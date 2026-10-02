@@ -291,6 +291,20 @@ class WsHub {
    */
   setOnEfspChange(fn) { this._onEfspChange = fn; }
 
+  /**
+   * Frames a caller with no session produced (the HTTP service path of the airspace registry, docs/adr/0098 §9): sent
+   * the way _onMessage sends a round trip's broadcasts, then the obligation re-check.
+   */
+  broadcastEfspFrames(frames) {
+    for (const frame of frames || []) this._broadcastEfsp(frame);
+    if (this._onEfspChange && frames && frames.length > 0) {
+      try { this._onEfspChange(); } catch (err) { log.error('onEfspChange failed', { err }); }
+    }
+  }
+
+  /** The booking calendar (docs/adr/0098 §9): information, the same for everyone; the last one is also sent on connect. */
+  broadcastAirspaceCalendar(msg) { this._calendarMsg = msg; this._broadcast(msg); }
+
   /** The carrier banner changed with no controller behind it (docs/adr/0074): the tick's delta, the same message a carrier op returns. */
   broadcastEfspCarrierDelta(delta) { this._broadcastEfsp(delta); }
 
@@ -548,6 +562,7 @@ class WsHub {
     this._refreshLabels();
     ws.send(JSON.stringify(this._pictureSnapshot(session)));
     if (this._efsp) ws.send(JSON.stringify(this._efsp.snapshotFor(session)));
+    if (this._calendarMsg) ws.send(JSON.stringify(this._calendarMsg));
     // The current conformance, conflict and obligation alerts (docs/adr/0058,
     // 0067) — always, even when empty — so a client
     // that connects mid-conflict sees it without waiting for the next change.

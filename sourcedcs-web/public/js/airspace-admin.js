@@ -319,7 +319,7 @@ function aaSave(overrideBase) {
     });
     if (!n) { $('aaEditResult').innerHTML = '<div class="bk-hint">Nothing changed.</div>'; return; }
     ed.lastPatch = patch;
-    msg = { theater: aa.theater, airspaceId: orig.airspaceId, op: { kind: 'EditAirspace', baseDefRev: overrideBase != null ? overrideBase : ed.entry.defRev, patch: patch } };
+    msg = { theater: aa.theater, airspaceId: orig.airspaceId, baseDefRev: overrideBase != null ? overrideBase : ed.entry.defRev, op: { kind: 'EditAirspace', patch: patch } };
   }
   aaSend(msg, function (ack) {
     aaLoadList(); aaLoadTheaters();
@@ -384,7 +384,7 @@ $('aaEditor') && $('aaEditor').addEventListener('click', function (e) {
 function aaDelete() {
   var ed = aa.ed;
   if (!confirm('Delete airspace ' + ed.orig.airspaceId + ' from ' + aa.theater + '? This is a hard delete.')) return;
-  aaSend({ theater: aa.theater, airspaceId: ed.orig.airspaceId, op: { kind: 'DeleteAirspace', baseDefRev: ed.entry.defRev } }, function () {
+  aaSend({ theater: aa.theater, airspaceId: ed.orig.airspaceId, baseDefRev: ed.entry.defRev, op: { kind: 'DeleteAirspace' } }, function () {
     aaLoadList(); aaLoadTheaters();
     $('aaEditor').style.display = 'none'; aa.ed = null;
   });

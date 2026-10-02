@@ -44,7 +44,7 @@ test('mutation: members get 403, admin and squadronlead pass', async () => {
   let calls = 0;
   const client = { mutateAirspace: async () => { calls++; return { ok: true, status: 200, ack: { airspace: {} } }; } };
   await withServer(client, async (call) => {
-    const body = { theater: 'Syria', airspaceId: 'A', op: { kind: 'DeleteAirspace', baseDefRev: 1 } };
+    const body = { theater: 'Syria', airspaceId: 'A', baseDefRev: 1, op: { kind: 'DeleteAirspace' } };
     assert.equal((await call('POST', '/airspaces/mutation', MEMBER, body)).status, 403);
     assert.equal(calls, 0);
     assert.equal((await call('POST', '/airspaces/mutation', ADMIN, body)).status, 200);
@@ -57,13 +57,20 @@ test('mutation: actor is taken from the token, a body actor is ignored; the ack 
   const ack = { reason: 'STALE_REV', conflicts: [{ field: 'name', base: 'A', theirs: 'B' }], detail: 'x' };
   const client = { mutateAirspace: async (theater, msg, actor) => { seen = { theater, msg, actor }; return { ok: true, status: 409, ack }; } };
   await withServer(client, async (call) => {
-    const r = await call('POST', '/airspaces/mutation', ADMIN, { theater: 'Syria', clientMutationId: 'cm1', airspaceId: 'A', op: { kind: 'EditAirspace', baseDefRev: 1, patch: { name: 'Z' } }, actor: { sub: 'evil', name: 'Evil' } });
+    const r = await call('POST', '/airspaces/mutation', ADMIN, { theater: 'Syria', clientMutationId: 'cm1', airspaceId: 'A', baseDefRev: 1, op: { kind: 'EditAirspace', patch: { name: 'Z' } }, actor: { sub: 'evil', name: 'Evil' } });
     assert.equal(r.status, 409);
     assert.deepEqual(r.body, ack);
     assert.deepEqual(seen.actor, { sub: 'u-admin', name: 'Admin Name' });
     assert.equal(seen.theater, 'Syria');
     assert.equal(seen.msg.clientMutationId, 'cm1');
     assert.equal(seen.msg.op.kind, 'EditAirspace');
+    assert.equal(seen.msg.baseDefRev, 1, 'the base revision rides beside op, where crc-sync reads it');
+  });
+});
+
+test('mutation: a non-integer baseDefRev is 400', async () => {
+  await withServer({ mutateAirspace: async () => ({ ok: true, status: 200, ack: {} }) }, async (call) => {
+    assert.equal((await call('POST', '/airspaces/mutation', ADMIN, { theater: 'S', airspaceId: 'A', baseDefRev: '1', op: { kind: 'DeleteAirspace' } })).status, 400);
   });
 });
 

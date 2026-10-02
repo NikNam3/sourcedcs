@@ -41,6 +41,9 @@ const { MissionClock, WALL_CLOCK } = require('./mission-clock');
 const { MissionSession } = require('./mission-session');
 const { loadTheaters } = require('./theaters');
 const { TheaterContext } = require('./theater-context');
+const { createAirspaceService } = require('./airspace-service');
+const { listUpcomingAirspaceBookings } = require('./efsp/booking-lookup');
+const { AirspaceCalendar } = require('./efsp/airspace-calendar');
 const { lookupFlightPlan, toFlightDataFiledSeed, listFiledFlightPlans } = require('./efsp/flight-plan-lookup');
 const efspStereoRoutes = require('./efsp/stereo-routes');
 const { createEfspInstrumentation } = require('./efsp/metrics');
@@ -650,6 +653,22 @@ function createApp(deps = {}) {
   if (env.CRCSYNC_TEST_RESET === '1') require('./test-reset').mountTestReset(app, { env, hooks: { setWireProtocol: (n) => wsHub.setWireProtocolForTest(n) } });
 
   // ── Static hosting ───────────────────────────────────────────────────────
+  // ── The airspace registry's server-to-server API, for sourcedcs-web (docs/adr/0098 §9). No token: every route 503. ──
+  app.use('/api/airspace-registry', createAirspaceService({
+    efsp, token: env.AIRSPACE_SERVICE_TOKEN || '', broadcast: (frames) => wsHub.broadcastEfspFrames(frames),
+  }));
+
+  // ── The booking calendar, information only: the web's upcoming airspace bookings, pulled on a ticker and sent to
+  // every session (docs/adr/0098 §9). `deps.bookingLookup` is the test/soak seam for the pull. ──
+  const airspaceCalendar = new AirspaceCalendar({
+    list: deps.bookingLookup || (() => listUpcomingAirspaceBookings({
+      baseUrl: env.CRCSYNC_SOURCEDCS_WEB_URL, serviceToken: env.AIRSPACE_SERVICE_TOKEN || '',
+    })),
+    currentTheater: () => efsp.airspaceStore.currentTheater(),
+    bookingUrl: env.CRCSYNC_SOURCEDCS_WEB_PUBLIC_URL ? `${String(env.CRCSYNC_SOURCEDCS_WEB_PUBLIC_URL).replace(/\/+$/, '')}/bookings.html` : null,
+    onChange: (msg) => wsHub.broadcastAirspaceCalendar(msg),
+  });
+
   app.use(express.static(PUBLIC_DIR));
 
   // ── Tickers: every timer the service runs, by name. start() installs them,
@@ -675,6 +694,7 @@ function createApp(deps = {}) {
       lastClockSource = source;
     } },
     { name: 'airport-weather', periodMs: 60000, tick: () => refreshAirportWeather(lastMissionData) },
+    { name: 'airspace-calendar', periodMs: 60000, tick: () => airspaceCalendar.refresh() },
     { name: 'efsp-metrics', periodMs: 60000, tick: () => efspInstrumentation.tick() },
     { name: 'efsp-archiver', periodMs: 60 * 1000, tick: () => _archive(efsp.archiver.sweep()) },
     // ── Stale reaper — mirrors crc-desktop's original 12s track eviction, now
@@ -810,6 +830,7 @@ function createApp(deps = {}) {
     wsHub.attach(server);
     attachHandlers();
     for (const t of tickers) timers.push(setInterval(() => t.tick(), t.periodMs));
+    airspaceCalendar.refresh().catch(() => {}); // the first pull does not wait a minute
   }
 
   function stop() {
@@ -832,7 +853,7 @@ function createApp(deps = {}) {
       instrumentation: efspInstrumentation,
     },
     // The stores and models the soak host reads and drives directly.
-    trackStore, collabStore, atisStore, surveillance, theaterContext, missionClock, missionSession, grpcClient, srsClient,
+    trackStore, collabStore, atisStore, airspaceCalendar, surveillance, theaterContext, missionClock, missionSession, grpcClient, srsClient,
     broadcastEfspAlerts,
   };
 }
