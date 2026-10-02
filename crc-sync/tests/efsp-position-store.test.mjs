@@ -235,6 +235,6 @@ test('getAll returns every configured Position, including unstaffed ones', () =>
 test('getAll\'s consolidatedPositions lists the unstaffed Positions currently routing through this one', () => {
   const store = freshStore();
   store.setSignedOnPositions('c1', 'Alice', ['LC']); // CD and GC unstaffed, both are eventually consolidated at LC
-  const twr = store.getAll().find(p => p.positionId === 'LC');
-  assert.deepEqual(twr.consolidatedPositions.sort(), ['CD', 'GC']);
+  const lc = store.getAll().find(p => p.positionId === 'LC');
+  assert.deepEqual(lc.consolidatedPositions.sort(), ['CD', 'GC']);
 });

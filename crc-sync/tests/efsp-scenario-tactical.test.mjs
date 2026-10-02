@@ -249,8 +249,8 @@ test('SCENARIO A3\'\' the same holds at Incirlik: GND walks away and TWR gets th
   hold(efsp, c.GC.session, 'INCIRLIK', []);
   const after = efsp.boardStoreFor('INCIRLIK').getStrip(strip.stripId);
   assert.equal(after.ownerPositionId, 'LC');
-  const twrBays = facilityConfig.getBaysFor('LC', 'INCIRLIK').map(b => b.bayId);
-  assert.ok(twrBays.includes(after.bayId), `TWR owns it but it sits in ${after.bayId}`);
+  const lcBays = facilityConfig.getBaysFor('LC', 'INCIRLIK').map(b => b.bayId);
+  assert.ok(lcBays.includes(after.bayId), `LC owns it but it sits in ${after.bayId}`);
 });
 
 test('SCENARIO A4 with TAC_C2 gone too, the chain bottoms out inside TACTICAL and says so (D19)', () => {

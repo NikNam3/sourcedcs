@@ -79,17 +79,17 @@ test('bayImpliesState returns null for Bays with no implied state, and for unkno
 });
 
 test('LC\'s runway-queue Bay has one Rack per configured runway (guide §4.2)', () => {
-  const twrBays = getBaysFor('LC');
-  const runwayQueue = twrBays.find(b => b.bayId === 'lc-runway-queue');
+  const lcBays = getBaysFor('LC');
+  const runwayQueue = lcBays.find(b => b.bayId === 'lc-runway-queue');
   assert.ok(runwayQueue.rackIds.length >= 2);
 });
 
 test('getAllBays tags every Bay with its owning positionId — required to keep Bays grouped by Position client-side (guide §4.8.5 rule 2)', () => {
   const all = getAllBays();
   const opsProposed = all.find(b => b.bayId === 'ops-proposed');
-  const gndPushback = all.find(b => b.bayId === 'gc-pushback');
+  const gcPushback = all.find(b => b.bayId === 'gc-pushback');
   assert.equal(opsProposed.positionId, 'OPS');
-  assert.equal(gndPushback.positionId, 'GC');
+  assert.equal(gcPushback.positionId, 'GC');
   assert.ok(all.every(b => typeof b.positionId === 'string' && b.positionId.length > 0));
 });
 

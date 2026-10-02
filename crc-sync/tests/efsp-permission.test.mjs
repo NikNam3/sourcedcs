@@ -136,10 +136,10 @@ test('D21 regression (shape-only): evaluating GC and LC independently never gran
   // GC/LC are still permission-identical in Phase 2 — this asserts the
   // *shape* of the guard (independent evaluation, no shared mutable state
   // between calls). OPS-vs-AP below is the real behavioral case.
-  const gndOnly = OP_KINDS.filter(op => canMutate('GC', op));
-  const twrOnly = OP_KINDS.filter(op => canMutate('LC', op));
-  assert.deepEqual(OP_KINDS.filter(op => canMutate('GC', op)), gndOnly);
-  assert.deepEqual(OP_KINDS.filter(op => canMutate('LC', op)), twrOnly);
+  const gcOnly = OP_KINDS.filter(op => canMutate('GC', op));
+  const lcOnly = OP_KINDS.filter(op => canMutate('LC', op));
+  assert.deepEqual(OP_KINDS.filter(op => canMutate('GC', op)), gcOnly);
+  assert.deepEqual(OP_KINDS.filter(op => canMutate('LC', op)), lcOnly);
 });
 
 // ── canCreateStripType (Phase 2) — role-scoped CreateStrip ───────────────

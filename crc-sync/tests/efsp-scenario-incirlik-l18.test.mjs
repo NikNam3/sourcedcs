@@ -378,8 +378,8 @@ test('RSU asks for a runway change and may not make one (H18): a request reaches
   refused(send({ kind: 'CloseRunway', runwayId: '05/23' }), 'PERMISSION_DENIED');
   refused(send({ kind: 'OpenRunway', runwayId: '05/23' }), 'PERMISSION_DENIED');
   // withdraw by letting LC reject it, so the shared runway is left as found
-  const twr = c.LC;
-  const rej = efsp.handleMessage(twr.session, {
+  const lc = c.LC;
+  const rej = efsp.handleMessage(lc.session, {
     version: 1, type: 'efsp-runway-status-mutation', clientMutationId: crypto.randomUUID(),
     facilityId: 'INCIRLIK', baseRev: current().rev, actingPositionId: 'LC', op: { kind: 'RejectRunwayRequest', runwayId: '05/23' },
   }).ack;

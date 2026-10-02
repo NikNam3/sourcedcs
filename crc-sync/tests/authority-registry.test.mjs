@@ -31,9 +31,9 @@ test('accessors answer from the composed tables', () => {
   assert.equal(authority.senderStateOnAccept('HANDOFF', 'ARRIVAL', 'INBOUND'), undefined);
   assert.deepEqual(authority.creatorsOf('ARRIVAL'), ['AP', 'CTR']);
   assert.deepEqual(authority.creatorsOf('PATTERN'), ['RSU']);
-  const app = authority.capabilitiesFor('AP');
-  assert.equal(app.family, 'civil-atc');
-  assert.equal(app.capabilities.rotatesSfa, true, 'incirlik-military extends APP');
+  const ap = authority.capabilitiesFor('AP');
+  assert.equal(ap.family, 'civil-atc');
+  assert.equal(ap.capabilities.rotatesSfa, true, 'incirlik-military extends AP');
   assert.equal(authority.capabilitiesFor('JTAC').capabilities.readScope, 'OWNED');
   assert.equal(authority.capabilitiesFor('NOBODY'), null);
 });
