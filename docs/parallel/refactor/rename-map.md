@@ -332,6 +332,7 @@ N10	=	tok	W	existingFdrId	existingFlightDataId
 N10	=	tok	W	ArchiveFdr	ArchiveFlightData	audit op
 N10	=	tok	W	fdrEqual	flightDataEqual	freeze harness field
 N10	=	tok	W	FDR_PROVISIONAL	FLIGHT_DATA_PROVISIONAL	correlation source value
+N10	=	tok	W	peerFdrId	peerFlightDataId	promoted (§1.2, RENAME-A N10 commit): ATO arInfo.links[] field on the flight data, read by the client ato-strip.js; goldens carry it only inside a record hash
 N10	=	lit	W	FDR	FLIGHT_DATA	string value only ('FDR' correlation/runway source); prose FDR -> "flight data"
 N10	=	tok	S	FdrStore	FlightDataStore
 N10	=	tok	S	fdr-store	flight-data-store	module path; file move
