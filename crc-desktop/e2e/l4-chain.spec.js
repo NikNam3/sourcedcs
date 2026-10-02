@@ -110,7 +110,7 @@ test('an NLA the server will refuse says so before it is pressed', async ({ page
   await openPanel(page, { signedOn: ALL });
   await seedStrip(page, { callsign: 'L4X1', stripType: 'DEPARTURE', flightData: FDR });
   await advance(page, 'L4X1', 7); // DEPARTED, next is Hand Off to AP
-  // Release APP. Nothing else covers it, so the server will now inhibit.
+  // Release AP. Nothing else covers it, so the server will now inhibit.
   await page.evaluate((h) => window.sendEfspSetPositions('INCIRLIK', h), ALL.filter((p) => p !== 'AP'));
   await page.waitForFunction(() => !getActingPositions('INCIRLIK').includes('AP'));
   await show(page, 'L4X1');

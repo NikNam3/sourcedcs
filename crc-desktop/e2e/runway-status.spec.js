@@ -11,7 +11,7 @@
  *
  * Several controllers, each in their own browser context, because the D21
  * checks are about WHO acts: a request from OPS is accepted by a different
- * person at TWR, and an acknowledgement sent as one Position never counts as
+ * person at LC, and an acknowledgement sent as one Position never counts as
  * another's. The e2e crc-sync has no DCS, so the active end starts unset
  * (docs/wip/L1b.md V14) — the walk sets it with a runway change first.
  *
@@ -120,7 +120,7 @@ async function press(page, kind, { positionId, action } = {}) {
 
 const offered = (page, kind) => page.locator(`#runway-status-panel button[data-kind="${kind}"]`);
 
-/** Back to OPEN with no change open, whatever the walk left (briefing T12). Needs TWR and OPS held. */
+/** Back to OPEN with no change open, whatever the walk left (briefing T12). Needs LC and OPS held. */
 async function resetField(page) {
   for (let i = 0; i < 8; i++) {
     const f = await field(page);
@@ -227,9 +227,9 @@ test('Phase 3 walk: OPS asks for runway works, TWR suspends, the Strips hold, FI
   // Walked through the real NLA chain, so each Strip is owned and filed where
   // the server would put it.
   await seed(ops, { callsign: DEP_TAXI, stripType: 'DEPARTURE', flightData: { departureRunway: '05' } });
-  await nla(ops, DEP_TAXI, 4); // -> TAXI (GND)
+  await nla(ops, DEP_TAXI, 4); // -> TAXI (GC)
   await seed(ops, { callsign: DEP_Q, stripType: 'DEPARTURE', flightData: { departureRunway: '05' } });
-  await nla(ops, DEP_Q, 5); // -> RUNWAY_QUEUE (TWR)
+  await nla(ops, DEP_Q, 5); // -> RUNWAY_QUEUE (LC)
   expect((await stripOf(ops, DEP_Q)).rackId, 'filed into 05\'s rack by its 8A (S-R2-1)').toBe('rwy-05');
   for (const cs of [ARR_TWR, ARR_FIN]) {
     await seed(ops, { callsign: cs, stripType: 'ARRIVAL', actingPositionId: 'AP', bayId: 'ap-inbound', flightData: { departureAirport: 'LTAF', destinationAirport: 'LTAG' } });
@@ -237,11 +237,11 @@ test('Phase 3 walk: OPS asks for runway works, TWR suspends, the Strips hold, FI
   }
   await stripOp(ops, ARR_FIN, { kind: 'SetBlock', blockId: '3F', value: true }, 'AP');
   await expect.poll(async () => (await ops.evaluate((cs) => { const s = getAllEfspStrips().find((x) => getEfspFlightData(x.flightDataId).identity.callsign === cs); return getEfspFlightData(s.flightDataId).military.hookRequired; }, ARR_FIN))).toBe(true);
-  await nla(ops, ARR_TWR, 1); // -> HANDED_TO_TOWER (TWR)
+  await nla(ops, ARR_TWR, 1); // -> HANDED_TO_TOWER (LC)
   await nla(ops, ARR_FIN, 1);
   await nla(twr, ARR_FIN, 1); // -> FINAL
 
-  // 3. OPS asks; TWR (another person) accepts, which suspends the runway.
+  // 3. OPS asks; LC (another person) accepts, which suspends the runway.
   await press(ops, 'RequestRunwayStatus', { positionId: 'OPS', action: 'WORKS' });
   await expect(ops.locator('#runway-status-panel .runway-status-request')).toHaveText(/^REQUEST WORKS from OPS \(goose\) \d{4}Z · waiting on LC$/);
   await expect(offered(ops, 'BeginRunwayWorks'), 'OPS never begins works itself (H18)').toHaveCount(0);
@@ -293,7 +293,7 @@ test('Phase 3 walk: OPS asks for runway works, TWR suspends, the Strips hold, FI
   await goBay(twr, 'LC', 'lc-runway-queue');
   await expect(chip(stripByCallsign(twr, DEP_Q))).toHaveText('RWY 05 INSP');
   await expect(nlaReason(stripByCallsign(twr, DEP_Q))).toHaveText('runway 05/23 suspended — awaiting inspection');
-  // TWR is not the inspection authority: the button is not offered, and the
+  // LC is not the inspection authority: the button is not offered, and the
   // server refuses it anyway when sent by hand — named by the runway.
   await expect(offered(twr, 'CompleteInspection')).toHaveCount(0);
   await front(twr, 'efsp');
@@ -336,7 +336,7 @@ test('Phase 3 walk: a runway change needs OPS and APP (each a different person),
   await nla(ops, DEP, 5);
   expect((await stripOf(ops, DEP)).rackId).toBe('rwy-05');
 
-  // TWR proposes 05 -> 23 from the panel's end picker.
+  // LC proposes 05 -> 23 from the panel's end picker.
   await front(twr, 'runwayStatus');
   await twr.locator('#runway-status-panel select.runway-status-to-end').selectOption('23');
   await press(twr, 'ProposeRunwayChange', { positionId: 'LC' });
@@ -366,13 +366,13 @@ test('Phase 3 walk: a runway change needs OPS and APP (each a different person),
   await expect(q.locator('.efsp-alert-reason')).toHaveText(/^Queued for inactive runway 05; the active runway is 23\./);
   await shot(twr, '08-inactive-runway-advisory');
 
-  // Pilot request "request runway 23": TWR moves the Strip to 23's rack and
+  // Pilot request "request runway 23": LC moves the Strip to 23's rack and
   // the advisory follows the rack (the chip goes).
   await twr.evaluate((cs) => _moveStrip(getAllEfspStrips().find((s) => getEfspFlightData(s.flightDataId).identity.callsign === cs && s.state !== 'DROPPED'), 'lc-runway-queue', 'rwy-23', null, null), DEP);
   await expect.poll(async () => (await stripOf(twr, DEP)).rackId).toBe('rwy-23');
   await expect(chip(stripByCallsign(twr, DEP))).toHaveCount(0);
 
-  // A change APP rejects: what TWR sees.
+  // A change AP rejects: what LC sees.
   await front(twr, 'runwayStatus');
   await twr.locator('#runway-status-panel select.runway-status-to-end').selectOption('05');
   await press(twr, 'ProposeRunwayChange', { positionId: 'LC' });

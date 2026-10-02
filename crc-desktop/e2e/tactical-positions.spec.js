@@ -1,7 +1,7 @@
 'use strict';
 
 /* L23 (docs/adr/0080) — the tactical Positions on screen: what a JTAC is sent,
- * the hand-back to TAC_C2, the Bay that follows a covering owner, the TOFI exit
+ * the hand-back to TAC_C2, the Bay that follows the Position an unstaffed owner is consolidated at, the TOFI exit
  * answered on an AIC-held line, and D12 on a combined controller.
  *
  * Several controllers at once, one browser context each (a context has one

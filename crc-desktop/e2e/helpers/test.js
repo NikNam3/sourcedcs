@@ -44,7 +44,7 @@ async function bootId() {
 }
 
 /**
- * Gives the spec file a brand-new crc-sync: no Strips, no FDRs, field state as shipped, no
+ * Gives the spec file a brand-new crc-sync: no Strips, no flight-data records, runway status as shipped, no
  * carrier/ATO/metrics/replay history, no Positions held. The hook ends the process and the
  * supervisor starts a clean one (crc-sync/src/test-reset.js), so nothing an earlier spec did, or
  * failed to undo, is visible and a spec file means the same thing alone or in any order. Called once

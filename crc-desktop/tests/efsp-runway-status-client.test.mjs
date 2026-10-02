@@ -1,4 +1,4 @@
-/* Field state on the client (guide §9.7, docs/adr/0068): the client state,
+/* Runway status on the client (guide §9.7, docs/adr/0068): the client state,
    the pure rules mirror and its drift tests against crc-sync, the dock
    panel, and the Strip's RWY / HOOK chips.
 
@@ -392,7 +392,7 @@ async function renderRunwayStatusBoard({ records, signedOn, prompt = () => 'a re
   ws.setEfspSender('sendEfspRunwayStatusMutation', (actingPositionId, facilityId, baseRev, op) => sent.push({ actingPositionId, facilityId, baseRev, op }));
   const snapshot = { runwayStatuses: records };
   if (scrambling) {
-    // L13's constraint comes from a real scramble in the Board: a SCRAMBLE FDR with a CLEARED departure.
+    // L13's constraint comes from a real scramble in the Board: a SCRAMBLE flight-data record with a CLEARED departure.
     snapshot.flightDataList = [{ flightDataId: 'f-viper', rev: 1, identity: { callsign: 'VIPER11' }, filed: {}, assigned: {}, military: { ordnanceState: 'CLEAN', hookRequired: false, alertStatus: 'SCRAMBLE' } }];
     snapshot.strips = [{ stripId: 's-viper', flightDataId: 'f-viper', stripType: 'DEPARTURE', state: 'CLEARED', facilityId: 'INCIRLIK', ownerPositionId: 'CD', bayId: 'cd-cleared', rackId: 'main', orderKey: 'V', rev: 1, annotations: {}, flags: {}, coordination: null, tofiCoordination: null, airspaceEntry: null, previousLeg: null }];
   }

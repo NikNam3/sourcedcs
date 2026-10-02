@@ -36,7 +36,7 @@ const stateOf = (page, cs) => page.evaluate((cs) => {
   return s && s.state;
 }, cs);
 
-/** OPS files it, CD clears it, GND taxis it and hands it to Tower — all through the page's own NLA. */
+/** OPS files it, CD clears it, GC taxis it and hands it to Tower — all through the page's own NLA. */
 async function taxiToTower(page, cs) {
   for (let i = 0; i < 5; i++) {
     const before = await stateOf(page, cs);

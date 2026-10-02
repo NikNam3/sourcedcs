@@ -266,7 +266,7 @@ test('a same-Facility transfer (TWR -> APP, no PROPOSED step) blinks at the send
   assert.equal(A.atcApplyClick(contact(), rel, 9500), 'HANDOFF_PDB');
   v = A.atcView(contact(), rel, env({ now: 9600 }));
   assert.equal(v.kind, 'PDB');
-  // First seen already APP's: no blink.
+  // First seen already AP's: no blink.
   A._resetAtcScopeForTest();
   rel = A.atcNoteOwnership('7', A.atcRelation(contact(), [strip({ ownerPositionId: 'AP' })], TWR, letterOf), 1000);
   assert.equal(A.atcView(contact(), rel, env()).kind, 'PDB');

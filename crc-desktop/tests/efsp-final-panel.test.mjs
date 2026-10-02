@@ -92,7 +92,7 @@ test('PAR and the carrier share target states and differ only in labels', () => 
   assert.deepEqual(p.map(a => a.toState), ['BALL', 'BOLTER_WAVEOFF']);
   assert.deepEqual(p.map(a => a.label), ['Landing assured', 'Missed approach']);
   assert.deepEqual(c.map(a => a.label), ['Ball', 'Waveoff']);
-  // Every target is a state the FINAL Role already owns (ADR 0064 B2); no new state is invented here.
+  // Every target is a state the FINAL strip type already owns (ADR 0064 B2); no new state is invented here.
   for (const a of [...p, ...c]) assert.ok(['ON_FINAL', 'BALL', 'BOLTER_WAVEOFF', 'DROPPED'].includes(a.toState));
 });
 

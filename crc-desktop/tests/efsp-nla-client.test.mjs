@@ -168,7 +168,7 @@ test('this client mirror stays in lockstep with the real, authoritative server t
   assert.deepEqual(MISSION_STATE_OWNERS, server.MISSION_STATE_OWNERS);
 });
 
-// crc-sync's docs/adr/0074: the carrier's Roles. The server tables are authoritative; these are the mirrors.
+// crc-sync's docs/adr/0074: the carrier's strip types. The server tables are authoritative; these are the mirrors.
 test('the carrier state owners and handoff table mirror the server exactly', () => {
   const server = require('../../crc-sync/src/efsp/permission.js');
   const transfers = require('../../crc-sync/src/efsp/carrier/handoffs.js');

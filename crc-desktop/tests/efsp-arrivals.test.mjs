@@ -44,7 +44,7 @@ test('an arrival in the Bay on screen is not unseen and is not listed on the arr
 });
 
 test('the controller\'s own move into another Bay IS an arrival — across Positions, and within one', () => {
-  // Handed from my GND to my LC: working several Positions is exactly when a
+  // Handed from my GC to my LC: working several Positions is exactly when a
   // Strip goes somewhere you are not looking.
   const across = A.noteEfspArrivals(was('gc-taxi-out', 'GC'), [strip({ updatedBy: ME })],
     ctx({ signedOnPositions: ['GC', 'LC'] }));

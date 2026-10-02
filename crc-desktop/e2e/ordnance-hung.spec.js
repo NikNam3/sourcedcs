@@ -4,7 +4,7 @@
  * in a real browser against a real crc-sync. Screenshots go to docs/wip/L12/
  * and are described in docs/wip/L12.md.
  *
- * Client field state (getEfspRunwayStatus) is L1b's real client; nothing is stubbed.
+ * Client runway status (getEfspRunwayStatus) is L1b's real client; nothing is stubbed.
  */
 
 const path = require('path');
@@ -80,7 +80,7 @@ test('HUNG: APP records it, TWR sees it, the flight lands normally, CLEAN clears
   await expect(strip.locator('[data-slot="ord"]'), 'a CLEAN Strip draws nothing (docs/adr/0058)').toHaveCount(0);
 
   // H55: the pilot reports it to approach, inbound. S-L12: while CLEAN, ORDNANCE
-  // is not on APP's face — it is one tap away in the expanded view.
+  // is not on AP's face — it is one tap away in the expanded view.
   await expect(strip.locator('.efsp-strip-fields .efsp-block-3G'), 'a CLEAN ORDNANCE costs APP no Strip height').toHaveCount(0);
   await only(page, CS);
   await strip.screenshot({ path: shot('02a-app-clean.png') });
@@ -94,7 +94,7 @@ test('HUNG: APP records it, TWR sees it, the flight lands normally, CLEAN clears
   await only(page, CS);
   await strip.screenshot({ path: shot('02-app-sees-it.png') });
 
-  // To tower: the chip travels with the flight, on TWR's Strip too.
+  // To tower: the chip travels with the flight, on LC's Strip too.
   await pressNla(page, strip, CS, 'HANDED_TO_TOWER');
   await goBay(page, 'LC', 'lc-arrivals');
   const twr = stripByCallsign(page, CS);
@@ -114,7 +114,7 @@ test('HUNG: APP records it, TWR sees it, the flight lands normally, CLEAN clears
   await landed.screenshot({ path: shot('03-lands-normally.png') });
   await pressNla(page, landed, CS, 'TAXI_IN');
 
-  // "Ordnance safe" at the pad: GND has no 3G on its grid, so the expanded view.
+  // "Ordnance safe" at the pad: GC has no 3G on its grid, so the expanded view.
   await goBay(page, 'GC', 'gc-taxi-in');
   const gnd = stripByCallsign(page, CS);
   await expect(gnd.locator('[data-slot="ord"]')).toHaveText('HUNG');
@@ -136,7 +136,7 @@ test('pilot walks with field state: the pad by name, a runway request re-stated,
   // Runway 05 active, established here: a fresh crc-sync has none, and this walk names it.
   await ensureActiveRunway(page, '05');
 
-  // "Request runway 23 for hot cargo" — TWR edits 8B; the advisory re-states the runway, recommends none.
+  // "Request runway 23 for hot cargo" — LC edits 8B; the advisory re-states the runway, recommends none.
   const CS = 'HUNG21';
   await goBay(page, 'AP', 'ap-inbound');
   let strip = await seedStrip(page, { callsign: CS, actingPositionId: 'AP', bayId: 'ap-inbound', stripType: 'ARRIVAL', flightData: ARR_FLIGHT_DATA });

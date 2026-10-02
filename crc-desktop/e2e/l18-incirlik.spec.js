@@ -1,7 +1,7 @@
 'use strict';
 
 /* L18 server half (crc-sync docs/adr/0075, 0093) on screen: RSU's pattern board, SFA's frequency racks with the
- * rotation header and "Rotate to PAR", and PAR's FINAL panel with nothing to type. One controller holds RSU, APP,
+ * rotation header and "Rotate to PAR", and PAR's FINAL panel with nothing to type. One controller holds RSU, AP,
  * SFA and PAR. Run on E2E_LANE=9. The Board lives for the whole run, so every test drops what it made. */
 
 const { test, expect } = require('./helpers/test');
@@ -56,7 +56,7 @@ test('01 SFA: filed on a frequency Rack, rotated to PAR with the frequency uncha
   await expect(header).toBeVisible();
   await expect(header.locator('.efsp-sfa-row')).toHaveCount(5);
   await expect(page.locator('.efsp-rack-header', { hasText: 'freq-2 · 233.100' })).toBeVisible();
-  // APP is held too, so the rotation is editable here: put PAR on freq-4
+  // AP is held too, so the rotation is editable here: put PAR on freq-4
   await header.locator('select[data-rack-id="freq-4"]').selectOption('PAR');
   await expect.poll(() => page.evaluate(() => getEfspSfa().rotation['freq-4'])).toBe('PAR');
 

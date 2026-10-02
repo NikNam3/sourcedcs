@@ -3,7 +3,7 @@
 /* Does the rig work at all?
  *
  * Deliberately the first spec and deliberately dull: it proves the page loads,
- * authenticates, connects to crc-sync, holds a Position and can put a Strip on
+ * authenticates, connects to crc-sync, signs on to a Position and can put a Strip on
  * the Board. Every other spec assumes all five, so when one of them fails this
  * is the one that says which.
  */

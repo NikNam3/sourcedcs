@@ -288,7 +288,7 @@ async function dropStrips(page, callsigns) {
  * A fresh crc-sync has NO active runway (the harness has no mission wind, and the active runway is
  * what the weather feed sets). A spec that asserts text naming the runway must establish it itself
  * rather than rely on an earlier spec file having done so (ordnance-hung did, and failed alone).
- * `page` must hold TWR, OPS and AP: one controller holding all three self-coordinates the change.
+ * `page` must hold LC, OPS and AP: one controller holding all three self-coordinates the change.
  */
 async function ensureActiveRunway(page, end = '05') {
   await page.waitForFunction(() => typeof getEfspRunwayStatus === 'function' && !!getEfspRunwayStatus('INCIRLIK'));

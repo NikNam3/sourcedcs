@@ -83,8 +83,8 @@ function compactBlocksFor(stripType, positionId) {
   return _compactBlocksFor(stripType, positionId);
 }
 
-// Every (Role, owning Position) pair the field lists distinguish, plus one
-// Position no list names, so the per-Role fallback is held to the same rule.
+// Every (strip type, owning Position) pair the field lists distinguish, plus one
+// Position no list names, so the per-strip-type fallback is held to the same rule.
 // strip-fields.js is a plain module; reading it directly is the source of truth.
 function positionsFor(stripType) {
   if (stripType === 'MISSION') return ['TAC_C2'];
@@ -92,7 +92,7 @@ function positionsFor(stripType) {
 }
 
 /**
- * Every Block id the expanded view renders for a Role — by pressing the real
+ * Every Block id the expanded view renders for a strip type — by pressing the real
  * toggle, not by poking module state.
  *
  * `_expandedStripId` is a `let`, and a `let` at the top level of a vm script
@@ -114,7 +114,7 @@ async function expandedBlocksFor(stripType, positionId = 'OPS') {
   return descendants(expandedEl).filter(c => c.dataset && c.dataset.expandedBlock).map(c => c.dataset.expandedBlock);
 }
 
-// Per (Role, Position) now that the field lists are per Position: trimming a
+// Per (strip type, Position) now that the field lists are per Position: trimming a
 // Position's fields is only legal because the expanded view picks up the rest.
 for (const stripType of Object.keys(BLOCK_MAPS)) {
   test(`every writable ${stripType} Block is somewhere a controller can reach`, async () => {
@@ -212,7 +212,7 @@ test('a Strip rebuilds when something it RENDERS but does not own changes', asyn
 
   unchanged();
 
-  // strip.nla moves with Position occupancy and with the clock, and crc-sync
+  // strip.nla moves with Position staffing and with the clock, and crc-sync
   // deliberately does NOT bump rev to say so (bumping it outside a Mutation
   // would invalidate every controller's in-flight edit).
   assert.equal(
@@ -233,7 +233,7 @@ test('a Strip rebuilds when something it RENDERS but does not own changes', asyn
   sandbox.applyEfspAlerts({ conformance: [], conflictAlert: [], obligations: [] });
   unchanged();
 
-  // The FDR behind the Strip — every Block value, and the separation regime
+  // The flight-data record behind the Strip — every Block value, and the separation regime
   // the TOFI exit gate reads.
   sandbox.applyEfspDelta({ flightDataList: { updated: [{ ...FDR, rev: 2, tofi: { ifrActive: true, separationRegime: 'ATC' } }] } });
   assert.equal(needsRebuild(el, strip, null, null), true, 'the FDR moved under the Strip');
@@ -248,8 +248,8 @@ test('the clearance Blocks a controller edits on most Strips are chips, per Role
   assert.ok(compactBlocksFor('ARRIVAL').includes('9A-VECTOR'), 'ARRIVAL VECTOR');
   assert.ok(compactBlocksFor('OVERFLIGHT').includes('7A'), 'OVERFLIGHT ASGN ALT');
   assert.ok(compactBlocksFor('OVERFLIGHT').includes('9A-VECTOR'), 'OVERFLIGHT VECTOR');
-  // And the Role-specific meanings do not leak: 20/21 are radar scratchpads on
-  // the airborne Roles, which is why they could never live in a shared list.
+  // And the strip-type-specific meanings do not leak: 20/21 are radar scratchpads on
+  // the airborne strip types, which is why they could never live in a shared list.
   assert.equal(compactBlocksFor('ARRIVAL').includes('21'), false);
   assert.equal(compactBlocksFor('OVERFLIGHT').includes('20'), false);
 });
@@ -257,10 +257,10 @@ test('the clearance Blocks a controller edits on most Strips are chips, per Role
 test('the Blocks the release and airspace sorties depend on are on the Strips of the Positions that work them', () => {
   // Each of these gates a scenario: the release state and void time drive
   // §3.8's holds at the airfield, and 22 is the frequency a flight is approved
-  // onto by APP or CTR, who also own the TOFI fields.
+  // onto by AP or CTR, who also own the TOFI fields.
   const want = {
     CD: ['14A', '14D'], GC: ['14A', '14D'],
-    AP: ['22', 'SREG', '5A', '14A'], CTR: ['22', '24A', 'SREG', 'IFR', 'RSVC', '5A', '14A'], // 14A at APP/CTR: UI-A U5
+    AP: ['22', 'SREG', '5A', '14A'], CTR: ['22', '24A', 'SREG', 'IFR', 'RSVC', '5A', '14A'], // 14A at AP/CTR: UI-A U5
   };
   for (const [positionId, blocks] of Object.entries(want)) {
     const compact = compactBlocksFor('DEPARTURE', positionId);
@@ -398,7 +398,7 @@ async function renderStrip({ strip, flightData, signedOn, airspaces = [], correl
   });
   const sandbox = await loadSandbox();
 
-  // Stand in for the pieces the Strip dispatches through: the real held Positions, and the senders
+  // Stand in for the pieces the Strip dispatches through: the real signed-on Positions, and the senders
   // replaced through efsp-ws.js's setEfspSender.
   const facilities = new Set(['INCIRLIK', 'TACTICAL', 'CENTER', 'CARRIER', strip.facilityId, ...otherStrips.map(s => s.facilityId)].filter(Boolean));
   sandbox.setEfspSender('_sendEfsp', () => {});
@@ -691,9 +691,9 @@ test("F-303: a rejected coordination replica's NLA reports itself inert", async 
 });
 
 // The decision recorded above used to end "✕ / Airspace… / Bind… / MARSA… are
-// FDR-level facts … deliberately left alone". Live testing reversed it: CTR
-// rejected APP's handoff and then opened a TOFI on the dead copy, minting a
-// MISSION Strip for a flight APP still worked. crc-sync now refuses every op on
+// flight-data-level facts … deliberately left alone". Live testing reversed it: CTR
+// rejected AP's handoff and then opened a TOFI on the dead copy, minting a
+// MISSION Strip for a flight AP still worked. crc-sync now refuses every op on
 // a rejected replica except Drop / the Drop NLA / moving it aside, and the
 // Strip stops offering what would only be refused.
 test('F-303: a rejected replica offers nothing but Drop', async () => {
@@ -773,8 +773,8 @@ test('a Strip whose regime picker has focus is protected from a rebuild', async 
 });
 
 test('Convert to Arrival is only offered to the Positions the server lets convert', async () => {
-  // TWR holds a Position, which was all the old gate asked for. The server
-  // refuses TWR's press (no ConvertToArrival, no ARRIVAL creation).
+  // LC is signed on to a Position, which was all the old gate asked for. The server
+  // refuses LC's press (no ConvertToArrival, no ARRIVAL creation).
   const { el } = await renderStrip({ strip: stripAt({ ownerPositionId: 'AP' }), flightData: FDR, signedOn: ['LC'] });
   assert.equal(menuItem(el, 'Convert to Arrival →'), undefined);
 });
@@ -1240,7 +1240,7 @@ test('the hook requirement toggles, and a blank cell sends true rather than clea
 });
 
 test('an FDR from before the military namespace existed still renders its Strip', async () => {
-  // Nothing reseeds an FDR already in a connected client's cache, so a Strip
+  // Nothing reseeds a flight-data record already in a connected client's cache, so a Strip
   // can legitimately arrive with `military: null` — the literal value this
   // field held until docs/adr/0052. Rendering must degrade to a blank cell,
   // not throw and take the whole Bay down with it.
@@ -1525,7 +1525,7 @@ test('acting from a popover uses the Strip as it is NOW, not as it was when the 
 // It says nothing about OPS, and that is how DropStrip stayed affordance-less:
 // server-side it has never been state-gated and OPS has always held the
 // permission, but the only way to ask was the `.drop` dot-command. The NLA
-// button reads "Send to Clearance" at PROPOSED — "Drop" is every Role's
+// button reads "Send to Clearance" at PROPOSED — "Drop" is every strip type's
 // TERMINAL transition and appears nowhere else.
 
 test('a Strip proposed in error can be dropped from the Strip itself, in two presses', async () => {
@@ -1571,7 +1571,7 @@ test('Drop is not offered where the server would refuse it, or where the NLA alr
     tofiCoordination: { direction: 'ENTRY', state: 'ACTIVE', peerFacilityId: 'TACTICAL', peerPositionId: 'TAC_C2' },
   }), ['CTR']), false);
 
-  // Nobody holding the Position means no control at all, not a disabled one —
+  // Nobody signed on to the Position means no control at all, not a disabled one —
   // a Strip nobody holds should not grow an affordance.
   assert.equal(await hasDrop(stripAt({ state: 'PROPOSED', ownerPositionId: 'OPS' }), []), false);
 });
@@ -1889,7 +1889,7 @@ test('a second advancing press inside the double-tap window is discarded, whiche
   // now exactly where the pointer is — so the second tap is an ordinary FIRST
   // click on a different Strip, which crc-sync's per-stripId guard is
   // structurally incapable of seeing. Lane 4's worst case: a double-tap on
-  // "Hand Off to APP" pressed "Line Up and Wait" for the jet that slid up.
+  // "Hand Off to AP" pressed "Line Up and Wait" for the jet that slid up.
   //
   // Hence board-wide. Both Strips are rendered from ONE sandbox so they share
   // the module state a real page shares.
@@ -2129,7 +2129,7 @@ test('an arrival is part of the render signature, so it appears (and clears) wit
 
 // ── §9.4 MTR fields on the Strip (crc-sync's docs/adr/0062) ──────────────────
 //
-// Fixtures built here rather than in the shared FDR above: the MTR group is
+// Fixtures built here rather than in the shared flight-data record above: the MTR group is
 // drawn only when the flight has MTR data, so most tests must keep seeing a
 // flight without it.
 
@@ -2159,7 +2159,7 @@ test('an APP ARRIVAL with an exit fix shows the M11 group as fields; without MTR
 });
 
 test('with MTR data, the expanded view still shows exactly what the face does not, in Block Map order', async () => {
-  // Proves bay-view.js's _expandedBlockIdsFor got the FDR too: had only the
+  // Proves bay-view.js's _expandedBlockIdsFor got the flight-data record too: had only the
   // face learned about the MTR group, its Blocks would be on both.
   const flightData = mtrFlightDataWith({ designator: 'IR107' });
   for (const [stripType, positionId, state] of [['DEPARTURE', 'CTR', 'HANDED_OFF'], ['ARRIVAL', 'AP', 'INBOUND'], ['OVERFLIGHT', 'CTR', 'IN_SECTOR'], ['DEPARTURE', 'OPS', 'PROPOSED']]) {
@@ -2232,9 +2232,9 @@ test('an MTR write reaches the Strip through the FDR\'s rev — the group appear
 // ── hung ordnance: every Position the pilot talks to records it (H55, S-L12) ──
 //
 // decisions.md H55 and S-L12 (crc-sync's docs/adr/0069). The server half — that
-// 3G routes on every Role — is efsp-block-map.test.mjs and the parity test; this
+// 3G routes on every strip type — is efsp-block-map.test.mjs and the parity test; this
 // is that each of those Positions can reach it from its own Strip: on the face
-// at TWR always, and at APP, CTR and the tactical Positions in ▼ while CLEAN and
+// at LC always, and at AP, CTR and the tactical Positions in ▼ while CLEAN and
 // on the face once set.
 
 const ORDNANCE_CASES = [

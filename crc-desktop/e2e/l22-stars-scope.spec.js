@@ -5,7 +5,7 @@
  * H71), drawn by the product code and photographed into docs/wip/L22/.
  *
  * The rig has no DCS, so the picture is injected the way the wire would
- * deliver it: a coverage message, an EFSP snapshot (Strips, FDRs,
+ * deliver it: a coverage message, an EFSP snapshot (Strips, flight-data records,
  * correlations, position letters), a track snapshot with each contact's
  * `scheme`, and the conformance/CA alerts. Everything after that — the
  * relation, the blocks, the colours, the black scope — is the app's own.
@@ -104,7 +104,7 @@ async function openScope(page, signedOn) {
   await page.evaluate(() => map.resize());
 }
 
-// ── Scene 1 / 4: an APP-only scope ─────────────────────────────────────────
+// ── Scene 1 / 4: an AP-only scope ─────────────────────────────────────────
 
 function appScene() {
   const c = [
@@ -206,7 +206,7 @@ test('scene 2b: the receiver end, after a point-out was accepted and a handoff t
   await snap(page, 'scene2b-receiver-after-accept.png');
 });
 
-// ── Scene 3: TAC_C2 + APP ─────────────────────────────────────────────────
+// ── Scene 3: TAC_C2 + AP ─────────────────────────────────────────────────
 
 test('scene 3: a mixed TAC_C2 + APP session — the tactical scheme wins where the E-3 sees a track', async ({ page }) => {
   await openScope(page, { INCIRLIK: ['AP'], TACTICAL: ['TAC_C2'] });

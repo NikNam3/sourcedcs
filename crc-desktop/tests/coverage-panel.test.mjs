@@ -102,7 +102,7 @@ test('each radar is listed with its range and the Position that granted it', asy
 
   assert.equal(list.children.length, 2);
   const rows = rowTexts(list);
-  // Sorted by label, so LTAG comes before LTAG APP.
+  // Sorted by label, so LTAG comes before LTAG AP.
   assert.deepEqual(rows, ['LTAG|AP/LC|40nm', 'LTAG APP|AP|80nm']);
 });
 

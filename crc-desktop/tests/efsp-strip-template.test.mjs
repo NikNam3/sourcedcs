@@ -659,7 +659,7 @@ test('§10.5: the chains are DEPARTURE-only — an ARRIVAL Block 6 is the ETA, s
   assert.deepEqual(resolveBlockValue('6', flightData, arrival), { value: '0905', provenance: 'CONTROLLER_ENTERED' });
   assert.equal(blockTitleFor('6', flightData, arrival), null);
   assert.equal(blockValueHintFor('6', flightData, arrival), null);
-  // And the collapsed face's label, which strip-view.js titles with the FDR
+  // And the collapsed face's label, which strip-view.js titles with the flight-data record
   // alone, gets no chain title — it cannot tell a P-time from an ETA.
   assert.equal(blockTitleFor('6', flightData), null);
 });

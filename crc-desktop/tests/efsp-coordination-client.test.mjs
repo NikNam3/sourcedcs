@@ -94,8 +94,8 @@ test('the Positions the client offers airspace entry to are exactly the ones the
 });
 
 // Convert to Arrival needs both the op and the right to create an ARRIVAL
-// Strip. The client used to gate on "you hold any Position" alone, so TWR saw
-// the button on an APP-owned departure and the server refused every press.
+// Strip. The client used to gate on "you hold any Position" alone, so LC saw
+// the button on an AP-owned departure and the server refused every press.
 test('the Positions the client offers Convert to Arrival to are exactly the ones the server lets do it', () => {
   const clientPositions = bayViewValue('CONVERT_TO_ARRIVAL_POSITIONS');
   const granted = Object.keys(server.PERMISSIONS)

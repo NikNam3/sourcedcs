@@ -1,7 +1,7 @@
 
 /* The client forgets archived flights (docs/adr/0082, crc-sync's archiver):
-   an efsp-board-delta's flightDataList.gone removes the FDRs, strips.gone the Strips.
-   Without it a client keeps every archived FDR until it reconnects. */
+   an efsp-board-delta's flightDataList.gone removes the flight-data records, strips.gone the Strips.
+   Without it a client keeps every archived flight-data record until it reconnects. */
 
 import test from 'node:test';
 import assert from 'node:assert/strict';

@@ -27,7 +27,7 @@
 //   - whether a Block is flightData/annotation-routed at all — if one side thinks a
 //     Block is directly writable and the other doesn't, SetBlock either
 //     silently no-ops or writes to a field the other side never reads.
-//   - for flight-data-routed Blocks: `target.path` (which FDR field) and `provenance`
+//   - for flight-data-routed Blocks: `target.path` (which flight-data field) and `provenance`
 //     (the pre-edit provenance default — see efsp-strip-template.test.mjs's own
 //     "Block 9 defaults to COMPUTER_GENERATED" test, which this mirrors).
 //   - `interlock` (docs/adr/0051) — which Blocks §9.2's MARSA void interlock
@@ -109,7 +109,7 @@ test('server and client MISSION_BLOCK_MAP agree on every Block ID, required flag
 });
 
 // §9.4 MTR fields (crc-sync's docs/adr/0062) — held explicitly rather than
-// trusted to the per-Role sweeps above: six new Blocks on three Roles is
+// trusted to the per-strip-type sweeps above: six new Blocks on three strip types is
 // eighteen places for a path to be mistyped on one side only.
 test('the six MTR Blocks are on all three ATC Roles on both sides, with identical paths, and on neither MISSION map', () => {
   const MTR = {
@@ -130,8 +130,8 @@ test('the six MTR Blocks are on all three ATC Roles on both sides, with identica
 
 // decisions.md H55 (crc-sync's docs/adr/0069): ordnance state is recorded by
 // whoever the pilot is talking to, tactical Positions included, so Block 3G is
-// on every Role — MISSION too — on both sides, onto the one FDR field. The hook
-// (3F) stays on the three ATC Roles only.
+// on every strip type — MISSION too — on both sides, onto the one flight-data field. The hook
+// (3F) stays on the three ATC strip types only.
 test('Block 3G is on all four Roles on both sides, onto military.ordnanceState, and 3F never on MISSION', () => {
   for (const stripType of ['DEPARTURE', 'ARRIVAL', 'OVERFLIGHT', 'MISSION']) {
     assert.deepEqual(server.BLOCK_MAPS[stripType]['3G'].target, { kind: 'military', field: 'ordnanceState' }, `server ${stripType}/3G`);
@@ -154,7 +154,7 @@ test('14E is the alert status on DEPARTURE on both sides, and on no other Role',
   }
 });
 
-// crc-sync's docs/adr/0074 (ADR 0064 B3): the carrier's three Roles. The generic sweep above
+// crc-sync's docs/adr/0074 (ADR 0064 B3): the carrier's three strip types. The generic sweep above
 // holds required, writability and (now) the dedicated kind and `field` of every Block; these
 // say what the design promises, on BOTH sides.
 test('the carrier Block Maps agree on both sides (MARSHAL, FINAL, PATTERN)', () => {
