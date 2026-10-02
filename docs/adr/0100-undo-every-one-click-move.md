@@ -1,6 +1,6 @@
 # 0100 — Undo for every one-click Strip move, 10 s, restoring the state before the action
 
-**Status.** Accepted (decisions.md H95, H100); being built by lane UNDO-S. Supersedes ADR 0009. Drafted in `docs/wip/DES-SPLIT-adr-0100.md`; this copy edits only what the lane's code-as-found proved different (`docs/wip/UNDO-S.md`).
+**Status.** Built (lane UNDO-S, 2026-10-02; decisions.md H95, H100). Supersedes ADR 0009. Drafted in `docs/wip/DES-SPLIT-adr-0100.md`; "As built" at the end records what the build settled that the draft left open.
 
 Vocabulary is post-RENAME (H96, H98): flight data (today FDR), strip type (Role), staffed (occupied), consolidation
 (covering), **CarrierHandoff** (today `CarrierTransfer`), Interfacility (today `Peer*`), beacon code.
@@ -225,3 +225,33 @@ persisted on a Strip or in the Board snapshot.
   compensators, `OBSERVED_PATHS` in the flight-data store, `VOIDED` cell status, the `efsp-undo-voided` panel message, ack
   `undoable`, metrics counters, the client slot.
 - Every later op (the release lane's, AIRSP's) declares `undo` and lists any system-written field as observed.
+
+## As built (UNDO-S)
+
+What the code settled inside this decision (`docs/wip/UNDO-S.md` has the code as found and the reasons):
+
+- **The contract.** `src/efsp/undo/undo-history.js`. Each op module's `undo` is `'none'` or
+  `{ label(op, strip, ctx), scope(ctx, strip, op), created?(result, ctx) }`; `scope` may return `null`, meaning
+  that action of the op kind is not undoable (HANDOFF's marks vs its other actions, TOFI `PROPOSE` vs `ACCEPT`).
+  `StripOps` refuses to start with a module that declares nothing. Shared scopes: `src/efsp/undo/scopes.js`.
+- **How later changes are seen (§4).** Every `applyMutation` on every Board is one frame of the history
+  (`begin` … `commit`). Every Board touch (`BoardState#recordTouch`, with a `placementOnly` flag that a rebalance
+  sets) and every flight-data write (`FlightDataStore#setWriteObserver`; `OBSERVED_PATHS` are not reported) joins
+  the open frame. A peer write happens inside the sender's frame, so another Facility's answer is seen as coming
+  from that Facility. A write outside any frame is a system change: a sign-off's reassignment, and the non-Board
+  families' writes to a scoped record (a MARSA declaration or void, an ATO import) block.
+- **An action that changed nothing** (the NLA's 400 ms double-tap guard) is not undoable.
+- **A restored Strip** is its before-image except `rev`, `updatedAt`, `updatedBy`, and annotation entries added
+  since, which are `VOIDED` (§3's append-only rule applies to Strip annotations as well as clearance cells).
+- **Where an Undo is sent.** To the Facility of the undone action (the record's Board); elsewhere it is
+  `UNDO_UNAVAILABLE` naming that Facility. Another Board's Strips are restored there through `receiveUndoRestore`.
+- **The panel message (§6).** crc-sync had no per-Position message path, so `efsp-undo-voided` is new:
+  `efsp-ws.js` returns it as directed frames and `ws-hub.js` sends each, after the round trip's broadcasts, to the
+  sessions signed on to that Position whose read scope (ADR 0080) shows the Strip. It also carries `stripId`.
+- **The Undo ack** carries `undone: { actionId, op, label, transfer }`; `transfer` (the undone action moved the
+  Strip to another Position) feeds `undoneTransfers`.
+- **Undoable ops as built:** `InvokeNla`, `SetState`, `DropStrip`, `MoveStrip`, `TransferStrip`,
+  `ConvertToArrival`, `CarrierHandoff`, `SfaRotation`, `TOFI` `PROPOSE` (`ENTRY`, `EXIT`). `'none'`: `CreateStrip`,
+  `SetBlock`, `SetFlag`, the five coordination primitives (the release lane declares its three marks, S-DESK4),
+  `ApproveAirspaceEntry`, `ClearAirspaceEntry`, `Undo`. SPLIT-JOIN declares `SplitFormation` and `JoinFormation`.
+

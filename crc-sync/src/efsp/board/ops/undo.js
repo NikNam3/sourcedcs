@@ -103,6 +103,10 @@ function _applyUndo(ctx, meta) {
   }
 
   const compensators = {};
+  // Created flight data (a split part's, ADR 0099) is archived at once, which releases its code (§3).
+  for (const id of plan.created.flightData || []) {
+    if (env.flightDataStore.archiveFlightData(id)) (compensators.archivedFlightData = compensators.archivedFlightData || []).push(id);
+  }
   const marsaChanged = [];
   for (const image of marsaActions) {
     const reopened = env.marsaStore.reopenRelation(image, { causedBy: clientMutationId, by });

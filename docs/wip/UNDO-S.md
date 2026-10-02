@@ -71,10 +71,69 @@ Names are post-RENAME (the briefing's names map 1:1 through the glossary; differ
   frames `{facilityId, positionId, frame}` and the hub sends each to the sessions signed on to that Position. That is
   a few lines in `ws-hub.js` (not owned): asked "main" at the wire step.
 
+## Each op's declared scope (as built)
+
+| Op | `undo` | Scope |
+|---|---|---|
+| `InvokeNla` | label by route | as the route: state-only/transfer → Strip + flight data; terminal Drop → retire scope; carrier → + carrier entry |
+| `SetState` | `Set <state>` / `Drop` | Strip + flight data (takeoff stamp); `DROPPED` → retire scope |
+| `DropStrip` | `Drop <cs>` | retire scope: Strip, flight data, code, `{flightDataId}` MARSA + every participant's flight data, carrier entry (MARSHAL/FINAL/PATTERN), the proposer's Strip on the peer Board for a replica |
+| `MoveStrip`, `TransferStrip`, `ConvertToArrival`, `SfaRotation` | yes | Strip + flight data |
+| `CarrierHandoff` | the kind's label | Strip + flight data + carrier entry |
+| `TOFI` | `PROPOSE` only (`null` otherwise) | Strip + flight data; EXIT + the MRU Strip; ENTRY + the MRU's live Strips of the flight, `created` the minted one |
+| `CreateStrip`, `SetBlock`, `SetFlag`, `HANDOFF`…`AIT`, `ApproveAirspaceEntry`, `ClearAirspaceEntry`, `Undo` | `'none'` | – |
+
+## Questioner's points (QA-UNDO-S)
+
+- **QA-UNDO-S-1** (per-action undoability): `scope` may return `null` (contract amendment `0417f7e`).
+- **Frameless controller writes.** Board Mutations all run in a frame. Writes outside any frame: the non-Board
+  families (MARSA ops write the regime on flight data through `setTofi`; the ATO import's `applyAtoTasking`; carrier
+  stack ops; correlation's `setBeaconObserved` is an observed path and never reported), `reassignPositionStrips` /
+  `returnConsolidatedStrips` (system), and archiving (no touch: the restore check finds the Strip missing,
+  `NOT_FOUND`). Each that touches a scoped record blocks the undo as a system change; none voids.
+- **Replay across a restart.** The replay cache persists (`REPLAY_PERSIST_WINDOW_MS`); the undo history does not.
+  After a restart the original action's cmid answers from the cache (no re-apply), an Undo is `UNDO_UNAVAILABLE`, and
+  the Board epoch is new (U13).
+
+## Outside Owns (approved by main)
+
+- `src/ws-hub.js`: 7 lines in the efsp result branch sending directed frames (S-UNDO0).
+- `crc-desktop/app/public/js/panels/efsp/efsp-nla.js` `UNDO_WINDOW_MS` 30000 → 10000; `crc-desktop/tests/client-mirror-parity.test.mjs`
+  reads crc-sync's `UNDO_WINDOW_MS` from `undo/undo-history.js`; `crc-desktop/tests/ws-message-contract.test.mjs`
+  `SERVER_ONLY_OK['efsp-undo-voided']`, **which UNDO-C removes when it adds the app.js handler** (S-UNDO2).
+- Tests and tools that used the old `{kind:'Undo'}`: `efsp-board-store`, `efsp-archiver`, `efsp-scenarios`,
+  `efsp-scenario-time-chains`, `-tactical`, `-incirlik-l18`, `-traffic-count`, `efsp-traffic-count`, `efsp-ui-findings`,
+  `clock-policy` (allow-list), `tools/soak/driver.js` (sends the actionId of its last undoable ack),
+  `tests/freeze/freeze-traces.mjs` (the hub-op-matrix walk names its actions).
+
 ## Defaults taken (P2)
 
-- (filled as they come)
+- `label(op, strip, ctx)`: the third argument so a label names the callsign (additive to the contract).
+- An Undo is answered at the undone action's Facility only (`UNDO_UNAVAILABLE` elsewhere, naming it).
+- Restored Strip annotations: entries added since are `VOIDED` (ADR §3 read over §6's "byte-for-byte").
+- `undoneTransfers`: an Undo whose undone action had moved the Strip to another Position (`undone.transfer`).
+- The control-invariant backstop (U23): a restored HANDOFF record (INITIATED/ACTIVE) whose peer Strip is retired or
+  gone is `UNDO_BLOCKED`. CR-S's comms/control holder fields are not there yet; CR-S extends the check.
+- `BoardStore` built alone (tests, tools) gets its own history on the wall clock; `createEfsp` shares one
+  (`wallClock` option, default `WALL_CLOCK`).
+- Flight-data write paths: `setField` reports its path (plus `assigned` / `identity.equipmentSuffix` for the derived
+  fields); the other writers report their section (`tofi`, `military`, `comms`, `airspace`).
 
 ## Findings for other lanes
 
-- (filled as they come)
+- **SJ-S:** declare `SplitFormation`/`JoinFormation` with `created` for the split part and its flight data; the
+  executor removes a created Strip (`gone`) and archives a created flight data (its code released), but no wire
+  frame says the flight data is gone (no op created one before): the delta for that is SJ-S's. `metrics.recordFormation` is keyed
+  on the op kind and already counted by the tap.
+- **CR-S:** the three marks return a scope from `scope` and `null` for the other HANDOFF actions. Extend
+  `controlInvariantRefusal` (`board/ops/undo.js`) with the comms/control holder fields of ADR 0101.
+- **TOFI-REGIME / AIRSP:** any field a monitor writes on a Strip or flight data outside a Mutation blocks open
+  undos of that record; if it should not, write it as an observed path (`OBSERVED_PATHS`) or inside no scope.
+- **UNDO-C:** wire as in the ADR's "As built"; remove `SERVER_ONLY_OK['efsp-undo-voided']`.
+- `StripOps#retire` and `BoardStore#applyMutation` still read a bare `Date.now()` (allow-listed, not this lane's).
+
+## Release note
+
+- Undo now works for every one-click Strip move (hand-offs, drags, drops, carrier hand-offs, SFA rotation, the
+  airborne chip, TOFI proposals) for 10 seconds, by the Position that did it; it puts the Strip back as it was and
+  voids later changes made at the same Facility (the controller whose change was voided gets a panel message).
