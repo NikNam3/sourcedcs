@@ -137,7 +137,7 @@ function mountArea(ctx, definition) {
         r.appendChild(_el('span', '', it.name));
         const meta = it.eligible
           ? `${it.shape} · ${it.simplifiedFrom ? `${it.simplifiedFrom} → ${it.pointCount}` : it.pointCount} pts`
-          : `${it.shape} · ${it.reason}`;
+          : it.reason;
         r.appendChild(_el('span', 'asg-drawing-meta', meta));
         if (it.eligible) r.addEventListener('click', () => {
           const pick = geometryFromDrawing(drawings(), it.index, missionData);
@@ -180,6 +180,8 @@ function mountRoute(ctx, definition) {
   const savedJson = JSON.stringify([definition.segments ?? null, definition.defaultWidthNm ?? null]);
 
   const emit = () => ctx.onChange({ segments: segmentsFromRows(st.rows), defaultWidthNm: st.defaultWidthNm });
+  // A cell edit must not rebuild the table (that would drop the focus a Tab is moving to): it updates these in place.
+  const refs = { cells: new Map(), legs: [], lo: null, hi: null, chip: null, dot: null, summary: null };
   const fmt = () => coordFormatOf(settings.coordFormat);
 
   function cell(row, i, field) {
@@ -194,6 +196,7 @@ function mountRoute(ctx, definition) {
       return row.widthNm == null ? '' : String(row.widthNm);
     };
     input.value = show();
+    refs.cells.set(fieldKey, { input, show });
     if (field === 'lon' && format === 'MGRS') { input.disabled = true; input.placeholder = 'in MGRS'; }
     if (field === 'widthNm') input.placeholder = String(st.defaultWidthNm);
     if (field === 'lat' && format === 'MGRS') input.placeholder = '36S XC 12345 12345';
@@ -218,10 +221,29 @@ function mountRoute(ctx, definition) {
         if (t === '') row.widthNm = null;
         else { const v = Number(t); if (!(v > 0 && v <= MAX_WIDTH_NM)) st.bad.add(fieldKey); else row.widthNm = v; }
       }
-      emit(); render();
+      emit(); syncRow(i);
     });
     return input;
   }
+
+  /** After a cell edit: show what was understood in the row's cells, then the derived parts of the section. */
+  function syncRow(i) {
+    for (const f of ['name', 'lat', 'lon', 'altLowerFt', 'altUpperFt', 'widthNm']) {
+      const c = refs.cells.get(`${i}:${f}`); if (!c) continue;
+      c.input.value = c.show(); c.input.classList.toggle('asg-bad', st.bad.has(`${i}:${f}`));
+    }
+    refreshDerived();
+  }
+  function refreshDerived() {
+    const env = routeEnvelope(st.rows);
+    if (refs.lo) refs.lo.value = altitudeText(env.altLowerFt, settings.transitionAltFt) || 'surface';
+    if (refs.hi) refs.hi.value = altitudeText(env.altUpperFt, settings.transitionAltFt) || 'unbounded';
+    st.rows.forEach((r, k) => { if (refs.legs[k] && k < st.rows.length - 1) refs.legs[k].textContent = `${r.name || '?'} \u2192 ${st.rows[k + 1].name || '?'}`; });
+    const changed = savedJson !== JSON.stringify([segmentsFromRows(st.rows), st.defaultWidthNm]) && !!definition.segments;
+    if (refs.dot) refs.dot.hidden = !changed;
+    if (refs.summary) refs.summary.textContent = summaryText();
+  }
+  const summaryText = () => `A blank width uses the default (${st.defaultWidthNm} NM). Altitudes are indicated feet, FL from ${settings.transitionAltFt}. ${routeSummary(st.rows, st.defaultWidthNm)}.${canAddFix(st.rows) ? '' : ` At most ${MAX_ROUTE_SEGMENTS} fixes.`}`;
 
   function navMenu(i, anchor) {
     const menu = _el('div', 'asg-navmenu');
@@ -269,6 +291,7 @@ function mountRoute(ctx, definition) {
 
   function render() {
     const root = ctx.root; root.innerHTML = '';
+    refs.cells.clear(); refs.legs = [];
     root.classList.toggle('asg-readonly', !!ctx.readOnly);
     const changed = savedJson !== JSON.stringify([segmentsFromRows(st.rows), st.defaultWidthNm]) && !!definition.segments;
     const head = _el('div', 'asg-head');
@@ -286,10 +309,16 @@ function mountRoute(ctx, definition) {
     const lab = (text, node) => { const l = _el('label'); l.append(document.createTextNode(text), node); return l; };
     const w = _el('input', 'airspace-input'); w.type = 'text'; w.id = 'asg-default-width'; w.value = String(st.defaultWidthNm ?? '');
     w.disabled = !!ctx.readOnly;
-    w.addEventListener('change', () => { const v = Number(w.value); if (v > 0 && v <= MAX_WIDTH_NM) { st.defaultWidthNm = v; st.bad.delete('width'); } else st.bad.add('width'); emit(); render(); });
+    w.addEventListener('change', () => {
+      const v = Number(w.value); if (v > 0 && v <= MAX_WIDTH_NM) { st.defaultWidthNm = v; st.bad.delete('width'); } else st.bad.add('width');
+      w.classList.toggle('asg-bad', st.bad.has('width'));
+      for (const [k, c] of refs.cells) if (k.endsWith(':widthNm')) c.input.placeholder = String(st.defaultWidthNm);
+      emit(); refreshDerived();
+    });
     if (st.bad.has('width')) w.classList.add('asg-bad');
     const lo = _el('input', 'airspace-input asg-derived'); lo.disabled = true; lo.value = altitudeText(env.altLowerFt, settings.transitionAltFt) || 'surface';
     const hi = _el('input', 'airspace-input asg-derived'); hi.disabled = true; hi.value = altitudeText(env.altUpperFt, settings.transitionAltFt) || 'unbounded';
+    refs.lo = lo; refs.hi = hi;
     top.append(lab('DEFAULT WIDTH NM', w), lab('ALT LOWER (DERIVED)', lo), lab('ALT UPPER (DERIVED)', hi));
     top.appendChild(_el('div', 'asg-text', 'Width is total (as stored); MTR charts quote it each side of the centreline, so 4 NM is ±2. The envelope is computed from the legs (crc-sync recomputes it on save). It is what a Strip\'s altitude block is checked against.'));
     root.appendChild(top);
@@ -327,7 +356,8 @@ function mountRoute(ctx, definition) {
     const add = _el('button', 'asg-btn', '+ Add fix'); add.type = 'button'; add.id = 'asg-add-fix';
     add.disabled = !!ctx.readOnly || !canAddFix(st.rows);
     add.addEventListener('click', () => { st.rows = addFix(st.rows, {}); emit(); render(); });
-    foot.append(add, _el('span', 'asg-why', `A blank width uses the default (${st.defaultWidthNm} NM). Altitudes are indicated feet, FL from ${settings.transitionAltFt}. ${routeSummary(st.rows, st.defaultWidthNm)}.${canAddFix(st.rows) ? '' : ` At most ${MAX_ROUTE_SEGMENTS} fixes.`}`));
+    refs.summary = _el('span', 'asg-why', summaryText());
+    foot.append(add, refs.summary);
     root.appendChild(foot);
     void legWidthNm;
   }

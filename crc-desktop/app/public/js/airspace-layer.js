@@ -163,6 +163,9 @@ export function currentTheater() { return (missionData && missionData.theatre) |
 export function applyMenu(menu) { settings.airspaceMenu = menu; saveSettings(); refreshAirspaceLayers(); }
 
 const EMPTY = { type: 'FeatureCollection', features: [] };
+let _last = { outlines: EMPTY, centrelines: EMPTY, labels: EMPTY };
+/** What the map was last given (the e2e specs read it; MapLibre does not keep the data object). */
+export function lastAirspaceFeatures() { return _last; }
 
 /** One registration line in map-setup.js: the sources and layers, below the tracks. */
 export function registerAirspaceLayers() {
@@ -198,6 +201,7 @@ export function refreshAirspaceLayers() {
     if (pruned !== menu) { menu = pruned; settings.airspaceMenu = menu; saveSettings(); }
   }
   const f = buildAirspaceFeatures(airspaces, menu, theater, { transitionAltFt: settings.transitionAltFt, lightMode: !!settings.lightMode });
+  _last = f;
   map.getSource('airspace-outlines').setData(f.outlines);
   map.getSource('airspace-centrelines').setData(f.centrelines);
   map.getSource('airspace-labels').setData(f.labels);

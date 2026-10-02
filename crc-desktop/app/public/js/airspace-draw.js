@@ -19,7 +19,23 @@ import { MAX_POLYGON_VERTICES } from './panels/efsp/airspace-validate.js';
 
 const CLOSE_PX = 12;
 const SNAP_PX = 12;
+const HIT_PX = 10;
 let _session = null;
+
+/** The point (vertex) or midpoint under a screen position, found from the session's own points, not from what was last rendered. */
+function hitAt(point, withMids) {
+  const s = _session; if (!s) return null;
+  let best = null; let bestD = HIT_PX;
+  s.points.forEach((p, i) => { const q = map.project([p[1], p[0]]); const d = Math.hypot(q.x - point.x, q.y - point.y); if (d <= bestD) { bestD = d; best = { role: 'vertex', index: i }; } });
+  if (!best && withMids && s.closed) {
+    s.points.forEach((p, i) => {
+      const n = s.points[(i + 1) % s.points.length];
+      const q = map.project([(p[1] + n[1]) / 2, (p[0] + n[0]) / 2]); const d = Math.hypot(q.x - point.x, q.y - point.y);
+      if (d <= bestD) { bestD = d; best = { role: 'mid', index: i, lat: (p[0] + n[0]) / 2, lon: (p[1] + n[1]) / 2 }; }
+    });
+  }
+  return best;
+}
 
 export function isDrawing() { return !!_session; }
 
@@ -135,7 +151,7 @@ function render() {
     s.btnDone.hidden = true; s.btnDelete.hidden = true; s.btnFinish.hidden = true; s.btnUndo.hidden = true;
     return;
   }
-  s.title.textContent = `${s.closed ? 'EDITING' : (s.route ? 'ADDING FIXES' : 'DRAWING')} ${s.route ? 'ROUTE' : 'OUTLINE'} · ${s.o.title || ''} · ${s.points.length} ${s.route ? 'fixes' : 'points'}`;
+  s.title.textContent = `${s.closed ? 'EDITING' : (s.route ? 'ADDING FIXES' : 'DRAWING')} ${s.route ? 'ROUTE' : 'OUTLINE'}${s.o.title ? ` · ${s.o.title}` : ''} · ${s.points.length} ${s.route ? 'fixes' : 'points'}`;
   s.help.textContent = s.route
     ? 'Click the map to add a fix. A click near a navpoint snaps to it.'
     : (s.closed ? `Drag a point to move it. Drag a small midpoint to insert a point. Select a point and press Delete to remove it (not below ${MIN_POLYGON_VERTICES}).`
@@ -166,11 +182,11 @@ function onClick(e) {
     const fix = { lat: nav ? nav.lat : e.lngLat.lat, lon: nav ? nav.lon : e.lngLat.lng, name: nav ? (nav.name || null) : null };
     const cb = s.o.onPick; stopDraw(); if (cb) cb(fix); return;
   }
-  const hit = map.queryRenderedFeatures(e.point, { layers: ['airspace-draft-vertex'] })[0];
+  const hit = hitAt(e.point, false);
   if (s.closed) { // editing: a click selects a point, or clears the selection
-    s.selected = hit ? hit.properties.index : null; render(); return;
+    s.selected = hit ? hit.index : null; render(); return;
   }
-  if (!s.route && hit && hit.properties.index === 0 && s.points.length >= MIN_POLYGON_VERTICES) { closeShape(); return; }
+  if (!s.route && hit && hit.index === 0 && s.points.length >= MIN_POLYGON_VERTICES) { closeShape(); return; }
   if (!s.route && s.points.length >= MAX_POLYGON_VERTICES) return;
   let p = [e.lngLat.lat, e.lngLat.lng]; let name = null;
   if (s.route) { const nav = snapToNavpoint(e.point); if (nav) { p = [nav.lat, nav.lon]; name = nav.name || null; } }
@@ -179,12 +195,12 @@ function onClick(e) {
 
 function onDown(e) {
   const s = _session; if (!s || !s.closed || s.route || e.originalEvent.button !== 0) return;
-  const hit = map.queryRenderedFeatures(e.point, { layers: ['airspace-draft-vertex', 'airspace-draft-mid'] })[0];
+  const hit = hitAt(e.point, true);
   if (!hit) return;
   e.preventDefault();
-  let index = hit.properties.index;
-  if (hit.properties.role === 'mid') { s.points = insertPoint(s.points, index, [hit.geometry.coordinates[1], hit.geometry.coordinates[0]]); index += 1; }
-  s.drag = { index, moved: hit.properties.role === 'mid' }; s.selected = index;
+  let index = hit.index;
+  if (hit.role === 'mid') { s.points = insertPoint(s.points, index, [hit.lat, hit.lon]); index += 1; }
+  s.drag = { index, moved: hit.role === 'mid' }; s.selected = index;
   map.dragPan.disable(); render();
 }
 function onMove(e) {

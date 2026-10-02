@@ -72,7 +72,7 @@ async function edit(page, id) {
   await expect(ed).toBeVisible();
   return ed;
 }
-const outlineIds = (page) => page.evaluate(() => crc.app.map.getSource('airspace-outlines')._data.features.map(f => f.properties.id).sort());
+const outlineIds = (page) => page.evaluate(() => crc.airspaceLayer.lastAirspaceFeatures().outlines.features.map(f => f.properties.id).sort());
 const px = (page, lat, lon) => page.evaluate(([a, o]) => { const p = crc.app.map.project([o, a]); const r = crc.app.map.getCanvas().getBoundingClientRect(); return { x: r.left + p.x, y: r.top + p.y }; }, [lat, lon]);
 async function clickMap(page, lat, lon) { const p = await px(page, lat, lon); await page.mouse.click(p.x, p.y); }
 
@@ -324,7 +324,7 @@ test('the layer menu: default is ACTIVE only; RETURNED on draws dashed outlines;
     rec(ROUTE(), { state: 'ACTIVE' }),
   ]);
   await expect.poll(() => outlineIds(page)).toEqual(['A-ACTIVE', 'C-ACTIVE', 'VR1207']);
-  const features = await page.evaluate(() => crc.app.map.getSource('airspace-outlines')._data.features.map(f => ({ id: f.properties.id, dashed: f.properties.dashed })));
+  const features = await page.evaluate(() => crc.airspaceLayer.lastAirspaceFeatures().outlines.features.map(f => ({ id: f.properties.id, dashed: f.properties.dashed })));
   expect(features.every(f => f.dashed === false)).toBe(true);
 
   const btn = page.locator('#airspace-menu-btn');
@@ -338,7 +338,7 @@ test('the layer menu: default is ACTIVE only; RETURNED on draws dashed outlines;
 
   await pop.locator('.aslm-check', { hasText: 'RETURNED' }).locator('input').check();
   await expect.poll(() => outlineIds(page)).toEqual(['A-ACTIVE', 'B-RETURNED', 'C-ACTIVE', 'VR1207']);
-  const dashed = await page.evaluate(() => crc.app.map.getSource('airspace-outlines')._data.features.find(f => f.properties.id === 'B-RETURNED').properties.dashed);
+  const dashed = await page.evaluate(() => crc.airspaceLayer.lastAirspaceFeatures().outlines.features.find(f => f.properties.id === 'B-RETURNED').properties.dashed);
   expect(dashed).toBe(true);
   await pop.locator('.aslm-row', { hasText: 'ACTIVE TWO' }).locator('.aslm-seg-btn', { hasText: 'Off' }).click();
   await expect.poll(() => outlineIds(page)).toEqual(['A-ACTIVE', 'B-RETURNED', 'VR1207']);
@@ -375,6 +375,6 @@ test('labels carry the name and the limits, FL from the transition altitude; a n
   await open(page, ['AP'], [rec(def({ geometry: g, altLowerFt: null, altUpperFt: 18000 }), { state: 'ACTIVE' })]);
   await page.evaluate(() => { crc.app.settings.transitionAltFt = 10000; });
   await page.evaluate(() => crc.airspace.renderAirspacePanel());
-  const text = await page.evaluate(() => crc.app.map.getSource('airspace-labels')._data.features[0].properties.text);
+  const text = await page.evaluate(() => crc.airspaceLayer.lastAirspaceFeatures().labels.features[0].properties.text);
   expect(text).toBe('MOA ADANA SOUTH\nGND–FL180');
 });
