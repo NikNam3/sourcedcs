@@ -114,7 +114,7 @@ class MarsaStore {
     this._flightDataExists = flightDataExists || (() => true);
     this._setSeparationRegime = setSeparationRegime || (() => ({ ok: true }));
     this._relations = new Map(); // marsaId -> relation
-    this._sync = new SyncLog(); // the store's sequence: a counter only, no ring, no epoch (sync/sync-log.js, S3-1)
+    this._sync = new SyncLog({ epoch: true }); // the store's sequence and its lifetime (epoch, not persisted): no ring, the resync answer is the snapshot slice (docs/adr/0105)
     this._mutationLog = null;
     // The flight data _applyRegime wrote during the op currently being applied, for
     // the caller to drain and broadcast. See drainRegimeWrites().
@@ -161,6 +161,8 @@ class MarsaStore {
   setMutationLog(mutationLog) { this._mutationLog = mutationLog; }
 
   get currentSeq() { return this._sync.seq; }
+  /** The lifetime this store's seq belongs to (docs/adr/0105): new per process, never persisted. */
+  get epoch() { return this._sync.epoch; }
 
   getRelation(marsaId) {
     const relation = this._relations.get(marsaId);

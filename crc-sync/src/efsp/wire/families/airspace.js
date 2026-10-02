@@ -73,7 +73,7 @@ module.exports = {
     conflicts: result.conflicts, blockers: result.blockers,
     created: result.created, skipped: result.skipped, removed: result.removed,
     effectiveAtRestart: result.effectiveAtRestart, theater: result.theater,
-    airspaceSeq: ctx.airspaceStore.currentSeq,
+    airspaceSeq: ctx.airspaceStore.currentSeq, airspaceEpoch: ctx.airspaceStore.epoch,
   }),
 
   // Broadcast to everyone, not just the two parties: an airspace going active
@@ -90,7 +90,7 @@ module.exports = {
     return {
       primary: {
         version: VERSION, type: 'efsp-airspace-delta',
-        airspaceSeq: ctx.airspaceStore.currentSeq,
+        airspaceSeq: ctx.airspaceStore.currentSeq, airspaceEpoch: ctx.airspaceStore.epoch,
         airspaces: { updated, ...(removed.length ? { removed } : {}) },
       },
     };

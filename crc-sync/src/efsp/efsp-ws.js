@@ -37,6 +37,7 @@ const families = require('./wire/families');
 
 // The resync window and the delta-or-snapshot decision live with the ring (sync/sync-log.js).
 const { canServeDelta, RESYNC_RING_WINDOW } = require('./sync/sync-log');
+const { STORE_SYNC } = require('./stores');
 
 function handleMessage(ctx, session, msg, persist) {
   const family = families.byType[msg.type];
@@ -203,8 +204,62 @@ function _handleMutation(ctx, session, msg, persist) {
  * getDeltaSince reports as `gone`.
  */
 function _handleResync(ctx, session, msg) {
+  // A request that names no Board position asks about the other stores only (docs/adr/0105): answered with their
+  // slices and no Board answer, which would be a full snapshot for a lastBoardSeq it was never given.
+  const storesOnly = msg.stores && typeof msg.stores === 'object' && msg.lastBoardSeq === undefined && msg.boardEpoch === undefined;
+  if (storesOnly) {
+    return { ack: { version: VERSION, type: 'efsp-resync-reply', answer: 'stores', stores: storeSlicesFor(ctx, session, msg.stores) }, broadcasts: skeleton.orderSlots(null) };
+  }
   const { ack } = _resyncAnswer(ctx, session, msg);
-  return { ack: _asResyncReply(ack), broadcasts: skeleton.orderSlots(null) };
+  const reply = _asResyncReply(ack);
+  // A full snapshot already carries every store; only a delta answer gets slices beside it.
+  if (reply.answer === 'delta' && msg.stores && typeof msg.stores === 'object') reply.stores = storeSlicesFor(ctx, session, msg.stores);
+  return { ack: reply, broadcasts: skeleton.orderSlots(null) };
+}
+
+/** The sync-declared stores that exist in this ctx: `{ ...declaration, store }`. */
+function syncedStores(ctx) {
+  const out = [];
+  for (const decl of STORE_SYNC) {
+    const store = ctx.stores && ctx.stores[decl.registryKey];
+    if (store) out.push({ ...decl, store });
+  }
+  return out;
+}
+
+/**
+ * The `stores` of an efsp-resync-reply (docs/adr/0105): for each store the client named whose epoch differs from ours
+ * or whose seq is not ours, `{ seq, epoch, slice }`, `slice` being what the full snapshot carries under that store's key,
+ * filtered for this session's read scope (docs/adr/0080). A store the client already has is left out; one it did not name is too.
+ * @param {Record<string, {lastSeq?: number, epoch?: string}>} asked
+ */
+function storeSlicesFor(ctx, session, asked) {
+  const out = {};
+  const scope = readScopeOf(ctx, session);
+  let strips = null;
+  for (const { key, store } of syncedStores(ctx)) {
+    const have = asked[key];
+    if (!have || typeof have !== 'object') continue;
+    if (have.epoch === store.epoch && have.lastSeq === store.currentSeq) continue;
+    let slice = families.bySnapshotKey[key].snapshot(ctx);
+    if (scope.kind !== readScope.ALL) {
+      strips = strips || liveStamped(ctx);
+      slice = readScope.filterSnapshot({ strips, [key]: slice }, scope)[key];
+    }
+    out[key] = { seq: store.currentSeq, epoch: store.epoch, slice };
+  }
+  return out;
+}
+
+/**
+ * The heartbeat's `stores`: `{ [snapshotKey]: { seq, epoch } }` for every store with a sync declaration (docs/adr/0105).
+ * Built once per tick. The same for every session: an owned-scope session is sent a (possibly empty) delta for every
+ * change of a filtered store, so its seq is continuous and the numbers hide nothing.
+ */
+function heartbeatStores(ctx) {
+  const out = {};
+  for (const { key, store } of syncedStores(ctx)) out[key] = { seq: store.currentSeq, epoch: store.epoch };
+  return out;
 }
 
 /**
@@ -418,7 +473,11 @@ function supplementFor(ctx, session, filtered) {
   const records = ctx.correlationStore ? [...flightDataIds].map(id => ctx.correlationStore.getCorrelation(id)).filter(Boolean) : [];
   if (records.length) out.push({ version: VERSION, type: 'efsp-correlation-delta', correlations: { updated: records } });
   const relations = ctx.marsaStore ? ctx.marsaStore.getAll().filter(r => (r.participants || []).some(id => flightDataIds.has(id))) : [];
-  if (relations.length) out.push(marsaDelta(ctx.marsaStore, relations));
+  if (relations.length) {
+    // A supplement is a partial: it names no seq, so it cannot move the client's marsaSeq past a change it never got (docs/adr/0105).
+    const { marsaSeq, marsaEpoch, ...supplement } = marsaDelta(ctx.marsaStore, relations);
+    out.push(supplement);
+  }
   return out;
 }
 
@@ -469,6 +528,13 @@ function familySnapshots(ctx) {
   return out;
 }
 
+function storeMaps(ctx) {
+  const storeSeqs = {};
+  const storeEpochs = {};
+  for (const { key, store } of syncedStores(ctx)) { storeSeqs[key] = store.currentSeq; storeEpochs[key] = store.epoch; }
+  return { storeSeqs, storeEpochs };
+}
+
 function _fullSnapshotMessage(ctx) {
   const { flightDataStore, facilityConfig } = ctx;
   const facilityIds = facilityConfig.getFacilityIds();
@@ -503,6 +569,8 @@ function _fullSnapshotMessage(ctx) {
     facilities: facilityIds,
     boardSeqByFacility,
     boardEpochByFacility,
+    // Every other store's seq and lifetime, by snapshot key (docs/adr/0105).
+    ...storeMaps(ctx),
     aitAuthorizedByFacility,
     // The character each Position's owned contacts carry on an ATC scope
     // (docs/adr/0088). Config, so it rides the snapshot only.
@@ -513,4 +581,4 @@ function _fullSnapshotMessage(ctx) {
   };
 }
 
-module.exports = { handleMessage, directedFor, carrierDelta, sfaDelta, snapshotMessage: _snapshotMessage, filterForSession, supplementFor, readScopeKey, readScopeOf, heartbeatBoardsAll, heartbeatBoardsFor, RESYNC_RING_WINDOW };
+module.exports = { handleMessage, directedFor, carrierDelta, sfaDelta, snapshotMessage: _snapshotMessage, filterForSession, supplementFor, readScopeKey, readScopeOf, heartbeatBoardsAll, heartbeatBoardsFor, heartbeatStores, RESYNC_RING_WINDOW };

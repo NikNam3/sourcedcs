@@ -64,7 +64,7 @@ module.exports = {
   fromCached: (ctx, cached) => ({ ...cached, relation: cached.id ? ctx.marsaStore.getRelation(cached.id) : undefined }),
   ack: (result, ctx) => ({
     marsa: result.relation, reason: result.reason, detail: result.detail,
-    marsaSeq: ctx.marsaStore.currentSeq,
+    marsaSeq: ctx.marsaStore.currentSeq, marsaEpoch: ctx.marsaStore.epoch,
   }),
 
   // Broadcast to everyone rather than to the participants' owners, matching

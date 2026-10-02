@@ -32,7 +32,7 @@ module.exports = {
   rememberId: () => null,
   persistWhen: (result) => result.ok && result.changed,
   fromCached: (ctx, cached) => cached,
-  ack: (result, ctx) => ({ sfaRotation: ctx.sfaStore.view(), reason: result.reason, detail: result.detail, sfaSeq: ctx.sfaStore.currentSeq }),
+  ack: (result, ctx) => ({ sfaRotation: ctx.sfaStore.view(), reason: result.reason, detail: result.detail, sfaSeq: ctx.sfaStore.currentSeq, sfaEpoch: ctx.sfaStore.epoch }),
   broadcasts: (result, ctx) => (result.changed ? { sfa: sfaDelta(ctx.sfaStore) } : {}),
 
   // Who is on which SFA frequency (docs/adr/0075, 0093), sent whole; null where

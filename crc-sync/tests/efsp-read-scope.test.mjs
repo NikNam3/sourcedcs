@@ -85,15 +85,15 @@ test('board delta: visible Strips stay, every other updated Strip goes to gone, 
   assert.equal(none.boardSeq, 9, 'sent even when empty, so the seq stays continuous');
 });
 
-test('correlation and MARSA deltas carry the visible flights only and are skipped when nothing is left', () => {
+test('correlation and MARSA deltas carry the visible flights only and are still sent, empty, when nothing is left (the seq stays continuous, docs/adr/0105)', () => {
   const flightDataIds = new Set(['f1']);
   const corr = { type: 'efsp-correlation-delta', correlations: { updated: [{ flightDataId: 'f1' }, { flightDataId: 'f2' }] }, stats: { n: 2 } };
   assert.deepEqual(rs.filterCorrelationDelta(corr, jtac, flightDataIds).correlations.updated, [{ flightDataId: 'f1' }]);
   assert.equal(rs.filterCorrelationDelta(corr, jtac, flightDataIds).stats.n, 2);
-  assert.equal(rs.filterCorrelationDelta({ ...corr, correlations: { updated: [{ flightDataId: 'f2' }] } }, jtac, flightDataIds), null);
+  assert.deepEqual(rs.filterCorrelationDelta({ ...corr, correlations: { updated: [{ flightDataId: 'f2' }] } }, jtac, flightDataIds).correlations.updated, []);
   const marsa = { type: 'efsp-marsa-delta', marsa: { updated: [{ marsaId: 'm1', participants: ['f1', 'f2'] }, { marsaId: 'm2', participants: ['f2'] }] } };
   assert.deepEqual(rs.filterMarsaDelta(marsa, jtac, flightDataIds).marsa.updated.map(r => r.marsaId), ['m1']);
-  assert.equal(rs.filterMarsaDelta({ ...marsa, marsa: { updated: [{ marsaId: 'm2', participants: ['f2'] }] } }, jtac, flightDataIds), null);
+  assert.deepEqual(rs.filterMarsaDelta({ ...marsa, marsa: { updated: [{ marsaId: 'm2', participants: ['f2'] }] } }, jtac, flightDataIds).marsa.updated, []);
 });
 
 test('alerts: conformance by flight and obligations by Strip, for visible ones only; conflictAlert is left as given', () => {

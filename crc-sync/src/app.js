@@ -356,6 +356,7 @@ function createApp(deps = {}) {
             // The same delta a runway-status op sends (decisions.md S-L1d).
             wsHub.broadcastEfspRunwayStatusDelta({
               runwayStatusSeq: efsp.runwayStatusStore.currentSeq,
+              runwayStatusEpoch: efsp.runwayStatusStore.epoch,
               runwayStatuses: [efsp.runwayStatusStore.getRunwayStatus(facilityId)],
             });
             efsp.nlaStatusMonitor.tick();
@@ -395,7 +396,7 @@ function createApp(deps = {}) {
     correlationStore: efsp.correlationStore,
     boardStoreFor: efsp.boardStoreFor,
     facilityConfig: efspFacilityConfig,
-    onDelta: (payload) => wsHub.broadcastEfspCorrelationDelta(payload),
+    onDelta: (payload) => wsHub.broadcastEfspCorrelationDelta({ ...payload, correlationSeq: efsp.correlationStore.currentSeq, correlationEpoch: efsp.correlationStore.epoch }),
   });
 
   // ── WP8 instrumentation (docs/adr/0065) — the §11.5 metric set, the §11.4

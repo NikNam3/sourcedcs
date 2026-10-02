@@ -88,19 +88,19 @@ function boardDelta(ctx, boardStore, facilityId, strips, flightDataList, positio
 
 /** The whole rotation record, sent whole: small. Its own delta type and seq, like efsp-carrier-delta. */
 function sfaDelta(sfaStore) {
-  return { version: VERSION, type: 'efsp-sfa-delta', sfaSeq: sfaStore.currentSeq, sfaRotation: sfaStore.view() };
+  return { version: VERSION, type: 'efsp-sfa-delta', sfaSeq: sfaStore.currentSeq, sfaEpoch: sfaStore.epoch, sfaRotation: sfaStore.view() };
 }
 
 /** The whole hull view(s), sent whole: small, and the derived stack comes from the server so the client never reimplements it. */
 function carrierDelta(carrierStore) {
-  return { version: VERSION, type: 'efsp-carrier-delta', carrierSeq: carrierStore.currentSeq, carriers: { updated: carrierStore.getAll() } };
+  return { version: VERSION, type: 'efsp-carrier-delta', carrierSeq: carrierStore.currentSeq, carrierEpoch: carrierStore.epoch, carriers: { updated: carrierStore.getAll() } };
 }
 
 /** Its own delta type with its own seq, like efsp-airspace-delta and efsp-correlation-delta — a relation is not a Strip and rides no Board's sequence. */
 function marsaDelta(marsaStore, relations) {
   return {
     version: VERSION, type: 'efsp-marsa-delta',
-    marsaSeq: marsaStore.currentSeq,
+    marsaSeq: marsaStore.currentSeq, marsaEpoch: marsaStore.epoch,
     marsa: { updated: relations.filter(Boolean) },
   };
 }

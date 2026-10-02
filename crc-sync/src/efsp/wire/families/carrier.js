@@ -35,7 +35,7 @@ module.exports = {
   fromCached: (ctx, cached) => cached,
   ack: (result, ctx, msg) => ({
     carrier: ctx.carrierStore.view(msg.hullId || undefined), reason: result.reason, detail: result.detail,
-    changed: result.ok ? result.changed : undefined, carrierSeq: ctx.carrierStore.currentSeq,
+    changed: result.ok ? result.changed : undefined, carrierSeq: ctx.carrierStore.currentSeq, carrierEpoch: ctx.carrierStore.epoch,
   }),
   // One delta carrying the whole hull record: a Case change reaches every
   // client as ONE message and each re-renders every carrier Strip from it

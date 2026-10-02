@@ -55,7 +55,7 @@ module.exports = {
   fromCached: (ctx, cached) => ({ ...cached, correlation: ctx.correlationStore.getCorrelation(cached.id) }),
   ack: (result, ctx) => ({
     correlation: result.correlation, reason: result.reason, detail: result.detail,
-    correlationSeq: ctx.correlationStore.currentSeq,
+    correlationSeq: ctx.correlationStore.currentSeq, correlationEpoch: ctx.correlationStore.epoch,
   }),
 
   // Its own delta type with its own seq, like efsp-airspace-delta and
@@ -64,7 +64,7 @@ module.exports = {
   broadcasts: (result, ctx) => ({
     primary: {
       version: VERSION, type: 'efsp-correlation-delta',
-      correlationSeq: ctx.correlationStore.currentSeq,
+      correlationSeq: ctx.correlationStore.currentSeq, correlationEpoch: ctx.correlationStore.epoch,
       correlations: { updated: [result.correlation] },
     },
   }),

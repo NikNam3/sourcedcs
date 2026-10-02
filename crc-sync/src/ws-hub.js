@@ -310,6 +310,8 @@ class WsHub {
   broadcastEfspCorrelationDelta(payload) {
     this._broadcastEfsp({
       version: VERSION, type: 'efsp-correlation-delta',
+      // The store's seq and lifetime after this reconcile's changes (docs/adr/0105), so every advance the reconciler made reaches the client.
+      correlationSeq: payload.correlationSeq, correlationEpoch: payload.correlationEpoch,
       correlations: { updated: payload.correlations || [] },
       stats: payload.stats,
     });
@@ -326,7 +328,7 @@ class WsHub {
   broadcastEfspRunwayStatusDelta(payload) {
     this._broadcast({
       version: VERSION, type: 'efsp-runway-status-delta',
-      runwayStatusSeq: payload.runwayStatusSeq,
+      runwayStatusSeq: payload.runwayStatusSeq, runwayStatusEpoch: payload.runwayStatusEpoch,
       runwayStatuses: { updated: (payload.runwayStatuses || []).filter(Boolean) },
     });
   }
@@ -580,14 +582,15 @@ class WsHub {
     if (this._surv.datalink) this._surv.datalink.tick();
     this._refreshLabels();
     const boards = this._efsp ? this._efsp.heartbeatBoardsAll() : null;
-    for (const [ws, session] of this._sessions) this._tick(ws, session, true, boards);
+    const stores = this._efsp ? this._efsp.heartbeatStores() : null;
+    for (const [ws, session] of this._sessions) this._tick(ws, session, true, boards, stores);
   }
 
   /**
    * One session's tick. `labelsFresh` is false when called on its own (tests),
    * so the contacts are re-described first.
    */
-  _tick(ws, session, labelsFresh = false, boardsAll = null) {
+  _tick(ws, session, labelsFresh = false, boardsAll = null, storesAll = null) {
     if (ws.readyState !== WebSocket.OPEN) return;
     if (!labelsFresh) this._refreshLabels();
 
@@ -598,9 +601,9 @@ class WsHub {
     // dead connection.
     if (this._efsp) {
       // Names every Board this session is sent (docs/adr/0104): seq and epoch per Facility.
-      // `stores` is reserved for the other stores' seqs (SYNC-B). `type` stays the second key.
+      // `stores` names every other store's seq and epoch by snapshot key (docs/adr/0105). `type` stays the second key.
       const all = boardsAll || this._efsp.heartbeatBoardsAll();
-      ws.send(JSON.stringify({ version: VERSION, type: 'efsp-heartbeat', boards: this._efsp.heartbeatBoardsFor(session, all) }));
+      ws.send(JSON.stringify({ version: VERSION, type: 'efsp-heartbeat', boards: this._efsp.heartbeatBoardsFor(session, all), stores: storesAll || this._efsp.heartbeatStores() }));
     }
 
     const lastSent = session.lastSent || (session.lastSent = new Map());
