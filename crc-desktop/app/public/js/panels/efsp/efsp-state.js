@@ -10,9 +10,7 @@ import { applyEfspSfaSnapshot } from './sfa-state.js';
 // a fresh baseline after reconnect (guide §5.6.3) instead of silently lost
 // (the guide's own words: "the worst failure mode in the system").
 //
-// Guarded module.exports at the end (same pattern as los.js) so this file
-// works unmodified as a plain <script> global in the browser AND as a
-// require()-able module for node:test — no build step either way.
+// An ES module: the browser and node:test both import it directly, no build step.
 
 export const efspStrips = new Map();     // stripId -> Strip
 export const efspFlightDataList = new Map();       // flightDataId -> FlightDataRecord

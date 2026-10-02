@@ -2,8 +2,8 @@
 
 // Client mirror of the carrier's record (crc-sync's docs/adr/0074, ADR 0064):
 // the recovery Case, the Marshal stack with its DERIVED angels / DME / push
-// time, the ship banner. Plain module-level state like efsp-state.js, a guarded
-// module.exports at the end so node:test can require it.
+// time, the ship banner. Plain module-level state like efsp-state.js, an ES
+// module whose exports node:test imports directly.
 //
 // The server sends the whole hull view on every change (`efsp-carrier-delta`)
 // and computes everything derived: crc-desktop cannot import crc-sync, so one

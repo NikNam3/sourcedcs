@@ -2,7 +2,7 @@
 
 // Client mirror of the SFA rotation record (crc-sync docs/adr/0075, 0093; guide
 // §4.7): who is on which of the pool's frequencies. Plain module-level state like
-// carrier-state.js, a guarded module.exports so node:test can require it.
+// carrier-state.js, an ES module that node:test imports directly.
 //
 // The server sends the whole record on every change (`efsp-sfa-delta`) with the
 // pool and the jurisdiction, so this file holds no rule of its own beyond two

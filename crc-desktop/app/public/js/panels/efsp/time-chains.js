@@ -24,8 +24,8 @@
 // crc-desktop/app/public/js/panels/efsp/time-chains.js — the two packages
 // never share code (docs/adr/0001). crc-sync/tests/fixtures/time-chains.json
 // holds both to the same answers, and the parity tests hold the files equal.
-// No requires, no clock: nothing here is a time of its own. In the browser
-// this is a classic script, so its top-level names are globals.
+// No imports, no clock: nothing here is a time of its own. An ES module on
+// both sides.
 
 // [SOURCE-DEFINED] order (docs/adr/0073), ATD-2's shape per guide §10.5.
 // A controller's entry always wins and stops the fallback (§10.2 rule 3);

@@ -10,9 +10,9 @@
 // hungOrdnanceAdvisoryFor is a COPY of crc-sync's src/efsp/runway-status.js
 // function of the same name, runway resolution included: browser scripts cannot
 // load crc-sync. tests/efsp-ordnance-client.test.js holds the two together.
-// The helpers are prefixed `_ord` because every script here shares one global
-// scope, and a second `function resolveRunwayForStrip` would silently replace
-// the first.
+// The helpers keep their `_ord` prefix from when this file was a classic script
+// sharing one global scope with its neighbours; as an ES module they are
+// file-private, and the prefix is now only a naming convention.
 //
 // Computed on every render from the FDR and the runway-status record, both of
 // which arrive whole on deltas — nothing is stored (the WP6 plan's rule-4

@@ -14,9 +14,8 @@ import { getEfspFlightData, getEfspRunwayStatus } from './efsp-state.js';
 // none, so tests/efsp-runway-status-client.test.js requires the crc-sync modules
 // and runs both over one table of cases.
 //
-// Dual-use: plain function declarations for the browser (classic <script>,
-// shared global scope), and a guarded module.exports block for node --test,
-// efsp-nla.js's pattern. The one function that reads client state,
+// An ES module: the browser and node --test both import its named exports.
+// The one function that reads client state,
 // runwayStatusAlertsFor, takes its lookups as an optional argument so a test
 // can pass fixtures.
 

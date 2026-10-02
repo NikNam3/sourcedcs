@@ -15,10 +15,10 @@
 //   indicators  standing state, always drawn, lit or dim, never clickable
 //   tools       ⋯ ▼ ✕
 //
-// Loaded after bay-view.js and called from its _buildStripEl. Everything here
-// is a function declaration in the shared script scope, so it reads bay-view.js's
-// gates (_canProposeTofiEntry and friends) and state at call time, and those
-// gates stay where efsp-coordination-client.test.js's drift checks find them.
+// Called from bay-view.js's _buildStripEl; bay-view.js and this file import each
+// other, so what they share is read at call time. bay-view.js's gates
+// (_canProposeTofiEntry and friends) stay where
+// efsp-coordination-client.test.mjs's drift checks find them.
 
 import { missionNow } from '../topbar.js';
 import {
