@@ -73,10 +73,10 @@ test('never throws: network failure, non-JSON body, timeout, token rejection', a
 test('mutateAirspace posts the contract body and returns the ack as it came, refusals included', async () => {
   const ack = { reason: 'STALE_REV', conflicts: [{ field: 'name', base: 'A', theirs: 'B' }] };
   const { f, c } = mk(() => ({ status: 409, body: ack }));
-  const r = await c.mutateAirspace('Syria', { clientMutationId: 'm1', airspaceId: 'MOA-1', op: { kind: 'EditAirspace' } }, { sub: 's', name: 'N' });
+  const r = await c.mutateAirspace('Syria', { clientMutationId: 'm1', airspaceId: 'MOA-1', baseDefRev: 3, op: { kind: 'EditAirspace' } }, { sub: 's', name: 'N' });
   assert.deepEqual(r, { ok: true, status: 409, ack });
   const sent = JSON.parse(f.calls[0].init.body);
-  assert.deepEqual(sent, { theater: 'Syria', clientMutationId: 'm1', airspaceId: 'MOA-1', op: { kind: 'EditAirspace' }, actor: { sub: 's', name: 'N' } });
+  assert.deepEqual(sent, { theater: 'Syria', clientMutationId: 'm1', airspaceId: 'MOA-1', baseDefRev: 3, op: { kind: 'EditAirspace' }, actor: { sub: 's', name: 'N' } });
   assert.equal(f.calls[0].init.method, 'POST');
   assert.equal(f.calls[0].url, 'http://cs:3000/api/airspace-registry/mutation');
 });

@@ -68,12 +68,12 @@ function createClient(opts) {
     return value;
   }
 
-  /* msg: { clientMutationId, airspaceId, op }. The ack is returned as it came
+  /* msg: { clientMutationId, airspaceId, op, baseDefRev? (Edit/Delete: an integer), baseRev? }. baseDefRev sits beside op, as in crc-sync's contract. The ack is returned as it came
      (refusal reasons, conflicts, warnings): { ok: true, status, ack }. */
   async function mutateAirspace(theater, msg, actor) {
     const m = msg || {};
     const r = await call('POST', '/api/airspace-registry/mutation', {
-      theater, clientMutationId: m.clientMutationId, airspaceId: m.airspaceId, op: m.op,
+      theater, clientMutationId: m.clientMutationId, airspaceId: m.airspaceId, baseDefRev: m.baseDefRev, baseRev: m.baseRev, op: m.op,
       actor: { sub: actor && actor.sub, name: actor && actor.name },
     });
     cache.delete(String(theater || ''));   /* any outcome: the next read is fresh */

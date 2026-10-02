@@ -36,10 +36,11 @@ router.post('/airspaces/mutation', writeOpsLimiter, auth.requireAuth, auth.requi
   if (!validTheater(b.theater)) return res.status(400).json({ error: 'theater is required' });
   if (!b.op || typeof b.op !== 'object' || typeof b.op.kind !== 'string') return res.status(400).json({ error: 'op.kind is required' });
   if (b.airspaceId != null && (typeof b.airspaceId !== 'string' || b.airspaceId.length > MAX_ID_LEN)) return res.status(400).json({ error: 'airspaceId must be a string' });
+  for (const k of ['baseDefRev', 'baseRev']) if (b[k] != null && !Number.isInteger(b[k])) return res.status(400).json({ error: k + ' must be an integer' });
   const clientMutationId = typeof b.clientMutationId === 'string' && b.clientMutationId && b.clientMutationId.length <= 80
     ? b.clientMutationId : 'web-' + crypto.randomUUID();
   const actor = { sub: req.user.sub, name: req.user.name || req.user.preferred_username || req.user.sub };
-  const r = await crcsync.getClient().mutateAirspace(b.theater, { clientMutationId, airspaceId: b.airspaceId, op: b.op }, actor);
+  const r = await crcsync.getClient().mutateAirspace(b.theater, { clientMutationId, airspaceId: b.airspaceId, baseDefRev: b.baseDefRev, baseRev: b.baseRev, op: b.op }, actor);
   if (!r.ok) return res.status(503).json({ error: UNREACHABLE, reason: r.reason });
   /* The ack as it came; an upstream status outside 200..499 is not ours to relay. */
   const status = r.status >= 200 && r.status < 500 ? r.status : 502;
