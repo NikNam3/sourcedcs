@@ -75,6 +75,8 @@ class TheaterContext {
     return true;
   }
 
+  // [SOURCE-DEFINED] (docs/adr/0085, H62): the fallback for "no `theater`
+  // message yet" (no theater known), config/theaters.json `defaultTransitionAltFt`.
   transitionAltFt() {
     const e = this.entry();
     return (e && e.transitionAltFt) || DEFAULT_TRANSITION_ALT_FT;
