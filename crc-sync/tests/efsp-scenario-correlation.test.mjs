@@ -395,7 +395,7 @@ test('SCENARIO the correlation rate is reported, and a flight still on the ramp 
 
   // The ramp-bound flight is not in the denominator at all: it has no
   // correlation record, because there is no aircraft to look for yet.
-  const rampFdrId = efsp.boardStore.getAll()
+  const rampFdrId = efsp.boardStoreFor('INCIRLIK').getAll()
     .map(s => efsp.fdrStore.getFdr(s.fdrId))
     .find(f => f && f.identity.callsign === 'RAMP1').fdrId;
   assert.equal(correlationOf(efsp, rampFdrId), null);
@@ -499,12 +499,12 @@ test('SCENARIO surveillance never moves a Strip, however much it contradicts the
     fdr: { ...DEPARTURE_FDR, callsign: 'EARLY1' },
   });
   strip = await advance(efsp, c.OPS, 'OPS', strip);
-  const atCd = efsp.boardStore.getStrip(strip.stripId);
+  const atCd = efsp.boardStoreFor('INCIRLIK').getStrip(strip.stripId);
   sky.spawn(101, 'EARLY1', parseInt(efsp.fdrStore.getFdr(strip.fdrId).identity.beaconAssigned, 10));
 
   reconciler.tick();
 
-  const after = efsp.boardStore.getStrip(strip.stripId);
+  const after = efsp.boardStoreFor('INCIRLIK').getStrip(strip.stripId);
   assert.equal(after.state, atCd.state, 'the state is the controller’s to change');
   assert.equal(after.bayId, atCd.bayId);
   assert.equal(after.rev, atCd.rev, 'the Strip was not written at all');

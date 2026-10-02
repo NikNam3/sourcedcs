@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { fullRules } from './helpers/full-rules.mjs';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -85,7 +86,7 @@ test('a CreateStrip whose ack died with the process is not created twice on retr
   assert.equal(retry.ack.ok, true, 'the retry is answered, as a success');
   assert.equal(retry.ack.strip.stripId, first.ack.strip.stripId, 'with the Strip it created the first time');
   assert.equal(slot(retry, 'primary'), undefined, 'a replay broadcasts nothing');
-  const named = efsp2.boardStore.getAll().filter(s => efsp2.fdrStore.getFdr(s.fdrId).identity.callsign === 'CRASHA1');
+  const named = efsp2.boardStoreFor('INCIRLIK').getAll().filter(s => efsp2.fdrStore.getFdr(s.fdrId).identity.callsign === 'CRASHA1');
   assert.equal(named.length, 1, 'one Strip, not two');
   assert.equal(linesFor(efsp2, msg.clientMutationId).length, 1, 'and one audit line');
 });
@@ -100,7 +101,7 @@ test('a Mutation audited but never persisted gets a NotPersisted marker at boot,
   assert.equal(linesFor(efsp, msg.clientMutationId).length, 1, 'the audit line was written before the crash');
 
   const efsp2 = restart();
-  const restored = efsp2.boardStore.getStrip(strip.stripId);
+  const restored = efsp2.boardStoreFor('INCIRLIK').getStrip(strip.stripId);
   assert.equal(restored.rev, strip.rev, 'the change never reached the snapshot');
   const afterBoot = linesFor(efsp2, msg.clientMutationId);
   assert.deepEqual(afterBoot.map(e => e.op), ['SetFlag', 'NotPersisted']);
@@ -135,7 +136,7 @@ test('a dropped Strip whose drop was never persisted is voided in the traffic co
   counter.close();
 
   const efsp2 = restart();
-  assert.notEqual(efsp2.boardStore.getStrip(strip.stripId).state, 'DROPPED', 'the Strip came back live');
+  assert.notEqual(efsp2.boardStoreFor('INCIRLIK').getStrip(strip.stripId).state, 'DROPPED', 'the Strip came back live');
   const counter2 = new TrafficCount({ mutationLog: efsp2.mutationLog, fdrStore: efsp2.fdrStore, boardStoreFor: efsp2.boardStoreFor, facilityIds });
   assert.equal(counter2.records().filter(x => x.stripId === strip.stripId).length, 0, 'the drop that never took effect is voided');
   assert.equal(counter2.lastReconciliation().ok, true, JSON.stringify(counter2.lastReconciliation()));
@@ -161,7 +162,7 @@ test('the replay window forgets entries older than 10 minutes', () => {
   let now = 1_800_000_000_000;
   Date.now = () => now;
   try {
-    const board = new BoardStore(new FdrStore(), {});
+    const board = new BoardStore(new FdrStore(), fullRules());
     const create = (callsign) => board.applyMutation({
       clientMutationId: `cm-${callsign}`,
       op: { kind: 'CreateStrip', bayId: 'proposed', rackId: 'main', fdr: { ...DEPARTURE_FDR, callsign } },
@@ -173,7 +174,7 @@ test('the replay window forgets entries older than 10 minutes', () => {
     assert.deepEqual(snap.replay.map(([cmid]) => cmid), ['cm-NEW1']);
     assert.equal(REPLAY_PERSIST_WINDOW_MS, 10 * 60 * 1000);
 
-    const restored = new BoardStore(new FdrStore(), {});
+    const restored = new BoardStore(new FdrStore(), fullRules());
     restored.restore(JSON.parse(JSON.stringify(snap)));
     assert.equal(restored.hasApplied('cm-NEW1'), true);
     assert.equal(restored.hasApplied('cm-OLD1'), false);
@@ -186,7 +187,7 @@ test('a covering-chain reassignment persists the Board', () => {
   const strip = efsp.handleMessage(c.OPS.session, createMsg('VACATE1')).ack.strip;
   // Hand it to CD without walking the lifecycle: this test is about what a
   // vacated Position's reassignment leaves on disk, not about the transfer.
-  efsp.boardStore.getStrip(strip.stripId).ownerPositionId = 'CD';
+  efsp.boardStoreFor('INCIRLIK').getStrip(strip.stripId).ownerPositionId = 'CD';
   efsp.persist();
   const beforeText = fs.readFileSync(process.env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH, 'utf8');
   // CD walks away: its Strips go down the covering chain.
@@ -195,7 +196,7 @@ test('a covering-chain reassignment persists the Board', () => {
   assert.ok(moved && moved.routedTo, JSON.stringify(out.ack));
   assert.notEqual(fs.readFileSync(process.env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH, 'utf8'), beforeText, 'the snapshot was rewritten');
   const efsp2 = restart();
-  assert.equal(efsp2.boardStore.getStrip(strip.stripId).ownerPositionId, moved.routedTo, 'the reassignment survives a restart');
+  assert.equal(efsp2.boardStoreFor('INCIRLIK').getStrip(strip.stripId).ownerPositionId, moved.routedTo, 'the reassignment survives a restart');
 });
 
 test('the snapshot is written compact, and not rewritten when nothing changed', () => {

@@ -121,7 +121,7 @@ class Placement {
 
   /** This Facility's runway status view, or null (no runways — nothing is runway-gated). */
   fieldStateView() {
-    return this._rules.fieldStateFor ? this._rules.fieldStateFor() : null;
+    return this._rules.fieldStateFor();
   }
 
   /**
@@ -135,7 +135,7 @@ class Placement {
     // An SFA frequency Bay is placed by the flight's own frequency, so a Strip put
     // back by a system move (a Position retaken, a covering hand-back) returns to
     // the Rack that IS its frequency, not the first one (guide §4.2, D17).
-    if (this._rules.sfaRackFor && bay && bay.view === 'sfa-freqs') {
+    if (bay && bay.view === 'sfa-freqs') {
       const fdr = this._fdrStore.getFdr(strip.fdrId);
       const rack = fdr && fdr.comms ? this._rules.sfaRackFor(bay.bayId, fdr.comms.workingFrequencyMhz) : null;
       if (rack) return rack;
@@ -152,7 +152,7 @@ class Placement {
    * otherwise do.
    */
   roleBayFor(strip, positionId = strip.ownerPositionId) {
-    const bays = this._rules.baysFor ? this._rules.baysFor(positionId) : [];
+    const bays = this._rules.baysFor(positionId);
     return bays.find(b => b.holdsRole === strip.role) || null;
   }
 
@@ -174,19 +174,19 @@ class Placement {
    */
   validateBayImpliedTransition(strip, targetBayId, targetRackId) {
     // A Role Bay (`holdsRole`, docs/adr/0087) takes only its own Role's Strips.
-    const holds = this._rules.bayHoldsRole ? this._rules.bayHoldsRole(targetBayId) : null;
+    const holds = this._rules.bayHoldsRole(targetBayId);
     if (holds && holds !== strip.role) {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: `${targetBayId} holds ${holds} Strips only; a ${strip.role} Strip cannot be placed there` };
     }
     const roleBay = this.roleBayFor(strip);
     if (roleBay) {
       // Another Role's state-implying Bay is not somewhere this Role goes.
-      if (this._rules.bayImpliesState && this._rules.bayImpliesState(targetBayId)) {
+      if (this._rules.bayImpliesState(targetBayId)) {
         return { ok: false, reason: 'VALIDATION_ERROR', detail: `a ${strip.role} Strip stays in ${roleBay.bayId}; ${targetBayId} is another Role's Bay` };
       }
       return { ok: true, impliedState: null };
     }
-    const impliedState = this._rules.bayImpliesState ? this._rules.bayImpliesState(targetBayId) : null;
+    const impliedState = this._rules.bayImpliesState(targetBayId);
     if (!impliedState || impliedState === strip.state) return { ok: true, impliedState }; // non-state-implying Bay, or already there — always fine
 
     // Per-State authority (guide §3.4's "normally owned by" column,
@@ -198,7 +198,7 @@ class Placement {
     // the Strip. strip.ownerPositionId is the acting Position here —
     // _dispatch() already verified actingPositionId === strip.ownerPositionId
     // before any _apply* method runs.
-    if (this._rules.canActOnState && !this._rules.canActOnState(strip.ownerPositionId, strip.role, strip.state)) {
+    if (!this._rules.canActOnState(strip.ownerPositionId, strip.role, strip.state)) {
       return { ok: false, reason: 'PERMISSION_DENIED', detail: `${strip.state} is not ${strip.ownerPositionId}'s to advance` };
     }
 
@@ -212,7 +212,7 @@ class Placement {
     if (inert) return { ok: false, reason: inert.reason, detail: inert.detail };
 
     const fdr = this._fdrStore.getFdr(strip.fdrId);
-    const nla = this._rules.computeNla ? this._rules.computeNla(strip, fdr, this._clock.now(), this.nlaCtx({ bayId: targetBayId, rackId: targetRackId })) : null;
+    const nla = this._rules.computeNla(strip, fdr, this._clock.now(), this.nlaCtx({ bayId: targetBayId, rackId: targetRackId }));
     if (!nla || nla.inhibited) {
       return { ok: false, reason: 'NLA_INHIBITED', detail: nla ? nla.inhibited : `no legal transition from ${strip.state}` };
     }
@@ -221,7 +221,7 @@ class Placement {
     // implies the NLA's own state is refused with the button's name rather than
     // moving the Strip without the stack effect and the tag.
     if (nla.carrierTransfer && nla.toState === impliedState) {
-      const t = this._rules.carrierTransfers && this._rules.carrierTransfers[nla.carrierTransfer];
+      const t = this._rules.carrierTransfers[nla.carrierTransfer];
       return { ok: false, reason: 'VALIDATION_ERROR', detail: `use the ${t ? t.label : nla.carrierTransfer} button — a carrier hand-over is recorded, not dragged` };
     }
     if (nla.toState !== impliedState && (nla.alsoLegal || []).includes(impliedState)) {
@@ -238,7 +238,7 @@ class Placement {
 
   /** @returns {object|null} a rejection when this Facility has no such Bay, else null. */
   requireKnownBay(bayId, strip) {
-    if (!this._rules.bayExists || this._rules.bayExists(bayId)) return null;
+    if (this._rules.bayExists(bayId)) return null;
     return { ok: false, reason: 'VALIDATION_ERROR', detail: `no such Bay here: ${bayId}`, strip };
   }
 
@@ -249,7 +249,7 @@ class Placement {
    * so re-ordering inside the Bay is never refused.
    */
   bayFullRefusal(bayId, strip) {
-    const bay = this._rules.bayDescriptor ? this._rules.bayDescriptor(bayId) : null;
+    const bay = this._rules.bayDescriptor(bayId);
     if (!bay || !Number.isInteger(bay.capacity)) return null;
     const held = this._state.all().filter(s => s.bayId === bayId && s.state !== 'DROPPED' && s.stripId !== strip.stripId);
     if (held.length < bay.capacity) return null;
@@ -268,7 +268,7 @@ class Placement {
    * @returns {{bayId:string, rackId:string}|null}
    */
   bayForNewOwner(positionId, state, strip = null) {
-    const bays = this._rules.baysFor ? this._rules.baysFor(positionId) : [];
+    const bays = this._rules.baysFor(positionId);
     const roleBay = strip ? bays.find(b => b.holdsRole === strip.role) : null;
     if (roleBay) return { bayId: roleBay.bayId, rackId: this.placementRack(strip, roleBay) };
     // Never another Role's Bay (`holdsRole`, docs/adr/0087): a Role Bay implies no state, so the
@@ -301,7 +301,6 @@ class Placement {
    * `impliesState` re-check rather than trusting the lookup.
    */
   relocateForImpliedState(strip, toState) {
-    if (!this._rules.bayForImpliedState) return;
     if (this.roleBayFor(strip)) return; // its Bay holds it in every state (docs/adr/0087)
     const bay = this._rules.bayForImpliedState(strip.ownerPositionId, toState);
     if (!bay || bay.impliesState !== toState || bay.bayId === strip.bayId) return;

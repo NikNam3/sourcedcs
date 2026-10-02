@@ -36,7 +36,7 @@ function _applyConvertToArrival(ctx, strip, by, actingPositionId) {
   // _dispatch restricts this to APP/CTR; this is the fine-grained half,
   // reusing canCreateStripRole's existing ARRIVAL-origination check
   // rather than a parallel table that would only ever say the same thing.
-  if (ctx.rules.canCreateStripRole && !ctx.rules.canCreateStripRole(actingPositionId, 'ARRIVAL')) {
+  if (!ctx.rules.canCreateStripRole(actingPositionId, 'ARRIVAL')) {
     return { ok: false, reason: 'PERMISSION_DENIED', strip };
   }
   // The conversion nulls both coordination records wholesale below, so an
@@ -65,7 +65,7 @@ function _applyConvertToArrival(ctx, strip, by, actingPositionId) {
   if (strip.tofiCoordination && strip.tofiCoordination.state === 'ACTIVE') {
     return { ok: false, reason: 'VALIDATION_ERROR', detail: 'cannot convert a Strip under active tactical control — complete a TOFI exit first', strip };
   }
-  const targetBay = ctx.rules.bayForImpliedState ? ctx.rules.bayForImpliedState(strip.ownerPositionId, 'INBOUND') : null;
+  const targetBay = ctx.rules.bayForImpliedState(strip.ownerPositionId, 'INBOUND');
   if (!targetBay) {
     return { ok: false, reason: 'VALIDATION_ERROR', detail: `no ARRIVAL Bay configured for ${strip.ownerPositionId}`, strip };
   }

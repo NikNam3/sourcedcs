@@ -28,9 +28,9 @@ function createStripMsg() {
 
 test('createEfsp returns the full facade shape', () => {
   const efsp = createEfsp();
-  assert.ok(efsp.boardStore);
+  assert.ok(efsp.boardStoreFor('INCIRLIK'));
   assert.ok(efsp.fdrStore);
-  assert.ok(efsp.positionStore);
+  assert.ok(efsp.positionStoreFor('INCIRLIK'));
   assert.ok(efsp.mutationLog);
   assert.equal(typeof efsp.handleMessage, 'function');
   assert.equal(typeof efsp.onDisconnect, 'function');
@@ -52,7 +52,7 @@ test('handleMessage end-to-end: a CreateStrip mutation is reflected in boardStor
   efsp.handleMessage(session, { type: 'efsp-set-positions', held: ['OPS'] });
   const result = efsp.handleMessage(session, createStripMsg());
   assert.equal(result.ack.ok, true);
-  assert.equal(efsp.boardStore.getAll().length, 1);
+  assert.equal(efsp.boardStoreFor('INCIRLIK').getAll().length, 1);
   assert.equal(efsp.fdrStore.getAll().length, 1);
 });
 
@@ -71,11 +71,11 @@ test('onDisconnect releases every Position the controller held', () => {
   const efsp = createEfsp();
   const session = { controllerId: 'c1', who: 'Alice' };
   efsp.handleMessage(session, { type: 'efsp-set-positions', held: ['GND', 'TWR'] });
-  assert.equal(efsp.positionStore.isOccupied('GND'), true);
+  assert.equal(efsp.positionStoreFor('INCIRLIK').isOccupied('GND'), true);
 
   efsp.onDisconnect(session);
-  assert.equal(efsp.positionStore.isOccupied('GND'), false);
-  assert.equal(efsp.positionStore.isOccupied('TWR'), false);
+  assert.equal(efsp.positionStoreFor('INCIRLIK').isOccupied('GND'), false);
+  assert.equal(efsp.positionStoreFor('INCIRLIK').isOccupied('TWR'), false);
 });
 
 // ── Persistence — the actual "restart" scenario (ADR 0002) ─────────────────
@@ -92,7 +92,7 @@ test('a successful mutation persists to BOARD_SNAPSHOT_PATH, and a freshly const
   // A brand-new createEfsp() call is the closest in-process simulation of
   // an actual process restart: fresh stores, restore() reads from disk.
   const efsp2 = createEfsp();
-  const restored = efsp2.boardStore.getStrip(stripId);
+  const restored = efsp2.boardStoreFor('INCIRLIK').getStrip(stripId);
   assert.ok(restored);
   assert.equal(restored.ownerPositionId, 'OPS');
   assert.ok(efsp2.fdrStore.getFdr(restored.fdrId));
@@ -149,7 +149,7 @@ test('a Strip mid-DEPARTED-to-APP-transfer (docs/adr/0007) round-trips correctly
 
   // Simulated restart — fresh stores, restore() reads from disk.
   const efsp2 = createEfsp();
-  const restored = efsp2.boardStore.getStrip(strip.stripId);
+  const restored = efsp2.boardStoreFor('INCIRLIK').getStrip(strip.stripId);
   assert.ok(restored);
   assert.equal(restored.ownerPositionId, 'APP'); // exactly one owner, unchanged by the restart (D7)
   assert.equal(restored.state, 'HANDED_OFF');

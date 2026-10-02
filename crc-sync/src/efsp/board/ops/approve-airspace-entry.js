@@ -28,7 +28,7 @@ function _applyApproveAirspaceEntry(ctx, strip, op, by) {
   if (!op.airspaceId) {
     return { ok: false, reason: 'VALIDATION_ERROR', detail: 'an airspace entry needs an airspaceId', strip };
   }
-  const airspace = ctx.rules.airspaceFor ? ctx.rules.airspaceFor(op.airspaceId) : null;
+  const airspace = ctx.rules.airspaceFor(op.airspaceId);
   if (!airspace) {
     return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown airspace: ${op.airspaceId}`, strip };
   }

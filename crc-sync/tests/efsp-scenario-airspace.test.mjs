@@ -83,7 +83,7 @@ test('SCENARIO before takeoff, out to a MOA, and home again', async () => {
   const handedBack = mustAct(efsp, c.CTR, 'CTR', returning, {
     kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'INCIRLIK', toPositionId: 'APP',
   });
-  let arrival = efsp.boardStore.getStrip(handedBack.coordination.peerStripId);
+  let arrival = efsp.boardStoreFor('INCIRLIK').getStrip(handedBack.coordination.peerStripId);
   arrival = mustAct(efsp, c.APP, 'APP', arrival, { kind: 'HANDOFF', action: 'ACCEPT' });
   arrival = await advance(efsp, c.APP, 'APP', arrival);  // -> HANDED_TO_TOWER at TWR
   arrival = jumpTo(efsp, c.TWR, 'TWR', arrival, 'LANDED');
@@ -248,7 +248,7 @@ test('SCENARIO an A/G range with its own tower: the flight goes to range control
   // What the range controller sees of it: the Strip is on INCIRLIK's Board,
   // which every client receives, and it is findable by the airspace. The
   // range position owns nothing and can do nothing to it.
-  const inBlock = efsp.boardStore.getAll().filter(s => s.airspaceEntry && s.airspaceEntry.airspaceId === 'RANGE-SOUTH');
+  const inBlock = efsp.boardStoreFor('INCIRLIK').getAll().filter(s => s.airspaceEntry && s.airspaceEntry.airspaceId === 'RANGE-SOUTH');
   assert.equal(inBlock.length, 1);
   for (const op of [{ kind: 'InvokeNla' }, { kind: 'ClearAirspaceEntry' }, { kind: 'DropStrip', reason: 'x' }]) {
     assert.equal(act(efsp, c.SOUTH_RANGE, 'SOUTH_RANGE', onRange, op).ok, false, op.kind);

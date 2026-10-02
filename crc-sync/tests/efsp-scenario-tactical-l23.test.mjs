@@ -26,6 +26,7 @@ const { createEfsp } = await import('../src/efsp/index.js');
 const facilityConfig = (await import('../src/efsp/facility-config.js')).default;
 const permission = await import('../src/efsp/permission.js');
 const { BoardStore } = await import('../src/efsp/board-store.js');
+import { fullRules } from "./helpers/full-rules.mjs";
 const { FdrStore } = await import('../src/efsp/fdr-store.js');
 const {
   crew, hold, act, mustAct, jumpTo, advance, DEPARTURE_FDR, airborneDeparture, handedToCenter,
@@ -153,7 +154,7 @@ test('B3 with no Bay to fit, the Strip keeps its Bay and the reassignment says s
     baysFor: (p) => (p === 'B' ? [{ bayId: 'b-only', rackIds: ['main'], impliesState: 'OTHER' }] : [{ bayId: 'a-1', rackIds: ['main'] }]),
     isValidState: () => true,
   };
-  const board = new BoardStore(new FdrStore(), rules);
+  const board = new BoardStore(new FdrStore(), fullRules(rules));
   assert.equal(board._placement.bayForNewOwner('B', 'PROPOSED'), null);
   assert.deepEqual(board._placement.bayForNewOwner('B', 'OTHER'), { bayId: 'b-only', rackId: 'main' });
   assert.deepEqual(board._placement.bayForNewOwner('A', 'ANY'), { bayId: 'a-1', rackId: 'main' });

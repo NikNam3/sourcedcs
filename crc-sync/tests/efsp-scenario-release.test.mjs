@@ -47,7 +47,7 @@ test('SCENARIO a flight held for release cannot push until somebody releases it'
   assert.equal(blocked.ok, false, 'a held flight does not push');
   assert.equal(blocked.reason, 'NLA_INHIBITED');
 
-  strip = mustAct(efsp, c.CD, 'CD', efsp.boardStore.getStrip(strip.stripId), {
+  strip = mustAct(efsp, c.CD, 'CD', efsp.boardStoreFor('INCIRLIK').getStrip(strip.stripId), {
     kind: 'SetBlock', blockId: '14A', value: 'RELEASED',
   });
   const released = await advance(efsp, c.CD, 'CD', strip);
@@ -102,7 +102,7 @@ test('SCENARIO a void-expired flight re-cleared by CD loses its alert on the nex
   assert.ok(monitor.getAll().some(a => a.stripId === strip.stripId && a.obligationType === 'VOID_TIME_EXPIRED'));
 
   // A fresh void time: the clearance is good again, so nothing is overdue.
-  mustAct(efsp, c.CD, 'CD', efsp.boardStore.getStrip(strip.stripId), {
+  mustAct(efsp, c.CD, 'CD', efsp.boardStoreFor('INCIRLIK').getStrip(strip.stripId), {
     kind: 'SetBlock', blockId: '14D', value: Date.now() + 10 * MINUTE,
   });
   assert.equal(monitor.tick(), true, 'the retraction is a change');

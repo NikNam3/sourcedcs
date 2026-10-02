@@ -85,7 +85,7 @@ class Coordination {
 
   _applyCoordinationPropose(strip, op, by, actingPositionId) {
     const primitive = op.kind;
-    const effect = this._rules.coordinationEffect ? this._rules.coordinationEffect(primitive) : null;
+    const effect = this._rules.coordinationEffect(primitive);
     if (!effect) return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown coordination primitive: ${primitive}`, strip };
 
     // AIT is configuration, not a default (guide §4.6 rule 7, docs/adr/0022)
@@ -101,7 +101,7 @@ class Coordination {
     // is the authoritative half, since the client's is only a convenience
     // gate. Only the (role, state) combos a receiving Facility actually has
     // a landing Bay configured for are eligible — see coordination.js.
-    if (this._rules.coordinationEligibleState && this._rules.coordinationEligibleState(strip.role) !== strip.state) {
+    if (this._rules.coordinationEligibleState(strip.role) !== strip.state) {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: `a ${strip.role} Strip may not propose coordination from state ${strip.state}`, strip };
     }
 
@@ -117,7 +117,7 @@ class Coordination {
     // receiver-side replica could re-propose right back to its own
     // sender, minting a spurious third replica. Authoritative half of
     // bay-view.js's _canProposeCoordination client-side gate.
-    const ownCoordinationBay = this._rules.coordinationBayFor ? this._rules.coordinationBayFor(strip.ownerPositionId) : null;
+    const ownCoordinationBay = this._rules.coordinationBayFor(strip.ownerPositionId);
     if (ownCoordinationBay && strip.bayId === ownCoordinationBay.bayId) {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: 'this Strip is a coordination replica, not a flight record you can propose coordination from', strip };
     }
@@ -127,7 +127,7 @@ class Coordination {
     if (op.toFacilityId === this._rules.facilityId) {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: 'coordination target must be a different Facility', strip };
     }
-    const peer = this._rules.peerBoard ? this._rules.peerBoard(op.toFacilityId) : null;
+    const peer = this._rules.peerBoard(op.toFacilityId);
     if (!peer) return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown Facility: ${op.toFacilityId}`, strip };
 
     // Track-degradation soft interlock (guide §4.6 rule 5): CST/FAIL/IF/NT/
@@ -189,7 +189,7 @@ class Coordination {
     if (!strip.coordination || strip.coordination.state !== 'PROPOSED') {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: 'no pending coordination proposal on this Strip', strip };
     }
-    const effect = this._rules.coordinationEffect ? this._rules.coordinationEffect(strip.coordination.primitive) : null;
+    const effect = this._rules.coordinationEffect(strip.coordination.primitive);
     if (!effect) return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown coordination primitive: ${strip.coordination.primitive}`, strip };
 
     const now = this._clock.now();
@@ -210,7 +210,7 @@ class Coordination {
     // already minted with (docs/adr/0022) — the replica's state was set
     // correctly by receiveCoordinationProposal already; accept only
     // relocates it, it never advances the state itself.
-    const targetBay = this._placement.roleBayFor(strip) || (this._rules.bayForImpliedState ? this._rules.bayForImpliedState(strip.ownerPositionId, strip.state) : null);
+    const targetBay = this._placement.roleBayFor(strip) || this._rules.bayForImpliedState(strip.ownerPositionId, strip.state);
     if (targetBay) {
       strip.bayId = targetBay.bayId;
       strip.rackId = this._placement.placementRack(strip, targetBay);
@@ -228,12 +228,10 @@ class Coordination {
     // reason _applyCoordinationPropose's is — see that method's comment.
     const peerFacilityId = strip.coordination.peerFacilityId;
     let peerStrip = null;
-    if (this._rules.peerBoard) {
-      const peer = this._rules.peerBoard(peerFacilityId);
-      if (peer) {
-        const peerResult = peer.receiveCoordinationResponse({ causedBy: this._activeCmid, stripId: strip.coordination.peerStripId, response: 'ACCEPT', by });
-        if (peerResult.ok) peerStrip = peerResult.strip;
-      }
+    const peer = this._rules.peerBoard(peerFacilityId);
+    if (peer) {
+      const peerResult = peer.receiveCoordinationResponse({ causedBy: this._activeCmid, stripId: strip.coordination.peerStripId, response: 'ACCEPT', by });
+      if (peerResult.ok) peerStrip = peerResult.strip;
     }
     return { ok: true, strip, peerFacilityId, peerStrip };
   }
@@ -247,12 +245,10 @@ class Coordination {
 
     const peerFacilityId = strip.coordination.peerFacilityId;
     let peerStrip = null;
-    if (this._rules.peerBoard) {
-      const peer = this._rules.peerBoard(peerFacilityId);
-      if (peer) {
-        const peerResult = peer.receiveCoordinationResponse({ causedBy: this._activeCmid, stripId: strip.coordination.peerStripId, response: 'REJECT', by });
-        if (peerResult.ok) peerStrip = peerResult.strip;
-      }
+    const peer = this._rules.peerBoard(peerFacilityId);
+    if (peer) {
+      const peerResult = peer.receiveCoordinationResponse({ causedBy: this._activeCmid, stripId: strip.coordination.peerStripId, response: 'REJECT', by });
+      if (peerResult.ok) peerStrip = peerResult.strip;
     }
     return { ok: true, strip, peerFacilityId, peerStrip };
   }
@@ -278,12 +274,10 @@ class Coordination {
     }
     const link = strip.coordination;
     let peerStrip = null;
-    if (this._rules.peerBoard) {
-      const peer = this._rules.peerBoard(link.peerFacilityId);
-      if (peer) {
-        const r = peer.receiveCoordinationCancel({ causedBy: this._activeCmid, stripId: link.peerStripId, by });
-        if (r.ok && r.strip) peerStrip = r.strip;
-      }
+    const peer = this._rules.peerBoard(link.peerFacilityId);
+    if (peer) {
+      const r = peer.receiveCoordinationCancel({ causedBy: this._activeCmid, stripId: link.peerStripId, by });
+      if (r.ok && r.strip) peerStrip = r.strip;
     }
     strip.coordination = null;
     this._state.bump(strip, by);
@@ -357,12 +351,10 @@ class Coordination {
 
     const peerFacilityId = strip.coordination.peerFacilityId;
     let peerStrip = null;
-    if (this._rules.peerBoard) {
-      const peer = this._rules.peerBoard(peerFacilityId);
-      if (peer) {
-        const peerResult = peer.receiveCoordinationResponse({ causedBy: this._activeCmid, stripId: strip.coordination.peerStripId, response: 'STAND_BY', by });
-        if (peerResult.ok) peerStrip = peerResult.strip;
-      }
+    const peer = this._rules.peerBoard(peerFacilityId);
+    if (peer) {
+      const peerResult = peer.receiveCoordinationResponse({ causedBy: this._activeCmid, stripId: strip.coordination.peerStripId, response: 'STAND_BY', by });
+      if (peerResult.ok) peerStrip = peerResult.strip;
     }
     return { ok: true, strip, peerFacilityId, peerStrip };
   }
@@ -391,7 +383,7 @@ class Coordination {
     const fdr = this._fdrStore.getFdr(fdrId);
     if (!fdr) return { ok: false, reason: 'NOT_FOUND', detail: 'referenced FDR not found' };
 
-    const coordinationBay = this._rules.coordinationBayFor ? this._rules.coordinationBayFor(toPositionId) : null;
+    const coordinationBay = this._rules.coordinationBayFor(toPositionId);
     if (!coordinationBay) {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: `no Coordination Bay configured for ${toPositionId}` };
     }
@@ -469,7 +461,7 @@ class Coordination {
 
     const now = this._clock.now();
     if (response === 'ACCEPT') {
-      const effect = this._rules.coordinationEffect ? this._rules.coordinationEffect(strip.coordination.primitive) : null;
+      const effect = this._rules.coordinationEffect(strip.coordination.primitive);
       // docs/adr/0087: a HANDed-OFF overflight has left this sector.
       const afterAccept = this._senderStateOnAccept(strip.coordination.primitive, strip.role, strip.state);
       if (afterAccept) strip.state = afterAccept;

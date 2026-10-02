@@ -8,6 +8,7 @@ const require = createRequire(import.meta.url);
 const crypto = require('crypto');
 const { BoardState } = require('../src/efsp/board/board-state.js');
 const { BoardStore } = require('../src/efsp/board-store.js');
+import { fullRules } from "./helpers/full-rules.mjs";
 
 const clock = { now: () => 1000 };
 function kernel() {
@@ -90,9 +91,9 @@ test('a Board restore mints a new epoch, keeps the seq, and replays nothing from
   let n = 0;
   crypto.randomUUID = () => `uuid-${++n}`;
   try {
-    const board = new BoardStore({ getFdr: () => null }, {}, { clock });
+    const board = new BoardStore({ getFdr: () => null }, fullRules(), { clock });
     assert.equal(n, 1, 'one randomUUID per Board construction');
-    board.restore({ strips: [], cidSeq: 0 });
+    board.restore({ strips: [], cidSeq: 0, replay: [], droppedWallAt: [] });
     assert.equal(n, 2, 'one per restore');
     assert.equal(board.currentSeq, 0);
   } finally {
@@ -105,7 +106,7 @@ test('the Board idempotency cache: 5,000 records, oldest out first; cmid-less ne
   let wall = 1_000_000;
   Date.now = () => wall;
   try {
-    const board = new BoardStore({ getFdr: () => null }, { resolveBlockTarget: () => null }, { clock });
+    const board = new BoardStore({ getFdr: () => null }, fullRules({ resolveBlockTarget: () => null }), { clock });
     const miss = (cmid) => board.applyMutation({ clientMutationId: cmid, stripId: 'nope', baseRev: 0, op: { kind: 'SetFlag', flag: 'attention', value: true } }, 'OPS', 'c');
     const first = miss('m-0');
     assert.equal(first.ok, false);
@@ -133,7 +134,7 @@ test('the Board idempotency cache: 5,000 records, oldest out first; cmid-less ne
     const many = [];
     for (let i = 0; i < 6000; i++) many.push([`r-${i}`, { ok: true, appliedWallAt: 0 }]);
     many.push(['', { ok: true }], [7, { ok: true }], ['bad', null]);
-    board.restore({ strips: [], cidSeq: 0, replay: many });
+    board.restore({ strips: [], cidSeq: 0, replay: many, droppedWallAt: [] });
     assert.equal(board.hasApplied('r-0'), true);
     assert.equal(board.hasApplied('r-5999'), true);
     assert.equal(board.hasApplied(''), true, 'restore keeps an empty-string cmid (applyMutation never consults it)');

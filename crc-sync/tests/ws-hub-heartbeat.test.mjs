@@ -15,7 +15,7 @@ function fakeWs() {
 }
 
 function fakeEfsp(currentSeq) {
-  return { boardStore: { currentSeq } };
+  return { boardStoreFor: () => ({ currentSeq }) };
 }
 
 test('_tick sends an efsp-heartbeat with the current Board sequence when EFSP is present', () => {

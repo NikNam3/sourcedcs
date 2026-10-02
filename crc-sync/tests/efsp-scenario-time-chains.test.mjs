@@ -52,7 +52,7 @@ test('SCENARIO T1 OPS files from a DD1801; P-time falls back to the plan, a cont
   assert.deepEqual(pick(resolveTimeChain('takeoff', fdr())), { valueUtc: zulu(14, 30), source: 'EST_OFF_BLOCK' });
 
   // "We're delayed, new P-time 1450."
-  let s = efsp.boardStore.getStrip(strip.stripId);
+  let s = efsp.boardStoreFor('INCIRLIK').getStrip(strip.stripId);
   s = mustAct(efsp, c.OPS, 'OPS', s, { kind: 'SetBlock', blockId: '6', value: '1450' });
   assert.deepEqual(pick(resolveTimeChain('departure', fdr())), { valueUtc: zulu(14, 50), source: 'CONTROLLER' });
   assert.equal(resolveTimeChain('offBlock', fdr()).valueUtc, zulu(14, 50), 'the estimates follow the amendment');
@@ -103,14 +103,14 @@ test('SCENARIO T3 the takeoff is stamped by the state change, wins over the off-
   assert.deepEqual(pick(resolveTimeChain('takeoff', fdr())), { valueUtc: zulu(14, 33), source: 'STATE_CHANGE' });
   assert.equal(resolveTimeChain('takeoff', fdr()).estimated, false);
   assert.equal(fdr().assigned.takeoffTimeUtc, null, 'never written into the controller\'s own field');
-  strip = efsp.boardStore.getStrip(strip.stripId);
+  strip = efsp.boardStoreFor('INCIRLIK').getStrip(strip.stripId);
 
   // Undo within its window: the takeoff did not happen.
   const undone = act(efsp, c.TWR, 'TWR', strip, { kind: 'Undo' });
   assert.equal(undone.ok, true, JSON.stringify(undone));
   assert.equal(fdr().timeInputs.takeoffStampedUtc, null);
   assert.equal(resolveTimeChain('takeoff', fdr()).source, 'EST_OFF_BLOCK');
-  strip = efsp.boardStore.getStrip(strip.stripId);
+  strip = efsp.boardStoreFor('INCIRLIK').getStrip(strip.stripId);
 
   // Again, later; a later state change does not restamp it.
   now = zulu(14, 35);

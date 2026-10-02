@@ -12,6 +12,7 @@ process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH = path.join(tmpDir, 'incirlik.json
 process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH_CENTER = path.join(tmpDir, 'center.json');
 
 const { BoardStore } = await import('../src/efsp/board-store.js');
+import { fullRules } from "./helpers/full-rules.mjs";
 const { FdrStore } = await import('../src/efsp/fdr-store.js');
 const { PositionStore } = await import('../src/efsp/position-store.js');
 const facilityConfig = await import('../src/efsp/facility-config.js');
@@ -56,7 +57,7 @@ function makeFacilities({ aitAuthorized = {} } = {}) {
       coordinationEffect: (primitive) => coordination.coordinationEffect(primitive),
       coordinationEligibleState: (role) => coordination.coordinationEligibleState(role),
     };
-    const boardStore = new BoardStore(fdrStore, rules);
+    const boardStore = new BoardStore(fdrStore, fullRules(rules));
     facilities.set(facilityId, { boardStore, positionStore });
   }
   return facilities;
@@ -748,16 +749,14 @@ test('a Strip carries no correlation field at all — it is keyed by fdrId, not 
   assert.equal(converted.strip.fdrId, strip.fdrId, 'the same airframe, throughout');
 });
 
-test('a pre-WP5 snapshot’s stale per-Strip correlation is dropped on restore, not carried forward', () => {
+test('a pre-WP5 snapshot’s per-Strip correlation field stops the restore (no quiet drop, ARCH-D5)', () => {
   const facilities = makeFacilities();
   const { boardStore } = facilities.get('INCIRLIK');
-  boardStore.restore({
+  assert.throws(() => boardStore.restore({
     strips: [{ stripId: 's1', fdrId: 'f1', rev: 1, state: 'PROPOSED', correlation: { state: 'UNCORRELATED' } }],
-    cidSeq: 3,
-  });
-  const restored = boardStore.getStrip('s1');
-  assert.equal('correlation' in restored, false,
-    'a second, stale answer to "which contact is this" must not survive a restore');
+    cidSeq: 3, replay: [], droppedWallAt: [],
+  }), /Strip s1 still has the per-Strip "correlation" field/);
+  assert.throws(() => boardStore.restore({ strips: [], cidSeq: 3 }), /not in the current shape/);
 });
 
 test('ConvertToArrival is rejected on anything other than a DEPARTURE Strip at HANDED_OFF', () => {

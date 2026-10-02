@@ -77,7 +77,7 @@ test('SCENARIO an operational request that gets a stand by before an answer', ()
   assert.equal(standBy.coordination.state, 'PROPOSED', 'stand by resolves nothing — the request is still open');
   assert.ok(standBy.coordination.lastStandByAt);
   // And the asking side sees it, which is the whole point of saying it.
-  assert.ok(efsp.boardStore.getStrip(asked.stripId).coordination.lastStandByAt);
+  assert.ok(efsp.boardStoreFor('INCIRLIK').getStrip(asked.stripId).coordination.lastStandByAt);
 
   const answered = mustAct(efsp, c.CTR, 'CTR', centerStrip(efsp, replica.stripId), {
     kind: 'OPERATIONAL_REQUEST', action: 'ACCEPT',
@@ -170,7 +170,7 @@ test('SCENARIO an unannounced inbound, against the same flight arriving properly
   const handed = mustAct(efsp, c.CTR, 'CTR', enroute, {
     kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'INCIRLIK', toPositionId: 'APP',
   });
-  const arrival = mustAct(efsp, c.APP, 'APP', efsp.boardStore.getStrip(handed.coordination.peerStripId), {
+  const arrival = mustAct(efsp, c.APP, 'APP', efsp.boardStoreFor('INCIRLIK').getStrip(handed.coordination.peerStripId), {
     kind: 'HANDOFF', action: 'ACCEPT',
   });
   assert.equal(arrival.coordination.state, 'ACTIVE', 'this one knows where it came from');
@@ -204,7 +204,7 @@ test('SCENARIO a single controller working both Approach and Center hands a flig
   // two-party dialogue collapses. Both replicas exist, jurisdiction moved.
   assert.equal(accepted.coordination.state, 'ACTIVE');
   assert.equal(accepted.coordination.dataOwnerPositionRef.positionId, 'CTR');
-  assert.equal(efsp.boardStore.getStrip(proposed.stripId).coordination.state, 'ACTIVE');
+  assert.equal(efsp.boardStoreFor('INCIRLIK').getStrip(proposed.stripId).coordination.state, 'ACTIVE');
 });
 
 

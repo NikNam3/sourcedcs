@@ -13,6 +13,7 @@ process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH_TACTICAL = path.join(tmpDir, 'tact
 
 const { handleMessage } = await import('../src/efsp/efsp-ws.js');
 const { BoardStore } = await import('../src/efsp/board-store.js');
+import { fullRules } from "./helpers/full-rules.mjs";
 const { FdrStore } = await import('../src/efsp/fdr-store.js');
 const { PositionStore } = await import('../src/efsp/position-store.js');
 const facilityConfig = await import('../src/efsp/facility-config.js');
@@ -50,14 +51,11 @@ function makeCtx() {
       coordinationEffect: (primitive) => coordination.coordinationEffect(primitive),
       tofiCounterparts: (actingPositionId) => permission.tofiCounterparts(actingPositionId),
     };
-    const boardStore = new BoardStore(fdrStore, rules);
+    const boardStore = new BoardStore(fdrStore, fullRules(rules));
     facilities.set(facilityId, { boardStore, positionStore });
   }
 
-  const defaultFacility = facilities.get(facilityConfig.DEFAULT_FACILITY_ID);
   return {
-    boardStore: defaultFacility.boardStore,
-    positionStore: defaultFacility.positionStore,
     fdrStore, facilityConfig,
     boardStoreFor: (facilityId = facilityConfig.DEFAULT_FACILITY_ID) => (facilities.get(facilityId) || {}).boardStore || null,
     positionStoreFor: (facilityId = facilityConfig.DEFAULT_FACILITY_ID) => (facilities.get(facilityId) || {}).positionStore || null,
@@ -100,7 +98,7 @@ test('a message with no facilityId at all behaves exactly like it targeted INCIR
   holding(ctx, opsSession, 'INCIRLIK', ['OPS']);
   const result = handleMessage(ctx, opsSession, msg, noopPersist);
   assert.equal(result.ack.ok, true, JSON.stringify(result.ack));
-  assert.equal(ctx.boardStore.getAll().length, 1); // landed on the INCIRLIK alias
+  assert.equal(ctx.boardStoreFor('INCIRLIK').getAll().length, 1); // landed on the INCIRLIK alias
   assert.equal(ctx.boardStoreFor('CENTER').getAll().length, 0);
 });
 

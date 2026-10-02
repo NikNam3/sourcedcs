@@ -12,6 +12,7 @@ process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH = path.join(tmpDir, 'facility.json
 
 const { handleMessage, RESYNC_RING_WINDOW } = await import('../src/efsp/efsp-ws.js');
 const { BoardStore } = await import('../src/efsp/board-store.js');
+import { fullRules } from "./helpers/full-rules.mjs";
 const { FdrStore } = await import('../src/efsp/fdr-store.js');
 const { CorrelationStore } = await import('../src/efsp/correlation-store.js');
 const { PositionStore } = await import('../src/efsp/position-store.js');
@@ -25,7 +26,7 @@ const coordination = await import('../src/efsp/coordination.js');
 // hand-simplified subset) — otherwise this fixture would silently diverge
 // from what the running server actually does. WP4A (docs/adr/0013): one
 // {BoardStore, PositionStore} pair per Facility, one shared FdrStore,
-// `ctx.boardStore`/`ctx.positionStore` kept as direct INCIRLIK aliases so
+// `ctx.boardStoreFor('INCIRLIK')`/`ctx.positionStoreFor('INCIRLIK')` kept as direct INCIRLIK aliases so
 // every pre-WP4A test below (which references them directly) is unchanged.
 function makeCtx() {
   const fdrStore = new FdrStore();
@@ -48,6 +49,7 @@ function makeCtx() {
       canCreateStripRole: (actingPositionId, role) => permission.canCreateStripRole(actingPositionId, role),
       canActOnState: (actingPositionId, role, state) => permission.canActOnState(actingPositionId, role, state),
       isSelfCoordinated: (controllerId, id) => positionStore.isSelfCoordinated(controllerId, id),
+      baysFor: (positionId) => facilityConfig.getBaysFor(positionId, facilityId),
       facilityId,
       peerBoard: (otherFacilityId) => {
         const other = facilities.get(otherFacilityId);
@@ -55,18 +57,15 @@ function makeCtx() {
       },
       coordinationEffect: (primitive) => coordination.coordinationEffect(primitive),
     };
-    const boardStore = new BoardStore(fdrStore, rules);
+    const boardStore = new BoardStore(fdrStore, fullRules(rules));
     facilities.set(facilityId, { boardStore, positionStore });
   }
 
-  const defaultFacility = facilities.get(facilityConfig.DEFAULT_FACILITY_ID);
   // WP5 (docs/adr/0045) — the fourth store, wired exactly as index.js does it,
   // so the correlation dispatch path below is exercised against the real ctx
   // shape rather than a hand-simplified one.
   const correlationStore = new CorrelationStore({ fdrExists: (id) => !!fdrStore.getFdr(id) });
   return {
-    boardStore: defaultFacility.boardStore,
-    positionStore: defaultFacility.positionStore,
     fdrStore, facilityConfig, correlationStore,
     boardStoreFor: (facilityId = facilityConfig.DEFAULT_FACILITY_ID) => (facilities.get(facilityId) || {}).boardStore || null,
     positionStoreFor: (facilityId = facilityConfig.DEFAULT_FACILITY_ID) => (facilities.get(facilityId) || {}).positionStore || null,
@@ -158,7 +157,7 @@ test('a rejected mutation\'s ack includes the human-readable detail, not just th
   // so the doctrine-bypass check below is actually reached, rather than
   // this Mutation instead being rejected earlier for "no receiving Position
   // present", which isn't what this test is about.
-  ctx.positionStore.setHeldPositions('controller-cd', 'CD-Holder', ['CD']);
+  ctx.positionStoreFor('INCIRLIK').setHeldPositions('controller-cd', 'CD-Holder', ['CD']);
 
   // Drop straight into a Bay whose implied state (RUNWAY_QUEUE) skips
   // ahead of PROPOSED's legal next state (PENDING_CLEARANCE) — the exact
@@ -196,10 +195,10 @@ test('a DropStrip mutation broadcasts the stripId under "gone", not "updated"', 
 
 test('resync within the ring-buffer window returns an efsp-board-delta, not a snapshot', () => {
   const ctx = makeCtx();
-  const before = ctx.boardStore.currentSeq;
+  const before = ctx.boardStoreFor('INCIRLIK').currentSeq;
   handleMessage(ctx, SESSION, createStripMsg(), noopPersist);
 
-  const result = handleMessage(ctx, SESSION, { type: 'efsp-resync', lastBoardSeq: before, boardEpoch: ctx.boardStore.epoch }, noopPersist);
+  const result = handleMessage(ctx, SESSION, { type: 'efsp-resync', lastBoardSeq: before, boardEpoch: ctx.boardStoreFor('INCIRLIK').epoch }, noopPersist);
   assert.equal(result.ack.answer, 'delta');
 });
 
@@ -228,7 +227,7 @@ test('resync from a client AHEAD of the server returns a snapshot — the server
   // ring, found nothing, and told a client holding a whole Board of Strips that
   // nothing had changed. They never went away.
   const ctx = makeCtx();
-  const ahead = ctx.boardStore.currentSeq + 50;
+  const ahead = ctx.boardStoreFor('INCIRLIK').currentSeq + 50;
 
   const result = handleMessage(ctx, SESSION, { type: 'efsp-resync', lastBoardSeq: ahead }, noopPersist);
   assert.equal(result.ack.answer, 'snapshot', 'a client ahead of the server must be re-seeded, not patched');
@@ -240,7 +239,7 @@ test('resync from a client AHEAD of the server returns a snapshot — the server
 test('resync never returns a third message type — only efsp-board-delta or efsp-snapshot', () => {
   const ctx = makeCtx();
   handleMessage(ctx, SESSION, createStripMsg(), noopPersist);
-  for (const lastBoardSeq of [ctx.boardStore.currentSeq, 0, -1, ctx.boardStore.currentSeq - RESYNC_RING_WINDOW, ctx.boardStore.currentSeq + 1]) {
+  for (const lastBoardSeq of [ctx.boardStoreFor('INCIRLIK').currentSeq, 0, -1, ctx.boardStoreFor('INCIRLIK').currentSeq - RESYNC_RING_WINDOW, ctx.boardStoreFor('INCIRLIK').currentSeq + 1]) {
     const result = handleMessage(ctx, SESSION, { type: 'efsp-resync', lastBoardSeq }, noopPersist);
     assert.ok(['delta', 'snapshot'].includes(result.ack.answer));
   }
@@ -273,7 +272,7 @@ test('vacating a Position with Strips and an occupied covering Position reassign
   assert.deepEqual(result.ack.warnings[0], { positionId: 'GND', count: 1, routedTo: 'TWR' });
   assert.equal(slot(result, 'primary').strips.updated.length, 1);
   assert.equal(slot(result, 'primary').strips.updated[0].stripId, strip.stripId);
-  assert.equal(ctx.boardStore.getStrip(strip.stripId).ownerPositionId, 'TWR');
+  assert.equal(ctx.boardStoreFor('INCIRLIK').getStrip(strip.stripId).ownerPositionId, 'TWR');
 });
 
 test('vacating a Position with Strips and NO occupied covering Position anywhere reports routedTo:null, distinctly, and does not silently drop the Strip', () => {
@@ -289,7 +288,7 @@ test('vacating a Position with Strips and NO occupied covering Position anywhere
   assert.deepEqual(result.ack.warnings, [{ positionId: 'GND', count: 1, routedTo: null }]);
   // Strip ownership is untouched — still GND, which is now unoccupied; this
   // is the D19 boundary condition itself, surfaced rather than hidden.
-  assert.equal(ctx.boardStore.getStrip(strip.stripId).ownerPositionId, 'GND');
+  assert.equal(ctx.boardStoreFor('INCIRLIK').getStrip(strip.stripId).ownerPositionId, 'GND');
 });
 
 test('vacating a Position that owns no Strips produces no warnings at all', () => {
@@ -307,7 +306,7 @@ test('a non-abrupt vacate does NOT auto-promote a waiting Observer, so its Strip
   createStripOwnedBy(ctx, 'GND', 'gnd-coordination'); // see the comment above the other two uses of this fixture
 
   const result = handleMessage(ctx, SESSION, { type: 'efsp-set-positions', held: [] }, noopPersist); // Alice explicitly vacates
-  assert.equal(ctx.positionStore.isOccupied('GND'), false); // Bob was NOT auto-promoted — an explicit prompt is required, not built here
+  assert.equal(ctx.positionStoreFor('INCIRLIK').isOccupied('GND'), false); // Bob was NOT auto-promoted — an explicit prompt is required, not built here
   assert.equal(result.ack.warnings.length, 1); // so the Strip genuinely needed routing, and GND has no covering Position occupied in this fixture
   assert.equal(result.ack.warnings[0].routedTo, null);
 });
@@ -442,7 +441,7 @@ test('efsp-resync has no correlation branch — a reconnecting client gets the s
   holding(ctx, session, ['OPS']);
   createOpsStrip(ctx, session);
 
-  const delta = handleMessage(ctx, session, { type: 'efsp-resync', lastBoardSeq: 0, boardEpoch: ctx.boardStore.epoch }, noopPersist).ack;
+  const delta = handleMessage(ctx, session, { type: 'efsp-resync', lastBoardSeq: 0, boardEpoch: ctx.boardStoreFor('INCIRLIK').epoch }, noopPersist).ack;
   assert.equal(delta.answer, 'delta');
   assert.equal(delta.correlations, undefined);
 });
@@ -582,12 +581,12 @@ function exhaustedRack(ctx) {
   const b = createNamed(ctx, SESSION, 'BBB2222');
   const c = createNamed(ctx, SESSION, 'CCC3333');
   const d = createNamed(ctx, SESSION, 'DDD4444');
-  ctx.boardStore.getStrip(a.stripId).orderKey = 'X';
-  ctx.boardStore.getStrip(b.stripId).orderKey = 'X0';
-  ctx.boardStore.getStrip(c.stripId).orderKey = 'Y';
+  ctx.boardStoreFor('INCIRLIK').getStrip(a.stripId).orderKey = 'X';
+  ctx.boardStoreFor('INCIRLIK').getStrip(b.stripId).orderKey = 'X0';
+  ctx.boardStoreFor('INCIRLIK').getStrip(c.stripId).orderKey = 'Y';
   const move = {
     version: 1, type: 'efsp-mutation', clientMutationId: crypto.randomUUID(), actingPositionId: 'OPS',
-    stripId: d.stripId, baseRev: ctx.boardStore.getStrip(d.stripId).rev,
+    stripId: d.stripId, baseRev: ctx.boardStoreFor('INCIRLIK').getStrip(d.stripId).rev,
     op: { kind: 'MoveStrip', bayId: 'ops-proposed', rackId: 'main', afterStripId: a.stripId, beforeStripId: b.stripId },
   };
   return { a, b, c, d, move };
@@ -601,7 +600,7 @@ test('a Mutation that rebalances a Rack broadcasts every Strip it re-keyed', () 
   const sent = new Map(slot(result, 'primary').strips.updated.map(s => [s.stripId, s]));
   assert.equal(slot(result, 'primary').strips.updated[0].stripId, d.stripId, 'the addressed Strip leads');
   for (const id of [a.stripId, b.stripId, c.stripId, d.stripId]) {
-    const truth = ctx.boardStore.getStrip(id);
+    const truth = ctx.boardStoreFor('INCIRLIK').getStrip(id);
     assert.ok(sent.has(id), `${id} was re-keyed but not broadcast`);
     assert.equal(sent.get(id).orderKey, truth.orderKey);
     assert.equal(sent.get(id).rev, truth.rev);
@@ -620,7 +619,7 @@ test('a refused Mutation broadcasts nothing and leaves nothing to drain', () => 
   }, noopPersist);
   assert.equal(r.ack.ok, false);
   assert.equal(slot(r, 'primary'), undefined);
-  assert.deepEqual(ctx.boardStore.drainTouched(), []);
+  assert.deepEqual(ctx.boardStoreFor('INCIRLIK').drainTouched(), []);
 });
 
 test('a replayed success returns the current Strip and produces no broadcast', () => {
@@ -654,7 +653,7 @@ test('a replayed success returns the current Strip and produces no broadcast', (
 test('a resync with the current epoch and a seq inside the window gets a delta', () => {
   const ctx = makeCtx();
   holding(ctx, SESSION, ['OPS']);
-  const before = ctx.boardStore.currentSeq;
+  const before = ctx.boardStoreFor('INCIRLIK').currentSeq;
   const epoch = handleMessage(ctx, SESSION, { type: 'efsp-resync', lastBoardSeq: -1 }, noopPersist).ack.boardEpochByFacility.INCIRLIK;
   createNamed(ctx, SESSION, 'EPOCH1');
   const r = handleMessage(ctx, SESSION, { type: 'efsp-resync', lastBoardSeq: before, boardEpoch: epoch }, noopPersist);
@@ -666,7 +665,7 @@ test('a resync with the current epoch and a seq inside the window gets a delta',
 test('a resync with no epoch gets a snapshot', () => {
   const ctx = makeCtx();
   holding(ctx, SESSION, ['OPS']);
-  const before = ctx.boardStore.currentSeq;
+  const before = ctx.boardStoreFor('INCIRLIK').currentSeq;
   createNamed(ctx, SESSION, 'EPOCH2');
   const r = handleMessage(ctx, SESSION, { type: 'efsp-resync', lastBoardSeq: before }, noopPersist);
   assert.equal(r.ack.answer, 'snapshot');
@@ -678,24 +677,24 @@ test('a resync carrying the previous lifetime\'s epoch gets a snapshot, even whe
   const ctx = makeCtx();
   holding(ctx, SESSION, ['OPS']);
   const doomed = createNamed(ctx, SESSION, 'GONE1');
-  const oldEpoch = ctx.boardStore.epoch;
-  const oldSeq = ctx.boardStore.currentSeq;
+  const oldEpoch = ctx.boardStoreFor('INCIRLIK').epoch;
+  const oldSeq = ctx.boardStoreFor('INCIRLIK').currentSeq;
 
   // A new process restores the snapshot: a fresh ring, seq from zero.
   const ctx2 = makeCtx();
   ctx2.fdrStore.restore(ctx.fdrStore.snapshot());
-  const snap = ctx.boardStore.snapshot();
+  const snap = ctx.boardStoreFor('INCIRLIK').snapshot();
   snap.strips = snap.strips.filter(s => s.stripId !== doomed.stripId); // dropped and gone before the restart
-  ctx2.boardStore.restore(JSON.parse(JSON.stringify(snap)));
-  assert.notEqual(ctx2.boardStore.epoch, oldEpoch, 'a restore is a new lifetime');
+  ctx2.boardStoreFor('INCIRLIK').restore(JSON.parse(JSON.stringify(snap)));
+  assert.notEqual(ctx2.boardStoreFor('INCIRLIK').epoch, oldEpoch, 'a restore is a new lifetime');
   holding(ctx2, SESSION, ['OPS']);
-  while (ctx2.boardStore.currentSeq <= oldSeq + 1) createNamed(ctx2, SESSION, `NEW${ctx2.boardStore.currentSeq}`);
+  while (ctx2.boardStoreFor('INCIRLIK').currentSeq <= oldSeq + 1) createNamed(ctx2, SESSION, `NEW${ctx2.boardStoreFor('INCIRLIK').currentSeq}`);
 
   const r = handleMessage(ctx2, SESSION, { type: 'efsp-resync', lastBoardSeq: oldSeq, boardEpoch: oldEpoch }, noopPersist);
   assert.equal(r.ack.answer, 'snapshot');
   assert.ok(!r.ack.strips.some(s => s.stripId === doomed.stripId), 'the snapshot, not a delta, clears what the client should no longer show');
   // The same seq with the new lifetime's epoch is a delta.
-  const ok = handleMessage(ctx2, SESSION, { type: 'efsp-resync', lastBoardSeq: oldSeq, boardEpoch: ctx2.boardStore.epoch }, noopPersist);
+  const ok = handleMessage(ctx2, SESSION, { type: 'efsp-resync', lastBoardSeq: oldSeq, boardEpoch: ctx2.boardStoreFor('INCIRLIK').epoch }, noopPersist);
   assert.equal(ok.ack.answer, 'delta');
 });
 
@@ -704,38 +703,38 @@ test('resync from the seq the rebalancing broadcast advertised returns an empty 
   const client = replica();
   const { move } = exhaustedRack(ctx);
   client.snapshot(handleMessage(ctx, SESSION, { type: 'efsp-resync', lastBoardSeq: -1 }, noopPersist).ack);
-  assert.deepEqual(client.diff(ctx.boardStore), []);
+  assert.deepEqual(client.diff(ctx.boardStoreFor('INCIRLIK')), []);
 
   const result = handleMessage(ctx, SESSION, move, noopPersist);
   client.ack(result.ack);
   client.delta(slot(result, 'primary'));
-  assert.deepEqual(client.diff(ctx.boardStore), [], 'the broadcast alone leaves the replica right');
+  assert.deepEqual(client.diff(ctx.boardStoreFor('INCIRLIK')), [], 'the broadcast alone leaves the replica right');
 
   const r = handleMessage(ctx, SESSION, { type: 'efsp-resync', lastBoardSeq: client.boardSeq, boardEpoch: client.boardEpoch }, noopPersist);
   assert.equal(r.ack.answer, 'delta');
   assert.deepEqual(r.ack.strips.updated, []);
   assert.deepEqual(r.ack.strips.gone, []);
   client.delta(r.ack);
-  assert.deepEqual(client.diff(ctx.boardStore), []);
+  assert.deepEqual(client.diff(ctx.boardStoreFor('INCIRLIK')), []);
 });
 
 test('a resync delta reports a Strip no longer on the Board as gone, once (the seam retention fills)', () => {
   const ctx = makeCtx();
   holding(ctx, SESSION, ['OPS']);
-  const before = ctx.boardStore.currentSeq;
+  const before = ctx.boardStoreFor('INCIRLIK').currentSeq;
   const archived = createNamed(ctx, SESSION, 'ARCH1');
   const dropped = createNamed(ctx, SESSION, 'DROP1');
   const kept = createNamed(ctx, SESSION, 'KEEP1');
   const d = handleMessage(ctx, SESSION, {
     version: 1, type: 'efsp-mutation', clientMutationId: crypto.randomUUID(), actingPositionId: 'OPS',
-    stripId: dropped.stripId, baseRev: ctx.boardStore.getStrip(dropped.stripId).rev, op: { kind: 'DropStrip' },
+    stripId: dropped.stripId, baseRev: ctx.boardStoreFor('INCIRLIK').getStrip(dropped.stripId).rev, op: { kind: 'DropStrip' },
   }, noopPersist);
   assert.equal(d.ack.ok, true, JSON.stringify(d.ack));
-  ctx.boardStore._strips.delete(archived.stripId); // what L24's archive will do
+  ctx.boardStoreFor('INCIRLIK')._strips.delete(archived.stripId); // what L24's archive will do
 
-  const delta = ctx.boardStore.getDeltaSince(before);
+  const delta = ctx.boardStoreFor('INCIRLIK').getDeltaSince(before);
   assert.deepEqual(delta.gone, [archived.stripId]);
-  const r = handleMessage(ctx, SESSION, { type: 'efsp-resync', lastBoardSeq: before, boardEpoch: ctx.boardStore.epoch }, noopPersist);
+  const r = handleMessage(ctx, SESSION, { type: 'efsp-resync', lastBoardSeq: before, boardEpoch: ctx.boardStoreFor('INCIRLIK').epoch }, noopPersist);
   assert.equal(r.ack.answer, 'delta');
   assert.deepEqual(r.ack.strips.gone.slice().sort(), [archived.stripId, dropped.stripId].sort());
   assert.deepEqual(r.ack.strips.updated.map(s => s.stripId), [kept.stripId]);
@@ -752,12 +751,12 @@ test('a resync from exactly RESYNC_RING_WINDOW (900) behind is a delta; one furt
   const stripId = created.ack.strip.stripId;
   const epoch = created.ack.boardEpoch;
   for (let i = 0; i < 905; i++) {
-    const strip = ctx.boardStore.getStrip(stripId);
-    const r = ctx.boardStore.applyMutation({ clientMutationId: `w-${i}`, stripId, baseRev: strip.rev, op: { kind: 'SetFlag', flag: 'attention', value: i % 2 === 0 } }, 'OPS', 'controller-1');
+    const strip = ctx.boardStoreFor('INCIRLIK').getStrip(stripId);
+    const r = ctx.boardStoreFor('INCIRLIK').applyMutation({ clientMutationId: `w-${i}`, stripId, baseRev: strip.rev, op: { kind: 'SetFlag', flag: 'attention', value: i % 2 === 0 } }, 'OPS', 'controller-1');
     assert.equal(r.ok, true);
   }
-  ctx.boardStore.drainTouched();
-  const current = ctx.boardStore.currentSeq;
+  ctx.boardStoreFor('INCIRLIK').drainTouched();
+  const current = ctx.boardStoreFor('INCIRLIK').currentSeq;
   assert.ok(current > 905);
   const answer = (lastBoardSeq, boardEpoch = epoch) => handleMessage(ctx, SESSION, { type: 'efsp-resync', lastBoardSeq, boardEpoch }, noopPersist).ack;
   const atEdge = answer(current - RESYNC_RING_WINDOW);

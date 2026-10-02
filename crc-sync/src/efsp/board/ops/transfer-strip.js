@@ -6,7 +6,7 @@ function _applyTransferStrip(ctx, strip, op, by) {
   // H2 / H40 (docs/adr/0080): a working Position with a hand-back row may
   // transfer a line only to the Positions the capability table names. The
   // acting Position is the owner (_dispatch verified it).
-  const handBack = ctx.rules.handBackTargetsFor ? ctx.rules.handBackTargetsFor(strip.ownerPositionId) : null;
+  const handBack = ctx.rules.handBackTargetsFor(strip.ownerPositionId);
   if (handBack && !handBack.includes(op.toPositionId)) {
     return {
       ok: false, reason: 'PERMISSION_DENIED', strip,
@@ -15,11 +15,9 @@ function _applyTransferStrip(ctx, strip, op, by) {
   }
   // B4: the Bay is one of the RECEIVING Position's, or the Strip's owner and
   // its Bay disagree and it drops off both Positions' panels.
-  if (ctx.rules.baysFor) {
-    const own = ctx.rules.baysFor(op.toPositionId);
-    if (!own.some(b => b.bayId === op.bayId)) {
-      return { ok: false, reason: 'VALIDATION_ERROR', detail: `${op.bayId} is not a Bay of ${op.toPositionId}`, strip };
-    }
+  const own = ctx.rules.baysFor(op.toPositionId);
+  if (!own.some(b => b.bayId === op.bayId)) {
+    return { ok: false, reason: 'VALIDATION_ERROR', detail: `${op.bayId} is not a Bay of ${op.toPositionId}`, strip };
   }
   // Same check _applyMoveStrip uses (§3.5 rule 4) — a Transfer landing in
   // a Bay configured with an implied EfspState is validated EXACTLY like
@@ -58,9 +56,7 @@ function _applyTransferStrip(ctx, strip, op, by) {
   // regime/radar-service state to also flip (that's WP4A/WP9 territory,
   // not yet built) — this tag is the Phase-1 analogue: the audit log
   // never silently collapses the boundary event away (defect D20).
-  const selfCoordinated = ctx.rules.isSelfCoordinated
-    ? ctx.rules.isSelfCoordinated(by, destPositionId)
-    : false;
+  const selfCoordinated = ctx.rules.isSelfCoordinated(by, destPositionId);
 
   strip.ownerPositionId = destPositionId;
   delete strip.coveredFrom; // it has a new owner by decision, not by cover (F10)

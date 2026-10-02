@@ -1,5 +1,11 @@
 # FREEZE: characterization (golden master) of the EFSP server
 
+> **2026-10-02: the refactor window is closed (BACKCOMPAT merged).** The freeze suite left `npm test` and is opt-in:
+> `cd crc-sync && npm run freeze`. The fixtures were correct on this day (`node --test tests/freeze/freeze-*.test.mjs`
+> green at the closing commit, `freeze:selfcheck` 18/18) and are **not maintained after this date**: a behaviour lane
+> does not re-record them (S-desk3, ARCH-D6). Run the suite when you want a characterization diff, expect failures
+> for any intended change, and delete or re-record a fixture only when you are working on it.
+
 Lane FREEZE, branch `lane/FREEZE-characterization`, tests only (no production file touched, one `package.json`
 edit: three script lines). Purpose: concern S-5 (the architecture refactor of `board-store.js` and friends,
 plan on `lane/ARCH-refactor-plan`). Before any move, today's observable behaviour is frozen.
@@ -12,7 +18,7 @@ changes behaviour on purpose re-records in its own commit and lists the changed 
 
 ```bash
 cd crc-sync
-npm test                                   # includes tests/freeze/ (node --test finds freeze-*.test.mjs)
+npm run freeze                             # the freeze suite; `npm test` no longer includes it (2026-10-02)
 node --test tests/freeze/freeze-*.test.mjs # just the freeze suite (about 16 s)
 npm run freeze:update                      # UPDATE_GOLDEN=1: rewrite crc-sync/tests/freeze/golden/*.json
 npm run freeze:selfcheck                   # proves the suite catches deliberate faults (not part of npm test)

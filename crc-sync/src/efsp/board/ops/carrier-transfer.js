@@ -20,7 +20,7 @@ const { CARRIER_TRANSFER_EFFECTS } = require('../../carrier/transfer-effects'); 
 function _applyCarrierTransfer(ctx, strip, kind, toPositionId, by, actingPositionId, clientMutationId) {
   const fx = typeof kind === 'string' && Object.prototype.hasOwnProperty.call(CARRIER_TRANSFER_EFFECTS, kind) ? CARRIER_TRANSFER_EFFECTS[kind] : null;
   if (!fx) return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown carrier transfer '${kind}'`, strip };
-  const row = ctx.rules.carrierTransfers && ctx.rules.carrierTransfers[kind];
+  const row = ctx.rules.carrierTransfers[kind];
   const label = row ? row.label : kind;
   if (strip.role !== fx.role || strip.state !== fx.state) {
     return { ok: false, reason: 'VALIDATION_ERROR', detail: `${label} applies to a ${fx.role} Strip in ${fx.state}, not ${strip.role} in ${strip.state}`, strip };
@@ -30,16 +30,14 @@ function _applyCarrierTransfer(ctx, strip, kind, toPositionId, by, actingPositio
 
   let dest = strip.ownerPositionId;
   if (fx.owner === 'TO') {
-    dest = toPositionId || fx.defaultTo || (ctx.rules.carrierLaneFor ? ctx.rules.carrierLaneFor(strip) : null);
+    dest = toPositionId || fx.defaultTo || ctx.rules.carrierLaneFor(strip);
     if (!dest) return { ok: false, reason: 'NO_RECEIVING_POSITION', detail: 'no receiving Position present', strip };
   }
-  const caseValue = ctx.rules.carrierCase ? ctx.rules.carrierCase() : null;
-  if (ctx.rules.validateCarrierTransfer) {
-    const v = ctx.rules.validateCarrierTransfer(kind, {
-      caseValue, fromPositionId: actingPositionId, toPositionId: fx.owner === 'TO' ? dest : (kind === 'FINAL_TO_LSO' ? null : undefined),
-    });
-    if (!v.ok) return { ok: false, reason: v.reason || 'VALIDATION_ERROR', detail: v.detail, strip };
-  }
+  const caseValue = ctx.rules.carrierCase();
+  const v = ctx.rules.validateCarrierTransfer(kind, {
+    caseValue, fromPositionId: actingPositionId, toPositionId: fx.owner === 'TO' ? dest : (kind === 'FINAL_TO_LSO' ? null : undefined),
+  });
+  if (!v.ok) return { ok: false, reason: v.reason || 'VALIDATION_ERROR', detail: v.detail, strip };
 
   let routedTo = null;
   if (fx.owner === 'TO' && !ctx.rules.isOccupied(dest)) {
@@ -54,7 +52,7 @@ function _applyCarrierTransfer(ctx, strip, kind, toPositionId, by, actingPositio
   // vacancy (H28). A flight that was never in the stack has nothing to remove.
   let carrierChanged = false;
   const effect = row ? row.stackEffect : null;
-  if (effect && ctx.rules.carrierApplyEffect) {
+  if (effect) {
     const r = ctx.rules.carrierApplyEffect(effect, strip.fdrId, { by, actingPositionId, clientMutationId });
     if (!r.ok && !(effect === 'REMOVE_NO_CLOSE_UP' && r.reason === 'NOT_FOUND')) {
       return { ok: false, reason: r.reason || 'VALIDATION_ERROR', detail: r.detail, strip };
@@ -106,7 +104,7 @@ function _applyCarrierTransfer(ctx, strip, kind, toPositionId, by, actingPositio
 module.exports = {
   kind: 'CarrierTransfer',
   authorize: (ctx, actingPositionId, op) => {
-    if (!(ctx.rules.canRecordCarrierTransfer && ctx.rules.canRecordCarrierTransfer(actingPositionId, op.transfer))) {
+    if (!(ctx.rules.canRecordCarrierTransfer(actingPositionId, op.transfer))) {
       return { ok: false, reason: 'PERMISSION_DENIED', detail: `${actingPositionId} may not record ${op.transfer || 'that transfer'}` };
     }
     return null;

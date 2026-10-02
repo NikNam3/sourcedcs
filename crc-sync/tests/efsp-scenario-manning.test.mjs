@@ -47,9 +47,9 @@ test('SCENARIO Ground walks away holding strips, and they route down the coverin
   // follows rather than being left with nobody.
   const ack = hold(efsp, c.GND.session, 'INCIRLIK', []).ack;
   assert.deepEqual(ack.warnings, [{ positionId: 'GND', count: 1, routedTo: 'TWR' }]);
-  assert.equal(efsp.boardStore.getStrip(onGround.stripId).ownerPositionId, 'TWR');
+  assert.equal(efsp.boardStoreFor('INCIRLIK').getStrip(onGround.stripId).ownerPositionId, 'TWR');
   // ...into one of TWR's own Bays, the only ones its panel builds (docs/adr/0080, B3).
-  const bayId = efsp.boardStore.getStrip(onGround.stripId).bayId;
+  const bayId = efsp.boardStoreFor('INCIRLIK').getStrip(onGround.stripId).bayId;
   assert.ok(['twr-runway-queue', 'twr-airborne', 'twr-arrivals', 'twr-final', 'twr-landed', 'twr-coordination'].includes(bayId), `TWR owns it but it sits in ${bayId}`);
 });
 
@@ -67,7 +67,7 @@ test('SCENARIO the last controller leaves and the strips are visibly stranded, n
   // the Strip must not quietly disappear.
   const ack = hold(efsp, c.APP.session, 'INCIRLIK', []).ack;
   assert.deepEqual(ack.warnings, [{ positionId: 'APP', count: 1, routedTo: null }]);
-  const stranded = efsp.boardStore.getStrip(strip.stripId);
+  const stranded = efsp.boardStoreFor('INCIRLIK').getStrip(strip.stripId);
   assert.equal(stranded.ownerPositionId, 'APP', 'still owned by an unoccupied Position — surfaced, not hidden');
   assert.equal(stranded.state, 'HANDED_OFF');
 });
@@ -80,15 +80,15 @@ test('SCENARIO a second controller sits down at an occupied Position and watches
   const relief = { controllerId: 'c-relief', who: 'Relief' };
 
   hold(efsp, relief, 'INCIRLIK', ['APP']);
-  assert.equal(efsp.positionStore.primaryOf('APP'), 'c-APP', 'the second selector is an Observer (§4.8.2 rule 3)');
+  assert.equal(efsp.positionStoreFor('INCIRLIK').primaryOf('APP'), 'c-APP', 'the second selector is an Observer (§4.8.2 rule 3)');
 
   const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'RELIEF1' });
   assert.equal(act(efsp, { session: relief, facilityId: 'INCIRLIK' }, 'APP', strip, { kind: 'InvokeNla' }).reason,
     'NOT_HOLDING_POSITION', 'an Observer watches');
 
   // Primary released deliberately, never auto-promoted.
-  assert.equal(efsp.positionStore.releasePrimaryTo('APP', 'c-relief').ok, true);
-  assert.equal(efsp.positionStore.primaryOf('APP'), 'c-relief');
+  assert.equal(efsp.positionStoreFor('INCIRLIK').releasePrimaryTo('APP', 'c-relief').ok, true);
+  assert.equal(efsp.positionStoreFor('INCIRLIK').primaryOf('APP'), 'c-relief');
   assert.equal(act(efsp, { session: relief, facilityId: 'INCIRLIK' }, 'APP', strip, { kind: 'DropStrip', reason: 'now mine' }).ok, true);
 });
 
@@ -101,14 +101,14 @@ test('SCENARIO a client disconnects mid-sortie: its Positions are released, its 
   const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'DROP1' });
   efsp.onDisconnect(c.APP.session);
 
-  assert.equal(efsp.positionStore.isOccupied('APP'), false, 'an abrupt drop releases the Position');
-  assert.equal(efsp.boardStore.getStrip(strip.stripId).ownerPositionId, 'APP',
+  assert.equal(efsp.positionStoreFor('INCIRLIK').isOccupied('APP'), false, 'an abrupt drop releases the Position');
+  assert.equal(efsp.boardStoreFor('INCIRLIK').getStrip(strip.stripId).ownerPositionId, 'APP',
     'but the flight is still there — a disconnect is not a reason to lose a Strip');
 
   // Coming back is just declaring Positions again: occupancy is deliberately
   // ephemeral (ADR 0002), so nothing about it survives, and nothing needs to.
   hold(efsp, c.APP.session, 'INCIRLIK', ['APP']);
-  assert.equal(act(efsp, c.APP, 'APP', efsp.boardStore.getStrip(strip.stripId), { kind: 'InvokeNla' }).ok, true);
+  assert.equal(act(efsp, c.APP, 'APP', efsp.boardStoreFor('INCIRLIK').getStrip(strip.stripId), { kind: 'InvokeNla' }).ok, true);
 });
 
 test('an airspace op issued while disconnected is simply lost, unlike a Strip mutation', () => {

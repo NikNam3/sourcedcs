@@ -22,7 +22,7 @@ function _applySetBlock(ctx, strip, op, by, actingPositionId, clientMutationId) 
   // Refused rather than silently overridden, and the reason names the way
   // out: End or Void the relation, which sets the regime back to ATC as part
   // of doing so. That IS the action the controller wanted.
-  if (target.kind === 'tofi' && target.field === 'separationRegime' && ctx.rules.activeMarsaFor) {
+  if (target.kind === 'tofi' && target.field === 'separationRegime') {
     const active = ctx.rules.activeMarsaFor(strip.fdrId);
     if (active) {
       return {
@@ -35,7 +35,7 @@ function _applySetBlock(ctx, strip, op, by, actingPositionId, clientMutationId) 
   // §8.1 — a Facility that hides a Block hides it for writes too, not just
   // for rendering. Enforced here because this is the only path a Block
   // value reaches an FDR or an annotation by.
-  if (ctx.rules.isBlockVisible && !ctx.rules.isBlockVisible(strip.role, op.blockId)) {
+  if (!ctx.rules.isBlockVisible(strip.role, op.blockId)) {
     return { ok: false, reason: 'VALIDATION_ERROR', detail: `Block ${op.blockId} is not visible for ${strip.role} at this Facility`, strip };
   }
 

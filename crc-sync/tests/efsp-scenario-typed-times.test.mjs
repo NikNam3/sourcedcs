@@ -62,7 +62,7 @@ async function cleared(efsp, c, callsign) {
   return jumpTo(efsp, c.CD, 'CD', strip, 'CLEARED');
 }
 
-const fresh = (efsp, strip) => efsp.boardStore.getStrip(strip.stripId);
+const fresh = (efsp, strip) => efsp.boardStoreFor('INCIRLIK').getStrip(strip.stripId);
 
 // ── 1. a typed void time expires ─────────────────────────────────────────
 

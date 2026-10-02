@@ -123,7 +123,7 @@ test('transfers: no receiving Position is a failure with its cause; a covered tr
   const refused = act(efsp, c.OPS, 'OPS', strip, { kind: 'TransferStrip', toPositionId: 'CD', bayId: 'cd-coordination', rackId: 'main' });
   assert.equal(refused.reason, 'NO_RECEIVING_POSITION');
   hold(efsp, c.APP.session, 'INCIRLIK', ['APP']);
-  const routed = mustAct(efsp, c.OPS, 'OPS', efsp.boardStore.getStrip(strip.stripId), { kind: 'TransferStrip', toPositionId: 'CD', bayId: 'cd-coordination', rackId: 'main' });
+  const routed = mustAct(efsp, c.OPS, 'OPS', efsp.boardStoreFor('INCIRLIK').getStrip(strip.stripId), { kind: 'TransferStrip', toPositionId: 'CD', bayId: 'cd-coordination', rackId: 'main' });
   assert.equal(routed.ownerPositionId, 'APP');
   hold(efsp, c.TWR.session, 'INCIRLIK', ['TWR']);
 
@@ -165,7 +165,7 @@ test('an owner pressing NLA against its own inhibit is an inhibitedPress, not a 
     });
     strip = jumpTo(efsp, c.OPS, 'OPS', strip, 'PENDING_CLEARANCE');
     strip = mustAct(efsp, c.OPS, 'OPS', strip, { kind: 'TransferStrip', toPositionId: 'CD', bayId: 'cd-pending-clearance', rackId: 'main' });
-    const status = efsp.boardStore.nlaStatusFor(efsp.boardStore.getStrip(strip.stripId));
+    const status = efsp.boardStoreFor('INCIRLIK').nlaStatusFor(efsp.boardStoreFor('INCIRLIK').getStrip(strip.stripId));
     assert.ok(status && status.inhibited, `precondition: the NLA is inhibited (${JSON.stringify(status)})`);
     const before = body().metrics.transfers;
     assert.equal(act(efsp, cd, 'CD', strip, { kind: 'InvokeNla' }).ok, false);
@@ -291,7 +291,7 @@ test('a SystemReassign in the log is counted', () => {
   strip = jumpTo(efsp, c.OPS, 'OPS', strip, 'DEPARTED');
   mustAct(efsp, c.OPS, 'OPS', strip, { kind: 'TransferStrip', toPositionId: 'TWR', bayId: 'twr-airborne', rackId: 'main' });
   hold(efsp, c.TWR.session, 'INCIRLIK', []); // TWR vacates; APP covers it and the Strip follows
-  assert.equal(efsp.boardStore.getStrip(strip.stripId).ownerPositionId, 'APP');
+  assert.equal(efsp.boardStoreFor('INCIRLIK').getStrip(strip.stripId).ownerPositionId, 'APP');
   hold(efsp, c.TWR.session, 'INCIRLIK', ['TWR']);
   const moved = efsp.mutationLog.readAll().filter(e => e.op === 'SystemReassign' && e.reason !== 'position-retaken').length;
   assert.ok(efsp.mutationLog.readAll().some(e => e.op === 'SystemReassign' && e.stripId === strip.stripId));

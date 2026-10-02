@@ -97,35 +97,34 @@ class BoardPersistence {
     return { strips: this._state.all(), cidSeq: this._state.cidSeq, replay, droppedWallAt: [...this._droppedWallAt] };
   }
   restore(data) {
-    this._state.replaceStrips(new Map((data?.strips || []).map(s => [s.stripId, s])));
+    // The shape snapshot() writes, and only that (ARCH-D5, H88): a snapshot with a part missing, or a Strip from
+    // before docs/adr/0045, is an old file and stops start-up. Nothing is defaulted or dropped quietly.
+    const where = `Board ${this._rules.facilityId || ''} snapshot`.replace('  ', ' ');
+    if (!data || !Array.isArray(data.strips) || !Number.isFinite(data.cidSeq) || !Array.isArray(data.replay) || !Array.isArray(data.droppedWallAt)) {
+      throw new Error(`[efsp] the ${where} is not in the current shape (needs strips[], cidSeq, replay[], droppedWallAt[]): delete state/efsp-board.json to start clean`);
+    }
+    const legacy = data.strips.find(s => 'correlation' in s);
+    if (legacy) {
+      throw new Error(`[efsp] the ${where}: Strip ${legacy.stripId} still has the per-Strip "correlation" field of docs/adr/0045: delete state/efsp-board.json to start clean`);
+    }
+    this._state.replaceStrips(new Map(data.strips.map(s => [s.stripId, s])));
     // A restored Board is a new lifetime: the ring and the seq did not come
     // back, so no seq a client holds from before can be served a delta.
     this._state.newEpoch();
-    // A snapshot written before docs/adr/0045 carries a per-Strip
-    // `correlation` field. Dropped rather than migrated: it was always the
-    // inert `{ state: 'UNCORRELATED' }` placeholder, so there is nothing in it
-    // to carry forward, and leaving it would put a second, stale answer to
-    // "which contact is this" next to the real one — which is the defect the
-    // key change removes, preserved through a restore.
-    for (const strip of this._state.strips.values()) delete strip.correlation;
-    this._state.setCidSeq(data?.cidSeq || 0);
-    // The persisted slice of the idempotency cache (docs/adr/0081). It used to
-    // be dropped here, so a CreateStrip whose ack died with the process was
-    // created twice on retry (L6's F5). Loaded whole: the snapshot already cut
+    this._state.setCidSeq(data.cidSeq);
+    // The persisted slice of the idempotency cache (docs/adr/0081). Loaded whole: the snapshot already cut
     // it to the retry window, and index.js's boot reconcile needs every record
     // that was persisted to tell a persisted Mutation from an unpersisted one.
     // It ages out through the cap and the next snapshot's window.
-    this._replay.load(data?.replay);
-    // docs/adr/0082 — when each DROPPED Strip dropped. One restored with no
-    // entry (a snapshot written before it) starts its 2 h now: it was counted
-    // before it was persisted (L5 backfills from the log at boot anyway).
-    const dropped = new Map(Array.isArray(data?.droppedWallAt) ? data.droppedWallAt : []);
+    this._replay.load(data.replay);
+    // docs/adr/0082 — when each DROPPED Strip dropped. Every DROPPED Strip has its entry.
+    const dropped = new Map(data.droppedWallAt);
     this._droppedWallAt = new Map();
-    const restoredAt = Date.now();
     for (const strip of this._state.strips.values()) {
       if (strip.state !== 'DROPPED') continue;
       const at = dropped.get(strip.stripId);
-      this._droppedWallAt.set(strip.stripId, Number.isFinite(at) ? at : restoredAt);
+      if (!Number.isFinite(at)) throw new Error(`[efsp] the ${where}: DROPPED Strip ${strip.stripId} has no drop time (droppedWallAt): delete state/efsp-board.json to start clean`);
+      this._droppedWallAt.set(strip.stripId, at);
     }
   }
 }

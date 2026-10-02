@@ -33,7 +33,6 @@ const ALLOWED = {
   'crc-sync/src/efsp/board/placement.js': 'comments only (the nlaCtx context and roleBayFor\'s Role Bay rule); roleBayFor keeps an OVERFLIGHT out of ARRIVAL\'s Bays by Role',
   'crc-sync/src/efsp/board/coordination.js': 'a comment only (the replica carries the sender\'s Role/EfspState); the tables it reads are passed in, keyed by Role',
   'crc-sync/src/efsp/surveillance-hints.js': 'EXPECTS is keyed by Role',
-  'crc-sync/src/efsp/overflight-migration.js': 'the comment naming the new states; it only touches TRANSITING',
   'crc-sync/src/efsp/wire/skeleton.js': 'the word INBOUND in a comment about messages',
   'crc-desktop/app/public/js/panels/efsp/sfa-state.js': 'the rotation button is offered only to role === ARRIVAL at INBOUND (the guard is on the same line)',
   'crc-sync/src/efsp/sfa.js': 'SFA_ROTATION is keyed by Role: it names role ARRIVAL with state INBOUND, and board-store _applySfaRotation refuses any other Role',
