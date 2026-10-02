@@ -101,6 +101,12 @@ class WsHub {
   /** Tests only (the Playwright hook, src/test-reset.js): make this hub speak another protocol until the process ends. */
   setWireProtocolForTest(n) { this._wireProtocol = n; }
 
+  _updateRequiredMsg(clientProtocol) {
+    const frame = { version: VERSION, type: 'update-required', serverProtocol: this._wireProtocol, clientProtocol };
+    if (this._downloadUrl) frame.downloadUrl = this._downloadUrl;
+    return frame;
+  }
+
   /**
    * The wire protocol handshake (docs/adr/0103). Exact match, or the client gets one `update-required` frame and close
    * 4426: no session, no coverage, no snapshot. Runs in the connection listener, not in `_onConnect`, which tests and the
@@ -118,9 +124,7 @@ class WsHub {
     const first = !this._refusedSeen.has(key);
     this._refusedSeen.add(key);
     log[first ? 'info' : 'debug']('client refused: update required', { who, clientVersion, clientProtocol, serverProtocol: this._wireProtocol });
-    const frame = { version: VERSION, type: 'update-required', serverProtocol: this._wireProtocol, clientProtocol };
-    if (this._downloadUrl) frame.downloadUrl = this._downloadUrl;
-    try { ws.send(JSON.stringify(frame)); } catch (_) { /* closing anyway */ }
+    try { ws.send(JSON.stringify(this._updateRequiredMsg(clientProtocol))); } catch (_) { /* closing anyway */ }
     ws.close(UPDATE_REQUIRED_CLOSE, 'update required');
     return false;
   }
