@@ -1,0 +1,6 @@
+{
+  "_comment": "The squadron's comm card (decisions R3-53, H31, H84). SQUAD-WIDE data, not per Facility. Read once at startup, never written by code (P5); a copy in state/comm-card.json overrides it key by key (unknown keys stop start-up). approachTypes: the approach kinds a carrier flight's `approachType` may name, upper case; [SOURCE-DEFINED] (L4 briefing Q7), the squadron verifies the list. approachButtons: `min`/`max` are the integer range a button may take while `buttons` is empty (1..20 is DCS's radio preset range, [SOURCE-DEFINED]). Once the squadron fills `buttons` with { \"button\": <integer within min..max>, \"label\": <what it is, e.g. \"CVN-72 approach\"> } entries, a flight's approachButton must be one of those `button` values and nothing else. A button, never a frequency (guide 9.12 rule 6). frequencies: [{ \"id\": <unique string>, \"name\": <string>, \"mhz\": <number>, \"use\": \"approach\"|\"tower\"|\"ground\"|\"departure\"|\"atis\"|\"other\" }]. Empty and without a consumer yet: the human supplies it later (R3-53).",
+  "approachTypes": ["TACAN", "ICLS", "ACLS", "PAR", "VISUAL"],
+  "approachButtons": { "min": 1, "max": 20, "buttons": [] },
+  "frequencies": []
+}
