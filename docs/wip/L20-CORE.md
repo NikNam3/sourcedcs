@@ -10,6 +10,8 @@ Branch `lane/L20-CORE` from 277e65f. Scan, L20-CORE column, before -> after: com
 3. `// the mission-clock time a DEPARTURE Strip entered DEPARTED, stamped by` / `// board-store.js into flightData.timeInputs.takeoffStampedUtc. It is an actual, so it` -> `// the mission-clock time a DEPARTURE Strip entered DEPARTED, stamped by crc-sync's` / `// board/strip-ops.js (`StripOps#_stampTakeoffOnStateChange`, through` / `// `FlightDataStore#setTakeoffStamp`) into flightData.timeInputs.takeoffStampedUtc. It is an actual, so it`
 `block-map.js` <-> `strip-template.js`: no marker or rule wording changed; only vocabulary (strip type, flight data) and pointers. The client copy's comments are L20-CLIENT's (the parity test compares tables and strings, not comments).
 
+Confirmation: CLIENT pasted the three hunks in e39e3fe, so the client `time-chains.js` body should now equal the server's (parity tests green on the merged tree).
+
 ## Facility notes (DATA-1): mapping from the literals at 8476c41^ to `facility-schema.js` (the block above `REQUIRED_KEYS`)
 | Old literal comment | Now | Marker |
 |---|---|---|

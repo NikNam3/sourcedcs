@@ -95,7 +95,7 @@ function countability(before, after) {
   const coord = after && after.coordination;
   if (coord && coord.state === 'REJECTED' && coord.mintedForCoordination) {
     // A replica the receiving Facility declined: the flight never became
-    // this Facility's traffic (board/strip-ops.js's rejectedReplicaRefusal).
+    // this Facility's traffic (board/strip-ops.js's isRejectedReplica).
     return { counted: false, excludedReason: 'REJECTED_REPLICA' };
   }
   const states = COUNTABLE_PRE_DROP_STATES[stripType];
