@@ -380,3 +380,27 @@ test('labels carry the name and the limits, FL from the transition altitude; a n
   const text = await page.evaluate(() => crc.airspaceLayer.lastAirspaceFeatures().labels.features[0].properties.text);
   expect(text).toBe('MOA ADANA SOUTH\nGND–FL180');
 });
+
+test('Add fixes on map: a click appends a fix, a click near a navpoint snaps to it and takes its name, the corridor shows while adding', async ({ page }) => {
+  const two = ROUTE(); two.segments = two.segments.slice(0, 2).map((s, i) => (i === 1 ? { ...s, altLowerFt: null, altUpperFt: null, widthNm: null } : s));
+  await open(page, ['CTR'], [rec(two)]);
+  const ed = await edit(page, 'VR1207');
+  const route = ed.locator('.asg-route');
+  await expect(route.locator('.asg-chip')).toHaveText('2 FIXES · 1 LEGS');
+  await page.evaluate(() => crc.app.map.jumpTo({ center: [35.75, 37.1], zoom: 8.5 }));
+  await route.locator('#asg-add-on-map').click();
+  const bar = page.locator('.asd-bar');
+  await expect(bar.locator('.asd-title')).toContainText('ADDING FIXES ROUTE');
+  await clickMap(page, 37.05, 35.95); // free air: a new fix
+  await expect(bar.locator('.asd-title')).toContainText('3 fixes');
+  const topak = await px(page, 36.98, 36.15);
+  await page.mouse.click(topak.x + 4, topak.y - 3); // near the TOPAK navpoint: snaps to it
+  await expect(route.locator('.asg-chip')).toHaveText('4 FIXES · 3 LEGS');
+  await expect(route.locator('input[data-row="3"][data-field="name"]')).toHaveValue('TOPAK');
+  await expect(route.locator('input[data-row="3"][data-field="lat"]')).toHaveValue('N36 58.8');
+  await expect(route.locator('input[data-row="2"][data-field="name"]')).toHaveValue('C');
+  await shot(page.locator('#map'), '11-map-route-fixes');
+  await bar.locator('.asd-primary').click();
+  await expect(bar).toHaveCount(0);
+  expect(await page.evaluate(() => window.__sent.length)).toBe(0);
+});
