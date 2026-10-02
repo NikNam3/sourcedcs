@@ -9,15 +9,15 @@ const nla = require('../src/efsp/nla.js');
 const permission = require('../src/efsp/permission.js');
 
 test('every Role family is a Role of nla.js and carries every field', () => {
-  assert.deepEqual(authority.roleNames(), Object.keys(nla.STATES_BY_ROLE));
-  for (const role of authority.roleNames()) {
-    const f = authority.roleFamily(role);
+  assert.deepEqual(authority.stripTypeNames(), Object.keys(nla.STATES_BY_ROLE));
+  for (const role of authority.stripTypeNames()) {
+    const f = authority.stripTypeFamily(role);
     assert.equal(f.states, nla.STATES_BY_ROLE[role]);
     assert.ok(f.states.includes(f.initialState));
     assert.equal(typeof f.computeNla, 'function');
     assert.equal(permission.STATE_OWNERS_BY_ROLE[role], f.stateOwners);
   }
-  assert.equal(authority.roleFamily('toString'), null);
+  assert.equal(authority.stripTypeFamily('toString'), null);
 });
 
 test('accessors answer from the composed tables', () => {
@@ -39,6 +39,6 @@ test('accessors answer from the composed tables', () => {
 });
 
 test('the registry is sealed once loaded: a late family is a loud error', () => {
-  assert.throws(() => authority.registerRoleFamily({ role: 'LATE' }), /sealed/);
+  assert.throws(() => authority.registerStripTypeFamily({ role: 'LATE' }), /sealed/);
   assert.throws(() => authority.registerPositionFamily({ family: 'late' }), /sealed/);
 });

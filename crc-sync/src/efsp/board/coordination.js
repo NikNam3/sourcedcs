@@ -210,7 +210,7 @@ class Coordination {
     // already minted with (docs/adr/0022) — the replica's state was set
     // correctly by receiveCoordinationProposal already; accept only
     // relocates it, it never advances the state itself.
-    const targetBay = this._placement.roleBayFor(strip) || this._rules.bayForImpliedState(strip.ownerPositionId, strip.state);
+    const targetBay = this._placement.stripTypeBayFor(strip) || this._rules.bayForImpliedState(strip.ownerPositionId, strip.state);
     if (targetBay) {
       strip.bayId = targetBay.bayId;
       strip.rackId = this._placement.placementRack(strip, targetBay);

@@ -45,8 +45,8 @@ test('radars: RSU the airport radar, SFA APP\'s picture, PAR the precision appro
 });
 
 test('Bays: each Position\'s Bay implies a state its Role really has, and the new states are not in INELIGIBLE_STATES (every PATTERN/FINAL state is decided)', () => {
-  const roleOfBay = { 'rsu-pattern': 'PATTERN', 'sfa-frequencies': 'ARRIVAL', 'par-final': 'FINAL', 'par-missed': 'FINAL' };
-  for (const [bayId, role] of Object.entries(roleOfBay)) {
+  const stripTypeOfBay = { 'rsu-pattern': 'PATTERN', 'sfa-frequencies': 'ARRIVAL', 'par-final': 'FINAL', 'par-missed': 'FINAL' };
+  for (const [bayId, role] of Object.entries(stripTypeOfBay)) {
     const bay = fc.getBay(bayId);
     assert.ok(bay, bayId);
     assert.ok(nla.STATES_BY_ROLE[role].includes(bay.impliesState), `${bayId} implies ${bay.impliesState}, not a ${role} state`);

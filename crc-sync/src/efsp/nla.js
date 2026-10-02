@@ -61,14 +61,14 @@ const { PATTERN_STATES } = require('./authority/strip-types/pattern');
 
 const { DEPARTURE_STATES, REQUIRED_FOR_CLEARANCE, CLEARANCE_BLOCK_LABELS, isFlightPlanValid, missingForClearance, isVoidExpired } = departure;
 const STATES_BY_ROLE = authority.STATES_BY_ROLE;
-const STATE_SETS_BY_ROLE = Object.fromEntries(Object.entries(STATES_BY_ROLE).map(([role, states]) => [role, new Set(states)]));
+const STATE_SETS_BY_STRIP_TYPE = Object.fromEntries(Object.entries(STATES_BY_ROLE).map(([role, states]) => [role, new Set(states)]));
 
 // Backward-compatible alias — every Phase 1 caller/test imports STATES
 // meaning "the departure lifecycle", which is still exactly what it means.
 const STATES = DEPARTURE_STATES;
 
 function isValidState(state, role = 'DEPARTURE') {
-  const set = STATE_SETS_BY_ROLE[role];
+  const set = STATE_SETS_BY_STRIP_TYPE[role];
   return !!set && set.has(state);
 }
 
@@ -100,7 +100,7 @@ function _normalizeCtx(ctx) {
 // Each Role family's computeNla is registered in the same commit as the Role:
 // computeNla falls back to the DEPARTURE table for an unknown Role, which would
 // show a MARSHAL Strip "Send to Clearance" (ADR 0064's trap for L17).
-const COMPUTE_BY_ROLE = Object.fromEntries(authority.roleNames().map(role => [role, authority.roleFamily(role).computeNla]));
+const COMPUTE_BY_STRIP_TYPE = Object.fromEntries(authority.stripTypeNames().map(role => [role, authority.stripTypeFamily(role).computeNla]));
 const computeDepartureNla = departure.computeDepartureNla;
 
 /**
@@ -113,7 +113,7 @@ const computeDepartureNla = departure.computeDepartureNla;
  */
 function computeNla(strip, fdr, now, ctx = {}) {
   _requireNow(now);
-  const compute = COMPUTE_BY_ROLE[strip.role] || computeDepartureNla;
+  const compute = COMPUTE_BY_STRIP_TYPE[strip.role] || computeDepartureNla;
   return compute(strip, fdr, now, _normalizeCtx(ctx));
 }
 

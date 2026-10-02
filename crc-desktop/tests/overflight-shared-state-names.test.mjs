@@ -30,7 +30,7 @@ const ALLOWED = {
   'crc-sync/src/efsp/board/strip-ops.js': 'comments only (moved from board-store.js)',
   'crc-sync/src/efsp/board/ops/create-strip.js': 'a comment only (the old ARRIVAL-or-PROPOSED binary); the initial state comes from the Role family (moved from board-store.js)',
   'crc-sync/src/efsp/board/ops/convert-to-arrival.js': 'ConvertToArrival checks the Role (moved from board-store.js)',
-  'crc-sync/src/efsp/board/placement.js': 'comments only (the nlaCtx context and roleBayFor\'s Role Bay rule); roleBayFor keeps an OVERFLIGHT out of ARRIVAL\'s Bays by Role',
+  'crc-sync/src/efsp/board/placement.js': 'comments only (the nlaCtx context and stripTypeBayFor\'s Role Bay rule); stripTypeBayFor keeps an OVERFLIGHT out of ARRIVAL\'s Bays by Role',
   'crc-sync/src/efsp/board/coordination.js': 'a comment only (the replica carries the sender\'s Role/EfspState); the tables it reads are passed in, keyed by Role',
   'crc-sync/src/efsp/surveillance-hints.js': 'EXPECTS is keyed by Role',
   'crc-sync/src/efsp/wire/skeleton.js': 'the word INBOUND in a comment about messages',

@@ -68,7 +68,7 @@ const family = {
   family: 'carrier',
   positions: ['CV_MARSHAL', 'CV_PRIFLY', 'CV_APP1', 'CV_APP2'],
   permissions: PERMISSIONS,
-  createRoles: CREATE_ROLE_PERMISSIONS,
+  createsStripTypes: CREATE_ROLE_PERMISSIONS,
   capabilities: CARRIER_CAPABILITIES,
 };
 

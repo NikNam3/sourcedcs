@@ -8,7 +8,7 @@ import path from 'path';
 // Strips and nobody else's. Before this file, `_bayForNewOwner`'s "first Bay implying no state"
 // fallback and `bayForImpliedState`'s `bays[0]` fallback could both land a DEPARTURE or ARRIVAL there.
 
-const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'efsp-role-bay-'));
+const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'efsp-strip-type-bay-'));
 for (const [k, v] of Object.entries({
   CRCSYNC_EFSP_FACILITY_CONFIG_PATH: 'incirlik.json',
   CRCSYNC_EFSP_FACILITY_CONFIG_PATH_CENTER: 'center.json',
@@ -24,11 +24,11 @@ const facilityConfig = await import('../src/efsp/facility-config.js');
 const { crew, hold, act, mustAct, jumpTo, DEPARTURE_FLIGHT_DATA } = await import('./helpers/efsp-scenario.mjs');
 
 const ATC = { OPS: 'INCIRLIK', GND: 'INCIRLIK', TWR: 'INCIRLIK', APP: 'INCIRLIK', CTR: 'CENTER' };
-const roleBayIds = (positionId, facilityId) => facilityConfig.getBaysFor(positionId, facilityId).filter(b => b.holdsRole).map(b => b.bayId);
+const stripTypeBayIds = (positionId, facilityId) => facilityConfig.getBaysFor(positionId, facilityId).filter(b => b.holdsRole).map(b => b.bayId);
 
 test('the shipped Role Bays are where the audit looked', () => {
-  assert.deepEqual(roleBayIds('APP', 'INCIRLIK'), ['app-overflight']);
-  assert.deepEqual(roleBayIds('CTR', 'CENTER'), ['ctr-overflight']);
+  assert.deepEqual(stripTypeBayIds('APP', 'INCIRLIK'), ['app-overflight']);
+  assert.deepEqual(stripTypeBayIds('CTR', 'CENTER'), ['ctr-overflight']);
 });
 
 test('bayForImpliedState never falls back to a Role Bay', () => {
@@ -64,10 +64,10 @@ test('a transfer routed to a covering APP, and a new owner at CTR with no matchi
     for (const role of ['DEPARTURE', 'ARRIVAL']) {
       const bay = store._placement.bayForNewOwner(pos, state, { role });
       assert.ok(bay, `${pos} ${role}/${state}`);
-      assert.ok(!roleBayIds(pos, facilityId).includes(bay.bayId), `${pos} ${role}/${state} -> ${bay.bayId}`);
+      assert.ok(!stripTypeBayIds(pos, facilityId).includes(bay.bayId), `${pos} ${role}/${state} -> ${bay.bayId}`);
     }
     const ovf = store._placement.bayForNewOwner(pos, 'IN_SECTOR', { role: 'OVERFLIGHT' });
-    assert.ok(roleBayIds(pos, facilityId).includes(ovf.bayId), `${pos} OVERFLIGHT -> ${ovf.bayId}`);
+    assert.ok(stripTypeBayIds(pos, facilityId).includes(ovf.bayId), `${pos} OVERFLIGHT -> ${ovf.bayId}`);
   }
 });
 

@@ -954,14 +954,14 @@ test('an OVERFLIGHT CreateStrip defaults its initial state to INBOUND, not PROPO
   assert.equal(result.strip.state, 'INBOUND');
 });
 
-test('CreateStrip with an unknown role is rejected VALIDATION_ERROR when isValidRole is supplied', () => {
-  const { board } = makeStore({ isValidRole: (role) => ['DEPARTURE', 'ARRIVAL'].includes(role) });
+test('CreateStrip with an unknown role is rejected VALIDATION_ERROR when isValidStripType is supplied', () => {
+  const { board } = makeStore({ isValidStripType: (role) => ['DEPARTURE', 'ARRIVAL'].includes(role) });
   const result = board.applyMutation(createMutation({ op: { ...createMutation().op, role: 'OVERFLIGHT' } }), 'OPS', 'OPS');
   assert.equal(result.ok, false);
   assert.equal(result.reason, 'VALIDATION_ERROR');
 });
 
-test('without isValidRole/canCreateStripRole rules supplied, CreateStrip role-gating is simply skipped (opt-in hooks, existing fixtures unaffected)', () => {
+test('without isValidStripType/canCreateStripRole rules supplied, CreateStrip role-gating is simply skipped (opt-in hooks, existing fixtures unaffected)', () => {
   const { board } = makeStore(); // fixture makeRules() defines neither
   const result = board.applyMutation(createMutation(), 'ANY_POSITION', 'ANY_POSITION');
   assert.equal(result.ok, true);

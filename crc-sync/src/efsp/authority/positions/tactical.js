@@ -87,7 +87,7 @@ const family = {
   family: 'tactical',
   positions: ['TAC_C2', 'GCI', 'AIC', 'JTAC'],
   permissions: PERMISSIONS,
-  createRoles: CREATE_ROLE_PERMISSIONS,
+  createsStripTypes: CREATE_ROLE_PERMISSIONS,
   capabilities: TACTICAL_CAPABILITIES,
   // TOFI's MRU side (guide §4.6.3): both answer to CENTER's CTR.
   tofiCounterparts: {

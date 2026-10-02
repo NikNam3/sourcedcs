@@ -10,7 +10,7 @@ function _applyCreateStrip(ctx, op, actingPositionId, by) {
   const bayCheck = ctx.placement.requireKnownBay(op.bayId);
   if (bayCheck) return bayCheck;
   const role = op.role || 'DEPARTURE';
-  if (!ctx.rules.isValidRole(role)) {
+  if (!ctx.rules.isValidStripType(role)) {
     return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown Strip Role: ${role}` };
   }
   // Role-scoped CreateStrip (OPS/DEPARTURE: guide §4.1 rule 3; APP/ARRIVAL: docs/adr/0008) — a

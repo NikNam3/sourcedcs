@@ -105,7 +105,7 @@ const family = {
   family: 'civil-atc',
   positions: ['OPS', 'CD', 'GND', 'TWR', 'APP', 'CTR'],
   permissions: PERMISSIONS,
-  createRoles: CREATE_ROLE_PERMISSIONS,
+  createsStripTypes: CREATE_ROLE_PERMISSIONS,
   fieldStateOwners: FIELD_STATE_OP_OWNERS,
   nonOwnerBlockWrites: NON_OWNER_BLOCK_WRITES,
   // TOFI's ATC side (guide §4.1): CTR only, not APP.

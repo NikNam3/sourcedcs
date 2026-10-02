@@ -41,7 +41,7 @@ function makeFacilities({ aitAuthorized = {} } = {}) {
       coordinationBayFor: (positionId) => facilityConfig.coordinationBayFor(positionId, facilityId),
       computeNla: (strip, fdr, now, ctx) => nla.computeNla(strip, fdr, now, ctx),
       isValidState: (state, role) => nla.isValidState(state, role),
-      isValidRole: (role) => blockMap.isValidRole(role),
+      isValidStripType: (role) => blockMap.isValidStripType(role),
       isStaffed: (id) => positionStore.isStaffed(id),
       consolidatedAt: (id) => positionStore.consolidatedAt(id),
       canMutate: (actingPositionId, opKind) => permission.canMutate(actingPositionId, opKind),

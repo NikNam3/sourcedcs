@@ -151,7 +151,7 @@ class Placement {
    * under ARRIVAL's `INBOUND` Bay, the one thing the shared state names would
    * otherwise do.
    */
-  roleBayFor(strip, positionId = strip.ownerPositionId) {
+  stripTypeBayFor(strip, positionId = strip.ownerPositionId) {
     const bays = this._rules.baysFor(positionId);
     return bays.find(b => b.holdsRole === strip.role) || null;
   }
@@ -174,15 +174,15 @@ class Placement {
    */
   validateBayImpliedTransition(strip, targetBayId, targetRackId) {
     // A Role Bay (`holdsRole`, docs/adr/0087) takes only its own Role's Strips.
-    const holds = this._rules.bayHoldsRole(targetBayId);
+    const holds = this._rules.bayHoldsStripType(targetBayId);
     if (holds && holds !== strip.role) {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: `${targetBayId} holds ${holds} Strips only; a ${strip.role} Strip cannot be placed there` };
     }
-    const roleBay = this.roleBayFor(strip);
-    if (roleBay) {
+    const stripTypeBay = this.stripTypeBayFor(strip);
+    if (stripTypeBay) {
       // Another Role's state-implying Bay is not somewhere this Role goes.
       if (this._rules.bayImpliesState(targetBayId)) {
-        return { ok: false, reason: 'VALIDATION_ERROR', detail: `a ${strip.role} Strip stays in ${roleBay.bayId}; ${targetBayId} is another Role's Bay` };
+        return { ok: false, reason: 'VALIDATION_ERROR', detail: `a ${strip.role} Strip stays in ${stripTypeBay.bayId}; ${targetBayId} is another Role's Bay` };
       }
       return { ok: true, impliedState: null };
     }
@@ -269,8 +269,8 @@ class Placement {
    */
   bayForNewOwner(positionId, state, strip = null) {
     const bays = this._rules.baysFor(positionId);
-    const roleBay = strip ? bays.find(b => b.holdsRole === strip.role) : null;
-    if (roleBay) return { bayId: roleBay.bayId, rackId: this.placementRack(strip, roleBay) };
+    const stripTypeBay = strip ? bays.find(b => b.holdsRole === strip.role) : null;
+    if (stripTypeBay) return { bayId: stripTypeBay.bayId, rackId: this.placementRack(strip, stripTypeBay) };
     // Never another Role's Bay (`holdsRole`, docs/adr/0087): a Role Bay implies no state, so the
     // "first Bay implying none" fallback used to pick app-overflight for a DEPARTURE.
     const bay = bays.find(b => b.impliesState === state) || bays.find(b => !b.impliesState && !b.holdsRole) || null;
@@ -301,7 +301,7 @@ class Placement {
    * `impliesState` re-check rather than trusting the lookup.
    */
   relocateForImpliedState(strip, toState) {
-    if (this.roleBayFor(strip)) return; // its Bay holds it in every state (docs/adr/0087)
+    if (this.stripTypeBayFor(strip)) return; // its Bay holds it in every state (docs/adr/0087)
     const bay = this._rules.bayForImpliedState(strip.ownerPositionId, toState);
     if (!bay || bay.impliesState !== toState || bay.bayId === strip.bayId) return;
     strip.bayId = bay.bayId;

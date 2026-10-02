@@ -99,10 +99,10 @@ function countability(before, after) {
     return { counted: false, excludedReason: 'REJECTED_REPLICA' };
   }
   const states = COUNTABLE_PRE_DROP_STATES[role];
-  if (!states) return { counted: false, excludedReason: 'UNCLASSIFIED_ROLE' };
+  if (!states) return { counted: false, excludedReason: 'UNCLASSIFIED_STRIP_TYPE' };
   const pre = before && before.state;
   if (states.includes(pre)) return { counted: true, excludedReason: null };
-  return { counted: false, excludedReason: EXCLUDED_WHEN_NOT_COUNTABLE[role] || 'UNCLASSIFIED_ROLE' };
+  return { counted: false, excludedReason: EXCLUDED_WHEN_NOT_COUNTABLE[role] || 'UNCLASSIFIED_STRIP_TYPE' };
 }
 
 function _code(v) { return typeof v === 'string' ? v.trim().toUpperCase() : ''; }

@@ -247,7 +247,7 @@ function computeDepartureNla(strip, fdr, now, ctx) {
 const family = {
   role: 'DEPARTURE',
   states: DEPARTURE_STATES,
-  initialState: 'PROPOSED',                       // board-store.js's DEFAULT_INITIAL_STATE_BY_ROLE
+  initialState: 'PROPOSED',                       // board-store.js's DEFAULT_INITIAL_STATE_BY_STRIP_TYPE
   stateOwners: DEPARTURE_STATE_OWNERS,
   computeNla: computeDepartureNla,
   countablePreDropStates: ['DEPARTED', 'HANDED_OFF'],   // it got airborne

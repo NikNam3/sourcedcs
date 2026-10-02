@@ -47,14 +47,14 @@ class BoardStore {
    * @param {import('./flight-data-store').FlightDataStore} flightDataStore
    * @param {object} rules
    * @param {(blockId:string, role:string) => {kind:'fdr',path:string}|{kind:'annotation'}|null} rules.resolveBlockTarget
-   * @param {(bayId:string) => string|null} rules.bayHoldsRole the Role a Bay is reserved for (docs/adr/0087), or null
+   * @param {(bayId:string) => string|null} rules.bayHoldsStripType the Role a Bay is reserved for (docs/adr/0087), or null
    * @param {(bayId:string) => string|null} rules.bayImpliesState
    * @param {(positionId:string, state:string) => {bayId:string,rackIds:string[]}|null} rules.bayForImpliedState
    * @param {(strip:object, fdr:object, now:number, ctx:object) => {toState:string,transferTo?:string}|{inhibited:string}|null} rules.computeNla
    * @param {(positionId:string) => boolean} rules.isStaffed
    * @param {(positionId:string) => string|null} rules.consolidatedAt
    * @param {(state:string, role:string) => boolean} rules.isValidState
-   * @param {(role:string) => boolean} rules.isValidRole
+   * @param {(role:string) => boolean} rules.isValidStripType
    * @param {(actingPositionId:string, role:string) => boolean} rules.canCreateStripRole
    * @param {string} rules.facilityId — WP4A: this Board's own Facility id (docs/adr/0013)
    * @param {(facilityId:string) => BoardStore|null} rules.peerBoard — WP4A: the OTHER Facility's BoardStore instance, for cross-Facility coordination (docs/adr/0015)

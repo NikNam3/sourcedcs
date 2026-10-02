@@ -18,7 +18,7 @@
 // export exactly what they exported before it existed (the client's PARITY
 // tests and the freeze tables read them).
 
-const roleFamilies = new Map();
+const stripTypeFamilies = new Map();
 let sealed = false;
 
 function _fail(what) { throw new Error(`authority registry: ${what}`); }
@@ -28,10 +28,10 @@ function _fail(what) { throw new Error(`authority registry: ${what}`); }
  *   countablePreDropStates:string[], excludedWhenNotCountable:string, replicaStateOnReceipt:object|null,
  *   senderStateOnAccept:object|null, coordinationEligibleState?:string, tofiEligibleState?:string}} def
  */
-function registerRoleFamily(def) {
+function registerStripTypeFamily(def) {
   if (sealed) _fail(`Role family ${def && def.role} registered after the registry was sealed; list it in authority/index.js`);
   if (!def || typeof def.role !== 'string' || !def.role) _fail('a Role family needs a `role`');
-  if (roleFamilies.has(def.role)) _fail(`Role ${def.role} is registered twice`);
+  if (stripTypeFamilies.has(def.role)) _fail(`Role ${def.role} is registered twice`);
   const states = def.states;
   if (!Array.isArray(states) || !states.includes('DROPPED')) _fail(`${def.role}: \`states\` must list the Role's states, DROPPED included`);
   if (!states.includes(def.initialState)) _fail(`${def.role}: initialState ${def.initialState} is not one of its states`);
@@ -43,23 +43,23 @@ function registerRoleFamily(def) {
   for (const k of ['coordinationEligibleState', 'tofiEligibleState']) {
     if (def[k] !== undefined && !states.includes(def[k])) _fail(`${def.role}: ${k} ${def[k]} is not one of its states`);
   }
-  roleFamilies.set(def.role, def);
+  stripTypeFamilies.set(def.role, def);
 }
 
 // ── Role families, in today's STATES_BY_ROLE order ─────────────────────────
-registerRoleFamily(require('./strip-types/departure').family);
-registerRoleFamily(require('./strip-types/arrival').family);
-registerRoleFamily(require('./strip-types/overflight').family);
-registerRoleFamily(require('./strip-types/mission').family);
-registerRoleFamily(require('./strip-types/marshal').family);
-registerRoleFamily(require('./strip-types/final').family);
-registerRoleFamily(require('./strip-types/pattern').family);
+registerStripTypeFamily(require('./strip-types/departure').family);
+registerStripTypeFamily(require('./strip-types/arrival').family);
+registerStripTypeFamily(require('./strip-types/overflight').family);
+registerStripTypeFamily(require('./strip-types/mission').family);
+registerStripTypeFamily(require('./strip-types/marshal').family);
+registerStripTypeFamily(require('./strip-types/final').family);
+registerStripTypeFamily(require('./strip-types/pattern').family);
 
 const positionFamilies = [];
 const positionOwner = new Map(); // positionId -> family name
 
 /**
- * @param {{family:string, positions:string[], extends?:string[], permissions:object, createRoles?:object,
+ * @param {{family:string, positions:string[], extends?:string[], permissions:object, createsStripTypes?:object,
  *   ownsStates?:object, fieldStateOwners?:object, fieldStateGrants?:object, nonOwnerBlockWrites?:object[],
  *   tofiCounterparts?:object, capabilities?:object}} def
  */
@@ -74,16 +74,16 @@ function registerPositionFamily(def) {
   const ext = def.extends || [];
   for (const id of ext) if (!positionOwner.has(id)) _fail(`${def.family}: extends ${id}, which no earlier family registered`);
   const mine = new Set([...def.positions, ...ext]);
-  for (const key of ['permissions', 'createRoles', 'ownsStates', 'tofiCounterparts', 'capabilities']) {
+  for (const key of ['permissions', 'createsStripTypes', 'ownsStates', 'tofiCounterparts', 'capabilities']) {
     for (const id of Object.keys(def[key] || {})) if (!mine.has(id)) _fail(`${def.family}: ${key} names ${id}, which is not its Position`);
   }
   for (const id of def.positions) if (!(def.permissions[id] instanceof Set)) _fail(`${def.family}: ${id} has no op grant`);
-  for (const [id, roles] of Object.entries(def.createRoles || {})) {
-    for (const r of roles) if (!roleFamilies.has(r)) _fail(`${def.family}: ${id} creates unknown Role ${r}`);
+  for (const [id, stripTypes] of Object.entries(def.createsStripTypes || {})) {
+    for (const r of stripTypes) if (!stripTypeFamilies.has(r)) _fail(`${def.family}: ${id} creates unknown Role ${r}`);
   }
   for (const [id, byRole] of Object.entries(def.ownsStates || {})) {
     for (const [role, states] of Object.entries(byRole)) {
-      const f = roleFamilies.get(role);
+      const f = stripTypeFamilies.get(role);
       if (!f) _fail(`${def.family}: ${id} owns states of unknown Role ${role}`);
       for (const s of states) if (!f.states.includes(s)) _fail(`${def.family}: ${id} owns ${role}.${s}, which is not a ${role} state`);
     }
@@ -103,27 +103,27 @@ registerPositionFamily(require('./positions/incirlik-military').family);
 sealed = true;
 
 // ── Role tables, composed once ─────────────────────────────────────────────
-const _byRole = (pick) => Object.fromEntries([...roleFamilies.values()].map(f => [f.role, pick(f)]));
-const _byRoleWhere = (pick) => Object.fromEntries([...roleFamilies.values()].filter(f => pick(f) != null).map(f => [f.role, pick(f)]));
+const _byStripType = (pick) => Object.fromEntries([...stripTypeFamilies.values()].map(f => [f.role, pick(f)]));
+const _byStripTypeWhere = (pick) => Object.fromEntries([...stripTypeFamilies.values()].filter(f => pick(f) != null).map(f => [f.role, pick(f)]));
 
 /** { role: states[] } — the same arrays the Role families own. */
-const STATES_BY_ROLE = _byRole(f => f.states);
+const STATES_BY_ROLE = _byStripType(f => f.states);
 /** { role: { state: owners[] } } — the same objects the Role families own. */
-const STATE_OWNERS_BY_ROLE = _byRole(f => f.stateOwners);
-/** board-store.js's DEFAULT_INITIAL_STATE_BY_ROLE (BOARD-3 switches its reads here). */
-const DEFAULT_INITIAL_STATE_BY_ROLE = _byRole(f => f.initialState);
+const STATE_OWNERS_BY_ROLE = _byStripType(f => f.stateOwners);
+/** board-store.js's DEFAULT_INITIAL_STATE_BY_STRIP_TYPE (BOARD-3 switches its reads here). */
+const DEFAULT_INITIAL_STATE_BY_STRIP_TYPE = _byStripType(f => f.initialState);
 /** board-store.js's REPLICA_STATE_ON_RECEIPT: { role: { senderState: replicaState } }; absent = the sender's state. */
-const REPLICA_STATE_ON_RECEIPT = _byRoleWhere(f => f.replicaStateOnReceipt);
+const REPLICA_STATE_ON_RECEIPT = _byStripTypeWhere(f => f.replicaStateOnReceipt);
 /** board-store.js's SENDER_STATE_ON_ACCEPT: { primitive: { role: { senderState: stateAfterAccept } } }. */
 const SENDER_STATE_ON_ACCEPT = {};
-for (const f of roleFamilies.values()) {
+for (const f of stripTypeFamilies.values()) {
   for (const [primitive, byState] of Object.entries(f.senderStateOnAccept || {})) {
     (SENDER_STATE_ON_ACCEPT[primitive] = SENDER_STATE_ON_ACCEPT[primitive] || {})[f.role] = byState;
   }
 }
 /** traffic-count.js's two countability tables. */
-const COUNTABLE_PRE_DROP_STATES = _byRole(f => f.countablePreDropStates);
-const EXCLUDED_WHEN_NOT_COUNTABLE = _byRole(f => f.excludedWhenNotCountable);
+const COUNTABLE_PRE_DROP_STATES = _byStripType(f => f.countablePreDropStates);
+const EXCLUDED_WHEN_NOT_COUNTABLE = _byStripType(f => f.excludedWhenNotCountable);
 
 // Which EfspState a Strip Role must be in to PROPOSE a coordination link —
 // i.e. which (role, state) combo has a Bay configured to receive it on the
@@ -142,7 +142,7 @@ const EXCLUDED_WHEN_NOT_COUNTABLE = _byRole(f => f.excludedWhenNotCountable);
 // unable to propose coordination at all), so a CTR overflight can be handed to
 // APP. The receiving side mints it INBOUND (board-store.js's
 // REPLICA_STATE_ON_RECEIPT).
-const COORDINATION_ELIGIBLE_STATES = _byRoleWhere(f => f.coordinationEligibleState);
+const COORDINATION_ELIGIBLE_STATES = _byStripTypeWhere(f => f.coordinationEligibleState);
 
 // Which EfspState an ATC-side Strip Role must be in to open a TOFI ENTRY —
 // TOFI's own analogue of COORDINATION_ELIGIBLE_STATES above, and added for
@@ -156,22 +156,22 @@ const COORDINATION_ELIGIBLE_STATES = _byRoleWhere(f => f.coordinationEligibleSta
 // plus OVERFLIGHT (IN_SECTOR, docs/adr/0087 — the flight being worked). MISSION
 // is deliberately absent: it is the MRU-side Role TOFI *creates*, never a
 // Role that opens an exchange of its own (docs/adr/0026).
-const TOFI_ELIGIBLE_STATES = _byRoleWhere(f => f.tofiEligibleState);
+const TOFI_ELIGIBLE_STATES = _byStripTypeWhere(f => f.tofiEligibleState);
 
 // ── Role accessors ─────────────────────────────────────────────────────────
 const _own = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 
 /** @returns {object|null} the registered Role family, or null. */
-function roleFamily(role) { return (typeof role === 'string' && roleFamilies.get(role)) || null; }
+function stripTypeFamily(role) { return (typeof role === 'string' && stripTypeFamilies.get(role)) || null; }
 /** @returns {string[]} every registered Role, in registration order. */
-function roleNames() { return [...roleFamilies.keys()]; }
+function stripTypeNames() { return [...stripTypeFamilies.keys()]; }
 /** @returns {string[]} who works `role` while it is in `state` (guide §3.4), or [] */
 function stateOwners(role, state) {
   const table = _own(STATE_OWNERS_BY_ROLE, role) ? STATE_OWNERS_BY_ROLE[role] : null;
   return (table && _own(table, state) && table[state]) || [];
 }
 /** @returns {string|undefined} */
-function initialStateFor(role) { return _own(DEFAULT_INITIAL_STATE_BY_ROLE, role) ? DEFAULT_INITIAL_STATE_BY_ROLE[role] : undefined; }
+function initialStateFor(role) { return _own(DEFAULT_INITIAL_STATE_BY_STRIP_TYPE, role) ? DEFAULT_INITIAL_STATE_BY_STRIP_TYPE[role] : undefined; }
 /** The state a coordination replica of a `role` Strip at `senderState` is minted in. */
 function replicaStateOnReceipt(role, senderState) { return ((REPLICA_STATE_ON_RECEIPT[role] || {})[senderState]) || senderState; }
 /** @returns {string|undefined} the sender's state once the receiver ACCEPTs `primitive`, or undefined (unchanged). */
@@ -196,7 +196,7 @@ const PERMISSIONS = {};
 const CREATE_ROLE_PERMISSIONS = {};
 for (const f of positionFamilies) {
   Object.assign(PERMISSIONS, f.permissions);
-  Object.assign(CREATE_ROLE_PERMISSIONS, f.createRoles || {});
+  Object.assign(CREATE_ROLE_PERMISSIONS, f.createsStripTypes || {});
 }
 
 // D12, enforced structurally rather than merely by careful hand-authoring
@@ -262,7 +262,7 @@ function positionIds() { return [...positionOwner.keys()]; }
 /**
  * Everything the registry knows a Position may do, for reading (never for a
  * gate: permission.js's one-Position predicates are the gates, D21).
- * @returns {{family:string, ops:Set<string>, createsRoles:Set<string>|null, capabilities:object}|null}
+ * @returns {{family:string, ops:Set<string>, createsStripTypes:Set<string>|null, capabilities:object}|null}
  */
 function capabilitiesFor(positionId) {
   const family = positionFamilyOf(positionId);
@@ -275,7 +275,7 @@ function capabilitiesFor(positionId) {
   return {
     family,
     ops: PERMISSIONS[positionId] || new Set(),
-    createsRoles: CREATE_ROLE_PERMISSIONS[positionId] || null,
+    createsStripTypes: CREATE_ROLE_PERMISSIONS[positionId] || null,
     capabilities,
   };
 }
@@ -285,10 +285,10 @@ function creatorsOf(role) {
 }
 
 module.exports = {
-  registerRoleFamily, registerPositionFamily,
+  registerStripTypeFamily, registerPositionFamily,
   positionFamilyOf, positionFamily, positionIds, capabilitiesFor, creatorsOf,
   PERMISSIONS, CREATE_ROLE_PERMISSIONS, FIELD_STATE_OP_OWNERS, NON_OWNER_BLOCK_WRITES, TOFI_COUNTERPARTS,
-  roleFamily, roleNames, stateOwners, initialStateFor, replicaStateOnReceipt, senderStateOnAccept,
-  STATES_BY_ROLE, STATE_OWNERS_BY_ROLE, DEFAULT_INITIAL_STATE_BY_ROLE, REPLICA_STATE_ON_RECEIPT, SENDER_STATE_ON_ACCEPT,
+  stripTypeFamily, stripTypeNames, stateOwners, initialStateFor, replicaStateOnReceipt, senderStateOnAccept,
+  STATES_BY_ROLE, STATE_OWNERS_BY_ROLE, DEFAULT_INITIAL_STATE_BY_STRIP_TYPE, REPLICA_STATE_ON_RECEIPT, SENDER_STATE_ON_ACCEPT,
   COUNTABLE_PRE_DROP_STATES, EXCLUDED_WHEN_NOT_COUNTABLE, COORDINATION_ELIGIBLE_STATES, TOFI_ELIGIBLE_STATES,
 };

@@ -11,14 +11,14 @@ const blockMap = await import('../src/efsp/block-map.js');
 const facilityConfig = await import('../src/efsp/facility-config.js');
 const { INELIGIBLE_STATES, CorrelationReconciler } = await import('../src/efsp/correlation-reconciler.js');
 
-const CARRIER_ROLES = ['MARSHAL', 'FINAL', 'PATTERN'];
+const CARRIER_STRIP_TYPES = ['MARSHAL', 'FINAL', 'PATTERN'];
 const NOW = Date.UTC(2026, 5, 1, 12, 0, 0);
 
 test('the three carrier Roles have states, owners, a Block Map and an NLA table', () => {
-  for (const role of CARRIER_ROLES) {
+  for (const role of CARRIER_STRIP_TYPES) {
     assert.ok(nla.STATES_BY_ROLE[role], `${role} states`);
     assert.ok(nla.isValidState(nla.STATES_BY_ROLE[role][0], role));
-    assert.ok(blockMap.isValidRole(role));
+    assert.ok(blockMap.isValidStripType(role));
     assert.ok(permission.STATE_OWNERS_BY_ROLE[role], `${role} owners`);
     // The trap: an unregistered Role falls back to the DEPARTURE table and would offer "Send to Clearance".
     const first = nla.STATES_BY_ROLE[role][0];
@@ -29,9 +29,9 @@ test('the three carrier Roles have states, owners, a Block Map and an NLA table'
 
 test('no carrier state name collides with another Role\'s state, except DROPPED', () => {
   const others = new Set();
-  for (const [role, states] of Object.entries(nla.STATES_BY_ROLE)) if (!CARRIER_ROLES.includes(role)) states.forEach(s => others.add(s));
+  for (const [role, states] of Object.entries(nla.STATES_BY_ROLE)) if (!CARRIER_STRIP_TYPES.includes(role)) states.forEach(s => others.add(s));
   const seen = new Set();
-  for (const role of CARRIER_ROLES) {
+  for (const role of CARRIER_STRIP_TYPES) {
     for (const s of nla.STATES_BY_ROLE[role]) {
       if (s === 'DROPPED') continue;
       assert.ok(!others.has(s), `${role}/${s} collides with a non-carrier state`);
@@ -127,7 +127,7 @@ test('the CARRIER Facility: four MILITARY_ATC Positions, Bays that imply carrier
   assert.equal(facilityConfig.bayImpliesState('cv-app2-bolter', 'CARRIER'), 'BOLTER_WAVEOFF');
   assert.deepEqual(facilityConfig.getBaysFor('CV_PRIFLY', 'CARRIER')[0].rackIds, ['initial', 'break', 'downwind', 'groove']);
   // every Bay-implied state is a state of some carrier Role
-  const carrierStates = new Set(CARRIER_ROLES.flatMap(r => nla.STATES_BY_ROLE[r]));
+  const carrierStates = new Set(CARRIER_STRIP_TYPES.flatMap(r => nla.STATES_BY_ROLE[r]));
   for (const b of facilityConfig.getAllBays('CARRIER')) if (b.impliesState) assert.ok(carrierStates.has(b.impliesState), b.bayId);
   assert.equal(facilityConfig.validateConfig(c).ok, true);
 });

@@ -77,7 +77,7 @@ test('countability: one case per row of the table', () => {
   assert.deepEqual(drop('OVERFLIGHT', 'IN_SECTOR'), { counted: true, excludedReason: null });
   assert.deepEqual(drop('OVERFLIGHT', 'HANDED_OFF'), { counted: true, excludedReason: null });
   assert.deepEqual(drop('OVERFLIGHT', 'INBOUND'), { counted: false, excludedReason: 'NEVER_TRANSITED' }, 'dropped while still INBOUND: it never worked the sector');
-  assert.deepEqual(drop('CARRIER_ARRIVAL', 'WHATEVER'), { counted: false, excludedReason: 'UNCLASSIFIED_ROLE' });
+  assert.deepEqual(drop('CARRIER_ARRIVAL', 'WHATEVER'), { counted: false, excludedReason: 'UNCLASSIFIED_STRIP_TYPE' });
 });
 
 test('ROLE COVERAGE: every Role nla.js knows has a countability entry, and every state listed exists for it (T14)', () => {

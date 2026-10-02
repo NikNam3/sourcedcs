@@ -370,7 +370,7 @@ function bayForImpliedState(positionId, state, facilityId = DEFAULT_FACILITY_ID)
 }
 
 /** The Role a Bay is reserved for (`holdsRole`, docs/adr/0087), or null for an ordinary Bay. */
-function bayHoldsRole(bayId, facilityId = DEFAULT_FACILITY_ID) {
+function bayHoldsStripType(bayId, facilityId = DEFAULT_FACILITY_ID) {
   const bay = getAllBays(facilityId).find(b => b.bayId === bayId);
   return (bay && bay.holdsRole) || null;
 }
@@ -393,7 +393,7 @@ module.exports = {
   DEFAULT_FACILITY_ID, getFacilityIds,
   getFacilityConfig, getPositionSet, getPositionClass, getPositionLetter, allPositionLetters, getConsolidation, getBaysFor, getAllBays, isBlockVisible,
   getPositionRadars, radarBearingPositionIds, validateRadarSelector,
-  bayImpliesState, bayHoldsRole, bayForImpliedState, bayExists, coordinationBayFor, setFacilityConfig, validateConfig,
+  bayImpliesState, bayHoldsStripType, bayForImpliedState, bayExists, coordinationBayFor, setFacilityConfig, validateConfig,
   getBay, getSingleFrequencyApproach, validateSfaRotationRecord, BAY_VIEWS,
   getShippedConfig, load,
 };

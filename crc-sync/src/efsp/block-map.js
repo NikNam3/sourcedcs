@@ -565,7 +565,7 @@ const MILITARY_BLOCK_NAMESPACE = {
 // that is the ADR that should settle it.
 
 /** Every Strip Role this facility's Block Map data actually defines — board-store.js's CreateStrip validation calls this so an unknown role is a VALIDATION_ERROR, not a silent fallback. */
-function isValidRole(role) {
+function isValidStripType(role) {
   return Object.prototype.hasOwnProperty.call(BLOCK_MAPS, role);
 }
 
@@ -666,6 +666,6 @@ function validateFacilityConfig(config) {
 module.exports = {
   DEPARTURE_BLOCK_MAP, ARRIVAL_BLOCK_MAP, OVERFLIGHT_BLOCK_MAP, MISSION_BLOCK_MAP,
   MARSHAL_BLOCK_MAP, FINAL_BLOCK_MAP, PATTERN_BLOCK_MAP, BLOCK_MAPS,
-  isValidRole, requiredBlocksFor, resolveBlockTarget, validateFacilityConfig,
+  isValidStripType, requiredBlocksFor, resolveBlockTarget, validateFacilityConfig,
   interlockFor, interlockBlocks, MILITARY_BLOCK_NAMESPACE,
 };
