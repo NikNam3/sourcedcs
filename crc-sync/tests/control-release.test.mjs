@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'fs';
-import { prologue, fakeClock, makeWorld, exchange, holders } from './helpers/control-release-fixture.mjs';
+import { prologue, fakeClock, fakeWallClock, makeWorld, exchange, holders } from './helpers/control-release-fixture.mjs';
 
 // ControlRelease and the HANDOFF steps (docs/adr/0101; H94, H100): accept moves radar ID and ownership only, comms and
 // control are their own marks, a release is granted/requested/refused/withdrawn, and a control instruction outside the
@@ -459,4 +459,45 @@ test('undo: the two marks declare a scope of both Strips; ControlRelease and eve
   for (const kind of ['POINT_OUT', 'TRAFFIC', 'OPERATIONAL_REQUEST', 'AIT']) assert.equal(OPS.find(m => m.kind === kind).undo, 'none', kind);
 });
 
-test.todo('undo of TRANSFER_COMMS / TRANSFER_CONTROL inside 10 s restores both Strips; after 10 s refused (fake wall clock): needs the UNDO-S executor (merge UNDO-S, then drive Undo through board/ops/undo.js)');
+test('undo of TRANSFER_COMMS / TRANSFER_CONTROL inside 10 s restores both Strips; after 10 s refused (fake wall clock)', () => {
+  const coordinationOf = (s) => JSON.stringify(s.coordination);
+  for (const [action, side] of [['TRANSFER_COMMS', 'T'], ['TRANSFER_COMMS', 'R'], ['TRANSFER_CONTROL', 'T'], ['TRANSFER_CONTROL', 'R']]) {
+    const label = `${action} by ${side}`;
+    const wallClock = fakeWallClock();
+    const w = world({ wallClock });
+    const ex = ex0(w, `UN${action[9]}${side}`);
+    const before = { T: coordinationOf(ex.T()), R: coordinationOf(ex.R()) };
+    const by = side === 'T' ? asT : asR;
+    const ack = by(w, ex, { kind: 'HANDOFF', action });
+    assert.equal(ack.ok, true, label);
+    assert.equal(ack.undoable.windowMs, 10_000, label);
+    assert.match(ack.undoable.label, action === 'TRANSFER_COMMS' ? /^Communications to / : /^Control to /);
+    assert.notEqual(coordinationOf(ex.T()), before.T, `${label} moved the record`);
+    wallClock.advance(9_999);
+    const undone = by(w, ex, { kind: 'Undo', actionId: ack.undoable.actionId });
+    assert.equal(undone.ok, true, `${label}: ${JSON.stringify(undone)}`);
+    assert.equal(coordinationOf(ex.T()), before.T, `${label}: the transferring Strip's record is back`);
+    assert.equal(coordinationOf(ex.R()), before.R, `${label}: the receiving Strip's record is back`);
+    assert.deepEqual(holders(ex), { comms: 'TRANSFERRING', control: 'TRANSFERRING', ref: { facilityId: 'CENTER', positionId: 'CTR' } });
+    const peerEntry = log(w).find(e => e.op === 'InterfacilityUndo' && e.undoneActionId === ack.undoable.actionId);
+    assert.ok(peerEntry, `${label}: the other Board's half is restored with an InterfacilityUndo entry`);
+    // The same mark again, and its window closes at 10 s.
+    const again = by(w, ex, { kind: 'HANDOFF', action });
+    assert.equal(again.ok, true, label);
+    wallClock.advance(10_000);
+    refused(by(w, ex, { kind: 'Undo', actionId: again.undoable.actionId }), 'UNDO_UNAVAILABLE', `${label} after 10 s`);
+    assert.notEqual(coordinationOf(ex.T()), before.T, `${label}: a refused undo changes nothing`);
+  }
+});
+
+test('undo of a mark: only the Position that made it; a later release from the other Facility blocks it', () => {
+  const wallClock = fakeWallClock();
+  const w = world({ wallClock });
+  const ex = ex0(w, 'UNDB');
+  const ack = asR(w, ex, { kind: 'HANDOFF', action: 'TRANSFER_COMMS' });
+  assert.equal(ack.ok, true);
+  refused(asT(w, ex, { kind: 'Undo', actionId: ack.undoable.actionId }), null, 'CTR undoing AP\'s mark');
+  mustT(w, ex, { kind: 'ControlRelease', action: 'GRANT', scopes: ['TURNS'] }); // CENTER writes both Strips
+  refused(asR(w, ex, { kind: 'Undo', actionId: ack.undoable.actionId }), 'UNDO_BLOCKED', 'after CENTER answered');
+  assert.equal(ex.T().coordination.comms.transferred, true, 'nothing restored');
+});

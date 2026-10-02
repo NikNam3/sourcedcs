@@ -289,7 +289,36 @@ test('I8 a restored record that names a retired holder is a violation the undo e
   T.coordination = null;
 });
 
-test.todo('I8 undo of a mark, and undo of the drop that caused TRANSFERRING_RETIRED (Strip and holders back together): needs the UNDO-S executor');
+test('I8 undo of a mark: both Strips\' records and the holders go back together, and the invariant holds', () => {
+  const wallClock = fakeWallClock();
+  const w = world({ wallClock });
+  const ex = ex0(w, 'I8M');
+  mustR(w, ex, { kind: 'HANDOFF', action: 'TRANSFER_COMMS' });
+  const ack = asT(w, ex, { kind: 'HANDOFF', action: 'TRANSFER_CONTROL' });
+  assert.deepEqual(holders(ex), { comms: 'RECEIVING', control: 'RECEIVING', ref: { facilityId: 'INCIRLIK', positionId: 'AP' } });
+  const undone = asT(w, ex, { kind: 'Undo', actionId: ack.undoable.actionId });
+  assert.equal(undone.ok, true, JSON.stringify(undone));
+  assert.deepEqual(holders(ex), { comms: 'RECEIVING', control: 'TRANSFERRING', ref: { facilityId: 'CENTER', positionId: 'CTR' } });
+  holds(w, ex, 'after the undo');
+});
+
+test('I8 undo of the drop that caused TRANSFERRING_RETIRED: the Strip and the holders come back together', () => {
+  const wallClock = fakeWallClock();
+  const w = world({ wallClock });
+  const ex = ex0(w, 'I8D');
+  const before = { T: JSON.stringify(ex.T().coordination), R: JSON.stringify(ex.R().coordination) };
+  const ack = asT(w, ex, DROP);
+  assert.equal(ack.ok, true);
+  assert.equal(ack.undoable.label, 'Drop I8D', 'the drop is undoable: its scope holds the receiving Strip it hands the holders to');
+  assert.equal(ex.R().coordination.control.trigger, 'TRANSFERRING_RETIRED');
+  const undone = asT(w, ex, { kind: 'Undo', actionId: ack.undoable.actionId });
+  assert.equal(undone.ok, true, JSON.stringify(undone));
+  assert.equal(ex.T().state, 'INBOUND');
+  assert.equal(JSON.stringify(ex.T().coordination), before.T);
+  assert.equal(JSON.stringify(ex.R().coordination), before.R, 'the receiving Strip no longer holds what the drop gave it');
+  assert.deepEqual(holders(ex), { comms: 'TRANSFERRING', control: 'TRANSFERRING', ref: { facilityId: 'CENTER', positionId: 'CTR' } });
+  holds(w, ex, 'after the undo');
+});
 
 test('I8 the executor refuses a restore while the exchange has nobody covering it (exchangeProblems, CONTROL_UNCOVERED): UNDO_BLOCKED', () => repairMode(() => {
   const wallClock = fakeWallClock();
@@ -378,6 +407,10 @@ const ACTIONS = {
   WITHDRAW:    (w, ex) => ex.T().state !== 'DROPPED' && asT(w, ex, { kind: 'ControlRelease', action: 'WITHDRAW' }),
   DROP_T:      (w, ex) => ex.T().state !== 'DROPPED' && asT(w, ex, DROP),
   DROP_R:      (w, ex) => ex.R() && ex.R().state !== 'DROPPED' && asR(w, ex, DROP),
+  // The last undoable action, undone by the Position that made it (docs/adr/0100; ADR 0101 I8). Refused once its window or
+  // its record is gone, or when a later change blocks it; either way the invariant must still hold.
+  UNDO_LAST:   (w, ex) => w.lastUndoable && act(w.efsp, w.c[w.lastUndoable.positionId], w.lastUndoable.positionId,
+    w.lastUndoable.positionId === 'CTR' ? ex.T() : ex.R(), { kind: 'Undo', actionId: w.lastUndoable.actionId }),
   SIGNOFF_T:   (w) => hold(w.efsp, w.c.CTR.session, 'CENTER', []),
   SIGNOFF_R:   (w) => hold(w.efsp, w.c.AP.session, 'INCIRLIK', []),
   SIGNON_T:    (w) => hold(w.efsp, w.c.CTR.session, 'CENTER', ['CTR']),
@@ -408,15 +441,18 @@ function checkInvariant(w, ex, path) {
   if (found.length === 0) return;
 }
 
+const ACTOR = { ACCEPT: 'AP', COMMS: 'AP', CONTROL: 'CTR', GRANT_FULL: 'CTR', WITHDRAW: 'CTR', DROP_T: 'CTR', DROP_R: 'AP' };
+
 function run(path) {
-  const w = world();
+  const w = world({ wallClock: fakeWallClock() }); // the wall clock stands still: every undo is inside its window
   const ex = ex0(w, 'WALK', { accept: false });
   let repairCount = 0;
   let seenRepairs = 0; // counted as they are recorded: re-reading the whole log file per step is what made the walk slow
   w.efsp.mutationLog.onRecord((e) => { if (e.op === 'InterfacilityControlRepair' && e.source !== 'peer') seenRepairs += 1; });
   let staffingChanged = false; // once a Position has signed off, a later step can meet an uncovered holder it did not cause
   path.forEach((name, i) => {
-    ACTIONS[name](w, ex);
+    const ack = ACTIONS[name](w, ex);
+    if (ack && ack.ok && ack.undoable) w.lastUndoable = { actionId: ack.undoable.actionId, positionId: ACTOR[name] };
     checkInvariant(w, ex, path.slice(0, i + 1));
     if (name.startsWith('SIGN')) staffingChanged = true;
     if (!staffingChanged) assert.equal(seenRepairs, repairCount, `[${path.slice(0, i + 1).join(' > ')}] only a change of staffing needs the safety net`);
@@ -425,7 +461,7 @@ function run(path) {
   return { w, ex };
 }
 
-test('I11 bounded exhaustive walk: every sequence of up to 4 steps of ACCEPT, comms, control, FULL, WITHDRAW, drops and staffing keeps the invariant', () => repairMode(() => {
+test('I11 bounded exhaustive walk: every sequence of up to 4 steps of ACCEPT, comms, control, FULL, WITHDRAW, drops, undo last and staffing keeps the invariant', () => repairMode(() => {
   // Breadth first, one representative per distinct state (a sequence reaching a state already seen adds nothing new at
   // the same depth). Every refused step leaves the invariant holding, and so is checked like any other.
   const seen = new Set();
