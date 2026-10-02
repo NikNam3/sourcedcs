@@ -197,7 +197,7 @@ export function atcSpeed(speedKt) {
 
 /**
  * 'A060↓ H250' — the flight's assigned altitude, with a trend arrow from its
- * current altitude toward it (7110.65 §5-14-4d), and its assigned heading.
+ * current altitude toward it (STARS trend arrow; `docs/parallel/research/stars.md` [65 §5-14-4d]), and its assigned heading.
  * The heading is what the controller typed, already magnetic; nothing here
  * converts a bearing. '' when nothing is assigned.
  * @param {{altFt:number|null, hdg:number|null}} assigned

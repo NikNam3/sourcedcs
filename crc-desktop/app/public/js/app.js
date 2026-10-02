@@ -190,7 +190,7 @@ const DEFAULTS = {
   // geojson.js's getDeclutteredIds() is kept — REVISIT then.
   declutter:       false,
   showDatalinkLocks: true, // draw the datalink's radar-lock lines (geojson.js's buildDatalinkLines)
-  transitionAltFt: 18000, // ft — how an ASSIGNED altitude is written. The theater's, from crc-sync's `theater` message (its docs/adr/0085); not a setting. This is only the placeholder until the first `theater` message (sent on connect); the other client files read it with no fallback of their own
+  transitionAltFt: 18000, // ft — how an ASSIGNED altitude is written. The theater's, from crc-sync's `theater` message (its docs/adr/0085); not a setting. [SOURCE-DEFINED] (docs/adr/0085): 18,000 ft is only the fallback until the first `theater` message (sent on connect); the other client files read it with no fallback of their own
   aprtManualWx:    {},    // per-airport manually-entered vis/cloud data, keyed by ICAO — squadron-wide, see crc-sync's apt-config.js
   aprtAtisFreq:    {},    // per-airport saved ATIS frequency, keyed by ICAO — squadron-wide, see crc-sync's apt-config.js
   aprtAtisRwy:     {},    // per-airport saved ATIS runway, keyed by ICAO — squadron-wide, see crc-sync's apt-config.js

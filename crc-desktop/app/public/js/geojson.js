@@ -128,6 +128,8 @@ function sweepOpacity(id, baseOp) {
 // A contact sent with `scheme: 'ATC'` is drawn in the STARS layout. What it
 // shows is atc-scope.js's; this only turns it into features. One display per
 // contact per frame, shared by the dots, the block and its leader.
+// [SOURCE-DEFINED] (docs/adr/0088, H41/H71) — 16 is an engineering bound, not STARS: the
+// number of text-segment layers map-setup.js pre-creates for one block.
 export const ATC_MAX_SEGMENTS = 16;
 const ATC_TRANSPARENT = 'rgba(0,0,0,0)';
 let _atcFrame = null;
