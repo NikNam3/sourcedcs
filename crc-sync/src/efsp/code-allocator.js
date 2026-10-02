@@ -54,14 +54,14 @@ function isSynthetic(code) {
 
 class CodeAllocator {
   constructor() {
-    this._allocated = new Map(); // code -> fdrId — single INCIRLIK facility in Phase 1, no per-facility pooling yet
+    this._allocated = new Map(); // code -> flightDataId — single INCIRLIK facility in Phase 1, no per-facility pooling yet
     // The last code allocate() handed out, as a number (docs/adr/0081). The
     // next scan starts after it, so a released code is not handed out again
     // until the whole discrete pool has cycled. 0 = nothing handed out yet.
     this._cursor = 0;
   }
 
-  /** The rotating cursor, persisted beside the allocated codes (fdr-store.js snapshot). */
+  /** The rotating cursor, persisted beside the allocated codes (flight-data-store.js snapshot). */
   get cursor() { return this._cursor; }
   restoreCursor(cursor) {
     this._cursor = Number.isInteger(cursor) && cursor >= 0 && cursor <= 0o7777 ? cursor : 0;
@@ -82,14 +82,14 @@ class CodeAllocator {
    * The guide's fuller pool/search-order model (named pools, exclusion lists
    * per facility) is WP6+-adjacent and not needed here.
    */
-  allocate(fdrId) {
+  allocate(flightDataId) {
     const POOL = 0o7777;
     for (let i = 1; i <= POOL; i++) {
       const n = ((this._cursor + i - 1) % POOL) + 1; // 1..7777, starting after the cursor
       const code = n.toString(8).padStart(4, '0');
       if (AUTO_ALLOCATE_EXCLUDED.has(code) || isSynthetic(code)) continue;
       if (this._allocated.has(code)) continue;
-      this._allocated.set(code, fdrId);
+      this._allocated.set(code, flightDataId);
       this._cursor = n;
       return { code, pool: 'DISCRETE' };
     }
@@ -107,12 +107,12 @@ class CodeAllocator {
    *     DUPLICATE_IGNORED_WARNING (defect D23 — duplicates are structural
    *     in the real system, never blocked)
    */
-  validateAssignment(code, fdrId) {
+  validateAssignment(code, flightDataId) {
     if (!isValidCodeFormat(code)) return { ok: false, reason: 'VALIDATION_ERROR' };
     if (isReserved(code))         return { ok: false, reason: 'VALIDATION_ERROR' };
     if (isSynthetic(code))        return { ok: false, reason: 'VALIDATION_ERROR', detail: 'reserved for uncontrolled traffic' };
     const holder = this._allocated.get(code);
-    if (holder && holder !== fdrId) return { ok: true, warning: 'DUPLICATE_IGNORED_WARNING' };
+    if (holder && holder !== flightDataId) return { ok: true, warning: 'DUPLICATE_IGNORED_WARNING' };
     return { ok: true };
   }
 
@@ -122,15 +122,15 @@ class CodeAllocator {
    * discrete code first, if it held a different one — an FDR holds at most
    * one code at a time.
    */
-  reassign(fdrId, newCode, previousCode) {
+  reassign(flightDataId, newCode, previousCode) {
     if (previousCode && previousCode !== newCode) this.release(previousCode);
-    this._allocated.set(newCode, fdrId);
+    this._allocated.set(newCode, flightDataId);
   }
 
   isAllocated(code) { return this._allocated.has(code); }
   holderOf(code) { return this._allocated.get(code) || null; }
 
-  // ── Persistence (durable per ADR 0002 — ties to fdr-store.js's snapshot) ──
+  // ── Persistence (durable per ADR 0002 — ties to flight-data-store.js's snapshot) ──
   snapshot() { return [...this._allocated.entries()]; }
   restore(entries) { this._allocated = new Map(entries || []); }
 }

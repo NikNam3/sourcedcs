@@ -30,7 +30,7 @@ let _atoDialogEl = null;
 let _atoText = '';
 let _atoPreview = null;
 let _atoPreviewRequestId = null;
-let _atoChoices = new Map();   // lineId -> { action, fdrId?, callsignOverride? }
+let _atoChoices = new Map();   // lineId -> { action, flightDataId?, callsignOverride? }
 let _atoPendingImportId = null;
 let _atoResults = null;
 let _atoMessage = '';
@@ -146,7 +146,7 @@ export function onAtoPreviewResult(msg) {
   _atoChoices = new Map();
   for (const l of _atoPreview.lines) {
     const c = { action: l.action };
-    if (l.action === 'BIND' && l.bindCandidates.length === 1) c.fdrId = l.bindCandidates[0].fdrId;
+    if (l.action === 'BIND' && l.bindCandidates.length === 1) c.flightDataId = l.bindCandidates[0].flightDataId;
     _atoChoices.set(l.lineId, c);
   }
   _atoMessage = '';
@@ -169,7 +169,7 @@ export function atoImportChoices(preview, choices) {
   return preview.lines.map((l) => {
     const c = choices.get(l.lineId) || { action: l.action };
     const out = { lineId: l.lineId, action: c.action };
-    if (c.action === 'BIND') out.fdrId = c.fdrId;
+    if (c.action === 'BIND') out.flightDataId = c.flightDataId;
     if (c.action === 'CREATE' && c.callsignOverride) out.callsignOverride = String(c.callsignOverride).toUpperCase();
     return out;
   });
@@ -214,8 +214,8 @@ export function onAtoAck(msg) {
 
 function _atoActionOptions(line) {
   const opts = [];
-  if (line.existingFdrId) opts.push({ value: 'UPDATE', label: 'Update the tasked flight' });
-  for (const b of line.bindCandidates) opts.push({ value: `BIND:${b.fdrId}`, label: `Bind to ${b.callsign} · ${b.beaconAssigned} (${b.key === 'MODE3' ? 'Mode 3' : 'callsign'})` });
+  if (line.existingFlightDataId) opts.push({ value: 'UPDATE', label: 'Update the tasked flight' });
+  for (const b of line.bindCandidates) opts.push({ value: `BIND:${b.flightDataId}`, label: `Bind to ${b.callsign} · ${b.beaconAssigned} (${b.key === 'MODE3' ? 'Mode 3' : 'callsign'})` });
   opts.push({ value: 'CREATE', label: 'New flight' });
   opts.push({ value: 'SKIP', label: 'Skip' });
   return opts;
@@ -313,10 +313,10 @@ function _atoLineRow(l) {
     opt.value = o.value;
     select.appendChild(opt);
   }
-  select.value = choice.action === 'BIND' ? `BIND:${choice.fdrId}` : choice.action;
+  select.value = choice.action === 'BIND' ? `BIND:${choice.flightDataId}` : choice.action;
   select.addEventListener('change', () => {
     const v = select.value;
-    const next = v.startsWith('BIND:') ? { action: 'BIND', fdrId: v.slice(5) } : { action: v };
+    const next = v.startsWith('BIND:') ? { action: 'BIND', flightDataId: v.slice(5) } : { action: v };
     if (next.action === 'CREATE') next.callsignOverride = choice.callsignOverride;
     _atoChoices.set(l.lineId, next);
     _renderAtoDialog();

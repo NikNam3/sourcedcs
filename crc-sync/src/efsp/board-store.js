@@ -5,18 +5,18 @@
 // ordering, ownership, ring-buffer resync) are modelled closely on
 // TrackStore's snapshot+delta-log shape (src/tracks.js).
 //
-// FDRs and Position occupancy are NOT part of this ring buffer: Phase 1 has
+// FDRs and Position staffing are NOT part of this ring buffer: Phase 1 has
 // at most a few dozen Strips/FDRs and four Positions, so efsp-ws.js just
-// includes fdrStore.getAll()/positionStore.getAll() in full on every
+// includes flightDataStore.getAll()/positionStore.getAll() in full on every
 // snapshot AND delta message, rather than building a second/third
 // ring-buffer for state this small. Revisit only if that stops being cheap.
 //
-// Doctrinal decisions (block routing, Bay-implies-state, NLA, occupancy/
-// covering-chain) are deliberately NOT known to this module — they're
+// Doctrinal decisions (block routing, Bay-implies-state, NLA, staffing/
+// consolidation) are deliberately NOT known to this module — they're
 // injected as `rules` functions from the composition root (index.js),
 // which is what actually knows the Departure Block Map (block-map.js),
 // facility Bay config (facility-config.js), the NLA table (nla.js), and
-// Position occupancy (position-store.js). This file only knows Strip/Rack/
+// Position staffing (position-store.js). This file only knows Strip/Rack/
 // Mutation mechanics.
 //
 // Ordering deviates slightly from the implementation plan's first-pass
@@ -44,31 +44,31 @@ const log = require('../log').logger('efsp:board-store');
 
 class BoardStore {
   /**
-   * @param {import('./fdr-store').FdrStore} fdrStore
+   * @param {import('./flight-data-store').FlightDataStore} flightDataStore
    * @param {object} rules
-   * @param {(blockId:string, role:string) => {kind:'fdr',path:string}|{kind:'annotation'}|null} rules.resolveBlockTarget
-   * @param {(bayId:string) => string|null} rules.bayHoldsRole the Role a Bay is reserved for (docs/adr/0087), or null
+   * @param {(blockId:string, stripType:string) => {kind:'flightData',path:string}|{kind:'annotation'}|null} rules.resolveBlockTarget
+   * @param {(bayId:string) => string|null} rules.bayHoldsStripType the Role a Bay is reserved for (docs/adr/0087), or null
    * @param {(bayId:string) => string|null} rules.bayImpliesState
    * @param {(positionId:string, state:string) => {bayId:string,rackIds:string[]}|null} rules.bayForImpliedState
-   * @param {(strip:object, fdr:object, now:number, ctx:object) => {toState:string,transferTo?:string}|{inhibited:string}|null} rules.computeNla
-   * @param {(positionId:string) => boolean} rules.isOccupied
-   * @param {(positionId:string) => string|null} rules.coveringPositionFor
-   * @param {(state:string, role:string) => boolean} rules.isValidState
-   * @param {(role:string) => boolean} rules.isValidRole
-   * @param {(actingPositionId:string, role:string) => boolean} rules.canCreateStripRole
+   * @param {(strip:object, flightData:object, now:number, ctx:object) => {toState:string,transferTo?:string}|{inhibited:string}|null} rules.computeNla
+   * @param {(positionId:string) => boolean} rules.isStaffed
+   * @param {(positionId:string) => string|null} rules.consolidatedAt
+   * @param {(state:string, stripType:string) => boolean} rules.isValidState
+   * @param {(stripType:string) => boolean} rules.isValidStripType
+   * @param {(actingPositionId:string, stripType:string) => boolean} rules.canCreateStripType
    * @param {string} rules.facilityId — WP4A: this Board's own Facility id (docs/adr/0013)
    * @param {(facilityId:string) => BoardStore|null} rules.peerBoard — WP4A: the OTHER Facility's BoardStore instance, for cross-Facility coordination (docs/adr/0015)
    * @param {(positionId:string) => {bayId:string,rackIds:string[]}|null} rules.coordinationBayFor — WP4A
    * @param {(primitive:string) => object|null} rules.coordinationEffect — WP4A, guide §4.6's primitive table (coordination.js)
    */
-  constructor(fdrStore, rules, { clock = WALL_CLOCK } = {}) {
+  constructor(flightDataStore, rules, { clock = WALL_CLOCK } = {}) {
     // The mission clock (docs/adr/0079). Every Strip timestamp, every NLA gate
     // and every Mutation-log `at` reads it. The one exception is the NLA
     // double-tap/Undo latch below, which is a UI debounce measured in real
     // seconds and never shown as a time of day — see _applyInvokeNla.
     assertRules(rules); // a rule the Board reads and the caller omitted is a start-up error, not a check that is silently off
     this._clock = clock;
-    this._fdrStore = fdrStore;
+    this._flightDataStore = flightDataStore;
     this._rules = rules;
     // The kernel (docs/adr/0095): the Strip map, the seq/log ring, the epoch,
     // the touched set and the cid counter. Every touch goes through its recordTouch;
@@ -83,7 +83,7 @@ class BoardStore {
     // Order keys and Bays (board/placement.js). touch is the kernel's recordTouch; rebalanceRack is late-bound to the
     // facade (host-core wraps it); rejectedReplicaRefusal is the NLA cluster's, still here.
     this._placement = new Placement({
-      state: this._state, rules, clock, fdrStore,
+      state: this._state, rules, clock, flightDataStore,
       touch,
       rebalanceRack: (bayId, rackId, excludeStripId) => this._rebalanceRack(bayId, rackId, excludeStripId),
       rejectedReplicaRefusal: (strip, toState) => this._stripOps.rejectedReplicaRefusal(strip, toState),
@@ -93,7 +93,7 @@ class BoardStore {
     // recordTouch; retire is late-bound to the facade (it is StripOps'), activeCmid and mutationLog are read late,
     // and the per-Role tables are the authority registry's accessors (authority/index.js), passed in.
     this._coordination = new Coordination({
-      rules, state: this._state, audit: this._audit, placement: this._placement, clock, fdrStore,
+      rules, state: this._state, audit: this._audit, placement: this._placement, clock, flightDataStore,
       touch,
       activeCmid: () => this._activeCmid,
       retire: (strip, by) => this._stripOps.retire(strip, by),
@@ -102,7 +102,7 @@ class BoardStore {
       senderStateOnAccept,
     });
     this._tofi = new Tofi({
-      rules, state: this._state, audit: this._audit, placement: this._placement, clock, fdrStore,
+      rules, state: this._state, audit: this._audit, placement: this._placement, clock, flightDataStore,
       touch,
       activeCmid: () => this._activeCmid,
       retire: (strip, by) => this._stripOps.retire(strip, by),
@@ -124,7 +124,7 @@ class BoardStore {
     // The Strip operations (board/strip-ops.js): the op table, NLA and retirement. The two Maps above stay
     // here (snapshot, restore and archiveStrip use them) and are read late, because restore replaces them.
     this._stripOps = new StripOps({
-      rules, state: this._state, audit: this._audit, placement: this._placement, clock, fdrStore,
+      rules, state: this._state, audit: this._audit, placement: this._placement, clock, flightDataStore,
       coordination: this._coordination, tofi: this._tofi, ops: OPS,
       touch,
       activeCmid: () => this._activeCmid,
@@ -171,7 +171,7 @@ class BoardStore {
 
   /**
    * Applies a client Mutation (guide §5.2). Returns
-   *   { ok:true, strip, fdr?, warning?, routedTo? }
+   *   { ok:true, strip, flightData?, warning?, routedTo? }
    * or
    *   { ok:false, reason, strip? }
    * Never throws for an ordinary rejection.
@@ -222,7 +222,7 @@ class BoardStore {
    * of a refusal cannot send a client backwards (L6's F11) and an archived
    * Strip is not kept alive by the cache (F4). `replayed: true` tells
    * efsp-ws.js to ack only — the original broadcasts already went out, and
-   * marsaChanged/fdrs/peerStrip are deliberately not rebuilt.
+   * marsaChanged/flightDataList/peerStrip are deliberately not rebuilt.
    */
   _replayResult(record) {
     const out = { ok: record.ok, replayed: true };
@@ -230,7 +230,7 @@ class BoardStore {
       if (record[k] !== null) out[k] = record[k];
     }
     if (record.stripId) out.strip = this.getStrip(record.stripId);
-    if (record.fdrId) out.fdr = this._fdrStore.getFdr(record.fdrId);
+    if (record.flightDataId) out.flightData = this._flightDataStore.getFlightData(record.flightDataId);
     return out;
   }
 
@@ -275,7 +275,7 @@ class BoardStore {
   /**
    * System-initiated bulk reassignment of every non-DROPPED Strip owned by
    * `fromPositionId` to `toPositionId` — used when a Position becomes
-   * fully unoccupied and its Strips must route down the covering chain
+   * fully unstaffed and its Strips must route down the covering chain
    * (guide §4.8.6 rule 2). Distinct from applyMutation()'s controller-
    * initiated TransferStrip: there is no controller "sending" this (the
    * Position itself vacated), so it bypasses the ownership/baseRev/
@@ -290,8 +290,8 @@ class BoardStore {
       const before = deepClone(strip);
       strip.ownerPositionId = toPositionId;
       // F10: remember whose it was, so it goes back when that Position is taken
-      // again (returnCoveredStrips). A Strip already covered keeps the first name.
-      if (!strip.coveredFrom) strip.coveredFrom = fromPositionId;
+      // again (returnConsolidatedStrips). A Strip already covered keeps the first name.
+      if (!strip.consolidatedFrom) strip.consolidatedFrom = fromPositionId;
       // B3: the Strip moves into the covering Position's own Bay, or (no Bay
       // there fits) stays where it is and the caller says so.
       const bay = this._placement.bayForNewOwner(toPositionId, strip.state, strip);
@@ -306,7 +306,7 @@ class BoardStore {
       if (this._mutationLog) {
         this._mutationLog.record({
           clientMutationId: null, op: 'SystemReassign', stripId: strip.stripId,
-        facilityId: this._rules.facilityId || null, fdrId: strip.fdrId || null,
+        facilityId: this._rules.facilityId || null, flightDataId: strip.flightDataId || null,
           actingPositionId: null, actorId: 'system', at: this._clock.now(),
           before, after: deepClone(strip), reason: 'position-vacated',
         });
@@ -317,20 +317,20 @@ class BoardStore {
   }
 
   /**
-   * F10 (docs/adr/0080): `positionId` is occupied again, so the Strips that were
+   * F10 (docs/adr/0080): `positionId` is staffed again, so the Strips that were
    * routed away from it to a covering Position — which may not advance them
    * (PENDING_CLEARANCE is not GND's to advance) and which nothing ever returned
    * — go back, each into a Bay of the returning Position. Only a Strip still
    * owned by cover: a Strip anyone transferred on by decision has lost its
-   * `coveredFrom` (_applyTransferStrip). Recorded like the reassignment.
+   * `consolidatedFrom` (_applyTransferStrip). Recorded like the reassignment.
    * @returns {string[]} stripIds returned
    */
-  returnCoveredStrips(positionId) {
-    const back = this.getAll().filter(s => s.coveredFrom === positionId && s.ownerPositionId !== positionId && s.state !== 'DROPPED');
+  returnConsolidatedStrips(positionId) {
+    const back = this.getAll().filter(s => s.consolidatedFrom === positionId && s.ownerPositionId !== positionId && s.state !== 'DROPPED');
     for (const strip of back) {
       const before = deepClone(strip);
       strip.ownerPositionId = positionId;
-      delete strip.coveredFrom;
+      delete strip.consolidatedFrom;
       const bay = this._placement.bayForNewOwner(positionId, strip.state, strip);
       if (bay) {
         strip.bayId = bay.bayId;
@@ -341,7 +341,7 @@ class BoardStore {
       if (this._mutationLog) {
         this._mutationLog.record({
           clientMutationId: null, op: 'SystemReassign', stripId: strip.stripId,
-        facilityId: this._rules.facilityId || null, fdrId: strip.fdrId || null,
+        facilityId: this._rules.facilityId || null, flightDataId: strip.flightDataId || null,
           actingPositionId: null, actorId: 'system', at: this._clock.now(),
           before, after: deepClone(strip), reason: 'position-retaken',
         });

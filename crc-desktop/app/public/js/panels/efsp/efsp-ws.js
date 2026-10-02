@@ -80,9 +80,9 @@ export function sendEfspCreateStrip(actingPositionId, createOp, facilityId = DEF
 }
 
 /** Sets the FULL held-Position set for ONE Facility — mirrors position-store.js's own "declare your full set each call" contract, per Facility (docs/adr/0013: each Facility has its own PositionStore instance server-side). */
-export function sendEfspSetPositions(facilityId, held) {
-  _actingPositionsByFacility[facilityId] = [...held];
-  _sendEfsp({ version: 1, type: 'efsp-set-positions', facilityId, held });
+export function sendEfspSetPositions(facilityId, signedOn) {
+  _actingPositionsByFacility[facilityId] = [...signedOn];
+  _sendEfsp({ version: 1, type: 'efsp-set-positions', facilityId, signedOn });
 }
 
 /**
@@ -115,7 +115,7 @@ export function sendEfspAirspaceMutation(actingPositionId, airspaceId, baseRev, 
 /**
  * Binding or unbinding a surveillance contact (WP5, crc-sync's
  * docs/adr/0045) — guide §6.6 rule 1's top rung, "explicit controller
- * binding". Its own message type because it targets an FDR: no stripId, no
+ * binding". Its own message type because it targets an FLIGHT_DATA: no stripId, no
  * Strip baseRev, no Facility routing.
  *
  * The way out of every ambiguity the server's sweep reports, and the only way
@@ -124,18 +124,18 @@ export function sendEfspAirspaceMutation(actingPositionId, airspaceId, baseRev, 
  * airspace op is not: §5.6.3's replay machinery is keyed on Strip identity,
  * and a bind is cheap to reissue.
  */
-export function sendEfspCorrelationMutation(actingPositionId, fdrId, baseRev, op) {
+export function sendEfspCorrelationMutation(actingPositionId, flightDataId, baseRev, op) {
   _sendEfsp({
     version: 1, type: 'efsp-correlation-mutation',
     clientMutationId: efspClientMutationId(),
-    fdrId, baseRev, actingPositionId, op,
+    flightDataId, baseRev, actingPositionId, op,
   });
 }
 
 /**
  * A MARSA op (WP6, §9.2 — crc-sync's docs/adr/0051). Its own message type
  * because it targets a relation BETWEEN flights: no stripId, no Strip baseRev,
- * no Facility routing, and no single fdrId either, since a relation's
+ * no Facility routing, and no single flightDataId either, since a relation's
  * participants can be worked by different Facilities at once.
  *
  * `marsaId` is undefined for DeclareMarsa, which mints the relation — the same
@@ -153,16 +153,16 @@ export function sendEfspMarsaMutation(actingPositionId, marsaId, baseRev, op) {
 }
 
 /**
- * A field-state op (guide §9.7, crc-sync docs/adr/0061): a runway's status,
+ * A runway-status op (guide §9.7, crc-sync docs/adr/0061): a runway's status,
  * a request to tower, a runway change. Its own message type because it
  * targets a Facility's field, not a Strip: `baseRev` is the Facility record's
  * rev. Not registered as a pending mutation, for the reason the airspace,
  * correlation and MARSA sends give: §5.6.3's replay machinery is keyed on
- * Strip identity, and a field-state op is cheap to reissue by hand.
+ * Strip identity, and a runway-status op is cheap to reissue by hand.
  */
 export function sendEfspFieldStateMutation(actingPositionId, facilityId, baseRev, op) {
   _sendEfsp({
-    version: 1, type: 'efsp-field-state-mutation',
+    version: 1, type: 'efsp-runway-status-mutation',
     clientMutationId: efspClientMutationId(),
     facilityId, baseRev, actingPositionId, op,
   });

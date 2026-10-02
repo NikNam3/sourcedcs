@@ -16,9 +16,9 @@ test.describe.configure({ timeout: 90000 });
 
 const SHOTS = path.join(__dirname, '..', '..', 'docs', 'wip', 'L16');
 
-const fdrOf = (page, callsign) => page.evaluate((cs) => {
-  const s = [...efspStrips.values()].find(x => (efspFdrs.get(x.fdrId) || {}).identity?.callsign === cs);
-  return s ? efspFdrs.get(s.fdrId) : null;
+const flightDataOf = (page, callsign) => page.evaluate((cs) => {
+  const s = [...efspStrips.values()].find(x => (efspFdrs.get(x.flightDataId) || {}).identity?.callsign === cs);
+  return s ? efspFdrs.get(s.flightDataId) : null;
 }, callsign);
 
 async function pick(strip, page, value) {
@@ -36,10 +36,10 @@ async function only(page, callsign) {
 
 test('9F is a select of the configured stereo routes, never free text', async ({ page }) => {
   test.skip(process.env.E2E_STEREO_ROUTES === 'none', 'needs the two-route stereo table');
-  await openPanel(page, { held: ['OPS'] });
+  await openPanel(page, { signedOn: ['OPS'] });
   await page.waitForFunction(() => typeof cachedStereoRoutesClient === 'function' && cachedStereoRoutesClient().length === 2);
   const CS = 'L16PK1';
-  const s = await seedStrip(page, { callsign: CS, fdr: { route: 'LTAG DCT HAND', requestedAltitude: '120', departureAirport: 'LTAG', destinationAirport: 'LTAG' } });
+  const s = await seedStrip(page, { callsign: CS, flightData: { route: 'LTAG DCT HAND', requestedAltitude: '120', departureAirport: 'LTAG', destinationAirport: 'LTAG' } });
 
   // The picker, and nothing typed.
   await s.locator('.efsp-block-9F').click();
@@ -70,19 +70,19 @@ test('9F is a select of the configured stereo routes, never free text', async ({
   await pick(s, page, '');
   await expect(s.locator('.efsp-block-9F')).toHaveText('');
   await expect(s.locator('.efsp-block-9')).toHaveText('LTAG DCT BRAVO DCT LTAG');
-  expect((await fdrOf(page, CS)).filed.route).toBe('LTAG DCT BRAVO DCT LTAG');
+  expect((await flightDataOf(page, CS)).filed.route).toBe('LTAG DCT BRAVO DCT LTAG');
 
   // A fresh page load: the Board renders before the route list lands, and the
   // Strip must still become a picker once it does.
-  await openPanel(page, { held: ['OPS'] });
+  await openPanel(page, { signedOn: ['OPS'] });
   await expect(stripByCallsign(page, CS).locator('.efsp-block-9F')).toHaveClass(/efsp-block-enum/);
 });
 
 test('§10.5: departure, off-block and takeoff time each follow an explicit ordered fallback, and the chosen source is visible on hover', async ({ page }) => {
-  await openPanel(page, { held: ['OPS'] });
+  await openPanel(page, { signedOn: ['OPS'] });
   const CS = 'L16TM1';
   // A DD1801 seed with item 13's departure time, as the lookup now sends it.
-  const s = await seedStrip(page, { callsign: CS, fdr: { flightPlanDepartureTimeHhmm: '1430' } });
+  const s = await seedStrip(page, { callsign: CS, flightData: { flightPlanDepartureTimeHhmm: '1430' } });
 
   // P-time on the OPS face: the plan's time, upright, its source on hover.
   const p = s.locator('.efsp-block-6');
@@ -121,7 +121,7 @@ test('§10.5: departure, off-block and takeoff time each follow an explicit orde
   await expect(row('18').locator('.efsp-block-18')).toHaveAttribute('title', /~1425Z estimate: off-block, entered by a controller/);
 
   // The chain wrote nothing: the stored actual is the controller's, takeoff still null (T5).
-  const fdr = await fdrOf(page, CS);
-  expect(fdr.assigned.takeoffTimeUtc).toBeNull();
-  expect(fdr.filed.proposedDepartureTimeUtc).toBeNull();
+  const flightData = await flightDataOf(page, CS);
+  expect(flightData.assigned.takeoffTimeUtc).toBeNull();
+  expect(flightData.filed.proposedDepartureTimeUtc).toBeNull();
 });

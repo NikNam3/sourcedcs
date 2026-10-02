@@ -125,7 +125,7 @@ function isRadarSite(apt) {
 
 /**
  * Every radar that exists in the theater right now, regardless of who can see
- * through it. station-coverage.js decides which of these a Position is
+ * through it. position-coverage.js decides which of these a Position is
  * assigned; coverage.js decides what each one is currently illuminating.
  *
  * @param {object} args

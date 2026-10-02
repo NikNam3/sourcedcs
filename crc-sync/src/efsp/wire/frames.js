@@ -25,7 +25,7 @@ const VERSION = 1;
  * so there is nothing per-connection to compute here.
  *
  * Derived at the wire boundary, never stored on the Strip: it is a function of
- * Position occupancy and the clock as much as of the Strip, so persisting it
+ * Position staffing and the clock as much as of the Strip, so persisting it
  * would make the Board snapshot carry a value that is wrong the moment anyone
  * takes or gives up a Position.
  *
@@ -41,10 +41,10 @@ function stampStrip(boardStore, strip, facilityId, ctx) {
   return { ...strip, facilityId, nla };
 }
 
-/** The FDRs a Mutation changed — the one it addressed, plus any it wrote as a side effect — deduplicated by fdrId, most recent value winning. */
-function mergeFdrs(primary, extra) {
+/** The FDRs a Mutation changed — the one it addressed, plus any it wrote as a side effect — deduplicated by flightDataId, most recent value winning. */
+function mergeFlightDataList(primary, extra) {
   const byId = new Map();
-  for (const fdr of [primary, ...(extra || [])]) if (fdr && fdr.fdrId) byId.set(fdr.fdrId, fdr);
+  for (const flightData of [primary, ...(extra || [])]) if (flightData && flightData.flightDataId) byId.set(flightData.flightDataId, flightData);
   return [...byId.values()];
 }
 
@@ -74,14 +74,14 @@ function touchedStrips(ctx, boardStore, facilityId, touchedIds, first) {
  * `boardSeq` (docs/adr/0081): a seq only means something within one Board
  * lifetime, and the epoch names the lifetime.
  */
-function boardDelta(ctx, boardStore, facilityId, strips, fdrs, positions = []) {
+function boardDelta(ctx, boardStore, facilityId, strips, flightDataList, positions = []) {
   return {
     version: VERSION, type: 'efsp-board-delta',
     boardSeq: boardStore ? boardStore.currentSeq : undefined,
     boardEpoch: boardStore ? boardStore.epoch : undefined,
     facilityId,
     strips,
-    fdrs: { updated: fdrs },
+    flightDataList: { updated: flightDataList },
     positions: { updated: positions },
   };
 }
@@ -116,4 +116,4 @@ function liveStamped(ctx) {
   return out;
 }
 
-module.exports = { VERSION, stampStrip, mergeFdrs, touchedStrips, boardDelta, marsaDelta, carrierDelta, sfaDelta, liveStamped };
+module.exports = { VERSION, stampStrip, mergeFlightDataList, touchedStrips, boardDelta, marsaDelta, carrierDelta, sfaDelta, liveStamped };

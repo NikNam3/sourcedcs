@@ -4,7 +4,7 @@ const { newFlags } = require('../strip-util');
 
 /**
  * docs/adr/0023 — converts a DEPARTURE Strip at its HANDED_OFF terminus
- * into an ARRIVAL Strip IN PLACE: same stripId, same fdrId, throughout.
+ * into an ARRIVAL Strip IN PLACE: same stripId, same flightDataId, throughout.
  * A deliberate departure from guide §3.6's turnaround rule ("an ARRIVAL
  * Strip that reaches DROPPED and a later DEPARTURE Strip for the same
  * airframe are separate Strips referencing separate FDRs") — chosen
@@ -12,7 +12,7 @@ const { newFlags } = require('../strip-util');
  * this feature) after live testing found the two-Strip approach left a
  * stale departure Strip behind and required copying every field by hand
  * (route, altitude, remarks, identity, beacon code — the last of which
- * can't even be copied cleanly, since fdr-store.js's createFdr always
+ * can't even be copied cleanly, since flight-data-store.js's createFlightData always
  * auto-allocates a fresh code). Reusing the same FDR makes every one of
  * those problems structurally impossible: there is nothing to copy,
  * because nothing new was created.
@@ -23,20 +23,20 @@ const { newFlags } = require('../strip-util');
  * an attention flag from the outbound leg). The correlation is the one
  * thing that does survive, and used to be reset here in error — see the
  * comment at the reset site below, and docs/adr/0045. And
- * this Strip's `role`-scoped Block Map, EfspState set and NLA table all
+ * this Strip's `stripType`-scoped Block Map, EfspState set and NLA table all
  * genuinely change underneath it, so starting those fields clean avoids
  * carrying over state that no longer means what it used to.
  */
 function _applyConvertToArrival(ctx, strip, by, actingPositionId) {
-  if (strip.role !== 'DEPARTURE' || strip.state !== 'HANDED_OFF') {
+  if (strip.stripType !== 'DEPARTURE' || strip.state !== 'HANDED_OFF') {
     return { ok: false, reason: 'VALIDATION_ERROR', detail: 'only a DEPARTURE Strip at HANDED_OFF can be converted to ARRIVAL', strip };
   }
   // Role-scoped, same two-tier permission shape _applyCreateStrip uses —
   // the coarse canMutate('ConvertToArrival') gate already applied in
   // _dispatch restricts this to APP/CTR; this is the fine-grained half,
-  // reusing canCreateStripRole's existing ARRIVAL-origination check
+  // reusing canCreateStripType's existing ARRIVAL-origination check
   // rather than a parallel table that would only ever say the same thing.
-  if (!ctx.rules.canCreateStripRole(actingPositionId, 'ARRIVAL')) {
+  if (!ctx.rules.canCreateStripType(actingPositionId, 'ARRIVAL')) {
     return { ok: false, reason: 'PERMISSION_DENIED', strip };
   }
   // The conversion nulls both coordination records wholesale below, so an
@@ -56,10 +56,10 @@ function _applyConvertToArrival(ctx, strip, by, actingPositionId) {
   // orphaned a replica that would wait forever for a response, and against
   // an ACTIVE TOFI it ended tactical control with no notification to the
   // MRU side at all.
-  if (strip.coordination && strip.coordination.state === 'PROPOSED') {
+  if (strip.coordination && strip.coordination.state === 'INITIATED') {
     return { ok: false, reason: 'VALIDATION_ERROR', detail: 'cannot convert a Strip with an open coordination proposal — accept, reject, or wait for a response first', strip };
   }
-  if (strip.tofiCoordination && strip.tofiCoordination.state === 'PROPOSED') {
+  if (strip.tofiCoordination && strip.tofiCoordination.state === 'INITIATED') {
     return { ok: false, reason: 'VALIDATION_ERROR', detail: 'cannot convert a Strip with an open TOFI proposal — accept, reject, or wait for a response first', strip };
   }
   if (strip.tofiCoordination && strip.tofiCoordination.state === 'ACTIVE') {
@@ -91,18 +91,18 @@ function _applyConvertToArrival(ctx, strip, by, actingPositionId) {
   // field names for the same fact. Seeding it from the filed altitude
   // would misrepresent a filed value as an issued clearance; leaving it
   // blank for the controller to actively assign is correct, not a gap.
-  const fdr = ctx.fdrStore.getFdr(strip.fdrId);
-  let updatedFdr = fdr;
-  if (fdr && fdr.filed.departureAirport) {
+  const flightData = ctx.flightDataStore.getFlightData(strip.flightDataId);
+  let updatedFlightData = flightData;
+  if (flightData && flightData.filed.departureAirport) {
     // Captured so it can ride in this method's own return value below —
-    // without it, efsp-ws.js's ack/broadcast has no fdr to include
-    // (mirrors _applySetBlock's own result.fdr pattern), and a connected
+    // without it, efsp-ws.js's ack/broadcast has no flightData to include
+    // (mirrors _applySetBlock's own result.flightData pattern), and a connected
     // client would never actually see originAirport update at all.
-    const fdrResult = ctx.fdrStore.setField(strip.fdrId, 'filed.originAirport', fdr.filed.departureAirport, { by });
-    if (fdrResult.ok) updatedFdr = fdrResult.fdr;
+    const flightDataResult = ctx.flightDataStore.setField(strip.flightDataId, 'filed.originAirport', flightData.filed.departureAirport, { by });
+    if (flightDataResult.ok) updatedFlightData = flightDataResult.flightData;
   }
 
-  strip.role = 'ARRIVAL';
+  strip.stripType = 'ARRIVAL';
   strip.state = 'INBOUND';
   strip.bayId = targetBay.bayId;
   strip.rackId = ctx.placement.placementRack(strip, targetBay);
@@ -120,7 +120,7 @@ function _applyConvertToArrival(ctx, strip, by, actingPositionId) {
   // either way, but a controller asking "what did Ground tell them before
   // they went out" is looking at the Strip, not reading a JSONL file.
   strip.previousLeg = {
-    role: 'DEPARTURE',
+    stripType: 'DEPARTURE',
     annotations: strip.annotations,
     flags: strip.flags,
     convertedAt: ctx.clock.now(),
@@ -132,15 +132,15 @@ function _applyConvertToArrival(ctx, strip, by, actingPositionId) {
   strip.tofiCoordination = null;
   // The correlation is deliberately NOT reset, and the line that used to do
   // it here was wrong even while it was inert (docs/adr/0045). This fires on
-  // the same stripId, the same fdrId, the same airframe — still airborne,
+  // the same stripId, the same flightDataId, the same airframe — still airborne,
   // still squawking the code docs/adr/0023 went out of its way to keep. It
   // threw away a correct binding for the one aircraft that certainly has
   // one, which is §6.6 rule 3's silent break reached through a role change
-  // instead of a track-id change. Under the fdrId key there is nothing here
+  // instead of a track-id change. Under the flightDataId key there is nothing here
   // to reset: the correlation is a fact about the airframe, and the airframe
   // did not change legs — the paperwork did.
   ctx.state.bump(strip, by);
-  return { ok: true, strip, fdr: updatedFdr };
+  return { ok: true, strip, flightData: updatedFlightData };
 }
 
 // docs/adr/0023 — converts this Strip's role IN PLACE, same Strip/

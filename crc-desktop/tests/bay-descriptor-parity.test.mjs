@@ -46,7 +46,7 @@ test('every field the client reads off a `bay` is on the server\'s Bay descripto
 });
 
 test('every Bay descriptor has the fields the panel keys on, and an impliesState that is a real state of some Role', () => {
-  const allStates = new Set(Object.values(nla.STATES_BY_ROLE).flat());
+  const allStates = new Set(Object.values(nla.STATES_BY_STRIP_TYPE).flat());
   for (const b of allBays()) {
     for (const f of ['bayId', 'positionId', 'facilityId', 'rackIds']) assert.ok(b[f], `${b.bayId}.${f}`);
     assert.ok(Array.isArray(b.rackIds) && b.rackIds.length >= 1, `${b.bayId}.rackIds`);

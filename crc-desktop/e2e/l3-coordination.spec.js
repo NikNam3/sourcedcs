@@ -42,9 +42,9 @@ async function controller(browser, opts) {
   return page;
 }
 
-const ctr = (browser) => controller(browser, { held: ['CTR'], facilityId: 'CENTER', controller: 'ctr-controller' });
-const app = (browser) => controller(browser, { held: ['APP'], facilityId: 'INCIRLIK', controller: 'app-controller' });
-const tacC2 = (browser) => controller(browser, { held: ['TAC_C2'], facilityId: 'TACTICAL', controller: 'tac-c2-controller' });
+const ctr = (browser) => controller(browser, { signedOn: ['CTR'], facilityId: 'CENTER', controller: 'ctr-controller' });
+const app = (browser) => controller(browser, { signedOn: ['AP'], facilityId: 'INCIRLIK', controller: 'ap-controller' });
+const tacC2 = (browser) => controller(browser, { signedOn: ['TAC_C2'], facilityId: 'TACTICAL', controller: 'tac-c2-controller' });
 
 /**
  * The Strip with an element reading exactly this callsign.
@@ -65,14 +65,14 @@ async function goBay(page, positionId, bayId) {
 
 /** A CENTER ARRIVAL at INBOUND — the state every coordination primitive and TOFI ENTRY is eligible from. */
 function seedCtrArrival(page, callsign) {
-  return seedStrip(page, { callsign, actingPositionId: 'CTR', bayId: 'ctr-enroute', role: 'ARRIVAL', facilityId: 'CENTER' });
+  return seedStrip(page, { callsign, actingPositionId: 'CTR', bayId: 'ctr-enroute', stripType: 'ARRIVAL', facilityId: 'CENTER' });
 }
 
 /** Every live Strip record for this callsign, as the page's own store has it. */
 function recordsFor(page, callsign) {
   return page.evaluate((cs) => [...efspStrips.values()]
-    .filter(s => (efspFdrs.get(s.fdrId) || {}).identity && efspFdrs.get(s.fdrId).identity.callsign === cs && s.state !== 'DROPPED')
-    .map(s => ({ facilityId: s.facilityId, owner: s.ownerPositionId, bayId: s.bayId, state: s.state, role: s.role,
+    .filter(s => (efspFdrs.get(s.flightDataId) || {}).identity && efspFdrs.get(s.flightDataId).identity.callsign === cs && s.state !== 'DROPPED')
+    .map(s => ({ facilityId: s.facilityId, owner: s.ownerPositionId, bayId: s.bayId, state: s.state, stripType: s.stripType,
       coordination: s.coordination && s.coordination.state, tofi: s.tofiCoordination && s.tofiCoordination.state })), callsign);
 }
 
@@ -130,7 +130,7 @@ test('a double-tap on Accept Hand Off accepts only the replica that was tapped',
   await propose(a, await seedCtrArrival(a, 'DBLAC1'), 'HANDOFF');
   await a.locator('.efsp-coordinate-popover').waitFor({ state: 'detached' });
   await propose(a, await seedCtrArrival(a, 'DBLAC2'), 'HANDOFF');
-  await goBay(b, 'APP', 'app-coordination');
+  await goBay(b, 'AP', 'ap-coordination');
   await expect(strip(b, 'DBLAC2').getByRole('button', { name: 'Accept Hand Off' })).toBeVisible();
 
   // Earlier tests' rejected replicas stay in this Bay (F-303) and the Bay is
@@ -160,7 +160,7 @@ test('a double-tap on Accept Hand Off accepts only the replica that was tapped',
   await b.waitForTimeout(700);
 
   const second = (await recordsFor(b, 'DBLAC2')).find(r => r.facilityId === 'INCIRLIK');
-  expect(second.coordination, `DBLAC2's Accept slid under the pointer ${arrivedAfterMs} ms after the first tap, and the second tap accepted it`).toBe('PROPOSED');
+  expect(second.coordination, `DBLAC2's Accept slid under the pointer ${arrivedAfterMs} ms after the first tap, and the second tap accepted it`).toBe('INITIATED');
 });
 
 // ── F-301 — extends F-001 ─────────────────────────────────────────────────
@@ -205,7 +205,7 @@ test('the sender can see a HANDOFF is pending, and then that it was accepted', a
   // that is the only change on the sender's Strip.
   await expect(s, 'pending HANDOFF: nothing on the sender\'s Strip says so').toContainText(/HAND ?OFF/i, { timeout: 2000 });
 
-  await goBay(b, 'APP', 'app-coordination');
+  await goBay(b, 'AP', 'ap-coordination');
   await strip(b, 'HOSEE1').getByRole('button', { name: 'Accept Hand Off' }).click({ timeout: 3000 });
   await expect.poll(async () => (await recordsFor(a, 'HOSEE1')).find(r => r.facilityId === 'CENTER').coordination).toBe('ACTIVE');
   await expect(s, 'accepted HANDOFF: nothing on the sender\'s Strip says so').toContainText(/APP|RADAR CONTACT|ACCEPTED/i, { timeout: 2000 });
@@ -216,7 +216,7 @@ test('a rejected proposal is visible to the controller who sent it', async ({ br
   const b = await app(browser);
   const s = await seedCtrArrival(a, 'REJSEE');
   await propose(a, s, 'OPERATIONAL_REQUEST');
-  await goBay(b, 'APP', 'app-coordination');
+  await goBay(b, 'AP', 'ap-coordination');
   await strip(b, 'REJSEE').getByRole('button', { name: 'Unable' }).click({ timeout: 3000 });
   await expect.poll(async () => (await recordsFor(a, 'REJSEE')).find(r => r.facilityId === 'CENTER').coordination).toBe('REJECTED');
   await a.waitForTimeout(300);
@@ -234,13 +234,13 @@ test('a rejected replica in the receiver\'s Coordination Bay cannot be worked', 
   const b = await app(browser);
   const s = await seedCtrArrival(a, 'DEADRP');
   await propose(a, s, 'POINT_OUT');
-  await goBay(b, 'APP', 'app-coordination');
+  await goBay(b, 'AP', 'ap-coordination');
   const replica = strip(b, 'DEADRP');
   await replica.getByRole('button', { name: 'Reject' }).click({ timeout: 3000 });
   await expect.poll(async () => (await recordsFor(b, 'DEADRP')).find(r => r.facilityId === 'INCIRLIK').coordination).toBe('REJECTED');
 
   // APP declined this flight. Its NLA must not now hand it to Tower —
-  // measured: it did, and the server accepted it (twr-arrivals /
+  // measured: it did, and the server accepted it (lc-arrivals /
   // HANDED_TO_TOWER) while CENTER still owned the flight.
   //
   // Not toHaveCount(0): removing the button was the catalogue's guess at a
@@ -278,7 +278,7 @@ test('the proposer\'s note reaches the receiver', async ({ browser }) => {
   const s = await seedCtrArrival(a, 'NOTE01');
   const note = 'climbing FL200 on request, verbal done';
   await propose(a, s, 'HANDOFF', note);
-  await goBay(b, 'APP', 'app-coordination');
+  await goBay(b, 'AP', 'ap-coordination');
   const replica = strip(b, 'NOTE01');
   await expect(replica.getByRole('button', { name: 'Accept Hand Off' })).toBeVisible();
   const shown = await replica.evaluate((el, n) => el.innerText.includes(n)
@@ -328,7 +328,7 @@ test('Accept TOFI Exit enables once CTR has set SEP REG back to ATC', async ({ b
   const mission = strip(b, 'EXIT01');
   await mission.locator('select.efsp-tofi-regime-select').selectOption('DUE_REGARD');
   await mission.getByRole('button', { name: 'Accept TOFI Entry' }).click({ timeout: 3000 });
-  await expect.poll(async () => (await recordsFor(a, 'EXIT01')).find(r => r.role === 'MISSION').tofi).toBe('ACTIVE');
+  await expect.poll(async () => (await recordsFor(a, 'EXIT01')).find(r => r.stripType === 'MISSION').tofi).toBe('ACTIVE');
 
   await startAction(s, 'TOFI Exit…', { timeout: 3000 });
   await goBay(b, 'TAC_C2', 'tac-c2-tasked');
@@ -362,9 +362,9 @@ test('the regime stated when accepting TOFI shows in SEP REG on both sides', asy
   const mission = strip(b, 'SREG01');
   await mission.locator('select.efsp-tofi-regime-select').selectOption('DUE_REGARD');
   await mission.getByRole('button', { name: 'Accept TOFI Entry' }).click({ timeout: 3000 });
-  await expect.poll(async () => (await recordsFor(a, 'SREG01')).find(r => r.role === 'ARRIVAL').tofi).toBe('ACTIVE');
+  await expect.poll(async () => (await recordsFor(a, 'SREG01')).find(r => r.stripType === 'ARRIVAL').tofi).toBe('ACTIVE');
 
-  // crc-sync writes fdr.tofi.separationRegime = DUE_REGARD on this accept —
+  // crc-sync writes flightData.tofi.separationRegime = DUE_REGARD on this accept —
   // a page opened AFTERWARDS gets it in its snapshot. Neither page that was
   // connected at the time ever receives it.
   const fdrRegime = (page) => page.evaluate(() => [...efspFdrs.values()].find(f => f.identity && f.identity.callsign === 'SREG01').tofi.separationRegime);
@@ -414,16 +414,16 @@ test('CTR is told what is blocking the TOFI exit they proposed', async ({ browse
   const mission = strip(b, 'EXIT02');
   await mission.locator('select.efsp-tofi-regime-select').selectOption('MARSA');
   await mission.getByRole('button', { name: 'Accept TOFI Entry' }).click({ timeout: 3000 });
-  await expect.poll(async () => (await recordsFor(a, 'EXIT02')).find(r => r.role === 'ARRIVAL').tofi).toBe('ACTIVE');
+  await expect.poll(async () => (await recordsFor(a, 'EXIT02')).find(r => r.stripType === 'ARRIVAL').tofi).toBe('ACTIVE');
 
   await startAction(s, 'TOFI Exit…', { timeout: 3000 });
-  await expect(s.locator('.efsp-tofi-badge')).toContainText(/EXIT[\s\S]*PROPOSED/);
+  await expect(s.locator('.efsp-tofi-badge')).toContainText(/EXIT[\s\S]*INITIATED/);
   await a.waitForTimeout(500);
   // Only CTR can fix it — SREG is on the ATC-side Strip alone — and only the
   // MRU side is told, in the title of a disabled button.
   const onStrip = /SEP ?REG|ATC/i.test(await s.locator('.efsp-tofi-badge').evaluate(el => el.textContent + ' ' + el.title));
   const banner = (await a.locator('#efsp-mutation-error').textContent() || '').trim();
-  expect(onStrip || banner.length > 0, 'CTR\'s Strip says "TOFI EXIT: PROPOSED" and nothing about SEP REG').toBe(true);
+  expect(onStrip || banner.length > 0, 'CTR\'s Strip says "TOFI EXIT: INITIATED" and nothing about SEP REG').toBe(true);
 });
 
 // ── F-308 / F-309 — the mission-line bind picker and .mission ──────────────
@@ -438,9 +438,9 @@ test('a mission line bound from the picker does not need a callsign retyped', as
   await bind.selectOption({ label: await bind.locator('option', { hasText: /^BINDA1\b/ }).textContent() });
   await b.locator('#efsp-create-strip-btn').click();
   // Measured: "Enter a callsign first". And the callsign that IS typed is
-  // then thrown away — a bound CreateStrip carries no `fdr` — so typing
+  // then thrown away — a bound CreateStrip carries no `flightData` — so typing
   // BINDA2 with BINDA1 picked frags BINDA1 without a word.
-  await expect.poll(async () => (await recordsFor(b, 'BINDA1')).some(r => r.role === 'MISSION'),
+  await expect.poll(async () => (await recordsFor(b, 'BINDA1')).some(r => r.stripType === 'MISSION'),
     { message: `refused: "${await b.locator('#efsp-create-strip-msg').textContent()}"`, timeout: 3000 }).toBe(true);
 });
 

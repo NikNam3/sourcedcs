@@ -92,7 +92,7 @@ function _preferVisibleStrip(stripIds) {
  *
  *   1. A correlation is not a Block. Every Block Map entry routes to an FDR
  *      path, an annotation, a flag, a system value, a composite or a
- *      frequency; a correlation record is keyed by fdrId in its own store and
+ *      frequency; a correlation record is keyed by flightDataId in its own store and
  *      is none of those. A Block would need a seventh target kind whose only
  *      member is something no controller can type.
  *   2. The reachability test would silently exempt it. That test holds every
@@ -187,8 +187,8 @@ function _correlatedSentence(record) {
 }
 
 function _provisionalSentence(record, strip) {
-  const fdr = typeof getEfspFdr === 'function' && strip ? getEfspFdr(strip.fdrId) : null;
-  const assigned = fdr && fdr.identity ? fdr.identity.beaconAssigned : null;
+  const flightData = typeof getEfspFdr === 'function' && strip ? getEfspFdr(strip.flightDataId) : null;
+  const assigned = flightData && flightData.identity ? flightData.identity.beaconAssigned : null;
   if (record.observedBeacon && assigned && record.observedBeacon !== assigned) {
     return `observed ${record.observedBeacon} ≠ assigned ${assigned}`;
   }

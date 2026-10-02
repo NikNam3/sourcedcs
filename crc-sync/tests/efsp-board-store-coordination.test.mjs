@@ -13,7 +13,7 @@ process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH_CENTER = path.join(tmpDir, 'center
 
 const { BoardStore } = await import('../src/efsp/board-store.js');
 import { fullRules } from "./helpers/full-rules.mjs";
-const { FdrStore } = await import('../src/efsp/fdr-store.js');
+const { FlightDataStore } = await import('../src/efsp/flight-data-store.js');
 const { PositionStore } = await import('../src/efsp/position-store.js');
 const facilityConfig = await import('../src/efsp/facility-config.js');
 const blockMap = await import('../src/efsp/block-map.js');
@@ -23,30 +23,30 @@ const coordination = await import('../src/efsp/coordination.js');
 
 /**
  * Builds two real, fully-wired {boardStore, positionStore} pairs — one per
- * Facility — sharing one FdrStore, wired via peerBoard exactly like
+ * Facility — sharing one FlightDataStore, wired via peerBoard exactly like
  * index.js's real composition root (docs/adr/0013). This is the direct,
  * BoardStore-level test tier for the D13 replication mechanism itself,
  * below the WS boundary (efsp-ws-coordination.test.mjs covers that layer).
  */
 function makeFacilities({ aitAuthorized = {} } = {}) {
-  const fdrStore = new FdrStore();
+  const flightDataStore = new FlightDataStore();
   const facilities = new Map();
 
   for (const facilityId of facilityConfig.getFacilityIds()) {
-    const positionStore = new PositionStore(facilityConfig.getPositionSet(facilityId), facilityConfig.getCoveringChain(facilityId));
+    const positionStore = new PositionStore(facilityConfig.getPositionSet(facilityId), facilityConfig.getConsolidation(facilityId));
     const rules = {
-      resolveBlockTarget: (blockId, role) => blockMap.resolveBlockTarget(role, blockId),
+      resolveBlockTarget: (blockId, stripType) => blockMap.resolveBlockTarget(stripType, blockId),
       bayImpliesState: (bayId) => facilityConfig.bayImpliesState(bayId, facilityId),
       bayForImpliedState: (positionId, state) => facilityConfig.bayForImpliedState(positionId, state, facilityId),
       coordinationBayFor: (positionId) => facilityConfig.coordinationBayFor(positionId, facilityId),
-      computeNla: (strip, fdr, now, ctx) => nla.computeNla(strip, fdr, now, ctx),
-      isValidState: (state, role) => nla.isValidState(state, role),
-      isValidRole: (role) => blockMap.isValidRole(role),
-      isOccupied: (id) => positionStore.isOccupied(id),
-      coveringPositionFor: (id) => positionStore.coveringPositionFor(id),
+      computeNla: (strip, flightData, now, ctx) => nla.computeNla(strip, flightData, now, ctx),
+      isValidState: (state, stripType) => nla.isValidState(state, stripType),
+      isValidStripType: (stripType) => blockMap.isValidStripType(stripType),
+      isStaffed: (id) => positionStore.isStaffed(id),
+      consolidatedAt: (id) => positionStore.consolidatedAt(id),
       canMutate: (actingPositionId, opKind) => permission.canMutate(actingPositionId, opKind),
-      canCreateStripRole: (actingPositionId, role) => permission.canCreateStripRole(actingPositionId, role),
-      canActOnState: (actingPositionId, role, state) => permission.canActOnState(actingPositionId, role, state),
+      canCreateStripType: (actingPositionId, stripType) => permission.canCreateStripType(actingPositionId, stripType),
+      canActOnState: (actingPositionId, stripType, state) => permission.canActOnState(actingPositionId, stripType, state),
       isSelfCoordinated: (controllerId, id) => positionStore.isSelfCoordinated(controllerId, id),
       facilityId,
       aitAuthorized: !!aitAuthorized[facilityId],
@@ -55,9 +55,9 @@ function makeFacilities({ aitAuthorized = {} } = {}) {
         return other ? other.boardStore : null;
       },
       coordinationEffect: (primitive) => coordination.coordinationEffect(primitive),
-      coordinationEligibleState: (role) => coordination.coordinationEligibleState(role),
+      coordinationEligibleState: (stripType) => coordination.coordinationEligibleState(stripType),
     };
-    const boardStore = new BoardStore(fdrStore, fullRules(rules));
+    const boardStore = new BoardStore(flightDataStore, fullRules(rules));
     facilities.set(facilityId, { boardStore, positionStore });
   }
   return facilities;
@@ -69,18 +69,18 @@ function makeFacilities({ aitAuthorized = {} } = {}) {
  * COORDINATION_ELIGIBLE_STATES.DEPARTURE). SetState first (bypasses the
  * bay-implied-transition sequence check entirely — mirrors this repo's
  * existing test fixtures' use of SetState as a raw jump, e.g.
- * efsp-board-store.test.mjs), THEN TransferStrip into app-departures —
+ * efsp-board-store.test.mjs), THEN TransferStrip into ap-departures —
  * by then strip.state already equals that Bay's impliesState, so
  * _validateBayImpliedTransition's "already there" short-circuit applies
  * and the transfer is never itself treated as an advancing transition.
  */
 function createAppHandedOffStrip(facilities) {
   const { boardStore: incirlikBoard, positionStore: incirlikPositions } = facilities.get('INCIRLIK');
-  incirlikPositions.setHeldPositions('app-controller', 'App1', ['APP']);
+  incirlikPositions.setSignedOnPositions('ap-controller', 'App1', ['AP']);
   const created = incirlikBoard.applyMutation(mutation({
     op: {
       kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main',
-      fdr: { callsign: 'VIPER1', departureAirport: 'LTAG', destinationAirport: 'LTAC', route: 'DCT', requestedAltitude: '250' },
+      flightData: { callsign: 'VIPER1', departureAirport: 'LTAG', destinationAirport: 'LTAC', route: 'DCT', requestedAltitude: '250' },
     },
   }), 'OPS', 'ops-controller');
   assert.equal(created.ok, true, JSON.stringify(created));
@@ -91,7 +91,7 @@ function createAppHandedOffStrip(facilities) {
   assert.equal(setState.ok, true, JSON.stringify(setState));
   const transferred = incirlikBoard.applyMutation(mutation({
     stripId: setState.strip.stripId, baseRev: setState.strip.rev,
-    op: { kind: 'TransferStrip', toPositionId: 'APP', bayId: 'app-departures', rackId: 'main' },
+    op: { kind: 'TransferStrip', toPositionId: 'AP', bayId: 'ap-departures', rackId: 'main' },
   }), 'OPS', 'ops-controller');
   assert.equal(transferred.ok, true, JSON.stringify(transferred));
   return transferred.strip;
@@ -103,7 +103,7 @@ function proposeFromApp(facilities, strip, overrides = {}) {
   return boardStore.applyMutation(mutation({
     stripId: strip.stripId, baseRev: strip.rev,
     op: { kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'CENTER', toPositionId: 'CTR', ...overrides },
-  }), 'APP', 'app-controller');
+  }), 'AP', 'ap-controller');
 }
 
 function mutation(overrides = {}) {
@@ -116,9 +116,9 @@ function createCtrStrip(facilities, overrides = {}) {
   const result = boardStore.applyMutation(mutation({
     op: {
       kind: 'CreateStrip', bayId: 'ctr-enroute', rackId: 'main',
-      fdr: { callsign: 'EAGLE1', aircraftType: 'F15', wakeCategory: 'D', originAirport: 'LTAC', estimatedArrivalTimeUtc: Date.now() + 20 * 60 * 1000 },
-      role: 'ARRIVAL',
-      ...overrides.fdrOverrides,
+      flightData: { callsign: 'EAGLE1', aircraftType: 'F15', wakeCategory: 'D', originAirport: 'LTAC', estimatedArrivalTimeUtc: Date.now() + 20 * 60 * 1000 },
+      stripType: 'ARRIVAL',
+      ...overrides.flightDataOverrides,
     },
   }), 'CTR', 'ctr-controller');
   assert.equal(result.ok, true, JSON.stringify(result));
@@ -129,7 +129,7 @@ function proposeHandoff(facilities, strip, overrides = {}) {
   const { boardStore } = facilities.get('CENTER');
   return boardStore.applyMutation(mutation({
     stripId: strip.stripId, baseRev: strip.rev,
-    op: { kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'INCIRLIK', toPositionId: 'APP', ...overrides },
+    op: { kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'INCIRLIK', toPositionId: 'AP', ...overrides },
   }), 'CTR', 'ctr-controller');
 }
 
@@ -141,7 +141,7 @@ test('HANDOFF PROPOSE mints a brand-new, independent Strip in the receiving Faci
 
   const proposed = proposeHandoff(facilities, senderStrip);
   assert.equal(proposed.ok, true, JSON.stringify(proposed));
-  assert.equal(proposed.strip.coordination.state, 'PROPOSED');
+  assert.equal(proposed.strip.coordination.state, 'INITIATED');
   assert.equal(proposed.strip.coordination.peerFacilityId, 'INCIRLIK');
 
   const receiverStripId = proposed.strip.coordination.peerStripId;
@@ -150,12 +150,12 @@ test('HANDOFF PROPOSE mints a brand-new, independent Strip in the receiving Faci
   const { boardStore: appBoard } = facilities.get('INCIRLIK');
   const receiverStrip = appBoard.getStrip(receiverStripId);
   assert.ok(receiverStrip);
-  assert.equal(receiverStrip.ownerPositionId, 'APP');
-  assert.equal(receiverStrip.bayId, 'app-coordination');
-  assert.equal(receiverStrip.coordination.state, 'PROPOSED');
+  assert.equal(receiverStrip.ownerPositionId, 'AP');
+  assert.equal(receiverStrip.bayId, 'ap-coordination');
+  assert.equal(receiverStrip.coordination.state, 'INITIATED');
   assert.equal(receiverStrip.coordination.peerStripId, senderStrip.stripId);
   assert.equal(receiverStrip.coordination.peerFacilityId, 'CENTER');
-  assert.equal(receiverStrip.fdrId, senderStrip.fdrId); // one logical FDR, shared — docs/adr/0013's simplification
+  assert.equal(receiverStrip.flightDataId, senderStrip.flightDataId); // one logical FDR, shared — docs/adr/0013's simplification
 });
 
 test('ACCEPT moves the receiver replica into its normal INBOUND Bay, sets both sides ACTIVE, and moves data ownership + separation responsibility to the receiver (HANDOFF\'s full-jurisdiction-transfer row)', () => {
@@ -169,14 +169,14 @@ test('ACCEPT moves the receiver replica into its normal INBOUND Bay, sets both s
   const accepted = appBoard.applyMutation(mutation({
     stripId: receiverStripId, baseRev: receiverBefore.rev,
     op: { kind: 'HANDOFF', action: 'ACCEPT' },
-  }), 'APP', 'app-controller');
+  }), 'AP', 'ap-controller');
 
   assert.equal(accepted.ok, true, JSON.stringify(accepted));
-  assert.equal(accepted.strip.bayId, 'app-inbound');
+  assert.equal(accepted.strip.bayId, 'ap-inbound');
   assert.equal(accepted.strip.state, 'INBOUND');
   assert.equal(accepted.strip.coordination.state, 'ACTIVE');
-  assert.deepEqual(accepted.strip.coordination.dataOwnerPositionRef, { facilityId: 'INCIRLIK', positionId: 'APP' });
-  assert.deepEqual(accepted.strip.coordination.separationResponsibilityRef, { facilityId: 'INCIRLIK', positionId: 'APP' });
+  assert.deepEqual(accepted.strip.coordination.dataOwnerPositionRef, { facilityId: 'INCIRLIK', positionId: 'AP' });
+  assert.deepEqual(accepted.strip.coordination.separationResponsibilityRef, { facilityId: 'INCIRLIK', positionId: 'AP' });
   assert.equal(accepted.strip.coordination.radarIdTransferred, true);
   assert.equal(accepted.strip.coordination.commsTransferred, true);
 
@@ -184,7 +184,7 @@ test('ACCEPT moves the receiver replica into its normal INBOUND Bay, sets both s
   const { boardStore: ctrBoard } = facilities.get('CENTER');
   const senderAfter = ctrBoard.getStrip(senderStrip.stripId);
   assert.equal(senderAfter.coordination.state, 'ACTIVE');
-  assert.deepEqual(senderAfter.coordination.dataOwnerPositionRef, { facilityId: 'INCIRLIK', positionId: 'APP' });
+  assert.deepEqual(senderAfter.coordination.dataOwnerPositionRef, { facilityId: 'INCIRLIK', positionId: 'AP' });
 });
 
 test('D13 acceptance criterion, literally: each replica is independently removable — dropping one has zero effect on the other', () => {
@@ -198,13 +198,13 @@ test('D13 acceptance criterion, literally: each replica is independently removab
   const receiver = appBoard.getStrip(receiverStripId);
   appBoard.applyMutation(mutation({
     stripId: receiverStripId, baseRev: receiver.rev, op: { kind: 'HANDOFF', action: 'ACCEPT' },
-  }), 'APP', 'app-controller');
+  }), 'AP', 'ap-controller');
 
   // Drop the RECEIVER's replica.
   const receiverNow = appBoard.getStrip(receiverStripId);
   const dropped = appBoard.applyMutation(mutation({
     stripId: receiverStripId, baseRev: receiverNow.rev, op: { kind: 'DropStrip' },
-  }), 'APP', 'app-controller');
+  }), 'AP', 'ap-controller');
   assert.equal(dropped.ok, true);
   assert.equal(appBoard.getStrip(receiverStripId).state, 'DROPPED');
 
@@ -239,11 +239,11 @@ test('REJECT marks both replicas REJECTED and does not move anything', () => {
   const receiver = appBoard.getStrip(receiverStripId);
   const rejected = appBoard.applyMutation(mutation({
     stripId: receiverStripId, baseRev: receiver.rev, op: { kind: 'HANDOFF', action: 'REJECT' },
-  }), 'APP', 'app-controller');
+  }), 'AP', 'ap-controller');
 
   assert.equal(rejected.ok, true);
   assert.equal(rejected.strip.coordination.state, 'REJECTED');
-  assert.equal(rejected.strip.bayId, 'app-coordination'); // never moved out
+  assert.equal(rejected.strip.bayId, 'ap-coordination'); // never moved out
 
   const senderAfter = ctrBoard.getStrip(senderStrip.stripId);
   assert.equal(senderAfter.coordination.state, 'REJECTED');
@@ -262,11 +262,11 @@ test('POINT_OUT on ACCEPT moves separation responsibility but leaves data owners
   const receiver = appBoard.getStrip(receiverStripId);
   const accepted = appBoard.applyMutation(mutation({
     stripId: receiverStripId, baseRev: receiver.rev, op: { kind: 'POINT_OUT', action: 'ACCEPT' },
-  }), 'APP', 'app-controller');
+  }), 'AP', 'ap-controller');
 
   assert.equal(accepted.ok, true, JSON.stringify(accepted));
   assert.deepEqual(accepted.strip.coordination.dataOwnerPositionRef, { facilityId: 'CENTER', positionId: 'CTR' }); // stays with initiator
-  assert.deepEqual(accepted.strip.coordination.separationResponsibilityRef, { facilityId: 'INCIRLIK', positionId: 'APP' }); // moves
+  assert.deepEqual(accepted.strip.coordination.separationResponsibilityRef, { facilityId: 'INCIRLIK', positionId: 'AP' }); // moves
   assert.equal(accepted.strip.coordination.commsTransferred, false); // guide's table: POINT_OUT comms does not transfer
 });
 
@@ -318,20 +318,20 @@ test('a Strip cannot have two open coordination links at once — a second PROPO
 test('D21 regression: only APP/CTR may PROPOSE a coordination primitive — GND is refused even though it owns its own Strip', () => {
   const facilities = makeFacilities();
   const { boardStore: incirlikBoard, positionStore: incirlikPositions } = facilities.get('INCIRLIK');
-  incirlikPositions.setHeldPositions('gnd-controller', 'Gnd1', ['GND']); // occupy GND so the TransferStrip fixture setup below can route to it
+  incirlikPositions.setSignedOnPositions('gc-controller', 'Gnd1', ['GC']); // occupy GND so the TransferStrip fixture setup below can route to it
   const created = incirlikBoard.applyMutation(mutation({
-    op: { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', fdr: { callsign: 'VIPER1', departureAirport: 'LTAG', destinationAirport: 'LTAC', route: 'DCT', requestedAltitude: '250' } },
+    op: { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', flightData: { callsign: 'VIPER1', departureAirport: 'LTAG', destinationAirport: 'LTAC', route: 'DCT', requestedAltitude: '250' } },
   }), 'OPS', 'ops-controller');
   const transferred = incirlikBoard.applyMutation(mutation({
     stripId: created.strip.stripId, baseRev: created.strip.rev,
-    op: { kind: 'TransferStrip', toPositionId: 'GND', bayId: 'gnd-coordination', rackId: 'main' },
+    op: { kind: 'TransferStrip', toPositionId: 'GC', bayId: 'gc-coordination', rackId: 'main' },
   }), 'OPS', 'ops-controller');
   assert.equal(transferred.ok, true, JSON.stringify(transferred));
 
   const result = incirlikBoard.applyMutation(mutation({
     stripId: transferred.strip.stripId, baseRev: transferred.strip.rev,
     op: { kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'CENTER', toPositionId: 'CTR' },
-  }), 'GND', 'ops-controller');
+  }), 'GC', 'ops-controller');
   assert.equal(result.ok, false);
   assert.equal(result.reason, 'PERMISSION_DENIED');
 });
@@ -353,8 +353,8 @@ test('PROPOSE is rejected without a note when the FDR carries a non-NONE track-d
   const facilities = makeFacilities();
   const strip = createCtrStrip(facilities);
   const { boardStore, } = facilities.get('CENTER');
-  const fdrStore = boardStore._fdrStore; // internal, test-only reach-in — mirrors other test files' direct-field access pattern
-  fdrStore.setField(strip.fdrId, 'identity.trackDegradationFlag', 'CST', { by: 'CTR' });
+  const flightDataStore = boardStore._flightDataStore; // internal, test-only reach-in — mirrors other test files' direct-field access pattern
+  flightDataStore.setField(strip.flightDataId, 'identity.trackDegradationFlag', 'CST', { by: 'CTR' });
 
   const withoutNote = proposeHandoff(facilities, strip, { note: undefined });
   assert.equal(withoutNote.ok, false);
@@ -377,7 +377,7 @@ test('OPERATIONAL_REQUEST APPROVE creates a replica and updates both sides like 
   const receiver = appBoard.getStrip(proposed.strip.coordination.peerStripId);
   const approved = appBoard.applyMutation(mutation({
     stripId: receiver.stripId, baseRev: receiver.rev, op: { kind: 'OPERATIONAL_REQUEST', action: 'ACCEPT' },
-  }), 'APP', 'app-controller');
+  }), 'AP', 'ap-controller');
 
   assert.equal(approved.ok, true, JSON.stringify(approved));
   assert.deepEqual(approved.strip.coordination.dataOwnerPositionRef, { facilityId: 'CENTER', positionId: 'CTR' });
@@ -390,7 +390,7 @@ test('OPERATIONAL_REQUEST APPROVE creates a replica and updates both sides like 
 test('APP -> CTR HANDOFF PROPOSE mints a DEPARTURE/HANDED_OFF replica at CTR — the previously-hardcoded ARRIVAL/INBOUND shape is now the sender\'s actual role/state', () => {
   const facilities = makeFacilities();
   const senderStrip = createAppHandedOffStrip(facilities);
-  assert.equal(senderStrip.role, 'DEPARTURE');
+  assert.equal(senderStrip.stripType, 'DEPARTURE');
   assert.equal(senderStrip.state, 'HANDED_OFF');
 
   const proposed = proposeFromApp(facilities, senderStrip);
@@ -399,9 +399,9 @@ test('APP -> CTR HANDOFF PROPOSE mints a DEPARTURE/HANDED_OFF replica at CTR —
   const { boardStore: ctrBoard } = facilities.get('CENTER');
   const receiver = ctrBoard.getStrip(proposed.strip.coordination.peerStripId);
   assert.ok(receiver);
-  assert.equal(receiver.role, 'DEPARTURE');
+  assert.equal(receiver.stripType, 'DEPARTURE');
   assert.equal(receiver.state, 'HANDED_OFF');
-  assert.equal(receiver.bayId, 'ctr-app-coordination');
+  assert.equal(receiver.bayId, 'ctr-ap-coordination');
 });
 
 test('APP -> CTR HANDOFF ACCEPT moves the replica into ctr-departures (not ctr-enroute) and each side stays independently droppable', () => {
@@ -430,21 +430,21 @@ test('APP -> CTR HANDOFF ACCEPT moves the replica into ctr-departures (not ctr-e
   assert.equal(senderStill.state, 'HANDED_OFF'); // untouched — independent replicas, D13
 });
 
-test('PROPOSE is rejected when the Strip is not in an eligible (role, state) combo — a DEPARTURE Strip at APP but still PROPOSED (not yet HANDED_OFF) cannot propose HANDOFF', () => {
+test('PROPOSE is rejected when the Strip is not in an eligible (stripType, state) combo — a DEPARTURE Strip at APP but still PROPOSED (not yet HANDED_OFF) cannot propose HANDOFF', () => {
   const facilities = makeFacilities();
   const { boardStore: incirlikBoard, positionStore } = facilities.get('INCIRLIK');
-  positionStore.setHeldPositions('app-controller', 'App1', ['APP']);
+  positionStore.setSignedOnPositions('ap-controller', 'App1', ['AP']);
   const created = incirlikBoard.applyMutation(mutation({
-    op: { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', fdr: { callsign: 'VIPER2', departureAirport: 'LTAG', destinationAirport: 'LTAC', route: 'DCT', requestedAltitude: '250' } },
+    op: { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', flightData: { callsign: 'VIPER2', departureAirport: 'LTAG', destinationAirport: 'LTAC', route: 'DCT', requestedAltitude: '250' } },
   }), 'OPS', 'ops-controller');
-  // app-coordination has no impliesState, so this transfer is never itself
+  // ap-coordination has no impliesState, so this transfer is never itself
   // treated as an advancing transition — lands a still-PROPOSED DEPARTURE
-  // Strip at APP, isolating the (role, state) eligibility check below from
+  // Strip at APP, isolating the (stripType, state) eligibility check below from
   // permission.js's separate canMutate gate (APP has full coordination
   // permissions, unlike the D21 test above's GND).
   const transferred = incirlikBoard.applyMutation(mutation({
     stripId: created.strip.stripId, baseRev: created.strip.rev,
-    op: { kind: 'TransferStrip', toPositionId: 'APP', bayId: 'app-coordination', rackId: 'main' },
+    op: { kind: 'TransferStrip', toPositionId: 'AP', bayId: 'ap-coordination', rackId: 'main' },
   }), 'OPS', 'ops-controller');
   assert.equal(transferred.ok, true, JSON.stringify(transferred));
   assert.equal(transferred.strip.state, 'PROPOSED');
@@ -452,7 +452,7 @@ test('PROPOSE is rejected when the Strip is not in an eligible (role, state) com
   const result = incirlikBoard.applyMutation(mutation({
     stripId: transferred.strip.stripId, baseRev: transferred.strip.rev,
     op: { kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'CENTER', toPositionId: 'CTR' },
-  }), 'APP', 'ops-controller');
+  }), 'AP', 'ops-controller');
   assert.equal(result.ok, false);
   assert.equal(result.reason, 'VALIDATION_ERROR');
 });
@@ -470,14 +470,14 @@ test('STAND_BY leaves the request PROPOSED on both replicas and stamps lastStand
   const receiver = appBoard.getStrip(proposed.strip.coordination.peerStripId);
   const stoodBy = appBoard.applyMutation(mutation({
     stripId: receiver.stripId, baseRev: receiver.rev, op: { kind: 'OPERATIONAL_REQUEST', action: 'STAND_BY' },
-  }), 'APP', 'app-controller');
+  }), 'AP', 'ap-controller');
 
   assert.equal(stoodBy.ok, true, JSON.stringify(stoodBy));
-  assert.equal(stoodBy.strip.coordination.state, 'PROPOSED'); // unresolved
+  assert.equal(stoodBy.strip.coordination.state, 'INITIATED'); // unresolved
   assert.ok(stoodBy.strip.coordination.lastStandByAt);
 
   const senderAfter = ctrBoard.getStrip(strip.stripId);
-  assert.equal(senderAfter.coordination.state, 'PROPOSED');
+  assert.equal(senderAfter.coordination.state, 'INITIATED');
   assert.ok(senderAfter.coordination.lastStandByAt);
 });
 
@@ -489,7 +489,7 @@ test('STAND_BY is rejected for any primitive other than OPERATIONAL_REQUEST', ()
   const receiver = appBoard.getStrip(proposed.strip.coordination.peerStripId);
   const result = appBoard.applyMutation(mutation({
     stripId: receiver.stripId, baseRev: receiver.rev, op: { kind: 'HANDOFF', action: 'STAND_BY' },
-  }), 'APP', 'app-controller');
+  }), 'AP', 'ap-controller');
   assert.equal(result.ok, false);
   assert.equal(result.reason, 'VALIDATION_ERROR');
 });
@@ -513,11 +513,11 @@ test('AIT PROPOSE succeeds once the sending Facility is configured as authorized
 });
 
 // ── docs/adr/0022: trackDegradationFlag's Block Map wiring ──────────────
-// (fdr-store.js's setField() already validated this field via WRITABLE_PATHS
+// (flight-data-store.js's setField() already validated this field via WRITABLE_PATHS
 // since docs/adr/0019 — the gap was purely that no Block ever routed a
 // SetBlock at it; Block '5A' closes that.)
 
-test('SetBlock on the new track-degradation Block (5A) round-trips through fdr-store.js\'s existing setField validation', () => {
+test('SetBlock on the new track-degradation Block (5A) round-trips through flight-data-store.js\'s existing setField validation', () => {
   const facilities = makeFacilities();
   const strip = createCtrStrip(facilities);
   const { boardStore } = facilities.get('CENTER');
@@ -525,7 +525,7 @@ test('SetBlock on the new track-degradation Block (5A) round-trips through fdr-s
     stripId: strip.stripId, baseRev: strip.rev, op: { kind: 'SetBlock', blockId: '5A', value: 'CST' },
   }), 'CTR', 'ctr-controller');
   assert.equal(result.ok, true, JSON.stringify(result));
-  assert.equal(result.fdr.identity.trackDegradationFlag, 'CST');
+  assert.equal(result.flightData.identity.trackDegradationFlag, 'CST');
 });
 
 test('SetBlock on the track-degradation Block rejects a value outside TRACK_DEGRADATION_FLAGS', () => {
@@ -552,7 +552,7 @@ test('InvokeNla is rejected while a coordination proposal is still open (PROPOSE
   const { boardStore: appBoard } = facilities.get('INCIRLIK');
   const result = appBoard.applyMutation(mutation({
     stripId: proposed.strip.stripId, baseRev: proposed.strip.rev, op: { kind: 'InvokeNla' },
-  }), 'APP', 'app-controller');
+  }), 'AP', 'ap-controller');
   assert.equal(result.ok, false);
   assert.equal(result.reason, 'VALIDATION_ERROR');
   assert.match(result.detail, /open coordination proposal/);
@@ -561,7 +561,7 @@ test('InvokeNla is rejected while a coordination proposal is still open (PROPOSE
   const { boardStore: ctrBoard } = facilities.get('CENTER');
   const receiver = ctrBoard.getStrip(proposed.strip.coordination.peerStripId);
   assert.equal(receiver.state, 'HANDED_OFF');
-  assert.equal(receiver.coordination.state, 'PROPOSED');
+  assert.equal(receiver.coordination.state, 'INITIATED');
 });
 
 test('the explicit DropStrip op is rejected the same way while a coordination proposal is open', () => {
@@ -572,7 +572,7 @@ test('the explicit DropStrip op is rejected the same way while a coordination pr
   const { boardStore: appBoard } = facilities.get('INCIRLIK');
   const result = appBoard.applyMutation(mutation({
     stripId: proposed.strip.stripId, baseRev: proposed.strip.rev, op: { kind: 'DropStrip' },
-  }), 'APP', 'app-controller');
+  }), 'AP', 'ap-controller');
   assert.equal(result.ok, false);
   assert.equal(result.reason, 'VALIDATION_ERROR');
 });
@@ -592,7 +592,7 @@ test('InvokeNla/DropStrip both work again once the proposal resolves (ACCEPT mov
   assert.equal(senderAfter.coordination.state, 'REJECTED'); // no longer PROPOSED
   const dropped = appBoard.applyMutation(mutation({
     stripId: senderAfter.stripId, baseRev: senderAfter.rev, op: { kind: 'InvokeNla' },
-  }), 'APP', 'app-controller');
+  }), 'AP', 'ap-controller');
   assert.equal(dropped.ok, true, JSON.stringify(dropped));
   assert.equal(dropped.strip.state, 'DROPPED');
 });
@@ -614,11 +614,11 @@ test('a REJECTED replica sitting in its owner\'s Coordination Bay cannot PROPOSE
   }), 'CTR', 'ctr-controller');
   assert.equal(rejected.ok, true, JSON.stringify(rejected));
   assert.equal(rejected.strip.coordination.state, 'REJECTED');
-  assert.equal(rejected.strip.bayId, 'ctr-app-coordination'); // never moved out — still the replica's Bay
+  assert.equal(rejected.strip.bayId, 'ctr-ap-coordination'); // never moved out — still the replica's Bay
 
   const retried = ctrBoard.applyMutation(mutation({
     stripId: rejected.strip.stripId, baseRev: rejected.strip.rev,
-    op: { kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'INCIRLIK', toPositionId: 'APP' },
+    op: { kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'INCIRLIK', toPositionId: 'AP' },
   }), 'CTR', 'ctr-controller');
   assert.equal(retried.ok, false);
   assert.equal(retried.reason, 'VALIDATION_ERROR');
@@ -667,67 +667,67 @@ test('CTR can Drop a HANDED_OFF DEPARTURE Strip it owns, whether accepted-and-re
 // that approach left a stale departure Strip AND a duplicated beacon code
 // behind, plus required copying every field by hand ─────────────────────
 
-test('ConvertToArrival turns a HANDED_OFF DEPARTURE Strip into an INBOUND ARRIVAL Strip in place — same stripId, same fdrId (so the same beacon code, trivially, never a duplicate)', () => {
+test('ConvertToArrival turns a HANDED_OFF DEPARTURE Strip into an INBOUND ARRIVAL Strip in place — same stripId, same flightDataId (so the same beacon code, trivially, never a duplicate)', () => {
   const facilities = makeFacilities();
   const strip = createAppHandedOffStrip(facilities);
   const { boardStore } = facilities.get('INCIRLIK');
 
   const converted = boardStore.applyMutation(mutation({
     stripId: strip.stripId, baseRev: strip.rev, op: { kind: 'ConvertToArrival' },
-  }), 'APP', 'app-controller');
+  }), 'AP', 'ap-controller');
 
   assert.equal(converted.ok, true, JSON.stringify(converted));
   assert.equal(converted.strip.stripId, strip.stripId); // same Strip
-  assert.equal(converted.strip.fdrId, strip.fdrId);     // same FDR — same beacon code, no copy needed
-  assert.equal(converted.strip.role, 'ARRIVAL');
+  assert.equal(converted.strip.flightDataId, strip.flightDataId);     // same FDR — same beacon code, no copy needed
+  assert.equal(converted.strip.stripType, 'ARRIVAL');
   assert.equal(converted.strip.state, 'INBOUND');
-  assert.equal(converted.strip.bayId, 'app-inbound');
-  assert.equal(converted.strip.ownerPositionId, 'APP');
+  assert.equal(converted.strip.bayId, 'ap-inbound');
+  assert.equal(converted.strip.ownerPositionId, 'AP');
 
   // Only one Strip exists for this flight — not two.
-  assert.equal(boardStore.getAll().filter(s => s.fdrId === strip.fdrId).length, 1);
+  assert.equal(boardStore.getAll().filter(s => s.flightDataId === strip.flightDataId).length, 1);
 });
 
 // Bug found in live testing: DEPARTURE and ARRIVAL read DIFFERENT FDR
 // fields for the same idea (departureAirport vs originAirport) — an
 // in-place conversion that never touched the FDR left originAirport
 // permanently blank even though departureAirport still held the value.
-test('ConvertToArrival maps the departure record\'s departureAirport onto the new ARRIVAL Strip\'s originAirport, and returns the updated fdr so the client actually sees it', () => {
+test('ConvertToArrival maps the departure record\'s departureAirport onto the new ARRIVAL Strip\'s originAirport, and returns the updated flightData so the client actually sees it', () => {
   const facilities = makeFacilities();
   const strip = createAppHandedOffStrip(facilities); // departureAirport: 'LTAG'
   const { boardStore } = facilities.get('INCIRLIK');
-  const fdrStore = boardStore._fdrStore; // internal, test-only reach-in — mirrors other tests in this file
+  const flightDataStore = boardStore._flightDataStore; // internal, test-only reach-in — mirrors other tests in this file
 
   const converted = boardStore.applyMutation(mutation({
     stripId: strip.stripId, baseRev: strip.rev, op: { kind: 'ConvertToArrival' },
-  }), 'APP', 'app-controller');
+  }), 'AP', 'ap-controller');
 
   assert.equal(converted.ok, true, JSON.stringify(converted));
-  assert.equal(converted.fdr.filed.originAirport, 'LTAG');
-  assert.equal(converted.fdr.filed.departureAirport, 'LTAG'); // untouched, just no longer the field ARRIVAL reads
-  assert.equal(fdrStore.getFdr(strip.fdrId).filed.originAirport, 'LTAG'); // persisted, not just echoed in the result
+  assert.equal(converted.flightData.filed.originAirport, 'LTAG');
+  assert.equal(converted.flightData.filed.departureAirport, 'LTAG'); // untouched, just no longer the field ARRIVAL reads
+  assert.equal(flightDataStore.getFlightData(strip.flightDataId).filed.originAirport, 'LTAG'); // persisted, not just echoed in the result
 });
 
 test('ConvertToArrival resets annotations/flags/coordination to fresh-Strip defaults — none of them mean the same thing under the new role', () => {
   const facilities = makeFacilities();
   const { boardStore, positionStore } = facilities.get('INCIRLIK');
-  positionStore.setHeldPositions('app-controller', 'App1', ['APP']);
+  positionStore.setSignedOnPositions('ap-controller', 'App1', ['AP']);
   const strip = createAppHandedOffStrip(facilities);
   const flagged = boardStore.applyMutation(mutation({
     stripId: strip.stripId, baseRev: strip.rev, op: { kind: 'SetFlag', flag: 'attention', value: 'red' },
-  }), 'APP', 'app-controller');
+  }), 'AP', 'ap-controller');
   assert.equal(flagged.ok, true, JSON.stringify(flagged));
 
   const converted = boardStore.applyMutation(mutation({
     stripId: flagged.strip.stripId, baseRev: flagged.strip.rev, op: { kind: 'ConvertToArrival' },
-  }), 'APP', 'app-controller');
+  }), 'AP', 'ap-controller');
   assert.equal(converted.ok, true, JSON.stringify(converted));
   assert.deepEqual(converted.strip.annotations, {});
   assert.equal(converted.strip.flags.attention, null);
   assert.equal(converted.strip.coordination, null);
 });
 
-test('a Strip carries no correlation field at all — it is keyed by fdrId, not stripId', () => {
+test('a Strip carries no correlation field at all — it is keyed by flightDataId, not stripId', () => {
   // This assertion used to read the other way: a per-Strip
   // `correlation: { state: 'UNCORRELATED' }` was set on creation and reset by
   // ConvertToArrival. Both were wrong, and docs/adr/0045 explains why — one
@@ -737,23 +737,23 @@ test('a Strip carries no correlation field at all — it is keyed by fdrId, not 
   // still airborne and still squawking the code docs/adr/0023 kept for it.
   const facilities = makeFacilities();
   const { boardStore, positionStore } = facilities.get('INCIRLIK');
-  positionStore.setHeldPositions('app-controller', 'App1', ['APP']);
+  positionStore.setSignedOnPositions('ap-controller', 'App1', ['AP']);
   const strip = createAppHandedOffStrip(facilities);
   assert.equal('correlation' in strip, false, 'not set on creation');
 
   const converted = boardStore.applyMutation(mutation({
     stripId: strip.stripId, baseRev: strip.rev, op: { kind: 'ConvertToArrival' },
-  }), 'APP', 'app-controller');
+  }), 'AP', 'ap-controller');
   assert.equal(converted.ok, true, JSON.stringify(converted));
-  assert.equal('correlation' in converted.strip, false, 'and not written by a role change');
-  assert.equal(converted.strip.fdrId, strip.fdrId, 'the same airframe, throughout');
+  assert.equal('correlation' in converted.strip, false, 'and not written by a stripType change');
+  assert.equal(converted.strip.flightDataId, strip.flightDataId, 'the same airframe, throughout');
 });
 
 test('a pre-WP5 snapshot’s per-Strip correlation field stops the restore (no quiet drop, ARCH-D5)', () => {
   const facilities = makeFacilities();
   const { boardStore } = facilities.get('INCIRLIK');
   assert.throws(() => boardStore.restore({
-    strips: [{ stripId: 's1', fdrId: 'f1', rev: 1, state: 'PROPOSED', correlation: { state: 'UNCORRELATED' } }],
+    strips: [{ stripId: 's1', flightDataId: 'f1', rev: 1, state: 'PROPOSED', correlation: { state: 'UNCORRELATED' } }],
     cidSeq: 3, replay: [], droppedWallAt: [],
   }), /Strip s1 still has the per-Strip "correlation" field/);
   assert.throws(() => boardStore.restore({ strips: [], cidSeq: 3 }), /not in the current shape/);
@@ -762,23 +762,23 @@ test('a pre-WP5 snapshot’s per-Strip correlation field stops the restore (no q
 test('ConvertToArrival is rejected on anything other than a DEPARTURE Strip at HANDED_OFF', () => {
   const facilities = makeFacilities();
   const { boardStore, positionStore } = facilities.get('INCIRLIK');
-  positionStore.setHeldPositions('app-controller', 'App1', ['APP']);
+  positionStore.setSignedOnPositions('ap-controller', 'App1', ['AP']);
   const created = boardStore.applyMutation(mutation({
-    op: { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', fdr: { callsign: 'VIPER3', departureAirport: 'LTAG', destinationAirport: 'LTAC', route: 'DCT', requestedAltitude: '250' } },
+    op: { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', flightData: { callsign: 'VIPER3', departureAirport: 'LTAG', destinationAirport: 'LTAC', route: 'DCT', requestedAltitude: '250' } },
   }), 'OPS', 'ops-controller');
-  // app-coordination has no impliesState, so this transfer is never itself
+  // ap-coordination has no impliesState, so this transfer is never itself
   // treated as an advancing transition (see the D21-isolation test above
   // for the same pattern) — lands a still-PROPOSED DEPARTURE Strip at APP.
   const transferred = boardStore.applyMutation(mutation({
     stripId: created.strip.stripId, baseRev: created.strip.rev,
-    op: { kind: 'TransferStrip', toPositionId: 'APP', bayId: 'app-coordination', rackId: 'main' },
+    op: { kind: 'TransferStrip', toPositionId: 'AP', bayId: 'ap-coordination', rackId: 'main' },
   }), 'OPS', 'ops-controller');
   assert.equal(transferred.ok, true, JSON.stringify(transferred));
   assert.equal(transferred.strip.state, 'PROPOSED'); // still not HANDED_OFF
 
   const result = boardStore.applyMutation(mutation({
     stripId: transferred.strip.stripId, baseRev: transferred.strip.rev, op: { kind: 'ConvertToArrival' },
-  }), 'APP', 'app-controller');
+  }), 'AP', 'ap-controller');
   assert.equal(result.ok, false);
   assert.equal(result.reason, 'VALIDATION_ERROR');
 });
@@ -786,22 +786,22 @@ test('ConvertToArrival is rejected on anything other than a DEPARTURE Strip at H
 test('D21 regression: TWR may not ConvertToArrival even a Strip it happens to own — only APP/CTR ever get this op kind at all', () => {
   const facilities = makeFacilities();
   const { boardStore, positionStore } = facilities.get('INCIRLIK');
-  positionStore.setHeldPositions('twr-controller', 'Twr1', ['TWR']);
+  positionStore.setSignedOnPositions('lc-controller', 'Twr1', ['LC']);
   const created = boardStore.applyMutation(mutation({
-    op: { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', fdr: { callsign: 'VIPER4', departureAirport: 'LTAG', destinationAirport: 'LTAC', route: 'DCT', requestedAltitude: '250' } },
+    op: { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', flightData: { callsign: 'VIPER4', departureAirport: 'LTAG', destinationAirport: 'LTAC', route: 'DCT', requestedAltitude: '250' } },
   }), 'OPS', 'ops-controller');
   const setState = boardStore.applyMutation(mutation({
     stripId: created.strip.stripId, baseRev: created.strip.rev, op: { kind: 'SetState', toState: 'HANDED_OFF' },
   }), 'OPS', 'ops-controller');
   const transferred = boardStore.applyMutation(mutation({
     stripId: setState.strip.stripId, baseRev: setState.strip.rev,
-    op: { kind: 'TransferStrip', toPositionId: 'TWR', bayId: 'twr-coordination', rackId: 'main' },
+    op: { kind: 'TransferStrip', toPositionId: 'LC', bayId: 'lc-coordination', rackId: 'main' },
   }), 'OPS', 'ops-controller');
   assert.equal(transferred.ok, true, JSON.stringify(transferred));
 
   const result = boardStore.applyMutation(mutation({
     stripId: transferred.strip.stripId, baseRev: transferred.strip.rev, op: { kind: 'ConvertToArrival' },
-  }), 'TWR', 'ops-controller');
+  }), 'LC', 'ops-controller');
   assert.equal(result.ok, false);
   assert.equal(result.reason, 'PERMISSION_DENIED');
 });
@@ -822,8 +822,8 @@ test('ConvertToArrival works identically at CTR (CENTER Facility) — a departur
     stripId: accepted.strip.stripId, baseRev: accepted.strip.rev, op: { kind: 'ConvertToArrival' },
   }), 'CTR', 'ctr-controller');
   assert.equal(converted.ok, true, JSON.stringify(converted));
-  assert.equal(converted.strip.role, 'ARRIVAL');
+  assert.equal(converted.strip.stripType, 'ARRIVAL');
   assert.equal(converted.strip.state, 'INBOUND');
   assert.equal(converted.strip.bayId, 'ctr-enroute');
-  assert.equal(converted.strip.fdrId, senderStrip.fdrId); // same FDR, all the way through both the HANDOFF and the conversion
+  assert.equal(converted.strip.flightDataId, senderStrip.flightDataId); // same FDR, all the way through both the HANDOFF and the conversion
 });

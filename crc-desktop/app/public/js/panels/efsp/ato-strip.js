@@ -18,7 +18,7 @@ import { getSelectedEfspStripId } from './bay-view.js';
 //    missing acceptance fields, on EVERY Role of the flight's Strips.
 //
 // A badge, not a Block — marsa-badge.js's three reasons: the join is keyed by
-// fdrId, no Block target kind could hold it, and a read-only Block would be
+// flightDataId, no Block target kind could hold it, and a read-only Block would be
 // invisible to the reachability test.
 //
 // SOURCE CAVEAT (EFSPImplementationGuide.md §9.9): the ATO these values come
@@ -26,11 +26,11 @@ import { getSelectedEfspStripId } from './bay-view.js';
 
 let _arHighlightStripIds = new Set();
 
-function _atoFdr(fdrId) { return typeof getEfspFdr === 'function' ? getEfspFdr(fdrId) : null; }
+function _atoFdr(flightDataId) { return typeof getEfspFdr === 'function' ? getEfspFdr(flightDataId) : null; }
 
-function _liveStripIdsOfFdr(fdrId) {
+function _liveStripIdsOfFdr(flightDataId) {
   const all = typeof getAllEfspStrips === 'function' ? getAllEfspStrips() : [];
-  return all.filter(s => s.fdrId === fdrId && s.state !== 'DROPPED').map(s => s.stripId);
+  return all.filter(s => s.flightDataId === flightDataId && s.state !== 'DROPPED').map(s => s.stripId);
 }
 
 function _atoHhmm(ms) {
@@ -39,13 +39,13 @@ function _atoHhmm(ms) {
   return `${String(d.getUTCHours()).padStart(2, '0')}${String(d.getUTCMinutes()).padStart(2, '0')}Z`;
 }
 
-function _arLinksOf(fdr) {
-  const ar = fdr && fdr.military && fdr.military.arInfo;
+function _arLinksOf(flightData) {
+  const ar = flightData && flightData.military && flightData.military.arInfo;
   return ar && Array.isArray(ar.links) ? ar.links : [];
 }
 
-function _arTacan(fdr) {
-  const ar = fdr && fdr.military && fdr.military.arInfo;
+function _arTacan(flightData) {
+  const ar = flightData && flightData.military && flightData.military.arInfo;
   if (!ar) return null;
   if (ar.asTanker && ar.asTanker.tacan) return ar.asTanker.tacan;
   const rx = (ar.asReceiver || []).find(r => r.tacan);
@@ -57,26 +57,26 @@ function _arTacan(fdr) {
  * somewhere are in the group: a dropped receiver leaves it, and a tanker that
  * is cancelled leaves its receivers with no group at all. The flight's own
  * record is never edited for that.
- * @returns {{role:'TANKER'|'RECEIVER', peers:{fdrId,callsign,stripIds}[], text:string, title:string}|null}
+ * @returns {{stripType:'TANKER'|'RECEIVER', peers:{flightDataId,callsign,stripIds}[], text:string, title:string}|null}
  */
 export function arJoinFor(strip) {
-  const fdr = strip ? _atoFdr(strip.fdrId) : null;
-  const links = _arLinksOf(fdr);
+  const flightData = strip ? _atoFdr(strip.flightDataId) : null;
+  const links = _arLinksOf(flightData);
   if (links.length === 0) return null;
-  const role = links[0].role;
+  const stripType = links[0].stripType;
   const peers = [];
   const lines = [];
   for (const l of links) {
-    if (!l.peerFdrId) continue;
-    const stripIds = _liveStripIdsOfFdr(l.peerFdrId);
+    if (!l.peerFlightDataId) continue;
+    const stripIds = _liveStripIdsOfFdr(l.peerFlightDataId);
     if (stripIds.length === 0) continue;
-    const pf = _atoFdr(l.peerFdrId);
-    const callsign = (pf && pf.identity && pf.identity.callsign) || l.peerCallsign || l.peerFdrId;
-    peers.push({ fdrId: l.peerFdrId, callsign, stripIds });
-    const tacan = _arTacan(role === 'TANKER' ? fdr : pf) || _arTacan(fdr);
+    const pf = _atoFdr(l.peerFlightDataId);
+    const callsign = (pf && pf.identity && pf.identity.callsign) || l.peerCallsign || l.peerFlightDataId;
+    peers.push({ flightDataId: l.peerFlightDataId, callsign, stripIds });
+    const tacan = _arTacan(stripType === 'TANKER' ? flightData : pf) || _arTacan(flightData);
     for (const w of (l.windows && l.windows.length ? l.windows : [{}])) {
       lines.push([
-        `${role === 'TANKER' ? 'Receiver' : 'Tanker'} ${callsign}`,
+        `${stripType === 'TANKER' ? 'Receiver' : 'Tanker'} ${callsign}`,
         w.arctUtc != null ? `ARCT ${_atoHhmm(w.arctUtc)}${w.endArUtc != null ? `–${_atoHhmm(w.endArUtc)}` : ''}` : null,
         w.offloadKlb != null ? `${w.offloadKlb} klb` : null,
         l.arcp ? `ARCP ${l.arcp}` : null,
@@ -85,8 +85,8 @@ export function arJoinFor(strip) {
     }
   }
   if (peers.length === 0) return null;
-  const text = role === 'TANKER' ? `AR ×${peers.length}` : `AR ${peers.map(p => p.callsign).join('/')}`;
-  return { role, peers, text, title: `Air refuelling (from the ATO)\n${lines.join('\n')}` };
+  const text = stripType === 'TANKER' ? `AR ×${peers.length}` : `AR ${peers.map(p => p.callsign).join('/')}`;
+  return { stripType, peers, text, title: `Air refuelling (from the ATO)\n${lines.join('\n')}` };
 }
 
 export function isArHighlighted(stripId) { return _arHighlightStripIds.has(stripId); }
@@ -113,7 +113,7 @@ export function highlightArParticipants(stripId) {
  */
 export function arSignatureFor(strip) {
   const join = arJoinFor(strip);
-  const peers = join ? join.peers.map(p => `${p.fdrId}:${p.stripIds.join(',')}`).join(';') : '';
+  const peers = join ? join.peers.map(p => `${p.flightDataId}:${p.stripIds.join(',')}`).join(';') : '';
   return `${join ? join.text : ''}|${peers}|${isArHighlighted(strip.stripId) ? 1 : 0}`;
 }
 
@@ -129,10 +129,10 @@ export function refreshArHighlight() {
  * the flight has no ATO.
  */
 export function atoAlertsFor(strip) {
-  const fdr = strip ? _atoFdr(strip.fdrId) : null;
-  const atoCode = fdr && fdr.ato && fdr.ato.iff ? fdr.ato.iff.modeThree : null;
+  const flightData = strip ? _atoFdr(strip.flightDataId) : null;
+  const atoCode = flightData && flightData.ato && flightData.ato.iff ? flightData.ato.iff.modeThree : null;
   if (!atoCode) return [];
-  const atc = fdr.identity ? fdr.identity.beaconAssigned : null;
+  const atc = flightData.identity ? flightData.identity.beaconAssigned : null;
   if (atoCode === atc) return [];
   return [{
     key: 'ato', tone: 'attn', legacy: 'efsp-ato-mode3-conflict',
@@ -143,11 +143,11 @@ export function atoAlertsFor(strip) {
 
 /** The read-only ▼ rows, as [label, value] pairs — [] for a flight no ATO tasked. */
 export function atoExpandedRowsFor(strip) {
-  const fdr = strip ? _atoFdr(strip.fdrId) : null;
-  if (!fdr || !fdr.ato) return [];
-  const a = fdr.ato;
-  const id = fdr.identity || {};
-  const mil = fdr.military || {};
+  const flightData = strip ? _atoFdr(strip.flightDataId) : null;
+  if (!flightData || !flightData.ato) return [];
+  const a = flightData.ato;
+  const id = flightData.identity || {};
+  const mil = flightData.military || {};
   const dl = a.datalink || {};
   const ctl = a.control || {};
   const freq = (f) => (f && f.freqMhz != null ? Number(f.freqMhz).toFixed(3) : f && f.designator ? f.designator : null);

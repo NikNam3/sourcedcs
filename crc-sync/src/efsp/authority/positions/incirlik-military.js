@@ -18,17 +18,17 @@ const { NON_CREATE_OPS } = require('../op-kinds');
 //                      module's header: the maximally-permissive trap). None of
 //                      them gets a coordination primitive, TOFI, ConvertToArrival
 //                      or an airspace-entry op: they sit inside one Facility.
-//  createsRoles        the Strip Roles it may originate via CreateStrip. Nothing
-//                      here is a Role a hand-over would reach it with: only RSU
+//  createsStripTypes        the Strip Roles it may originate via CreateStrip. Nothing
+//                      here is a Role a handoff would reach it with: only RSU
 //                      originates (a PATTERN Strip for an aircraft it watches join
 //                      the pattern, [SOURCE-DEFINED]); SFA's arrive from APP and
 //                      PAR's by the SFA rotation.
 //  ownsStates          { Role: [states] } this Position works (the "normally owned
-//                      by" authority, §3.4), merged into STATE_OWNERS_BY_ROLE.
+//                      by" authority, §3.4), merged into STATE_OWNERS_BY_STRIP_TYPE.
 //  requestsRunwayStatus  may SEND RequestRunwayStatus (kinds CLOSE, OPEN,
 //                      WORKS; BARRIER_CHANGE is WORKS since L1b). RSU asks; only TWR closes or opens a
 //                      runway (decisions.md H18, S-L1b), so no column here grants
-//                      CloseRunway, OpenRunway or any other FIELD_STATE_OP_OWNERS row.
+//                      CloseRunway, OpenRunway or any other RUNWAY_STATUS_OP_OWNERS row.
 //  rotatesSfa          the CEILING on who may change the SFA rotation record (guide
 //                      §4.7: APP "retains jurisdiction over the rotation"). The
 //                      store narrows it to config's `singleFrequencyApproach.
@@ -38,25 +38,25 @@ const { NON_CREATE_OPS } = require('../op-kinds');
 //                      -> FINAL at the receiver)
 //  receivesSfaRotation the Position an SFA_ROTATION lands on
 const INCIRLIK_CAPABILITIES = {
-  APP: { // APP's own op grant is in positions/civil-atc.js; these are the columns L18 adds to it
-    ops: null, createsRoles: null, ownsStates: {},
+  AP: { // APP's own op grant is in positions/civil-atc.js; these are the columns L18 adds to it
+    ops: null, createsStripTypes: null, ownsStates: {},
     requestsRunwayStatus: true, rotatesSfa: true, sendsSfaRotation: true, receivesSfaRotation: false,
   },
   RSU: {
     ops: [...NON_CREATE_OPS, 'CreateStrip'],
-    createsRoles: ['PATTERN'],
+    createsStripTypes: ['PATTERN'],
     ownsStates: { PATTERN: ['IN_PATTERN', 'RECOVERED'] },
     requestsRunwayStatus: true, rotatesSfa: false, sendsSfaRotation: false, receivesSfaRotation: false,
   },
   SFA: {
     ops: [...NON_CREATE_OPS],
-    createsRoles: [],
+    createsStripTypes: [],
     ownsStates: { ARRIVAL: ['INBOUND'] },
     requestsRunwayStatus: false, rotatesSfa: false, sendsSfaRotation: true, receivesSfaRotation: false,
   },
   PAR: {
     ops: [...NON_CREATE_OPS],
-    createsRoles: [],
+    createsStripTypes: [],
     ownsStates: { FINAL: ['ON_FINAL', 'BALL', 'BOLTER_WAVEOFF'] },
     requestsRunwayStatus: false, rotatesSfa: false, sendsSfaRotation: false, receivesSfaRotation: true,
   },
@@ -87,9 +87,9 @@ const family = {
   positions: _rows.filter(([, row]) => row.ops).map(([id]) => id),
   extends: _rows.filter(([, row]) => !row.ops).map(([id]) => id),
   permissions: Object.fromEntries(_rows.filter(([, row]) => row.ops).map(([id, row]) => [id, new Set(row.ops)])),
-  createRoles: Object.fromEntries(_rows.filter(([, row]) => row.createsRoles && row.createsRoles.length).map(([id, row]) => [id, new Set(row.createsRoles)])),
+  createsStripTypes: Object.fromEntries(_rows.filter(([, row]) => row.createsStripTypes && row.createsStripTypes.length).map(([id, row]) => [id, new Set(row.createsStripTypes)])),
   ownsStates: Object.fromEntries(_rows.map(([id, row]) => [id, row.ownsStates || {}])),
-  fieldStateGrants: { RequestRunwayStatus: incirlikPositionsWith('requestsRunwayStatus') },
+  runwayStatusGrants: { RequestRunwayStatus: incirlikPositionsWith('requestsRunwayStatus') },
   capabilities: INCIRLIK_CAPABILITIES,
 };
 

@@ -9,19 +9,19 @@ const nla = require('../src/efsp/nla.js');
 const permission = require('../src/efsp/permission.js');
 
 test('every Role family is a Role of nla.js and carries every field', () => {
-  assert.deepEqual(authority.roleNames(), Object.keys(nla.STATES_BY_ROLE));
-  for (const role of authority.roleNames()) {
-    const f = authority.roleFamily(role);
-    assert.equal(f.states, nla.STATES_BY_ROLE[role]);
+  assert.deepEqual(authority.stripTypeNames(), Object.keys(nla.STATES_BY_STRIP_TYPE));
+  for (const stripType of authority.stripTypeNames()) {
+    const f = authority.stripTypeFamily(stripType);
+    assert.equal(f.states, nla.STATES_BY_STRIP_TYPE[stripType]);
     assert.ok(f.states.includes(f.initialState));
     assert.equal(typeof f.computeNla, 'function');
-    assert.equal(permission.STATE_OWNERS_BY_ROLE[role], f.stateOwners);
+    assert.equal(permission.STATE_OWNERS_BY_STRIP_TYPE[stripType], f.stateOwners);
   }
-  assert.equal(authority.roleFamily('toString'), null);
+  assert.equal(authority.stripTypeFamily('toString'), null);
 });
 
 test('accessors answer from the composed tables', () => {
-  assert.deepEqual(authority.stateOwners('DEPARTURE', 'HELD'), ['CD', 'GND']);
+  assert.deepEqual(authority.stateOwners('DEPARTURE', 'HELD'), ['CD', 'GC']);
   assert.deepEqual(authority.stateOwners('FINAL', 'ON_FINAL'), ['CV_APP1', 'CV_APP2', 'PAR']);
   assert.deepEqual(authority.stateOwners('NOPE', 'X'), []);
   assert.equal(authority.initialStateFor('MARSHAL'), 'IN_STACK');
@@ -29,9 +29,9 @@ test('accessors answer from the composed tables', () => {
   assert.equal(authority.replicaStateOnReceipt('ARRIVAL', 'INBOUND'), 'INBOUND');
   assert.equal(authority.senderStateOnAccept('HANDOFF', 'OVERFLIGHT', 'IN_SECTOR'), 'HANDED_OFF');
   assert.equal(authority.senderStateOnAccept('HANDOFF', 'ARRIVAL', 'INBOUND'), undefined);
-  assert.deepEqual(authority.creatorsOf('ARRIVAL'), ['APP', 'CTR']);
+  assert.deepEqual(authority.creatorsOf('ARRIVAL'), ['AP', 'CTR']);
   assert.deepEqual(authority.creatorsOf('PATTERN'), ['RSU']);
-  const app = authority.capabilitiesFor('APP');
+  const app = authority.capabilitiesFor('AP');
   assert.equal(app.family, 'civil-atc');
   assert.equal(app.capabilities.rotatesSfa, true, 'incirlik-military extends APP');
   assert.equal(authority.capabilitiesFor('JTAC').capabilities.readScope, 'OWNED');
@@ -39,6 +39,6 @@ test('accessors answer from the composed tables', () => {
 });
 
 test('the registry is sealed once loaded: a late family is a loud error', () => {
-  assert.throws(() => authority.registerRoleFamily({ role: 'LATE' }), /sealed/);
+  assert.throws(() => authority.registerStripTypeFamily({ stripType: 'LATE' }), /sealed/);
   assert.throws(() => authority.registerPositionFamily({ family: 'late' }), /sealed/);
 });

@@ -2,8 +2,8 @@
   "_comment": "docs/adr/0073 \u2014 shared by crc-sync/tests/efsp-time-chains.test.mjs and crc-desktop/tests/efsp-time-chains.test.js. Every case goes here, never in one side's test (T6). Times are 2016-06-21 Zulu (a mission date, H11).",
   "cases": [
     {
-      "name": "null FDR: every chain has no value and no source",
-      "fdr": null,
+      "name": "null FLIGHT_DATA: every chain has no value and no source",
+      "flightData": null,
       "expect": {
         "departure": {
           "valueUtc": null,
@@ -26,8 +26,8 @@
       }
     },
     {
-      "name": "nothing known: timeInputs null, no fdr.ato",
-      "fdr": {
+      "name": "nothing known: timeInputs null, no flightData.ato",
+      "flightData": {
         "filed": {
           "proposedDepartureTimeUtc": null
         },
@@ -62,7 +62,7 @@
     },
     {
       "name": "timeInputs absent (an FDR restored from before 0073) reads as null, not a throw",
-      "fdr": {
+      "flightData": {
         "filed": {
           "proposedDepartureTimeUtc": null
         },
@@ -94,7 +94,7 @@
     },
     {
       "name": "controller P-time alone; TAXI and TAKEOFF estimate from it through two levels",
-      "fdr": {
+      "flightData": {
         "filed": {
           "proposedDepartureTimeUtc": 1466519400000
         },
@@ -129,7 +129,7 @@
     },
     {
       "name": "flight plan alone",
-      "fdr": {
+      "flightData": {
         "filed": {
           "proposedDepartureTimeUtc": null
         },
@@ -164,7 +164,7 @@
     },
     {
       "name": "ATO alone",
-      "fdr": {
+      "flightData": {
         "filed": {
           "proposedDepartureTimeUtc": null
         },
@@ -203,8 +203,8 @@
       }
     },
     {
-      "name": "fdr.ato present with a null departure time falls through",
-      "fdr": {
+      "name": "flightData.ato present with a null departure time falls through",
+      "flightData": {
         "filed": {
           "proposedDepartureTimeUtc": null
         },
@@ -244,7 +244,7 @@
     },
     {
       "name": "controller beats flight plan",
-      "fdr": {
+      "flightData": {
         "filed": {
           "proposedDepartureTimeUtc": 1466520600000
         },
@@ -279,7 +279,7 @@
     },
     {
       "name": "controller beats ATO",
-      "fdr": {
+      "flightData": {
         "filed": {
           "proposedDepartureTimeUtc": 1466520600000
         },
@@ -319,7 +319,7 @@
     },
     {
       "name": "flight plan beats ATO (Q-L16-6)",
-      "fdr": {
+      "flightData": {
         "filed": {
           "proposedDepartureTimeUtc": null
         },
@@ -359,7 +359,7 @@
     },
     {
       "name": "controller P-time cleared (null) resumes the chain at the flight plan",
-      "fdr": {
+      "flightData": {
         "filed": {
           "proposedDepartureTimeUtc": null
         },
@@ -399,7 +399,7 @@
     },
     {
       "name": "a typed off-block time stops TAXI's fallback and becomes TAKEOFF's estimate",
-      "fdr": {
+      "flightData": {
         "filed": {
           "proposedDepartureTimeUtc": null
         },
@@ -439,7 +439,7 @@
     },
     {
       "name": "a typed takeoff time is an actual, not an estimate",
-      "fdr": {
+      "flightData": {
         "filed": {
           "proposedDepartureTimeUtc": null
         },
@@ -479,7 +479,7 @@
     },
     {
       "name": "a non-numeric stored time (a string persisted before F4) is not a value",
-      "fdr": {
+      "flightData": {
         "filed": {
           "proposedDepartureTimeUtc": "1430"
         },
@@ -511,7 +511,7 @@
     },
     {
       "name": "a state-change stamp is the takeoff, an actual, and beats the off-block estimate",
-      "fdr": {
+      "flightData": {
         "filed": {
           "proposedDepartureTimeUtc": null
         },
@@ -547,7 +547,7 @@
     },
     {
       "name": "a typed takeoff time still beats the state-change stamp",
-      "fdr": {
+      "flightData": {
         "filed": {
           "proposedDepartureTimeUtc": null
         },

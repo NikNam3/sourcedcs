@@ -5,7 +5,7 @@
 // activation, release direction. Give it a Field State board", and §4.2:
 // "Airspace board (not a strip rack)").
 //
-// A THIRD store, peer to FdrStore and BoardStore rather than part of either.
+// A THIRD store, peer to FlightDataStore and BoardStore rather than part of either.
 // docs/adr/0032 left the choice open ("does an airspace entity live on the
 // FDR, on a Board, or in a third store?") and answered the why: airspace
 // state outlives any one flight — "a MOA stays hot after one flight leaves
@@ -13,7 +13,7 @@
 // every flight carry its own private copy of a fact about the world; putting
 // it on a Board would make it a Strip, which §4.1 says RANGE never works.
 //
-// One store shared across every Facility, like FdrStore: an airspace is a
+// One store shared across every Facility, like FlightDataStore: an airspace is a
 // theater entity that names its controlling Facility, not a per-Facility
 // replica. There is no D13 replication question here because nothing is ever
 // handed across a boundary — the record has one home.
@@ -57,7 +57,7 @@ class AirspaceStore {
    * @param {{occupancyFor?:(airspaceId:string)=>number}} [deps] —
    *   `occupancyFor` counts the flights currently approved into an airspace,
    *   across every Facility's Board. Injected the same way board-store.js's
-   *   `liveStripsForFdr` is, and for the same reason: this store has no
+   *   `liveStripsForFlightData` is, and for the same reason: this store has no
    *   business reaching into Boards, and the Boards do not exist yet when it
    *   is constructed. Optional, so a fixture can drive the store alone.
    */
@@ -84,7 +84,7 @@ class AirspaceStore {
       // approval (§9.11: "coordination and approval must precede airspace
       // entry and exit"). Null when there is nothing outstanding.
       pendingRequest: null,
-      // Append-only, same shape docs/adr/0032 gave fdr.airspace.transitions
+      // Append-only, same shape docs/adr/0032 gave flightData.airspace.transitions
       // and for the same reason — JO 7110.65 ¶2-3-1's "do not erase or
       // overwrite any item". An after-action review has to be able to say
       // when the block went hot and who approved it, not just where it is now.
@@ -184,7 +184,7 @@ class AirspaceStore {
         case 'RequestActivation': result = this._requestActivation(record, definition, op, actingPositionId, by); break;
         case 'ApproveActivation': result = this._approveActivation(record, definition, op, actingPositionId, by); break;
         case 'DenyActivation':    result = this._denyActivation(record, definition, op, actingPositionId, by); break;
-        case 'ReleaseAirspace':   result = this._release(record, definition, op, actingPositionId, by); break;
+        case 'ReleaseAirspace':   result = this._signOff(record, definition, op, actingPositionId, by); break;
         case 'ReturnAirspace':    result = this._return(record, definition, op, actingPositionId, by); break;
         default:
           result = { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown airspace op: ${op.kind}` };
@@ -322,7 +322,7 @@ class AirspaceStore {
     return { ok: true };
   }
 
-  _release(record, definition, op, actingPositionId, by) {
+  _signOff(record, definition, op, actingPositionId, by) {
     if (!this._isUsing(definition, actingPositionId)) {
       return this._denied(record, `${actingPositionId} is not the using agency for ${definition.name}`);
     }

@@ -7,7 +7,7 @@
  * The rig has no DCS, so the picture is injected the way the wire would
  * deliver it: a coverage message, an EFSP snapshot (Strips, FDRs,
  * correlations, position letters), a track snapshot with each contact's
- * `scheme`, and the conformance/STCA alerts. Everything after that — the
+ * `scheme`, and the conformance/CA alerts. Everything after that — the
  * relation, the blocks, the colours, the black scope — is the app's own.
  */
 
@@ -26,15 +26,15 @@ const at = (x, y) => ({ lat: LTAG.lat - (y - 330) * 0.1 / 60, lon: LTAG.lon + (x
 const APP_RADAR = { id: 'app:Incirlik', type: 'approach', presentation: 'ATC', label: 'LTAG APP', airport: 'Incirlik', ...LTAG, elevM: 60, rangeM: 80 * 1852, sweepMs: 3000, caps: { ssr: true } };
 const E3_RADAR = { id: 'crc:99', type: 'awacs', presentation: 'TACTICAL', label: 'DARKSTAR', ...at(150, 110), elevM: 9000, rangeM: 216 * 1852, sweepMs: 10000, caps: { ssr: true, height: true, mode4: true } };
 
-const FDR = (fdrId, callsign, type, clearance) => ({
-  fdrId, identity: { callsign, aircraftType: type, beaconAssigned: null }, filed: {}, clearance: clearance || {},
+const FDR = (flightDataId, callsign, type, clearance) => ({
+  flightDataId, identity: { callsign, aircraftType: type, beaconAssigned: null }, filed: {}, clearance: clearance || {},
 });
 const ASSIGNED = (altFt, hdg) => ({
   altitude: { entries: [{ status: 'ACTIVE', parsed: altFt }] },
   heading: { entries: [{ status: 'ACTIVE', parsed: hdg }] },
 });
-const S = (stripId, fdrId, ownerPositionId, over = {}) => ({
-  stripId, fdrId, ownerPositionId, facilityId: 'INCIRLIK', role: 'ARRIVAL', state: 'INBOUND',
+const S = (stripId, flightDataId, ownerPositionId, over = {}) => ({
+  stripId, flightDataId, ownerPositionId, facilityId: 'INCIRLIK', stripType: 'ARRIVAL', state: 'INBOUND',
   bayId: 'none', rackId: 'main', orderKey: 'a', rev: 1, annotations: {}, flags: {}, coordination: null, ...over,
 });
 
@@ -47,7 +47,7 @@ function wire(c) {
   return {
     id: c.id, ...at(c.x, c.y), domain: 'AIR', onGround: false, illuminatedAt: 0,
     sources, iffState: c.iff || 'neutral', iffOverride: c.override || null,
-    label: { callsign: c.callsign || null, source: c.callsign ? 'FDR' : null, tag: null, trackNumber: c.tn || `TN000${c.id.length}` },
+    label: { callsign: c.callsign || null, source: c.callsign ? 'FLIGHT_DATA' : null, tag: null, trackNumber: c.tn || `TN000${c.id.length}` },
     type: c.type || null, ssr: squawk,
     altitude: c.alt ? { ft: c.alt, ref: 'QNH', source: c.altSource || (squawk ? 'MODE_C' : 'RADAR') } : null,
     dl: null, scheme: c.scheme || 'ATC', _h: c.h, _kt: c.kt, _stale: c.stale || 0,
@@ -57,12 +57,12 @@ function wire(c) {
 /** Puts a scene on the page: coverage, Board, tracks with trails, alerts, view. */
 async function inject(page, scene) {
   await page.evaluate((sc) => {
-    applyCoverage({ radars: sc.radars, heldPositions: sc.held, datalink: !!sc.datalink });
+    applyCoverage({ radars: sc.radars, signedOnPositions: sc.signedOn, datalink: !!sc.datalink });
     applyEfspSnapshot({
       boardSeq: getEfspBoardSeq(), facility: getEfspFacility(), bays: getEfspBays(), positions: getAllEfspPositions(),
-      strips: sc.strips, fdrs: sc.fdrs, correlations: sc.correlations,
+      strips: sc.strips, flightDataList: sc.flightDataList, correlations: sc.correlations,
       positionLetters: {
-        INCIRLIK: { OPS: 'O', CD: 'D', GND: 'G', TWR: 'T', APP: 'A' }, CENTER: { CTR: 'C' },
+        INCIRLIK: { OPS: 'O', CD: 'D', GC: 'G', LC: 'T', AP: 'A' }, CENTER: { CTR: 'C' },
         TACTICAL: { TAC_C2: 'M', AIC: 'M', GCI: 'M', JTAC: 'M' },
       },
     });
@@ -95,10 +95,10 @@ async function snap(page, name) {
   await page.locator('#map').screenshot({ path: path.join(OUT, name), animations: 'disabled' });
 }
 
-async function openScope(page, held) {
-  const facilities = Object.keys(held);
-  await openPanel(page, { held: held[facilities[0]], facilityId: facilities[0], controller: `l22-${facilities.join('-')}-${Date.now()}` });
-  for (const f of facilities.slice(1)) await page.evaluate(([fac, h]) => window.sendEfspSetPositions(fac, h), [f, held[f]]);
+async function openScope(page, signedOn) {
+  const facilities = Object.keys(signedOn);
+  await openPanel(page, { signedOn: signedOn[facilities[0]], facilityId: facilities[0], controller: `l22-${facilities.join('-')}-${Date.now()}` });
+  for (const f of facilities.slice(1)) await page.evaluate(([fac, h]) => window.sendEfspSetPositions(fac, h), [f, signedOn[f]]);
   await page.evaluate(() => window.toggleDockPanel && window.toggleDockPanel('efsp', false));
   await page.waitForFunction(() => typeof mapReady !== 'undefined' && mapReady);
   await page.evaluate(() => map.resize());
@@ -121,42 +121,42 @@ function appScene() {
     { id: 'mojo', x: 790, y: 200, h: 60, kt: 420, callsign: 'MOJO21', type: 'F16', code: '4633', alt: 18000 },
     { id: 'bad', x: 270, y: 255, h: 110, kt: 480, tn: 'TN00031', override: 'hostile' },
   ];
-  const fdrs = [
+  const flightDataList = [
     FDR('f-viper', 'VIPER11', 'F16', ASSIGNED(6000, 250)), FDR('f-colt', 'COLT31', 'F18'), FDR('f-snake', 'SNAKE21', 'F16'),
     FDR('f-enf', 'ENFLD11', 'C130'), FDR('f-dude', 'DUDE41', 'F16'), FDR('f-hawg', 'HAWG61', 'A10'),
     FDR('f-rage', 'RAGE51', 'F16'), FDR('f-boar', 'BOAR05', 'F15'), FDR('f-mojo', 'MOJO21', 'F16'),
   ];
   const strips = [
-    S('s-viper', 'f-viper', 'APP'),
-    S('s-colt-ctr', 'f-colt', 'CTR', { facilityId: 'CENTER', coordination: { primitive: 'HANDOFF', state: 'PROPOSED', peerPositionId: 'APP', peerFacilityId: 'INCIRLIK' } }),
-    S('s-colt-app', 'f-colt', 'APP', { coordination: { primitive: 'HANDOFF', state: 'PROPOSED', mintedForCoordination: true, peerPositionId: 'CTR', peerFacilityId: 'CENTER' } }),
-    S('s-snake-twr', 'f-snake', 'TWR', { role: 'DEPARTURE', state: 'HANDED_OFF', coordination: { primitive: 'POINT_OUT', state: 'PROPOSED', peerPositionId: 'APP' } }),
-    S('s-snake-app', 'f-snake', 'APP', { role: 'DEPARTURE', state: 'HANDED_OFF', coordination: { primitive: 'POINT_OUT', state: 'PROPOSED', mintedForCoordination: true, peerPositionId: 'TWR' } }),
+    S('s-viper', 'f-viper', 'AP'),
+    S('s-colt-ctr', 'f-colt', 'CTR', { facilityId: 'CENTER', coordination: { primitive: 'HANDOFF', state: 'INITIATED', peerPositionId: 'AP', peerFacilityId: 'INCIRLIK' } }),
+    S('s-colt-app', 'f-colt', 'AP', { coordination: { primitive: 'HANDOFF', state: 'INITIATED', mintedForCoordination: true, peerPositionId: 'CTR', peerFacilityId: 'CENTER' } }),
+    S('s-snake-twr', 'f-snake', 'LC', { stripType: 'DEPARTURE', state: 'HANDED_OFF', coordination: { primitive: 'POINT_OUT', state: 'INITIATED', peerPositionId: 'AP' } }),
+    S('s-snake-app', 'f-snake', 'AP', { stripType: 'DEPARTURE', state: 'HANDED_OFF', coordination: { primitive: 'POINT_OUT', state: 'INITIATED', mintedForCoordination: true, peerPositionId: 'LC' } }),
     S('s-enf', 'f-enf', 'CTR', { facilityId: 'CENTER' }),
-    S('s-dude', 'f-dude', 'APP'),
-    S('s-hawg', 'f-hawg', 'TWR'),
-    S('s-rage', 'f-rage', 'APP'),
-    S('s-boar', 'f-boar', 'CTR', { facilityId: 'CENTER', role: 'OVERFLIGHT' }),
-    S('s-mojo-ctr', 'f-mojo', 'CTR', { facilityId: 'CENTER', role: 'DEPARTURE', state: 'HANDED_OFF', tofiCoordination: { direction: 'ENTRY', state: 'ACTIVE' } }),
-    S('s-mojo-m', 'f-mojo', 'TAC_C2', { facilityId: 'TACTICAL', role: 'MISSION', state: 'ON_STATION', tofiCoordination: { direction: 'ENTRY', state: 'ACTIVE' } }),
+    S('s-dude', 'f-dude', 'AP'),
+    S('s-hawg', 'f-hawg', 'LC'),
+    S('s-rage', 'f-rage', 'AP'),
+    S('s-boar', 'f-boar', 'CTR', { facilityId: 'CENTER', stripType: 'OVERFLIGHT' }),
+    S('s-mojo-ctr', 'f-mojo', 'CTR', { facilityId: 'CENTER', stripType: 'DEPARTURE', state: 'HANDED_OFF', tofiCoordination: { direction: 'ENTRY', state: 'ACTIVE' } }),
+    S('s-mojo-m', 'f-mojo', 'TAC_C2', { facilityId: 'TACTICAL', stripType: 'MISSION', state: 'ON_STATION', tofiCoordination: { direction: 'ENTRY', state: 'ACTIVE' } }),
   ];
-  const correlations = fdrs.map(f => ({ fdrId: f.fdrId, trackId: f.fdrId.slice(2), state: 'CORRELATED' }));
+  const correlations = flightDataList.map(f => ({ flightDataId: f.flightDataId, trackId: f.flightDataId.slice(2), state: 'CORRELATED' }));
   const d = at(380, 170); const h = at(490, 185);
   const alerts = {
-    conformance: [{ fdrId: 'f-viper', alerts: [{ kind: 'HEADING', actual: 230, assigned: 250 }] }],
-    stca: [{ id: 'dude|hawg', a: 'dude', b: 'hawg', aCallsign: 'DUDE41', bCallsign: 'HAWG61', timeToCpaSec: 55, minNm: 1.8, vertFt: 500,
+    conformance: [{ flightDataId: 'f-viper', alerts: [{ kind: 'HEADING', actual: 230, assigned: 250 }] }],
+    conflictAlert: [{ id: 'dude|hawg', a: 'dude', b: 'hawg', aCallsign: 'DUDE41', bCallsign: 'HAWG61', timeToCpaSec: 55, minNm: 1.8, vertFt: 500,
       aAt: at(429, 179), bAt: at(436, 176) }],
     obligations: [],
   };
   void d; void h;
   return {
-    radars: [APP_RADAR], held: [{ facilityId: 'INCIRLIK', positionId: 'APP', isPrimary: true }],
-    strips, fdrs, correlations, alerts, tracks: c.map(wire), center: at(460, 285), zoom: 8.3,
+    radars: [APP_RADAR], signedOn: [{ facilityId: 'INCIRLIK', positionId: 'AP', isPrimary: true }],
+    strips, flightDataList, correlations, alerts, tracks: c.map(wire), center: at(460, 285), zoom: 8.3,
   };
 }
 
 test('scene 1: an APP-only scope, map background on', async ({ page }) => {
-  await openScope(page, { INCIRLIK: ['APP'] });
+  await openScope(page, { INCIRLIK: ['AP'] });
   await page.evaluate(() => { settings.atcMapBackground = true; });
   await inject(page, appScene());
   const labels = await page.evaluate(() => buildLabels().features.filter(f => f.properties.scheme === 'ATC').length);
@@ -165,7 +165,7 @@ test('scene 1: an APP-only scope, map background on', async ({ page }) => {
 });
 
 test('scene 4: "ATC map background" off — the black strict-STARS scope', async ({ page }) => {
-  await openScope(page, { INCIRLIK: ['APP'] });
+  await openScope(page, { INCIRLIK: ['AP'] });
   await page.evaluate(() => { settings.atcMapBackground = false; });
   await inject(page, appScene());
   await page.waitForFunction(() => map.getPaintProperty('Background', 'background-color') === '#000000');
@@ -175,21 +175,21 @@ test('scene 4: "ATC map background" off — the black strict-STARS scope', async
 // ── Scene 2: the two ends of a handoff and a point-out ────────────────────
 
 test('scene 2: the sender ends — CTR handing COLT31 to APP, TWR pointing SNAKE21 out', async ({ page }) => {
-  await openScope(page, { CENTER: ['CTR'], INCIRLIK: ['TWR'] });
+  await openScope(page, { CENTER: ['CTR'], INCIRLIK: ['LC'] });
   const sc = appScene();
-  sc.held = [{ facilityId: 'CENTER', positionId: 'CTR' }, { facilityId: 'INCIRLIK', positionId: 'TWR' }];
+  sc.signedOn = [{ facilityId: 'CENTER', positionId: 'CTR' }, { facilityId: 'INCIRLIK', positionId: 'LC' }];
   sc.radars = [{ ...APP_RADAR, id: 'app:x' }];
   sc.tracks = sc.tracks.filter(t => ['colt', 'snake', 'enf', 'boar', 'hawg', 'sq'].includes(t.id));
-  sc.alerts = { conformance: [], stca: [], obligations: [] };
+  sc.alerts = { conformance: [], conflictAlert: [], obligations: [] };
   await inject(page, sc);
   await snap(page, 'scene2-senders-ctr-twr.png');
 });
 
 test('scene 2b: the receiver end, after a point-out was accepted and a handoff taken', async ({ page }) => {
-  await openScope(page, { INCIRLIK: ['APP'] });
+  await openScope(page, { INCIRLIK: ['AP'] });
   const sc = appScene();
   sc.tracks = sc.tracks.filter(t => ['colt', 'snake'].includes(t.id));
-  sc.alerts = { conformance: [], stca: [], obligations: [] };
+  sc.alerts = { conformance: [], conflictAlert: [], obligations: [] };
   await inject(page, sc);
   // Accept both, the STARS way: a click on the target sends the ACCEPT
   // mutation. Here the Board is injected, so the server refuses it; flip the
@@ -209,7 +209,7 @@ test('scene 2b: the receiver end, after a point-out was accepted and a handoff t
 // ── Scene 3: TAC_C2 + APP ─────────────────────────────────────────────────
 
 test('scene 3: a mixed TAC_C2 + APP session — the tactical scheme wins where the E-3 sees a track', async ({ page }) => {
-  await openScope(page, { INCIRLIK: ['APP'], TACTICAL: ['TAC_C2'] });
+  await openScope(page, { INCIRLIK: ['AP'], TACTICAL: ['TAC_C2'] });
   const c = [
     { id: 'viper', x: 470, y: 200, h: 250, kt: 280, callsign: 'VIPER11', type: 'F16', code: '4521', alt: 12000, scheme: 'TACTICAL', iff: 'friendly', height: true },
     { id: 'mojo', x: 260, y: 130, h: 60, kt: 420, callsign: 'MOJO21', type: 'F16', code: '4633', alt: 18000, scheme: 'TACTICAL', iff: 'friendly', height: true },
@@ -219,13 +219,13 @@ test('scene 3: a mixed TAC_C2 + APP session — the tactical scheme wins where t
     { id: 'sq', x: 700, y: 420, h: 330, kt: 160, code: '6123', alt: 4200, tn: 'TN00002' },
     { id: 'x36', x: 820, y: 170, h: 250, kt: 450, tn: 'TN00036', override: 'hostile' },
   ];
-  const fdrs = [FDR('f-viper', 'VIPER11', 'F16', ASSIGNED(6000, 250)), FDR('f-mojo', 'MOJO21', 'F16'), FDR('f-snake', 'SNAKE21', 'F16'), FDR('f-colt', 'COLT31', 'F18', ASSIGNED(8000, 280))];
-  const strips = [S('s-viper', 'f-viper', 'APP'), S('s-mojo-m', 'f-mojo', 'TAC_C2', { facilityId: 'TACTICAL', role: 'MISSION' }), S('s-snake', 'f-snake', 'APP'), S('s-colt', 'f-colt', 'APP')];
+  const flightDataList = [FDR('f-viper', 'VIPER11', 'F16', ASSIGNED(6000, 250)), FDR('f-mojo', 'MOJO21', 'F16'), FDR('f-snake', 'SNAKE21', 'F16'), FDR('f-colt', 'COLT31', 'F18', ASSIGNED(8000, 280))];
+  const strips = [S('s-viper', 'f-viper', 'AP'), S('s-mojo-m', 'f-mojo', 'TAC_C2', { facilityId: 'TACTICAL', stripType: 'MISSION' }), S('s-snake', 'f-snake', 'AP'), S('s-colt', 'f-colt', 'AP')];
   await inject(page, {
     radars: [APP_RADAR, E3_RADAR], datalink: true,
-    held: [{ facilityId: 'INCIRLIK', positionId: 'APP' }, { facilityId: 'TACTICAL', positionId: 'TAC_C2' }],
-    strips, fdrs, correlations: fdrs.map(f => ({ fdrId: f.fdrId, trackId: f.fdrId.slice(2), state: 'CORRELATED' })),
-    alerts: { conformance: [], stca: [], obligations: [] },
+    signedOn: [{ facilityId: 'INCIRLIK', positionId: 'AP' }, { facilityId: 'TACTICAL', positionId: 'TAC_C2' }],
+    strips, flightDataList, correlations: flightDataList.map(f => ({ flightDataId: f.flightDataId, trackId: f.flightDataId.slice(2), state: 'CORRELATED' })),
+    alerts: { conformance: [], conflictAlert: [], obligations: [] },
     tracks: c.map(wire), center: at(480, 250), zoom: 8.3,
   });
   const schemes = await page.evaluate(() => {

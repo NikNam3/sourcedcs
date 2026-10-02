@@ -18,7 +18,7 @@ const SHOTS = path.join(__dirname, '..', '..', 'docs', 'wip', 'L12');
 fs.mkdirSync(SHOTS, { recursive: true });
 const shot = (name) => path.join(SHOTS, name);
 
-// The real field-state client (L1b) is loaded, so the reason names the configured pad.
+// The real runway-status client (L1b) is loaded, so the reason names the configured pad.
 const PAD_SENTENCE = 'Hung ordnance. SOURCE practice: after landing, taxi to Hot cargo pad';
 
 async function goBay(page, positionId, bayId) {
@@ -27,12 +27,12 @@ async function goBay(page, positionId, bayId) {
 }
 
 const stateOf = (page, cs) => page.evaluate((cs) => {
-  const s = getAllEfspStrips().find((x) => getEfspFdr(x.fdrId).identity.callsign === cs);
+  const s = getAllEfspStrips().find((x) => getEfspFdr(x.flightDataId).identity.callsign === cs);
   return s && s.state;
 }, cs);
 const ordnanceOf = (page, cs) => page.evaluate((cs) => {
-  const s = getAllEfspStrips().find((x) => getEfspFdr(x.fdrId).identity.callsign === cs);
-  return s && getEfspFdr(s.fdrId).military.ordnanceState;
+  const s = getAllEfspStrips().find((x) => getEfspFdr(x.flightDataId).identity.callsign === cs);
+  return s && getEfspFdr(s.flightDataId).military.ordnanceState;
 }, cs);
 
 /** Press the Strip's own NLA button, then wait out the server's double-tap guard. */
@@ -72,11 +72,11 @@ const ARR_FDR = { originAirport: 'LTAG', destinationAirport: 'LTAG', route: 'DCT
 
 test('HUNG: APP records it, TWR sees it, the flight lands normally, CLEAN clears it', async ({ page }) => {
   await page.setViewportSize({ width: 1600, height: 1200 });
-  const { consoleErrors } = await openPanel(page, { held: ['TWR', 'APP', 'GND'] });
+  const { consoleErrors } = await openPanel(page, { signedOn: ['LC', 'AP', 'GC'] });
   const CS = 'HUNG11';
 
-  await goBay(page, 'APP', 'app-inbound');
-  const strip = await seedStrip(page, { callsign: CS, actingPositionId: 'APP', bayId: 'app-inbound', role: 'ARRIVAL', fdr: ARR_FDR });
+  await goBay(page, 'AP', 'ap-inbound');
+  const strip = await seedStrip(page, { callsign: CS, actingPositionId: 'AP', bayId: 'ap-inbound', stripType: 'ARRIVAL', flightData: ARR_FDR });
   await expect(strip.locator('[data-slot="ord"]'), 'a CLEAN Strip draws nothing (docs/adr/0058)').toHaveCount(0);
 
   // H55: the pilot reports it to approach, inbound. S-L12: while CLEAN, ORDNANCE
@@ -96,7 +96,7 @@ test('HUNG: APP records it, TWR sees it, the flight lands normally, CLEAN clears
 
   // To tower: the chip travels with the flight, on TWR's Strip too.
   await pressNla(page, strip, CS, 'HANDED_TO_TOWER');
-  await goBay(page, 'TWR', 'twr-arrivals');
+  await goBay(page, 'LC', 'lc-arrivals');
   const twr = stripByCallsign(page, CS);
   await expect(twr.locator('[data-slot="ord"]')).toHaveText('HUNG');
   await only(page, CS);
@@ -104,9 +104,9 @@ test('HUNG: APP records it, TWR sees it, the flight lands normally, CLEAN clears
 
   // Never an inhibit: FINAL, LANDED, TAXI_IN exactly as for a CLEAN flight.
   await pressNla(page, twr, CS, 'FINAL');
-  await goBay(page, 'TWR', 'twr-final');
+  await goBay(page, 'LC', 'lc-final');
   await pressNla(page, stripByCallsign(page, CS), CS, 'LANDED');
-  await goBay(page, 'TWR', 'twr-landed');
+  await goBay(page, 'LC', 'lc-landed');
   const landed = stripByCallsign(page, CS);
   await expect(landed.locator('[data-slot="ord"]')).toHaveText('HUNG');
   await expect(landed.locator('.efsp-nla-btn')).toBeEnabled();
@@ -115,7 +115,7 @@ test('HUNG: APP records it, TWR sees it, the flight lands normally, CLEAN clears
   await pressNla(page, landed, CS, 'TAXI_IN');
 
   // "Ordnance safe" at the pad: GND has no 3G on its grid, so the expanded view.
-  await goBay(page, 'GND', 'gnd-taxi-in');
+  await goBay(page, 'GC', 'gc-taxi-in');
   const gnd = stripByCallsign(page, CS);
   await expect(gnd.locator('[data-slot="ord"]')).toHaveText('HUNG');
   await gnd.locator('.efsp-expand-btn').click();
@@ -132,21 +132,21 @@ test('HUNG: APP records it, TWR sees it, the flight lands normally, CLEAN clears
 
 test('pilot walks with field state: the pad by name, a runway request re-stated, an aborted departure', async ({ page }) => {
   await page.setViewportSize({ width: 1600, height: 1200 });
-  const { consoleErrors } = await openPanel(page, { held: ['TWR', 'APP', 'GND', 'OPS'] });
+  const { consoleErrors } = await openPanel(page, { signedOn: ['LC', 'AP', 'GC', 'OPS'] });
   // Runway 05 active, established here: a fresh crc-sync has none, and this walk names it.
   await ensureActiveRunway(page, '05');
 
   // "Request runway 23 for hot cargo" — TWR edits 8B; the advisory re-states the runway, recommends none.
   const CS = 'HUNG21';
-  await goBay(page, 'APP', 'app-inbound');
-  let strip = await seedStrip(page, { callsign: CS, actingPositionId: 'APP', bayId: 'app-inbound', role: 'ARRIVAL', fdr: ARR_FDR });
+  await goBay(page, 'AP', 'ap-inbound');
+  let strip = await seedStrip(page, { callsign: CS, actingPositionId: 'AP', bayId: 'ap-inbound', stripType: 'ARRIVAL', flightData: ARR_FDR });
   await recordFromExpanded(strip, 'HUNG');
   await expect(strip.locator('.efsp-strip-reason', { hasText: 'taxi to Hot cargo pad' }))
     .toHaveText('Hung ordnance. SOURCE practice: after landing, taxi to Hot cargo pad; the runway is the controller\'s call. Runway 05/23 (05) assigned.');
   await only(page, CS);
   await strip.screenshot({ path: shot('06-pad-named.png') });
   await pressNla(page, strip, CS, 'HANDED_TO_TOWER');
-  await goBay(page, 'TWR', 'twr-arrivals');
+  await goBay(page, 'LC', 'lc-arrivals');
   strip = stripByCallsign(page, CS);
   await strip.locator('.efsp-block-8B').first().click();
   const input = strip.locator('input.efsp-block-input');
@@ -164,8 +164,8 @@ test('pilot walks with field state: the pad by name, a runway request re-stated,
   // A departure that aborts and returns with a hung store.
   const DEP = 'HUNG31';
   await goBay(page, 'OPS', 'ops-proposed');
-  const dep = await seedStrip(page, { callsign: DEP, actingPositionId: 'OPS', role: 'DEPARTURE',
-    fdr: { departureAirport: 'LTAG', destinationAirport: 'LTAG', route: 'DCT', requestedAltitude: '250' } });
+  const dep = await seedStrip(page, { callsign: DEP, actingPositionId: 'OPS', stripType: 'DEPARTURE',
+    flightData: { departureAirport: 'LTAG', destinationAirport: 'LTAG', route: 'DCT', requestedAltitude: '250' } });
   // UI-A U1: ORDNANCE is on OPS's face, so it is set there (the expanded view lists only what is off the face).
   await setOrdnance(dep.locator('.efsp-strip-fields'), 'HUNG');
   await expect(dep.locator('.efsp-strip-reason', { hasText: 'Hung ordnance' })).toContainText('if it returns, taxi to Hot cargo pad');

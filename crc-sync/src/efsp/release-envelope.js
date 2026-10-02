@@ -18,16 +18,16 @@
 // nothing about it, and deliberately: it compares two strings off the FDR.
 
 /**
- * @param {object} fdr — matched on `filed.stereoRouteName` (preferred) / `filed.route` / `filed.requestedAltitude`
+ * @param {object} flightData — matched on `filed.stereoRouteName` (preferred) / `filed.route` / `filed.requestedAltitude`
  * @param {Array<{envelopeId:string, description?:string, stereoRoute?:string, atOrBelowAltitude?:number, radiusNm?:number, active?:boolean}>} standingReleases
- * @returns {boolean} true if `fdr`'s filed intent falls inside ANY active envelope
+ * @returns {boolean} true if `flightData`'s filed intent falls inside ANY active envelope
  */
-function matchesStandingRelease(fdr, standingReleases) {
-  if (!fdr || !Array.isArray(standingReleases)) return false;
-  return standingReleases.some((envelope) => _matchesOne(fdr, envelope));
+function matchesStandingRelease(flightData, standingReleases) {
+  if (!flightData || !Array.isArray(standingReleases)) return false;
+  return standingReleases.some((envelope) => _matchesOne(flightData, envelope));
 }
 
-function _matchesOne(fdr, envelope) {
+function _matchesOne(flightData, envelope) {
   if (!envelope || envelope.active === false) return false;
 
   let matchedSomething = false;
@@ -52,14 +52,14 @@ function _matchesOne(fdr, envelope) {
     // PACK 1 whose route was later amended to some other envelope's string
     // would then match both, and two answers to one question is the defect
     // class, not the fix.
-    const filedName = String(fdr.filed.stereoRouteName || '').trim();
-    const candidate = filedName || fdr.filed.route;
+    const filedName = String(flightData.filed.stereoRouteName || '').trim();
+    const candidate = filedName || flightData.filed.route;
     if (String(candidate || '') !== String(envelope.stereoRoute)) return false;
     matchedSomething = true;
   }
 
   if (envelope.atOrBelowAltitude != null) {
-    const requested = Number.parseInt(fdr.filed.requestedAltitude, 10);
+    const requested = Number.parseInt(flightData.filed.requestedAltitude, 10);
     if (!Number.isFinite(requested) || requested > envelope.atOrBelowAltitude) return false;
     matchedSomething = true;
   }

@@ -28,7 +28,7 @@
 // the "looks correct in every demo" trap the guide warns about for D21 (a
 // table where every Position can do everything proves nothing about
 // per-acting-Position evaluation). Instead CreateStrip is a SECOND,
-// role-scoped permission axis, checked by canCreateStripRole() below: OPS
+// role-scoped permission axis, checked by canCreateStripType() below: OPS
 // originates DEPARTURE (guide §4.1 rule 3), APP originates ARRIVAL (the
 // Phase-2 stub for "no CTR Facility to hand an inbound flight off from
 // yet" — see docs/adr/0008, superseded this WP4A slice by docs/adr/0014).
@@ -52,32 +52,32 @@
 // The tables themselves now live in the authority registry (authority/,
 // S3-2): the op-kind vocabulary in op-kinds.js, the class rules in classes.js,
 // each Position family's grants and capability columns in
-// positions/<family>.js, each Role's state owners in roles/<role>.js, all
+// positions/<family>.js, each Role's state owners in strip-types/<role>.js, all
 // composed in authority/index.js. This module is their facade and exports
 // exactly what it exported before; the one-Position predicates (the D21
 // gates) stay here.
 
 const authority = require('./authority');
-const { OP_KINDS, COORDINATION_OP_KINDS, APP_CTR_ONLY_OP_KINDS, TOFI_OP_KINDS, AIRSPACE_ENTRY_OP_KINDS } = require('./authority/op-kinds');
+const { OP_KINDS, COORDINATION_OP_KINDS, AP_CTR_ONLY_OP_KINDS, TOFI_OP_KINDS, AIRSPACE_ENTRY_OP_KINDS } = require('./authority/op-kinds');
 const { NO_STRIP_OP_CLASSES, _worksNoStrips, _hasNoScope } = require('./authority/classes');
 const {
   TACTICAL_CAPABILITIES, READ_SCOPES, TOFI_ANSWER_ACTIONS, handBackTargetsFor, tofiAnswererFor, readScopeFor,
 } = require('./authority/positions/tactical');
 const {
-  CARRIER_CAPABILITIES, canSetRecoveryCase, canSequenceMarshalStack, canEditShipStateInput, canRecordCarrierTransfer,
+  CARRIER_CAPABILITIES, canSetRecoveryCase, canSequenceMarshalStack, canEditShipStateInput, canRecordCarrierHandoff,
 } = require('./authority/positions/carrier');
 const {
   INCIRLIK_CAPABILITIES, canRotateSfa, canSendSfaRotationTransfer, sfaRotationReceiver, sfaControllerPositions, incirlikPositionsWith,
 } = require('./authority/positions/incirlik-military');
-const { DEPARTURE_STATE_OWNERS } = require('./authority/roles/departure');
-const { ARRIVAL_STATE_OWNERS } = require('./authority/roles/arrival');
-const { OVERFLIGHT_STATE_OWNERS } = require('./authority/roles/overflight');
-const { MISSION_STATE_OWNERS } = require('./authority/roles/mission');
-const { MARSHAL_STATE_OWNERS } = require('./authority/roles/marshal');
-const { FINAL_STATE_OWNERS } = require('./authority/roles/final');
-const { PATTERN_STATE_OWNERS } = require('./authority/roles/pattern');
+const { DEPARTURE_STATE_OWNERS } = require('./authority/strip-types/departure');
+const { ARRIVAL_STATE_OWNERS } = require('./authority/strip-types/arrival');
+const { OVERFLIGHT_STATE_OWNERS } = require('./authority/strip-types/overflight');
+const { MISSION_STATE_OWNERS } = require('./authority/strip-types/mission');
+const { MARSHAL_STATE_OWNERS } = require('./authority/strip-types/marshal');
+const { FINAL_STATE_OWNERS } = require('./authority/strip-types/final');
+const { PATTERN_STATE_OWNERS } = require('./authority/strip-types/pattern');
 const {
-  PERMISSIONS, CREATE_ROLE_PERMISSIONS, STATE_OWNERS_BY_ROLE, FIELD_STATE_OP_OWNERS, NON_OWNER_BLOCK_WRITES, TOFI_COUNTERPARTS,
+  PERMISSIONS, CREATE_STRIP_TYPE_PERMISSIONS, STATE_OWNERS_BY_STRIP_TYPE, RUNWAY_STATUS_OP_OWNERS, NON_OWNER_BLOCK_WRITES, TOFI_COUNTERPARTS,
 } = authority;
 
 /**
@@ -139,8 +139,8 @@ function canDeclareMarsa(actingPositionId) {
  * construction. A controller holding TWR and APP acts as one or the other, and
  * an acknowledgement sent as TWR never counts as APP's.
  */
-function canActOnFieldState(actingPositionId, opKind) {
-  const owners = Object.prototype.hasOwnProperty.call(FIELD_STATE_OP_OWNERS, opKind) ? FIELD_STATE_OP_OWNERS[opKind] : null;
+function canActOnRunwayStatus(actingPositionId, opKind) {
+  const owners = Object.prototype.hasOwnProperty.call(RUNWAY_STATUS_OP_OWNERS, opKind) ? RUNWAY_STATUS_OP_OWNERS[opKind] : null;
   return !!owners && owners.includes(actingPositionId);
 }
 
@@ -159,11 +159,11 @@ function canActOnFieldState(actingPositionId, opKind) {
  */
 function mayActBesideOwner(actingPositionId, strip, op) {
   if (!strip || !op) return false;
-  if (op.kind === 'TOFI' && strip.role === 'MISSION' && TOFI_ANSWER_ACTIONS.includes(op.action)) {
+  if (op.kind === 'TOFI' && strip.stripType === 'MISSION' && TOFI_ANSWER_ACTIONS.includes(op.action)) {
     return tofiAnswererFor(strip.ownerPositionId) === actingPositionId;
   }
   if (op.kind === 'SetBlock' && strip.state !== 'DROPPED') {
-    return NON_OWNER_BLOCK_WRITES.some(r => r.blockId === op.blockId && r.role === strip.role && r.positions.includes(actingPositionId));
+    return NON_OWNER_BLOCK_WRITES.some(r => r.blockId === op.blockId && r.stripType === strip.stripType && r.positions.includes(actingPositionId));
   }
   return false;
 }
@@ -173,12 +173,12 @@ function mayActBesideOwner(actingPositionId, strip, op) {
  * Structurally the same D21 guard as canMutate() — exactly one
  * actingPositionId, never a held set.
  * @param {string} actingPositionId
- * @param {string} role — the Strip Role being created (e.g. 'DEPARTURE')
+ * @param {string} stripType — the Strip Role being created (e.g. 'DEPARTURE')
  * @returns {boolean}
  */
-function canCreateStripRole(actingPositionId, role) {
-  const allowed = CREATE_ROLE_PERMISSIONS[actingPositionId];
-  return !!allowed && allowed.has(role);
+function canCreateStripType(actingPositionId, stripType) {
+  const allowed = CREATE_STRIP_TYPE_PERMISSIONS[actingPositionId];
+  return !!allowed && allowed.has(stripType);
 }
 
 /** @returns {{facilityId:string, positionId:string}[]} the valid TOFI counterparts for `actingPositionId`, or an empty array if it has none. */
@@ -188,24 +188,24 @@ function tofiCounterparts(actingPositionId) {
 
 /**
  * @param {string} actingPositionId
- * @param {string} role
+ * @param {string} stripType
  * @param {string} state — the Strip's CURRENT state (the one being advanced FROM)
  * @returns {boolean}
  */
-function canActOnState(actingPositionId, role, state) {
-  const owners = (STATE_OWNERS_BY_ROLE[role] || {})[state];
+function canActOnState(actingPositionId, stripType, state) {
+  const owners = (STATE_OWNERS_BY_STRIP_TYPE[stripType] || {})[state];
   return !!owners && owners.includes(actingPositionId);
 }
 
 module.exports = {
-  canMutate, canCorrelate, canDeclareMarsa, canCreateStripRole, canActOnState, tofiCounterparts,
-  PERMISSIONS, CREATE_ROLE_PERMISSIONS, STATE_OWNERS_BY_ROLE,
+  canMutate, canCorrelate, canDeclareMarsa, canCreateStripType, canActOnState, tofiCounterparts,
+  PERMISSIONS, CREATE_STRIP_TYPE_PERMISSIONS, STATE_OWNERS_BY_STRIP_TYPE,
   DEPARTURE_STATE_OWNERS, ARRIVAL_STATE_OWNERS, OVERFLIGHT_STATE_OWNERS, MISSION_STATE_OWNERS,
-  OP_KINDS, COORDINATION_OP_KINDS, APP_CTR_ONLY_OP_KINDS, TOFI_OP_KINDS, AIRSPACE_ENTRY_OP_KINDS, TOFI_COUNTERPARTS,
+  OP_KINDS, COORDINATION_OP_KINDS, AP_CTR_ONLY_OP_KINDS, TOFI_OP_KINDS, AIRSPACE_ENTRY_OP_KINDS, TOFI_COUNTERPARTS,
   NO_STRIP_OP_CLASSES,
-  canActOnFieldState, FIELD_STATE_OP_OWNERS,
+  canActOnRunwayStatus, RUNWAY_STATUS_OP_OWNERS,
   TACTICAL_CAPABILITIES, READ_SCOPES, handBackTargetsFor, tofiAnswererFor, readScopeFor, mayActBesideOwner,
-  CARRIER_CAPABILITIES, canSetRecoveryCase, canSequenceMarshalStack, canEditShipStateInput, canRecordCarrierTransfer,
+  CARRIER_CAPABILITIES, canSetRecoveryCase, canSequenceMarshalStack, canEditShipStateInput, canRecordCarrierHandoff,
   MARSHAL_STATE_OWNERS, FINAL_STATE_OWNERS, PATTERN_STATE_OWNERS,
   INCIRLIK_CAPABILITIES, canRotateSfa, canSendSfaRotationTransfer, sfaRotationReceiver, sfaControllerPositions, incirlikPositionsWith,
 };

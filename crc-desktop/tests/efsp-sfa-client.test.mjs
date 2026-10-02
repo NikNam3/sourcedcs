@@ -22,22 +22,22 @@ test('drift: who may send the rotation, its label and the rotation ceiling are t
   for (const id of S.SFA_ROTATION_SENDERS) assert.equal(permission.canSendSfaRotationTransfer(id), true, id);
   assert.equal(S.SFA_ROTATION_LABEL, SFA_TRANSFERS.SFA_ROTATION.label);
   assert.deepEqual([...S.SFA_ROTATION_CEILING].sort(), permission.incirlikPositionsWith('rotatesSfa').sort());
-  for (const id of ['APP', 'SFA', 'PAR', 'RSU', 'TWR']) {
+  for (const id of ['AP', 'SFA', 'PAR', 'RSU', 'LC']) {
     assert.equal(S.SFA_ROTATION_CEILING.includes(id), permission.canRotateSfa(id), id);
   }
 });
 
 test('the server\'s view carries what the client draws: the pool, the jurisdiction, the controllers who may be on a frequency', () => {
   const v = realView();
-  assert.equal(v.jurisdiction, 'APP');
+  assert.equal(v.jurisdiction, 'AP');
   assert.equal(v.pool.length, 5);
-  assert.deepEqual(v.controllers, ['APP', 'SFA', 'PAR']);
+  assert.deepEqual(v.controllers, ['AP', 'SFA', 'PAR']);
   S._resetEfspSfaStateForTest();
   S.applyEfspSfaSnapshot({ sfaRotation: v });
   assert.equal(S.getEfspSfa(), v);
   const rows = S.sfaRotationRows();
   assert.equal(rows.length, 5);
-  assert.deepEqual(rows[0], { rackId: 'freq-1', mhz: 232.1, text: '232.100', positionId: 'APP' });
+  assert.deepEqual(rows[0], { rackId: 'freq-1', mhz: 232.1, text: '232.100', positionId: 'AP' });
   assert.equal(rows[4].positionId, null, 'a spare frequency');
   const next = { ...v, rev: 5, rotation: { 'freq-4': 'PAR' } };
   S.applyEfspSfaDelta({ sfaRotation: next });
@@ -49,21 +49,21 @@ test('the server\'s view carries what the client draws: the pool, the jurisdicti
 test('only the held jurisdiction Position is offered the rotation controls', () => {
   const v = realView();
   assert.equal(S.sfaRotatingPosition(['SFA', 'PAR'], v), null);
-  assert.equal(S.sfaRotatingPosition(['SFA', 'APP'], v), 'APP');
-  assert.equal(S.sfaRotatingPosition(['APP'], null), null);
+  assert.equal(S.sfaRotatingPosition(['SFA', 'AP'], v), 'AP');
+  assert.equal(S.sfaRotatingPosition(['AP'], null), null);
   assert.equal(S.sfaRotatingPosition(undefined, v), null);
 });
 
 test('the Rotate to PAR button is offered on an inbound aircraft on an SFA frequency, to a held sender, and nowhere else', () => {
   const v = realView();
   const onFreq = { comms: { workingFrequencyMhz: 233.1 } };
-  const strip = (over) => ({ role: 'ARRIVAL', state: 'INBOUND', ownerPositionId: 'SFA', ...over });
+  const strip = (over) => ({ stripType: 'ARRIVAL', state: 'INBOUND', ownerPositionId: 'SFA', ...over });
   assert.equal(S.sfaRotationOffered(strip(), onFreq, ['SFA'], v), true);
-  assert.equal(S.sfaRotationOffered(strip({ ownerPositionId: 'APP' }), onFreq, ['APP'], v), true, 'APP sends it too');
-  assert.equal(S.sfaRotationOffered(strip(), onFreq, ['TWR'], v), false, 'not held');
+  assert.equal(S.sfaRotationOffered(strip({ ownerPositionId: 'AP' }), onFreq, ['AP'], v), true, 'APP sends it too');
+  assert.equal(S.sfaRotationOffered(strip(), onFreq, ['LC'], v), false, 'not held');
   assert.equal(S.sfaRotationOffered(strip({ ownerPositionId: 'PAR' }), onFreq, ['PAR'], v), false, 'PAR does not send it');
   assert.equal(S.sfaRotationOffered(strip({ state: 'HANDED_TO_TOWER' }), onFreq, ['SFA'], v), false);
-  assert.equal(S.sfaRotationOffered(strip({ role: 'FINAL', state: 'ON_FINAL' }), onFreq, ['SFA'], v), false);
+  assert.equal(S.sfaRotationOffered(strip({ stripType: 'FINAL', state: 'ON_FINAL' }), onFreq, ['SFA'], v), false);
   assert.equal(S.sfaRotationOffered(strip(), { comms: { workingFrequencyMhz: 121.5 } }, ['SFA'], v), false, 'not an SFA frequency');
   assert.equal(S.sfaRotationOffered(strip(), { comms: {} }, ['SFA'], v), false);
   assert.equal(S.sfaRotationOffered(strip(), onFreq, ['SFA'], null), false, 'no SFA on this server');

@@ -27,12 +27,12 @@ const facilityConfig = (await import('../src/efsp/facility-config.js')).default;
 const permission = await import('../src/efsp/permission.js');
 const { BoardStore } = await import('../src/efsp/board-store.js');
 import { fullRules } from "./helpers/full-rules.mjs";
-const { FdrStore } = await import('../src/efsp/fdr-store.js');
+const { FlightDataStore } = await import('../src/efsp/flight-data-store.js');
 const {
-  crew, hold, act, mustAct, jumpTo, advance, DEPARTURE_FDR, airborneDeparture, handedToCenter,
+  crew, hold, act, mustAct, jumpTo, advance, DEPARTURE_FLIGHT_DATA, airborneDeparture, handedToCenter,
 } = await import('./helpers/efsp-scenario.mjs');
 
-const ALL = { OPS: 'INCIRLIK', APP: 'INCIRLIK', CTR: 'CENTER', TAC_C2: 'TACTICAL', GCI: 'TACTICAL', AIC: 'TACTICAL', JTAC: 'TACTICAL' };
+const ALL = { OPS: 'INCIRLIK', AP: 'INCIRLIK', CTR: 'CENTER', TAC_C2: 'TACTICAL', GCI: 'TACTICAL', AIC: 'TACTICAL', JTAC: 'TACTICAL' };
 
 function freshEfsp() {
   fs.rmSync(process.env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH, { force: true });
@@ -50,7 +50,7 @@ function refused(ack, reason, detail, label = '') {
 
 function taskedLine(efsp, c, callsign, state = 'ON_STATION') {
   let line = mustAct(efsp, c.TAC_C2, 'TAC_C2', null, {
-    kind: 'CreateStrip', bayId: 'tac-c2-tasked', rackId: 'main', role: 'MISSION', fdr: { callsign },
+    kind: 'CreateStrip', bayId: 'tac-c2-tasked', rackId: 'main', stripType: 'MISSION', flightData: { callsign },
   });
   for (const s of ['AIRBORNE', 'ON_STATION', 'OFF_STATION']) {
     if (line.state === state) break;
@@ -65,7 +65,7 @@ const baysOf = (positionId, facilityId = 'TACTICAL') => facilityConfig.getBaysFo
 
 /** CTR hands tactical control to TAC_C2 (as L8's file does), leaving an ON_STATION mission line under TOFI. */
 function onStationUnderTofi(efsp, c, callsign) {
-  const atCenter = handedToCenter(efsp, c, airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign }));
+  const atCenter = handedToCenter(efsp, c, airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign }));
   const proposed = mustAct(efsp, c.CTR, 'CTR', atCenter, {
     kind: 'TOFI', action: 'PROPOSE', direction: 'ENTRY', toFacilityId: 'TACTICAL', toPositionId: 'TAC_C2',
   });
@@ -150,16 +150,16 @@ test('B3 the routed TransferStrip lands in the covering Position\'s Bay too, and
 
 test('B3 with no Bay to fit, the Strip keeps its Bay and the reassignment says so', () => {
   const rules = {
-    resolveBlockTarget: () => ({ kind: 'annotation' }), isOccupied: () => true, coveringPositionFor: () => null,
+    resolveBlockTarget: () => ({ kind: 'annotation' }), isStaffed: () => true, consolidatedAt: () => null,
     baysFor: (p) => (p === 'B' ? [{ bayId: 'b-only', rackIds: ['main'], impliesState: 'OTHER' }] : [{ bayId: 'a-1', rackIds: ['main'] }]),
     isValidState: () => true,
   };
-  const board = new BoardStore(new FdrStore(), fullRules(rules));
+  const board = new BoardStore(new FlightDataStore(), fullRules(rules));
   assert.equal(board._placement.bayForNewOwner('B', 'PROPOSED'), null);
   assert.deepEqual(board._placement.bayForNewOwner('B', 'OTHER'), { bayId: 'b-only', rackId: 'main' });
   assert.deepEqual(board._placement.bayForNewOwner('A', 'ANY'), { bayId: 'a-1', rackId: 'main' });
   const made = board.applyMutation({
-    clientMutationId: '00000000-0000-4000-8000-000000000001', op: { kind: 'CreateStrip', bayId: 'a-1', rackId: 'main', role: 'DEPARTURE', fdr: { ...DEPARTURE_FDR, callsign: 'L23B3' } },
+    clientMutationId: '00000000-0000-4000-8000-000000000001', op: { kind: 'CreateStrip', bayId: 'a-1', rackId: 'main', stripType: 'DEPARTURE', flightData: { ...DEPARTURE_FLIGHT_DATA, callsign: 'L23B3' } },
   }, 'A', 'A');
   assert.equal(made.ok, true, JSON.stringify(made));
   const ids = board.reassignPositionStrips('A', 'B');
@@ -195,18 +195,18 @@ test('B2 the exception is TOFI on a MISSION line for the one Position the table 
 
 test('B2 the exception is MISSION-only and TOFI-only, and OPS\'s 14E exception is DEPARTURE-only and ends at DROPPED', () => {
   const { mayActBesideOwner } = permission;
-  const mission = { role: 'MISSION', ownerPositionId: 'AIC', state: 'ON_STATION' };
+  const mission = { stripType: 'MISSION', ownerPositionId: 'AIC', state: 'ON_STATION' };
   assert.equal(mayActBesideOwner('TAC_C2', mission, { kind: 'TOFI', action: 'ACCEPT' }), true);
   assert.equal(mayActBesideOwner('TAC_C2', mission, { kind: 'TOFI', action: 'PROPOSE' }), false);
-  assert.equal(mayActBesideOwner('TAC_C2', { ...mission, role: 'DEPARTURE' }, { kind: 'TOFI', action: 'ACCEPT' }), false);
+  assert.equal(mayActBesideOwner('TAC_C2', { ...mission, stripType: 'DEPARTURE' }, { kind: 'TOFI', action: 'ACCEPT' }), false);
   assert.equal(mayActBesideOwner('TAC_C2', { ...mission, ownerPositionId: 'GCI' }, { kind: 'TOFI', action: 'ACCEPT' }), false, 'GCI has no row: nobody answers for it');
   assert.equal(mayActBesideOwner('TAC_C2', mission, { kind: 'SetBlock', blockId: 'M2' }), false);
-  const dep = { role: 'DEPARTURE', ownerPositionId: 'TWR', state: 'RUNWAY_QUEUE' };
+  const dep = { stripType: 'DEPARTURE', ownerPositionId: 'LC', state: 'RUNWAY_QUEUE' };
   assert.equal(mayActBesideOwner('OPS', dep, { kind: 'SetBlock', blockId: '14E' }), true);
   assert.equal(mayActBesideOwner('OPS', dep, { kind: 'SetBlock', blockId: '8A' }), false);
-  assert.equal(mayActBesideOwner('GND', dep, { kind: 'SetBlock', blockId: '14E' }), false);
+  assert.equal(mayActBesideOwner('GC', dep, { kind: 'SetBlock', blockId: '14E' }), false);
   assert.equal(mayActBesideOwner('OPS', { ...dep, state: 'DROPPED' }, { kind: 'SetBlock', blockId: '14E' }), false);
-  assert.equal(mayActBesideOwner('OPS', { ...dep, role: 'ARRIVAL' }, { kind: 'SetBlock', blockId: '14E' }), false);
+  assert.equal(mayActBesideOwner('OPS', { ...dep, stripType: 'ARRIVAL' }, { kind: 'SetBlock', blockId: '14E' }), false);
 });
 
 // ── B7: SetState is owner-checked, for every Role ─────────────────────────
@@ -218,7 +218,7 @@ test('B7 SetState needs the Position that owns the current state, and the refusa
   refused(act(efsp, c.AIC, 'AIC', tac(efsp, m.stripId), { kind: 'SetState', toState: 'OFF_STATION' }),
     'PERMISSION_DENIED', /ON_STATION is not AIC's to change/, 'AIC SetState');
   // A DEPARTURE at PROPOSED is OPS's; once it is at PENDING_CLEARANCE OPS may not SetState it though it still owns it.
-  let dep = mustAct(efsp, c.OPS, 'OPS', null, { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: { ...DEPARTURE_FDR, callsign: 'L23D2' } });
+  let dep = mustAct(efsp, c.OPS, 'OPS', null, { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE', flightData: { ...DEPARTURE_FLIGHT_DATA, callsign: 'L23D2' } });
   dep = mustAct(efsp, c.OPS, 'OPS', dep, { kind: 'SetState', toState: 'PENDING_CLEARANCE' });
   refused(act(efsp, c.OPS, 'OPS', dep, { kind: 'SetState', toState: 'CLEARED' }), 'PERMISSION_DENIED', /PENDING_CLEARANCE is not OPS's to change/, 'OPS SetState');
 });
@@ -261,7 +261,7 @@ test('S-L24 SetState to DROPPED under active tactical control is refused like a 
 test('S-L24 a refused TOFI retires the strip it minted through the same path (archive clock, remove indicator)', () => {
   const efsp = freshEfsp();
   const c = crew(efsp, ALL);
-  const atCenter = handedToCenter(efsp, c, airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'L23E3' }));
+  const atCenter = handedToCenter(efsp, c, airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'L23E3' }));
   const proposed = mustAct(efsp, c.CTR, 'CTR', atCenter, {
     kind: 'TOFI', action: 'PROPOSE', direction: 'ENTRY', toFacilityId: 'TACTICAL', toPositionId: 'TAC_C2',
   });
@@ -275,37 +275,37 @@ test('S-L24 a refused TOFI retires the strip it minted through the same path (ar
 
 // ── F10: a covering Position gives the Strips back ────────────────────────
 
-test('F10 Strips routed to a covering Position go back, into the returning Position\'s Bay, when it is manned again', () => {
+test('F10 Strips routed to a covering Position go back, into the returning Position\'s Bay, when it is staffed again', () => {
   const efsp = freshEfsp();
-  const c = crew(efsp, { OPS: 'INCIRLIK', CD: 'INCIRLIK', GND: 'INCIRLIK' });
-  let s = mustAct(efsp, c.OPS, 'OPS', null, { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: { ...DEPARTURE_FDR, callsign: 'L23F1' } });
+  const c = crew(efsp, { OPS: 'INCIRLIK', CD: 'INCIRLIK', GC: 'INCIRLIK' });
+  let s = mustAct(efsp, c.OPS, 'OPS', null, { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE', flightData: { ...DEPARTURE_FLIGHT_DATA, callsign: 'L23F1' } });
   s = mustAct(efsp, c.OPS, 'OPS', s, { kind: 'InvokeNla' }); // Send to Clearance: the Strip is CD's now
   assert.equal(inc(efsp, s.stripId).ownerPositionId, 'CD');
   assert.equal(inc(efsp, s.stripId).state, 'PENDING_CLEARANCE');
 
   hold(efsp, c.CD.session, 'INCIRLIK', []);
-  assert.equal(inc(efsp, s.stripId).ownerPositionId, 'GND', 'covered by GND');
-  assert.equal(inc(efsp, s.stripId).coveredFrom, 'CD');
-  assert.ok(baysOf('GND', 'INCIRLIK').includes(inc(efsp, s.stripId).bayId));
+  assert.equal(inc(efsp, s.stripId).ownerPositionId, 'GC', 'covered by GND');
+  assert.equal(inc(efsp, s.stripId).consolidatedFrom, 'CD');
+  assert.ok(baysOf('GC', 'INCIRLIK').includes(inc(efsp, s.stripId).bayId));
 
   const newCd = { controllerId: 'c-CD2', who: 'CD2' };
   const back = hold(efsp, newCd, 'INCIRLIK', ['CD']);
   const after = inc(efsp, s.stripId);
   assert.equal(after.ownerPositionId, 'CD', 'returned');
   assert.equal(after.bayId, 'cd-pending-clearance');
-  assert.equal(after.coveredFrom, undefined);
+  assert.equal(after.consolidatedFrom, undefined);
   assert.ok(slot(back, 'primary').strips.updated.some(x => x.stripId === s.stripId), 'the return is broadcast');
 });
 
 test('F10 a Strip the covering Position transferred on by decision does not come back', () => {
   const efsp = freshEfsp();
-  const c = crew(efsp, { OPS: 'INCIRLIK', CD: 'INCIRLIK', GND: 'INCIRLIK', TWR: 'INCIRLIK' });
-  let s = mustAct(efsp, c.OPS, 'OPS', null, { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: { ...DEPARTURE_FDR, callsign: 'L23F2' } });
+  const c = crew(efsp, { OPS: 'INCIRLIK', CD: 'INCIRLIK', GC: 'INCIRLIK', LC: 'INCIRLIK' });
+  let s = mustAct(efsp, c.OPS, 'OPS', null, { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE', flightData: { ...DEPARTURE_FLIGHT_DATA, callsign: 'L23F2' } });
   s = mustAct(efsp, c.OPS, 'OPS', s, { kind: 'InvokeNla' });
   hold(efsp, c.CD.session, 'INCIRLIK', []);
-  mustAct(efsp, c.GND, 'GND', inc(efsp, s.stripId), { kind: 'TransferStrip', toPositionId: 'TWR', bayId: 'twr-coordination', rackId: 'main' });
+  mustAct(efsp, c.GC, 'GC', inc(efsp, s.stripId), { kind: 'TransferStrip', toPositionId: 'LC', bayId: 'lc-coordination', rackId: 'main' });
   hold(efsp, { controllerId: 'c-CD3', who: 'CD3' }, 'INCIRLIK', ['CD']);
-  assert.equal(inc(efsp, s.stripId).ownerPositionId, 'TWR');
+  assert.equal(inc(efsp, s.stripId).ownerPositionId, 'LC');
 });
 
 // ── U7: a coordination link cannot outlive the side that could answer it ───
@@ -316,8 +316,8 @@ for (const primitive of ['POINT_OUT', 'HANDOFF']) {
   test(`U7 ${primitive}: propose, accept, the receiver drops its side -> the proposer's link ends (audited) and it can act again`, () => {
     const efsp = freshEfsp();
     const c = crew(efsp, ALL);
-    const dep = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: `L23U1${primitive[0]}` });
-    const sent = mustAct(efsp, c.APP, 'APP', dep, { kind: primitive, action: 'PROPOSE', toFacilityId: 'CENTER', toPositionId: 'CTR' });
+    const dep = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: `L23U1${primitive[0]}` });
+    const sent = mustAct(efsp, c.AP, 'AP', dep, { kind: primitive, action: 'PROPOSE', toFacilityId: 'CENTER', toPositionId: 'CTR' });
     const replica = ctrOf(efsp, sent.coordination.peerStripId);
     const accepted = mustAct(efsp, c.CTR, 'CTR', replica, { kind: primitive, action: 'ACCEPT' });
     assert.equal(inc(efsp, dep.stripId).coordination.state, 'ACTIVE');
@@ -330,15 +330,15 @@ for (const primitive of ['POINT_OUT', 'HANDOFF']) {
     assert.equal(mine.coordination, null, 'return it to no coordination');
     assert.equal(mine.state, 'HANDED_OFF');
     // ...and the proposer is not stuck: it can propose again.
-    const again = mustAct(efsp, c.APP, 'APP', mine, { kind: primitive, action: 'PROPOSE', toFacilityId: 'CENTER', toPositionId: 'CTR' });
-    assert.equal(again.coordination.state, 'PROPOSED');
+    const again = mustAct(efsp, c.AP, 'AP', mine, { kind: primitive, action: 'PROPOSE', toFacilityId: 'CENTER', toPositionId: 'CTR' });
+    assert.equal(again.coordination.state, 'INITIATED');
   });
 
   test(`U7 ${primitive}: the wire tells the proposer's Facility (peer broadcast) and the log names the system change`, () => {
     const efsp = freshEfsp();
     const c = crew(efsp, ALL);
-    const dep = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: `L23U2${primitive[0]}` });
-    const sent = mustAct(efsp, c.APP, 'APP', dep, { kind: primitive, action: 'PROPOSE', toFacilityId: 'CENTER', toPositionId: 'CTR' });
+    const dep = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: `L23U2${primitive[0]}` });
+    const sent = mustAct(efsp, c.AP, 'AP', dep, { kind: primitive, action: 'PROPOSE', toFacilityId: 'CENTER', toPositionId: 'CTR' });
     const accepted = mustAct(efsp, c.CTR, 'CTR', ctrOf(efsp, sent.coordination.peerStripId), { kind: primitive, action: 'ACCEPT' });
     const res = efsp.handleMessage(c.CTR.session, {
       version: 1, type: 'efsp-mutation', clientMutationId: '00000000-0000-4000-8000-0000000000aa', facilityId: 'CENTER',
@@ -355,8 +355,8 @@ for (const primitive of ['POINT_OUT', 'HANDOFF']) {
   test(`U7 ${primitive}: propose, and the receiver's side ends before it answers -> the proposer is not left waiting`, () => {
     const efsp = freshEfsp();
     const c = crew(efsp, ALL);
-    const dep = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: `L23U3${primitive[0]}` });
-    const sent = mustAct(efsp, c.APP, 'APP', dep, { kind: primitive, action: 'PROPOSE', toFacilityId: 'CENTER', toPositionId: 'CTR' });
+    const dep = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: `L23U3${primitive[0]}` });
+    const sent = mustAct(efsp, c.AP, 'AP', dep, { kind: primitive, action: 'PROPOSE', toFacilityId: 'CENTER', toPositionId: 'CTR' });
     // A controller cannot Drop an unanswered proposal (the open-link guard), so
     // the replica is retired the way a system path would (an archive, a state
     // override): the store must still end the proposer's link.
@@ -369,32 +369,32 @@ for (const primitive of ['POINT_OUT', 'HANDOFF']) {
     const efsp = freshEfsp();
     const c = crew(efsp, ALL);
     // Unanswered: the replica is retired with the proposal.
-    let dep = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: `L23U4${primitive[0]}` });
-    let sent = mustAct(efsp, c.APP, 'APP', dep, { kind: primitive, action: 'PROPOSE', toFacilityId: 'CENTER', toPositionId: 'CTR' });
+    let dep = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: `L23U4${primitive[0]}` });
+    let sent = mustAct(efsp, c.AP, 'AP', dep, { kind: primitive, action: 'PROPOSE', toFacilityId: 'CENTER', toPositionId: 'CTR' });
     const replica = ctrOf(efsp, sent.coordination.peerStripId);
     refused(act(efsp, c.CTR, 'CTR', replica, { kind: primitive, action: 'CANCEL' }), 'VALIDATION_ERROR', /only the proposer can cancel/, 'replica cancels');
-    let cancelled = mustAct(efsp, c.APP, 'APP', sent, { kind: primitive, action: 'CANCEL' });
+    let cancelled = mustAct(efsp, c.AP, 'AP', sent, { kind: primitive, action: 'CANCEL' });
     assert.equal(cancelled.coordination, null);
     assert.equal(ctrOf(efsp, replica.stripId).state, 'DROPPED');
 
     // Accepted: the receiver's working Strip stays, minus the link.
-    sent = mustAct(efsp, c.APP, 'APP', cancelled, { kind: primitive, action: 'PROPOSE', toFacilityId: 'CENTER', toPositionId: 'CTR' });
+    sent = mustAct(efsp, c.AP, 'AP', cancelled, { kind: primitive, action: 'PROPOSE', toFacilityId: 'CENTER', toPositionId: 'CTR' });
     const second = mustAct(efsp, c.CTR, 'CTR', ctrOf(efsp, sent.coordination.peerStripId), { kind: primitive, action: 'ACCEPT' });
-    cancelled = mustAct(efsp, c.APP, 'APP', inc(efsp, dep.stripId), { kind: primitive, action: 'CANCEL' });
+    cancelled = mustAct(efsp, c.AP, 'AP', inc(efsp, dep.stripId), { kind: primitive, action: 'CANCEL' });
     assert.equal(cancelled.coordination, null);
     assert.notEqual(ctrOf(efsp, second.stripId).state, 'DROPPED');
     assert.equal(ctrOf(efsp, second.stripId).coordination, null);
 
     // Nothing to cancel.
-    refused(act(efsp, c.APP, 'APP', inc(efsp, dep.stripId), { kind: primitive, action: 'CANCEL' }), 'VALIDATION_ERROR', /no coordination link/, 'cancel twice');
+    refused(act(efsp, c.AP, 'AP', inc(efsp, dep.stripId), { kind: primitive, action: 'CANCEL' }), 'VALIDATION_ERROR', /no coordination link/, 'cancel twice');
   });
 }
 
 test('U7 a receiver that Rejected and then dropped leaves the proposer\'s REJECTED record alone (only a live exchange is ended)', () => {
   const efsp = freshEfsp();
   const c = crew(efsp, ALL);
-  const dep = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'L23U5' });
-  const sent = mustAct(efsp, c.APP, 'APP', dep, { kind: 'POINT_OUT', action: 'PROPOSE', toFacilityId: 'CENTER', toPositionId: 'CTR' });
+  const dep = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'L23U5' });
+  const sent = mustAct(efsp, c.AP, 'AP', dep, { kind: 'POINT_OUT', action: 'PROPOSE', toFacilityId: 'CENTER', toPositionId: 'CTR' });
   const rejected = mustAct(efsp, c.CTR, 'CTR', ctrOf(efsp, sent.coordination.peerStripId), { kind: 'POINT_OUT', action: 'REJECT' });
   act(efsp, c.CTR, 'CTR', rejected, { kind: 'DropStrip' });
   assert.equal(inc(efsp, dep.stripId).coordination.state, 'REJECTED');

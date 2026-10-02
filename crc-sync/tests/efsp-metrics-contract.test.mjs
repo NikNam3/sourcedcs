@@ -78,7 +78,7 @@ const METRICS_SHAPE = {
   staleness: { status: STATUS, target: { kind: STR }, total: NUM_OR_NULL, byPosition: OBJ, byState: OBJ, byHour: OBJ },
   transfers: {
     status: STATUS, target: { kind: STR, value: NUM },
-    attempts: NUM, succeeded: NUM, failed: NUM, failureRate: NUM_OR_NULL, routedToCovering: NUM, inhibitedPress: NUM,
+    attempts: NUM, succeeded: NUM, failed: NUM, failureRate: NUM_OR_NULL, routedToConsolidated: NUM, inhibitedPress: NUM,
     byCause: OBJ, byKind: { TRANSFER: { attempts: NUM, failed: NUM }, NLA_TRANSFER: { attempts: NUM, failed: NUM } }, byHour: OBJ,
   },
   obligations: { status: STATUS, live: 'object|null' },
@@ -105,7 +105,7 @@ const TRAFFIC_BODY_SHAPE = {
   ok: 'boolean', version: NUM, generatedAt: NUM, from: NUM, to: NUM, unit: STR, policy: STR,
   missionSession: NUM_OR_NULL,
   facilities: {
-    INCIRLIK: { homeAirports: ARR, totals: TOTALS_SHAPE, byHour: ARR, byAircraftType: OBJ, byRole: OBJ },
+    INCIRLIK: { homeAirports: ARR, totals: TOTALS_SHAPE, byHour: ARR, byAircraftType: OBJ, byStripType: OBJ },
   },
   reconciliation: {
     checkedAt: NUM, ok: 'boolean', window: OBJ, expected: NUM, actual: NUM,

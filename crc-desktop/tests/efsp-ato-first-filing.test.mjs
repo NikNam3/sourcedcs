@@ -1,7 +1,7 @@
 /* The ATO-first direction (crc-sync docs/adr/0071): OPS files a flight TAC_C2's
  * ATO import already made. The toolbar offers "file against ATO mission <msn>",
  * picked by default only when exactly one flight matches, and the create goes
- * out on the bind path (op.fdrId) — no new flight, no new code.
+ * out on the bind path (op.flightDataId) — no new flight, no new code.
  * Mounts the real efsp-panel.js the way efsp-mission-line-panel.test.js does. */
 
 import test from 'node:test';
@@ -26,27 +26,27 @@ const IDS = [
   'efsp-mutation-error', 'efsp-mutation-warning', 'efsp-connection-banner',
 ];
 
-function fdr(fdrId, callsign, ato) {
+function flightData(flightDataId, callsign, ato) {
   return {
-    fdrId, rev: 1, provenance: {}, identity: { callsign, beaconAssigned: ato ? '4521' : '0101', trackDegradationFlag: 'NONE' },
+    flightDataId, rev: 1, provenance: {}, identity: { callsign, beaconAssigned: ato ? '4521' : '0101', trackDegradationFlag: 'NONE' },
     filed: {}, assigned: {}, tofi: {}, airspace: {}, comms: {}, mission: { missionNumber: ato ? '1101A' : null },
     military: { ordnanceState: 'CLEAN', hookRequired: false, alertStatus: 'NONE', mtr: {} },
     ...(ato ? { ato: { missionNumber: '1101A', lineId: '1101A#0' } } : {}),
   };
 }
-function strip(stripId, fdrId, role, over = {}) {
+function strip(stripId, flightDataId, stripType, over = {}) {
   return {
-    stripId, cid: '001', fdrId, rev: 1, role, state: role === 'MISSION' ? 'TASKED' : 'PROPOSED',
-    ownerPositionId: role === 'MISSION' ? 'TAC_C2' : 'OPS', facilityId: role === 'MISSION' ? 'TACTICAL' : 'INCIRLIK',
-    bayId: role === 'MISSION' ? 'tac-c2-tasked' : 'ops-proposed', rackId: 'main', orderKey: 'V',
+    stripId, cid: '001', flightDataId, rev: 1, stripType, state: stripType === 'MISSION' ? 'TASKED' : 'PROPOSED',
+    ownerPositionId: stripType === 'MISSION' ? 'TAC_C2' : 'OPS', facilityId: stripType === 'MISSION' ? 'TACTICAL' : 'INCIRLIK',
+    bayId: stripType === 'MISSION' ? 'tac-c2-tasked' : 'ops-proposed', rackId: 'main', orderKey: 'V',
     annotations: {}, flags: {}, coordination: null, tofiCoordination: null, airspaceEntry: null, ...over,
   };
 }
 
-async function mount({ strips, fdrs }) {
+async function mount({ strips, flightDataList }) {
   const sent = [];
   const els = {};
-  for (const id of IDS) els[id] = makeElement(id.endsWith('-btn') ? 'button' : /role|stereo|bind/.test(id) ? 'select' : 'input');
+  for (const id of IDS) els[id] = makeElement(id.endsWith('-btn') ? 'button' : /role|type|stereo|bind/.test(id) ? 'select' : 'input');
   globalThis.document.getElementById = (id) => els[id] || null;
   globalThis.document.createElement = makeElement;
   globalThis.fetch = async (url) => {
@@ -62,7 +62,7 @@ async function mount({ strips, fdrs }) {
   ws.sendEfspSetPositions('INCIRLIK', ['OPS']); // getActingPositions() = ['OPS']
   ws.setEfspSender('sendEfspCreateStrip', (actingPositionId, op, facilityId) => { sent.push({ actingPositionId, op, facilityId }); return 'mid'; });
   ws.setEfspSender('sendEfspMutation', () => 'mid');
-  state.applyEfspSnapshot({ strips, fdrs, positions: [], bays: [], airspaces: [], correlations: [], marsa: [] });
+  state.applyEfspSnapshot({ strips, flightDataList, positions: [], bays: [], airspaces: [], correlations: [], marsa: [] });
   panel.initEfspPanel();
   const type = (v) => { els['efsp-new-strip-callsign'].value = v; for (const fn of els['efsp-new-strip-callsign']._listeners.input || []) fn({}); };
   const press = async () => { for (const fn of els['efsp-create-strip-btn']._listeners.click || []) await fn({ preventDefault() {} }); };
@@ -70,7 +70,7 @@ async function mount({ strips, fdrs }) {
 }
 
 test('OPS typing an ATO mission\'s callsign is offered "file against ATO mission", picked when it is the only one', async () => {
-  const m = await mount({ fdrs: [fdr('f1', 'VIPER11', true)], strips: [strip('m1', 'f1', 'MISSION')] });
+  const m = await mount({ flightDataList: [flightData('f1', 'VIPER11', true)], strips: [strip('m1', 'f1', 'MISSION')] });
   const bind = m.els['efsp-create-strip-bind'];
   m.type('VIPER1');
   assert.equal(bind.hidden, true);
@@ -81,13 +81,13 @@ test('OPS typing an ATO mission\'s callsign is offered "file against ATO mission
   await m.press();
   assert.equal(m.sent.length, 1);
   assert.equal(m.sent[0].actingPositionId, 'OPS');
-  assert.equal(m.sent[0].op.fdrId, 'f1', 'the bind path: the same flight, no new code');
-  assert.equal(m.sent[0].op.fdr, undefined);
+  assert.equal(m.sent[0].op.flightDataId, 'f1', 'the bind path: the same flight, no new code');
+  assert.equal(m.sent[0].op.flightData, undefined);
 });
 
 test('two matching ATO flights are both offered and neither is picked', async () => {
   const m = await mount({
-    fdrs: [fdr('f1', 'VIPER11', true), fdr('f2', 'VIPER11', true)],
+    flightDataList: [flightData('f1', 'VIPER11', true), flightData('f2', 'VIPER11', true)],
     strips: [strip('m1', 'f1', 'MISSION'), strip('m2', 'f2', 'MISSION')],
   });
   m.type('VIPER11');
@@ -97,7 +97,7 @@ test('two matching ATO flights are both offered and neither is picked', async ()
 
 test('a flight that already has an ATC Strip, or no ATO, is not offered', async () => {
   const m = await mount({
-    fdrs: [fdr('f1', 'VIPER11', true), fdr('f2', 'DUDE21', false)],
+    flightDataList: [flightData('f1', 'VIPER11', true), flightData('f2', 'DUDE21', false)],
     strips: [strip('m1', 'f1', 'MISSION'), strip('d1', 'f1', 'DEPARTURE'), strip('m2', 'f2', 'MISSION')],
   });
   m.type('VIPER11');

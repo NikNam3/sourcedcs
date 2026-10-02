@@ -29,8 +29,8 @@ function deepFreeze(o) {
 }
 
 function fiveStack({ caseIAngels = null } = {}) {
-  const entries = ['fdr-a', 'fdr-b', 'fdr-c', 'fdr-d', 'fdr-e'].map((fdrId, i) => ({
-    fdrId, stackIndex: i, status: 'HOLDING', caseIAngels: caseIAngels == null ? null : caseIAngels + i,
+  const entries = ['flight-data-a', 'flight-data-b', 'flight-data-c', 'flight-data-d', 'flight-data-e'].map((flightDataId, i) => ({
+    flightDataId, stackIndex: i, status: 'HOLDING', caseIAngels: caseIAngels == null ? null : caseIAngels + i,
   }));
   return deepFreeze({ ...emptyStack({ hullId: 'CVN-72' }), charlieTimeUtc: CHARLIE, entries });
 }
@@ -39,28 +39,28 @@ test('Inserting an aircraft low in the marshal stack renumbers altitude, DME and
   const stack = fiveStack();
   const before = deriveStack(stack, { caseValue: 'III', shipState: SHIP });
 
-  const result = insertAt(stack, { fdrId: 'fdr-low', stackIndex: 1 }); // ONE call
+  const result = insertAt(stack, { flightDataId: 'flight-data-low', stackIndex: 1 }); // ONE call
 
   assert.equal(result.ok, true);
-  const after = new Map(deriveStack(result.stack, { caseValue: 'III', shipState: SHIP }).map((d) => [d.fdrId, d]));
+  const after = new Map(deriveStack(result.stack, { caseValue: 'III', shipState: SHIP }).map((d) => [d.flightDataId, d]));
   // the entry below is untouched
-  assert.deepEqual(after.get('fdr-a'), before[0]);
+  assert.deepEqual(after.get('flight-data-a'), before[0]);
   // every entry formerly at ≥ 1 moved up together: index +1, angels +1, DME +1, push +60 s
   for (const old of before.slice(1)) {
-    const now = after.get(old.fdrId);
-    assert.equal(now.stackIndex, old.stackIndex + 1, old.fdrId);
-    assert.equal(now.angels, old.angels + 1, old.fdrId);
-    assert.equal(now.marshalDme, old.marshalDme + 1, old.fdrId);
-    assert.equal(now.pushTimeUtc, old.pushTimeUtc + 60_000, old.fdrId);
+    const now = after.get(old.flightDataId);
+    assert.equal(now.stackIndex, old.stackIndex + 1, old.flightDataId);
+    assert.equal(now.angels, old.angels + 1, old.flightDataId);
+    assert.equal(now.marshalDme, old.marshalDme + 1, old.flightDataId);
+    assert.equal(now.pushTimeUtc, old.pushTimeUtc + 60_000, old.flightDataId);
   }
   // the low-fuel aircraft took the slot and its values
-  assert.equal(after.get('fdr-low').angels, 7);
-  assert.equal(after.get('fdr-low').marshalDme, 22);
-  assert.equal(after.get('fdr-low').pushTimeUtc, CHARLIE + 60_000);
+  assert.equal(after.get('flight-data-low').angels, 7);
+  assert.equal(after.get('flight-data-low').marshalDme, 22);
+  assert.equal(after.get('flight-data-low').pushTimeUtc, CHARLIE + 60_000);
   // one delta: exactly the inserted flight and everyone shifted, in stack order
-  assert.deepEqual(result.changed, ['fdr-low', 'fdr-b', 'fdr-c', 'fdr-d', 'fdr-e']);
+  assert.deepEqual(result.changed, ['flight-data-low', 'flight-data-b', 'flight-data-c', 'flight-data-d', 'flight-data-e']);
   // and the input stack is unchanged
-  assert.equal(stack.entries[1].fdrId, 'fdr-b');
+  assert.equal(stack.entries[1].flightDataId, 'flight-data-b');
   assert.equal(stack.entries[1].stackIndex, 1);
 });
 
@@ -71,14 +71,14 @@ test('Marshal DME, angels and push time are not independently editable.', () => 
   // Case I's squadron-assigned altitude (§9.12 rule 3), which the sequenced
   // derivation never reads — proved right here.
   for (const kind of STACK_OP_KINDS.filter((k) => k !== 'SetCaseIAngels')) assert.doesNotMatch(kind, /angel|dme|push ?time/i);
-  const caseI = applyStackOp(stack, { kind: 'SetCaseIAngels', fdrId: 'fdr-b', caseIAngels: 12 });
+  const caseI = applyStackOp(stack, { kind: 'SetCaseIAngels', flightDataId: 'flight-data-b', caseIAngels: 12 });
   assert.equal(caseI.ok, true);
   assert.deepEqual(
     deriveStack(caseI.stack, { caseValue: 'III', shipState: SHIP }),
     deriveStack(stack, { caseValue: 'III', shipState: SHIP }),
   );
   for (const kind of ['SetAngels', 'SetDme', 'SetMarshalDme', 'SetPushTime']) {
-    const r = applyStackOp(stack, { kind, fdrId: 'fdr-b', value: 12 });
+    const r = applyStackOp(stack, { kind, flightDataId: 'flight-data-b', value: 12 });
     assert.equal(r.ok, false, kind);
     assert.equal(r.reason, 'VALIDATION_ERROR');
   }
@@ -153,16 +153,16 @@ test('Changing the Case re-derives every carrier entry at once — one Case valu
 test('EEAT set before launch is still present on the recovery marshal message', () => {
   const EEAT = Date.UTC(2026, 8, 30, 15, 10, 0);
   // E1 — set on the flight while it has only a launch Strip …
-  const fdr = {
-    fdrId: 'fdr-a',
+  const flightData = {
+    flightDataId: 'flight-data-a',
     identity: { callsign: 'HORNET 11', aircraftType: 'FA18C' },
     military: { carrier: setCarrierFlightField(defaultCarrierFlight(), 'eeatUtc', EEAT).flight },
   };
   // … and later, on recovery, the marshal message built from the stack derivation carries it
-  const derived = deriveEntry({ fdrId: 'fdr-a', stackIndex: 0, status: 'HOLDING', caseIAngels: null },
+  const derived = deriveEntry({ flightDataId: 'flight-data-a', stackIndex: 0, status: 'HOLDING', caseIAngels: null },
     { caseValue: 'III', charlieTimeUtc: CHARLIE, shipState: SHIP });
-  const eeat = marshalMessage({ fdr, derived, caseValue: 'III', shipState: SHIP }).find((x) => x.key === 'eeat');
+  const eeat = marshalMessage({ flightData, derived, caseValue: 'III', shipState: SHIP }).find((x) => x.key === 'eeat');
   assert.equal(eeat.value, EEAT);
   // E2 — the restore path keeps it
-  assert.equal(normalizeCarrierFlight(JSON.parse(JSON.stringify(fdr.military.carrier))).eeatUtc, EEAT);
+  assert.equal(normalizeCarrierFlight(JSON.parse(JSON.stringify(flightData.military.carrier))).eeatUtc, EEAT);
 });

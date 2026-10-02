@@ -4,7 +4,7 @@ import crypto from 'crypto';
 
 const { BoardStore } = await import('../src/efsp/board-store.js');
 import { fullRules } from "./helpers/full-rules.mjs";
-const { FdrStore } = await import('../src/efsp/fdr-store.js');
+const { FlightDataStore } = await import('../src/efsp/flight-data-store.js');
 
 // A minimal, deterministic `rules` fixture standing in for block-map.js /
 // facility-config.js / nla.js / position-store.js, which don't exist yet at
@@ -13,8 +13,8 @@ const { FdrStore } = await import('../src/efsp/fdr-store.js');
 function makeRules(overrides = {}) {
   return {
     resolveBlockTarget: (blockId) => {
-      if (blockId === '5') return { kind: 'fdr', path: 'identity.beaconAssigned' };
-      if (blockId === '9E') return { kind: 'fdr', path: 'filed.remarks' };
+      if (blockId === '5') return { kind: 'flightData', path: 'identity.beaconAssigned' };
+      if (blockId === '9E') return { kind: 'flightData', path: 'filed.remarks' };
       if (blockId === '7') return { kind: 'annotation' }; // pretend Block 7 is annotation-routed for this fixture
       if (blockId === 'UNKNOWN') return null;
       return { kind: 'annotation' };
@@ -30,17 +30,17 @@ function makeRules(overrides = {}) {
       if (strip.state === 'CLEARED') return { inhibited: 'hold in force' };
       return null;
     },
-    isOccupied: (positionId) => positionId !== 'UNMANNED',
-    coveringPositionFor: (positionId) => (positionId === 'UNMANNED' ? 'COVER' : null),
+    isStaffed: (positionId) => positionId !== 'UNSTAFFED',
+    consolidatedAt: (positionId) => (positionId === 'UNSTAFFED' ? 'COVER' : null),
     isValidState: (state) => ['PROPOSED', 'PENDING_CLEARANCE', 'CLEARED', 'RUNWAY_QUEUE', 'DEPARTED', 'DROPPED'].includes(state),
     ...overrides,
   };
 }
 
 function makeStore(rulesOverrides) {
-  const fdrStore = new FdrStore();
-  const board = new BoardStore(fdrStore, fullRules(makeRules(rulesOverrides)));
-  return { board, fdrStore };
+  const flightDataStore = new FlightDataStore();
+  const board = new BoardStore(flightDataStore, fullRules(makeRules(rulesOverrides)));
+  return { board, flightDataStore };
 }
 
 function createMutation(overrides = {}) {
@@ -49,7 +49,7 @@ function createMutation(overrides = {}) {
     op: {
       kind: 'CreateStrip',
       bayId: 'proposed', rackId: 'main',
-      fdr: { callsign: 'VIPER1', aircraftType: 'F16', wakeCategory: 'D', departureAirport: 'LTAG', destinationAirport: 'LTAC', route: 'DCT', requestedAltitude: '250' },
+      flightData: { callsign: 'VIPER1', aircraftType: 'F16', wakeCategory: 'D', departureAirport: 'LTAG', destinationAirport: 'LTAC', route: 'DCT', requestedAltitude: '250' },
     },
     ...overrides,
   };
@@ -71,24 +71,24 @@ test('CreateStrip creates a Strip owned by the acting Position, with a minted FD
   const { board } = makeStore();
   const strip = createStrip(board, 'OPS');
   assert.equal(strip.ownerPositionId, 'OPS');
-  assert.equal(strip.role, 'DEPARTURE');
+  assert.equal(strip.stripType, 'DEPARTURE');
   assert.equal(strip.state, 'PROPOSED');
   assert.equal(strip.rev, 1);
   assert.ok(strip.cid);
-  assert.ok(strip.fdrId);
+  assert.ok(strip.flightDataId);
 });
 
 test('CreateStrip appends new Strips at the end of the target Rack by default', () => {
   const { board } = makeStore();
-  const a = createStrip(board, 'OPS', { op: { ...createMutation().op, fdr: { ...createMutation().op.fdr, callsign: 'AAA1111' } } });
-  const b = createStrip(board, 'OPS', { op: { ...createMutation().op, fdr: { ...createMutation().op.fdr, callsign: 'BBB2222' } } });
+  const a = createStrip(board, 'OPS', { op: { ...createMutation().op, flightData: { ...createMutation().op.flightData, callsign: 'AAA1111' } } });
+  const b = createStrip(board, 'OPS', { op: { ...createMutation().op, flightData: { ...createMutation().op.flightData, callsign: 'BBB2222' } } });
   const rack = board.getRack('proposed', 'main');
   assert.deepEqual(rack.map(s => s.stripId), [a.stripId, b.stripId]);
 });
 
 test('CreateStrip with an invalid FDR seed (bad callsign) is rejected and creates no Strip', () => {
   const { board } = makeStore();
-  const mut = createMutation({ op: { ...createMutation().op, fdr: { ...createMutation().op.fdr, callsign: 'TOOLONGCALLSIGN' } } });
+  const mut = createMutation({ op: { ...createMutation().op, flightData: { ...createMutation().op.flightData, callsign: 'TOOLONGCALLSIGN' } } });
   const result = board.applyMutation(mut, 'OPS', 'OPS');
   assert.equal(result.ok, false);
   assert.equal(board.getAll().length, 0);
@@ -159,7 +159,7 @@ test('idempotent replay works even for a Mutation that originally failed', () =>
 test('a Mutation from a Position that does not own the Strip is rejected as NOT_OWNER', () => {
   const { board } = makeStore();
   const strip = createStrip(board, 'OPS');
-  const result = board.applyMutation(mutation(strip, { kind: 'SetFlag', flag: 'offset', value: true }), 'GND', 'GND');
+  const result = board.applyMutation(mutation(strip, { kind: 'SetFlag', flag: 'offset', value: true }), 'GC', 'GC');
   assert.equal(result.ok, false);
   assert.equal(result.reason, 'NOT_OWNER');
 });
@@ -218,9 +218,9 @@ test('MoveStrip into a Bay with no implied state leaves the Strip state unchange
 
 test('MoveStrip resolves orderKey between explicit afterStripId/beforeStripId neighbors', () => {
   const { board } = makeStore();
-  const a = createStrip(board, 'OPS', { op: { ...createMutation().op, fdr: { ...createMutation().op.fdr, callsign: 'AAA1111' } } });
-  const b = createStrip(board, 'OPS', { op: { ...createMutation().op, fdr: { ...createMutation().op.fdr, callsign: 'BBB2222' } } });
-  const c = createStrip(board, 'OPS', { op: { ...createMutation().op, fdr: { ...createMutation().op.fdr, callsign: 'CCC3333' } } });
+  const a = createStrip(board, 'OPS', { op: { ...createMutation().op, flightData: { ...createMutation().op.flightData, callsign: 'AAA1111' } } });
+  const b = createStrip(board, 'OPS', { op: { ...createMutation().op, flightData: { ...createMutation().op.flightData, callsign: 'BBB2222' } } });
+  const c = createStrip(board, 'OPS', { op: { ...createMutation().op, flightData: { ...createMutation().op.flightData, callsign: 'CCC3333' } } });
   // Move c between a and b.
   const result = board.applyMutation(
     mutation(c, { kind: 'MoveStrip', bayId: 'proposed', rackId: 'main', afterStripId: a.stripId, beforeStripId: b.stripId }),
@@ -233,8 +233,8 @@ test('MoveStrip resolves orderKey between explicit afterStripId/beforeStripId ne
 
 test('MoveStrip triggers a Rack rebalance transparently when orderKey headroom is exhausted', () => {
   const { board } = makeStore();
-  const a = createStrip(board, 'OPS', { op: { ...createMutation().op, fdr: { ...createMutation().op.fdr, callsign: 'AAA1111' } } });
-  const b = createStrip(board, 'OPS', { op: { ...createMutation().op, fdr: { ...createMutation().op.fdr, callsign: 'BBB2222' } } });
+  const a = createStrip(board, 'OPS', { op: { ...createMutation().op, flightData: { ...createMutation().op.flightData, callsign: 'AAA1111' } } });
+  const b = createStrip(board, 'OPS', { op: { ...createMutation().op, flightData: { ...createMutation().op.flightData, callsign: 'BBB2222' } } });
 
   // Force b's orderKey into the exact "a + minDigit" exhaustion shape by
   // repeatedly moving b to sit directly after a until we can't any more —
@@ -245,7 +245,7 @@ test('MoveStrip triggers a Rack rebalance transparently when orderKey headroom i
   // no matter how many times we insert at the same tight slot.
   let prev = a, mid = b;
   for (let i = 0; i < 40; i++) {
-    const c = createStrip(board, 'OPS', { op: { ...createMutation().op, fdr: { ...createMutation().op.fdr, callsign: 'C' + i.toString().padStart(6, '0') } } });
+    const c = createStrip(board, 'OPS', { op: { ...createMutation().op, flightData: { ...createMutation().op.flightData, callsign: 'C' + i.toString().padStart(6, '0') } } });
     const result = board.applyMutation(
       mutation(c, { kind: 'MoveStrip', bayId: 'proposed', rackId: 'main', afterStripId: prev.stripId, beforeStripId: mid.stripId }),
       'OPS', 'OPS'
@@ -260,9 +260,9 @@ test('MoveStrip triggers a Rack rebalance transparently when orderKey headroom i
 
 test('MoveStrip between two Strips whose orderKeys already collide (a real, if rare, outcome of order-key.js\'s jitter — guide §5.4) rebalances transparently instead of crashing — the exact production scenario that took the whole server down before this fix', () => {
   const { board } = makeStore();
-  const a = createStrip(board, 'OPS', { op: { ...createMutation().op, fdr: { ...createMutation().op.fdr, callsign: 'AAA1111' } } });
-  const b = createStrip(board, 'OPS', { op: { ...createMutation().op, fdr: { ...createMutation().op.fdr, callsign: 'BBB2222' } } });
-  const c = createStrip(board, 'OPS', { op: { ...createMutation().op, fdr: { ...createMutation().op.fdr, callsign: 'CCC3333' } } });
+  const a = createStrip(board, 'OPS', { op: { ...createMutation().op, flightData: { ...createMutation().op.flightData, callsign: 'AAA1111' } } });
+  const b = createStrip(board, 'OPS', { op: { ...createMutation().op, flightData: { ...createMutation().op.flightData, callsign: 'BBB2222' } } });
+  const c = createStrip(board, 'OPS', { op: { ...createMutation().op, flightData: { ...createMutation().op.flightData, callsign: 'CCC3333' } } });
 
   // Force the exact production crash shape directly (a jitter collision is
   // ~1-in-62 and not worth relying on real randomness to reproduce) — a
@@ -283,8 +283,8 @@ test('MoveStrip between two Strips whose orderKeys already collide (a real, if r
 });
 
 test('applyMutation never propagates an unexpected exception — it rejects the one Mutation instead of crashing the process, regardless of where the exception originates', () => {
-  const fdrStore = new FdrStore();
-  const board = new BoardStore(fdrStore, fullRules(makeRules({
+  const flightDataStore = new FlightDataStore();
+  const board = new BoardStore(flightDataStore, fullRules(makeRules({
     resolveBlockTarget: () => { throw new Error('boom — simulated unexpected failure deep in a rule'); },
   })));
   const strip = createStrip(board);
@@ -297,30 +297,30 @@ test('applyMutation never propagates an unexpected exception — it rejects the 
   assert.equal(after.ok, true);
 });
 
-// ── SetBlock: fdr-routed and annotation-routed ──────────────────────────────
+// ── SetBlock: flight-data-routed and annotation-routed ──────────────────────────────
 
-test('SetBlock routed to an fdr path writes through fdr-store and bumps the Strip rev too', () => {
-  const { board, fdrStore } = makeStore();
+test('SetBlock routed to an flightData path writes through flight-data-store and bumps the Strip rev too', () => {
+  const { board, flightDataStore } = makeStore();
   const strip = createStrip(board);
   const revBefore = strip.rev; // snapshot the primitive — `strip` and `result.strip` below are the same live object
   const result = board.applyMutation(mutation(strip, { kind: 'SetBlock', blockId: '9E', value: 'NORDO PRACTICE' }), 'OPS', 'OPS');
   assert.equal(result.ok, true);
-  assert.equal(fdrStore.getFdr(strip.fdrId).filed.remarks, 'NORDO PRACTICE');
+  assert.equal(flightDataStore.getFlightData(strip.flightDataId).filed.remarks, 'NORDO PRACTICE');
   assert.equal(result.strip.rev, revBefore + 1);
 });
 
 test('SetBlock routed to beaconAssigned surfaces a duplicate warning without failing (defect D23)', () => {
-  const { board, fdrStore } = makeStore();
-  const a = createStrip(board, 'OPS', { op: { ...createMutation().op, fdr: { ...createMutation().op.fdr, callsign: 'AAA1111' } } });
-  const b = createStrip(board, 'OPS', { op: { ...createMutation().op, fdr: { ...createMutation().op.fdr, callsign: 'BBB2222' } } });
-  const aCode = fdrStore.getFdr(a.fdrId).identity.beaconAssigned;
+  const { board, flightDataStore } = makeStore();
+  const a = createStrip(board, 'OPS', { op: { ...createMutation().op, flightData: { ...createMutation().op.flightData, callsign: 'AAA1111' } } });
+  const b = createStrip(board, 'OPS', { op: { ...createMutation().op, flightData: { ...createMutation().op.flightData, callsign: 'BBB2222' } } });
+  const aCode = flightDataStore.getFlightData(a.flightDataId).identity.beaconAssigned;
 
   const result = board.applyMutation(mutation(b, { kind: 'SetBlock', blockId: '5', value: aCode }), 'OPS', 'OPS');
   assert.equal(result.ok, true);
   assert.equal(result.warning, 'DUPLICATE_IGNORED_WARNING');
 });
 
-test('SetBlock routed to an fdr path fails cleanly on invalid input (reserved beacon code) and does not bump rev', () => {
+test('SetBlock routed to an flightData path fails cleanly on invalid input (reserved beacon code) and does not bump rev', () => {
   const { board } = makeStore();
   const strip = createStrip(board);
   const revBefore = strip.rev; // snapshot the primitive — board.getStrip() below returns the same live object as `strip`, so comparing them directly would be a tautology regardless of correctness
@@ -331,14 +331,14 @@ test('SetBlock routed to an fdr path fails cleanly on invalid input (reserved be
 
 // ── WP4A: SetBlock routed to airspace-owner (§4.6.4), docs/adr/0018 ──────
 
-test('SetBlock routed to airspace-owner writes through fdr-store\'s dedicated setAirspaceOwner, not the generic setField path', () => {
-  const { board, fdrStore } = makeStore({
+test('SetBlock routed to airspace-owner writes through flight-data-store\'s dedicated setAirspaceOwner, not the generic setField path', () => {
+  const { board, flightDataStore } = makeStore({
     resolveBlockTarget: (blockId) => (blockId === '24A' ? { kind: 'airspace-owner' } : null),
   });
   const strip = createStrip(board);
   const result = board.applyMutation(mutation(strip, { kind: 'SetBlock', blockId: '24A', value: 'USING_AGENCY' }), 'OPS', 'OPS');
   assert.equal(result.ok, true, JSON.stringify(result));
-  assert.equal(fdrStore.getFdr(strip.fdrId).airspace.owner, 'USING_AGENCY');
+  assert.equal(flightDataStore.getFlightData(strip.flightDataId).airspace.owner, 'USING_AGENCY');
 });
 
 test('SetBlock routed to airspace-owner rejects a boolean value and surfaces the detail message (defect D15)', () => {
@@ -542,54 +542,54 @@ test('Undo consumes the window — a second Undo immediately after has nothing l
 function makeTransferNlaRules(overrides = {}) {
   return {
     resolveBlockTarget: () => ({ kind: 'annotation' }),
-    bayImpliesState: (bayId) => (bayId === 'app-departures' ? 'HANDED_OFF' : null),
+    bayImpliesState: (bayId) => (bayId === 'ap-departures' ? 'HANDED_OFF' : null),
     bayForImpliedState: (positionId, state) =>
-      (positionId === 'APP' && state === 'HANDED_OFF' ? { bayId: 'app-departures', rackIds: ['main'] } : null),
-    computeNla: (strip) => (strip.state === 'DEPARTED' ? { toState: 'HANDED_OFF', transferTo: 'APP' } : null),
-    isOccupied: (positionId) => positionId === 'APP',
-    coveringPositionFor: () => null,
+      (positionId === 'AP' && state === 'HANDED_OFF' ? { bayId: 'ap-departures', rackIds: ['main'] } : null),
+    computeNla: (strip) => (strip.state === 'DEPARTED' ? { toState: 'HANDED_OFF', transferTo: 'AP' } : null),
+    isStaffed: (positionId) => positionId === 'AP',
+    consolidatedAt: () => null,
     isValidState: () => true,
     ...overrides,
   };
 }
 
 test('a transfer-shaped InvokeNla changes owner, Bay, and state atomically, in one Mutation', () => {
-  const fdrStore = new FdrStore();
-  const board = new BoardStore(fdrStore, fullRules(makeTransferNlaRules()));
-  const strip = createStrip(board, 'TWR', { op: { ...createMutation().op, bayId: 'twr-airborne', rackId: 'main' } });
-  board.applyMutation({ clientMutationId: crypto.randomUUID(), stripId: strip.stripId, baseRev: strip.rev, op: { kind: 'SetState', toState: 'DEPARTED' } }, 'TWR', 'TWR');
+  const flightDataStore = new FlightDataStore();
+  const board = new BoardStore(flightDataStore, fullRules(makeTransferNlaRules()));
+  const strip = createStrip(board, 'LC', { op: { ...createMutation().op, bayId: 'lc-airborne', rackId: 'main' } });
+  board.applyMutation({ clientMutationId: crypto.randomUUID(), stripId: strip.stripId, baseRev: strip.rev, op: { kind: 'SetState', toState: 'DEPARTED' } }, 'LC', 'LC');
   const departed = board.getStrip(strip.stripId);
 
-  const result = board.applyMutation(mutation(departed, { kind: 'InvokeNla' }), 'TWR', 'TWR');
+  const result = board.applyMutation(mutation(departed, { kind: 'InvokeNla' }), 'LC', 'LC');
   assert.equal(result.ok, true);
-  assert.equal(result.strip.ownerPositionId, 'APP');
-  assert.equal(result.strip.bayId, 'app-departures');
+  assert.equal(result.strip.ownerPositionId, 'AP');
+  assert.equal(result.strip.bayId, 'ap-departures');
   assert.equal(result.strip.state, 'HANDED_OFF');
 });
 
-test('a transfer-shaped InvokeNla to an unoccupied, uncovered Position is rejected via _applyTransferStrip\'s own occupancy gate, and the Strip stays with the sender — defense in depth even when computeNla itself doesn\'t pre-check occupancy (the real nla.js does; this fixture deliberately doesn\'t, to exercise board-store.js\'s own gate)', () => {
-  const fdrStore = new FdrStore();
-  const board = new BoardStore(fdrStore, fullRules(makeTransferNlaRules({ isOccupied: () => false, coveringPositionFor: () => null })));
-  const strip = createStrip(board, 'TWR', { op: { ...createMutation().op, bayId: 'twr-airborne', rackId: 'main' } });
-  board.applyMutation({ clientMutationId: crypto.randomUUID(), stripId: strip.stripId, baseRev: strip.rev, op: { kind: 'SetState', toState: 'DEPARTED' } }, 'TWR', 'TWR');
+test('a transfer-shaped InvokeNla to an unstaffed, uncovered Position is rejected via _applyTransferStrip\'s own staffing gate, and the Strip stays with the sender — defense in depth even when computeNla itself doesn\'t pre-check staffing (the real nla.js does; this fixture deliberately doesn\'t, to exercise board-store.js\'s own gate)', () => {
+  const flightDataStore = new FlightDataStore();
+  const board = new BoardStore(flightDataStore, fullRules(makeTransferNlaRules({ isStaffed: () => false, consolidatedAt: () => null })));
+  const strip = createStrip(board, 'LC', { op: { ...createMutation().op, bayId: 'lc-airborne', rackId: 'main' } });
+  board.applyMutation({ clientMutationId: crypto.randomUUID(), stripId: strip.stripId, baseRev: strip.rev, op: { kind: 'SetState', toState: 'DEPARTED' } }, 'LC', 'LC');
   const departed = board.getStrip(strip.stripId);
 
-  const result = board.applyMutation(mutation(departed, { kind: 'InvokeNla' }), 'TWR', 'TWR');
+  const result = board.applyMutation(mutation(departed, { kind: 'InvokeNla' }), 'LC', 'LC');
   assert.equal(result.ok, false);
   assert.equal(result.reason, 'NO_RECEIVING_POSITION');
-  assert.equal(board.getStrip(strip.stripId).ownerPositionId, 'TWR');
+  assert.equal(board.getStrip(strip.stripId).ownerPositionId, 'LC');
 });
 
 test('a transfer-shaped InvokeNla is NOT recorded into the Undo window (docs/adr/0009) — Undo reports unavailable right after', () => {
-  const fdrStore = new FdrStore();
-  const board = new BoardStore(fdrStore, fullRules(makeTransferNlaRules()));
-  const strip = createStrip(board, 'TWR', { op: { ...createMutation().op, bayId: 'twr-airborne', rackId: 'main' } });
-  board.applyMutation({ clientMutationId: crypto.randomUUID(), stripId: strip.stripId, baseRev: strip.rev, op: { kind: 'SetState', toState: 'DEPARTED' } }, 'TWR', 'TWR');
+  const flightDataStore = new FlightDataStore();
+  const board = new BoardStore(flightDataStore, fullRules(makeTransferNlaRules()));
+  const strip = createStrip(board, 'LC', { op: { ...createMutation().op, bayId: 'lc-airborne', rackId: 'main' } });
+  board.applyMutation({ clientMutationId: crypto.randomUUID(), stripId: strip.stripId, baseRev: strip.rev, op: { kind: 'SetState', toState: 'DEPARTED' } }, 'LC', 'LC');
   const departed = board.getStrip(strip.stripId);
-  board.applyMutation(mutation(departed, { kind: 'InvokeNla' }), 'TWR', 'TWR');
+  board.applyMutation(mutation(departed, { kind: 'InvokeNla' }), 'LC', 'LC');
 
   const handedOff = board.getStrip(strip.stripId);
-  const undoResult = board.applyMutation(mutation(handedOff, { kind: 'Undo' }), 'APP', 'APP');
+  const undoResult = board.applyMutation(mutation(handedOff, { kind: 'Undo' }), 'AP', 'AP');
   assert.equal(undoResult.ok, false);
 });
 
@@ -617,7 +617,7 @@ test('an ordinary TransferStrip clears any PENDING Undo window for that Strip �
 
 function makeStateOwnerRules(overrides = {}) {
   return {
-    canActOnState: (actingPositionId, role, state) => {
+    canActOnState: (actingPositionId, stripType, state) => {
       const owners = { PROPOSED: ['OPS'], PENDING_CLEARANCE: ['CD'], CLEARED: ['CD'] };
       return !!owners[state] && owners[state].includes(actingPositionId);
     },
@@ -632,17 +632,17 @@ function makeStateOwnerRules(overrides = {}) {
       return null;
     },
     resolveBlockTarget: () => ({ kind: 'annotation' }),
-    isOccupied: () => true,
-    coveringPositionFor: () => null,
+    isStaffed: () => true,
+    consolidatedAt: () => null,
     isValidState: () => true,
     ...overrides,
   };
 }
 
 function makeStateOwnerStore(rulesOverrides) {
-  const fdrStore = new FdrStore();
-  const board = new BoardStore(fdrStore, fullRules(makeStateOwnerRules(rulesOverrides)));
-  return { board, fdrStore };
+  const flightDataStore = new FlightDataStore();
+  const board = new BoardStore(flightDataStore, fullRules(makeStateOwnerRules(rulesOverrides)));
+  return { board, flightDataStore };
 }
 
 test('InvokeNla succeeds for the Position that IS the current state\'s normal owner', () => {
@@ -715,9 +715,9 @@ test('without a canActOnState rule supplied, this gate is simply skipped (opt-in
   assert.equal(result.ok, true);
 });
 
-// ── TransferStrip: occupancy gating + covering chain (guide §4.5) ──────────
+// ── TransferStrip: staffing gating + covering chain (guide §4.5) ──────────
 
-test('TransferStrip to an occupied Position succeeds and changes owner + Bay/Rack atomically', () => {
+test('TransferStrip to an staffed Position succeeds and changes owner + Bay/Rack atomically', () => {
   const { board } = makeStore();
   const strip = createStrip(board, 'OPS');
   const result = board.applyMutation(
@@ -768,11 +768,11 @@ test('TransferStrip into a Bay with no implied state leaves the Strip state unch
   assert.equal(result.strip.state, strip.state);
 });
 
-test('TransferStrip to an unmanned Position with no covering Position is rejected with NO_RECEIVING_POSITION and the Strip stays with the sender', () => {
-  const { board } = makeStore({ coveringPositionFor: () => null });
+test('TransferStrip to an unstaffed Position with no covering Position is rejected with NO_RECEIVING_POSITION and the Strip stays with the sender', () => {
+  const { board } = makeStore({ consolidatedAt: () => null });
   const strip = createStrip(board, 'OPS');
   const result = board.applyMutation(
-    mutation(strip, { kind: 'TransferStrip', toPositionId: 'UNMANNED', bayId: 'x', rackId: 'y' }),
+    mutation(strip, { kind: 'TransferStrip', toPositionId: 'UNSTAFFED', bayId: 'x', rackId: 'y' }),
     'OPS', 'OPS'
   );
   assert.equal(result.ok, false);
@@ -780,11 +780,11 @@ test('TransferStrip to an unmanned Position with no covering Position is rejecte
   assert.equal(board.getStrip(strip.stripId).ownerPositionId, 'OPS');
 });
 
-test('TransferStrip to an unmanned Position with an occupied covering Position routes there instead, and reports routedTo', () => {
-  const { board } = makeStore(); // fixture: UNMANNED -> covered by COVER, and COVER is occupied
+test('TransferStrip to an unstaffed Position with an staffed covering Position routes there instead, and reports routedTo', () => {
+  const { board } = makeStore(); // fixture: UNSTAFFED -> covered by COVER, and COVER is staffed
   const strip = createStrip(board, 'OPS');
   const result = board.applyMutation(
-    mutation(strip, { kind: 'TransferStrip', toPositionId: 'UNMANNED', bayId: 'x', rackId: 'y' }),
+    mutation(strip, { kind: 'TransferStrip', toPositionId: 'UNSTAFFED', bayId: 'x', rackId: 'y' }),
     'OPS', 'OPS'
   );
   assert.equal(result.ok, true);
@@ -797,54 +797,54 @@ test('TransferStrip is itself owner-gated — a non-owning Position cannot initi
   const strip = createStrip(board, 'OPS');
   const result = board.applyMutation(
     mutation(strip, { kind: 'TransferStrip', toPositionId: 'CD', bayId: 'x', rackId: 'y' }),
-    'GND', 'GND'
+    'GC', 'GC'
   );
   assert.equal(result.ok, false);
   assert.equal(result.reason, 'NOT_OWNER');
 });
 
-// ── reassignPositionStrips — system-initiated, covering-chain routing (guide §4.8.6 rule 2) ──
+// ── reassignPositionStrips — system-initiated, consolidation routing (guide §4.8.6 rule 2) ──
 
 test('reassignPositionStrips moves every non-DROPPED Strip owned by the vacated Position to the covering Position', () => {
   const { board } = makeStore();
-  const a = createStrip(board, 'GND', { op: { ...createMutation().op, fdr: { ...createMutation().op.fdr, callsign: 'AAA1111' } } });
-  const b = createStrip(board, 'GND', { op: { ...createMutation().op, fdr: { ...createMutation().op.fdr, callsign: 'BBB2222' } } });
+  const a = createStrip(board, 'GC', { op: { ...createMutation().op, flightData: { ...createMutation().op.flightData, callsign: 'AAA1111' } } });
+  const b = createStrip(board, 'GC', { op: { ...createMutation().op, flightData: { ...createMutation().op.flightData, callsign: 'BBB2222' } } });
 
-  const reassigned = board.reassignPositionStrips('GND', 'TWR');
+  const reassigned = board.reassignPositionStrips('GC', 'LC');
   assert.deepEqual(reassigned.sort(), [a.stripId, b.stripId].sort());
-  assert.equal(board.getStrip(a.stripId).ownerPositionId, 'TWR');
-  assert.equal(board.getStrip(b.stripId).ownerPositionId, 'TWR');
+  assert.equal(board.getStrip(a.stripId).ownerPositionId, 'LC');
+  assert.equal(board.getStrip(b.stripId).ownerPositionId, 'LC');
 });
 
 test('reassignPositionStrips leaves a DROPPED Strip untouched (it is not stranded traffic)', () => {
   const { board } = makeStore();
-  const strip = createStrip(board, 'GND');
-  board.applyMutation(mutation(strip, { kind: 'DropStrip', reason: 'x' }), 'GND', 'GND');
+  const strip = createStrip(board, 'GC');
+  board.applyMutation(mutation(strip, { kind: 'DropStrip', reason: 'x' }), 'GC', 'GC');
 
-  const reassigned = board.reassignPositionStrips('GND', 'TWR');
+  const reassigned = board.reassignPositionStrips('GC', 'LC');
   assert.deepEqual(reassigned, []);
-  assert.equal(board.getStrip(strip.stripId).ownerPositionId, 'GND'); // unchanged
+  assert.equal(board.getStrip(strip.stripId).ownerPositionId, 'GC'); // unchanged
 });
 
 test('reassignPositionStrips is recorded in the mutation log as a system action, not attributed to any acting Position', () => {
   const { board } = makeStore();
   const recorded = [];
   board.setMutationLog({ record: (entry) => recorded.push(entry) });
-  createStrip(board, 'GND');
+  createStrip(board, 'GC');
   recorded.length = 0;
 
-  board.reassignPositionStrips('GND', 'TWR');
+  board.reassignPositionStrips('GC', 'LC');
   assert.equal(recorded.length, 1);
   assert.equal(recorded[0].op, 'SystemReassign');
   assert.equal(recorded[0].actingPositionId, null);
   assert.equal(recorded[0].actorId, 'system');
-  assert.equal(recorded[0].before.ownerPositionId, 'GND');
-  assert.equal(recorded[0].after.ownerPositionId, 'TWR');
+  assert.equal(recorded[0].before.ownerPositionId, 'GC');
+  assert.equal(recorded[0].after.ownerPositionId, 'LC');
 });
 
 test('reassignPositionStrips with nothing owned by the source Position returns an empty array and touches nothing', () => {
   const { board } = makeStore();
-  const reassigned = board.reassignPositionStrips('GND', 'TWR');
+  const reassigned = board.reassignPositionStrips('GC', 'LC');
   assert.deepEqual(reassigned, []);
 });
 
@@ -887,16 +887,16 @@ test('a two-party TransferStrip (isSelfCoordinated=false) is recorded as such, n
 // ── Per-acting-Position permission (guide §4.8.4, defect D21) ──────────────
 
 test('when a canMutate rule is supplied, a denied (actingPosition, opKind) combination is rejected with PERMISSION_DENIED before ownership is even checked', () => {
-  const { board } = makeStore({ canMutate: (actingPositionId, opKind) => !(actingPositionId === 'GND' && opKind === 'DropStrip') });
-  const strip = createStrip(board, 'GND');
-  const result = board.applyMutation(mutation(strip, { kind: 'DropStrip', reason: 'x' }), 'GND', 'GND');
+  const { board } = makeStore({ canMutate: (actingPositionId, opKind) => !(actingPositionId === 'GC' && opKind === 'DropStrip') });
+  const strip = createStrip(board, 'GC');
+  const result = board.applyMutation(mutation(strip, { kind: 'DropStrip', reason: 'x' }), 'GC', 'GC');
   assert.equal(result.ok, false);
   assert.equal(result.reason, 'PERMISSION_DENIED');
 });
 
 test('CreateStrip itself is gated by canMutate (only OPS may originate an FDR, guide §4.1 rule 3)', () => {
   const { board } = makeStore({ canMutate: (actingPositionId, opKind) => !(opKind === 'CreateStrip' && actingPositionId !== 'OPS') });
-  const result = board.applyMutation(createMutation(), 'GND', 'GND');
+  const result = board.applyMutation(createMutation(), 'GC', 'GC');
   assert.equal(result.ok, false);
   assert.equal(result.reason, 'PERMISSION_DENIED');
   assert.equal(board.getAll().length, 0);
@@ -904,64 +904,64 @@ test('CreateStrip itself is gated by canMutate (only OPS may originate an FDR, g
 
 test('without a canMutate rule supplied, permission checking is simply skipped (opt-in hook, existing callers/tests unaffected)', () => {
   const { board } = makeStore(); // fixture makeRules() defines no canMutate
-  const result = board.applyMutation(createMutation(), 'GND', 'GND');
+  const result = board.applyMutation(createMutation(), 'GC', 'GC');
   assert.equal(result.ok, true);
 });
 
 // ── CreateStrip role-scoped permission (Phase 2, docs/adr/0008) ─────────
 
-test('CreateStrip is rejected PERMISSION_DENIED when canCreateStripRole says no for this (Position, role) pair, before touching fdrStore', () => {
-  const { board, fdrStore } = makeStore({
-    canCreateStripRole: (actingPositionId, role) => actingPositionId === 'OPS' && role === 'DEPARTURE',
+test('CreateStrip is rejected PERMISSION_DENIED when canCreateStripType says no for this (Position, stripType) pair, before touching flightDataStore', () => {
+  const { board, flightDataStore } = makeStore({
+    canCreateStripType: (actingPositionId, stripType) => actingPositionId === 'OPS' && stripType === 'DEPARTURE',
   });
-  const result = board.applyMutation(createMutation({ op: { ...createMutation().op, role: 'ARRIVAL' } }), 'OPS', 'OPS');
+  const result = board.applyMutation(createMutation({ op: { ...createMutation().op, stripType: 'ARRIVAL' } }), 'OPS', 'OPS');
   assert.equal(result.ok, false);
   assert.equal(result.reason, 'PERMISSION_DENIED');
-  assert.equal(fdrStore.getAll().length, 0); // no side effect on a denied CreateStrip
+  assert.equal(flightDataStore.getAll().length, 0); // no side effect on a denied CreateStrip
 });
 
-test('CreateStrip succeeds when canCreateStripRole allows this (Position, role) pair', () => {
+test('CreateStrip succeeds when canCreateStripType allows this (Position, stripType) pair', () => {
   const { board } = makeStore({
-    canCreateStripRole: (actingPositionId, role) => actingPositionId === 'APP' && role === 'ARRIVAL',
+    canCreateStripType: (actingPositionId, stripType) => actingPositionId === 'AP' && stripType === 'ARRIVAL',
   });
-  const result = board.applyMutation(createMutation({ op: { ...createMutation().op, role: 'ARRIVAL' } }), 'APP', 'APP');
+  const result = board.applyMutation(createMutation({ op: { ...createMutation().op, stripType: 'ARRIVAL' } }), 'AP', 'AP');
   assert.equal(result.ok, true);
-  assert.equal(result.strip.role, 'ARRIVAL');
+  assert.equal(result.strip.stripType, 'ARRIVAL');
 });
 
-test('CreateStrip defaults to role DEPARTURE when op.role is omitted', () => {
-  const { board } = makeStore({ canCreateStripRole: (id, role) => id === 'OPS' && role === 'DEPARTURE' });
-  const result = board.applyMutation(createMutation(), 'OPS', 'OPS'); // no op.role at all
+test('CreateStrip defaults to role DEPARTURE when op.stripType is omitted', () => {
+  const { board } = makeStore({ canCreateStripType: (id, stripType) => id === 'OPS' && stripType === 'DEPARTURE' });
+  const result = board.applyMutation(createMutation(), 'OPS', 'OPS'); // no op.stripType at all
   assert.equal(result.ok, true);
-  assert.equal(result.strip.role, 'DEPARTURE');
+  assert.equal(result.strip.stripType, 'DEPARTURE');
 });
 
 test('an ARRIVAL CreateStrip defaults its initial state to INBOUND, not PROPOSED', () => {
-  const { board } = makeStore({ canCreateStripRole: () => true });
-  const result = board.applyMutation(createMutation({ op: { ...createMutation().op, role: 'ARRIVAL' } }), 'APP', 'APP');
+  const { board } = makeStore({ canCreateStripType: () => true });
+  const result = board.applyMutation(createMutation({ op: { ...createMutation().op, stripType: 'ARRIVAL' } }), 'AP', 'AP');
   assert.equal(result.ok, true);
   assert.equal(result.strip.state, 'INBOUND');
 });
 
 // Bug found in live testing (docs/adr/0023): the pre-fix default was a raw
-// `role === 'ARRIVAL' ? 'INBOUND' : 'PROPOSED'` binary, which would have
+// `stripType === 'ARRIVAL' ? 'INBOUND' : 'PROPOSED'` binary, which would have
 // silently given a new OVERFLIGHT Strip the invalid state 'PROPOSED' (not
 // even in OVERFLIGHT_STATE_SET) since no caller passes op.initialState.
 test('an OVERFLIGHT CreateStrip defaults its initial state to INBOUND, not PROPOSED', () => {
-  const { board } = makeStore({ canCreateStripRole: () => true });
-  const result = board.applyMutation(createMutation({ op: { ...createMutation().op, role: 'OVERFLIGHT' } }), 'CTR', 'CTR');
+  const { board } = makeStore({ canCreateStripType: () => true });
+  const result = board.applyMutation(createMutation({ op: { ...createMutation().op, stripType: 'OVERFLIGHT' } }), 'CTR', 'CTR');
   assert.equal(result.ok, true);
   assert.equal(result.strip.state, 'INBOUND');
 });
 
-test('CreateStrip with an unknown role is rejected VALIDATION_ERROR when isValidRole is supplied', () => {
-  const { board } = makeStore({ isValidRole: (role) => ['DEPARTURE', 'ARRIVAL'].includes(role) });
-  const result = board.applyMutation(createMutation({ op: { ...createMutation().op, role: 'OVERFLIGHT' } }), 'OPS', 'OPS');
+test('CreateStrip with an unknown role is rejected VALIDATION_ERROR when isValidStripType is supplied', () => {
+  const { board } = makeStore({ isValidStripType: (stripType) => ['DEPARTURE', 'ARRIVAL'].includes(stripType) });
+  const result = board.applyMutation(createMutation({ op: { ...createMutation().op, stripType: 'OVERFLIGHT' } }), 'OPS', 'OPS');
   assert.equal(result.ok, false);
   assert.equal(result.reason, 'VALIDATION_ERROR');
 });
 
-test('without isValidRole/canCreateStripRole rules supplied, CreateStrip role-gating is simply skipped (opt-in hooks, existing fixtures unaffected)', () => {
+test('without isValidStripType/canCreateStripType rules supplied, CreateStrip role-gating is simply skipped (opt-in hooks, existing fixtures unaffected)', () => {
   const { board } = makeStore(); // fixture makeRules() defines neither
   const result = board.applyMutation(createMutation(), 'ANY_POSITION', 'ANY_POSITION');
   assert.equal(result.ok, true);
@@ -988,11 +988,11 @@ test('a DROPPED Strip leaves the visible Board — getRack excludes it', () => {
 });
 
 test('DropStrip releases the FDR\'s beacon code back to the allocator', () => {
-  const { board, fdrStore } = makeStore();
+  const { board, flightDataStore } = makeStore();
   const strip = createStrip(board);
-  const code = fdrStore.getFdr(strip.fdrId).identity.beaconAssigned;
+  const code = flightDataStore.getFlightData(strip.flightDataId).identity.beaconAssigned;
   board.applyMutation(mutation(strip, { kind: 'DropStrip', reason: 'cancelled' }), 'OPS', 'OPS');
-  assert.equal(fdrStore.codeAllocator.isAllocated(code), false);
+  assert.equal(flightDataStore.codeAllocator.isAllocated(code), false);
 });
 
 // ── Mutation log wiring ─────────────────────────────────────────────────────
@@ -1034,10 +1034,10 @@ test('a Strip snapshot/restore round-trip resolves to exactly one owner, unchang
 
   const snap = board.snapshot();
 
-  // Simulate an actual restart: a brand-new BoardStore/FdrStore instance,
+  // Simulate an actual restart: a brand-new BoardStore/FlightDataStore instance,
   // as would happen on process restart, restoring only from persisted data.
-  const freshFdrStore = new FdrStore();
-  const freshBoard = new BoardStore(freshFdrStore, fullRules(makeRules()));
+  const freshFlightDataStore = new FlightDataStore();
+  const freshBoard = new BoardStore(freshFlightDataStore, fullRules(makeRules()));
   freshBoard.restore(snap);
 
   const restored = freshBoard.getStrip(strip.stripId);
@@ -1051,10 +1051,10 @@ test('restore() preserves the cid sequence so future CreateStrip calls do not re
   const first = createStrip(board);
   const snap = board.snapshot();
 
-  const freshFdrStore = new FdrStore();
-  const freshBoard = new BoardStore(freshFdrStore, fullRules(makeRules()));
+  const freshFlightDataStore = new FlightDataStore();
+  const freshBoard = new BoardStore(freshFlightDataStore, fullRules(makeRules()));
   freshBoard.restore(snap);
-  const second = createStrip(freshBoard, 'OPS', { op: { ...createMutation().op, fdr: { ...createMutation().op.fdr, callsign: 'ZZZ9999' } } });
+  const second = createStrip(freshBoard, 'OPS', { op: { ...createMutation().op, flightData: { ...createMutation().op.flightData, callsign: 'ZZZ9999' } } });
 
   assert.notEqual(second.cid, first.cid);
 });
@@ -1062,7 +1062,7 @@ test('restore() preserves the cid sequence so future CreateStrip calls do not re
 // ── docs/adr/0081 (L27): one Board event, every touched Strip ─────────────
 
 function named(board, callsign) {
-  return createStrip(board, 'OPS', { op: { ...createMutation().op, fdr: { ...createMutation().op.fdr, callsign } } });
+  return createStrip(board, 'OPS', { op: { ...createMutation().op, flightData: { ...createMutation().op.flightData, callsign } } });
 }
 
 test('a forced exhaustion rebalance puts every re-keyed Strip in drainTouched()', () => {
@@ -1114,7 +1114,7 @@ test('a refused Mutation leaves drainTouched() empty', () => {
   board.drainTouched();
   const stale = board.applyMutation({ ...mutation(s, { kind: 'SetFlag', flag: 'offset', value: true }), baseRev: s.rev + 7 }, 'OPS', 'OPS');
   assert.equal(stale.ok, false);
-  const notOwner = board.applyMutation(mutation(s, { kind: 'SetFlag', flag: 'offset', value: true }), 'GND', 'GND');
+  const notOwner = board.applyMutation(mutation(s, { kind: 'SetFlag', flag: 'offset', value: true }), 'GC', 'GC');
   assert.equal(notOwner.ok, false);
   const bad = board.applyMutation(mutation(s, { kind: 'SetFlag', flag: 'nope', value: true }), 'OPS', 'OPS');
   assert.equal(bad.ok, false);
@@ -1169,9 +1169,9 @@ test('a Mutation without a clientMutationId is never answered from the cache', (
 
 test('observeTouches sees every touch once, after its ring entry, in order; a wrap of _rebalanceRack attributes the rebalance touches; an archive is not a touch', () => {
   const { board } = makeStore();
-  const a = createStrip(board, 'OPS', { op: { ...createMutation().op, fdr: { ...createMutation().op.fdr, callsign: 'AAA1111' } } });
-  const b = createStrip(board, 'OPS', { op: { ...createMutation().op, fdr: { ...createMutation().op.fdr, callsign: 'BBB2222' } } });
-  const c = createStrip(board, 'OPS', { op: { ...createMutation().op, fdr: { ...createMutation().op.fdr, callsign: 'CCC3333' } } });
+  const a = createStrip(board, 'OPS', { op: { ...createMutation().op, flightData: { ...createMutation().op.flightData, callsign: 'AAA1111' } } });
+  const b = createStrip(board, 'OPS', { op: { ...createMutation().op, flightData: { ...createMutation().op.flightData, callsign: 'BBB2222' } } });
+  const c = createStrip(board, 'OPS', { op: { ...createMutation().op, flightData: { ...createMutation().op.flightData, callsign: 'CCC3333' } } });
   board.getStrip(a.stripId).orderKey = 'V';
   board.getStrip(b.stripId).orderKey = 'V';
 

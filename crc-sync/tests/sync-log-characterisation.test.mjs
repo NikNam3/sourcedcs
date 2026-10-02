@@ -91,7 +91,7 @@ test('a Board restore mints a new epoch, keeps the seq, and replays nothing from
   let n = 0;
   crypto.randomUUID = () => `uuid-${++n}`;
   try {
-    const board = new BoardStore({ getFdr: () => null }, fullRules(), { clock });
+    const board = new BoardStore({ getFlightData: () => null }, fullRules(), { clock });
     assert.equal(n, 1, 'one randomUUID per Board construction');
     board.restore({ strips: [], cidSeq: 0, replay: [], droppedWallAt: [] });
     assert.equal(n, 2, 'one per restore');
@@ -106,7 +106,7 @@ test('the Board idempotency cache: 5,000 records, oldest out first; cmid-less ne
   let wall = 1_000_000;
   Date.now = () => wall;
   try {
-    const board = new BoardStore({ getFdr: () => null }, fullRules({ resolveBlockTarget: () => null }), { clock });
+    const board = new BoardStore({ getFlightData: () => null }, fullRules({ resolveBlockTarget: () => null }), { clock });
     const miss = (cmid) => board.applyMutation({ clientMutationId: cmid, stripId: 'nope', baseRev: 0, op: { kind: 'SetFlag', flag: 'attention', value: true } }, 'OPS', 'c');
     const first = miss('m-0');
     assert.equal(first.ok, false);
@@ -128,7 +128,7 @@ test('the Board idempotency cache: 5,000 records, oldest out first; cmid-less ne
     assert.deepEqual(Object.keys(snap), ['strips', 'cidSeq', 'replay', 'droppedWallAt']);
     assert.equal(snap.replay[0][0], 'm-1000');
     assert.equal(snap.replay.length, 4001);
-    assert.deepEqual(Object.keys(snap.replay[0][1]), ['ok', 'reason', 'detail', 'warning', 'routedTo', 'selfCoordinated', 'stripId', 'fdrId', 'peerFacilityId', 'peerStripId', 'appliedWallAt']);
+    assert.deepEqual(Object.keys(snap.replay[0][1]), ['ok', 'reason', 'detail', 'warning', 'routedTo', 'selfCoordinated', 'stripId', 'flightDataId', 'peerFacilityId', 'peerStripId', 'appliedWallAt']);
     assert.equal(snap.replay[0][1].warning, null, 'absent fields are null in a Board record');
     // Restore loads every pair with a string cmid and an object record, no cap, no window.
     const many = [];

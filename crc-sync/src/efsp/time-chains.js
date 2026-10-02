@@ -10,8 +10,8 @@
 // source in a fixed order that has a value wins.
 //
 // Computed at READ, never stored. The inputs are stored (the controller's
-// field, the filed DD-1801's departure time in fdr.timeInputs, the ATO's in
-// fdr.ato); the answer is a pure function of them, so "which source was used"
+// field, the filed DD-1801's departure time in flightData.timeInputs, the ATO's in
+// flightData.ato); the answer is a pure function of them, so "which source was used"
 // is recorded by being deterministic from recorded inputs, and no writer has
 // to remember to recompute anything. Above all, a stored actual-time field
 // (assigned.taxiTimeUtc, assigned.takeoffTimeUtc) never holds an estimate a
@@ -39,7 +39,7 @@ const TIME_CHAINS = {
 
 // STATE_CHANGE is the takeoff chain's observed source (docs/adr/0076, Q-L16-3):
 // the mission-clock time a DEPARTURE Strip entered DEPARTED, stamped by
-// board-store.js into fdr.timeInputs.takeoffStampedUtc. It is an actual, so it
+// board-store.js into flightData.timeInputs.takeoffStampedUtc. It is an actual, so it
 // is never `estimated`, and it sits below CONTROLLER so a typed time still wins.
 
 // Which chain an EST_* source reads.
@@ -49,19 +49,19 @@ function _timeChainEpoch(v) {
   return typeof v === 'number' && Number.isFinite(v) ? v : null;
 }
 
-function _timeChainRead(fdr, path) {
-  return path.split('.').reduce((o, k) => (o == null ? o : o[k]), fdr);
+function _timeChainRead(flightData, path) {
+  return path.split('.').reduce((o, k) => (o == null ? o : o[k]), flightData);
 }
 
 /** The value one source gives for a chain, or null. `via` is the upstream chain's source, for an EST_*. */
-function _timeChainSourceValue(source, chain, fdr) {
-  if (!fdr) return { valueUtc: null, via: null };
-  if (source === 'CONTROLLER') return { valueUtc: _timeChainEpoch(_timeChainRead(fdr, chain.path)), via: null };
-  if (source === 'FLIGHT_PLAN') return { valueUtc: _timeChainEpoch(fdr.timeInputs && fdr.timeInputs.flightPlanDepartureUtc), via: null };
-  if (source === 'STATE_CHANGE') return { valueUtc: _timeChainEpoch(fdr.timeInputs && fdr.timeInputs.takeoffStampedUtc), via: null };
-  if (source === 'ATO') return { valueUtc: _timeChainEpoch(fdr.ato && fdr.ato.departure && fdr.ato.departure.timeUtc), via: null };
+function _timeChainSourceValue(source, chain, flightData) {
+  if (!flightData) return { valueUtc: null, via: null };
+  if (source === 'CONTROLLER') return { valueUtc: _timeChainEpoch(_timeChainRead(flightData, chain.path)), via: null };
+  if (source === 'FLIGHT_PLAN') return { valueUtc: _timeChainEpoch(flightData.timeInputs && flightData.timeInputs.flightPlanDepartureUtc), via: null };
+  if (source === 'STATE_CHANGE') return { valueUtc: _timeChainEpoch(flightData.timeInputs && flightData.timeInputs.takeoffStampedUtc), via: null };
+  if (source === 'ATO') return { valueUtc: _timeChainEpoch(flightData.ato && flightData.ato.departure && flightData.ato.departure.timeUtc), via: null };
   if (ESTIMATE_SOURCES[source]) {
-    const upstream = resolveTimeChain(ESTIMATE_SOURCES[source], fdr);
+    const upstream = resolveTimeChain(ESTIMATE_SOURCES[source], flightData);
     return { valueUtc: upstream.valueUtc, via: upstream.source };
   }
   return { valueUtc: null, via: null };
@@ -71,17 +71,17 @@ function _timeChainSourceValue(source, chain, fdr) {
  * The answer to one chain for one flight.
  *
  * @param {'departure'|'offBlock'|'takeoff'} name
- * @param {object|null} fdr — may be null, and may predate fdr.timeInputs or fdr.ato
+ * @param {object|null} flightData — may be null, and may predate flightData.timeInputs or flightData.ato
  * @returns {{ valueUtc: number|null, source: string|null, via: string|null, estimated: boolean,
  *   candidates: Array<{ source: string, valueUtc: number|null, via: string|null }> }}
  *   `candidates` is every source in order with what it gives, so a reader can
  *   say what would apply next. Never throws.
  */
-function resolveTimeChain(name, fdr) {
+function resolveTimeChain(name, flightData) {
   const chain = TIME_CHAINS[name];
   const none = { valueUtc: null, source: null, via: null, estimated: false, candidates: [] };
   if (!chain) return none;
-  const candidates = chain.sources.map((source) => ({ source, ..._timeChainSourceValue(source, chain, fdr) }));
+  const candidates = chain.sources.map((source) => ({ source, ..._timeChainSourceValue(source, chain, flightData) }));
   const chosen = candidates.find(c => c.valueUtc != null);
   if (!chosen) return { ...none, candidates };
   return {

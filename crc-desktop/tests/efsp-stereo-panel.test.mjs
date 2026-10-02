@@ -38,7 +38,7 @@ const { makeElement } = domStub;
  * `stereoRoutes` is what the (injected) client fetch resolves to, so the
  * empty-table case — which is the SHIPPED case — is just `[]`.
  */
-async function mountPanel({ held = ['OPS'], stereoRoutes = ROUTES, lookupSpy = null, liveStrips = [] } = {}) {
+async function mountPanel({ signedOn = ['OPS'], stereoRoutes = ROUTES, lookupSpy = null, liveStrips = [] } = {}) {
   const sent = [];
   const els = {};
   for (const id of ['efsp-panel', 'efsp-position-tabs', 'efsp-bay-tabs', 'efsp-bay-content',
@@ -46,7 +46,7 @@ async function mountPanel({ held = ['OPS'], stereoRoutes = ROUTES, lookupSpy = n
     'efsp-create-strip-role', 'efsp-create-strip-stereo', 'efsp-dot-command-input',
     'efsp-dot-command-preview', 'efsp-mutation-error', 'efsp-mutation-warning',
     'efsp-connection-banner']) {
-    els[id] = makeElement(id.endsWith('-btn') ? 'button' : id.includes('role') || id.includes('stereo') ? 'select' : 'input');
+    els[id] = makeElement(id.endsWith('-btn') ? 'button' : id.includes('role') || id.includes('type') || id.includes('stereo') ? 'select' : 'input');
   }
 
   globalThis.document.getElementById = (id) => els[id] || null;
@@ -72,18 +72,18 @@ async function mountPanel({ held = ['OPS'], stereoRoutes = ROUTES, lookupSpy = n
   const ws = await g.import('panels/efsp/efsp-ws.js');
   const panel = await g.import('panels/efsp/efsp-panel.js');
   ws.setEfspSender('_sendEfsp', () => {});
-  for (const p of held) ws.sendEfspSetPositions(p === 'CTR' ? 'CENTER' : 'INCIRLIK', [p]); // getActingPositions() = held
+  for (const p of signedOn) ws.sendEfspSetPositions(p === 'CTR' ? 'CENTER' : 'INCIRLIK', [p]); // getActingPositions() = signedOn
   ws.setEfspSender('sendEfspCreateStrip', (actingPositionId, op, facilityId) => { sent.push({ actingPositionId, op, facilityId }); return 'mid'; });
   ws.setEfspSender('sendEfspMutation', () => 'mid');
 
   // §3.6's duplicate-origination guard reads the live Strips for a callsign; `liveStrips` lets a test
   // say "this callsign is already working somewhere" with real Strips of one real flight.
   const live = liveStrips.map((l, i) => ({
-    stripId: `live-${i}`, cid: `00${i}`, fdrId: 'f-live', rev: 1, role: 'DEPARTURE', state: 'PROPOSED', bayId: 'x', rackId: 'main', orderKey: 'V',
+    stripId: `live-${i}`, cid: `00${i}`, flightDataId: 'f-live', rev: 1, stripType: 'DEPARTURE', state: 'PROPOSED', bayId: 'x', rackId: 'main', orderKey: 'V',
     annotations: {}, flags: {}, coordination: null, tofiCoordination: null, airspaceEntry: null, ...l,
   }));
-  const liveFdrs = live.length ? [{ fdrId: 'f-live', rev: 1, identity: { callsign: 'VIPER11' }, filed: {}, assigned: {}, military: {} }] : [];
-  state.applyEfspSnapshot({ strips: live, fdrs: liveFdrs, positions: [], bays: [], airspaces: [], correlations: [] });
+  const liveFlightDataList = live.length ? [{ flightDataId: 'f-live', rev: 1, identity: { callsign: 'VIPER11' }, filed: {}, assigned: {}, military: {} }] : [];
+  state.applyEfspSnapshot({ strips: live, flightDataList: liveFlightDataList, positions: [], bays: [], airspaces: [], correlations: [] });
   panel.initEfspPanel();
   return {
     els, sent, sandbox: panel,
@@ -127,7 +127,7 @@ test('with a table installed the picker appears, blank-first, one option per rou
 test('the picker is hidden for an origin that cannot use a canned route', async () => {
   // CTR originates ARRIVAL Strips, whose filed shape is originAirport/
   // arrivalFix/estimatedArrivalTimeUtc — nothing a departure route seeds.
-  const { els } = await mounted({ held: ['CTR'] });
+  const { els } = await mounted({ signedOn: ['CTR'] });
   assert.equal(els['efsp-create-strip-stereo'].hidden, true);
 });
 
@@ -141,12 +141,12 @@ test('picking a stereo and pressing New Strip files by short name', async () => 
 
   assert.equal(sent.length, 1);
   assert.equal(sent[0].op.kind, 'CreateStrip');
-  assert.equal(sent[0].op.fdr.callsign, 'PACK11');
-  assert.equal(sent[0].op.fdr.stereoRouteName, 'PACK 1');
+  assert.equal(sent[0].op.flightData.callsign, 'PACK11');
+  assert.equal(sent[0].op.flightData.stereoRouteName, 'PACK 1');
   // Route/altitude/airports are ABSENT, not blank — an empty string would
   // count as an explicit value server-side and beat the table's expansion.
   for (const key of ['route', 'requestedAltitude', 'departureAirport', 'destinationAirport']) {
-    assert.equal(key in sent[0].op.fdr, false, `${key} should be left to the server`);
+    assert.equal(key in sent[0].op.flightData, false, `${key} should be left to the server`);
   }
 });
 
@@ -169,8 +169,8 @@ test('with no stereo picked, the existing flight-plan pre-fill path is untouched
   els['efsp-create-strip-stereo'].value = '';
   for (const fn of els['efsp-create-strip-btn']._listeners.click) await fn({});
   assert.equal(lookups, 1);
-  assert.equal(sent[0].op.fdr.route, 'DCT');
-  assert.equal(sent[0].op.fdr.stereoRouteName, undefined);
+  assert.equal(sent[0].op.flightData.route, 'DCT');
+  assert.equal(sent[0].op.flightData.stereoRouteName, undefined);
 });
 
 test('the picker resets after a filing, so the next Strip is not silently on the same route', async () => {
@@ -192,15 +192,15 @@ test('.stereo PACK1 VIPER11 files a Strip, resolving the name the controller act
   const m = await mounted();
   await runDotCommand(m, '.stereo pack1 VIPER11');
   assert.equal(m.sent.length, 1);
-  assert.equal(m.sent[0].op.fdr.callsign, 'VIPER11');
+  assert.equal(m.sent[0].op.flightData.callsign, 'VIPER11');
   // The canonical spelling goes over the wire, not `pack1`.
-  assert.equal(m.sent[0].op.fdr.stereoRouteName, 'PACK 1');
+  assert.equal(m.sent[0].op.flightData.stereoRouteName, 'PACK 1');
   // Byte-identical to what the button sends for the same origin, including
-  // OPS's `role: undefined` (board-store.js defaults an absent role to
+  // OPS's `stripType: undefined` (board-store.js defaults an absent stripType to
   // DEPARTURE). Two filing surfaces, one op — worth pinning, because the
   // easy mistake here is for the keyboard path to drift into sending
   // something subtly different from the pointer path.
-  assert.equal(m.sent[0].op.role, undefined);
+  assert.equal(m.sent[0].op.stripType, undefined);
   assert.equal(m.sent[0].actingPositionId, 'OPS');
   assert.equal(m.sent[0].op.bayId, 'ops-proposed');
   assert.equal(m.sent[0].facilityId, 'INCIRLIK');
@@ -228,14 +228,14 @@ test('.stereo refuses a malformed callsign client-side, same rule the button app
 });
 
 test('.stereo refuses when the held Position cannot originate a DEPARTURE Strip', async () => {
-  const m = await mounted({ held: ['CTR'] });
+  const m = await mounted({ signedOn: ['CTR'] });
   await runDotCommand(m, '.stereo PACK1 VIPER11');
   assert.equal(m.sent.length, 0);
   assert.match(m.els['efsp-dot-command-preview'].textContent, /DEPARTURE/);
 });
 
 test('.stereo refuses when no origin Position is held at all', async () => {
-  const m = await mounted({ held: [] });
+  const m = await mounted({ signedOn: [] });
   await runDotCommand(m, '.stereo PACK1 VIPER11');
   assert.equal(m.sent.length, 0);
   assert.match(m.els['efsp-dot-command-preview'].textContent, /OPS, APP or CTR only/);

@@ -27,7 +27,7 @@ function _applyTransferStrip(ctx, strip, op, by) {
   // controllers, the gap isn't specific to self-coordination — from
   // dragging a Strip straight past every doctrine check NLA enforces
   // (e.g. PROPOSED directly into a CLEARED Bay with no flight plan and
-  // no beacon code at all). Validated before the owner/occupancy checks
+  // no beacon code at all). Validated before the owner/staffing checks
   // below too, so a rejected transfer never partially mutates the Strip.
   const check = ctx.placement.validateBayImpliedTransition(strip, op.bayId, op.rackId);
   if (!check.ok) return { ok: false, reason: check.reason, detail: check.detail, strip };
@@ -38,9 +38,9 @@ function _applyTransferStrip(ctx, strip, op, by) {
   let routedTo = null;
   let warning;
 
-  if (!ctx.rules.isOccupied(op.toPositionId)) {
-    const covering = ctx.rules.coveringPositionFor(op.toPositionId);
-    if (!covering || !ctx.rules.isOccupied(covering)) {
+  if (!ctx.rules.isStaffed(op.toPositionId)) {
+    const covering = ctx.rules.consolidatedAt(op.toPositionId);
+    if (!covering || !ctx.rules.isStaffed(covering)) {
       return { ok: false, reason: 'NO_RECEIVING_POSITION', strip };
     }
     destPositionId = covering;
@@ -59,7 +59,7 @@ function _applyTransferStrip(ctx, strip, op, by) {
   const selfCoordinated = ctx.rules.isSelfCoordinated(by, destPositionId);
 
   strip.ownerPositionId = destPositionId;
-  delete strip.coveredFrom; // it has a new owner by decision, not by cover (F10)
+  delete strip.consolidatedFrom; // it has a new owner by decision, not by cover (F10)
   if (check.impliedState && check.impliedState !== strip.state) strip.state = check.impliedState;
   const routedBay = routedTo ? ctx.placement.bayForNewOwner(destPositionId, strip.state, strip) : null;
   if (routedBay) {
@@ -75,7 +75,7 @@ function _applyTransferStrip(ctx, strip, op, by) {
     if (routedTo) warning = `${routedTo} has no Bay for this Strip; it stays in ${op.bayId}`;
   }
 
-  const sfaFdr = routedBay ? null : ctx.assignSfaFrequency(strip, by);
+  const sfaFlightData = routedBay ? null : ctx.assignSfaFrequency(strip, by);
 
   ctx.state.bump(strip, by);
   // A pending Undo window (§3.5 rule 5) is for reverting a STATE change —
@@ -86,7 +86,7 @@ function _applyTransferStrip(ctx, strip, op, by) {
   // regardless of whether this transfer came from a drag or an NLA-
   // driven transfer-shaped transition (board-store.js's own _applyInvokeNla).
   ctx.nlaHistory.delete(strip.stripId);
-  return { ok: true, strip, routedTo, selfCoordinated, warning, fdr: sfaFdr ? sfaFdr.fdr : undefined };
+  return { ok: true, strip, routedTo, selfCoordinated, warning, flightData: sfaFlightData ? sfaFlightData.flightData : undefined };
 }
 
 module.exports = {

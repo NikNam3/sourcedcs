@@ -41,10 +41,10 @@ const cmid = () => `00000000-0000-4000-8000-${(++cmidN).toString(16).padStart(12
 
 const FDR = { callsign: 'FREEZE1', aircraftType: 'F16', wakeCategory: 'D', departureAirport: 'LTAG', destinationAirport: 'LTAG', route: 'DCT', requestedAltitude: '250' };
 const ROLES = [
-  { role: 'DEPARTURE', facilityId: 'INCIRLIK', creator: 'OPS', bayId: 'ops-proposed' },
-  { role: 'ARRIVAL', facilityId: 'INCIRLIK', creator: 'APP', bayId: 'app-inbound' },
-  { role: 'OVERFLIGHT', facilityId: 'CENTER', creator: 'CTR', bayId: 'ctr-overflight' },
-  { role: 'MISSION', facilityId: 'TACTICAL', creator: 'TAC_C2', bayId: 'tac-c2-tasked' },
+  { stripType: 'DEPARTURE', facilityId: 'INCIRLIK', creator: 'OPS', bayId: 'ops-proposed' },
+  { stripType: 'ARRIVAL', facilityId: 'INCIRLIK', creator: 'AP', bayId: 'ap-inbound' },
+  { stripType: 'OVERFLIGHT', facilityId: 'CENTER', creator: 'CTR', bayId: 'ctr-overflight' },
+  { stripType: 'MISSION', facilityId: 'TACTICAL', creator: 'TAC_C2', bayId: 'tac-c2-tasked' },
 ];
 const FACILITIES = ['INCIRLIK', 'CENTER', 'TACTICAL'];
 
@@ -58,7 +58,7 @@ function freshEfsp() {
   const sessions = {};
   for (const f of FACILITIES) for (const p of facilityConfig.getPositionSet(f)) {
     const session = { controllerId: `c-${p}`, who: p };
-    efsp.handleMessage(session, { type: 'efsp-set-positions', facilityId: f, held: [p] });
+    efsp.handleMessage(session, { type: 'efsp-set-positions', facilityId: f, signedOn: [p] });
     sessions[p] = session;
   }
   sessions.GHOST = { controllerId: 'c-GHOST', who: 'GHOST' };
@@ -74,13 +74,13 @@ function send(h, facilityId, acting, strip, op, as = acting) {
   return r;
 }
 
-/** Seed a Strip of `spec.role` in `state`; returns the Strip or { refused: reason }. */
+/** Seed a Strip of `spec.stripType` in `state`; returns the Strip or { refused: reason }. */
 function seed(h, spec, state, ownerVariant) {
   const bs = h.efsp.boardStoreFor(spec.facilityId);
-  let r = send(h, spec.facilityId, spec.creator, null, { kind: 'CreateStrip', bayId: spec.bayId, rackId: 'main', role: spec.role, fdr: { ...FDR, callsign: `FRZ${cmidN}` } });
+  let r = send(h, spec.facilityId, spec.creator, null, { kind: 'CreateStrip', bayId: spec.bayId, rackId: 'main', stripType: spec.stripType, flightData: { ...FDR, callsign: `FRZ${cmidN}` } });
   if (!r.ack.ok) return { refused: `create:${r.ack.reason}` };
   let strip = bs.getStrip(r.ack.strip.stripId);
-  const order = nla.STATES_BY_ROLE[spec.role];
+  const order = nla.STATES_BY_STRIP_TYPE[spec.stripType];
   const target = order.indexOf(state);
   if (state === 'DROPPED') {
     r = send(h, spec.facilityId, strip.ownerPositionId, strip, { kind: 'DropStrip' });
@@ -90,7 +90,7 @@ function seed(h, spec, state, ownerVariant) {
     r = send(h, spec.facilityId, strip.ownerPositionId, strip, { kind: 'SetState', toState: order[i] });
     if (!r.ack.ok && r.ack.reason === 'PERMISSION_DENIED') {
       // the current owner may not act on the next state: hand the Strip to that state's owner, then retry as them
-      const want = ((permission.STATE_OWNERS_BY_ROLE[spec.role] || {})[order[i]] || []).find(p => facilityConfig.getPositionSet(spec.facilityId).includes(p));
+      const want = ((permission.STATE_OWNERS_BY_STRIP_TYPE[spec.stripType] || {})[order[i]] || []).find(p => facilityConfig.getPositionSet(spec.facilityId).includes(p));
       if (want) {
         const t = send(h, spec.facilityId, strip.ownerPositionId, strip, { kind: 'TransferStrip', toPositionId: want, bayId: coordBay(want, spec.facilityId), rackId: 'main' });
         if (t.ack.ok) { strip = bs.getStrip(strip.stripId); r = send(h, spec.facilityId, want, strip, { kind: 'SetState', toState: order[i] }); }
@@ -100,7 +100,7 @@ function seed(h, spec, state, ownerVariant) {
     strip = bs.getStrip(strip.stripId);
   }
   if (ownerVariant === 'STATE_OWNER') {
-    const owners = (permission.STATE_OWNERS_BY_ROLE[spec.role] || {})[state] || [];
+    const owners = (permission.STATE_OWNERS_BY_STRIP_TYPE[spec.stripType] || {})[state] || [];
     const want = owners.find(p => facilityConfig.getPositionSet(spec.facilityId).includes(p));
     if (!want) return { refused: 'no-state-owner-in-facility' };
     if (want !== strip.ownerPositionId) {
@@ -114,13 +114,13 @@ function seed(h, spec, state, ownerVariant) {
 }
 
 function opsFor(spec, strip, actor) {
-  const order = nla.STATES_BY_ROLE[spec.role];
+  const order = nla.STATES_BY_STRIP_TYPE[spec.stripType];
   const next = order[Math.min(order.indexOf(strip.state) + 1, order.length - 1)];
   const pos = facilityConfig.getPositionSet(spec.facilityId);
   const other = pos.find(p => p !== actor) || actor;
   const peer = spec.facilityId === 'CENTER'
-    ? { toFacilityId: 'INCIRLIK', toPositionId: 'APP' } : { toFacilityId: 'CENTER', toPositionId: 'CTR' };
-  const block = spec.role === 'MISSION' ? 'M2' : '3A';
+    ? { toFacilityId: 'INCIRLIK', toPositionId: 'AP' } : { toFacilityId: 'CENTER', toPositionId: 'CTR' };
+  const block = spec.stripType === 'MISSION' ? 'M2' : '3A';
   return [
     { kind: 'MoveStrip', bayId: strip.bayId, rackId: 'main' },
     { kind: 'SetBlock', blockId: block, value: 'FRZ' },
@@ -151,11 +151,11 @@ function runMatrix() {
   const nlas = [];
   for (const spec of ROLES) {
     const actors = facilityConfig.getPositionSet(spec.facilityId);
-    for (const state of nla.STATES_BY_ROLE[spec.role]) {
+    for (const state of nla.STATES_BY_STRIP_TYPE[spec.stripType]) {
       for (const ownerVariant of ['CREATOR', 'STATE_OWNER']) {
         const h = freshEfsp();
         const bs = h.efsp.boardStoreFor(spec.facilityId);
-        const tag = `${spec.role}/${state}/owner=${ownerVariant}`;
+        const tag = `${spec.stripType}/${state}/owner=${ownerVariant}`;
         let strip = seed(h, spec, state, ownerVariant);
         const sigOf = (s) => `${s.rev}|${s.state}|${s.ownerPositionId}`;
         let sig = strip.refused ? null : sigOf(strip);
@@ -189,11 +189,11 @@ function runMatrix() {
         // snapshot()/restore() round trip for the whole group
         h.efsp.persist();
         const snapA = JSON.stringify(canonical(Object.fromEntries(FACILITIES.map(f => [f, h.efsp.boardStoreFor(f).snapshot()]))));
-        const fdrA = JSON.stringify(canonical(h.efsp.fdrStore.snapshot()));
+        const flightDataA = JSON.stringify(canonical(h.efsp.flightDataStore.snapshot()));
         const again = createEfsp({ clock: { now: () => MISSION_T0, source: 'MISSION' } });
         const snapB = JSON.stringify(canonical(Object.fromEntries(FACILITIES.map(f => [f, again.boardStoreFor(f).snapshot()]))));
-        const fdrB = JSON.stringify(canonical(again.fdrStore.snapshot()));
-        roundTrips.push({ id: tag, boardsEqual: snapA === snapB, fdrEqual: fdrA === fdrB, boardHash: digest(snapA), strips: JSON.parse(snapA).INCIRLIK.strips.length + JSON.parse(snapA).CENTER.strips.length + JSON.parse(snapA).TACTICAL.strips.length });
+        const flightDataB = JSON.stringify(canonical(again.flightDataStore.snapshot()));
+        roundTrips.push({ id: tag, boardsEqual: snapA === snapB, flightDataEqual: flightDataA === flightDataB, boardHash: digest(snapA), strips: JSON.parse(snapA).INCIRLIK.strips.length + JSON.parse(snapA).CENTER.strips.length + JSON.parse(snapA).TACTICAL.strips.length });
       }
     }
   }
@@ -207,11 +207,11 @@ function createMatrix() {
   for (const spec of ROLES) {
     for (const f of FACILITIES) for (const actor of facilityConfig.getPositionSet(f)) {
       const bay = facilityConfig.getBaysFor(actor, f).map(b => b.bayId)[0];
-      const r = send(h, f, actor, null, { kind: 'CreateStrip', bayId: bay, rackId: 'main', role: spec.role, fdr: { ...FDR, callsign: `CRT${cmidN}` } });
-      out.push({ cell: `CreateStrip role=${spec.role} at=${f}/${actor} bay=${bay}`, ok: r.ack.ok, reason: r.ack.reason || null, detail: r.ack.detail || null, warning: r.ack.warning || null, strip: r.ack.strip ? summarize(r.ack.strip) : null, audit: summarize(h.audit) });
+      const r = send(h, f, actor, null, { kind: 'CreateStrip', bayId: bay, rackId: 'main', stripType: spec.stripType, flightData: { ...FDR, callsign: `CRT${cmidN}` } });
+      out.push({ cell: `CreateStrip stripType=${spec.stripType} at=${f}/${actor} bay=${bay}`, ok: r.ack.ok, reason: r.ack.reason || null, detail: r.ack.detail || null, warning: r.ack.warning || null, strip: r.ack.strip ? summarize(r.ack.strip) : null, audit: summarize(h.audit) });
     }
   }
-  const ghost = send(h, 'INCIRLIK', 'OPS', null, { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: FDR }, 'GHOST');
+  const ghost = send(h, 'INCIRLIK', 'OPS', null, { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE', flightData: FDR }, 'GHOST');
   out.push({ cell: 'CreateStrip as GHOST claiming OPS', ok: ghost.ack.ok, reason: ghost.ack.reason || null, detail: ghost.ack.detail || null });
   return out;
 }
@@ -223,14 +223,14 @@ test('freeze table: mutation matrix (op kind x role x state x owner x acting Pos
   checkGolden(assert, 'table-mutations', { cells: matrix.cells }, (d) => d.cells.map(c => [c.cell, c]));
 });
 
-test('freeze table: CreateStrip (Position x role)', () => {
+test('freeze table: CreateStrip (Position x stripType)', () => {
   checkGolden(assert, 'table-create', { cells: createMatrix() }, (d) => d.cells.map(c => [c.cell, c]));
 });
 
 test('freeze table: snapshot()/restore() reproduces the Board and FDRs', () => {
   for (const r of matrix.roundTrips) {
     assert.ok(r.boardsEqual, `${r.id}: a restored Board differs from the persisted one`);
-    assert.ok(r.fdrEqual, `${r.id}: restored FDRs differ from the persisted ones`);
+    assert.ok(r.flightDataEqual, `${r.id}: restored FDRs differ from the persisted ones`);
   }
   checkGolden(assert, 'table-roundtrip', { cells: matrix.roundTrips.map(r => ({ ...r, cell: r.id })) }, (d) => d.cells.map(c => [c.cell, c]));
 });

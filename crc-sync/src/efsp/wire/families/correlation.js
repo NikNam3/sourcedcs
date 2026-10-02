@@ -21,7 +21,7 @@ module.exports = {
   deltaType: 'efsp-correlation-delta',
   replayKind: 'correlation',
   snapshotKey: 'correlations',
-  subject: (msg) => ({ fdrId: msg.fdrId }),
+  subject: (msg) => ({ flightDataId: msg.flightDataId }),
   store: (ctx) => ctx.correlationStore,
   noStore: 'no correlation store',
 
@@ -48,10 +48,10 @@ module.exports = {
     : { reason: 'PERMISSION_DENIED', detail: `${msg.actingPositionId} works no flights, so it identifies no contacts` },
 
   apply: (ctx, session, msg) => ctx.correlationStore.apply(
-    { clientMutationId: msg.clientMutationId, fdrId: msg.fdrId, baseRev: msg.baseRev, op: msg.op },
+    { clientMutationId: msg.clientMutationId, flightDataId: msg.flightDataId, baseRev: msg.baseRev, op: msg.op },
     msg.actingPositionId, session.controllerId,
   ),
-  rememberId: (result, msg) => msg.fdrId,
+  rememberId: (result, msg) => msg.flightDataId,
   fromCached: (ctx, cached) => ({ ...cached, correlation: ctx.correlationStore.getCorrelation(cached.id) }),
   ack: (result, ctx) => ({
     correlation: result.correlation, reason: result.reason, detail: result.detail,
@@ -70,7 +70,7 @@ module.exports = {
   }),
 
   // Correlation records, one per live FDR and sent whole for the same reason
-  // fdrs are: cheap enough at this scale that a second ring buffer would
+  // flightDataList are: cheap enough at this scale that a second ring buffer would
   // cost more than it saved (_handleResync's own stated reasoning). There is
   // deliberately no correlation branch in efsp-resync either — a reconnecting
   // client gets these in its snapshot and a fresh reconcile delta within a
@@ -78,5 +78,5 @@ module.exports = {
   snapshot: (ctx) => ctx.correlationStore ? ctx.correlationStore.getAll() : [],
 
   /** What an owned session is sent of an efsp-correlation-delta (docs/adr/0080). */
-  filter: (ctx, scope, msg) => readScope.filterCorrelationDelta(msg, scope, readScope.visibleFdrIdsOf(scope, liveStamped(ctx))),
+  filter: (ctx, scope, msg) => readScope.filterCorrelationDelta(msg, scope, readScope.visibleFlightDataIdsOf(scope, liveStamped(ctx))),
 };

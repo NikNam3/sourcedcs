@@ -18,7 +18,7 @@
     "GCI": "M",
     "JTAC": "M"
   },
-  "coveringChain": {
+  "consolidation": {
     "AIC": "TAC_C2",
     "GCI": "TAC_C2",
     "JTAC": "TAC_C2"

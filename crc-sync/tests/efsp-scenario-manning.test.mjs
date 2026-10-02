@@ -24,9 +24,9 @@ fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, JSON.stringify([
 ]));
 
 const { createEfsp } = await import('../src/efsp/index.js');
-const { crew, hold, act, mustAct, airspaceAct, mustAirspaceAct, jumpTo, DEPARTURE_FDR, airborneDeparture, handedToCenter, activate } = await import('./helpers/efsp-scenario.mjs');
+const { crew, hold, act, mustAct, airspaceAct, mustAirspaceAct, jumpTo, DEPARTURE_FLIGHT_DATA, airborneDeparture, handedToCenter, activate } = await import('./helpers/efsp-scenario.mjs');
 
-const ATC = { OPS: 'INCIRLIK', CD: 'INCIRLIK', GND: 'INCIRLIK', TWR: 'INCIRLIK', APP: 'INCIRLIK', CTR: 'CENTER' };
+const ATC = { OPS: 'INCIRLIK', CD: 'INCIRLIK', GC: 'INCIRLIK', LC: 'INCIRLIK', AP: 'INCIRLIK', CTR: 'CENTER' };
 
 // ── 21. a controller walks away with strips in front of them ────────────
 
@@ -35,61 +35,61 @@ test('SCENARIO Ground walks away holding strips, and they route down the coverin
   const c = crew(efsp, ATC);
 
   const strip = mustAct(efsp, c.OPS, 'OPS', null, {
-    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE',
-    fdr: { ...DEPARTURE_FDR, callsign: 'VACA1' },
+    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE',
+    flightData: { ...DEPARTURE_FLIGHT_DATA, callsign: 'VACA1' },
   });
   const onGround = mustAct(efsp, c.OPS, 'OPS', strip, {
-    kind: 'TransferStrip', toPositionId: 'GND', bayId: 'gnd-coordination', rackId: 'main',
+    kind: 'TransferStrip', toPositionId: 'GC', bayId: 'gc-coordination', rackId: 'main',
   });
-  assert.equal(onGround.ownerPositionId, 'GND');
+  assert.equal(onGround.ownerPositionId, 'GC');
 
   // GND vacates. TWR covers it (the chain is CD→GND→TWR→APP), so the Strip
   // follows rather than being left with nobody.
-  const ack = hold(efsp, c.GND.session, 'INCIRLIK', []).ack;
-  assert.deepEqual(ack.warnings, [{ positionId: 'GND', count: 1, routedTo: 'TWR' }]);
-  assert.equal(efsp.boardStoreFor('INCIRLIK').getStrip(onGround.stripId).ownerPositionId, 'TWR');
+  const ack = hold(efsp, c.GC.session, 'INCIRLIK', []).ack;
+  assert.deepEqual(ack.warnings, [{ positionId: 'GC', count: 1, routedTo: 'LC' }]);
+  assert.equal(efsp.boardStoreFor('INCIRLIK').getStrip(onGround.stripId).ownerPositionId, 'LC');
   // ...into one of TWR's own Bays, the only ones its panel builds (docs/adr/0080, B3).
   const bayId = efsp.boardStoreFor('INCIRLIK').getStrip(onGround.stripId).bayId;
-  assert.ok(['twr-runway-queue', 'twr-airborne', 'twr-arrivals', 'twr-final', 'twr-landed', 'twr-coordination'].includes(bayId), `TWR owns it but it sits in ${bayId}`);
+  assert.ok(['lc-runway-queue', 'lc-airborne', 'lc-arrivals', 'lc-final', 'lc-landed', 'lc-coordination'].includes(bayId), `TWR owns it but it sits in ${bayId}`);
 });
 
 // ── 22. nobody downstream to cover ──────────────────────────────────────
 
 test('SCENARIO the last controller leaves and the strips are visibly stranded, not silently orphaned', () => {
   const efsp = createEfsp();
-  const c = crew(efsp, { OPS: 'INCIRLIK', APP: 'INCIRLIK' });
+  const c = crew(efsp, { OPS: 'INCIRLIK', AP: 'INCIRLIK' });
 
-  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'STRAND1' });
-  assert.equal(strip.ownerPositionId, 'APP');
+  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'STRAND1' });
+  assert.equal(strip.ownerPositionId, 'AP');
 
   // APP has no covering Position at all (the chain ends there), so this is
   // defect D19's boundary: the warning has to be distinct from "routed", and
   // the Strip must not quietly disappear.
-  const ack = hold(efsp, c.APP.session, 'INCIRLIK', []).ack;
-  assert.deepEqual(ack.warnings, [{ positionId: 'APP', count: 1, routedTo: null }]);
+  const ack = hold(efsp, c.AP.session, 'INCIRLIK', []).ack;
+  assert.deepEqual(ack.warnings, [{ positionId: 'AP', count: 1, routedTo: null }]);
   const stranded = efsp.boardStoreFor('INCIRLIK').getStrip(strip.stripId);
-  assert.equal(stranded.ownerPositionId, 'APP', 'still owned by an unoccupied Position — surfaced, not hidden');
+  assert.equal(stranded.ownerPositionId, 'AP', 'still owned by an unstaffed Position — surfaced, not hidden');
   assert.equal(stranded.state, 'HANDED_OFF');
 });
 
 // ── an observer cannot quietly take over ────────────────────────────────
 
-test('SCENARIO a second controller sits down at an occupied Position and watches until handed it', () => {
+test('SCENARIO a second controller sits down at an staffed Position and watches until handed it', () => {
   const efsp = createEfsp();
-  const c = crew(efsp, { OPS: 'INCIRLIK', APP: 'INCIRLIK' });
+  const c = crew(efsp, { OPS: 'INCIRLIK', AP: 'INCIRLIK' });
   const relief = { controllerId: 'c-relief', who: 'Relief' };
 
-  hold(efsp, relief, 'INCIRLIK', ['APP']);
-  assert.equal(efsp.positionStoreFor('INCIRLIK').primaryOf('APP'), 'c-APP', 'the second selector is an Observer (§4.8.2 rule 3)');
+  hold(efsp, relief, 'INCIRLIK', ['AP']);
+  assert.equal(efsp.positionStoreFor('INCIRLIK').primaryOf('AP'), 'c-AP', 'the second selector is an Observer (§4.8.2 rule 3)');
 
-  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'RELIEF1' });
-  assert.equal(act(efsp, { session: relief, facilityId: 'INCIRLIK' }, 'APP', strip, { kind: 'InvokeNla' }).reason,
+  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'RELIEF1' });
+  assert.equal(act(efsp, { session: relief, facilityId: 'INCIRLIK' }, 'AP', strip, { kind: 'InvokeNla' }).reason,
     'NOT_HOLDING_POSITION', 'an Observer watches');
 
   // Primary released deliberately, never auto-promoted.
-  assert.equal(efsp.positionStoreFor('INCIRLIK').releasePrimaryTo('APP', 'c-relief').ok, true);
-  assert.equal(efsp.positionStoreFor('INCIRLIK').primaryOf('APP'), 'c-relief');
-  assert.equal(act(efsp, { session: relief, facilityId: 'INCIRLIK' }, 'APP', strip, { kind: 'DropStrip', reason: 'now mine' }).ok, true);
+  assert.equal(efsp.positionStoreFor('INCIRLIK').releasePrimaryTo('AP', 'c-relief').ok, true);
+  assert.equal(efsp.positionStoreFor('INCIRLIK').primaryOf('AP'), 'c-relief');
+  assert.equal(act(efsp, { session: relief, facilityId: 'INCIRLIK' }, 'AP', strip, { kind: 'DropStrip', reason: 'now mine' }).ok, true);
 });
 
 // ── 24. a client drops mid-sortie ───────────────────────────────────────
@@ -98,17 +98,17 @@ test('SCENARIO a client disconnects mid-sortie: its Positions are released, its 
   const efsp = createEfsp();
   const c = crew(efsp, ATC);
 
-  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'DROP1' });
-  efsp.onDisconnect(c.APP.session);
+  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'DROP1' });
+  efsp.onDisconnect(c.AP.session);
 
-  assert.equal(efsp.positionStoreFor('INCIRLIK').isOccupied('APP'), false, 'an abrupt drop releases the Position');
-  assert.equal(efsp.boardStoreFor('INCIRLIK').getStrip(strip.stripId).ownerPositionId, 'APP',
+  assert.equal(efsp.positionStoreFor('INCIRLIK').isStaffed('AP'), false, 'an abrupt drop releases the Position');
+  assert.equal(efsp.boardStoreFor('INCIRLIK').getStrip(strip.stripId).ownerPositionId, 'AP',
     'but the flight is still there — a disconnect is not a reason to lose a Strip');
 
-  // Coming back is just declaring Positions again: occupancy is deliberately
+  // Coming back is just declaring Positions again: staffing is deliberately
   // ephemeral (ADR 0002), so nothing about it survives, and nothing needs to.
-  hold(efsp, c.APP.session, 'INCIRLIK', ['APP']);
-  assert.equal(act(efsp, c.APP, 'APP', efsp.boardStoreFor('INCIRLIK').getStrip(strip.stripId), { kind: 'InvokeNla' }).ok, true);
+  hold(efsp, c.AP.session, 'INCIRLIK', ['AP']);
+  assert.equal(act(efsp, c.AP, 'AP', efsp.boardStoreFor('INCIRLIK').getStrip(strip.stripId), { kind: 'InvokeNla' }).ok, true);
 });
 
 test('an airspace op issued while disconnected is simply lost, unlike a Strip mutation', () => {
@@ -140,10 +140,10 @@ test('SCENARIO crc-sync restarts with a flight airborne in a hot MOA, and everyt
   const c = crew(efsp, ATC);
   activate(efsp, c, 'MOA-RESTART');
 
-  const working = mustAct(efsp, c.CTR, 'CTR', handedToCenter(efsp, c, airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'RSTRT1' })), {
+  const working = mustAct(efsp, c.CTR, 'CTR', handedToCenter(efsp, c, airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'RSTRT1' })), {
     kind: 'ApproveAirspaceEntry', airspaceId: 'MOA-RESTART', altitudeBlock: { lowerFt: 10000, upperFt: 20000 },
   });
-  const beacon = efsp.fdrStore.getFdr(working.fdrId).identity.beaconAssigned;
+  const beacon = efsp.flightDataStore.getFlightData(working.flightDataId).identity.beaconAssigned;
 
   // A fresh createEfsp() is the closest in-process thing to a real restart:
   // new stores, restore() reads what was persisted.
@@ -154,16 +154,16 @@ test('SCENARIO crc-sync restarts with a flight airborne in a hot MOA, and everyt
   assert.equal(strip.airspaceEntry.airspaceId, 'MOA-RESTART');
   assert.deepEqual(strip.airspaceEntry.altitudeBlock, { lowerFt: 10000, upperFt: 20000 },
     'including the restriction it was working under');
-  assert.equal(after.fdrStore.getFdr(working.fdrId).comms.workingFrequencyMhz, 138.0);
-  assert.equal(after.fdrStore._codeAllocator.isAllocated(beacon), true, 'and its code is still held');
+  assert.equal(after.flightDataStore.getFlightData(working.flightDataId).comms.workingFrequencyMhz, 138.0);
+  assert.equal(after.flightDataStore._codeAllocator.isAllocated(beacon), true, 'and its code is still held');
 
   const airspace = after.airspaceStore.getAirspace('MOA-RESTART');
   assert.equal(airspace.state, 'ACTIVE', 'the block is still hot');
   assert.deepEqual(airspace.transitions.map(t => t.state), ['SCHEDULED', 'ACTIVE'], 'with its history intact');
 
-  // Position occupancy deliberately does NOT survive — it is presence, not
+  // Position staffing deliberately does NOT survive — it is presence, not
   // Board state (§4.8.2 rule 5), so a reconnecting client re-declares it.
-  assert.equal(after.positionStoreFor('CENTER').isOccupied('CTR'), false);
+  assert.equal(after.positionStoreFor('CENTER').isStaffed('CTR'), false);
   const back = { controllerId: 'c-CTR', who: 'CTR' };
   hold(after, back, 'CENTER', ['CTR']);
   assert.equal(act(after, { session: back, facilityId: 'CENTER' }, 'CTR', strip, { kind: 'ClearAirspaceEntry' }).ok, true);

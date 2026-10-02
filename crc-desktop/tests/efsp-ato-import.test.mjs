@@ -19,14 +19,14 @@ const { makeElement, descendants } = domStub;
 const realSetTimeout = globalThis.setTimeout;
 globalThis.setTimeout = (fn, ms, ...a) => { const t = realSetTimeout(fn, ms, ...a); if (t.unref) t.unref(); return t; };
 
-async function mount({ held = ['TAC_C2'] } = {}) {
+async function mount({ signedOn = ['TAC_C2'] } = {}) {
   const sent = [];
   const g = freshGraph(); // a new instance of the client modules per mount, as the old vm context was
   const ws = await g.import('panels/efsp/efsp-ws.js');
   const panel = await g.import('panels/efsp/efsp-panel.js');
   const api = await g.import('panels/efsp/ato-import.js');
   ws.setEfspSender('_sendEfsp', () => {});
-  ws.sendEfspSetPositions('TACTICAL', held); // what getActingPositions() reads
+  ws.sendEfspSetPositions('TACTICAL', signedOn); // what getActingPositions() reads
   ws.setEfspSender('_sendEfsp', (msg) => sent.push(msg));
   // _showMutationError records the refusal; read it back as the old stub's list.
   const errors = { map: (fn) => { const r = panel.getCurrentEfspRefusal(); return (r ? [{ reason: r.reason, detail: r.detail }] : []).map(fn); } };
@@ -45,10 +45,10 @@ const PREVIEW = {
   warnings: [{ code: 'ATO_DATE_DIFFERS', severity: 'info', message: 'ATO dated 14 SEP 2026; its times are placed on the mission\'s calendar from 21 JUN 2016.' }],
   lines: [
     { lineId: '1101A#0', missionNumber: '1101A', callsign: 'VIPER11', callsignRaw: 'VIPER 11', seedable: true, action: 'BIND',
-      bindCandidates: [{ fdrId: 'f1', key: 'MODE3', callsign: 'VIPER11', beaconAssigned: '4521', strips: [] }], existingFdrId: null, changes: [],
+      bindCandidates: [{ flightDataId: 'f1', key: 'MODE3', callsign: 'VIPER11', beaconAssigned: '4521', strips: [] }], existingFlightDataId: null, changes: [],
       missing: ['packageId'], warnings: [], summary: { vul: { startUtc: Date.UTC(2016, 5, 21, 13), endUtc: Date.UTC(2016, 5, 21, 15) }, agency: 'MAGIC11', iff: { modeOne: '12', modeTwo: '0011', modeThree: '4521' } } },
     { lineId: '1901T#0', missionNumber: '1901T', callsign: null, callsignRaw: 'BDRKSTRX 71', seedable: false, action: 'CREATE',
-      bindCandidates: [], existingFdrId: null, changes: [], missing: ['callsign', 'modeOne'],
+      bindCandidates: [], existingFlightDataId: null, changes: [], missing: ['callsign', 'modeOne'],
       warnings: [{ code: 'CALLSIGN_INVALID', severity: 'warning', message: 'Callsign "BDRKSTRX 71" … needs a callsign typed.' }], summary: { vul: {}, iff: {} } },
   ],
   arLinks: [{ tankerCallsign: 'SHELL71', receiverCallsign: 'VIPER11', arctUtc: Date.UTC(2016, 5, 21, 13, 45), offloadKlb: 12, arcp: 'ANCHOR BLUE' }],
@@ -66,7 +66,7 @@ function previewed(m) {
 
 test('the Import ATO button is there only while TAC_C2 is held', async () => {
   assert.equal((await mount()).button.hidden, false);
-  const gci = await mount({ held: ['GCI'] });
+  const gci = await mount({ signedOn: ['GCI'] });
   assert.equal(gci.button.hidden, true);
   gci.api.openAtoImportDialog();
   assert.equal(gci.api.getAtoImportState().open, false, 'no dialog for a Position that cannot import');
@@ -135,7 +135,7 @@ test('Import sends exactly one efsp-ato-mutation carrying the preview\'s textSha
   assert.equal(msg.op.textSha1, PREVIEW.textSha1);
   assert.equal(msg.op.text, 'UNCLAS\nEXER/IRON FLAG//');
   assert.deepEqual(JSON.parse(JSON.stringify(msg.op.choices)), [
-    { lineId: '1101A#0', action: 'BIND', fdrId: 'f1' },
+    { lineId: '1101A#0', action: 'BIND', flightDataId: 'f1' },
     { lineId: '1901T#0', action: 'SKIP' },
   ]);
   assert.equal(m.api.sendAtoImport(), null, 'a second press while pending sends nothing');

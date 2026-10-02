@@ -16,7 +16,7 @@ process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH_TACTICAL = path.join(tmpDir, 'tact
 
 const { BoardStore } = await import('../src/efsp/board-store.js');
 import { fullRules } from "./helpers/full-rules.mjs";
-const { FdrStore } = await import('../src/efsp/fdr-store.js');
+const { FlightDataStore } = await import('../src/efsp/flight-data-store.js');
 const { PositionStore } = await import('../src/efsp/position-store.js');
 const facilityConfig = await import('../src/efsp/facility-config.js');
 const blockMap = await import('../src/efsp/block-map.js');
@@ -25,24 +25,24 @@ const permission = await import('../src/efsp/permission.js');
 const coordination = await import('../src/efsp/coordination.js');
 
 function makeFacilities() {
-  const fdrStore = new FdrStore();
+  const flightDataStore = new FlightDataStore();
   const facilities = new Map();
 
   for (const facilityId of facilityConfig.getFacilityIds()) {
-    const positionStore = new PositionStore(facilityConfig.getPositionSet(facilityId), facilityConfig.getCoveringChain(facilityId));
+    const positionStore = new PositionStore(facilityConfig.getPositionSet(facilityId), facilityConfig.getConsolidation(facilityId));
     const rules = {
-      resolveBlockTarget: (blockId, role) => blockMap.resolveBlockTarget(role, blockId),
+      resolveBlockTarget: (blockId, stripType) => blockMap.resolveBlockTarget(stripType, blockId),
       bayImpliesState: (bayId) => facilityConfig.bayImpliesState(bayId, facilityId),
       bayForImpliedState: (positionId, state) => facilityConfig.bayForImpliedState(positionId, state, facilityId),
       coordinationBayFor: (positionId) => facilityConfig.coordinationBayFor(positionId, facilityId),
-      computeNla: (strip, fdr, now, ctx) => nla.computeNla(strip, fdr, now, ctx),
-      isValidState: (state, role) => nla.isValidState(state, role),
-      isValidRole: (role) => blockMap.isValidRole(role),
-      isOccupied: (id) => positionStore.isOccupied(id),
-      coveringPositionFor: (id) => positionStore.coveringPositionFor(id),
+      computeNla: (strip, flightData, now, ctx) => nla.computeNla(strip, flightData, now, ctx),
+      isValidState: (state, stripType) => nla.isValidState(state, stripType),
+      isValidStripType: (stripType) => blockMap.isValidStripType(stripType),
+      isStaffed: (id) => positionStore.isStaffed(id),
+      consolidatedAt: (id) => positionStore.consolidatedAt(id),
       canMutate: (actingPositionId, opKind) => permission.canMutate(actingPositionId, opKind),
-      canCreateStripRole: (actingPositionId, role) => permission.canCreateStripRole(actingPositionId, role),
-      canActOnState: (actingPositionId, role, state) => permission.canActOnState(actingPositionId, role, state),
+      canCreateStripType: (actingPositionId, stripType) => permission.canCreateStripType(actingPositionId, stripType),
+      canActOnState: (actingPositionId, stripType, state) => permission.canActOnState(actingPositionId, stripType, state),
       isSelfCoordinated: (controllerId, id) => positionStore.isSelfCoordinated(controllerId, id),
       facilityId,
       peerBoard: (otherFacilityId) => {
@@ -50,29 +50,29 @@ function makeFacilities() {
         return other ? other.boardStore : null;
       },
       coordinationEffect: (primitive) => coordination.coordinationEffect(primitive),
-      coordinationEligibleState: (role) => coordination.coordinationEligibleState(role),
+      coordinationEligibleState: (stripType) => coordination.coordinationEligibleState(stripType),
       tofiCounterparts: (actingPositionId) => permission.tofiCounterparts(actingPositionId),
       // Wired as of the mission-line slice. It was absent, and
       // board-store.js's `if (this._rules.tofiEligibleState)` guard meant
-      // docs/adr/0031's (role, state) gate was SILENTLY SKIPPED across this
+      // docs/adr/0031's (stripType, state) gate was SILENTLY SKIPPED across this
       // entire file — the one place TOFI is tested most densely. 0031's own
       // Consequences blessed the omission while nothing depended on the gate
       // being real; find-before-mint does, so it stops being defensible.
-      tofiEligibleState: (role) => coordination.tofiEligibleState(role),
-      // Needed by _releaseFdrIfLastStrip once one FDR legitimately carries
+      tofiEligibleState: (stripType) => coordination.tofiEligibleState(stripType),
+      // Needed by _releaseFlightDataIfLastStrip once one FDR legitimately carries
       // several Strips. Absent here too, so the beacon-release refcount was
       // reading `0` for every Strip in this file.
-      liveStripsForFdr: (fdrId, excludeStripId) => {
+      liveStripsForFlightData: (flightDataId, excludeStripId) => {
         let n = 0;
         for (const { boardStore } of facilities.values()) {
           for (const s of boardStore.getAll()) {
-            if (s.fdrId === fdrId && s.stripId !== excludeStripId && s.state !== 'DROPPED') n++;
+            if (s.flightDataId === flightDataId && s.stripId !== excludeStripId && s.state !== 'DROPPED') n++;
           }
         }
         return n;
       },
     };
-    const boardStore = new BoardStore(fdrStore, fullRules(rules));
+    const boardStore = new BoardStore(flightDataStore, fullRules(rules));
     facilities.set(facilityId, { boardStore, positionStore });
   }
   return facilities;
@@ -88,8 +88,8 @@ function createCtrStrip(facilities) {
   const result = boardStore.applyMutation(mutation({
     op: {
       kind: 'CreateStrip', bayId: 'ctr-enroute', rackId: 'main',
-      fdr: { callsign: 'EAGLE1', aircraftType: 'F15', wakeCategory: 'D', originAirport: 'LTAC', estimatedArrivalTimeUtc: Date.now() + 20 * 60 * 1000 },
-      role: 'ARRIVAL',
+      flightData: { callsign: 'EAGLE1', aircraftType: 'F15', wakeCategory: 'D', originAirport: 'LTAC', estimatedArrivalTimeUtc: Date.now() + 20 * 60 * 1000 },
+      stripType: 'ARRIVAL',
     },
   }), 'CTR', 'ctr-controller');
   assert.equal(result.ok, true, JSON.stringify(result));
@@ -128,14 +128,14 @@ function completeEntry(facilities) {
 
 // ── PROPOSE (ENTRY) mints a real MISSION Strip sharing the ATC Strip's FDR ──
 
-test('TOFI ENTRY PROPOSE mints a brand-new MISSION Strip on TACTICAL\'s own Board, sharing the ATC-side Strip\'s fdrId (guide §9.8\'s binding)', () => {
+test('TOFI ENTRY PROPOSE mints a brand-new MISSION Strip on TACTICAL\'s own Board, sharing the ATC-side Strip\'s flightDataId (guide §9.8\'s binding)', () => {
   const facilities = makeFacilities();
   const atcStrip = createCtrStrip(facilities);
   const proposed = proposeEntry(facilities, atcStrip);
 
   assert.equal(proposed.ok, true, JSON.stringify(proposed));
   assert.equal(proposed.strip.tofiCoordination.direction, 'ENTRY');
-  assert.equal(proposed.strip.tofiCoordination.state, 'PROPOSED');
+  assert.equal(proposed.strip.tofiCoordination.state, 'INITIATED');
   assert.equal(proposed.strip.tofiCoordination.peerFacilityId, 'TACTICAL');
   assert.equal(proposed.strip.tofiCoordination.peerPositionId, 'TAC_C2');
 
@@ -145,13 +145,13 @@ test('TOFI ENTRY PROPOSE mints a brand-new MISSION Strip on TACTICAL\'s own Boar
   const { boardStore: tacBoard } = facilities.get('TACTICAL');
   const missionStrip = tacBoard.getStrip(missionStripId);
   assert.ok(missionStrip);
-  assert.equal(missionStrip.role, 'MISSION');
+  assert.equal(missionStrip.stripType, 'MISSION');
   assert.equal(missionStrip.state, 'TASKED');
   assert.equal(missionStrip.ownerPositionId, 'TAC_C2');
   assert.equal(missionStrip.bayId, 'tac-c2-coordination');
-  assert.equal(missionStrip.fdrId, atcStrip.fdrId); // shared FDR, not a fresh one
+  assert.equal(missionStrip.flightDataId, atcStrip.flightDataId); // shared FDR, not a fresh one
   assert.equal(missionStrip.tofiCoordination.direction, 'ENTRY');
-  assert.equal(missionStrip.tofiCoordination.state, 'PROPOSED');
+  assert.equal(missionStrip.tofiCoordination.state, 'INITIATED');
   assert.equal(missionStrip.tofiCoordination.peerStripId, atcStrip.stripId);
   assert.equal(missionStrip.tofiCoordination.peerFacilityId, 'CENTER');
 });
@@ -262,13 +262,13 @@ test('EXIT PROPOSE re-enters the SAME MISSION Strip\'s link — never mints a ne
   }), 'CTR', 'ctr-controller');
   assert.equal(exitProposed.ok, true, JSON.stringify(exitProposed));
   assert.equal(exitProposed.strip.tofiCoordination.direction, 'EXIT');
-  assert.equal(exitProposed.strip.tofiCoordination.state, 'PROPOSED');
+  assert.equal(exitProposed.strip.tofiCoordination.state, 'INITIATED');
   assert.equal(exitProposed.strip.tofiCoordination.peerStripId, missionStripId); // unchanged — same link
 
   const { boardStore: tacBoard } = facilities.get('TACTICAL');
   const missionAfterExitPropose = tacBoard.getStrip(missionStripId);
   assert.equal(missionAfterExitPropose.tofiCoordination.direction, 'EXIT');
-  assert.equal(missionAfterExitPropose.tofiCoordination.state, 'PROPOSED');
+  assert.equal(missionAfterExitPropose.tofiCoordination.state, 'INITIATED');
 });
 
 test('rule 3: EXIT ACCEPT is refused unless separation_regime has already been set back to ATC — a hard precondition, never auto-derived', () => {
@@ -298,7 +298,7 @@ test('rule 3: EXIT ACCEPT is refused unless separation_regime has already been s
     op: { kind: 'SetBlock', blockId: 'SREG', value: 'ATC' },
   }), 'CTR', 'ctr-controller');
   assert.equal(setRegime.ok, true, JSON.stringify(setRegime));
-  assert.equal(setRegime.fdr.tofi.separationRegime, 'ATC');
+  assert.equal(setRegime.flightData.tofi.separationRegime, 'ATC');
 
   const acceptAllowed = tacBoard.applyMutation(mutation({
     stripId: missionStripId, baseRev: tacBoard.getStrip(missionStripId).rev, op: { kind: 'TOFI', action: 'ACCEPT' },
@@ -384,7 +384,7 @@ test('the MISSION Strip advances through its own lifecycle via ordinary InvokeNl
   assert.equal(advanced.strip.state, 'AIRBORNE');
 });
 
-// ── the (role, state) gate is actually wired here now ─────────────────────
+// ── the (stripType, state) gate is actually wired here now ─────────────────────
 
 test('TOFI ENTRY is refused on an ARRIVAL Strip that is not at INBOUND (docs/adr/0031)', () => {
   // This file's `rules` fixture omitted `tofiEligibleState` until the
@@ -410,10 +410,10 @@ test('TOFI ENTRY is refused on an ARRIVAL Strip that is not at INBOUND (docs/adr
 // ── binding a mission line to an existing flight (docs/adr/0054) ──────────
 
 /** TAC_C2 tasks a mission line bound to an existing flight — no TOFI involved. */
-function bindMissionLine(facilities, fdrId, overrides = {}) {
+function bindMissionLine(facilities, flightDataId, overrides = {}) {
   const { boardStore } = facilities.get('TACTICAL');
   return boardStore.applyMutation(mutation({
-    op: { kind: 'CreateStrip', bayId: 'tac-c2-tasked', rackId: 'main', role: 'MISSION', fdrId, ...overrides },
+    op: { kind: 'CreateStrip', bayId: 'tac-c2-tasked', rackId: 'main', stripType: 'MISSION', flightDataId, ...overrides },
   }), 'TAC_C2', 'tac-c2-controller');
 }
 
@@ -422,16 +422,16 @@ test('CreateStrip binds a MISSION Strip to an existing flight, sharing its FDR a
   const atcStrip = createCtrStrip(facilities);
   const { boardStore: tacBoard } = facilities.get('TACTICAL');
 
-  const bound = bindMissionLine(facilities, atcStrip.fdrId);
+  const bound = bindMissionLine(facilities, atcStrip.flightDataId);
   assert.equal(bound.ok, true, JSON.stringify(bound));
-  assert.equal(bound.strip.role, 'MISSION');
+  assert.equal(bound.strip.stripType, 'MISSION');
   assert.equal(bound.strip.state, 'TASKED', 'the lifecycle is entered at its real beginning');
   assert.equal(bound.strip.bayId, 'tac-c2-tasked');
-  assert.equal(bound.strip.fdrId, atcStrip.fdrId);
+  assert.equal(bound.strip.flightDataId, atcStrip.flightDataId);
   assert.notEqual(bound.strip.stripId, atcStrip.stripId);
 
   // Guide §9.8's bridge field: one Mode 3/A, not two.
-  assert.equal(bound.fdr.identity.beaconAssigned, tacBoard._fdrStore.getFdr(atcStrip.fdrId).identity.beaconAssigned);
+  assert.equal(bound.flightData.identity.beaconAssigned, tacBoard._flightDataStore.getFlightData(atcStrip.flightDataId).identity.beaconAssigned);
   assert.equal(bound.strip.tofiCoordination, null, 'a tasked mission line is in no exchange yet');
 });
 
@@ -442,19 +442,19 @@ test('a bound CreateStrip refuses the ways it can be wrong', () => {
 
   const both = boardStore.applyMutation(mutation({
     op: {
-      kind: 'CreateStrip', bayId: 'tac-c2-tasked', rackId: 'main', role: 'MISSION',
-      fdrId: atcStrip.fdrId, fdr: { callsign: 'GHOST1' },
+      kind: 'CreateStrip', bayId: 'tac-c2-tasked', rackId: 'main', stripType: 'MISSION',
+      flightDataId: atcStrip.flightDataId, flightData: { callsign: 'GHOST1' },
     },
   }), 'TAC_C2', 'tac-c2-controller');
   assert.equal(both.ok, false);
-  assert.match(both.detail, /either fdr .* or fdrId .* not both/);
+  assert.match(both.detail, /either flightData .* or flightDataId .* not both/);
 
-  const missing = bindMissionLine(facilities, 'no-such-fdr');
+  const missing = bindMissionLine(facilities, 'no-such-flightData');
   assert.equal(missing.ok, false);
   assert.equal(missing.reason, 'NOT_FOUND');
 
-  assert.equal(bindMissionLine(facilities, atcStrip.fdrId).ok, true);
-  const second = bindMissionLine(facilities, atcStrip.fdrId);
+  assert.equal(bindMissionLine(facilities, atcStrip.flightDataId).ok, true);
+  const second = bindMissionLine(facilities, atcStrip.flightDataId);
   assert.equal(second.ok, false, 'one flight, one mission line');
   assert.match(second.detail, /already has a live MISSION Strip at TAC_C2/);
 });
@@ -464,13 +464,13 @@ test('TOFI ENTRY lands on a mission line that already exists, instead of minting
   const atcStrip = createCtrStrip(facilities);
   const { boardStore: tacBoard } = facilities.get('TACTICAL');
 
-  const bound = bindMissionLine(facilities, atcStrip.fdrId);
+  const bound = bindMissionLine(facilities, atcStrip.flightDataId);
   const proposed = proposeEntry(facilities, atcStrip);
   assert.equal(proposed.ok, true, JSON.stringify(proposed));
 
   assert.equal(proposed.strip.tofiCoordination.peerStripId, bound.strip.stripId,
     'the exchange must point at the Strip TAC_C2 already had');
-  const missionStrips = tacBoard.getAll().filter(s => s.fdrId === atcStrip.fdrId && s.state !== 'DROPPED');
+  const missionStrips = tacBoard.getAll().filter(s => s.flightDataId === atcStrip.flightDataId && s.state !== 'DROPPED');
   assert.equal(missionStrips.length, 1, 'one airframe, one MRU record');
   assert.equal(missionStrips[0].bayId, 'tac-c2-tasked', 'reuse does not drag it into the Coordination Bay');
 });
@@ -485,7 +485,7 @@ test('a TOFI accepted on a mission line at OFF_STATION does not file it back und
   const atcStrip = createCtrStrip(facilities);
   const { boardStore: tacBoard } = facilities.get('TACTICAL');
 
-  let mission = bindMissionLine(facilities, atcStrip.fdrId).strip;
+  let mission = bindMissionLine(facilities, atcStrip.flightDataId).strip;
   // Dragged into the On Station Bay, which is what a controller does and what
   // carries the state with it (SetState alone never moves a Strip between
   // Bays).
@@ -524,7 +524,7 @@ test('a TOFI accepted on a mission line at OFF_STATION does not file it back und
 test('a TOFI proposed to the wrong counterpart is refused, not duplicated', () => {
   const facilities = makeFacilities();
   const atcStrip = createCtrStrip(facilities);
-  bindMissionLine(facilities, atcStrip.fdrId); // TAC_C2 holds it
+  bindMissionLine(facilities, atcStrip.flightDataId); // TAC_C2 holds it
 
   const toGci = proposeEntry(facilities, atcStrip, { toPositionId: 'GCI' });
   assert.equal(toGci.ok, false);
@@ -556,8 +556,8 @@ test('accepting tactical control requires a separation regime, and records it (d
     op: { kind: 'TOFI', action: 'ACCEPT', separationRegime: 'USING_AGENCY' },
   }), 'TAC_C2', 'tac-c2-controller');
   assert.equal(ok.ok, true, JSON.stringify(ok));
-  const fdr = facilities.get('CENTER').boardStore._fdrStore.getFdr(atcStrip.fdrId);
-  assert.equal(fdr.tofi.separationRegime, 'USING_AGENCY', 'the FDR now says who is separating, from the start');
+  const flightData = facilities.get('CENTER').boardStore._flightDataStore.getFlightData(atcStrip.flightDataId);
+  assert.equal(flightData.tofi.separationRegime, 'USING_AGENCY', 'the FDR now says who is separating, from the start');
 });
 
 test('a rejected TOFI leaves no residue, but never retires a mission line TAC_C2 tasked itself', () => {
@@ -577,7 +577,7 @@ test('a rejected TOFI leaves no residue, but never retires a mission line TAC_C2
 
   // Tasked by TAC_C2: it existed before the exchange and outlives a rejection.
   const b = createCtrStrip(facilities);
-  const bound = bindMissionLine(facilities, b.fdrId);
+  const bound = bindMissionLine(facilities, b.flightDataId);
   assert.equal(proposeEntry(facilities, b).ok, true);
   tacBoard.applyMutation(mutation({
     stripId: bound.strip.stripId, baseRev: tacBoard.getStrip(bound.strip.stripId).rev,

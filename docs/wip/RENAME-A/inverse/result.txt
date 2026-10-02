@@ -1,0 +1,65 @@
+SAME     guard-board-surface.json
+KEYORDER hub-crash-replay.json 
+KEYORDER hub-monitors.json 
+KEYORDER hub-op-matrix.json 
+SAME     hub-order-keys.json
+KEYORDER hub-peer-marsa-order.json 
+SAME     hub-random-seed1.json
+SAME     hub-random-seed2.json
+SAME     hub-random-seed3.json
+KEYORDER hub-resync-metrics.json 
+KEYORDER hub-walk-civil.json 
+KEYORDER hub-walk-manning.json 
+KEYORDER hub-walk-tactical.json 
+SAME     scenario-airspace.json
+SAME     scenario-ato.json
+DIFF     scenario-carrier-l17.json (2 lines)
+   line 1298 .out.ack.detail
+     new: use the Commence button — a carrier handoff is recorded, not dragged
+     old: use the Commence button — a carrier hand-over is recorded, not dragged
+   line 1344 [1].detail
+     new: use the Commence button — a carrier handoff is recorded, not dragged
+     old: use the Commence button — a carrier hand-over is recorded, not dragged
+SAME     scenario-concurrency.json
+SAME     scenario-coordination.json
+SAME     scenario-correlation.json
+SAME     scenario-incirlik-l18.json
+SAME     scenario-manning.json
+SAME     scenario-marsa.json
+SAME     scenario-military.json
+SAME     scenario-mtr.json
+SAME     scenario-ordnance.json
+SAME     scenario-release.json
+SAME     scenario-resync.json
+SAME     scenario-runway-status.json
+SAME     scenario-scramble.json
+SAME     scenario-stereo.json
+SAME     scenario-tactical-l23.json
+SAME     scenario-tactical.json
+SAME     scenario-time-chains.json
+SAME     scenario-traffic-count.json
+SAME     scenario-typed-times.json
+SAME     scenarios.json
+SAME     table-create.json
+SAME     table-mutations.json
+SAME     table-nla.json
+SAME     table-roundtrip.json
+DIFF     tables-nla-coordination-config.json (5 lines)
+   line 26 .v.coveringChain
+     new: <absent>
+     old: {'CD': 'GND', 'GND': 'TWR', 'PAR': 'APP', 'SFA': 'APP', 'TWR': 'APP'}
+   line 27 .v.coveringChain
+     new: <absent>
+     old: {}
+   line 28 .v.coveringChain
+     new: <absent>
+     old: {'AIC': 'TAC_C2', 'GCI': 'TAC_C2', 'JTAC': 'TAC_C2'}
+   line 29 .v.coveringChain
+     new: <absent>
+     old: {'CV_APP1': 'CV_MARSHAL', 'CV_APP2': 'CV_APP1'}
+   line 30 .v.coveringChain
+     new: <absent>
+     old: {}
+SAME     tables-permission-data.json
+SAME     tables-permission-decisions.json
+STRSORT  tables-wire-message-types.json 

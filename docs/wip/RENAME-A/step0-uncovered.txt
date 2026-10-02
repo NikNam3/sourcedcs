@@ -1,0 +1,168 @@
+A AIC-held 5 crc-sync/src/efsp/authority/positions/tactical.js crc-sync/src/efsp/permission.js
+A APP 1108 crc-sync/src/efsp/airspace-config.js crc-sync/src/efsp/airspace-store.js
+A APP1 3 crc-sync/tests/efsp-scenario-carrier-l17.test.mjs
+A APP2 1 crc-sync/tests/efsp-scenario-carrier-l17.test.mjs
+A APPLE 3 crc-sync/tests/efsp-ato-sets.test.mjs crc-sync/tests/efsp-ato-tokenize.test.mjs
+A APPLE20 1 crc-sync/tests/efsp-ato-sets.test.mjs
+A APPLIED_MUTATIONS_CAP 5 crc-sync/src/efsp/metrics.js crc-sync/src/efsp/sync/replay-cache.js
+A APPLY 1 crc-sync/tests/freeze/freeze-selfcheck.mjs
+A APPROACH 29 crc-sync/src/efsp/carrier/flight-record.js crc-sync/tests/coverage.test.mjs
+A APPROACH_BUTTON_MAX 8 crc-sync/src/efsp/carrier/flight-record.js crc-sync/src/efsp/carrier/index.js
+A APPROACH_BUTTON_MIN 8 crc-sync/src/efsp/carrier/flight-record.js crc-sync/src/efsp/carrier/index.js
+A APPROACH_END 4 crc-sync/src/efsp/runway-status.js crc-sync/tests/efsp-runway-status.test.mjs
+A APPROACH_RADAR 6 crc-sync/src/radars.js crc-sync/tests/radars.test.mjs
+A APPROACH_TO_FINAL 8 crc-sync/src/efsp/authority/strip-types/marshal.js crc-sync/src/efsp/carrier/handoff-effects.js
+A APPROACH_TYPES 10 crc-sync/src/efsp/carrier/flight-record.js crc-sync/src/efsp/carrier/index.js
+A APPROVE 1 crc-sync/tests/efsp-board-store-coordination.test.mjs
+A APPROVED 9 crc-sync/src/efsp/authority/primitives.js crc-sync/src/efsp/board/coordination.js
+A ARRIVAL-role 5 crc-sync/src/efsp/flight-data-store.js
+A CENTER-held 7 crc-sync/src/efsp/authority/strip-types/arrival.js crc-sync/src/efsp/authority/strip-types/departure.js
+A CVN_APPROACH_RADAR 4 crc-sync/src/radars.js
+A DEPARTURE-role 1 crc-sync/tests/efsp-forwarding-obligations.test.mjs
+A GND 371 crc-sync/src/efsp/authority/op-kinds.js crc-sync/src/efsp/authority/positions/civil-atc.js
+A HELD- 1 crc-sync/src/efsp/nla.js
+A HELD1 1 crc-sync/tests/efsp-alert-scramble.test.mjs
+A HELD_INDEX 2 crc-sync/src/efsp/forwarding-obligations.js
+A Held 2 crc-sync/src/efsp/position-coverage.js crc-sync/src/ws-hub.js
+A KNOWN_UNMAPPED 2 crc-sync/src/efsp/ato/ato-structure.js
+A MARSHAL_TO_APPROACH 20 crc-sync/src/efsp/authority/strip-types/marshal.js crc-sync/src/efsp/carrier/handoff-effects.js
+A MODE3_HELD_BY_OTHER 2 crc-sync/src/efsp/ato/ato-board.js crc-sync/tests/efsp-scenario-ato.test.mjs
+A OCCUPANCY 2 crc-sync/src/efsp/authority/strip-types/departure.js crc-sync/src/efsp/nla.js
+A Occupied 1 crc-sync/tests/efsp-scenario-airspace.test.mjs
+A ROLE 2 crc-sync/src/efsp/board/tofi.js crc-sync/tests/efsp-traffic-count.test.mjs
+A ROLES 3 crc-sync/tests/freeze/freeze-table.test.mjs
+A Role-agnostic 1 crc-sync/src/efsp/board/ops/create-strip.js
+A Role-scoped 2 crc-sync/src/efsp/board/ops/convert-to-arrival.js crc-sync/src/efsp/board/ops/create-strip.js
+A Station 5 crc-sync/tests/efsp-scenario-tactical.test.mjs crc-sync/tests/efsp-tofi.test.mjs
+A Stationary 1 crc-sync/tests/grpc-client-stream.test.mjs
+A TWR 644 crc-sync/src/app.js crc-sync/src/efsp/authority/op-kinds.js
+A _byRole 6 crc-sync/src/efsp/authority/index.js
+A _byRoleWhere 4 crc-sync/src/efsp/authority/index.js
+A actually-held 1 crc-sync/tests/efsp-ws.test.mjs
+A aic-on-station 11 crc-sync/tests/efsp-scenario-tactical-l23.test.mjs crc-sync/tests/efsp-scenario-tactical.test.mjs
+A also-unoccupied 1 crc-sync/tests/efsp-position-store.test.mjs
+A conformance-stca 3 crc-sync/src/app.js crc-sync/tests/app-boot.test.mjs
+A createRoles 8 crc-sync/src/efsp/authority/index.js crc-sync/src/efsp/authority/positions/carrier.js
+A f-held 2 crc-sync/tests/efsp-alert-scramble.test.mjs
+A gci-on-station 6 crc-sync/tests/efsp-facility-config.test.mjs crc-sync/tests/efsp-scenario-tactical-l23.test.mjs
+A gnd 6 crc-sync/tests/freeze/freeze-traces.mjs
+A gndOnly 2 crc-sync/tests/efsp-permission.test.mjs
+A gndPushback 2 crc-sync/tests/efsp-facility-config.test.mjs
+A held-open 1 crc-sync/tests/grpc-client-stream.test.mjs
+A held-set 2 crc-sync/tests/efsp-position-store.test.mjs crc-sync/tests/ws-hub-read-scope.test.mjs
+A heldWithReleaseTime 2 crc-sync/tests/efsp-ui-findings.test.mjs
+A makeHeldStrip 12 crc-sync/tests/efsp-forwarding-obligations.test.mjs
+A manned 50 crc-sync/src/coverage.js crc-sync/src/efsp/board/ops/sfa-rotation.js
+A mannedHours 3 crc-sync/src/efsp/metrics.js crc-sync/tests/efsp-metrics.test.mjs
+A mannedMinutes 7 crc-sync/src/efsp/metrics.js crc-sync/tests/efsp-metrics.test.mjs
+A occupancy-fallback 1 crc-sync/tests/efsp-facility-config.test.mjs
+A occupiable 1 crc-sync/src/efsp/nla.js
+A occupy 2 crc-sync/tests/efsp-board-store-coordination.test.mjs crc-sync/tests/efsp-ws.test.mjs
+A occupying 2 crc-sync/src/efsp/efsp-ws.js crc-sync/src/efsp/position-store.js
+A on-station 2 crc-sync/src/efsp/ato/ato-mapping.js crc-sync/src/efsp/block-map.js
+A onStationRaw 6 crc-sync/src/efsp/ato/ato-mapping.js crc-sync/src/efsp/ato/ato-sets.js
+A onStationUnderTofi 7 crc-sync/tests/efsp-scenario-tactical-l23.test.mjs crc-sync/tests/efsp-scenario-tactical.test.mjs
+A onStationUtc 11 crc-sync/src/efsp/ato/ato-mapping.js crc-sync/src/efsp/ato/ato-sets.js
+A per-Role 6 crc-sync/src/efsp/block-map.js crc-sync/src/efsp/board-store.js
+A per-role 1 crc-sync/src/efsp/board/ops/create-strip.js
+A perMannedHour 4 crc-sync/src/efsp/metrics.js crc-sync/tests/efsp-metrics.test.mjs
+A radar-station 1 crc-sync/src/efsp/position-store.js
+A registerRoleFamily 10 crc-sync/src/efsp/authority/index.js crc-sync/tests/authority-registry.test.mjs
+A resyncHeldEfspBoardsOnOpen 1 crc-sync/tests/efsp-scenario-resync.test.mjs
+A role-aware 1 crc-sync/tests/efsp-nla.test.mjs
+A role-based 1 crc-sync/src/efsp/authority/index.js
+A role-blind 2 crc-sync/src/efsp/authority/strip-types/marshal.js crc-sync/src/efsp/board/ops/create-strip.js
+A role-gating 1 crc-sync/tests/efsp-board-store.test.mjs
+A role-scoped 6 crc-sync/src/efsp/permission.js crc-sync/tests/efsp-board-store.test.mjs
+A role-specific 1 crc-sync/src/efsp/block-map.js
+A roleBayFor 4 crc-sync/src/efsp/board/coordination.js crc-sync/src/efsp/board/placement.js
+A roleDir 2 crc-sync/tests/efsp-alert-scramble.test.mjs
+A roleFamilies 10 crc-sync/src/efsp/authority/index.js
+A roleFamily 5 crc-sync/src/efsp/authority/index.js crc-sync/src/efsp/nla.js
+A roleNames 5 crc-sync/src/efsp/authority/index.js crc-sync/src/efsp/nla.js
+A s-held 2 crc-sync/tests/efsp-alert-scramble.test.mjs
+A same-role 3 crc-sync/src/efsp/board/ops/create-strip.js crc-sync/src/efsp/board/tofi.js
+A stationary 1 crc-sync/tools/soak/report.js
+A stations 2 crc-sync/src/efsp/position-store.js
+A tac-c2-on-station 14 crc-sync/tests/efsp-facility-config.test.mjs crc-sync/tests/efsp-scenario-tactical-l23.test.mjs
+A twr 15 crc-sync/tests/efsp-index.test.mjs crc-sync/tests/efsp-position-store.test.mjs
+A twr- 1 crc-sync/tests/efsp-index.test.mjs
+A twrBays 4 crc-sync/tests/efsp-facility-config.test.mjs crc-sync/tests/efsp-scenario-tactical.test.mjs
+A twrOnly 2 crc-sync/tests/efsp-permission.test.mjs
+A unheld 1 crc-sync/tests/atis-store.test.mjs
+B -held 2 crc-desktop/tests/efsp-ui-reachability.test.mjs
+B 02-scramble-line-twr 1 crc-desktop/e2e/alert-scramble.spec.js
+B 05-inspection-refused-to-twr 1 crc-desktop/e2e/runway-status.spec.js
+B AIC-held 5 crc-desktop/app/public/js/panels/efsp/bay/authority-mirror.js crc-desktop/e2e/tactical-positions.spec.js
+B APP 405 crc-desktop/app/public/css/efsp-panel.css crc-desktop/app/public/index.html
+B APPLIED 1 crc-desktop/e2e/l1-popovers.spec.js
+B APPR 1 crc-desktop/app/public/js/panels/efsp/strip-template.js
+B APPROACH 1 crc-desktop/app/public/js/panels/radar-panel.js
+B APPROACH_END 1 crc-desktop/tests/efsp-runway-status-client.test.mjs
+B APPROACH_TO_FINAL 2 crc-desktop/app/public/js/panels/efsp/efsp-nla.js crc-desktop/e2e/l17-carrier.spec.js
+B APPROACH_TYPES 1 crc-desktop/app/public/js/panels/efsp/strip-template.js
+B APPROVED 1 crc-desktop/app/public/js/panels/efsp/bay/popovers/coordination.js
+B DEPARTURE-role 1 crc-desktop/app/public/js/panels/efsp/panel/create-strip.js
+B GND 153 crc-desktop/app/public/js/panels/efsp/bay-view.js crc-desktop/app/public/js/panels/efsp/efsp-nla.js
+B HELD_SETS 2 crc-desktop/tests/efsp-runway-status-client.test.mjs
+B JTAC-held 1 crc-desktop/app/public/js/panels/efsp/strip-view.js
+B LOW_APPROACH 2 crc-desktop/app/public/js/panels/efsp/pattern-board.js crc-desktop/tests/efsp-final-panel.test.mjs
+B MARSHAL_TO_APPROACH 5 crc-desktop/app/public/js/panels/efsp/efsp-nla.js crc-desktop/e2e/l17-carrier.spec.js
+B Manned 1 crc-desktop/app/public/js/panels/metrics-panel.js
+B Role-aware 3 crc-desktop/app/public/js/panels/efsp/strip-template.js crc-desktop/tests/overflight-shared-state-names.test.mjs
+B Role-keyed 1 crc-desktop/tests/overflight-shared-state-names.test.mjs
+B Role-specific 1 crc-desktop/tests/efsp-ui-reachability.test.mjs
+B Station 4 crc-desktop/app/public/js/panels/efsp/efsp-nla.js crc-desktop/app/public/js/panels/efsp/panel/create-strip.js
+B TWR 285 crc-desktop/app/public/js/atc-scope.js crc-desktop/app/public/js/panels/efsp/efsp-nla.js
+B TWR$ 1 crc-desktop/e2e/runway-status.spec.js
+B _setCoverageHeldPositions 4 crc-desktop/app/public/js/app.js crc-desktop/tests/coverage-panel.test.mjs
+B aic-on-station 11 crc-desktop/e2e/tactical-positions.spec.js crc-desktop/e2e/ui-a.spec.js
+B c-gnd 2 crc-desktop/tests/efsp-ui-reachability.test.mjs
+B c-twr 2 crc-desktop/tests/efsp-runway-status-client.test.mjs crc-desktop/tests/efsp-ui-reachability.test.mjs
+B currently-held 1 crc-desktop/app/public/js/panels/efsp/efsp-ws.js
+B discovering 1 crc-desktop/app/public/js/panels/efsp/marsa-badge.js
+B gci-on-station 1 crc-desktop/app/public/js/panels/efsp/panel/create-strip.js
+B gnd 12 crc-desktop/app/public/js/icons.js crc-desktop/e2e/ordnance-hung.spec.js
+B gnd-ctl 1 crc-desktop/e2e/l5-arrivals.spec.js
+B gnd-ctl-2 1 crc-desktop/e2e/l5-arrivals.spec.js
+B gnd-ctl-3 1 crc-desktop/e2e/l5-arrivals.spec.js
+B gnd-taxi 1 crc-desktop/tests/efsp-panel-drop-targets.test.mjs
+B held-Position 2 crc-desktop/app/public/js/panels/efsp/efsp-ws.js
+B manned 6 crc-desktop/app/public/js/panels/metrics-panel.js crc-desktop/e2e/ui-a.spec.js
+B mannedHours 11 crc-desktop/app/public/js/panels/metrics-panel.js crc-desktop/tests/metrics-panel.test.mjs
+B mannedMinutes 5 crc-desktop/app/public/js/panels/metrics-panel.js crc-desktop/tests/metrics-panel.test.mjs
+B not-held 1 crc-desktop/app/public/js/panels/efsp/efsp-metrics-client.js
+B occupant 1 crc-desktop/app/public/js/dock.js
+B occupied$ 1 crc-desktop/app/public/js/panels/efsp/runway-status-panel.js
+B on-station 1 crc-desktop/app/public/js/panels/efsp/ato-strip.js
+B onStationLine 6 crc-desktop/e2e/tactical-positions.spec.js
+B onStationUtc 3 crc-desktop/app/public/js/panels/efsp/ato-strip.js crc-desktop/tests/efsp-ato-strip.test.mjs
+B per-Role 7 crc-desktop/app/public/js/panels/efsp/bay/popovers/airspace-entry.js crc-desktop/app/public/js/panels/efsp/strip-fields.js
+B per-role 1 crc-desktop/app/public/js/panels/efsp/strip-template.js
+B perMannedHour 9 crc-desktop/app/public/js/panels/metrics-panel.js crc-desktop/tests/metrics-panel.test.mjs
+B resyncHeldEfspBoardsOnOpen 2 crc-desktop/tests/ws-message-contract.test.mjs
+B role-aware 1 crc-desktop/tests/efsp-strip-template.test.mjs
+B role-keyed 2 crc-desktop/app/public/js/panels/efsp/efsp-nla.js crc-desktop/app/public/js/panels/efsp/strip-template.js
+B roleBayFor 2 crc-desktop/tests/overflight-shared-state-names.test.mjs
+B s-snake-twr 1 crc-desktop/e2e/l22-stars-scope.spec.js
+B scene2-senders-ctr-twr 1 crc-desktop/e2e/l22-stars-scope.spec.js
+B setHeld 10 crc-desktop/tests/efsp-bay-views.test.mjs
+B station-derived 1 crc-desktop/app/public/js/panels/efsp/bay/popovers/bind.js
+B tac-c2-on-station 6 crc-desktop/e2e/tactical-positions.spec.js crc-desktop/tests/efsp-ui-reachability.test.mjs
+B twr 120 crc-desktop/e2e/l5-arrivals.spec.js crc-desktop/e2e/ordnance-hung.spec.js
+B twr-ctl 1 crc-desktop/e2e/l5-arrivals.spec.js
+B twr-ctl-2 1 crc-desktop/e2e/l5-arrivals.spec.js
+B twr-ctl-3 1 crc-desktop/e2e/l5-arrivals.spec.js
+B twr-departed 1 crc-desktop/tests/efsp-scramble-client.test.mjs
+B unheld 1 crc-desktop/e2e/l1-nla-clearance-chain.spec.js
+C $role 5 infra/mediawiki/extensions/CasdoorSync/includes/CasdoorSyncJob.php
+C $roles 2 infra/mediawiki/extensions/CasdoorSync/includes/CasdoorSyncJob.php
+C APP 11 crc-sync/config/efsp-facility-incirlik.json
+C APPLY_CHANNEL_ID 3 .env.example infra/docker-compose.yml
+C GND 7 crc-sync/config/efsp-facility-incirlik.json
+C TWR 7 crc-sync/config/efsp-facility-incirlik.json
+C VALID_ROLES 3 infra/mediawiki/extensions/CasdoorSync/includes/CasdoorSyncJob.php
+C aic-on-station 1 crc-sync/config/efsp-facility-tactical.json
+C gci-on-station 1 crc-sync/config/efsp-facility-tactical.json
+C syncRoles 2 infra/mediawiki/extensions/CasdoorSync/includes/CasdoorSyncJob.php
+C tac-c2-on-station 1 crc-sync/config/efsp-facility-tactical.json

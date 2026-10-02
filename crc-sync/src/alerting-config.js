@@ -20,10 +20,10 @@ const NAME = 'alerting.json';
  */
 function loadAlertingConfig(override) {
   const shipped = readShipped(NAME);
-  const layer = readLayer(NAME, override) || {};
+  const layer = readLayer(NAME, override, shipped) || {};
   return {
     conformance: { ...shipped.conformance, ...(layer.conformance || {}) },
-    stca: { ...shipped.stca, ...(layer.stca || {}) },
+    conflictAlert: { ...shipped.conflictAlert, ...(layer.conflictAlert || {}) },
   };
 }
 

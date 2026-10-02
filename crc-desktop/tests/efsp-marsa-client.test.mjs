@@ -35,21 +35,21 @@ const require = createRequire(import.meta.url);
 // global); this drives the real one.
 const setSelected = (id) => _setSelectedStripIdForTest(id);
 
-const TANKER = 'fdr-shell71';
-const RX1 = 'fdr-viper11';
-const RX2 = 'fdr-viper12';
+const TANKER = 'flight-data-shell71';
+const RX1 = 'flight-data-viper11';
+const RX2 = 'flight-data-viper12';
 
-function strip(stripId, fdrId) {
+function strip(stripId, flightDataId) {
   return {
-    stripId, fdrId, rev: 1, role: 'DEPARTURE', state: 'HANDED_OFF',
-    bayId: 'app-departures', rackId: 'main', orderKey: 'V', ownerPositionId: 'APP',
+    stripId, flightDataId, rev: 1, stripType: 'DEPARTURE', state: 'HANDED_OFF',
+    bayId: 'ap-departures', rackId: 'main', orderKey: 'V', ownerPositionId: 'AP',
     annotations: {}, flags: {}, coordination: null, tofiCoordination: null,
     airspaceEntry: null, previousLeg: null,
   };
 }
 
-function fdr(fdrId, callsign) {
-  return { fdrId, rev: 1, identity: { callsign, beaconAssigned: '0041', beaconObserved: null } };
+function flightData(flightDataId, callsign) {
+  return { flightDataId, rev: 1, identity: { callsign, beaconAssigned: '0041', beaconObserved: null } };
 }
 
 function relation(over = {}) {
@@ -66,11 +66,11 @@ function relation(over = {}) {
 }
 
 const STRIPS = [strip('s-tanker', TANKER), strip('s-rx1', RX1), strip('s-rx2', RX2)];
-const FDRS = [fdr(TANKER, 'SHELL71'), fdr(RX1, 'VIPER11'), fdr(RX2, 'VIPER12')];
+const FDRS = [flightData(TANKER, 'SHELL71'), flightData(RX1, 'VIPER11'), flightData(RX2, 'VIPER12')];
 
 function load(marsa = []) {
   state._resetEfspStateForTest();
-  state.applyEfspSnapshot({ strips: STRIPS, fdrs: FDRS, positions: [], bays: [], marsa, boardSeq: 1 });
+  state.applyEfspSnapshot({ strips: STRIPS, flightDataList: FDRS, positions: [], bays: [], marsa, boardSeq: 1 });
   setSelected(null);
   highlightMarsaParticipants(null);
 }
@@ -236,7 +236,7 @@ test('a DROPPED Strip is not highlighted', () => {
   state._resetEfspStateForTest();
   state.applyEfspSnapshot({
     strips: [strip('s-tanker', TANKER), { ...strip('s-rx1', RX1), state: 'DROPPED' }],
-    fdrs: FDRS, positions: [], bays: [], marsa: [relation()], boardSeq: 1,
+    flightDataList: FDRS, positions: [], bays: [], marsa: [relation()], boardSeq: 1,
   });
   highlightMarsaParticipants('s-tanker');
   assert.deepEqual(getMarsaHighlightStripIds(), []);

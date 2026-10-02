@@ -37,7 +37,7 @@ function crew(efsp, spec) {
   const sessions = {};
   for (const [positionId, facilityId] of Object.entries(spec)) {
     const session = { controllerId: `c-${positionId}`, who: positionId };
-    efsp.handleMessage(session, { type: 'efsp-set-positions', facilityId, held: [positionId] });
+    efsp.handleMessage(session, { type: 'efsp-set-positions', facilityId, signedOn: [positionId] });
     sessions[positionId] = { session, facilityId };
   }
   return sessions;
@@ -75,8 +75,8 @@ const FILED = {
 
 function createDeparture(efsp, c, callsign, filed = FILED) {
   return mustAct(efsp, c.OPS, 'OPS', null, {
-    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE',
-    fdr: { callsign, ...filed },
+    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE',
+    flightData: { callsign, ...filed },
   });
 }
 
@@ -84,7 +84,7 @@ function createDeparture(efsp, c, callsign, filed = FILED) {
 
 test('F-102: every NLA in the departure chain leaves the Strip in the Bay for its NEW state', async () => {
   const efsp = createEfsp();
-  const c = crew(efsp, { OPS: 'INCIRLIK', CD: 'INCIRLIK', GND: 'INCIRLIK', TWR: 'INCIRLIK', APP: 'INCIRLIK' });
+  const c = crew(efsp, { OPS: 'INCIRLIK', CD: 'INCIRLIK', GC: 'INCIRLIK', LC: 'INCIRLIK', AP: 'INCIRLIK' });
   let strip = createDeparture(efsp, c, 'VPR102');
 
   // The exact table docs/ui-findings/lane1.md F-102 measured, made to come out
@@ -93,12 +93,12 @@ test('F-102: every NLA in the departure chain leaves the Strip in the Bay for it
   const walk = [
     ['OPS', 'cd-pending-clearance', 'PENDING_CLEARANCE'],
     ['CD',  'cd-cleared',           'CLEARED'],
-    ['CD',  'gnd-pushback',         'PUSHBACK'],
-    ['GND', 'gnd-taxi-out',         'TAXI'],
-    ['GND', 'twr-runway-queue',     'RUNWAY_QUEUE'],
-    ['TWR', 'twr-runway-queue',     'LUAW'],
-    ['TWR', 'twr-airborne',         'DEPARTED'],
-    ['TWR', 'app-departures',       'HANDED_OFF'],
+    ['CD',  'gc-pushback',         'PUSHBACK'],
+    ['GC', 'gc-taxi-out',         'TAXI'],
+    ['GC', 'lc-runway-queue',     'RUNWAY_QUEUE'],
+    ['LC', 'lc-runway-queue',     'LUAW'],
+    ['LC', 'lc-airborne',         'DEPARTED'],
+    ['LC', 'ap-departures',       'HANDED_OFF'],
   ];
   for (const [positionId, bayId, state] of walk) {
     strip = await advance(efsp, c[positionId], positionId, strip);
@@ -176,7 +176,7 @@ test('F-408: giving up the receiving Position re-sends every Strip with its new 
   // CD goes away. Nothing covers it, so Send to Clearance is now inhibited —
   // and the Strip it applies to was not itself touched by this message, which
   // is the whole reason the broadcast carries the Board rather than a diff.
-  const out = efsp.handleMessage(c.CD.session, { type: 'efsp-set-positions', facilityId: 'INCIRLIK', held: [] });
+  const out = efsp.handleMessage(c.CD.session, { type: 'efsp-set-positions', facilityId: 'INCIRLIK', signedOn: [] });
   const sent = slot(out, 'primary').strips.updated.find(s => s.stripId === strip.stripId);
   assert.ok(sent, 'the untouched Strip is in the broadcast');
   assert.deepEqual(sent.nla, { inhibited: 'no receiving Position present', reason: 'NLA_INHIBITED' });
@@ -211,17 +211,17 @@ test('F-111: declaring MARSA broadcasts the participants\' FDRs, not just the re
     version: 1, type: 'efsp-marsa-mutation', clientMutationId: crypto.randomUUID(),
     actingPositionId: 'OPS',
     op: {
-      kind: 'DeclareMarsa', participants: [a.fdrId, b.fdrId],
+      kind: 'DeclareMarsa', participants: [a.flightDataId, b.flightDataId],
       declaringCallsign: 'SHELL71', startEvent: 'TANKER_ACCEPTED', endCondition: 'VERTICALLY_POSITIONED',
     },
   });
   assert.equal(out.ack.ok, true, JSON.stringify(out.ack));
   assert.equal(slot(out, 'marsa').type, 'efsp-marsa-delta');
 
-  const fdrs = slot(out, 'primary').fdrs.updated;
+  const flightDataList = slot(out, 'primary').flightDataList.updated;
   assert.equal(slot(out, 'primary').type, 'efsp-board-delta');
-  assert.deepEqual(fdrs.map(f => f.fdrId).sort(), [a.fdrId, b.fdrId].sort());
-  for (const fdr of fdrs) assert.equal(fdr.tofi.separationRegime, 'MARSA');
+  assert.deepEqual(flightDataList.map(f => f.flightDataId).sort(), [a.flightDataId, b.flightDataId].sort());
+  for (const flightData of flightDataList) assert.equal(flightData.tofi.separationRegime, 'MARSA');
 });
 
 test('F-111: ending a relation broadcasts the regime going back to ATC', () => {
@@ -236,15 +236,15 @@ test('F-111: ending a relation broadcasts the regime going back to ATC', () => {
   });
 
   const declared = marsa({
-    kind: 'DeclareMarsa', participants: [a.fdrId, b.fdrId],
+    kind: 'DeclareMarsa', participants: [a.flightDataId, b.flightDataId],
     declaringCallsign: 'SHELL71', startEvent: 'TANKER_ACCEPTED', endCondition: 'VERTICALLY_POSITIONED',
   }).ack.marsa;
 
   const ended = marsa({ kind: 'EndMarsa' }, declared);
   assert.equal(ended.ack.ok, true, JSON.stringify(ended.ack));
-  const fdrs = slot(ended, 'primary').fdrs.updated;
-  assert.deepEqual(fdrs.map(f => f.fdrId).sort(), [a.fdrId, b.fdrId].sort());
-  for (const fdr of fdrs) assert.equal(fdr.tofi.separationRegime, 'ATC');
+  const flightDataList = slot(ended, 'primary').flightDataList.updated;
+  assert.deepEqual(flightDataList.map(f => f.flightDataId).sort(), [a.flightDataId, b.flightDataId].sort());
+  for (const flightData of flightDataList) assert.equal(flightData.tofi.separationRegime, 'ATC');
 });
 
 test('F-111: the interlock void rides the same board-delta as the clearance that caused it', () => {
@@ -256,7 +256,7 @@ test('F-111: the interlock void rides the same board-delta as the clearance that
     version: 1, type: 'efsp-marsa-mutation', clientMutationId: crypto.randomUUID(),
     actingPositionId: 'OPS',
     op: {
-      kind: 'DeclareMarsa', participants: [a.fdrId, b.fdrId],
+      kind: 'DeclareMarsa', participants: [a.flightDataId, b.flightDataId],
       declaringCallsign: 'SHELL71', startEvent: 'TANKER_ACCEPTED', endCondition: 'VERTICALLY_POSITIONED',
     },
   });
@@ -268,9 +268,9 @@ test('F-111: the interlock void rides the same board-delta as the clearance that
   assert.equal(out.ack.ok, true, JSON.stringify(out.ack));
   assert.equal(slot(out, 'marsa').marsa.updated[0].state, 'VOIDED');
 
-  const byId = new Map(slot(out, 'primary').fdrs.updated.map(f => [f.fdrId, f]));
-  assert.deepEqual([...byId.keys()].sort(), [a.fdrId, b.fdrId].sort(), 'both participants, not just the one cleared');
-  for (const fdr of byId.values()) assert.equal(fdr.tofi.separationRegime, 'ATC');
+  const byId = new Map(slot(out, 'primary').flightDataList.updated.map(f => [f.flightDataId, f]));
+  assert.deepEqual([...byId.keys()].sort(), [a.flightDataId, b.flightDataId].sort(), 'both participants, not just the one cleared');
+  for (const flightData of byId.values()) assert.equal(flightData.tofi.separationRegime, 'ATC');
 });
 
 // ── F-206 — clearing an enum Block ────────────────────────────────────────
@@ -283,9 +283,9 @@ test('F-206: SREG and RSVC accept being cleared; the four Blocks with no "unset"
   // Set then clear, for the two whose FDR field genuinely starts as null.
   for (const [blockId, value, field] of [['SREG', 'DUE_REGARD', 'separationRegime'], ['RSVC', 'ACTIVE', 'radarService']]) {
     strip = mustAct(efsp, c.OPS, 'OPS', strip, { kind: 'SetBlock', blockId, value });
-    assert.equal(efsp.fdrStore.getFdr(strip.fdrId).tofi[field], value);
+    assert.equal(efsp.flightDataStore.getFlightData(strip.flightDataId).tofi[field], value);
     strip = mustAct(efsp, c.OPS, 'OPS', strip, { kind: 'SetBlock', blockId, value: '' });
-    assert.equal(efsp.fdrStore.getFdr(strip.fdrId).tofi[field], null, `${blockId} cleared`);
+    assert.equal(efsp.flightDataStore.getFlightData(strip.flightDataId).tofi[field], null, `${blockId} cleared`);
   }
 
   // The other four have no null state to return to — their "cleared" value is
@@ -303,37 +303,37 @@ test('F-206: SREG and RSVC accept being cleared; the four Blocks with no "unset"
 
 test('F-303: the facility that rejected a coordination cannot then work the replica', () => {
   const efsp = createEfsp();
-  const c = crew(efsp, { OPS: 'INCIRLIK', APP: 'INCIRLIK', TWR: 'INCIRLIK', CTR: 'CENTER' });
+  const c = crew(efsp, { OPS: 'INCIRLIK', AP: 'INCIRLIK', LC: 'INCIRLIK', CTR: 'CENTER' });
 
   // A CENTER-held INBOUND ARRIVAL, point-outed to INCIRLIK's APP.
   const ctrStrip = mustAct(efsp, c.CTR, 'CTR', null, {
-    kind: 'CreateStrip', bayId: 'ctr-enroute', rackId: 'main', role: 'ARRIVAL',
-    fdr: { callsign: 'DED303', aircraftType: 'F16', wakeCategory: 'D', originAirport: 'LTAC', destinationAirport: 'LTAG', route: 'DCT', requestedAltitude: '250' },
+    kind: 'CreateStrip', bayId: 'ctr-enroute', rackId: 'main', stripType: 'ARRIVAL',
+    flightData: { callsign: 'DED303', aircraftType: 'F16', wakeCategory: 'D', originAirport: 'LTAC', destinationAirport: 'LTAG', route: 'DCT', requestedAltitude: '250' },
   });
   const proposed = mustAct(efsp, c.CTR, 'CTR', ctrStrip, {
-    kind: 'POINT_OUT', action: 'PROPOSE', toFacilityId: 'INCIRLIK', toPositionId: 'APP',
+    kind: 'POINT_OUT', action: 'PROPOSE', toFacilityId: 'INCIRLIK', toPositionId: 'AP',
   });
 
   const incirlik = efsp.boardStoreFor('INCIRLIK');
   const replica = incirlik.getStrip(proposed.coordination.peerStripId);
-  const rejected = mustAct(efsp, c.APP, 'APP', replica, { kind: 'POINT_OUT', action: 'REJECT' });
+  const rejected = mustAct(efsp, c.AP, 'AP', replica, { kind: 'POINT_OUT', action: 'REJECT' });
   assert.equal(rejected.coordination.state, 'REJECTED');
-  assert.equal(rejected.bayId, 'app-coordination', 'left inert where it landed, not reaped');
+  assert.equal(rejected.bayId, 'ap-coordination', 'left inert where it landed, not reaped');
 
   // The panel is told before the press (F-408's shape)...
   assert.equal(rejected.nla.reason, 'VALIDATION_ERROR');
   assert.match(rejected.nla.inhibited, /rejected — the replica is inert/);
 
   // ...and the press itself is refused, which is the half that matters.
-  const handed = act(efsp, c.APP, 'APP', rejected, { kind: 'InvokeNla' });
+  const handed = act(efsp, c.AP, 'AP', rejected, { kind: 'InvokeNla' });
   assert.equal(handed.ok, false);
   assert.equal(handed.reason, 'VALIDATION_ERROR');
   assert.match(handed.detail, /POINT_OUT was rejected/);
   assert.equal(incirlik.getStrip(replica.stripId).state, 'INBOUND', 'never reached HANDED_TO_TOWER');
 
   // Nor by dragging it into a Bay that implies the state the button would have set.
-  const dragged = act(efsp, c.APP, 'APP', rejected, {
-    kind: 'MoveStrip', bayId: 'twr-arrivals', rackId: 'main',
+  const dragged = act(efsp, c.AP, 'AP', rejected, {
+    kind: 'MoveStrip', bayId: 'lc-arrivals', rackId: 'main',
   });
   assert.equal(dragged.ok, false);
   assert.match(dragged.detail, /POINT_OUT was rejected/);
@@ -341,16 +341,16 @@ test('F-303: the facility that rejected a coordination cannot then work the repl
 
 test('F-303: the SENDER\'s own Strip reads REJECTED too, and stays fully workable', () => {
   const efsp = createEfsp();
-  const c = crew(efsp, { APP: 'INCIRLIK', TWR: 'INCIRLIK', CTR: 'CENTER' });
+  const c = crew(efsp, { AP: 'INCIRLIK', LC: 'INCIRLIK', CTR: 'CENTER' });
   const ctrStrip = mustAct(efsp, c.CTR, 'CTR', null, {
-    kind: 'CreateStrip', bayId: 'ctr-enroute', rackId: 'main', role: 'ARRIVAL',
-    fdr: { callsign: 'SND303', aircraftType: 'F16', wakeCategory: 'D', originAirport: 'LTAC', destinationAirport: 'LTAG', route: 'DCT', requestedAltitude: '250' },
+    kind: 'CreateStrip', bayId: 'ctr-enroute', rackId: 'main', stripType: 'ARRIVAL',
+    flightData: { callsign: 'SND303', aircraftType: 'F16', wakeCategory: 'D', originAirport: 'LTAC', destinationAirport: 'LTAG', route: 'DCT', requestedAltitude: '250' },
   });
   const proposed = mustAct(efsp, c.CTR, 'CTR', ctrStrip, {
-    kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'INCIRLIK', toPositionId: 'APP',
+    kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'INCIRLIK', toPositionId: 'AP',
   });
   const replica = efsp.boardStoreFor('INCIRLIK').getStrip(proposed.coordination.peerStripId);
-  mustAct(efsp, c.APP, 'APP', replica, { kind: 'HANDOFF', action: 'REJECT' });
+  mustAct(efsp, c.AP, 'AP', replica, { kind: 'HANDOFF', action: 'REJECT' });
 
   // CENTER still owns the flight and must be able to carry on working it —
   // including proposing the handoff again. Both records read REJECTED, so
@@ -358,23 +358,23 @@ test('F-303: the SENDER\'s own Strip reads REJECTED too, and stays fully workabl
   const sender = efsp.boardStoreFor('CENTER').getStrip(ctrStrip.stripId);
   assert.equal(sender.coordination.state, 'REJECTED');
   const retried = act(efsp, c.CTR, 'CTR', sender, {
-    kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'INCIRLIK', toPositionId: 'APP',
+    kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'INCIRLIK', toPositionId: 'AP',
   });
   assert.equal(retried.ok, true, JSON.stringify(retried));
 });
 
 test('F-303: Drop is the one NLA a dead replica keeps — it is how it gets cleared', () => {
   const efsp = createEfsp();
-  const c = crew(efsp, { OPS: 'INCIRLIK', APP: 'INCIRLIK', CTR: 'CENTER' });
+  const c = crew(efsp, { OPS: 'INCIRLIK', AP: 'INCIRLIK', CTR: 'CENTER' });
   const appStrip = mustAct(efsp, c.OPS, 'OPS', null, {
-    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE',
-    fdr: { callsign: 'DRP303', ...FILED },
+    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE',
+    flightData: { callsign: 'DRP303', ...FILED },
   });
   const handedOff = mustAct(efsp, c.OPS, 'OPS', appStrip, { kind: 'SetState', toState: 'HANDED_OFF' });
   const atApp = mustAct(efsp, c.OPS, 'OPS', handedOff, {
-    kind: 'TransferStrip', toPositionId: 'APP', bayId: 'app-departures', rackId: 'main',
+    kind: 'TransferStrip', toPositionId: 'AP', bayId: 'ap-departures', rackId: 'main',
   });
-  const proposed = mustAct(efsp, c.APP, 'APP', atApp, {
+  const proposed = mustAct(efsp, c.AP, 'AP', atApp, {
     kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'CENTER', toPositionId: 'CTR',
   });
   const replica = efsp.boardStoreFor('CENTER').getStrip(proposed.coordination.peerStripId);
@@ -389,14 +389,14 @@ test('F-303: Drop is the one NLA a dead replica keeps — it is how it gets clea
 // APP → CTR HANDOFF of a DEPARTURE, answered by CTR. Returns CENTER's replica.
 function handoffToCenter(efsp, c, callsign, answer) {
   const created = mustAct(efsp, c.OPS, 'OPS', null, {
-    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE',
-    fdr: { callsign, ...FILED },
+    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE',
+    flightData: { callsign, ...FILED },
   });
   const handedOff = mustAct(efsp, c.OPS, 'OPS', created, { kind: 'SetState', toState: 'HANDED_OFF' });
   const atApp = mustAct(efsp, c.OPS, 'OPS', handedOff, {
-    kind: 'TransferStrip', toPositionId: 'APP', bayId: 'app-departures', rackId: 'main',
+    kind: 'TransferStrip', toPositionId: 'AP', bayId: 'ap-departures', rackId: 'main',
   });
-  const proposed = mustAct(efsp, c.APP, 'APP', atApp, {
+  const proposed = mustAct(efsp, c.AP, 'AP', atApp, {
     kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'CENTER', toPositionId: 'CTR',
   });
   const replica = efsp.boardStoreFor('CENTER').getStrip(proposed.coordination.peerStripId);
@@ -406,7 +406,7 @@ function handoffToCenter(efsp, c, callsign, answer) {
 
 test('F-303: a rejected replica refuses every op except the ones that clear it away', () => {
   const efsp = createEfsp();
-  const c = crew(efsp, { OPS: 'INCIRLIK', APP: 'INCIRLIK', CTR: 'CENTER', TAC_C2: 'TACTICAL' });
+  const c = crew(efsp, { OPS: 'INCIRLIK', AP: 'INCIRLIK', CTR: 'CENTER', TAC_C2: 'TACTICAL' });
   const { replica } = handoffToCenter(efsp, c, 'INR303', 'REJECT');
   assert.equal(replica.coordination.state, 'REJECTED');
 
@@ -423,36 +423,36 @@ test('F-303: a rejected replica refuses every op except the ones that clear it a
     { kind: 'SetState', toState: 'INBOUND' },
     { kind: 'TransferStrip', toPositionId: 'CTR', bayId: 'ctr-departures', rackId: 'main' },
     { kind: 'Undo' },
-    { kind: 'POINT_OUT', action: 'PROPOSE', toFacilityId: 'INCIRLIK', toPositionId: 'APP' },
+    { kind: 'POINT_OUT', action: 'PROPOSE', toFacilityId: 'INCIRLIK', toPositionId: 'AP' },
   ];
   for (const op of refusedOps) {
     const ack = act(efsp, c.CTR, 'CTR', replica, op);
     assert.equal(ack.ok, false, `${op.kind} must be refused`);
     assert.equal(ack.reason, 'VALIDATION_ERROR', op.kind);
-    assert.match(ack.detail, /HANDOFF was rejected — the replica is inert, and APP still works the flight/, op.kind);
+    assert.match(ack.detail, /HANDOFF was rejected — the replica is inert, and AP still works the flight/, op.kind);
   }
   assert.equal(efsp.boardStoreFor('TACTICAL').getAll().length, 0, 'no MISSION Strip was minted');
 
   // Moving it aside, and dropping it, both still work.
-  const moved = mustAct(efsp, c.CTR, 'CTR', replica, { kind: 'MoveStrip', bayId: 'ctr-app-coordination', rackId: 'main' });
+  const moved = mustAct(efsp, c.CTR, 'CTR', replica, { kind: 'MoveStrip', bayId: 'ctr-ap-coordination', rackId: 'main' });
   const dropped = mustAct(efsp, c.CTR, 'CTR', moved, { kind: 'DropStrip' });
   assert.equal(dropped.state, 'DROPPED');
 });
 
 test('F-303: the sender of a rejected handoff keeps working its own Strip', () => {
   const efsp = createEfsp();
-  const c = crew(efsp, { OPS: 'INCIRLIK', APP: 'INCIRLIK', CTR: 'CENTER' });
+  const c = crew(efsp, { OPS: 'INCIRLIK', AP: 'INCIRLIK', CTR: 'CENTER' });
   const { sender } = handoffToCenter(efsp, c, 'SND304', 'REJECT');
   const own = efsp.boardStoreFor('INCIRLIK').getStrip(sender.stripId);
   assert.equal(own.coordination.state, 'REJECTED');
-  mustAct(efsp, c.APP, 'APP', own, { kind: 'SetBlock', blockId: '22', value: '251.000' });
+  mustAct(efsp, c.AP, 'AP', own, { kind: 'SetBlock', blockId: '22', value: '251.000' });
 });
 
 test('a TOFI cannot be opened while a coordination proposal on the same Strip is still open', () => {
   const efsp = createEfsp();
-  const c = crew(efsp, { OPS: 'INCIRLIK', APP: 'INCIRLIK', CTR: 'CENTER', TAC_C2: 'TACTICAL' });
+  const c = crew(efsp, { OPS: 'INCIRLIK', AP: 'INCIRLIK', CTR: 'CENTER', TAC_C2: 'TACTICAL' });
   const { replica } = handoffToCenter(efsp, c, 'PND303');
-  assert.equal(replica.coordination.state, 'PROPOSED');
+  assert.equal(replica.coordination.state, 'INITIATED');
 
   const ack = act(efsp, c.CTR, 'CTR', replica, {
     kind: 'TOFI', action: 'PROPOSE', direction: 'ENTRY', toFacilityId: 'TACTICAL', toPositionId: 'TAC_C2',
@@ -477,8 +477,8 @@ test('F-306: accepting a TOFI ENTRY carries the regime it wrote in the ack AND t
   // ctr-enroute implies INBOUND, which is where an ARRIVAL Strip may open a
   // TOFI ENTRY (coordination.js's TOFI_ELIGIBLE_STATES).
   const ctrStrip = mustAct(efsp, c.CTR, 'CTR', null, {
-    kind: 'CreateStrip', bayId: 'ctr-enroute', rackId: 'main', role: 'ARRIVAL',
-    fdr: { callsign: 'SRG306', aircraftType: 'F16', wakeCategory: 'D', originAirport: 'LTAC', destinationAirport: 'LTAG', route: 'DCT', requestedAltitude: '250' },
+    kind: 'CreateStrip', bayId: 'ctr-enroute', rackId: 'main', stripType: 'ARRIVAL',
+    flightData: { callsign: 'SRG306', aircraftType: 'F16', wakeCategory: 'D', originAirport: 'LTAC', destinationAirport: 'LTAG', route: 'DCT', requestedAltitude: '250' },
   });
   const proposed = mustAct(efsp, c.CTR, 'CTR', ctrStrip, {
     kind: 'TOFI', action: 'PROPOSE', direction: 'ENTRY', toFacilityId: 'TACTICAL', toPositionId: 'TAC_C2',
@@ -491,10 +491,10 @@ test('F-306: accepting a TOFI ENTRY carries the regime it wrote in the ack AND t
   assert.equal(out.ack.ok, true, JSON.stringify(out.ack));
 
   // The accepter's own page gets it on the ack...
-  assert.equal(out.ack.fdr.tofi.separationRegime, 'DUE_REGARD');
+  assert.equal(out.ack.flightData.tofi.separationRegime, 'DUE_REGARD');
   // ...and the proposer's, from the broadcast every client receives. Without
   // this the write landed and neither screen ever showed it (F-306).
-  const broadcast = slot(out, 'primary').fdrs.updated.find(f => f.fdrId === mission.fdrId);
+  const broadcast = slot(out, 'primary').flightDataList.updated.find(f => f.flightDataId === mission.flightDataId);
   assert.ok(broadcast, 'the FDR is in the board-delta');
   assert.equal(broadcast.tofi.separationRegime, 'DUE_REGARD');
 });
@@ -523,14 +523,14 @@ function heldWithReleaseTime(efsp, c, callsign, releaseAt) {
   strip = mustAct(efsp, c.OPS, 'OPS', strip, {
     kind: 'TransferStrip', toPositionId: 'CD', bayId: 'cd-held', rackId: 'main',
   });
-  assert.equal(efsp.fdrStore.setField(strip.fdrId, 'assigned.releaseState', 'RELEASE_TIME', { by: 'CD' }).ok, true);
-  assert.equal(efsp.fdrStore.setField(strip.fdrId, 'assigned.releaseTimeUtc', releaseAt, { by: 'CD' }).ok, true);
+  assert.equal(efsp.flightDataStore.setField(strip.flightDataId, 'assigned.departureRelease', 'RELEASE_TIME', { by: 'CD' }).ok, true);
+  assert.equal(efsp.flightDataStore.setField(strip.flightDataId, 'assigned.releaseTimeUtc', releaseAt, { by: 'CD' }).ok, true);
   return strip;
 }
 
 test('F-408: a release time passing is broadcast exactly once, and a second tick sends nothing', () => {
   const efsp = createEfsp();
-  const c = crew(efsp, { OPS: 'INCIRLIK', CD: 'INCIRLIK', GND: 'INCIRLIK' });
+  const c = crew(efsp, { OPS: 'INCIRLIK', CD: 'INCIRLIK', GC: 'INCIRLIK' });
   const releaseAt = Date.now() + 10 * 60 * 1000;
   const strip = heldWithReleaseTime(efsp, c, 'HLD408', releaseAt);
 
@@ -556,7 +556,7 @@ test('F-408: a release time passing is broadcast exactly once, and a second tick
   assert.equal(payload.facilityId, 'INCIRLIK');
   assert.equal(payload.strips.length, 1);
   assert.equal(payload.strips[0].stripId, strip.stripId);
-  assert.deepEqual(payload.strips[0].nla, { toState: 'PUSHBACK', transferTo: 'GND' });
+  assert.deepEqual(payload.strips[0].nla, { toState: 'PUSHBACK', transferTo: 'GC' });
   assert.equal(payload.strips[0].facilityId, 'INCIRLIK', 'stamped like any other board-delta record');
 
   // And it does not keep saying so.
@@ -583,20 +583,20 @@ test('F-408: the sweep never re-sends a status a Mutation already put on the wir
 
 test('F-408: a void deadline expiring reaches the sweep too, and the reason is the press\'s own wording', () => {
   const efsp = createEfsp();
-  const c = crew(efsp, { OPS: 'INCIRLIK', CD: 'INCIRLIK', GND: 'INCIRLIK' });
+  const c = crew(efsp, { OPS: 'INCIRLIK', CD: 'INCIRLIK', GC: 'INCIRLIK' });
   let strip = createDeparture(efsp, c, 'VOD408');
   strip = mustAct(efsp, c.OPS, 'OPS', strip, { kind: 'SetState', toState: 'HELD' });
   strip = mustAct(efsp, c.OPS, 'OPS', strip, {
     kind: 'TransferStrip', toPositionId: 'CD', bayId: 'cd-held', rackId: 'main',
   });
-  // fdr-store derives voidDeadlineUtc from the void time (§3.8, 30 minutes).
+  // flight-data-store derives voidDeadlineUtc from the void time (§3.8, 30 minutes).
   // Set in the past, so the derived deadline has already gone by at the real
   // clock the press below reads — the sweep takes an explicit `now`, the
   // Mutation path does not.
   const voidAt = Date.now() - 31 * 60 * 1000;
-  efsp.fdrStore.setField(strip.fdrId, 'assigned.releaseState', 'CLEARANCE_VOID_TIME', { by: 'CD' });
-  efsp.fdrStore.setField(strip.fdrId, 'assigned.voidTimeUtc', voidAt, { by: 'CD' });
-  const deadline = efsp.fdrStore.getFdr(strip.fdrId).assigned.voidDeadlineUtc;
+  efsp.flightDataStore.setField(strip.flightDataId, 'assigned.departureRelease', 'CLEARANCE_VOID_TIME', { by: 'CD' });
+  efsp.flightDataStore.setField(strip.flightDataId, 'assigned.voidTimeUtc', voidAt, { by: 'CD' });
+  const deadline = efsp.flightDataStore.getFlightData(strip.flightDataId).assigned.voidDeadlineUtc;
   assert.ok(Number.isFinite(deadline), 'the deadline is derived');
 
   efsp.nlaStatusMonitor.tick(deadline - 1000); // settle

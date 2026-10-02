@@ -5,23 +5,23 @@ import permission from '../src/efsp/permission.js';
 
 test('U1 OPS records ORDNANCE (3G) on a departure whoever holds it, and nothing else of the kind', () => {
   const { mayActBesideOwner } = permission;
-  const dep = { role: 'DEPARTURE', ownerPositionId: 'TWR', state: 'AIRBORNE' };
+  const dep = { stripType: 'DEPARTURE', ownerPositionId: 'LC', state: 'AIRBORNE' };
   assert.equal(mayActBesideOwner('OPS', dep, { kind: 'SetBlock', blockId: '3G' }), true);
   assert.equal(mayActBesideOwner('OPS', { ...dep, state: 'DROPPED' }, { kind: 'SetBlock', blockId: '3G' }), false);
-  assert.equal(mayActBesideOwner('TWR', dep, { kind: 'SetBlock', blockId: '3G' }), false, 'ownership stays the rule for everyone else');
+  assert.equal(mayActBesideOwner('LC', dep, { kind: 'SetBlock', blockId: '3G' }), false, 'ownership stays the rule for everyone else');
   assert.equal(mayActBesideOwner('OPS', dep, { kind: 'SetBlock', blockId: '3F' }), false);
 });
 
 test('S-L16: a vul window cannot be left ending before it starts', async () => {
-  const { FdrStore } = await import('../src/efsp/fdr-store.js');
-  const store = new FdrStore();
-  const created = store.createFdr({
+  const { FlightDataStore } = await import('../src/efsp/flight-data-store.js');
+  const store = new FlightDataStore();
+  const created = store.createFlightData({
     callsign: 'WEASEL1', flightSize: 2, aircraftType: 'F16', wakeCategory: 'D', equipmentCodes: ['G'],
     route: 'DCT', requestedAltitude: '250', departureAirport: 'LTAG', destinationAirport: 'LTAG',
     vulWindowStartUtc: Date.UTC(2026, 3, 14, 6, 0), vulWindowEndUtc: Date.UTC(2026, 3, 14, 8, 0),
-  }, { by: 'TAC_C2', role: 'MISSION' });
+  }, { by: 'TAC_C2', stripType: 'MISSION' });
   assert.equal(created.ok, true, JSON.stringify(created));
-  const id = created.fdr.fdrId;
+  const id = created.flightData.flightDataId;
   const late = store.setField(id, 'mission.vulWindowStartUtc', Date.UTC(2026, 3, 14, 9, 0), { by: 'TAC_C2' });
   assert.equal(late.ok, false);
   assert.match(late.detail, /move the end first/);

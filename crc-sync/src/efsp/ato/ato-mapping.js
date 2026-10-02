@@ -4,12 +4,12 @@
 // one MissionLine per MSNACFT, a document-level AR join table, and packages.
 //
 // Output shape, per decision S-Q50: every line carries
-//   fdrSeed  — ONLY keys FdrStore.createFdr(seed) reads today (fdr-store.js,
-//              createFdr's flat seed). Nothing else: createFdr silently
+//   flightDataSeed  — ONLY keys FlightDataStore.createFlightData(seed) reads today (flight-data-store.js,
+//              createFlightData's flat seed). Nothing else: createFlightData silently
 //              ignores unknown keys, so a key here that it does not read would
 //              be a promise nobody keeps.
-//   military — the fdr.military fields the ATO owns (alertStatus, scl,
-//              arInfo), shaped as fdr.military holds them. setMilitary() can
+//   military — the flightData.military fields the ATO owns (alertStatus, scl,
+//              arInfo), shaped as flightData.military holds them. setMilitary() can
 //              write alertStatus today; it refuses scl and arInfo by name.
 //   extras   — { ato, identityAto } (S-R2-8): everything with no FDR home
 //              yet — identityAto the IFF Mode 1/2/3 and datalink, ato the
@@ -38,8 +38,8 @@
 //
 // Pure: requires nothing with load-time I/O.
 
-// createFdr's flat seed keys this mapping fills (a subset of
-// fdr-store.js createFdr's whole list; the test pins it).
+// createFlightData's flat seed keys this mapping fills (a subset of
+// flight-data-store.js createFlightData's whole list; the test pins it).
 const SEED_KEYS = Object.freeze(['callsign', 'flightSize', 'aircraftType', 'unit', 'homeStation',
   'missionNumber', 'packageId', 'controllingAgency', 'vulWindowStartUtc', 'vulWindowEndUtc']);
 
@@ -52,38 +52,38 @@ const ACCEPTANCE_FIELDS = Object.freeze(['packageId', 'vulWindowStartUtc', 'vulW
 // Every ATO value, where it lands on the MissionLine (`out`), the FDR path it
 // targets, the guide §6.4 M-number (comment-level only), today's Block id,
 // and whether anything can write it today.
-//   writePathToday: 'createFdr' — rides in fdrSeed, createFdr writes it
-//                   'setMilitary' — FdrStore.setMilitary() accepts it
+//   writePathToday: 'createFlightData' — rides in flightDataSeed, createFlightData writes it
+//                   'setMilitary' — FlightDataStore.setMilitary() accepts it
 //                   'none' — a named hand-off to L14 (or a supervisor ruling)
 const ATO_FIELD_TARGETS = Object.freeze([
-  { set: 'AMSNDAT', field: 'missionNumber', out: 'fdrSeed.missionNumber', fdrPath: 'mission.missionNumber', guideM: 'M1', blockId: 'M1', writePathToday: 'createFdr' },
-  { set: 'AMSNDAT|PKGCMD|9PKGDAT', field: 'packageId', out: 'fdrSeed.packageId', fdrPath: 'mission.packageId', guideM: 'M2', blockId: 'M2', writePathToday: 'createFdr' },
-  { set: 'AMSNDAT', field: 'missionType', out: 'extras.ato.missionType', fdrPath: null, guideM: 'M3', blockId: null, writePathToday: 'none' },
-  { set: 'AMSNDAT', field: 'alertStatus', out: 'military.alertStatus', fdrPath: 'military.alertStatus', guideM: 'M16', blockId: null, writePathToday: 'setMilitary' },
-  { set: 'AMSNDAT', field: 'DEPLOC/ARRLOC', out: 'extras.ato.departure', fdrPath: null, guideM: 'departure/recovery', blockId: null, writePathToday: 'none' },
-  { set: 'AMSNDAT|PKGCMD|9PKGDAT', field: 'packageCommander', out: 'extras.ato.packageCommander', fdrPath: null, guideM: 'M2', blockId: null, writePathToday: 'none' },
-  { set: 'MSNACFT', field: 'count', out: 'fdrSeed.flightSize', fdrPath: 'identity.flightSize', guideM: null, blockId: null, writePathToday: 'createFdr' },
-  { set: 'MSNACFT', field: 'aircraftType', out: 'fdrSeed.aircraftType', fdrPath: 'identity.aircraftType', guideM: null, blockId: '3A', writePathToday: 'createFdr' },
-  { set: 'MSNACFT', field: 'callsign', out: 'fdrSeed.callsign', fdrPath: 'identity.callsign', guideM: null, blockId: 'M3', writePathToday: 'createFdr' },
-  { set: 'MSNACFT', field: 'iffModeOne', out: 'extras.identityAto.modeOne', fdrPath: 'identity.modeOne', guideM: 'M4', blockId: null, writePathToday: 'none' },
-  { set: 'MSNACFT', field: 'iffModeTwo', out: 'extras.identityAto.modeTwo', fdrPath: 'identity.modeTwo', guideM: 'M4', blockId: null, writePathToday: 'none' },
+  { set: 'AMSNDAT', field: 'missionNumber', out: 'flightDataSeed.missionNumber', flightDataPath: 'mission.missionNumber', guideM: 'M1', blockId: 'M1', writePathToday: 'createFlightData' },
+  { set: 'AMSNDAT|PKGCMD|9PKGDAT', field: 'packageId', out: 'flightDataSeed.packageId', flightDataPath: 'mission.packageId', guideM: 'M2', blockId: 'M2', writePathToday: 'createFlightData' },
+  { set: 'AMSNDAT', field: 'missionType', out: 'extras.ato.missionType', flightDataPath: null, guideM: 'M3', blockId: null, writePathToday: 'none' },
+  { set: 'AMSNDAT', field: 'alertStatus', out: 'military.alertStatus', flightDataPath: 'military.alertStatus', guideM: 'M16', blockId: null, writePathToday: 'setMilitary' },
+  { set: 'AMSNDAT', field: 'DEPLOC/ARRLOC', out: 'extras.ato.departure', flightDataPath: null, guideM: 'departure/recovery', blockId: null, writePathToday: 'none' },
+  { set: 'AMSNDAT|PKGCMD|9PKGDAT', field: 'packageCommander', out: 'extras.ato.packageCommander', flightDataPath: null, guideM: 'M2', blockId: null, writePathToday: 'none' },
+  { set: 'MSNACFT', field: 'count', out: 'flightDataSeed.flightSize', flightDataPath: 'identity.flightSize', guideM: null, blockId: null, writePathToday: 'createFlightData' },
+  { set: 'MSNACFT', field: 'aircraftType', out: 'flightDataSeed.aircraftType', flightDataPath: 'identity.aircraftType', guideM: null, blockId: '3A', writePathToday: 'createFlightData' },
+  { set: 'MSNACFT', field: 'callsign', out: 'flightDataSeed.callsign', flightDataPath: 'identity.callsign', guideM: null, blockId: 'M3', writePathToday: 'createFlightData' },
+  { set: 'MSNACFT', field: 'iffModeOne', out: 'extras.identityAto.modeOne', flightDataPath: 'identity.modeOne', guideM: 'M4', blockId: null, writePathToday: 'none' },
+  { set: 'MSNACFT', field: 'iffModeTwo', out: 'extras.identityAto.modeTwo', flightDataPath: 'identity.modeTwo', guideM: 'M4', blockId: null, writePathToday: 'none' },
   // NOT identity.beaconAssigned: the ATO side of §3.10.3 rule 3's reconciliation.
-  { set: 'MSNACFT', field: 'iffModeThree', out: 'extras.identityAto.modeThree', fdrPath: null, guideM: '§9.8 bridge field', blockId: null, writePathToday: 'none' },
-  { set: 'MSNACFT', field: 'datalink', out: 'extras.identityAto.datalink', fdrPath: null, guideM: 'M5', blockId: null, writePathToday: 'none' },
-  { set: 'MSNACFT', field: 'config', out: 'military.scl', fdrPath: 'military.scl', guideM: 'M13', blockId: null, writePathToday: 'none' },
-  { set: 'AMSNLOC|GTGTLOC|7CONTROL', field: 'vulStart', out: 'fdrSeed.vulWindowStartUtc', fdrPath: 'mission.vulWindowStartUtc', guideM: 'M6', blockId: 'M6', writePathToday: 'createFdr' },
-  { set: 'AMSNLOC|GTGTLOC', field: 'vulEnd', out: 'fdrSeed.vulWindowEndUtc', fdrPath: 'mission.vulWindowEndUtc', guideM: 'M6', blockId: 'M7', writePathToday: 'createFdr' },
-  { set: 'AMSNLOC', field: 'altitude', out: 'extras.ato.missionAltitudeFt', fdrPath: null, guideM: 'M6', blockId: null, writePathToday: 'none' },
-  { set: '7CONTROL', field: 'TOSTA', out: 'extras.ato.onStationUtc', fdrPath: null, guideM: 'M6', blockId: null, writePathToday: 'none' },
-  { set: 'CONTROLA|7CONTROL', field: 'reportInPoint', out: 'extras.ato.reportInPoint', fdrPath: null, guideM: 'M6', blockId: null, writePathToday: 'none' },
-  { set: 'CONTROLA|7CONTROL', field: 'agencyCallsign', out: 'fdrSeed.controllingAgency', fdrPath: 'mission.controllingAgency', guideM: 'M7', blockId: 'M5', writePathToday: 'createFdr' },
-  { set: 'CONTROLA', field: 'typeAndFrequencies', out: 'extras.ato.control', fdrPath: null, guideM: 'M7', blockId: null, writePathToday: 'none' },
-  { set: 'ARINFO', field: 'receiverAr', out: 'military.arInfo.asReceiver', fdrPath: 'military.arInfo', guideM: 'M12', blockId: null, writePathToday: 'none' },
-  { set: 'REFTSK|5REFUEL', field: 'tankerAr', out: 'military.arInfo.asTanker', fdrPath: 'military.arInfo', guideM: 'M12', blockId: null, writePathToday: 'none' },
-  { set: 'TASKUNIT', field: 'unit', out: 'fdrSeed.unit', fdrPath: 'identity.unit', guideM: 'M20', blockId: '3D', writePathToday: 'createFdr' },
-  { set: 'TASKUNIT', field: 'location', out: 'fdrSeed.homeStation', fdrPath: 'identity.homeStation', guideM: 'M20', blockId: '3E', writePathToday: 'createFdr' },
+  { set: 'MSNACFT', field: 'iffModeThree', out: 'extras.identityAto.modeThree', flightDataPath: null, guideM: '§9.8 bridge field', blockId: null, writePathToday: 'none' },
+  { set: 'MSNACFT', field: 'datalink', out: 'extras.identityAto.datalink', flightDataPath: null, guideM: 'M5', blockId: null, writePathToday: 'none' },
+  { set: 'MSNACFT', field: 'config', out: 'military.scl', flightDataPath: 'military.scl', guideM: 'M13', blockId: null, writePathToday: 'none' },
+  { set: 'AMSNLOC|GTGTLOC|7CONTROL', field: 'vulStart', out: 'flightDataSeed.vulWindowStartUtc', flightDataPath: 'mission.vulWindowStartUtc', guideM: 'M6', blockId: 'M6', writePathToday: 'createFlightData' },
+  { set: 'AMSNLOC|GTGTLOC', field: 'vulEnd', out: 'flightDataSeed.vulWindowEndUtc', flightDataPath: 'mission.vulWindowEndUtc', guideM: 'M6', blockId: 'M7', writePathToday: 'createFlightData' },
+  { set: 'AMSNLOC', field: 'altitude', out: 'extras.ato.missionAltitudeFt', flightDataPath: null, guideM: 'M6', blockId: null, writePathToday: 'none' },
+  { set: '7CONTROL', field: 'TOSTA', out: 'extras.ato.onStationUtc', flightDataPath: null, guideM: 'M6', blockId: null, writePathToday: 'none' },
+  { set: 'CONTROLA|7CONTROL', field: 'reportInPoint', out: 'extras.ato.reportInPoint', flightDataPath: null, guideM: 'M6', blockId: null, writePathToday: 'none' },
+  { set: 'CONTROLA|7CONTROL', field: 'agencyCallsign', out: 'flightDataSeed.controllingAgency', flightDataPath: 'mission.controllingAgency', guideM: 'M7', blockId: 'M5', writePathToday: 'createFlightData' },
+  { set: 'CONTROLA', field: 'typeAndFrequencies', out: 'extras.ato.control', flightDataPath: null, guideM: 'M7', blockId: null, writePathToday: 'none' },
+  { set: 'ARINFO', field: 'receiverAr', out: 'military.arInfo.asReceiver', flightDataPath: 'military.arInfo', guideM: 'M12', blockId: null, writePathToday: 'none' },
+  { set: 'REFTSK|5REFUEL', field: 'tankerAr', out: 'military.arInfo.asTanker', flightDataPath: 'military.arInfo', guideM: 'M12', blockId: null, writePathToday: 'none' },
+  { set: 'TASKUNIT', field: 'unit', out: 'flightDataSeed.unit', flightDataPath: 'identity.unit', guideM: 'M20', blockId: '3D', writePathToday: 'createFlightData' },
+  { set: 'TASKUNIT', field: 'location', out: 'flightDataSeed.homeStation', flightDataPath: 'identity.homeStation', guideM: 'M20', blockId: '3E', writePathToday: 'createFlightData' },
   // NOT filed.remarks: that is controller text (ADR 0040's erasure lesson).
-  { set: 'AMPN|NARR|GENTEXT|RMKS', field: 'text', out: 'extras.ato.remarks', fdrPath: null, guideM: null, blockId: null, writePathToday: 'none' },
+  { set: 'AMPN|NARR|GENTEXT|RMKS', field: 'text', out: 'extras.ato.remarks', flightDataPath: null, guideM: null, blockId: null, writePathToday: 'none' },
 ].map((r) => Object.freeze(r)));
 
 function W(code, severity, line, set, message) {
@@ -264,7 +264,7 @@ function mapAtoDocument(doc) {
         own.push(W('MULTIPLE_FLIGHTS_IN_MISSION', 'info', a.line, 'MSNACFT',
           `Mission ${m.missionKey} has ${m.aircraft.length} MSNACFT sets; each is its own line.`));
       }
-      const fdrSeed = {
+      const flightDataSeed = {
         callsign: a.callsignValid ? a.callsign : null,
         flightSize: a.count,
         aircraftType: a.aircraftType,
@@ -292,16 +292,16 @@ function mapAtoDocument(doc) {
       };
       const missing = [];
       for (const k of ACCEPTANCE_FIELDS) {
-        const v = k.startsWith('mode') ? identityAto[k] : fdrSeed[k];
+        const v = k.startsWith('mode') ? identityAto[k] : flightDataSeed[k];
         if (v == null) missing.push(k);
       }
-      if (!fdrSeed.callsign) missing.unshift('callsign');
+      if (!flightDataSeed.callsign) missing.unshift('callsign');
       const ato = {
         missionNumber: m.missionNumber,
         missionKey: m.missionKey,
         callsign: a.callsign, // always the normalised callsign, even when it cannot seed (H1)
         callsignRaw: a.callsignRaw,
-        seedable: !!fdrSeed.callsign,
+        seedable: !!flightDataSeed.callsign,
         missingAcceptanceFields: missing,
         taskUnit: m.taskUnit ? { unit: m.taskUnit.unit, location: m.taskUnit.location, country: m.taskUnit.country, service: m.taskUnit.service } : null,
         missionType: { ...a0.missionType },
@@ -329,11 +329,11 @@ function mapAtoDocument(doc) {
       const P = (set, line) => ({ source: 'ATO', set, line });
       const provenance = {};
       provenance['mission.missionNumber'] = P('AMSNDAT', m.line);
-      if (fdrSeed.callsign) provenance['identity.callsign'] = P('MSNACFT', a.line);
+      if (flightDataSeed.callsign) provenance['identity.callsign'] = P('MSNACFT', a.line);
       provenance['identity.flightSize'] = P('MSNACFT', a.line);
-      if (fdrSeed.aircraftType) provenance['identity.aircraftType'] = P('MSNACFT', a.line);
-      if (fdrSeed.unit) provenance['identity.unit'] = P('TASKUNIT', m.taskUnit.line);
-      if (fdrSeed.homeStation) provenance['identity.homeStation'] = P('TASKUNIT', m.taskUnit.line);
+      if (flightDataSeed.aircraftType) provenance['identity.aircraftType'] = P('MSNACFT', a.line);
+      if (flightDataSeed.unit) provenance['identity.unit'] = P('TASKUNIT', m.taskUnit.line);
+      if (flightDataSeed.homeStation) provenance['identity.homeStation'] = P('TASKUNIT', m.taskUnit.line);
       if (packageSrc) provenance['mission.packageId'] = P(packageSrc.set, packageSrc.line);
       if (agencySrc) provenance['mission.controllingAgency'] = P(agencySrc.set, agencySrc.line);
       if (vul.start != null) provenance['mission.vulWindowStartUtc'] = P(vul.source, vul.line);
@@ -347,7 +347,7 @@ function mapAtoDocument(doc) {
         sourceLines: { ...m.lines, MSNACFT: a.line },
         provenance,
         // S-Q50's four keys
-        fdrSeed,
+        flightDataSeed,
         military,
         extras: { ato, identityAto },
         warnings: lw,

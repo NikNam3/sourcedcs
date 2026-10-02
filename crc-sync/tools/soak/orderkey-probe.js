@@ -30,10 +30,10 @@ async function main() {
     return r.out.map(([, p]) => JSON.parse(p)).find(m => m.type === 'efsp-mutation-ack');
   };
   await call('connect', { clientId: 'ops', user: { name: 'ops', sub: 'ops' } });
-  await call('send', { clientId: 'ops', msg: { type: 'efsp-set-positions', facilityId: 'INCIRLIK', held: ['OPS'] } });
+  await call('send', { clientId: 'ops', msg: { type: 'efsp-set-positions', facilityId: 'INCIRLIK', signedOn: ['OPS'] } });
   const ids = [];
   for (let i = 0; i < 3; i++) {
-    const ack = await send({ version: 1, type: 'efsp-mutation', facilityId: 'INCIRLIK', actingPositionId: 'OPS', op: { kind: 'CreateStrip', bayId: 'ops-filed', rackId: 'main', role: 'DEPARTURE', fdr: { callsign: `OKP${i}`, aircraftType: 'F16', wakeCategory: 'M', departureAirport: 'LTAG', destinationAirport: 'LTAG', route: 'DCT', requestedAltitude: '250' } } });
+    const ack = await send({ version: 1, type: 'efsp-mutation', facilityId: 'INCIRLIK', actingPositionId: 'OPS', op: { kind: 'CreateStrip', bayId: 'ops-filed', rackId: 'main', stripType: 'DEPARTURE', flightData: { callsign: `OKP${i}`, aircraftType: 'F16', wakeCategory: 'M', departureAirport: 'LTAG', destinationAirport: 'LTAG', route: 'DCT', requestedAltitude: '250' } } });
     ids.push(ack.strip.stripId);
   }
   const rows = [];

@@ -4,17 +4,17 @@
 // TWR and APP, and CENTER's CTR (guide §4.1). Moved from permission.js. RSU,
 // SFA and PAR are incirlik-military.js, which also adds APP's L18 columns.
 
-const { OP_KINDS, COORDINATION_OP_KINDS, APP_CTR_ONLY_OP_KINDS, AIRSPACE_ENTRY_OP_KINDS, TOFI_OP_KINDS, NON_CREATE_OPS } = require('../op-kinds');
+const { OP_KINDS, COORDINATION_OP_KINDS, AP_CTR_ONLY_OP_KINDS, AIRSPACE_ENTRY_OP_KINDS, TOFI_OP_KINDS, NON_CREATE_OPS } = require('../op-kinds');
 
 const PERMISSIONS = {
-  OPS: new Set(OP_KINDS.filter(k => !COORDINATION_OP_KINDS.includes(k) && !APP_CTR_ONLY_OP_KINDS.includes(k) && !TOFI_OP_KINDS.includes(k) && !AIRSPACE_ENTRY_OP_KINDS.includes(k))),
+  OPS: new Set(OP_KINDS.filter(k => !COORDINATION_OP_KINDS.includes(k) && !AP_CTR_ONLY_OP_KINDS.includes(k) && !TOFI_OP_KINDS.includes(k) && !AIRSPACE_ENTRY_OP_KINDS.includes(k))),
   CD:  new Set(NON_CREATE_OPS),
-  GND: new Set(NON_CREATE_OPS),
-  TWR: new Set(NON_CREATE_OPS),
+  GC: new Set(NON_CREATE_OPS),
+  LC: new Set(NON_CREATE_OPS),
   // APP deliberately excludes TOFI even though it otherwise gets the full
   // OP_KINDS set — guide §4.1's own Position table lists TOFI only for CTR
   // among the ATC Positions built so far; APP is not on TOFI's ATC side.
-  APP: new Set(OP_KINDS.filter(k => !TOFI_OP_KINDS.includes(k))),
+  AP: new Set(OP_KINDS.filter(k => !TOFI_OP_KINDS.includes(k))),
   // CTR gets CreateStrip too — it self-originates ARRIVAL Strips as the new
   // terminus stub (docs/adr/0014, mirroring the same "nothing further
   // upstream is built yet" shape as docs/adr/0008's original APP stub),
@@ -26,8 +26,8 @@ const PERMISSIONS = {
 // Which Strip Role(s) a Position may originate via CreateStrip. Every
 // Position in PERMISSIONS with CreateStrip in its op-kind set MUST have an
 // entry here (even if empty) — see the "every CreateStrip-eligible
-// Position has a CREATE_ROLE_PERMISSIONS entry" test.
-const CREATE_ROLE_PERMISSIONS = {
+// Position has a CREATE_STRIP_TYPE_PERMISSIONS entry" test.
+const CREATE_STRIP_TYPE_PERMISSIONS = {
   OPS: new Set(['DEPARTURE']),
   // docs/adr/0023 reopens this — ADR 0014 had deliberately emptied it,
   // reasoning ARRIVAL Strips at APP should only ever arrive via the real
@@ -41,7 +41,7 @@ const CREATE_ROLE_PERMISSIONS = {
   // it directly. ARRIVAL Strips can now originate BOTH ways: via a real
   // cross-Facility HANDOFF, or via APP self-originating one directly, same
   // as CTR already could.
-  APP: new Set(['ARRIVAL', 'OVERFLIGHT']),
+  AP: new Set(['ARRIVAL', 'OVERFLIGHT']),
   // CTR self-originates ARRIVAL Strips (docs/adr/0014) — now also
   // OVERFLIGHT (docs/adr/0023), for a flight transiting Center's airspace
   // without landing or departing at Incirlik at all (guide §2/§6.3).
@@ -67,28 +67,28 @@ const CREATE_ROLE_PERMISSIONS = {
  *     never answered from another Facility (S-R2-15).
  *
  * Two rows are CEILINGS the store narrows further from config, never widens:
- * CompleteInspection (to `fieldState.inspectionAuthorityPositionId`) and
+ * CompleteInspection (to `runwayStatus.inspectionAuthorityPositionId`) and
  * Ack/RejectRunwayChange (to the change's frozen acknowledger set). Inspection
  * authority is therefore NOT configurable wider than OPS — widening it needs
  * config-derived permissions (docs/adr/0035's shape), a bigger change than
  * this deliverable.
  */
-const FIELD_STATE_OP_OWNERS = {
-  CloseRunway:                ['TWR'],
-  OpenRunway:                 ['TWR'],
-  BeginRunwayWorks:           ['TWR'],
+const RUNWAY_STATUS_OP_OWNERS = {
+  CloseRunway:                ['LC'],
+  OpenRunway:                 ['LC'],
+  BeginRunwayWorks:           ['LC'],
   CompleteRunwayWorks:        ['OPS'],
   CompleteInspection:         ['OPS'],
-  RequestRunwayStatus:        ['OPS', 'CD', 'GND'], // plus every Position with INCIRLIK_CAPABILITIES' requestsRunwayStatus (positions/incirlik-military.js): APP, RSU
-  AcceptRunwayRequest:        ['TWR'],
-  RejectRunwayRequest:        ['TWR'],
-  ProposeRunwayChange:        ['TWR'],
-  SelfCoordinateRunwayChange: ['TWR'],
-  WithdrawRunwayChange:       ['TWR'],
-  BeginRunwayChange:          ['TWR'],
-  CompleteRunwayChange:       ['TWR'],
-  AckRunwayChange:            ['OPS', 'APP'],
-  RejectRunwayChange:         ['OPS', 'APP'],
+  RequestRunwayStatus:        ['OPS', 'CD', 'GC'], // plus every Position with INCIRLIK_CAPABILITIES' requestsRunwayStatus (positions/incirlik-military.js): APP, RSU
+  AcceptRunwayRequest:        ['LC'],
+  RejectRunwayRequest:        ['LC'],
+  ProposeRunwayChange:        ['LC'],
+  SelfCoordinateRunwayChange: ['LC'],
+  WithdrawRunwayChange:       ['LC'],
+  BeginRunwayChange:          ['LC'],
+  CompleteRunwayChange:       ['LC'],
+  AckRunwayChange:            ['OPS', 'AP'],
+  RejectRunwayChange:         ['OPS', 'AP'],
 };
 
 // The non-owner Block writes (docs/adr/0080; see permission.js's
@@ -96,17 +96,17 @@ const FIELD_STATE_OP_OWNERS = {
 // DEPARTURE at every state until it is DROPPED, whoever holds the Strip.
 // Likewise 3G ORDNANCE (UI-A U1).
 const NON_OWNER_BLOCK_WRITES = [
-  { blockId: '14E', role: 'DEPARTURE', positions: ['OPS'] },
+  { blockId: '14E', stripType: 'DEPARTURE', positions: ['OPS'] },
   // UI-A U1 (H55): OPS records the ordnance state (CLEAN / HUNG ...) on a departure whoever holds it.
-  { blockId: '3G', role: 'DEPARTURE', positions: ['OPS'] },
+  { blockId: '3G', stripType: 'DEPARTURE', positions: ['OPS'] },
 ];
 
 const family = {
   family: 'civil-atc',
-  positions: ['OPS', 'CD', 'GND', 'TWR', 'APP', 'CTR'],
+  positions: ['OPS', 'CD', 'GC', 'LC', 'AP', 'CTR'],
   permissions: PERMISSIONS,
-  createRoles: CREATE_ROLE_PERMISSIONS,
-  fieldStateOwners: FIELD_STATE_OP_OWNERS,
+  createsStripTypes: CREATE_STRIP_TYPE_PERMISSIONS,
+  runwayStatusOwners: RUNWAY_STATUS_OP_OWNERS,
   nonOwnerBlockWrites: NON_OWNER_BLOCK_WRITES,
   // TOFI's ATC side (guide §4.1): CTR only, not APP.
   tofiCounterparts: {

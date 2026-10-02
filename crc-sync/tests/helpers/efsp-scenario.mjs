@@ -18,15 +18,15 @@ export function crew(efsp, spec) {
   const sessions = {};
   for (const [positionId, facilityId] of Object.entries(spec)) {
     const session = { controllerId: `c-${positionId}`, who: positionId };
-    efsp.handleMessage(session, { type: 'efsp-set-positions', facilityId, held: [positionId] });
+    efsp.handleMessage(session, { type: 'efsp-set-positions', facilityId, signedOn: [positionId] });
     sessions[positionId] = { session, facilityId };
   }
   return sessions;
 }
 
 /** Declare a controller's FULL held set — for the combined-Position and vacate cases. */
-export function hold(efsp, session, facilityId, held) {
-  return efsp.handleMessage(session, { type: 'efsp-set-positions', facilityId, held });
+export function hold(efsp, session, facilityId, signedOn) {
+  return efsp.handleMessage(session, { type: 'efsp-set-positions', facilityId, signedOn });
 }
 
 export function act(efsp, crewMember, positionId, strip, op) {
@@ -98,27 +98,27 @@ export async function advance(efsp, crewMember, positionId, strip) {
   return mustAct(efsp, crewMember, positionId, strip, { kind: 'InvokeNla' });
 }
 
-export const DEPARTURE_FDR = {
+export const DEPARTURE_FLIGHT_DATA = {
   callsign: 'VIPER1', aircraftType: 'F16', wakeCategory: 'D',
   departureAirport: 'LTAG', destinationAirport: 'LTAG', route: 'DCT', requestedAltitude: '250',
 };
 
 /** A DEPARTURE Strip parked at APP's terminus, which is where most airborne scenarios start. */
-export function airborneDeparture(efsp, c, fdr = DEPARTURE_FDR) {
+export function airborneDeparture(efsp, c, flightData = DEPARTURE_FLIGHT_DATA) {
   let strip = mustAct(efsp, c.OPS, 'OPS', null, {
-    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr,
+    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE', flightData,
   });
-  // app-departures implies HANDED_OFF, so the Strip has to be there already
+  // ap-departures implies HANDED_OFF, so the Strip has to be there already
   // before it can land in that Bay (_validateBayImpliedTransition).
   strip = jumpTo(efsp, c.OPS, 'OPS', strip, 'HANDED_OFF');
   return mustAct(efsp, c.OPS, 'OPS', strip, {
-    kind: 'TransferStrip', toPositionId: 'APP', bayId: 'app-departures', rackId: 'main',
+    kind: 'TransferStrip', toPositionId: 'AP', bayId: 'ap-departures', rackId: 'main',
   });
 }
 
 /** The same flight, handed across the boundary and accepted by CTR. */
 export function handedToCenter(efsp, c, strip) {
-  const appStrip = mustAct(efsp, c.APP, 'APP', strip, {
+  const appStrip = mustAct(efsp, c.AP, 'AP', strip, {
     kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'CENTER', toPositionId: 'CTR',
   });
   const replica = efsp.boardStoreFor('CENTER').getStrip(appStrip.coordination.peerStripId);
@@ -148,7 +148,7 @@ export async function obligationAlerts(efsp, facilityConfig) {
   const { ForwardingObligationMonitor } = await import('../../src/efsp/forwarding-obligations.js');
   const monitor = new ForwardingObligationMonitor({
     boardStoreFor: efsp.boardStoreFor,
-    fdrStore: efsp.fdrStore,
+    flightDataStore: efsp.flightDataStore,
     facilityConfig,
     airspaceStore: efsp.airspaceStore,
   });

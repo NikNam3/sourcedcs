@@ -13,7 +13,7 @@ const wallFollows = (m) => { const raw = m.tick.bind(m); m.tick = (t, w = t) => 
 const { instantPhase, debouncedPhase, PHASES } = await import('../src/efsp/airborne.js');
 const { SurveillanceHintMonitor, EXPECTS, UNEXPECTING } = await import('../src/efsp/surveillance-hints.js');
 const { normalizeHintsConfig, DEFAULT_HINTS_CONFIG, loadHintsConfig } = await import('../src/efsp/surveillance-hints-config.js');
-const { STATES_BY_ROLE } = await import('../src/efsp/nla.js');
+const { STATES_BY_STRIP_TYPE } = await import('../src/efsp/nla.js');
 const { EfspMetrics } = await import('../src/efsp/metrics.js');
 
 const KT = 0.514444;
@@ -62,10 +62,10 @@ test('AIRBORNE is debounced by holdSec; ON_GROUND is immediate', () => {
 // ── the state table ────────────────────────────────────────────────────────
 
 test('every EFSP state either expects a phase or deliberately expects none', () => {
-  for (const [role, states] of Object.entries(STATES_BY_ROLE)) {
+  for (const [stripType, states] of Object.entries(STATES_BY_STRIP_TYPE)) {
     for (const s of states) {
-      const listed = !!(EXPECTS[role] || {})[s] || (UNEXPECTING[role] || []).includes(s);
-      assert.ok(listed, `${role}/${s}: decide what it expects of the aircraft in surveillance-hints.js`);
+      const listed = !!(EXPECTS[stripType] || {})[s] || (UNEXPECTING[stripType] || []).includes(s);
+      assert.ok(listed, `${stripType}/${s}: decide what it expects of the aircraft in surveillance-hints.js`);
     }
   }
 });
@@ -88,7 +88,7 @@ function build({ strips, track, correlated = true, config = CFG }) {
   return { mon, state, logged };
 }
 
-const dep = (state, extra = {}) => ({ stripId: 's1', fdrId: 'f1', role: 'DEPARTURE', state, ownerPositionId: 'TWR', ...extra });
+const dep = (state, extra = {}) => ({ stripId: 's1', flightDataId: 'f1', stripType: 'DEPARTURE', state, ownerPositionId: 'LC', ...extra });
 
 test('a departure on the ground side with a contact airborne for holdSec gets the chip, naming DEPARTED', () => {
   const strips = [dep('LUAW')];
@@ -125,7 +125,7 @@ test('staleness: raised after afterSec, once per episode, logged once', () => {
   assert.equal(logged.length, 1, 'one occurrence, however long it lasts');
   assert.equal(logged[0].stripState, 'TAXI');
   assert.equal(logged[0].trackState, 'AIRBORNE');
-  assert.equal(logged[0].positionId, 'TWR');
+  assert.equal(logged[0].positionId, 'LC');
   assert.ok(logged[0].durationMs >= 120000);
 });
 
@@ -192,7 +192,7 @@ test('every occurrence reaches L5 metric 6 as a staleness count', () => {
   wallFollows(mon);
   for (let t = 0; t <= 130000; t += 1000) mon.tick(t);
   assert.equal(calls.length, 1);
-  assert.deepEqual(Object.keys(calls[0]).sort(), ['at', 'durationMs', 'facilityId', 'fdrId', 'positionId', 'stripId', 'stripState', 'trackState']);
+  assert.deepEqual(Object.keys(calls[0]).sort(), ['at', 'durationMs', 'facilityId', 'flightDataId', 'positionId', 'stripId', 'stripState', 'trackState']);
 });
 
 test('hold and staleness run on the wall clock; `since` and the logged `at` stay mission time (docs/adr/0096)', () => {

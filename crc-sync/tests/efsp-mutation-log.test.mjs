@@ -35,7 +35,7 @@ test('record() preserves full entry shape including nested before/after objects'
     clientMutationId: 'cmid-1',
     op: 'SetBlock',
     stripId: 's1',
-    actingPositionId: 'GND',
+    actingPositionId: 'GC',
     actorId: 'controller-1',
     at: 12345,
     before: { state: 'PROPOSED' },

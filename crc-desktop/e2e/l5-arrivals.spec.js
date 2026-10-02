@@ -32,7 +32,7 @@ async function goBay(page, positionId, bayId) {
 }
 
 const stateOf = (page, cs) => page.evaluate((cs) => {
-  const s = getAllEfspStrips().find((x) => getEfspFdr(x.fdrId).identity.callsign === cs);
+  const s = getAllEfspStrips().find((x) => getEfspFdr(x.flightDataId).identity.callsign === cs);
   return s && s.state;
 }, cs);
 
@@ -40,7 +40,7 @@ const stateOf = (page, cs) => page.evaluate((cs) => {
 async function taxiToTower(page, cs) {
   for (let i = 0; i < 5; i++) {
     const before = await stateOf(page, cs);
-    await page.evaluate((cs) => _invokeNla(getAllEfspStrips().find((x) => getEfspFdr(x.fdrId).identity.callsign === cs)), cs);
+    await page.evaluate((cs) => _invokeNla(getAllEfspStrips().find((x) => getEfspFdr(x.flightDataId).identity.callsign === cs)), cs);
     // 10 s: one Mutation round trip, measured over 3 s under load. The spec's budget is 90 s.
     await expect.poll(() => stateOf(page, cs), { timeout: 10000 }).not.toBe(before);
     await page.waitForTimeout(450); // the server's per-Strip double-tap guard
@@ -48,21 +48,21 @@ async function taxiToTower(page, cs) {
 }
 
 test('a Strip handed over while you look elsewhere lights its Bay tab and the arrivals line', async ({ browser }) => {
-  const twr = await controller(browser, { held: ['TWR'], controller: 'twr-ctl' });
-  const ground = await controller(browser, { held: ['OPS', 'CD', 'GND'], controller: 'gnd-ctl' });
-  await goBay(twr, 'TWR', 'twr-airborne');
+  const twr = await controller(browser, { signedOn: ['LC'], controller: 'twr-ctl' });
+  const ground = await controller(browser, { signedOn: ['OPS', 'CD', 'GC'], controller: 'gnd-ctl' });
+  await goBay(twr, 'LC', 'lc-airborne');
 
   // The Board is shared across spec files, so the Bay may already hold Strips:
   // the count has to go up by exactly one, whatever it started at.
-  const queueTab = twr.locator('#efsp-bay-tabs .efsp-bay-tab[data-bay-id="twr-runway-queue"]');
+  const queueTab = twr.locator('#efsp-bay-tabs .efsp-bay-tab[data-bay-id="lc-runway-queue"]');
   const countBefore = Number(await queueTab.locator('.efsp-tab-count').textContent());
 
-  await seedStrip(ground, { callsign: 'ARV501', role: 'DEPARTURE', fdr: FDR });
+  await seedStrip(ground, { callsign: 'ARV501', stripType: 'DEPARTURE', flightData: FDR });
   await taxiToTower(ground, 'ARV501');
 
   await expect(queueTab.locator('.efsp-tab-new'), 'no +1 on the Bay it landed in').toHaveText('+1');
   await expect(queueTab.locator('.efsp-tab-count')).toHaveText(String(countBefore + 1));
-  await expect(twr.locator('#efsp-position-tabs .efsp-position-tab[data-position-id="TWR"] .efsp-tab-new-dot')).toHaveCount(1);
+  await expect(twr.locator('#efsp-position-tabs .efsp-position-tab[data-position-id="LC"] .efsp-tab-new-dot')).toHaveCount(1);
   const row = twr.locator('#efsp-arrivals-line .efsp-arrival-row');
   await expect(row).toHaveCount(1);
   await expect(row).toContainText('ARV501');
@@ -73,7 +73,7 @@ test('a Strip handed over while you look elsewhere lights its Bay tab and the ar
   await expect(queueTab).toHaveClass(/active/);
   await expect(queueTab.locator('.efsp-tab-new')).toHaveCount(0);
   await expect(twr.locator('#efsp-arrivals-line')).toBeHidden();
-  await expect(twr.locator('#efsp-position-tabs .efsp-position-tab[data-position-id="TWR"] .efsp-tab-new-dot'),
+  await expect(twr.locator('#efsp-position-tabs .efsp-position-tab[data-position-id="LC"] .efsp-tab-new-dot'),
     'the Position tab still says there is something unseen').toHaveCount(0);
   const s = stripByCallsign(twr, 'ARV501');
   await expect(s).toHaveClass(/efsp-strip-arrived/);
@@ -85,39 +85,39 @@ test('a Strip handed over while you look elsewhere lights its Bay tab and the ar
 });
 
 test('opening the Bay from its tab clears the Bay tab and the Position tab', async ({ browser }) => {
-  const twr = await controller(browser, { held: ['TWR'], controller: 'twr-ctl-3' });
-  const ground = await controller(browser, { held: ['OPS', 'CD', 'GND'], controller: 'gnd-ctl-3' });
-  await goBay(twr, 'TWR', 'twr-airborne');
-  await seedStrip(ground, { callsign: 'ARV551', role: 'DEPARTURE', fdr: FDR });
+  const twr = await controller(browser, { signedOn: ['LC'], controller: 'twr-ctl-3' });
+  const ground = await controller(browser, { signedOn: ['OPS', 'CD', 'GC'], controller: 'gnd-ctl-3' });
+  await goBay(twr, 'LC', 'lc-airborne');
+  await seedStrip(ground, { callsign: 'ARV551', stripType: 'DEPARTURE', flightData: FDR });
   await taxiToTower(ground, 'ARV551');
-  const dot = twr.locator('#efsp-position-tabs .efsp-position-tab[data-position-id="TWR"] .efsp-tab-new-dot');
+  const dot = twr.locator('#efsp-position-tabs .efsp-position-tab[data-position-id="LC"] .efsp-tab-new-dot');
   await expect(dot).toHaveCount(1);
-  await twr.locator('#efsp-bay-tabs .efsp-bay-tab[data-bay-id="twr-runway-queue"]').click();
+  await twr.locator('#efsp-bay-tabs .efsp-bay-tab[data-bay-id="lc-runway-queue"]').click();
   await expect(dot).toHaveCount(0);
   await expect(twr.locator('#efsp-arrivals-line')).toBeHidden();
 });
 
 test('a Strip arriving in the Bay on screen flashes once, and is not listed on the arrivals line', async ({ browser }) => {
-  const twr = await controller(browser, { held: ['TWR'], controller: 'twr-ctl-2' });
-  const ground = await controller(browser, { held: ['OPS', 'CD', 'GND'], controller: 'gnd-ctl-2' });
-  await goBay(twr, 'TWR', 'twr-runway-queue');
+  const twr = await controller(browser, { signedOn: ['LC'], controller: 'twr-ctl-2' });
+  const ground = await controller(browser, { signedOn: ['OPS', 'CD', 'GC'], controller: 'gnd-ctl-2' });
+  await goBay(twr, 'LC', 'lc-runway-queue');
 
-  await seedStrip(ground, { callsign: 'ARV601', role: 'DEPARTURE', fdr: FDR });
+  await seedStrip(ground, { callsign: 'ARV601', stripType: 'DEPARTURE', flightData: FDR });
   await taxiToTower(ground, 'ARV601');
   const first = stripByCallsign(twr, 'ARV601');
   await expect(first).toHaveClass(/efsp-strip-arrived-flash/);
   await expect(twr.locator('#efsp-arrivals-line')).toBeHidden();
-  await expect(twr.locator('#efsp-bay-tabs .efsp-bay-tab[data-bay-id="twr-runway-queue"] .efsp-tab-new')).toHaveCount(0);
+  await expect(twr.locator('#efsp-bay-tabs .efsp-bay-tab[data-bay-id="lc-runway-queue"] .efsp-tab-new')).toHaveCount(0);
 
   // A second Strip arrives in the same Bay. The Bay re-renders; the first
   // Strip must NOT replay its flash.
-  await seedStrip(ground, { callsign: 'ARV602', role: 'DEPARTURE', fdr: FDR });
+  await seedStrip(ground, { callsign: 'ARV602', stripType: 'DEPARTURE', flightData: FDR });
   await taxiToTower(ground, 'ARV602');
   await expect(stripByCallsign(twr, 'ARV602')).toHaveClass(/efsp-strip-arrived-flash/);
   // Force a rebuild of ARV601 by something unrelated to its arrival.
   await twr.evaluate((cs) => {
-    const s = getAllEfspStrips().find((x) => getEfspFdr(x.fdrId).identity.callsign === cs);
-    applyEfspDelta({ fdrs: { updated: [{ ...getEfspFdr(s.fdrId), rev: getEfspFdr(s.fdrId).rev + 100 }] } });
+    const s = getAllEfspStrips().find((x) => getEfspFdr(x.flightDataId).identity.callsign === cs);
+    applyEfspDelta({ flightDataList: { updated: [{ ...getEfspFdr(s.flightDataId), rev: getEfspFdr(s.flightDataId).rev + 100 }] } });
     renderAllOpenEfspBays();
   }, 'ARV601');
   const rebuilt = stripByCallsign(twr, 'ARV601');
@@ -126,19 +126,19 @@ test('a Strip arriving in the Bay on screen flashes once, and is not listed on t
 });
 
 test('working several Positions, your own hand-off to a Bay you are not looking at is announced too', async ({ page }) => {
-  await openPanel(page, { held: ['OPS', 'CD', 'GND', 'TWR'], controller: 'solo-ctl' });
-  await seedStrip(page, { callsign: 'ARV701', role: 'DEPARTURE', fdr: FDR });
-  await goBay(page, 'TWR', 'twr-airborne');
+  await openPanel(page, { signedOn: ['OPS', 'CD', 'GC', 'LC'], controller: 'solo-ctl' });
+  await seedStrip(page, { callsign: 'ARV701', stripType: 'DEPARTURE', flightData: FDR });
+  await goBay(page, 'LC', 'lc-airborne');
   await taxiToTower(page, 'ARV701');
-  const queueTab = page.locator('#efsp-bay-tabs .efsp-bay-tab[data-bay-id="twr-runway-queue"]');
+  const queueTab = page.locator('#efsp-bay-tabs .efsp-bay-tab[data-bay-id="lc-runway-queue"]');
   await expect(queueTab.locator('.efsp-tab-new')).toHaveText('+1');
   await expect(page.locator('#efsp-arrivals-line .efsp-arrival-row')).toContainText('from GND');
 });
 
 test('creating a Strip yourself is not announced', async ({ page }) => {
-  await openPanel(page, { held: ['OPS'], controller: 'solo-ctl-2' });
+  await openPanel(page, { signedOn: ['OPS'], controller: 'solo-ctl-2' });
   await goBay(page, 'OPS', 'ops-proposed');
-  await seedStrip(page, { callsign: 'ARV801', role: 'DEPARTURE', fdr: FDR });
+  await seedStrip(page, { callsign: 'ARV801', stripType: 'DEPARTURE', flightData: FDR });
   await expect(page.locator('#efsp-bay-tabs .efsp-tab-new')).toHaveCount(0);
   await expect(page.locator('#efsp-arrivals-line')).toBeHidden();
   await expect(page.locator('.efsp-strip-arrived')).toHaveCount(0);

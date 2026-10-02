@@ -12,12 +12,12 @@ import { _mountPopover, _unmountPopover } from '../popover-portal.js';
  * Coordination Bay (bayId ends '-coordination') with coordination.state
  * PROPOSED — that combination is what actually distinguishes "this Strip
  * IS the pending proposal awaiting my response" from the SENDER's own
- * Strip, which also carries coordination.state:'PROPOSED' but stays in
+ * Strip, which also carries coordination.state:'INITIATED' but stays in
  * its normal working Bay. Accepting/rejecting your own just-sent proposal
  * makes no sense, so this check is load-bearing, not decorative.
  */
 export function _isPendingCoordinationReplica(strip) {
-  return !!(strip.coordination && strip.coordination.state === 'PROPOSED' && strip.bayId.endsWith('-coordination'));
+  return !!(strip.coordination && strip.coordination.state === 'INITIATED' && strip.bayId.endsWith('-coordination'));
 }
 
 // COORDINATION_ELIGIBLE_STATES (docs/adr/0022) lives in efsp-nla.js, loaded
@@ -46,7 +46,7 @@ export function _isPendingCoordinationReplica(strip) {
  */
 export function _canProposeCoordination(strip) {
   if (!COORDINATION_TARGETS[strip.ownerPositionId]) return false;
-  if (COORDINATION_ELIGIBLE_STATES[strip.role] !== strip.state) return false;
+  if (COORDINATION_ELIGIBLE_STATES[strip.stripType] !== strip.state) return false;
   if (strip.bayId.endsWith('-coordination')) return false;
   if (!strip.coordination) return true;
   return strip.coordination.state === 'REJECTED'; // ACTIVE/PROPOSED are open links; REJECTED can be retried
@@ -177,8 +177,8 @@ function _onDocPointerDownCloseCoordinatePopover(e) {
 /** Opens the primitive-choice popover — mirrors _openHighlightPopover's exact pattern (anchor, outside-click close, deferred listener). */
 export function _openCoordinatePopover(strip, anchorEl) {
   _closeCoordinatePopover();
-  const fdr = getEfspFdr(strip.fdrId);
-  const degraded = !!(fdr && fdr.identity && fdr.identity.trackDegradationFlag && fdr.identity.trackDegradationFlag !== 'NONE');
+  const flightData = getEfspFdr(strip.flightDataId);
+  const degraded = !!(flightData && flightData.identity && flightData.identity.trackDegradationFlag && flightData.identity.trackDegradationFlag !== 'NONE');
 
   const popover = document.createElement('div');
   popover.className = 'efsp-coordinate-popover';
@@ -187,7 +187,7 @@ export function _openCoordinatePopover(strip, anchorEl) {
   if (degraded) {
     const warn = document.createElement('div');
     warn.className = 'efsp-coordinate-degraded-warning';
-    warn.textContent = `Track degraded (${fdr.identity.trackDegradationFlag}) — verbal coordination required, note mandatory`;
+    warn.textContent = `Track degraded (${flightData.identity.trackDegradationFlag}) — verbal coordination required, note mandatory`;
     popover.appendChild(warn);
   }
 

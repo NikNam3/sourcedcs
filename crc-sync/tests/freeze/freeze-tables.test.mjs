@@ -30,25 +30,25 @@ const plain = (v) => {
 const entries = (o) => Object.entries(o).map(([k, v]) => ({ id: k, v: canonical(plain(v)) }));
 const units = (d) => d.rows.map(r => [r.id, r]);
 
-const POSITIONS = ['OPS', 'CD', 'GND', 'TWR', 'APP', 'CTR', 'TAC_C2', 'AIC', 'GCI', 'JTAC', 'CV_MARSHAL', 'CV_PRIFLY', 'CV_APP1', 'CV_APP2'];
+const POSITIONS = ['OPS', 'CD', 'GC', 'LC', 'AP', 'CTR', 'TAC_C2', 'AIC', 'GCI', 'JTAC', 'CV_MARSHAL', 'CV_PRIFLY', 'CV_APP1', 'CV_APP2'];
 
 test('freeze tables: permission tables', () => {
   const rows = [];
-  for (const k of ['PERMISSIONS', 'CREATE_ROLE_PERMISSIONS', 'STATE_OWNERS_BY_ROLE', 'OP_KINDS', 'COORDINATION_OP_KINDS', 'APP_CTR_ONLY_OP_KINDS',
-    'TOFI_OP_KINDS', 'AIRSPACE_ENTRY_OP_KINDS', 'TOFI_COUNTERPARTS', 'NO_STRIP_OP_CLASSES', 'FIELD_STATE_OP_OWNERS', 'TACTICAL_CAPABILITIES',
+  for (const k of ['PERMISSIONS', 'CREATE_STRIP_TYPE_PERMISSIONS', 'STATE_OWNERS_BY_STRIP_TYPE', 'OP_KINDS', 'COORDINATION_OP_KINDS', 'AP_CTR_ONLY_OP_KINDS',
+    'TOFI_OP_KINDS', 'AIRSPACE_ENTRY_OP_KINDS', 'TOFI_COUNTERPARTS', 'NO_STRIP_OP_CLASSES', 'RUNWAY_STATUS_OP_OWNERS', 'TACTICAL_CAPABILITIES',
     'READ_SCOPES', 'CARRIER_CAPABILITIES', 'MARSHAL_STATE_OWNERS', 'FINAL_STATE_OWNERS', 'PATTERN_STATE_OWNERS']) {
     rows.push({ id: `permission.${k}`, v: canonical(plain(permission[k])) });
   }
   checkGolden(assert, 'tables-permission-data', { rows }, units);
 });
 
-test('freeze tables: permission decisions (Position x op kind, Position x role x state, Position x created role)', () => {
+test('freeze tables: permission decisions (Position x op kind, Position x role x state, Position x created stripType)', () => {
   const rows = [];
   for (const p of POSITIONS) {
     rows.push({ id: `canMutate ${p}`, v: Object.fromEntries(permission.OP_KINDS.map(k => [k, permission.canMutate(p, k)])) });
-    rows.push({ id: `canCreateStripRole ${p}`, v: Object.fromEntries(Object.keys(nla.STATES_BY_ROLE).map(r => [r, permission.canCreateStripRole(p, r)])) });
-    for (const [role, states] of Object.entries(nla.STATES_BY_ROLE)) {
-      rows.push({ id: `canActOnState ${p} ${role}`, v: Object.fromEntries(states.map(s => [s, permission.canActOnState(p, role, s)])) });
+    rows.push({ id: `canCreateStripType ${p}`, v: Object.fromEntries(Object.keys(nla.STATES_BY_STRIP_TYPE).map(r => [r, permission.canCreateStripType(p, r)])) });
+    for (const [stripType, states] of Object.entries(nla.STATES_BY_STRIP_TYPE)) {
+      rows.push({ id: `canActOnState ${p} ${stripType}`, v: Object.fromEntries(states.map(s => [s, permission.canActOnState(p, stripType, s)])) });
     }
     rows.push({ id: `handBackTargetsFor ${p}`, v: plain(permission.handBackTargetsFor(p)) });
     rows.push({ id: `tofiCounterparts ${p}`, v: plain(permission.tofiCounterparts(p)) });
@@ -59,19 +59,19 @@ test('freeze tables: permission decisions (Position x op kind, Position x role x
 
 test('freeze tables: NLA state sets, coordination effects, block maps, facility defaults', () => {
   const rows = [];
-  for (const k of ['STATES', 'DEPARTURE_STATES', 'ARRIVAL_STATES', 'OVERFLIGHT_STATES', 'MISSION_STATES', 'STATES_BY_ROLE', 'MARSHAL_STATES', 'FINAL_STATES', 'PATTERN_STATES', 'REQUIRED_FOR_CLEARANCE', 'CLEARANCE_BLOCK_LABELS']) {
+  for (const k of ['STATES', 'DEPARTURE_STATES', 'ARRIVAL_STATES', 'OVERFLIGHT_STATES', 'MISSION_STATES', 'STATES_BY_STRIP_TYPE', 'MARSHAL_STATES', 'FINAL_STATES', 'PATTERN_STATES', 'REQUIRED_FOR_CLEARANCE', 'CLEARANCE_BLOCK_LABELS']) {
     rows.push({ id: `nla.${k}`, v: canonical(plain(nla[k])) });
   }
   for (const k of ['COORDINATION_PRIMITIVES', 'COORDINATION_EFFECTS', 'COORDINATION_ELIGIBLE_STATES', 'TOFI_EFFECTS', 'TOFI_ELIGIBLE_STATES']) {
     rows.push({ id: `coordination.${k}`, v: canonical(plain(coordination[k])) });
   }
-  for (const [role, map] of Object.entries(blockMap.BLOCK_MAPS)) {
-    rows.push({ id: `blockMap.${role}`, v: { blocks: Object.keys(plain(map)).length, h: digest(canonical(plain(map))), ids: Object.keys(plain(map)) } });
+  for (const [stripType, map] of Object.entries(blockMap.BLOCK_MAPS)) {
+    rows.push({ id: `blockMap.${stripType}`, v: { blocks: Object.keys(plain(map)).length, h: digest(canonical(plain(map))), ids: Object.keys(plain(map)) } });
   }
   for (const name of facilityConfig.getFacilityIds()) {
     const cfg = facilityConfig.getFacilityConfig(name);
     const c = canonical(plain(cfg));
-    rows.push({ id: `facility.${name}`, v: { positions: c.positions, coveringChain: c.coveringChain, positionClasses: c.positionClasses,
+    rows.push({ id: `facility.${name}`, v: { positions: c.positions, consolidation: c.consolidation, positionClasses: c.positionClasses,
       bays: Object.fromEntries(Object.entries(c.bays || {}).map(([p, list]) => [p, (Array.isArray(list) ? list : []).map(b => `${b.bayId || b.id}:${b.impliesState || ''}`)])), h: digest(c) } });
   }
   checkGolden(assert, 'tables-nla-coordination-config', { rows }, units);

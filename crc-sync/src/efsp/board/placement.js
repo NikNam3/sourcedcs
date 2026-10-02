@@ -9,7 +9,7 @@
 // still on the facade).
 
 const { keyBetween, rebalance, needsRebalance } = require('../order-key');
-const { runwayRackFor } = require('../field-state');
+const { runwayRackFor } = require('../runway-status');
 
 class Placement {
   /**
@@ -17,16 +17,16 @@ class Placement {
    * @param {import('./board-state').BoardState} deps.state
    * @param {object} deps.rules the Board's rules
    * @param {{now: () => number}} deps.clock the mission clock
-   * @param {import('../fdr-store').FdrStore} deps.fdrStore
+   * @param {import('../flight-data-store').FlightDataStore} deps.flightDataStore
    * @param {(stripId: string) => void} deps.touch
    * @param {(bayId: string, rackId: string, excludeStripId: string|null) => void} deps.rebalanceRack
    * @param {(strip: object, toState: string) => object|null} deps.rejectedReplicaRefusal
    */
-  constructor({ rules, state, clock, fdrStore, touch, rebalanceRack, rejectedReplicaRefusal }) {
+  constructor({ rules, state, clock, flightDataStore, touch, rebalanceRack, rejectedReplicaRefusal }) {
     this._state = state;
     this._rules = rules;
     this._clock = clock;
-    this._fdrStore = fdrStore;
+    this._flightDataStore = flightDataStore;
     this._touch = touch;
     this._rebalanceRack = rebalanceRack;
     this._rejectedReplicaRefusal = rejectedReplicaRefusal;
@@ -101,17 +101,17 @@ class Placement {
     return this.resolveOrderKey(bayId, rackId, last, null, excludeStripId);
   }
 
-  /** {isOccupied, coveringPositionFor, facilityId} bound from this._rules — computeNla()'s occupancy context (guide §4.5, e.g. DEPARTED's real Hand-Off-to-APP inhibit). `facilityId` (WP4A, docs/adr/0014) lets nla.js distinguish a CENTER-held ARRIVAL Strip's INBOUND state (whose next step is the Coordinate/HANDOFF button, not an intrafacility NLA transfer) from an INCIRLIK one. Built once per call site rather than inline so both computeNla() call sites below stay in lockstep. */
+  /** {isStaffed, consolidatedAt, facilityId} bound from this._rules — computeNla()'s staffing context (guide §4.5, e.g. DEPARTED's real Hand-Off-to-APP inhibit). `facilityId` (WP4A, docs/adr/0014) lets nla.js distinguish a CENTER-held ARRIVAL Strip's INBOUND state (whose next step is the Coordinate/HANDOFF button, not an intrafacility NLA transfer) from an INCIRLIK one. Built once per call site rather than inline so both computeNla() call sites below stay in lockstep. */
   nlaCtx(target = null) {
     return {
-      isOccupied: this._rules.isOccupied, coveringPositionFor: this._rules.coveringPositionFor,
+      isStaffed: this._rules.isStaffed, consolidatedAt: this._rules.consolidatedAt,
       facilityId: this._rules.facilityId, standingReleases: this._rules.standingReleases,
       // §9.7 rule 1 (docs/adr/0061) — the runway status view, on every
       // computeNla call site at once: the button, the advisory stamp, and the
       // drag. `targetRackId` is set only on the drag path (decisions.md Q27).
-      fieldStateFor: this._rules.fieldStateFor,
+      runwayStatusFor: this._rules.runwayStatusFor,
       targetRackId: target ? target.rackId : undefined,
-      // docs/adr/0074 — the recovery Case, the manned lane the stack feeds, and
+      // docs/adr/0074 — the recovery Case, the staffed lane the stack feeds, and
       // whether the flight is in the stack, for the carrier's NLA tables.
       carrierCase: this._rules.carrierCase,
       carrierLaneFor: this._rules.carrierLaneFor,
@@ -120,8 +120,8 @@ class Placement {
   }
 
   /** This Facility's runway status view, or null (no runways — nothing is runway-gated). */
-  fieldStateView() {
-    return this._rules.fieldStateFor();
+  runwayStatusView() {
+    return this._rules.runwayStatusFor();
   }
 
   /**
@@ -136,24 +136,24 @@ class Placement {
     // back by a system move (a Position retaken, a covering hand-back) returns to
     // the Rack that IS its frequency, not the first one (guide §4.2, D17).
     if (bay && bay.view === 'sfa-freqs') {
-      const fdr = this._fdrStore.getFdr(strip.fdrId);
-      const rack = fdr && fdr.comms ? this._rules.sfaRackFor(bay.bayId, fdr.comms.workingFrequencyMhz) : null;
+      const flightData = this._flightDataStore.getFlightData(strip.flightDataId);
+      const rack = flightData && flightData.comms ? this._rules.sfaRackFor(bay.bayId, flightData.comms.workingFrequencyMhz) : null;
       if (rack) return rack;
     }
-    return runwayRackFor(strip, this._fdrStore.getFdr(strip.fdrId), this.fieldStateView(), bay);
+    return runwayRackFor(strip, this._flightDataStore.getFlightData(strip.flightDataId), this.runwayStatusView(), bay);
   }
 
   /**
    * The owner's Bay that holds this Strip's Role whatever its state (Bay
-   * `holdsRole`, docs/adr/0087), or null. A Role with such a Bay keeps its state
+   * `holdsStripType`, docs/adr/0087), or null. A Role with such a Bay keeps its state
    * on the Strip: no Bay implies it, so a drag never changes it, and a state
    * change never moves it — which also stops an OVERFLIGHT `INBOUND` being filed
    * under ARRIVAL's `INBOUND` Bay, the one thing the shared state names would
    * otherwise do.
    */
-  roleBayFor(strip, positionId = strip.ownerPositionId) {
+  stripTypeBayFor(strip, positionId = strip.ownerPositionId) {
     const bays = this._rules.baysFor(positionId);
-    return bays.find(b => b.holdsRole === strip.role) || null;
+    return bays.find(b => b.holdsStripType === strip.stripType) || null;
   }
 
   /**
@@ -173,16 +173,16 @@ class Placement {
    * @returns {{ok:true, impliedState:string|null}|{ok:false, reason:string, detail:string}}
    */
   validateBayImpliedTransition(strip, targetBayId, targetRackId) {
-    // A Role Bay (`holdsRole`, docs/adr/0087) takes only its own Role's Strips.
-    const holds = this._rules.bayHoldsRole(targetBayId);
-    if (holds && holds !== strip.role) {
-      return { ok: false, reason: 'VALIDATION_ERROR', detail: `${targetBayId} holds ${holds} Strips only; a ${strip.role} Strip cannot be placed there` };
+    // A Role Bay (`holdsStripType`, docs/adr/0087) takes only its own Role's Strips.
+    const holds = this._rules.bayHoldsStripType(targetBayId);
+    if (holds && holds !== strip.stripType) {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: `${targetBayId} holds ${holds} Strips only; a ${strip.stripType} Strip cannot be placed there` };
     }
-    const roleBay = this.roleBayFor(strip);
-    if (roleBay) {
+    const stripTypeBay = this.stripTypeBayFor(strip);
+    if (stripTypeBay) {
       // Another Role's state-implying Bay is not somewhere this Role goes.
       if (this._rules.bayImpliesState(targetBayId)) {
-        return { ok: false, reason: 'VALIDATION_ERROR', detail: `a ${strip.role} Strip stays in ${roleBay.bayId}; ${targetBayId} is another Role's Bay` };
+        return { ok: false, reason: 'VALIDATION_ERROR', detail: `a ${strip.stripType} Strip stays in ${stripTypeBay.bayId}; ${targetBayId} is another strip type's Bay` };
       }
       return { ok: true, impliedState: null };
     }
@@ -198,7 +198,7 @@ class Placement {
     // the Strip. strip.ownerPositionId is the acting Position here —
     // _dispatch() already verified actingPositionId === strip.ownerPositionId
     // before any _apply* method runs.
-    if (!this._rules.canActOnState(strip.ownerPositionId, strip.role, strip.state)) {
+    if (!this._rules.canActOnState(strip.ownerPositionId, strip.stripType, strip.state)) {
       return { ok: false, reason: 'PERMISSION_DENIED', detail: `${strip.state} is not ${strip.ownerPositionId}'s to advance` };
     }
 
@@ -211,18 +211,18 @@ class Placement {
     const inert = this._rejectedReplicaRefusal(strip, impliedState);
     if (inert) return { ok: false, reason: inert.reason, detail: inert.detail };
 
-    const fdr = this._fdrStore.getFdr(strip.fdrId);
-    const nla = this._rules.computeNla(strip, fdr, this._clock.now(), this.nlaCtx({ bayId: targetBayId, rackId: targetRackId }));
+    const flightData = this._flightDataStore.getFlightData(strip.flightDataId);
+    const nla = this._rules.computeNla(strip, flightData, this._clock.now(), this.nlaCtx({ bayId: targetBayId, rackId: targetRackId }));
     if (!nla || nla.inhibited) {
       return { ok: false, reason: 'NLA_INHIBITED', detail: nla ? nla.inhibited : `no legal transition from ${strip.state}` };
     }
-    // docs/adr/0074: the four carrier hand-overs are four buttons and each
+    // docs/adr/0074: the four carrier handoffs are four buttons and each
     // records its own trigger type (guide §9.12), so a drag into the Bay that
     // implies the NLA's own state is refused with the button's name rather than
     // moving the Strip without the stack effect and the tag.
-    if (nla.carrierTransfer && nla.toState === impliedState) {
-      const t = this._rules.carrierTransfers[nla.carrierTransfer];
-      return { ok: false, reason: 'VALIDATION_ERROR', detail: `use the ${t ? t.label : nla.carrierTransfer} button — a carrier hand-over is recorded, not dragged` };
+    if (nla.carrierHandoff && nla.toState === impliedState) {
+      const t = this._rules.carrierHandoffs[nla.carrierHandoff];
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: `use the ${t ? t.label : nla.carrierHandoff} button — a carrier handoff is recorded, not dragged` };
     }
     if (nla.toState !== impliedState && (nla.alsoLegal || []).includes(impliedState)) {
       return { ok: true, impliedState };
@@ -269,11 +269,11 @@ class Placement {
    */
   bayForNewOwner(positionId, state, strip = null) {
     const bays = this._rules.baysFor(positionId);
-    const roleBay = strip ? bays.find(b => b.holdsRole === strip.role) : null;
-    if (roleBay) return { bayId: roleBay.bayId, rackId: this.placementRack(strip, roleBay) };
-    // Never another Role's Bay (`holdsRole`, docs/adr/0087): a Role Bay implies no state, so the
-    // "first Bay implying none" fallback used to pick app-overflight for a DEPARTURE.
-    const bay = bays.find(b => b.impliesState === state) || bays.find(b => !b.impliesState && !b.holdsRole) || null;
+    const stripTypeBay = strip ? bays.find(b => b.holdsStripType === strip.stripType) : null;
+    if (stripTypeBay) return { bayId: stripTypeBay.bayId, rackId: this.placementRack(strip, stripTypeBay) };
+    // Never another Role's Bay (`holdsStripType`, docs/adr/0087): a Role Bay implies no state, so the
+    // "first Bay implying none" fallback used to pick ap-overflight for a DEPARTURE.
+    const bay = bays.find(b => b.impliesState === state) || bays.find(b => !b.impliesState && !b.holdsStripType) || null;
     if (!bay) return null;
     return { bayId: bay.bayId, rackId: strip ? this.placementRack(strip, bay) : bay.rackIds[0] };
   }
@@ -285,23 +285,23 @@ class Placement {
    *
    * A state-only transition used to change `state` and nothing else, so Mark
    * Cleared left the Strip in `cd-pending-clearance` reading CLEARED while
-   * `cd-cleared` stayed empty, and the same at GND (`gnd-taxi-out`) and TWR
-   * (`twr-airborne`) — the Bay name and the Strip contradicting each other
+   * `cd-cleared` stayed empty, and the same at GND (`gc-taxi-out`) and TWR
+   * (`lc-airborne`) — the Bay name and the Strip contradicting each other
    * (docs/ui-findings/lane1.md F-102). The config already asserts the
    * equivalence in the other direction: dragging INTO one of these Bays
    * changes the state (validateBayImpliedTransition), so the Bay means the
    * state whichever way the Strip got there.
    *
    * Nothing happens when this owner has no Bay for the state — LUAW is the
-   * live example, and TWR's Strip correctly stays in `twr-runway-queue`.
+   * live example, and TWR's Strip correctly stays in `lc-runway-queue`.
    * `bayForImpliedState` FALLS BACK to the Position's first Bay when nothing
    * matches (facility-config.js), which is what a transfer wants and is
    * exactly wrong here: it would file a Strip reaching LUAW back under
-   * `twr-runway-queue`'s own implied RUNWAY_QUEUE. Hence the explicit
+   * `lc-runway-queue`'s own implied RUNWAY_QUEUE. Hence the explicit
    * `impliesState` re-check rather than trusting the lookup.
    */
   relocateForImpliedState(strip, toState) {
-    if (this.roleBayFor(strip)) return; // its Bay holds it in every state (docs/adr/0087)
+    if (this.stripTypeBayFor(strip)) return; // its Bay holds it in every state (docs/adr/0087)
     const bay = this._rules.bayForImpliedState(strip.ownerPositionId, toState);
     if (!bay || bay.impliesState !== toState || bay.bayId === strip.bayId) return;
     strip.bayId = bay.bayId;

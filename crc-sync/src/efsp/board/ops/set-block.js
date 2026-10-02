@@ -1,10 +1,10 @@
 'use strict';
 
-const { MAX_FREE_TEXT } = require('../../fdr-store');
+const { MAX_FREE_TEXT } = require('../../flight-data-store');
 const { _frequencyFromBlockValue } = require('../strip-util');
 
 function _applySetBlock(ctx, strip, op, by, actingPositionId, clientMutationId) {
-  const target = ctx.rules.resolveBlockTarget(op.blockId, strip.role);
+  const target = ctx.rules.resolveBlockTarget(op.blockId, strip.stripType);
   if (!target) return { ok: false, reason: 'VALIDATION_ERROR', strip };
 
   // WP6 (docs/adr/0051) — while an ACTIVE MARSA relation holds this flight,
@@ -23,7 +23,7 @@ function _applySetBlock(ctx, strip, op, by, actingPositionId, clientMutationId) 
   // out: End or Void the relation, which sets the regime back to ATC as part
   // of doing so. That IS the action the controller wanted.
   if (target.kind === 'tofi' && target.field === 'separationRegime') {
-    const active = ctx.rules.activeMarsaFor(strip.fdrId);
+    const active = ctx.rules.activeMarsaFor(strip.flightDataId);
     if (active) {
       return {
         ok: false, reason: 'VALIDATION_ERROR',
@@ -35,25 +35,25 @@ function _applySetBlock(ctx, strip, op, by, actingPositionId, clientMutationId) 
   // §8.1 — a Facility that hides a Block hides it for writes too, not just
   // for rendering. Enforced here because this is the only path a Block
   // value reaches an FDR or an annotation by.
-  if (!ctx.rules.isBlockVisible(strip.role, op.blockId)) {
-    return { ok: false, reason: 'VALIDATION_ERROR', detail: `Block ${op.blockId} is not visible for ${strip.role} at this Facility`, strip };
+  if (!ctx.rules.isBlockVisible(strip.stripType, op.blockId)) {
+    return { ok: false, reason: 'VALIDATION_ERROR', detail: `Block ${op.blockId} is not visible for ${strip.stripType} at this Facility`, strip };
   }
 
-  if (target.kind === 'fdr' || target.kind === 'airspace-owner' || target.kind === 'tofi' || target.kind === 'frequency' || target.kind === 'military') {
-    const fdrResult = target.kind === 'airspace-owner'
-      ? ctx.fdrStore.setAirspaceOwner(strip.fdrId, op.value, { by })
+  if (target.kind === 'flightData' || target.kind === 'airspace-owner' || target.kind === 'tofi' || target.kind === 'frequency' || target.kind === 'military') {
+    const flightDataResult = target.kind === 'airspace-owner'
+      ? ctx.flightDataStore.setAirspaceOwner(strip.flightDataId, op.value, { by })
       : target.kind === 'frequency'
-        ? ctx.fdrStore.setWorkingFrequency(strip.fdrId, _frequencyFromBlockValue(op.value), { by })
+        ? ctx.flightDataStore.setWorkingFrequency(strip.flightDataId, _frequencyFromBlockValue(op.value), { by })
         : target.kind === 'tofi'
-          ? ctx.fdrStore.setTofi(strip.fdrId, { [target.field]: op.value }, { by })
+          ? ctx.flightDataStore.setTofi(strip.flightDataId, { [target.field]: op.value }, { by })
           // WP6 (docs/adr/0052), guide §6.4 — the military extension
           // namespace, routed exactly like 'tofi' above.
           : target.kind === 'military'
-            ? ctx.fdrStore.setMilitary(strip.fdrId, { [target.field]: op.value }, { by })
+            ? ctx.flightDataStore.setMilitary(strip.flightDataId, { [target.field]: op.value }, { by })
             : target.path === 'identity.beaconAssigned'
-              ? ctx.fdrStore.setBeaconAssigned(strip.fdrId, op.value, { by })
-              : ctx.fdrStore.setField(strip.fdrId, target.path, op.value, { by });
-    if (!fdrResult.ok) return { ok: false, reason: fdrResult.reason, detail: fdrResult.detail, strip };
+              ? ctx.flightDataStore.setBeaconAssigned(strip.flightDataId, op.value, { by })
+              : ctx.flightDataStore.setField(strip.flightDataId, target.path, op.value, { by });
+    if (!flightDataResult.ok) return { ok: false, reason: flightDataResult.reason, detail: flightDataResult.detail, strip };
 
     // FDR keeps its own independent rev (guide §3.1); the Strip's rev is
     // also bumped here as a deliberate Phase-1 simplification so the
@@ -63,35 +63,35 @@ function _applySetBlock(ctx, strip, op, by, actingPositionId, clientMutationId) 
     ctx.state.bump(strip, by);
     const marsaVoided = ctx.marsaVoidFor(strip, op, by, actingPositionId, clientMutationId);
     return {
-      ok: true, strip, fdr: fdrResult.fdr, warning: fdrResult.warning,
-      marsaVoided, fdrs: marsaVoided ? ctx.drainMarsaRegimeWrites() : undefined,
+      ok: true, strip, flightData: flightDataResult.flightData, warning: flightDataResult.warning,
+      marsaVoided, flightDataList: marsaVoided ? ctx.drainMarsaRegimeWrites() : undefined,
     };
   }
 
   // docs/adr/0074 — a flight's own carrier fields, written to the FDR
-  // (`fdr.military.carrier`) so they survive from the launch Strip to the
+  // (`flightData.military.carrier`) so they survive from the launch Strip to the
   // recovery Strip. A `carrier-derived` Block never reaches here: its target
   // resolves to null above, so SetBlock on CASE, DME, ANGELS, EAT/PUSH or the
   // expected final bearing is a VALIDATION_ERROR (WP7A bullets 2 and 5).
   if (target.kind === 'carrier') {
-    const fdrResult = ctx.fdrStore.setCarrier(strip.fdrId, target.field, op.value, { by });
-    if (!fdrResult.ok) return { ok: false, reason: fdrResult.reason, detail: fdrResult.detail, strip };
+    const flightDataResult = ctx.flightDataStore.setCarrier(strip.flightDataId, target.field, op.value, { by });
+    if (!flightDataResult.ok) return { ok: false, reason: flightDataResult.reason, detail: flightDataResult.detail, strip };
     ctx.state.bump(strip, by);
-    return { ok: true, strip, fdr: fdrResult.fdr };
+    return { ok: true, strip, flightData: flightDataResult.flightData };
   }
 
   // docs/adr/0058 — the flight's assigned altitude or heading. On the FDR,
   // not the Strip, so every Facility's copy reads the same value; history
   // and confirmVacated work exactly as they do for a Strip annotation.
   if (target.kind === 'clearance') {
-    const fdrResult = ctx.fdrStore.setClearance(strip.fdrId, target.field,
+    const flightDataResult = ctx.flightDataStore.setClearance(strip.flightDataId, target.field,
       { value: op.value, confirmVacated: !!op.confirmVacated }, { by });
-    if (!fdrResult.ok) return { ok: false, reason: fdrResult.reason, detail: fdrResult.detail, strip };
+    if (!flightDataResult.ok) return { ok: false, reason: flightDataResult.reason, detail: flightDataResult.detail, strip };
     ctx.state.bump(strip, by);
     const marsaVoided = ctx.marsaVoidFor(strip, op, by, actingPositionId, clientMutationId);
     return {
-      ok: true, strip, fdr: fdrResult.fdr,
-      marsaVoided, fdrs: marsaVoided ? ctx.drainMarsaRegimeWrites() : undefined,
+      ok: true, strip, flightData: flightDataResult.flightData,
+      marsaVoided, flightDataList: marsaVoided ? ctx.drainMarsaRegimeWrites() : undefined,
     };
   }
 
@@ -104,7 +104,7 @@ function _applySetBlock(ctx, strip, op, by, actingPositionId, clientMutationId) 
   // target kind changes is the failure mode docs/adr/0041 is about.
   if (result.ok) {
     result.marsaVoided = ctx.marsaVoidFor(strip, op, by, actingPositionId, clientMutationId);
-    if (result.marsaVoided) result.fdrs = ctx.drainMarsaRegimeWrites();
+    if (result.marsaVoided) result.flightDataList = ctx.drainMarsaRegimeWrites();
   }
   return result;
 }

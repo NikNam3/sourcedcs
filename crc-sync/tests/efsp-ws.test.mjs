@@ -13,7 +13,7 @@ process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH = path.join(tmpDir, 'facility.json
 const { handleMessage, RESYNC_RING_WINDOW } = await import('../src/efsp/efsp-ws.js');
 const { BoardStore } = await import('../src/efsp/board-store.js');
 import { fullRules } from "./helpers/full-rules.mjs";
-const { FdrStore } = await import('../src/efsp/fdr-store.js');
+const { FlightDataStore } = await import('../src/efsp/flight-data-store.js');
 const { CorrelationStore } = await import('../src/efsp/correlation-store.js');
 const { PositionStore } = await import('../src/efsp/position-store.js');
 const facilityConfig = await import('../src/efsp/facility-config.js');
@@ -25,29 +25,29 @@ const coordination = await import('../src/efsp/coordination.js');
 // Mirrors index.js's real multi-Facility `rules`/ctx wiring exactly (not a
 // hand-simplified subset) — otherwise this fixture would silently diverge
 // from what the running server actually does. WP4A (docs/adr/0013): one
-// {BoardStore, PositionStore} pair per Facility, one shared FdrStore,
+// {BoardStore, PositionStore} pair per Facility, one shared FlightDataStore,
 // `ctx.boardStoreFor('INCIRLIK')`/`ctx.positionStoreFor('INCIRLIK')` kept as direct INCIRLIK aliases so
 // every pre-WP4A test below (which references them directly) is unchanged.
 function makeCtx() {
-  const fdrStore = new FdrStore();
+  const flightDataStore = new FlightDataStore();
   const facilityIds = facilityConfig.getFacilityIds();
   const facilities = new Map();
 
   for (const facilityId of facilityIds) {
-    const positionStore = new PositionStore(facilityConfig.getPositionSet(facilityId), facilityConfig.getCoveringChain(facilityId));
+    const positionStore = new PositionStore(facilityConfig.getPositionSet(facilityId), facilityConfig.getConsolidation(facilityId));
     const rules = {
-      resolveBlockTarget: (blockId, role) => blockMap.resolveBlockTarget(role, blockId),
+      resolveBlockTarget: (blockId, stripType) => blockMap.resolveBlockTarget(stripType, blockId),
       bayImpliesState: (bayId) => facilityConfig.bayImpliesState(bayId, facilityId),
       bayForImpliedState: (positionId, state) => facilityConfig.bayForImpliedState(positionId, state, facilityId),
       coordinationBayFor: (positionId) => facilityConfig.coordinationBayFor(positionId, facilityId),
-      computeNla: (strip, fdr, now, ctx) => nla.computeNla(strip, fdr, now, ctx),
-      isValidState: (state, role) => nla.isValidState(state, role),
-      isValidRole: (role) => blockMap.isValidRole(role),
-      isOccupied: (id) => positionStore.isOccupied(id),
-      coveringPositionFor: (id) => positionStore.coveringPositionFor(id),
+      computeNla: (strip, flightData, now, ctx) => nla.computeNla(strip, flightData, now, ctx),
+      isValidState: (state, stripType) => nla.isValidState(state, stripType),
+      isValidStripType: (stripType) => blockMap.isValidStripType(stripType),
+      isStaffed: (id) => positionStore.isStaffed(id),
+      consolidatedAt: (id) => positionStore.consolidatedAt(id),
       canMutate: (actingPositionId, opKind) => permission.canMutate(actingPositionId, opKind),
-      canCreateStripRole: (actingPositionId, role) => permission.canCreateStripRole(actingPositionId, role),
-      canActOnState: (actingPositionId, role, state) => permission.canActOnState(actingPositionId, role, state),
+      canCreateStripType: (actingPositionId, stripType) => permission.canCreateStripType(actingPositionId, stripType),
+      canActOnState: (actingPositionId, stripType, state) => permission.canActOnState(actingPositionId, stripType, state),
       isSelfCoordinated: (controllerId, id) => positionStore.isSelfCoordinated(controllerId, id),
       baysFor: (positionId) => facilityConfig.getBaysFor(positionId, facilityId),
       facilityId,
@@ -57,16 +57,16 @@ function makeCtx() {
       },
       coordinationEffect: (primitive) => coordination.coordinationEffect(primitive),
     };
-    const boardStore = new BoardStore(fdrStore, fullRules(rules));
+    const boardStore = new BoardStore(flightDataStore, fullRules(rules));
     facilities.set(facilityId, { boardStore, positionStore });
   }
 
   // WP5 (docs/adr/0045) — the fourth store, wired exactly as index.js does it,
   // so the correlation dispatch path below is exercised against the real ctx
   // shape rather than a hand-simplified one.
-  const correlationStore = new CorrelationStore({ fdrExists: (id) => !!fdrStore.getFdr(id) });
+  const correlationStore = new CorrelationStore({ flightDataExists: (id) => !!flightDataStore.getFlightData(id) });
   return {
-    fdrStore, facilityConfig, correlationStore,
+    flightDataStore, facilityConfig, correlationStore,
     boardStoreFor: (facilityId = facilityConfig.DEFAULT_FACILITY_ID) => (facilities.get(facilityId) || {}).boardStore || null,
     positionStoreFor: (facilityId = facilityConfig.DEFAULT_FACILITY_ID) => (facilities.get(facilityId) || {}).positionStore || null,
   };
@@ -81,7 +81,7 @@ function createStripMsg(overrides = {}) {
     actingPositionId: 'OPS',
     op: {
       kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main',
-      fdr: { callsign: 'VIPER1', aircraftType: 'F16', wakeCategory: 'D', departureAirport: 'LTAG', destinationAirport: 'LTAC', route: 'DCT', requestedAltitude: '250' },
+      flightData: { callsign: 'VIPER1', aircraftType: 'F16', wakeCategory: 'D', departureAirport: 'LTAG', destinationAirport: 'LTAC', route: 'DCT', requestedAltitude: '250' },
     },
     ...overrides,
   };
@@ -92,8 +92,8 @@ const SESSION = { controllerId: 'controller-1', who: 'Alice' };
 // A real client sends efsp-set-positions before it ever mutates, and
 // efsp-ws.js now requires the acting Position to be one the sending session
 // is Primary at. Fixtures declare the same thing, the same way.
-function holding(ctx, session, held) {
-  handleMessage(ctx, session, { type: 'efsp-set-positions', held }, noopPersist);
+function holding(ctx, session, signedOn) {
+  handleMessage(ctx, session, { type: 'efsp-set-positions', signedOn }, noopPersist);
 }
 
 // Only OPS may CreateStrip (guide §4.1 rule 3, enforced by permission.js) —
@@ -140,7 +140,7 @@ test('a successful efsp-mutation returns both an ack and a broadcast, and calls 
 test('a failed efsp-mutation returns only an ack (no broadcast), and does not persist', () => {
   const ctx = makeCtx();
   let persisted = false;
-  const badMsg = createStripMsg({ op: { ...createStripMsg().op, fdr: { ...createStripMsg().op.fdr, callsign: 'WAYTOOLONGACALLSIGN' } } });
+  const badMsg = createStripMsg({ op: { ...createStripMsg().op, flightData: { ...createStripMsg().op.flightData, callsign: 'WAYTOOLONGACALLSIGN' } } });
   const result = handleMessage(ctx, SESSION, badMsg, () => { persisted = true; });
 
   assert.equal(result.ack.ok, false);
@@ -157,7 +157,7 @@ test('a rejected mutation\'s ack includes the human-readable detail, not just th
   // so the doctrine-bypass check below is actually reached, rather than
   // this Mutation instead being rejected earlier for "no receiving Position
   // present", which isn't what this test is about.
-  ctx.positionStoreFor('INCIRLIK').setHeldPositions('controller-cd', 'CD-Holder', ['CD']);
+  ctx.positionStoreFor('INCIRLIK').setSignedOnPositions('controller-cd', 'CD-Holder', ['CD']);
 
   // Drop straight into a Bay whose implied state (RUNWAY_QUEUE) skips
   // ahead of PROPOSED's legal next state (PENDING_CLEARANCE) — the exact
@@ -166,7 +166,7 @@ test('a rejected mutation\'s ack includes the human-readable detail, not just th
   const moveMsg = {
     version: 1, type: 'efsp-mutation', clientMutationId: crypto.randomUUID(),
     actingPositionId: 'OPS', stripId: strip.stripId, baseRev: strip.rev,
-    op: { kind: 'MoveStrip', bayId: 'twr-runway-queue', rackId: 'rwy-05' },
+    op: { kind: 'MoveStrip', bayId: 'lc-runway-queue', rackId: 'rwy-05' },
   };
   const result = handleMessage(ctx, SESSION, moveMsg, noopPersist);
   assert.equal(result.ack.ok, false);
@@ -209,7 +209,7 @@ test('resync with lastBoardSeq far outside the window returns a full efsp-snapsh
   const result = handleMessage(ctx, SESSION, { type: 'efsp-resync', lastBoardSeq: -999999 }, noopPersist);
   assert.equal(result.ack.answer, 'snapshot');
   assert.ok(Array.isArray(result.ack.strips));
-  assert.ok(Array.isArray(result.ack.fdrs));
+  assert.ok(Array.isArray(result.ack.flightDataList));
   assert.ok(Array.isArray(result.ack.positions));
   assert.ok(Array.isArray(result.ack.bays));
 });
@@ -249,65 +249,65 @@ test('resync never returns a third message type — only efsp-board-delta or efs
 
 test('setting held positions acks with the actually-held set and broadcasts positions', () => {
   const ctx = makeCtx();
-  const result = handleMessage(ctx, SESSION, { type: 'efsp-set-positions', held: ['GND', 'TWR'] }, noopPersist);
-  assert.deepEqual(result.ack.held.sort(), ['GND', 'TWR']);
+  const result = handleMessage(ctx, SESSION, { type: 'efsp-set-positions', signedOn: ['GC', 'LC'] }, noopPersist);
+  assert.deepEqual(result.ack.signedOn.sort(), ['GC', 'LC']);
   assert.equal(result.ack.warnings.length, 0);
   assert.equal(slot(result, 'primary').type, 'efsp-board-delta');
   assert.equal(slot(result, 'primary').positions.updated.length, 8); // all of INCIRLIK's Positions reported (RSU, SFA, PAR since L18)
 });
 
-test('vacating a Position with Strips and an occupied covering Position reassigns them and reports the warning with routedTo', () => {
+test('vacating a Position with Strips and an staffed covering Position reassigns them and reports the warning with routedTo', () => {
   const ctx = makeCtx();
-  handleMessage(ctx, SESSION, { type: 'efsp-set-positions', held: ['GND'] }, noopPersist); // Alice holds GND
-  handleMessage(ctx, { controllerId: 'controller-2', who: 'Bob' }, { type: 'efsp-set-positions', held: ['TWR'] }, noopPersist); // Bob holds TWR (GND's covering Position)
+  handleMessage(ctx, SESSION, { type: 'efsp-set-positions', signedOn: ['GC'] }, noopPersist); // Alice holds GND
+  handleMessage(ctx, { controllerId: 'controller-2', who: 'Bob' }, { type: 'efsp-set-positions', signedOn: ['LC'] }, noopPersist); // Bob holds TWR (GND's covering Position)
 
-  // gnd-coordination (not gnd-taxi-in) — this fixture just needs "GND owns
-  // a Strip", and gnd-taxi-in now implies TAXI_IN (Phase 2), which a fresh
+  // gc-coordination (not gc-taxi-in) — this fixture just needs "GND owns
+  // a Strip", and gc-taxi-in now implies TAXI_IN (Phase 2), which a fresh
   // PROPOSED Strip can't legally jump straight to (correctly rejected by
-  // _validateBayImpliedTransition). gnd-coordination implies no state.
-  const strip = createStripOwnedBy(ctx, 'GND', 'gnd-coordination');
+  // _validateBayImpliedTransition). gc-coordination implies no state.
+  const strip = createStripOwnedBy(ctx, 'GC', 'gc-coordination');
 
-  const result = handleMessage(ctx, SESSION, { type: 'efsp-set-positions', held: [] }, noopPersist); // Alice vacates GND
+  const result = handleMessage(ctx, SESSION, { type: 'efsp-set-positions', signedOn: [] }, noopPersist); // Alice vacates GND
   assert.equal(result.ack.warnings.length, 1);
-  assert.deepEqual(result.ack.warnings[0], { positionId: 'GND', count: 1, routedTo: 'TWR' });
+  assert.deepEqual(result.ack.warnings[0], { positionId: 'GC', count: 1, routedTo: 'LC' });
   assert.equal(slot(result, 'primary').strips.updated.length, 1);
   assert.equal(slot(result, 'primary').strips.updated[0].stripId, strip.stripId);
-  assert.equal(ctx.boardStoreFor('INCIRLIK').getStrip(strip.stripId).ownerPositionId, 'TWR');
+  assert.equal(ctx.boardStoreFor('INCIRLIK').getStrip(strip.stripId).ownerPositionId, 'LC');
 });
 
-test('vacating a Position with Strips and NO occupied covering Position anywhere reports routedTo:null, distinctly, and does not silently drop the Strip', () => {
+test('vacating a Position with Strips and NO staffed covering Position anywhere reports routedTo:null, distinctly, and does not silently drop the Strip', () => {
   const ctx = makeCtx();
-  handleMessage(ctx, SESSION, { type: 'efsp-set-positions', held: ['GND'] }, noopPersist); // GND held, but nobody holds TWR
-  // gnd-coordination (not gnd-taxi-in) — this fixture just needs "GND owns
-  // a Strip", and gnd-taxi-in now implies TAXI_IN (Phase 2), which a fresh
+  handleMessage(ctx, SESSION, { type: 'efsp-set-positions', signedOn: ['GC'] }, noopPersist); // GND held, but nobody holds TWR
+  // gc-coordination (not gc-taxi-in) — this fixture just needs "GND owns
+  // a Strip", and gc-taxi-in now implies TAXI_IN (Phase 2), which a fresh
   // PROPOSED Strip can't legally jump straight to (correctly rejected by
-  // _validateBayImpliedTransition). gnd-coordination implies no state.
-  const strip = createStripOwnedBy(ctx, 'GND', 'gnd-coordination');
+  // _validateBayImpliedTransition). gc-coordination implies no state.
+  const strip = createStripOwnedBy(ctx, 'GC', 'gc-coordination');
 
-  const result = handleMessage(ctx, SESSION, { type: 'efsp-set-positions', held: [] }, noopPersist);
-  assert.deepEqual(result.ack.warnings, [{ positionId: 'GND', count: 1, routedTo: null }]);
-  // Strip ownership is untouched — still GND, which is now unoccupied; this
+  const result = handleMessage(ctx, SESSION, { type: 'efsp-set-positions', signedOn: [] }, noopPersist);
+  assert.deepEqual(result.ack.warnings, [{ positionId: 'GC', count: 1, routedTo: null }]);
+  // Strip ownership is untouched — still GND, which is now unstaffed; this
   // is the D19 boundary condition itself, surfaced rather than hidden.
-  assert.equal(ctx.boardStoreFor('INCIRLIK').getStrip(strip.stripId).ownerPositionId, 'GND');
+  assert.equal(ctx.boardStoreFor('INCIRLIK').getStrip(strip.stripId).ownerPositionId, 'GC');
 });
 
 test('vacating a Position that owns no Strips produces no warnings at all', () => {
   const ctx = makeCtx();
-  handleMessage(ctx, SESSION, { type: 'efsp-set-positions', held: ['GND'] }, noopPersist);
-  const result = handleMessage(ctx, SESSION, { type: 'efsp-set-positions', held: [] }, noopPersist);
+  handleMessage(ctx, SESSION, { type: 'efsp-set-positions', signedOn: ['GC'] }, noopPersist);
+  const result = handleMessage(ctx, SESSION, { type: 'efsp-set-positions', signedOn: [] }, noopPersist);
   assert.deepEqual(result.ack.warnings, []);
 });
 
 test('a non-abrupt vacate does NOT auto-promote a waiting Observer, so its Strips still need routing (position-store.js\'s promotion-is-a-prompt rule feeds straight into the strand check)', () => {
   const ctx = makeCtx();
-  handleMessage(ctx, SESSION, { type: 'efsp-set-positions', held: ['GND'] }, noopPersist); // Alice Primary
-  handleMessage(ctx, { controllerId: 'controller-2', who: 'Bob' }, { type: 'efsp-set-positions', held: ['GND'] }, noopPersist); // Bob Observer
+  handleMessage(ctx, SESSION, { type: 'efsp-set-positions', signedOn: ['GC'] }, noopPersist); // Alice Primary
+  handleMessage(ctx, { controllerId: 'controller-2', who: 'Bob' }, { type: 'efsp-set-positions', signedOn: ['GC'] }, noopPersist); // Bob Observer
 
-  createStripOwnedBy(ctx, 'GND', 'gnd-coordination'); // see the comment above the other two uses of this fixture
+  createStripOwnedBy(ctx, 'GC', 'gc-coordination'); // see the comment above the other two uses of this fixture
 
-  const result = handleMessage(ctx, SESSION, { type: 'efsp-set-positions', held: [] }, noopPersist); // Alice explicitly vacates
-  assert.equal(ctx.positionStoreFor('INCIRLIK').isOccupied('GND'), false); // Bob was NOT auto-promoted — an explicit prompt is required, not built here
-  assert.equal(result.ack.warnings.length, 1); // so the Strip genuinely needed routing, and GND has no covering Position occupied in this fixture
+  const result = handleMessage(ctx, SESSION, { type: 'efsp-set-positions', signedOn: [] }, noopPersist); // Alice explicitly vacates
+  assert.equal(ctx.positionStoreFor('INCIRLIK').isStaffed('GC'), false); // Bob was NOT auto-promoted — an explicit prompt is required, not built here
+  assert.equal(result.ack.warnings.length, 1); // so the Strip genuinely needed routing, and GND has no covering Position staffed in this fixture
   assert.equal(result.ack.warnings[0].routedTo, null);
 });
 
@@ -336,7 +336,7 @@ test('efsp-correlation-mutation routes, binds, and broadcasts its own delta type
   holding(ctx, session, ['OPS']);
   const strip = createOpsStrip(ctx, session);
 
-  const result = handleMessage(ctx, session, bindMsg({ fdrId: strip.fdrId, baseRev: 0 }), noopPersist);
+  const result = handleMessage(ctx, session, bindMsg({ flightDataId: strip.flightDataId, baseRev: 0 }), noopPersist);
 
   assert.equal(result.ack.type, 'efsp-correlation-ack');
   assert.equal(result.ack.ok, true, JSON.stringify(result.ack));
@@ -355,11 +355,11 @@ test('UnbindTrack routes through the same path', () => {
   const session = { controllerId: 'c-app', who: 'App1' };
   holding(ctx, session, ['OPS']);
   const strip = createOpsStrip(ctx, session);
-  handleMessage(ctx, session, bindMsg({ fdrId: strip.fdrId, baseRev: 0 }), noopPersist);
+  handleMessage(ctx, session, bindMsg({ flightDataId: strip.flightDataId, baseRev: 0 }), noopPersist);
 
-  const rev = ctx.correlationStore.getCorrelation(strip.fdrId).rev;
+  const rev = ctx.correlationStore.getCorrelation(strip.flightDataId).rev;
   const result = handleMessage(ctx, session, bindMsg({
-    fdrId: strip.fdrId, baseRev: rev, op: { kind: 'UnbindTrack' },
+    flightDataId: strip.flightDataId, baseRev: rev, op: { kind: 'UnbindTrack' },
   }), noopPersist);
   assert.equal(result.ack.ok, true, JSON.stringify(result.ack));
   assert.equal(result.ack.correlation.binding, null);
@@ -373,7 +373,7 @@ test('a correlation op from a session that is not Primary anywhere is refused (d
 
   // Somebody else claims APP without holding it.
   const impostor = { controllerId: 'c-nobody', who: 'Nobody' };
-  const result = handleMessage(ctx, impostor, bindMsg({ fdrId: strip.fdrId, baseRev: 0 }), noopPersist);
+  const result = handleMessage(ctx, impostor, bindMsg({ flightDataId: strip.flightDataId, baseRev: 0 }), noopPersist);
   assert.equal(result.ack.ok, false);
   assert.equal(result.ack.reason, 'NOT_HOLDING_POSITION');
   assert.equal(slot(result, 'primary'), undefined);
@@ -389,9 +389,9 @@ test('any Primary may bind, whichever Facility holds a Strip for that flight', (
   const strip = createOpsStrip(ctx, ops);
 
   const ctr = { controllerId: 'c-ctr', who: 'Ctr1' };
-  handleMessage(ctx, ctr, { type: 'efsp-set-positions', facilityId: 'CENTER', held: ['CTR'] }, noopPersist);
+  handleMessage(ctx, ctr, { type: 'efsp-set-positions', facilityId: 'CENTER', signedOn: ['CTR'] }, noopPersist);
   const result = handleMessage(ctx, ctr, bindMsg({
-    fdrId: strip.fdrId, baseRev: 0, actingPositionId: 'CTR',
+    flightDataId: strip.flightDataId, baseRev: 0, actingPositionId: 'CTR',
   }), noopPersist);
 
   assert.equal(result.ack.ok, true, JSON.stringify(result.ack));
@@ -403,9 +403,9 @@ test('a refused correlation op still carries the record, so the client renders t
   const session = { controllerId: 'c-app', who: 'App1' };
   holding(ctx, session, ['OPS']);
   const strip = createOpsStrip(ctx, session);
-  handleMessage(ctx, session, bindMsg({ fdrId: strip.fdrId, baseRev: 0 }), noopPersist);
+  handleMessage(ctx, session, bindMsg({ flightDataId: strip.flightDataId, baseRev: 0 }), noopPersist);
 
-  const stale = handleMessage(ctx, session, bindMsg({ fdrId: strip.fdrId, baseRev: 0, op: { kind: 'BindTrack', trackId: '999' } }), noopPersist);
+  const stale = handleMessage(ctx, session, bindMsg({ flightDataId: strip.flightDataId, baseRev: 0, op: { kind: 'BindTrack', trackId: '999' } }), noopPersist);
   assert.equal(stale.ack.ok, false);
   assert.equal(stale.ack.reason, 'STALE_REV');
   assert.equal(stale.ack.correlation.trackId, '101');
@@ -415,7 +415,7 @@ test('a correlation op for an unknown FDR is refused, not thrown', () => {
   const ctx = makeCtx();
   const session = { controllerId: 'c-ops4', who: 'Ops4' };
   holding(ctx, session, ['OPS']);
-  const result = handleMessage(ctx, session, bindMsg({ fdrId: 'ghost', baseRev: 0 }), noopPersist);
+  const result = handleMessage(ctx, session, bindMsg({ flightDataId: 'ghost', baseRev: 0 }), noopPersist);
   assert.equal(result.ack.ok, false);
   assert.equal(result.ack.reason, 'NOT_FOUND');
 });
@@ -425,12 +425,12 @@ test('the snapshot carries correlation records alongside airspaces', () => {
   const session = { controllerId: 'c-app', who: 'App1' };
   holding(ctx, session, ['OPS']);
   const strip = createOpsStrip(ctx, session);
-  handleMessage(ctx, session, bindMsg({ fdrId: strip.fdrId, baseRev: 0 }), noopPersist);
+  handleMessage(ctx, session, bindMsg({ flightDataId: strip.flightDataId, baseRev: 0 }), noopPersist);
 
   const snapshot = handleMessage(ctx, session, { type: 'efsp-resync', lastBoardSeq: -1 }, noopPersist).ack;
   assert.equal(snapshot.answer, 'snapshot');
   assert.equal(snapshot.correlations.length, 1);
-  assert.equal(snapshot.correlations[0].fdrId, strip.fdrId);
+  assert.equal(snapshot.correlations[0].flightDataId, strip.flightDataId);
 });
 
 test('efsp-resync has no correlation branch — a reconnecting client gets the snapshot and the next tick', () => {
@@ -470,51 +470,51 @@ test('an efsp-mutation-ack echoes the stripId it was about, even when it is refu
   assert.equal(refused.ack.stripId, strip.stripId);
 });
 
-test('an efsp-correlation-ack echoes the fdrId on every refusal path', () => {
+test('an efsp-correlation-ack echoes the flightDataId on every refusal path', () => {
   const ctx = makeCtx();
   const notPrimary = handleMessage(ctx, { controllerId: 'nobody', who: 'Nobody' }, {
     version: 1, type: 'efsp-correlation-mutation', clientMutationId: crypto.randomUUID(),
-    actingPositionId: 'APP', fdrId: 'fdr-abc', baseRev: 0, op: { kind: 'BindTrack', trackId: 't-1' },
+    actingPositionId: 'AP', flightDataId: 'flight-data-abc', baseRev: 0, op: { kind: 'BindTrack', trackId: 't-1' },
   }, noopPersist);
   assert.equal(notPrimary.ack.reason, 'NOT_HOLDING_POSITION');
-  assert.equal(notPrimary.ack.fdrId, 'fdr-abc');
+  assert.equal(notPrimary.ack.flightDataId, 'flight-data-abc');
 
   // And on the store's own refusal, where the record it would have carried
   // does not exist either.
-  holding(ctx, SESSION, ['APP']);
-  const unknownFdr = handleMessage(ctx, SESSION, {
+  holding(ctx, SESSION, ['AP']);
+  const unknownFlightData = handleMessage(ctx, SESSION, {
     version: 1, type: 'efsp-correlation-mutation', clientMutationId: crypto.randomUUID(),
-    actingPositionId: 'APP', fdrId: 'fdr-def', baseRev: 0, op: { kind: 'BindTrack', trackId: 't-1' },
+    actingPositionId: 'AP', flightDataId: 'flight-data-def', baseRev: 0, op: { kind: 'BindTrack', trackId: 't-1' },
   }, noopPersist);
-  assert.equal(unknownFdr.ack.ok, false);
-  assert.equal(unknownFdr.ack.fdrId, 'fdr-def');
+  assert.equal(unknownFlightData.ack.ok, false);
+  assert.equal(unknownFlightData.ack.flightDataId, 'flight-data-def');
 });
 
 test('an efsp-marsa-ack echoes the marsaId and the flights the op names', () => {
   const ctx = makeCtx(); // no marsaStore wired — the earliest refusal there is
   const declare = handleMessage(ctx, SESSION, {
     version: 1, type: 'efsp-marsa-mutation', clientMutationId: crypto.randomUUID(),
-    actingPositionId: 'APP',
-    op: { kind: 'DeclareMarsa', participants: ['fdr-tanker', 'fdr-receiver'], declaringCallsign: 'SHELL71' },
+    actingPositionId: 'AP',
+    op: { kind: 'DeclareMarsa', participants: ['flight-data-tanker', 'flight-data-receiver'], declaringCallsign: 'SHELL71' },
   }, noopPersist);
   assert.equal(declare.ack.ok, false);
   assert.equal(declare.ack.marsa, undefined);
-  assert.deepEqual(declare.ack.fdrIds, ['fdr-tanker', 'fdr-receiver']);
+  assert.deepEqual(declare.ack.flightDataIds, ['flight-data-tanker', 'flight-data-receiver']);
 
   const remove = handleMessage(ctx, SESSION, {
     version: 1, type: 'efsp-marsa-mutation', clientMutationId: crypto.randomUUID(),
-    actingPositionId: 'APP', marsaId: 'marsa-77', baseRev: 3,
-    op: { kind: 'RemoveParticipant', fdrId: 'fdr-receiver' },
+    actingPositionId: 'AP', marsaId: 'marsa-77', baseRev: 3,
+    op: { kind: 'RemoveParticipant', flightDataId: 'flight-data-receiver' },
   }, noopPersist);
   assert.equal(remove.ack.marsaId, 'marsa-77');
-  assert.deepEqual(remove.ack.fdrIds, ['fdr-receiver']);
+  assert.deepEqual(remove.ack.flightDataIds, ['flight-data-receiver']);
 });
 
 test('an efsp-airspace-ack echoes the airspaceId on refusal', () => {
   const ctx = makeCtx(); // no airspaceStore wired
   const refused = handleMessage(ctx, SESSION, {
     version: 1, type: 'efsp-airspace-mutation', clientMutationId: crypto.randomUUID(),
-    actingPositionId: 'APP', airspaceId: 'MOA-EAST', baseRev: 0, op: { kind: 'ApproveActivation' },
+    actingPositionId: 'AP', airspaceId: 'MOA-EAST', baseRev: 0, op: { kind: 'ApproveActivation' },
   }, noopPersist);
   assert.equal(refused.ack.ok, false);
   assert.equal(refused.ack.airspace, undefined);
@@ -523,7 +523,7 @@ test('an efsp-airspace-ack echoes the airspaceId on refusal', () => {
 
 test('an efsp-positions-ack names the Facility it refused, not just that one was unknown', () => {
   const ctx = makeCtx();
-  const refused = handleMessage(ctx, SESSION, { type: 'efsp-set-positions', facilityId: 'ATLANTIS', held: ['OPS'] }, noopPersist);
+  const refused = handleMessage(ctx, SESSION, { type: 'efsp-set-positions', facilityId: 'ATLANTIS', signedOn: ['OPS'] }, noopPersist);
   assert.equal(refused.ack.reason, 'VALIDATION_ERROR');
   assert.equal(refused.ack.facilityId, 'ATLANTIS');
 });
@@ -531,7 +531,7 @@ test('an efsp-positions-ack names the Facility it refused, not just that one was
 // ── docs/adr/0081 (L27): one Board event, one broadcast ──────────────────
 
 function createNamed(ctx, session, callsign) {
-  const r = handleMessage(ctx, session, createStripMsg({ op: { ...createStripMsg().op, fdr: { ...createStripMsg().op.fdr, callsign } } }), noopPersist);
+  const r = handleMessage(ctx, session, createStripMsg({ op: { ...createStripMsg().op, flightData: { ...createStripMsg().op.flightData, callsign } } }), noopPersist);
   assert.equal(r.ack.ok, true, JSON.stringify(r.ack));
   return r.ack.strip;
 }
@@ -682,7 +682,7 @@ test('a resync carrying the previous lifetime\'s epoch gets a snapshot, even whe
 
   // A new process restores the snapshot: a fresh ring, seq from zero.
   const ctx2 = makeCtx();
-  ctx2.fdrStore.restore(ctx.fdrStore.snapshot());
+  ctx2.flightDataStore.restore(ctx.flightDataStore.snapshot());
   const snap = ctx.boardStoreFor('INCIRLIK').snapshot();
   snap.strips = snap.strips.filter(s => s.stripId !== doomed.stripId); // dropped and gone before the restart
   ctx2.boardStoreFor('INCIRLIK').restore(JSON.parse(JSON.stringify(snap)));

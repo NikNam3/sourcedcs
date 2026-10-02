@@ -36,7 +36,7 @@ const PROFILES = {
 };
 
 const POSITION_FACILITY = {
-  OPS: 'INCIRLIK', CD: 'INCIRLIK', GND: 'INCIRLIK', TWR: 'INCIRLIK', APP: 'INCIRLIK',
+  OPS: 'INCIRLIK', CD: 'INCIRLIK', GC: 'INCIRLIK', LC: 'INCIRLIK', AP: 'INCIRLIK',
   CTR: 'CENTER',
   TAC_C2: 'TACTICAL', AIC: 'TACTICAL', GCI: 'TACTICAL', JTAC: 'TACTICAL',
   SOUTH_RANGE: 'RANGES',
@@ -46,23 +46,23 @@ const POSITION_FACILITY = {
 // Declaration order matters: an observer must select after the Primary.
 const CREWS = {
   three: [
-    { id: 'ctl-cab', holds: { INCIRLIK: ['OPS', 'CD', 'GND', 'TWR'] } },
-    { id: 'ctl-radar', holds: { INCIRLIK: ['APP'], CENTER: ['CTR'] } },
+    { id: 'ctl-cab', holds: { INCIRLIK: ['OPS', 'CD', 'GC', 'LC'] } },
+    { id: 'ctl-radar', holds: { INCIRLIK: ['AP'], CENTER: ['CTR'] } },
     { id: 'ctl-tac', holds: { TACTICAL: ['TAC_C2'], RANGES: ['SOUTH_RANGE'] } },
   ],
   full: [
     { id: 'ctl-ops', holds: { INCIRLIK: ['OPS'] } },
     { id: 'ctl-cd', holds: { INCIRLIK: ['CD'] } },
-    { id: 'ctl-gnd', holds: { INCIRLIK: ['GND'] } },
-    { id: 'ctl-twr', holds: { INCIRLIK: ['TWR'] } },
-    { id: 'ctl-app', holds: { INCIRLIK: ['APP'] } },
+    { id: 'ctl-gc', holds: { INCIRLIK: ['GC'] } },
+    { id: 'ctl-lc', holds: { INCIRLIK: ['LC'] } },
+    { id: 'ctl-ap', holds: { INCIRLIK: ['AP'] } },
     { id: 'ctl-ctr', holds: { CENTER: ['CTR'] } },
     { id: 'ctl-tac', holds: { TACTICAL: ['TAC_C2'] } },
     { id: 'ctl-range', holds: { RANGES: ['SOUTH_RANGE'] } },
-    { id: 'obs-app', holds: { INCIRLIK: ['APP'] }, observer: true },
+    { id: 'obs-ap', holds: { INCIRLIK: ['AP'] }, observer: true },
   ],
   solo: [
-    { id: 'ctl-solo', holds: { INCIRLIK: ['OPS', 'CD', 'GND', 'TWR', 'APP'], CENTER: ['CTR'], TACTICAL: ['TAC_C2'], RANGES: ['SOUTH_RANGE'] } },
+    { id: 'ctl-solo', holds: { INCIRLIK: ['OPS', 'CD', 'GC', 'LC', 'AP'], CENTER: ['CTR'], TACTICAL: ['TAC_C2'], RANGES: ['SOUTH_RANGE'] } },
   ],
 };
 
@@ -91,7 +91,7 @@ const CALLSIGN_PREFIX = {
 
 function callsignFor(script, n) { return `${CALLSIGN_PREFIX[script]}${10 + (n % 90)}`; }
 
-function departureFdr(f) {
+function departureFlightData(f) {
   return {
     callsign: f.callsign, aircraftType: f.script === 'militarySortie' || f.script === 'rangeVisit' ? 'F16' : 'B738', wakeCategory: 'M',
     departureAirport: 'LTAG', destinationAirport: f.script === 'departureOut' ? 'OJAI' : 'LTAG', route: 'DCT', requestedAltitude: '250',
@@ -100,14 +100,14 @@ function departureFdr(f) {
 
 function* outboundToCenter(f, x) {
   const r0 = yield create('OPS', {
-    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: departureFdr(f),
+    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE', flightData: departureFlightData(f),
     // Order-key stress (briefing §5.2): some creates insert after the FIRST
     // Strip of a busy Rack, so repeated creates hit the same slot.
     ...(x.sameSlotCreate ? { afterStripId: '@first' } : {}),
   });
   if (!r0.ok) return null;
   const dep = r0.strip.stripId;
-  const r1 = yield walk('INCIRLIK', dep, s => s.state === 'HANDED_OFF' && s.ownerPositionId === 'APP', 14);
+  const r1 = yield walk('INCIRLIK', dep, s => s.state === 'HANDED_OFF' && s.ownerPositionId === 'AP', 14);
   if (!r1.ok) return null;
   yield think();
   const r2 = yield act('INCIRLIK', dep, { kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'CENTER', toPositionId: 'CTR' });
@@ -124,7 +124,7 @@ function* homeFromCenter(f, x, ctr) {
   let r = yield act('CENTER', ctr, { kind: 'ConvertToArrival' });
   if (!r.ok) return false;
   yield think();
-  r = yield act('CENTER', ctr, { kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'INCIRLIK', toPositionId: 'APP' });
+  r = yield act('CENTER', ctr, { kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'INCIRLIK', toPositionId: 'AP' });
   if (!r.ok || !r.strip.coordination) return false;
   const arr = r.strip.coordination.peerStripId;
   f.own(arr, 'INCIRLIK');
@@ -172,9 +172,9 @@ const SCRIPTS = {
   * popupArrival(f, x) {
     if (x.rng.chance(0.5)) {
       // Pop-up: nobody handed it over, so APP originates it (coordination :154).
-      const r = yield create('APP', {
-        kind: 'CreateStrip', bayId: 'app-inbound', rackId: 'main', role: 'ARRIVAL',
-        fdr: { callsign: f.callsign, aircraftType: 'C130', wakeCategory: 'M', originAirport: 'LTAC', destinationAirport: 'LTAG' },
+      const r = yield create('AP', {
+        kind: 'CreateStrip', bayId: 'ap-inbound', rackId: 'main', stripType: 'ARRIVAL',
+        flightData: { callsign: f.callsign, aircraftType: 'C130', wakeCategory: 'M', originAirport: 'LTAC', destinationAirport: 'LTAG' },
       });
       if (!r.ok) return;
       yield think();
@@ -186,15 +186,15 @@ const SCRIPTS = {
     // is the one Role/state CTR can propose coordination from besides a
     // HANDED_OFF departure (coordination.js:65).
     const r = yield create('CTR', {
-      kind: 'CreateStrip', bayId: 'ctr-enroute', rackId: 'main', role: 'ARRIVAL',
-      fdr: { callsign: f.callsign, aircraftType: 'C130', wakeCategory: 'M', originAirport: 'LTAC', destinationAirport: 'LTAG' },
+      kind: 'CreateStrip', bayId: 'ctr-enroute', rackId: 'main', stripType: 'ARRIVAL',
+      flightData: { callsign: f.callsign, aircraftType: 'C130', wakeCategory: 'M', originAirport: 'LTAC', destinationAirport: 'LTAG' },
     });
     if (!r.ok) return;
     const enroute = r.strip.stripId;
     yield think();
     if (x.rng.chance(0.4)) {
       const primitive = x.rng.chance(0.5) ? 'POINT_OUT' : 'TRAFFIC';
-      const p = yield act('CENTER', enroute, { kind: primitive, action: 'PROPOSE', toFacilityId: 'INCIRLIK', toPositionId: 'APP' });
+      const p = yield act('CENTER', enroute, { kind: primitive, action: 'PROPOSE', toFacilityId: 'INCIRLIK', toPositionId: 'AP' });
       if (p.ok && p.strip.coordination) {
         const replica = p.strip.coordination.peerStripId;
         f.own(replica, 'INCIRLIK');
@@ -205,7 +205,7 @@ const SCRIPTS = {
       }
       yield think();
     }
-    const h = yield act('CENTER', enroute, { kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'INCIRLIK', toPositionId: 'APP' });
+    const h = yield act('CENTER', enroute, { kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'INCIRLIK', toPositionId: 'AP' });
     if (!h.ok || !h.strip.coordination) return;
     const arr = h.strip.coordination.peerStripId;
     f.own(arr, 'INCIRLIK');
@@ -222,8 +222,8 @@ const SCRIPTS = {
     // fixed: an IN_SECTOR overflight may propose coordination, and arrives
     // INBOUND at APP); the rest leave our airspace by NLA and are dropped.
     const r = yield create('CTR', {
-      kind: 'CreateStrip', bayId: 'ctr-overflight', rackId: 'main', role: 'OVERFLIGHT',
-      fdr: { callsign: f.callsign, aircraftType: 'A320', wakeCategory: 'M', originAirport: 'LTBA', destinationAirport: 'OJAI' },
+      kind: 'CreateStrip', bayId: 'ctr-overflight', rackId: 'main', stripType: 'OVERFLIGHT',
+      flightData: { callsign: f.callsign, aircraftType: 'A320', wakeCategory: 'M', originAirport: 'LTBA', destinationAirport: 'OJAI' },
     });
     if (!r.ok) return;
     const ctr = r.strip.stripId;
@@ -231,7 +231,7 @@ const SCRIPTS = {
     yield walk('CENTER', ctr, s => s.state === 'IN_SECTOR', 2);
     yield think();
     if (x.rng.chance(0.5)) {
-      const h = yield act('CENTER', ctr, { kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'INCIRLIK', toPositionId: 'APP' });
+      const h = yield act('CENTER', ctr, { kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'INCIRLIK', toPositionId: 'AP' });
       if (h.ok && h.strip.coordination) {
         const replica = h.strip.coordination.peerStripId;
         f.own(replica, 'INCIRLIK');
@@ -278,10 +278,10 @@ const SCRIPTS = {
 
   * rangeVisit(f, x) {
     yield { kind: 'ensureRangeActive' };
-    const r0 = yield create('OPS', { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: departureFdr(f) });
+    const r0 = yield create('OPS', { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE', flightData: departureFlightData(f) });
     if (!r0.ok) return;
     const dep = r0.strip.stripId;
-    const r1 = yield walk('INCIRLIK', dep, s => s.state === 'HANDED_OFF' && s.ownerPositionId === 'APP', 14);
+    const r1 = yield walk('INCIRLIK', dep, s => s.state === 'HANDED_OFF' && s.ownerPositionId === 'AP', 14);
     if (!r1.ok) return;
     yield think();
     const r2 = yield act('INCIRLIK', dep, { kind: 'ApproveAirspaceEntry', airspaceId: 'RANGE-SOUTH' });

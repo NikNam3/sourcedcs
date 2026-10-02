@@ -66,8 +66,8 @@ async function lookupFlightPlan(callsign, opts = {}) {
 
 /**
  * Maps sourcedcs-web's DD1801 field names onto EFSP's FDR seed shape
- * (fdr-store.js's createFdr() seed — flat keys, nested into identity.* /
- * filed.* by createFdr() itself) — [SOURCE-DEFINED] mapping, since
+ * (flight-data-store.js's createFlightData() seed — flat keys, nested into identity.* /
+ * filed.* by createFlightData() itself) — [SOURCE-DEFINED] mapping, since
  * sourcedcs-web's schema predates and is independent of EFSP's, and the
  * two use different field names for the same concepts. Only carries over
  * what EFSP actually models; DD1801-specific fields with no FDR
@@ -83,7 +83,7 @@ async function lookupFlightPlan(callsign, opts = {}) {
  * Never throws — a missing/malformed field on the plan just yields an
  * empty string for that seed field, same as an ordinary blank CreateStrip.
  */
-function toFdrFiledSeed(plan) {
+function toFlightDataFiledSeed(plan) {
   if (!plan || typeof plan !== 'object') return {};
   return {
     route: plan.route || '',
@@ -93,8 +93,8 @@ function toFdrFiledSeed(plan) {
     remarks: plan.otherInfo || '',
     aircraftType: plan.aircraftType || '',
     wakeCategory: plan.wtc || '',
-    // Item 13's departure time, HHMM Zulu as the pilot typed it. createFdr()
-    // dates it by the mission clock into fdr.timeInputs, one source of the
+    // Item 13's departure time, HHMM Zulu as the pilot typed it. createFlightData()
+    // dates it by the mission clock into flightData.timeInputs, one source of the
     // P-time fallback chain (docs/adr/0073) — never into the controller's
     // filed.proposedDepartureTimeUtc.
     flightPlanDepartureTimeHhmm: plan.depTime || '',
@@ -120,7 +120,7 @@ function toFdrFiledSeed(plan) {
  * down, slow, or unconfigured (no token set) always resolves {ok:false},
  * never a throw. Each returned entry is a lightweight display/seed pair,
  * not the raw sourcedcs-web record — callers never see plan-specific
- * fields EFSP doesn't model (see toFdrFiledSeed's own doc for what's
+ * fields EFSP doesn't model (see toFlightDataFiledSeed's own doc for what's
  * dropped and why).
  *
  * @param {{fetchImpl?:typeof fetch, baseUrl?:string, timeoutMs?:number, serviceToken?:string}} [opts]
@@ -151,7 +151,7 @@ async function listFiledFlightPlans(opts = {}) {
       callsign: (plan && plan.aircraftId) || '',
       submittedByName: (plan && plan.submittedBy && plan.submittedBy.name) || null,
       submittedAt: (plan && plan.submittedAt) || null,
-      seed: toFdrFiledSeed(plan),
+      seed: toFlightDataFiledSeed(plan),
     })).filter((p) => p.callsign); // a plan with no aircraftId at all can't seed a CreateStrip — drop it rather than surface an unusable card
 
     return { ok: true, plans };
@@ -164,5 +164,5 @@ async function listFiledFlightPlans(opts = {}) {
 }
 
 module.exports = {
-  lookupFlightPlan, toFdrFiledSeed, listFiledFlightPlans,
+  lookupFlightPlan, toFlightDataFiledSeed, listFiledFlightPlans,
 };

@@ -12,10 +12,10 @@ function _applyMoveStrip(ctx, strip, op, by) {
   strip.rackId = op.rackId;
   strip.orderKey = ctx.placement.resolveOrderKey(op.bayId, op.rackId, op.afterStripId || null, op.beforeStripId || null, strip.stripId);
   if (check.impliedState && check.impliedState !== strip.state) strip.state = check.impliedState;
-  const fdrResult = ctx.assignSfaFrequency(strip, by);
+  const flightDataResult = ctx.assignSfaFrequency(strip, by);
 
   ctx.state.bump(strip, by);
-  return { ok: true, strip, fdr: fdrResult ? fdrResult.fdr : undefined };
+  return { ok: true, strip, flightData: flightDataResult ? flightDataResult.flightData : undefined };
 }
 
 module.exports = {

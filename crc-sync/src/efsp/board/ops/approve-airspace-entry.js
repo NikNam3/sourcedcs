@@ -41,8 +41,8 @@ function _applyApproveAirspaceEntry(ctx, strip, op, by) {
   const blockCheck = _validateAltitudeBlock(op.altitudeBlock, definition);
   if (!blockCheck.ok) return { ok: false, reason: 'VALIDATION_ERROR', detail: blockCheck.detail, strip };
 
-  const fdrResult = ctx.fdrStore.setWorkingFrequency(strip.fdrId, frequencyMhz, { airspaceId: op.airspaceId, by });
-  if (!fdrResult.ok) return { ok: false, reason: fdrResult.reason, detail: fdrResult.detail, strip };
+  const flightDataResult = ctx.flightDataStore.setWorkingFrequency(strip.flightDataId, frequencyMhz, { airspaceId: op.airspaceId, by });
+  if (!flightDataResult.ok) return { ok: false, reason: flightDataResult.reason, detail: flightDataResult.detail, strip };
 
   strip.airspaceEntry = {
     airspaceId: op.airspaceId,
@@ -59,7 +59,7 @@ function _applyApproveAirspaceEntry(ctx, strip, op, by) {
   ctx.state.bump(strip, by);
 
   const warning = airspace.state !== 'ACTIVE' ? 'AIRSPACE_NOT_ACTIVE' : undefined;
-  return { ok: true, strip, fdr: fdrResult.fdr, warning };
+  return { ok: true, strip, flightData: flightDataResult.flightData, warning };
 }
 
 // The RANGE slice — a flight is approved onto an airspace's working

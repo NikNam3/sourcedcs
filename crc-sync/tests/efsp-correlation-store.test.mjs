@@ -13,22 +13,22 @@ import assert from 'node:assert/strict';
  */
 
 const { CorrelationStore, MATCH_KEYS } = await import('../src/efsp/correlation-store.js');
-const { MAX_FREE_TEXT } = await import('../src/efsp/fdr-store.js');
+const { MAX_FREE_TEXT } = await import('../src/efsp/flight-data-store.js');
 
-const FDR = 'fdr-1';
+const FDR = 'flight-data-1';
 
-function store({ fdrs = [FDR] } = {}) {
-  return new CorrelationStore({ fdrExists: (id) => fdrs.includes(id) });
+function store({ flightDataList = [FDR] } = {}) {
+  return new CorrelationStore({ flightDataExists: (id) => flightDataList.includes(id) });
 }
 
-function bind(s, { fdrId = FDR, trackId = '101', note, baseRev } = {}) {
-  const current = s.getCorrelation(fdrId);
+function bind(s, { flightDataId = FDR, trackId = '101', note, baseRev } = {}) {
+  const current = s.getCorrelation(flightDataId);
   return s.apply({
     clientMutationId: `m-${Math.random()}`,
-    fdrId,
+    flightDataId,
     baseRev: baseRev !== undefined ? baseRev : (current ? current.rev : 0),
     op: { kind: 'BindTrack', trackId, note },
-  }, 'APP', 'controller-1');
+  }, 'AP', 'controller-1');
 }
 
 function resolvedTo(trackId, matchedBy, state, extra = {}) {
@@ -72,13 +72,13 @@ test('BindTrack is rung 1: it correlates, records who bound it, and clears any w
   assert.equal(record.trackId, '101');
   assert.equal(record.warning, null);
   assert.equal(record.binding.boundBy, 'controller-1');
-  assert.equal(record.binding.boundPositionId, 'APP');
+  assert.equal(record.binding.boundPositionId, 'AP');
   assert.equal(record.binding.note, 'visual on him');
 });
 
 test('BindTrack without a trackId is refused', () => {
   const s = store();
-  const result = s.apply({ clientMutationId: 'm', fdrId: FDR, baseRev: 0, op: { kind: 'BindTrack' } }, 'APP', 'c');
+  const result = s.apply({ clientMutationId: 'm', flightDataId: FDR, baseRev: 0, op: { kind: 'BindTrack' } }, 'AP', 'c');
   assert.equal(result.ok, false);
   assert.match(result.detail, /needs a trackId/);
 });
@@ -90,8 +90,8 @@ test('UnbindTrack drops to uncorrelated rather than guessing a lower rung', () =
   const s = store();
   bind(s);
   const result = s.apply({
-    clientMutationId: 'm2', fdrId: FDR, baseRev: s.getCorrelation(FDR).rev, op: { kind: 'UnbindTrack' },
-  }, 'APP', 'controller-1');
+    clientMutationId: 'm2', flightDataId: FDR, baseRev: s.getCorrelation(FDR).rev, op: { kind: 'UnbindTrack' },
+  }, 'AP', 'controller-1');
   assert.equal(result.ok, true);
   const record = s.getCorrelation(FDR);
   assert.equal(record.state, 'UNCORRELATED');
@@ -103,17 +103,17 @@ test('UnbindTrack with nothing bound is refused', () => {
   const s = store();
   s.reconcile(new Map([[FDR, null]]));
   const result = s.apply({
-    clientMutationId: 'm', fdrId: FDR, baseRev: s.getCorrelation(FDR).rev, op: { kind: 'UnbindTrack' },
-  }, 'APP', 'c');
+    clientMutationId: 'm', flightDataId: FDR, baseRev: s.getCorrelation(FDR).rev, op: { kind: 'UnbindTrack' },
+  }, 'AP', 'c');
   assert.equal(result.ok, false);
   assert.match(result.detail, /nothing is explicitly bound/);
 });
 
 test('an unknown op kind and an unknown FDR are both refused, not thrown', () => {
   const s = store();
-  assert.equal(s.apply({ fdrId: FDR, op: { kind: 'Nope' } }, 'APP', 'c').reason, 'VALIDATION_ERROR');
-  assert.equal(s.apply({ fdrId: 'ghost', op: { kind: 'BindTrack', trackId: '1' } }, 'APP', 'c').reason, 'NOT_FOUND');
-  assert.equal(s.apply({ op: { kind: 'BindTrack', trackId: '1' } }, 'APP', 'c').reason, 'VALIDATION_ERROR');
+  assert.equal(s.apply({ flightDataId: FDR, op: { kind: 'Nope' } }, 'AP', 'c').reason, 'VALIDATION_ERROR');
+  assert.equal(s.apply({ flightDataId: 'ghost', op: { kind: 'BindTrack', trackId: '1' } }, 'AP', 'c').reason, 'NOT_FOUND');
+  assert.equal(s.apply({ op: { kind: 'BindTrack', trackId: '1' } }, 'AP', 'c').reason, 'VALIDATION_ERROR');
 });
 
 test('a stale baseRev is refused, and the refusal still carries the current record', () => {
@@ -128,7 +128,7 @@ test('a stale baseRev is refused, and the refusal still carries the current reco
 test('every result carries the record, success or failure', () => {
   const s = store();
   assert.ok(bind(s).correlation);
-  assert.ok(s.apply({ fdrId: FDR, baseRev: 0, op: { kind: 'Nope' } }, 'APP', 'c').correlation);
+  assert.ok(s.apply({ flightDataId: FDR, baseRev: 0, op: { kind: 'Nope' } }, 'AP', 'c').correlation);
 });
 
 test('a binding note is capped at the free-text ceiling that rides every broadcast', () => {
@@ -145,12 +145,12 @@ test('a controller op is logged against its FDR, and a REFUSAL is logged too', (
   s.setMutationLog({ record: (e) => entries.push(e) });
 
   bind(s, { trackId: '101' });
-  s.apply({ clientMutationId: 'bad', fdrId: FDR, baseRev: 0, op: { kind: 'BindTrack', trackId: '9' } }, 'APP', 'c');
+  s.apply({ clientMutationId: 'bad', flightDataId: FDR, baseRev: 0, op: { kind: 'BindTrack', trackId: '9' } }, 'AP', 'c');
 
   assert.equal(entries.length, 2);
-  assert.equal(entries[0].fdrId, FDR);
+  assert.equal(entries[0].flightDataId, FDR);
   assert.equal(entries[0].op, 'BindTrack');
-  assert.equal(entries[0].actingPositionId, 'APP');
+  assert.equal(entries[0].actingPositionId, 'AP');
   assert.equal(entries[0].ok, true);
   assert.equal(entries[0].stripId, undefined, 'a correlation op targets no Strip');
   assert.equal(entries[1].ok, false);
@@ -300,9 +300,9 @@ test('a warning detail is capped like every other string that rides a broadcast'
 // ── mission reload ─────────────────────────────────────────────────────────
 
 test('resetPicture drops every record AND its binding, naming why', () => {
-  const s = store({ fdrs: [FDR, 'fdr-2'] });
+  const s = store({ flightDataList: [FDR, 'flight-data-2'] });
   bind(s, { trackId: '101' });
-  s.reconcile(new Map([['fdr-2', resolvedTo('202', 'BEACON', 'CORRELATED')]]));
+  s.reconcile(new Map([['flight-data-2', resolvedTo('202', 'BEACON', 'CORRELATED')]]));
 
   const { changed } = s.resetPicture('MISSION_RELOAD');
   assert.equal(changed.length, 2);
@@ -340,21 +340,21 @@ test('after a reset, the next tick re-binds on the beacon — warn, then re-bind
 
 // ── lookup and lifecycle ───────────────────────────────────────────────────
 
-test('fdrForTrack answers the reverse question the client asks on a map click', () => {
-  const s = store({ fdrs: [FDR, 'fdr-2'] });
+test('flightDataForTrack answers the reverse question the client asks on a map click', () => {
+  const s = store({ flightDataList: [FDR, 'flight-data-2'] });
   s.reconcile(new Map([[FDR, resolvedTo('101', 'BEACON', 'CORRELATED')]]));
-  assert.equal(s.fdrForTrack('101'), FDR);
-  assert.equal(s.fdrForTrack(101), FDR, 'a numeric id works too');
-  assert.equal(s.fdrForTrack('999'), null);
+  assert.equal(s.flightDataForTrack('101'), FDR);
+  assert.equal(s.flightDataForTrack(101), FDR, 'a numeric id works too');
+  assert.equal(s.flightDataForTrack('999'), null);
 });
 
 test('a record whose FDR is gone is evicted — FDR lifecycle governs correlation lifecycle', () => {
-  const fdrs = [FDR];
-  const s = new CorrelationStore({ fdrExists: (id) => fdrs.includes(id) });
+  const flightDataList = [FDR];
+  const s = new CorrelationStore({ flightDataExists: (id) => flightDataList.includes(id) });
   s.reconcile(new Map([[FDR, resolvedTo('101', 'BEACON', 'CORRELATED')]]));
   assert.equal(s.getAll().length, 1);
-  fdrs.length = 0;
-  assert.equal(s.evictMissingFdrs(), 1);
+  flightDataList.length = 0;
+  assert.equal(s.evictMissingFlightDataList(), 1);
   assert.equal(s.getAll().length, 0);
 });
 
@@ -381,22 +381,22 @@ test('restore skips a record whose FDR is gone', () => {
   const s = store();
   bind(s);
   const snapshot = s.snapshot();
-  const restored = new CorrelationStore({ fdrExists: () => false });
+  const restored = new CorrelationStore({ flightDataExists: () => false });
   restored.restore(snapshot);
   assert.equal(restored.getAll().length, 0);
 });
 
 test('snapshot omits a record whose FDR has already gone', () => {
-  const fdrs = [FDR];
-  const s = new CorrelationStore({ fdrExists: (id) => fdrs.includes(id) });
+  const flightDataList = [FDR];
+  const s = new CorrelationStore({ flightDataExists: (id) => flightDataList.includes(id) });
   bind(s);
-  fdrs.length = 0;
+  flightDataList.length = 0;
   assert.deepEqual(s.snapshot(), []);
 });
 
 test('restore copes with junk rather than throwing', () => {
   const s = store();
   s.restore(null);
-  s.restore([null, {}, { fdrId: 'ghost' }]);
+  s.restore([null, {}, { flightDataId: 'ghost' }]);
   assert.equal(s.getAll().length, 0);
 });

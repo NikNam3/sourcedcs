@@ -166,7 +166,7 @@ class CoverageEngine {
    * Drops radars that are no longer being swept from the live picture.
    *
    * Without this, illumination outlives the radar that produced it. The swept
-   * set is scoped to OCCUPIED Positions, so when the last controller holding
+   * set is scoped to STAFFED Positions, so when the last controller holding
    * Approach vacates, its radar stops sweeping — but its entries stayed put
    * with their old timestamps. Re-taking the Position minutes later then
    * replayed those contacts, stamped with an `illuminatedAt` from before the
@@ -174,7 +174,7 @@ class CoverageEngine {
    * Self-correcting within one scan, but wrong in the meantime and wrong in a
    * way that reads as a bug rather than as radar behaviour.
    *
-   * A contact another manned radar also sees keeps that radar and stays.
+   * A contact another staffed radar also sees keeps that radar and stays.
    */
   _pruneUnsweptRadars(sweptIds) {
     for (const [trackId, byRadar] of this._illuminated) {

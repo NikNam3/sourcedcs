@@ -18,7 +18,7 @@ const MINUTE = 60 * 1000;
 const FDR = { departureAirport: 'LTAG', destinationAirport: 'LTAG', route: 'DCT', requestedAltitude: '250' };
 
 const stripOf = (page, cs) => page.evaluate((c) => {
-  const s = getAllEfspStrips().find((x) => getEfspFdr(x.fdrId).identity.callsign === c && x.state !== 'DROPPED');
+  const s = getAllEfspStrips().find((x) => getEfspFdr(x.flightDataId).identity.callsign === c && x.state !== 'DROPPED');
   return s ? { stripId: s.stripId, rev: s.rev, state: s.state, bayId: s.bayId, ownerPositionId: s.ownerPositionId } : null;
 }, cs);
 
@@ -26,7 +26,7 @@ const stripOf = (page, cs) => page.evaluate((c) => {
 async function act(page, cs, positionId, op) {
   const before = await stripOf(page, cs);
   await page.evaluate(([c, p, o]) => {
-    const s = getAllEfspStrips().find((x) => getEfspFdr(x.fdrId).identity.callsign === c && x.state !== 'DROPPED');
+    const s = getAllEfspStrips().find((x) => getEfspFdr(x.flightDataId).identity.callsign === c && x.state !== 'DROPPED');
     sendEfspMutation(p, s, o);
   }, [cs, positionId, op]);
   await expect.poll(async () => (await stripOf(page, cs)).rev, { message: `${op.kind} landed` }).toBeGreaterThan(before.rev);
@@ -40,14 +40,14 @@ async function showStrip(page, cs) {
 }
 
 const obligationOnPage = (page, cs) => page.evaluate((c) => {
-  const s = getAllEfspStrips().find((x) => getEfspFdr(x.fdrId).identity.callsign === c && x.state !== 'DROPPED');
+  const s = getAllEfspStrips().find((x) => getEfspFdr(x.flightDataId).identity.callsign === c && x.state !== 'DROPPED');
   const o = s && getEfspObligation(s.stripId);
   return o ? o.obligationType : null;
 }, cs);
 
 /** A departure CD holds on a void time that expired 31 minutes ago. */
 async function voidExpired(page, cs) {
-  await seedStrip(page, { callsign: cs, role: 'DEPARTURE', fdr: FDR });
+  await seedStrip(page, { callsign: cs, stripType: 'DEPARTURE', flightData: FDR });
   await act(page, cs, 'OPS', { kind: 'InvokeNla' }); // -> PENDING_CLEARANCE at CD
   await act(page, cs, 'CD', { kind: 'SetState', toState: 'CLEARED' });
   await act(page, cs, 'CD', { kind: 'SetBlock', blockId: '14A', value: 'CLEARANCE_VOID_TIME' });
@@ -62,7 +62,7 @@ async function drop(page, cs) {
 }
 
 test('a void-expired Strip re-cleared by CD loses its badge without a reload, and a reload does not bring it back', async ({ page }) => {
-  await openPanel(page, { held: ['OPS', 'CD'] });
+  await openPanel(page, { signedOn: ['OPS', 'CD'] });
   try {
     await voidExpired(page, 'OBR1');
     await expect.poll(() => obligationOnPage(page, 'OBR1'), { timeout: 5000 }).toBe('VOID_TIME_EXPIRED');
@@ -75,7 +75,7 @@ test('a void-expired Strip re-cleared by CD loses its badge without a reload, an
     expect(await obligationOnPage(page, 'OBR1')).toBe(null);
 
     await page.reload();
-    await openPanel(page, { held: ['OPS', 'CD'] });
+    await openPanel(page, { signedOn: ['OPS', 'CD'] });
     await expect.poll(() => stripOf(page, 'OBR1')).not.toBe(null);
     const again = await showStrip(page, 'OBR1');
     await expect(again).toHaveCount(1);
@@ -86,13 +86,13 @@ test('a void-expired Strip re-cleared by CD loses its badge without a reload, an
 });
 
 test('a reload shows an obligation that is still due', async ({ page }) => {
-  await openPanel(page, { held: ['OPS', 'CD'] });
+  await openPanel(page, { signedOn: ['OPS', 'CD'] });
   try {
     await voidExpired(page, 'OBR2');
     await expect.poll(() => obligationOnPage(page, 'OBR2'), { timeout: 5000 }).toBe('VOID_TIME_EXPIRED');
 
     await page.reload();
-    await openPanel(page, { held: ['OPS', 'CD'] });
+    await openPanel(page, { signedOn: ['OPS', 'CD'] });
     await expect.poll(() => obligationOnPage(page, 'OBR2'), { timeout: 5000 }).toBe('VOID_TIME_EXPIRED');
     const strip = await showStrip(page, 'OBR2');
     await expect(strip.locator('.efsp-obligation-badge')).toHaveCount(1);

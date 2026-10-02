@@ -298,14 +298,14 @@ test('two radars illuminating one track both appear against it', () => {
 
 test('illumination does not outlive the radar that produced it', () => {
   // Found by walking the sortie rather than by a test: the swept set is scoped
-  // to OCCUPIED Positions, so when the last holder of Approach vacates its
+  // to STAFFED Positions, so when the last holder of Approach vacates its
   // radar stops sweeping — and its entries used to stay put with their old
   // timestamps. Re-taking the Position minutes later replayed those contacts
   // stamped from before the gap, so the client drew them already faded and
   // expired them on the spot.
   const engine = new CoverageEngine();
   sweepOnce(engine, [APPROACH], [aircraft(1, 37.2, 35.2)]);
-  assert.ok(engine.illuminationFor('1'), 'illuminated while manned');
+  assert.ok(engine.illuminationFor('1'), 'illuminated while staffed');
 
   // The Position is vacated: activeRadars() no longer offers app:X.
   engine.tick([], [aircraft(1, 37.2, 35.2)], null, 2_000_000);
@@ -314,7 +314,7 @@ test('illumination does not outlive the radar that produced it', () => {
   assert.equal(engine.isVisibleThrough('1', new Set(['app:X'])), false);
 });
 
-test('a contact another manned radar also sees keeps that radar and stays', () => {
+test('a contact another staffed radar also sees keeps that radar and stays', () => {
   const engine = new CoverageEngine();
   const second = { ...APPROACH, id: 'app:Y' };
   sweepOnce(engine, [APPROACH, second], [aircraft(1, 37.2, 35.2)]);

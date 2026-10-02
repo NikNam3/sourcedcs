@@ -23,7 +23,7 @@
   <link rel="stylesheet" href="./css/srs-radio.css"/>
   <link rel="stylesheet" href="./css/efsp-panel.css"/>
   <link rel="stylesheet" href="./css/efsp-pattern-final.css"/>
-  <link rel="stylesheet" href="./css/field-state-panel.css"/>
+  <link rel="stylesheet" href="./css/runway-status-panel.css"/>
   <link rel="stylesheet" href="./css/metrics-panel.css"/>
 </head>
 <body>
@@ -187,7 +187,7 @@
          controller (guide §4.8.1: "under low manning the combined case is
          the normal case"), e.g. holding OPS+APP+CTR at once. Options are
          built dynamically by efsp-panel.js's _refreshCreateStripAvailability
-         from whichever Positions are actually held right now — nothing
+         from whichever Positions are actually signedOn right now — nothing
          static here. Hidden by default via the native `hidden` attribute. -->
     <select id="efsp-create-strip-role" hidden></select>
     <!-- File by §9.10 short name (docs/adr/0050). Options come from
@@ -229,7 +229,7 @@
 </div>
 
 <!-- Field state (guide §9.7, crc-sync docs/adr/0061). Its own panel: runways and gear are
-     not Strips, so this is not the ops-field-state Bay (docs/adr/0068). -->
+     not Strips, so this is not the ops-runway-status Bay (docs/adr/0068). -->
 <div id="field-state-panel" class="dock-unmounted">
   <div id="field-state-empty" class="efsp-empty">No field state at any Facility you can see.</div>
   <div id="field-state-list"></div>

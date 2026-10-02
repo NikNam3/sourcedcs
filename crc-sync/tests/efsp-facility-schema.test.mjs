@@ -56,18 +56,18 @@ test('a bayId used twice is rejected', () => {
   reject(c, 'used twice');
 });
 
-test('holdsRole must be a known Role', () => {
-  const c = shipped('CENTER'); c.bays.CTR.find(b => b.holdsRole).holdsRole = 'NOPE';
-  reject(c, 'holdsRole "NOPE" is not a Role');
+test('holdsStripType must be a known Role', () => {
+  const c = shipped('CENTER'); c.bays.CTR.find(b => b.holdsStripType).holdsStripType = 'NOPE';
+  reject(c, 'holdsStripType "NOPE" is not a strip type');
 });
 
 test('the covering chain names known Positions and has no loop', () => {
-  const a = shipped('INCIRLIK'); a.coveringChain.CD = 'NOPE';
-  reject(a, 'coveringChain.CD names unknown Position NOPE');
-  const b = shipped('INCIRLIK'); b.coveringChain.NOPE = 'CD';
-  reject(b, 'coveringChain names unknown Position NOPE');
-  const c = shipped('INCIRLIK'); c.coveringChain.APP = 'CD';
-  reject(c, 'coveringChain loops');
+  const a = shipped('INCIRLIK'); a.consolidation.CD = 'NOPE';
+  reject(a, 'consolidation.CD names unknown Position NOPE');
+  const b = shipped('INCIRLIK'); b.consolidation.NOPE = 'CD';
+  reject(b, 'consolidation names unknown Position NOPE');
+  const c = shipped('INCIRLIK'); c.consolidation.AP = 'CD';
+  reject(c, 'consolidation loops');
 });
 
 test('every Position needs a class', () => {
@@ -77,11 +77,11 @@ test('every Position needs a class', () => {
 
 test('hiddenBlocks must name a known Role', () => {
   const c = shipped('CENTER'); c.hiddenBlocks.NOPE = ['1'];
-  reject(c, 'hiddenBlocks names unknown Role NOPE');
+  reject(c, 'hiddenBlocks names unknown strip type NOPE');
 });
 
 test('validateConfig (the shape check) still rejects what it always did', () => {
-  const c = clone(shipped('INCIRLIK')); c.bays.TWR[0].view = 'nope';
+  const c = clone(shipped('INCIRLIK')); c.bays.LC[0].view = 'nope';
   assert.equal(schema.validateConfig(c).ok, false);
 });
 

@@ -30,7 +30,7 @@ fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, JSON.stringify([
 const { createEfsp } = await import('../src/efsp/index.js');
 const facilityConfig = await import('../src/efsp/facility-config.js');
 const { createEfspInstrumentation } = await import('../src/efsp/metrics.js');
-const { crew, hold, mustAct, jumpTo, airborneDeparture, handedToCenter, DEPARTURE_FDR } = await import('./helpers/efsp-scenario.mjs');
+const { crew, hold, mustAct, jumpTo, airborneDeparture, handedToCenter, DEPARTURE_FLIGHT_DATA } = await import('./helpers/efsp-scenario.mjs');
 
 function quiet(fn) {
   const cap = crcLog.capture();
@@ -43,7 +43,7 @@ quiet(() => createEfspInstrumentation({
   correlationStats: () => ({ rate: null, eligible: 0 }),
   obligationStats: () => ({}),
 }));
-const c = crew(efsp, { OPS: 'INCIRLIK', TWR: 'INCIRLIK', APP: 'INCIRLIK', CTR: 'CENTER', TAC_C2: 'TACTICAL', JTAC: 'TACTICAL' });
+const c = crew(efsp, { OPS: 'INCIRLIK', LC: 'INCIRLIK', AP: 'INCIRLIK', CTR: 'CENTER', TAC_C2: 'TACTICAL', JTAC: 'TACTICAL' });
 
 const entriesFor = (cmid) => efsp.mutationLog.readAll().filter(e => e.clientMutationId === cmid);
 const send = (member, msg) => efsp.handleMessage(member.session, { version: 1, facilityId: member.facilityId, ...msg });
@@ -69,34 +69,34 @@ test('an airspace entry carries the clientMutationId of the message that caused 
 
 function refusals() {
   const strip = mustAct(efsp, c.OPS, 'OPS', null, {
-    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: { ...DEPARTURE_FDR, callsign: 'AUD1' },
+    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE', flightData: { ...DEPARTURE_FLIGHT_DATA, callsign: 'AUD1' },
   });
   const rev = efsp.airspaceStore.getAirspace('MOA-AUD').rev;
-  const fs0 = efsp.fieldStateStore.getFieldState('INCIRLIK');
+  const fs0 = efsp.runwayStatusStore.getRunwayStatus('INCIRLIK');
   return [
     // Board path: the tap logs every efsp-mutation refusal.
     ['board: unknown facilityId', c.OPS, { type: 'efsp-mutation', facilityId: 'NOWHERE', actingPositionId: 'OPS', stripId: strip.stripId, baseRev: strip.rev, op: { kind: 'SetFlag', flag: 'highlight', value: true } }, 'VALIDATION_ERROR'],
-    ['board: NOT_HOLDING_POSITION', c.OPS, { type: 'efsp-mutation', actingPositionId: 'APP', stripId: strip.stripId, baseRev: strip.rev, op: { kind: 'SetFlag', flag: 'highlight', value: true } }, 'NOT_HOLDING_POSITION'],
+    ['board: NOT_HOLDING_POSITION', c.OPS, { type: 'efsp-mutation', actingPositionId: 'AP', stripId: strip.stripId, baseRev: strip.rev, op: { kind: 'SetFlag', flag: 'highlight', value: true } }, 'NOT_HOLDING_POSITION'],
     ['board: STALE_REV', c.OPS, { type: 'efsp-mutation', actingPositionId: 'OPS', stripId: strip.stripId, baseRev: strip.rev - 1, op: { kind: 'SetBlock', blockId: '24', value: 'X' } }, 'STALE_REV'],
-    ['board: PERMISSION_DENIED', c.TWR, { type: 'efsp-mutation', actingPositionId: 'TWR', op: { kind: 'CreateStrip', bayId: 'twr-airborne', rackId: 'main', role: 'DEPARTURE', fdr: DEPARTURE_FDR } }, 'PERMISSION_DENIED'],
+    ['board: PERMISSION_DENIED', c.LC, { type: 'efsp-mutation', actingPositionId: 'LC', op: { kind: 'CreateStrip', bayId: 'lc-airborne', rackId: 'main', stripType: 'DEPARTURE', flightData: DEPARTURE_FLIGHT_DATA } }, 'PERMISSION_DENIED'],
     // Airspace: two store refusals that were never logged, one the store always logged, one pre-store.
     ['airspace: NOT_FOUND', c.CTR, { type: 'efsp-airspace-mutation', airspaceId: 'NO-SUCH', baseRev: 0, actingPositionId: 'CTR', op: { kind: 'ScheduleAirspace' } }, 'NOT_FOUND'],
     ['airspace: STALE_REV', c.CTR, { type: 'efsp-airspace-mutation', airspaceId: 'MOA-AUD', baseRev: rev + 5, actingPositionId: 'CTR', op: { kind: 'ScheduleAirspace' } }, 'STALE_REV'],
-    ['airspace: PERMISSION_DENIED (store)', c.APP, { type: 'efsp-airspace-mutation', airspaceId: 'MOA-AUD', baseRev: rev, actingPositionId: 'APP', op: { kind: 'ApproveActivation' } }, 'PERMISSION_DENIED'],
-    ['airspace: NOT_HOLDING_POSITION', c.APP, { type: 'efsp-airspace-mutation', airspaceId: 'MOA-AUD', baseRev: rev, actingPositionId: 'CTR', op: { kind: 'ApproveActivation' } }, 'NOT_HOLDING_POSITION'],
+    ['airspace: PERMISSION_DENIED (store)', c.AP, { type: 'efsp-airspace-mutation', airspaceId: 'MOA-AUD', baseRev: rev, actingPositionId: 'AP', op: { kind: 'ApproveActivation' } }, 'PERMISSION_DENIED'],
+    ['airspace: NOT_HOLDING_POSITION', c.AP, { type: 'efsp-airspace-mutation', airspaceId: 'MOA-AUD', baseRev: rev, actingPositionId: 'CTR', op: { kind: 'ApproveActivation' } }, 'NOT_HOLDING_POSITION'],
     // Correlation.
-    ['correlation: NOT_HOLDING_POSITION', c.APP, { type: 'efsp-correlation-mutation', fdrId: strip.fdrId, baseRev: 0, actingPositionId: 'CTR', op: { kind: 'BindTrack', trackId: '1' } }, 'NOT_HOLDING_POSITION'],
-    ['correlation: class PERMISSION_DENIED', c.JTAC, { type: 'efsp-correlation-mutation', fdrId: strip.fdrId, baseRev: 0, actingPositionId: 'JTAC', op: { kind: 'BindTrack', trackId: '1' } }, 'PERMISSION_DENIED'],
-    ['correlation: store refusal', c.OPS, { type: 'efsp-correlation-mutation', fdrId: 'no-such-fdr', baseRev: 0, actingPositionId: 'OPS', op: { kind: 'BindTrack', trackId: '1' } }, null],
+    ['correlation: NOT_HOLDING_POSITION', c.AP, { type: 'efsp-correlation-mutation', flightDataId: strip.flightDataId, baseRev: 0, actingPositionId: 'CTR', op: { kind: 'BindTrack', trackId: '1' } }, 'NOT_HOLDING_POSITION'],
+    ['correlation: class PERMISSION_DENIED', c.JTAC, { type: 'efsp-correlation-mutation', flightDataId: strip.flightDataId, baseRev: 0, actingPositionId: 'JTAC', op: { kind: 'BindTrack', trackId: '1' } }, 'PERMISSION_DENIED'],
+    ['correlation: store refusal', c.OPS, { type: 'efsp-correlation-mutation', flightDataId: 'no-such-flightData', baseRev: 0, actingPositionId: 'OPS', op: { kind: 'BindTrack', trackId: '1' } }, null],
     // MARSA.
-    ['marsa: NOT_HOLDING_POSITION', c.APP, { type: 'efsp-marsa-mutation', actingPositionId: 'CTR', op: { kind: 'DeclareMarsa', participants: [strip.fdrId] } }, 'NOT_HOLDING_POSITION'],
-    ['marsa: class PERMISSION_DENIED', c.JTAC, { type: 'efsp-marsa-mutation', actingPositionId: 'JTAC', op: { kind: 'DeclareMarsa', participants: [strip.fdrId] } }, 'PERMISSION_DENIED'],
+    ['marsa: NOT_HOLDING_POSITION', c.AP, { type: 'efsp-marsa-mutation', actingPositionId: 'CTR', op: { kind: 'DeclareMarsa', participants: [strip.flightDataId] } }, 'NOT_HOLDING_POSITION'],
+    ['marsa: class PERMISSION_DENIED', c.JTAC, { type: 'efsp-marsa-mutation', actingPositionId: 'JTAC', op: { kind: 'DeclareMarsa', participants: [strip.flightDataId] } }, 'PERMISSION_DENIED'],
     ['marsa: store refusal', c.OPS, { type: 'efsp-marsa-mutation', actingPositionId: 'OPS', op: { kind: 'DeclareMarsa', participants: [] } }, null],
     // Field state.
-    ['field state: NOT_HOLDING_POSITION', c.OPS, { type: 'efsp-field-state-mutation', actingPositionId: 'TWR', baseRev: fs0 && fs0.rev, op: { kind: 'CloseRunway' } }, 'NOT_HOLDING_POSITION'],
-    ['field state: store refusal', c.OPS, { type: 'efsp-field-state-mutation', actingPositionId: 'OPS', baseRev: fs0 && fs0.rev, op: { kind: 'NoSuchOp' } }, null],
+    ['field state: NOT_HOLDING_POSITION', c.OPS, { type: 'efsp-runway-status-mutation', actingPositionId: 'LC', baseRev: fs0 && fs0.rev, op: { kind: 'CloseRunway' } }, 'NOT_HOLDING_POSITION'],
+    ['field state: store refusal', c.OPS, { type: 'efsp-runway-status-mutation', actingPositionId: 'OPS', baseRev: fs0 && fs0.rev, op: { kind: 'NoSuchOp' } }, null],
     // ATO import.
-    ['ato: NOT_HOLDING_POSITION', c.OPS, { type: 'efsp-ato-mutation', actingPositionId: 'APP', op: { kind: 'ImportAto', text: 'x' } }, 'NOT_HOLDING_POSITION'],
+    ['ato: NOT_HOLDING_POSITION', c.OPS, { type: 'efsp-ato-mutation', actingPositionId: 'AP', op: { kind: 'ImportAto', text: 'x' } }, 'NOT_HOLDING_POSITION'],
   ];
 }
 
@@ -121,54 +121,54 @@ test('every refusal is logged exactly once', () => {
 // ── G4 ──
 
 test('every entry written by any path names its facilityId, and its FDR where it has one', () => {
-  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'AUD2' });
+  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'AUD2' });
   const handed = handedToCenter(efsp, c, strip);
-  // A correlation and a MARSA, a field-state op, a covering reassignment.
-  send(c.OPS, { type: 'efsp-correlation-mutation', clientMutationId: crypto.randomUUID(), fdrId: handed.fdrId, baseRev: 0, actingPositionId: 'OPS', op: { kind: 'BindTrack', trackId: '9' } });
-  const other = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'AUD3' });
-  send(c.OPS, { type: 'efsp-marsa-mutation', clientMutationId: crypto.randomUUID(), actingPositionId: 'OPS', op: { kind: 'DeclareMarsa', participants: [strip.fdrId, other.fdrId], startEvent: 'LOCAL_DECLARATION', endCondition: 'MTR_COMPLETE', declaringCallsign: 'AUD2' } });
-  send(c.OPS, { type: 'efsp-field-state-mutation', clientMutationId: crypto.randomUUID(), actingPositionId: 'TWR', op: { kind: 'CloseRunway' } });
-  let tw = mustAct(efsp, c.OPS, 'OPS', null, { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: { ...DEPARTURE_FDR, callsign: 'AUD8' } });
+  // A correlation and a MARSA, a runway-status op, a covering reassignment.
+  send(c.OPS, { type: 'efsp-correlation-mutation', clientMutationId: crypto.randomUUID(), flightDataId: handed.flightDataId, baseRev: 0, actingPositionId: 'OPS', op: { kind: 'BindTrack', trackId: '9' } });
+  const other = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'AUD3' });
+  send(c.OPS, { type: 'efsp-marsa-mutation', clientMutationId: crypto.randomUUID(), actingPositionId: 'OPS', op: { kind: 'DeclareMarsa', participants: [strip.flightDataId, other.flightDataId], startEvent: 'LOCAL_DECLARATION', endCondition: 'MTR_COMPLETE', declaringCallsign: 'AUD2' } });
+  send(c.OPS, { type: 'efsp-runway-status-mutation', clientMutationId: crypto.randomUUID(), actingPositionId: 'LC', op: { kind: 'CloseRunway' } });
+  let tw = mustAct(efsp, c.OPS, 'OPS', null, { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE', flightData: { ...DEPARTURE_FLIGHT_DATA, callsign: 'AUD8' } });
   tw = jumpTo(efsp, c.OPS, 'OPS', tw, 'DEPARTED');
-  mustAct(efsp, c.OPS, 'OPS', tw, { kind: 'TransferStrip', toPositionId: 'TWR', bayId: 'twr-airborne', rackId: 'main' });
-  hold(efsp, c.TWR.session, 'INCIRLIK', []); // TWR vacates; APP covers it
-  hold(efsp, c.TWR.session, 'INCIRLIK', ['TWR']);
+  mustAct(efsp, c.OPS, 'OPS', tw, { kind: 'TransferStrip', toPositionId: 'LC', bayId: 'lc-airborne', rackId: 'main' });
+  hold(efsp, c.LC.session, 'INCIRLIK', []); // TWR vacates; APP covers it
+  hold(efsp, c.LC.session, 'INCIRLIK', ['LC']);
 
   const all = efsp.mutationLog.readAll();
   const missing = all.filter(e => !('facilityId' in e)).map(e => e.op);
   assert.deepEqual(missing, [], 'every entry carries a facilityId key');
   for (const e of all.filter(x => x.type === undefined && x.stripId && x.op !== 'Archive')) {
-    assert.ok(e.fdrId, `${e.op} on a Strip names its FDR`);
+    assert.ok(e.flightDataId, `${e.op} on a Strip names its FDR`);
   }
-  assert.ok(all.some(e => e.op === 'SystemReassign' && e.facilityId === 'INCIRLIK' && e.fdrId));
+  assert.ok(all.some(e => e.op === 'SystemReassign' && e.facilityId === 'INCIRLIK' && e.flightDataId));
   const correlation = all.find(e => e.op === 'BindTrack' && e.ok);
   if (correlation) assert.equal(correlation.facilityId, null, 'theater-wide');
   const marsa = all.find(e => e.op === 'DeclareMarsa' && e.ok);
   assert.ok(marsa, JSON.stringify(all.filter(e => e.op === 'DeclareMarsa')));
   assert.equal(marsa.facilityId, null);
-  assert.deepEqual([...marsa.fdrIds].sort(), [strip.fdrId, other.fdrId].sort());
+  assert.deepEqual([...marsa.flightDataIds].sort(), [strip.flightDataId, other.flightDataId].sort());
   const field = all.find(e => e.op === 'CloseRunway');
   assert.equal(field.facilityId, 'INCIRLIK');
 });
 
 test('a SetBlock entry records the Block id and value; a coordination entry its action', () => {
-  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'AUD4' });
+  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'AUD4' });
   const cmid = crypto.randomUUID();
-  const r = send(c.APP, { type: 'efsp-mutation', clientMutationId: cmid, actingPositionId: 'APP', stripId: strip.stripId, baseRev: strip.rev, op: { kind: 'SetBlock', blockId: '24', value: 'RED 1' } });
+  const r = send(c.AP, { type: 'efsp-mutation', clientMutationId: cmid, actingPositionId: 'AP', stripId: strip.stripId, baseRev: strip.rev, op: { kind: 'SetBlock', blockId: '24', value: 'RED 1' } });
   assert.equal(r.ack.ok, true, JSON.stringify(r.ack));
   const [e] = entriesFor(cmid);
   assert.equal(e.blockId, '24');
   assert.equal(e.value, 'RED 1');
   const pcmid = crypto.randomUUID();
-  const p = send(c.APP, { type: 'efsp-mutation', clientMutationId: pcmid, actingPositionId: 'APP', stripId: strip.stripId, baseRev: r.ack.strip.rev, op: { kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'CENTER', toPositionId: 'CTR' } });
+  const p = send(c.AP, { type: 'efsp-mutation', clientMutationId: pcmid, actingPositionId: 'AP', stripId: strip.stripId, baseRev: r.ack.strip.rev, op: { kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'CENTER', toPositionId: 'CTR' } });
   assert.equal(p.ack.ok, true, JSON.stringify(p.ack));
   assert.equal(entriesFor(pcmid)[0].action, 'PROPOSE');
   const ccmid = crypto.randomUUID();
-  const x = send(c.APP, { type: 'efsp-mutation', clientMutationId: ccmid, actingPositionId: 'APP', stripId: strip.stripId, baseRev: p.ack.strip.rev, op: { kind: 'HANDOFF', action: 'CANCEL' } });
+  const x = send(c.AP, { type: 'efsp-mutation', clientMutationId: ccmid, actingPositionId: 'AP', stripId: strip.stripId, baseRev: p.ack.strip.rev, op: { kind: 'HANDOFF', action: 'CANCEL' } });
   assert.equal(x.ack.ok, true, JSON.stringify(x.ack));
   assert.equal(entriesFor(ccmid)[0].action, 'CANCEL');
   const peers = efsp.mutationLog.readAll().filter(en => en.causedBy === ccmid);
-  assert.deepEqual(peers.map(en => en.op), ['PeerCoordinationCancel']);
+  assert.deepEqual(peers.map(en => en.op), ['InterfacilityCoordinationCancel']);
 });
 
 // ── G3 ──
@@ -182,23 +182,23 @@ function sendOp(member, positionId, strip, op) {
 const peerLines = (cmid) => efsp.mutationLog.readAll().filter(e => e.causedBy === cmid && e.source === 'peer');
 
 test('a coordination proposal writes one entry on each Board, linked by causedBy', () => {
-  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'AUD5' });
-  const proposed = sendOp(c.APP, 'APP', strip, { kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'CENTER', toPositionId: 'CTR' });
+  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'AUD5' });
+  const proposed = sendOp(c.AP, 'AP', strip, { kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'CENTER', toPositionId: 'CTR' });
   const own = entriesFor(proposed.cmid);
   assert.equal(own.length, 1);
   assert.equal(own[0].facilityId, 'INCIRLIK');
   const [peer] = peerLines(proposed.cmid);
-  assert.equal(peer.op, 'PeerCoordinationProposal');
+  assert.equal(peer.op, 'InterfacilityCoordinationProposal');
   assert.equal(peer.clientMutationId, null, 'a peer line is never a second application (Q2)');
   assert.equal(peer.facilityId, 'CENTER');
   assert.equal(peer.fromFacilityId, 'INCIRLIK');
-  assert.equal(peer.fdrId, strip.fdrId);
+  assert.equal(peer.flightDataId, strip.flightDataId);
   assert.equal(peer.before, null);
 
   const replica = efsp.boardStoreFor('CENTER').getStrip(proposed.strip.coordination.peerStripId);
   const accepted = sendOp(c.CTR, 'CTR', replica, { kind: 'HANDOFF', action: 'ACCEPT' });
   const [resp] = peerLines(accepted.cmid);
-  assert.equal(resp.op, 'PeerCoordinationResponse');
+  assert.equal(resp.op, 'InterfacilityCoordinationResponse');
   assert.equal(resp.action, 'ACCEPT');
   assert.equal(resp.facilityId, 'INCIRLIK');
   assert.equal(resp.fromFacilityId, 'CENTER');
@@ -207,16 +207,16 @@ test('a coordination proposal writes one entry on each Board, linked by causedBy
 });
 
 test('each TOFI step writes a linked entry on the other Board, and none of them is a drop (T5)', () => {
-  const strip = handedToCenter(efsp, c, airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'AUD6' }));
+  const strip = handedToCenter(efsp, c, airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'AUD6' }));
   const entry = sendOp(c.CTR, 'CTR', strip, { kind: 'TOFI', action: 'PROPOSE', direction: 'ENTRY', toFacilityId: 'TACTICAL', toPositionId: 'TAC_C2' });
   const [p1] = peerLines(entry.cmid);
-  assert.equal(p1.op, 'PeerTofiProposal');
+  assert.equal(p1.op, 'TofiProposal');
   assert.equal(p1.facilityId, 'TACTICAL');
   assert.equal(p1.fromFacilityId, 'CENTER');
   const mission = efsp.boardStoreFor('TACTICAL').getStrip(entry.strip.tofiCoordination.peerStripId);
   const acc = sendOp(c.TAC_C2, 'TAC_C2', mission, { kind: 'TOFI', action: 'ACCEPT', separationRegime: 'MARSA' });
   const [p2] = peerLines(acc.cmid);
-  assert.equal(p2.op, 'PeerTofiResponse');
+  assert.equal(p2.op, 'TofiResponse');
   assert.equal(p2.action, 'ACCEPT');
   assert.equal(p2.facilityId, 'CENTER');
   const missionNow = efsp.boardStoreFor('TACTICAL').getStrip(mission.stripId);
@@ -226,7 +226,7 @@ test('each TOFI step writes a linked entry on the other Board, and none of them 
   const ctrNow = efsp.boardStoreFor('CENTER').getStrip(strip.stripId);
   const ctrReg = sendOp(c.CTR, 'CTR', ctrNow, { kind: 'SetBlock', blockId: 'SREG', value: 'ATC' });
   const exit = sendOp(c.CTR, 'CTR', ctrReg.strip, { kind: 'TOFI', action: 'PROPOSE', direction: 'EXIT' });
-  assert.equal(peerLines(exit.cmid)[0].op, 'PeerTofiExitProposal');
+  assert.equal(peerLines(exit.cmid)[0].op, 'TofiExitProposal');
   const exitAcc = sendOp(c.TAC_C2, 'TAC_C2', efsp.boardStoreFor('TACTICAL').getStrip(mission.stripId), { kind: 'TOFI', action: 'ACCEPT' });
   assert.equal(peerLines(exitAcc.cmid)[0].after.tofiCoordination.state, 'COMPLETE');
 
@@ -251,11 +251,11 @@ test('no two entries share a non-null clientMutationId except a refusal and its 
 
 test('a backfilled drop of a Strip no Board still holds keeps its Facility from the entry', async () => {
   const { TrafficCount } = await import('../src/efsp/traffic-count.js');
-  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'AUD7' });
-  const dropped = mustAct(efsp, c.APP, 'APP', jumpTo(efsp, c.APP, 'APP', strip, 'HANDED_OFF'), { kind: 'DropStrip' });
+  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'AUD7' });
+  const dropped = mustAct(efsp, c.AP, 'AP', jumpTo(efsp, c.AP, 'AP', strip, 'HANDED_OFF'), { kind: 'DropStrip' });
   assert.equal(dropped.state, 'DROPPED');
   const noBoards = quiet(() => new TrafficCount({
-    mutationLog: efsp.mutationLog, fdrStore: { getFdr: () => null }, boardStoreFor: () => null,
+    mutationLog: efsp.mutationLog, flightDataStore: { getFlightData: () => null }, boardStoreFor: () => null,
     facilityIds: facilityConfig.getFacilityIds(), config: { retentionDays: 400, homeAirports: {} },
     path: path.join(tmpDir, 'no-boards.jsonl'),
   }));
@@ -266,9 +266,9 @@ test('a backfilled drop of a Strip no Board still holds keeps its Facility from 
 });
 
 test('the field state on the wire carries the configured acknowledgers and inspection authority (S-L1b)', () => {
-  const state = efsp.fieldStateStore.getFieldState('INCIRLIK');
-  assert.deepEqual(state.runwayChangeAcknowledgers, ['OPS', 'APP']);
+  const state = efsp.runwayStatusStore.getRunwayStatus('INCIRLIK');
+  assert.deepEqual(state.runwayChangeAcknowledgers, ['OPS', 'AP']);
   assert.equal(state.inspectionAuthorityPositionId, 'OPS');
   state.runwayChangeAcknowledgers.push('X');
-  assert.deepEqual(efsp.fieldStateStore.getFieldState('INCIRLIK').runwayChangeAcknowledgers, ['OPS', 'APP'], 'a copy');
+  assert.deepEqual(efsp.runwayStatusStore.getRunwayStatus('INCIRLIK').runwayChangeAcknowledgers, ['OPS', 'AP'], 'a copy');
 });

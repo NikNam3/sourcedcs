@@ -29,7 +29,7 @@ const tc = await import('../src/efsp/traffic-count.js');
 const nla = await import('../src/efsp/nla.js');
 const { createEfsp } = await import('../src/efsp/index.js');
 const facilityConfig = await import('../src/efsp/facility-config.js');
-const { crew, act, mustAct, jumpTo, advance, DEPARTURE_FDR, airborneDeparture, handedToCenter, activate } = await import('./helpers/efsp-scenario.mjs');
+const { crew, act, mustAct, jumpTo, advance, DEPARTURE_FLIGHT_DATA, airborneDeparture, handedToCenter, activate } = await import('./helpers/efsp-scenario.mjs');
 
 const {
   TrafficCount, COUNTABLE_PRE_DROP_STATES, hourKey, isDropTransition, isUndoOfDrop,
@@ -61,7 +61,7 @@ test('isUndoOfDrop: an Undo out of DROPPED', () => {
 });
 
 test('countability: one case per row of the table', () => {
-  const drop = (role, pre, extra = {}) => countability({ role, state: pre }, { role, state: 'DROPPED', ...extra });
+  const drop = (stripType, pre, extra = {}) => countability({ stripType, state: pre }, { stripType, state: 'DROPPED', ...extra });
   assert.deepEqual(drop('MISSION', 'RTB'), { counted: false, excludedReason: 'MISSION_LINE' });
   assert.deepEqual(drop('DEPARTURE', 'HANDED_OFF', { coordination: { state: 'REJECTED', mintedForCoordination: true } }),
     { counted: false, excludedReason: 'REJECTED_REPLICA' });
@@ -77,35 +77,35 @@ test('countability: one case per row of the table', () => {
   assert.deepEqual(drop('OVERFLIGHT', 'IN_SECTOR'), { counted: true, excludedReason: null });
   assert.deepEqual(drop('OVERFLIGHT', 'HANDED_OFF'), { counted: true, excludedReason: null });
   assert.deepEqual(drop('OVERFLIGHT', 'INBOUND'), { counted: false, excludedReason: 'NEVER_TRANSITED' }, 'dropped while still INBOUND: it never worked the sector');
-  assert.deepEqual(drop('CARRIER_ARRIVAL', 'WHATEVER'), { counted: false, excludedReason: 'UNCLASSIFIED_ROLE' });
+  assert.deepEqual(drop('CARRIER_ARRIVAL', 'WHATEVER'), { counted: false, excludedReason: 'UNCLASSIFIED_STRIP_TYPE' });
 });
 
 test('ROLE COVERAGE: every Role nla.js knows has a countability entry, and every state listed exists for it (T14)', () => {
-  for (const [role, states] of Object.entries(nla.STATES_BY_ROLE)) {
-    assert.ok(COUNTABLE_PRE_DROP_STATES[role], `Role ${role} has no traffic-count decision — add it to COUNTABLE_PRE_DROP_STATES`);
-    for (const s of COUNTABLE_PRE_DROP_STATES[role]) assert.ok(states.includes(s), `${role}: ${s} is not a ${role} state`);
+  for (const [stripType, states] of Object.entries(nla.STATES_BY_STRIP_TYPE)) {
+    assert.ok(COUNTABLE_PRE_DROP_STATES[stripType], `strip type ${stripType} has no traffic-count decision — add it to COUNTABLE_PRE_DROP_STATES`);
+    for (const s of COUNTABLE_PRE_DROP_STATES[stripType]) assert.ok(states.includes(s), `${stripType}: ${s} is not a ${stripType} state`);
   }
-  for (const role of Object.keys(COUNTABLE_PRE_DROP_STATES)) {
-    assert.ok(nla.STATES_BY_ROLE[role], `COUNTABLE_PRE_DROP_STATES names a Role nla.js does not know: ${role}`);
+  for (const stripType of Object.keys(COUNTABLE_PRE_DROP_STATES)) {
+    assert.ok(nla.STATES_BY_STRIP_TYPE[stripType], `COUNTABLE_PRE_DROP_STATES names a strip type nla.js does not know: ${stripType}`);
   }
 });
 
 test('classifyLocality: every branch', () => {
   const dep = (d, a) => ({ filed: { departureAirport: d, destinationAirport: a } });
-  assert.deepEqual(classifyLocality({ role: 'DEPARTURE' }, dep('LTAG', 'LTAG'), HOME.INCIRLIK), { locality: 'LOCAL', localityBasis: 'AIRPORTS' });
-  assert.deepEqual(classifyLocality({ role: 'DEPARTURE' }, dep(' ltag', 'LTAG '), HOME.INCIRLIK), { locality: 'LOCAL', localityBasis: 'AIRPORTS' }, 'trimmed and uppercased');
-  assert.deepEqual(classifyLocality({ role: 'DEPARTURE' }, dep('LTAG', 'LTAC'), HOME.INCIRLIK), { locality: 'TRANSIENT', localityBasis: 'AIRPORTS' });
-  assert.deepEqual(classifyLocality({ role: 'DEPARTURE' }, dep('LTAG', ''), HOME.INCIRLIK), { locality: 'UNKNOWN', localityBasis: 'NO_AIRPORT_DATA' });
-  assert.deepEqual(classifyLocality({ role: 'ARRIVAL' }, { filed: { originAirport: 'LTAG' } }, HOME.INCIRLIK), { locality: 'LOCAL', localityBasis: 'AIRPORTS' });
-  assert.deepEqual(classifyLocality({ role: 'ARRIVAL' }, { filed: { originAirport: 'LTAC' } }, HOME.INCIRLIK), { locality: 'TRANSIENT', localityBasis: 'AIRPORTS' });
-  assert.deepEqual(classifyLocality({ role: 'ARRIVAL' }, { filed: { originAirport: '' } }, HOME.INCIRLIK), { locality: 'UNKNOWN', localityBasis: 'NO_AIRPORT_DATA' });
-  assert.deepEqual(classifyLocality({ role: 'ARRIVAL', previousLeg: { role: 'DEPARTURE' } }, { filed: { originAirport: '' } }, HOME.INCIRLIK),
+  assert.deepEqual(classifyLocality({ stripType: 'DEPARTURE' }, dep('LTAG', 'LTAG'), HOME.INCIRLIK), { locality: 'LOCAL', localityBasis: 'AIRPORTS' });
+  assert.deepEqual(classifyLocality({ stripType: 'DEPARTURE' }, dep(' ltag', 'LTAG '), HOME.INCIRLIK), { locality: 'LOCAL', localityBasis: 'AIRPORTS' }, 'trimmed and uppercased');
+  assert.deepEqual(classifyLocality({ stripType: 'DEPARTURE' }, dep('LTAG', 'LTAC'), HOME.INCIRLIK), { locality: 'TRANSIENT', localityBasis: 'AIRPORTS' });
+  assert.deepEqual(classifyLocality({ stripType: 'DEPARTURE' }, dep('LTAG', ''), HOME.INCIRLIK), { locality: 'UNKNOWN', localityBasis: 'NO_AIRPORT_DATA' });
+  assert.deepEqual(classifyLocality({ stripType: 'ARRIVAL' }, { filed: { originAirport: 'LTAG' } }, HOME.INCIRLIK), { locality: 'LOCAL', localityBasis: 'AIRPORTS' });
+  assert.deepEqual(classifyLocality({ stripType: 'ARRIVAL' }, { filed: { originAirport: 'LTAC' } }, HOME.INCIRLIK), { locality: 'TRANSIENT', localityBasis: 'AIRPORTS' });
+  assert.deepEqual(classifyLocality({ stripType: 'ARRIVAL' }, { filed: { originAirport: '' } }, HOME.INCIRLIK), { locality: 'UNKNOWN', localityBasis: 'NO_AIRPORT_DATA' });
+  assert.deepEqual(classifyLocality({ stripType: 'ARRIVAL', previousLeg: { stripType: 'DEPARTURE' } }, { filed: { originAirport: '' } }, HOME.INCIRLIK),
     { locality: 'LOCAL', localityBasis: 'CONVERTED_ARRIVAL' });
-  assert.deepEqual(classifyLocality({ role: 'OVERFLIGHT' }, dep('LTAG', 'LTAG'), HOME.INCIRLIK),
+  assert.deepEqual(classifyLocality({ stripType: 'OVERFLIGHT' }, dep('LTAG', 'LTAG'), HOME.INCIRLIK),
     { locality: 'TRANSIENT', localityBasis: 'OVERFLIGHT' }, 'an overflight never touches the field, whatever it filed');
-  assert.deepEqual(classifyLocality({ role: 'DEPARTURE' }, dep('LTAG', 'LTAG'), undefined),
+  assert.deepEqual(classifyLocality({ stripType: 'DEPARTURE' }, dep('LTAG', 'LTAG'), undefined),
     { locality: 'UNKNOWN', localityBasis: 'NO_HOME_AIRPORT_CONFIGURED' }, 'a CENTER strip: "local" means nothing to a centre');
-  assert.deepEqual(classifyLocality({ role: 'DEPARTURE' }, { identity: { homeStation: 'LTAG' }, filed: {} }, HOME.INCIRLIK).locality, 'UNKNOWN',
+  assert.deepEqual(classifyLocality({ stripType: 'DEPARTURE' }, { identity: { homeStation: 'LTAG' }, filed: {} }, HOME.INCIRLIK).locality, 'UNKNOWN',
     'homeStation is the unit\'s home, never used');
 });
 
@@ -117,12 +117,12 @@ test('normalizeAircraftType: trimmed, uppercased, blank is UNKNOWN', () => {
 
 // ── the live counter on a real Board ────────────────────────────────────────
 
-const ATC = { OPS: 'INCIRLIK', CD: 'INCIRLIK', GND: 'INCIRLIK', TWR: 'INCIRLIK', APP: 'INCIRLIK', CTR: 'CENTER' };
+const ATC = { OPS: 'INCIRLIK', CD: 'INCIRLIK', GC: 'INCIRLIK', LC: 'INCIRLIK', AP: 'INCIRLIK', CTR: 'CENTER' };
 
 function counterFor(efsp, extra = {}) {
   return new TrafficCount({
     mutationLog: efsp.mutationLog,
-    fdrStore: efsp.fdrStore,
+    flightDataStore: efsp.flightDataStore,
     boardStoreFor: efsp.boardStoreFor,
     facilityIds: facilityConfig.getFacilityIds(),
     config: { retentionDays: 400, homeAirports: HOME },
@@ -146,14 +146,14 @@ const c = crew(efsp, ATC);
 let counter = quiet(() => counterFor(efsp));
 
 test('a DEPARTURE pressed through to DROPPED is one counted, local record', async () => {
-  let strip = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'CNT1', aircraftType: 'f-16c' });
-  strip = await advance(efsp, c.APP, 'APP', strip);
+  let strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'CNT1', aircraftType: 'f-16c' });
+  strip = await advance(efsp, c.AP, 'AP', strip);
   assert.equal(strip.state, 'DROPPED');
   const [r] = recordsFor(counter, strip.stripId);
   assert.equal(recordsFor(counter, strip.stripId).length, 1);
   assert.equal(r.counted, true);
   assert.equal(r.facilityId, 'INCIRLIK');
-  assert.equal(r.role, 'DEPARTURE');
+  assert.equal(r.stripType, 'DEPARTURE');
   assert.equal(r.callsign, 'CNT1');
   assert.equal(r.aircraftType, 'F-16C');
   assert.equal(r.locality, 'LOCAL');
@@ -167,7 +167,7 @@ test('a DEPARTURE pressed through to DROPPED is one counted, local record', asyn
 
 test('a proposal dropped at PROPOSED is recorded but excluded as NEVER_DEPARTED', () => {
   const strip = mustAct(efsp, c.OPS, 'OPS', null, {
-    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: { ...DEPARTURE_FDR, callsign: 'CNT2' },
+    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE', flightData: { ...DEPARTURE_FLIGHT_DATA, callsign: 'CNT2' },
   });
   mustAct(efsp, c.OPS, 'OPS', strip, { kind: 'DropStrip' });
   const [r] = recordsFor(counter, strip.stripId);
@@ -178,25 +178,25 @@ test('a proposal dropped at PROPOSED is recorded but excluded as NEVER_DEPARTED'
 });
 
 test('Undo of a terminal Drop appends a VOID and the flight leaves the count; a re-drop is a new record', async () => {
-  let strip = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'CNT3' });
-  strip = await advance(efsp, c.APP, 'APP', strip);
+  let strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'CNT3' });
+  strip = await advance(efsp, c.AP, 'AP', strip);
   const first = recordsFor(counter, strip.stripId);
   assert.equal(first.length, 1);
 
-  strip = mustAct(efsp, c.APP, 'APP', strip, { kind: 'Undo' });
+  strip = mustAct(efsp, c.AP, 'AP', strip, { kind: 'Undo' });
   assert.equal(strip.state, 'HANDED_OFF');
   assert.equal(recordsFor(counter, strip.stripId).length, 0, 'voided');
   assert.ok(counter.entries().some(e => e.type === 'VOID' && e.countId === first[0].countId), 'a VOID line, not an edit');
 
-  strip = await advance(efsp, c.APP, 'APP', strip);
+  strip = await advance(efsp, c.AP, 'AP', strip);
   const again = recordsFor(counter, strip.stripId);
   assert.equal(again.length, 1);
   assert.notEqual(again[0].countId, first[0].countId);
 });
 
 test('a 4-ship counts as one flight and four aircraft (H34)', async () => {
-  let strip = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'CNT4', flightSize: 4 });
-  strip = await advance(efsp, c.APP, 'APP', strip);
+  let strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'CNT4', flightSize: 4 });
+  strip = await advance(efsp, c.AP, 'AP', strip);
   const [r] = recordsFor(counter, strip.stripId);
   assert.equal(r.formation, true);
   assert.equal(r.flightSize, 4);
@@ -209,7 +209,7 @@ test('a 4-ship counts as one flight and four aircraft (H34)', async () => {
 
 test('SUA traversal survives ClearAirspaceEntry: approved, cleared, then dropped (T8)', () => {
   activate(efsp, c, 'MOA-TC');
-  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'CNT5', destinationAirport: 'LTAC' });
+  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'CNT5', destinationAirport: 'LTAC' });
   let ctr = handedToCenter(efsp, c, strip);
   ctr = mustAct(efsp, c.CTR, 'CTR', ctr, { kind: 'ApproveAirspaceEntry', airspaceId: 'MOA-TC' });
   ctr = mustAct(efsp, c.CTR, 'CTR', ctr, { kind: 'ClearAirspaceEntry' });
@@ -223,20 +223,20 @@ test('SUA traversal survives ClearAirspaceEntry: approved, cleared, then dropped
 });
 
 test('alert scramble latches: SCRAMBLE seen at any logged Mutation still counts after it is reset', async () => {
-  let strip = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'CNT6' });
-  assert.equal(efsp.fdrStore.setMilitary(strip.fdrId, { alertStatus: 'SCRAMBLE' }).ok, true);
-  strip = mustAct(efsp, c.APP, 'APP', strip, { kind: 'SetFlag', flag: 'highlight', value: true });
-  efsp.fdrStore.setMilitary(strip.fdrId, { alertStatus: 'NONE' });
-  strip = await advance(efsp, c.APP, 'APP', strip);
+  let strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'CNT6' });
+  assert.equal(efsp.flightDataStore.setMilitary(strip.flightDataId, { alertStatus: 'SCRAMBLE' }).ok, true);
+  strip = mustAct(efsp, c.AP, 'AP', strip, { kind: 'SetFlag', flag: 'highlight', value: true });
+  efsp.flightDataStore.setMilitary(strip.flightDataId, { alertStatus: 'NONE' });
+  strip = await advance(efsp, c.AP, 'AP', strip);
   assert.equal(recordsFor(counter, strip.stripId)[0].alertScramble, true);
 });
 
-test('noteFdr latches a SCRAMBLE written with no Strip Mutation around it (L13\'s hatch)', async () => {
-  let strip = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'CNT7' });
-  efsp.fdrStore.setMilitary(strip.fdrId, { alertStatus: 'SCRAMBLE' });
-  counter.noteFdr(strip.fdrId);
-  efsp.fdrStore.setMilitary(strip.fdrId, { alertStatus: 'NONE' });
-  strip = await advance(efsp, c.APP, 'APP', strip);
+test('noteFlightData latches a SCRAMBLE written with no Strip Mutation around it (L13\'s hatch)', async () => {
+  let strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'CNT7' });
+  efsp.flightDataStore.setMilitary(strip.flightDataId, { alertStatus: 'SCRAMBLE' });
+  counter.noteFlightData(strip.flightDataId);
+  efsp.flightDataStore.setMilitary(strip.flightDataId, { alertStatus: 'NONE' });
+  strip = await advance(efsp, c.AP, 'AP', strip);
   assert.equal(recordsFor(counter, strip.stripId)[0].alertScramble, true);
 });
 
@@ -244,7 +244,7 @@ test('a refused drop in the log is not a drop (T7)', () => {
   const before = counter.records().length;
   efsp.mutationLog.record({
     clientMutationId: 'x', op: 'DropStrip', stripId: 'ghost', ok: false, reason: 'NOT_OWNER',
-    before: { state: 'HANDED_OFF', role: 'DEPARTURE' }, after: { state: 'DROPPED', role: 'DEPARTURE' },
+    before: { state: 'HANDED_OFF', stripType: 'DEPARTURE' }, after: { state: 'DROPPED', stripType: 'DEPARTURE' },
   });
   assert.equal(counter.records().length, before);
 });
@@ -287,7 +287,7 @@ test('retention compaction at boot drops records older than retentionDays, atomi
   fs.writeFileSync(p, [line('old', wall - 401 * DAY), line('edge', wall - 400 * DAY), line('new', wall - DAY),
     JSON.stringify({ type: 'VOID', countId: 'old' })].join('\n') + '\n');
   const counter2 = quiet(() => new TrafficCount({
-    mutationLog: null, fdrStore: efsp.fdrStore, boardStoreFor: efsp.boardStoreFor,
+    mutationLog: null, flightDataStore: efsp.flightDataStore, boardStoreFor: efsp.boardStoreFor,
     facilityIds: facilityConfig.getFacilityIds(), config: { retentionDays: 400, homeAirports: HOME },
     path: p, wallNow: () => wall,
   }));
@@ -300,7 +300,7 @@ test('retention compaction at boot drops records older than retentionDays, atomi
 test('a backfill whose FDR has since been archived is UNKNOWN, basis ARCHIVED (S-R2-13)', () => {
   const archived = quiet(() => new TrafficCount({
     mutationLog: efsp.mutationLog,
-    fdrStore: { getFdr: () => null }, // every FDR gone
+    flightDataStore: { getFlightData: () => null }, // every FDR gone
     boardStoreFor: efsp.boardStoreFor,
     facilityIds: facilityConfig.getFacilityIds(),
     config: { retentionDays: 400, homeAirports: HOME },

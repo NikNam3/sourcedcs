@@ -34,7 +34,7 @@
 const permission = require('./permission');
 const readScope = require('./read-scope');
 const frames = require('./wire/frames');
-const { VERSION, stampStrip, mergeFdrs, touchedStrips, boardDelta, marsaDelta, carrierDelta, sfaDelta, liveStamped } = frames;
+const { VERSION, stampStrip, mergeFlightDataList, touchedStrips, boardDelta, marsaDelta, carrierDelta, sfaDelta, liveStamped } = frames;
 const skeleton = require('./wire/skeleton');
 const families = require('./wire/families');
 
@@ -89,18 +89,18 @@ function _handleMutation(ctx, session, msg, persist) {
   // the separation regime the MRU controller stated (F-306), and a clearance
   // that voids a MARSA relation, or a flight ending that retires it, writes the
   // regime back to ATC on every participant (F-111's other direction). Those
-  // writes landed server-side and reached nobody: the ack carries one `fdr` and
+  // writes landed server-side and reached nobody: the ack carries one `flightData` and
   // the delta carried only that one, so a connected client held the stale value
   // until it next took a full snapshot. board-store.js collects them as
-  // `result.fdrs`.
-  const updatedFdrs = mergeFdrs(result.fdr, result.fdrs);
+  // `result.flightDataList`.
+  const updatedFlightDataList = mergeFlightDataList(result.flightData, result.flightDataList);
 
   const ack = {
     version: VERSION, type: 'efsp-mutation-ack', clientMutationId: msg.clientMutationId,
     ...skeleton.subjectOf(msg),
     facilityId,
     boardSeq: boardStore.currentSeq, boardEpoch: boardStore.epoch, ok: result.ok,
-    strip: stampedStrip, fdr: result.fdr, reason: result.reason, detail: result.detail,
+    strip: stampedStrip, flightData: result.flightData, reason: result.reason, detail: result.detail,
     warning: result.warning, routedTo: result.routedTo,
   };
   // A replay answers from the idempotency cache (docs/adr/0081): the original
@@ -121,7 +121,7 @@ function _handleMutation(ctx, session, msg, persist) {
   }
 
   const slots = {
-    primary: boardDelta(ctx, boardStore, facilityId, touchedStrips(ctx, boardStore, facilityId, touched, stampedStrip), updatedFdrs),
+    primary: boardDelta(ctx, boardStore, facilityId, touchedStrips(ctx, boardStore, facilityId, touched, stampedStrip), updatedFlightDataList),
   };
 
   // Bug found in live testing: a coordination primitive's PROPOSE/ACCEPT/
@@ -144,7 +144,7 @@ function _handleMutation(ctx, session, msg, persist) {
     const peerBoardStore = ctx.boardStoreFor(result.peerFacilityId);
     const peerStamped = stampStrip(peerBoardStore, result.peerStrip, result.peerFacilityId, ctx);
     const peerTouched = peerBoardStore ? peerBoardStore.drainTouched() : [];
-    // fdrs: one shared FdrStore (docs/adr/0013) — already covered by the primary broadcast's fdrs.updated
+    // flightDataList: one shared FlightDataStore (docs/adr/0013) — already covered by the primary broadcast's flightDataList.updated
     slots.peer = boardDelta(ctx, peerBoardStore, result.peerFacilityId,
       touchedStrips(ctx, peerBoardStore, result.peerFacilityId, peerTouched, peerStamped), []);
   }
@@ -168,8 +168,8 @@ function _handleMutation(ctx, session, msg, persist) {
   if (marsaChanged.length > 0 && ctx.marsaStore) {
     slots.marsa = marsaDelta(ctx.marsaStore, marsaChanged);
   }
-  // docs/adr/0074 — a carrier hand-over or a Strip retiring moves the Marshal
-  // stack (Commence marks a flight pushed, a hand-over to PriFly leaves a
+  // docs/adr/0074 — a carrier handoff or a Strip retiring moves the Marshal
+  // stack (Commence marks a flight pushed, a handoff to PriFly leaves a
   // vacancy). The record is not a Strip, so it rides its own delta on the same
   // round trip, MARSA's shape.
   if (result.carrierChanged && ctx.carrierStore) {
@@ -234,10 +234,10 @@ function _resyncAnswer(ctx, session, msg) {
       },
       // FDRs/Positions are cheap enough at this scale to always send in
       // full rather than building a second/third ring buffer — see
-      // board-store.js's module comment. fdrStore is shared across every
+      // board-store.js's module comment. flightDataStore is shared across every
       // Facility (docs/adr/0013), so this list is NOT facility-scoped —
       // it's the same full set a snapshot would carry.
-      ctx.fdrStore.getAll(),
+      ctx.flightDataStore.getAll(),
       positionStore.getAll().map(p => ({ ...p, facilityId }))),
   };
 }
@@ -254,27 +254,27 @@ function _handleSetPositions(ctx, session, msg, persist) {
   const positionStore = ctx.positionStoreFor(facilityId);
   const boardStore = ctx.boardStoreFor(facilityId);
   if (!positionStore || !boardStore) {
-    return { ack: { version: VERSION, type: 'efsp-positions-ack', facilityId, held: [], warnings: [], reason: 'VALIDATION_ERROR', detail: `unknown facilityId: ${facilityId}` }, broadcasts: skeleton.orderSlots(null) };
+    return { ack: { version: VERSION, type: 'efsp-positions-ack', facilityId, signedOn: [], warnings: [], reason: 'VALIDATION_ERROR', detail: `unknown facilityId: ${facilityId}` }, broadcasts: skeleton.orderSlots(null) };
   }
-  const held = Array.isArray(msg.held) ? msg.held : [];
-  const occupiedBefore = new Set(facilityConfig_positionIds(ctx, facilityId).filter(id => positionStore.isOccupied(id)));
-  const { held: actuallyHeld, vacated } = positionStore.setHeldPositions(session.controllerId, session.who, held);
+  const signedOn = Array.isArray(msg.signedOn) ? msg.signedOn : [];
+  const staffedBefore = new Set(facilityConfig_positionIds(ctx, facilityId).filter(id => positionStore.isStaffed(id)));
+  const { signedOn: actuallySignedOn, vacated } = positionStore.setSignedOnPositions(session.controllerId, session.who, signedOn);
 
   const warnings = [];
   const reassignedIds = [];
   // F10: a Position that was empty and now has a Primary gets back the Strips
   // that were routed away from it (docs/adr/0080).
-  for (const positionId of actuallyHeld) {
-    if (!occupiedBefore.has(positionId) && positionStore.isOccupied(positionId)) {
-      reassignedIds.push(...boardStore.returnCoveredStrips(positionId));
+  for (const positionId of actuallySignedOn) {
+    if (!staffedBefore.has(positionId) && positionStore.isStaffed(positionId)) {
+      reassignedIds.push(...boardStore.returnConsolidatedStrips(positionId));
     }
   }
   for (const positionId of vacated) {
-    if (positionStore.isOccupied(positionId)) continue; // another controller is now Primary — nothing to route
+    if (positionStore.isStaffed(positionId)) continue; // another controller is now Primary — nothing to route
     const owned = boardStore.getAll().filter(s => s.ownerPositionId === positionId && s.state !== 'DROPPED');
     if (owned.length === 0) continue;
 
-    const covering = positionStore.coveringPositionFor(positionId);
+    const covering = positionStore.consolidatedAt(positionId);
     if (covering) {
       const moved = boardStore.reassignPositionStrips(positionId, covering);
       reassignedIds.push(...moved);
@@ -284,7 +284,7 @@ function _handleSetPositions(ctx, session, msg, persist) {
     } else {
       // Defect D19 boundary: the covering chain bottomed out with nobody
       // occupying any link. MUST be a visible, distinct condition — never
-      // a Strip silently left owned by an unoccupied Position with no
+      // a Strip silently left owned by an unstaffed Position with no
       // signal to anyone (guide §4.8.6 rule 3).
       warnings.push({ positionId, count: owned.length, routedTo: null });
     }
@@ -294,13 +294,13 @@ function _handleSetPositions(ctx, session, msg, persist) {
   // reassignPositionStrips touched is already in it. Drained so those touches
   // do not ride again on the next Mutation's broadcast (docs/adr/0081).
   boardStore.drainTouched();
-  // A covering-chain reassignment changes the Board, and it used to be the one
+  // A consolidation reassignment changes the Board, and it used to be the one
   // Board change never persisted: a restart before the next Mutation restored
   // the Strips to the Position that had left (docs/adr/0081, L6's F2/F5 tail).
   if (reassignedIds.length > 0 && typeof persist === 'function') persist();
 
   return {
-    ack: { version: VERSION, type: 'efsp-positions-ack', facilityId, held: actuallyHeld, warnings },
+    ack: { version: VERSION, type: 'efsp-positions-ack', facilityId, signedOn: actuallySignedOn, warnings },
     // EVERY live Strip, not just the reassigned ones. Taking or giving up a
     // Position changes who is there to receive a transfer, which changes the
     // `nla` status stampStrip computes for Strips this message never
@@ -325,13 +325,13 @@ function _handleSetPositions(ctx, session, msg, persist) {
  */
 function readScopeOf(ctx, session) {
   if (!session || !session.controllerId) return { kind: readScope.ALL };
-  const held = [];
+  const signedOn = [];
   for (const facilityId of ctx.facilityConfig.getFacilityIds()) {
     const positionStore = ctx.positionStoreFor(facilityId);
     if (!positionStore) continue;
-    for (const positionId of positionStore.heldBy(session.controllerId)) held.push({ facilityId, positionId });
+    for (const positionId of positionStore.signedOnBy(session.controllerId)) signedOn.push({ facilityId, positionId });
   }
-  return readScope.scopeOf(held, permission.readScopeFor);
+  return readScope.scopeOf(signedOn, permission.readScopeFor);
 }
 
 /**
@@ -347,11 +347,11 @@ function filterForSession(ctx, session, msg) {
     case 'efsp-snapshot':
       return readScope.filterSnapshot(msg, scope);
     case 'efsp-board-delta':
-      return readScope.filterBoardDelta(msg, scope, readScope.visibleFdrIdsOf(scope, liveStamped(ctx)), (id) => ctx.fdrStore.getFdr(id));
+      return readScope.filterBoardDelta(msg, scope, readScope.visibleFlightDataIdsOf(scope, liveStamped(ctx)), (id) => ctx.flightDataStore.getFlightData(id));
     case 'efsp-alerts': {
       const live = liveStamped(ctx);
       const byKey = new Map(live.map(s => [`${s.facilityId}:${s.stripId}`, s]));
-      return readScope.filterAlerts(msg, scope, readScope.visibleFdrIdsOf(scope, live),
+      return readScope.filterAlerts(msg, scope, readScope.visibleFlightDataIdsOf(scope, live),
         (facilityId, stripId) => readScope.isStripVisible(scope, byKey.get(`${facilityId}:${stripId}`)));
     }
     default: {
@@ -376,12 +376,12 @@ function supplementFor(ctx, session, filtered) {
   if (!filtered || filtered.type !== 'efsp-board-delta') return [];
   const scope = readScopeOf(ctx, session);
   if (scope.kind === readScope.ALL) return [];
-  const fdrIds = new Set(((filtered.strips || {}).updated || []).map(s => s.fdrId).filter(Boolean));
-  if (fdrIds.size === 0) return [];
+  const flightDataIds = new Set(((filtered.strips || {}).updated || []).map(s => s.flightDataId).filter(Boolean));
+  if (flightDataIds.size === 0) return [];
   const out = [];
-  const records = ctx.correlationStore ? [...fdrIds].map(id => ctx.correlationStore.getCorrelation(id)).filter(Boolean) : [];
+  const records = ctx.correlationStore ? [...flightDataIds].map(id => ctx.correlationStore.getCorrelation(id)).filter(Boolean) : [];
   if (records.length) out.push({ version: VERSION, type: 'efsp-correlation-delta', correlations: { updated: records } });
-  const relations = ctx.marsaStore ? ctx.marsaStore.getAll().filter(r => (r.participants || []).some(id => fdrIds.has(id))) : [];
+  const relations = ctx.marsaStore ? ctx.marsaStore.getAll().filter(r => (r.participants || []).some(id => flightDataIds.has(id))) : [];
   if (relations.length) out.push(marsaDelta(ctx.marsaStore, relations));
   return out;
 }
@@ -401,7 +401,7 @@ function _snapshotMessage(ctx, session = null) {
   return session ? readScope.filterSnapshot(full, readScopeOf(ctx, session)) : full;
 }
 
-/** The snapshot keys the families own, in registry order (airspaces, correlations, marsa, fieldStates, carriers, sfaRotation). */
+/** The snapshot keys the families own, in registry order (airspaces, correlations, marsa, runwayStatuses, carriers, sfaRotation). */
 function familySnapshots(ctx) {
   const out = {};
   for (const family of families.FAMILIES) if (family.snapshotKey) out[family.snapshotKey] = family.snapshot(ctx);
@@ -409,7 +409,7 @@ function familySnapshots(ctx) {
 }
 
 function _fullSnapshotMessage(ctx) {
-  const { fdrStore, facilityConfig } = ctx;
+  const { flightDataStore, facilityConfig } = ctx;
   const facilityIds = facilityConfig.getFacilityIds();
 
   const strips = [];
@@ -449,7 +449,7 @@ function _fullSnapshotMessage(ctx) {
     // (docs/adr/0088). Config, so it rides the snapshot only.
     positionLetters: facilityConfig.allPositionLetters ? facilityConfig.allPositionLetters() : {},
     positions, bays, strips,
-    fdrs: fdrStore.getAll(),
+    flightDataList: flightDataStore.getAll(),
     ...familySnapshots(ctx),
   };
 }

@@ -5,7 +5,7 @@
 // mission lines; this module decides what each line becomes on TACTICAL's
 // Board — a new flight, a Strip bound to a flight already filed, an update of
 // a flight an earlier ATO tasked, or nothing — and builds the tasking that
-// fdr-store.js's applyAtoTasking() writes onto the flight. It parses nothing
+// flight-data-store.js's applyAtoTasking() writes onto the flight. It parses nothing
 // itself and it never trusts a client's parse: the server re-reads the text on
 // import (efsp-ws.js _handleAtoMutation).
 //
@@ -42,7 +42,7 @@ const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', '
 
 // The seed-owned FDR paths: filled from the ATO, but a controller may type
 // over them (WRITABLE_PATHS), and a re-import then keeps the controller's
-// value (§10.2 rule 3). Mirrored by fdr-store.js's ATO_SEED_PATHS.
+// value (§10.2 rule 3). Mirrored by flight-data-store.js's ATO_SEED_PATHS.
 const SEED_PATH_OF = Object.freeze({
   missionNumber: 'mission.missionNumber',
   packageId: 'mission.packageId',
@@ -139,18 +139,18 @@ function isAssignableModeThree(code) {
   return isValidCodeFormat(code) && !isReserved(code) && !isSynthetic(code);
 }
 
-function _stripsByFdr(liveStrips) {
+function _stripsByFlightData(liveStrips) {
   const by = new Map();
   for (const s of liveStrips || []) {
     if (!s || s.state === 'DROPPED') continue;
-    if (!by.has(s.fdrId)) by.set(s.fdrId, []);
-    by.get(s.fdrId).push(s);
+    if (!by.has(s.flightDataId)) by.set(s.flightDataId, []);
+    by.get(s.flightDataId).push(s);
   }
   return by;
 }
 
 function _hasLiveMissionOnTactical(strips) {
-  return (strips || []).some((s) => s.role === 'MISSION' && s.facilityId === ATO_IMPORT_ORIGIN.facilityId && s.state !== 'DROPPED');
+  return (strips || []).some((s) => s.stripType === 'MISSION' && s.facilityId === ATO_IMPORT_ORIGIN.facilityId && s.state !== 'DROPPED');
 }
 
 /**
@@ -160,19 +160,19 @@ function _hasLiveMissionOnTactical(strips) {
  * per flight — board-store would refuse it anyway).
  *
  * @param {object} line an analysed line ({ callsign, modeThree })
- * @param {object[]} fdrs every FDR
+ * @param {object[]} flightDataList every FDR
  * @param {object[]} liveStrips every live Strip, each stamped with its facilityId
- * @returns {{fdrId,key:'MODE3'|'CALLSIGN',callsign,beaconAssigned,strips:object[]}[]}
+ * @returns {{flightDataId,key:'MODE3'|'CALLSIGN',callsign,beaconAssigned,strips:object[]}[]}
  */
-function bindCandidatesFor(line, fdrs, liveStrips) {
-  const byFdr = _stripsByFdr(liveStrips);
-  const eligible = (fdrs || []).filter((f) => {
-    const strips = byFdr.get(f.fdrId) || [];
-    return strips.some((s) => s.role !== 'MISSION') && !_hasLiveMissionOnTactical(strips);
+function bindCandidatesFor(line, flightDataList, liveStrips) {
+  const byFlightData = _stripsByFlightData(liveStrips);
+  const eligible = (flightDataList || []).filter((f) => {
+    const strips = byFlightData.get(f.flightDataId) || [];
+    return strips.some((s) => s.stripType !== 'MISSION') && !_hasLiveMissionOnTactical(strips);
   });
   const describe = (f, key) => ({
-    fdrId: f.fdrId, key, callsign: f.identity.callsign, beaconAssigned: f.identity.beaconAssigned,
-    strips: (byFdr.get(f.fdrId) || []).map((s) => ({ stripId: s.stripId, facilityId: s.facilityId, role: s.role, ownerPositionId: s.ownerPositionId })),
+    flightDataId: f.flightDataId, key, callsign: f.identity.callsign, beaconAssigned: f.identity.beaconAssigned,
+    strips: (byFlightData.get(f.flightDataId) || []).map((s) => ({ stripId: s.stripId, facilityId: s.facilityId, stripType: s.stripType, ownerPositionId: s.ownerPositionId })),
   });
   const m3 = line.modeThree;
   if (isAssignableModeThree(m3)) {
@@ -184,8 +184,8 @@ function bindCandidatesFor(line, fdrs, liveStrips) {
 }
 
 /** The flight an earlier ATO tasked on this line and that still has a live MISSION Strip on TACTICAL — a re-import's UPDATE target. */
-function _existingFdrFor(l3line, fdrs, byFdr) {
-  const hits = (fdrs || []).filter((f) => f.ato && (f.ato.lineId === l3line.lineId) && _hasLiveMissionOnTactical(byFdr.get(f.fdrId)));
+function _existingFlightDataFor(l3line, flightDataList, byFlightData) {
+  const hits = (flightDataList || []).filter((f) => f.ato && (f.ato.lineId === l3line.lineId) && _hasLiveMissionOnTactical(byFlightData.get(f.flightDataId)));
   if (hits.length === 0) return null;
   return hits.reduce((a, b) => ((b.updatedAt || 0) > (a.updatedAt || 0) ? b : a));
 }
@@ -196,13 +196,13 @@ function _humanWarnings(ws) {
 
 // ── The seed and the tasking ─────────────────────────────────────────────────
 
-/** createFdr's seed for a line: L3's fdrSeed, re-dated, with the fitted (or typed) callsign. */
+/** createFlightData's seed for a line: L3's flightDataSeed, re-dated, with the fitted (or typed) callsign. */
 function seedFor(line, callsign) {
-  return { ...line.fdrSeed, callsign };
+  return { ...line.flightDataSeed, callsign };
 }
 
 /**
- * What fdrStore.applyAtoTasking() writes for one line.
+ * What flightDataStore.applyAtoTasking() writes for one line.
  * @param {object} line an analysed line (re-dated)
  * @param {{mode:'CREATE'|'BIND'|'UPDATE', atoRef:object, links:object[]}} opts
  */
@@ -211,7 +211,7 @@ function atoTaskingFor(line, { mode, atoRef, links }) {
   const ato = { ...l3.extras.ato };
   delete ato.callsign; delete ato.seedable;
   const seed = {};
-  for (const [k, path] of Object.entries(SEED_PATH_OF)) seed[path] = l3.fdrSeed[k] === undefined ? null : l3.fdrSeed[k];
+  for (const [k, path] of Object.entries(SEED_PATH_OF)) seed[path] = l3.flightDataSeed[k] === undefined ? null : l3.flightDataSeed[k];
   const arInfo = l3.military.arInfo || (links && links.length ? { asReceiver: [], asTanker: null } : null);
   return {
     mode,
@@ -244,7 +244,7 @@ const CHANGE_PATHS = [
 
 function _atoValueAt(l3, path) {
   const seedKey = Object.keys(SEED_PATH_OF).find((k) => SEED_PATH_OF[k] === path);
-  if (seedKey) return l3.fdrSeed[seedKey] === undefined ? null : l3.fdrSeed[seedKey];
+  if (seedKey) return l3.flightDataSeed[seedKey] === undefined ? null : l3.flightDataSeed[seedKey];
   if (path === 'identity.modeOne') return l3.extras.identityAto.modeOne || null;
   if (path === 'identity.modeTwo') return l3.extras.identityAto.modeTwo || null;
   if (path === 'ato.iff.modeThree') return l3.extras.identityAto.modeThree || null;
@@ -252,14 +252,14 @@ function _atoValueAt(l3, path) {
   return null;
 }
 
-function _changesFor(l3, fdr) {
+function _changesFor(l3, flightData) {
   const out = [];
   for (const path of CHANGE_PATHS) {
-    const from = getPath(fdr, path);
+    const from = getPath(flightData, path);
     const to = _atoValueAt(l3, path);
     if ((from == null ? null : from) === (to == null ? null : to)) continue;
     if ((from === '' || from == null) && to == null) continue;
-    const prov = fdr.provenance ? fdr.provenance[path] : undefined;
+    const prov = flightData.provenance ? flightData.provenance[path] : undefined;
     // The same rule applyAtoTasking() applies: a seed path is the ATO's while
     // its provenance says so (or the flight has nothing there yet); a
     // controller's value, or the filed flight's own, is kept.
@@ -276,15 +276,15 @@ const SEED_PATH_OF_VALUES = new Set(Object.values(SEED_PATH_OF));
 /**
  * Parses the text and says what an import would do. Never throws, no side effects.
  *
- * @param {{text:string, fdrs:object[], liveStrips:object[], nowUtc:number}} args
+ * @param {{text:string, flightDataList:object[], liveStrips:object[], nowUtc:number}} args
  *   liveStrips — every live Strip on every Board, each carrying its facilityId;
  *   nowUtc — the mission clock (H11), used for L3's fallback reference and the date shift (H68)
  * @returns {{ preview:object, lines:Map<string,object>, doc:object, shiftMs:number }}
  */
-function analyseAto({ text, fdrs, liveStrips, nowUtc }) {
+function analyseAto({ text, flightDataList, liveStrips, nowUtc }) {
   const doc = ingestAtoText(text, { referenceUtc: nowUtc });
-  const byFdr = _stripsByFdr(liveStrips);
-  const fdrById = new Map((fdrs || []).map((f) => [f.fdrId, f]));
+  const byFlightData = _stripsByFlightData(liveStrips);
+  const flightDataById = new Map((flightDataList || []).map((f) => [f.flightDataId, f]));
   const { shiftMs, warning: dateWarning } = atoDateShift(doc, nowUtc);
 
   const lines = new Map();
@@ -293,7 +293,7 @@ function analyseAto({ text, fdrs, liveStrips, nowUtc }) {
     const l3 = redateDeep(raw, shiftMs);
     const own = [];
     const atoCallsign = l3.extras.ato.callsign;
-    let callsign = l3.fdrSeed.callsign;
+    let callsign = l3.flightDataSeed.callsign;
     if (!callsign) {
       const fitted = fitCallsign(atoCallsign);
       if (fitted) {
@@ -308,8 +308,8 @@ function analyseAto({ text, fdrs, liveStrips, nowUtc }) {
         message: `The ATO's Mode 3 ${modeThree} can never be assigned${isSynthetic(modeThree) ? ' (it is in the 6000–6777 block crc-sync gives AI aircraft)' : ''}; a new flight keeps the code crc-sync mints.` });
     }
     const line = { l3, callsign: callsign || null, modeThree, warnings: [..._humanWarnings(l3.warnings), ...own] };
-    const existing = _existingFdrFor(l3, fdrs, byFdr);
-    const candidates = existing ? [] : bindCandidatesFor(line, fdrs, liveStrips);
+    const existing = _existingFlightDataFor(l3, flightDataList, byFlightData);
+    const candidates = existing ? [] : bindCandidatesFor(line, flightDataList, liveStrips);
     let action = 'CREATE';
     if (existing) action = 'UPDATE';
     else if (candidates.length === 1 && (candidates[0].key === 'CALLSIGN' || candidates[0].callsign === line.callsign)) action = 'BIND';
@@ -323,7 +323,7 @@ function analyseAto({ text, fdrs, liveStrips, nowUtc }) {
       }
     }
     const missing = [...(l3.extras.ato.missingAcceptanceFields || [])].filter((f) => !(f === 'callsign' && callsign));
-    line.existingFdrId = existing ? existing.fdrId : null;
+    line.existingFlightDataId = existing ? existing.flightDataId : null;
     line.bindCandidates = candidates;
     line.defaultAction = action;
     lines.set(l3.lineId, line);
@@ -336,17 +336,17 @@ function analyseAto({ text, fdrs, liveStrips, nowUtc }) {
       seedable: !!line.callsign,
       action,
       bindCandidates: candidates,
-      existingFdrId: line.existingFdrId,
+      existingFlightDataId: line.existingFlightDataId,
       changes: existing ? _changesFor(l3, existing) : [],
       missing,
       warnings: line.warnings,
       summary: {
-        packageId: l3.fdrSeed.packageId,
+        packageId: l3.flightDataSeed.packageId,
         missionType: l3.extras.ato.missionType,
-        aircraftType: l3.fdrSeed.aircraftType,
-        flightSize: l3.fdrSeed.flightSize,
-        vul: { startUtc: l3.fdrSeed.vulWindowStartUtc, endUtc: l3.fdrSeed.vulWindowEndUtc },
-        agency: l3.fdrSeed.controllingAgency,
+        aircraftType: l3.flightDataSeed.aircraftType,
+        flightSize: l3.flightDataSeed.flightSize,
+        vul: { startUtc: l3.flightDataSeed.vulWindowStartUtc, endUtc: l3.flightDataSeed.vulWindowEndUtc },
+        agency: l3.flightDataSeed.controllingAgency,
         iff: { modeOne: l3.extras.identityAto.modeOne, modeTwo: l3.extras.identityAto.modeTwo, modeThree },
       },
     });
@@ -356,10 +356,10 @@ function analyseAto({ text, fdrs, liveStrips, nowUtc }) {
   // never dropped (Q55(a), H65's "replaces").
   const inThisAto = new Set(lines.keys());
   const notInThisAto = [];
-  for (const f of fdrById.values()) {
+  for (const f of flightDataById.values()) {
     if (!f.ato || inThisAto.has(f.ato.lineId)) continue;
-    if (!_hasLiveMissionOnTactical(byFdr.get(f.fdrId))) continue;
-    notInThisAto.push({ fdrId: f.fdrId, lineId: f.ato.lineId, missionNumber: f.mission && f.mission.missionNumber, callsign: f.identity.callsign });
+    if (!_hasLiveMissionOnTactical(byFlightData.get(f.flightDataId))) continue;
+    notInThisAto.push({ flightDataId: f.flightDataId, lineId: f.ato.lineId, missionNumber: f.mission && f.mission.missionNumber, callsign: f.identity.callsign });
   }
 
   const header = doc.header || {};
@@ -405,16 +405,16 @@ function planImport(analysis, choices, { textSha1 } = {}) {
     if (!ACTIONS.has(action)) return { ok: false, reason: 'VALIDATION_ERROR', detail: `${lineId}: unknown action ${JSON.stringify(action)}` };
     if (action === 'SKIP') { steps.push({ lineId, action, line }); continue; }
     if (action === 'UPDATE') {
-      if (!line.existingFdrId) return { ok: false, reason: 'VALIDATION_ERROR', detail: `${lineId}: no flight from an earlier ATO to update` };
-      steps.push({ lineId, action, line, fdrId: line.existingFdrId });
+      if (!line.existingFlightDataId) return { ok: false, reason: 'VALIDATION_ERROR', detail: `${lineId}: no flight from an earlier ATO to update` };
+      steps.push({ lineId, action, line, flightDataId: line.existingFlightDataId });
       continue;
     }
     if (action === 'BIND') {
-      const fdrId = c.fdrId !== undefined ? c.fdrId : (line.bindCandidates.length === 1 ? line.bindCandidates[0].fdrId : undefined);
-      if (!line.bindCandidates.some((b) => b.fdrId === fdrId)) {
+      const flightDataId = c.flightDataId !== undefined ? c.flightDataId : (line.bindCandidates.length === 1 ? line.bindCandidates[0].flightDataId : undefined);
+      if (!line.bindCandidates.some((b) => b.flightDataId === flightDataId)) {
         return { ok: false, reason: 'VALIDATION_ERROR', detail: `${lineId}: that flight is not one this line can bind to` };
       }
-      steps.push({ lineId, action, line, fdrId });
+      steps.push({ lineId, action, line, flightDataId });
       continue;
     }
     // CREATE
@@ -436,10 +436,10 @@ function planImport(analysis, choices, { textSha1 } = {}) {
  * import skipped, the flight an earlier ATO tasked on it). The join is data on
  * each flight; it is not MARSA and says nothing about separation (T2).
  */
-function arLinksByLine(analysis, fdrIdByLineId, fdrs) {
+function arLinksByLine(analysis, flightDataIdByLineId, flightDataList) {
   const earlier = new Map();
-  for (const f of fdrs || []) if (f.ato && f.ato.lineId) earlier.set(f.ato.lineId, f.fdrId);
-  const peer = (lineId) => (lineId ? (fdrIdByLineId.get(lineId) || earlier.get(lineId) || null) : null);
+  for (const f of flightDataList || []) if (f.ato && f.ato.lineId) earlier.set(f.ato.lineId, f.flightDataId);
+  const peer = (lineId) => (lineId ? (flightDataIdByLineId.get(lineId) || earlier.get(lineId) || null) : null);
   const out = new Map();
   const push = (lineId, link) => {
     if (!lineId) return;
@@ -452,12 +452,12 @@ function arLinksByLine(analysis, fdrIdByLineId, fdrs) {
   };
   for (const a of analysis.preview.arLinks) {
     push(a.tankerLineId, {
-      role: 'TANKER', peerFdrId: peer(a.receiverLineId), peerLineId: a.receiverLineId || null,
+      stripType: 'TANKER', peerFlightDataId: peer(a.receiverLineId), peerLineId: a.receiverLineId || null,
       peerMissionNumber: a.receiverMissionNumber || null, peerCallsign: callsignOf(a.receiverLineId, a.receiverCallsign),
       arcp: a.arcp || null, windows: a.windows || [],
     });
     push(a.receiverLineId, {
-      role: 'RECEIVER', peerFdrId: peer(a.tankerLineId), peerLineId: a.tankerLineId || null,
+      stripType: 'RECEIVER', peerFlightDataId: peer(a.tankerLineId), peerLineId: a.tankerLineId || null,
       peerMissionNumber: a.tankerMissionNumber || null, peerCallsign: callsignOf(a.tankerLineId, a.tankerCallsign),
       arcp: a.arcp || null, windows: a.windows || [],
     });
@@ -474,26 +474,26 @@ function arLinksByLine(analysis, fdrIdByLineId, fdrs) {
  * per touched flight. Best effort: a refused line is reported and the others
  * go on (Q-L14-8).
  *
- * @returns {{ results:object[], strips:object[], fdrIds:string[], applied:boolean }}
+ * @returns {{ results:object[], strips:object[], flightDataIds:string[], applied:boolean }}
  */
-function executeImport({ analysis, plan, boardStore, fdrStore, clientMutationId, actingPositionId, by, atoRef }) {
+function executeImport({ analysis, plan, boardStore, flightDataStore, clientMutationId, actingPositionId, by, atoRef }) {
   const results = [];
   const strips = [];
-  const fdrIdByLineId = new Map();
+  const flightDataIdByLineId = new Map();
   const modeByLineId = new Map();
   let applied = false;
 
   for (const step of plan.steps) {
     if (step.action === 'SKIP') { results.push({ lineId: step.lineId, ok: true, action: 'SKIP' }); continue; }
     if (step.action === 'UPDATE') {
-      fdrIdByLineId.set(step.lineId, step.fdrId);
+      flightDataIdByLineId.set(step.lineId, step.flightDataId);
       modeByLineId.set(step.lineId, 'UPDATE');
-      results.push({ lineId: step.lineId, ok: true, action: 'UPDATE', fdrId: step.fdrId });
+      results.push({ lineId: step.lineId, ok: true, action: 'UPDATE', flightDataId: step.flightDataId });
       continue;
     }
-    const op = { kind: 'CreateStrip', bayId: ATO_IMPORT_ORIGIN.bayId, rackId: ATO_IMPORT_ORIGIN.rackId, role: 'MISSION' };
-    if (step.action === 'BIND') op.fdrId = step.fdrId;
-    else op.fdr = seedFor(step.line.l3, step.callsign);
+    const op = { kind: 'CreateStrip', bayId: ATO_IMPORT_ORIGIN.bayId, rackId: ATO_IMPORT_ORIGIN.rackId, stripType: 'MISSION' };
+    if (step.action === 'BIND') op.flightDataId = step.flightDataId;
+    else op.flightData = seedFor(step.line.l3, step.callsign);
     const r = boardStore.applyMutation({ clientMutationId: `${clientMutationId}#${step.lineId}`, op }, actingPositionId, by);
     if (!r.ok) {
       results.push({ lineId: step.lineId, ok: false, action: step.action, reason: r.reason, detail: r.detail });
@@ -501,29 +501,29 @@ function executeImport({ analysis, plan, boardStore, fdrStore, clientMutationId,
     }
     applied = true;
     strips.push(r.strip);
-    fdrIdByLineId.set(step.lineId, r.fdr.fdrId);
+    flightDataIdByLineId.set(step.lineId, r.flightData.flightDataId);
     modeByLineId.set(step.lineId, step.action);
-    results.push({ lineId: step.lineId, ok: true, action: step.action, stripId: r.strip.stripId, fdrId: r.fdr.fdrId });
+    results.push({ lineId: step.lineId, ok: true, action: step.action, stripId: r.strip.stripId, flightDataId: r.flightData.flightDataId });
   }
 
-  const links = arLinksByLine(analysis, fdrIdByLineId, fdrStore.getAll());
-  const fdrIds = [];
+  const links = arLinksByLine(analysis, flightDataIdByLineId, flightDataStore.getAll());
+  const flightDataIds = [];
   for (const res of results) {
     if (!res.ok || res.action === 'SKIP') continue;
     const line = analysis.lines.get(res.lineId);
-    const fdr = fdrStore.getFdr(res.fdrId);
+    const flightData = flightDataStore.getFlightData(res.flightDataId);
     // A replayed line answered from board-store's cache already carries this
     // import's tasking; writing it again would be a second rev bump for nothing.
-    if (fdr && fdr.ato && fdr.ato.atoRef && fdr.ato.atoRef.importId === atoRef.importId) { fdrIds.push(res.fdrId); continue; }
+    if (flightData && flightData.ato && flightData.ato.atoRef && flightData.ato.atoRef.importId === atoRef.importId) { flightDataIds.push(res.flightDataId); continue; }
     const tasking = atoTaskingFor(line, { mode: modeByLineId.get(res.lineId), atoRef, links: links.get(res.lineId) || [] });
-    const t = fdrStore.applyAtoTasking(res.fdrId, tasking, { by });
+    const t = flightDataStore.applyAtoTasking(res.flightDataId, tasking, { by });
     if (!t.ok) { res.ok = false; res.reason = t.reason; res.detail = t.detail; continue; }
     applied = true;
-    fdrIds.push(res.fdrId);
+    flightDataIds.push(res.flightDataId);
     if (t.kept && t.kept.length) res.kept = t.kept;
     if (t.beacon) res.beacon = t.beacon;
   }
-  return { results, strips, fdrIds, applied };
+  return { results, strips, flightDataIds, applied };
 }
 
 module.exports = {

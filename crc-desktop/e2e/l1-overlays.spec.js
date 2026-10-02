@@ -38,7 +38,7 @@ async function contrastOf(page, selector) {
 
 for (const [selector, what] of [['#disc-msg', 'the disconnect message'], ['#no-awacs-msg', 'the no-coverage message']]) {
   test(`${what} is legible — at least 4.5:1`, async ({ page }) => {
-    await openPanel(page, { held: ['OPS'] });
+    await openPanel(page, { signedOn: ['OPS'] });
     const c = await contrastOf(page, selector);
     console.log(`${selector}: ${JSON.stringify(c)}`);
     expect(c.ratio, `${what} "${c.text}" is ${c.color} on ${c.background}`).toBeGreaterThanOrEqual(4.5);

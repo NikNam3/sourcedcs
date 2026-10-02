@@ -25,8 +25,8 @@ async function controller(browser, opts) {
 }
 
 const records = (page, callsign) => page.evaluate((c) => [...efspStrips.values()]
-  .filter(s => (efspFdrs.get(s.fdrId) || {}).identity && efspFdrs.get(s.fdrId).identity.callsign === c && s.state !== 'DROPPED')
-  .map(s => ({ facilityId: s.facilityId, owner: s.ownerPositionId, bayId: s.bayId, state: s.state, role: s.role })), callsign);
+  .filter(s => (efspFdrs.get(s.flightDataId) || {}).identity && efspFdrs.get(s.flightDataId).identity.callsign === c && s.state !== 'DROPPED')
+  .map(s => ({ facilityId: s.facilityId, owner: s.ownerPositionId, bayId: s.bayId, state: s.state, stripType: s.stripType })), callsign);
 const stateAt = async (page, callsign, facilityId) => ((await records(page, callsign)).find(r => r.facilityId === facilityId) || {}).state || null;
 const shot = (page, name) => page.screenshot({ path: path.join(SHOTS, `${name}.png`) });
 const nla = (page, callsign) => stripByCallsign(page, callsign).locator('.efsp-nla-btn');
@@ -40,15 +40,15 @@ async function goBay(page, positionId, bayId) {
 }
 
 test('an overflight walks INBOUND, IN_SECTOR, is handed CTR to APP, and is dropped at APP', async ({ browser }) => {
-  const ctr = await controller(browser, { held: ['CTR'], facilityId: 'CENTER', controller: 'l28-ctr' });
-  const app = await controller(browser, { held: ['APP'], facilityId: 'INCIRLIK', controller: 'l28-app' });
+  const ctr = await controller(browser, { signedOn: ['CTR'], facilityId: 'CENTER', controller: 'l28-ctr' });
+  const app = await controller(browser, { signedOn: ['AP'], facilityId: 'INCIRLIK', controller: 'l28-app' });
   const callsign = cs('OVF');
   try {
     // 1. CTR creates it: INBOUND, in CTR's overflight Bay, Radar Contact on offer.
     await goBay(ctr, 'CTR', 'ctr-overflight'); // the Strip count the seed waits on is the visible Bay's
-    await seedStrip(ctr, { callsign, actingPositionId: 'CTR', bayId: 'ctr-overflight', role: 'OVERFLIGHT', facilityId: 'CENTER' });
+    await seedStrip(ctr, { callsign, actingPositionId: 'CTR', bayId: 'ctr-overflight', stripType: 'OVERFLIGHT', facilityId: 'CENTER' });
     await expect(nla(ctr, callsign)).toHaveText(/Radar Contact/);
-    expect((await records(ctr, callsign))[0]).toMatchObject({ state: 'INBOUND', bayId: 'ctr-overflight', role: 'OVERFLIGHT' });
+    expect((await records(ctr, callsign))[0]).toMatchObject({ state: 'INBOUND', bayId: 'ctr-overflight', stripType: 'OVERFLIGHT' });
     await shot(ctr, '01-ctr-creates-inbound');
 
     // 2. Radar Contact: IN_SECTOR, and the NLA now says what it does ("leaves our airspace"); Coordinate is on the menu.
@@ -60,27 +60,27 @@ test('an overflight walks INBOUND, IN_SECTOR, is handed CTR to APP, and is dropp
     await shot(ctr, '02-in-sector');
     await ctr.keyboard.press('Escape');
 
-    // 3. HANDOFF to APP: the replica reaches APP INBOUND, in a coordination Bay.
+    // 3. HANDOFF to AP: the replica reaches APP INBOUND, in a coordination Bay.
     await startAction(stripByCallsign(ctr, callsign), 'Coordinate…');
     const popover = ctr.locator('.efsp-coordinate-popover');
     await popover.locator('select').selectOption('HANDOFF');
     await popover.getByRole('button', { name: 'Send' }).dispatchEvent('click');
     await expect.poll(() => stateAt(app, callsign, 'INCIRLIK')).toBe('INBOUND');
-    expect((await records(app, callsign)).find(r => r.facilityId === 'INCIRLIK')).toMatchObject({ role: 'OVERFLIGHT', owner: 'APP' });
-    await app.locator('#efsp-position-tabs .efsp-position-tab[data-position-id="APP"]').click();
+    expect((await records(app, callsign)).find(r => r.facilityId === 'INCIRLIK')).toMatchObject({ stripType: 'OVERFLIGHT', owner: 'AP' });
+    await app.locator('#efsp-position-tabs .efsp-position-tab[data-position-id="AP"]').click();
     await app.locator('#efsp-bay-tabs .efsp-bay-tab.efsp-tab-has-arrival').click();
     await expect(app.locator('.efsp-strip', { hasText: callsign }).first()).toBeVisible();
     await shot(app, '03-handoff-to-app');
 
     // 4. APP accepts: it lands in APP's overflight Bay (not ARRIVAL's inbound Bay), the sender is HANDED_OFF with Drop on offer.
     await app.locator('.efsp-strip', { hasText: callsign }).first().getByRole('button', { name: /accept/i }).first().click();
-    await expect.poll(async () => ((await records(app, callsign)).find(r => r.facilityId === 'INCIRLIK') || {}).bayId).toBe('app-overflight');
+    await expect.poll(async () => ((await records(app, callsign)).find(r => r.facilityId === 'INCIRLIK') || {}).bayId).toBe('ap-overflight');
     await expect.poll(() => stateAt(ctr, callsign, 'CENTER')).toBe('HANDED_OFF');
     await expect(nla(ctr, callsign)).toHaveText(/Drop/);
     await shot(ctr, '04-accepted');
 
     // 5. APP walks it: Radar Contact, then it is APP's flight to hand off or drop; CTR drops its own.
-    await goBay(app, 'APP', 'app-overflight');
+    await goBay(app, 'AP', 'ap-overflight');
     await expect(nla(app, callsign)).toHaveText(/Radar Contact/);
     await press(app, callsign);
     await expect.poll(() => stateAt(app, callsign, 'INCIRLIK')).toBe('IN_SECTOR');
@@ -98,11 +98,11 @@ test('an overflight walks INBOUND, IN_SECTOR, is handed CTR to APP, and is dropp
 });
 
 test('an overflight that leaves our airspace goes IN_SECTOR to HANDED_OFF with no transfer, then is dropped', async ({ browser }) => {
-  const ctr = await controller(browser, { held: ['CTR'], facilityId: 'CENTER', controller: 'l28-ctr2' });
+  const ctr = await controller(browser, { signedOn: ['CTR'], facilityId: 'CENTER', controller: 'l28-ctr2' });
   const callsign = cs('LVE');
   try {
     await goBay(ctr, 'CTR', 'ctr-overflight'); // the Strip count the seed waits on is the visible Bay's
-    await seedStrip(ctr, { callsign, actingPositionId: 'CTR', bayId: 'ctr-overflight', role: 'OVERFLIGHT', facilityId: 'CENTER' });
+    await seedStrip(ctr, { callsign, actingPositionId: 'CTR', bayId: 'ctr-overflight', stripType: 'OVERFLIGHT', facilityId: 'CENTER' });
     await press(ctr, callsign);
     await expect.poll(() => stateAt(ctr, callsign, 'CENTER')).toBe('IN_SECTOR');
     await press(ctr, callsign);

@@ -488,7 +488,7 @@
   ],
   "panels/efsp/efsp-nla.js": [
    "ARRIVAL_STATE_OWNERS",
-   "CARRIER_TRANSFERS",
+   "CARRIER_HANDOFFS",
    "COORDINATION_ELIGIBLE_STATES",
    "COORDINATION_OP_KINDS",
    "DEFAULT_STALE_THRESHOLD_SECONDS",
@@ -500,7 +500,7 @@
    "NLA_LABELS",
    "OVERFLIGHT_STATE_OWNERS",
    "PATTERN_STATE_OWNERS",
-   "STATE_OWNERS_BY_ROLE",
+   "STATE_OWNERS_BY_STRIP_TYPE",
    "TOFI_ELIGIBLE_STATES",
    "TOFI_EXIT_DUE_MISSION_STATES",
    "TOFI_OP_KINDS",
@@ -630,25 +630,6 @@
    "sendEfspSfaMutation",
    "setEfspSender"
   ],
-  "panels/efsp/field-state-panel.js": [
-   "initFieldStatePanel",
-   "renderFieldStatePanel"
-  ],
-  "panels/efsp/field-state-rules.js": [
-   "FIELD_STATE_ACTION_OWNERS",
-   "FIELD_STATE_GEAR_CHECK_STATES",
-   "FIELD_STATE_RUNWAY_STRIP_STATES",
-   "fieldStateActionsFor",
-   "fieldStateAlertsFor",
-   "fieldStateSignatureFor",
-   "fieldStateSubjectFor",
-   "fieldStateViewOf",
-   "gearMismatchFor",
-   "normalizeRunwayEnd",
-   "runwayAdvisoryFor",
-   "runwayForStrip",
-   "runwayStatusReasonFor"
-  ],
   "panels/efsp/final-panel.js": [
    "FINAL_CADENCE_S",
    "FINAL_CALL_PRIORITY",
@@ -766,6 +747,25 @@
    "nextLeg",
    "patternBoardModel",
    "renderPatternBoard"
+  ],
+  "panels/efsp/runway-status-panel.js": [
+   "initFieldStatePanel",
+   "renderFieldStatePanel"
+  ],
+  "panels/efsp/runway-status-rules.js": [
+   "FIELD_STATE_ACTION_OWNERS",
+   "FIELD_STATE_GEAR_CHECK_STATES",
+   "FIELD_STATE_RUNWAY_STRIP_STATES",
+   "fieldStateActionsFor",
+   "fieldStateAlertsFor",
+   "fieldStateSignatureFor",
+   "fieldStateSubjectFor",
+   "fieldStateViewOf",
+   "gearMismatchFor",
+   "normalizeRunwayEnd",
+   "runwayAdvisoryFor",
+   "runwayForStrip",
+   "runwayStatusReasonFor"
   ],
   "panels/efsp/scramble.js": [
    "GROUND_STATES",
@@ -975,8 +975,8 @@
    "BLOCK_MAPS",
    "BLOCK_TITLES",
    "CARRIER_CAPABILITIES",
+   "CARRIER_HANDOFFS",
    "CARRIER_POSITION_IDS",
-   "CARRIER_TRANSFERS",
    "CHIP_HISTORY_LIMIT",
    "COALITION_COLOR",
    "COMPACT_BLOCKS_BY_POSITION",
@@ -1056,7 +1056,7 @@
    "SFA_ROTATION_LABEL",
    "SFA_ROTATION_SENDERS",
    "STALE_MS",
-   "STATE_OWNERS_BY_ROLE",
+   "STATE_OWNERS_BY_STRIP_TYPE",
    "STEREO_ROUTES_CLIENT_TIMEOUT_MS",
    "STRIP_CONTROL_SELECTOR",
    "TEXT_OFFSET_EM",

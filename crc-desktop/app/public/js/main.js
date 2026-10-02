@@ -54,8 +54,8 @@ import './panels/efsp/efsp-panel.js';
 import './panels/efsp/ato-strip.js';
 import './panels/efsp/ato-import.js';
 import './panels/efsp/airspace-panel.js';
-import './panels/efsp/field-state-rules.js';
-import './panels/efsp/field-state-panel.js';
+import './panels/efsp/runway-status-rules.js';
+import './panels/efsp/runway-status-panel.js';
 import './panels/metrics-panel.js';
 import './app.js';
 import './classic-globals-bridge.js'; // last: for the Playwright specs only (see its header)

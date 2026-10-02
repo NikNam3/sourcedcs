@@ -8,7 +8,7 @@ import TrackStore from '../src/tracks.js';
 import CollaborativeStore from '../src/collab-store.js';
 
 /* docs/adr/0067 (decisions.md S-Q82). efsp-alerts carries three slices from
- * producers on different cadences — conformance/STCA every second,
+ * producers on different cadences — conformance/CA every second,
  * obligations every 15 s and after a Mutation — and WsHub.broadcastEfspAlerts
  * replaces the whole state. So server.js must compose the message in exactly
  * one place, from all three monitors, or one producer erases another's slice.
@@ -22,12 +22,12 @@ test('app.js calls wsHub.broadcastEfspAlerts in exactly one place, the compose f
   const fn = SERVER.match(/\n *function broadcastEfspAlerts\(\) \{[\s\S]*?\n  \}\n/);
   assert.ok(fn, 'the compose function exists');
   assert.match(fn[0], /wsHub\.broadcastEfspAlerts\(/);
-  for (const key of ['conformance', 'stca', 'obligations', 'surveillance']) assert.match(fn[0], new RegExp(`${key}:`));
+  for (const key of ['conformance', 'conflictAlert', 'obligations', 'surveillance']) assert.match(fn[0], new RegExp(`${key}:`));
 });
 
 test('a conformance-only tick does not clear obligations', () => {
   const body = SERVER.match(/\n *function broadcastEfspAlerts\(\) \{[\s\S]*?\n  \}\n/)[0];
-  const compose = new Function('wsHub', 'conformanceMonitor', 'stcaMonitor', 'obligationMonitor', 'surveillanceHints',
+  const compose = new Function('wsHub', 'conformanceMonitor', 'conflictAlertMonitor', 'obligationMonitor', 'surveillanceHints',
     `${body}; return broadcastEfspAlerts;`);
 
   const wsHub = new WsHub({ trackStore: new TrackStore(), collabStore: new CollaborativeStore() });
@@ -44,7 +44,7 @@ test('a conformance-only tick does not clear obligations', () => {
     { getAll: () => [hint] });
 
   broadcast(); // the 15 s sweep raised the obligation
-  conformance = [{ fdrId: 'f1', alerts: [] }];
+  conformance = [{ flightDataId: 'f1', alerts: [] }];
   broadcast(); // then the 1 s tick saw conformance change
 
   const last = sent.filter(m => m.type === 'efsp-alerts').pop();

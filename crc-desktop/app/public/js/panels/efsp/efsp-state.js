@@ -15,7 +15,7 @@ import { applyEfspSfaSnapshot } from './sfa-state.js';
 // require()-able module for node:test — no build step either way.
 
 export const efspStrips = new Map();     // stripId -> Strip
-export const efspFdrs = new Map();       // fdrId -> FlightDataRecord
+export const efspFdrs = new Map();       // flightDataId -> FlightDataRecord
 const efspPositions = new Map();  // positionId -> PositionOccupancy
 let efspBoardSeq = 0;
 let efspFacility = null;
@@ -52,10 +52,10 @@ const efspObligations = new Map(); // stripId -> [{ facilityId, stripId, obligat
 // replicated into each one.
 export const efspAirspaces = new Map();
 
-// WP5 (crc-sync's docs/adr/0045) — fdrId -> the correlation record: which
+// WP5 (crc-sync's docs/adr/0045) — flightDataId -> the correlation record: which
 // surveillance contact this airframe is, on what evidence, and any warning.
 //
-// Keyed by fdrId, not stripId, and that is the point. One FDR legitimately has
+// Keyed by flightDataId, not stripId, and that is the point. One FDR legitimately has
 // several Strips — per-Facility replicas, a TOFI MISSION Strip, an arrival
 // converted in place — and they are all one airframe. A per-Strip correlation
 // would let two of them disagree about which contact it is, which is the
@@ -68,19 +68,19 @@ let efspCorrelationStats = null;
 // flights have declared that military authority is separating them, on whose
 // declaration, and whether it is still standing.
 //
-// Keyed by marsaId with fdrId PARTICIPANTS, which is what makes §9.2's "model
+// Keyed by marsaId with flightDataId PARTICIPANTS, which is what makes §9.2's "model
 // it as an edge, not a flag" real on this side too. A per-Strip flag could not
 // say who else is in the relation, and two Strips of one airframe could carry
 // different answers. Finished relations stay in the Map on purpose: a VOIDED
 // one is the alert §9.2 rule 2 requires, and dropping it would erase the
 // warning for whoever just reconnected.
 const efspMarsa = new Map();
-const efspFieldStates = new Map(); // facilityId -> field-state record (crc-sync docs/adr/0061)
+const efspFieldStates = new Map(); // facilityId -> runway-status record (crc-sync docs/adr/0061)
 
 // docs/adr/0058 — what crc-sync's conformance and conflict monitors say is
 // WRONG right now. Sent whole on every change (efsp-alerts), so a flight that
 // conforms again simply is not in the next message.
-const efspConformance = new Map(); // fdrId -> [{ kind, assigned, actual?, altFt?, fpm?, deviationFt?, since }]
+const efspConformance = new Map(); // flightDataId -> [{ kind, assigned, actual?, altFt?, fpm?, deviationFt?, since }]
 // docs/adr/0076 (crc-sync) — surveillance informs, the controller advances: the
 // suggestion chip and the staleness indication, stripId -> hints. Full state in
 // efsp-alerts, so one that no longer applies is simply not in the next message.
@@ -92,7 +92,7 @@ export function applyEfspSnapshot(msg) {
   efspFdrs.clear();
   efspPositions.clear();
   for (const s of msg.strips || []) efspStrips.set(s.stripId, s);
-  for (const f of msg.fdrs || []) efspFdrs.set(f.fdrId, f);
+  for (const f of msg.flightDataList || []) efspFdrs.set(f.flightDataId, f);
   for (const p of msg.positions || []) efspPositions.set(p.positionId, p);
   efspBoardSeq = msg.boardSeq;
   efspFacility = msg.facility;
@@ -107,11 +107,11 @@ export function applyEfspSnapshot(msg) {
   efspAirspaces.clear();
   for (const a of msg.airspaces || []) efspAirspaces.set(a.airspaceId, a);
   efspCorrelations.clear();
-  for (const r of msg.correlations || []) efspCorrelations.set(r.fdrId, r);
+  for (const r of msg.correlations || []) efspCorrelations.set(r.flightDataId, r);
   efspMarsa.clear();
   for (const r of msg.marsa || []) efspMarsa.set(r.marsaId, r);
   efspFieldStates.clear();
-  for (const r of msg.fieldStates || []) efspFieldStates.set(r.facilityId, r);
+  for (const r of msg.runwayStatuses || []) efspFieldStates.set(r.facilityId, r);
   // crc-sync's docs/adr/0074 — the carrier's hull record (carrier-state.js).
   if (typeof applyEfspCarrierSnapshot === 'function') applyEfspCarrierSnapshot(msg);
   // crc-sync's docs/adr/0093 — who is on which SFA frequency (sfa-state.js).
@@ -136,10 +136,10 @@ export function getEfspMarsa(marsaId) { return efspMarsa.get(marsaId) || null; }
 export function getAllEfspMarsa() { return [...efspMarsa.values()]; }
 
 /** The ACTIVE relation this flight is in, or null. At most one — crc-sync enforces it. */
-export function activeMarsaForFdr(fdrId) {
-  if (!fdrId) return null;
+export function activeMarsaForFdr(flightDataId) {
+  if (!flightDataId) return null;
   for (const relation of efspMarsa.values()) {
-    if (relation.state === 'ACTIVE' && relation.participants.includes(fdrId)) return relation;
+    if (relation.state === 'ACTIVE' && relation.participants.includes(flightDataId)) return relation;
   }
   return null;
 }
@@ -155,11 +155,11 @@ export function activeMarsaForFdr(fdrId) {
  */
 export function marsaForStrip(strip) {
   if (!strip) return null;
-  const active = activeMarsaForFdr(strip.fdrId);
+  const active = activeMarsaForFdr(strip.flightDataId);
   if (active) return active;
   let latest = null;
   for (const relation of efspMarsa.values()) {
-    if (!relation.participants.includes(strip.fdrId)) continue;
+    if (!relation.participants.includes(strip.flightDataId)) continue;
     if (!latest || (relation.endedAt || 0) > (latest.endedAt || 0)) latest = relation;
   }
   return latest;
@@ -176,28 +176,28 @@ export function marsaForStrip(strip) {
  * two Facilities has two Strips and both are in the relation.
  */
 export function marsaParticipantStripIds(strip) {
-  const relation = strip ? activeMarsaForFdr(strip.fdrId) : null;
+  const relation = strip ? activeMarsaForFdr(strip.flightDataId) : null;
   if (!relation) return [];
-  const others = new Set(relation.participants.filter(id => id !== strip.fdrId));
+  const others = new Set(relation.participants.filter(id => id !== strip.flightDataId));
   if (others.size === 0) return [];
   return getAllEfspStrips()
-    .filter(s => s.state !== 'DROPPED' && others.has(s.fdrId))
+    .filter(s => s.state !== 'DROPPED' && others.has(s.flightDataId))
     .map(s => s.stripId);
 }
 
 /**
- * An efsp-field-state-delta (guide §9.7, crc-sync docs/adr/0061) — its own
+ * An efsp-runway-status-delta (guide §9.7, crc-sync docs/adr/0061) — its own
  * message type on its own seq, like MARSA and airspace: a runway is not a
  * Strip and rides no Board's sequence. One record per Facility, sent whole, so
  * a delta simply replaces it (docs/adr/0068).
  */
 export function applyEfspFieldStateDelta(msg) {
-  for (const r of (msg && msg.fieldStates && msg.fieldStates.updated) || []) {
+  for (const r of (msg && msg.runwayStatuses && msg.runwayStatuses.updated) || []) {
     if (r && r.facilityId) efspFieldStates.set(r.facilityId, r);
   }
 }
 
-/** The Facility's field-state record exactly as the server sent it, or null (L12/L13 read this — do not rename). */
+/** The Facility's runway-status record exactly as the server sent it, or null (L12/L13 read this — do not rename). */
 export function getEfspFieldState(facilityId) { return efspFieldStates.get(facilityId) || null; }
 export function getAllEfspFieldStates() { return [...efspFieldStates.values()]; }
 
@@ -211,18 +211,18 @@ export function getAllEfspFieldStates() { return [...efspFieldStates.values()]; 
  */
 export function applyEfspCorrelationDelta(msg) {
   for (const r of (msg.correlations && msg.correlations.updated) || []) {
-    efspCorrelations.set(r.fdrId, r);
+    efspCorrelations.set(r.flightDataId, r);
   }
   if (msg.stats) efspCorrelationStats = msg.stats;
 }
 
-export function getEfspCorrelation(fdrId) { return efspCorrelations.get(fdrId) || null; }
+export function getEfspCorrelation(flightDataId) { return efspCorrelations.get(flightDataId) || null; }
 export function getAllEfspCorrelations() { return [...efspCorrelations.values()]; }
 export function getEfspCorrelationStats() { return efspCorrelationStats; }
 
 /** The correlation for whichever airframe this Strip is about. */
 export function getEfspCorrelationForStrip(strip) {
-  return strip ? getEfspCorrelation(strip.fdrId) : null;
+  return strip ? getEfspCorrelation(strip.flightDataId) : null;
 }
 
 /** The contact this Strip is bound to, or null. What the map highlight reads. */
@@ -242,13 +242,13 @@ export function correlatedTrackIdForStrip(strip) {
  */
 export function stripIdsForTrackId(trackId) {
   const wanted = String(trackId);
-  const fdrIds = new Set();
+  const flightDataIds = new Set();
   for (const record of efspCorrelations.values()) {
-    if (record.trackId === wanted) fdrIds.add(record.fdrId);
+    if (record.trackId === wanted) flightDataIds.add(record.flightDataId);
   }
-  if (fdrIds.size === 0) return [];
+  if (flightDataIds.size === 0) return [];
   return getAllEfspStrips()
-    .filter(s => s.state !== 'DROPPED' && fdrIds.has(s.fdrId))
+    .filter(s => s.state !== 'DROPPED' && flightDataIds.has(s.flightDataId))
     .map(s => s.stripId);
 }
 
@@ -320,8 +320,8 @@ export function efspHeartbeatGapOf(msg) {
 export function applyEfspDelta(msg) {
   for (const s of (msg.strips && msg.strips.updated) || []) efspStrips.set(s.stripId, s);
   for (const id of (msg.strips && msg.strips.gone) || []) efspStrips.delete(id);
-  for (const f of (msg.fdrs && msg.fdrs.updated) || []) efspFdrs.set(f.fdrId, f);
-  for (const id of (msg.fdrs && msg.fdrs.gone) || []) efspFdrs.delete(id); // archived (docs/adr/0082)
+  for (const f of (msg.flightDataList && msg.flightDataList.updated) || []) efspFdrs.set(f.flightDataId, f);
+  for (const id of (msg.flightDataList && msg.flightDataList.gone) || []) efspFdrs.delete(id); // archived (docs/adr/0082)
   for (const p of (msg.positions && msg.positions.updated) || []) efspPositions.set(p.positionId, p);
   _adoptBoardSeq(msg);
 }
@@ -344,7 +344,7 @@ export function applyEfspMutationAck(msg) {
   const pending = efspPendingMutations.get(msg.clientMutationId) || null;
   efspPendingMutations.delete(msg.clientMutationId);
   if (msg.strip) efspStrips.set(msg.strip.stripId, msg.strip);
-  if (msg.fdr) efspFdrs.set(msg.fdr.fdrId, msg.fdr);
+  if (msg.flightData) efspFdrs.set(msg.flightData.flightDataId, msg.flightData);
   // The ack's boardSeq is deliberately NOT adopted: its broadcast delta (same
   // seq) is what moves our position, so a delta lost after its ack still shows
   // up as a gap at the next heartbeat (docs/adr/0081). A refusal or a replay has
@@ -391,7 +391,7 @@ export function rebaseForResend(clientMutationId) {
 }
 
 export function getEfspStrip(stripId) { return efspStrips.get(stripId) || null; }
-export function getEfspFdr(fdrId) { return efspFdrs.get(fdrId) || null; }
+export function getEfspFdr(flightDataId) { return efspFdrs.get(flightDataId) || null; }
 export function getEfspPosition(positionId) { return efspPositions.get(positionId) || null; }
 export function getAllEfspStrips() { return [...efspStrips.values()]; }
 export function getAllEfspPositions() { return [...efspPositions.values()]; }
@@ -419,9 +419,9 @@ export function getEfspPositionLetter(positionId) {
  * that says so. Purely client-local — the snapshot already carries every
  * Facility's Strips, so no server support is needed.
  */
-export function otherLiveStripsForFdr(fdrId, exceptStripId) {
-  if (!fdrId) return [];
-  return getAllEfspStrips().filter(s => s.fdrId === fdrId && s.stripId !== exceptStripId && s.state !== 'DROPPED');
+export function otherLiveStripsForFdr(flightDataId, exceptStripId) {
+  if (!flightDataId) return [];
+  return getAllEfspStrips().filter(s => s.flightDataId === flightDataId && s.stripId !== exceptStripId && s.state !== 'DROPPED');
 }
 
 /** Live Strips whose FDR carries this callsign — the duplicate-origination check (§3.6). */
@@ -430,8 +430,8 @@ export function liveStripsForCallsign(callsign) {
   if (!target) return [];
   return getAllEfspStrips().filter((s) => {
     if (s.state === 'DROPPED') return false;
-    const fdr = getEfspFdr(s.fdrId);
-    return !!(fdr && fdr.identity && (fdr.identity.callsign || '').toUpperCase() === target);
+    const flightData = getEfspFdr(s.flightDataId);
+    return !!(flightData && flightData.identity && (flightData.identity.callsign || '').toUpperCase() === target);
   });
 }
 
@@ -457,9 +457,9 @@ export function searchEfspStrips(query) {
   if (!q) return [];
   return getAllEfspStrips().filter((s) => {
     if (s.state === 'DROPPED') return false;
-    const fdr = getEfspFdr(s.fdrId);
-    const callsign = (fdr && fdr.identity && fdr.identity.callsign) || '';
-    const beacon = (fdr && fdr.identity && fdr.identity.beaconAssigned) || '';
+    const flightData = getEfspFdr(s.flightDataId);
+    const callsign = (flightData && flightData.identity && flightData.identity.callsign) || '';
+    const beacon = (flightData && flightData.identity && flightData.identity.beaconAssigned) || '';
     return callsign.toLowerCase().includes(q) || beacon.toLowerCase().includes(q);
   });
 }
@@ -479,7 +479,7 @@ export function efspLinesWithOthers(positionId) {
   const owners = LINES_WITH_OTHERS[positionId];
   if (!owners) return [];
   return getAllEfspStrips()
-    .filter(s => s.role === 'MISSION' && s.state !== 'DROPPED' && owners.includes(s.ownerPositionId))
+    .filter(s => s.stripType === 'MISSION' && s.state !== 'DROPPED' && owners.includes(s.ownerPositionId))
     .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
 }
 
@@ -511,8 +511,8 @@ export function _resetEfspStateForTest() {
 /** Applies an efsp-alerts message: the complete current conformance, conflict and obligation picture. */
 export function applyEfspAlerts(msg) {
   efspConformance.clear();
-  for (const r of (msg && msg.conformance) || []) if (r.alerts && r.alerts.length) efspConformance.set(r.fdrId, r.alerts);
-  efspConflicts = (msg && msg.stca) || [];
+  for (const r of (msg && msg.conformance) || []) if (r.alerts && r.alerts.length) efspConformance.set(r.flightDataId, r.alerts);
+  efspConflicts = (msg && msg.conflictAlert) || [];
   efspSurveillanceHints.clear();
   for (const h of (msg && msg.surveillance) || []) {
     if (!efspSurveillanceHints.has(h.stripId)) efspSurveillanceHints.set(h.stripId, []);
@@ -536,7 +536,7 @@ export function surveillanceHintsForStrip(strip) {
 }
 
 /** What is wrong with this flight's conformance right now; [] when it conforms. */
-export function conformanceAlertsForFdr(fdrId) { return efspConformance.get(fdrId) || []; }
+export function conformanceAlertsForFdr(flightDataId) { return efspConformance.get(flightDataId) || []; }
 
 /** Every current short-term conflict. */
 export function getAllEfspConflicts() { return efspConflicts; }

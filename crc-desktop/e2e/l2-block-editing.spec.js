@@ -47,7 +47,7 @@ const clickAway = (page) => page.locator('#efsp-bay-content').click({ position: 
 // ── F-201 ────────────────────────────────────────────────────────────────
 
 test('F-201: a space can be typed into a free-text Block', async ({ page }) => {
-  await openPanel(page, { held: ['OPS'] });
+  await openPanel(page, { signedOn: ['OPS'] });
   const s = await seedStrip(page, { callsign: 'SPC201' });
   await s.locator('.efsp-block-9').click();
   const input = s.locator('input.efsp-block-input');
@@ -59,7 +59,7 @@ test('F-201: a space can be typed into a free-text Block', async ({ page }) => {
 });
 
 test('F-201: a space can be typed into a text input inside a Strip popover', async ({ page }) => {
-  await openPanel(page, { held: ['OPS'] });
+  await openPanel(page, { signedOn: ['OPS'] });
   const s = await seedStrip(page, { callsign: 'SPC202' });
   await seedStrip(page, { callsign: 'SPC203' });
   await startAction(s, 'MARSA…');
@@ -73,7 +73,7 @@ test('F-201: a space can be typed into a text input inside a Strip popover', asy
 // ── F-202 ────────────────────────────────────────────────────────────────
 
 test('F-202: a half-typed Block keeps focus when another controller updates a different Strip', async ({ page, browser }) => {
-  await openPanel(page, { held: ['OPS'] });
+  await openPanel(page, { signedOn: ['OPS'] });
   const mine = await seedStrip(page, { callsign: 'FOC201' });
   const other = await seedStrip(page, { callsign: 'FOC202' });
   const otherId = await other.getAttribute('data-strip-id');
@@ -84,7 +84,7 @@ test('F-202: a half-typed Block keeps focus when another controller updates a di
   const ctx2 = await browser.newContext();
   const page2 = await ctx2.newPage();
   try {
-    await openPanel(page2, { held: ['CD'], controller: 'e2e-second' });
+    await openPanel(page2, { signedOn: ['CD'], controller: 'e2e-second' });
     // Hand FOC202 to CD, so the update below is to a Strip this controller
     // is not even looking at any more.
     await page.evaluate((i) => window.sendEfspMutation('OPS', window.getEfspStrip(i), { kind: 'InvokeNla' }), otherId);
@@ -95,7 +95,7 @@ test('F-202: a half-typed Block keeps focus when another controller updates a di
     await page.keyboard.type('FL3');
 
     await setBlockVia(page2, otherId, '8', 'LTAG', 'CD');
-    await expect.poll(() => page.evaluate((i) => window.getEfspFdr(window.getEfspStrip(i).fdrId).filed.departureAirport, otherId)).toBe('LTAG');
+    await expect.poll(() => page.evaluate((i) => window.getEfspFdr(window.getEfspStrip(i).flightDataId).filed.departureAirport, otherId)).toBe('LTAG');
     await page.waitForTimeout(100); // one rAF for the batched render
 
     // Measured: focus is now div.efsp-strip — FOC201's own Strip element.
@@ -110,7 +110,7 @@ test('F-202: a half-typed Block keeps focus when another controller updates a di
 // ── F-203 ────────────────────────────────────────────────────────────────
 
 test('F-203: Enter commits the Block and does nothing else to the Strip', async ({ page }) => {
-  await openPanel(page, { held: ['OPS'] });
+  await openPanel(page, { signedOn: ['OPS'] });
   const s = await seedStrip(page, { callsign: 'ENT201' });
   await expect(s).not.toHaveClass(/efsp-strip-selected/);
   await s.locator('.efsp-block-7').click();
@@ -124,7 +124,7 @@ test('F-203: Enter commits the Block and does nothing else to the Strip', async 
 // ── F-204 ────────────────────────────────────────────────────────────────
 
 test('F-204: a Strip with an abandoned Block edit still shows other changes to it', async ({ page }) => {
-  await openPanel(page, { held: ['OPS'] });
+  await openPanel(page, { signedOn: ['OPS'] });
   const s = await seedStrip(page, { callsign: 'FRZ201' });
   const id = await s.getAttribute('data-strip-id');
   await s.locator('.efsp-block-7').click();
@@ -134,13 +134,13 @@ test('F-204: a Strip with an abandoned Block edit still shows other changes to i
   await expect(s.locator('input.efsp-block-input')).toHaveCount(1);
 
   await setBlockVia(page, id, '8', 'LTAG');
-  await expect.poll(() => page.evaluate((i) => window.getEfspFdr(window.getEfspStrip(i).fdrId).filed.departureAirport, id)).toBe('LTAG');
+  await expect.poll(() => page.evaluate((i) => window.getEfspFdr(window.getEfspStrip(i).flightDataId).filed.departureAirport, id)).toBe('LTAG');
   // Measured: DEP stays blank; data-rev on the element stays at the old rev.
   await expect(s.locator('.efsp-block-8')).toHaveText('LTAG', { timeout: 2000 });
 });
 
 test('F-204: a Strip with an abandoned Block edit leaves the Bay when it is transferred', async ({ page }) => {
-  await openPanel(page, { held: ['OPS', 'CD'] });
+  await openPanel(page, { signedOn: ['OPS', 'CD'] });
   const s = await seedStrip(page, { callsign: 'FRZ202' });
   const id = await s.getAttribute('data-strip-id');
   await s.locator('.efsp-block-7').click();
@@ -155,7 +155,7 @@ test('F-204: a Strip with an abandoned Block edit leaves the Bay when it is tran
 });
 
 test('F-204: starting a second Block edit closes the first', async ({ page }) => {
-  await openPanel(page, { held: ['OPS'] });
+  await openPanel(page, { signedOn: ['OPS'] });
   const s = await seedStrip(page, { callsign: 'FRZ203' });
   await s.locator('.efsp-block-7').click();
   await s.locator('.efsp-block-8').click();
@@ -167,7 +167,7 @@ test('F-204: starting a second Block edit closes the first', async ({ page }) =>
 // ── the rule that holds (§3.7 rule 5 / §7.4 rule 2) ──────────────────────
 
 test('blur neither commits nor reverts a free-text Block', async ({ page }) => {
-  await openPanel(page, { held: ['OPS'] });
+  await openPanel(page, { signedOn: ['OPS'] });
   const s = await seedStrip(page, { callsign: 'BLR201' });
   await page.evaluate(() => {
     window.__l2Sent = [];
@@ -187,8 +187,8 @@ test('blur neither commits nor reverts a free-text Block', async ({ page }) => {
 
 test('F-205: arrowing through an enum Block does not commit until the controller chooses', async ({ page }) => {
   // A CTR arrival: 5A and RADAR are CTR's fields, not OPS's (docs/adr/0056).
-  await openPanel(page, { held: ['CTR'], facilityId: 'CENTER', controller: 'ctr-controller' });
-  const s = await seedStrip(page, { callsign: 'ENM201', actingPositionId: 'CTR', bayId: 'ctr-enroute', role: 'ARRIVAL', facilityId: 'CENTER' });
+  await openPanel(page, { signedOn: ['CTR'], facilityId: 'CENTER', controller: 'ctr-controller' });
+  const s = await seedStrip(page, { callsign: 'ENM201', actingPositionId: 'CTR', bayId: 'ctr-enroute', stripType: 'ARRIVAL', facilityId: 'CENTER' });
   await page.evaluate(() => {
     window.__l2Sent = [];
     const orig = window.sendEfspMutation;
@@ -205,8 +205,8 @@ test('F-205: arrowing through an enum Block does not commit until the controller
 
 test('F-205: Space opens the enum select rather than leaving it', async ({ page }) => {
   // A CTR arrival: 5A and RADAR are CTR's fields, not OPS's (docs/adr/0056).
-  await openPanel(page, { held: ['CTR'], facilityId: 'CENTER', controller: 'ctr-controller' });
-  const s = await seedStrip(page, { callsign: 'ENM202', actingPositionId: 'CTR', bayId: 'ctr-enroute', role: 'ARRIVAL', facilityId: 'CENTER' });
+  await openPanel(page, { signedOn: ['CTR'], facilityId: 'CENTER', controller: 'ctr-controller' });
+  const s = await seedStrip(page, { callsign: 'ENM202', actingPositionId: 'CTR', bayId: 'ctr-enroute', stripType: 'ARRIVAL', facilityId: 'CENTER' });
   await s.locator('.efsp-block-5A').click();
   await expect(s.locator('select.efsp-block-enum-select')).toBeFocused();
   await page.keyboard.press('Space');
@@ -219,8 +219,8 @@ test('F-205: Space opens the enum select rather than leaving it', async ({ page 
 
 test('F-206: choosing "—" on a set enum Block clears it', async ({ page }) => {
   // A CTR arrival: 5A and RADAR are CTR's fields, not OPS's (docs/adr/0056).
-  await openPanel(page, { held: ['CTR'], facilityId: 'CENTER', controller: 'ctr-controller' });
-  const s = await seedStrip(page, { callsign: 'ENM203', actingPositionId: 'CTR', bayId: 'ctr-enroute', role: 'ARRIVAL', facilityId: 'CENTER' });
+  await openPanel(page, { signedOn: ['CTR'], facilityId: 'CENTER', controller: 'ctr-controller' });
+  const s = await seedStrip(page, { callsign: 'ENM203', actingPositionId: 'CTR', bayId: 'ctr-enroute', stripType: 'ARRIVAL', facilityId: 'CENTER' });
   // RADAR, not 5A. The original walk used 5A and could never have passed:
   // strip-template.js's ENUM_CLEARABLE_BLOCKS carries the SERVER's per-Block
   // answer to "may this be cleared", and 5A's cleared value is the option
@@ -244,7 +244,7 @@ test('F-206: choosing "—" on a set enum Block clears it', async ({ page }) => 
 // ── F-207 (extends F-103) ────────────────────────────────────────────────
 
 test('F-207: a refused Block edit keeps what was typed and marks the Block', async ({ page }) => {
-  await openPanel(page, { held: ['OPS'] });
+  await openPanel(page, { signedOn: ['OPS'] });
   const s = await seedStrip(page, { callsign: 'REF201' });
   // Block 6 (PROP DEP), not 9F: 9F became a picker of the configured routes
   // (crc-sync's docs/adr/0073), so nothing can be typed into it. Since F4 a
@@ -290,7 +290,7 @@ test('F-207: a refused Block edit keeps what was typed and marks the Block', asy
 // make them green: the measurement is the record.
 
 test.fail('extends F-105: the ⌿ confirm-vacated button meets the touch floor', async ({ page }) => {
-  await openPanel(page, { held: ['OPS'] });
+  await openPanel(page, { signedOn: ['OPS'] });
   const s = await seedStrip(page, { callsign: 'TCH201' });
   await setBlockVia(page, await s.getAttribute('data-strip-id'), '21', '5000');
   const btn = s.locator('.efsp-confirm-vacated-btn');
@@ -302,7 +302,7 @@ test.fail('extends F-105: the ⌿ confirm-vacated button meets the touch floor',
 });
 
 test.fail('extends F-105: the * history overflow meets the touch floor', async ({ page }) => {
-  await openPanel(page, { held: ['OPS'] });
+  await openPanel(page, { signedOn: ['OPS'] });
   const s = await seedStrip(page, { callsign: 'TCH202' });
   const id = await s.getAttribute('data-strip-id');
   for (const v of ['1000', '2000', '3000', '4000']) {
@@ -328,7 +328,7 @@ test.fail('extends F-105: the * history overflow meets the touch floor', async (
 // annotation stays as the record of that call, not as an open bug. Its sibling
 // below (the collapse control) WAS a defect and is fixed.
 test.fail('F-208: the expanded view lists only Blocks it can show something for', async ({ page }) => {
-  await openPanel(page, { held: ['OPS'] });
+  await openPanel(page, { signedOn: ['OPS'] });
   const s = await seedStrip(page, { callsign: 'EXP201' });
   await s.locator('.efsp-expand-btn').click();
   const exp = s.locator('.efsp-strip-expanded');
@@ -339,7 +339,7 @@ test.fail('F-208: the expanded view lists only Blocks it can show something for'
 });
 
 test('F-208: the collapse control is reachable while reading the bottom of the expanded view', async ({ page }) => {
-  await openPanel(page, { held: ['OPS'] });
+  await openPanel(page, { signedOn: ['OPS'] });
   const s = await seedStrip(page, { callsign: 'EXP202' });
   await s.locator('.efsp-expand-btn').click();
   const last = s.locator('.efsp-expanded-row').last();

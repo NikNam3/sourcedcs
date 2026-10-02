@@ -70,17 +70,17 @@ function _scheduleArrivalExpiry() {
 /** app.js, after an efsp-board-delta is applied — see efsp-arrivals.js for the rule. */
 export function noteEfspBoardArrivals(msg, placementBefore) {
   if (typeof noteEfspArrivals !== 'function') return;
-  const held = typeof getActingPositions === 'function' ? getActingPositions() : [];
+  const signedOn = typeof getActingPositions === 'function' ? getActingPositions() : [];
   const mine = new Set();
-  for (const positionId of held) {
+  for (const positionId of signedOn) {
     const p = typeof getEfspPosition === 'function' ? getEfspPosition(positionId) : null;
     if (p && p.primary && p.primary.controllerId) mine.add(p.primary.controllerId);
   }
   noteEfspArrivals(placementBefore, (msg.strips && msg.strips.updated) || [], {
-    heldPositions: held, myControllerIds: mine, visibleBayId: efspVisibleBayId(), now: Date.now(),
+    signedOnPositions: signedOn, myControllerIds: mine, visibleBayId: efspVisibleBayId(), now: Date.now(),
     callsignOf: (strip) => {
-      const fdr = getEfspFdr(strip.fdrId);
-      return (fdr && fdr.identity && fdr.identity.callsign) || strip.stripId;
+      const flightData = getEfspFdr(strip.flightDataId);
+      return (flightData && flightData.identity && flightData.identity.callsign) || strip.stripId;
     },
   });
   if (typeof forgetEfspArrivals === 'function') forgetEfspArrivals(msg.strips && msg.strips.gone);

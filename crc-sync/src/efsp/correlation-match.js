@@ -65,8 +65,8 @@ function splitCallsign(cs) {
  * VIPER11/VIPER12 while the flight plan filed VIPER1 for the formation,
  * because guide §3.2 rule 2 makes a formation ONE Identity with flightSize > 1.
  */
-function callsignAffinity(fdrCallsign, trackCallsign) {
-  const a = normaliseCallsign(fdrCallsign);
+function callsignAffinity(flightDataCallsign, trackCallsign) {
+  const a = normaliseCallsign(flightDataCallsign);
   const b = normaliseCallsign(trackCallsign);
   if (!a || !b) return null;
   if (a === b) return AFFINITY_EXACT;
@@ -91,7 +91,7 @@ function callsignAffinity(fdrCallsign, trackCallsign) {
 
 /**
  * Per-tick lookup tables over the live tracks, built once rather than
- * re-scanned per FDR — this is what keeps the reconciler O(tracks + fdrs).
+ * re-scanned per FDR — this is what keeps the reconciler O(tracks + flightDataList).
  *
  * Both are one-to-MANY on purpose. A duplicate beacon code is structural and
  * explicitly accepted (§3.10.2 rule 7: "duplicate codes raise an alert, never

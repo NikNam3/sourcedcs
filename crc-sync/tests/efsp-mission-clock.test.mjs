@@ -17,7 +17,7 @@ process.env.CRCSYNC_EFSP_MUTATION_LOG_PATH = path.join(tmpDir, 'mutations.jsonl'
 const { createEfsp } = await import('../src/efsp/index.js');
 const { BoardStore } = await import('../src/efsp/board-store.js');
 import { fullRules } from "./helpers/full-rules.mjs";
-const { FdrStore } = await import('../src/efsp/fdr-store.js');
+const { FlightDataStore } = await import('../src/efsp/flight-data-store.js');
 const { ConformanceMonitor } = await import('../src/efsp/conformance.js');
 
 const MISSION_0240Z = Date.UTC(2016, 5, 21, 2, 40, 0);
@@ -31,17 +31,17 @@ function createStripMsg() {
     version: 1, type: 'efsp-mutation', clientMutationId: crypto.randomUUID(), actingPositionId: 'OPS',
     op: {
       kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main',
-      fdr: { callsign: 'VIPER1', aircraftType: 'F16', wakeCategory: 'D', departureAirport: 'LTAG', destinationAirport: 'LTAC', route: 'DCT', requestedAltitude: '250' },
+      flightData: { callsign: 'VIPER1', aircraftType: 'F16', wakeCategory: 'D', departureAirport: 'LTAG', destinationAirport: 'LTAC', route: 'DCT', requestedAltitude: '250' },
     },
   };
 }
 
-test('createEfsp stamps Strips, FDRs, Position occupancy and the Mutation log with mission time', () => {
+test('createEfsp stamps Strips, FDRs, Position staffing and the Mutation log with mission time', () => {
   const clock = fakeClock();
   const efsp = createEfsp({ clock });
   assert.equal(efsp.clock, clock);
   const session = { controllerId: 'c1', who: 'Alice' };
-  efsp.handleMessage(session, { type: 'efsp-set-positions', held: ['OPS'] });
+  efsp.handleMessage(session, { type: 'efsp-set-positions', signedOn: ['OPS'] });
   const result = efsp.handleMessage(session, createStripMsg());
   assert.equal(result.ack.ok, true);
 
@@ -59,10 +59,10 @@ test('createEfsp stamps Strips, FDRs, Position occupancy and the Mutation log wi
 test('the NLA status every Strip carries is computed at mission time', () => {
   const clock = fakeClock();
   let seen = null;
-  const board = new BoardStore(new FdrStore(undefined, { clock }), fullRules({
-    computeNla: (_strip, _fdr, now) => { seen = now; return null; },
+  const board = new BoardStore(new FlightDataStore(undefined, { clock }), fullRules({
+    computeNla: (_strip, _flightData, now) => { seen = now; return null; },
   }), { clock });
-  board.nlaStatusFor({ stripId: 's1', fdrId: 'f1', state: 'HELD' });
+  board.nlaStatusFor({ stripId: 's1', flightDataId: 'f1', state: 'HELD' });
   assert.equal(seen, MISSION_0240Z);
 });
 
@@ -70,12 +70,12 @@ test('conformance measures the heading grace on the wall clock from first sight;
   const clock = fakeClock();
   let wall = 1000;
   const cleared = MISSION_0240Z; // mission time: a stamp seven years from the wall clock's
-  const fdr = { fdrId: 'f1', clearance: { heading: { entries: [{ status: 'ACTIVE', parsed: 90, at: cleared }] }, altitude: { entries: [] } } };
+  const flightData = { flightDataId: 'f1', clearance: { heading: { entries: [{ status: 'ACTIVE', parsed: 90, at: cleared }] }, altitude: { entries: [] } } };
   const monitor = new ConformanceMonitor({
     clock, wallClock: { now: () => wall },
     trackStore: { get: () => ({ course: 180, groundSpeed: 200, verticalSpeed: 0, alt: 3000 }) },
-    fdrStore: { getFdr: () => fdr },
-    correlationStore: { getAll: () => [{ fdrId: 'f1', trackId: 't1', state: 'CORRELATED' }] },
+    flightDataStore: { getFlightData: () => flightData },
+    correlationStore: { getAll: () => [{ flightDataId: 'f1', trackId: 't1', state: 'CORRELATED' }] },
     weather: () => ({}), transitionAltFt: () => 18000, indicatedAltFt: () => 10000,
     gridToMagnetic: (deg) => deg, // frames are conformance.test.mjs's concern
     config: { minGroundSpeedKt: 50, headingToleranceDeg: 5, headingGraceSec: 30, headingPersistSec: 10, atAltitudeBandFt: 400, levelBustFt: 500, levelBustPersistSec: 3, wrongWayFpm: 500, wrongWayPersistSec: 5 },

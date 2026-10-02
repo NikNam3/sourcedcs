@@ -82,22 +82,22 @@ export const COMPACT_BLOCKS_BY_POSITION = {
   DEPARTURE: {
     OPS: ['1', '3', '5', '6', '7', '8', '8A', '8B', '9', '9F', '3D', '3E', '3G', '14E'],
     CD:  ['1', '3', '5', '7', '8', '8A', '8B', '9', '9F', '10', '14A', '14D', '21', '14E'],
-    GND: ['1', '3', '5', '8', '8A', '14A', '14D', '17', '14E'],
-    TWR: ['1', '3', '5', '8A', '21', '14D', '18', '3F', '3G', '14E'],
-    APP: ['1', '3', '5', '7', '8A', '9', '20', '21', '14A', '22', '5A', 'SREG'],
+    GC: ['1', '3', '5', '8', '8A', '14A', '14D', '17', '14E'],
+    LC: ['1', '3', '5', '8A', '21', '14D', '18', '3F', '3G', '14E'],
+    AP: ['1', '3', '5', '7', '8A', '9', '20', '21', '14A', '22', '5A', 'SREG'],
     CTR: ['1', '3', '5', '7', '21', '20', '8B', '9', '14A', '22', '24A', 'IFR', 'RSVC', 'SREG', '5A'],
   },
   ARRIVAL: {
-    GND: ['1', '3', '5', '8B'],
-    TWR: ['1', '3', '5', '7', '8B', '9A-FUEL', '3F', '3G'],
-    APP: ['1', '3', '5', '6', '7', '8A', '8B', '9A-VECTOR', '9A-SPEED', '22', '5A', 'SREG'],
+    GC: ['1', '3', '5', '8B'],
+    LC: ['1', '3', '5', '7', '8B', '9A-FUEL', '3F', '3G'],
+    AP: ['1', '3', '5', '6', '7', '8A', '8B', '9A-VECTOR', '9A-SPEED', '22', '5A', 'SREG'],
     // SFA (crc-sync docs/adr/0075): the approach controller's list, FREQ included, because a frequency
     // is the Strip's attribute and the controller rotates onto it (guide §4.7). No SREG: MARSA is APP's.
     SFA: ['1', '3', '5', '6', '7', '8A', '8B', '9A-VECTOR', '9A-SPEED', '22', '5A'],
     CTR: ['1', '3', '5', '6', '7', '9A-VECTOR', '22', '24A', 'IFR', 'RSVC', 'SREG', '5A'],
   },
   OVERFLIGHT: {
-    APP: ['1', '3', '5', '7A', '8B', '9', '9A-VECTOR', '22', '5A', 'SREG'],
+    AP: ['1', '3', '5', '7A', '8B', '9', '9A-VECTOR', '22', '5A', 'SREG'],
     CTR: ['1', '3', '5', '7A', '8B', '9', '9A-VECTOR', '22', '24A', 'IFR', 'RSVC', 'SREG', '5A'],
   },
 };
@@ -105,8 +105,8 @@ export const COMPACT_BLOCKS_BY_POSITION = {
 // Grid columns a field spans. Everything else takes one.
 export const FIELD_SPANS = { '1': 2, '3': 2, '9': 3, '24A': 2, M1: 2, M3: 2, M5: 2, C1: 2, C2: 1, C24: 2 };
 
-function _blockMapFor(role) {
-  return (typeof BLOCK_MAPS === 'object' && BLOCK_MAPS && BLOCK_MAPS[role]) || null;
+function _blockMapFor(stripType) {
+  return (typeof BLOCK_MAPS === 'object' && BLOCK_MAPS && BLOCK_MAPS[stripType]) || null;
 }
 
 /**
@@ -114,18 +114,18 @@ function _blockMapFor(role) {
  * order. The per-Position list if there is one, else the Role's; either way
  * only Blocks the Role's Block Map actually has.
  */
-export function compactBlocksFor(role, positionId, fdr) {
-  const byPosition = COMPACT_BLOCKS_BY_POSITION[role];
+export function compactBlocksFor(stripType, positionId, flightData) {
+  const byPosition = COMPACT_BLOCKS_BY_POSITION[stripType];
   let list = (byPosition && positionId && byPosition[positionId])
-    || COMPACT_BLOCKS_BY_ROLE[role] || COMPACT_BLOCKS_SHARED;
+    || COMPACT_BLOCKS_BY_ROLE[stripType] || COMPACT_BLOCKS_SHARED;
   // Hung ordnance (crc-sync's docs/adr/0069): ORDNANCE, only once it says something —
   // before the MTR group, which starts its own grid row.
-  if (_ordnanceWhenSet(role, positionId) && isOrdnanceSet(fdr) && !list.includes('3G')) list = [...list, '3G'];
+  if (_ordnanceWhenSet(stripType, positionId) && isOrdnanceSet(flightData) && !list.includes('3G')) list = [...list, '3G'];
   // §9.4 (docs/adr/0062): the flight's MTR group, only when it has MTR data.
-  const mtr = fdr && hasMtrData(fdr) && MTR_BLOCKS_BY_POSITION[role] && positionId
-    ? MTR_BLOCKS_BY_POSITION[role][positionId] : null;
+  const mtr = flightData && hasMtrData(flightData) && MTR_BLOCKS_BY_POSITION[stripType] && positionId
+    ? MTR_BLOCKS_BY_POSITION[stripType][positionId] : null;
   if (mtr) list = [...list, ...mtr];
-  const map = _blockMapFor(role);
+  const map = _blockMapFor(stripType);
   return map ? list.filter(id => Object.prototype.hasOwnProperty.call(map, id)) : list;
 }
 
@@ -138,15 +138,15 @@ export function compactBlocksFor(role, positionId, fdr) {
 // on their face only while it says something other than CLEAN (S-L12). Before
 // that it is one tap away in the expanded view (▼), where every Block off the
 // face is. Tower keeps it on its face unconditionally (COMPACT_BLOCKS_BY_POSITION).
-export const ORDNANCE_WHEN_SET = { positions: ['APP', 'CTR'], roles: ['MISSION'] };
+export const ORDNANCE_WHEN_SET = { positions: ['AP', 'CTR'], roles: ['MISSION'] };
 
-function _ordnanceWhenSet(role, positionId) {
-  return ORDNANCE_WHEN_SET.roles.includes(role) || (!!positionId && ORDNANCE_WHEN_SET.positions.includes(positionId));
+function _ordnanceWhenSet(stripType, positionId) {
+  return ORDNANCE_WHEN_SET.roles.includes(stripType) || (!!positionId && ORDNANCE_WHEN_SET.positions.includes(positionId));
 }
 
 /** True when the flight's ordnance state is anything but CLEAN or empty. */
-export function isOrdnanceSet(fdr) {
-  const state = fdr && fdr.military ? fdr.military.ordnanceState : null;
+export function isOrdnanceSet(flightData) {
+  const state = flightData && flightData.military ? flightData.military.ordnanceState : null;
   return !!state && state !== 'CLEAN';
 }
 
@@ -167,7 +167,7 @@ export function fieldSpanFor(blockId) {
 // [SOURCE-DEFINED] which Positions work MTR traffic (H24 took this default):
 //  - OPS files the flight: designator and entry.
 //  - CD reads the designator into the clearance, nothing else.
-//  - GND and TWR: none — ground movement and the runway do not use MTR data.
+//  - GND and LC: none — ground movement and the runway do not use MTR data.
 //  - APP and CTR release the aircraft into the route and take the call on
 //    exit: the whole group, M11 first. An ARRIVAL is past the route, so its
 //    entry is history and stays in the expanded view.
@@ -176,15 +176,15 @@ export const MTR_BLOCKS_BY_POSITION = {
   DEPARTURE: {
     OPS: ['9G-MTR', '9G-ENTRY', '9G-TIME'],
     CD:  ['9G-MTR'],
-    APP: ['9G-MTR', '9H-EXIT', '9H-TIME', '9H-ALT', '9G-ENTRY', '9G-TIME'],
+    AP: ['9G-MTR', '9H-EXIT', '9H-TIME', '9H-ALT', '9G-ENTRY', '9G-TIME'],
     CTR: ['9G-MTR', '9H-EXIT', '9H-TIME', '9H-ALT', '9G-ENTRY', '9G-TIME'],
   },
   ARRIVAL: {
-    APP: ['9G-MTR', '9H-EXIT', '9H-TIME', '9H-ALT'],
+    AP: ['9G-MTR', '9H-EXIT', '9H-TIME', '9H-ALT'],
     CTR: ['9G-MTR', '9H-EXIT', '9H-TIME', '9H-ALT'],
   },
   OVERFLIGHT: {
-    APP: ['9G-MTR', '9H-EXIT', '9H-TIME', '9H-ALT', '9G-ENTRY', '9G-TIME'],
+    AP: ['9G-MTR', '9H-EXIT', '9H-TIME', '9H-ALT', '9G-ENTRY', '9G-TIME'],
     CTR: ['9G-MTR', '9H-EXIT', '9H-TIME', '9H-ALT', '9G-ENTRY', '9G-TIME'],
   },
 };
@@ -197,8 +197,8 @@ const MTR_FIELDS = ['designator', 'entryFix', 'entryTimeUtc', 'exitFix', 'exitEs
  * that exit fix on the Strip, rather than have it vanish into the expanded
  * view while it still sits on the flight.
  */
-export function hasMtrData(fdr) {
-  const mtr = fdr && fdr.military && fdr.military.mtr;
+export function hasMtrData(flightData) {
+  const mtr = flightData && flightData.military && flightData.military.mtr;
   if (!mtr) return false;
   return MTR_FIELDS.some(k => mtr[k] != null && mtr[k] !== '');
 }
@@ -211,9 +211,9 @@ export function hasMtrData(fdr) {
  * here. It never reads 9H-ALT: that is the pilot's request, and the rule says
  * "last clearance". [SOURCE-DEFINED] the wording; the rule is the guide's.
  */
-export function mtrLostCommsAdvisory(fdr) {
-  if (!hasMtrData(fdr)) return null;
-  const cell = fdr.clearance && fdr.clearance.altitude;
+export function mtrLostCommsAdvisory(flightData) {
+  if (!hasMtrData(flightData)) return null;
+  const cell = flightData.clearance && flightData.clearance.altitude;
   const active = cell && Array.isArray(cell.entries) ? cell.entries.find(e => e.status === 'ACTIVE') : null;
   const cleared = active && active.value != null && active.value !== ''
     ? String(active.value) : 'none posted (ALT is empty)';

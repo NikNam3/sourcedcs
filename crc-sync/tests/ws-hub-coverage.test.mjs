@@ -37,8 +37,8 @@ function fakePicture(grants, lit) {
       return {
         radars: RADARS.filter(r => ids.includes(r.id)),
         radarIds: new Set(ids),
-        heldPositions: (grants[`${controllerId}:held`]) || [],
-        radarBearingPositions: ids.length ? ['APP'] : [],
+        signedOnPositions: (grants[`${controllerId}:signedOn`]) || [],
+        radarBearingPositions: ids.length ? ['AP'] : [],
       };
     },
     // `lit` is written as { at, radarIds } per track for readability; the
@@ -228,17 +228,17 @@ test('taking a radar Position re-sends the picture; giving it up empties it', ()
 
 test('a coverage message goes out even when the radar set is unchanged, because the held list is in it', () => {
   // Taking Ground adds no scope, but the client still renders what you hold.
-  const grants = { c1: ['app:Incirlik'], 'c1:held': [] };
+  const grants = { c1: ['app:Incirlik'], 'c1:signedOn': [] };
   const picture = fakePicture(grants, {});
   const hub = new WsHub({ trackStore: new TrackStore(), collabStore: new CollaborativeStore(), picture });
   const ws = fakeWs();
   const s = session('c1', hub);
 
-  grants['c1:held'] = [{ facilityId: 'INCIRLIK', positionId: 'GND', isPrimary: true }];
+  grants['c1:signedOn'] = [{ facilityId: 'INCIRLIK', positionId: 'GC', isPrimary: true }];
   assert.equal(hub._refreshCoverage(ws, s), false, 'the radar set did not change');
   const coverage = ws.sent.find(m => m.type === 'coverage');
   assert.ok(coverage);
-  assert.deepEqual(coverage.heldPositions.map(p => p.positionId), ['GND']);
+  assert.deepEqual(coverage.signedOnPositions.map(p => p.positionId), ['GC']);
   assert.equal(ws.sent.some(m => m.type === 'snapshot'), false, 'and no expensive re-send');
 });
 
@@ -250,7 +250,7 @@ test('the coverage message carries the radars and which Positions grant them', (
   ws.send(JSON.stringify(hub._coverageMsg(s)));
   const msg = ws.sent[0];
   assert.deepEqual(msg.radars.map(r => r.id), ['app:Incirlik']);
-  assert.deepEqual(msg.radarBearingPositions, ['APP']);
+  assert.deepEqual(msg.radarBearingPositions, ['AP']);
 });
 
 // ── without a picture, nobody sees anything ────────────────────────────────

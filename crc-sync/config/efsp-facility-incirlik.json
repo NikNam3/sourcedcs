@@ -3,45 +3,45 @@
   "positions": [
     "OPS",
     "CD",
-    "GND",
-    "TWR",
+    "GC",
+    "LC",
     "RSU",
-    "APP",
+    "AP",
     "SFA",
     "PAR"
   ],
   "positionClasses": {
     "OPS": "BASOPS",
     "CD": "MILITARY_ATC",
-    "GND": "MILITARY_ATC",
-    "TWR": "MILITARY_ATC",
+    "GC": "MILITARY_ATC",
+    "LC": "MILITARY_ATC",
     "RSU": "MILITARY_ATC",
-    "APP": "MILITARY_ATC",
+    "AP": "MILITARY_ATC",
     "SFA": "MILITARY_ATC",
     "PAR": "MILITARY_ATC"
   },
   "positionLetters": {
     "OPS": "O",
     "CD": "D",
-    "GND": "G",
-    "TWR": "T",
+    "GC": "G",
+    "LC": "T",
     "RSU": "R",
-    "APP": "A",
+    "AP": "A",
     "SFA": "S",
     "PAR": "P"
   },
-  "coveringChain": {
-    "CD": "GND",
-    "GND": "TWR",
-    "TWR": "APP",
-    "SFA": "APP",
-    "PAR": "APP"
+  "consolidation": {
+    "CD": "GC",
+    "GC": "LC",
+    "LC": "AP",
+    "SFA": "AP",
+    "PAR": "AP"
   },
   "positionRadars": {
     "OPS": [],
     "CD": [],
-    "GND": [],
-    "TWR": [
+    "GC": [],
+    "LC": [
       {
         "kind": "airport",
         "airport": "LTAG"
@@ -53,7 +53,7 @@
         "airport": "LTAG"
       }
     ],
-    "APP": [
+    "AP": [
       {
         "kind": "approach",
         "airport": "LTAG"
@@ -97,7 +97,7 @@
         ]
       },
       {
-        "bayId": "ops-field-state",
+        "bayId": "ops-runway-status",
         "rackIds": [
           "main"
         ]
@@ -138,38 +138,38 @@
         ]
       }
     ],
-    "GND": [
+    "GC": [
       {
-        "bayId": "gnd-pushback",
+        "bayId": "gc-pushback",
         "rackIds": [
           "main"
         ],
         "impliesState": "PUSHBACK"
       },
       {
-        "bayId": "gnd-taxi-out",
+        "bayId": "gc-taxi-out",
         "rackIds": [
           "main"
         ],
         "impliesState": "TAXI"
       },
       {
-        "bayId": "gnd-taxi-in",
+        "bayId": "gc-taxi-in",
         "rackIds": [
           "main"
         ],
         "impliesState": "TAXI_IN"
       },
       {
-        "bayId": "gnd-coordination",
+        "bayId": "gc-coordination",
         "rackIds": [
           "main"
         ]
       }
     ],
-    "TWR": [
+    "LC": [
       {
-        "bayId": "twr-runway-queue",
+        "bayId": "lc-runway-queue",
         "rackIds": [
           "rwy-05",
           "rwy-23"
@@ -177,35 +177,35 @@
         "impliesState": "RUNWAY_QUEUE"
       },
       {
-        "bayId": "twr-airborne",
+        "bayId": "lc-airborne",
         "rackIds": [
           "main"
         ],
         "impliesState": "DEPARTED"
       },
       {
-        "bayId": "twr-arrivals",
+        "bayId": "lc-arrivals",
         "rackIds": [
           "main"
         ],
         "impliesState": "HANDED_TO_TOWER"
       },
       {
-        "bayId": "twr-final",
+        "bayId": "lc-final",
         "rackIds": [
           "main"
         ],
         "impliesState": "FINAL"
       },
       {
-        "bayId": "twr-landed",
+        "bayId": "lc-landed",
         "rackIds": [
           "main"
         ],
         "impliesState": "LANDED"
       },
       {
-        "bayId": "twr-coordination",
+        "bayId": "lc-coordination",
         "rackIds": [
           "main"
         ]
@@ -225,30 +225,30 @@
         "replacesRacks": true
       }
     ],
-    "APP": [
+    "AP": [
       {
-        "bayId": "app-inbound",
+        "bayId": "ap-inbound",
         "rackIds": [
           "main"
         ],
         "impliesState": "INBOUND"
       },
       {
-        "bayId": "app-departures",
+        "bayId": "ap-departures",
         "rackIds": [
           "main"
         ],
         "impliesState": "HANDED_OFF"
       },
       {
-        "bayId": "app-overflight",
+        "bayId": "ap-overflight",
         "rackIds": [
           "main"
         ],
-        "holdsRole": "OVERFLIGHT"
+        "holdsStripType": "OVERFLIGHT"
       },
       {
-        "bayId": "app-coordination",
+        "bayId": "ap-coordination",
         "rackIds": [
           "main"
         ]
@@ -289,7 +289,7 @@
     ]
   },
   "singleFrequencyApproach": {
-    "jurisdiction": "APP",
+    "jurisdiction": "AP",
     "rotationSize": 3,
     "pool": [
       {
@@ -314,7 +314,7 @@
       }
     ],
     "initialRotation": {
-      "freq-1": "APP",
+      "freq-1": "AP",
       "freq-2": "SFA",
       "freq-3": "PAR"
     }
@@ -322,7 +322,7 @@
   "dataOnly": false,
   "standingReleases": [],
   "aitAuthorized": false,
-  "fieldState": {
+  "runwayStatus": {
     "airportIcao": "LTAG",
     "runways": [
       {
@@ -344,7 +344,7 @@
     ],
     "runwayChangeAcknowledgers": [
       "OPS",
-      "APP"
+      "AP"
     ],
     "inspectionAuthorityPositionId": "OPS",
     "pads": {

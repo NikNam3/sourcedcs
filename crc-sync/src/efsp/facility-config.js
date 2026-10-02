@@ -27,7 +27,7 @@
 // one EfspState — Filed/Taxi In/Arrivals/every Coordination Bay have none.
 
 const fs = require('fs');
-const fieldState = require('./field-state'); // pure, requires nothing back (docs/adr/0061)
+const runwayStatus = require('./runway-status'); // pure, requires nothing back (docs/adr/0061)
 const schema = require('./facility-schema');
 const { validateConfig, validateRadarSelector, validateSfaRotationRecord, BAY_VIEWS } = schema;
 // Required BEFORE this module builds its configs Map: the RANGES Facility's
@@ -97,7 +97,7 @@ const SHIPPED_FACILITY_IDS = ['INCIRLIK', 'CENTER', 'TACTICAL', 'CARRIER'];
 // getAllBays() to return here — and because the client builds its Position
 // tabs from Bays, a range Position correctly never grows a strip-rack tab.
 //
-// Absent from `coveringChain` deliberately: the chain exists to re-route
+// Absent from `consolidation` deliberately: the chain exists to re-route
 // Strips away from a vacated Position (defect D19), and a Position that owns
 // no Strips has none to strand.
 function _rangesConfig() {
@@ -107,7 +107,7 @@ function _rangesConfig() {
     positionClasses: Object.fromEntries(
       airspaceConfig.getRangePositionIds().map(id => [id, 'USING_AGENCY'])
     ),
-    coveringChain: {},
+    consolidation: {},
     positionLetters: {},
     // `hiddenBlocks`, not the `blockVisibility` inclusion list docs/adr/0041
     // replaced — this config is derived and never persisted, so the stale key
@@ -153,7 +153,7 @@ function _loadOne(facilityId) {
   }
   const check = schema.validateFacilityConfig(config, facilityId);
   if (!check.ok) throw new Error(`[efsp-facility-config] ${facilityId}: ${file} is not a valid facility config: ${check.detail}`);
-  for (const warning of fieldState.runwayInventoryWarnings(config)) {
+  for (const warning of runwayStatus.runwayInventoryWarnings(config)) {
     log.warn(warning, { facilityId });
   }
   return config;
@@ -205,7 +205,7 @@ function getFacilityConfig(facilityId = DEFAULT_FACILITY_ID) { return deepClone(
 
 function getPositionSet(facilityId = DEFAULT_FACILITY_ID) { return [...(_configs().get(facilityId).positions)]; }
 
-function getCoveringChain(facilityId = DEFAULT_FACILITY_ID) { return { ...(_configs().get(facilityId).coveringChain) }; }
+function getConsolidation(facilityId = DEFAULT_FACILITY_ID) { return { ...(_configs().get(facilityId).consolidation) }; }
 
 /**
  * WP4A second slice — a Position's doctrinal class (guide §4.1's own Class
@@ -289,10 +289,10 @@ function getBaysFor(positionId, facilityId = DEFAULT_FACILITY_ID) {
  * An exclusion list cannot drift that way: a new Block is visible until
  * somebody deliberately hides it.
  */
-function isBlockVisible(role, blockId, facilityId = DEFAULT_FACILITY_ID) {
+function isBlockVisible(stripType, blockId, facilityId = DEFAULT_FACILITY_ID) {
   const config = _configs().get(facilityId);
   if (!config) return true;
-  const hidden = (config.hiddenBlocks || {})[role];
+  const hidden = (config.hiddenBlocks || {})[stripType];
   return !hidden || !hidden.includes(blockId);
 }
 
@@ -364,15 +364,15 @@ function setFacilityConfig(next, facilityId = DEFAULT_FACILITY_ID) {
 /** The Bay whose configured impliesState matches `state` for a Position, or that Position's first Bay as a defensive fallback (guide §3.5 rule 4 accelerator target). */
 function bayForImpliedState(positionId, state, facilityId = DEFAULT_FACILITY_ID) {
   const bays = getBaysFor(positionId, facilityId);
-  // The fallback never lands on a Role Bay (`holdsRole`, docs/adr/0087): that Bay belongs to one Role, and a caller
+  // The fallback never lands on a Role Bay (`holdsStripType`, docs/adr/0087): that Bay belongs to one Role, and a caller
   // that gets it back for another Role's Strip files the Strip under the wrong Role.
-  return bays.find(b => b.impliesState === state) || bays.find(b => !b.holdsRole) || null;
+  return bays.find(b => b.impliesState === state) || bays.find(b => !b.holdsStripType) || null;
 }
 
-/** The Role a Bay is reserved for (`holdsRole`, docs/adr/0087), or null for an ordinary Bay. */
-function bayHoldsRole(bayId, facilityId = DEFAULT_FACILITY_ID) {
+/** The Role a Bay is reserved for (`holdsStripType`, docs/adr/0087), or null for an ordinary Bay. */
+function bayHoldsStripType(bayId, facilityId = DEFAULT_FACILITY_ID) {
   const bay = getAllBays(facilityId).find(b => b.bayId === bayId);
-  return (bay && bay.holdsRole) || null;
+  return (bay && bay.holdsStripType) || null;
 }
 
 /**
@@ -391,9 +391,9 @@ function coordinationBayFor(positionId, facilityId = DEFAULT_FACILITY_ID) {
 
 module.exports = {
   DEFAULT_FACILITY_ID, getFacilityIds,
-  getFacilityConfig, getPositionSet, getPositionClass, getPositionLetter, allPositionLetters, getCoveringChain, getBaysFor, getAllBays, isBlockVisible,
+  getFacilityConfig, getPositionSet, getPositionClass, getPositionLetter, allPositionLetters, getConsolidation, getBaysFor, getAllBays, isBlockVisible,
   getPositionRadars, radarBearingPositionIds, validateRadarSelector,
-  bayImpliesState, bayHoldsRole, bayForImpliedState, bayExists, coordinationBayFor, setFacilityConfig, validateConfig,
+  bayImpliesState, bayHoldsStripType, bayForImpliedState, bayExists, coordinationBayFor, setFacilityConfig, validateConfig,
   getBay, getSingleFrequencyApproach, validateSfaRotationRecord, BAY_VIEWS,
   getShippedConfig, load,
 };

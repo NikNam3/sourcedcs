@@ -18,18 +18,18 @@ function _applyInvokeNla(ctx, strip, by) {
   const blocked = ctx.nlaPrecheck(strip);
   if (blocked) return { ok: false, reason: blocked.reason, detail: blocked.detail, strip };
 
-  const fdr = ctx.fdrStore.getFdr(strip.fdrId);
-  const result = ctx.rules.computeNla(strip, fdr, now, ctx.placement.nlaCtx());
+  const flightData = ctx.flightDataStore.getFlightData(strip.flightDataId);
+  const result = ctx.rules.computeNla(strip, flightData, now, ctx.placement.nlaCtx());
   if (!result || result.inhibited) {
     return { ok: false, reason: 'NLA_INHIBITED', detail: result ? result.inhibited : 'no NLA for this state', strip };
   }
   const inert = ctx.rejectedReplicaRefusal(strip, result.toState);
   if (inert) return { ok: false, reason: inert.reason, detail: inert.detail, strip };
 
-  // docs/adr/0074: a carrier hand-over is one implementation whichever way it
+  // docs/adr/0074: a carrier handoff is one implementation whichever way it
   // is reached. Not the undoable state-only NLA path: it moves the stack.
-  if (result.carrierTransfer) {
-    return ctx.run('CarrierTransfer', strip, { transfer: result.carrierTransfer, toPositionId: result.transferTo || null }, { by, actingPositionId: strip.ownerPositionId, clientMutationId: null });
+  if (result.carrierHandoff) {
+    return ctx.run('CarrierHandoff', strip, { transfer: result.carrierHandoff, toPositionId: result.transferTo || null }, { by, actingPositionId: strip.ownerPositionId, clientMutationId: null });
   }
 
   const prevState = strip.state;
@@ -75,10 +75,10 @@ function _applyInvokeNla(ctx, strip, by) {
 
 module.exports = {
   kind: 'InvokeNla',
-  // An NLA press records what the op it ran would: a transfer's selfCoordinated, or a carrier hand-over's kind and trigger.
+  // An NLA press records what the op it ran would: a transfer's selfCoordinated, or a carrier handoff's kind and trigger.
   auditFields: (ctx, result, op) => ({ tail: {
     ...ctx.auditFieldsFor('TransferStrip', result, op).tail,
-    ...ctx.auditFieldsFor('CarrierTransfer', result, op).tail,
+    ...ctx.auditFieldsFor('CarrierHandoff', result, op).tail,
   } }),
   apply: (ctx, strip, op, meta) => _applyInvokeNla(ctx, strip, meta.by),
 };

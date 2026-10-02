@@ -205,8 +205,8 @@ class Ledger {
 
 function trimAck(ack) {
   const a = { ...ack };
-  if (a.strip) a.strip = { stripId: a.strip.stripId, rev: a.strip.rev, state: a.strip.state, ownerPositionId: a.strip.ownerPositionId, bayId: a.strip.bayId, role: a.strip.role };
-  if (a.fdr) a.fdr = { fdrId: a.fdr.fdrId };
+  if (a.strip) a.strip = { stripId: a.strip.stripId, rev: a.strip.rev, state: a.strip.state, ownerPositionId: a.strip.ownerPositionId, bayId: a.strip.bayId, stripType: a.strip.stripType };
+  if (a.flightData) a.flightData = { flightDataId: a.flightData.flightDataId };
   delete a.correlation; delete a.airspace; delete a.marsa;
   return a;
 }

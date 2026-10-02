@@ -1,12 +1,12 @@
 'use strict';
 
-// The wire families (the Board path, resync and set-positions stay in efsp-ws.js), in snapshot key order (the snapshot frame's tail is airspaces, correlations, marsa, fieldStates,
+// The wire families (the Board path, resync and set-positions stay in efsp-ws.js), in snapshot key order (the snapshot frame's tail is airspaces, correlations, marsa, runwayStatuses,
 // carriers, sfaRotation). See docs/wip/WIRE.md "How to add a family".
 const FAMILIES = [
   require('./airspace'),
   require('./correlation'),
   require('./marsa'),
-  require('./field-state'),
+  require('./runway-status'),
   require('./carrier'),
   require('./sfa'),
   ...require('./ato'),

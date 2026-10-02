@@ -26,7 +26,7 @@ function fakeToken(name = 'e2e-controller') {
  * already gone out unauthenticated, which fails in a way that looks like a
  * server problem.
  */
-async function openPanel(page, { held = ['OPS'], facilityId = 'INCIRLIK', controller = 'e2e-controller' } = {}) {
+async function openPanel(page, { signedOn = ['OPS'], facilityId = 'INCIRLIK', controller = 'e2e-controller' } = {}) {
   const consoleErrors = [];
   page.on('console', (msg) => { if (msg.type() === 'error') consoleErrors.push(msg.text()); });
   page.on('pageerror', (err) => consoleErrors.push(String(err)));
@@ -38,13 +38,13 @@ async function openPanel(page, { held = ['OPS'], facilityId = 'INCIRLIK', contro
   await page.goto('/');
   await openEfspPanel(page);
   await page.waitForFunction(() => typeof window.sendEfspSetPositions === 'function');
-  await page.evaluate(([f, h]) => window.sendEfspSetPositions(f, h), [facilityId, held]);
+  await page.evaluate(([f, h]) => window.sendEfspSetPositions(f, h), [facilityId, signedOn]);
   // The ack is what actually makes the Positions held server-side; until it
   // lands every op is refused as NOT_HOLDING_POSITION and a spec fails for a
   // reason that has nothing to do with what it is testing.
   await page.waitForFunction(
     ([f, h]) => (window.getActingPositions ? window.getActingPositions(f) : []).length === h.length,
-    [facilityId, held],
+    [facilityId, signedOn],
   );
   return { consoleErrors };
 }
@@ -77,13 +77,13 @@ async function openEfspPanel(page) {
  * the seed on the actual wire protocol, so it cannot drift from what the app
  * does, while leaving the form itself to the spec that is about the form.
  */
-async function seedStrip(page, { callsign, actingPositionId = 'OPS', bayId = 'ops-proposed', role, facilityId = 'INCIRLIK', fdr = {} }) {
+async function seedStrip(page, { callsign, actingPositionId = 'OPS', bayId = 'ops-proposed', stripType, facilityId = 'INCIRLIK', flightData = {} }) {
   const before = await page.locator('.efsp-strip').count();
   await page.evaluate(([acting, op, fac]) => window.sendEfspCreateStrip(acting, op, fac), [
     actingPositionId,
     {
-      kind: 'CreateStrip', bayId, rackId: 'main', role,
-      fdr: { callsign, aircraftType: 'F16', wakeCategory: 'D', ...fdr },
+      kind: 'CreateStrip', bayId, rackId: 'main', stripType,
+      flightData: { callsign, aircraftType: 'F16', wakeCategory: 'D', ...flightData },
     },
     facilityId,
   ]);
@@ -110,7 +110,7 @@ const CORRELATION_INELIGIBLE = ['PROPOSED', 'PENDING_CLEARANCE', 'CLEARED', 'HEL
 async function settleCorrelation(page, callsign) {
   await expect.poll(() => page.evaluate(([cs, ineligible]) => {
     const s = [...efspStrips.values()].find((x) => x.state !== 'DROPPED'
-      && (efspFdrs.get(x.fdrId) || {}).identity && efspFdrs.get(x.fdrId).identity.callsign === cs);
+      && (efspFdrs.get(x.flightDataId) || {}).identity && efspFdrs.get(x.flightDataId).identity.callsign === cs);
     if (!s || ineligible.includes(s.state)) return true;
     const el = document.querySelector(`.efsp-strip[data-strip-id="${s.stripId}"]`);
     return !!el && /\|cor:\d/.test(el.dataset.sig || '');
@@ -274,8 +274,8 @@ async function startAction(strip, name, opts = {}) {
 async function dropStrips(page, callsigns) {
   await page.evaluate((cs) => {
     for (const s of getAllEfspStrips()) {
-      const fdr = getEfspFdr(s.fdrId);
-      if (!fdr || !cs.includes(fdr.identity.callsign) || s.state === 'DROPPED') continue;
+      const flightData = getEfspFdr(s.flightDataId);
+      if (!flightData || !cs.includes(flightData.identity.callsign) || s.state === 'DROPPED') continue;
       sendEfspMutation(s.ownerPositionId, s, { kind: 'DropStrip', reason: 'e2e cleanup' });
     }
   }, callsigns);
@@ -283,12 +283,12 @@ async function dropStrips(page, callsigns) {
 }
 
 /**
- * Makes `end` ('05' or '23') INCIRLIK's active runway, through the real field-state machinery.
+ * Makes `end` ('05' or '23') INCIRLIK's active runway, through the real runway-status machinery.
  *
  * A fresh crc-sync has NO active runway (the harness has no mission wind, and the active runway is
  * what the weather feed sets). A spec that asserts text naming the runway must establish it itself
  * rather than rely on an earlier spec file having done so (ordnance-hung did, and failed alone).
- * `page` must hold TWR, OPS and APP: one controller holding all three self-coordinates the change.
+ * `page` must hold TWR, OPS and AP: one controller holding all three self-coordinates the change.
  */
 async function ensureActiveRunway(page, end = '05') {
   await page.waitForFunction(() => typeof getEfspFieldState === 'function' && !!getEfspFieldState('INCIRLIK'));
@@ -299,9 +299,9 @@ async function ensureActiveRunway(page, end = '05') {
   };
   const active = () => page.evaluate(() => getEfspFieldState('INCIRLIK').activeRunway);
   if ((await active()) === end) return;
-  await step('TWR', { kind: 'SelfCoordinateRunwayChange', toRunwayId: end });
-  await step('TWR', { kind: 'BeginRunwayChange' });
-  await step('TWR', { kind: 'CompleteRunwayChange' });
+  await step('LC', { kind: 'SelfCoordinateRunwayChange', toRunwayId: end });
+  await step('LC', { kind: 'BeginRunwayChange' });
+  await step('LC', { kind: 'CompleteRunwayChange' });
   const needsInspection = await page.evaluate(() => getEfspFieldState('INCIRLIK').runways[0].status === 'SUSPENDED_INSPECTION');
   if (needsInspection) await step('OPS', { kind: 'CompleteInspection', runwayId: '05/23' });
   await expect.poll(active, { timeout: 5000 }).toBe(end);

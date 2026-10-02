@@ -28,35 +28,35 @@ let selectedStripId = null;
 let selectCalls = 0;
 _setSelectEfspStripByIdForTest((stripId) => { selectedStripId = stripId; _setSelectedStripIdForTest(stripId); selectCalls += 1; });
 const select = (id) => { selectedStripId = id; _setSelectedStripIdForTest(id); };
-setOpenEfspBays([{ containerEl: null, bayId: 'app-departures' }]);
+setOpenEfspBays([{ containerEl: null, bayId: 'ap-departures' }]);
 
 const liveTracks = new Map();
 globalThis.getLatestTrack = (id) => liveTracks.get(String(id)) || null; // window === globalThis (client-env.mjs)
 
-function strip(stripId, fdrId, bayId = 'app-departures') {
+function strip(stripId, flightDataId, bayId = 'ap-departures') {
   return {
-    stripId, fdrId, rev: 1, role: 'DEPARTURE', state: 'AIRBORNE',
-    bayId, rackId: 'main', orderKey: 'V', ownerPositionId: 'APP',
+    stripId, flightDataId, rev: 1, stripType: 'DEPARTURE', state: 'AIRBORNE',
+    bayId, rackId: 'main', orderKey: 'V', ownerPositionId: 'AP',
     annotations: {}, flags: {}, coordination: null, tofiCoordination: null,
     airspaceEntry: null, previousLeg: null,
   };
 }
 
-function fdr(fdrId, callsign, beaconAssigned = '0041') {
-  return { fdrId, rev: 1, identity: { callsign, beaconAssigned, beaconObserved: null } };
+function flightData(flightDataId, callsign, beaconAssigned = '0041') {
+  return { flightDataId, rev: 1, identity: { callsign, beaconAssigned, beaconObserved: null } };
 }
 
-function correlation(fdrId, over = {}) {
+function correlation(flightDataId, over = {}) {
   return {
-    fdrId, rev: 1, state: 'CORRELATED', trackId: '101', matchedBy: 'BEACON',
+    flightDataId, rev: 1, state: 'CORRELATED', trackId: '101', matchedBy: 'BEACON',
     confidence: null, binding: null, warning: null, observedBeacon: '0041',
     transitions: [], ...over,
   };
 }
 
-function load({ strips = [], fdrs = [], correlations = [], tracks = [] } = {}) {
+function load({ strips = [], flightDataList = [], correlations = [], tracks = [] } = {}) {
   state._resetEfspStateForTest();
-  state.applyEfspSnapshot({ strips, fdrs, positions: [], bays: [], correlations, boardSeq: 1 });
+  state.applyEfspSnapshot({ strips, flightDataList, positions: [], bays: [], correlations, boardSeq: 1 });
   liveTracks.clear();
   for (const t of tracks) liveTracks.set(String(t.id), t);
   select(null);
@@ -96,7 +96,7 @@ test('the reverse lookup finds every live Strip for a contact, across Facilities
   // One FDR, two Strips — the ordinary case after a cross-Facility handoff,
   // and the case a per-Strip correlation would have got wrong.
   load({
-    strips: [strip('s1', 'f1', 'app-departures'), strip('s2', 'f1', 'ctr-departures')],
+    strips: [strip('s1', 'f1', 'ap-departures'), strip('s2', 'f1', 'ctr-departures')],
     correlations: [correlation('f1')],
   });
   assert.deepEqual(state.stripIdsForTrackId('101').sort(), ['s1', 's2']);
@@ -180,10 +180,10 @@ test('clicking the same contact twice keeps its Strip selected — not a toggle'
 
 test('a contact with several Strips prefers the one in a Bay that is open', () => {
   load({
-    strips: [strip('s1', 'f1', 'ctr-departures'), strip('s2', 'f1', 'app-departures')],
+    strips: [strip('s1', 'f1', 'ctr-departures'), strip('s2', 'f1', 'ap-departures')],
     correlations: [correlation('f1')],
   });
-  assert.equal(selectStripForTrack('101'), 's2', 'app-departures is the open Bay');
+  assert.equal(selectStripForTrack('101'), 's2', 'ap-departures is the open Bay');
 });
 
 // ── the badge ──────────────────────────────────────────────────────────────
@@ -192,9 +192,9 @@ test('a correlated Strip names the contact by its code, not by the callsign it a
   // crc-sync's docs/adr/0059: once correlated, the contact's label IS this
   // Strip's callsign, so the badge gives the contact's own reference.
   load({
-    strips: [strip('s1', 'f1')], fdrs: [fdr('f1', 'VIPER1')],
+    strips: [strip('s1', 'f1')], flightDataList: [flightData('f1', 'VIPER1')],
     correlations: [correlation('f1')],
-    tracks: [{ id: '101', label: { callsign: 'VIPER1', source: 'FDR', trackNumber: 'TN00012' }, ssr: { code: '0041' } }],
+    tracks: [{ id: '101', label: { callsign: 'VIPER1', source: 'FLIGHT_DATA', trackNumber: 'TN00012' }, ssr: { code: '0041' } }],
   });
   const badge = correlationBadgeFor(state.getEfspStrip('s1'));
   assert.equal(badge.text, 'TRK 0041', 'the code its transponder is sending');
@@ -204,17 +204,17 @@ test('a correlated Strip names the contact by its code, not by the callsign it a
 
 test('a controller binding says who bound it', () => {
   load({
-    strips: [strip('s1', 'f1')], fdrs: [fdr('f1', 'VIPER1')],
-    correlations: [correlation('f1', { matchedBy: 'BINDING', binding: { trackId: '101', boundPositionId: 'APP' } })],
+    strips: [strip('s1', 'f1')], flightDataList: [flightData('f1', 'VIPER1')],
+    correlations: [correlation('f1', { matchedBy: 'BINDING', binding: { trackId: '101', boundPositionId: 'AP' } })],
     tracks: [{ id: '101', callsign: 'VIPER1' }],
   });
-  assert.match(correlationBadgeFor(state.getEfspStrip('s1')).title, /bound by APP/);
+  assert.match(correlationBadgeFor(state.getEfspStrip('s1')).title, /bound by AP/);
 });
 
 test('a provisional match shows the observed-versus-assigned mismatch in words', () => {
   // §3.10.2 rule 1's three-case render, with real data behind it.
   load({
-    strips: [strip('s1', 'f1')], fdrs: [fdr('f1', 'VIPER1', '0041')],
+    strips: [strip('s1', 'f1')], flightDataList: [flightData('f1', 'VIPER1', '0041')],
     correlations: [correlation('f1', { state: 'PROVISIONAL', matchedBy: 'CALLSIGN_EXACT', observedBeacon: '0056' })],
     tracks: [{ id: '101', callsign: 'VIPER1' }],
   });
@@ -226,7 +226,7 @@ test('a provisional match shows the observed-versus-assigned mismatch in words',
 
 test('a fuzzy match reports its confidence rather than a mismatch', () => {
   load({
-    strips: [strip('s1', 'f1')], fdrs: [fdr('f1', 'VIPER1')],
+    strips: [strip('s1', 'f1')], flightDataList: [flightData('f1', 'VIPER1')],
     correlations: [correlation('f1', { state: 'PROVISIONAL', matchedBy: 'CALLSIGN_FUZZY', confidence: 0.9, observedBeacon: null })],
     tracks: [{ id: '101', callsign: 'VIPER11' }],
   });
@@ -240,7 +240,7 @@ test('correlated to a contact outside your coverage says so, rather than showing
   // somebody else's radar. The badge used to read `TRK 101`, which looks like
   // a callsign, and clicking the Strip drew no ring at all.
   load({
-    strips: [strip('s1', 'f1')], fdrs: [fdr('f1', 'VIPER1')],
+    strips: [strip('s1', 'f1')], flightDataList: [flightData('f1', 'VIPER1')],
     correlations: [correlation('f1')],
     tracks: [], // nothing in this controller's picture
   });
@@ -253,13 +253,13 @@ test('correlated to a contact outside your coverage says so, rather than showing
 
 test('the same record reads as a normal correlation once the contact enters coverage', () => {
   load({
-    strips: [strip('s1', 'f1')], fdrs: [fdr('f1', 'VIPER1')],
+    strips: [strip('s1', 'f1')], flightDataList: [flightData('f1', 'VIPER1')],
     correlations: [correlation('f1')],
     tracks: [],
   });
   assert.equal(correlationBadgeFor(state.getEfspStrip('s1')).outsideCoverage, true);
 
-  liveTracks.set('101', { id: '101', label: { callsign: 'VIPER1', source: 'FDR', trackNumber: 'TN00012' }, ssr: null });
+  liveTracks.set('101', { id: '101', label: { callsign: 'VIPER1', source: 'FLIGHT_DATA', trackNumber: 'TN00012' }, ssr: null });
   const badge = correlationBadgeFor(state.getEfspStrip('s1'));
   assert.equal(badge.outsideCoverage, undefined);
   assert.equal(badge.text, 'TRK TN00012', 'no transponder: its track number');
@@ -269,7 +269,7 @@ test('a provisional match outside coverage also reads as outside, not as a misma
   // Otherwise the tooltip would explain a squawk disagreement for a contact
   // the controller cannot look at.
   load({
-    strips: [strip('s1', 'f1')], fdrs: [fdr('f1', 'VIPER1', '0041')],
+    strips: [strip('s1', 'f1')], flightDataList: [flightData('f1', 'VIPER1', '0041')],
     correlations: [correlation('f1', { state: 'PROVISIONAL', matchedBy: 'CALLSIGN_EXACT', observedBeacon: '0056' })],
     tracks: [],
   });
@@ -278,7 +278,7 @@ test('a provisional match outside coverage also reads as outside, not as a misma
 
 test('an uncorrelated Strip reads NO TRK, and a broken binding reads louder', () => {
   load({
-    strips: [strip('s1', 'f1')], fdrs: [fdr('f1', 'VIPER1')],
+    strips: [strip('s1', 'f1')], flightDataList: [flightData('f1', 'VIPER1')],
     correlations: [correlation('f1', { state: 'UNCORRELATED', trackId: null, matchedBy: null })],
   });
   const plain = correlationBadgeFor(state.getEfspStrip('s1'));
@@ -301,7 +301,7 @@ test('an uncorrelated Strip reads NO TRK, and a broken binding reads louder', ()
 
 test('an ambiguous correlation is a button carrying its candidates', () => {
   load({
-    strips: [strip('s1', 'f1')], fdrs: [fdr('f1', 'VIPER1')],
+    strips: [strip('s1', 'f1')], flightDataList: [flightData('f1', 'VIPER1')],
     correlations: [correlation('f1', {
       state: 'UNCORRELATED', trackId: null, matchedBy: null,
       warning: { kind: 'AMBIGUOUS_CALLSIGN', candidateTrackIds: ['101', '102'], detail: '2 contacts answer to VIPER1 equally well — bind one' },
@@ -315,6 +315,6 @@ test('an ambiguous correlation is a button carrying its candidates', () => {
 });
 
 test('a Strip with no correlation record yet shows no badge at all', () => {
-  load({ strips: [strip('s1', 'f1')], fdrs: [fdr('f1', 'VIPER1')] });
+  load({ strips: [strip('s1', 'f1')], flightDataList: [flightData('f1', 'VIPER1')] });
   assert.equal(correlationBadgeFor(state.getEfspStrip('s1')), null);
 });

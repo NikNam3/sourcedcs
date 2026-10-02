@@ -47,28 +47,28 @@ const GROUND_STATES = Object.freeze({
   ARRIVAL: Object.freeze(['LANDED', 'TAXI_IN']),
 });
 
-function _callsignOf(strip, fdr) {
-  return (fdr && fdr.identity && fdr.identity.callsign) || strip.stripId;
+function _callsignOf(strip, flightData) {
+  return (flightData && flightData.identity && flightData.identity.callsign) || strip.stripId;
 }
 
-function _isScrambling(strip, fdr) {
-  if (!strip || strip.role !== 'DEPARTURE') return false;
+function _isScrambling(strip, flightData) {
+  if (!strip || strip.stripType !== 'DEPARTURE') return false;
   if (!SCRAMBLE_PRE_AIRBORNE.DEPARTURE.includes(strip.state)) return false;
-  return !!(fdr && fdr.military && fdr.military.alertStatus === 'SCRAMBLE');
+  return !!(flightData && flightData.military && flightData.military.alertStatus === 'SCRAMBLE');
 }
 
 /**
- * Every active scramble, optionally at one Facility. `fdrOf(fdrId)` returns
+ * Every active scramble, optionally at one Facility. `flightDataOf(flightDataId)` returns
  * the FDR or null (an archived FDR is null, never a throw).
- * @returns {{stripId, fdrId, facilityId, state, callsign}[]} sorted by callsign
+ * @returns {{stripId, flightDataId, facilityId, state, callsign}[]} sorted by callsign
  */
-function activeScrambles(strips, fdrOf, facilityId) {
+function activeScrambles(strips, flightDataOf, facilityId) {
   const out = [];
   for (const strip of strips || []) {
     if (facilityId !== undefined && facilityId !== null && strip.facilityId !== facilityId) continue;
-    const fdr = strip.fdrId ? fdrOf(strip.fdrId) : null;
-    if (!_isScrambling(strip, fdr)) continue;
-    out.push({ stripId: strip.stripId, fdrId: strip.fdrId, facilityId: strip.facilityId, state: strip.state, callsign: _callsignOf(strip, fdr) });
+    const flightData = strip.flightDataId ? flightDataOf(strip.flightDataId) : null;
+    if (!_isScrambling(strip, flightData)) continue;
+    out.push({ stripId: strip.stripId, flightDataId: strip.flightDataId, facilityId: strip.facilityId, state: strip.state, callsign: _callsignOf(strip, flightData) });
   }
   return out.sort((a, b) => (a.callsign < b.callsign ? -1 : a.callsign > b.callsign ? 1 : (a.stripId < b.stripId ? -1 : 1)));
 }
@@ -77,32 +77,32 @@ function activeScrambles(strips, fdrOf, facilityId) {
  * The ground Strips at `facilityId` that a scramble there flags — empty when
  * nothing is scrambling at that Facility. Never a scrambler itself (no Strip
  * of a scrambling flight is flagged against its own scramble).
- * @returns {{stripId, fdrId, facilityId, role, state, callsign}[]} in input order
+ * @returns {{stripId, flightDataId, facilityId, stripType, state, callsign}[]} in input order
  */
-function conflictingGroundStrips(strips, fdrOf, facilityId) {
-  const scrambles = activeScrambles(strips, fdrOf, facilityId);
+function conflictingGroundStrips(strips, flightDataOf, facilityId) {
+  const scrambles = activeScrambles(strips, flightDataOf, facilityId);
   if (scrambles.length === 0) return [];
-  const scramblingFdrs = new Set(scrambles.map(s => s.fdrId));
+  const scramblingFlightDataList = new Set(scrambles.map(s => s.flightDataId));
   const out = [];
   for (const strip of strips || []) {
     if (strip.facilityId !== facilityId) continue;
-    const states = GROUND_STATES[strip.role];
+    const states = GROUND_STATES[strip.stripType];
     if (!states || !states.includes(strip.state)) continue;
-    if (scramblingFdrs.has(strip.fdrId)) continue;
-    const fdr = strip.fdrId ? fdrOf(strip.fdrId) : null;
-    out.push({ stripId: strip.stripId, fdrId: strip.fdrId, facilityId: strip.facilityId, role: strip.role, state: strip.state, callsign: _callsignOf(strip, fdr) });
+    if (scramblingFlightDataList.has(strip.flightDataId)) continue;
+    const flightData = strip.flightDataId ? flightDataOf(strip.flightDataId) : null;
+    out.push({ stripId: strip.stripId, flightDataId: strip.flightDataId, facilityId: strip.facilityId, stripType: strip.stripType, state: strip.state, callsign: _callsignOf(strip, flightData) });
   }
   return out;
 }
 
 /**
- * How the alert-pad access route is named, from a Facility's field-state
+ * How the alert-pad access route is named, from a Facility's runway-status
  * record (or null when none is known). Never blocks the indication (§9.6's
  * first MUST does not depend on config).
  */
-function accessRouteText(fieldState) {
-  if (!fieldState) return 'the alert-pad access route';
-  const pad = fieldState.alertPad;
+function accessRouteText(runwayStatus) {
+  if (!runwayStatus) return 'the alert-pad access route';
+  const pad = runwayStatus.alertPad;
   if (pad && typeof pad.accessRoute === 'string' && pad.accessRoute) return pad.accessRoute;
   return 'the alert-pad access route (not configured)';
 }
@@ -112,20 +112,20 @@ function accessRouteText(fieldState) {
  * Facility's) is active, or null when none is.
  * @returns {null | { route: string|null, text: string }}
  */
-function alertPadConstraint(fieldState, scrambles) {
+function alertPadConstraint(runwayStatus, scrambles) {
   if (!scrambles || scrambles.length === 0) return null;
-  const pad = fieldState && fieldState.alertPad;
+  const pad = runwayStatus && runwayStatus.alertPad;
   const route = pad && typeof pad.accessRoute === 'string' && pad.accessRoute ? pad.accessRoute : null;
   const who = scrambles.map(s => s.callsign).join(', ');
-  const head = route ? `ACCESS ROUTE ${route}` : `ALERT-PAD ACCESS ROUTE${fieldState ? ' (not configured)' : ''}`;
+  const head = route ? `ACCESS ROUTE ${route}` : `ALERT-PAD ACCESS ROUTE${runwayStatus ? ' (not configured)' : ''}`;
   return { route, text: `${head} CONSTRAINED — scramble in progress (${who})` };
 }
 
-/** facility-config.js's validateConfig: the one key L13 adds under fieldState.pads.alert. */
+/** facility-config.js's validateConfig: the one key L13 adds under runwayStatus.pads.alert. */
 function validateAlertPadConfig(alertPad) {
   if (alertPad === null || alertPad === undefined) return null;
   if (alertPad.accessRoute !== undefined && typeof alertPad.accessRoute !== 'string') {
-    return 'fieldState.pads.alert.accessRoute must be a string';
+    return 'runwayStatus.pads.alert.accessRoute must be a string';
   }
   return null;
 }

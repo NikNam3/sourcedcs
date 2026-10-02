@@ -14,8 +14,8 @@ let seq = 0;
 const cs = (prefix) => `${prefix}${(Date.now() + seq++) % 10000}`;
 
 const stripOf = (page, callsign) => page.evaluate((c) => {
-  const s = getAllEfspStrips().find(x => x.state !== 'DROPPED' && (getEfspFdr(x.fdrId) || { identity: {} }).identity.callsign === c);
-  return s ? { stripId: s.stripId, role: s.role, state: s.state, ownerPositionId: s.ownerPositionId, bayId: s.bayId, rackId: s.rackId, mhz: (getEfspFdr(s.fdrId).comms || {}).workingFrequencyMhz } : null;
+  const s = getAllEfspStrips().find(x => x.state !== 'DROPPED' && (getEfspFdr(x.flightDataId) || { identity: {} }).identity.callsign === c);
+  return s ? { stripId: s.stripId, stripType: s.stripType, state: s.state, ownerPositionId: s.ownerPositionId, bayId: s.bayId, rackId: s.rackId, mhz: (getEfspFdr(s.flightDataId).comms || {}).workingFrequencyMhz } : null;
 }, callsign);
 const waitStrip = (page, callsign, pred, what) => expect.poll(async () => { const s = await stripOf(page, callsign); return !!s && pred(s); }, { message: what, timeout: 10000 }).toBe(true);
 
@@ -34,7 +34,7 @@ async function cleanUp(page) {
 }
 
 async function controller(page) {
-  await openPanel(page, { held: ['RSU', 'APP', 'SFA', 'PAR'], controller: 'e2e-l18' });
+  await openPanel(page, { signedOn: ['RSU', 'AP', 'SFA', 'PAR'], controller: 'e2e-l18' });
   await page.waitForFunction(() => typeof getEfspSfa === 'function' && !!getEfspSfa());
 }
 
@@ -43,11 +43,11 @@ test.afterEach(async ({ page }) => { await cleanUp(page).catch(() => {}); });
 test('01 SFA: filed on a frequency Rack, rotated to PAR with the frequency unchanged, talk-down has nothing to type, Landing assured', async ({ page }) => {
   await controller(page);
   const call = cs('SFA');
-  await page.evaluate((c) => sendEfspCreateStrip('APP', { kind: 'CreateStrip', bayId: 'app-inbound', rackId: 'main', role: 'ARRIVAL', fdr: { callsign: c, aircraftType: 'F-16C', originAirport: 'LTAG' } }), call);
-  await waitStrip(page, call, s => s.ownerPositionId === 'APP', 'created at APP');
+  await page.evaluate((c) => sendEfspCreateStrip('AP', { kind: 'CreateStrip', bayId: 'ap-inbound', rackId: 'main', stripType: 'ARRIVAL', flightData: { callsign: c, aircraftType: 'F-16C', originAirport: 'LTAG' } }), call);
+  await waitStrip(page, call, s => s.ownerPositionId === 'AP', 'created at APP');
   await page.evaluate((c) => {
-    const s = getAllEfspStrips().find(x => (getEfspFdr(x.fdrId) || { identity: {} }).identity.callsign === c);
-    sendEfspMutation('APP', s, { kind: 'TransferStrip', toPositionId: 'SFA', bayId: 'sfa-frequencies', rackId: 'freq-2' });
+    const s = getAllEfspStrips().find(x => (getEfspFdr(x.flightDataId) || { identity: {} }).identity.callsign === c);
+    sendEfspMutation('AP', s, { kind: 'TransferStrip', toPositionId: 'SFA', bayId: 'sfa-frequencies', rackId: 'freq-2' });
   }, call);
   await waitStrip(page, call, s => s.ownerPositionId === 'SFA' && s.rackId === 'freq-2' && s.mhz === 233.1, 'on SFA freq-2, frequency set from the Rack');
 
@@ -61,7 +61,7 @@ test('01 SFA: filed on a frequency Rack, rotated to PAR with the frequency uncha
   await expect.poll(() => page.evaluate(() => getEfspSfa().rotation['freq-4'])).toBe('PAR');
 
   await page.locator('.efsp-sfa-rotate').first().click();
-  await waitStrip(page, call, s => s.ownerPositionId === 'PAR' && s.role === 'FINAL' && s.state === 'ON_FINAL' && s.bayId === 'par-final', 'rotated');
+  await waitStrip(page, call, s => s.ownerPositionId === 'PAR' && s.stripType === 'FINAL' && s.state === 'ON_FINAL' && s.bayId === 'par-final', 'rotated');
   expect((await stripOf(page, call)).mhz).toBe(233.1);
 
   await openBay(page, 'PAR', 'par-final');
@@ -77,16 +77,16 @@ test('02 PAR holds one aircraft: a second rotation is refused with the reason, a
   await controller(page);
   const a = cs('PA'); const b = cs('PB');
   for (const [c, rack] of [[a, 'freq-1'], [b, 'freq-3']]) {
-    await page.evaluate(([cc, r]) => sendEfspCreateStrip('APP', { kind: 'CreateStrip', bayId: 'app-inbound', rackId: 'main', role: 'ARRIVAL', fdr: { callsign: cc, aircraftType: 'F-16C' } }), [c, rack]);
-    await waitStrip(page, c, s => s.ownerPositionId === 'APP', `${c} created`);
+    await page.evaluate(([cc, r]) => sendEfspCreateStrip('AP', { kind: 'CreateStrip', bayId: 'ap-inbound', rackId: 'main', stripType: 'ARRIVAL', flightData: { callsign: cc, aircraftType: 'F-16C' } }), [c, rack]);
+    await waitStrip(page, c, s => s.ownerPositionId === 'AP', `${c} created`);
     await page.evaluate(([cc, r]) => {
-      const s = getAllEfspStrips().find(x => (getEfspFdr(x.fdrId) || { identity: {} }).identity.callsign === cc);
-      sendEfspMutation('APP', s, { kind: 'TransferStrip', toPositionId: 'SFA', bayId: 'sfa-frequencies', rackId: r });
+      const s = getAllEfspStrips().find(x => (getEfspFdr(x.flightDataId) || { identity: {} }).identity.callsign === cc);
+      sendEfspMutation('AP', s, { kind: 'TransferStrip', toPositionId: 'SFA', bayId: 'sfa-frequencies', rackId: r });
     }, [c, rack]);
     await waitStrip(page, c, s => s.ownerPositionId === 'SFA', `${c} with SFA`);
   }
   const rotate = (c) => page.evaluate((cc) => {
-    const s = getAllEfspStrips().find(x => (getEfspFdr(x.fdrId) || { identity: {} }).identity.callsign === cc);
+    const s = getAllEfspStrips().find(x => (getEfspFdr(x.flightDataId) || { identity: {} }).identity.callsign === cc);
     sendEfspMutation('SFA', s, { kind: 'SfaRotation' });
   }, c);
   await rotate(a);
@@ -103,7 +103,7 @@ test('02 PAR holds one aircraft: a second rotation is refused with the reason, a
 test('03 RSU: the pattern board replaces the racks; Next leg, Landed and Drop work from the chips', async ({ page }) => {
   await controller(page);
   const call = cs('PAT');
-  await page.evaluate((c) => sendEfspCreateStrip('RSU', { kind: 'CreateStrip', bayId: 'rsu-pattern', rackId: 'initial', role: 'PATTERN', fdr: { callsign: c, aircraftType: 'F-16C' } }), call);
+  await page.evaluate((c) => sendEfspCreateStrip('RSU', { kind: 'CreateStrip', bayId: 'rsu-pattern', rackId: 'initial', stripType: 'PATTERN', flightData: { callsign: c, aircraftType: 'F-16C' } }), call);
   await waitStrip(page, call, s => s.ownerPositionId === 'RSU' && s.rackId === 'initial', 'in the pattern');
   await openBay(page, 'RSU', 'rsu-pattern');
   const chip = page.locator('.efsp-pattern-chip', { hasText: call });

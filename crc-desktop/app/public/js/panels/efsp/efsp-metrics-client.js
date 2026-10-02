@@ -68,7 +68,7 @@ const _isSearchBay = (bayId) => typeof bayId === 'string' && bayId.endsWith('-se
  * @param {(msg:object) => void} deps.send               sends one efsp-metrics-report
  * @param {() => boolean} deps.isOpen                    is the crc-sync socket open
  * @param {() => Array<{bayId:string, positionId:string, facilityId:string}>} deps.bays
- * @param {(facilityId:string) => string[]} deps.held    Positions held at a Facility
+ * @param {(facilityId:string) => string[]} deps.signedOn    Positions held at a Facility
  * @param {(stripId:string) => object|null} deps.stripOf
  * @param {(bayId:string) => boolean} deps.bayHasStrips
  * @param {() => string|null} deps.visibleBayId          the Bay on screen, null when the panel is hidden
@@ -101,7 +101,7 @@ export function createEfspMetricsClient(deps) {
   }
 
   function _holds(facilityId, positionId) {
-    return !!facilityId && (deps.held(facilityId) || []).includes(positionId);
+    return !!facilityId && (deps.signedOn(facilityId) || []).includes(positionId);
   }
 
   function _enqueue(positionId, event) {
@@ -283,7 +283,7 @@ function _efspMetrics() {
     send: (msg) => _sendEfsp(msg),
     isOpen: () => (has('isSyncOpen') ? isSyncOpen() : false),
     bays: () => (has('getEfspBays') ? getEfspBays() : []),
-    held: (facilityId) => (has('getActingPositions') ? getActingPositions(facilityId) : []),
+    signedOn: (facilityId) => (has('getActingPositions') ? getActingPositions(facilityId) : []),
     stripOf: (stripId) => (has('getEfspStrip') ? getEfspStrip(stripId) : null),
     bayHasStrips: (bayId) => (has('getAllEfspStrips') ? getAllEfspStrips().some(s => s && s.bayId === bayId) : false),
     visibleBayId: () => (has('efspVisibleBayId') ? efspVisibleBayId() : null),

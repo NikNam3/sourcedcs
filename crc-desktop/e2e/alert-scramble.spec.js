@@ -34,23 +34,23 @@ async function goBay(page, positionId, bayId) {
 /** One op on the Strip showing `callsign`, through the page's real sender; waits for the ack to land. */
 async function mutate(page, acting, callsign, op) {
   const before = await page.evaluate((cs) => {
-    const s = [...efspStrips.values()].find(x => efspFdrs.get(x.fdrId)?.identity?.callsign === cs && x.state !== 'DROPPED');
+    const s = [...efspStrips.values()].find(x => efspFdrs.get(x.flightDataId)?.identity?.callsign === cs && x.state !== 'DROPPED');
     return s ? s.rev : null;
   }, callsign);
   await page.evaluate(([a, cs, o]) => {
-    const s = [...efspStrips.values()].find(x => efspFdrs.get(x.fdrId)?.identity?.callsign === cs && x.state !== 'DROPPED');
+    const s = [...efspStrips.values()].find(x => efspFdrs.get(x.flightDataId)?.identity?.callsign === cs && x.state !== 'DROPPED');
     window.sendEfspMutation(a, s, o);
   }, [acting, callsign, op]);
   await expect.poll(() => page.evaluate((cs) => {
-    const s = [...efspStrips.values()].find(x => efspFdrs.get(x.fdrId)?.identity?.callsign === cs);
+    const s = [...efspStrips.values()].find(x => efspFdrs.get(x.flightDataId)?.identity?.callsign === cs);
     return s ? s.rev : null;
   }, callsign)).toBeGreaterThan(before);
 }
 
-const stateOf = (page, cs) => page.evaluate((c) => [...efspStrips.values()].find(x => efspFdrs.get(x.fdrId)?.identity?.callsign === c)?.state, cs);
+const stateOf = (page, cs) => page.evaluate((c) => [...efspStrips.values()].find(x => efspFdrs.get(x.flightDataId)?.identity?.callsign === c)?.state, cs);
 const alertOf = (page, cs) => page.evaluate((c) => {
-  const s = [...efspStrips.values()].find(x => efspFdrs.get(x.fdrId)?.identity?.callsign === c);
-  return s ? efspFdrs.get(s.fdrId).military.alertStatus : null;
+  const s = [...efspStrips.values()].find(x => efspFdrs.get(x.flightDataId)?.identity?.callsign === c);
+  return s ? efspFdrs.get(s.flightDataId).military.alertStatus : null;
 }, cs);
 
 async function nla(page, acting, cs) {
@@ -69,17 +69,17 @@ async function pickAlert(strip, value) {
 const bayOrder = (page, bayId) => page.evaluate((b) => [...efspStrips.values()]
   .filter(s => s.bayId === b && s.state !== 'DROPPED')
   .sort((x, y) => (x.rackId + x.orderKey < y.rackId + y.orderKey ? -1 : 1))
-  .map(s => efspFdrs.get(s.fdrId).identity.callsign), bayId);
+  .map(s => efspFdrs.get(s.flightDataId).identity.callsign), bayId);
 const domOrder = (page) => page.locator('#efsp-bay-content .efsp-strip .efsp-block-1').allTextContents();
 
 // The Board lives for the whole run. A walk that fails while VIPER11 is SCRAMBLE would leave the
 // scramble line and a "keep clear of ..." reason on every ground Strip of every later spec file
-// (field-state's "the Strip never says it twice" then failed for it). Retire this walk's Strips.
+// (runway-status's "the Strip never says it twice" then failed for it). Retire this walk's Strips.
 test.afterEach(async ({ page }) => {
   await page.evaluate((cs) => {
     for (const s of getAllEfspStrips()) {
-      const fdr = getEfspFdr(s.fdrId);
-      if (!fdr || !cs.includes(fdr.identity.callsign) || s.state === 'DROPPED') continue;
+      const flightData = getEfspFdr(s.flightDataId);
+      if (!flightData || !cs.includes(flightData.identity.callsign) || s.state === 'DROPPED') continue;
       sendEfspMutation(s.ownerPositionId, s, { kind: 'DropStrip', reason: 'e2e cleanup' });
     }
   }, ['VIPER11', 'HAWK31', 'HAWK32', 'EAGLE41', 'EAGLE42']).catch(() => {});
@@ -87,13 +87,13 @@ test.afterEach(async ({ page }) => {
 });
 
 test('alert and scramble: ALERT is quiet, SCRAMBLE lights the Board and flags ground traffic, nothing reorders, airborne clears', async ({ page }) => {
-  const { consoleErrors } = await openPanel(page, { held: ['OPS', 'CD', 'GND', 'TWR'] });
+  const { consoleErrors } = await openPanel(page, { signedOn: ['OPS', 'CD', 'GC', 'LC'] });
   await page.setViewportSize({ width: 1600, height: 1100 });
   const CS = 'VIPER11';
 
   // ── 1. OPS puts VIPER11 on alert (decisions.md H56: OPS sets it). ─────────
   await goBay(page, 'OPS', 'ops-proposed');
-  const viper = await seedStrip(page, { callsign: CS, role: 'DEPARTURE', fdr: { departureAirport: 'LTAG', destinationAirport: 'LTAG', route: 'DCT', requestedAltitude: '250' } });
+  const viper = await seedStrip(page, { callsign: CS, stripType: 'DEPARTURE', flightData: { departureAirport: 'LTAG', destinationAirport: 'LTAG', route: 'DCT', requestedAltitude: '250' } });
   await pickAlert(viper, 'ALERT');
   await expect.poll(() => alertOf(page, CS)).toBe('ALERT');
   await expect(viper.locator('.efsp-strip-fields .efsp-block-14E')).toHaveText('ALERT');
@@ -109,20 +109,20 @@ test('alert and scramble: ALERT is quiet, SCRAMBLE lights the Board and flags gr
 
   // ── ground traffic: two departures at TAXI and RUNWAY_QUEUE, plus one more in each so order is visible.
   for (const [cs, state, to, bay, rack] of [
-    ['HAWK31', 'TAXI', 'GND', 'gnd-taxi-out', 'main'], ['HAWK32', 'TAXI', 'GND', 'gnd-taxi-out', 'main'],
-    ['EAGLE41', 'RUNWAY_QUEUE', 'TWR', 'twr-runway-queue', 'rwy-05'], ['EAGLE42', 'RUNWAY_QUEUE', 'TWR', 'twr-runway-queue', 'rwy-05'],
+    ['HAWK31', 'TAXI', 'GC', 'gc-taxi-out', 'main'], ['HAWK32', 'TAXI', 'GC', 'gc-taxi-out', 'main'],
+    ['EAGLE41', 'RUNWAY_QUEUE', 'LC', 'lc-runway-queue', 'rwy-05'], ['EAGLE42', 'RUNWAY_QUEUE', 'LC', 'lc-runway-queue', 'rwy-05'],
   ]) {
     await goBay(page, 'OPS', 'ops-proposed');
-    await seedStrip(page, { callsign: cs, role: 'DEPARTURE', fdr: { departureAirport: 'LTAG', destinationAirport: 'LTAG', route: 'DCT', requestedAltitude: '250' } });
+    await seedStrip(page, { callsign: cs, stripType: 'DEPARTURE', flightData: { departureAirport: 'LTAG', destinationAirport: 'LTAG', route: 'DCT', requestedAltitude: '250' } });
     await mutate(page, 'OPS', cs, { kind: 'SetState', toState: state });
     await mutate(page, 'OPS', cs, { kind: 'TransferStrip', toPositionId: to, bayId: bay, rackId: rack });
   }
   await expect(page.locator('#efsp-scramble-line')).toBeHidden();
 
-  const beforeData = { taxi: await bayOrder(page, 'gnd-taxi-out'), queue: await bayOrder(page, 'twr-runway-queue') };
-  await goBay(page, 'GND', 'gnd-taxi-out');
+  const beforeData = { taxi: await bayOrder(page, 'gc-taxi-out'), queue: await bayOrder(page, 'lc-runway-queue') };
+  await goBay(page, 'GC', 'gc-taxi-out');
   const beforeGndDom = await domOrder(page);
-  await goBay(page, 'TWR', 'twr-runway-queue');
+  await goBay(page, 'LC', 'lc-runway-queue');
   const beforeTwrDom = await domOrder(page);
 
   // ── 2. SCRAMBLE, set by CD in the 14E picker (CD owns the Strip now). ─────
@@ -138,24 +138,24 @@ test('alert and scramble: ALERT is quiet, SCRAMBLE lights the Board and flags gr
   await expect(stripByCallsign(page, CS).locator('[data-slot="scram"]')).toHaveText('SCRAMBLE');
   await panelShot(page, '02-scramble-line-cd');
   // Board-wide: the same line on another Position's tab.
-  await goBay(page, 'TWR', 'twr-runway-queue');
+  await goBay(page, 'LC', 'lc-runway-queue');
   await expect(line).toBeVisible();
   await expect(line.locator('.efsp-scramble-cs')).toHaveText(CS);
   await panelShot(page, '02-scramble-line-twr');
 
   // ── 3. the ground flags. ───────────────────────────────────────────────
-  await goBay(page, 'GND', 'gnd-taxi-out');
+  await goBay(page, 'GC', 'gc-taxi-out');
   const hawk = stripByCallsign(page, 'HAWK31');
   await expect(hawk.locator('[data-slot="scram"]')).toHaveText('SCRAMBLE');
   await expect(hawk.locator('.efsp-alert-reason')).toContainText('VIPER11 is scrambling from INCIRLIK. SOURCE practice: keep clear of ALERT ACCESS TAXIWAY.');
   await shot(hawk, '03-ground-flags');
 
   // ── 4. nothing reordered, moved or held. ─────────────────────────────────
-  expect(await bayOrder(page, 'gnd-taxi-out')).toEqual(beforeData.taxi);
-  expect(await bayOrder(page, 'twr-runway-queue')).toEqual(beforeData.queue);
+  expect(await bayOrder(page, 'gc-taxi-out')).toEqual(beforeData.taxi);
+  expect(await bayOrder(page, 'lc-runway-queue')).toEqual(beforeData.queue);
   expect(await domOrder(page)).toEqual(beforeGndDom);
   await panelShot(page, '04-nothing-reordered');
-  await goBay(page, 'TWR', 'twr-runway-queue');
+  await goBay(page, 'LC', 'lc-runway-queue');
   expect(await domOrder(page)).toEqual(beforeTwrDom);
 
   // Clicking the callsign on the line selects VIPER11 on its own Position's tab.
@@ -165,12 +165,12 @@ test('alert and scramble: ALERT is quiet, SCRAMBLE lights the Board and flags gr
 
   // ── 5. VIPER11 gets airborne: the line and every flag go by themselves. ──
   for (let i = 0; i < 8 && (await stateOf(page, CS)) !== 'DEPARTED'; i++) {
-    const owner = await page.evaluate((c) => [...efspStrips.values()].find(x => efspFdrs.get(x.fdrId)?.identity?.callsign === c).ownerPositionId, CS);
+    const owner = await page.evaluate((c) => [...efspStrips.values()].find(x => efspFdrs.get(x.flightDataId)?.identity?.callsign === c).ownerPositionId, CS);
     await nla(page, owner, CS);
   }
   expect(await stateOf(page, CS)).toBe('DEPARTED');
   await expect(line).toBeHidden();
-  await goBay(page, 'GND', 'gnd-taxi-out');
+  await goBay(page, 'GC', 'gc-taxi-out');
   await expect(page.locator('#efsp-bay-content [data-slot="scram"]')).toHaveCount(0);
   expect(await alertOf(page, CS)).toBe('SCRAMBLE'); // nothing resets the field (T5)
   await panelShot(page, '05-airborne-clears');

@@ -1,6 +1,6 @@
 'use strict';
 
-const { runwayInhibitFor, RUNWAY_GATED_STATES } = require('../../field-state');
+const { runwayInhibitFor, RUNWAY_GATED_STATES } = require('../../runway-status');
 
 /**
  * SetState is owner-checked (decisions.md S-R2-14, docs/adr/0080, B7). Until
@@ -8,13 +8,13 @@ const { runwayInhibitFor, RUNWAY_GATED_STATES } = require('../../field-state');
  * and owning the Strip could put it in any state, which let AIC do the very
  * thing H2 says it never does (advance a mission line) and leave the Strip in
  * a Bay that implied another state. The acting Position must own the Strip's
- * CURRENT state per STATE_OWNERS_BY_ROLE — the authority InvokeNla and the
+ * CURRENT state per STATE_OWNERS_BY_STRIP_TYPE — the authority InvokeNla and the
  * Bay-implied drag already apply — for every Role. Checked before the runway
  * inhibit (authority before availability), and ONLY on the controller's
  * SetState: the Undo / NLA paths that reach _applySetState carry their own.
  */
 function _setStateOwnerRefusal(ctx, strip, toState, actingPositionId) {
-  if (ctx.rules.canActOnState(actingPositionId, strip.role, strip.state)) return null;
+  if (ctx.rules.canActOnState(actingPositionId, strip.stripType, strip.state)) return null;
   return {
     ok: false, reason: 'PERMISSION_DENIED', strip,
     detail: `${strip.state} is not ${actingPositionId}'s to change`,
@@ -48,7 +48,7 @@ function _applySetStateGated(ctx, strip, op, actingPositionId, by) {
 }
 
 function _observedDeparture(ctx, strip, op) {
-  return op.observedAirborne === true && strip.role === 'DEPARTURE' && op.toState === 'DEPARTED'
+  return op.observedAirborne === true && strip.stripType === 'DEPARTURE' && op.toState === 'DEPARTED'
     && typeof ctx.airborneObserver === 'function' && ctx.airborneObserver(strip) === true;
 }
 
@@ -60,10 +60,10 @@ function _observedDeparture(ctx, strip, op) {
  * gate (who may use SetState at all is L23's).
  */
 function _setStateRunwayRefusal(ctx, strip, toState) {
-  if (!(RUNWAY_GATED_STATES[strip.role] || []).includes(toState)) return null;
+  if (!(RUNWAY_GATED_STATES[strip.stripType] || []).includes(toState)) return null;
   const bay = ctx.rules.bayForImpliedState(strip.ownerPositionId, toState);
   const targetRackId = bay && bay.impliesState === toState ? ctx.placement.placementRack(strip, bay) : undefined;
-  const inhibit = runwayInhibitFor(strip, ctx.fdrStore.getFdr(strip.fdrId), ctx.placement.fieldStateView(), { targetRackId });
+  const inhibit = runwayInhibitFor(strip, ctx.flightDataStore.getFlightData(strip.flightDataId), ctx.placement.runwayStatusView(), { targetRackId });
   return inhibit ? { ok: false, reason: 'NLA_INHIBITED', detail: inhibit, strip } : null;
 }
 

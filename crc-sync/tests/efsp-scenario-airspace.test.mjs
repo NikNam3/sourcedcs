@@ -30,21 +30,21 @@ fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, JSON.stringify([
   { airspaceId: 'MOA-OCCUPIED', name: 'Occupied MOA', type: 'MOA', controllingFacilityId: 'CENTER', controllingPositionId: 'CTR', workingFrequencyMhz: 136.5 },
   { airspaceId: 'MOA-COLD', name: 'Cold MOA', type: 'MOA', controllingFacilityId: 'CENTER', controllingPositionId: 'CTR', workingFrequencyMhz: 137.0 },
   { airspaceId: 'MOA-LATER', name: 'Later MOA', type: 'MOA', controllingFacilityId: 'CENTER', controllingPositionId: 'CTR', workingFrequencyMhz: 137.5 },
-  { airspaceId: 'RANGE-SOUTH', name: 'South A/G Range', type: 'RANGE', controllingFacilityId: 'INCIRLIK', controllingPositionId: 'APP', usingPositionId: 'SOUTH_RANGE', controlFrequencyMhz: 283.5 },
-  { airspaceId: 'RANGE-DENY', name: 'Deny Range', type: 'RANGE', controllingFacilityId: 'INCIRLIK', controllingPositionId: 'APP', usingPositionId: 'DENY_RANGE', controlFrequencyMhz: 284.0 },
+  { airspaceId: 'RANGE-SOUTH', name: 'South A/G Range', type: 'RANGE', controllingFacilityId: 'INCIRLIK', controllingPositionId: 'AP', usingPositionId: 'SOUTH_RANGE', controlFrequencyMhz: 283.5 },
+  { airspaceId: 'RANGE-DENY', name: 'Deny Range', type: 'RANGE', controllingFacilityId: 'INCIRLIK', controllingPositionId: 'AP', usingPositionId: 'DENY_RANGE', controlFrequencyMhz: 284.0 },
 ]));
 
 const { createEfsp } = await import('../src/efsp/index.js');
 const facilityConfig = await import('../src/efsp/facility-config.js');
 const {
   crew, act, mustAct, airspaceAct, mustAirspaceAct, jumpTo, advance,
-  DEPARTURE_FDR, airborneDeparture, handedToCenter, activate, obligationAlerts,
+  DEPARTURE_FLIGHT_DATA, airborneDeparture, handedToCenter, activate, obligationAlerts,
 } = await import('./helpers/efsp-scenario.mjs');
 
-const ATC = { OPS: 'INCIRLIK', CD: 'INCIRLIK', GND: 'INCIRLIK', TWR: 'INCIRLIK', APP: 'INCIRLIK', CTR: 'CENTER' };
+const ATC = { OPS: 'INCIRLIK', CD: 'INCIRLIK', GC: 'INCIRLIK', LC: 'INCIRLIK', AP: 'INCIRLIK', CTR: 'CENTER' };
 
 function flight(efsp, c, callsign) {
-  return airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign });
+  return airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign });
 }
 
 // ── 5. the bread-and-butter sortie ───────────────────────────────────────
@@ -58,17 +58,17 @@ test('SCENARIO before takeoff, out to a MOA, and home again', async () => {
 
   // The full pre-departure chain, pressed rather than jumped.
   let strip = mustAct(efsp, c.OPS, 'OPS', null, {
-    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: DEPARTURE_FDR,
+    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE', flightData: DEPARTURE_FLIGHT_DATA,
   });
-  const fdrId = strip.fdrId;
+  const flightDataId = strip.flightDataId;
   strip = await advance(efsp, c.OPS, 'OPS', strip);   // -> PENDING_CLEARANCE at CD
   strip = jumpTo(efsp, c.CD, 'CD', strip, 'CLEARED');
   strip = await advance(efsp, c.CD, 'CD', strip);     // -> PUSHBACK at GND
-  strip = jumpTo(efsp, c.GND, 'GND', strip, 'TAXI');
-  strip = await advance(efsp, c.GND, 'GND', strip);   // -> RUNWAY_QUEUE at TWR
-  strip = jumpTo(efsp, c.TWR, 'TWR', strip, 'DEPARTED');
-  strip = await advance(efsp, c.TWR, 'TWR', strip);   // -> HANDED_OFF at APP
-  assert.equal(strip.ownerPositionId, 'APP');
+  strip = jumpTo(efsp, c.GC, 'GC', strip, 'TAXI');
+  strip = await advance(efsp, c.GC, 'GC', strip);   // -> RUNWAY_QUEUE at TWR
+  strip = jumpTo(efsp, c.LC, 'LC', strip, 'DEPARTED');
+  strip = await advance(efsp, c.LC, 'LC', strip);   // -> HANDED_OFF at APP
+  assert.equal(strip.ownerPositionId, 'AP');
 
   const ctrStrip = handedToCenter(efsp, c, strip);
   const working = mustAct(efsp, c.CTR, 'CTR', ctrStrip, { kind: 'ApproveAirspaceEntry', airspaceId: 'MOA-EAST' });
@@ -77,18 +77,18 @@ test('SCENARIO before takeoff, out to a MOA, and home again', async () => {
 
   // Done in the block, back to Center's frequency, home the same way out.
   const clear = mustAct(efsp, c.CTR, 'CTR', working, { kind: 'ClearAirspaceEntry' });
-  assert.equal(efsp.fdrStore.getFdr(fdrId).comms.workingFrequencyMhz, null);
+  assert.equal(efsp.flightDataStore.getFlightData(flightDataId).comms.workingFrequencyMhz, null);
 
   const returning = mustAct(efsp, c.CTR, 'CTR', clear, { kind: 'ConvertToArrival' });
   const handedBack = mustAct(efsp, c.CTR, 'CTR', returning, {
-    kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'INCIRLIK', toPositionId: 'APP',
+    kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'INCIRLIK', toPositionId: 'AP',
   });
   let arrival = efsp.boardStoreFor('INCIRLIK').getStrip(handedBack.coordination.peerStripId);
-  arrival = mustAct(efsp, c.APP, 'APP', arrival, { kind: 'HANDOFF', action: 'ACCEPT' });
-  arrival = await advance(efsp, c.APP, 'APP', arrival);  // -> HANDED_TO_TOWER at TWR
-  arrival = jumpTo(efsp, c.TWR, 'TWR', arrival, 'LANDED');
-  arrival = await advance(efsp, c.TWR, 'TWR', arrival);  // -> TAXI_IN at GND
-  arrival = await advance(efsp, c.GND, 'GND', arrival);  // terminal Drop
+  arrival = mustAct(efsp, c.AP, 'AP', arrival, { kind: 'HANDOFF', action: 'ACCEPT' });
+  arrival = await advance(efsp, c.AP, 'AP', arrival);  // -> HANDED_TO_TOWER at TWR
+  arrival = jumpTo(efsp, c.LC, 'LC', arrival, 'LANDED');
+  arrival = await advance(efsp, c.LC, 'LC', arrival);  // -> TAXI_IN at GND
+  arrival = await advance(efsp, c.GC, 'GC', arrival);  // terminal Drop
   assert.equal(arrival.state, 'DROPPED');
   assert.equal(arrival.flags.removeIndicator, true);
 });
@@ -223,27 +223,27 @@ test('SCENARIO a range asks, is refused with a reason, asks again and gets it', 
   mustAirspaceAct(efsp, c.DENY_RANGE, 'DENY_RANGE', 'RANGE-DENY', { kind: 'ScheduleAirspace', ...window });
   mustAirspaceAct(efsp, c.DENY_RANGE, 'DENY_RANGE', 'RANGE-DENY', { kind: 'RequestActivation' });
 
-  const denied = mustAirspaceAct(efsp, c.APP, 'APP', 'RANGE-DENY', { kind: 'DenyActivation', reason: 'inbound traffic' });
+  const denied = mustAirspaceAct(efsp, c.AP, 'AP', 'RANGE-DENY', { kind: 'DenyActivation', reason: 'inbound traffic' });
   assert.equal(denied.state, 'SCHEDULED', 'the booking survives a refusal');
   assert.equal(denied.pendingRequest, null);
   assert.equal(denied.lastDenial.reason, 'inbound traffic');
 
   mustAirspaceAct(efsp, c.DENY_RANGE, 'DENY_RANGE', 'RANGE-DENY', { kind: 'RequestActivation' });
-  assert.equal(mustAirspaceAct(efsp, c.APP, 'APP', 'RANGE-DENY', { kind: 'ApproveActivation' }).state, 'ACTIVE');
+  assert.equal(mustAirspaceAct(efsp, c.AP, 'AP', 'RANGE-DENY', { kind: 'ApproveActivation' }).state, 'ACTIVE');
 });
 
-// ── 9. a manned range tower ──────────────────────────────────────────────
+// ── 9. a staffed range tower ──────────────────────────────────────────────
 
 test('SCENARIO an A/G range with its own tower: the flight goes to range control, and the range sees it', () => {
   const efsp = createEfsp();
   const c = crew(efsp, { ...ATC, SOUTH_RANGE: 'RANGES' });
   activate(efsp, c, 'RANGE-SOUTH');
 
-  const onRange = mustAct(efsp, c.APP, 'APP', flight(efsp, c, 'HOG1'), {
+  const onRange = mustAct(efsp, c.AP, 'AP', flight(efsp, c, 'HOG1'), {
     kind: 'ApproveAirspaceEntry', airspaceId: 'RANGE-SOUTH',
   });
   assert.equal(onRange.airspaceEntry.frequencyMhz, 283.5, "the tower's own frequency, not a working frequency");
-  assert.equal(onRange.ownerPositionId, 'APP', 'the range controls the range; Approach still has the Strip');
+  assert.equal(onRange.ownerPositionId, 'AP', 'the range controls the range; Approach still has the Strip');
 
   // What the range controller sees of it: the Strip is on INCIRLIK's Board,
   // which every client receives, and it is findable by the airspace. The
@@ -254,9 +254,9 @@ test('SCENARIO an A/G range with its own tower: the flight goes to range control
     assert.equal(act(efsp, c.SOUTH_RANGE, 'SOUTH_RANGE', onRange, op).ok, false, op.kind);
   }
 
-  mustAct(efsp, c.APP, 'APP', onRange, { kind: 'ClearAirspaceEntry' });
+  mustAct(efsp, c.AP, 'AP', onRange, { kind: 'ClearAirspaceEntry' });
   mustAirspaceAct(efsp, c.SOUTH_RANGE, 'SOUTH_RANGE', 'RANGE-SOUTH', { kind: 'ReleaseAirspace' });
-  assert.equal(mustAirspaceAct(efsp, c.APP, 'APP', 'RANGE-SOUTH', { kind: 'ReturnAirspace' }).state, 'RETURNED');
+  assert.equal(mustAirspaceAct(efsp, c.AP, 'AP', 'RANGE-SOUTH', { kind: 'ReturnAirspace' }).state, 'RETURNED');
 });
 
 // ── 10. booked ahead ─────────────────────────────────────────────────────
@@ -305,23 +305,23 @@ test('SCENARIO a controller types a frequency into Block 22 and it is accepted',
   // passing a number straight out of config.
   const efsp = createEfsp();
   const c = crew(efsp, ATC);
-  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'FREQ11' });
+  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'FREQ11' });
 
-  const typed = mustAct(efsp, c.APP, 'APP', strip, { kind: 'SetBlock', blockId: '22', value: '360.200' });
-  assert.equal(efsp.fdrStore.getFdr(typed.fdrId).comms.workingFrequencyMhz, 360.2);
+  const typed = mustAct(efsp, c.AP, 'AP', strip, { kind: 'SetBlock', blockId: '22', value: '360.200' });
+  assert.equal(efsp.flightDataStore.getFlightData(typed.flightDataId).comms.workingFrequencyMhz, 360.2);
 
   // A whole number and surrounding whitespace both work.
-  const round = mustAct(efsp, c.APP, 'APP', typed, { kind: 'SetBlock', blockId: '22', value: ' 251 ' });
-  assert.equal(efsp.fdrStore.getFdr(round.fdrId).comms.workingFrequencyMhz, 251);
+  const round = mustAct(efsp, c.AP, 'AP', typed, { kind: 'SetBlock', blockId: '22', value: ' 251 ' });
+  assert.equal(efsp.flightDataStore.getFlightData(round.flightDataId).comms.workingFrequencyMhz, 251);
 
   // Clearing still clears rather than writing 0 — Number('') is 0, which is
   // the trap this had to step around.
-  const cleared = mustAct(efsp, c.APP, 'APP', round, { kind: 'SetBlock', blockId: '22', value: '' });
-  assert.equal(efsp.fdrStore.getFdr(cleared.fdrId).comms.workingFrequencyMhz, null);
+  const cleared = mustAct(efsp, c.AP, 'AP', round, { kind: 'SetBlock', blockId: '22', value: '' });
+  assert.equal(efsp.flightDataStore.getFlightData(cleared.flightDataId).comms.workingFrequencyMhz, null);
 
   // And genuinely bad input is still refused, with the band in the message.
   for (const bad of ['not a frequency', '12.5', '9000']) {
-    const result = act(efsp, c.APP, 'APP', efsp.boardStoreFor('INCIRLIK').getStrip(strip.stripId), {
+    const result = act(efsp, c.AP, 'AP', efsp.boardStoreFor('INCIRLIK').getStrip(strip.stripId), {
       kind: 'SetBlock', blockId: '22', value: bad,
     });
     assert.equal(result.ok, false, bad);

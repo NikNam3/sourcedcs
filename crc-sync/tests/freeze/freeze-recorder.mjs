@@ -57,17 +57,17 @@ Module._load = function (request, parent, isMain) {
 };
 
 function finalState(efsp) {
-  const out = { boards: {}, fdr: null };
+  const out = { boards: {}, flightData: null };
   try {
     for (const f of require('../../src/efsp/facility-config.js').getFacilityIds()) {
       const b = efsp.boardStoreFor(f);
       if (b) out.boards[f] = clone(b.snapshot());
     }
-    out.fdr = clone(efsp.fdrStore.snapshot());
+    out.flightData = clone(efsp.flightDataStore.snapshot());
     out.airspaces = clone(efsp.airspaceStore.snapshot());
     out.correlations = clone(efsp.correlationStore.snapshot());
     out.marsa = clone(efsp.marsaStore.snapshot());
-    out.fieldStates = clone(efsp.fieldStateStore.snapshot());
+    out.runwayStatuses = clone(efsp.runwayStatusStore.snapshot());
     out.carriers = clone(efsp.carrierStore.snapshot());
   } catch (e) { out.error = String(e && e.message); }
   return out;

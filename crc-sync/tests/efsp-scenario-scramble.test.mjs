@@ -33,13 +33,13 @@ const { createEfsp } = await import('../src/efsp/index.js');
 const facilityConfig = await import('../src/efsp/facility-config.js');
 const { TrafficCount } = await import('../src/efsp/traffic-count.js');
 const { activeScrambles, conflictingGroundStrips, alertPadConstraint } = await import('../src/efsp/alert-scramble.js');
-const { crew, mustAct, act, jumpTo, advance, DEPARTURE_FDR } = await import('./helpers/efsp-scenario.mjs');
+const { crew, mustAct, act, jumpTo, advance, DEPARTURE_FLIGHT_DATA } = await import('./helpers/efsp-scenario.mjs');
 
 const efsp = createEfsp();
-const c = crew(efsp, { OPS: 'INCIRLIK', CD: 'INCIRLIK', GND: 'INCIRLIK', TWR: 'INCIRLIK', APP: 'INCIRLIK' });
+const c = crew(efsp, { OPS: 'INCIRLIK', CD: 'INCIRLIK', GC: 'INCIRLIK', LC: 'INCIRLIK', AP: 'INCIRLIK' });
 const counter = new TrafficCount({
   mutationLog: efsp.mutationLog,
-  fdrStore: efsp.fdrStore,
+  flightDataStore: efsp.flightDataStore,
   boardStoreFor: efsp.boardStoreFor,
   facilityIds: facilityConfig.getFacilityIds(),
   config: { retentionDays: 400, homeAirports: { INCIRLIK: ['LTAG'] } },
@@ -50,17 +50,17 @@ const board = efsp.boardStoreFor('INCIRLIK');
 // edge (efsp-ws.js _stampStrip), not stored on the Board.
 const live = () => board.getAll().filter(s => s.state !== 'DROPPED')
   .map(s => ({ ...s, facilityId: 'INCIRLIK', nla: board.nlaStatusFor(s) }));
-const fdrOf = (id) => efsp.fdrStore.getFdr(id);
-const scrambles = () => activeScrambles(live(), fdrOf, 'INCIRLIK');
-const flagged = () => conflictingGroundStrips(live(), fdrOf, 'INCIRLIK').map(s => s.stripId).sort();
+const flightDataOf = (id) => efsp.flightDataStore.getFlightData(id);
+const scrambles = () => activeScrambles(live(), flightDataOf, 'INCIRLIK');
+const flagged = () => conflictingGroundStrips(live(), flightDataOf, 'INCIRLIK').map(s => s.stripId).sort();
 const fresh = (s) => board.getStrip(s.stripId);
 let n = 0;
 
 /** A departure created by OPS and pressed through NLA to CLEARED (CD owns it). */
 async function clearedDeparture(callsign) {
   let s = mustAct(efsp, c.OPS, 'OPS', null, {
-    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE',
-    fdr: { ...DEPARTURE_FDR, callsign, aircraftType: 'F16' },
+    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE',
+    flightData: { ...DEPARTURE_FLIGHT_DATA, callsign, aircraftType: 'F16' },
   });
   s = await advance(efsp, c.OPS, 'OPS', s);
   assert.equal(s.state, 'PENDING_CLEARANCE');
@@ -73,23 +73,23 @@ async function clearedDeparture(callsign) {
 function groundTraffic() {
   const dep = (state) => {
     let s = mustAct(efsp, c.OPS, 'OPS', null, {
-      kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE',
-      fdr: { ...DEPARTURE_FDR, callsign: `HAWK${++n}` },
+      kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE',
+      flightData: { ...DEPARTURE_FLIGHT_DATA, callsign: `HAWK${++n}` },
     });
     s = jumpTo(efsp, c.OPS, 'OPS', s, state);
     return state === 'TAXI'
-      ? mustAct(efsp, c.OPS, 'OPS', s, { kind: 'TransferStrip', toPositionId: 'GND', bayId: 'gnd-taxi-out', rackId: 'main' })
-      : mustAct(efsp, c.OPS, 'OPS', s, { kind: 'TransferStrip', toPositionId: 'TWR', bayId: 'twr-runway-queue', rackId: 'rwy-05' });
+      ? mustAct(efsp, c.OPS, 'OPS', s, { kind: 'TransferStrip', toPositionId: 'GC', bayId: 'gc-taxi-out', rackId: 'main' })
+      : mustAct(efsp, c.OPS, 'OPS', s, { kind: 'TransferStrip', toPositionId: 'LC', bayId: 'lc-runway-queue', rackId: 'rwy-05' });
   };
   const taxi = dep('TAXI');
   const queue = dep('RUNWAY_QUEUE');
-  let arr = mustAct(efsp, c.APP, 'APP', null, {
-    kind: 'CreateStrip', bayId: 'app-inbound', rackId: 'main', role: 'ARRIVAL',
-    fdr: { callsign: `TANKER${++n}`, aircraftType: 'KC135', wakeCategory: 'H', originAirport: 'LTAG' },
+  let arr = mustAct(efsp, c.AP, 'AP', null, {
+    kind: 'CreateStrip', bayId: 'ap-inbound', rackId: 'main', stripType: 'ARRIVAL',
+    flightData: { callsign: `TANKER${++n}`, aircraftType: 'KC135', wakeCategory: 'H', originAirport: 'LTAG' },
   });
-  arr = jumpTo(efsp, c.APP, 'APP', arr, 'HANDED_TO_TOWER');
-  arr = mustAct(efsp, c.APP, 'APP', arr, { kind: 'TransferStrip', toPositionId: 'TWR', bayId: 'twr-arrivals', rackId: 'main' });
-  arr = jumpTo(efsp, c.TWR, 'TWR', arr, 'TAXI_IN');
+  arr = jumpTo(efsp, c.AP, 'AP', arr, 'HANDED_TO_TOWER');
+  arr = mustAct(efsp, c.AP, 'AP', arr, { kind: 'TransferStrip', toPositionId: 'LC', bayId: 'lc-arrivals', rackId: 'main' });
+  arr = jumpTo(efsp, c.LC, 'LC', arr, 'TAXI_IN');
   return { taxi, queue, arr };
 }
 
@@ -126,7 +126,7 @@ test('sortie: an alert pair scrambles past taxiing traffic — flagged, never re
 
   assert.deepEqual(scrambles().map(s => [s.callsign, s.state]), [['VIPER11', 'CLEARED']]);
   assert.deepEqual(flagged(), [taxi.stripId, queue.stripId, arr.stripId].sort());
-  const constraint = alertPadConstraint(efsp.fieldStateStore.getFieldState('INCIRLIK'), scrambles());
+  const constraint = alertPadConstraint(efsp.runwayStatusStore.getRunwayStatus('INCIRLIK'), scrambles());
   assert.deepEqual(constraint, {
     route: 'ALERT ACCESS TAXIWAY',
     text: 'ACCESS ROUTE ALERT ACCESS TAXIWAY CONSTRAINED — scramble in progress (VIPER11)',
@@ -139,7 +139,7 @@ test('sortie: an alert pair scrambles past taxiing traffic — flagged, never re
   assert.equal(fresh(viper).bayId, viper.bayId);
 
   // The others carry on normally — a flag refuses nothing.
-  const taxiNext = await advance(efsp, c.GND, 'GND', fresh(taxi));
+  const taxiNext = await advance(efsp, c.GC, 'GC', fresh(taxi));
   assert.equal(taxiNext.state, 'RUNWAY_QUEUE');
   assert.ok(flagged().includes(taxi.stripId), 'still on the movement area, still flagged');
 
@@ -153,7 +153,7 @@ test('sortie: an alert pair scrambles past taxiing traffic — flagged, never re
   assert.equal(v.state, 'DEPARTED');
   assert.deepEqual(scrambles(), []);
   assert.deepEqual(flagged(), []);
-  assert.equal(efsp.fdrStore.getFdr(v.fdrId).military.alertStatus, 'SCRAMBLE', 'nothing resets the field (T5)');
+  assert.equal(efsp.flightDataStore.getFlightData(v.flightDataId).military.alertStatus, 'SCRAMBLE', 'nothing resets the field (T5)');
 
   // Both writes are logged Strip Mutations (decisions.md S-L5): the audit and
   // L5's latch see them. The log names the op kind, not the Block or value
@@ -165,8 +165,8 @@ test('sortie: an alert pair scrambles past taxiing traffic — flagged, never re
   assert.ok(sets.every(e => e.actingPositionId === 'CD'));
 
   // Traffic count: dropped after departure, it counts as an alert scramble.
-  v = await advance(efsp, c.TWR, 'TWR', v); // DEPARTED -> HANDED_OFF, to APP
-  mustAct(efsp, c.APP, 'APP', fresh(v), { kind: 'DropStrip' });
+  v = await advance(efsp, c.LC, 'LC', v); // DEPARTED -> HANDED_OFF, to APP
+  mustAct(efsp, c.AP, 'AP', fresh(v), { kind: 'DropStrip' });
   const rec = counter.records().filter(r => r.stripId === viper.stripId);
   assert.equal(rec.length, 1);
   assert.equal(rec[0].alertScramble, true);
@@ -186,7 +186,7 @@ test('sortie: the scramble is cancelled on the ground', async () => {
   assert.deepEqual(scrambles(), []);
   assert.deepEqual(flagged(), []);
   setAlert('CD', viper, 'NONE');
-  assert.equal(fdrOf(viper.fdrId).military.alertStatus, 'NONE');
+  assert.equal(flightDataOf(viper.flightDataId).military.alertStatus, 'NONE');
   await clearBoard();
 });
 
@@ -213,8 +213,8 @@ test('sortie: a scramble called off after departure was flown, and the drop coun
   }
   assert.equal(v.state, 'DEPARTED');
   setAlert('OPS', v, 'ALERT');
-  v = await advance(efsp, c.TWR, 'TWR', fresh(v));
-  mustAct(efsp, c.APP, 'APP', fresh(v), { kind: 'DropStrip' });
+  v = await advance(efsp, c.LC, 'LC', fresh(v));
+  mustAct(efsp, c.AP, 'AP', fresh(v), { kind: 'DropStrip' });
   const rec = counter.records().filter(r => r.stripId === s0.stripId);
   assert.equal(rec.length, 1);
   assert.equal(rec[0].alertScramble, true);
@@ -223,16 +223,16 @@ test('sortie: a scramble called off after departure was flown, and the drop coun
 
 test('OPS owns 14E on a departure at every state, whoever holds the Strip (H56, S-L13)', async () => {
   let s = mustAct(efsp, c.OPS, 'OPS', null, {
-    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE',
-    fdr: { ...DEPARTURE_FDR, callsign: 'COLT41' },
+    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE',
+    flightData: { ...DEPARTURE_FLIGHT_DATA, callsign: 'COLT41' },
   });
   s = setAlert('OPS', s, 'ALERT');
-  assert.equal(fdrOf(s.fdrId).military.alertStatus, 'ALERT');
+  assert.equal(flightDataOf(s.flightDataId).military.alertStatus, 'ALERT');
   s = await advance(efsp, c.OPS, 'OPS', s);
   // CD holds it now, and OPS still sets the alert status.
   const scrambled = act(efsp, c.OPS, 'OPS', fresh(s), { kind: 'SetBlock', blockId: '14E', value: 'SCRAMBLE' });
   assert.equal(scrambled.ok, true, JSON.stringify(scrambled));
-  assert.equal(fdrOf(s.fdrId).military.alertStatus, 'SCRAMBLE');
+  assert.equal(flightDataOf(s.flightDataId).military.alertStatus, 'SCRAMBLE');
   // Any other Block is still the owner's: the exception is 14E only.
   const other = act(efsp, c.OPS, 'OPS', fresh(s), { kind: 'SetBlock', blockId: '8A', value: 'X' });
   assert.equal(other.reason, 'NOT_OWNER');

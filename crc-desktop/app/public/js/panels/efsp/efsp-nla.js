@@ -8,7 +8,7 @@
 // waiting on the server" budget. Clock is injectable so the timing logic
 // is testable without real setTimeout delays.
 
-// [SOURCE-DEFINED] — mirrors nla.js's STATES_BY_ROLE/computeNla exactly,
+// [SOURCE-DEFINED] — mirrors nla.js's STATES_BY_STRIP_TYPE/computeNla exactly,
 // role-keyed since Phase 2 adds ARRIVAL. DEPARTED's label reflects the
 // real transfer-shaped Hand Off now (docs/adr/0007, superseding ADR
 // 0005's "(local)" stub wording — this IS the real intrafacility
@@ -56,8 +56,8 @@ export const NLA_LABELS = {
   // The carrier's Roles (crc-sync's docs/adr/0074, nla.js's computeMarshalNla,
   // computeFinalNla, computePatternNla). IN_STACK's label is Case-dependent
   // ('Commence' in Case II and III, 'To pattern' in Case I): the server's own
-  // `strip.nla.carrierTransfer` names the hand-over and nlaButtonLabel() below
-  // reads its label from CARRIER_TRANSFERS; this is the fallback.
+  // `strip.nla.carrierHandoff` names the handoff and nlaButtonLabel() below
+  // reads its label from CARRIER_HANDOFFS; this is the fallback.
   MARSHAL: {
     LAUNCH:    'Launched',
     IN_STACK:  'Commence',
@@ -74,11 +74,11 @@ export const NLA_LABELS = {
   },
 };
 
-// The carrier's hand-overs (guide §9.12: four different buttons, four trigger
+// The carrier's handoffs (guide §9.12: four different buttons, four trigger
 // types, "MUST NOT be unified behind one button"). A client mirror of
-// crc-sync's carrier/transfers.js, drift-tested like the tables below. `seeYou`
+// crc-sync's carrier/handoffs.js, drift-tested like the tables below. `seeYou`
 // (MARSHAL_TO_PRIFLY) is the Case II second button beside the NLA.
-export const CARRIER_TRANSFERS = {
+export const CARRIER_HANDOFFS = {
   MARSHAL_TO_APPROACH:       { label: 'Commence',      trigger: 'CONTROLLER_INITIATED', from: ['CV_MARSHAL'], cases: ['II', 'III'] },
   APPROACH_TO_FINAL:         { label: 'Radar contact', trigger: 'RADAR_ACQUISITION',    from: ['CV_APP1', 'CV_APP2'], cases: ['II', 'III'] },
   FINAL_TO_LSO:              { label: 'Ball',          trigger: 'PILOT_BALL_CALL',      from: ['CV_APP1', 'CV_APP2'], cases: ['I', 'II', 'III'] },
@@ -86,19 +86,19 @@ export const CARRIER_TRANSFERS = {
   MARSHAL_TO_PATTERN_CASE_I: { label: 'To pattern',    trigger: 'CONTROLLER_INITIATED', from: ['CV_MARSHAL'], cases: ['I'] },
 };
 
-/** The label on a Strip's NLA button: the hand-over's own name when the server says the NLA is one, else the Role's state table. */
+/** The label on a Strip's NLA button: the handoff's own name when the server says the NLA is one, else the Role's state table. */
 export function nlaButtonLabel(strip) {
-  const t = strip && strip.nla && strip.nla.carrierTransfer;
-  if (t && CARRIER_TRANSFERS[t]) return CARRIER_TRANSFERS[t].label;
-  return strip ? nlaLabelFor(strip.state, strip.role) : null;
+  const t = strip && strip.nla && strip.nla.carrierHandoff;
+  if (t && CARRIER_HANDOFFS[t]) return CARRIER_HANDOFFS[t].label;
+  return strip ? nlaLabelFor(strip.state, strip.stripType) : null;
 }
 
-export function nlaLabelFor(state, role = 'DEPARTURE') {
-  return (NLA_LABELS[role] || {})[state] || null;
+export function nlaLabelFor(state, stripType = 'DEPARTURE') {
+  return (NLA_LABELS[stripType] || {})[state] || null;
 }
 
 // Per-State authority (guide §3.4's "normally owned by" column) — client
-// mirror of permission.js's STATE_OWNERS_BY_ROLE/canActOnState. The SERVER
+// mirror of permission.js's STATE_OWNERS_BY_STRIP_TYPE/canActOnState. The SERVER
 // check (board-store.js's _applyInvokeNla/_validateBayImpliedTransition,
 // docs/adr/0010) is what's actually authoritative and load-bearing.
 //
@@ -118,30 +118,30 @@ export const DEPARTURE_STATE_OWNERS = {
   PROPOSED:          ['OPS'],
   PENDING_CLEARANCE: ['CD'],
   CLEARED:           ['CD'],
-  HELD:              ['CD', 'GND'],
-  PUSHBACK:          ['GND'],
-  TAXI:              ['GND'],
-  RUNWAY_QUEUE:      ['TWR'],
-  LUAW:              ['TWR'],
-  DEPARTED:          ['TWR'],
-  HANDED_OFF:        ['APP', 'CTR'], // docs/adr/0022 bug fix — mirrors permission.js exactly
+  HELD:              ['CD', 'GC'],
+  PUSHBACK:          ['GC'],
+  TAXI:              ['GC'],
+  RUNWAY_QUEUE:      ['LC'],
+  LUAW:              ['LC'],
+  DEPARTED:          ['LC'],
+  HANDED_OFF:        ['AP', 'CTR'], // docs/adr/0022 bug fix — mirrors permission.js exactly
 };
 
 // [SOURCE-DEFINED] ARRIVAL lifecycle authority (docs/adr/0008/0010). CTR
 // added to INBOUND (WP4A, docs/adr/0014) — mirrors permission.js exactly.
 export const ARRIVAL_STATE_OWNERS = {
-  INBOUND:         ['APP', 'CTR', 'SFA'], // SFA (docs/adr/0075) works the inbound aircraft on its frequencies
-  HANDED_TO_TOWER: ['TWR'],
-  FINAL:           ['TWR'],
-  LANDED:          ['TWR'],
-  TAXI_IN:         ['GND'],
+  INBOUND:         ['AP', 'CTR', 'SFA'], // SFA (docs/adr/0075) works the inbound aircraft on its frequencies
+  HANDED_TO_TOWER: ['LC'],
+  FINAL:           ['LC'],
+  LANDED:          ['LC'],
+  TAXI_IN:         ['GC'],
 };
 
 // [SOURCE-DEFINED] OVERFLIGHT lifecycle authority (docs/adr/0087) — mirrors permission.js exactly.
 export const OVERFLIGHT_STATE_OWNERS = {
-  INBOUND:    ['APP', 'CTR'],
-  IN_SECTOR:  ['APP', 'CTR'],
-  HANDED_OFF: ['APP', 'CTR'],
+  INBOUND:    ['AP', 'CTR'],
+  IN_SECTOR:  ['AP', 'CTR'],
+  HANDED_OFF: ['AP', 'CTR'],
 };
 
 // WP4A second slice — MISSION lifecycle authority, mirroring permission.js's
@@ -188,7 +188,7 @@ export const MARSHAL_STATE_OWNERS = { LAUNCH: ['CV_MARSHAL'], IN_STACK: ['CV_MAR
 export const FINAL_STATE_OWNERS = { ON_FINAL: ['CV_APP1', 'CV_APP2', 'PAR'], BALL: ['CV_APP1', 'CV_APP2', 'PAR'], BOLTER_WAVEOFF: ['CV_APP1', 'CV_APP2', 'PAR'] };
 export const PATTERN_STATE_OWNERS = { IN_PATTERN: ['CV_PRIFLY', 'RSU'], RECOVERED: ['CV_PRIFLY', 'RSU'] };
 
-export const STATE_OWNERS_BY_ROLE = {
+export const STATE_OWNERS_BY_STRIP_TYPE = {
   DEPARTURE: DEPARTURE_STATE_OWNERS, ARRIVAL: ARRIVAL_STATE_OWNERS, OVERFLIGHT: OVERFLIGHT_STATE_OWNERS, MISSION: MISSION_STATE_OWNERS,
   MARSHAL: MARSHAL_STATE_OWNERS, FINAL: FINAL_STATE_OWNERS, PATTERN: PATTERN_STATE_OWNERS,
 };
@@ -199,8 +199,8 @@ export const STATE_OWNERS_BY_ROLE = {
  * @param {string} state — the Strip's CURRENT state (the one being advanced FROM)
  * @returns {boolean}
  */
-export function canActOnState(actingPositionId, role, state) {
-  const owners = (STATE_OWNERS_BY_ROLE[role] || {})[state];
+export function canActOnState(actingPositionId, stripType, state) {
+  const owners = (STATE_OWNERS_BY_STRIP_TYPE[stripType] || {})[state];
   return !!owners && owners.includes(actingPositionId);
 }
 
@@ -245,9 +245,9 @@ export const TOFI_EXIT_DUE_MISSION_STATES = ['OFF_STATION', 'RTB'];
 
 /** True when `strip` (an ATC-side Strip in ACTIVE TOFI) should offer TOFI Exit as its primary action. */
 export function tofiExitDueFor(strip, missionStrip) {
-  if (!strip || strip.role === 'MISSION') return false;
+  if (!strip || strip.stripType === 'MISSION') return false;
   const tofi = strip.tofiCoordination;
   if (!tofi || tofi.state !== 'ACTIVE') return false;
-  return !!missionStrip && missionStrip.role === 'MISSION'
+  return !!missionStrip && missionStrip.stripType === 'MISSION'
     && TOFI_EXIT_DUE_MISSION_STATES.includes(missionStrip.state);
 }

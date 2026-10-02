@@ -15,8 +15,8 @@ const { openPanel, seedStrip, dropStrips, expectTouchTarget, stripMenuItem } = r
 // Layout C (docs/adr/0056): MARSA… is a ⋯ menu item now, so both the opener
 // and the item it leads to have to meet the floor.
 test('the ⋯ menu and its MARSA… item meet the touch-target floor', async ({ page }) => {
-  await openPanel(page, { held: ['OPS'] });
-  const strip = await seedStrip(page, { callsign: 'VIPER11', role: 'DEPARTURE' });
+  await openPanel(page, { signedOn: ['OPS'] });
+  const strip = await seedStrip(page, { callsign: 'VIPER11', stripType: 'DEPARTURE' });
   try {
     await expectTouchTarget(strip.locator('.efsp-strip-menu-btn'), '⋯');
     await expectTouchTarget(await stripMenuItem(strip, 'MARSA…'), 'MARSA… (⋯ menu item)');

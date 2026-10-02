@@ -23,12 +23,12 @@ async function controller(browser, opts) {
 }
 
 const has = (page, callsign) => page.evaluate((cs) => getAllEfspStrips().some(s => {
-  const f = getEfspFdr(s.fdrId); return f && f.identity.callsign === cs && s.state !== 'DROPPED';
+  const f = getEfspFdr(s.flightDataId); return f && f.identity.callsign === cs && s.state !== 'DROPPED';
 }), callsign);
 
 test('a websocket killed mid-session reconnects, sends no resync, and converges through the connect snapshot', async ({ browser, page }) => {
-  await openPanel(page, { held: ['CD'], controller: 'e2e-ui-b-watcher' });
-  const { page: other } = await controller(browser, { held: ['OPS'], controller: 'e2e-ui-b-actor' });
+  await openPanel(page, { signedOn: ['CD'], controller: 'e2e-ui-b-watcher' });
+  const { page: other } = await controller(browser, { signedOn: ['OPS'], controller: 'e2e-ui-b-actor' });
 
   // R3-47: a reconnect is recovered by the full snapshot the server sends on every connect; the
   // client sends no efsp-resync for it (resync is for a Board epoch change and a missed delta).
@@ -59,8 +59,8 @@ test('a websocket killed mid-session reconnects, sends no resync, and converges 
   // ... while another controller changes the Board
   const callsign = `UIB${Date.now() % 10000}`;
   try {
-    await other.evaluate((cs) => window.sendEfspCreateStrip('OPS', { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE',
-      fdr: { callsign: cs, aircraftType: 'F16', wakeCategory: 'D' } }, 'INCIRLIK'), callsign);
+    await other.evaluate((cs) => window.sendEfspCreateStrip('OPS', { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE',
+      flightData: { callsign: cs, aircraftType: 'F16', wakeCategory: 'D' } }, 'INCIRLIK'), callsign);
     await expect.poll(() => has(other, callsign), { timeout: 10000 }).toBe(true);
     expect(await has(page, callsign), 'the watcher is offline and has not seen it').toBe(false);
 

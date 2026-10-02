@@ -50,7 +50,7 @@ const RATE_WARN_INTERVAL_MS = 60000;
 // a state added in WP6 or WP7 silently leaves the denominator, and the rate
 // silently RISES — flattering and wrong. With an exclusion list a new state
 // defaults to eligible, so the rate FALLS and somebody notices. A test holds
-// every state in nla.js's STATES_BY_ROLE to being either listed here or
+// every state in nla.js's STATES_BY_STRIP_TYPE to being either listed here or
 // eligible, so adding one forces the decision rather than defaulting it.
 const INELIGIBLE_STATES = new Set([
   // Pre-movement: the aircraft may not even be spawned.
@@ -59,7 +59,7 @@ const INELIGIBLE_STATES = new Set([
   'TASKED',
   'DROPPED',
   // The carrier Roles (docs/adr/0074) are pinned one by one in
-  // tests/efsp-carrier-roles.test.mjs. Every MARSHAL/FINAL/PATTERN state is
+  // tests/efsp-carrier-strip-types.test.mjs. Every MARSHAL/FINAL/PATTERN state is
   // ELIGIBLE, LAUNCH included: correlation matches an FDR against the track
   // store (binding, beacon, callsign), not against what a ship radar has
   // illuminated, so `noGroundAircraft` on the ship radars does not hide a jet
@@ -71,7 +71,7 @@ class CorrelationReconciler {
   /**
    * @param {object} deps
    * @param {object} deps.trackStore
-   * @param {object} deps.fdrStore
+   * @param {object} deps.flightDataStore
    * @param {object} deps.correlationStore
    * @param {(facilityId:string)=>object|null} deps.boardStoreFor
    * @param {object} deps.facilityConfig
@@ -80,7 +80,7 @@ class CorrelationReconciler {
    * @param {(payload:object)=>void} [deps.onDelta] — called ONCE per tick with
    *   the records that changed plus the stats, or not at all on a quiet tick.
    */
-  constructor({ trackStore, fdrStore, correlationStore, boardStoreFor, facilityConfig, beaconOf, onDelta, clock = WALL_CLOCK }) {
+  constructor({ trackStore, flightDataStore, correlationStore, boardStoreFor, facilityConfig, beaconOf, onDelta, clock = WALL_CLOCK }) {
     // The mission clock (docs/adr/0079) — what the correlation records are
     // stamped with. The below-target warning's rate limit is a log throttle
     // and stays on the wall clock (_warnIfBelowTarget).
@@ -88,7 +88,7 @@ class CorrelationReconciler {
     if (typeof beaconOf !== 'function') throw new Error('CorrelationReconciler needs beaconOf');
     this._beaconOf = beaconOf;
     this._trackStore = trackStore;
-    this._fdrStore = fdrStore;
+    this._flightDataStore = flightDataStore;
     this._store = correlationStore;
     this._boardStoreFor = boardStoreFor;
     this._facilityConfig = facilityConfig;
@@ -109,7 +109,7 @@ class CorrelationReconciler {
     this._lastEligible = 0;
     this._lastWarnAt = 0;
 
-    // trackId -> the fdrId of the finished flight that last held that contact
+    // trackId -> the flightDataId of the finished flight that last held that contact
     // (docs/adr/0076, S-L27). Such a contact is not claimable by another
     // flight's callsign or code: it is an earlier flight's aircraft, still in
     // the air, and a new flight that reuses the callsign must not inherit it.
@@ -119,18 +119,18 @@ class CorrelationReconciler {
   }
 
   /** Every live Strip across every Facility, so eligibility can be judged per FDR. */
-  _liveStripsByFdr() {
-    const byFdr = new Map(); // fdrId -> [strip]
+  _liveStripsByFlightData() {
+    const byFlightData = new Map(); // flightDataId -> [strip]
     for (const facilityId of this._facilityConfig.getFacilityIds()) {
       const boardStore = this._boardStoreFor(facilityId);
       if (!boardStore) continue;
       for (const strip of boardStore.getAll()) {
         if (strip.state === 'DROPPED') continue;
-        const list = byFdr.get(strip.fdrId);
-        if (list) list.push(strip); else byFdr.set(strip.fdrId, [strip]);
+        const list = byFlightData.get(strip.flightDataId);
+        if (list) list.push(strip); else byFlightData.set(strip.flightDataId, [strip]);
       }
     }
-    return byFdr;
+    return byFlightData;
   }
 
   /**
@@ -158,7 +158,7 @@ class CorrelationReconciler {
 
     const tracks = this._trackStore.getAll();
     const { byBeacon, byStem, byId } = buildTrackIndices(tracks, this._beaconOf);
-    const stripsByFdr = this._liveStripsByFdr();
+    const stripsByFlightData = this._liveStripsByFlightData();
 
     // A flight with no live Strip anywhere is over, and its record goes with
     // it. Note the distinction from eligibility: a Strip sitting at PROPOSED is
@@ -166,44 +166,44 @@ class CorrelationReconciler {
     // Its contact is remembered first (docs/adr/0076): it may well still be in
     // the air, and must not be handed to the next flight with that callsign.
     for (const [trackId, held] of this._store.trackIndex()) {
-      if (!stripsByFdr.has(held.fdrId)) this._formerHolder.set(String(trackId), held.fdrId);
+      if (!stripsByFlightData.has(held.flightDataId)) this._formerHolder.set(String(trackId), held.flightDataId);
     }
     for (const trackId of [...this._formerHolder.keys()]) {
       if (!byId.has(trackId)) this._formerHolder.delete(trackId);
     }
-    this._store.retireFinished(new Set(stripsByFdr.keys()));
+    this._store.retireFinished(new Set(stripsByFlightData.keys()));
 
     const eligible = [];
-    for (const fdr of this._fdrStore.getAll()) {
-      const strips = stripsByFdr.get(fdr.fdrId);
+    for (const flightData of this._flightDataStore.getAll()) {
+      const strips = stripsByFlightData.get(flightData.flightDataId);
       if (!strips || !CorrelationReconciler.isEligible(strips)) continue;
-      eligible.push(fdr);
+      eligible.push(flightData);
     }
 
-    const claimed = new Map(); // trackId -> fdrId
-    const resolutions = new Map(); // fdrId -> resolution | null
+    const claimed = new Map(); // trackId -> flightDataId
+    const resolutions = new Map(); // flightDataId -> resolution | null
 
     // Rung 1 — an explicit controller binding. It outranks everything the
     // sweep can work out, which is the point of having it: an aircraft with
     // its transponder off and a callsign nothing matches is still a contact
     // the controller can see.
-    for (const fdr of eligible) {
-      const record = this._store.getCorrelation(fdr.fdrId);
+    for (const flightData of eligible) {
+      const record = this._store.getCorrelation(flightData.flightDataId);
       const bound = record && record.binding && record.binding.trackId;
       if (!bound) continue;
       const track = byId.get(String(bound));
       if (!track) continue; // the contact is gone — later rungs get a chance
-      claimed.set(String(bound), fdr.fdrId);
-      resolutions.set(fdr.fdrId, {
+      claimed.set(String(bound), flightData.flightDataId);
+      resolutions.set(flightData.flightDataId, {
         trackId: String(bound), matchedBy: 'BINDING', state: 'CORRELATED',
         observedBeacon: this._beaconOf(track),
       });
     }
 
     // Rung 2 — the assigned Mode 3/A code, observed on a contact.
-    for (const fdr of eligible) {
-      if (resolutions.has(fdr.fdrId)) continue;
-      const assigned = fdr.identity.beaconAssigned;
+    for (const flightData of eligible) {
+      if (resolutions.has(flightData.flightDataId)) continue;
+      const assigned = flightData.identity.beaconAssigned;
       if (!assigned) continue;
       const candidates = (byBeacon.get(assigned) || []).filter(id => !claimed.has(id) && !this._formerHolder.has(id));
       if (candidates.length === 0) continue;
@@ -212,7 +212,7 @@ class CorrelationReconciler {
         // rule 7), so this is not an error — but guessing between two
         // aircraft squawking one code would be. Say so and let rung 1 settle
         // it, which is what rung 1 is for.
-        resolutions.set(fdr.fdrId, {
+        resolutions.set(flightData.flightDataId, {
           warning: {
             kind: 'AMBIGUOUS_BEACON', candidateTrackIds: candidates,
             detail: `${candidates.length} contacts are squawking ${assigned} — bind one`,
@@ -222,8 +222,8 @@ class CorrelationReconciler {
         continue;
       }
       const trackId = candidates[0];
-      claimed.set(trackId, fdr.fdrId);
-      resolutions.set(fdr.fdrId, {
+      claimed.set(trackId, flightData.flightDataId);
+      resolutions.set(flightData.flightDataId, {
         trackId, matchedBy: 'BEACON', state: 'CORRELATED',
         observedBeacon: this._beaconOf(byId.get(trackId)),
       });
@@ -232,19 +232,19 @@ class CorrelationReconciler {
     // Rungs 3 and 4 — the callsign, exact then fuzzy. Both walk the same
     // candidate set; the rung is decided by the affinity that comes back.
     for (const pass of ['exact', 'fuzzy']) {
-      for (const fdr of eligible) {
-        if (resolutions.has(fdr.fdrId)) continue;
-        const resolution = this._matchByCallsign(fdr, { byStem, byId, claimed, exactOnly: pass === 'exact' });
+      for (const flightData of eligible) {
+        if (resolutions.has(flightData.flightDataId)) continue;
+        const resolution = this._matchByCallsign(flightData, { byStem, byId, claimed, exactOnly: pass === 'exact' });
         if (!resolution) continue;
-        if (resolution.trackId) claimed.set(resolution.trackId, fdr.fdrId);
-        resolutions.set(fdr.fdrId, resolution);
+        if (resolution.trackId) claimed.set(resolution.trackId, flightData.flightDataId);
+        resolutions.set(flightData.flightDataId, resolution);
       }
     }
 
     // Everything eligible and unmatched is uncorrelated, and says why.
-    for (const fdr of eligible) {
-      if (resolutions.has(fdr.fdrId)) continue;
-      resolutions.set(fdr.fdrId, {
+    for (const flightData of eligible) {
+      if (resolutions.has(flightData.flightDataId)) continue;
+      resolutions.set(flightData.flightDataId, {
         warning: { kind: 'TRACK_LOST', detail: 'no contact matches this flight' },
         observedBeacon: null,
       });
@@ -258,8 +258,8 @@ class CorrelationReconciler {
     return { changed, stats };
   }
 
-  _matchByCallsign(fdr, { byStem, byId, claimed, exactOnly }) {
-    const callsign = fdr.identity.callsign;
+  _matchByCallsign(flightData, { byStem, byId, claimed, exactOnly }) {
+    const callsign = flightData.identity.callsign;
     if (!callsign) return null;
     const stem = callsign.toUpperCase().replace(/[^A-Z]/g, '').replace(/[0-9]/g, '');
     const candidateIds = (byStem.get(stem) || []).filter(id => !claimed.has(id) && !this._formerHolder.has(id));
@@ -290,7 +290,7 @@ class CorrelationReconciler {
     const trackId = top[0].id;
     const track = byId.get(trackId);
     const observedBeacon = this._beaconOf(track);
-    const assigned = fdr.identity.beaconAssigned;
+    const assigned = flightData.identity.beaconAssigned;
     // An exact callsign match is CORRELATED — unless the contact is squawking
     // something other than the code we assigned it, which is real evidence
     // against the identity even when the name agrees. A fuzzy match is
@@ -313,8 +313,8 @@ class CorrelationReconciler {
    * on change, so this is a no-op for a steady flight.
    */
   _writeObservedBeacons(resolutions) {
-    for (const [fdrId, resolution] of resolutions) {
-      this._fdrStore.setBeaconObserved(fdrId, (resolution && resolution.observedBeacon) || null);
+    for (const [flightDataId, resolution] of resolutions) {
+      this._flightDataStore.setBeaconObserved(flightDataId, (resolution && resolution.observedBeacon) || null);
     }
   }
 

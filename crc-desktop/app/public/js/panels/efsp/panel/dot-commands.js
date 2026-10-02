@@ -18,12 +18,12 @@ function _fragMissionLine(callsign) {
   const wanted = String(callsign || '').trim().toUpperCase();
   if (!wanted) return _showDotCommandError('.mission needs a callsign');
 
-  const origin = _availableCreateStripOrigins().find(o => o.role === 'MISSION' && o.actingPositionId === 'TAC_C2');
+  const origin = _availableCreateStripOrigins().find(o => o.stripType === 'MISSION' && o.actingPositionId === 'TAC_C2');
   if (!origin) return _showDotCommandError('only TAC_C2 can frag a mission line');
 
   const candidate = _missionBindCandidates().find((s) => {
-    const fdr = typeof getEfspFdr === 'function' ? getEfspFdr(s.fdrId) : null;
-    return fdr && fdr.identity && String(fdr.identity.callsign || '').toUpperCase() === wanted;
+    const flightData = typeof getEfspFdr === 'function' ? getEfspFdr(s.flightDataId) : null;
+    return flightData && flightData.identity && String(flightData.identity.callsign || '').toUpperCase() === wanted;
   });
   if (!candidate) {
     // docs/ui-findings F-309 — _missionBindCandidates() drops every flight
@@ -31,16 +31,16 @@ function _fragMissionLine(callsign) {
     // generic message above fired about a flight that is live and on screen.
     // The refusal is right (one mission line per flight, which crc-sync
     // enforces); only the wording was wrong.
-    const fdrIds = new Set(liveStripsForCallsign(wanted).map(s => s.fdrId));
-    const alreadyFragged = fdrIds.size > 0 && (typeof getAllEfspStrips === 'function' ? getAllEfspStrips() : [])
-      .some(s => s.role === 'MISSION' && s.state !== 'DROPPED' && fdrIds.has(s.fdrId));
+    const flightDataIds = new Set(liveStripsForCallsign(wanted).map(s => s.flightDataId));
+    const alreadyFragged = flightDataIds.size > 0 && (typeof getAllEfspStrips === 'function' ? getAllEfspStrips() : [])
+      .some(s => s.stripType === 'MISSION' && s.state !== 'DROPPED' && flightDataIds.has(s.flightDataId));
     if (alreadyFragged) return _showDotCommandError(`${wanted} already has a mission line — a flight gets one`);
     return _showDotCommandError(`no live flight ${wanted} available to frag against`);
   }
 
   _setPendingCreateStripMutationId(sendEfspCreateStrip(origin.actingPositionId, {
-    kind: 'CreateStrip', bayId: origin.bayId, rackId: 'main', role: 'MISSION',
-    fdrId: candidate.fdrId, initialState: origin.initialState || undefined,
+    kind: 'CreateStrip', bayId: origin.bayId, rackId: 'main', stripType: 'MISSION',
+    flightDataId: candidate.flightDataId, initialState: origin.initialState || undefined,
   }, origin.facilityId));
   _setCreateStripMsg(`Fragging a mission line for ${wanted}…`, false);
 }
@@ -102,7 +102,7 @@ export function _dispatchDotCommand(parsed) {
     const record = typeof getEfspCorrelationForStrip === 'function' ? getEfspCorrelationForStrip(strip) : null;
     const baseRev = record ? record.rev : 0;
     if (parsed.verb === 'unbind') {
-      sendEfspCorrelationMutation(actingPositionId, strip.fdrId, baseRev, { kind: 'UnbindTrack' });
+      sendEfspCorrelationMutation(actingPositionId, strip.flightDataId, baseRev, { kind: 'UnbindTrack' });
       return;
     }
     const trackId = parsed.args[0];
@@ -112,7 +112,7 @@ export function _dispatchDotCommand(parsed) {
       _showDotCommandError('.bind needs a track id — click the TRK badge to pick from the candidates');
       return;
     }
-    sendEfspCorrelationMutation(actingPositionId, strip.fdrId, baseRev, { kind: 'BindTrack', trackId: String(trackId) });
+    sendEfspCorrelationMutation(actingPositionId, strip.flightDataId, baseRev, { kind: 'BindTrack', trackId: String(trackId) });
   } else if (MARSA_VERBS[parsed.verb]) {
     _dispatchMarsaDotCommand(parsed, strip, actingPositionId);
   }
@@ -125,7 +125,7 @@ export function _dispatchDotCommand(parsed) {
 //
 // `.marsa <CALLSIGN> [DECLARER]` reads the way the radio call arrives —
 // "SHELL71 accepting MARSA with VIPER11" — rather than making the controller
-// type two fdrIds nobody can see.
+// type two flightDataIds nobody can see.
 const MARSA_VERBS = {
   marsa: 'DeclareMarsa',
   rendezvous: 'MarkRendezvous',
@@ -149,7 +149,7 @@ function _dispatchMarsaDotCommand(parsed, strip, actingPositionId) {
       // which crc-sync would refuse anyway, since a flight is in at most one.
       const joining = _marsaStripByCallsign(callsign);
       if (!joining) { _showDotCommandError(`no live Strip for ${callsign.toUpperCase()}`); return; }
-      sendEfspMarsaMutation(actingPositionId, active.marsaId, active.rev, { kind: 'AddParticipant', fdrId: joining.fdrId });
+      sendEfspMarsaMutation(actingPositionId, active.marsaId, active.rev, { kind: 'AddParticipant', flightDataId: joining.flightDataId });
       return;
     }
     const other = _marsaStripByCallsign(callsign);
@@ -167,7 +167,7 @@ function _dispatchMarsaDotCommand(parsed, strip, actingPositionId) {
     }
     sendEfspMarsaMutation(actingPositionId, undefined, undefined, {
       kind: 'DeclareMarsa',
-      participants: [strip.fdrId, other.fdrId],
+      participants: [strip.flightDataId, other.flightDataId],
       // [SOURCE-DEFINED] defaults: the typed form is the fast path for the
       // common AR case, and the popover is where a controller picks an MTR
       // entry or a local declaration. §9.2 rule 1's aerial-refuelling case is
@@ -190,8 +190,8 @@ function _dispatchMarsaDotCommand(parsed, strip, actingPositionId) {
 }
 
 function _marsaCallsignOf(strip) {
-  const fdr = typeof getEfspFdr === 'function' ? getEfspFdr(strip.fdrId) : null;
-  return (fdr && fdr.identity && fdr.identity.callsign) || '';
+  const flightData = typeof getEfspFdr === 'function' ? getEfspFdr(strip.flightDataId) : null;
+  return (flightData && flightData.identity && flightData.identity.callsign) || '';
 }
 
 /** The live Strip whose flight answers to this callsign — how a controller names a flight out loud. */
@@ -235,7 +235,7 @@ function _fileStereoByName(rawName, rawCallsign) {
     return;
   }
   if (!_stereoEligibleOrigin(origin)) {
-    _showDotCommandError(`a stereo route seeds a DEPARTURE Strip, not ${origin.role}`);
+    _showDotCommandError(`a stereo route seeds a DEPARTURE Strip, not ${origin.stripType}`);
     return;
   }
 
@@ -266,8 +266,8 @@ function _fileStereoByName(rawName, rawCallsign) {
   _setPendingDuplicateCallsign(null);
 
   _setPendingCreateStripMutationId(sendEfspCreateStrip(origin.actingPositionId, {
-    kind: 'CreateStrip', bayId: origin.bayId, rackId: 'main', role: origin.role,
-    fdr: { callsign, aircraftType: '', wakeCategory: '', stereoRouteName: known.name },
+    kind: 'CreateStrip', bayId: origin.bayId, rackId: 'main', stripType: origin.stripType,
+    flightData: { callsign, aircraftType: '', wakeCategory: '', stereoRouteName: known.name },
     initialState: origin.initialState || undefined,
   }, origin.facilityId));
   _setCreateStripMsg(`Creating ${callsign} (${known.name})…`, false);

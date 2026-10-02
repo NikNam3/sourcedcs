@@ -51,11 +51,11 @@ export function _openMarsaPopover(strip, anchorEl) {
     heading.title = typeof MARSA_EXPANSION === 'string' ? MARSA_EXPANSION : '';
     popover.appendChild(heading);
 
-    for (const fdrId of relation.participants) {
-      if (fdrId === strip.fdrId) continue;
-      const peer = getAllEfspStrips().find(s => s.fdrId === fdrId && s.state !== 'DROPPED');
-      const fdr = typeof getEfspFdr === 'function' ? getEfspFdr(fdrId) : null;
-      const label = (fdr && fdr.identity && fdr.identity.callsign) || fdrId;
+    for (const flightDataId of relation.participants) {
+      if (flightDataId === strip.flightDataId) continue;
+      const peer = getAllEfspStrips().find(s => s.flightDataId === flightDataId && s.state !== 'DROPPED');
+      const flightData = typeof getEfspFdr === 'function' ? getEfspFdr(flightDataId) : null;
+      const label = (flightData && flightData.identity && flightData.identity.callsign) || flightDataId;
       const row = document.createElement('button');
       row.className = 'efsp-marsa-participant-btn';
       row.textContent = label;
@@ -88,7 +88,7 @@ export function _openMarsaPopover(strip, anchorEl) {
       e.stopPropagation();
       _closeMarsaPopover();
       const op = action.kind === 'RemoveParticipant'
-        ? { kind: 'RemoveParticipant', fdrId: strip.fdrId }
+        ? { kind: 'RemoveParticipant', flightDataId: strip.flightDataId }
         : { kind: action.kind };
       _dispatchMarsa(strip, action.marsaId, op);
     });
@@ -111,10 +111,10 @@ export function _openMarsaPopover(strip, anchorEl) {
 /** Which other live flights this one could be put into a relation with. */
 function _marsaCandidates(strip) {
   return getAllEfspStrips().filter((s) => {
-    if (s.state === 'DROPPED' || s.fdrId === strip.fdrId) return false;
+    if (s.state === 'DROPPED' || s.flightDataId === strip.flightDataId) return false;
     // A flight already under MARSA cannot be in a second relation — crc-sync
     // refuses it, and offering it here would be a control that always fails.
-    return !(typeof activeMarsaForFdr === 'function' && activeMarsaForFdr(s.fdrId));
+    return !(typeof activeMarsaForFdr === 'function' && activeMarsaForFdr(s.flightDataId));
   });
 }
 
@@ -122,10 +122,10 @@ function _marsaCandidateSelect(strip) {
   const select = document.createElement('select');
   select.className = 'efsp-coordinate-primitive-select';
   for (const s of _marsaCandidates(strip)) {
-    const fdr = typeof getEfspFdr === 'function' ? getEfspFdr(s.fdrId) : null;
+    const flightData = typeof getEfspFdr === 'function' ? getEfspFdr(s.flightDataId) : null;
     const option = document.createElement('option');
-    option.value = s.fdrId;
-    option.textContent = (fdr && fdr.identity && fdr.identity.callsign) || s.fdrId;
+    option.value = s.flightDataId;
+    option.textContent = (flightData && flightData.identity && flightData.identity.callsign) || s.flightDataId;
     select.appendChild(option);
   }
   return select;
@@ -186,7 +186,7 @@ function _buildMarsaDeclareForm(strip) {
     _closeMarsaPopover();
     _dispatchMarsa(strip, undefined, {
       kind: 'DeclareMarsa',
-      participants: [strip.fdrId, other.value],
+      participants: [strip.flightDataId, other.value],
       startEvent: startEvent.value,
       endCondition: endCondition.value,
       declaringCallsign: (declaring.value || '').trim(),
@@ -214,7 +214,7 @@ function _buildMarsaAddForm(strip, active) {
   add.addEventListener('click', (e) => {
     e.stopPropagation();
     _closeMarsaPopover();
-    _dispatchMarsa(strip, active && active.marsaId, { kind: 'AddParticipant', fdrId: other.value });
+    _dispatchMarsa(strip, active && active.marsaId, { kind: 'AddParticipant', flightDataId: other.value });
   });
   wrap.appendChild(add);
   return wrap;

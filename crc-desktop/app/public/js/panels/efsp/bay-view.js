@@ -16,7 +16,7 @@ import { renderBayDescriptorView } from './bay-views.js';
 import { stereoRoutesCacheKey } from './efsp-stereo-routes.js';
 import { tofiExitSignatureFor } from './strip-view.js';
 import { efspArrivalFor } from './efsp-arrivals.js';
-import { fieldStateSignatureFor } from './field-state-rules.js';
+import { fieldStateSignatureFor } from './runway-status-rules.js';
 import { trackRef } from '../../track-label.js';
 import { getActiveEfspSearchQuery } from './efsp-panel.js';
 import { computeRackReconciliation } from './strip-drag.js';
@@ -148,7 +148,7 @@ export function _dispatchCorrelation(strip, op) {
   const actingPositionId = _resolveActingPositionId(strip);
   if (!actingPositionId) return;
   const record = typeof getEfspCorrelationForStrip === 'function' ? getEfspCorrelationForStrip(strip) : null;
-  sendEfspCorrelationMutation(actingPositionId, strip.fdrId, record ? record.rev : 0, op);
+  sendEfspCorrelationMutation(actingPositionId, strip.flightDataId, record ? record.rev : 0, op);
 }
 
 export function _selectStrip(stripId) {
@@ -504,7 +504,7 @@ export function _isProtectedStripEl(el) {
  *                  deliberately does NOT bump `rev` to say so — `rev` is
  *                  concurrency control, and bumping it outside a Mutation
  *                  would invalidate every controller's in-flight edit.
- *   the FDR        every Block value, and fdr.tofi.separationRegime, which is
+ *   the FDR        every Block value, and flightData.tofi.separationRegime, which is
  *                  what the TOFI exit gate reads. A regime set on the ATC-side
  *                  Strip left the MRU's "Accept TOFI Exit" disabled forever.
  *   siblings       the +N shared-FDR badge is computed from OTHER Strips.
@@ -539,14 +539,14 @@ export function _stripRenderSignature(strip) {
   // Which Position the controller is acting as decides which controls render.
   parts.push('act:' + (_resolveActingPositionId(strip) || ''));
 
-  const fdr = typeof getEfspFdr === 'function' ? getEfspFdr(strip.fdrId) : null;
-  parts.push('fdr:' + (fdr ? fdr.rev : ''));
+  const flightData = typeof getEfspFdr === 'function' ? getEfspFdr(strip.flightDataId) : null;
+  parts.push('flightData:' + (flightData ? flightData.rev : ''));
   parts.push('stereo:' + (typeof stereoRoutesCacheKey === 'function' ? stereoRoutesCacheKey() : '')); // Block 9F's options (docs/adr/0073)
 
-  const siblings = typeof otherLiveStripsForFdr === 'function' ? otherLiveStripsForFdr(strip.fdrId, strip.stripId) : [];
+  const siblings = typeof otherLiveStripsForFdr === 'function' ? otherLiveStripsForFdr(strip.flightDataId, strip.stripId) : [];
   // Not just the count: the badge's title names each sibling's Facility,
   // Position and Role, and a sibling that moves desk changes it.
-  parts.push('sib:' + siblings.map(s => `${s.stripId}/${s.facilityId || '?'}/${s.ownerPositionId}/${s.role}`).sort().join(','));
+  parts.push('sib:' + siblings.map(s => `${s.stripId}/${s.facilityId || '?'}/${s.ownerPositionId}/${s.stripType}`).sort().join(','));
 
   const obligation = typeof getEfspObligation === 'function' ? getEfspObligation(strip.stripId) : null;
   parts.push('obl:' + (obligation ? `${obligation.obligationType}/${obligation.severity}` : ''));
@@ -595,11 +595,11 @@ export function _stripRenderSignature(strip) {
   // Conformance and conflict alerts (docs/adr/0058). A conflict's countdown is
   // part of what the Strip says, so it rebuilds each second while one lasts —
   // only the Strips actually in a conflict.
-  const conf = typeof conformanceAlertsForFdr === 'function' ? conformanceAlertsForFdr(strip.fdrId) : [];
+  const conf = typeof conformanceAlertsForFdr === 'function' ? conformanceAlertsForFdr(strip.flightDataId) : [];
   const trackId = typeof correlatedTrackIdForStrip === 'function' ? correlatedTrackIdForStrip(strip) : null;
-  const stca = typeof stcaConflictsForTrack === 'function' ? stcaConflictsForTrack(trackId) : [];
+  const conflictAlert = typeof stcaConflictsForTrack === 'function' ? stcaConflictsForTrack(trackId) : [];
   parts.push('alr:' + conf.map(a => `${a.kind}/${a.assigned}/${a.actual ?? ''}/${a.deviationFt ?? ''}/${a.fpm ?? ''}`).join(',')
-    + ';' + stca.map(c => `${c.id}/${c.timeToCpaSec}/${c.minNm}/${c.vertFt}`).join(','));
+    + ';' + conflictAlert.map(c => `${c.id}/${c.timeToCpaSec}/${c.minNm}/${c.vertFt}`).join(','));
   // Field state (docs/adr/0068): the RWY/HOOK chips read the Facility's runway record, not the Strip.
   parts.push('fld:' + (typeof fieldStateSignatureFor === 'function' ? fieldStateSignatureFor(strip) : ''));
   // Surveillance hints (docs/adr/0076) are stated by the server about this Strip, not part of its own

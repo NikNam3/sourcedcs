@@ -58,8 +58,8 @@ function visibleGap(page, upper, lower) {
 async function dropAll(page, callsigns) {
   await page.evaluate((cs) => {
     for (const s of getAllEfspStrips()) {
-      const fdr = getEfspFdr(s.fdrId);
-      if (!fdr || !cs.includes(fdr.identity.callsign) || s.state === 'DROPPED') continue;
+      const flightData = getEfspFdr(s.flightDataId);
+      if (!flightData || !cs.includes(flightData.identity.callsign) || s.state === 'DROPPED') continue;
       sendEfspMutation(s.ownerPositionId, s, { kind: 'DropStrip', reason: 'e2e cleanup' });
     }
   }, callsigns);
@@ -72,11 +72,11 @@ test.describe('in one Rack', () => {
   // F-402 — was a catalogued finding, now fixed.
   test('dropping at the gap the controller can see puts the Strip there', async ({ page }) => {
     const cs = ['L4A1', 'L4A2', 'L4A3', 'L4A4'];
-    await openPanel(page, { held: ['OPS'] });
+    await openPanel(page, { signedOn: ['OPS'] });
     // Bay first: seedStrip waits for the new Strip to render, and only the
     // active Bay renders.
     await openBay(page, BAY);
-    for (const c of cs) await seedStrip(page, { callsign: c, role: 'DEPARTURE', bayId: BAY });
+    for (const c of cs) await seedStrip(page, { callsign: c, stripType: 'DEPARTURE', bayId: BAY });
     try {
       const { x } = await grab(page, 'L4A1');
       // The Rack closes up the moment the drag starts (the Strip goes
@@ -90,11 +90,11 @@ test.describe('in one Rack', () => {
   // F-403 — was a catalogued finding, now fixed.
   test('the dragged Strip stays inside the Strip panel', async ({ page }) => {
     const cs = ['L4B1', 'L4B2'];
-    await openPanel(page, { held: ['OPS'] });
+    await openPanel(page, { signedOn: ['OPS'] });
     // Bay first: seedStrip waits for the new Strip to render, and only the
     // active Bay renders.
     await openBay(page, BAY);
-    for (const c of cs) await seedStrip(page, { callsign: c, role: 'DEPARTURE', bayId: BAY });
+    for (const c of cs) await seedStrip(page, { callsign: c, stripType: 'DEPARTURE', bayId: BAY });
     try {
       await grab(page, 'L4B1');
       const m = await page.evaluate(() => {
@@ -110,11 +110,11 @@ test.describe('in one Rack', () => {
   // F-404 — was a catalogued finding, now fixed.
   test('scrolling the Bay mid-drag still drops where the pointer is', async ({ page }) => {
     const cs = Array.from({ length: 10 }, (_, i) => `L4C${i}`);
-    await openPanel(page, { held: ['OPS'] });
+    await openPanel(page, { signedOn: ['OPS'] });
     // Bay first: seedStrip waits for the new Strip to render, and only the
     // active Bay renders.
     await openBay(page, BAY);
-    for (const c of cs) await seedStrip(page, { callsign: c, role: 'DEPARTURE', bayId: BAY });
+    for (const c of cs) await seedStrip(page, { callsign: c, stripType: 'DEPARTURE', bayId: BAY });
     try {
       const { x } = await grab(page, 'L4C0');
       await page.mouse.wheel(0, 600);
@@ -141,9 +141,9 @@ test.describe('in one Rack', () => {
   // the cached rects exactly as the wheel does.
   test('a Strip autoscrolled to an off-screen slot drops where the pointer is', async ({ page }) => {
     const cs = Array.from({ length: 8 }, (_, i) => `L4S${i}`);
-    await openPanel(page, { held: ['OPS'] });
+    await openPanel(page, { signedOn: ['OPS'] });
     await openBay(page, BAY);
-    for (const c of cs) await seedStrip(page, { callsign: c, role: 'DEPARTURE', bayId: BAY });
+    for (const c of cs) await seedStrip(page, { callsign: c, stripType: 'DEPARTURE', bayId: BAY });
     try {
       const content = page.locator('#efsp-bay-content');
       await content.evaluate((e) => { e.scrollTop = 0; });
@@ -174,21 +174,21 @@ test('a Strip can be dragged from one Rack to another in the same Bay', async ({
   test.setTimeout(60000);
   const cs = ['L4R1', 'L4R2', 'L4R3'];
   await page.setViewportSize({ width: 1600, height: 1600 });
-  await openPanel(page, { held: ['OPS', 'CD', 'GND', 'TWR'] });
+  await openPanel(page, { signedOn: ['OPS', 'CD', 'GC', 'LC'] });
   try {
-    // Walk each to twr-runway-queue through the real NLA chain — TWR cannot
+    // Walk each to lc-runway-queue through the real NLA chain — TWR cannot
     // create a Strip, and the queue implies RUNWAY_QUEUE.
     for (const c of cs) {
-      await seedStrip(page, { callsign: c, role: 'DEPARTURE', fdr: { route: 'DCT', requestedAltitude: 'FL250', departureAirport: 'LTAG', destinationAirport: 'LTAF' } });
+      await seedStrip(page, { callsign: c, stripType: 'DEPARTURE', flightData: { route: 'DCT', requestedAltitude: 'FL250', departureAirport: 'LTAG', destinationAirport: 'LTAF' } });
       for (let i = 0; i < 5; i++) {
-        await page.evaluate((c) => _invokeNla(getAllEfspStrips().find((s) => getEfspFdr(s.fdrId).identity.callsign === c)), c);
+        await page.evaluate((c) => _invokeNla(getAllEfspStrips().find((s) => getEfspFdr(s.flightDataId).identity.callsign === c)), c);
         await page.waitForTimeout(500);
       }
     }
-    await page.evaluate(() => _moveStrip(getAllEfspStrips().find((s) => getEfspFdr(s.fdrId).identity.callsign === 'L4R3'), 'twr-runway-queue', 'rwy-23', null, null));
+    await page.evaluate(() => _moveStrip(getAllEfspStrips().find((s) => getEfspFdr(s.flightDataId).identity.callsign === 'L4R3'), 'lc-runway-queue', 'rwy-23', null, null));
     await page.waitForTimeout(500);
-    await openBay(page, 'twr-runway-queue', 'TWR');
-    const rackOf = (c) => page.evaluate((c) => getAllEfspStrips().find((s) => getEfspFdr(s.fdrId).identity.callsign === c).rackId, c);
+    await openBay(page, 'lc-runway-queue', 'LC');
+    const rackOf = (c) => page.evaluate((c) => getAllEfspStrips().find((s) => getEfspFdr(s.flightDataId).identity.callsign === c).rackId, c);
     expect(await rackOf('L4R1')).toBe('rwy-05');
     expect(await rackOf('L4R3')).toBe('rwy-23');
 

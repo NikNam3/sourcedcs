@@ -18,7 +18,7 @@ export function _setPendingConvertStripId(v) { _pendingConvertStripId = v; }
 
 /** Whether this client should offer Convert to Arrival at all (the button may still render disabled for an open link). */
 export function _canConvertToArrival(strip) {
-  if (strip.role !== 'DEPARTURE' || strip.state !== 'HANDED_OFF') return false;
+  if (strip.stripType !== 'DEPARTURE' || strip.state !== 'HANDED_OFF') return false;
   if (!CONVERT_TO_ARRIVAL_POSITIONS.includes(strip.ownerPositionId)) return false;
   if (!getActingPositions().includes(strip.ownerPositionId)) return false;
   return !_isRejectedCoordinationReplica(strip);

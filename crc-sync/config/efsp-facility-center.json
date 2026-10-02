@@ -9,7 +9,7 @@
   "positionLetters": {
     "CTR": "C"
   },
-  "coveringChain": {},
+  "consolidation": {},
   "positionRadars": {
     "CTR": [
       {
@@ -40,10 +40,10 @@
         "rackIds": [
           "main"
         ],
-        "holdsRole": "OVERFLIGHT"
+        "holdsStripType": "OVERFLIGHT"
       },
       {
-        "bayId": "ctr-app-coordination",
+        "bayId": "ctr-ap-coordination",
         "rackIds": [
           "main"
         ]

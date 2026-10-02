@@ -4,7 +4,7 @@
 // and TOFI (§4.6.3). The tables now live in the authority registry (S3-2):
 // the primitive and TOFI effect tables in authority/primitives.js, and each
 // Role's coordination/TOFI eligibility in its Role family
-// (authority/roles/<role>.js), composed in authority/index.js. This module is
+// (authority/strip-types/<role>.js), composed in authority/index.js. This module is
 // their facade and exports exactly what it exported before; it is injected
 // into board-store.js as `rules.coordinationEffect` &c from index.js.
 
@@ -20,9 +20,9 @@ function coordinationEffect(primitive) {
   return COORDINATION_EFFECTS[primitive] || null;
 }
 
-/** @returns {string|undefined} the EfspState `role` must be in to propose a coordination link, or undefined if this role never can. */
-function coordinationEligibleState(role) {
-  return COORDINATION_ELIGIBLE_STATES[role];
+/** @returns {string|undefined} the EfspState `stripType` must be in to propose a coordination link, or undefined if this role never can. */
+function coordinationEligibleState(stripType) {
+  return COORDINATION_ELIGIBLE_STATES[stripType];
 }
 
 /** @returns {{acceptPhrase:string}|null} */
@@ -30,9 +30,9 @@ function tofiEffect(direction) {
   return TOFI_EFFECTS[direction] || null;
 }
 
-/** @returns {string|undefined} the EfspState `role` must be in to open a TOFI ENTRY, or undefined if this role never can. */
-function tofiEligibleState(role) {
-  return TOFI_ELIGIBLE_STATES[role];
+/** @returns {string|undefined} the EfspState `stripType` must be in to open a TOFI ENTRY, or undefined if this role never can. */
+function tofiEligibleState(stripType) {
+  return TOFI_ELIGIBLE_STATES[stripType];
 }
 
 module.exports = {

@@ -98,7 +98,7 @@ function _changedFrom(strip, from, now) {
 function _tofiControlled(strips) {
   return strips.some((s) => {
     const c = s.tofiCoordination;
-    return !!c && ((c.direction === 'ENTRY' && c.state === 'ACTIVE') || (c.direction === 'EXIT' && c.state === 'PROPOSED'));
+    return !!c && ((c.direction === 'ENTRY' && c.state === 'ACTIVE') || (c.direction === 'EXIT' && c.state === 'INITIATED'));
   });
 }
 
@@ -122,23 +122,23 @@ export function atcRelation(t, strips, acting, letterOf) {
   const source = t && t.label && t.label.source;
   const live = (strips || []).filter(s => s && s.state !== 'DROPPED');
   const rel = {
-    associated: (source === 'FDR' || source === 'FDR_PROVISIONAL') && live.length > 0,
+    associated: (source === 'FLIGHT_DATA' || source === 'FLIGHT_DATA_PROVISIONAL') && live.length > 0,
     owner: null, ownerLetter: null, mine: false, tofi: false,
     handoffIn: null, handoffOut: null, handoffDone: null, poIn: null, poOut: null,
   };
   if (!rel.associated) return rel;
-  const atcStrips = live.filter(s => s.role !== 'MISSION');
+  const atcStrips = live.filter(s => s.stripType !== 'MISSION');
 
   for (const s of atcStrips) {
     const c = s.coordination;
     if (!c || !acting.has(s.ownerPositionId)) continue;
     const replica = !!c.mintedForCoordination;
     if (ATC_HANDOFF_PRIMITIVES.has(c.primitive)) {
-      if (replica && c.state === 'PROPOSED') rel.handoffIn = { strip: s };
-      else if (!replica && c.state === 'PROPOSED') rel.handoffOut = { strip: s, recipientLetter: letterOf(c.peerPositionId) || '' };
+      if (replica && c.state === 'INITIATED') rel.handoffIn = { strip: s };
+      else if (!replica && c.state === 'INITIATED') rel.handoffOut = { strip: s, recipientLetter: letterOf(c.peerPositionId) || '' };
       else if (!replica && c.state === 'ACTIVE') rel.handoffDone = { strip: s };
     } else if (c.primitive === 'POINT_OUT') {
-      if (replica && (c.state === 'PROPOSED' || c.state === 'ACTIVE')) rel.poIn = { strip: s, state: c.state };
+      if (replica && (c.state === 'INITIATED' || c.state === 'ACTIVE')) rel.poIn = { strip: s, state: c.state };
       else if (!replica) rel.poOut = { strip: s, state: c.state, recipientLetter: letterOf(c.peerPositionId) || '' };
     }
   }
@@ -156,7 +156,7 @@ export function atcRelation(t, strips, acting, letterOf) {
     rel.ownerLetter = letterOf(owner.ownerPositionId) || owner.ownerPositionId.charAt(0);
   }
   if (_tofiControlled(live)) {
-    const mission = live.find(s => s.role === 'MISSION');
+    const mission = live.find(s => s.stripType === 'MISSION');
     rel.tofi = true;
     rel.owner = mission ? mission.ownerPositionId : rel.owner;
     rel.ownerLetter = (mission && letterOf(mission.ownerPositionId)) || 'M';
@@ -174,7 +174,7 @@ export function atcRelation(t, strips, acting, letterOf) {
  * @param {object} env
  * @param {object} env.palette    ATC_PALETTES entry
  * @param {number} env.now        local ms, for blink windows
- * @param {string[]} env.conflicts  the STCA conflict ids this track is in
+ * @param {string[]} env.conflicts  the CA conflict ids this track is in
  * @param {{tag:string,color:string}|null} env.conform  docs/adr/0058's tag, if any
  * @param {boolean} env.coast
  */
@@ -208,9 +208,9 @@ export function atcView(t, rel, env) {
     // accepted, then a click to green, a click to a PDB (stages 1, 2, 3).
     let poStage = null;
     if (rel.poIn) {
-      if (rel.poIn.state === 'PROPOSED') { _observe(rel.poIn.strip, now); poStage = 0; }
+      if (rel.poIn.state === 'INITIATED') { _observe(rel.poIn.strip, now); poStage = 0; }
       else {
-        const accepted = _changedFrom(rel.poIn.strip, 'POINT_OUT:PROPOSED', now);
+        const accepted = _changedFrom(rel.poIn.strip, 'POINT_OUT:INITIATED', now);
         poStage = accepted != null ? (_atcStage.get(`PO:${rel.poIn.strip.stripId}`) || 1) : 3;
       }
     }
@@ -233,12 +233,12 @@ export function atcView(t, rel, env) {
     if (rel.handoffOut) recipient = rel.handoffOut.recipientLetter;
     if (rel.poOut) {
       const s = rel.poOut.strip;
-      if (rel.poOut.state === 'PROPOSED') { _observe(s, now); l1Suffix.push({ text: `PO${rel.poOut.recipientLetter}` }); }
+      if (rel.poOut.state === 'INITIATED') { _observe(s, now); l1Suffix.push({ text: `PO${rel.poOut.recipientLetter}` }); }
       else if (rel.poOut.state === 'ACTIVE') {
-        const at = _changedFrom(s, 'POINT_OUT:PROPOSED', now);
+        const at = _changedFrom(s, 'POINT_OUT:INITIATED', now);
         if (at != null && now - at < ATC_SENDER_BLINK_MS) l1Suffix.push({ text: 'PO', blink: true });
       } else if (rel.poOut.state === 'REJECTED') {
-        const at = _changedFrom(s, 'POINT_OUT:PROPOSED', now);
+        const at = _changedFrom(s, 'POINT_OUT:INITIATED', now);
         if (at != null && !_atcAcked.has(`UN:${s.stripId}`)) l1Suffix.push({ text: 'UN', blink: true });
       }
     }
@@ -266,7 +266,7 @@ export function atcView(t, rel, env) {
 function _handedOn(rel, now) {
   if (rel.handoffDone) {
     const s = rel.handoffDone.strip;
-    return { key: `HO:${s.stripId}`, at: _changedFrom(s, `${s.coordination.primitive}:PROPOSED`, now) };
+    return { key: `HO:${s.stripId}`, at: _changedFrom(s, `${s.coordination.primitive}:INITIATED`, now) };
   }
   if (rel.transferredAt != null) return { key: `TR:${rel.trackId}`, at: rel.transferredAt };
   return null;
@@ -303,11 +303,11 @@ export function atcConformTag(alerts) {
 }
 
 /** The flight's ACTIVE assigned altitude (ft) and heading, from its FDR's clearance (docs/adr/0058). */
-export function atcAssigned(fdr) {
-  if (!fdr || !fdr.clearance) return null;
+export function atcAssigned(flightData) {
+  if (!flightData || !flightData.clearance) return null;
   const active = (cell) => cell && (cell.entries || []).find(e => e.status === 'ACTIVE');
-  const alt = active(fdr.clearance.altitude);
-  const hdg = active(fdr.clearance.heading);
+  const alt = active(flightData.clearance.altitude);
+  const hdg = active(flightData.clearance.heading);
   return {
     altFt: alt && Number.isFinite(alt.parsed) ? alt.parsed : null,
     altBlock: alt && alt.block ? alt.block : null,
@@ -375,13 +375,13 @@ export function atcDisplay(id, t, now = Date.now()) {
   }
 
   const conflicts = typeof stcaConflictsForTrack === 'function' ? stcaConflictsForTrack(id).map(c => c.id) : [];
-  const fdr = strips.length && typeof getEfspFdr === 'function' ? getEfspFdr(strips[0].fdrId) : null;
-  const conform = fdr && typeof conformanceAlertsForFdr === 'function' ? atcConformTag(conformanceAlertsForFdr(fdr.fdrId)) : null;
+  const flightData = strips.length && typeof getEfspFdr === 'function' ? getEfspFdr(strips[0].flightDataId) : null;
+  const conform = flightData && typeof conformanceAlertsForFdr === 'function' ? atcConformTag(conformanceAlertsForFdr(flightData.flightDataId)) : null;
   const view = atcView(t, rel, { palette, now, conflicts, conform, coast });
 
   const speedKt = typeof kinematics === 'function' ? kinematics(hist).speedKt : 0;
   const lines = typeof atcBlockLines === 'function'
-    ? atcBlockLines(t, view, { speedKt, assigned: atcAssigned(fdr), typePhase: Math.floor(now / ATC_TIMESHARE_MS) % 2 === 1 })
+    ? atcBlockLines(t, view, { speedKt, assigned: atcAssigned(flightData), typePhase: Math.floor(now / ATC_TIMESHARE_MS) % 2 === 1 })
     : [];
   return { id, lat, lon, rel, view, palette, lines };
 }
@@ -410,7 +410,7 @@ export function atcTargetClick(id, now = Date.now()) {
 export function atcApplyClick(t, rel, now, { conflicts = [], accept = () => {} } = {}) {
   const id = String(t.id);
   if (rel.handoffIn) { accept(rel.handoffIn.strip); return 'ACCEPT_HANDOFF'; }
-  if (rel.poIn && rel.poIn.state === 'PROPOSED') { accept(rel.poIn.strip); return 'ACCEPT_POINT_OUT'; }
+  if (rel.poIn && rel.poIn.state === 'INITIATED') { accept(rel.poIn.strip); return 'ACCEPT_POINT_OUT'; }
 
   const em = typeof atcEmergencyTag === 'function' ? atcEmergencyTag(t) : '';
   if (em && !_atcAcked.has(`EM:${id}:${em}`)) { _atcAcked.add(`EM:${id}:${em}`); return 'ACK_EMERGENCY'; }
@@ -428,7 +428,7 @@ export function atcApplyClick(t, rel, now, { conflicts = [], accept = () => {} }
   if (rel.poIn && rel.poIn.state === 'ACTIVE') {
     const key = `PO:${rel.poIn.strip.stripId}`;
     const seen = _atcSeen.get(rel.poIn.strip.stripId);
-    const live = seen && seen.changedAt != null && seen.from === 'POINT_OUT:PROPOSED';
+    const live = seen && seen.changedAt != null && seen.from === 'POINT_OUT:INITIATED';
     const stage = live ? (_atcStage.get(key) || 1) : 3;
     if (stage < 3) { _atcStage.set(key, stage + 1); return stage === 1 ? 'POINT_OUT_GREEN' : 'POINT_OUT_PDB'; }
   }

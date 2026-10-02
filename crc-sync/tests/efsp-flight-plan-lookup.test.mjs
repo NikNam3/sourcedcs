@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-const { lookupFlightPlan, toFdrFiledSeed, listFiledFlightPlans } = await import('../src/efsp/flight-plan-lookup.js');
+const { lookupFlightPlan, toFlightDataFiledSeed, listFiledFlightPlans } = await import('../src/efsp/flight-plan-lookup.js');
 
 // Every test injects fetchImpl directly rather than mocking the global
 // `fetch` — matches the module's own injectable-for-tests design, and
@@ -96,10 +96,10 @@ test('the callsign is URL-encoded into the request path', async () => {
   assert.equal(requestedUrl, 'http://example.test/api/fpl1801/by-callsign/VIPER%201%2F2');
 });
 
-// ── toFdrFiledSeed — the DD1801 -> FDR.filed field mapping ─────────────────
+// ── toFlightDataFiledSeed — the DD1801 -> FDR.filed field mapping ─────────────────
 
-test('toFdrFiledSeed maps exactly the fields EFSP models, dropping everything DD1801-specific with no equivalent', () => {
-  const seed = toFdrFiledSeed(makePlan());
+test('toFlightDataFiledSeed maps exactly the fields EFSP models, dropping everything DD1801-specific with no equivalent', () => {
+  const seed = toFlightDataFiledSeed(makePlan());
   assert.deepEqual(seed, {
     route: 'DCT', requestedAltitude: '250',
     departureAirport: 'LTAG', destinationAirport: 'LTAC',
@@ -111,18 +111,18 @@ test('toFdrFiledSeed maps exactly the fields EFSP models, dropping everything DD
   assert.equal('worldTour' in seed, false);
 });
 
-test('toFdrFiledSeed never throws on a missing field — falls back to empty string, same as a blank CreateStrip', () => {
-  const seed = toFdrFiledSeed({});
+test('toFlightDataFiledSeed never throws on a missing field — falls back to empty string, same as a blank CreateStrip', () => {
+  const seed = toFlightDataFiledSeed({});
   assert.deepEqual(seed, {
     route: '', requestedAltitude: '', departureAirport: '', destinationAirport: '', remarks: '',
     aircraftType: '', wakeCategory: '', flightPlanDepartureTimeHhmm: '',
   });
 });
 
-test('toFdrFiledSeed on null/non-object input returns an empty object, not a throw', () => {
-  assert.deepEqual(toFdrFiledSeed(null), {});
-  assert.deepEqual(toFdrFiledSeed(undefined), {});
-  assert.deepEqual(toFdrFiledSeed('not an object'), {});
+test('toFlightDataFiledSeed on null/non-object input returns an empty object, not a throw', () => {
+  assert.deepEqual(toFlightDataFiledSeed(null), {});
+  assert.deepEqual(toFlightDataFiledSeed(undefined), {});
+  assert.deepEqual(toFlightDataFiledSeed('not an object'), {});
 });
 
 // ── listFiledFlightPlans — the ops-filed queue, service-token gated ─────
@@ -213,7 +213,7 @@ test('a plan with no submittedBy at all still maps cleanly (submittedByName null
 
 // ── docs/adr/0073 — item 13's departure time reaches the seed ──────────────
 
-test('toFdrFiledSeed carries the DD1801 departure time (depTime) as typed, for the P-time chain', () => {
-  assert.equal(toFdrFiledSeed({ depTime: '1430' }).flightPlanDepartureTimeHhmm, '1430');
-  assert.equal(toFdrFiledSeed({ depTime: 'garbage' }).flightPlanDepartureTimeHhmm, 'garbage', 'createFdr drops it, not the mapping');
+test('toFlightDataFiledSeed carries the DD1801 departure time (depTime) as typed, for the P-time chain', () => {
+  assert.equal(toFlightDataFiledSeed({ depTime: '1430' }).flightPlanDepartureTimeHhmm, '1430');
+  assert.equal(toFlightDataFiledSeed({ depTime: 'garbage' }).flightPlanDepartureTimeHhmm, 'garbage', 'createFlightData drops it, not the mapping');
 });

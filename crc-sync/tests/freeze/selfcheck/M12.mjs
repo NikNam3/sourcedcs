@@ -3,8 +3,8 @@
 export default {
   id: "M12",
   what: "a permission table row: HELD is also CTR's to act on",
-  file: "src/efsp/authority/roles/departure.js",
-  find: "  HELD:              ['CD', 'GND'],",
-  replace: "  HELD:              ['CD', 'GND', 'CTR'],",
+  file: "src/efsp/authority/strip-types/departure.js",
+  find: "  HELD:              ['CD', 'GC'],",
+  replace: "  HELD:              ['CD', 'GC', 'CTR'],",
   detect: ["freeze-tables","freeze-table"],
 };

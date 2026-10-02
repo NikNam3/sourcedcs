@@ -15,19 +15,19 @@ import { settings, _setCoverageRadars, _setCoverageDatalink } from '../app/publi
 settings.transitionAltFt = 18000;
 
 const P = A.ATC_PALETTES.MAP;
-const LETTERS = { TWR: 'T', APP: 'A', CTR: 'C', TAC_C2: 'M' };
+const LETTERS = { LC: 'T', AP: 'A', CTR: 'C', TAC_C2: 'M' };
 const letterOf = (p) => LETTERS[p] || null;
-const APP = new Set(['APP']);
+const APP = new Set(['AP']);
 
 function contact(over = {}) {
   return {
     id: '7', domain: 'AIR', onGround: false, scheme: 'ATC', sources: ['PRIMARY', 'SSR'],
-    label: { callsign: 'VIPER11', source: 'FDR', tag: null, trackNumber: 'TN00007' },
+    label: { callsign: 'VIPER11', source: 'FLIGHT_DATA', tag: null, trackNumber: 'TN00007' },
     type: 'F16', ssr: { code: '4521', ident: false, emergency: null },
     altitude: { ft: 12000, ref: 'QNH', source: 'MODE_C' }, dl: null, iffOverride: null, ...over,
   };
 }
-const strip = (over = {}) => ({ stripId: 's1', fdrId: 'f1', role: 'ARRIVAL', state: 'INBOUND', ownerPositionId: 'APP', coordination: null, ...over });
+const strip = (over = {}) => ({ stripId: 's1', flightDataId: 'f1', stripType: 'ARRIVAL', state: 'INBOUND', ownerPositionId: 'AP', coordination: null, ...over });
 const env = (over = {}) => ({ palette: P, now: 1000, conflicts: [], conform: null, coast: false, ...over });
 const text = (lines) => lines.map(l => l.map(s => s.text).join('')).join('\n');
 
@@ -110,8 +110,8 @@ test('mine -> white FDB with my letter; someone else\'s -> green PDB with theirs
 });
 
 test('a handoff to me: flashing white FDB, still the sender\'s letter; accepting it is a click on the target', () => {
-  const sender = strip({ stripId: 'ctr', ownerPositionId: 'CTR', coordination: { primitive: 'HANDOFF', state: 'PROPOSED', peerPositionId: 'APP' } });
-  const replica = strip({ stripId: 'app', ownerPositionId: 'APP', coordination: { primitive: 'HANDOFF', state: 'PROPOSED', mintedForCoordination: true, peerPositionId: 'CTR' } });
+  const sender = strip({ stripId: 'ctr', ownerPositionId: 'CTR', coordination: { primitive: 'HANDOFF', state: 'INITIATED', peerPositionId: 'AP' } });
+  const replica = strip({ stripId: 'app', ownerPositionId: 'AP', coordination: { primitive: 'HANDOFF', state: 'INITIATED', mintedForCoordination: true, peerPositionId: 'CTR' } });
   const rel = A.atcRelation(contact(), [sender, replica], APP, letterOf);
   const v = A.atcView(contact(), rel, env());
   assert.deepEqual([v.kind, v.color, v.blinkBlock, v.posChar], ['FDB', P.own, true, 'C']);
@@ -122,13 +122,13 @@ test('a handoff to me: flashing white FDB, still the sender\'s letter; accepting
 
 test('the sender side: recipient letter while proposed; after an accept it saw, a 5 s blink, then click green, click PDB', () => {
   const CTR = new Set(['CTR']);
-  const proposed = strip({ stripId: 'ctr', ownerPositionId: 'CTR', coordination: { primitive: 'HANDOFF', state: 'PROPOSED', peerPositionId: 'APP' } });
+  const proposed = strip({ stripId: 'ctr', ownerPositionId: 'CTR', coordination: { primitive: 'HANDOFF', state: 'INITIATED', peerPositionId: 'AP' } });
   let rel = A.atcRelation(contact(), [proposed], CTR, letterOf);
   let v = A.atcView(contact(), rel, env({ now: 1000 }));
   assert.deepEqual([v.kind, v.color, v.recipient, v.posChar], ['FDB', P.own, 'A', 'C']);
 
   const active = { ...proposed, coordination: { ...proposed.coordination, state: 'ACTIVE' } };
-  const replica = strip({ stripId: 'app', ownerPositionId: 'APP', coordination: { primitive: 'HANDOFF', state: 'ACTIVE', mintedForCoordination: true } });
+  const replica = strip({ stripId: 'app', ownerPositionId: 'AP', coordination: { primitive: 'HANDOFF', state: 'ACTIVE', mintedForCoordination: true } });
   rel = A.atcRelation(contact(), [active, replica], CTR, letterOf);
   v = A.atcView(contact(), rel, env({ now: 2000 }));
   assert.deepEqual([rel.mine, v.kind, v.color, v.blinkBlock, v.posChar], [false, 'FDB', P.own, true, 'A']);
@@ -142,16 +142,16 @@ test('the sender side: recipient letter while proposed; after an accept it saw, 
 
 test('an accept this scope did not see happen does not blink: a reconnect shows the settled picture', () => {
   const CTR = new Set(['CTR']);
-  const active = strip({ stripId: 'ctr', ownerPositionId: 'CTR', coordination: { primitive: 'HANDOFF', state: 'ACTIVE', peerPositionId: 'APP' } });
-  const replica = strip({ stripId: 'app', ownerPositionId: 'APP', coordination: { primitive: 'HANDOFF', state: 'ACTIVE', mintedForCoordination: true } });
+  const active = strip({ stripId: 'ctr', ownerPositionId: 'CTR', coordination: { primitive: 'HANDOFF', state: 'ACTIVE', peerPositionId: 'AP' } });
+  const replica = strip({ stripId: 'app', ownerPositionId: 'AP', coordination: { primitive: 'HANDOFF', state: 'ACTIVE', mintedForCoordination: true } });
   const v = A.atcView(contact(), A.atcRelation(contact(), [active, replica], CTR, letterOf), env());
   assert.deepEqual([v.kind, v.blinkBlock], ['PDB', false]);
 });
 
 test('a point-out to me: flashing yellow PO; accepted -> steady yellow; then green FDB; then PDB', () => {
-  const owner = strip({ stripId: 'twr', ownerPositionId: 'TWR', role: 'DEPARTURE', state: 'HANDED_OFF', coordination: { primitive: 'POINT_OUT', state: 'PROPOSED', peerPositionId: 'APP' } });
-  const replica = (state) => strip({ stripId: 'po', ownerPositionId: 'APP', coordination: { primitive: 'POINT_OUT', state, mintedForCoordination: true, peerPositionId: 'TWR' } });
-  let rel = A.atcRelation(contact(), [owner, replica('PROPOSED')], APP, letterOf);
+  const owner = strip({ stripId: 'twr', ownerPositionId: 'LC', stripType: 'DEPARTURE', state: 'HANDED_OFF', coordination: { primitive: 'POINT_OUT', state: 'INITIATED', peerPositionId: 'AP' } });
+  const replica = (state) => strip({ stripId: 'po', ownerPositionId: 'AP', coordination: { primitive: 'POINT_OUT', state, mintedForCoordination: true, peerPositionId: 'LC' } });
+  let rel = A.atcRelation(contact(), [owner, replica('INITIATED')], APP, letterOf);
   let v = A.atcView(contact(), rel, env());
   assert.deepEqual([v.kind, v.color, v.blinkBlock, v.posChar, v.l1Suffix[0].text], ['FDB', P.pointout, true, 'T', 'PO'], 'the owner stays TWR');
   rel = A.atcRelation(contact(), [owner, replica('ACTIVE')], APP, letterOf);
@@ -164,15 +164,15 @@ test('a point-out to me: flashing yellow PO; accepted -> steady yellow; then gre
 });
 
 test('the point-out sender: PO+recipient while proposed; PO blinks after the accept; UN flashes on a refusal until clicked', () => {
-  const TWR = new Set(['TWR']);
-  const s = (state) => strip({ stripId: 'twr', ownerPositionId: 'TWR', coordination: { primitive: 'POINT_OUT', state, peerPositionId: 'APP' } });
-  let v = A.atcView(contact(), A.atcRelation(contact(), [s('PROPOSED')], TWR, letterOf), env({ now: 1000 }));
+  const TWR = new Set(['LC']);
+  const s = (state) => strip({ stripId: 'twr', ownerPositionId: 'LC', coordination: { primitive: 'POINT_OUT', state, peerPositionId: 'AP' } });
+  let v = A.atcView(contact(), A.atcRelation(contact(), [s('INITIATED')], TWR, letterOf), env({ now: 1000 }));
   assert.deepEqual([v.kind, v.color, v.l1Suffix.map(x => x.text)], ['FDB', P.own, ['POA']]);
   v = A.atcView(contact(), A.atcRelation(contact(), [s('ACTIVE')], TWR, letterOf), env({ now: 2000 }));
   assert.deepEqual(v.l1Suffix.map(x => [x.text, x.blink]), [['PO', true]]);
 
   A._resetAtcScopeForTest();
-  A.atcView(contact(), A.atcRelation(contact(), [s('PROPOSED')], TWR, letterOf), env({ now: 1000 }));
+  A.atcView(contact(), A.atcRelation(contact(), [s('INITIATED')], TWR, letterOf), env({ now: 1000 }));
   const rel = A.atcRelation(contact(), [s('REJECTED')], TWR, letterOf);
   v = A.atcView(contact(), rel, env({ now: 2000 }));
   assert.deepEqual(v.l1Suffix.map(x => [x.text, x.blink]), [['UN', true]]);
@@ -181,12 +181,12 @@ test('the point-out sender: PO+recipient while proposed; PO blinks after the acc
 });
 
 test('H48: under tactical control the owner letter is the tactical side\'s, `M`', () => {
-  const atc = strip({ stripId: 'ctr', ownerPositionId: 'CTR', role: 'DEPARTURE', state: 'HANDED_OFF', tofiCoordination: { direction: 'ENTRY', state: 'ACTIVE' } });
-  const mission = strip({ stripId: 'm', ownerPositionId: 'TAC_C2', role: 'MISSION', state: 'ON_STATION', tofiCoordination: { direction: 'ENTRY', state: 'ACTIVE' } });
+  const atc = strip({ stripId: 'ctr', ownerPositionId: 'CTR', stripType: 'DEPARTURE', state: 'HANDED_OFF', tofiCoordination: { direction: 'ENTRY', state: 'ACTIVE' } });
+  const mission = strip({ stripId: 'm', ownerPositionId: 'TAC_C2', stripType: 'MISSION', state: 'ON_STATION', tofiCoordination: { direction: 'ENTRY', state: 'ACTIVE' } });
   const rel = A.atcRelation(contact(), [atc, mission], APP, letterOf);
   const v = A.atcView(contact(), rel, env());
   assert.deepEqual([rel.tofi, v.posChar, v.kind], [true, 'M', 'PDB']);
-  const exiting = A.atcRelation(contact(), [{ ...atc, tofiCoordination: { direction: 'EXIT', state: 'PROPOSED' } }, mission], APP, letterOf);
+  const exiting = A.atcRelation(contact(), [{ ...atc, tofiCoordination: { direction: 'EXIT', state: 'INITIATED' } }, mission], APP, letterOf);
   assert.equal(exiting.ownerLetter, 'M', 'still tactical until the exit is accepted');
   const done = A.atcRelation(contact(), [{ ...atc, tofiCoordination: { direction: 'EXIT', state: 'COMPLETE' } }], APP, letterOf);
   assert.equal(done.ownerLetter, 'C');
@@ -256,10 +256,10 @@ test('the black scope needs the setting off AND an ATC-only session (H71 questio
 });
 
 test('a same-Facility transfer (TWR -> APP, no PROPOSED step) blinks at the sender like an accepted handoff', () => {
-  const TWR = new Set(['TWR']);
-  let rel = A.atcNoteOwnership('7', A.atcRelation(contact(), [strip({ ownerPositionId: 'TWR' })], TWR, letterOf), 1000);
+  const TWR = new Set(['LC']);
+  let rel = A.atcNoteOwnership('7', A.atcRelation(contact(), [strip({ ownerPositionId: 'LC' })], TWR, letterOf), 1000);
   assert.equal(A.atcView(contact(), rel, env({ now: 1000 })).color, P.own);
-  rel = A.atcNoteOwnership('7', A.atcRelation(contact(), [strip({ ownerPositionId: 'APP' })], TWR, letterOf), 2000);
+  rel = A.atcNoteOwnership('7', A.atcRelation(contact(), [strip({ ownerPositionId: 'AP' })], TWR, letterOf), 2000);
   let v = A.atcView(contact(), rel, env({ now: 2000 }));
   assert.deepEqual([v.kind, v.color, v.blinkBlock, v.posChar], ['FDB', P.own, true, 'A']);
   assert.equal(A.atcApplyClick(contact(), rel, 9000), 'HANDOFF_GREEN');
@@ -268,6 +268,6 @@ test('a same-Facility transfer (TWR -> APP, no PROPOSED step) blinks at the send
   assert.equal(v.kind, 'PDB');
   // First seen already APP's: no blink.
   A._resetAtcScopeForTest();
-  rel = A.atcNoteOwnership('7', A.atcRelation(contact(), [strip({ ownerPositionId: 'APP' })], TWR, letterOf), 1000);
+  rel = A.atcNoteOwnership('7', A.atcRelation(contact(), [strip({ ownerPositionId: 'AP' })], TWR, letterOf), 1000);
   assert.equal(A.atcView(contact(), rel, env()).kind, 'PDB');
 });

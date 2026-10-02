@@ -20,25 +20,25 @@ process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH_CENTER = tmpFileCenter;
 process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH_TACTICAL = tmpFileTactical;
 
 const {
-  getFacilityIds, getFacilityConfig, getPositionSet, getPositionClass, getCoveringChain, getBaysFor, getAllBays,
+  getFacilityIds, getFacilityConfig, getPositionSet, getPositionClass, getConsolidation, getBaysFor, getAllBays,
   bayImpliesState, bayForImpliedState, coordinationBayFor, setFacilityConfig, validateConfig, isBlockVisible,
   getShippedConfig, DEFAULT_FACILITY_ID,
 } = await import('../src/efsp/facility-config.js');
 const { DEPARTURE_BLOCK_MAP, OVERFLIGHT_BLOCK_MAP, MISSION_BLOCK_MAP, requiredBlocksFor } = await import('../src/efsp/block-map.js');
 
 test('getPositionSet returns exactly INCIRLIK\'s eight Positions (RSU, SFA and PAR since L18, ADR 0075)', () => {
-  assert.deepEqual(getPositionSet(), ['OPS', 'CD', 'GND', 'TWR', 'RSU', 'APP', 'SFA', 'PAR']);
+  assert.deepEqual(getPositionSet(), ['OPS', 'CD', 'GC', 'LC', 'RSU', 'AP', 'SFA', 'PAR']);
 });
 
-test('getCoveringChain matches the guide\'s default chain, un-truncated through APP, plus SFA and PAR to APP (L18)', () => {
-  assert.deepEqual(getCoveringChain(), { CD: 'GND', GND: 'TWR', TWR: 'APP', SFA: 'APP', PAR: 'APP' });
+test('getConsolidation matches the guide\'s default chain, un-truncated through APP, plus SFA and PAR to APP (L18)', () => {
+  assert.deepEqual(getConsolidation(), { CD: 'GC', GC: 'LC', LC: 'AP', SFA: 'AP', PAR: 'AP' });
 });
 
 test('OPS, RSU and APP have no entry in the covering chain — OPS per the guide\'s table, RSU so a Strip never strands on a supervisory Position (ADR 0075), APP because there\'s no CTR Facility yet to cover it', () => {
-  const chain = getCoveringChain();
+  const chain = getConsolidation();
   assert.equal('OPS' in chain, false);
   assert.equal('RSU' in chain, false);
-  assert.equal('APP' in chain, false);
+  assert.equal('AP' in chain, false);
 });
 
 test('every Position in the Position set has at least one Bay, including a Coordination Bay (WP4A seam, present but inert) — except RSU, SFA and PAR, which sit on no Facility boundary (ADR 0075)', () => {
@@ -59,37 +59,37 @@ test('bayImpliesState resolves the known state-implying Bays from the guide\'s B
   assert.equal(bayImpliesState('cd-pending-clearance'), 'PENDING_CLEARANCE');
   assert.equal(bayImpliesState('cd-cleared'), 'CLEARED');
   assert.equal(bayImpliesState('cd-held'), 'HELD');
-  assert.equal(bayImpliesState('gnd-pushback'), 'PUSHBACK');
-  assert.equal(bayImpliesState('gnd-taxi-out'), 'TAXI');
-  assert.equal(bayImpliesState('gnd-taxi-in'), 'TAXI_IN'); // ARRIVAL role, Phase 2
-  assert.equal(bayImpliesState('twr-runway-queue'), 'RUNWAY_QUEUE');
-  assert.equal(bayImpliesState('twr-airborne'), 'DEPARTED');
-  assert.equal(bayImpliesState('twr-arrivals'), 'HANDED_TO_TOWER'); // ARRIVAL role, Phase 2
-  assert.equal(bayImpliesState('twr-final'), 'FINAL'); // ARRIVAL role, Phase 2 — EfspState, not Strip Role
-  assert.equal(bayImpliesState('twr-landed'), 'LANDED'); // ARRIVAL role, Phase 2
-  assert.equal(bayImpliesState('app-inbound'), 'INBOUND'); // Phase 2
-  assert.equal(bayImpliesState('app-departures'), 'HANDED_OFF'); // Phase 2
+  assert.equal(bayImpliesState('gc-pushback'), 'PUSHBACK');
+  assert.equal(bayImpliesState('gc-taxi-out'), 'TAXI');
+  assert.equal(bayImpliesState('gc-taxi-in'), 'TAXI_IN'); // ARRIVAL stripType, Phase 2
+  assert.equal(bayImpliesState('lc-runway-queue'), 'RUNWAY_QUEUE');
+  assert.equal(bayImpliesState('lc-airborne'), 'DEPARTED');
+  assert.equal(bayImpliesState('lc-arrivals'), 'HANDED_TO_TOWER'); // ARRIVAL stripType, Phase 2
+  assert.equal(bayImpliesState('lc-final'), 'FINAL'); // ARRIVAL stripType, Phase 2 — EfspState, not Strip Role
+  assert.equal(bayImpliesState('lc-landed'), 'LANDED'); // ARRIVAL stripType, Phase 2
+  assert.equal(bayImpliesState('ap-inbound'), 'INBOUND'); // Phase 2
+  assert.equal(bayImpliesState('ap-departures'), 'HANDED_OFF'); // Phase 2
 });
 
 test('bayImpliesState returns null for Bays with no implied state, and for unknown Bay ids', () => {
-  for (const id of ['ops-filed', 'ops-coordination', 'cd-coordination', 'gnd-coordination', 'twr-coordination', 'app-coordination']) {
+  for (const id of ['ops-filed', 'ops-coordination', 'cd-coordination', 'gc-coordination', 'lc-coordination', 'ap-coordination']) {
     assert.equal(bayImpliesState(id), null, id);
   }
   assert.equal(bayImpliesState('not-a-real-bay'), null);
 });
 
 test('TWR\'s runway-queue Bay has one Rack per configured runway (guide §4.2)', () => {
-  const twrBays = getBaysFor('TWR');
-  const runwayQueue = twrBays.find(b => b.bayId === 'twr-runway-queue');
+  const twrBays = getBaysFor('LC');
+  const runwayQueue = twrBays.find(b => b.bayId === 'lc-runway-queue');
   assert.ok(runwayQueue.rackIds.length >= 2);
 });
 
 test('getAllBays tags every Bay with its owning positionId — required to keep Bays grouped by Position client-side (guide §4.8.5 rule 2)', () => {
   const all = getAllBays();
   const opsProposed = all.find(b => b.bayId === 'ops-proposed');
-  const gndPushback = all.find(b => b.bayId === 'gnd-pushback');
+  const gndPushback = all.find(b => b.bayId === 'gc-pushback');
   assert.equal(opsProposed.positionId, 'OPS');
-  assert.equal(gndPushback.positionId, 'GND');
+  assert.equal(gndPushback.positionId, 'GC');
   assert.ok(all.every(b => typeof b.positionId === 'string' && b.positionId.length > 0));
 });
 
@@ -127,7 +127,7 @@ test('setFacilityConfig rejects a non-object patch without throwing', () => {
 
 test('the shipped INCIRLIK config matches what a fresh, unconfigured store actually serves', () => {
   assert.deepEqual(getPositionSet(), getShippedConfig('INCIRLIK').positions);
-  assert.deepEqual(getCoveringChain(), getShippedConfig('INCIRLIK').coveringChain);
+  assert.deepEqual(getConsolidation(), getShippedConfig('INCIRLIK').consolidation);
 });
 
 test('nothing is hidden by default, at any Facility — and a Block added later stays that way', () => {
@@ -197,18 +197,18 @@ test('RANGES exists with no Positions until an airspace declares one, and works 
 
 test('every zero-arg call site from before WP4A keeps behaving identically — the optional facilityId param defaults to INCIRLIK', () => {
   assert.deepEqual(getPositionSet(), getPositionSet('INCIRLIK'));
-  assert.deepEqual(getCoveringChain(), getCoveringChain('INCIRLIK'));
+  assert.deepEqual(getConsolidation(), getConsolidation('INCIRLIK'));
   assert.deepEqual(getBaysFor('OPS'), getBaysFor('OPS', 'INCIRLIK'));
   assert.deepEqual(getFacilityConfig().facility, getFacilityConfig('INCIRLIK').facility);
 });
 
 test('CENTER has exactly one Position, CTR, with no covering Position (mirrors OPS\'s "absent from the chain" precedent)', () => {
   assert.deepEqual(getPositionSet('CENTER'), ['CTR']);
-  assert.deepEqual(getCoveringChain('CENTER'), {});
+  assert.deepEqual(getConsolidation('CENTER'), {});
 });
 
 test('INCIRLIK\'s own covering chain is NOT extended to CTR — the covering chain is an intrafacility occupancy-fallback mechanism, a different thing from the cross-Facility HANDOFF primitive (docs/adr/0013)', () => {
-  assert.equal('APP' in getCoveringChain('INCIRLIK'), false);
+  assert.equal('AP' in getConsolidation('INCIRLIK'), false);
 });
 
 test('CTR has a Coordination Bay and an en-route Bay implying INBOUND', () => {
@@ -222,10 +222,10 @@ test('docs/adr/0022: CTR also has a departures Bay implying HANDED_OFF, for a St
 });
 
 test('docs/adr/0087: both Facilities have an overflight Bay that holds the Role and implies no state', () => {
-  assert.equal(bayImpliesState('app-overflight', 'INCIRLIK'), null);
+  assert.equal(bayImpliesState('ap-overflight', 'INCIRLIK'), null);
   assert.equal(bayImpliesState('ctr-overflight', 'CENTER'), null);
-  assert.equal(getAllBays('INCIRLIK').find(b => b.bayId === 'app-overflight').holdsRole, 'OVERFLIGHT');
-  assert.equal(getAllBays('CENTER').find(b => b.bayId === 'ctr-overflight').holdsRole, 'OVERFLIGHT');
+  assert.equal(getAllBays('INCIRLIK').find(b => b.bayId === 'ap-overflight').holdsStripType, 'OVERFLIGHT');
+  assert.equal(getAllBays('CENTER').find(b => b.bayId === 'ctr-overflight').holdsStripType, 'OVERFLIGHT');
 });
 
 test('docs/adr/0022: aitAuthorized defaults to false on both Facilities', () => {
@@ -234,8 +234,8 @@ test('docs/adr/0022: aitAuthorized defaults to false on both Facilities', () => 
 });
 
 test('coordinationBayFor resolves each Position\'s Coordination Bay in the correct Facility, and null for a Position with none', () => {
-  assert.equal(coordinationBayFor('APP', 'INCIRLIK').bayId, 'app-coordination');
-  assert.equal(coordinationBayFor('CTR', 'CENTER').bayId, 'ctr-app-coordination');
+  assert.equal(coordinationBayFor('AP', 'INCIRLIK').bayId, 'ap-coordination');
+  assert.equal(coordinationBayFor('CTR', 'CENTER').bayId, 'ctr-ap-coordination');
   assert.equal(coordinationBayFor('NOT_A_POSITION', 'INCIRLIK'), null);
 });
 
@@ -263,7 +263,7 @@ test('TACTICAL has exactly the 4 MRU/non-ATC Positions from guide §4.1', () => 
 });
 
 test('getPositionClass resolves every Position\'s doctrinal class, searching across all Facilities (Position IDs are globally unique)', () => {
-  assert.equal(getPositionClass('APP'), 'MILITARY_ATC');
+  assert.equal(getPositionClass('AP'), 'MILITARY_ATC');
   assert.equal(getPositionClass('CTR'), 'CIVIL_ATC');
   assert.equal(getPositionClass('TAC_C2'), 'MRU');
   assert.equal(getPositionClass('GCI'), 'MRU');
@@ -272,8 +272,8 @@ test('getPositionClass resolves every Position\'s doctrinal class, searching acr
   assert.equal(getPositionClass('NOT_A_POSITION'), null);
 });
 
-test('AIC/GCI -> TAC_C2 is a legal intrafacility covering-chain entry, but TAC_C2 -> CTR is NOT — that hop would cross a Facility boundary (mirrors docs/adr/0013 point 4\'s identical APP -> CTR rejection)', () => {
-  const chain = getCoveringChain('TACTICAL');
+test('AIC/GCI -> TAC_C2 is a legal intrafacility consolidation entry, but TAC_C2 -> CTR is NOT — that hop would cross a Facility boundary (mirrors docs/adr/0013 point 4\'s identical APP -> CTR rejection)', () => {
+  const chain = getConsolidation('TACTICAL');
   assert.equal(chain.AIC, 'TAC_C2');
   assert.equal(chain.GCI, 'TAC_C2');
   assert.equal('TAC_C2' in chain, false);
@@ -299,9 +299,9 @@ test('TAC_C2 and GCI each have Bays implying every MISSION lifecycle state that 
 
 test('every Block of every Role is writable at every Facility, since none hides anything', () => {
   for (const [facilityId, map] of [['INCIRLIK', DEPARTURE_BLOCK_MAP], ['CENTER', DEPARTURE_BLOCK_MAP], ['TACTICAL', MISSION_BLOCK_MAP]]) {
-    const role = map === MISSION_BLOCK_MAP ? 'MISSION' : 'DEPARTURE';
+    const stripType = map === MISSION_BLOCK_MAP ? 'MISSION' : 'DEPARTURE';
     for (const blockId of Object.keys(map)) {
-      assert.equal(isBlockVisible(role, blockId, facilityId), true, `${facilityId} ${role} ${blockId}`);
+      assert.equal(isBlockVisible(stripType, blockId, facilityId), true, `${facilityId} ${stripType} ${blockId}`);
     }
   }
 });
@@ -330,20 +330,20 @@ test('setFacilityConfig rejects an unknown facilityId without throwing', () => {
 
 test('position letters: T/A/C for the ATC scopes, M for every tactical Position (H41 S5, H48)', async () => {
   const { getPositionLetter, allPositionLetters } = await import('../src/efsp/facility-config.js');
-  assert.equal(getPositionLetter('TWR'), 'T');
-  assert.equal(getPositionLetter('APP'), 'A');
+  assert.equal(getPositionLetter('LC'), 'T');
+  assert.equal(getPositionLetter('AP'), 'A');
   assert.equal(getPositionLetter('CTR'), 'C');
   for (const p of ['TAC_C2', 'AIC', 'GCI', 'JTAC']) assert.equal(getPositionLetter(p), 'M');
   assert.equal(getPositionLetter('NOPE'), null);
-  assert.equal(allPositionLetters().INCIRLIK.APP, 'A');
+  assert.equal(allPositionLetters().INCIRLIK.AP, 'A');
 });
 
 test('a position letter must be one character, on a known Position', () => {
   const base = JSON.parse(JSON.stringify(getShippedConfig('INCIRLIK')));
-  assert.equal(validateConfig({ ...base, positionLetters: { APP: 'AP' } }).ok, false);
-  assert.equal(validateConfig({ ...base, positionLetters: { APP: 'a' } }).ok, false);
+  assert.equal(validateConfig({ ...base, positionLetters: { AP: 'AP' } }).ok, false);
+  assert.equal(validateConfig({ ...base, positionLetters: { AP: 'a' } }).ok, false);
   assert.equal(validateConfig({ ...base, positionLetters: { XXX: 'X' } }).ok, false);
-  assert.equal(validateConfig({ ...base, positionLetters: { APP: 'R' } }).ok, true);
+  assert.equal(validateConfig({ ...base, positionLetters: { AP: 'R' } }).ok, true);
 });
 
 // ── Loading (docs/wip/DATA-1.md, S-ARCH2 (12)) — each case in a fresh process, since the module loads once ──

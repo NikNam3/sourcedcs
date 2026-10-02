@@ -32,17 +32,17 @@ import { cachedStereoRoutesClient } from './efsp-stereo-routes.js';
 // one; several of those seven were wrong, not just ambiguous.
 // efsp-strip-template.test.js holds both rules.
 export const DEPARTURE_BLOCK_MAP = {
-  '1':  { required: true,  label: 'CALLSIGN', target: { kind: 'fdr', path: 'identity.callsign' } },
+  '1':  { required: true,  label: 'CALLSIGN', target: { kind: 'flightData', path: 'identity.callsign' } },
   '2':  { required: true,  label: 'REV',      target: { kind: 'system', field: 'rev' } },
   '2A': { required: false, label: 'VOICE',     target: { kind: 'annotation' } },
   '3':  { required: true,  label: 'TYPE',     target: { kind: 'composite' } },
   // docs/adr/0023 gap-closure — see crc-sync's block-map.js's '3A' comment
-  // for the full rationale. Plain 'fdr'-routed, like '5A'.
-  '3A': { required: false, label: 'ACFT',     target: { kind: 'fdr', path: 'identity.aircraftType' } },
-  '3B': { required: false, label: 'WAKE',     target: { kind: 'fdr', path: 'identity.wakeCategory' } },
-  '3C': { required: false, label: 'TAIL',     target: { kind: 'fdr', path: 'identity.tailNumber' } },
-  '3D': { required: false, label: 'UNIT',     target: { kind: 'fdr', path: 'identity.unit' } },
-  '3E': { required: false, label: 'HOME',     target: { kind: 'fdr', path: 'identity.homeStation' } },
+  // for the full rationale. Plain 'flightData'-routed, like '5A'.
+  '3A': { required: false, label: 'ACFT',     target: { kind: 'flightData', path: 'identity.aircraftType' } },
+  '3B': { required: false, label: 'WAKE',     target: { kind: 'flightData', path: 'identity.wakeCategory' } },
+  '3C': { required: false, label: 'TAIL',     target: { kind: 'flightData', path: 'identity.tailNumber' } },
+  '3D': { required: false, label: 'UNIT',     target: { kind: 'flightData', path: 'identity.unit' } },
+  '3E': { required: false, label: 'HOME',     target: { kind: 'flightData', path: 'identity.homeStation' } },
   // WP6 (crc-sync's docs/adr/0052) — guide §6.4's military extension
   // namespace. Mirrors crc-sync's block-map.js; see its MILITARY_BLOCK_NAMESPACE
   // table for the whole guide-M-number-to-Block-id mapping and why the
@@ -56,23 +56,23 @@ export const DEPARTURE_BLOCK_MAP = {
   '3G': { required: false, label: 'ORDNANCE', target: { kind: 'military', field: 'ordnanceState' } }, // guide M14, §9.5
   '4':  { required: true,  label: 'CID',      target: { kind: 'system', field: 'cid' } },
   '4A': { required: false, label: 'RMV',      target: { kind: 'flag', flag: 'removeIndicator' } },
-  '4B': { required: true,  label: 'DATALINK', target: { kind: 'fdr', path: 'assigned.datalinkClearanceIndicator' } },
-  '5':  { required: true,  label: 'SQUAWK',   target: { kind: 'fdr', path: 'identity.beaconAssigned' } },
+  '4B': { required: true,  label: 'DATALINK', target: { kind: 'flightData', path: 'assigned.datalinkClearanceIndicator' } },
+  '5':  { required: true,  label: 'SQUAWK',   target: { kind: 'flightData', path: 'identity.beaconAssigned' } },
   // WP4A gap-closure — track-degradation flag. Mirrors crc-sync's
-  // block-map.js's '5A' exactly (plain 'fdr'-routed — see that module's
+  // block-map.js's '5A' exactly (plain 'flightData'-routed — see that module's
   // comment for why this one needs no dedicated target kind, unlike 24A).
-  '5A': { required: false, label: 'DEGR',     target: { kind: 'fdr', path: 'identity.trackDegradationFlag' } },
-  '6':  { required: true,  label: 'PROP DEP', target: { kind: 'fdr', path: 'filed.proposedDepartureTimeUtc' } },
-  '7':  { required: true,  label: 'CRUS ALT', target: { kind: 'fdr', path: 'filed.requestedAltitude' } }, // what was filed; the assigned altitude is the clearance (docs/adr/0058)
-  '8':  { required: true,  label: 'DEP',      target: { kind: 'fdr', path: 'filed.departureAirport' } },
-  '8A': { required: true,  label: 'RWY',      target: { kind: 'fdr', path: 'filed.departureRunway' } },
-  '8B': { required: true,  label: 'DEST',     target: { kind: 'fdr', path: 'filed.destinationAirport' } },
-  '9':  { required: true,  label: 'RTE',      target: { kind: 'fdr', path: 'filed.route' }, provenance: 'COMPUTER_GENERATED' },
+  '5A': { required: false, label: 'DEGR',     target: { kind: 'flightData', path: 'identity.trackDegradationFlag' } },
+  '6':  { required: true,  label: 'PROP DEP', target: { kind: 'flightData', path: 'filed.proposedDepartureTimeUtc' } },
+  '7':  { required: true,  label: 'CRUS ALT', target: { kind: 'flightData', path: 'filed.requestedAltitude' } }, // what was filed; the assigned altitude is the clearance (docs/adr/0058)
+  '8':  { required: true,  label: 'DEP',      target: { kind: 'flightData', path: 'filed.departureAirport' } },
+  '8A': { required: true,  label: 'RWY',      target: { kind: 'flightData', path: 'filed.departureRunway' } },
+  '8B': { required: true,  label: 'DEST',     target: { kind: 'flightData', path: 'filed.destinationAirport' } },
+  '9':  { required: true,  label: 'RTE',      target: { kind: 'flightData', path: 'filed.route' }, provenance: 'COMPUTER_GENERATED' },
   '9A': { required: false, label: 'FAC A',    target: { kind: 'annotation' } },
   '9B': { required: false, label: 'FAC B',    target: { kind: 'annotation' } },
   '9C': { required: false, label: 'FAC C',    target: { kind: 'annotation' } },
-  '9D': { required: true,  label: 'FULL RTE', target: { kind: 'fdr', path: 'filed.fullRouteClearance' } },
-  '9E': { required: true,  label: 'RMKS',     target: { kind: 'fdr', path: 'filed.remarks' } },
+  '9D': { required: true,  label: 'FULL RTE', target: { kind: 'flightData', path: 'filed.fullRouteClearance' } },
+  '9E': { required: true,  label: 'RMKS',     target: { kind: 'flightData', path: 'filed.remarks' } },
   // §9.10 stereo route name (docs/adr/0050) — mirrors crc-sync's
   // block-map.js '9F' exactly; see that module's comment for why it is not
   // numbered M18 and why writing it re-files the flight rather than just
@@ -80,32 +80,32 @@ export const DEPARTURE_BLOCK_MAP = {
   // (docs/adr/0073): 0050 left it free text because ENUM_SELECT_BLOCKS is a
   // static literal and the route table is runtime config. The runtime option
   // source is efsp-stereo-routes.js's cache of the last fetched list, read by
-  // enumSelectOptionsFor(blockId, fdr) below. The server still resolves every
+  // enumSelectOptionsFor(blockId, flightData) below. The server still resolves every
   // name and refuses one it does not have (a stale list).
-  '9F': { required: false, label: 'STEREO',   target: { kind: 'fdr', path: 'filed.stereoRouteName' } },
+  '9F': { required: false, label: 'STEREO',   target: { kind: 'flightData', path: 'filed.stereoRouteName' } },
   // §9.4 MTR fields (crc-sync's docs/adr/0062): 9G-* is the guide's M10, 9H-*
-  // its M11. Plain fdr, no interlock (9H-ALT is the pilot's request, not a
+  // its M11. Plain flightData, no interlock (9H-ALT is the pilot's request, not a
   // clearance). The two times display as HHMM (ZULU_HHMM_BLOCKS below).
-  '9G-MTR':   { required: false, label: 'MTR',      target: { kind: 'fdr', path: 'military.mtr.designator' } },
-  '9G-ENTRY': { required: false, label: 'ENTRY',    target: { kind: 'fdr', path: 'military.mtr.entryFix' } },
-  '9G-TIME':  { required: false, label: 'ENTRY TM', target: { kind: 'fdr', path: 'military.mtr.entryTimeUtc' } },
-  '9H-EXIT':  { required: false, label: 'EXIT',     target: { kind: 'fdr', path: 'military.mtr.exitFix' } },
-  '9H-TIME':  { required: false, label: 'EXIT EST', target: { kind: 'fdr', path: 'military.mtr.exitEstimateUtc' } },
-  '9H-ALT':   { required: false, label: 'EXIT ALT', target: { kind: 'fdr', path: 'military.mtr.requestedAltitudeAfterExit' } },
-  '10': { required: true,  label: 'ATIS',     target: { kind: 'fdr', path: 'assigned.atisCode' } },
+  '9G-MTR':   { required: false, label: 'MTR',      target: { kind: 'flightData', path: 'military.mtr.designator' } },
+  '9G-ENTRY': { required: false, label: 'ENTRY',    target: { kind: 'flightData', path: 'military.mtr.entryFix' } },
+  '9G-TIME':  { required: false, label: 'ENTRY TM', target: { kind: 'flightData', path: 'military.mtr.entryTimeUtc' } },
+  '9H-EXIT':  { required: false, label: 'EXIT',     target: { kind: 'flightData', path: 'military.mtr.exitFix' } },
+  '9H-TIME':  { required: false, label: 'EXIT EST', target: { kind: 'flightData', path: 'military.mtr.exitEstimateUtc' } },
+  '9H-ALT':   { required: false, label: 'EXIT ALT', target: { kind: 'flightData', path: 'military.mtr.requestedAltitudeAfterExit' } },
+  '10': { required: true,  label: 'ATIS',     target: { kind: 'flightData', path: 'assigned.atisCode' } },
   '11': { required: true,  label: 'APREQ',    target: { kind: 'annotation' } },
-  '14': { required: true,  label: 'RLS TIME', target: { kind: 'fdr', path: 'assigned.releaseTimeUtc' } },
+  '14': { required: true,  label: 'RLS TIME', target: { kind: 'flightData', path: 'assigned.releaseTimeUtc' } },
   // WP4A (docs/adr/0017), §4.6.2 — mirrors crc-sync's block-map.js exactly.
   // See crc-sync's block-map.js for why these two exist and why they are
   // numbered in the 14-family.
-  '14A': { required: false, label: 'RELEASE', target: { kind: 'fdr', path: 'assigned.releaseState' } },
-  '14D': { required: false, label: 'VOID',      target: { kind: 'fdr', path: 'assigned.voidTimeUtc' } },
-  '14B': { required: false, label: 'EDCT',    target: { kind: 'fdr', path: 'assigned.edctTimeUtc' } },
-  '14C': { required: false, label: 'CFR',     target: { kind: 'fdr', path: 'assigned.callForReleaseTimeUtc' } },
+  '14A': { required: false, label: 'RELEASE', target: { kind: 'flightData', path: 'assigned.departureRelease' } },
+  '14D': { required: false, label: 'VOID',      target: { kind: 'flightData', path: 'assigned.voidTimeUtc' } },
+  '14B': { required: false, label: 'EDCT',    target: { kind: 'flightData', path: 'assigned.edctTimeUtc' } },
+  '14C': { required: false, label: 'CFR',     target: { kind: 'flightData', path: 'assigned.callForReleaseTimeUtc' } },
   '14E': { required: false, label: 'ALERT',   target: { kind: 'military', field: 'alertStatus' } }, // WP6, guide M16 §9.6 — crc-sync docs/adr/0070
-  '16': { required: false, label: 'MVMT',     target: { kind: 'fdr', path: 'assigned.movementAreaEntryTimeUtc' } },
-  '17': { required: false, label: 'TAXI',     target: { kind: 'fdr', path: 'assigned.taxiTimeUtc' } },
-  '18': { required: true,  label: 'TAKEOFF',  target: { kind: 'fdr', path: 'assigned.takeoffTimeUtc' } },
+  '16': { required: false, label: 'MVMT',     target: { kind: 'flightData', path: 'assigned.movementAreaEntryTimeUtc' } },
+  '17': { required: false, label: 'TAXI',     target: { kind: 'flightData', path: 'assigned.taxiTimeUtc' } },
+  '18': { required: true,  label: 'TAKEOFF',  target: { kind: 'flightData', path: 'assigned.takeoffTimeUtc' } },
   '19': { required: false, label: 'GATE',     target: { kind: 'annotation' } },
   // These are NOT scratchpads, and were mislabelled as such until WP6. Guide
   // §6.2's own DEPARTURE table names Block 20 "Heading" and Block 21 "Initial
@@ -135,7 +135,7 @@ export const DEPARTURE_BLOCK_MAP = {
   '23': { required: false, label: 'FAC RMKS',     target: { kind: 'annotation' } },
   '24': { required: true,  label: 'MIT RMKS',     target: { kind: 'annotation' } },
   // WP4A (docs/adr/0018), §4.6.4 — airspace ownership as a direction. Not
-  // fdr/annotation-routed on either side (see efsp-block-map-parity.test.js's
+  // flightData/annotation-routed on either side (see efsp-block-map-parity.test.js's
   // isWritableKind) — edited via a dedicated <select> widget (bay-view.js's
   // enum-Block renderer), never the generic free-text click-to-edit path
   // (docs/adr/0022 gave this its first actual UI).
@@ -156,41 +156,41 @@ export const DEPARTURE_BLOCK_MAP = {
 // 9A-* split, the 20/21 scratchpad simplification). Kept in sync by
 // efsp-block-map-parity.test.js, same as DEPARTURE_BLOCK_MAP.
 export const ARRIVAL_BLOCK_MAP = {
-  '1':        { required: true,  label: 'CALLSIGN', target: { kind: 'fdr', path: 'identity.callsign' } },
+  '1':        { required: true,  label: 'CALLSIGN', target: { kind: 'flightData', path: 'identity.callsign' } },
   '2':        { required: true,  label: 'REV',      target: { kind: 'system', field: 'rev' } },
   '2A':       { required: false, label: 'VOICE',     target: { kind: 'annotation' } },
   '3':        { required: true,  label: 'TYPE',     target: { kind: 'composite' } },
-  '3A':       { required: false, label: 'ACFT',     target: { kind: 'fdr', path: 'identity.aircraftType' } }, // docs/adr/0023 gap-closure — see DEPARTURE_BLOCK_MAP's '3A' comment
-  '3B':       { required: false, label: 'WAKE',     target: { kind: 'fdr', path: 'identity.wakeCategory' } },
-  '3C':       { required: false, label: 'TAIL',     target: { kind: 'fdr', path: 'identity.tailNumber' } },
-  '3D':       { required: false, label: 'UNIT',     target: { kind: 'fdr', path: 'identity.unit' } },
-  '3E':       { required: false, label: 'HOME',     target: { kind: 'fdr', path: 'identity.homeStation' } },
+  '3A':       { required: false, label: 'ACFT',     target: { kind: 'flightData', path: 'identity.aircraftType' } }, // docs/adr/0023 gap-closure — see DEPARTURE_BLOCK_MAP's '3A' comment
+  '3B':       { required: false, label: 'WAKE',     target: { kind: 'flightData', path: 'identity.wakeCategory' } },
+  '3C':       { required: false, label: 'TAIL',     target: { kind: 'flightData', path: 'identity.tailNumber' } },
+  '3D':       { required: false, label: 'UNIT',     target: { kind: 'flightData', path: 'identity.unit' } },
+  '3E':       { required: false, label: 'HOME',     target: { kind: 'flightData', path: 'identity.homeStation' } },
   '3F':       { required: false, label: 'HOOK',     target: { kind: 'military', field: 'hookRequired' } },  // WP6, guide M15 §9.7 — see DEPARTURE_BLOCK_MAP's '3F'/'3G' comment
   '3G':       { required: false, label: 'ORDNANCE', target: { kind: 'military', field: 'ordnanceState' } }, // WP6, guide M14 §9.5
   '4':        { required: true,  label: 'CID',      target: { kind: 'system', field: 'cid' } },
   '4A':       { required: false, label: 'RMV',      target: { kind: 'flag', flag: 'removeIndicator' } },
-  '4B':       { required: true,  label: 'DATALINK', target: { kind: 'fdr', path: 'assigned.datalinkClearanceIndicator' } },
-  '5':        { required: true,  label: 'SQUAWK',   target: { kind: 'fdr', path: 'identity.beaconAssigned' } },
-  '5A':       { required: false, label: 'DEGR',     target: { kind: 'fdr', path: 'identity.trackDegradationFlag' } }, // WP4A gap-closure — see DEPARTURE_BLOCK_MAP's '5A' comment
-  '6':        { required: true,  label: 'ETA',      target: { kind: 'fdr', path: 'filed.estimatedArrivalTimeUtc' } },
+  '4B':       { required: true,  label: 'DATALINK', target: { kind: 'flightData', path: 'assigned.datalinkClearanceIndicator' } },
+  '5':        { required: true,  label: 'SQUAWK',   target: { kind: 'flightData', path: 'identity.beaconAssigned' } },
+  '5A':       { required: false, label: 'DEGR',     target: { kind: 'flightData', path: 'identity.trackDegradationFlag' } }, // WP4A gap-closure — see DEPARTURE_BLOCK_MAP's '5A' comment
+  '6':        { required: true,  label: 'ETA',      target: { kind: 'flightData', path: 'filed.estimatedArrivalTimeUtc' } },
   '7':        { required: true,  label: 'ALT',      target: { kind: 'clearance', field: 'altitude' }, interlock: 'ALTITUDE' }, // docs/adr/0058
-  '8':        { required: true,  label: 'ORIG',     target: { kind: 'fdr', path: 'filed.originAirport' } },
-  '8A':       { required: false, label: 'FIX',      target: { kind: 'fdr', path: 'filed.arrivalFix' } },
-  '8B':       { required: true,  label: 'RWY',      target: { kind: 'fdr', path: 'assigned.landingRunway' } },
-  '9':        { required: true,  label: 'RTE',      target: { kind: 'fdr', path: 'filed.route' }, provenance: 'COMPUTER_GENERATED' },
+  '8':        { required: true,  label: 'ORIG',     target: { kind: 'flightData', path: 'filed.originAirport' } },
+  '8A':       { required: false, label: 'FIX',      target: { kind: 'flightData', path: 'filed.arrivalFix' } },
+  '8B':       { required: true,  label: 'RWY',      target: { kind: 'flightData', path: 'assigned.landingRunway' } },
+  '9':        { required: true,  label: 'RTE',      target: { kind: 'flightData', path: 'filed.route' }, provenance: 'COMPUTER_GENERATED' },
   '9A-FUEL':  { required: true,  label: 'MIN FUEL', target: { kind: 'annotation' } },
   '9A-DEST':  { required: false, label: 'DEST',     target: { kind: 'annotation' } },
   '9A-PTOUT': { required: false, label: 'PT OUT',   target: { kind: 'annotation' } },
   '9A-VECTOR':{ required: false, label: 'HDG',      target: { kind: 'clearance', field: 'heading' }, interlock: 'COURSE' }, // docs/adr/0058 — a radar vector IS the assigned heading
   '9A-SPEED': { required: false, label: 'SPEED',    target: { kind: 'annotation' } },
   // §9.4 MTR fields — see DEPARTURE_BLOCK_MAP's '9G-*' comment
-  '9G-MTR':   { required: false, label: 'MTR',      target: { kind: 'fdr', path: 'military.mtr.designator' } },
-  '9G-ENTRY': { required: false, label: 'ENTRY',    target: { kind: 'fdr', path: 'military.mtr.entryFix' } },
-  '9G-TIME':  { required: false, label: 'ENTRY TM', target: { kind: 'fdr', path: 'military.mtr.entryTimeUtc' } },
-  '9H-EXIT':  { required: false, label: 'EXIT',     target: { kind: 'fdr', path: 'military.mtr.exitFix' } },
-  '9H-TIME':  { required: false, label: 'EXIT EST', target: { kind: 'fdr', path: 'military.mtr.exitEstimateUtc' } },
-  '9H-ALT':   { required: false, label: 'EXIT ALT', target: { kind: 'fdr', path: 'military.mtr.requestedAltitudeAfterExit' } },
-  '9E':       { required: true,  label: 'RMKS',     target: { kind: 'fdr', path: 'filed.remarks' } },
+  '9G-MTR':   { required: false, label: 'MTR',      target: { kind: 'flightData', path: 'military.mtr.designator' } },
+  '9G-ENTRY': { required: false, label: 'ENTRY',    target: { kind: 'flightData', path: 'military.mtr.entryFix' } },
+  '9G-TIME':  { required: false, label: 'ENTRY TM', target: { kind: 'flightData', path: 'military.mtr.entryTimeUtc' } },
+  '9H-EXIT':  { required: false, label: 'EXIT',     target: { kind: 'flightData', path: 'military.mtr.exitFix' } },
+  '9H-TIME':  { required: false, label: 'EXIT EST', target: { kind: 'flightData', path: 'military.mtr.exitEstimateUtc' } },
+  '9H-ALT':   { required: false, label: 'EXIT ALT', target: { kind: 'flightData', path: 'military.mtr.requestedAltitudeAfterExit' } },
+  '9E':       { required: true,  label: 'RMKS',     target: { kind: 'flightData', path: 'filed.remarks' } },
   '20':       { required: false, label: 'SCRATCH1',  target: { kind: 'annotation' } },
   '21':       { required: false, label: 'SCRATCH2',  target: { kind: 'annotation' } },
   '24':       { required: true,  label: 'MIT RMKS',     target: { kind: 'annotation' } },
@@ -213,22 +213,22 @@ export const ARRIVAL_BLOCK_MAP = {
 // destination, never Incirlik, and why there are no ground/runway/taxi
 // Blocks). Kept in sync by efsp-block-map-parity.test.js.
 export const OVERFLIGHT_BLOCK_MAP = {
-  '1':  { required: true,  label: 'CALLSIGN', target: { kind: 'fdr', path: 'identity.callsign' } },
+  '1':  { required: true,  label: 'CALLSIGN', target: { kind: 'flightData', path: 'identity.callsign' } },
   '2':  { required: true,  label: 'REV',      target: { kind: 'system', field: 'rev' } },
   '3':  { required: true,  label: 'TYPE',     target: { kind: 'composite' } },
-  '3A': { required: false, label: 'ACFT',     target: { kind: 'fdr', path: 'identity.aircraftType' } }, // docs/adr/0023 gap-closure — see DEPARTURE_BLOCK_MAP's '3A' comment
-  '3B': { required: false, label: 'WAKE',     target: { kind: 'fdr', path: 'identity.wakeCategory' } },
-  '3C': { required: false, label: 'TAIL',     target: { kind: 'fdr', path: 'identity.tailNumber' } },
-  '3D': { required: false, label: 'UNIT',     target: { kind: 'fdr', path: 'identity.unit' } },
-  '3E': { required: false, label: 'HOME',     target: { kind: 'fdr', path: 'identity.homeStation' } },
+  '3A': { required: false, label: 'ACFT',     target: { kind: 'flightData', path: 'identity.aircraftType' } }, // docs/adr/0023 gap-closure — see DEPARTURE_BLOCK_MAP's '3A' comment
+  '3B': { required: false, label: 'WAKE',     target: { kind: 'flightData', path: 'identity.wakeCategory' } },
+  '3C': { required: false, label: 'TAIL',     target: { kind: 'flightData', path: 'identity.tailNumber' } },
+  '3D': { required: false, label: 'UNIT',     target: { kind: 'flightData', path: 'identity.unit' } },
+  '3E': { required: false, label: 'HOME',     target: { kind: 'flightData', path: 'identity.homeStation' } },
   '3F': { required: false, label: 'HOOK',     target: { kind: 'military', field: 'hookRequired' } },  // WP6, guide M15 §9.7 — see DEPARTURE_BLOCK_MAP's '3F'/'3G' comment
   '3G': { required: false, label: 'ORDNANCE', target: { kind: 'military', field: 'ordnanceState' } }, // WP6, guide M14 §9.5
   '4':  { required: true,  label: 'CID',      target: { kind: 'system', field: 'cid' } },
   '4A': { required: false, label: 'RMV',      target: { kind: 'flag', flag: 'removeIndicator' } },
-  '4B': { required: true,  label: 'DATALINK', target: { kind: 'fdr', path: 'assigned.datalinkClearanceIndicator' } },
-  '5':  { required: true,  label: 'SQUAWK',   target: { kind: 'fdr', path: 'identity.beaconAssigned' } },
-  '5A': { required: false, label: 'DEGR',     target: { kind: 'fdr', path: 'identity.trackDegradationFlag' } },
-  '7':  { required: true,  label: 'CRUS ALT', target: { kind: 'fdr', path: 'filed.requestedAltitude' } }, // what was filed; the assigned altitude is the clearance (docs/adr/0058)
+  '4B': { required: true,  label: 'DATALINK', target: { kind: 'flightData', path: 'assigned.datalinkClearanceIndicator' } },
+  '5':  { required: true,  label: 'SQUAWK',   target: { kind: 'flightData', path: 'identity.beaconAssigned' } },
+  '5A': { required: false, label: 'DEGR',     target: { kind: 'flightData', path: 'identity.trackDegradationFlag' } },
+  '7':  { required: true,  label: 'CRUS ALT', target: { kind: 'flightData', path: 'filed.requestedAltitude' } }, // what was filed; the assigned altitude is the clearance (docs/adr/0058)
   // WP6 (crc-sync's docs/adr/0051) — OVERFLIGHT had no Block carrying an ATC
   // course or altitude ASSIGNMENT, only the filed request above, which left
   // §9.2's MARSA interlock unreachable on this one Role. Annotation-routed
@@ -238,17 +238,17 @@ export const OVERFLIGHT_BLOCK_MAP = {
   // docs/adr/0058: both are the flight's clearance now, on the FDR.
   '7A': { required: false, label: 'ALT',      target: { kind: 'clearance', field: 'altitude' }, interlock: 'ALTITUDE' },
   '9A-VECTOR': { required: false, label: 'HDG', target: { kind: 'clearance', field: 'heading' }, interlock: 'COURSE' },
-  '8':  { required: true,  label: 'ORIG',     target: { kind: 'fdr', path: 'filed.departureAirport' } },
-  '8B': { required: true,  label: 'DEST',     target: { kind: 'fdr', path: 'filed.destinationAirport' } },
-  '9':  { required: true,  label: 'RTE',      target: { kind: 'fdr', path: 'filed.route' }, provenance: 'COMPUTER_GENERATED' },
+  '8':  { required: true,  label: 'ORIG',     target: { kind: 'flightData', path: 'filed.departureAirport' } },
+  '8B': { required: true,  label: 'DEST',     target: { kind: 'flightData', path: 'filed.destinationAirport' } },
+  '9':  { required: true,  label: 'RTE',      target: { kind: 'flightData', path: 'filed.route' }, provenance: 'COMPUTER_GENERATED' },
   // §9.4 MTR fields — see DEPARTURE_BLOCK_MAP's '9G-*' comment
-  '9G-MTR':   { required: false, label: 'MTR',      target: { kind: 'fdr', path: 'military.mtr.designator' } },
-  '9G-ENTRY': { required: false, label: 'ENTRY',    target: { kind: 'fdr', path: 'military.mtr.entryFix' } },
-  '9G-TIME':  { required: false, label: 'ENTRY TM', target: { kind: 'fdr', path: 'military.mtr.entryTimeUtc' } },
-  '9H-EXIT':  { required: false, label: 'EXIT',     target: { kind: 'fdr', path: 'military.mtr.exitFix' } },
-  '9H-TIME':  { required: false, label: 'EXIT EST', target: { kind: 'fdr', path: 'military.mtr.exitEstimateUtc' } },
-  '9H-ALT':   { required: false, label: 'EXIT ALT', target: { kind: 'fdr', path: 'military.mtr.requestedAltitudeAfterExit' } },
-  '9E': { required: true,  label: 'RMKS',     target: { kind: 'fdr', path: 'filed.remarks' } },
+  '9G-MTR':   { required: false, label: 'MTR',      target: { kind: 'flightData', path: 'military.mtr.designator' } },
+  '9G-ENTRY': { required: false, label: 'ENTRY',    target: { kind: 'flightData', path: 'military.mtr.entryFix' } },
+  '9G-TIME':  { required: false, label: 'ENTRY TM', target: { kind: 'flightData', path: 'military.mtr.entryTimeUtc' } },
+  '9H-EXIT':  { required: false, label: 'EXIT',     target: { kind: 'flightData', path: 'military.mtr.exitFix' } },
+  '9H-TIME':  { required: false, label: 'EXIT EST', target: { kind: 'flightData', path: 'military.mtr.exitEstimateUtc' } },
+  '9H-ALT':   { required: false, label: 'EXIT ALT', target: { kind: 'flightData', path: 'military.mtr.requestedAltitudeAfterExit' } },
+  '9E': { required: true,  label: 'RMKS',     target: { kind: 'flightData', path: 'filed.remarks' } },
   '20': { required: false, label: 'SCRATCH1',  target: { kind: 'annotation' } },
   '21': { required: false, label: 'SCRATCH2',  target: { kind: 'annotation' } },
   '24': { required: true,  label: 'MIT RMKS',     target: { kind: 'annotation' } },
@@ -271,14 +271,14 @@ export const OVERFLIGHT_BLOCK_MAP = {
 // ARRIVAL field-reuse the way OVERFLIGHT's was). Kept in sync by
 // efsp-block-map-parity.test.js.
 export const MISSION_BLOCK_MAP = {
-  'M1': { required: true,  label: 'MSN #',   target: { kind: 'fdr', path: 'mission.missionNumber' } },
-  'M2': { required: false, label: 'PKG',     target: { kind: 'fdr', path: 'mission.packageId' } },
-  'M3': { required: true,  label: 'CALLSIGN',target: { kind: 'fdr', path: 'identity.callsign' } },
-  'M4': { required: true,  label: 'SQUAWK',  target: { kind: 'fdr', path: 'identity.beaconAssigned' } },
-  'M5': { required: false, label: 'CTL AGY', target: { kind: 'fdr', path: 'mission.controllingAgency' } },
-  'M6': { required: false, label: 'VUL STRT',target: { kind: 'fdr', path: 'mission.vulWindowStartUtc' } },
-  'M7': { required: false, label: 'VUL END', target: { kind: 'fdr', path: 'mission.vulWindowEndUtc' } },
-  'M8': { required: false, label: 'RMKS',    target: { kind: 'fdr', path: 'filed.remarks' } },
+  'M1': { required: true,  label: 'MSN #',   target: { kind: 'flightData', path: 'mission.missionNumber' } },
+  'M2': { required: false, label: 'PKG',     target: { kind: 'flightData', path: 'mission.packageId' } },
+  'M3': { required: true,  label: 'CALLSIGN',target: { kind: 'flightData', path: 'identity.callsign' } },
+  'M4': { required: true,  label: 'SQUAWK',  target: { kind: 'flightData', path: 'identity.beaconAssigned' } },
+  'M5': { required: false, label: 'CTL AGY', target: { kind: 'flightData', path: 'mission.controllingAgency' } },
+  'M6': { required: false, label: 'VUL STRT',target: { kind: 'flightData', path: 'mission.vulWindowStartUtc' } },
+  'M7': { required: false, label: 'VUL END', target: { kind: 'flightData', path: 'mission.vulWindowEndUtc' } },
+  'M8': { required: false, label: 'RMKS',    target: { kind: 'flightData', path: 'filed.remarks' } },
   'M25': { required: true, label: 'STATE',   target: { kind: 'system', field: 'state' } },
   'M26': { required: true, label: 'NLA',     target: { kind: 'nla' } },
   // decisions.md H55 (crc-sync's docs/adr/0069): whoever the pilot talks to records hung ordnance.
@@ -297,14 +297,14 @@ const _CARRIER_CHROME = {
   '2':  { required: true,  label: 'REV',    target: { kind: 'system', field: 'rev' } },
   '4':  { required: true,  label: 'CID',    target: { kind: 'system', field: 'cid' } },
   '4A': { required: false, label: 'RMV',    target: { kind: 'flag', flag: 'removeIndicator' } },
-  '5':  { required: false, label: 'SQUAWK', target: { kind: 'fdr', path: 'identity.beaconAssigned' } },
+  '5':  { required: false, label: 'SQUAWK', target: { kind: 'flightData', path: 'identity.beaconAssigned' } },
   '25': { required: true,  label: 'STATE',  target: { kind: 'system', field: 'state' } },
   '26': { required: true,  label: 'NLA',    target: { kind: 'nla' } },
 };
 
 export const MARSHAL_BLOCK_MAP = {
-  'C1':  { required: true,  label: 'CALLSIGN', target: { kind: 'fdr', path: 'identity.callsign' } },
-  'C2':  { required: true,  label: 'TYPE',     target: { kind: 'fdr', path: 'identity.aircraftType' } },
+  'C1':  { required: true,  label: 'CALLSIGN', target: { kind: 'flightData', path: 'identity.callsign' } },
+  'C2':  { required: true,  label: 'TYPE',     target: { kind: 'flightData', path: 'identity.aircraftType' } },
   'C3':  { required: false, label: 'CASE',     target: { kind: 'carrier-derived', field: 'case' } },
   'C4':  { required: false, label: 'APPR',     target: { kind: 'carrier', field: 'approachType' } },
   'C5':  { required: false, label: 'RADIAL',   target: { kind: 'carrier-derived', field: 'marshalRadial' } },
@@ -332,8 +332,8 @@ export const FINAL_BLOCK_MAP = {
 };
 
 export const PATTERN_BLOCK_MAP = {
-  'C1':  { required: true,  label: 'CALLSIGN', target: { kind: 'fdr', path: 'identity.callsign' } },
-  'C2':  { required: true,  label: 'TYPE',     target: { kind: 'fdr', path: 'identity.aircraftType' } },
+  'C1':  { required: true,  label: 'CALLSIGN', target: { kind: 'flightData', path: 'identity.callsign' } },
+  'C2':  { required: true,  label: 'TYPE',     target: { kind: 'flightData', path: 'identity.aircraftType' } },
   'C24': { required: false, label: 'NOTE',     target: { kind: 'annotation' } },
   ..._CARRIER_CHROME,
 };
@@ -354,11 +354,11 @@ function getPath(obj, path) {
  */
 function _historyCellFor(strip, blockId) {
   if (!strip) return null;
-  const map = BLOCK_MAPS[strip.role || 'DEPARTURE'];
+  const map = BLOCK_MAPS[strip.stripType || 'DEPARTURE'];
   const def = map && map[blockId];
   if (def && def.target.kind === 'clearance') {
-    const fdr = typeof getEfspFdr === 'function' ? getEfspFdr(strip.fdrId) : null;
-    return (fdr && fdr.clearance && fdr.clearance[def.target.field]) || null;
+    const flightData = typeof getEfspFdr === 'function' ? getEfspFdr(strip.flightDataId) : null;
+    return (flightData && flightData.clearance && flightData.clearance[def.target.field]) || null;
   }
   return (strip.annotations && strip.annotations[blockId]) || null;
 }
@@ -423,9 +423,9 @@ export const CONFIRM_VACATED_ELIGIBLE_BLOCKS = { DEPARTURE: ['21'], ARRIVAL: ['7
 // example template (§6.5): count (if formation), wake category, type,
 // equipment suffix — degradation (§3.3) overrides the rendered suffix
 // independently of the derived equipmentSuffix, never touching it.
-export function formatBlock3(fdr) {
-  if (!fdr) return '';
-  const id = fdr.identity;
+export function formatBlock3(flightData) {
+  if (!flightData) return '';
+  const id = flightData.identity;
   const count = id.flightSize > 1 ? String(id.flightSize) : '';
   const suffix = id.degradation === 'TRANSPONDER_FAILED' ? '/H'
     : id.degradation === 'MODE_C_FAILED' ? '/O'
@@ -435,7 +435,7 @@ export function formatBlock3(fdr) {
 
 /**
  * Resolves one Block's display value + provenance for a Strip/FDR pair.
- * Role-aware via strip.role (defaulting to DEPARTURE when strip is null —
+ * Role-aware via strip.stripType (defaulting to DEPARTURE when strip is null —
  * e.g. an unrendered/placeholder cell) rather than a separate parameter,
  * since every real caller already has the Strip in hand.
  * NLA (Block 26) resolves to null here — the button's label/inhibit state
@@ -443,22 +443,22 @@ export function formatBlock3(fdr) {
  * stored value.
  * @returns {{value:*, provenance:string}}
  */
-export function resolveBlockValue(blockId, fdr, strip) {
-  const map = BLOCK_MAPS[(strip && strip.role) || 'DEPARTURE'] || DEPARTURE_BLOCK_MAP;
+export function resolveBlockValue(blockId, flightData, strip) {
+  const map = BLOCK_MAPS[(strip && strip.stripType) || 'DEPARTURE'] || DEPARTURE_BLOCK_MAP;
   const def = map[blockId];
   if (!def) return { value: null, provenance: 'SYSTEM_DERIVED' };
   const t = def.target;
 
-  if (t.kind === 'fdr') {
+  if (t.kind === 'flightData') {
     // §10.5 (docs/adr/0073): P-time, TAXI and TAKEOFF on a DEPARTURE Strip
     // show the first source in their chain that has a value, computed here and
     // never written back. `timeSource` says which; `estimated` marks another
     // source's time standing in for an actual that has not happened yet.
-    const chain = ((strip && strip.role) || 'DEPARTURE') === 'DEPARTURE' && typeof timeChainForBlock === 'function'
+    const chain = ((strip && strip.stripType) || 'DEPARTURE') === 'DEPARTURE' && typeof timeChainForBlock === 'function'
       ? timeChainForBlock(blockId) : null;
     if (chain) {
-      const r = resolveTimeChain(chain, fdr);
-      const stored = (fdr && fdr.provenance && fdr.provenance[t.path]) || 'CONTROLLER_ENTERED';
+      const r = resolveTimeChain(chain, flightData);
+      const stored = (flightData && flightData.provenance && flightData.provenance[t.path]) || 'CONTROLLER_ENTERED';
       return {
         value: formatZuluHhmm(r.valueUtc) || null,
         provenance: r.source === 'CONTROLLER' ? stored : 'COMPUTER_GENERATED',
@@ -466,16 +466,16 @@ export function resolveBlockValue(blockId, fdr, strip) {
         estimated: r.estimated,
       };
     }
-    let value = fdr ? getPath(fdr, t.path) : null;
+    let value = flightData ? getPath(flightData, t.path) : null;
     if (ZULU_HHMM_BLOCKS.has(blockId)) value = formatZuluHhmm(value) || null; // epoch ms → '1432'
-    const provenance = (fdr && fdr.provenance && fdr.provenance[t.path]) || def.provenance || 'CONTROLLER_ENTERED';
+    const provenance = (flightData && flightData.provenance && flightData.provenance[t.path]) || def.provenance || 'CONTROLLER_ENTERED';
     return { value: value ?? null, provenance };
   }
   if (t.kind === 'annotation') {
     return { value: activeAnnotationValue(strip, blockId), provenance: 'CONTROLLER_ENTERED' };
   }
   if (t.kind === 'clearance') {
-    const cell = fdr && fdr.clearance && fdr.clearance[t.field];
+    const cell = flightData && flightData.clearance && flightData.clearance[t.field];
     const active = cell && cell.entries.find(e => e.status === 'ACTIVE');
     return { value: active ? active.value : null, provenance: 'CONTROLLER_ENTERED' };
   }
@@ -486,43 +486,43 @@ export function resolveBlockValue(blockId, fdr, strip) {
     return { value: strip ? strip.flags[t.flag] : null, provenance: 'SYSTEM_DERIVED' };
   }
   if (t.kind === 'composite') {
-    return { value: formatBlock3(fdr), provenance: 'COMPUTER_GENERATED' };
+    return { value: formatBlock3(flightData), provenance: 'COMPUTER_GENERATED' };
   }
   if (t.kind === 'nla') {
     return { value: null, provenance: 'SYSTEM_DERIVED' };
   }
   // WP4A gap-closure (docs/adr/0022) — was previously falling through to
   // the null/SYSTEM_DERIVED catch-all below, meaning Block 24A never
-  // actually displayed fdr.airspace.owner even before it had an edit path.
-  // Reads straight off the FDR, same shape as the 'fdr' branch above — kept
-  // separate since airspace ownership lives in fdr.airspace, not
-  // fdr.identity/fdr.filed/fdr.assigned like every generic 'fdr' path.
+  // actually displayed flightData.airspace.owner even before it had an edit path.
+  // Reads straight off the FDR, same shape as the 'flightData' branch above — kept
+  // separate since airspace ownership lives in flightData.airspace, not
+  // flightData.identity/flightData.filed/flightData.assigned like every generic 'flightData' path.
   if (t.kind === 'airspace-owner') {
-    return { value: (fdr && fdr.airspace) ? fdr.airspace.owner : null, provenance: (fdr && fdr.provenance && fdr.provenance['airspace.owner']) || 'CONTROLLER_ENTERED' };
+    return { value: (flightData && flightData.airspace) ? flightData.airspace.owner : null, provenance: (flightData && flightData.provenance && flightData.provenance['airspace.owner']) || 'CONTROLLER_ENTERED' };
   }
   // WP4A second slice, §4.6.3 — the three-field separation model. Same
   // dedicated-kind reasoning as 'airspace-owner' above; `field` picks which
-  // of the 3 keys on fdr.tofi this particular Block renders.
+  // of the 3 keys on flightData.tofi this particular Block renders.
   if (t.kind === 'tofi') {
-    return { value: (fdr && fdr.tofi) ? fdr.tofi[t.field] : null, provenance: (fdr && fdr.provenance && fdr.provenance.tofi) || 'CONTROLLER_ENTERED' };
+    return { value: (flightData && flightData.tofi) ? flightData.tofi[t.field] : null, provenance: (flightData && flightData.provenance && flightData.provenance.tofi) || 'CONTROLLER_ENTERED' };
   }
   // WP6 (crc-sync's docs/adr/0052), guide §6.4 — the military extension
-  // namespace, read exactly like 'tofi' above. The `fdr.military &&` guard is
+  // namespace, read exactly like 'tofi' above. The `flightData.military &&` guard is
   // not defensive padding: this field was the literal `null` of a WP6 hook
   // until 0052, and an FDR restored from a snapshot written before then can
   // still arrive that way if it reaches a client before the server has
   // reseeded it.
   if (t.kind === 'military') {
-    return { value: (fdr && fdr.military) ? fdr.military[t.field] : null, provenance: (fdr && fdr.provenance && fdr.provenance.military) || 'CONTROLLER_ENTERED' };
+    return { value: (flightData && flightData.military) ? flightData.military[t.field] : null, provenance: (flightData && flightData.provenance && flightData.provenance.military) || 'CONTROLLER_ENTERED' };
   }
   // The RANGE slice — Block 22, the frequency this flight has been approved
-  // onto. Lives in fdr.comms for the same reason airspace ownership lives in
-  // fdr.airspace: a dedicated setter, not a generic writable path.
+  // onto. Lives in flightData.comms for the same reason airspace ownership lives in
+  // flightData.airspace: a dedicated setter, not a generic writable path.
   // crc-sync docs/adr/0074 — a flight's own carrier fields, off the FDR.
   if (t.kind === 'carrier') {
-    const raw = fdr && fdr.military && fdr.military.carrier ? fdr.military.carrier[t.field] : null;
+    const raw = flightData && flightData.military && flightData.military.carrier ? flightData.military.carrier[t.field] : null;
     const value = t.field === 'eeatUtc' && raw != null ? formatZuluHhmm(raw) : raw;
-    return { value: value ?? null, provenance: (fdr && fdr.provenance && fdr.provenance.military) || 'CONTROLLER_ENTERED' };
+    return { value: value ?? null, provenance: (flightData && flightData.provenance && flightData.provenance.military) || 'CONTROLLER_ENTERED' };
   }
   // ...and the values the server DERIVES (angels, DME, push time, the bearings,
   // the Case). Formatted by carrier-state.js from what the server sent; nothing
@@ -530,19 +530,19 @@ export function resolveBlockValue(blockId, fdr, strip) {
   if (t.kind === 'carrier-derived') {
     let text = '';
     if (t.field === 'finalDistance') text = typeof carrierFinalDistanceText === 'function' ? carrierFinalDistanceText(strip) : '';
-    else if (t.field === 'callsign') text = fdr && fdr.identity ? (fdr.identity.callsign || '') : '';
-    else if (t.field === 'aircraftType') text = fdr && fdr.identity ? (fdr.identity.aircraftType || '') : '';
+    else if (t.field === 'callsign') text = flightData && flightData.identity ? (flightData.identity.callsign || '') : '';
+    else if (t.field === 'aircraftType') text = flightData && flightData.identity ? (flightData.identity.aircraftType || '') : '';
     else if (typeof carrierDerivedText === 'function') {
       const c = typeof getEfspCarrier === 'function' ? getEfspCarrier() : null;
-      text = carrierDerivedText(t.field, strip ? strip.fdrId : null, c ? c.shipState : null);
+      text = carrierDerivedText(t.field, strip ? strip.flightDataId : null, c ? c.shipState : null);
     }
     return { value: text === '' ? null : text, provenance: 'SYSTEM_DERIVED' };
   }
   if (t.kind === 'frequency') {
-    const mhz = (fdr && fdr.comms) ? fdr.comms.workingFrequencyMhz : null;
+    const mhz = (flightData && flightData.comms) ? flightData.comms.workingFrequencyMhz : null;
     return {
       value: mhz == null ? null : mhz.toFixed(3),
-      provenance: (fdr && fdr.provenance && fdr.provenance['comms.workingFrequencyMhz']) || 'CONTROLLER_ENTERED',
+      provenance: (flightData && flightData.provenance && flightData.provenance['comms.workingFrequencyMhz']) || 'CONTROLLER_ENTERED',
     };
   }
   return { value: null, provenance: 'SYSTEM_DERIVED' };
@@ -553,7 +553,7 @@ export function resolveBlockValue(blockId, fdr, strip) {
 // text would let a controller enter something invalid. Keyed by blockId,
 // not target.kind: '24A' needs a structurally distinct target kind
 // server-side (the D15 "no boolean path" defect), but '5A' is plain
-// 'fdr'-routed (fdr-store.js's setField already validates it) — both still
+// 'flightData'-routed (flight-data-store.js's setField already validates it) — both still
 // deserve the same picker UX, not free text, so this is a client-only
 // rendering decision independent of how the server routes the write.
 // Distinct from isBlockEditable() below: these ARE editable, just not
@@ -565,19 +565,19 @@ export function resolveBlockValue(blockId, fdr, strip) {
 // convention instead of a 2-option <select>.
 const ENUM_SELECT_BLOCKS = {
   '5A': ['NONE', 'CST', 'FAIL', 'IF', 'NT', 'TRK'],
-  // §3.8's release states. fdr-store.js validates the value; this is the
+  // §3.8's release states. flight-data-store.js validates the value; this is the
   // picker so a controller never types one of six exact strings by hand.
   '14A': ['RELEASED', 'HOLD_FOR_RELEASE', 'RELEASE_TIME', 'CLEARANCE_VOID_TIME', 'EDCT', 'CALL_FOR_RELEASE'],
   '24A': ['CONTROLLING_AGENCY', 'USING_AGENCY'],
   'RSVC': ['ACTIVE', 'TERMINATED'],
   'SREG': ['ATC', 'MARSA', 'USING_AGENCY', 'DUE_REGARD', 'SEE_AND_AVOID'],
-  // WP6 §9.5 (guide M14) — ordnance state. fdr-store.js's ORDNANCE_STATES is
+  // WP6 §9.5 (guide M14) — ordnance state. flight-data-store.js's ORDNANCE_STATES is
   // the authority; this is the picker. A static literal is right here, unlike
   // Block 9F's route table, because these four values are the guide's own and
   // are not runtime config.
   '3G': ['CLEAN', 'LOADED', 'HUNG', 'EXPENDED'],
   // WP6 §9.6 (guide M16) — alert status, the guide's own three values;
-  // fdr-store.js's ALERT_STATUSES is the authority. 'NONE' is its cleared
+  // flight-data-store.js's ALERT_STATUSES is the authority. 'NONE' is its cleared
   // value and is in the list, as 3G's 'CLEAN' is (crc-sync docs/adr/0070).
   '14E': ['NONE', 'ALERT', 'SCRAMBLE'],
   'C4': ['TACAN', 'ICLS', 'ACLS', 'PAR', 'VISUAL'], // crc-sync carrier/flight-record.js APPROACH_TYPES
@@ -593,7 +593,7 @@ function _stereoRouteOptions() {
 
 /**
  * @param {string} blockId
- * @param {object} [fdr] — the flight, for Block 9F only: a route the squadron
+ * @param {object} [flightData] — the flight, for Block 9F only: a route the squadron
  *   has since retired stays on the flight flying it (ADR 0050: deactivation is
  *   not retroactive), so the flight's current name is offered even when the
  *   table no longer lists it.
@@ -602,10 +602,10 @@ function _stereoRouteOptions() {
  *   no routes cached and no stereo on the flight — so bay-view.js renders a
  *   plain cell rather than a picker that can only fail.
  */
-export function enumSelectOptionsFor(blockId, fdr) {
+export function enumSelectOptionsFor(blockId, flightData) {
   if (blockId === '9F') {
     const names = _stereoRouteOptions().map(r => r.name);
-    const current = fdr && fdr.filed ? fdr.filed.stereoRouteName : null;
+    const current = flightData && flightData.filed ? flightData.filed.stereoRouteName : null;
     if (current && !names.includes(current)) names.push(current);
     return names.length ? names : null;
   }
@@ -620,7 +620,7 @@ export function enumSelectOptionsFor(blockId, fdr) {
 // This is the SERVER's answer to "which of the six accept a clear", not a
 // guess from reading the validators:
 //   RSVC / SREG  -> both start as null and null is a real, renderable state,
-//                   so clearing one is a meaningful action. fdr-store.js's
+//                   so clearing one is a meaningful action. flight-data-store.js's
 //                   setTofi() normalizes the '' a <select> sends to null, so
 //                   "—" sends '' and there is one spelling of "cleared"
 //                   server-side.
@@ -629,9 +629,9 @@ export function enumSelectOptionsFor(blockId, fdr) {
 //   14A          -> §3.8's six release states are exhaustive. There is no
 //                   "no release state".
 //   24A          -> airspace ownership is a DIRECTION, and its record is
-//                   append-only precisely so a handover cannot be erased.
+//                   append-only precisely so a handoff cannot be erased.
 //                   "Give it back" is CONTROLLING_AGENCY, not blank.
-//   9F           -> fdr-store.js's setField('filed.stereoRouteName', '')
+//   9F           -> flight-data-store.js's setField('filed.stereoRouteName', '')
 //                   clears the LABEL and keeps the route (docs/adr/0050), so
 //                   "cancel the stereo" is meaningful and the route a flight
 //                   is taxiing on never goes blank (docs/adr/0073).
@@ -665,14 +665,14 @@ export function isBooleanToggleBlock(blockId) {
 }
 
 /** @returns {string|null} this Block's display label for the given role, or null if the Block doesn't exist for that role. */
-export function blockLabelFor(blockId, role = 'DEPARTURE') {
-  const map = BLOCK_MAPS[role] || DEPARTURE_BLOCK_MAP;
+export function blockLabelFor(blockId, stripType = 'DEPARTURE') {
+  const map = BLOCK_MAPS[stripType] || DEPARTURE_BLOCK_MAP;
   const def = map[blockId];
   return def ? def.label || null : null;
 }
 
-export function requiredBlocksFor(role = 'DEPARTURE') {
-  const map = BLOCK_MAPS[role];
+export function requiredBlocksFor(stripType = 'DEPARTURE') {
+  const map = BLOCK_MAPS[stripType];
   if (!map) return [];
   return Object.entries(map).filter(([, def]) => def.required).map(([id]) => id);
 }
@@ -684,8 +684,8 @@ export function requiredBlocksFor(role = 'DEPARTURE') {
  * are managed by their own dedicated mechanisms (board-store-derived,
  * gesture toggles, the NLA button) and are never free-text editable here.
  */
-export function isBlockEditable(blockId, role = 'DEPARTURE') {
-  const map = BLOCK_MAPS[role];
+export function isBlockEditable(blockId, stripType = 'DEPARTURE') {
+  const map = BLOCK_MAPS[stripType];
   const def = map && map[blockId];
   // 9F is a picker (docs/adr/0073) and editable only while there is a route
   // table to pick from; with none it must not fall through to free text
@@ -695,24 +695,24 @@ export function isBlockEditable(blockId, role = 'DEPARTURE') {
   // are restricted enums with their own <select>, a frequency is a free
   // numeric entry — the ordinary click-to-edit path is right for it. The
   // server validates the band.
-  return !!def && (def.target.kind === 'fdr' || def.target.kind === 'annotation' || def.target.kind === 'frequency' || def.target.kind === 'clearance' || def.target.kind === 'carrier');
+  return !!def && (def.target.kind === 'flightData' || def.target.kind === 'annotation' || def.target.kind === 'frequency' || def.target.kind === 'clearance' || def.target.kind === 'carrier');
 }
 
 /**
  * UI-A U4: the TYPE field (Block 3) is a read-only composite (count, wake, type,
  * suffix), so it cannot be written itself. Editing it edits the one part a
  * controller means by "type", the aircraft type (3A, identity.aircraftType), which
- * is a plain fdr field every airframe Role already has. The wake category (3B)
+ * is a plain flightData field every airframe Role already has. The wake category (3B)
  * stays in the expanded view: nothing derives it from the type, and guessing it
  * would put a made-up value on a Strip.
  * @returns {{blockId:string, value:string}|null} null when the Block is not redirected
  */
-export function editRedirectFor(blockId, role, fdr) {
+export function editRedirectFor(blockId, stripType, flightData) {
   if (blockId !== '3') return null;
-  const map = BLOCK_MAPS[role || 'DEPARTURE'];
+  const map = BLOCK_MAPS[stripType || 'DEPARTURE'];
   const def = map && map['3A'];
-  if (!def || def.target.kind !== 'fdr') return null;
-  return { blockId: '3A', value: (fdr && fdr.identity && fdr.identity.aircraftType) || '' };
+  if (!def || def.target.kind !== 'flightData') return null;
+  return { blockId: '3A', value: (flightData && flightData.identity && flightData.identity.aircraftType) || '' };
 }
 
 // ── Zulu time-of-day Blocks (crc-sync's docs/adr/0062) ──────────────────────
@@ -778,11 +778,11 @@ function _timeSourceSentence(source, via) {
  * value and where it came from, and what would apply if it were cleared.
  * Null for any other Block or Role.
  */
-export function timeChainTitleFor(blockId, fdr, strip) {
-  if (((strip && strip.role) || 'DEPARTURE') !== 'DEPARTURE') return null;
+export function timeChainTitleFor(blockId, flightData, strip) {
+  if (((strip && strip.stripType) || 'DEPARTURE') !== 'DEPARTURE') return null;
   const chain = typeof timeChainForBlock === 'function' ? timeChainForBlock(blockId) : null;
   if (!chain) return null;
-  const r = resolveTimeChain(chain, fdr);
+  const r = resolveTimeChain(chain, flightData);
   const lines = [TIME_CHAIN_NAMES[chain]];
   if (r.source) {
     lines.push(`${r.estimated ? '~' : ''}${formatZuluHhmm(r.valueUtc)}Z ${_timeSourceSentence(r.source, r.via)}`);
@@ -806,13 +806,13 @@ export function timeChainTitleFor(blockId, fdr, strip) {
  * the Strip would otherwise show TAXI 1425 ahead of a P-time of 1450 with nothing saying why.
  * @returns {{typedUtc:number, planUtc:number}|null}
  */
-export function typedTimeBehindPlan(blockId, fdr, strip) {
-  if (((strip && strip.role) || 'DEPARTURE') !== 'DEPARTURE') return null;
+export function typedTimeBehindPlan(blockId, flightData, strip) {
+  if (((strip && strip.stripType) || 'DEPARTURE') !== 'DEPARTURE') return null;
   const chain = typeof timeChainForBlock === 'function' ? timeChainForBlock(blockId) : null;
   if (chain !== 'offBlock' && chain !== 'takeoff') return null;
-  const own = resolveTimeChain(chain, fdr);
+  const own = resolveTimeChain(chain, flightData);
   if (own.source !== 'CONTROLLER' || own.valueUtc == null) return null;
-  const plan = resolveTimeChain('departure', fdr);
+  const plan = resolveTimeChain('departure', flightData);
   if (plan.valueUtc == null || own.valueUtc >= plan.valueUtc) return null;
   return { typedUtc: own.valueUtc, planUtc: plan.valueUtc };
 }
@@ -823,15 +823,15 @@ export function typedTimeBehindPlan(blockId, fdr, strip) {
  * the cell needs nothing. Block 9F with no route table says why it is not a
  * picker, since there is nothing to pick.
  */
-export function blockValueHintFor(blockId, fdr, strip) {
-  if (blockId === '9F' && enumSelectOptionsFor('9F', fdr) == null) {
+export function blockValueHintFor(blockId, flightData, strip) {
+  if (blockId === '9F' && enumSelectOptionsFor('9F', flightData) == null) {
     return { title: 'no stereo routes configured', estimated: false };
   }
-  let title = timeChainTitleFor(blockId, fdr, strip);
+  let title = timeChainTitleFor(blockId, flightData, strip);
   if (!title) return null;
-  const resolved = resolveBlockValue(blockId, fdr, strip);
+  const resolved = resolveBlockValue(blockId, flightData, strip);
   if (resolved.estimated) title += '\nType it again to accept it as the actual.'; // S-L16 W5
-  const behind = typedTimeBehindPlan(blockId, fdr, strip);
+  const behind = typedTimeBehindPlan(blockId, flightData, strip);
   if (behind) {
     title += `\n${formatZuluHhmm(behind.typedUtc)}Z was typed before the proposed departure moved to ${formatZuluHhmm(behind.planUtc)}Z: `
       + 'a typed time does not follow a new P-time. Clear it to follow, or retype it.'; // S-L16 W3
@@ -840,19 +840,19 @@ export function blockValueHintFor(blockId, fdr, strip) {
 }
 
 /**
- * The label's hover title for this Block, or null. `fdr` adds the lost-comms
+ * The label's hover title for this Block, or null. `flightData` adds the lost-comms
  * rule to EXIT ALT; with `strip`, Blocks 6/17/18 on a DEPARTURE carry §10.5's
  * source (docs/adr/0073). Without the Strip (the collapsed face's label, which
  * strip-view.js titles with the FDR alone) the chain title is left off: the
  * same id is the ETA on an ARRIVAL, and the value cell carries it anyway.
  */
-export function blockTitleFor(blockId, fdr, strip) {
+export function blockTitleFor(blockId, flightData, strip) {
   if (strip) {
-    const chainTitle = timeChainTitleFor(blockId, fdr, strip);
+    const chainTitle = timeChainTitleFor(blockId, flightData, strip);
     if (chainTitle) return chainTitle;
   }
   const base = BLOCK_TITLES[blockId] || null;
   if (blockId !== '9H-ALT' || typeof mtrLostCommsAdvisory !== 'function') return base;
-  const advisory = mtrLostCommsAdvisory(fdr);
+  const advisory = mtrLostCommsAdvisory(flightData);
   return advisory ? `${base}.\n${advisory}` : base;
 }

@@ -43,12 +43,12 @@ const COORDINATION_OP_KINDS = ['HANDOFF', 'POINT_OUT', 'TRAFFIC', 'OPERATIONAL_R
 // (docs/adr/0023). Kept separate from COORDINATION_OP_KINDS since it isn't
 // one (no cross-Facility exchange, no replica — a same-Facility in-place
 // role change), but needs the identical exclusion from OPS/CD/GND/TWR.
-const APP_CTR_ONLY_OP_KINDS = ['ConvertToArrival'];
+const AP_CTR_ONLY_OP_KINDS = ['ConvertToArrival'];
 
 // Approving a flight into an airspace is something the Position working that
 // airborne flight does — APP and CTR here, since they are the Positions that
 // hold a flight once it is airborne. Kept separate from
-// APP_CTR_ONLY_OP_KINDS, which those two hold for an unrelated reason, so
+// AP_CTR_ONLY_OP_KINDS, which those two hold for an unrelated reason, so
 // neither list has to be read as "and also these".
 const AIRSPACE_ENTRY_OP_KINDS = ['ApproveAirspaceEntry', 'ClearAirspaceEntry'];
 
@@ -58,8 +58,8 @@ const AIRSPACE_ENTRY_OP_KINDS = ['ApproveAirspaceEntry', 'ClearAirspaceEntry'];
 // table names it (CTR, TAC_C2, GCI — see PERMISSIONS below).
 const TOFI_OP_KINDS = ['TOFI'];
 
-const NON_CREATE_OPS = OP_KINDS.filter(k => k !== 'CreateStrip' && !COORDINATION_OP_KINDS.includes(k) && !APP_CTR_ONLY_OP_KINDS.includes(k) && !TOFI_OP_KINDS.includes(k) && !AIRSPACE_ENTRY_OP_KINDS.includes(k));
+const NON_CREATE_OPS = OP_KINDS.filter(k => k !== 'CreateStrip' && !COORDINATION_OP_KINDS.includes(k) && !AP_CTR_ONLY_OP_KINDS.includes(k) && !TOFI_OP_KINDS.includes(k) && !AIRSPACE_ENTRY_OP_KINDS.includes(k));
 
 module.exports = {
-  OP_KINDS, COORDINATION_OP_KINDS, APP_CTR_ONLY_OP_KINDS, AIRSPACE_ENTRY_OP_KINDS, TOFI_OP_KINDS, NON_CREATE_OPS,
+  OP_KINDS, COORDINATION_OP_KINDS, AP_CTR_ONLY_OP_KINDS, AIRSPACE_ENTRY_OP_KINDS, TOFI_OP_KINDS, NON_CREATE_OPS,
 };

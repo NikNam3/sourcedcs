@@ -26,20 +26,20 @@ const efspFacilityConfig = require('./efsp/facility-config');
 const { buildRadars, loadSensorSpecs } = require('./radars');
 const { TerrainStore } = require('./terrain');
 const { CoverageEngine } = require('./coverage');
-const { StationCoverage, assignableRadars, reportUnresolvedSelectors } = require('./efsp/station-coverage');
+const { PositionCoverage, assignableRadars, reportUnresolvedSelectors } = require('./efsp/position-coverage');
 const { ForwardingObligationMonitor } = require('./efsp/forwarding-obligations');
 const { CorrelationReconciler, CORRELATION_TICK_MS } = require('./efsp/correlation-reconciler');
 const { SurveillanceHintMonitor } = require('./efsp/surveillance-hints');
 const { getHintsConfig } = require('./efsp/surveillance-hints-config');
 const { ConformanceMonitor } = require('./efsp/conformance');
-const { StcaMonitor } = require('./stca');
+const { ConflictAlertMonitor } = require('./conflict-alert');
 const { loadAlertingConfig } = require('./alerting-config');
 const { indicatedAltFt } = require('./altimetry');
 const { MissionClock, WALL_CLOCK } = require('./mission-clock');
 const { MissionSession } = require('./mission-session');
 const { loadTheaters } = require('./theaters');
 const { TheaterContext } = require('./theater-context');
-const { lookupFlightPlan, toFdrFiledSeed, listFiledFlightPlans } = require('./efsp/flight-plan-lookup');
+const { lookupFlightPlan, toFlightDataFiledSeed, listFiledFlightPlans } = require('./efsp/flight-plan-lookup');
 const efspStereoRoutes = require('./efsp/stereo-routes');
 const { createEfspInstrumentation } = require('./efsp/metrics');
 const { archiveDeltas } = require('./efsp/archiver');
@@ -50,7 +50,7 @@ const { wireCollabSession } = require('./collab-wiring');
 const log = require('./log').logger('app');
 const authLog = require('./log').logger('auth');
 const weatherLog = require('./log').logger('weather');
-const fieldLog = require('./log').logger('field-state');
+const fieldLog = require('./log').logger('runway-status');
 const archiverLog = require('./log').logger('efsp:archiver');
 const fplLog = require('./log').logger('efsp:flight-plan-lookup');
 const stereoLog = require('./log').logger('efsp:stereo-routes');
@@ -193,7 +193,7 @@ function createApp(deps = {}) {
   // persistence.md) — deliberately NOT cleared below on mission reload,
   // unlike trackStore/collabStore. Strips represent real controller work
   // product and must survive a DCS mission reload, not just a crc-sync
-  // restart. DO NOT add efsp.boardStore/fdrStore clear() calls to the
+  // restart. DO NOT add efsp.boardStore/flightDataStore clear() calls to the
   // mission-reload handler below.
   // The mission clock (docs/adr/0079): in-game Zulu, fed by the gRPC game-time
   // poll below. Every EFSP time a controller reads — gates, deadlines, Strip
@@ -212,7 +212,7 @@ function createApp(deps = {}) {
   // all live here now rather than in each renderer. The chain is:
   //
   //   sensor-specs.json + missionData + tracks  ->  buildRadars()
-  //   StationCoverage    which Positions grant which of those radars
+  //   PositionCoverage    which Positions grant which of those radars
   //   CoverageEngine     what each of those radars is illuminating, one phase
   //                      for everybody, terrain included
   //   WsHub              each session gets only what its Positions can see
@@ -232,7 +232,7 @@ function createApp(deps = {}) {
     });
   }
 
-  const stationCoverage = new StationCoverage({
+  const positionCoverage = new PositionCoverage({
     facilityConfig: efspFacilityConfig,
     positionStoreFor: efsp.positionStoreFor,
     radars: currentRadars,
@@ -240,7 +240,7 @@ function createApp(deps = {}) {
 
   const picture = {
     coverageFor: (controllerId) => {
-      const result = stationCoverage.forController(controllerId);
+      const result = positionCoverage.forController(controllerId);
       // Stamp each radar with the server's own sweep phase. The client draws the
       // debug beam overlay from it, and that overlay used to be decorative —
       // each renderer guessed its own phase, so the beam it drew was nowhere
@@ -270,7 +270,7 @@ function createApp(deps = {}) {
     srs: srsClient,
     sensorSpecs,
     correlationStore: efsp.correlationStore,
-    fdrStore: efsp.fdrStore,
+    flightDataStore: efsp.flightDataStore,
     env: () => ({ weather: grpcClient.getWeather(), transitionAltFt: theaterContext.transitionAltFt() }),
   });
   const { transponders, identity } = surveillance;
@@ -323,21 +323,21 @@ function createApp(deps = {}) {
   function deriveActiveRunwaysFromWind(missionData) {
     const missionSessionSeq = missionSession.currentSeq();
     for (const facilityId of efspFacilityConfig.getFacilityIds()) {
-      const icao = (efspFacilityConfig.getFacilityConfig(facilityId).fieldState || {}).airportIcao;
-      if (!icao || !efsp.fieldStateStore.hasFieldState(facilityId)) continue;
+      const icao = (efspFacilityConfig.getFacilityConfig(facilityId).runwayStatus || {}).airportIcao;
+      if (!icao || !efsp.runwayStatusStore.hasRunwayStatus(facilityId)) continue;
       const airport = (missionData.airports || []).find(a => a.icao === icao);
       if (!airport) { fieldLog.warn('no such airport in this mission — active runway left as it is', { facilityId, icao }); continue; }
       grpcClient.getAptWeather(airport.lat, airport.lon, airport.elev || 0)
         .then((w) => {
-          const r = efsp.fieldStateStore.setActiveRunwayFromWind(facilityId, { windFromTrue: w.windFrom, windKt: w.windKt, missionSession: missionSessionSeq });
+          const r = efsp.runwayStatusStore.setActiveRunwayFromWind(facilityId, { windFromTrue: w.windFrom, windKt: w.windKt, missionSession: missionSessionSeq });
           // Persisted even when the end is unchanged: the store has recorded
           // that this session's wind is applied (docs/adr/0086).
           if (r.ok && !r.skipped) efsp.persist();
           if (r.ok && r.changed) {
-            // The same delta a field-state op sends (decisions.md S-L1d).
-            wsHub.broadcastEfspFieldStateDelta({
-              fieldStateSeq: efsp.fieldStateStore.currentSeq,
-              fieldStates: [efsp.fieldStateStore.getFieldState(facilityId)],
+            // The same delta a runway-status op sends (decisions.md S-L1d).
+            wsHub.broadcastEfspRunwayStatusDelta({
+              runwayStatusSeq: efsp.runwayStatusStore.currentSeq,
+              runwayStatuses: [efsp.runwayStatusStore.getRunwayStatus(facilityId)],
             });
             efsp.nlaStatusMonitor.tick();
             fieldLog.info('active runway from the mission wind', { facilityId, activeRunway: r.activeRunway, windFromDegTrue: w.windFrom, windKt: w.windKt });
@@ -355,7 +355,7 @@ function createApp(deps = {}) {
   const obligationMonitor = new ForwardingObligationMonitor({
     clock: missionClock,
     boardStoreFor: efsp.boardStoreFor,
-    fdrStore: efsp.fdrStore,
+    flightDataStore: efsp.flightDataStore,
     facilityConfig: efspFacilityConfig,
     airspaceStore: efsp.airspaceStore,
   });
@@ -372,7 +372,7 @@ function createApp(deps = {}) {
     trackStore,
     // The code the aircraft is actually sending (docs/adr/0059).
     beaconOf: trackSeams.beacon || ((t) => { const x = transponders.transponderOf(t); return x ? x.code : null; }),
-    fdrStore: efsp.fdrStore,
+    flightDataStore: efsp.flightDataStore,
     correlationStore: efsp.correlationStore,
     boardStoreFor: efsp.boardStoreFor,
     facilityConfig: efspFacilityConfig,
@@ -404,7 +404,7 @@ function createApp(deps = {}) {
     efsp.persist();
     for (const p of payloads) wsHub.broadcastEfspBoardDelta(p);
     const n = payloads.reduce((sum, p) => sum + p.gone.length, 0);
-    archiverLog.info('archived Strips and FDRs', { strips: n, fdrs: r.fdrIds.length });
+    archiverLog.info('archived Strips and FDRs', { strips: n, flightDataList: r.flightDataIds.length });
     return n;
   }
   missionSession.onNewSession((session) => _archive(efsp.archiver.onMissionSessionChange(session)));
@@ -446,7 +446,7 @@ function createApp(deps = {}) {
     clock: missionClock,
     wallClock: WALL_CLOCK,
     trackStore,
-    fdrStore: efsp.fdrStore,
+    flightDataStore: efsp.flightDataStore,
     correlationStore: efsp.correlationStore,
     weather: () => grpcClient.getWeather(),
     transitionAltFt: () => theaterContext.transitionAltFt(),
@@ -479,23 +479,23 @@ function createApp(deps = {}) {
       if (board) board.setAirborneObserver((s) => surveillanceHints.getAll().some(h => h.stripId === s.stripId && h.kind === 'AIRBORNE_ADVANCE'));
     }
   }
-  const stcaMonitor = new StcaMonitor({
+  const conflictAlertMonitor = new ConflictAlertMonitor({
     trackStore,
-    config: alertingConfig.stca,
-    fdrForTrack: (trackId) => efsp.correlationStore.fdrForTrack(trackId),
-    activeMarsaFor: (fdrId) => efsp.marsaStore.activeFor(fdrId),
+    config: alertingConfig.conflictAlert,
+    flightDataForTrack: (trackId) => efsp.correlationStore.flightDataForTrack(trackId),
+    activeMarsaFor: (flightDataId) => efsp.marsaStore.activeFor(flightDataId),
     // Alert text names each aircraft the way identity does (docs/adr/0059).
     callsignFor: trackSeams.callsign || ((track) => identity.labelFor(track.id)),
   });
   // The one place efsp-alerts is composed (docs/adr/0067). broadcastEfspAlerts
-  // replaces the whole alert state, so every producer — the 1s conformance/STCA
+  // replaces the whole alert state, so every producer — the 1s conformance/CA
   // tick, the 15s obligation sweep, the post-Mutation hook — must send all three
   // slices, or it would erase the others'. A function declaration: the 15s
   // interval above calls it, long after these consts exist.
   function broadcastEfspAlerts() {
     wsHub.broadcastEfspAlerts({
       conformance: conformanceMonitor.getAll(),
-      stca: stcaMonitor.getAll(),
+      conflictAlert: conflictAlertMonitor.getAll(),
       obligations: obligationMonitor.getAll(),
       surveillance: surveillanceHints ? surveillanceHints.getAll() : undefined, // docs/adr/0076: the suggestion chip and staleness
     });
@@ -547,7 +547,7 @@ function createApp(deps = {}) {
     try {
       const result = await lookupFlightPlan(req.params.callsign);
       if (!result.found) return res.status(404).json({ found: false, reason: result.reason });
-      res.json({ found: true, seed: toFdrFiledSeed(result.plan) });
+      res.json({ found: true, seed: toFlightDataFiledSeed(result.plan) });
     } catch (err) {
       fplLog.error('unexpected error, responding 503 instead of crashing', { err });
       res.status(503).json({ found: false, reason: 'lookup failed unexpectedly' });
@@ -648,7 +648,7 @@ function createApp(deps = {}) {
         lastRadarIds = ids;
         wsHub.refreshAllCoverage();
       }
-      coverageEngine.tick(stationCoverage.activeRadars(), trackStore.getAll(), wsHub.getMissionData());
+      coverageEngine.tick(positionCoverage.activeRadars(), trackStore.getAll(), wsHub.getMissionData());
     } },
     // With DCS gone there are no samples to broadcast on, and the clock has fallen
     // back to the wall clock — clients still need to hear that, and when.
@@ -682,14 +682,14 @@ function createApp(deps = {}) {
     { name: 'carrier', periodMs: 1000, tick: () => carrierTick.tick() },
     // Conformance and the hints stamp mission time (the `since` they report is shown to
     // controllers); their pure durations (the heading grace, the airborne hold, staleness)
-    // run on the injected wall clock (docs/adr/0096). STCA stays on the wall clock: it only
+    // run on the injected wall clock (docs/adr/0096). CA stays on the wall clock: it only
     // compares track ages, which tracks.js stamps in wall time, and shows no time
     // of day at all.
-    { name: 'conformance-stca', periodMs: 1000, tick: () => {
+    { name: 'conformance-conflict-alert', periodMs: 1000, tick: () => {
       const conformanceChanged = conformanceMonitor.tick();
       const hintsChanged = surveillanceHints ? surveillanceHints.tick() : false;
-      const stcaChanged = stcaMonitor.tick(Date.now());
-      if (conformanceChanged || stcaChanged || hintsChanged) {
+      const conflictAlertChanged = conflictAlertMonitor.tick(Date.now());
+      if (conformanceChanged || conflictAlertChanged || hintsChanged) {
         broadcastEfspAlerts();
       }
     } },
@@ -729,7 +729,7 @@ function createApp(deps = {}) {
       // exactly two outcomes on an identity change; this does both, in order,
       // rather than leaving a stale binding pointing at a contact that is gone.
       correlationReconciler.resetPicture('MISSION_RELOAD');
-      // Do NOT add efsp.boardStore.clear()/efsp.fdrStore.clear() here — EFSP
+      // Do NOT add efsp.boardStore.clear()/efsp.flightDataStore.clear() here — EFSP
       // Strips are durably persisted and MUST survive a mission reload, unlike
       // tracks/the IFF overlay (see the `createEfsp()` comment above and
       // docs/adr/0002-durable-board-persistence.md).
@@ -755,7 +755,7 @@ function createApp(deps = {}) {
       // Scoped to radars some Position is actually ASSIGNED, not every airfield in
       // the theater: a 225-airfield map produces 450 airfield radars and would
       // pre-fetch about nine hundred tiles for scopes nobody will ever look
-      // through. Not scoped to OCCUPIED Positions, though — a controller taking
+      // through. Not scoped to STAFFED Positions, though — a controller taking
       // Approach mid-session must not then wait for a DEM. Airborne radars are
       // excluded because they move, so there is no fixed circle to fetch, and
       // they warm as they fly.
@@ -810,7 +810,7 @@ function createApp(deps = {}) {
       obligation: obligationMonitor,
       correlation: correlationReconciler,
       conformance: conformanceMonitor,
-      stca: stcaMonitor,
+      conflictAlert: conflictAlertMonitor,
       surveillanceHints,
       carrier: carrierTick,
       instrumentation: efspInstrumentation,

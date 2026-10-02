@@ -11,7 +11,7 @@ import {
 import { getActingPositions, sendEfspMutation, sendEfspSfaMutation } from './efsp-ws.js';
 import { patternBoardModel, renderPatternBoard } from './pattern-board.js';
 import { createFinalTracker, renderFinalPanel } from './final-panel.js';
-import { runwayForStrip } from './field-state-rules.js';
+import { runwayForStrip } from './runway-status-rules.js';
 import { getActiveRadars } from '../../app.js';
 
 // Bay descriptor views (crc-sync docs/adr/0075, 0093): a Bay whose descriptor says
@@ -59,20 +59,20 @@ export function patternLegsFor(bay) {
 
 /**
  * Strips on the pattern board: one entry per live Strip in the Bay, its leg the Rack it sits in. Time in
- * the pattern runs from when the Strip joined this Position (a hand-over's own stamp, else its creation),
+ * the pattern runs from when the Strip joined this Position (a handoff's own stamp, else its creation),
  * not from its last Move, so going round again does not reset it.
  * @param {object} bay
  * @param {(bayId:string, rackId:string)=>object[]} rackOf  getEfspRack
- * @param {(fdrId:string)=>object|null} fdrOf               getEfspFdr
+ * @param {(flightDataId:string)=>object|null} flightDataOf               getEfspFdr
  */
-export function patternStripsFor(bay, rackOf, fdrOf) {
+export function patternStripsFor(bay, rackOf, flightDataOf) {
   const out = [];
   let order = 0;
   for (const rackId of bay.rackIds || []) {
     for (const s of rackOf(bay.bayId, rackId) || []) {
-      const fdr = fdrOf ? fdrOf(s.fdrId) : null;
-      const identity = (fdr && fdr.identity) || {};
-      const joinedMs = (s.carrierTransfer && s.carrierTransfer.at) || s.createdAt;
+      const flightData = flightDataOf ? flightDataOf(s.flightDataId) : null;
+      const identity = (flightData && flightData.identity) || {};
+      const joinedMs = (s.carrierHandoff && s.carrierHandoff.at) || s.createdAt;
       out.push({
         stripId: s.stripId, callsign: identity.callsign || '', type: identity.aircraftType || '',
         legId: s.rackId, enteredPatternS: _fin(joinedMs) ? joinedMs / 1000 : undefined, order: order++,
@@ -122,11 +122,11 @@ export function finalSampleFor({ kind, strip, callsign, runway, track, ref, nowS
 
 /**
  * The op a terminal button sends. PAR's "Landing assured" and "Missed approach" are FINAL's own states, set
- * by the owner (ADR 0075). The carrier's "Ball" is its recorded FINAL_TO_LSO hand-over, so the trigger type
+ * by the owner (ADR 0075). The carrier's "Ball" is its recorded FINAL_TO_LSO handoff, so the trigger type
  * is kept (ADR 0074); its "Waveoff" is the state change.
  */
 export function finalTerminalOp(kind, terminal) {
-  if (kind === 'CARRIER' && terminal && terminal.toState === 'BALL') return { kind: 'CarrierTransfer', transfer: 'FINAL_TO_LSO' };
+  if (kind === 'CARRIER' && terminal && terminal.toState === 'BALL') return { kind: 'CarrierHandoff', transfer: 'FINAL_TO_LSO' };
   return terminal ? { kind: 'SetState', toState: terminal.toState } : null;
 }
 
@@ -188,11 +188,11 @@ function _renderPattern(container, bay) {
   const runway = fs && fs.runways && fs.runways[0];
   const model = patternBoardModel({
     legs, strips, nowS: (typeof missionNow === 'function' ? missionNow() : Date.now()) / 1000,
-    runwayStatus: runway ? (runway.status === 'OPEN' ? 'OPEN' : (runway.status === 'CLOSED' ? 'CLOSED' : 'SUSPENDED')) : undefined,
+    runwayOpenStatus: runway ? (runway.status === 'OPEN' ? 'OPEN' : (runway.status === 'CLOSED' ? 'CLOSED' : 'SUSPENDED')) : undefined,
   });
   // Only a held Position acts: a read-only board for everyone else.
-  const held = _heldAt(bay);
-  const owner = (stripId) => { const s = getEfspStrip(stripId); return s && held.includes(s.ownerPositionId) ? s : null; };
+  const signedOn = _heldAt(bay);
+  const owner = (stripId) => { const s = getEfspStrip(stripId); return s && signedOn.includes(s.ownerPositionId) ? s : null; };
   const act = (stripId, op) => { const s = owner(stripId); if (s && op) _send(s, { ...op, ...(op.kind === 'MoveStrip' ? { bayId: bay.bayId } : {}) }); };
   const board = renderPatternBoard(model, {
     doc: document, legs,
@@ -220,7 +220,7 @@ function _renderFinal(container, bay) {
   const kind = bay.facilityId === 'CARRIER' ? 'CARRIER' : 'PAR';
   const live = [];
   for (const rackId of bay.rackIds || []) live.push(...getEfspRack(bay.bayId, rackId));
-  const held = _heldAt(bay);
+  const signedOn = _heldAt(bay);
   const gone = new Set([..._finalTrackers.keys()]);
   const wrap = document.createElement('div');
   wrap.dataset.bayView = 'final';
@@ -233,16 +233,16 @@ function _renderFinal(container, bay) {
   for (const strip of live) {
     gone.delete(strip.stripId);
     if (!_finalTrackers.has(strip.stripId)) _finalTrackers.set(strip.stripId, createFinalTracker());
-    const fdr = getEfspFdr(strip.fdrId);
+    const flightData = getEfspFdr(strip.flightDataId);
     const trackId = typeof correlatedTrackIdForStrip === 'function' ? correlatedTrackIdForStrip(strip) : null;
     const track = trackId && typeof window !== 'undefined' && typeof window.getLatestTrack === 'function' ? window.getLatestTrack(trackId) : null;
     let runwayText = '--';
     if (typeof runwayForStrip === 'function' && typeof getEfspFieldState === 'function') {
-      const r = runwayForStrip({ ...strip, role: 'ARRIVAL' }, fdr, getEfspFieldState(bay.facilityId));
+      const r = runwayForStrip({ ...strip, stripType: 'ARRIVAL' }, flightData, getEfspFieldState(bay.facilityId));
       if (r) runwayText = r.end || r.runwayId;
     }
     const sample = finalSampleFor({
-      kind, strip, callsign: fdr && fdr.identity ? fdr.identity.callsign : '', runway: runwayText, track,
+      kind, strip, callsign: flightData && flightData.identity ? flightData.identity.callsign : '', runway: runwayText, track,
       ref: kind === 'CARRIER' ? _carrierReference() : _approachReference(),
       nowS: (typeof missionNow === 'function' ? missionNow() : Date.now()) / 1000,
     });
@@ -250,7 +250,7 @@ function _renderFinal(container, bay) {
     const panel = renderFinalPanel(vm, {
       doc: document,
       onTerminal: ({ id, toState }) => {
-        if (!held.includes(strip.ownerPositionId)) return;
+        if (!signedOn.includes(strip.ownerPositionId)) return;
         const op = finalTerminalOp(kind, { id, toState });
         if (op) _send(strip, op);
       },
@@ -277,8 +277,8 @@ function _renderSfaHeader(container, bay) {
   const mount = _mountPoint(container, bay.bayId);
   if (!view) { _replace(mount, null); return; }
   if (_busy(mount)) return;
-  const held = _heldAt(bay);
-  const rotating = sfaRotatingPosition(held, view);
+  const signedOn = _heldAt(bay);
+  const rotating = sfaRotatingPosition(signedOn, view);
   const box = document.createElement('div');
   box.className = 'efsp-sfa-header';
   box.dataset.bayView = 'sfa-freqs';
@@ -346,8 +346,8 @@ export function renderBayDescriptorView(container, bay) {
 /** The second button beside the NLA on a Strip on an SFA frequency: Rotate to PAR (ADR 0075). */
 export function sfaExtraNlaButtons(strip) {
   if (typeof getEfspSfa !== 'function' || typeof getActingPositions !== 'function') return [];
-  const fdr = typeof getEfspFdr === 'function' ? getEfspFdr(strip.fdrId) : null;
-  if (!sfaRotationOffered(strip, fdr, getActingPositions(strip.facilityId || undefined))) return [];
+  const flightData = typeof getEfspFdr === 'function' ? getEfspFdr(strip.flightDataId) : null;
+  if (!sfaRotationOffered(strip, flightData, getActingPositions(strip.facilityId || undefined))) return [];
   const btn = document.createElement('button');
   btn.className = 'efsp-sbtn efsp-nla-btn efsp-sfa-rotate';
   btn.textContent = SFA_ROTATION_LABEL;

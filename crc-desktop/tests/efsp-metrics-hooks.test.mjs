@@ -28,21 +28,21 @@ const realSetInterval = globalThis.setInterval;
 globalThis.setInterval = (fn, ms, ...args) => { const t = realSetInterval(fn, ms, ...args); if (t && typeof t.unref === 'function') t.unref(); return t; };
 
 const BAYS = [
-  { bayId: 'gnd-pending', positionId: 'GND', facilityId: 'INCIRLIK', rackIds: ['main'] },
-  { bayId: 'gnd-taxi-out', positionId: 'GND', facilityId: 'INCIRLIK', rackIds: ['main'] },
+  { bayId: 'gnd-pending', positionId: 'GC', facilityId: 'INCIRLIK', rackIds: ['main'] },
+  { bayId: 'gc-taxi-out', positionId: 'GC', facilityId: 'INCIRLIK', rackIds: ['main'] },
 ];
 
-function stripFor(stripId, fdrId, bayId) {
+function stripFor(stripId, flightDataId, bayId) {
   return {
-    stripId, cid: '001', fdrId, rev: 1, role: 'DEPARTURE', state: 'PROPOSED',
-    ownerPositionId: 'GND', facilityId: 'INCIRLIK', bayId, rackId: 'main', orderKey: 'V',
+    stripId, cid: '001', flightDataId, rev: 1, stripType: 'DEPARTURE', state: 'PROPOSED',
+    ownerPositionId: 'GC', facilityId: 'INCIRLIK', bayId, rackId: 'main', orderKey: 'V',
     annotations: {}, flags: { offset: false, flipped: false, removeIndicator: false, highlight: null, attention: null },
     correlation: { state: 'UNCORRELATED' }, coordination: null, tofiCoordination: null, airspaceEntry: null,
   };
 }
-function fdrFor(fdrId, callsign) {
+function flightDataFor(flightDataId, callsign) {
   return {
-    fdrId, rev: 1, provenance: {},
+    flightDataId, rev: 1, provenance: {},
     identity: { callsign, beaconAssigned: '0001', trackDegradationFlag: 'NONE' },
     filed: {}, assigned: {}, tofi: {}, airspace: {}, comms: {},
     military: { ordnanceState: 'CLEAN', hookRequired: false, alertStatus: 'NONE', mtr: {} },
@@ -57,7 +57,7 @@ async function mount({ metrics = true } = {}) {
   const reports = [];
   const els = {};
   for (const id of IDS) {
-    els[id] = makeElement(id.endsWith('-btn') ? 'button' : /role|stereo|bind/.test(id) ? 'select' : 'input');
+    els[id] = makeElement(id.endsWith('-btn') ? 'button' : /role|type|stereo|bind/.test(id) ? 'select' : 'input');
   }
   const d = globalThis.document;
   d.getElementById = (id) => els[id] || null;
@@ -77,7 +77,7 @@ async function mount({ metrics = true } = {}) {
   if (!metrics) metricsClient._setEfspMetricsClientForTest(NO_METRICS);
 
   ws.setEfspSender('_sendEfsp', () => {});
-  ws.sendEfspSetPositions('INCIRLIK', ['GND']); // getActingPositions() = ['GND']
+  ws.sendEfspSetPositions('INCIRLIK', ['GC']); // getActingPositions() = ['GC']
   ws.setEfspSender('sendEfspMutation', (actingPositionId, s, op) => { mutations.push({ actingPositionId, stripId: s.stripId, rev: s.rev, op }); return 'mid'; });
   ws.setEfspSender('sendEfspCreateStrip', () => 'mid');
   geojson._setUpdateMapForTest(() => {});
@@ -89,8 +89,8 @@ async function mount({ metrics = true } = {}) {
   ws.setEfspSender('_sendEfsp', (msg) => { if (msg && msg.events) reports.push(msg); });
 
   state.applyEfspSnapshot({
-    strips: [stripFor('s1', 'f1', 'gnd-pending'), stripFor('s2', 'f2', 'gnd-taxi-out')],
-    fdrs: [fdrFor('f1', 'VIPER11'), fdrFor('f2', 'VIPER12')],
+    strips: [stripFor('s1', 'f1', 'gnd-pending'), stripFor('s2', 'f2', 'gc-taxi-out')],
+    flightDataList: [flightDataFor('f1', 'VIPER11'), flightDataFor('f2', 'VIPER12')],
     positions: [], bays: BAYS, airspaces: [], correlations: [], marsa: [],
   });
   panel.initEfspPanel();
@@ -112,7 +112,7 @@ test('a search sends one SEARCH for the active Position and the Bay it was run f
   const events = m.flush();
   assert.equal(events.length, 1);
   assert.equal(events[0].kind, 'SEARCH');
-  assert.equal(events[0].positionId, 'GND');
+  assert.equal(events[0].positionId, 'GC');
   assert.equal(events[0].facilityId, 'INCIRLIK');
   assert.equal(events[0].bayId, 'gnd-pending', 'the source Bay, not the search pseudo-Bay it switches to');
   assert.equal(JSON.stringify(m.reports).includes('VIPER'), false, 'no search text on the wire (T3)');
@@ -121,22 +121,22 @@ test('a search sends one SEARCH for the active Position and the Bay it was run f
 test('a Bay tab click, then a Strip click in it, yields one TIME_TO_FIND', async () => {
   const m = await mount();
   await nextTask();
-  clickEl(bayTab(m, 'gnd-taxi-out'));
+  clickEl(bayTab(m, 'gc-taxi-out'));
   await nextTask(); // a controller's click is a later task
   m.sandbox._selectStrip('s2');
   m.sandbox._selectStrip('s2'); // toggle off
   m.sandbox._selectStrip('s2'); // and on again: still one entry, one sample
   const ttf = m.flush().filter(e => e.kind === 'TIME_TO_FIND');
   assert.equal(ttf.length, 1);
-  assert.equal(ttf[0].bayId, 'gnd-taxi-out');
-  assert.equal(ttf[0].positionId, 'GND');
+  assert.equal(ttf[0].bayId, 'gc-taxi-out');
+  assert.equal(ttf[0].positionId, 'GC');
   assert.ok(Number.isInteger(ttf[0].latencyMs));
 });
 
 test('a map click selecting a Strip in the Bay on screen stops the clock too', async () => {
   const m = await mount();
   await nextTask();
-  clickEl(bayTab(m, 'gnd-taxi-out'));
+  clickEl(bayTab(m, 'gc-taxi-out'));
   await nextTask();
   m.sandbox.selectEfspStripById('s2');
   assert.equal(m.flush().filter(e => e.kind === 'TIME_TO_FIND').length, 1);
@@ -156,18 +156,18 @@ test('each gesture entry point yields one GESTURE with its declared cost', async
   assert.ok(offset, 'the ⋯ menu offers Offset');
   clickEl(offset);
   const gestures = m.flush().filter(e => e.kind === 'GESTURE').map(e => `${e.gesture}=${e.inputs}@${e.positionId}`);
-  assert.deepEqual(gestures.sort(), ['ATTENTION=1@GND', 'FLIP=1@GND', 'HIGHLIGHT=2@GND', 'OFFSET=2@GND']);
+  assert.deepEqual(gestures.sort(), ['ATTENTION=1@GC', 'FLIP=1@GC', 'HIGHLIGHT=2@GC', 'OFFSET=2@GC']);
   assert.equal(m.mutations.length, 4, 'and each dispatched exactly one Mutation');
 });
 
 test('a gesture that does not dispatch is not counted', async () => {
   const m = await mount();
   await nextTask();
-  m.ws.sendEfspSetPositions('INCIRLIK', []); // nothing held: _dispatchGesture declines
+  m.ws.sendEfspSetPositions('INCIRLIK', []); // nothing signedOn: _dispatchGesture declines
   const el = m.sandbox._buildStripEl(strip(m, 's1'));
   fire(el, 'dblclick');
   assert.equal(m.mutations.length, 0);
-  m.ws.sendEfspSetPositions('INCIRLIK', ['GND']);
+  m.ws.sendEfspSetPositions('INCIRLIK', ['GC']);
   assert.equal(m.flush().length, 0);
 });
 
@@ -176,7 +176,7 @@ test('no hook changes what the Strip panel dispatches (T4)', async () => {
     await nextTask();
     m.sandbox._runEfspSearch('VIPER');
     m.sandbox._runEfspSearch('');
-    clickEl(bayTab(m, 'gnd-taxi-out'));
+    clickEl(bayTab(m, 'gc-taxi-out'));
     await nextTask();
     m.sandbox._selectStrip('s2');
     m.sandbox.selectEfspStripById('s1');

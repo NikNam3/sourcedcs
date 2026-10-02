@@ -16,7 +16,7 @@ const { cases } = JSON.parse(fs.readFileSync(path.join(__dirname, '../../crc-syn
 for (const c of cases) {
   test(`time chains (client): ${c.name}`, () => {
     for (const [name, want] of Object.entries(c.expect)) {
-      const got = resolveTimeChain(name, c.fdr);
+      const got = resolveTimeChain(name, c.flightData);
       assert.deepEqual({ valueUtc: got.valueUtc, source: got.source, via: got.via, estimated: got.estimated }, want, name);
     }
   });

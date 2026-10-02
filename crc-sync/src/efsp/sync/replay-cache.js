@@ -15,7 +15,7 @@
 //
 // Idempotency for the non-Board dispatch paths (guide §5.2, docs/adr/0081;
 // L6's F13). BoardStore keeps its own cache inside applyMutation (a forBoard instance); the
-// airspace, correlation, MARSA and field-state paths had none, so a retried
+// airspace, correlation, MARSA and runway-status paths had none, so a retried
 // message was applied and audited a second time — and a retried DeclareMarsa
 // minted a second relation.
 //
@@ -58,7 +58,7 @@ function replayRecord(result, appliedWallAt) {
     routedTo: result.routedTo === undefined ? null : result.routedTo,
     selfCoordinated: result.selfCoordinated === undefined ? null : result.selfCoordinated,
     stripId: result.strip ? result.strip.stripId : null,
-    fdrId: result.fdr ? result.fdr.fdrId : null,
+    flightDataId: result.flightData ? result.flightData.flightDataId : null,
     peerFacilityId: result.peerFacilityId === undefined ? null : result.peerFacilityId,
     peerStripId: result.peerStrip ? result.peerStrip.stripId : null,
     appliedWallAt,

@@ -31,7 +31,7 @@ for (const [k, v] of Object.entries({
 fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, '[]');
 
 const { createEfsp } = await import('../src/efsp/index.js');
-const { crew, DEPARTURE_FDR } = await import('./helpers/efsp-scenario.mjs');
+const { crew, DEPARTURE_FLIGHT_DATA } = await import('./helpers/efsp-scenario.mjs');
 
 const CLIENT_STATE = fs.readFileSync(path.join(import.meta.dirname, '../../crc-desktop/app/public/js/panels/efsp/efsp-state.js'), 'utf8');
 // CMSG: the efsp message handlers moved out of app.js into the registry's modules.
@@ -46,7 +46,7 @@ function fieldsReadBy(src, fnName) {
 }
 
 const efsp = createEfsp();
-const c = crew(efsp, { OPS: 'INCIRLIK', CD: 'INCIRLIK', APP: 'INCIRLIK', CTR: 'CENTER' });
+const c = crew(efsp, { OPS: 'INCIRLIK', CD: 'INCIRLIK', AP: 'INCIRLIK', CTR: 'CENTER' });
 
 test('every field applyEfspSnapshot reads is on a real efsp-snapshot', () => {
   const read = fieldsReadBy(CLIENT_STATE, 'applyEfspSnapshot');
@@ -63,15 +63,15 @@ test('every field applyEfspDelta reads is on a real efsp-board-delta (broadcast 
   assert.ok(read.length >= 4, `scan found ${read}`);
   const result = efsp.handleMessage(c.OPS.session, {
     version: 1, type: 'efsp-mutation', clientMutationId: 'wire-1', facilityId: 'INCIRLIK', actingPositionId: 'OPS',
-    op: { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: DEPARTURE_FDR },
+    op: { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE', flightData: DEPARTURE_FLIGHT_DATA },
   });
   assert.equal(result.ack.ok, true, JSON.stringify(result.ack));
   const delta = slot(result, 'primary');
   assert.equal(delta.type, 'efsp-board-delta');
   const missing = read.filter(f => !(f in delta));
   assert.deepEqual(missing, [], `the client reads delta field(s) the server does not send: ${missing}`);
-  // fdrs.gone rides only an archive sweep (docs/adr/0082): covered by efsp-archiver.test.mjs.
-  for (const [k, sub] of [['strips', ['updated', 'gone']], ['fdrs', ['updated']], ['positions', ['updated']]]) {
+  // flightDataList.gone rides only an archive sweep (docs/adr/0082): covered by efsp-archiver.test.mjs.
+  for (const [k, sub] of [['strips', ['updated', 'gone']], ['flightDataList', ['updated']], ['positions', ['updated']]]) {
     for (const s of sub) assert.ok(s in delta[k], `delta.${k}.${s}`);
   }
 });
@@ -90,7 +90,7 @@ test('every field applyEfspMutationAck and the efsp-mutation-ack case read is on
 
   const ok = efsp.handleMessage(c.OPS.session, {
     version: 1, type: 'efsp-mutation', clientMutationId: 'wire-2', facilityId: 'INCIRLIK', actingPositionId: 'OPS',
-    op: { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: { ...DEPARTURE_FDR, callsign: 'WIRE2' } },
+    op: { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE', flightData: { ...DEPARTURE_FLIGHT_DATA, callsign: 'WIRE2' } },
   }).ack;
   const bad = efsp.handleMessage(c.OPS.session, {
     version: 1, type: 'efsp-mutation', clientMutationId: 'wire-3', facilityId: 'INCIRLIK', actingPositionId: 'OPS',

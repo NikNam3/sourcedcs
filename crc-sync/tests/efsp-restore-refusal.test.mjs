@@ -35,8 +35,8 @@ function savedBoard() {
   const first = createEfsp();
   const c = crew(first, { CTR: 'CENTER' });
   const strip = mustAct(first, c.CTR, 'CTR', null, {
-    kind: 'CreateStrip', bayId: 'ctr-overflight', rackId: 'main', role: 'OVERFLIGHT',
-    fdr: { callsign: 'OLD1', aircraftType: 'A320', wakeCategory: 'M', originAirport: 'LTBA', destinationAirport: 'OJAI' },
+    kind: 'CreateStrip', bayId: 'ctr-overflight', rackId: 'main', stripType: 'OVERFLIGHT',
+    flightData: { callsign: 'OLD1', aircraftType: 'A320', wakeCategory: 'M', originAirport: 'LTBA', destinationAirport: 'OJAI' },
   });
   return { strip, body: JSON.parse(fs.readFileSync(file, 'utf8')) };
 }
@@ -60,7 +60,7 @@ test('an OVERFLIGHT Strip saved as TRANSITING (before docs/adr/0087) stops start
 
 test('the pre-WP4A snapshot shape (a top-level board) stops start-up', () => {
   const { body } = savedBoard();
-  const old = { fdr: body.fdr, board: body.boards.CENTER };
+  const old = { flightData: body.flightData, board: body.boards.CENTER };
   fs.writeFileSync(file, JSON.stringify(old));
   assertRefusedUntouched(() => createEfsp(), /pre-WP4A shape/);
 });
@@ -83,4 +83,34 @@ test('a Strip whose assigned altitude is still a Strip annotation (before docs/a
   saved.annotations = { '7A': { blockId: '7A', entries: [{ value: '350', status: 'ACTIVE', at: 1, by: 'cd' }] } };
   fs.writeFileSync(file, JSON.stringify(body));
   assertRefusedUntouched(() => createEfsp(), new RegExp(`${strip.stripId}.*annotations \\(Block 7A`));
+});
+
+// H88 item 8 / decisions.md S-RENA2: a key the build does not know is an unknown persisted shape. RENAME-A's step 5
+// found a snapshot written before the W7 rename (`fdr`/`fdrs`, Strip `fdrId`/`role`) starting up and serving a
+// half-read Board (Strips with no flight data and no strip type).
+function inOldNames(body) {
+  return JSON.stringify(body)
+    .replaceAll('"flightDataList":', '"fdrs":').replaceAll('"flightData":', '"fdr":')
+    .replaceAll('"flightDataId":', '"fdrId":').replaceAll('"stripType":', '"role":');
+}
+
+test('a snapshot written in the pre-rename names (fdrs, fdrId, role) stops start-up, naming the file and the key', () => {
+  const { body } = savedBoard();
+  fs.writeFileSync(file, inOldNames(body));
+  assertRefusedUntouched(() => createEfsp(), new RegExp(`${file.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} has an unknown key "boards\\.CENTER\\.strips\\[\\]\\.fdrId"`));
+});
+
+test('one unknown key deep in a flight-data record (assigned.releaseState) stops start-up too', () => {
+  const { body } = savedBoard();
+  body.flightData.flightDataList[0].assigned.releaseState = null;
+  fs.writeFileSync(file, JSON.stringify(body));
+  assertRefusedUntouched(() => createEfsp(), /unknown key "flightData\.flightDataList\[\]\.assigned\.releaseState"/);
+});
+
+test('an unknown top-level key stops start-up; the keys the current build writes all restore', async () => {
+  const { body } = savedBoard();
+  const { PERSISTED_SHAPE } = await import('../src/efsp/stores.js');
+  assert.deepEqual(Object.keys(body).sort(), Object.keys(PERSISTED_SHAPE).sort(), 'the shape lists exactly what _persist writes');
+  fs.writeFileSync(file, JSON.stringify({ ...body, fieldStates: [] }));
+  assertRefusedUntouched(() => createEfsp(), /unknown key "fieldStates"/);
 });

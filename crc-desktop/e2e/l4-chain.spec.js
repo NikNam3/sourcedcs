@@ -17,19 +17,19 @@ const { test, expect } = require('./helpers/test');
 const { openPanel, seedStrip, stripByCallsign } = require('./helpers/app');
 
 const FDR = { route: 'DCT', requestedAltitude: 'FL250', departureAirport: 'LTAG', destinationAirport: 'LTAF' };
-const ALL = ['OPS', 'CD', 'GND', 'TWR', 'APP'];
+const ALL = ['OPS', 'CD', 'GC', 'LC', 'AP'];
 
-const stripOf = (cs) => getAllEfspStrips().find((x) => getEfspFdr(x.fdrId).identity.callsign === cs);
+const stripOf = (cs) => getAllEfspStrips().find((x) => getEfspFdr(x.flightDataId).identity.callsign === cs);
 const info = (page, cs) => page.evaluate((cs) => {
-  const s = getAllEfspStrips().find((x) => getEfspFdr(x.fdrId).identity.callsign === cs);
+  const s = getAllEfspStrips().find((x) => getEfspFdr(x.flightDataId).identity.callsign === cs);
   return s && { owner: s.ownerPositionId, bay: s.bayId, state: s.state };
 }, cs);
-const allStates = (page) => page.evaluate(() => Object.fromEntries(getAllEfspStrips().map((s) => [getEfspFdr(s.fdrId).identity.callsign, s.state])));
+const allStates = (page) => page.evaluate(() => Object.fromEntries(getAllEfspStrips().map((s) => [getEfspFdr(s.flightDataId).identity.callsign, s.state])));
 
 async function advance(page, cs, n) {
   for (let i = 0; i < n; i++) {
     const before = (await info(page, cs)).state;
-    await page.evaluate((cs) => _invokeNla(getAllEfspStrips().find((x) => getEfspFdr(x.fdrId).identity.callsign === cs)), cs);
+    await page.evaluate((cs) => _invokeNla(getAllEfspStrips().find((x) => getEfspFdr(x.flightDataId).identity.callsign === cs)), cs);
     await expect.poll(async () => (await info(page, cs)).state, {
       timeout: 3000,
       message: `setup: ${cs} stuck at ${before}: ${await page.locator('#efsp-mutation-error').textContent()}`,
@@ -62,13 +62,13 @@ for (const [label, n, tag] of [['Approve Pushback', 2, 'P'], ['To Runway Queue',
   test(`a double-tap on ${label} moves only the Strip that was tapped`, async ({ page }) => {
     test.setTimeout(120000);
     await page.setViewportSize({ width: 1600, height: 1600 });
-    await openPanel(page, { held: ALL });
+    await openPanel(page, { signedOn: ALL });
 
     for (let attempt = 0; attempt < 3; attempt++) {
       const pair = [`L4${tag}${attempt}A`, `L4${tag}${attempt}B`];
       await page.locator('#efsp-position-tabs .efsp-position-tab[data-position-id="OPS"]').click();
       await page.locator('#efsp-bay-tabs .efsp-bay-tab[data-bay-id="ops-proposed"]').click();
-      for (const c of pair) { await seedStrip(page, { callsign: c, role: 'DEPARTURE', fdr: FDR }); await advance(page, c, n); }
+      for (const c of pair) { await seedStrip(page, { callsign: c, stripType: 'DEPARTURE', flightData: FDR }); await advance(page, c, n); }
       await show(page, pair[0]);
 
       // Tap whichever of ours is higher, so the other is the one that slides up.
@@ -107,12 +107,12 @@ for (const [label, n, tag] of [['Approve Pushback', 2, 'P'], ['To Runway Queue',
 test('an NLA the server will refuse says so before it is pressed', async ({ page }) => {
   test.setTimeout(60000);
   await page.setViewportSize({ width: 1600, height: 1600 });
-  await openPanel(page, { held: ALL });
-  await seedStrip(page, { callsign: 'L4X1', role: 'DEPARTURE', fdr: FDR });
+  await openPanel(page, { signedOn: ALL });
+  await seedStrip(page, { callsign: 'L4X1', stripType: 'DEPARTURE', flightData: FDR });
   await advance(page, 'L4X1', 7); // DEPARTED, next is Hand Off to APP
   // Release APP. Nothing else covers it, so the server will now inhibit.
-  await page.evaluate((h) => window.sendEfspSetPositions('INCIRLIK', h), ALL.filter((p) => p !== 'APP'));
-  await page.waitForFunction(() => !getActingPositions('INCIRLIK').includes('APP'));
+  await page.evaluate((h) => window.sendEfspSetPositions('INCIRLIK', h), ALL.filter((p) => p !== 'AP'));
+  await page.waitForFunction(() => !getActingPositions('INCIRLIK').includes('AP'));
   await show(page, 'L4X1');
   await page.waitForTimeout(500);
 

@@ -38,7 +38,7 @@ function makeElement(tag) {
 }
 
 /** Loads radar-panel.js against stubs, with the coverage state the app would hold. */
-async function load({ radars = [], heldPositions = [] } = {}) {
+async function load({ radars = [], signedOnPositions = [] } = {}) {
   const list = makeElement('div');
   const nodes = { 'radar-active-list': list };
   globalThis.document.getElementById = (id) => nodes[id] || null;
@@ -50,7 +50,7 @@ async function load({ radars = [], heldPositions = [] } = {}) {
   const losPanel = await g.import('panels/los-panel.js');
   // What app.js holds once a `coverage` message has landed.
   app._setCoverageRadars(radars);
-  app._setCoverageHeldPositions(heldPositions);
+  app._setCoverageHeldPositions(signedOnPositions);
   return { sandbox: radarPanel, list, losPanel };
 }
 
@@ -59,7 +59,7 @@ function rowTexts(list) {
 }
 
 test('a controller holding nothing is told to select a Position, not shown an empty box', async () => {
-  const { sandbox, list } = await load({ radars: [], heldPositions: [] });
+  const { sandbox, list } = await load({ radars: [], signedOnPositions: [] });
   sandbox.renderCoverageList();
   assert.equal(list.children.length, 1);
   assert.match(list.children[0].textContent, /No radar coverage/);
@@ -69,47 +69,47 @@ test('a controller holding nothing is told to select a Position, not shown an em
 test('a controller holding only scopeless Positions is told which ones work no scope', async () => {
   const { sandbox, list } = await load({
     radars: [],
-    heldPositions: [
-      { facilityId: 'INCIRLIK', positionId: 'GND', isPrimary: true },
+    signedOnPositions: [
+      { facilityId: 'INCIRLIK', positionId: 'GC', isPrimary: true },
       { facilityId: 'INCIRLIK', positionId: 'CD', isPrimary: true },
     ],
   });
   sandbox.renderCoverageList();
   const text = list.children[0].textContent;
   assert.match(text, /No radar coverage/);
-  assert.match(text, /GND, CD/);
+  assert.match(text, /GC, CD/);
   assert.match(text, /work no scope/, 'two Positions read as plural');
 });
 
 test('one scopeless Position reads as singular', async () => {
   const { sandbox, list } = await load({
     radars: [],
-    heldPositions: [{ facilityId: 'INCIRLIK', positionId: 'GND', isPrimary: true }],
+    signedOnPositions: [{ facilityId: 'INCIRLIK', positionId: 'GC', isPrimary: true }],
   });
   sandbox.renderCoverageList();
-  assert.match(list.children[0].textContent, /GND works no scope/);
+  assert.match(list.children[0].textContent, /GC works no scope/);
 });
 
 test('each radar is listed with its range and the Position that granted it', async () => {
   const { sandbox, list } = await load({
     radars: [
-      { id: 'app:Incirlik', type: 'approach', label: 'LTAG APP', rangeM: 148160, grantedBy: ['APP'] },
-      { id: 'apt:Incirlik', type: 'airport', label: 'LTAG', rangeM: 74080, grantedBy: ['APP', 'TWR'] },
+      { id: 'app:Incirlik', type: 'approach', label: 'LTAG APP', rangeM: 148160, grantedBy: ['AP'] },
+      { id: 'apt:Incirlik', type: 'airport', label: 'LTAG', rangeM: 74080, grantedBy: ['AP', 'LC'] },
     ],
-    heldPositions: [{ facilityId: 'INCIRLIK', positionId: 'APP', isPrimary: true }],
+    signedOnPositions: [{ facilityId: 'INCIRLIK', positionId: 'AP', isPrimary: true }],
   });
   sandbox.renderCoverageList();
 
   assert.equal(list.children.length, 2);
   const rows = rowTexts(list);
   // Sorted by label, so LTAG comes before LTAG APP.
-  assert.deepEqual(rows, ['LTAG|APP/TWR|40nm', 'LTAG APP|APP|80nm']);
+  assert.deepEqual(rows, ['LTAG|AP/LC|40nm', 'LTAG APP|AP|80nm']);
 });
 
 test('a radar whose aircraft is on the ground is marked, not hidden', async () => {
   const { sandbox, list } = await load({
     radars: [{ id: 'crc:11', type: 'awacs', label: 'MAGIC', rangeM: 400000, grantedBy: ['GCI'], onGround: true }],
-    heldPositions: [{ facilityId: 'TACTICAL', positionId: 'GCI', isPrimary: true }],
+    signedOnPositions: [{ facilityId: 'TACTICAL', positionId: 'GCI', isPrimary: true }],
   });
   sandbox.renderCoverageList();
   assert.match(list.children[0].children[0].textContent, /MAGIC GND/);
@@ -118,8 +118,8 @@ test('a radar whose aircraft is on the ground is marked, not hidden', async () =
 
 test('the list is replaced rather than appended to on a re-render', async () => {
   const { sandbox, list } = await load({
-    radars: [{ id: 'apt:X', type: 'airport', label: 'X', rangeM: 74080, grantedBy: ['TWR'] }],
-    heldPositions: [{ facilityId: 'INCIRLIK', positionId: 'TWR', isPrimary: true }],
+    radars: [{ id: 'apt:X', type: 'airport', label: 'X', rangeM: 74080, grantedBy: ['LC'] }],
+    signedOnPositions: [{ facilityId: 'INCIRLIK', positionId: 'LC', isPrimary: true }],
   });
   sandbox.renderCoverageList();
   sandbox.renderCoverageList();
@@ -129,8 +129,8 @@ test('the list is replaced rather than appended to on a re-render', async () => 
 test('hovering a radar row opens its line-of-sight profile', async () => {
   let hovered = null;
   const { sandbox, list, losPanel } = await load({
-    radars: [{ id: 'app:X', type: 'approach', label: 'X APP', rangeM: 148160, grantedBy: ['APP'] }],
-    heldPositions: [{ facilityId: 'INCIRLIK', positionId: 'APP', isPrimary: true }],
+    radars: [{ id: 'app:X', type: 'approach', label: 'X APP', rangeM: 148160, grantedBy: ['AP'] }],
+    signedOnPositions: [{ facilityId: 'INCIRLIK', positionId: 'AP', isPrimary: true }],
   });
   losPanel._setShowLosProfileForTest((radar) => { hovered = radar.id; });
   sandbox.renderCoverageList();
@@ -140,8 +140,8 @@ test('hovering a radar row opens its line-of-sight profile', async () => {
 
 test('refreshRadarPanelData renders the coverage list — the entry point app.js calls', async () => {
   const { sandbox, list } = await load({
-    radars: [{ id: 'apt:X', type: 'airport', label: 'X', rangeM: 74080, grantedBy: ['TWR'] }],
-    heldPositions: [{ facilityId: 'INCIRLIK', positionId: 'TWR', isPrimary: true }],
+    radars: [{ id: 'apt:X', type: 'airport', label: 'X', rangeM: 74080, grantedBy: ['LC'] }],
+    signedOnPositions: [{ facilityId: 'INCIRLIK', positionId: 'LC', isPrimary: true }],
   });
   sandbox.refreshRadarPanelData();
   assert.equal(list.children.length, 1);

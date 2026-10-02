@@ -66,7 +66,7 @@ class BoardPersistence {
    * @param {string} stripId
    * @param {string} reason 'AGE' | 'MISSION_CHANGE'
    * @param {object} [extra] fields added to the audit line (e.g. the session)
-   * @returns {string|null} the Strip's fdrId, or null when it was not a DROPPED Strip here
+   * @returns {string|null} the Strip's flightDataId, or null when it was not a DROPPED Strip here
    */
   archiveStrip(stripId, reason, extra = {}) {
     const strip = this._state.strips.get(stripId);
@@ -77,14 +77,14 @@ class BoardPersistence {
     this._state.logGone(stripId);
     if (this._mutationLog) {
       this._mutationLog.record({
-        clientMutationId: null, op: 'Archive', stripId, fdrId: strip.fdrId || null,
+        clientMutationId: null, op: 'Archive', stripId, flightDataId: strip.flightDataId || null,
         // L26 (decisions.md S-L5) puts facilityId on every Board entry; this
         // line carries it from the start.
         facilityId: this._rules.facilityId || null,
         actingPositionId: null, actorId: 'system', at: this._clock.now(), reason, ...extra,
       });
     }
-    return strip.fdrId || null;
+    return strip.flightDataId || null;
   }
 
   // ── Persistence (durable per ADR 0002 — mission reload must NOT clear this) ──

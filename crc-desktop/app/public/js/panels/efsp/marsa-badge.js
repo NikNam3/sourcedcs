@@ -21,13 +21,13 @@ import { getSelectedEfspStripId } from './bay-view.js';
 //
 // A BADGE, NOT A BLOCK — the same three reasons correlation-highlight.js lists,
 // and they apply harder here. A relation is keyed by its own id and its
-// participants are fdrIds, so there is no Block target kind that could hold it
+// participants are flightDataIds, so there is no Block target kind that could hold it
 // without inventing one whose only member is something no controller types; the
 // reachability test holds only WRITABLE Blocks, so a read-only one would be
 // invisible to the test that exists to catch invisible fields; and the airspace,
 // obligation and correlation badges are all this exact shape already.
 
-// The fdrIds of the other participants in the selected Strip's relation, for
+// The flightDataIds of the other participants in the selected Strip's relation, for
 // rule 5's highlight. Module state rather than a DOM mutation, mirroring
 // correlation-highlight.js's `_correlatedTrackId` — the renderer reads it while
 // building each Strip, so it survives a re-render with no extra bookkeeping.
@@ -95,7 +95,7 @@ export function marsaBadgeFor(strip) {
   const relation = typeof marsaForStrip === 'function' ? marsaForStrip(strip) : null;
   if (!relation) return null;
 
-  const others = relation.participants.filter(id => strip && id !== strip.fdrId);
+  const others = relation.participants.filter(id => strip && id !== strip.flightDataId);
   const withText = others.length === 1 ? 'with 1 other flight' : `with ${others.length} other flights`;
 
   if (relation.state === 'VOIDED') {

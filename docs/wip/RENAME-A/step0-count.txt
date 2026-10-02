@@ -1,0 +1,489 @@
+row op old -> new | cls | A B C D G
+N01 = SEATS -> STAFFED | A | 4 0 0 0 0
+N01 ? seat -> Position | P | 4 2 0 1 0
+N02 = StationCoverage -> PositionCoverage | S | 10 0 0 0 0
+N02 = stationCoverage -> positionCoverage | A | 3 0 0 0 0
+N02 = station-coverage -> position-coverage | S | 5 0 0 1 0
+N02 = efsp-station-coverage -> efsp-position-coverage | A | 0 0 0 0 0
+N02 = crcsync-stationcov- -> crcsync-poscov- | A | 1 0 0 0 0
+N02 ? station -> Position | P | 5 3 0 15 0
+N03 = isOccupied -> isStaffed | S | 119 1 0 0 0
+N03 = _isOccupied -> _isStaffed | A | 5 0 0 0 0
+N03 = occupiedBefore -> staffedBefore | A | 2 0 0 0 0
+N03 = PositionOccupancy -> PositionStaffing | B | 0 1 0 0 0
+N03 = NOT_OCCUPIED -> NOT_STAFFED | W | 2 2 0 0 0
+N03 = UNMANNED -> UNSTAFFED | W | 7 1 0 0 0
+N03 = unmanned -> unstaffed | S | 12 1 0 8 0
+N03 = TWR-occupancy -> LC-staffing | A | 2 0 0 0 0
+N03 = GND-occupancy -> GC-staffing | A | 1 0 0 0 0
+N03 = occupancy-gated -> staffing-gated | A | 6 0 0 1 0
+N03 ? occupied -> staffed | W | 60 10 0 8 655
+N03 ? unoccupied -> unstaffed | A | 20 0 0 7 0
+N03 ? occupancy -> staffing | S | 32 2 0 8 0
+N03 ? OCCUPIED -> STAFFED | A | 5 0 0 0 0
+N03 ? Occupancy -> Staffing | A | 3 0 0 1 0
+N04 = setHeldPositions -> setSignedOnPositions | A | 53 0 0 0 0
+N04 = heldPositions -> signedOnPositions | S | 18 21 0 1 0
+N04 = heldPositionIds -> signedOnPositionIds | S | 2 15 0 0 0
+N04 = coverageHeldPositions -> coverageSignedOnPositions | B | 0 9 0 0 0
+N04 = heldBy -> signedOnBy | A | 4 0 0 0 0
+N04 = actuallyHeld -> actuallySignedOn | A | 3 0 0 0 0
+N04 = heldIds -> signedOnIds | B | 0 8 0 0 0
+N04 = heldFacilities -> signedOnFacilities | B | 0 5 0 0 0
+N04 = heldFacilitiesWithTabs -> signedOnFacilitiesWithTabs | B | 0 2 0 0 0
+N04 = isHeld -> isSignedOn | B | 0 4 0 0 0
+N04 = _heldAt -> _signedOnAt | B | 0 4 0 0 0
+N04 = _heldCarrierIds -> _signedOnCarrierIds | B | 0 4 0 0 0
+N04 = heldHere -> signedOnHere | B | 0 3 0 0 0
+N04 = _atoHeld -> _atoSignedOn | B | 0 4 0 0 0
+N04 = droppedNotHeld -> droppedNotSignedOn | B | 0 3 0 0 0
+N04 = _claim -> _signOn | A | 2 0 0 0 0
+N04 = _release -> _signOff | A | 6 0 0 0 0
+N04 ? held -> signedOn | W | 203 478 0 35 2805
+N05 = coveringChain -> consolidation | W | 30 0 4 0 5
+N05 = _coveringChain -> _consolidation | A | 3 0 0 0 0
+N05 = getCoveringChain -> getConsolidation | A | 19 0 0 0 0
+N05 = COVERING_CHAIN -> CONSOLIDATION | A | 2 0 0 0 0
+N05 = covering-chain -> consolidation | A | 5 0 0 0 0
+N05 = coveringPositionFor -> consolidatedAt | A | 76 0 0 0 0
+N05 = coveringFor -> consolidatedPositions | W | 3 0 0 0 2321
+N05 = coveredFrom -> consolidatedFrom | W | 10 0 0 2 0
+N05 = returnCoveredStrips -> returnConsolidatedStrips | W | 3 0 0 1 2
+N05 = routedToCovering -> routedToConsolidated | W | 10 4 0 0 2
+N05 = coveringStranded -> consolidationStranded | A | 4 0 0 0 0
+N05 = coveringHandedBack -> consolidationHandedBack | A | 4 0 0 0 0
+N05 = 04-covering-lands-in-tab -> 04-consolidated-lands-in-tab | B | 0 1 0 0 0
+N05 ? covering -> consolidated | P | 84 8 0 22 0
+N05 ? covered -> consolidated | P | 23 12 0 7 0
+N06 = CarrierTransfer -> CarrierHandoff | W | 16 4 0 2 10
+N06 = carrierTransfer -> carrierHandoff | W | 39 18 0 1 12
+N06 = carrierTransfers -> carrierHandoffs | A | 6 0 0 0 0
+N06 = CARRIER_TRANSFERS -> CARRIER_HANDOFFS | S | 19 13 0 0 0
+N06 = CARRIER_TRANSFER_EFFECTS -> CARRIER_HANDOFF_EFFECTS | A | 5 0 0 0 0
+N06 = validateCarrierTransfer -> validateCarrierHandoff | A | 20 0 0 0 0
+N06 = canRecordCarrierTransfer -> canRecordCarrierHandoff | A | 15 0 0 0 0
+N06 = _applyCarrierTransfer -> _applyCarrierHandoff | A | 2 0 0 0 0
+N06 = efsp-carrier-transfers -> efsp-carrier-handoffs | A | 0 0 0 0 0
+N06 = data-carrier-transfer -> data-carrier-handoff | B | 0 6 0 0 0
+N06 = efsp-carrier-handover -> efsp-carrier-handoff | B | 0 3 0 0 0
+N06 = 03-two-handover-buttons -> 03-two-handoff-buttons | B | 0 1 0 0 0
+N06 = hand-over -> handoff | W | 18 14 0 2 2
+N06 = hand-overs -> handoffs | S | 7 4 0 3 0
+N06 = Hand-over -> Handoff | B | 0 1 0 0 0
+N06 = handover -> handoff | S | 2 1 0 8 0
+N06 = Handovers -> Handoffs | C | 0 0 0 1 0
+N07 = stca -> conflictAlert | W | 57 32 1 0 205
+N07 = STCA -> CA | S | 11 7 0 9 0
+N07 = StcaMonitor -> ConflictAlertMonitor | A | 8 0 0 0 0
+N07 = stcaMonitor -> conflictAlertMonitor | A | 5 0 0 0 0
+N07 = stcaMax -> conflictAlertMax | A | 3 0 0 0 0
+N07 = stcaChanged -> conflictAlertChanged | A | 2 0 0 0 0
+N07 = stcaRaised -> conflictAlertRaised | A | 2 0 0 0 0
+N07 = _stcaUp -> _conflictAlertUp | A | 2 0 0 0 0
+N07 = conformanceStca -> conformanceConflictAlert | W | 3 0 0 0 961
+N07 = stcaConflictsForTrack -> conflictAlertsForTrack | B | 0 20 0 0 0
+N07 = buildStcaOverlay -> buildConflictAlertOverlay | B | 0 2 0 0 0
+N07 = stcaNode -> conflictAlertNode | B | 0 2 0 0 0
+N07 = stca-paths -> conflict-alert-paths | B | 0 1 0 0 0
+N07 = stca-cpa -> conflict-alert-cpa | B | 0 1 0 0 0
+N07 = stca-cpa-line -> conflict-alert-cpa-line | B | 0 1 0 0 0
+N07 = stca-cpa-label -> conflict-alert-cpa-label | B | 0 1 0 0 0
+N07 = efsp-stca-indicator -> efsp-conflict-alert-indicator | B | 0 1 0 0 0
+N08 = ASACS_DOMAIN -> CRCSYNC_DOMAIN | E | 0 0 6 0 0
+N08 = ASACS_URL -> CRCSYNC_URL | E | 0 0 9 0 0
+N09 = CRC_SYNC_URL -> CRCSYNC_URL | E | 0 14 1 0 0
+N10 = fdrId -> flightDataId | W | 1488 426 0 13 14501
+N10 = fdrIds -> flightDataIds | W | 58 13 0 1 68
+N10 = fdrs -> flightDataList | W | 194 105 0 3 4040
+N10 = fdr -> flightData | W | 1702 905 0 24 1556
+N10 = occupantFdrId -> occupantFlightDataId | W | 8 7 0 2 654
+N10 = existingFdrId -> existingFlightDataId | W | 6 3 0 0 3
+N10 = ArchiveFdr -> ArchiveFlightData | W | 4 0 0 2 1
+N10 = fdrEqual -> flightDataEqual | W | 2 0 0 0 54
+N10 = FDR_PROVISIONAL -> FLIGHT_DATA_PROVISIONAL | W | 2 4 0 0 0
+N10 = FDR -> FLIGHT_DATA | W | 14 20 0 0 0
+N10 = FdrStore -> FlightDataStore | S | 171 0 0 3 0
+N10 = fdr-store -> flight-data-store | S | 82 12 0 5 0
+N10 = efsp-shared-fdr-badge -> efsp-shared-flight-data-badge | B | 0 4 0 0 0
+N10 ~ FDRS -> FLIGHT_DATA_LIST | ~ | 2 13 0 0 0
+N10 ~ FDR_ -> FLIGHT_DATA_ | ~ | 3 0 0 0 0
+N10 ~ _FDR -> _FLIGHT_DATA | ~ | 169 8 0 0 0
+N10 ~ Fdrs -> FlightDataList | ~ | 43 50 0 0 0
+N10 ~ fdrs -> flightDataList | ~ | 35 0 0 1 0
+N10 ~ Fdr -> FlightData | ~ | 699 292 0 9 0
+N10 ~ fdr- -> flight-data- | ~ | 72 12 0 0 0
+N10 ~ fdr -> flightData | ~ | 781 110 0 4 1
+N10 ? FDR -> flight data | P | 471 257 0 48 0
+N10 ? FDRs -> flight data | P | 41 6 0 6 0
+N11 = holdsRole -> holdsStripType | W | 30 0 2 0 6
+N11 = canCreateStripRole -> canCreateStripType | W | 67 2 0 0 14
+N11 = STATES_BY_ROLE -> STATES_BY_STRIP_TYPE | W | 35 12 0 0 1
+N11 = STATE_OWNERS_BY_ROLE -> STATE_OWNERS_BY_STRIP_TYPE | W | 22 15 0 0 1
+N11 = CREATE_ROLE_PERMISSIONS -> CREATE_STRIP_TYPE_PERMISSIONS | W | 23 0 0 0 1
+N11 = NOT_A_ROLE -> NOT_A_STRIP_TYPE | W | 5 1 0 0 0
+N11 = isValidRole -> isValidStripType | A | 27 0 0 0 0
+N11 = roleChange -> stripTypeChange | A | 13 0 0 0 0
+N11 = toRole -> toStripType | A | 10 0 0 0 0
+N11 = fromRole -> fromStripType | A | 7 0 0 0 0
+N11 = createsRoles -> createsStripTypes | A | 10 0 0 1 0
+N11 = byRole -> byStripType | A | 10 2 0 0 5
+N11 = bayHoldsRole -> bayHoldsStripType | A | 8 0 0 0 0
+N11 = roleBay -> stripTypeBay | A | 7 0 0 0 0
+N11 = roleBayIds -> stripTypeBayIds | A | 5 0 0 0 0
+N11 = _roleBayFor -> _stripTypeBayFor | A | 0 0 0 0 0
+N11 = roleOfBay -> stripTypeOfBay | A | 2 0 0 0 0
+N11 = CARRIER_ROLES -> CARRIER_STRIP_TYPES | A | 5 0 0 0 0
+N11 = ATC_ROLES -> ATC_STRIP_TYPES | A | 10 0 0 0 0
+N11 = DEFAULT_INITIAL_STATE_BY_ROLE -> DEFAULT_INITIAL_STATE_BY_STRIP_TYPE | A | 6 0 0 0 0
+N11 = UNCLASSIFIED_ROLE -> UNCLASSIFIED_STRIP_TYPE | A | 3 0 0 0 0
+N11 = CLEARANCE_BLOCKS_BY_ROLE -> CLEARANCE_BLOCKS_BY_STRIP_TYPE | A | 0 0 0 0 0
+N11 = STATE_SETS_BY_ROLE -> STATE_SETS_BY_STRIP_TYPE | A | 2 0 0 0 0
+N11 = COMPUTE_BY_ROLE -> COMPUTE_BY_STRIP_TYPE | A | 2 0 0 0 0
+N11 = efsp-carrier-roles -> efsp-carrier-strip-types | A | 1 0 0 0 0
+N11 = efsp-role-bay- -> efsp-strip-type-bay- | A | 1 0 0 0 0
+N11 = _createStripRoleEl -> _createStripTypeEl | B | 0 13 0 0 0
+N11 = efsp-create-strip-role -> efsp-create-strip-type | B | 0 9 0 0 0
+N11 = efsp-strip-tab-role -> efsp-strip-tab-type | B | 0 5 0 0 0
+N11 = COMPACT_BLOCKS_BY_ROLE -> COMPACT_BLOCKS_BY_STRIP_TYPE | B | 0 7 0 0 0
+N11 = ROLE_ABBR -> STRIP_TYPE_ABBR | B | 0 4 0 0 0
+N11 = MTR_ROLES -> MTR_STRIP_TYPES | B | 0 4 0 0 0
+N11 ? role -> stripType | W | 802 562 0 12 479
+N11 ? Role -> strip type | W | 171 73 0 22 14
+N11 ? roles -> stripTypes | S | 42 7 2 2 0
+N11 ? Roles -> strip types | S | 23 15 0 13 0
+N12 = PeerCoordinationProposal -> InterfacilityCoordinationProposal | W | 2 0 0 0 147
+N12 = PeerCoordinationResponse -> InterfacilityCoordinationResponse | W | 2 0 0 0 119
+N12 = PeerCoordinationCancel -> InterfacilityCoordinationCancel | W | 2 0 0 2 8
+N12 = PeerTofiProposal -> TofiProposal | W | 3 0 0 0 20
+N12 = PeerTofiResponse -> TofiResponse | W | 2 0 0 0 29
+N12 = PeerTofiExitProposal -> TofiExitProposal | W | 2 0 0 0 10
+N13 ? PROPOSED -> INITIATED | W | 109 109 1 9 143
+N14P = runwayStatus -> runwayOpenStatus | S | 0 8 0 0 0
+N14 = efsp-field-state-mutation -> efsp-runway-status-mutation | W | 19 1 0 0 119
+N14 = efsp-field-state-delta -> efsp-runway-status-delta | W | 9 2 0 1 94
+N14 = efsp-field-state-ack -> efsp-runway-status-ack | W | 2 2 0 0 119
+N14 = fieldStates -> runwayStatuses | W | 23 19 0 0 650
+N14 = fieldState -> runwayStatus | W | 132 74 1 2 118
+N14 = fieldStateSeq -> runwayStatusSeq | W | 14 1 0 1 210
+N14 = fieldStateFacilityId -> runwayStatusFacilityId | W | 8 0 0 1 115
+N14 = FIELD_STATE_OP_OWNERS -> RUNWAY_STATUS_OP_OWNERS | W | 29 6 0 0 1
+N14 = ops-field-state -> ops-runway-status | W | 0 2 1 1 4
+N14 = FIELD STATE -> RUNWAY STATUS | U | 0 7 0 6 0
+N14 ~ FIELD_STATE -> RUNWAY_STATUS | ~ | 0 34 0 0 0
+N14 ~ FieldState -> RunwayStatus | ~ | 139 144 0 12 0
+N14 ~ fieldState -> runwayStatus | ~ | 96 65 0 5 0
+N14 ~ field-state -> runway-status | ~ | 61 218 0 18 4
+N14 ~ Field-state -> Runway-status | ~ | 1 0 0 0 0
+N15 ? EFSP State -> strip state | P | 1 0 0 5 0
+N16 = releaseState -> departureRelease | W | 57 1 0 4 0
+N16 = RELEASE_STATES -> DEPARTURE_RELEASE_STATES | A | 2 0 0 0 0
+N16 = WINDOWED_RELEASE_STATES -> WINDOWED_DEPARTURE_RELEASE_STATES | A | 2 0 0 0 0
+N17 = SQUAWK -> BEACON | U | 0 6 0 0 0
+N18 = TWR -> LC | W | 522 218 7 40 1271
+N18 = GND -> GC | W | 294 122 7 26 547
+N18 = APP -> AP | W | 874 251 11 53 2559
+N18 ? TWR -> LC | W | 5 5 0 0 779
+N18 ? GND -> GC | W | 3 2 0 0 170
+N18 ? APP -> AP | W | 27 6 0 2 1392
+N18 = twr-runway-queue -> lc-runway-queue | W | 22 48 1 2 226
+N18 = twr-airborne -> lc-airborne | W | 12 8 1 1 1479
+N18 = twr-arrivals -> lc-arrivals | W | 6 7 1 1 143
+N18 = twr-final -> lc-final | W | 3 3 1 1 974
+N18 = twr-landed -> lc-landed | W | 2 1 1 1 1471
+N18 = twr-coordination -> lc-coordination | W | 4 0 1 1 1891
+N18 = gnd-pushback -> gc-pushback | W | 3 0 1 1 317
+N18 = gnd-taxi-out -> gc-taxi-out | W | 7 35 1 1 1499
+N18 = gnd-taxi-in -> gc-taxi-in | W | 5 1 1 1 108
+N18 = gnd-coordination -> gc-coordination | W | 11 0 1 1 973
+N18 = app-inbound -> ap-inbound | W | 20 22 1 2 2738
+N18 = app-departures -> ap-departures | W | 32 9 1 1 3288
+N18 = app-overflight -> ap-overflight | W | 11 3 1 0 50
+N18 = app-coordination -> ap-coordination | W | 16 11 1 3 553
+N18 = ctr-app-coordination -> ctr-ap-coordination | W | 5 5 1 1 414
+N18 = ctl-twr -> ctl-lc | W | 1 0 0 0 291
+N18 = ctl-gnd -> ctl-gc | W | 1 0 0 0 271
+N18 = ctl-app -> ctl-ap | W | 1 0 0 0 397
+N18 = obs-app -> obs-ap | W | 1 0 0 0 229
+N18 = APP_CTR_ONLY_OP_KINDS -> AP_CTR_ONLY_OP_KINDS | W | 12 0 0 0 1
+N18 = twr-controller -> lc-controller | A | 1 0 0 0 0
+N18 = gnd-controller -> gc-controller | A | 1 0 0 0 0
+N18 = app-controller -> ap-controller | A | 24 1 0 0 0
+N18 = APP_SESSION -> AP_SESSION | A | 4 0 0 0 0
+N18 = gnd-pending -> gc-pending | B | 1 29 0 0 0
+
+LANE TOTALS (occurrences; stems listed separately):
+  A structural: 982
+  A structural (stems): 2150
+  A wire commit: 8518
+  A wire commit (stems): 139
+  B: 176
+  B (stems): 808
+  C code: 30
+  C docs: 417
+  G re-recorded: 47873
+  prose sites (L20 comments; C docs): 1021
+  review sites in area A: 1505
+  review sites in area B: 1269
+  review sites in area C: 3
+
+stem field-state: 57 compounds
+  W field-state 101
+  B field-state-panel 35
+  B field-state-rules 17
+  B field-state-line 10
+  S field-state-store 9
+  B field-state-badge 8
+  B field-state-change 7
+  B field-state-to-end 5
+  B field-state-active 4
+  B field-state-suspension 4
+  B field-state-request 4
+  B field-state-ack-waiting 4
+  B field-state-ack 4
+  B field-state-ack-done 4
+  B field-state-empty 4
+  B field-state-list 4
+  B field-state-runway-id 3
+  B field-state-change-pending 3
+  B field-state-change-rejected 3
+  B field-state-actions 3
+  B field-state-action-btn 3
+  B field-state-active-source 3
+  B field-state-facility 2
+  B field-state-facility-header 2
+  B field-state-facility-id 2
+  B field-state-rev 2
+  B field-state-runway 2
+  B field-state-status-closed 2
+  B field-state-status-suspended-works 2
+  B field-state-status-suspended-inspection 2
+  B field-state-runway-header 2
+  B field-state-ends 2
+  B field-state-end-active 2
+  B field-state-closure 2
+  B field-state-change-head 2
+  B field-state-acks 2
+  B field-state-ack-skipped 2
+  B field-state-gear-none 2
+  B field-state-pads 2
+  B field-state-inspection 2
+  B field-state-gear 2
+  B field-state-pad-constraint 2
+  B efsp-field-state-client 2
+  W field-state-stale 2
+  W field-state-replay 2
+  W field-state-replay-not-holding 2
+  B field-state-status-open 1
+  B field-state-gear-down 1
+  B field-state-gear-out_of_service 1
+  B field-state-status-$ 1
+  B field-state-end$ 1
+  B field-state-gear-$ 1
+  B field-state-pad 1
+  A efsp-scenario-field-state 1
+  A efsp-field-state- 1
+  A efsp-field-state-scn- 1
+  C field-state-drift 1
+
+stem FieldState: 20 compounds
+  A mustFieldStateAct 58
+  S getFieldState 49
+  B getEfspFieldState 48
+  S canActOnFieldState 17
+  B serverFieldState 15
+  B applyEfspFieldStateDelta 13
+  S FieldStateStore 13
+  B renderFieldStatePanel 12
+  B renderFieldStateBoard 12
+  B sendEfspFieldStateMutation 11
+  A broadcastEfspFieldStateDelta 9
+  B getAllEfspFieldStates 8
+  B initFieldStatePanel 7
+  B efspFieldStates 7
+  A validateFieldStateInventory 6
+  B _scrambleFieldStateFor 4
+  B _buildFieldStateSection 2
+  A hasFieldState 2
+  C FieldState 1
+  C standInFieldState 1
+
+stem Fdr: 57 compounds
+  A getFdr 207
+  S createFdr 180
+  B getEfspFdr 150
+  S makeFdr 150
+  S toFdrFiledSeed 35
+  B conformanceAlertsForFdr 18
+  A readyFdr 17
+  B _callsignOfFdr 14
+  S peerFdrId 12
+  A liveStripsForFdr 12
+  A byFdr 12
+  B activeMarsaForFdr 11
+  B otherLiveStripsForFdr 10
+  B mtrFdrWith 10
+  A releaseFdr 9
+  A makeVoidFdr 9
+  B bindFdrId 8
+  A onFdrRetired 8
+  A reacquireFdr 7
+  B _scrambleFdrOf 6
+  A _releaseFdrIfLastStrip 6
+  A seenFdr 6
+  A visibleFdrIdsOf 6
+  B _atoFdr 5
+  S retireMarsaForFdr 5
+  A entryFdr 5
+  A exitFdr 5
+  A archiveFdr 4
+  A stripsByFdr 4
+  A noteFdr 4
+  A freshFdrStore 4
+  B participantFdrIds 3
+  B putFdr 3
+  B makeArrivalFdr 3
+  B mtrFdr 3
+  A _stripsByFdr 3
+  A updatedFdr 3
+  A sfaFdr 3
+  A writtenFdr 3
+  A unknownFdr 3
+  A isFdr 3
+  A departureFdr 3
+  B _liveStripIdsOfFdr 2
+  B _fsFdrRunwayText 2
+  B _selectedBindFdrId 2
+  B makeMissionFdr 2
+  A _existingFdrFor 2
+  A _checkFdrId 2
+  A _liveStripsByFdr 2
+  A _auditFdrIds 2
+  A marsaFdrIds 2
+  A fakeFdrStore 2
+  A firstFdr 2
+  A rampFdrId 2
+  A centerFdr 2
+  A _notWired_liveStripsForFdr 1
+  A trackBelongsToFdr 1
+
+stem fdr: 37 compounds
+  S fdrStore 365
+  S fdrOf 111
+  A fdrSeed 80
+  W _fdrStore 32
+  A fdrResult 32
+  S fdrWith 31
+  A fdrPath 28
+  B fdrDep 24
+  A fdrFiled 24
+  A fdrExists 22
+  A fdrCallsign 17
+  A _fdrExists 16
+  S fdrFor 15
+  B fdrArr 15
+  A fdrForTrack 13
+  B _fdrForTrack 9
+  B fdrWithMtr 9
+  A fdrType 8
+  A fdrIdByLineId 6
+  B fdrRegime 5
+  B fdrEst 4
+  A fdrIdsWithLiveStrips 3
+  A _fdrRunwayText 3
+  A fdrLanding 3
+  B fdrMap 2
+  A fdrById 2
+  A no-such-fdr 2
+  A fdrNoRunway 2
+  A fdrOther 2
+  A fdrA 2
+  A fdrB 2
+  A fdrFlight 2
+  B non-fdr 1
+  A plain-fdr 1
+  A fdrOverrides 1
+  A _fdr 1
+  C fdrId-keyed 1
+
+stem fieldState: 15 compounds
+  A fieldStateStore 39
+  S fieldStateFor 20
+  A fieldStateAct 20
+  B fieldStateActionsFor 19
+  B fieldStateSignatureFor 12
+  B fieldStateAlertsFor 11
+  A fieldStateOverride 11
+  B fieldStateSubjectFor 9
+  B _fieldStateListEl 5
+  B fieldStateViewOf 5
+  B _fieldStateEmptyEl 4
+  A fieldStateOwners 3
+  A fieldStateGrants 3
+  A fieldStateView 3
+  A fieldStateDelta 2
+
+stem Fdrs: 10 compounds
+  B efspFdrs 46
+  A evictMissingFdrs 13
+  S liveFdrs 8
+  A makeStoreWithFdrs 7
+  S scramblingFdrs 4
+  A candidateFdrs 4
+  A mergeFdrs 4
+  A regimeFdrs 3
+  A updatedFdrs 2
+  A extraFdrs 2
+
+stem FIELD_STATE: 7 compounds
+  B FIELD_STATE_ACTION_OWNERS 8
+  B FIELD_STATE_RUNWAY_STRIP_STATES 7
+  B ORDNANCE_NO_FIELD_STATE_REASON 6
+  B FIELD_STATE_GEAR_CHECK_STATES 5
+  B FIELD_STATE_SUSPENSION_LABELS 3
+  B FIELD_STATE_GEAR_TYPE_LABELS 3
+  B FIELD_STATE_STATUS_BADGES 2
+
+stem fdr-: 22 compounds
+  A fdr-1 19
+  S fdr-routed 10
+  A fdr-2 8
+  A fdr-b 5
+  A fdr-low 5
+  S fdr-bound 4
+  A fdr-a 4
+  A fdr-receiver 4
+  S fdr-shell71 2
+  S fdr-viper11 2
+  S fdr-viper12 2
+  A fdr-c 2
+  A fdr-d 2
+  A fdr-e 2
+  A fdr-$ 2
+  A fdr-ghost 2
+  A fdr-abc 2
+  A fdr-def 2
+  A fdr-tanker 2
+  B fdr- 1
+  A efsp-fdr-store-stereo- 1
+  A fdr-hawg01 1
+
+stem _FDR: 4 compounds
+  A DEPARTURE_FDR 167
+  B STRIP_FDR 5
+  B ARR_FDR 3
+  A OVF_FDR 2
+
+stem FDRS: 2 compounds
+  B FDRS 13
+  A NO_FDRS 2
+
+stem fdrs: 3 compounds
+  A _fdrs 26
+  A fdrsGone 6
+  A fdrsUpdated 4
+
+stem FDR_: 1 compounds
+  A CREATE_FDR_SEED_KEYS 3
+
+stem Field-state: 1 compounds
+  A Field-state 1

@@ -67,16 +67,16 @@ facilityConfig.setFacilityConfig({
 const { createEfsp } = await import('../src/efsp/index.js');
 const { crew, mustAct, act, jumpTo, advance } = await import('./helpers/efsp-scenario.mjs');
 
-const ATC = { OPS: 'INCIRLIK', CD: 'INCIRLIK', GND: 'INCIRLIK', TWR: 'INCIRLIK', APP: 'INCIRLIK' };
+const ATC = { OPS: 'INCIRLIK', CD: 'INCIRLIK', GC: 'INCIRLIK', LC: 'INCIRLIK', AP: 'INCIRLIK' };
 
 function fileStereo(efsp, c, callsign, stereoRouteName) {
   return act(efsp, c.OPS, 'OPS', null, {
-    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE',
-    fdr: { callsign, stereoRouteName },
+    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE',
+    flightData: { callsign, stereoRouteName },
   });
 }
 
-function fdrOf(efsp, strip) { return efsp.fdrStore.getFdr(strip.fdrId); }
+function flightDataOf(efsp, strip) { return efsp.flightDataStore.getFlightData(strip.flightDataId); }
 
 // ── 1. the acceptance criterion, walked ──────────────────────────────────
 
@@ -92,14 +92,14 @@ test('SCENARIO a squadron jet files PACK 1 by phone and flies it', async () => {
   assert.equal(ack.ok, true, JSON.stringify(ack));
   let strip = ack.strip;
 
-  const fdr = fdrOf(efsp, strip);
-  assert.equal(fdr.filed.route, PACK_1_ROUTE);
-  assert.equal(fdr.filed.requestedAltitude, '250');
-  assert.equal(fdr.filed.departureAirport, 'LTAG');
-  assert.equal(fdr.filed.destinationAirport, 'LTAG');
-  assert.equal(fdr.filed.remarks, 'squadron standard');
+  const flightData = flightDataOf(efsp, strip);
+  assert.equal(flightData.filed.route, PACK_1_ROUTE);
+  assert.equal(flightData.filed.requestedAltitude, '250');
+  assert.equal(flightData.filed.departureAirport, 'LTAG');
+  assert.equal(flightData.filed.destinationAirport, 'LTAG');
+  assert.equal(flightData.filed.remarks, 'squadron standard');
   // The canonical spelling, not the `PACK1` that was typed.
-  assert.equal(fdr.filed.stereoRouteName, 'PACK 1');
+  assert.equal(flightData.filed.stereoRouteName, 'PACK 1');
 
   // And then it is an entirely ordinary Strip: nothing downstream knows or
   // cares that the FDR came out of a table rather than off a form.
@@ -109,10 +109,10 @@ test('SCENARIO a squadron jet files PACK 1 by phone and flies it', async () => {
   assert.equal(strip.state, 'CLEARED');
   strip = await advance(efsp, c.CD, 'CD', strip);        // -> PUSHBACK at GND
   assert.equal(strip.state, 'PUSHBACK');
-  assert.equal(strip.ownerPositionId, 'GND');
+  assert.equal(strip.ownerPositionId, 'GC');
   // The stereo name survives the whole walk — it is filed intent, and filed
   // intent does not change because a flight taxied.
-  assert.equal(fdrOf(efsp, strip).filed.stereoRouteName, 'PACK 1');
+  assert.equal(flightDataOf(efsp, strip).filed.stereoRouteName, 'PACK 1');
 });
 
 // ── 2. the standing release is for the NAME ──────────────────────────────
@@ -135,10 +135,10 @@ test('SCENARIO the standing release is for the route\'s name, not its text', asy
   // 0017 fallback still matches it, because the envelope predates the table.
   // This is the back-compat guarantee stated as a sortie.
   let byRoute = mustAct(efsp, c.OPS, 'OPS', null, {
-    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE',
-    fdr: { callsign: 'PACK22', route: 'PACK 1', requestedAltitude: '250', departureAirport: 'LTAG', destinationAirport: 'LTAG' },
+    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE',
+    flightData: { callsign: 'PACK22', route: 'PACK 1', requestedAltitude: '250', departureAirport: 'LTAG', destinationAirport: 'LTAG' },
   });
-  assert.equal(fdrOf(efsp, byRoute).filed.stereoRouteName, '');
+  assert.equal(flightDataOf(efsp, byRoute).filed.stereoRouteName, '');
   byRoute = await advance(efsp, c.OPS, 'OPS', byRoute);
   byRoute = jumpTo(efsp, c.CD, 'CD', byRoute, 'CLEARED');
   mustAct(efsp, c.CD, 'CD', byRoute, { kind: 'SetBlock', blockId: '14A', value: 'HOLD_FOR_RELEASE' });
@@ -154,7 +154,7 @@ test('SCENARIO the standing release is for the route\'s name, not its text', asy
   amended = await advance(efsp, c.OPS, 'OPS', amended);
   amended = jumpTo(efsp, c.CD, 'CD', amended, 'CLEARED');
   mustAct(efsp, c.CD, 'CD', amended, { kind: 'SetBlock', blockId: '9', value: 'LTAG DCT DELTA' });
-  assert.equal(fdrOf(efsp, amended).filed.stereoRouteName, '', 'an amended route is no longer the canned one');
+  assert.equal(flightDataOf(efsp, amended).filed.stereoRouteName, '', 'an amended route is no longer the canned one');
   amended = efsp.boardStoreFor('INCIRLIK').getStrip(amended.stripId);
   mustAct(efsp, c.CD, 'CD', amended, { kind: 'SetBlock', blockId: '14A', value: 'HOLD_FOR_RELEASE' });
   amended = efsp.boardStoreFor('INCIRLIK').getStrip(amended.stripId);
@@ -200,7 +200,7 @@ test('SCENARIO a mistyped stereo name creates no Strip and burns no beacon code'
   // have got with no refusals in between.
   const ok = fileStereo(efsp, c, 'PACK33', 'PACK1');
   assert.equal(ok.ok, true);
-  assert.ok(fdrOf(efsp, ok.strip).identity.beaconAssigned);
+  assert.ok(flightDataOf(efsp, ok.strip).identity.beaconAssigned);
 });
 
 // ── 4. deactivation is not retroactive ───────────────────────────────────
@@ -221,9 +221,9 @@ test('SCENARIO retiring a stereo route stops new filings and leaves the flight a
     // The flight already on it is untouched — it is still flying the route it
     // was cleared for, and rewriting history under a taxiing aircraft would
     // be the defect, not the fix.
-    const fdr = fdrOf(efsp, airborne);
-    assert.equal(fdr.filed.stereoRouteName, 'PACK 1');
-    assert.equal(fdr.filed.route, PACK_1_ROUTE);
+    const flightData = flightDataOf(efsp, airborne);
+    assert.equal(flightData.filed.stereoRouteName, 'PACK 1');
+    assert.equal(flightData.filed.route, PACK_1_ROUTE);
 
     // A new filing is refused.
     const late = fileStereo(efsp, c, 'PACK42', 'PACK1');
@@ -251,16 +251,16 @@ test('SCENARIO a stereo name is local symbology and never leaves as the route (�
   let strip = fileStereo(efsp, c, 'PACK51', 'PACK1').strip;
   strip = jumpTo(efsp, c.OPS, 'OPS', strip, 'HANDED_OFF');
   strip = mustAct(efsp, c.OPS, 'OPS', strip, {
-    kind: 'TransferStrip', toPositionId: 'APP', bayId: 'app-departures', rackId: 'main',
+    kind: 'TransferStrip', toPositionId: 'AP', bayId: 'ap-departures', rackId: 'main',
   });
-  const appStrip = mustAct(efsp, c.APP, 'APP', strip, {
+  const appStrip = mustAct(efsp, c.AP, 'AP', strip, {
     kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'CENTER', toPositionId: 'CTR',
   });
   const replica = efsp.boardStoreFor('CENTER').getStrip(appStrip.coordination.peerStripId);
   const accepted = mustAct(efsp, c.CTR, 'CTR', replica, { kind: 'HANDOFF', action: 'ACCEPT' });
 
-  const centerFdr = efsp.fdrStore.getFdr(accepted.fdrId);
-  assert.equal(centerFdr.filed.route, PACK_1_ROUTE, 'CENTER sees the expanded route');
+  const centerFlightData = efsp.flightDataStore.getFlightData(accepted.flightDataId);
+  assert.equal(centerFlightData.filed.route, PACK_1_ROUTE, 'CENTER sees the expanded route');
   // CENTER's Block Map has no 9F at all, so the name is not renderable
   // there even though it rides along on the shared FDR.
   const blockMap = await import('../src/efsp/block-map.js');
@@ -278,7 +278,7 @@ test('SCENARIO "request change to PACK 2" on a taxiing flight keeps its squawk a
   const c = crew(efsp, ATC);
 
   let strip = fileStereo(efsp, c, 'PACK61', 'PACK1').strip;
-  const squawk = fdrOf(efsp, strip).identity.beaconAssigned;
+  const squawk = flightDataOf(efsp, strip).identity.beaconAssigned;
   const cid = strip.cid;
   strip = await advance(efsp, c.OPS, 'OPS', strip);        // -> PENDING_CLEARANCE at CD
   mustAct(efsp, c.CD, 'CD', strip, { kind: 'SetBlock', blockId: '9E', value: 'PPR 1420' });
@@ -286,13 +286,13 @@ test('SCENARIO "request change to PACK 2" on a taxiing flight keeps its squawk a
 
   mustAct(efsp, c.CD, 'CD', strip, { kind: 'SetBlock', blockId: '9F', value: 'pack2' });
 
-  const fdr = fdrOf(efsp, strip);
-  assert.equal(fdr.filed.stereoRouteName, 'PACK 2');
-  assert.equal(fdr.filed.route, PACK_2_ROUTE);
-  assert.equal(fdr.filed.requestedAltitude, '180', 'the new route\'s altitude came with it');
-  assert.equal(fdr.identity.beaconAssigned, squawk, 'the pilot keeps the squawk they were given');
+  const flightData = flightDataOf(efsp, strip);
+  assert.equal(flightData.filed.stereoRouteName, 'PACK 2');
+  assert.equal(flightData.filed.route, PACK_2_ROUTE);
+  assert.equal(flightData.filed.requestedAltitude, '180', 'the new route\'s altitude came with it');
+  assert.equal(flightData.identity.beaconAssigned, squawk, 'the pilot keeps the squawk they were given');
   assert.equal(efsp.boardStoreFor('INCIRLIK').getStrip(strip.stripId).cid, cid);
-  assert.equal(fdr.filed.remarks, 'PPR 1420', 'controller free text survives a re-file');
+  assert.equal(flightData.filed.remarks, 'PPR 1420', 'controller free text survives a re-file');
 });
 
 test('SCENARIO a re-filed flight moves into the NEW route\'s standing-release envelope', async () => {
@@ -334,17 +334,17 @@ test('SCENARIO "request PACK 1" from a flight that filed a plain route the norma
   const c = crew(efsp, ATC);
 
   let strip = mustAct(efsp, c.OPS, 'OPS', null, {
-    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE',
-    fdr: { callsign: 'PACK63', route: 'LTAG DCT WHATEVER', requestedAltitude: '100', departureAirport: 'LTAG' },
+    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE',
+    flightData: { callsign: 'PACK63', route: 'LTAG DCT WHATEVER', requestedAltitude: '100', departureAirport: 'LTAG' },
   });
-  assert.equal(fdrOf(efsp, strip).filed.stereoRouteName, '');
+  assert.equal(flightDataOf(efsp, strip).filed.stereoRouteName, '');
 
   // Still OPS-owned at PROPOSED — §4.4 rule 2 makes every op owner-only.
   mustAct(efsp, c.OPS, 'OPS', strip, { kind: 'SetBlock', blockId: '9F', value: 'PACK1' });
-  const fdr = fdrOf(efsp, strip);
-  assert.equal(fdr.filed.stereoRouteName, 'PACK 1');
-  assert.equal(fdr.filed.route, PACK_1_ROUTE);
-  assert.equal(fdr.filed.requestedAltitude, '250');
+  const flightData = flightDataOf(efsp, strip);
+  assert.equal(flightData.filed.stereoRouteName, 'PACK 1');
+  assert.equal(flightData.filed.route, PACK_1_ROUTE);
+  assert.equal(flightData.filed.requestedAltitude, '250');
 });
 
 test('SCENARIO cancelling a stereo un-labels the flight but leaves it a route to fly', async () => {
@@ -353,19 +353,19 @@ test('SCENARIO cancelling a stereo un-labels the flight but leaves it a route to
   const strip = fileStereo(efsp, c, 'PACK64', 'PACK1').strip;
 
   mustAct(efsp, c.OPS, 'OPS', strip, { kind: 'SetBlock', blockId: '9F', value: '' });
-  const fdr = fdrOf(efsp, strip);
-  assert.equal(fdr.filed.stereoRouteName, '');
-  assert.equal(fdr.filed.route, PACK_1_ROUTE, 'un-labelling must never blank a route mid-taxi');
+  const flightData = flightDataOf(efsp, strip);
+  assert.equal(flightData.filed.stereoRouteName, '');
+  assert.equal(flightData.filed.route, PACK_1_ROUTE, 'un-labelling must never blank a route mid-taxi');
 });
 
 test('SCENARIO a mistyped re-file on a live Strip changes nothing at all', () => {
   const efsp = createEfsp();
   const c = crew(efsp, ATC);
   const strip = fileStereo(efsp, c, 'PACK65', 'PACK1').strip;
-  const before = JSON.stringify(fdrOf(efsp, strip));
+  const before = JSON.stringify(flightDataOf(efsp, strip));
 
   const refused = act(efsp, c.OPS, 'OPS', strip, { kind: 'SetBlock', blockId: '9F', value: 'PACK77' });
   assert.equal(refused.ok, false);
   assert.match(refused.detail, /PACK77 is not a configured stereo route/);
-  assert.equal(JSON.stringify(fdrOf(efsp, strip)), before);
+  assert.equal(JSON.stringify(flightDataOf(efsp, strip)), before);
 });
