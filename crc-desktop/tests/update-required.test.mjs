@@ -25,7 +25,7 @@ test('older client follows the updater: checking, downloading, ready', () => {
 });
 
 test('older client, updater says not available: no update published, link when given', () => {
-  const v = viewFor({ ...older, hasUpdater: true, phase: 'none', downloadUrl: 'https://sourcedcs.page/download' });
+  const v = viewFor({ ...older, hasUpdater: true, phase: 'none', downloadUrl: 'https://sourcedcs.page/download.html' });
   assert.match(v.text, /No update is published yet\. Ask the server admin\./);
   assert.equal(v.button, null);
   assert.equal(v.showLink, true);
