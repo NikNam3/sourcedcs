@@ -109,6 +109,9 @@ function createHost(env, { stateDir }) {
   for (const fid of facilityIds) {
     const bs = efsp.boardStoreFor(fid);
     bs.observeTouches((id) => { touched.push({ fid, id, cause: causeStack.length ? causeStack[causeStack.length - 1] : null }); });
+    // Touches come from the Board's own observeTouches(). The causes below wrap
+    // board-store.js methods by name: _rebalanceRack is a private of the facade
+    // (it delegates to board/placement.js) and the soak depends on that name.
     const wrapCause = (name, cause, onCall) => {
       const orig = bs[name].bind(bs);
       bs[name] = (...args) => {

@@ -5,8 +5,8 @@
 //
 // Own-coalition units whose type is a network participant
 // (sensor-specs.json `datalink.participants`) report themselves — position,
-// callsign, type and altitude — every `pliPeriodMs`, the way Link 16 PPLI
-// does. A controller whose Positions are granted the datalink (the
+// callsign, type and altitude — every `pliPeriodMs`, loosely modelled on a
+// Link 16 PPLI, not a model of one. A controller whose Positions are granted the datalink (the
 // `{kind: 'datalink'}` selector, facility-config.js) sees every participant,
 // radar or no radar.
 //

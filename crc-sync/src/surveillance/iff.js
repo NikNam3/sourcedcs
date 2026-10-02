@@ -3,6 +3,8 @@
 // IFF classification: which side a contact is on, as the scope colours it
 // (docs/adr/0066).
 //
+// [SOURCE-DEFINED] (docs/adr/0066, 0084) — the automatic-IFF rules are ours.
+//
 // The colour is what THIS controller's interrogators got back, never the DCS
 // coalition. A controller's declaration wins; otherwise a datalink report or
 // a valid Mode 4/5 reply is friendly, a Mode 3/C reply alone is neutral, and
@@ -10,7 +12,7 @@
 // those answers — it never sees the track — so it cannot read the coalition.
 //
 // USER_COALITION stays here as "which side's crypto our interrogators hold".
-// Only the sensor model reads it (transponder.js, datalink.js, station
+// Only the sensor model reads it (transponder.js, datalink.js, position
 // coverage), to decide what a contact would transmit; classification never
 // does.
 

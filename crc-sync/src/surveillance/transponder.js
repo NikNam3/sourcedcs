@@ -10,7 +10,8 @@
 //     or the transponder switched off, is no transponder at all.
 //   - An AI aircraft: SRS knows nothing about it, so crc-sync gives it a
 //     synthetic code from the reserved 6000–6777 block, stable for the life
-//     of the unit. Only for the coalitions sensor-specs.json names
+//     of the unit. [SOURCE-DEFINED] (docs/adr/0059): DCS gives an AI aircraft
+//     no transponder, so the block and which coalitions get a code are ours. Only for the coalitions sensor-specs.json names
 //     (`transponder.syntheticFor`) — hostile AI flies with it off.
 //
 // Mode C is implied whenever the transponder is on. We have no real Mode C:

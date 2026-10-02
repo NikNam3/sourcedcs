@@ -36,14 +36,17 @@ const log = require('./log').logger('mission-session');
 
 const FILE_NAME = 'mission-session.json';
 const VERSION = 1;
+// [SOURCE-DEFINED] (docs/adr/0086): how far the mission clock may step back
+// before it counts as a new session.
 const CLOCK_STEP_BACK_MS = 5 * 60 * 1000;
-// lastAt only ever moves forward within a session, and a stale persisted value
-// only makes the step-back test more lenient, so it need not be written on
-// every 5 s poll.
+// Engineering bound, not policy: lastAt only ever moves forward within a
+// session, and a stale persisted value only makes the step-back test more
+// lenient, so it need not be written on every 5 s poll.
 const LAST_AT_PERSIST_MS = 60 * 1000;
 // A clock step seen on a reconnect just BEFORE the mission-load that names a
 // different mission is the same event, not two: the load adopts the
 // fingerprint into the session the step opened instead of opening another.
+// [SOURCE-DEFINED] (docs/adr/0086): the two-minute window for that.
 const CLOCK_ROLL_ADOPT_MS = 2 * 60 * 1000;
 
 const REASONS = Object.freeze(['FIRST', 'MISSION_START', 'MISSION_CHANGED', 'CLOCK_STEP_BACK']);

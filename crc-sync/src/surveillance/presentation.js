@@ -1,6 +1,8 @@
 'use strict';
 
 // What a controller is told about a contact (docs/adr/0059).
+// [SOURCE-DEFINED] (docs/adr/0059, 0066, 0088): which sensor reveals what, and
+// the IFF and scheme rules below, are our model.
 //
 // This is the ONE place that decides it. Everything a client receives about
 // a track comes out of presentTrack(), and nothing else about the track goes
@@ -16,7 +18,7 @@
 //     (caps.mode4)                (crypto) reply
 //   the datalink               -> an own participant's callsign, type and
 //                                 altitude (DATALINK)
-//   correlation                -> the flight's callsign and type, from its FDR
+//   correlation                -> the flight's callsign and type, from its flight data
 //
 // IFF is what the interrogation got back (docs/adr/0066): a declaration,
 // else datalink or a valid Mode 4 reply -> friendly, a Mode 3/C reply ->
@@ -26,8 +28,8 @@
 // runs per session — two controllers can see one contact in two colours.
 //
 // Which scheme draws the contact is per session too (docs/adr/0088, H50): a
-// controller holding no ATC Position sees only the tactical scheme; one
-// holding ATC Positions sees a contact TACTICAL while any of its current
+// controller signed on to no ATC Position sees only the tactical scheme; one
+// signed on to ATC Positions sees a contact TACTICAL while any of its current
 // tactical radars (or the datalink) sees it, and ATC (STARS) otherwise.
 
 const { checkOnGround } = require('../geo');
@@ -44,7 +46,8 @@ const WIRE_KEYS = [
 // How long a tactical radar's last return keeps a contact TACTICAL after the
 // radar has lost it, in that radar's own sweeps (H41 S1's hysteresis). Two,
 // the same look currentRadars() uses, so a contact at the edge of AWACS cover
-// does not flip scheme on every missed sweep.
+// does not flip scheme on every missed sweep. [SOURCE-DEFINED] (docs/adr/0088,
+// H41/H71): the two sweeps are our choice.
 const SCHEME_HOLD_SWEEPS = 2;
 
 function domainOf(track) {
@@ -69,7 +72,7 @@ function currentRadars(radars, at) {
  * @param {Array<{presentation?:string, sweepMs:number, at:number}>} radars this session's radars that saw it
  * @param {number|null} at  the newest return from this session's sensors
  * @param {boolean} datalink  the contact reports on this session's datalink
- * @param {boolean} atcSession  the session holds at least one ATC Position
+ * @param {boolean} atcSession  the session is signed on to at least one ATC Position
  * @returns {'TACTICAL'|'ATC'}
  */
 function schemeOf(radars, at, datalink, atcSession) {
@@ -94,7 +97,7 @@ function schemeOf(radars, at, datalink, atcSession) {
  * @param {{code:string|null, ident:boolean, emergency:string|null}|null} ctx.transponder
  * @param {{weather:object, transitionAltFt:number}} ctx.env
  * @param {object|null} ctx.missionData
- * @param {boolean} [ctx.atcSession]  the session holds an ATC Position (docs/adr/0088)
+ * @param {boolean} [ctx.atcSession]  the session is signed on to an ATC Position (docs/adr/0088)
  * @returns {object|null} the wire track, or null when the controller must not be told about it
  */
 function presentTrack(track, ctx) {

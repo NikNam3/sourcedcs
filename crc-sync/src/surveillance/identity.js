@@ -6,7 +6,7 @@
 // session and lives in presentation.js. This is only the part that does not
 // depend on which radar is looking:
 //
-//   1. correlated to a flight: the flight's callsign, from its FDR — the
+//   1. correlated to a flight: the flight's callsign, from its flight data — the
 //      flight plan is where a callsign comes from in the first place.
 //      PROVISIONAL is flagged, so a doubtful match still looks doubtful.
 //   2. a controller's tag (collab-store rename), for traffic nothing else

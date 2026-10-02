@@ -33,6 +33,8 @@ function createSurveillance({ collab, srs = null, sensorSpecs = null, correlatio
   });
   return {
     transponders, trackNumbers, identity, datalink,
+    // [SOURCE-DEFINED] (docs/adr/0085, H62): with no injected env, i.e. before any
+    // `theater` message, the transition altitude is config/theaters.json's default.
     env: env || (() => ({ weather: {}, transitionAltFt: DEFAULT_TRANSITION_ALT_FT })),
 
     /**

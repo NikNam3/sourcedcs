@@ -46,6 +46,7 @@ def build_callsigns_registry(flights: list[Flight]) -> dict | None:
 
 # DCS tanker unit type → the AR system it offers (registry.tankers[].system).
 # A fact of the airframe, so it is filled from the type; unknown types are left out.
+# (DCS module facts, not from the guide.)
 TANKER_AR_SYSTEM: dict[str, str] = {
     "KC-135":           "BOOM",
     "KC_10_Extender":   "BOOM",

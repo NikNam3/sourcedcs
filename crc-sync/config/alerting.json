@@ -1,5 +1,5 @@
 {
-  "_comment": "Conformance and short-term conflict alert thresholds (docs/adr/0058). Our own choices, not doctrine. Override by placing a copy in state/alerting.json; missing keys fall back to these.",
+  "_comment": "Conformance and Conflict Alert (CA) thresholds (docs/adr/0058). [SOURCE-DEFINED]: our own choices, not doctrine. Override by placing a copy in state/alerting.json; missing keys fall back to these.",
   "conformance": {
     "minGroundSpeedKt": 50,
     "headingToleranceDeg": 5,
