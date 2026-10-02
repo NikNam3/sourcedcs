@@ -46,8 +46,8 @@ export const NLA_LABELS = {
     IN_SECTOR:  'Leaves Sector',
     HANDED_OFF: 'Drop',
   },
-  // [SOURCE-DEFINED] — the guide's own mission lifecycle (guide line 215, under
-  // §3.4's [SOURCE-DEFINED] heading). WP4A second slice, mirroring
+  // [SOURCE-DEFINED] — the guide's own mission lifecycle (the lifecycle list
+  // under §3.4's [SOURCE-DEFINED] heading). WP4A second slice, mirroring
   // authority/strip-types/mission.js's computeMissionNla exactly.
   MISSION: {
     TASKED:      'Airborne',
@@ -150,8 +150,8 @@ export const OVERFLIGHT_STATE_OWNERS = {
   HANDED_OFF: ['AP', 'CTR'],
 };
 
-// [SOURCE-DEFINED] — the guide's own mission lifecycle (guide line 215, under
-// §3.4's [SOURCE-DEFINED] heading). WP4A second slice, mirroring crc-sync's MISSION_STATE_OWNERS (authority/strip-types/mission.js) exactly.
+// [SOURCE-DEFINED] — the guide's own mission lifecycle (the lifecycle list
+// under §3.4's [SOURCE-DEFINED] heading). WP4A second slice, mirroring crc-sync's MISSION_STATE_OWNERS (authority/strip-types/mission.js) exactly.
 // AIC/JTAC deliberately absent — see that module's own comment.
 export const MISSION_STATE_OWNERS = {
   TASKED:      ['TAC_C2', 'GCI'],

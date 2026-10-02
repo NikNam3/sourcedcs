@@ -3,8 +3,8 @@
 // The MISSION strip-type family (authority registry, docs/adr/0095): states,
 // NLA table and state owners.
 
-// [SOURCE-DEFINED] — the guide's own mission lifecycle (guide line 215, under
-// §3.4's [SOURCE-DEFINED] heading; §9.8 names it too). No staffing/
+// [SOURCE-DEFINED] — the guide's own mission lifecycle (the lifecycle list
+// under §3.4's [SOURCE-DEFINED] heading; §9.8 names it too). No staffing/
 // transferTo gating, same reasoning as OVERFLIGHT's own table: TAC_C2/GCI
 // (whichever originated the mission, or received it via a TOFI ENTRY
 // exchange) work its entire lifecycle solo — the cross-Position richness
@@ -13,7 +13,7 @@
 const MISSION_STATES = ['TASKED', 'AIRBORNE', 'ON_STATION', 'OFF_STATION', 'RTB', 'DROPPED'];
 
 // [SOURCE-DEFINED] (WP4A second slice) — MISSION has no guide-published
-// state-ownership table (§9.8 only names the lifecycle, guide line 215);
+// state-ownership table (§9.8 only names the lifecycle, which is §3.4's lifecycle list);
 // mirrors OVERFLIGHT_STATE_OWNERS' "self-originator owns it" precedent —
 // whichever Position originated the mission (CREATE_STRIP_TYPE_PERMISSIONS
 // above) works its entire lifecycle solo. AIC/JTAC deliberately absent:

@@ -507,7 +507,7 @@ function monitors() {
 
 // ---- T5: one Mutation that yields both a peer delta and a MARSA delta (R0 step 1, S-FREEZE) ----------------
 // Dropping the LAST Strip of a flight that is in a MARSA relation and whose Strip is a minted coordination
-// replica: _retireStrip returns marsaChanged and peerStrip together, so the hub sends the primary, peer and MARSA
+// replica: `StripOps#retire` returns marsaChanged and peerStrip together, so the hub sends the primary, peer and MARSA
 // deltas for one Mutation, in that order.
 function peerMarsaOrder() {
   const w = crewWorld(81);

@@ -384,7 +384,7 @@ test('OVERFLIGHT\'s DROPPED has no NLA — a terminal state, same as every other
 
 // ── MISSION lifecycle (WP4A second slice) ────────────────────────────────
 // TASKED -> AIRBORNE -> ON_STATION -> OFF_STATION -> RTB -> DROPPED — the
-// guide's own published lifecycle (§9.8, line 215), not invented. No
+// guide's own published lifecycle (§9.8, §3.4's lifecycle list), not invented. No
 // staffing gating, no transferTo, same shape as OVERFLIGHT's own table:
 // whichever Position originated (or received via TOFI ENTRY) the mission
 // works its entire lifecycle solo.
