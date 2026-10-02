@@ -1,28 +1,27 @@
 'use strict';
 import { getEfspFlightData, getEfspRunwayStatus } from './efsp-state.js';
 
-// Field state on the client (guide §9.7, crc-sync docs/adr/0061, crc-desktop
+// Runway status on the client (guide §9.7, crc-sync docs/adr/0061, crc-desktop
 // docs/adr/0068) — the PURE rules: which runway a Strip uses, what is wrong
 // with it, whether a hook-equipped arrival has arresting gear to land on, and
 // which runway-status buttons a controller is offered.
 //
-// Everything here is a MIRROR of crc-sync's src/efsp/runway-status.js and
-// permission.js, and proactive only: the server decides every op and stamps
+// Everything here is a MIRROR of crc-sync's src/efsp/runway-status.js and its
+// authority tables (authority/positions/civil-atc.js), and proactive only: the server decides every op and stamps
 // every NLA inhibit (`strip.nla.inhibited`). These functions exist so a
 // controller sees a runway problem on a Strip before the NLA does, and is not
 // offered a button that will be refused. A mirror that drifts is worse than
-// none, so tests/efsp-runway-status-client.test.js requires the crc-sync modules
+// none, so tests/efsp-runway-status-client.test.mjs requires the crc-sync modules
 // and runs both over one table of cases.
 //
-// Dual-use: plain function declarations for the browser (classic <script>,
-// shared global scope), and a guarded module.exports block for node --test,
-// efsp-nla.js's pattern. The one function that reads client state,
+// An ES module: the browser and node --test both import its named exports.
+// The one function that reads client state,
 // runwayStatusAlertsFor, takes its lookups as an optional argument so a test
 // can pass fixtures.
 
 // ── the mirrored tables ────────────────────────────────────────────────────
 
-// crc-sync permission.js RUNWAY_STATUS_OP_OWNERS, verbatim (the drift test
+// crc-sync's RUNWAY_STATUS_OP_OWNERS (authority/positions/civil-atc.js), verbatim (the drift test
 // asserts deep equality).
 export const RUNWAY_STATUS_ACTION_OWNERS = {
   CloseRunway:                ['LC'],
@@ -42,7 +41,9 @@ export const RUNWAY_STATUS_ACTION_OWNERS = {
   RejectRunwayChange:         ['OPS', 'AP'],
 };
 
-// Which Strips show a RWY chip (L1b-Q5 (a), decisions.md S-W2A): every Strip
+// [SOURCE-DEFINED] (docs/adr/0068) — which Strips show a RWY chip
+// (L1b-Q5 (a), decisions.md S-W2A; the state set is ours, mirroring runway-status.js's
+// RUNWAY_GATED_STATES): every Strip
 // that will still use the runway, so the controller sees the problem before
 // the NLA does. FINAL is listed although its NLA (-> LANDED) is never held.
 export const RUNWAY_STATUS_RUNWAY_STRIP_STATES = {
@@ -53,7 +54,8 @@ export const RUNWAY_STATUS_RUNWAY_STRIP_STATES = {
 // Where rule 4 (the hook check) applies: an arrival on its way to the runway.
 export const RUNWAY_STATUS_GEAR_CHECK_STATES = ['INBOUND', 'HANDED_TO_TOWER', 'FINAL'];
 
-// The mirror of runway-status.js's SUSPENSION_LABELS (decisions.md H52: the
+// [SOURCE-DEFINED] (decisions.md Q40) — the wording of these suspension labels is
+// ours. The mirror of runway-status.js's SUSPENSION_LABELS (decisions.md H52: the
 // generic "runway works + inspection" suspension).
 const RUNWAY_STATUS_SUSPENSION_LABELS = { WORKS: 'works in progress', RUNWAY_CHANGE: 'runway change in progress' };
 
@@ -117,7 +119,7 @@ function _fsResolveText(view, text) {
 
 /**
  * Which runway a Strip uses (decisions.md S-Q25): the target rack, its rack,
- * its FDR's 8A/8B, the Facility's active end, else null (fail open). The same
+ * its flight data's 8A/8B, the Facility's active end, else null (fail open). The same
  * order, normalisation and `source` names as crc-sync's resolveRunwayForStrip,
  * plus the runway row itself so a caller need not look it up again.
  *
@@ -181,8 +183,8 @@ function _fsGearText(gear) {
 /**
  * Guide §9.7 rule 4: a hook-equipped arrival (`3F`, flightData.military.hookRequired)
  * onto a runway with no usable arresting gear. Computed, never stored: it is
- * derived from two records that already broadcast whole (the FDR and the field
- * state), so it grows no record, alert type or message (docs/adr/0068).
+ * derived from two records that already broadcast whole (the flight data and the runway
+ * status), so it grows no record, alert type or message (docs/adr/0068).
  *
  * decisions.md H57 (L1b-Q1 (a)): it fires ONLY when gear is configured. No
  * inventory — Incirlik ships `arrestingGear: []` (H17: DCS simulates no wires)
@@ -291,7 +293,7 @@ export function runwayStatusAlertsFor(strip, lookups) {
 
 /**
  * What the Strip's runway-status chips depend on, as a string for bay-view.js's
- * render signature: the Strip is rebuilt when it changes. Field state is not
+ * render signature: the Strip is rebuilt when it changes. Runway status is not
  * on the Strip, and the re-stamped `nla` board-delta reaches the client before
  * the runway-status delta, so without this the chip would lag a whole change.
  */
@@ -319,14 +321,21 @@ function _fsOpenChange(change) {
  * The runway-status actions this controller may take, given the Positions they
  * hold at the record's Facility — airspace-panel.js's airspaceActionsFor
  * shape. One entry per (acting Position, op): an action is always sent AS one
- * Position (D21), so a controller holding OPS and APP sees one Ack for each.
+ * Position (D21), so a controller holding OPS and AP sees one Ack for each.
  *
- * Mirrors RUNWAY_STATUS_OP_OWNERS (decisions.md H18/S-L1b: TWR closes, opens and
+ * [SOURCE-DEFINED] (docs/adr/0068) — the button labels (CLOSE, WORKS, WRK DONE,
+ * INSP OK, ACCEPT, REJECT, REQ CLS, REQ WRKS, REQ OPEN, CHG RWY, SELF CHG, ACK,
+ * WITHDRAW, BEGIN, COMPLETE, OPEN) are ours, not the guide's.
+ *
+ * Mirrors RUNWAY_STATUS_OP_OWNERS (decisions.md H18/S-L1b: LC closes, opens and
  * begins works; everyone else asks) and the store's preconditions. Two config
- * values the record does not carry fall back to the permission table's owners:
- * the acknowledger set before a change is proposed (AckRunwayChange's owners)
- * and the inspection authority (CompleteInspection's owners). Both equal
- * Incirlik's config (docs/wip/L1b.md, Findings).
+ * values a record without `runwayChangeAcknowledgers` /
+ * `inspectionAuthorityPositionId` does not carry fall back to the authority
+ * table's owners (the owners-table fallback): the acknowledger set before a
+ * change is proposed (AckRunwayChange's owners) and the inspection authority
+ * (CompleteInspection's owners). Both equal Incirlik's config
+ * (docs/wip/L1b.md, Findings). Both fields are on the wire now; dropping the
+ * fallback is a later UI lane's (S-L26), not a comment change.
  *
  * @returns {{positionId:string, kind:string, label:string, title:string,
  *   runwayId?:string, action?:string, toEnds?:string[], needs?:'reason'|'toEnd'}[]}

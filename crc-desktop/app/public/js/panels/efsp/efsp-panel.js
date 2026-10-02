@@ -38,9 +38,8 @@ export { _dispatchDotCommand } from './panel/dot-commands.js';
 // active tab in its group (the element stays alive in memory — dockview
 // re-attaches the exact same reference later — but document.getElementById
 // stops finding it while detached, per dock.js's own comment on
-// _legacyPanelState). Every other panel in this codebase (e.g.
-// squawk-panel.js's initCallsPanel) already follows this pattern for
-// exactly this reason. This file originally didn't, which meant every
+// _legacyPanelState). Every other panel in this codebase already
+// follows this pattern for exactly this reason. This file originally didn't, which meant every
 // render after the Strip panel tab lost focus silently no-op'd — the
 // "held OPS but panel still says no Position" bug.
 

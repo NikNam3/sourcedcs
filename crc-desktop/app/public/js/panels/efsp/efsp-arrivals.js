@@ -4,7 +4,7 @@
 //
 // No DOM here. efsp-panel.js (tabs, arrivals line) and strip-view.js (the
 // Strip's amber edge and "from" line) read this; app.js feeds it every board
-// delta. Pure enough for efsp-arrivals.test.js to drive directly.
+// delta. Pure enough for efsp-arrivals.test.mjs to drive directly.
 //
 // What counts as an arrival (docs/adr/0057), for a Bay owned by a Position
 // this controller holds:
@@ -71,7 +71,7 @@ export function noteEfspArrivals(before, updated, ctx) {
     if (prev && prev.bayId === strip.bayId) continue;           // it did not move
     // A Strip this controller just made. NOT a coordination/TOFI replica, though: the exchange
     // mints it at the receiving Position, and a controller who holds both ends (UI-A U2: one
-    // person on APP and CTR) is still being told that a proposal has arrived there.
+    // person on AP and CTR) is still being told that a proposal has arrived there.
     if (!prev && !_isMintedReplica(strip) && (!strip.updatedBy || mine.has(strip.updatedBy))) continue;
     const inView = ctx.visibleBayId === strip.bayId;
     const entry = {
@@ -107,7 +107,7 @@ export function efspArrivalFor(stripId, now = Date.now()) {
 /**
  * True exactly once per arrival: the first time the Strip is drawn where the
  * controller can see it. The flash plays on that build and never again — a
- * rebuild for any other reason (another Strip arriving, an FDR change) shows
+ * rebuild for any other reason (another Strip arriving, a flight data change) shows
  * the steady amber edge, not a replay. Also starts the 30 s fade-out clock.
  */
 export function consumeEfspArrivalFlash(stripId, now = Date.now()) {

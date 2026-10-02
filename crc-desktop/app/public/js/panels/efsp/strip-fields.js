@@ -5,9 +5,9 @@
 // _appendExpandedView), which is what makes trimming these lists legal.
 //
 // The layout these feed, and why the lists are per-Position rather than
-// per-Role, is docs/adr/0056.
+// per-strip-type, is docs/adr/0056.
 
-// ── Fallback lists, by Role ────────────────────────────────────────────────
+// ── Fallback lists, by strip type ────────────────────────────────────────────────
 //
 // **The criterion is EDIT FREQUENCY, not interlock-ness.** Every Block is
 // reachable from the expanded view, so reachability cannot be why these earn a
@@ -16,11 +16,11 @@
 // is issued constantly. Every field costs Strip height, and Strip height costs
 // Strips-visible-per-Bay. Keep these lists earned.
 //
-// Used for any (Role, Position) pair COMPACT_BLOCKS_BY_POSITION does not name.
+// Used for any (strip type, Position) pair COMPACT_BLOCKS_BY_POSITION does not name.
 // STATE (25 / M25) is on no list: the Strip's tab header already says it.
 //
-// Filtered by the Role's own Block Map before use (compactBlocksFor), so a
-// Block listed here that a Role does not have is dropped rather than drawn
+// Filtered by the strip type's own Block Map before use (compactBlocksFor), so a
+// Block listed here that a strip type does not have is dropped rather than drawn
 // as an unlabelled field.
 import { BLOCK_MAPS } from './strip-template.js';
 
@@ -32,7 +32,7 @@ export const COMPACT_BLOCKS_BY_STRIP_TYPE = {
   // Heading and initial altitude: the two things a departure clearance issues
   // beyond the route.
   DEPARTURE:  [...COMPACT_BLOCKS_SHARED, '20', '21'],
-  // '7' is the ASSIGNED altitude on this Role (annotation-routed, append-only);
+  // '7' is the ASSIGNED altitude on this strip type (annotation-routed, append-only);
   // the vector is the other constant.
   ARRIVAL:    [...COMPACT_BLOCKS_SHARED, '9A-VECTOR'],
   // '7' stays as the FILED request here; '7A' is the assignment beside it.
@@ -52,31 +52,31 @@ export const COMPACT_BLOCKS_BY_STRIP_TYPE = {
 // ── Per-Position lists ─────────────────────────────────────────────────────
 //
 // What each Position actually works. The rules they follow, so the next edit
-// keeps to them (efsp-strip-fields.test.js holds every one):
+// keeps to them (efsp-strip-fields.test.mjs holds every one):
 //  - TYPE (3) already reads count/type/wake, so ACFT (3A) and WAKE (3B) never
 //    get a field of their own.
 //  - CID (4) and TAIL (3C) are on no Strip: nothing reads either at a glance.
 //  - HOOK (3F) is Tower's alone (carrier control later). ORDNANCE (3G) is on
-//    Tower's and OPS's face always (OPS records the load state, UI-A U1); on APP, CTR and every tactical Position it is on the
+//    Tower's and OPS's face always (OPS records the load state, UI-A U1); on AP, CTR and every tactical Position it is on the
 //    face only once it is set to something other than CLEAN — see
 //    ORDNANCE_WHEN_SET below (decisions.md H55 and S-L12, crc-sync's
 //    docs/adr/0069).
-//  - A runway field only for the airfield Positions: OPS, CD, GND, TWR, APP, and SFA (an approach controller).
-//  - FREQ (22) only where a controller works more than one frequency: APP and
-//    CTR. OPS, CD, GND and TWR each sit on one.
+//  - A runway field only for the airfield Positions: OPS, CD, GC, LC, AP, and SFA (an approach controller).
+//  - FREQ (22) only where a controller works more than one frequency: AP and
+//    CTR. OPS, CD, GC and LC each sit on one.
 //  - The assigned altitude (ALT) wherever a clearance is issued or worked: CD,
-//    TWR, APP, CTR. The assigned heading (HDG) only where aircraft are
-//    vectored: APP and CTR (docs/adr/0058) — a departure clearance rarely
+//    LC, AP, CTR. The assigned heading (HDG) only where aircraft are
+//    vectored: AP and CTR (docs/adr/0058) — a departure clearance rarely
 //    carries one.
 //  - The TOFI fields (IFR, RSVC, SREG) and airspace ownership (24A) where TOFI
-//    and airspace entry happen: CTR. SREG stays at APP too, because MARSA —
-//    which APP can declare — writes it.
-//  - TAXI (17) on GND's face and TAKEOFF (18) on TWR's: the off-block call and the takeoff call are
+//    and airspace entry happen: CTR. SREG stays at AP too, because MARSA —
+//    which AP can declare — writes it.
+//  - TAXI (17) on GC's face and TAKEOFF (18) on LC's: the off-block call and the takeoff call are
 //    what those two Positions receive and type (S-L16 W2, ADR 0073), and neither was on any face.
-//  - RELEASE (14A, the release state) on a DEPARTURE at APP and CTR, because the release
-//    travels CTR -> APP -> TWR (guide §4.6.2) and each of them reads and passes it (UI-A U5).
+//  - RELEASE (14A, the release state) on a DEPARTURE at AP and CTR, because the release
+//    travels CTR -> AP -> LC (guide §4.6.2) and each of them reads and passes it (UI-A U5).
 //  - ALERT (14E) where an alert aircraft is ordered and moved: OPS sets it
-//    (decisions.md H56), and every ground Position shows it: CD, GND, TWR
+//    (decisions.md H56), and every ground Position shows it: CD, GC, LC
 //    (crc-sync docs/adr/0070).
 export const COMPACT_BLOCKS_BY_POSITION = {
   DEPARTURE: {
@@ -92,7 +92,7 @@ export const COMPACT_BLOCKS_BY_POSITION = {
     LC: ['1', '3', '5', '7', '8B', '9A-FUEL', '3F', '3G'],
     AP: ['1', '3', '5', '6', '7', '8A', '8B', '9A-VECTOR', '9A-SPEED', '22', '5A', 'SREG'],
     // SFA (crc-sync docs/adr/0075): the approach controller's list, FREQ included, because a frequency
-    // is the Strip's attribute and the controller rotates onto it (guide §4.7). No SREG: MARSA is APP's.
+    // is the Strip's attribute and the controller rotates onto it (guide §4.7). No SREG: MARSA is AP's.
     SFA: ['1', '3', '5', '6', '7', '8A', '8B', '9A-VECTOR', '9A-SPEED', '22', '5A'],
     CTR: ['1', '3', '5', '6', '7', '9A-VECTOR', '22', '24A', 'IFR', 'RSVC', 'SREG', '5A'],
   },
@@ -110,9 +110,9 @@ function _blockMapFor(stripType) {
 }
 
 /**
- * The fields a Strip of this Role shows when `positionId` owns it, in render
- * order. The per-Position list if there is one, else the Role's; either way
- * only Blocks the Role's Block Map actually has.
+ * The fields a Strip of this strip type shows when `positionId` owns it, in render
+ * order. The per-Position list if there is one, else the strip type's; either way
+ * only Blocks the strip type's Block Map actually has.
  */
 export function compactBlocksFor(stripType, positionId, flightData) {
   const byPosition = COMPACT_BLOCKS_BY_POSITION[stripType];
@@ -131,7 +131,7 @@ export function compactBlocksFor(stripType, positionId, flightData) {
 
 // ── Ordnance (guide §9.5, crc-sync's docs/adr/0069) ────────────────────────
 //
-// A pilot reports hung ordnance to whoever they are talking to, so APP, CTR and
+// A pilot reports hung ordnance to whoever they are talking to, so AP, CTR and
 // every tactical Position may record it (decisions.md H55). A field on every
 // Strip those Positions work would cost Strip height on every flight for a value
 // that is almost always CLEAN, so — as the MTR group does (H51) — ORDNANCE goes
@@ -167,8 +167,8 @@ export function fieldSpanFor(blockId) {
 // [SOURCE-DEFINED] which Positions work MTR traffic (H24 took this default):
 //  - OPS files the flight: designator and entry.
 //  - CD reads the designator into the clearance, nothing else.
-//  - GND and LC: none — ground movement and the runway do not use MTR data.
-//  - APP and CTR release the aircraft into the route and take the call on
+//  - GC and LC: none — ground movement and the runway do not use MTR data.
+//  - AP and CTR release the aircraft into the route and take the call on
 //    exit: the whole group, M11 first. An ARRIVAL is past the route, so its
 //    entry is history and stays in the expanded view.
 //  - MISSION: no MTR Blocks at all. Any Position not named: the expanded view.

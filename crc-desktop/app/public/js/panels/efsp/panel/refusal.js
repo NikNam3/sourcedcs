@@ -6,8 +6,8 @@ import { getEfspFlightData, getEfspStrip } from '../efsp-state.js';
 import { renderAllOpenEfspBays } from '../bay-view.js';
 
 // Rejections that reach here have no other visible surface — a dragged
-// Strip that gets refused (e.g. by board-store.js's bay-implied-state
-// validation: "you can't drop this here, it'd skip a doctrine check")
+// Strip that gets refused (e.g. by crc-sync's bay-implied-state
+// validation (board/placement.js's `validateBayImpliedTransition`): "you can't drop this here, it'd skip a lifecycle check")
 // just silently snaps back to where it was otherwise, indistinguishable
 // from the drag not registering at all. That property is the point of this
 // banner and must survive every change to it.
@@ -62,7 +62,7 @@ function _refusalSentence(reason, detail) {
   return detail || reason || 'Rejected';
 }
 
-/** The callsign on an FDR — what a controller reads off the Strip, and so how a refusal has to name it. */
+/** The callsign on a flight data — what a controller reads off the Strip, and so how a refusal has to name it. */
 export function _callsignOfFlightData(flightDataId) {
   const flightData = flightDataId && typeof getEfspFlightData === 'function' ? getEfspFlightData(flightDataId) : null;
   return (flightData && flightData.identity && flightData.identity.callsign) || '';

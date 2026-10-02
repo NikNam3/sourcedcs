@@ -25,7 +25,7 @@ import { _setActiveBayId, _setActivePositionTab } from './efsp-panel.js';
 // The local rules are shown as "SOURCE practice", never as FAA/USAF doctrine.
 //
 // The pure half below is a hand copy of crc-sync/src/efsp/alert-scramble.js (a
-// browser script cannot load it); efsp-scramble-client.test.js runs both over
+// browser script cannot load it); efsp-scramble-client.test.mjs runs both over
 // one fixture table and requires identical answers. Change them together.
 
 // ── the pure half (mirrors crc-sync's alert-scramble.js) ──────────────────
@@ -100,7 +100,7 @@ function _scrambleLiveStrips() {
 function _scrambleFlightDataOf(flightDataId) {
   return typeof getEfspFlightData === 'function' ? getEfspFlightData(flightDataId) : null;
 }
-/** L1b's client field state when it is loaded (decisions.md T6: never block on it). */
+/** L1b's client runway status when it is loaded (decisions.md T6: never block on it). */
 function _scrambleRunwayStatusFor(facilityId) {
   return typeof getEfspRunwayStatus === 'function' ? getEfspRunwayStatus(facilityId) : null;
 }
@@ -149,9 +149,8 @@ const _seenScrambleStripIds = new Set();
 /**
  * Switches to the Position and Bay holding the Strip when this client holds
  * that Position (the arrivals line's click, efsp-panel.js), then selects it.
- * efsp-panel.js's tab state is a top-level binding of a classic script, so it
- * is reachable here in the browser; guarded so a test sandbox without it
- * simply selects.
+ * the Position lookups come from imported modules; the guards below let a
+ * test sandbox without them simply select.
  */
 function _revealScrambleStrip(stripId) {
   const strip = typeof getEfspStrip === 'function' ? getEfspStrip(stripId) : null;

@@ -2,11 +2,11 @@
 
 // Client mirror of the SFA rotation record (crc-sync docs/adr/0075, 0093; guide
 // §4.7): who is on which of the pool's frequencies. Plain module-level state like
-// carrier-state.js, a guarded module.exports so node:test can require it.
+// carrier-state.js, an ES module that node:test imports directly.
 //
 // The server sends the whole record on every change (`efsp-sfa-delta`) with the
 // pool and the jurisdiction, so this file holds no rule of its own beyond two
-// small drift-tested mirrors of permission.js (who may send the rotation
+// small drift-tested mirrors of crc-sync's authority tables (who may send the rotation
 // transfer, which Position holds jurisdiction). The server is the authority;
 // these only decide what is OFFERED.
 //
@@ -21,7 +21,7 @@ export function applyEfspSfaDelta(msg) { if (msg && msg.sfaRotation) efspSfaView
 export function getEfspSfa() { return efspSfaView; }
 export function _resetEfspSfaStateForTest() { efspSfaView = null; }
 
-// Mirrors of crc-sync permission.js (drift-tested: tests/efsp-sfa-client.test.js).
+// Mirrors of crc-sync's authority/positions/incirlik-military.js (drift-tested: tests/efsp-sfa-client.test.mjs).
 // INCIRLIK_CAPABILITIES' `sendsSfaRotation` column, and SFA_TRANSFERS.SFA_ROTATION's label.
 export const SFA_ROTATION_SENDERS = ['AP', 'SFA'];
 export const SFA_ROTATION_LABEL = 'Rotate to PAR';
@@ -38,7 +38,7 @@ export function sfaRotationRows(view = getEfspSfa()) {
   return view.pool.map(p => ({ rackId: p.rackId, mhz: p.mhz, text: sfaFrequencyText(p.mhz), positionId: rotation[p.rackId] || null }));
 }
 
-/** The held Position that may change the rotation (the jurisdiction Position, inside the ceiling), or null. Pure over `signedOnIds`. */
+/** The signed-on Position that may change the rotation (the jurisdiction Position, inside the ceiling), or null. Pure over `signedOnIds`. */
 export function sfaRotatingPosition(signedOnIds, view = getEfspSfa()) {
   if (!view) return null;
   return (signedOnIds || []).find(id => id === view.jurisdiction && SFA_ROTATION_CEILING.includes(id)) || null;
@@ -51,7 +51,7 @@ export function sfaPoolEntryForFrequency(mhz, view = getEfspSfa()) {
 }
 
 /**
- * Should this Strip carry the rotation button? An ARRIVAL at INBOUND, held by a Position that may send
+ * Should this Strip carry the rotation button? An ARRIVAL at INBOUND, owned by a Position that may send
  * the transfer, that is on an SFA frequency (its working frequency is in the pool; filing a Strip
  * on an SFA Rack assigns it that frequency). A Strip has one NLA (§3.5 rule 1), so this is a second button beside it, as "See you" is.
  */

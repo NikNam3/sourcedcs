@@ -190,7 +190,7 @@ function _renderPattern(container, bay) {
     legs, strips, nowS: (typeof missionNow === 'function' ? missionNow() : Date.now()) / 1000,
     runwayOpenStatus: runway ? (runway.status === 'OPEN' ? 'OPEN' : (runway.status === 'CLOSED' ? 'CLOSED' : 'SUSPENDED')) : undefined,
   });
-  // Only a held Position acts: a read-only board for everyone else.
+  // Only a signed-on Position acts: a read-only board for everyone else.
   const signedOn = _signedOnAt(bay);
   const owner = (stripId) => { const s = getEfspStrip(stripId); return s && signedOn.includes(s.ownerPositionId) ? s : null; };
   const act = (stripId, op) => { const s = owner(stripId); if (s && op) _send(s, { ...op, ...(op.kind === 'MoveStrip' ? { bayId: bay.bayId } : {}) }); };

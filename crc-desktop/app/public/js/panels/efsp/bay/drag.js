@@ -8,13 +8,12 @@ import { _defaultBayFor, _defaultRackFor, _moveStrip, _transferStrip, renderAllO
 
 
 // ── Pointer Events drag ──────────────────────────────────────────────────
-// Named _efspDrag, not _drag — app.js already declares a top-level `let
-// _drag` for the map's label-offset dragging (map-setup.js), and every
-// script here shares one global scope (no bundler, no modules). Reusing
-// `_drag` would redeclare that `let` in a later-loaded script, which is a
-// SyntaxError that kills the ENTIRE script it occurs in — this exact
-// collision (with app.js) previously broke the whole renderer silently
-// (app.js failed to parse, so initDock()/the WS connection never ran).
+// Named _efspDrag, not _drag: app.js declares a top-level `let _drag` for the
+// map's label-offset dragging (map-setup.js). When every script shared one
+// global scope, reusing `_drag` was a SyntaxError that killed the whole
+// renderer silently (app.js failed to parse, so initDock()/the WS connection
+// never ran). Modules have their own scope now; the distinct name stays so a
+// grep for either finds one thing.
 
 export let _efspDrag = null; // { strip, bayId, rackEl, rects, scrollEl, cacheScrollTop, insertionEl, dragEl, dragWidth, lastClientY, dropTargetEl, hasMoved }
 

@@ -58,9 +58,10 @@ export function cachedTopToViewportY(cachedY, scrollTopAtCache, scrollTopNow) {
  * @param {number} pointerY
  * @returns {{index:number, afterStripId:string|null, beforeStripId:string|null}}
  *   afterStripId/beforeStripId feed directly into a MoveStrip/TransferStrip
- *   Mutation's neighbor references (board-store.js resolves the actual
- *   orderKey server-side — see board-store.js's module comment on why the
- *   client never computes a raw orderKey itself).
+ *   Mutation's neighbor references (crc-sync resolves the actual
+ *   orderKey server-side — see board/placement.js's `resolveOrderKey` and the
+ *   board-store.js module comment on why the client never computes a raw
+ *   orderKey itself).
  */
 export function computeInsertionIndex(rects, pointerY) {
   for (let i = 0; i < rects.length; i++) {

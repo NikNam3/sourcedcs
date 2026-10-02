@@ -1,7 +1,7 @@
 'use strict';
 
 // The FINAL component, shared by PAR and the carrier Final lane (EFSPImplementationGuide.md §7.10,
-// docs/adr/0075, built on docs/adr/0064's Role FINAL).
+// docs/adr/0075, built on docs/adr/0064's strip type FINAL).
 //
 // "PAR and the carrier Final controller are the same job." The controller is talking continuously, so
 // the Strip is minimal and glanceable and MUST NOT need data entry during the approach. Everything
@@ -14,15 +14,15 @@
 // REQUIRED (every mile, glidepath interception, decision altitude, trend deviation) are prompted from
 // the track's own movement, and clear themselves.
 //
-// THE TERMINAL EVENT. ADR 0064 left PAR's terminal state to L18: reuse the FINAL Role's own states
-// under neutral labels rather than add a state (nla.js is L17's). "Ball" and "Landing assured" both
+// THE TERMINAL EVENT. ADR 0064 left PAR's terminal state to L18: reuse the FINAL strip type's own states
+// under neutral labels rather than add a state (the FINAL strip type's lifecycle in crc-sync's authority/strip-types/final.js is L17's). "Ball" and "Landing assured" both
 // end the talk-down and go to BALL; "Waveoff" and "Missed approach" both go to BOLTER_WAVEOFF.
 //
 // Pure model first, renderer second, so the model is unit-testable with no DOM and the renderer with
 // the stub in tests/helpers/dom-stub.js.
 
 export const FINAL_CADENCE_S = 5;           // §7.10: "approximately every 5 seconds"
-export const FINAL_PROMPT_HOLD_S = 4;       // a due call stays on screen this long, then clears itself
+export const FINAL_PROMPT_HOLD_S = 4;       // [SOURCE-DEFINED] (docs/adr/0064) a due call stays on screen this long, then clears itself
 export const FINAL_GLIDEPATH_TOL_DEG = 0.3; // [SOURCE-DEFINED] inside this is "on glidepath"
 export const FINAL_TREND_STEP_DEG = 0.1;    // [SOURCE-DEFINED] drifting further out by this much between samples is a trend
 

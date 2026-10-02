@@ -11,12 +11,13 @@ import { _mountPopover, _unmountPopover } from '../popover-portal.js';
 // colour for exceptions" — if both gestures could paint the same colour,
 // a controller scanning the Board couldn't tell which one they're looking
 // at). setHighlight replaces a different active colour in one Mutation and
-// clears on a repeat of the same colour (see efsp-gestures.test.js).
+// clears on a repeat of the same colour (see efsp-gestures.test.mjs).
 //
-// Inputs, counted honestly (S-L15; the comment here used to say the swatch met the
-// one-input ceiling, which it does not: right-click + swatch is TWO). The one-input
-// entry point is Ctrl+click on the Strip, which steps the colour through the swatches
-// and then off (_cycleHighlight). The popover remains for choosing a colour directly.
+// Inputs, counted honestly: the swatch costs 2 inputs (right-click, then a swatch)
+// against guide §7.3's ceiling of 1; accepted for now (S-L15), one-input entry
+// points are a later UI lane's. Ctrl+click on the Strip is the one-input entry
+// point: it steps the colour through the swatches and then off (_cycleHighlight).
+// The popover remains for choosing a colour directly.
 const HIGHLIGHT_SWATCHES = ['yellow', 'cyan', 'lime'];
 
 /** The colour one Ctrl+click moves a Strip to: the next swatch, or (past the last) the last again, which clears it. */

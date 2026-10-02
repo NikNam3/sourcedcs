@@ -20,23 +20,23 @@ export function _isPendingCoordinationReplica(strip) {
   return !!(strip.coordination && strip.coordination.state === 'INITIATED' && strip.bayId.endsWith('-coordination'));
 }
 
-// COORDINATION_ELIGIBLE_STATES (docs/adr/0022) lives in efsp-nla.js, loaded
-// before this file — the established pattern for small doctrinal tables
+// COORDINATION_ELIGIBLE_STATES (docs/adr/0022) lives in efsp-nla.js, imported
+// here — the established pattern for small rule tables
 // that need a server/client drift test (see that module's own comment).
 // Was previously hardcoded to ARRIVAL-only here, which is what made the
 // Coordinate button unreachable for any DEPARTURE Strip — this fix closes
-// both the missing APP->CTR handoff AND the other 4 primitives' same
+// both the missing AP->CTR handoff AND the other 4 primitives' same
 // ARRIVAL-only gate.
 
 /**
  * A Strip may open a NEW coordination proposal only while it has no
- * already-open one (server-enforced too — board-store.js's
- * _applyCoordinationPropose). REJECTED can be retried — but ONLY from the
+ * already-open one (server-enforced too — crc-sync's
+ * `_applyCoordinationPropose`, board/coordination.js). REJECTED can be retried — but ONLY from the
  * SENDER's own Strip, which stays in its normal working Bay the whole time
  * (guide's real flight record). A Strip sitting in a Coordination Bay is
  * always the RECEIVER-side replica/proposal artifact — jurisdiction never
  * actually transferred there even once accepted (accept relocates it OUT
- * of the Coordination Bay, board-store.js's _applyCoordinationAccept), so
+ * of the Coordination Bay, board/coordination.js's `_applyCoordinationAccept`), so
  * one still sitting there (PROPOSED awaiting response, or REJECTED and
  * left inert) is never a legitimate flight record to propose FROM. Bug
  * found in live testing: without this, a rejected receiver-side replica
@@ -99,9 +99,9 @@ export const COORDINATION_PRIMITIVE_LABELS = {
  * Is this Strip the RECEIVER's replica of the exchange, rather than the
  * sender's own flight record?
  *
- * `mintedForCoordination` is board-store.js's authoritative answer and is
- * stamped by receiveCoordinationProposal. The Bay check is the same fallback
- * the server keeps (_isRejectedReplica) for a replica minted before the field
+ * `mintedForCoordination` is the server's authoritative answer and is
+ * stamped by board/coordination.js's `receiveCoordinationProposal`. The Bay
+ * check is the same fallback the server keeps (`isRejectedReplica`, board/strip-ops.js) for a replica minted before the field
  * existed and restored from a persisted Board.
  */
 export function _coordinationIsReplica(strip) {
@@ -114,7 +114,7 @@ export function _coordinationIsReplica(strip) {
 /**
  * F-303: the receiver's copy of a coordination it rejected. It is inert — the
  * sender still works the flight — so it offers nothing but Drop and moving it
- * aside. board-store.js's _rejectedReplicaOpRefusal refuses the rest; this
+ * aside. board/strip-ops.js's `rejectedReplicaOpRefusal` refuses the rest; this
  * keeps the controls that would only be refused off the Strip in the first
  * place. MARSA and correlation are flight-level on the server, so for those
  * two this is the only guard there is.
@@ -193,7 +193,7 @@ export function _openCoordinatePopover(strip, anchorEl) {
 
   // AIT is configuration, not a default (guide §4.6 rule 7, docs/adr/0022)
   // — disabled here rather than letting a PROPOSE submit-and-silently-fail
-  // against the authoritative server-side check in board-store.js.
+  // against the authoritative server-side check in board/coordination.js.
   const aitAuthorized = isAitAuthorizedFor(strip.facilityId);
 
   const select = document.createElement('select');

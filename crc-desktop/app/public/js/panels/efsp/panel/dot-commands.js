@@ -204,7 +204,7 @@ function _marsaStripByCallsign(callsign) {
  * `.stereo <NAME> <CALLSIGN>` — the keyboard half of filing by short name.
  *
  * Shares _createStripOrigin() with the toolbar rather than duplicating the
- * OPS/APP/CTR gate and the combined-Position choice, so the two surfaces can
+ * OPS/AP/CTR gate and the combined-Position choice, so the two surfaces can
  * never disagree about who may originate what.
  *
  * Deliberately does NOT reuse _submitCreateStrip's duplicate-callsign
@@ -278,7 +278,7 @@ function _fileStereoByName(rawName, rawCallsign) {
 // below erased every dot-command error the instant it was written — .bind's
 // "needs a track id" has never once been visible on screen, which made a
 // mistyped .bind indistinguishable from the input not registering at all.
-// Found writing efsp-stereo-panel.test.js; it is the same silent-failure
+// Found writing efsp-stereo-panel.test.mjs; it is the same silent-failure
 // shape the create-strip box's own rejection message was added to close.
 let _dotCommandErrorShown = false;
 

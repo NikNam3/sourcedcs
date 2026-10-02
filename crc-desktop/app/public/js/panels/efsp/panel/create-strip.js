@@ -12,8 +12,7 @@ import { refreshAtoImportButton } from '../ato-import.js';
 // anywhere in this codebase (grepped: zero other uses of prompt/alert/
 // confirm), Electron's support for it is inconsistent across versions/
 // webPreferences, and every other input flow here already uses an inline
-// form (see squawk-panel.js's sqmap-code-input/sqmap-add for the exact
-// pattern this mirrors). A silent no-op from a dialog that doesn't fire is
+// form. A silent no-op from a dialog that doesn't fire is
 // indistinguishable from a broken button — this doesn't have that failure
 // mode, and every rejection path is now visible instead of silent too.
 
@@ -40,7 +39,7 @@ export let _pendingDuplicateCallsign = null;
 // picker until they reloaded the whole app. A snapshot is exactly the event
 // that means "the server you were talking to may not be the one you are
 // talking to now", so it is the right trigger — and it is free, because
-// _refreshStereoRoutes is a no-op re-render when nothing changed.
+// the stereo-route refresh is a no-op re-render when nothing changed.
 export let _stereoRoutes = [];
 let _stereoRoutesInFlight = false;
 
@@ -73,7 +72,7 @@ function _selectedStereoName() {
 }
 
 /**
- * Roles a canned route can seed. DEPARTURE only, matching Block 9F's own
+ * Strip types a canned route can seed. DEPARTURE only, matching Block 9F's own
  * Block-Map placement: ARRIVAL's filed shape is originAirport/arrivalFix/
  * estimatedArrivalTimeUtc, MISSION has no filed route at all, and an
  * OVERFLIGHT by definition did not depart here, so a locally-defined route
@@ -97,19 +96,19 @@ export function _setCreateStripMsg(text, isError) {
 
 // WP4A (docs/adr/0014) started this as CTR self-originating ARRIVAL Strips
 // — the same "no Facility further upstream is built yet" terminus stub
-// OPS/DEPARTURE always had. docs/adr/0023 opens the same right to APP (for
-// ARRIVAL, matching guide §4.1's "all" Strip Roles for APP) and adds
+// OPS/DEPARTURE always had. docs/adr/0023 opens the same right to AP (for
+// ARRIVAL, matching guide §4.1's "all" strip types for AP) and adds
 // OVERFLIGHT for both — real pop-up ATC scenarios (a VFR aircraft picking
 // up an IFR clearance airborne, an aircraft transiting Center's airspace
 // without landing at Incirlik) have no sending Facility to HANDOFF from,
 // so whichever Position takes the call originates the Strip directly.
 //
-// Every (Position, Role) origin this app can ever originate a Strip from —
+// Every (Position, strip type) origin this app can ever originate a Strip from —
 // a flat, exhaustive list rather than a priority order. An earlier version
 // of this picked OPS unconditionally whenever it was held, silently
-// ignoring APP/CTR even if ALSO held — wrong per guide §4.8.1's own
+// ignoring AP/CTR even if ALSO held — wrong per guide §4.8.1's own
 // framing: "under low manning the combined case is the NORMAL case," not
-// an edge case to deprioritize. A controller holding OPS+APP+CTR at once
+// an edge case to deprioritize. A controller holding OPS+AP+CTR at once
 // (entirely plausible under low manning) must be able to originate any of
 // the three, not just whichever this list happened to check first.
 const CREATE_STRIP_ORIGINS = [
@@ -121,8 +120,8 @@ const CREATE_STRIP_ORIGINS = [
   // WP4A second slice — TAC_C2/GCI self-originate a standalone MISSION
   // Strip (guide §9.8), for a mission that never needs to touch ATC-
   // controlled airspace at all. Distinct from a MISSION Strip minted as a
-  // TOFI ENTRY exchange's byproduct (crc-sync's board-store.js
-  // receiveTofiProposal), which shares its FDR with the ATC-side Strip
+  // TOFI ENTRY exchange's byproduct (crc-sync's board/tofi.js
+  // `receiveTofiProposal`), which shares its flight data with the ATC-side Strip
   // instead — both paths coexist, same "origin OR replica" duality
   // DEPARTURE/ARRIVAL Strips already have. GCI has no Tasked/Airborne Bay
   // of its own (guide §4.2 only gives those to TAC_C2 — AIC/GCI get the
@@ -135,7 +134,7 @@ const CREATE_STRIP_ORIGINS = [
 
 function _createStripOriginKey(o) { return `${o.actingPositionId}:${o.stripType || 'DEPARTURE'}`; }
 
-/** Every origin CURRENTLY reachable, given the Positions actually held right now — not a fixed list, since held Positions change live during a session (guide §4.1: "the set changes live during a session"). */
+/** Every origin CURRENTLY reachable, given the Positions actually signed on right now — not a fixed list, since signed-on Positions change live during a session (guide §4.1: "the set changes live during a session"). */
 export function _availableCreateStripOrigins() {
   const signedOn = getActingPositions();
   return CREATE_STRIP_ORIGINS.filter(o => signedOn.includes(o.actingPositionId));
@@ -327,7 +326,7 @@ export function _refreshCreateStripAvailability() {
   if (!origin) {
     _setCreateStripMsg('OPS, AP or CTR only — select one in Panels to create Strips', true);
   } else if (!_pendingCreateStripMutationId) {
-    // Clear a stale "OPS/APP/CTR only"/validation message once one is
+    // Clear a stale "OPS/AP/CTR only"/validation message once one is
     // selected — but never stomp "Creating…" while an attempt is still in
     // flight.
     _setCreateStripMsg('', false);
@@ -338,13 +337,13 @@ export function _refreshCreateStripAvailability() {
  * docs/adr/0023 — converts this DEPARTURE Strip into its return-leg
  * ARRIVAL Strip IN PLACE: one Mutation (`ConvertToArrival`), same stripId,
  * same flightDataId, throughout. Two earlier versions of this feature spawned a
- * SECOND Strip/FDR instead (per guide §3.6's turnaround rule) — abandoned
+ * SECOND Strip/flight data instead (per guide §3.6's turnaround rule) — abandoned
  * after live testing found that approach left a stale departure Strip
  * behind and needed every field copied by hand, including a beacon code
  * that can't even be copied cleanly (flight-data-store.js's createFlightData always
- * auto-allocates a fresh one). Reusing the same FDR makes both problems
+ * auto-allocates a fresh one). Reusing the same flight data makes both problems
  * structurally impossible — there's nothing to copy, because nothing new
- * is created. `board-store.js`'s `_applyConvertToArrival` is authoritative
+ * is created. crc-sync's `_applyConvertToArrival` (board/ops/convert-to-arrival.js) is authoritative
  * for the state/role/Bay/permission rules; this just sends the Mutation.
  */
 export function convertStripToArrival(strip) {

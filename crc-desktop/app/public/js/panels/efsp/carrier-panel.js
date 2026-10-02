@@ -26,7 +26,7 @@ import { _showMutationError } from './efsp-panel.js';
 // one `Move`), and the other things the Marshal types (Charlie time, the
 // marshal radial, the Case I altitude) are inputs, never results.
 
-// Client mirror of permission.js's CARRIER_CAPABILITIES (drift-tested). A UX
+// Client mirror of crc-sync's CARRIER_CAPABILITIES (authority/positions/carrier.js, read through permission.js) (drift-tested). A UX
 // convenience: the server's predicates are the authority.
 export const CARRIER_CAPABILITIES = {
   CV_MARSHAL: { setsCase: false, sequencesStack: true,  editsShipInput: true },
@@ -37,7 +37,7 @@ export const CARRIER_CAPABILITIES = {
 export const CARRIER_POSITION_IDS = Object.keys(CARRIER_CAPABILITIES);
 const CARRIER_CASES = ['I', 'II', 'III'];
 
-/** The held CV Position that has this capability, or null. Pure over `signedOnIds`. */
+/** The signed-on CV Position that has this capability, or null. Pure over `signedOnIds`. */
 export function carrierActingFor(capability, signedOnIds) {
   for (const id of signedOnIds || []) {
     if (CARRIER_CAPABILITIES[id] && CARRIER_CAPABILITIES[id][capability]) return id;
@@ -66,7 +66,7 @@ function _sendCarrier(capability, op) {
 
 // ── The ship banner and the Case selector ─────────────────────────────────
 
-/** Draws the banner into #efsp-carrier-banner when this controller holds a carrier Position; hides it otherwise. */
+/** Draws the banner into #efsp-carrier-banner when this controller is signed on at a carrier Position; hides it otherwise. */
 export function renderCarrierBanner() {
   const root = typeof document !== 'undefined' ? document.getElementById('efsp-carrier-banner') : null;
   if (!root) return;

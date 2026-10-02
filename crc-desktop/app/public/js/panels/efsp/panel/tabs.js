@@ -47,7 +47,7 @@ function _positionsWithBays() {
  * other Positions at the same Facilities as DROP TARGETS ONLY.
  *
  * A tab is what carries the drop-position dataset attribute bay-view.js
- * hit-tests during a drag, and only held Positions ever got one — so a
+ * hit-tests during a drag, and only signed-on Positions ever got one — so a
  * controller holding a single Position had nothing to drag a handoff onto.
  * It worked in testing only because test sessions hold several Positions at
  * once and self-coordinate. The server never required the sender to hold the
@@ -63,7 +63,7 @@ function _positionsWithBays() {
  * Pure so it can be tested without a DOM; the render below is what is not.
  * @param {Array<{bayId:string, positionId:string, facilityId:string}>} bays
  * @param {string[]} signedOnPositionIds
- * @returns {Array<{positionId:string, facilityId:string, signedOn:boolean, bays:Array}>} held Positions first
+ * @returns {Array<{positionId:string, facilityId:string, signedOn:boolean, bays:Array}>} signed-on Positions first
  */
 // UI-A (S-L23 finding, H59): the JTAC's UI shows only what a JTAC knows, i.e. the lines TAC_C2 has
 // handed it. A drop-only tab for TAC_C2, AIC or GCI shows those Positions exist, so a controller
@@ -78,7 +78,7 @@ export function computePositionTabs(bays, signedOnPositionIds) {
     if (!signedOn.has(b.positionId)) continue;
     signedOnFacilities.add(b.facilityId);
   }
-  // A Facility where every held Position is a "no drop tabs" one offers no other Position's tab.
+  // A Facility where every signed-on Position is a "no drop tabs" one offers no other Position's tab.
   for (const facilityId of [...signedOnFacilities]) {
     const signedOnHere = [...new Set((bays || []).filter(b => b.facilityId === facilityId && signedOn.has(b.positionId)).map(b => b.positionId))];
     if (signedOnHere.length > 0 && signedOnHere.every(p => HOLDS_ONLY_NO_DROP_TABS.includes(p))) signedOnFacilities.delete(facilityId);

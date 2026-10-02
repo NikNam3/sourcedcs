@@ -1,9 +1,9 @@
 // The Strip's face: Layout C (docs/adr/0056).
 //
 //   ┌──────────── tab ────────────┬──────────── main ─────────────┬ tools ┐
-//   │ DEP · HANDED OFF            │ CALLSIGN  TYPE  SQUAWK  …      │  ⋯     │
+//   │ DEP · HANDED OFF            │ CALLSIGN  TYPE  BEACON  …      │  ⋯     │
 //   │ ── one row per exchange ──  │ [TRK] [MARSA] [TOFI] …         │  ▼     │
-//   │ HANDOFF ← APP  [Rej][Acc]   │ ▲ reason, a full line          │  ✕     │
+//   │ HANDOFF ← AP   [Rej][Acc]   │ ▲ reason, a full line          │  ✕     │
 //   │ ── next step ──  [ NLA ]    │ (expanded view)                │        │
 //   └─────────────────────────────┴───────────────────────────────┴────────┘
 //
@@ -15,10 +15,10 @@
 //   indicators  standing state, always drawn, lit or dim, never clickable
 //   tools       ⋯ ▼ ✕
 //
-// Loaded after bay-view.js and called from its _buildStripEl. Everything here
-// is a function declaration in the shared script scope, so it reads bay-view.js's
-// gates (_canProposeTofiEntry and friends) and state at call time, and those
-// gates stay where efsp-coordination-client.test.js's drift checks find them.
+// Called from bay-view.js's _buildStripEl; bay-view.js and this file import each
+// other, so what they share is read at call time. bay-view.js's gates
+// (_canProposeTofiEntry and friends) stay where
+// efsp-coordination-client.test.mjs's drift checks find them.
 
 import { missionNow } from '../topbar.js';
 import {
@@ -428,7 +428,7 @@ function _buildStripFields(strip) {
 // place: the left end of the row.
 export const INDICATOR_ORDER = ['conflictAlert', 'conf', 'rwy', 'gear', 'ord', 'scram', 'trk', 'marsa', 'tofi', 'airspace', 'timer', 'siblings'];
 // Keys whose chips come from _stripAlerts (warnings first, left end of the row). rwy/gear:
-// field state (docs/adr/0068); ord: hung ordnance (0069); scram: alert/scramble (0070).
+// Runway status (docs/adr/0068); ord: hung ordnance (0069); scram: alert/scramble (0070).
 export const ALERT_SLOT_KEYS = new Set(['conflictAlert', 'conf', 'rwy', 'gear', 'ord', 'scram']);
 
 const _pad3 = (n) => String(Math.round(n)).padStart(3, '0');

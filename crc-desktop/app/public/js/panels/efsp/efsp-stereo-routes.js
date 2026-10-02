@@ -21,7 +21,7 @@ import { renderAllOpenEfspBays } from './bay-view.js';
 // This list is the picker's option source only, never the authority. The
 // server resolves the short name again at CreateStrip and refuses one it
 // does not know, so a stale client list can cause a visible rejection but
-// never a wrong FDR.
+// never a wrong flight data.
 
 export const STEREO_ROUTES_CLIENT_TIMEOUT_MS = 4000;
 
@@ -45,7 +45,7 @@ export function cachedStereoRoutesClient() {
  * signature (bay-view.js's _stripRenderSignature), so a Strip drawn before the
  * list landed is rebuilt with the picker once it does. Without it the first
  * render after a page load or a crc-sync restart, which always beats the
- * fetch, left every Strip's 9F as "no stereo routes configured" until its FDR
+ * fetch, left every Strip's 9F as "no stereo routes configured" until its flight data
  * next changed.
  */
 export function stereoRoutesCacheKey() {
