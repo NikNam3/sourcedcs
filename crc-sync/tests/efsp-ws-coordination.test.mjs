@@ -77,7 +77,7 @@ function createCtrStripMsg(overrides = {}) {
 }
 
 const CTR_SESSION = { controllerId: 'ctr-controller', who: 'Ctr1' };
-const APP_SESSION = { controllerId: 'app-controller', who: 'App1' };
+const AP_SESSION = { controllerId: 'ap-controller', who: 'App1' };
 
 // A real client sends efsp-set-positions before it ever mutates, and
 // efsp-ws.js now requires the acting Position to be one the sending session
@@ -113,7 +113,7 @@ test('a message with an unknown facilityId is rejected, not a throw', () => {
 test('CTR originates an ARRIVAL Strip, proposes HANDOFF to APP, and APP accepts it — full round trip through handleMessage with facilityId routing', () => {
   const ctx = makeCtx();
   holding(ctx, CTR_SESSION, 'CENTER', ['CTR']);
-  holding(ctx, APP_SESSION, 'INCIRLIK', ['APP']);
+  holding(ctx, AP_SESSION, 'INCIRLIK', ['APP']);
 
   const created = handleMessage(ctx, CTR_SESSION, createCtrStripMsg(), noopPersist);
   assert.equal(created.ack.ok, true, JSON.stringify(created.ack));
@@ -151,7 +151,7 @@ test('CTR originates an ARRIVAL Strip, proposes HANDOFF to APP, and APP accepts 
     facilityId: 'INCIRLIK', actingPositionId: 'APP', stripId: receiverStripId, baseRev: receiverStrip.rev,
     op: { kind: 'HANDOFF', action: 'ACCEPT' },
   };
-  const accepted = handleMessage(ctx, APP_SESSION, acceptMsg, noopPersist);
+  const accepted = handleMessage(ctx, AP_SESSION, acceptMsg, noopPersist);
   assert.equal(accepted.ack.ok, true, JSON.stringify(accepted.ack));
   assert.equal(accepted.ack.strip.bayId, 'app-inbound');
   assert.equal(accepted.ack.strip.state, 'INBOUND');
@@ -251,7 +251,7 @@ test('a snapshot includes every Facility\'s Bays, each correctly stamped', async
 test('a coordination proposal that rebalances the peer\'s coordination Rack puts the re-keyed peer Strips in peerBroadcast', () => {
   const ctx = makeCtx();
   holding(ctx, CTR_SESSION, 'CENTER', ['CTR']);
-  holding(ctx, APP_SESSION, 'INCIRLIK', ['APP']);
+  holding(ctx, AP_SESSION, 'INCIRLIK', ['APP']);
   const propose = (strip) => handleMessage(ctx, CTR_SESSION, {
     version: 1, type: 'efsp-mutation', clientMutationId: crypto.randomUUID(),
     facilityId: 'CENTER', actingPositionId: 'CTR', stripId: strip.stripId, baseRev: strip.rev,

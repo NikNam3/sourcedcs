@@ -41,7 +41,7 @@ const CALL_FOR_RELEASE_AFTER_MINUTES = 1;   //           / + 1 min
 // release travels controller-to-controller CTR->APP->TWR, per that
 // section's own text). The original four are unchanged/still Phase-2-only
 // reachable without WP4A at all.
-const RELEASE_STATES = new Set(['RELEASED', 'HOLD_FOR_RELEASE', 'RELEASE_TIME', 'CLEARANCE_VOID_TIME', 'EDCT', 'CALL_FOR_RELEASE']);
+const DEPARTURE_RELEASE_STATES = new Set(['RELEASED', 'HOLD_FOR_RELEASE', 'RELEASE_TIME', 'CLEARANCE_VOID_TIME', 'EDCT', 'CALL_FOR_RELEASE']);
 const DEGRADATION_STATES = new Set(['NONE', 'TRANSPONDER_FAILED', 'MODE_C_FAILED']);
 const DATALINK_INDICATOR_STATES = new Set(['NONE', 'ISSUED']);
 // WP4A (docs/adr/0019) — guide §4.6 rule 5's track-degradation flags, which
@@ -729,7 +729,7 @@ class FlightDataStore {
     if (path === 'identity.degradation' && !DEGRADATION_STATES.has(value)) {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: 'invalid degradation state' };
     }
-    if (path === 'assigned.releaseState' && !RELEASE_STATES.has(value)) {
+    if (path === 'assigned.releaseState' && !DEPARTURE_RELEASE_STATES.has(value)) {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: 'invalid release state' };
     }
     if (path === 'assigned.datalinkClearanceIndicator' && !DATALINK_INDICATOR_STATES.has(value)) {

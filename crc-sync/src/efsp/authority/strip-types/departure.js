@@ -104,7 +104,7 @@ function flightPlanInhibitReason(fdr) {
 // The two release states whose gate is a derived WINDOW rather than a single
 // instant (docs/adr/0017). RELEASE_TIME is deliberately absent — it is a
 // "not before" with no upper bound, checked separately in the HELD case.
-const WINDOWED_RELEASE_STATES = {
+const WINDOWED_DEPARTURE_RELEASE_STATES = {
   EDCT:             { startKey: 'edctWindowStartUtc',           endKey: 'edctWindowEndUtc',           label: 'EDCT' },
   CALL_FOR_RELEASE: { startKey: 'callForReleaseWindowStartUtc', endKey: 'callForReleaseWindowEndUtc', label: 'call-for-release' },
 };
@@ -176,7 +176,7 @@ function computeDepartureNla(strip, fdr, now, ctx) {
       // release sortie. Missing a window inhibits too — a slot that has
       // passed needs a new one, and sliding through it silently is exactly
       // what the window exists to prevent.
-      const windowed = fdr && WINDOWED_RELEASE_STATES[fdr.assigned.releaseState];
+      const windowed = fdr && WINDOWED_DEPARTURE_RELEASE_STATES[fdr.assigned.releaseState];
       if (windowed) {
         const opensAt = fdr.assigned[windowed.startKey];
         const closesAt = fdr.assigned[windowed.endKey];

@@ -43,7 +43,7 @@ async function controller(browser, opts) {
 }
 
 const ctr = (browser) => controller(browser, { held: ['CTR'], facilityId: 'CENTER', controller: 'ctr-controller' });
-const app = (browser) => controller(browser, { held: ['APP'], facilityId: 'INCIRLIK', controller: 'app-controller' });
+const app = (browser) => controller(browser, { held: ['APP'], facilityId: 'INCIRLIK', controller: 'ap-controller' });
 const tacC2 = (browser) => controller(browser, { held: ['TAC_C2'], facilityId: 'TACTICAL', controller: 'tac-c2-controller' });
 
 /**

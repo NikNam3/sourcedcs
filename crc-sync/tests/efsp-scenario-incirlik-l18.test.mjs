@@ -34,7 +34,7 @@ const {
   crew, hold, act, mustAct, advance, sfaAct, mustSfaAct,
 } = await import('./helpers/efsp-scenario.mjs');
 
-const SEATS = { OPS: 'INCIRLIK', TWR: 'INCIRLIK', RSU: 'INCIRLIK', APP: 'INCIRLIK', SFA: 'INCIRLIK', PAR: 'INCIRLIK' };
+const STAFFED = { OPS: 'INCIRLIK', TWR: 'INCIRLIK', RSU: 'INCIRLIK', APP: 'INCIRLIK', SFA: 'INCIRLIK', PAR: 'INCIRLIK' };
 const MS = { 'freq-1': 232.1, 'freq-2': 233.1, 'freq-3': 234.1, 'freq-4': 235.1, 'freq-5': 236.1 };
 const board = (efsp) => efsp.boardStoreFor('INCIRLIK');
 const strip = (efsp, s) => board(efsp).getStrip(s.stripId);
@@ -45,7 +45,7 @@ let n = 0;
 function fresh() {
   fs.rmSync(process.env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH, { force: true });
   const efsp = createEfsp();
-  return { efsp, c: crew(efsp, SEATS) };
+  return { efsp, c: crew(efsp, STAFFED) };
 }
 
 function refused(ack, reason, detail, label = '') {
