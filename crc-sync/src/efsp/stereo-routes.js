@@ -45,7 +45,7 @@ const { read: STEREO_ROUTES_PATH, write: STEREO_ROUTES_WRITE_PATH } =
   statePaths('efsp-stereo-routes.json', process.env.CRCSYNC_EFSP_STEREO_ROUTES_PATH);
 
 // The same ceiling flight-data-store.js puts on controller-entered free text, and for
-// the same reason: a stereo route seeds an FDR, and an FDR is broadcast whole
+// the same reason: a stereo route seeds flight data, and flight data is broadcast whole
 // to every connected client on every subsequent change (docs/adr/0004's
 // immediate broadcast) and sits in the durable snapshot forever. Duplicated
 // rather than imported to keep the require direction one-way — flight-data-store.js
@@ -101,7 +101,7 @@ function validateStereoRoutes(candidate) {
     }
     seen.set(key, r.name);
     // The expansion is the whole point of the record — a stereo with no route
-    // resolves to nothing and would produce exactly the incomplete FDR WP6's
+    // resolves to nothing and would produce exactly the incomplete flight data WP6's
     // acceptance criterion exists to rule out.
     if (!r.route || typeof r.route !== 'string' || !r.route.trim()) {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: `${r.name} needs a non-empty route` };
@@ -167,7 +167,7 @@ function resolveStereoRoute(name) {
 }
 
 /**
- * The flat FDR seed a resolved route expands to — deliberately the same key
+ * The flat flight data seed a resolved route expands to — deliberately the same key
  * set flight-plan-lookup.js's toFlightDataFiledSeed() produces, because the briefing
  * frames a stereo as "the same shape with a local table instead of an HTTP
  * lookup" and flight-data-store.js's createFlightData() seed is the shared contract.

@@ -1,6 +1,6 @@
 'use strict';
 
-// The carrier's ownership transfers, as data (guide §9.12, docs/adr/0064).
+// The carrier handoffs (the guide's "ownership transfers"), as data (guide §9.12, docs/adr/0064).
 //
 // §9.12: "Ownership transfers on the carrier are heterogeneous and MUST NOT be
 // unified behind one button: Marshal → Approach is controller-initiated;
@@ -11,10 +11,10 @@
 // ALL of them are controller gestures. Guide §10.3 / defect D5 forbid
 // advancing a Strip on surveillance: "radar acquisition" is the controller
 // saying "radar contact"; "ball" and "see you" are the controller recording
-// what the pilot said. The trigger type is METADATA recorded on the transfer
+// what the pilot said. The trigger type is METADATA recorded on the handoff
 // and rendered distinctly (WP7A bullet 4). It is never an automation hook.
 //
-// No transfer kind carries a frequency: frequency is SFA's business (§4.7,
+// No handoff kind carries a frequency: frequency is SFA's business (§4.7,
 // D17, lane L18).
 //
 // Provenance:
@@ -26,7 +26,7 @@
 //   decisions H30    — alternating APP lanes, [SOURCE-DEFINED].
 //   [SOURCE-DEFINED] — the lane parity (even push ordinal → CV_APP1); the
 //                      fifth row MARSHAL_TO_PATTERN_CASE_I (L4 briefing Q8:
-//                      the guide gives Case I no transfer, so it reuses the
+//                      the guide gives Case I no handoff, so it reuses the
 //                      CONTROLLER_INITIATED trigger type — the four trigger
 //                      TYPES stay four); the button labels.
 
@@ -97,7 +97,7 @@ function _fail(detail) {
 }
 
 /**
- * Is this transfer legal in this Case, from this Position, to that one?
+ * Is this handoff legal in this Case, from this Position, to that one?
  * `to: 'SAME'` means the receiving Position is the sender (toPositionId may be
  * omitted); `to: 'EXTERNAL_LSO'` means nobody in the EFSP receives it
  * (toPositionId must be null/omitted).

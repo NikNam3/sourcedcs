@@ -7,18 +7,18 @@
 // neither one writes a frequency.
 //
 //  1. The ROTATION RECORD (sfa-store.js): `{ rackId: positionId }`, which Position
-//     is on which pool frequency right now. Only the jurisdiction Position (APP)
+//     is on which pool frequency right now. Only the jurisdiction Position (AP)
 //     changes it.
 //  2. The SFA_ROTATION transfer (below): a Strip's controller changes, the Strip's
 //     frequency never does. It is the same shape as a carrier handoff (ADR 0074):
-//     an ARRIVAL Strip becomes a FINAL Strip IN PLACE (same Strip, same FDR, as
+//     an ARRIVAL Strip becomes a FINAL Strip IN PLACE (same Strip, same flight data, as
 //     ConvertToArrival does, ADR 0023), ownership moves to PAR, and the transfer's
 //     trigger type is recorded.
 //
-// A frequency is an attribute of the FLIGHT (the FDR's working frequency, Block
+// A frequency is an attribute of the FLIGHT (the flight data's working frequency, Block
 // 22), so nothing here can change one by accident: SFA_ROTATION never touches the
-// FDR. The one place a frequency IS written is a controller dragging a Strip onto
-// an SFA Rack, which is assigning it a frequency on purpose (board-store.js).
+// flight data. The one place a frequency IS written is a controller dragging a Strip onto
+// an SFA Rack, which is assigning it a frequency on purpose (board/ops/move-strip.js, through `assignSfaFrequency`).
 //
 // Pure: no store, no clock. Who may do what is permission.js's capability table.
 

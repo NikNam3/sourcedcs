@@ -1,6 +1,6 @@
 'use strict';
 
-// Field state (EFSPImplementationGuide.md §9.7) — the STATEFUL half, and the
+// Runway status (EFSPImplementationGuide.md §9.7) — the STATEFUL half, and the
 // sixth EFSP store (docs/adr/0061).
 //
 // A peer of the Strip model, not a subsidiary of it (§9.1: "the runway-status
@@ -22,7 +22,7 @@
 // The pure rules (status machine, runway resolution, inhibit wording, the
 // into-wind end) are runway-status.js's; this file applies them to records.
 //
-// Rule 5's deliberate deviation: field state rides its OWN sequence
+// Rule 5's deliberate deviation: runway status rides its OWN sequence
 // (`currentSeq`, sent as `runwayStatusSeq`) and its own efsp-runway-status-delta,
 // not the Board sequence the guide names — see docs/adr/0061 for why each
 // literal reading of "broadcast on the Board sequence" breaks.
@@ -39,7 +39,7 @@ const log = require('../log').logger('efsp:runway-status-store');
 
 function deepClone(obj) { return obj === undefined ? undefined : JSON.parse(JSON.stringify(obj)); }
 
-// What each request action needs the runway to be at, and the TWR op an
+// What each request action needs the runway to be at, and the LC op an
 // accepted request is carried out as — so an accepted request goes through
 // the very same checks as tower doing it directly.
 const REQUEST_EFFECTS = {
@@ -96,8 +96,8 @@ class RunwayStatusStore {
       activeRunway: null,
       activeRunwaySource: null,
       // The mission session (docs/adr/0086) whose wind has been applied. Kept
-      // apart from activeRunwaySource, which a TWR runway change replaces: a
-      // reconnect after TWR's change must still see the wind as applied.
+      // apart from activeRunwaySource, which an LC runway change replaces: a
+      // reconnect after LC's change must still see the wind as applied.
       windDerivedSession: null,
       runways: inventory.runways.map(def => this._seedRunway(def)),
       runwayChange: null,
@@ -132,7 +132,7 @@ class RunwayStatusStore {
   // ── reads ──────────────────────────────────────────────────────────────
 
   /**
-   * One Facility's field state as the wire carries it: stored state merged
+   * One Facility's runway status as the wire carries it: stored state merged
    * with the inventory, so each runway row is self-describing (the ends, the
    * racks, the gear), plus the guide's derived `runwayChangeInProgress`.
    * Cloned — a caller can never mutate the store through it. Null for a
@@ -170,7 +170,7 @@ class RunwayStatusStore {
     return out;
   }
 
-  /** Every Facility's field state — what the snapshot carries. */
+  /** Every Facility's runway status — what the snapshot carries. */
   getAll() { return [...this._records.keys()].map(id => this.getRunwayStatus(id)); }
 
   /**
@@ -235,7 +235,7 @@ class RunwayStatusStore {
    * touches.
    *
    * @param {{clientMutationId?:string, facilityId:string, baseRev?:number, op:{kind:string}}} mutation
-   * @param {string} actingPositionId — verified by efsp-ws.js to be a Position
+   * @param {string} actingPositionId — verified by the wire gate (wire/skeleton.js) to be a Position
    *   the session is Primary at, at this Facility (docs/adr/0029)
    * @param {string} by — controllerId
    */
@@ -422,20 +422,20 @@ class RunwayStatusStore {
 
   // ── rule 3: the runway change ──────────────────────────────────────────
   //
-  // Its own machine on the runway-status record. board-store.js's coordination
-  // primitives cannot carry it: they are attached to a Strip, cross-Facility
-  // by construction (TWR, OPS and APP are all INCIRLIK), and one proposer /
-  // one responder with no way to say "OPS AND APP".
+  // Its own machine on the runway-status record. board/coordination.js's
+  // coordination primitives cannot carry it: they are attached to a Strip, cross-Facility
+  // by construction (LC, OPS and AP are all INCIRLIK), and one proposer /
+  // one responder with no way to say "OPS AND AP".
   //
-  //   null ─Propose(TWR)→ PROPOSED ─(every acknowledger acked, any order)→ ACKNOWLEDGED
-  //        ─Begin(TWR)→ IN_PROGRESS ─Complete(TWR)→ PENDING_INSPECTION
+  //   null ─Propose(LC)→ PROPOSED ─(every acknowledger acked, any order)→ ACKNOWLEDGED
+  //        ─Begin(LC)→ IN_PROGRESS ─Complete(LC)→ PENDING_INSPECTION
   //        ─(OPS CompleteInspection on each runway in the set)→ null
-  //   PROPOSED/ACKNOWLEDGED ─Reject(an acknowledger) | Withdraw(TWR)→ REJECTED (terminal)
+  //   PROPOSED/ACKNOWLEDGED ─Reject(an acknowledger) | Withdraw(LC)→ REJECTED (terminal)
   //
   // Acknowledgement is coordination, not permission (decisions.md H20): tower
   // alone decides, so an acknowledger nobody holds when the change is proposed
   // is SKIPPED and recorded as such, never a deadlock — and never answered from
-  // another Facility (S-R2-15). A controller holding TWR and every acknowledger
+  // another Facility (S-R2-15). A controller signed on to LC and every acknowledger
   // self-coordinates in ONE input (SelfCoordinateRunwayChange, S-Q24).
 
   _endOfRunway(ctx, end) {
@@ -468,7 +468,7 @@ class RunwayStatusStore {
 
     if (selfCoordinate) {
       // One input, legal only when this controller is Primary on every
-      // acknowledger that is staffed (TWR is checked at the wire).
+      // acknowledger that is staffed (LC is checked at the wire).
       const elsewhere = required.filter(p => this._primaryOf(record.facilityId, p) !== by);
       if (elsewhere.length) {
         return { ok: false, reason: 'PERMISSION_DENIED', detail: `a self-coordinated runway change needs you Primary at ${elsewhere.join(' and ')} — ask for the acknowledgement instead` };
@@ -544,7 +544,7 @@ class RunwayStatusStore {
   _beginChange(ctx) {
     const { record, actingPositionId, by } = ctx;
     const change = record.runwayChange;
-    // §13: "A runway change cannot be initiated without OPS and APP
+    // §13: "A runway change cannot be initiated without OPS and AP
     // acknowledgement." This single guard is that sentence.
     if (!(change && change.state === 'ACKNOWLEDGED')) {
       return {
@@ -665,8 +665,8 @@ class RunwayStatusStore {
    * end to the one most into the wind — once per mission SESSION
    * (mission-session.js, docs/adr/0086): crc-sync hears 'mission-load' on every
    * reconnect, and a reconnect (or a restart) onto the same session must not
-   * undo what TWR has since chosen. Never while a runway change is open (the
-   * wind then counts as applied: TWR is choosing). Audited as a system change.
+   * undo what LC has since chosen. Never while a runway change is open (the
+   * wind then counts as applied: LC is choosing). Audited as a system change.
    *
    * @returns {{ok:boolean, changed?:boolean, skipped?:boolean, activeRunway?:string, reason?:string}}
    *   skipped: this session's wind was already applied, nothing was touched

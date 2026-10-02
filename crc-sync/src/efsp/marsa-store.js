@@ -7,15 +7,15 @@
 // §9.2's title is the whole design brief: "model it as an edge, not a flag."
 // MARSA is a stateful RELATIONSHIP between two or more flights, with a
 // declaring party, a start event, an end condition and auto-void conditions.
-// A boolean on each participant's FDR would be the flag that section refuses:
+// A boolean on each participant's flight data would be the flag that section refuses:
 // nothing would say who else is in it, nothing could void it as a unit, and
 // two participants could disagree about whether they were in the same relation
 // at all.
 //
 // KEYED BY marsaId; PARTICIPANTS ARE flightDataIds, NEVER stripIds — the same call
-// docs/adr/0045 made for correlation, for the same reason. One FDR
+// docs/adr/0045 made for correlation, for the same reason. One flight's flight data
 // legitimately has several Strips (per-Facility replicas docs/adr/0013, a TOFI
-// MISSION Strip on the same FDR docs/adr/0025, an arrival converted in place
+// MISSION Strip on the same flight data docs/adr/0025, an arrival converted in place
 // docs/adr/0023), and they are all one airframe. A stripId participant list
 // would let a tanker's INCIRLIK replica be in the relation while its CENTER
 // replica was not — two answers to "is this aircraft separating itself",
@@ -35,10 +35,10 @@
 // the void to "alert every participant Strip". `voidedBy`/`voidedDetail` live
 // on the relation, which is broadcast whole on every change, so every
 // participant Strip renders the alert with no per-Strip fan-out and no
-// separate retraction mechanism — docs/adr/0045's shape, and deliberately NOT
-// forwarding-obligations.js's fire-and-forget alert, which cannot retract at
-// all (efsp-state.js's own comment admits as much, and the briefing still
-// lists that unretractable badge as an outstanding defect). Do not copy it.
+// separate retraction mechanism — docs/adr/0045's shape. Before L7 (decisions
+// H39) forwarding-obligations.js's alert was fire-and-forget and could not
+// retract; since L7 an obligation leaves the set when its condition clears.
+// A relation is state in the same way: the badge goes when the relation does.
 //
 // Built on airspace-store.js and correlation-store.js throughout: own
 // _relations Map, per-record rev, own _sync seq, setMutationLog, a _recordAudit
@@ -94,8 +94,8 @@ class MarsaStore {
    * @param {(flightDataId:string)=>boolean} [deps.flightDataExists]
    * @param {(flightDataId:string, regime:string|null, opts:{by?:string})=>object} [deps.setSeparationRegime]
    *   — writes flightData.tofi.separationRegime. Injected rather than reached for, the
-   *   same way correlation-store.js takes flightDataExists and board-store.js takes
-   *   liveStripsForFlightData: this store has no business holding an FlightDataStore, and in
+   *   same way correlation-store.js takes flightDataExists and the Board's rules
+   *   take `liveStripsForFlightData` (index.js): this store has no business holding a FlightDataStore, and in
    *   index.js's composition root the stores it would need do not all exist
    *   yet.
    *
@@ -106,8 +106,8 @@ class MarsaStore {
    *   participants ... MARSA takes over", and "if a second controller takes
    *   TAC_C2 ten minutes later, the state must already be correct, or they
    *   inherit a lie." A relation that left the field alone would BE that lie.
-   *   The other half of keeping the two agreed is board-store.js refusing a
-   *   direct SREG write while an ACTIVE relation holds the FDR.
+   *   The other half of keeping the two agreed is board/ops/set-block.js refusing a
+   *   direct SREG write while an ACTIVE relation holds the flight data.
    */
   constructor({ flightDataExists, setSeparationRegime, clock = WALL_CLOCK } = {}) {
     this._clock = clock; // the mission clock, docs/adr/0079
@@ -116,19 +116,19 @@ class MarsaStore {
     this._relations = new Map(); // marsaId -> relation
     this._sync = new SyncLog(); // the store's sequence: a counter only, no ring, no epoch (sync/sync-log.js, S3-1)
     this._mutationLog = null;
-    // The FDRs _applyRegime wrote during the op currently being applied, for
+    // The flight data _applyRegime wrote during the op currently being applied, for
     // the caller to drain and broadcast. See drainRegimeWrites().
     this._regimeWrites = [];
   }
 
   /**
-   * The FDRs whose `tofi.separationRegime` this store wrote during the op just
-   * applied, most recent value per FDR, and clears the list.
+   * The flight data whose `tofi.separationRegime` this store wrote during the op just
+   * applied, most recent value per flight data, and clears the list.
    *
    * It exists because the write was invisible. Declaring a relation writes
    * MARSA on every participant and ending or voiding one writes ATC back, and
    * none of that reached a single connected client: the marsa-delta carries the
-   * RELATION, and an FDR rides an efsp-board-delta. So SEP REG stayed blank on
+   * RELATION, and flight data rides an efsp-board-delta. So SEP REG stayed blank on
    * every already-connected page until it next took a full snapshot, and only
    * someone who reconnected saw the truth — §4.8.3's "they inherit a lie", in
    * the direction it warns about (docs/ui-findings/lane1.md F-111).
@@ -139,7 +139,7 @@ class MarsaStore {
    * a return value through all of them would be more bookkeeping than one
    * journal that every public entry point clears on the way in.
    *
-   * @returns {object[]} FDR records, deduplicated by flightDataId
+   * @returns {object[]} flight data records, deduplicated by flightDataId
    */
   drainRegimeWrites() {
     const byId = new Map();
@@ -253,7 +253,7 @@ class MarsaStore {
    * the relation's own rev.
    *
    * @param {{clientMutationId:string, marsaId?:string, baseRev?:number, op:object}} mutation
-   * @param {string} actingPositionId — already verified by efsp-ws.js to be a
+   * @param {string} actingPositionId — already verified by the wire gate (wire/skeleton.js) to be a
    *   Position the calling session is Primary at (docs/adr/0029)
    * @param {string} by — controllerId, for the audit trail
    */
@@ -263,8 +263,8 @@ class MarsaStore {
     this._regimeWrites = [];
 
     // DeclareMarsa mints the relation, so it has no marsaId to look up and no
-    // baseRev to check — the same shape CreateStrip has in board-store.js's
-    // _dispatch, handled before the record lookup rather than inside it.
+    // baseRev to check — the same shape CreateStrip has in board/strip-ops.js's
+    // `dispatch`, handled before the record lookup rather than inside it.
     if (op.kind === 'DeclareMarsa') {
       let result;
       try {
@@ -317,7 +317,7 @@ class MarsaStore {
     // nothing about current state leaves the client rendering its own guess
     // (airspace-store.js's stated reason).
     if (!result.relation) result.relation = this.getRelation(mutation.marsaId);
-    // The regime writes this op made, for efsp-ws.js to put on the wire beside
+    // The regime writes this op made, for wire/families/marsa.js to put on the wire beside
     // the marsa-delta — see drainRegimeWrites().
     if (result.ok) result.flightDataList = this.drainRegimeWrites();
     this._recordAudit(mutation, actingPositionId, by, before, result);
@@ -524,13 +524,13 @@ class MarsaStore {
 
   /**
    * Writes flightData.tofi.separationRegime for a set of participants, tolerating a
-   * missing FDR rather than failing the op around it.
+   * missing flight data rather than failing the op around it.
    *
    * Deliberately best-effort: the relation is the record of what was declared,
-   * and it must not be left half-applied because one participant's FDR went
+   * and it must not be left half-applied because one participant's flight data went
    * away between the check and the write. A failure is logged, not returned —
    * the relation's own state stays the authoritative answer to "is this pair
-   * under MARSA", and board-store.js reads it directly.
+   * under MARSA", and board/ops/set-block.js and board/tofi.js read it directly (`activeMarsaFor`).
    */
   _applyRegime(flightDataIds, regime, by) {
     const written = [];
@@ -555,14 +555,14 @@ class MarsaStore {
    * is in an ACTIVE relation that has not reached rendezvous, that relation
    * voids.
    *
-   * NOT a Mutation of its own: no baseRev, and the caller is board-store.js
-   * partway through applying somebody else's SetBlock. It still lands in the
+   * NOT a Mutation of its own: no baseRev, and the caller is board/strip-ops.js
+   * (`marsaVoidFor`) partway through applying somebody else's SetBlock. It still lands in the
    * Mutation log under the clientMutationId of the SetBlock that caused it, so
    * the audit trail answers "why did SHELL71's MARSA void" with the exact
    * clearance that did it.
    *
-   * Returns the voided relation, or null. board-store.js turns a non-null
-   * return into `marsaVoided` on its own result, which efsp-ws.js broadcasts as
+   * Returns the voided relation, or null. board/ops/set-block.js turns a non-null
+   * return into `marsaVoided` on its own result, which the wire broadcasts as
    * a marsa-delta beside the board-delta — so every participant Strip learns
    * about it in the same round trip as the clearance.
    *
@@ -596,11 +596,11 @@ class MarsaStore {
   // ── lifecycle ───────────────────────────────────────────────────────────
 
   /**
-   * A flight is over — its last live Strip was dropped, so board-store.js has
-   * just released its beacon code.
+   * A flight is over — its last live Strip was dropped, so board/strip-ops.js has
+   * just released its beacon code (`retireMarsaForFlightData`).
    *
    * Left alone, the relation would keep naming a flight that is on the ground,
-   * keep its separation regime at MARSA on an FDR nobody is working, and keep
+   * keep its separation regime at MARSA on flight data nobody is working, and keep
    * arming an interlock for an aircraft that cannot be assigned anything. This
    * is correlation-store.js's retireFinished arriving from the other direction:
    * there a 1Hz reconciler sweeps the record, here there is no sweep, so the
@@ -623,7 +623,7 @@ class MarsaStore {
     return changed;
   }
 
-  /** Forgets relations whose participants are all gone — FDR lifecycle governs relation lifecycle, with no separate retention policy (correlation-store.js's evictMissingFlightDataList, same contract). */
+  /** Forgets relations whose participants are all gone — flight data lifecycle governs relation lifecycle, with no separate retention policy (correlation-store.js's evictMissingFlightDataList, same contract). */
   evictMissingFlightDataList() {
     let dropped = 0;
     for (const [marsaId, relation] of [...this._relations.entries()]) {

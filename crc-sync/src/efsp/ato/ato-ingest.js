@@ -2,7 +2,7 @@
 
 // USMTF Air Tasking Order ingest — the facade (EFSPImplementationGuide.md
 // §9.9, WP7; docs/adr/0063). Text in, mission lines out. It creates nothing:
-// no FDR, no Strip, no beacon code. Lane L14 (ADR 0071) turns the result into
+// no flight data, no Strip, no beacon code. Lane L14 (ADR 0071) turns the result into
 // mission Strips.
 //
 // SOURCE CAVEAT (EFSPImplementationGuide.md §9.9, required to be carried into code):

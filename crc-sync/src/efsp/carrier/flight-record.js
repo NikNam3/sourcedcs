@@ -6,15 +6,16 @@
 // The design point: EEAT survives launch → recovery because it is on the
 // flight, not on a Strip. §9.12 rule 7: "EEAT is issued before launch as the
 // lost-comms fallback and MUST survive from the departure Strip through to
-// recovery. It is the field most likely to be missed." One FDR spans the
+// recovery. It is the field most likely to be missed." One flight's flight data spans the
 // flight's whole life; its Strips come and go (the launch Strip is dropped,
 // the recovery Strip is a new one on the same flightDataId, replicas per Facility —
 // docs/adr/0013). An EEAT held on a Strip dies with the launch Strip.
 //
-// So these fields live on the FDR, in docs/adr/0052's single military
+// So these fields live on the flight data, in docs/adr/0052's single military
 // namespace, as one sub-object: `flightData.military.carrier` (the way §9.4's MTR
 // fields are `flightData.military.mtr`). Round-1 question Q63, supervisor default
-// (a). L17 adds it to flight-data-store.js's defaultMilitary(); this module defines the
+// (a). flight-data-store.js's `setCarrier` writes it on first use (it is not in
+// defaultMilitary()); this module defines the
 // shape, the validators and the restore normaliser.
 //
 // Provenance:
@@ -23,8 +24,9 @@
 //                      marshal message's sixteen fields in their order.
 //   decisions H31    — approach buttons: a validated integer, no defaults.
 //   [SOURCE-DEFINED] — APPROACH_TYPES (L4 briefing Q7); the button range
-//                      1..20 (the common DCS radio preset range); the fuel
-//                      sanity bound.
+//                      1..20 (SOURCE's choice of preset range); the fuel
+//                      sanity bound; BINGO_FIELD_MAX_LEN is an engineering
+//                      bound, not a rule.
 //
 // FUEL/LOW STATE is `lowStateLb` here, not guide M17 `military.fuelState`:
 // §6.4 defines M17 as "fuel state / playtime remaining" (endurance, a TIME,
@@ -37,7 +39,7 @@ const APPROACH_TYPES = Object.freeze(['TACAN', 'ICLS', 'ACLS', 'PAR', 'VISUAL'])
 const APPROACH_BUTTON_MIN = 1; // [SOURCE-DEFINED]
 const APPROACH_BUTTON_MAX = 20; // [SOURCE-DEFINED]
 const FUEL_MAX_LB = 100000; // [SOURCE-DEFINED] sanity bound
-const BINGO_FIELD_MAX_LEN = 32;
+const BINGO_FIELD_MAX_LEN = 32; // engineering bound on the typed field, not a rule
 
 const RULE_6 = 'store the approach button, not a frequency (§9.12 rule 6)';
 
@@ -126,8 +128,8 @@ function setCarrierFlightField(flight, field, value) {
 }
 
 /**
- * Restore path, and the read path for an FDR from before L17 wired this in:
- * a missing namespace or key becomes its default (§12's "present and
+ * Restore path, and the read path for flight data that has no carrier
+ * namespace yet: a missing namespace or key becomes its default (§12's "present and
  * unpopulated" promise — flight-data-store.js's ensureMilitary reasoning); an invalid
  * value becomes null; unknown keys are dropped. A valid set EEAT is never
  * cleared.
@@ -143,7 +145,7 @@ function normalizeCarrierFlight(raw) {
   return out;
 }
 
-/** The carrier record of an FDR, wherever it is in its life. */
+/** The carrier record of flight data, wherever it is in its life. */
 function carrierFlightOf(flightData) {
   return normalizeCarrierFlight(_isObj(flightData) && _isObj(flightData.military) ? flightData.military.carrier : null);
 }
@@ -178,7 +180,7 @@ const MARSHAL_MESSAGE_FIELDS = Object.freeze([
  * given (decisions H15).
  *
  * @param {object} args
- * @param {object} args.flightData        the FDR; carrier fields are read from flightData.military.carrier
+ * @param {object} args.flightData        the flight data; carrier fields are read from flightData.military.carrier
  * @param {object} [args.derived]  marshal-stack.deriveEntry() for this flight, or null
  * @param {string} [args.caseValue] the recovery Case (the record's value)
  * @param {object} [args.shipState]

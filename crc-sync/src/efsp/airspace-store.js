@@ -2,14 +2,14 @@
 
 // Airspace state — the `RANGE` Position's board (EFSPImplementationGuide.md
 // §4.1 rule 2: "RANGE works no Strips. It owns airspace state — schedule,
-// activation, release direction. Give it a Field State board", and §4.2:
+// activation, release direction. Give it a Runway Status board", and §4.2:
 // "Airspace board (not a strip rack)").
 //
 // A THIRD store, peer to FlightDataStore and BoardStore rather than part of either.
 // docs/adr/0032 left the choice open ("does an airspace entity live on the
-// FDR, on a Board, or in a third store?") and answered the why: airspace
+// FDR [flight data], on a Board, or in a third store?") and answered the why: airspace
 // state outlives any one flight — "a MOA stays hot after one flight leaves
-// it whenever other participants remain". Putting it on the FDR would make
+// it whenever other participants remain". Putting it on the flight data would make
 // every flight carry its own private copy of a fact about the world; putting
 // it on a Board would make it a Strip, which §4.1 says RANGE never works.
 //
@@ -24,7 +24,7 @@
 // direction field: §4.6.4's prohibition is against a bare `released` BOOLEAN,
 // because "released" alone is ambiguous — released *to the using agency*
 // means active, released *to the controlling agency* means available. Four
-// named states resolve that ambiguity by construction. The per-FDR
+// named states resolve that ambiguity by construction. The per-flight-data
 // `airspace.owner` direction (docs/adr/0018) is a different fact, about a
 // flight rather than about the airspace, and is untouched by this store.
 
@@ -56,8 +56,8 @@ class AirspaceStore {
    *   required directly, so tests can drive a fixture without touching disk)
    * @param {{occupancyFor?:(airspaceId:string)=>number}} [deps] —
    *   `occupancyFor` counts the flights currently approved into an airspace,
-   *   across every Facility's Board. Injected the same way board-store.js's
-   *   `liveStripsForFlightData` is, and for the same reason: this store has no
+   *   across every Facility's Board. Injected the same way the `liveStripsForFlightData`
+   *   rule (index.js) is, and for the same reason: this store has no
    *   business reaching into Boards, and the Boards do not exist yet when it
    *   is constructed. Optional, so a fixture can drive the store alone.
    */
@@ -95,7 +95,7 @@ class AirspaceStore {
   }
 
   /**
-   * Same wiring BoardStore has, and for the same reason: who activated a
+   * Same wiring the Board's audit has (board/audit.js), and for the same reason: who activated a
    * block, who refused a request and why, and when a schedule moved are
    * exactly the questions an after-action review asks. The record's own
    * `transitions` array holds where the airspace has BEEN; this holds what
@@ -122,7 +122,7 @@ class AirspaceStore {
       at: this._clock.now(),
       ok: result.ok,
       // A refusal is the interesting half of an authority model, so failures
-      // are logged too — unlike BoardStore's, which records successes only.
+      // are logged too — unlike BoardStore's (board/audit.js's `recordAudit`), which records successes only.
       reason: result.ok ? undefined : result.reason,
       detail: result.ok ? undefined : result.detail,
       before,
@@ -155,7 +155,7 @@ class AirspaceStore {
    * into an ack. Optimistic concurrency on the record's own rev.
    *
    * @param {{airspaceId:string, baseRev:number, op:{kind:string}}} mutation
-   * @param {string} actingPositionId — already verified by efsp-ws.js to be a
+   * @param {string} actingPositionId — already verified by the wire gate (wire/skeleton.js) to be a
    *   Position the calling session is Primary at (docs/adr/0029)
    * @param {string} by — controllerId, for the audit trail
    */
@@ -208,9 +208,12 @@ class AirspaceStore {
 
   // ── authority ──────────────────────────────────────────────────────────
   //
-  // §9.11's split, generalized: the guide says activation authority sits with
-  // APP because it assumes a RAPCON-owned range complex. Here each airspace
-  // names its own controlling Position, so a MOA inside Ankara Center's
+  // [SOURCE-DEFINED] (docs/adr/0036) — the approver is configured per
+  // airspace, not fixed to one Position. §9.11's verified principle is only
+  // that ATC approves and approval precedes entry; the guide's example
+  // Position is AP. §9.11's split, generalized: the guide says activation
+  // authority sits with AP because it assumes a RAPCON-owned range complex.
+  // Here each airspace names its own controlling Position, so a MOA inside Ankara Center's
   // airspace is approved by CTR rather than by an Approach that does not own
   // it. The using agency schedules and releases; the controlling agency
   // approves and takes it back.

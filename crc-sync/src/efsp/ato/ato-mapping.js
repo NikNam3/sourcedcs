@@ -11,7 +11,7 @@
 //   military — the flightData.military fields the ATO owns (alertStatus, scl,
 //              arInfo), shaped as flightData.military holds them. setMilitary() can
 //              write alertStatus today; it refuses scl and arInfo by name.
-//   extras   — { ato, identityAto } (S-R2-8): everything with no FDR home
+//   extras   — { ato, identityAto } (S-R2-8): everything with no flight data home
 //              yet — identityAto the IFF Mode 1/2/3 and datalink, ato the
 //              mission type, departure/recovery, on-station time, control
 //              detail, remarks… — verbatim, for L14's UI.
@@ -22,7 +22,7 @@
 // (the ATO date). The raw DTG always rides beside it (vulRaw, departure.raw,
 // onStationRaw, arctRaw…) because how the ATO date relates to the DCS mission
 // date is not decided here (R2-9, pending the human): L14 applies that policy.
-// ATO_FIELD_TARGETS below names, for every value, the FDR path it targets
+// ATO_FIELD_TARGETS below names, for every value, the flight data path it targets
 // and whether a write path exists today, so L14 applies it without
 // re-deriving anything.
 //
@@ -49,7 +49,7 @@ const SEED_KEYS = Object.freeze(['callsign', 'flightSize', 'aircraftType', 'unit
 const ACCEPTANCE_FIELDS = Object.freeze(['packageId', 'vulWindowStartUtc', 'vulWindowEndUtc',
   'controllingAgency', 'modeOne', 'modeTwo', 'modeThree']);
 
-// Every ATO value, where it lands on the MissionLine (`out`), the FDR path it
+// Every ATO value, where it lands on the MissionLine (`out`), the flight data path it
 // targets, the guide §6.4 M-number (comment-level only), today's Block id,
 // and whether anything can write it today.
 //   writePathToday: 'createFlightData' — rides in flightDataSeed, createFlightData writes it
@@ -283,7 +283,7 @@ function mapAtoDocument(doc) {
         arInfo: (asReceiver.length || asTanker) ? { asReceiver: asReceiver.map((x) => ({ ...x })), asTanker } : null,
       };
       // extras = { ato, identityAto } (decision S-R2-8). identityAto holds the
-      // identity values the ATO owns with no FDR write path (IFF, datalink);
+      // identity values the ATO owns with no flight data write path (IFF, datalink);
       // ato holds the rest, plus this line's normalised callsign, whether it
       // can seed, and which acceptance fields it lacks (decision H1).
       const identityAto = {

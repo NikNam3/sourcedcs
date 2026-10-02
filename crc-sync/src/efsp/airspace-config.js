@@ -32,10 +32,9 @@ const log = require('../log').logger('efsp:airspace-config');
 const { read: AIRSPACES_PATH, write: AIRSPACES_WRITE_PATH } =
   statePaths('efsp-airspaces.json', process.env.CRCSYNC_EFSP_AIRSPACES_PATH);
 
-// What kind of block this is. The FAA's special-use taxonomy and ICAO's
-// (which is what Turkey publishes) name overlapping things — a MOA in FAA
-// terms is usually charted as a danger or restricted area elsewhere — so
-// this set spans both rather than picking one and mistranslating.
+// What kind of block this is: labels borrowed from FAA and ICAO special-use
+// airspace names, spanning both rather than picking one. The set is ours
+// (see the [SOURCE-DEFINED] note at the top of this file).
 //
 // **Purely descriptive.** Nothing in the system derives behaviour from it,
 // and nothing may: defect D14 and guide §4.6.3 are explicit that
@@ -48,7 +47,7 @@ const { read: AIRSPACES_PATH, write: AIRSPACES_WRITE_PATH } =
 const AIRSPACE_TYPES = new Set([
   'MOA',        // military operations area — FAA naming
   'RANGE',      // a range, usually with control of its own
-  'DANGER',     // ICAO D — how most of these are charted outside the US
+  'DANGER',     // ICAO D
   'RESTRICTED', // ICAO/FAA R
   'PROHIBITED', // ICAO/FAA P
   'WARNING',    // FAA W — over international water
@@ -57,7 +56,8 @@ const AIRSPACE_TYPES = new Set([
 // Vertical limits, in feet. Both optional: an airspace with neither is
 // unbounded as far as this system is concerned, which is honest — the real
 // limits are published elsewhere and this is not a charting tool. When they
-// ARE set, a flight's altitude block has to fit inside them.
+// ARE set, a flight's altitude block has to fit inside them. The 0..100000 ft
+// range is an engineering bound on typed input (a sanity check), not a rule.
 const MIN_ALTITUDE_FT = 0;
 const MAX_ALTITUDE_FT = 100000;
 
@@ -70,6 +70,7 @@ function isValidAltitude(value) {
 // number. The wider repo is inconsistent (atis-store keys by integer Hz,
 // apt-config stores an unvalidated string, the SRS bridge takes float MHz at
 // its HTTP boundary), so conversions happen at those edges, never here.
+// 30..400 MHz is likewise an engineering bound on typed input, not a rule.
 const MIN_FREQUENCY_MHZ = 30;
 const MAX_FREQUENCY_MHZ = 400;
 
@@ -109,10 +110,10 @@ function validateAirspaces(candidate) {
     if (!AIRSPACE_TYPES.has(a.type)) {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: `${a.airspaceId} has unknown type ${JSON.stringify(a.type)}` };
     }
-    // Who approves activation. §9.11 names APP specifically because it
+    // Who approves activation. §9.11 names AP specifically because it
     // assumes a RAPCON-owned range complex; here it is per-airspace, so a
     // MOA inside Ankara Center's airspace is approved by CTR rather than by
-    // an Approach that does not own it. See the ADR for this generalization.
+    // an Approach that does not own it. See docs/adr/0036 for this generalization.
     if (!a.controllingFacilityId || typeof a.controllingFacilityId !== 'string') {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: `${a.airspaceId} needs a controllingFacilityId` };
     }
