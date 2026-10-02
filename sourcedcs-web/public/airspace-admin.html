@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Airspaces — Admin — SOURCE DCS</title>
+  <meta name="description" content="Manage the airspace registry per theater and migrate legacy booking ranges.">
+  <link rel="icon" href="sourcelogobg.png">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/bookings.css">
+  <link rel="stylesheet" href="css/airspace-admin.css">
+</head>
+<body>
+
+<div class="scanline"></div>
+
+<header>
+  <a class="header-logo-link" href="/">
+    <img class="header-logo" src="sourcelogobg.png" alt="SOURCE logo">
+    <div class="header-title">SOURCEDCS</div>
+  </a>
+  <nav class="header-nav" id="mainNav" aria-label="Main navigation">
+    <a class="nav-link" href="/bookings.html">BOOKINGS</a>
+    <a class="nav-link" href="/wing-admin.html">WING ADMIN</a>
+  </nav>
+  <div class="header-spacer"></div>
+  <div class="header-right">
+    <button class="hamburger-btn" id="hamburgerBtn" aria-label="Toggle menu" aria-expanded="false">
+      <span class="hamburger-line"></span><span class="hamburger-line"></span><span class="hamburger-line"></span>
+    </button>
+    <button class="login-btn" id="loginBtn" onclick="loginWithCasdoor()">LOGIN</button>
+    <div class="hdr-toggle-group">
+      <span class="hdr-toggle-label">DISPLAY</span>
+      <div class="theme-toggle">
+        <button class="theme-btn active" data-theme="pro"   onclick="setTheme('pro')">PROF</button>
+        <button class="theme-btn"        data-theme="movie" onclick="setTheme('movie')">MFD</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<section class="bk-hero">
+  <div class="bk-hero-inner">
+    <div class="section-label">FLIGHT OPERATIONS</div>
+    <h1 class="bk-title">AIRSPACE REGISTRY</h1>
+    <p class="bk-sub">Per theater &middot; crc-sync holds the definitions, this page edits them there &middot; Altitudes in indicated feet</p>
+  </div>
+</section>
+
+<div id="aaDenied" class="aa-wrap" style="display:none"><p>Booking admin access required. <a href="/bookings.html">Back to bookings</a></p></div>
+
+<div id="aaMain" class="aa-wrap" style="display:none">
+  <div id="aaBanner"></div>
+
+  <div id="aaMigration" class="aa-panel" style="display:none">
+    <div class="aa-panel-head"><span>LEGACY RANGE MIGRATION (ONE TIME)</span></div>
+    <div class="aa-panel-body">
+      <p class="bk-hint">Each legacy range is mapped to a registry airspace. Its bookings move with it, all or nothing. A range disappears from this list once migrated.</p>
+      <div class="aa-scroll"><table class="aa-table" id="aaLegacyTable"></table></div>
+      <div id="aaMigrateResult"></div>
+    </div>
+  </div>
+
+  <div class="aa-toolbar">
+    <div class="form-group">
+      <label class="form-label" for="aaTheater">THEATER</label>
+      <select class="form-select" id="aaTheater"></select>
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="aaNewTheater">OTHER THEATER (A NAME DCS REPORTS)</label>
+      <input class="form-input" id="aaNewTheater" type="text" maxlength="64" placeholder="e.g. Syria" autocomplete="off">
+    </div>
+    <button class="btn btn-ghost" id="aaUseTheater">USE</button>
+    <button class="btn btn-ghost" id="aaReload">RELOAD</button>
+    <button class="btn btn-primary" id="aaCreate">+ NEW AIRSPACE</button>
+  </div>
+
+  <div class="aa-scroll"><table class="aa-table" id="aaTable"></table></div>
+
+  <div id="aaEditor" class="aa-panel" style="display:none"></div>
+</div>
+
+<footer>
+  <div class="footer-inner">
+    <div class="footer-brand-area"><img class="footer-logo" src="sourcelogobg.png" alt="SOURCE"><span class="footer-brand">SOURCEDCS</span></div>
+    <div class="footer-links-row"><a class="footer-link" href="/">Home</a><span class="footer-sep">&middot;</span><a class="footer-link" href="/bookings.html">Bookings</a></div>
+    <div class="footer-copy"><span class="footer-text">&copy; 2025 SOURCEDCS</span><span class="footer-sep">&middot;</span><span class="footer-text">MIT License</span></div>
+  </div>
+</footer>
+
+<script src="/js/config.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/airspace-coords.js"></script>
+<script src="/js/airspace-admin.js"></script>
+</body>
+</html>
