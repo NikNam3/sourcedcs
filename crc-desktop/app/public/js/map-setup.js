@@ -5,6 +5,7 @@ import {
 } from './geojson.js';
 import { createNavpointIcon, initIcons, updateIcons, updateIffIcons } from './icons.js';
 import { initElevationContours } from './elevation.js';
+import { onMaptilerKey, transformMaptilerRequest } from './maptiler-key.js';
 import { updateBullseyeCursor, updateMeasureLine } from './panels/topbar.js';
 import { applyBullseyePick } from './panels/settings-panel.js';
 import { closeAptWeatherPanel, showAptWeatherPanel } from './panels/airport-selector.js';
@@ -19,13 +20,31 @@ import { _setDrag, _setMap, _setMapReady, _setMeasure } from './app.js';
 // ── Map initialisation ────────────────────────────────────────────────────
 // Sets up all MapLibre sources, layers, and event handlers.
 
+// The key arrives after the map exists (it is fetched at login). The basemap's tile source reloads then,
+// which also retries the glyph ranges that failed without it. maplibre 3.6.2's VectorTileSource has
+// setTiles(), so the source is not re-added and the style is never replaced (setStyle would destroy the
+// GeoJSON layers below).
+export function refreshMaptilerSources() {
+  if (!map) return;
+  let sources;
+  try { sources = map.getStyle().sources; } catch (_) { return; } // style not loaded yet: its first tile requests already carry the key
+  for (const [id, src] of Object.entries(sources)) {
+    if (src.type !== 'vector' || !Array.isArray(src.tiles) || !src.tiles.some((u) => u.startsWith('https://api.maptiler.com/'))) continue;
+    map.getSource(id).setTiles(src.tiles);
+  }
+}
+
 export function initMap(container) {
   _setMap(new maplibregl.Map({
     container,
     style: '/crc-desktop-scope-style.json',
+    // The style carries no key: MapTiler requests get it here once crc-sync has handed it over (maptiler-key.js).
+    transformRequest: (url) => transformMaptilerRequest(url),
     center: [35.4258, 37.0021],
     zoom: 7,
   }));
+
+  onMaptilerKey(refreshMaptilerSources);
 
   map.dragRotate.disable();
   map.touchZoomRotate.disableRotation();
