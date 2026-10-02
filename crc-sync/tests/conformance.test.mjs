@@ -195,3 +195,44 @@ test('unknown magnetic course (no projection for the theater, or no converter): 
   for (let t = 0; t <= 120; t += 5) bare.tick(t * S);
   assert.deepEqual(bare.getAll(), [], 'no converter injected: never a cross-frame compare');
 });
+
+// ── persistence durations run on the wall clock (docs/adr/0096, H102) ─────
+// steps: [missionSec, wallSec, input]. `since` stays mission time.
+function runWall(steps, base = {}) {
+  const mem = {};
+  let alerts = [];
+  for (const [m, w, over] of steps) {
+    alerts = evaluateConformance({ hdg: null, alt: null, course: 50, groundSpeedMs: FAST, verticalSpeedMs: 0, altFt: 10000, ...base, ...over }, mem, m * S, cfg, w * S);
+  }
+  return alerts;
+}
+
+test('heading persistence is wall time: a paused or jumping mission clock does not change it', () => {
+  const hdg = { parsed: 50, at: 0 };
+  const dev = { hdg, course: 90 };
+  const w0 = 100; // grace over: first seen at wall 0
+  const first = [[0, 0, { hdg, course: 50 }], [0, w0, dev]];
+  // mission clock paused for 60 s of wall time: alert fires
+  const paused = runWall([...first, [0, w0 + 11, dev]]);
+  assert.deepEqual(kinds(paused), ['HEADING']);
+  assert.equal(paused[0].since, 0, '`since` is mission time');
+  // mission clock jumps an hour, wall only 5 s: no alert
+  assert.deepEqual(runWall([...first, [3600, w0 + 5, dev]]), []);
+});
+
+test('wrong-way persistence is wall time: a paused or jumping mission clock does not change it', () => {
+  const alt = { parsed: 12000, at: 0 };
+  const dev = { alt, altFt: 10000, verticalSpeedMs: fpm(-1500) };
+  const start = [0, 0, dev];
+  assert.deepEqual(kinds(runWall([start, [0, 31, dev]])), ['WRONG_WAY']);
+  assert.deepEqual(runWall([start, [3600, 4, dev]]), []);
+});
+
+test('level-bust persistence is wall time: a paused or jumping mission clock does not change it', () => {
+  const alt = { parsed: 10000, at: 0 };
+  const on = { alt, altFt: 10000 };
+  const bust = { alt, altFt: 10800 };
+  const pre = [[0, 0, on], [1, 1, bust]];
+  assert.deepEqual(kinds(runWall([...pre, [1, 1 + cfg.levelBustPersistSec + 1, bust]])), ['LEVEL_BUST']);
+  assert.deepEqual(runWall([...pre, [3600, 3, bust]]), []);
+});

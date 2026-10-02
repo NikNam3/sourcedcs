@@ -962,6 +962,8 @@ the scope gets a coloured tag, and the track panel lists it.
 | `BUST +600` | it reached its `ALT` and has since left it by more than 500 ft |
 | `CA SNAKE21 0:55` | on present course and rate it will be within 3 NM and 1,000 ft of SNAKE21 in 55 s. Only at an ATC Position (LC, AP, CTR…), and only when both aircraft are on your scope |
 
+The "for 10 s" and "for 3 s" in this table (heading, wrong-way and level-bust persistence, and the 30 s turn grace) are real elapsed seconds on the server's own clock, not mission seconds (`adr/0096`). If the mission is paused or its clock jumps, they keep counting, so an alert appears the same number of real seconds after the deviation is first seen; the `since` time shown with an alert is still mission Zulu.
+
 Not a warning: a flight that has not started its climb or descent yet ("descend when ready"). Only
 a flight going the opposite way alerts. Route conformance and terrain are not checked yet.
 
