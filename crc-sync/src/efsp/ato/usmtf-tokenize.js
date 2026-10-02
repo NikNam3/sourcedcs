@@ -19,7 +19,7 @@
 
 const MAX_INPUT_BYTES = 1024 * 1024; // 1 MiB — see the pathological-input test
 
-// Duplicates flight-data-store.js:76's MAX_FREE_TEXT. Not required from there because
+// Duplicates flight-data-store.js's MAX_FREE_TEXT. Not required from there because
 // flight-data-store.js reads config at require time (airspace-config, stereo-routes);
 // tests/efsp-ato-acceptance.test.mjs asserts the two stay equal.
 const MAX_FREE_TEXT = 2000;

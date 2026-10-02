@@ -31,7 +31,7 @@
 const { isDtgShaped } = require('./usmtf-time');
 const { isValidCodeFormat, isReserved, isSynthetic } = require('../code-allocator');
 
-// Duplicates flight-data-store.js:67's CALLSIGN_RE (§3.2 rule 1), after upper-casing.
+// Duplicates flight-data-store.js's CALLSIGN_RE (§3.2 rule 1), after upper-casing.
 // Not required from there (load-time I/O); the parity test in
 // tests/efsp-ato-acceptance.test.mjs proves createFlightData refuses what this refuses.
 const CALLSIGN_RE = /^[A-Z0-9]{1,7}$/;

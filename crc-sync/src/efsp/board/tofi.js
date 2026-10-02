@@ -340,7 +340,7 @@ class Tofi {
     // flight data, and the ATC-side Strip is still live by construction here.
     let retired = null;
     if (tofi.mintedForTofi) {
-      // Through _retireStrip like every other route to DROPPED (S-L24): the
+      // Through `StripOps#retire` (board/strip-ops.js) like every other route to DROPPED (S-L24): the
       // archive clock, the remove indicator, the beacon release and the MARSA
       // retirement. Its active-TOFI guard cannot fire (the state is REJECTED).
       retired = this._retire(strip, by);

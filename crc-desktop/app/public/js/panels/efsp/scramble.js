@@ -149,8 +149,7 @@ const _seenScrambleStripIds = new Set();
 /**
  * Switches to the Position and Bay holding the Strip when this client holds
  * that Position (the arrivals line's click, efsp-panel.js), then selects it.
- * the Position lookups come from imported modules; the guards below let a
- * test sandbox without them simply select.
+ * The Position lookups come from imported modules.
  */
 function _revealScrambleStrip(stripId) {
   const strip = typeof getEfspStrip === 'function' ? getEfspStrip(stripId) : null;

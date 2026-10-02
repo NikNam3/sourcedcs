@@ -40,7 +40,7 @@ class BoardPersistence {
 
   /**
    * When this DROPPED Strip dropped, in wall ms (docs/adr/0082). A Strip that
-   * reached DROPPED by a path other than _retireStrip (a refused TOFI's minted
+   * reached DROPPED by a path other than `StripOps#retire` (board/strip-ops.js) (a refused TOFI's minted
    * Strip, a SetState) is stamped the first time anyone asks, so it is
    * archived at most one sweep late rather than never. Null for a live Strip.
    */

@@ -182,9 +182,9 @@ const SCRIPTS = {
       return;
     }
     // Properly: CTR has it inbound, may point it out or call traffic to AP
-    // first, then hands it across (coordination :166-180). An INBOUND ARRIVAL
+    // first, then hands it across (board/coordination.js's `_applyCoordinationAccept`). An INBOUND ARRIVAL
     // is the one strip type/state CTR can propose coordination from besides a
-    // HANDED_OFF departure (coordination.js:65).
+    // HANDED_OFF departure (board/coordination.js's `_applyCoordinationPropose`, the (stripType, state) check).
     const r = yield create('CTR', {
       kind: 'CreateStrip', bayId: 'ctr-enroute', rackId: 'main', stripType: 'ARRIVAL',
       flightData: { callsign: f.callsign, aircraftType: 'C130', wakeCategory: 'M', originAirport: 'LTAC', destinationAirport: 'LTAG' },

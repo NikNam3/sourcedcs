@@ -7,7 +7,7 @@ function _applyUndo(ctx, strip, by) {
     return { ok: false, reason: 'VALIDATION_ERROR', detail: 'no Undo available', strip };
   }
   ctx.nlaHistory.delete(strip.stripId);
-  // A terminal NLA Drop now does more than set a state (see _retireStrip),
+  // A terminal NLA Drop now does more than set a state (see `StripOps#retire` in board/strip-ops.js),
   // so undoing one has to put back what it took: clear the remove
   // indicator and re-claim the beacon code. The code can only have been
   // taken by another flight if one was created inside this 30s window —

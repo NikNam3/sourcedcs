@@ -1164,7 +1164,7 @@ test('a Mutation without a clientMutationId is never answered from the cache', (
   assert.equal(board.getStrip(strip.stripId).flags.flipped, true);
 });
 
-// ── observeTouches (SYNC, W5-7): the soak host's touch record, without patching _touch ─────────────────
+// ── observeTouches (SYNC, W5-7): the soak host's touch record, without patching the kernel's `recordTouch` ─────────────────
 
 test('observeTouches sees every touch once, after its ring entry, in order; a wrap of _rebalanceRack attributes the rebalance touches; an archive is not a touch', () => {
   const { board } = makeStore();

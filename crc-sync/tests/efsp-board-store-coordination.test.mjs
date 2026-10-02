@@ -622,7 +622,7 @@ test('a REJECTED replica sitting in its owner\'s Coordination Bay cannot PROPOSE
   }), 'CTR', 'ctr-controller');
   assert.equal(retried.ok, false);
   assert.equal(retried.reason, 'VALIDATION_ERROR');
-  // Refused by _dispatch's rejected-replica gate (F-303) before the
+  // Refused by `StripOps#dispatch`'s rejected-replica gate (F-303) before the
   // coordination-Bay check in board/coordination.js's `_applyCoordinationPropose` is ever reached.
   assert.match(retried.detail, /rejected — the replica is inert/);
 });

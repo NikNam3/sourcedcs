@@ -5,7 +5,7 @@ import os from 'os';
 import path from 'path';
 
 // A strip type Bay (`holdsStripType`, docs/adr/0087: ap-overflight, ctr-overflight) takes its own strip type's
-// Strips and nobody else's. Before this file, `_bayForNewOwner`'s "first Bay implying no state"
+// Strips and nobody else's. Before this file, `Placement#bayForNewOwner`'s "first Bay implying no state"
 // fallback and `bayForImpliedState`'s `bays[0]` fallback could both land a DEPARTURE or ARRIVAL there.
 
 const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'efsp-strip-type-bay-'));

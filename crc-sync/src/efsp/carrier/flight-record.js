@@ -24,7 +24,7 @@
 //                      marshal message's sixteen fields in their order.
 //   decisions H31    — approach buttons: a validated integer, no defaults.
 //   [SOURCE-DEFINED] — APPROACH_TYPES (L4 briefing Q7); the button range
-//                      1..20 (SOURCE's choice of preset range); the fuel
+//                      1..20 (DCS's radio preset range, a DCS module fact, not from the guide); the fuel
 //                      sanity bound; BINGO_FIELD_MAX_LEN is an engineering
 //                      bound, not a rule.
 //

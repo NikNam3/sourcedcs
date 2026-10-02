@@ -22,7 +22,7 @@
 //                       convergence; when none is given it keeps the grid
 //                       value and SAYS so (headingRef: 'GRID').
 //   [SOURCE-DEFINED]  — ANGLED_DECK_BY_TYPE (9° to port for the Nimitz class,
-//                       SOURCE's adopted figure; the guide gives none);
+//                       the published geometry of the Nimitz-class angled deck; the guide gives none);
 //                       the altimeter's sane band 27.00–32.00 inHg; the 1°
 //                       re-broadcast step (`shipStateChanged`'s default
 //                       `headingStepDeg`).
