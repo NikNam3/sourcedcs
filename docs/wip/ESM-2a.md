@@ -1,7 +1,16 @@
 # ESM-2a: bay-view.js split into bay/**
 
 ## Report
-(filled in at the end; the final message carries the same)
+**Branch** `lane/ESM-2a-bay-view-split`, base 115ff24. bay-view.js 3,115 -> 721 lines; 12 new modules under `js/panels/efsp/bay/**`.
+**Counts.** crc-desktop 882 -> 882 (880 pass, 2 todo, 0 fail). crc-sync 2153 -> 2153: the two failures seen under load (grpc-client-stream retry timing,
+ato-tokenize timing) are timing flakes; the grpc one passes alone (no crc-sync file touched). Freeze goldens 48/48 at base; no crc-sync change, not re-run.
+**Playwright (E2E_LANE=2, load 40-65):** smoke, l4-drag, l4-chain, marsa-popover, l1-nla-clearance-chain: 15 pass, 2 fail on 3 s click timeouts
+(l1-nla-clearance-chain:124, marsa-popover:80); both re-run alone: 7/7 pass.
+**Structure fixture:** module-graph-exports.json gains 12 bay/** entries; bay-view.js's export set unchanged; bridge names unchanged.
+**Outside Owns (approved by S-ESM2-q):** client-mirror-parity, efsp-coordination-client, bay-descriptor-parity, overflight-shared-state-names (my entries only).
+**S-ESM2-q answers:** (1) client-mirror-parity reads the six tables from bay/authority-mirror.js and TOFI_ACCEPT_REGIMES from bay/popovers/tofi.js;
+(2) overflight allow-list: bay-view.js entry replaced by bay/popovers/airspace-entry.js; (3) bay-descriptor-parity walks panels/efsp recursively, floor 30 files;
+(4) selection and dispatch stayed in bay-view.js (cost: bay-view.js <-> bay/** import cycle, function-level only).
 
 ## Code as found (base 115ff24)
 - `bay-view.js`: 3,115 lines, 160 top-level names (124 read by other scripts), 16 `let`s. Cross-file `let` writes found by a scope
