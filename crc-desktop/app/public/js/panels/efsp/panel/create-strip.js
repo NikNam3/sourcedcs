@@ -341,7 +341,7 @@ export function _refreshCreateStripAvailability() {
  * SECOND Strip/FDR instead (per guide §3.6's turnaround rule) — abandoned
  * after live testing found that approach left a stale departure Strip
  * behind and needed every field copied by hand, including a beacon code
- * that can't even be copied cleanly (flight-data-store.js's createFdr always
+ * that can't even be copied cleanly (flight-data-store.js's createFlightData always
  * auto-allocates a fresh one). Reusing the same FDR makes both problems
  * structurally impossible — there's nothing to copy, because nothing new
  * is created. `board-store.js`'s `_applyConvertToArrival` is authoritative
@@ -420,7 +420,7 @@ async function _submitCreateStrip() {
   // Flight-plan pre-fill (guide §10.1 "auto-population — do it
   // aggressively", §10.5 provenance fallback chains) — DEPARTURE-role
   // only: the DD1801 lookup maps onto route/altitude/departure+destination
-  // airport/remarks (crc-sync's toFdrFiledSeed), which line up with
+  // airport/remarks (crc-sync's toFlightDataFiledSeed), which line up with
   // DEPARTURE's filed shape, not ARRIVAL's (originAirport/arrivalFix/
   // estimatedArrivalTimeUtc — a genuinely different set of fields),
   // OVERFLIGHT's (docs/adr/0023 — the fields it reuses mean the flight's

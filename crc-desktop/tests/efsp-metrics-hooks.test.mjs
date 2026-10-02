@@ -40,7 +40,7 @@ function stripFor(stripId, fdrId, bayId) {
     correlation: { state: 'UNCORRELATED' }, coordination: null, tofiCoordination: null, airspaceEntry: null,
   };
 }
-function fdrFor(fdrId, callsign) {
+function flightDataFor(fdrId, callsign) {
   return {
     fdrId, rev: 1, provenance: {},
     identity: { callsign, beaconAssigned: '0001', trackDegradationFlag: 'NONE' },
@@ -90,7 +90,7 @@ async function mount({ metrics = true } = {}) {
 
   state.applyEfspSnapshot({
     strips: [stripFor('s1', 'f1', 'gnd-pending'), stripFor('s2', 'f2', 'gnd-taxi-out')],
-    fdrs: [fdrFor('f1', 'VIPER11'), fdrFor('f2', 'VIPER12')],
+    fdrs: [flightDataFor('f1', 'VIPER11'), flightDataFor('f2', 'VIPER12')],
     positions: [], bays: BAYS, airspaces: [], correlations: [], marsa: [],
   });
   panel.initEfspPanel();

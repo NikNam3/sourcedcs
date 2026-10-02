@@ -263,8 +263,8 @@ function opMatrix() {
 
   // MARSA: declare (refused: one participant; success), void.
   const m1 = airborne(w, 'MARSAT'), m2 = airborne(w, 'MARSAR');
-  const fdrOf = (s) => w.strip('INCIRLIK', s.stripId);
-  void fdrOf;
+  const flightDataOf = (s) => w.strip('INCIRLIK', s.stripId);
+  void flightDataOf;
   const tr = w.truth().facilities.INCIRLIK.strips;
   const fd1 = tr.find(x => x.stripId === m1.stripId).fdrId, fd2 = tr.find(x => x.stripId === m2.stripId).fdrId;
   w.family('app', 'efsp-marsa-mutation', { actingPositionId: 'APP', op: { kind: 'DeclareMarsa', participants: [fd1], startEvent: 'TANKER_ACCEPTED', endCondition: 'VERTICALLY_POSITIONED', declaringCallsign: 'SHELL1' } });
@@ -514,8 +514,8 @@ function peerMarsaOrder() {
   const app = at(w, 'app'), ctr = at(w, 'ctr');
   const live = (f, s) => w.strip(f, s.stripId);
   const m1 = airborne(w, 'PMO1'), m2 = airborne(w, 'PMO2');
-  const fdrOf = (s) => w.truth().facilities.INCIRLIK.strips.find(x => x.stripId === s.stripId).fdrId;
-  const fd1 = fdrOf(m1), fd2 = fdrOf(m2);
+  const flightDataOf = (s) => w.truth().facilities.INCIRLIK.strips.find(x => x.stripId === s.stripId).fdrId;
+  const fd1 = flightDataOf(m1), fd2 = flightDataOf(m2);
   const dm = w.family('app', 'efsp-marsa-mutation', { actingPositionId: 'APP', op: { kind: 'DeclareMarsa', participants: [fd1, fd2], startEvent: 'TANKER_ACCEPTED', endCondition: 'VERTICALLY_POSITIONED', declaringCallsign: 'SHELL1' } });
   void dm;
   const replicaOf = (s) => w.truth().facilities.CENTER.strips.find(x => x.coord && x.coord.peerStripId === s.stripId);

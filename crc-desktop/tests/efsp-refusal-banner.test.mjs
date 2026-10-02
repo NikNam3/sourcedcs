@@ -38,7 +38,7 @@ const TOOLBAR_IDS = [
   'efsp-mutation-error', 'efsp-mutation-warning', 'efsp-connection-banner',
 ];
 
-function fdrFor(fdrId, callsign) {
+function flightDataFor(fdrId, callsign) {
   return {
     fdrId, rev: 1, provenance: {},
     identity: { callsign, beaconAssigned: '0001', trackDegradationFlag: 'NONE' },
@@ -59,7 +59,7 @@ function stripFor(stripId, fdrId, overrides = {}) {
 
 const BOARD = {
   strips: [stripFor('sA', 'fA'), stripFor('sB', 'fB')],
-  fdrs: [fdrFor('fA', 'AAA11'), fdrFor('fB', 'BBB22')],
+  fdrs: [flightDataFor('fA', 'AAA11'), flightDataFor('fB', 'BBB22')],
 };
 
 async function mountPanel() {

@@ -34,7 +34,7 @@
 const permission = require('./permission');
 const readScope = require('./read-scope');
 const frames = require('./wire/frames');
-const { VERSION, stampStrip, mergeFdrs, touchedStrips, boardDelta, marsaDelta, carrierDelta, sfaDelta, liveStamped } = frames;
+const { VERSION, stampStrip, mergeFlightDataList, touchedStrips, boardDelta, marsaDelta, carrierDelta, sfaDelta, liveStamped } = frames;
 const skeleton = require('./wire/skeleton');
 const families = require('./wire/families');
 
@@ -93,7 +93,7 @@ function _handleMutation(ctx, session, msg, persist) {
   // the delta carried only that one, so a connected client held the stale value
   // until it next took a full snapshot. board-store.js collects them as
   // `result.fdrs`.
-  const updatedFdrs = mergeFdrs(result.fdr, result.fdrs);
+  const updatedFlightDataList = mergeFlightDataList(result.fdr, result.fdrs);
 
   const ack = {
     version: VERSION, type: 'efsp-mutation-ack', clientMutationId: msg.clientMutationId,
@@ -121,7 +121,7 @@ function _handleMutation(ctx, session, msg, persist) {
   }
 
   const slots = {
-    primary: boardDelta(ctx, boardStore, facilityId, touchedStrips(ctx, boardStore, facilityId, touched, stampedStrip), updatedFdrs),
+    primary: boardDelta(ctx, boardStore, facilityId, touchedStrips(ctx, boardStore, facilityId, touched, stampedStrip), updatedFlightDataList),
   };
 
   // Bug found in live testing: a coordination primitive's PROPOSE/ACCEPT/
@@ -144,7 +144,7 @@ function _handleMutation(ctx, session, msg, persist) {
     const peerBoardStore = ctx.boardStoreFor(result.peerFacilityId);
     const peerStamped = stampStrip(peerBoardStore, result.peerStrip, result.peerFacilityId, ctx);
     const peerTouched = peerBoardStore ? peerBoardStore.drainTouched() : [];
-    // fdrs: one shared FdrStore (docs/adr/0013) — already covered by the primary broadcast's fdrs.updated
+    // fdrs: one shared FlightDataStore (docs/adr/0013) — already covered by the primary broadcast's fdrs.updated
     slots.peer = boardDelta(ctx, peerBoardStore, result.peerFacilityId,
       touchedStrips(ctx, peerBoardStore, result.peerFacilityId, peerTouched, peerStamped), []);
   }
@@ -234,10 +234,10 @@ function _resyncAnswer(ctx, session, msg) {
       },
       // FDRs/Positions are cheap enough at this scale to always send in
       // full rather than building a second/third ring buffer — see
-      // board-store.js's module comment. fdrStore is shared across every
+      // board-store.js's module comment. flightDataStore is shared across every
       // Facility (docs/adr/0013), so this list is NOT facility-scoped —
       // it's the same full set a snapshot would carry.
-      ctx.fdrStore.getAll(),
+      ctx.flightDataStore.getAll(),
       positionStore.getAll().map(p => ({ ...p, facilityId }))),
   };
 }
@@ -347,11 +347,11 @@ function filterForSession(ctx, session, msg) {
     case 'efsp-snapshot':
       return readScope.filterSnapshot(msg, scope);
     case 'efsp-board-delta':
-      return readScope.filterBoardDelta(msg, scope, readScope.visibleFdrIdsOf(scope, liveStamped(ctx)), (id) => ctx.fdrStore.getFdr(id));
+      return readScope.filterBoardDelta(msg, scope, readScope.visibleFlightDataIdsOf(scope, liveStamped(ctx)), (id) => ctx.flightDataStore.getFlightData(id));
     case 'efsp-alerts': {
       const live = liveStamped(ctx);
       const byKey = new Map(live.map(s => [`${s.facilityId}:${s.stripId}`, s]));
-      return readScope.filterAlerts(msg, scope, readScope.visibleFdrIdsOf(scope, live),
+      return readScope.filterAlerts(msg, scope, readScope.visibleFlightDataIdsOf(scope, live),
         (facilityId, stripId) => readScope.isStripVisible(scope, byKey.get(`${facilityId}:${stripId}`)));
     }
     default: {
@@ -409,7 +409,7 @@ function familySnapshots(ctx) {
 }
 
 function _fullSnapshotMessage(ctx) {
-  const { fdrStore, facilityConfig } = ctx;
+  const { flightDataStore, facilityConfig } = ctx;
   const facilityIds = facilityConfig.getFacilityIds();
 
   const strips = [];
@@ -449,7 +449,7 @@ function _fullSnapshotMessage(ctx) {
     // (docs/adr/0088). Config, so it rides the snapshot only.
     positionLetters: facilityConfig.allPositionLetters ? facilityConfig.allPositionLetters() : {},
     positions, bays, strips,
-    fdrs: fdrStore.getAll(),
+    fdrs: flightDataStore.getAll(),
     ...familySnapshots(ctx),
   };
 }

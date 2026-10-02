@@ -16,7 +16,7 @@ test.describe.configure({ timeout: 90000 });
 
 const SHOTS = path.join(__dirname, '..', '..', 'docs', 'wip', 'L16');
 
-const fdrOf = (page, callsign) => page.evaluate((cs) => {
+const flightDataOf = (page, callsign) => page.evaluate((cs) => {
   const s = [...efspStrips.values()].find(x => (efspFdrs.get(x.fdrId) || {}).identity?.callsign === cs);
   return s ? efspFdrs.get(s.fdrId) : null;
 }, callsign);
@@ -70,7 +70,7 @@ test('9F is a select of the configured stereo routes, never free text', async ({
   await pick(s, page, '');
   await expect(s.locator('.efsp-block-9F')).toHaveText('');
   await expect(s.locator('.efsp-block-9')).toHaveText('LTAG DCT BRAVO DCT LTAG');
-  expect((await fdrOf(page, CS)).filed.route).toBe('LTAG DCT BRAVO DCT LTAG');
+  expect((await flightDataOf(page, CS)).filed.route).toBe('LTAG DCT BRAVO DCT LTAG');
 
   // A fresh page load: the Board renders before the route list lands, and the
   // Strip must still become a picker once it does.
@@ -121,7 +121,7 @@ test('§10.5: departure, off-block and takeoff time each follow an explicit orde
   await expect(row('18').locator('.efsp-block-18')).toHaveAttribute('title', /~1425Z estimate: off-block, entered by a controller/);
 
   // The chain wrote nothing: the stored actual is the controller's, takeoff still null (T5).
-  const fdr = await fdrOf(page, CS);
+  const fdr = await flightDataOf(page, CS);
   expect(fdr.assigned.takeoffTimeUtc).toBeNull();
   expect(fdr.filed.proposedDepartureTimeUtc).toBeNull();
 });

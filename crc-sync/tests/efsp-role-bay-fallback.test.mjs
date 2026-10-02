@@ -21,7 +21,7 @@ fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, '[]');
 
 const { createEfsp } = await import('../src/efsp/index.js');
 const facilityConfig = await import('../src/efsp/facility-config.js');
-const { crew, hold, act, mustAct, jumpTo, DEPARTURE_FDR } = await import('./helpers/efsp-scenario.mjs');
+const { crew, hold, act, mustAct, jumpTo, DEPARTURE_FLIGHT_DATA } = await import('./helpers/efsp-scenario.mjs');
 
 const ATC = { OPS: 'INCIRLIK', GND: 'INCIRLIK', TWR: 'INCIRLIK', APP: 'INCIRLIK', CTR: 'CENTER' };
 const roleBayIds = (positionId, facilityId) => facilityConfig.getBaysFor(positionId, facilityId).filter(b => b.holdsRole).map(b => b.bayId);
@@ -41,7 +41,7 @@ test('bayForImpliedState never falls back to a Role Bay', () => {
 test('SCENARIO TWR vacated: a LUAW DEPARTURE reassigned to APP lands in app-coordination, not app-overflight; and goes back on retake', () => {
   const efsp = createEfsp();
   const c = crew(efsp, ATC);
-  let s = mustAct(efsp, c.OPS, 'OPS', null, { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: { ...DEPARTURE_FDR, callsign: 'RBF1', departureRunway: '05' } });
+  let s = mustAct(efsp, c.OPS, 'OPS', null, { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: { ...DEPARTURE_FLIGHT_DATA, callsign: 'RBF1', departureRunway: '05' } });
   s = jumpTo(efsp, c.OPS, 'OPS', s, 'RUNWAY_QUEUE');
   s = mustAct(efsp, c.OPS, 'OPS', s, { kind: 'TransferStrip', toPositionId: 'TWR', bayId: 'twr-runway-queue', rackId: 'rwy-05' });
   s = jumpTo(efsp, c.TWR, 'TWR', s, 'LUAW');
@@ -74,7 +74,7 @@ test('a transfer routed to a covering APP, and a new owner at CTR with no matchi
 test('a DEPARTURE cannot be dragged into a Role Bay; an OVERFLIGHT can still be moved within its own', () => {
   const efsp = createEfsp();
   const c = crew(efsp, ATC);
-  const dep = mustAct(efsp, c.OPS, 'OPS', null, { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: { ...DEPARTURE_FDR, callsign: 'RBF2' } });
+  const dep = mustAct(efsp, c.OPS, 'OPS', null, { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: { ...DEPARTURE_FLIGHT_DATA, callsign: 'RBF2' } });
   const bad = act(efsp, c.APP, 'APP', mustAct(efsp, c.OPS, 'OPS', dep, { kind: 'TransferStrip', toPositionId: 'APP', bayId: 'app-coordination', rackId: 'main' }), { kind: 'MoveStrip', bayId: 'app-overflight', rackId: 'main' });
   assert.equal(bad.ok, false);
   assert.equal(bad.reason, 'VALIDATION_ERROR');

@@ -52,7 +52,7 @@ function isStripVisible(scope, strip, facilityId) {
 }
 
 /** The FDRs of the Strips a scope can see, from `strips` (each stamped with facilityId). */
-function visibleFdrIdsOf(scope, strips) {
+function visibleFlightDataIdsOf(scope, strips) {
   const out = new Set();
   for (const s of strips) if (isStripVisible(scope, s) && s.fdrId) out.add(s.fdrId);
   return out;
@@ -80,12 +80,12 @@ function filterSnapshot(msg, scope) {
  * continuous (a skipped delta would make the next resync look like a gap).
  * A Strip that has just BECOME visible (handed to this session) arrives as one
  * updated Strip, and its FDR was filtered out of every delta until now, so the
- * FDR of every visible updated Strip rides along (`fdrOf` supplies it). Without
+ * FDR of every visible updated Strip rides along (`flightDataOf` supplies it). Without
  * that a handed line drew with a blank callsign.
  * @param {Set<string>} fdrIds the FDRs of every Strip the scope can see now, on every Board
- * @param {(fdrId:string) => object|null} [fdrOf]
+ * @param {(fdrId:string) => object|null} [flightDataOf]
  */
-function filterBoardDelta(msg, scope, fdrIds, fdrOf = () => null) {
+function filterBoardDelta(msg, scope, fdrIds, flightDataOf = () => null) {
   if (scope.kind === ALL) return msg;
   const strips = msg.strips || {};
   const updated = [];
@@ -95,17 +95,17 @@ function filterBoardDelta(msg, scope, fdrIds, fdrOf = () => null) {
     else gone.push(s.stripId);
   }
   const fdrs = msg.fdrs || {};
-  const fdrsUpdated = (fdrs.updated || []).filter(f => fdrIds.has(f.fdrId));
-  const have = new Set(fdrsUpdated.map(f => f.fdrId));
+  const flightDataListUpdated = (fdrs.updated || []).filter(f => fdrIds.has(f.fdrId));
+  const have = new Set(flightDataListUpdated.map(f => f.fdrId));
   for (const s of updated) {
     if (!s.fdrId || have.has(s.fdrId)) continue;
-    const fdr = fdrOf(s.fdrId);
-    if (fdr) { fdrsUpdated.push(fdr); have.add(s.fdrId); }
+    const fdr = flightDataOf(s.fdrId);
+    if (fdr) { flightDataListUpdated.push(fdr); have.add(s.fdrId); }
   }
   return {
     ...msg,
     strips: { ...strips, updated, gone },
-    fdrs: { ...fdrs, updated: fdrsUpdated },
+    fdrs: { ...fdrs, updated: flightDataListUpdated },
   };
 }
 
@@ -139,6 +139,6 @@ function filterAlerts(msg, scope, fdrIds, stripVisible) {
 }
 
 module.exports = {
-  ALL, OWNED, scopeOf, scopeKey, isOwned, isStripVisible, visibleFdrIdsOf,
+  ALL, OWNED, scopeOf, scopeKey, isOwned, isStripVisible, visibleFlightDataIdsOf,
   filterSnapshot, filterBoardDelta, filterCorrelationDelta, filterMarsaDelta, filterAlerts,
 };

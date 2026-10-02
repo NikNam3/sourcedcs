@@ -16,7 +16,7 @@ process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH_TACTICAL = path.join(tmpDir, 'tact
 
 const { BoardStore } = await import('../src/efsp/board-store.js');
 import { fullRules } from "./helpers/full-rules.mjs";
-const { FdrStore } = await import('../src/efsp/flight-data-store.js');
+const { FlightDataStore } = await import('../src/efsp/flight-data-store.js');
 const { PositionStore } = await import('../src/efsp/position-store.js');
 const facilityConfig = await import('../src/efsp/facility-config.js');
 const blockMap = await import('../src/efsp/block-map.js');
@@ -25,7 +25,7 @@ const permission = await import('../src/efsp/permission.js');
 const coordination = await import('../src/efsp/coordination.js');
 
 function makeFacilities() {
-  const fdrStore = new FdrStore();
+  const flightDataStore = new FlightDataStore();
   const facilities = new Map();
 
   for (const facilityId of facilityConfig.getFacilityIds()) {
@@ -59,10 +59,10 @@ function makeFacilities() {
       // Consequences blessed the omission while nothing depended on the gate
       // being real; find-before-mint does, so it stops being defensible.
       tofiEligibleState: (role) => coordination.tofiEligibleState(role),
-      // Needed by _releaseFdrIfLastStrip once one FDR legitimately carries
+      // Needed by _releaseFlightDataIfLastStrip once one FDR legitimately carries
       // several Strips. Absent here too, so the beacon-release refcount was
       // reading `0` for every Strip in this file.
-      liveStripsForFdr: (fdrId, excludeStripId) => {
+      liveStripsForFlightData: (fdrId, excludeStripId) => {
         let n = 0;
         for (const { boardStore } of facilities.values()) {
           for (const s of boardStore.getAll()) {
@@ -72,7 +72,7 @@ function makeFacilities() {
         return n;
       },
     };
-    const boardStore = new BoardStore(fdrStore, fullRules(rules));
+    const boardStore = new BoardStore(flightDataStore, fullRules(rules));
     facilities.set(facilityId, { boardStore, positionStore });
   }
   return facilities;
@@ -431,7 +431,7 @@ test('CreateStrip binds a MISSION Strip to an existing flight, sharing its FDR a
   assert.notEqual(bound.strip.stripId, atcStrip.stripId);
 
   // Guide §9.8's bridge field: one Mode 3/A, not two.
-  assert.equal(bound.fdr.identity.beaconAssigned, tacBoard._fdrStore.getFdr(atcStrip.fdrId).identity.beaconAssigned);
+  assert.equal(bound.fdr.identity.beaconAssigned, tacBoard._fdrStore.getFlightData(atcStrip.fdrId).identity.beaconAssigned);
   assert.equal(bound.strip.tofiCoordination, null, 'a tasked mission line is in no exchange yet');
 });
 
@@ -449,7 +449,7 @@ test('a bound CreateStrip refuses the ways it can be wrong', () => {
   assert.equal(both.ok, false);
   assert.match(both.detail, /either fdr .* or fdrId .* not both/);
 
-  const missing = bindMissionLine(facilities, 'no-such-fdr');
+  const missing = bindMissionLine(facilities, 'no-such-flightData');
   assert.equal(missing.ok, false);
   assert.equal(missing.reason, 'NOT_FOUND');
 
@@ -556,7 +556,7 @@ test('accepting tactical control requires a separation regime, and records it (d
     op: { kind: 'TOFI', action: 'ACCEPT', separationRegime: 'USING_AGENCY' },
   }), 'TAC_C2', 'tac-c2-controller');
   assert.equal(ok.ok, true, JSON.stringify(ok));
-  const fdr = facilities.get('CENTER').boardStore._fdrStore.getFdr(atcStrip.fdrId);
+  const fdr = facilities.get('CENTER').boardStore._fdrStore.getFlightData(atcStrip.fdrId);
   assert.equal(fdr.tofi.separationRegime, 'USING_AGENCY', 'the FDR now says who is separating, from the start');
 });
 

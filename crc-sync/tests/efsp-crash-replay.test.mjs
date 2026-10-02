@@ -31,10 +31,10 @@ fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, '[]');
 
 const { createEfsp } = await import('../src/efsp/index.js');
 const { BoardStore, REPLAY_PERSIST_WINDOW_MS } = await import('../src/efsp/board-store.js');
-const { FdrStore } = await import('../src/efsp/flight-data-store.js');
+const { FlightDataStore } = await import('../src/efsp/flight-data-store.js');
 const facilityConfig = await import('../src/efsp/facility-config.js');
 const { TrafficCount, reconcileTrafficCount } = await import('../src/efsp/traffic-count.js');
-const { crew, DEPARTURE_FDR } = await import('./helpers/efsp-scenario.mjs');
+const { crew, DEPARTURE_FLIGHT_DATA } = await import('./helpers/efsp-scenario.mjs');
 
 const SNAPSHOT_TMP = `${process.env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH}.tmp`;
 
@@ -61,7 +61,7 @@ function effective(lines) { return lines.filter(e => e.op !== 'NotPersisted').le
 function createMsg(callsign, cmid = crypto.randomUUID()) {
   return {
     version: 1, type: 'efsp-mutation', clientMutationId: cmid, facilityId: 'INCIRLIK', actingPositionId: 'OPS',
-    op: { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: { ...DEPARTURE_FDR, callsign } },
+    op: { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: { ...DEPARTURE_FLIGHT_DATA, callsign } },
   };
 }
 
@@ -86,7 +86,7 @@ test('a CreateStrip whose ack died with the process is not created twice on retr
   assert.equal(retry.ack.ok, true, 'the retry is answered, as a success');
   assert.equal(retry.ack.strip.stripId, first.ack.strip.stripId, 'with the Strip it created the first time');
   assert.equal(slot(retry, 'primary'), undefined, 'a replay broadcasts nothing');
-  const named = efsp2.boardStoreFor('INCIRLIK').getAll().filter(s => efsp2.fdrStore.getFdr(s.fdrId).identity.callsign === 'CRASHA1');
+  const named = efsp2.boardStoreFor('INCIRLIK').getAll().filter(s => efsp2.flightDataStore.getFlightData(s.fdrId).identity.callsign === 'CRASHA1');
   assert.equal(named.length, 1, 'one Strip, not two');
   assert.equal(linesFor(efsp2, msg.clientMutationId).length, 1, 'and one audit line');
 });
@@ -126,7 +126,7 @@ test('a Mutation audited but never persisted gets a NotPersisted marker at boot,
 test('a dropped Strip whose drop was never persisted is voided in the traffic count', () => {
   const efsp = createEfsp();
   const facilityIds = facilityConfig.getFacilityIds();
-  const counter = new TrafficCount({ mutationLog: efsp.mutationLog, fdrStore: efsp.fdrStore, boardStoreFor: efsp.boardStoreFor, facilityIds });
+  const counter = new TrafficCount({ mutationLog: efsp.mutationLog, flightDataStore: efsp.flightDataStore, boardStoreFor: efsp.boardStoreFor, facilityIds });
   const c = crew(efsp, { OPS: 'INCIRLIK' });
   const strip = efsp.handleMessage(c.OPS.session, createMsg('CRASHC1')).ack.strip;
   const drop = stripOp(strip, { kind: 'DropStrip' });
@@ -137,7 +137,7 @@ test('a dropped Strip whose drop was never persisted is voided in the traffic co
 
   const efsp2 = restart();
   assert.notEqual(efsp2.boardStoreFor('INCIRLIK').getStrip(strip.stripId).state, 'DROPPED', 'the Strip came back live');
-  const counter2 = new TrafficCount({ mutationLog: efsp2.mutationLog, fdrStore: efsp2.fdrStore, boardStoreFor: efsp2.boardStoreFor, facilityIds });
+  const counter2 = new TrafficCount({ mutationLog: efsp2.mutationLog, flightDataStore: efsp2.flightDataStore, boardStoreFor: efsp2.boardStoreFor, facilityIds });
   assert.equal(counter2.records().filter(x => x.stripId === strip.stripId).length, 0, 'the drop that never took effect is voided');
   assert.equal(counter2.lastReconciliation().ok, true, JSON.stringify(counter2.lastReconciliation()));
 
@@ -152,7 +152,7 @@ test('a dropped Strip whose drop was never persisted is voided in the traffic co
 
   // And a later boot does not void the retried drop a second time.
   const efsp3 = restart();
-  const counter3 = new TrafficCount({ mutationLog: efsp3.mutationLog, fdrStore: efsp3.fdrStore, boardStoreFor: efsp3.boardStoreFor, facilityIds });
+  const counter3 = new TrafficCount({ mutationLog: efsp3.mutationLog, flightDataStore: efsp3.flightDataStore, boardStoreFor: efsp3.boardStoreFor, facilityIds });
   assert.equal(counter3.records().filter(x => x.stripId === strip.stripId).length, 1);
   counter3.close();
 });
@@ -162,10 +162,10 @@ test('the replay window forgets entries older than 10 minutes', () => {
   let now = 1_800_000_000_000;
   Date.now = () => now;
   try {
-    const board = new BoardStore(new FdrStore(), fullRules());
+    const board = new BoardStore(new FlightDataStore(), fullRules());
     const create = (callsign) => board.applyMutation({
       clientMutationId: `cm-${callsign}`,
-      op: { kind: 'CreateStrip', bayId: 'proposed', rackId: 'main', fdr: { ...DEPARTURE_FDR, callsign } },
+      op: { kind: 'CreateStrip', bayId: 'proposed', rackId: 'main', fdr: { ...DEPARTURE_FLIGHT_DATA, callsign } },
     }, 'OPS', 'OPS');
     assert.equal(create('OLD1').ok, true);
     now += REPLAY_PERSIST_WINDOW_MS + 1000;
@@ -174,7 +174,7 @@ test('the replay window forgets entries older than 10 minutes', () => {
     assert.deepEqual(snap.replay.map(([cmid]) => cmid), ['cm-NEW1']);
     assert.equal(REPLAY_PERSIST_WINDOW_MS, 10 * 60 * 1000);
 
-    const restored = new BoardStore(new FdrStore(), fullRules());
+    const restored = new BoardStore(new FlightDataStore(), fullRules());
     restored.restore(JSON.parse(JSON.stringify(snap)));
     assert.equal(restored.hasApplied('cm-NEW1'), true);
     assert.equal(restored.hasApplied('cm-OLD1'), false);

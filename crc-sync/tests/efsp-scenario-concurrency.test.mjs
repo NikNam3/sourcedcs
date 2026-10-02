@@ -28,7 +28,7 @@ fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, JSON.stringify([
 ]));
 
 const { createEfsp } = await import('../src/efsp/index.js');
-const { crew, hold, act, mustAct, airspaceAct, DEPARTURE_FDR, airborneDeparture } = await import('./helpers/efsp-scenario.mjs');
+const { crew, hold, act, mustAct, airspaceAct, DEPARTURE_FLIGHT_DATA, airborneDeparture } = await import('./helpers/efsp-scenario.mjs');
 
 const ATC = { OPS: 'INCIRLIK', CD: 'INCIRLIK', GND: 'INCIRLIK', TWR: 'INCIRLIK', APP: 'INCIRLIK', CTR: 'CENTER' };
 
@@ -45,7 +45,7 @@ function send(efsp, session, { facilityId = 'INCIRLIK', actingPositionId, stripI
 test('SCENARIO two controllers act on the same Strip at once — the second is refused, not silently merged', () => {
   const efsp = createEfsp();
   const c = crew(efsp, ATC);
-  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'RACE1' });
+  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'RACE1' });
 
   // Both clients are looking at the same revision. A relieving controller
   // sits down at APP as an Observer and both hold their own cached copy.
@@ -68,14 +68,14 @@ test('SCENARIO two controllers act on the same Strip at once — the second is r
   // decide rather than being left showing what it guessed.
   assert.equal(second.ack.strip.rev, first.ack.strip.rev);
 
-  const fdr = efsp.fdrStore.getFdr(strip.fdrId);
+  const fdr = efsp.flightDataStore.getFlightData(strip.fdrId);
   assert.equal(fdr.filed.remarks, 'first writer', 'last writer does NOT win — the first one did');
 });
 
 test('the same Mutation sent twice is applied once — a retry after a lost ack is safe', () => {
   const efsp = createEfsp();
   const c = crew(efsp, ATC);
-  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'RETRY1' });
+  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'RETRY1' });
 
   // §5.2 idempotent replay: a client that never saw its ack resends the same
   // clientMutationId rather than inventing a second Mutation.
@@ -97,7 +97,7 @@ test('two controllers advancing the same Strip cannot both move it', async () =>
   const c = crew(efsp, ATC);
   let strip = mustAct(efsp, c.OPS, 'OPS', null, {
     kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE',
-    fdr: { ...DEPARTURE_FDR, callsign: 'ADV1' },
+    fdr: { ...DEPARTURE_FLIGHT_DATA, callsign: 'ADV1' },
   });
 
   // Both presses arrive on the same revision. Only one transition may happen
@@ -142,8 +142,8 @@ test('SCENARIO a client that missed a few updates gets a delta, not a whole snap
   const c = crew(efsp, ATC);
 
   const before = efsp.boardStoreFor('INCIRLIK').currentSeq;
-  const first = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'LAG1' });
-  airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'LAG2' });
+  const first = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'LAG1' });
+  airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'LAG2' });
 
   const resync = efsp.handleMessage(c.APP.session, { type: 'efsp-resync', lastBoardSeq: before, boardEpoch: efsp.snapshotFor().boardEpochByFacility.INCIRLIK });
   assert.equal(resync.ack.answer, 'delta', 'inside the ring buffer, so a delta');
@@ -155,7 +155,7 @@ test('SCENARIO a client that missed a few updates gets a delta, not a whole snap
 test('SCENARIO a client that fell too far behind is sent a full snapshot instead', () => {
   const efsp = createEfsp();
   const c = crew(efsp, ATC);
-  airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'FAR1' });
+  airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'FAR1' });
 
   // Beyond the ring-buffer window there is nothing to replay from, so the
   // only honest answer is the whole Board. Two paths, never a third (§5.6).
@@ -168,7 +168,7 @@ test('SCENARIO a client that fell too far behind is sent a full snapshot instead
 test('a reconnecting client that never declared its Positions cannot act until it does', () => {
   const efsp = createEfsp();
   const c = crew(efsp, ATC);
-  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'RECON1' });
+  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'RECON1' });
 
   // The client drops and comes back. It has a cached Strip and a pending
   // Mutation to replay — but staffing is presence, and presence did not
@@ -192,7 +192,7 @@ test('a reconnecting client that never declared its Positions cannot act until i
 test('a Mutation replayed against a Strip whose role changed while the client was away is refused', () => {
   const efsp = createEfsp();
   const c = crew(efsp, ATC);
-  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'ROLE1' });
+  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'ROLE1' });
   const cached = { stripId: strip.stripId, rev: strip.rev };
 
   // The guide calls a silently-lost Mutation the worst failure mode in the
@@ -216,7 +216,7 @@ test('SCENARIO both ends of a handoff act at the same moment', () => {
   const efsp = createEfsp();
   const c = crew(efsp, ATC);
 
-  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'BOTH1' });
+  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'BOTH1' });
   const proposed = mustAct(efsp, c.APP, 'APP', strip, {
     kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'CENTER', toPositionId: 'CTR',
   });
@@ -238,7 +238,7 @@ test('an accept that lands twice resolves the exchange once', () => {
   const efsp = createEfsp();
   const c = crew(efsp, ATC);
 
-  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'TWICE1' });
+  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'TWICE1' });
   const proposed = mustAct(efsp, c.APP, 'APP', strip, {
     kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'CENTER', toPositionId: 'CTR',
   });
@@ -282,8 +282,8 @@ test('the Mutation log records who did what, including the airspace ops and the 
 test('a restored Strip whose beacon code the pool had free gets it re-reserved', () => {
   const efsp = createEfsp();
   const c = crew(efsp, ATC);
-  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'RECON2' });
-  const code = efsp.fdrStore.getFdr(strip.fdrId).identity.beaconAssigned;
+  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'RECON2' });
+  const code = efsp.flightDataStore.getFlightData(strip.fdrId).identity.beaconAssigned;
 
   // Corrupt the snapshot the way a partial write or an older format would:
   // the Strip and its FDR survive, the allocated-code map does not.
@@ -295,15 +295,15 @@ test('a restored Strip whose beacon code the pool had free gets it re-reserved',
   // Left alone, the next CreateStrip would mint this code for a different
   // aircraft — the same failure ADR 0028 fixed, arriving another way.
   const after = createEfsp();
-  assert.equal(after.fdrStore._codeAllocator.isAllocated(code), true,
+  assert.equal(after.flightDataStore._codeAllocator.isAllocated(code), true,
     'a code a live flight is squawking must not be left in the pool');
-  assert.equal(after.fdrStore._codeAllocator.holderOf(code), strip.fdrId);
+  assert.equal(after.flightDataStore._codeAllocator.holderOf(code), strip.fdrId);
 });
 
 test('the snapshot is written atomically, so a crash mid-write cannot empty the Board', () => {
   const efsp = createEfsp();
   const c = crew(efsp, ATC);
-  airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'ATOMIC1' });
+  airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'ATOMIC1' });
 
   const snapshotPath = process.env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH;
   // The real guarantee: the live file is only ever replaced by rename, so it
@@ -315,7 +315,7 @@ test('the snapshot is written atomically, so a crash mid-write cannot empty the 
 test('free text is capped, because a Strip rides whole in every broadcast', () => {
   const efsp = createEfsp();
   const c = crew(efsp, ATC);
-  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'LONG1' });
+  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'LONG1' });
 
   const huge = 'X'.repeat(5000);
   const route = act(efsp, c.APP, 'APP', strip, { kind: 'SetBlock', blockId: '9', value: huge });
@@ -335,7 +335,7 @@ test('free text is capped, because a Strip rides whole in every broadcast', () =
 test('a coordination note is capped too — it rides in the same broadcast as everything else', () => {
   const efsp = createEfsp();
   const c = crew(efsp, ATC);
-  let strip = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'NOTE1' });
+  let strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'NOTE1' });
   strip = mustAct(efsp, c.APP, 'APP', strip, { kind: 'SetBlock', blockId: '5A', value: 'CST' });
 
   // A degraded track forces the verbal path, so this is the one op kind that

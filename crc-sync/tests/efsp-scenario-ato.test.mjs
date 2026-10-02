@@ -32,7 +32,7 @@ for (const [k, v] of Object.entries({
 fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, '[]');
 
 const { createEfsp } = await import('../src/efsp/index.js');
-const { crew, mustAct, act, DEPARTURE_FDR } = await import('./helpers/efsp-scenario.mjs');
+const { crew, mustAct, act, DEPARTURE_FLIGHT_DATA } = await import('./helpers/efsp-scenario.mjs');
 const { BLOCK_MAPS, resolveBlockTarget } = await import('../src/efsp/block-map.js');
 
 const IRON = fs.readFileSync(new URL('./fixtures/ato/iron-flag-26-3.txt', import.meta.url), 'utf8');
@@ -65,10 +65,10 @@ function importAto(efsp, c, text = IRON, choices = [], clientMutationId = crypto
 }
 
 const missionStrips = (efsp) => efsp.boardStoreFor('TACTICAL').getAll().filter((s) => s.role === 'MISSION' && s.state !== 'DROPPED');
-const fdrOf = (efsp, callsign) => efsp.fdrStore.getAll().find((f) => f.identity.callsign === callsign);
+const flightDataOf = (efsp, callsign) => efsp.flightDataStore.getAll().find((f) => f.identity.callsign === callsign);
 
 function fileDeparture(efsp, c, callsign) {
-  return mustAct(efsp, c.OPS, 'OPS', null, { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: { ...DEPARTURE_FDR, callsign } });
+  return mustAct(efsp, c.OPS, 'OPS', null, { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: { ...DEPARTURE_FLIGHT_DATA, callsign } });
 }
 
 // ── WP7, verbatim ────────────────────────────────────────────────────────────
@@ -87,7 +87,7 @@ test('WP7: An ATO fixture produces mission Strips with correct mission number, p
   const strips = missionStrips(efsp);
   assert.equal(strips.length, 5);
   for (const [callsign, e] of Object.entries(EXPECTED)) {
-    const fdr = fdrOf(efsp, callsign);
+    const fdr = flightDataOf(efsp, callsign);
     assert.ok(fdr, callsign);
     const strip = strips.find((s) => s.fdrId === fdr.fdrId);
     assert.ok(strip, `${callsign} has a MISSION Strip`);
@@ -104,15 +104,15 @@ test('WP7: An ATO fixture produces mission Strips with correct mission number, p
     assert.equal(fdr.identity.beaconAssigned, e.iff[2], `${callsign}: the ATO's Mode 3 is adopted (H64)`);
   }
   // C1: L16 reads the ATO departure time from here, in-game Zulu on the mission calendar.
-  assert.equal(fdrOf(efsp, 'VIPER11').ato.departure.timeUtc, M(12, 0));
+  assert.equal(flightDataOf(efsp, 'VIPER11').ato.departure.timeUtc, M(12, 0));
 });
 
 test('WP7: A tanker\'s AR line and its receivers\' Strips render as a joined group.', () => {
   const { efsp, c } = fresh();
   importAto(efsp, c);
-  const shell = fdrOf(efsp, 'SHELL71');
-  const viper = fdrOf(efsp, 'VIPER11');
-  const dude = fdrOf(efsp, 'DUDE21');
+  const shell = flightDataOf(efsp, 'SHELL71');
+  const viper = flightDataOf(efsp, 'VIPER11');
+  const dude = flightDataOf(efsp, 'DUDE21');
   const tankerLinks = shell.military.arInfo.links;
   assert.deepEqual(tankerLinks.map((l) => [l.role, l.peerFdrId, l.peerCallsign]).sort(),
     [['TANKER', dude.fdrId, 'DUDE21'], ['TANKER', viper.fdrId, 'VIPER11']].sort());
@@ -120,10 +120,10 @@ test('WP7: A tanker\'s AR line and its receivers\' Strips render as a joined gro
     assert.deepEqual(r.military.arInfo.links.map((l) => [l.role, l.peerFdrId, l.peerCallsign]), [['RECEIVER', shell.fdrId, 'SHELL71']]);
     assert.ok(r.military.arInfo.links[0].windows[0].arctUtc >= M(13, 45));
   }
-  assert.equal(fdrOf(efsp, 'SNAKE41').military.arInfo, null, 'no AR, no join');
+  assert.equal(flightDataOf(efsp, 'SNAKE41').military.arInfo, null, 'no AR, no join');
   // T2: the join is not MARSA. No relation exists, no separation regime moved.
   assert.deepEqual(efsp.marsaStore.getAll(), []);
-  for (const f of efsp.fdrStore.getAll()) assert.equal(f.tofi.separationRegime, null, f.identity.callsign);
+  for (const f of efsp.flightDataStore.getAll()) assert.equal(f.tofi.separationRegime, null, f.identity.callsign);
 });
 
 test('WP7: The community-source caveat (§9.9) appears in the parser\'s module documentation.', () => {
@@ -140,7 +140,7 @@ test('import binds a pre-filed flight on its Mode 3/A', () => {
   const { efsp, c } = fresh();
   let dep = fileDeparture(efsp, c, 'VIPER11');
   dep = mustAct(efsp, c.OPS, 'OPS', dep, { kind: 'SetBlock', blockId: '5', value: '4521' });
-  const codesBefore = efsp.fdrStore.codeAllocator.snapshot().length;
+  const codesBefore = efsp.flightDataStore.codeAllocator.snapshot().length;
   const { preview: p, ack } = importAto(efsp, c);
   const line = p.lines.find((l) => l.lineId === '1101A#0');
   assert.equal(line.action, 'BIND');
@@ -149,11 +149,11 @@ test('import binds a pre-filed flight on its Mode 3/A', () => {
   const res = ack.results.find((r) => r.lineId === '1101A#0');
   assert.equal(res.action, 'BIND');
   assert.equal(res.fdrId, dep.fdrId, 'the mission line shares the fdrId');
-  const fdr = efsp.fdrStore.getFdr(dep.fdrId);
+  const fdr = efsp.flightDataStore.getFlightData(dep.fdrId);
   assert.equal(fdr.identity.beaconAssigned, '4521');
   assert.equal(fdr.mission.missionNumber, '1101A');
   assert.equal(fdr.identity.modeOne, '12');
-  assert.equal(efsp.fdrStore.codeAllocator.snapshot().length, codesBefore + 4, 'four new flights, no code minted for the bound one');
+  assert.equal(efsp.flightDataStore.codeAllocator.snapshot().length, codesBefore + 4, 'four new flights, no code minted for the bound one');
   // Re-previewed, the filed flight's own type is reported as kept, not as the ATO's to change.
   const again = preview(efsp, c).lines.find((l) => l.lineId === '1101A#0');
   assert.equal(again.action, 'UPDATE');
@@ -182,7 +182,7 @@ test('a Mode 3 the allocator refuses keeps the minted code and says so', () => {
   for (const [lineId, callsign, code] of [['1101A#0', 'VIPER11', '7700'], ['1202S#0', 'DUDE21', '6001']]) {
     const res = ack.results.find((r) => r.lineId === lineId);
     assert.equal(res.beacon.adopted, false, lineId);
-    const fdr = fdrOf(efsp, callsign);
+    const fdr = flightDataOf(efsp, callsign);
     assert.notEqual(fdr.identity.beaconAssigned, code);
     assert.equal(fdr.provenance['identity.beaconAssigned'], 'COMPUTER_GENERATED');
     assert.equal(fdr.ato.iff.modeThree, code, 'the ATO\'s code is kept beside it');
@@ -211,10 +211,10 @@ test('Mode 1 and Mode 2 cannot be written by any ATC Position', () => {
       act(efsp, member, positionId, current, { kind: 'SetBlock', blockId, value: '77' });
     }
   }
-  const fdr = efsp.fdrStore.getFdr(dep.fdrId);
+  const fdr = efsp.flightDataStore.getFlightData(dep.fdrId);
   assert.equal(fdr.identity.modeOne, '12');
   assert.equal(fdr.identity.modeTwo, '0011');
-  assert.equal(efsp.fdrStore.setField(dep.fdrId, 'identity.modeOne', '77', { by: 'x' }).ok, false);
+  assert.equal(efsp.flightDataStore.setField(dep.fdrId, 'identity.modeOne', '77', { by: 'x' }).ok, false);
 });
 
 // ── Re-import and replacement (Q55(a), H65) ──────────────────────────────────
@@ -222,11 +222,11 @@ test('Mode 1 and Mode 2 cannot be written by any ATC Position', () => {
 test('re-importing an amended ATO updates what the ATO owns and keeps what a controller typed', () => {
   const { efsp, c } = fresh();
   importAto(efsp, c);
-  const viper = fdrOf(efsp, 'VIPER11');
+  const viper = flightDataOf(efsp, 'VIPER11');
   const strip = missionStrips(efsp).find((s) => s.fdrId === viper.fdrId);
   mustAct(efsp, c.TAC_C2, 'TAC_C2', strip, { kind: 'SetBlock', blockId: 'M6', value: '1330' });
-  const typed = efsp.fdrStore.getFdr(viper.fdrId).mission.vulWindowStartUtc;
-  assert.equal(efsp.fdrStore.getFdr(viper.fdrId).provenance['mission.vulWindowStartUtc'], 'CONTROLLER_ENTERED');
+  const typed = efsp.flightDataStore.getFlightData(viper.fdrId).mission.vulWindowStartUtc;
+  assert.equal(efsp.flightDataStore.getFlightData(viper.fdrId).provenance['mission.vulWindowStartUtc'], 'CONTROLLER_ENTERED');
 
   // Planning moves VIPER 11's window to 1400–1600Z and changes its Mode 1, and
   // drops SNAKE 41 from the ATO altogether.
@@ -247,18 +247,18 @@ test('re-importing an amended ATO updates what the ATO owns and keeps what a con
   assert.equal(byPath['identity.modeOne'].to, '13');
   assert.deepEqual(p.notInThisAto.map((n) => n.callsign), ['SNAKE41'], 'listed, never dropped');
 
-  const snake = fdrOf(efsp, 'SNAKE41');
+  const snake = flightDataOf(efsp, 'SNAKE41');
   const snakeBefore = JSON.stringify(snake);
   const { ack } = importAto(efsp, c, amended);
   const res = ack.results.find((r) => r.lineId === '1101A#0');
   assert.equal(res.action, 'UPDATE');
   assert.deepEqual(res.kept.map((k) => k.path), ['mission.vulWindowStartUtc']);
-  const after = efsp.fdrStore.getFdr(viper.fdrId);
+  const after = efsp.flightDataStore.getFlightData(viper.fdrId);
   assert.equal(after.mission.vulWindowStartUtc, typed, 'the controller\'s value stands');
   assert.equal(after.mission.vulWindowEndUtc, M(16, 0), 'the ATO\'s value is replaced');
   assert.equal(after.identity.modeOne, '13');
   assert.equal(missionStrips(efsp).length, 5, 'no second Strip for any line; SNAKE 41 untouched');
-  assert.equal(JSON.stringify(efsp.fdrStore.getFdr(snake.fdrId)), snakeBefore);
+  assert.equal(JSON.stringify(efsp.flightDataStore.getFlightData(snake.fdrId)), snakeBefore);
 });
 
 test('H65: a new ATO replaces the previous one — its Strips stay, and the lines it shares are rebound to it', () => {
@@ -267,7 +267,7 @@ test('H65: a new ATO replaces the previous one — its Strips stay, and the line
   const second = IRON.replace('MSGID/ATO/SOURCEDCS AOC/ATO C/SEP//', 'MSGID/ATO/SOURCEDCS AOC/ATO D/SEP//');
   const { ack } = importAto(efsp, c, second);
   assert.ok(ack.results.every((r) => r.action === 'UPDATE'));
-  for (const f of efsp.fdrStore.getAll()) {
+  for (const f of efsp.flightDataStore.getAll()) {
     assert.equal(f.ato.atoRef.msgId.serial, 'ATO D', f.identity.callsign);
     assert.notEqual(f.ato.atoRef.textSha1, first.preview.textSha1);
   }
@@ -284,7 +284,7 @@ test('a replayed import creates nothing twice', () => {
   });
   assert.deepEqual(again.ack, ack);
   assert.equal(missionStrips(efsp).length, 5);
-  assert.equal(efsp.fdrStore.getAll().length, 5);
+  assert.equal(efsp.flightDataStore.getAll().length, 5);
 });
 
 test('the real squadron ATO imports', { skip: !fs.existsSync(OJW) && 'atobrief/test/fixtures/usmtf/ojw1v5-export.txt is missing' }, () => {
@@ -300,7 +300,7 @@ test('the real squadron ATO imports', { skip: !fs.existsSync(OJW) && 'atobrief/t
   const blade = p.lines.find((l) => l.callsign === 'BLADE21');
   if (blade) {
     assert.ok(blade.warnings.some((w) => w.code === 'MODE3_NOT_ADOPTED'));
-    assert.notEqual(fdrOf(efsp, 'BLADE21').identity.beaconAssigned, '6001');
+    assert.notEqual(flightDataOf(efsp, 'BLADE21').identity.beaconAssigned, '6001');
   }
 });
 
@@ -309,8 +309,8 @@ test('a restart keeps the ATO tasking and the AR group', () => {
   importAto(efsp, c);
   efsp.persist();
   const reborn = createEfsp({ clock });
-  const shell = reborn.fdrStore.getAll().find((f) => f.identity.callsign === 'SHELL71');
-  const viper = reborn.fdrStore.getAll().find((f) => f.identity.callsign === 'VIPER11');
+  const shell = reborn.flightDataStore.getAll().find((f) => f.identity.callsign === 'SHELL71');
+  const viper = reborn.flightDataStore.getAll().find((f) => f.identity.callsign === 'VIPER11');
   assert.equal(viper.identity.modeOne, '12');
   assert.equal(viper.identity.modeTwo, '0011');
   assert.equal(viper.ato.missionNumber, '1101A');
@@ -322,23 +322,23 @@ test('a restart keeps the ATO tasking and the AR group', () => {
 test('DUDE 21 files late: OPS files against its ATO mission, sharing the flight and its code', () => {
   const { efsp, c } = fresh();
   importAto(efsp, c);
-  const dude = fdrOf(efsp, 'DUDE21');
-  const codes = efsp.fdrStore.codeAllocator.snapshot().length;
+  const dude = flightDataOf(efsp, 'DUDE21');
+  const codes = efsp.flightDataStore.codeAllocator.snapshot().length;
   const dep = mustAct(efsp, c.OPS, 'OPS', null, { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdrId: dude.fdrId });
   assert.equal(dep.fdrId, dude.fdrId);
-  assert.equal(efsp.fdrStore.getFdr(dude.fdrId).identity.beaconAssigned, '4531');
-  assert.equal(efsp.fdrStore.codeAllocator.snapshot().length, codes, 'no code minted');
-  assert.equal(efsp.fdrStore.getAll().length, 5, 'no second flight');
+  assert.equal(efsp.flightDataStore.getFlightData(dude.fdrId).identity.beaconAssigned, '4531');
+  assert.equal(efsp.flightDataStore.codeAllocator.snapshot().length, codes, 'no code minted');
+  assert.equal(efsp.flightDataStore.getAll().length, 5, 'no second flight');
 });
 
 test('SHELL 71 is cancelled: its receivers keep their records, and nothing else changes', () => {
   const { efsp, c } = fresh();
   importAto(efsp, c);
-  const shell = fdrOf(efsp, 'SHELL71');
-  const viperBefore = JSON.stringify(fdrOf(efsp, 'VIPER11'));
+  const shell = flightDataOf(efsp, 'SHELL71');
+  const viperBefore = JSON.stringify(flightDataOf(efsp, 'VIPER11'));
   const strip = missionStrips(efsp).find((s) => s.fdrId === shell.fdrId);
   mustAct(efsp, c.TAC_C2, 'TAC_C2', strip, { kind: 'DropStrip' });
-  assert.equal(JSON.stringify(fdrOf(efsp, 'VIPER11')), viperBefore, 'the join is resolved at read time (the badge drops the peer)');
+  assert.equal(JSON.stringify(flightDataOf(efsp, 'VIPER11')), viperBefore, 'the join is resolved at read time (the badge drops the peer)');
   assert.deepEqual(efsp.marsaStore.getAll(), []);
 });
 
@@ -349,9 +349,9 @@ test('VIPER 11 goes to a different tanker: a re-import with a changed ARINFO rew
     .replace('ARINFO/SHELL 71/1901T/34571/NAME:ANCHOR BLUE/220/ARCT:141345Z/', 'ARINFO/MAGIC 11/1801W/34501/NAME:ANCHOR BLUE/220/ARCT:141345Z/')
     .replace('/1101A /VIPER 11 /2 /AC:F16C /KLB:12.0/141345Z /A:1 /A:JP8 /BOM\n', '');
   importAto(efsp, c, text);
-  const viper = fdrOf(efsp, 'VIPER11');
+  const viper = flightDataOf(efsp, 'VIPER11');
   assert.deepEqual(viper.military.arInfo.links.map((l) => [l.role, l.peerCallsign]), [['RECEIVER', 'MAGIC11']]);
-  assert.deepEqual(fdrOf(efsp, 'SHELL71').military.arInfo.links.map((l) => l.peerCallsign), ['DUDE21']);
+  assert.deepEqual(flightDataOf(efsp, 'SHELL71').military.arInfo.links.map((l) => l.peerCallsign), ['DUDE21']);
 });
 
 test('the ATO\'s squawk is taken: the duplicate is adopted with a warning, never refused (D23)', () => {

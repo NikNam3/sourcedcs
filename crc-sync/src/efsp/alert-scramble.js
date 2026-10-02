@@ -58,15 +58,15 @@ function _isScrambling(strip, fdr) {
 }
 
 /**
- * Every active scramble, optionally at one Facility. `fdrOf(fdrId)` returns
+ * Every active scramble, optionally at one Facility. `flightDataOf(fdrId)` returns
  * the FDR or null (an archived FDR is null, never a throw).
  * @returns {{stripId, fdrId, facilityId, state, callsign}[]} sorted by callsign
  */
-function activeScrambles(strips, fdrOf, facilityId) {
+function activeScrambles(strips, flightDataOf, facilityId) {
   const out = [];
   for (const strip of strips || []) {
     if (facilityId !== undefined && facilityId !== null && strip.facilityId !== facilityId) continue;
-    const fdr = strip.fdrId ? fdrOf(strip.fdrId) : null;
+    const fdr = strip.fdrId ? flightDataOf(strip.fdrId) : null;
     if (!_isScrambling(strip, fdr)) continue;
     out.push({ stripId: strip.stripId, fdrId: strip.fdrId, facilityId: strip.facilityId, state: strip.state, callsign: _callsignOf(strip, fdr) });
   }
@@ -79,17 +79,17 @@ function activeScrambles(strips, fdrOf, facilityId) {
  * of a scrambling flight is flagged against its own scramble).
  * @returns {{stripId, fdrId, facilityId, role, state, callsign}[]} in input order
  */
-function conflictingGroundStrips(strips, fdrOf, facilityId) {
-  const scrambles = activeScrambles(strips, fdrOf, facilityId);
+function conflictingGroundStrips(strips, flightDataOf, facilityId) {
+  const scrambles = activeScrambles(strips, flightDataOf, facilityId);
   if (scrambles.length === 0) return [];
-  const scramblingFdrs = new Set(scrambles.map(s => s.fdrId));
+  const scramblingFlightDataList = new Set(scrambles.map(s => s.fdrId));
   const out = [];
   for (const strip of strips || []) {
     if (strip.facilityId !== facilityId) continue;
     const states = GROUND_STATES[strip.role];
     if (!states || !states.includes(strip.state)) continue;
-    if (scramblingFdrs.has(strip.fdrId)) continue;
-    const fdr = strip.fdrId ? fdrOf(strip.fdrId) : null;
+    if (scramblingFlightDataList.has(strip.fdrId)) continue;
+    const fdr = strip.fdrId ? flightDataOf(strip.fdrId) : null;
     out.push({ stripId: strip.stripId, fdrId: strip.fdrId, facilityId: strip.facilityId, role: strip.role, state: strip.state, callsign: _callsignOf(strip, fdr) });
   }
   return out;

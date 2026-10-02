@@ -21,7 +21,7 @@
 //
 // A future persisted-state `version` key and a per-store upgrade hook would go here (S3-4: not now).
 
-const { FdrStore } = require('./flight-data-store');
+const { FlightDataStore } = require('./flight-data-store');
 const { AirspaceStore } = require('./airspace-store');
 const { CorrelationStore } = require('./correlation-store');
 const { MarsaStore } = require('./marsa-store');
@@ -80,14 +80,14 @@ const REGISTRY = [
   },
   {
     key: 'fdr',
-    build: ({ clock, transitionAltFt, codeAllocator }) => new FdrStore(codeAllocator, { clock, transitionAltFt }),
+    build: ({ clock, transitionAltFt, codeAllocator }) => new FlightDataStore(codeAllocator, { clock, transitionAltFt }),
     snapshot: (s) => s.snapshot(),
     restore: (s, data) => s.restore(data),
   },
   {
     key: 'airspaces',
     audited: true,
-    // One store for every Facility, like fdrStore — an airspace is a theater
+    // One store for every Facility, like flightDataStore — an airspace is a theater
     // entity that NAMES its controlling Facility rather than being replicated
     // into each one. There is no D13 replication question here because nothing
     // is ever handed across a boundary; the record has exactly one home.
@@ -113,12 +113,12 @@ const REGISTRY = [
   {
     key: 'correlations',
     audited: true,
-    // WP5 (docs/adr/0045) — keyed by fdrId, and shared across every Facility for the same reason fdrStore is:
+    // WP5 (docs/adr/0045) — keyed by fdrId, and shared across every Facility for the same reason flightDataStore is:
     // a correlation is a fact about one airframe, and both halves of a cross-Facility exchange are looking at
     // the same one. There is no D13 replication question here either — the record has one home.
     build: ({ clock, stores }) => new CorrelationStore({
       clock,
-      fdrExists: (fdrId) => !!stores.fdr.getFdr(fdrId),
+      flightDataExists: (fdrId) => !!stores.fdr.getFlightData(fdrId),
     }),
     snapshot: (s) => s.snapshot(),
     // Correlation records after the FDRs, since restore() skips any whose FDR
@@ -130,19 +130,19 @@ const REGISTRY = [
   {
     key: 'marsa',
     audited: true,
-    // WP6 (docs/adr/0051) — shared across every Facility for the same reason fdrStore and correlationStore
+    // WP6 (docs/adr/0051) — shared across every Facility for the same reason flightDataStore and correlationStore
     // are: MARSA is a fact about a set of airframes, not about one Facility's Board, and both halves of a
     // cross-Facility exchange are looking at the same relation. There is no D13 replication question here
     // either — the record has one home, and its participants are fdrIds, which are already theater-wide.
     //
     // setSeparationRegime is injected rather than reached for: the store must not
-    // hold an FdrStore (correlation-store.js's fdrExists precedent), and guide
+    // hold an FlightDataStore (correlation-store.js's flightDataExists precedent), and guide
     // §4.8.3 requires the regime to actually change when a flight enters a MARSA
     // block — "if a second controller takes TAC_C2 ten minutes later, the state
     // must already be correct, or they inherit a lie."
     build: ({ clock, stores }) => new MarsaStore({
       clock,
-      fdrExists: (fdrId) => !!stores.fdr.getFdr(fdrId),
+      flightDataExists: (fdrId) => !!stores.fdr.getFlightData(fdrId),
       setSeparationRegime: (fdrId, separationRegime, { by } = {}) =>
         stores.fdr.setTofi(fdrId, { separationRegime }, { by }),
     }),
@@ -188,12 +188,12 @@ const REGISTRY = [
     audited: true,
     // docs/adr/0074 (ADR 0064 B6) — the carrier's Case, Marshal
     // stack and altimeter input, one record per hull. Shared across Facilities
-    // like fdrStore (there is exactly one CARRIER Facility; nothing is replicated).
+    // like flightDataStore (there is exactly one CARRIER Facility; nothing is replicated).
     // Lane feeding reads CARRIER staffing lazily through `facilities`.
     build: ({ clock, facilities, stores }) => new CarrierStore({
       hulls: carrierHulls.getHulls(),
       clock,
-      fdrExists: (fdrId) => !!stores.fdr.getFdr(fdrId),
+      flightDataExists: (fdrId) => !!stores.fdr.getFlightData(fdrId),
       isStaffed: (positionId) => {
         const f = facilities.get('CARRIER');
         return !!f && f.positionStore.isStaffed(positionId);
@@ -206,7 +206,7 @@ const REGISTRY = [
     // gone is dropped without closing up (docs/adr/0074).
     restore: (s, data) => {
       s.restore(data);
-      const gone = s.evictMissingFdrs();
+      const gone = s.evictMissingFlightDataList();
       if (gone) log.warn('dropped restored Marshal stack entries whose FDR is gone', { dropped: gone });
     },
   },

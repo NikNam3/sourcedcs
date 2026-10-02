@@ -65,8 +65,8 @@ function splitCallsign(cs) {
  * VIPER11/VIPER12 while the flight plan filed VIPER1 for the formation,
  * because guide §3.2 rule 2 makes a formation ONE Identity with flightSize > 1.
  */
-function callsignAffinity(fdrCallsign, trackCallsign) {
-  const a = normaliseCallsign(fdrCallsign);
+function callsignAffinity(flightDataCallsign, trackCallsign) {
+  const a = normaliseCallsign(flightDataCallsign);
   const b = normaliseCallsign(trackCallsign);
   if (!a || !b) return null;
   if (a === b) return AFFINITY_EXACT;

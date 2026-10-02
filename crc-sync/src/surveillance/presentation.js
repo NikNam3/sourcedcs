@@ -129,8 +129,8 @@ function presentTrack(track, ctx) {
   const who = ctx.who;
   let callsign = null;
   let source = null;
-  if (who.fdrCallsign && who.correlation === 'CORRELATED') { callsign = who.fdrCallsign; source = 'FDR'; }
-  else if (who.fdrCallsign && who.correlation === 'PROVISIONAL') { callsign = who.fdrCallsign; source = 'FDR_PROVISIONAL'; }
+  if (who.flightDataCallsign && who.correlation === 'CORRELATED') { callsign = who.flightDataCallsign; source = 'FDR'; }
+  else if (who.flightDataCallsign && who.correlation === 'PROVISIONAL') { callsign = who.flightDataCallsign; source = 'FDR_PROVISIONAL'; }
   else if (dl && dl.callsign) { callsign = dl.callsign; source = 'DATALINK'; }
   else if (who.tag) { callsign = who.tag; source = 'TAG'; }
 
@@ -145,7 +145,7 @@ function presentTrack(track, ctx) {
     iffState,
     iffOverride: ctx.iffOverride || null,
     label: { callsign, source, tag: who.tag || null, trackNumber: who.trackNumber },
-    type: (who.correlation && who.fdrType) || (dl && dl.type) || null,
+    type: (who.correlation && who.flightDataType) || (dl && dl.type) || null,
     ssr: squawking ? { code: ctx.transponder.code, ident: ctx.transponder.ident, emergency: ctx.transponder.emergency } : null,
     altitude,
     dl: dl ? { lock: dl.lock || null } : null,

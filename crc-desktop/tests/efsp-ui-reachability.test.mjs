@@ -461,7 +461,7 @@ const FDR = {
   fdrId: 'f1', rev: 1, provenance: {},
   identity: { callsign: 'VIPER1', beaconAssigned: '0001', trackDegradationFlag: 'NONE' },
   filed: {}, assigned: {}, tofi: { ifrActive: true }, airspace: {}, comms: {},
-  // WP6, guide §6.4 (crc-sync's docs/adr/0052) — seeded the way createFdr
+  // WP6, guide §6.4 (crc-sync's docs/adr/0052) — seeded the way createFlightData
   // seeds it, not left off, so the Strip renders what a real one would.
   military: { ordnanceState: 'CLEAN', hookRequired: false, alertStatus: 'NONE', mtr: {} },
 };

@@ -3,7 +3,7 @@
 // Archiving finished flights (docs/adr/0082; decisions.md H36, S-R2-13).
 //
 // Nothing used to leave memory: a DROPPED Strip stayed in its Board's _strips
-// forever, its FDR stayed in the FdrStore, and both went into every snapshot.
+// forever, its FDR stayed in the FlightDataStore, and both went into every snapshot.
 // L6's 4-hour soak measured it: the snapshot grew from 23 KB to 470 KB and a
 // Mutation's p50 from 0.8 to 13 ms. The rules, exactly as S-R2-13 fixed them:
 //
@@ -20,7 +20,7 @@
 // keeps the history, with one `Archive` line per Strip and one `ArchiveFdr`
 // line per FDR. There is no archive file.
 //
-// This module decides WHEN; BoardStore.archiveStrip and FdrStore.archiveFdr
+// This module decides WHEN; BoardStore.archiveStrip and FlightDataStore.archiveFlightData
 // do it. The caller persists and broadcasts what a sweep returns (server.js).
 
 /** H36: two hours. A decision, not tuning, so a constant rather than a config file. */
@@ -33,7 +33,7 @@ class Archiver {
    * @param {object} deps
    * @param {string[]} deps.facilityIds
    * @param {(facilityId:string) => object|null} deps.boardStoreFor
-   * @param {object} deps.fdrStore
+   * @param {object} deps.flightDataStore
    * @param {object} [deps.correlationStore]
    * @param {object} [deps.marsaStore]
    * @param {object} [deps.mutationLog]
@@ -42,11 +42,11 @@ class Archiver {
    * @param {number} [deps.retentionMs]
    * @param {((stripId:string) => boolean)|null} [deps.isCounted] null: no traffic count wired
    */
-  constructor({ facilityIds, boardStoreFor, fdrStore, correlationStore = null, marsaStore = null, mutationLog = null,
+  constructor({ facilityIds, boardStoreFor, flightDataStore, correlationStore = null, marsaStore = null, mutationLog = null,
     clock, wallNow = () => Date.now(), retentionMs = ARCHIVE_AFTER_MS, isCounted = null }) {
     this._facilityIds = [...facilityIds];
     this._boardStoreFor = boardStoreFor;
-    this._fdrStore = fdrStore;
+    this._fdrStore = flightDataStore;
     this._correlationStore = correlationStore;
     this._marsaStore = marsaStore;
     this._mutationLog = mutationLog;
@@ -73,7 +73,7 @@ class Archiver {
       log.warn('no traffic count wired — archiving DROPPED Strips without checking they were counted');
     }
     const now = this._wallNow();
-    const candidateFdrs = new Set();
+    const candidateFlightDataList = new Set();
 
     for (const facilityId of this._facilityIds) {
       const board = this._boardStoreFor(facilityId);
@@ -92,23 +92,23 @@ class Archiver {
         }
         const fdrId = board.archiveStrip(strip.stripId, reason, extra);
         archived.push(strip.stripId);
-        if (fdrId) candidateFdrs.add(fdrId);
+        if (fdrId) candidateFlightDataList.add(fdrId);
       }
       if (archived.length) result.stripsByFacility[facilityId] = archived;
     }
 
     // Rule 2: an FDR goes only when no Strip on any Board — live, or DROPPED
     // and not archived yet — still references it (TOFI's shared FDR, T1).
-    if (candidateFdrs.size) {
+    if (candidateFlightDataList.size) {
       const referenced = new Set();
       for (const facilityId of this._facilityIds) {
         const board = this._boardStoreFor(facilityId);
         if (!board) continue;
         for (const s of board.getAll()) referenced.add(s.fdrId);
       }
-      for (const fdrId of candidateFdrs) {
+      for (const fdrId of candidateFlightDataList) {
         if (referenced.has(fdrId)) continue;
-        if (!this._fdrStore.archiveFdr(fdrId)) continue;
+        if (!this._fdrStore.archiveFlightData(fdrId)) continue;
         result.fdrIds.push(fdrId);
         if (this._mutationLog) {
           this._mutationLog.record({
@@ -122,8 +122,8 @@ class Archiver {
     // What pointed at an archived FDR goes with it. Both only ran at restore
     // before (index.js _reconcileRestored).
     if (result.fdrIds.length) {
-      if (this._marsaStore) result.relations = this._marsaStore.evictMissingFdrs();
-      if (this._correlationStore) result.correlations = this._correlationStore.evictMissingFdrs();
+      if (this._marsaStore) result.relations = this._marsaStore.evictMissingFlightDataList();
+      if (this._correlationStore) result.correlations = this._correlationStore.evictMissingFlightDataList();
     }
     return result;
   }
@@ -147,11 +147,11 @@ function sweepChanged(r) {
 /**
  * The board-deltas that tell clients about a sweep: one per Facility whose
  * ring advanced, so every client's boardSeq stays continuous (T5), each
- * carrying the archived FDR ids — the FdrStore is shared across Facilities
+ * carrying the archived FDR ids — the FlightDataStore is shared across Facilities
  * and a client holds every FDR, whichever Facility it works. The archived
  * Strips were already DROPPED, so their `gone` is a no-op on a client that
  * saw the drop; it matters to one that missed it.
- * @returns {{facilityId:string, boardSeq:number, gone:string[], fdrsGone:string[]}[]}
+ * @returns {{facilityId:string, boardSeq:number, gone:string[], flightDataListGone:string[]}[]}
  */
 function archiveDeltas(r, boardStoreFor) {
   if (!sweepChanged(r)) return [];
@@ -159,7 +159,7 @@ function archiveDeltas(r, boardStoreFor) {
   for (const [facilityId, gone] of Object.entries(r.stripsByFacility)) {
     const board = boardStoreFor(facilityId);
     if (!board) continue;
-    payloads.push({ facilityId, boardSeq: board.currentSeq, gone, fdrsGone: r.fdrIds });
+    payloads.push({ facilityId, boardSeq: board.currentSeq, gone, flightDataListGone: r.fdrIds });
   }
   return payloads;
 }

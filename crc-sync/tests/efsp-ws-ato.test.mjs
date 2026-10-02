@@ -61,7 +61,7 @@ test('GCI is refused: only TAC_C2 imports an ATO', () => {
 
 test('a context with no stores refuses cleanly, never throws', () => {
   const session = { controllerId: 'x' };
-  for (const ctx of [{}, { fdrStore: null, boardStoreFor: () => null, positionStoreFor: () => null }]) {
+  for (const ctx of [{}, { flightDataStore: null, boardStoreFor: () => null, positionStoreFor: () => null }]) {
     const p = handleMessage(ctx, session, { type: 'efsp-ato-preview', actingPositionId: 'TAC_C2', text: IRON }, () => {});
     assert.equal(p.ack.ok, false);
     assert.equal(p.ack.reason, 'VALIDATION_ERROR');

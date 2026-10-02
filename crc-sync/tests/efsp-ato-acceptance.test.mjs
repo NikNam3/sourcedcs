@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 const { ingestAtoText, parseAtoText, collectWarnings } = await import('../src/efsp/ato/ato-ingest.js');
 const { CALLSIGN_RE } = await import('../src/efsp/ato/ato-sets.js');
 const { MAX_FREE_TEXT: TOKENIZER_MAX_FREE_TEXT } = await import('../src/efsp/ato/usmtf-tokenize.js');
-const { FdrStore, MAX_FREE_TEXT } = await import('../src/efsp/flight-data-store.js');
+const { FlightDataStore, MAX_FREE_TEXT } = await import('../src/efsp/flight-data-store.js');
 
 const fixture = (name) => readFileSync(new URL(`./fixtures/ato/${name}`, import.meta.url), 'utf8');
 const Z = (h, m) => Date.UTC(2026, 8, 14, h, m); // iron-flag-26-3: 14 SEP 2026
@@ -35,11 +35,11 @@ const EXPECTED = {
 
 // WP7 bullet 1 (guide line 1396) — the PARSER half. "Mission Strips" are
 // L14's: this test proves the seed each Strip would be created from, through
-// the real createFdr. IFF is asserted on the LINE (extras.identityAto), not on
+// the real createFlightData. IFF is asserted on the LINE (extras.identityAto), not on
 // the FDR, because no FDR write path for Mode 1/2 exists (flight-data-store.js:
 // "ATO-owned, WP7 hook — no setter exists anywhere") and the ATO's Mode 3 is
 // deliberately never seeded as the beacon (guide §3.10.3 rule 3, ADR 0054).
-test('WP7: An ATO fixture produces mission Strips with correct mission number, package, vul window, controlling agency and IFF codes (parser half: createFdr seeds + IFF on the line)', () => {
+test('WP7: An ATO fixture produces mission Strips with correct mission number, package, vul window, controlling agency and IFF codes (parser half: createFlightData seeds + IFF on the line)', () => {
   for (const [file, expected] of Object.entries(EXPECTED)) {
     const r = ingestAtoText(fixture(file));
     assert.equal(r.ok, true, file);
@@ -47,7 +47,7 @@ test('WP7: An ATO fixture produces mission Strips with correct mission number, p
     for (const line of r.missionLines) {
       const want = expected[line.lineId];
       assert.equal(line.extras.ato.seedable, true, `${file} ${line.lineId}`);
-      const res = new FdrStore().createFdr(line.fdrSeed, { by: 'ato-test' });
+      const res = new FlightDataStore().createFlightData(line.flightDataSeed, { by: 'ato-test' });
       assert.equal(res.ok, true, `${file} ${line.lineId}: ${res.detail}`);
       const fdr = res.fdr;
       assert.equal(fdr.mission.missionNumber, want.missionNumber);
@@ -78,22 +78,22 @@ test('WP7 bullet 3: the community-source caveat is in the parser\'s module heade
   }
 });
 
-test('ato parity: createFdr accepts every seedable line and refuses the CALLSIGN_INVALID one', () => {
+test('ato parity: createFlightData accepts every seedable line and refuses the CALLSIGN_INVALID one', () => {
   const r = ingestAtoText(fixture('malformed.txt'));
   const bad = r.missionLines.find((l) => l.warnings.some((w) => w.code === 'CALLSIGN_INVALID'));
   assert.equal(bad.extras.ato.callsign, 'WEASEL31');
-  assert.equal(bad.fdrSeed.callsign, null);
-  // With the normalised callsign put back, createFdr must refuse it too —
+  assert.equal(bad.flightDataSeed.callsign, null);
+  // With the normalised callsign put back, createFlightData must refuse it too —
   // proving CALLSIGN_RE here matches flight-data-store.js's rule.
-  const refused = new FdrStore().createFdr({ ...bad.fdrSeed, callsign: bad.extras.ato.callsign }, { by: 'ato-test' });
+  const refused = new FlightDataStore().createFlightData({ ...bad.flightDataSeed, callsign: bad.extras.ato.callsign }, { by: 'ato-test' });
   assert.equal(refused.ok, false);
   assert.equal(refused.reason, 'VALIDATION_ERROR');
   for (const l of r.missionLines.filter((x) => x.extras.ato.seedable)) {
-    assert.equal(new FdrStore().createFdr(l.fdrSeed, { by: 'ato-test' }).ok, true, l.lineId);
+    assert.equal(new FlightDataStore().createFlightData(l.flightDataSeed, { by: 'ato-test' }).ok, true, l.lineId);
   }
   // The rule itself, on both sides.
   for (const cs of ['A', 'VIPER11', 'ABCDEFG', 'ABCDEFGH', '', 'VIPER 1', 'SHELL-1']) {
-    assert.equal(CALLSIGN_RE.test(cs), new FdrStore().createFdr({ callsign: cs }, { by: 't' }).ok, cs);
+    assert.equal(CALLSIGN_RE.test(cs), new FlightDataStore().createFlightData({ callsign: cs }, { by: 't' }).ok, cs);
   }
 });
 

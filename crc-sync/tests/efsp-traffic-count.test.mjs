@@ -29,7 +29,7 @@ const tc = await import('../src/efsp/traffic-count.js');
 const nla = await import('../src/efsp/nla.js');
 const { createEfsp } = await import('../src/efsp/index.js');
 const facilityConfig = await import('../src/efsp/facility-config.js');
-const { crew, act, mustAct, jumpTo, advance, DEPARTURE_FDR, airborneDeparture, handedToCenter, activate } = await import('./helpers/efsp-scenario.mjs');
+const { crew, act, mustAct, jumpTo, advance, DEPARTURE_FLIGHT_DATA, airborneDeparture, handedToCenter, activate } = await import('./helpers/efsp-scenario.mjs');
 
 const {
   TrafficCount, COUNTABLE_PRE_DROP_STATES, hourKey, isDropTransition, isUndoOfDrop,
@@ -122,7 +122,7 @@ const ATC = { OPS: 'INCIRLIK', CD: 'INCIRLIK', GND: 'INCIRLIK', TWR: 'INCIRLIK',
 function counterFor(efsp, extra = {}) {
   return new TrafficCount({
     mutationLog: efsp.mutationLog,
-    fdrStore: efsp.fdrStore,
+    flightDataStore: efsp.flightDataStore,
     boardStoreFor: efsp.boardStoreFor,
     facilityIds: facilityConfig.getFacilityIds(),
     config: { retentionDays: 400, homeAirports: HOME },
@@ -146,7 +146,7 @@ const c = crew(efsp, ATC);
 let counter = quiet(() => counterFor(efsp));
 
 test('a DEPARTURE pressed through to DROPPED is one counted, local record', async () => {
-  let strip = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'CNT1', aircraftType: 'f-16c' });
+  let strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'CNT1', aircraftType: 'f-16c' });
   strip = await advance(efsp, c.APP, 'APP', strip);
   assert.equal(strip.state, 'DROPPED');
   const [r] = recordsFor(counter, strip.stripId);
@@ -167,7 +167,7 @@ test('a DEPARTURE pressed through to DROPPED is one counted, local record', asyn
 
 test('a proposal dropped at PROPOSED is recorded but excluded as NEVER_DEPARTED', () => {
   const strip = mustAct(efsp, c.OPS, 'OPS', null, {
-    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: { ...DEPARTURE_FDR, callsign: 'CNT2' },
+    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: { ...DEPARTURE_FLIGHT_DATA, callsign: 'CNT2' },
   });
   mustAct(efsp, c.OPS, 'OPS', strip, { kind: 'DropStrip' });
   const [r] = recordsFor(counter, strip.stripId);
@@ -178,7 +178,7 @@ test('a proposal dropped at PROPOSED is recorded but excluded as NEVER_DEPARTED'
 });
 
 test('Undo of a terminal Drop appends a VOID and the flight leaves the count; a re-drop is a new record', async () => {
-  let strip = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'CNT3' });
+  let strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'CNT3' });
   strip = await advance(efsp, c.APP, 'APP', strip);
   const first = recordsFor(counter, strip.stripId);
   assert.equal(first.length, 1);
@@ -195,7 +195,7 @@ test('Undo of a terminal Drop appends a VOID and the flight leaves the count; a 
 });
 
 test('a 4-ship counts as one flight and four aircraft (H34)', async () => {
-  let strip = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'CNT4', flightSize: 4 });
+  let strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'CNT4', flightSize: 4 });
   strip = await advance(efsp, c.APP, 'APP', strip);
   const [r] = recordsFor(counter, strip.stripId);
   assert.equal(r.formation, true);
@@ -209,7 +209,7 @@ test('a 4-ship counts as one flight and four aircraft (H34)', async () => {
 
 test('SUA traversal survives ClearAirspaceEntry: approved, cleared, then dropped (T8)', () => {
   activate(efsp, c, 'MOA-TC');
-  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'CNT5', destinationAirport: 'LTAC' });
+  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'CNT5', destinationAirport: 'LTAC' });
   let ctr = handedToCenter(efsp, c, strip);
   ctr = mustAct(efsp, c.CTR, 'CTR', ctr, { kind: 'ApproveAirspaceEntry', airspaceId: 'MOA-TC' });
   ctr = mustAct(efsp, c.CTR, 'CTR', ctr, { kind: 'ClearAirspaceEntry' });
@@ -223,19 +223,19 @@ test('SUA traversal survives ClearAirspaceEntry: approved, cleared, then dropped
 });
 
 test('alert scramble latches: SCRAMBLE seen at any logged Mutation still counts after it is reset', async () => {
-  let strip = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'CNT6' });
-  assert.equal(efsp.fdrStore.setMilitary(strip.fdrId, { alertStatus: 'SCRAMBLE' }).ok, true);
+  let strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'CNT6' });
+  assert.equal(efsp.flightDataStore.setMilitary(strip.fdrId, { alertStatus: 'SCRAMBLE' }).ok, true);
   strip = mustAct(efsp, c.APP, 'APP', strip, { kind: 'SetFlag', flag: 'highlight', value: true });
-  efsp.fdrStore.setMilitary(strip.fdrId, { alertStatus: 'NONE' });
+  efsp.flightDataStore.setMilitary(strip.fdrId, { alertStatus: 'NONE' });
   strip = await advance(efsp, c.APP, 'APP', strip);
   assert.equal(recordsFor(counter, strip.stripId)[0].alertScramble, true);
 });
 
-test('noteFdr latches a SCRAMBLE written with no Strip Mutation around it (L13\'s hatch)', async () => {
-  let strip = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'CNT7' });
-  efsp.fdrStore.setMilitary(strip.fdrId, { alertStatus: 'SCRAMBLE' });
-  counter.noteFdr(strip.fdrId);
-  efsp.fdrStore.setMilitary(strip.fdrId, { alertStatus: 'NONE' });
+test('noteFlightData latches a SCRAMBLE written with no Strip Mutation around it (L13\'s hatch)', async () => {
+  let strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'CNT7' });
+  efsp.flightDataStore.setMilitary(strip.fdrId, { alertStatus: 'SCRAMBLE' });
+  counter.noteFlightData(strip.fdrId);
+  efsp.flightDataStore.setMilitary(strip.fdrId, { alertStatus: 'NONE' });
   strip = await advance(efsp, c.APP, 'APP', strip);
   assert.equal(recordsFor(counter, strip.stripId)[0].alertScramble, true);
 });
@@ -287,7 +287,7 @@ test('retention compaction at boot drops records older than retentionDays, atomi
   fs.writeFileSync(p, [line('old', wall - 401 * DAY), line('edge', wall - 400 * DAY), line('new', wall - DAY),
     JSON.stringify({ type: 'VOID', countId: 'old' })].join('\n') + '\n');
   const counter2 = quiet(() => new TrafficCount({
-    mutationLog: null, fdrStore: efsp.fdrStore, boardStoreFor: efsp.boardStoreFor,
+    mutationLog: null, flightDataStore: efsp.flightDataStore, boardStoreFor: efsp.boardStoreFor,
     facilityIds: facilityConfig.getFacilityIds(), config: { retentionDays: 400, homeAirports: HOME },
     path: p, wallNow: () => wall,
   }));
@@ -300,7 +300,7 @@ test('retention compaction at boot drops records older than retentionDays, atomi
 test('a backfill whose FDR has since been archived is UNKNOWN, basis ARCHIVED (S-R2-13)', () => {
   const archived = quiet(() => new TrafficCount({
     mutationLog: efsp.mutationLog,
-    fdrStore: { getFdr: () => null }, // every FDR gone
+    flightDataStore: { getFlightData: () => null }, // every FDR gone
     boardStoreFor: efsp.boardStoreFor,
     facilityIds: facilityConfig.getFacilityIds(),
     config: { retentionDays: 400, homeAirports: HOME },

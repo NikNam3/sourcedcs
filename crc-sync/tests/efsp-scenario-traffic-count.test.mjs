@@ -32,13 +32,13 @@ fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, JSON.stringify([
 const { createEfsp } = await import('../src/efsp/index.js');
 const facilityConfig = await import('../src/efsp/facility-config.js');
 const { TrafficCount, reconcileTrafficCount } = await import('../src/efsp/traffic-count.js');
-const { crew, act, mustAct, advance, DEPARTURE_FDR, airborneDeparture, handedToCenter, activate } = await import('./helpers/efsp-scenario.mjs');
+const { crew, act, mustAct, advance, DEPARTURE_FLIGHT_DATA, airborneDeparture, handedToCenter, activate } = await import('./helpers/efsp-scenario.mjs');
 
 const efsp = createEfsp();
 const c = crew(efsp, { OPS: 'INCIRLIK', CD: 'INCIRLIK', GND: 'INCIRLIK', TWR: 'INCIRLIK', APP: 'INCIRLIK', CTR: 'CENTER', TAC_C2: 'TACTICAL' });
 const counter = new TrafficCount({
   mutationLog: efsp.mutationLog,
-  fdrStore: efsp.fdrStore,
+  flightDataStore: efsp.flightDataStore,
   boardStoreFor: efsp.boardStoreFor,
   facilityIds: facilityConfig.getFacilityIds(),
   config: { retentionDays: 400, homeAirports: { INCIRLIK: ['LTAG'] } },
@@ -64,11 +64,11 @@ function countFileEntries() {
 
 test('SCENARIO a flying session: the traffic count reconciles against the Mutation log', async () => {
   // 1-2. Two local sorties, LTAG to LTAG, one of them a 2-ship.
-  await flyOut(airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'LOCAL1', aircraftType: 'F-16C' }), 'INCIRLIK');
-  await flyOut(airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'LOCAL2', aircraftType: 'F-16C', flightSize: 2 }), 'INCIRLIK');
+  await flyOut(airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'LOCAL1', aircraftType: 'F-16C' }), 'INCIRLIK');
+  await flyOut(airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'LOCAL2', aircraftType: 'F-16C', flightSize: 2 }), 'INCIRLIK');
 
   // 3. A transient, LTAG to LTAC, handed to Center and dropped at BOTH Facilities.
-  const transient = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'TRANS1', aircraftType: 'C-130', destinationAirport: 'LTAC' });
+  const transient = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'TRANS1', aircraftType: 'C-130', destinationAirport: 'LTAC' });
   const transientCtr = handedToCenter(efsp, c, transient);
   mustAct(efsp, c.APP, 'APP', incirlik(transient.stripId), { kind: 'DropStrip' });
   mustAct(efsp, c.CTR, 'CTR', center(transientCtr.stripId), { kind: 'DropStrip' });
@@ -81,25 +81,25 @@ test('SCENARIO a flying session: the traffic count reconciles against the Mutati
   await flyOut(arrival, 'INCIRLIK');
 
   // 5. A departure converted in place for its return, and landed: one Strip, two legs.
-  const outAndBack = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'RTN1', aircraftType: 'F-16C' });
+  const outAndBack = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'RTN1', aircraftType: 'F-16C' });
   const returning = mustAct(efsp, c.APP, 'APP', outAndBack, { kind: 'ConvertToArrival' });
   await flyOut(returning, 'INCIRLIK');
 
   // 6. A proposal OPS throws away — not traffic.
   const proposal = mustAct(efsp, c.OPS, 'OPS', null, {
-    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: { ...DEPARTURE_FDR, callsign: 'OOPS1' },
+    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: { ...DEPARTURE_FLIGHT_DATA, callsign: 'OOPS1' },
   });
   mustAct(efsp, c.OPS, 'OPS', proposal, { kind: 'DropStrip' });
 
   // 7. A terminal Drop undone, then done again.
-  let undone = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'UNDO1' });
+  let undone = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'UNDO1' });
   undone = await advance(efsp, c.APP, 'APP', undone);
   undone = mustAct(efsp, c.APP, 'APP', undone, { kind: 'Undo' });
   await advance(efsp, c.APP, 'APP', undone);
 
   // 8. A flight approved into a MOA by Center, out again, then finished at both ends.
   activate(efsp, c, 'MOA-SORTIE');
-  const moa = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'MOA1', destinationAirport: 'LTAC' });
+  const moa = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'MOA1', destinationAirport: 'LTAC' });
   let moaCtr = handedToCenter(efsp, c, moa);
   moaCtr = mustAct(efsp, c.CTR, 'CTR', moaCtr, { kind: 'ApproveAirspaceEntry', airspaceId: 'MOA-SORTIE' });
   moaCtr = mustAct(efsp, c.CTR, 'CTR', moaCtr, { kind: 'ClearAirspaceEntry' });
@@ -108,7 +108,7 @@ test('SCENARIO a flying session: the traffic count reconciles against the Mutati
 
   // 9. A handoff Center declines: the replica is dropped (not traffic), the
   // sender's own Strip is a real flight that carries on.
-  const declined = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'DECL1' });
+  const declined = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'DECL1' });
   const proposed = mustAct(efsp, c.APP, 'APP', declined, { kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'CENTER', toPositionId: 'CTR' });
   const replica = mustAct(efsp, c.CTR, 'CTR', center(proposed.coordination.peerStripId), { kind: 'HANDOFF', action: 'REJECT' });
   mustAct(efsp, c.CTR, 'CTR', center(replica.stripId), { kind: 'DropStrip' });

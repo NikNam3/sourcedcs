@@ -17,7 +17,7 @@ process.env.CRCSYNC_EFSP_MUTATION_LOG_PATH = path.join(tmpDir, 'mutations.jsonl'
 const { createEfsp } = await import('../src/efsp/index.js');
 const { BoardStore } = await import('../src/efsp/board-store.js');
 import { fullRules } from "./helpers/full-rules.mjs";
-const { FdrStore } = await import('../src/efsp/flight-data-store.js');
+const { FlightDataStore } = await import('../src/efsp/flight-data-store.js');
 const { ConformanceMonitor } = await import('../src/efsp/conformance.js');
 
 const MISSION_0240Z = Date.UTC(2016, 5, 21, 2, 40, 0);
@@ -59,8 +59,8 @@ test('createEfsp stamps Strips, FDRs, Position staffing and the Mutation log wit
 test('the NLA status every Strip carries is computed at mission time', () => {
   const clock = fakeClock();
   let seen = null;
-  const board = new BoardStore(new FdrStore(undefined, { clock }), fullRules({
-    computeNla: (_strip, _fdr, now) => { seen = now; return null; },
+  const board = new BoardStore(new FlightDataStore(undefined, { clock }), fullRules({
+    computeNla: (_strip, _flightData, now) => { seen = now; return null; },
   }), { clock });
   board.nlaStatusFor({ stripId: 's1', fdrId: 'f1', state: 'HELD' });
   assert.equal(seen, MISSION_0240Z);
@@ -74,7 +74,7 @@ test('conformance measures the heading grace on the wall clock from first sight;
   const monitor = new ConformanceMonitor({
     clock, wallClock: { now: () => wall },
     trackStore: { get: () => ({ course: 180, groundSpeed: 200, verticalSpeed: 0, alt: 3000 }) },
-    fdrStore: { getFdr: () => fdr },
+    flightDataStore: { getFlightData: () => fdr },
     correlationStore: { getAll: () => [{ fdrId: 'f1', trackId: 't1', state: 'CORRELATED' }] },
     weather: () => ({}), transitionAltFt: () => 18000, indicatedAltFt: () => 10000,
     gridToMagnetic: (deg) => deg, // frames are conformance.test.mjs's concern

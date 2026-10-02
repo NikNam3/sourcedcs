@@ -20,11 +20,11 @@ const { CodeAllocator, isValidCodeFormat } = require('./code-allocator');
 // and a frequency a flight is approved onto can never validate differently.
 const { isValidFrequency, MIN_FREQUENCY_MHZ, MAX_FREQUENCY_MHZ } = require('./airspace-config');
 // §9.10's canned-route table (docs/adr/0050). A data-table require rather
-// than the validator-only one above, and deliberately so: createFdr() is the
+// than the validator-only one above, and deliberately so: createFlightData() is the
 // single place a flat seed is interpreted into identity.*/filed.*, and
 // expanding a short name into a route IS seed interpretation. Putting it in
 // board-store.js's _applyCreateStrip instead would mean any second creation
-// path — or a test constructing an FdrStore directly — silently skips it.
+// path — or a test constructing an FlightDataStore directly — silently skips it.
 const stereoRoutes = require('./stereo-routes');
 const { resolveZuluHhmm, resolveTypedTime, formatZuluHhmm } = require('./zulu-time');
 const { setCarrierFlightField } = require('./carrier/flight-record');
@@ -451,7 +451,7 @@ function activeClearanceEntry(fdr, field) {
   return (cell && cell.entries.find(e => e.status === 'ACTIVE')) || null;
 }
 
-class FdrStore {
+class FlightDataStore {
   /**
    * @param {CodeAllocator} [codeAllocator]
    * @param {{clock?:{now:()=>number}, transitionAltFt?:()=>number}} [deps] the mission clock (docs/adr/0079)
@@ -463,13 +463,13 @@ class FdrStore {
     this._clock = clock;
     this._transitionAltFt = transitionAltFt;
     this._codeAllocator = codeAllocator || new CodeAllocator();
-    this._fdrs = new Map(); // fdrId -> FlightDataRecord
+    this._flightDataList = new Map(); // fdrId -> FlightDataRecord
   }
 
   get codeAllocator() { return this._codeAllocator; }
 
-  getFdr(fdrId) { return this._fdrs.get(fdrId) || null; }
-  getAll() { return [...this._fdrs.values()]; }
+  getFlightData(fdrId) { return this._flightDataList.get(fdrId) || null; }
+  getAll() { return [...this._flightDataList.values()]; }
 
   /**
    * Creates a new FDR from filed intent (§3.1, §3.2). Mints a beacon code
@@ -483,7 +483,7 @@ class FdrStore {
    *
    * Returns { ok:true, fdr } or { ok:false, reason }.
    */
-  createFdr(seed, { by }) {
+  createFlightData(seed, { by }) {
     const callsign = String(seed?.callsign || '').toUpperCase();
     if (!CALLSIGN_RE.test(callsign)) {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: 'callsign must be 1-7 alphanumeric characters' };
@@ -537,7 +537,7 @@ class FdrStore {
       if (route.active === false) {
         return { ok: false, reason: 'VALIDATION_ERROR', detail: `${route.name} is not an active stereo route` };
       }
-      stereoSeed = stereoRoutes.toFdrFiledSeed(route);
+      stereoSeed = stereoRoutes.toFlightDataFiledSeed(route);
       stereoName = route.name; // the CANONICAL spelling, not whatever was typed
     }
     // The stereo is a template ("file me the usual"); an explicitly supplied
@@ -688,7 +688,7 @@ class FdrStore {
       updatedBy: by || null,
     };
 
-    this._fdrs.set(fdrId, fdr);
+    this._flightDataList.set(fdrId, fdr);
     return { ok: true, fdr };
   }
 
@@ -712,7 +712,7 @@ class FdrStore {
   }
 
   setField(fdrId, path, value, { by } = {}) {
-    const fdr = this._fdrs.get(fdrId);
+    const fdr = this._flightDataList.get(fdrId);
     if (!fdr) return { ok: false, reason: 'NOT_FOUND' };
     if (path === 'identity.beaconAssigned') {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: 'use setBeaconAssigned' };
@@ -794,7 +794,7 @@ class FdrStore {
     // flight. Naming a different route IS the amendment; the derive-on-write
     // shape is identity.equipmentCodes -> equipmentSuffix above.
     //
-    // Unlike createFdr()'s expansion, this overwrites unconditionally. There
+    // Unlike createFlightData()'s expansion, this overwrites unconditionally. There
     // the seed is a controller's explicit entry and wins; here the explicit
     // entry IS the new route name, so leaving PACK 1's 250 on a flight now
     // filed PACK 2 would be the stale value, not a preserved one.
@@ -808,7 +808,7 @@ class FdrStore {
     //                          clearance already issued is a separate field
     //                          and a separate conversation with the pilot.
     if (stereoExpansion) {
-      const seed = stereoRoutes.toFdrFiledSeed(stereoExpansion);
+      const seed = stereoRoutes.toFlightDataFiledSeed(stereoExpansion);
       for (const key of ['route', 'requestedAltitude', 'departureAirport', 'destinationAirport']) {
         fdr.filed[key] = seed[key];
         fdr.provenance[`filed.${key}`] = 'COMPUTER_GENERATED';
@@ -867,7 +867,7 @@ class FdrStore {
    * for a duplicate, per defect D23.
    */
   setBeaconAssigned(fdrId, code, { by } = {}) {
-    const fdr = this._fdrs.get(fdrId);
+    const fdr = this._flightDataList.get(fdrId);
     if (!fdr) return { ok: false, reason: 'NOT_FOUND' };
 
     const check = this._codeAllocator.validateAssignment(code, fdrId);
@@ -912,7 +912,7 @@ class FdrStore {
    * @returns {{ok:true, fdr, changed:boolean}|{ok:false, reason, detail?}}
    */
   setBeaconObserved(fdrId, code, { source = 'UPSTREAM_TRACK' } = {}) {
-    const fdr = this._fdrs.get(fdrId);
+    const fdr = this._flightDataList.get(fdrId);
     if (!fdr) return { ok: false, reason: 'NOT_FOUND' };
     if (code !== null && !isValidCodeFormat(code)) {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: `observed code must be 4 octal digits or null, not ${JSON.stringify(code)}` };
@@ -944,7 +944,7 @@ class FdrStore {
    * @returns {{ok:true, fdr}|{ok:false, reason:'NOT_FOUND'|'VALIDATION_ERROR', detail?}}
    */
   setAirspaceOwner(fdrId, owner, { by } = {}) {
-    const fdr = this._fdrs.get(fdrId);
+    const fdr = this._flightDataList.get(fdrId);
     if (!fdr) return { ok: false, reason: 'NOT_FOUND' };
     if (!AIRSPACE_OWNERS.has(owner)) {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: `airspace ownership must be a direction (${[...AIRSPACE_OWNERS].join(' or ')}), not ${JSON.stringify(owner)}` };
@@ -989,7 +989,7 @@ class FdrStore {
    * @returns {{ok:true, fdr}|{ok:false, reason:'NOT_FOUND'|'VALIDATION_ERROR', detail?}}
    */
   setTofi(fdrId, patch, { by } = {}) {
-    const fdr = this._fdrs.get(fdrId);
+    const fdr = this._flightDataList.get(fdrId);
     if (!fdr) return { ok: false, reason: 'NOT_FOUND' };
     // Both fields START as null and null is a real, renderable state — "no
     // radar service", "the regime has not been stated" — so clearing one is a
@@ -1041,7 +1041,7 @@ class FdrStore {
    * @returns {{ok:true, fdr}|{ok:false, reason:'NOT_FOUND'|'VALIDATION_ERROR', detail?}}
    */
   setMilitary(fdrId, patch, { by } = {}) {
-    const fdr = this._fdrs.get(fdrId);
+    const fdr = this._flightDataList.get(fdrId);
     if (!fdr) return { ok: false, reason: 'NOT_FOUND' };
 
     for (const key of Object.keys(patch || {})) {
@@ -1080,7 +1080,7 @@ class FdrStore {
    * frequency where a button belongs (rule 6). `null` clears.
    */
   setCarrier(fdrId, field, value, { by } = {}) {
-    const fdr = this._fdrs.get(fdrId);
+    const fdr = this._flightDataList.get(fdrId);
     if (!fdr) return { ok: false, reason: 'NOT_FOUND' };
     const military = ensureMilitary(fdr);
     // EEAT is typed as Zulu HHMM like every other time on a Strip, resolved
@@ -1118,7 +1118,7 @@ class FdrStore {
    *  - CREATE: the import just made this FDR from the line's seed. Every seed
    *    path is marked provenance 'ATO'; the ATO's Mode 3 is ADOPTED as the
    *    assigned code when the allocator accepts it (decision H64, answering
-   *    docs/adr/0054's inherited question), releasing the code createFdr just
+   *    docs/adr/0054's inherited question), releasing the code createFlightData just
    *    minted — else the minted code stays; an ATO alert status of ALERT is
    *    written (the ATO never says SCRAMBLE).
    *  - BIND: a flight already filed. The ATC code is authoritative (§3.10.3
@@ -1141,7 +1141,7 @@ class FdrStore {
       'identity.unit', 'identity.homeStation']);
     const refuse = (detail) => ({ ok: false, reason: 'VALIDATION_ERROR', detail });
 
-    const fdr = this._fdrs.get(fdrId);
+    const fdr = this._flightDataList.get(fdrId);
     if (!fdr) return { ok: false, reason: 'NOT_FOUND' };
     if (!tasking || typeof tasking !== 'object') return refuse('an ATO tasking is an object');
     for (const key of Object.keys(tasking)) if (!TASKING_KEYS.has(key)) return refuse(`${key} is not part of an ATO tasking`);
@@ -1234,7 +1234,7 @@ class FdrStore {
    * @returns {{ok:true, fdr}|{ok:false, reason, detail?}}
    */
   setWorkingFrequency(fdrId, frequencyMhz, { airspaceId = null, by } = {}) {
-    const fdr = this._fdrs.get(fdrId);
+    const fdr = this._flightDataList.get(fdrId);
     if (!fdr) return { ok: false, reason: 'NOT_FOUND' };
     if (frequencyMhz !== null && !isValidFrequency(frequencyMhz)) {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: `frequency must be a number between ${MIN_FREQUENCY_MHZ} and ${MAX_FREQUENCY_MHZ} MHz, not ${JSON.stringify(frequencyMhz)}` };
@@ -1258,10 +1258,10 @@ class FdrStore {
    * Releases the FDR's beacon code — called when its LAST live Strip is
    * DROPPED. Callers must not invoke this while another Strip still
    * references the FDR (TOFI binds two Strips to one fdrId, docs/adr/0025);
-   * board-store.js's _releaseFdrIfLastStrip is the guard that enforces it.
+   * board-store.js's _releaseFlightDataIfLastStrip is the guard that enforces it.
    */
-  releaseFdr(fdrId) {
-    const fdr = this._fdrs.get(fdrId);
+  releaseFlightData(fdrId) {
+    const fdr = this._flightDataList.get(fdrId);
     if (!fdr) return;
     this._codeAllocator.release(fdr.identity.beaconAssigned);
   }
@@ -1277,7 +1277,7 @@ class FdrStore {
    * @returns {{ok:true, fdr, changed:boolean}|{ok:false, reason:'NOT_FOUND'}}
    */
   setTakeoffStamp(fdrId, utc) {
-    const fdr = this._fdrs.get(fdrId);
+    const fdr = this._flightDataList.get(fdrId);
     if (!fdr) return { ok: false, reason: 'NOT_FOUND' };
     const value = Number.isFinite(utc) ? utc : null;
     if (!fdr.timeInputs) fdr.timeInputs = { flightPlanDepartureUtc: null, takeoffStampedUtc: null };
@@ -1288,15 +1288,15 @@ class FdrStore {
   }
 
   /**
-   * Re-claims a code released by releaseFdr, for Undo of a terminal NLA Drop
+   * Re-claims a code released by releaseFlightData, for Undo of a terminal NLA Drop
    * within its 30s window (§3.5 rule 5). No-op when the code has already gone
    * to a different FDR in the meantime — that flight is now squawking it, and
    * minting a knowing duplicate here would be worse than leaving this FDR's
    * own recorded code un-reserved (defect D23: duplicates warn, never block).
    * @returns {{ok:true, warning?:'DUPLICATE_IGNORED_WARNING'}|{ok:false, reason:'NOT_FOUND'}}
    */
-  reacquireFdr(fdrId) {
-    const fdr = this._fdrs.get(fdrId);
+  reacquireFlightData(fdrId) {
+    const fdr = this._flightDataList.get(fdrId);
     if (!fdr) return { ok: false, reason: 'NOT_FOUND' };
     const code = fdr.identity.beaconAssigned;
     if (!code) return { ok: true };
@@ -1321,7 +1321,7 @@ class FdrStore {
    * @returns {{ok:true, fdr}|{ok:false, reason:'NOT_FOUND'|'VALIDATION_ERROR', detail?}}
    */
   setClearance(fdrId, field, { value, confirmVacated = false } = {}, { by } = {}) {
-    const fdr = this._fdrs.get(fdrId);
+    const fdr = this._flightDataList.get(fdrId);
     if (!fdr) return { ok: false, reason: 'NOT_FOUND' };
     if (!CLEARANCE_FIELDS.has(field)) return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown clearance field ${field}` };
     const cell = ensureClearance(fdr)[field];
@@ -1375,17 +1375,17 @@ class FdrStore {
    * Archives a finished flight's FDR (docs/adr/0082, H36): it leaves memory
    * and the snapshot. Only archiver.js calls this, and only in the sweep that
    * archived the FDR's last Strip — an FDR that never had a Strip is never
-   * passed here. The code should already be free (_releaseFdrIfLastStrip);
+   * passed here. The code should already be free (_releaseFlightDataIfLastStrip);
    * it is released again only if this FDR still holds it, never when another
    * flight has taken it since. Idempotent.
    * @returns {boolean} whether there was an FDR to archive
    */
-  archiveFdr(fdrId) {
-    const fdr = this._fdrs.get(fdrId);
+  archiveFlightData(fdrId) {
+    const fdr = this._flightDataList.get(fdrId);
     if (!fdr) return false;
     const code = fdr.identity && fdr.identity.beaconAssigned;
     if (code && this._codeAllocator.holderOf(code) === fdrId) this._codeAllocator.release(code);
-    this._fdrs.delete(fdrId);
+    this._flightDataList.delete(fdrId);
     return true;
   }
 
@@ -1394,7 +1394,7 @@ class FdrStore {
     return { fdrs: this.getAll(), codes: this._codeAllocator.snapshot(), codeCursor: this._codeAllocator.cursor };
   }
   restore(data) {
-    this._fdrs = new Map((data?.fdrs || []).map((f) => {
+    this._flightDataList = new Map((data?.fdrs || []).map((f) => {
       // Every FDR written before docs/adr/0052 has `military: null` on disk.
       // Seeding on the way in (rather than on every read) means one place
       // knows about the old shape and nothing downstream has to — see
@@ -1411,7 +1411,7 @@ class FdrStore {
 }
 
 module.exports = {
-  FdrStore, deriveEquipmentSuffix, WRITABLE_PATHS, VOID_DEADLINE_MINUTES,
+  FlightDataStore, deriveEquipmentSuffix, WRITABLE_PATHS, VOID_DEADLINE_MINUTES,
   EDCT_WINDOW_MINUTES, CALL_FOR_RELEASE_BEFORE_MINUTES, CALL_FOR_RELEASE_AFTER_MINUTES,
   TRACK_DEGRADATION_FLAGS, AIRSPACE_OWNERS, RADAR_SERVICE_STATES, SEPARATION_REGIMES, MAX_FREE_TEXT,
   ORDNANCE_STATES, ALERT_STATUSES, MILITARY_WRITABLE_FIELDS, defaultMilitary,

@@ -113,7 +113,7 @@ async function advance(efsp, crewMember, positionId, strip) {
   return mustAct(efsp, crewMember, positionId, strip, { kind: 'InvokeNla' });
 }
 
-const DEPARTURE_FDR = {
+const DEPARTURE_FLIGHT_DATA = {
   callsign: 'VIPER1', aircraftType: 'F16', wakeCategory: 'D',
   departureAirport: 'LTAG', destinationAirport: 'LTAG', route: 'DCT MOA DCT', requestedAltitude: '250',
 };
@@ -126,10 +126,10 @@ test('SCENARIO civil round trip: Incirlik IFR departure -> CTR -> airspace hande
 
   // OPS originates, then the Strip walks the intrafacility chain.
   let strip = mustAct(efsp, c.OPS, 'OPS', null, {
-    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: DEPARTURE_FDR,
+    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: DEPARTURE_FLIGHT_DATA,
   });
   const fdrId = strip.fdrId;
-  const beacon = efsp.fdrStore.getFdr(fdrId).identity.beaconAssigned;
+  const beacon = efsp.flightDataStore.getFlightData(fdrId).identity.beaconAssigned;
   assert.ok(beacon, 'a beacon code is minted at creation');
 
   strip = await advance(efsp, c.OPS, 'OPS', strip);  // PROPOSED -> PENDING_CLEARANCE, transfers to CD
@@ -162,11 +162,11 @@ test('SCENARIO civil round trip: Incirlik IFR departure -> CTR -> airspace hande
   // of both transitions, not just the most recent one.
   mustAct(efsp, c.CTR, 'CTR', ctrStrip, { kind: 'SetBlock', blockId: '24A', value: 'USING_AGENCY' });
   ctrStrip = efsp.boardStoreFor('CENTER').getStrip(ctrStripId);
-  assert.equal(efsp.fdrStore.getFdr(fdrId).airspace.owner, 'USING_AGENCY');
+  assert.equal(efsp.flightDataStore.getFlightData(fdrId).airspace.owner, 'USING_AGENCY');
   mustAct(efsp, c.CTR, 'CTR', ctrStrip, { kind: 'SetBlock', blockId: '24A', value: 'CONTROLLING_AGENCY' });
   ctrStrip = efsp.boardStoreFor('CENTER').getStrip(ctrStripId);
 
-  const airspace = efsp.fdrStore.getFdr(fdrId).airspace;
+  const airspace = efsp.flightDataStore.getFlightData(fdrId).airspace;
   assert.equal(airspace.owner, 'CONTROLLING_AGENCY', 'the airspace came back');
   assert.deepEqual(airspace.transitions.map(t => t.owner), ['USING_AGENCY', 'CONTROLLING_AGENCY'],
     'both transitions are on the record — a flat overwrite would show only the second');
@@ -201,10 +201,10 @@ test('the terminal Drop button releases the beacon code, not just the state — 
   const c = crew(efsp, { OPS: 'INCIRLIK', APP: 'INCIRLIK' });
 
   const strip = mustAct(efsp, c.OPS, 'OPS', null, {
-    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: DEPARTURE_FDR,
+    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: DEPARTURE_FLIGHT_DATA,
   });
-  const code = efsp.fdrStore.getFdr(strip.fdrId).identity.beaconAssigned;
-  assert.equal(efsp.fdrStore._codeAllocator.isAllocated(code), true);
+  const code = efsp.flightDataStore.getFlightData(strip.fdrId).identity.beaconAssigned;
+  assert.equal(efsp.flightDataStore._codeAllocator.isAllocated(code), true);
 
   // app-departures implies HANDED_OFF, so the Strip has to already be there
   // before it can land in that Bay (_validateBayImpliedTransition).
@@ -214,8 +214,8 @@ test('the terminal Drop button releases the beacon code, not just the state — 
   });
   const dropped = mustAct(efsp, c.APP, 'APP', relocated, { kind: 'InvokeNla' }); // HANDED_OFF's terminal NLA
   assert.equal(dropped.state, 'DROPPED');
-  assert.equal(efsp.fdrStore._codeAllocator.isAllocated(code), false,
-    'the code is back in the pool — the NLA Drop path used to skip releaseFdr entirely');
+  assert.equal(efsp.flightDataStore._codeAllocator.isAllocated(code), false,
+    'the code is back in the pool — the NLA Drop path used to skip releaseFlightData entirely');
 });
 
 test('Undo of a terminal Drop puts back the remove indicator and re-claims the beacon code', () => {
@@ -223,9 +223,9 @@ test('Undo of a terminal Drop puts back the remove indicator and re-claims the b
   const c = crew(efsp, { OPS: 'INCIRLIK', APP: 'INCIRLIK' });
 
   const strip = mustAct(efsp, c.OPS, 'OPS', null, {
-    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: DEPARTURE_FDR,
+    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: DEPARTURE_FLIGHT_DATA,
   });
-  const code = efsp.fdrStore.getFdr(strip.fdrId).identity.beaconAssigned;
+  const code = efsp.flightDataStore.getFlightData(strip.fdrId).identity.beaconAssigned;
   // app-departures implies HANDED_OFF, so the Strip has to already be there
   // before it can land in that Bay (_validateBayImpliedTransition).
   const airborne = jumpTo(efsp, c.OPS, 'OPS', strip, 'HANDED_OFF');
@@ -233,12 +233,12 @@ test('Undo of a terminal Drop puts back the remove indicator and re-claims the b
     kind: 'TransferStrip', toPositionId: 'APP', bayId: 'app-departures', rackId: 'main',
   });
   const dropped = mustAct(efsp, c.APP, 'APP', relocated, { kind: 'InvokeNla' });
-  assert.equal(efsp.fdrStore._codeAllocator.isAllocated(code), false);
+  assert.equal(efsp.flightDataStore._codeAllocator.isAllocated(code), false);
 
   const undone = mustAct(efsp, c.APP, 'APP', dropped, { kind: 'Undo' });
   assert.equal(undone.state, 'HANDED_OFF');
   assert.equal(undone.flags.removeIndicator, false);
-  assert.equal(efsp.fdrStore._codeAllocator.isAllocated(code), true, 'the code is re-claimed, not orphaned');
+  assert.equal(efsp.flightDataStore._codeAllocator.isAllocated(code), true, 'the code is re-claimed, not orphaned');
 });
 
 // ── Scenario 2: military round trip ──────────────────────────────────────
@@ -252,10 +252,10 @@ test('SCENARIO military round trip: Incirlik IFR departure -> CTR -> tactical co
   // Out of Incirlik and across to CTR (the civil leg, compressed — scenario
   // 1 above is what covers the chain itself step by step).
   let strip = mustAct(efsp, c.OPS, 'OPS', null, {
-    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: DEPARTURE_FDR,
+    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: DEPARTURE_FLIGHT_DATA,
   });
   const fdrId = strip.fdrId;
-  const beacon = efsp.fdrStore.getFdr(fdrId).identity.beaconAssigned;
+  const beacon = efsp.flightDataStore.getFlightData(fdrId).identity.beaconAssigned;
 
   strip = jumpTo(efsp, c.OPS, 'OPS', strip, 'HANDED_OFF');
   strip = mustAct(efsp, c.OPS, 'OPS', strip, {
@@ -308,7 +308,7 @@ test('SCENARIO military round trip: Incirlik IFR departure -> CTR -> tactical co
   // separation model and is settable on the ATC-side Strip only.
   mustAct(efsp, c.CTR, 'CTR', ctrStrip, { kind: 'SetBlock', blockId: 'IFR', value: false });
   ctrStrip = efsp.boardStoreFor('CENTER').getStrip(ctrStrip.stripId);
-  assert.equal(efsp.fdrStore.getFdr(fdrId).tofi.ifrActive, false);
+  assert.equal(efsp.flightDataStore.getFlightData(fdrId).tofi.ifrActive, false);
 
   mission = mustAct(efsp, c.TAC_C2, 'TAC_C2', mission, { kind: 'TOFI', action: 'TRANSFER_COMMS' });
   assert.equal(mission.tofiCoordination.commsTransferred, true);
@@ -333,7 +333,7 @@ test('SCENARIO military round trip: Incirlik IFR departure -> CTR -> tactical co
   // still squawking the shared code. The code must NOT go back in the pool.
   const retired = mustAct(efsp, c.TAC_C2, 'TAC_C2', mission, { kind: 'DropStrip', reason: 'mission complete' });
   assert.equal(retired.state, 'DROPPED');
-  assert.equal(efsp.fdrStore._codeAllocator.isAllocated(beacon), true,
+  assert.equal(efsp.flightDataStore._codeAllocator.isAllocated(beacon), true,
     'the ATC-side Strip is still live on this FDR — releasing here would hand a squawking aircraft\'s code to the next departure');
 
   // Return leg, now that the exchange is resolved.
@@ -357,17 +357,17 @@ test('SCENARIO military round trip: Incirlik IFR departure -> CTR -> tactical co
   // sender-side departure Strip APP kept at handoff and CTR's own Strip are
   // still live. Nothing forces their resolution, which is why the client
   // grew a shared-FDR indicator for exactly this.
-  assert.equal(efsp.fdrStore._codeAllocator.isAllocated(beacon), true);
+  assert.equal(efsp.flightDataStore._codeAllocator.isAllocated(beacon), true);
 
   const staleDeparture = efsp.boardStoreFor('INCIRLIK').getStrip(appStrip.stripId);
   assert.equal(staleDeparture.state, 'HANDED_OFF', 'the sender-side Strip is still sitting there');
   mustAct(efsp, c.APP, 'APP', staleDeparture, { kind: 'DropStrip', reason: 'stale after handoff' });
-  assert.equal(efsp.fdrStore._codeAllocator.isAllocated(beacon), true, 'CTR still has one');
+  assert.equal(efsp.flightDataStore._codeAllocator.isAllocated(beacon), true, 'CTR still has one');
 
   mustAct(efsp, c.CTR, 'CTR', efsp.boardStoreFor('CENTER').getStrip(ctrStrip.stripId), { kind: 'DropStrip', reason: 'handed back' });
 
   // Only now, with the last Strip on this FDR gone, does the code come back.
-  assert.equal(efsp.fdrStore._codeAllocator.isAllocated(beacon), false);
+  assert.equal(efsp.flightDataStore._codeAllocator.isAllocated(beacon), false);
 });
 
 test('a TOFI EXIT that completes while the airspace is still booked to the using agency warns, but is not blocked', () => {
@@ -375,7 +375,7 @@ test('a TOFI EXIT that completes while the airspace is still booked to the using
   const c = crew(efsp, { OPS: 'INCIRLIK', APP: 'INCIRLIK', CTR: 'CENTER', TAC_C2: 'TACTICAL' });
 
   let strip = mustAct(efsp, c.OPS, 'OPS', null, {
-    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: DEPARTURE_FDR,
+    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: DEPARTURE_FLIGHT_DATA,
   });
   strip = jumpTo(efsp, c.OPS, 'OPS', strip, 'HANDED_OFF');
   strip = mustAct(efsp, c.OPS, 'OPS', strip, { kind: 'TransferStrip', toPositionId: 'APP', bayId: 'app-departures', rackId: 'main' });
@@ -402,7 +402,7 @@ test('a controller cannot act as a Position it is not Primary at, however the mu
   const c = crew(efsp, { OPS: 'INCIRLIK', APP: 'INCIRLIK' });
 
   const strip = mustAct(efsp, c.OPS, 'OPS', null, {
-    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: DEPARTURE_FDR,
+    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: DEPARTURE_FLIGHT_DATA,
   });
   // app-departures implies HANDED_OFF, so the Strip has to already be there
   // before it can land in that Bay (_validateBayImpliedTransition).
@@ -429,7 +429,7 @@ test('an Observer at a Position may not mutate its Strips — Primary is what ac
   assert.equal(efsp.positionStoreFor('INCIRLIK').primaryOf('OPS'), 'c-OPS', 'the second selector is an Observer, not a second Primary');
 
   const ack = act(efsp, { session: observer, facilityId: 'INCIRLIK' }, 'OPS', null, {
-    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: DEPARTURE_FDR,
+    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: DEPARTURE_FLIGHT_DATA,
   });
   assert.equal(ack.ok, false);
   assert.equal(ack.reason, 'NOT_HOLDING_POSITION');
@@ -513,7 +513,7 @@ test('SCENARIO a MOA sortie: Center books and activates its own MOA, a flight wo
 
   // A flight gets out to Center and is approved into the MOA.
   let strip = mustAct(efsp, c.OPS, 'OPS', null, {
-    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: DEPARTURE_FDR,
+    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: DEPARTURE_FLIGHT_DATA,
   });
   strip = jumpTo(efsp, c.OPS, 'OPS', strip, 'HANDED_OFF');
   strip = mustAct(efsp, c.OPS, 'OPS', strip, { kind: 'TransferStrip', toPositionId: 'APP', bayId: 'app-departures', rackId: 'main' });
@@ -561,7 +561,7 @@ test('SCENARIO a range with its own control: the range books it, Approach approv
   assert.equal(airspaceAct(efsp, c.APP, 'APP', 'RANGE-SOUTH', { kind: 'ApproveActivation' }).ok, true);
 
   let strip = mustAct(efsp, c.OPS, 'OPS', null, {
-    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: DEPARTURE_FDR,
+    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: DEPARTURE_FLIGHT_DATA,
   });
   strip = jumpTo(efsp, c.OPS, 'OPS', strip, 'HANDED_OFF');
   strip = mustAct(efsp, c.OPS, 'OPS', strip, { kind: 'TransferStrip', toPositionId: 'APP', bayId: 'app-departures', rackId: 'main' });
@@ -576,7 +576,7 @@ test('a range Position works no Strips — it can run its airspace and nothing e
   const c = crew(efsp, { OPS: 'INCIRLIK', WEST_RANGE: 'RANGES' });
 
   const strip = mustAct(efsp, c.OPS, 'OPS', null, {
-    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: DEPARTURE_FDR,
+    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: DEPARTURE_FLIGHT_DATA,
   });
   // Guide §4.1: "no strip primitives — owns airspace state", Strip Roles "none".
   for (const op of [{ kind: 'InvokeNla' }, { kind: 'SetState', toState: 'HANDED_OFF' }, { kind: 'DropStrip', reason: 'x' }]) {
@@ -594,7 +594,7 @@ test('approving a flight into airspace nobody has activated is allowed, but warn
   const c = crew(efsp, { OPS: 'INCIRLIK', APP: 'INCIRLIK' });
 
   let strip = mustAct(efsp, c.OPS, 'OPS', null, {
-    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: DEPARTURE_FDR,
+    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: DEPARTURE_FLIGHT_DATA,
   });
   strip = jumpTo(efsp, c.OPS, 'OPS', strip, 'HANDED_OFF');
   strip = mustAct(efsp, c.OPS, 'OPS', strip, { kind: 'TransferStrip', toPositionId: 'APP', bayId: 'app-departures', rackId: 'main' });
@@ -609,7 +609,7 @@ test('approving a flight into airspace nobody has activated is allowed, but warn
   const { ForwardingObligationMonitor } = await import('../src/efsp/forwarding-obligations.js');
   const monitor = new ForwardingObligationMonitor({
     boardStoreFor: efsp.boardStoreFor,
-    fdrStore: efsp.fdrStore,
+    flightDataStore: efsp.flightDataStore,
     facilityConfig,
     airspaceStore: efsp.airspaceStore,
   });

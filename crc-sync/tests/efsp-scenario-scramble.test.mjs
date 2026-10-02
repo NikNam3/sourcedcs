@@ -33,13 +33,13 @@ const { createEfsp } = await import('../src/efsp/index.js');
 const facilityConfig = await import('../src/efsp/facility-config.js');
 const { TrafficCount } = await import('../src/efsp/traffic-count.js');
 const { activeScrambles, conflictingGroundStrips, alertPadConstraint } = await import('../src/efsp/alert-scramble.js');
-const { crew, mustAct, act, jumpTo, advance, DEPARTURE_FDR } = await import('./helpers/efsp-scenario.mjs');
+const { crew, mustAct, act, jumpTo, advance, DEPARTURE_FLIGHT_DATA } = await import('./helpers/efsp-scenario.mjs');
 
 const efsp = createEfsp();
 const c = crew(efsp, { OPS: 'INCIRLIK', CD: 'INCIRLIK', GND: 'INCIRLIK', TWR: 'INCIRLIK', APP: 'INCIRLIK' });
 const counter = new TrafficCount({
   mutationLog: efsp.mutationLog,
-  fdrStore: efsp.fdrStore,
+  flightDataStore: efsp.flightDataStore,
   boardStoreFor: efsp.boardStoreFor,
   facilityIds: facilityConfig.getFacilityIds(),
   config: { retentionDays: 400, homeAirports: { INCIRLIK: ['LTAG'] } },
@@ -50,9 +50,9 @@ const board = efsp.boardStoreFor('INCIRLIK');
 // edge (efsp-ws.js _stampStrip), not stored on the Board.
 const live = () => board.getAll().filter(s => s.state !== 'DROPPED')
   .map(s => ({ ...s, facilityId: 'INCIRLIK', nla: board.nlaStatusFor(s) }));
-const fdrOf = (id) => efsp.fdrStore.getFdr(id);
-const scrambles = () => activeScrambles(live(), fdrOf, 'INCIRLIK');
-const flagged = () => conflictingGroundStrips(live(), fdrOf, 'INCIRLIK').map(s => s.stripId).sort();
+const flightDataOf = (id) => efsp.flightDataStore.getFlightData(id);
+const scrambles = () => activeScrambles(live(), flightDataOf, 'INCIRLIK');
+const flagged = () => conflictingGroundStrips(live(), flightDataOf, 'INCIRLIK').map(s => s.stripId).sort();
 const fresh = (s) => board.getStrip(s.stripId);
 let n = 0;
 
@@ -60,7 +60,7 @@ let n = 0;
 async function clearedDeparture(callsign) {
   let s = mustAct(efsp, c.OPS, 'OPS', null, {
     kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE',
-    fdr: { ...DEPARTURE_FDR, callsign, aircraftType: 'F16' },
+    fdr: { ...DEPARTURE_FLIGHT_DATA, callsign, aircraftType: 'F16' },
   });
   s = await advance(efsp, c.OPS, 'OPS', s);
   assert.equal(s.state, 'PENDING_CLEARANCE');
@@ -74,7 +74,7 @@ function groundTraffic() {
   const dep = (state) => {
     let s = mustAct(efsp, c.OPS, 'OPS', null, {
       kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE',
-      fdr: { ...DEPARTURE_FDR, callsign: `HAWK${++n}` },
+      fdr: { ...DEPARTURE_FLIGHT_DATA, callsign: `HAWK${++n}` },
     });
     s = jumpTo(efsp, c.OPS, 'OPS', s, state);
     return state === 'TAXI'
@@ -153,7 +153,7 @@ test('sortie: an alert pair scrambles past taxiing traffic — flagged, never re
   assert.equal(v.state, 'DEPARTED');
   assert.deepEqual(scrambles(), []);
   assert.deepEqual(flagged(), []);
-  assert.equal(efsp.fdrStore.getFdr(v.fdrId).military.alertStatus, 'SCRAMBLE', 'nothing resets the field (T5)');
+  assert.equal(efsp.flightDataStore.getFlightData(v.fdrId).military.alertStatus, 'SCRAMBLE', 'nothing resets the field (T5)');
 
   // Both writes are logged Strip Mutations (decisions.md S-L5): the audit and
   // L5's latch see them. The log names the op kind, not the Block or value
@@ -186,7 +186,7 @@ test('sortie: the scramble is cancelled on the ground', async () => {
   assert.deepEqual(scrambles(), []);
   assert.deepEqual(flagged(), []);
   setAlert('CD', viper, 'NONE');
-  assert.equal(fdrOf(viper.fdrId).military.alertStatus, 'NONE');
+  assert.equal(flightDataOf(viper.fdrId).military.alertStatus, 'NONE');
   await clearBoard();
 });
 
@@ -224,15 +224,15 @@ test('sortie: a scramble called off after departure was flown, and the drop coun
 test('OPS owns 14E on a departure at every state, whoever holds the Strip (H56, S-L13)', async () => {
   let s = mustAct(efsp, c.OPS, 'OPS', null, {
     kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE',
-    fdr: { ...DEPARTURE_FDR, callsign: 'COLT41' },
+    fdr: { ...DEPARTURE_FLIGHT_DATA, callsign: 'COLT41' },
   });
   s = setAlert('OPS', s, 'ALERT');
-  assert.equal(fdrOf(s.fdrId).military.alertStatus, 'ALERT');
+  assert.equal(flightDataOf(s.fdrId).military.alertStatus, 'ALERT');
   s = await advance(efsp, c.OPS, 'OPS', s);
   // CD holds it now, and OPS still sets the alert status.
   const scrambled = act(efsp, c.OPS, 'OPS', fresh(s), { kind: 'SetBlock', blockId: '14E', value: 'SCRAMBLE' });
   assert.equal(scrambled.ok, true, JSON.stringify(scrambled));
-  assert.equal(fdrOf(s.fdrId).military.alertStatus, 'SCRAMBLE');
+  assert.equal(flightDataOf(s.fdrId).military.alertStatus, 'SCRAMBLE');
   // Any other Block is still the owner's: the exception is 14E only.
   const other = act(efsp, c.OPS, 'OPS', fresh(s), { kind: 'SetBlock', blockId: '8A', value: 'X' });
   assert.equal(other.reason, 'NOT_OWNER');

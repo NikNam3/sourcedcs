@@ -44,7 +44,7 @@ fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, '[]');
 const { createEfsp } = await import('../src/efsp/index.js');
 const facilityConfig = (await import('../src/efsp/facility-config.js')).default;
 const {
-  crew, hold, act, mustAct, marsaAct, jumpTo, DEPARTURE_FDR, airborneDeparture, handedToCenter,
+  crew, hold, act, mustAct, marsaAct, jumpTo, DEPARTURE_FLIGHT_DATA, airborneDeparture, handedToCenter,
 } = await import('./helpers/efsp-scenario.mjs');
 
 const ALL = { OPS: 'INCIRLIK', APP: 'INCIRLIK', CTR: 'CENTER', TAC_C2: 'TACTICAL', GCI: 'TACTICAL', AIC: 'TACTICAL', JTAC: 'TACTICAL' };
@@ -69,7 +69,7 @@ function refused(ack, reason, detail, label = '') {
 
 /** CTR hands tactical control to TAC_C2 (MARSA), and the mission line walks to ON_STATION. */
 function onStationUnderTofi(efsp, c, callsign) {
-  const atCenter = handedToCenter(efsp, c, airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign }));
+  const atCenter = handedToCenter(efsp, c, airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign }));
   const proposed = mustAct(efsp, c.CTR, 'CTR', atCenter, {
     kind: 'TOFI', action: 'PROPOSE', direction: 'ENTRY', toFacilityId: 'TACTICAL', toPositionId: 'TAC_C2',
   });
@@ -123,7 +123,7 @@ test('SCENARIO A1 AIC works a mission line it is handed, and nothing more (H2)',
 
   // Annotate.
   m = mustAct(efsp, c.AIC, 'AIC', tac(efsp, m.stripId), { kind: 'SetBlock', blockId: 'M2', value: 'PKG-A' });
-  assert.equal(efsp.fdrStore.getFdr(m.fdrId).mission.packageId, 'PKG-A');
+  assert.equal(efsp.flightDataStore.getFlightData(m.fdrId).mission.packageId, 'PKG-A');
   m = mustAct(efsp, c.AIC, 'AIC', tac(efsp, m.stripId), { kind: 'SetFlag', flag: 'highlight', value: 'yellow' });
 
   // On Station ↔ Committed. aic-committed implies no state, so the move is free.
@@ -173,7 +173,7 @@ test('SCENARIO A1 AIC works a mission line it is handed, and nothing more (H2)',
   assert.equal(m.ownerPositionId, 'TAC_C2');
   const off = mustAct(efsp, c.TAC_C2, 'TAC_C2', tac(efsp, m.stripId), { kind: 'InvokeNla' });
   assert.equal(off.state, 'OFF_STATION');
-  assert.equal(efsp.fdrStore.getFdr(off.fdrId).mission.packageId, 'PKG-A', 'AIC\'s annotation travels with the line');
+  assert.equal(efsp.flightDataStore.getFlightData(off.fdrId).mission.packageId, 'PKG-A', 'AIC\'s annotation travels with the line');
 });
 
 test('SCENARIO A2 CTR asks for the exit while AIC holds the line — AIC cannot answer it, and the TOFI exception is TAC_C2\'s only (B2)', () => {
@@ -243,7 +243,7 @@ test('SCENARIO A3\'\' the same holds at Incirlik: GND walks away and TWR gets th
   const efsp = freshEfsp();
   const c = crew(efsp, { OPS: 'INCIRLIK', GND: 'INCIRLIK', TWR: 'INCIRLIK', APP: 'INCIRLIK' });
   const strip = mustAct(efsp, c.OPS, 'OPS', null, {
-    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: { ...DEPARTURE_FDR, callsign: 'VAC14' },
+    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: { ...DEPARTURE_FLIGHT_DATA, callsign: 'VAC14' },
   });
   mustAct(efsp, c.OPS, 'OPS', strip, { kind: 'TransferStrip', toPositionId: 'GND', bayId: 'gnd-coordination', rackId: 'main' });
   hold(efsp, c.GND.session, 'INCIRLIK', []);
@@ -302,7 +302,7 @@ test('SCENARIO A6 one controller holding CTR and AIC still gets no coordination 
   const c = crew(efsp, { OPS: 'INCIRLIK', APP: 'INCIRLIK', CTR: 'CENTER', TAC_C2: 'TACTICAL', JTAC: 'TACTICAL' });
 
   // A mission line on a flight CTR is working (the taskMissionLine shape).
-  const ctrStrip = handedToCenter(efsp, c, airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'CMB11' }));
+  const ctrStrip = handedToCenter(efsp, c, airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'CMB11' }));
   let line = mustAct(efsp, c.TAC_C2, 'TAC_C2', null, {
     kind: 'CreateStrip', bayId: 'tac-c2-tasked', rackId: 'main', role: 'MISSION', fdrId: ctrStrip.fdrId,
   });
@@ -389,7 +389,7 @@ test('SCENARIO J1 JTAC writes nothing on a line it has not been handed', () => {
   assert.equal(tac(efsp, m.stripId).rev, m.rev, 'nothing JTAC sent touched the line');
 
   // JTAC is never a TOFI counterpart.
-  const ctrStrip = handedToCenter(efsp, c, airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'JT12' }));
+  const ctrStrip = handedToCenter(efsp, c, airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'JT12' }));
   refused(act(efsp, c.CTR, 'CTR', ctrStrip, {
     kind: 'TOFI', action: 'PROPOSE', direction: 'ENTRY', toFacilityId: 'TACTICAL', toPositionId: 'JTAC',
   }), 'VALIDATION_ERROR', /not a valid TOFI counterpart/, 'TOFI to JTAC');
@@ -440,7 +440,7 @@ test('SCENARIO J4 a JTAC is sent only the Strips TAC_C2 has handed it (H40)', ()
   const c = crew(efsp, ALL);
   const handed = handTo(efsp, c, taskedLine(efsp, c, 'JT16'), 'JTAC', 'jtac-mission');
   const kept = taskedLine(efsp, c, 'JT17');
-  airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'JT18' });
+  airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'JT18' });
 
   // A reconnecting JTAC's full resync is the one read path that is already
   // per-session on the wire; the connect-time snapshot and the broadcast

@@ -45,7 +45,7 @@ fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, '[]');
 
 const { createEfsp } = await import('../src/efsp/index.js');
 const {
-  crew, hold, act, mustAct, jumpTo, advance, DEPARTURE_FDR, NLA_DOUBLE_TAP_MS,
+  crew, hold, act, mustAct, jumpTo, advance, DEPARTURE_FLIGHT_DATA, NLA_DOUBLE_TAP_MS,
 } = await import('./helpers/efsp-scenario.mjs');
 
 const ATC = { OPS: 'INCIRLIK', CD: 'INCIRLIK', GND: 'INCIRLIK', TWR: 'INCIRLIK', APP: 'INCIRLIK', CTR: 'CENTER' };
@@ -83,7 +83,7 @@ let n = 0;
 function departure(state, { runway: rwy = '05', rackId = 'rwy-05', e = efsp, crewOf = c } = {}) {
   let s = mustAct(e, crewOf.OPS, 'OPS', null, {
     kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE',
-    fdr: { ...DEPARTURE_FDR, callsign: `RWY${++n}`, departureRunway: rwy },
+    fdr: { ...DEPARTURE_FLIGHT_DATA, callsign: `RWY${++n}`, departureRunway: rwy },
   });
   if (state === 'TAXI') {
     s = jumpTo(e, crewOf.OPS, 'OPS', s, 'TAXI');

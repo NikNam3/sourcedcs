@@ -78,5 +78,5 @@ module.exports = {
   snapshot: (ctx) => ctx.correlationStore ? ctx.correlationStore.getAll() : [],
 
   /** What an owned session is sent of an efsp-correlation-delta (docs/adr/0080). */
-  filter: (ctx, scope, msg) => readScope.filterCorrelationDelta(msg, scope, readScope.visibleFdrIdsOf(scope, liveStamped(ctx))),
+  filter: (ctx, scope, msg) => readScope.filterCorrelationDelta(msg, scope, readScope.visibleFlightDataIdsOf(scope, liveStamped(ctx))),
 };

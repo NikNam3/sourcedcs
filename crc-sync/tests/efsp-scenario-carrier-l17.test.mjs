@@ -70,7 +70,7 @@ test('a launch is a MARSHAL Strip in LAUNCH; EEAT set on it is on the recovery S
   const recovery = checkIn(efsp, c, null, { fdrId: launch.fdrId });
   assert.equal(recovery.fdrId, launch.fdrId);
   assert.equal(recovery.state, 'IN_STACK');
-  const carrierFields = efsp.fdrStore.getFdr(launch.fdrId).military.carrier;
+  const carrierFields = efsp.flightDataStore.getFlightData(launch.fdrId).military.carrier;
   assert.equal(carrierFields.eeatUtc, eeat, 'EEAT survives from the launch Strip to the recovery Strip');
   assert.equal(carrierFields.approachButton, 7);
   assert.equal(stack(efsp).length, 1, 'the check-in joined the stack');
@@ -302,7 +302,7 @@ test('typed values are what a controller reads: EEAT and Charlie time as Zulu HH
   const { efsp, c } = fresh();
   const a = checkIn(efsp, c, 'AAA11');
   mustAct(efsp, c.CV_MARSHAL, 'CV_MARSHAL', a, { kind: 'SetBlock', blockId: 'C15', value: '1432' });
-  const eeat = efsp.fdrStore.getFdr(a.fdrId).military.carrier.eeatUtc;
+  const eeat = efsp.flightDataStore.getFlightData(a.fdrId).military.carrier.eeatUtc;
   assert.equal(new Date(eeat).getUTCHours() * 100 + new Date(eeat).getUTCMinutes(), 1432);
   refused(act(efsp, c.CV_MARSHAL, 'CV_MARSHAL', strip(efsp, a.stripId), { kind: 'SetBlock', blockId: 'C15', value: '2561' }), 'VALIDATION_ERROR', /Zulu/);
   mustCarrierAct(efsp, c.CV_MARSHAL, 'CV_MARSHAL', { kind: 'SetCharlieTime', hhmm: '1500' });
@@ -334,13 +334,13 @@ test('the recovery Strip keeps the flight\'s squawk: dropping the launch Strip m
   const launch = mustAct(efsp, c.CV_MARSHAL, 'CV_MARSHAL', null, {
     kind: 'CreateStrip', bayId: 'cv-marshal-departures', rackId: 'main', role: 'MARSHAL', initialState: 'LAUNCH', fdr: { callsign: 'VIPER11', aircraftType: 'F-18C' },
   });
-  const code = efsp.fdrStore.getFdr(launch.fdrId).identity.beaconAssigned;
+  const code = efsp.flightDataStore.getFlightData(launch.fdrId).identity.beaconAssigned;
   assert.ok(code, 'the launch minted a squawk');
   await advance(efsp, c.CV_MARSHAL, 'CV_MARSHAL', strip(efsp, launch.stripId)); // launched: the Strip drops
   const recovery = checkIn(efsp, c, null, { fdrId: launch.fdrId });
-  assert.equal(efsp.fdrStore.getFdr(recovery.fdrId).identity.beaconAssigned, code);
-  assert.equal(efsp.fdrStore.codeAllocator.isAllocated(code), true, 'the code is held again, not free in the pool');
+  assert.equal(efsp.flightDataStore.getFlightData(recovery.fdrId).identity.beaconAssigned, code);
+  assert.equal(efsp.flightDataStore.codeAllocator.isAllocated(code), true, 'the code is held again, not free in the pool');
   // and another flight created now does not get the same code
   const other = checkIn(efsp, c, 'OTHER22');
-  assert.notEqual(efsp.fdrStore.getFdr(other.fdrId).identity.beaconAssigned, code, 'a duplicate Mode 3/A');
+  assert.notEqual(efsp.flightDataStore.getFlightData(other.fdrId).identity.beaconAssigned, code, 'a duplicate Mode 3/A');
 });

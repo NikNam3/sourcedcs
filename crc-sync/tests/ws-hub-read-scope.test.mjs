@@ -24,7 +24,7 @@ const WsHub = (await import('../src/ws-hub.js')).default;
 const TrackStore = (await import('../src/tracks.js')).default;
 const CollaborativeStore = (await import('../src/collab-store.js')).default;
 const { createEfsp } = await import('../src/efsp/index.js');
-const { crew, mustAct, jumpTo, airborneDeparture, DEPARTURE_FDR } = await import('./helpers/efsp-scenario.mjs');
+const { crew, mustAct, jumpTo, airborneDeparture, DEPARTURE_FLIGHT_DATA } = await import('./helpers/efsp-scenario.mjs');
 
 const OPEN = 1;
 const fakeWs = () => {
@@ -44,7 +44,7 @@ function world() {
   };
   const handed = mustAct(efsp, c.TAC_C2, 'TAC_C2', line('HND11'), { kind: 'TransferStrip', toPositionId: 'JTAC', bayId: 'jtac-mission', rackId: 'main' });
   const kept = line('KPT11');
-  const dep = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'DEP11' });
+  const dep = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'DEP11' });
   const hub = new WsHub({ trackStore: new TrackStore(), collabStore: new CollaborativeStore(), efsp });
   const clients = new Set();
   hub._wss = { clients };

@@ -48,7 +48,7 @@ function _atoGate(ctx, session, msg, text) {
   const origin = atoBoard.ATO_IMPORT_ORIGIN;
   const boardStore = typeof ctx.boardStoreFor === 'function' ? ctx.boardStoreFor(origin.facilityId) : null;
   const positionStore = typeof ctx.positionStoreFor === 'function' ? ctx.positionStoreFor(origin.facilityId) : null;
-  if (!boardStore || !positionStore || !ctx.fdrStore) return { reason: 'VALIDATION_ERROR', detail: 'this server has no TACTICAL Board to import an ATO into' };
+  if (!boardStore || !positionStore || !ctx.flightDataStore) return { reason: 'VALIDATION_ERROR', detail: 'this server has no TACTICAL Board to import an ATO into' };
   if (positionStore.primaryOf(msg.actingPositionId) !== session.controllerId) {
     return { reason: 'NOT_HOLDING_POSITION', detail: `you are not Primary at ${msg.actingPositionId} at ${origin.facilityId} — select it before importing an ATO` };
   }
@@ -65,7 +65,7 @@ function handleAtoPreview(ctx, session, msg) {
   const base = { version: VERSION, type: 'efsp-ato-preview-result', requestId: msg.requestId };
   const gate = _atoGate(ctx, session, msg, msg.text);
   if (gate.reason) return { ack: { ...base, ok: false, reason: gate.reason, detail: gate.detail }, broadcasts: orderSlots(null) };
-  const preview = atoBoard.previewAto({ text: msg.text, fdrs: ctx.fdrStore.getAll(), liveStrips: _atoLiveStrips(ctx), nowUtc: ctx.clock.now() });
+  const preview = atoBoard.previewAto({ text: msg.text, fdrs: ctx.flightDataStore.getAll(), liveStrips: _atoLiveStrips(ctx), nowUtc: ctx.clock.now() });
   return { ack: { ...base, ok: true, preview }, broadcasts: orderSlots(null) };
 }
 
@@ -102,7 +102,7 @@ function handleAtoMutation(ctx, session, msg, persist) {
   if (op.kind !== 'ImportAto') return refuse('VALIDATION_ERROR', `unknown ATO op ${JSON.stringify(op.kind)}`);
 
   const now = ctx.clock.now();
-  const analysis = atoBoard.analyseAto({ text: op.text, fdrs: ctx.fdrStore.getAll(), liveStrips: _atoLiveStrips(ctx), nowUtc: now });
+  const analysis = atoBoard.analyseAto({ text: op.text, fdrs: ctx.flightDataStore.getAll(), liveStrips: _atoLiveStrips(ctx), nowUtc: now });
   const plan = atoBoard.planImport(analysis, op.choices, { textSha1: op.textSha1 });
   if (!plan.ok) return refuse(plan.reason, plan.detail);
 
@@ -112,7 +112,7 @@ function handleAtoMutation(ctx, session, msg, persist) {
   };
   const { boardStore } = gate;
   const exec = atoBoard.executeImport({
-    analysis, plan, boardStore, fdrStore: ctx.fdrStore, clientMutationId: cmid,
+    analysis, plan, boardStore, flightDataStore: ctx.flightDataStore, clientMutationId: cmid,
     actingPositionId: msg.actingPositionId, by: session.controllerId, atoRef,
   });
   logEntry({
@@ -130,7 +130,7 @@ function handleAtoMutation(ctx, session, msg, persist) {
     broadcasts: orderSlots({ primary: {
       version: VERSION, type: 'efsp-board-delta', boardSeq: boardStore.currentSeq, boardEpoch: boardStore.epoch, facilityId,
       strips: { updated: exec.strips.map((s) => stampStrip(boardStore, boardStore.getStrip(s.stripId) || s, facilityId, ctx)), gone: [] },
-      fdrs: { updated: exec.fdrIds.map((id) => ctx.fdrStore.getFdr(id)).filter(Boolean) },
+      fdrs: { updated: exec.fdrIds.map((id) => ctx.flightDataStore.getFlightData(id)).filter(Boolean) },
       positions: { updated: [] },
     } }),
   };

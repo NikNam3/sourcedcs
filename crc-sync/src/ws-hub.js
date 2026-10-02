@@ -152,7 +152,7 @@ class WsHub {
       boardEpoch: payload.boardEpoch !== undefined ? payload.boardEpoch : this._boardEpochFor(payload.facilityId),
       facilityId: payload.facilityId,
       strips: { updated: payload.strips || [], gone: payload.gone || [] },
-      fdrs: payload.fdrsGone && payload.fdrsGone.length ? { updated: [], gone: payload.fdrsGone } : { updated: [] },
+      fdrs: payload.flightDataListGone && payload.flightDataListGone.length ? { updated: [], gone: payload.flightDataListGone } : { updated: [] },
       positions: { updated: [] },
     });
   }
@@ -338,7 +338,7 @@ class WsHub {
       const d = this._surv.describe(track);
       described.set(id, d);
       const w = d.who;
-      const fp = [d.iffOverride, w.fdrId, w.correlation, w.fdrCallsign, w.fdrType, w.tag].join('|');
+      const fp = [d.iffOverride, w.fdrId, w.correlation, w.flightDataCallsign, w.flightDataType, w.tag].join('|');
       const prev = this._labels.get(id);
       if (!prev) this._labels.set(id, { fp, rev: 1 });
       else if (prev.fp !== fp) this._labels.set(id, { fp, rev: prev.rev + 1 });

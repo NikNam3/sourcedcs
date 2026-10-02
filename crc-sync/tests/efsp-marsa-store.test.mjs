@@ -9,15 +9,15 @@ import { MarsaStore, MARSA_EXPANSION, MIN_PARTICIPANTS } from '../src/efsp/marsa
 // because §13's acceptance criterion is about what happens when a controller
 // presses a Block, not about what this class does when called directly.
 
-const TANKER = 'fdr-shell71';
-const RX1 = 'fdr-viper11';
-const RX2 = 'fdr-viper12';
-const OUTSIDER = 'fdr-hawg01';
+const TANKER = 'flight-data-shell71';
+const RX1 = 'flight-data-viper11';
+const RX2 = 'flight-data-viper12';
+const OUTSIDER = 'flight-data-hawg01';
 
 function makeStore({ known = [TANKER, RX1, RX2, OUTSIDER] } = {}) {
   const regimes = new Map();
   const store = new MarsaStore({
-    fdrExists: (fdrId) => known.includes(fdrId),
+    flightDataExists: (fdrId) => known.includes(fdrId),
     setSeparationRegime: (fdrId, separationRegime) => {
       regimes.set(fdrId, separationRegime);
       return { ok: true };
@@ -89,7 +89,7 @@ test('a relation needs two flights, a declaring callsign, and valid start/end en
   assert.equal(declare(store, { declaringCallsign: '' }).reason, 'VALIDATION_ERROR');
   assert.equal(declare(store, { startEvent: 'VIBES' }).reason, 'VALIDATION_ERROR');
   assert.equal(declare(store, { endCondition: 'WHENEVER' }).reason, 'VALIDATION_ERROR');
-  assert.equal(declare(store, { participants: [TANKER, 'fdr-ghost'] }).reason, 'NOT_FOUND');
+  assert.equal(declare(store, { participants: [TANKER, 'flight-data-ghost'] }).reason, 'NOT_FOUND');
 });
 
 test('one flight is in at most one ACTIVE relation — the invariant the auto-void keys on', () => {
@@ -188,7 +188,7 @@ test('one receiver breaking off leaves the rest under MARSA; the last one ends i
 test('a flight ending retires it from its relation — and that is not a void', () => {
   const { store, regimes } = makeStore();
   const { marsaId } = declare(store).relation;
-  const changed = store.onFdrRetired(TANKER, 'ctrl-1');
+  const changed = store.onFlightDataRetired(TANKER, 'ctrl-1');
   assert.equal(changed.length, 1);
   const r = store.getRelation(marsaId);
   assert.equal(r.state, 'ENDED');
@@ -197,7 +197,7 @@ test('a flight ending retires it from its relation — and that is not a void', 
   assert.equal(r.endedBy, 'PARTICIPANT_RETIRED');
   assert.equal(r.voidedBy, null);
   assert.equal(regimes.get(RX1), 'ATC');
-  assert.equal(store.onFdrRetired(OUTSIDER, 'ctrl-1').length, 0, 'a flight in no relation changes nothing');
+  assert.equal(store.onFlightDataRetired(OUTSIDER, 'ctrl-1').length, 0, 'a flight in no relation changes nothing');
 });
 
 // ── the interlock (§9.2 rule 2) ─────────────────────────────────────────────
@@ -251,7 +251,7 @@ test('refusals are audited too — a rejected ask must leave a trace somewhere',
   store.setMutationLog({ record: (e) => entries.push(e) });
 
   const { marsaId } = declare(store).relation;
-  op(store, marsaId, { kind: 'AddParticipant', fdrId: 'fdr-ghost' });
+  op(store, marsaId, { kind: 'AddParticipant', fdrId: 'flight-data-ghost' });
   op(store, marsaId, { kind: 'EndMarsa' }, { baseRev: 999 });
 
   const refusals = entries.filter(e => !e.ok);
@@ -323,13 +323,13 @@ test('a relation that comes back with one participant left is finished, not acti
   assert.equal(reborn.activeFor(TANKER), null);
 });
 
-test('evictMissingFdrs forgets relations nobody is in any more', () => {
+test('evictMissingFlightDataList forgets relations nobody is in any more', () => {
   const { store } = makeStore();
   declare(store);
-  assert.equal(store.evictMissingFdrs(), 0);
+  assert.equal(store.evictMissingFlightDataList(), 0);
   const { store: narrowed } = makeStore({ known: [] });
   narrowed.restore([]);
-  assert.equal(narrowed.evictMissingFdrs(), 0);
+  assert.equal(narrowed.evictMissingFlightDataList(), 0);
 });
 
 test('the glossary expansion is exported so UI text has one copy (§9.2 rule 6)', () => {
@@ -360,11 +360,11 @@ test('an op against an unknown relation is NOT_FOUND', () => {
 // connected client at all until the next full snapshot. This is the journal
 // efsp-ws.js drains to put them on the wire.
 
-/** A store whose injected setter returns the FDR it wrote, the way fdr-store.setTofi does. */
-function makeStoreWithFdrs() {
+/** A store whose injected setter returns the FDR it wrote, the way flight-data-store.setTofi does. */
+function makeStoreWithFlightDataList() {
   const fdrs = new Map([TANKER, RX1, RX2, OUTSIDER].map(id => [id, { fdrId: id, tofi: { separationRegime: null } }]));
   const store = new MarsaStore({
-    fdrExists: (fdrId) => fdrs.has(fdrId),
+    flightDataExists: (fdrId) => fdrs.has(fdrId),
     setSeparationRegime: (fdrId, separationRegime) => {
       const fdr = fdrs.get(fdrId);
       fdr.tofi = { ...fdr.tofi, separationRegime };
@@ -375,14 +375,14 @@ function makeStoreWithFdrs() {
 }
 
 test('DeclareMarsa reports the FDRs whose separation regime it wrote', () => {
-  const { store } = makeStoreWithFdrs();
+  const { store } = makeStoreWithFlightDataList();
   const result = declare(store);
   assert.deepEqual(result.fdrs.map(f => f.fdrId).sort(), [TANKER, RX1].sort());
   for (const fdr of result.fdrs) assert.equal(fdr.tofi.separationRegime, 'MARSA');
 });
 
 test('EndMarsa reports every participant going back to ATC', () => {
-  const { store } = makeStoreWithFdrs();
+  const { store } = makeStoreWithFlightDataList();
   const { marsaId } = declare(store).relation;
   const ended = op(store, marsaId, { kind: 'EndMarsa' });
   assert.deepEqual(ended.fdrs.map(f => f.fdrId).sort(), [TANKER, RX1].sort());
@@ -390,7 +390,7 @@ test('EndMarsa reports every participant going back to ATC', () => {
 });
 
 test('RemoveParticipant reports the flight that LEFT, which is no longer in the relation to be derived from it', () => {
-  const { store } = makeStoreWithFdrs();
+  const { store } = makeStoreWithFlightDataList();
   const { marsaId } = declare(store, { participants: [TANKER, RX1, RX2] }).relation;
   const removed = op(store, marsaId, { kind: 'RemoveParticipant', fdrId: RX2 });
   assert.equal(removed.ok, true);
@@ -399,7 +399,7 @@ test('RemoveParticipant reports the flight that LEFT, which is no longer in the 
 });
 
 test('the journal is drained per op — one op never reports the writes of the one before it', () => {
-  const { store } = makeStoreWithFdrs();
+  const { store } = makeStoreWithFlightDataList();
   const { marsaId } = declare(store).relation;
   const marked = op(store, marsaId, { kind: 'MarkRendezvous' });
   assert.equal(marked.ok, true);
@@ -407,7 +407,7 @@ test('the journal is drained per op — one op never reports the writes of the o
 });
 
 test('the interlock void leaves its regime writes for board-store to drain', () => {
-  const { store, fdrs } = makeStoreWithFdrs();
+  const { store, fdrs } = makeStoreWithFlightDataList();
   declare(store);
   const voided = store.voidForAssignment(TANKER, { cause: 'CONTROLLER_ALTITUDE_CHANGE', blockId: '21' });
   assert.equal(voided.state, 'VOIDED');
@@ -419,9 +419,9 @@ test('the interlock void leaves its regime writes for board-store to drain', () 
 });
 
 test('a flight ending retires it from its relation, and the surviving participants\' regime writes are drainable too', () => {
-  const { store } = makeStoreWithFdrs();
+  const { store } = makeStoreWithFlightDataList();
   declare(store);
-  const changed = store.onFdrRetired(RX1, 'ctrl-1');
+  const changed = store.onFlightDataRetired(RX1, 'ctrl-1');
   assert.equal(changed.length, 1);
   assert.equal(changed[0].endedBy, 'PARTICIPANT_RETIRED');
   assert.deepEqual(store.drainRegimeWrites().map(f => f.fdrId), [TANKER]);

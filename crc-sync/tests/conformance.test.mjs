@@ -109,7 +109,7 @@ test('the monitor reads correlation, track and clearance, and reports a flight o
   const track = { id: 't1', alt: 3048, course: 90, groundSpeed: FAST, verticalSpeed: 0 };
   const monitor = new ConformanceMonitor({
     trackStore: { get: (id) => (id === 't1' ? track : null) },
-    fdrStore: { getFdr: (id) => (id === 'f1' ? fdr : null) },
+    flightDataStore: { getFlightData: (id) => (id === 'f1' ? fdr : null) },
     correlationStore: { getAll: () => [{ fdrId: 'f1', trackId: 't1', state: 'CORRELATED' }] },
     weather: () => ({ pressurePa: 101325, tempK: 288.15 }),
     transitionAltFt: () => 18000,
@@ -145,7 +145,7 @@ async function syriaMonitor(course, { theatre = 'Syria', at = [37.0, 35.43] } = 
   const track = { id: 't1', lat: at[0], lon: at[1], alt: 3048, course, groundSpeed: FAST, verticalSpeed: 0 };
   const monitor = new ConformanceMonitor({
     trackStore: { get: () => track },
-    fdrStore: { getFdr: () => fdr },
+    flightDataStore: { getFlightData: () => fdr },
     correlationStore: { getAll: () => [{ fdrId: 'f1', trackId: 't1', state: 'CORRELATED' }] },
     weather: () => ({ pressurePa: 101325, tempK: 288.15 }),
     transitionAltFt: () => 10000,
@@ -187,7 +187,7 @@ test('unknown magnetic course (no projection for the theater, or no converter): 
   const { ConformanceMonitor } = await import('../src/efsp/conformance.js');
   const bare = new ConformanceMonitor({
     trackStore: { get: () => track },
-    fdrStore: { getFdr: () => ({ fdrId: 'f1', clearance: { heading: { entries: [{ parsed: 50, status: 'ACTIVE', at: 0 }] }, altitude: { entries: [] } } }) },
+    flightDataStore: { getFlightData: () => ({ fdrId: 'f1', clearance: { heading: { entries: [{ parsed: 50, status: 'ACTIVE', at: 0 }] }, altitude: { entries: [] } } }) },
     correlationStore: { getAll: () => [{ fdrId: 'f1', trackId: 't1', state: 'CORRELATED' }] },
     weather: () => ({}), transitionAltFt: () => 18000, indicatedAltFt, config: cfg,
   });

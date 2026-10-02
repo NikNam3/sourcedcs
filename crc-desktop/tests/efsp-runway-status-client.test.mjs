@@ -55,7 +55,7 @@ const departure = (extra = {}) => ({ stripId: 's-dep', fdrId: 'f-dep', facilityI
 const arrival = (extra = {}) => ({ stripId: 's-arr', fdrId: 'f-arr', facilityId: 'INCIRLIK', role: 'ARRIVAL', state: 'HANDED_TO_TOWER', bayId: 'twr-arrivals', rackId: 'main', ...extra });
 const fdrDep = (rwy) => ({ fdrId: 'f-dep', filed: { departureRunway: rwy }, assigned: {}, military: {} });
 const fdrArr = (rwy, hook = false) => ({ fdrId: 'f-arr', filed: {}, assigned: { landingRunway: rwy }, military: { hookRequired: hook } });
-const lookups = (rec, fdr) => ({ fieldStateFor: (id) => (rec && rec.facilityId === id ? rec : null), fdrFor: () => fdr });
+const lookups = (rec, fdr) => ({ fieldStateFor: (id) => (rec && rec.facilityId === id ? rec : null), flightDataFor: () => fdr });
 
 // ── Step 1: client state ────────────────────────────────────────────────────
 

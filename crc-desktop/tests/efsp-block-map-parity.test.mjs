@@ -27,7 +27,7 @@
 //   - whether a Block is fdr/annotation-routed at all — if one side thinks a
 //     Block is directly writable and the other doesn't, SetBlock either
 //     silently no-ops or writes to a field the other side never reads.
-//   - for fdr-routed Blocks: `target.path` (which FDR field) and `provenance`
+//   - for flight-data-routed Blocks: `target.path` (which FDR field) and `provenance`
 //     (the pre-edit provenance default — see strip-template.test.js's own
 //     "Block 9 defaults to COMPUTER_GENERATED" test, which this mirrors).
 //   - `interlock` (docs/adr/0051) — which Blocks §9.2's MARSA void interlock

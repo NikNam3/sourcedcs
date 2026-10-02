@@ -63,8 +63,8 @@ function sfaArrival(efsp, c, rackId = 'freq-2') {
   return mustAct(efsp, c.APP, 'APP', s, { kind: 'TransferStrip', toPositionId: 'SFA', bayId: 'sfa-frequencies', rackId });
 }
 
-const fdrOf = (efsp, s) => efsp.fdrStore.getFdr(s.fdrId);
-const freqOf = (efsp, s) => fdrOf(efsp, s).comms.workingFrequencyMhz;
+const flightDataOf = (efsp, s) => efsp.flightDataStore.getFlightData(s.fdrId);
+const freqOf = (efsp, s) => flightDataOf(efsp, s).comms.workingFrequencyMhz;
 
 // ── SFA ─────────────────────────────────────────────────────────────────────
 
@@ -75,7 +75,7 @@ test('SFA acceptance (guide §4.7, D17): rotating moves the controller and the S
   assert.equal(s.bayId, 'sfa-frequencies');
   assert.equal(s.rackId, 'freq-2');
   assert.equal(freqOf(efsp, s), MS['freq-2'], 'the Rack the Strip was filed in is its frequency');
-  const commsBefore = JSON.stringify(fdrOf(efsp, s).comms);
+  const commsBefore = JSON.stringify(flightDataOf(efsp, s).comms);
 
   const rotated = mustAct(efsp, c.SFA, 'SFA', strip(efsp, s), { kind: 'SfaRotation' });
   assert.equal(rotated.ownerPositionId, 'PAR', 'the controller moved');
@@ -84,7 +84,7 @@ test('SFA acceptance (guide §4.7, D17): rotating moves the controller and the S
   assert.equal(rotated.stripId, s.stripId, 'same Strip');
   assert.equal(rotated.fdrId, s.fdrId, 'same flight');
   assert.equal(rotated.bayId, 'par-final');
-  assert.equal(JSON.stringify(fdrOf(efsp, s).comms), commsBefore, 'the flight\'s comms record is byte-identical: no frequency change, no transition');
+  assert.equal(JSON.stringify(flightDataOf(efsp, s).comms), commsBefore, 'the flight\'s comms record is byte-identical: no frequency change, no transition');
   assert.equal(freqOf(efsp, s), MS['freq-2']);
   assert.deepEqual(
     { kind: rotated.sfaTransfer.kind, trigger: rotated.sfaTransfer.trigger, from: rotated.sfaTransfer.from, to: rotated.sfaTransfer.to, frequencyRackId: rotated.sfaTransfer.frequencyRackId },
@@ -175,7 +175,7 @@ test('a pilot SWITCHES frequency: the controller drags the Strip to another Rack
   assert.equal(moved.rackId, 'freq-4');
   assert.equal(moved.ownerPositionId, 'SFA', 'the controller did not move');
   assert.equal(freqOf(efsp, s), MS['freq-4']);
-  assert.equal(fdrOf(efsp, s).comms.transitions.at(-1).workingFrequencyMhz, MS['freq-4'], 'the transition is on the flight, for the sortie\'s record');
+  assert.equal(flightDataOf(efsp, s).comms.transitions.at(-1).workingFrequencyMhz, MS['freq-4'], 'the transition is on the flight, for the sortie\'s record');
   // back again, and the rotation afterwards still leaves the frequency alone
   mustAct(efsp, c.SFA, 'SFA', strip(efsp, s), { kind: 'MoveStrip', bayId: 'sfa-frequencies', rackId: 'freq-2' });
   mustAct(efsp, c.SFA, 'SFA', strip(efsp, s), { kind: 'SfaRotation' });

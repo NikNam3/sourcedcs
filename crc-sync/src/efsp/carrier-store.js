@@ -1,7 +1,7 @@
 'use strict';
 
 // The CarrierStore (docs/adr/0064 B6, docs/adr/0074): a SIXTH store, peer to
-// FdrStore, BoardStore, AirspaceStore, CorrelationStore, MarsaStore and
+// FlightDataStore, BoardStore, AirspaceStore, CorrelationStore, MarsaStore and
 // FieldStateStore, keyed by `hullId`.
 //
 // The Case and the Marshal stack are facts about the SHIP's recovery, spanning
@@ -49,13 +49,13 @@ class CarrierStore {
   /**
    * @param {object} deps
    * @param {object[]} deps.hulls hull configs (carrier/hull-config.js)
-   * @param {(fdrId:string)=>boolean} [deps.fdrExists]
+   * @param {(fdrId:string)=>boolean} [deps.flightDataExists]
    * @param {(positionId:string)=>boolean} [deps.isStaffed] CARRIER Position staffing, for lane feeding
    * @param {{now:()=>number}} [deps.clock] the mission clock
    */
-  constructor({ hulls, fdrExists, isStaffed, clock = WALL_CLOCK } = {}) {
+  constructor({ hulls, flightDataExists, isStaffed, clock = WALL_CLOCK } = {}) {
     this._clock = clock;
-    this._fdrExists = fdrExists || (() => true);
+    this._flightDataExists = flightDataExists || (() => true);
     this._isStaffed = isStaffed || (() => false);
     if (!hulls || !hulls.length) throw new Error('CarrierStore needs at least one hull (config/efsp-carriers.json)');
     this._hulls = hulls.map(deepClone);
@@ -338,7 +338,7 @@ class CarrierStore {
     const stackId = op.stackId || carrier.DEFAULT_STACK_ID;
     const stack = record.stacks[stackId];
     if (!stack) return { ok: false, reason: 'NOT_FOUND', detail: `unknown stack ${stackId}` };
-    if ((op.kind === 'InsertAt' || op.kind === 'Append') && !this._fdrExists(op.fdrId)) {
+    if ((op.kind === 'InsertAt' || op.kind === 'Append') && !this._flightDataExists(op.fdrId)) {
       return { ok: false, reason: 'NOT_FOUND', detail: `unknown FDR ${op.fdrId}` };
     }
     const r = carrier.applyStackOp(stack, op);
@@ -387,7 +387,7 @@ class CarrierStore {
    * (H28, ADR 0064).
    * @returns {boolean} whether anything changed
    */
-  onFdrRetired(fdrId, by = null) {
+  onFlightDataRetired(fdrId, by = null) {
     let changed = false;
     for (const record of this._records.values()) {
       for (const [stackId, stack] of Object.entries(record.stacks)) {
@@ -399,12 +399,12 @@ class CarrierStore {
     return changed;
   }
 
-  evictMissingFdrs() {
+  evictMissingFlightDataList() {
     let n = 0;
     for (const record of this._records.values()) {
       for (const stack of Object.values(record.stacks)) {
         for (const e of stack.entries.slice()) {
-          if (!this._fdrExists(e.fdrId) && this.onFdrRetired(e.fdrId, 'system')) n += 1;
+          if (!this._flightDataExists(e.fdrId) && this.onFlightDataRetired(e.fdrId, 'system')) n += 1;
         }
       }
     }

@@ -63,14 +63,14 @@ export function patternLegsFor(bay) {
  * not from its last Move, so going round again does not reset it.
  * @param {object} bay
  * @param {(bayId:string, rackId:string)=>object[]} rackOf  getEfspRack
- * @param {(fdrId:string)=>object|null} fdrOf               getEfspFdr
+ * @param {(fdrId:string)=>object|null} flightDataOf               getEfspFdr
  */
-export function patternStripsFor(bay, rackOf, fdrOf) {
+export function patternStripsFor(bay, rackOf, flightDataOf) {
   const out = [];
   let order = 0;
   for (const rackId of bay.rackIds || []) {
     for (const s of rackOf(bay.bayId, rackId) || []) {
-      const fdr = fdrOf ? fdrOf(s.fdrId) : null;
+      const fdr = flightDataOf ? flightDataOf(s.fdrId) : null;
       const identity = (fdr && fdr.identity) || {};
       const joinedMs = (s.carrierTransfer && s.carrierTransfer.at) || s.createdAt;
       out.push({

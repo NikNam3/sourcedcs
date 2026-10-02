@@ -11,11 +11,11 @@ function _applyUndo(ctx, strip, by) {
   // so undoing one has to put back what it took: clear the remove
   // indicator and re-claim the beacon code. The code can only have been
   // taken by another flight if one was created inside this 30s window —
-  // reacquireFdr leaves it alone in that case rather than minting a
+  // reacquireFlightData leaves it alone in that case rather than minting a
   // silent duplicate, exactly as a controller override would (D23).
   if (strip.state === 'DROPPED') {
     strip.flags.removeIndicator = false;
-    ctx.fdrStore.reacquireFdr(strip.fdrId);
+    ctx.flightDataStore.reacquireFlightData(strip.fdrId);
     ctx.droppedWallAt.delete(strip.stripId);
   }
   return ctx.applySetState(strip, last.prevState, by);

@@ -94,7 +94,7 @@ test('H68: a mission flown in the ATO period\'s second calendar day sees the per
 });
 
 test('H68: an ATO with no TIMEFRAM is centred on its own times; null stays null; raw DTGs are untouched', () => {
-  const doc = { header: { timeframe: null }, missionLines: [{ fdrSeed: { vulWindowStartUtc: Date.UTC(2026, 8, 14, 13, 0), vulWindowEndUtc: Date.UTC(2026, 8, 14, 15, 0) } }] };
+  const doc = { header: { timeframe: null }, missionLines: [{ flightDataSeed: { vulWindowStartUtc: Date.UTC(2026, 8, 14, 13, 0), vulWindowEndUtc: Date.UTC(2026, 8, 14, 15, 0) } }] };
   const { shiftMs } = atoDateShift(doc, MISSION_NOW);
   assert.equal(redateAtoTime(Date.UTC(2026, 8, 14, 14, 0), shiftMs), M(14, 0));
   assert.equal(redateAtoTime(null, shiftMs), null);

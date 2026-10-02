@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 // Lane TA — the theater's transition altitude decides how an altitude's TEXT is
 // written (FL at and above it, feet below). Stored values are feet either way.
-const { FdrStore, parseAltitude, formatAltitudeBlock, normalizeMtrValue } = await import('../src/efsp/flight-data-store.js');
+const { FlightDataStore, parseAltitude, formatAltitudeBlock, normalizeMtrValue } = await import('../src/efsp/flight-data-store.js');
 const { indicatedAltFt } = await import('../src/altimetry.js');
 const { TheaterContext } = await import('../src/theater-context.js');
 
@@ -44,11 +44,11 @@ for (const [name, ta, text, shown] of [
   ['Syria, high block', SYRIA, 'FL220B240', 'FL220-FL240'],
 ]) {
   test(`setClearance in ${name} writes the block text with the injected transition altitude and stores feet`, () => {
-    const store = new FdrStore(undefined, { transitionAltFt: () => ta });
-    const fdr = store.createFdr({ callsign: 'VPR9', ...FILED }, { by: 'test' }).fdr;
+    const store = new FlightDataStore(undefined, { transitionAltFt: () => ta });
+    const fdr = store.createFlightData({ callsign: 'VPR9', ...FILED }, { by: 'test' }).fdr;
     const r = store.setClearance(fdr.fdrId, 'altitude', { value: text }, { by: 'cd' });
     assert.equal(r.ok, true, JSON.stringify(r));
-    const e = store.getFdr(fdr.fdrId).clearance.altitude.entries.at(-1);
+    const e = store.getFlightData(fdr.fdrId).clearance.altitude.entries.at(-1);
     assert.equal(e.value, shown);
     assert.equal(e.block.lowFt % 100, 0);
     assert.ok(e.block.lowFt >= 10000, 'stored in feet');
@@ -57,12 +57,12 @@ for (const [name, ta, text, shown] of [
 
 test('the transition altitude is read when the text is written, so a theater change applies to the next entry', () => {
   let ta = CAUCASUS;
-  const store = new FdrStore(undefined, { transitionAltFt: () => ta });
-  const fdr = store.createFdr({ callsign: 'VPR9', ...FILED }, { by: 'test' }).fdr;
+  const store = new FlightDataStore(undefined, { transitionAltFt: () => ta });
+  const fdr = store.createFlightData({ callsign: 'VPR9', ...FILED }, { by: 'test' }).fdr;
   store.setClearance(fdr.fdrId, 'altitude', { value: '100B120' }, { by: 'cd' });
   ta = SYRIA;
   store.setClearance(fdr.fdrId, 'altitude', { value: '100B120' }, { by: 'cd' });
-  const entries = store.getFdr(fdr.fdrId).clearance.altitude.entries;
+  const entries = store.getFlightData(fdr.fdrId).clearance.altitude.entries;
   assert.equal(entries.at(-2).value, '10000-12000');
   assert.equal(entries.at(-1).value, 'FL100-FL120');
 });

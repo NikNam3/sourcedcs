@@ -29,7 +29,7 @@ function createStripMsg() {
 test('createEfsp returns the full facade shape', () => {
   const efsp = createEfsp();
   assert.ok(efsp.boardStoreFor('INCIRLIK'));
-  assert.ok(efsp.fdrStore);
+  assert.ok(efsp.flightDataStore);
   assert.ok(efsp.positionStoreFor('INCIRLIK'));
   assert.ok(efsp.mutationLog);
   assert.equal(typeof efsp.handleMessage, 'function');
@@ -46,14 +46,14 @@ test('controllerIdFor uses the same fallback chain as ws-hub.js\'s session.who',
   assert.equal(efsp.controllerIdFor({}), 'unknown');
 });
 
-test('handleMessage end-to-end: a CreateStrip mutation is reflected in boardStore/fdrStore directly', () => {
+test('handleMessage end-to-end: a CreateStrip mutation is reflected in boardStore/flightDataStore directly', () => {
   const efsp = createEfsp();
   const session = { controllerId: 'c1', who: 'Alice' };
   efsp.handleMessage(session, { type: 'efsp-set-positions', held: ['OPS'] });
   const result = efsp.handleMessage(session, createStripMsg());
   assert.equal(result.ack.ok, true);
   assert.equal(efsp.boardStoreFor('INCIRLIK').getAll().length, 1);
-  assert.equal(efsp.fdrStore.getAll().length, 1);
+  assert.equal(efsp.flightDataStore.getAll().length, 1);
 });
 
 test('snapshotFor returns a well-formed efsp-snapshot message with all four collections', () => {
@@ -95,7 +95,7 @@ test('a successful mutation persists to BOARD_SNAPSHOT_PATH, and a freshly const
   const restored = efsp2.boardStoreFor('INCIRLIK').getStrip(stripId);
   assert.ok(restored);
   assert.equal(restored.ownerPositionId, 'OPS');
-  assert.ok(efsp2.fdrStore.getFdr(restored.fdrId));
+  assert.ok(efsp2.flightDataStore.getFlightData(restored.fdrId));
 });
 
 test('a Strip mid-DEPARTED-to-APP-transfer (docs/adr/0007) round-trips correctly across a simulated restart — exactly one owner, no strand', () => {

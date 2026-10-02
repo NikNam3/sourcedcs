@@ -75,7 +75,7 @@ function _applyTransferStrip(ctx, strip, op, by) {
     if (routedTo) warning = `${routedTo} has no Bay for this Strip; it stays in ${op.bayId}`;
   }
 
-  const sfaFdr = routedBay ? null : ctx.assignSfaFrequency(strip, by);
+  const sfaFlightData = routedBay ? null : ctx.assignSfaFrequency(strip, by);
 
   ctx.state.bump(strip, by);
   // A pending Undo window (§3.5 rule 5) is for reverting a STATE change —
@@ -86,7 +86,7 @@ function _applyTransferStrip(ctx, strip, op, by) {
   // regardless of whether this transfer came from a drag or an NLA-
   // driven transfer-shaped transition (board-store.js's own _applyInvokeNla).
   ctx.nlaHistory.delete(strip.stripId);
-  return { ok: true, strip, routedTo, selfCoordinated, warning, fdr: sfaFdr ? sfaFdr.fdr : undefined };
+  return { ok: true, strip, routedTo, selfCoordinated, warning, fdr: sfaFlightData ? sfaFlightData.fdr : undefined };
 }
 
 module.exports = {

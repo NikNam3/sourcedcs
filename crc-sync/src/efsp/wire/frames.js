@@ -42,7 +42,7 @@ function stampStrip(boardStore, strip, facilityId, ctx) {
 }
 
 /** The FDRs a Mutation changed — the one it addressed, plus any it wrote as a side effect — deduplicated by fdrId, most recent value winning. */
-function mergeFdrs(primary, extra) {
+function mergeFlightDataList(primary, extra) {
   const byId = new Map();
   for (const fdr of [primary, ...(extra || [])]) if (fdr && fdr.fdrId) byId.set(fdr.fdrId, fdr);
   return [...byId.values()];
@@ -116,4 +116,4 @@ function liveStamped(ctx) {
   return out;
 }
 
-module.exports = { VERSION, stampStrip, mergeFdrs, touchedStrips, boardDelta, marsaDelta, carrierDelta, sfaDelta, liveStamped };
+module.exports = { VERSION, stampStrip, mergeFlightDataList, touchedStrips, boardDelta, marsaDelta, carrierDelta, sfaDelta, liveStamped };

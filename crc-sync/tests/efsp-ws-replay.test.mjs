@@ -27,7 +27,7 @@ fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, JSON.stringify([
 const { createEfsp } = await import('../src/efsp/index.js');
 const { ReplayCache } = await import('../src/efsp/sync/replay-cache.js');
 const WsHub = (await import('../src/ws-hub.js')).default;
-const { crew, hold, mustAct, DEPARTURE_FDR, airborneDeparture } = await import('./helpers/efsp-scenario.mjs');
+const { crew, hold, mustAct, DEPARTURE_FLIGHT_DATA, airborneDeparture } = await import('./helpers/efsp-scenario.mjs');
 
 const ATC = { OPS: 'INCIRLIK', CD: 'INCIRLIK', GND: 'INCIRLIK', TWR: 'INCIRLIK', APP: 'INCIRLIK', CTR: 'CENTER' };
 
@@ -44,8 +44,8 @@ function send(efsp, member, msg) {
 test('a retried DeclareMarsa returns the first relation and mints no second one', () => {
   const efsp = createEfsp();
   const c = crew(efsp, ATC);
-  const tanker = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'SHELL1' });
-  const rx = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'VIPER1' });
+  const tanker = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'SHELL1' });
+  const rx = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'VIPER1' });
   const before = efsp.marsaStore.getAll().length;
   const msg = {
     version: 1, type: 'efsp-marsa-mutation', clientMutationId: crypto.randomUUID(), actingPositionId: 'APP',
@@ -65,7 +65,7 @@ test('a retried DeclareMarsa returns the first relation and mints no second one'
 test('a retried BindTrack is acked once, audited once', () => {
   const efsp = createEfsp();
   const c = crew(efsp, ATC);
-  const strip = mustAct(efsp, c.OPS, 'OPS', null, { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: { ...DEPARTURE_FDR, callsign: 'BIND1' } });
+  const strip = mustAct(efsp, c.OPS, 'OPS', null, { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: { ...DEPARTURE_FLIGHT_DATA, callsign: 'BIND1' } });
   const cur = efsp.correlationStore.getCorrelation(strip.fdrId);
   const msg = {
     version: 1, type: 'efsp-correlation-mutation', clientMutationId: crypto.randomUUID(), actingPositionId: 'OPS',
@@ -126,8 +126,8 @@ test('a retried field-state op is not re-applied', () => {
 test('a NOT_HOLDING_POSITION refusal is not cached: the retry after selecting the Position applies', () => {
   const efsp = createEfsp();
   const c = crew(efsp, ATC);
-  const tanker = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'SHELL2' });
-  const rx = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'VIPER2' });
+  const tanker = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'SHELL2' });
+  const rx = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'VIPER2' });
   const late = { controllerId: 'c-late', who: 'Late' };
   const msg = {
     version: 1, type: 'efsp-marsa-mutation', clientMutationId: crypto.randomUUID(), actingPositionId: 'CTR',
@@ -175,8 +175,8 @@ test('every efsp-board-delta carries boardEpoch', () => {
   cases.push(['peerBroadcast', slot(proposed, 'peer'), 'INCIRLIK']);
 
   // _handleMarsaMutation's FDR-only delta.
-  const tanker = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'SHELL3' });
-  const rx = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'VIPER3' });
+  const tanker = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'SHELL3' });
+  const rx = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'VIPER3' });
   const declared = send(efsp, c.APP, { type: 'efsp-marsa-mutation', actingPositionId: 'APP', op: { kind: 'DeclareMarsa', participants: [tanker.fdrId, rx.fdrId], startEvent: 'TANKER_ACCEPTED', endCondition: 'VERTICALLY_POSITIONED', declaringCallsign: 'SHELL3' } });
   assert.equal(declared.ack.ok, true, JSON.stringify(declared.ack));
   cases.push(['MARSA regime delta', slot(declared, 'primary'), 'INCIRLIK']);

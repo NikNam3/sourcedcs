@@ -82,8 +82,8 @@ async function mountPanel({ held = ['OPS'], stereoRoutes = ROUTES, lookupSpy = n
     stripId: `live-${i}`, cid: `00${i}`, fdrId: 'f-live', rev: 1, role: 'DEPARTURE', state: 'PROPOSED', bayId: 'x', rackId: 'main', orderKey: 'V',
     annotations: {}, flags: {}, coordination: null, tofiCoordination: null, airspaceEntry: null, ...l,
   }));
-  const liveFdrs = live.length ? [{ fdrId: 'f-live', rev: 1, identity: { callsign: 'VIPER11' }, filed: {}, assigned: {}, military: {} }] : [];
-  state.applyEfspSnapshot({ strips: live, fdrs: liveFdrs, positions: [], bays: [], airspaces: [], correlations: [] });
+  const liveFlightDataList = live.length ? [{ fdrId: 'f-live', rev: 1, identity: { callsign: 'VIPER11' }, filed: {}, assigned: {}, military: {} }] : [];
+  state.applyEfspSnapshot({ strips: live, fdrs: liveFlightDataList, positions: [], bays: [], airspaces: [], correlations: [] });
   panel.initEfspPanel();
   return {
     els, sent, sandbox: panel,

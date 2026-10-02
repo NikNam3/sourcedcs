@@ -91,7 +91,7 @@ const CALLSIGN_PREFIX = {
 
 function callsignFor(script, n) { return `${CALLSIGN_PREFIX[script]}${10 + (n % 90)}`; }
 
-function departureFdr(f) {
+function departureFlightData(f) {
   return {
     callsign: f.callsign, aircraftType: f.script === 'militarySortie' || f.script === 'rangeVisit' ? 'F16' : 'B738', wakeCategory: 'M',
     departureAirport: 'LTAG', destinationAirport: f.script === 'departureOut' ? 'OJAI' : 'LTAG', route: 'DCT', requestedAltitude: '250',
@@ -100,7 +100,7 @@ function departureFdr(f) {
 
 function* outboundToCenter(f, x) {
   const r0 = yield create('OPS', {
-    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: departureFdr(f),
+    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: departureFlightData(f),
     // Order-key stress (briefing §5.2): some creates insert after the FIRST
     // Strip of a busy Rack, so repeated creates hit the same slot.
     ...(x.sameSlotCreate ? { afterStripId: '@first' } : {}),
@@ -278,7 +278,7 @@ const SCRIPTS = {
 
   * rangeVisit(f, x) {
     yield { kind: 'ensureRangeActive' };
-    const r0 = yield create('OPS', { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: departureFdr(f) });
+    const r0 = yield create('OPS', { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: departureFlightData(f) });
     if (!r0.ok) return;
     const dep = r0.strip.stripId;
     const r1 = yield walk('INCIRLIK', dep, s => s.state === 'HANDED_OFF' && s.ownerPositionId === 'APP', 14);

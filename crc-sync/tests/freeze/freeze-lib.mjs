@@ -37,7 +37,7 @@ export function digest(v) {
 }
 
 const isStrip = (v) => v && typeof v === 'object' && typeof v.stripId === 'string' && 'rev' in v && 'state' in v && 'role' in v;
-const isFdr = (v) => v && typeof v === 'object' && typeof v.fdrId === 'string' && v.identity && v.filed;
+const isFlightData = (v) => v && typeof v === 'object' && typeof v.fdrId === 'string' && v.identity && v.filed;
 
 /** Strip -> "S#13 r4 DEPARTURE/HANDED_OFF @APP app-departures/main:V h=ab12cd34ef". */
 export function summarize(v, depth = 0) {
@@ -57,7 +57,7 @@ function summarizeInner(v, depth) {
     const c = canonical(v);
     return `S ${c.stripId} r${c.rev} ${c.role}/${c.state} @${c.ownerPositionId} ${c.bayId}/${c.rackId}:${c.orderKey} h=${digest(c)}`;
   }
-  if (isFdr(v)) {
+  if (isFlightData(v)) {
     const c = canonical(v);
     return `F ${c.fdrId} r${c.rev} ${c.identity.callsign} sq=${c.identity.beaconAssigned} h=${digest(c)}`;
   }
@@ -78,7 +78,7 @@ export function summarizeCollection(v) {
   return { h: digest(canonical(v)), v: summarize(v) };
 }
 function summarizeRow(r) {
-  if (isStrip(r) || isFdr(r)) return summarize(r);
+  if (isStrip(r) || isFlightData(r)) return summarize(r);
   const c = canonical(r);
   const id = c && (c.airspaceId || c.marsaId || c.fdrId || c.hullId || c.id || c.runwayId || c.facilityId);
   return `${id !== undefined ? id : '?'} h=${digest(c)}`;

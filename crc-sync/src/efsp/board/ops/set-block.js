@@ -40,20 +40,20 @@ function _applySetBlock(ctx, strip, op, by, actingPositionId, clientMutationId) 
   }
 
   if (target.kind === 'fdr' || target.kind === 'airspace-owner' || target.kind === 'tofi' || target.kind === 'frequency' || target.kind === 'military') {
-    const fdrResult = target.kind === 'airspace-owner'
-      ? ctx.fdrStore.setAirspaceOwner(strip.fdrId, op.value, { by })
+    const flightDataResult = target.kind === 'airspace-owner'
+      ? ctx.flightDataStore.setAirspaceOwner(strip.fdrId, op.value, { by })
       : target.kind === 'frequency'
-        ? ctx.fdrStore.setWorkingFrequency(strip.fdrId, _frequencyFromBlockValue(op.value), { by })
+        ? ctx.flightDataStore.setWorkingFrequency(strip.fdrId, _frequencyFromBlockValue(op.value), { by })
         : target.kind === 'tofi'
-          ? ctx.fdrStore.setTofi(strip.fdrId, { [target.field]: op.value }, { by })
+          ? ctx.flightDataStore.setTofi(strip.fdrId, { [target.field]: op.value }, { by })
           // WP6 (docs/adr/0052), guide §6.4 — the military extension
           // namespace, routed exactly like 'tofi' above.
           : target.kind === 'military'
-            ? ctx.fdrStore.setMilitary(strip.fdrId, { [target.field]: op.value }, { by })
+            ? ctx.flightDataStore.setMilitary(strip.fdrId, { [target.field]: op.value }, { by })
             : target.path === 'identity.beaconAssigned'
-              ? ctx.fdrStore.setBeaconAssigned(strip.fdrId, op.value, { by })
-              : ctx.fdrStore.setField(strip.fdrId, target.path, op.value, { by });
-    if (!fdrResult.ok) return { ok: false, reason: fdrResult.reason, detail: fdrResult.detail, strip };
+              ? ctx.flightDataStore.setBeaconAssigned(strip.fdrId, op.value, { by })
+              : ctx.flightDataStore.setField(strip.fdrId, target.path, op.value, { by });
+    if (!flightDataResult.ok) return { ok: false, reason: flightDataResult.reason, detail: flightDataResult.detail, strip };
 
     // FDR keeps its own independent rev (guide §3.1); the Strip's rev is
     // also bumped here as a deliberate Phase-1 simplification so the
@@ -63,7 +63,7 @@ function _applySetBlock(ctx, strip, op, by, actingPositionId, clientMutationId) 
     ctx.state.bump(strip, by);
     const marsaVoided = ctx.marsaVoidFor(strip, op, by, actingPositionId, clientMutationId);
     return {
-      ok: true, strip, fdr: fdrResult.fdr, warning: fdrResult.warning,
+      ok: true, strip, fdr: flightDataResult.fdr, warning: flightDataResult.warning,
       marsaVoided, fdrs: marsaVoided ? ctx.drainMarsaRegimeWrites() : undefined,
     };
   }
@@ -74,23 +74,23 @@ function _applySetBlock(ctx, strip, op, by, actingPositionId, clientMutationId) 
   // resolves to null above, so SetBlock on CASE, DME, ANGELS, EAT/PUSH or the
   // expected final bearing is a VALIDATION_ERROR (WP7A bullets 2 and 5).
   if (target.kind === 'carrier') {
-    const fdrResult = ctx.fdrStore.setCarrier(strip.fdrId, target.field, op.value, { by });
-    if (!fdrResult.ok) return { ok: false, reason: fdrResult.reason, detail: fdrResult.detail, strip };
+    const flightDataResult = ctx.flightDataStore.setCarrier(strip.fdrId, target.field, op.value, { by });
+    if (!flightDataResult.ok) return { ok: false, reason: flightDataResult.reason, detail: flightDataResult.detail, strip };
     ctx.state.bump(strip, by);
-    return { ok: true, strip, fdr: fdrResult.fdr };
+    return { ok: true, strip, fdr: flightDataResult.fdr };
   }
 
   // docs/adr/0058 — the flight's assigned altitude or heading. On the FDR,
   // not the Strip, so every Facility's copy reads the same value; history
   // and confirmVacated work exactly as they do for a Strip annotation.
   if (target.kind === 'clearance') {
-    const fdrResult = ctx.fdrStore.setClearance(strip.fdrId, target.field,
+    const flightDataResult = ctx.flightDataStore.setClearance(strip.fdrId, target.field,
       { value: op.value, confirmVacated: !!op.confirmVacated }, { by });
-    if (!fdrResult.ok) return { ok: false, reason: fdrResult.reason, detail: fdrResult.detail, strip };
+    if (!flightDataResult.ok) return { ok: false, reason: flightDataResult.reason, detail: flightDataResult.detail, strip };
     ctx.state.bump(strip, by);
     const marsaVoided = ctx.marsaVoidFor(strip, op, by, actingPositionId, clientMutationId);
     return {
-      ok: true, strip, fdr: fdrResult.fdr,
+      ok: true, strip, fdr: flightDataResult.fdr,
       marsaVoided, fdrs: marsaVoided ? ctx.drainMarsaRegimeWrites() : undefined,
     };
   }

@@ -20,12 +20,12 @@ fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, '[]');
 
 const { createEfsp } = await import('../src/efsp/index.js');
 const facilityConfig = await import('../src/efsp/facility-config.js');
-const { crew, hold, act, mustAct, jumpTo, advance, DEPARTURE_FDR, airborneDeparture } = await import('./helpers/efsp-scenario.mjs');
+const { crew, hold, act, mustAct, jumpTo, advance, DEPARTURE_FLIGHT_DATA, airborneDeparture } = await import('./helpers/efsp-scenario.mjs');
 
 const ATC = { OPS: 'INCIRLIK', GND: 'INCIRLIK', TWR: 'INCIRLIK', APP: 'INCIRLIK', CTR: 'CENTER' };
 
 function flight(efsp, c, callsign) {
-  return airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign });
+  return airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign });
 }
 
 function centerStrip(efsp, id) { return efsp.boardStoreFor('CENTER').getStrip(id); }
@@ -132,8 +132,8 @@ test('SCENARIO a flight transiting Center that never touches Incirlik', async ()
   assert.equal(strip.role, 'OVERFLIGHT');
   assert.equal(strip.state, 'INBOUND');
 
-  const beacon = efsp.fdrStore.getFdr(strip.fdrId).identity.beaconAssigned;
-  assert.equal(efsp.fdrStore._codeAllocator.isAllocated(beacon), true);
+  const beacon = efsp.flightDataStore.getFlightData(strip.fdrId).identity.beaconAssigned;
+  assert.equal(efsp.flightDataStore._codeAllocator.isAllocated(beacon), true);
 
   // The guide's four states (docs/adr/0087): Radar Contact, Hand Off, then the
   // terminal Drop — the path that used to skip DropStrip's rules entirely
@@ -145,7 +145,7 @@ test('SCENARIO a flight transiting Center that never touches Incirlik', async ()
   const dropped = await advance(efsp, c.CTR, 'CTR', handedOff);
   assert.equal(dropped.state, 'DROPPED');
   assert.equal(dropped.flags.removeIndicator, true);
-  assert.equal(efsp.fdrStore._codeAllocator.isAllocated(beacon), false, 'and the code goes back');
+  assert.equal(efsp.flightDataStore._codeAllocator.isAllocated(beacon), false, 'and the code goes back');
 });
 
 // ── 16. pop-up arrival versus a real handoff ─────────────────────────────
@@ -258,9 +258,9 @@ test('converting a flight for its return leg archives the departure annotations 
 
 // ── docs/adr/0087: an overflight is handed to our next Facility (F14) ─────
 
-const OVF_FDR = (callsign) => ({ callsign, aircraftType: 'A320', wakeCategory: 'M', originAirport: 'LTBA', destinationAirport: 'OJAI' });
+const OVF_FLIGHT_DATA = (callsign) => ({ callsign, aircraftType: 'A320', wakeCategory: 'M', originAirport: 'LTBA', destinationAirport: 'OJAI' });
 function createOverflight(efsp, c, callsign, who = 'CTR', bayId = 'ctr-overflight') {
-  return mustAct(efsp, c[who], who, null, { kind: 'CreateStrip', bayId, rackId: 'main', role: 'OVERFLIGHT', fdr: OVF_FDR(callsign) });
+  return mustAct(efsp, c[who], who, null, { kind: 'CreateStrip', bayId, rackId: 'main', role: 'OVERFLIGHT', fdr: OVF_FLIGHT_DATA(callsign) });
 }
 const appStrip = (efsp, id) => efsp.boardStoreFor('INCIRLIK').getStrip(id);
 

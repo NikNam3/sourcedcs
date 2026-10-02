@@ -49,28 +49,28 @@ function _isScrambling(strip, fdr) {
   return !!(fdr && fdr.military && fdr.military.alertStatus === 'SCRAMBLE');
 }
 
-export function activeScrambles(strips, fdrOf, facilityId) {
+export function activeScrambles(strips, flightDataOf, facilityId) {
   const out = [];
   for (const strip of strips || []) {
     if (facilityId !== undefined && facilityId !== null && strip.facilityId !== facilityId) continue;
-    const fdr = strip.fdrId ? fdrOf(strip.fdrId) : null;
+    const fdr = strip.fdrId ? flightDataOf(strip.fdrId) : null;
     if (!_isScrambling(strip, fdr)) continue;
     out.push({ stripId: strip.stripId, fdrId: strip.fdrId, facilityId: strip.facilityId, state: strip.state, callsign: _scrambleCallsignOf(strip, fdr) });
   }
   return out.sort((a, b) => (a.callsign < b.callsign ? -1 : a.callsign > b.callsign ? 1 : (a.stripId < b.stripId ? -1 : 1)));
 }
 
-export function conflictingGroundStrips(strips, fdrOf, facilityId) {
-  const scrambles = activeScrambles(strips, fdrOf, facilityId);
+export function conflictingGroundStrips(strips, flightDataOf, facilityId) {
+  const scrambles = activeScrambles(strips, flightDataOf, facilityId);
   if (scrambles.length === 0) return [];
-  const scramblingFdrs = new Set(scrambles.map(s => s.fdrId));
+  const scramblingFlightDataList = new Set(scrambles.map(s => s.fdrId));
   const out = [];
   for (const strip of strips || []) {
     if (strip.facilityId !== facilityId) continue;
     const states = GROUND_STATES[strip.role];
     if (!states || !states.includes(strip.state)) continue;
-    if (scramblingFdrs.has(strip.fdrId)) continue;
-    const fdr = strip.fdrId ? fdrOf(strip.fdrId) : null;
+    if (scramblingFlightDataList.has(strip.fdrId)) continue;
+    const fdr = strip.fdrId ? flightDataOf(strip.fdrId) : null;
     out.push({ stripId: strip.stripId, fdrId: strip.fdrId, facilityId: strip.facilityId, role: strip.role, state: strip.state, callsign: _scrambleCallsignOf(strip, fdr) });
   }
   return out;

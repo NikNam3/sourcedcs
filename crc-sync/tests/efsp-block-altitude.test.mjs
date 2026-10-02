@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 // docs/adr/0091 — block altitudes in the ALT field.
-const { FdrStore, parseAltitudeFt, parseAltitude, formatAltitudeBlock } = await import('../src/efsp/flight-data-store.js');
+const { FlightDataStore, parseAltitudeFt, parseAltitude, formatAltitudeBlock } = await import('../src/efsp/flight-data-store.js');
 const { evaluateConformance, FPM_PER_MS, MS_PER_KT } = await import('../src/efsp/conformance.js');
 const { loadAlertingConfig } = await import('../src/alerting-config.js');
 const DEFAULTS = loadAlertingConfig();
@@ -43,21 +43,21 @@ test('a block is written back in one canonical form', () => {
 const FILED = { aircraftType: 'F16', wakeCategory: 'D', departureAirport: 'LTAG', destinationAirport: 'LTAC', route: 'DCT', requestedAltitude: 'FL250' };
 
 test('setClearance stores a block structurally and canonicalises its text', () => {
-  const store = new FdrStore();
-  const fdr = store.createFdr({ callsign: 'VPR1', ...FILED }, { by: 'test' }).fdr;
+  const store = new FlightDataStore();
+  const fdr = store.createFlightData({ callsign: 'VPR1', ...FILED }, { by: 'test' }).fdr;
   assert.equal(store.setClearance(fdr.fdrId, 'altitude', { value: 'fl220b240' }, { by: 'cd' }).ok, true);
-  const e = store.getFdr(fdr.fdrId).clearance.altitude.entries[0];
+  const e = store.getFlightData(fdr.fdrId).clearance.altitude.entries[0];
   assert.equal(e.value, 'FL220-FL240');
   assert.equal(e.parsed, null, 'no single altitude');
   assert.deepEqual(e.block, blk(22000, 24000));
   // Amending to a single altitude clears the block; wire round-trips through snapshot/restore.
   store.setClearance(fdr.fdrId, 'altitude', { value: 'FL180' }, { by: 'cd' });
-  const e2 = store.getFdr(fdr.fdrId).clearance.altitude.entries[1];
+  const e2 = store.getFlightData(fdr.fdrId).clearance.altitude.entries[1];
   assert.deepEqual([e2.parsed, e2.block], [18000, null]);
   store.setClearance(fdr.fdrId, 'altitude', { value: '220-240' }, { by: 'cd' });
-  const copy = new FdrStore();
+  const copy = new FlightDataStore();
   copy.restore(JSON.parse(JSON.stringify(store.snapshot())));
-  const r = copy.getFdr(fdr.fdrId).clearance.altitude.entries.at(-1);
+  const r = copy.getFlightData(fdr.fdrId).clearance.altitude.entries.at(-1);
   assert.deepEqual(r.block, blk(22000, 24000));
   assert.equal(r.status, 'ACTIVE');
   // Refusals say how to write a block.
@@ -91,7 +91,7 @@ test('a block set through SetBlock reaches the wire shape every Strip reads', as
   const strip = ack.strip;
   ack = send(strip, { kind: 'SetBlock', blockId: '21', value: 'FL220B240' });
   if (ack.ok) {
-    const e = efsp.fdrStore.getFdr(strip.fdrId).clearance.altitude.entries.at(-1);
+    const e = efsp.flightDataStore.getFlightData(strip.fdrId).clearance.altitude.entries.at(-1);
     assert.equal(e.value, 'FL220-FL240');
     assert.deepEqual(e.block, blk(22000, 24000));
   } else {

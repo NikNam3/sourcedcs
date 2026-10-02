@@ -29,7 +29,7 @@ const { createEfsp } = await import('../src/efsp/index.js');
 const facilityConfig = await import('../src/efsp/facility-config.js');
 const { computeDueObligations } = await import('../src/efsp/forwarding-obligations.js');
 const {
-  crew, act, mustAct, mustMarsaAct, jumpTo, DEPARTURE_FDR, handedToCenter,
+  crew, act, mustAct, mustMarsaAct, jumpTo, DEPARTURE_FLIGHT_DATA, handedToCenter,
 } = await import('./helpers/efsp-scenario.mjs');
 
 // The mission clock (H11): a date nothing else uses, advancing at real rate,
@@ -43,8 +43,8 @@ const ATC = { OPS: 'INCIRLIK', CD: 'INCIRLIK', GND: 'INCIRLIK', TWR: 'INCIRLIK',
 const efsp = createEfsp({ clock });
 const c = crew(efsp, ATC);
 
-const fdrOf = (strip) => efsp.fdrStore.getFdr(strip.fdrId);
-const mtrOf = (strip) => fdrOf(strip).military.mtr;
+const flightDataOf = (strip) => efsp.flightDataStore.getFlightData(strip.fdrId);
+const mtrOf = (strip) => flightDataOf(strip).military.mtr;
 const incirlik = (strip) => efsp.boardStoreFor('INCIRLIK').getStrip(strip.stripId);
 const center = (strip) => efsp.boardStoreFor('CENTER').getStrip(strip.stripId);
 
@@ -52,7 +52,7 @@ const center = (strip) => efsp.boardStoreFor('CENTER').getStrip(strip.stripId);
 function filed(callsign, extra = {}) {
   return mustAct(efsp, c.OPS, 'OPS', null, {
     kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE',
-    fdr: { ...DEPARTURE_FDR, callsign, ...extra },
+    fdr: { ...DEPARTURE_FLIGHT_DATA, callsign, ...extra },
   });
 }
 
@@ -115,7 +115,7 @@ test('sortie 2: "request exit at E instead, estimating 40, request FL210" — a 
     startEvent: 'TANKER_ACCEPTED', endCondition: 'VERTICALLY_POSITIONED', declaringCallsign: 'SHELL12',
   });
 
-  const rev = fdrOf(ctr).rev;
+  const rev = flightDataOf(ctr).rev;
   ctr = mustAct(efsp, c.CTR, 'CTR', center(ctr), { kind: 'SetBlock', blockId: '9H-EXIT', value: 'E' });
   ctr = mustAct(efsp, c.CTR, 'CTR', ctr, { kind: 'SetBlock', blockId: '9H-TIME', value: '1440' });
   ctr = mustAct(efsp, c.CTR, 'CTR', ctr, { kind: 'SetBlock', blockId: '9H-ALT', value: 'FL210' });
@@ -124,7 +124,7 @@ test('sortie 2: "request exit at E instead, estimating 40, request FL210" — a 
   assert.equal(mtr.exitFix, 'E');
   assert.equal(mtr.exitEstimateUtc, zulu(14, 40));
   assert.equal(mtr.requestedAltitudeAfterExit, 'FL210');
-  assert.equal(fdrOf(ctr).rev, rev + 3, 'three writes, three revs — and nothing else touched');
+  assert.equal(flightDataOf(ctr).rev, rev + 3, 'three writes, three revs — and nothing else touched');
   assert.equal(mtrOf(incirlik(app)).exitFix, 'E', 'APP\'s Strip reads the new exit fix');
   assert.equal(efsp.marsaStore.getRelation(relation.marsaId).state, 'ACTIVE',
     'posting the pilot\'s REQUEST issues nothing, so it must not void the join');
@@ -141,7 +141,7 @@ test('sortie 2: "request exit at E instead, estimating 40, request FL210" — a 
 
 test('sortie 3: a bad time or altitude is refused legibly, and the flight is untouched', () => {
   const { ctr } = onTheRoute('VIPER13');
-  const rev = fdrOf(ctr).rev;
+  const rev = flightDataOf(ctr).rev;
 
   const time = act(efsp, c.CTR, 'CTR', ctr, { kind: 'SetBlock', blockId: '9H-TIME', value: '2460' });
   assert.equal(time.ok, false);
@@ -152,7 +152,7 @@ test('sortie 3: a bad time or altitude is refused legibly, and the flight is unt
   assert.equal(alt.ok, false);
   assert.match(alt.detail, /altitude/);
 
-  assert.equal(fdrOf(ctr).rev, rev);
+  assert.equal(flightDataOf(ctr).rev, rev);
   assert.equal(mtrOf(ctr).exitEstimateUtc, null);
 });
 
@@ -177,8 +177,8 @@ test('sortie 4: "cancel IR107, direct home" clears the designator only — no hi
 test('sortie 5: posting MTR data inside 30 min of departure is a filed-plan amendment; on an airborne flight it is not', () => {
   const now = clock.now();
   let soon = filed('VIPER15', { proposedDepartureTimeUtc: now + 20 * 60 * 1000 });
-  efsp.fdrStore.getFdr(soon.fdrId).updatedAt = now - 5 * 60 * 1000; // filed a while ago
-  const due = (s) => computeDueObligations(s, fdrOf(s), clock.now()).map(o => o.obligationType);
+  efsp.flightDataStore.getFlightData(soon.fdrId).updatedAt = now - 5 * 60 * 1000; // filed a while ago
+  const due = (s) => computeDueObligations(s, flightDataOf(s), clock.now()).map(o => o.obligationType);
   assert.equal(due(soon).includes('AMENDMENT_INSIDE_30MIN'), false, 'precondition: nothing amended yet');
 
   soon = mustAct(efsp, c.OPS, 'OPS', soon, { kind: 'SetBlock', blockId: '9G-MTR', value: 'IR107' });
@@ -214,7 +214,7 @@ test('sortie 7: the six values survive a crc-sync restart', () => {
   efsp.persist();
 
   const reborn = createEfsp({ clock });
-  assert.deepEqual(reborn.fdrStore.getFdr(ctr.fdrId).military.mtr, {
+  assert.deepEqual(reborn.flightDataStore.getFlightData(ctr.fdrId).military.mtr, {
     designator: 'IR107', entryFix: 'A', entryTimeUtc: zulu(14, 5),
     exitFix: 'F', exitEstimateUtc: zulu(14, 32), requestedAltitudeAfterExit: '080',
   });

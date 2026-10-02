@@ -16,19 +16,19 @@ class Tofi {
    * @param {object} deps.audit BoardAudit
    * @param {object} deps.placement Placement
    * @param {{now: () => number}} deps.clock the mission clock
-   * @param {object} deps.fdrStore
+   * @param {object} deps.flightDataStore
    * @param {(stripId:string) => void} deps.touch late-bound to the facade's _touch (the soak host patches it)
    * @param {() => string|null} deps.activeCmid the clientMutationId being applied, read late
    * @param {(strip:object, by:string) => object|null} deps.retire late-bound to StripOps' retire
    * @param {(role:string) => string|undefined} deps.initialStateFor the authority registry's accessor
    */
-  constructor({ rules, state, audit, placement, clock, fdrStore, touch, activeCmid, retire, initialStateFor }) {
+  constructor({ rules, state, audit, placement, clock, flightDataStore, touch, activeCmid, retire, initialStateFor }) {
     this._rules = rules;
     this._state = state;
     this._audit = audit;
     this._placement = placement;
     this._clock = clock;
-    this._fdrStore = fdrStore;
+    this._fdrStore = flightDataStore;
     this._touch = touch;
     this._activeCmidOf = activeCmid;
     this._retire = retire;
@@ -129,12 +129,12 @@ class Tofi {
       // ATC<->ATC primitives (docs/adr/0019) — TOFI is named in the same
       // §4.6 primitive table this rule sits directly under, so it applies
       // here too, for both directions.
-      const entryFdr = this._fdrStore.getFdr(strip.fdrId);
-      const entryDegraded = entryFdr && entryFdr.identity.trackDegradationFlag && entryFdr.identity.trackDegradationFlag !== 'NONE';
+      const entryFlightData = this._fdrStore.getFlightData(strip.fdrId);
+      const entryDegraded = entryFlightData && entryFlightData.identity.trackDegradationFlag && entryFlightData.identity.trackDegradationFlag !== 'NONE';
       if (entryDegraded && !op.note) {
         return {
           ok: false, reason: 'VALIDATION_ERROR',
-          detail: `track degradation (${entryFdr.identity.trackDegradationFlag}) forces verbal coordination — a note is required`,
+          detail: `track degradation (${entryFlightData.identity.trackDegradationFlag}) forces verbal coordination — a note is required`,
           strip,
         };
       }
@@ -165,12 +165,12 @@ class Tofi {
     const peer = this._rules.peerBoard(prior.peerFacilityId);
     if (!peer) return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown Facility: ${prior.peerFacilityId}`, strip };
 
-    const exitFdr = this._fdrStore.getFdr(strip.fdrId);
-    const exitDegraded = exitFdr && exitFdr.identity.trackDegradationFlag && exitFdr.identity.trackDegradationFlag !== 'NONE';
+    const exitFlightData = this._fdrStore.getFlightData(strip.fdrId);
+    const exitDegraded = exitFlightData && exitFlightData.identity.trackDegradationFlag && exitFlightData.identity.trackDegradationFlag !== 'NONE';
     if (exitDegraded && !op.note) {
       return {
         ok: false, reason: 'VALIDATION_ERROR',
-        detail: `track degradation (${exitFdr.identity.trackDegradationFlag}) forces verbal coordination — a note is required`,
+        detail: `track degradation (${exitFlightData.identity.trackDegradationFlag}) forces verbal coordination — a note is required`,
         strip,
       };
     }
@@ -217,9 +217,9 @@ class Tofi {
     // on BOTH pages for the whole of tactical control, which is precisely what
     // docs/adr/0053 was written to stop (docs/ui-findings/lane3.md F-306,
     // lane1.md F-111's class).
-    let writtenFdr;
+    let writtenFlightData;
     if (tofi.direction === 'EXIT') {
-      const fdr = this._fdrStore.getFdr(strip.fdrId);
+      const fdr = this._fdrStore.getFlightData(strip.fdrId);
       if (!fdr || !fdr.tofi || fdr.tofi.separationRegime !== 'ATC') {
         return { ok: false, reason: 'VALIDATION_ERROR', detail: 'separation_regime must be set back to ATC before completing a TOFI exit', strip };
       }
@@ -265,7 +265,7 @@ class Tofi {
         }
         const wrote = this._fdrStore.setTofi(strip.fdrId, { separationRegime: op.separationRegime }, { by });
         if (!wrote.ok) return { ok: false, reason: wrote.reason, detail: wrote.detail, strip };
-        writtenFdr = wrote.fdr;
+        writtenFlightData = wrote.fdr;
       }
     }
 
@@ -312,7 +312,7 @@ class Tofi {
       const peerResult = peer.receiveTofiResponse({ causedBy: this._activeCmid, stripId: tofi.peerStripId, response: 'ACCEPT', by });
       if (peerResult.ok) peerStrip = peerResult.strip;
     }
-    return { ok: true, strip, fdr: writtenFdr, peerFacilityId: tofi.peerFacilityId, peerStrip, warning };
+    return { ok: true, strip, fdr: writtenFlightData, peerFacilityId: tofi.peerFacilityId, peerStrip, warning };
   }
 
   /** Always invoked on the MISSION-side Strip, mirroring _applyTofiAccept's own side. */
@@ -336,7 +336,7 @@ class Tofi {
     //
     // Retired rather than deleted, so the Mutation log and any client that
     // already has it see a normal DROPPED transition. The beacon is safe:
-    // _releaseFdrIfLastStrip only releases when no other live Strip shares the
+    // _releaseFlightDataIfLastStrip only releases when no other live Strip shares the
     // FDR, and the ATC-side Strip is still live by construction here.
     let retired = null;
     if (tofi.mintedForTofi) {
@@ -410,7 +410,7 @@ class Tofi {
    * @returns {{ok:true, strip}|{ok:false, reason, detail}}
    */
   receiveTofiProposal({ fromFacilityId, fromPositionId, fromStripId, toPositionId, fdrId, note, by, causedBy }) {
-    const fdr = this._fdrStore.getFdr(fdrId);
+    const fdr = this._fdrStore.getFlightData(fdrId);
     if (!fdr) return { ok: false, reason: 'NOT_FOUND', detail: 'referenced FDR not found' };
 
     // FIND BEFORE MINT (docs/adr/0054). A mission line can now exist before

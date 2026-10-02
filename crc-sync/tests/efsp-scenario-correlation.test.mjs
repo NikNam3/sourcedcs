@@ -38,7 +38,7 @@ const facilityConfig = await import('../src/efsp/facility-config.js');
 const { CorrelationReconciler } = await import('../src/efsp/correlation-reconciler.js');
 const { octalCode } = await import('../src/surveillance/transponder.js');
 const {
-  crew, mustAct, advance, airborneDeparture, handedToCenter, DEPARTURE_FDR,
+  crew, mustAct, advance, airborneDeparture, handedToCenter, DEPARTURE_FLIGHT_DATA,
 } = await import('./helpers/efsp-scenario.mjs');
 
 const ATC = { OPS: 'INCIRLIK', CD: 'INCIRLIK', GND: 'INCIRLIK', TWR: 'INCIRLIK', APP: 'INCIRLIK', CTR: 'CENTER' };
@@ -70,7 +70,7 @@ function reconcilerFor(efsp, trackStore, deltas = []) {
   return new CorrelationReconciler({
     beaconOf: (t) => octalCode(t.squawk),
     trackStore,
-    fdrStore: efsp.fdrStore,
+    flightDataStore: efsp.flightDataStore,
     correlationStore: efsp.correlationStore,
     boardStoreFor: efsp.boardStoreFor,
     facilityConfig,
@@ -80,8 +80,8 @@ function reconcilerFor(efsp, trackStore, deltas = []) {
 
 /** An airborne flight at APP, correlated to a contact squawking its assigned code. */
 function airborneAndCorrelated(efsp, c, sky, { callsign = 'VIPER1', trackId = 101 } = {}) {
-  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign });
-  const fdr = efsp.fdrStore.getFdr(strip.fdrId);
+  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign });
+  const fdr = efsp.flightDataStore.getFlightData(strip.fdrId);
   sky.spawn(trackId, callsign, parseInt(fdr.identity.beaconAssigned, 10));
   return { strip, fdr };
 }
@@ -153,7 +153,7 @@ test('a flight whose transponder is off keeps the warning after a reload rather 
   const sky = picture();
   const reconciler = reconcilerFor(efsp, sky);
 
-  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'DARK1' });
+  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'DARK1' });
   sky.spawn(101, 'DARK1', null); // no squawk at all
   reconciler.tick();
   assert.equal(correlationOf(efsp, strip.fdrId).matchedBy, 'CALLSIGN_EXACT');
@@ -239,7 +239,7 @@ test('SCENARIO a pilot squawking the wrong code stays on the flight, degraded, w
   assert.equal(record.state, 'PROVISIONAL', 'the transponder disagrees, so the match is only provisional');
   assert.equal(record.observedBeacon, '1234');
 
-  const after = efsp.fdrStore.getFdr(strip.fdrId);
+  const after = efsp.flightDataStore.getFlightData(strip.fdrId);
   assert.equal(after.identity.beaconAssigned, assigned, 'the assignment is untouched');
   assert.equal(after.identity.beaconObserved, '1234');
   assert.notEqual(after.identity.beaconAssigned, after.identity.beaconObserved,
@@ -250,7 +250,7 @@ test('SCENARIO a pilot squawking the wrong code stays on the flight, degraded, w
   assert.equal(bound.matchedBy, 'BINDING');
   assert.equal(bound.state, 'CORRELATED');
   reconciler.tick();
-  assert.equal(efsp.fdrStore.getFdr(strip.fdrId).identity.beaconObserved, '1234',
+  assert.equal(efsp.flightDataStore.getFlightData(strip.fdrId).identity.beaconObserved, '1234',
     'binding settles the identity, it does not paper over the squawk');
 });
 
@@ -282,8 +282,8 @@ test('SCENARIO two flights sharing a callsign with transponders off: both ambigu
   const sky = picture();
   const reconciler = reconcilerFor(efsp, sky);
 
-  const first = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'TWIN1' });
-  const second = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'TWIN1' });
+  const first = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'TWIN1' });
+  const second = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'TWIN1' });
   sky.spawn(101, 'TWIN1', null).spawn(102, 'TWIN1', null);
   reconciler.tick();
 
@@ -297,8 +297,8 @@ test('SCENARIO two flights sharing a callsign with transponders off: both ambigu
   // One of them squawks its assigned code. The beacon rung claims first, so
   // the other resolves on the callsign rung against the single contact left —
   // this is the assertion that pays for sweeping in rung order.
-  const firstFdr = efsp.fdrStore.getFdr(first.fdrId);
-  sky.squawk(101, parseInt(firstFdr.identity.beaconAssigned, 10));
+  const firstFlightData = efsp.flightDataStore.getFlightData(first.fdrId);
+  sky.squawk(101, parseInt(firstFlightData.identity.beaconAssigned, 10));
   reconciler.tick();
 
   const one = correlationOf(efsp, first.fdrId);
@@ -318,8 +318,8 @@ test('SCENARIO two contacts squawking one code is ambiguous, and one binding res
   const sky = picture();
   const reconciler = reconcilerFor(efsp, sky);
 
-  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'DUPE1' });
-  const code = parseInt(efsp.fdrStore.getFdr(strip.fdrId).identity.beaconAssigned, 10);
+  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'DUPE1' });
+  const code = parseInt(efsp.flightDataStore.getFlightData(strip.fdrId).identity.beaconAssigned, 10);
   sky.spawn(101, 'SOMEONE', code).spawn(102, 'SOMEONEELSE', code);
   reconciler.tick();
 
@@ -375,12 +375,12 @@ test('SCENARIO the correlation rate is reported, and a flight still on the ramp 
   // Three airborne, two of them findable.
   const found1 = airborneAndCorrelated(efsp, c, sky, { callsign: 'RATE1', trackId: 1 });
   const found2 = airborneAndCorrelated(efsp, c, sky, { callsign: 'RATE2', trackId: 2 });
-  const missing = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'RATE3' });
+  const missing = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'RATE3' });
   // Plus one still at PROPOSED, which has no contact to find and is therefore
   // not in the denominator.
   mustAct(efsp, c.OPS, 'OPS', null, {
     kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE',
-    fdr: { ...DEPARTURE_FDR, callsign: 'RAMP1' },
+    fdr: { ...DEPARTURE_FLIGHT_DATA, callsign: 'RAMP1' },
   });
 
   // Board state is durable and shared across the tests in this file (see the
@@ -395,10 +395,10 @@ test('SCENARIO the correlation rate is reported, and a flight still on the ramp 
 
   // The ramp-bound flight is not in the denominator at all: it has no
   // correlation record, because there is no aircraft to look for yet.
-  const rampFdrId = efsp.boardStoreFor('INCIRLIK').getAll()
-    .map(s => efsp.fdrStore.getFdr(s.fdrId))
+  const rampFlightDataId = efsp.boardStoreFor('INCIRLIK').getAll()
+    .map(s => efsp.flightDataStore.getFlightData(s.fdrId))
     .find(f => f && f.identity.callsign === 'RAMP1').fdrId;
-  assert.equal(correlationOf(efsp, rampFdrId), null);
+  assert.equal(correlationOf(efsp, rampFlightDataId), null);
 
   // A contact appears that nothing matches; the controller binds it, and the
   // rate rises by exactly that one flight.
@@ -496,11 +496,11 @@ test('SCENARIO surveillance never moves a Strip, however much it contradicts the
   // airborne and squawking its code.
   let strip = mustAct(efsp, c.OPS, 'OPS', null, {
     kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE',
-    fdr: { ...DEPARTURE_FDR, callsign: 'EARLY1' },
+    fdr: { ...DEPARTURE_FLIGHT_DATA, callsign: 'EARLY1' },
   });
   strip = await advance(efsp, c.OPS, 'OPS', strip);
   const atCd = efsp.boardStoreFor('INCIRLIK').getStrip(strip.stripId);
-  sky.spawn(101, 'EARLY1', parseInt(efsp.fdrStore.getFdr(strip.fdrId).identity.beaconAssigned, 10));
+  sky.spawn(101, 'EARLY1', parseInt(efsp.flightDataStore.getFlightData(strip.fdrId).identity.beaconAssigned, 10));
 
   reconciler.tick();
 

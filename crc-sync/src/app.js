@@ -39,7 +39,7 @@ const { MissionClock, WALL_CLOCK } = require('./mission-clock');
 const { MissionSession } = require('./mission-session');
 const { loadTheaters } = require('./theaters');
 const { TheaterContext } = require('./theater-context');
-const { lookupFlightPlan, toFdrFiledSeed, listFiledFlightPlans } = require('./efsp/flight-plan-lookup');
+const { lookupFlightPlan, toFlightDataFiledSeed, listFiledFlightPlans } = require('./efsp/flight-plan-lookup');
 const efspStereoRoutes = require('./efsp/stereo-routes');
 const { createEfspInstrumentation } = require('./efsp/metrics');
 const { archiveDeltas } = require('./efsp/archiver');
@@ -193,7 +193,7 @@ function createApp(deps = {}) {
   // persistence.md) — deliberately NOT cleared below on mission reload,
   // unlike trackStore/collabStore. Strips represent real controller work
   // product and must survive a DCS mission reload, not just a crc-sync
-  // restart. DO NOT add efsp.boardStore/fdrStore clear() calls to the
+  // restart. DO NOT add efsp.boardStore/flightDataStore clear() calls to the
   // mission-reload handler below.
   // The mission clock (docs/adr/0079): in-game Zulu, fed by the gRPC game-time
   // poll below. Every EFSP time a controller reads — gates, deadlines, Strip
@@ -270,7 +270,7 @@ function createApp(deps = {}) {
     srs: srsClient,
     sensorSpecs,
     correlationStore: efsp.correlationStore,
-    fdrStore: efsp.fdrStore,
+    flightDataStore: efsp.flightDataStore,
     env: () => ({ weather: grpcClient.getWeather(), transitionAltFt: theaterContext.transitionAltFt() }),
   });
   const { transponders, identity } = surveillance;
@@ -355,7 +355,7 @@ function createApp(deps = {}) {
   const obligationMonitor = new ForwardingObligationMonitor({
     clock: missionClock,
     boardStoreFor: efsp.boardStoreFor,
-    fdrStore: efsp.fdrStore,
+    flightDataStore: efsp.flightDataStore,
     facilityConfig: efspFacilityConfig,
     airspaceStore: efsp.airspaceStore,
   });
@@ -372,7 +372,7 @@ function createApp(deps = {}) {
     trackStore,
     // The code the aircraft is actually sending (docs/adr/0059).
     beaconOf: trackSeams.beacon || ((t) => { const x = transponders.transponderOf(t); return x ? x.code : null; }),
-    fdrStore: efsp.fdrStore,
+    flightDataStore: efsp.flightDataStore,
     correlationStore: efsp.correlationStore,
     boardStoreFor: efsp.boardStoreFor,
     facilityConfig: efspFacilityConfig,
@@ -446,7 +446,7 @@ function createApp(deps = {}) {
     clock: missionClock,
     wallClock: WALL_CLOCK,
     trackStore,
-    fdrStore: efsp.fdrStore,
+    flightDataStore: efsp.flightDataStore,
     correlationStore: efsp.correlationStore,
     weather: () => grpcClient.getWeather(),
     transitionAltFt: () => theaterContext.transitionAltFt(),
@@ -482,7 +482,7 @@ function createApp(deps = {}) {
   const conflictAlertMonitor = new ConflictAlertMonitor({
     trackStore,
     config: alertingConfig.stca,
-    fdrForTrack: (trackId) => efsp.correlationStore.fdrForTrack(trackId),
+    flightDataForTrack: (trackId) => efsp.correlationStore.flightDataForTrack(trackId),
     activeMarsaFor: (fdrId) => efsp.marsaStore.activeFor(fdrId),
     // Alert text names each aircraft the way identity does (docs/adr/0059).
     callsignFor: trackSeams.callsign || ((track) => identity.labelFor(track.id)),
@@ -547,7 +547,7 @@ function createApp(deps = {}) {
     try {
       const result = await lookupFlightPlan(req.params.callsign);
       if (!result.found) return res.status(404).json({ found: false, reason: result.reason });
-      res.json({ found: true, seed: toFdrFiledSeed(result.plan) });
+      res.json({ found: true, seed: toFlightDataFiledSeed(result.plan) });
     } catch (err) {
       fplLog.error('unexpected error, responding 503 instead of crashing', { err });
       res.status(503).json({ found: false, reason: 'lookup failed unexpectedly' });
@@ -729,7 +729,7 @@ function createApp(deps = {}) {
       // exactly two outcomes on an identity change; this does both, in order,
       // rather than leaving a stale binding pointing at a contact that is gone.
       correlationReconciler.resetPicture('MISSION_RELOAD');
-      // Do NOT add efsp.boardStore.clear()/efsp.fdrStore.clear() here — EFSP
+      // Do NOT add efsp.boardStore.clear()/efsp.flightDataStore.clear() here — EFSP
       // Strips are durably persisted and MUST survive a mission reload, unlike
       // tracks/the IFF overlay (see the `createEfsp()` comment above and
       // docs/adr/0002-durable-board-persistence.md).

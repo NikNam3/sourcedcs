@@ -189,11 +189,11 @@ function runMatrix() {
         // snapshot()/restore() round trip for the whole group
         h.efsp.persist();
         const snapA = JSON.stringify(canonical(Object.fromEntries(FACILITIES.map(f => [f, h.efsp.boardStoreFor(f).snapshot()]))));
-        const fdrA = JSON.stringify(canonical(h.efsp.fdrStore.snapshot()));
+        const flightDataA = JSON.stringify(canonical(h.efsp.flightDataStore.snapshot()));
         const again = createEfsp({ clock: { now: () => MISSION_T0, source: 'MISSION' } });
         const snapB = JSON.stringify(canonical(Object.fromEntries(FACILITIES.map(f => [f, again.boardStoreFor(f).snapshot()]))));
-        const fdrB = JSON.stringify(canonical(again.fdrStore.snapshot()));
-        roundTrips.push({ id: tag, boardsEqual: snapA === snapB, fdrEqual: fdrA === fdrB, boardHash: digest(snapA), strips: JSON.parse(snapA).INCIRLIK.strips.length + JSON.parse(snapA).CENTER.strips.length + JSON.parse(snapA).TACTICAL.strips.length });
+        const flightDataB = JSON.stringify(canonical(again.flightDataStore.snapshot()));
+        roundTrips.push({ id: tag, boardsEqual: snapA === snapB, fdrEqual: flightDataA === flightDataB, boardHash: digest(snapA), strips: JSON.parse(snapA).INCIRLIK.strips.length + JSON.parse(snapA).CENTER.strips.length + JSON.parse(snapA).TACTICAL.strips.length });
       }
     }
   }

@@ -10,10 +10,10 @@ const ingest = (name) => mapAtoDocument(parseStructure(fixture(name)));
 const iffOf = (l) => ({ modeOne: l.extras.identityAto.modeOne, modeTwo: l.extras.identityAto.modeTwo, modeThree: l.extras.identityAto.modeThree });
 const lines = (r) => Object.fromEntries(r.missionLines.map((l) => [l.lineId, l]));
 
-// Every flat key flight-data-store.js createFdr() reads from its seed (createFdr's
+// Every flat key flight-data-store.js createFlightData() reads from its seed (createFlightData's
 // body, the `seed.<key>` reads from `callsign` down to the mission set). A
-// literal on purpose: if createFdr grows a key, this list is where L14 looks.
-const CREATE_FDR_SEED_KEYS = ['callsign', 'flightSize', 'aircraftType', 'wakeCategory', 'equipmentCodes',
+// literal on purpose: if createFlightData grows a key, this list is where L14 looks.
+const CREATE_FLIGHT_DATA_SEED_KEYS = ['callsign', 'flightSize', 'aircraftType', 'wakeCategory', 'equipmentCodes',
   'tailNumber', 'unit', 'homeStation', 'route', 'requestedAltitude', 'departureAirport', 'departureRunway',
   'destinationAirport', 'stereoRouteName', 'proposedDepartureTimeUtc', 'fullRouteClearance', 'remarks',
   'originAirport', 'arrivalFix', 'estimatedArrivalTimeUtc', 'missionNumber', 'packageId', 'controllingAgency',
@@ -41,13 +41,13 @@ test('ato mapping: the research fixture matches the research note\'s oracle', ()
     assert.equal(l.extras.ato.seedable, true, id);
     assert.equal(l.extras.ato.callsign, cs, id);
     assert.deepEqual(
-      [l.fdrSeed.callsign, l.fdrSeed.flightSize, l.fdrSeed.aircraftType, l.fdrSeed.packageId, l.fdrSeed.vulWindowStartUtc, l.fdrSeed.vulWindowEndUtc, l.fdrSeed.controllingAgency],
+      [l.flightDataSeed.callsign, l.flightDataSeed.flightSize, l.flightDataSeed.aircraftType, l.flightDataSeed.packageId, l.flightDataSeed.vulWindowStartUtc, l.flightDataSeed.vulWindowEndUtc, l.flightDataSeed.controllingAgency],
       [cs, size, type, pkg, vs, ve, agency], id);
     assert.equal(l.extras.ato.vulSource, vsrc, id);
     assert.deepEqual(iffOf(l), { modeOne: m1, modeTwo: m2, modeThree: m3 }, id);
     assert.deepEqual([l.extras.identityAto.datalink.l16Callsign, l.extras.identityAto.datalink.tacan, l.extras.identityAto.datalink.ju], [l16, tacan, ju], id);
     assert.equal(l.extras.ato.reportInPoint, rip, id);
-    assert.equal(l.fdrSeed.homeStation, 'OMAM', id);
+    assert.equal(l.flightDataSeed.homeStation, 'OMAM', id);
     assert.equal(l.military.alertStatus, 'NONE', id);
     assert.deepEqual(l.warnings, [], id);
   }
@@ -96,14 +96,14 @@ test('ato mapping: the Incirlik fixture matches the briefing\'s expected lines',
   for (const [id, cs, size, type, msn, pkg, vs, ve, agency, m1, m2, m3, dl, alert] of rows) {
     const l = L[id];
     assert.deepEqual(
-      [l.fdrSeed.callsign, l.fdrSeed.flightSize, l.fdrSeed.aircraftType, l.fdrSeed.missionNumber, l.fdrSeed.packageId, l.fdrSeed.vulWindowStartUtc, l.fdrSeed.vulWindowEndUtc, l.fdrSeed.controllingAgency],
+      [l.flightDataSeed.callsign, l.flightDataSeed.flightSize, l.flightDataSeed.aircraftType, l.flightDataSeed.missionNumber, l.flightDataSeed.packageId, l.flightDataSeed.vulWindowStartUtc, l.flightDataSeed.vulWindowEndUtc, l.flightDataSeed.controllingAgency],
       [cs, size, type, msn, pkg, vs, ve, agency], id);
     assert.deepEqual(iffOf(l), { modeOne: m1, modeTwo: m2, modeThree: m3 }, id);
     assert.equal(l.extras.identityAto.datalink.code, dl, id);
     assert.equal(l.military.alertStatus, alert, id);
   }
   assert.equal(L['0201C#0'].extras.ato.alertStatusRaw, 'GA15');
-  const units = Object.fromEntries(Object.entries(L).map(([k, l]) => [k, [l.fdrSeed.unit, l.fdrSeed.homeStation]]));
+  const units = Object.fromEntries(Object.entries(L).map(([k, l]) => [k, [l.flightDataSeed.unit, l.flightDataSeed.homeStation]]));
   assert.deepEqual(units, {
     '0101A#0': ['480FS', 'LTAG'], '0103A#0': ['480FS', 'LTAG'], '0102A#0': ['493FS', 'LTAG'],
     '0201C#0': ['493FS', 'LTAG'], '0501T#0': ['351ARS', 'LTAG'], '0601W#0': ['552ACW', 'LTAG'],
@@ -119,7 +119,7 @@ test('ato mapping: the Incirlik fixture matches the briefing\'s expected lines',
   assert.equal(L['0101A#0'].extras.ato.missionAltitudeFt, 25000);
   assert.deepEqual(L['0101A#0'].extras.ato.vulRaw, { start: '140430ZAPR', stop: '140530ZAPR' });
   assert.deepEqual(L['0101A#0'].extras.ato.remarks, ['PACKAGE AA STRIKE ON OBJ ANVIL']);
-  assert.equal(L['0601W#0'].fdrSeed.controllingAgency, null, 'the agency\'s own line has no agency, and no warning');
+  assert.equal(L['0601W#0'].flightDataSeed.controllingAgency, null, 'the agency\'s own line has no agency, and no warning');
   assert.deepEqual(collectWarnings(r).filter((w) => w.severity !== 'info'), []);
 });
 
@@ -144,29 +144,29 @@ test('ato mapping: an ArLink declares nothing (not MARSA)', () => {
   }
 });
 
-test('ato mapping: fdrSeed holds only createFdr\'s own keys — never a beacon, never Mode 1/2', () => {
-  assert.ok(SEED_KEYS.every((k) => CREATE_FDR_SEED_KEYS.includes(k)));
+test('ato mapping: flightDataSeed holds only createFlightData\'s own keys — never a beacon, never Mode 1/2', () => {
+  assert.ok(SEED_KEYS.every((k) => CREATE_FLIGHT_DATA_SEED_KEYS.includes(k)));
   for (const f of ['iron-flag-26-3.txt', 'incirlik-day1.txt', 'malformed.txt']) {
     for (const l of ingest(f).missionLines) {
-      for (const k of Object.keys(l.fdrSeed)) assert.ok(CREATE_FDR_SEED_KEYS.includes(k), `${f} ${l.lineId}: ${k}`);
-      assert.deepEqual(Object.keys(l.fdrSeed), [...SEED_KEYS]);
-      for (const bad of ['beaconAssigned', 'modeOne', 'modeTwo', 'modeThree', 'beacon']) assert.ok(!(bad in l.fdrSeed));
+      for (const k of Object.keys(l.flightDataSeed)) assert.ok(CREATE_FLIGHT_DATA_SEED_KEYS.includes(k), `${f} ${l.lineId}: ${k}`);
+      assert.deepEqual(Object.keys(l.flightDataSeed), [...SEED_KEYS]);
+      for (const bad of ['beaconAssigned', 'modeOne', 'modeTwo', 'modeThree', 'beacon']) assert.ok(!(bad in l.flightDataSeed));
     }
   }
 });
 
-test('ato mapping: ATO_FIELD_TARGETS — createFdr rows are exactly the fdrSeed rows', () => {
+test('ato mapping: ATO_FIELD_TARGETS — createFlightData rows are exactly the flightDataSeed rows', () => {
   for (const row of ATO_FIELD_TARGETS) {
-    for (const k of ['set', 'field', 'out', 'fdrPath', 'guideM', 'blockId', 'writePathToday']) assert.ok(k in row, k);
-    assert.ok(['createFdr', 'setMilitary', 'none'].includes(row.writePathToday));
-    assert.equal(row.writePathToday === 'createFdr', row.out.startsWith('fdrSeed.'), row.out);
-    if (row.writePathToday === 'createFdr') assert.ok(SEED_KEYS.includes(row.out.slice('fdrSeed.'.length)));
+    for (const k of ['set', 'field', 'out', 'flightDataPath', 'guideM', 'blockId', 'writePathToday']) assert.ok(k in row, k);
+    assert.ok(['createFlightData', 'setMilitary', 'none'].includes(row.writePathToday));
+    assert.equal(row.writePathToday === 'createFlightData', row.out.startsWith('flightDataSeed.'), row.out);
+    if (row.writePathToday === 'createFlightData') assert.ok(SEED_KEYS.includes(row.out.slice('flightDataSeed.'.length)));
   }
-  // Every fdrSeed key has a row.
-  for (const k of SEED_KEYS) assert.ok(ATO_FIELD_TARGETS.some((r) => r.out === `fdrSeed.${k}`), k);
+  // Every flightDataSeed key has a row.
+  for (const k of SEED_KEYS) assert.ok(ATO_FIELD_TARGETS.some((r) => r.out === `flightDataSeed.${k}`), k);
   // The ATO's Mode 3 never targets the beacon.
   const m3 = ATO_FIELD_TARGETS.find((r) => r.field === 'iffModeThree');
-  assert.notEqual(m3.fdrPath, 'identity.beaconAssigned');
+  assert.notEqual(m3.flightDataPath, 'identity.beaconAssigned');
   // Every `out` path resolves on a real line.
   const l = lines(ingest('iron-flag-26-3.txt'))['1901T#0'];
   for (const row of ATO_FIELD_TARGETS) {
@@ -205,12 +205,12 @@ test('ato mapping: fall-backs — agency and vul start from 7CONTROL, package id
     '/0001A /VIPER 11 /2 /AC:F16C /CAP /140330Z /EAST//',
   ].join('\n')));
   const l = lines(r)['0001A#0'];
-  assert.equal(l.fdrSeed.controllingAgency, 'DARKSTAR1', 'the controller\'s normalised callsign (free text: no 7-char rule)');
-  assert.equal(l.fdrSeed.vulWindowStartUtc, A(3, 30));
-  assert.equal(l.fdrSeed.vulWindowEndUtc, null);
+  assert.equal(l.flightDataSeed.controllingAgency, 'DARKSTAR1', 'the controller\'s normalised callsign (free text: no 7-char rule)');
+  assert.equal(l.flightDataSeed.vulWindowStartUtc, A(3, 30));
+  assert.equal(l.flightDataSeed.vulWindowEndUtc, null);
   assert.equal(l.extras.ato.vulSource, '7CONTROL');
   assert.equal(l.extras.ato.reportInPoint, 'EAST');
-  assert.equal(l.fdrSeed.packageId, 'ZZ');
+  assert.equal(l.flightDataSeed.packageId, 'ZZ');
   assert.deepEqual(l.provenance['mission.packageId'], { source: 'ATO', set: '9PKGDAT', line: 9 });
   assert.deepEqual(l.warnings.map((w) => w.code).filter((c) => c !== 'NO_LOCATION_SET'), ['VUL_FROM_7CONTROL', 'AGENCY_FROM_7CONTROL']);
   assert.equal(lines(r)['0009W#0'].extras.ato.seedable, false, 'DARKSTAR1 is 9 characters');
@@ -224,7 +224,7 @@ test('ato mapping: two MSNACFT in one mission give two lines sharing the mission
     'MSNACFT/2/ACTYP:F15C/EAGLE 21/-/-/31112//',
     'AMSNLOC/140400ZAPR/140500ZAPR/X/250/1//',
   ].join('\n')));
-  assert.deepEqual(r.missionLines.map((l) => [l.lineId, l.extras.ato.callsign, l.extras.identityAto.modeThree, l.fdrSeed.vulWindowStartUtc]), [
+  assert.deepEqual(r.missionLines.map((l) => [l.lineId, l.extras.ato.callsign, l.extras.identityAto.modeThree, l.flightDataSeed.vulWindowStartUtc]), [
     ['0001A#0', 'VIPER11', '1111', A(4, 0)], ['0001A#1', 'EAGLE21', '1112', A(4, 0)],
   ]);
   assert.ok(r.missionLines.every((l) => l.warnings.some((w) => w.code === 'MULTIPLE_FLIGHTS_IN_MISSION')));
@@ -254,7 +254,7 @@ test('ato mapping: ARINFO and 5REFUEL that disagree warn, and the receiver\'s AR
 test('ato mapping: a line has S-Q50\'s four keys plus the S-R2-8 metadata, and nothing else', () => {
   for (const f of ['iron-flag-26-3.txt', 'incirlik-day1.txt', 'malformed.txt']) {
     for (const l of ingest(f).missionLines) {
-      assert.deepEqual(Object.keys(l).sort(), ['extras', 'fdrSeed', 'lineId', 'military', 'provenance', 'sourceLines', 'warnings']);
+      assert.deepEqual(Object.keys(l).sort(), ['extras', 'flightDataSeed', 'lineId', 'military', 'provenance', 'sourceLines', 'warnings']);
       assert.deepEqual(Object.keys(l.extras).sort(), ['ato', 'identityAto']);
       assert.deepEqual(Object.keys(l.military).sort(), ['alertStatus', 'arInfo', 'scl']);
       assert.equal(typeof l.sourceLines.MSNACFT, 'number');

@@ -30,7 +30,7 @@ fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, JSON.stringify([
 const { createEfsp } = await import('../src/efsp/index.js');
 const facilityConfig = await import('../src/efsp/facility-config.js');
 const { createEfspInstrumentation } = await import('../src/efsp/metrics.js');
-const { crew, hold, mustAct, jumpTo, airborneDeparture, handedToCenter, DEPARTURE_FDR } = await import('./helpers/efsp-scenario.mjs');
+const { crew, hold, mustAct, jumpTo, airborneDeparture, handedToCenter, DEPARTURE_FLIGHT_DATA } = await import('./helpers/efsp-scenario.mjs');
 
 function quiet(fn) {
   const cap = crcLog.capture();
@@ -69,7 +69,7 @@ test('an airspace entry carries the clientMutationId of the message that caused 
 
 function refusals() {
   const strip = mustAct(efsp, c.OPS, 'OPS', null, {
-    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: { ...DEPARTURE_FDR, callsign: 'AUD1' },
+    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: { ...DEPARTURE_FLIGHT_DATA, callsign: 'AUD1' },
   });
   const rev = efsp.airspaceStore.getAirspace('MOA-AUD').rev;
   const fs0 = efsp.fieldStateStore.getFieldState('INCIRLIK');
@@ -78,7 +78,7 @@ function refusals() {
     ['board: unknown facilityId', c.OPS, { type: 'efsp-mutation', facilityId: 'NOWHERE', actingPositionId: 'OPS', stripId: strip.stripId, baseRev: strip.rev, op: { kind: 'SetFlag', flag: 'highlight', value: true } }, 'VALIDATION_ERROR'],
     ['board: NOT_HOLDING_POSITION', c.OPS, { type: 'efsp-mutation', actingPositionId: 'APP', stripId: strip.stripId, baseRev: strip.rev, op: { kind: 'SetFlag', flag: 'highlight', value: true } }, 'NOT_HOLDING_POSITION'],
     ['board: STALE_REV', c.OPS, { type: 'efsp-mutation', actingPositionId: 'OPS', stripId: strip.stripId, baseRev: strip.rev - 1, op: { kind: 'SetBlock', blockId: '24', value: 'X' } }, 'STALE_REV'],
-    ['board: PERMISSION_DENIED', c.TWR, { type: 'efsp-mutation', actingPositionId: 'TWR', op: { kind: 'CreateStrip', bayId: 'twr-airborne', rackId: 'main', role: 'DEPARTURE', fdr: DEPARTURE_FDR } }, 'PERMISSION_DENIED'],
+    ['board: PERMISSION_DENIED', c.TWR, { type: 'efsp-mutation', actingPositionId: 'TWR', op: { kind: 'CreateStrip', bayId: 'twr-airborne', rackId: 'main', role: 'DEPARTURE', fdr: DEPARTURE_FLIGHT_DATA } }, 'PERMISSION_DENIED'],
     // Airspace: two store refusals that were never logged, one the store always logged, one pre-store.
     ['airspace: NOT_FOUND', c.CTR, { type: 'efsp-airspace-mutation', airspaceId: 'NO-SUCH', baseRev: 0, actingPositionId: 'CTR', op: { kind: 'ScheduleAirspace' } }, 'NOT_FOUND'],
     ['airspace: STALE_REV', c.CTR, { type: 'efsp-airspace-mutation', airspaceId: 'MOA-AUD', baseRev: rev + 5, actingPositionId: 'CTR', op: { kind: 'ScheduleAirspace' } }, 'STALE_REV'],
@@ -87,7 +87,7 @@ function refusals() {
     // Correlation.
     ['correlation: NOT_HOLDING_POSITION', c.APP, { type: 'efsp-correlation-mutation', fdrId: strip.fdrId, baseRev: 0, actingPositionId: 'CTR', op: { kind: 'BindTrack', trackId: '1' } }, 'NOT_HOLDING_POSITION'],
     ['correlation: class PERMISSION_DENIED', c.JTAC, { type: 'efsp-correlation-mutation', fdrId: strip.fdrId, baseRev: 0, actingPositionId: 'JTAC', op: { kind: 'BindTrack', trackId: '1' } }, 'PERMISSION_DENIED'],
-    ['correlation: store refusal', c.OPS, { type: 'efsp-correlation-mutation', fdrId: 'no-such-fdr', baseRev: 0, actingPositionId: 'OPS', op: { kind: 'BindTrack', trackId: '1' } }, null],
+    ['correlation: store refusal', c.OPS, { type: 'efsp-correlation-mutation', fdrId: 'no-such-flightData', baseRev: 0, actingPositionId: 'OPS', op: { kind: 'BindTrack', trackId: '1' } }, null],
     // MARSA.
     ['marsa: NOT_HOLDING_POSITION', c.APP, { type: 'efsp-marsa-mutation', actingPositionId: 'CTR', op: { kind: 'DeclareMarsa', participants: [strip.fdrId] } }, 'NOT_HOLDING_POSITION'],
     ['marsa: class PERMISSION_DENIED', c.JTAC, { type: 'efsp-marsa-mutation', actingPositionId: 'JTAC', op: { kind: 'DeclareMarsa', participants: [strip.fdrId] } }, 'PERMISSION_DENIED'],
@@ -121,14 +121,14 @@ test('every refusal is logged exactly once', () => {
 // ── G4 ──
 
 test('every entry written by any path names its facilityId, and its FDR where it has one', () => {
-  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'AUD2' });
+  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'AUD2' });
   const handed = handedToCenter(efsp, c, strip);
   // A correlation and a MARSA, a field-state op, a covering reassignment.
   send(c.OPS, { type: 'efsp-correlation-mutation', clientMutationId: crypto.randomUUID(), fdrId: handed.fdrId, baseRev: 0, actingPositionId: 'OPS', op: { kind: 'BindTrack', trackId: '9' } });
-  const other = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'AUD3' });
+  const other = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'AUD3' });
   send(c.OPS, { type: 'efsp-marsa-mutation', clientMutationId: crypto.randomUUID(), actingPositionId: 'OPS', op: { kind: 'DeclareMarsa', participants: [strip.fdrId, other.fdrId], startEvent: 'LOCAL_DECLARATION', endCondition: 'MTR_COMPLETE', declaringCallsign: 'AUD2' } });
   send(c.OPS, { type: 'efsp-field-state-mutation', clientMutationId: crypto.randomUUID(), actingPositionId: 'TWR', op: { kind: 'CloseRunway' } });
-  let tw = mustAct(efsp, c.OPS, 'OPS', null, { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: { ...DEPARTURE_FDR, callsign: 'AUD8' } });
+  let tw = mustAct(efsp, c.OPS, 'OPS', null, { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: { ...DEPARTURE_FLIGHT_DATA, callsign: 'AUD8' } });
   tw = jumpTo(efsp, c.OPS, 'OPS', tw, 'DEPARTED');
   mustAct(efsp, c.OPS, 'OPS', tw, { kind: 'TransferStrip', toPositionId: 'TWR', bayId: 'twr-airborne', rackId: 'main' });
   hold(efsp, c.TWR.session, 'INCIRLIK', []); // TWR vacates; APP covers it
@@ -152,7 +152,7 @@ test('every entry written by any path names its facilityId, and its FDR where it
 });
 
 test('a SetBlock entry records the Block id and value; a coordination entry its action', () => {
-  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'AUD4' });
+  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'AUD4' });
   const cmid = crypto.randomUUID();
   const r = send(c.APP, { type: 'efsp-mutation', clientMutationId: cmid, actingPositionId: 'APP', stripId: strip.stripId, baseRev: strip.rev, op: { kind: 'SetBlock', blockId: '24', value: 'RED 1' } });
   assert.equal(r.ack.ok, true, JSON.stringify(r.ack));
@@ -182,7 +182,7 @@ function sendOp(member, positionId, strip, op) {
 const peerLines = (cmid) => efsp.mutationLog.readAll().filter(e => e.causedBy === cmid && e.source === 'peer');
 
 test('a coordination proposal writes one entry on each Board, linked by causedBy', () => {
-  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'AUD5' });
+  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'AUD5' });
   const proposed = sendOp(c.APP, 'APP', strip, { kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'CENTER', toPositionId: 'CTR' });
   const own = entriesFor(proposed.cmid);
   assert.equal(own.length, 1);
@@ -207,7 +207,7 @@ test('a coordination proposal writes one entry on each Board, linked by causedBy
 });
 
 test('each TOFI step writes a linked entry on the other Board, and none of them is a drop (T5)', () => {
-  const strip = handedToCenter(efsp, c, airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'AUD6' }));
+  const strip = handedToCenter(efsp, c, airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'AUD6' }));
   const entry = sendOp(c.CTR, 'CTR', strip, { kind: 'TOFI', action: 'PROPOSE', direction: 'ENTRY', toFacilityId: 'TACTICAL', toPositionId: 'TAC_C2' });
   const [p1] = peerLines(entry.cmid);
   assert.equal(p1.op, 'PeerTofiProposal');
@@ -251,11 +251,11 @@ test('no two entries share a non-null clientMutationId except a refusal and its 
 
 test('a backfilled drop of a Strip no Board still holds keeps its Facility from the entry', async () => {
   const { TrafficCount } = await import('../src/efsp/traffic-count.js');
-  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'AUD7' });
+  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'AUD7' });
   const dropped = mustAct(efsp, c.APP, 'APP', jumpTo(efsp, c.APP, 'APP', strip, 'HANDED_OFF'), { kind: 'DropStrip' });
   assert.equal(dropped.state, 'DROPPED');
   const noBoards = quiet(() => new TrafficCount({
-    mutationLog: efsp.mutationLog, fdrStore: { getFdr: () => null }, boardStoreFor: () => null,
+    mutationLog: efsp.mutationLog, flightDataStore: { getFlightData: () => null }, boardStoreFor: () => null,
     facilityIds: facilityConfig.getFacilityIds(), config: { retentionDays: 400, homeAirports: {} },
     path: path.join(tmpDir, 'no-boards.jsonl'),
   }));

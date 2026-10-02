@@ -1,7 +1,7 @@
 'use strict';
 
 // Strip<->track correlation (EFSPImplementationGuide.md §6.6) — a FOURTH
-// store, peer to FdrStore, BoardStore and AirspaceStore.
+// store, peer to FlightDataStore, BoardStore and AirspaceStore.
 //
 // §6.6 rule 2 is the whole design brief: "Store the correlation as its own
 // record with its own history; do not store a raw track ID on the FDR." The
@@ -73,14 +73,14 @@ function capText(value) {
 
 class CorrelationStore {
   /**
-   * @param {{fdrExists?:(fdrId:string)=>boolean}} [deps] — injected the same
-   *   way board-store.js's liveStripsForFdr is, and for the same reason: this
-   *   store has no business reaching into the FdrStore, and in index.js's
+   * @param {{flightDataExists?:(fdrId:string)=>boolean}} [deps] — injected the same
+   *   way board-store.js's liveStripsForFlightData is, and for the same reason: this
+   *   store has no business reaching into the FlightDataStore, and in index.js's
    *   composition root the stores it would need do not all exist yet.
    */
-  constructor({ fdrExists, clock = WALL_CLOCK } = {}) {
+  constructor({ flightDataExists, clock = WALL_CLOCK } = {}) {
     this._clock = clock; // the mission clock, docs/adr/0079
-    this._fdrExists = fdrExists || (() => true);
+    this._flightDataExists = flightDataExists || (() => true);
     this._records = new Map(); // fdrId -> record
     this._sync = new SyncLog(); // the store's sequence: a counter only, no ring, no epoch (sync/sync-log.js, S3-1)
     this._mutationLog = null;
@@ -168,7 +168,7 @@ class CorrelationStore {
   }
 
   /** The FDR bound to a contact, or null. Used by the client-side reverse lookup's server-side equivalent. */
-  fdrForTrack(trackId) {
+  flightDataForTrack(trackId) {
     const wanted = String(trackId);
     for (const record of this._records.values()) {
       if (record.trackId === wanted) return record.fdrId;
@@ -238,7 +238,7 @@ class CorrelationStore {
    */
   apply(mutation, actingPositionId, by) {
     if (!mutation.fdrId) return { ok: false, reason: 'VALIDATION_ERROR', detail: 'no fdrId' };
-    if (!this._fdrExists(mutation.fdrId)) {
+    if (!this._flightDataExists(mutation.fdrId)) {
       const miss = { ok: false, reason: 'NOT_FOUND', detail: `unknown FDR ${mutation.fdrId}` };
       this._recordAudit(mutation, actingPositionId, by, null, miss);
       return miss;
@@ -491,7 +491,7 @@ class CorrelationStore {
   /**
    * Forgets records for flights that are over.
    *
-   * `releaseFdr` does not delete the FDR — it only frees the beacon code — so
+   * `releaseFlightData` does not delete the FDR — it only frees the beacon code — so
    * an FDR with nothing but DROPPED Strips lives forever, and its correlation
    * record used to live with it: never swept again (eligibility needs a live
    * Strip), stuck at whatever it last was, still carrying a `trackId` for a
@@ -503,13 +503,13 @@ class CorrelationStore {
    * controller did survives in the Mutation log, which is where "who bound
    * what" belongs anyway.
    *
-   * @param {Set<string>} fdrIdsWithLiveStrips
+   * @param {Set<string>} flightDataIdsWithLiveStrips
    * @returns {string[]} the fdrIds retired
    */
-  retireFinished(fdrIdsWithLiveStrips) {
+  retireFinished(flightDataIdsWithLiveStrips) {
     const retired = [];
     for (const fdrId of [...this._records.keys()]) {
-      if (fdrIdsWithLiveStrips.has(fdrId)) continue;
+      if (flightDataIdsWithLiveStrips.has(fdrId)) continue;
       this._records.delete(fdrId);
       retired.push(fdrId);
     }
@@ -517,10 +517,10 @@ class CorrelationStore {
   }
 
   /** Forgets records whose FDR is gone — FDR lifecycle governs correlation lifecycle, with no separate retention policy. */
-  evictMissingFdrs() {
+  evictMissingFlightDataList() {
     let dropped = 0;
     for (const fdrId of [...this._records.keys()]) {
-      if (!this._fdrExists(fdrId)) { this._records.delete(fdrId); dropped += 1; }
+      if (!this._flightDataExists(fdrId)) { this._records.delete(fdrId); dropped += 1; }
     }
     return dropped;
   }
@@ -528,7 +528,7 @@ class CorrelationStore {
   // ── Persistence (durable per docs/adr/0002) ─────────────────────────────
 
   snapshot() {
-    return [...this._records.values()].filter(r => this._fdrExists(r.fdrId)).map(deepClone);
+    return [...this._records.values()].filter(r => this._flightDataExists(r.fdrId)).map(deepClone);
   }
 
   /**
@@ -544,7 +544,7 @@ class CorrelationStore {
   restore(data) {
     for (const saved of data || []) {
       if (!saved || !saved.fdrId) continue;
-      if (!this._fdrExists(saved.fdrId)) continue; // its FDR is gone
+      if (!this._flightDataExists(saved.fdrId)) continue; // its FDR is gone
       const record = deepClone(saved);
       record.trackId = null;
       record.matchedBy = null;

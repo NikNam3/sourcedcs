@@ -37,7 +37,7 @@ const TOOLBAR_IDS = [
   'efsp-mutation-error', 'efsp-mutation-warning', 'efsp-connection-banner',
 ];
 
-function fdrFor(fdrId, callsign, extra = {}) {
+function flightDataFor(fdrId, callsign, extra = {}) {
   return {
     fdrId, rev: 1, provenance: {},
     identity: { callsign, beaconAssigned: extra.beacon || '0001', trackDegradationFlag: 'NONE' },
@@ -94,8 +94,8 @@ const TWO_FLIGHTS = {
     stripFor('s2', 'f2'),
   ],
   fdrs: [
-    fdrFor('f1', 'VIPER11', { beacon: '4201', route: 'LTAG DCT ALPHA' }),
-    fdrFor('f2', 'VIPER12', { beacon: '4202', route: 'LTAG DCT BRAVO' }),
+    flightDataFor('f1', 'VIPER11', { beacon: '4201', route: 'LTAG DCT ALPHA' }),
+    flightDataFor('f2', 'VIPER12', { beacon: '4202', route: 'LTAG DCT BRAVO' }),
   ],
 };
 

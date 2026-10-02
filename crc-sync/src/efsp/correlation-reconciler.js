@@ -71,7 +71,7 @@ class CorrelationReconciler {
   /**
    * @param {object} deps
    * @param {object} deps.trackStore
-   * @param {object} deps.fdrStore
+   * @param {object} deps.flightDataStore
    * @param {object} deps.correlationStore
    * @param {(facilityId:string)=>object|null} deps.boardStoreFor
    * @param {object} deps.facilityConfig
@@ -80,7 +80,7 @@ class CorrelationReconciler {
    * @param {(payload:object)=>void} [deps.onDelta] — called ONCE per tick with
    *   the records that changed plus the stats, or not at all on a quiet tick.
    */
-  constructor({ trackStore, fdrStore, correlationStore, boardStoreFor, facilityConfig, beaconOf, onDelta, clock = WALL_CLOCK }) {
+  constructor({ trackStore, flightDataStore, correlationStore, boardStoreFor, facilityConfig, beaconOf, onDelta, clock = WALL_CLOCK }) {
     // The mission clock (docs/adr/0079) — what the correlation records are
     // stamped with. The below-target warning's rate limit is a log throttle
     // and stays on the wall clock (_warnIfBelowTarget).
@@ -88,7 +88,7 @@ class CorrelationReconciler {
     if (typeof beaconOf !== 'function') throw new Error('CorrelationReconciler needs beaconOf');
     this._beaconOf = beaconOf;
     this._trackStore = trackStore;
-    this._fdrStore = fdrStore;
+    this._fdrStore = flightDataStore;
     this._store = correlationStore;
     this._boardStoreFor = boardStoreFor;
     this._facilityConfig = facilityConfig;
@@ -119,18 +119,18 @@ class CorrelationReconciler {
   }
 
   /** Every live Strip across every Facility, so eligibility can be judged per FDR. */
-  _liveStripsByFdr() {
-    const byFdr = new Map(); // fdrId -> [strip]
+  _liveStripsByFlightData() {
+    const byFlightData = new Map(); // fdrId -> [strip]
     for (const facilityId of this._facilityConfig.getFacilityIds()) {
       const boardStore = this._boardStoreFor(facilityId);
       if (!boardStore) continue;
       for (const strip of boardStore.getAll()) {
         if (strip.state === 'DROPPED') continue;
-        const list = byFdr.get(strip.fdrId);
-        if (list) list.push(strip); else byFdr.set(strip.fdrId, [strip]);
+        const list = byFlightData.get(strip.fdrId);
+        if (list) list.push(strip); else byFlightData.set(strip.fdrId, [strip]);
       }
     }
-    return byFdr;
+    return byFlightData;
   }
 
   /**
@@ -158,7 +158,7 @@ class CorrelationReconciler {
 
     const tracks = this._trackStore.getAll();
     const { byBeacon, byStem, byId } = buildTrackIndices(tracks, this._beaconOf);
-    const stripsByFdr = this._liveStripsByFdr();
+    const stripsByFlightData = this._liveStripsByFlightData();
 
     // A flight with no live Strip anywhere is over, and its record goes with
     // it. Note the distinction from eligibility: a Strip sitting at PROPOSED is
@@ -166,16 +166,16 @@ class CorrelationReconciler {
     // Its contact is remembered first (docs/adr/0076): it may well still be in
     // the air, and must not be handed to the next flight with that callsign.
     for (const [trackId, held] of this._store.trackIndex()) {
-      if (!stripsByFdr.has(held.fdrId)) this._formerHolder.set(String(trackId), held.fdrId);
+      if (!stripsByFlightData.has(held.fdrId)) this._formerHolder.set(String(trackId), held.fdrId);
     }
     for (const trackId of [...this._formerHolder.keys()]) {
       if (!byId.has(trackId)) this._formerHolder.delete(trackId);
     }
-    this._store.retireFinished(new Set(stripsByFdr.keys()));
+    this._store.retireFinished(new Set(stripsByFlightData.keys()));
 
     const eligible = [];
     for (const fdr of this._fdrStore.getAll()) {
-      const strips = stripsByFdr.get(fdr.fdrId);
+      const strips = stripsByFlightData.get(fdr.fdrId);
       if (!strips || !CorrelationReconciler.isEligible(strips)) continue;
       eligible.push(fdr);
     }

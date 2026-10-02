@@ -179,15 +179,15 @@ const MET_WHEN = {
  */
 class ForwardingObligationMonitor {
   /**
-   * @param {{boardStoreFor:(facilityId:string)=>object, fdrStore:object, facilityConfig:object, airspaceStore?:object, clock?:object}} deps
+   * @param {{boardStoreFor:(facilityId:string)=>object, flightDataStore:object, facilityConfig:object, airspaceStore?:object, clock?:object}} deps
    *   A stray `onAlert` is ignored — obligations are state now, not events.
    */
-  constructor({ boardStoreFor, fdrStore, facilityConfig, airspaceStore, clock = WALL_CLOCK }) {
+  constructor({ boardStoreFor, flightDataStore, facilityConfig, airspaceStore, clock = WALL_CLOCK }) {
     // The mission clock (docs/adr/0079) — every obligation here is due at an
     // ETA, a proposed departure or a void deadline, all in mission time.
     this._clock = clock;
     this._boardStoreFor = boardStoreFor;
-    this._fdrStore = fdrStore;
+    this._fdrStore = flightDataStore;
     this._facilityConfig = facilityConfig;
     this._airspaceStore = airspaceStore || null;
     this._current = new Map(); // `${facilityId}:${stripId}:${obligationType}` -> entry
@@ -218,7 +218,7 @@ class ForwardingObligationMonitor {
 
       for (const strip of boardStore.getAll()) {
         if (strip.state === 'DROPPED') continue;
-        const fdr = this._fdrStore.getFdr(strip.fdrId);
+        const fdr = this._fdrStore.getFlightData(strip.fdrId);
         if (!fdr) continue;
         live.set(`${facilityId}:${strip.stripId}`, strip);
 

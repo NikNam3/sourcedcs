@@ -4,7 +4,7 @@ import crypto from 'crypto';
 
 const { BoardStore } = await import('../src/efsp/board-store.js');
 import { fullRules } from "./helpers/full-rules.mjs";
-const { FdrStore } = await import('../src/efsp/flight-data-store.js');
+const { FlightDataStore } = await import('../src/efsp/flight-data-store.js');
 
 // A minimal, deterministic `rules` fixture standing in for block-map.js /
 // facility-config.js / nla.js / position-store.js, which don't exist yet at
@@ -38,9 +38,9 @@ function makeRules(overrides = {}) {
 }
 
 function makeStore(rulesOverrides) {
-  const fdrStore = new FdrStore();
-  const board = new BoardStore(fdrStore, fullRules(makeRules(rulesOverrides)));
-  return { board, fdrStore };
+  const flightDataStore = new FlightDataStore();
+  const board = new BoardStore(flightDataStore, fullRules(makeRules(rulesOverrides)));
+  return { board, flightDataStore };
 }
 
 function createMutation(overrides = {}) {
@@ -283,8 +283,8 @@ test('MoveStrip between two Strips whose orderKeys already collide (a real, if r
 });
 
 test('applyMutation never propagates an unexpected exception — it rejects the one Mutation instead of crashing the process, regardless of where the exception originates', () => {
-  const fdrStore = new FdrStore();
-  const board = new BoardStore(fdrStore, fullRules(makeRules({
+  const flightDataStore = new FlightDataStore();
+  const board = new BoardStore(flightDataStore, fullRules(makeRules({
     resolveBlockTarget: () => { throw new Error('boom — simulated unexpected failure deep in a rule'); },
   })));
   const strip = createStrip(board);
@@ -297,23 +297,23 @@ test('applyMutation never propagates an unexpected exception — it rejects the 
   assert.equal(after.ok, true);
 });
 
-// ── SetBlock: fdr-routed and annotation-routed ──────────────────────────────
+// ── SetBlock: flight-data-routed and annotation-routed ──────────────────────────────
 
-test('SetBlock routed to an fdr path writes through fdr-store and bumps the Strip rev too', () => {
-  const { board, fdrStore } = makeStore();
+test('SetBlock routed to an fdr path writes through flight-data-store and bumps the Strip rev too', () => {
+  const { board, flightDataStore } = makeStore();
   const strip = createStrip(board);
   const revBefore = strip.rev; // snapshot the primitive — `strip` and `result.strip` below are the same live object
   const result = board.applyMutation(mutation(strip, { kind: 'SetBlock', blockId: '9E', value: 'NORDO PRACTICE' }), 'OPS', 'OPS');
   assert.equal(result.ok, true);
-  assert.equal(fdrStore.getFdr(strip.fdrId).filed.remarks, 'NORDO PRACTICE');
+  assert.equal(flightDataStore.getFlightData(strip.fdrId).filed.remarks, 'NORDO PRACTICE');
   assert.equal(result.strip.rev, revBefore + 1);
 });
 
 test('SetBlock routed to beaconAssigned surfaces a duplicate warning without failing (defect D23)', () => {
-  const { board, fdrStore } = makeStore();
+  const { board, flightDataStore } = makeStore();
   const a = createStrip(board, 'OPS', { op: { ...createMutation().op, fdr: { ...createMutation().op.fdr, callsign: 'AAA1111' } } });
   const b = createStrip(board, 'OPS', { op: { ...createMutation().op, fdr: { ...createMutation().op.fdr, callsign: 'BBB2222' } } });
-  const aCode = fdrStore.getFdr(a.fdrId).identity.beaconAssigned;
+  const aCode = flightDataStore.getFlightData(a.fdrId).identity.beaconAssigned;
 
   const result = board.applyMutation(mutation(b, { kind: 'SetBlock', blockId: '5', value: aCode }), 'OPS', 'OPS');
   assert.equal(result.ok, true);
@@ -331,14 +331,14 @@ test('SetBlock routed to an fdr path fails cleanly on invalid input (reserved be
 
 // ── WP4A: SetBlock routed to airspace-owner (§4.6.4), docs/adr/0018 ──────
 
-test('SetBlock routed to airspace-owner writes through fdr-store\'s dedicated setAirspaceOwner, not the generic setField path', () => {
-  const { board, fdrStore } = makeStore({
+test('SetBlock routed to airspace-owner writes through flight-data-store\'s dedicated setAirspaceOwner, not the generic setField path', () => {
+  const { board, flightDataStore } = makeStore({
     resolveBlockTarget: (blockId) => (blockId === '24A' ? { kind: 'airspace-owner' } : null),
   });
   const strip = createStrip(board);
   const result = board.applyMutation(mutation(strip, { kind: 'SetBlock', blockId: '24A', value: 'USING_AGENCY' }), 'OPS', 'OPS');
   assert.equal(result.ok, true, JSON.stringify(result));
-  assert.equal(fdrStore.getFdr(strip.fdrId).airspace.owner, 'USING_AGENCY');
+  assert.equal(flightDataStore.getFlightData(strip.fdrId).airspace.owner, 'USING_AGENCY');
 });
 
 test('SetBlock routed to airspace-owner rejects a boolean value and surfaces the detail message (defect D15)', () => {
@@ -554,8 +554,8 @@ function makeTransferNlaRules(overrides = {}) {
 }
 
 test('a transfer-shaped InvokeNla changes owner, Bay, and state atomically, in one Mutation', () => {
-  const fdrStore = new FdrStore();
-  const board = new BoardStore(fdrStore, fullRules(makeTransferNlaRules()));
+  const flightDataStore = new FlightDataStore();
+  const board = new BoardStore(flightDataStore, fullRules(makeTransferNlaRules()));
   const strip = createStrip(board, 'TWR', { op: { ...createMutation().op, bayId: 'twr-airborne', rackId: 'main' } });
   board.applyMutation({ clientMutationId: crypto.randomUUID(), stripId: strip.stripId, baseRev: strip.rev, op: { kind: 'SetState', toState: 'DEPARTED' } }, 'TWR', 'TWR');
   const departed = board.getStrip(strip.stripId);
@@ -568,8 +568,8 @@ test('a transfer-shaped InvokeNla changes owner, Bay, and state atomically, in o
 });
 
 test('a transfer-shaped InvokeNla to an unstaffed, uncovered Position is rejected via _applyTransferStrip\'s own staffing gate, and the Strip stays with the sender — defense in depth even when computeNla itself doesn\'t pre-check staffing (the real nla.js does; this fixture deliberately doesn\'t, to exercise board-store.js\'s own gate)', () => {
-  const fdrStore = new FdrStore();
-  const board = new BoardStore(fdrStore, fullRules(makeTransferNlaRules({ isStaffed: () => false, consolidatedAt: () => null })));
+  const flightDataStore = new FlightDataStore();
+  const board = new BoardStore(flightDataStore, fullRules(makeTransferNlaRules({ isStaffed: () => false, consolidatedAt: () => null })));
   const strip = createStrip(board, 'TWR', { op: { ...createMutation().op, bayId: 'twr-airborne', rackId: 'main' } });
   board.applyMutation({ clientMutationId: crypto.randomUUID(), stripId: strip.stripId, baseRev: strip.rev, op: { kind: 'SetState', toState: 'DEPARTED' } }, 'TWR', 'TWR');
   const departed = board.getStrip(strip.stripId);
@@ -581,8 +581,8 @@ test('a transfer-shaped InvokeNla to an unstaffed, uncovered Position is rejecte
 });
 
 test('a transfer-shaped InvokeNla is NOT recorded into the Undo window (docs/adr/0009) — Undo reports unavailable right after', () => {
-  const fdrStore = new FdrStore();
-  const board = new BoardStore(fdrStore, fullRules(makeTransferNlaRules()));
+  const flightDataStore = new FlightDataStore();
+  const board = new BoardStore(flightDataStore, fullRules(makeTransferNlaRules()));
   const strip = createStrip(board, 'TWR', { op: { ...createMutation().op, bayId: 'twr-airborne', rackId: 'main' } });
   board.applyMutation({ clientMutationId: crypto.randomUUID(), stripId: strip.stripId, baseRev: strip.rev, op: { kind: 'SetState', toState: 'DEPARTED' } }, 'TWR', 'TWR');
   const departed = board.getStrip(strip.stripId);
@@ -640,9 +640,9 @@ function makeStateOwnerRules(overrides = {}) {
 }
 
 function makeStateOwnerStore(rulesOverrides) {
-  const fdrStore = new FdrStore();
-  const board = new BoardStore(fdrStore, fullRules(makeStateOwnerRules(rulesOverrides)));
-  return { board, fdrStore };
+  const flightDataStore = new FlightDataStore();
+  const board = new BoardStore(flightDataStore, fullRules(makeStateOwnerRules(rulesOverrides)));
+  return { board, flightDataStore };
 }
 
 test('InvokeNla succeeds for the Position that IS the current state\'s normal owner', () => {
@@ -910,14 +910,14 @@ test('without a canMutate rule supplied, permission checking is simply skipped (
 
 // ── CreateStrip role-scoped permission (Phase 2, docs/adr/0008) ─────────
 
-test('CreateStrip is rejected PERMISSION_DENIED when canCreateStripRole says no for this (Position, role) pair, before touching fdrStore', () => {
-  const { board, fdrStore } = makeStore({
+test('CreateStrip is rejected PERMISSION_DENIED when canCreateStripRole says no for this (Position, role) pair, before touching flightDataStore', () => {
+  const { board, flightDataStore } = makeStore({
     canCreateStripRole: (actingPositionId, role) => actingPositionId === 'OPS' && role === 'DEPARTURE',
   });
   const result = board.applyMutation(createMutation({ op: { ...createMutation().op, role: 'ARRIVAL' } }), 'OPS', 'OPS');
   assert.equal(result.ok, false);
   assert.equal(result.reason, 'PERMISSION_DENIED');
-  assert.equal(fdrStore.getAll().length, 0); // no side effect on a denied CreateStrip
+  assert.equal(flightDataStore.getAll().length, 0); // no side effect on a denied CreateStrip
 });
 
 test('CreateStrip succeeds when canCreateStripRole allows this (Position, role) pair', () => {
@@ -988,11 +988,11 @@ test('a DROPPED Strip leaves the visible Board — getRack excludes it', () => {
 });
 
 test('DropStrip releases the FDR\'s beacon code back to the allocator', () => {
-  const { board, fdrStore } = makeStore();
+  const { board, flightDataStore } = makeStore();
   const strip = createStrip(board);
-  const code = fdrStore.getFdr(strip.fdrId).identity.beaconAssigned;
+  const code = flightDataStore.getFlightData(strip.fdrId).identity.beaconAssigned;
   board.applyMutation(mutation(strip, { kind: 'DropStrip', reason: 'cancelled' }), 'OPS', 'OPS');
-  assert.equal(fdrStore.codeAllocator.isAllocated(code), false);
+  assert.equal(flightDataStore.codeAllocator.isAllocated(code), false);
 });
 
 // ── Mutation log wiring ─────────────────────────────────────────────────────
@@ -1034,10 +1034,10 @@ test('a Strip snapshot/restore round-trip resolves to exactly one owner, unchang
 
   const snap = board.snapshot();
 
-  // Simulate an actual restart: a brand-new BoardStore/FdrStore instance,
+  // Simulate an actual restart: a brand-new BoardStore/FlightDataStore instance,
   // as would happen on process restart, restoring only from persisted data.
-  const freshFdrStore = new FdrStore();
-  const freshBoard = new BoardStore(freshFdrStore, fullRules(makeRules()));
+  const freshFlightDataStore = new FlightDataStore();
+  const freshBoard = new BoardStore(freshFlightDataStore, fullRules(makeRules()));
   freshBoard.restore(snap);
 
   const restored = freshBoard.getStrip(strip.stripId);
@@ -1051,8 +1051,8 @@ test('restore() preserves the cid sequence so future CreateStrip calls do not re
   const first = createStrip(board);
   const snap = board.snapshot();
 
-  const freshFdrStore = new FdrStore();
-  const freshBoard = new BoardStore(freshFdrStore, fullRules(makeRules()));
+  const freshFlightDataStore = new FlightDataStore();
+  const freshBoard = new BoardStore(freshFlightDataStore, fullRules(makeRules()));
   freshBoard.restore(snap);
   const second = createStrip(freshBoard, 'OPS', { op: { ...createMutation().op, fdr: { ...createMutation().op.fdr, callsign: 'ZZZ9999' } } });
 

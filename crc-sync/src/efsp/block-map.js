@@ -213,7 +213,7 @@ const DEPARTURE_BLOCK_MAP = {
 // discipline: this is labelled SOURCE-DEFINED here and MUST NOT be
 // presented as real FAA numbering in UI text or documentation.
 //
-// Block 7 (assigned/cleared altitude) is annotation-routed, not fdr-routed
+// Block 7 (assigned/cleared altitude) is annotation-routed, not flight-data-routed
 // — unlike DEPARTURE's Block 7 — specifically so it carries the append-only
 // + confirmVacated model (§3.7 rule 3): a descending arrival's sequence of
 // altitude clearances is exactly where "don't strike a vacated altitude

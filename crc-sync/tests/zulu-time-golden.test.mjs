@@ -27,7 +27,7 @@ test('resolveZuluHhmmAfter answers as captured', () => {
 test('formatZuluHhmm answers as captured', () => {
   for (const c of g.format) assert.equal(formatZuluHhmm(un(c.ms)), c.out, JSON.stringify(c));
 });
-test('a typed MTR time (the fdr-store typed-time wrapper) answers as captured', () => {
+test('a typed MTR time (the flight-data-store typed-time wrapper) answers as captured', () => {
   for (const c of g.mtr) assert.deepEqual(normalizeMtrValue(c.path, c.value, c.now), c.out, JSON.stringify(c));
 });
 

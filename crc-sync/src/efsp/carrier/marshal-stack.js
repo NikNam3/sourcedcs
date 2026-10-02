@@ -114,7 +114,7 @@ function validateStack(stack, opts = STACK_DEFAULTS) {
     return _fail('marshalRadialDeg must be a bearing in [0, 360) degrees true, or null');
   }
   if (!Array.isArray(stack.entries)) return _fail('entries must be an array');
-  const seenFdr = new Set();
+  const seenFlightData = new Set();
   let prev = -1;
   for (const e of stack.entries) {
     if (!_isObj(e)) return _fail('every entry must be an object');
@@ -123,8 +123,8 @@ function validateStack(stack, opts = STACK_DEFAULTS) {
       if (!ENTRY_KEYS.includes(k)) return _fail(`entry ${e.fdrId}: unknown key '${k}'`);
     }
     if (typeof e.fdrId !== 'string' || !e.fdrId) return _fail('entry fdrId must be a non-empty string');
-    if (seenFdr.has(e.fdrId)) return _fail(`fdrId ${e.fdrId} appears twice in the stack`);
-    seenFdr.add(e.fdrId);
+    if (seenFlightData.has(e.fdrId)) return _fail(`fdrId ${e.fdrId} appears twice in the stack`);
+    seenFlightData.add(e.fdrId);
     if (!Number.isInteger(e.stackIndex) || e.stackIndex < 0 || e.stackIndex > maxIndex) {
       return _fail(`entry ${e.fdrId}: stackIndex must be an integer 0..${maxIndex}`);
     }
@@ -175,12 +175,12 @@ function normalizeStack(raw, { stackId = DEFAULT_STACK_ID, hullId = null, maxInd
     });
   }
   cleaned.sort((a, b) => a.stackIndex - b.stackIndex);
-  const seenFdr = new Set();
+  const seenFlightData = new Set();
   const seenIdx = new Set();
   for (const e of cleaned) {
-    if (seenFdr.has(e.fdrId)) { dropped.push({ fdrId: e.fdrId, why: 'duplicate fdrId' }); continue; }
+    if (seenFlightData.has(e.fdrId)) { dropped.push({ fdrId: e.fdrId, why: 'duplicate fdrId' }); continue; }
     if (seenIdx.has(e.stackIndex)) { dropped.push({ fdrId: e.fdrId, why: `stackIndex ${e.stackIndex} already taken` }); continue; }
-    seenFdr.add(e.fdrId);
+    seenFlightData.add(e.fdrId);
     seenIdx.add(e.stackIndex);
     stack.entries.push(e);
   }
@@ -354,7 +354,7 @@ function _placeAt(entries, newEntry, index, maxIndex) {
   return { ok: true, entries: out, shifted: [...shiftedIds] };
 }
 
-function _checkFdrId(fdrId) {
+function _checkFlightDataId(fdrId) {
   return typeof fdrId === 'string' && fdrId.length > 0;
 }
 
@@ -366,7 +366,7 @@ function _checkFdrId(fdrId) {
 function insertAt(stack, { fdrId, stackIndex, caseIAngels = null } = {}, opts = STACK_DEFAULTS) {
   const v = validateStack(stack, opts);
   if (!v.ok) return v;
-  if (!_checkFdrId(fdrId)) return _fail('fdrId must be a non-empty string');
+  if (!_checkFlightDataId(fdrId)) return _fail('fdrId must be a non-empty string');
   if (stack.entries.some((e) => e.fdrId === fdrId)) return _fail(`${fdrId} is already in the stack — use Move to re-sequence it`);
   if (!_validCaseIAngels(caseIAngels)) return _fail(`caseIAngels must be an integer ${CASE_I_MIN_ANGELS}..${CASE_I_MAX_ANGELS} or null`);
   const placed = _placeAt(_copyEntries(stack), { fdrId, status: 'HOLDING', caseIAngels }, stackIndex, _maxIndex(opts));

@@ -19,7 +19,7 @@ fs.writeFileSync(tmpFile, JSON.stringify(FIXTURE));
 process.env.CRCSYNC_EFSP_STEREO_ROUTES_PATH = tmpFile;
 
 const {
-  getStereoRoutes, getActiveStereoRoutes, resolveStereoRoute, toFdrFiledSeed,
+  getStereoRoutes, getActiveStereoRoutes, resolveStereoRoute, toFlightDataFiledSeed,
   setStereoRoutes, validateStereoRoutes, normalizeStereoName, MAX_FREE_TEXT,
 } = await import('../src/efsp/stereo-routes.js');
 
@@ -159,8 +159,8 @@ test('reads are clones — mutating a result cannot corrupt the table', () => {
 
 // ── the FDR seed ─────────────────────────────────────────────────────────
 
-test('toFdrFiledSeed produces the flat seed createFdr consumes', () => {
-  assert.deepEqual(toFdrFiledSeed(resolveStereoRoute('PACK1')), {
+test('toFlightDataFiledSeed produces the flat seed createFlightData consumes', () => {
+  assert.deepEqual(toFlightDataFiledSeed(resolveStereoRoute('PACK1')), {
     route: 'LTAG DCT ALPHA DCT LTAG',
     requestedAltitude: '250',
     departureAirport: 'LTAG',
@@ -169,8 +169,8 @@ test('toFdrFiledSeed produces the flat seed createFdr consumes', () => {
   });
 });
 
-test('toFdrFiledSeed leaves absent optional fields as empty strings, and carries no aircraft type', () => {
-  const seed = toFdrFiledSeed({ name: 'PACK 2', route: 'LTAG DCT BRAVO' });
+test('toFlightDataFiledSeed leaves absent optional fields as empty strings, and carries no aircraft type', () => {
+  const seed = toFlightDataFiledSeed({ name: 'PACK 2', route: 'LTAG DCT BRAVO' });
   assert.deepEqual(seed, { route: 'LTAG DCT BRAVO', requestedAltitude: '', departureAirport: '', destinationAirport: '', remarks: '' });
   // A canned ROUTE says nothing about what airframe is flying it — unlike
   // the DD1801 seed, which legitimately carries aircraftType/wtc.
@@ -178,9 +178,9 @@ test('toFdrFiledSeed leaves absent optional fields as empty strings, and carries
   assert.equal('wakeCategory' in seed, false);
 });
 
-test('toFdrFiledSeed on garbage is an empty seed, never a throw', () => {
+test('toFlightDataFiledSeed on garbage is an empty seed, never a throw', () => {
   for (const bad of [null, undefined, 'PACK 1', 42]) {
-    assert.deepEqual(toFdrFiledSeed(bad), {});
+    assert.deepEqual(toFlightDataFiledSeed(bad), {});
   }
 });
 

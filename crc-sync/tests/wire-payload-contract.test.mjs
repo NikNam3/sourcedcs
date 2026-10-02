@@ -31,7 +31,7 @@ for (const [k, v] of Object.entries({
 fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, '[]');
 
 const { createEfsp } = await import('../src/efsp/index.js');
-const { crew, DEPARTURE_FDR } = await import('./helpers/efsp-scenario.mjs');
+const { crew, DEPARTURE_FLIGHT_DATA } = await import('./helpers/efsp-scenario.mjs');
 
 const CLIENT_STATE = fs.readFileSync(path.join(import.meta.dirname, '../../crc-desktop/app/public/js/panels/efsp/efsp-state.js'), 'utf8');
 // CMSG: the efsp message handlers moved out of app.js into the registry's modules.
@@ -63,7 +63,7 @@ test('every field applyEfspDelta reads is on a real efsp-board-delta (broadcast 
   assert.ok(read.length >= 4, `scan found ${read}`);
   const result = efsp.handleMessage(c.OPS.session, {
     version: 1, type: 'efsp-mutation', clientMutationId: 'wire-1', facilityId: 'INCIRLIK', actingPositionId: 'OPS',
-    op: { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: DEPARTURE_FDR },
+    op: { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: DEPARTURE_FLIGHT_DATA },
   });
   assert.equal(result.ack.ok, true, JSON.stringify(result.ack));
   const delta = slot(result, 'primary');
@@ -90,7 +90,7 @@ test('every field applyEfspMutationAck and the efsp-mutation-ack case read is on
 
   const ok = efsp.handleMessage(c.OPS.session, {
     version: 1, type: 'efsp-mutation', clientMutationId: 'wire-2', facilityId: 'INCIRLIK', actingPositionId: 'OPS',
-    op: { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: { ...DEPARTURE_FDR, callsign: 'WIRE2' } },
+    op: { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: { ...DEPARTURE_FLIGHT_DATA, callsign: 'WIRE2' } },
   }).ack;
   const bad = efsp.handleMessage(c.OPS.session, {
     version: 1, type: 'efsp-mutation', clientMutationId: 'wire-3', facilityId: 'INCIRLIK', actingPositionId: 'OPS',

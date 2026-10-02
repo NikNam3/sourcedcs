@@ -20,7 +20,7 @@ fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, '[]');
 
 const { createEfsp } = await import('../src/efsp/index.js');
 const facilityConfig = await import('../src/efsp/facility-config.js');
-const { crew, act, mustAct, jumpTo, advance, DEPARTURE_FDR, obligationAlerts } = await import('./helpers/efsp-scenario.mjs');
+const { crew, act, mustAct, jumpTo, advance, DEPARTURE_FLIGHT_DATA, obligationAlerts } = await import('./helpers/efsp-scenario.mjs');
 
 const ATC = { OPS: 'INCIRLIK', CD: 'INCIRLIK', GND: 'INCIRLIK', TWR: 'INCIRLIK', APP: 'INCIRLIK' };
 const MINUTE = 60 * 1000;
@@ -29,7 +29,7 @@ const MINUTE = 60 * 1000;
 async function cleared(efsp, c, callsign) {
   let strip = mustAct(efsp, c.OPS, 'OPS', null, {
     kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE',
-    fdr: { ...DEPARTURE_FDR, callsign },
+    fdr: { ...DEPARTURE_FLIGHT_DATA, callsign },
   });
   strip = await advance(efsp, c.OPS, 'OPS', strip); // -> PENDING_CLEARANCE at CD
   return jumpTo(efsp, c.CD, 'CD', strip, 'CLEARED');
@@ -69,7 +69,7 @@ test('SCENARIO a clearance goes void while the flight is still on the ground', a
   strip = mustAct(efsp, c.CD, 'CD', strip, { kind: 'SetBlock', blockId: '14D', value: voidTime });
   strip = jumpTo(efsp, c.CD, 'CD', strip, 'HELD');
 
-  const fdr = efsp.fdrStore.getFdr(strip.fdrId);
+  const fdr = efsp.flightDataStore.getFlightData(strip.fdrId);
   assert.equal(fdr.assigned.voidDeadlineUtc, voidTime + 30 * MINUTE, 'the deadline is derived, not entered');
 
   // Passive half: the release button refuses.
@@ -96,7 +96,7 @@ test('SCENARIO a void-expired flight re-cleared by CD loses its alert on the nex
 
   const { ForwardingObligationMonitor } = await import('../src/efsp/forwarding-obligations.js');
   const monitor = new ForwardingObligationMonitor({
-    boardStoreFor: efsp.boardStoreFor, fdrStore: efsp.fdrStore, facilityConfig, airspaceStore: efsp.airspaceStore,
+    boardStoreFor: efsp.boardStoreFor, flightDataStore: efsp.flightDataStore, facilityConfig, airspaceStore: efsp.airspaceStore,
   });
   assert.equal(monitor.tick(), true);
   assert.ok(monitor.getAll().some(a => a.stripId === strip.stripId && a.obligationType === 'VOID_TIME_EXPIRED'));
@@ -122,7 +122,7 @@ test('SCENARIO an EDCT slot: inside the window it goes, outside it waits', async
   // goes to HELD — which is what HELD means (§3.4: "hold for release,
   // release time, or void time in force"). The windows are checked there.
   strip = jumpTo(efsp, c.CD, 'CD', strip, 'HELD');
-  const window = efsp.fdrStore.getFdr(strip.fdrId).assigned;
+  const window = efsp.flightDataStore.getFlightData(strip.fdrId).assigned;
   assert.equal(window.edctWindowStartUtc, window.edctTimeUtc - 5 * MINUTE, '±5 minutes, derived');
   assert.equal(window.edctWindowEndUtc, window.edctTimeUtc + 5 * MINUTE);
   assert.equal((await advance(efsp, c.CD, 'CD', strip)).state, 'PUSHBACK');
@@ -156,7 +156,7 @@ test('SCENARIO call for release: a tighter window than an EDCT, and it bites the
   waiting = mustAct(efsp, c.CD, 'CD', waiting, { kind: 'SetBlock', blockId: '14C', value: Date.now() + 30 * MINUTE });
 
   waiting = jumpTo(efsp, c.CD, 'CD', waiting, 'HELD');
-  const assigned = efsp.fdrStore.getFdr(waiting.fdrId).assigned;
+  const assigned = efsp.flightDataStore.getFlightData(waiting.fdrId).assigned;
   assert.equal(assigned.callForReleaseWindowStartUtc, assigned.callForReleaseTimeUtc - 2 * MINUTE);
   assert.equal(assigned.callForReleaseWindowEndUtc, assigned.callForReleaseTimeUtc + 1 * MINUTE,
     'asymmetric on purpose — −2/+1, not ±5 like an EDCT');

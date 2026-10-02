@@ -46,8 +46,8 @@ function viewWith(status, { activeRunway = '05', kind = 'WORKS', inventory = INV
 
 const departure = (over = {}) => ({ role: 'DEPARTURE', state: 'TAXI', bayId: 'gnd-taxi-out', rackId: 'main', ...over });
 const arrival = (over = {}) => ({ role: 'ARRIVAL', state: 'HANDED_TO_TOWER', bayId: 'twr-arrivals', rackId: 'main', ...over });
-const fdrFiled = (rwy) => ({ filed: { departureRunway: rwy }, assigned: { landingRunway: null } });
-const fdrLanding = (rwy) => ({ filed: { departureRunway: null }, assigned: { landingRunway: rwy } });
+const flightDataFiled = (rwy) => ({ filed: { departureRunway: rwy }, assigned: { landingRunway: null } });
+const flightDataLanding = (rwy) => ({ filed: { departureRunway: null }, assigned: { landingRunway: rwy } });
 
 // ── step 1 — config and the pure module ─────────────────────────────────────
 
@@ -152,52 +152,52 @@ test("normalizeRunwayEnd: '5', 'RWY 05', 'rw23', ' 23 ', '5L' resolve; garbage r
 
 test('runwayIdForStrip prefers the rack the Strip sits in over the filed runway, and records the source', () => {
   const view = viewWith('OPEN');
-  const r = resolveRunwayForStrip(departure({ state: 'RUNWAY_QUEUE', bayId: 'twr-runway-queue', rackId: 'rwy-23' }), fdrFiled('05'), view);
+  const r = resolveRunwayForStrip(departure({ state: 'RUNWAY_QUEUE', bayId: 'twr-runway-queue', rackId: 'rwy-23' }), flightDataFiled('05'), view);
   assert.deepEqual(r, { runwayId: '05/23', end: '23', source: 'RACK' });
 });
 
 test('on the drag path the target rack wins over the rack the Strip is in (decisions.md Q27)', () => {
   const view = viewWith('OPEN');
-  const r = resolveRunwayForStrip(departure(), fdrFiled('05'), view, { targetRackId: 'rwy-23' });
+  const r = resolveRunwayForStrip(departure(), flightDataFiled('05'), view, { targetRackId: 'rwy-23' });
   assert.deepEqual(r, { runwayId: '05/23', end: '23', source: 'TARGET_RACK' });
   // A target rack that is no runway's changes nothing.
-  assert.equal(resolveRunwayForStrip(departure(), fdrFiled('05'), view, { targetRackId: 'main' }).source, 'FDR');
+  assert.equal(resolveRunwayForStrip(departure(), flightDataFiled('05'), view, { targetRackId: 'main' }).source, 'FDR');
 });
 
 test('runwayIdForStrip falls back to filed.departureRunway (DEPARTURE) and assigned.landingRunway (ARRIVAL)', () => {
   const view = viewWith('OPEN');
-  assert.deepEqual(resolveRunwayForStrip(departure(), fdrFiled('rwy 23'), view), { runwayId: '05/23', end: '23', source: 'FDR' });
-  assert.deepEqual(resolveRunwayForStrip(arrival(), fdrLanding('5'), view), { runwayId: '05/23', end: '05', source: 'FDR' });
+  assert.deepEqual(resolveRunwayForStrip(departure(), flightDataFiled('rwy 23'), view), { runwayId: '05/23', end: '23', source: 'FDR' });
+  assert.deepEqual(resolveRunwayForStrip(arrival(), flightDataLanding('5'), view), { runwayId: '05/23', end: '05', source: 'FDR' });
   // A whole-runway designator names the pavement but no direction.
-  assert.deepEqual(resolveRunwayForStrip(arrival(), fdrLanding('05/23'), view), { runwayId: '05/23', end: null, source: 'FDR' });
+  assert.deepEqual(resolveRunwayForStrip(arrival(), flightDataLanding('05/23'), view), { runwayId: '05/23', end: null, source: 'FDR' });
 });
 
 test('then to the active runway, then nothing (decisions.md S-Q25)', () => {
-  assert.deepEqual(resolveRunwayForStrip(departure(), fdrFiled(null), viewWith('OPEN')), { runwayId: '05/23', end: '05', source: 'ACTIVE_RUNWAY' });
-  assert.deepEqual(resolveRunwayForStrip(departure(), fdrFiled('99'), viewWith('OPEN')), { runwayId: '05/23', end: '05', source: 'ACTIVE_RUNWAY' });
-  assert.equal(resolveRunwayForStrip(departure(), fdrFiled(null), viewWith('OPEN', { activeRunway: null })), null);
+  assert.deepEqual(resolveRunwayForStrip(departure(), flightDataFiled(null), viewWith('OPEN')), { runwayId: '05/23', end: '05', source: 'ACTIVE_RUNWAY' });
+  assert.deepEqual(resolveRunwayForStrip(departure(), flightDataFiled('99'), viewWith('OPEN')), { runwayId: '05/23', end: '05', source: 'ACTIVE_RUNWAY' });
+  assert.equal(resolveRunwayForStrip(departure(), flightDataFiled(null), viewWith('OPEN', { activeRunway: null })), null);
   assert.equal(resolveRunwayForStrip(departure(), null, viewWith('OPEN', { activeRunway: null })), null);
 });
 
 test('OVERFLIGHT and MISSION Strips have no runway', () => {
   const view = viewWith('CLOSED');
-  assert.equal(resolveRunwayForStrip({ role: 'OVERFLIGHT', rackId: 'rwy-05' }, fdrFiled('05'), view), null);
-  assert.equal(resolveRunwayForStrip({ role: 'MISSION', rackId: 'rwy-05' }, fdrFiled('05'), view), null);
+  assert.equal(resolveRunwayForStrip({ role: 'OVERFLIGHT', rackId: 'rwy-05' }, flightDataFiled('05'), view), null);
+  assert.equal(resolveRunwayForStrip({ role: 'MISSION', rackId: 'rwy-05' }, flightDataFiled('05'), view), null);
 });
 
 test('runwayInhibitFor fails open: no field state, unknown runway, OPEN runway -> null', () => {
-  assert.equal(runwayInhibitFor(departure(), fdrFiled('05'), null), null);
-  assert.equal(runwayInhibitFor(departure(), fdrFiled('05'), viewWith('OPEN')), null);
-  assert.equal(runwayInhibitFor(departure(), fdrFiled('17'), viewWith('CLOSED', { activeRunway: null })), null);
+  assert.equal(runwayInhibitFor(departure(), flightDataFiled('05'), null), null);
+  assert.equal(runwayInhibitFor(departure(), flightDataFiled('05'), viewWith('OPEN')), null);
+  assert.equal(runwayInhibitFor(departure(), flightDataFiled('17'), viewWith('CLOSED', { activeRunway: null })), null);
   const empty = buildStatusView({ runways: [] }, { activeRunway: null, runways: [] });
-  assert.equal(runwayInhibitFor(departure(), fdrFiled('05'), empty), null);
+  assert.equal(runwayInhibitFor(departure(), flightDataFiled('05'), empty), null);
 });
 
 test('runwayInhibitFor names the runway and the cause for each unusable status', () => {
-  assert.equal(runwayInhibitFor(departure(), fdrFiled('05'), viewWith('SUSPENDED_WORKS')), 'runway 05/23 suspended — works in progress');
-  assert.equal(runwayInhibitFor(departure(), fdrFiled('05'), viewWith('SUSPENDED_INSPECTION')), 'runway 05/23 suspended — awaiting inspection');
-  assert.equal(runwayInhibitFor(departure(), fdrFiled('05'), viewWith('SUSPENDED_INSPECTION', { kind: 'RUNWAY_CHANGE' })), 'runway 05/23 suspended — awaiting inspection');
-  assert.equal(runwayInhibitFor(departure(), fdrFiled('05'), viewWith('CLOSED')), 'runway 05/23 closed');
+  assert.equal(runwayInhibitFor(departure(), flightDataFiled('05'), viewWith('SUSPENDED_WORKS')), 'runway 05/23 suspended — works in progress');
+  assert.equal(runwayInhibitFor(departure(), flightDataFiled('05'), viewWith('SUSPENDED_INSPECTION')), 'runway 05/23 suspended — awaiting inspection');
+  assert.equal(runwayInhibitFor(departure(), flightDataFiled('05'), viewWith('SUSPENDED_INSPECTION', { kind: 'RUNWAY_CHANGE' })), 'runway 05/23 suspended — awaiting inspection');
+  assert.equal(runwayInhibitFor(departure(), flightDataFiled('05'), viewWith('CLOSED')), 'runway 05/23 closed');
 });
 
 test('runwayAdvisoryFor flags a Strip queued for the inactive end, and nothing else (decisions.md Q30)', () => {
@@ -210,12 +210,12 @@ test('runwayAdvisoryFor flags a Strip queued for the inactive end, and nothing e
 test("runwayRackFor files a Strip under its filed end, else the active end, else the Bay's first rack (decisions.md Q26)", () => {
   const queue = INCIRLIK.bays.TWR.find(b => b.bayId === 'twr-runway-queue');
   const view = viewWith('OPEN', { activeRunway: '23' });
-  assert.equal(runwayRackFor(departure(), fdrFiled('05'), view, queue), 'rwy-05');
-  assert.equal(runwayRackFor(departure(), fdrFiled(null), view, queue), 'rwy-23');
-  assert.equal(runwayRackFor(departure(), fdrFiled(null), viewWith('OPEN', { activeRunway: null }), queue), 'rwy-05');
-  assert.equal(runwayRackFor(departure(), fdrFiled('23'), null, queue), 'rwy-05'); // no field state: as before
+  assert.equal(runwayRackFor(departure(), flightDataFiled('05'), view, queue), 'rwy-05');
+  assert.equal(runwayRackFor(departure(), flightDataFiled(null), view, queue), 'rwy-23');
+  assert.equal(runwayRackFor(departure(), flightDataFiled(null), viewWith('OPEN', { activeRunway: null }), queue), 'rwy-05');
+  assert.equal(runwayRackFor(departure(), flightDataFiled('23'), null, queue), 'rwy-05'); // no field state: as before
   const other = { bayId: 'twr-final', rackIds: ['main'] };
-  assert.equal(runwayRackFor(departure(), fdrFiled('05'), view, other), 'main');
+  assert.equal(runwayRackFor(departure(), flightDataFiled('05'), view, other), 'main');
 });
 
 test('the active end is the one most into the TRUE wind (decisions.md H22)', () => {
@@ -649,7 +649,7 @@ const nla = await import('../src/efsp/nla.js');
 const NOW = Date.UTC(2026, 8, 30, 12, 0, 0);
 const everyoneHome = { isStaffed: () => true, consolidatedAt: () => null };
 const ctxWith = (view, extra = {}) => ({ ...everyoneHome, fieldStateFor: () => view, ...extra });
-const readyFdr = (over = {}) => ({
+const readyFlightData = (over = {}) => ({
   identity: { beaconAssigned: '4001' },
   filed: { route: 'DCT', requestedAltitude: '250', departureAirport: 'LTAG', destinationAirport: 'LTAG', departureRunway: '05', ...over.filed },
   assigned: { releaseState: 'RELEASED', landingRunway: '05', ...over.assigned },
@@ -658,50 +658,50 @@ const readyFdr = (over = {}) => ({
 test('TAXI, RUNWAY_QUEUE and LUAW are inhibited on a suspended runway, with the runway named in the reason', () => {
   const view = viewWith('SUSPENDED_WORKS');
   for (const [state, rackId] of [['TAXI', 'main'], ['RUNWAY_QUEUE', 'rwy-05'], ['LUAW', 'rwy-05']]) {
-    const r = nla.computeNla({ role: 'DEPARTURE', state, rackId }, readyFdr(), NOW, ctxWith(view));
+    const r = nla.computeNla({ role: 'DEPARTURE', state, rackId }, readyFlightData(), NOW, ctxWith(view));
     assert.deepEqual(r, { inhibited: 'runway 05/23 suspended — works in progress' }, state);
   }
 });
 
 test('HANDED_TO_TOWER -> FINAL is inhibited on a suspended runway', () => {
-  const r = nla.computeNla({ role: 'ARRIVAL', state: 'HANDED_TO_TOWER', rackId: 'main' }, readyFdr(), NOW, ctxWith(viewWith('SUSPENDED_INSPECTION')));
+  const r = nla.computeNla({ role: 'ARRIVAL', state: 'HANDED_TO_TOWER', rackId: 'main' }, readyFlightData(), NOW, ctxWith(viewWith('SUSPENDED_INSPECTION')));
   assert.deepEqual(r, { inhibited: 'runway 05/23 suspended — awaiting inspection' });
 });
 
 test('FINAL -> LANDED is never inhibited — touchdown is an observation, not a clearance', () => {
   for (const status of ['SUSPENDED_WORKS', 'SUSPENDED_INSPECTION', 'CLOSED']) {
-    const r = nla.computeNla({ role: 'ARRIVAL', state: 'FINAL', rackId: 'main' }, readyFdr(), NOW, ctxWith(viewWith(status)));
+    const r = nla.computeNla({ role: 'ARRIVAL', state: 'FINAL', rackId: 'main' }, readyFlightData(), NOW, ctxWith(viewWith(status)));
     assert.deepEqual(r, { toState: 'LANDED' }, status);
   }
 });
 
 test('a CLOSED runway inhibits too (decisions.md Q28)', () => {
-  const r = nla.computeNla({ role: 'DEPARTURE', state: 'LUAW', rackId: 'rwy-23' }, readyFdr(), NOW, ctxWith(viewWith('CLOSED')));
+  const r = nla.computeNla({ role: 'DEPARTURE', state: 'LUAW', rackId: 'rwy-23' }, readyFlightData(), NOW, ctxWith(viewWith('CLOSED')));
   assert.deepEqual(r, { inhibited: 'runway 05/23 closed' });
 });
 
 test('an unresolvable runway, a runway not in the inventory, and a Facility with no field state all fail open', () => {
   const noActive = viewWith('CLOSED', { activeRunway: null });
-  const fdrNoRunway = readyFdr({ filed: { departureRunway: null }, assigned: { landingRunway: null } });
-  assert.deepEqual(nla.computeNla({ role: 'DEPARTURE', state: 'RUNWAY_QUEUE', rackId: 'main' }, fdrNoRunway, NOW, ctxWith(noActive)), { toState: 'LUAW' });
-  const fdrOther = readyFdr({ filed: { departureRunway: '17' } });
-  assert.deepEqual(nla.computeNla({ role: 'DEPARTURE', state: 'RUNWAY_QUEUE', rackId: 'main' }, fdrOther, NOW, ctxWith(noActive)), { toState: 'LUAW' });
-  assert.deepEqual(nla.computeNla({ role: 'DEPARTURE', state: 'RUNWAY_QUEUE', rackId: 'rwy-05' }, readyFdr(), NOW, ctxWith(null)), { toState: 'LUAW' });
+  const flightDataNoRunway = readyFlightData({ filed: { departureRunway: null }, assigned: { landingRunway: null } });
+  assert.deepEqual(nla.computeNla({ role: 'DEPARTURE', state: 'RUNWAY_QUEUE', rackId: 'main' }, flightDataNoRunway, NOW, ctxWith(noActive)), { toState: 'LUAW' });
+  const flightDataOther = readyFlightData({ filed: { departureRunway: '17' } });
+  assert.deepEqual(nla.computeNla({ role: 'DEPARTURE', state: 'RUNWAY_QUEUE', rackId: 'main' }, flightDataOther, NOW, ctxWith(noActive)), { toState: 'LUAW' });
+  assert.deepEqual(nla.computeNla({ role: 'DEPARTURE', state: 'RUNWAY_QUEUE', rackId: 'rwy-05' }, readyFlightData(), NOW, ctxWith(null)), { toState: 'LUAW' });
 });
 
 test('a ctx with no fieldStateFor at all behaves exactly as before (every pre-L1 caller)', () => {
-  assert.deepEqual(nla.computeNla({ role: 'DEPARTURE', state: 'TAXI', rackId: 'main' }, readyFdr(), NOW, everyoneHome), { toState: 'RUNWAY_QUEUE', transferTo: 'TWR' });
-  assert.deepEqual(nla.computeNla({ role: 'DEPARTURE', state: 'LUAW', rackId: 'rwy-05' }, readyFdr(), NOW, everyoneHome), { toState: 'DEPARTED' });
-  assert.deepEqual(nla.computeNla({ role: 'ARRIVAL', state: 'HANDED_TO_TOWER', rackId: 'main' }, readyFdr(), NOW, everyoneHome), { toState: 'FINAL' });
+  assert.deepEqual(nla.computeNla({ role: 'DEPARTURE', state: 'TAXI', rackId: 'main' }, readyFlightData(), NOW, everyoneHome), { toState: 'RUNWAY_QUEUE', transferTo: 'TWR' });
+  assert.deepEqual(nla.computeNla({ role: 'DEPARTURE', state: 'LUAW', rackId: 'rwy-05' }, readyFlightData(), NOW, everyoneHome), { toState: 'DEPARTED' });
+  assert.deepEqual(nla.computeNla({ role: 'ARRIVAL', state: 'HANDED_TO_TOWER', rackId: 'main' }, readyFlightData(), NOW, everyoneHome), { toState: 'FINAL' });
 });
 
 test('OVERFLIGHT and MISSION are never inhibited by field state', () => {
   const view = viewWith('CLOSED');
   // INBOUND and HANDED_OFF are ARRIVAL's and DEPARTURE's state names too (docs/adr/0087): a closed runway must not hold an overflight in them.
-  assert.deepEqual(nla.computeNla({ role: 'OVERFLIGHT', state: 'INBOUND', rackId: 'rwy-05' }, readyFdr(), NOW, ctxWith(view)), { toState: 'IN_SECTOR' });
-  assert.deepEqual(nla.computeNla({ role: 'OVERFLIGHT', state: 'IN_SECTOR', rackId: 'rwy-05' }, readyFdr(), NOW, ctxWith(view)), { toState: 'HANDED_OFF' });
-  assert.deepEqual(nla.computeNla({ role: 'OVERFLIGHT', state: 'HANDED_OFF', rackId: 'rwy-05' }, readyFdr(), NOW, ctxWith(view)), { toState: 'DROPPED' });
-  assert.deepEqual(nla.computeNla({ role: 'MISSION', state: 'TASKED', rackId: 'rwy-05' }, readyFdr(), NOW, ctxWith(view)), { toState: 'AIRBORNE' });
+  assert.deepEqual(nla.computeNla({ role: 'OVERFLIGHT', state: 'INBOUND', rackId: 'rwy-05' }, readyFlightData(), NOW, ctxWith(view)), { toState: 'IN_SECTOR' });
+  assert.deepEqual(nla.computeNla({ role: 'OVERFLIGHT', state: 'IN_SECTOR', rackId: 'rwy-05' }, readyFlightData(), NOW, ctxWith(view)), { toState: 'HANDED_OFF' });
+  assert.deepEqual(nla.computeNla({ role: 'OVERFLIGHT', state: 'HANDED_OFF', rackId: 'rwy-05' }, readyFlightData(), NOW, ctxWith(view)), { toState: 'DROPPED' });
+  assert.deepEqual(nla.computeNla({ role: 'MISSION', state: 'TASKED', rackId: 'rwy-05' }, readyFlightData(), NOW, ctxWith(view)), { toState: 'AIRBORNE' });
 });
 
 test('the inhibit follows the rack a Strip is in, at a field with two independent runways', () => {
@@ -715,10 +715,10 @@ test('the inhibit follows the rack a Strip is in, at a field with two independen
     ],
   };
   const view = buildStatusView(inv, { activeRunway: '05', runways: [{ runwayId: '05/23', status: 'CLOSED' }, { runwayId: '17/35', status: 'OPEN' }] });
-  const at = (rackId) => nla.computeNla({ role: 'DEPARTURE', state: 'RUNWAY_QUEUE', rackId }, readyFdr(), NOW, ctxWith(view));
+  const at = (rackId) => nla.computeNla({ role: 'DEPARTURE', state: 'RUNWAY_QUEUE', rackId }, readyFlightData(), NOW, ctxWith(view));
   assert.deepEqual(at('rwy-17'), { toState: 'LUAW' });
   assert.deepEqual(at('rwy-05'), { inhibited: 'runway 05/23 closed' });
-  const taxi = (targetRackId) => nla.computeNla({ role: 'DEPARTURE', state: 'TAXI', rackId: 'main' }, readyFdr(), NOW, ctxWith(view, { targetRackId }));
+  const taxi = (targetRackId) => nla.computeNla({ role: 'DEPARTURE', state: 'TAXI', rackId: 'main' }, readyFlightData(), NOW, ctxWith(view, { targetRackId }));
   assert.deepEqual(taxi('rwy-35'), { toState: 'RUNWAY_QUEUE', transferTo: 'TWR' });
   assert.deepEqual(taxi('rwy-23'), { inhibited: 'runway 05/23 closed' });
   assert.deepEqual(taxi(undefined), { inhibited: 'runway 05/23 closed' }); // filed 8A = 05
@@ -890,7 +890,7 @@ test('CompleteRunwayChange sets the active runway, suspends the pavement for ins
   assert.equal(rwy(fsI).status, 'SUSPENDED_INSPECTION');
   assert.equal(rwy(fsI).suspension.kind, 'RUNWAY_CHANGE');
   assert.deepEqual(fsI.runwayChange.pendingInspection, ['05/23']);
-  assert.equal(runwayInhibitFor(departure({ rackId: 'rwy-23' }), fdrFiled('23'), store.statusView('INCIRLIK')), 'runway 05/23 suspended — awaiting inspection');
+  assert.equal(runwayInhibitFor(departure({ rackId: 'rwy-23' }), flightDataFiled('23'), store.statusView('INCIRLIK')), 'runway 05/23 suspended — awaiting inspection');
 });
 
 test('the change record clears only when every runway in pendingInspection has been inspected', () => {

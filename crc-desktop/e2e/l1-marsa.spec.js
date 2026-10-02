@@ -107,7 +107,7 @@ test('F-110: typing the declarer leaves the field empty', async ({ page }) => {
 
 // ── F-111 ────────────────────────────────────────────────────────────────
 //
-// Declaring writes separationRegime = 'MARSA' server-side via fdrStore.setTofi
+// Declaring writes separationRegime = 'MARSA' server-side via flightDataStore.setTofi
 // (plan §1c). The delta does not carry it, so every connected client holds
 // null until a reload. Guide §4.8.3's "they inherit a lie", in the direction
 // it warns about: the Strip says nothing about who is separating the aircraft.

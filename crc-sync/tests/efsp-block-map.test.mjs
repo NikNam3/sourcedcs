@@ -42,7 +42,7 @@ test('isValidRole is true for DEPARTURE, ARRIVAL, OVERFLIGHT (docs/adr/0023) and
 
 // ── resolveBlockTarget ───────────────────────────────────────────────────
 
-test('resolveBlockTarget routes fdr-bound Blocks to their exact field path', () => {
+test('resolveBlockTarget routes flight-data-bound Blocks to their exact field path', () => {
   assert.deepEqual(resolveBlockTarget('DEPARTURE', '1'), { kind: 'fdr', path: 'identity.callsign' });
   assert.deepEqual(resolveBlockTarget('DEPARTURE', '5'), { kind: 'fdr', path: 'identity.beaconAssigned' });
   assert.deepEqual(resolveBlockTarget('DEPARTURE', '9E'), { kind: 'fdr', path: 'filed.remarks' });
@@ -114,7 +114,7 @@ test('the assigned altitude and heading are the FLIGHT\'s clearance, on every Ro
   assert.deepEqual(resolveBlockTarget('DEPARTURE', '7'), { kind: 'fdr', path: 'filed.requestedAltitude' });
 });
 
-test('ARRIVAL resolveBlockTarget routes fdr-bound Blocks to their exact field path', () => {
+test('ARRIVAL resolveBlockTarget routes flight-data-bound Blocks to their exact field path', () => {
   assert.deepEqual(resolveBlockTarget('ARRIVAL', '1'), { kind: 'fdr', path: 'identity.callsign' });
   assert.deepEqual(resolveBlockTarget('ARRIVAL', '8'), { kind: 'fdr', path: 'filed.originAirport' });
   assert.deepEqual(resolveBlockTarget('ARRIVAL', '8B'), { kind: 'fdr', path: 'assigned.landingRunway' });
@@ -224,7 +224,7 @@ const IDENTITY_SUB_BLOCK_PATHS = {
 };
 
 for (const role of ['DEPARTURE', 'ARRIVAL', 'OVERFLIGHT']) {
-  test(`${role}'s Blocks 3A-3E are present, optional, and fdr-routed to the right identity path`, () => {
+  test(`${role}'s Blocks 3A-3E are present, optional, and flight-data-routed to the right identity path`, () => {
     for (const [id, path] of Object.entries(IDENTITY_SUB_BLOCK_PATHS)) {
       assert.deepEqual(resolveBlockTarget(role, id), { kind: 'fdr', path }, `${role}/${id}`);
       assert.equal(requiredBlocksFor(role).includes(id), false, `${role}/${id} should not be required`);
@@ -442,8 +442,8 @@ test('MILITARY_BLOCK_NAMESPACE agrees with the Block Maps it documents', () => {
   }
 });
 
-test('every fdr-routed Block writing under military. is claimed by exactly one namespace row', () => {
-  // The reverse drift: a new plain-fdr Block reaching into the military
+test('every flight-data-routed Block writing under military. is claimed by exactly one namespace row', () => {
+  // The reverse drift: a new plain-flightData Block reaching into the military
   // namespace without the table knowing would be the §9.4 reservation
   // problem all over again, invisible to the check above.
   for (const role of ATC_ROLES) {

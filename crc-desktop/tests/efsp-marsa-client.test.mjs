@@ -35,9 +35,9 @@ const require = createRequire(import.meta.url);
 // global); this drives the real one.
 const setSelected = (id) => _setSelectedStripIdForTest(id);
 
-const TANKER = 'fdr-shell71';
-const RX1 = 'fdr-viper11';
-const RX2 = 'fdr-viper12';
+const TANKER = 'flight-data-shell71';
+const RX1 = 'flight-data-viper11';
+const RX2 = 'flight-data-viper12';
 
 function strip(stripId, fdrId) {
   return {

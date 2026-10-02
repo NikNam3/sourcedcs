@@ -315,7 +315,7 @@ class TrafficCount {
   /**
    * @param {object} deps
    * @param {import('./mutation-log').MutationLog} deps.mutationLog
-   * @param {object} deps.fdrStore
+   * @param {object} deps.flightDataStore
    * @param {(facilityId:string) => object|null} deps.boardStoreFor
    * @param {string[]} deps.facilityIds
    * @param {{retentionDays?:number, homeAirports?:object}} [deps.config]
@@ -324,10 +324,10 @@ class TrafficCount {
    * @param {() => number} [deps.wallNow]    retention only
    * @param {() => (number|null)} [deps.missionSessionOf] the metrics session (decisions.md H32) a drop belongs to
    */
-  constructor({ mutationLog, fdrStore, boardStoreFor, facilityIds, config, path: filePath, clock = WALL_CLOCK, wallNow = () => Date.now(), missionSessionOf = () => null }) {
+  constructor({ mutationLog, flightDataStore, boardStoreFor, facilityIds, config, path: filePath, clock = WALL_CLOCK, wallNow = () => Date.now(), missionSessionOf = () => null }) {
     const defaults = getInstrumentationConfig().trafficCount;
     this._log = mutationLog;
-    this._fdrStore = fdrStore;
+    this._fdrStore = flightDataStore;
     this._boardStoreFor = boardStoreFor;
     this._facilityIds = [...(facilityIds || [])];
     this._retentionDays = config && Number.isInteger(config.retentionDays) && config.retentionDays >= 1 ? config.retentionDays : defaults.retentionDays;
@@ -433,7 +433,7 @@ class TrafficCount {
   }
 
   _maybeLatchScramble(stripId, fdrId) {
-    const fdr = fdrId && this._fdrStore ? this._fdrStore.getFdr(fdrId) : null;
+    const fdr = fdrId && this._fdrStore ? this._fdrStore.getFlightData(fdrId) : null;
     if (fdr && fdr.military && fdr.military.alertStatus === 'SCRAMBLE') this._scramble.add(stripId);
   }
 
@@ -499,7 +499,7 @@ class TrafficCount {
   _buildRecord(entry, { backfilled, sua }) {
     const base = logDerivedRecord(entry, sua || this._sua.get(entry.stripId));
     const strip = entry.after;
-    const fdr = strip.fdrId && this._fdrStore ? this._fdrStore.getFdr(strip.fdrId) : null;
+    const fdr = strip.fdrId && this._fdrStore ? this._fdrStore.getFlightData(strip.fdrId) : null;
     // The entry names its Facility (docs/adr/0083), so a Strip no Board holds any more
     // (archived) keeps it; older entries fall back to looking the Strip up.
     const facilityId = entry.facilityId || this._facilityOf(entry.stripId) || 'UNKNOWN';
@@ -558,7 +558,7 @@ class TrafficCount {
    * outside a logged Strip Mutation, so a SCRAMBLE that is reset before the
    * drop still counts.
    */
-  noteFdr(fdrId) {
+  noteFlightData(fdrId) {
     for (const f of this._facilityIds) {
       const bs = this._boardStoreFor(f);
       if (!bs) continue;

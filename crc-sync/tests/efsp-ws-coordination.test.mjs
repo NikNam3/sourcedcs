@@ -14,7 +14,7 @@ process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH_TACTICAL = path.join(tmpDir, 'tact
 const { handleMessage } = await import('../src/efsp/efsp-ws.js');
 const { BoardStore } = await import('../src/efsp/board-store.js');
 import { fullRules } from "./helpers/full-rules.mjs";
-const { FdrStore } = await import('../src/efsp/flight-data-store.js');
+const { FlightDataStore } = await import('../src/efsp/flight-data-store.js');
 const { PositionStore } = await import('../src/efsp/position-store.js');
 const facilityConfig = await import('../src/efsp/facility-config.js');
 const blockMap = await import('../src/efsp/block-map.js');
@@ -27,7 +27,7 @@ const coordination = await import('../src/efsp/coordination.js');
 // (facilityId routing) a real client sends, one layer above
 // efsp-board-store-coordination.test.mjs's direct applyMutation() calls.
 function makeCtx() {
-  const fdrStore = new FdrStore();
+  const flightDataStore = new FlightDataStore();
   const facilities = new Map();
 
   for (const facilityId of facilityConfig.getFacilityIds()) {
@@ -51,12 +51,12 @@ function makeCtx() {
       coordinationEffect: (primitive) => coordination.coordinationEffect(primitive),
       tofiCounterparts: (actingPositionId) => permission.tofiCounterparts(actingPositionId),
     };
-    const boardStore = new BoardStore(fdrStore, fullRules(rules));
+    const boardStore = new BoardStore(flightDataStore, fullRules(rules));
     facilities.set(facilityId, { boardStore, positionStore });
   }
 
   return {
-    fdrStore, facilityConfig,
+    flightDataStore, facilityConfig,
     boardStoreFor: (facilityId = facilityConfig.DEFAULT_FACILITY_ID) => (facilities.get(facilityId) || {}).boardStore || null,
     positionStoreFor: (facilityId = facilityConfig.DEFAULT_FACILITY_ID) => (facilities.get(facilityId) || {}).positionStore || null,
   };

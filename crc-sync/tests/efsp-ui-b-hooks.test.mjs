@@ -23,7 +23,7 @@ fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, '[]');
 
 const { createEfsp } = await import('../src/efsp/index.js');
 const fieldState = await import('../src/efsp/runway-status.js');
-const { crew, mustAct, jumpTo, DEPARTURE_FDR } = await import('./helpers/efsp-scenario.mjs');
+const { crew, mustAct, jumpTo, DEPARTURE_FLIGHT_DATA } = await import('./helpers/efsp-scenario.mjs');
 
 test('RUNWAY_CHANGE has its own label in the inhibit reason; WORKS and unknown kinds read as before', () => {
   const rw = (kind) => ({ runwayId: '05/23', status: 'SUSPENDED_WORKS', suspension: kind ? { kind } : null });
@@ -44,7 +44,7 @@ const fs1 = (member, positionId, op) => {
 };
 let n = 0;
 function taxiing() {
-  let s = mustAct(efsp, c.OPS, 'OPS', null, { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: { ...DEPARTURE_FDR, callsign: `OBS${++n}`, departureRunway: '05' } });
+  let s = mustAct(efsp, c.OPS, 'OPS', null, { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: { ...DEPARTURE_FLIGHT_DATA, callsign: `OBS${++n}`, departureRunway: '05' } });
   s = jumpTo(efsp, c.OPS, 'OPS', s, 'RUNWAY_QUEUE');
   return mustAct(efsp, c.OPS, 'OPS', s, { kind: 'TransferStrip', toPositionId: 'TWR', bayId: 'twr-runway-queue', rackId: 'rwy-05' });
 }

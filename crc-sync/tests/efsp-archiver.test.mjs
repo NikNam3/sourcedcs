@@ -30,7 +30,7 @@ const { TrafficCount } = await import('../src/efsp/traffic-count.js');
 const { MissionSession } = await import('../src/mission-session.js');
 const facilityConfig = await import('../src/efsp/facility-config.js');
 const {
-  crew, act, mustAct, jumpTo, mustMarsaAct, airborneDeparture, handedToCenter, DEPARTURE_FDR,
+  crew, act, mustAct, jumpTo, mustMarsaAct, airborneDeparture, handedToCenter, DEPARTURE_FLIGHT_DATA,
 } = await import('./helpers/efsp-scenario.mjs');
 
 const HOUR = 60 * 60 * 1000;
@@ -49,7 +49,7 @@ function quiet(fn) {
 const efsp = createEfsp();
 const c = crew(efsp, ALL);
 const counter = quiet(() => new TrafficCount({
-  mutationLog: efsp.mutationLog, fdrStore: efsp.fdrStore, boardStoreFor: efsp.boardStoreFor,
+  mutationLog: efsp.mutationLog, flightDataStore: efsp.flightDataStore, boardStoreFor: efsp.boardStoreFor,
   facilityIds: facilityConfig.getFacilityIds(), config: { retentionDays: 400, homeAirports: { INCIRLIK: ['LTAG'] } },
 }));
 
@@ -60,7 +60,7 @@ function archiverFor(extra = {}) {
   return new Archiver({
     facilityIds: facilityConfig.getFacilityIds(),
     boardStoreFor: efsp.boardStoreFor,
-    fdrStore: efsp.fdrStore,
+    flightDataStore: efsp.flightDataStore,
     correlationStore: efsp.correlationStore,
     marsaStore: efsp.marsaStore,
     mutationLog: efsp.mutationLog,
@@ -77,7 +77,7 @@ const tactical = () => efsp.boardStoreFor('TACTICAL');
 
 /** A flight flown to APP's terminus and dropped there: counted traffic. */
 function droppedFlight(callsign) {
-  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign });
+  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign });
   return mustAct(efsp, c.APP, 'APP', strip, { kind: 'DropStrip' });
 }
 
@@ -88,7 +88,7 @@ function logLines(pred) {
 // ── §5.1 when a Strip dropped, in wall time ─────────────────────────────────
 
 test('the drop time is stamped on drop, cleared by an Undo, and never on the wire', () => {
-  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'STAMP1' });
+  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'STAMP1' });
   const before = Date.now();
   const dropped = mustAct(efsp, c.APP, 'APP', strip, { kind: 'InvokeNla' });
   assert.equal(dropped.state, 'DROPPED');
@@ -109,14 +109,14 @@ test('the drop time survives snapshot/restore, and a snapshot without it is refu
   const at = incirlik().droppedWallAtOf(dropped.stripId);
   assert.ok(snap.droppedWallAt.some(([id, ms]) => id === dropped.stripId && ms === at));
 
-  const fresh = new BoardStore(efsp.fdrStore, fullRules(), { clock: efsp.clock });
+  const fresh = new BoardStore(efsp.flightDataStore, fullRules(), { clock: efsp.clock });
   fresh.restore(snap);
   assert.equal(fresh.droppedWallAtOf(dropped.stripId), at);
 
   // A snapshot written before this change has no droppedWallAt at all: refused, never defaulted (ARCH-D5).
   const old = { ...snap };
   delete old.droppedWallAt;
-  const refused = new BoardStore(efsp.fdrStore, fullRules(), { clock: efsp.clock });
+  const refused = new BoardStore(efsp.flightDataStore, fullRules(), { clock: efsp.clock });
   assert.throws(() => refused.restore(old), /not in the current shape/);
   // A DROPPED Strip with no entry in an otherwise current snapshot is refused too.
   assert.throws(() => refused.restore({ ...snap, droppedWallAt: [] }), new RegExp(`DROPPED Strip ${dropped.stripId} has no drop time`));
@@ -140,7 +140,7 @@ test('1. a DROPPED Strip is archived 2 h after its drop and not before', () => {
   assert.ok(due.stripsByFacility.INCIRLIK.includes(dropped.stripId));
   assert.equal(incirlik().getStrip(dropped.stripId), null);
   assert.ok(due.fdrIds.includes(dropped.fdrId), 'its FDR had no other Strip');
-  assert.equal(efsp.fdrStore.getFdr(dropped.fdrId), null);
+  assert.equal(efsp.flightDataStore.getFlightData(dropped.fdrId), null);
   assert.equal(sweepChanged(due), true);
 
   const [line] = logLines(e => e.op === 'Archive' && e.stripId === dropped.stripId);
@@ -153,7 +153,7 @@ test('1. a DROPPED Strip is archived 2 h after its drop and not before', () => {
 });
 
 test('2. an FDR goes with its last Strip, not before: TOFI\'s shared FDR stays while the other Facility\'s Strip is live', () => {
-  let ctrStrip = handedToCenter(efsp, c, airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'SHARE1' }));
+  let ctrStrip = handedToCenter(efsp, c, airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'SHARE1' }));
   const appStrip = incirlik().getAll().find(s => s.fdrId === ctrStrip.fdrId && s.stripId !== ctrStrip.stripId);
   ctrStrip = mustAct(efsp, c.CTR, 'CTR', ctrStrip, {
     kind: 'TOFI', action: 'PROPOSE', direction: 'ENTRY', toFacilityId: 'TACTICAL', toPositionId: 'TAC_C2',
@@ -177,13 +177,13 @@ test('2. an FDR goes with its last Strip, not before: TOFI\'s shared FDR stays w
   offset = 0;
   assert.ok(r.stripsByFacility.TACTICAL.includes(mission.stripId));
   assert.equal(r.fdrIds.includes(ctrStrip.fdrId), false, 'CENTER\'s Strip is live');
-  assert.ok(efsp.fdrStore.getFdr(ctrStrip.fdrId));
-  assert.ok(efsp.fdrStore.codeAllocator.isAllocated(efsp.fdrStore.getFdr(ctrStrip.fdrId).identity.beaconAssigned), 'its code stays held');
+  assert.ok(efsp.flightDataStore.getFlightData(ctrStrip.fdrId));
+  assert.ok(efsp.flightDataStore.codeAllocator.isAllocated(efsp.flightDataStore.getFlightData(ctrStrip.fdrId).identity.beaconAssigned), 'its code stays held');
 
   // T6: and across a restart, the live Strip keeps its flight data.
   efsp.persist();
   const again = quiet(() => createEfsp());
-  assert.ok(again.fdrStore.getFdr(ctrStrip.fdrId));
+  assert.ok(again.flightDataStore.getFlightData(ctrStrip.fdrId));
   assert.ok(again.boardStoreFor('CENTER').getStrip(ctrStrip.stripId));
 
   // The FDR goes only in the sweep that archives its LAST Strip.
@@ -203,18 +203,18 @@ test('2. an FDR goes with its last Strip, not before: TOFI\'s shared FDR stays w
     assert.ok(r2.fdrIds.includes(dropped.fdrId));
   }
   offset = 0;
-  assert.equal(efsp.fdrStore.getFdr(dropped.fdrId), null);
+  assert.equal(efsp.flightDataStore.getFlightData(dropped.fdrId), null);
 });
 
 test('3. an FDR that never had a Strip is never archived', () => {
-  const { fdr } = efsp.fdrStore.createFdr({ ...DEPARTURE_FDR, callsign: 'SEED1' }, { by: 'ato' });
+  const { fdr } = efsp.flightDataStore.createFlightData({ ...DEPARTURE_FLIGHT_DATA, callsign: 'SEED1' }, { by: 'ato' });
   droppedFlight('SEED2');
   const archiver = archiverFor();
   offset = 10 * HOUR;
   archiver.sweep();
   archiver.onMissionSessionChange({ seq: 99, reason: 'MISSION_CHANGED' });
   offset = 0;
-  assert.ok(efsp.fdrStore.getFdr(fdr.fdrId), 'an ATO-seeded FDR with no Strip is L14\'s, not ours');
+  assert.ok(efsp.flightDataStore.getFlightData(fdr.fdrId), 'an ATO-seeded FDR with no Strip is L14\'s, not ours');
 });
 
 test('4. an uncounted Strip is skipped and retried', () => {
@@ -228,7 +228,7 @@ test('4. an uncounted Strip is skipped and retried', () => {
   const warnings = cap.records.filter(x => x.level === 'warn').map(x => x.line);
   assert.ok(r.skipped.includes(dropped.stripId));
   assert.ok(incirlik().getStrip(dropped.stripId), 'kept');
-  assert.ok(efsp.fdrStore.getFdr(dropped.fdrId));
+  assert.ok(efsp.flightDataStore.getFlightData(dropped.fdrId));
   assert.ok(warnings.some(w => w.includes(dropped.stripId)), 'and said so, by id');
 
   counted = true;
@@ -253,7 +253,7 @@ test('4b. with no traffic count wired, a sweep archives anyway and warns once', 
 
 test('5. a mission change archives every counted DROPPED Strip at once, and no live one', () => {
   const young = droppedFlight('MSN1');
-  const live = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'MSN2' });
+  const live = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'MSN2' });
   const archiver = archiverFor();
 
   // Wired as server.js wires it: F3's session roll-over (S-F3).
@@ -265,9 +265,9 @@ test('5. a mission change archives every counted DROPPED Strip at once, and no l
   session.noteMissionLoad({ theatre: 'Syria', waypoints: [{ name: 'A' }] });
 
   assert.equal(incirlik().getStrip(young.stripId), null, 'seconds old, and gone');
-  assert.equal(efsp.fdrStore.getFdr(young.fdrId), null);
+  assert.equal(efsp.flightDataStore.getFlightData(young.fdrId), null);
   assert.ok(incirlik().getStrip(live.stripId), 'ADR 0002 still holds for live Strips');
-  assert.ok(efsp.fdrStore.getFdr(live.fdrId));
+  assert.ok(efsp.flightDataStore.getFlightData(live.fdrId));
   const [line] = logLines(e => e.op === 'Archive' && e.stripId === young.stripId);
   assert.equal(line.reason, 'MISSION_CHANGE');
   assert.equal(line.sessionReason, 'MISSION_START');
@@ -276,7 +276,7 @@ test('5. a mission change archives every counted DROPPED Strip at once, and no l
 });
 
 test('6. Undo of an archived drop is NOT_FOUND — the mission change archives inside the 30 s window', () => {
-  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'UNDO1' });
+  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'UNDO1' });
   const dropped = mustAct(efsp, c.APP, 'APP', strip, { kind: 'InvokeNla' });
   assert.equal(dropped.state, 'DROPPED');
   archiverFor().onMissionSessionChange({ seq: 7, reason: 'CLOCK_STEP_BACK' });
@@ -287,7 +287,7 @@ test('6. Undo of an archived drop is NOT_FOUND — the mission change archives i
 });
 
 test('6b. an age sweep never archives inside the Undo window', () => {
-  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'UNDO2' });
+  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'UNDO2' });
   const dropped = mustAct(efsp, c.APP, 'APP', strip, { kind: 'InvokeNla' });
   archiverFor().sweep();
   const undone = mustAct(efsp, c.APP, 'APP', dropped, { kind: 'Undo' });
@@ -319,8 +319,8 @@ test('7b. on the wire: efsp-resync puts the archived Strip in strips.gone', () =
 });
 
 test('8. MARSA relations and correlation records of archived FDRs are evicted', () => {
-  const tanker = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'SHELL1' });
-  const rx = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'VIPER9' });
+  const tanker = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'SHELL1' });
+  const rx = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'VIPER9' });
   const relation = mustMarsaAct(efsp, c.APP, 'APP', null, {
     kind: 'DeclareMarsa', participants: [tanker.fdrId, rx.fdrId],
     startEvent: 'TANKER_ACCEPTED', endCondition: 'VERTICALLY_POSITIONED', declaringCallsign: 'SHELL1',
@@ -353,13 +353,13 @@ test('9. the traffic count is unchanged by a sweep, and a backfill of an archive
   offset = 3 * HOUR;
   archiverFor().sweep();
   offset = 0;
-  assert.equal(efsp.fdrStore.getFdr(dropped.fdrId), null);
+  assert.equal(efsp.flightDataStore.getFlightData(dropped.fdrId), null);
   assert.deepEqual(counter.records().map(r => r.countId).sort(), before, 'Archive/ArchiveFdr lines are not drops or undos');
   assert.equal(counter.reconcile().ok, true, 'and the log still reconciles');
 
   // A count file lost after the archive: the boot backfill finds no FDR.
   const fresh = quiet(() => new TrafficCount({
-    mutationLog: efsp.mutationLog, fdrStore: efsp.fdrStore, boardStoreFor: efsp.boardStoreFor,
+    mutationLog: efsp.mutationLog, flightDataStore: efsp.flightDataStore, boardStoreFor: efsp.boardStoreFor,
     facilityIds: facilityConfig.getFacilityIds(), config: { retentionDays: 400, homeAirports: { INCIRLIK: ['LTAG'] } },
     path: path.join(tmpDir, 'backfill-after-archive.jsonl'),
   }));
@@ -396,7 +396,7 @@ test('the monitors prune against the live set after archiving (V8)', async () =>
   const { ConformanceMonitor } = await import('../src/efsp/conformance.js');
   const { ForwardingObligationMonitor } = await import('../src/efsp/forwarding-obligations.js');
   const { CorrelationReconciler } = await import('../src/efsp/correlation-reconciler.js');
-  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'MON1' });
+  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'MON1' });
 
   const nlaMon = new NlaStatusMonitor({ clock: efsp.clock, boardStoreFor: efsp.boardStoreFor, facilityConfig });
   nlaMon.setOnDelta(() => {});
@@ -406,7 +406,7 @@ test('the monitors prune against the live set after archiving (V8)', async () =>
   const tracks = { getAll: () => [{ id: 't1', lat: 37, lon: 35, alt: 3000, course: 90, groundSpeed: 150, verticalSpeed: 0 }], getTrack: () => null };
   const conf = new ConformanceMonitor({
     clock: efsp.clock, trackStore: { ...tracks, get: (id) => tracks.getAll().find(t => t.id === id) || null },
-    fdrStore: efsp.fdrStore, correlationStore: efsp.correlationStore, weather: () => ({}), transitionAltFt: () => 18000,
+    flightDataStore: efsp.flightDataStore, correlationStore: efsp.correlationStore, weather: () => ({}), transitionAltFt: () => 18000,
     indicatedAltFt: (a) => a, config: {},
   });
   conf._mem.set(strip.fdrId, {});
@@ -416,7 +416,7 @@ test('the monitors prune against the live set after archiving (V8)', async () =>
   offset = 3 * HOUR;
   archiverFor().sweep();
   offset = 0;
-  assert.equal(efsp.fdrStore.getFdr(dropped.fdrId), null);
+  assert.equal(efsp.flightDataStore.getFlightData(dropped.fdrId), null);
 
   nlaMon.tick();
   assert.equal(nlaMon._last.has(strip.stripId), false, 'NLA-status monitor let go');
@@ -425,14 +425,14 @@ test('the monitors prune against the live set after archiving (V8)', async () =>
   assert.equal(conf._alerts.has(strip.fdrId), false, 'conformance _alerts let go');
 
   // The rest only have to not throw on a stripId/fdrId from a previous tick.
-  const obligations = new ForwardingObligationMonitor({ clock: efsp.clock, boardStoreFor: efsp.boardStoreFor, fdrStore: efsp.fdrStore, facilityConfig, airspaceStore: efsp.airspaceStore });
+  const obligations = new ForwardingObligationMonitor({ clock: efsp.clock, boardStoreFor: efsp.boardStoreFor, flightDataStore: efsp.flightDataStore, facilityConfig, airspaceStore: efsp.airspaceStore });
   assert.doesNotThrow(() => obligations.tick());
   const reconciler = new CorrelationReconciler({
-    clock: efsp.clock, trackStore: { getAll: () => [] }, beaconOf: () => null, fdrStore: efsp.fdrStore,
+    clock: efsp.clock, trackStore: { getAll: () => [] }, beaconOf: () => null, flightDataStore: efsp.flightDataStore,
     correlationStore: efsp.correlationStore, boardStoreFor: efsp.boardStoreFor, facilityConfig, onDelta: () => {},
   });
   assert.doesNotThrow(() => reconciler.tick());
-  assert.doesNotThrow(() => counter.noteFdr(dropped.fdrId));
+  assert.doesNotThrow(() => counter.noteFlightData(dropped.fdrId));
   assert.doesNotThrow(() => efsp.snapshotFor());
 });
 
@@ -456,7 +456,7 @@ function reachesStrip(root, target, seen = new Set()) {
 }
 
 test('F4: after archiving, no Board, store or monitor structure references the Strip (except the idempotency cache)', () => {
-  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'PIN1' });
+  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'PIN1' });
   mustAct(efsp, c.APP, 'APP', strip, { kind: 'DropStrip' });
   const live = incirlik().getStrip(strip.stripId);
   offset = 3 * HOUR;
@@ -470,13 +470,13 @@ test('F4: after archiving, no Board, store or monitor structure references the S
     assert.equal(reachesStrip(b._state.log, live), false, `${fid} ring`);
     assert.equal(b._state.log.some(e => e.id === strip.stripId && e.type === 'gone') || fid !== 'INCIRLIK', true, 'the ring keeps the id only');
   }
-  for (const [name, store] of Object.entries({ fdr: efsp.fdrStore._fdrs, correlation: efsp.correlationStore._records, marsa: efsp.marsaStore._relations, nla: efsp.nlaStatusMonitor._last })) {
+  for (const [name, store] of Object.entries({ fdr: efsp.flightDataStore._flightDataList, correlation: efsp.correlationStore._records, marsa: efsp.marsaStore._relations, nla: efsp.nlaStatusMonitor._last })) {
     assert.equal(reachesStrip(store, live), false, name);
   }
 });
 
 test('F4: the idempotency cache holds no Strip object after archiving', () => {
-  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'PIN2' });
+  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'PIN2' });
   mustAct(efsp, c.APP, 'APP', strip, { kind: 'DropStrip' });
   const live = incirlik().getStrip(strip.stripId);
   offset = 3 * HOUR;
@@ -491,7 +491,7 @@ test('createEfsp exposes the archiver, and hasCountFor answers from the traffic 
   assert.ok(efsp.archiver instanceof Archiver);
   const dropped = droppedFlight('REG1');
   assert.equal(counter.hasCountFor(dropped.stripId), true);
-  const live = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'REG2' });
+  const live = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'REG2' });
   assert.equal(counter.hasCountFor(live.stripId), false);
   // Its default retention is real wall time: nothing that just dropped goes.
   efsp.archiver.setIsCounted((id) => counter.hasCountFor(id));
@@ -509,7 +509,7 @@ test('archiveDeltas + broadcastEfspBoardDelta: one delta per Facility, gone Stri
   hub._broadcastEfsp = (m) => sent.push(m);
 
   const a = droppedFlight('WIRE1');
-  const ctr = handedToCenter(efsp, c, airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'WIRE2' }));
+  const ctr = handedToCenter(efsp, c, airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'WIRE2' }));
   const b = mustAct(efsp, c.CTR, 'CTR', ctr, { kind: 'DropStrip' });
   offset = 3 * HOUR;
   const r = archiverFor().sweep();

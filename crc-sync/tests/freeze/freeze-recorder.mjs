@@ -63,7 +63,7 @@ function finalState(efsp) {
       const b = efsp.boardStoreFor(f);
       if (b) out.boards[f] = clone(b.snapshot());
     }
-    out.fdr = clone(efsp.fdrStore.snapshot());
+    out.fdr = clone(efsp.flightDataStore.snapshot());
     out.airspaces = clone(efsp.airspaceStore.snapshot());
     out.correlations = clone(efsp.correlationStore.snapshot());
     out.marsa = clone(efsp.marsaStore.snapshot());

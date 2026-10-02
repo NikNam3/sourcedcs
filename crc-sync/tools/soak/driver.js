@@ -95,7 +95,7 @@ class Driver {
     this.correlations = new Map(); // fdrId -> { rev, state, trackId }
     this.flights = new Map();
     this.stripFlight = new Map(); // sid -> flightId
-    this.fdrFlight = new Map();   // fdrId -> flightId
+    this.flightDataFlight = new Map();   // fdrId -> flightId
     this.flightSeq = 0;
     this.lastNla = new Map();     // sid -> virtual ms of the last InvokeNla
     this.uncarriedHints = new Map(); // `${fid}|${sid}` -> cause
@@ -290,7 +290,7 @@ class Driver {
           const cause = owner.done ? 'LINGERING_TRACK' : (owner.faults && owner.faults.length ? `FAULT_${owner.faults.join('+')}` : 'OTHER_LIVE_FLIGHT');
           this.stats.misbinding.count++;
           this.stats.misbinding.byCause[cause] = (this.stats.misbinding.byCause[cause] || 0) + 1;
-          const ex = { fdrId: r.fdrId, trackId: r.trackId, matchedBy: r.matchedBy, trackBelongsToFdr: owner.fdrId, cause, squawk: owner.squawk };
+          const ex = { fdrId: r.fdrId, trackId: r.trackId, matchedBy: r.matchedBy, trackBelongsToFlightData: owner.fdrId, cause, squawk: owner.squawk };
           if (this.stats.misbinding.examples.length < 20) this.stats.misbinding.examples.push(ex);
           this.event('misbinding', ex);
         }
@@ -534,7 +534,7 @@ class Driver {
     f.own(ack.strip.stripId, it.facilityId);
     if (ack.fdr) {
       f.fdr = { fdrId: ack.fdr.fdrId, callsign: ack.fdr.identity && ack.fdr.identity.callsign || f.callsign, code: ack.fdr.identity && ack.fdr.identity.beaconAssigned };
-      this.fdrFlight.set(ack.fdr.fdrId, f.id);
+      this.flightDataFlight.set(ack.fdr.fdrId, f.id);
     }
     this.onStrip(f, it.facilityId, ack.strip);
     this.queueEdits(f, it.facilityId, ack.strip, null);

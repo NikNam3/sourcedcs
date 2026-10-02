@@ -12,7 +12,7 @@ const { newFlags } = require('../strip-util');
  * this feature) after live testing found the two-Strip approach left a
  * stale departure Strip behind and required copying every field by hand
  * (route, altitude, remarks, identity, beacon code — the last of which
- * can't even be copied cleanly, since flight-data-store.js's createFdr always
+ * can't even be copied cleanly, since flight-data-store.js's createFlightData always
  * auto-allocates a fresh code). Reusing the same FDR makes every one of
  * those problems structurally impossible: there is nothing to copy,
  * because nothing new was created.
@@ -91,15 +91,15 @@ function _applyConvertToArrival(ctx, strip, by, actingPositionId) {
   // field names for the same fact. Seeding it from the filed altitude
   // would misrepresent a filed value as an issued clearance; leaving it
   // blank for the controller to actively assign is correct, not a gap.
-  const fdr = ctx.fdrStore.getFdr(strip.fdrId);
-  let updatedFdr = fdr;
+  const fdr = ctx.flightDataStore.getFlightData(strip.fdrId);
+  let updatedFlightData = fdr;
   if (fdr && fdr.filed.departureAirport) {
     // Captured so it can ride in this method's own return value below —
     // without it, efsp-ws.js's ack/broadcast has no fdr to include
     // (mirrors _applySetBlock's own result.fdr pattern), and a connected
     // client would never actually see originAirport update at all.
-    const fdrResult = ctx.fdrStore.setField(strip.fdrId, 'filed.originAirport', fdr.filed.departureAirport, { by });
-    if (fdrResult.ok) updatedFdr = fdrResult.fdr;
+    const flightDataResult = ctx.flightDataStore.setField(strip.fdrId, 'filed.originAirport', fdr.filed.departureAirport, { by });
+    if (flightDataResult.ok) updatedFlightData = flightDataResult.fdr;
   }
 
   strip.role = 'ARRIVAL';
@@ -140,7 +140,7 @@ function _applyConvertToArrival(ctx, strip, by, actingPositionId) {
   // to reset: the correlation is a fact about the airframe, and the airframe
   // did not change legs — the paperwork did.
   ctx.state.bump(strip, by);
-  return { ok: true, strip, fdr: updatedFdr };
+  return { ok: true, strip, fdr: updatedFlightData };
 }
 
 // docs/adr/0023 — converts this Strip's role IN PLACE, same Strip/

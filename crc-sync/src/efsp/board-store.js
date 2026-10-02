@@ -7,7 +7,7 @@
 //
 // FDRs and Position staffing are NOT part of this ring buffer: Phase 1 has
 // at most a few dozen Strips/FDRs and four Positions, so efsp-ws.js just
-// includes fdrStore.getAll()/positionStore.getAll() in full on every
+// includes flightDataStore.getAll()/positionStore.getAll() in full on every
 // snapshot AND delta message, rather than building a second/third
 // ring-buffer for state this small. Revisit only if that stops being cheap.
 //
@@ -44,7 +44,7 @@ const log = require('../log').logger('efsp:board-store');
 
 class BoardStore {
   /**
-   * @param {import('./flight-data-store').FdrStore} fdrStore
+   * @param {import('./flight-data-store').FlightDataStore} flightDataStore
    * @param {object} rules
    * @param {(blockId:string, role:string) => {kind:'fdr',path:string}|{kind:'annotation'}|null} rules.resolveBlockTarget
    * @param {(bayId:string) => string|null} rules.bayHoldsRole the Role a Bay is reserved for (docs/adr/0087), or null
@@ -61,14 +61,14 @@ class BoardStore {
    * @param {(positionId:string) => {bayId:string,rackIds:string[]}|null} rules.coordinationBayFor — WP4A
    * @param {(primitive:string) => object|null} rules.coordinationEffect — WP4A, guide §4.6's primitive table (coordination.js)
    */
-  constructor(fdrStore, rules, { clock = WALL_CLOCK } = {}) {
+  constructor(flightDataStore, rules, { clock = WALL_CLOCK } = {}) {
     // The mission clock (docs/adr/0079). Every Strip timestamp, every NLA gate
     // and every Mutation-log `at` reads it. The one exception is the NLA
     // double-tap/Undo latch below, which is a UI debounce measured in real
     // seconds and never shown as a time of day — see _applyInvokeNla.
     assertRules(rules); // a rule the Board reads and the caller omitted is a start-up error, not a check that is silently off
     this._clock = clock;
-    this._fdrStore = fdrStore;
+    this._fdrStore = flightDataStore;
     this._rules = rules;
     // The kernel (docs/adr/0095): the Strip map, the seq/log ring, the epoch,
     // the touched set and the cid counter. Every touch goes through its recordTouch;
@@ -83,7 +83,7 @@ class BoardStore {
     // Order keys and Bays (board/placement.js). touch is the kernel's recordTouch; rebalanceRack is late-bound to the
     // facade (host-core wraps it); rejectedReplicaRefusal is the NLA cluster's, still here.
     this._placement = new Placement({
-      state: this._state, rules, clock, fdrStore,
+      state: this._state, rules, clock, flightDataStore,
       touch,
       rebalanceRack: (bayId, rackId, excludeStripId) => this._rebalanceRack(bayId, rackId, excludeStripId),
       rejectedReplicaRefusal: (strip, toState) => this._stripOps.rejectedReplicaRefusal(strip, toState),
@@ -93,7 +93,7 @@ class BoardStore {
     // recordTouch; retire is late-bound to the facade (it is StripOps'), activeCmid and mutationLog are read late,
     // and the per-Role tables are the authority registry's accessors (authority/index.js), passed in.
     this._coordination = new Coordination({
-      rules, state: this._state, audit: this._audit, placement: this._placement, clock, fdrStore,
+      rules, state: this._state, audit: this._audit, placement: this._placement, clock, flightDataStore,
       touch,
       activeCmid: () => this._activeCmid,
       retire: (strip, by) => this._stripOps.retire(strip, by),
@@ -102,7 +102,7 @@ class BoardStore {
       senderStateOnAccept,
     });
     this._tofi = new Tofi({
-      rules, state: this._state, audit: this._audit, placement: this._placement, clock, fdrStore,
+      rules, state: this._state, audit: this._audit, placement: this._placement, clock, flightDataStore,
       touch,
       activeCmid: () => this._activeCmid,
       retire: (strip, by) => this._stripOps.retire(strip, by),
@@ -124,7 +124,7 @@ class BoardStore {
     // The Strip operations (board/strip-ops.js): the op table, NLA and retirement. The two Maps above stay
     // here (snapshot, restore and archiveStrip use them) and are read late, because restore replaces them.
     this._stripOps = new StripOps({
-      rules, state: this._state, audit: this._audit, placement: this._placement, clock, fdrStore,
+      rules, state: this._state, audit: this._audit, placement: this._placement, clock, flightDataStore,
       coordination: this._coordination, tofi: this._tofi, ops: OPS,
       touch,
       activeCmid: () => this._activeCmid,
@@ -230,7 +230,7 @@ class BoardStore {
       if (record[k] !== null) out[k] = record[k];
     }
     if (record.stripId) out.strip = this.getStrip(record.stripId);
-    if (record.fdrId) out.fdr = this._fdrStore.getFdr(record.fdrId);
+    if (record.fdrId) out.fdr = this._fdrStore.getFlightData(record.fdrId);
     return out;
   }
 

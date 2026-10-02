@@ -13,7 +13,7 @@ process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH_CENTER = path.join(tmpDir, 'center
 
 const { BoardStore } = await import('../src/efsp/board-store.js');
 import { fullRules } from "./helpers/full-rules.mjs";
-const { FdrStore } = await import('../src/efsp/flight-data-store.js');
+const { FlightDataStore } = await import('../src/efsp/flight-data-store.js');
 const { PositionStore } = await import('../src/efsp/position-store.js');
 const facilityConfig = await import('../src/efsp/facility-config.js');
 const blockMap = await import('../src/efsp/block-map.js');
@@ -23,13 +23,13 @@ const coordination = await import('../src/efsp/coordination.js');
 
 /**
  * Builds two real, fully-wired {boardStore, positionStore} pairs — one per
- * Facility — sharing one FdrStore, wired via peerBoard exactly like
+ * Facility — sharing one FlightDataStore, wired via peerBoard exactly like
  * index.js's real composition root (docs/adr/0013). This is the direct,
  * BoardStore-level test tier for the D13 replication mechanism itself,
  * below the WS boundary (efsp-ws-coordination.test.mjs covers that layer).
  */
 function makeFacilities({ aitAuthorized = {} } = {}) {
-  const fdrStore = new FdrStore();
+  const flightDataStore = new FlightDataStore();
   const facilities = new Map();
 
   for (const facilityId of facilityConfig.getFacilityIds()) {
@@ -57,7 +57,7 @@ function makeFacilities({ aitAuthorized = {} } = {}) {
       coordinationEffect: (primitive) => coordination.coordinationEffect(primitive),
       coordinationEligibleState: (role) => coordination.coordinationEligibleState(role),
     };
-    const boardStore = new BoardStore(fdrStore, fullRules(rules));
+    const boardStore = new BoardStore(flightDataStore, fullRules(rules));
     facilities.set(facilityId, { boardStore, positionStore });
   }
   return facilities;
@@ -118,7 +118,7 @@ function createCtrStrip(facilities, overrides = {}) {
       kind: 'CreateStrip', bayId: 'ctr-enroute', rackId: 'main',
       fdr: { callsign: 'EAGLE1', aircraftType: 'F15', wakeCategory: 'D', originAirport: 'LTAC', estimatedArrivalTimeUtc: Date.now() + 20 * 60 * 1000 },
       role: 'ARRIVAL',
-      ...overrides.fdrOverrides,
+      ...overrides.flightDataOverrides,
     },
   }), 'CTR', 'ctr-controller');
   assert.equal(result.ok, true, JSON.stringify(result));
@@ -353,8 +353,8 @@ test('PROPOSE is rejected without a note when the FDR carries a non-NONE track-d
   const facilities = makeFacilities();
   const strip = createCtrStrip(facilities);
   const { boardStore, } = facilities.get('CENTER');
-  const fdrStore = boardStore._fdrStore; // internal, test-only reach-in — mirrors other test files' direct-field access pattern
-  fdrStore.setField(strip.fdrId, 'identity.trackDegradationFlag', 'CST', { by: 'CTR' });
+  const flightDataStore = boardStore._fdrStore; // internal, test-only reach-in — mirrors other test files' direct-field access pattern
+  flightDataStore.setField(strip.fdrId, 'identity.trackDegradationFlag', 'CST', { by: 'CTR' });
 
   const withoutNote = proposeHandoff(facilities, strip, { note: undefined });
   assert.equal(withoutNote.ok, false);
@@ -696,7 +696,7 @@ test('ConvertToArrival maps the departure record\'s departureAirport onto the ne
   const facilities = makeFacilities();
   const strip = createAppHandedOffStrip(facilities); // departureAirport: 'LTAG'
   const { boardStore } = facilities.get('INCIRLIK');
-  const fdrStore = boardStore._fdrStore; // internal, test-only reach-in — mirrors other tests in this file
+  const flightDataStore = boardStore._fdrStore; // internal, test-only reach-in — mirrors other tests in this file
 
   const converted = boardStore.applyMutation(mutation({
     stripId: strip.stripId, baseRev: strip.rev, op: { kind: 'ConvertToArrival' },
@@ -705,7 +705,7 @@ test('ConvertToArrival maps the departure record\'s departureAirport onto the ne
   assert.equal(converted.ok, true, JSON.stringify(converted));
   assert.equal(converted.fdr.filed.originAirport, 'LTAG');
   assert.equal(converted.fdr.filed.departureAirport, 'LTAG'); // untouched, just no longer the field ARRIVAL reads
-  assert.equal(fdrStore.getFdr(strip.fdrId).filed.originAirport, 'LTAG'); // persisted, not just echoed in the result
+  assert.equal(flightDataStore.getFlightData(strip.fdrId).filed.originAirport, 'LTAG'); // persisted, not just echoed in the result
 });
 
 test('ConvertToArrival resets annotations/flags/coordination to fresh-Strip defaults — none of them mean the same thing under the new role', () => {

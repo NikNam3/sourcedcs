@@ -5,11 +5,11 @@ function _applyClearAirspaceEntry(ctx, strip, by) {
   if (!strip.airspaceEntry) {
     return { ok: false, reason: 'VALIDATION_ERROR', detail: 'this Strip is not working an airspace', strip };
   }
-  const fdrResult = ctx.fdrStore.setWorkingFrequency(strip.fdrId, null, { airspaceId: null, by });
-  if (!fdrResult.ok) return { ok: false, reason: fdrResult.reason, detail: fdrResult.detail, strip };
+  const flightDataResult = ctx.flightDataStore.setWorkingFrequency(strip.fdrId, null, { airspaceId: null, by });
+  if (!flightDataResult.ok) return { ok: false, reason: flightDataResult.reason, detail: flightDataResult.detail, strip };
   strip.airspaceEntry = null;
   ctx.state.bump(strip, by);
-  return { ok: true, strip, fdr: fdrResult.fdr };
+  return { ok: true, strip, fdr: flightDataResult.fdr };
 }
 
 module.exports = {

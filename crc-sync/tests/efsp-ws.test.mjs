@@ -13,7 +13,7 @@ process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH = path.join(tmpDir, 'facility.json
 const { handleMessage, RESYNC_RING_WINDOW } = await import('../src/efsp/efsp-ws.js');
 const { BoardStore } = await import('../src/efsp/board-store.js');
 import { fullRules } from "./helpers/full-rules.mjs";
-const { FdrStore } = await import('../src/efsp/flight-data-store.js');
+const { FlightDataStore } = await import('../src/efsp/flight-data-store.js');
 const { CorrelationStore } = await import('../src/efsp/correlation-store.js');
 const { PositionStore } = await import('../src/efsp/position-store.js');
 const facilityConfig = await import('../src/efsp/facility-config.js');
@@ -25,11 +25,11 @@ const coordination = await import('../src/efsp/coordination.js');
 // Mirrors index.js's real multi-Facility `rules`/ctx wiring exactly (not a
 // hand-simplified subset) — otherwise this fixture would silently diverge
 // from what the running server actually does. WP4A (docs/adr/0013): one
-// {BoardStore, PositionStore} pair per Facility, one shared FdrStore,
+// {BoardStore, PositionStore} pair per Facility, one shared FlightDataStore,
 // `ctx.boardStoreFor('INCIRLIK')`/`ctx.positionStoreFor('INCIRLIK')` kept as direct INCIRLIK aliases so
 // every pre-WP4A test below (which references them directly) is unchanged.
 function makeCtx() {
-  const fdrStore = new FdrStore();
+  const flightDataStore = new FlightDataStore();
   const facilityIds = facilityConfig.getFacilityIds();
   const facilities = new Map();
 
@@ -57,16 +57,16 @@ function makeCtx() {
       },
       coordinationEffect: (primitive) => coordination.coordinationEffect(primitive),
     };
-    const boardStore = new BoardStore(fdrStore, fullRules(rules));
+    const boardStore = new BoardStore(flightDataStore, fullRules(rules));
     facilities.set(facilityId, { boardStore, positionStore });
   }
 
   // WP5 (docs/adr/0045) — the fourth store, wired exactly as index.js does it,
   // so the correlation dispatch path below is exercised against the real ctx
   // shape rather than a hand-simplified one.
-  const correlationStore = new CorrelationStore({ fdrExists: (id) => !!fdrStore.getFdr(id) });
+  const correlationStore = new CorrelationStore({ flightDataExists: (id) => !!flightDataStore.getFlightData(id) });
   return {
-    fdrStore, facilityConfig, correlationStore,
+    flightDataStore, facilityConfig, correlationStore,
     boardStoreFor: (facilityId = facilityConfig.DEFAULT_FACILITY_ID) => (facilities.get(facilityId) || {}).boardStore || null,
     positionStoreFor: (facilityId = facilityConfig.DEFAULT_FACILITY_ID) => (facilities.get(facilityId) || {}).positionStore || null,
   };
@@ -474,20 +474,20 @@ test('an efsp-correlation-ack echoes the fdrId on every refusal path', () => {
   const ctx = makeCtx();
   const notPrimary = handleMessage(ctx, { controllerId: 'nobody', who: 'Nobody' }, {
     version: 1, type: 'efsp-correlation-mutation', clientMutationId: crypto.randomUUID(),
-    actingPositionId: 'APP', fdrId: 'fdr-abc', baseRev: 0, op: { kind: 'BindTrack', trackId: 't-1' },
+    actingPositionId: 'APP', fdrId: 'flight-data-abc', baseRev: 0, op: { kind: 'BindTrack', trackId: 't-1' },
   }, noopPersist);
   assert.equal(notPrimary.ack.reason, 'NOT_HOLDING_POSITION');
-  assert.equal(notPrimary.ack.fdrId, 'fdr-abc');
+  assert.equal(notPrimary.ack.fdrId, 'flight-data-abc');
 
   // And on the store's own refusal, where the record it would have carried
   // does not exist either.
   holding(ctx, SESSION, ['APP']);
-  const unknownFdr = handleMessage(ctx, SESSION, {
+  const unknownFlightData = handleMessage(ctx, SESSION, {
     version: 1, type: 'efsp-correlation-mutation', clientMutationId: crypto.randomUUID(),
-    actingPositionId: 'APP', fdrId: 'fdr-def', baseRev: 0, op: { kind: 'BindTrack', trackId: 't-1' },
+    actingPositionId: 'APP', fdrId: 'flight-data-def', baseRev: 0, op: { kind: 'BindTrack', trackId: 't-1' },
   }, noopPersist);
-  assert.equal(unknownFdr.ack.ok, false);
-  assert.equal(unknownFdr.ack.fdrId, 'fdr-def');
+  assert.equal(unknownFlightData.ack.ok, false);
+  assert.equal(unknownFlightData.ack.fdrId, 'flight-data-def');
 });
 
 test('an efsp-marsa-ack echoes the marsaId and the flights the op names', () => {
@@ -495,19 +495,19 @@ test('an efsp-marsa-ack echoes the marsaId and the flights the op names', () => 
   const declare = handleMessage(ctx, SESSION, {
     version: 1, type: 'efsp-marsa-mutation', clientMutationId: crypto.randomUUID(),
     actingPositionId: 'APP',
-    op: { kind: 'DeclareMarsa', participants: ['fdr-tanker', 'fdr-receiver'], declaringCallsign: 'SHELL71' },
+    op: { kind: 'DeclareMarsa', participants: ['flight-data-tanker', 'flight-data-receiver'], declaringCallsign: 'SHELL71' },
   }, noopPersist);
   assert.equal(declare.ack.ok, false);
   assert.equal(declare.ack.marsa, undefined);
-  assert.deepEqual(declare.ack.fdrIds, ['fdr-tanker', 'fdr-receiver']);
+  assert.deepEqual(declare.ack.fdrIds, ['flight-data-tanker', 'flight-data-receiver']);
 
   const remove = handleMessage(ctx, SESSION, {
     version: 1, type: 'efsp-marsa-mutation', clientMutationId: crypto.randomUUID(),
     actingPositionId: 'APP', marsaId: 'marsa-77', baseRev: 3,
-    op: { kind: 'RemoveParticipant', fdrId: 'fdr-receiver' },
+    op: { kind: 'RemoveParticipant', fdrId: 'flight-data-receiver' },
   }, noopPersist);
   assert.equal(remove.ack.marsaId, 'marsa-77');
-  assert.deepEqual(remove.ack.fdrIds, ['fdr-receiver']);
+  assert.deepEqual(remove.ack.fdrIds, ['flight-data-receiver']);
 });
 
 test('an efsp-airspace-ack echoes the airspaceId on refusal', () => {
@@ -682,7 +682,7 @@ test('a resync carrying the previous lifetime\'s epoch gets a snapshot, even whe
 
   // A new process restores the snapshot: a fresh ring, seq from zero.
   const ctx2 = makeCtx();
-  ctx2.fdrStore.restore(ctx.fdrStore.snapshot());
+  ctx2.flightDataStore.restore(ctx.flightDataStore.snapshot());
   const snap = ctx.boardStoreFor('INCIRLIK').snapshot();
   snap.strips = snap.strips.filter(s => s.stripId !== doomed.stripId); // dropped and gone before the restart
   ctx2.boardStoreFor('INCIRLIK').restore(JSON.parse(JSON.stringify(snap)));

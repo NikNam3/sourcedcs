@@ -768,7 +768,7 @@ function createEfspInstrumentation({
     positionStoreFor: efsp.positionStoreFor, correlationStats, obligationStats, missionSession,
   });
   const trafficCount = new TrafficCount({
-    mutationLog: efsp.mutationLog, fdrStore: efsp.fdrStore, boardStoreFor: efsp.boardStoreFor,
+    mutationLog: efsp.mutationLog, flightDataStore: efsp.flightDataStore, boardStoreFor: efsp.boardStoreFor,
     facilityIds, config: config.trafficCount, path: trafficCountPath, clock, wallNow,
     missionSessionOf: () => missionSession.currentSeq(),
   });

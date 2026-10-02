@@ -2,7 +2,7 @@
 
 // MARSA — "Military Authority Assumes Responsibility for Separation of
 // Aircraft" (EFSPImplementationGuide.md §9.2). A FIFTH store, peer to
-// FdrStore, BoardStore, AirspaceStore and CorrelationStore.
+// FlightDataStore, BoardStore, AirspaceStore and CorrelationStore.
 //
 // §9.2's title is the whole design brief: "model it as an edge, not a flag."
 // MARSA is a stateful RELATIONSHIP between two or more flights, with a
@@ -91,11 +91,11 @@ function capText(value) {
 class MarsaStore {
   /**
    * @param {object} [deps]
-   * @param {(fdrId:string)=>boolean} [deps.fdrExists]
+   * @param {(fdrId:string)=>boolean} [deps.flightDataExists]
    * @param {(fdrId:string, regime:string|null, opts:{by?:string})=>object} [deps.setSeparationRegime]
    *   — writes fdr.tofi.separationRegime. Injected rather than reached for, the
-   *   same way correlation-store.js takes fdrExists and board-store.js takes
-   *   liveStripsForFdr: this store has no business holding an FdrStore, and in
+   *   same way correlation-store.js takes flightDataExists and board-store.js takes
+   *   liveStripsForFlightData: this store has no business holding an FlightDataStore, and in
    *   index.js's composition root the stores it would need do not all exist
    *   yet.
    *
@@ -109,9 +109,9 @@ class MarsaStore {
    *   The other half of keeping the two agreed is board-store.js refusing a
    *   direct SREG write while an ACTIVE relation holds the FDR.
    */
-  constructor({ fdrExists, setSeparationRegime, clock = WALL_CLOCK } = {}) {
+  constructor({ flightDataExists, setSeparationRegime, clock = WALL_CLOCK } = {}) {
     this._clock = clock; // the mission clock, docs/adr/0079
-    this._fdrExists = fdrExists || (() => true);
+    this._flightDataExists = flightDataExists || (() => true);
     this._setSeparationRegime = setSeparationRegime || (() => ({ ok: true }));
     this._relations = new Map(); // marsaId -> relation
     this._sync = new SyncLog(); // the store's sequence: a counter only, no ring, no epoch (sync/sync-log.js, S3-1)
@@ -207,7 +207,7 @@ class MarsaStore {
     }
   }
 
-  _auditFdrIds(mutation, result, before) {
+  _auditFlightDataIds(mutation, result, before) {
     const op = mutation.op || {};
     const ids = new Set();
     for (const rel of [result.relation, before]) {
@@ -232,7 +232,7 @@ class MarsaStore {
       // Theater-wide (docs/adr/0013); the flights it concerns are named instead
       // (docs/adr/0083): the relation's participants, or the op's own.
       facilityId: null,
-      fdrIds: this._auditFdrIds(mutation, result, before),
+      fdrIds: this._auditFlightDataIds(mutation, result, before),
       actingPositionId,
       actorId: by || null,
       at: this._clock.now(),
@@ -330,7 +330,7 @@ class MarsaStore {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: `MARSA is a relation between ${MIN_PARTICIPANTS} or more flights` };
     }
     for (const fdrId of participants) {
-      if (!this._fdrExists(fdrId)) {
+      if (!this._flightDataExists(fdrId)) {
         return { ok: false, reason: 'NOT_FOUND', detail: `unknown FDR ${fdrId}` };
       }
     }
@@ -450,7 +450,7 @@ class MarsaStore {
     if (notActive) return notActive;
     const fdrId = op.fdrId != null ? String(op.fdrId) : '';
     if (!fdrId) return { ok: false, reason: 'VALIDATION_ERROR', detail: 'AddParticipant needs an fdrId' };
-    if (!this._fdrExists(fdrId)) return { ok: false, reason: 'NOT_FOUND', detail: `unknown FDR ${fdrId}` };
+    if (!this._flightDataExists(fdrId)) return { ok: false, reason: 'NOT_FOUND', detail: `unknown FDR ${fdrId}` };
     if (relation.participants.includes(fdrId)) {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: 'that flight is already a participant' };
     }
@@ -535,7 +535,7 @@ class MarsaStore {
   _applyRegime(fdrIds, regime, by) {
     const written = [];
     for (const fdrId of fdrIds) {
-      if (!this._fdrExists(fdrId)) continue;
+      if (!this._flightDataExists(fdrId)) continue;
       const result = this._setSeparationRegime(fdrId, regime, { by });
       if (result && result.ok === false) {
         log.warn('could not set separation regime', { regime, fdrId, reason: result.reason });
@@ -608,7 +608,7 @@ class MarsaStore {
    *
    * @returns {object[]} the relations that changed — broadcast by the caller
    */
-  onFdrRetired(fdrId, by) {
+  onFlightDataRetired(fdrId, by) {
     this._regimeWrites = [];
     const changed = [];
     for (const relation of this._relations.values()) {
@@ -623,11 +623,11 @@ class MarsaStore {
     return changed;
   }
 
-  /** Forgets relations whose participants are all gone — FDR lifecycle governs relation lifecycle, with no separate retention policy (correlation-store.js's evictMissingFdrs, same contract). */
-  evictMissingFdrs() {
+  /** Forgets relations whose participants are all gone — FDR lifecycle governs relation lifecycle, with no separate retention policy (correlation-store.js's evictMissingFlightDataList, same contract). */
+  evictMissingFlightDataList() {
     let dropped = 0;
     for (const [marsaId, relation] of [...this._relations.entries()]) {
-      if (relation.participants.some(fdrId => this._fdrExists(fdrId))) continue;
+      if (relation.participants.some(fdrId => this._flightDataExists(fdrId))) continue;
       this._relations.delete(marsaId);
       dropped += 1;
     }
@@ -638,7 +638,7 @@ class MarsaStore {
 
   snapshot() {
     return [...this._relations.values()]
-      .filter(r => r.participants.some(fdrId => this._fdrExists(fdrId)))
+      .filter(r => r.participants.some(fdrId => this._flightDataExists(fdrId)))
       .map(deepClone);
   }
 
@@ -657,9 +657,9 @@ class MarsaStore {
   restore(data) {
     for (const saved of data || []) {
       if (!saved || !saved.marsaId) continue;
-      if (!Array.isArray(saved.participants) || !saved.participants.some(fdrId => this._fdrExists(fdrId))) continue;
+      if (!Array.isArray(saved.participants) || !saved.participants.some(fdrId => this._flightDataExists(fdrId))) continue;
       const relation = deepClone(saved);
-      relation.participants = relation.participants.filter(fdrId => this._fdrExists(fdrId));
+      relation.participants = relation.participants.filter(fdrId => this._flightDataExists(fdrId));
       relation.transitions = Array.isArray(relation.transitions) ? relation.transitions : [];
       // A relation that came back with too few participants to BE one is
       // finished, not active — the same rule _removeParticipant applies live.

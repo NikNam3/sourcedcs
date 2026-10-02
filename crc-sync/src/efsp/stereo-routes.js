@@ -168,15 +168,15 @@ function resolveStereoRoute(name) {
 
 /**
  * The flat FDR seed a resolved route expands to — deliberately the same key
- * set flight-plan-lookup.js's toFdrFiledSeed() produces, because the briefing
+ * set flight-plan-lookup.js's toFlightDataFiledSeed() produces, because the briefing
  * frames a stereo as "the same shape with a local table instead of an HTTP
- * lookup" and flight-data-store.js's createFdr() seed is the shared contract.
+ * lookup" and flight-data-store.js's createFlightData() seed is the shared contract.
  *
  * aircraftType/wakeCategory are absent, unlike the DD1801 seed: a canned
  * ROUTE says nothing about what airframe is flying it, and guessing would put
  * a wrong type on the Strip for every flight that files the route.
  */
-function toFdrFiledSeed(route) {
+function toFlightDataFiledSeed(route) {
   if (!route || typeof route !== 'object') return {};
   return {
     route: route.route || '',
@@ -212,7 +212,7 @@ function setStereoRoutes(next) {
 }
 
 module.exports = {
-  getStereoRoutes, getActiveStereoRoutes, resolveStereoRoute, toFdrFiledSeed,
+  getStereoRoutes, getActiveStereoRoutes, resolveStereoRoute, toFlightDataFiledSeed,
   setStereoRoutes, validateStereoRoutes, normalizeStereoName,
   MAX_FREE_TEXT,
 };

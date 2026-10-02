@@ -16,7 +16,7 @@ function _applyCreateStrip(ctx, op, actingPositionId, by) {
   // Role-scoped CreateStrip (OPS/DEPARTURE: guide §4.1 rule 3; APP/ARRIVAL: docs/adr/0008) — a
   // SECOND permission check beyond the coarse canMutate('CreateStrip')
   // gate already applied in _dispatch: OPS may only originate DEPARTURE,
-  // APP may only originate ARRIVAL. Checked before touching fdrStore so
+  // APP may only originate ARRIVAL. Checked before touching flightDataStore so
   // a denied CreateStrip has no side effects.
   if (!ctx.rules.canCreateStripRole(actingPositionId, role)) {
     return { ok: false, reason: 'PERMISSION_DENIED' };
@@ -38,12 +38,12 @@ function _applyCreateStrip(ctx, op, actingPositionId, by) {
     if (op.fdr) {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: 'CreateStrip takes either fdr (a new flight) or fdrId (an existing one), not both' };
     }
-    const bound = ctx.fdrStore.getFdr(op.fdrId);
+    const bound = ctx.flightDataStore.getFlightData(op.fdrId);
     // Same reason code and wording receiveTofiProposal already uses, so
     // both binding paths fail identically.
     if (!bound) return { ok: false, reason: 'NOT_FOUND', detail: 'referenced FDR not found' };
 
-    // Scanned LOCALLY, not through rules.liveStripsForFdr — that one is
+    // Scanned LOCALLY, not through rules.liveStripsForFlightData — that one is
     // global and role-blind, and the 5 ATC<->ATC primitives legitimately put
     // same-role Strips for one FDR on two Boards (docs/adr/0013). Within ONE
     // Board, two same-role Strips on one FDR is §3.6's duplicate
@@ -57,18 +57,18 @@ function _applyCreateStrip(ctx, op, actingPositionId, by) {
         detail: `${bound.identity.callsign} already has a live ${role} Strip at ${clash.ownerPositionId}`,
       };
     }
-    // No createFdr, so NO BEACON CODE IS MINTED: the mission line shares the
+    // No createFlightData, so NO BEACON CODE IS MINTED: the mission line shares the
     // flight's Mode 3/A, which is guide §9.8's own "bridge field" and the
     // strongest argument for a shared fdrId over copying fields across.
     created = { ok: true, fdr: bound };
     // docs/adr/0074: the recovery Strip binds to the flight whose launch Strip
     // was dropped, and that drop released the flight's squawk once no Strip
     // referenced it. Re-claim it, or the next CreateStrip is handed a code a
-    // live aircraft is squawking (D23: reacquireFdr never steals a code another
+    // live aircraft is squawking (D23: reacquireFlightData never steals a code another
     // flight took in the meantime, and is a no-op for a flight still holding it).
-    if (ctx.fdrStore.reacquireFdr) ctx.fdrStore.reacquireFdr(op.fdrId);
+    if (ctx.flightDataStore.reacquireFlightData) ctx.flightDataStore.reacquireFlightData(op.fdrId);
   } else {
-    created = ctx.fdrStore.createFdr(op.fdr, { by });
+    created = ctx.flightDataStore.createFlightData(op.fdr, { by });
   }
   if (!created.ok) return { ok: false, reason: created.reason, detail: created.detail };
 

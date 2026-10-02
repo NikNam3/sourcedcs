@@ -28,9 +28,9 @@ fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, '[]');
 fs.writeFileSync(process.env.CRCSYNC_EFSP_STEREO_ROUTES_PATH, '[]');
 
 const { createEfsp } = await import('../src/efsp/index.js');
-const { toFdrFiledSeed } = await import('../src/efsp/flight-plan-lookup.js');
+const { toFlightDataFiledSeed } = await import('../src/efsp/flight-plan-lookup.js');
 const { resolveTimeChain } = await import('../src/efsp/time-chains.js');
-const { crew, act, mustAct, jumpTo, DEPARTURE_FDR } = await import('./helpers/efsp-scenario.mjs');
+const { crew, act, mustAct, jumpTo, DEPARTURE_FLIGHT_DATA } = await import('./helpers/efsp-scenario.mjs');
 
 const ATC = { OPS: 'INCIRLIK', CD: 'INCIRLIK', GND: 'INCIRLIK', TWR: 'INCIRLIK', APP: 'INCIRLIK' };
 const zulu = (hh, mm) => Date.UTC(2016, 5, 21, hh, mm);
@@ -41,12 +41,12 @@ test('SCENARIO T1 OPS files from a DD1801; P-time falls back to the plan, a cont
   const c = crew(efsp, ATC);
 
   // What the client spreads into op.fdr from the lookup (efsp-panel.js `...seed`).
-  const seed = toFdrFiledSeed({ route: 'DCT', levelValue: '250', depAerodrome: 'LTAG', destAerodrome: 'LTAG', depTime: '1430' });
+  const seed = toFlightDataFiledSeed({ route: 'DCT', levelValue: '250', depAerodrome: 'LTAG', destAerodrome: 'LTAG', depTime: '1430' });
   const strip = mustAct(efsp, c.OPS, 'OPS', null, {
     kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE',
-    fdr: { ...DEPARTURE_FDR, ...seed, callsign: 'CHAIN1' },
+    fdr: { ...DEPARTURE_FLIGHT_DATA, ...seed, callsign: 'CHAIN1' },
   });
-  const fdr = () => efsp.fdrStore.getFdr(strip.fdrId);
+  const fdr = () => efsp.flightDataStore.getFlightData(strip.fdrId);
   assert.equal(fdr().timeInputs.flightPlanDepartureUtc, zulu(14, 30));
   assert.deepEqual(pick(resolveTimeChain('departure', fdr())), { valueUtc: zulu(14, 30), source: 'FLIGHT_PLAN' });
   assert.deepEqual(pick(resolveTimeChain('takeoff', fdr())), { valueUtc: zulu(14, 30), source: 'EST_OFF_BLOCK' });
@@ -81,11 +81,11 @@ test('SCENARIO T3 the takeoff is stamped by the state change, wins over the off-
   const clock = { now: () => now, source: 'MISSION' };
   const efsp = createEfsp({ clock });
   const c = crew(efsp, ATC);
-  const seed = toFdrFiledSeed({ route: 'DCT', levelValue: '250', depAerodrome: 'LTAG', destAerodrome: 'LTAG', depTime: '1430' });
+  const seed = toFlightDataFiledSeed({ route: 'DCT', levelValue: '250', depAerodrome: 'LTAG', destAerodrome: 'LTAG', depTime: '1430' });
   let strip = mustAct(efsp, c.OPS, 'OPS', null, {
-    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: { ...DEPARTURE_FDR, ...seed, callsign: 'STAMP1', departureRunway: '05' },
+    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: { ...DEPARTURE_FLIGHT_DATA, ...seed, callsign: 'STAMP1', departureRunway: '05' },
   });
-  const fdr = () => efsp.fdrStore.getFdr(strip.fdrId);
+  const fdr = () => efsp.flightDataStore.getFlightData(strip.fdrId);
   assert.equal(resolveTimeChain('takeoff', fdr()).source, 'EST_OFF_BLOCK');
 
   strip = jumpTo(efsp, c.OPS, 'OPS', strip, 'RUNWAY_QUEUE');

@@ -15,10 +15,10 @@ import assert from 'node:assert/strict';
 const { CorrelationStore, MATCH_KEYS } = await import('../src/efsp/correlation-store.js');
 const { MAX_FREE_TEXT } = await import('../src/efsp/flight-data-store.js');
 
-const FDR = 'fdr-1';
+const FDR = 'flight-data-1';
 
 function store({ fdrs = [FDR] } = {}) {
-  return new CorrelationStore({ fdrExists: (id) => fdrs.includes(id) });
+  return new CorrelationStore({ flightDataExists: (id) => fdrs.includes(id) });
 }
 
 function bind(s, { fdrId = FDR, trackId = '101', note, baseRev } = {}) {
@@ -300,9 +300,9 @@ test('a warning detail is capped like every other string that rides a broadcast'
 // ── mission reload ─────────────────────────────────────────────────────────
 
 test('resetPicture drops every record AND its binding, naming why', () => {
-  const s = store({ fdrs: [FDR, 'fdr-2'] });
+  const s = store({ fdrs: [FDR, 'flight-data-2'] });
   bind(s, { trackId: '101' });
-  s.reconcile(new Map([['fdr-2', resolvedTo('202', 'BEACON', 'CORRELATED')]]));
+  s.reconcile(new Map([['flight-data-2', resolvedTo('202', 'BEACON', 'CORRELATED')]]));
 
   const { changed } = s.resetPicture('MISSION_RELOAD');
   assert.equal(changed.length, 2);
@@ -340,21 +340,21 @@ test('after a reset, the next tick re-binds on the beacon — warn, then re-bind
 
 // ── lookup and lifecycle ───────────────────────────────────────────────────
 
-test('fdrForTrack answers the reverse question the client asks on a map click', () => {
-  const s = store({ fdrs: [FDR, 'fdr-2'] });
+test('flightDataForTrack answers the reverse question the client asks on a map click', () => {
+  const s = store({ fdrs: [FDR, 'flight-data-2'] });
   s.reconcile(new Map([[FDR, resolvedTo('101', 'BEACON', 'CORRELATED')]]));
-  assert.equal(s.fdrForTrack('101'), FDR);
-  assert.equal(s.fdrForTrack(101), FDR, 'a numeric id works too');
-  assert.equal(s.fdrForTrack('999'), null);
+  assert.equal(s.flightDataForTrack('101'), FDR);
+  assert.equal(s.flightDataForTrack(101), FDR, 'a numeric id works too');
+  assert.equal(s.flightDataForTrack('999'), null);
 });
 
 test('a record whose FDR is gone is evicted — FDR lifecycle governs correlation lifecycle', () => {
   const fdrs = [FDR];
-  const s = new CorrelationStore({ fdrExists: (id) => fdrs.includes(id) });
+  const s = new CorrelationStore({ flightDataExists: (id) => fdrs.includes(id) });
   s.reconcile(new Map([[FDR, resolvedTo('101', 'BEACON', 'CORRELATED')]]));
   assert.equal(s.getAll().length, 1);
   fdrs.length = 0;
-  assert.equal(s.evictMissingFdrs(), 1);
+  assert.equal(s.evictMissingFlightDataList(), 1);
   assert.equal(s.getAll().length, 0);
 });
 
@@ -381,14 +381,14 @@ test('restore skips a record whose FDR is gone', () => {
   const s = store();
   bind(s);
   const snapshot = s.snapshot();
-  const restored = new CorrelationStore({ fdrExists: () => false });
+  const restored = new CorrelationStore({ flightDataExists: () => false });
   restored.restore(snapshot);
   assert.equal(restored.getAll().length, 0);
 });
 
 test('snapshot omits a record whose FDR has already gone', () => {
   const fdrs = [FDR];
-  const s = new CorrelationStore({ fdrExists: (id) => fdrs.includes(id) });
+  const s = new CorrelationStore({ flightDataExists: (id) => fdrs.includes(id) });
   bind(s);
   fdrs.length = 0;
   assert.deepEqual(s.snapshot(), []);

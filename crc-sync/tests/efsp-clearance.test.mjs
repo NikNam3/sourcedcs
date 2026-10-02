@@ -17,7 +17,7 @@ process.env.CRCSYNC_EFSP_AIRSPACES_PATH = path.join(tmpDir, 'airspaces.json');
 fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, JSON.stringify([]));
 
 const { createEfsp } = await import('../src/efsp/index.js');
-const { FdrStore, parseAltitudeFt, parseHeadingDeg } = await import('../src/efsp/flight-data-store.js');
+const { FlightDataStore, parseAltitudeFt, parseHeadingDeg } = await import('../src/efsp/flight-data-store.js');
 const { computeDueObligations } = await import('../src/efsp/forwarding-obligations.js');
 
 function crew(efsp, spec) {
@@ -56,11 +56,11 @@ test('altitudes and headings parse the way a strip writes them', () => {
 });
 
 test('setClearance keeps §3.7 history, confirms vacated only on altitude, and refuses nonsense', () => {
-  const store = new FdrStore();
-  const fdr = store.createFdr({ callsign: 'VPR1', ...FILED }, { by: 'test' }).fdr;
+  const store = new FlightDataStore();
+  const fdr = store.createFlightData({ callsign: 'VPR1', ...FILED }, { by: 'test' }).fdr;
   assert.equal(store.setClearance(fdr.fdrId, 'altitude', { value: '050' }, { by: 'cd' }).ok, true);
   assert.equal(store.setClearance(fdr.fdrId, 'altitude', { value: 'FL180' }, { by: 'app' }).ok, true);
-  const cell = store.getFdr(fdr.fdrId).clearance.altitude;
+  const cell = store.getFlightData(fdr.fdrId).clearance.altitude;
   assert.deepEqual(cell.entries.map(e => [e.value, e.status, e.parsed]), [['050', 'SUPERSEDED', 5000], ['FL180', 'ACTIVE', 18000]]);
 
   assert.equal(store.setClearance(fdr.fdrId, 'altitude', { confirmVacated: true }).ok, true);
@@ -72,7 +72,7 @@ test('setClearance keeps §3.7 history, confirms vacated only on altitude, and r
   // Clearing a heading ("resume own navigation") is an amendment like any other.
   store.setClearance(fdr.fdrId, 'heading', { value: '270' });
   store.setClearance(fdr.fdrId, 'heading', { value: '' });
-  assert.equal(active(store.getFdr(fdr.fdrId).clearance.heading).value, '');
+  assert.equal(active(store.getFlightData(fdr.fdrId).clearance.heading).value, '');
 });
 
 test('what APP assigns is on CTR\'s copy of the flight — one clearance, not one per Strip', () => {
@@ -85,7 +85,7 @@ test('what APP assigns is on CTR\'s copy of the flight — one clearance, not on
   strip = mustAct(efsp, c.APP, 'APP', strip, { kind: 'SetBlock', blockId: '20', value: '090' });
   const proposed = mustAct(efsp, c.APP, 'APP', strip, { kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'CENTER', toPositionId: 'CTR' });
   const replica = efsp.boardStoreFor('CENTER').getStrip(proposed.coordination.peerStripId);
-  const fdr = efsp.fdrStore.getFdr(replica.fdrId);
+  const fdr = efsp.flightDataStore.getFlightData(replica.fdrId);
   assert.equal(replica.fdrId, strip.fdrId);
   assert.equal(active(fdr.clearance.altitude).value, 'FL180');
   assert.equal(active(fdr.clearance.heading).value, '090');
@@ -93,12 +93,12 @@ test('what APP assigns is on CTR\'s copy of the flight — one clearance, not on
 });
 
 test('issuing a clearance altitude is not a flight-plan amendment — no AMENDMENT_INSIDE_30MIN', () => {
-  const store = new FdrStore();
-  const fdr = store.createFdr({ callsign: 'VPR3', ...FILED, proposedDepartureTimeUtc: Date.now() + 10 * 60 * 1000 }, { by: 'test' }).fdr;
+  const store = new FlightDataStore();
+  const fdr = store.createFlightData({ callsign: 'VPR3', ...FILED, proposedDepartureTimeUtc: Date.now() + 10 * 60 * 1000 }, { by: 'test' }).fdr;
   fdr.updatedAt = Date.now() - 5 * 60 * 1000; // filed a while ago
   store.setClearance(fdr.fdrId, 'altitude', { value: '050' }, { by: 'cd' });
   const strip = { stripId: 's', fdrId: fdr.fdrId, role: 'DEPARTURE', state: 'CLEARED', coordination: null };
-  const due = computeDueObligations(strip, store.getFdr(fdr.fdrId), Date.now());
+  const due = computeDueObligations(strip, store.getFlightData(fdr.fdrId), Date.now());
   assert.equal(due.some(o => o.obligationType === 'AMENDMENT_INSIDE_30MIN'), false);
 });
 

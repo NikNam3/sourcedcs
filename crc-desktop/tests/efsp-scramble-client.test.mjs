@@ -41,7 +41,7 @@ const STRIPS = [
   strip('s-other', 'f-other', 'DEPARTURE', 'TAXI', 'CENTER'),
 ];
 const fdrMap = new Map(FDRS.map(f => [f.fdrId, f]));
-const fdrOf = (id) => fdrMap.get(id) || null;
+const flightDataOf = (id) => fdrMap.get(id) || null;
 
 function load(strips = STRIPS, fdrs = FDRS, fieldStates = []) {
   state._resetEfspStateForTest();
@@ -54,7 +54,7 @@ test('drift: scramble.js answers exactly as crc-sync\'s alert-scramble.js over o
   assert.deepEqual(client.SCRAMBLE_PRE_AIRBORNE, server.SCRAMBLE_PRE_AIRBORNE);
   assert.deepEqual(client.GROUND_STATES, server.GROUND_STATES);
   const extra = [strip('s-ace', 'f-ace', 'DEPARTURE', 'TAXI'), strip('s-missing', 'f-missing', 'DEPARTURE', 'LUAW')];
-  const fdrs = (id) => (id === 'f-ace' ? fdr('f-ace', 'ACE12', 'SCRAMBLE') : fdrOf(id));
+  const fdrs = (id) => (id === 'f-ace' ? fdr('f-ace', 'ACE12', 'SCRAMBLE') : flightDataOf(id));
   for (const strips of [STRIPS, [...STRIPS, ...extra], [], STRIPS.filter(s => s.stripId !== 's-viper')]) {
     for (const facilityId of [undefined, 'INCIRLIK', 'CENTER']) {
       assert.deepEqual(client.activeScrambles(strips, fdrs, facilityId), server.activeScrambles(strips, fdrs, facilityId));
@@ -63,7 +63,7 @@ test('drift: scramble.js answers exactly as crc-sync\'s alert-scramble.js over o
       }
     }
   }
-  const scrambles = server.activeScrambles(STRIPS, fdrOf, 'INCIRLIK');
+  const scrambles = server.activeScrambles(STRIPS, flightDataOf, 'INCIRLIK');
   for (const fieldState of [null, { alertPad: {} }, { alertPad: { accessRoute: 'ALERT ACCESS TAXIWAY' } }, { alertPad: { accessRoute: 7 } }]) {
     assert.deepEqual(client.alertPadConstraint(fieldState, scrambles), server.alertPadConstraint(fieldState, scrambles));
     assert.deepEqual(client.alertPadConstraint(fieldState, []), server.alertPadConstraint(fieldState, []));

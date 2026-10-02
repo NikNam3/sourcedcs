@@ -119,7 +119,7 @@ function findConflicts(tracks, cfg, now = Date.now(), suppress = () => false, ca
 
 class ConflictAlertMonitor {
   /**
-   * @param {object} deps { trackStore, config, fdrForTrack?(trackId), activeMarsaFor?(fdrId), callsignFor?(track) }
+   * @param {object} deps { trackStore, config, flightDataForTrack?(trackId), activeMarsaFor?(fdrId), callsignFor?(track) }
    */
   constructor(deps) {
     this._d = deps;
@@ -130,11 +130,11 @@ class ConflictAlertMonitor {
 
   /** @returns {boolean} whether anything changed (any conflict present counts: its countdown moves) */
   tick(now = Date.now()) {
-    const { trackStore, config, fdrForTrack, activeMarsaFor, callsignFor } = this._d;
+    const { trackStore, config, flightDataForTrack, activeMarsaFor, callsignFor } = this._d;
     const suppress = (a, b) => {
-      if (!fdrForTrack || !activeMarsaFor) return false;
-      const fa = fdrForTrack(a.id);
-      const fb = fdrForTrack(b.id);
+      if (!flightDataForTrack || !activeMarsaFor) return false;
+      const fa = flightDataForTrack(a.id);
+      const fb = flightDataForTrack(b.id);
       if (!fa || !fb) return false;
       const rel = activeMarsaFor(fa);
       return !!rel && rel.participants.includes(fb);

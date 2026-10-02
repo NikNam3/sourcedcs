@@ -98,13 +98,13 @@ export async function advance(efsp, crewMember, positionId, strip) {
   return mustAct(efsp, crewMember, positionId, strip, { kind: 'InvokeNla' });
 }
 
-export const DEPARTURE_FDR = {
+export const DEPARTURE_FLIGHT_DATA = {
   callsign: 'VIPER1', aircraftType: 'F16', wakeCategory: 'D',
   departureAirport: 'LTAG', destinationAirport: 'LTAG', route: 'DCT', requestedAltitude: '250',
 };
 
 /** A DEPARTURE Strip parked at APP's terminus, which is where most airborne scenarios start. */
-export function airborneDeparture(efsp, c, fdr = DEPARTURE_FDR) {
+export function airborneDeparture(efsp, c, fdr = DEPARTURE_FLIGHT_DATA) {
   let strip = mustAct(efsp, c.OPS, 'OPS', null, {
     kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr,
   });
@@ -148,7 +148,7 @@ export async function obligationAlerts(efsp, facilityConfig) {
   const { ForwardingObligationMonitor } = await import('../../src/efsp/forwarding-obligations.js');
   const monitor = new ForwardingObligationMonitor({
     boardStoreFor: efsp.boardStoreFor,
-    fdrStore: efsp.fdrStore,
+    flightDataStore: efsp.flightDataStore,
     facilityConfig,
     airspaceStore: efsp.airspaceStore,
   });

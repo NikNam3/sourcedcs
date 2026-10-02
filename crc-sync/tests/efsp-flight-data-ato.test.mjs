@@ -1,12 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-// L14 (docs/adr/0071) — fdrStore.applyAtoTasking(), the one writer of what an
+// L14 (docs/adr/0071) — flightDataStore.applyAtoTasking(), the one writer of what an
 // ATO says about a flight: Mode 1/2 (read-only to ATC, D24 by construction),
 // SCL, AR info, `fdr.ato`, the adopted Mode 3 (H64) and the seed provenance
 // guard a re-import relies on.
 
-const { FdrStore, WRITABLE_PATHS, MILITARY_WRITABLE_FIELDS } = await import('../src/efsp/flight-data-store.js');
+const { FlightDataStore, WRITABLE_PATHS, MILITARY_WRITABLE_FIELDS } = await import('../src/efsp/flight-data-store.js');
 const { CodeAllocator } = await import('../src/efsp/code-allocator.js');
 
 const clock = { now: () => Date.UTC(2016, 5, 21, 10, 0) };
@@ -29,8 +29,8 @@ function tasking(over = {}) {
 
 function fresh() {
   const alloc = new CodeAllocator();
-  const store = new FdrStore(alloc, { clock });
-  const { fdr } = store.createFdr(SEED, { by: 'c1' });
+  const store = new FlightDataStore(alloc, { clock });
+  const { fdr } = store.createFlightData(SEED, { by: 'c1' });
   return { store, alloc, fdr };
 }
 
@@ -52,7 +52,7 @@ test('applyAtoTasking writes Mode 1/2, SCL, AR info and fdr.ato with provenance 
 
 test('applyAtoTasking refuses unknown keys and bad values, and writes nothing when it refuses', () => {
   const { store, fdr } = fresh();
-  const before = JSON.stringify(store.getFdr(fdr.fdrId));
+  const before = JSON.stringify(store.getFlightData(fdr.fdrId));
   for (const bad of [
     { ...tasking(), extra: 1 },
     tasking({ mode: 'MERGE' }),
@@ -69,7 +69,7 @@ test('applyAtoTasking refuses unknown keys and bad values, and writes nothing wh
     assert.equal(r.ok, false, JSON.stringify(bad));
     assert.equal(r.reason, 'VALIDATION_ERROR');
   }
-  assert.equal(JSON.stringify(store.getFdr(fdr.fdrId)), before);
+  assert.equal(JSON.stringify(store.getFlightData(fdr.fdrId)), before);
   assert.equal(store.applyAtoTasking('nope', tasking()).reason, 'NOT_FOUND');
 });
 
@@ -85,7 +85,7 @@ test('D24 by construction: Mode 1/2 are in no writable list, and setField / setM
   assert.equal(store.setField(fdr.fdrId, 'ato.iff.modeThree', '1234', { by: 'c2' }).ok, false);
   assert.equal(store.setMilitary(fdr.fdrId, { scl: 'X' }, { by: 'c2' }).ok, false);
   assert.equal(store.setMilitary(fdr.fdrId, { arInfo: null }, { by: 'c2' }).ok, false);
-  assert.equal(store.getFdr(fdr.fdrId).identity.modeOne, '12');
+  assert.equal(store.getFlightData(fdr.fdrId).identity.modeOne, '12');
 });
 
 test('H64: on a new flight the ATO Mode 3 is adopted and the minted code goes back to the pool', () => {
@@ -115,7 +115,7 @@ test('H64: a reserved or 6xxx ATO Mode 3 is refused by nothing — the minted co
 
 test('H64: a duplicate ATO Mode 3 is adopted with a warning, never refused (D23)', () => {
   const { store, fdr } = fresh();
-  const other = store.createFdr({ ...SEED, callsign: 'OTHER1' }, { by: 'c1' }).fdr;
+  const other = store.createFlightData({ ...SEED, callsign: 'OTHER1' }, { by: 'c1' }).fdr;
   store.setBeaconAssigned(other.fdrId, '4521', { by: 'c1' });
   const r = store.applyAtoTasking(fdr.fdrId, tasking(), { by: 'c1' });
   assert.equal(r.beacon.adopted, true);
@@ -156,8 +156,8 @@ test('the seed provenance guard: an update replaces ATO-owned values and keeps w
 
 test('a bind fills only what the flight has nothing for', () => {
   const alloc = new CodeAllocator();
-  const store = new FdrStore(alloc, { clock });
-  const filed = store.createFdr({ callsign: 'VIPER11', aircraftType: 'F16', flightSize: 4 }, { by: 'ops' }).fdr;
+  const store = new FlightDataStore(alloc, { clock });
+  const filed = store.createFlightData({ callsign: 'VIPER11', aircraftType: 'F16', flightSize: 4 }, { by: 'ops' }).fdr;
   const r = store.applyAtoTasking(filed.fdrId, tasking({ mode: 'BIND' }), { by: 'c1' });
   assert.equal(r.fdr.mission.missionNumber, '1101A');
   assert.equal(r.fdr.provenance['mission.missionNumber'], 'ATO');

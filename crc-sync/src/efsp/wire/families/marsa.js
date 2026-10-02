@@ -10,7 +10,7 @@ const readScope = require('../../read-scope');
  * refusal can be attributed even when it never reached the store and so has no
  * relation to carry back (see subjectOf in the skeleton).
  */
-function marsaFdrIds(op) {
+function marsaFlightDataIds(op) {
   if (!op) return undefined;
   if (Array.isArray(op.participants)) return op.participants.map(String).filter(Boolean);
   if (op.fdrId) return [String(op.fdrId)];
@@ -30,7 +30,7 @@ module.exports = {
   deltaType: 'efsp-marsa-delta',
   replayKind: 'marsa',
   snapshotKey: 'marsa',
-  subject: (msg) => ({ marsaId: msg.marsaId, fdrIds: marsaFdrIds(msg.op) }),
+  subject: (msg) => ({ marsaId: msg.marsaId, fdrIds: marsaFlightDataIds(msg.op) }),
   store: (ctx) => ctx.marsaStore,
   noStore: 'no MARSA store',
 
@@ -89,11 +89,11 @@ module.exports = {
     // with the default Facility's own boardSeq, unchanged for the same reason —
     // fdrs are shared theater-wide (docs/adr/0013) and are not Facility-scoped,
     // so there is no per-Facility delta to send N of.
-    const regimeFdrs = result.fdrs || [];
-    if (regimeFdrs.length > 0) {
+    const regimeFlightDataList = result.fdrs || [];
+    if (regimeFlightDataList.length > 0) {
       const facilityId = ctx.facilityConfig.DEFAULT_FACILITY_ID;
       const boardStore = ctx.boardStoreFor(facilityId);
-      out.primary = boardDelta(ctx, boardStore, facilityId, { updated: [], gone: [] }, regimeFdrs);
+      out.primary = boardDelta(ctx, boardStore, facilityId, { updated: [], gone: [] }, regimeFlightDataList);
     }
     return out;
   },
@@ -108,5 +108,5 @@ module.exports = {
   snapshot: (ctx) => ctx.marsaStore ? ctx.marsaStore.getAll() : [],
 
   /** What an owned session is sent of an efsp-marsa-delta (docs/adr/0080). */
-  filter: (ctx, scope, msg) => readScope.filterMarsaDelta(msg, scope, readScope.visibleFdrIdsOf(scope, liveStamped(ctx))),
+  filter: (ctx, scope, msg) => readScope.filterMarsaDelta(msg, scope, readScope.visibleFlightDataIdsOf(scope, liveStamped(ctx))),
 };

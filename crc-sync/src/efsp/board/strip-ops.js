@@ -19,7 +19,7 @@ class StripOps {
    * @param {object} deps.audit BoardAudit
    * @param {object} deps.placement Placement
    * @param {{now: () => number}} deps.clock the mission clock
-   * @param {object} deps.fdrStore
+   * @param {object} deps.flightDataStore
    * @param {object} deps.coordination Coordination (the HANDOFF... ops call it)
    * @param {object} deps.tofi Tofi (the TOFI op calls it)
    * @param {object[]} deps.ops the op table, `{kind, authorize?, apply(ctx, strip, op, meta)}` each (board/ops/index.js)
@@ -34,7 +34,7 @@ class StripOps {
     this.state = deps.state;
     this.placement = deps.placement;
     this.clock = deps.clock;
-    this.fdrStore = deps.fdrStore;
+    this.flightDataStore = deps.flightDataStore;
     this.coordination = deps.coordination;
     this.tofi = deps.tofi;
     this._audit = deps.audit;
@@ -154,16 +154,16 @@ class StripOps {
    * @returns {object|null} the FDR it changed, for the ack's broadcast.
    */
   _stampTakeoffOnStateChange(strip, prevState) {
-    if (strip.role !== 'DEPARTURE' || !this.fdrStore || !this.fdrStore.setTakeoffStamp) return null;
+    if (strip.role !== 'DEPARTURE' || !this.flightDataStore || !this.flightDataStore.setTakeoffStamp) return null;
     const airborne = (st) => DEPARTURE_AIRBORNE_STATES.includes(st);
-    const fdr = this.fdrStore.getFdr(strip.fdrId);
+    const fdr = this.flightDataStore.getFlightData(strip.fdrId);
     if (!fdr) return null;
     let r = null;
     if (airborne(strip.state) && !airborne(prevState) && prevState !== 'DROPPED') {
       if (fdr.timeInputs && fdr.timeInputs.takeoffStampedUtc != null) return null;
-      r = this.fdrStore.setTakeoffStamp(strip.fdrId, this.clock.now());
+      r = this.flightDataStore.setTakeoffStamp(strip.fdrId, this.clock.now());
     } else if (!airborne(strip.state) && strip.state !== 'DROPPED' && airborne(prevState)) {
-      r = this.fdrStore.setTakeoffStamp(strip.fdrId, null);
+      r = this.flightDataStore.setTakeoffStamp(strip.fdrId, null);
     }
     return r && r.ok && r.changed ? r.fdr : null;
   }
@@ -180,9 +180,9 @@ class StripOps {
   assignSfaFrequency(strip, by) {
     const mhz = this.rules.sfaFrequencyFor(strip.bayId, strip.rackId);
     if (mhz == null) return null;
-    const fdr = this.fdrStore.getFdr(strip.fdrId);
+    const fdr = this.flightDataStore.getFlightData(strip.fdrId);
     if (!fdr || (fdr.comms && fdr.comms.workingFrequencyMhz === mhz)) return null;
-    const r = this.fdrStore.setWorkingFrequency(strip.fdrId, mhz, { by });
+    const r = this.flightDataStore.setWorkingFrequency(strip.fdrId, mhz, { by });
     return r.ok ? r : null;
   }
 
@@ -384,7 +384,7 @@ class StripOps {
    */
   nlaStatusFor(strip, now = this.clock.now()) {
     if (!strip) return null;
-    const fdr = this.fdrStore.getFdr(strip.fdrId);
+    const fdr = this.flightDataStore.getFlightData(strip.fdrId);
     const result = this.rules.computeNla(strip, fdr, now, this.placement.nlaCtx());
     // No NLA at all for this State (every Role's terminal DROPPED) — null, not
     // a reason. _applyInvokeNla runs the precheck FIRST and so answers a press
@@ -453,7 +453,7 @@ class StripOps {
     // clearance voiding a relation, and the two must not render as the same
     // thing. A tanker landing mid-AR leaves the relation `ENDED` with
     // `endedBy: 'PARTICIPANT_RETIRED'`; nothing went wrong and no alert is due.
-    const marsaChanged = this._releaseFdrIfLastStrip(strip, by);
+    const marsaChanged = this._releaseFlightDataIfLastStrip(strip, by);
     // docs/adr/0074: a flight that leaves the recovery leaves the stack, with a
     // vacancy and no close-up (H28). A LAUNCH Strip is not in the stack; the
     // removal is a no-op for it.
@@ -491,10 +491,10 @@ class StripOps {
    * (code-allocator.js's validateAssignment) only fires on a manual override,
    * never on the automatic allocate() scan.
    */
-  _releaseFdrIfLastStrip(strip, by) {
-    const othersLive = this.rules.liveStripsForFdr(strip.fdrId, strip.stripId);
+  _releaseFlightDataIfLastStrip(strip, by) {
+    const othersLive = this.rules.liveStripsForFlightData(strip.fdrId, strip.stripId);
     if (othersLive !== 0) return null;
-    this.fdrStore.releaseFdr(strip.fdrId);
+    this.flightDataStore.releaseFlightData(strip.fdrId);
     // WP6 (docs/adr/0051) — the flight is over, so it leaves any MARSA relation
     // it was in. Left alone the relation would keep naming an aircraft on the
     // ground, keep its separation regime at MARSA on an FDR nobody is working,
@@ -502,7 +502,7 @@ class StripOps {
     // anything. Same shape correlation-store.js's retireFinished has, arriving
     // from the other direction: correlation is swept by a 1Hz reconciler and
     // MARSA has no sweep, so the Strip lifecycle has to say so out loud.
-    return this.rules.retireMarsaForFdr(strip.fdrId, by);
+    return this.rules.retireMarsaForFlightData(strip.fdrId, by);
   }
 }
 

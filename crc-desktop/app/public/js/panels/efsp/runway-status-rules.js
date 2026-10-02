@@ -251,10 +251,10 @@ export function fieldStateAlertsFor(strip, lookups) {
   if (!strip || strip.state === 'DROPPED') return out;
   if (strip.role !== 'DEPARTURE' && strip.role !== 'ARRIVAL') return out;
   const fieldStateFor = (lookups && lookups.fieldStateFor) || (typeof getEfspFieldState === 'function' ? getEfspFieldState : () => null);
-  const fdrFor = (lookups && lookups.fdrFor) || (typeof getEfspFdr === 'function' ? getEfspFdr : () => null);
+  const flightDataFor = (lookups && lookups.flightDataFor) || (typeof getEfspFdr === 'function' ? getEfspFdr : () => null);
   const record = fieldStateFor(strip.facilityId);
   if (!record) return out;
-  const fdr = strip.fdrId ? fdrFor(strip.fdrId) : null;
+  const fdr = strip.fdrId ? flightDataFor(strip.fdrId) : null;
   const resolved = runwayForStrip(strip, fdr, record);
   if (!resolved) return out;
   const runway = resolved.runway;

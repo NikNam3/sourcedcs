@@ -23,12 +23,12 @@ function fakeTrackStore(tracks) {
   return { getAll: () => tracks };
 }
 
-/** An FdrStore stand-in: just identity, plus the observed-code setter. */
-function fakeFdrStore(fdrs) {
+/** An FlightDataStore stand-in: just identity, plus the observed-code setter. */
+function fakeFlightDataStore(fdrs) {
   const observed = new Map();
   return {
     getAll: () => fdrs,
-    getFdr: (id) => fdrs.find(f => f.fdrId === id) || null,
+    getFlightData: (id) => fdrs.find(f => f.fdrId === id) || null,
     setBeaconObserved: (id, code) => { observed.set(id, code); return { ok: true, changed: true }; },
     observed,
   };
@@ -47,19 +47,19 @@ function track(id, callsign, squawk = null) {
 }
 
 function build({ fdrs = [], strips = [], tracks = [] } = {}) {
-  const fdrStore = fakeFdrStore(fdrs);
-  const store = new CorrelationStore({ fdrExists: (id) => !!fdrStore.getFdr(id) });
+  const flightDataStore = fakeFlightDataStore(fdrs);
+  const store = new CorrelationStore({ flightDataExists: (id) => !!flightDataStore.getFlightData(id) });
   const deltas = [];
   const reconciler = new CorrelationReconciler({
     beaconOf: (t) => octalCode(t.squawk),
     trackStore: fakeTrackStore(tracks),
-    fdrStore,
+    flightDataStore,
     correlationStore: store,
     boardStoreFor: (facilityId) => (facilityId === 'INCIRLIK' ? { getAll: () => strips } : { getAll: () => [] }),
     facilityConfig: { getFacilityIds: () => ['INCIRLIK', 'CENTER'] },
     onDelta: (payload) => deltas.push(payload),
   });
-  return { reconciler, store, fdrStore, deltas };
+  return { reconciler, store, flightDataStore, deltas };
 }
 
 // ── the rate ───────────────────────────────────────────────────────────────
@@ -148,7 +148,7 @@ test('a binding to a contact that no longer exists lets the lower rungs have a g
 });
 
 test('the assigned beacon code correlates, and the observed code is pushed onto the FDR', () => {
-  const { reconciler, store, fdrStore } = build({
+  const { reconciler, store, flightDataStore } = build({
     fdrs: [fdr('f1', 'VIPER1', '0041')], strips: [strip('f1')], tracks: [track(1, 'SOMETHINGELSE', 41)],
   });
   reconciler.tick();
@@ -156,7 +156,7 @@ test('the assigned beacon code correlates, and the observed code is pushed onto 
   assert.equal(record.state, 'CORRELATED');
   assert.equal(record.matchedBy, 'BEACON');
   assert.equal(record.observedBeacon, '0041');
-  assert.equal(fdrStore.observed.get('f1'), '0041', '§3.10.2 rule 1 has real data behind it');
+  assert.equal(flightDataStore.observed.get('f1'), '0041', '§3.10.2 rule 1 has real data behind it');
 });
 
 test('an exact callsign match correlates when no beacon evidence contradicts it', () => {
@@ -410,7 +410,7 @@ test('the sweep never touches a Strip even when the contact contradicts its stat
 // ── flights that are over ─────────────────────────────────────────────────
 
 test('a flight with no live Strip left is retired, not kept forever with a stale contact', () => {
-  // Found by walking the sortie: releaseFdr only frees the beacon code, it does
+  // Found by walking the sortie: releaseFlightData only frees the beacon code, it does
   // not delete the FDR — so an FDR with nothing but DROPPED Strips lives
   // forever, and its correlation record lived with it. Never swept again
   // (eligibility needs a live Strip), stuck at whatever it last was, still

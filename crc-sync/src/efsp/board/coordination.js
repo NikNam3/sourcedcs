@@ -15,7 +15,7 @@ class Coordination {
    * @param {object} deps.audit BoardAudit
    * @param {object} deps.placement Placement
    * @param {{now: () => number}} deps.clock the mission clock
-   * @param {object} deps.fdrStore
+   * @param {object} deps.flightDataStore
    * @param {(stripId:string) => void} deps.touch late-bound to the facade's _touch (the soak host patches it)
    * @param {() => string|null} deps.activeCmid the clientMutationId being applied, read late
    * @param {(strip:object, by:string) => object|null} deps.retire late-bound to StripOps' retire
@@ -23,13 +23,13 @@ class Coordination {
    * @param {(role:string, senderState:string) => string} deps.replicaStateOnReceipt the authority registry's accessor (docs/adr/0087)
    * @param {(primitive:string, role:string, senderState:string) => string|undefined} deps.senderStateOnAccept the authority registry's accessor (docs/adr/0087)
    */
-  constructor({ rules, state, audit, placement, clock, fdrStore, touch, activeCmid, retire, mutationLog, replicaStateOnReceipt, senderStateOnAccept }) {
+  constructor({ rules, state, audit, placement, clock, flightDataStore, touch, activeCmid, retire, mutationLog, replicaStateOnReceipt, senderStateOnAccept }) {
     this._rules = rules;
     this._state = state;
     this._audit = audit;
     this._placement = placement;
     this._clock = clock;
-    this._fdrStore = fdrStore;
+    this._fdrStore = flightDataStore;
     this._touch = touch;
     this._activeCmidOf = activeCmid;
     this._retire = retire;
@@ -133,7 +133,7 @@ class Coordination {
     // Track-degradation soft interlock (guide §4.6 rule 5): CST/FAIL/IF/NT/
     // TRK force verbal coordination; a non-empty note is the electronic
     // stand-in for "verbal coordination occurred" (docs/adr/0019).
-    const fdr = this._fdrStore.getFdr(strip.fdrId);
+    const fdr = this._fdrStore.getFlightData(strip.fdrId);
     const degraded = fdr && fdr.identity.trackDegradationFlag && fdr.identity.trackDegradationFlag !== 'NONE';
     if (degraded && !op.note) {
       return {
@@ -380,7 +380,7 @@ class Coordination {
    * @returns {{ok:true, strip}|{ok:false, reason, detail}}
    */
   receiveCoordinationProposal({ primitive, fromFacilityId, fromPositionId, fromStripId, toPositionId, fdrId, fromRole, fromState, note, by, causedBy }) {
-    const fdr = this._fdrStore.getFdr(fdrId);
+    const fdr = this._fdrStore.getFlightData(fdrId);
     if (!fdr) return { ok: false, reason: 'NOT_FOUND', detail: 'referenced FDR not found' };
 
     const coordinationBay = this._rules.coordinationBayFor(toPositionId);

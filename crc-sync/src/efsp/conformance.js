@@ -132,7 +132,7 @@ function evaluateConformance(input, mem, now, cfg, wallNow = now) {
  */
 class ConformanceMonitor {
   /**
-   * @param {object} deps { trackStore, fdrStore, correlationStore, weather: () => {pressurePa,tempK},
+   * @param {object} deps { trackStore, flightDataStore, correlationStore, weather: () => {pressurePa,tempK},
    *                        transitionAltFt: () => number, indicatedAltFt, config, clock?, wallClock?,
    *                        gridToMagnetic?: (gridDeg, lat, lon) => number|null }
    * `gridToMagnetic` turns DCS's GRID course into magnetic (server.js passes
@@ -158,13 +158,13 @@ class ConformanceMonitor {
 
   /** @returns {boolean} whether any flight's alerts changed */
   tick(now = this._clock.now(), wallNow = this._wallClock.now()) {
-    const { trackStore, fdrStore, correlationStore, config } = this._d;
+    const { trackStore, flightDataStore, correlationStore, config } = this._d;
     const seen = new Set();
     let changed = false;
     for (const record of correlationStore.getAll()) {
       if (!record.trackId || (record.state !== 'CORRELATED' && record.state !== 'PROVISIONAL')) continue;
       const track = trackStore.get(record.trackId);
-      const fdr = fdrStore.getFdr(record.fdrId);
+      const fdr = flightDataStore.getFlightData(record.fdrId);
       if (!track || !fdr) continue;
       seen.add(record.fdrId);
       const mem = this._mem.get(record.fdrId) || {};

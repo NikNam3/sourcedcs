@@ -283,9 +283,9 @@ test('F-206: SREG and RSVC accept being cleared; the four Blocks with no "unset"
   // Set then clear, for the two whose FDR field genuinely starts as null.
   for (const [blockId, value, field] of [['SREG', 'DUE_REGARD', 'separationRegime'], ['RSVC', 'ACTIVE', 'radarService']]) {
     strip = mustAct(efsp, c.OPS, 'OPS', strip, { kind: 'SetBlock', blockId, value });
-    assert.equal(efsp.fdrStore.getFdr(strip.fdrId).tofi[field], value);
+    assert.equal(efsp.flightDataStore.getFlightData(strip.fdrId).tofi[field], value);
     strip = mustAct(efsp, c.OPS, 'OPS', strip, { kind: 'SetBlock', blockId, value: '' });
-    assert.equal(efsp.fdrStore.getFdr(strip.fdrId).tofi[field], null, `${blockId} cleared`);
+    assert.equal(efsp.flightDataStore.getFlightData(strip.fdrId).tofi[field], null, `${blockId} cleared`);
   }
 
   // The other four have no null state to return to — their "cleared" value is
@@ -523,8 +523,8 @@ function heldWithReleaseTime(efsp, c, callsign, releaseAt) {
   strip = mustAct(efsp, c.OPS, 'OPS', strip, {
     kind: 'TransferStrip', toPositionId: 'CD', bayId: 'cd-held', rackId: 'main',
   });
-  assert.equal(efsp.fdrStore.setField(strip.fdrId, 'assigned.releaseState', 'RELEASE_TIME', { by: 'CD' }).ok, true);
-  assert.equal(efsp.fdrStore.setField(strip.fdrId, 'assigned.releaseTimeUtc', releaseAt, { by: 'CD' }).ok, true);
+  assert.equal(efsp.flightDataStore.setField(strip.fdrId, 'assigned.releaseState', 'RELEASE_TIME', { by: 'CD' }).ok, true);
+  assert.equal(efsp.flightDataStore.setField(strip.fdrId, 'assigned.releaseTimeUtc', releaseAt, { by: 'CD' }).ok, true);
   return strip;
 }
 
@@ -589,14 +589,14 @@ test('F-408: a void deadline expiring reaches the sweep too, and the reason is t
   strip = mustAct(efsp, c.OPS, 'OPS', strip, {
     kind: 'TransferStrip', toPositionId: 'CD', bayId: 'cd-held', rackId: 'main',
   });
-  // fdr-store derives voidDeadlineUtc from the void time (§3.8, 30 minutes).
+  // flight-data-store derives voidDeadlineUtc from the void time (§3.8, 30 minutes).
   // Set in the past, so the derived deadline has already gone by at the real
   // clock the press below reads — the sweep takes an explicit `now`, the
   // Mutation path does not.
   const voidAt = Date.now() - 31 * 60 * 1000;
-  efsp.fdrStore.setField(strip.fdrId, 'assigned.releaseState', 'CLEARANCE_VOID_TIME', { by: 'CD' });
-  efsp.fdrStore.setField(strip.fdrId, 'assigned.voidTimeUtc', voidAt, { by: 'CD' });
-  const deadline = efsp.fdrStore.getFdr(strip.fdrId).assigned.voidDeadlineUtc;
+  efsp.flightDataStore.setField(strip.fdrId, 'assigned.releaseState', 'CLEARANCE_VOID_TIME', { by: 'CD' });
+  efsp.flightDataStore.setField(strip.fdrId, 'assigned.voidTimeUtc', voidAt, { by: 'CD' });
+  const deadline = efsp.flightDataStore.getFlightData(strip.fdrId).assigned.voidDeadlineUtc;
   assert.ok(Number.isFinite(deadline), 'the deadline is derived');
 
   efsp.nlaStatusMonitor.tick(deadline - 1000); // settle

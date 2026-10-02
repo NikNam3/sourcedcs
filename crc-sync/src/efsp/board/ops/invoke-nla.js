@@ -18,7 +18,7 @@ function _applyInvokeNla(ctx, strip, by) {
   const blocked = ctx.nlaPrecheck(strip);
   if (blocked) return { ok: false, reason: blocked.reason, detail: blocked.detail, strip };
 
-  const fdr = ctx.fdrStore.getFdr(strip.fdrId);
+  const fdr = ctx.flightDataStore.getFlightData(strip.fdrId);
   const result = ctx.rules.computeNla(strip, fdr, now, ctx.placement.nlaCtx());
   if (!result || result.inhibited) {
     return { ok: false, reason: 'NLA_INHIBITED', detail: result ? result.inhibited : 'no NLA for this state', strip };

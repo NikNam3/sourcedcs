@@ -194,12 +194,12 @@ function createHost(env, { stateDir }) {
   function structureCounts() {
     const c = {};
     let total = 0; let live = 0; let dropped = 0; let log = 0; let applied = 0; let nlaHist = 0; let nlaHistDropped = 0; let maxCid = 0;
-    const liveFdrs = new Set();
+    const liveFlightDataList = new Set();
     for (const fid of facilityIds) {
       const bs = efsp.boardStoreFor(fid);
       let fl = 0; let fd = 0;
       for (const s of bs._strips.values()) {
-        if (s.state === 'DROPPED') fd++; else { fl++; liveFdrs.add(s.fdrId); }
+        if (s.state === 'DROPPED') fd++; else { fl++; liveFlightDataList.add(s.fdrId); }
       }
       for (const id of bs._nlaHistory.keys()) { const s = bs._strips.get(id); if (s && s.state === 'DROPPED') nlaHistDropped++; }
       c[`strips.live.${fid}`] = fl;
@@ -217,9 +217,9 @@ function createHost(env, { stateDir }) {
     c['log.max'] = log; c['appliedMutations.max'] = applied;
     c['nlaHistory'] = nlaHist; c['nlaHistory.dropped'] = nlaHistDropped;
     c['cidSeq.max'] = maxCid;
-    c['fdrs'] = efsp.fdrStore._fdrs.size;
-    c['fdrs.withLiveStrip'] = liveFdrs.size;
-    c['codes.allocated'] = efsp.fdrStore.codeAllocator._allocated.size;
+    c['fdrs'] = efsp.flightDataStore._flightDataList.size;
+    c['fdrs.withLiveStrip'] = liveFlightDataList.size;
+    c['codes.allocated'] = efsp.flightDataStore.codeAllocator._allocated.size;
     let corrTransitions = 0;
     for (const r of efsp.correlationStore._records.values()) corrTransitions += (r.transitions || []).length;
     c['correlation.records'] = efsp.correlationStore._records.size;
@@ -391,8 +391,8 @@ function createHost(env, { stateDir }) {
         // DIAGNOSTIC ONLY (--prune-retired): what the heap does without
         // retention. Never a fix — see the report header.
         let strips = 0; let fdrs = 0;
-        const liveFdrs = new Set();
-        for (const [, s] of liveStrips()) liveFdrs.add(s.fdrId);
+        const liveFlightDataList = new Set();
+        for (const [, s] of liveStrips()) liveFlightDataList.add(s.fdrId);
         for (const fid of facilityIds) {
           const bs = efsp.boardStoreFor(fid);
           for (const [id, s] of bs._strips) {
@@ -400,9 +400,9 @@ function createHost(env, { stateDir }) {
             bs._strips.delete(id); bs._nlaHistory.delete(id); strips++;
           }
         }
-        for (const id of [...efsp.fdrStore._fdrs.keys()]) {
-          if (liveFdrs.has(id)) continue;
-          efsp.fdrStore._fdrs.delete(id); efsp.correlationStore._records.delete(id); fdrs++;
+        for (const id of [...efsp.flightDataStore._flightDataList.keys()]) {
+          if (liveFlightDataList.has(id)) continue;
+          efsp.flightDataStore._flightDataList.delete(id); efsp.correlationStore._records.delete(id); fdrs++;
         }
         reply.pruned = { strips, fdrs };
         break;

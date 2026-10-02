@@ -25,7 +25,7 @@ for (const [k, v] of Object.entries({
 fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, '[]');
 
 const { createEfsp } = await import('../src/efsp/index.js');
-const { crew, mustAct, DEPARTURE_FDR } = await import('./helpers/efsp-scenario.mjs');
+const { crew, mustAct, DEPARTURE_FLIGHT_DATA } = await import('./helpers/efsp-scenario.mjs');
 
 // The client is ES modules (ESM-1): its browser-ish globals first, then a fresh module graph per client.
 await import('../../crc-desktop/tests/helpers/client-env.mjs');
@@ -62,7 +62,7 @@ async function makeClient() {
 
 const serverStrips = (efsp) => efsp.boardStoreFor('INCIRLIK').getAll().filter(s => s.state !== 'DROPPED').map(s => s.stripId + ':' + s.rev).sort();
 const create = (efsp, c, callsign) => mustAct(efsp, c.OPS, 'OPS', null,
-  { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: { ...DEPARTURE_FDR, callsign } });
+  { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: { ...DEPARTURE_FLIGHT_DATA, callsign } });
 
 /** Runs the server's reply to every resync in the outbox back into the client; returns what types came back. */
 function serveResyncs(efsp, session, client) {
@@ -87,10 +87,10 @@ test('a client that misses a delta sees the gap at the heartbeat, resyncs, and c
 
   // two changes; the second one's broadcast never reaches client B
   const first = efsp.handleMessage(c.OPS.session, { version: 1, type: 'efsp-mutation', clientMutationId: 'm1', facilityId: 'INCIRLIK', actingPositionId: 'OPS',
-    op: { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: { ...DEPARTURE_FDR, callsign: 'RSYNC1' } } });
+    op: { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: { ...DEPARTURE_FLIGHT_DATA, callsign: 'RSYNC1' } } });
   b.deliver(slot(first, 'primary'));
   const second = efsp.handleMessage(c.OPS.session, { version: 1, type: 'efsp-mutation', clientMutationId: 'm2', facilityId: 'INCIRLIK', actingPositionId: 'OPS',
-    op: { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: { ...DEPARTURE_FDR, callsign: 'RSYNC2' } } });
+    op: { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: { ...DEPARTURE_FLIGHT_DATA, callsign: 'RSYNC2' } } });
   assert.equal(second.ack.ok, true); // broadcast lost
   assert.notDeepEqual(b.stripIds(), serverStrips(efsp));
 
@@ -122,7 +122,7 @@ test('a delta from another Board lifetime (server restarted) triggers a resync t
   const c2 = crew(efsp2, { OPS: 'INCIRLIK', CD: 'INCIRLIK' });
   assert.notEqual(efsp2.boardStoreFor('INCIRLIK').epoch, efsp1.boardStoreFor('INCIRLIK').epoch);
   const r = efsp2.handleMessage(c2.OPS.session, { version: 1, type: 'efsp-mutation', clientMutationId: 'e1', facilityId: 'INCIRLIK', actingPositionId: 'OPS',
-    op: { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: { ...DEPARTURE_FDR, callsign: 'EPOCH2' } } });
+    op: { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: { ...DEPARTURE_FLIGHT_DATA, callsign: 'EPOCH2' } } });
   b.deliver(slot(r, 'primary'));
   assert.equal(b.outbox.length, 1);
   assert.equal(b.run('efspResyncPositionFor("INCIRLIK").boardEpoch'), efsp1.boardStoreFor('INCIRLIK').epoch, 'the new lifetime\'s epoch is not adopted from a delta');

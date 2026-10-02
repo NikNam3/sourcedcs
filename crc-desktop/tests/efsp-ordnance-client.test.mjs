@@ -42,7 +42,7 @@ function record({ pad = 'Hot cargo pad', activeRunway = '05', facilityId = 'INCI
   };
 }
 
-const fdrWith = (ordnanceState, { dep = null, arr = null } = {}) => ({
+const flightDataWith = (ordnanceState, { dep = null, arr = null } = {}) => ({
   fdrId: 'f1', rev: 1, provenance: {},
   identity: { callsign: 'VIPER1', beaconAssigned: '0001', trackDegradationFlag: 'NONE' },
   filed: { departureRunway: dep }, assigned: { landingRunway: arr }, tofi: { ifrActive: true }, airspace: {}, comms: {},
@@ -71,7 +71,7 @@ test('drift: the client copy and crc-sync\'s hungOrdnanceAdvisoryFor agree on ev
               for (const activeRunway of ['05', '23', null]) {
                 for (const fs of [record({ pad, activeRunway }), null]) {
                   const strip = { stripId: 's1', fdrId: 'f1', facilityId: 'INCIRLIK', role, state, rackId };
-                  const fdr = fdrWith(ordnance, { dep: runwayText, arr: runwayText });
+                  const fdr = flightDataWith(ordnance, { dep: runwayText, arr: runwayText });
                   const s = server.hungOrdnanceAdvisoryFor(strip, fdr, fs);
                   const c = client.hungOrdnanceAdvisoryFor(strip, fdr, fs);
                   assert.deepEqual(pick(c), pick(s), JSON.stringify({ ordnance, role, state, pad, rackId, runwayText, activeRunway, fs: !!fs }));
@@ -108,7 +108,7 @@ function alertsSandbox({ fdr, fieldState }) {
 const arrivalStrip = (over = {}) => ({ stripId: 's1', fdrId: 'f1', facilityId: 'INCIRLIK', role: 'ARRIVAL', state: 'HANDED_TO_TOWER', rackId: 'main', ...over });
 
 test('ordnanceAlertsFor: one amber HUNG chip with the pad sentence when field state is loaded', () => {
-  const sb = alertsSandbox({ fdr: fdrWith('HUNG', { arr: '05' }), fieldState: record() });
+  const sb = alertsSandbox({ fdr: flightDataWith('HUNG', { arr: '05' }), fieldState: record() });
   const alerts = sb.ordnanceAlertsFor(arrivalStrip());
   assert.equal(alerts.length, 1);
   assert.deepEqual({ ...alerts[0] }, {
@@ -119,7 +119,7 @@ test('ordnanceAlertsFor: one amber HUNG chip with the pad sentence when field st
 });
 
 test('ordnanceAlertsFor: the chip still shows with no client field state at all (L1b not loaded)', () => {
-  const sb = alertsSandbox({ fdr: fdrWith('HUNG'), fieldState: undefined });
+  const sb = alertsSandbox({ fdr: flightDataWith('HUNG'), fieldState: undefined });
   assert.equal(efspState.getEfspFieldState('INCIRLIK'), null, 'no client field state loaded');
   const alerts = sb.ordnanceAlertsFor(arrivalStrip());
   assert.equal(alerts.length, 1);
@@ -128,15 +128,15 @@ test('ordnanceAlertsFor: the chip still shows with no client field state at all 
 });
 
 test('ordnanceAlertsFor: a Facility with no record yet shows the generic sentence too', () => {
-  const sb = alertsSandbox({ fdr: fdrWith('HUNG'), fieldState: null });
+  const sb = alertsSandbox({ fdr: flightDataWith('HUNG'), fieldState: null });
   assert.equal(sb.ordnanceAlertsFor(arrivalStrip()).at(0).reason, client.ORDNANCE_NO_FIELD_STATE_REASON);
 });
 
 test('ordnanceAlertsFor: nothing for CLEAN/LOADED/EXPENDED, a DROPPED Strip, an OVERFLIGHT, a MISSION line or a missing FDR', () => {
   for (const state of ['CLEAN', 'LOADED', 'EXPENDED']) {
-    assert.equal(alertsSandbox({ fdr: fdrWith(state), fieldState: record() }).ordnanceAlertsFor(arrivalStrip()).length, 0, state);
+    assert.equal(alertsSandbox({ fdr: flightDataWith(state), fieldState: record() }).ordnanceAlertsFor(arrivalStrip()).length, 0, state);
   }
-  const hung = alertsSandbox({ fdr: fdrWith('HUNG'), fieldState: record() });
+  const hung = alertsSandbox({ fdr: flightDataWith('HUNG'), fieldState: record() });
   assert.equal(hung.ordnanceAlertsFor(arrivalStrip({ state: 'DROPPED' })).length, 0);
   assert.equal(hung.ordnanceAlertsFor(arrivalStrip({ role: 'OVERFLIGHT', state: 'ACTIVE' })).length, 0);
   assert.equal(hung.ordnanceAlertsFor(arrivalStrip({ role: 'MISSION', state: 'ON_STATION' })).length, 0);
@@ -180,7 +180,7 @@ const byClass = (el, cls) => descendants(el).filter(c => (c.className || '').spl
 test('a HUNG arrival shows the HUNG chip and its reason line on every Position\'s Strip, whether or not 3G is on its grid', async () => {
   for (const positionId of ['APP', 'GND', 'TWR', 'CTR']) {
     const strip = { ...appArrival(), ownerPositionId: positionId };
-    const { el, sandbox } = await renderStrip({ strip, fdr: fdrWith('HUNG', { arr: '23' }), held: [positionId], fieldState: record() });
+    const { el, sandbox } = await renderStrip({ strip, fdr: flightDataWith('HUNG', { arr: '23' }), held: [positionId], fieldState: record() });
     const chip = descendants(el).find(c => c.dataset && c.dataset.slot === 'ord');
     assert.ok(chip, `${positionId}: no ord chip`);
     assert.equal(chip.textContent, 'HUNG');
@@ -198,15 +198,15 @@ test('a HUNG arrival shows the HUNG chip and its reason line on every Position\'
 });
 
 test('the chip shows with no client field state loaded, with the generic sentence', async () => {
-  const { el } = await renderStrip({ strip: appArrival(), fdr: fdrWith('HUNG'), held: ['APP'], fieldState: undefined });
+  const { el } = await renderStrip({ strip: appArrival(), fdr: flightDataWith('HUNG'), held: ['APP'], fieldState: undefined });
   assert.ok(descendants(el).find(c => c.dataset && c.dataset.slot === 'ord'));
   assert.ok(byClass(el, 'efsp-strip-reason').some(r => r.textContent === client.ORDNANCE_NO_FIELD_STATE_REASON));
 });
 
 test('the advisory never disables the NLA button', async () => {
   const strip = { ...appArrival(), ownerPositionId: 'TWR', state: 'HANDED_TO_TOWER', bayId: 'twr-arrivals' };
-  const clean = await renderStrip({ strip, fdr: fdrWith('CLEAN', { arr: '05' }), held: ['TWR'], fieldState: record() });
-  const hung = await renderStrip({ strip, fdr: fdrWith('HUNG', { arr: '05' }), held: ['TWR'], fieldState: record() });
+  const clean = await renderStrip({ strip, fdr: flightDataWith('CLEAN', { arr: '05' }), held: ['TWR'], fieldState: record() });
+  const hung = await renderStrip({ strip, fdr: flightDataWith('HUNG', { arr: '05' }), held: ['TWR'], fieldState: record() });
   const buttons = (el) => descendants(el).filter(c => c.tagName === 'button').map(b => [b.textContent, b.disabled]);
   assert.deepEqual(buttons(hung.el), buttons(clean.el));
   assert.ok(buttons(hung.el).some(([label, disabled]) => /Cleared to Land|Final|Land/i.test(label) && !disabled), JSON.stringify(buttons(hung.el)));
@@ -214,7 +214,7 @@ test('the advisory never disables the NLA button', async () => {
 });
 
 test('a CLEAN arrival shows no indicator row at all (docs/adr/0058)', async () => {
-  const { el } = await renderStrip({ strip: appArrival(), fdr: fdrWith('CLEAN'), held: ['APP'], fieldState: record() });
+  const { el } = await renderStrip({ strip: appArrival(), fdr: flightDataWith('CLEAN'), held: ['APP'], fieldState: record() });
   assert.equal(byClass(el, 'efsp-strip-slots').length, 0);
   assert.equal(byClass(el, 'efsp-strip-reason').length, 0);
 });

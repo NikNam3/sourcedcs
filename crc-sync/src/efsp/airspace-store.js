@@ -5,7 +5,7 @@
 // activation, release direction. Give it a Field State board", and §4.2:
 // "Airspace board (not a strip rack)").
 //
-// A THIRD store, peer to FdrStore and BoardStore rather than part of either.
+// A THIRD store, peer to FlightDataStore and BoardStore rather than part of either.
 // docs/adr/0032 left the choice open ("does an airspace entity live on the
 // FDR, on a Board, or in a third store?") and answered the why: airspace
 // state outlives any one flight — "a MOA stays hot after one flight leaves
@@ -13,7 +13,7 @@
 // every flight carry its own private copy of a fact about the world; putting
 // it on a Board would make it a Strip, which §4.1 says RANGE never works.
 //
-// One store shared across every Facility, like FdrStore: an airspace is a
+// One store shared across every Facility, like FlightDataStore: an airspace is a
 // theater entity that names its controlling Facility, not a per-Facility
 // replica. There is no D13 replication question here because nothing is ever
 // handed across a boundary — the record has one home.
@@ -57,7 +57,7 @@ class AirspaceStore {
    * @param {{occupancyFor?:(airspaceId:string)=>number}} [deps] —
    *   `occupancyFor` counts the flights currently approved into an airspace,
    *   across every Facility's Board. Injected the same way board-store.js's
-   *   `liveStripsForFdr` is, and for the same reason: this store has no
+   *   `liveStripsForFlightData` is, and for the same reason: this store has no
    *   business reaching into Boards, and the Boards do not exist yet when it
    *   is constructed. Optional, so a fixture can drive the store alone.
    */

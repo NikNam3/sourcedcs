@@ -30,7 +30,7 @@ fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, '[]');
 
 const { createEfsp } = await import('../src/efsp/index.js');
 const { hungOrdnanceAdvisoryFor } = await import('../src/efsp/runway-status.js');
-const { crew, act, mustAct, jumpTo, advance, DEPARTURE_FDR } = await import('./helpers/efsp-scenario.mjs');
+const { crew, act, mustAct, jumpTo, advance, DEPARTURE_FLIGHT_DATA } = await import('./helpers/efsp-scenario.mjs');
 
 const efsp = createEfsp();
 const c = crew(efsp, {
@@ -38,9 +38,9 @@ const c = crew(efsp, {
 });
 
 const fresh = (s) => efsp.boardStoreFor(s.facilityId || 'INCIRLIK').getStrip(s.stripId);
-const fdrOf = (s) => efsp.fdrStore.getFdr(s.fdrId);
+const flightDataOf = (s) => efsp.flightDataStore.getFlightData(s.fdrId);
 const fieldState = () => efsp.fieldStateStore.getFieldState('INCIRLIK');
-const advisory = (s) => hungOrdnanceAdvisoryFor(fresh(s), fdrOf(s), fieldState());
+const advisory = (s) => hungOrdnanceAdvisoryFor(fresh(s), flightDataOf(s), fieldState());
 const mutations = () => fs.readFileSync(process.env.CRCSYNC_EFSP_MUTATION_LOG_PATH, 'utf8').trim().split('\n').map(l => JSON.parse(l));
 
 function fieldStateAct(member, positionId, op) {
@@ -70,7 +70,7 @@ function inboundFromCenter() {
 function queued(rackId) {
   let s = mustAct(efsp, c.OPS, 'OPS', null, {
     kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE',
-    fdr: { ...DEPARTURE_FDR, callsign: `QUE${++n}`, departureRunway: rackId === 'rwy-23' ? '23' : '05' },
+    fdr: { ...DEPARTURE_FLIGHT_DATA, callsign: `QUE${++n}`, departureRunway: rackId === 'rwy-23' ? '23' : '05' },
   });
   s = jumpTo(efsp, c.OPS, 'OPS', s, 'RUNWAY_QUEUE');
   return mustAct(efsp, c.OPS, 'OPS', s, { kind: 'TransferStrip', toPositionId: 'TWR', bayId: 'twr-runway-queue', rackId });
@@ -85,7 +85,7 @@ test('sortie: an arrival reports hung ordnance, is advised toward the hot cargo 
   assert.equal(s.ownerPositionId, 'TWR');
   s = mustAct(efsp, c.TWR, 'TWR', s, { kind: 'SetBlock', blockId: '8B', value: '05' });
   s = mustAct(efsp, c.TWR, 'TWR', s, { kind: 'SetBlock', blockId: '3G', value: 'HUNG' });
-  assert.equal(fdrOf(s).military.ordnanceState, 'HUNG');
+  assert.equal(flightDataOf(s).military.ordnanceState, 'HUNG');
   // The write is audited. The entry carries the Strip before/after but not the FDR value it
   // changed — an audit gap for L26 (docs/wip/L12.md "Findings"), so it is found by op and rev.
   const logged = mutations().filter(m => m.stripId === s.stripId && m.op === 'SetBlock' && m.actingPositionId === 'TWR');
@@ -155,7 +155,7 @@ test('an invalid ordnance state is refused, and the advisory never appears for i
   const s = inboundFromCenter();
   const bad = act(efsp, c.APP, 'APP', s, { kind: 'SetBlock', blockId: '3G', value: 'HUNG ' });
   assert.equal(bad.ok, false);
-  assert.equal(fdrOf(s).military.ordnanceState, 'CLEAN');
+  assert.equal(flightDataOf(s).military.ordnanceState, 'CLEAN');
   assert.equal(advisory(s), null);
   mustAct(efsp, c.APP, 'APP', fresh(s), { kind: 'SetState', toState: 'DROPPED' });
 });
@@ -166,11 +166,11 @@ test('sortie: the tactical Position the pilot reports to records HUNG on the mis
     kind: 'CreateStrip', bayId: 'tac-c2-tasked', rackId: 'main', role: 'MISSION', fdrId: arr.fdrId,
   });
   mustAct(efsp, c.TAC_C2, 'TAC_C2', line, { kind: 'SetBlock', blockId: '3G', value: 'HUNG' });
-  assert.equal(fdrOf(arr).military.ordnanceState, 'HUNG', 'one field, reached from the mission line');
+  assert.equal(flightDataOf(arr).military.ordnanceState, 'HUNG', 'one field, reached from the mission line');
   // The MISSION Strip itself carries no advisory (it has no runway); its ATC twin does.
   const tacLine = efsp.boardStoreFor('TACTICAL').getStrip(line.stripId);
-  assert.equal(hungOrdnanceAdvisoryFor(tacLine, fdrOf(arr), fieldState()), null);
-  assert.equal(hungOrdnanceAdvisoryFor(tacLine, fdrOf(arr), null), null, 'TACTICAL has no field state');
+  assert.equal(hungOrdnanceAdvisoryFor(tacLine, flightDataOf(arr), fieldState()), null);
+  assert.equal(hungOrdnanceAdvisoryFor(tacLine, flightDataOf(arr), null), null, 'TACTICAL has no field state');
   assert.equal(advisory(arr).padName, 'Hot cargo pad');
   // Cleared the same way from the ATC side.
   mustAct(efsp, c.APP, 'APP', fresh(arr), { kind: 'SetBlock', blockId: '3G', value: 'CLEAN' });

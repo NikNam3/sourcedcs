@@ -17,16 +17,16 @@ class Placement {
    * @param {import('./board-state').BoardState} deps.state
    * @param {object} deps.rules the Board's rules
    * @param {{now: () => number}} deps.clock the mission clock
-   * @param {import('../flight-data-store').FdrStore} deps.fdrStore
+   * @param {import('../flight-data-store').FlightDataStore} deps.flightDataStore
    * @param {(stripId: string) => void} deps.touch
    * @param {(bayId: string, rackId: string, excludeStripId: string|null) => void} deps.rebalanceRack
    * @param {(strip: object, toState: string) => object|null} deps.rejectedReplicaRefusal
    */
-  constructor({ rules, state, clock, fdrStore, touch, rebalanceRack, rejectedReplicaRefusal }) {
+  constructor({ rules, state, clock, flightDataStore, touch, rebalanceRack, rejectedReplicaRefusal }) {
     this._state = state;
     this._rules = rules;
     this._clock = clock;
-    this._fdrStore = fdrStore;
+    this._fdrStore = flightDataStore;
     this._touch = touch;
     this._rebalanceRack = rebalanceRack;
     this._rejectedReplicaRefusal = rejectedReplicaRefusal;
@@ -136,11 +136,11 @@ class Placement {
     // back by a system move (a Position retaken, a covering hand-back) returns to
     // the Rack that IS its frequency, not the first one (guide §4.2, D17).
     if (bay && bay.view === 'sfa-freqs') {
-      const fdr = this._fdrStore.getFdr(strip.fdrId);
+      const fdr = this._fdrStore.getFlightData(strip.fdrId);
       const rack = fdr && fdr.comms ? this._rules.sfaRackFor(bay.bayId, fdr.comms.workingFrequencyMhz) : null;
       if (rack) return rack;
     }
-    return runwayRackFor(strip, this._fdrStore.getFdr(strip.fdrId), this.fieldStateView(), bay);
+    return runwayRackFor(strip, this._fdrStore.getFlightData(strip.fdrId), this.fieldStateView(), bay);
   }
 
   /**
@@ -211,7 +211,7 @@ class Placement {
     const inert = this._rejectedReplicaRefusal(strip, impliedState);
     if (inert) return { ok: false, reason: inert.reason, detail: inert.detail };
 
-    const fdr = this._fdrStore.getFdr(strip.fdrId);
+    const fdr = this._fdrStore.getFlightData(strip.fdrId);
     const nla = this._rules.computeNla(strip, fdr, this._clock.now(), this.nlaCtx({ bayId: targetBayId, rackId: targetRackId }));
     if (!nla || nla.inhibited) {
       return { ok: false, reason: 'NLA_INHIBITED', detail: nla ? nla.inhibited : `no legal transition from ${strip.state}` };

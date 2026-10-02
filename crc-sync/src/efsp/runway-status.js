@@ -139,7 +139,7 @@ function _runwayOfEnd(view, end) {
   return (view.runways || []).find(r => r.ends.includes(end)) || null;
 }
 
-function _fdrRunwayText(strip, fdr) {
+function _flightDataRunwayText(strip, fdr) {
   if (!fdr) return null;
   if (strip.role === 'DEPARTURE') return fdr.filed ? fdr.filed.departureRunway : null;
   if (strip.role === 'ARRIVAL') return fdr.assigned ? fdr.assigned.landingRunway : null;
@@ -187,7 +187,7 @@ function resolveRunwayForStrip(strip, fdr, view, { targetRackId } = {}) {
   if (target) return target;
   const rack = byRack(strip.rackId, 'RACK');
   if (rack) return rack;
-  const filed = _resolveText(view, _fdrRunwayText(strip, fdr));
+  const filed = _resolveText(view, _flightDataRunwayText(strip, fdr));
   if (filed) return { runwayId: filed.runway.runwayId, end: filed.end, source: 'FDR' };
   if (view.activeRunway) {
     const runway = _runwayOfEnd(view, view.activeRunway);
@@ -272,7 +272,7 @@ function runwayRackFor(strip, fdr, view, bay) {
   const rackIdsByEnd = {};
   for (const [rackId, end] of Object.entries(view.rackEnds || {})) rackIdsByEnd[end] = rackId;
   const inBay = (rackId) => rackId && (bay.rackIds || []).includes(rackId);
-  const filed = _resolveText(view, _fdrRunwayText(strip, fdr));
+  const filed = _resolveText(view, _flightDataRunwayText(strip, fdr));
   if (filed && filed.end && inBay(rackIdsByEnd[filed.end])) return rackIdsByEnd[filed.end];
   if (view.activeRunway && inBay(rackIdsByEnd[view.activeRunway])) return rackIdsByEnd[view.activeRunway];
   return first;

@@ -24,7 +24,7 @@ fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, JSON.stringify([
 ]));
 
 const { createEfsp } = await import('../src/efsp/index.js');
-const { crew, hold, act, mustAct, airspaceAct, mustAirspaceAct, jumpTo, DEPARTURE_FDR, airborneDeparture, handedToCenter, activate } = await import('./helpers/efsp-scenario.mjs');
+const { crew, hold, act, mustAct, airspaceAct, mustAirspaceAct, jumpTo, DEPARTURE_FLIGHT_DATA, airborneDeparture, handedToCenter, activate } = await import('./helpers/efsp-scenario.mjs');
 
 const ATC = { OPS: 'INCIRLIK', CD: 'INCIRLIK', GND: 'INCIRLIK', TWR: 'INCIRLIK', APP: 'INCIRLIK', CTR: 'CENTER' };
 
@@ -36,7 +36,7 @@ test('SCENARIO Ground walks away holding strips, and they route down the coverin
 
   const strip = mustAct(efsp, c.OPS, 'OPS', null, {
     kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE',
-    fdr: { ...DEPARTURE_FDR, callsign: 'VACA1' },
+    fdr: { ...DEPARTURE_FLIGHT_DATA, callsign: 'VACA1' },
   });
   const onGround = mustAct(efsp, c.OPS, 'OPS', strip, {
     kind: 'TransferStrip', toPositionId: 'GND', bayId: 'gnd-coordination', rackId: 'main',
@@ -59,7 +59,7 @@ test('SCENARIO the last controller leaves and the strips are visibly stranded, n
   const efsp = createEfsp();
   const c = crew(efsp, { OPS: 'INCIRLIK', APP: 'INCIRLIK' });
 
-  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'STRAND1' });
+  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'STRAND1' });
   assert.equal(strip.ownerPositionId, 'APP');
 
   // APP has no covering Position at all (the chain ends there), so this is
@@ -82,7 +82,7 @@ test('SCENARIO a second controller sits down at an occupied Position and watches
   hold(efsp, relief, 'INCIRLIK', ['APP']);
   assert.equal(efsp.positionStoreFor('INCIRLIK').primaryOf('APP'), 'c-APP', 'the second selector is an Observer (§4.8.2 rule 3)');
 
-  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'RELIEF1' });
+  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'RELIEF1' });
   assert.equal(act(efsp, { session: relief, facilityId: 'INCIRLIK' }, 'APP', strip, { kind: 'InvokeNla' }).reason,
     'NOT_HOLDING_POSITION', 'an Observer watches');
 
@@ -98,7 +98,7 @@ test('SCENARIO a client disconnects mid-sortie: its Positions are released, its 
   const efsp = createEfsp();
   const c = crew(efsp, ATC);
 
-  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'DROP1' });
+  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'DROP1' });
   efsp.onDisconnect(c.APP.session);
 
   assert.equal(efsp.positionStoreFor('INCIRLIK').isStaffed('APP'), false, 'an abrupt drop releases the Position');
@@ -140,10 +140,10 @@ test('SCENARIO crc-sync restarts with a flight airborne in a hot MOA, and everyt
   const c = crew(efsp, ATC);
   activate(efsp, c, 'MOA-RESTART');
 
-  const working = mustAct(efsp, c.CTR, 'CTR', handedToCenter(efsp, c, airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'RSTRT1' })), {
+  const working = mustAct(efsp, c.CTR, 'CTR', handedToCenter(efsp, c, airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'RSTRT1' })), {
     kind: 'ApproveAirspaceEntry', airspaceId: 'MOA-RESTART', altitudeBlock: { lowerFt: 10000, upperFt: 20000 },
   });
-  const beacon = efsp.fdrStore.getFdr(working.fdrId).identity.beaconAssigned;
+  const beacon = efsp.flightDataStore.getFlightData(working.fdrId).identity.beaconAssigned;
 
   // A fresh createEfsp() is the closest in-process thing to a real restart:
   // new stores, restore() reads what was persisted.
@@ -154,8 +154,8 @@ test('SCENARIO crc-sync restarts with a flight airborne in a hot MOA, and everyt
   assert.equal(strip.airspaceEntry.airspaceId, 'MOA-RESTART');
   assert.deepEqual(strip.airspaceEntry.altitudeBlock, { lowerFt: 10000, upperFt: 20000 },
     'including the restriction it was working under');
-  assert.equal(after.fdrStore.getFdr(working.fdrId).comms.workingFrequencyMhz, 138.0);
-  assert.equal(after.fdrStore._codeAllocator.isAllocated(beacon), true, 'and its code is still held');
+  assert.equal(after.flightDataStore.getFlightData(working.fdrId).comms.workingFrequencyMhz, 138.0);
+  assert.equal(after.flightDataStore._codeAllocator.isAllocated(beacon), true, 'and its code is still held');
 
   const airspace = after.airspaceStore.getAirspace('MOA-RESTART');
   assert.equal(airspace.state, 'ACTIVE', 'the block is still hot');

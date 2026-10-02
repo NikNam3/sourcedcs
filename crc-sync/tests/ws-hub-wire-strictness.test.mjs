@@ -30,7 +30,7 @@ function setup() {
   const surveillance = createSurveillance({
     collab: collabStore,
     correlationStore: { trackIndex: () => new Map(records.map(r => [r.trackId, r])) },
-    fdrStore: { getFdr: (id) => (id === 'f1' ? { identity: { callsign: 'VIPER11', aircraftType: 'F16' } } : null) },
+    flightDataStore: { getFlightData: (id) => (id === 'f1' ? { identity: { callsign: 'VIPER11', aircraftType: 'F16' } } : null) },
   });
   const lit = { 7: new Map([['app:X', 5000]]) };
   const picture = {

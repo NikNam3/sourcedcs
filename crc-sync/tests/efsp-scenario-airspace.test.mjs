@@ -38,13 +38,13 @@ const { createEfsp } = await import('../src/efsp/index.js');
 const facilityConfig = await import('../src/efsp/facility-config.js');
 const {
   crew, act, mustAct, airspaceAct, mustAirspaceAct, jumpTo, advance,
-  DEPARTURE_FDR, airborneDeparture, handedToCenter, activate, obligationAlerts,
+  DEPARTURE_FLIGHT_DATA, airborneDeparture, handedToCenter, activate, obligationAlerts,
 } = await import('./helpers/efsp-scenario.mjs');
 
 const ATC = { OPS: 'INCIRLIK', CD: 'INCIRLIK', GND: 'INCIRLIK', TWR: 'INCIRLIK', APP: 'INCIRLIK', CTR: 'CENTER' };
 
 function flight(efsp, c, callsign) {
-  return airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign });
+  return airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign });
 }
 
 // ── 5. the bread-and-butter sortie ───────────────────────────────────────
@@ -58,7 +58,7 @@ test('SCENARIO before takeoff, out to a MOA, and home again', async () => {
 
   // The full pre-departure chain, pressed rather than jumped.
   let strip = mustAct(efsp, c.OPS, 'OPS', null, {
-    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: DEPARTURE_FDR,
+    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', role: 'DEPARTURE', fdr: DEPARTURE_FLIGHT_DATA,
   });
   const fdrId = strip.fdrId;
   strip = await advance(efsp, c.OPS, 'OPS', strip);   // -> PENDING_CLEARANCE at CD
@@ -77,7 +77,7 @@ test('SCENARIO before takeoff, out to a MOA, and home again', async () => {
 
   // Done in the block, back to Center's frequency, home the same way out.
   const clear = mustAct(efsp, c.CTR, 'CTR', working, { kind: 'ClearAirspaceEntry' });
-  assert.equal(efsp.fdrStore.getFdr(fdrId).comms.workingFrequencyMhz, null);
+  assert.equal(efsp.flightDataStore.getFlightData(fdrId).comms.workingFrequencyMhz, null);
 
   const returning = mustAct(efsp, c.CTR, 'CTR', clear, { kind: 'ConvertToArrival' });
   const handedBack = mustAct(efsp, c.CTR, 'CTR', returning, {
@@ -305,19 +305,19 @@ test('SCENARIO a controller types a frequency into Block 22 and it is accepted',
   // passing a number straight out of config.
   const efsp = createEfsp();
   const c = crew(efsp, ATC);
-  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FDR, callsign: 'FREQ11' });
+  const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'FREQ11' });
 
   const typed = mustAct(efsp, c.APP, 'APP', strip, { kind: 'SetBlock', blockId: '22', value: '360.200' });
-  assert.equal(efsp.fdrStore.getFdr(typed.fdrId).comms.workingFrequencyMhz, 360.2);
+  assert.equal(efsp.flightDataStore.getFlightData(typed.fdrId).comms.workingFrequencyMhz, 360.2);
 
   // A whole number and surrounding whitespace both work.
   const round = mustAct(efsp, c.APP, 'APP', typed, { kind: 'SetBlock', blockId: '22', value: ' 251 ' });
-  assert.equal(efsp.fdrStore.getFdr(round.fdrId).comms.workingFrequencyMhz, 251);
+  assert.equal(efsp.flightDataStore.getFlightData(round.fdrId).comms.workingFrequencyMhz, 251);
 
   // Clearing still clears rather than writing 0 — Number('') is 0, which is
   // the trap this had to step around.
   const cleared = mustAct(efsp, c.APP, 'APP', round, { kind: 'SetBlock', blockId: '22', value: '' });
-  assert.equal(efsp.fdrStore.getFdr(cleared.fdrId).comms.workingFrequencyMhz, null);
+  assert.equal(efsp.flightDataStore.getFlightData(cleared.fdrId).comms.workingFrequencyMhz, null);
 
   // And genuinely bad input is still refused, with the band in the message.
   for (const bad of ['not a frequency', '12.5', '9000']) {

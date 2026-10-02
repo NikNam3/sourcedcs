@@ -61,7 +61,7 @@ test('a MARSA pair is suppressed; the monitor reports a change while conflicts e
   const store = { getAll: () => tracks };
   const marsa = new ConflictAlertMonitor({
     trackStore: store, config: cfg,
-    fdrForTrack: (id) => (String(id) === '1' ? 'fA' : 'fB'),
+    flightDataForTrack: (id) => (String(id) === '1' ? 'fA' : 'fB'),
     activeMarsaFor: (fdrId) => ({ participants: ['fA', 'fB'] }),
   });
   assert.equal(marsa.tick(NOW), false);

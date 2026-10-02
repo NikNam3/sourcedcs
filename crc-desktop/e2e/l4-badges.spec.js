@@ -36,7 +36,7 @@ async function raiseObligation(page, callsign) {
  * relation left ACTIVE here is still ACTIVE when another file counts
  * `.efsp-marsa-badge` — marsa-popover.spec.js's "exactly 2 participants" was
  * counting four. Dropping the Strips is enough on its own: _retireStrip
- * releases the FDR and board-store's retireMarsaForFdr ends the relation with
+ * releases the FDR and board-store's retireMarsaForFlightData ends the relation with
  * it, which is the same shape l4-drag.spec.js's dropAll has.
  */
 async function dropAll(page, callsigns) {

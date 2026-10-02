@@ -25,7 +25,7 @@ const fdr = (fdrId, callsign, alertStatus = 'NONE') => ({
 });
 const strip = (stripId, fdrId, role, state, facilityId = 'INCIRLIK') => ({ stripId, fdrId, role, state, facilityId });
 
-function board(extraFdrs = [], extraStrips = []) {
+function board(extraFlightDataList = [], extraStrips = []) {
   const fdrs = new Map([
     fdr('f-viper', 'VIPER11', 'SCRAMBLE'),
     fdr('f-alert', 'COLT21', 'ALERT'),
@@ -34,7 +34,7 @@ function board(extraFdrs = [], extraStrips = []) {
     fdr('f-in', 'TANKER51'),
     fdr('f-airborne', 'BONE61'),
     fdr('f-other', 'OTHER71'),
-    ...extraFdrs,
+    ...extraFlightDataList,
   ].map(f => [f.fdrId, f]));
   const strips = [
     strip('s-viper', 'f-viper', 'DEPARTURE', 'CLEARED'),
@@ -46,7 +46,7 @@ function board(extraFdrs = [], extraStrips = []) {
     strip('s-other', 'f-other', 'DEPARTURE', 'TAXI', 'OTHERFIELD'),
     ...extraStrips,
   ];
-  return { strips, fdrOf: (id) => fdrs.get(id) || null };
+  return { strips, flightDataOf: (id) => fdrs.get(id) || null };
 }
 
 // ── the state sets ───────────────────────────────────────────────────────
@@ -65,75 +65,75 @@ test('GROUND_STATES are states of their Role', () => {
 // ── activeScrambles ──────────────────────────────────────────────────────
 
 test('activeScrambles names the scrambling departure, with its Facility and state', () => {
-  const { strips, fdrOf } = board();
-  assert.deepEqual(activeScrambles(strips, fdrOf), [
+  const { strips, flightDataOf } = board();
+  assert.deepEqual(activeScrambles(strips, flightDataOf), [
     { stripId: 's-viper', fdrId: 'f-viper', facilityId: 'INCIRLIK', state: 'CLEARED', callsign: 'VIPER11' },
   ]);
-  assert.equal(activeScrambles(strips, fdrOf, 'INCIRLIK').length, 1);
-  assert.equal(activeScrambles(strips, fdrOf, 'OTHERFIELD').length, 0);
+  assert.equal(activeScrambles(strips, flightDataOf, 'INCIRLIK').length, 1);
+  assert.equal(activeScrambles(strips, flightDataOf, 'OTHERFIELD').length, 0);
 });
 
 test('ALERT is not a scramble', () => {
-  const { strips, fdrOf } = board();
-  assert.ok(!activeScrambles(strips, fdrOf).some(s => s.stripId === 's-alert'));
+  const { strips, flightDataOf } = board();
+  assert.ok(!activeScrambles(strips, flightDataOf).some(s => s.stripId === 's-alert'));
 });
 
 test('a scrambler that is DEPARTED raises nothing', () => {
-  const { strips, fdrOf } = board([fdr('f-gone', 'GONE81', 'SCRAMBLE')], [strip('s-gone', 'f-gone', 'DEPARTURE', 'DEPARTED')]);
-  assert.ok(!activeScrambles(strips, fdrOf).some(s => s.stripId === 's-gone'));
+  const { strips, flightDataOf } = board([fdr('f-gone', 'GONE81', 'SCRAMBLE')], [strip('s-gone', 'f-gone', 'DEPARTURE', 'DEPARTED')]);
+  assert.ok(!activeScrambles(strips, flightDataOf).some(s => s.stripId === 's-gone'));
   const dropped = board([fdr('f-drop', 'DROP91', 'SCRAMBLE')], [strip('s-drop', 'f-drop', 'DEPARTURE', 'DROPPED')]);
-  assert.ok(!activeScrambles(dropped.strips, dropped.fdrOf).some(s => s.stripId === 's-drop'));
+  assert.ok(!activeScrambles(dropped.strips, dropped.flightDataOf).some(s => s.stripId === 's-drop'));
 });
 
 test('a scrambling FDR with no pre-airborne DEPARTURE Strip raises nothing, and an archived FDR is null, not a throw', () => {
-  const { strips, fdrOf } = board([fdr('f-arr', 'ARR1', 'SCRAMBLE')], [
+  const { strips, flightDataOf } = board([fdr('f-arr', 'ARR1', 'SCRAMBLE')], [
     strip('s-arr', 'f-arr', 'ARRIVAL', 'TAXI_IN'),
     strip('s-archived', 'f-missing', 'DEPARTURE', 'TAXI'),
   ]);
-  const ids = activeScrambles(strips, fdrOf).map(s => s.stripId);
+  const ids = activeScrambles(strips, flightDataOf).map(s => s.stripId);
   assert.deepEqual(ids, ['s-viper']);
 });
 
 test('two scramblers at once: two entries, sorted by callsign', () => {
-  const { strips, fdrOf } = board([fdr('f-ace', 'ACE12', 'SCRAMBLE')], [strip('s-ace', 'f-ace', 'DEPARTURE', 'TAXI')]);
-  assert.deepEqual(activeScrambles(strips, fdrOf).map(s => s.callsign), ['ACE12', 'VIPER11']);
+  const { strips, flightDataOf } = board([fdr('f-ace', 'ACE12', 'SCRAMBLE')], [strip('s-ace', 'f-ace', 'DEPARTURE', 'TAXI')]);
+  assert.deepEqual(activeScrambles(strips, flightDataOf).map(s => s.callsign), ['ACE12', 'VIPER11']);
 });
 
 // ── conflictingGroundStrips ──────────────────────────────────────────────
 
 test('conflictingGroundStrips flags every ground Strip at the scrambler\'s Facility', () => {
-  const { strips, fdrOf } = board();
-  assert.deepEqual(conflictingGroundStrips(strips, fdrOf, 'INCIRLIK').map(s => s.stripId), ['s-taxi', 's-queue', 's-in']);
-  const [taxi] = conflictingGroundStrips(strips, fdrOf, 'INCIRLIK');
+  const { strips, flightDataOf } = board();
+  assert.deepEqual(conflictingGroundStrips(strips, flightDataOf, 'INCIRLIK').map(s => s.stripId), ['s-taxi', 's-queue', 's-in']);
+  const [taxi] = conflictingGroundStrips(strips, flightDataOf, 'INCIRLIK');
   assert.deepEqual(taxi, { stripId: 's-taxi', fdrId: 'f-taxi', facilityId: 'INCIRLIK', role: 'DEPARTURE', state: 'TAXI', callsign: 'HAWK31' });
 });
 
 test('a scrambler at INCIRLIK flags nothing at another Facility', () => {
-  const { strips, fdrOf } = board();
-  assert.deepEqual(conflictingGroundStrips(strips, fdrOf, 'OTHERFIELD'), []);
+  const { strips, flightDataOf } = board();
+  assert.deepEqual(conflictingGroundStrips(strips, flightDataOf, 'OTHERFIELD'), []);
 });
 
 test('the scrambler never flags itself — nor another scrambler', () => {
-  const { strips, fdrOf } = board([fdr('f-ace', 'ACE12', 'SCRAMBLE')], [strip('s-ace', 'f-ace', 'DEPARTURE', 'TAXI')]);
-  const ids = conflictingGroundStrips(strips, fdrOf, 'INCIRLIK').map(s => s.stripId);
+  const { strips, flightDataOf } = board([fdr('f-ace', 'ACE12', 'SCRAMBLE')], [strip('s-ace', 'f-ace', 'DEPARTURE', 'TAXI')]);
+  const ids = conflictingGroundStrips(strips, flightDataOf, 'INCIRLIK').map(s => s.stripId);
   assert.ok(!ids.includes('s-viper'));
   assert.ok(!ids.includes('s-ace'), 'a taxiing scrambler is a scrambler, not a conflict');
   assert.deepEqual(ids, ['s-taxi', 's-queue', 's-in']);
 });
 
 test('no scramble, no flags', () => {
-  const { strips, fdrOf } = board();
+  const { strips, flightDataOf } = board();
   const calm = strips.filter(s => s.stripId !== 's-viper');
-  assert.deepEqual(conflictingGroundStrips(calm, fdrOf, 'INCIRLIK'), []);
+  assert.deepEqual(conflictingGroundStrips(calm, flightDataOf, 'INCIRLIK'), []);
 });
 
 test('Strips off the movement area are not flagged: CLEARED, HELD, DEPARTED, and ARRIVAL before LANDED', () => {
-  const { strips, fdrOf } = board([fdr('f-held', 'HELD1'), fdr('f-final', 'FINAL1'), fdr('f-landed', 'LAND1')], [
+  const { strips, flightDataOf } = board([fdr('f-held', 'HELD1'), fdr('f-final', 'FINAL1'), fdr('f-landed', 'LAND1')], [
     strip('s-held', 'f-held', 'DEPARTURE', 'HELD'),
     strip('s-final', 'f-final', 'ARRIVAL', 'FINAL'),
     strip('s-landed', 'f-landed', 'ARRIVAL', 'LANDED'),
   ]);
-  const ids = conflictingGroundStrips(strips, fdrOf, 'INCIRLIK').map(s => s.stripId);
+  const ids = conflictingGroundStrips(strips, flightDataOf, 'INCIRLIK').map(s => s.stripId);
   for (const quiet of ['s-alert', 's-airborne', 's-held', 's-final']) assert.ok(!ids.includes(quiet), quiet);
   assert.ok(ids.includes('s-landed'));
 });

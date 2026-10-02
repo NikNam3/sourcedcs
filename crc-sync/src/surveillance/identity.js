@@ -20,13 +20,13 @@ class Identity {
   /**
    * @param {object} deps
    * @param {{trackIndex:()=>Map}} deps.correlationStore
-   * @param {{getFdr:(fdrId:string)=>object|null}} deps.fdrStore
+   * @param {{getFlightData:(fdrId:string)=>object|null}} deps.flightDataStore
    * @param {{get:(trackId:string)=>object|null}} deps.collab
    * @param {{get:(trackId:string)=>string}} deps.trackNumbers
    */
-  constructor({ correlationStore, fdrStore, collab, trackNumbers }) {
+  constructor({ correlationStore, flightDataStore, collab, trackNumbers }) {
     this._correlations = correlationStore;
-    this._fdrs = fdrStore;
+    this._flightDataList = flightDataStore;
     this._collab = collab;
     this._trackNumbers = trackNumbers;
     this._index = null;
@@ -46,18 +46,18 @@ class Identity {
 
   /**
    * @returns {{fdrId:string|null, correlation:'CORRELATED'|'PROVISIONAL'|null,
-   *            fdrCallsign:string|null, fdrType:string|null, tag:string|null, trackNumber:string}}
+   *            flightDataCallsign:string|null, flightDataType:string|null, tag:string|null, trackNumber:string}}
    */
   identify(trackId) {
     const id = String(trackId);
     const hit = this._correlationOf(id);
-    const fdr = hit ? this._fdrs.getFdr(hit.fdrId) : null;
+    const fdr = hit ? this._flightDataList.getFlightData(hit.fdrId) : null;
     const entry = this._collab.get(id);
     return {
       fdrId: fdr ? hit.fdrId : null,
       correlation: fdr ? hit.state : null,
-      fdrCallsign: (fdr && fdr.identity && fdr.identity.callsign) || null,
-      fdrType: (fdr && fdr.identity && fdr.identity.aircraftType) || null,
+      flightDataCallsign: (fdr && fdr.identity && fdr.identity.callsign) || null,
+      flightDataType: (fdr && fdr.identity && fdr.identity.aircraftType) || null,
       tag: (entry && entry.rename && entry.rename.value) || null,
       trackNumber: this._trackNumbers.get(id),
     };
@@ -66,7 +66,7 @@ class Identity {
   /** The one name for a contact where there is no per-session picture: alert text. */
   labelFor(trackId) {
     const who = this.identify(trackId);
-    return who.fdrCallsign || who.tag || who.trackNumber;
+    return who.flightDataCallsign || who.tag || who.trackNumber;
   }
 }
 

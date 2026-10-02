@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const { ingestAtoText, collectWarnings } = await import('../src/efsp/ato/ato-ingest.js');
-const { FdrStore } = await import('../src/efsp/flight-data-store.js');
+const { FlightDataStore } = await import('../src/efsp/flight-data-store.js');
 
 // The repository normalises line endings (`* text=auto`), so the fixture is
 // stored with LF. The briefing asks for this ATO to be read with CRLF, so the
@@ -59,8 +59,8 @@ test('ato malformed: with a referenceUtc, line 5 resolves and raises VUL_END_BEF
   assert.ok(got.some((g) => g[0] === 5 && g[1] === 'VUL_END_BEFORE_START'));
   assert.ok(!got.some((g) => g[0] === 5 && g[1] === 'TIME_UNRESOLVED'));
   const weasel = r.missionLines.find((l) => l.lineId === '0701A#0');
-  assert.equal(weasel.fdrSeed.vulWindowStartUtc, Date.UTC(2026, 3, 14, 6, 0), 'both values kept, not "fixed"');
-  assert.equal(weasel.fdrSeed.vulWindowEndUtc, Date.UTC(2026, 3, 14, 5, 0));
+  assert.equal(weasel.flightDataSeed.vulWindowStartUtc, Date.UTC(2026, 3, 14, 6, 0), 'both values kept, not "fixed"');
+  assert.equal(weasel.flightDataSeed.vulWindowEndUtc, Date.UTC(2026, 3, 14, 5, 0));
 });
 
 test('ato malformed: the good missions survive, seedable', () => {
@@ -70,14 +70,14 @@ test('ato malformed: the good missions survive, seedable', () => {
   assert.ok(!('ORPHAN 1' in by), 'an MSNACFT before any AMSNDAT produces no line');
   for (const cs of ['COLT 51', 'COLT 61', 'VIPER 99', 'HAWK 21']) {
     assert.equal(by[cs].extras.ato.seedable, true, cs);
-    assert.equal(new FdrStore().createFdr(by[cs].fdrSeed, { by: 'ato-test' }).ok, true, cs);
+    assert.equal(new FlightDataStore().createFlightData(by[cs].flightDataSeed, { by: 'ato-test' }).ok, true, cs);
   }
   assert.equal(by['WEASEL 31'].extras.ato.seedable, false);
-  assert.equal(by['WEASEL 31'].fdrSeed.callsign, null);
+  assert.equal(by['WEASEL 31'].flightDataSeed.callsign, null);
   assert.deepEqual(by['WEASEL 31'].extras.ato.missingAcceptanceFields.slice(0, 1), ['callsign']);
   assert.equal(by['HAWK 21'].extras.identityAto.modeThree, '7700');
   assert.equal(by['HAWK 21'].extras.identityAto.modeTwo, null);
-  assert.equal(by['HAWK 21'].fdrSeed.flightSize, 1);
+  assert.equal(by['HAWK 21'].flightDataSeed.flightSize, 1);
   assert.equal(by['COLT 61'].lineId, '0704A~2#0');
   assert.equal(by['COLT 51'].lineId, '0704A#0');
   assert.equal(by['VIPER 99'].extras.identityAto.modeThree, '4705', 'the unterminated set is still read');
