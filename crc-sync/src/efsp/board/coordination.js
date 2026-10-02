@@ -44,7 +44,7 @@ class Coordination {
 
   // ── WP4A: cross-Facility coordination (guide §4.6, docs/adr/0013-0018) ──
   //
-  // "The Strip does not cross the Facility boundary... one logical FDR, N
+  // "The Strip does not cross the Facility boundary... one logical flight data record, N
   // per-Facility Strip replicas" (guide §4.6, defect D13 if built as a
   // move). Concretely: this BoardStore instance is one Facility's Board
   // (index.js's composition root now constructs one {BoardStore,
@@ -89,7 +89,7 @@ class Coordination {
     if (!effect) return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown coordination primitive: ${primitive}`, strip };
 
     // AIT is configuration, not a default (guide §4.6 rule 7, docs/adr/0022)
-    // — every other primitive is always available to APP/CTR; AIT alone
+    // — every other primitive is always available to AP/CTR; AIT alone
     // additionally requires a written directive on file for this Facility.
     if (primitive === 'AIT' && !this._rules.aitAuthorized) {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: "AIT requires a written directive — not authorized in this Facility's configuration", strip };
@@ -373,7 +373,7 @@ class Coordination {
    * configured to accept it (coordinationBayFor — absent means refused).
    *
    * `fromStripType`/`fromState` (docs/adr/0022) — the replica is minted with the
-   * SENDER's own Strip Role/EfspState, not a hardcoded ARRIVAL/INBOUND
+   * SENDER's own strip type/EfspState, not a hardcoded ARRIVAL/INBOUND
    * shape. `_applyCoordinationPropose` already validated the sender's
    * (stripType, state) is one of coordination.js's COORDINATION_ELIGIBLE_STATES
    * combos, so nothing further to check here.
@@ -399,7 +399,7 @@ class Coordination {
       cid: this._state.nextCid(),
       flightDataId,
       rev: 1,
-      // The replica carries the SENDER's own Role/EfspState (docs/adr/0022)
+      // The replica carries the SENDER's own strip type/EfspState (docs/adr/0022)
       // from the moment it's minted, not a separate "not yet accepted"
       // pseudo-state — coordination.state is what actually tracks
       // PROPOSED/ACTIVE/REJECTED. fromState is guaranteed to be one of
@@ -415,7 +415,7 @@ class Coordination {
       annotations: {},
       flags: newFlags(),
       // No `correlation` — it is keyed by flightDataId, and a replica shares the
-      // originator's FDR (docs/adr/0013), so it shares the correlation too.
+      // originator's flight data (docs/adr/0013), so it shares the correlation too.
       // That is the case a per-Strip field got wrong: both halves of a
       // cross-Facility exchange are looking at one airframe.
       coordination: {

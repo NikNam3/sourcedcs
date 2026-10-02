@@ -151,7 +151,7 @@ class StripOps {
    * DEPARTURE first reaches an airborne state, with the mission clock; cleared
    * when it is taken back out of one (an Undo, a SetState back), because the
    * takeoff then did not happen. A DROP keeps it. The first stamp wins.
-   * @returns {object|null} the FDR it changed, for the ack's broadcast.
+   * @returns {object|null} the flight data it changed, for the ack's broadcast.
    */
   _stampTakeoffOnStateChange(strip, prevState) {
     if (strip.stripType !== 'DEPARTURE' || !this.flightDataStore || !this.flightDataStore.setTakeoffStamp) return null;
@@ -170,11 +170,11 @@ class StripOps {
 
   /**
    * Placing a Strip on an SFA frequency Rack assigns it that frequency (guide
-   * §4.2: one Rack per frequency): the FDR's working frequency, the same field the
+   * §4.2: one Rack per frequency): the flight data's working frequency, the same field the
    * airspace approval writes, so a frequency is one number on one flight. This is
    * the controller choosing a frequency, which is not what SFA forbids; it forbids
    * a CONTROLLER CHANGE being a frequency change, and no transfer or rotation
-   * reaches this (D17). Returns the FDR result, or null when the Rack is no SFA
+   * reaches this (D17). Returns the flight data result, or null when the Rack is no SFA
    * frequency or the flight already has that frequency.
    */
   assignSfaFrequency(strip, by) {
@@ -187,10 +187,10 @@ class StripOps {
   }
 
   /**
-   * The FDRs a MARSA side effect just rewrote the separation regime on (ending
+   * The flight data a MARSA side effect just rewrote the separation regime on (ending
    * or voiding a relation writes ATC back on every participant). A relation is
    * not a Strip and its participants' Strips may sit in another Facility, so
-   * those FDR writes reach nobody unless they are collected here and put in the
+   * those flight data writes reach nobody unless they are collected here and put in the
    * board-delta's own `flightDataList.updated` — the same gap F-111 found on the declare
    * side, arriving from the Strip-op direction. See marsa-store.js's
    * drainRegimeWrites().
@@ -283,7 +283,7 @@ class StripOps {
     // strip.ownerPositionId; _dispatch() already verified that above)
     // must be authorized for the Strip's CURRENT state, not just own the
     // Strip. This is what stops e.g. OPS from single-handedly walking a
-    // Strip through CD's, GND's and TWR's entire job just because nobody
+    // Strip through CD's, GC's and LC's entire job just because nobody
     // ever transferred it away — raw ownership alone used to be sufficient
     // to invoke ANY NLA on a Strip you held, regardless of whose job that
     // state's action actually is.
@@ -317,9 +317,9 @@ class StripOps {
   /**
    * F-303: a declined replica is "left inert" — _applyCoordinationPropose's
    * own comment has said so since WP4A, and nothing anywhere enforced it
-   * beyond stopping a re-propose. So APP could reject a Point Out from CTR and
+   * beyond stopping a re-propose. So AP could reject a Point Out from CTR and
    * then hand that same flight to its own Tower, and the server took it:
-   * INCIRLIK Tower holding an arrival for a flight CENTER still owns and APP
+   * INCIRLIK Tower holding an arrival for a flight CENTER still owns and AP
    * explicitly declined. The sender's own Strip is untouched — see
    * _isRejectedReplica for how the two are told apart.
    *
@@ -345,7 +345,7 @@ class StripOps {
    * NLA and the Bay-implied drag, so a controller who had just rejected a
    * handoff could still open a TOFI on the dead replica (minting a MISSION
    * Strip on TACTICAL for a flight the sender still controls), approve an
-   * airspace entry, convert it to an arrival, or write Blocks into the FDR it
+   * airspace entry, convert it to an arrival, or write Blocks into the flight data it
    * shares with the sender's live Strip.
    *
    * Three op kinds stay allowed, because each already enforces the rule
@@ -386,7 +386,7 @@ class StripOps {
     if (!strip) return null;
     const flightData = this.flightDataStore.getFlightData(strip.flightDataId);
     const result = this.rules.computeNla(strip, flightData, now, this.placement.nlaCtx());
-    // No NLA at all for this State (every Role's terminal DROPPED) — null, not
+    // No NLA at all for this State (every strip type's terminal DROPPED) — null, not
     // a reason. _applyInvokeNla runs the precheck FIRST and so answers a press
     // on a terminal Strip with whichever precheck refusal comes up; that is
     // right for a press, and wrong here, where reporting a reason would have
@@ -411,7 +411,7 @@ class StripOps {
     }
     const status = result.transferTo ? { toState: result.toState, transferTo: result.transferTo } : { toState: result.toState };
     // docs/adr/0074: which carrier handoff this NLA button records, and the
-    // Role it changes the Strip to, so the panel labels it from the model's own
+    // strip type it changes the Strip to, so the panel labels it from the model's own
     // table (and renders "See you" beside it in Case II).
     if (result.carrierHandoff) status.carrierHandoff = result.carrierHandoff;
     if (result.stripTypeChange) status.stripTypeChange = result.stripTypeChange;
@@ -421,7 +421,7 @@ class StripOps {
   /**
    * The ONE path by which a Strip reaches DROPPED, whichever op asked for it
    * (the explicit DropStrip op, or a terminal NLA transition whose toState is
-   * DROPPED — every Role has one, labelled "Drop" in the UI).
+   * DROPPED — every strip type has one, labelled "Drop" in the UI).
    *
    * Found by an end-to-end scenario trace: this used to live entirely inside
    * _applyDropStrip, which only the `.drop` dot-command ever reaches. The
@@ -478,10 +478,10 @@ class StripOps {
   }
 
   /**
-   * Releases the FDR's beacon code only once NO other live Strip still
-   * references that FDR, anywhere (this Facility or any other).
+   * Releases the flight data's beacon code only once NO other live Strip still
+   * references that flight data, anywhere (this Facility or any other).
    *
-   * One FDR meant one live Strip until TOFI, which deliberately binds a
+   * One flight data meant one live Strip until TOFI, which deliberately binds a
    * MISSION Strip and its ATC-side Strip to one shared flightDataId (docs/adr/0025)
    * with independent lifecycles. An unconditional release therefore handed
    * the shared Mode 3/A code back to the allocator when the MRU controller
@@ -497,7 +497,7 @@ class StripOps {
     this.flightDataStore.releaseFlightData(strip.flightDataId);
     // WP6 (docs/adr/0051) — the flight is over, so it leaves any MARSA relation
     // it was in. Left alone the relation would keep naming an aircraft on the
-    // ground, keep its separation regime at MARSA on an FDR nobody is working,
+    // ground, keep its separation regime at MARSA on flight data nobody is working,
     // and keep arming an interlock for a flight that cannot be assigned
     // anything. Same shape correlation-store.js's retireFinished has, arriving
     // from the other direction: correlation is swept by a 1Hz reconciler and

@@ -1,7 +1,7 @@
 'use strict';
 
 // Placement (docs/adr/0095): where a Strip goes. The order keys inside a Rack (fractional keys, the rebalance) and the
-// Bays (Role Bays, Bay-implied state, capacity, the Bay a new owner gets, the rack a system move picks). Moved verbatim
+// Bays (strip-type Bays, Bay-implied state, capacity, the Bay a new owner gets, the rack a system move picks). Moved verbatim
 // from board-store.js; the facade calls these methods.
 //
 // Late-bound callbacks, all into the facade: `touch` and `rebalanceRack` (tools/soak/host-core.js patches the facade's
@@ -101,7 +101,7 @@ class Placement {
     return this.resolveOrderKey(bayId, rackId, last, null, excludeStripId);
   }
 
-  /** {isStaffed, consolidatedAt, facilityId} bound from this._rules — computeNla()'s staffing context (guide §4.5, e.g. DEPARTED's real Hand-Off-to-APP inhibit). `facilityId` (WP4A, docs/adr/0014) lets nla.js distinguish a CENTER-held ARRIVAL Strip's INBOUND state (whose next step is the Coordinate/HANDOFF button, not an intrafacility NLA transfer) from an INCIRLIK one. Built once per call site rather than inline so both computeNla() call sites below stay in lockstep. */
+  /** {isStaffed, consolidatedAt, facilityId} bound from this._rules — computeNla()'s staffing context (guide §4.5, e.g. DEPARTED's real Hand-Off-to-AP inhibit). `facilityId` (WP4A, docs/adr/0014) lets nla.js distinguish a CENTER-held ARRIVAL Strip's INBOUND state (whose next step is the Coordinate/HANDOFF button, not an intrafacility NLA transfer) from an INCIRLIK one. Built once per call site rather than inline so both computeNla() call sites below stay in lockstep. */
   nlaCtx(target = null) {
     return {
       isStaffed: this._rules.isStaffed, consolidatedAt: this._rules.consolidatedAt,
@@ -126,7 +126,7 @@ class Placement {
 
   /**
    * The rack a Strip lands in when something other than a drag places it in
-   * `bay` (decisions.md Q26, S-R2-1): in a runway-queue Bay, the end its FDR
+   * `bay` (decisions.md Q26, S-R2-1): in a runway-queue Bay, the end its flight data
    * names or else the active end; anywhere else, the Bay's first rack as
    * always. Without it every NLA-queued departure sat in rwy-05 and was judged
    * against 05, whatever the active runway was.
@@ -144,8 +144,8 @@ class Placement {
   }
 
   /**
-   * The owner's Bay that holds this Strip's Role whatever its state (Bay
-   * `holdsStripType`, docs/adr/0087), or null. A Role with such a Bay keeps its state
+   * The owner's Bay that holds this Strip's type whatever its state (Bay
+   * `holdsStripType`, docs/adr/0087), or null. A strip type with such a Bay keeps its state
    * on the Strip: no Bay implies it, so a drag never changes it, and a state
    * change never moves it — which also stops an OVERFLIGHT `INBOUND` being filed
    * under ARRIVAL's `INBOUND` Bay, the one thing the shared state names would
@@ -173,14 +173,14 @@ class Placement {
    * @returns {{ok:true, impliedState:string|null}|{ok:false, reason:string, detail:string}}
    */
   validateBayImpliedTransition(strip, targetBayId, targetRackId) {
-    // A Role Bay (`holdsStripType`, docs/adr/0087) takes only its own Role's Strips.
+    // A strip-type Bay (`holdsStripType`, docs/adr/0087) takes only its own strip type's Strips.
     const holds = this._rules.bayHoldsStripType(targetBayId);
     if (holds && holds !== strip.stripType) {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: `${targetBayId} holds ${holds} Strips only; a ${strip.stripType} Strip cannot be placed there` };
     }
     const stripTypeBay = this.stripTypeBayFor(strip);
     if (stripTypeBay) {
-      // Another Role's state-implying Bay is not somewhere this Role goes.
+      // Another strip type's state-implying Bay is not somewhere this strip type goes.
       if (this._rules.bayImpliesState(targetBayId)) {
         return { ok: false, reason: 'VALIDATION_ERROR', detail: `a ${strip.stripType} Strip stays in ${stripTypeBay.bayId}; ${targetBayId} is another strip type's Bay` };
       }
@@ -271,7 +271,7 @@ class Placement {
     const bays = this._rules.baysFor(positionId);
     const stripTypeBay = strip ? bays.find(b => b.holdsStripType === strip.stripType) : null;
     if (stripTypeBay) return { bayId: stripTypeBay.bayId, rackId: this.placementRack(strip, stripTypeBay) };
-    // Never another Role's Bay (`holdsStripType`, docs/adr/0087): a Role Bay implies no state, so the
+    // Never another strip type's Bay (`holdsStripType`, docs/adr/0087): a strip-type Bay implies no state, so the
     // "first Bay implying none" fallback used to pick ap-overflight for a DEPARTURE.
     const bay = bays.find(b => b.impliesState === state) || bays.find(b => !b.impliesState && !b.holdsStripType) || null;
     if (!bay) return null;
@@ -285,7 +285,7 @@ class Placement {
    *
    * A state-only transition used to change `state` and nothing else, so Mark
    * Cleared left the Strip in `cd-pending-clearance` reading CLEARED while
-   * `cd-cleared` stayed empty, and the same at GND (`gc-taxi-out`) and TWR
+   * `cd-cleared` stayed empty, and the same at GC (`gc-taxi-out`) and LC
    * (`lc-airborne`) — the Bay name and the Strip contradicting each other
    * (docs/ui-findings/lane1.md F-102). The config already asserts the
    * equivalence in the other direction: dragging INTO one of these Bays
@@ -293,7 +293,7 @@ class Placement {
    * state whichever way the Strip got there.
    *
    * Nothing happens when this owner has no Bay for the state — LUAW is the
-   * live example, and TWR's Strip correctly stays in `lc-runway-queue`.
+   * live example, and LC's Strip correctly stays in `lc-runway-queue`.
    * `bayForImpliedState` FALLS BACK to the Position's first Bay when nothing
    * matches (facility-config.js), which is what a transfer wants and is
    * exactly wrong here: it would file a Strip reaching LUAW back under

@@ -2,15 +2,15 @@
 
 /**
  * The SFA_ROTATION transfer (guide §4.7, docs/adr/0075, 0093): an ARRIVAL Strip
- * at INBOUND with APP or SFA becomes a FINAL Strip at ON_FINAL with PAR. The
+ * at INBOUND with AP or SFA becomes a FINAL Strip at ON_FINAL with PAR. The
  * controller moves; the aircraft's frequency does not, and nothing here reads or
- * writes the FDR (D17). The Role changes IN PLACE (same Strip, same FDR, as
+ * writes the flight data (D17). The strip type changes IN PLACE (same Strip, same flight data, as
  * ConvertToArrival, ADR 0023), the trigger type is recorded on the Strip and the
  * audit line, and the frequency Rack the Strip left is kept on the record so an
  * after-action review sees which frequency the rotation was on.
  *
  * PAR must be staffed: there is no covering fallback, because a FINAL Strip at
- * APP would sit in a Bay APP does not have. Refused, with the aircraft staying
+ * AP would sit in a Bay AP does not have. Refused, with the aircraft staying
  * where it is. PAR's final Bay holds one Strip (§7.10): a second is refused.
  * Nothing is half applied: validate everything, then change the Strip.
  */

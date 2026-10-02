@@ -9,7 +9,7 @@ const { runwayInhibitFor, RUNWAY_GATED_STATES } = require('../../runway-status')
  * thing H2 says it never does (advance a mission line) and leave the Strip in
  * a Bay that implied another state. The acting Position must own the Strip's
  * CURRENT state per STATE_OWNERS_BY_STRIP_TYPE — the authority InvokeNla and the
- * Bay-implied drag already apply — for every Role. Checked before the runway
+ * Bay-implied drag already apply — for every strip type. Checked before the runway
  * inhibit (authority before availability), and ONLY on the controller's
  * SetState: the Undo / NLA paths that reach _applySetState carry their own.
  */

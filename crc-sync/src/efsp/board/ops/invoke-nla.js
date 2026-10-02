@@ -35,9 +35,9 @@ function _applyInvokeNla(ctx, strip, by) {
   const prevState = strip.state;
   let applied;
   if (result.transferTo) {
-    // Transfer-shaped NLA transition (Phase 2's real TWR->APP "Hand
+    // Transfer-shaped NLA transition (Phase 2's real LC->AP "Hand
     // Off", per docs/adr/0007 superseding the old always-stub DEPARTED
-    // case — and ARRIVAL's INBOUND->TWR/LANDED->GND steps). Routed
+    // case — and ARRIVAL's INBOUND->LC/LANDED->GC steps). Routed
     // through the EXACT SAME atomic _applyTransferStrip a controller-
     // initiated drag transfer uses — owner, Bay, Rack and state change
     // together, in one Mutation — not a separate, easier-to-drift path
@@ -49,7 +49,7 @@ function _applyInvokeNla(ctx, strip, by) {
     }
     applied = ctx.run('TransferStrip', strip, { toPositionId: result.transferTo, bayId: targetBay.bayId, rackId: ctx.placement.placementRack(strip, targetBay) }, { by });
   } else if (result.toState === 'DROPPED') {
-    // Every Role's terminal NLA is a Drop (DEPARTURE at HANDED_OFF,
+    // Every strip type's terminal NLA is a Drop (DEPARTURE at HANDED_OFF,
     // ARRIVAL at TAXI_IN, OVERFLIGHT at HANDED_OFF, MISSION at RTB), and
     // it has to mean exactly what the explicit DropStrip op means —
     // same guards, same remove indicator, same beacon release. Routed

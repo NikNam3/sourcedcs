@@ -5,8 +5,8 @@
 // ordering, ownership, ring-buffer resync) are modelled closely on
 // TrackStore's snapshot+delta-log shape (src/tracks.js).
 //
-// FDRs and Position staffing are NOT part of this ring buffer: Phase 1 has
-// at most a few dozen Strips/FDRs and four Positions, so efsp-ws.js just
+// flight data and Position staffing are NOT part of this ring buffer: Phase 1 has
+// at most a few dozen Strips/flight data and four Positions, so efsp-ws.js just
 // includes flightDataStore.getAll()/positionStore.getAll() in full on every
 // snapshot AND delta message, rather than building a second/third
 // ring-buffer for state this small. Revisit only if that stops being cheap.
@@ -47,7 +47,7 @@ class BoardStore {
    * @param {import('./flight-data-store').FlightDataStore} flightDataStore
    * @param {object} rules
    * @param {(blockId:string, stripType:string) => {kind:'flightData',path:string}|{kind:'annotation'}|null} rules.resolveBlockTarget
-   * @param {(bayId:string) => string|null} rules.bayHoldsStripType the Role a Bay is reserved for (docs/adr/0087), or null
+   * @param {(bayId:string) => string|null} rules.bayHoldsStripType the strip type a Bay is reserved for (docs/adr/0087), or null
    * @param {(bayId:string) => string|null} rules.bayImpliesState
    * @param {(positionId:string, state:string) => {bayId:string,rackIds:string[]}|null} rules.bayForImpliedState
    * @param {(strip:object, flightData:object, now:number, ctx:object) => {toState:string,transferTo?:string}|{inhibited:string}|null} rules.computeNla
@@ -91,7 +91,7 @@ class BoardStore {
     this._activeCmid = null;  // the clientMutationId being applied, while applyMutation runs
     // Cross-Facility coordination and TOFI (board/coordination.js, board/tofi.js). touch is the kernel's
     // recordTouch; retire is late-bound to the facade (it is StripOps'), activeCmid and mutationLog are read late,
-    // and the per-Role tables are the authority registry's accessors (authority/index.js), passed in.
+    // and the per-strip-type tables are the authority registry's accessors (authority/index.js), passed in.
     this._coordination = new Coordination({
       rules, state: this._state, audit: this._audit, placement: this._placement, clock, flightDataStore,
       touch,
@@ -218,7 +218,7 @@ class BoardStore {
 
   /**
    * A replay's answer (docs/adr/0081): the ORIGINAL outcome with the records
-   * as they are NOW. The cache holds ids, never a Strip or an FDR, so a replay
+   * as they are NOW. The cache holds ids, never a Strip or flight data, so a replay
    * of a refusal cannot send a client backwards (L6's F11) and an archived
    * Strip is not kept alive by the cache (F4). `replayed: true` tells
    * efsp-ws.js to ack only — the original broadcasts already went out, and
@@ -319,7 +319,7 @@ class BoardStore {
   /**
    * F10 (docs/adr/0080): `positionId` is staffed again, so the Strips that were
    * routed away from it to a covering Position — which may not advance them
-   * (PENDING_CLEARANCE is not GND's to advance) and which nothing ever returned
+   * (PENDING_CLEARANCE is not GC's to advance) and which nothing ever returned
    * — go back, each into a Bay of the returning Position. Only a Strip still
    * owned by cover: a Strip anyone transferred on by decision has lost its
    * `consolidatedFrom` (_applyTransferStrip). Recorded like the reassignment.

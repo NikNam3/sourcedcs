@@ -7,13 +7,13 @@ const { newFlags } = require('../strip-util');
  * into an ARRIVAL Strip IN PLACE: same stripId, same flightDataId, throughout.
  * A deliberate departure from guide §3.6's turnaround rule ("an ARRIVAL
  * Strip that reaches DROPPED and a later DEPARTURE Strip for the same
- * airframe are separate Strips referencing separate FDRs") — chosen
- * explicitly over spawning a second Strip/FDR pair (the first version of
+ * airframe are separate Strips referencing separate flight data") — chosen
+ * explicitly over spawning a second Strip/flight data pair (the first version of
  * this feature) after live testing found the two-Strip approach left a
  * stale departure Strip behind and required copying every field by hand
  * (route, altitude, remarks, identity, beacon code — the last of which
  * can't even be copied cleanly, since flight-data-store.js's createFlightData always
- * auto-allocates a fresh code). Reusing the same FDR makes every one of
+ * auto-allocates a fresh code). Reusing the same flight data makes every one of
  * those problems structurally impossible: there is nothing to copy,
  * because nothing new was created.
  *
@@ -31,9 +31,9 @@ function _applyConvertToArrival(ctx, strip, by, actingPositionId) {
   if (strip.stripType !== 'DEPARTURE' || strip.state !== 'HANDED_OFF') {
     return { ok: false, reason: 'VALIDATION_ERROR', detail: 'only a DEPARTURE Strip at HANDED_OFF can be converted to ARRIVAL', strip };
   }
-  // Role-scoped, same two-tier permission shape _applyCreateStrip uses —
+  // Strip-type-scoped, same two-tier permission shape _applyCreateStrip uses —
   // the coarse canMutate('ConvertToArrival') gate already applied in
-  // _dispatch restricts this to APP/CTR; this is the fine-grained half,
+  // _dispatch restricts this to AP/CTR; this is the fine-grained half,
   // reusing canCreateStripType's existing ARRIVAL-origination check
   // rather than a parallel table that would only ever say the same thing.
   if (!ctx.rules.canCreateStripType(actingPositionId, 'ARRIVAL')) {
@@ -70,11 +70,11 @@ function _applyConvertToArrival(ctx, strip, by, actingPositionId) {
     return { ok: false, reason: 'VALIDATION_ERROR', detail: `no ARRIVAL Bay configured for ${strip.ownerPositionId}`, strip };
   }
 
-  // Bug found in live testing: DEPARTURE and ARRIVAL read DIFFERENT FDR
+  // Bug found in live testing: DEPARTURE and ARRIVAL read DIFFERENT flight data
   // fields for the same underlying idea — DEPARTURE's Block 8 is
   // filed.departureAirport, ARRIVAL's Block 8 is filed.originAirport
-  // (block-map.js). Converting in place never touches the FDR otherwise
-  // (that's the whole point — same FDR throughout), so originAirport
+  // (block-map.js). Converting in place never touches the flight data otherwise
+  // (that's the whole point — same flight data throughout), so originAirport
   // stayed permanently blank even though departureAirport still held the
   // right value right next to it. The flight's real point of origin
   // doesn't change just because it's airborne — for a sortie that
@@ -144,7 +144,7 @@ function _applyConvertToArrival(ctx, strip, by, actingPositionId) {
 }
 
 // docs/adr/0023 — converts this Strip's role IN PLACE, same Strip/
-// FDR throughout, for a returning flight at the same Facility.
+// flight data throughout, for a returning flight at the same Facility.
 module.exports = {
   kind: 'ConvertToArrival',
   apply: (ctx, strip, op, meta) => _applyConvertToArrival(ctx, strip, meta.by, meta.actingPositionId),
