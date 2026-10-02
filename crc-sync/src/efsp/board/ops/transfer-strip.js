@@ -39,12 +39,12 @@ function _applyTransferStrip(ctx, strip, op, by) {
   let warning;
 
   if (!ctx.rules.isStaffed(op.toPositionId)) {
-    const covering = ctx.rules.consolidatedAt(op.toPositionId);
-    if (!covering || !ctx.rules.isStaffed(covering)) {
+    const consolidatedAt = ctx.rules.consolidatedAt(op.toPositionId);
+    if (!consolidatedAt || !ctx.rules.isStaffed(consolidatedAt)) {
       return { ok: false, reason: 'NO_RECEIVING_POSITION', strip };
     }
-    destPositionId = covering;
-    routedTo = covering;
+    destPositionId = consolidatedAt;
+    routedTo = consolidatedAt;
   }
 
   // Self-coordination (guide §4.8.3): when the same controller who is
