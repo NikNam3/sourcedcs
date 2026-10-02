@@ -9,8 +9,7 @@ import { _setBullseyePickTarget } from '../app.js';
 
 // ── Settings panel: tab switching, per-tab wiring (map display, bullseye
 // override, colours, tools) and the bullseye pick-on-map mode. Split out of
-// the former ui.js "god file" — see panels/topbar.js for why this stays a
-// plain script rather than an IIFE (dock.js/app.js call these by name).
+// the former ui.js "god file" (history); dock.js and app.js import these by name.
 
 export function initSettings() {
   const panel   = document.getElementById('settings-panel');

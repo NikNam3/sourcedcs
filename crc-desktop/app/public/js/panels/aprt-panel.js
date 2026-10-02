@@ -6,8 +6,7 @@ import { updateMap } from '../geojson.js';
 import { atisActive, missionData, saveSettings, settings } from '../app.js';
 
 // ── APRT / Theater side panel ─────────────────────────────────────────────
-// Split out of the former ui.js "god file" — see panels/topbar.js for why
-// this stays a plain script rather than an IIFE. This was the single
+// Split out of the former ui.js "god file" (history). It was the single
 // largest chunk of ui.js (~625 of its 2234 lines) — airport reference card,
 // manual weather entry, ATIS build/transmit/loop, and a read-only line of
 // theater facts. Nothing about the theater is a setting any more: crc-sync
@@ -17,7 +16,7 @@ import { atisActive, missionData, saveSettings, settings } from '../app.js';
 export let _aprtSelectedApt = null;
 
 // Numeric heading parsed from the APRT panel's runway field, for the
-// extended APP-radar centerline (geojson.js buildExtendedCenterline()).
+// extended AP-radar centerline (geojson.js buildExtendedCenterline()).
 // Cached rather than read from the DOM every map-update tick. The runway
 // number is MAGNETIC; the map draws in true, and crc-sync does the
 // conversion (its docs/adr/0085 — a typed magnetic value is never converted

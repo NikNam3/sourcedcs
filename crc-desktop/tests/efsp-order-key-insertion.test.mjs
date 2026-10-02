@@ -1,6 +1,6 @@
 
 /* Unit tests for strip-drag.js's pure insertion-index math (no DOM/real
-   pointer events involved), matching los-math.test.js's style. */
+   pointer events involved), matching los-math.test.mjs's style. */
 
 import test from 'node:test';
 import assert from 'node:assert/strict';

@@ -33,15 +33,17 @@ import { coverageDatalink, coverageRadars, history, lastSweepMs, map, mapReady, 
 // block is track-label.js's (atcBlockLines); geojson.js and map-setup.js draw
 // it.
 //
-// Guarded module.exports at the end, like efsp-state.js, so node:test can
-// require it without a browser.
+// An ES module (H87): node:test imports it directly, with no browser. The old
+// guarded `module.exports` at the end of the file is gone.
 
 // ── Colours (H41 variant B, and A for the black scope) ────────────────────
 //
 // MAP  — the app's dark map ("ATC map background" on): the approved variant B
 //        values, softened for a non-black background, with a text halo.
 // BLACK — the setting off: strict STARS, the measured TCW values (FAA
-//        DOT/FAA/TC-08/15 Table 1), no halo.
+//        DOT/FAA/TC-08/15 Table 1), no halo. This is the cited palette.
+// [SOURCE-DEFINED] (docs/adr/0088, H41/H71) — the MAP palette is our softened
+// variant of the BLACK one, chosen for the dark map; it is not a STARS value.
 export const ATC_PALETTES = {
   MAP: {
     name: 'MAP', own: '#E6E6E6', other: '#3CE63C', pointout: '#FFFF00', alert: '#FF3C3C', sa: '#FFFF00',
@@ -60,6 +62,9 @@ export const ATC_PALETTES = {
 export const ATC_CONFORM_COLOR = { bad: '#FF8A4C', attn: '#E0A83C' };
 export const ATC_DIM_GRAY = '#8C8C8C';
 
+// [SOURCE-DEFINED] (docs/adr/0088, H41/H71) — the timings below are ours: STARS
+// publishes no blink or time-share period we could cite, and the coast rule is
+// our model of "missed returns".
 export const ATC_SENDER_BLINK_MS = 5000;   // an accepted handoff / point-out blinks this long at the sender
 export const ATC_TIMESHARE_MS = 2000;      // ground speed and type alternate this often (approximation)
 const ATC_COAST_SWEEPS = 2;         // a correlated track coasts after missing this many ATC sweeps
@@ -259,7 +264,7 @@ export function atcView(t, rel, env) {
 
 /**
  * A flight I handed on that this scope saw go: a cross-Facility handoff
- * accepted, or a same-Facility transfer (a Strip dragged TWR -> APP, which
+ * accepted, or a same-Facility move (a Strip dragged LC -> AP, which
  * moves at once with no PROPOSED step, guide §8). `at` is when this scope saw
  * it happen, or null when it was already so; `key` names its click-down stage.
  */
@@ -302,7 +307,7 @@ export function atcConformTag(alerts) {
   return null;
 }
 
-/** The flight's ACTIVE assigned altitude (ft) and heading, from its FDR's clearance (docs/adr/0058). */
+/** The flight's ACTIVE assigned altitude (ft) and heading, from its flight data's clearance (docs/adr/0058). */
 export function atcAssigned(flightData) {
   if (!flightData || !flightData.clearance) return null;
   const active = (cell) => cell && (cell.entries || []).find(e => e.status === 'ACTIVE');

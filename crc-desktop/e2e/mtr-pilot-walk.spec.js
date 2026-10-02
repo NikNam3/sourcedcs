@@ -58,7 +58,7 @@ test('pilot walk: "VIPER11 request a different exit fix", CTR and APP at once', 
   const app = await controller(browser, { signedOn: ['AP'], facilityId: 'INCIRLIK', controller: 'app-walk' });
   const CS = 'MTRW11'; // plays "VIPER11"; unique because the Board persists across specs in a run
 
-  // An inbound at Center, coordinated to APP so both Facilities hold a Strip.
+  // An inbound at Center, coordinated to AP so both Facilities hold a Strip.
   await goBay(ctr, 'CTR', 'ctr-enroute');
   const c = await seedStrip(ctr, { callsign: CS, actingPositionId: 'CTR', bayId: 'ctr-enroute', stripType: 'ARRIVAL', facilityId: 'CENTER',
     flightData: { originAirport: 'LCRA', destinationAirport: 'LTAG', route: 'DCT' } });
@@ -83,7 +83,7 @@ test('pilot walk: "VIPER11 request a different exit fix", CTR and APP at once', 
   await only(app, CS);
   await a.screenshot({ path: path.join(SHOTS, 'walk-1-app-replica.png') });
 
-  // APP takes the flight.
+  // AP takes the flight.
   const accept = a.getByRole('button', { name: 'Accept Hand Off' });
   await accept.click({ timeout: 3000 });
   await expect.poll(async () => (await app.evaluate((cs) => [...efspStrips.values()].filter(s => efspFlightDataList.get(s.flightDataId)?.identity?.callsign === cs && s.facilityId === 'INCIRLIK').map(s => s.coordination && s.coordination.state), CS))[0]).toBe('ACTIVE');
@@ -144,12 +144,12 @@ test('pilot walk: "VIPER11 request a different exit fix", CTR and APP at once', 
   await app.locator('#efsp-panel').screenshot({ path: path.join(SHOTS, 'walk-6-typo.png') });
   await app.keyboard.press('Escape');
 
-  // ── 7. On APP's ARRIVAL: the M11 group, no entry on the face. ─────────────
+  // ── 7. On AP's ARRIVAL: the M11 group, no entry on the face. ─────────────
   const ids = await faceIds(mine);
   note('7', `APP ARRIVAL face MTR group: ${ids.filter(id => /^9[GH]/.test(id)).join(' ')}`);
   expect(ids.includes('9G-ENTRY')).toBe(false);
 
-  // ── 8. CTR edits EXIT EST while APP is typing in EXIT. ────────────────────
+  // ── 8. CTR edits EXIT EST while AP is typing in EXIT. ────────────────────
   await mine.locator('.efsp-strip-fields .efsp-block-9H-EXIT').click();
   const input = mine.locator('input.efsp-block-input');
   await input.fill('D');

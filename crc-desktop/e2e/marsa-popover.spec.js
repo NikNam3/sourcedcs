@@ -48,7 +48,7 @@ test.beforeEach(async ({ page }) => {
 // The Board is one crc-sync for the whole RUN. The declare test below leaves a
 // MARSA relation ACTIVE on two of these three, and a relation left standing is
 // visible to every spec file that runs after this one — dropping the Strips
-// retires it (board-store's _retireStrip releases the FDR, which ends the
+// retires it (`board/strip-ops.js`'s `retire` releases the flight data, which ends the
 // relation with it). Same reason l4-drag.spec.js drops what it creates.
 //
 // By stripId, not by callsign: l1-touch-targets.spec.js seeds its own VIPER11

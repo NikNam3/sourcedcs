@@ -49,9 +49,9 @@
   cursor: pointer;
   font: inherit;
 }
-/* Origin (Position + Role) picker (docs/adr/0023) — shown only when 2+
+/* Origin (Position + strip type) picker (docs/adr/0023) — shown only when 2+
    origins are simultaneously reachable (a combined-Position controller,
-   e.g. holding OPS+APP+CTR at once); auto-resolved with no picker shown
+   e.g. signed on to OPS+AP+CTR at once); auto-resolved with no picker shown
    for the common single-Position case. */
 /* The stereo-route and mission-line pickers share it — both were unstyled,
    and so drew as the browser's white default select at its own size. */
@@ -262,7 +262,7 @@
 
 /* docs/adr/0024 — a small muted label stacked above each compact-view
    Block's value (chosen over inline "label: value" or hover-only after a
-   preview comparison) so e.g. '0001' reads as SQUAWK without memorizing
+   preview comparison) so e.g. '0001' reads as BEACON without memorizing
    Block position. line-height:1 on the label keeps the two-line chip within
    .efsp-strip's existing 44px touch-target floor above, no layout change
    needed there. */
@@ -552,7 +552,7 @@
    this is somebody's words, not a state. 7.59:1. */
 .efsp-coordination-note { color: #a8b4bd; font-style: italic; }
 
-/* Expand — opens every Block for the Strip's Role (§3.7's "full history on
+/* Expand — opens every Block for the Strip's strip type (§3.7's "full history on
    tap" surface, and the only way to reach a Block that has no chip). */
 .efsp-expand-btn {
   min-width: 44px;
@@ -770,8 +770,8 @@
   border: 1px solid #6a5bbf; /* a distinct hue from the NLA button's blue (#4a7dbf) — a different KIND of action, not a variant of NLA */
   color: #fff;
 }
-/* Convert to Arrival (docs/adr/0023) — an in-place role change (same
-   Strip, same FDR), not a Drop/Coordinate/NLA-style action — the dashed
+/* Convert to Arrival (docs/adr/0023) — an in-place strip type change (same
+   Strip, same flight data), not a Drop/Coordinate/NLA-style action — the dashed
    border reads as "transforms this Strip," distinct from every solid-
    bordered action button next to it. */
 .efsp-spawn-return-btn {
@@ -887,7 +887,7 @@
   color: #a8b4bd;
 }
 /* This flight has other live Strips elsewhere (a replica at another
-   Facility, or a MISSION Strip sharing its FDR). Advisory only. */
+   Facility, or a MISSION Strip sharing its flight data). Advisory only. */
 .efsp-shared-flight-data-badge { border-color: #4a7dbf; color: #bfe0ff; }
 .efsp-coordination-badge-data { border-color: #6a5bbf; color: #c9c0ff; }
 .efsp-coordination-badge-sep  { border-color: #4a7dbf; color: #bfe0ff; }
@@ -1101,7 +1101,7 @@
        Which surveillance contact a flight is, and on what evidence. A
        Strip-level badge like the airspace and obligation badges — not a Block,
        since a correlation is keyed by flightDataId in its own store and is neither
-       FDR data nor a Strip annotation. Deliberately none of these use the
+       flight data nor a Strip annotation. Deliberately none of these use the
        attention red that guide §7.7 rule 4 reserves. */
     .efsp-correlation-badge {
       display: inline-block;
@@ -1202,7 +1202,7 @@
        "Military Authority Assumes Responsibility for Separation of Aircraft."
        A Strip-level badge like the correlation and airspace badges, and not a
        Block, for the same reason: the relation is keyed by its own id with
-       flightDataId participants, so it is neither FDR data nor a Strip annotation.
+       flightDataId participants, so it is neither flight data nor a Strip annotation.
 
        Three states that must be distinguishable at a glance, because each
        means something different to the controller looking at it:

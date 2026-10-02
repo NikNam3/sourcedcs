@@ -1,5 +1,5 @@
 {
-  "_comment": "DCS unit type -> display label. Radar specifications used to live here too; they moved to crc-sync/config/radar-specs.json when the radar picture became server-authoritative (docs/adr/0042). This file is display metadata only.",
+  "_comment": "DCS unit type -> display label. Radar specifications used to live here too; they moved to crc-sync/config/sensor-specs.json when the radar picture became server-authoritative (docs/adr/0042). This file is display metadata only.",
 
   "E-3A": { "label": "E-3A Sentry" },
   "A-50": { "label": "A-50 Mainstay" },

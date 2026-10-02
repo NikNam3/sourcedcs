@@ -2,7 +2,7 @@
 // they were written to. Each rule came from a controller reading the Strip:
 // a field a Position never uses costs Strip height on every flight.
 // Reachability — everything left off is still in the expanded view — is held
-// by efsp-ui-reachability.test.js, per (Role, Position).
+// by efsp-ui-reachability.test.mjs, per (strip type, Position).
 
 import './helpers/client-env.mjs';
 import test from 'node:test';
@@ -85,7 +85,7 @@ test('a set ORDNANCE goes before the MTR group, which starts its own row', () =>
 });
 
 test('a runway field only on the airfield Positions', () => {
-  // The Block that is the runway differs by Role: 8A on DEPARTURE, 8B on ARRIVAL.
+  // The Block that is the runway differs by strip type: 8A on DEPARTURE, 8B on ARRIVAL.
   const runwayBlock = { DEPARTURE: '8A', ARRIVAL: '8B' };
   for (const { stripType, positionId, list } of everyList()) {
     const rwy = runwayBlock[stripType];

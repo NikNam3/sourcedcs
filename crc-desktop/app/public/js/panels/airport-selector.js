@@ -8,8 +8,7 @@ import { _setApproachRwyCourse, _setSelectedApt } from '../app.js';
 
 // ── Airport selector (topbar dropdown + runway course input) and the
 // airport-weather popup shown when left-clicking an airport label on the
-// map. Split out of the former ui.js "god file" — see panels/topbar.js for
-// why this stays a plain script rather than an IIFE.
+// map. Split out of the former ui.js "god file" (history).
 
 const HELIPAD_PATTERN = /helipad|farp|fob/i;
 

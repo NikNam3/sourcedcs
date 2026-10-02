@@ -3,7 +3,7 @@
  *  1. Drift — the client's hungOrdnanceAdvisoryFor is a copy of crc-sync's
  *     (browser scripts cannot load crc-sync), so both run over one table and
  *     must agree on every row.
- *  2. ordnanceAlertsFor with and without client field state (L1b's
+ *  2. ordnanceAlertsFor with and without client runway status (L1b's
  *     getEfspRunwayStatus may not be loaded; the chip shows regardless).
  *  3. The real strip-view.js rendering the chip and reason line on a Position
  *     whose grid does not carry Block 3G, and nothing on a CLEAN Strip
@@ -86,7 +86,7 @@ test('drift: the client copy and crc-sync\'s hungOrdnanceAdvisoryFor agree on ev
     }
   }
   assert.ok(rows > 5000 && advised > 300, `the table exercised both branches (${rows} rows, ${advised} advised)`);
-  // And the no-FDR / no-military rows (an archived FDR, S-R2-13).
+  // And the no-flight-data / no-military rows (an archived flight-data record, S-R2-13).
   for (const flightData of [null, undefined, { identity: {} }, { military: null }]) {
     const strip = { stripType: 'ARRIVAL', state: 'INBOUND', rackId: 'main' };
     assert.equal(client.hungOrdnanceAdvisoryFor(strip, flightData, record()), server.hungOrdnanceAdvisoryFor(strip, flightData, record()));
@@ -96,7 +96,7 @@ test('drift: the client copy and crc-sync\'s hungOrdnanceAdvisoryFor agree on ev
 // ── 2. ordnanceAlertsFor ─────────────────────────────────────────────────
 
 function alertsSandbox({ flightData, runwayStatus }) {
-  // The real state module holds the FDR and the runway-status record the advisory reads.
+  // The real state module holds the flight-data record and the runway-status record the advisory reads.
   efspState._resetEfspStateForTest();
   efspState.applyEfspSnapshot({
     strips: [], flightDataList: flightData ? [flightData] : [], positions: [], bays: [], boardSeq: 1,
@@ -145,7 +145,7 @@ test('ordnanceAlertsFor: nothing for CLEAN/LOADED/EXPENDED, a DROPPED Strip, an 
 
 // ── 3. the real Strip ────────────────────────────────────────────────────
 //
-// A loader of its own, copied from efsp-ui-reachability.test.js's renderStrip
+// A loader of its own, copied from efsp-ui-reachability.test.mjs's renderStrip
 // rather than shared (that harness is not this lane's to change).
 
 async function renderStrip({ strip, flightData, signedOn, runwayStatus }) {
@@ -189,7 +189,7 @@ test('a HUNG arrival shows the HUNG chip and its reason line on every Position\'
     const reasons = byClass(el, 'efsp-strip-reason').map(r => r.textContent);
     assert.ok(reasons.includes('Hung ordnance. SOURCE practice: after landing, taxi to Hot cargo pad; the runway is the controller\'s call. Runway 05/23 (23) assigned.'),
       `${positionId}: ${JSON.stringify(reasons)}`);
-    // GND has no 3G on its grid (H55: only the Positions a pilot reports to), and still sees it.
+    // GC has no 3G on its grid (H55: only the Positions a pilot reports to), and still sees it.
     if (positionId === 'GC') assert.equal(sandbox.compactBlocksFor('ARRIVAL', 'GC').includes('3G'), false);
     // Chips in their slot order: ord after the conformance warnings, before trk.
     const slots = descendants(el).filter(c => c.dataset && c.dataset.slot).map(c => c.dataset.slot);

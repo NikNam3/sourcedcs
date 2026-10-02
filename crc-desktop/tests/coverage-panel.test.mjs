@@ -7,7 +7,7 @@
  * panel has to say so with its cause rather than showing an empty box that
  * looks like a fault.
  *
- * Same vm-plus-DOM-stub approach as efsp-ui-reachability.test.js, and for the
+ * Same vm-plus-DOM-stub approach as efsp-ui-reachability.test.mjs, and for the
  * same reason: it proves the wiring, not the pixels.
  */
 
@@ -102,7 +102,7 @@ test('each radar is listed with its range and the Position that granted it', asy
 
   assert.equal(list.children.length, 2);
   const rows = rowTexts(list);
-  // Sorted by label, so LTAG comes before LTAG APP.
+  // Sorted by label, so LTAG comes before LTAG AP.
   assert.deepEqual(rows, ['LTAG|AP/LC|40nm', 'LTAG APP|AP|80nm']);
 });
 

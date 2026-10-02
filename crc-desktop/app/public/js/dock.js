@@ -523,7 +523,7 @@ function withRememberedPlacement(id, options, allowGridSize) {
 // which keeps it open until explicitly unpinned.
 //
 // The trigger used to be a user ticking a radar checkbox. Coverage follows the
-// held Positions now (crc-sync's docs/adr/0042), so the implication fires when
+// Positions the controller is signed on to now (crc-sync's docs/adr/0042), so the implication fires when
 // a controller takes Tower or Approach — which is when they want the Airport
 // panel anyway, and is a better signal than the one it replaced.
 // Settings/Squawk C/S have no radar tie and aren't affected by any of this.

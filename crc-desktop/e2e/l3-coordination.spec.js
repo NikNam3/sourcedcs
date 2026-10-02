@@ -33,7 +33,7 @@ test.describe.configure({ timeout: 60000 });
 const _contexts = [];
 test.afterEach(async () => { while (_contexts.length) await _contexts.pop().close().catch(() => {}); });
 
-/** A second, third… controller: its own context, its own token, its own held Positions. */
+/** A second, third… controller: its own context, its own token, its own signed-on Positions. */
 async function controller(browser, opts) {
   const ctx = await browser.newContext({ baseURL: test.info().project.use.baseURL, viewport: { width: 1600, height: 1000 } });
   _contexts.push(ctx);
@@ -118,7 +118,7 @@ function hitTest(locator) {
 
 // ── extends F-101 ─────────────────────────────────────────────────────────
 //
-// FIRST in the file on purpose. It depends on what else is in APP's
+// FIRST in the file on purpose. It depends on what else is in AP's
 // Coordination Bay: every later test that rejects a proposal leaves a dead
 // replica there (F-303), and with those above it the reflow no longer carries
 // the neighbour under the pointer — measured: it passed in a full run while
@@ -240,7 +240,7 @@ test('a rejected replica in the receiver\'s Coordination Bay cannot be worked', 
   await replica.getByRole('button', { name: 'Reject' }).click({ timeout: 3000 });
   await expect.poll(async () => (await recordsFor(b, 'DEADRP')).find(r => r.facilityId === 'INCIRLIK').coordination).toBe('REJECTED');
 
-  // APP declined this flight. Its NLA must not now hand it to Tower —
+  // AP declined this flight. Its NLA must not now hand it to Tower —
   // measured: it did, and the server accepted it (lc-arrivals /
   // HANDED_TO_TOWER) while CENTER still owned the flight.
   //
@@ -344,7 +344,7 @@ test('Accept TOFI Exit enables once CTR has set SEP REG back to ATC', async ({ b
   expect(look, 'a disabled Accept TOFI Exit is drawn as the live button').toEqual({ cursor: 'not-allowed', borderStyle: 'dashed' });
 
   await setSepReg(s, 'ATC');
-  // The MRU page's own FDR store does get the change...
+  // The MRU page's own flight-data store does get the change...
   await expect.poll(() => b.evaluate(() => [...efspFlightDataList.values()].find(f => f.identity && f.identity.callsign === 'EXIT01').tofi.separationRegime)).toBe('ATC');
   // ...but the MISSION Strip is not rebuilt (its rev did not move), so the
   // button keeps saying "CTR must set separation regime back to ATC" after

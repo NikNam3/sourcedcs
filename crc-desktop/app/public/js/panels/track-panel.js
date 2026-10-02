@@ -18,8 +18,7 @@ import { history, map, mapReady, settings, tracks } from '../app.js';
 // input shown when left-clicking a ground vehicle icon) — grouped here
 // because both are "click a map icon, get a small info/edit surface"
 // interactions triggered from the same map click-handling code.
-// Split out of the former ui.js "god file" — see panels/topbar.js for why
-// this stays a plain script rather than an IIFE.
+// Split out of the former ui.js "god file" (history).
 
 let _trackPanelId = null; // currently displayed track id (string), or null
 

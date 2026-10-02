@@ -2,7 +2,7 @@
  * ATO import already made. The toolbar offers "file against ATO mission <msn>",
  * picked by default only when exactly one flight matches, and the create goes
  * out on the bind path (op.flightDataId) — no new flight, no new code.
- * Mounts the real efsp-panel.js the way efsp-mission-line-panel.test.js does. */
+ * Mounts the real efsp-panel.js the way efsp-mission-line-panel.test.mjs does. */
 
 import test from 'node:test';
 import assert from 'node:assert/strict';

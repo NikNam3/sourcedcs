@@ -27,8 +27,7 @@ import { coverageSignedOnPositions, getActiveRadars } from '../app.js';
 // facility config. It was never really a display preference; it was a
 // description of what a Military Radar Unit works from.
 //
-// Split out of the former ui.js "god file" — see panels/topbar.js for why this
-// stays a plain script rather than an IIFE.
+// Split out of the former ui.js "god file" (history).
 
 const TYPE_LABELS = { airport: 'AIRPORT', approach: 'APPROACH', awacs: 'AWACS', fighter: 'FIGHTER', carrier: 'CARRIER' };
 
@@ -41,7 +40,7 @@ export function refreshRadarPanelData() {
 }
 
 /**
- * The radars our held Positions grant us, and why. An empty list is a real
+ * The radars the Positions we are signed on to grant us, and why. An empty list is a real
  * answer, not a failure: a Ground or Clearance Delivery controller has no
  * scope, and saying which Position would give them one is more use than an
  * empty box.
@@ -72,7 +71,7 @@ export function renderCoverageList() {
     $label.className = 'radar-row-label';
     $label.textContent = r.label + (isGnd ? ' GND' : '');
 
-    // Which of the held Positions put this radar in the list — the answer to
+    // Which of the Positions we are signed on to put this radar in the list — the answer to
     // "why am I seeing this", which a checkbox never had to explain.
     const $via = document.createElement('span');
     $via.className = 'radar-row-via';

@@ -7,7 +7,7 @@
  * over the rendered Strip.
  *
  * Isolation: the Board is shared across a run, so each test seeds into a Bay no
- * other spec uses (ops-coordination) or walks its own Strips to TWR, and drops
+ * other spec uses (ops-coordination) or walks its own Strips to LC, and drops
  * what it created afterwards. dropAll matches by CALLSIGN, so the callsigns
  * have to be unique across the whole suite, not just this file — the
  * autoscroll test's were L4D0..L4D7 and overlapped l4-density.spec.js's
@@ -176,7 +176,7 @@ test('a Strip can be dragged from one Rack to another in the same Bay', async ({
   await page.setViewportSize({ width: 1600, height: 1600 });
   await openPanel(page, { signedOn: ['OPS', 'CD', 'GC', 'LC'] });
   try {
-    // Walk each to lc-runway-queue through the real NLA chain — TWR cannot
+    // Walk each to lc-runway-queue through the real NLA chain — LC cannot
     // create a Strip, and the queue implies RUNWAY_QUEUE.
     for (const c of cs) {
       await seedStrip(page, { callsign: c, stripType: 'DEPARTURE', flightData: { route: 'DCT', requestedAltitude: 'FL250', departureAirport: 'LTAG', destinationAirport: 'LTAF' } });

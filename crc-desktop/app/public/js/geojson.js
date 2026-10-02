@@ -128,6 +128,8 @@ function sweepOpacity(id, baseOp) {
 // A contact sent with `scheme: 'ATC'` is drawn in the STARS layout. What it
 // shows is atc-scope.js's; this only turns it into features. One display per
 // contact per frame, shared by the dots, the block and its leader.
+// [SOURCE-DEFINED] (docs/adr/0088, H41/H71) — 16 is an engineering bound, not STARS: the
+// number of text-segment layers map-setup.js pre-creates for one block.
 export const ATC_MAX_SEGMENTS = 16;
 const ATC_TRANSPARENT = 'rgba(0,0,0,0)';
 let _atcFrame = null;
@@ -622,11 +624,11 @@ function buildApproachVector() {
   };
 }
 
-// Extended centerline for APP-control: independent of the topbar-driven
+// Extended centerline for AP-control: independent of the topbar-driven
 // buildApproachVector() above (different airport-selection state — the APRT
 // panel's _aprtSelectedApt, not the topbar's selectedApt/approachRwyCourse —
 // and no real runway geometry exists to unify them on). Only drawn when an
-// APP radar for the APRT panel's airport is enabled and a runway heading has
+// AP radar for the APRT panel's airport is enabled and a runway heading has
 // been entered there.
 // Distance-tick spacing in nm, coarser at low zoom so ticks don't merge into
 // noise once the centerline's whole length is only a few screen pixels long.

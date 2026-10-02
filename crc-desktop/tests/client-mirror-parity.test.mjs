@@ -1,6 +1,6 @@
 // Hand-mirrored server tables with no parity test before this file
 // (docs/wip/PARITY.md has the full inventory and which test holds which).
-// Same pattern as efsp-block-map-parity.test.js: require the crc-sync module
+// Same pattern as efsp-block-map-parity.test.mjs: require the crc-sync module
 // across the package boundary (test-only; ADR 0001's "no import" rule is
 // about the runtime path) and compare the data the client actually ships.
 //
@@ -49,7 +49,7 @@ test('S-6: every IFF state the server can classify has a client fallback colour,
 
 // ── NLA button labels (D-9) ─────────────────────────────────────────────────
 // efsp-nla.js NLA_LABELS says it "mirrors nla.js's STATES_BY_STRIP_TYPE/computeNla": the
-// label is the verb for leaving a state, so every live (non-DROPPED) state of a Role has one.
+// label is the verb for leaving a state, so every live (non-DROPPED) state of a strip type has one.
 
 const { NLA_LABELS, DOUBLE_TAP_MS, UNDO_WINDOW_MS, DEFAULT_STALE_THRESHOLD_SECONDS } = clientNla;
 

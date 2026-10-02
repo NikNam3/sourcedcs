@@ -299,7 +299,7 @@ export function initMap(container) {
       paint: { 'line-color': ['get', 'color'], 'line-opacity': 0.8, 'line-width': 1.5, 'line-dasharray': [8, 4] },
     });
 
-    // ── Extended centerline (APP-radar control, APRT-panel-driven) ────────
+    // ── Extended centerline (AP-radar control, APRT-panel-driven) ────────
     map.addSource('ext-centerline', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
     map.addLayer({
       id: 'ext-centerline-line', type: 'line', source: 'ext-centerline',

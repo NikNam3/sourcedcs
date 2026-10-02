@@ -1,9 +1,9 @@
 // docs/adr/0087 (questions-round3 Q3-35, lane brief T1): INBOUND and HANDED_OFF
-// are state names of three Roles now (ARRIVAL/OVERFLIGHT, DEPARTURE/OVERFLIGHT).
-// Any code that compares a bare state without its Role is wrong for one of them.
+// are state names of three strip types now (ARRIVAL/OVERFLIGHT, DEPARTURE/OVERFLIGHT).
+// Any code that compares a bare state without its strip type is wrong for one of them.
 // This pins the set of source files that name those two states and why each one
 // is safe; a NEW file naming one (a scope label, a geojson layer, a conformance
-// rule) fails here until someone decides it is Role-aware.
+// rule) fails here until someone decides it is strip-type-aware.
 
 import test from 'node:test';
 import assert from 'node:assert/strict';

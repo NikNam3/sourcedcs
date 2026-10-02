@@ -93,7 +93,7 @@ test('a retracted warning simply arrives as null — no separate clear step exis
 });
 
 test('the reverse lookup finds every live Strip for a contact, across Facilities', () => {
-  // One FDR, two Strips — the ordinary case after a cross-Facility handoff,
+  // One flight-data record, two Strips — the ordinary case after a cross-Facility handoff,
   // and the case a per-Strip correlation would have got wrong.
   load({
     strips: [strip('s1', 'f1', 'ap-departures'), strip('s2', 'f1', 'ctr-departures')],

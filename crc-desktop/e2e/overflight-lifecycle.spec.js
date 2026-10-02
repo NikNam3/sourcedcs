@@ -1,6 +1,6 @@
 'use strict';
 
-/* L28 (docs/adr/0087): an overflight's four states on screen, CTR to APP.
+/* L28 (docs/adr/0087): an overflight's four states on screen, CTR to AP.
  * Every Strip the test makes is dropped at its end (the Board lives for the whole run). */
 
 const path = require('path');
@@ -60,7 +60,7 @@ test('an overflight walks INBOUND, IN_SECTOR, is handed CTR to APP, and is dropp
     await shot(ctr, '02-in-sector');
     await ctr.keyboard.press('Escape');
 
-    // 3. HANDOFF to AP: the replica reaches APP INBOUND, in a coordination Bay.
+    // 3. HANDOFF to AP: the replica reaches AP INBOUND, in a coordination Bay.
     await startAction(stripByCallsign(ctr, callsign), 'Coordinate…');
     const popover = ctr.locator('.efsp-coordinate-popover');
     await popover.locator('select').selectOption('HANDOFF');
@@ -72,14 +72,14 @@ test('an overflight walks INBOUND, IN_SECTOR, is handed CTR to APP, and is dropp
     await expect(app.locator('.efsp-strip', { hasText: callsign }).first()).toBeVisible();
     await shot(app, '03-handoff-to-app');
 
-    // 4. APP accepts: it lands in APP's overflight Bay (not ARRIVAL's inbound Bay), the sender is HANDED_OFF with Drop on offer.
+    // 4. AP accepts: it lands in AP's overflight Bay (not ARRIVAL's inbound Bay), the sender is HANDED_OFF with Drop on offer.
     await app.locator('.efsp-strip', { hasText: callsign }).first().getByRole('button', { name: /accept/i }).first().click();
     await expect.poll(async () => ((await records(app, callsign)).find(r => r.facilityId === 'INCIRLIK') || {}).bayId).toBe('ap-overflight');
     await expect.poll(() => stateAt(ctr, callsign, 'CENTER')).toBe('HANDED_OFF');
     await expect(nla(ctr, callsign)).toHaveText(/Drop/);
     await shot(ctr, '04-accepted');
 
-    // 5. APP walks it: Radar Contact, then it is APP's flight to hand off or drop; CTR drops its own.
+    // 5. AP walks it: Radar Contact, then it is AP's flight to hand off or drop; CTR drops its own.
     await goBay(app, 'AP', 'ap-overflight');
     await expect(nla(app, callsign)).toHaveText(/Radar Contact/);
     await press(app, callsign);

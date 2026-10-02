@@ -1,6 +1,6 @@
 
 /* Unit tests for the pure client-side annotation supersession model
-   (annotation-editor.js), mirroring board-store.js's server-side rules —
+   (annotation-editor.js), mirroring the server-side rules in crc-sync's `board/` directory —
    append-only, SUPERSEDED on amendment, STRUCK only via confirmVacated. */
 
 import test from 'node:test';

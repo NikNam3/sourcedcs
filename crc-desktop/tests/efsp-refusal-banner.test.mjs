@@ -8,7 +8,7 @@
  * server replies, so the typed value exists nowhere on screen afterwards.
  *
  * Mounts the real efsp-panel.js against the shared DOM stub, the way
- * efsp-mission-line-panel.test.js does — the banner is panel chrome, so
+ * efsp-mission-line-panel.test.mjs does — the banner is panel chrome, so
  * efsp-ui-reachability's Strip-rendering harness cannot reach it.
  */
 

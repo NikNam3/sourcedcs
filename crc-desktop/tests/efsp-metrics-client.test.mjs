@@ -314,7 +314,7 @@ test('time-to-find: in the search pseudo-Bay any Strip found stops the clock, fo
   const h = harness();
   h.enterBay('GC-search', 'GC');
   h.tick(1200);
-  h.client.noteStripSelected('s3'); // a TWR Strip, found by GND's search
+  h.client.noteStripSelected('s3'); // an LC Strip, found by GC's search
   h.client.flush();
   assert.deepEqual(h.events(), [{ kind: 'TIME_TO_FIND', bayId: 'GC-search', latencyMs: 1200, at: 1_700_000_000_000 }]);
   assert.equal(h.sent[0].positionId, 'GC');

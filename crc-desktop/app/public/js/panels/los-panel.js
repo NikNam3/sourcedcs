@@ -6,8 +6,7 @@ import { getActiveRadars, settings } from '../app.js';
 // Shown while hovering a radar row in the coverage list: a terrain-vs-distance
 // chart along that radar's current (live) beam bearing, with the curvature-
 // adjusted sight line and the point where terrain first blocks it.
-// Split out of the former ui.js "god file" — see panels/topbar.js for why
-// this stays a plain script rather than an IIFE.
+// Split out of the former ui.js "god file" (history).
 //
 // This is a DIAGNOSTIC, and it is the last thing in the renderer that reads
 // terrain. Masking itself is crc-sync's (its src/terrain.js, docs/adr/0044) —
