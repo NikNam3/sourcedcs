@@ -130,7 +130,7 @@ function appScene() {
     S('s-viper', 'f-viper', 'AP'),
     S('s-colt-ctr', 'f-colt', 'CTR', { facilityId: 'CENTER', coordination: { primitive: 'HANDOFF', state: 'INITIATED', peerPositionId: 'AP', peerFacilityId: 'INCIRLIK' } }),
     S('s-colt-app', 'f-colt', 'AP', { coordination: { primitive: 'HANDOFF', state: 'INITIATED', mintedForCoordination: true, peerPositionId: 'CTR', peerFacilityId: 'CENTER' } }),
-    S('s-snake-twr', 'f-snake', 'LC', { stripType: 'DEPARTURE', state: 'HANDED_OFF', coordination: { primitive: 'POINT_OUT', state: 'INITIATED', peerPositionId: 'AP' } }),
+    S('s-snake-lc', 'f-snake', 'LC', { stripType: 'DEPARTURE', state: 'HANDED_OFF', coordination: { primitive: 'POINT_OUT', state: 'INITIATED', peerPositionId: 'AP' } }),
     S('s-snake-app', 'f-snake', 'AP', { stripType: 'DEPARTURE', state: 'HANDED_OFF', coordination: { primitive: 'POINT_OUT', state: 'INITIATED', mintedForCoordination: true, peerPositionId: 'LC' } }),
     S('s-enf', 'f-enf', 'CTR', { facilityId: 'CENTER' }),
     S('s-dude', 'f-dude', 'AP'),
@@ -182,7 +182,7 @@ test('scene 2: the sender ends — CTR handing COLT31 to AP, LC pointing SNAKE21
   sc.tracks = sc.tracks.filter(t => ['colt', 'snake', 'enf', 'boar', 'hawg', 'sq'].includes(t.id));
   sc.alerts = { conformance: [], conflictAlert: [], obligations: [] };
   await inject(page, sc);
-  await snap(page, 'scene2-senders-ctr-twr.png');
+  await snap(page, 'scene2-senders-ctr-lc.png');
 });
 
 test('scene 2b: the receiver end, after a point-out was accepted and a handoff taken', async ({ page }) => {

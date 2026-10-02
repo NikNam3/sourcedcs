@@ -81,7 +81,7 @@ test('HUNG: AP records it, LC sees it, the flight lands normally, CLEAN clears i
 
   // H55: the pilot reports it to approach, inbound. S-L12: while CLEAN, ORDNANCE
   // is not on AP's face — it is one tap away in the expanded view.
-  await expect(strip.locator('.efsp-strip-fields .efsp-block-3G'), 'a CLEAN ORDNANCE costs APP no Strip height').toHaveCount(0);
+  await expect(strip.locator('.efsp-strip-fields .efsp-block-3G'), 'a CLEAN ORDNANCE costs AP no Strip height').toHaveCount(0);
   await only(page, CS);
   await strip.screenshot({ path: shot('02a-app-clean.png') });
   await recordFromExpanded(strip, 'HUNG');

@@ -225,7 +225,7 @@ test('a rejected proposal is visible to the controller who sent it', async ({ br
   const onStrip = /REJECT|UNABLE/i.test(await s.innerText());
   const banner = (await a.locator('#efsp-mutation-error').textContent() || '').trim();
   expect(onStrip || banner.length > 0,
-    'APP said UNABLE; the sender\'s Strip quietly went back to offering Coordinate… and nothing on the panel says the request was refused').toBe(true);
+    'AP said UNABLE; the sender\'s Strip quietly went back to offering Coordinate… and nothing on the panel says the request was refused').toBe(true);
 });
 
 // ── F-303 ─────────────────────────────────────────────────────────────────
@@ -251,7 +251,7 @@ test('a rejected replica in the receiver\'s Coordination Bay cannot be worked', 
   // that answers it — and it is the only shape that tells the controller WHY
   // the flight they declined is still theirs to see.
   const nla = replica.getByRole('button', { name: 'Hand to Tower' });
-  await expect(nla, 'the replica APP just rejected offers an enabled Hand to Tower').toBeDisabled({ timeout: 2000 });
+  await expect(nla, 'the replica AP just rejected offers an enabled Hand to Tower').toBeDisabled({ timeout: 2000 });
   await expect(replica.locator('.efsp-nla-inhibit-reason'),
     'disabled with no reason on the Strip is a control that refuses in silence')
     .toContainText(/rejected/i, { timeout: 2000 });

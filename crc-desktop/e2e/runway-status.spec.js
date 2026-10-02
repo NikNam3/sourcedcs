@@ -30,7 +30,7 @@ test.describe.configure({ mode: 'serial', timeout: 240000 });
 const SHOTS = path.join(__dirname, '..', '..', 'docs', 'wip', 'L1b');
 const shot = (page, name) => page.screenshot({ path: path.join(SHOTS, `${name}.png`), fullPage: false });
 
-const FDR = { route: 'DCT', requestedAltitude: 'FL250', departureAirport: 'LTAG', destinationAirport: 'LTAF' };
+const FLIGHT_DATA = { route: 'DCT', requestedAltitude: 'FL250', departureAirport: 'LTAG', destinationAirport: 'LTAF' };
 const RUN = String(Date.now()).slice(-3); // callsigns unique per run, since the Board is shared
 
 const _contexts = [];
@@ -157,7 +157,7 @@ async function stripOp(page, cs, op, positionId) {
 /** Creates a Strip over the real wire and waits for it in client state (not in whatever Bay is on screen). */
 async function seed(page, { callsign, stripType, actingPositionId = 'OPS', bayId = 'ops-proposed', flightData = {} }) {
   await page.evaluate(([acting, op]) => crc.ws.sendEfspCreateStrip(acting, op, 'INCIRLIK'), [
-    actingPositionId, { kind: 'CreateStrip', bayId, rackId: 'main', stripType, flightData: { callsign, aircraftType: 'F16', wakeCategory: 'D', ...FDR, ...flightData } },
+    actingPositionId, { kind: 'CreateStrip', bayId, rackId: 'main', stripType, flightData: { callsign, aircraftType: 'F16', wakeCategory: 'D', ...FLIGHT_DATA, ...flightData } },
   ]);
   await expect.poll(() => stripOf(page, callsign), { message: `${callsign} created` }).not.toBeNull();
 }
@@ -300,7 +300,7 @@ test('Phase 3 walk: OPS asks for runway works, LC suspends, the Strips hold, FIN
   await front(lc, 'efsp');
   await lc.evaluate(() => crc.ws.sendEfspRunwayStatusMutation('LC', 'INCIRLIK', crc.state.getEfspRunwayStatus('INCIRLIK').rev, { kind: 'CompleteInspection', runwayId: '05/23' }));
   await expect(lc.locator('#efsp-mutation-error')).toHaveText(/^runway 05\/23 — /);
-  expect(await expectRefusalIsVisible(lc, 'TWR signing off an inspection')).toMatch(/^runway 05\/23/);
+  expect(await expectRefusalIsVisible(lc, 'LC signing off an inspection')).toMatch(/^runway 05\/23/);
   await shot(lc, '05-inspection-refused-to-lc');
 
   await press(ops, 'CompleteInspection', { positionId: 'OPS' });
@@ -343,7 +343,7 @@ test('Phase 3 walk: a runway change needs OPS and AP (each a different person), 
   await press(lc, 'ProposeRunwayChange', { positionId: 'LC' });
   await expect(offered(lc, 'BeginRunwayChange'), 'not before both acknowledge').toHaveCount(0);
   await press(app, 'AckRunwayChange', { positionId: 'AP' });
-  await expect(offered(lc, 'BeginRunwayChange'), 'APP alone is not enough').toHaveCount(0);
+  await expect(offered(lc, 'BeginRunwayChange'), 'AP alone is not enough').toHaveCount(0);
   await expect(lc.locator('#runway-status-panel .runway-status-ack-done')).toHaveText([/^AP ✓ \d{4}Z$/]);
   await expect(lc.locator('#runway-status-panel .runway-status-ack-waiting')).toHaveText(['OPS …']);
   await press(ops, 'AckRunwayChange', { positionId: 'OPS' });

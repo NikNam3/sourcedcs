@@ -44,7 +44,7 @@ test('01 SFA: filed on a frequency Rack, rotated to PAR with the frequency uncha
   await controller(page);
   const call = cs('SFA');
   await page.evaluate((c) => crc.ws.sendEfspCreateStrip('AP', { kind: 'CreateStrip', bayId: 'ap-inbound', rackId: 'main', stripType: 'ARRIVAL', flightData: { callsign: c, aircraftType: 'F-16C', originAirport: 'LTAG' } }), call);
-  await waitStrip(page, call, s => s.ownerPositionId === 'AP', 'created at APP');
+  await waitStrip(page, call, s => s.ownerPositionId === 'AP', 'created at AP');
   await page.evaluate((c) => {
     const s = crc.state.getAllEfspStrips().find(x => (crc.state.getEfspFlightData(x.flightDataId) || { identity: {} }).identity.callsign === c);
     crc.ws.sendEfspMutation('AP', s, { kind: 'TransferStrip', toPositionId: 'SFA', bayId: 'sfa-frequencies', rackId: 'freq-2' });

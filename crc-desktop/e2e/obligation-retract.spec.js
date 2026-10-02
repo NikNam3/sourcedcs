@@ -15,7 +15,7 @@ const { test, expect } = require('./helpers/test');
 const { openPanel, seedStrip, stripByCallsign } = require('./helpers/app');
 
 const MINUTE = 60 * 1000;
-const FDR = { departureAirport: 'LTAG', destinationAirport: 'LTAG', route: 'DCT', requestedAltitude: '250' };
+const FLIGHT_DATA = { departureAirport: 'LTAG', destinationAirport: 'LTAG', route: 'DCT', requestedAltitude: '250' };
 
 const stripOf = (page, cs) => page.evaluate((c) => {
   const s = crc.state.getAllEfspStrips().find((x) => crc.state.getEfspFlightData(x.flightDataId).identity.callsign === c && x.state !== 'DROPPED');
@@ -47,7 +47,7 @@ const obligationOnPage = (page, cs) => page.evaluate((c) => {
 
 /** A departure CD holds on a void time that expired 31 minutes ago. */
 async function voidExpired(page, cs) {
-  await seedStrip(page, { callsign: cs, stripType: 'DEPARTURE', flightData: FDR });
+  await seedStrip(page, { callsign: cs, stripType: 'DEPARTURE', flightData: FLIGHT_DATA });
   await act(page, cs, 'OPS', { kind: 'InvokeNla' }); // -> PENDING_CLEARANCE at CD
   await act(page, cs, 'CD', { kind: 'SetState', toState: 'CLEARED' });
   await act(page, cs, 'CD', { kind: 'SetBlock', blockId: '14A', value: 'CLEARANCE_VOID_TIME' });

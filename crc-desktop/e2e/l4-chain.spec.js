@@ -16,7 +16,7 @@
 const { test, expect } = require('./helpers/test');
 const { openPanel, seedStrip, stripByCallsign } = require('./helpers/app');
 
-const FDR = { route: 'DCT', requestedAltitude: 'FL250', departureAirport: 'LTAG', destinationAirport: 'LTAF' };
+const FLIGHT_DATA = { route: 'DCT', requestedAltitude: 'FL250', departureAirport: 'LTAG', destinationAirport: 'LTAF' };
 const ALL = ['OPS', 'CD', 'GC', 'LC', 'AP'];
 
 const stripOf = (cs) => crc.state.getAllEfspStrips().find((x) => crc.state.getEfspFlightData(x.flightDataId).identity.callsign === cs);
@@ -68,7 +68,7 @@ for (const [label, n, tag] of [['Approve Pushback', 2, 'P'], ['To Runway Queue',
       const pair = [`L4${tag}${attempt}A`, `L4${tag}${attempt}B`];
       await page.locator('#efsp-position-tabs .efsp-position-tab[data-position-id="OPS"]').click();
       await page.locator('#efsp-bay-tabs .efsp-bay-tab[data-bay-id="ops-proposed"]').click();
-      for (const c of pair) { await seedStrip(page, { callsign: c, stripType: 'DEPARTURE', flightData: FDR }); await advance(page, c, n); }
+      for (const c of pair) { await seedStrip(page, { callsign: c, stripType: 'DEPARTURE', flightData: FLIGHT_DATA }); await advance(page, c, n); }
       await show(page, pair[0]);
 
       // Tap whichever of ours is higher, so the other is the one that slides up.
@@ -108,7 +108,7 @@ test('an NLA the server will refuse says so before it is pressed', async ({ page
   test.setTimeout(60000);
   await page.setViewportSize({ width: 1600, height: 1600 });
   await openPanel(page, { signedOn: ALL });
-  await seedStrip(page, { callsign: 'L4X1', stripType: 'DEPARTURE', flightData: FDR });
+  await seedStrip(page, { callsign: 'L4X1', stripType: 'DEPARTURE', flightData: FLIGHT_DATA });
   await advance(page, 'L4X1', 7); // DEPARTED, next is Hand Off to AP
   // Release AP. Nothing else covers it, so the server will now inhibit.
   await page.evaluate((h) => crc.ws.sendEfspSetPositions('INCIRLIK', h), ALL.filter((p) => p !== 'AP'));
