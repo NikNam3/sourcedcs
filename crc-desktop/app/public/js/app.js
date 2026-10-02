@@ -588,11 +588,11 @@ async function connect() {
         // model, so both runway entries are converted again.
         applyTheaterFacts(msg);
         settings.transitionAltFt = msg.transitionAltFt;
-        if (typeof resolveApproachCourse === 'function') resolveApproachCourse();
-        if (typeof _updateAprtRwyHeading === 'function') _updateAprtRwyHeading();
+        resolveApproachCourse();
+        _updateAprtRwyHeading();
         updateMap();
-        if (typeof _updateAprtRefCard === 'function') _updateAprtRefCard();
-        if (typeof refreshAprtTheaterFacts === 'function') refreshAprtTheaterFacts();
+        _updateAprtRefCard();
+        refreshAprtTheaterFacts();
         break;
       case 'atis':
         // Live "who's transmitting ATIS on which frequency" list — pushed
@@ -600,7 +600,7 @@ async function connect() {
         // periodic tick so a crashed client's entry still clears for
         // everyone once it goes stale (see crc-sync's AtisStore.getActive()).
         atisActive = msg.active || [];
-        if (typeof _updateAprtRefCard === 'function') _updateAprtRefCard();
+        _updateAprtRefCard();
         break;
       case 'apt-config':
         // Squadron-wide config (crc-sync/src/apt-config.js): per-airport
@@ -620,7 +620,7 @@ async function connect() {
           settings.aprtManualWx[key] = entry.manualWx || { vis: '', clouds: [] };
         }
         saveSettings();
-        if (typeof refreshAprtSelectedApt === 'function') refreshAprtSelectedApt();
+        refreshAprtSelectedApt();
         break;
       // Which radars the Positions we are signed on to let us look through. Arrives before
       // the first snapshot and again whenever the signed-on set changes — see

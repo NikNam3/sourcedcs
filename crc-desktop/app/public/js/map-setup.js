@@ -633,7 +633,7 @@ export function initMap(container) {
     // correlation-highlight.js's selectStripForTrack.
     // eslint-disable-next-line no-inner-declarations
     function _selectStripForTrackIfAny(id) {
-      if (typeof selectStripForTrack === 'function') selectStripForTrack(id);
+      selectStripForTrack(id);
     }
 
     // ── Left-click on track icon ─────────────────────────────────────────
