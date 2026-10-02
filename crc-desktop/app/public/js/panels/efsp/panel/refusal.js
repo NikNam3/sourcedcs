@@ -4,6 +4,7 @@ import { _pendingCreateStripMutationId, _setCreateStripMsg, _setPendingCreateStr
 import { blockLabelFor } from '../strip-template.js';
 import { getEfspFlightData, getEfspStrip } from '../efsp-state.js';
 import { renderAllOpenEfspBays } from '../bay-view.js';
+import { noteAttestationRefusal } from './control-attest.js';
 
 // Rejections that reach here have no other visible surface — a dragged
 // Strip that gets refused (e.g. by crc-sync's bay-implied-state
@@ -262,7 +263,9 @@ export function notifyEfspOrphanedMutation(original) {
 export function notifyEfspMutationAck(clientMutationId, result) {
   // `result.pending` is the request this ack answers (efsp-state.js) — the
   // only place the refused Strip and the refused value exist. F-103/F-207.
-  if (!result.ok) _showMutationError(result.reason || 'Rejected', result.detail, { pending: result.pending });
+  // docs/adr/0101: the server asking for "coordinated with" is a question to the controller, not a refusal banner.
+  if (!result.ok && noteAttestationRefusal(result.reason, result.detail, result.pending)) { /* asked in #efsp-control-attest */ }
+  else if (!result.ok) _showMutationError(result.reason || 'Rejected', result.detail, { pending: result.pending });
   else if (result.warning) _showMutationWarning(result.warning);
   if (clientMutationId !== _pendingCreateStripMutationId) return;
   _setPendingCreateStripMutationId(null);

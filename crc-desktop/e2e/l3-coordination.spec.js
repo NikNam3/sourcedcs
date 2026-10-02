@@ -80,7 +80,7 @@ function recordsFor(page, callsign) {
 async function propose(page, stripEl, primitive, note) {
   await startAction(stripEl, 'Coordinate…');
   const popover = page.locator('.efsp-coordinate-popover');
-  await popover.locator('select').selectOption(primitive);
+  await popover.locator('.efsp-coordinate-primitive-select').selectOption(primitive);
   if (note) await popover.locator('textarea').fill(note);
   await popover.getByRole('button', { name: 'Send' }).dispatchEvent('click');
 }

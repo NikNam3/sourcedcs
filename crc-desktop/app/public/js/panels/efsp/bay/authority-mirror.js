@@ -1,4 +1,5 @@
 'use strict';
+import { COORDINATION_ELIGIBLE_STATES } from '../efsp-nla.js';
 
 
 // ── WP4A: cross-Facility coordination (guide §4.6, docs/adr/0015-0016) ──
@@ -17,6 +18,17 @@ export const COORDINATION_TARGETS = {
   AP: { facilityId: 'CENTER', positionId: 'CTR' },
   CTR: { facilityId: 'INCIRLIK', positionId: 'AP' },
 };
+
+// docs/adr/0101 (DR-3): APP or CTR may also hand an ARRIVAL in its coordination-eligible state to the carrier's Marshal (the Strip never leaves
+// the EFSP). The only primitive it takes is a HANDOFF; the server refuses the rest ("CV_MARSHAL does not take ...").
+export const CARRIER_HANDOFF_TARGET = { facilityId: 'CARRIER', positionId: 'CV_MARSHAL' };
+export const CARRIER_HANDOFF_STRIP_TYPE = 'ARRIVAL';
+
+/** Can this Strip be handed to the Marshal? (A key of COORDINATION_TARGETS holding an ARRIVAL in that state.) */
+export function canHandOffToCarrier(strip) {
+  return !!COORDINATION_TARGETS[strip.ownerPositionId]
+    && strip.stripType === CARRIER_HANDOFF_STRIP_TYPE && strip.state === COORDINATION_ELIGIBLE_STATES[CARRIER_HANDOFF_STRIP_TYPE];
+}
 
 // ── WP4A second slice: TOFI (guide §4.6.3) — a genuinely different
 // sub-protocol from the 5 primitives above, not a 6th COORDINATION_TARGETS

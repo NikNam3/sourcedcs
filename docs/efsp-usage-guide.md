@@ -624,6 +624,35 @@ Primitive cheat sheet (what moves on ACCEPT):
 
 `POINT_OUT` shows two badges on the Strip ("DATA: X" / "SEP: Y") since those can genuinely differ.
 
+### HANDOFF after Accept: communications, ControlRelease and control (`docs/adr/0101`)
+
+**Accept on a `HANDOFF` moves radar identification and the Strip only.** The flight is now on the receiving Position's
+Bay, but the transferring Position is still on the frequency and still has control. (This supersedes the `HANDOFF` row of
+the cheat sheet above and step 4's "separation responsibility moves"; `AIT` still moves everything at Accept.) What is
+left to do is three separate steps, shown as chips on the `HANDOFF` row of **both** Strips: `COMMS: CTR` and `CTRL: CTR`
+(the Position that has them; a blue outline means yours), and, when there is one, the `RELEASE` in effect.
+
+| Step | Who | What it says |
+|---|---|---|
+| **Comms to X** | either side | The aircraft was told to call X, or X heard the check-in. One click; **Undo** (10 s) takes it back. |
+| **Release…** (`ControlRelease`) | the transferring side | Lets the receiver turn, climb or descend the aircraft before control transfers: tick Turns, Climb, Descent or Full, an optional ceiling or floor for Climb/Descent, an optional condition and an optional effective time (HHMM Zulu). A new release replaces the last one. Not undoable: **Withdraw release** is the correction, and only until control transfers. |
+| **Request release…** | the receiving side | Asks for a release of what you tick. The transferring side sees `RELEASE REQUESTED`, and either **Release…** (which answers it) or **Unable** (with a reason you both can read). One request at a time. |
+| **Control to X** | either side | Transfer of control at the boundary or an agreed point. One click; **Undo** (10 s). Control also moves by itself when comms have moved and a **Full** release is in effect, in either order. |
+
+**Before control transfers, a heading or an altitude has to be coordinated.** The receiver may write inside the release
+without asking (a turn under Turns; a climb under Climb, up to the ceiling; speed is never checked). Anything else, and
+anything the transferring side writes after Accept, brings up a line above the Strips: "CLIMB is a control instruction
+and CTR still has control of this flight. Coordinated with CTR?". **Coordinated with CTR** sends your write again with the
+attestation (it is audited); **Cancel** drops it. Nothing is sent without your click. If the transferring side drops its
+Strip, comms and control both move to the receiver (a warning says so); if the receiver drops its replica, what it held goes
+back. If nobody staffed can hold either, the Strip shows `NO CONTROL HOLDER` (sign on at the Position that should) and a
+repair by the system shows as `CONTROL MOVED` and a `… MOVED BY THE SYSTEM` chip.
+
+**To the carrier.** `AP` or `CTR` can hand an `ARRIVAL` at `INBOUND` to `CV_MARSHAL`: in **Coordinate…** pick `HANDOFF`,
+then **to CV_MARSHAL**. The Marshal gets it in `cv-marshal-coordination`, Accepts, and the flight joins the stack at the next
+free slot as a Marshal Strip; from then on the same chips and steps apply, with the Marshal as the receiver (it can Accept or
+Reject, record comms and control and request a release, but proposes nothing).
+
 ### Forwarding obligations — the timer indicator
 
 Some things have to happen by a time: forward an arrival at least 15 minutes before it reaches

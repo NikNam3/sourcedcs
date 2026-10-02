@@ -2,7 +2,7 @@
 import { COORDINATION_ELIGIBLE_STATES } from '../../efsp-nla.js';
 import { getEfspFlightData, getEfspStrip, isAitAuthorizedFor } from '../../efsp-state.js';
 import { sendEfspMutation } from '../../efsp-ws.js';
-import { COORDINATION_TARGETS } from '../authority-mirror.js';
+import { CARRIER_HANDOFF_TARGET, COORDINATION_TARGETS, canHandOffToCarrier } from '../authority-mirror.js';
 import { _resolveActingPositionId, _swallowRepeatAdvance } from '../../bay-view.js';
 import { _mountPopover, _unmountPopover } from '../popover-portal.js';
 
@@ -69,7 +69,7 @@ export function _canProposeCoordination(strip) {
  * _dispatchMarsa/_dispatchCorrelation: those two send their own relation's or
  * correlation record's current rev, not the Strip's.
  */
-export function _dispatchCoordination(strip, primitive, action, note) {
+export function _dispatchCoordination(strip, primitive, action, note, targetOverride) {
   strip = getEfspStrip(strip.stripId) || strip;
   const actingPositionId = _resolveActingPositionId(strip);
   if (!actingPositionId) return;
@@ -80,7 +80,7 @@ export function _dispatchCoordination(strip, primitive, action, note) {
   // neither moves the Strip and neither removes a control from it.
   if ((action === 'ACCEPT' || action === 'REJECT') && _swallowRepeatAdvance()) return;
   if (action === 'PROPOSE') {
-    const target = COORDINATION_TARGETS[strip.ownerPositionId];
+    const target = targetOverride || COORDINATION_TARGETS[strip.ownerPositionId];
     if (!target) return;
     sendEfspMutation(actingPositionId, strip, { kind: primitive, action: 'PROPOSE', toFacilityId: target.facilityId, toPositionId: target.positionId, note: note || undefined });
   } else {
@@ -210,6 +210,26 @@ export function _openCoordinatePopover(strip, anchorEl) {
   }
   popover.appendChild(select);
 
+  // docs/adr/0101 (DR-3): an ARRIVAL in its coordination-eligible state may be handed to the carrier's Marshal instead of the counterpart.
+  // Only a HANDOFF goes there, so the choice shows with HANDOFF and falls back to the counterpart otherwise.
+  let toSelect = null;
+  if (canHandOffToCarrier(strip)) {
+    const counterpart = COORDINATION_TARGETS[strip.ownerPositionId];
+    toSelect = document.createElement('select');
+    toSelect.className = 'efsp-coordinate-target-select';
+    toSelect.setAttribute('aria-label', 'hand off to');
+    for (const t of [counterpart, CARRIER_HANDOFF_TARGET]) {
+      const opt = document.createElement('option');
+      opt.value = t.positionId;
+      opt.textContent = `to ${t.positionId}`;
+      toSelect.appendChild(opt);
+    }
+    const sync = () => { toSelect.hidden = select.value !== 'HANDOFF'; };
+    select.addEventListener('change', sync);
+    sync();
+    popover.appendChild(toSelect);
+  }
+
   const note = document.createElement('textarea');
   note.className = 'efsp-coordinate-note';
   note.placeholder = degraded ? 'Verbal coordination note (required)' : 'Note (optional)';
@@ -224,7 +244,8 @@ export function _openCoordinatePopover(strip, anchorEl) {
       note.classList.add('efsp-coordinate-note-required');
       return;
     }
-    _dispatchCoordination(strip, select.value, 'PROPOSE', note.value.trim());
+    const toCarrier = toSelect && select.value === 'HANDOFF' && toSelect.value === CARRIER_HANDOFF_TARGET.positionId;
+    _dispatchCoordination(strip, select.value, 'PROPOSE', note.value.trim(), toCarrier ? CARRIER_HANDOFF_TARGET : undefined);
     _closeCoordinatePopover();
   });
   popover.appendChild(sendBtn);

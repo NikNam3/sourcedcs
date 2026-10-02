@@ -454,6 +454,10 @@ test('undo: the two marks declare a scope of both Strips; ControlRelease and eve
     const scope = handoff.undo.scope(ctx, T, { kind: 'HANDOFF', action });
     assert.deepEqual(scope.strips, [{ facilityId: 'CENTER', stripId: T.stripId }, { facilityId: 'INCIRLIK', stripId: ex.R().stripId }]);
     assert.equal(typeof handoff.undo.label({ kind: 'HANDOFF', action }, T, ctx), 'string');
+    // The label names the RECEIVING Position from either side (AP on the transferring Strip and on the replica alike).
+    const words = action === 'TRANSFER_COMMS' ? 'Communications' : 'Control';
+    assert.equal(handoff.undo.label({ kind: 'HANDOFF', action }, T, ctx), `${words} to ${ex.R().ownerPositionId}`);
+    assert.equal(handoff.undo.label({ kind: 'HANDOFF', action }, ex.R(), ctx), `${words} to ${ex.R().ownerPositionId}`);
   }
   for (const action of ['PROPOSE', 'ACCEPT', 'REJECT', 'CANCEL']) assert.equal(handoff.undo.scope(ctx, T, { kind: 'HANDOFF', action }), null, action);
   for (const kind of ['POINT_OUT', 'TRAFFIC', 'OPERATIONAL_REQUEST', 'AIT']) assert.equal(OPS.find(m => m.kind === kind).undo, 'none', kind);
