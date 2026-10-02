@@ -14,3 +14,15 @@ Lane UNDO-C, branch `lane/UNDO-C-undo-button`, base `9d1c58d4`. ADR 0100 "As bui
 - Server wire: ack `undoable {actionId,label,windowMs}`; Undo ack `undone {actionId,op,label,transfer}`, `voided [{clientMutationId,op,actingPositionId,actorId,at,summary}]`; frame `efsp-undo-voided {facilityId,positionId,actionId,stripId,undoneOp,undoneLabel,undoneBy,at,voided:[{op,positionId,at,summary}]}`.
 
 ## Defaults taken
+- P2 defaults: the voided-message wording is the ADR's example; terminal refusals (UNDO_UNAVAILABLE, UNDO_BLOCKED, NOT_FOUND) clear the slot, transient ones (NOT_STAFFED, BAY_FULL) keep it; Ctrl+Z is ignored while typing in an input.
+- The Undo send is not registered as a pending mutation (no reconnect replay by rebase); undo-slot.js tracks its own ack and skips the refusal banner for it.
+
+## What was built
+`panel/undo-slot.js` (slot, outcome, voided messages, Ctrl+Z), `sendEfspUndo` in `efsp-ws.js`, ack/delta/snapshot epoch hooks and the `efsp-undo-voided` handler in `efsp-messages.js`, `#efsp-undo-slot` / `#efsp-undo-voided` in `index.html`, `.undo` by actionId. `SERVER_ONLY_OK['efsp-undo-voided']` removed. Tests: `tests/efsp-undo-slot.test.mjs`, `e2e/efsp-undo.spec.js` (4 specs, E2E_LANE=5).
+
+## Not done / walks
+- The e2e voided-message spec injects the frame; a real two-Position scenario (LC hands off, APP edits, LC undoes) is covered server-side by UNDO-S's tests, not walked in a browser.
+- `docs/efsp-usage-guide.md` line 1431 area updated (Undo lines only).
+
+## Release note
+Undo: every one-click move can be undone for 10 s from the new Undo slot, Ctrl+Z or `.undo`; a controller whose change an Undo voided gets a panel message.

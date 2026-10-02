@@ -20,8 +20,8 @@ async function pressNla(strip) {
 }
 
 test('a one-click move fills the Undo slot; Ctrl+Z undoes it and the slot shows the outcome', async ({ page }) => {
-  await openPanel(page, { signedOn: ['OPS'] });
-  const strip = await seedStrip(page, { callsign: 'UNDO11' });
+  await openPanel(page, { signedOn: ['OPS', 'CD'] });
+  const strip = await seedStrip(page, { callsign: 'UNDO11', stripType: 'DEPARTURE' });
   const before = await stateOf(page, 'UNDO11');
   await pressNla(strip);
   await expect(slot(page).locator('button')).toContainText(/^Undo · .* · \d+ s$/);
@@ -36,8 +36,8 @@ test('a one-click move fills the Undo slot; Ctrl+Z undoes it and the slot shows 
 });
 
 test('.undo sends the slot action, with no Strip selected', async ({ page }) => {
-  await openPanel(page, { signedOn: ['OPS'] });
-  const strip = await seedStrip(page, { callsign: 'UNDO12' });
+  await openPanel(page, { signedOn: ['OPS', 'CD'] });
+  const strip = await seedStrip(page, { callsign: 'UNDO12', stripType: 'DEPARTURE' });
   const before = await stateOf(page, 'UNDO12');
   await pressNla(strip);
   await expect(slot(page).locator('button')).toBeVisible();
@@ -55,7 +55,7 @@ test('a second Undo has nothing to undo; the slot says so and the Strip does not
 
 test('a voided controller sees a dismissible panel message and no marker on the Strip', async ({ page }) => {
   await openPanel(page, { signedOn: ['OPS'] });
-  const strip = await seedStrip(page, { callsign: 'UNDO13' });
+  const strip = await seedStrip(page, { callsign: 'UNDO13', stripType: 'DEPARTURE' });
   await page.evaluate(() => import('/js/panels/efsp/efsp-message-registry.js').then(r => r.dispatchEfspMessage({
     version: 1, type: 'efsp-undo-voided', facilityId: 'INCIRLIK', positionId: 'OPS', actionId: 'a1', stripId: 'x',
     undoneOp: 'InvokeNla', undoneLabel: 'Hand off UNDO13 → APP', undoneBy: 'LC', at: 0,
