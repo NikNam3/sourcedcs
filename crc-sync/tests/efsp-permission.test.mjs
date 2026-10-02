@@ -34,12 +34,17 @@ test('OPS and AP both pass the coarse CreateStrip gate (both originate Strips, j
 });
 
 test('every INCIRLIK/CENTER Position may perform every non-CreateStrip, non-coordination, non-AP/CTR-only, non-TOFI op kind (WP4A\'s coordination primitives, TOFI, and docs/adr/0023\'s ConvertToArrival are op-kind-level asymmetries, tested separately below)', () => {
-  const nonCreate = OP_KINDS.filter(k => k !== 'CreateStrip' && !COORDINATION_OP_KINDS.includes(k) && !AP_CTR_ONLY_OP_KINDS.includes(k) && !TOFI_OP_KINDS.includes(k) && !AIRSPACE_ENTRY_OP_KINDS.includes(k));
+  const nonCreate = OP_KINDS.filter(k => k !== 'CreateStrip' && !COORDINATION_OP_KINDS.includes(k) && k !== 'ControlRelease' && !AP_CTR_ONLY_OP_KINDS.includes(k) && !TOFI_OP_KINDS.includes(k) && !AIRSPACE_ENTRY_OP_KINDS.includes(k));
   for (const id of ['OPS', 'CD', 'GC', 'LC', 'AP', 'CTR']) {
     for (const op of nonCreate) {
       assert.equal(canMutate(id, op), true, `${id} / ${op}`);
     }
   }
+});
+
+test('ControlRelease (docs/adr/0101) goes where a HANDOFF goes: AP and CTR, never OPS/CD/GC/LC', () => {
+  for (const id of ['AP', 'CTR']) assert.equal(canMutate(id, 'ControlRelease'), true, id);
+  for (const id of ['OPS', 'CD', 'GC', 'LC']) assert.equal(canMutate(id, 'ControlRelease'), false, id);
 });
 
 test('only AP and CTR may use ConvertToArrival — CD/GC/LC/OPS get none, same restriction as the 5 coordination primitives, for the same underlying reason (docs/adr/0023)', () => {

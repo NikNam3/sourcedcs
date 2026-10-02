@@ -192,7 +192,7 @@ function replicaOnReceipt(toPositionId, stripType, senderState) {
 function senderStateOnAccept(primitive, stripType, senderState) { return ((SENDER_STATE_ON_ACCEPT[primitive] || {})[stripType] || {})[senderState]; }
 
 // ── Position tables, composed once ─────────────────────────────────────────
-const { COORDINATION_OP_KINDS } = require('./op-kinds');
+const { COORDINATION_OP_KINDS, COORDINATION_STEP_OP_KINDS } = require('./op-kinds');
 const { _isMruOrNonAtc } = require('./classes');
 
 // The coarse "may this Position class ever perform this KIND of op at
@@ -223,7 +223,7 @@ for (const f of positionFamilies) {
 // of what PERMISSIONS[positionId] was constructed with above.
 for (const [positionId, ops] of Object.entries(PERMISSIONS)) {
   if (_isMruOrNonAtc(positionId)) {
-    for (const opKind of COORDINATION_OP_KINDS) ops.delete(opKind);
+    for (const opKind of [...COORDINATION_OP_KINDS, ...COORDINATION_STEP_OP_KINDS]) ops.delete(opKind);
   }
 }
 

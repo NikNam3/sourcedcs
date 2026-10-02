@@ -38,7 +38,12 @@ const OP_KINDS = [
 // The 5 cross-Facility coordination primitives (guide §4.6) — split out so
 // PERMISSIONS below can grant them to exactly AP/CTR without repeating
 // the list, and so canMutate()'s D21 shape stays a single flat lookup.
-const COORDINATION_OP_KINDS = ['HANDOFF', 'POINT_OUT', 'TRAFFIC', 'OPERATIONAL_REQUEST', 'AIT', 'ControlRelease'];
+const COORDINATION_OP_KINDS = ['HANDOFF', 'POINT_OUT', 'TRAFFIC', 'OPERATIONAL_REQUEST', 'AIT'];
+
+// A step inside one of them (docs/adr/0101): held exactly where the HANDOFF is, so every place that withholds the
+// primitives withholds it too, and kept out of COORDINATION_OP_KINDS because that list is the five primitives the client
+// mirrors (crc-desktop's coordination lockstep test).
+const COORDINATION_STEP_OP_KINDS = ['ControlRelease'];
 
 // Op kinds restricted to exactly AP/CTR, for reasons other than being a
 // cross-Facility coordination primitive — currently just ConvertToArrival
@@ -60,8 +65,8 @@ const AIRSPACE_ENTRY_OP_KINDS = ['ApproveAirspaceEntry', 'ClearAirspaceEntry'];
 // table names it (CTR, TAC_C2, GCI — see PERMISSIONS below).
 const TOFI_OP_KINDS = ['TOFI'];
 
-const NON_CREATE_OPS = OP_KINDS.filter(k => k !== 'CreateStrip' && !COORDINATION_OP_KINDS.includes(k) && !AP_CTR_ONLY_OP_KINDS.includes(k) && !TOFI_OP_KINDS.includes(k) && !AIRSPACE_ENTRY_OP_KINDS.includes(k));
+const NON_CREATE_OPS = OP_KINDS.filter(k => k !== 'CreateStrip' && !COORDINATION_OP_KINDS.includes(k) && !COORDINATION_STEP_OP_KINDS.includes(k) && !AP_CTR_ONLY_OP_KINDS.includes(k) && !TOFI_OP_KINDS.includes(k) && !AIRSPACE_ENTRY_OP_KINDS.includes(k));
 
 module.exports = {
-  OP_KINDS, COORDINATION_OP_KINDS, AP_CTR_ONLY_OP_KINDS, AIRSPACE_ENTRY_OP_KINDS, TOFI_OP_KINDS, NON_CREATE_OPS,
+  OP_KINDS, COORDINATION_OP_KINDS, COORDINATION_STEP_OP_KINDS, AP_CTR_ONLY_OP_KINDS, AIRSPACE_ENTRY_OP_KINDS, TOFI_OP_KINDS, NON_CREATE_OPS,
 };

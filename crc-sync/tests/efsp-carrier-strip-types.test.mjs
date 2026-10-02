@@ -84,7 +84,7 @@ test('permissions: only the Marshal creates, only as MARSHAL; no CV Position pro
   for (const p of ['CV_MARSHAL', 'CV_PRIFLY', 'CV_APP1', 'CV_APP2']) {
     // The Marshal alone holds HANDOFF and ControlRelease, and only their receiving actions (DR-3).
     const held = p === 'CV_MARSHAL' ? ['HANDOFF', 'ControlRelease'] : [];
-    for (const k of [...permission.COORDINATION_OP_KINDS, 'TOFI', 'ConvertToArrival', 'ApproveAirspaceEntry', 'ClearAirspaceEntry']) {
+    for (const k of [...permission.COORDINATION_OP_KINDS, 'ControlRelease', 'TOFI', 'ConvertToArrival', 'ApproveAirspaceEntry', 'ClearAirspaceEntry']) {
       assert.equal(permission.canMutate(p, k), held.includes(k), `${p}/${k}`);
     }
     assert.equal(permission.canMutateAction(p, 'HANDOFF', 'PROPOSE'), false, `${p} never proposes`);
