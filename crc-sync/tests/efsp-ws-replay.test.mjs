@@ -20,9 +20,9 @@ for (const [k, v] of Object.entries({
   CRCSYNC_EFSP_MUTATION_LOG_PATH: 'mutations.jsonl',
   CRCSYNC_EFSP_AIRSPACES_PATH: 'airspaces.json',
 })) process.env[k] = path.join(tmpDir, v);
-fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, JSON.stringify([
+fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, JSON.stringify({ Test: [
   { airspaceId: 'MOA-RPLY', name: 'Replay MOA', type: 'MOA', controllingFacilityId: 'CENTER', controllingPositionId: 'CTR', workingFrequencyMhz: 134.25 },
-]));
+] }));
 
 const { createEfsp } = await import('../src/efsp/index.js');
 const { ReplayCache } = await import('../src/efsp/sync/replay-cache.js');
@@ -42,7 +42,7 @@ function send(efsp, member, msg) {
 // ── F13: one kind at a time ─────────────────────────────────────────────
 
 test('a retried DeclareMarsa returns the first relation and mints no second one', () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ currentTheater: () => 'Test' });
   const c = crew(efsp, ATC);
   const tanker = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'SHELL1' });
   const rx = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'VIPER1' });
@@ -63,7 +63,7 @@ test('a retried DeclareMarsa returns the first relation and mints no second one'
 });
 
 test('a retried BindTrack is acked once, audited once', () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ currentTheater: () => 'Test' });
   const c = crew(efsp, ATC);
   const strip = mustAct(efsp, c.OPS, 'OPS', null, { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE', flightData: { ...DEPARTURE_FLIGHT_DATA, callsign: 'BIND1' } });
   const cur = efsp.correlationStore.getCorrelation(strip.flightDataId);
@@ -84,7 +84,7 @@ test('a retried BindTrack is acked once, audited once', () => {
 });
 
 test('a retried airspace op is not re-applied', () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ currentTheater: () => 'Test' });
   const c = crew(efsp, ATC);
   const cur = efsp.airspaceStore.getAirspace('MOA-RPLY');
   const msg = {
@@ -102,7 +102,7 @@ test('a retried airspace op is not re-applied', () => {
 });
 
 test('a retried runway-status op is not re-applied', () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ currentTheater: () => 'Test' });
   const c = crew(efsp, ATC);
   const cur = efsp.runwayStatusStore.getRunwayStatus('INCIRLIK');
   const msg = {
@@ -124,7 +124,7 @@ test('a retried runway-status op is not re-applied', () => {
 });
 
 test('a NOT_HOLDING_POSITION refusal is not cached: the retry after selecting the Position applies', () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ currentTheater: () => 'Test' });
   const c = crew(efsp, ATC);
   const tanker = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'SHELL2' });
   const rx = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'VIPER2' });
@@ -161,7 +161,7 @@ test('ReplayCache evicts the oldest entry past its cap and ignores an empty clie
 // ── F2: every efsp-board-delta carries boardEpoch ────────────────────────
 
 test('every efsp-board-delta carries boardEpoch', () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ currentTheater: () => 'Test' });
   const c = crew(efsp, ATC);
   const epochOf = (fid) => efsp.boardStoreFor(fid).epoch;
   const cases = [];

@@ -40,6 +40,12 @@ function _isPrimarySomewhere(ctx, session, msg) {
 
 /** Null when the session may act, else { reason, detail }. The session binding of docs/adr/0029, once, for every family. */
 function _gate(family, ctx, session, msg) {
+  // A service principal (the HTTP path, ADR 0098 §9) is set by server code on a pseudo-session, never by the wire; a
+  // family names the principals it accepts, and any other principal is refused.
+  if (session && session.servicePrincipal) {
+    if (family.servicePrincipals && family.servicePrincipals.includes(session.servicePrincipal.service)) return null;
+    return { reason: 'PERMISSION_DENIED', detail: `${session.servicePrincipal.service} may not use ${family.type}` };
+  }
   if (typeof family.gate === 'function') return family.gate(ctx, session, msg);
   if (family.gate === 'primary-somewhere') {
     return _isPrimarySomewhere(ctx, session, msg) ? null : { reason: 'NOT_HOLDING_POSITION', detail: family.notHolding(msg) };

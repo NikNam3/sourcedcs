@@ -207,7 +207,9 @@ function createApp(deps = {}) {
   // magnetic value becomes true, and the source of the `theater` message.
   const theaterContext = new TheaterContext({ theaters, clock: missionClock });
   const boardPaths   = deps.paths || statePaths('efsp-board.json', env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH);
-  const efsp        = createEfsp({ clock: missionClock, transitionAltFt: () => theaterContext.transitionAltFt(), paths: boardPaths });
+  // The airspace registry is scoped to the loaded mission's theater (docs/adr/0098 §2); the MissionSession is built below.
+  const theaterSource = { current: () => null };
+  const efsp        = createEfsp({ clock: missionClock, transitionAltFt: () => theaterContext.transitionAltFt(), currentTheater: () => theaterSource.current(), paths: boardPaths });
 
   // ── The radar picture (docs/adr/0042) ────────────────────────────────────
   // Radars, their sweep phase, terrain masking and who may look through what
@@ -307,6 +309,7 @@ function createApp(deps = {}) {
   // H36's archiver all read it. Registered BEFORE the mission-load handler below,
   // so that handler already sees the session this load belongs to.
   const missionSession = deps.missionSession || new MissionSession({ clock: missionClock });
+  theaterSource.current = () => missionSession.current().theatre || null;
   let lastMissionData = null;
   // A clock step back opens a session with no mission-load behind it: the wind
   // is re-read then too (a load-driven session is handled in the handler below).

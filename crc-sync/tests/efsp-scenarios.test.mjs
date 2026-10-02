@@ -18,7 +18,7 @@ import crypto from 'crypto';
 // beacon code released out from under a live shared-flight-data flight,
 // ConvertToArrival discarding an open link, and an unbound actingPositionId).
 //
-// Driven through createEfsp() + handleMessage — the real composition root and
+// Driven through createEfsp({ currentTheater: () => 'Test' }) + handleMessage — the real composition root and
 // the real wire path, not a hand-built rules object — so a rule that exists
 // but was never wired in index.js fails here rather than silently passing.
 
@@ -35,7 +35,7 @@ process.env.CRCSYNC_EFSP_MUTATION_LOG_PATH = path.join(tmpDir, 'mutations.jsonl'
 // before the imports below, because facility-config derives the RANGES
 // Facility's Position set from this at require time.
 process.env.CRCSYNC_EFSP_AIRSPACES_PATH = path.join(tmpDir, 'airspaces.json');
-fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, JSON.stringify([
+fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, JSON.stringify({ Test: [
   {
     airspaceId: 'MOA-EAST', name: 'East MOA', type: 'MOA',
     controllingFacilityId: 'CENTER', controllingPositionId: 'CTR',
@@ -59,7 +59,7 @@ fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, JSON.stringify([
     controllingFacilityId: 'CENTER', controllingPositionId: 'CTR',
     workingFrequencyMhz: 139.5,
   },
-]));
+] }));
 
 const { createEfsp } = await import('../src/efsp/index.js');
 const facilityConfig = await import('../src/efsp/facility-config.js');
@@ -121,7 +121,7 @@ const DEPARTURE_FLIGHT_DATA = {
 // ── Scenario 1: civil round trip ─────────────────────────────────────────
 
 test('SCENARIO civil round trip: Incirlik IFR departure -> CTR -> airspace handed to the using agency and back -> return leg -> landed and dropped', async () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ currentTheater: () => 'Test' });
   const c = crew(efsp, { OPS: 'INCIRLIK', CD: 'INCIRLIK', GC: 'INCIRLIK', LC: 'INCIRLIK', AP: 'INCIRLIK', CTR: 'CENTER' });
 
   // OPS originates, then the Strip walks the intrafacility chain.
@@ -197,7 +197,7 @@ test('SCENARIO civil round trip: Incirlik IFR departure -> CTR -> airspace hande
 });
 
 test('the terminal Drop button releases the beacon code, not just the state — the flight data goes back in the pool', () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ currentTheater: () => 'Test' });
   const c = crew(efsp, { OPS: 'INCIRLIK', AP: 'INCIRLIK' });
 
   const strip = mustAct(efsp, c.OPS, 'OPS', null, {
@@ -219,7 +219,7 @@ test('the terminal Drop button releases the beacon code, not just the state — 
 });
 
 test('Undo of a terminal Drop puts back the remove indicator and re-claims the beacon code', () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ currentTheater: () => 'Test' });
   const c = crew(efsp, { OPS: 'INCIRLIK', AP: 'INCIRLIK' });
 
   const strip = mustAct(efsp, c.OPS, 'OPS', null, {
@@ -244,7 +244,7 @@ test('Undo of a terminal Drop puts back the remove indicator and re-claims the b
 // ── Scenario 2: military round trip ──────────────────────────────────────
 
 test('SCENARIO military round trip: Incirlik IFR departure -> CTR -> tactical control under TAC_C2 -> goes VFR -> TOFI exit -> return', async () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ currentTheater: () => 'Test' });
   const c = crew(efsp, {
     OPS: 'INCIRLIK', AP: 'INCIRLIK', LC: 'INCIRLIK', GC: 'INCIRLIK', CTR: 'CENTER', TAC_C2: 'TACTICAL',
   });
@@ -371,7 +371,7 @@ test('SCENARIO military round trip: Incirlik IFR departure -> CTR -> tactical co
 });
 
 test('a TOFI EXIT that completes while the airspace is still booked to the using agency warns, but is not blocked', () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ currentTheater: () => 'Test' });
   const c = crew(efsp, { OPS: 'INCIRLIK', AP: 'INCIRLIK', CTR: 'CENTER', TAC_C2: 'TACTICAL' });
 
   let strip = mustAct(efsp, c.OPS, 'OPS', null, {
@@ -398,7 +398,7 @@ test('a TOFI EXIT that completes while the airspace is still booked to the using
 // ── Cross-cutting guards the scenarios depend on ─────────────────────────
 
 test('a controller cannot act as a Position it is not Primary at, however the mutation names itself', () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ currentTheater: () => 'Test' });
   const c = crew(efsp, { OPS: 'INCIRLIK', AP: 'INCIRLIK' });
 
   const strip = mustAct(efsp, c.OPS, 'OPS', null, {
@@ -422,7 +422,7 @@ test('a controller cannot act as a Position it is not Primary at, however the mu
 });
 
 test('an Observer at a Position may not mutate its Strips — Primary is what acts', () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ currentTheater: () => 'Test' });
   const c = crew(efsp, { OPS: 'INCIRLIK' });
   const observer = { controllerId: 'c-observer', who: 'Observer' };
   efsp.handleMessage(observer, { type: 'efsp-set-positions', facilityId: 'INCIRLIK', signedOn: ['OPS'] });
@@ -436,7 +436,7 @@ test('an Observer at a Position may not mutate its Strips — Primary is what ac
 });
 
 test('TOFI cannot be opened on a Strip that is not yet airborne, nor on a MISSION Strip', () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ currentTheater: () => 'Test' });
   const c = crew(efsp, { OPS: 'INCIRLIK', CTR: 'CENTER', TAC_C2: 'TACTICAL' });
 
   // A CTR-originated ARRIVAL sitting at INBOUND is eligible; drive one to a
@@ -462,7 +462,7 @@ test('TOFI cannot be opened on a Strip that is not yet airborne, nor on a MISSIO
 });
 
 test('a Block a Facility hides cannot be written', () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ currentTheater: () => 'Test' });
   const c = crew(efsp, { CTR: 'CENTER' });
 
   const ctrStrip = mustAct(efsp, c.CTR, 'CTR', null, {
@@ -499,7 +499,7 @@ function airspaceAct(efsp, crewMember, positionId, airspaceId, op) {
 }
 
 test('SCENARIO a MOA sortie: Center books and activates its own MOA, a flight works it on the working frequency, then it all comes back', async () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ currentTheater: () => 'Test' });
   const c = crew(efsp, { OPS: 'INCIRLIK', AP: 'INCIRLIK', CTR: 'CENTER' });
 
   // Ankara Center owns the airspace the MOA sits in, so CTR both books and
@@ -546,7 +546,7 @@ test('SCENARIO a MOA sortie: Center books and activates its own MOA, a flight wo
 });
 
 test('SCENARIO a range with its own control: the range books it, Approach approves, and a flight goes to the range control frequency', () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ currentTheater: () => 'Test' });
   const c = crew(efsp, { OPS: 'INCIRLIK', AP: 'INCIRLIK', SOUTH_RANGE: 'RANGES' });
 
   const window = { fromUtc: Date.now(), toUtc: Date.now() + 2 * 60 * 60 * 1000 };
@@ -572,7 +572,7 @@ test('SCENARIO a range with its own control: the range books it, Approach approv
 });
 
 test('a range Position works no Strips — it can run its airspace and nothing else', () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ currentTheater: () => 'Test' });
   const c = crew(efsp, { OPS: 'INCIRLIK', WEST_RANGE: 'RANGES' });
 
   const strip = mustAct(efsp, c.OPS, 'OPS', null, {
@@ -590,7 +590,7 @@ test('a range Position works no Strips — it can run its airspace and nothing e
 });
 
 test('approving a flight into airspace nobody has activated is allowed, but warns and raises an alert', async () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ currentTheater: () => 'Test' });
   const c = crew(efsp, { OPS: 'INCIRLIK', AP: 'INCIRLIK' });
 
   let strip = mustAct(efsp, c.OPS, 'OPS', null, {
@@ -619,7 +619,7 @@ test('approving a flight into airspace nobody has activated is allowed, but warn
 });
 
 test('a controller cannot run an airspace from a Position it has not selected', () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ currentTheater: () => 'Test' });
   const c = crew(efsp, { AP: 'INCIRLIK' });
   // The same session binding every Strip mutation carries (docs/adr/0029) —
   // a new dispatch path is exactly where that gets forgotten.

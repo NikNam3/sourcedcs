@@ -28,10 +28,11 @@ const fs = require('fs');
 const runwayStatus = require('./runway-status'); // pure, requires nothing back (docs/adr/0061)
 const schema = require('./facility-schema');
 const { validateConfig, validateRadarSelector, validateSfaRotationRecord, BAY_VIEWS } = schema;
-// The RANGES Facility's Position set is derived from the airspace definitions (see _rangesConfig),
-// so this module needs airspace-schema.js; airspace-schema.js deliberately does not require
-// this module back, so there is no cycle.
-const airspaceConfig = require('./airspace-schema');
+// The RANGES Facility's Position set is derived from the airspace definitions (see _rangesConfig). The definitions
+// live in the registry (airspace-store.js, docs/adr/0098) and this module requires none of it: createEfsp derives the
+// ids from every theater's saved definitions and the standing list, and hands them over with setRangePositionIds()
+// before it builds the Facilities.
+let rangePositionIds = [];
 const path = require('path');
 const { CONFIG_DIR, readPath, writePath, ensureDirFor } = require('../state-paths');
 const log = require('../log').logger('efsp:facility-config');
@@ -100,9 +101,9 @@ const SHIPPED_FACILITY_IDS = ['INCIRLIK', 'CENTER', 'TACTICAL', 'CARRIER'];
 function _rangesConfig() {
   return {
     facility: 'RANGES',
-    positions: airspaceConfig.getRangePositionIds(),
+    positions: rangePositionIds,
     positionClasses: Object.fromEntries(
-      airspaceConfig.getRangePositionIds().map(id => [id, 'USING_AGENCY'])
+      rangePositionIds.map(id => [id, 'USING_AGENCY'])
     ),
     consolidation: {},
     positionLetters: {},
@@ -183,6 +184,15 @@ function load({ reload = false } = {}) {
 }
 
 function _configs() { load(); return configs; }
+
+/**
+ * The RANGES Facility's Positions: every distinct `usingPositionId` of every theater's definitions (R3-24: a change
+ * takes effect at the next start). Called by createEfsp before the Facilities are built.
+ */
+function setRangePositionIds(ids) {
+  rangePositionIds = [...new Set(ids)];
+  if (configs) configs.set('RANGES', _rangesConfig());
+}
 
 function _persist(facilityId) {
   if (DERIVED_FACILITY_IDS.has(facilityId)) return; // see DERIVED_FACILITY_IDS
@@ -386,6 +396,7 @@ function coordinationBayFor(positionId, facilityId = DEFAULT_FACILITY_ID) {
 }
 
 module.exports = {
+  setRangePositionIds,
   DEFAULT_FACILITY_ID, getFacilityIds,
   getFacilityConfig, getPositionSet, getPositionClass, getPositionLetter, allPositionLetters, getConsolidation, getBaysFor, getAllBays, isBlockVisible,
   getPositionRadars, radarBearingPositionIds, validateRadarSelector,

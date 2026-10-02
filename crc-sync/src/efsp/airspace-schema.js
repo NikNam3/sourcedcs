@@ -1,57 +1,27 @@
 'use strict';
 
-// Airspace definitions — the MOAs and ranges this theater knows about
-// (EFSPImplementationGuide.md §4.1's `RANGES` Facility, §9.11's activation
-// authority). Static configuration, loaded once at require time, same
-// load-or-default pattern as facility-config.js; the mutable *state* of each
-// airspace (scheduled/active/released/returned) lives in airspace-store.js,
-// exactly as a Strip's definition-vs-state split works.
+// The airspace SCHEMA and the standing-list SEED LOADER, and nothing else (docs/adr/0098 §3, §5, §10). The
+// definitions themselves live in the registry (airspace-store.js), per theater, which is their only writer; this
+// module never holds one. `validateAirspaceDefinition` is pure. `loadStandingList` reads the theater-keyed file
+// `config/efsp-airspaces.json` (a copy in state/ replaces it whole, ADR 0048) and the store applies it once per id.
 //
-// Deliberately loaded by facility-config.js rather than the other way round:
-// the `RANGES` Facility's Position set is DERIVED from these records (every
-// distinct `usingPositionId`), because a Position only exists for a range
-// that has real control of its own. An ordinary MOA has none — a flight
-// working inside it is approved onto a working frequency by whichever ATC
-// Position owns the airspace, which is the common case. That means this
-// module must not require facility-config.js back; it validates Position
-// references by shape only, and index.js's _validateAirspaceReferences
-// cross-checks them against the real Position sets at startup.
-//
-// [SOURCE-DEFINED]: the guide models no working frequency, no range-control
-// frequency, and no airspace *type* taxonomy at all — its only airspace
-// vocabulary is §4.6.4's ownership direction. `type`, `workingFrequencyMhz`
-// and `controlFrequencyMhz` are this squadron's operating practice, not FAA
-// or DoD doctrine, and must never be presented as such (defect D11).
+// [SOURCE-DEFINED]: the guide models no working frequency, no range-control frequency and no airspace *type*
+// taxonomy at all. `type`, `workingFrequencyMhz` and `controlFrequencyMhz` are this squadron's operating practice,
+// not FAA or DoD doctrine, and must never be presented as such (defect D11). `type` is **never read for behaviour**
+// (D14, ADR 0038): the governing agreement picks the separation regime, not the label.
 
 const fs = require('fs');
-const { statePaths, ensureDirFor } = require('../state-paths');
-const log = require('../log').logger('efsp:airspace-schema');
+const { statePaths } = require('../state-paths');
+const containment = require('./airspace/containment');
 
-// Squadron data that a live edit rewrites (setAirspaces), so it reads from
-// data/ if a live copy exists and always writes there — see state-paths.js.
-const { read: AIRSPACES_PATH, write: AIRSPACES_WRITE_PATH } =
-  statePaths('efsp-airspaces.json', process.env.CRCSYNC_EFSP_AIRSPACES_PATH);
 
-// What kind of block this is: labels borrowed from FAA and ICAO special-use
-// airspace names, spanning both rather than picking one. The set is ours
-// (see the [SOURCE-DEFINED] note at the top of this file).
-//
-// **Purely descriptive.** Nothing in the system derives behaviour from it,
-// and nothing may: defect D14 and guide §4.6.3 are explicit that
-// `separation_regime` "MUST NOT be derived from airspace type" — the
-// governing agreement picks the regime, including the case where ATC keeps
-// separating inside the block. `type` exists to label the airspace on the
-// board and nothing else. The two values that DO change behaviour are
-// `usingPositionId` (whether a Position exists for it) and which frequency
-// field is set.
-const AIRSPACE_TYPES = new Set([
-  'MOA',        // military operations area — FAA naming
-  'RANGE',      // a range, usually with control of its own
-  'DANGER',     // ICAO D
-  'RESTRICTED', // ICAO/FAA R
-  'PROHIBITED', // ICAO/FAA P
-  'WARNING',    // FAA W — over international water
-]);
+// What kind of block this is: labels borrowed from FAA and ICAO special-use airspace names (AREA) and from the
+// JO 7610.14 / AIM military training route names (ROUTE). **Purely descriptive** and never read for behaviour.
+const AREA_TYPES = new Set(['MOA', 'RANGE', 'DANGER', 'RESTRICTED', 'PROHIBITED', 'WARNING']);
+const ROUTE_TYPES = new Set(['IR', 'VR', 'SR', 'LLTR']);
+const AIRSPACE_TYPES = new Set([...AREA_TYPES, ...ROUTE_TYPES]);
+const KINDS = ['AREA', 'ROUTE'];
+const SOURCES = ['PANEL', 'WEB', 'STANDING', 'ACO'];
 
 // Vertical limits, in feet. Both optional: an airspace with neither is
 // unbounded as far as this system is concerned, which is honest — the real
@@ -79,137 +49,228 @@ function isValidFrequency(value) {
     && value >= MIN_FREQUENCY_MHZ && value <= MAX_FREQUENCY_MHZ;
 }
 
-function deepClone(obj) {
-  return JSON.parse(JSON.stringify(obj));
+
+// ── engineering constants ─────────────────────────────────────────────────────────────────────
+const ID_PATTERN = /^[A-Z0-9][A-Z0-9-]{1,23}$/;
+const MAX_NAME_LENGTH = 40;
+const MAX_FIX_NAME_LENGTH = 40;
+const MAX_ROUTE_SEGMENTS = 100;
+const MAX_WIDTH_NM = 100;
+const DEFINITION_HISTORY_CAP = 50;
+
+// Fields a definition may carry, and the ones a patch may never touch.
+const DEFINITION_FIELDS = ['airspaceId', 'name', 'kind', 'type', 'controllingFacilityId', 'controllingPositionId',
+  'usingPositionId', 'usingFacilityId', 'workingFrequencyMhz', 'controlFrequencyMhz', 'altLowerFt', 'altUpperFt',
+  'geometry', 'segments', 'defaultWidthNm', 'source'];
+const IMMUTABLE_FIELDS = ['airspaceId', 'kind'];
+// ROUTE: derived from the segments on every write, never accepted from a client.
+const DERIVED_ROUTE_FIELDS = ['altLowerFt', 'altUpperFt'];
+// R3-23: while SCHEDULED, ACTIVE or RELEASED, or with a pending request, only these may change.
+const LIVE_EDITABLE_FIELDS = ['name', 'workingFrequencyMhz', 'controlFrequencyMhz'];
+// Clearable (`null`) fields. The rest are required.
+const OPTIONAL_FIELDS = ['usingPositionId', 'usingFacilityId', 'workingFrequencyMhz', 'controlFrequencyMhz',
+  'altLowerFt', 'altUpperFt', 'geometry', 'source'];
+
+/** ACTIVATION is a rule keyed by `kind`, not a stored field (ADR 0098 §3): AREA needs an approval, ROUTE a confirmation. */
+const ACTIVATION_BY_KIND = { AREA: 'APPROVE', ROUTE: 'CONFIRM' };
+
+function deepClone(obj) { return JSON.parse(JSON.stringify(obj)); }
+
+const fail = (detail) => ({ ok: false, reason: 'VALIDATION_ERROR', detail });
+const isStr = (v) => typeof v === 'string' && v.length > 0;
+const isOptStr = (v) => v === undefined || v === null || isStr(v);
+const isLat = (v) => typeof v === 'number' && Number.isFinite(v) && v >= -90 && v <= 90;
+const isLon = (v) => typeof v === 'number' && Number.isFinite(v) && v >= -180 && v <= 180;
+
+function _validatePoints(id, label, points) {
+  if (!Array.isArray(points) || points.length < 3) return fail(`${id}: ${label} needs at least 3 points`);
+  if (points.length > containment.MAX_POLYGON_VERTICES) return fail(`${id}: ${label} has more than ${containment.MAX_POLYGON_VERTICES} points`);
+  for (const p of points) {
+    if (!Array.isArray(p) || p.length !== 2 || !isLat(p[0]) || !isLon(p[1])) return fail(`${id}: every ${label} point must be [lat, lon] in decimal degrees`);
+  }
+  const first = points[0]; const last = points[points.length - 1];
+  if (first[0] === last[0] && first[1] === last[1]) return fail(`${id}: ${label} must not repeat its first point at the end`);
+  if (containment.polygonSelfIntersects(points)) return fail(`${id}: ${label} crosses itself`);
+  return null;
+}
+
+function _validateGeometry(id, geometry) {
+  if (geometry === null || geometry === undefined) return null;
+  if (typeof geometry !== 'object' || Array.isArray(geometry)) return fail(`${id}: geometry must be an object or null`);
+  if (geometry.source === 'POLYGON') {
+    const extra = Object.keys(geometry).filter(k => !['source', 'points'].includes(k));
+    if (extra.length) return fail(`${id}: a POLYGON geometry has no ${extra[0]}`);
+    return _validatePoints(id, 'geometry', geometry.points);
+  }
+  if (geometry.source === 'DCS_DRAWING') {
+    const extra = Object.keys(geometry).filter(k => !['source', 'points', 'drawingRef'].includes(k));
+    if (extra.length) return fail(`${id}: a DCS_DRAWING geometry has no ${extra[0]}`);
+    const ref = geometry.drawingRef;
+    if (!ref || typeof ref !== 'object' || !isStr(ref.layerName) || !isStr(ref.objectName) || !isStr(ref.missionFingerprint)) {
+      return fail(`${id}: a DCS_DRAWING geometry needs drawingRef { layerName, objectName, missionFingerprint }`);
+    }
+    return _validatePoints(id, 'geometry', geometry.points);
+  }
+  return fail(`${id}: geometry.source must be POLYGON or DCS_DRAWING`);
+}
+
+function _bandOk(id, label, lo, hi) {
+  for (const [k, v] of [['altLowerFt', lo], ['altUpperFt', hi]]) {
+    if (v !== undefined && v !== null && !isValidAltitude(v)) {
+      return fail(`${id}: ${label}${k} must be a whole number of feet between ${MIN_ALTITUDE_FT} and ${MAX_ALTITUDE_FT}`);
+    }
+  }
+  if (isValidAltitude(lo) && isValidAltitude(hi) && hi <= lo) return fail(`${id}: ${label}altUpperFt must be above its altLowerFt`);
+  return null;
+}
+
+function _validateSegments(id, def) {
+  const segs = def.segments;
+  if (!Array.isArray(segs) || segs.length < 2) return fail(`${id}: a ROUTE needs at least 2 segments (the last is the exit fix)`);
+  if (segs.length > MAX_ROUTE_SEGMENTS) return fail(`${id}: a ROUTE has at most ${MAX_ROUTE_SEGMENTS} segments`);
+  for (let i = 0; i < segs.length; i++) {
+    const s = segs[i];
+    if (!s || typeof s !== 'object') return fail(`${id}: segment ${i + 1} must be an object`);
+    const extra = Object.keys(s).filter(k => !['fix', 'altLowerFt', 'altUpperFt', 'widthNm'].includes(k));
+    if (extra.length) return fail(`${id}: segment ${i + 1} has no ${extra[0]}`);
+    const f = s.fix;
+    if (!f || typeof f !== 'object' || !isStr(f.name) || f.name.length > MAX_FIX_NAME_LENGTH || !isLat(f.lat) || !isLon(f.lon)) {
+      return fail(`${id}: segment ${i + 1} needs fix { name, lat, lon }`);
+    }
+    const last = i === segs.length - 1;
+    if (last) {
+      if ((s.altLowerFt ?? null) !== null || (s.altUpperFt ?? null) !== null || (s.widthNm ?? null) !== null) {
+        return fail(`${id}: the last segment is the exit fix only: its altitudes and width must be null`);
+      }
+      continue;
+    }
+    const band = _bandOk(id, `segment ${i + 1} `, s.altLowerFt, s.altUpperFt);
+    if (band) return band;
+    if (s.widthNm !== undefined && s.widthNm !== null && !(typeof s.widthNm === 'number' && s.widthNm > 0 && s.widthNm <= MAX_WIDTH_NM)) {
+      return fail(`${id}: segment ${i + 1} widthNm must be a number above 0 and at most ${MAX_WIDTH_NM}`);
+    }
+  }
+  if (!(typeof def.defaultWidthNm === 'number' && def.defaultWidthNm > 0 && def.defaultWidthNm <= MAX_WIDTH_NM)) {
+    return fail(`${id}: a ROUTE needs a defaultWidthNm above 0 and at most ${MAX_WIDTH_NM}`);
+  }
+  return null;
+}
+
+/** The envelope of a route's legs: min of the lows, max of the highs. A null low is the surface, a null high is unbounded. */
+function deriveRouteEnvelope(segments) {
+  const legs = segments.slice(0, -1);
+  const lows = legs.map(l => (l.altLowerFt == null ? null : l.altLowerFt));
+  const highs = legs.map(l => (l.altUpperFt == null ? null : l.altUpperFt));
+  return {
+    altLowerFt: lows.some(v => v === null) ? null : Math.min(...lows),
+    altUpperFt: highs.some(v => v === null) ? null : Math.max(...highs),
+  };
 }
 
 /**
- * Validates a whole airspace list (guide §8.3's configuration-validation
- * shape, mirroring facility-config.js's validateConfig).
- * @returns {{ok:true}|{ok:false, reason:'VALIDATION_ERROR', detail:string}}
+ * Validates ONE definition (ADR 0098 §3, §5), purely: no Facility lookup and no store (the cross-references are the
+ * store's hard check). A normalised copy comes back, so every optional field is present (null when empty) and a
+ * ROUTE's `altLowerFt`/`altUpperFt` are derived from its segments.
+ *
+ * @param {object} def
+ * @param {{derived?:'refuse'|'recompute'}} [ctx] `refuse` (default, a client's definition): a ROUTE carrying
+ *   `altLowerFt`/`altUpperFt` is refused. `recompute` (a stored definition, or a patch merged onto one): they are
+ *   overwritten from the segments.
+ * @returns {{ok:true, definition:object}|{ok:false, reason:'VALIDATION_ERROR', detail:string}}
  */
-function validateAirspaces(candidate) {
-  if (!Array.isArray(candidate)) {
-    return { ok: false, reason: 'VALIDATION_ERROR', detail: 'airspaces config must be an array' };
-  }
-  const seen = new Set();
-  for (const a of candidate) {
-    if (!a || typeof a !== 'object') {
-      return { ok: false, reason: 'VALIDATION_ERROR', detail: 'each airspace must be an object' };
-    }
-    if (!a.airspaceId || typeof a.airspaceId !== 'string') {
-      return { ok: false, reason: 'VALIDATION_ERROR', detail: 'each airspace needs a string airspaceId' };
-    }
-    if (seen.has(a.airspaceId)) {
-      return { ok: false, reason: 'VALIDATION_ERROR', detail: `duplicate airspaceId ${a.airspaceId}` };
-    }
-    seen.add(a.airspaceId);
-    if (!a.name || typeof a.name !== 'string') {
-      return { ok: false, reason: 'VALIDATION_ERROR', detail: `${a.airspaceId} needs a name` };
-    }
-    if (!AIRSPACE_TYPES.has(a.type)) {
-      return { ok: false, reason: 'VALIDATION_ERROR', detail: `${a.airspaceId} has unknown type ${JSON.stringify(a.type)}` };
-    }
-    // Who approves activation. §9.11 names AP specifically because it
-    // assumes a RAPCON-owned range complex; here it is per-airspace, so a
-    // MOA inside Ankara Center's airspace is approved by CTR rather than by
-    // an Approach that does not own it. See docs/adr/0036 for this generalization.
-    if (!a.controllingFacilityId || typeof a.controllingFacilityId !== 'string') {
-      return { ok: false, reason: 'VALIDATION_ERROR', detail: `${a.airspaceId} needs a controllingFacilityId` };
-    }
-    if (!a.controllingPositionId || typeof a.controllingPositionId !== 'string') {
-      return { ok: false, reason: 'VALIDATION_ERROR', detail: `${a.airspaceId} needs a controllingPositionId` };
-    }
-    if (a.usingPositionId !== undefined && a.usingPositionId !== null && typeof a.usingPositionId !== 'string') {
-      return { ok: false, reason: 'VALIDATION_ERROR', detail: `${a.airspaceId}'s usingPositionId must be a string when present` };
-    }
-    for (const key of ['workingFrequencyMhz', 'controlFrequencyMhz']) {
-      if (a[key] !== undefined && a[key] !== null && !isValidFrequency(a[key])) {
-        return { ok: false, reason: 'VALIDATION_ERROR', detail: `${a.airspaceId}'s ${key} must be a number between ${MIN_FREQUENCY_MHZ} and ${MAX_FREQUENCY_MHZ} MHz` };
-      }
-    }
-    for (const key of ['altLowerFt', 'altUpperFt']) {
-      if (a[key] !== undefined && a[key] !== null && !isValidAltitude(a[key])) {
-        return { ok: false, reason: 'VALIDATION_ERROR', detail: `${a.airspaceId}'s ${key} must be a whole number of feet between ${MIN_ALTITUDE_FT} and ${MAX_ALTITUDE_FT}` };
-      }
-    }
-    if (isValidAltitude(a.altLowerFt) && isValidAltitude(a.altUpperFt) && a.altUpperFt <= a.altLowerFt) {
-      return { ok: false, reason: 'VALIDATION_ERROR', detail: `${a.airspaceId}'s altUpperFt must be above its altLowerFt` };
+function validateAirspaceDefinition(def, { derived = 'refuse' } = {}) {
+  if (!def || typeof def !== 'object' || Array.isArray(def)) return fail('an airspace definition must be an object');
+  const unknown = Object.keys(def).filter(k => !DEFINITION_FIELDS.includes(k));
+  if (unknown.length) return fail(`an airspace definition has no field ${unknown[0]}`);
+  const id = def.airspaceId;
+  if (typeof id !== 'string' || !ID_PATTERN.test(id)) return fail('airspaceId must be 2-24 characters of A-Z, 0-9 and "-", starting with a letter or digit');
+  if (!isStr(def.name) || def.name.trim() !== def.name || def.name.length > MAX_NAME_LENGTH) return fail(`${id} needs a name of 1-${MAX_NAME_LENGTH} characters`);
+  const kind = def.kind === undefined ? 'AREA' : def.kind;
+  if (!KINDS.includes(kind)) return fail(`${id} has unknown kind ${JSON.stringify(def.kind)}`);
+  const types = kind === 'ROUTE' ? ROUTE_TYPES : AREA_TYPES;
+  if (!types.has(def.type)) return fail(`${id} has unknown ${kind} type ${JSON.stringify(def.type)}`);
+  // Who approves activation (§9.11; docs/adr/0036): per airspace, so a MOA inside Ankara Center's airspace is
+  // approved by CTR rather than by an Approach that does not own it.
+  if (!isStr(def.controllingFacilityId)) return fail(`${id} needs a controllingFacilityId`);
+  if (!isStr(def.controllingPositionId)) return fail(`${id} needs a controllingPositionId`);
+  if (!isOptStr(def.usingPositionId)) return fail(`${id}'s usingPositionId must be a string when present`);
+  if (!isOptStr(def.usingFacilityId)) return fail(`${id}'s usingFacilityId must be a string when present`);
+  if (def.usingPositionId && def.usingFacilityId) return fail(`${id} cannot have both a usingPositionId and a usingFacilityId: at most one using agency`);
+  for (const key of ['workingFrequencyMhz', 'controlFrequencyMhz']) {
+    if (def[key] !== undefined && def[key] !== null && !isValidFrequency(def[key])) {
+      return fail(`${id}'s ${key} must be a number between ${MIN_FREQUENCY_MHZ} and ${MAX_FREQUENCY_MHZ} MHz`);
     }
   }
-  return { ok: true };
+  if (def.source !== undefined && def.source !== null && !SOURCES.includes(def.source)) return fail(`${id}'s source must be one of ${SOURCES.join(', ')}`);
+
+  const out = {
+    airspaceId: id, name: def.name, kind, type: def.type,
+    controllingFacilityId: def.controllingFacilityId, controllingPositionId: def.controllingPositionId,
+    usingPositionId: def.usingPositionId || null, usingFacilityId: def.usingFacilityId || null,
+    workingFrequencyMhz: def.workingFrequencyMhz ?? null, controlFrequencyMhz: def.controlFrequencyMhz ?? null,
+    altLowerFt: null, altUpperFt: null, geometry: null, source: def.source ?? null,
+  };
+  if (kind === 'ROUTE') {
+    if (def.geometry !== undefined && def.geometry !== null) return fail(`${id}: a ROUTE has segments, not a geometry`);
+    if (derived === 'refuse' && ((def.altLowerFt ?? null) !== null || (def.altUpperFt ?? null) !== null)) {
+      return fail(`${id}: a ROUTE's altLowerFt and altUpperFt are derived from its segments and cannot be set`);
+    }
+    const bad = _validateSegments(id, def);
+    if (bad) return bad;
+    out.segments = deepClone(def.segments).map(s => ({
+      fix: s.fix, altLowerFt: s.altLowerFt ?? null, altUpperFt: s.altUpperFt ?? null, widthNm: s.widthNm ?? null,
+    }));
+    out.defaultWidthNm = def.defaultWidthNm;
+    Object.assign(out, deriveRouteEnvelope(out.segments));
+  } else {
+    if (def.segments !== undefined || def.defaultWidthNm !== undefined) return fail(`${id}: an AREA has a geometry, not segments`);
+    const band = _bandOk(id, '', def.altLowerFt, def.altUpperFt);
+    if (band) return band;
+    out.altLowerFt = def.altLowerFt ?? null;
+    out.altUpperFt = def.altUpperFt ?? null;
+    const bad = _validateGeometry(id, def.geometry);
+    if (bad) return bad;
+    out.geometry = def.geometry ? deepClone(def.geometry) : null;
+  }
+  return { ok: true, definition: out };
 }
 
-// Ships empty as config/efsp-airspaces.json (see this module's header for why an
-// invented default would be defect D11). No code copy of that `[]` exists (DATA-2, H88): an
-// unreadable or invalid file is a startup error naming it.
-function _load() {
+/**
+ * The standing list (R3-26): `{ [theater]: [definition] }`. Shipped as `{}` until the human supplies it. A missing
+ * or malformed file is a startup error naming the theater and id (no code default, DATA-2, H88).
+ * @param {{paths?:{read:string}}} [opts]
+ * @returns {Object<string, object[]>}
+ */
+function loadStandingList({ paths = statePaths('efsp-airspaces.json', process.env.CRCSYNC_EFSP_AIRSPACES_PATH) } = {}) {
   let onDisk;
   try {
-    onDisk = JSON.parse(fs.readFileSync(AIRSPACES_PATH, 'utf8'));
+    onDisk = JSON.parse(fs.readFileSync(paths.read, 'utf8'));
   } catch (e) {
-    throw new Error(`[efsp-airspace-config] cannot read ${AIRSPACES_PATH}: ${e.message}`);
+    throw new Error(`[efsp-airspace-schema] cannot read ${paths.read}: ${e.message}`);
   }
-  const check = validateAirspaces(onDisk);
-  if (!check.ok) throw new Error(`[efsp-airspace-config] ${AIRSPACES_PATH} failed validation: ${check.detail}`);
-  return onDisk;
-}
-
-// Loaded on first use, not at require time, so requiring this module (facility-config.js does) reads no file
-// (DATA-1's lazy facility load; integration fix after DATA-2).
-let airspaces = null;
-function _all() {
-  if (airspaces === null) airspaces = _load();
-  return airspaces;
-}
-
-function getAirspaces() { return deepClone(_all()); }
-
-function getAirspace(airspaceId) {
-  const found = _all().find(a => a.airspaceId === airspaceId);
-  return found ? deepClone(found) : null;
-}
-
-/**
- * Every distinct `usingPositionId` across the configured airspaces — the
- * `RANGES` Facility's Position set. A range with no control of its own
- * contributes nothing, which is the whole point: Positions exist only where
- * somebody actually controls a range.
- */
-function getRangePositionIds() {
-  const ids = [];
-  for (const a of _all()) {
-    if (a.usingPositionId && !ids.includes(a.usingPositionId)) ids.push(a.usingPositionId);
+  if (!onDisk || typeof onDisk !== 'object' || Array.isArray(onDisk)) {
+    throw new Error(`[efsp-airspace-schema] ${paths.read} must be an object keyed by theater (the pre-0098 array shape is not read)`);
   }
-  return ids;
-}
-
-/** The airspaces a given range Position is responsible for. */
-function airspacesForUsingPosition(positionId) {
-  return deepClone(_all().filter(a => a.usingPositionId === positionId));
-}
-
-/**
- * Replaces the whole airspace list (guide §8.4 — an explicit reload step, not
- * a live mutation). No editing UI calls this yet; it exists so one is
- * additive later, and so tests can exercise the load path.
- */
-function setAirspaces(next) {
-  const check = validateAirspaces(next);
-  if (!check.ok) return check;
-  airspaces = deepClone(next);
-  try {
-    ensureDirFor(AIRSPACES_WRITE_PATH);
-    fs.writeFileSync(AIRSPACES_WRITE_PATH, JSON.stringify(airspaces, null, 2));
-  } catch (e) {
-    log.warn('failed to persist airspaces', { error: e.message });
+  const out = {};
+  for (const [theater, list] of Object.entries(onDisk)) {
+    if (!Array.isArray(list)) throw new Error(`[efsp-airspace-schema] ${paths.read}: theater ${theater} must hold an array of airspace definitions`);
+    const seen = new Set();
+    out[theater] = list.map((def) => {
+      const check = validateAirspaceDefinition(def, { derived: 'refuse' });
+      if (!check.ok) throw new Error(`[efsp-airspace-schema] ${paths.read}: theater ${theater}, airspace ${def && def.airspaceId}: ${check.detail}`);
+      if (seen.has(def.airspaceId)) throw new Error(`[efsp-airspace-schema] ${paths.read}: theater ${theater} lists ${def.airspaceId} twice`);
+      seen.add(def.airspaceId);
+      return check.definition;
+    });
   }
-  return { ok: true };
+  return out;
 }
 
 module.exports = {
-  getAirspaces, getAirspace, getRangePositionIds,
-  setAirspaces, validateAirspaces, isValidFrequency, isValidAltitude,
-  AIRSPACE_TYPES, MIN_FREQUENCY_MHZ, MAX_FREQUENCY_MHZ,
-  MIN_ALTITUDE_FT, MAX_ALTITUDE_FT,
+  validateAirspaceDefinition, loadStandingList, deriveRouteEnvelope,
+  isValidFrequency, isValidAltitude,
+  AIRSPACE_TYPES, AREA_TYPES, ROUTE_TYPES, KINDS, SOURCES, ACTIVATION_BY_KIND,
+  DEFINITION_FIELDS, IMMUTABLE_FIELDS, DERIVED_ROUTE_FIELDS, LIVE_EDITABLE_FIELDS, OPTIONAL_FIELDS,
+  MIN_FREQUENCY_MHZ, MAX_FREQUENCY_MHZ, MIN_ALTITUDE_FT, MAX_ALTITUDE_FT,
+  MAX_NAME_LENGTH, DEFINITION_HISTORY_CAP, MAX_ROUTE_SEGMENTS, MAX_WIDTH_NM,
 };

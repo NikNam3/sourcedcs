@@ -27,7 +27,7 @@ for (const [k, v] of Object.entries({
   CRCSYNC_EFSP_TRAFFIC_COUNT_PATH: 'traffic-count.jsonl',
   CRCSYNC_EFSP_INSTRUMENTATION_CONFIG_PATH: 'instrumentation.json',
 })) process.env[k] = path.join(tmpDir, v);
-fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, '[]');
+fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, '{}');
 
 const { createEfsp } = await import('../src/efsp/index.js');
 const { BoardStore, REPLAY_PERSIST_WINDOW_MS } = await import('../src/efsp/board-store.js');

@@ -1,8 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-const { AirspaceStore, AIRSPACE_STATES, INITIAL_STATE } = await import('../src/efsp/airspace-store.js');
-const airspaceConfig = await import('../src/efsp/airspace-schema.js');
+import { makeRegistry, stateOp, panel, MOA, RANGE } from './helpers/airspace-registry.mjs';
+
+const { AIRSPACE_STATES, INITIAL_STATE } = await import('../src/efsp/airspace-store.js');
 
 // Two airspaces covering both shapes the squadron actually flies:
 //  - a range with a control tower of its own, so it has a using agency
@@ -11,31 +12,11 @@ const airspaceConfig = await import('../src/efsp/airspace-schema.js');
 //    airspace it sits in, where a flight is simply approved onto a working
 //    frequency. The MOA has no usingPositionId, and that asymmetry is the
 //    single most important thing these tests cover.
-const FIXTURE = [
-  {
-    airspaceId: 'RANGE-1', name: 'Test Range', type: 'RANGE',
-    controllingFacilityId: 'INCIRLIK', controllingPositionId: 'AP',
-    usingPositionId: 'RANGE_1_CONTROL',
-    controlFrequencyMhz: 283.5,
-  },
-  {
-    airspaceId: 'MOA-1', name: 'Test MOA', type: 'MOA',
-    controllingFacilityId: 'CENTER', controllingPositionId: 'CTR',
-    workingFrequencyMhz: 134.25,
-  },
-];
+const FIXTURE = [RANGE, MOA];
 
-function makeStore(airspaces = FIXTURE) {
-  return new AirspaceStore({
-    getAirspaces: () => JSON.parse(JSON.stringify(airspaces)),
-    getAirspace: (id) => airspaces.find(a => a.airspaceId === id) || null,
-  });
-}
+function makeStore(defs = FIXTURE) { return makeRegistry({ defs }).store; }
 
-function apply(store, airspaceId, op, actingPositionId, by = 'c1') {
-  const record = store.getAirspace(airspaceId);
-  return store.apply({ airspaceId, baseRev: record ? record.rev : 0, op }, actingPositionId, by);
-}
+function apply(store, airspaceId, op, actingPositionId, by = 'c1') { return stateOp(store, airspaceId, op, actingPositionId, by); }
 
 const WINDOW = { fromUtc: Date.UTC(2026, 0, 1, 12, 0), toUtc: Date.UTC(2026, 0, 1, 14, 0) };
 
@@ -267,74 +248,32 @@ test('a stale rev is rejected, so two controllers cannot both act on what they l
   const stale = store.getAirspace('MOA-1').rev;
   apply(store, 'MOA-1', { kind: 'ScheduleAirspace', ...WINDOW }, 'CTR');
 
-  const result = store.apply({ airspaceId: 'MOA-1', baseRev: stale, op: { kind: 'ApproveActivation' } }, 'CTR', 'c2');
+  const result = store.apply({ airspaceId: 'MOA-1', baseRev: stale, op: { kind: 'ApproveActivation' } }, panel('CTR', 'c2'));
   assert.equal(result.ok, false);
   assert.equal(result.reason, 'STALE_REV');
 });
 
-// ── persistence (ADR 0002) ───────────────────────────────────────────────
+// ── persistence (ADR 0002, 0098): definitions AND state come back from the one snapshot ──
 
-test('state survives a restart; definitions come from config rather than the snapshot', () => {
+test('state AND definitions survive a restart, from the snapshot alone', () => {
   const store = makeStore();
   activateRange(store);
 
-  const restored = makeStore();
-  restored.restore(store.snapshot());
+  const restored = makeRegistry({ defs: [] }).store;
+  restored.restore(JSON.parse(JSON.stringify(store.snapshot())));
   assert.equal(restored.getAirspace('RANGE-1').state, 'ACTIVE');
   assert.equal(restored.getAirspace('RANGE-1').definition.name, 'Test Range');
   assert.deepEqual(restored.getAirspace('RANGE-1').transitions.map(t => t.state), ['SCHEDULED', 'ACTIVE']);
 });
 
-test('an airspace dropped from config since the snapshot was written is skipped, not resurrected', () => {
-  const store = makeStore();
-  activateRange(store);
-  const saved = store.snapshot();
-
-  const narrowed = makeStore(FIXTURE.filter(a => a.airspaceId !== 'RANGE-1'));
-  narrowed.restore(saved);
-  assert.equal(narrowed.getAirspace('RANGE-1'), null);
-  assert.equal(narrowed.getAll().length, 1);
-});
-
-// ── config validation ────────────────────────────────────────────────────
-
-test('the shipped airspace config is empty — real names and frequencies are squadron data, and inventing them would present source-defined behaviour as doctrine', () => {
-  assert.deepEqual(airspaceConfig.getAirspaces(), []);
-  assert.deepEqual(airspaceConfig.getRangePositionIds(), []);
-});
-
-test('a malformed airspace definition is rejected with a reason, never half-loaded', () => {
-  const { validateAirspaces } = airspaceConfig;
-  assert.equal(validateAirspaces(FIXTURE).ok, true);
-  assert.equal(validateAirspaces({}).ok, false);
-  assert.match(validateAirspaces([{ name: 'x', type: 'MOA' }]).detail, /airspaceId/);
-  assert.match(validateAirspaces([{ ...FIXTURE[0], type: 'WARNING_AREA' }]).detail, /unknown type/);
-  assert.match(validateAirspaces([FIXTURE[0], FIXTURE[0]]).detail, /duplicate/);
-  assert.match(validateAirspaces([{ ...FIXTURE[1], controllingPositionId: undefined }]).detail, /controllingPositionId/);
-});
-
-test('a frequency outside the band, or not a number at all, is rejected at load', () => {
-  const { validateAirspaces, isValidFrequency } = airspaceConfig;
-  assert.equal(isValidFrequency(251.0), true);
-  assert.equal(isValidFrequency('251.0'), false, 'one unit and one type — MHz, as a number');
-  assert.equal(isValidFrequency(0), false);
-  assert.equal(isValidFrequency(1e9), false, 'Hz would be out of band — the repo mixes units elsewhere, this does not');
-  assert.match(validateAirspaces([{ ...FIXTURE[1], workingFrequencyMhz: '134.25' }]).detail, /workingFrequencyMhz/);
-});
-
-test('range Positions are derived from the airspaces that declare one — a MOA contributes none', () => {
-  const { validateAirspaces } = airspaceConfig;
-  assert.equal(validateAirspaces(FIXTURE).ok, true);
-  // Mirrors getRangePositionIds' logic against the fixture: only the range
-  // with control of its own yields a Position.
-  const derived = [...new Set(FIXTURE.filter(a => a.usingPositionId).map(a => a.usingPositionId))];
-  assert.deepEqual(derived, ['RANGE_1_CONTROL']);
+test('the pre-0098 array snapshot is refused loudly, never read as an empty registry', () => {
+  const store = makeRegistry({ defs: [] }).store;
+  assert.throws(() => store.restore([{ airspaceId: 'RANGE-1', rev: 3, state: 'ACTIVE' }]), /pre-ADR-0098 shape.*delete state\/efsp-board.json/);
 });
 
 test('the RANGES Facility config is derived, never loaded from or written to disk', async () => {
-  // Its Position set comes from the airspace config, so an on-disk override
-  // would freeze a `positions` array that goes stale the moment an airspace
-  // is added or removed.
+  // Its Position set comes from the registry's definitions, so an on-disk override would freeze a `positions` array
+  // that goes stale the moment an airspace is added or removed.
   const facilityConfig = await import('../src/efsp/facility-config.js');
   const result = facilityConfig.setFacilityConfig({ positions: ['FAKE_RANGE'] }, 'RANGES');
   assert.equal(result.ok, false);

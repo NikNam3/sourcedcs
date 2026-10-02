@@ -24,7 +24,7 @@ for (const [k, v] of Object.entries({
   CRCSYNC_EFSP_AIRSPACES_PATH: 'airspaces.json',
   CRCSYNC_EFSP_STEREO_ROUTES_PATH: 'stereo.json',
 })) process.env[k] = path.join(tmpDir, v);
-fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, '[]');
+fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, '{}');
 fs.writeFileSync(process.env.CRCSYNC_EFSP_STEREO_ROUTES_PATH, '[]');
 
 const { createEfsp } = await import('../src/efsp/index.js');

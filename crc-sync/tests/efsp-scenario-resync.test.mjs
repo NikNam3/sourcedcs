@@ -22,7 +22,7 @@ for (const [k, v] of Object.entries({
   CRCSYNC_EFSP_METRICS_PATH: 'metrics.json',
   CRCSYNC_EFSP_INSTRUMENTATION_CONFIG_PATH: 'instrumentation.json',
 })) process.env[k] = path.join(tmpDir, v);
-fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, '[]');
+fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, '{}');
 
 const { createEfsp } = await import('../src/efsp/index.js');
 const { crew, mustAct, DEPARTURE_FLIGHT_DATA } = await import('./helpers/efsp-scenario.mjs');

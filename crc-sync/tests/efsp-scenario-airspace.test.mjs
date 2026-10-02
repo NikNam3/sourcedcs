@@ -22,7 +22,7 @@ for (const [k, v] of Object.entries({
 // One airspace per scenario that needs a clean starting state, plus the two
 // shapes that matter: a block with no control of its own (owned by the Center
 // that owns the airspace it sits in) and a range with its own tower.
-fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, JSON.stringify([
+fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, JSON.stringify({ Test: [
   { airspaceId: 'MOA-EAST', name: 'East MOA', type: 'MOA', controllingFacilityId: 'CENTER', controllingPositionId: 'CTR', workingFrequencyMhz: 134.25 },
   // A danger area with published vertical limits — the altitude-block case.
   { airspaceId: 'D-12', name: 'Danger 12', type: 'DANGER', controllingFacilityId: 'CENTER', controllingPositionId: 'CTR', workingFrequencyMhz: 135.5, altLowerFt: 5000, altUpperFt: 28000 },
@@ -32,7 +32,7 @@ fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, JSON.stringify([
   { airspaceId: 'MOA-LATER', name: 'Later MOA', type: 'MOA', controllingFacilityId: 'CENTER', controllingPositionId: 'CTR', workingFrequencyMhz: 137.5 },
   { airspaceId: 'RANGE-SOUTH', name: 'South A/G Range', type: 'RANGE', controllingFacilityId: 'INCIRLIK', controllingPositionId: 'AP', usingPositionId: 'SOUTH_RANGE', controlFrequencyMhz: 283.5 },
   { airspaceId: 'RANGE-DENY', name: 'Deny Range', type: 'RANGE', controllingFacilityId: 'INCIRLIK', controllingPositionId: 'AP', usingPositionId: 'DENY_RANGE', controlFrequencyMhz: 284.0 },
-]));
+] }));
 
 const { createEfsp } = await import('../src/efsp/index.js');
 const facilityConfig = await import('../src/efsp/facility-config.js');
@@ -50,7 +50,7 @@ function flight(efsp, c, callsign) {
 // ── 5. the bread-and-butter sortie ───────────────────────────────────────
 
 test('SCENARIO before takeoff, out to a MOA, and home again', async () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ currentTheater: () => 'Test' });
   const c = crew(efsp, ATC);
 
   // Center books and activates its own block before anyone launches.
@@ -96,7 +96,7 @@ test('SCENARIO before takeoff, out to a MOA, and home again', async () => {
 // ── the altitude-block case ──────────────────────────────────────────────
 
 test('SCENARIO a flight working a danger area is restricted to an altitude block while another crosses it', () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ currentTheater: () => 'Test' });
   const c = crew(efsp, ATC);
   activate(efsp, c, 'D-12');
 
@@ -135,7 +135,7 @@ test('SCENARIO a flight working a danger area is restricted to an altitude block
 });
 
 test('an altitude block has to fit inside the airspace it is in, and be the right way up', () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ currentTheater: () => 'Test' });
   const c = crew(efsp, ATC);
   activate(efsp, c, 'D-12');
   const strip = handedToCenter(efsp, c, flight(efsp, c, 'EAGLE9'));
@@ -168,7 +168,7 @@ test('an altitude block has to fit inside the airspace it is in, and be the righ
 // ── 6. two flights, one block ────────────────────────────────────────────
 
 test('SCENARIO a MOA stays hot when one of two flights leaves it', () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ currentTheater: () => 'Test' });
   const c = crew(efsp, ATC);
   activate(efsp, c, 'MOA-SHARED');
 
@@ -194,7 +194,7 @@ test('SCENARIO a MOA stays hot when one of two flights leaves it', () => {
 // ── 7. released with somebody still inside ───────────────────────────────
 
 test('SCENARIO an airspace released while a flight is still working it', async () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ currentTheater: () => 'Test' });
   const c = crew(efsp, ATC);
   activate(efsp, c, 'MOA-OCCUPIED');
 
@@ -216,7 +216,7 @@ test('SCENARIO an airspace released while a flight is still working it', async (
 // ── 8. denied, then granted ──────────────────────────────────────────────
 
 test('SCENARIO a range asks, is refused with a reason, asks again and gets it', () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ currentTheater: () => 'Test' });
   const c = crew(efsp, { ...ATC, DENY_RANGE: 'RANGES' });
   const window = { fromUtc: Date.now(), toUtc: Date.now() + 3600000 };
 
@@ -235,7 +235,7 @@ test('SCENARIO a range asks, is refused with a reason, asks again and gets it', 
 // ── 9. a staffed range tower ──────────────────────────────────────────────
 
 test('SCENARIO an A/G range with its own tower: the flight goes to range control, and the range sees it', () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ currentTheater: () => 'Test' });
   const c = crew(efsp, { ...ATC, SOUTH_RANGE: 'RANGES' });
   activate(efsp, c, 'RANGE-SOUTH');
 
@@ -262,7 +262,7 @@ test('SCENARIO an A/G range with its own tower: the flight goes to range control
 // ── 10. booked ahead ─────────────────────────────────────────────────────
 
 test('SCENARIO a block booked for later this afternoon, activated when the time comes', () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ currentTheater: () => 'Test' });
   const c = crew(efsp, ATC);
   const later = { fromUtc: Date.now() + 4 * 3600000, toUtc: Date.now() + 6 * 3600000 };
 
@@ -280,7 +280,7 @@ test('SCENARIO a block booked for later this afternoon, activated when the time 
 // ── 11. into a cold block ────────────────────────────────────────────────
 
 test('SCENARIO a flight approved into a block nobody activated: allowed, flagged, alerted', async () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ currentTheater: () => 'Test' });
   const c = crew(efsp, ATC);
   assert.equal(efsp.airspaceStore.getAirspace('MOA-COLD').state, 'RETURNED');
 
@@ -303,7 +303,7 @@ test('SCENARIO a controller types a frequency into Block 22 and it is accepted',
   // cell sends a string, isValidFrequency() requires a number, and nothing
   // bridged them, so the only writer that ever worked was ApproveAirspaceEntry
   // passing a number straight out of config.
-  const efsp = createEfsp();
+  const efsp = createEfsp({ currentTheater: () => 'Test' });
   const c = crew(efsp, ATC);
   const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'FREQ11' });
 

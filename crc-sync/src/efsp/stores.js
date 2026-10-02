@@ -5,7 +5,7 @@
 // _restore restores every entry, each by looping over this list.
 //
 //   key       the key in the persisted body (and in ctx.stores)
-//   build     (deps) -> instance | null. deps = { clock, transitionAltFt, codeAllocator, mutationLog,
+//   build     (deps) -> instance | null. deps = { clock, transitionAltFt, currentTheater, codeAllocator, mutationLog,
 //             facilities, stores }. `facilities` (facilityId -> { boardStore, positionStore, rules }) is
 //             filled after the stores are built, so a closure may read it lazily, never at build time.
 //             `stores` fills in registry order as each entry is built.
@@ -28,7 +28,7 @@ const { MarsaStore } = require('./marsa-store');
 const { RunwayStatusStore } = require('./runway-status-store');
 const { CarrierStore } = require('./carrier-store');
 const { SfaStore } = require('./sfa-store');
-const airspaceConfig = require('./airspace-schema');
+const authority = require('./authority');
 const carrierHulls = require('./carrier/hull-config');
 const facilityConfig = require('./facility-config');
 const log = require('../log').logger('efsp:stores');
@@ -87,27 +87,49 @@ const REGISTRY = [
   {
     key: 'airspaces',
     audited: true,
-    // One store for every Facility, like flightDataStore — an airspace is a theater
-    // entity that NAMES its controlling Facility rather than being replicated
-    // into each one. There is no D13 replication question here because nothing
-    // is ever handed across a boundary; the record has exactly one home.
-    build: ({ clock, facilities }) => new AirspaceStore(airspaceConfig, {
-      clock,
-      occupancyFor: (airspaceId) => {
+    // The airspace REGISTRY (docs/adr/0098): definitions per theater and their state, one store for every Facility,
+    // like flightDataStore. An airspace is a theater entity that NAMES its controlling Facility rather than being
+    // replicated into each one, so there is no D13 replication question: the record has one home.
+    build: ({ clock, currentTheater, facilities, stores }) => {
+      // The Strips working an AREA: non-DROPPED Strips whose `airspaceEntry` names it, on any Facility's Board.
+      const occupantsFor = (airspaceId) => {
+        const out = [];
+        for (const { boardStore } of facilities.values()) {
+          for (const s of boardStore.getAll()) {
+            if (s.state === 'DROPPED' || !s.airspaceEntry || s.airspaceEntry.airspaceId !== airspaceId) continue;
+            const fd = stores.flightData && stores.flightData.getFlightData(s.flightDataId);
+            out.push({ stripId: s.stripId, callsign: (fd && fd.identity && fd.identity.callsign) || null, frequencyMhz: s.airspaceEntry.frequencyMhz ?? null });
+          }
+        }
+        return out;
+      };
+      // A ROUTE's occupancy: non-DROPPED Strips whose flight data's MTR designator, normalised as flight-data-store
+      // writes it (trimmed, upper case), is the route's id.
+      const routeOccupancyFor = (airspaceId) => {
         let n = 0;
         for (const { boardStore } of facilities.values()) {
           for (const s of boardStore.getAll()) {
-            if (s.state !== 'DROPPED' && s.airspaceEntry && s.airspaceEntry.airspaceId === airspaceId) n++;
+            if (s.state === 'DROPPED') continue;
+            const fd = stores.flightData && stores.flightData.getFlightData(s.flightDataId);
+            const d = fd && fd.military && fd.military.mtr && fd.military.mtr.designator;
+            if (typeof d === 'string' && d.trim().toUpperCase() === airspaceId) n++;
           }
         }
         return n;
-      },
-    }),
+      };
+      return new AirspaceStore({
+        clock, currentTheater, occupantsFor, routeOccupancyFor,
+        facilityLookup: {
+          hasFacility: (id) => facilityConfig.getFacilityIds().includes(id),
+          positionsOf: (id) => (facilityConfig.getFacilityIds().includes(id) ? facilityConfig.getPositionSet(id) : []),
+          facilityOfPosition: (positionId) => facilityConfig.getFacilityIds().find(f => facilityConfig.getPositionSet(f).includes(positionId)) || null,
+        },
+        authority: { rowOf: authority.airspaceRowOf },
+      });
+    },
     snapshot: (s) => s.snapshot(),
-    // Airspace STATE is durable (ADR 0002); the definitions come from config
-    // on every boot, so restore() skips anything no longer configured and a
-    // newly configured airspace simply starts available. No migration either
-    // way — the same reasoning that keeps facility config out of the snapshot.
+    // Airspace definitions AND state are durable (ADR 0002, 0098): both come back from the one atomic snapshot, per
+    // theater. The pre-0098 array shape is refused (R3-2). The standing list is applied after this, once per id.
     restore: (s, data) => s.restore(data),
   },
   {
@@ -300,7 +322,11 @@ const ENTRY_SHAPES = {
     droppedWallAt: true,
   }),
   flightData: { flightDataList: arrayOf(FLIGHT_DATA_SHAPE), codes: true, codeCursor: true },
-  airspaces: arrayOf(anyOf('airspaceId', 'lastDenial', 'pendingRequest', 'rev', 'state', 'transitions', 'updatedAt', 'updatedBy', 'window')),
+  airspaces: {
+    byTheater: mapOf(arrayOf(anyOf('airspaceId', 'theater', 'definition', 'defRev', 'definitionHistory', 'lastDenial', 'pendingRequest',
+      'rev', 'state', 'transitions', 'updatedAt', 'updatedBy', 'window'))),
+    seeded: mapOf(true),
+  },
   correlations: arrayOf(anyOf('binding', 'confidence', 'flightDataId', 'lastMatchedAt', 'matchedBy', 'observedBeacon', 'rev', 'state',
     'trackId', 'transitions', 'updatedAt', 'updatedBy', 'warning')),
   marsa: arrayOf(anyOf('declaredBy', 'declaredPositionId', 'declaringCallsign', 'endCondition', 'endedAt', 'endedBy', 'marsaId', 'note',
@@ -325,7 +351,12 @@ const PERSISTED_SHAPE = { persistedWallAt: true, ...Object.fromEntries(REGISTRY.
 function checkPersistedShape(data, file, shape = PERSISTED_SHAPE) {
   const walk = (v, s, at) => {
     if (s === true || v === null || typeof v !== 'object') return;
-    if (Array.isArray(v)) { if (s['[]']) v.forEach(e => walk(e, s['[]'], `${at}[]`)); return; }
+    if (Array.isArray(v)) {
+      // An array where the shape expects an object is an older shape (e.g. the pre-ADR-0098 airspaces array): refused, never half read.
+      if (!s['[]']) throw new Error(`[efsp] the Board snapshot ${file} holds an array at "${at}", which this build keeps as an object (an unknown persisted shape, H88; an older build's?): delete state/efsp-board.json and state/efsp-mutations.jsonl to start clean`);
+      v.forEach(e => walk(e, s['[]'], `${at}[]`));
+      return;
+    }
     for (const [k, child] of Object.entries(v)) {
       const sub = s['*'] || (Object.prototype.hasOwnProperty.call(s, k) ? s[k] : undefined);
       if (sub === undefined) {

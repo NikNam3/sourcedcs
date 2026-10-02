@@ -8,7 +8,7 @@ import { resetDeterminism } from './freeze-determinism.mjs';
 import { legacyShape } from '../helpers/wire-slots.mjs';
 
 // The systematic table: ONE mutation per (Strip role x Strip state x owner variant x acting Position x op kind),
-// permitted and refused alike, driven through createEfsp().handleMessage (the real wire path) with an injected
+// permitted and refused alike, driven through createEfsp({ currentTheater: () => 'Test' }).handleMessage (the real wire path) with an injected
 // mission clock. Each cell records the ack (ok/reason/detail/warning/routedTo), what the Strip became, the
 // delta kinds sent, and the audit entries written. Everything is data in golden/table-*.json.
 //
@@ -24,9 +24,9 @@ Object.assign(process.env, {
   CRCSYNC_EFSP_MUTATION_LOG_PATH: path.join(tmp, 'mutations.jsonl'),
   CRCSYNC_EFSP_AIRSPACES_PATH: path.join(tmp, 'airspaces.json'),
 });
-fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, JSON.stringify([
+fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, JSON.stringify({ Test: [
   { airspaceId: 'MOA-EAST', name: 'East MOA', type: 'MOA', controllingFacilityId: 'CENTER', controllingPositionId: 'CTR', workingFrequencyMhz: 134.25 },
-]));
+] }));
 
 const { createEfsp } = await import('../../src/efsp/index.js');
 const facilityConfig = await import('../../src/efsp/facility-config.js');
@@ -51,7 +51,7 @@ const FACILITIES = ['INCIRLIK', 'CENTER', 'TACTICAL'];
 function freshEfsp() {
   fs.rmSync(SNAP, { force: true }); fs.rmSync(process.env.CRCSYNC_EFSP_MUTATION_LOG_PATH, { force: true });
   const clock = { now: () => MISSION_T0, source: 'MISSION' };
-  const efsp = createEfsp({ clock });
+  const efsp = createEfsp({ currentTheater: () => 'Test', clock });
   const audit = [];
   const rec = efsp.mutationLog.record.bind(efsp.mutationLog);
   efsp.mutationLog.record = (e) => { audit.push(JSON.parse(JSON.stringify(e))); return rec(e); };
@@ -190,7 +190,7 @@ function runMatrix() {
         h.efsp.persist();
         const snapA = JSON.stringify(canonical(Object.fromEntries(FACILITIES.map(f => [f, h.efsp.boardStoreFor(f).snapshot()]))));
         const flightDataA = JSON.stringify(canonical(h.efsp.flightDataStore.snapshot()));
-        const again = createEfsp({ clock: { now: () => MISSION_T0, source: 'MISSION' } });
+        const again = createEfsp({ currentTheater: () => 'Test', clock: { now: () => MISSION_T0, source: 'MISSION' } });
         const snapB = JSON.stringify(canonical(Object.fromEntries(FACILITIES.map(f => [f, again.boardStoreFor(f).snapshot()]))));
         const flightDataB = JSON.stringify(canonical(again.flightDataStore.snapshot()));
         roundTrips.push({ id: tag, boardsEqual: snapA === snapB, flightDataEqual: flightDataA === flightDataB, boardHash: digest(snapA), strips: JSON.parse(snapA).INCIRLIK.strips.length + JSON.parse(snapA).CENTER.strips.length + JSON.parse(snapA).TACTICAL.strips.length });
