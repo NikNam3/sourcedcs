@@ -102,7 +102,6 @@ class BoardStore {
       touch,
       activeCmid: () => this._activeCmid,
       retire: (strip, by) => this._stripOps.retire(strip, by),
-      mutationLog: () => this._mutationLog,
       replicaStateOnReceipt,
       senderStateOnAccept,
     });
@@ -122,8 +121,7 @@ class BoardStore {
     this._nlaHistory = new Map();
     // Snapshot, restore, archive and when each DROPPED Strip dropped (board/persistence.js), which owns that Map.
     this._persistence = new BoardPersistence({
-      rules, state: this._state, replay: this._replay, clock,
-      mutationLog: () => this._mutationLog,
+      rules, state: this._state, replay: this._replay, clock, audit: this._audit,
       nlaHistory: () => this._nlaHistory,
     });
     // The Strip operations (board/strip-ops.js): the op table, NLA and retirement. The NLA history Map stays
@@ -309,14 +307,7 @@ class BoardStore {
         unplaced.push(strip.stripId);
       }
       this._state.bump(strip, null);
-      if (this._mutationLog) {
-        this._mutationLog.record({
-          clientMutationId: null, op: 'SystemReassign', stripId: strip.stripId,
-        facilityId: this._rules.facilityId || null, flightDataId: strip.flightDataId || null,
-          actingPositionId: null, actorId: 'system', at: this._clock.now(),
-          before, after: deepClone(strip), reason: 'position-vacated',
-        });
-      }
+      this._audit.recordSystem('SystemReassign', strip, { before, after: deepClone(strip), reason: 'position-vacated' });
     }
     // `unplaced` rides along without being an element or an enumerable key.
     return Object.defineProperty(affected.map(s => s.stripId), 'unplaced', { value: unplaced });
@@ -344,14 +335,7 @@ class BoardStore {
         strip.orderKey = this._placement.appendOrderKey(bay.bayId, bay.rackId, strip.stripId);
       }
       this._state.bump(strip, null);
-      if (this._mutationLog) {
-        this._mutationLog.record({
-          clientMutationId: null, op: 'SystemReassign', stripId: strip.stripId,
-        facilityId: this._rules.facilityId || null, flightDataId: strip.flightDataId || null,
-          actingPositionId: null, actorId: 'system', at: this._clock.now(),
-          before, after: deepClone(strip), reason: 'position-retaken',
-        });
-      }
+      this._audit.recordSystem('SystemReassign', strip, { before, after: deepClone(strip), reason: 'position-retaken' });
     }
     return back.map(s => s.stripId);
   }
