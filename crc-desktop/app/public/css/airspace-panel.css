@@ -1,0 +1,91 @@
+/* The airspace board's editing UI (AIRSP-2P-A; mockup docs/wip/AIRSP-mockup.html). Colour rule (ADR 0056/0058): everything is
+   grey, orange-red (--efsp-bad) marks only an error or the one clashing row. The tokens come from efsp-panel.css; each use
+   carries its dark fallback so the panel reads the same if the tokens ever move. */
+
+.airspace-toolbar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  padding: 0 0 8px; color: var(--efsp-muted, #8c9aa6); font-size: 11px;
+}
+.airspace-seg { display: inline-flex; border: 1px solid var(--efsp-line-2, #4a5560); }
+.airspace-seg-btn {
+  background: none; border: 0; color: var(--efsp-text, #d8e0e6); font: inherit; font-size: 11px;
+  padding: 2px 10px; cursor: pointer; letter-spacing: .06em;
+}
+.airspace-seg-btn[aria-pressed="true"] { background: var(--efsp-line-2, #4a5560); }
+.airspace-seg-btn:disabled { color: var(--efsp-faint, #56616c); cursor: default; }
+.airspace-as { flex: 1; }
+
+.airspace-group {
+  margin: 10px 0 4px; color: var(--efsp-muted, #8c9aa6); font-size: 11px; letter-spacing: .08em;
+  border-bottom: 1px solid var(--efsp-line, #2e3740);
+}
+.airspace-ids, .airspace-using, .airspace-route-count { margin-top: 1px; }
+.airspace-more-btn {
+  background: none; border: 1px solid transparent; color: var(--efsp-muted, #8c9aa6); cursor: pointer;
+  font: inherit; padding: 0 6px; margin-left: auto;
+}
+.airspace-more-btn:hover { border-color: var(--efsp-line-2, #4a5560); }
+.airspace-card-header { flex-wrap: wrap; }
+
+.airspace-menu { margin-top: 4px; border: 1px solid var(--efsp-line-2, #4a5560); background: var(--efsp-strip-2, #232a32); padding: 2px; }
+.airspace-menu-row { display: flex; align-items: baseline; gap: 8px; }
+.airspace-menu-btn {
+  background: none; border: 1px solid transparent; color: var(--efsp-text, #d8e0e6); font: inherit; font-size: 11px;
+  padding: 3px 8px; cursor: pointer; text-align: left; min-width: 72px;
+}
+.airspace-menu-btn:hover:not(:disabled) { border-color: var(--efsp-line-2, #4a5560); }
+/* Disabled with the reason beside it, the same rule as everywhere (ADR 0056): a dashed outline, never just a dimmer button. */
+.airspace-menu-btn.airspace-disabled { border: 1px dashed var(--efsp-line-2, #4a5560); color: var(--efsp-faint, #56616c); cursor: default; }
+.airspace-menu-why { color: var(--efsp-muted, #8c9aa6); font-size: 11px; }
+
+.airspace-booking { color: var(--efsp-muted, #8c9aa6); font-size: 11px; margin-top: 4px; }
+.airspace-booking-label { letter-spacing: .06em; }
+.airspace-booking-link { color: var(--efsp-muted, #8c9aa6); text-decoration: underline; }
+
+/* The editor: inline in the card, the same field grid, no modal. */
+.airspace-editor { margin-top: 6px; border-top: 1px solid var(--efsp-line, #2e3740); padding-top: 6px; font-size: 11px; }
+.airspace-editor-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; color: var(--efsp-muted, #8c9aa6); }
+.airspace-editor-head strong { color: var(--efsp-text, #d8e0e6); }
+.airspace-editor-form { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px 10px; margin-top: 6px; }
+.airspace-field-label { color: var(--efsp-muted, #8c9aa6); font-size: 10px; letter-spacing: .06em; display: block; }
+.airspace-dot { color: var(--efsp-text, #d8e0e6); margin-right: 3px; }
+.airspace-input {
+  width: 100%; box-sizing: border-box; background: var(--efsp-input, #151a1f); color: var(--efsp-text, #d8e0e6);
+  border: 1px solid var(--efsp-line-2, #4a5560); font: inherit; padding: 3px 5px; min-height: 22px;
+}
+.airspace-input:disabled { color: var(--efsp-faint, #56616c); border-style: dashed; }
+.airspace-readonly { color: var(--efsp-text, #d8e0e6); padding: 3px 0; }
+.airspace-field-was, .airspace-field-why { color: var(--efsp-muted, #8c9aa6); font-size: 10px; }
+.airspace-field-error { color: var(--efsp-bad, #ff8a4c); font-size: 10px; }
+.airspace-field-bad .airspace-input { border-color: var(--efsp-bad, #ff8a4c); }
+.airspace-editor-notes, .airspace-editor-impact { margin-top: 6px; }
+.airspace-note { color: var(--efsp-muted, #8c9aa6); background: var(--efsp-note-bg, #181d22); padding: 3px 6px; margin-top: 3px; }
+.airspace-note-bad { color: var(--efsp-bad, #ff8a4c); }
+.airspace-editor-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; }
+.airspace-save-btn {
+  min-height: 26px; padding: 2px 14px; background: var(--efsp-go, #4a7dbf); border: 1px solid var(--efsp-go, #4a7dbf);
+  color: var(--efsp-go-text, #fff); cursor: pointer; font: inherit; font-size: 11px;
+}
+.airspace-save-btn:disabled { background: none; border: 1px dashed var(--efsp-line-2, #4a5560); color: var(--efsp-faint, #56616c); cursor: default; }
+.airspace-editor-status { color: var(--efsp-muted, #8c9aa6); font-size: 11px; }
+.airspace-status-bad { color: var(--efsp-bad, #ff8a4c); }
+.airspace-geometry { grid-column: 1 / -1; }
+.airspace-geometry-stub { color: var(--efsp-muted, #8c9aa6); font-size: 10px; border: 1px dashed var(--efsp-line-2, #4a5560); padding: 4px 6px; }
+.airspace-delay { display: flex; gap: 6px; margin-top: 6px; }
+
+/* The conflict and delete views: a table, grey, with the clashing row alone in orange-red. */
+.airspace-conflict, .airspace-delete { margin-top: 6px; font-size: 11px; }
+.airspace-conflict-title { color: var(--efsp-bad, #ff8a4c); font-weight: 600; }
+.airspace-conflict-text { color: var(--efsp-muted, #8c9aa6); margin: 2px 0 6px; }
+.airspace-conflict-table { border-collapse: collapse; width: 100%; }
+.airspace-conflict-table th { text-align: left; color: var(--efsp-muted, #8c9aa6); font-weight: 400; font-size: 10px; letter-spacing: .06em; }
+.airspace-conflict-table td, .airspace-conflict-table th { border-top: 1px solid var(--efsp-line, #2e3740); padding: 3px 6px 3px 0; vertical-align: top; }
+.airspace-conflict-row-bad td { color: var(--efsp-bad, #ff8a4c); }
+.airspace-choice-btn[aria-pressed="true"] { background: var(--efsp-line-2, #4a5560); }
+
+/* History: time, kind, who, what. Neutral: nothing here is wrong. */
+.airspace-history { margin-top: 6px; font-size: 11px; }
+.airspace-history-row { display: grid; grid-template-columns: 50px 42px 1fr; gap: 6px; border-top: 1px solid var(--efsp-line, #2e3740); padding: 3px 0; }
+.airspace-history-time, .airspace-history-kind, .airspace-history-who { color: var(--efsp-muted, #8c9aa6); }
+.airspace-history-head { color: var(--efsp-text, #d8e0e6); }
+.airspace-history-change { color: var(--efsp-text, #d8e0e6); }
