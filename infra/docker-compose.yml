@@ -207,6 +207,9 @@ services:
       # key the picture still works and terrain simply masks nothing — every
       # radar sees to its full range — which is logged once at startup.
       - CRCSYNC_MAPTILER_KEY=${CRCSYNC_MAPTILER_KEY:-}
+      # The key crc-desktop draws its basemap with, handed to it after login (GET /api/client-config). Falls back
+      # to CRCSYNC_MAPTILER_KEY; set it to give clients a separate, browser-restricted key.
+      - CRCSYNC_MAPTILER_CLIENT_KEY=${CRCSYNC_MAPTILER_CLIENT_KEY:-}
       - CRCSYNC_TERRAIN_CACHE_DIR=/app/state/terrain-cache
     volumes:
       # EVERYTHING crc-sync writes, and nothing else. Mounted at /app/state,
