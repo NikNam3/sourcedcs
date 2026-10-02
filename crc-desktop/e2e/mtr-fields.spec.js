@@ -209,7 +209,7 @@ test('the lost-comms advisory: a grey note in ▼ naming the ALT clearance, noth
   expect(title).toMatch(/Lost comms \(§9\.4\).*FL180/s);
 });
 
-test('APP arrival: the M11 group only — no entry fields on the face', async ({ page }) => {
+test('AP arrival: the M11 group only — no entry fields on the face', async ({ page }) => {
   await openPanel(page, { signedOn: ['AP'] });
   await goBay(page, 'AP', 'ap-inbound');
   const strip = await seedStrip(page, {

@@ -87,7 +87,7 @@ test('S-L16 W5: retyping a shown estimate accepts it as the actual', async ({ pa
   }
 });
 
-test('U2: a HANDOFF proposal to CTR announces a new Strip at CTR, even to one controller holding APP and CTR', async ({ browser }) => {
+test('U2: a HANDOFF proposal to CTR announces a new Strip at CTR, even to one controller holding AP and CTR', async ({ browser }) => {
   const page = await controller(browser, { signedOn: ['AP'], facilityId: 'INCIRLIK', controller: 'uia-combo' });
   await page.evaluate(() => crc.ws.sendEfspSetPositions('CENTER', ['CTR']));
   await page.waitForFunction(() => crc.ws.getActingPositions('CENTER').includes('CTR'));

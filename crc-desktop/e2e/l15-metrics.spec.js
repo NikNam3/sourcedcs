@@ -15,7 +15,7 @@ const { openPanel, seedStrip, stripByCallsign } = require('./helpers/app');
 test.describe.configure({ timeout: 60000 });
 
 const SHOTS = path.join(__dirname, '..', '..', 'docs', 'wip', 'L15');
-const FDR = { route: 'DCT', requestedAltitude: 'FL250', departureAirport: 'LTAG', destinationAirport: 'LTAF' };
+const FLIGHT_DATA = { route: 'DCT', requestedAltitude: 'FL250', departureAirport: 'LTAG', destinationAirport: 'LTAF' };
 
 const metricRow = (page, id) => page.locator(`#metrics-panel .metrics-row[data-metric="${id}"]`);
 const missionCell = (page, id) => metricRow(page, id).locator('.metrics-cell').first();
@@ -27,8 +27,8 @@ async function openMetrics(page) {
 
 test('what a controller does is measured and shown on METRICS', async ({ page }) => {
   await openPanel(page, { signedOn: ['OPS', 'GC'] });
-  await seedStrip(page, { callsign: 'MET101', stripType: 'DEPARTURE', flightData: FDR });
-  await seedStrip(page, { callsign: 'MET102', stripType: 'DEPARTURE', flightData: FDR });
+  await seedStrip(page, { callsign: 'MET101', stripType: 'DEPARTURE', flightData: FLIGHT_DATA });
+  await seedStrip(page, { callsign: 'MET102', stripType: 'DEPARTURE', flightData: FLIGHT_DATA });
 
   // Two searches, the way a controller runs one: `.find` in the command line.
   const cmd = page.locator('#efsp-dot-command-input');

@@ -26,7 +26,7 @@ const at = (x, y) => ({ lat: LTAG.lat - (y - 330) * 0.1 / 60, lon: LTAG.lon + (x
 const APP_RADAR = { id: 'app:Incirlik', type: 'approach', presentation: 'ATC', label: 'LTAG APP', airport: 'Incirlik', ...LTAG, elevM: 60, rangeM: 80 * 1852, sweepMs: 3000, caps: { ssr: true } };
 const E3_RADAR = { id: 'crc:99', type: 'awacs', presentation: 'TACTICAL', label: 'DARKSTAR', ...at(150, 110), elevM: 9000, rangeM: 216 * 1852, sweepMs: 10000, caps: { ssr: true, height: true, mode4: true } };
 
-const FDR = (flightDataId, callsign, type, clearance) => ({
+const mkFlightData = (flightDataId, callsign, type, clearance) => ({
   flightDataId, identity: { callsign, aircraftType: type, beaconAssigned: null }, filed: {}, clearance: clearance || {},
 });
 const ASSIGNED = (altFt, hdg) => ({
@@ -122,9 +122,9 @@ function appScene() {
     { id: 'bad', x: 270, y: 255, h: 110, kt: 480, tn: 'TN00031', override: 'hostile' },
   ];
   const flightDataList = [
-    FDR('f-viper', 'VIPER11', 'F16', ASSIGNED(6000, 250)), FDR('f-colt', 'COLT31', 'F18'), FDR('f-snake', 'SNAKE21', 'F16'),
-    FDR('f-enf', 'ENFLD11', 'C130'), FDR('f-dude', 'DUDE41', 'F16'), FDR('f-hawg', 'HAWG61', 'A10'),
-    FDR('f-rage', 'RAGE51', 'F16'), FDR('f-boar', 'BOAR05', 'F15'), FDR('f-mojo', 'MOJO21', 'F16'),
+    mkFlightData('f-viper', 'VIPER11', 'F16', ASSIGNED(6000, 250)), mkFlightData('f-colt', 'COLT31', 'F18'), mkFlightData('f-snake', 'SNAKE21', 'F16'),
+    mkFlightData('f-enf', 'ENFLD11', 'C130'), mkFlightData('f-dude', 'DUDE41', 'F16'), mkFlightData('f-hawg', 'HAWG61', 'A10'),
+    mkFlightData('f-rage', 'RAGE51', 'F16'), mkFlightData('f-boar', 'BOAR05', 'F15'), mkFlightData('f-mojo', 'MOJO21', 'F16'),
   ];
   const strips = [
     S('s-viper', 'f-viper', 'AP'),
@@ -155,7 +155,7 @@ function appScene() {
   };
 }
 
-test('scene 1: an APP-only scope, map background on', async ({ page }) => {
+test('scene 1: an AP-only scope, map background on', async ({ page }) => {
   await openScope(page, { INCIRLIK: ['AP'] });
   await page.evaluate(() => { crc.app.settings.atcMapBackground = true; });
   await inject(page, appScene());
@@ -174,7 +174,7 @@ test('scene 4: "ATC map background" off — the black strict-STARS scope', async
 
 // ── Scene 2: the two ends of a handoff and a point-out ────────────────────
 
-test('scene 2: the sender ends — CTR handing COLT31 to APP, TWR pointing SNAKE21 out', async ({ page }) => {
+test('scene 2: the sender ends — CTR handing COLT31 to AP, LC pointing SNAKE21 out', async ({ page }) => {
   await openScope(page, { CENTER: ['CTR'], INCIRLIK: ['LC'] });
   const sc = appScene();
   sc.signedOn = [{ facilityId: 'CENTER', positionId: 'CTR' }, { facilityId: 'INCIRLIK', positionId: 'LC' }];
@@ -208,7 +208,7 @@ test('scene 2b: the receiver end, after a point-out was accepted and a handoff t
 
 // ── Scene 3: TAC_C2 + AP ─────────────────────────────────────────────────
 
-test('scene 3: a mixed TAC_C2 + APP session — the tactical scheme wins where the E-3 sees a track', async ({ page }) => {
+test('scene 3: a mixed TAC_C2 + AP session — the tactical scheme wins where the E-3 sees a track', async ({ page }) => {
   await openScope(page, { INCIRLIK: ['AP'], TACTICAL: ['TAC_C2'] });
   const c = [
     { id: 'viper', x: 470, y: 200, h: 250, kt: 280, callsign: 'VIPER11', type: 'F16', code: '4521', alt: 12000, scheme: 'TACTICAL', iff: 'friendly', height: true },
@@ -219,7 +219,7 @@ test('scene 3: a mixed TAC_C2 + APP session — the tactical scheme wins where t
     { id: 'sq', x: 700, y: 420, h: 330, kt: 160, code: '6123', alt: 4200, tn: 'TN00002' },
     { id: 'x36', x: 820, y: 170, h: 250, kt: 450, tn: 'TN00036', override: 'hostile' },
   ];
-  const flightDataList = [FDR('f-viper', 'VIPER11', 'F16', ASSIGNED(6000, 250)), FDR('f-mojo', 'MOJO21', 'F16'), FDR('f-snake', 'SNAKE21', 'F16'), FDR('f-colt', 'COLT31', 'F18', ASSIGNED(8000, 280))];
+  const flightDataList = [mkFlightData('f-viper', 'VIPER11', 'F16', ASSIGNED(6000, 250)), mkFlightData('f-mojo', 'MOJO21', 'F16'), mkFlightData('f-snake', 'SNAKE21', 'F16'), mkFlightData('f-colt', 'COLT31', 'F18', ASSIGNED(8000, 280))];
   const strips = [S('s-viper', 'f-viper', 'AP'), S('s-mojo-m', 'f-mojo', 'TAC_C2', { facilityId: 'TACTICAL', stripType: 'MISSION' }), S('s-snake', 'f-snake', 'AP'), S('s-colt', 'f-colt', 'AP')];
   await inject(page, {
     radars: [APP_RADAR, E3_RADAR], datalink: true,

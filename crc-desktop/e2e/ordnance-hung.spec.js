@@ -70,7 +70,7 @@ const scriptErrors = (errors) => errors.filter((e) => !/Failed to load resource/
 
 const ARR_FLIGHT_DATA = { originAirport: 'LTAG', destinationAirport: 'LTAG', route: 'DCT' };
 
-test('HUNG: APP records it, TWR sees it, the flight lands normally, CLEAN clears it', async ({ page }) => {
+test('HUNG: AP records it, LC sees it, the flight lands normally, CLEAN clears it', async ({ page }) => {
   await page.setViewportSize({ width: 1600, height: 1200 });
   const { consoleErrors } = await openPanel(page, { signedOn: ['LC', 'AP', 'GC'] });
   const CS = 'HUNG11';
@@ -97,13 +97,13 @@ test('HUNG: APP records it, TWR sees it, the flight lands normally, CLEAN clears
   // To tower: the chip travels with the flight, on LC's Strip too.
   await pressNla(page, strip, CS, 'HANDED_TO_TOWER');
   await goBay(page, 'LC', 'lc-arrivals');
-  const twr = stripByCallsign(page, CS);
-  await expect(twr.locator('[data-slot="ord"]')).toHaveText('HUNG');
+  const lc = stripByCallsign(page, CS);
+  await expect(lc.locator('[data-slot="ord"]')).toHaveText('HUNG');
   await only(page, CS);
-  await twr.screenshot({ path: shot('01-hung-chip.png') });
+  await lc.screenshot({ path: shot('01-hung-chip.png') });
 
   // Never an inhibit: FINAL, LANDED, TAXI_IN exactly as for a CLEAN flight.
-  await pressNla(page, twr, CS, 'FINAL');
+  await pressNla(page, lc, CS, 'FINAL');
   await goBay(page, 'LC', 'lc-final');
   await pressNla(page, stripByCallsign(page, CS), CS, 'LANDED');
   await goBay(page, 'LC', 'lc-landed');
@@ -116,21 +116,21 @@ test('HUNG: APP records it, TWR sees it, the flight lands normally, CLEAN clears
 
   // "Ordnance safe" at the pad: GC has no 3G on its grid, so the expanded view.
   await goBay(page, 'GC', 'gc-taxi-in');
-  const gnd = stripByCallsign(page, CS);
-  await expect(gnd.locator('[data-slot="ord"]')).toHaveText('HUNG');
-  await gnd.locator('.efsp-expand-btn').click();
-  await setOrdnance(gnd.locator('[data-expanded-block="3G"]'), 'CLEAN');
+  const gc = stripByCallsign(page, CS);
+  await expect(gc.locator('[data-slot="ord"]')).toHaveText('HUNG');
+  await gc.locator('.efsp-expand-btn').click();
+  await setOrdnance(gc.locator('[data-expanded-block="3G"]'), 'CLEAN');
   await expect.poll(() => ordnanceOf(page, CS)).toBe('CLEAN');
-  await expect(gnd.locator('[data-slot="ord"]')).toHaveCount(0);
-  await expect(gnd.locator('.efsp-strip-reason', { hasText: 'Hung ordnance' })).toHaveCount(0);
-  await gnd.locator('.efsp-expand-btn').click();
+  await expect(gc.locator('[data-slot="ord"]')).toHaveCount(0);
+  await expect(gc.locator('.efsp-strip-reason', { hasText: 'Hung ordnance' })).toHaveCount(0);
+  await gc.locator('.efsp-expand-btn').click();
   await only(page, CS);
-  await gnd.screenshot({ path: shot('04-cleared.png') });
+  await gc.screenshot({ path: shot('04-cleared.png') });
 
   expect(scriptErrors(consoleErrors), consoleErrors.join('\n')).toEqual([]);
 });
 
-test('pilot walks with field state: the pad by name, a runway request re-stated, an aborted departure', async ({ page }) => {
+test('pilot walks with runway status: the pad by name, a runway request re-stated, an aborted departure', async ({ page }) => {
   await page.setViewportSize({ width: 1600, height: 1200 });
   const { consoleErrors } = await openPanel(page, { signedOn: ['LC', 'AP', 'GC', 'OPS'] });
   // Runway 05 active, established here: a fresh crc-sync has none, and this walk names it.

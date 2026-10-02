@@ -39,9 +39,9 @@ async function goBay(page, positionId, bayId) {
   await page.locator(`#efsp-bay-tabs .efsp-bay-tab[data-bay-id="${bayId}"]`).click();
 }
 
-test('an overflight walks INBOUND, IN_SECTOR, is handed CTR to APP, and is dropped at APP', async ({ browser }) => {
+test('an overflight walks INBOUND, IN_SECTOR, is handed CTR to AP, and is dropped at AP', async ({ browser }) => {
   const ctr = await controller(browser, { signedOn: ['CTR'], facilityId: 'CENTER', controller: 'l28-ctr' });
-  const app = await controller(browser, { signedOn: ['AP'], facilityId: 'INCIRLIK', controller: 'l28-app' });
+  const ap = await controller(browser, { signedOn: ['AP'], facilityId: 'INCIRLIK', controller: 'l28-ap' });
   const callsign = cs('OVF');
   try {
     // 1. CTR creates it: INBOUND, in CTR's overflight Bay, Radar Contact on offer.
@@ -65,35 +65,35 @@ test('an overflight walks INBOUND, IN_SECTOR, is handed CTR to APP, and is dropp
     const popover = ctr.locator('.efsp-coordinate-popover');
     await popover.locator('select').selectOption('HANDOFF');
     await popover.getByRole('button', { name: 'Send' }).dispatchEvent('click');
-    await expect.poll(() => stateAt(app, callsign, 'INCIRLIK')).toBe('INBOUND');
-    expect((await records(app, callsign)).find(r => r.facilityId === 'INCIRLIK')).toMatchObject({ stripType: 'OVERFLIGHT', owner: 'AP' });
-    await app.locator('#efsp-position-tabs .efsp-position-tab[data-position-id="AP"]').click();
-    await app.locator('#efsp-bay-tabs .efsp-bay-tab.efsp-tab-has-arrival').click();
-    await expect(app.locator('.efsp-strip', { hasText: callsign }).first()).toBeVisible();
-    await shot(app, '03-handoff-to-app');
+    await expect.poll(() => stateAt(ap, callsign, 'INCIRLIK')).toBe('INBOUND');
+    expect((await records(ap, callsign)).find(r => r.facilityId === 'INCIRLIK')).toMatchObject({ stripType: 'OVERFLIGHT', owner: 'AP' });
+    await ap.locator('#efsp-position-tabs .efsp-position-tab[data-position-id="AP"]').click();
+    await ap.locator('#efsp-bay-tabs .efsp-bay-tab.efsp-tab-has-arrival').click();
+    await expect(ap.locator('.efsp-strip', { hasText: callsign }).first()).toBeVisible();
+    await shot(ap, '03-handoff-to-ap');
 
     // 4. AP accepts: it lands in AP's overflight Bay (not ARRIVAL's inbound Bay), the sender is HANDED_OFF with Drop on offer.
-    await app.locator('.efsp-strip', { hasText: callsign }).first().getByRole('button', { name: /accept/i }).first().click();
-    await expect.poll(async () => ((await records(app, callsign)).find(r => r.facilityId === 'INCIRLIK') || {}).bayId).toBe('ap-overflight');
+    await ap.locator('.efsp-strip', { hasText: callsign }).first().getByRole('button', { name: /accept/i }).first().click();
+    await expect.poll(async () => ((await records(ap, callsign)).find(r => r.facilityId === 'INCIRLIK') || {}).bayId).toBe('ap-overflight');
     await expect.poll(() => stateAt(ctr, callsign, 'CENTER')).toBe('HANDED_OFF');
     await expect(nla(ctr, callsign)).toHaveText(/Drop/);
     await shot(ctr, '04-accepted');
 
     // 5. AP walks it: Radar Contact, then it is AP's flight to hand off or drop; CTR drops its own.
-    await goBay(app, 'AP', 'ap-overflight');
-    await expect(nla(app, callsign)).toHaveText(/Radar Contact/);
-    await press(app, callsign);
-    await expect.poll(() => stateAt(app, callsign, 'INCIRLIK')).toBe('IN_SECTOR');
-    await press(app, callsign);
-    await expect.poll(() => stateAt(app, callsign, 'INCIRLIK')).toBe('HANDED_OFF');
-    await press(app, callsign);
-    await expect.poll(() => stateAt(app, callsign, 'INCIRLIK')).toBeNull();
-    await shot(app, '05-app-walks-it');
+    await goBay(ap, 'AP', 'ap-overflight');
+    await expect(nla(ap, callsign)).toHaveText(/Radar Contact/);
+    await press(ap, callsign);
+    await expect.poll(() => stateAt(ap, callsign, 'INCIRLIK')).toBe('IN_SECTOR');
+    await press(ap, callsign);
+    await expect.poll(() => stateAt(ap, callsign, 'INCIRLIK')).toBe('HANDED_OFF');
+    await press(ap, callsign);
+    await expect.poll(() => stateAt(ap, callsign, 'INCIRLIK')).toBeNull();
+    await shot(ap, '05-ap-walks-it');
     await press(ctr, callsign);
     await expect.poll(() => records(ctr, callsign)).toEqual([]);
   } finally {
     await dropStrips(ctr, [callsign]);
-    await dropStrips(app, [callsign]);
+    await dropStrips(ap, [callsign]);
   }
 });
 

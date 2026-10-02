@@ -138,7 +138,7 @@ test('04 AIC walks away: the line lands in TAC_C2\'s On Station tab, where TAC_C
   await tac.context.close(); await aic.context.close();
 });
 
-test('05 CTR proposes the TOFI exit while AIC holds the line, and the TAC_C2 seat answers it (B2)', async ({ browser, baseURL }) => {
+test('05 CTR proposes the TOFI exit while AIC holds the line, and the TAC_C2 position answers it (B2)', async ({ browser, baseURL }) => {
   const ctr = await controller(browser, baseURL, 'e2e-ctr5', ['CTR'], 'CENTER');
   // One controller holds both: the AIC tab shows the line, and the answer is sent as TAC_C2.
   const combo = await controller(browser, baseURL, 'e2e-combo5', ['TAC_C2', 'AIC']);

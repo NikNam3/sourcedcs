@@ -53,9 +53,9 @@ async function only(page, callsign) {
   }, callsign);
 }
 
-test('pilot walk: "VIPER11 request a different exit fix", CTR and APP at once', async ({ browser }) => {
+test('pilot walk: "VIPER11 request a different exit fix", CTR and AP at once', async ({ browser }) => {
   const ctr = await controller(browser, { signedOn: ['CTR'], facilityId: 'CENTER', controller: 'ctr-walk' });
-  const app = await controller(browser, { signedOn: ['AP'], facilityId: 'INCIRLIK', controller: 'app-walk' });
+  const ap = await controller(browser, { signedOn: ['AP'], facilityId: 'INCIRLIK', controller: 'ap-walk' });
   const CS = 'MTRW11'; // plays "VIPER11"; unique because the Board persists across specs in a run
 
   // An inbound at Center, coordinated to AP so both Facilities hold a Strip.
@@ -66,8 +66,8 @@ test('pilot walk: "VIPER11 request a different exit fix", CTR and APP at once', 
   const pop = ctr.locator('.efsp-coordinate-popover');
   await pop.locator('select').selectOption('HANDOFF');
   await pop.getByRole('button', { name: 'Send' }).dispatchEvent('click');
-  await goBay(app, 'AP', 'ap-coordination');
-  const a = stripOf(app, CS);
+  await goBay(ap, 'AP', 'ap-coordination');
+  const a = stripOf(ap, CS);
   await expect(a).toBeVisible();
 
   // ── 1. "VIPER11, IR107, exit F at 32, request FL190." — CTR posts. ─────────
@@ -80,25 +80,25 @@ test('pilot walk: "VIPER11 request a different exit fix", CTR and APP at once', 
   await expect(a.locator('.efsp-strip-fields .efsp-block-9H-EXIT')).toHaveText('F', { timeout: 3000 });
   await expect(a.locator('.efsp-strip-fields .efsp-block-9H-TIME')).toHaveText('1432');
   note('1', `CTR posted IR107/F/1432/FL190; APP's replica showed them without a reload. APP face: ${(await faceIds(a)).join(' ')}`);
-  await only(app, CS);
-  await a.screenshot({ path: path.join(SHOTS, 'walk-1-app-replica.png') });
+  await only(ap, CS);
+  await a.screenshot({ path: path.join(SHOTS, 'walk-1-ap-replica.png') });
 
   // AP takes the flight.
   const accept = a.getByRole('button', { name: 'Accept Hand Off' });
   await accept.click({ timeout: 3000 });
-  await expect.poll(async () => (await app.evaluate((cs) => [...crc.state.efspStrips.values()].filter(s => crc.state.efspFlightDataList.get(s.flightDataId)?.identity?.callsign === cs && s.facilityId === 'INCIRLIK').map(s => s.coordination && s.coordination.state), CS))[0]).toBe('ACTIVE');
-  const bayNow = await app.evaluate((cs) => [...crc.state.efspStrips.values()].find(s => crc.state.efspFlightDataList.get(s.flightDataId)?.identity?.callsign === cs && s.facilityId === 'INCIRLIK').bayId, CS);
-  if (bayNow !== 'ap-coordination') await goBay(app, 'AP', bayNow);
-  const mine = stripOf(app, CS);
+  await expect.poll(async () => (await ap.evaluate((cs) => [...crc.state.efspStrips.values()].filter(s => crc.state.efspFlightDataList.get(s.flightDataId)?.identity?.callsign === cs && s.facilityId === 'INCIRLIK').map(s => s.coordination && s.coordination.state), CS))[0]).toBe('ACTIVE');
+  const bayNow = await ap.evaluate((cs) => [...crc.state.efspStrips.values()].find(s => crc.state.efspFlightDataList.get(s.flightDataId)?.identity?.callsign === cs && s.facilityId === 'INCIRLIK').bayId, CS);
+  if (bayNow !== 'ap-coordination') await goBay(ap, 'AP', bayNow);
+  const mine = stripOf(ap, CS);
   note('1b', `APP accepted; its Strip is in ${bayNow}`);
 
   // ── 2. "request exit at E instead, estimating 40, request FL210." ─────────
-  const before = await mtrOf(app, CS);
+  const before = await mtrOf(ap, CS);
   await edit(mine, '9H-EXIT', 'E');
   await edit(mine, '9H-TIME', '1440');
   await edit(mine, '9H-ALT', 'FL210');
   await expect(mine.locator('.efsp-block-9H-EXIT')).toHaveText('E');
-  const after = await mtrOf(app, CS);
+  const after = await mtrOf(ap, CS);
   const struck = await mine.locator('.efsp-strip-fields .efsp-annotation-entry').count();
   note('2', `APP overwrote F/1432/FL190 -> ${after.exitFix}/${new Date(after.exitEstimateUtc).toISOString().slice(11, 16)}/${after.requestedAltitudeAfterExit}. `
     + `Struck history entries on the face: ${struck} (expected 0 — §3.7 gap, H25). Old exit fix anywhere on the FLIGHT_DATA: ${JSON.stringify(after).includes('"F"')}`);
@@ -106,7 +106,7 @@ test('pilot walk: "VIPER11 request a different exit fix", CTR and APP at once', 
   expect(after.exitFix).toBe('E');
   await expect(c.locator('.efsp-strip-fields .efsp-block-9H-EXIT')).toHaveText('E', { timeout: 3000 });
   note('2b', 'CTR\'s Strip showed E within the poll; nothing on either Strip says it was amended');
-  await only(app, CS);
+  await only(ap, CS);
   await mine.screenshot({ path: path.join(SHOTS, 'walk-2-amended.png') });
 
   // ── 3. "…approved FL210": the controller writes ALT. The advisory follows. ──
@@ -137,12 +137,12 @@ test('pilot walk: "VIPER11 request a different exit fix", CTR and APP at once', 
 
   // ── 6. A typo'd time. ────────────────────────────────────────────────────
   await edit(mine, '9H-TIME', '1472');
-  await expect(app.locator('#efsp-mutation-error')).toContainText('HHMM');
+  await expect(ap.locator('#efsp-mutation-error')).toContainText('HHMM');
   await expect(mine.locator('.efsp-strip-fields .efsp-block-refused')).toHaveCount(1);
-  note('6', `1472 refused: "${(await app.locator('#efsp-mutation-error').textContent()).trim()}"; cell marked refused`);
-  await only(app, CS);
-  await app.locator('#efsp-panel').screenshot({ path: path.join(SHOTS, 'walk-6-typo.png') });
-  await app.keyboard.press('Escape');
+  note('6', `1472 refused: "${(await ap.locator('#efsp-mutation-error').textContent()).trim()}"; cell marked refused`);
+  await only(ap, CS);
+  await ap.locator('#efsp-panel').screenshot({ path: path.join(SHOTS, 'walk-6-typo.png') });
+  await ap.keyboard.press('Escape');
 
   // ── 7. On AP's ARRIVAL: the M11 group, no entry on the face. ─────────────
   const ids = await faceIds(mine);
@@ -158,15 +158,15 @@ test('pilot walk: "VIPER11 request a different exit fix", CTR and APP at once', 
     crc.ws.sendEfspMutation('CTR', s, { kind: 'SetBlock', blockId: '9H-TIME', value: '1445' }, 'CENTER');
     return s.ownerPositionId;
   }, CS);
-  await app.waitForTimeout(800);
+  await ap.waitForTimeout(800);
   const stillOpen = await input.count();
   const draft = stillOpen ? await input.inputValue() : null;
   const ctrErr = (await ctr.locator('#efsp-mutation-error').textContent().catch(() => '') || '').trim();
   const est = await mine.locator('.efsp-block-9H-TIME').textContent().catch(() => null);
   note('8', `CTR (its Strip owned by ${ctrWrite}) sent EXIT EST 1445 while APP typed "D" in EXIT: APP input still open=${!!stillOpen}, draft=${JSON.stringify(draft)}; APP's EXIT EST now ${JSON.stringify(est)}; CTR refusal: ${JSON.stringify(ctrErr)}`);
-  const flightDataEst = (await mtrOf(app, CS)).exitEstimateUtc;
+  const flightDataEst = (await mtrOf(ap, CS)).exitEstimateUtc;
   note('8b', `APP's copy of the FDR has exitEstimateUtc=${flightDataEst ? new Date(flightDataEst).toISOString().slice(11, 16) : flightDataEst} while the edit is open`);
   if (stillOpen) await input.press('Enter');
-  await app.waitForTimeout(800);
+  await ap.waitForTimeout(800);
   note('8c', `after APP pressed Enter: EXIT=${JSON.stringify(await mine.locator('.efsp-block-9H-EXIT').textContent())}, EXIT EST=${JSON.stringify(await mine.locator('.efsp-block-9H-TIME').textContent())}`);
 });

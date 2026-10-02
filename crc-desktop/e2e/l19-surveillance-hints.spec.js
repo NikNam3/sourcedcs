@@ -13,7 +13,7 @@
 const { test, expect } = require('./helpers/test');
 const { openPanel, seedStrip, stripByCallsign } = require('./helpers/app');
 
-const FDR = { route: 'DCT', requestedAltitude: 'FL250', departureAirport: 'LTAG', destinationAirport: 'LTAF' };
+const FLIGHT_DATA = { route: 'DCT', requestedAltitude: 'FL250', departureAirport: 'LTAG', destinationAirport: 'LTAF' };
 const ALL = ['OPS', 'CD', 'GC', 'LC', 'AP'];
 const CS = 'L19AIR1';
 
@@ -39,7 +39,7 @@ test('the suggestion chip: drawn, moves nothing, one click advances the flight a
   await openPanel(page, { signedOn: ALL });
   await page.locator('#efsp-position-tabs .efsp-position-tab[data-position-id="OPS"]').click();
   await page.locator('#efsp-bay-tabs .efsp-bay-tab[data-bay-id="ops-proposed"]').click();
-  await seedStrip(page, { callsign: CS, stripType: 'DEPARTURE', flightData: FDR });
+  await seedStrip(page, { callsign: CS, stripType: 'DEPARTURE', flightData: FLIGHT_DATA });
 
   // To LUAW, with the page's own NLA, as l4-chain does.
   for (let i = 0; i < 6; i++) {
@@ -84,7 +84,7 @@ test('the suggestion chip: drawn, moves nothing, one click advances the flight a
 test('the staleness badge is quiet: low severity, no reason line, no alert styling', async ({ page }) => {
   await page.setViewportSize({ width: 1600, height: 1400 });
   await openPanel(page, { signedOn: ['OPS'] });
-  await seedStrip(page, { callsign: CS, stripType: 'DEPARTURE', flightData: FDR });
+  await seedStrip(page, { callsign: CS, stripType: 'DEPARTURE', flightData: FLIGHT_DATA });
   const at = await info(page);
   await page.evaluate(([h]) => { crc.state.applyEfspAlerts({ surveillance: [h] }); crc.bayView.renderAllOpenEfspBays(); }, [
     { stripId: at.stripId, flightDataId: at.flightDataId, facilityId: 'INCIRLIK', kind: 'STALE', stripState: at.state, contactPhase: 'ON_GROUND', since: 1, afterSec: 120 },

@@ -43,7 +43,7 @@ async function controller(browser, opts) {
 }
 
 const ctr = (browser) => controller(browser, { signedOn: ['CTR'], facilityId: 'CENTER', controller: 'ctr-controller' });
-const app = (browser) => controller(browser, { signedOn: ['AP'], facilityId: 'INCIRLIK', controller: 'ap-controller' });
+const ap = (browser) => controller(browser, { signedOn: ['AP'], facilityId: 'INCIRLIK', controller: 'ap-controller' });
 const tacC2 = (browser) => controller(browser, { signedOn: ['TAC_C2'], facilityId: 'TACTICAL', controller: 'tac-c2-controller' });
 
 /**
@@ -126,7 +126,7 @@ function hitTest(locator) {
 
 test('a double-tap on Accept Hand Off accepts only the replica that was tapped', async ({ browser }) => {
   const a = await ctr(browser);
-  const b = await app(browser);
+  const b = await ap(browser);
   await propose(a, await seedCtrArrival(a, 'DBLAC1'), 'HANDOFF');
   await a.locator('.efsp-coordinate-popover').waitFor({ state: 'detached' });
   await propose(a, await seedCtrArrival(a, 'DBLAC2'), 'HANDOFF');
@@ -195,7 +195,7 @@ test('the TOFI popover can be reached on a lone Strip', async ({ browser }) => {
 
 test('the sender can see a HANDOFF is pending, and then that it was accepted', async ({ browser }) => {
   const a = await ctr(browser);
-  const b = await app(browser);
+  const b = await ap(browser);
   const s = await seedCtrArrival(a, 'HOSEE1');
   await propose(a, s, 'HANDOFF');
   await expect.poll(async () => (await recordsFor(a, 'HOSEE1')).length).toBe(2);
@@ -214,7 +214,7 @@ test('the sender can see a HANDOFF is pending, and then that it was accepted', a
 
 test('a rejected proposal is visible to the controller who sent it', async ({ browser }) => {
   const a = await ctr(browser);
-  const b = await app(browser);
+  const b = await ap(browser);
   const s = await seedCtrArrival(a, 'REJSEE');
   await propose(a, s, 'OPERATIONAL_REQUEST');
   await goBay(b, 'AP', 'ap-coordination');
@@ -232,7 +232,7 @@ test('a rejected proposal is visible to the controller who sent it', async ({ br
 
 test('a rejected replica in the receiver\'s Coordination Bay cannot be worked', async ({ browser }) => {
   const a = await ctr(browser);
-  const b = await app(browser);
+  const b = await ap(browser);
   const s = await seedCtrArrival(a, 'DEADRP');
   await propose(a, s, 'POINT_OUT');
   await goBay(b, 'AP', 'ap-coordination');
@@ -275,7 +275,7 @@ test('a rejected replica in the receiver\'s Coordination Bay cannot be worked', 
 
 test('the proposer\'s note reaches the receiver', async ({ browser }) => {
   const a = await ctr(browser);
-  const b = await app(browser);
+  const b = await ap(browser);
   const s = await seedCtrArrival(a, 'NOTE01');
   const note = 'climbing FL200 on request, verbal done';
   await propose(a, s, 'HANDOFF', note);
