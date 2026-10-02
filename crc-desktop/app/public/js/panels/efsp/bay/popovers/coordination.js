@@ -210,7 +210,7 @@ export function _openCoordinatePopover(strip, anchorEl) {
   }
   popover.appendChild(select);
 
-  // docs/adr/0101 (DR-3): an ARRIVAL at INBOUND may be handed to the carrier's Marshal instead of the counterpart.
+  // docs/adr/0101 (DR-3): an ARRIVAL in its coordination-eligible state may be handed to the carrier's Marshal instead of the counterpart.
   // Only a HANDOFF goes there, so the choice shows with HANDOFF and falls back to the counterpart otherwise.
   let toSelect = null;
   if (canHandOffToCarrier(strip)) {
