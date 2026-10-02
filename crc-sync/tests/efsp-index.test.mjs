@@ -60,7 +60,7 @@ test('snapshotFor returns a well-formed efsp-snapshot message with all four coll
   const efsp = createEfsp();
   const snap = efsp.snapshotFor();
   assert.equal(snap.type, 'efsp-snapshot');
-  assert.equal(snap.facility, 'INCIRLIK');
+  assert.equal(snap.facilities[0], 'INCIRLIK');
   assert.ok(Array.isArray(snap.strips));
   assert.ok(Array.isArray(snap.flightDataList));
   assert.ok(Array.isArray(snap.positions));
