@@ -84,3 +84,57 @@ exist. It reuses the same copy-at-selection rule (DA-2).
 - Map: `map-setup.js` registers sources/layers by hand; `geojson.js` `buildDrawings()` already draws drawings; `missionData.drawings` now carries `name`/`layerName` (2S-B). No `js/map/` dir exists; map modules sit in `js/`.
 - Settings: `app.js` `settings` persisted in localStorage `crc-desktop-settings`; no coordinate-format setting yet; no MGRS code anywhere (client or web). Web has `sourcedcs-web/public/js/airspace-coords.js` (decimal/DMS/DM pair parsing, no MGRS).
 - Airspaces on the client: `getAllEfspAirspaces()` in `efsp-state.js`; transition altitude in `settings.transitionAltFt`.
+
+## Built (build lane, branch `lane/AIRSP-2P-B-build`)
+
+New files under `crc-desktop/app/public/js/`:
+
+| File | What it is |
+|---|---|
+| `coords.js` | DMS / DM / MGRS formatting and parsing (decimal accepted too); hand-written UTM/MGRS, no dependency. `tests/coords.test.mjs` (reference points: equator/3E, 45N/3E, Sydney, round trips in both hemispheres, even and odd zones) |
+| `panels/efsp/airspace-geometry-model.js` | pure: polygon editing, circle to 64 points, Douglas-Peucker (0.1 NM), the picker's rows, `geometryFromDrawing` (copies the points), `outlineStatus` (what the OUTLINE chip and buttons say), route rows <-> segments, the hand copy of `missionFingerprint` (parity-tested against crc-sync) |
+| `panels/efsp/airspace-geometry-editor.js` | the real `mountGeometryEditor` (replaces 2P-A's stub): OUTLINE for an AREA, the fix table for a ROUTE |
+| `airspace-draw.js` | the map session: draw a polygon, drag/insert/delete vertices, add route fixes with navpoint snap, place one fix |
+| `airspace-layer.js` | outlines, corridors, centrelines, labels on the map; the draft layer; mounts the menu |
+| `airspace-layer-menu.js` | the menu model (pure) and its DOM |
+| `panels/efsp/mtr-route-note.js` | the Strip's "route active / not active" note |
+| `css/airspace-geometry.css` | all styling for the above |
+
+Tests: `airspace-geometry`, `airspace-layer`, `airspace-layer-menu`, `mtr-route-note`, `coords` (crc-desktop `tests/`), the MGRS case in `sourcedcs-web/test/airspace-coords.test.js`, and `e2e/airspace-geometry.spec.js` (13 tests).
+
+### Shared-file edits (kept minimal)
+
+- `airspace-editor.js` (2P-A's): `kind` chooser on create (AREA / ROUTE) that rebuilds the form (`buildForm`, `switchKind`); `_createDefinition` carries `segments`/`defaultWidthNm` and leaves the derived altitudes out; `base` and `editable` became `let`.
+- `airspace-panel.js` (2P-A's): `renderAirspacePanel()` calls `refreshAirspaceLayers()` first (the map follows the registry whether or not the panel is built).
+- `map-setup.js`: one `registerAirspaceLayers()` line, `mountAirspaceMenuButton()`, a refresh at map ready and in `applyMapTheme`.
+- `app.js`: two settings defaults (`airspaceMenu`, `coordFormat`) and `refreshAirspaceLayers()` in the `init` handler.
+- `panels/settings-panel.js` + `index.html`: the coordinate-format select and the airspace menu mount (GENERAL tab).
+- `panels/efsp/bay/strip-element.js`: the route note in the expanded view (next to the lost-comms note).
+- `e2e/helpers/modules.js`: `airspaceLayer` added to MODULES.
+- `tests/fixtures/module-graph-exports.json`: re-recorded (`GOLDEN_RECORD=1`).
+- `sourcedcs-web/public/js/airspace-coords.js` + its test and the hint in `airspace-admin.js`: MGRS paste (own commit).
+
+## Defaults taken
+
+- **Coordinate setting** lives in the settings store as `coordFormat` ('DMS' | 'DM' | 'MGRS', default DM). It controls what the editor and the cursor readout write; input accepts every format whatever the setting. In the route table, MGRS shows in the LAT cell and LON is disabled ("in MGRS"); pasting a whole position (any format) into the LAT cell fills both.
+- **Unnamed drawings** are referenced by `unnamed drawing #n` (index + 1) as `objectName`; Refresh finds them by the same rule, so reordering a mission's drawings can break the link (the outline stays, Refresh says the drawing is not in the mission).
+- **MTR note** is in the Strip's expanded view, not on the collapsed face: the briefing says "the MTR group", but the group's blocks are generic block-map cells and a note there would need block-map changes outside this lane.
+- **Route widths** are total widths (as stored, mockup note); a blank leg width uses the default.
+- **Fixes added on the map** append at the end only; moving an existing fix is done with "+" (place on map) or typing.
+- **Typed outline** ("Type points", one point per line, any format) was added to the AREA section (not in the mockup) because the web admin has the same and a keyboard path is useful with no map; it is one extra grey button.
+- **Layer menu "Reset"** clears the individual settings of every theater, not only the current one (the briefing's default says "no individual overrides").
+- **AP2B-Q3** done as decided: a DCS line is listed greyed in the AREA picker ("an open line is not an outline"); no route from a line.
+
+## Walks not done / follow-ups
+
+- Moving an existing route fix by dragging on the map.
+- The MTR route note on the collapsed Strip face.
+- The Strip e2e for the note (unit-tested; no e2e spec builds a flight with MTR data and a ROUTE record together).
+- A route from a DCS line drawing (AP2B-Q3, later lane).
+- `sourcedcs-web` `npm test` has 7 failing files on this checkout both before and after the MGRS commit (airspaces-route, auth, bookings-airspace, discord-client, helpers-routes, ranges-migration, store); the coords test passes.
+
+## Findings
+
+- Re-rendering a table on every `change` drops the focus a Tab is moving to (a Playwright fill of the next cell hit it); the route table updates cells in place and only structural changes rebuild it. 2P-A's editor re-renders its field rows the same way via `refresh()` but keeps the input elements, so it is not affected.
+- MapLibre 3.6 does not keep the GeoJSON data object on the source, so specs read `crc.airspaceLayer.lastAirspaceFeatures()`.
+- `queryRenderedFeatures` right after `setData` can miss a vertex that was just added; hit-testing is done from the session's own points.
