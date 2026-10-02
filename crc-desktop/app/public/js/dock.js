@@ -53,7 +53,7 @@ export const PANEL_TITLES = {
   metrics:  'METRICS',
 };
 
-const DOCK_LAYOUT_KEY = 'crc-desktop-dock-layout';
+const DOCK_LAYOUT_KEY = 'crc-desktop-dock-layout-v2';
 
 export let dock = null;
 
