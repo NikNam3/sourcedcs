@@ -128,7 +128,7 @@ Reason: the FDR changes from upstream data (track updates, filed amendments, ATO
 
 ```
 FlightDataRecord {
-  fdrId            string          // stable, server-assigned
+  flightDataId            string          // stable, server-assigned
   rev              uint64
   identity         Identity        // §3.2
   filed            FiledIntent     // route, altitude, times as filed
@@ -141,9 +141,9 @@ FlightDataRecord {
 
 Strip {
   stripId          string
-  fdrId            string
+  flightDataId            string
   rev              uint64          // independent of FDR rev
-  role             StripRole
+  stripType             StripRole
   state            EfspState       // Block 25
   ownerPositionId  string
   bayId, rackId    string
@@ -201,12 +201,12 @@ Departure lifecycle:
 | `PROPOSED` | FDR exists, strip auto-created from filed data | `OPS` |
 | `PENDING_CLEARANCE` | Awaiting clearance delivery | `CD` |
 | `CLEARED` | Clearance issued (voice or datalink) | `CD` |
-| `HELD` | Hold for release, release time, or void time in force — §3.8 | `CD` / `GND` |
-| `PUSHBACK` | Off-block / engine start approved | `GND` |
-| `TAXI` | Taxiing to runway | `GND` |
-| `RUNWAY_QUEUE` | At or approaching the runway, in departure sequence | `TWR` |
-| `LUAW` | Line up and wait — a distinct state, see §3.9 | `TWR` |
-| `DEPARTED` | Airborne | `TWR` → `APP` |
+| `HELD` | Hold for release, release time, or void time in force — §3.8 | `CD` / `GC` |
+| `PUSHBACK` | Off-block / engine start approved | `GC` |
+| `TAXI` | Taxiing to runway | `GC` |
+| `RUNWAY_QUEUE` | At or approaching the runway, in departure sequence | `LC` |
+| `LUAW` | Line up and wait — a distinct state, see §3.9 | `LC` |
+| `DEPARTED` | Airborne | `LC` → `AP` |
 | `HANDED_OFF` | Transferred to the next controlling agency | — |
 | `DROPPED` | Removed from the Board | — |
 
@@ -362,10 +362,10 @@ Eighteen Positions across five Facilities. The **Class** column is load-bearing 
 | ID | Name | Class | Facility | Primitives | Strip Roles |
 |---|---|---|---|---|---|
 | `CD` | Clearance Delivery | Military ATC | Incirlik | intrafacility transfer; receives release | `DEPARTURE` |
-| `GND` | Ground | Military ATC | Incirlik | intrafacility transfer | `DEPARTURE`, `ARRIVAL` |
-| `TWR` | Tower | Military ATC | Incirlik | intrafacility; `HANDOFF` to `APP` | `DEPARTURE`, `ARRIVAL` |
+| `GC` | Ground | Military ATC | Incirlik | intrafacility transfer | `DEPARTURE`, `ARRIVAL` |
+| `LC` | Tower | Military ATC | Incirlik | intrafacility; `HANDOFF` to `AP` | `DEPARTURE`, `ARRIVAL` |
 | `RSU` | Runway Supervisory Unit | Military ATC, advisory | Incirlik | pattern supervision; **no separation authority** | `PATTERN` |
-| `APP` | Approach / Departure (RAPCON) | **Military ATC** | Incirlik | `HANDOFF`, `POINT_OUT`, `TRAFFIC`, `OPERATIONAL_REQUEST`, release | all |
+| `AP` | Approach / Departure (RAPCON) | **Military ATC** | Incirlik | `HANDOFF`, `POINT_OUT`, `TRAFFIC`, `OPERATIONAL_REQUEST`, release | all |
 | `SFA` | Single Frequency Approach | Military ATC | Incirlik | **frequency-rotation transfer** — §4.7 | `ARRIVAL` |
 | `PAR` | PAR Approach | Military ATC | Incirlik | continuous guidance | `FINAL` |
 | `OPS` | Operations | **BASOPS / AMOPS** | Incirlik | files flight plans; owns Field State; **not a control position** | originates `DEPARTURE` |
@@ -389,7 +389,7 @@ Eighteen Positions across five Facilities. The **Class** column is load-bearing 
 
 **Positions are not signed into. They are derived from the controller's selected radar stations, they combine freely including across Facilities, and the set changes live during a session.** This is a property of the host CRC, it is the normal operating condition under low manning, and it governs §4.8 — read that before implementing anything in this section.
 
-**`APP` unmanned:** when no controller holds `APP`, the delegated airspace reverts to `CTR`. Delegation is time-bounded in the real world — a verified example has a RAPCON's delegated Class B sector reverting outside published operating hours `[Coord §2.2]`. The panel MUST render reversion explicitly rather than stranding Strips.
+**`AP` unstaffed:** when no controller holds `AP`, the delegated airspace reverts to `CTR`. Delegation is time-bounded in the real world — a verified example has a RAPCON's delegated Class B sector reverting outside published operating hours `[Coord §2.2]`. The panel MUST render reversion explicitly rather than stranding Strips.
 
 ### 4.2 Bay structure
 
@@ -403,10 +403,10 @@ Default Bay sets `[SOURCE-DEFINED]` — the real TFDM bay names are not publishe
 |---|---|
 | `OPS` | Filed · Proposed · Field State · Coordination |
 | `CD` | Pending Clearance · Cleared · Held · Coordination |
-| `GND` | Pushback · Taxi Out · Taxi In · Coordination |
-| `TWR` | Runway Queue (one Rack per runway) · Airborne · Arrivals · Coordination |
+| `GC` | Pushback · Taxi Out · Taxi In · Coordination |
+| `LC` | Runway Queue (one Rack per runway) · Airborne · Arrivals · Coordination |
 | `RSU` | Pattern board (not a strip rack) — closed, initial, base, final |
-| `APP` | Inbound · In Sector · Departures · Handed Off · Coordination |
+| `AP` | Inbound · In Sector · Departures · Handed Off · Coordination |
 | `SFA` | Assigned Frequencies (one Rack per frequency — §4.7) |
 | `PAR` | On Final (one Strip at a time, minimal — §7.10) |
 | `CTR` | Inbound · In Sector · Delegated to APP · Forwarded · Coordination |
@@ -448,7 +448,7 @@ TransferStrip {
 
 1. Transfer MUST be a **single atomic server-side Mutation**: owner change, Bay change and Rack placement commit together or not at all.
 2. **Push targets MUST be gated on occupancy.** A Position is occupied when some connected controller is its Primary (§4.8.2). A transfer to an unoccupied Position MUST be rejected with `NO_RECEIVING_POSITION` and MUST NOT silently strand the Strip. vStrips gates external pushes on an active controller at the destination `[Annex §15.1]`. Occupancy is derived and changes live, so this check MUST be evaluated at commit time on the server, never from a cached client-side view.
-3. Where the destination is unmanned, the Strip MUST route to the **covering Position** per the facility configuration, and the UI MUST say so.
+3. Where the destination is unstaffed, the Strip MUST route to the **covering Position** per the facility configuration, and the UI MUST say so.
 4. The sending Position MUST see the Strip leave only on server acknowledgement. Optimistic rendering applies to moves *within* a Position; **transfer MUST NOT be rendered optimistically as complete** — it MAY render as "transferring".
 5. A transfer that times out MUST return the Strip to the sender with a visible failure, never disappear.
 6. Every transfer MUST be recorded in the Mutation log with both Positions and the timestamp. `[Annex §9]` notes that in real towers the Clearance Delivery controller **initials the strip** before passing it on; the electronic equivalent is a non-optional audit entry.
@@ -497,7 +497,7 @@ These are exactly the obligations a paper strip cannot track and an electronic p
 
 Five states, per §3.8 plus `[Coord §2.7]`: `RELEASED` · `HOLD_FOR_RELEASE` (with mandatory delay information) · `RELEASE_TIME` (with a mandatory time check unless expressed in minutes) · `EDCT` (**±5 min**, ground stop overrides) · `CALL_FOR_RELEASE` (**−2 / +1 min**).
 
-**At a tower-served field the release travels controller-to-controller — `CTR` → `APP` → `TWR`. The pilot never hears "released."**
+**At a tower-served field the release travels controller-to-controller — `CTR` → `AP` → `LC`. The pilot never hears "released."**
 
 The agreement normally converts the per-flight call into a **standing release** for a named envelope — a stereo route, at or below an altitude, within a radius. Model standing releases as facility configuration; anything outside the envelope falls back to a per-flight `OPERATIONAL_REQUEST`.
 
@@ -537,19 +537,19 @@ Two naming traps to avoid in the schema:
 
 Single Frequency Approach exists so a single-piloted jet does not change frequency during an approach. Instead, **controllers rotate onto the aircraft's frequency**. The radar approach controller *"retains jurisdiction over the rotation of three frequencies between himself and the GCA controller"*, from a pool of **at least five discrete UHF frequencies** `[Coord §4.7]`.
 
-**If the panel models "ownership transfer = frequency change", `SFA` breaks it.** Implement `SFA` ownership transfer as a controller-side rotation over a frequency pool, with `APP` holding rotation jurisdiction. The frequency is an attribute of the Strip; the controller is what moves.
+**If the panel models "ownership transfer = frequency change", `SFA` breaks it.** Implement `SFA` ownership transfer as a controller-side rotation over a frequency pool, with `AP` holding rotation jurisdiction. The frequency is an attribute of the Strip; the controller is what moves.
 
-### 4.8 Position occupancy, combination and handover
+### 4.8 Position occupancy, combination and handoff
 
-Fixed by the project owner: **a controller's Positions are derived from which radar stations they have selected**, several controllers may hold the same station with one acting as Primary, and **selection changes mid-session with automatic handover**. Combination across Facilities is normal — one person may be `CTR` and `TAC_C2` simultaneously — and under low manning it is the usual case, not the exception.
+Fixed by the project owner: **a controller's Positions are derived from which radar stations they have selected**, several controllers may hold the same station with one acting as Primary, and **selection changes mid-session with automatic handoff**. Combination across Facilities is normal — one person may be `CTR` and `TAC_C2` simultaneously — and under low manning it is the usual case, not the exception.
 
 Saab's product describes the general capability: *"roles can be combined or split in real-time based on workload"* `[Annex §4]`. What follows is how to do that without losing the doctrine.
 
-#### 4.8.1 Ownership is per-Position, and that makes handover nearly free
+#### 4.8.1 Ownership is per-Position, and that makes handoff nearly free
 
 `Strip.ownerPositionId` (§3.1) names a **Position**, never a person. This was the right choice for reasons that only now become obvious:
 
-> **On a handover, Strips do not move at all. Only the Position→Primary mapping changes.**
+> **On a handoff, Strips do not move at all. Only the Position→Primary mapping changes.**
 
 A controller dropping `TAC_C2` and another picking it up is a change to one mapping entry. Every Strip keeps its `ownerPositionId`; the new Primary simply resolves to them. There is no bulk transfer, no re-parenting, and no window in which a Strip is owned by nobody.
 
@@ -582,7 +582,7 @@ Rules:
 
 **This is the load-bearing rule of the section.**
 
-When one controller holds both sides of a boundary — `CTR` and `TAC_C2`, or `TWR` and `APP` — there is no phone call to make. It is tempting to skip the whole exchange. **Do not.**
+When one controller holds both sides of a boundary — `CTR` and `TAC_C2`, or `LC` and `AP` — there is no phone call to make. It is tempting to skip the whole exchange. **Do not.**
 
 The reason: a coordination event is two things bolted together. There is a *dialogue* between two humans, and there is a *state change* to the flight. Combination removes the first. **It does not remove the second**, because the state change is a fact about the aircraft, not about the staffing:
 
@@ -622,9 +622,9 @@ Because the Position set changes during a session, Bay composition is **reactive
 When a controller deselects a station or disconnects:
 
 1. If another controller is an **Observer** on that Position, they are offered Primary. Promotion is explicit — a prompt, not a silent transfer — **except** on an abrupt disconnect, where the longest-waiting Observer is auto-promoted and told so.
-2. If **no controller holds the Position**, its Strips MUST route to the **covering Position** named in facility configuration (§8.2), and the UI MUST say what happened and where they went. The default covering chain: `CD`→`GND`→`TWR`→`APP`→`CTR`; `AIC`/`GCI`→`TAC_C2`→`CTR`; `CV_APP*`→`CV_MARSHAL`→`CV_PRIFLY`; `RSU`→`TWR`; `SFA`/`PAR`→`APP`.
+2. If **no controller holds the Position**, its Strips MUST route to the **covering Position** named in facility configuration (§8.2), and the UI MUST say what happened and where they went. The default covering chain: `CD`→`GC`→`LC`→`AP`→`CTR`; `AIC`/`GCI`→`TAC_C2`→`CTR`; `CV_APP*`→`CV_MARSHAL`→`CV_PRIFLY`; `RSU`→`LC`; `SFA`/`PAR`→`AP`.
 3. If the covering Position is also unoccupied, follow the chain to the end. **A Strip MUST NOT be left owned by an unoccupied Position with no covering path.** That is defect class **D19**.
-4. Vacating with delegated airspace held is a special case: when `APP` becomes unoccupied, its delegated airspace reverts to `CTR` (§4.1), and the reversion MUST be rendered rather than merely implied.
+4. Vacating with delegated airspace held is a special case: when `AP` becomes unoccupied, its delegated airspace reverts to `CTR` (§4.1), and the reversion MUST be rendered rather than merely implied.
 5. **A controller MUST be warned before deselecting a station that would strand Strips**, with the count and destination shown. Warn, do not block — under low manning, blocking a controller from leaving is worse than the stranding.
 
 #### 4.8.7 Instrumentation
@@ -635,7 +635,7 @@ Add to the §11.5 metric set:
 |---|---|---|
 | Positions held per controller, over time | the low-manning reality this design serves | observed, not targeted |
 | Self-coordination events, as a share of all boundary events | tells you how often combination is active, and whether §4.8.3 clause 3 is being obeyed | self-coord ≈ combined-position share |
-| Handovers completed without a stranded Strip | §4.8.6 | 100% |
+| Handoffs completed without a stranded Strip | §4.8.6 | 100% |
 | Time a Position spends unoccupied while holding Strips | the covering chain working, or not | trending to zero |
 
 ---
@@ -732,7 +732,7 @@ Taken from FAA Order JO 7210.637 Figure 1 `[Annex §2.1]`. Blocks marked ✱ are
 | 6 ✱ | Proposed departure time (P-Time) | |
 | 7 ✱ | Requested altitude | |
 | 8 ✱ | Departure airport, first fix or departure transition area | |
-| 8A ✱ | Departure runway | drives Rack placement in `TWR` |
+| 8A ✱ | Departure runway | drives Rack placement in `LC` |
 | 8B ✱ | Destination airport | |
 | 9 ✱ | Route and destination (computer-generated); altitude restrictions in order flown (manual) | mixed provenance in one Block — render both |
 | 9A–9C | facility use | adaptation layer |
@@ -795,15 +795,15 @@ Every field below has a real-world basis cited in the Annex; the *block numberin
 
 ```jsonc
 {
-  "role": "DEPARTURE",
+  "stripType": "DEPARTURE",
   "rows": [
     { "cells": [
-      { "block": "1",  "type": "text",     "bind": "fdr.identity.callsign",
+      { "block": "1",  "type": "text",     "bind": "flightData.identity.callsign",
         "width": 9, "style": "callsign",
         "leftAction": "selectStrip", "rightAction": "stripMenu" },
-      { "block": "3",  "type": "composite","bind": "fdr.identity",
+      { "block": "3",  "type": "composite","bind": "flightData.identity",
         "format": "{flightSize>1?flightSize:''}{wakeCat}/{type}/{suffix}" },
-      { "block": "5",  "type": "beacon",   "bind": "fdr.identity.beaconCode",
+      { "block": "5",  "type": "beacon",   "bind": "flightData.identity.beaconCode",
         "editable": false },
       { "block": "25", "type": "state",    "bind": "strip.state" },
       { "block": "26", "type": "nla",      "bind": "computed.nla" }
@@ -942,7 +942,7 @@ FAA doctrine states plainly that **"national standardization of items (10 throug
 | Alerts | Which conditions alert, at which severity |
 | Routes | Stereo/canned route table (§9.9) |
 | Positions | Position set and permitted combinations |
-| Transfer | Routing table for unmanned Positions |
+| Transfer | Routing table for unstaffed Positions |
 
 ### 8.3 Configuration validation
 
@@ -972,7 +972,7 @@ This section is what distinguishes the EFSP from a civil TFDM clone. Every field
 
 Both verified military electronic-strip systems — Frequentis at Vance AFB (2009) and Northrop Grumman REFS at Sheppard AFB (2010) — span **tower + RAPCON + base operations + emergency response**, not tower alone `[Annex §11]`. The Navy's VIDS is likewise an **aggregator**: strips plus flight-data feed plus wind, altimeter, airfield lighting, ATIS, weather, cameras, and automated position logs `[Annex §10]`.
 
-**Design consequence:** the EFSP is not a tower strip bay with military fields bolted on. It is a base-wide flight-data surface. `OPS` (AMOPS) is a first-class Position for this reason, and the field-state model (§9.7) is a peer of the Strip model, not a subsidiary of it.
+**Design consequence:** the EFSP is not a tower strip bay with military fields bolted on. It is a base-wide flight-data surface. `OPS` (AMOPS) is a first-class Position for this reason, and the runway-status model (§9.7) is a peer of the Strip model, not a subsidiary of it.
 
 ### 9.2 MARSA — model it as an edge, not a flag
 
@@ -982,7 +982,7 @@ MARSA is a **stateful relationship between two or more Strips**, with a declarin
 MarsaRelation {
   marsaId
   declaringCallsign     string
-  participants          [ fdrId ]
+  participants          [ flightDataId ]
   startedAt             timestamp
   startEvent            TANKER_ACCEPTED | MTR_ENTRY | LOCAL_DECLARATION
   endCondition          VERTICALLY_POSITIONED | MTR_COMPLETE | ATC_SEPARATION_ESTABLISHED
@@ -1037,7 +1037,7 @@ This is the highest-value military-specific feature in the guide, and it has no 
 Verified: arresting-gear configuration is a **field state that gates runway availability**, and changing it **suspends runway operations pending a post-configuration inspection**. Barrier Maintenance notifies AMOPS and the tower before reconfiguration; operations resume only after AMOPS performs the inspection `[Annex §13.8]`.
 
 ```
-FieldState {
+RunwayStatus {
   runways [ Runway {
       id
       status          OPEN | CLOSED | SUSPENDED_BARRIER_CHANGE | SUSPENDED_INSPECTION
@@ -1045,8 +1045,8 @@ FieldState {
                              position: APPROACH_END | DEPARTURE_END | OVERRUN,
                              distanceFt, state: UP | DOWN | OUT_OF_SERVICE } ]
   } ]
-  hotCargoPad     { occupied, occupantFdrId? }
-  alertPad        { occupied, occupantFdrId? }
+  hotCargoPad     { occupied, occupantFlightDataId? }
+  alertPad        { occupied, occupantFlightDataId? }
   runwayChangeInProgress  bool
 }
 ```
@@ -1055,7 +1055,7 @@ Rules:
 
 1. A runway in `SUSPENDED_*` MUST inhibit takeoff and landing NLA on every Strip assigned to it, with the reason rendered.
 2. Resumption MUST require an explicit inspection-complete action attributable to a Position — by default `OPS` (AMOPS) `[Annex §13.8]`.
-3. A **runway change MUST require coordination with `OPS` and `APP`** before it can be initiated. The verified real-world rule is that the tower coordinates with the Supervisor of Flying and the RAPCON; SOURCE has no separate SOF Position, so `OPS` carries that role. Implement as a coordination workflow with acknowledgements, not a dropdown.
+3. A **runway change MUST require coordination with `OPS` and `AP`** before it can be initiated. The verified real-world rule is that the tower coordinates with the Supervisor of Flying and the RAPCON; SOURCE has no separate SOF Position, so `OPS` carries that role. Implement as a coordination workflow with acknowledgements, not a dropdown.
 4. Aircraft with `M15` hook requirement MUST be checked against gear state on approach; a mismatch alerts.
 5. Field state changes MUST broadcast on the Board sequence like any other Mutation and MUST appear in the audit log.
 
@@ -1102,7 +1102,7 @@ This is the single most authentic-feeling military flight-data behaviour availab
 
 Verified: the **RAPCON, not the flying squadron, holds airspace activation authority**, and coordination and approval must precede airspace entry and exit `[Annex §13.3]`.
 
-Model airspace activation as a state owned by `APP` (with `RANGE` as the using agency that schedules and releases it), with request and approval as recorded actions. Aircraft entering unactivated airspace MUST alert. Ownership is a direction, never a boolean — §4.6.4.
+Model airspace activation as a state owned by `AP` (with `RANGE` as the using agency that schedules and releases it), with request and approval as recorded actions. Aircraft entering unactivated airspace MUST alert. Ownership is a direction, never a boolean — §4.6.4.
 
 ### 9.12 The carrier — the marshal stack
 
@@ -1280,7 +1280,7 @@ Acceptance:
 - Replaying a Mutation with the same `clientMutationId` does not double-apply.
 - An unacknowledged Mutation that fails `baseRev` after reconnect is surfaced, not dropped. **Test this explicitly; it is the worst failure mode in the system.**
 
-### WP1A — Position occupancy, combination and handover
+### WP1A — Position occupancy, combination and handoff
 
 **Entry:** WP1, and the WP0 finding on how the host CRC exposes radar-station selection.
 
@@ -1295,8 +1295,8 @@ Acceptance:
 - A boundary event between two Positions held by one controller **applies the full state change** — separation regime, radar service, IFR status — in **one input**, and writes a Mutation marked self-coordinated and naming both Positions.
 - A second controller taking `TAC_C2` mid-block **inherits correct state**, not a state that was never written because one person held both sides.
 - A Position never resolves to two Primaries, under any interleaving of selection changes. Test concurrently.
-- **A handover moves no Strips.** Verify that `ownerPositionId` values are unchanged across a Primary change.
-- Vacating a Position with no successor routes its Strips down the covering chain, tells the controller where they went, and leaves nothing stranded. Vacating `APP` renders the airspace reversion to `CTR`.
+- **A handoff moves no Strips.** Verify that `ownerPositionId` values are unchanged across a Primary change.
+- Vacating a Position with no successor routes its Strips down the covering chain, tells the controller where they went, and leaves nothing stranded. Vacating `AP` renders the airspace reversion to `CTR`.
 - A controller deselecting a station that would strand Strips is **warned with a count and destination, and not blocked**.
 - Recomposition during an active drag, an open annotation cell, or a scrolled Bay disturbs none of them.
 
@@ -1339,7 +1339,7 @@ Acceptance:
 
 - Every State has exactly one NLA or a rendered inhibit reason.
 - Double-tap on NLA within 400 ms applies once.
-- Transfer to an unmanned Position is rejected with a named reason, and the Strip stays with the sender.
+- Transfer to an unstaffed Position is rejected with a named reason, and the Strip stays with the sender.
 - A transfer interrupted by a server restart resolves to exactly one owner. **Test with an actual restart.**
 - Void-time expiry raises an alert at void + 30 minutes.
 
@@ -1381,7 +1381,7 @@ Acceptance:
 
 - A heading or altitude assignment to a MARSA participant before rendezvous voids the relation, sets `voidedBy`, and alerts every participant Strip.
 - A barrier reconfiguration suspends the runway, inhibits takeoff and landing NLA with the reason shown, and requires an attributable inspection-complete action to resume.
-- A runway change cannot be initiated without `OPS` and `APP` acknowledgement.
+- A runway change cannot be initiated without `OPS` and `AP` acknowledgement.
 - A stereo route filed by short name produces a complete FDR.
 - No UI text or code comment presents a `[SOURCE-DEFINED]` behaviour as real-world doctrine. **Audit this explicitly.**
 
@@ -1443,7 +1443,7 @@ Acceptance:
 | D-7 | **American procedures at Incirlik**, not Turkish | Stated once in the facility configuration; see the header note and `EFSP-Coordination-Annex.md` §6 |
 | D-8 | **Conform to the SOURCE Contract Language Standard** | The conforming pass is **pending receipt of the standard's text**. Until then §0.1's editor's note stands |
 | D-9 | **Positions are derived from selected radar stations**, combine freely including across Facilities, and change live during a session | §4.8 in full; §4.1 combination rule replaced; §4.5 occupancy gating |
-| D-10 | **Several controllers may hold a Position; one is Primary. Selection changes mid-session with automatic handover** | §4.8.2, §4.8.6; defect classes D18–D21 |
+| D-10 | **Several controllers may hold a Position; one is Primary. Selection changes mid-session with automatic handoff** | §4.8.2, §4.8.6; defect classes D18–D21 |
 
 #### 7.6.1 Consequence of D-5 — dockable panel, not a tablet
 
