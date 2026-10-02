@@ -120,10 +120,10 @@ test('transfers: no receiving Position is a failure with its cause; a consolidat
   const strip = newStrip('TAP2');
   hold(efsp, c.LC.session, 'INCIRLIK', []);
   hold(efsp, c.AP.session, 'INCIRLIK', []);
-  const refused = act(efsp, c.OPS, 'OPS', strip, { kind: 'TransferStrip', toPositionId: 'CD', bayId: 'cd-coordination', rackId: 'main' });
+  const refused = act(efsp, c.OPS, 'OPS', strip, { kind: 'TransferStrip', toPositionId: 'LC', bayId: 'lc-coordination', rackId: 'main' });
   assert.equal(refused.reason, 'NO_RECEIVING_POSITION');
   hold(efsp, c.AP.session, 'INCIRLIK', ['AP']);
-  const routed = mustAct(efsp, c.OPS, 'OPS', efsp.boardStoreFor('INCIRLIK').getStrip(strip.stripId), { kind: 'TransferStrip', toPositionId: 'CD', bayId: 'cd-coordination', rackId: 'main' });
+  const routed = mustAct(efsp, c.OPS, 'OPS', efsp.boardStoreFor('INCIRLIK').getStrip(strip.stripId), { kind: 'TransferStrip', toPositionId: 'LC', bayId: 'lc-coordination', rackId: 'main' });
   assert.equal(routed.ownerPositionId, 'AP');
   hold(efsp, c.LC.session, 'INCIRLIK', ['LC']);
 

@@ -8,6 +8,7 @@
 const blockMap = require('./block-map');
 const runwayStatus = require('./runway-status'); // pure, requires nothing back (docs/adr/0061)
 const { validateAlertPadConfig } = require('./alert-scramble'); // pure (docs/adr/0070)
+const { isValidFrequency, MIN_FREQUENCY_MHZ, MAX_FREQUENCY_MHZ } = require('./airspace-schema'); // the one frequency check (docs/adr/0105)
 
 /**
  * Validates a candidate facility config (guide §8.3): every required Block
@@ -67,6 +68,10 @@ function validateConfig(candidate) {
   }
   const bayProblem = validateBayDescriptors(candidate);
   if (bayProblem) return { ok: false, reason: 'VALIDATION_ERROR', detail: bayProblem };
+  if (candidate.positionFrequencies !== undefined) {
+    const problem = validatePositionFrequencies(candidate.positionFrequencies, candidate.positions || []);
+    if (problem) return { ok: false, reason: 'VALIDATION_ERROR', detail: problem };
+  }
   if (candidate.singleFrequencyApproach !== undefined) {
     const problem = validateSingleFrequencyApproach(candidate.singleFrequencyApproach, candidate);
     if (problem) return { ok: false, reason: 'VALIDATION_ERROR', detail: problem };
@@ -117,6 +122,30 @@ function validateBayDescriptors(candidate) {
 // UHF, [SOURCE-DEFINED]: guide §4.7 says "UHF", the squadron's pool lives in 225.000 to 399.975.
 const SFA_MIN_MHZ = 225;
 const SFA_MAX_MHZ = 399.975;
+/**
+ * `positionFrequencies` (docs/adr/0105): `{ <Position>: [ { label, mhz } ] }`. Every key is a Position of this Facility, a
+ * label is a short non-empty string unique within the Position, and mhz is airspace-schema's isValidFrequency. Returns a
+ * problem string or null.
+ */
+function validatePositionFrequencies(freqs, positions) {
+  if (!freqs || typeof freqs !== 'object' || Array.isArray(freqs)) return 'positionFrequencies must be an object';
+  for (const [positionId, list] of Object.entries(freqs)) {
+    if (!positions.includes(positionId)) return `positionFrequencies names unknown Position ${positionId}`;
+    if (!Array.isArray(list)) return `positionFrequencies.${positionId} must be an array of { label, mhz }`;
+    const labels = new Set();
+    for (const f of list) {
+      if (!f || typeof f !== 'object' || Array.isArray(f)) return `positionFrequencies.${positionId} entries must be { label, mhz }`;
+      const extra = Object.keys(f).filter(k => k !== 'label' && k !== 'mhz');
+      if (extra.length) return `positionFrequencies.${positionId}: unknown key ${extra[0]}`;
+      if (typeof f.label !== 'string' || !f.label.trim() || f.label.length > 12) return `positionFrequencies.${positionId}: label must be a string of 1 to 12 characters`;
+      if (labels.has(f.label)) return `positionFrequencies.${positionId} repeats label ${f.label}`;
+      labels.add(f.label);
+      if (!isValidFrequency(f.mhz)) return `positionFrequencies.${positionId}.${f.label}: mhz must be a number between ${MIN_FREQUENCY_MHZ} and ${MAX_FREQUENCY_MHZ}`;
+    }
+  }
+  return null;
+}
+
 const SFA_MIN_POOL = 5; // guide §4.7: "at least five discrete UHF frequencies"
 
 /**
@@ -256,7 +285,7 @@ const isPlainObject = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
 //    TAC_C2 and CV_MARSHAL end their chains: guide §4.8.6 rule 3 calls a Strip left owned by an unstaffed
 //    Position with no consolidation path defect D19, and the Facility boundary is what leaves it open here;
 //    the mitigation is rule 5's "warn, do not block" (the controller is warned of the stranding before
-//    leaving). Whether GC should consolidate into LC at all is open (decisions H101, RP-F1).
+//    leaving). GC ends its chain: a tower controller takes ground by COMBINING (docs/adr/0105, H104), not by consolidation.
 //  positionRadars: which radars each Position works through, as selectors, never radar ids (docs/adr/0042,
 //    0043). [SOURCE-DEFINED] (docs/adr/0042, 0043): which scope sits at which console is squadron data, not
 //    doctrine; the guide says nothing about it. A radar's id is derived from live mission data, so a stored id
@@ -298,6 +327,10 @@ const isPlainObject = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
 //    rackIds ARE the SFA Bay's Racks. [SOURCE-DEFINED] (docs/adr/0075): the frequencies are placeholders, and
 //    so is who starts on which one. "Squadron data to verify." Read once at start-up, never written by code (P5);
 //    the live record is sfa-store.js's.
+//  positionFrequencies (optional): docs/adr/0105, H104 GCLC-4. `{ <Position>: [ { label, mhz } ] }`, the frequencies a
+//    Position works, checked by validatePositionFrequencies (mhz by airspace-schema's isValidFrequency). A controller who
+//    holds two Positions has both. [SOURCE-DEFINED]: the shipped Incirlik values are placeholders, squadron data to
+//    confirm. Read once at start-up, never written by code (P5).
 //  dataOnly: whether this Facility is data-only. §4.6.1's 3-minute-verification obligation branches only when the
 //    RECEIVING Facility is data-only; every shipped Facility has a real controller interface, so false
 //    everywhere, exercised only by test fixtures (docs/adr/0021).
@@ -324,7 +357,7 @@ const isPlainObject = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
 //    (docs/adr/0070), a [SOURCE-DEFINED] placeholder name.
 
 // Keys every facility file must carry (a shipped file is complete: nothing is merged in from the code).
-// `singleFrequencyApproach` and `runwayStatus` are the only optional ones: a Facility without those Bays has none.
+// `singleFrequencyApproach`, `runwayStatus` and `positionFrequencies` are the only optional ones: a Facility without those Bays has none.
 const REQUIRED_KEYS = Object.freeze({
   facility: 'string', positions: 'array', positionClasses: 'object', positionLetters: 'object', consolidation: 'object',
   positionRadars: 'object', hiddenBlocks: 'object', bays: 'object', dataOnly: 'boolean', standingReleases: 'array', aitAuthorized: 'boolean',

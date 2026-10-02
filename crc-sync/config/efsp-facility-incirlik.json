@@ -32,10 +32,23 @@
   },
   "consolidation": {
     "CD": "GC",
-    "GC": "LC",
     "LC": "AP",
     "SFA": "AP",
     "PAR": "AP"
+  },
+  "positionFrequencies": {
+    "GC": [
+      {
+        "label": "GND",
+        "mhz": 275.8
+      }
+    ],
+    "LC": [
+      {
+        "label": "TWR",
+        "mhz": 251
+      }
+    ]
   },
   "positionRadars": {
     "OPS": [],

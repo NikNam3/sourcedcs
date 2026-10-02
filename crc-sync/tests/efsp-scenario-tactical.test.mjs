@@ -239,7 +239,7 @@ test('SCENARIO A3\' a consolidation reassignment lands the line in a Bay the con
   assert.ok(baysOf('TAC_C2').includes(after.bayId), `TAC_C2 owns it but it sits in ${after.bayId}`);
 });
 
-test('SCENARIO A3\'\' the same holds at Incirlik: GND walks away and TWR gets the Strip in a TWR Bay', () => {
+test('SCENARIO A3\'\' at Incirlik GND ends its chain: GND walks away and the Strip stays GND\'s, not LC\'s (ADR 0105)', () => {
   const efsp = freshEfsp();
   const c = crew(efsp, { OPS: 'INCIRLIK', GC: 'INCIRLIK', LC: 'INCIRLIK', AP: 'INCIRLIK' });
   const strip = mustAct(efsp, c.OPS, 'OPS', null, {
@@ -248,9 +248,7 @@ test('SCENARIO A3\'\' the same holds at Incirlik: GND walks away and TWR gets th
   mustAct(efsp, c.OPS, 'OPS', strip, { kind: 'TransferStrip', toPositionId: 'GC', bayId: 'gc-coordination', rackId: 'main' });
   hold(efsp, c.GC.session, 'INCIRLIK', []);
   const after = efsp.boardStoreFor('INCIRLIK').getStrip(strip.stripId);
-  assert.equal(after.ownerPositionId, 'LC');
-  const lcBays = facilityConfig.getBaysFor('LC', 'INCIRLIK').map(b => b.bayId);
-  assert.ok(lcBays.includes(after.bayId), `LC owns it but it sits in ${after.bayId}`);
+  assert.equal(after.ownerPositionId, 'GC', 'LC cannot advance a taxiing Strip, so nothing is parked on it');
 });
 
 test('SCENARIO A4 with TAC_C2 gone too, the chain bottoms out inside TACTICAL and says so (D19)', () => {

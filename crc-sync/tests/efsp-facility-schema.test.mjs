@@ -66,7 +66,7 @@ test('the consolidation chain names known Positions and has no loop', () => {
   reject(a, 'consolidation.CD names unknown Position NOPE');
   const b = shipped('INCIRLIK'); b.consolidation.NOPE = 'CD';
   reject(b, 'consolidation names unknown Position NOPE');
-  const c = shipped('INCIRLIK'); c.consolidation.AP = 'CD';
+  const c = shipped('INCIRLIK'); c.consolidation.AP = 'LC';
   reject(c, 'consolidation loops');
 });
 
