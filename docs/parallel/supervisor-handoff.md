@@ -1,6 +1,18 @@
 # Supervisor handoff
 
-## START HERE: state at the end of session 4 (2026-10-01, late; usage limit reached)
+## START HERE: state in session 4, day 2 (2026-10-02, afternoon)
+
+Record: `docs/parallel/decisions.md` (this session: S-W1 … S-M-W7, H99-H101). Standing rules: H99 (the supervisor merges finished lanes into `efsp-wp5-correlation` without asking until all waves finish; never push; ask before any prod deploy, R3-79); lanes never run `git merge` (S-APP1; integration branches excepted); desk questions go up immediately and answers are read back by listing the whole `answers` collection (memory `feedback_decision_desk_for_questions`).
+
+**The refactor (W1-W7) is merged** into `efsp-wp5-correlation` (local only; head after `7b8f04c`): R0, STORES, WIRE, BOARD-1/2/3, APP, DATA-1/2, LOG-1/2, AUTH, TIME-B, SYNC, ESM-1 (+1T a/b/c), ESM-2a/2b, CMSG, BACKCOMPAT (window closed: `npm test` excludes the freeze suite, `npm run freeze` runs it), RENAME-A/B/C (FAA vocabulary, every wire name changed). Merged tree: crc-sync 2117/2118, freeze 48/48, crc-desktop 881/883 + 2 todo. **The final sharded Playwright run on the renamed tree was in progress** (log `scratchpad/pw-w7.log`); the two before it (post-ESM, post-W6) had 0 consistent failures.
+
+**Next, in order:** (1) read the W7 Playwright result; fix any consistent failure (likely a renamed name on one side only). (2) L20 (comment/doc sweep): briefings being written by `lane/L20-BRIEF` → `docs/parallel/l20/`; then launch its parallel lanes. (3) Queued small lanes: migrate the e2e specs off `classic-globals-bridge.js` and delete it; the 336 always-true `typeof` guards (client); a later data lane (S-DATA2-0 follow-ups). (4) Feature lanes, briefings ready in `docs/parallel/post-refactor/` with H100 applied: UNDO-S/C + SJ-S/C (split/join, undo), CR-S/C (ControlRelease), TOFI-REGIME (after AIRSP-2S-A), AIRSP-2 (2S-A, 2S-B, 2P-A, 2P-B with a mockup round first, 2W). Then WIRE-B (per-Facility heartbeat) and SYNC-B (resync for every store; SYNC's step-7 proposal). Doctrine question after the window: RP-F1 (GC consolidated at LC; the human: "ground and tower are two different controllers").
+
+**Human actions:** push a backup (the branch is local only); stop the orphaned `node app/server.js` on :3117 (pid 323124); before any deploy of this branch: ship crc-desktop and crc-sync together (every wire name changed), rename `ASACS_DOMAIN`/`ASACS_URL` → `CRCSYNC_DOMAIN`/`CRCSYNC_URL` in the server's `infra/.env` before the pull, delete `state/efsp-board.json`, `state/efsp-mutations.jsonl`, old `state/efsp-facility-*.json` and a `state/alerting.json` that uses `stca` (clean start; anything old now stops start-up loudly), and the INFRA3 R3-17 checks; every client gets the default dock layout once.
+
+---
+
+## Previous: state at the end of session 4, day 1 (2026-10-01)
 
 Record: `docs/parallel/decisions.md` rows S-W1 … S-SYNCq2, H99, H100 (this session). **H99: the supervisor merges finished lanes into `efsp-wp5-correlation` without asking until all waves finish; never push, never deploy (R3-79).** S-APP1: lanes never run `git merge` (classifier denies it); the supervisor runs merges in lane worktrees, the lane resolves. Desk questions go up as soon as they arrive (memory updated).
 
