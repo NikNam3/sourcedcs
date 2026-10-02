@@ -35,11 +35,14 @@
 const COORDINATION_PRIMITIVES = new Set(['HANDOFF', 'POINT_OUT', 'TRAFFIC', 'OPERATIONAL_REQUEST', 'AIT']);
 
 const COORDINATION_EFFECTS = {
-  HANDOFF:              { radarIdTransfers: true,  commsTransfers: true,  dataOwnershipMoves: true,  separationResponsibilityMoves: true,  acceptPhrase: 'RADAR CONTACT' },
-  POINT_OUT:            { radarIdTransfers: true,  commsTransfers: false, dataOwnershipMoves: false, separationResponsibilityMoves: true,  acceptPhrase: 'POINT OUT APPROVED' },
-  TRAFFIC:              { radarIdTransfers: true,  commsTransfers: false, dataOwnershipMoves: false, separationResponsibilityMoves: false, acceptPhrase: 'TRAFFIC OBSERVED' },
-  OPERATIONAL_REQUEST:  { radarIdTransfers: false, commsTransfers: false, dataOwnershipMoves: false, separationResponsibilityMoves: false, acceptPhrase: 'APPROVED' },
-  AIT:                  { radarIdTransfers: true,  commsTransfers: true,  dataOwnershipMoves: true,  separationResponsibilityMoves: true,  acceptPhrase: null }, // silent — requires a written directive, guide §4.6 rule 7
+  // docs/adr/0101 (H94): ACCEPT of a HANDOFF moves radar identification and the Strip only. Communications, the
+  // ControlRelease and transfer of control are steps of their own (`controlModel: 'STEPS'`); AIT keeps all of it at
+  // accept (`'AT_ACCEPT'`, a written directive is the agreement, JO 7110.65 2-1-15 b); every other row has none.
+  HANDOFF:              { radarIdTransfers: true,  commsTransfers: false, dataOwnershipMoves: true,  separationResponsibilityMoves: false, controlModel: 'STEPS', acceptPhrase: 'RADAR CONTACT' },
+  POINT_OUT:            { radarIdTransfers: true,  commsTransfers: false, dataOwnershipMoves: false, separationResponsibilityMoves: true,  controlModel: null, acceptPhrase: 'POINT OUT APPROVED' },
+  TRAFFIC:              { radarIdTransfers: true,  commsTransfers: false, dataOwnershipMoves: false, separationResponsibilityMoves: false, controlModel: null, acceptPhrase: 'TRAFFIC OBSERVED' },
+  OPERATIONAL_REQUEST:  { radarIdTransfers: false, commsTransfers: false, dataOwnershipMoves: false, separationResponsibilityMoves: false, controlModel: null, acceptPhrase: 'APPROVED' },
+  AIT:                  { radarIdTransfers: true,  commsTransfers: true,  dataOwnershipMoves: true,  separationResponsibilityMoves: true,  controlModel: 'AT_ACCEPT', acceptPhrase: null }, // silent — requires a written directive, guide §4.6 rule 7
 };
 
 // WP4A second slice (docs/adr/0025), §4.6.3 — TOFI does NOT fit

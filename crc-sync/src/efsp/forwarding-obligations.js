@@ -126,6 +126,18 @@ function computeDueObligations(strip, flightData, now, ctx = {}) {
     });
   }
 
+  // CONTROL_UNCOVERED / CONTROL_REPAIRED — the control invariant of a HANDOFF (docs/adr/0101, H100 DR-6): a live flight must
+  // never have nobody holding comms and control. UNCOVERED is a standing state, recomputed on every tick and Mutation, so
+  // it stays on both Facilities' panels until a Position is staffed (a repair that is impossible is not an event that
+  // fires once). REPAIRED is the notice that the server moved a holder to the live, staffed side; it stays until the
+  // exchange's holders next move (HandoffControl clears `coordination.repair`).
+  if (ctx.controlProblems && strip.coordination && strip.coordination.state === 'ACTIVE' && ctx.controlProblems(strip).length) {
+    obligations.push({ obligationType: 'CONTROL_UNCOVERED', dueAt: strip.coordination.acceptedAt || now, severity: 'OVERDUE' });
+  }
+  if (strip.coordination && strip.coordination.repair) {
+    obligations.push({ obligationType: 'CONTROL_REPAIRED', dueAt: strip.coordination.repair.at, severity: 'WARNING' });
+  }
+
   return obligations;
 }
 
@@ -222,7 +234,7 @@ class ForwardingObligationMonitor {
         if (!flightData) continue;
         live.set(`${facilityId}:${strip.stripId}`, strip);
 
-        for (const o of computeDueObligations(strip, flightData, now, { dataOnly, isAirspaceActive })) {
+        for (const o of computeDueObligations(strip, flightData, now, { dataOnly, isAirspaceActive, controlProblems: typeof boardStore.exchangeProblems === 'function' ? (s) => boardStore.exchangeProblems(s.stripId) : null })) {
           const key = `${facilityId}:${strip.stripId}:${o.obligationType}`;
           const prev = this._current.get(key);
           if (!prev) this._recordMissed(o.obligationType);

@@ -10,6 +10,8 @@ const OP_KINDS = [
   'CreateStrip', 'MoveStrip', 'SetBlock', 'TransferStrip',
   'SetFlag', 'SetState', 'InvokeNla', 'Undo', 'DropStrip',
   'HANDOFF', 'POINT_OUT', 'TRAFFIC', 'OPERATIONAL_REQUEST', 'AIT',
+  // docs/adr/0101 (H94, H98): the release of control inside a HANDOFF, never a bare "Release" (that is departure release).
+  'ControlRelease',
   // docs/adr/0023 — converts a DEPARTURE Strip at HANDED_OFF into an
   // ARRIVAL Strip IN PLACE (same Strip, same flight data), for a flight returning
   // to the same Facility that just handed it off. Deliberately restricted
@@ -36,7 +38,7 @@ const OP_KINDS = [
 // The 5 cross-Facility coordination primitives (guide §4.6) — split out so
 // PERMISSIONS below can grant them to exactly AP/CTR without repeating
 // the list, and so canMutate()'s D21 shape stays a single flat lookup.
-const COORDINATION_OP_KINDS = ['HANDOFF', 'POINT_OUT', 'TRAFFIC', 'OPERATIONAL_REQUEST', 'AIT'];
+const COORDINATION_OP_KINDS = ['HANDOFF', 'POINT_OUT', 'TRAFFIC', 'OPERATIONAL_REQUEST', 'AIT', 'ControlRelease'];
 
 // Op kinds restricted to exactly AP/CTR, for reasons other than being a
 // cross-Facility coordination primitive — currently just ConvertToArrival

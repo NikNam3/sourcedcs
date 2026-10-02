@@ -259,6 +259,7 @@ function _handleSetPositions(ctx, session, msg, persist) {
 
   const warnings = [];
   const reassignedIds = [];
+  let controlRepaired = false;
   // F10: a Position that was empty and now has a Primary gets back the Strips
   // that were routed away from it (docs/adr/0080).
   for (const positionId of actuallySignedOn) {
@@ -287,6 +288,13 @@ function _handleSetPositions(ctx, session, msg, persist) {
     }
   }
 
+  // docs/adr/0101: a change of staffing is when a HANDOFF holder can lose its staffed owner. Every Facility's exchanges are
+  // checked (sign-off is not blocked, DR-6: the invariant repairs or alerts, and the alert stands until someone signs on).
+  for (const id of ctx.facilityConfig.getFacilityIds()) {
+    const b = ctx.boardStoreFor(id);
+    if (b && b.reconcileExchanges().length) controlRepaired = true;
+  }
+
   // The re-send below carries every live Strip, so whatever
   // reassignPositionStrips touched is already in it. Drained so those touches
   // do not ride again on the next Mutation's broadcast (docs/adr/0081).
@@ -294,7 +302,7 @@ function _handleSetPositions(ctx, session, msg, persist) {
   // A consolidation reassignment changes the Board, and it used to be the one
   // Board change never persisted: a restart before the next Mutation restored
   // the Strips to the Position that had left (docs/adr/0081, L6's F2/F5 tail).
-  if (reassignedIds.length > 0 && typeof persist === 'function') persist();
+  if ((reassignedIds.length > 0 || controlRepaired) && typeof persist === 'function') persist();
 
   return {
     ack: { version: VERSION, type: 'efsp-positions-ack', facilityId, signedOn: actuallySignedOn, warnings },

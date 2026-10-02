@@ -22,6 +22,7 @@ class StripOps {
    * @param {{now: () => number}} deps.clock the mission clock
    * @param {object} deps.flightDataStore
    * @param {object} deps.coordination Coordination (the HANDOFF... ops call it)
+   * @param {object} deps.control HandoffControl (ControlRelease, the control-axis check, retirement and owner changes)
    * @param {object} deps.tofi Tofi (the TOFI op calls it)
    * @param {object[]} deps.ops the op table, `{kind, authorize?, apply(ctx, strip, op, meta)}` each (board/ops/index.js)
    * @param {(stripId:string) => void} deps.touch the kernel's `recordTouch` (board/board-state.js)
@@ -37,6 +38,7 @@ class StripOps {
     this.clock = deps.clock;
     this.flightDataStore = deps.flightDataStore;
     this.coordination = deps.coordination;
+    this.control = deps.control;
     this.tofi = deps.tofi;
     this._audit = deps.audit;
     // docs/adr/0100: every op module declares `undo` ('none' or a scope); a module without it is a start-up error.
@@ -131,6 +133,12 @@ class StripOps {
     const result = entry
       ? entry.apply(this, strip, op, meta)
       : { ok: false, reason: 'VALIDATION_ERROR', strip: deepClone(strip) };
+    // docs/adr/0101 decision 7 (DR-4): an owner change inside a Facility carries control with it, whichever op made it
+    // (TransferStrip, a NLA transfer, CarrierHandoff, SfaRotation): the one place, not each op.
+    if (result.ok && strip.ownerPositionId !== before.ownerPositionId) {
+      const followed = this.control.followOwner(strip, by);
+      if (followed && followed.peerStrip && !result.peerStrip) { result.peerFacilityId = followed.peerFacilityId; result.peerStrip = followed.peerStrip; }
+    }
     // docs/adr/0076, Q-L16-3: a DEPARTURE entering Airborne stamps the takeoff
     // time, however it got there (the NLA, SetState, a drag into the Airborne
     // Bay) — one place, after every op that can change a state.
@@ -468,8 +476,14 @@ class StripOps {
       carrierChanged = this.rules.carrierRetireFlight(strip.flightDataId, by) || undefined;
     }
     // U7: a replica that ends takes the proposer's link with it.
-    let peerFacilityId; let peerStrip;
+    let peerFacilityId; let peerStrip; let controlAudit; let warning;
     const link = strip.coordination;
+    // docs/adr/0101 (TRANSFERRING_RETIRED): the proposer's Strip ends (drop, join, anything that retires it) while it
+    // still holds comms or control: both move to the receiving side, so the flight is never left with nobody on it.
+    const implicit = this.control.onTransferringRetired(strip, by);
+    if (implicit) {
+      peerFacilityId = implicit.peerFacilityId; peerStrip = implicit.peerStrip; controlAudit = implicit.controlAudit; warning = implicit.warning;
+    }
     if (link && link.mintedForCoordination) {
       const peer = this.rules.peerBoard(link.peerFacilityId);
       const ended = peer ? peer.receiveCoordinationPeerGone({ causedBy: this._activeCmid, stripId: link.peerStripId, goneStripId: strip.stripId }) : null;
@@ -479,7 +493,7 @@ class StripOps {
       ok: true, strip,
       marsaChanged: marsaChanged && marsaChanged.length ? marsaChanged : undefined,
       flightDataList: marsaChanged && marsaChanged.length ? this.drainMarsaRegimeWrites() : undefined,
-      peerFacilityId, peerStrip, carrierChanged,
+      peerFacilityId, peerStrip, carrierChanged, controlAudit, warning,
     };
   }
 

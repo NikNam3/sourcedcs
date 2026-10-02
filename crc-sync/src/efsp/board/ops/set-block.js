@@ -7,6 +7,21 @@ function _applySetBlock(ctx, strip, op, by, actingPositionId, clientMutationId) 
   const target = ctx.rules.resolveBlockTarget(op.blockId, strip.stripType);
   if (!target) return { ok: false, reason: 'VALIDATION_ERROR', strip };
 
+  // docs/adr/0101 (H94, H100 DR-1 b): until control transfers on a HANDOFF, a heading or an altitude outside the release
+  // in effect (and any from the transferring side after ACCEPT) needs a "coordinated with" attestation. Speed is not an
+  // axis. The attestation is audited with the write; nothing below changes.
+  const control = ctx.control.checkControlAxis(strip, op, by);
+  if (!control.ok) return { ok: false, reason: control.reason, detail: control.detail, strip };
+  const result = _applySetBlockWrite(ctx, strip, op, by, actingPositionId, clientMutationId, target);
+  if (result.ok) {
+    if (control.audit || control.settled) result.controlAudit = { ...(control.audit || {}), ...(control.settled ? { control: control.settled } : {}) };
+    if (control.peerStrip && !result.peerStrip) { result.peerFacilityId = control.peerFacilityId; result.peerStrip = control.peerStrip; }
+  }
+  return result;
+}
+
+function _applySetBlockWrite(ctx, strip, op, by, actingPositionId, clientMutationId, target) {
+
   // WP6 (docs/adr/0051) — while an ACTIVE MARSA relation holds this flight,
   // the relation owns its separation regime and a direct Block write to it is
   // refused.
@@ -144,6 +159,7 @@ module.exports = {
   undo: 'none', // docs/adr/0100 §1: an edit, corrected by editing
   // The op kind alone names neither the Block written nor a coordination
   // action (PROPOSE/ACCEPT/REJECT/CANCEL...); the entry says which.
-  auditFields: (ctx, result, op) => ({ head: { blockId: op.blockId, value: op.value } }),
+  // A coordinated write carries `coordinatedWith` and `controlAxis` in its line (docs/adr/0101).
+  auditFields: (ctx, result, op) => ({ head: { blockId: op.blockId, value: op.value }, ...(result.controlAudit ? { tail: result.controlAudit } : {}) }),
   apply: (ctx, strip, op, meta) => _applySetBlock(ctx, strip, op, meta.by, meta.actingPositionId, meta.clientMutationId),
 };

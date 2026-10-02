@@ -174,6 +174,20 @@ function stateOwners(stripType, state) {
 function initialStateFor(stripType) { return _own(DEFAULT_INITIAL_STATE_BY_STRIP_TYPE, stripType) ? DEFAULT_INITIAL_STATE_BY_STRIP_TYPE[stripType] : undefined; }
 /** The state a coordination replica of a `stripType` Strip at `senderState` is minted in. */
 function replicaStateOnReceipt(stripType, senderState) { return ((REPLICA_STATE_ON_RECEIPT[stripType] || {})[senderState]) || senderState; }
+/**
+ * What the replica of a `stripType` Strip at `senderState` is minted as at Position `toPositionId`: a Position family's
+ * `replicaOnReceipt` row (a carrier Marshal mints a MARSHAL Strip, docs/adr/0101), else the sender's strip type with the
+ * strip type family's `replicaStateOnReceipt`.
+ * @returns {{stripType:string, state:string}}
+ */
+function replicaOnReceipt(toPositionId, stripType, senderState) {
+  for (const f of positionFamilies) {
+    const row = f.replicaOnReceipt && _own(f.replicaOnReceipt, toPositionId) ? f.replicaOnReceipt[toPositionId] : null;
+    const hit = row && _own(row, stripType) && _own(row[stripType], senderState) ? row[stripType][senderState] : null;
+    if (hit) return { stripType: hit.stripType, state: hit.state };
+  }
+  return { stripType, state: replicaStateOnReceipt(stripType, senderState) };
+}
 /** @returns {string|undefined} the sender's state once the receiver ACCEPTs `primitive`, or undefined (unchanged). */
 function senderStateOnAccept(primitive, stripType, senderState) { return ((SENDER_STATE_ON_ACCEPT[primitive] || {})[stripType] || {})[senderState]; }
 
@@ -194,7 +208,10 @@ const { _isMruOrNonAtc } = require('./classes');
 // terminus in a position to convert it).
 const PERMISSIONS = {};
 const CREATE_STRIP_TYPE_PERMISSIONS = {};
+/** { positionId: { opKind: actions[] } }: where a grant is narrower than the op kind (docs/adr/0101). */
+const COORDINATION_ACTIONS = {};
 for (const f of positionFamilies) {
+  Object.assign(COORDINATION_ACTIONS, f.coordinationActions || {});
   Object.assign(PERMISSIONS, f.permissions);
   Object.assign(CREATE_STRIP_TYPE_PERMISSIONS, f.createsStripTypes || {});
 }
@@ -287,7 +304,7 @@ function creatorsOf(stripType) {
 module.exports = {
   registerStripTypeFamily, registerPositionFamily,
   positionFamilyOf, positionFamily, positionIds, capabilitiesFor, creatorsOf,
-  PERMISSIONS, CREATE_STRIP_TYPE_PERMISSIONS, RUNWAY_STATUS_OP_OWNERS, NON_OWNER_BLOCK_WRITES, TOFI_COUNTERPARTS,
+  PERMISSIONS, CREATE_STRIP_TYPE_PERMISSIONS, COORDINATION_ACTIONS, replicaOnReceipt, RUNWAY_STATUS_OP_OWNERS, NON_OWNER_BLOCK_WRITES, TOFI_COUNTERPARTS,
   stripTypeFamily, stripTypeNames, stateOwners, initialStateFor, replicaStateOnReceipt, senderStateOnAccept,
   STATES_BY_STRIP_TYPE, STATE_OWNERS_BY_STRIP_TYPE, DEFAULT_INITIAL_STATE_BY_STRIP_TYPE, REPLICA_STATE_ON_RECEIPT, SENDER_STATE_ON_ACCEPT,
   COUNTABLE_PRE_DROP_STATES, EXCLUDED_WHEN_NOT_COUNTABLE, COORDINATION_ELIGIBLE_STATES, TOFI_ELIGIBLE_STATES,

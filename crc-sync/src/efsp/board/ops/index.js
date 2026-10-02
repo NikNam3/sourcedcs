@@ -14,6 +14,7 @@ const MODULES = [
   require('./undo'),
   require('./drop-strip'),
   require('./coordination'),
+  require('./control-release'),
   require('./tofi'),
   require('./convert-to-arrival'),
   require('./approve-airspace-entry'),

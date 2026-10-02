@@ -15,5 +15,6 @@ function _applyDropStrip(ctx, strip, op, by) {
 module.exports = {
   kind: 'DropStrip',
   undo: 'none', // docs/adr/0100: not undoable (yet); UNDO-S step 2 declares the scopes
+  auditFields: (ctx, result) => (result.controlAudit ? { tail: result.controlAudit } : {}),
   apply: (ctx, strip, op, meta) => _applyDropStrip(ctx, strip, op, meta.by),
 };

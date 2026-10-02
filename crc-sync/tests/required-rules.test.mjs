@@ -36,7 +36,7 @@ test('REQUIRED_RULES is exactly the set of rule names the Board reads', () => {
 test('a BoardStore built without rules it reads fails at construction, naming each one', () => {
   const { facilityId, peerBoard, ...partial } = fullRules();
   assert.throws(() => new BoardStore({ getFlightData: () => null }, partial), (e) => /2 required rule\(s\)/.test(e.message) && e.message.includes('facilityId') && e.message.includes('peerBoard'));
-  assert.throws(() => new BoardStore({ getFlightData: () => null }, {}), /50 required rule\(s\)/);
+  assert.throws(() => new BoardStore({ getFlightData: () => null }, {}), /52 required rule\(s\)/);
   // a function rule that is null is as missing as an absent one
   assert.throws(() => new BoardStore({ getFlightData: () => null }, fullRules({ peerBoard: null })), /1 required rule\(s\).*peerBoard/);
   // null, false and [] are values for the data rules
