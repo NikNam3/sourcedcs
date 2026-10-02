@@ -16,8 +16,11 @@ const UNDOABLE_MARKS = ['TRANSFER_COMMS', 'TRANSFER_CONTROL'];
  */
 const HANDOFF_UNDO = {
   label: (op, strip) => {
-    const callsign = (strip && strip.coordination && strip.coordination.peerPositionId) || 'the receiving Position';
-    return op.action === 'TRANSFER_COMMS' ? `Communications to ${callsign}` : `Control to ${callsign}`;
+    // Always the RECEIVING Position, whichever side records the mark: on the receiver's replica that is its own owner,
+    // on the transferring Strip it is the peer (so a receiver's mark never reads "to" the Position that held it).
+    const co = strip && strip.coordination;
+    const receiving = (co && (co.mintedForCoordination ? strip.ownerPositionId : co.peerPositionId)) || 'the receiving Position';
+    return op.action === 'TRANSFER_COMMS' ? `Communications to ${receiving}` : `Control to ${receiving}`;
   },
   scope: (ctx, strip, op) => {
     if (!UNDOABLE_MARKS.includes(op.action) || !strip || !strip.coordination) return null;
