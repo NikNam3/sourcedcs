@@ -24,6 +24,24 @@ test('U17: every module in the op table declares undo, none or a valid declarati
   assert.equal(UNDO_WINDOW_MS, 10_000);
 });
 
+test('U17: a scope that returns null makes that one action not undoable (per-action decision)', () => {
+  const entry = { kind: 'Multi', undo: { label: () => 'x', scope: (ctx, strip, op) => (op.action === 'MARK' ? { strips: [S(strip.stripId)] } : null) } };
+  assert.equal(undoDeclarationProblem(entry), null);
+  const h = new UndoHistory({ wallClock: fakeWall() });
+  for (const [id, action] of [['m1', 'MARK'], ['r1', 'RELEASE']]) {
+    h.begin(id, meta({ op: 'Multi' }), entry.undo.scope(null, { stripId: 's1' }, { action }));
+    h.observe(strip('s1'));
+    const undoable = h.commit({ ok: true });
+    assert.equal(!!undoable, action === 'MARK', action);
+  }
+});
+
+test('an action that changed nothing is not undoable', () => {
+  const h = new UndoHistory({ wallClock: fakeWall() });
+  h.begin('a1', meta(), { strips: [S('s1')] });
+  assert.equal(h.commit({ ok: true }), null);
+});
+
 test('U17: StripOps refuses an op table with a module that declares no undo', async () => {
   const { StripOps } = await import('../src/efsp/board/strip-ops.js');
   assert.throws(() => new StripOps({ ops: [{ kind: 'Bogus', apply() {} }] }), /declares no undo/);

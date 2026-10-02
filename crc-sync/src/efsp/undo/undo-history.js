@@ -9,8 +9,11 @@
 // or an undo declaration
 //
 //   undo: {
-//     label(op, strip) -> string                       what the client's undo slot says ("Hand off VIPER1 -> APP")
-//     scope(ctx, strip, op) -> Scope                   everything the op may write, read BEFORE it applies
+//     label(op, strip, ctx) -> string                  what the client's undo slot says ("Hand off VIPER1 -> APP")
+//     scope(ctx, strip, op) -> Scope | null            everything the op may write, read BEFORE it applies; null means
+//                                                      THIS action is not undoable (a module whose op kind has several
+//                                                      actions, e.g. HANDOFF's TRANSFER_* marks vs its other actions,
+//                                                      TOFI PROPOSE vs ACCEPT, decides per action)
 //     created?(result, ctx) -> { strips?: [{facilityId, stripId}], flightData?: [id] }   what it made, read after
 //   }
 //
@@ -22,7 +25,8 @@
 //     marsa?:      [relationId | { flightDataId }],  MARSA relations it may end (by id, or every relation of a flight)
 //   }
 //
-// A module without the key fails the op-table test (tests/undo-op-table.test.mjs), so every new op decides.
+// A module without the key fails the op-table test (tests/undo-history.test.mjs, U17), so every new op decides.
+// An action that changed nothing (an empty footprint, e.g. the NLA's 400 ms double-tap guard) is never undoable.
 //
 // HOW CHANGES ARE SEEN. Every Mutation on every Board runs inside one frame: `begin(actionId, meta, scope)` before
 // the op applies (scope null: the op is not undoable, but its changes are still observed), `commit(result)` after it,
@@ -234,6 +238,7 @@ class UndoHistory {
   }
 
   _record(frame, created) {
+    if (frame.footprint.size === 0) return null; // it changed nothing: nothing to undo, and no record to overlap others
     const keys = scopeKeys(frame.scope, created);
     const escaped = [...frame.footprint].filter(k => !keys.has(k));
     if (escaped.length) {
