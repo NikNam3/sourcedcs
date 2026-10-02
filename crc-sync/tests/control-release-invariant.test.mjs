@@ -148,6 +148,58 @@ test('I3 a transferring Strip retired by any path (the join of SJ-S calls the sa
   holds(w, ex);
 });
 
+/** An ARRIVAL AP originates in its inbound Bay: a formation lead (or joiner) on the receiving Board. */
+const apArrival = (w, callsign) => mustAct(w.efsp, w.c.AP, 'AP', null, {
+  kind: 'CreateStrip', bayId: 'ap-inbound', rackId: 'main', stripType: 'ARRIVAL',
+  flightData: { callsign, aircraftType: 'C130', wakeCategory: 'M', originAirport: 'LTAC' },
+});
+const joinOp = (lead) => ({ kind: 'JoinFormation', leadStripId: lead.stripId, leadBaseRev: lead.rev });
+
+test('I3 JoinFormation and a HANDOFF: a joiner whose exchange is live is refused; a replica holding both joins through retire() and the invariant holds', () => {
+  const wallClock = fakeWallClock();
+  const w = world({ wallClock });
+  const ex = ex0(w, 'I3J');
+  mustR(w, ex, { kind: 'HANDOFF', action: 'TRANSFER_COMMS' });
+  const lead = apArrival(w, 'I3L');
+  // While the transferring Strip is live the flight has two live Strips: the join is refused and nothing moves.
+  const before = JSON.stringify([ex.T().coordination, ex.R().coordination]);
+  const refusedJoin = asR(w, ex, joinOp(lead));
+  assert.equal(refusedJoin.ok, false);
+  assert.match(refusedJoin.detail, /another live Strip/);
+  assert.equal(JSON.stringify([ex.T().coordination, ex.R().coordination]), before);
+  holds(w, ex, 'after the refused join');
+  // The transferring Strip drops (control moves to the replica, TRANSFERRING_RETIRED); the replica then joins the lead.
+  mustT(w, ex, DROP);
+  assert.deepEqual(holders(ex), { comms: 'RECEIVING', control: 'RECEIVING', ref: { facilityId: 'INCIRLIK', positionId: 'AP' } });
+  const leadNow = w.efsp.boardStoreFor('INCIRLIK').getStrip(lead.stripId);
+  const joined = asR(w, ex, joinOp(leadNow)); // CRCSYNC_CONTROL_INVARIANT=throw: the assertion after retire() throws on a violation
+  assert.equal(joined.ok, true, JSON.stringify(joined));
+  assert.equal(ex.R().state, 'DROPPED');
+  assert.equal(ex.R().endReason, 'JOINED');
+  assert.equal(ex.T().coordination, null, 'the replica retired through retire(): the proposer\'s link ends (U7)');
+  holds(w, ex, 'after the join');
+  assert.equal(repairs(w).length, 0, 'nothing for the safety net');
+  // Undone: the replica is back holding both, beside the dropped proposer that holds nothing (not UNDO_BLOCKED).
+  const undone = asR(w, ex, { kind: 'Undo', actionId: joined.undoable.actionId });
+  assert.equal(undone.ok, true, JSON.stringify(undone));
+  assert.equal(ex.R().state, 'INBOUND');
+  assert.equal(ex.R().coordination.control.holder, 'RECEIVING');
+  assert.equal(ex.T().coordination.state, 'ACTIVE', 'the proposer\'s link is back too');
+  holds(w, ex, 'after the undo of the join');
+});
+
+test('I3 a lead in an ACTIVE HANDOFF absorbs a joiner: its exchange record and holders are unchanged and the invariant is asserted', () => {
+  const w = world();
+  const ex = ex0(w, 'I3K');
+  mustR(w, ex, { kind: 'HANDOFF', action: 'TRANSFER_CONTROL' });
+  const holdersBefore = holders(ex);
+  const joiner = apArrival(w, 'I3M');
+  const ack = act(w.efsp, w.c.AP, 'AP', joiner, joinOp(ex.R()));
+  assert.equal(ack.ok, true, JSON.stringify(ack));
+  assert.deepEqual(holders(ex), holdersBefore);
+  holds(w, ex);
+});
+
 test('I4 a transferring Strip archived while the exchange is ACTIVE, and the mission-change variant', () => {
   for (const variant of ['sweep', 'missionChange']) {
     const w = world();

@@ -64,6 +64,10 @@ function _applyJoin(ctx, joiner, op, meta) {
   const voided = ctx.flightDataStore.voidFlightData(joiner.flightDataId, { reason: 'JOINED', into: lead.flightDataId, by });
   const grown = ctx.flightDataStore.setFormationSize(lead.flightDataId, leadFd.identity.flightSize + joinerSize, { by });
   ctx.state.bump(lead, by);
+  // docs/adr/0101 (I3): the joiner retired through ctx.retire, whose hook hands what a transferring Strip still held to the
+  // receiving side; the invariant is then asserted for the joiner's exchange and for the lead's, as after every retirement.
+  ctx.control.assertControlInvariant(joiner, by);
+  ctx.control.assertControlInvariant(lead, by);
   return {
     ...retired,
     ok: true, strip: joiner,
