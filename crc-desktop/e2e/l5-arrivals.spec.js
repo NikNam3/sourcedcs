@@ -32,7 +32,7 @@ async function goBay(page, positionId, bayId) {
 }
 
 const stateOf = (page, cs) => page.evaluate((cs) => {
-  const s = getAllEfspStrips().find((x) => getEfspFdr(x.fdrId).identity.callsign === cs);
+  const s = getAllEfspStrips().find((x) => getEfspFlightData(x.fdrId).identity.callsign === cs);
   return s && s.state;
 }, cs);
 
@@ -40,7 +40,7 @@ const stateOf = (page, cs) => page.evaluate((cs) => {
 async function taxiToTower(page, cs) {
   for (let i = 0; i < 5; i++) {
     const before = await stateOf(page, cs);
-    await page.evaluate((cs) => _invokeNla(getAllEfspStrips().find((x) => getEfspFdr(x.fdrId).identity.callsign === cs)), cs);
+    await page.evaluate((cs) => _invokeNla(getAllEfspStrips().find((x) => getEfspFlightData(x.fdrId).identity.callsign === cs)), cs);
     // 10 s: one Mutation round trip, measured over 3 s under load. The spec's budget is 90 s.
     await expect.poll(() => stateOf(page, cs), { timeout: 10000 }).not.toBe(before);
     await page.waitForTimeout(450); // the server's per-Strip double-tap guard
@@ -80,7 +80,7 @@ test('a Strip handed over while you look elsewhere lights its Bay tab and the ar
   await expect(s.locator('.efsp-strip-from')).toHaveText('from GND');
 
   // Touching it is noticing it.
-  await s.locator('.efsp-strip-tab-role').click();
+  await s.locator('.efsp-strip-tab-type').click();
   await expect(s).not.toHaveClass(/efsp-strip-arrived/);
 });
 
@@ -116,8 +116,8 @@ test('a Strip arriving in the Bay on screen flashes once, and is not listed on t
   await expect(stripByCallsign(twr, 'ARV602')).toHaveClass(/efsp-strip-arrived-flash/);
   // Force a rebuild of ARV601 by something unrelated to its arrival.
   await twr.evaluate((cs) => {
-    const s = getAllEfspStrips().find((x) => getEfspFdr(x.fdrId).identity.callsign === cs);
-    applyEfspDelta({ fdrs: { updated: [{ ...getEfspFdr(s.fdrId), rev: getEfspFdr(s.fdrId).rev + 100 }] } });
+    const s = getAllEfspStrips().find((x) => getEfspFlightData(x.fdrId).identity.callsign === cs);
+    applyEfspDelta({ fdrs: { updated: [{ ...getEfspFlightData(s.fdrId), rev: getEfspFlightData(s.fdrId).rev + 100 }] } });
     renderAllOpenEfspBays();
   }, 'ARV601');
   const rebuilt = stripByCallsign(twr, 'ARV601');

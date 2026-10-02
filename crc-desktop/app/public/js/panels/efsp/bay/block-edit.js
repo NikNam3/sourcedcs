@@ -4,7 +4,7 @@ import {
   CONFIRM_VACATED_ELIGIBLE_BLOCKS, blockValueHintFor, editRedirectFor, enumSelectOptionsFor,
   hasActiveAnnotationEntry, isBlockEditable, isBooleanToggleBlock, isEnumBlockClearable, resolveBlockValue
 } from '../strip-template.js';
-import { getEfspFdr, getEfspStrip } from '../efsp-state.js';
+import { getEfspFlightData, getEfspStrip } from '../efsp-state.js';
 import { sendEfspMutation } from '../efsp-ws.js';
 import { _resolveActingPositionId } from '../bay-view.js';
 
@@ -88,7 +88,7 @@ export function _blockLabel(fdr, strip, blockId) {
  * survives the rebuild rather than blocking it (see _isProtectedStripEl).
  */
 export function _buildBlockCell(strip, blockId) {
-  const fdr = getEfspFdr(strip.fdrId);
+  const fdr = getEfspFlightData(strip.fdrId);
   const span = document.createElement('span');
   span.className = 'efsp-block efsp-block-' + blockId;
   span.dataset.block = blockId;

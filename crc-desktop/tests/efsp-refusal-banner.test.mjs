@@ -33,7 +33,7 @@ globalThis.setInterval = () => 0;
 const TOOLBAR_IDS = [
   'efsp-panel', 'efsp-position-tabs', 'efsp-bay-tabs', 'efsp-bay-content',
   'efsp-new-strip-callsign', 'efsp-create-strip-btn', 'efsp-create-strip-msg',
-  'efsp-create-strip-role', 'efsp-create-strip-stereo', 'efsp-create-strip-bind',
+  'efsp-create-strip-type', 'efsp-create-strip-stereo', 'efsp-create-strip-bind',
   'efsp-dot-command-input', 'efsp-dot-command-preview',
   'efsp-mutation-error', 'efsp-mutation-warning', 'efsp-connection-banner',
 ];

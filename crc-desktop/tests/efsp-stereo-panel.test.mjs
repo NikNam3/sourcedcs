@@ -43,7 +43,7 @@ async function mountPanel({ held = ['OPS'], stereoRoutes = ROUTES, lookupSpy = n
   const els = {};
   for (const id of ['efsp-panel', 'efsp-position-tabs', 'efsp-bay-tabs', 'efsp-bay-content',
     'efsp-new-strip-callsign', 'efsp-create-strip-btn', 'efsp-create-strip-msg',
-    'efsp-create-strip-role', 'efsp-create-strip-stereo', 'efsp-dot-command-input',
+    'efsp-create-strip-type', 'efsp-create-strip-stereo', 'efsp-dot-command-input',
     'efsp-dot-command-preview', 'efsp-mutation-error', 'efsp-mutation-warning',
     'efsp-connection-banner']) {
     els[id] = makeElement(id.endsWith('-btn') ? 'button' : id.includes('role') || id.includes('stereo') ? 'select' : 'input');

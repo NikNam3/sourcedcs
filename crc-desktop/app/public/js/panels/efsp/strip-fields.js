@@ -28,7 +28,7 @@ export const COMPACT_BLOCKS_SHARED = [
   '1', '3', '5', '5A', '7', '8', '8A', '8B', '9', '22', '24A', 'IFR', 'RSVC', 'SREG',
 ];
 
-export const COMPACT_BLOCKS_BY_ROLE = {
+export const COMPACT_BLOCKS_BY_STRIP_TYPE = {
   // Heading and initial altitude: the two things a departure clearance issues
   // beyond the route.
   DEPARTURE:  [...COMPACT_BLOCKS_SHARED, '20', '21'],
@@ -117,7 +117,7 @@ function _blockMapFor(role) {
 export function compactBlocksFor(role, positionId, fdr) {
   const byPosition = COMPACT_BLOCKS_BY_POSITION[role];
   let list = (byPosition && positionId && byPosition[positionId])
-    || COMPACT_BLOCKS_BY_ROLE[role] || COMPACT_BLOCKS_SHARED;
+    || COMPACT_BLOCKS_BY_STRIP_TYPE[role] || COMPACT_BLOCKS_SHARED;
   // Hung ordnance (crc-sync's docs/adr/0069): ORDNANCE, only once it says something —
   // before the MTR group, which starts its own grid row.
   if (_ordnanceWhenSet(role, positionId) && isOrdnanceSet(fdr) && !list.includes('3G')) list = [...list, '3G'];

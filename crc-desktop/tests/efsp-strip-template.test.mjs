@@ -233,7 +233,7 @@ test('isBlockEditable is false for an unknown Block ID', () => {
 
 // ── ARRIVAL_BLOCK_MAP (Phase 2, docs/adr/0008) ──────────────────────────
 
-function makeArrivalFdr(overrides = {}) {
+function makeArrivalFlightData(overrides = {}) {
   return {
     identity: { callsign: 'REACH1', flightSize: 1, wakeCategory: 'D', aircraftType: 'C17', equipmentSuffix: 'GR', degradation: 'NONE', beaconAssigned: '5678', ...overrides.identity },
     filed: { route: 'DCT', originAirport: 'LTAG', arrivalFix: 'KADOX', estimatedArrivalTimeUtc: '1200', remarks: '', ...overrides.filed },
@@ -251,13 +251,13 @@ test('requiredBlocksFor(ARRIVAL) matches ARRIVAL_BLOCK_MAP\'s required set', () 
 });
 
 test('resolveBlockValue routes to ARRIVAL_BLOCK_MAP when strip.role is ARRIVAL', () => {
-  const fdr = makeArrivalFdr();
+  const fdr = makeArrivalFlightData();
   const strip = makeArrivalStrip();
   assert.deepEqual(resolveBlockValue('8', fdr, strip), { value: 'LTAG', provenance: 'CONTROLLER_ENTERED' });
 });
 
 test('resolveBlockValue on ARRIVAL Block 7 reads the flight\'s assigned altitude — unlike DEPARTURE\'s Block 7, the filed one', () => {
-  const fdr = { ...makeArrivalFdr(), clearance: { altitude: { entries: [{ value: '4000', status: 'ACTIVE' }] }, heading: { entries: [] } } };
+  const fdr = { ...makeArrivalFlightData(), clearance: { altitude: { entries: [{ value: '4000', status: 'ACTIVE' }] }, heading: { entries: [] } } };
   assert.equal(resolveBlockValue('7', fdr, makeArrivalStrip()).value, '4000');
 });
 
@@ -284,7 +284,7 @@ test('every required ARRIVAL Block exists in ARRIVAL_BLOCK_MAP', () => {
 
 const REQUIRED_MISSION_BLOCKS = ['M1', 'M3', 'M4', 'M25', 'M26'];
 
-function makeMissionFdr(overrides = {}) {
+function makeMissionFlightData(overrides = {}) {
   return {
     identity: { callsign: 'EAGLE1', beaconAssigned: '4321', ...overrides.identity },
     filed: { remarks: '', ...overrides.filed },
@@ -303,7 +303,7 @@ test('requiredBlocksFor(MISSION) matches MISSION_BLOCK_MAP\'s required set', () 
 });
 
 test('resolveBlockValue routes to MISSION_BLOCK_MAP when strip.role is MISSION, reusing identity.callsign/beaconAssigned', () => {
-  const fdr = makeMissionFdr();
+  const fdr = makeMissionFlightData();
   const strip = makeMissionStrip();
   assert.equal(resolveBlockValue('M3', fdr, strip).value, 'EAGLE1');
   assert.equal(resolveBlockValue('M4', fdr, strip).value, '4321');
@@ -389,7 +389,7 @@ test('every entry in every Block Map has a non-empty label of 8 characters or fe
 });
 
 test('blockLabelFor looks up a Block\'s label per role, and returns null for a Block that role has no entry for', () => {
-  assert.equal(blockLabelFor('5', 'DEPARTURE'), 'SQUAWK');
+  assert.equal(blockLabelFor('5', 'DEPARTURE'), 'BEACON');
   assert.equal(blockLabelFor('8', 'ARRIVAL'), 'ORIG');
   assert.equal(blockLabelFor('8A', 'OVERFLIGHT'), null);
 });
@@ -521,19 +521,19 @@ test('every label fits the compact chip', () => {
 // ── §9.4 MTR fields (crc-sync's docs/adr/0062) ──────────────────────────────
 
 const MTR_LABELS = { '9G-MTR': 'MTR', '9G-ENTRY': 'ENTRY', '9G-TIME': 'ENTRY TM', '9H-EXIT': 'EXIT', '9H-TIME': 'EXIT EST', '9H-ALT': 'EXIT ALT' };
-const MTR_ROLES = ['DEPARTURE', 'ARRIVAL', 'OVERFLIGHT'];
+const MTR_STRIP_TYPES = ['DEPARTURE', 'ARRIVAL', 'OVERFLIGHT'];
 
-function mtrFdr(mtr) {
+function mtrFlightData(mtr) {
   return { ...makeFdr(), military: { ordnanceState: 'CLEAN', hookRequired: false, alertStatus: 'NONE', mtr } };
 }
 
 test('resolveBlockValue reads each MTR field, the two times as a four-digit Zulu time', () => {
-  const fdr = mtrFdr({
+  const fdr = mtrFlightData({
     designator: 'IR107', entryFix: 'A', entryTimeUtc: Date.UTC(2016, 5, 21, 14, 5),
     exitFix: 'F', exitEstimateUtc: Date.UTC(2016, 5, 21, 14, 32), requestedAltitudeAfterExit: 'FL190',
   });
   const expected = { '9G-MTR': 'IR107', '9G-ENTRY': 'A', '9G-TIME': '1405', '9H-EXIT': 'F', '9H-TIME': '1432', '9H-ALT': 'FL190' };
-  for (const role of MTR_ROLES) {
+  for (const role of MTR_STRIP_TYPES) {
     for (const [id, value] of Object.entries(expected)) {
       assert.equal(resolveBlockValue(id, fdr, { role }).value, value, `${role}/${id}`);
     }
@@ -543,11 +543,11 @@ test('resolveBlockValue reads each MTR field, the two times as a four-digit Zulu
 test('an MTR Block on an FDR with military: null (or no time) renders blank, not a throw', () => {
   const fdr = { ...makeFdr(), military: null };
   for (const id of Object.keys(MTR_LABELS)) assert.equal(resolveBlockValue(id, fdr, { role: 'ARRIVAL' }).value, null, id);
-  assert.equal(resolveBlockValue('9H-TIME', mtrFdr({ exitEstimateUtc: null }), { role: 'ARRIVAL' }).value, null);
+  assert.equal(resolveBlockValue('9H-TIME', mtrFlightData({ exitEstimateUtc: null }), { role: 'ARRIVAL' }).value, null);
 });
 
 test('the MTR labels are exactly the §9.4 set on every ATC Role', () => {
-  for (const role of MTR_ROLES) {
+  for (const role of MTR_STRIP_TYPES) {
     for (const [id, label] of Object.entries(MTR_LABELS)) assert.equal(blockLabelFor(id, role), label, `${role}/${id}`);
   }
 });
@@ -556,7 +556,7 @@ test('the MTR Blocks are ordinary click-to-edit cells — no picker, no toggle',
   for (const id of Object.keys(MTR_LABELS)) {
     assert.equal(enumSelectOptionsFor(id), null, id);
     assert.equal(isBooleanToggleBlock(id), false, id);
-    for (const role of MTR_ROLES) assert.equal(isBlockEditable(id, role), true, `${role}/${id}`);
+    for (const role of MTR_STRIP_TYPES) assert.equal(isBlockEditable(id, role), true, `${role}/${id}`);
   }
 });
 

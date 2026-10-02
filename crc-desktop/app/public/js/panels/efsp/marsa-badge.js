@@ -114,7 +114,7 @@ export function marsaBadgeFor(strip) {
       // fires on an ordinary INIT ALT edit, so the controller who caused the
       // void is looking at the Block they just typed into, not at the badge).
       voidReason: `MARSA VOIDED — ${why}. ATC is separating these aircraft again.`,
-      participantFdrIds: relation.participants,
+      participantFlightDataIds: relation.participants,
     };
   }
 
@@ -130,7 +130,7 @@ export function marsaBadgeFor(strip) {
       : `${MARSA_EXPANSION} — declared by ${relation.declaringCallsign}, ${withText}. Rendezvous marked.`,
     armed,
     active: true,
-    participantFdrIds: relation.participants,
+    participantFlightDataIds: relation.participants,
   };
 }
 

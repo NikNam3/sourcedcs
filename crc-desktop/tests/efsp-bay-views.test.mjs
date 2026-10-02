@@ -40,7 +40,7 @@ const setHeld = (h) => {
   for (const f of ['INCIRLIK', 'CENTER', 'TACTICAL', 'CARRIER', 'RANGES']) sendEfspSetPositions(f, held[f] || []);
 };
 const putStrip = (st) => { strips[st.stripId] = st; syncBoard(); };
-const putFdr = (id, f) => { fdrs[id] = f; syncBoard(); };
+const putFlightData = (id, f) => { fdrs[id] = f; syncBoard(); };
 const clearBoard = () => { strips = {}; fdrs = {}; syncBoard(); };
 
 function setGlobals() {
@@ -219,14 +219,14 @@ test('the Rotate to PAR button sends the transfer as the Strip\'s owner and goes
   applyEfspSfaSnapshot({ sfaRotation: store.view() });
   setHeld({ INCIRLIK: ['SFA'] });
   const strip = { stripId: 'a1', fdrId: 'f1', rev: 4, role: 'ARRIVAL', state: 'INBOUND', ownerPositionId: 'SFA', facilityId: 'INCIRLIK' };
-  putFdr('f1', { comms: { workingFrequencyMhz: 234.1 } }); putStrip(strip);
+  putFlightData('f1', { comms: { workingFrequencyMhz: 234.1 } }); putStrip(strip);
   const buttons = sfaExtraNlaButtons(strip);
   assert.equal(buttons.length, 1);
   assert.equal(buttons[0].textContent, 'Rotate to PAR');
   click(buttons[0]);
   assert.deepEqual(sent.pop(), { position: 'SFA', stripId: 'a1', op: { kind: 'SfaRotation' } });
   assert.equal(buttons[0].disabled, true);
-  putFdr('f1', { comms: { workingFrequencyMhz: 121.5 } });
+  putFlightData('f1', { comms: { workingFrequencyMhz: 121.5 } });
   assert.equal(sfaExtraNlaButtons(strip).length, 0, 'off the SFA pool: no button');
   _resetEfspSfaStateForTest();
 });

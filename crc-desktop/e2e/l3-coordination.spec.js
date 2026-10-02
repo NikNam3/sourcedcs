@@ -71,7 +71,7 @@ function seedCtrArrival(page, callsign) {
 /** Every live Strip record for this callsign, as the page's own store has it. */
 function recordsFor(page, callsign) {
   return page.evaluate((cs) => [...efspStrips.values()]
-    .filter(s => (efspFdrs.get(s.fdrId) || {}).identity && efspFdrs.get(s.fdrId).identity.callsign === cs && s.state !== 'DROPPED')
+    .filter(s => (efspFlightDataList.get(s.fdrId) || {}).identity && efspFlightDataList.get(s.fdrId).identity.callsign === cs && s.state !== 'DROPPED')
     .map(s => ({ facilityId: s.facilityId, owner: s.ownerPositionId, bayId: s.bayId, state: s.state, role: s.role,
       coordination: s.coordination && s.coordination.state, tofi: s.tofiCoordination && s.tofiCoordination.state })), callsign);
 }
@@ -306,7 +306,7 @@ test('the +N badge appears on the ATC Strip when a mission line is fragged again
   const a = await ctr(browser);
   const b = await tacC2(browser);
   const s = await seedCtrArrival(a, 'PLUSN1');
-  await expect(s.locator('.efsp-shared-fdr-badge')).toHaveCount(0);
+  await expect(s.locator('.efsp-shared-flight-data-badge')).toHaveCount(0);
 
   await b.locator('#efsp-dot-command-input').fill('.mission PLUSN1');
   await b.locator('#efsp-dot-command-input').press('Enter');
@@ -316,7 +316,7 @@ test('the +N badge appears on the ATC Strip when a mission line is fragged again
   // one exists". It is computed from OTHER Strips, and the reconciler only
   // rebuilds a Strip when its OWN rev moves — which a sibling appearing does
   // not do. It appears after a Bay-tab switch forces a full render.
-  await expect(s.locator('.efsp-shared-fdr-badge'), 'CTR\'s Strip never shows +1 while they watch it').toHaveText('+1', { timeout: 3000 });
+  await expect(s.locator('.efsp-shared-flight-data-badge'), 'CTR\'s Strip never shows +1 while they watch it').toHaveText('+1', { timeout: 3000 });
 });
 
 test('Accept TOFI Exit enables once CTR has set SEP REG back to ATC', async ({ browser }) => {
@@ -344,7 +344,7 @@ test('Accept TOFI Exit enables once CTR has set SEP REG back to ATC', async ({ b
 
   await setSepReg(s, 'ATC');
   // The MRU page's own FDR store does get the change...
-  await expect.poll(() => b.evaluate(() => [...efspFdrs.values()].find(f => f.identity && f.identity.callsign === 'EXIT01').tofi.separationRegime)).toBe('ATC');
+  await expect.poll(() => b.evaluate(() => [...efspFlightDataList.values()].find(f => f.identity && f.identity.callsign === 'EXIT01').tofi.separationRegime)).toBe('ATC');
   // ...but the MISSION Strip is not rebuilt (its rev did not move), so the
   // button keeps saying "CTR must set separation regime back to ATC" after
   // CTR has done exactly that.
@@ -367,9 +367,9 @@ test('the regime stated when accepting TOFI shows in SEP REG on both sides', asy
   // crc-sync writes fdr.tofi.separationRegime = DUE_REGARD on this accept —
   // a page opened AFTERWARDS gets it in its snapshot. Neither page that was
   // connected at the time ever receives it.
-  const fdrRegime = (page) => page.evaluate(() => [...efspFdrs.values()].find(f => f.identity && f.identity.callsign === 'SREG01').tofi.separationRegime);
-  await expect.poll(() => fdrRegime(a), { message: 'the CTR page never learns the regime', timeout: 3000 }).toBe('DUE_REGARD');
-  await expect.poll(() => fdrRegime(b), { message: 'the TAC_C2 page that set it never learns it either', timeout: 3000 }).toBe('DUE_REGARD');
+  const flightDataRegime = (page) => page.evaluate(() => [...efspFlightDataList.values()].find(f => f.identity && f.identity.callsign === 'SREG01').tofi.separationRegime);
+  await expect.poll(() => flightDataRegime(a), { message: 'the CTR page never learns the regime', timeout: 3000 }).toBe('DUE_REGARD');
+  await expect.poll(() => flightDataRegime(b), { message: 'the TAC_C2 page that set it never learns it either', timeout: 3000 }).toBe('DUE_REGARD');
 });
 
 // The picker used by a real pointer. Every other spec here uses selectOption,
@@ -399,8 +399,8 @@ test('the regime picker can be opened with a real click and keeps what was chose
   await expect(select).toHaveValue('ATC');
   await mission.getByRole('button', { name: 'Accept TOFI Entry' }).click({ timeout: 3000 });
 
-  const fdrRegime = (page) => page.evaluate(() => [...efspFdrs.values()].find(f => f.identity && f.identity.callsign === 'SREG02').tofi.separationRegime);
-  await expect.poll(() => fdrRegime(a), { timeout: 3000 }).toBe('ATC');
+  const flightDataRegime = (page) => page.evaluate(() => [...efspFlightDataList.values()].find(f => f.identity && f.identity.callsign === 'SREG02').tofi.separationRegime);
+  await expect.poll(() => flightDataRegime(a), { timeout: 3000 }).toBe('ATC');
 });
 
 // ── F-307 ─────────────────────────────────────────────────────────────────

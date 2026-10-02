@@ -1,14 +1,14 @@
 'use strict';
 import { projectPos } from '../../geo.js';
-import { correlatedTrackIdForStrip, getEfspFdr, getEfspStrip } from './efsp-state.js';
+import { correlatedTrackIdForStrip, getEfspFlightData, getEfspStrip } from './efsp-state.js';
 import { CARRIER_TRANSFERS } from './efsp-nla.js';
 import {
   carrierBannerParts, carrierCaseValue, carrierDerivedFor, carrierDerivedStack, carrierHhmm, getEfspCarrier
 } from './carrier-state.js';
 import { getActingPositions, sendEfspCarrierMutation, sendEfspMutation } from './efsp-ws.js';
-// ESM-1: today efsp-panel.js's _callsignOfFdr (fallback '') silently won over this file's own copy (fallback fdrId);
+// ESM-1: today efsp-panel.js's _callsignOfFlightData (fallback '') silently won over this file's own copy (fallback fdrId);
 // the import keeps that effective behaviour (S-ARCH2 item 3, plan §6 queue item 3).
-import { _callsignOfFdr } from './efsp-panel.js';
+import { _callsignOfFlightData } from './efsp-panel.js';
 import { registerEfspMessage } from './efsp-message-registry.js';
 import { applyEfspCarrierDelta } from './carrier-state.js';
 import { renderAllOpenEfspBays } from './bay-view.js';
@@ -37,15 +37,15 @@ export const CARRIER_CAPABILITIES = {
 export const CARRIER_POSITION_IDS = Object.keys(CARRIER_CAPABILITIES);
 const CARRIER_CASES = ['I', 'II', 'III'];
 
-/** The held CV Position that has this capability, or null. Pure over `heldIds`. */
-export function carrierActingFor(capability, heldIds) {
-  for (const id of heldIds || []) {
+/** The held CV Position that has this capability, or null. Pure over `signedOnIds`. */
+export function carrierActingFor(capability, signedOnIds) {
+  for (const id of signedOnIds || []) {
     if (CARRIER_CAPABILITIES[id] && CARRIER_CAPABILITIES[id][capability]) return id;
   }
   return null;
 }
 
-function _heldCarrierIds() {
+function _signedOnCarrierIds() {
   return (typeof getActingPositions === 'function' ? getActingPositions('CARRIER') : []).filter(id => CARRIER_CAPABILITIES[id]);
 }
 
@@ -57,7 +57,7 @@ function _cel(tag, className, text) {
 }
 
 function _sendCarrier(capability, op) {
-  const acting = carrierActingFor(capability, _heldCarrierIds());
+  const acting = carrierActingFor(capability, _signedOnCarrierIds());
   if (!acting) return false;
   const view = getEfspCarrier();
   sendEfspCarrierMutation(acting, view ? view.hullId : undefined, undefined, op);
@@ -70,7 +70,7 @@ function _sendCarrier(capability, op) {
 export function renderCarrierBanner() {
   const root = typeof document !== 'undefined' ? document.getElementById('efsp-carrier-banner') : null;
   if (!root) return;
-  const held = _heldCarrierIds();
+  const held = _signedOnCarrierIds();
   const view = getEfspCarrier();
   if (held.length === 0 || !view) { root.hidden = true; root.innerHTML = ''; return; }
   root.hidden = false;
@@ -219,7 +219,7 @@ function _slotRowEl(row, caseValue, sequenced, canSequence) {
   el.appendChild(_cel('span', 'carrier-slot-index', String(row.stackIndex)));
   const entry = row.entry;
   const shown = entry || row.preview;
-  el.appendChild(_cel('span', 'carrier-slot-call', entry ? _callsignOfFdr(entry.fdrId) : '—'));
+  el.appendChild(_cel('span', 'carrier-slot-call', entry ? _callsignOfFlightData(entry.fdrId) : '—'));
   el.appendChild(_cel('span', 'carrier-slot-angels', shown.angels != null ? `A${shown.angels}` : (entry ? 'assign' : '')));
   if (sequenced) {
     el.appendChild(_cel('span', 'carrier-slot-dme', shown.marshalDme != null ? `${shown.marshalDme} DME` : ''));
@@ -261,7 +261,7 @@ export function renderCarrierStackBoard(container) {
   if (!container) return;
   let board = container.querySelector(':scope > .carrier-stack-board');
   const view = getEfspCarrier();
-  const canSequence = !!carrierActingFor('sequencesStack', _heldCarrierIds());
+  const canSequence = !!carrierActingFor('sequencesStack', _signedOnCarrierIds());
   if (!view) { if (board) board.remove(); return; }
   // Never rebuild under an input being typed in.
   if (board && board.contains(document.activeElement) && document.activeElement.tagName === 'INPUT') return;
@@ -310,7 +310,7 @@ export function renderCarrierStackBoard(container) {
   container.insertBefore(board, container.firstChild);
 }
 
-// ── Hand-over buttons ────────────────────────────────────────────────────
+// ── Handoff buttons ────────────────────────────────────────────────────
 
 /** Gives the NLA button its hand-over's identity: four trigger types, four looks (WP7A bullet 4). */
 export function carrierDecorateNlaButton(btn, strip) {
@@ -319,7 +319,7 @@ export function carrierDecorateNlaButton(btn, strip) {
   if (!t) return;
   btn.dataset.carrierTransfer = key;
   btn.dataset.carrierTrigger = t.trigger;
-  btn.classList.add('efsp-carrier-handover', `efsp-carrier-trigger-${t.trigger.toLowerCase().replace(/_/g, '-')}`);
+  btn.classList.add('efsp-carrier-handoff', `efsp-carrier-trigger-${t.trigger.toLowerCase().replace(/_/g, '-')}`);
   btn.title = btn.title || `${t.label} — ${t.trigger.replace(/_/g, ' ').toLowerCase()}`;
 }
 
@@ -329,7 +329,7 @@ export function carrierExtraNlaButtons(strip) {
   if (!getActingPositions('CARRIER').includes(strip.ownerPositionId)) return [];
   const t = CARRIER_TRANSFERS.MARSHAL_TO_PRIFLY;
   if (!t.from.includes(strip.ownerPositionId)) return [];
-  const btn = _cel('button', `efsp-sbtn efsp-nla-btn efsp-carrier-handover efsp-carrier-trigger-${t.trigger.toLowerCase().replace(/_/g, '-')}`, t.label);
+  const btn = _cel('button', `efsp-sbtn efsp-nla-btn efsp-carrier-handoff efsp-carrier-trigger-${t.trigger.toLowerCase().replace(/_/g, '-')}`, t.label);
   btn.dataset.carrierTransfer = 'MARSHAL_TO_PRIFLY';
   btn.dataset.carrierTrigger = t.trigger;
   btn.title = 'See you: the pilot has the ship visual. Hands the flight to PriFly, leaving a gap in the stack.';

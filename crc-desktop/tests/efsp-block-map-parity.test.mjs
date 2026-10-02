@@ -9,7 +9,7 @@
 // the runtime wire path, not test tooling).
 //
 // Deliberately NOT a byte-for-byte object comparison: the two sides have
-// legitimately different needs for non-fdr/non-annotation Blocks (system,
+// legitimately different needs for non-flightData/non-annotation Blocks (system,
 // flag, composite, nla) — the server only ever needs to know "is this
 // directly SetBlock-writable" (fdr/annotation, everything else routes
 // through a dedicated mechanism and returns null from resolveBlockTarget

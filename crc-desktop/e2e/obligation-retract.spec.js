@@ -18,7 +18,7 @@ const MINUTE = 60 * 1000;
 const FDR = { departureAirport: 'LTAG', destinationAirport: 'LTAG', route: 'DCT', requestedAltitude: '250' };
 
 const stripOf = (page, cs) => page.evaluate((c) => {
-  const s = getAllEfspStrips().find((x) => getEfspFdr(x.fdrId).identity.callsign === c && x.state !== 'DROPPED');
+  const s = getAllEfspStrips().find((x) => getEfspFlightData(x.fdrId).identity.callsign === c && x.state !== 'DROPPED');
   return s ? { stripId: s.stripId, rev: s.rev, state: s.state, bayId: s.bayId, ownerPositionId: s.ownerPositionId } : null;
 }, cs);
 
@@ -26,7 +26,7 @@ const stripOf = (page, cs) => page.evaluate((c) => {
 async function act(page, cs, positionId, op) {
   const before = await stripOf(page, cs);
   await page.evaluate(([c, p, o]) => {
-    const s = getAllEfspStrips().find((x) => getEfspFdr(x.fdrId).identity.callsign === c && x.state !== 'DROPPED');
+    const s = getAllEfspStrips().find((x) => getEfspFlightData(x.fdrId).identity.callsign === c && x.state !== 'DROPPED');
     sendEfspMutation(p, s, o);
   }, [cs, positionId, op]);
   await expect.poll(async () => (await stripOf(page, cs)).rev, { message: `${op.kind} landed` }).toBeGreaterThan(before.rev);
@@ -40,7 +40,7 @@ async function showStrip(page, cs) {
 }
 
 const obligationOnPage = (page, cs) => page.evaluate((c) => {
-  const s = getAllEfspStrips().find((x) => getEfspFdr(x.fdrId).identity.callsign === c && x.state !== 'DROPPED');
+  const s = getAllEfspStrips().find((x) => getEfspFlightData(x.fdrId).identity.callsign === c && x.state !== 'DROPPED');
   const o = s && getEfspObligation(s.stripId);
   return o ? o.obligationType : null;
 }, cs);

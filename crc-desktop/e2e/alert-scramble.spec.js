@@ -34,23 +34,23 @@ async function goBay(page, positionId, bayId) {
 /** One op on the Strip showing `callsign`, through the page's real sender; waits for the ack to land. */
 async function mutate(page, acting, callsign, op) {
   const before = await page.evaluate((cs) => {
-    const s = [...efspStrips.values()].find(x => efspFdrs.get(x.fdrId)?.identity?.callsign === cs && x.state !== 'DROPPED');
+    const s = [...efspStrips.values()].find(x => efspFlightDataList.get(x.fdrId)?.identity?.callsign === cs && x.state !== 'DROPPED');
     return s ? s.rev : null;
   }, callsign);
   await page.evaluate(([a, cs, o]) => {
-    const s = [...efspStrips.values()].find(x => efspFdrs.get(x.fdrId)?.identity?.callsign === cs && x.state !== 'DROPPED');
+    const s = [...efspStrips.values()].find(x => efspFlightDataList.get(x.fdrId)?.identity?.callsign === cs && x.state !== 'DROPPED');
     window.sendEfspMutation(a, s, o);
   }, [acting, callsign, op]);
   await expect.poll(() => page.evaluate((cs) => {
-    const s = [...efspStrips.values()].find(x => efspFdrs.get(x.fdrId)?.identity?.callsign === cs);
+    const s = [...efspStrips.values()].find(x => efspFlightDataList.get(x.fdrId)?.identity?.callsign === cs);
     return s ? s.rev : null;
   }, callsign)).toBeGreaterThan(before);
 }
 
-const stateOf = (page, cs) => page.evaluate((c) => [...efspStrips.values()].find(x => efspFdrs.get(x.fdrId)?.identity?.callsign === c)?.state, cs);
+const stateOf = (page, cs) => page.evaluate((c) => [...efspStrips.values()].find(x => efspFlightDataList.get(x.fdrId)?.identity?.callsign === c)?.state, cs);
 const alertOf = (page, cs) => page.evaluate((c) => {
-  const s = [...efspStrips.values()].find(x => efspFdrs.get(x.fdrId)?.identity?.callsign === c);
-  return s ? efspFdrs.get(s.fdrId).military.alertStatus : null;
+  const s = [...efspStrips.values()].find(x => efspFlightDataList.get(x.fdrId)?.identity?.callsign === c);
+  return s ? efspFlightDataList.get(s.fdrId).military.alertStatus : null;
 }, cs);
 
 async function nla(page, acting, cs) {
@@ -69,7 +69,7 @@ async function pickAlert(strip, value) {
 const bayOrder = (page, bayId) => page.evaluate((b) => [...efspStrips.values()]
   .filter(s => s.bayId === b && s.state !== 'DROPPED')
   .sort((x, y) => (x.rackId + x.orderKey < y.rackId + y.orderKey ? -1 : 1))
-  .map(s => efspFdrs.get(s.fdrId).identity.callsign), bayId);
+  .map(s => efspFlightDataList.get(s.fdrId).identity.callsign), bayId);
 const domOrder = (page) => page.locator('#efsp-bay-content .efsp-strip .efsp-block-1').allTextContents();
 
 // The Board lives for the whole run. A walk that fails while VIPER11 is SCRAMBLE would leave the
@@ -78,7 +78,7 @@ const domOrder = (page) => page.locator('#efsp-bay-content .efsp-strip .efsp-blo
 test.afterEach(async ({ page }) => {
   await page.evaluate((cs) => {
     for (const s of getAllEfspStrips()) {
-      const fdr = getEfspFdr(s.fdrId);
+      const fdr = getEfspFlightData(s.fdrId);
       if (!fdr || !cs.includes(fdr.identity.callsign) || s.state === 'DROPPED') continue;
       sendEfspMutation(s.ownerPositionId, s, { kind: 'DropStrip', reason: 'e2e cleanup' });
     }
@@ -165,7 +165,7 @@ test('alert and scramble: ALERT is quiet, SCRAMBLE lights the Board and flags gr
 
   // ── 5. VIPER11 gets airborne: the line and every flag go by themselves. ──
   for (let i = 0; i < 8 && (await stateOf(page, CS)) !== 'DEPARTED'; i++) {
-    const owner = await page.evaluate((c) => [...efspStrips.values()].find(x => efspFdrs.get(x.fdrId)?.identity?.callsign === c).ownerPositionId, CS);
+    const owner = await page.evaluate((c) => [...efspStrips.values()].find(x => efspFlightDataList.get(x.fdrId)?.identity?.callsign === c).ownerPositionId, CS);
     await nla(page, owner, CS);
   }
   expect(await stateOf(page, CS)).toBe('DEPARTED');

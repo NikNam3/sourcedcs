@@ -2,7 +2,7 @@
 import { trackRef } from '../../track-label.js';
 import { updateMap } from '../../geojson.js';
 import {
-  correlatedTrackIdForStrip, getEfspCorrelationForStrip, getEfspFdr, getEfspStrip, stripIdsForTrackId
+  correlatedTrackIdForStrip, getEfspCorrelationForStrip, getEfspFlightData, getEfspStrip, stripIdsForTrackId
 } from './efsp-state.js';
 import { getOpenEfspBayIds, getSelectedEfspStripId, selectEfspStripById } from './bay-view.js';
 
@@ -187,7 +187,7 @@ function _correlatedSentence(record) {
 }
 
 function _provisionalSentence(record, strip) {
-  const fdr = typeof getEfspFdr === 'function' && strip ? getEfspFdr(strip.fdrId) : null;
+  const fdr = typeof getEfspFlightData === 'function' && strip ? getEfspFlightData(strip.fdrId) : null;
   const assigned = fdr && fdr.identity ? fdr.identity.beaconAssigned : null;
   if (record.observedBeacon && assigned && record.observedBeacon !== assigned) {
     return `observed ${record.observedBeacon} ≠ assigned ${assigned}`;

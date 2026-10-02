@@ -7,7 +7,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  applyEfspSnapshot, applyEfspDelta, getEfspFdr, getEfspStrip, getEfspBoardSeq, _resetEfspStateForTest,
+  applyEfspSnapshot, applyEfspDelta, getEfspFlightData, getEfspStrip, getEfspBoardSeq, _resetEfspStateForTest,
 } from '../app/public/js/panels/efsp/efsp-state.js';
 
 test.beforeEach(() => _resetEfspStateForTest());
@@ -20,8 +20,8 @@ test('applyEfspDelta: fdrs.gone removes archived FDRs, and leaves the rest', () 
   // The archiver's delta: the Strip was already DROPPED, so its gone is a no-op
   // here; the ring advanced, so the seq moves.
   applyEfspDelta({ boardSeq: 5, strips: { updated: [], gone: ['s-archived'] }, fdrs: { updated: [], gone: ['f2'] }, positions: { updated: [] } });
-  assert.equal(getEfspFdr('f2'), null);
-  assert.ok(getEfspFdr('f1'));
+  assert.equal(getEfspFlightData('f2'), null);
+  assert.ok(getEfspFlightData('f1'));
   assert.ok(getEfspStrip('s1'));
   assert.equal(getEfspBoardSeq(), 5);
 });
@@ -29,5 +29,5 @@ test('applyEfspDelta: fdrs.gone removes archived FDRs, and leaves the rest', () 
 test('applyEfspDelta: a delta with no fdrs.gone (every other sender) removes nothing', () => {
   applyEfspSnapshot({ boardSeq: 1, strips: [], fdrs: [{ fdrId: 'f1' }], positions: [] });
   applyEfspDelta({ boardSeq: 2, strips: { updated: [], gone: [] }, fdrs: { updated: [] }, positions: { updated: [] } });
-  assert.ok(getEfspFdr('f1'));
+  assert.ok(getEfspFlightData('f1'));
 });

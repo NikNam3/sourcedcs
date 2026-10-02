@@ -1,9 +1,9 @@
 'use strict';
 import { isWithinDoubleTapWindow } from './efsp-nla.js';
 import {
-  conformanceAlertsForFdr, correlatedTrackIdForStrip, efspLinesWithOthers, getEfspAirspace, getEfspBays,
-  getEfspCorrelationForStrip, getEfspFdr, getEfspMarsa, getEfspObligation, getEfspRack, getEfspStrip,
-  isWithOthersBayId, marsaForStrip, otherLiveStripsForFdr, searchEfspStrips, stcaConflictsForTrack,
+  conformanceAlertsForFlightData, correlatedTrackIdForStrip, efspLinesWithOthers, getEfspAirspace, getEfspBays,
+  getEfspCorrelationForStrip, getEfspFlightData, getEfspMarsa, getEfspObligation, getEfspRack, getEfspStrip,
+  isWithOthersBayId, marsaForStrip, otherLiveStripsForFlightData, searchEfspStrips, conflictAlertsForTrack,
   surveillanceHintsForStrip
 } from './efsp-state.js';
 import { getActingPositions, sendEfspCorrelationMutation, sendEfspMarsaMutation, sendEfspMutation } from './efsp-ws.js';
@@ -539,11 +539,11 @@ export function _stripRenderSignature(strip) {
   // Which Position the controller is acting as decides which controls render.
   parts.push('act:' + (_resolveActingPositionId(strip) || ''));
 
-  const fdr = typeof getEfspFdr === 'function' ? getEfspFdr(strip.fdrId) : null;
+  const fdr = typeof getEfspFlightData === 'function' ? getEfspFlightData(strip.fdrId) : null;
   parts.push('fdr:' + (fdr ? fdr.rev : ''));
   parts.push('stereo:' + (typeof stereoRoutesCacheKey === 'function' ? stereoRoutesCacheKey() : '')); // Block 9F's options (docs/adr/0073)
 
-  const siblings = typeof otherLiveStripsForFdr === 'function' ? otherLiveStripsForFdr(strip.fdrId, strip.stripId) : [];
+  const siblings = typeof otherLiveStripsForFlightData === 'function' ? otherLiveStripsForFlightData(strip.fdrId, strip.stripId) : [];
   // Not just the count: the badge's title names each sibling's Facility,
   // Position and Role, and a sibling that moves desk changes it.
   parts.push('sib:' + siblings.map(s => `${s.stripId}/${s.facilityId || '?'}/${s.ownerPositionId}/${s.role}`).sort().join(','));
@@ -595,9 +595,9 @@ export function _stripRenderSignature(strip) {
   // Conformance and conflict alerts (docs/adr/0058). A conflict's countdown is
   // part of what the Strip says, so it rebuilds each second while one lasts —
   // only the Strips actually in a conflict.
-  const conf = typeof conformanceAlertsForFdr === 'function' ? conformanceAlertsForFdr(strip.fdrId) : [];
+  const conf = typeof conformanceAlertsForFlightData === 'function' ? conformanceAlertsForFlightData(strip.fdrId) : [];
   const trackId = typeof correlatedTrackIdForStrip === 'function' ? correlatedTrackIdForStrip(strip) : null;
-  const stca = typeof stcaConflictsForTrack === 'function' ? stcaConflictsForTrack(trackId) : [];
+  const stca = typeof conflictAlertsForTrack === 'function' ? conflictAlertsForTrack(trackId) : [];
   parts.push('alr:' + conf.map(a => `${a.kind}/${a.assigned}/${a.actual ?? ''}/${a.deviationFt ?? ''}/${a.fpm ?? ''}`).join(',')
     + ';' + stca.map(c => `${c.id}/${c.timeToCpaSec}/${c.minNm}/${c.vertFt}`).join(','));
   // Field state (docs/adr/0068): the RWY/HOOK chips read the Facility's runway record, not the Strip.

@@ -53,8 +53,8 @@ function record({ status = 'OPEN', activeRunway = '05', suspension = null, closu
 
 const departure = (extra = {}) => ({ stripId: 's-dep', fdrId: 'f-dep', facilityId: 'INCIRLIK', role: 'DEPARTURE', state: 'TAXI', bayId: 'gnd-taxi-out', rackId: 'main', ...extra });
 const arrival = (extra = {}) => ({ stripId: 's-arr', fdrId: 'f-arr', facilityId: 'INCIRLIK', role: 'ARRIVAL', state: 'HANDED_TO_TOWER', bayId: 'twr-arrivals', rackId: 'main', ...extra });
-const fdrDep = (rwy) => ({ fdrId: 'f-dep', filed: { departureRunway: rwy }, assigned: {}, military: {} });
-const fdrArr = (rwy, hook = false) => ({ fdrId: 'f-arr', filed: {}, assigned: { landingRunway: rwy }, military: { hookRequired: hook } });
+const flightDataDep = (rwy) => ({ fdrId: 'f-dep', filed: { departureRunway: rwy }, assigned: {}, military: {} });
+const flightDataArr = (rwy, hook = false) => ({ fdrId: 'f-arr', filed: {}, assigned: { landingRunway: rwy }, military: { hookRequired: hook } });
 const lookups = (rec, fdr) => ({ fieldStateFor: (id) => (rec && rec.facilityId === id ? rec : null), fdrFor: () => fdr });
 
 // ── Step 1: client state ────────────────────────────────────────────────────
@@ -93,16 +93,16 @@ test('a Facility with no field state is null, and the test reset clears everythi
 // ── Step 2: drift against crc-sync ──────────────────────────────────────────
 
 const RESOLVER_CASES = [
-  ['rack wins over the FDR', departure({ bayId: 'twr-runway-queue', rackId: 'rwy-23', state: 'RUNWAY_QUEUE' }), fdrDep('05'), {}],
-  ['the drag target wins over the rack', departure({ bayId: 'twr-runway-queue', rackId: 'rwy-23' }), fdrDep('23'), { targetRackId: 'rwy-05' }],
-  ['8A when there is no runway rack', departure(), fdrDep('RWY 5'), {}],
-  ['8B for an arrival', arrival(), fdrArr('23'), {}],
-  ['a whole-pavement designator in 8A', departure(), fdrDep('05/23'), {}],
-  ['the active end when nothing else says', departure(), fdrDep(''), {}],
-  ['garbage 8A falls back to the active end', departure(), fdrDep('banana'), {}],
-  ['an 8A that names no configured runway falls back', departure(), fdrDep('17'), {}],
-  ['OVERFLIGHT never resolves', departure({ role: 'OVERFLIGHT' }), fdrDep('05'), {}],
-  ['MISSION never resolves', departure({ role: 'MISSION' }), fdrDep('05'), {}],
+  ['rack wins over the FDR', departure({ bayId: 'twr-runway-queue', rackId: 'rwy-23', state: 'RUNWAY_QUEUE' }), flightDataDep('05'), {}],
+  ['the drag target wins over the rack', departure({ bayId: 'twr-runway-queue', rackId: 'rwy-23' }), flightDataDep('23'), { targetRackId: 'rwy-05' }],
+  ['8A when there is no runway rack', departure(), flightDataDep('RWY 5'), {}],
+  ['8B for an arrival', arrival(), flightDataArr('23'), {}],
+  ['a whole-pavement designator in 8A', departure(), flightDataDep('05/23'), {}],
+  ['the active end when nothing else says', departure(), flightDataDep(''), {}],
+  ['garbage 8A falls back to the active end', departure(), flightDataDep('banana'), {}],
+  ['an 8A that names no configured runway falls back', departure(), flightDataDep('17'), {}],
+  ['OVERFLIGHT never resolves', departure({ role: 'OVERFLIGHT' }), flightDataDep('05'), {}],
+  ['MISSION never resolves', departure({ role: 'MISSION' }), flightDataDep('05'), {}],
   ['no FDR, no rack: the active end', arrival(), null, {}],
 ];
 
@@ -292,21 +292,21 @@ const gear = (state, end = '05', type = 'BAK_12') => ({ end, position: 'APPROACH
 const rwyWith = (g) => record({ gear: g }).runways[0];
 
 test('gearMismatchFor: no hook -> null; no runway -> null; no inventory -> null (H57: fires only when gear is configured)', () => {
-  assert.equal(rules.gearMismatchFor(fdrArr('05', false), rwyWith([gear('DOWN')])), null);
-  assert.equal(rules.gearMismatchFor(fdrArr('05', true), null), null);
-  assert.equal(rules.gearMismatchFor(fdrArr('05', true), rwyWith([])), null);
+  assert.equal(rules.gearMismatchFor(flightDataArr('05', false), rwyWith([gear('DOWN')])), null);
+  assert.equal(rules.gearMismatchFor(flightDataArr('05', true), null), null);
+  assert.equal(rules.gearMismatchFor(flightDataArr('05', true), rwyWith([])), null);
   assert.equal(rules.gearMismatchFor(null, rwyWith([gear('DOWN')])), null);
 });
 
 test('gearMismatchFor: all gear DOWN -> HOOK, naming the runway and every gear; one UP anywhere on the pavement -> null', () => {
-  const m = rules.gearMismatchFor(fdrArr('05', true), rwyWith([gear('DOWN'), gear('OUT_OF_SERVICE', '23', 'E_5')]));
+  const m = rules.gearMismatchFor(flightDataArr('05', true), rwyWith([gear('DOWN'), gear('OUT_OF_SERVICE', '23', 'E_5')]));
   assert.equal(m.text, 'HOOK');
   assert.equal(m.reason, 'Hook required: no arresting gear is rigged on runway 05/23 (SOURCE practice). BAK-12 05 end DOWN, E-5 23 end OUT OF SERVICE.');
-  assert.equal(rules.gearMismatchFor(fdrArr('05', true), rwyWith([gear('DOWN'), gear('UP', '23')])), null);
+  assert.equal(rules.gearMismatchFor(flightDataArr('05', true), rwyWith([gear('DOWN'), gear('UP', '23')])), null);
 });
 
 test('gearMismatchFor: OUT_OF_SERVICE is not usable', () => {
-  assert.ok(rules.gearMismatchFor(fdrArr('05', true), rwyWith([gear('OUT_OF_SERVICE')])));
+  assert.ok(rules.gearMismatchFor(flightDataArr('05', true), rwyWith([gear('OUT_OF_SERVICE')])));
 });
 
 // ── Step 2: fieldStateAlertsFor ─────────────────────────────────────────────
@@ -314,62 +314,62 @@ test('gearMismatchFor: OUT_OF_SERVICE is not usable', () => {
 const alerts = (strip, rec, fdr) => rules.fieldStateAlertsFor(strip, lookups(rec, fdr));
 
 test('a quiet Strip on an OPEN active runway gets nothing (ADR 0058: nothing for normal)', () => {
-  assert.deepEqual(alerts(departure(), record(), fdrDep('05')), []);
-  assert.deepEqual(alerts(arrival(), record(), fdrArr('05')), []);
+  assert.deepEqual(alerts(departure(), record(), flightDataDep('05')), []);
+  assert.deepEqual(alerts(arrival(), record(), flightDataArr('05')), []);
 });
 
 test('RWY SUSP / INSP / CLSD on every runway-using state (Q5 (a)), naming the resolved end and what clears it', () => {
   const works = record({ status: 'SUSPENDED_WORKS', suspension: { kind: 'WORKS' } });
   for (const st of ['CLEARED', 'HELD', 'PUSHBACK', 'TAXI', 'RUNWAY_QUEUE', 'LUAW']) {
-    const [a] = alerts(departure({ state: st }), works, fdrDep('05'));
+    const [a] = alerts(departure({ state: st }), works, flightDataDep('05'));
     assert.deepEqual({ key: a.key, tone: a.tone, text: a.text }, { key: 'rwy', tone: 'bad', text: 'RWY 05 SUSP' }, st);
     assert.equal(a.reason, 'Runway 05/23 is suspended for works; it reopens when OPS completes the works and signs off the inspection.');
   }
-  const [insp] = alerts(departure(), record({ status: 'SUSPENDED_INSPECTION', suspension: { kind: 'WORKS' } }), fdrDep('23'));
+  const [insp] = alerts(departure(), record({ status: 'SUSPENDED_INSPECTION', suspension: { kind: 'WORKS' } }), flightDataDep('23'));
   assert.equal(insp.text, 'RWY 23 INSP');
-  const [clsd] = alerts(arrival({ state: 'INBOUND' }), record({ status: 'CLOSED' }), fdrArr('05'));
+  const [clsd] = alerts(arrival({ state: 'INBOUND' }), record({ status: 'CLOSED' }), flightDataArr('05'));
   assert.equal(clsd.text, 'RWY 05 CLSD');
   assert.equal(clsd.reason, 'Runway 05/23 is closed; it reopens when TWR opens it.');
-  const [fin] = alerts(arrival({ state: 'FINAL' }), record({ status: 'CLOSED' }), fdrArr('05'));
+  const [fin] = alerts(arrival({ state: 'FINAL' }), record({ status: 'CLOSED' }), flightDataArr('05'));
   assert.match(fin.reason, /Landing is an observation and is not held\.$/);
 });
 
 test('no RWY chip for states that no longer use the runway, OVERFLIGHT/MISSION, DROPPED, or a Facility with no record', () => {
   const closed = record({ status: 'CLOSED' });
-  for (const st of ['PROPOSED', 'PENDING_CLEARANCE', 'DEPARTED', 'HANDED_OFF']) assert.deepEqual(alerts(departure({ state: st }), closed, fdrDep('05')), [], st);
-  for (const st of ['LANDED', 'TAXI_IN']) assert.deepEqual(alerts(arrival({ state: st }), closed, fdrArr('05')), [], st);
-  assert.deepEqual(alerts(departure({ state: 'DROPPED' }), closed, fdrDep('05')), []);
-  assert.deepEqual(alerts(departure({ role: 'OVERFLIGHT' }), closed, fdrDep('05')), []);
-  assert.deepEqual(alerts(departure({ facilityId: 'CENTER' }), closed, fdrDep('05')), []);
-  assert.deepEqual(alerts(departure(), record({ status: 'CLOSED', activeRunway: null }), fdrDep('banana')), [], 'unresolvable fails open');
+  for (const st of ['PROPOSED', 'PENDING_CLEARANCE', 'DEPARTED', 'HANDED_OFF']) assert.deepEqual(alerts(departure({ state: st }), closed, flightDataDep('05')), [], st);
+  for (const st of ['LANDED', 'TAXI_IN']) assert.deepEqual(alerts(arrival({ state: st }), closed, flightDataArr('05')), [], st);
+  assert.deepEqual(alerts(departure({ state: 'DROPPED' }), closed, flightDataDep('05')), []);
+  assert.deepEqual(alerts(departure({ role: 'OVERFLIGHT' }), closed, flightDataDep('05')), []);
+  assert.deepEqual(alerts(departure({ facilityId: 'CENTER' }), closed, flightDataDep('05')), []);
+  assert.deepEqual(alerts(departure(), record({ status: 'CLOSED', activeRunway: null }), flightDataDep('banana')), [], 'unresolvable fails open');
 });
 
 test('the RWY reason line is suppressed (the chip is not) when the server\'s NLA inhibit already names the runway', () => {
   const works = record({ status: 'SUSPENDED_WORKS', suspension: { kind: 'WORKS' } });
   const strip = departure({ state: 'RUNWAY_QUEUE', bayId: 'twr-runway-queue', rackId: 'rwy-05', nla: { inhibited: 'runway 05/23 suspended — works in progress' } });
-  const [a] = alerts(strip, works, fdrDep('05'));
+  const [a] = alerts(strip, works, flightDataDep('05'));
   assert.equal(a.text, 'RWY 05 SUSP');
   assert.equal(a.reason, null);
 });
 
 test('the inactive-runway advisory (Q30): attn chip on an OPEN runway when queued for the other end', () => {
   const strip = departure({ state: 'RUNWAY_QUEUE', bayId: 'twr-runway-queue', rackId: 'rwy-05' });
-  const [a] = alerts(strip, record({ activeRunway: '23' }), fdrDep('05'));
+  const [a] = alerts(strip, record({ activeRunway: '23' }), flightDataDep('05'));
   assert.deepEqual({ key: a.key, tone: a.tone, text: a.text }, { key: 'rwy', tone: 'attn', text: 'RWY 05 INACT' });
   assert.match(a.reason, /^Queued for inactive runway 05; the active runway is 23\./);
-  assert.deepEqual(alerts(strip, record({ activeRunway: '05' }), fdrDep('05')), []);
-  assert.deepEqual(alerts(strip, record({ activeRunway: null }), fdrDep('05')), []);
+  assert.deepEqual(alerts(strip, record({ activeRunway: '05' }), flightDataDep('05')), []);
+  assert.deepEqual(alerts(strip, record({ activeRunway: null }), flightDataDep('05')), []);
 });
 
 test('HOOK on a hook-required ARRIVAL inbound, handed to tower or on final when the runway\'s gear is all down', () => {
   const rec = record({ gear: [gear('DOWN')] });
   for (const st of ['INBOUND', 'HANDED_TO_TOWER', 'FINAL']) {
-    const out = alerts(arrival({ state: st }), rec, fdrArr('05', true));
+    const out = alerts(arrival({ state: st }), rec, flightDataArr('05', true));
     assert.deepEqual(out.map(a => [a.key, a.text, a.tone]), [['gear', 'HOOK', 'bad']], st);
   }
-  assert.deepEqual(alerts(arrival({ state: 'LANDED' }), rec, fdrArr('05', true)), []);
-  assert.deepEqual(alerts(departure(), rec, { ...fdrDep('05'), military: { hookRequired: true } }), [], 'rule 4 is about arrivals');
-  assert.deepEqual(alerts(arrival(), record(), fdrArr('05', true)), [], 'the shipped empty inventory never fires (H57)');
+  assert.deepEqual(alerts(arrival({ state: 'LANDED' }), rec, flightDataArr('05', true)), []);
+  assert.deepEqual(alerts(departure(), rec, { ...flightDataDep('05'), military: { hookRequired: true } }), [], 'rule 4 is about arrivals');
+  assert.deepEqual(alerts(arrival(), record(), flightDataArr('05', true)), [], 'the shipped empty inventory never fires (H57)');
 });
 
 // ── Step 3: the dock panel, rendered for real against the DOM stub ─────────
@@ -520,7 +520,7 @@ async function renderStripWithField({ strip, fdr, records }) {
   return bay._buildStripEl(strip);
 }
 
-const STRIP_FDR = (extra = {}) => ({
+const STRIP_FLIGHT_DATA = (extra = {}) => ({
   fdrId: 'f1', rev: 1, provenance: {},
   identity: { callsign: 'VIPER1', beaconAssigned: '0001', trackDegradationFlag: 'NONE' },
   filed: {}, assigned: {}, tofi: { ifrActive: true }, airspace: {}, comms: {},
@@ -540,7 +540,7 @@ const reasonLines = (el) => descendants(el).filter(n => /\befsp-strip-reason\b/.
 
 test('a Strip taxiing for a suspended runway shows the RWY chip first in the row, and its reason line', async () => {
   const el = await renderStripWithField({
-    strip: fieldStrip(), fdr: STRIP_FDR({ filed: { departureRunway: '05' } }),
+    strip: fieldStrip(), fdr: STRIP_FLIGHT_DATA({ filed: { departureRunway: '05' } }),
     records: [record({ status: 'SUSPENDED_WORKS', suspension: { kind: 'WORKS' } })],
   });
   const [chip] = chips(el);
@@ -553,7 +553,7 @@ test('a Strip taxiing for a suspended runway shows the RWY chip first in the row
 test('HOOK on a hook-required arrival handed to tower onto a runway whose only gear is down', async () => {
   const el = await renderStripWithField({
     strip: fieldStrip({ role: 'ARRIVAL', state: 'HANDED_TO_TOWER', ownerPositionId: 'TWR', bayId: 'twr-arrivals' }),
-    fdr: STRIP_FDR({ assigned: { landingRunway: '05' }, military: { hookRequired: true } }),
+    fdr: STRIP_FLIGHT_DATA({ assigned: { landingRunway: '05' }, military: { hookRequired: true } }),
     records: [record({ gear: [gear('DOWN')] })],
   });
   assert.deepEqual(chips(el).map(c => [c.dataset.slot, c.textContent]), [['gear', 'HOOK']]);
@@ -561,7 +561,7 @@ test('HOOK on a hook-required arrival handed to tower onto a runway whose only g
 });
 
 test('a quiet Strip on an open runway has no RWY or HOOK chip (ADR 0058: nothing for normal)', async () => {
-  const el = await renderStripWithField({ strip: fieldStrip(), fdr: STRIP_FDR({ filed: { departureRunway: '05' } }), records: [record()] });
+  const el = await renderStripWithField({ strip: fieldStrip(), fdr: STRIP_FLIGHT_DATA({ filed: { departureRunway: '05' } }), records: [record()] });
   assert.deepEqual(chips(el), []);
   assert.deepEqual(reasonLines(el), []);
 });
@@ -570,7 +570,7 @@ test('the server\'s field-state NLA inhibit still renders exactly one reason lin
   const inhibited = 'runway 05/23 suspended — works in progress';
   const el = await renderStripWithField({
     strip: fieldStrip({ state: 'RUNWAY_QUEUE', ownerPositionId: 'TWR', bayId: 'twr-runway-queue', rackId: 'rwy-05', nla: { inhibited, reason: 'RUNWAY' } }),
-    fdr: STRIP_FDR(),
+    fdr: STRIP_FLIGHT_DATA(),
     records: [record({ status: 'SUSPENDED_WORKS', suspension: { kind: 'WORKS' } })],
   });
   assert.deepEqual(chips(el).map(c => c.textContent), ['RWY 05 SUSP']);
@@ -584,7 +584,7 @@ test('the server\'s field-state NLA inhibit still renders exactly one reason lin
 test('fieldStateSignatureFor changes when the runway does, so bay-view.js rebuilds the Strip (S-L1b2)', () => {
   state._resetEfspStateForTest();
   const strip = departure();
-  state.applyEfspSnapshot({ strips: [strip], fdrs: [fdrDep('05')], fieldStates: [record()] });
+  state.applyEfspSnapshot({ strips: [strip], fdrs: [flightDataDep('05')], fieldStates: [record()] });
   const open = rules.fieldStateSignatureFor(strip);
   state.applyEfspFieldStateDelta({ fieldStates: { updated: [record({ status: 'SUSPENDED_WORKS', suspension: { kind: 'WORKS' } })] } });
   const works = rules.fieldStateSignatureFor(strip);

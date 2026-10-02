@@ -52,7 +52,7 @@ test('S-L15: Alt+click offsets a Strip and Ctrl+click steps its highlight, one i
   const callsign = cs('GST');
   const strip = await seedStrip(page, { callsign });
   try {
-    const fields = () => stripByCallsign(page, callsign).locator('.efsp-strip-tab-role'); // an inert part of the Strip
+    const fields = () => stripByCallsign(page, callsign).locator('.efsp-strip-tab-type'); // an inert part of the Strip
     await fields().click({ modifiers: ['Alt'] });
     await expect(stripByCallsign(page, callsign)).toHaveClass(/efsp-strip-offset/);
     await fields().click({ modifiers: ['Alt'] });
@@ -113,11 +113,11 @@ test('U8: TOFI Exit becomes CTR\'s primary action once the mission line goes OFF
   const tac = await controller(browser, { held: ['TAC_C2'], facilityId: 'TACTICAL', controller: 'uia-tac' });
   const callsign = cs('EXT');
   const act = (page, pos, role, op) => page.evaluate(([p, c, r, o]) => {
-    const s = getAllEfspStrips().find(x => x.state !== 'DROPPED' && x.role === r && getEfspFdr(x.fdrId).identity.callsign === c);
+    const s = getAllEfspStrips().find(x => x.state !== 'DROPPED' && x.role === r && getEfspFlightData(x.fdrId).identity.callsign === c);
     window.sendEfspMutation(p, getEfspStrip(s.stripId), o);
   }, [pos, callsign, role, op]);
   const state = (page, role) => page.evaluate(([c, r]) => {
-    const s = getAllEfspStrips().find(x => x.state !== 'DROPPED' && x.role === r && getEfspFdr(x.fdrId).identity.callsign === c);
+    const s = getAllEfspStrips().find(x => x.state !== 'DROPPED' && x.role === r && getEfspFlightData(x.fdrId).identity.callsign === c);
     return s ? s.state : null;
   }, [callsign, role]);
   try {
@@ -143,7 +143,7 @@ test('U8: TOFI Exit becomes CTR\'s primary action once the mission line goes OFF
     await expect(exit).toHaveText('TOFI Exit');
     await exit.click();
     await expect.poll(() => ctr.evaluate((c) => {
-      const s = getAllEfspStrips().find(x => x.role === 'OVERFLIGHT' && x.state !== 'DROPPED' && getEfspFdr(x.fdrId).identity.callsign === c);
+      const s = getAllEfspStrips().find(x => x.role === 'OVERFLIGHT' && x.state !== 'DROPPED' && getEfspFlightData(x.fdrId).identity.callsign === c);
       return s && s.tofiCoordination && s.tofiCoordination.direction + ':' + s.tofiCoordination.state;
     }, callsign)).toBe('EXIT:PROPOSED');
   } finally {
@@ -159,13 +159,13 @@ test('S-L23 finding: a TAC_C2-only controller sees the line AIC holds, and a JTA
   const callsign = cs('WTH');
   try {
     await tac.evaluate((c) => window.sendEfspCreateStrip('TAC_C2', { kind: 'CreateStrip', bayId: 'tac-c2-tasked', rackId: 'main', role: 'MISSION', fdr: { callsign: c } }, 'TACTICAL'), callsign);
-    const line = (page) => page.evaluate((c) => getAllEfspStrips().find(x => x.state !== 'DROPPED' && getEfspFdr(x.fdrId).identity.callsign === c), callsign);
+    const line = (page) => page.evaluate((c) => getAllEfspStrips().find(x => x.state !== 'DROPPED' && getEfspFlightData(x.fdrId).identity.callsign === c), callsign);
     await expect.poll(() => line(tac)).not.toBeNull();
     for (const to of ['AIRBORNE', 'ON_STATION']) {
-      await tac.evaluate(([c, t]) => { const s = getAllEfspStrips().find(x => x.state !== 'DROPPED' && getEfspFdr(x.fdrId).identity.callsign === c); window.sendEfspMutation('TAC_C2', getEfspStrip(s.stripId), { kind: 'SetState', toState: t }); }, [callsign, to]);
+      await tac.evaluate(([c, t]) => { const s = getAllEfspStrips().find(x => x.state !== 'DROPPED' && getEfspFlightData(x.fdrId).identity.callsign === c); window.sendEfspMutation('TAC_C2', getEfspStrip(s.stripId), { kind: 'SetState', toState: t }); }, [callsign, to]);
       await expect.poll(async () => (await line(tac)).state).toBe(to);
     }
-    await tac.evaluate((c) => { const s = getAllEfspStrips().find(x => x.state !== 'DROPPED' && getEfspFdr(x.fdrId).identity.callsign === c); window.sendEfspMutation('TAC_C2', getEfspStrip(s.stripId), { kind: 'TransferStrip', toPositionId: 'AIC', bayId: 'aic-on-station', rackId: 'main' }); }, callsign);
+    await tac.evaluate((c) => { const s = getAllEfspStrips().find(x => x.state !== 'DROPPED' && getEfspFlightData(x.fdrId).identity.callsign === c); window.sendEfspMutation('TAC_C2', getEfspStrip(s.stripId), { kind: 'TransferStrip', toPositionId: 'AIC', bayId: 'aic-on-station', rackId: 'main' }); }, callsign);
     await expect.poll(async () => (await line(tac)).ownerPositionId).toBe('AIC');
     const withTab = tac.locator('#efsp-bay-tabs .efsp-bay-tab', { hasText: 'with AIC/JTAC' });
     await expect(withTab, 'TAC_C2 has a tab for lines held below it').toBeVisible();

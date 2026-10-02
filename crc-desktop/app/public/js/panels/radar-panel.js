@@ -3,7 +3,7 @@ import { PANEL_TITLES, isDockPanelOpen, isPanelPinned, setPanelPinned, toggleDoc
 import { hideLosProfile, showLosProfile } from './los-panel.js';
 import { getAllEfspPositions } from './efsp/efsp-state.js';
 import { getActingPositions, sendEfspSetPositions } from './efsp/efsp-ws.js';
-import { coverageHeldPositions, getActiveRadars } from '../app.js';
+import { coverageSignedOnPositions, getActiveRadars } from '../app.js';
 
 // ── Coverage panel: the radars this controller is looking through ─────────
 //
@@ -56,9 +56,9 @@ export function renderCoverageList() {
   if (radars.length === 0) {
     const $empty = document.createElement('div');
     $empty.className = 'radar-empty';
-    $empty.textContent = coverageHeldPositions.length === 0
+    $empty.textContent = coverageSignedOnPositions.length === 0
       ? 'No radar coverage — select a Position under ACTING AS below.'
-      : `No radar coverage. ${coverageHeldPositions.map(p => p.positionId).join(', ')} ${coverageHeldPositions.length === 1 ? 'works' : 'work'} no scope.`;
+      : `No radar coverage. ${coverageSignedOnPositions.map(p => p.positionId).join(', ')} ${coverageSignedOnPositions.length === 1 ? 'works' : 'work'} no scope.`;
     $list.appendChild($empty);
     return;
   }

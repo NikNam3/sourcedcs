@@ -17,8 +17,8 @@ test.describe.configure({ timeout: 90000 });
 const SHOTS = path.join(__dirname, '..', '..', 'docs', 'wip', 'L16');
 
 const fdrOf = (page, callsign) => page.evaluate((cs) => {
-  const s = [...efspStrips.values()].find(x => (efspFdrs.get(x.fdrId) || {}).identity?.callsign === cs);
-  return s ? efspFdrs.get(s.fdrId) : null;
+  const s = [...efspStrips.values()].find(x => (efspFlightDataList.get(x.fdrId) || {}).identity?.callsign === cs);
+  return s ? efspFlightDataList.get(s.fdrId) : null;
 }, callsign);
 
 async function pick(strip, page, value) {

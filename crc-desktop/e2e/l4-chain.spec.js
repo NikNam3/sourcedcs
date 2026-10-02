@@ -19,17 +19,17 @@ const { openPanel, seedStrip, stripByCallsign } = require('./helpers/app');
 const FDR = { route: 'DCT', requestedAltitude: 'FL250', departureAirport: 'LTAG', destinationAirport: 'LTAF' };
 const ALL = ['OPS', 'CD', 'GND', 'TWR', 'APP'];
 
-const stripOf = (cs) => getAllEfspStrips().find((x) => getEfspFdr(x.fdrId).identity.callsign === cs);
+const stripOf = (cs) => getAllEfspStrips().find((x) => getEfspFlightData(x.fdrId).identity.callsign === cs);
 const info = (page, cs) => page.evaluate((cs) => {
-  const s = getAllEfspStrips().find((x) => getEfspFdr(x.fdrId).identity.callsign === cs);
+  const s = getAllEfspStrips().find((x) => getEfspFlightData(x.fdrId).identity.callsign === cs);
   return s && { owner: s.ownerPositionId, bay: s.bayId, state: s.state };
 }, cs);
-const allStates = (page) => page.evaluate(() => Object.fromEntries(getAllEfspStrips().map((s) => [getEfspFdr(s.fdrId).identity.callsign, s.state])));
+const allStates = (page) => page.evaluate(() => Object.fromEntries(getAllEfspStrips().map((s) => [getEfspFlightData(s.fdrId).identity.callsign, s.state])));
 
 async function advance(page, cs, n) {
   for (let i = 0; i < n; i++) {
     const before = (await info(page, cs)).state;
-    await page.evaluate((cs) => _invokeNla(getAllEfspStrips().find((x) => getEfspFdr(x.fdrId).identity.callsign === cs)), cs);
+    await page.evaluate((cs) => _invokeNla(getAllEfspStrips().find((x) => getEfspFlightData(x.fdrId).identity.callsign === cs)), cs);
     await expect.poll(async () => (await info(page, cs)).state, {
       timeout: 3000,
       message: `setup: ${cs} stuck at ${before}: ${await page.locator('#efsp-mutation-error').textContent()}`,

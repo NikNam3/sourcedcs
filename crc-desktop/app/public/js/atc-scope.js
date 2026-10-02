@@ -4,7 +4,7 @@ import { atcBlockLines, atcEmergencyTag } from './track-label.js';
 import { updateMap } from './geojson.js';
 import { applyAtcBackground } from './map-setup.js';
 import {
-  conformanceAlertsForFdr, getEfspFdr, getEfspPositionLetter, getEfspStrip, stcaConflictsForTrack,
+  conformanceAlertsForFlightData, getEfspFlightData, getEfspPositionLetter, getEfspStrip, conflictAlertsForTrack,
   stripIdsForTrackId
 } from './panels/efsp/efsp-state.js';
 import { getActingPositions, sendEfspMutation } from './panels/efsp/efsp-ws.js';
@@ -374,9 +374,9 @@ export function atcDisplay(id, t, now = Date.now()) {
     if (speedMs > 0) [lat, lon] = projectPos(t.lat, t.lon, heading, speedMs * (sinceReturn / 1000));
   }
 
-  const conflicts = typeof stcaConflictsForTrack === 'function' ? stcaConflictsForTrack(id).map(c => c.id) : [];
-  const fdr = strips.length && typeof getEfspFdr === 'function' ? getEfspFdr(strips[0].fdrId) : null;
-  const conform = fdr && typeof conformanceAlertsForFdr === 'function' ? atcConformTag(conformanceAlertsForFdr(fdr.fdrId)) : null;
+  const conflicts = typeof conflictAlertsForTrack === 'function' ? conflictAlertsForTrack(id).map(c => c.id) : [];
+  const fdr = strips.length && typeof getEfspFlightData === 'function' ? getEfspFlightData(strips[0].fdrId) : null;
+  const conform = fdr && typeof conformanceAlertsForFlightData === 'function' ? atcConformTag(conformanceAlertsForFlightData(fdr.fdrId)) : null;
   const view = atcView(t, rel, { palette, now, conflicts, conform, coast });
 
   const speedKt = typeof kinematics === 'function' ? kinematics(hist).speedKt : 0;
@@ -398,7 +398,7 @@ export function atcTargetClick(id, now = Date.now()) {
   if (!t) return 'NONE';
   const rel = atcNoteOwnership(id, atcRelation(t, _stripsFor(id), _actingSet(), _letterOf), now);
   return atcApplyClick(t, rel, now, {
-    conflicts: typeof stcaConflictsForTrack === 'function' ? stcaConflictsForTrack(id).map(c => c.id) : [],
+    conflicts: typeof conflictAlertsForTrack === 'function' ? conflictAlertsForTrack(id).map(c => c.id) : [],
     accept: (strip) => {
       if (typeof sendEfspMutation !== 'function') return;
       sendEfspMutation(strip.ownerPositionId, strip, { kind: strip.coordination.primitive, action: 'ACCEPT' });

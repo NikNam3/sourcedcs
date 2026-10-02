@@ -18,7 +18,7 @@
 // which arrive whole on deltas — nothing is stored (the WP6 plan's rule-4
 // argument), so a 3G change re-renders the Strip with no new wiring.
 
-import { getEfspFdr, getEfspFieldState } from './efsp-state.js';
+import { getEfspFlightData, getEfspFieldState } from './efsp-state.js';
 
 function _ordNormalizeEnd(text) {
   if (typeof text !== 'string' && typeof text !== 'number') return null;
@@ -103,7 +103,7 @@ export const ORDNANCE_NO_FIELD_STATE_REASON = 'Hung ordnance. The hot cargo pad 
  */
 export function ordnanceAlertsFor(strip) {
   if (!strip || (strip.role !== 'ARRIVAL' && strip.role !== 'DEPARTURE') || strip.state === 'DROPPED') return [];
-  const fdr = typeof getEfspFdr === 'function' ? getEfspFdr(strip.fdrId) : null;
+  const fdr = typeof getEfspFlightData === 'function' ? getEfspFlightData(strip.fdrId) : null;
   if (!fdr || !fdr.military || fdr.military.ordnanceState !== 'HUNG') return [];
   const fieldState = typeof getEfspFieldState === 'function' ? getEfspFieldState(strip.facilityId) : null;
   const advisory = fieldState ? hungOrdnanceAdvisoryFor(strip, fdr, fieldState) : null;

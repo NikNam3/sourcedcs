@@ -22,8 +22,8 @@
 
 import { missionNow } from '../topbar.js';
 import {
-  conformanceAlertsForFdr, correlatedTrackIdForStrip, getEfspAirspace, getEfspCorrelationForStrip, getEfspFdr,
-  getEfspStrip, marsaForStrip, otherLiveStripsForFdr, stcaConflictsForTrack, surveillanceHintsForStrip
+  conformanceAlertsForFlightData, correlatedTrackIdForStrip, getEfspAirspace, getEfspCorrelationForStrip, getEfspFlightData,
+  getEfspStrip, marsaForStrip, otherLiveStripsForFlightData, conflictAlertsForTrack, surveillanceHintsForStrip
 } from './efsp-state.js';
 import { clearEfspArrival, consumeEfspArrivalFlash, efspArrivalFor } from './efsp-arrivals.js';
 import { blockLabelFor, blockTitleFor } from './strip-template.js';
@@ -56,7 +56,7 @@ import { arJoinFor, atoAlertsFor, isArHighlighted } from './ato-strip.js';
 import { fieldStateAlertsFor } from './runway-status-rules.js';
 import { settings } from '../../app.js';
 
-export const ROLE_ABBR = { DEPARTURE: 'DEP', ARRIVAL: 'ARR', OVERFLIGHT: 'OVF', MISSION: 'MSN', MARSHAL: 'MAR', FINAL: 'FNL', PATTERN: 'PAT' };
+export const STRIP_TYPE_ABBR = { DEPARTURE: 'DEP', ARRIVAL: 'ARR', OVERFLIGHT: 'OVF', MISSION: 'MSN', MARSHAL: 'MAR', FINAL: 'FNL', PATTERN: 'PAT' };
 
 function _stripEl(tag, className, text) {
   const node = document.createElement(tag);
@@ -285,7 +285,7 @@ function _marsaExchange(strip) {
   const relation = marsaForStrip(strip);
   if (!relation || relation.state !== 'ACTIVE' || relation.rendezvousAt) return null;
   const others = relation.participants.filter(id => id !== strip.fdrId).map((fdrId) => {
-    const fdr = typeof getEfspFdr === 'function' ? getEfspFdr(fdrId) : null;
+    const fdr = typeof getEfspFlightData === 'function' ? getEfspFlightData(fdrId) : null;
     return (fdr && fdr.identity && fdr.identity.callsign) || fdrId;
   });
   const row = _exchangeRow({ kind: 'marsa', title: `declared by ${relation.declaringCallsign}` });
@@ -385,8 +385,8 @@ function _buildLifeBlock(strip) {
 
 function _buildStripTab(strip, arrival) {
   const tab = _stripEl('div', 'efsp-strip-tab');
-  tab.appendChild(_stripEl('div', 'efsp-strip-tab-role',
-    `${ROLE_ABBR[strip.role] || strip.role} · ${String(strip.state).replace(/_/g, ' ')}`));
+  tab.appendChild(_stripEl('div', 'efsp-strip-tab-type',
+    `${STRIP_TYPE_ABBR[strip.role] || strip.role} · ${String(strip.state).replace(/_/g, ' ')}`));
   // Just arrived from another controller (docs/adr/0057): who from, in amber,
   // until the controller touches the Strip or 30 s after they first saw it.
   if (arrival) tab.appendChild(_stripEl('div', 'efsp-strip-from', `from ${arrival.from}`));
@@ -402,12 +402,12 @@ function _buildStripTab(strip, arrival) {
 
 function _buildStripFields(strip) {
   const grid = _stripEl('div', 'efsp-strip-fields');
-  for (const id of compactBlocksFor(strip.role, strip.ownerPositionId, getEfspFdr(strip.fdrId))) {
+  for (const id of compactBlocksFor(strip.role, strip.ownerPositionId, getEfspFlightData(strip.fdrId))) {
     const span = fieldSpanFor(id);
     const chip = _stripEl('span', `efsp-block-chip efsp-field${span > 1 ? ' efsp-field-w' + span : ''}`);
     const label = blockLabelFor(id, strip.role);
     const labelEl = _stripEl('span', 'efsp-block-label', label || '');
-    const title = typeof blockTitleFor === 'function' ? blockTitleFor(id, getEfspFdr(strip.fdrId)) : null; if (title) labelEl.title = title; // docs/adr/0062
+    const title = typeof blockTitleFor === 'function' ? blockTitleFor(id, getEfspFlightData(strip.fdrId)) : null; if (title) labelEl.title = title; // docs/adr/0062
     // §3.7 rule 2's "in the same Block": the current value keeps the field; the
     // latest superseded value sits small and struck beside the label, with a
     // count of the rest. The whole chain is in the expanded view.
@@ -444,18 +444,18 @@ const _fmtClock = (sec) => `${Math.floor(sec / 60)}:${String(Math.round(sec % 60
 function _stripAlerts(strip) {
   const out = [];
   const trackId = typeof correlatedTrackIdForStrip === 'function' ? correlatedTrackIdForStrip(strip) : null;
-  for (const c of (typeof stcaConflictsForTrack === 'function' ? stcaConflictsForTrack(trackId) : [])) {
+  for (const c of (typeof conflictAlertsForTrack === 'function' ? conflictAlertsForTrack(trackId) : [])) {
     // crc-sync names the other aircraft the way it is labelled: its flight's
     // callsign when correlated, else its tag or track number (docs/adr/0059).
     const other = c.otherCallsign;
     out.push({
-      key: 'stca', tone: 'bad', legacy: 'efsp-stca-indicator',
+      key: 'stca', tone: 'bad', legacy: 'efsp-conflict-alert-indicator',
       text: `STCA ${other} ${_fmtClock(c.timeToCpaSec)}`,
       reason: `Conflict with ${other} in ${_fmtClock(c.timeToCpaSec)}: closest ${c.minNm} NM / ${c.vertFt} ft.`,
     });
   }
   if (typeof atoAlertsFor === 'function') out.push(...atoAlertsFor(strip)); // docs/adr/0071, §3.10.3 rule 3
-  for (const a of (typeof conformanceAlertsForFdr === 'function' ? conformanceAlertsForFdr(strip.fdrId) : [])) {
+  for (const a of (typeof conformanceAlertsForFlightData === 'function' ? conformanceAlertsForFlightData(strip.fdrId) : [])) {
     if (a.kind === 'HEADING') {
       out.push({ key: 'conf', tone: 'attn', legacy: 'efsp-conf-indicator', text: `HDG ${_pad3(a.actual)}`,
         reason: `Assigned heading ${_pad3(a.assigned)}, tracking ${_pad3(a.actual)}.` });
@@ -581,7 +581,7 @@ function _litIndicator(strip, key, el, obligation, siblings) {
     if (siblings.length === 0) return null;
     // A sortie that crosses a Facility boundary leaves several live Strips on
     // one flight. Advisory only; the title names each (crc-sync docs/adr/0054).
-    return _indicator(key, `+${siblings.length}`, 'on', 'efsp-shared-fdr-badge',
+    return _indicator(key, `+${siblings.length}`, 'on', 'efsp-shared-flight-data-badge',
       `this flight also has ${siblings.length === 1 ? 'a Strip' : `${siblings.length} Strips`} at ${siblings.map(s => `${s.facilityId || '?'}/${s.ownerPositionId} (${s.role})`).join(', ')}`);
   }
   return null;
@@ -590,7 +590,7 @@ function _litIndicator(strip, key, el, obligation, siblings) {
 /** The indicator row, or null when there is nothing to say (docs/adr/0058). */
 function _buildIndicatorSlots(strip, el, obligation, alerts) {
   const slots = _stripEl('div', 'efsp-strip-slots');
-  const siblings = otherLiveStripsForFdr(strip.fdrId, strip.stripId);
+  const siblings = otherLiveStripsForFlightData(strip.fdrId, strip.stripId);
   for (const key of INDICATOR_ORDER) {
     if (ALERT_SLOT_KEYS.has(key)) {
       for (const a of alerts.filter(x => x.key === key)) slots.appendChild(_indicator(key, a.text, a.tone, a.legacy, a.reason));

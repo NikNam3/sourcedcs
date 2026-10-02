@@ -33,14 +33,14 @@ async function goBay(page, positionId, bayId) {
 
 /** The server-side Strip for a callsign, as the page's own state has it. */
 const serverStrip = (page, callsign) => page.evaluate((cs) => {
-  const s = [...efspStrips.values()].find(x => efspFdrs.get(x.fdrId).identity.callsign === cs);
+  const s = [...efspStrips.values()].find(x => efspFlightDataList.get(x.fdrId).identity.callsign === cs);
   return s && { rev: s.rev, flags: s.flags, tofi: s.tofiCoordination && s.tofiCoordination.state,
     coordination: s.coordination && s.coordination.state, airspace: s.airspaceEntry && s.airspaceEntry.airspaceId };
 }, callsign);
 
 /** Another controller's update to this Strip, through the real send path. */
 const remoteOffset = (page, callsign) => page.evaluate((cs) => {
-  const s = [...efspStrips.values()].find(x => efspFdrs.get(x.fdrId).identity.callsign === cs);
+  const s = [...efspStrips.values()].find(x => efspFlightDataList.get(x.fdrId).identity.callsign === cs);
   sendEfspMutation(s.ownerPositionId, s, { kind: 'SetFlag', flag: 'offset', value: !s.flags.offset });
 }, callsign);
 

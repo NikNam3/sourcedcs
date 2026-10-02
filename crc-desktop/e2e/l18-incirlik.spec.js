@@ -14,8 +14,8 @@ let seq = 0;
 const cs = (prefix) => `${prefix}${(Date.now() + seq++) % 10000}`;
 
 const stripOf = (page, callsign) => page.evaluate((c) => {
-  const s = getAllEfspStrips().find(x => x.state !== 'DROPPED' && (getEfspFdr(x.fdrId) || { identity: {} }).identity.callsign === c);
-  return s ? { stripId: s.stripId, role: s.role, state: s.state, ownerPositionId: s.ownerPositionId, bayId: s.bayId, rackId: s.rackId, mhz: (getEfspFdr(s.fdrId).comms || {}).workingFrequencyMhz } : null;
+  const s = getAllEfspStrips().find(x => x.state !== 'DROPPED' && (getEfspFlightData(x.fdrId) || { identity: {} }).identity.callsign === c);
+  return s ? { stripId: s.stripId, role: s.role, state: s.state, ownerPositionId: s.ownerPositionId, bayId: s.bayId, rackId: s.rackId, mhz: (getEfspFlightData(s.fdrId).comms || {}).workingFrequencyMhz } : null;
 }, callsign);
 const waitStrip = (page, callsign, pred, what) => expect.poll(async () => { const s = await stripOf(page, callsign); return !!s && pred(s); }, { message: what, timeout: 10000 }).toBe(true);
 
@@ -46,7 +46,7 @@ test('01 SFA: filed on a frequency Rack, rotated to PAR with the frequency uncha
   await page.evaluate((c) => sendEfspCreateStrip('APP', { kind: 'CreateStrip', bayId: 'app-inbound', rackId: 'main', role: 'ARRIVAL', fdr: { callsign: c, aircraftType: 'F-16C', originAirport: 'LTAG' } }), call);
   await waitStrip(page, call, s => s.ownerPositionId === 'APP', 'created at APP');
   await page.evaluate((c) => {
-    const s = getAllEfspStrips().find(x => (getEfspFdr(x.fdrId) || { identity: {} }).identity.callsign === c);
+    const s = getAllEfspStrips().find(x => (getEfspFlightData(x.fdrId) || { identity: {} }).identity.callsign === c);
     sendEfspMutation('APP', s, { kind: 'TransferStrip', toPositionId: 'SFA', bayId: 'sfa-frequencies', rackId: 'freq-2' });
   }, call);
   await waitStrip(page, call, s => s.ownerPositionId === 'SFA' && s.rackId === 'freq-2' && s.mhz === 233.1, 'on SFA freq-2, frequency set from the Rack');
@@ -80,13 +80,13 @@ test('02 PAR holds one aircraft: a second rotation is refused with the reason, a
     await page.evaluate(([cc, r]) => sendEfspCreateStrip('APP', { kind: 'CreateStrip', bayId: 'app-inbound', rackId: 'main', role: 'ARRIVAL', fdr: { callsign: cc, aircraftType: 'F-16C' } }), [c, rack]);
     await waitStrip(page, c, s => s.ownerPositionId === 'APP', `${c} created`);
     await page.evaluate(([cc, r]) => {
-      const s = getAllEfspStrips().find(x => (getEfspFdr(x.fdrId) || { identity: {} }).identity.callsign === cc);
+      const s = getAllEfspStrips().find(x => (getEfspFlightData(x.fdrId) || { identity: {} }).identity.callsign === cc);
       sendEfspMutation('APP', s, { kind: 'TransferStrip', toPositionId: 'SFA', bayId: 'sfa-frequencies', rackId: r });
     }, [c, rack]);
     await waitStrip(page, c, s => s.ownerPositionId === 'SFA', `${c} with SFA`);
   }
   const rotate = (c) => page.evaluate((cc) => {
-    const s = getAllEfspStrips().find(x => (getEfspFdr(x.fdrId) || { identity: {} }).identity.callsign === cc);
+    const s = getAllEfspStrips().find(x => (getEfspFlightData(x.fdrId) || { identity: {} }).identity.callsign === cc);
     sendEfspMutation('SFA', s, { kind: 'SfaRotation' });
   }, c);
   await rotate(a);

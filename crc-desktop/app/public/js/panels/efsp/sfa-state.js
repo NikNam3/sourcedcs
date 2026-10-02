@@ -38,10 +38,10 @@ export function sfaRotationRows(view = getEfspSfa()) {
   return view.pool.map(p => ({ rackId: p.rackId, mhz: p.mhz, text: sfaFrequencyText(p.mhz), positionId: rotation[p.rackId] || null }));
 }
 
-/** The held Position that may change the rotation (the jurisdiction Position, inside the ceiling), or null. Pure over `heldIds`. */
-export function sfaRotatingPosition(heldIds, view = getEfspSfa()) {
+/** The held Position that may change the rotation (the jurisdiction Position, inside the ceiling), or null. Pure over `signedOnIds`. */
+export function sfaRotatingPosition(signedOnIds, view = getEfspSfa()) {
   if (!view) return null;
-  return (heldIds || []).find(id => id === view.jurisdiction && SFA_ROTATION_CEILING.includes(id)) || null;
+  return (signedOnIds || []).find(id => id === view.jurisdiction && SFA_ROTATION_CEILING.includes(id)) || null;
 }
 
 /** The pool entry whose frequency is this flight's working frequency, or null: "an aircraft on an SFA frequency". */
@@ -55,10 +55,10 @@ export function sfaPoolEntryForFrequency(mhz, view = getEfspSfa()) {
  * the transfer, that is on an SFA frequency (its working frequency is in the pool; filing a Strip
  * on an SFA Rack assigns it that frequency). A Strip has one NLA (§3.5 rule 1), so this is a second button beside it, as "See you" is.
  */
-export function sfaRotationOffered(strip, fdr, heldIds, view = getEfspSfa()) {
+export function sfaRotationOffered(strip, fdr, signedOnIds, view = getEfspSfa()) {
   if (!view || !strip || strip.role !== 'ARRIVAL' || strip.state !== 'INBOUND') return false;
   if (!SFA_ROTATION_SENDERS.includes(strip.ownerPositionId)) return false;
-  if (!(heldIds || []).includes(strip.ownerPositionId)) return false;
+  if (!(signedOnIds || []).includes(strip.ownerPositionId)) return false;
   const mhz = fdr && fdr.comms ? fdr.comms.workingFrequencyMhz : null;
   return !!sfaPoolEntryForFrequency(mhz, view);
 }

@@ -18,7 +18,7 @@ export let _bayContentEl = null;
 export let _createStripInputEl = null;
 export let _createStripBtnEl = null;
 export let _createStripMsgEl = null;
-export let _createStripRoleEl = null;
+export let _createStripTypeEl = null;
 export let _createStripStereoEl = null;
 export let _createStripBindEl = null;
 export let _dotCommandInputEl = null;
@@ -39,7 +39,7 @@ export function _cachePanelElements() {
   _createStripInputEl = document.getElementById('efsp-new-strip-callsign');
   _createStripBtnEl = document.getElementById('efsp-create-strip-btn');
   _createStripMsgEl = document.getElementById('efsp-create-strip-msg');
-  _createStripRoleEl = document.getElementById('efsp-create-strip-role');
+  _createStripTypeEl = document.getElementById('efsp-create-strip-type');
   _createStripStereoEl = document.getElementById('efsp-create-strip-stereo');
   _createStripBindEl = document.getElementById('efsp-create-strip-bind');
   _dotCommandInputEl = document.getElementById('efsp-dot-command-input');

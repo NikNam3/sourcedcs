@@ -25,7 +25,7 @@ async function controller(browser, opts) {
 }
 
 const records = (page, callsign) => page.evaluate((c) => [...efspStrips.values()]
-  .filter(s => (efspFdrs.get(s.fdrId) || {}).identity && efspFdrs.get(s.fdrId).identity.callsign === c && s.state !== 'DROPPED')
+  .filter(s => (efspFlightDataList.get(s.fdrId) || {}).identity && efspFlightDataList.get(s.fdrId).identity.callsign === c && s.state !== 'DROPPED')
   .map(s => ({ facilityId: s.facilityId, owner: s.ownerPositionId, bayId: s.bayId, state: s.state, role: s.role })), callsign);
 const stateAt = async (page, callsign, facilityId) => ((await records(page, callsign)).find(r => r.facilityId === facilityId) || {}).state || null;
 const shot = (page, name) => page.screenshot({ path: path.join(SHOTS, `${name}.png`) });

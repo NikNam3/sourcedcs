@@ -3,7 +3,7 @@ import { _availableCreateStripOrigins, _createStripOrigin, _missionBindCandidate
 import { _dotCommandInputEl, _dotCommandPreviewEl } from './state.js';
 import { _runEfspSearch } from './tabs.js';
 import { getActingPositions, sendEfspCorrelationMutation, sendEfspCreateStrip, sendEfspMarsaMutation, sendEfspMutation } from '../efsp-ws.js';
-import { getAllEfspStrips, getEfspCorrelationForStrip, getEfspFdr, getEfspStrip, liveStripsForCallsign, marsaForStrip } from '../efsp-state.js';
+import { getAllEfspStrips, getEfspCorrelationForStrip, getEfspFlightData, getEfspStrip, liveStripsForCallsign, marsaForStrip } from '../efsp-state.js';
 import { getSelectedEfspStripId } from '../bay-view.js';
 import { normalizeStereoNameClient } from '../efsp-stereo-routes.js';
 import { parseDotCommand } from '../dot-command.js';
@@ -22,7 +22,7 @@ function _fragMissionLine(callsign) {
   if (!origin) return _showDotCommandError('only TAC_C2 can frag a mission line');
 
   const candidate = _missionBindCandidates().find((s) => {
-    const fdr = typeof getEfspFdr === 'function' ? getEfspFdr(s.fdrId) : null;
+    const fdr = typeof getEfspFlightData === 'function' ? getEfspFlightData(s.fdrId) : null;
     return fdr && fdr.identity && String(fdr.identity.callsign || '').toUpperCase() === wanted;
   });
   if (!candidate) {
@@ -190,7 +190,7 @@ function _dispatchMarsaDotCommand(parsed, strip, actingPositionId) {
 }
 
 function _marsaCallsignOf(strip) {
-  const fdr = typeof getEfspFdr === 'function' ? getEfspFdr(strip.fdrId) : null;
+  const fdr = typeof getEfspFlightData === 'function' ? getEfspFlightData(strip.fdrId) : null;
   return (fdr && fdr.identity && fdr.identity.callsign) || '';
 }
 

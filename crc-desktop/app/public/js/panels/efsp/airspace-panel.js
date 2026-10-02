@@ -1,6 +1,6 @@
 'use strict';
 import { missionNow } from '../topbar.js';
-import { getAllEfspAirspaces, getEfspFdr, stripsInAirspace } from './efsp-state.js';
+import { getAllEfspAirspaces, getEfspFlightData, stripsInAirspace } from './efsp-state.js';
 import { getActingPositions, sendEfspAirspaceMutation } from './efsp-ws.js';
 import { registerEfspMessage } from './efsp-message-registry.js';
 import { applyEfspAirspaceDelta } from './efsp-state.js';
@@ -153,7 +153,7 @@ function _buildAirspaceCard(airspace, heldPositionIds) {
     const list = document.createElement('div');
     list.className = 'airspace-flights';
     list.textContent = flights.map((s) => {
-      const fdr = getEfspFdr(s.fdrId);
+      const fdr = getEfspFlightData(s.fdrId);
       const callsign = (fdr && fdr.identity && fdr.identity.callsign) || s.cid;
       const entry = s.airspaceEntry || {};
       const bits = [];

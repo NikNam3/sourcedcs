@@ -16,7 +16,7 @@ const { makeElement, descendants } = domStub;
 const IDS = [
   'efsp-panel', 'efsp-position-tabs', 'efsp-bay-tabs', 'efsp-bay-content',
   'efsp-new-strip-callsign', 'efsp-create-strip-btn', 'efsp-create-strip-msg',
-  'efsp-create-strip-role', 'efsp-create-strip-stereo', 'efsp-create-strip-bind',
+  'efsp-create-strip-type', 'efsp-create-strip-stereo', 'efsp-create-strip-bind',
   'efsp-dot-command-input', 'efsp-dot-command-preview',
   'efsp-mutation-error', 'efsp-mutation-warning', 'efsp-connection-banner',
 ];
@@ -28,7 +28,7 @@ const realSetInterval = globalThis.setInterval;
 globalThis.setInterval = (fn, ms, ...args) => { const t = realSetInterval(fn, ms, ...args); if (t && typeof t.unref === 'function') t.unref(); return t; };
 
 const BAYS = [
-  { bayId: 'gnd-pending', positionId: 'GND', facilityId: 'INCIRLIK', rackIds: ['main'] },
+  { bayId: 'gc-pending', positionId: 'GND', facilityId: 'INCIRLIK', rackIds: ['main'] },
   { bayId: 'gnd-taxi-out', positionId: 'GND', facilityId: 'INCIRLIK', rackIds: ['main'] },
 ];
 
@@ -89,7 +89,7 @@ async function mount({ metrics = true } = {}) {
   ws.setEfspSender('_sendEfsp', (msg) => { if (msg && msg.events) reports.push(msg); });
 
   state.applyEfspSnapshot({
-    strips: [stripFor('s1', 'f1', 'gnd-pending'), stripFor('s2', 'f2', 'gnd-taxi-out')],
+    strips: [stripFor('s1', 'f1', 'gc-pending'), stripFor('s2', 'f2', 'gnd-taxi-out')],
     fdrs: [fdrFor('f1', 'VIPER11'), fdrFor('f2', 'VIPER12')],
     positions: [], bays: BAYS, airspaces: [], correlations: [], marsa: [],
   });
@@ -114,7 +114,7 @@ test('a search sends one SEARCH for the active Position and the Bay it was run f
   assert.equal(events[0].kind, 'SEARCH');
   assert.equal(events[0].positionId, 'GND');
   assert.equal(events[0].facilityId, 'INCIRLIK');
-  assert.equal(events[0].bayId, 'gnd-pending', 'the source Bay, not the search pseudo-Bay it switches to');
+  assert.equal(events[0].bayId, 'gc-pending', 'the source Bay, not the search pseudo-Bay it switches to');
   assert.equal(JSON.stringify(m.reports).includes('VIPER'), false, 'no search text on the wire (T3)');
 });
 

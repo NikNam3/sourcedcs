@@ -16,7 +16,7 @@ const { test, expect } = require('./helpers/test');
 const { openPanel, seedStrip } = require('./helpers/app');
 
 function stripIdOf(page, callsign) {
-  return page.evaluate((cs) => getAllEfspStrips().find((s) => getEfspFdr(s.fdrId).identity.callsign === cs).stripId, callsign);
+  return page.evaluate((cs) => getAllEfspStrips().find((s) => getEfspFlightData(s.fdrId).identity.callsign === cs).stripId, callsign);
 }
 
 async function raiseObligation(page, callsign) {
@@ -42,7 +42,7 @@ async function raiseObligation(page, callsign) {
 async function dropAll(page, callsigns) {
   await page.evaluate((cs) => {
     for (const s of getAllEfspStrips()) {
-      const fdr = getEfspFdr(s.fdrId);
+      const fdr = getEfspFlightData(s.fdrId);
       if (!fdr || !cs.includes(fdr.identity.callsign) || s.state === 'DROPPED') continue;
       sendEfspMutation(s.ownerPositionId, s, { kind: 'DropStrip', reason: 'e2e cleanup' });
     }
@@ -67,7 +67,7 @@ test('declaring MARSA updates the badge on the participants', async ({ page }) =
     // Sent through the page's own MARSA sender, not the popover — the popover
     // is F-001's, and this is about what happens after the relation exists.
     await page.evaluate(() => {
-      const f = (cs) => getAllEfspStrips().find((s) => getEfspFdr(s.fdrId).identity.callsign === cs);
+      const f = (cs) => getAllEfspStrips().find((s) => getEfspFlightData(s.fdrId).identity.callsign === cs);
       sendEfspMarsaMutation('OPS', undefined, undefined, {
         kind: 'DeclareMarsa', participants: [f('L4M1').fdrId, f('L4M2').fdrId],
         startEvent: 'LOCAL_DECLARATION', endCondition: 'ATC_SEPARATION_ESTABLISHED', declaringCallsign: 'L4M1',

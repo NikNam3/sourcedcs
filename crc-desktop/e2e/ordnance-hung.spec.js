@@ -27,12 +27,12 @@ async function goBay(page, positionId, bayId) {
 }
 
 const stateOf = (page, cs) => page.evaluate((cs) => {
-  const s = getAllEfspStrips().find((x) => getEfspFdr(x.fdrId).identity.callsign === cs);
+  const s = getAllEfspStrips().find((x) => getEfspFlightData(x.fdrId).identity.callsign === cs);
   return s && s.state;
 }, cs);
 const ordnanceOf = (page, cs) => page.evaluate((cs) => {
-  const s = getAllEfspStrips().find((x) => getEfspFdr(x.fdrId).identity.callsign === cs);
-  return s && getEfspFdr(s.fdrId).military.ordnanceState;
+  const s = getAllEfspStrips().find((x) => getEfspFlightData(x.fdrId).identity.callsign === cs);
+  return s && getEfspFlightData(s.fdrId).military.ordnanceState;
 }, cs);
 
 /** Press the Strip's own NLA button, then wait out the server's double-tap guard. */
@@ -68,7 +68,7 @@ async function recordFromExpanded(strip, value) {
 // those are the rig's, not this feature's. Script errors stay a hard failure.
 const scriptErrors = (errors) => errors.filter((e) => !/Failed to load resource/.test(e));
 
-const ARR_FDR = { originAirport: 'LTAG', destinationAirport: 'LTAG', route: 'DCT' };
+const ARR_FLIGHT_DATA = { originAirport: 'LTAG', destinationAirport: 'LTAG', route: 'DCT' };
 
 test('HUNG: APP records it, TWR sees it, the flight lands normally, CLEAN clears it', async ({ page }) => {
   await page.setViewportSize({ width: 1600, height: 1200 });
@@ -76,7 +76,7 @@ test('HUNG: APP records it, TWR sees it, the flight lands normally, CLEAN clears
   const CS = 'HUNG11';
 
   await goBay(page, 'APP', 'app-inbound');
-  const strip = await seedStrip(page, { callsign: CS, actingPositionId: 'APP', bayId: 'app-inbound', role: 'ARRIVAL', fdr: ARR_FDR });
+  const strip = await seedStrip(page, { callsign: CS, actingPositionId: 'APP', bayId: 'app-inbound', role: 'ARRIVAL', fdr: ARR_FLIGHT_DATA });
   await expect(strip.locator('[data-slot="ord"]'), 'a CLEAN Strip draws nothing (docs/adr/0058)').toHaveCount(0);
 
   // H55: the pilot reports it to approach, inbound. S-L12: while CLEAN, ORDNANCE
@@ -139,7 +139,7 @@ test('pilot walks with field state: the pad by name, a runway request re-stated,
   // "Request runway 23 for hot cargo" — TWR edits 8B; the advisory re-states the runway, recommends none.
   const CS = 'HUNG21';
   await goBay(page, 'APP', 'app-inbound');
-  let strip = await seedStrip(page, { callsign: CS, actingPositionId: 'APP', bayId: 'app-inbound', role: 'ARRIVAL', fdr: ARR_FDR });
+  let strip = await seedStrip(page, { callsign: CS, actingPositionId: 'APP', bayId: 'app-inbound', role: 'ARRIVAL', fdr: ARR_FLIGHT_DATA });
   await recordFromExpanded(strip, 'HUNG');
   await expect(strip.locator('.efsp-strip-reason', { hasText: 'taxi to Hot cargo pad' }))
     .toHaveText('Hung ordnance. SOURCE practice: after landing, taxi to Hot cargo pad; the runway is the controller\'s call. Runway 05/23 (05) assigned.');

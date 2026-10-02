@@ -1,5 +1,5 @@
 'use strict';
-import { activeMarsaForFdr, getAllEfspStrips, getEfspFdr, marsaForStrip } from '../../efsp-state.js';
+import { activeMarsaForFlightData, getAllEfspStrips, getEfspFlightData, marsaForStrip } from '../../efsp-state.js';
 import { MARSA_EXPANSION, marsaActionsFor } from '../../marsa-badge.js';
 import { _mountPopover, _unmountPopover } from '../popover-portal.js';
 import { _dispatchMarsa, selectEfspStripById } from '../../bay-view.js';
@@ -54,7 +54,7 @@ export function _openMarsaPopover(strip, anchorEl) {
     for (const fdrId of relation.participants) {
       if (fdrId === strip.fdrId) continue;
       const peer = getAllEfspStrips().find(s => s.fdrId === fdrId && s.state !== 'DROPPED');
-      const fdr = typeof getEfspFdr === 'function' ? getEfspFdr(fdrId) : null;
+      const fdr = typeof getEfspFlightData === 'function' ? getEfspFlightData(fdrId) : null;
       const label = (fdr && fdr.identity && fdr.identity.callsign) || fdrId;
       const row = document.createElement('button');
       row.className = 'efsp-marsa-participant-btn';
@@ -114,7 +114,7 @@ function _marsaCandidates(strip) {
     if (s.state === 'DROPPED' || s.fdrId === strip.fdrId) return false;
     // A flight already under MARSA cannot be in a second relation — crc-sync
     // refuses it, and offering it here would be a control that always fails.
-    return !(typeof activeMarsaForFdr === 'function' && activeMarsaForFdr(s.fdrId));
+    return !(typeof activeMarsaForFlightData === 'function' && activeMarsaForFlightData(s.fdrId));
   });
 }
 
@@ -122,7 +122,7 @@ function _marsaCandidateSelect(strip) {
   const select = document.createElement('select');
   select.className = 'efsp-coordinate-primitive-select';
   for (const s of _marsaCandidates(strip)) {
-    const fdr = typeof getEfspFdr === 'function' ? getEfspFdr(s.fdrId) : null;
+    const fdr = typeof getEfspFlightData === 'function' ? getEfspFlightData(s.fdrId) : null;
     const option = document.createElement('option');
     option.value = s.fdrId;
     option.textContent = (fdr && fdr.identity && fdr.identity.callsign) || s.fdrId;

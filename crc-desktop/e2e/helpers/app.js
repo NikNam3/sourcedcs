@@ -110,7 +110,7 @@ const CORRELATION_INELIGIBLE = ['PROPOSED', 'PENDING_CLEARANCE', 'CLEARED', 'HEL
 async function settleCorrelation(page, callsign) {
   await expect.poll(() => page.evaluate(([cs, ineligible]) => {
     const s = [...efspStrips.values()].find((x) => x.state !== 'DROPPED'
-      && (efspFdrs.get(x.fdrId) || {}).identity && efspFdrs.get(x.fdrId).identity.callsign === cs);
+      && (efspFlightDataList.get(x.fdrId) || {}).identity && efspFlightDataList.get(x.fdrId).identity.callsign === cs);
     if (!s || ineligible.includes(s.state)) return true;
     const el = document.querySelector(`.efsp-strip[data-strip-id="${s.stripId}"]`);
     return !!el && /\|cor:\d/.test(el.dataset.sig || '');
@@ -274,7 +274,7 @@ async function startAction(strip, name, opts = {}) {
 async function dropStrips(page, callsigns) {
   await page.evaluate((cs) => {
     for (const s of getAllEfspStrips()) {
-      const fdr = getEfspFdr(s.fdrId);
+      const fdr = getEfspFlightData(s.fdrId);
       if (!fdr || !cs.includes(fdr.identity.callsign) || s.state === 'DROPPED') continue;
       sendEfspMutation(s.ownerPositionId, s, { kind: 'DropStrip', reason: 'e2e cleanup' });
     }

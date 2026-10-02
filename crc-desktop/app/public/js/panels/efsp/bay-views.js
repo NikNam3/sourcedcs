@@ -2,7 +2,7 @@
 import { haversineM } from '../../geo.js';
 import { missionNow } from '../topbar.js';
 import {
-  correlatedTrackIdForStrip, getEfspBays, getEfspFdr, getEfspFieldState, getEfspRack, getEfspStrip
+  correlatedTrackIdForStrip, getEfspBays, getEfspFlightData, getEfspFieldState, getEfspRack, getEfspStrip
 } from './efsp-state.js';
 import { getEfspCarrier } from './carrier-state.js';
 import {
@@ -63,7 +63,7 @@ export function patternLegsFor(bay) {
  * not from its last Move, so going round again does not reset it.
  * @param {object} bay
  * @param {(bayId:string, rackId:string)=>object[]} rackOf  getEfspRack
- * @param {(fdrId:string)=>object|null} fdrOf               getEfspFdr
+ * @param {(fdrId:string)=>object|null} fdrOf               getEfspFlightData
  */
 export function patternStripsFor(bay, rackOf, fdrOf) {
   const out = [];
@@ -136,7 +136,7 @@ const _finalTrackers = new Map(); // stripId -> final-panel tracker
 const _finalMounts = new Set();   // containers showing a final view, refreshed on a timer
 let _finalTimer = null;
 
-function _heldAt(bay) {
+function _signedOnAt(bay) {
   return typeof getActingPositions === 'function' ? getActingPositions(bay.facilityId) : [];
 }
 
@@ -183,7 +183,7 @@ function _busy(el) {
 function _renderPattern(container, bay) {
   const mount = _mountPoint(container, bay.bayId);
   const legs = patternLegsFor(bay);
-  const strips = patternStripsFor(bay, getEfspRack, getEfspFdr);
+  const strips = patternStripsFor(bay, getEfspRack, getEfspFlightData);
   const fs = typeof getEfspFieldState === 'function' ? getEfspFieldState(bay.facilityId) : null;
   const runway = fs && fs.runways && fs.runways[0];
   const model = patternBoardModel({
@@ -191,7 +191,7 @@ function _renderPattern(container, bay) {
     runwayOpenStatus: runway ? (runway.status === 'OPEN' ? 'OPEN' : (runway.status === 'CLOSED' ? 'CLOSED' : 'SUSPENDED')) : undefined,
   });
   // Only a held Position acts: a read-only board for everyone else.
-  const held = _heldAt(bay);
+  const held = _signedOnAt(bay);
   const owner = (stripId) => { const s = getEfspStrip(stripId); return s && held.includes(s.ownerPositionId) ? s : null; };
   const act = (stripId, op) => { const s = owner(stripId); if (s && op) _send(s, { ...op, ...(op.kind === 'MoveStrip' ? { bayId: bay.bayId } : {}) }); };
   const board = renderPatternBoard(model, {
@@ -220,7 +220,7 @@ function _renderFinal(container, bay) {
   const kind = bay.facilityId === 'CARRIER' ? 'CARRIER' : 'PAR';
   const live = [];
   for (const rackId of bay.rackIds || []) live.push(...getEfspRack(bay.bayId, rackId));
-  const held = _heldAt(bay);
+  const held = _signedOnAt(bay);
   const gone = new Set([..._finalTrackers.keys()]);
   const wrap = document.createElement('div');
   wrap.dataset.bayView = 'final';
@@ -233,7 +233,7 @@ function _renderFinal(container, bay) {
   for (const strip of live) {
     gone.delete(strip.stripId);
     if (!_finalTrackers.has(strip.stripId)) _finalTrackers.set(strip.stripId, createFinalTracker());
-    const fdr = getEfspFdr(strip.fdrId);
+    const fdr = getEfspFlightData(strip.fdrId);
     const trackId = typeof correlatedTrackIdForStrip === 'function' ? correlatedTrackIdForStrip(strip) : null;
     const track = trackId && typeof window !== 'undefined' && typeof window.getLatestTrack === 'function' ? window.getLatestTrack(trackId) : null;
     let runwayText = '--';
@@ -277,7 +277,7 @@ function _renderSfaHeader(container, bay) {
   const mount = _mountPoint(container, bay.bayId);
   if (!view) { _replace(mount, null); return; }
   if (_busy(mount)) return;
-  const held = _heldAt(bay);
+  const held = _signedOnAt(bay);
   const rotating = sfaRotatingPosition(held, view);
   const box = document.createElement('div');
   box.className = 'efsp-sfa-header';
@@ -346,7 +346,7 @@ export function renderBayDescriptorView(container, bay) {
 /** The second button beside the NLA on a Strip on an SFA frequency: Rotate to PAR (ADR 0075). */
 export function sfaExtraNlaButtons(strip) {
   if (typeof getEfspSfa !== 'function' || typeof getActingPositions !== 'function') return [];
-  const fdr = typeof getEfspFdr === 'function' ? getEfspFdr(strip.fdrId) : null;
+  const fdr = typeof getEfspFlightData === 'function' ? getEfspFlightData(strip.fdrId) : null;
   if (!sfaRotationOffered(strip, fdr, getActingPositions(strip.facilityId || undefined))) return [];
   const btn = document.createElement('button');
   btn.className = 'efsp-sbtn efsp-nla-btn efsp-sfa-rotate';

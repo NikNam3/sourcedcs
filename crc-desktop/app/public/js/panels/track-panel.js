@@ -5,9 +5,9 @@ import { clearIffOverride, getIff, iffColor, setIffOverride } from '../iff.js';
 import {
   altitudeLong, assignedAltText, assignedBlockText, tagEditable, trackName, trackNameSuffix, typeText
 } from '../track-label.js';
-import { _fdrForTrack, buildFiledRoute, parseFiledRouteWaypoints, updateMap } from '../geojson.js';
+import { _flightDataForTrack, buildFiledRoute, parseFiledRouteWaypoints, updateMap } from '../geojson.js';
 import { dock, ensureTrackPanel } from '../dock.js';
-import { conformanceAlertsForFdr, stcaConflictsForTrack } from './efsp/efsp-state.js';
+import { conformanceAlertsForFlightData, conflictAlertsForTrack } from './efsp/efsp-state.js';
 import { history, map, mapReady, settings, tracks } from '../app.js';
 
 // ── Track info panel ─────────────────────────────────────────────────────
@@ -214,7 +214,7 @@ function _refreshTrackFpl(fdr) {
  * Nothing is shown while nothing is wrong.
  */
 function _refreshTrackAlerts(trackId) {
-  const fdr = typeof _fdrForTrack === 'function' ? _fdrForTrack(trackId) : null;
+  const fdr = typeof _flightDataForTrack === 'function' ? _flightDataForTrack(trackId) : null;
   // "ALT FL180 · HDG 050".
   const active = (cell) => cell && cell.entries.find(e => e.status === 'ACTIVE');
   const alt = fdr && fdr.clearance && active(fdr.clearance.altitude);
@@ -234,10 +234,10 @@ function _refreshTrackAlerts(trackId) {
   if (!$alerts) return;
   const lines = [];
   const clock = (sec) => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
-  for (const c of (typeof stcaConflictsForTrack === 'function' ? stcaConflictsForTrack(trackId) : [])) {
+  for (const c of (typeof conflictAlertsForTrack === 'function' ? conflictAlertsForTrack(trackId) : [])) {
     lines.push({ bad: true, text: `STCA with ${c.otherCallsign} in ${clock(c.timeToCpaSec)}. Closest ${c.minNm} NM / ${c.vertFt} ft.` });
   }
-  for (const a of (fdr && typeof conformanceAlertsForFdr === 'function' ? conformanceAlertsForFdr(fdr.fdrId) : [])) {
+  for (const a of (fdr && typeof conformanceAlertsForFlightData === 'function' ? conformanceAlertsForFlightData(fdr.fdrId) : [])) {
     const pad = (n) => String(n).padStart(3, '0');
     if (a.kind === 'HEADING') lines.push({ bad: false, text: `Assigned heading ${pad(a.assigned)}, tracking ${pad(a.actual)}.` });
     if (a.kind === 'WRONG_WAY') lines.push({ bad: true, text: `Assigned ${a.assigned.toLocaleString('en-US')} ft, ${a.fpm < 0 ? 'descending' : 'climbing'} at ${Math.abs(a.fpm).toLocaleString('en-US')} ft/min.` });
@@ -302,7 +302,7 @@ export function updateTrackPanel() {
   }
 
   // The correlated flight's plan
-  _refreshTrackFpl(typeof _fdrForTrack === 'function' ? _fdrForTrack(String(_trackPanelId)) : null);
+  _refreshTrackFpl(typeof _flightDataForTrack === 'function' ? _flightDataForTrack(String(_trackPanelId)) : null);
 }
 
 // ── Ground vehicle tag popup ──────────────────────────────────────────────

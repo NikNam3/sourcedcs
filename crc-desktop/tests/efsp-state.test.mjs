@@ -10,7 +10,7 @@ import assert from 'node:assert/strict';
 import {
   applyEfspSnapshot, applyEfspDelta, applyEfspMutationAck,
   registerPendingMutation, getPendingMutations, rebaseForResend,
-  getEfspStrip, getEfspFdr, getEfspPosition, getAllEfspStrips, getAllEfspPositions,
+  getEfspStrip, getEfspFlightData, getEfspPosition, getAllEfspStrips, getAllEfspPositions,
   getEfspRack, searchEfspStrips, getEfspBoardSeq, getEfspFacility, getEfspBays,
   applyEfspAlerts, getEfspObligation, getEfspObligations,
   _resetEfspStateForTest,
@@ -31,7 +31,7 @@ test('applyEfspSnapshot populates strips/fdrs/positions and boardSeq/facility/ba
   assert.equal(getEfspBoardSeq(), 5);
   assert.equal(getEfspFacility(), 'INCIRLIK');
   assert.deepEqual(getEfspStrip('s1'), strip());
-  assert.ok(getEfspFdr('f1'));
+  assert.ok(getEfspFlightData('f1'));
   assert.ok(getEfspPosition('OPS'));
   assert.deepEqual(getEfspBays(), [{ bayId: 'b1' }]);
 });
@@ -55,7 +55,7 @@ test('applyEfspDelta updates changed strips and removes gone ones, leaving other
 
 test('applyEfspDelta updates FDRs and Positions too', () => {
   applyEfspDelta({ boardSeq: 1, strips: { updated: [], gone: [] }, fdrs: { updated: [{ fdrId: 'f1', rev: 3 }] }, positions: { updated: [{ positionId: 'GND', primary: null }] } });
-  assert.equal(getEfspFdr('f1').rev, 3);
+  assert.equal(getEfspFlightData('f1').rev, 3);
   assert.equal(getAllEfspPositions().length, 1);
 });
 

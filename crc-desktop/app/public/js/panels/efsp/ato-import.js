@@ -42,7 +42,7 @@ function _atoEl(tag, cls, text) {
   return el;
 }
 
-function _atoHeld() { return typeof getActingPositions === 'function' && getActingPositions().includes(ATO_IMPORT_POSITION); }
+function _atoSignedOn() { return typeof getActingPositions === 'function' && getActingPositions().includes(ATO_IMPORT_POSITION); }
 
 function _atoZ(ms) {
   if (ms == null || !Number.isFinite(Number(ms))) return '—';
@@ -66,12 +66,12 @@ export function initAtoImport(rootEl) {
 
 /** "No control that always fails" (efsp-panel.js): hidden unless TAC_C2 is held. */
 export function refreshAtoImportButton() {
-  if (_atoButtonEl) _atoButtonEl.hidden = !_atoHeld();
-  if (_atoDialogEl && !_atoHeld()) closeAtoImportDialog();
+  if (_atoButtonEl) _atoButtonEl.hidden = !_atoSignedOn();
+  if (_atoDialogEl && !_atoSignedOn()) closeAtoImportDialog();
 }
 
 export function openAtoImportDialog() {
-  if (!_atoRootEl || !_atoHeld()) return;
+  if (!_atoRootEl || !_atoSignedOn()) return;
   if (!_atoDialogEl) {
     _atoDialogEl = _atoEl('div', 'efsp-ato-dialog');
     _atoDialogEl.addEventListener('keydown', _onAtoKeydown);

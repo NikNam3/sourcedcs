@@ -90,7 +90,7 @@ export function createEfspMetricsClient(deps) {
   let flushTimer = null;
   const stats = {
     queued: 0, sent: 0, reports: 0,
-    droppedNotHeld: 0, droppedOverflow: 0, droppedStale: 0, droppedReleased: 0,
+    droppedNotSignedOn: 0, droppedOverflow: 0, droppedStale: 0, droppedReleased: 0,
     ttfSamples: 0, ttfAbandoned: 0, ttfNotAFind: 0,
     acked: 0, rejected: 0, rejectedByReason: {},
   };
@@ -108,7 +108,7 @@ export function createEfspMetricsClient(deps) {
     const facilityId = _facilityOf(positionId);
     if (!positionId || !_holds(facilityId, positionId)) {
       // crc-sync would refuse the report (NOT_HOLDING_POSITION) — T7.
-      stats.droppedNotHeld += 1;
+      stats.droppedNotSignedOn += 1;
       warnOnce('not-held', `[efsp-metrics] dropping a ${event.kind} for ${positionId || 'no Position'}: not held (logged once)`);
       return;
     }

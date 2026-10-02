@@ -1,5 +1,5 @@
 'use strict';
-import { getAllEfspStrips, getEfspFdr, getEfspStrip } from './efsp-state.js';
+import { getAllEfspStrips, getEfspFlightData, getEfspStrip } from './efsp-state.js';
 import { getSelectedEfspStripId } from './bay-view.js';
 
 // What an imported ATO shows on a Strip (crc-sync's docs/adr/0071, guide §9.8,
@@ -26,9 +26,9 @@ import { getSelectedEfspStripId } from './bay-view.js';
 
 let _arHighlightStripIds = new Set();
 
-function _atoFdr(fdrId) { return typeof getEfspFdr === 'function' ? getEfspFdr(fdrId) : null; }
+function _atoFlightData(fdrId) { return typeof getEfspFlightData === 'function' ? getEfspFlightData(fdrId) : null; }
 
-function _liveStripIdsOfFdr(fdrId) {
+function _liveStripIdsOfFlightData(fdrId) {
   const all = typeof getAllEfspStrips === 'function' ? getAllEfspStrips() : [];
   return all.filter(s => s.fdrId === fdrId && s.state !== 'DROPPED').map(s => s.stripId);
 }
@@ -60,7 +60,7 @@ function _arTacan(fdr) {
  * @returns {{role:'TANKER'|'RECEIVER', peers:{fdrId,callsign,stripIds}[], text:string, title:string}|null}
  */
 export function arJoinFor(strip) {
-  const fdr = strip ? _atoFdr(strip.fdrId) : null;
+  const fdr = strip ? _atoFlightData(strip.fdrId) : null;
   const links = _arLinksOf(fdr);
   if (links.length === 0) return null;
   const role = links[0].role;
@@ -68,9 +68,9 @@ export function arJoinFor(strip) {
   const lines = [];
   for (const l of links) {
     if (!l.peerFdrId) continue;
-    const stripIds = _liveStripIdsOfFdr(l.peerFdrId);
+    const stripIds = _liveStripIdsOfFlightData(l.peerFdrId);
     if (stripIds.length === 0) continue;
-    const pf = _atoFdr(l.peerFdrId);
+    const pf = _atoFlightData(l.peerFdrId);
     const callsign = (pf && pf.identity && pf.identity.callsign) || l.peerCallsign || l.peerFdrId;
     peers.push({ fdrId: l.peerFdrId, callsign, stripIds });
     const tacan = _arTacan(role === 'TANKER' ? fdr : pf) || _arTacan(fdr);
@@ -129,7 +129,7 @@ export function refreshArHighlight() {
  * the flight has no ATO.
  */
 export function atoAlertsFor(strip) {
-  const fdr = strip ? _atoFdr(strip.fdrId) : null;
+  const fdr = strip ? _atoFlightData(strip.fdrId) : null;
   const atoCode = fdr && fdr.ato && fdr.ato.iff ? fdr.ato.iff.modeThree : null;
   if (!atoCode) return [];
   const atc = fdr.identity ? fdr.identity.beaconAssigned : null;
@@ -143,7 +143,7 @@ export function atoAlertsFor(strip) {
 
 /** The read-only ▼ rows, as [label, value] pairs — [] for a flight no ATO tasked. */
 export function atoExpandedRowsFor(strip) {
-  const fdr = strip ? _atoFdr(strip.fdrId) : null;
+  const fdr = strip ? _atoFlightData(strip.fdrId) : null;
   if (!fdr || !fdr.ato) return [];
   const a = fdr.ato;
   const id = fdr.identity || {};

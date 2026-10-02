@@ -1,5 +1,5 @@
 'use strict';
-import { getEfspFdr, getEfspFieldState } from './efsp-state.js';
+import { getEfspFlightData, getEfspFieldState } from './efsp-state.js';
 
 // Field state on the client (guide §9.7, crc-sync docs/adr/0061, crc-desktop
 // docs/adr/0068) — the PURE rules: which runway a Strip uses, what is wrong
@@ -96,7 +96,7 @@ function _fsRunwayOfEnd(view, end) {
   return (view.runways || []).find(r => (r.ends || []).includes(end)) || null;
 }
 
-function _fsFdrRunwayText(strip, fdr) {
+function _fsFlightDataRunwayText(strip, fdr) {
   if (!fdr) return null;
   if (strip.role === 'DEPARTURE') return fdr.filed ? fdr.filed.departureRunway : null;
   if (strip.role === 'ARRIVAL') return fdr.assigned ? fdr.assigned.landingRunway : null;
@@ -136,7 +136,7 @@ export function runwayForStrip(strip, fdr, record, { targetRackId } = {}) {
   if (target) return target;
   const rack = byRack(strip.rackId, 'RACK');
   if (rack) return rack;
-  const filed = _fsResolveText(view, _fsFdrRunwayText(strip, fdr));
+  const filed = _fsResolveText(view, _fsFlightDataRunwayText(strip, fdr));
   if (filed) return { runwayId: filed.runway.runwayId, end: filed.end, source: 'FDR', runway: filed.runway };
   if (view.activeRunway) {
     const runway = _fsRunwayOfEnd(view, view.activeRunway);
@@ -251,7 +251,7 @@ export function fieldStateAlertsFor(strip, lookups) {
   if (!strip || strip.state === 'DROPPED') return out;
   if (strip.role !== 'DEPARTURE' && strip.role !== 'ARRIVAL') return out;
   const fieldStateFor = (lookups && lookups.fieldStateFor) || (typeof getEfspFieldState === 'function' ? getEfspFieldState : () => null);
-  const fdrFor = (lookups && lookups.fdrFor) || (typeof getEfspFdr === 'function' ? getEfspFdr : () => null);
+  const fdrFor = (lookups && lookups.fdrFor) || (typeof getEfspFlightData === 'function' ? getEfspFlightData : () => null);
   const record = fieldStateFor(strip.facilityId);
   if (!record) return out;
   const fdr = strip.fdrId ? fdrFor(strip.fdrId) : null;

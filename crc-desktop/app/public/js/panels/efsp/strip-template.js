@@ -1,5 +1,5 @@
 'use strict';
-import { getEfspFdr } from './efsp-state.js';
+import { getEfspFlightData } from './efsp-state.js';
 import { resolveTimeChain, timeChainForBlock } from './time-chains.js';
 import { carrierDerivedText, getEfspCarrier } from './carrier-state.js';
 import { mtrLostCommsAdvisory } from './strip-fields.js';
@@ -57,7 +57,7 @@ export const DEPARTURE_BLOCK_MAP = {
   '4':  { required: true,  label: 'CID',      target: { kind: 'system', field: 'cid' } },
   '4A': { required: false, label: 'RMV',      target: { kind: 'flag', flag: 'removeIndicator' } },
   '4B': { required: true,  label: 'DATALINK', target: { kind: 'fdr', path: 'assigned.datalinkClearanceIndicator' } },
-  '5':  { required: true,  label: 'SQUAWK',   target: { kind: 'fdr', path: 'identity.beaconAssigned' } },
+  '5':  { required: true,  label: 'BEACON',   target: { kind: 'fdr', path: 'identity.beaconAssigned' } },
   // WP4A gap-closure — track-degradation flag. Mirrors crc-sync's
   // block-map.js's '5A' exactly (plain 'fdr'-routed — see that module's
   // comment for why this one needs no dedicated target kind, unlike 24A).
@@ -170,7 +170,7 @@ export const ARRIVAL_BLOCK_MAP = {
   '4':        { required: true,  label: 'CID',      target: { kind: 'system', field: 'cid' } },
   '4A':       { required: false, label: 'RMV',      target: { kind: 'flag', flag: 'removeIndicator' } },
   '4B':       { required: true,  label: 'DATALINK', target: { kind: 'fdr', path: 'assigned.datalinkClearanceIndicator' } },
-  '5':        { required: true,  label: 'SQUAWK',   target: { kind: 'fdr', path: 'identity.beaconAssigned' } },
+  '5':        { required: true,  label: 'BEACON',   target: { kind: 'fdr', path: 'identity.beaconAssigned' } },
   '5A':       { required: false, label: 'DEGR',     target: { kind: 'fdr', path: 'identity.trackDegradationFlag' } }, // WP4A gap-closure — see DEPARTURE_BLOCK_MAP's '5A' comment
   '6':        { required: true,  label: 'ETA',      target: { kind: 'fdr', path: 'filed.estimatedArrivalTimeUtc' } },
   '7':        { required: true,  label: 'ALT',      target: { kind: 'clearance', field: 'altitude' }, interlock: 'ALTITUDE' }, // docs/adr/0058
@@ -226,7 +226,7 @@ export const OVERFLIGHT_BLOCK_MAP = {
   '4':  { required: true,  label: 'CID',      target: { kind: 'system', field: 'cid' } },
   '4A': { required: false, label: 'RMV',      target: { kind: 'flag', flag: 'removeIndicator' } },
   '4B': { required: true,  label: 'DATALINK', target: { kind: 'fdr', path: 'assigned.datalinkClearanceIndicator' } },
-  '5':  { required: true,  label: 'SQUAWK',   target: { kind: 'fdr', path: 'identity.beaconAssigned' } },
+  '5':  { required: true,  label: 'BEACON',   target: { kind: 'fdr', path: 'identity.beaconAssigned' } },
   '5A': { required: false, label: 'DEGR',     target: { kind: 'fdr', path: 'identity.trackDegradationFlag' } },
   '7':  { required: true,  label: 'CRUS ALT', target: { kind: 'fdr', path: 'filed.requestedAltitude' } }, // what was filed; the assigned altitude is the clearance (docs/adr/0058)
   // WP6 (crc-sync's docs/adr/0051) — OVERFLIGHT had no Block carrying an ATC
@@ -274,7 +274,7 @@ export const MISSION_BLOCK_MAP = {
   'M1': { required: true,  label: 'MSN #',   target: { kind: 'fdr', path: 'mission.missionNumber' } },
   'M2': { required: false, label: 'PKG',     target: { kind: 'fdr', path: 'mission.packageId' } },
   'M3': { required: true,  label: 'CALLSIGN',target: { kind: 'fdr', path: 'identity.callsign' } },
-  'M4': { required: true,  label: 'SQUAWK',  target: { kind: 'fdr', path: 'identity.beaconAssigned' } },
+  'M4': { required: true,  label: 'BEACON',  target: { kind: 'fdr', path: 'identity.beaconAssigned' } },
   'M5': { required: false, label: 'CTL AGY', target: { kind: 'fdr', path: 'mission.controllingAgency' } },
   'M6': { required: false, label: 'VUL STRT',target: { kind: 'fdr', path: 'mission.vulWindowStartUtc' } },
   'M7': { required: false, label: 'VUL END', target: { kind: 'fdr', path: 'mission.vulWindowEndUtc' } },
@@ -297,7 +297,7 @@ const _CARRIER_CHROME = {
   '2':  { required: true,  label: 'REV',    target: { kind: 'system', field: 'rev' } },
   '4':  { required: true,  label: 'CID',    target: { kind: 'system', field: 'cid' } },
   '4A': { required: false, label: 'RMV',    target: { kind: 'flag', flag: 'removeIndicator' } },
-  '5':  { required: false, label: 'SQUAWK', target: { kind: 'fdr', path: 'identity.beaconAssigned' } },
+  '5':  { required: false, label: 'BEACON', target: { kind: 'fdr', path: 'identity.beaconAssigned' } },
   '25': { required: true,  label: 'STATE',  target: { kind: 'system', field: 'state' } },
   '26': { required: true,  label: 'NLA',    target: { kind: 'nla' } },
 };
@@ -357,7 +357,7 @@ function _historyCellFor(strip, blockId) {
   const map = BLOCK_MAPS[strip.role || 'DEPARTURE'];
   const def = map && map[blockId];
   if (def && def.target.kind === 'clearance') {
-    const fdr = typeof getEfspFdr === 'function' ? getEfspFdr(strip.fdrId) : null;
+    const fdr = typeof getEfspFlightData === 'function' ? getEfspFlightData(strip.fdrId) : null;
     return (fdr && fdr.clearance && fdr.clearance[def.target.field]) || null;
   }
   return (strip.annotations && strip.annotations[blockId]) || null;
@@ -679,7 +679,7 @@ export function requiredBlocksFor(role = 'DEPARTURE') {
 
 /**
  * A Block is directly editable via click-to-edit (guide §3.7/§7.4 — Enter
- * commits, Esc reverts, no auto-commit on blur) when it's fdr- or
+ * commits, Esc reverts, no auto-commit on blur) when it's flight-data- or
  * annotation-routed. System/composite/flag/nla Blocks (2, 3, 4, 4A, 25, 26)
  * are managed by their own dedicated mechanisms (board-store-derived,
  * gesture toggles, the NLA button) and are never free-text editable here.

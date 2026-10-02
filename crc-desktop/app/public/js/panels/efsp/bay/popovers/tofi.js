@@ -1,7 +1,7 @@
 'use strict';
 import { TOFI_ELIGIBLE_STATES } from '../../efsp-nla.js';
 import { getActingPositions, sendEfspMutation } from '../../efsp-ws.js';
-import { getEfspFdr, getEfspStrip } from '../../efsp-state.js';
+import { getEfspFlightData, getEfspStrip } from '../../efsp-state.js';
 import { TOFI_ANSWERED_BY, TOFI_COUNTERPARTS } from '../authority-mirror.js';
 import { _isRejectedCoordinationReplica } from './coordination.js';
 import { _resolveActingPositionId, _swallowRepeatAdvance } from '../../bay-view.js';
@@ -125,7 +125,7 @@ function _onDocPointerDownCloseTofiPopover(e) {
  */
 export function _openTofiEntryPopover(strip, anchorEl, counterparts) {
   _closeTofiPopover();
-  const fdr = getEfspFdr(strip.fdrId);
+  const fdr = getEfspFlightData(strip.fdrId);
   const degraded = !!(fdr && fdr.identity && fdr.identity.trackDegradationFlag && fdr.identity.trackDegradationFlag !== 'NONE');
 
   const popover = document.createElement('div');
@@ -189,7 +189,7 @@ export function _tofiProposerOf(strip, tofi) {
  */
 export function _tofiExitPrecondition(strip, tofi) {
   if (!tofi || tofi.direction !== 'EXIT' || tofi.state !== 'PROPOSED') return null;
-  const fdr = typeof getEfspFdr === 'function' ? getEfspFdr(strip.fdrId) : null;
+  const fdr = typeof getEfspFlightData === 'function' ? getEfspFlightData(strip.fdrId) : null;
   const regime = (fdr && fdr.tofi && fdr.tofi.separationRegime) || null;
   if (regime === 'ATC') return null;
   const shown = regime || 'unset';

@@ -36,7 +36,7 @@ async function controller(browser, baseURL, name, held, facilityId = 'TACTICAL')
 
 // `role` picks between the two Strips one flight has under TOFI (the ATC side and the MISSION line).
 const stripOf = (page, callsign, role = null) => page.evaluate(([c, r]) => {
-  const s = getAllEfspStrips().find(x => x.state !== 'DROPPED' && (!r || x.role === r) && (getEfspFdr(x.fdrId) || { identity: {} }).identity.callsign === c);
+  const s = getAllEfspStrips().find(x => x.state !== 'DROPPED' && (!r || x.role === r) && (getEfspFlightData(x.fdrId) || { identity: {} }).identity.callsign === c);
   return s ? { stripId: s.stripId, state: s.state, ownerPositionId: s.ownerPositionId, bayId: s.bayId, rev: s.rev, tofi: s.tofiCoordination } : null;
 }, [callsign, role]);
 const waitStrip = (page, callsign, pred, what, role = null) => expect.poll(async () => {
@@ -48,7 +48,7 @@ const liveCount = (page) => page.evaluate(() => getAllEfspStrips().filter(s => s
 /** A mutation through the page's own send function, as `positionId`, on the live Strip. */
 async function act(page, positionId, callsign, op, role = null) {
   await page.evaluate(([pos, c, o, r]) => {
-    const s = getAllEfspStrips().find(x => x.state !== 'DROPPED' && (!r || x.role === r) && getEfspFdr(x.fdrId).identity.callsign === c);
+    const s = getAllEfspStrips().find(x => x.state !== 'DROPPED' && (!r || x.role === r) && getEfspFlightData(x.fdrId).identity.callsign === c);
     window.sendEfspMutation(pos, getEfspStrip(s.stripId), o);
   }, [positionId, callsign, op, role]);
 }
@@ -134,7 +134,7 @@ test('04 AIC walks away: the line lands in TAC_C2\'s On Station tab, where TAC_C
   await waitStrip(tac.page, line, s => s.ownerPositionId === 'TAC_C2' && s.bayId === 'tac-c2-on-station');
   await openBay(tac.page, 'TAC_C2', 'tac-c2-on-station');
   await expect(stripByCallsign(tac.page, line)).toBeVisible();
-  await tac.page.screenshot({ path: path.join(SHOTS, '04-covering-lands-in-tab.png') });
+  await tac.page.screenshot({ path: path.join(SHOTS, '04-consolidated-lands-in-tab.png') });
   await tac.context.close(); await aic.context.close();
 });
 
@@ -151,7 +151,7 @@ test('05 CTR proposes the TOFI exit while AIC holds the line, and the TAC_C2 sea
   await waitStrip(ctr.page, line, s => s.state === 'IN_SECTOR', null, 'OVERFLIGHT');
   await act(ctr.page, 'CTR', line, { kind: 'TOFI', action: 'PROPOSE', direction: 'ENTRY', toFacilityId: 'TACTICAL', toPositionId: 'TAC_C2' }, 'OVERFLIGHT');
   // The MISSION Strip minted at TACTICAL shares the callsign; the ATC side is the CENTER one.
-  await expect.poll(() => combo.page.evaluate((c) => getAllEfspStrips().some(s => s.role === 'MISSION' && getEfspFdr(s.fdrId).identity.callsign === c), line)).toBe(true);
+  await expect.poll(() => combo.page.evaluate((c) => getAllEfspStrips().some(s => s.role === 'MISSION' && getEfspFlightData(s.fdrId).identity.callsign === c), line)).toBe(true);
   await act(combo.page, 'TAC_C2', line, { kind: 'TOFI', action: 'ACCEPT', separationRegime: 'MARSA' }, 'MISSION');
   await waitStrip(combo.page, line, s => s.tofi && s.tofi.state === 'ACTIVE', null, 'MISSION');
   await act(combo.page, 'TAC_C2', line, { kind: 'SetState', toState: 'AIRBORNE' }, 'MISSION');
@@ -164,12 +164,12 @@ test('05 CTR proposes the TOFI exit while AIC holds the line, and the TAC_C2 sea
   // CTR sets SEP REG back to ATC, then proposes the exit.
   await act(ctr.page, 'CTR', line, { kind: 'SetBlock', blockId: 'SREG', value: 'ATC' }, 'OVERFLIGHT');
   await expect.poll(() => ctr.page.evaluate((c) => {
-    const s = getAllEfspStrips().find(x => x.role === 'OVERFLIGHT' && getEfspFdr(x.fdrId).identity.callsign === c);
-    return getEfspFdr(s.fdrId).tofi.separationRegime;
+    const s = getAllEfspStrips().find(x => x.role === 'OVERFLIGHT' && getEfspFlightData(x.fdrId).identity.callsign === c);
+    return getEfspFlightData(s.fdrId).tofi.separationRegime;
   }, line)).toBe('ATC');
   await act(ctr.page, 'CTR', line, { kind: 'TOFI', action: 'PROPOSE', direction: 'EXIT' }, 'OVERFLIGHT');
   await expect.poll(() => combo.page.evaluate((c) => {
-    const s = getAllEfspStrips().find(x => x.role === 'MISSION' && getEfspFdr(x.fdrId).identity.callsign === c);
+    const s = getAllEfspStrips().find(x => x.role === 'MISSION' && getEfspFlightData(x.fdrId).identity.callsign === c);
     return s && s.tofiCoordination && s.tofiCoordination.state;
   }, line)).toBe('PROPOSED');
 
@@ -179,7 +179,7 @@ test('05 CTR proposes the TOFI exit while AIC holds the line, and the TAC_C2 sea
   await combo.page.screenshot({ path: path.join(SHOTS, '05-tofi-exit-answered-before.png') });
   await strip.getByRole('button', { name: 'Accept TOFI Exit' }).click();
   await expect.poll(() => ctr.page.evaluate((c) => {
-    const s = getAllEfspStrips().find(x => x.role === 'OVERFLIGHT' && getEfspFdr(x.fdrId).identity.callsign === c);
+    const s = getAllEfspStrips().find(x => x.role === 'OVERFLIGHT' && getEfspFlightData(x.fdrId).identity.callsign === c);
     return s.tofiCoordination && s.tofiCoordination.state;
   }, line)).toBe('COMPLETE');
   expect((await stripOf(combo.page, line, 'MISSION')).ownerPositionId, 'answering did not move the line').toBe('AIC');

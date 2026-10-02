@@ -18,14 +18,14 @@ const ALL = ['OPS', 'CD', 'GND', 'TWR', 'APP'];
 const CS = 'L19AIR1';
 
 const info = (page) => page.evaluate((cs) => {
-  const s = getAllEfspStrips().find((x) => x.state !== 'DROPPED' && (getEfspFdr(x.fdrId) || {}).identity && getEfspFdr(x.fdrId).identity.callsign === cs);
-  return s && { stripId: s.stripId, fdrId: s.fdrId, owner: s.ownerPositionId, bay: s.bayId, state: s.state, rev: s.rev, takeoff: (getEfspFdr(s.fdrId).timeInputs || {}).takeoffStampedUtc };
+  const s = getAllEfspStrips().find((x) => x.state !== 'DROPPED' && (getEfspFlightData(x.fdrId) || {}).identity && getEfspFlightData(x.fdrId).identity.callsign === cs);
+  return s && { stripId: s.stripId, fdrId: s.fdrId, owner: s.ownerPositionId, bay: s.bayId, state: s.state, rev: s.rev, takeoff: (getEfspFlightData(s.fdrId).timeInputs || {}).takeoffStampedUtc };
 }, CS);
 
 test.afterEach(async ({ page }) => {
   await page.evaluate((cs) => {
     for (const s of getAllEfspStrips()) {
-      const fdr = getEfspFdr(s.fdrId);
+      const fdr = getEfspFlightData(s.fdrId);
       if (!fdr || fdr.identity.callsign !== cs || s.state === 'DROPPED') continue;
       sendEfspMutation(s.ownerPositionId, s, { kind: 'DropStrip', reason: 'e2e cleanup' });
     }
@@ -44,7 +44,7 @@ test('the suggestion chip: drawn, moves nothing, one click advances the flight a
   // To LUAW, with the page's own NLA, as l4-chain does.
   for (let i = 0; i < 6; i++) {
     const before = (await info(page)).state;
-    await page.evaluate((cs) => _invokeNla(getAllEfspStrips().find((x) => x.state !== 'DROPPED' && getEfspFdr(x.fdrId).identity.callsign === cs)), CS);
+    await page.evaluate((cs) => _invokeNla(getAllEfspStrips().find((x) => x.state !== 'DROPPED' && getEfspFlightData(x.fdrId).identity.callsign === cs)), CS);
     await expect.poll(async () => (await info(page)).state, { timeout: 3000, message: `stuck at ${before}` }).not.toBe(before);
     await page.waitForTimeout(450); // the server's double-tap guard
   }

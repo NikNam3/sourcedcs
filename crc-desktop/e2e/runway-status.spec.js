@@ -140,14 +140,14 @@ async function resetField(page) {
 // ── Strips ───────────────────────────────────────────────────────────────
 
 const stripOf = (page, cs) => page.evaluate((cs) => getAllEfspStrips().find((x) => {
-  const f = getEfspFdr(x.fdrId);
+  const f = getEfspFlightData(x.fdrId);
   return f && f.identity.callsign === cs && x.state !== 'DROPPED';
 }) || null, cs);
 
 /** A Strip op sent as `positionId`, else its owner when held here, else the first Position held here. */
 async function stripOp(page, cs, op, positionId) {
   await page.evaluate(([cs, op, p]) => {
-    const s = getAllEfspStrips().find((x) => getEfspFdr(x.fdrId).identity.callsign === cs && x.state !== 'DROPPED');
+    const s = getAllEfspStrips().find((x) => getEfspFlightData(x.fdrId).identity.callsign === cs && x.state !== 'DROPPED');
     const held = getActingPositions('INCIRLIK');
     sendEfspMutation(p || (held.includes(s.ownerPositionId) ? s.ownerPositionId : held[0]), s, op);
   }, [cs, op, positionId || null]);
@@ -170,7 +170,7 @@ async function setState(page, cs, toState) {
 async function nla(page, cs, n = 1) {
   for (let i = 0; i < n; i++) {
     const before = (await stripOf(page, cs)).state;
-    await page.evaluate((cs) => _invokeNla(getAllEfspStrips().find((x) => getEfspFdr(x.fdrId).identity.callsign === cs && x.state !== 'DROPPED')), cs);
+    await page.evaluate((cs) => _invokeNla(getAllEfspStrips().find((x) => getEfspFlightData(x.fdrId).identity.callsign === cs && x.state !== 'DROPPED')), cs);
     await expect.poll(async () => (await stripOf(page, cs)).state, { message: `${cs} NLA from ${before}` }).not.toBe(before);
     await page.waitForTimeout(450); // the server's per-Strip 400 ms double-tap guard (T5)
   }
@@ -236,7 +236,7 @@ test('Phase 3 walk: OPS asks for runway works, TWR suspends, the Strips hold, FI
     await stripOp(ops, cs, { kind: 'SetBlock', blockId: '8B', value: '05' }, 'APP');
   }
   await stripOp(ops, ARR_FIN, { kind: 'SetBlock', blockId: '3F', value: true }, 'APP');
-  await expect.poll(async () => (await ops.evaluate((cs) => { const s = getAllEfspStrips().find((x) => getEfspFdr(x.fdrId).identity.callsign === cs); return getEfspFdr(s.fdrId).military.hookRequired; }, ARR_FIN))).toBe(true);
+  await expect.poll(async () => (await ops.evaluate((cs) => { const s = getAllEfspStrips().find((x) => getEfspFlightData(x.fdrId).identity.callsign === cs); return getEfspFlightData(s.fdrId).military.hookRequired; }, ARR_FIN))).toBe(true);
   await nla(ops, ARR_TWR, 1); // -> HANDED_TO_TOWER (TWR)
   await nla(ops, ARR_FIN, 1);
   await nla(twr, ARR_FIN, 1); // -> FINAL
@@ -368,7 +368,7 @@ test('Phase 3 walk: a runway change needs OPS and APP (each a different person),
 
   // Pilot request "request runway 23": TWR moves the Strip to 23's rack and
   // the advisory follows the rack (the chip goes).
-  await twr.evaluate((cs) => _moveStrip(getAllEfspStrips().find((s) => getEfspFdr(s.fdrId).identity.callsign === cs && s.state !== 'DROPPED'), 'twr-runway-queue', 'rwy-23', null, null), DEP);
+  await twr.evaluate((cs) => _moveStrip(getAllEfspStrips().find((s) => getEfspFlightData(s.fdrId).identity.callsign === cs && s.state !== 'DROPPED'), 'twr-runway-queue', 'rwy-23', null, null), DEP);
   await expect.poll(async () => (await stripOf(twr, DEP)).rackId).toBe('rwy-23');
   await expect(chip(stripByCallsign(twr, DEP))).toHaveCount(0);
 
