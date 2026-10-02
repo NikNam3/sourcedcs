@@ -19,12 +19,12 @@ export const COORDINATION_TARGETS = {
   CTR: { facilityId: 'INCIRLIK', positionId: 'AP' },
 };
 
-// docs/adr/0101 (DR-3): APP or CTR may also hand an ARRIVAL at INBOUND to the carrier's Marshal (the Strip never leaves
+// docs/adr/0101 (DR-3): APP or CTR may also hand an ARRIVAL in its coordination-eligible state to the carrier's Marshal (the Strip never leaves
 // the EFSP). The only primitive it takes is a HANDOFF; the server refuses the rest ("CV_MARSHAL does not take ...").
 export const CARRIER_HANDOFF_TARGET = { facilityId: 'CARRIER', positionId: 'CV_MARSHAL' };
 export const CARRIER_HANDOFF_STRIP_TYPE = 'ARRIVAL';
 
-/** Can this Strip be handed to the Marshal? (A key of COORDINATION_TARGETS holding an ARRIVAL at INBOUND.) */
+/** Can this Strip be handed to the Marshal? (A key of COORDINATION_TARGETS holding an ARRIVAL in that state.) */
 export function canHandOffToCarrier(strip) {
   return !!COORDINATION_TARGETS[strip.ownerPositionId]
     && strip.stripType === CARRIER_HANDOFF_STRIP_TYPE && strip.state === COORDINATION_ELIGIBLE_STATES[CARRIER_HANDOFF_STRIP_TYPE];
