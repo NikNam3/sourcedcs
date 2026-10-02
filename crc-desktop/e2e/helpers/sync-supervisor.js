@@ -26,7 +26,7 @@ function wipeState() {
     fs.rmSync(path.join(dir, name), { recursive: true, force: true });
   }
   // airspaces start as an empty list, like the first boot
-  fs.writeFileSync(path.join(dir, 'efsp-airspaces.json'), '[]');
+  fs.writeFileSync(path.join(dir, 'efsp-airspaces.json'), '{}');
 }
 
 function run() {
