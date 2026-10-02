@@ -301,7 +301,7 @@ test('Phase 3 walk: OPS asks for runway works, LC suspends, the Strips hold, FIN
   await lc.evaluate(() => crc.ws.sendEfspRunwayStatusMutation('LC', 'INCIRLIK', crc.state.getEfspRunwayStatus('INCIRLIK').rev, { kind: 'CompleteInspection', runwayId: '05/23' }));
   await expect(lc.locator('#efsp-mutation-error')).toHaveText(/^runway 05\/23 — /);
   expect(await expectRefusalIsVisible(lc, 'LC signing off an inspection')).toMatch(/^runway 05\/23/);
-  await shot(lc, '05-inspection-refused-to-lc');
+  await shot(lc, '05-inspection-refused-to-twr');
 
   await press(ops, 'CompleteInspection', { positionId: 'OPS' });
   expect((await runway(ops)).status).toBe('OPEN');

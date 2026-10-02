@@ -81,7 +81,7 @@ test('pilot walk: "VIPER11 request a different exit fix", CTR and AP at once', a
   await expect(a.locator('.efsp-strip-fields .efsp-block-9H-TIME')).toHaveText('1432');
   note('1', `CTR posted IR107/F/1432/FL190; AP's replica showed them without a reload. AP face: ${(await faceIds(a)).join(' ')}`);
   await only(ap, CS);
-  await a.screenshot({ path: path.join(SHOTS, 'walk-1-ap-replica.png') });
+  await a.screenshot({ path: path.join(SHOTS, 'walk-1-app-replica.png') });
 
   // AP takes the flight.
   const accept = a.getByRole('button', { name: 'Accept Hand Off' });

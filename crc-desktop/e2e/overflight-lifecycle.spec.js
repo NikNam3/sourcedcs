@@ -70,7 +70,7 @@ test('an overflight walks INBOUND, IN_SECTOR, is handed CTR to AP, and is droppe
     await ap.locator('#efsp-position-tabs .efsp-position-tab[data-position-id="AP"]').click();
     await ap.locator('#efsp-bay-tabs .efsp-bay-tab.efsp-tab-has-arrival').click();
     await expect(ap.locator('.efsp-strip', { hasText: callsign }).first()).toBeVisible();
-    await shot(ap, '03-handoff-to-ap');
+    await shot(ap, '03-handoff-to-app');
 
     // 4. AP accepts: it lands in AP's overflight Bay (not ARRIVAL's inbound Bay), the sender is HANDED_OFF with Drop on offer.
     await ap.locator('.efsp-strip', { hasText: callsign }).first().getByRole('button', { name: /accept/i }).first().click();
@@ -88,7 +88,7 @@ test('an overflight walks INBOUND, IN_SECTOR, is handed CTR to AP, and is droppe
     await expect.poll(() => stateAt(ap, callsign, 'INCIRLIK')).toBe('HANDED_OFF');
     await press(ap, callsign);
     await expect.poll(() => stateAt(ap, callsign, 'INCIRLIK')).toBeNull();
-    await shot(ap, '05-ap-walks-it');
+    await shot(ap, '05-app-walks-it');
     await press(ctr, callsign);
     await expect.poll(() => records(ctr, callsign)).toEqual([]);
   } finally {
