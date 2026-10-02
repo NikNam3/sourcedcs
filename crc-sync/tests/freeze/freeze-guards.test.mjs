@@ -26,7 +26,7 @@ Object.assign(process.env, {
   CRCSYNC_EFSP_MUTATION_LOG_PATH: path.join(tmp, 'mutations.jsonl'),
   CRCSYNC_EFSP_AIRSPACES_PATH: path.join(tmp, 'airspaces.json'),
 });
-fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, '[]');
+fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, '{}');
 
 const { createEfsp } = await import('../../src/efsp/index.js');
 const facilityConfig = await import('../../src/efsp/facility-config.js');

@@ -14,6 +14,8 @@ const { SRC } = require('./host-env');
  * with its own using Position — copied from tests/efsp-scenarios.test.mjs so a
  * change to the shipped config/ cannot move the soak.
  */
+// The standing list is theater-keyed (ADR 0098); the host's MissionSession is put in this theater (host-core.js).
+const SOAK_THEATER = 'Soak';
 const AIRSPACES = [
   {
     airspaceId: 'MOA-EAST', name: 'East MOA', type: 'MOA',
@@ -39,7 +41,7 @@ function writeFixtures(stateDir) {
   // startup error, so the otherwise-empty config dir carries the shipped copies.
   for (const f of TUNING_FILES) fs.copyFileSync(path.join(__dirname, '../../config', f), path.join(stateDir, 'config-empty', f));
   fs.mkdirSync(path.join(stateDir, 'terrain'), { recursive: true });
-  fs.writeFileSync(path.join(stateDir, 'airspaces.json'), JSON.stringify(AIRSPACES, null, 2));
+  fs.writeFileSync(path.join(stateDir, 'airspaces.json'), JSON.stringify({ [SOAK_THEATER]: AIRSPACES }, null, 2));
   fs.writeFileSync(path.join(stateDir, 'stereo-routes.json'), '[]');
   // No theater table (offset 0, as before), but the default transition altitude is read from this file.
   fs.writeFileSync(path.join(stateDir, 'config-empty', 'theaters.json'), JSON.stringify({ defaultTransitionAltFt: 18000, theaters: {} }));
@@ -161,4 +163,4 @@ class InprocHost {
   async shutdown() { if (this._host) this._host.shutdown(); if (this._env) this._env.closeLog(); }
 }
 
-module.exports = { ForkedHost, InprocHost, writeFixtures, AIRSPACES };
+module.exports = { ForkedHost, InprocHost, writeFixtures, AIRSPACES, SOAK_THEATER };
