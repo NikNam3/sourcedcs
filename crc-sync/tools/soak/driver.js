@@ -22,7 +22,7 @@ const { PROFILES, CREWS, POSITION_FACILITY, SCRIPT_WEIGHTS, SCRIPTS, NLA_FALLBAC
 const FACILITIES = ['INCIRLIK', 'CENTER', 'TACTICAL', 'RANGES'];
 const NLA_GUARD_MS = 400 + 10; // NLA_DOUBLE_TAP_MS + 10, briefing §5.2
 const EVENTS_CAP = 50;
-// Where a CD-owned departure goes back to when a covering Position was handed it.
+// Where a CD-owned departure goes back to when the Position CD is consolidated at was handed it.
 const RETURN_BAY = {
   PENDING_CLEARANCE: { position: 'CD', bayId: 'cd-pending-clearance' },
   CLEARED: { position: 'CD', bayId: 'cd-cleared' },
@@ -615,9 +615,9 @@ class Driver {
         return null;
       });
     }
-    // A covering Position was handed a Strip it may not advance (the vacated
-    // Position's work, routed down the covering chain). A controller hands it
-    // back once its Position is staffed again; until then the flight waits.
+    // The Position a vacated Position is consolidated at was handed a Strip it may
+    // not advance (the vacated Position's work, routed along the consolidation
+    // chain). It goes back once that Position is staffed again; until then the flight waits.
     const notMine = ack.reason === 'PERMISSION_DENIED' && /is not (\w+)'s to advance/.exec(ack.detail || '');
     if (notMine && s.stripType === 'DEPARTURE' && RETURN_BAY[s.state]) {
       this.stats.consolidationStranded = (this.stats.consolidationStranded || 0) + 1;
@@ -1231,7 +1231,7 @@ class Driver {
       this.after(this.rngNet.exp(60 / p.conflictsPerHour * MIN), conflict, 'conflict');
     };
     this.at(this.t0 + this.rngNet.exp(60 / p.conflictsPerHour * MIN), conflict, 'conflict');
-    // Manning churn: CD vacated for a few minutes (SystemReassign to its covering Position).
+    // Staffing churn: CD vacated for a few minutes (SystemReassign to the Position it is consolidated at).
     const churn = async () => {
       const c = [...this.clients.values()].find(x => x.connected && x.declared && (x.holds.INCIRLIK || []).includes('CD'));
       if (c && (c.holds.INCIRLIK || []).length > 1) {

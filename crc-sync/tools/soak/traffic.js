@@ -13,7 +13,7 @@
 
 // SOURCE assumption, not a measured squadron figure (briefing §10 Q7):
 // realistic = H46's 12 concurrent flights and 3 controllers; stress = 3x the
-// rate with one controller holding every Position (H12's worst case).
+// rate with one controller signed on to every Position (H12's worst case).
 const PROFILES = {
   realistic: {
     concurrentFlights: 12, spawnCheckS: [20, 60], thinkS: [15, 90],
@@ -171,7 +171,7 @@ const SCRIPTS = {
 
   * popupArrival(f, x) {
     if (x.rng.chance(0.5)) {
-      // Pop-up: nobody handed it over, so APP originates it (coordination :154).
+      // Pop-up: nobody handed it over, so AP originates it (coordination :154).
       const r = yield create('AP', {
         kind: 'CreateStrip', bayId: 'ap-inbound', rackId: 'main', stripType: 'ARRIVAL',
         flightData: { callsign: f.callsign, aircraftType: 'C130', wakeCategory: 'M', originAirport: 'LTAC', destinationAirport: 'LTAG' },
@@ -181,9 +181,9 @@ const SCRIPTS = {
       yield walk('INCIRLIK', r.strip.stripId, s => s.state === 'DROPPED', 10);
       return;
     }
-    // Properly: CTR has it inbound, may point it out or call traffic to APP
+    // Properly: CTR has it inbound, may point it out or call traffic to AP
     // first, then hands it across (coordination :166-180). An INBOUND ARRIVAL
-    // is the one Role/state CTR can propose coordination from besides a
+    // is the one strip type/state CTR can propose coordination from besides a
     // HANDED_OFF departure (coordination.js:65).
     const r = yield create('CTR', {
       kind: 'CreateStrip', bayId: 'ctr-enroute', rackId: 'main', stripType: 'ARRIVAL',
@@ -218,9 +218,9 @@ const SCRIPTS = {
 
   * overflight(f, x) {
     // The guide's four states (docs/adr/0087): INBOUND -> IN_SECTOR -> HANDED_OFF
-    // -> DROPPED. Half the flights are handed CTR -> APP by HANDOFF (F14 is
+    // -> DROPPED. Half the flights are handed CTR -> AP by HANDOFF (F14 is
     // fixed: an IN_SECTOR overflight may propose coordination, and arrives
-    // INBOUND at APP); the rest leave our airspace by NLA and are dropped.
+    // INBOUND at AP); the rest leave our airspace by NLA and are dropped.
     const r = yield create('CTR', {
       kind: 'CreateStrip', bayId: 'ctr-overflight', rackId: 'main', stripType: 'OVERFLIGHT',
       flightData: { callsign: f.callsign, aircraftType: 'A320', wakeCategory: 'M', originAirport: 'LTBA', destinationAirport: 'OJAI' },

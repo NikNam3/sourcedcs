@@ -258,10 +258,10 @@ class WsHub {
   }
 
   /**
-   * Field state (guide §9.7, docs/adr/0061) changed with no controller's op
+   * Runway status (guide §9.7, docs/adr/0061) changed with no controller's op
    * behind it — today only the active end derived from the mission wind at
    * load (decisions.md H22). The same efsp-runway-status-delta a runway-status op
-   * returns from handleMessage, on field state's own sequence (0061's rule-5
+   * returns from handleMessage, on runway status's own sequence (0061's rule-5
    * deviation), so a client needs one handler for both (docs/adr/0068,
    * decisions.md S-L1d).
    */
@@ -444,8 +444,8 @@ class WsHub {
     const before = key(session.coverage);
     const after = key(next);
     this._setCoverage(session, next);
-    // Held Positions can change without the radar set changing (taking GND
-    // adds no scope), and the client renders the held list too — so the
+    // Signed-on Positions can change without the radar set changing (signing on to GC
+    // adds no scope), and the client renders the signed-on list too — so the
     // message goes out either way, and only the expensive re-send is gated.
     if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(this._coverageMsg(session)));
     if (before === after) return false;
@@ -618,9 +618,9 @@ class WsHub {
         if (this._onEfspChange && broadcasts.length > 0) {
           try { this._onEfspChange(); } catch (err) { log.error('onEfspChange failed', { err }); }
         }
-        // Declaring a different held set is what changes a controller's
-        // coverage (docs/adr/0042) — taking APP hands you the RAPCON's
-        // scopes, giving it up takes them away again. Done here rather than
+        // Declaring a different signed-on set is what changes a controller's
+        // coverage (docs/adr/0042) — signing on to AP gives you the RAPCON's
+        // scopes, signing off takes them away again. Done here rather than
         // inside efsp-ws.js because coverage is a property of the connection,
         // not of the Board, and efsp-ws.js has no session concept beyond the
         // controllerId it is handed.

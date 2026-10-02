@@ -318,7 +318,7 @@ function createApp(deps = {}) {
   // Each Facility with runways takes the end most into its airfield's wind as the
   // active runway, once per mission SESSION (docs/adr/0061, 0086): the store
   // skips a Facility whose runway was already derived in the current session, so
-  // a gRPC reconnect or a crc-sync restart keeps the end TWR has since chosen,
+  // a gRPC reconnect or a crc-sync restart keeps the end LC has since chosen,
   // and the same .miz restarted for a new sortie reads the wind again. DCS wind
   // is TRUE and is compared with each end's true heading from the inventory,
   // never with the magnetic end number.
@@ -398,7 +398,7 @@ function createApp(deps = {}) {
   // ── Archiving finished flights (H36, docs/adr/0082) ───────────────────────
   // A DROPPED Strip leaves memory and the Board snapshot 2 h after its drop, or
   // at the next mission session (F3), once the traffic count above has it; its
-  // FDR goes with its last Strip. The Mutation log keeps the history.
+  // Flight data goes with its last Strip. The Mutation log keeps the history.
   efsp.archiver.setIsCounted((stripId) => efspInstrumentation.trafficCount.hasCountFor(stripId));
   function _archive(r) {
     const payloads = archiveDeltas(r, efsp.boardStoreFor);
@@ -769,9 +769,9 @@ function createApp(deps = {}) {
       airportWeather = new Map();
       refreshAirportWeather(missionData);
 
-      // ── L1 field state: active runway from wind (H22) ─────────────────────────
+      // ── L1 runway status: active runway from wind (H22) ─────────────────────────
       deriveActiveRunwaysFromWind(missionData);
-      // ── end L1 field state ────────────────────────────────────────────────────
+      // ── end L1 runway status ────────────────────────────────────────────────────
     });
 
     on(grpcClient, 'status', (state) => wsHub.setGrpcStatus(state));
