@@ -306,7 +306,7 @@ export function _transferStrip(strip, toPositionId, bayId, rackId) {
 /**
  * The Bay a hand-back lands in: the receiving Position's Bay implying the
  * Strip's state, else its first Bay implying none — the client mirror of
- * board-store.js's _bayForNewOwner (the server rule is authoritative).
+ * crc-sync's board/placement.js `bayForNewOwner` (the server rule is authoritative).
  * @returns {{bayId:string, rackId:string}|null}
  */
 export function _handBackBayFor(strip, toPositionId) {
@@ -349,7 +349,7 @@ export function _dispatchGesture(strip, gestureFn, ...extraArgs) {
   return actingPositionId; // truthy only when dispatched — what the gesture metric counts (docs/adr/0072)
 }
 
-/** The first configured Bay for a Position — used as the transfer landing spot when the drop target is a Position tab rather than a specific Bay tab. Facility-config.js's Bay ordering intentionally puts each Position's "entry" Bay first (e.g. CD's Pending Clearance, GND's Pushback). */
+/** The first configured Bay for a Position — used as the transfer landing spot when the drop target is a Position tab rather than a specific Bay tab. crc-sync's facility-config.js Bay ordering intentionally puts each Position's "entry" Bay first (e.g. CD's Pending Clearance, GND's Pushback). */
 export function _defaultBayFor(positionId) {
   return getEfspBays().find(b => b.positionId === positionId) || null;
 }
@@ -484,7 +484,7 @@ export function _isProtectedStripEl(el) {
   //
   // Containment is no longer the question and cannot be: F-001 portals every
   // popover out to document.body, so `el.contains(popover)` is false for all
-  // six. efsp-ui-reachability.test.js opens each popover in turn and asserts
+  // six. efsp-ui-reachability.test.mjs opens each popover in turn and asserts
   // its Strip is protected, which is what holds this to the class.
   if (_stripHasOpenPopover(el.dataset.stripId)) return true;
   return false;

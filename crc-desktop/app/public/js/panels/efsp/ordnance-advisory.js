@@ -9,7 +9,7 @@
 //
 // hungOrdnanceAdvisoryFor is a COPY of crc-sync's src/efsp/runway-status.js
 // function of the same name, runway resolution included: browser scripts cannot
-// load crc-sync. tests/efsp-ordnance-client.test.js holds the two together.
+// load crc-sync. tests/efsp-ordnance-client.test.mjs holds the two together.
 // The helpers keep their `_ord` prefix from when this file was a classic script
 // sharing one global scope with its neighbours; as an ES module they are
 // file-private, and the prefix is now only a naming convention.

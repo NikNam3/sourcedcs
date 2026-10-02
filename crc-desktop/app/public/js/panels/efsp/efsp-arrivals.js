@@ -4,7 +4,7 @@
 //
 // No DOM here. efsp-panel.js (tabs, arrivals line) and strip-view.js (the
 // Strip's amber edge and "from" line) read this; app.js feeds it every board
-// delta. Pure enough for efsp-arrivals.test.js to drive directly.
+// delta. Pure enough for efsp-arrivals.test.mjs to drive directly.
 //
 // What counts as an arrival (docs/adr/0057), for a Bay owned by a Position
 // this controller holds:

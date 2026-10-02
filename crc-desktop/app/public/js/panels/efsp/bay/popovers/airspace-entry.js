@@ -8,7 +8,7 @@ import { _mountPopover, _unmountPopover } from '../popover-portal.js';
 
 
 // Only the Positions that hold an airborne flight approve one into an
-// airspace — the client mirror of permission.js's AIRSPACE_ENTRY_OP_KINDS
+// airspace — the client mirror of crc-sync's AIRSPACE_ENTRY_OP_KINDS (authority/op-kinds.js)
 // grant. A range Position never appears here: it works no Strips at all.
 // The Strip awaiting a second press on Convert to Arrival. Module-level
 // rather than per-render, since a re-render rebuilds the button.

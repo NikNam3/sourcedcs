@@ -12,8 +12,7 @@ import { refreshAtoImportButton } from '../ato-import.js';
 // anywhere in this codebase (grepped: zero other uses of prompt/alert/
 // confirm), Electron's support for it is inconsistent across versions/
 // webPreferences, and every other input flow here already uses an inline
-// form (see squawk-panel.js's sqmap-code-input/sqmap-add for the exact
-// pattern this mirrors). A silent no-op from a dialog that doesn't fire is
+// form. A silent no-op from a dialog that doesn't fire is
 // indistinguishable from a broken button — this doesn't have that failure
 // mode, and every rejection path is now visible instead of silent too.
 
@@ -40,7 +39,7 @@ export let _pendingDuplicateCallsign = null;
 // picker until they reloaded the whole app. A snapshot is exactly the event
 // that means "the server you were talking to may not be the one you are
 // talking to now", so it is the right trigger — and it is free, because
-// _refreshStereoRoutes is a no-op re-render when nothing changed.
+// the stereo-route refresh is a no-op re-render when nothing changed.
 export let _stereoRoutes = [];
 let _stereoRoutesInFlight = false;
 
@@ -121,8 +120,8 @@ const CREATE_STRIP_ORIGINS = [
   // WP4A second slice — TAC_C2/GCI self-originate a standalone MISSION
   // Strip (guide §9.8), for a mission that never needs to touch ATC-
   // controlled airspace at all. Distinct from a MISSION Strip minted as a
-  // TOFI ENTRY exchange's byproduct (crc-sync's board-store.js
-  // receiveTofiProposal), which shares its FDR with the ATC-side Strip
+  // TOFI ENTRY exchange's byproduct (crc-sync's board/tofi.js
+  // `receiveTofiProposal`), which shares its FDR with the ATC-side Strip
   // instead — both paths coexist, same "origin OR replica" duality
   // DEPARTURE/ARRIVAL Strips already have. GCI has no Tasked/Airborne Bay
   // of its own (guide §4.2 only gives those to TAC_C2 — AIC/GCI get the
@@ -344,7 +343,7 @@ export function _refreshCreateStripAvailability() {
  * that can't even be copied cleanly (flight-data-store.js's createFlightData always
  * auto-allocates a fresh one). Reusing the same FDR makes both problems
  * structurally impossible — there's nothing to copy, because nothing new
- * is created. `board-store.js`'s `_applyConvertToArrival` is authoritative
+ * is created. crc-sync's `_applyConvertToArrival` (board/ops/convert-to-arrival.js) is authoritative
  * for the state/role/Bay/permission rules; this just sends the Mutation.
  */
 export function convertStripToArrival(strip) {

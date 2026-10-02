@@ -25,7 +25,7 @@ import { _setActiveBayId, _setActivePositionTab } from './efsp-panel.js';
 // The local rules are shown as "SOURCE practice", never as FAA/USAF doctrine.
 //
 // The pure half below is a hand copy of crc-sync/src/efsp/alert-scramble.js (a
-// browser script cannot load it); efsp-scramble-client.test.js runs both over
+// browser script cannot load it); efsp-scramble-client.test.mjs runs both over
 // one fixture table and requires identical answers. Change them together.
 
 // ── the pure half (mirrors crc-sync's alert-scramble.js) ──────────────────

@@ -26,7 +26,7 @@ import { _showMutationError } from './efsp-panel.js';
 // one `Move`), and the other things the Marshal types (Charlie time, the
 // marshal radial, the Case I altitude) are inputs, never results.
 
-// Client mirror of permission.js's CARRIER_CAPABILITIES (drift-tested). A UX
+// Client mirror of crc-sync's CARRIER_CAPABILITIES (authority/positions/carrier.js, read through permission.js) (drift-tested). A UX
 // convenience: the server's predicates are the authority.
 export const CARRIER_CAPABILITIES = {
   CV_MARSHAL: { setsCase: false, sequencesStack: true,  editsShipInput: true },

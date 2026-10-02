@@ -6,12 +6,12 @@ import { getEfspFlightData, getEfspRunwayStatus } from './efsp-state.js';
 // with it, whether a hook-equipped arrival has arresting gear to land on, and
 // which runway-status buttons a controller is offered.
 //
-// Everything here is a MIRROR of crc-sync's src/efsp/runway-status.js and
-// permission.js, and proactive only: the server decides every op and stamps
+// Everything here is a MIRROR of crc-sync's src/efsp/runway-status.js and its
+// authority tables (authority/positions/civil-atc.js), and proactive only: the server decides every op and stamps
 // every NLA inhibit (`strip.nla.inhibited`). These functions exist so a
 // controller sees a runway problem on a Strip before the NLA does, and is not
 // offered a button that will be refused. A mirror that drifts is worse than
-// none, so tests/efsp-runway-status-client.test.js requires the crc-sync modules
+// none, so tests/efsp-runway-status-client.test.mjs requires the crc-sync modules
 // and runs both over one table of cases.
 //
 // An ES module: the browser and node --test both import its named exports.
@@ -21,7 +21,7 @@ import { getEfspFlightData, getEfspRunwayStatus } from './efsp-state.js';
 
 // ── the mirrored tables ────────────────────────────────────────────────────
 
-// crc-sync permission.js RUNWAY_STATUS_OP_OWNERS, verbatim (the drift test
+// crc-sync's RUNWAY_STATUS_OP_OWNERS (authority/positions/civil-atc.js), verbatim (the drift test
 // asserts deep equality).
 export const RUNWAY_STATUS_ACTION_OWNERS = {
   CloseRunway:                ['LC'],

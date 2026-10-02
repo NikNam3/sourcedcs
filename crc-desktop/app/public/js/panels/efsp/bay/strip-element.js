@@ -36,16 +36,16 @@ const DROP_ARM_MS = 5000;
  * every Role's TERMINAL transition and appears nowhere else. So a fully
  * implemented, permitted operation had no affordance at all.
  *
- * Invisible to efsp-ui-reachability.test.js because that test holds every
+ * Invisible to efsp-ui-reachability.test.mjs because that test holds every
  * writable BLOCK to being reachable and says nothing about OPS — the same
  * blind spot that hid the boolean-toggle Blocks, one level up.
  *
  * Deliberately NOT rendered when:
  *  - the terminal NLA already says "Drop" — one question, one control.
- *  - an exchange is open or live on this Strip. board-store refuses those
- *    (`_applyDropStrip`'s two guards, and `_retireStrip`'s ACTIVE-TOFI
- *    refusal), and a control that always fails is worse than no control —
- *    the rule _marsaCandidates already follows.
+ *  - an exchange is open or live on this Strip. crc-sync refuses those
+ *    (`_applyDropStrip`'s two guards in board/ops/drop-strip.js, and
+ *    `retire`'s ACTIVE-TOFI refusal in board/strip-ops.js), and a control
+ *    that always fails is worse than no control — the rule _marsaCandidates already follows.
  */
 function _canDropStrip(strip) {
   if (!_resolveActingPositionId(strip)) return false;

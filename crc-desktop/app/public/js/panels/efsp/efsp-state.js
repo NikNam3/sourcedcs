@@ -325,8 +325,8 @@ export function applyEfspDelta(msg) {
 }
 
 /**
- * Applies an efsp-mutation-ack. The server includes the current Strip/FDR
- * on BOTH success and rejection (board-store.js always returns the
+ * Applies an efsp-mutation-ack. The server includes the current Strip/flight data
+ * on BOTH success and rejection (the Board always returns the
  * authoritative current state) — apply it either way, so a rejected
  * optimistic edit snaps back to server truth rather than lingering.
  *
@@ -433,7 +433,7 @@ export function liveStripsForCallsign(callsign) {
   });
 }
 
-/** Strips currently placed in a Bay/Rack, in order, excluding DROPPED — mirrors board-store.js's getRack() exactly. */
+/** Strips currently placed in a Bay/Rack, in order, excluding DROPPED — mirrors crc-sync's board-store.js getRack() exactly. */
 export function getEfspRack(bayId, rackId) {
   return getAllEfspStrips()
     .filter(s => s.bayId === bayId && s.rackId === rackId && s.state !== 'DROPPED')
@@ -445,7 +445,7 @@ export function getEfspRack(bayId, rackId) {
  * ground-control dwells occurred searching the Pending bay"). Deliberately
  * NOT a server concept: search results are a second VIEW onto the same
  * live Strip objects, still in their real Bay/Rack (no re-parenting) —
- * matches board.js/efsp-panel.js's existing precedent that "which Bay is
+ * matches efsp-panel.js's existing precedent that "which Bay is
  * in view" is per-controller local state, not Board state. Matches
  * callsign or beacon code, case-insensitive substring. Excludes DROPPED,
  * same as getEfspRack.

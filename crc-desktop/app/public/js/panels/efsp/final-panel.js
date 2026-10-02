@@ -15,7 +15,7 @@
 // the track's own movement, and clear themselves.
 //
 // THE TERMINAL EVENT. ADR 0064 left PAR's terminal state to L18: reuse the FINAL Role's own states
-// under neutral labels rather than add a state (nla.js is L17's). "Ball" and "Landing assured" both
+// under neutral labels rather than add a state (the FINAL strip type's lifecycle in crc-sync's authority/strip-types/final.js is L17's). "Ball" and "Landing assured" both
 // end the talk-down and go to BALL; "Waveoff" and "Missed approach" both go to BOLTER_WAVEOFF.
 //
 // Pure model first, renderer second, so the model is unit-testable with no DOM and the renderer with

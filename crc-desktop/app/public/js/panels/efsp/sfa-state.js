@@ -6,7 +6,7 @@
 //
 // The server sends the whole record on every change (`efsp-sfa-delta`) with the
 // pool and the jurisdiction, so this file holds no rule of its own beyond two
-// small drift-tested mirrors of permission.js (who may send the rotation
+// small drift-tested mirrors of crc-sync's authority tables (who may send the rotation
 // transfer, which Position holds jurisdiction). The server is the authority;
 // these only decide what is OFFERED.
 //
@@ -21,7 +21,7 @@ export function applyEfspSfaDelta(msg) { if (msg && msg.sfaRotation) efspSfaView
 export function getEfspSfa() { return efspSfaView; }
 export function _resetEfspSfaStateForTest() { efspSfaView = null; }
 
-// Mirrors of crc-sync permission.js (drift-tested: tests/efsp-sfa-client.test.js).
+// Mirrors of crc-sync's authority/positions/incirlik-military.js (drift-tested: tests/efsp-sfa-client.test.mjs).
 // INCIRLIK_CAPABILITIES' `sendsSfaRotation` column, and SFA_TRANSFERS.SFA_ROTATION's label.
 export const SFA_ROTATION_SENDERS = ['AP', 'SFA'];
 export const SFA_ROTATION_LABEL = 'Rotate to PAR';

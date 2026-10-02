@@ -39,7 +39,7 @@ export const TIME_CHAINS = {
 
 // STATE_CHANGE is the takeoff chain's observed source (docs/adr/0076, Q-L16-3):
 // the mission-clock time a DEPARTURE Strip entered DEPARTED, stamped by
-// board-store.js into flightData.timeInputs.takeoffStampedUtc. It is an actual, so it
+// crc-sync's board/strip-ops.js into flightData.timeInputs.takeoffStampedUtc. It is an actual, so it
 // is never `estimated`, and it sits below CONTROLLER so a typed time still wins.
 
 // Which chain an EST_* source reads.

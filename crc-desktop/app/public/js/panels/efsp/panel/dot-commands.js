@@ -278,7 +278,7 @@ function _fileStereoByName(rawName, rawCallsign) {
 // below erased every dot-command error the instant it was written — .bind's
 // "needs a track id" has never once been visible on screen, which made a
 // mistyped .bind indistinguishable from the input not registering at all.
-// Found writing efsp-stereo-panel.test.js; it is the same silent-failure
+// Found writing efsp-stereo-panel.test.mjs; it is the same silent-failure
 // shape the create-strip box's own rejection message was added to close.
 let _dotCommandErrorShown = false;
 

@@ -16,21 +16,21 @@ import { cachedStereoRoutesClient } from './efsp-stereo-routes.js';
 // note on schema drift) — not a compiled contract.
 //
 // resolveBlockValue() is kept PURE and separate from DOM writing (bay-
-// view.js/efsp-panel.js do the actual rendering) so it's testable without
+// view.js and bay/strip-element.js do the actual rendering) so it's testable without
 // a DOM — same discipline as los.js's math functions.
 
 // docs/adr/0024 — `label` added to every entry (guide §2's own Block Map
 // definition names it as one of the fields a Block Map maps to; it was the
 // one field never actually added). Client-only — block-map.js (server) is
 // never used for display, only validation/permission/routing, matching the
-// same asymmetry efsp-block-map-parity.test.js already documents for
+// same asymmetry efsp-block-map-parity.test.mjs already documents for
 // `field`/`flag`. Kept to 8 characters or fewer so the compact view never
 // has to grow wider to fit one, and UNIQUE within a Role — a label is the
 // only thing telling two Blocks apart, and the expanded view renders the long
 // tail where four Blocks once all read NOTE and three all read RESTR. Take the
 // wording from the guide's own §6.2/§6.3 field column rather than inventing
 // one; several of those seven were wrong, not just ambiguous.
-// efsp-strip-template.test.js holds both rules.
+// efsp-strip-template.test.mjs holds both rules.
 export const DEPARTURE_BLOCK_MAP = {
   '1':  { required: true,  label: 'CALLSIGN', target: { kind: 'flightData', path: 'identity.callsign' } },
   '2':  { required: true,  label: 'REV',      target: { kind: 'system', field: 'rev' } },
@@ -122,7 +122,7 @@ export const DEPARTURE_BLOCK_MAP = {
   // server-only under docs/adr/0051, so crc-sync could tag a Block and the
   // client had no way to know which Blocks §9.2 watches — fine while the only
   // use was a tooltip the client composes for itself, wrong the moment it
-  // needs to say so per-Block. efsp-block-map-parity.test.js compares it now.
+  // needs to say so per-Block. efsp-block-map-parity.test.mjs compares it now.
   // docs/adr/0058 — the flight's clearance, on the FDR and shared with every
   // Facility: CD issues ALT with the clearance, APP/CTR amend it and vector.
   '20': { required: false, label: 'HDG',      target: { kind: 'clearance', field: 'heading' }, interlock: 'COURSE' },
@@ -135,7 +135,7 @@ export const DEPARTURE_BLOCK_MAP = {
   '23': { required: false, label: 'FAC RMKS',     target: { kind: 'annotation' } },
   '24': { required: true,  label: 'MIT RMKS',     target: { kind: 'annotation' } },
   // WP4A (docs/adr/0018), §4.6.4 — airspace ownership as a direction. Not
-  // flightData/annotation-routed on either side (see efsp-block-map-parity.test.js's
+  // flightData/annotation-routed on either side (see efsp-block-map-parity.test.mjs's
   // isWritableKind) — edited via a dedicated <select> widget (bay-view.js's
   // enum-Block renderer), never the generic free-text click-to-edit path
   // (docs/adr/0022 gave this its first actual UI).
@@ -154,7 +154,7 @@ export const DEPARTURE_BLOCK_MAP = {
 // mirror of crc-sync's ARRIVAL_BLOCK_MAP; see that module's header comment
 // for the full design rationale (why Block 7 is annotation-routed, the
 // 9A-* split, the 20/21 scratchpad simplification). Kept in sync by
-// efsp-block-map-parity.test.js, same as DEPARTURE_BLOCK_MAP.
+// efsp-block-map-parity.test.mjs, same as DEPARTURE_BLOCK_MAP.
 export const ARRIVAL_BLOCK_MAP = {
   '1':        { required: true,  label: 'CALLSIGN', target: { kind: 'flightData', path: 'identity.callsign' } },
   '2':        { required: true,  label: 'REV',      target: { kind: 'system', field: 'rev' } },
@@ -211,7 +211,7 @@ export const ARRIVAL_BLOCK_MAP = {
 // crc-sync's OVERFLIGHT_BLOCK_MAP; see that module's header comment for the
 // full design rationale (why '8'/'8B' mean the flight's real origin/
 // destination, never Incirlik, and why there are no ground/runway/taxi
-// Blocks). Kept in sync by efsp-block-map-parity.test.js.
+// Blocks). Kept in sync by efsp-block-map-parity.test.mjs.
 export const OVERFLIGHT_BLOCK_MAP = {
   '1':  { required: true,  label: 'CALLSIGN', target: { kind: 'flightData', path: 'identity.callsign' } },
   '2':  { required: true,  label: 'REV',      target: { kind: 'system', field: 'rev' } },
@@ -269,7 +269,7 @@ export const OVERFLIGHT_BLOCK_MAP = {
 // MISSION_BLOCK_MAP; see that module's header comment for the full design
 // rationale (why this is its own M-prefixed namespace, not a DEPARTURE/
 // ARRIVAL field-reuse the way OVERFLIGHT's was). Kept in sync by
-// efsp-block-map-parity.test.js.
+// efsp-block-map-parity.test.mjs.
 export const MISSION_BLOCK_MAP = {
   'M1': { required: true,  label: 'MSN #',   target: { kind: 'flightData', path: 'mission.missionNumber' } },
   'M2': { required: false, label: 'PKG',     target: { kind: 'flightData', path: 'mission.packageId' } },
@@ -287,7 +287,7 @@ export const MISSION_BLOCK_MAP = {
 
 // The carrier's three Block Maps (crc-sync's docs/adr/0064 B3, docs/adr/0074;
 // guide §9.12) — a literal duplicate of crc-sync's block-map.js, held by
-// efsp-block-map-parity.test.js. `carrier-derived` Blocks are DISPLAY ONLY:
+// efsp-block-map-parity.test.mjs. `carrier-derived` Blocks are DISPLAY ONLY:
 // the server derives them (angels from the stack index, DME from angels, push
 // time from the Charlie time, the final bearing from the ship's heading) and
 // refuses any write, so nothing here is editable and nothing here computes
@@ -636,7 +636,7 @@ export function enumSelectOptionsFor(blockId, flightData) {
 //                   "cancel the stereo" is meaningful and the route a flight
 //                   is taxiing on never goes blank (docs/adr/0073).
 // Clearing SREG is still refused while an ACTIVE MARSA relation holds the
-// flight (board-store.js names the declarer in the refusal). That is correct
+// flight (crc-sync names the declarer in the refusal). That is correct
 // and deliberately NOT pre-empted here: the refusal is legible and lands
 // attributed to the Strip.
 export const ENUM_CLEARABLE_BLOCKS = new Set(['RSVC', 'SREG', '9F', 'C4']);
@@ -681,7 +681,7 @@ export function requiredBlocksFor(stripType = 'DEPARTURE') {
  * A Block is directly editable via click-to-edit (guide §3.7/§7.4 — Enter
  * commits, Esc reverts, no auto-commit on blur) when it's flight-data- or
  * annotation-routed. System/composite/flag/nla Blocks (2, 3, 4, 4A, 25, 26)
- * are managed by their own dedicated mechanisms (board-store-derived,
+ * are managed by their own dedicated mechanisms (server-derived,
  * gesture toggles, the NLA button) and are never free-text editable here.
  */
 export function isBlockEditable(blockId, stripType = 'DEPARTURE') {

@@ -12,7 +12,7 @@ import { _mountPopover, _unmountPopover } from '../popover-portal.js';
 // COORDINATION_TARGETS above — that's what structurally prevents a
 // HANDOFF/POINT_OUT/TRAFFIC/OPERATIONAL_REQUEST/AIT button from ever
 // rendering for them, regardless of Position combination (see
-// efsp-coordination-client.test.js's permanent regression guard). TOFI's
+// efsp-coordination-client.test.mjs's permanent regression guard). TOFI's
 // OWN button (below) is the only coordination-shaped affordance any of
 // those 4 Positions ever get, and it only ever dispatches kind:'TOFI' —
 // structurally incapable of offering one of the 5 forbidden primitives.
@@ -23,13 +23,13 @@ export function _canProposeTofiEntry(strip) {
   if (strip.stripType === 'MISSION') return false;
   if (_isRejectedCoordinationReplica(strip)) return false;
   // Not while a coordination is still open — a handoff replica CTR has not
-  // accepted is a flight APP still works (board-store.js's _applyTofiPropose).
+  // accepted is a flight APP still works (board/tofi.js's `_applyTofiPropose`).
   if (strip.coordination && strip.coordination.state === 'INITIATED') return false;
   // The (role, state) gate the 5 primitives have had since docs/adr/0022 and
   // TOFI never did — a flight has to actually be airborne and enroute before
   // it can enter tactically controlled airspace. Client mirror of
-  // coordination.js's TOFI_ELIGIBLE_STATES, kept in lockstep by
-  // efsp-coordination-client.test.js.
+  // crc-sync's TOFI_ELIGIBLE_STATES (coordination.js, authority/index.js), kept in lockstep by
+  // efsp-coordination-client.test.mjs.
   if (TOFI_ELIGIBLE_STATES[strip.stripType] !== strip.state) return false;
   if (!strip.tofiCoordination) return true;
   return strip.tofiCoordination.state === 'REJECTED';
@@ -42,7 +42,7 @@ export function _canProposeTofiExit(strip) {
   return !!(strip.tofiCoordination && strip.tofiCoordination.state === 'ACTIVE');
 }
 
-/** Accept/Reject always render on the MISSION-side Strip — the receiving MRU controller's own record — for BOTH ENTRY and EXIT (mirrors board-store.js's own side-split exactly). */
+/** Accept/Reject always render on the MISSION-side Strip — the receiving MRU controller's own record — for BOTH ENTRY and EXIT (mirrors crc-sync's own side-split in board/tofi.js exactly). */
 export function _isPendingTofiReplica(strip) {
   return strip.stripType === 'MISSION' && !!strip.tofiCoordination && strip.tofiCoordination.state === 'INITIATED';
 }
@@ -121,7 +121,7 @@ function _onDocPointerDownCloseTofiPopover(e) {
  * TAC_C2/GCI's single-candidate case skips this popover entirely, see the
  * click handler below). Reuses the same degraded-track warning/required-
  * note pattern as the Coordinate popover (guide §4.6 rule 5 applies to
- * TOFI too — crc-sync's board-store.js enforces this identically for both).
+ * TOFI too — crc-sync's board/tofi.js enforces this identically for both).
  */
 export function _openTofiEntryPopover(strip, anchorEl, counterparts) {
   _closeTofiPopover();

@@ -52,7 +52,7 @@ export const COMPACT_BLOCKS_BY_STRIP_TYPE = {
 // ── Per-Position lists ─────────────────────────────────────────────────────
 //
 // What each Position actually works. The rules they follow, so the next edit
-// keeps to them (efsp-strip-fields.test.js holds every one):
+// keeps to them (efsp-strip-fields.test.mjs holds every one):
 //  - TYPE (3) already reads count/type/wake, so ACFT (3A) and WAKE (3B) never
 //    get a field of their own.
 //  - CID (4) and TAIL (3C) are on no Strip: nothing reads either at a glance.
