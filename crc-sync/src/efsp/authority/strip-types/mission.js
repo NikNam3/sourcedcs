@@ -54,12 +54,12 @@ const family = {
   initialState: 'TASKED',
   stateOwners: MISSION_STATE_OWNERS,
   computeNla: computeMissionNla,
-  countablePreDropStates: [],                             // never: shares its FDR with the ATC Strip TOFI linked it to
+  countablePreDropStates: [],                             // never: shares its flight data with the ATC Strip TOFI linked it to
   excludedWhenNotCountable: 'MISSION_LINE',
   replicaStateOnReceipt: null,
   senderStateOnAccept: null,
   // MISSION is deliberately absent from both eligibility tables: it is the
-  // MRU-side Role TOFI *creates*, never a Role that opens an exchange of its
+  // MRU-side strip type TOFI *creates*, never a strip type that opens an exchange of its
   // own (docs/adr/0026).
   coordinationEligibleState: undefined,
   tofiEligibleState: undefined,

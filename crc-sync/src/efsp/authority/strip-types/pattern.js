@@ -1,8 +1,8 @@
 'use strict';
 
-// The PATTERN Role family (authority registry, S3-2): the visual-pattern Role,
+// The PATTERN strip-type family (authority registry, S3-2): the visual-pattern strip type,
 // shared by PriFly and RSU (L18). States and NLA moved from nla.js, state
-// owners from permission.js. See marshal.js for the carrier Roles' naming rule.
+// owners from permission.js. See marshal.js for the carrier strip types' naming rule.
 
 const PATTERN_STATES = ['IN_PATTERN', 'RECOVERED', 'DROPPED'];
 

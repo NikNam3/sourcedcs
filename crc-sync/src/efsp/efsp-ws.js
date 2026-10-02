@@ -84,8 +84,8 @@ function _handleMutation(ctx, session, msg, persist) {
   // the one stamping helper, which is where the reasons for what it adds live.
   const stampedStrip = result.strip ? stampStrip(boardStore, result.strip, facilityId, ctx) : result.strip;
 
-  // Every FDR this Mutation changed, not just the one it was addressed to. A
-  // Strip op can write an FDR as a SIDE EFFECT — accepting a TOFI ENTRY writes
+  // Every flight data this Mutation changed, not just the one it was addressed to. A
+  // Strip op can write a flight data as a SIDE EFFECT — accepting a TOFI ENTRY writes
   // the separation regime the MRU controller stated (F-306), and a clearance
   // that voids a MARSA relation, or a flight ending that retires it, writes the
   // regime back to ATC on every participant (F-111's other direction). Those
@@ -232,7 +232,7 @@ function _resyncAnswer(ctx, session, msg) {
         // (retention's archive, L24). Disjoint by construction.
         gone: [...dropped, ...delta.gone],
       },
-      // FDRs/Positions are cheap enough at this scale to always send in
+      // flight data/Positions are cheap enough at this scale to always send in
       // full rather than building a second/third ring buffer — see
       // board-store.js's module comment. flightDataStore is shared across every
       // Facility (docs/adr/0013), so this list is NOT facility-scoped —
@@ -304,8 +304,8 @@ function _handleSetPositions(ctx, session, msg, persist) {
     // EVERY live Strip, not just the reassigned ones. Taking or giving up a
     // Position changes who is there to receive a transfer, which changes the
     // `nla` status stampStrip computes for Strips this message never
-    // touched — a TWR Strip at DEPARTED becomes "no receiving Position
-    // present" the instant APP is released, and F-408's whole point is that
+    // touched — an LC Strip at DEPARTED becomes "no receiving Position
+    // present" the instant AP is released, and F-408's whole point is that
     // the panel be told BEFORE the press. The Board is a few dozen Strips
     // (board-store.js's module comment) and a Position change is a rare,
     // deliberate act, so re-sending the set is cheaper than tracking which

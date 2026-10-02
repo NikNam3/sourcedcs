@@ -18,7 +18,7 @@ const ARRIVAL_STATES = ['INBOUND', 'HANDED_TO_TOWER', 'FINAL', 'LANDED', 'TAXI_I
 // per-Position-per-lifecycle-stage shape as DEPARTURE's guide-given one.
 const ARRIVAL_STATE_OWNERS = {
   // CTR added (docs/adr/0014) — a CENTER-held INBOUND Strip (CTR's own
-  // local origination, mirroring APP's original ADR 0008 stub) needs its
+  // local origination, mirroring AP's original ADR 0008 stub) needs its
   // owning Position authorized to act on it too, even though "acting on
   // it" now means proposing a cross-Facility HANDOFF via the Coordinate
   // button rather than an ordinary NLA transfer (computeArrivalNla's
@@ -35,10 +35,10 @@ function computeArrivalNla(strip, flightData, now, ctx) {
   switch (strip.state) {
     case 'INBOUND':
       // WP4A (docs/adr/0014): a CENTER-held INBOUND Strip's next step is
-      // the cross-Facility HANDOFF to APP — a genuinely different
+      // the cross-Facility HANDOFF to AP — a genuinely different
       // mechanism (guide §4.6, "a different mechanism entirely"), fired
       // via the Coordinate button/dispatch path, not this ordinary
-      // intrafacility-transfer NLA. There is no TWR Position at CENTER to
+      // intrafacility-transfer NLA. There is no LC Position at CENTER to
       // transfer to at all, so this branches BEFORE attempting the
       // INCIRLIK-only LC-staffing check below. Every caller that never
       // sets ctx.facilityId (every pre-WP4A call site, and every
@@ -60,7 +60,7 @@ function computeArrivalNla(strip, flightData, now, ctx) {
     }
 
     case 'FINAL':
-      // Never inhibited by field state, deliberately: LANDED is an
+      // Never inhibited by runway status, deliberately: LANDED is an
       // OBSERVATION that the aircraft touched down, not a clearance. Refusing
       // it would make the board lie about something that already happened
       // and strand a landed aircraft with no legal transition.
@@ -94,7 +94,7 @@ const family = {
   excludedWhenNotCountable: 'NEVER_LANDED',
   replicaStateOnReceipt: null,
   senderStateOnAccept: null,
-  coordinationEligibleState: 'INBOUND',           // docs/adr/0014: CTR->APP
+  coordinationEligibleState: 'INBOUND',           // docs/adr/0014: CTR->AP
   tofiEligibleState: 'INBOUND',
 };
 

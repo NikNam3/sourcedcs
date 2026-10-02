@@ -9,7 +9,7 @@
 // marked [SOURCE-DEFINED]): INBOUND -> IN_SECTOR -> HANDED_OFF -> DROPPED.
 // The names are the guide's; the NLA labels and the owners are ours. INBOUND
 // and HANDED_OFF are also ARRIVAL's and DEPARTURE's state names: states are
-// per Role, so nothing may compare a bare state without its Role.
+// per strip type, so nothing may compare a bare state without its strip type.
 const OVERFLIGHT_STATES = ['INBOUND', 'IN_SECTOR', 'HANDED_OFF', 'DROPPED'];
 
 // [SOURCE-DEFINED] (docs/adr/0087) — the guide's four-state OVERFLIGHT
@@ -31,7 +31,7 @@ const OVERFLIGHT_STATE_OWNERS = {
  * (permission.js's CREATE_STRIP_TYPE_PERMISSIONS) works it solo. IN_SECTOR's step
  * is "leaves our airspace" — to an agency this server does not model, so
  * nothing is transferred. Handing the flight to our own next Facility
- * (CTR -> APP) is Coordinate/HANDOFF, as at ARRIVAL's CENTER INBOUND.
+ * (CTR -> AP) is Coordinate/HANDOFF, as at ARRIVAL's CENTER INBOUND.
  */
 function computeOverflightNla(strip) {
   switch (strip.state) {

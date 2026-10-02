@@ -33,10 +33,10 @@ const PERMISSIONS = {
 const CREATE_STRIP_TYPE_PERMISSIONS = {
   // WP4A second slice — TAC_C2/GCI originate MISSION Strips (guide §9.8:
   // "TAC_C2 works mission lines"). A standalone origination (own fresh
-  // FDR) for a mission that never touches ATC-controlled airspace at all —
+  // flight data) for a mission that never touches ATC-controlled airspace at all —
   // separate from, and coexisting with, a MISSION Strip minted as a TOFI
-  // ENTRY exchange's byproduct (board-store.js's receiveTofiProposal),
-  // which shares its FDR with the ATC-side Strip instead.
+  // ENTRY exchange's byproduct (board/tofi.js's receiveTofiProposal),
+  // which shares its flight data with the ATC-side Strip instead.
   TAC_C2: new Set(['MISSION']),
   GCI: new Set(['MISSION']),
 };

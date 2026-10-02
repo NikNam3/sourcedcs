@@ -41,9 +41,9 @@ const DEPARTURE_STATE_OWNERS = {
   LUAW:              ['LC'],
   DEPARTED:          ['LC'],
   // CTR added (docs/adr/0022 bug fix) — a CENTER-held HANDED_OFF Strip
-  // (received via APP's real HANDOFF, mirroring ARRIVAL_STATE_OWNERS.
+  // (received via AP's real HANDOFF, mirroring ARRIVAL_STATE_OWNERS.
   // INBOUND's existing ['AP','CTR'] entry for the reverse direction)
-  // needs its owning Position authorized to Drop it, same as APP's own
+  // needs its owning Position authorized to Drop it, same as AP's own
   // copy. Without this, a CENTER-side replica — whether legitimately
   // ACCEPTed and moved to ctr-departures, or REJECTed and left inert in
   // ctr-ap-coordination — had NO way to ever be cleared: NLA's Drop
@@ -65,7 +65,7 @@ const REQUIRED_FOR_CLEARANCE = ['route', 'requestedAltitude', 'departureAirport'
 // plan invalid" told them nothing about which four mattered, and nothing on
 // the Strip marks them (docs/ui-findings/lane1.md F-104).
 //
-// These are Blocks 7/8/8B/9 of every Role's Block Map. block-map.js carries
+// These are Blocks 7/8/8B/9 of every strip type's Block Map. block-map.js carries
 // the routing (`filed.requestedAltitude` &c) but deliberately not the labels
 // — those are the panel's rendering concern (crc-desktop's strip-template.js)
 // — so the mapping is spelled out here, in the one place a server-side reason
@@ -86,7 +86,7 @@ function isFlightPlanValid(flightData) {
 
 /**
  * The Block labels of whatever CLEARED still needs, in Block order — [] when
- * the plan is complete, and every label when there is no FDR at all (nothing
+ * the plan is complete, and every label when there is no flight data at all (nothing
  * is filed, so nothing is filled in).
  * @returns {string[]}
  */
@@ -127,7 +127,7 @@ function computeDepartureNla(strip, flightData, now, ctx) {
     case 'PROPOSED':
       // Every boundary crossing between two DIFFERENT owning Positions
       // (permission.js's DEPARTURE_STATE_OWNERS) is transfer-shaped, same
-      // pattern as DEPARTED->APP below — matches real strip-passing
+      // pattern as DEPARTED->AP below — matches real strip-passing
       // procedure (OPS finishes their part, the strip actually moves to
       // the next desk in the SAME action, not a separate manual drag) and
       // closes the single-Position-controller gap: without this, OPS
@@ -184,9 +184,9 @@ function computeDepartureNla(strip, flightData, now, ctx) {
         if (closesAt && now > closesAt) return { inhibited: `${windowed.label} window has passed — a new slot is needed` };
       }
       if (isVoidExpired(flightData, now)) return { inhibited: 'void time expired' };
-      // HELD is jointly owned by CD and GND (DEPARTURE_STATE_OWNERS) since
-      // either may be the one holding it, but PUSHBACK is GND's alone —
-      // always transfer to GND here, a no-op reassignment when GND already
+      // HELD is jointly owned by CD and GC (DEPARTURE_STATE_OWNERS) since
+      // either may be the one holding it, but PUSHBACK is GC's alone —
+      // always transfer to GC here, a no-op reassignment when GC already
       // held it.
       if (!ctx.isStaffed('GC') && !ctx.consolidatedAt('GC')) {
         return { inhibited: 'no receiving Position present' };
@@ -194,7 +194,7 @@ function computeDepartureNla(strip, flightData, now, ctx) {
       return { toState: 'PUSHBACK', transferTo: 'GC' };
 
     case 'PUSHBACK':
-      // TAXI is still GND's own — state-only.
+      // TAXI is still GC's own — state-only.
       return { toState: 'TAXI' };
 
     case 'TAXI': {
@@ -228,7 +228,7 @@ function computeDepartureNla(strip, flightData, now, ctx) {
     }
 
     case 'DEPARTED':
-      // Real, staffing-gated "Hand Off" to APP (docs/adr/0007) — an
+      // Real, staffing-gated "Hand Off" to AP (docs/adr/0007) — an
       // intrafacility TransferStrip, not WP4A's cross-Facility HANDOFF.
       if (!ctx.isStaffed('AP') && !ctx.consolidatedAt('AP')) {
         return { inhibited: 'no receiving Position present' };
@@ -247,14 +247,14 @@ function computeDepartureNla(strip, flightData, now, ctx) {
 const family = {
   stripType: 'DEPARTURE',
   states: DEPARTURE_STATES,
-  initialState: 'PROPOSED',                       // board-store.js's DEFAULT_INITIAL_STATE_BY_STRIP_TYPE
+  initialState: 'PROPOSED',                       // read through authority/index.js's initialStateFor
   stateOwners: DEPARTURE_STATE_OWNERS,
   computeNla: computeDepartureNla,
   countablePreDropStates: ['DEPARTED', 'HANDED_OFF'],   // it got airborne
   excludedWhenNotCountable: 'NEVER_DEPARTED',
   replicaStateOnReceipt: null,                    // absent = the sender's state
   senderStateOnAccept: null,
-  coordinationEligibleState: 'HANDED_OFF',        // docs/adr/0022: APP->CTR
+  coordinationEligibleState: 'HANDED_OFF',        // docs/adr/0022: AP->CTR
   tofiEligibleState: 'HANDED_OFF',
 };
 

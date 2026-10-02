@@ -11,9 +11,9 @@ const OP_KINDS = [
   'SetFlag', 'SetState', 'InvokeNla', 'Undo', 'DropStrip',
   'HANDOFF', 'POINT_OUT', 'TRAFFIC', 'OPERATIONAL_REQUEST', 'AIT',
   // docs/adr/0023 — converts a DEPARTURE Strip at HANDED_OFF into an
-  // ARRIVAL Strip IN PLACE (same Strip, same FDR), for a flight returning
+  // ARRIVAL Strip IN PLACE (same Strip, same flight data), for a flight returning
   // to the same Facility that just handed it off. Deliberately restricted
-  // the same way the 5 coordination primitives are (only APP/CTR sit on a
+  // the same way the 5 coordination primitives are (only AP/CTR sit on a
   // boundary where this makes sense) — see COORDINATION_OP_KINDS' own
   // comment for why that exclusion pattern exists, and why it applies here
   // too, not just to those 5.
@@ -21,7 +21,7 @@ const OP_KINDS = [
   // WP4A second slice (docs/adr/0025) — TOFI (guide §4.6.3), the ATC<->MRU
   // sub-protocol. Deliberately NOT folded into COORDINATION_OP_KINDS below
   // (that set is specifically the 5 ATC<->ATC primitives) and deliberately
-  // NOT granted to APP even though APP otherwise gets the full OP_KINDS
+  // NOT granted to AP even though AP otherwise gets the full OP_KINDS
   // set — guide §4.1's own Position table lists TOFI only for CTR among
   // the ATC Positions built so far, plus TAC_C2/GCI on the MRU side. See
   // TOFI_OP_KINDS and each Position's own PERMISSIONS entry below.
@@ -34,19 +34,19 @@ const OP_KINDS = [
 ];
 
 // The 5 cross-Facility coordination primitives (guide §4.6) — split out so
-// PERMISSIONS below can grant them to exactly APP/CTR without repeating
+// PERMISSIONS below can grant them to exactly AP/CTR without repeating
 // the list, and so canMutate()'s D21 shape stays a single flat lookup.
 const COORDINATION_OP_KINDS = ['HANDOFF', 'POINT_OUT', 'TRAFFIC', 'OPERATIONAL_REQUEST', 'AIT'];
 
-// Op kinds restricted to exactly APP/CTR, for reasons other than being a
+// Op kinds restricted to exactly AP/CTR, for reasons other than being a
 // cross-Facility coordination primitive — currently just ConvertToArrival
 // (docs/adr/0023). Kept separate from COORDINATION_OP_KINDS since it isn't
 // one (no cross-Facility exchange, no replica — a same-Facility in-place
-// role change), but needs the identical exclusion from OPS/CD/GND/TWR.
+// role change), but needs the identical exclusion from OPS/CD/GC/LC.
 const AP_CTR_ONLY_OP_KINDS = ['ConvertToArrival'];
 
 // Approving a flight into an airspace is something the Position working that
-// airborne flight does — APP and CTR here, since they are the Positions that
+// airborne flight does — AP and CTR here, since they are the Positions that
 // hold a flight once it is airborne. Kept separate from
 // AP_CTR_ONLY_OP_KINDS, which those two hold for an unrelated reason, so
 // neither list has to be read as "and also these".

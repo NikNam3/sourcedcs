@@ -24,7 +24,7 @@ function _isMruOrNonAtc(positionId) {
 }
 
 // Guide §4.1's `RANGE` row: Class "Using agency", Primitives "no strip
-// primitives — owns airspace state", Strip Roles "none". A Position of this
+// primitives — owns airspace state", strip types "none". A Position of this
 // class works no Strips at all, so it is refused every Strip op kind by
 // class, in canMutate below.
 //

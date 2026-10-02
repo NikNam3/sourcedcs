@@ -1,8 +1,8 @@
 'use strict';
 
-// The FINAL Role family (authority registry, S3-2): the talk-down Role, shared
+// The FINAL strip-type family (authority registry, S3-2): the talk-down strip type, shared
 // by the carrier lanes and PAR (L18). States and NLA moved from nla.js, state
-// owners from permission.js. See marshal.js for the carrier Roles' naming rule.
+// owners from permission.js. See marshal.js for the carrier strip types' naming rule.
 
 const { CV_LANES } = require('./marshal');
 
@@ -18,7 +18,7 @@ const FINAL_STATE_OWNERS = {
  * FINAL's NLA table. Shared with PAR (L18), which either adds a terminal state
  * or reuses BALL under a neutral label. `alsoLegal` lists the states a drag may
  * put the Strip in besides the NLA's (a bolter or waveoff is a drag to the
- * Bolter Bay, ADR 0064 B2): board-store.js's Bay-implied check reads it, so the
+ * Bolter Bay, ADR 0064 B2): board/placement.js's Bay-implied check reads it, so the
  * drag stays inside the state table.
  */
 function computeFinalNla(strip, flightData, now, ctx = {}) {

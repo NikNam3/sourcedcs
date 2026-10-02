@@ -14,7 +14,7 @@ const PERMISSIONS = {
   // not by a list that has to stay current. Only the Marshal originates Strips
   // (launch and recovery check-in); FINAL and PATTERN Strips come only by a
   // carrier transfer. CarrierHandoff is NOT in OP_KINDS (it is not a `.filter()`
-  // grant anyone could pick up silently): board-store.js's dispatch asks
+  // grant anyone could pick up silently): board/ops/carrier-handoff.js asks
   // canRecordCarrierHandoff below, one acting Position and one transfer kind.
   CV_MARSHAL: new Set([...NON_CREATE_OPS, 'CreateStrip']),
   CV_PRIFLY:  new Set(NON_CREATE_OPS),

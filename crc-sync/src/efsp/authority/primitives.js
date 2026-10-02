@@ -1,15 +1,14 @@
 'use strict';
 
 // Cross-Facility coordination primitives (EFSPImplementationGuide.md §4.6)
-// — WP4A first slice (docs/adr/0013 ff.), civil ATC<->ATC only (APP<->CTR).
+// — WP4A first slice (docs/adr/0013 ff.), civil ATC<->ATC only (AP<->CTR).
 // This is the doctrinal table (guide §4.6's own primitive table,
-// reproduced exactly) — injected into board-store.js as `rules.
+// reproduced exactly) — injected into the Board as `rules.
 // coordinationEffect`, the same pattern nla.js/block-map.js/permission.js
 // already use: doctrinal decisions live in their own small module and are
 // injected from the composition root (index.js), never known directly to
-// board-store.js's Strip/Rack mechanics. (Moved from coordination.js into the
-// authority registry, AUTH: a table per primitive, neither a Role's nor a
-// Position's.)
+// the Board's Strip/Rack mechanics (board/**). A table per primitive, neither a
+// strip type's nor a Position's, so it sits beside the families in the registry.
 //
 // `dataOwnershipMoves`: does the Strip's real controlling record pass to
 // the receiver on ACCEPT? `separationResponsibilityMoves`: does
@@ -18,7 +17,7 @@
 // "Jurisdiction" column is one value) — POINT_OUT is the one row where
 // they split (rule 1: "the initiator retains data ownership while the
 // receiver takes separation responsibility for its own traffic"), which
-// is exactly why board-store.js models them as two independent refs
+// is exactly why board/coordination.js models them as two independent refs
 // rather than one, and why the client renders both halves separately.
 //
 // OPERATIONAL_REQUEST is folded into the same PROPOSE/ACCEPT/REJECT
@@ -27,8 +26,8 @@
 // only says its Radar ID/Comms columns are blank and its jurisdiction
 // "stays with requester," not that no replica may exist, and reusing one
 // mechanism for all 5 primitives keeps every one of them addressable
-// through the existing ownership-gated Mutation dispatch (board-store.js's
-// _dispatch already requires the acting Position to own the Strip being
+// through the existing ownership-gated Mutation dispatch (the Board's
+// ownership gate, board/strip-ops.js's NOT_OWNER check, already requires the acting Position to own the Strip being
 // acted on — a genuinely separate "respond without owning a Strip"
 // pathway would have needed a parallel, unguarded addressing scheme).
 // Its zeroed-out effect row below is what actually enforces "stays with
@@ -49,7 +48,7 @@ const COORDINATION_EFFECTS = {
 // "the Strip stays live and posted throughout tactical control"), so a
 // separate, parallel table by direction rather than a row alongside the 5
 // ATC<->ATC primitives. Purely descriptive (acceptPhrase is UI-facing
-// text, same as the other table's) — board-store.js's TOFI logic doesn't
+// text, same as the other table's) — board/tofi.js doesn't
 // need to consult this to decide what state to transition to, since ENTRY
 // vs EXIT is already an explicit field on the Mutation itself.
 const TOFI_EFFECTS = {

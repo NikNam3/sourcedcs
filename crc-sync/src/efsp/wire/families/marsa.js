@@ -77,8 +77,8 @@ module.exports = {
     const out = { marsa: marsaDelta(ctx.marsaStore, [result.relation]) };
 
     // Declaring writes `tofi.separationRegime` = MARSA on every participant, and
-    // ending, voiding or leaving a relation writes ATC back. Those are FDR
-    // writes, and an FDR rides an efsp-board-delta — the marsa-delta above
+    // ending, voiding or leaving a relation writes ATC back. Those are flight data
+    // writes, and a flight data rides an efsp-board-delta — the marsa-delta above
     // carries the RELATION and nothing else. So SEP REG stayed blank on every
     // already-connected page and only a reconnect ever showed the truth: guide
     // §4.8.3's "they inherit a lie", in the direction it warns about

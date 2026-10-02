@@ -1,6 +1,6 @@
 'use strict';
 
-// Helpers more than one Role family's NLA table uses (moved from nla.js, AUTH).
+// Helpers more than one strip-type family's NLA table uses (moved from nla.js, AUTH).
 
 const { runwayInhibitFor } = require('../../runway-status');
 

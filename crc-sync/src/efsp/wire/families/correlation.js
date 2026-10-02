@@ -6,9 +6,9 @@ const readScope = require('../../read-scope');
 
 /**
  * Correlation ops (BindTrack/UnbindTrack) — a THIRD dispatch path, for the
- * same reason _handleAirspaceMutation is a second one: this targets an FDR.
+ * same reason _handleAirspaceMutation is a second one: this targets a flight data.
  * There is no stripId, no Strip baseRev and no Strip-owner check, because no
- * Position owns an FDR.
+ * Position owns a flight data.
  *
  * Guide §6.6 rule 1's top rung is "explicit controller binding", and this is
  * its wire surface. It is the way out of every ambiguity the sweep reports,
@@ -33,9 +33,9 @@ module.exports = {
   // twice.
   //
   // "Primary somewhere" is the right gate here rather than at a particular
-  // Facility: no Position owns an FDR, and a correlation is not a clearance.
+  // Facility: no Position owns a flight data, and a correlation is not a clearance.
   // Any Primary may bind, whichever Facility holds a Strip for that flight —
-  // the FDR is already shared theater-wide (docs/adr/0013), and refusing would
+  // the flight data is already shared theater-wide (docs/adr/0013), and refusing would
   // mean a controller who can see the contact cannot tell the system what they
   // see. The binding records boundBy/boundPositionId, so the audit says who.
   gate: 'primary-somewhere',
@@ -69,7 +69,7 @@ module.exports = {
     },
   }),
 
-  // Correlation records, one per live FDR and sent whole for the same reason
+  // Correlation records, one per live flight data and sent whole for the same reason
   // flightDataList are: cheap enough at this scale that a second ring buffer would
   // cost more than it saved (_handleResync's own stated reasoning). There is
   // deliberately no correlation branch in efsp-resync either — a reconnecting

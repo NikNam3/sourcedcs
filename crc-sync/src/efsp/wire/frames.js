@@ -41,7 +41,7 @@ function stampStrip(boardStore, strip, facilityId, ctx) {
   return { ...strip, facilityId, nla };
 }
 
-/** The FDRs a Mutation changed — the one it addressed, plus any it wrote as a side effect — deduplicated by flightDataId, most recent value winning. */
+/** The flight data a Mutation changed — the one it addressed, plus any it wrote as a side effect — deduplicated by flightDataId, most recent value winning. */
 function mergeFlightDataList(primary, extra) {
   const byId = new Map();
   for (const flightData of [primary, ...(extra || [])]) if (flightData && flightData.flightDataId) byId.set(flightData.flightDataId, flightData);

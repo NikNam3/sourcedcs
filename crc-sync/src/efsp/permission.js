@@ -68,7 +68,7 @@ function canMutate(actingPositionId, opKind) {
  * there is nothing for it to have seen.
  *
  * Everything else may. A correlation is not a clearance and no Position owns
- * an FDR — a controller who can see the contact must be able to say so, even
+ * a flight data — a controller who can see the contact must be able to say so, even
  * about a flight whose Strip belongs to somebody else. That includes an MRU:
  * D12 is about being asked to provide ATC SERVICE (handoffs, point-outs), and
  * "which blip is this" is not that.
@@ -103,8 +103,8 @@ function canDeclareMarsa(actingPositionId) {
 
 /**
  * Exactly two parameters: ONE acting Position, never a held set — D21 by
- * construction. A controller holding TWR and APP acts as one or the other, and
- * an acknowledgement sent as TWR never counts as APP's.
+ * construction. A controller signed on to LC and AP acts as one or the other, and
+ * an acknowledgement sent as LC never counts as AP's.
  */
 function canActOnRunwayStatus(actingPositionId, opKind) {
   const owners = Object.prototype.hasOwnProperty.call(RUNWAY_STATUS_OP_OWNERS, opKind) ? RUNWAY_STATUS_OP_OWNERS[opKind] : null;
@@ -140,7 +140,7 @@ function mayActBesideOwner(actingPositionId, strip, op) {
  * Structurally the same D21 guard as canMutate() — exactly one
  * actingPositionId, never a held set.
  * @param {string} actingPositionId
- * @param {string} stripType — the Strip Role being created (e.g. 'DEPARTURE')
+ * @param {string} stripType — the strip type being created (e.g. 'DEPARTURE')
  * @returns {boolean}
  */
 function canCreateStripType(actingPositionId, stripType) {
