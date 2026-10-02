@@ -948,6 +948,25 @@ the thing you were reaching for anyway, and it sets the field back as part of do
 **A relation survives a crc-sync restart.** A tanker's declaration does not stop being true because
 the server bounced, so it comes back exactly as it was, rendezvous and all.
 
+## 8D1. Splitting and joining a formation (`adr/0099`)
+
+A formation is one Strip with a size above 1. Any ATC Position (not the tactical or carrier ones) that owns a live
+DEPARTURE, ARRIVAL or OVERFLIGHT Strip can break it up or fold another flight into it.
+
+- **Split.** Strip menu, group Formation, **Split...**: `Leaving` (1 up to size minus 1, with "of 4, 3 remain"), the
+  departing part's `Callsign` (always typed), and an `Assignment`: heading, speed or altitude. The assignment is
+  required unless the Strip is on the ground (DEPARTURE up to LUAW, ARRIVAL LANDED and TAXI_IN), where the row is
+  hidden. `Back from MARSA` records that the split is being noted on return from MARSA; the assignment is still
+  required. The part appears directly after the lead with its own new beacon code, a copy of the plan, and a `SPLIT`
+  chip ("split from VIPER1 at 1432Z"). A split is binary: for 1+1+2, split twice.
+- **Join.** Menu **Join formation...** on the joining Strip lists your other live Strips; one click sends it. The joiner
+  ends as joined (it leaves the Board like a drop), its beacon code is released and the lead's size grows. A joiner that
+  still has a Strip at another Facility is not offered: resolve that first. There is no confirm; Undo covers a mistake.
+- **Typing it.** On the selected Strip: `.split <k> <CALLSIGN> <H270|S250|SM.80|A120|FL240>`, add `MARSA` for a return
+  from MARSA, drop the assignment on a ground Strip; `.join <LEAD-CALLSIGN>`.
+- Speed is a recorded assignment only: it shows in the SPEED Block, nothing checks the aircraft against it.
+- A refusal from the server (for example the code pool being empty) appears in the red banner.
+
 ## 8E. Conformance and Conflict Alert (CA)
 
 crc-sync compares every correlated flight with its `ALT` and `HDG` once a second, and every pair of
