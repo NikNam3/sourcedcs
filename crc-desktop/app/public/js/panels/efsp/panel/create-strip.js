@@ -44,7 +44,6 @@ export let _stereoRoutes = [];
 let _stereoRoutesInFlight = false;
 
 export function _loadStereoRoutes() {
-  if (typeof listStereoRoutesClient !== 'function') return;
   // Fire and forget: the picker appears when the list lands. Nothing waits
   // on it, and the failure case is identical to the (shipped) empty-table
   // case — no picker, file by hand exactly as before. The in-flight latch
@@ -157,7 +156,7 @@ export function _createStripOrigin() {
  * always fails is worse than no control.
  */
 export function _missionBindCandidates() {
-  const all = typeof getAllEfspStrips === 'function' ? getAllEfspStrips() : [];
+  const all = getAllEfspStrips();
   const taken = new Set(all.filter(s => s.stripType === 'MISSION' && s.state !== 'DROPPED').map(s => s.flightDataId));
   const seen = new Set();
   const out = [];
@@ -201,7 +200,7 @@ function _refreshMissionBindPicker(origin) {
   none.textContent = '— not bound to a flight —';
   _createStripBindEl.appendChild(none);
   for (const s of candidates) {
-    const flightData = typeof getEfspFlightData === 'function' ? getEfspFlightData(s.flightDataId) : null;
+    const flightData = getEfspFlightData(s.flightDataId);
     const id = flightData && flightData.identity ? flightData.identity : {};
     const opt = document.createElement('option');
     opt.value = s.flightDataId;
@@ -228,14 +227,14 @@ function _refreshMissionBindPicker(origin) {
 function _atoFirstCandidates(callsign) {
   const wanted = String(callsign || '').trim().toUpperCase();
   if (!wanted) return [];
-  const all = typeof getAllEfspStrips === 'function' ? getAllEfspStrips() : [];
+  const all = getAllEfspStrips();
   const live = all.filter(s => s.state !== 'DROPPED');
   const out = [];
   const seen = new Set();
   for (const s of live) {
     if (s.stripType !== 'MISSION' || seen.has(s.flightDataId)) continue;
     seen.add(s.flightDataId);
-    const flightData = typeof getEfspFlightData === 'function' ? getEfspFlightData(s.flightDataId) : null;
+    const flightData = getEfspFlightData(s.flightDataId);
     if (!flightData || !flightData.ato || !flightData.identity || flightData.identity.callsign !== wanted) continue;
     if (live.some(o => o.flightDataId === s.flightDataId && o.stripType !== 'MISSION')) continue; // already filed
     out.push(flightData);
@@ -319,7 +318,7 @@ export function _refreshCreateStripAvailability() {
     }
   }
   _refreshMissionBindPicker(origin);
-  if (typeof refreshAtoImportButton === 'function') refreshAtoImportButton(); // docs/adr/0071
+  refreshAtoImportButton(); // docs/adr/0071
   _refreshAtoFirstPicker(origin); // docs/adr/0071 — OPS files against an ATO mission
   _createStripInputEl.disabled = !origin;
   _createStripBtnEl.disabled = !origin;
@@ -443,7 +442,7 @@ async function _submitCreateStrip() {
   const stereoRouteName = _stereoEligibleOrigin(origin) ? _selectedStereoName() : '';
 
   let seed = {};
-  if (!stereoRouteName && origin.stripType !== 'ARRIVAL' && origin.stripType !== 'OVERFLIGHT' && origin.stripType !== 'MISSION' && typeof lookupFlightPlanClient === 'function') {
+  if (!stereoRouteName && origin.stripType !== 'ARRIVAL' && origin.stripType !== 'OVERFLIGHT' && origin.stripType !== 'MISSION') {
     _createStripLookupInFlight = true;
     if (_createStripInputEl) _createStripInputEl.disabled = true;
     if (_createStripBtnEl) _createStripBtnEl.disabled = true;

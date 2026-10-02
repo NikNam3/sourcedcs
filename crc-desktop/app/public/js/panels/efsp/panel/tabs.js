@@ -33,11 +33,9 @@ function _positionsWithBays() {
     });
   }
   // UI-A: the "with AIC/JTAC" pseudo-Bay on a held TAC_C2's tab, only while there is a line in it.
-  if (typeof efspLinesWithOthers === 'function') {
-    for (const positionId of Object.keys(byPosition)) {
-      if (efspLinesWithOthers(positionId).length === 0) continue;
-      byPosition[positionId].push({ bayId: withOthersBayId(positionId), positionId, rackIds: ['results'], withOthers: true });
-    }
+  for (const positionId of Object.keys(byPosition)) {
+    if (efspLinesWithOthers(positionId).length === 0) continue;
+    byPosition[positionId].push({ bayId: withOthersBayId(positionId), positionId, rackIds: ['results'], withOthers: true });
   }
   return byPosition;
 }
@@ -110,7 +108,7 @@ export function _runEfspSearch(query) {
     _renderPositionTabs();
     return;
   }
-  if (typeof noteEfspSearch === 'function') noteEfspSearch(_activePositionTab, _activeBayId); // §11.5, docs/adr/0072 — before the Bay switches to the results
+  noteEfspSearch(_activePositionTab, _activeBayId); // §11.5, docs/adr/0072 — before the Bay switches to the results
   _searchQuery = trimmed;
   if (_activePositionTab) _setActiveBayId(_searchBayId(_activePositionTab));
   _renderPositionTabs();
@@ -133,7 +131,7 @@ export function _renderPositionTabs() {
       + (signedOn ? '' : ' efsp-position-tab-drop-only');
     tab.dataset.positionId = positionId;
     _fillTabLabel(tab, positionId, signedOn ? _stripCountForPosition(positionId) : null,
-      signedOn && typeof unseenEfspArrivalsForPosition === 'function' ? unseenEfspArrivalsForPosition(positionId) : 0, 'dot');
+      signedOn ? unseenEfspArrivalsForPosition(positionId) : 0, 'dot');
     // Doubles as a drag drop-zone (guide §4.2: "other Bays reachable
     // through header drop zones that double as drag targets") —
     // bay-view.js hit-tests for this attribute during a drag and issues a
@@ -161,7 +159,7 @@ export function _renderPositionTabs() {
   }
 
   _renderBayTabs();
-  if (typeof renderCarrierBanner === 'function') renderCarrierBanner(); // crc-sync docs/adr/0074
+  renderCarrierBanner(); // crc-sync docs/adr/0074
 }
 
 function _renderBayTabs() {
@@ -169,10 +167,10 @@ function _renderBayTabs() {
   const bays = _positionsWithBays()[_activePositionTab] || [];
   if (!bays.some(b => b.bayId === _activeBayId)) _setActiveBayId(bays[0] ? bays[0].bayId : null);
 
-  if (typeof noteEfspBayVisible === 'function') noteEfspBayVisible(efspVisibleBayId(), _activePositionTab); // time-to-find, docs/adr/0072
+  noteEfspBayVisible(efspVisibleBayId(), _activePositionTab); // time-to-find, docs/adr/0072
   // The Bay in front of the controller has been seen, before its tab is drawn,
   // so it never shows "+N" for what is on screen.
-  if (_activeBayId && _isEfspPanelShowing() && typeof markEfspBaySeen === 'function') {
+  if (_activeBayId && _isEfspPanelShowing()) {
     markEfspBaySeen(_activeBayId);
     // Opening a Bay is a Bay-tab click, which redraws only the Bay tabs; the
     // Position tab's dot has to follow or it stays lit for arrivals just seen.
@@ -185,7 +183,7 @@ function _renderBayTabs() {
     const isOpsFiledBay = bay.bayId === 'ops-filed';
     const isWithBay = !!bay.withOthers;
     const tab = document.createElement('button');
-    const unseen = !isSearchBay && typeof unseenEfspArrivalsInBay === 'function' ? unseenEfspArrivalsInBay(bay.bayId) : 0;
+    const unseen = !isSearchBay ? unseenEfspArrivalsInBay(bay.bayId) : 0;
     tab.className = 'efsp-bay-tab' + (bay.bayId === _activeBayId ? ' active' : '') + (isSearchBay ? ' efsp-bay-tab-search' : '')
       + (unseen ? ' efsp-tab-has-arrival' : '');
     tab.dataset.bayId = bay.bayId;
@@ -258,7 +256,7 @@ function _fillTabLabel(tab, name, count, unseen, unseenStyle) {
 }
 
 function _liveStrips() {
-  return typeof getAllEfspStrips === 'function' ? getAllEfspStrips().filter(s => s.state !== 'DROPPED') : [];
+  return getAllEfspStrips().filter(s => s.state !== 'DROPPED');
 }
 
 function _stripCountForBay(bayId) {
@@ -276,7 +274,7 @@ function _refreshPositionTabMarks() {
     if (!positionId) continue;
     const signedOn = !String(tab.className).includes('efsp-position-tab-drop-only');
     _fillTabLabel(tab, positionId, signedOn ? _stripCountForPosition(positionId) : null,
-      signedOn && typeof unseenEfspArrivalsForPosition === 'function' ? unseenEfspArrivalsForPosition(positionId) : 0, 'dot');
+      signedOn ? unseenEfspArrivalsForPosition(positionId) : 0, 'dot');
   }
 }
 
