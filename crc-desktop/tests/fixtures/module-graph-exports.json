@@ -230,6 +230,7 @@
    "COORDINATION_PRIMITIVE_LABELS",
    "COORDINATION_TARGETS",
    "HAND_BACK_TO",
+   "STRIP_CONTROL_SELECTOR",
    "TOFI_ACCEPT_REGIMES",
    "TOFI_ANSWERED_BY",
    "TOFI_COUNTERPARTS",
@@ -250,6 +251,8 @@
    "_coordinationIsReplica",
    "_coordinationProposerOf",
    "_coordinationStateWord",
+   "_defaultBayFor",
+   "_defaultRackFor",
    "_dispatchCoordination",
    "_dispatchCorrelation",
    "_dispatchGesture",
@@ -265,6 +268,7 @@
    "_isRejectedCoordinationReplica",
    "_mountPopover",
    "_moveStrip",
+   "_onStripKeydown",
    "_openAirspaceEntryPopover",
    "_openBindPopover",
    "_openCoordinatePopover",
@@ -273,6 +277,7 @@
    "_pendingConvertStripId",
    "_resolveActingPositionId",
    "_selectStrip",
+   "_selectedStripId",
    "_setExpandedStripId",
    "_setPendingConvertStripId",
    "_setRenderAllOpenEfspBaysForTest",
@@ -286,6 +291,7 @@
    "_tofiExitPrecondition",
    "_tofiProposerOf",
    "_tofiRegimeChoice",
+   "_transferStrip",
    "_unmountPopover",
    "getOpenEfspBayIds",
    "getSelectedEfspStripId",
@@ -305,6 +311,92 @@
    "patternStripsFor",
    "renderBayDescriptorView",
    "sfaExtraNlaButtons"
+  ],
+  "panels/efsp/bay/authority-mirror.js": [
+   "AIRSPACE_ENTRY_POSITIONS",
+   "CONVERT_TO_ARRIVAL_POSITIONS",
+   "COORDINATION_TARGETS",
+   "HAND_BACK_TO",
+   "TOFI_ANSWERED_BY",
+   "TOFI_COUNTERPARTS"
+  ],
+  "panels/efsp/bay/block-edit.js": [
+   "_blockLabel",
+   "_buildBlockCell",
+   "_refusalForStrip",
+   "_setRestoredEditInThisStrip"
+  ],
+  "panels/efsp/bay/drag.js": [
+   "_efspDrag",
+   "_onStripPointerDown"
+  ],
+  "panels/efsp/bay/open-bays.js": [
+   "_isPseudoBayId",
+   "_openBayContainers",
+   "_stripElById",
+   "getOpenEfspBayIds",
+   "setOpenEfspBays"
+  ],
+  "panels/efsp/bay/ops-cards.js": [
+   "_refreshOpsFiledIfStale",
+   "_renderOpsFiledCards"
+  ],
+  "panels/efsp/bay/popover-portal.js": [
+   "_mountPopover",
+   "_stripHasOpenPopover",
+   "_unmountPopover"
+  ],
+  "panels/efsp/bay/popovers/airspace-entry.js": [
+   "_canApproveAirspaceEntry",
+   "_canConvertToArrival",
+   "_openAirspaceEntryPopover",
+   "_pendingConvertStripId",
+   "_setPendingConvertStripId"
+  ],
+  "panels/efsp/bay/popovers/bind.js": [
+   "_openBindPopover"
+  ],
+  "panels/efsp/bay/popovers/coordination.js": [
+   "COORDINATION_PRIMITIVE_LABELS",
+   "_buildCoordinationNoteEl",
+   "_buildCoordinationReasonEl",
+   "_canProposeCoordination",
+   "_coordinationIsReplica",
+   "_coordinationProposerOf",
+   "_coordinationStateWord",
+   "_dispatchCoordination",
+   "_isPendingCoordinationReplica",
+   "_isRejectedCoordinationReplica",
+   "_openCoordinatePopover"
+  ],
+  "panels/efsp/bay/popovers/highlight.js": [
+   "_cycleHighlight",
+   "_openHighlightPopover"
+  ],
+  "panels/efsp/bay/popovers/marsa.js": [
+   "_openMarsaPopover"
+  ],
+  "panels/efsp/bay/popovers/tofi.js": [
+   "TOFI_ACCEPT_REGIMES",
+   "_canProposeTofiEntry",
+   "_canProposeTofiExit",
+   "_canTransferTofiComms",
+   "_dispatchTofi",
+   "_isPendingTofiReplica",
+   "_openTofiEntryPopover",
+   "_tofiExitPrecondition",
+   "_tofiProposerOf",
+   "_tofiRegimeChoice"
+  ],
+  "panels/efsp/bay/strip-element.js": [
+   "CHIP_HISTORY_LIMIT",
+   "_appendAnnotationHistory",
+   "_appendDropButton",
+   "_appendExpandButton",
+   "_appendExpandedView",
+   "_buildStripEl",
+   "_expandedStripId",
+   "_setExpandedStripId"
   ],
   "panels/efsp/carrier-panel.js": [
    "CARRIER_CAPABILITIES",
@@ -783,7 +875,7 @@
   ]
  },
  "bridge": {
-  "count": 668,
+  "count": 674,
   "skipped": [],
   "names": [
    "$aptDisplay",
@@ -886,6 +978,7 @@
    "STALE_MS",
    "STATE_OWNERS_BY_ROLE",
    "STEREO_ROUTES_CLIENT_TIMEOUT_MS",
+   "STRIP_CONTROL_SELECTOR",
    "TEXT_OFFSET_EM",
    "TEXT_SIZE_PX",
    "TIME_CHAINS",
@@ -922,6 +1015,8 @@
    "_coordinationIsReplica",
    "_coordinationProposerOf",
    "_coordinationStateWord",
+   "_defaultBayFor",
+   "_defaultRackFor",
    "_dispatchCoordination",
    "_dispatchCorrelation",
    "_dispatchDotCommand",
@@ -942,6 +1037,7 @@
    "_metricsPollTick",
    "_mountPopover",
    "_moveStrip",
+   "_onStripKeydown",
    "_openAirspaceEntryPopover",
    "_openBindPopover",
    "_openCoordinatePopover",
@@ -958,6 +1054,7 @@
    "_resolveActingPositionId",
    "_runEfspSearch",
    "_selectStrip",
+   "_selectedStripId",
    "_sendEfsp",
    "_setActiveBayId",
    "_setActivePositionTab",
@@ -994,6 +1091,7 @@
    "_tofiExitPrecondition",
    "_tofiProposerOf",
    "_tofiRegimeChoice",
+   "_transferStrip",
    "_unmountPopover",
    "_updateAprtRefCard",
    "_updateAprtRwyHeading",

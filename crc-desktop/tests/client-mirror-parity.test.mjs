@@ -125,12 +125,12 @@ test('D-9: every Position a client authority table names is a Position some Faci
   const note = (where, ids) => { for (const id of ids) named.set(id, where); };
   for (const owners of Object.values(rules.FIELD_STATE_ACTION_OWNERS)) note('FIELD_STATE_ACTION_OWNERS', owners);
   for (const byState of Object.values(clientNla.STATE_OWNERS_BY_ROLE)) for (const owners of Object.values(byState)) note('STATE_OWNERS_BY_ROLE', owners);
-  const bay = readClient(EFSP + 'bay-view.js');
-  for (const name of ['AIRSPACE_ENTRY_POSITIONS', 'CONVERT_TO_ARRIVAL_POSITIONS']) note(name, constLiteral(bay, name, 'bay-view.js'));
-  const handBack = constLiteral(bay, 'HAND_BACK_TO', 'bay-view.js');
+  const bay = readClient(EFSP + 'bay/authority-mirror.js');
+  for (const name of ['AIRSPACE_ENTRY_POSITIONS', 'CONVERT_TO_ARRIVAL_POSITIONS']) note(name, constLiteral(bay, name, 'authority-mirror.js'));
+  const handBack = constLiteral(bay, 'HAND_BACK_TO', 'authority-mirror.js');
   note('HAND_BACK_TO keys', Object.keys(handBack));
   for (const v of Object.values(handBack)) note('HAND_BACK_TO', v);
-  const answered = constLiteral(bay, 'TOFI_ANSWERED_BY', 'bay-view.js');
+  const answered = constLiteral(bay, 'TOFI_ANSWERED_BY', 'authority-mirror.js');
   note('TOFI_ANSWERED_BY', [...Object.keys(answered), ...Object.values(answered)]);
   for (const byPos of Object.values(COMPACT_BLOCKS_BY_POSITION)) note('COMPACT_BLOCKS_BY_POSITION', Object.keys(byPos));
   for (const [id, where] of named) assert.ok(real.has(id), `${where} names Position ${id}, which no Facility in facility-config.js has`);
@@ -177,7 +177,7 @@ test('D-9: the TOFI accept picker offers exactly the server\'s SEPARATION_REGIME
   const server = /const SEPARATION_REGIMES = new Set\((\[[^\]]*\])\)/.exec(readServer('efsp/fdr-store.js'));
   assert.ok(server, 'fdr-store.js SEPARATION_REGIMES moved');
   const regimes = new Function(`return ${server[1]}`)();
-  assert.deepEqual([...constLiteral(readClient(EFSP + 'bay-view.js'), 'TOFI_ACCEPT_REGIMES', 'bay-view.js')].sort(), [...regimes].sort());
+  assert.deepEqual([...constLiteral(readClient(EFSP + 'bay/popovers/tofi.js'), 'TOFI_ACCEPT_REGIMES', 'tofi.js')].sort(), [...regimes].sort());
 });
 
 // ── held by other files already (listed so the inventory stays honest) ──────

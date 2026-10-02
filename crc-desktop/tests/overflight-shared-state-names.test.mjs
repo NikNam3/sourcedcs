@@ -38,7 +38,7 @@ const ALLOWED = {
   'crc-sync/src/efsp/sfa.js': 'SFA_ROTATION is keyed by Role: it names role ARRIVAL with state INBOUND, and board-store _applySfaRotation refuses any other Role',
   'crc-desktop/app/public/js/panels/efsp/efsp-nla.js': 'per-Role tables',
   'crc-desktop/app/public/js/panels/efsp/field-state-rules.js': 'keyed by Role / guarded by role === ARRIVAL',
-  'crc-desktop/app/public/js/panels/efsp/bay-view.js': 'guarded by role === DEPARTURE',
+  'crc-desktop/app/public/js/panels/efsp/bay/popovers/airspace-entry.js': 'guarded by role === DEPARTURE (moved from bay-view.js)',
 };
 
 function* walk(p) {
