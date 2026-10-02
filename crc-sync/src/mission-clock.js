@@ -12,7 +12,7 @@
 // DCS-gRPC's GetScenarioCurrentTime answers with an ISO 8601 string built from
 // the mission date plus timer.getAbsTime(), i.e. the theater's LOCAL time of
 // day, whatever suffix the string carries. Converting it to Zulu needs the
-// theater's offset, which is fixed per theater (theater-offsets.js), never a
+// theater's offset, which is fixed per theater (config/theaters.json through theaters.js), never a
 // setting a controller edits.
 //
 // grpc-client.js polls every 5 s. Between polls this advances at real rate from

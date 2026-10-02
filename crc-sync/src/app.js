@@ -1,9 +1,11 @@
 'use strict';
 
-// The composition root (docs/wip/ARCH-plan.md §2.5). server.js reads the
-// environment, makes the two real network clients, calls createApp(), start()
-// and listen. The soak host (tools/soak/host-core.js) and the tests call the
-// same function with fakes, so nobody re-implements the monitor wiring.
+// The composition root (docs/adr/0095 §4). server.js reads the environment,
+// makes the two real network clients, calls createApp(), start() and listen.
+// createApp() wires every store, monitor and the hub, and returns the named
+// `tickers` that start() runs on timers. The soak host (tools/soak/host-core.js)
+// and the tests call the same function with fakes and drive the tickers by name,
+// so nobody re-implements the monitor wiring.
 
 const express     = require('express');
 const http        = require('http');
@@ -542,7 +544,7 @@ function createApp(deps = {}) {
   // lookupFlightPlan() never throws/rejects by construction (see that
   // module's own header comment) — this handler is still wrapped so a bug
   // there can never become an unhandled rejection that crashes the process,
-  // same discipline board-store.js's applyMutation() catch-all uses.
+  // same discipline the stores' apply catch-alls use (board-store.js's applyMutation() among them).
   app.get('/api/flight-plan-lookup/:callsign', auth.requireAuth, async (req, res) => {
     try {
       const result = await lookupFlightPlan(req.params.callsign);

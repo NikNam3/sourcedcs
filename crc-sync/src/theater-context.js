@@ -11,10 +11,9 @@
 // in the client) and for the `theater` message that lets every client show
 // true bearings as magnetic without a model of its own.
 //
-// Replaces theater-settings.js: the transition altitude was a synced setting
-// any controller could edit from the Airport panel, and the heading was
-// corrected by a manual `hdgCorrection` fudge factor. Both are now properties
-// of the theater (decisions.md H15, H62).
+// The transition altitude and the heading correction are properties of the
+// theater, never a setting a controller edits (decisions.md H15, H62;
+// theater-settings.js is removed, docs/adr/0085).
 
 const magnetic = require('./magnetic');
 const { DEFAULT_TRANSITION_ALT_FT } = require('./theaters');

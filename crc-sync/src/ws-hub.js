@@ -279,12 +279,9 @@ class WsHub {
   // client sees it (not just the next one to collide with it via a 409).
   setAtisActive(list) { this._atisActive = list; this._broadcast(this._atisMsg()); }
 
-  // Message shapes below are deliberately identical to crc-desktop's
-  // original app/src/ws-server.js protocol (type names, field names, and
-  // the connect-time send order in _onConnect below) — so the renderer's
-  // existing connect()/message-switch in app.js needs no changes beyond
-  // the WebSocket URL and auth. Only the transport (ticket-based /feed on a
-  // remote host instead of a same-origin local socket) is new.
+  // Message shapes below keep the type names, field names and the connect-time
+  // send order of _onConnect, so the renderer's message switch in app.js reads
+  // one protocol over the ticket-based /feed WebSocket.
 
   _statusMsg()  { return { version: VERSION, type: 'status', grpc: this._grpcStatus, srs: this._srsStatus }; }
   _weatherMsg() { return { version: VERSION, type: 'weather', pressurePa: this._weather.pressurePa, tempK: this._weather.tempK }; }

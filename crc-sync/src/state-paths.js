@@ -9,7 +9,7 @@
 // docs/adr/0041 went to some trouble to make `_persist` atomic; neither
 // survived the deployment. Seven separate things were affected, not one:
 //
-//   efsp-board.json       the whole Board — Strips, FDRs, airspace, correlation
+//   efsp-board.json       the whole Board — Strips, flight data, airspace, correlation
 //   efsp-mutations.jsonl  the entire audit trail
 //   squawk-map.json       squadron squawk->callsign edits (since removed, docs/adr/0059)
 //   theater-settings.json transition altitude, heading correction (since removed, docs/adr/0085)

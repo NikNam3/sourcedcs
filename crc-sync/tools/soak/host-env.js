@@ -70,12 +70,12 @@ function setupHostEnv({ stateDir, seed, startNow, logPath, patchGlobals = true, 
     // double-tap latch is satisfied by arithmetic, not by sleeping.
     Date.now = () => clock.now;
     // D5: order-key.js's jitter (and anything else that rolls a die) becomes
-    // reproducible. crypto.randomUUID is left alone: Strip and FDR ids differ
+    // reproducible. crypto.randomUUID is left alone: Strip and flight data ids differ
     // between runs, which no criterion depends on. The report header says the
     // server's randomness was replaced so nobody mistakes it for production.
     Math.random = mulberry32(deriveSeed(seed, 'host-math-random'));
     // crypto.randomUUID too, which the briefing (D5) left alone: getRack()
-    // breaks an order-key tie by stripId (board-store.js getRack), so random
+    // breaks an order-key tie by stripId (board/board-state.js rack()), so random
     // ids made a stress run's reorder storms diverge between two runs of one
     // seed. Seeded per host lifetime so a restart never re-issues an id.
     seedIds(lifetime);
@@ -88,7 +88,7 @@ function setupHostEnv({ stateDir, seed, startNow, logPath, patchGlobals = true, 
   const LOG_LINE_CAP = 20000;
   if (logPath) logFd = fs.openSync(logPath, 'a');
   const counters = {
-    internalErrors: 0,          // '[board-store] unexpected error'
+    internalErrors: 0,          // the Board's own catch-all (logger efsp:board-store)
     storeInternalErrors: 0,     // any other store's catch-all
     exhaustedThrows: 0,         // order-key ORDER_KEY_EXHAUSTED thrown by keyBetween
     persistCount: 0,
@@ -139,8 +139,8 @@ function setupHostEnv({ stateDir, seed, startNow, logPath, patchGlobals = true, 
   }
 
   // ── order-key: count exhaustion throws (briefing §5.7) ────────────────
-  // board-store.js destructures keyBetween at require time, so the property
-  // has to be replaced before board-store is first required.
+  // board/placement.js destructures keyBetween at require time, so the property
+  // has to be replaced before board-store (which loads placement.js) is first required.
   // Called again by an in-process restart, which purges the require cache and
   // so gets a fresh, unwrapped order-key module.
   function wrapOrderKey() {
