@@ -206,4 +206,4 @@ function rebalance(orderedStripIds) {
   return out;
 }
 
-module.exports = { keyBetween, keyStart, needsRebalance, rebalance, ALPHA };
+module.exports = { keyBetween, keyStart, needsRebalance, rebalance, ALPHA, REBALANCE_KEY_LENGTH };
