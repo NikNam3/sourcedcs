@@ -152,18 +152,21 @@ function opMatrix() {
   ops({ kind: 'MoveStrip', bayId: 'ops-proposed', rackId: 'main' }, dep); dep = live('INCIRLIK', dep);
 
   // InvokeNla: success, the 400 ms double tap (swallowed), after the latch, inhibited, Undo inside and outside its window.
+  // An Undo names the action by its actionId (docs/adr/0100); one without it is refused.
+  const undoOf = (r) => ({ kind: 'Undo', actionId: r && r.ack && r.ack.undoable ? r.ack.undoable.actionId : 'none' });
   ops({ kind: 'InvokeNla' }, dep);               dep = live('INCIRLIK', dep);
-  cd({ kind: 'InvokeNla' }, dep);                    dep = live('INCIRLIK', dep);                                                // CLEARED, same owner
+  const cleared = cd({ kind: 'InvokeNla' }, dep);    dep = live('INCIRLIK', dep);                                                // CLEARED, same owner
   cd({ kind: 'InvokeNla' }, dep);                                                                                                // inside the 400 ms latch (same rev: stale or swallowed)
   dep = live('INCIRLIK', dep);
-  byOwner(w, 'INCIRLIK', dep, { kind: 'Undo' });     dep = live('INCIRLIK', dep);                                                // Undo inside the window
-  byOwner(w, 'INCIRLIK', dep, { kind: 'Undo' });                                                                                 // nothing left to undo
+  byOwner(w, 'INCIRLIK', dep, { kind: 'Undo' });                                                                                 // no actionId
+  byOwner(w, 'INCIRLIK', dep, undoOf(cleared));      dep = live('INCIRLIK', dep);                                                // Undo inside the window
+  byOwner(w, 'INCIRLIK', dep, undoOf(cleared));                                                                                  // nothing left to undo
   w.advance(500);
   byOwner(w, 'INCIRLIK', dep, { kind: 'InvokeNla' }); dep = live('INCIRLIK', dep);
   w.advance(500);
-  byOwner(w, 'INCIRLIK', dep, { kind: 'InvokeNla' }); dep = live('INCIRLIK', dep);
+  const later = byOwner(w, 'INCIRLIK', dep, { kind: 'InvokeNla' }); dep = live('INCIRLIK', dep);
   w.advance(31000);
-  byOwner(w, 'INCIRLIK', dep, { kind: 'Undo' });                                                                                 // outside the Undo window
+  byOwner(w, 'INCIRLIK', dep, undoOf(later));                                                                                    // outside the Undo window
   dep = live('INCIRLIK', dep);
   ops({ kind: 'InvokeNla' }, dep);                                                                                               // not OPS's to advance
   dep = setState(w, 'cd', dep, 'HANDED_OFF');

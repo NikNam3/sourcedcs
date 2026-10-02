@@ -99,6 +99,12 @@ function _handleMutation(ctx, session, msg, persist) {
     boardSeq: boardStore.currentSeq, boardEpoch: boardStore.epoch, ok: result.ok,
     strip: stampedStrip, flightData: result.flightData, reason: result.reason, detail: result.detail,
     warning: result.warning, routedTo: result.routedTo,
+    // docs/adr/0100 §7: the server says what is undoable (the client keeps no list), and an Undo's ack says what it
+    // undid and voided. Absent otherwise.
+    undoable: result.undoable, undone: result.undone, voided: result.voided,
+    // docs/adr/0099: the part a split made (its Strip rides the broadcast) and what a join did.
+    ...(result.split ? { splitStripId: result.splitStrip.stripId, split: result.split } : {}),
+    ...(result.join ? { join: result.join } : {}),
   };
   // A replay answers from the idempotency cache (docs/adr/0081): the original
   // outcome with the Strip as it is now. Its broadcasts went out the first
@@ -120,6 +126,12 @@ function _handleMutation(ctx, session, msg, persist) {
   const slots = {
     primary: boardDelta(ctx, boardStore, facilityId, touchedStrips(ctx, boardStore, facilityId, touched, stampedStrip), updatedFlightDataList),
   };
+  // docs/adr/0100 §6 (H100 Q-U2 b): an Undo that voided another Position's Mutations tells that Position by a panel
+  // message, sent by the hub after this round trip's broadcasts to the sessions signed on to it (directedFor).
+  const directed = (result.undoVoided || []).map(d => ({
+    facilityId: d.facilityId, positionId: d.positionId,
+    frame: { version: VERSION, type: 'efsp-undo-voided', facilityId: d.facilityId, positionId: d.positionId, ...d.message },
+  }));
 
   // Bug found in live testing: a coordination primitive's PROPOSE/ACCEPT/
   // REJECT/STAND_BY mutates or mints a Strip in a DIFFERENT Facility's
@@ -137,9 +149,10 @@ function _handleMutation(ctx, session, msg, persist) {
   // in a coordination Bay can rebalance that Rack, and those re-keyed Strips
   // are the peer's side of the same Board event. The peer Board is drained
   // only when this broadcast is built, so nothing it touched is discarded.
-  if (result.peerStrip) {
+  if (result.peerStrip || result.peerFacilityId) {
     const peerBoardStore = ctx.boardStoreFor(result.peerFacilityId);
-    const peerStamped = stampStrip(peerBoardStore, result.peerStrip, result.peerFacilityId, ctx);
+    // An Undo that only removed the peer's replica has no peer Strip to name: the delta carries its `gone`.
+    const peerStamped = result.peerStrip ? stampStrip(peerBoardStore, result.peerStrip, result.peerFacilityId, ctx) : null;
     const peerTouched = peerBoardStore ? peerBoardStore.drainTouched() : [];
     // flightDataList: one shared FlightDataStore (docs/adr/0013) — already covered by the primary broadcast's flightDataList.updated
     slots.peer = boardDelta(ctx, peerBoardStore, result.peerFacilityId,
@@ -174,7 +187,9 @@ function _handleMutation(ctx, session, msg, persist) {
     // A push re-numbers nothing but changes which lane the next flight feeds.
     if (ctx.nlaStatusMonitor) ctx.nlaStatusMonitor.tick();
   }
-  return { ack, broadcasts: skeleton.orderSlots(slots) };
+  return directed.length
+    ? { ack, broadcasts: skeleton.orderSlots(slots), directed }
+    : { ack, broadcasts: skeleton.orderSlots(slots) };
 }
 
 /**
@@ -336,6 +351,22 @@ function readScopeOf(ctx, session) {
  * session that reads everything (the fast path), a filtered copy for one that
  * reads only what it owns, or null when nothing is left to send.
  */
+/**
+ * The frame a directed message (`{facilityId, positionId, frame}`, an Undo's `efsp-undo-voided`) gives `session`:
+ * the frame when the session is signed on to that Position and may see the Strip it names, else null.
+ */
+function directedFor(ctx, session, directed) {
+  if (!session || !session.controllerId || !directed || !directed.frame) return null;
+  const positionStore = ctx.positionStoreFor(directed.facilityId);
+  if (!positionStore || !positionStore.signedOnBy(session.controllerId).includes(directed.positionId)) return null;
+  // Read scope (docs/adr/0080): a session that reads only what it owns hears only of what it may see.
+  const scope = readScopeOf(ctx, session);
+  if (scope.kind === readScope.ALL) return directed.frame;
+  const board = ctx.boardStoreFor(directed.facilityId);
+  const strip = board && directed.frame.stripId ? board.getStrip(directed.frame.stripId) : null;
+  return strip && readScope.isStripVisible(scope, { ...strip, facilityId: directed.facilityId }, directed.facilityId) ? directed.frame : null;
+}
+
 function filterForSession(ctx, session, msg) {
   if (!msg) return msg;
   const scope = readScopeOf(ctx, session);
@@ -387,11 +418,36 @@ function supplementFor(ctx, session, filtered) {
 function readScopeKey(ctx, session) { return readScope.scopeKey(readScopeOf(ctx, session)); }
 
 /**
+ * The heartbeat's `boards` for every Facility: `{ [facilityId]: { seq, epoch } }`
+ * (docs/adr/0104). Built once per tick and shared by every session that reads everything.
+ */
+function heartbeatBoardsAll(ctx) {
+  const boards = {};
+  for (const facilityId of ctx.facilityConfig.getFacilityIds()) {
+    const board = ctx.boardStoreFor(facilityId);
+    boards[facilityId] = { seq: board.currentSeq, epoch: board.epoch };
+  }
+  return boards;
+}
+
+/**
+ * The `boards` this session's heartbeat names: every Facility for a session that reads
+ * everything (the shared `all` object itself), and only the Facilities where it holds a
+ * Position for one that reads only what it owns (docs/adr/0080, 0104).
+ */
+function heartbeatBoardsFor(ctx, session, all = heartbeatBoardsAll(ctx)) {
+  const scope = readScopeOf(ctx, session);
+  if (scope.kind === readScope.ALL) return all;
+  const out = {};
+  for (const facilityId of scope.own.keys()) if (all[facilityId]) out[facilityId] = all[facilityId];
+  return out;
+}
+
+/**
  * WP4A: sends every Facility's strips/positions/bays in one message (each
  * record stamped with `facilityId`), since a client can be signed on to Positions
- * and act across both. `boardSeq`/`facility` stay as top-level back-compat
- * aliases for INCIRLIK specifically — `boardSeqByFacility`/`facilities` are
- * the real, general shape.
+ * and act across both. `boardSeqByFacility`/`facilities` are the shape (the
+ * old top-level `boardSeq`/`facility` aliases are gone, docs/adr/0104).
  */
 function _snapshotMessage(ctx, session = null) {
   const full = _fullSnapshotMessage(ctx);
@@ -433,11 +489,9 @@ function _fullSnapshotMessage(ctx) {
     bays.push(...facilityConfig.getAllBays(facilityId));
   }
 
-  const defaultFacilityId = facilityConfig.DEFAULT_FACILITY_ID;
   return {
     version: VERSION, type: 'efsp-snapshot',
-    boardSeq: boardSeqByFacility[defaultFacilityId], // back-compat alias
-    facility: facilityConfig.getFacilityConfig(defaultFacilityId).facility, // back-compat alias
+    // The default Facility comes first (docs/adr/0104): a client selects `facilities[0]`.
     facilities: facilityIds,
     boardSeqByFacility,
     boardEpochByFacility,
@@ -451,4 +505,4 @@ function _fullSnapshotMessage(ctx) {
   };
 }
 
-module.exports = { handleMessage, carrierDelta, sfaDelta, snapshotMessage: _snapshotMessage, filterForSession, supplementFor, readScopeKey, readScopeOf, RESYNC_RING_WINDOW };
+module.exports = { handleMessage, directedFor, carrierDelta, sfaDelta, snapshotMessage: _snapshotMessage, filterForSession, supplementFor, readScopeKey, readScopeOf, heartbeatBoardsAll, heartbeatBoardsFor, RESYNC_RING_WINDOW };

@@ -31,6 +31,8 @@ const { setCarrierFlightField } = require('./carrier/flight-record');
 const { WALL_CLOCK } = require('../mission-clock');
 const { DEFAULT_TRANSITION_ALT_FT } = require('../theaters');
 
+const { voidAppendedEntries } = require('./undo/append-only');
+
 const VOID_DEADLINE_MINUTES = 30; // §3.8 — derived, not stored input
 const EDCT_WINDOW_MINUTES = 5;              // §4.6.2 — EDCT ± 5 min
 const CALL_FOR_RELEASE_BEFORE_MINUTES = 2;  // §4.6.2 — CALL_FOR_RELEASE − 2 min
@@ -153,8 +155,20 @@ const WRITABLE_PATHS = new Set([
   'military.mtr.exitFix', 'military.mtr.exitEstimateUtc', 'military.mtr.requestedAltitudeAfterExit',
 ]);
 
+/**
+ * Paths surveillance writes (docs/adr/0100 §3). An undo never restores them: the aircraft's squawk is a fact, not a
+ * controller's change. A later op that writes a field from a system observation lists it here.
+ */
+const OBSERVED_PATHS = Object.freeze(['identity.beaconObserved']);
+
 function getPath(obj, path) {
   return path.split('.').reduce((o, k) => (o == null ? o : o[k]), obj);
+}
+function setPathCreating(obj, path, value) {
+  const parts = path.split('.');
+  const last = parts.pop();
+  const target = parts.reduce((o, k) => (o[k] == null ? (o[k] = {}) : o[k]), obj);
+  if (value === undefined) delete target[last]; else target[last] = value;
 }
 function setPath(obj, path, value) {
   const parts = path.split('.');
@@ -268,16 +282,19 @@ function ensureMilitary(flightData) {
 // overwrites, and a vacated altitude is struck only by an explicit confirm.
 // `parsed` on each entry is the value as a number (feet, degrees) for the
 // conformance monitor; `value` is what the controller wrote.
-const CLEARANCE_FIELDS = new Set(['altitude', 'heading']);
+// `speed` (docs/adr/0099 §3, H100 DR-11 b) is a RECORDED assignment only: no conformance check, no monitor, no alert,
+// no control axis. It exists because a formation split can be by speed.
+const CLEARANCE_FIELDS = new Set(['altitude', 'heading', 'speed']);
 
 function defaultClearance() {
-  return { altitude: { entries: [] }, heading: { entries: [] } };
+  return { altitude: { entries: [] }, heading: { entries: [] }, speed: { entries: [] } };
 }
 
 function ensureClearance(flightData) {
   if (!flightData.clearance) flightData.clearance = defaultClearance();
   if (!flightData.clearance.altitude) flightData.clearance.altitude = { entries: [] };
   if (!flightData.clearance.heading) flightData.clearance.heading = { entries: [] };
+  if (!flightData.clearance.speed) flightData.clearance.speed = { entries: [] }; // docs/adr/0099
   return flightData.clearance;
 }
 
@@ -445,6 +462,22 @@ function parseHeadingDeg(text) {
   return n === 0 ? 360 : n;
 }
 
+/**
+ * A speed assignment (docs/adr/0099 §3): knots ("250", 2 or 3 digits) or Mach ("M.85", "M0.85"). Format only.
+ * @returns {{shown:string, parsed:number, unit:'KT'|'MACH'}|null}
+ */
+function parseSpeed(text) {
+  const t = String(text == null ? '' : text).trim().toUpperCase();
+  let m = /^(\d{2,3})(?:KT|KTS)?$/.exec(t);
+  if (m) { const n = Number(m[1]); return n >= 50 ? { shown: String(n), parsed: n, unit: 'KT' } : null; }
+  m = /^M0?\.(\d{1,2})$/.exec(t);
+  if (m) {
+    const mach = Number(`0.${m[1]}`);
+    return mach >= 0.1 ? { shown: `M${m[1].length === 1 ? `.${m[1]}0` : `.${m[1]}`}`, parsed: mach, unit: 'MACH' } : null;
+  }
+  return null;
+}
+
 /** The value a clearance cell currently holds, or null. */
 function activeClearanceEntry(flightData, field) {
   const cell = flightData && flightData.clearance && flightData.clearance[field];
@@ -464,6 +497,64 @@ class FlightDataStore {
     this._transitionAltFt = transitionAltFt;
     this._codeAllocator = codeAllocator || new CodeAllocator();
     this._flightDataList = new Map(); // flightDataId -> FlightDataRecord
+    this._writeObserver = null;       // (flightDataId, paths) after every controller or system write (docs/adr/0100)
+  }
+
+  /** The undo history's hook (docs/adr/0100): `fn(flightDataId, paths)` after every write but an observed one. */
+  setWriteObserver(fn) { this._writeObserver = fn; }
+  get hasWriteObserver() { return !!this._writeObserver; }
+
+  _wrote(flightDataId, paths) {
+    if (this._writeObserver) this._writeObserver(flightDataId, paths.filter(p => !OBSERVED_PATHS.includes(p)));
+  }
+
+  /**
+   * Puts `paths` of a flight data back as `image` had them (docs/adr/0100 §3), for an undo. Never an observed path
+   * (OBSERVED_PATHS keep their live value even when an ancestor path is restored); a clearance cell is never
+   * truncated: entries added since are VOIDED (H100 Q-U4 a). A restored beacon code is re-claimed from the
+   * allocator only when nobody else holds it (D23: warn, never steal). Not a write the hook reports: the undo's
+   * own frame is not a later change.
+   * @returns {{ok:true, flightData, changed:boolean, warning?:string}|{ok:false, reason:'NOT_FOUND'}}
+   */
+  restorePaths(flightDataId, image, paths, { voidedBy = null, by = null } = {}) {
+    const flightData = this._flightDataList.get(flightDataId);
+    if (!flightData || !image) return { ok: false, reason: 'NOT_FOUND' };
+    const codeBefore = flightData.identity.beaconAssigned;
+    let changed = false;
+    for (const path of [...new Set(paths)]) {
+      if (OBSERVED_PATHS.includes(path)) continue;
+      if (path.startsWith('clearance.')) {
+        const field = path.slice('clearance.'.length);
+        const cell = ensureClearance(flightData)[field];
+        if (voidAppendedEntries(image.clearance && image.clearance[field], cell, voidedBy)) changed = true;
+        continue;
+      }
+      const kept = OBSERVED_PATHS.filter(o => o.startsWith(`${path}.`)).map(o => [o, getPath(flightData, o)]);
+      const want = getPath(image, path);
+      if (JSON.stringify(getPath(flightData, path)) === JSON.stringify(want)) continue;
+      setPathCreating(flightData, path, want === undefined ? undefined : JSON.parse(JSON.stringify(want)));
+      for (const [o, v] of kept) setPathCreating(flightData, o, v);
+      for (const key of Object.keys({ ...flightData.provenance, ...image.provenance })) {
+        if (key !== path && !key.startsWith(`${path}.`)) continue;
+        if (OBSERVED_PATHS.includes(key)) continue;
+        if (image.provenance && image.provenance[key] !== undefined) flightData.provenance[key] = image.provenance[key];
+        else delete flightData.provenance[key];
+      }
+      changed = true;
+    }
+    let warning;
+    const code = flightData.identity.beaconAssigned;
+    if (code !== codeBefore) {
+      const holder = code ? this._codeAllocator.holderOf(code) : null;
+      if (holder && holder !== flightDataId) warning = 'DUPLICATE_IGNORED_WARNING';
+      else if (code) this._codeAllocator.reassign(flightDataId, code, codeBefore);
+      else if (codeBefore) this._codeAllocator.release(codeBefore);
+    }
+    if (changed) {
+      flightData.rev += 1;
+      flightData.updatedBy = by || null;
+    }
+    return { ok: true, flightData, changed, ...(warning ? { warning } : {}) };
   }
 
   get codeAllocator() { return this._codeAllocator; }
@@ -855,6 +946,9 @@ class FlightDataStore {
     flightData.rev += 1;
     flightData.updatedAt = this._clock.now();
     flightData.updatedBy = by || null;
+    // The derived fields ride with the path they derive from (docs/adr/0100: an undo restores both).
+    this._wrote(flightDataId, path.startsWith('assigned.') ? [path, 'assigned']
+      : path === 'identity.equipmentCodes' ? [path, 'identity.equipmentSuffix'] : [path]);
     return { ok: true, flightData };
   }
 
@@ -880,6 +974,7 @@ class FlightDataStore {
     flightData.rev += 1;
     flightData.updatedAt = this._clock.now();
     flightData.updatedBy = by || null;
+    this._wrote(flightDataId, ['identity.beaconAssigned']);
     return { ok: true, flightData, warning: check.warning };
   }
 
@@ -967,6 +1062,7 @@ class FlightDataStore {
     flightData.rev += 1;
     flightData.updatedAt = this._clock.now();
     flightData.updatedBy = by || null;
+    this._wrote(flightDataId, ['airspace']);
     return { ok: true, flightData };
   }
 
@@ -1011,6 +1107,7 @@ class FlightDataStore {
     flightData.rev += 1;
     flightData.updatedAt = this._clock.now();
     flightData.updatedBy = by || null;
+    this._wrote(flightDataId, ['tofi']);
     return { ok: true, flightData };
   }
 
@@ -1067,6 +1164,7 @@ class FlightDataStore {
     flightData.rev += 1;
     flightData.updatedAt = this._clock.now();
     flightData.updatedBy = by || null;
+    this._wrote(flightDataId, ['military']);
     return { ok: true, flightData };
   }
 
@@ -1101,6 +1199,7 @@ class FlightDataStore {
     flightData.rev += 1;
     flightData.updatedAt = this._clock.now();
     flightData.updatedBy = by || null;
+    this._wrote(flightDataId, ['military']);
     return { ok: true, flightData };
   }
 
@@ -1214,6 +1313,8 @@ class FlightDataStore {
     flightData.rev += 1;
     flightData.updatedAt = this._clock.now();
     flightData.updatedBy = by || null;
+    this._wrote(flightDataId, ['identity.modeOne', 'identity.modeTwo', 'identity.beaconAssigned', 'identity.flightSize',
+      'identity.aircraftType', 'identity.unit', 'identity.homeStation', 'military', 'ato', 'mission', 'filed', 'assigned']);
     return { ok: true, flightData, kept, beacon };
   }
 
@@ -1251,6 +1352,7 @@ class FlightDataStore {
     flightData.rev += 1;
     flightData.updatedAt = now;
     flightData.updatedBy = by || null;
+    this._wrote(flightDataId, ['comms']);
     return { ok: true, flightData };
   }
 
@@ -1284,6 +1386,7 @@ class FlightDataStore {
     if (flightData.timeInputs.takeoffStampedUtc === value) return { ok: true, flightData, changed: false };
     flightData.timeInputs.takeoffStampedUtc = value;
     flightData.rev += 1;
+    this._wrote(flightDataId, ['timeInputs.takeoffStampedUtc']);
     return { ok: true, flightData, changed: true };
   }
 
@@ -1337,6 +1440,7 @@ class FlightDataStore {
       if (text.length > MAX_FREE_TEXT) return { ok: false, reason: 'VALIDATION_ERROR', detail: `limited to ${MAX_FREE_TEXT} characters` };
       let parsed = null;
       let block = null;
+      let unit = null;
       let shown = text;
       if (text !== '') {
         if (field === 'altitude') {
@@ -1351,6 +1455,12 @@ class FlightDataStore {
           }
           if (band.lowFt === band.highFt) parsed = band.lowFt;
           else { block = band; shown = formatAltitudeBlock(band, this._transitionAltFt()); }
+        } else if (field === 'speed') {
+          const sp = parseSpeed(text);
+          if (sp === null) {
+            return { ok: false, reason: 'VALIDATION_ERROR', detail: `${JSON.stringify(text)} is not a speed — write knots like 250 or Mach like M.85` };
+          }
+          parsed = sp.parsed; shown = sp.shown; unit = sp.unit;
         } else {
           parsed = parseHeadingDeg(text);
           if (parsed === null) {
@@ -1361,6 +1471,7 @@ class FlightDataStore {
       if (active) active.status = 'SUPERSEDED';
       const entry = { value: shown, parsed, status: 'ACTIVE', at: now, by: by || null };
       if (field === 'altitude') entry.block = block;
+      if (field === 'speed') entry.unit = unit;
       cell.entries.push(entry);
     }
 
@@ -1368,6 +1479,121 @@ class FlightDataStore {
     flightData.rev += 1;
     flightData.clearanceUpdatedAt = now;
     flightData.updatedBy = by || null;
+    this._wrote(flightDataId, [`clearance.${field}`]);
+    return { ok: true, flightData };
+  }
+
+  // ── Formation split and join (docs/adr/0099) ────────────────────────────
+
+  /**
+   * The flight data of the part that leaves a formation (docs/adr/0099 §1 step 2). The lead's plan, mission, military
+   * namespace, assignments and identity (type, wake, equipment, unit, home station) are COPIED; the callsign is the typed
+   * one, `flightSize` is `size`, a NEW beacon code is allocated (last among the checks, before any write: a refusal leaks
+   * nothing), `beaconObserved`/`tailNumber`/modes/degradation are reset, and `identity.splitFrom` records the lineage. The
+   * lead's ACTIVE altitude, heading and speed entries are copied as fresh ACTIVE entries; `assignment` (a heading, speed
+   * or altitude) is then written as an ordinary clearance entry. The lead's size is NOT changed here (setFormationSize).
+   * `onGround`: the part has not taken off, so no takeoff stamp is copied.
+   * @param {string} leadId
+   * @param {{callsign:string, size:number, assignment:{kind:'HEADING'|'SPEED'|'ALTITUDE', value:string}|null,
+   *          onGround?:boolean, by?:string}} args
+   * @returns {{ok:true, flightData}|{ok:false, reason, detail?}}
+   */
+  createSplitFlightData(leadId, { callsign, size, assignment = null, onGround = false, by = null } = {}) {
+    const lead = this._flightDataList.get(leadId);
+    if (!lead) return { ok: false, reason: 'NOT_FOUND', detail: 'the formation\'s flight data is not found' };
+    const typed = String(callsign || '').trim().toUpperCase();
+    if (!CALLSIGN_RE.test(typed)) return { ok: false, reason: 'VALIDATION_ERROR', detail: 'callsign must be 1-7 alphanumeric characters' };
+    if (typed === String(lead.identity.callsign || '').toUpperCase()) {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: `${typed} is the formation's own callsign — type the departing part's own` };
+    }
+    let field = null;
+    if (assignment) {
+      field = { HEADING: 'heading', SPEED: 'speed', ALTITUDE: 'altitude' }[assignment.kind];
+      if (!field) return { ok: false, reason: 'VALIDATION_ERROR', detail: 'the assignment is a HEADING, SPEED or ALTITUDE' };
+      const text = String(assignment.value == null ? '' : assignment.value).trim().toUpperCase();
+      const ok = text !== '' && (field === 'heading' ? parseHeadingDeg(text) !== null : field === 'speed' ? parseSpeed(text) !== null : parseAltitude(text) !== null);
+      if (!ok) return { ok: false, reason: 'VALIDATION_ERROR', detail: `${JSON.stringify(assignment.value)} is not a valid ${field} assignment` };
+    }
+    const flightDataId = crypto.randomUUID();
+    const minted = this._codeAllocator.allocate(flightDataId); // the last check, the first write
+    if (minted.error) return { ok: false, reason: 'VALIDATION_ERROR', detail: 'beacon code pool exhausted' };
+
+    const now = this._clock.now();
+    const copy = (o) => JSON.parse(JSON.stringify(o));
+    const provenance = { 'identity.beaconAssigned': 'COMPUTER_GENERATED', 'identity.equipmentSuffix': 'SYSTEM_DERIVED' };
+    const identity = {
+      ...copy(lead.identity),
+      callsign: typed,
+      flightSize: size,
+      degradation: 'NONE',
+      trackDegradationFlag: 'NONE',
+      beaconAssigned: minted.code,
+      beaconObserved: null,
+      modeOne: null, modeTwo: null,
+      tailNumber: null,
+      splitFrom: leadId,
+    };
+    const filed = copy(lead.filed);
+    for (const k of Object.keys(filed)) if (filed[k] !== '' && filed[k] != null && filed[k] !== false) provenance[`filed.${k}`] = 'COPIED_ON_SPLIT';
+    for (const k of ['aircraftType', 'wakeCategory', 'unit', 'homeStation']) if (identity[k]) provenance[`identity.${k}`] = 'COPIED_ON_SPLIT';
+    const mission = copy(lead.mission);
+    for (const k of Object.keys(mission)) if (mission[k] != null) provenance[`mission.${k}`] = 'COPIED_ON_SPLIT';
+    const military = ensureMilitary(copy({ ...lead, military: lead.military || defaultMilitary() }));
+    military.arInfo = null; // the ATO's tasking link belongs to the lead's flight
+    const tofi = copy(lead.tofi || { ifrActive: false, radarService: null, separationRegime: null, changedAt: null, changedBy: null });
+    if (tofi.separationRegime === 'MARSA') tofi.separationRegime = 'ATC'; // the part is in no MARSA relation
+    const clearance = defaultClearance();
+    for (const f of CLEARANCE_FIELDS) {
+      const a = activeClearanceEntry(lead, f);
+      if (a) clearance[f].entries.push({ ...copy(a), status: 'ACTIVE', at: now, by: by || null });
+    }
+    const timeInputs = { flightPlanDepartureUtc: (lead.timeInputs || {}).flightPlanDepartureUtc ?? null, takeoffStampedUtc: onGround ? null : ((lead.timeInputs || {}).takeoffStampedUtc ?? null) };
+    const flightData = {
+      flightDataId, rev: 1, identity, filed, clearance,
+      assigned: copy(lead.assigned),
+      military, trackRef: null,
+      airspace: { ...copy(lead.airspace || { owner: null, changedAt: null, changedBy: null }), transitions: [] },
+      comms: { ...copy(lead.comms || { workingFrequencyMhz: null, airspaceId: null, changedAt: null, changedBy: null }), transitions: [] },
+      timeInputs, mission, tofi, provenance,
+      createdAt: now, updatedAt: now, updatedBy: by || null,
+    };
+    this._flightDataList.set(flightDataId, flightData);
+    if (field) {
+      const w = this.setClearance(flightDataId, field, { value: assignment.value }, { by });
+      if (!w.ok) { // pre-validated above; never expected. Leave nothing behind.
+        this._flightDataList.delete(flightDataId);
+        this._codeAllocator.release(minted.code);
+        return w;
+      }
+    }
+    return { ok: true, flightData };
+  }
+
+  /**
+   * Sets how many aircraft a formation's flight data stands for (a split shrinks the lead, a join grows it). Not a
+   * flight-plan amendment, so `updatedAt` stays (the AMENDMENT_INSIDE_30MIN obligation reads it). Bumps `rev`.
+   */
+  setFormationSize(flightDataId, size, { by } = {}) {
+    const flightData = this._flightDataList.get(flightDataId);
+    if (!flightData) return { ok: false, reason: 'NOT_FOUND' };
+    if (!Number.isInteger(size) || size < 1) return { ok: false, reason: 'VALIDATION_ERROR', detail: 'a formation has at least one aircraft' };
+    flightData.identity.flightSize = size;
+    flightData.rev += 1;
+    flightData.updatedBy = by || null;
+    this._wrote(flightDataId, ['identity.flightSize']); // an undone split or join puts the size back (docs/adr/0100)
+    return { ok: true, flightData };
+  }
+
+  /**
+   * Marks the flight data of a joiner void (docs/adr/0099 §2): a field, never a deletion; the archiver removes it with its
+   * last Strip. `into` is the lead's flight data id.
+   */
+  voidFlightData(flightDataId, { reason = 'JOINED', into = null, by = null } = {}) {
+    const flightData = this._flightDataList.get(flightDataId);
+    if (!flightData) return { ok: false, reason: 'NOT_FOUND' };
+    flightData.voided = { reason, into, at: this._clock.now(), by: by || null };
+    flightData.rev += 1;
+    this._wrote(flightDataId, ['voided']); // an undone join removes it: the before-image has none (docs/adr/0100)
     return { ok: true, flightData };
   }
 
@@ -1415,6 +1641,6 @@ module.exports = {
   EDCT_WINDOW_MINUTES, CALL_FOR_RELEASE_BEFORE_MINUTES, CALL_FOR_RELEASE_AFTER_MINUTES,
   TRACK_DEGRADATION_FLAGS, AIRSPACE_OWNERS, RADAR_SERVICE_STATES, SEPARATION_REGIMES, MAX_FREE_TEXT,
   ORDNANCE_STATES, ALERT_STATUSES, MILITARY_WRITABLE_FIELDS, defaultMilitary,
-  ensureClearance, parseAltitudeFt, parseAltitude, formatAltitudeBlock, parseHeadingDeg, activeClearanceEntry,
-  normalizeMtrValue,
+  ensureClearance, parseAltitudeFt, parseAltitude, parseSpeed, formatAltitudeBlock, parseHeadingDeg, activeClearanceEntry,
+  normalizeMtrValue, OBSERVED_PATHS,
 };

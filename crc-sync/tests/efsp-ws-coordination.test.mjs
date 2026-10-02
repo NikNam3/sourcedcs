@@ -235,12 +235,12 @@ test('a snapshot includes every Facility\'s Bays, each correctly stamped', async
   const ctx = makeCtx();
   const { snapshotMessage } = await import('../src/efsp/efsp-ws.js');
   const snap = snapshotMessage(ctx);
-  assert.equal(snap.facilities.sort().join(','), 'CARRIER,CENTER,INCIRLIK,RANGES,TACTICAL');
+  assert.equal([...snap.facilities].sort().join(','), 'CARRIER,CENTER,INCIRLIK,RANGES,TACTICAL');
   assert.ok(snap.bays.some(b => b.bayId === 'ctr-enroute' && b.facilityId === 'CENTER'));
   assert.ok(snap.bays.some(b => b.bayId === 'ap-coordination' && b.facilityId === 'INCIRLIK'));
   assert.ok(snap.bays.some(b => b.bayId === 'tac-c2-coordination' && b.facilityId === 'TACTICAL'));
-  assert.equal(snap.facility, 'INCIRLIK'); // back-compat alias
-  assert.equal(typeof snap.boardSeq, 'number'); // back-compat alias
+  assert.equal(snap.facilities[0], 'INCIRLIK', 'the default Facility comes first');
+  assert.equal('boardSeq' in snap || 'facility' in snap, false, 'the back-compat aliases are gone (docs/adr/0104)');
   assert.equal(typeof snap.boardSeqByFacility.INCIRLIK, 'number');
   assert.equal(typeof snap.boardSeqByFacility.CENTER, 'number');
   assert.equal(typeof snap.boardSeqByFacility.TACTICAL, 'number');

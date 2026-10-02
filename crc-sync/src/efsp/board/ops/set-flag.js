@@ -11,5 +11,6 @@ function _applySetFlag(ctx, strip, op, by) {
 
 module.exports = {
   kind: 'SetFlag',
+  undo: 'none', // docs/adr/0100 §1: an edit, corrected by editing
   apply: (ctx, strip, op, meta) => _applySetFlag(ctx, strip, op, meta.by),
 };

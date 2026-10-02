@@ -5,7 +5,7 @@
 // permission.js. Registered LAST: it extends AP and the strip-type families' owner
 // tables, so everything it extends must already be there.
 
-const { NON_CREATE_OPS } = require('../op-kinds');
+const { NON_CREATE_OPS, FORMATION_OP_KINDS } = require('../op-kinds');
 
 // Incirlik's radar-approach and visual-pattern Positions (docs/adr/0075, L18):
 // RSU, SFA and PAR, plus AP's two new columns. ONE table, one row per Position,
@@ -43,19 +43,19 @@ const INCIRLIK_CAPABILITIES = {
     requestsRunwayStatus: true, rotatesSfa: true, sendsSfaRotation: true, receivesSfaRotation: false,
   },
   RSU: {
-    ops: [...NON_CREATE_OPS, 'CreateStrip'],
+    ops: [...NON_CREATE_OPS, 'CreateStrip', ...FORMATION_OP_KINDS],
     createsStripTypes: ['PATTERN'],
     ownsStates: { PATTERN: ['IN_PATTERN', 'RECOVERED'] },
     requestsRunwayStatus: true, rotatesSfa: false, sendsSfaRotation: false, receivesSfaRotation: false,
   },
   SFA: {
-    ops: [...NON_CREATE_OPS],
+    ops: [...NON_CREATE_OPS, ...FORMATION_OP_KINDS],
     createsStripTypes: [],
     ownsStates: { ARRIVAL: ['INBOUND'] },
     requestsRunwayStatus: false, rotatesSfa: false, sendsSfaRotation: true, receivesSfaRotation: false,
   },
   PAR: {
-    ops: [...NON_CREATE_OPS],
+    ops: [...NON_CREATE_OPS, ...FORMATION_OP_KINDS],
     createsStripTypes: [],
     ownsStates: { FINAL: ['ON_FINAL', 'BALL', 'BOLTER_WAVEOFF'] },
     requestsRunwayStatus: false, rotatesSfa: false, sendsSfaRotation: false, receivesSfaRotation: true,

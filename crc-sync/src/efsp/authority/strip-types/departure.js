@@ -256,6 +256,10 @@ const family = {
   senderStateOnAccept: null,
   coordinationEligibleState: 'HANDED_OFF',        // docs/adr/0022: AP->CTR
   tofiEligibleState: 'HANDED_OFF',
+  // docs/adr/0099 §4 (H100 Q-SJ2): any live IFR Strip may split or join; `groundStates` are the states a split needs no assignment in
+  splitEligibleStates: DEPARTURE_STATES.filter(s => s !== 'DROPPED'),
+  joinEligibleStates: DEPARTURE_STATES.filter(s => s !== 'DROPPED'),
+  groundStates: ['PROPOSED', 'PENDING_CLEARANCE', 'CLEARED', 'HELD', 'PUSHBACK', 'TAXI', 'RUNWAY_QUEUE', 'LUAW'],
 };
 
 module.exports = {

@@ -63,6 +63,10 @@ const family = {
   // own (docs/adr/0026).
   coordinationEligibleState: undefined,
   tofiEligibleState: undefined,
+  // docs/adr/0099 §4: never split or joined (MARSA records nothing; carrier control is its own regime)
+  splitEligibleStates: [],
+  joinEligibleStates: [],
+  groundStates: [],
 };
 
 module.exports = { family, MISSION_STATES, MISSION_STATE_OWNERS, computeMissionNla };

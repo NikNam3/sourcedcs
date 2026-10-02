@@ -1,5 +1,7 @@
 'use strict';
 
+const { stripScope, retireScope, union, callsignOf } = require('../../undo/scopes');
+
 const { CARRIER_HANDOFF_EFFECTS } = require('../../carrier/handoff-effects'); // pure (docs/adr/0074)
 
 /**
@@ -87,7 +89,6 @@ function _applyCarrierHandoff(ctx, strip, kind, toPositionId, by, actingPosition
   strip.updatedAt = now;
   strip.updatedBy = by || null;
   ctx.touch(strip.stripId);
-  ctx.nlaHistory.delete(strip.stripId);
   return {
     ok: true, strip, routedTo: routedTo || undefined, warning,
     carrierHandoff: { kind, trigger: strip.carrierHandoff.trigger },
@@ -103,6 +104,11 @@ function _applyCarrierHandoff(ctx, strip, kind, toPositionId, by, actingPosition
 // button reaches the same method.
 module.exports = {
   kind: 'CarrierHandoff',
+  // docs/adr/0100 (H95): the handoff and its stack effect (Commence's push mark, PriFly's removal).
+  undo: {
+    label: (op, strip, ctx) => `${(ctx.rules.carrierHandoffs[op.transfer] || {}).label || op.transfer} ${callsignOf(ctx, strip)}`,
+    scope: (ctx, strip) => union(stripScope(ctx, strip), { carrier: [{ flightDataId: strip.flightDataId }] }),
+  },
   authorize: (ctx, actingPositionId, op) => {
     if (!(ctx.rules.canRecordCarrierHandoff(actingPositionId, op.transfer))) {
       return { ok: false, reason: 'PERMISSION_DENIED', detail: `${actingPositionId} may not record ${op.transfer || 'that transfer'}` };

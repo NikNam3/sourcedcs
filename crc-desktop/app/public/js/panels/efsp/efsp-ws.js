@@ -239,8 +239,7 @@ export function noteEfspHeartbeatForSync(msg) {
   for (const [f, n] of _resyncInFlight) {
     if (n + 1 >= RESYNC_RETRY_HEARTBEATS) _resyncInFlight.delete(f); else _resyncInFlight.set(f, n + 1);
   }
-  const behind = efspHeartbeatGapOf(msg);
-  if (behind) requestEfspResync(behind, 'heartbeat names a seq we never received');
+  for (const facilityId of efspHeartbeatGapOf(msg)) requestEfspResync(facilityId, 'heartbeat names a seq or Board lifetime we never received');
 }
 
 /** A delta or ack from another Board lifetime: resync (the server answers a snapshot). Call before applying it. */

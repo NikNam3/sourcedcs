@@ -45,6 +45,7 @@ const { BoardPersistence } = require('./board/persistence');
 const OPS = require('./board/ops');
 const { initialStateFor, replicaStateOnReceipt, senderStateOnAccept } = require('./authority');
 const { ReplayCache, replayRecord, REPLAY_PERSIST_WINDOW_MS } = require('./sync/replay-cache');
+const { UndoHistory, undoEnv } = require('./undo/undo-history');
 const log = require('../log').logger('efsp:board-store');
 
 class BoardStore {
@@ -65,8 +66,11 @@ class BoardStore {
    * @param {(facilityId:string) => BoardStore|null} rules.peerBoard — the OTHER Facility's BoardStore instance, for cross-Facility coordination (docs/adr/0015)
    * @param {(positionId:string) => {bayId:string,rackIds:string[]}|null} rules.coordinationBayFor
    * @param {(primitive:string) => object|null} rules.coordinationEffect — guide §4.6's primitive table (coordination.js)
+   * @param {object} [opts]
+   * @param {import('./undo/undo-history').UndoHistory} [opts.undoHistory] the process's one undo history (createEfsp
+   *   shares one across the Boards, docs/adr/0100); a Board built alone gets its own on the wall clock
    */
-  constructor(flightDataStore, rules, { clock = WALL_CLOCK } = {}) {
+  constructor(flightDataStore, rules, { clock = WALL_CLOCK, undoHistory = null } = {}) {
     // The mission clock (docs/adr/0079). Every Strip timestamp, every NLA gate
     // and every Mutation-log `at` reads it. The one exception is the NLA
     // double-tap/Undo latch below, which is a UI debounce measured in real
@@ -79,7 +83,10 @@ class BoardStore {
     // the touched set and the cid counter. Every touch goes through its recordTouch;
     // observeTouches(fn) sees them all (tools/soak/host-core.js).
     this._state = new BoardState({ clock });
-    const touch = (id) => this._state.recordTouch(id);
+    // docs/adr/0100: every touch is attributed by the undo history (a rebalance's are placement-only).
+    this._undoHistory = undoHistory || this._ownUndoHistory(flightDataStore, rules);
+    this._state.setTouchHook((id, { placementOnly }) => this._undoHistory.observe({ facilityId: rules.facilityId, kind: 'strip', id, placementOnly }));
+    const touch = (id, opts) => this._state.recordTouch(id, opts);
     this._replay = ReplayCache.forBoard(); // clientMutationId -> compact frozen replay record (replayRecord), idempotency (§5.2, docs/adr/0081)
     this._mutationLog = null; // optional collaborator, see setMutationLog()
     // The Mutation-log entries for a client Mutation and a peer write (board/audit.js).
@@ -135,7 +142,46 @@ class BoardStore {
       nlaHistory: () => this._nlaHistory,
       droppedWallAt: () => this._persistence.droppedWallAt,
       initialStateFor,
+      undoHistory: () => this._undoHistory,
     });
+  }
+
+  /** A Board built alone (tests, tools): its own history over this Board and its peers, and the flight data's writes if unobserved. */
+  _ownUndoHistory(flightDataStore, rules) {
+    const history = new UndoHistory({ wallClock: WALL_CLOCK });
+    history.attach(undoEnv({ boardFor: (f) => (f === rules.facilityId ? this : rules.peerBoard(f)), flightDataStore }));
+    if (flightDataStore && flightDataStore.setWriteObserver && !flightDataStore.hasWriteObserver) {
+      flightDataStore.setWriteObserver((id, paths) => history.observe({ kind: 'flightData', id, paths }));
+    }
+    return history;
+  }
+
+  /** The undo history this Board reports to (docs/adr/0100). */
+  get undoHistory() { return this._undoHistory; }
+
+  /** A Strip's before-image for the undo history (board/strip-ops.js). */
+  captureForUndo(stripId) { return this._stripOps.captureForUndo(stripId); }
+
+  /** Whether `images` of this Board's Strips can be restored now (board/strip-ops.js checkRestore). */
+  checkUndoRestore(images) { return this._stripOps.checkRestore(images); }
+
+  /**
+   * Another Facility's Undo restores this Board's Strips (docs/adr/0100 §3): the before-images go back, the records
+   * that action created here are removed, and one `InterfacilityUndo` entry is written with `causedBy`.
+   * @returns {{records: object[], gone: string[]}}
+   */
+  receiveUndoRestore({ causedBy, undoneActionId, fromFacilityId, images, removeIds = [], voidedBy, by }) {
+    const r = this._stripOps.restoreImages(images, removeIds, { voidedBy, by });
+    const [first, ...rest] = r.records;
+    if (first && this._mutationLog) {
+      this._mutationLog.record({
+        clientMutationId: null, causedBy: causedBy || null, op: 'InterfacilityUndo',
+        stripId: first.stripId, flightDataId: first.flightDataId, facilityId: this._rules.facilityId || null,
+        fromFacilityId: fromFacilityId || null, actingPositionId: null, actorId: by || null, at: this._clock.now(),
+        before: first.before, after: first.after, undoneActionId, records: rest, source: 'peer',
+      });
+    }
+    return r;
   }
 
   setMutationLog(mutationLog) { this._mutationLog = mutationLog; }

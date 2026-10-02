@@ -240,13 +240,28 @@ test('a rotation CANCELLED by the receiver: PAR unstaffed refuses it and the air
   assert.equal(ok.ownerPositionId, 'PAR');
 });
 
-test('a rotation is not undoable (the state the Undo would restore is another strip type\'s): Undo is refused and nothing moves', () => {
+test('U5: a rotation is undoable by the Position that rotated it: back on its frequency Rack after its predecessor, PAR\'s Bay empty (docs/adr/0100, H95)', () => {
   const { efsp, c } = fresh();
+  const first = sfaArrival(efsp, c);
   const s = sfaArrival(efsp, c);
-  mustAct(efsp, c.SFA, 'SFA', strip(efsp, s), { kind: 'SfaRotation' });
-  refused(act(efsp, c.PAR, 'PAR', strip(efsp, s), { kind: 'Undo' }), null, null, 'Undo');
-  assert.equal(strip(efsp, s).stripType, 'FINAL');
-  assert.equal(strip(efsp, s).ownerPositionId, 'PAR');
+  const last = sfaArrival(efsp, c);
+  const before = strip(efsp, s);
+  const rackBefore = board(efsp).getRack(before.bayId, before.rackId).map(x => x.stripId);
+  assert.deepEqual(rackBefore.slice().sort(), [first.stripId, s.stripId, last.stripId].sort());
+  const ack = act(efsp, c.SFA, 'SFA', before, { kind: 'SfaRotation' });
+  assert.equal(ack.ok, true, JSON.stringify(ack));
+  const undo = { kind: 'Undo', actionId: ack.undoable.actionId };
+  refused(act(efsp, c.PAR, 'PAR', strip(efsp, s), undo), 'PERMISSION_DENIED', null, 'PAR undoing SFA\'s rotation');
+  const back = act(efsp, c.SFA, 'SFA', strip(efsp, s), undo);
+  assert.equal(back.ok, true, JSON.stringify(back));
+  const now = strip(efsp, s);
+  assert.deepEqual([now.stripType, now.state, now.ownerPositionId, now.bayId, now.rackId],
+    [before.stripType, before.state, before.ownerPositionId, before.bayId, before.rackId]);
+  assert.equal(now.sfaTransfer, before.sfaTransfer);
+  const rack = efsp.boardStoreFor('INCIRLIK').getRack(before.bayId, before.rackId).map(x => x.stripId);
+  assert.deepEqual(rack, rackBefore, 'after its predecessor');
+  const parFinal = efsp.boardStoreFor('INCIRLIK').getAll().filter(x => x.ownerPositionId === 'PAR' && x.state !== 'DROPPED');
+  assert.deepEqual(parFinal, [], 'PAR\'s Bay is empty');
 });
 
 test('a rotation applies to an ARRIVAL at INBOUND only: a Strip already on final, or not an arrival, is refused', () => {

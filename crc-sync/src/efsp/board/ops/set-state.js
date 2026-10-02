@@ -1,5 +1,7 @@
 'use strict';
 
+const { stripScope, retireScope, union, callsignOf } = require('../../undo/scopes');
+
 const { runwayInhibitFor, RUNWAY_GATED_STATES } = require('../../runway-status');
 
 /**
@@ -90,6 +92,11 @@ function _applySetStateOp(ctx, strip, toState, by) {
 
 module.exports = {
   kind: 'SetState',
+  // docs/adr/0100: the state change (typed, menu, L19's chip); a SetState to DROPPED is a retirement.
+  undo: {
+    label: (op, strip, ctx) => `${op.toState === 'DROPPED' ? 'Drop' : `Set ${op.toState}`} ${callsignOf(ctx, strip)}`,
+    scope: (ctx, strip, op) => (op.toState === 'DROPPED' ? retireScope(ctx, strip) : stripScope(ctx, strip)),
+  },
   auditFields: (ctx, result) => ({ tail: {
     // A gate this Mutation was let past, and why (S-L19 open point, decided in
     // docs/wip/UI-B.md). Undefined, so absent from the line, otherwise.

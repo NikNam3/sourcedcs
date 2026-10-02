@@ -8,7 +8,9 @@
 
 const OP_KINDS = [
   'CreateStrip', 'MoveStrip', 'SetBlock', 'TransferStrip',
-  'SetFlag', 'SetState', 'InvokeNla', 'Undo', 'DropStrip',
+  // Undo is not a grant (docs/adr/0100 §5): only the Position that performed an action may undo it, whatever
+  // ops it holds (a JTAC undoing its hand-back), so board/strip-ops.js's _dispatchUndo gates it on the record.
+  'SetFlag', 'SetState', 'InvokeNla', 'DropStrip',
   'HANDOFF', 'POINT_OUT', 'TRAFFIC', 'OPERATIONAL_REQUEST', 'AIT',
   // docs/adr/0023 — converts a DEPARTURE Strip at HANDED_OFF into an
   // ARRIVAL Strip IN PLACE (same Strip, same flight data), for a flight returning
@@ -58,8 +60,13 @@ const AIRSPACE_ENTRY_OP_KINDS = ['ApproveAirspaceEntry', 'ClearAirspaceEntry'];
 // table names it (CTR, TAC_C2, GCI — see PERMISSIONS below).
 const TOFI_OP_KINDS = ['TOFI'];
 
+// docs/adr/0099 §4 (H100 Q-SJ3 c): formation split and join. A literal capability held by every ATC Position (the civil-ATC
+// and Incirlik-military families), NEVER a `.filter()` over OP_KINDS and not an OP_KINDS entry: a kind there would reach the
+// tactical and carrier Positions through NON_CREATE_OPS silently. Ownership of the Strip is checked by the Board as always.
+const FORMATION_OP_KINDS = ['SplitFormation', 'JoinFormation'];
+
 const NON_CREATE_OPS = OP_KINDS.filter(k => k !== 'CreateStrip' && !COORDINATION_OP_KINDS.includes(k) && !AP_CTR_ONLY_OP_KINDS.includes(k) && !TOFI_OP_KINDS.includes(k) && !AIRSPACE_ENTRY_OP_KINDS.includes(k));
 
 module.exports = {
-  OP_KINDS, COORDINATION_OP_KINDS, AP_CTR_ONLY_OP_KINDS, AIRSPACE_ENTRY_OP_KINDS, TOFI_OP_KINDS, NON_CREATE_OPS,
+  OP_KINDS, COORDINATION_OP_KINDS, AP_CTR_ONLY_OP_KINDS, AIRSPACE_ENTRY_OP_KINDS, TOFI_OP_KINDS, FORMATION_OP_KINDS, NON_CREATE_OPS,
 };

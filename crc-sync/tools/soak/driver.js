@@ -342,6 +342,8 @@ class Driver {
     if (acks.length === 0) { this.event('lost', { cmid: msg.clientMutationId, type: msg.type, op: msg.op && msg.op.kind }); return null; }
     const ack = acks[0].msg;
     this.ledger.onAck(ack, { isReplay: replay });
+    // docs/adr/0100: the ack names what is undoable; an Undo later names that action.
+    if (ack.ok && ack.undoable && msg.stripId) (this.lastUndoable || (this.lastUndoable = new Map())).set(msg.stripId, ack.undoable.actionId);
     if (!replay && !ack.ok && !['STALE_REV', 'NLA_INHIBITED', 'NOT_HOLDING_POSITION'].includes(ack.reason)) {
       this.event(`refusal:${msg.op ? msg.op.kind : msg.type}:${ack.reason}`, { detail: ack.detail, actingPositionId: msg.actingPositionId, strip: ack.strip ? { state: ack.strip.state, owner: ack.strip.ownerPositionId, stripType: ack.strip.stripType } : null });
     }
@@ -670,7 +672,9 @@ class Driver {
       }
       return;
     }
-    const op = it.op.kind === 'MoveStrip' ? await this._sameBayMove(it.facilityId, s) : it.op;
+    const op = it.op.kind === 'MoveStrip' ? await this._sameBayMove(it.facilityId, s)
+      : it.op.kind === 'Undo' ? (this.lastUndoable && this.lastUndoable.get(it.stripId) ? { kind: 'Undo', actionId: this.lastUndoable.get(it.stripId) } : null)
+      : it.op;
     if (!op) return;
     const ack = await this.send(client, { version: 1, type: 'efsp-mutation', facilityId: it.facilityId, actingPositionId: s.ownerPositionId, stripId: it.stripId, baseRev: s.rev, op }, { label: `f${f.id}|edit` });
     if (ack && ack.ok) {

@@ -94,7 +94,7 @@ test('SCENARIO a flying session: the traffic count reconciles against the Mutati
   // 7. A terminal Drop undone, then done again.
   let undone = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'UNDO1' });
   undone = await advance(efsp, c.AP, 'AP', undone);
-  undone = mustAct(efsp, c.AP, 'AP', undone, { kind: 'Undo' });
+  undone = mustAct(efsp, c.AP, 'AP', undone, { kind: 'Undo', actionId: efsp.undoHistory.latestActionFor({ facilityId: 'INCIRLIK', stripId: undone.stripId }) });
   await advance(efsp, c.AP, 'AP', undone);
 
   // 8. A flight approved into a MOA by Center, out again, then finished at both ends.

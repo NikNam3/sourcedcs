@@ -87,8 +87,37 @@ class Placement {
     for (const s of ordered) {
       s.orderKey = fresh.get(s.stripId);
       s.rev += 1;
-      this._touch(s.stripId);
+      this._touch(s.stripId, { placementOnly: true }); // never a change to an undo (docs/adr/0100 §4)
     }
+  }
+
+  /**
+   * Where a Strip sits now, for an undo's before-image (docs/adr/0100 §3): its Bay, its Rack and the Strip just
+   * before it (null: it is first). A raw order key is never restored; the predecessor is.
+   */
+  placementOf(strip) {
+    const rack = this._state.rack(strip.bayId, strip.rackId).filter(s => s.stripId !== strip.stripId);
+    let afterStripId = null;
+    for (const s of rack) {
+      if (s.orderKey < strip.orderKey || (s.orderKey === strip.orderKey && s.stripId < strip.stripId)) afterStripId = s.stripId;
+      else break;
+    }
+    return { bayId: strip.bayId, rackId: strip.rackId, afterStripId };
+  }
+
+  /**
+   * Puts a Strip an undo restores back in its recorded Bay and Rack, directly after the Strip that preceded it at
+   * action time, or first when that one has left the Rack (docs/adr/0100 §3). A key exhaustion rebalances the Rack
+   * like any insert (placement-only touches).
+   */
+  restorePlacement(strip, { bayId, rackId, afterStripId }) {
+    strip.bayId = bayId;
+    strip.rackId = rackId;
+    const rack = this._state.rack(bayId, rackId).filter(s => s.stripId !== strip.stripId);
+    const i = afterStripId ? rack.findIndex(s => s.stripId === afterStripId) : -1;
+    const after = i >= 0 ? rack[i].stripId : null;
+    const next = i >= 0 ? rack[i + 1] : rack[0];
+    strip.orderKey = this.resolveOrderKey(bayId, rackId, after, next ? next.stripId : null, strip.stripId);
   }
 
   /**

@@ -14,5 +14,6 @@ function _applyClearAirspaceEntry(ctx, strip, by) {
 
 module.exports = {
   kind: 'ClearAirspaceEntry',
+  undo: 'none', // docs/adr/0100 §1: airspace entry approval is not undoable
   apply: (ctx, strip, op, meta) => _applyClearAirspaceEntry(ctx, strip, meta.by),
 };

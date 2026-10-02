@@ -4,7 +4,7 @@ export default {
   id: "M16",
   what: "the allocator hands out a different first beacon code",
   file: "src/efsp/flight-data-store.js",
-  find: "const flightDataId = crypto.randomUUID();",
-  replace: "const flightDataId = crypto.randomUUID(); crypto.randomUUID();",
+  find: "const flightDataId = crypto.randomUUID();\n    const now = this._clock.now();\n    const equipmentCodes",
+  replace: "const flightDataId = crypto.randomUUID(); crypto.randomUUID();\n    const now = this._clock.now();\n    const equipmentCodes",
   detect: ["freeze-hub","freeze-table","freeze-scenarios"],
 };

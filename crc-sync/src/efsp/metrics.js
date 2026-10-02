@@ -48,13 +48,12 @@ const { WALL_CLOCK } = require('../mission-clock');
 const { MissionSession } = require('../mission-session');
 const { getInstrumentationConfig } = require('./instrumentation-config');
 const { TrafficCount, hourKey } = require('./traffic-count');
+const { HOUR_MS, DAY_MS } = require('../units');
 const log = require('../log').logger('efsp:metrics');
 
 const METRICS_PATH = writePath('efsp-metrics.json', process.env.CRCSYNC_EFSP_METRICS_PATH);
 
 const VERSION = 1;
-const HOUR_MS = 60 * 60 * 1000;
-const DAY_MS = 24 * HOUR_MS;
 // The caps below (sample, event, session and dedupe counts, the 720 h window) are
 // engineering bounds, not doctrine: they keep memory and a report finite. The three
 // TARGET constants are the guide's, each cited on its line.
@@ -354,6 +353,30 @@ class EfspMetrics {
     const gesture = FLAG_TO_GESTURE[flag];
     if (!gesture) return;
     this._record(at, (b) => inc(b.setFlag || (b.setFlag = {}), gesture));
+  }
+
+  /**
+   * docs/adr/0100 §9: one successful Undo, by the op kind it undid; how many Mutations by ANOTHER Position it voided;
+   * and whether it undid a transfer. An undone transfer stays a successful transfer attempt (§11.1 unchanged):
+   * `undoneTransfers` beside it shows the mis-click rate.
+   */
+  recordUndo({ at = this._clock.now(), undoneOp, voidedOthers = 0, transfer = false }) {
+    this._record(at, (b) => {
+      const u = b.undo || (b.undo = { undos: 0, byOp: {}, undoVoided: 0, undoneTransfers: 0 });
+      u.undos += 1;
+      inc(u.byOp, undoneOp || 'UNKNOWN');
+      u.undoVoided += voidedOthers;
+      if (transfer) u.undoneTransfers += 1;
+    });
+  }
+
+  /** ADR 0099 (SPLIT-JOIN's ops, keyed on the op kind): one successful SplitFormation or JoinFormation. */
+  recordFormation({ at = this._clock.now(), op }) {
+    this._record(at, (b) => {
+      const f = b.formations || (b.formations = { formationSplits: 0, formationJoins: 0 });
+      if (op === 'SplitFormation') f.formationSplits += 1;
+      else if (op === 'JoinFormation') f.formationJoins += 1;
+    });
   }
 
   recordSystemReassign({ at = this._clock.now() } = {}) {
@@ -683,6 +706,18 @@ class EfspMetrics {
       if (series(h)) trByHour[h] = { missionSession: seq, attempts: t.attempts, failed: t.failed, inhibitedPress: t.inhibitedPress || 0, byCause: { ...t.byCause } };
     }
 
+    // not §11.5: undo (docs/adr/0100 §9) and formation splits/joins (ADR 0099)
+    const undo = { undos: 0, byOp: {}, undoVoided: 0, undoneTransfers: 0, byHour: {} };
+    const formations = { formationSplits: 0, formationJoins: 0 };
+    for (const [h, b] of entries) {
+      if (b.undo) {
+        undo.undos += b.undo.undos; undo.undoVoided += b.undo.undoVoided; undo.undoneTransfers += b.undo.undoneTransfers;
+        for (const [k, v] of Object.entries(b.undo.byOp)) inc(undo.byOp, k, v);
+        if (series(h)) undo.byHour[h] = { missionSession: seq, undos: b.undo.undos, undoVoided: b.undo.undoVoided, undoneTransfers: b.undo.undoneTransfers };
+      }
+      if (b.formations) { formations.formationSplits += b.formations.formationSplits; formations.formationJoins += b.formations.formationJoins; }
+    }
+
     // not §11.5: obligations (L7's, verbatim — counts, not rates: `met` is only
     // meaningful for ADVANCE_FORWARDING and VOID_TIME_EXPIRED, ADR 0067) and
     // system reassignments
@@ -743,6 +778,8 @@ class EfspMetrics {
       },
       obligations: { status: obligationsStatus, live: obligationsLive },
       systemReassigned: { total: reassigned, byHour: reassignedByHour },
+      undo,
+      formations,
     };
   }
 }
@@ -876,7 +913,7 @@ function createEfspInstrumentation({
     let rec = liveSessions.get(session);
     if (!rec) {
       rec = { sessionId: crypto.randomUUID(), controllerId: session.controllerId || null, startedAt: at, endedAt: null,
-        mutations: 0, rejected: 0, byReason: {}, transfers: { attempts: 0, failed: 0 } };
+        mutations: 0, rejected: 0, byReason: {}, transfers: { attempts: 0, failed: 0 }, undos: 0, undoVoided: 0 };
       liveSessions.set(session, rec);
       liveSessionList.add(rec);
     }
@@ -912,6 +949,12 @@ function createEfspInstrumentation({
         metrics.recordInhibitedPress({ at });
       }
       if (ok && op === 'SetFlag' && msg.op) metrics.recordSetFlag({ at, flag: msg.op.flag });
+      if (ok && op === 'Undo' && ack.undone) {
+        const voidedOthers = (ack.voided || []).filter(v => v.actingPositionId && v.actingPositionId !== msg.actingPositionId).length;
+        metrics.recordUndo({ at, undoneOp: ack.undone.op, voidedOthers, transfer: ack.undone.transfer === true });
+        if (rec) { rec.undos += 1; rec.undoVoided += voidedOthers; }
+      }
+      if (ok && (op === 'SplitFormation' || op === 'JoinFormation')) metrics.recordFormation({ at, op });
     }
 
     // §11.3: every Mutation is recorded, refusals included. the Board logs
