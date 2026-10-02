@@ -75,3 +75,12 @@ from navpoints or placed on the map.
 controller fills in altitudes and widths.
 *Recommend (a)* for 2P-B (the scope stays at 1.1 lanes), with (b) as a small follow-up lane once 2S-B's drawing names
 exist. It reuses the same copy-at-selection rule (DA-2).
+
+## Code as found (step 0, build lane)
+
+- `airspace-geometry-editor.js` is 2P-A's stub (`mountGeometryEditor(container, definition, onChange)` returning `{destroy, setReadOnly}`); replaced whole.
+- `airspace-editor.js` builds the form with a constant `base = {kind:'AREA'}` on create, so there is no AREA/ROUTE chooser; `_createDefinition` also drops `segments`/`defaultWidthNm`. Minimal edits needed there (kind chooser, route create).
+- `airspace-validate.js` exports `validateAirspaceDefinition`, `polygonSelfIntersects`, `deriveRouteEnvelope`, limits (200 vertices, 100 segments).
+- Map: `map-setup.js` registers sources/layers by hand; `geojson.js` `buildDrawings()` already draws drawings; `missionData.drawings` now carries `name`/`layerName` (2S-B). No `js/map/` dir exists; map modules sit in `js/`.
+- Settings: `app.js` `settings` persisted in localStorage `crc-desktop-settings`; no coordinate-format setting yet; no MGRS code anywhere (client or web). Web has `sourcedcs-web/public/js/airspace-coords.js` (decimal/DMS/DM pair parsing, no MGRS).
+- Airspaces on the client: `getAllEfspAirspaces()` in `efsp-state.js`; transition altitude in `settings.transitionAltFt`.
