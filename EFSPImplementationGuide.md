@@ -539,17 +539,17 @@ Single Frequency Approach exists so a single-piloted jet does not change frequen
 
 **If the panel models "ownership transfer = frequency change", `SFA` breaks it.** Implement `SFA` ownership transfer as a controller-side rotation over a frequency pool, with `AP` holding rotation jurisdiction. The frequency is an attribute of the Strip; the controller is what moves.
 
-### 4.8 Position staffing, combination and handoff
+### 4.8 Position staffing, combination and position relief
 
-Fixed by the project owner: **a controller's Positions are derived from which radar stations they have selected**, several controllers may select the same radar station with one acting as Primary, and **selection changes mid-session with automatic handoff**. Combination across Facilities is normal — one person may be `CTR` and `TAC_C2` simultaneously — and under low manning it is the usual case, not the exception.
+Fixed by the project owner: **a controller's Positions are derived from which radar stations they have selected**, several controllers may select the same radar station with one acting as Primary, and **selection changes mid-session with automatic position relief**. *Position relief* is the term here for one controller taking over a Position from another (the FAA's "transfer of position responsibility", signing off with relief: JO 7110.65 para 2-1-24 and Appendix A, as `docs/parallel/research/vocabulary.md` A3 cites it). It is not a *handoff*, which in this guide always means a Strip or radar handoff between Positions (P/CG HANDOFF; JO 7110.65 para 5-4-5 and 5-4-6, §4.6). Combination across Facilities is normal — one person may be `CTR` and `TAC_C2` simultaneously — and under low manning it is the usual case, not the exception.
 
 Saab's product describes the general capability: *"roles can be combined or split in real-time based on workload"* (Saab's word "roles" is theirs; here they are Positions) `[Annex §4]`. What follows is how to do that without losing the doctrine.
 
-#### 4.8.1 Ownership is per-Position, and that makes handoff nearly free
+#### 4.8.1 Ownership is per-Position, and that makes position relief nearly free
 
 `Strip.ownerPositionId` (§3.1) names a **Position**, never a person. This was the right choice for reasons that only now become obvious:
 
-> **On a handoff, Strips do not move at all. Only the Position→Primary mapping changes.**
+> **On a position relief, Strips do not move at all. Only the Position→Primary mapping changes.**
 
 A controller dropping `TAC_C2` and another picking it up is a change to one mapping entry. Every Strip keeps its `ownerPositionId`; the new Primary simply resolves to them. There is no bulk transfer, no re-parenting, and no window in which a Strip is owned by nobody.
 
@@ -635,7 +635,7 @@ Add to the §11.5 metric set:
 |---|---|---|
 | Positions signed on per controller, over time | the low-manning reality this design serves | observed, not targeted |
 | Self-coordination events, as a share of all boundary events | tells you how often combination is active, and whether §4.8.3 clause 3 is being obeyed | self-coord ≈ combined-position share |
-| Handoffs completed without a stranded Strip | §4.8.6 | 100% |
+| Position reliefs and sign-offs completed without a stranded Strip | §4.8.6 | 100% |
 | Time a Position spends unstaffed while it still owns Strips | the consolidation working, or not | trending to zero |
 
 ---
@@ -1280,7 +1280,7 @@ Acceptance:
 - Replaying a Mutation with the same `clientMutationId` does not double-apply.
 - An unacknowledged Mutation that fails `baseRev` after reconnect is surfaced, not dropped. **Test this explicitly; it is the worst failure mode in the system.**
 
-### WP1A — Position staffing, combination and handoff
+### WP1A — Position staffing, combination and position relief
 
 **Entry:** WP1, and the WP0 finding on how the host CRC exposes radar-station selection.
 
