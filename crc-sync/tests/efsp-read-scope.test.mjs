@@ -85,7 +85,7 @@ test('board delta: visible Strips stay, every other updated Strip goes to gone, 
   assert.equal(none.boardSeq, 9, 'sent even when empty, so the seq stays continuous');
 });
 
-test('correlation and MARSA deltas carry the visible flights only and are still sent, empty, when nothing is left (the seq stays continuous, docs/adr/0105)', () => {
+test('correlation and MARSA deltas carry the visible flights only and are still sent, empty, when nothing is left (the seq stays continuous, docs/adr/0106)', () => {
   const flightDataIds = new Set(['f1']);
   const corr = { type: 'efsp-correlation-delta', correlations: { updated: [{ flightDataId: 'f1' }, { flightDataId: 'f2' }] }, stats: { n: 2 } };
   assert.deepEqual(rs.filterCorrelationDelta(corr, jtac, flightDataIds).correlations.updated, [{ flightDataId: 'f1' }]);

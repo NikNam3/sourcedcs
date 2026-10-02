@@ -127,7 +127,7 @@ class AirspaceStore {
     this._rowOf = authority ? authority.rowOf : () => ({ create: null, edit: null, delete: null, use: false });
     this._byTheater = new Map(); // theater -> Map(airspaceId -> record)
     this._seeded = new Map();    // theater -> Set(airspaceId) imported from the standing list at least once
-    this._sync = new SyncLog({ epoch: true }); // the store's sequence and its lifetime (epoch, not persisted): no ring, the resync answer is the snapshot slice (docs/adr/0105)
+    this._sync = new SyncLog({ epoch: true }); // the store's sequence and its lifetime (epoch, not persisted): no ring, the resync answer is the snapshot slice (docs/adr/0106)
     this._mutationLog = null;
   }
 
@@ -139,7 +139,7 @@ class AirspaceStore {
   setMutationLog(mutationLog) { this._mutationLog = mutationLog; }
 
   get currentSeq() { return this._sync.seq; }
-  /** The lifetime this store's seq belongs to (docs/adr/0105): new per process, never persisted. */
+  /** The lifetime this store's seq belongs to (docs/adr/0106): new per process, never persisted. */
   get epoch() { return this._sync.epoch; }
 
   // ── reading ────────────────────────────────────────────────────────────

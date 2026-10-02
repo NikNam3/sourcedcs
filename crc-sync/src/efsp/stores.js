@@ -86,7 +86,7 @@ const REGISTRY = [
   },
   {
     key: 'airspaces',
-    // The store's sync declaration (docs/adr/0105): `key` is its snapshot key, which is also the key of its heartbeat entry
+    // The store's sync declaration (docs/adr/0106): `key` is its snapshot key, which is also the key of its heartbeat entry
     // and of its resync slice; `gapFromDeltas` says a delta moves seq by exactly one change, so a client may ask at once on a jump.
     sync: { key: 'airspaces', seqKey: 'airspaceSeq', epochKey: 'airspaceEpoch', deltaType: 'efsp-airspace-delta', gapFromDeltas: true },
     audited: true,
@@ -138,7 +138,7 @@ const REGISTRY = [
   },
   {
     key: 'correlations',
-    // The store's sync declaration (docs/adr/0105): `key` is its snapshot key, which is also the key of its heartbeat entry
+    // The store's sync declaration (docs/adr/0106): `key` is its snapshot key, which is also the key of its heartbeat entry
     // and of its resync slice; `gapFromDeltas` says a delta moves seq by exactly one change, so a client may ask at once on a jump.
     sync: { key: 'correlations', seqKey: 'correlationSeq', epochKey: 'correlationEpoch', deltaType: 'efsp-correlation-delta', gapFromDeltas: false },
     audited: true,
@@ -158,7 +158,7 @@ const REGISTRY = [
   },
   {
     key: 'marsa',
-    // The store's sync declaration (docs/adr/0105): `key` is its snapshot key, which is also the key of its heartbeat entry
+    // The store's sync declaration (docs/adr/0106): `key` is its snapshot key, which is also the key of its heartbeat entry
     // and of its resync slice; `gapFromDeltas` says a delta moves seq by exactly one change, so a client may ask at once on a jump.
     sync: { key: 'marsa', seqKey: 'marsaSeq', epochKey: 'marsaEpoch', deltaType: 'efsp-marsa-delta', gapFromDeltas: false },
     audited: true,
@@ -190,7 +190,7 @@ const REGISTRY = [
   },
   {
     key: 'runwayStatuses',
-    // The store's sync declaration (docs/adr/0105): `key` is its snapshot key, which is also the key of its heartbeat entry
+    // The store's sync declaration (docs/adr/0106): `key` is its snapshot key, which is also the key of its heartbeat entry
     // and of its resync slice; `gapFromDeltas` says a delta moves seq by exactly one change, so a client may ask at once on a jump.
     sync: { key: 'runwayStatuses', seqKey: 'runwayStatusSeq', epochKey: 'runwayStatusEpoch', deltaType: 'efsp-runway-status-delta', gapFromDeltas: true },
     audited: true,
@@ -220,7 +220,7 @@ const REGISTRY = [
   },
   {
     key: 'carriers',
-    // The store's sync declaration (docs/adr/0105): `key` is its snapshot key, which is also the key of its heartbeat entry
+    // The store's sync declaration (docs/adr/0106): `key` is its snapshot key, which is also the key of its heartbeat entry
     // and of its resync slice; `gapFromDeltas` says a delta moves seq by exactly one change, so a client may ask at once on a jump.
     sync: { key: 'carriers', seqKey: 'carrierSeq', epochKey: 'carrierEpoch', deltaType: 'efsp-carrier-delta', gapFromDeltas: false },
     audited: true,
@@ -250,7 +250,7 @@ const REGISTRY = [
   },
   {
     key: 'sfaRotation',
-    // The store's sync declaration (docs/adr/0105): `key` is its snapshot key, which is also the key of its heartbeat entry
+    // The store's sync declaration (docs/adr/0106): `key` is its snapshot key, which is also the key of its heartbeat entry
     // and of its resync slice; `gapFromDeltas` says a delta moves seq by exactly one change, so a client may ask at once on a jump.
     sync: { key: 'sfaRotation', seqKey: 'sfaSeq', epochKey: 'sfaEpoch', deltaType: 'efsp-sfa-delta', gapFromDeltas: true },
     audited: true,
@@ -388,7 +388,7 @@ function checkPersistedShape(data, file, shape = PERSISTED_SHAPE) {
   walk(data, shape, '');
 }
 
-// The stores that resync by snapshot slice (docs/adr/0105): the registry entries with a `sync` declaration, with the
+// The stores that resync by snapshot slice (docs/adr/0106): the registry entries with a `sync` declaration, with the
 // registry key to find the instance in `ctx.stores`.
 const STORE_SYNC = REGISTRY.filter(e => e.sync).map(e => ({ registryKey: e.key, ...e.sync }));
 

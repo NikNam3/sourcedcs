@@ -4,7 +4,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
-// SYNC-B-S (docs/adr/0105): every store outside the Board has an epoch, names its seq and epoch on acks, deltas, the snapshot and the
+// SYNC-B-S (docs/adr/0106): every store outside the Board has an epoch, names its seq and epoch on acks, deltas, the snapshot and the
 // heartbeat, and answers an efsp-resync `stores` request with its snapshot slice.
 
 const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'store-resync-'));

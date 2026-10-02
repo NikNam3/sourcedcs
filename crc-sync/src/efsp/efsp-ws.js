@@ -204,7 +204,7 @@ function _handleMutation(ctx, session, msg, persist) {
  * getDeltaSince reports as `gone`.
  */
 function _handleResync(ctx, session, msg) {
-  // A request that names no Board position asks about the other stores only (docs/adr/0105): answered with their
+  // A request that names no Board position asks about the other stores only (docs/adr/0106): answered with their
   // slices and no Board answer, which would be a full snapshot for a lastBoardSeq it was never given.
   const storesOnly = msg.stores && typeof msg.stores === 'object' && msg.lastBoardSeq === undefined && msg.boardEpoch === undefined;
   if (storesOnly) {
@@ -228,7 +228,7 @@ function syncedStores(ctx) {
 }
 
 /**
- * The `stores` of an efsp-resync-reply (docs/adr/0105): for each store the client named whose epoch differs from ours
+ * The `stores` of an efsp-resync-reply (docs/adr/0106): for each store the client named whose epoch differs from ours
  * or whose seq is not ours, `{ seq, epoch, slice }`, `slice` being what the full snapshot carries under that store's key,
  * filtered for this session's read scope (docs/adr/0080). A store the client already has is left out; one it did not name is too.
  * @param {Record<string, {lastSeq?: number, epoch?: string}>} asked
@@ -252,7 +252,7 @@ function storeSlicesFor(ctx, session, asked) {
 }
 
 /**
- * The heartbeat's `stores`: `{ [snapshotKey]: { seq, epoch } }` for every store with a sync declaration (docs/adr/0105).
+ * The heartbeat's `stores`: `{ [snapshotKey]: { seq, epoch } }` for every store with a sync declaration (docs/adr/0106).
  * Built once per tick. The same for every session: an owned-scope session is sent a (possibly empty) delta for every
  * change of a filtered store, so its seq is continuous and the numbers hide nothing.
  */
@@ -474,7 +474,7 @@ function supplementFor(ctx, session, filtered) {
   if (records.length) out.push({ version: VERSION, type: 'efsp-correlation-delta', correlations: { updated: records } });
   const relations = ctx.marsaStore ? ctx.marsaStore.getAll().filter(r => (r.participants || []).some(id => flightDataIds.has(id))) : [];
   if (relations.length) {
-    // A supplement is a partial: it names no seq, so it cannot move the client's marsaSeq past a change it never got (docs/adr/0105).
+    // A supplement is a partial: it names no seq, so it cannot move the client's marsaSeq past a change it never got (docs/adr/0106).
     const { marsaSeq, marsaEpoch, ...supplement } = marsaDelta(ctx.marsaStore, relations);
     out.push(supplement);
   }
@@ -569,7 +569,7 @@ function _fullSnapshotMessage(ctx) {
     facilities: facilityIds,
     boardSeqByFacility,
     boardEpochByFacility,
-    // Every other store's seq and lifetime, by snapshot key (docs/adr/0105).
+    // Every other store's seq and lifetime, by snapshot key (docs/adr/0106).
     ...storeMaps(ctx),
     aitAuthorizedByFacility,
     // The character each Position's owned contacts carry on an ATC scope

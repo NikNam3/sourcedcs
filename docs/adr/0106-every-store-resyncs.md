@@ -1,4 +1,4 @@
-# 0105 — Every store resyncs
+# 0106 — Every store resyncs
 
 ## Context
 

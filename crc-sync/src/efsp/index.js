@@ -369,7 +369,7 @@ function createEfsp({ clock = WALL_CLOCK, wallClock = WALL_CLOCK, transitionAltF
     /** The efsp-heartbeat's `boards` (docs/adr/0104): `heartbeatBoardsAll()` once per tick, `heartbeatBoardsFor(session, all)` per session. */
     heartbeatBoardsAll: () => heartbeatBoardsAll(ctx),
     heartbeatBoardsFor: (session, all) => heartbeatBoardsFor(ctx, session, all),
-    /** The efsp-heartbeat's `stores` (docs/adr/0105), once per tick. */
+    /** The efsp-heartbeat's `stores` (docs/adr/0106), once per tick. */
     heartbeatStores: () => heartbeatStores(ctx),
 
     archiver,

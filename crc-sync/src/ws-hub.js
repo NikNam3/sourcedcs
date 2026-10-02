@@ -310,7 +310,7 @@ class WsHub {
   broadcastEfspCorrelationDelta(payload) {
     this._broadcastEfsp({
       version: VERSION, type: 'efsp-correlation-delta',
-      // The store's seq and lifetime after this reconcile's changes (docs/adr/0105), so every advance the reconciler made reaches the client.
+      // The store's seq and lifetime after this reconcile's changes (docs/adr/0106), so every advance the reconciler made reaches the client.
       correlationSeq: payload.correlationSeq, correlationEpoch: payload.correlationEpoch,
       correlations: { updated: payload.correlations || [] },
       stats: payload.stats,
@@ -601,7 +601,7 @@ class WsHub {
     // dead connection.
     if (this._efsp) {
       // Names every Board this session is sent (docs/adr/0104): seq and epoch per Facility.
-      // `stores` names every other store's seq and epoch by snapshot key (docs/adr/0105). `type` stays the second key.
+      // `stores` names every other store's seq and epoch by snapshot key (docs/adr/0106). `type` stays the second key.
       const all = boardsAll || this._efsp.heartbeatBoardsAll();
       ws.send(JSON.stringify({ version: VERSION, type: 'efsp-heartbeat', boards: this._efsp.heartbeatBoardsFor(session, all), stores: storesAll || this._efsp.heartbeatStores() }));
     }

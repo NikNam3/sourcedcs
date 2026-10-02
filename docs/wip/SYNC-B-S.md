@@ -1,4 +1,4 @@
-# SYNC-B-S: every store resyncs (ADR 0105)
+# SYNC-B-S: every store resyncs (ADR 0106)
 
 ## Code as found (base c2df2e3d)
 - `sync/sync-log.js`: counter-only unless asked; only `BoardState` had ring/touched/epoch. Six stores construct `new SyncLog()` and expose `currentSeq`.

@@ -130,7 +130,7 @@ test('the NLA-monitor sweep and the set-positions re-stamp are filtered too', ()
   assert.ok(restamp.positions.updated.length > 0, 'staffing is not filtered');
 });
 
-test('correlation and MARSA deltas carry only the JTAC\'s flights, and are sent empty when none is left (seq stays continuous, docs/adr/0105)', () => {
+test('correlation and MARSA deltas carry only the JTAC\'s flights, and are sent empty when none is left (seq stays continuous, docs/adr/0106)', () => {
   const w = world();
   const jt = w.connect('c-JTAC', { TACTICAL: ['JTAC'] });
   const tc = w.connect('c-TAC_C2', { TACTICAL: ['TAC_C2'] });

@@ -111,7 +111,7 @@ function filterBoardDelta(msg, scope, flightDataIds, flightDataOf = () => null) 
 
 /**
  * efsp-correlation-delta: the visible flights' records. Always returned, even empty, so `correlationSeq` stays
- * continuous for the session (docs/adr/0105: the same reason as filterBoardDelta).
+ * continuous for the session (docs/adr/0106: the same reason as filterBoardDelta).
  */
 function filterCorrelationDelta(msg, scope, flightDataIds) {
   if (scope.kind === ALL) return msg;
@@ -119,7 +119,7 @@ function filterCorrelationDelta(msg, scope, flightDataIds) {
   return { ...msg, correlations: { ...msg.correlations, updated } };
 }
 
-/** efsp-marsa-delta: relations with a visible participant; always returned, even empty (docs/adr/0105), as for correlations. */
+/** efsp-marsa-delta: relations with a visible participant; always returned, even empty (docs/adr/0106), as for correlations. */
 function filterMarsaDelta(msg, scope, flightDataIds) {
   if (scope.kind === ALL) return msg;
   const updated = ((msg.marsa || {}).updated || []).filter(r => (r.participants || []).some(id => flightDataIds.has(id)));
