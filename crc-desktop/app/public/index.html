@@ -23,6 +23,7 @@
   <link rel="stylesheet" href="./css/srs-radio.css"/>
   <link rel="stylesheet" href="./css/efsp-panel.css"/>
   <link rel="stylesheet" href="./css/airspace-panel.css"/>
+  <link rel="stylesheet" href="./css/airspace-geometry.css"/>
   <link rel="stylesheet" href="./css/efsp-pattern-final.css"/>
   <link rel="stylesheet" href="./css/runway-status-panel.css"/>
   <link rel="stylesheet" href="./css/metrics-panel.css"/>
@@ -548,6 +549,23 @@
         </label>
       </div>
     </div>
+
+    <div class="hr"></div>
+    <div class="setting-label">Coordinates</div>
+    <div class="setting-group">
+      <div class="setting-row">
+        <span>Format shown (input accepts all)</span>
+        <select id="set-coord-format">
+          <option value="DMS">DMS</option>
+          <option value="DM">DM</option>
+          <option value="MGRS">MGRS</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="hr"></div>
+    <div class="setting-label">Airspaces on the map</div>
+    <div class="setting-group" id="set-airspace-menu"></div>
 
   </div><!-- /stab-general -->
 

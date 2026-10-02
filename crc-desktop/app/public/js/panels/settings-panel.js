@@ -6,6 +6,8 @@ import { hideLosProfile } from './los-panel.js';
 import { initToolsTab } from './tools-panel.js';
 import { applyScale, bullseyePickTarget, history, map, mapReady, missionData, saveSettings, settings } from '../app.js';
 import { _setBullseyePickTarget } from '../app.js';
+import { mountAirspaceMenuInSettings } from '../airspace-layer.js';
+import { coordFormatOf } from '../coords.js';
 
 // ── Settings panel: tab switching, per-tab wiring (map display, bullseye
 // override, colours, tools) and the bullseye pick-on-map mode. Split out of
@@ -65,6 +67,12 @@ export function initSettings() {
   els.datalink.checked     = settings.showDatalinkLocks !== false;
   els.textMarks.checked    = settings.textMarksEnabled;
   applyLightMode();
+
+  // Coordinates (H102 AP2B-Q2): how the airspace editor and the map readout write positions; input takes all formats.
+  const coordSel = document.getElementById('set-coord-format');
+  coordSel.value = coordFormatOf(settings.coordFormat);
+  coordSel.addEventListener('change', () => { settings.coordFormat = coordFormatOf(coordSel.value); saveSettings(); });
+  mountAirspaceMenuInSettings();
 
   const persist = (key, val) => { settings[key] = val; saveSettings(); updateMap(); };
 
