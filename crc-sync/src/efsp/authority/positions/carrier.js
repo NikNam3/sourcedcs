@@ -34,7 +34,7 @@ const CREATE_STRIP_TYPE_PERMISSIONS = {
  * the capability-table shape docs/adr/0080 gave the tactical Positions: one row
  * per Position, one column per capability, static (P5), so the next capability
  * is a column. Read through the one-parameter predicates below (D21: exactly one
- * acting Position, never a held set). They are predicates and not OP_KINDS
+ * acting Position, never a signed-on set). They are predicates and not OP_KINDS
  * entries because the Case, the stack and the ship input are not Strip ops: they
  * go to the CarrierStore (carrier-store.js), which asks these.
  *

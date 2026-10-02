@@ -56,7 +56,7 @@ const DEPARTURE_STATE_OWNERS = {
 // A Strip's filed intent must have these non-empty before CLEARED is
 // reachable — a minimal stand-in for the real flight-plan validator (the
 // guide's fuller §8.5 validation is facility-config/Block-Map-driven and
-// not built in Phase 1).
+// not implemented by this stand-in).
 const REQUIRED_FOR_CLEARANCE = ['route', 'requestedAltitude', 'departureAirport', 'destinationAirport'];
 
 // The controller-facing Block label for each of those four, so the inhibit

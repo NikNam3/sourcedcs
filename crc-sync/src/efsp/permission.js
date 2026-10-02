@@ -7,9 +7,12 @@
 // canMutate()'s signature is the guard by construction: it takes exactly one
 // actingPositionId, with nowhere for a set to sneak in.
 //
+// The coordination primitives exist (guide §4.6): their table is
+// authority/primitives.js and their mechanics board/coordination.js and
+// board/tofi.js. HANDOFF, POINT_OUT and TOFI are ops like any other.
+//
 // The tables live in the authority registry (docs/adr/0095; authority/): the
-// op-kind vocabulary (HANDOFF, POINT_OUT, TOFI and the other coordination
-// kinds included) in op-kinds.js, the class rules in classes.js, each Position
+// op-kind vocabulary (the coordination kinds included) in op-kinds.js, the class rules in classes.js, each Position
 // family's grants and capability columns in positions/<family>.js (the MRU
 // capability table is docs/adr/0080), each strip type's state owners in
 // strip-types/<type>.js, all composed in authority/index.js. This module is
@@ -102,7 +105,7 @@ function canDeclareMarsa(actingPositionId) {
 }
 
 /**
- * Exactly two parameters: ONE acting Position, never a held set — D21 by
+ * Exactly two parameters: ONE acting Position, never a signed-on set — D21 by
  * construction. A controller signed on to LC and AP acts as one or the other, and
  * an acknowledgement sent as LC never counts as AP's.
  */
@@ -138,7 +141,7 @@ function mayActBesideOwner(actingPositionId, strip, op) {
 /**
  * The role-scoped half of CreateStrip permission (see the module comment).
  * Structurally the same D21 guard as canMutate() — exactly one
- * actingPositionId, never a held set.
+ * actingPositionId, never a signed-on set.
  * @param {string} actingPositionId
  * @param {string} stripType — the strip type being created (e.g. 'DEPARTURE')
  * @returns {boolean}
