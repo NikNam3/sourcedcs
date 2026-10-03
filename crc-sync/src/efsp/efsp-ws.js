@@ -345,87 +345,132 @@ function _handleSetPositions(ctx, session, msg, persist) {
   const staffedBefore = new Set(facilityConfig_positionIds(ctx, facilityId).filter(id => positionStore.isStaffed(id)));
   const { signedOn: actuallySignedOn, vacated } = positionStore.setSignedOnPositions(session.controllerId, session.who, signedOn);
 
-  const warnings = [];
-  const reassignedIds = [];
-  let controlRepaired = false;
-  // F10: a Position that was empty and now has a Primary gets back the Strips
-  // that were routed away from it (docs/adr/0080).
-  for (const positionId of actuallySignedOn) {
-    if (!staffedBefore.has(positionId) && positionStore.isStaffed(positionId)) {
-      reassignedIds.push(...boardStore.returnConsolidatedStrips(positionId));
-    }
-  }
-  for (const positionId of vacated) {
-    if (positionStore.isStaffed(positionId)) continue; // another controller is now Primary — nothing to route
-    const owned = boardStore.getAll().filter(s => s.ownerPositionId === positionId && s.state !== 'DROPPED');
-    if (owned.length === 0) continue;
-
-    const consolidatedAt = positionStore.consolidatedAt(positionId);
-    if (consolidatedAt) {
-      const moved = boardStore.reassignPositionStrips(positionId, consolidatedAt);
-      reassignedIds.push(...moved);
-      const warning = { positionId, count: owned.length, routedTo: consolidatedAt };
-      if (moved.unplaced && moved.unplaced.length) warning.unplaced = moved.unplaced.length; // no Bay of the Position they were consolidated at fits: they stay where they were
-      warnings.push(warning);
-    } else {
-      // Defect D19 boundary: the consolidation chain bottomed out with nobody
-      // staffing any link. MUST be a visible, distinct condition — never
-      // a Strip silently left owned by an unstaffed Position with no
-      // signal to anyone (guide §4.8.6 rule 3).
-      warnings.push({ positionId, count: owned.length, routedTo: null });
-    }
-  }
-
-  // docs/adr/0101: a change of staffing is when a HANDOFF holder can lose its staffed owner. Every Facility's exchanges are
-  // checked (sign-off is not blocked, DR-6: the invariant repairs or alerts, and the alert stands until someone signs on).
-  for (const id of ctx.facilityConfig.getFacilityIds()) {
-    const b = ctx.boardStoreFor(id);
-    if (!b || !(b.reconcileExchanges() > 0)) continue;
-    controlRepaired = true;
-  }
-
-  // A repair writes both halves of an exchange, so it touches the OTHER Facility's Board whichever side lost its holder:
-  // what any other Board touched is sent in this round trip, to the sessions that read it (not left for its next Mutation).
-  const peerDeltas = [];
-  for (const id of ctx.facilityConfig.getFacilityIds()) {
-    const b = id === facilityId ? null : ctx.boardStoreFor(id);
-    const touched = b ? b.drainTouched() : [];
-    if (touched.length) peerDeltas.push(boardDelta(ctx, b, id, touchedStrips(ctx, b, id, touched, null), []));
-  }
-
-  // The re-send below carries every live Strip, so whatever
-  // reassignPositionStrips touched is already in it. Drained so those touches
-  // do not ride again on the next Mutation's broadcast (docs/adr/0081).
-  boardStore.drainTouched();
-  // A consolidation reassignment changes the Board, and it used to be the one
-  // Board change never persisted: a restart before the next Mutation restored
-  // the Strips to the Position that had left (docs/adr/0081, L6's F2/F5 tail).
-  if ((reassignedIds.length > 0 || controlRepaired) && typeof persist === 'function') persist();
-
-  const offered = combination.offerAfterSignOff(positionStore, boardStore, facilityId, vacated, session.controllerId);
+  // A takeover (a sign-on that ended an absent Primary's held entry) is a sign-off of that Position too: same effects.
+  const takenOver = positionStore.drainTakenOver();
+  const fx = staffingChanged(ctx, session.controllerId, [{ facilityId, signedOn: actuallySignedOn, vacated: [...vacated, ...takenOver], staffedBefore }], persist);
+  const { warnings, offered } = fx.byFacility.get(facilityId);
   const result = {
     // docs/adr/0105: `combination` is the warning for one controller holding LC with GC or CD (null otherwise), and
     // `monitoring` the frequencies of every Position this controller is Primary at (a combination has both).
     ack: { version: VERSION, type: 'efsp-positions-ack', facilityId, signedOn: actuallySignedOn, warnings,
       combination: combination.combinationOf(positionStore, session.controllerId, boardStore.getAll()),
       monitoring: positionStore.frequenciesHeldBy(session.controllerId) },
-    // EVERY live Strip, not just the reassigned ones. Taking or giving up a
-    // Position changes who is there to receive a transfer, which changes the
-    // `nla` status stampStrip computes for Strips this message never
-    // touched — an LC Strip at DEPARTED becomes "no receiving Position
-    // present" the instant AP is released, and F-408's whole point is that
-    // the panel be told BEFORE the press. The Board is a few dozen Strips
-    // (a few dozen Strips) and a Position change is a rare,
-    // deliberate act, so re-sending the set is cheaper than tracking which
-    // Strips' status actually moved.
-    broadcasts: skeleton.orderSlots({ primary: boardDelta(ctx, boardStore, facilityId,
-      { updated: boardStore.getAll().filter(s => s.state !== 'DROPPED').map(s => stampStrip(boardStore, s, facilityId, ctx)), gone: [] },
-      [], positionStore.getAll().map(p => ({ ...p, facilityId }))),
-      peer: peerDeltas.length ? peerDeltas : null }),
+    broadcasts: skeleton.orderSlots({ primary: fx.primary.get(facilityId), peer: fx.peer.length ? fx.peer : null }),
   };
   // The sign-on offer (docs/adr/0105) goes to LC's Primary alone, by the directed channel (docs/adr/0100 s6).
   if (offered) result.directed = [{ facilityId, positionId: offered.positionId, primaryOnly: true, frame: { version: VERSION, type: 'efsp-position-offer', ...offered } }];
   return result;
+}
+
+/**
+ * THE sign-off's effects, whoever caused it: an explicit `efsp-set-positions`, a disconnect whose sign-on grace ran
+ * out (ws-hub.js), or a sign-on that took over an absent controller's Position. One function, so a sign-off caused by a
+ * disconnect has the same effects as an explicit one (docs/wip/SIGNOFF-EFFECTS.md).
+ *
+ * `changes` is `[{ facilityId, signedOn, vacated, staffedBefore }]`, one per Facility whose staffing moved, the Position
+ * store already updated. Does: (1) the Strips of a Position left unstaffed go to where it was consolidated (or a visible
+ * warning); (2) a Position that gained a Primary gets its routed-away Strips back; (3) the control invariant is repaired on
+ * every Facility's Board (docs/adr/0101, sign-off is never blocked, DR-6); (4) the other Boards' touched Strips are sent;
+ * (5) the Board is persisted when 1-3 changed it; (6) the GC offer to LC's Primary (docs/adr/0105).
+ * @returns {{byFacility: Map, primary: Map, peer: object[], directed: object[]}} per changed Facility `{warnings, offered}`,
+ *   its full-Board delta, the other Boards' deltas, and the directed offers.
+ */
+function staffingChanged(ctx, controllerId, changes, persist) {
+  const byFacility = new Map();
+  const changed = new Set(changes.map(c => c.facilityId));
+  let boardChanged = false;
+  for (const c of changes) {
+    const positionStore = ctx.positionStoreFor(c.facilityId);
+    const boardStore = ctx.boardStoreFor(c.facilityId);
+    const warnings = [];
+    const reassignedIds = [];
+    // F10: a Position that was empty and now has a Primary gets back the Strips that were routed away from it (docs/adr/0080).
+    for (const positionId of c.signedOn) {
+      if (!c.staffedBefore.has(positionId) && positionStore.isStaffed(positionId)) {
+        reassignedIds.push(...boardStore.returnConsolidatedStrips(positionId));
+      }
+    }
+    for (const positionId of c.vacated) {
+      if (positionStore.isStaffed(positionId)) continue; // another controller is now Primary — nothing to route
+      const owned = boardStore.getAll().filter(s => s.ownerPositionId === positionId && s.state !== 'DROPPED');
+      if (owned.length === 0) continue;
+
+      const consolidatedAt = positionStore.consolidatedAt(positionId);
+      if (consolidatedAt) {
+        const moved = boardStore.reassignPositionStrips(positionId, consolidatedAt);
+        reassignedIds.push(...moved);
+        const warning = { positionId, count: owned.length, routedTo: consolidatedAt };
+        if (moved.unplaced && moved.unplaced.length) warning.unplaced = moved.unplaced.length; // no Bay of the Position they were consolidated at fits: they stay where they were
+        warnings.push(warning);
+      } else {
+        // Defect D19 boundary: the consolidation chain bottomed out with nobody staffing any link. MUST be a visible,
+        // distinct condition — never a Strip silently left owned by an unstaffed Position with no signal to anyone (guide §4.8.6 rule 3).
+        warnings.push({ positionId, count: owned.length, routedTo: null });
+      }
+    }
+    if (reassignedIds.length > 0) boardChanged = true;
+    byFacility.set(c.facilityId, { warnings, offered: null });
+  }
+
+  // docs/adr/0101: a change of staffing is when a HANDOFF holder can lose its staffed owner. Every Facility's exchanges are
+  // checked (sign-off is not blocked, DR-6: the invariant repairs or alerts, and the alert stands until someone signs on).
+  for (const id of ctx.facilityConfig.getFacilityIds()) {
+    const b = ctx.boardStoreFor(id);
+    if (b && b.reconcileExchanges() > 0) boardChanged = true;
+  }
+
+  // A repair writes both halves of an exchange, so it touches the OTHER Facility's Board whichever side lost its holder:
+  // what any Board that is not re-sent in full touched is sent in this round trip, to the sessions that read it.
+  const peer = [];
+  for (const id of ctx.facilityConfig.getFacilityIds()) {
+    if (changed.has(id)) continue;
+    const b = ctx.boardStoreFor(id);
+    const touched = b ? b.drainTouched() : [];
+    if (touched.length) peer.push(boardDelta(ctx, b, id, touchedStrips(ctx, b, id, touched, null), []));
+  }
+
+  // The re-send carries every live Strip (taking or giving up a Position changes who is there to receive a transfer, which
+  // changes the `nla` status of Strips this change never touched, F-408), so whatever was touched is already in it; drained
+  // so those touches do not ride again on the next Mutation's broadcast (docs/adr/0081). It carries the Positions too.
+  const primary = new Map();
+  for (const c of changes) {
+    const boardStore = ctx.boardStoreFor(c.facilityId);
+    const positionStore = ctx.positionStoreFor(c.facilityId);
+    primary.set(c.facilityId, boardDelta(ctx, boardStore, c.facilityId,
+      { updated: boardStore.getAll().filter(s => s.state !== 'DROPPED').map(s => stampStrip(boardStore, s, c.facilityId, ctx)), gone: [] },
+      [], positionStore.getAll().map(p => ({ ...p, facilityId: c.facilityId }))));
+    boardStore.drainTouched();
+  }
+  // A consolidation reassignment or a repair changes the Board; a restart before the next Mutation must not undo it (docs/adr/0081).
+  if (boardChanged && typeof persist === 'function') persist();
+
+  const directed = [];
+  for (const c of changes) {
+    const offered = combination.offerAfterSignOff(ctx.positionStoreFor(c.facilityId), ctx.boardStoreFor(c.facilityId), c.facilityId, c.vacated, controllerId);
+    byFacility.get(c.facilityId).offered = offered;
+    if (offered) directed.push({ facilityId: c.facilityId, positionId: offered.positionId, primaryOnly: true, frame: { version: VERSION, type: 'efsp-position-offer', ...offered } });
+  }
+  return { byFacility, primary, peer, directed };
+}
+
+/**
+ * A controller's connection is gone and its sign-on grace ran out: sign them off every Position at every Facility
+ * (guide §4.8.6 rule 1: the longest-waiting Observer is promoted) with the same effects as an explicit sign-off.
+ * @returns {{broadcasts: object[], directed: object[]}} the frames to send; empty when they held nothing
+ */
+function signOffController(ctx, controllerId, persist) {
+  const changes = [];
+  for (const facilityId of ctx.facilityConfig.getFacilityIds()) {
+    const positionStore = ctx.positionStoreFor(facilityId);
+    if (!positionStore) continue;
+    const staffedBefore = new Set(facilityConfig_positionIds(ctx, facilityId).filter(id => positionStore.isStaffed(id)));
+    const { vacated } = positionStore.onDisconnect(controllerId);
+    if (vacated.length) changes.push({ facilityId, signedOn: [], vacated, staffedBefore });
+  }
+  if (changes.length === 0) return { broadcasts: [], directed: [] };
+  const fx = staffingChanged(ctx, controllerId, changes, persist);
+  const [first, ...rest] = changes.map(c => fx.primary.get(c.facilityId));
+  return { broadcasts: skeleton.orderSlots({ primary: first, peer: [...rest, ...fx.peer] }), directed: fx.directed };
 }
 
 // ── The read scope (docs/adr/0080) ───────────────────────────────────────────
@@ -620,4 +665,4 @@ function _fullSnapshotMessage(ctx) {
   };
 }
 
-module.exports = { handleMessage, directedFor, carrierDelta, sfaDelta, snapshotMessage: _snapshotMessage, filterForSession, supplementFor, readScopeKey, readScopeOf, heartbeatBoardsAll, heartbeatBoardsFor, heartbeatStores, RESYNC_RING_WINDOW };
+module.exports = { handleMessage, signOffController, directedFor, carrierDelta, sfaDelta, snapshotMessage: _snapshotMessage, filterForSession, supplementFor, readScopeKey, readScopeOf, heartbeatBoardsAll, heartbeatBoardsFor, heartbeatStores, RESYNC_RING_WINDOW };

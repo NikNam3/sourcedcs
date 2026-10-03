@@ -41,7 +41,7 @@ const nla = require('./nla');
 const blockMap = require('./block-map');
 const facilityConfig = require('./facility-config');
 const coordination = require('./coordination');
-const { handleMessage, snapshotMessage, filterForSession, supplementFor, readScopeKey, directedFor, heartbeatBoardsAll, heartbeatBoardsFor, heartbeatStores } = require('./efsp-ws');
+const { handleMessage, signOffController, snapshotMessage, filterForSession, supplementFor, readScopeKey, directedFor, heartbeatBoardsAll, heartbeatBoardsFor, heartbeatStores } = require('./efsp-ws');
 const { NlaStatusMonitor } = require('./nla-status-monitor');
 const { Archiver } = require('./archiver');
 const { statePaths, ensureDirFor } = require('../state-paths');
@@ -372,10 +372,12 @@ function createEfsp({ clock = WALL_CLOCK, wallClock = WALL_CLOCK, transitionAltF
      */
     persist: () => _persist({ facilities, stores, persistState, paths }),
 
-    /** Abrupt disconnect (guide §4.8.6) — signs the controller off every Position they were signed on at, across EVERY Facility (a controller may be signed on at Positions in more than one, guide §4.8.5). */
-    onDisconnect: (session) => {
-      for (const { positionStore } of facilities.values()) positionStore.onDisconnect(session.controllerId);
-    },
+    /**
+     * Abrupt disconnect (guide §4.8.6) — signs the controller off every Position they were signed on at, across EVERY
+     * Facility (a controller may be signed on at Positions in more than one, guide §4.8.5), with the effects of an explicit
+     * sign-off (efsp-ws.js `staffingChanged`). @returns {{broadcasts: object[], directed: object[]}} for the hub to send.
+     */
+    onDisconnect: (session) => signOffController(ctx, session.controllerId, () => _persist({ facilities, stores, persistState, paths })),
 
     /** Tells every Facility's PositionStore which controllers are held in the sign-on grace (ws-hub.js). */
     setAbsentCheck: (fn) => { for (const { positionStore } of facilities.values()) positionStore.setAbsentCheck(fn); },
