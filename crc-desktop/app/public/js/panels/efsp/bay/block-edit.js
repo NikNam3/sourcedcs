@@ -87,7 +87,29 @@ export function _blockLabel(flightData, strip, blockId) {
  * rebuilt in place of the span carrying whatever had been typed — the edit
  * survives the rebuild rather than blocking it (see _isProtectedStripEl).
  */
+/**
+ * SEP REG with a regime waiting for the airspace (crc-sync docs/adr/0102): the cell keeps the EFFECTIVE regime (the
+ * picker reads its text), and a marker beside it says what takes effect on entry.
+ */
 export function _buildBlockCell(strip, blockId) {
+  const cell = _buildBlockCellInner(strip, blockId);
+  if (blockId !== 'SREG') return cell;
+  const flightData = getEfspFlightData(strip.flightDataId);
+  const pending = flightData && flightData.tofi && flightData.tofi.pendingSeparationRegime;
+  if (!pending) return cell;
+  const wrapper = document.createElement('span');
+  wrapper.className = 'efsp-block-with-pending';
+  wrapper.appendChild(cell);
+  const marker = document.createElement('span');
+  marker.className = 'efsp-sreg-pending';
+  marker.dataset.pendingRegime = pending;
+  marker.textContent = `→ ${pending} on entry`;
+  marker.title = `${pending} was agreed at the TOFI accept and takes effect when the flight is inside an active airspace, or when the MRU marks it entered. Until then ATC separates.`;
+  wrapper.appendChild(marker);
+  return wrapper;
+}
+
+function _buildBlockCellInner(strip, blockId) {
   const flightData = getEfspFlightData(strip.flightDataId);
   const span = document.createElement('span');
   span.className = 'efsp-block efsp-block-' + blockId;

@@ -559,6 +559,38 @@ test('a controller can open tactical control, and the MRU side can accept it', a
   assert.equal(mru.sent[0].op.separationRegime, 'USING_AGENCY');
 });
 
+test('a pending TOFI regime shows beside SEP REG, the MRU can mark it entered, and the alert chip follows efsp-alerts (docs/adr/0102)', async () => {
+  const pendingFdr = { ...FDR, tofi: { ifrActive: true, separationRegime: 'ATC', pendingSeparationRegime: 'USING_AGENCY', pendingSince: 1, pendingFacilityId: 'TACTICAL' } };
+  const mission = stripAt({
+    stripType: 'MISSION', state: 'TASKED', ownerPositionId: 'TAC_C2', bayId: 'tac-c2-coordination',
+    tofiCoordination: { direction: 'ENTRY', state: 'ACTIVE', acceptedAt: 1, commsTransferred: true, peerFacilityId: 'CENTER', peerPositionId: 'CTR' },
+  });
+  const mru = await renderStrip({ strip: mission, flightData: pendingFdr, signedOn: ['TAC_C2'] });
+  const waiting = descendants(mru.el).find(c => (c.className || '').includes('efsp-x-regime-pending'));
+  assert.ok(waiting, 'the waiting regime must be visible on the MRU Strip');
+  assert.equal(waiting.dataset.pendingRegime, 'USING_AGENCY');
+  click(findByText(mru.el, 'Entered'));
+  assert.deepEqual(mru.sent[0].op, { kind: 'TOFI', action: 'MARK_ENTERED' });
+
+  // The ATC side has no button, and a settled regime shows no marker or button.
+  const atc = await renderStrip({ strip: stripAt({ tofiCoordination: mission.tofiCoordination }), flightData: pendingFdr, signedOn: ['AP'] });
+  assert.equal(findByText(atc.el, 'Entered'), undefined);
+  const marker = descendants(atc.el).find(c => (c.className || '').includes('efsp-sreg-pending'));
+  assert.ok(marker, 'the SEP REG block shows the waiting regime beside the effective one');
+  assert.equal(marker.dataset.pendingRegime, 'USING_AGENCY');
+  const settled = await renderStrip({ strip: mission, flightData: { ...FDR, tofi: { ifrActive: true, separationRegime: 'USING_AGENCY' } }, signedOn: ['TAC_C2'] });
+  assert.equal(findByText(settled.el, 'Entered'), undefined);
+  assert.equal(descendants(settled.el).find(c => (c.className || '').includes('efsp-sreg-pending')), undefined);
+
+  const chip = (el) => descendants(el).find(c => (c.className || '').includes('efsp-tofi-regime-alert'));
+  mru.sandbox.applyEfspAlerts({ tofiRegime: [{ flightDataId: 'f1', kind: 'REGIME_OUTSIDE_AIRSPACE', since: 5 }] });
+  assert.equal(chip(mru.sandbox._buildStripEl(mission)).textContent, 'OUTSIDE AIRSPACE');
+  mru.sandbox.applyEfspAlerts({ tofiRegime: [{ flightDataId: 'f1', kind: 'AWAITING_ENTRY_UNKNOWN', since: 5 }] });
+  assert.equal(chip(mru.sandbox._buildStripEl(mission)).textContent, 'ENTRY UNKNOWN');
+  mru.sandbox.applyEfspAlerts({});
+  assert.equal(chip(mru.sandbox._buildStripEl(mission)), undefined);
+});
+
 test('a TOFI exit cannot be accepted early, and the Strip says whose job it is to fix', async () => {
   const mission = stripAt({
     stripType: 'MISSION', state: 'ON_STATION', ownerPositionId: 'TAC_C2', bayId: 'tac-c2-coordination',

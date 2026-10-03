@@ -100,6 +100,7 @@ const efspConformance = new Map(); // flightDataId -> [{ kind, assigned, actual?
 // suggestion chip and the staleness indication, stripId -> hints. Full state in
 // efsp-alerts, so one that no longer applies is simply not in the next message.
 const efspSurveillanceHints = new Map(); // stripId -> [{ kind: 'AIRBORNE_ADVANCE'|'STALE', stripState, toState?, since, afterSec? }]
+const efspTofiRegime = new Map(); // flightDataId -> { kind: 'REGIME_OUTSIDE_AIRSPACE'|'AWAITING_ENTRY_UNKNOWN', since } (crc-sync docs/adr/0102)
 let efspConflicts = [];            // [{ id, a, b, aCallsign, bCallsign, timeToCpaSec, minNm, vertFt, aAt, bAt }]
 
 export function applyEfspSnapshot(msg) {
@@ -653,6 +654,7 @@ export function _resetEfspStateForTest() {
   efspAirspaceEdits.clear();
   efspRunwayStatuses.clear();
   efspConformance.clear();
+  efspTofiRegime.clear();
   efspConflicts = [];
   efspBoardSeq = 0;
   efspFacility = null;
@@ -671,6 +673,8 @@ export function applyEfspAlerts(msg) {
   efspConformance.clear();
   for (const r of (msg && msg.conformance) || []) if (r.alerts && r.alerts.length) efspConformance.set(r.flightDataId, r.alerts);
   efspConflicts = (msg && msg.conflictAlert) || [];
+  efspTofiRegime.clear();
+  for (const r of (msg && msg.tofiRegime) || []) efspTofiRegime.set(r.flightDataId, r);
   efspSurveillanceHints.clear();
   for (const h of (msg && msg.surveillance) || []) {
     if (!efspSurveillanceHints.has(h.stripId)) efspSurveillanceHints.set(h.stripId, []);
@@ -695,6 +699,9 @@ export function surveillanceHintsForStrip(strip) {
 
 /** What is wrong with this flight's conformance right now; [] when it conforms. */
 export function conformanceAlertsForFlightData(flightDataId) { return efspConformance.get(flightDataId) || []; }
+
+/** The TOFI regime alert standing on this flight ({ kind, since }), or null (crc-sync docs/adr/0102). */
+export function tofiRegimeAlertForFlightData(flightDataId) { return efspTofiRegime.get(flightDataId) || null; }
 
 /** Every current short-term conflict. */
 export function getAllEfspConflicts() { return efspConflicts; }

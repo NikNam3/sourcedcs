@@ -64,6 +64,14 @@ export const TOFI_ACCEPT_REGIMES = ['MARSA', 'ATC', 'USING_AGENCY', 'DUE_REGARD'
 // exchange is answered.
 export const _tofiRegimeChoice = new Map();
 
+/** ADR 0102: the MRU's own Strip of an ACTIVE ENTRY, with a separation regime still waiting for the airspace. Always allowed. */
+export function _canMarkTofiEntered(strip) {
+  const link = strip.tofiCoordination;
+  if (strip.stripType !== 'MISSION' || !link || link.direction !== 'ENTRY' || link.state !== 'ACTIVE') return false;
+  const flightData = getEfspFlightData(strip.flightDataId);
+  return !!(flightData && flightData.tofi && flightData.tofi.pendingSeparationRegime);
+}
+
 /** The Position a TOFI answer is sent as: the owner's TOFI answerer when this controller holds it, else the usual resolution. */
 function _tofiActingPositionId(strip) {
   const answerer = strip.stripType === 'MISSION' ? TOFI_ANSWERED_BY[strip.ownerPositionId] : null;
