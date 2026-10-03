@@ -16,7 +16,7 @@ import { slot } from './helpers/wire-slots.mjs';
 //   F-306  the regime stated when accepting TOFI reached neither screen
 //   F-408  an NLA the server would refuse looked exactly like one it wouldn't
 //
-// Driven through createEfsp() + handleMessage — the real composition root and
+// Driven through createEfsp({ wallClock: wall }) + handleMessage — the real composition root and
 // the real wire path — because every one of these is about what actually
 // reaches a client, and a hand-built rules object cannot answer that.
 
@@ -62,9 +62,10 @@ function mustAct(efsp, crewMember, positionId, strip, op) {
   return ack.strip;
 }
 
-const NLA_DOUBLE_TAP_MS = 400; // board/ops/invoke-nla.js's double-tap guard
+let wallT = Date.now();
+const wall = { now: () => wallT, step: (ms) => { wallT += ms; }, source: 'TEST' }; // docs/adr/0096: the NLA double-tap guard lapses on a step, not a sleep
 async function advance(efsp, crewMember, positionId, strip) {
-  await new Promise(resolve => setTimeout(resolve, NLA_DOUBLE_TAP_MS + 10));
+  wall.step(410); // the 400 ms double-tap guard lapses
   return mustAct(efsp, crewMember, positionId, strip, { kind: 'InvokeNla' });
 }
 
@@ -83,7 +84,7 @@ function createDeparture(efsp, c, callsign, filed = FILED) {
 // ── F-102 — Bay membership expresses operational state ────────────────────
 
 test('F-102: every NLA in the departure chain leaves the Strip in the Bay for its NEW state', async () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ wallClock: wall });
   const c = crew(efsp, { OPS: 'INCIRLIK', CD: 'INCIRLIK', GC: 'INCIRLIK', LC: 'INCIRLIK', AP: 'INCIRLIK' });
   let strip = createDeparture(efsp, c, 'VPR102');
 
@@ -108,7 +109,7 @@ test('F-102: every NLA in the departure chain leaves the Strip in the Bay for it
 });
 
 test('F-102: a relocated Strip lands at the END of the destination Rack, not on top of it', async () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ wallClock: wall });
   const c = crew(efsp, { OPS: 'INCIRLIK', CD: 'INCIRLIK' });
 
   // Two Strips already sitting in cd-cleared, so "append" and "prepend" are
@@ -130,7 +131,7 @@ test('F-102: a relocated Strip lands at the END of the destination Rack, not on 
 });
 
 test('F-102: Undo puts the Strip back in the Bay it came from, not just the state', async () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ wallClock: wall });
   const c = crew(efsp, { OPS: 'INCIRLIK', CD: 'INCIRLIK' });
   let strip = createDeparture(efsp, c, 'UND102');
   strip = await advance(efsp, c.OPS, 'OPS', strip);
@@ -145,7 +146,7 @@ test('F-102: Undo puts the Strip back in the Bay it came from, not just the stat
 // ── F-408 — the inhibit reason is on the wire before the press ────────────
 
 test('F-408: every Strip on the wire carries what its NLA would do and why it would be refused', async () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ wallClock: wall });
   const c = crew(efsp, { OPS: 'INCIRLIK', CD: 'INCIRLIK' });
   const strip = createDeparture(efsp, c, 'ADV408', { ...FILED, route: '', requestedAltitude: '' });
 
@@ -167,7 +168,7 @@ test('F-408: every Strip on the wire carries what its NLA would do and why it wo
 });
 
 test('F-408: giving up the receiving Position re-sends every Strip with its new inhibit reason', async () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ wallClock: wall });
   const c = crew(efsp, { OPS: 'INCIRLIK', CD: 'INCIRLIK' });
   let strip = createDeparture(efsp, c, 'REL408');
   strip = mustAct(efsp, c.OPS, 'OPS', strip, { kind: 'SetFlag', flag: 'attention', value: null });
@@ -188,7 +189,7 @@ test('F-408: giving up the receiving Position re-sends every Strip with its new 
 });
 
 test('F-408: a terminal state has no NLA at all, and says so as null rather than an inhibit', () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ wallClock: wall });
   const c = crew(efsp, { OPS: 'INCIRLIK' });
   const strip = createDeparture(efsp, c, 'TRM408');
   const snapshot = efsp.snapshotFor();
@@ -202,7 +203,7 @@ test('F-408: a terminal state has no NLA at all, and says so as null rather than
 // ── F-111 / F-306 — a flight data record written as a side effect reaches the clients ───
 
 test('F-111: declaring MARSA broadcasts the participants\' FDRs, not just the relation', () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ wallClock: wall });
   const c = crew(efsp, { OPS: 'INCIRLIK' });
   const a = createDeparture(efsp, c, 'TNK111');
   const b = createDeparture(efsp, c, 'VPR111');
@@ -225,7 +226,7 @@ test('F-111: declaring MARSA broadcasts the participants\' FDRs, not just the re
 });
 
 test('F-111: ending a relation broadcasts the regime going back to ATC', () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ wallClock: wall });
   const c = crew(efsp, { OPS: 'INCIRLIK' });
   const a = createDeparture(efsp, c, 'TNK112');
   const b = createDeparture(efsp, c, 'VPR112');
@@ -248,7 +249,7 @@ test('F-111: ending a relation broadcasts the regime going back to ATC', () => {
 });
 
 test('F-111: the interlock void rides the same board-delta as the clearance that caused it', () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ wallClock: wall });
   const c = crew(efsp, { OPS: 'INCIRLIK' });
   const a = createDeparture(efsp, c, 'TNK113');
   const b = createDeparture(efsp, c, 'VPR113');
@@ -276,7 +277,7 @@ test('F-111: the interlock void rides the same board-delta as the clearance that
 // ── F-206 — clearing an enum Block ────────────────────────────────────────
 
 test('F-206: SREG and RSVC accept being cleared; the four Blocks with no "unset" value do not', () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ wallClock: wall });
   const c = crew(efsp, { OPS: 'INCIRLIK' });
   let strip = createDeparture(efsp, c, 'CLR206');
 
@@ -302,7 +303,7 @@ test('F-206: SREG and RSVC accept being cleared; the four Blocks with no "unset"
 // ── F-303 — a rejected replica is inert ───────────────────────────────────
 
 test('F-303: the facility that rejected a coordination cannot then work the replica', () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ wallClock: wall });
   const c = crew(efsp, { OPS: 'INCIRLIK', AP: 'INCIRLIK', LC: 'INCIRLIK', CTR: 'CENTER' });
 
   // A CENTER-held INBOUND ARRIVAL, point-outed to INCIRLIK's AP.
@@ -340,7 +341,7 @@ test('F-303: the facility that rejected a coordination cannot then work the repl
 });
 
 test('F-303: the SENDER\'s own Strip reads REJECTED too, and stays fully workable', () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ wallClock: wall });
   const c = crew(efsp, { AP: 'INCIRLIK', LC: 'INCIRLIK', CTR: 'CENTER' });
   const ctrStrip = mustAct(efsp, c.CTR, 'CTR', null, {
     kind: 'CreateStrip', bayId: 'ctr-enroute', rackId: 'main', stripType: 'ARRIVAL',
@@ -364,7 +365,7 @@ test('F-303: the SENDER\'s own Strip reads REJECTED too, and stays fully workabl
 });
 
 test('F-303: Drop is the one NLA a dead replica keeps — it is how it gets cleared', () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ wallClock: wall });
   const c = crew(efsp, { OPS: 'INCIRLIK', AP: 'INCIRLIK', CTR: 'CENTER' });
   const appStrip = mustAct(efsp, c.OPS, 'OPS', null, {
     kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE',
@@ -405,7 +406,7 @@ function handoffToCenter(efsp, c, callsign, answer) {
 }
 
 test('F-303: a rejected replica refuses every op except the ones that clear it away', () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ wallClock: wall });
   const c = crew(efsp, { OPS: 'INCIRLIK', AP: 'INCIRLIK', CTR: 'CENTER', TAC_C2: 'TACTICAL' });
   const { replica } = handoffToCenter(efsp, c, 'INR303', 'REJECT');
   assert.equal(replica.coordination.state, 'REJECTED');
@@ -439,7 +440,7 @@ test('F-303: a rejected replica refuses every op except the ones that clear it a
 });
 
 test('F-303: the sender of a rejected handoff keeps working its own Strip', () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ wallClock: wall });
   const c = crew(efsp, { OPS: 'INCIRLIK', AP: 'INCIRLIK', CTR: 'CENTER' });
   const { sender } = handoffToCenter(efsp, c, 'SND304', 'REJECT');
   const own = efsp.boardStoreFor('INCIRLIK').getStrip(sender.stripId);
@@ -448,7 +449,7 @@ test('F-303: the sender of a rejected handoff keeps working its own Strip', () =
 });
 
 test('a TOFI cannot be opened while a coordination proposal on the same Strip is still open', () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ wallClock: wall });
   const c = crew(efsp, { OPS: 'INCIRLIK', AP: 'INCIRLIK', CTR: 'CENTER', TAC_C2: 'TACTICAL' });
   const { replica } = handoffToCenter(efsp, c, 'PND303');
   assert.equal(replica.coordination.state, 'INITIATED');
@@ -470,7 +471,7 @@ test('a TOFI cannot be opened while a coordination proposal on the same Strip is
 // ── F-306 — the regime stated when accepting TOFI ─────────────────────────
 
 test('F-306: accepting a TOFI ENTRY carries the regime it wrote in the ack AND the broadcast', () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ wallClock: wall });
   const c = crew(efsp, { CTR: 'CENTER', TAC_C2: 'TACTICAL' });
 
   // ctr-enroute implies INBOUND, which is where an ARRIVAL Strip may open a
@@ -529,7 +530,7 @@ function heldWithReleaseTime(efsp, c, callsign, releaseAt) {
 }
 
 test('F-408: a release time passing is broadcast exactly once, and a second tick sends nothing', () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ wallClock: wall });
   const c = crew(efsp, { OPS: 'INCIRLIK', CD: 'INCIRLIK', GC: 'INCIRLIK' });
   const releaseAt = Date.now() + 10 * 60 * 1000;
   const strip = heldWithReleaseTime(efsp, c, 'HLD408', releaseAt);
@@ -565,7 +566,7 @@ test('F-408: a release time passing is broadcast exactly once, and a second tick
 });
 
 test('F-408: the sweep never re-sends a status a Mutation already put on the wire', async () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ wallClock: wall });
   const c = crew(efsp, { OPS: 'INCIRLIK', CD: 'INCIRLIK' });
   efsp.nlaStatusMonitor.tick(); // settle whatever the shared Board restored
 
@@ -582,7 +583,7 @@ test('F-408: the sweep never re-sends a status a Mutation already put on the wir
 });
 
 test('F-408: a void deadline expiring reaches the sweep too, and the reason is the press\'s own wording', () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ wallClock: wall });
   const c = crew(efsp, { OPS: 'INCIRLIK', CD: 'INCIRLIK', GC: 'INCIRLIK' });
   let strip = createDeparture(efsp, c, 'VOD408');
   strip = mustAct(efsp, c.OPS, 'OPS', strip, { kind: 'SetState', toState: 'HELD' });
@@ -618,7 +619,7 @@ test('F-408: a void deadline expiring reaches the sweep too, and the reason is t
 });
 
 test('F-408: the sweep forgets a Strip once it leaves the Board', () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ wallClock: wall });
   const c = crew(efsp, { OPS: 'INCIRLIK' });
   const strip = createDeparture(efsp, c, 'RIP408');
   efsp.nlaStatusMonitor.tick();

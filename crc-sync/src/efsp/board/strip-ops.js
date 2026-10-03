@@ -21,6 +21,8 @@ class StripOps {
    * @param {object} deps.audit BoardAudit
    * @param {object} deps.placement Placement
    * @param {{now: () => number}} deps.clock the mission clock
+   * @param {{now: () => number}} deps.wallClock real time (docs/adr/0096)
+   * @param {number} deps.nlaGuardMs the NLA double-tap guard's length
    * @param {object} deps.flightDataStore
    * @param {object} deps.coordination Coordination (the HANDOFF... ops call it)
    * @param {object} deps.control HandoffControl (ControlRelease, the control-axis check, retirement and owner changes)
@@ -38,6 +40,8 @@ class StripOps {
     this.state = deps.state;
     this.placement = deps.placement;
     this.clock = deps.clock;
+    this.wallClock = deps.wallClock; // docs/adr/0096: the NLA double-tap latch and the drop stamp
+    this.nlaGuardMs = deps.nlaGuardMs;
     this.flightDataStore = deps.flightDataStore;
     this.coordination = deps.coordination;
     this.control = deps.control;
@@ -605,7 +609,7 @@ class StripOps {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: 'cannot drop a Strip under active tactical control — complete a TOFI exit first', strip };
     }
     strip.state = 'DROPPED';
-    this.droppedWallAt.set(strip.stripId, Date.now()); // the archive's clock, docs/adr/0082
+    this.droppedWallAt.set(strip.stripId, this.wallClock.now()); // the archive's clock, docs/adr/0082
     strip.flags.removeIndicator = true; // distinct from delete (§3.4) — Strip stays queryable, see getRack()
     this.state.bump(strip, by);
     // `marsaChanged` rather than `marsaVoided`: this is a flight ENDING, not a

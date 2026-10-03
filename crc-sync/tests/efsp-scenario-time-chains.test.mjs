@@ -30,7 +30,7 @@ fs.writeFileSync(process.env.CRCSYNC_EFSP_STEREO_ROUTES_PATH, '[]');
 const { createEfsp } = await import('../src/efsp/index.js');
 const { toFlightDataFiledSeed } = await import('../src/efsp/flight-plan-lookup.js');
 const { resolveTimeChain } = await import('../src/efsp/time-chains.js');
-const { crew, act, mustAct, jumpTo, DEPARTURE_FLIGHT_DATA } = await import('./helpers/efsp-scenario.mjs');
+const { crew, act, mustAct, jumpTo, DEPARTURE_FLIGHT_DATA, steppedWallClock, lapseNlaGuard } = await import('./helpers/efsp-scenario.mjs');
 
 const ATC = { OPS: 'INCIRLIK', CD: 'INCIRLIK', GC: 'INCIRLIK', LC: 'INCIRLIK', AP: 'INCIRLIK' };
 const zulu = (hh, mm) => Date.UTC(2016, 5, 21, hh, mm);
@@ -79,7 +79,8 @@ test('SCENARIO T2 flight data carrying the ATO\'s departure time and no plan res
 test('SCENARIO T3 the takeoff is stamped by the state change, wins over the off-block estimate, loses to a typed time (docs/adr/0076)', async () => {
   let now = zulu(14, 20);
   const clock = { now: () => now, source: 'MISSION' };
-  const efsp = createEfsp({ clock });
+  const wall = steppedWallClock();
+  const efsp = createEfsp({ clock, wallClock: wall });
   const c = crew(efsp, ATC);
   const seed = toFlightDataFiledSeed({ route: 'DCT', levelValue: '250', depAerodrome: 'LTAG', destAerodrome: 'LTAG', depTime: '1430' });
   let strip = mustAct(efsp, c.OPS, 'OPS', null, {
@@ -95,7 +96,7 @@ test('SCENARIO T3 the takeoff is stamped by the state change, wins over the off-
 
   // LC presses Airborne: the NLA.
   now = zulu(14, 33);
-  await new Promise(r => setTimeout(r, 410)); // the double-tap guard
+  await lapseNlaGuard(wall); // the double-tap guard
   const ack = act(efsp, c.LC, 'LC', strip, { kind: 'InvokeNla' });
   assert.equal(ack.ok, true, JSON.stringify(ack));
   assert.equal(ack.strip.state, 'DEPARTED');

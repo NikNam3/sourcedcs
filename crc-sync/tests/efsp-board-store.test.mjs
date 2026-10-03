@@ -38,8 +38,9 @@ function makeRules(overrides = {}) {
 
 function makeStore(rulesOverrides) {
   const flightDataStore = new FlightDataStore();
-  const board = new BoardStore(flightDataStore, fullRules(makeRules(rulesOverrides)));
-  return { board, flightDataStore };
+  const wall = { t: Date.now(), now() { return this.t; } }; // a stepped wall clock (docs/adr/0096)
+  const board = new BoardStore(flightDataStore, fullRules(makeRules(rulesOverrides)), { wallClock: wall });
+  return { board, flightDataStore, wall };
 }
 
 function createMutation(overrides = {}) {
@@ -484,7 +485,7 @@ test('InvokeNla after the 400ms window applies normally', async () => {
   // this test needs a second real transition (PENDING_CLEARANCE ->
   // CLEARED) to prove the SECOND call actually re-applied rather than
   // just happening to no-op — supply a fuller local override.
-  const { board } = makeStore({
+  const { board, wall } = makeStore({
     computeNla: (strip) => {
       if (strip.state === 'PROPOSED') return { toState: 'PENDING_CLEARANCE' };
       if (strip.state === 'PENDING_CLEARANCE') return { toState: 'CLEARED' };
@@ -494,7 +495,7 @@ test('InvokeNla after the 400ms window applies normally', async () => {
   const strip = createStrip(board);
   board.applyMutation(mutation(strip, { kind: 'InvokeNla' }), 'OPS', 'OPS');
 
-  await new Promise(resolve => setTimeout(resolve, 420));
+  wall.t += 420; // the double-tap guard lapses
 
   const afterFirst = board.getStrip(strip.stripId);
   const result = board.applyMutation(mutation(afterFirst, { kind: 'InvokeNla' }), 'OPS', 'OPS');
@@ -1212,4 +1213,25 @@ test('observeTouches sees every touch once, after its ring entry, in order; a wr
   off();
   board.applyMutation(mutation(board.getStrip(a.stripId), { kind: 'SetFlag', flag: 'offset', value: true }), 'OPS', 'OPS');
   assert.equal(seen.length, n);
+});
+
+test('the double-tap guard reads the injected wall clock and its configured length (docs/adr/0096)', () => {
+  const nla = { computeNla: (strip) => (strip.state === 'PROPOSED' ? { toState: 'PENDING_CLEARANCE' } : strip.state === 'PENDING_CLEARANCE' ? { toState: 'CLEARED' } : null) };
+  const press = (board, strip) => board.applyMutation({ clientMutationId: crypto.randomUUID(), stripId: strip.stripId, baseRev: strip.rev, op: { kind: 'InvokeNla' } }, 'OPS', 'OPS');
+  for (const [guardMs, expectSecond] of [[undefined, 'PENDING_CLEARANCE'], [0, 'CLEARED']]) {
+    const wall = { t: 5_000_000, now() { return this.t; } };
+    const board = new BoardStore(new FlightDataStore(), fullRules(makeRules(nla)), { wallClock: wall, ...(guardMs === undefined ? {} : { nlaGuardMs: guardMs }) });
+    const strip = board.applyMutation(createMutation(), 'OPS', 'OPS').strip;
+    press(board, strip);
+    wall.t += 399; // the wall clock stands still: no real time passes in this test
+    assert.equal(press(board, board.getStrip(strip.stripId)).strip.state, expectSecond, `guard ${guardMs ?? 'default'} ms, 399 ms later`);
+  }
+});
+
+test('CRCSYNC_NLA_GUARD_MS is honoured only with CRCSYNC_TEST_RESET=1', async () => {
+  const { nlaGuardFromEnv } = await import('../src/app.js');
+  assert.equal(nlaGuardFromEnv({ CRCSYNC_NLA_GUARD_MS: '0' }), undefined);
+  assert.equal(nlaGuardFromEnv({ CRCSYNC_TEST_RESET: '1' }), undefined);
+  assert.equal(nlaGuardFromEnv({ CRCSYNC_TEST_RESET: '1', CRCSYNC_NLA_GUARD_MS: '0' }), 0);
+  assert.throws(() => nlaGuardFromEnv({ CRCSYNC_TEST_RESET: '1', CRCSYNC_NLA_GUARD_MS: 'x' }), /CRCSYNC_NLA_GUARD_MS/);
 });

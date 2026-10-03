@@ -76,7 +76,7 @@ const log = require('../log').logger('efsp');
  *   or worse, restored a snapshot somebody had committed to git. It lives in
  *   data/ now; see src/state-paths.js.
  */
-function createEfsp({ clock = WALL_CLOCK, wallClock = WALL_CLOCK, transitionAltFt, currentTheater = () => null,
+function createEfsp({ clock = WALL_CLOCK, wallClock = WALL_CLOCK, nlaGuardMs, transitionAltFt, currentTheater = () => null,
   paths = statePaths('efsp-board.json', process.env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH),
   standingPaths = statePaths('efsp-airspaces.json', process.env.CRCSYNC_EFSP_AIRSPACES_PATH) } = {}) {
   facilityConfig.load(); // the Facilities' JSON is read here, not when the module is required (docs/wip/DATA-1.md)
@@ -243,7 +243,7 @@ function createEfsp({ clock = WALL_CLOCK, wallClock = WALL_CLOCK, transitionAltF
       canSendSfaRotationTransfer: (actingPositionId) => permission.canSendSfaRotationTransfer(actingPositionId),
     };
 
-    const boardStore = new BoardStore(flightDataStore, rules, { clock, undoHistory });
+    const boardStore = new BoardStore(flightDataStore, rules, { clock, wallClock, undoHistory, ...(nlaGuardMs === undefined ? {} : { nlaGuardMs }) });
     boardStore.setMutationLog(mutationLog);
     facilities.set(facilityId, { boardStore, positionStore, rules });
   }
@@ -314,7 +314,7 @@ function createEfsp({ clock = WALL_CLOCK, wallClock = WALL_CLOCK, transitionAltF
   };
 
   return {
-    flightDataStore, mutationLog, clock, undoHistory,
+    flightDataStore, mutationLog, clock, wallClock, undoHistory,
     airspaceStore, correlationStore, marsaStore, nlaStatusMonitor, runwayStatusStore, carrierStore, sfaStore,
     boardStoreFor: ctx.boardStoreFor, positionStoreFor: ctx.positionStoreFor,
 
