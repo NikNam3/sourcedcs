@@ -96,7 +96,7 @@ test('U2: a HANDOFF proposal to CTR announces a new Strip at CTR, even to one co
   try {
     await startAction(s, 'Coordinate…');
     const popover = page.locator('.efsp-coordinate-popover');
-    await popover.locator('select').selectOption('HANDOFF');
+    await popover.locator('.efsp-coordinate-primitive-select').selectOption('HANDOFF');
     await popover.getByRole('button', { name: 'Send' }).dispatchEvent('click');
     const ctrTab = page.locator('.efsp-position-tab[data-position-id="CTR"]');
     await expect(ctrTab.locator('.efsp-tab-new-dot, .efsp-tab-new'), 'CTR\'s tab says a Strip arrived').toBeVisible({ timeout: 10000 });
