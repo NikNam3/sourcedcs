@@ -13,6 +13,22 @@ import crypto from 'crypto';
 
 export const NLA_DOUBLE_TAP_MS = 400; // board/ops/invoke-nla.js's double-tap guard
 
+/**
+ * A wall clock a test steps by hand (docs/adr/0096): start at the real time so wall stamps stay comparable with
+ * the archiver's, then move only on `step(ms)`. Pass it to createEfsp({ wallClock }) so the double-tap guard
+ * needs no real sleep.
+ */
+export function steppedWallClock(start = Date.now()) {
+  let t = start;
+  return { now: () => t, step: (ms) => { t += ms; }, source: 'TEST' };
+}
+
+/** Let the double-tap guard lapse: a step on a stepped wall clock, a real sleep otherwise. */
+export async function lapseNlaGuard(wallClock) {
+  if (wallClock && wallClock.step) wallClock.step(NLA_DOUBLE_TAP_MS + 10);
+  else await new Promise(resolve => setTimeout(resolve, NLA_DOUBLE_TAP_MS + 10));
+}
+
 /** One controller per Position, each declaring what it holds the way a real client does. */
 export function crew(efsp, spec) {
   const sessions = {};
@@ -94,7 +110,7 @@ export function jumpTo(efsp, crewMember, positionId, strip, toState) {
  * does, and the second press would be silently swallowed as a no-op.
  */
 export async function advance(efsp, crewMember, positionId, strip) {
-  await new Promise(resolve => setTimeout(resolve, NLA_DOUBLE_TAP_MS + 10));
+  await lapseNlaGuard(efsp.wallClock);
   return mustAct(efsp, crewMember, positionId, strip, { kind: 'InvokeNla' });
 }
 

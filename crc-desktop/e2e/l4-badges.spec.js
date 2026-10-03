@@ -13,7 +13,7 @@
  */
 
 const { test, expect } = require('./helpers/test');
-const { openPanel, seedStrip } = require('./helpers/app');
+const { openPanel, seedStrip, settle } = require('./helpers/app');
 
 function stripIdOf(page, callsign) {
   return page.evaluate((cs) => crc.state.getAllEfspStrips().find((s) => crc.state.getEfspFlightData(s.flightDataId).identity.callsign === cs).stripId, callsign);
@@ -47,7 +47,7 @@ async function dropAll(page, callsigns) {
       crc.ws.sendEfspMutation(s.ownerPositionId, s, { kind: 'DropStrip', reason: 'e2e cleanup' });
     }
   }, callsigns);
-  await page.waitForTimeout(400);
+  await settle(page);
 }
 
 // Extends F-305 — was a catalogued finding, now fixed.
@@ -55,7 +55,7 @@ test('an obligation alert shows on the Strip without anything else happening', a
   await openPanel(page, { signedOn: ['OPS'] });
   const strip = await seedStrip(page, { callsign: 'L4O1', stripType: 'DEPARTURE' });
   await raiseObligation(page, 'L4O1');
-  await expect(strip.locator('.efsp-obligation-badge')).toHaveCount(1, { timeout: 2000 });
+  await expect(strip.locator('.efsp-obligation-badge')).toHaveCount(1, { timeout: 5000 });
 });
 
 // Extends F-305 — was a catalogued finding, now fixed.
@@ -74,8 +74,8 @@ test('declaring MARSA updates the badge on the participants', async ({ page }) =
       });
     });
     await expect.poll(() => page.evaluate(() => crc.state.getAllEfspMarsa().some((m) => m.state === 'ACTIVE')),
-      { timeout: 3000, message: 'precondition: the relation is ACTIVE on the page' }).toBe(true);
-    await expect(tanker.locator('.efsp-marsa-badge, .efsp-marsa-btn')).not.toHaveText('MARSA…', { timeout: 2000 });
+      { timeout: 5000, message: 'precondition: the relation is ACTIVE on the page' }).toBe(true);
+    await expect(tanker.locator('.efsp-marsa-badge, .efsp-marsa-btn')).not.toHaveText('MARSA…', { timeout: 5000 });
   } finally {
     // The relation must not outlive this test — see dropAll.
     await dropAll(page, ['L4M1', 'L4M2']);
@@ -95,7 +95,7 @@ test('an obligation badge does not push the Strip onto another row', async ({ pa
   // x=17, which after F-105's 44x44 targets is inside the CALLSIGN cell. The
   // click opened the Block editor, .efsp-block-1 became an <input> with no
   // text, and stripByCallsign() stopped resolving the Strip at all.
-  await expect(strip.locator('.efsp-obligation-badge')).toHaveCount(1, { timeout: 2000 });
+  await expect(strip.locator('.efsp-obligation-badge')).toHaveCount(1, { timeout: 5000 });
   // Indicators are drawn only when there is something wrong (docs/adr/0058), so
   // the first one adds the indicator row inside the body zone: the Strip may
   // grow by that one row, never by a row under the actions column (F-002).

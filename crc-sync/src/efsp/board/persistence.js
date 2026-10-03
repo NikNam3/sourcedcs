@@ -15,14 +15,16 @@ class BoardPersistence {
    * @param {import('./board-state').BoardState} deps.state
    * @param {import('../sync/replay-cache').ReplayCache} deps.replay the Board's idempotency cache
    * @param {{now: () => number}} deps.clock the mission clock
+   * @param {{now: () => number}} deps.wallClock real time: the drop stamp and the replay window
    * @param {object} deps.audit BoardAudit (the Archive entry)
    * @param {() => Map} deps.nlaHistory the facade's NLA history, read late
    */
-  constructor({ rules, state, replay, clock, audit, nlaHistory }) {
+  constructor({ rules, state, replay, clock, wallClock, audit, nlaHistory }) {
     this._rules = rules;
     this._state = state;
     this._replay = replay;
     this._clock = clock;
+    this._wallClock = wallClock; // docs/adr/0096
     this._audit = audit;
     this._nlaHistoryOf = nlaHistory;
     // stripId -> Date.now() at its drop: when a DROPPED Strip is archived
@@ -48,7 +50,7 @@ class BoardPersistence {
       this._droppedWallAt.delete(stripId);
       return null;
     }
-    if (!this._droppedWallAt.has(stripId)) this._droppedWallAt.set(stripId, Date.now());
+    if (!this._droppedWallAt.has(stripId)) this._droppedWallAt.set(stripId, this._wallClock.now());
     return this._droppedWallAt.get(stripId);
   }
 
@@ -82,7 +84,7 @@ class BoardPersistence {
     // `replay`: the idempotency records of the last REPLAY_PERSIST_WINDOW_MS,
     // so a retry after a restart answers from the cache instead of applying a
     // second time (docs/adr/0081, L6's F5 mode A). Compact records only.
-    const horizon = Date.now() - REPLAY_PERSIST_WINDOW_MS;
+    const horizon = this._wallClock.now() - REPLAY_PERSIST_WINDOW_MS;
     const replay = this._replay.windowSince(horizon);
     return { strips: this._state.all(), cidSeq: this._state.cidSeq, replay, droppedWallAt: [...this._droppedWallAt] };
   }

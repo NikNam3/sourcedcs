@@ -26,7 +26,7 @@
  */
 
 const { test, expect } = require('./helpers/test');
-const { openPanel, seedStrip, stripByCallsign, startAction } = require('./helpers/app');
+const { openPanel, seedStrip, stripByCallsign, startAction, settle } = require('./helpers/app');
 
 test.use({ viewport: { width: 1600, height: 2400 } });
 
@@ -153,7 +153,7 @@ test('extends F-305: the void reaches the declaring controller\'s own Strip', as
   // A was rebuilt by its own SetBlock ack, BEFORE the efsp-marsa-delta
   // carrying the void arrived — so its badge still reads as armed. Measured at
   // +0.8s, +3s and +8s; it only corrects when something else selects a Strip.
-  await page.waitForTimeout(3000);
+  await settle(page);
   const badge = stripByCallsign(page, a).locator('.efsp-marsa-badge');
   await expect(badge, 'the Strip that issued the clearance still says MARSA armed')
     .not.toHaveText(/MARSA\s*⚠/);

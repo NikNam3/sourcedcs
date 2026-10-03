@@ -198,6 +198,7 @@ export function _openCoordinatePopover(strip, anchorEl) {
 
   const select = document.createElement('select');
   select.className = 'efsp-coordinate-primitive-select';
+  select.dataset.testid = 'coordination-primitive';
   for (const primitive of ['HANDOFF', 'POINT_OUT', 'TRAFFIC', 'OPERATIONAL_REQUEST', 'AIT']) {
     const opt = document.createElement('option');
     opt.value = primitive;

@@ -69,6 +69,7 @@ export function _openAirspaceEntryPopover(strip, anchorEl) {
 
   const select = document.createElement('select');
   select.className = 'efsp-coordinate-primitive-select';
+  select.dataset.testid = 'airspace-entry-airspace';
   for (const a of airspaces) {
     const definition = a.definition || {};
     const frequency = definition.controlFrequencyMhz || definition.workingFrequencyMhz;

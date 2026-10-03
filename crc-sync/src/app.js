@@ -104,6 +104,18 @@ function nearestAirport(lat, lon, missionData) {
 const COVERAGE_TICK_MS = 250;
 
 /**
+ * The NLA double-tap guard's length in ms. Only the e2e harness (CRCSYNC_TEST_RESET=1) may change it, with
+ * CRCSYNC_NLA_GUARD_MS: a spec that presses the NLA twice in a row must not depend on how fast the server
+ * receives the two frames. Anywhere else the shipped 400 ms stands. undefined = the Board's default.
+ */
+function nlaGuardFromEnv(env) {
+  if (env.CRCSYNC_TEST_RESET !== '1' || env.CRCSYNC_NLA_GUARD_MS === undefined || env.CRCSYNC_NLA_GUARD_MS === '') return undefined;
+  const ms = Number(env.CRCSYNC_NLA_GUARD_MS);
+  if (!Number.isFinite(ms) || ms < 0) throw new Error(`CRCSYNC_NLA_GUARD_MS must be a number of ms >= 0, got ${env.CRCSYNC_NLA_GUARD_MS}`);
+  return ms;
+}
+
+/**
  * @param {object} [deps]
  * @param {object} [deps.env] the environment; `LOG_LEVEL`, `CRCSYNC_TEST_RESET`, `NODE_ENV` and `CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH`, `CRCSYNC_MAPTILER_CLIENT_KEY` and `CRCSYNC_MAPTILER_KEY` are read here
  * @param {{read:string, write:string}} [deps.paths] the Board snapshot's paths (default: state/ per `env`)
@@ -225,7 +237,7 @@ function createApp(deps = {}) {
   const boardPaths   = deps.paths || statePaths('efsp-board.json', env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH);
   // The airspace registry is scoped to the loaded mission's theater (docs/adr/0098 §2); the MissionSession is built below.
   const theaterSource = { current: () => null };
-  const efsp        = createEfsp({ clock: missionClock, transitionAltFt: () => theaterContext.transitionAltFt(), currentTheater: () => theaterSource.current(), paths: boardPaths });
+  const efsp        = createEfsp({ clock: missionClock, wallClock: WALL_CLOCK, nlaGuardMs: nlaGuardFromEnv(env), transitionAltFt: () => theaterContext.transitionAltFt(), currentTheater: () => theaterSource.current(), paths: boardPaths });
 
   // ── The radar picture (docs/adr/0042) ────────────────────────────────────
   // Radars, their sweep phase, terrain masking and who may look through what
@@ -679,7 +691,7 @@ function createApp(deps = {}) {
   // Test-only (Playwright harness); mounts nothing unless CRCSYNC_TEST_RESET=1, see src/test-reset.js.
   // Required only here: test-reset.js mints its boot id (crypto.randomUUID) when loaded, and the soak's
   // seeded id stream must not be consumed before createEfsp.
-  if (env.CRCSYNC_TEST_RESET === '1') require('./test-reset').mountTestReset(app, { env, hooks: { setWireProtocol: (n) => wsHub.setWireProtocolForTest(n) } });
+  if (env.CRCSYNC_TEST_RESET === '1') require('./test-reset').mountTestReset(app, { env, hooks: { setWireProtocol: (n) => wsHub.setWireProtocolForTest(n), setNlaGuardMs: (ms) => efsp.setNlaGuardMs(ms) } });
 
   // ── Static hosting ───────────────────────────────────────────────────────
   // ── The airspace registry's server-to-server API, for sourcedcs-web (docs/adr/0098 §9). No token: every route 503. ──
@@ -891,4 +903,4 @@ function createApp(deps = {}) {
   };
 }
 
-module.exports = { createApp };
+module.exports = { createApp, nlaGuardFromEnv };

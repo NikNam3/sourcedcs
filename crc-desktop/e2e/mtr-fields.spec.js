@@ -12,7 +12,7 @@
 
 const path = require('path');
 const { test, expect } = require('./helpers/test');
-const { openPanel, seedStrip, stripByCallsign, expectRefusalIsVisible } = require('./helpers/app');
+const { openPanel, seedStrip, stripByCallsign, expectRefusalIsVisible, frames } = require('./helpers/app');
 
 test.describe.configure({ timeout: 60000 });
 
@@ -243,7 +243,7 @@ test('narrow Bays (480 and 320 px): no field under 66 px, nothing overflows the 
 
   for (const width of [480, 320]) {
     await page.evaluate((w) => { document.querySelector('#efsp-bay-content').style.width = `${w}px`; }, width);
-    await page.waitForTimeout(100);
+    await frames(page);
     const m = await strip.evaluate((el) => ({
       narrowest: Math.min(...[...el.querySelectorAll('.efsp-strip-fields > .efsp-field')].map((f) => f.getBoundingClientRect().width)),
       overflow: el.scrollWidth - el.clientWidth,
@@ -255,10 +255,10 @@ test('narrow Bays (480 and 320 px): no field under 66 px, nothing overflows the 
     expect(m.mtrLeft, `${width}px: the MTR group is not at column 1`).toBe(m.gridLeft);
   }
   await page.evaluate(() => { document.querySelector('#efsp-bay-content').style.width = '480px'; });
-  await page.waitForTimeout(100);
+  await frames(page);
   await strip.screenshot({ path: shot('mtr-07-narrow-480.png') });
   await page.evaluate(() => { document.querySelector('#efsp-bay-content').style.width = '320px'; });
-  await page.waitForTimeout(100);
+  await frames(page);
   await strip.screenshot({ path: shot('mtr-07-narrow-320.png') });
 });
 

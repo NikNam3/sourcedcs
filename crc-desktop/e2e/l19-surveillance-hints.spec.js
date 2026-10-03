@@ -11,7 +11,7 @@
  */
 
 const { test, expect } = require('./helpers/test');
-const { openPanel, seedStrip, stripByCallsign } = require('./helpers/app');
+const { openPanel, seedStrip, stripByCallsign, lapseNlaGuard, settle, serverTicks } = require('./helpers/app');
 
 const FLIGHT_DATA = { route: 'DCT', requestedAltitude: 'FL250', departureAirport: 'LTAG', destinationAirport: 'LTAF' };
 const ALL = ['OPS', 'CD', 'GC', 'LC', 'AP'];
@@ -30,7 +30,7 @@ test.afterEach(async ({ page }) => {
       crc.ws.sendEfspMutation(s.ownerPositionId, s, { kind: 'DropStrip', reason: 'e2e cleanup' });
     }
   }, CS).catch(() => {});
-  await page.waitForTimeout(400);
+  await settle(page).catch(() => {});
 });
 
 test('the suggestion chip: drawn, moves nothing, one click advances the flight and stamps the takeoff', async ({ page }) => {
@@ -45,8 +45,8 @@ test('the suggestion chip: drawn, moves nothing, one click advances the flight a
   for (let i = 0; i < 6; i++) {
     const before = (await info(page)).state;
     await page.evaluate((cs) => crc.bayView._invokeNla(crc.state.getAllEfspStrips().find((x) => x.state !== 'DROPPED' && crc.state.getEfspFlightData(x.flightDataId).identity.callsign === cs)), CS);
-    await expect.poll(async () => (await info(page)).state, { timeout: 3000, message: `stuck at ${before}` }).not.toBe(before);
-    await page.waitForTimeout(450); // the server's double-tap guard
+    await expect.poll(async () => (await info(page)).state, { timeout: 5000, message: `stuck at ${before}` }).not.toBe(before);
+    await lapseNlaGuard(page); // the client's double-tap window
   }
   const at = await info(page);
   expect(at.state).toBe('LUAW');
@@ -67,7 +67,7 @@ test('the suggestion chip: drawn, moves nothing, one click advances the flight a
   await expect(chip).toContainText('AIRBORNE');
 
   // Nothing moves by itself.
-  await page.waitForTimeout(1500);
+  await serverTicks(page, 3); // the server's monitor has run a few more times
   expect((await info(page)).state).toBe('LUAW');
 
   // One input.

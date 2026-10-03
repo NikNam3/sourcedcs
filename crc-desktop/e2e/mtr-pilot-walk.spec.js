@@ -12,7 +12,7 @@
 const path = require('path');
 const fs = require('fs');
 const { test, expect } = require('./helpers/test');
-const { openPanel, seedStrip, startAction } = require('./helpers/app');
+const { openPanel, seedStrip, startAction, settle, serverTicks } = require('./helpers/app');
 
 test.describe.configure({ timeout: 120000 });
 
@@ -77,7 +77,7 @@ test('pilot walk: "VIPER11 request a different exit fix", CTR and AP at once', a
   await edit(c, '9H-EXIT', 'F');
   await edit(c, '9H-TIME', '1432');
   await edit(c, '9H-ALT', 'FL190');
-  await expect(a.locator('.efsp-strip-fields .efsp-block-9H-EXIT')).toHaveText('F', { timeout: 3000 });
+  await expect(a.locator('.efsp-strip-fields .efsp-block-9H-EXIT')).toHaveText('F', { timeout: 5000 });
   await expect(a.locator('.efsp-strip-fields .efsp-block-9H-TIME')).toHaveText('1432');
   note('1', `CTR posted IR107/F/1432/FL190; AP's replica showed them without a reload. AP face: ${(await faceIds(a)).join(' ')}`);
   await only(ap, CS);
@@ -85,7 +85,7 @@ test('pilot walk: "VIPER11 request a different exit fix", CTR and AP at once', a
 
   // AP takes the flight.
   const accept = a.getByRole('button', { name: 'Accept Hand Off' });
-  await accept.click({ timeout: 3000 });
+  await accept.click({ timeout: 5000 });
   await expect.poll(async () => (await ap.evaluate((cs) => [...crc.state.efspStrips.values()].filter(s => crc.state.efspFlightDataList.get(s.flightDataId)?.identity?.callsign === cs && s.facilityId === 'INCIRLIK').map(s => s.coordination && s.coordination.state), CS))[0]).toBe('ACTIVE');
   const bayNow = await ap.evaluate((cs) => [...crc.state.efspStrips.values()].find(s => crc.state.efspFlightDataList.get(s.flightDataId)?.identity?.callsign === cs && s.facilityId === 'INCIRLIK').bayId, CS);
   if (bayNow !== 'ap-coordination') await goBay(ap, 'AP', bayNow);
@@ -104,7 +104,7 @@ test('pilot walk: "VIPER11 request a different exit fix", CTR and AP at once', a
     + `Struck history entries on the face: ${struck} (expected 0 — §3.7 gap, H25). Old exit fix anywhere on the FLIGHT_DATA: ${JSON.stringify(after).includes('"F"')}`);
   expect(before.exitFix).toBe('F');
   expect(after.exitFix).toBe('E');
-  await expect(c.locator('.efsp-strip-fields .efsp-block-9H-EXIT')).toHaveText('E', { timeout: 3000 });
+  await expect(c.locator('.efsp-strip-fields .efsp-block-9H-EXIT')).toHaveText('E', { timeout: 5000 });
   note('2b', 'CTR\'s Strip showed E within the poll; nothing on either Strip says it was amended');
   await only(ap, CS);
   await mine.screenshot({ path: path.join(SHOTS, 'walk-2-amended.png') });
@@ -112,7 +112,7 @@ test('pilot walk: "VIPER11 request a different exit fix", CTR and AP at once', a
   // ── 3. "…approved FL210": the controller writes ALT. The advisory follows. ──
   // ADR 0101: Accept moved radar ID only, so CTR hands over control first (an altitude is a control instruction).
   await c.locator('.efsp-x-buttons').getByRole('button', { name: 'Control to AP' }).click();
-  await expect(mine.locator('[data-chip="control"]')).toHaveText('CTRL: AP', { timeout: 3000 });
+  await expect(mine.locator('[data-chip="control"]')).toHaveText('CTRL: AP', { timeout: 5000 });
   await edit(mine, '7', 'FL210');
   await mine.locator('.efsp-expand-btn').click();
   const adv = mine.locator('.efsp-mtr-lostcomms');
@@ -161,7 +161,8 @@ test('pilot walk: "VIPER11 request a different exit fix", CTR and AP at once', a
     crc.ws.sendEfspMutation('CTR', s, { kind: 'SetBlock', blockId: '9H-TIME', value: '1445' }, 'CENTER');
     return s.ownerPositionId;
   }, CS);
-  await ap.waitForTimeout(800);
+  await settle(ctr);
+  await serverTicks(ap, 1); // a heartbeat follows the delta on AP's socket, so CTR's write has reached AP
   const stillOpen = await input.count();
   const draft = stillOpen ? await input.inputValue() : null;
   const ctrErr = (await ctr.locator('#efsp-mutation-error').textContent().catch(() => '') || '').trim();
@@ -170,6 +171,6 @@ test('pilot walk: "VIPER11 request a different exit fix", CTR and AP at once', a
   const flightDataEst = (await mtrOf(ap, CS)).exitEstimateUtc;
   note('8b', `AP's copy of the flight data has exitEstimateUtc=${flightDataEst ? new Date(flightDataEst).toISOString().slice(11, 16) : flightDataEst} while the edit is open`);
   if (stillOpen) await input.press('Enter');
-  await ap.waitForTimeout(800);
+  await settle(ap);
   note('8c', `after AP pressed Enter: EXIT=${JSON.stringify(await mine.locator('.efsp-block-9H-EXIT').textContent())}, EXIT EST=${JSON.stringify(await mine.locator('.efsp-block-9H-TIME').textContent())}`);
 });

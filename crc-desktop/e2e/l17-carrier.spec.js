@@ -12,7 +12,7 @@
 
 const path = require('path');
 const { test, expect } = require('./helpers/test');
-const { openPanel } = require('./helpers/app');
+const { openPanel, lapseNlaGuard } = require('./helpers/app');
 
 const SHOTS = path.join(__dirname, '../../docs/wip/L17');
 test.use({ viewport: { width: 1400, height: 1000 } });
@@ -173,7 +173,7 @@ test('03 Case II handoffs: Commence feeds a lane, See you hands to PriFly, Radar
   await waitStrip(marshal, a, s => s.state === 'BALL' && s.trigger === 'PILOT_BALL_CALL', 'Ball');
   await expect(strip(marshal, a).locator('.efsp-nla-btn')).toHaveText('Trapped');
   // Ball and Trapped are two advancing presses: the client swallows a second one inside the 400 ms double-tap window (F-101), as it does for a person's double tap.
-  await marshal.waitForTimeout(450);
+  await lapseNlaGuard(marshal);
   await strip(marshal, a).locator('.efsp-nla-btn').click();
   await expect.poll(() => stripOf(marshal, a)).toBeNull();
   await expect.poll(() => marshal.evaluate(() => crc.carrier.carrierDerivedStack().length)).toBe(0);

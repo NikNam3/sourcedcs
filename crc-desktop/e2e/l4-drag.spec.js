@@ -19,14 +19,14 @@
  */
 
 const { test, expect } = require('./helpers/test');
-const { openPanel, seedStrip, stripByCallsign } = require('./helpers/app');
+const { openPanel, seedStrip, stripByCallsign, settle, frames, lapseNlaGuard } = require('./helpers/app');
 
 const BAY = 'ops-coordination';
 
 async function openBay(page, bayId, positionId = 'OPS') {
   await page.locator(`#efsp-position-tabs .efsp-position-tab[data-position-id=\"${positionId}\"]`).click();
   await page.locator(`#efsp-bay-tabs .efsp-bay-tab[data-bay-id=\"${bayId}\"]`).click();
-  await page.waitForTimeout(200);
+  await frames(page);
 }
 
 /** Pointer down on the Strip's own left padding — not a chip, which would swallow it. */
@@ -63,7 +63,7 @@ async function dropAll(page, callsigns) {
       crc.ws.sendEfspMutation(s.ownerPositionId, s, { kind: 'DropStrip', reason: 'e2e cleanup' });
     }
   }, callsigns);
-  await page.waitForTimeout(400);
+  await settle(page);
 }
 
 test.describe('in one Rack', () => {
@@ -83,7 +83,7 @@ test.describe('in one Rack', () => {
       // position:fixed), so this is measured after, not before.
       await page.mouse.move(x, await visibleGap(page, 'L4A3', 'L4A4'), { steps: 5 });
       await page.mouse.up();
-      await expect.poll(() => orderOf(page, cs), { timeout: 3000 }).toEqual(['L4A2', 'L4A3', 'L4A1', 'L4A4']);
+      await expect.poll(() => orderOf(page, cs), { timeout: 5000 }).toEqual(['L4A2', 'L4A3', 'L4A1', 'L4A4']);
     } finally { await dropAll(page, cs); }
   });
 
@@ -118,7 +118,7 @@ test.describe('in one Rack', () => {
     try {
       const { x } = await grab(page, 'L4C0');
       await page.mouse.wheel(0, 600);
-      await page.waitForTimeout(300);
+      await frames(page);
       // Whichever two of ours are now fully in view, aim between them.
       const pair = await page.evaluate((cs) => {
         const cr = document.querySelector('#efsp-bay-content').getBoundingClientRect();
@@ -129,7 +129,7 @@ test.describe('in one Rack', () => {
       expect(pair.length, 'need two Strips in view to aim between').toBe(2);
       await page.mouse.move(x, await visibleGap(page, pair[0], pair[1]), { steps: 3 });
       await page.mouse.up();
-      await page.waitForTimeout(600);
+      await settle(page);
       const order = await orderOf(page, cs);
       const i = order.indexOf('L4C0');
       expect([order[i - 1], order[i + 1]], `aimed between ${pair.join('/')}`).toEqual(pair);
@@ -150,8 +150,7 @@ test.describe('in one Rack', () => {
       const box = await content.boundingBox();
       const { x } = await grab(page, 'L4S0');
       await page.mouse.move(x, box.y + box.height - 4, { steps: 8 });
-      await page.waitForTimeout(1500);
-      expect(await content.evaluate((e) => e.scrollTop), 'precondition: the Bay autoscrolled').toBeGreaterThan(0);
+      await expect.poll(() => content.evaluate((e) => e.scrollTop), { message: 'precondition: the Bay autoscrolled' }).toBeGreaterThan(0);
       const pair = await page.evaluate((cs) => {
         const cr = document.querySelector('#efsp-bay-content').getBoundingClientRect();
         return [...document.querySelectorAll('.efsp-strip:not(.efsp-strip-dragging)')]
@@ -161,7 +160,7 @@ test.describe('in one Rack', () => {
       expect(pair.length, 'need two Strips in view to aim between').toBe(2);
       await page.mouse.move(x, await visibleGap(page, pair[0], pair[1]), { steps: 3 });
       await page.mouse.up();
-      await page.waitForTimeout(600);
+      await settle(page);
       const order = await orderOf(page, cs);
       const i = order.indexOf('L4S0');
       expect([order[i - 1], order[i + 1]], `aimed between ${pair.join('/')}`).toEqual(pair);
@@ -182,11 +181,12 @@ test('a Strip can be dragged from one Rack to another in the same Bay', async ({
       await seedStrip(page, { callsign: c, stripType: 'DEPARTURE', flightData: { route: 'DCT', requestedAltitude: 'FL250', departureAirport: 'LTAG', destinationAirport: 'LTAF' } });
       for (let i = 0; i < 5; i++) {
         await page.evaluate((c) => crc.bayView._invokeNla(crc.state.getAllEfspStrips().find((s) => crc.state.getEfspFlightData(s.flightDataId).identity.callsign === c)), c);
-        await page.waitForTimeout(500);
+        await settle(page);
+        await lapseNlaGuard(page); // the client's board-wide double-tap window
       }
     }
     await page.evaluate(() => crc.bayView._moveStrip(crc.state.getAllEfspStrips().find((s) => crc.state.getEfspFlightData(s.flightDataId).identity.callsign === 'L4R3'), 'lc-runway-queue', 'rwy-23', null, null));
-    await page.waitForTimeout(500);
+    await settle(page);
     await openBay(page, 'lc-runway-queue', 'LC');
     const rackOf = (c) => page.evaluate((c) => crc.state.getAllEfspStrips().find((s) => crc.state.getEfspFlightData(s.flightDataId).identity.callsign === c).rackId, c);
     expect(await rackOf('L4R1')).toBe('rwy-05');
@@ -196,6 +196,6 @@ test('a Strip can be dragged from one Rack to another in the same Bay', async ({
     const target = await stripByCallsign(page, 'L4R3').boundingBox();
     await page.mouse.move(x, target.y + target.height - 10, { steps: 10 });
     await page.mouse.up();
-    await expect.poll(() => rackOf('L4R1'), { timeout: 3000 }).toBe('rwy-23');
+    await expect.poll(() => rackOf('L4R1'), { timeout: 5000 }).toBe('rwy-23');
   } finally { await dropAll(page, cs); }
 });

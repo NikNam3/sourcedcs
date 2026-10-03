@@ -10,7 +10,7 @@
 
 const path = require('path');
 const { test, expect } = require('./helpers/test');
-const { openPanel, seedStrip, stripByCallsign } = require('./helpers/app');
+const { openPanel, seedStrip, stripByCallsign, frames } = require('./helpers/app');
 
 test.describe.configure({ timeout: 60000 });
 
@@ -41,7 +41,7 @@ test('what a controller does is measured and shown on METRICS', async ({ page })
   await page.locator('#efsp-position-tabs .efsp-position-tab[data-position-id="OPS"]').click();
   await page.locator('#efsp-bay-tabs .efsp-bay-tab[data-bay-id="ops-coordination"]').click();
   await page.locator('#efsp-bay-tabs .efsp-bay-tab[data-bay-id="ops-proposed"]').click();
-  await page.waitForTimeout(400);
+  await frames(page);
   const s = stripByCallsign(page, 'MET101');
   await s.click({ position: { x: 3, y: 3 } });
   await expect(s).toHaveClass(/efsp-strip-selected/);
@@ -106,7 +106,7 @@ test('what a controller does is measured and shown on METRICS', async ({ page })
 
   await page.screenshot({ path: path.join(SHOTS, 'metrics-1600.png'), fullPage: false });
   await page.setViewportSize({ width: 480, height: 1000 });
-  await page.waitForTimeout(300);
+  await frames(page);
   await page.locator('#metrics-panel').screenshot({ path: path.join(SHOTS, 'metrics-480.png') });
 });
 

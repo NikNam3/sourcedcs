@@ -27,7 +27,8 @@ async function dropSocket(page) {
   await page.evaluate(() => {
     const Real = window.WebSocket;
     window.__blockWs = true;
-    window.WebSocket = function (url, protocols) { return new Real(window.__blockWs ? 'ws://127.0.0.1:1/' : url, protocols); };
+    window.__blockedAttempts = 0;
+    window.WebSocket = function (url, protocols) { if (window.__blockWs) window.__blockedAttempts += 1; return new Real(window.__blockWs ? 'ws://127.0.0.1:1/' : url, protocols); };
     window.WebSocket.prototype = Real.prototype;
     for (const k of ['CONNECTING', 'OPEN', 'CLOSING', 'CLOSED']) window.WebSocket[k] = Real[k];
     crc.app._ws.close();
@@ -49,7 +50,8 @@ test('a short drop keeps the controller signed on and actions still work', async
   await openPanel(page, { signedOn: ['OPS'], controller: 'e2e-signon-blip' });
   const seen = acks(page);
   await dropSocket(page);
-  await page.waitForTimeout(2500);
+  // The drop lasts until the client has tried to reconnect and been refused once; it is far inside the 15 s grace.
+  await expect.poll(() => page.evaluate(() => window.__blockedAttempts)).toBeGreaterThanOrEqual(1);
   await raise(page);
   // the reconnect declares again and the server's ack says it is still signed on
   await expect.poll(() => seen.length, { timeout: 15000 }).toBeGreaterThanOrEqual(1);
@@ -63,7 +65,9 @@ test('a drop longer than the grace is recovered by the re-declaration', async ({
   await openPanel(page, { signedOn: ['OPS'], controller: 'e2e-signon-long' });
   const seen = acks(page);
   await dropSocket(page);
-  // past the 15 s grace: crc-sync has signed the dropped controller off
+  // Past the 15 s grace: crc-sync has signed the dropped controller off. This is the one wait that stays: the grace is the
+  // SERVER's wall clock (config/sign-on-grace.json) and the spec's whole point is that it has run out. The sign-off is not
+  // visible to this page, so there is no signal to poll; 17 s is the grace plus its two-second margin.
   await page.waitForTimeout(17000);
   await raise(page);
   await expect.poll(() => seen.length, { timeout: 15000 }).toBeGreaterThanOrEqual(1);

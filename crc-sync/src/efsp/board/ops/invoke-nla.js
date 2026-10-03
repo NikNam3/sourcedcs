@@ -3,6 +3,9 @@
 const { stripScope, retireScope, union, callsignOf } = require('../../undo/scopes');
 
 /** What the NLA would do now (the state table), or null when it has none or is inhibited: the undo scope's route. */
+/** The double-tap guard's default length, ms (§3.5 rule 3). */
+const NLA_GUARD_MS = 400;
+
 function _route(ctx, strip) {
   const flightData = ctx.flightDataStore.getFlightData(strip.flightDataId);
   const r = ctx.rules.computeNla(strip, flightData, ctx.clock.now(), ctx.placement.nlaCtx());
@@ -13,10 +16,10 @@ function _applyInvokeNla(ctx, strip, by) {
   // Two clocks, deliberately. The latch (400ms double tap) is how
   // long a person's finger took, in real time; the NLA gate is a release
   // time or a void deadline, in mission time (docs/adr/0079).
-  const wallNow = Date.now();
+  const wallNow = ctx.wallClock.now();
   const now = ctx.clock.now();
   const lastInvoke = ctx.nlaHistory.get(strip.stripId);
-  if (lastInvoke && wallNow - lastInvoke.invokedAt < 400) {
+  if (lastInvoke && wallNow - lastInvoke.invokedAt < ctx.nlaGuard.ms) {
     // Idempotent double-tap guard (§3.5 rule 3): a second press within
     // 400ms is discarded, not queued — the first tap already applied,
     // so from the controller's perspective this is a no-op success, not
@@ -77,6 +80,7 @@ function _applyInvokeNla(ctx, strip, by) {
 }
 
 module.exports = {
+  NLA_GUARD_MS,
   kind: 'InvokeNla',
   // docs/adr/0100: as the op the NLA routes to (state-only, transfer-shaped, terminal Drop, carrier handoff).
   undo: {

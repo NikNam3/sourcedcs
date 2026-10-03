@@ -28,6 +28,7 @@ const fs = require('fs');
 
 const carrierModel = require('./carrier');
 const sfaModel = require('./sfa');
+const { NLA_GUARD_MS } = require('./board/ops/invoke-nla');
 const airspaceSchema = require('./airspace-schema');
 const { deriveRangePositionIds } = require('./airspace-store');
 const { CodeAllocator } = require('./code-allocator');
@@ -76,7 +77,7 @@ const log = require('../log').logger('efsp');
  *   or worse, restored a snapshot somebody had committed to git. It lives in
  *   data/ now; see src/state-paths.js.
  */
-function createEfsp({ clock = WALL_CLOCK, wallClock = WALL_CLOCK, transitionAltFt, currentTheater = () => null,
+function createEfsp({ clock = WALL_CLOCK, wallClock = WALL_CLOCK, nlaGuardMs = NLA_GUARD_MS, transitionAltFt, currentTheater = () => null,
   paths = statePaths('efsp-board.json', process.env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH),
   standingPaths = statePaths('efsp-airspaces.json', process.env.CRCSYNC_EFSP_AIRSPACES_PATH) } = {}) {
   facilityConfig.load(); // the Facilities' JSON is read here, not when the module is required (docs/wip/DATA-1.md)
@@ -87,6 +88,7 @@ function createEfsp({ clock = WALL_CLOCK, wallClock = WALL_CLOCK, transitionAltF
   const standing = airspaceSchema.loadStandingList({ paths: standingPaths });
   facilityConfig.setRangePositionIds(deriveRangePositionIds(saved && saved.airspaces, standing));
   assertAuthorityCoverage(facilityConfig);
+  const nlaGuard = { ms: nlaGuardMs }; // one cell for every Board: the e2e hook changes it at run time (setNlaGuardMs)
   const codeAllocator = new CodeAllocator();
   const mutationLog = new MutationLog(undefined, { clock });
   const facilities = new Map(); // facilityId -> { boardStore, positionStore, rules }
@@ -243,7 +245,7 @@ function createEfsp({ clock = WALL_CLOCK, wallClock = WALL_CLOCK, transitionAltF
       canSendSfaRotationTransfer: (actingPositionId) => permission.canSendSfaRotationTransfer(actingPositionId),
     };
 
-    const boardStore = new BoardStore(flightDataStore, rules, { clock, undoHistory });
+    const boardStore = new BoardStore(flightDataStore, rules, { clock, wallClock, undoHistory, nlaGuard });
     boardStore.setMutationLog(mutationLog);
     facilities.set(facilityId, { boardStore, positionStore, rules });
   }
@@ -314,7 +316,9 @@ function createEfsp({ clock = WALL_CLOCK, wallClock = WALL_CLOCK, transitionAltF
   };
 
   return {
-    flightDataStore, mutationLog, clock, undoHistory,
+    flightDataStore, mutationLog, clock, wallClock, undoHistory,
+    /** Tests only (src/test-reset.js): the NLA double-tap guard's length, ms, for every Board. */
+    setNlaGuardMs: (ms) => { nlaGuard.ms = ms; },
     airspaceStore, correlationStore, marsaStore, nlaStatusMonitor, runwayStatusStore, carrierStore, sfaStore,
     boardStoreFor: ctx.boardStoreFor, positionStoreFor: ctx.positionStoreFor,
 

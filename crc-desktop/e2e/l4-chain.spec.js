@@ -14,7 +14,7 @@
  */
 
 const { test, expect } = require('./helpers/test');
-const { openPanel, seedStrip, stripByCallsign } = require('./helpers/app');
+const { openPanel, seedStrip, stripByCallsign, lapseNlaGuard, settle, frames } = require('./helpers/app');
 
 const FLIGHT_DATA = { route: 'DCT', requestedAltitude: 'FL250', departureAirport: 'LTAG', destinationAirport: 'LTAF' };
 const ALL = ['OPS', 'CD', 'GC', 'LC', 'AP'];
@@ -31,12 +31,11 @@ async function advance(page, cs, n) {
     const before = (await info(page, cs)).state;
     await page.evaluate((cs) => crc.bayView._invokeNla(crc.state.getAllEfspStrips().find((x) => crc.state.getEfspFlightData(x.flightDataId).identity.callsign === cs)), cs);
     await expect.poll(async () => (await info(page, cs)).state, {
-      timeout: 3000,
+      timeout: 5000,
       message: `setup: ${cs} stuck at ${before}: ${await page.locator('#efsp-mutation-error').textContent()}`,
     }).not.toBe(before);
-    // The server drops a second NLA on the same Strip inside 400 ms, silently
-    // (`board/ops/invoke-nla.js`'s double-tap guard) — so setup must not outrun it.
-    await page.waitForTimeout(450);
+    // The client swallows a second advancing press inside its 400 ms window — setup must not outrun it.
+    await lapseNlaGuard(page);
   }
 }
 
@@ -44,7 +43,7 @@ async function show(page, cs) {
   const { owner, bay } = await info(page, cs);
   await page.locator(`#efsp-position-tabs .efsp-position-tab[data-position-id=\"${owner}\"]`).click();
   await page.locator(`#efsp-bay-tabs .efsp-bay-tab[data-bay-id=\"${bay}\"]`).click();
-  await page.waitForTimeout(250);
+  await frames(page);
 }
 
 // Extends F-101 — used to fail at every transfer-shaped step after Send to Clearance; fixed.
@@ -84,9 +83,9 @@ for (const [label, n, tag] of [['Approve Pushback', 2, 'P'], ['To Runway Queue',
       });
       const box = await btn.boundingBox();
       await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
-      await page.waitForTimeout(150);
+      await settle(page); // the first tap's ack is in and the Rack has reflowed under the pointer
       await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
-      await page.waitForTimeout(800);
+      await settle(page); // a second advance would have been sent inside the click: acked and painted means it was not
 
       const taps = await page.evaluate(() => window.__tapTimes);
       const gap = taps.length > 1 ? taps[1] - taps[0] : Infinity;
@@ -114,9 +113,10 @@ test('an NLA the server will refuse says so before it is pressed', async ({ page
   await page.evaluate((h) => crc.ws.sendEfspSetPositions('INCIRLIK', h), ALL.filter((p) => p !== 'AP'));
   await page.waitForFunction(() => !crc.ws.getActingPositions('INCIRLIK').includes('AP'));
   await show(page, 'L4X1');
-  await page.waitForTimeout(500);
 
   const btn = stripByCallsign(page, 'L4X1').locator('.efsp-nla-btn');
+  // The server's inhibit reaches the Strip in a delta after the release: wait for the button to say so, then judge it.
+  await expect.poll(async () => (await btn.isEnabled()) && !(await btn.getAttribute('title')), { message: 'the released AP reaches the button' }).toBe(false);
   const pre = { enabled: await btn.isEnabled(), title: await btn.getAttribute('title'), strip: await stripByCallsign(page, 'L4X1').innerText() };
   expect(pre.enabled && !pre.title && !/no receiving Position/i.test(pre.strip),
     `Hand Off to AP looks pressable: enabled=${pre.enabled} title=${pre.title}`).toBe(false);

@@ -4,7 +4,7 @@
  * assigned ALT (docs/adr/0058). */
 
 const { test, expect } = require('./helpers/test');
-const { openPanel, seedStrip, dropStrips } = require('./helpers/app');
+const { openPanel, seedStrip, dropStrips, settle } = require('./helpers/app');
 
 const CS = 'U6BLK1';
 
@@ -32,7 +32,7 @@ test('ALT takes FL220B240, shows it as FL220-FL240, refuses a reversed block, an
 
     // A reversed block is refused and the stored one stays.
     await type('FL240-FL220');
-    await page.waitForTimeout(700);
+    await settle(page); // the refusal's ack is in
     expect((await stored()).value).toBe('FL220-FL240');
     // The refusal is on screen, and the editor stays open on what was typed so it can be fixed.
     await expect(page.getByText(/write the lower altitude first/).first()).toBeVisible();

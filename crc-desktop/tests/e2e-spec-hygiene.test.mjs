@@ -45,3 +45,39 @@ test('no e2e file assigns an app sender or reads a bare app global', () => {
   }
   assert.deepEqual(bad, []);
 });
+
+// ARCH-W 5.3 item 5 (E2E-STAB): a popover holds more than one <select>, so `locator('select')` (strict mode throws the day a
+// second one appears) or `locator('select').first()` (picks whichever renders first) is a spec waiting to break. Use the
+// popover's own hook: a `data-testid` through getByTestId, or a class that names the one select (`select.efsp-block-enum-select`).
+test('no spec reaches a <select> by the bare tag', () => {
+  const bad = [];
+  for (const f of specs) {
+    fs.readFileSync(path.join(E2E, f), 'utf8').split('\n').forEach((line, i) => {
+      if (/locator\(\s*['"]select['"]\s*\)/.test(line)) bad.push(`${f}:${i + 1}: ${line.trim()}`);
+    });
+  }
+  assert.deepEqual(bad, [], 'name the select by getByTestId(...) or a class selector');
+});
+
+// ARCH-W 5.3 item 3: a sleep is a guess about load. Wait on a signal (helpers/app.js: settle, frames, serverTicks,
+// lapseNlaGuard, or an expect.poll on the store). The one left is a server wall-clock grace with no signal to poll.
+const SLEEPS_ALLOWED = { 'signon-reconnect.spec.js': 1 };
+test('waitForTimeout is not used outside the documented exceptions', () => {
+  const found = {};
+  for (const f of [...specs, 'helpers/app.js', 'helpers/test.js']) {
+    const n = (fs.readFileSync(path.join(E2E, f), 'utf8').match(/\.waitForTimeout\(/g) || []).length;
+    if (n) found[f] = n;
+  }
+  assert.deepEqual(found, SLEEPS_ALLOWED);
+});
+
+// ARCH-W 5.3 item 4: a retry budget under the 5 s default shrinks exactly when the machine is busy.
+test('no spec or helper sets an assertion or click timeout under the 5 s default', () => {
+  const bad = [];
+  for (const f of [...specs, 'helpers/app.js']) {
+    fs.readFileSync(path.join(E2E, f), 'utf8').split('\n').forEach((line, i) => {
+      for (const m of line.matchAll(/\btimeout:\s*(\d+)\b/g)) if (Number(m[1]) < 5000 && !/setTimeout|test\.setTimeout/.test(line)) bad.push(`${f}:${i + 1}: ${line.trim()}`);
+    });
+  }
+  assert.deepEqual(bad, []);
+});

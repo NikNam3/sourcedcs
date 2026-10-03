@@ -48,7 +48,7 @@ const board = (efsp, f = 'INCIRLIK') => efsp.boardStoreFor(f);
 const get = (efsp, s, f = 'INCIRLIK') => board(efsp, f).getStrip(s.stripId);
 const fdOf = (efsp, s) => efsp.flightDataStore.getFlightData(s.flightDataId);
 const log = () => fs.readFileSync(process.env.CRCSYNC_EFSP_MUTATION_LOG_PATH, 'utf8').trim().split('\n').map(l => JSON.parse(l));
-const pause = () => new Promise(r => setTimeout(r, NLA_DOUBLE_TAP_MS + 10));
+const pause = async () => { wallNow += NLA_DOUBLE_TAP_MS + 10; }; // the guard lapses on the injected wall clock
 
 /** The whole round trip (ack, broadcasts, directed) of one Mutation. */
 function send(efsp, who, positionId, strip, op, { cmid = crypto.randomUUID(), baseRev } = {}) {

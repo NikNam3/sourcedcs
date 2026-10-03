@@ -25,7 +25,7 @@
  */
 
 const { test, expect } = require('./helpers/test');
-const { openPanel, seedStrip, stripByCallsign, expectOnTop, expectDoesSomething, startAction } = require('./helpers/app');
+const { openPanel, seedStrip, stripByCallsign, expectOnTop, expectDoesSomething, startAction, settle } = require('./helpers/app');
 
 /** The stripIds THIS test seeded — what afterEach is allowed to retire. */
 let seeded = [];
@@ -62,7 +62,7 @@ test.afterEach(async ({ page }) => {
       crc.ws.sendEfspMutation(s.ownerPositionId, s, { kind: 'DropStrip', reason: 'e2e cleanup' });
     }
   }, seeded);
-  await page.waitForTimeout(400);
+  await settle(page).catch(() => {});
 });
 
 test('the MARSA popover is on top of the Strips below it', async ({ page }) => {
@@ -103,7 +103,7 @@ test('declaring MARSA from the popover actually declares it', async ({ page }) =
   // _marsaCandidates offers EVERY live flight on the Board, and the Board is
   // one crc-sync for the whole run — so the first candidate is some other spec
   // file's Strip, quite possibly in a Bay this page is not even showing.
-  await popover.locator('select').first().selectOption({ label: 'VIPER12' });
+  await popover.getByTestId('marsa-candidate').selectOption({ label: 'VIPER12' });
 
   await expectDoesSomething(page, popover.getByRole('button', { name: 'Declare' }), 'MARSA Declare');
 

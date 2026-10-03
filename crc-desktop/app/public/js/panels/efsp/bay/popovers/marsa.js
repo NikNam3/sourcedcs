@@ -121,6 +121,7 @@ function _marsaCandidates(strip) {
 function _marsaCandidateSelect(strip) {
   const select = document.createElement('select');
   select.className = 'efsp-coordinate-primitive-select';
+  select.dataset.testid = 'marsa-candidate'; // e2e hook: the popover has three selects of one class
   for (const s of _marsaCandidates(strip)) {
     const flightData = getEfspFlightData(s.flightDataId);
     const option = document.createElement('option');
@@ -147,6 +148,7 @@ function _buildMarsaDeclareForm(strip) {
 
   const startEvent = document.createElement('select');
   startEvent.className = 'efsp-coordinate-primitive-select';
+  startEvent.dataset.testid = 'marsa-start-event';
   for (const [value, label] of [
     ['TANKER_ACCEPTED', 'tanker accepted MARSA'],
     ['MTR_ENTRY', 'MTR entry'],
@@ -161,6 +163,7 @@ function _buildMarsaDeclareForm(strip) {
 
   const endCondition = document.createElement('select');
   endCondition.className = 'efsp-coordinate-primitive-select';
+  endCondition.dataset.testid = 'marsa-end-condition';
   for (const [value, label] of [
     ['VERTICALLY_POSITIONED', 'until vertically positioned'],
     ['MTR_COMPLETE', 'until MTR complete'],

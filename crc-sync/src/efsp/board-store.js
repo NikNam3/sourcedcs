@@ -34,6 +34,7 @@
 
 const { deepClone } = require('./board/strip-util');
 const { WALL_CLOCK } = require('../mission-clock');
+const { NLA_GUARD_MS } = require('./board/ops/invoke-nla');
 const { BoardState } = require('./board/board-state');
 const { assertRules } = require('./required-rules');
 const { BoardAudit } = require('./board/audit');
@@ -71,13 +72,15 @@ class BoardStore {
    * @param {import('./undo/undo-history').UndoHistory} [opts.undoHistory] the process's one undo history (createEfsp
    *   shares one across the Boards, docs/adr/0100); a Board built alone gets its own on the wall clock
    */
-  constructor(flightDataStore, rules, { clock = WALL_CLOCK, undoHistory = null } = {}) {
+  constructor(flightDataStore, rules, { clock = WALL_CLOCK, wallClock = WALL_CLOCK, nlaGuard = { ms: NLA_GUARD_MS }, undoHistory = null } = {}) {
     // The mission clock (docs/adr/0079). Every Strip timestamp, every NLA gate
     // and every Mutation-log `at` reads it. The one exception is the NLA
     // double-tap/Undo latch below, which is a UI debounce measured in real
     // seconds and never shown as a time of day — see board/ops/invoke-nla.js's _applyInvokeNla.
+    // It reads the injected wall clock (docs/adr/0096), and `nlaGuard.ms` is its length (a shared, mutable cell: the e2e harness sets it).
     assertRules(rules); // a rule the Board reads and the caller omitted is a start-up error, not a check that is silently off
     this._clock = clock;
+    this._wallNowFn = () => wallClock.now();
     this._flightDataStore = flightDataStore;
     this._rules = rules;
     // The kernel (docs/adr/0095): the Strip map, the seq/log ring, the epoch,
@@ -138,14 +141,14 @@ class BoardStore {
     this._nlaHistory = new Map();
     // Snapshot, restore, archive and when each DROPPED Strip dropped (board/persistence.js), which owns that Map.
     this._persistence = new BoardPersistence({
-      rules, state: this._state, replay: this._replay, clock, audit: this._audit,
+      rules, state: this._state, replay: this._replay, clock, wallClock, audit: this._audit,
       nlaHistory: () => this._nlaHistory,
     });
     // The Strip operations (board/strip-ops.js): the op table, NLA and retirement. The NLA history Map stays
     // here and BoardPersistence's droppedWallAt Map is its own (snapshot, restore and archiveStrip use them); both
     // are read late, because restore replaces them.
     this._stripOps = new StripOps({
-      rules, state: this._state, audit: this._audit, placement: this._placement, clock, flightDataStore,
+      rules, state: this._state, audit: this._audit, placement: this._placement, clock, wallClock, nlaGuard, flightDataStore,
       coordination: this._coordination, control: this._control, tofi: this._tofi, ops: OPS,
       touch,
       activeCmid: () => this._activeCmid,
@@ -158,7 +161,7 @@ class BoardStore {
 
   /** A Board built alone (tests, tools): its own history over this Board and its peers, and the flight data's writes if unobserved. */
   _ownUndoHistory(flightDataStore, rules) {
-    const history = new UndoHistory({ wallClock: WALL_CLOCK });
+    const history = new UndoHistory({ wallClock: { now: () => this._wallNowFn() } });
     history.attach(undoEnv({ boardFor: (f) => (f === rules.facilityId ? this : rules.peerBoard(f)), flightDataStore }));
     if (flightDataStore && flightDataStore.setWriteObserver && !flightDataStore.hasWriteObserver) {
       flightDataStore.setWriteObserver((id, paths) => history.observe({ kind: 'flightData', id, paths }));
@@ -273,7 +276,7 @@ class BoardStore {
       this._activeCmid = null;
     }
 
-    if (keyed) this._replay.set(null, cmid, replayRecord(result, Date.now()));
+    if (keyed) this._replay.set(null, cmid, replayRecord(result, this._wallNowFn()));
     return result;
   }
 

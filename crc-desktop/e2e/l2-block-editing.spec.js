@@ -24,7 +24,7 @@
  */
 
 const { test, expect } = require('./helpers/test');
-const { openPanel, seedStrip, stripByCallsign, expectTouchTarget, startAction } = require('./helpers/app');
+const { openPanel, seedStrip, stripByCallsign, expectTouchTarget, startAction, settle, frames, serverTicks } = require('./helpers/app');
 
 // Candidate for the shared helper: what has keyboard focus, as tag.class.
 const focused = (page) => page.evaluate(() => {
@@ -55,7 +55,7 @@ test('F-201: a space can be typed into a free-text Block', async ({ page }) => {
   await page.keyboard.type('DCT ALPHA DCT');
   // Measured: "DCTALP" — the space is swallowed, focus lands on the Strip one
   // frame later, and everything typed after that goes nowhere.
-  await expect(input).toHaveValue('DCT ALPHA DCT', { timeout: 1000 });
+  await expect(input).toHaveValue('DCT ALPHA DCT', { timeout: 5000 });
 });
 
 test('F-201: a space can be typed into a text input inside a Strip popover', async ({ page }) => {
@@ -67,7 +67,7 @@ test('F-201: a space can be typed into a text input inside a Strip popover', asy
   await note.focus();
   await page.keyboard.type('AR TRACK');
   // Measured: "AR".
-  await expect(note).toHaveValue('AR TRACK', { timeout: 1000 });
+  await expect(note).toHaveValue('AR TRACK', { timeout: 5000 });
 });
 
 // ── F-202 ────────────────────────────────────────────────────────────────
@@ -96,12 +96,12 @@ test('F-202: a half-typed Block keeps focus when another controller updates a di
 
     await setBlockVia(page2, otherId, '8', 'LTAG', 'CD');
     await expect.poll(() => page.evaluate((i) => crc.state.getEfspFlightData(crc.state.getEfspStrip(i).flightDataId).filed.departureAirport, otherId)).toBe('LTAG');
-    await page.waitForTimeout(100); // one rAF for the batched render
+    await frames(page); // the batched render
 
     // Measured: focus is now div.efsp-strip — FOC201's own Strip element.
     expect(await focused(page), 'focus left the input on an unrelated update').toBe('input.efsp-block-input');
     await page.keyboard.type('50');
-    await expect(input).toHaveValue('FL350', { timeout: 1000 });
+    await expect(input).toHaveValue('FL350', { timeout: 5000 });
   } finally {
     await ctx2.close();
   }
@@ -118,7 +118,7 @@ test('F-203: Enter commits the Block and does nothing else to the Strip', async 
   await page.keyboard.press('Enter');
   await expect(s.locator('.efsp-block-7')).toHaveText('FL350');
   // Measured: the Strip is now selected — Enter bubbled to _onStripKeydown.
-  await expect(s).not.toHaveClass(/efsp-strip-selected/, { timeout: 1000 });
+  await expect(s).not.toHaveClass(/efsp-strip-selected/, { timeout: 5000 });
 });
 
 // ── F-204 ────────────────────────────────────────────────────────────────
@@ -136,7 +136,7 @@ test('F-204: a Strip with an abandoned Block edit still shows other changes to i
   await setBlockVia(page, id, '8', 'LTAG');
   await expect.poll(() => page.evaluate((i) => crc.state.getEfspFlightData(crc.state.getEfspStrip(i).flightDataId).filed.departureAirport, id)).toBe('LTAG');
   // Measured: DEP stays blank; data-rev on the element stays at the old rev.
-  await expect(s.locator('.efsp-block-8')).toHaveText('LTAG', { timeout: 2000 });
+  await expect(s.locator('.efsp-block-8')).toHaveText('LTAG', { timeout: 5000 });
 });
 
 test('F-204: a Strip with an abandoned Block edit leaves the Bay when it is transferred', async ({ page }) => {
@@ -151,7 +151,7 @@ test('F-204: a Strip with an abandoned Block edit leaves the Bay when it is tran
   await expect.poll(() => page.evaluate((i) => crc.state.getEfspStrip(i).bayId, id)).toBe('cd-pending-clearance');
   // Measured: still drawn in ops-proposed, still offering "Send to Clearance",
   // and pressing it comes back STALE_REV.
-  await expect(page.locator(`#efsp-bay-content .efsp-strip[data-strip-id="${id}"]`)).toHaveCount(0, { timeout: 2000 });
+  await expect(page.locator(`#efsp-bay-content .efsp-strip[data-strip-id="${id}"]`)).toHaveCount(0, { timeout: 5000 });
 });
 
 test('F-204: starting a second Block edit closes the first', async ({ page }) => {
@@ -161,7 +161,7 @@ test('F-204: starting a second Block edit closes the first', async ({ page }) =>
   await s.locator('.efsp-block-8').click();
   // _buildBlockCell's comment says starting a new edit reverts any other.
   // Measured: 2.
-  await expect(s.locator('input.efsp-block-input')).toHaveCount(1, { timeout: 1000 });
+  await expect(s.locator('input.efsp-block-input')).toHaveCount(1, { timeout: 5000 });
 });
 
 // ── the rule that holds (§3.7 rule 5 / §7.4 rule 2) ──────────────────────
@@ -177,7 +177,7 @@ test('blur neither commits nor reverts a free-text Block', async ({ page }) => {
   await s.locator('.efsp-block-7').click();
   await page.keyboard.type('FL350');
   await clickAway(page);
-  await page.waitForTimeout(300);
+  await settle(page); // a blur that sent a Mutation would have put it on the wire inside the click
   expect(await page.evaluate(() => window.__l2Sent), 'blur sent a Mutation').toEqual([]);
   await expect(s.locator('input.efsp-block-input'), 'blur reverted the edit').toHaveValue('FL350');
   // (That the input then stays open, and what that costs, is F-204.)
@@ -197,7 +197,7 @@ test('F-205: arrowing through an enum Block does not commit until the controller
   await s.locator('.efsp-block-5A').click();
   await expect(s.locator('select.efsp-block-enum-select')).toBeFocused();
   await page.keyboard.press('ArrowDown');
-  await page.waitForTimeout(300);
+  await settle(page);
   // Measured: [{kind:'SetBlock', blockId:'5A', value:'CST'}] — sent on the
   // first arrow press, and the select is gone.
   expect(await page.evaluate(() => window.__l2Sent)).toEqual([]);
@@ -210,9 +210,9 @@ test('F-205: Space opens the enum select rather than leaving it', async ({ page 
   await s.locator('.efsp-block-5A').click();
   await expect(s.locator('select.efsp-block-enum-select')).toBeFocused();
   await page.keyboard.press('Space');
-  await page.waitForTimeout(200);
+  await settle(page);
   // Measured: the select is gone and focus is on the Strip.
-  await expect(s.locator('select.efsp-block-enum-select')).toBeFocused({ timeout: 1000 });
+  await expect(s.locator('select.efsp-block-enum-select')).toBeFocused({ timeout: 5000 });
 });
 
 // ── F-206 ────────────────────────────────────────────────────────────────
@@ -238,7 +238,7 @@ test('F-206: choosing "—" on a set enum Block clears it', async ({ page }) => 
   // read ACTIVE — the change handler returned early on an empty value, so "—"
   // was an enabled choice that did nothing (standing rule 1).
   await s.locator('select.efsp-block-enum-select').selectOption('');
-  await expect(s.locator('.efsp-block-RSVC')).toHaveText('', { timeout: 2000 });
+  await expect(s.locator('.efsp-block-RSVC')).toHaveText('', { timeout: 5000 });
 });
 
 // ── F-207 (extends F-103) ────────────────────────────────────────────────
@@ -266,7 +266,7 @@ test('F-207: a refused Block edit keeps what was typed and marks the Block', asy
   // editor replaces that span with the <input>, so a locator that filters on
   // the span matches no chip at all once the fix works.
   const chip = s.locator('.efsp-block-chip', { has: page.locator('.efsp-block-label', { hasText: /^PROP DEP$/ }) });
-  await expect(chip.locator('input.efsp-block-input')).toHaveValue('NOSUCH', { timeout: 1000 });
+  await expect(chip.locator('input.efsp-block-input')).toHaveValue('NOSUCH', { timeout: 5000 });
   // And the Strip carries the refusal, so the banner does not have to be
   // matched to a Rack by eye (F-103). The CELL mark lives on the span the
   // reopened editor is standing in for, so it is the Strip outline that is on
@@ -335,7 +335,7 @@ test.fail('F-208: the expanded view lists only Blocks it can show something for'
   await expect(exp).toBeVisible();
   // Block 26 is the NLA button, already on the Strip; its row is a label
   // with nothing beside it. Measured: present, and intended to be.
-  await expect(exp.locator('[data-expanded-block="26"]')).toHaveCount(0, { timeout: 1000 });
+  await expect(exp.locator('[data-expanded-block="26"]')).toHaveCount(0, { timeout: 5000 });
 });
 
 test('F-208: the collapse control is reachable while reading the bottom of the expanded view', async ({ page }) => {

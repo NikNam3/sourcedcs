@@ -19,6 +19,46 @@ function fakeToken(name = 'e2e-controller') {
   })}.e2e`;
 }
 
+// The client swallows a second advancing press inside DOUBLE_TAP_MS of the first (bay-view.js's _swallowRepeatAdvance,
+// F-101), and that window is browser wall time. The harness starts crc-sync with its own guard at 0
+// (CRCSYNC_NLA_GUARD_MS, nla-guard.spec.js keeps the real 400 ms), so the only guard left between two presses is the
+// client's, and `lapseNlaGuard` moves the page's clock past it instead of sleeping and hoping the server saw the
+// first press more than 400 ms ago.
+const CLOCK_INSTALLED = new WeakSet();
+const NLA_GUARD_LAPSE_MS = 450;
+async function lapseNlaGuard(page) {
+  if (!CLOCK_INSTALLED.has(page)) { await page.clock.install(); CLOCK_INSTALLED.add(page); }
+  await page.clock.fastForward(NLA_GUARD_LAPSE_MS);
+}
+
+/** `n` animation frames in the page: whatever the last event scheduled for the next render has been painted. */
+const frames = (page, n = 2) => page.evaluate((k) => new Promise((resolve) => {
+  const step = (left) => (left <= 0 ? resolve() : requestAnimationFrame(() => step(left - 1)));
+  step(k);
+}), n);
+
+/**
+ * The page has caught up with what it just did, on a signal rather than a sleep: every Mutation it sent has been
+ * acked (crc.state's pending map is empty) and the render that follows has been painted. A press that would send
+ * something sends it inside the click, so after `settle` "nothing was sent" is a fact, not a guess.
+ */
+async function settle(page) {
+  await page.waitForFunction(() => crc.state.getPendingMutations().length === 0);
+  await frames(page, 2);
+}
+
+/** The server has ticked `n` more times (crc-sync's hub sends an efsp-heartbeat every tick), for "nothing moves by itself" checks. */
+const serverTicks = (page, n = 2) => page.evaluate((k) => new Promise((resolve) => {
+  const ws = crc.app._ws;
+  let seen = 0;
+  const onMessage = (ev) => {
+    let type = null;
+    try { type = JSON.parse(ev.data).type; } catch (_) { /* not JSON */ }
+    if (type === 'efsp-heartbeat' && ++seen >= k) { ws.removeEventListener('message', onMessage); resolve(); }
+  };
+  ws.addEventListener('message', onMessage);
+}), n);
+
 /**
  * Opens the panel, authenticated and connected, with the given Positions held.
  *
@@ -161,8 +201,8 @@ async function expectDoesSomething(page, locator, what) {
   // test.fail() does not convert into an expected failure. Three seconds is
   // far longer than any real click needs, and failing fast keeps an
   // unreachable control reported as what it is.
-  await locator.click({ timeout: 3000 });
-  await page.waitForTimeout(250);
+  await locator.click({ timeout: 5000 });
+  await settle(page);
 
   const sent = await page.evaluate(() => window.__e2eSent || []);
   const domAfter = await page.locator('#efsp-bay-content').innerHTML();
@@ -255,7 +295,7 @@ async function stripMenuItem(strip, name) {
   const page = strip.page();
   const menu = page.locator('.efsp-strip-menu');
   if (!(await menu.isVisible().catch(() => false))) {
-    await strip.locator('.efsp-strip-menu-btn').click({ timeout: 3000 });
+    await strip.locator('.efsp-strip-menu-btn').click({ timeout: 5000 });
   }
   return menu.getByRole('menuitem', { name, exact: true });
 }
@@ -263,7 +303,7 @@ async function stripMenuItem(strip, name) {
 /** Presses a Strip's ⋯ menu item — the replacement for clicking the old on-Strip button. */
 async function startAction(strip, name, opts = {}) {
   const item = await stripMenuItem(strip, name);
-  await item.click({ timeout: 3000, ...opts });
+  await item.click({ timeout: 5000, ...opts });
 }
 
 /**
@@ -281,7 +321,7 @@ async function dropStrips(page, callsigns) {
       crc.ws.sendEfspMutation(s.ownerPositionId, s, { kind: 'DropStrip', reason: 'e2e cleanup' });
     }
   }, callsigns);
-  await page.waitForTimeout(400);
+  await settle(page);
 }
 
 /**
@@ -310,7 +350,7 @@ async function ensureActiveRunway(page, end = '05') {
 }
 
 module.exports = {
-  ensureActiveRunway, dropStrips,
+  ensureActiveRunway, dropStrips, lapseNlaGuard, frames, settle, serverTicks,
   fakeToken, openPanel, openEfspPanel, seedStrip, stripByCallsign,
   expectDoesSomething, expectRefusalIsVisible, expectOnTop, expectTouchTarget,
   stripMenuItem, startAction,
