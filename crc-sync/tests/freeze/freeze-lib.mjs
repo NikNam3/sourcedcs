@@ -27,7 +27,8 @@ export const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const GOLDEN_DIR = path.join(HERE, 'golden');
 export const UPDATE = process.env.UPDATE_GOLDEN === '1';
 
-const UUID_G = /00000000-0000-4000-8000-([0-9a-f]{12})/g;
+// Every uuid in a recording is deterministic (the freeze counter's 00000000-0000-4000-8000-<n>, or the hub host's seeded ones).
+const UUID_G = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g;
 const TMP_RE = /\/(?:tmp|var\/folders)[^"\s']*?(efsp|freeze)[-\w]*/g;
 
 /** Cross-cutting volatile keys: dropped from every normalised value (canonical), so adding one is one line here. */
@@ -37,7 +38,7 @@ export const VOLATILE_RE = /Epoch(s|ByFacility)?$/;
 export const isVolatileKey = (k) => VOLATILE_KEYS.has(k) || VOLATILE_RE.test(k);
 
 /**
- * The deterministic uuids (00000000-0000-4000-8000-<n>) in `text`, renumbered "#1, #2, ..." by first appearance in
+ * The uuids in `text`, renumbered "#1, #2, ..." by first appearance in
  * `text`. Applied to a whole golden when it is written or compared, and to each record before it is hashed.
  */
 export function renumberIds(text) {
@@ -45,13 +46,21 @@ export function renumberIds(text) {
   return text.replace(UUID_G, (m) => { if (!seen.has(m)) seen.set(m, seen.size + 1); return `#${seen.get(m)}`; });
 }
 
+const HAS_UUID = new RegExp(UUID_G.source);
+/** Sorted keys, except that keys holding a uuid keep their insertion order after the others (a raw uuid's value is not stable, its place is). */
+const sortKeys = (keys) => keys.sort((a, b) => {
+  const ua = HAS_UUID.test(a), ub = HAS_UUID.test(b);
+  if (ua || ub) return ua && ub ? 0 : ua ? 1 : -1;
+  return a < b ? -1 : a > b ? 1 : 0;
+});
+
 /** Recursively sorted keys; volatile keys dropped (unless keepVolatile); temp paths scrubbed to "<tmp>". Ids stay as recorded. */
 export function canonical(v, keepVolatile = false) {
   if (typeof v === 'string') return v.replace(TMP_RE, '<tmp>');
   if (Array.isArray(v)) return v.map(e => canonical(e, keepVolatile));
   if (v && typeof v === 'object') {
     const o = {};
-    for (const k of Object.keys(v).sort()) {
+    for (const k of sortKeys(Object.keys(v))) {
       if (!keepVolatile && isVolatileKey(k)) continue;
       o[canonical(k)] = canonical(v[k], keepVolatile);
     }
@@ -147,7 +156,7 @@ function summarizeInner(v, depth) {
   if (Array.isArray(v)) return v.map(e => summarize(e, depth + 1));
   if (v && typeof v === 'object') {
     const o = {};
-    for (const k of Object.keys(v).sort()) { if (!isVolatileKey(k)) o[canonical(k)] = summarize(v[k], depth + 1); }
+    for (const k of sortKeys(Object.keys(v))) { if (!isVolatileKey(k)) o[canonical(k)] = summarize(v[k], depth + 1); }
     return o;
   }
   return canonical(v);
