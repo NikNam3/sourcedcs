@@ -502,7 +502,7 @@ export function applyEfspMutationAck(msg) {
   // seq) is what moves our position, so a delta lost after its ack still shows
   // up as a gap at the next heartbeat (docs/adr/0081). A refusal or a replay has
   // no delta at all and changes nothing.
-  return { wasPending: !!pending, pending, ok: !!msg.ok, reason: msg.reason, detail: msg.detail, warning: msg.warning };
+  return { wasPending: !!pending, pending, ok: !!msg.ok, reason: msg.reason, detail: msg.detail, warnings: msg.warnings || [] };
 }
 
 /** Registers a just-sent efsp-mutation message as pending its ack. */

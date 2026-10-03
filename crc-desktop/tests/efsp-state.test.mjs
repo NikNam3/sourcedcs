@@ -105,8 +105,8 @@ test('an ack for a clientMutationId that was never registered as pending still a
 });
 
 test('a warning on the ack is surfaced through the return value', () => {
-  const result = applyEfspMutationAck({ clientMutationId: 'm1', ok: true, warning: 'DUPLICATE_IGNORED_WARNING', strip: strip() });
-  assert.equal(result.warning, 'DUPLICATE_IGNORED_WARNING');
+  const result = applyEfspMutationAck({ clientMutationId: 'm1', ok: true, warnings: [{ code: 'DUPLICATE_IGNORED_WARNING' }], strip: strip() });
+  assert.deepEqual(result.warnings, [{ code: 'DUPLICATE_IGNORED_WARNING' }]);
 });
 
 // ── Pending mutations / rebase-on-reject (§5.6.3) ───────────────────────────
