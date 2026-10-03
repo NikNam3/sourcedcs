@@ -15,7 +15,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
-import { canonical, summarize, summarizeCollection, summarizeFinalState, digest } from './freeze-lib.mjs';
+import { canonical, summarize, summarizeCollection, summarizeFinalState, digest, hashOf } from './freeze-lib.mjs';
 
 const require = createRequire(import.meta.url);
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -49,10 +49,14 @@ export class Recorder {
     const key = `${st.ino}:${st.mtimeNs}:${st.size}`;
     if (!checkpoint && this._snapKey === key) return this._snapOut;
     const raw = fs.readFileSync(this.boardPath, 'utf8');
-    const out = { hash: digest(raw.replace(/"persistedWallAt":\d+/, '"persistedWallAt":0')), bytes: raw.length };
+    // The hash covers the PROJECTED body (Strips and flight data by projection, volatile keys dropped), so a new
+    // field in the persisted records moves nothing; no byte count either, it moves with every added field.
+    const body = JSON.parse(raw);
+    body.persistedWallAt = 0;
+    const out = { hash: hashOf(canonical(body)) };
     this._snapKey = key; this._snapOut = out;
     if (checkpoint) {
-      const body = JSON.parse(raw);
+      body.persistedWallAt = JSON.parse(raw).persistedWallAt;
       return { ...out, keys: Object.keys(body), persistedWallAt: body.persistedWallAt - this.startNow, state: summarizeFinalState(canonical(body)) };
     }
     return out;
@@ -69,7 +73,7 @@ export class Recorder {
       if (payload.startsWith('{"version":1,"type":"efsp-heartbeat"')) continue;
       const msg = JSON.parse(payload);
       let m;
-      if (!this.full) m = `${msg.type}#${msg.boardSeq === undefined ? '' : msg.boardSeq} h=${digest(canonical(msg))}`;
+      if (!this.full) m = `${msg.type}#${msg.boardSeq === undefined ? '' : msg.boardSeq} h=${hashOf(canonical(msg))}`;
       else if (msg.type === 'efsp-snapshot' || (msg.type === 'efsp-resync-reply' && msg.answer === 'snapshot')) m = this._snapshotView(msg);
       else m = summarize(msg);
       const prev = groups[groups.length - 1];
@@ -85,7 +89,7 @@ export class Recorder {
     for (const k of Object.keys(msg).sort()) {
       const v = msg[k];
       if (Array.isArray(v)) out[k] = summarizeCollection(v);
-      else if (v && typeof v === 'object') out[k] = { h: digest(canonical(v)), keys: Object.keys(v).sort().slice(0, 12) };
+      else if (v && typeof v === 'object') out[k] = { h: hashOf(canonical(v)), keys: Object.keys(v).sort().slice(0, 12) };
       else out[k] = canonical(v);
     }
     return out;
@@ -99,7 +103,7 @@ export class Recorder {
     step.frames = this._frames(reply.out || []);
     // `reply.uncarried` (the soak host's own accounting of deltas it could not attribute) is deliberately not
     // recorded: it is a host artefact, not wire behaviour (plan §3.2).
-    if (log.length) step.log = this.full ? summarize(log) : log.map(e => `${e.op || '?'} ${e.stripId || ''} h=${digest(canonical(e))}`);
+    if (log.length) step.log = this.full ? summarize(log) : log.map(e => `${e.op || '?'} ${e.stripId || ''} h=${hashOf(canonical(e))}`);
     step.snap = this._snap(checkpoint);
     this.steps.push(step);
     this.last = { reply, frames: reply.out || [] };

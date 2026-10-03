@@ -2,10 +2,22 @@
 //
 // A "golden" file is JSON with one line per step/cell so a git diff points at the step that
 // moved. Heavy records (a whole Strip, a whole flight data) are not stored verbatim: they are replaced
-// by a one-line summary carrying a content hash of the FULL normalised record, so any field
-// change anywhere inside still changes the golden, and the readable summary says which Strip.
-// To see the full before/after of a changed record, dump both runs (FREEZE_DUMP=dir, see
-// docs/wip/FREEZE.md) and diff the dumps.
+// by a one-line summary carrying a content hash of the record's PROJECTION (see PROJECTION below), and the
+// readable summary says which Strip. To see the full before/after of a changed record, dump both runs
+// (FREEZE_DUMP=dir, see docs/wip/FREEZE.md) and diff the dumps (the dumps hold every field, ext included).
+//
+// Grain (docs/wip/FREEZE-GRAIN.md): a golden changes only when behaviour that file records changes.
+//   * ids: the recordings carry the deterministic uuids as they are; a golden is renumbered "#1, #2, ..." by FIRST
+//     APPEARANCE IN THAT FILE when it is written or compared (renumberIds), so an extra randomUUID() elsewhere
+//     renumbers nothing; a hash renumbers inside its own record only.
+//   * records: a hash covers PROJECTION (identity, placement and the behavioural groups, with empty values
+//     pruned), not the whole record. Every other field is "ext": still in the FREEZE_DUMP dumps, in no hash.
+//     A lane that wants a field frozen PROMOTES it on purpose: add it to PROJECTION.<kind>.core (scalars and
+//     values that are always meaningful) or .sparse (objects, hashed with null/false/""/[]/{} dropped), then
+//     `npm run freeze:update` in its own commit.
+//   * VOLATILE_KEYS: cross-cutting counters (epochs, boardSeq, undoable) the normaliser drops everywhere; a new
+//     epoch key is covered by VOLATILE_RE, any other cross-cutting key is one line in VOLATILE_KEYS.
+//   * big tables are split per op into a directory of goldens (checkGoldenSet).
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -15,29 +27,100 @@ export const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const GOLDEN_DIR = path.join(HERE, 'golden');
 export const UPDATE = process.env.UPDATE_GOLDEN === '1';
 
-const UUID_RE = /00000000-0000-4000-8000-([0-9a-f]{12})/g;
+const UUID_G = /00000000-0000-4000-8000-([0-9a-f]{12})/g;
 const TMP_RE = /\/(?:tmp|var\/folders)[^"\s']*?(efsp|freeze)[-\w]*/g;
 
-/** Recursively sorted keys; strings scrubbed (deterministic uuids -> "#n", temp paths -> "<tmp>"). */
-export function canonical(v) {
-  if (typeof v === 'string') {
-    return v.replace(UUID_RE, (_, h) => `#${parseInt(h, 16)}`).replace(TMP_RE, '<tmp>');
-  }
-  if (Array.isArray(v)) return v.map(canonical);
+/** Cross-cutting volatile keys: dropped from every normalised value (canonical), so adding one is one line here. */
+export const VOLATILE_KEYS = new Set(['boardSeq', 'boardSeqByFacility', 'storeSeqs', 'undoable']);
+/** Every `...Epoch`, `...Epochs`, `...EpochByFacility` key is volatile too (boardEpoch, marsaEpoch, storeEpochs, a future one). */
+export const VOLATILE_RE = /Epoch(s|ByFacility)?$/;
+export const isVolatileKey = (k) => VOLATILE_KEYS.has(k) || VOLATILE_RE.test(k);
+
+/**
+ * The deterministic uuids (00000000-0000-4000-8000-<n>) in `text`, renumbered "#1, #2, ..." by first appearance in
+ * `text`. Applied to a whole golden when it is written or compared, and to each record before it is hashed.
+ */
+export function renumberIds(text) {
+  const seen = new Map();
+  return text.replace(UUID_G, (m) => { if (!seen.has(m)) seen.set(m, seen.size + 1); return `#${seen.get(m)}`; });
+}
+
+/** Recursively sorted keys; volatile keys dropped (unless keepVolatile); temp paths scrubbed to "<tmp>". Ids stay as recorded. */
+export function canonical(v, keepVolatile = false) {
+  if (typeof v === 'string') return v.replace(TMP_RE, '<tmp>');
+  if (Array.isArray(v)) return v.map(e => canonical(e, keepVolatile));
   if (v && typeof v === 'object') {
     const o = {};
-    for (const k of Object.keys(v).sort()) o[canonical(k)] = canonical(v[k]);
+    for (const k of Object.keys(v).sort()) {
+      if (!keepVolatile && isVolatileKey(k)) continue;
+      o[canonical(k)] = canonical(v[k], keepVolatile);
+    }
     return o;
   }
   return v;
 }
 
+/** sha1 prefix of the JSON of `v` (a string is hashed as it is), its ids renumbered inside it. */
 export function digest(v) {
-  return crypto.createHash('sha1').update(JSON.stringify(v)).digest('hex').slice(0, 10);
+  const s = typeof v === 'string' ? v : JSON.stringify(v);
+  return crypto.createHash('sha1').update(renumberIds(s)).digest('hex').slice(0, 10);
 }
 
-const isStrip = (v) => v && typeof v === 'object' && typeof v.stripId === 'string' && 'rev' in v && 'state' in v && 'stripType' in v;
-const isFlightData = (v) => v && typeof v === 'object' && typeof v.flightDataId === 'string' && v.identity && v.filed;
+// ---- projection: what a hash covers ----------------------------------------------------------------------
+
+export const PROJECTION = {
+  strip: {
+    core: ['stripId', 'stripType', 'state', 'ownerPositionId', 'bayId', 'rackId', 'orderKey', 'rev', 'flightDataId'],
+    sparse: ['flags', 'coordination', 'airspaceEntry', 'tofiCoordination', 'annotations', 'previousLeg'],
+  },
+  flightData: {
+    core: ['flightDataId', 'rev'],
+    sparse: ['identity', 'filed', 'assigned', 'clearance', 'airspace', 'comms'],
+  },
+};
+
+const isEmpty = (v) => v === null || v === undefined || v === false || v === '' || (Array.isArray(v) && !v.length) || (v && typeof v === 'object' && !Array.isArray(v) && !Object.keys(v).length);
+/** Objects lose their empty members (null, false, "", [], {}), recursively; array elements stay in place. */
+export function pruneEmpty(v) {
+  if (Array.isArray(v)) return v.map(pruneEmpty);
+  if (v && typeof v === 'object') {
+    const o = {};
+    for (const k of Object.keys(v)) { const c = pruneEmpty(v[k]); if (!isEmpty(c)) o[k] = c; }
+    return o;
+  }
+  return v;
+}
+
+function projectRecord(rec, spec) {
+  const o = {};
+  for (const k of spec.core) o[k] = rec[k] === undefined ? null : rec[k];
+  for (const k of spec.sparse) { const c = pruneEmpty(rec[k]); if (!isEmpty(c)) o[k] = c; }
+  return o;
+}
+
+/** The fields of `rec` no hash covers (ext): what a lane promotes on purpose. */
+export function extKeys(rec, kind) {
+  const spec = PROJECTION[kind];
+  return Object.keys(rec).filter(k => !spec.core.includes(k) && !spec.sparse.includes(k) && !isVolatileKey(k)).sort();
+}
+
+/** What a digest of `v` is taken over: every Strip and flight data inside it projected, everything else with empties pruned. */
+export function project(v) {
+  if (isStrip(v)) return projectRecord(v, PROJECTION.strip);
+  if (isFlightData(v)) return projectRecord(v, PROJECTION.flightData);
+  if (Array.isArray(v)) return v.map(project);
+  if (v && typeof v === 'object') {
+    const o = {};
+    for (const k of Object.keys(v)) { const c = project(v[k]); if (!isEmpty(c)) o[k] = c; }
+    return o;
+  }
+  return v;
+}
+/** digest(project(v)): the hash a golden line carries. */
+export const hashOf = (v) => digest(project(v));
+
+export const isStrip = (v) => v && typeof v === 'object' && typeof v.stripId === 'string' && 'rev' in v && 'state' in v && 'stripType' in v;
+export const isFlightData = (v) => v && typeof v === 'object' && typeof v.flightDataId === 'string' && v.identity && v.filed;
 
 /** Strip -> "S#13 r4 DEPARTURE/HANDED_OFF @APP ap-departures/main:V h=ab12cd34ef". */
 export function summarize(v, depth = 0) {
@@ -55,16 +138,16 @@ const BIG = 700;
 function summarizeInner(v, depth) {
   if (isStrip(v)) {
     const c = canonical(v);
-    return `S ${c.stripId} r${c.rev} ${c.stripType}/${c.state} @${c.ownerPositionId} ${c.bayId}/${c.rackId}:${c.orderKey} h=${digest(c)}`;
+    return `S ${c.stripId} r${c.rev} ${c.stripType}/${c.state} @${c.ownerPositionId} ${c.bayId}/${c.rackId}:${c.orderKey} h=${hashOf(c)}`;
   }
   if (isFlightData(v)) {
     const c = canonical(v);
-    return `F ${c.flightDataId} r${c.rev} ${c.identity.callsign} sq=${c.identity.beaconAssigned} h=${digest(c)}`;
+    return `F ${c.flightDataId} r${c.rev} ${c.identity.callsign} sq=${c.identity.beaconAssigned} h=${hashOf(c)}`;
   }
   if (Array.isArray(v)) return v.map(e => summarize(e, depth + 1));
   if (v && typeof v === 'object') {
     const o = {};
-    for (const k of Object.keys(v).sort()) o[canonical(k)] = summarize(v[k], depth + 1);
+    for (const k of Object.keys(v).sort()) { if (!isVolatileKey(k)) o[canonical(k)] = summarize(v[k], depth + 1); }
     return o;
   }
   return canonical(v);
@@ -74,14 +157,14 @@ const ROWS_MAX = 12; // beyond this a collection is its count + hash (a changed 
 
 /** A snapshot-shaped value (many records): count + digest of the whole + per-record summaries. */
 export function summarizeCollection(v) {
-  if (Array.isArray(v)) return { n: v.length, h: digest(canonical(v)), ...(v.length <= ROWS_MAX ? { rows: v.map(summarizeRow) } : {}) };
-  return { h: digest(canonical(v)), v: summarize(v) };
+  if (Array.isArray(v)) return { n: v.length, h: hashOf(canonical(v)), ...(v.length <= ROWS_MAX ? { rows: v.map(summarizeRow) } : {}) };
+  return { h: hashOf(canonical(v)), v: summarize(v) };
 }
 function summarizeRow(r) {
   if (isStrip(r) || isFlightData(r)) return summarize(r);
   const c = canonical(r);
   const id = c && (c.airspaceId || c.marsaId || c.flightDataId || c.hullId || c.id || c.runwayId || c.facilityId);
-  return `${id !== undefined ? id : '?'} h=${digest(c)}`;
+  return `${id !== undefined ? id : '?'} h=${hashOf(c)}`;
 }
 
 /** The compact final-state record for one createEfsp() instance. */
@@ -94,7 +177,7 @@ export function summarizeFinalState(fs_) {
   for (const k of ['flightData', 'airspaces', 'correlations', 'marsa', 'runwayStatuses', 'carriers']) {
     if (k === 'flightData' && fs_.flightData && !Array.isArray(fs_.flightData)) {
       const { flightDataList, ...rest } = fs_.flightData;
-      out.flightData = { ...(Array.isArray(flightDataList) ? summarizeCollection(flightDataList) : { h: digest(canonical(flightDataList)) }), rest: summarize(rest) };
+      out.flightData = { ...(Array.isArray(flightDataList) ? summarizeCollection(flightDataList) : { h: hashOf(canonical(flightDataList)) }), rest: summarize(rest) };
     } else out[k] = fs_[k] === undefined ? null : summarizeCollection(fs_[k]);
   }
   if (fs_.error) out.error = fs_.error;
@@ -152,9 +235,9 @@ const short = (v) => { const s = v === undefined ? 'undefined' : JSON.stringify(
  */
 export function checkGolden(assert, name, actual, unitsOf) {
   const file = goldenPath(name);
-  const text = serializeGolden(actual);
+  const text = renumberIds(serializeGolden(actual));
   if (UPDATE) {
-    fs.mkdirSync(GOLDEN_DIR, { recursive: true });
+    fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(file, text);
     return;
   }
@@ -176,4 +259,27 @@ export function checkGolden(assert, name, actual, unitsOf) {
     }
   }
   assert.fail(`FREEZE: ${name} no longer matches its golden (${moved} of ${n} units differ; golden diffs must be empty unless a supervisor approved the change, docs/wip/FREEZE.md).\n` + msgs.join('\n'));
+}
+
+/**
+ * A table split per op: `docs` is { <op name>: doc }, each golden/<dir>/<op>.json, so a change to one op touches one file.
+ * The set of files is itself checked (a missing or stale file fails); every file is compared and all mismatches are
+ * reported together. With UPDATE_GOLDEN=1 the directory is rewritten whole.
+ */
+export function checkGoldenSet(assert, dir, docs, unitsOf) {
+  const safe = (n) => n.replace(/[^\w.-]/g, '_');
+  const names = Object.keys(docs).map(safe).sort();
+  if (new Set(names).size !== names.length) assert.fail(`${dir}: two op names map to one file name`);
+  const folder = path.join(GOLDEN_DIR, dir);
+  if (UPDATE) fs.rmSync(folder, { recursive: true, force: true });
+  else {
+    const have = fs.existsSync(folder) ? fs.readdirSync(folder).filter(f => f.endsWith('.json')).map(f => f.slice(0, -5)).sort() : [];
+    const missing = names.filter(n => !have.includes(n)), stale = have.filter(n => !names.includes(n));
+    if (missing.length || stale.length) assert.fail(`FREEZE: ${dir}/ file set changed: missing goldens [${missing}], stale goldens [${stale}] (docs/wip/FREEZE-GRAIN.md)`);
+  }
+  const failures = [];
+  for (const [op, doc] of Object.entries(docs)) {
+    try { checkGolden(assert, `${dir}/${safe(op)}`, doc, unitsOf); } catch (e) { failures.push(e.message); }
+  }
+  if (failures.length) assert.fail(`FREEZE: ${failures.length} of ${names.length} goldens in ${dir}/ differ.\n` + failures.slice(0, 3).join('\n') + (failures.length > 3 ? `\n... ${failures.length - 3} more` : ''));
 }
