@@ -4,7 +4,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
-// A closed session keeps its sign-ons for a grace (config/session.json signOnGraceMs). docs/wip/DESK-SIGNON.md.
+// A closed session keeps its sign-ons for a grace (config/sign-on-grace.json signOnGraceMs). docs/wip/DESK-SIGNON.md.
 const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'signon-grace-'));
 process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH = path.join(tmpDir, 'facility.json');
 process.env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH = path.join(tmpDir, 'board.json');

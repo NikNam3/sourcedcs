@@ -3,7 +3,7 @@ import { PANEL_TITLES, isDockPanelOpen, isPanelPinned, setPanelPinned, toggleDoc
 import { hideLosProfile, showLosProfile } from './los-panel.js';
 import { getAllEfspPositions } from './efsp/efsp-state.js';
 import { formatFrequencies } from './efsp/combination-rules.js';
-import { getActingPositions, sendEfspSetPositions } from './efsp/efsp-ws.js';
+import { getSignedOnPositions, isObserverAt, sendEfspSetPositions } from './efsp/efsp-ws.js';
 import { coverageSignedOnPositions, getActiveRadars } from '../app.js';
 
 // ── Coverage panel: the radars this controller is looking through ─────────
@@ -234,7 +234,7 @@ export function renderPositionControls() {
 
   for (const facilityId of _efspFacilityIds()) {
     const positionIds = _efspPositionsFor(facilityId);
-    const signedOn = new Set(getActingPositions(facilityId));
+    const signedOn = new Set(getSignedOnPositions(facilityId));
 
     const $facilityHeader = document.createElement('div');
     $facilityHeader.className = 'panel-ctrl-facility-header';
@@ -248,6 +248,7 @@ export function renderPositionControls() {
       const $label = document.createElement('span');
       $label.className = 'panel-ctrl-label';
       $label.textContent = positionId;
+      if (signedOn.has(positionId) && isObserverAt(facilityId, positionId)) $label.title = 'Observer: someone else is Primary here';
       // crc-sync docs/adr/0105: the Position's frequencies where it is named.
       const entry = getAllEfspPositions().find(p => p.positionId === positionId && (!p.facilityId || p.facilityId === facilityId));
       const freqText = entry ? formatFrequencies(entry.frequencies) : '';

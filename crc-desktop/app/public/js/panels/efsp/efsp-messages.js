@@ -11,7 +11,7 @@ import { captureEfspPlacement } from './efsp-arrivals.js';
 import { applyEfspSfaDelta } from './sfa-state.js';
 import {
   efspResyncReplyAsMessage, noteEfspBoardMessageForSync, noteEfspHeartbeatForSync, noteEfspResyncAnswered,
-  noteEfspSnapshotLanded, noteEfspStoreAnswerLanded, replayPendingEfspMutations
+  noteEfspPositionsAck, noteEfspSnapshotLanded, noteEfspStoreAnswerLanded, replayPendingEfspMutations
 } from './efsp-ws.js';
 import { onEfspMetricsReportAck } from './efsp-metrics-client.js';
 import { refreshCorrelatedHighlight } from './correlation-highlight.js';
@@ -135,6 +135,7 @@ registerEfspMessage('efsp-mutation-ack', (msg) => {
 });
 
 registerEfspMessage('efsp-positions-ack', (msg) => {
+  noteEfspPositionsAck(msg); // the server's signedOn is the truth (adopted)
   console.warn('[efsp] efsp-positions-ack received, signedOn =', msg.signedOn, 'warnings =', msg.warnings);
   renderPositionControls();
   renderPositionWarnings(msg.warnings);

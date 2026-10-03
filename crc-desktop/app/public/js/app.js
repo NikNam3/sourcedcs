@@ -1,5 +1,6 @@
 'use strict';
 import { _setSyncSocket, getSyncFeedUrl } from './sync.js';
+import { noteCoveragePositions, redeclareEfspPositions } from './panels/efsp/efsp-ws.js';
 import { UPDATE_REQUIRED_CLOSE, hideUpdateRequired, isUpdateRequiredShown, showUpdateRequired } from './update-required.js';
 import { kinematics } from './geo.js';
 import { refreshAirspaceLayers } from './airspace-layer.js';
@@ -452,6 +453,7 @@ function applyDelta(updated, relabeled, gone) {
 export function applyCoverage(msg) {
   coverageRadars = msg.radars || [];
   coverageSignedOnPositions = msg.signedOnPositions || [];
+  noteCoveragePositions(coverageSignedOnPositions); // Primary or Observer, per Position
   coverageDatalink = !!msg.datalink;
 
   // The datalink is a picture too (crc-sync's docs/adr/0059): a tactical
@@ -536,6 +538,7 @@ async function connect() {
   ws.onopen = () => {
     hideUpdateRequired();
     console.log('[ws] connected to crc-sync');
+    redeclareEfspPositions(); // the server signs a closed session off after its grace: say again what we hold
   };
 
   ws.onmessage = (e) => {

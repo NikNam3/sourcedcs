@@ -21,6 +21,11 @@ import { addEfspMessageObserver } from './efsp-message-registry.js';
 // return one flat, facility-agnostic list for every pre-WP4A call site.
 const DEFAULT_EFSP_FACILITY_ID = 'INCIRLIK';
 let _actingPositionsByFacility = { INCIRLIK: [], CENTER: [], TACTICAL: [], CARRIER: [], RANGES: [] };
+let _ackedByFacility = {};     // facilityId -> the last `signedOn` the SERVER acknowledged (e2e waits on this, not on the claim)
+let _declaredByFacility = {};   // facilityId -> positionIds the controller asked for
+let _observerKeys = new Set(); // 'facility/position' where the controller is Observer (coverage message)
+let _primaryKeys = new Set();   // ... and where Primary
+let _redeclare = null;          // { expectPrimary, acksPending } while a reconnect's re-declaration is in flight
 
 function efspClientMutationId() {
   // crypto.randomUUID() is available in Electron's Chromium renderer (and
@@ -99,13 +104,29 @@ export function sendEfspCreateStrip(actingPositionId, createOp, facilityId = DEF
   return msg.clientMutationId;
 }
 
-/** Sets the FULL signed-on-Position set for ONE Facility — mirrors position-store.js's own "declare your full set each call" contract, per Facility (docs/adr/0013: each Facility has its own PositionStore instance server-side). */
+/**
+ * Sets the FULL signed-on-Position set for ONE Facility — mirrors position-store.js's own "declare your full set each call" contract, per Facility (docs/adr/0013: each Facility has its own PositionStore instance server-side).
+ * `_declared` is what the controller asked for and is re-sent on every connect; `_actingPositionsByFacility` is what
+ * the server said (the ack's `signedOn`), set optimistically here until the ack lands.
+ */
 export function sendEfspSetPositions(facilityId, signedOn) {
+  _notice(''); // a new declaration answers the reconnect notice
+  _declaredByFacility[facilityId] = [...signedOn];
   _actingPositionsByFacility[facilityId] = [...signedOn];
   _sendEfsp({ version: 1, type: 'efsp-set-positions', facilityId, signedOn });
 }
 
+/** Every Position the server has this controller signed on at (Primary or Observer): what the Acting-As checkboxes show and what a new declaration extends. */
+export function getSignedOnPositions(facilityId) {
+  if (facilityId) return [...(_actingPositionsByFacility[facilityId] || [])];
+  return Object.values(_actingPositionsByFacility).flat();
+}
+
 /**
+ * The Positions this controller may ACT at: signed on and Primary. An Observer watches (crc-sync's docs/adr/0105 / the
+ * GCLC finding), so it is offered no action and shows no COMBINED line. A Position the coverage message has not named
+ * yet counts as Primary (sign-on just landed), and the coverage message that follows corrects it.
+ *
  * @param {string} [facilityId] — omit to get the flattened union across
  *   EVERY Facility (every pre-WP4A call site in bay-view.js/efsp-panel.js
  *   does this — Position IDs are globally unique across Facilities this
@@ -113,8 +134,62 @@ export function sendEfspSetPositions(facilityId, signedOn) {
  *   for "is this controller signed on at Position X").
  */
 export function getActingPositions(facilityId) {
-  if (facilityId) return [...(_actingPositionsByFacility[facilityId] || [])];
-  return Object.values(_actingPositionsByFacility).flat();
+  const facilities = facilityId ? [facilityId] : Object.keys(_actingPositionsByFacility);
+  return facilities.flatMap(f => (_actingPositionsByFacility[f] || []).filter(p => !_observerKeys.has(`${f}/${p}`)));
+}
+
+/** What the server last acknowledged as signed on at this Facility (not the optimistic claim). */
+export function getAckedPositions(facilityId) { return [...(_ackedByFacility[facilityId] || [])]; }
+
+/** Is the controller an Observer (not Primary) at this Position? */
+export function isObserverAt(facilityId, positionId) { return _observerKeys.has(`${facilityId}/${positionId}`); }
+
+let _noticeListener = null;
+/** combination.js registers the one visible line a sign-on notice is shown on. */
+export function setSignOnNoticeListener(fn) { _noticeListener = fn; }
+function _notice(text) { if (_noticeListener) _noticeListener(text); }
+
+/**
+ * A (re)connect: the server signs a closed session off after its grace, so declare again what the controller had.
+ * The ack is the truth (noteEfspPositionsAck) and the coverage that follows says Primary or Observer.
+ */
+export function redeclareEfspPositions() {
+  const facilities = Object.keys(_declaredByFacility).filter(f => _declaredByFacility[f].length > 0);
+  _redeclare = facilities.length ? { expectPrimary: new Set(_primaryKeys), acksPending: new Set(facilities) } : null;
+  for (const f of facilities) _sendEfsp({ version: 1, type: 'efsp-set-positions', facilityId: f, signedOn: _declaredByFacility[f] });
+}
+
+/** The server's `efsp-positions-ack`: adopt `signedOn` as the truth. */
+export function noteEfspPositionsAck(msg) {
+  const f = msg.facilityId;
+  if (!f || !Array.isArray(msg.signedOn)) return;
+  const asked = _declaredByFacility[f] || [];
+  _ackedByFacility[f] = [...msg.signedOn];
+  _actingPositionsByFacility[f] = [...msg.signedOn];
+  _declaredByFacility[f] = [...msg.signedOn];
+  if (_redeclare) {
+    _redeclare.acksPending.delete(f);
+    const dropped = asked.filter(p => !msg.signedOn.includes(p));
+    if (dropped.length) _notice(`Reconnected: ${dropped.join(', ')} could not be signed on again`);
+  }
+}
+
+/**
+ * A `coverage` message's `signedOnPositions` (app.js): who is Primary where. After a reconnect's re-declaration, a
+ * Position this controller was Primary at that someone else took meanwhile is unticked here, with one line saying so.
+ */
+export function noteCoveragePositions(list) {
+  _observerKeys = new Set(list.filter(p => p.isPrimary === false).map(p => `${p.facilityId}/${p.positionId}`));
+  _primaryKeys = new Set(list.filter(p => p.isPrimary).map(p => `${p.facilityId}/${p.positionId}`));
+  if (!_redeclare || _redeclare.acksPending.size > 0) return;
+  const { expectPrimary } = _redeclare;
+  _redeclare = null;
+  const lost = [...expectPrimary].filter(k => _observerKeys.has(k));
+  if (!lost.length) return;
+  const byFacility = {};
+  for (const k of lost) { const [f, p] = k.split('/'); (byFacility[f] = byFacility[f] || []).push(p); }
+  for (const [f, ids] of Object.entries(byFacility)) sendEfspSetPositions(f, getSignedOnPositions(f).filter(p => !ids.includes(p)));
+  _notice(`Reconnected: ${lost.map(k => k.split('/')[1]).join(', ')} taken by someone else meanwhile, signed off`);
 }
 
 /**

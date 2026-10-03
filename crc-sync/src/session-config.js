@@ -1,11 +1,11 @@
 'use strict';
 
-// Session tuning (docs/wip/DESK-SIGNON.md): the sign-on grace. Shipped default in config/session.json; a copy in
-// state/session.json overrides it key by key. Read once at startup, never written by code.
+// Session tuning (docs/wip/DESK-SIGNON.md): the sign-on grace. Shipped default in config/sign-on-grace.json; a copy in
+// state/sign-on-grace.json overrides it key by key. Read once at startup, never written by code.
 
 const { readShipped, readLayer } = require('./tuning-file');
 
-const NAME = 'session.json';
+const NAME = 'sign-on-grace.json';
 
 function loadSessionConfig(override) {
   const shipped = readShipped(NAME);

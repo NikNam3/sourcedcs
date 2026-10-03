@@ -45,7 +45,7 @@ class WsHub {
    *   the `theater` message: transition altitude and magnetic variation.
    * @param {number} [deps.wireProtocol] the protocol this server speaks (docs/adr/0103); tests only, defaults to WIRE_PROTOCOL.
    * @param {object} [deps.wallClock]    real time, for the sign-on grace only (docs/adr/0096).
-   * @param {number} [deps.signOnGraceMs] how long a closed session keeps its sign-ons (config/session.json); 0 signs off at once.
+   * @param {number} [deps.signOnGraceMs] how long a closed session keeps its sign-ons (config/sign-on-grace.json); 0 signs off at once.
    * @param {string} [deps.downloadUrl]  where `update-required` points an out-of-date client (CRCSYNC_DOWNLOAD_URL); omitted when unset.
    */
   constructor({ trackStore, collabStore, efsp = null, picture = null, surveillance = null, clock = WALL_CLOCK, theater = null, wireProtocol = WIRE_PROTOCOL, downloadUrl = null, wallClock = WALL_CLOCK, signOnGraceMs = 0 }) {

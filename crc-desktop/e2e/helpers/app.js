@@ -40,11 +40,11 @@ async function openPanel(page, { signedOn = ['OPS'], facilityId = 'INCIRLIK', co
   await openEfspPanel(page);
   await page.waitForFunction(() => typeof crc.ws.sendEfspSetPositions === 'function');
   await page.evaluate(([f, h]) => crc.ws.sendEfspSetPositions(f, h), [facilityId, signedOn]);
-  // The ack is what actually makes the Positions held server-side; until it
+  // The SERVER's ack (getAckedPositions), not the client's own optimistic claim, is what makes the Positions held server-side; until it
   // lands every op is refused as NOT_HOLDING_POSITION and a spec fails for a
   // reason that has nothing to do with what it is testing.
   await page.waitForFunction(
-    ([f, h]) => (crc.ws.getActingPositions ? crc.ws.getActingPositions(f) : []).length === h.length,
+    ([f, h]) => { const a = crc.ws.getAckedPositions ? crc.ws.getAckedPositions(f) : []; return a.length === h.length && h.every(p => a.includes(p)); },
     [facilityId, signedOn],
   );
   return { consoleErrors };
