@@ -36,7 +36,7 @@ merge their branches into `efsp-wp5-correlation`, and keep the record. Older ses
 
 ### State
 
-`efsp-wp5-correlation` is local only, about 1,150 commits ahead of `main`. Everything is merged and green:
+`efsp-wp5-correlation` is local only, about 1,200 commits ahead of `main`. Everything is merged and green:
 
 | Suite | Result |
 |---|---|
