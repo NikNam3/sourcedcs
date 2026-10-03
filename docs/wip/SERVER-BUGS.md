@@ -36,3 +36,6 @@ rev gets `STALE_REV` on the next edit.
 ## Decisions / defaults taken
 
 (filled in below as work proceeds)
+
+### Goldens moved
+- B2: hub-random-seed1, hub-random-seed2, scenario-coordination, scenario-manning, scenarios (a sign-off now persists a repair and sends the other Boards' touched Strips as extra `efsp-board-delta` frames in the same round trip).
