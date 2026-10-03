@@ -37,7 +37,8 @@ function coordBay(p, f) { const b = facilityConfig.coordinationBayFor(p, f); ret
 
 const MISSION_T0 = Date.UTC(2026, 5, 21, 2, 40, 0);
 let cmidN = 0;
-const cmid = () => `00000000-0000-4000-8000-${(++cmidN).toString(16).padStart(12, '0')}`;
+// Not uuid-shaped: a second 00000000-0000-4000-8000-<n> counter would collide with the freeze uuid counter's ids once the golden is renumbered by appearance.
+const cmid = () => `freeze-cmid-${String(++cmidN).padStart(5, '0')}`;
 
 const FDR = { callsign: 'FREEZE1', aircraftType: 'F16', wakeCategory: 'D', departureAirport: 'LTAG', destinationAirport: 'LTAG', route: 'DCT', requestedAltitude: '250' };
 const ROLES = [
