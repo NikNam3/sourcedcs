@@ -18,6 +18,7 @@ function load(script, configDir) {
 
 const CASES = [
   ['alerting', "require('./src/alerting-config').loadAlertingConfig()", 'alerting.json'],
+  ['session', "require('./src/session-config').loadSessionConfig()", 'session.json'],
   ['surveillance hints', "require('./src/efsp/surveillance-hints-config')", 'efsp-surveillance-hints.json'],
   ['carrier hulls', "require('./src/efsp/carrier/hull-config')", 'efsp-carriers.json'],
   ['sensor specs', "require('./src/radars').loadSensorSpecs()", 'sensor-specs.json'],

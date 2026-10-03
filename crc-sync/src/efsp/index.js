@@ -377,6 +377,9 @@ function createEfsp({ clock = WALL_CLOCK, wallClock = WALL_CLOCK, transitionAltF
       for (const { positionStore } of facilities.values()) positionStore.onDisconnect(session.controllerId);
     },
 
+    /** Tells every Facility's PositionStore which controllers are held in the sign-on grace (ws-hub.js). */
+    setAbsentCheck: (fn) => { for (const { positionStore } of facilities.values()) positionStore.setAbsentCheck(fn); },
+
     /** Sent once at connect, appended to ws-hub.js's existing connect-time send order. */
     snapshotFor: (session = null) => snapshotMessage(ctx, session),
 

@@ -1,0 +1,4 @@
+{
+  "_comment": "signOnGraceMs: how long crc-sync keeps a closed /feed session's Position sign-ons (a network blip or a server restart is no sign-off). A reconnect of the same signed-in user inside it cancels the sign-off; another controller signing on to a held Position takes it as if it were free. 0 signs off at once. Read once at startup.",
+  "signOnGraceMs": 15000
+}
