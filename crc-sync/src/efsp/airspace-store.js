@@ -27,6 +27,7 @@ const schema = require('./airspace-schema');
 const containment = require('./airspace/containment');
 const log = require('../log').logger('efsp:airspace-store');
 const airspaceAuthority = require('./authority/airspace');
+const { internalError, partialAuditTail } = require('./store-throw');
 
 const AIRSPACE_STATES = ['SCHEDULED', 'ACTIVE', 'RELEASED', 'RETURNED'];
 
@@ -238,7 +239,7 @@ class AirspaceStore {
   _recordAudit(mutation, actor, theater, before, result) {
     if (!this._mutationLog) return;
     const op = mutation.op || {};
-    const afterRecord = result.ok && !result.removed && mutation.airspaceId ? this._record(theater, mutation.airspaceId) : null;
+    const afterRecord = (result.ok || result.partial) && !result.removed && mutation.airspaceId ? this._record(theater, mutation.airspaceId) : null;
     const known = (before && before.definition) || (afterRecord && afterRecord.definition) || (op.definition && typeof op.definition === 'object' ? op.definition : null);
     let facilityId = (known && known.controllingFacilityId) || null;
     if (!facilityId && result.created && result.created.length) {
@@ -267,6 +268,7 @@ class AirspaceStore {
       ...(result.warning ? { warning: result.warning } : {}),
       before,
       after: afterRecord ? viewOf(afterRecord) : undefined,
+      ...partialAuditTail(result),
     });
   }
 
@@ -294,6 +296,7 @@ class AirspaceStore {
     const op = mutation.op || {};
     const theater = actor.service ? (mutation.theater || (op.kind === 'ImportAirspaces' ? op.theater : null) || null) : this.currentTheater();
     let result; let before;
+    const seq0 = this._sync.seq;
     try {
       if (!VIAS.includes(actor.via)) throw new Error(`unknown via ${actor.via}`);
       if (!AIRSPACE_OP_KINDS.includes(op.kind)) {
@@ -316,7 +319,7 @@ class AirspaceStore {
     } catch (err) {
       // Same backstop as BoardStore.applyMutation: one bad op must never take the process down for every client.
       log.error('unexpected error applying an airspace op — rejecting it instead of crashing', { err });
-      result = verr('internal error processing airspace op');
+      result = internalError('airspace op', err, this._sync.seq !== seq0);
     }
     // Every result carries the record, success or not: the client renders from the ack either way, and a rejection that
     // says nothing about the current state leaves the board showing whatever the client last guessed.

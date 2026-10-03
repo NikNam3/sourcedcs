@@ -37,6 +37,7 @@ const {
   REQUEST_ACTIONS,
 } = require('./runway-status');
 const log = require('../log').logger('efsp:runway-status-store');
+const { internalError, partialAuditTail } = require('./store-throw');
 
 function deepClone(obj) { return obj === undefined ? undefined : JSON.parse(JSON.stringify(obj)); }
 
@@ -216,7 +217,8 @@ class RunwayStatusStore {
       reason: result.ok ? undefined : result.reason,
       detail: result.ok ? undefined : result.detail,
       before,
-      after: result.ok ? deepClone(this._records.get(mutation.facilityId)) : undefined,
+      after: result.ok || result.partial ? deepClone(this._records.get(mutation.facilityId)) : undefined,
+      ...partialAuditTail(result),
     });
   }
 
@@ -245,6 +247,7 @@ class RunwayStatusStore {
   apply(mutation, actingPositionId, by) {
     let result;
     let before = null;
+    const seq0 = this._sync.seq;
     try {
       mutation = mutation && typeof mutation === 'object' ? mutation : {};
       const op = mutation.op && typeof mutation.op === 'object' ? mutation.op : {};
@@ -269,7 +272,7 @@ class RunwayStatusStore {
       // The backstop every EFSP store has: one bad op must never take the
       // process down for every connected client.
       log.error('unexpected error applying a runway-status op — rejecting it instead of crashing', { err });
-      result = { ok: false, reason: 'VALIDATION_ERROR', detail: 'internal error processing runway-status op' };
+      result = internalError('runway-status op', err, this._sync.seq !== seq0);
     }
     result.runwayStatus = this.getRunwayStatus(mutation && mutation.facilityId);
     this._recordAudit(mutation || {}, actingPositionId, by, before, result);

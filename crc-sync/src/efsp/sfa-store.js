@@ -27,6 +27,7 @@ const { validateSfaRotationRecord } = require('./facility-config');
 const { WALL_CLOCK } = require('../mission-clock');
 const { SyncLog } = require('./sync/sync-log');
 const log = require('../log').logger('efsp:sfa-store');
+const { internalError, partialAuditTail } = require('./store-throw');
 
 const TRANSITIONS_CAP = 100; // engineering bound: the newest transitions kept per record; no meaning attached
 const SET_OP = 'SetSfaRotation';
@@ -95,7 +96,8 @@ class SfaStore {
       reason: result.ok ? undefined : result.reason,
       detail: result.ok ? undefined : result.detail,
       before,
-      after: result.ok ? deepClone(this._record) : undefined,
+      after: result.ok || result.partial ? deepClone(this._record) : undefined,
+      ...partialAuditTail(result),
     });
   }
 
@@ -107,11 +109,12 @@ class SfaStore {
   apply(mutation, actingPositionId, by) {
     const before = deepClone(this._record);
     let result;
+    const seq0 = this._sync.seq;
     try {
       result = this._dispatch(mutation, actingPositionId, by);
     } catch (err) {
       log.error('unexpected error applying an SFA op — rejecting it instead of crashing', { err });
-      result = { ok: false, reason: 'VALIDATION_ERROR', detail: 'internal error processing SFA op' };
+      result = internalError('SFA op', err, this._sync.seq !== seq0);
     }
     this._audit(mutation, actingPositionId, by, before, result);
     return result;
