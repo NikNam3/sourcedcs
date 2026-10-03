@@ -455,6 +455,7 @@
    "_buildStripEl",
    "_canApproveAirspaceEntry",
    "_canConvertToArrival",
+   "_canMarkTofiEntered",
    "_canProposeCoordination",
    "_canProposeTofiEntry",
    "_canProposeTofiExit",
@@ -602,6 +603,7 @@
   ],
   "panels/efsp/bay/popovers/tofi.js": [
    "TOFI_ACCEPT_REGIMES",
+   "_canMarkTofiEntered",
    "_canProposeTofiEntry",
    "_canProposeTofiExit",
    "_canTransferTofiComms",
@@ -868,6 +870,7 @@
    "stripIdsForTrackId",
    "stripsInAirspace",
    "surveillanceHintsForStrip",
+   "tofiRegimeAlertForFlightData",
    "withOthersBayId"
   ],
   "panels/efsp/efsp-stereo-routes.js": [
