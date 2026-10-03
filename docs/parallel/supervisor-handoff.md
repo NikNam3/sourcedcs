@@ -47,7 +47,7 @@ merge their branches into `efsp-wp5-correlation`, and keep the record. Older ses
 | crc-desktop | 1137/1137 |
 | sourcedcs-web | 146/146 |
 | infra | 25/25 |
-| Playwright (full, phase 1) | see the S-ARCH-4 row in decisions.md |
+| Playwright (full, phase 1) | 187/187 after the airspace-geometry spec fix (S-ARCH-4) |
 
 The only worktree is the main checkout. Two unmerged branches are kept on purpose and are superseded:
 `lane/QA-sync-cleanup` and `lane/AIRSP-2P-B-geometry`.
