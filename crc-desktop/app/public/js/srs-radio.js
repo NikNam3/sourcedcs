@@ -1,5 +1,7 @@
 'use strict';
 
+import { createPttController, clampMaxTxSeconds, PTT_MAX_TX_DEFAULT_S } from './ptt-controller.js';
+
 // ── SRS Radio panel ──────────────────────────────────────────────────────────
 // Communicates with lxsrs_v2 via the /srs-api/ proxy on the CRC server.
 
@@ -14,6 +16,7 @@
   const LS_MIC     = 'srs_pref_mic';
   const LS_SINK    = 'srs_pref_sink';
   const LS_PTT_KEY = 'srs_pref_ptt_key';
+  const LS_PTT_MAX_TX_S = 'srs_pref_ptt_max_tx_s'; // seconds; clamped 5..120, default 30 (ptt-controller.js)
 
   function _loadPref(key) {
     try {
@@ -49,8 +52,6 @@
   };
 
   let _devices = { inputs: [], outputs: [] };
-  let _pttHeld       = false;
-  let _pttTimer      = null;
   let _rebuildingSelects = false;
   const _draggingSlots = new Set();  // slots whose vol slider is being dragged
 
@@ -306,8 +307,8 @@
                               :                                        'disconnected');
 
     // PTT — reflect server state for non-browser sources (pynput, stdin)
-    if (_state.ptt && !_pttHeld) _pttBtn.classList.add('ptt-active');
-    else if (!_state.ptt && !_pttHeld) _pttBtn.classList.remove('ptt-active');
+    if (_state.ptt && !_ptt.isHeld()) _pttBtn.classList.add('ptt-active');
+    else if (!_state.ptt && !_ptt.isHeld()) _pttBtn.classList.remove('ptt-active');
 
     // Radio slots — diffed to avoid destroying slider state mid-drag
     _renderSlots();
@@ -383,23 +384,21 @@
 
   // ── PTT ────────────────────────────────────────────────────────────────────
 
-  function _pttDown(e) {
-    if (e) e.preventDefault();
-    if (_pttHeld) return;
-    _pttHeld = true;
-    _post('/ptt/start');
-    _pttTimer = setInterval(() => _post('/ptt/start'), 400);
-    _pttBtn.classList.add('ptt-active');
-  }
+  // The PTT state machine (key, blur, visibility, maximum transmit time) lives in ptt-controller.js.
+  const _ptt = createPttController({
+    post: _post,
+    setActive: (on) => _pttBtn.classList.toggle('ptt-active', on),
+    getKey: () => _pttKey,
+    isTyping: _isTyping,
+    win: window,
+    doc: document,
+    getMaxTxSeconds: () => _loadPref(LS_PTT_MAX_TX_S) ?? PTT_MAX_TX_DEFAULT_S,
+    log: (m) => console.warn('[srs-ptt] ' + m),
+  });
+  console.info(`[srs-ptt] maximum transmit time ${clampMaxTxSeconds(_loadPref(LS_PTT_MAX_TX_S) ?? PTT_MAX_TX_DEFAULT_S)} s (pref ${LS_PTT_MAX_TX_S})`);
 
-  function _pttUp(e) {
-    if (e) e.preventDefault();
-    if (!_pttHeld) return;
-    _pttHeld = false;
-    clearInterval(_pttTimer);
-    _post('/ptt/stop');
-    _pttBtn.classList.remove('ptt-active');
-  }
+  function _pttDown(e) { if (e) e.preventDefault(); _ptt.down(); }
+  function _pttUp(e) { if (e) e.preventDefault(); _ptt.up(); }
 
   // ── PTT button wiring ──────────────────────────────────────────────────────
 
@@ -414,15 +413,6 @@
     const tag = (document.activeElement?.tagName || '').toUpperCase();
     return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
   }
-
-  document.addEventListener('keydown', (e) => {
-    if (e.code !== _pttKey || e.repeat || _isTyping()) return;
-    e.preventDefault();
-    _pttDown(null);
-  });
-  document.addEventListener('keyup', (e) => {
-    if (e.code === _pttKey && !_isTyping()) _pttUp(null);
-  });
 
   // Radio slot clicks — delegated
   _radioList.addEventListener('click', async (e) => {
