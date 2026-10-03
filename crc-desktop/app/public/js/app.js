@@ -2,6 +2,7 @@
 import { _setSyncSocket, getSyncFeedUrl } from './sync.js';
 import { UPDATE_REQUIRED_CLOSE, hideUpdateRequired, isUpdateRequiredShown, showUpdateRequired } from './update-required.js';
 import { kinematics } from './geo.js';
+import { refreshAirspaceLayers } from './airspace-layer.js';
 import { applyTheaterFacts } from './magnetic.js';
 import { getUserCoalition, loadUserCoalition, toggleUserCoalition } from './iff.js';
 import { trackEmergency, trackIsIdent } from './track-label.js';
@@ -190,6 +191,8 @@ const DEFAULTS = {
   // disabled until the end of the EFSP work (decision H6). The code path in
   // geojson.js's getDeclutteredIds() is kept — REVISIT then.
   declutter:       false,
+  airspaceMenu:    null,   // the airspace layer menu's choices (airspace-layer-menu.js); null = its default (ACTIVE only). Per user, never synced
+  coordFormat:     'DM',   // how coordinates are shown and prefilled: 'DMS' | 'DM' | 'MGRS' (coords.js, H102 AP2B-Q2); input accepts all
   showDatalinkLocks: true, // draw the datalink's radar-lock lines (geojson.js's buildDatalinkLines)
   transitionAltFt: 18000, // ft — how an ASSIGNED altitude is written. The theater's, from crc-sync's `theater` message (its docs/adr/0085); not a setting. [SOURCE-DEFINED] (docs/adr/0085): 18,000 ft is only the fallback until the first `theater` message (sent on connect); the other client files read it with no fallback of their own
   aprtManualWx:    {},    // per-airport manually-entered vis/cloud data, keyed by ICAO — squadron-wide, see crc-sync's apt-config.js
@@ -570,6 +573,7 @@ async function connect() {
           map.getSource('navpoints').setData(buildNavpoints());
           map.getSource('drawings').setData(buildDrawings());
           map.getSource('text-marks').setData(buildTextMarks());
+          refreshAirspaceLayers();
         }
         // The airfields changed, so the coverage list the server resolves for
         // us will too — it sends a fresh `coverage` message of its own right

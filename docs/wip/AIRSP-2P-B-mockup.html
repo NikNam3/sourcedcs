@@ -1,0 +1,729 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Airspace Geometry Mockup</title>
+<meta name="description" content="AIRSP-2P-B: the airspace panel's outline and route editor, the DCS-drawing picker, the map while drawing, and the airspace layer menu with its default (ACTIVE only), in light and dark. A delta on the approved AIRSP mockup, for approval before any product code (H100 DA-8).">
+<style>
+/* Page chrome (same as AIRSP-mockup.html) */
+:root {
+  --page: #f3f5f7; --page-text: #1c2228; --page-muted: #56636f; --page-line: #cfd6dc; --page-accent: #1f5fa8;
+  --page-note: #2f64a8;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --page: #11151a; --page-text: #d8e0e6; --page-muted: #8c9aa6; --page-line: #2e3740; --page-accent: #8ec7ff;
+    --page-note: #6fb3ff;
+  }
+}
+:root[data-theme="dark"] {
+  --page: #11151a; --page-text: #d8e0e6; --page-muted: #8c9aa6; --page-line: #2e3740; --page-accent: #8ec7ff;
+  --page-note: #6fb3ff;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--page); color: var(--page-text); font: 14px/1.5 system-ui, sans-serif; overflow-x: hidden; }
+.wrap { max-width: 1320px; margin: 0 auto; padding: 20px 16px 64px; }
+h1 { font-size: 20px; font-weight: 600; margin: 4px 0; }
+h2 { font-size: 13px; margin: 34px 0 6px; letter-spacing: .08em; text-transform: uppercase; color: var(--page-muted); border-top: 1px solid var(--page-line); padding-top: 14px; }
+h3 { font-size: 12.5px; margin: 18px 0 4px; font-weight: 600; color: var(--page-muted); }
+p { margin: 6px 0 10px; max-width: 96ch; }
+.lede { color: var(--page-muted); }
+.cap { font-size: 12.5px; color: var(--page-muted); margin: 8px 0 0; max-width: 96ch; }
+.annot { color: var(--page-note); font-style: italic; font-size: 12px; }
+code { font-family: "Courier New", ui-monospace, monospace; font-size: .9em; }
+.bar { position: sticky; top: 0; z-index: 9; display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin: 12px 0; padding: 8px 12px;
+  background: var(--page); border: 1px solid var(--page-line); border-radius: 6px; font-size: 13px; }
+.bar nav { display: flex; flex-wrap: wrap; gap: 6px; margin-left: auto; }
+.bar nav a { padding: 1px 9px; border: 1px solid var(--page-line); border-radius: 12px; color: var(--page-accent); text-decoration: none; font-size: 12.5px; }
+.seg { display: inline-flex; border: 1px solid var(--page-line); border-radius: 5px; overflow: hidden; }
+.seg button { background: none; border: 0; color: var(--page-text); font: inherit; padding: 2px 11px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--page-accent); color: var(--page); }
+
+/* Themed scenes: the --efsp-* ramp of the approved mockup, plus map tokens for this delta. */
+.scene, .themed {
+  --efsp-strip: #1c2228; --efsp-strip-2: #232a32; --efsp-tab: #20272e; --efsp-line: #2e3740; --efsp-line-2: #4a5560;
+  --efsp-text: #d8e0e6; --efsp-muted: #8c9aa6; --efsp-faint: #56616c; --efsp-attn: #e0a83c; --efsp-go: #4a7dbf;
+  --efsp-bad: #ff8a4c; --efsp-bad-bg: #2b1a12; --efsp-input: #151a1f; --efsp-bay: #151a1f; --efsp-bay-line: #262d34;
+  --efsp-go-text: #fff; --efsp-note-bg: #181d22;
+  --map-sea: #0d1216; --map-land: #161c21; --map-coast: #2a333b; --map-grid: #1d252c; --map-text: #56616c;
+  --map-nav: #6c7883; --air-act: #b3bec7; --air-idle: #6c7883; --edit: #5b8fd1;
+  color: var(--efsp-text); font-family: "Courier New", ui-monospace, monospace; font-size: 11px;
+}
+.themed.light {
+  --efsp-strip: #ffffff; --efsp-strip-2: #eef1f4; --efsp-tab: #e9edf1; --efsp-line: #cfd6dc; --efsp-line-2: #8a96a1;
+  --efsp-text: #1c2228; --efsp-muted: #56636f; --efsp-faint: #8a96a1; --efsp-attn: #a86f00; --efsp-go: #2f64a8;
+  --efsp-bad: #b8420a; --efsp-bad-bg: #fdeee6; --efsp-input: #ffffff; --efsp-bay: #e4e9ee; --efsp-bay-line: #cfd6dc;
+  --efsp-go-text: #fff; --efsp-note-bg: #f3f6f8;
+  --map-sea: #dce5ec; --map-land: #f5f7f9; --map-coast: #b3bfc9; --map-grid: #e6ebef; --map-text: #8a96a1;
+  --map-nav: #6b7884; --air-act: #3a4550; --air-idle: #8e9aa5; --edit: #2f64a8;
+}
+.themed { margin: 8px 0; }
+.pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+.pair.stack { grid-template-columns: minmax(0, 1fr); }
+body[data-mode="dark"] .themed.light, body[data-mode="light"] .themed.dark { display: none; }
+body[data-mode="dark"] .pair, body[data-mode="light"] .pair { grid-template-columns: minmax(0, 1fr); }
+@media (max-width: 1000px) { .pair { grid-template-columns: minmax(0, 1fr); } }
+.themed .tag { font: 600 10px system-ui, sans-serif; letter-spacing: .1em; text-transform: uppercase; color: var(--page-muted); margin: 0 0 3px; }
+.panel { background: var(--efsp-bay); border: 1px solid var(--efsp-bay-line); padding: 6px; }
+.panel.fixed { max-width: 760px; }
+
+/* Panel chrome and card (copied from the approved mockup) */
+.phead { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; padding: 2px 2px 6px; }
+.phead .ttl { font-weight: bold; letter-spacing: .08em; }
+.phead .sp { flex: 1; }
+.chip { display: inline-flex; align-items: center; height: 24px; padding: 0 8px; border: 1px solid var(--efsp-line-2); border-radius: 2px; background: var(--efsp-strip-2); font-size: 10px; font-weight: bold; color: var(--efsp-text); }
+.card { background: var(--efsp-strip); border: 1px solid var(--efsp-line); border-left: 4px solid transparent; margin: 3px 0; container: card / inline-size; }
+.grid { display: grid; grid-template-columns: clamp(130px, 22%, 170px) minmax(0, 1fr) auto; }
+.tab { background: var(--efsp-tab); border-right: 1px solid var(--efsp-line); padding: 6px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.tab .role { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--efsp-muted); }
+.tab .nm { font-size: 13px; font-weight: bold; line-height: 1.2; overflow-wrap: anywhere; }
+.tab .st { font-size: 10px; letter-spacing: .08em; color: var(--efsp-muted); }
+.main { padding: 6px 8px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(78px, 1fr)); gap: 4px 10px; }
+.tools { display: flex; flex-direction: column; gap: 4px; padding: 6px; border-left: 1px solid var(--efsp-line); }
+.f { display: flex; flex-direction: column; min-width: 0; }
+.w2 { grid-column: span 2; }
+.lbl { font-size: 9px; letter-spacing: .08em; color: var(--efsp-muted); white-space: nowrap; overflow: hidden; }
+.sbtn { min-width: 44px; min-height: 44px; padding: 0 10px; border-radius: 3px; background: var(--efsp-strip-2); border: 1px solid var(--efsp-line-2); color: var(--efsp-text); font: inherit; font-size: 11px; font-weight: bold; cursor: default; }
+.sbtn.go { background: var(--efsp-go); border-color: var(--efsp-go); color: var(--efsp-go-text); }
+.sbtn.dis { background: transparent; border: 1px dashed var(--efsp-line-2); color: var(--efsp-muted); font-weight: normal; }
+.sbtn.small { min-height: 30px; font-size: 10px; }
+.sbtn.on { background: var(--efsp-tab); border-color: var(--efsp-text); }
+.sbtn.tiny { min-width: 30px; min-height: 30px; padding: 0 6px; font-size: 10px; white-space: nowrap; }
+.row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.inp { font: inherit; font-size: 12px; color: var(--efsp-text); background: var(--efsp-input); border: 1px solid var(--efsp-line-2); border-radius: 2px; height: 30px; padding: 0 6px; width: 100%; min-width: 0; }
+.inp.locked { background: transparent; border-style: dashed; color: var(--efsp-muted); }
+.inp::placeholder { color: var(--efsp-faint); }
+.was { font-size: 9px; color: var(--efsp-muted); min-height: 12px; }
+.err { font: 11px/1.3 system-ui, sans-serif; color: var(--efsp-bad); }
+.f.chg .lbl::after, .geo.chg > .geohead .lbl::after { content: " \25CF"; color: var(--efsp-text); }
+.editbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding-top: 6px; border-top: 1px solid var(--efsp-line); }
+.editbar .why { font: 11px/1.3 system-ui, sans-serif; color: var(--efsp-muted); flex: 1 1 200px; }
+.editbar .why.bad { color: var(--efsp-bad); }
+.hdr { display: flex; flex-wrap: wrap; gap: 6px 14px; font: 11px system-ui, sans-serif; color: var(--efsp-muted); }
+.note { font: 11.5px/1.45 system-ui, sans-serif; color: var(--efsp-muted); background: var(--efsp-note-bg); border: 1px solid var(--efsp-line); padding: 6px 8px; }
+.note b { color: var(--efsp-text); }
+.elided { font: italic 11px system-ui, sans-serif; color: var(--efsp-faint); border: 1px dashed var(--efsp-line); padding: 4px 8px; }
+
+/* NEW: the OUTLINE (geometry) section */
+.geo { border: 1px solid var(--efsp-line); background: var(--efsp-strip); padding: 6px 8px; display: flex; flex-direction: column; gap: 6px; }
+.geohead { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; }
+.geohead .lbl { font-size: 10px; }
+.src { display: inline-flex; align-items: center; height: 18px; padding: 0 6px; border: 1px solid var(--efsp-line-2); border-radius: 2px; font-size: 9.5px; letter-spacing: .06em; color: var(--efsp-muted); }
+.cnt { font-size: 11px; color: var(--efsp-text); margin-left: auto; }
+.cnt small { color: var(--efsp-muted); font-size: 10px; }
+.georow { display: flex; gap: 10px; align-items: flex-start; }
+.thumb { flex: 0 0 auto; width: 96px; height: 64px; background: var(--map-land); border: 1px solid var(--efsp-line); }
+.thumb .o { fill: none; stroke: var(--air-act); stroke-width: 1.4; }
+.thumb .o.ed { stroke: var(--edit); }
+.geotext { font: 11.5px/1.4 system-ui, sans-serif; color: var(--efsp-muted); min-width: 0; }
+.geotext b { color: var(--efsp-text); font-weight: 600; }
+.reason { font: 10.5px/1.3 system-ui, sans-serif; color: var(--efsp-muted); }
+.states { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 8px; }
+.states .geo .ttlx { font: 600 10px system-ui, sans-serif; letter-spacing: .08em; text-transform: uppercase; color: var(--efsp-faint); }
+.dd { border: 1px solid var(--efsp-line-2); background: var(--efsp-strip); box-shadow: 0 4px 14px rgba(0,0,0,.3); }
+.dd .ddh { display: flex; gap: 8px; align-items: center; padding: 6px; border-bottom: 1px solid var(--efsp-line); }
+.dd .grp { font-size: 9.5px; letter-spacing: .1em; color: var(--efsp-muted); padding: 6px 8px 2px; text-transform: uppercase; }
+.dd .it { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px; align-items: center; min-height: 34px; padding: 0 8px; border-top: 1px solid var(--efsp-line); font-size: 11.5px; }
+.dd .it small { color: var(--efsp-muted); font-size: 10px; }
+.dd .it.hov { background: var(--efsp-tab); box-shadow: inset 3px 0 0 var(--efsp-go); }
+.dd .it.off { color: var(--efsp-faint); border-style: dashed; }
+.dd .foot { font: 10.5px/1.35 system-ui, sans-serif; color: var(--efsp-muted); padding: 6px 8px; border-top: 1px solid var(--efsp-line); }
+
+/* NEW: the ROUTE table */
+table.rt { border-collapse: collapse; width: 100%; font-size: 11px; }
+table.rt th { font: 600 9px system-ui, sans-serif; letter-spacing: .08em; text-transform: uppercase; color: var(--efsp-muted); text-align: left; padding: 4px 4px; border-bottom: 1px solid var(--efsp-line); white-space: nowrap; }
+table.rt th.legh { border-left: 1px solid var(--efsp-line); }
+table.rt td { padding: 4px 4px; border-bottom: 1px solid var(--efsp-line); vertical-align: top; }
+table.rt td.leg { border-left: 1px solid var(--efsp-line); }
+table.rt td.num { color: var(--efsp-muted); width: 18px; padding-top: 11px; }
+table.rt td.legname { color: var(--efsp-muted); white-space: nowrap; padding-top: 11px; font-size: 10.5px; }
+table.rt td.exit { color: var(--efsp-faint); font: italic 11px system-ui, sans-serif; padding-top: 10px; }
+table.rt .inp { height: 28px; font-size: 11.5px; }
+table.rt .w-name { width: 76px; } table.rt .w-ll { width: 96px; } table.rt .w-alt { width: 64px; } table.rt .w-wd { width: 58px; }
+.relpos { position: relative; }
+.navdd { position: absolute; left: 0; top: 34px; z-index: 3; width: 250px; }
+.kv { display: flex; flex-wrap: wrap; gap: 4px 18px; align-items: flex-end; }
+
+/* NEW: map */
+.mapwrap { position: relative; border: 1px solid var(--efsp-bay-line); background: var(--map-sea); overflow: hidden; }
+.pair.stack .mapwrap { max-width: 1000px; }
+.pair.stack .mapmenu { max-width: 1300px; }
+.pair.stack .mapmenu .mapwrap { max-width: none; }
+.mapwrap svg { display: block; width: 100%; height: auto; }
+.mapbtn { position: absolute; top: 8px; right: 8px; display: flex; gap: 4px; }
+.mapbtn .sbtn { min-height: 32px; font-size: 10px; background: var(--efsp-strip); }
+.drawbar { position: absolute; top: 8px; left: 8px; max-width: calc(100% - 140px); background: var(--efsp-strip); border: 1px solid var(--edit); padding: 6px 8px; display: flex; flex-direction: column; gap: 5px; }
+.drawbar .t { font-weight: bold; letter-spacing: .06em; }
+.drawbar .h { font: 11px/1.35 system-ui, sans-serif; color: var(--efsp-muted); }
+.drawbar.bad { border-color: var(--efsp-bad); }
+.sea { fill: var(--map-sea); }
+.land { fill: var(--map-land); stroke: var(--map-coast); stroke-width: 1.2; }
+.gr { stroke: var(--map-grid); stroke-width: 1; }
+.mt { fill: var(--map-text); font: 10px "Courier New", monospace; }
+.afd { fill: none; stroke: var(--map-nav); stroke-width: 1.3; }
+.nav { fill: none; stroke: var(--map-nav); stroke-width: 1.2; }
+.navt { fill: var(--map-nav); font: 9.5px "Courier New", monospace; }
+.a-act { fill: none; stroke: var(--air-act); stroke-width: 1.6; }
+.a-idle { fill: none; stroke: var(--air-idle); stroke-width: 1.4; stroke-dasharray: 7 5; }
+.l-act { fill: var(--air-act); font: bold 11px "Courier New", monospace; }
+.l-act2 { fill: var(--air-act); font: 10.5px "Courier New", monospace; }
+.l-idle { fill: var(--air-idle); font: bold 11px "Courier New", monospace; }
+.l-idle2 { fill: var(--air-idle); font: 10.5px "Courier New", monospace; }
+.co { fill: none; stroke: var(--air-act); stroke-linecap: round; stroke-linejoin: round; }
+.ci { fill: none; stroke: var(--map-land); stroke-linecap: round; stroke-linejoin: round; }
+.co.ed { stroke: var(--edit); }
+.cl { fill: none; stroke: var(--air-act); stroke-width: 1; stroke-dasharray: 2 4; }
+.ed-poly { fill: var(--edit); fill-opacity: .1; stroke: var(--edit); stroke-width: 2; }
+.ed-line { fill: none; stroke: var(--edit); stroke-width: 2; }
+.rub { fill: none; stroke: var(--edit); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.hd { fill: var(--map-land); stroke: var(--edit); stroke-width: 2; }
+.hd.sel { fill: var(--edit); }
+.hd.first { stroke-width: 3; }
+.mid { fill: var(--map-land); stroke: var(--edit); stroke-width: 1; stroke-dasharray: 2 2; }
+.badl { fill: none; stroke: var(--efsp-bad); stroke-width: 2.6; }
+.badx { fill: none; stroke: var(--efsp-bad); stroke-width: 2; }
+.snap { fill: none; stroke: var(--edit); stroke-width: 1.5; }
+.cur { stroke: var(--efsp-text); stroke-width: 1.2; }
+.tipb { fill: var(--efsp-strip); stroke: var(--efsp-line-2); }
+.tipt { fill: var(--efsp-text); font: 10.5px "Courier New", monospace; }
+.tipt2 { fill: var(--efsp-muted); font: 10px system-ui, sans-serif; }
+
+/* NEW: the layer menu */
+.mapmenu { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 8px; align-items: start; }
+@media (max-width: 900px) { .mapmenu { grid-template-columns: minmax(0, 1fr); } }
+.lm { border: 1px solid var(--efsp-line-2); background: var(--efsp-strip); box-shadow: 0 4px 14px rgba(0,0,0,.3); font-size: 11px; }
+.lm .lmh { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-bottom: 1px solid var(--efsp-line); }
+.lm .lmh b { letter-spacing: .08em; flex: 1; }
+.lm .sec { padding: 6px 8px; border-bottom: 1px solid var(--efsp-line); }
+.lm .sh { font-size: 9px; letter-spacing: .1em; color: var(--efsp-muted); text-transform: uppercase; margin-bottom: 4px; }
+.lm .cbs { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.cb { display: inline-flex; align-items: center; gap: 5px; min-height: 26px; white-space: nowrap; }
+.cb i { width: 13px; height: 13px; border: 1.5px solid var(--efsp-line-2); border-radius: 2px; display: inline-grid; place-items: center; font-style: normal; font-size: 10px; line-height: 1; }
+.cb.on i { background: var(--efsp-go); border-color: var(--efsp-go); color: var(--efsp-go-text); }
+.cb.on i::after { content: "\2713"; }
+.cb.chg span::after { content: " \25CF"; }
+.ind { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 6px; align-items: center; min-height: 34px; padding-top: 3px; padding-bottom: 3px; border-top: 1px solid var(--efsp-line); padding: 0 2px; }
+.ind .nm2 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ind .nm2 small { display: block; color: var(--efsp-muted); font-size: 9.5px; line-height: 1.2; }
+.tri { display: inline-flex; border: 1px solid var(--efsp-line-2); border-radius: 2px; overflow: hidden; }
+.tri span { padding: 2px 6px; font-size: 9.5px; color: var(--efsp-muted); border-left: 1px solid var(--efsp-line); }
+.tri span:first-child { border-left: 0; }
+.tri span.on { background: var(--efsp-tab); color: var(--efsp-text); font-weight: bold; box-shadow: inset 0 -2px 0 var(--efsp-text); }
+.res { font-size: 9.5px; color: var(--efsp-muted); width: 62px; text-align: right; white-space: nowrap; }
+.res.hid { color: var(--efsp-faint); }
+.lm .fac2 { font-size: 9.5px; letter-spacing: .1em; color: var(--efsp-muted); padding: 6px 2px 2px; }
+.lm .ft { font: 10.5px/1.35 system-ui, sans-serif; color: var(--efsp-muted); padding: 6px 8px; }
+
+/* Legend */
+table.lg { border-collapse: collapse; width: 100%; max-width: 1100px; font-size: 13px; }
+table.lg th, table.lg td { border-bottom: 1px solid var(--page-line); padding: 6px 8px; text-align: left; vertical-align: top; }
+table.lg th { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--page-muted); }
+table.lg td:first-child { white-space: nowrap; font-weight: 600; }
+.callouts { font-size: 13px; max-width: 100ch; padding-left: 18px; }
+.callouts li { margin: 3px 0; }
+@container card (max-width: 520px) {
+  .grid { grid-template-columns: minmax(0, 1fr); }
+  .tab { border-right: 0; border-bottom: 1px solid var(--efsp-line); }
+}
+.tscroll { overflow-x: auto; }
+</style>
+</head>
+<body data-mode="both">
+<div class="wrap">
+<h1>AIRSP-2P-B: outlines, routes and the airspace layer menu, for approval</h1>
+<p class="lede">A delta on the approved airspace panel mockup (AIRSP-1, <code>docs/wip/AIRSP-mockup.html</code>): only what that mockup did not show. That is the OUTLINE section of the editor for an AREA (draw on the map or copy a DCS drawing), the ROUTE editor for an MTR (fixes, legs, widths, the derived envelope), the map while drawing, and the airspace layer menu (H100 DA-9) with its default of ACTIVE only. Everything else in the editor (ID, name, type, frequencies, Save, conflicts, history) is unchanged from the approved mockup. The colour rule is the same (ADR 0056/0058): saved outlines are grey, the outline being edited is the blue accent, and orange-red appears only when something is wrong. Theater: Syria (transition altitude 10,000 ft, so FL from 10,000 up). All airspaces, fixes, navpoints and times are invented sample data. Design notes and open questions: <code>docs/wip/AIRSP-2P-B.md</code>.</p>
+
+<div class="bar">
+  <span>Theme</span>
+  <span class="seg" id="mode"><button data-m="both" aria-pressed="true">Both</button><button data-m="dark" aria-pressed="false">Dark</button><button data-m="light" aria-pressed="false">Light</button></span>
+  <nav><a href="#s1">1 Area outline</a><a href="#s2">2 Outline states</a><a href="#s3">3 Route</a><a href="#s4">4 Drawing</a><a href="#s5">5 Vertex edit</a><a href="#s6">6 Route fixes</a><a href="#s7">7 Layer menu</a><a href="#s8">8 Menu changed</a><a href="#legend">Legend</a></nav>
+</div>
+
+<!-- ───────────── 1. AREA OUTLINE, PICKER OPEN ───────────── -->
+<h2 id="s1">1 · AREA editor: the OUTLINE section, picking a DCS drawing</h2>
+<div class="scene">
+<div class="panel fixed">
+  <div class="phead"><span class="ttl">AIRSPACE</span><span class="sp"></span><span class="chip">Signed on as AP</span></div>
+  <div class="card"><div class="grid">
+    <div class="tab"><div class="role">MOA</div><div class="nm">MOA ADANA SOUTH</div><div class="st">RETURNED · EDITING</div></div>
+    <div class="main">
+      <div class="hdr"><span>Editing as <b>AP</b></span><span>definition rev 3</span><span>opened 1402Z</span></div>
+      <div class="elided">ID, NAME, TYPE, CTRL FACILITY, CTRL POSITION, USING, WORK FREQ, CONTROL FREQ, ALT LOWER 5000, ALT UPPER FL230: as in the approved mockup, scene 2</div>
+      <div class="geo">
+        <div class="geohead"><span class="lbl">OUTLINE</span><span class="src">NONE</span><span class="cnt">0 points <small>· 3 to 200</small></span></div>
+        <div class="georow">
+          <svg class="thumb" viewBox="0 0 96 64"><text x="48" y="36" text-anchor="middle" class="mt">no outline</text></svg>
+          <div class="geotext">No outline yet. The map cannot draw this airspace, and "is a flight inside it" answers <b>unknown</b>.</div>
+        </div>
+        <div class="row">
+          <button class="sbtn small">Draw on map</button>
+          <button class="sbtn small on">Pick DCS drawing ▴</button>
+          <button class="sbtn small dis">Refresh from drawing</button>
+          <button class="sbtn small dis">Clear outline</button>
+        </div>
+        <div class="reason">Refresh: no drawing picked yet. Clear: there is no outline.</div>
+        <div class="dd">
+          <div class="ddh"><input class="inp" value="" placeholder="Search drawings by name or layer"><span class="reason" style="white-space:nowrap">loaded mission: 9 drawings</span></div>
+          <div class="grp">Common</div>
+          <div class="it hov"><span>ADANA SOUTH MOA</span><small>polygon · 6 pts</small><small>shown on map</small></div>
+          <div class="it"><span>KARATAS WARNING</span><small>polygon · 4 pts</small><small></small></div>
+          <div class="it"><span>TOROS RNG</span><small>polygon · 4 pts</small><small></small></div>
+          <div class="it"><span>AR TRACK OLIVE</span><small>oval → 64 pts</small><small></small></div>
+          <div class="grp">Blue</div>
+          <div class="it"><span>CAP NORTH</span><small>circle 15 NM → 64 pts</small><small></small></div>
+          <div class="it"><span>KILLBOX 7A</span><small>rectangle · 4 pts</small><small></small></div>
+          <div class="it off"><span>INGRESS PINK</span><small>open line</small><small>not an outline</small></div>
+          <div class="grp">Red</div>
+          <div class="it"><span>SA-11 RING</span><small>circle 18 NM → 64 pts</small><small></small></div>
+          <div class="grp">Author</div>
+          <div class="it"><span>SCRATCH 1</span><small>freehand · 140 pts</small><small></small></div>
+          <div class="foot">Click a drawing to <b>copy its points</b> into this outline. The airspace keeps the copy in every mission; the drawing's layer and name are kept only so "Refresh from drawing" can find it again. Text and icon drawings are not listed. Hovering a row outlines that drawing on the map.</div>
+        </div>
+      </div>
+      <div class="editbar"><button class="sbtn dis">Save</button><button class="sbtn">Cancel</button><span class="why">No changes yet.</span></div>
+    </div>
+    <div class="tools"></div>
+  </div></div>
+</div>
+</div>
+<p class="cap">The OUTLINE section is new and sits under the approved field grid; for an AREA it replaces nothing. The source chip says where the points came from (NONE, DRAWN, DCS DRAWING). The picker lists the loaded mission's drawings grouped by DCS layer, with the shape and the point count the outline will get: a circle or oval becomes 64 points, a rectangle 4. An open line cannot be an outline and is listed greyed with the reason rather than hidden, so nobody wonders where it went. <span class="annot">Until lane 2S-B adds <code>name</code>/<code>layerName</code> to the drawing export, rows read "unnamed drawing #3" under one "Mission" group. Open question Q1: a drawing over 200 points (SCRATCH 1 is 140, fine).</span></p>
+
+<!-- ───────────── 2. OUTLINE STATES ───────────── -->
+<h2 id="s2">2 · The OUTLINE section in each state</h2>
+<div class="scene">
+<div class="panel">
+  <div class="states">
+    <div class="geo chg">
+      <div class="ttlx">a · just picked, not saved</div>
+      <div class="geohead"><span class="lbl">OUTLINE</span><span class="src">DCS DRAWING</span><span class="cnt">6 points <small>· 3 to 200</small></span></div>
+      <div class="georow">
+        <svg class="thumb" viewBox="0 0 96 64"><polygon class="o ed" points="10,20 46,14 78,32 70,54 22,52 12,40"/></svg>
+        <div class="geotext">Copied from <b>Common / ADANA SOUTH MOA</b> at 1403Z.<div class="was">was: no outline</div></div>
+      </div>
+      <div class="row"><button class="sbtn small">Draw on map</button><button class="sbtn small">Pick DCS drawing ▾</button><button class="sbtn small dis">Refresh from drawing</button><button class="sbtn small">Clear outline</button></div>
+      <div class="reason">Refresh: the copy matches the drawing.</div>
+    </div>
+
+    <div class="geo">
+      <div class="ttlx">b · the drawing has moved in this mission</div>
+      <div class="geohead"><span class="lbl">OUTLINE</span><span class="src">DCS DRAWING</span><span class="cnt">6 points <small>· 3 to 200</small></span></div>
+      <div class="georow">
+        <svg class="thumb" viewBox="0 0 96 64"><polygon class="o" points="10,20 46,14 78,32 70,54 22,52 12,40"/><polygon class="o ed" style="stroke-dasharray:3 3" points="10,20 46,10 84,28 70,54 22,52 12,40 8,30"/></svg>
+        <div class="geotext">Copied from <b>Common / ADANA SOUTH MOA</b> at 1403Z. The loaded mission's drawing differs: <b>7 points</b> now (dashed).</div>
+      </div>
+      <div class="row"><button class="sbtn small">Draw on map</button><button class="sbtn small">Pick DCS drawing ▾</button><button class="sbtn small">Refresh from drawing</button><button class="sbtn small">Clear outline</button></div>
+      <div class="reason">Refresh copies the 7 points into the form; Save makes it the outline.</div>
+    </div>
+
+    <div class="geo">
+      <div class="ttlx">c · drawing not in the loaded mission</div>
+      <div class="geohead"><span class="lbl">OUTLINE</span><span class="src">DCS DRAWING</span><span class="cnt">6 points <small>· 3 to 200</small></span></div>
+      <div class="georow">
+        <svg class="thumb" viewBox="0 0 96 64"><polygon class="o" points="10,20 46,14 78,32 70,54 22,52 12,40"/></svg>
+        <div class="geotext">Copied from <b>Common / ADANA SOUTH MOA</b> (mission of 14 Sep). The outline stays as copied.</div>
+      </div>
+      <div class="row"><button class="sbtn small">Draw on map</button><button class="sbtn small">Pick DCS drawing ▾</button><button class="sbtn small dis">Refresh from drawing</button><button class="sbtn small">Clear outline</button></div>
+      <div class="reason">Refresh: ADANA SOUTH MOA is not in the loaded mission.</div>
+    </div>
+
+    <div class="geo">
+      <div class="ttlx">d · drawn on the map</div>
+      <div class="geohead"><span class="lbl">OUTLINE</span><span class="src">DRAWN</span><span class="cnt">5 points <small>· 3 to 200</small></span></div>
+      <div class="georow">
+        <svg class="thumb" viewBox="0 0 96 64"><polygon class="o" points="12,22 50,12 82,36 66,56 18,50"/></svg>
+        <div class="geotext">Drawn on the map by AP at 1218Z.</div>
+      </div>
+      <div class="row"><button class="sbtn small">Edit on map</button><button class="sbtn small">Pick DCS drawing ▾</button><button class="sbtn small dis">Refresh from drawing</button><button class="sbtn small">Clear outline</button></div>
+      <div class="reason">Refresh: this outline was drawn, not copied from a drawing.</div>
+    </div>
+
+    <div class="geo chg">
+      <div class="ttlx">e · cleared, not saved</div>
+      <div class="geohead"><span class="lbl">OUTLINE</span><span class="src">NONE</span><span class="cnt">0 points <small>· 3 to 200</small></span></div>
+      <div class="georow">
+        <svg class="thumb" viewBox="0 0 96 64"><polygon class="o" style="stroke-dasharray:2 3;opacity:.6" points="12,22 50,12 82,36 66,56 18,50"/></svg>
+        <div class="geotext">No outline. On Save, the map stops drawing it and "inside" answers <b>unknown</b>.<div class="was">was: drawn, 5 points</div></div>
+      </div>
+      <div class="row"><button class="sbtn small">Draw on map</button><button class="sbtn small">Pick DCS drawing ▾</button><button class="sbtn small dis">Refresh from drawing</button><button class="sbtn small dis">Clear outline</button></div>
+      <div class="reason">Cancel brings the old outline back.</div>
+    </div>
+
+    <div class="geo">
+      <div class="ttlx">f · airspace ACTIVE (R3-23)</div>
+      <div class="geohead"><span class="lbl">OUTLINE</span><span class="src">DCS DRAWING</span><span class="cnt">4 points <small>· 3 to 200</small></span></div>
+      <div class="georow">
+        <svg class="thumb" viewBox="0 0 96 64"><polygon class="o" points="10,10 84,10 88,50 14,54"/></svg>
+        <div class="geotext">Copied from <b>Common / TOROS RNG</b> at 1205Z.</div>
+      </div>
+      <div class="row"><button class="sbtn small dis">Edit on map</button><button class="sbtn small dis">Pick DCS drawing ▾</button><button class="sbtn small dis">Refresh from drawing</button><button class="sbtn small dis">Clear outline</button></div>
+      <div class="reason">airspace is ACTIVE: only name and frequencies can change</div>
+    </div>
+  </div>
+</div>
+</div>
+<p class="cap">One section, six states. Every disabled button is the dashed outline with its reason written under it (ADR 0056), never a silent grey. A changed outline gets the same dot and grey "was" line as a changed field. Nothing is saved until Save: drawing, picking, refreshing and clearing only fill the form, and Cancel undoes them. The thumbnail is a north-up sketch of the points; blue marks the points in the form that are not saved yet. State (b) is found by comparing the copied points with the drawing in the loaded mission, so it needs no stored hash. State (f) is the R3-23 lock 2P-A already applies to the other fields.</p>
+
+<!-- ───────────── 3. ROUTE EDITOR ───────────── -->
+<h2 id="s3">3 · ROUTE editor: an MTR with 4 fixes and one wide leg</h2>
+<div class="scene" data-stack>
+<div class="panel fixed" style="max-width:1000px;padding-bottom:110px">
+  <div class="card"><div class="grid">
+    <div class="tab"><div class="role">ROUTE · VR</div><div class="nm">VR1207 SEYHAN LOW</div><div class="st">RETURNED · EDITING</div></div>
+    <div class="main">
+      <div class="hdr"><span>Editing as <b>CTR</b></span><span>definition rev 2</span><span>opened 1411Z</span></div>
+      <div class="elided">ID VR1207, NAME, TYPE VR, CTRL CENTER / CTR, USING FACILITY TACTICAL, WORK FREQ, CONTROL FREQ: as in the approved mockup</div>
+      <div class="geo">
+        <div class="geohead"><span class="lbl">ROUTE</span><span class="src">4 FIXES · 3 LEGS</span>
+          <span class="cnt"><button class="sbtn small">Add fixes on map</button></span></div>
+        <div class="kv">
+          <div class="f" style="width:120px"><span class="lbl">DEFAULT WIDTH NM</span><input class="inp" value="4"><span class="was">total, ±2 each side</span></div>
+          <div class="f" style="width:120px"><span class="lbl">ALT LOWER (DERIVED)</span><input class="inp locked" value="500" readonly><span class="was">lowest leg floor</span></div>
+          <div class="f" style="width:120px"><span class="lbl">ALT UPPER (DERIVED)</span><input class="inp locked" value="6000" readonly><span class="was">highest leg top</span></div>
+          <div class="geotext" style="flex:1 1 180px;padding-bottom:12px">The envelope is computed from the legs (crc-sync recomputes it on save). It is what a Strip's altitude block is checked against.</div>
+        </div>
+        <table class="rt">
+          <tr><th></th><th>Fix</th><th>Lat</th><th>Lon</th><th></th><th class="legh">Leg</th><th>Lower ft</th><th>Upper ft</th><th>Width NM</th><th></th></tr>
+          <tr><td class="num">1</td>
+            <td><input class="inp w-name" value="A"></td>
+            <td><input class="inp w-ll" value="N37 21.0"></td>
+            <td><input class="inp w-ll" value="E035 21.0"></td>
+            <td><div class="row" style="flex-wrap:nowrap"><button class="sbtn tiny" title="Pick navpoint">Navpt ▾</button><button class="sbtn tiny" title="Place on map">✛</button></div></td>
+            <td class="leg legname">A → SARIN</td>
+            <td><input class="inp w-alt" value="500"></td>
+            <td><input class="inp w-alt" value="3000"></td>
+            <td><input class="inp w-wd" value="" placeholder="4"></td>
+            <td><button class="sbtn tiny">✕</button></td></tr>
+          <tr><td class="num">2</td>
+            <td><input class="inp w-name" value="SARIN"></td>
+            <td><input class="inp w-ll" value="N37 12.0"></td>
+            <td><input class="inp w-ll" value="E035 39.0"></td>
+            <td><div class="row" style="flex-wrap:nowrap"><button class="sbtn tiny">Navpt ▾</button><button class="sbtn tiny">✛</button></div></td>
+            <td class="leg legname">SARIN → C</td>
+            <td><input class="inp w-alt" value="1000"></td>
+            <td><input class="inp w-alt" value="6000"></td>
+            <td><input class="inp w-wd" value="10"></td>
+            <td><button class="sbtn tiny">✕</button></td></tr>
+          <tr><td class="num">3</td>
+            <td><input class="inp w-name" value="C"></td>
+            <td><input class="inp w-ll" value="N37 04.8"></td>
+            <td><input class="inp w-ll" value="E035 51.0"></td>
+            <td><div class="row" style="flex-wrap:nowrap"><button class="sbtn tiny">Navpt ▾</button><button class="sbtn tiny">✛</button></div></td>
+            <td class="leg legname">C → TOPAK</td>
+            <td><input class="inp w-alt" value="500"></td>
+            <td><input class="inp w-alt" value="4000"></td>
+            <td><input class="inp w-wd" value="" placeholder="4"></td>
+            <td><button class="sbtn tiny">✕</button></td></tr>
+          <tr><td class="num">4</td>
+            <td><input class="inp w-name" value="TOPAK"></td>
+            <td><input class="inp w-ll" value="N36 58.8"></td>
+            <td><input class="inp w-ll" value="E036 09.0"></td>
+            <td class="relpos"><div class="row" style="flex-wrap:nowrap"><button class="sbtn tiny on">Navpt ▴</button><button class="sbtn tiny">✛</button></div>
+              <div class="dd navdd">
+                <div class="ddh"><input class="inp" value="TO" placeholder="Navpoint"></div>
+                <div class="it hov"><span>TOPAK</span><small>N36 58.8 E036 09.0</small><small></small></div>
+                <div class="it"><span>TOPRAK</span><small>N37 07.2 E036 15.0</small><small></small></div>
+                <div class="foot">The loaded mission's navpoints. Picking one fills the name and the coordinates.</div>
+              </div></td>
+            <td class="leg exit" colspan="4">exit fix: the route ends here, no leg</td>
+            <td><button class="sbtn tiny">✕</button></td></tr>
+        </table>
+        <div class="row"><button class="sbtn small">+ Add fix</button><span class="reason">A blank width uses the default (4 NM). Altitudes are indicated feet; from 10000 they read as FL.</span></div>
+      </div>
+      <div class="editbar"><button class="sbtn go">Save</button><button class="sbtn">Cancel</button><span class="why">4 fixes, 3 legs, one leg wider than the default. Envelope 500 to 6000.</span></div>
+    </div>
+    <div class="tools"></div>
+  </div></div>
+</div>
+</div>
+<p class="cap">For <code>kind: ROUTE</code> the OUTLINE section is replaced by the ROUTE section (S-R3-80). One row per fix; the leg columns on a row describe the leg <b>from</b> that fix to the next, so the last row is the exit fix and has none (ADR 0098 §5). A fix name is free text (a letter or a navpoint name; there is no fix database, H23). Coordinates are typed (degrees and decimal minutes shown; decimal degrees and DMS paste accepted, Q2), picked from the mission's navpoints, or placed on the map with ✛. Width is the <b>total</b> corridor width, as the ADR stores it; the "±2 each side" hint is there because MTR charts quote width either side. ALT LOWER/UPPER become read-only and derived for a route. Rows reorder by drag on the number. The same R3-23 lock applies: on an ACTIVE route the whole section is read-only with the reason. The card's activation labels (Confirm, Delay) are 2P-A's and are not shown here.</p>
+
+<!-- ───────────── 4. MAP: DRAWING ───────────── -->
+<h2 id="s4">4 · The map while drawing an outline</h2>
+<div class="scene" data-stack>
+<div class="mapwrap">
+  <svg viewBox="0 0 880 520" data-base>
+    <g data-active-faint></g>
+    <polyline class="ed-line" points="180,430 330,410 450,470 420,510"/>
+    <polygon class="ed-poly" style="stroke:none" points="180,430 330,410 450,470 420,510 236,498"/>
+    <line class="rub" x1="420" y1="510" x2="236" y2="498"/>
+    <line class="rub" x1="236" y1="498" x2="180" y2="430" style="opacity:.6"/>
+    <circle class="hd first" cx="180" cy="430" r="6"/>
+    <circle class="hd" cx="330" cy="410" r="5"/>
+    <circle class="hd" cx="450" cy="470" r="5"/>
+    <circle class="hd" cx="420" cy="510" r="5"/>
+    <g transform="translate(236 498)"><line class="cur" x1="-9" y1="0" x2="9" y2="0"/><line class="cur" x1="0" y1="-9" x2="0" y2="9"/></g>
+    <g transform="translate(250 452)"><rect class="tipb" x="0" y="0" width="150" height="34" rx="2"/><text class="tipt" x="7" y="14">N36 31.8 E034 59.0</text><text class="tipt2" x="7" y="27">leg 9.8 NM · click to add</text></g>
+    <text class="l-act2" x="250" y="398" style="fill:var(--edit)">MOA ADANA SOUTH</text>
+  </svg>
+  <div class="drawbar">
+    <span class="t">DRAWING OUTLINE · MOA ADANA SOUTH · 4 points</span>
+    <span class="h">Click to add a point. Click the first point, or press Enter, to finish. Backspace removes the last point. Esc cancels and leaves the form as it was.</span>
+    <div class="row"><button class="sbtn small">Undo point</button><button class="sbtn small go">Finish</button><button class="sbtn small">Cancel</button></div>
+  </div>
+  <div class="mapbtn"><button class="sbtn small">Airspaces ▾</button></div>
+</div>
+</div>
+<p class="cap">"Draw on map" puts the scope map into a drawing mode; the editor stays open in the panel. The outline being drawn is the blue accent (selection, not a state) with a filled tint; the rubber band runs to the cursor and back to the first point, whose handle is heavier because clicking it closes the shape. The cursor readout gives the coordinate and the length of the leg being drawn. Saved airspaces stay visible in grey, as the layer menu has them, so a new outline can be drawn against its neighbours. Finish hands the points to the form, which shows "DRAWN · 5 points" and the change dot; nothing is sent until Save.</p>
+
+<!-- ───────────── 5. MAP: VERTEX EDIT, INVALID ───────────── -->
+<h2 id="s5">5 · Editing vertices, with a crossing edge</h2>
+<div class="scene" data-stack>
+<div class="mapwrap">
+  <svg viewBox="0 0 880 520" data-base>
+    <g data-active-faint></g>
+    <polygon class="ed-poly" points="180,430 330,410 450,470 260,400 220,505"/>
+    <line class="badl" x1="180" y1="430" x2="330" y2="410"/>
+    <line class="badl" x1="450" y1="470" x2="260" y2="400"/>
+    <line class="badl" x1="260" y1="400" x2="220" y2="505"/>
+    <g transform="translate(298.6 414.2)"><circle class="badx" r="6"/></g>
+    <g transform="translate(252.2 420.4)"><circle class="badx" r="6"/></g>
+    <circle class="mid" cx="390" cy="440" r="4"/>
+    <circle class="mid" cx="200" cy="467" r="4"/>
+    <circle class="hd" cx="180" cy="430" r="5"/>
+    <circle class="hd" cx="330" cy="410" r="5"/>
+    <circle class="hd" cx="450" cy="470" r="5"/>
+    <circle class="hd sel" cx="260" cy="400" r="6"/>
+    <circle class="hd" cx="220" cy="505" r="5"/>
+    <circle class="hd" cx="420" cy="510" r="4" style="opacity:.35;stroke-dasharray:2 2"/>
+    <line class="rub" x1="420" y1="510" x2="260" y2="400" style="opacity:.35"/>
+  </svg>
+  <div class="drawbar bad">
+    <span class="t">EDITING OUTLINE · MOA ADANA SOUTH · 5 points</span>
+    <span class="h">Drag a point to move it. Drag a small midpoint to insert a point. Select a point and press Delete to remove it (not below 3).</span>
+    <span class="err">Edges cross at 2 places. Move the selected point back, or Done is disabled.</span>
+    <div class="row"><button class="sbtn small">Delete point</button><button class="sbtn small dis">Done</button><button class="sbtn small">Cancel</button></div>
+  </div>
+  <div class="mapbtn"><button class="sbtn small">Airspaces ▾</button></div>
+</div>
+</div>
+<p class="cap">"Edit on map" (or Finish, then a click on the outline) shows a handle on every point and a dashed midpoint handle on every edge. The selected point is filled; its old place is a faint ghost while dragging. A self-intersection is checked by 2P-A's validator as the point moves: the crossing edges and the crossing points turn orange-red (something is wrong), and Done is disabled with the reason, the same rule as Save. The 200-point limit counts here too.</p>
+
+<!-- ───────────── 6. MAP: ROUTE FIXES ───────────── -->
+<h2 id="s6">6 · Adding route fixes on the map, snapping to a navpoint</h2>
+<div class="scene" data-stack>
+<div class="mapwrap">
+  <svg viewBox="0 0 880 520" data-base>
+    <g data-active-faint data-no-route></g>
+    <g data-navpts></g>
+    <line class="co ed" x1="380" y1="100" x2="500" y2="160" stroke-width="29.7"/>
+    <line class="co ed" x1="500" y1="160" x2="580" y2="208" stroke-width="69.7"/>
+    <line class="ci" x1="380" y1="100" x2="500" y2="160" stroke-width="26.7"/>
+    <line class="ci" x1="500" y1="160" x2="580" y2="208" stroke-width="66.7"/>
+    <polyline class="ed-line" points="380,100 500,160 580,208"/>
+    <line class="rub" x1="580" y1="208" x2="700" y2="248"/>
+    <circle class="hd" cx="380" cy="100" r="5"/>
+    <circle class="hd" cx="500" cy="160" r="5"/>
+    <circle class="hd" cx="580" cy="208" r="5"/>
+    <circle class="snap" cx="700" cy="248" r="13"/>
+    <g transform="translate(706 254)"><line class="cur" x1="-9" y1="0" x2="9" y2="0"/><line class="cur" x1="0" y1="-9" x2="0" y2="9"/></g>
+    <g transform="translate(596 272)"><rect class="tipb" x="0" y="0" width="176" height="34" rx="2"/><text class="tipt" x="7" y="14">TOPAK · navpoint</text><text class="tipt2" x="7" y="27">snaps · click to use as fix 4</text></g>
+    <text class="tipt2" x="388" y="88" style="fill:var(--edit)">A</text>
+    <text class="tipt2" x="510" y="150" style="fill:var(--edit)">SARIN</text>
+    <text class="tipt2" x="588" y="198" style="fill:var(--edit)">C</text>
+  </svg>
+  <div class="drawbar">
+    <span class="t">ADDING FIXES · VR1207 · 3 fixes</span>
+    <span class="h">Click to add a fix at the end. Near a navpoint the click snaps to it and takes its name. Enter or Finish returns to the table.</span>
+    <div class="row"><button class="sbtn small">Undo fix</button><button class="sbtn small go">Finish</button><button class="sbtn small">Cancel</button></div>
+  </div>
+  <div class="mapbtn"><button class="sbtn small">Airspaces ▾</button></div>
+</div>
+</div>
+<p class="cap">The same drawing mode for a ROUTE adds fixes in order. The corridor is drawn as it will be shown, buffered by each leg's width (the second leg is 10 NM wide, the others the 4 NM default), so a wrong width is visible at once. Navpoints (<code>missionData.waypoints</code>) are the grey triangles; within a few pixels a click snaps to one and takes its name. Altitudes are typed in the table afterwards: the map only places points.</p>
+
+<!-- ───────────── 7. LAYER MENU, DEFAULT ───────────── -->
+<h2 id="s7">7 · The airspace layer menu, default: ACTIVE only</h2>
+<div class="scene" data-stack>
+<div class="mapmenu">
+<div class="mapwrap">
+  <svg viewBox="0 0 880 520" data-base>
+    <g data-show="TOROS KOZAN VR"></g>
+  </svg>
+  <div class="mapbtn"><button class="sbtn small on">Airspaces ▴</button></div>
+</div>
+<div class="lm">
+  <div class="lmh"><b>AIRSPACES ON THE MAP</b><button class="sbtn small dis">Reset</button></div>
+  <div class="sec"><div class="sh">Layers</div><div class="cbs">
+    <span class="cb on"><i></i><span>Outlines</span></span><span class="cb on"><i></i><span>Labels</span></span>
+    <span class="cb on"><i></i><span>Route corridors</span></span><span class="cb"><i></i><span>Route centrelines</span></span></div></div>
+  <div class="sec"><div class="sh">Kind</div><div class="cbs">
+    <span class="cb on"><i></i><span>MOA</span></span><span class="cb on"><i></i><span>RANGE</span></span><span class="cb on"><i></i><span>DANGER</span></span>
+    <span class="cb on"><i></i><span>RESTRICTED</span></span><span class="cb on"><i></i><span>PROHIBITED</span></span><span class="cb on"><i></i><span>WARNING</span></span>
+    <span class="cb on"><i></i><span>ROUTE</span></span></div></div>
+  <div class="sec"><div class="sh">State</div><div class="cbs">
+    <span class="cb"><i></i><span>SCHEDULED</span></span><span class="cb on"><i></i><span>ACTIVE</span></span>
+    <span class="cb"><i></i><span>RELEASED</span></span><span class="cb"><i></i><span>RETURNED</span></span></div></div>
+  <div class="sec"><div class="sh">Each airspace · Syria</div>
+    <input class="inp" placeholder="Search by name or ID">
+    <div class="fac2">INCIRLIK</div>
+    <div class="ind"><span class="nm2">TOROS RANGE<small>ACTIVE</small></span><span class="tri"><span class="on">Filter</span><span>On</span><span>Off</span></span><span class="res">shown</span></div>
+    <div class="ind"><span class="nm2">MOA ADANA SOUTH<small>RETURNED</small></span><span class="tri"><span class="on">Filter</span><span>On</span><span>Off</span></span><span class="res hid">hidden</span></div>
+    <div class="fac2">CENTER</div>
+    <div class="ind"><span class="nm2">MOA KOZAN<small>ACTIVE</small></span><span class="tri"><span class="on">Filter</span><span>On</span><span>Off</span></span><span class="res">shown</span></div>
+    <div class="ind"><span class="nm2">W-21 KARATAS<small>SCHEDULED</small></span><span class="tri"><span class="on">Filter</span><span>On</span><span>Off</span></span><span class="res hid">hidden</span></div>
+    <div class="ind"><span class="nm2">D-117 MERSIN<small>RETURNED · no outline</small></span><span class="tri"><span class="on">Filter</span><span>On</span><span>Off</span></span><span class="res hid">no outline</span></div>
+    <div class="ind"><span class="nm2">VR1207 SEYHAN LOW<small>ACTIVE</small></span><span class="tri"><span class="on">Filter</span><span>On</span><span>Off</span></span><span class="res">shown</span></div>
+  </div>
+  <div class="ft">Saved for you on this computer. Not shared with other controllers. Reset is disabled because this is already the default.</div>
+</div>
+</div>
+</div>
+<p class="cap">The default reproduces "outline the ACTIVE airspaces" (DA-9 a) without making it a rule. Every ACTIVE airspace is a solid grey outline with a two-line label: name, then limits (FL from the transition altitude up). A route is its corridor, buffered by the leg widths. Nothing is coloured. The menu opens from the small "Airspaces" button on the map and is also mounted in the SETTINGS panel. Each airspace has a three-way switch: <b>Filter</b> (follow the kind and state boxes), <b>On</b> or <b>Off</b> (wins over the boxes). The grey word on the right says what that airspace does right now, so the rule never has to be worked out. An airspace with no outline is listed but cannot be drawn.</p>
+
+<!-- ───────────── 8. LAYER MENU, CHANGED ───────────── -->
+<h2 id="s8">8 · The menu changed: RETURNED on, two individual switches, centrelines on</h2>
+<div class="scene" data-stack>
+<div class="mapmenu">
+<div class="mapwrap">
+  <svg viewBox="0 0 880 520" data-base>
+    <g data-show="KOZAN VR ADS W21 CL"></g>
+  </svg>
+  <div class="mapbtn"><button class="sbtn small on">Airspaces ▴</button></div>
+</div>
+<div class="lm">
+  <div class="lmh"><b>AIRSPACES ON THE MAP</b><button class="sbtn small">Reset</button></div>
+  <div class="sec"><div class="sh">Layers</div><div class="cbs">
+    <span class="cb on"><i></i><span>Outlines</span></span><span class="cb on"><i></i><span>Labels</span></span>
+    <span class="cb on"><i></i><span>Route corridors</span></span><span class="cb on chg"><i></i><span>Route centrelines</span></span></div></div>
+  <div class="sec"><div class="sh">Kind</div><div class="cbs">
+    <span class="cb on"><i></i><span>MOA</span></span><span class="cb on"><i></i><span>RANGE</span></span><span class="cb on"><i></i><span>DANGER</span></span>
+    <span class="cb on"><i></i><span>RESTRICTED</span></span><span class="cb on"><i></i><span>PROHIBITED</span></span><span class="cb on"><i></i><span>WARNING</span></span>
+    <span class="cb on"><i></i><span>ROUTE</span></span></div></div>
+  <div class="sec"><div class="sh">State</div><div class="cbs">
+    <span class="cb"><i></i><span>SCHEDULED</span></span><span class="cb on"><i></i><span>ACTIVE</span></span>
+    <span class="cb"><i></i><span>RELEASED</span></span><span class="cb on chg"><i></i><span>RETURNED</span></span></div></div>
+  <div class="sec"><div class="sh">Each airspace · Syria</div>
+    <input class="inp" placeholder="Search by name or ID">
+    <div class="fac2">INCIRLIK</div>
+    <div class="ind"><span class="nm2">TOROS RANGE<small>ACTIVE</small></span><span class="tri"><span>Filter</span><span>On</span><span class="on">Off</span></span><span class="res hid">hidden</span></div>
+    <div class="ind"><span class="nm2">MOA ADANA SOUTH<small>RETURNED</small></span><span class="tri"><span class="on">Filter</span><span>On</span><span>Off</span></span><span class="res">shown</span></div>
+    <div class="fac2">CENTER</div>
+    <div class="ind"><span class="nm2">MOA KOZAN<small>ACTIVE</small></span><span class="tri"><span class="on">Filter</span><span>On</span><span>Off</span></span><span class="res">shown</span></div>
+    <div class="ind"><span class="nm2">W-21 KARATAS<small>SCHEDULED</small></span><span class="tri"><span>Filter</span><span class="on">On</span><span>Off</span></span><span class="res">shown</span></div>
+    <div class="ind"><span class="nm2">D-117 MERSIN<small>RETURNED · no outline</small></span><span class="tri"><span class="on">Filter</span><span>On</span><span>Off</span></span><span class="res hid">no outline</span></div>
+    <div class="ind"><span class="nm2">VR1207 SEYHAN LOW<small>ACTIVE</small></span><span class="tri"><span class="on">Filter</span><span>On</span><span>Off</span></span><span class="res">shown</span></div>
+  </div>
+  <div class="ft">Saved for you on this computer, for Syria. Reset returns to ACTIVE only and clears the individual switches.</div>
+</div>
+</div>
+</div>
+<p class="cap">A non-ACTIVE airspace is a <b>dashed, lighter grey</b> outline whose label carries its state (MOA ADANA SOUTH · RETURNED, shown through the state filter; W-21 KARATAS · SCHEDULED, shown by its own On switch although SCHEDULED is off). TOROS RANGE is ACTIVE but switched Off, so it is gone. The route centreline is a fine dotted line inside the corridor. The individual switches are kept per theater, because airspace ids belong to a theater; switching to another theater and back keeps them, and a switch for a deleted airspace is dropped. A new airspace appears under the boxes. Orange-red is never used for an outline.</p>
+
+<!-- ───────────── LEGEND ───────────── -->
+<h2 id="legend">Legend: what each control does</h2>
+<table class="lg">
+  <tr><th>Control</th><th>Where</th><th>What it does</th></tr>
+  <tr><td>Draw on map / Edit on map</td><td>OUTLINE section (AREA)</td><td>Puts the scope map into drawing mode for this airspace (scenes 4 and 5). Finish or Done writes the points into the form. Saved only with Save.</td></tr>
+  <tr><td>Pick DCS drawing</td><td>OUTLINE section (AREA)</td><td>Lists the loaded mission's drawings by layer and name. A click copies the points (circle or oval: 64 points) and records the drawing's layer, name and mission as provenance (DA-2).</td></tr>
+  <tr><td>Refresh from drawing</td><td>OUTLINE section (AREA)</td><td>Copies the points again from the same drawing in the loaded mission. Enabled only when the outline came from a drawing, that drawing is loaded, and its points differ.</td></tr>
+  <tr><td>Clear outline</td><td>OUTLINE section (AREA)</td><td>Sets the outline to none in the form. On Save the map stops drawing it and containment answers unknown.</td></tr>
+  <tr><td>Point count</td><td>OUTLINE section</td><td>Points in the form now, against the 3 to 200 rule.</td></tr>
+  <tr><td>Default width NM</td><td>ROUTE section</td><td>Total corridor width of every leg whose own width is blank. Required, above 0.</td></tr>
+  <tr><td>Fix row: name, lat, lon</td><td>ROUTE section</td><td>One fix. Name is free text. Coordinates typed, or filled by Navpt ▾ (mission navpoints) or ✛ (one click on the map).</td></tr>
+  <tr><td>Leg: lower, upper, width</td><td>ROUTE section</td><td>The band and width of the leg from this fix to the next. The exit fix has none.</td></tr>
+  <tr><td>Alt lower / upper (derived)</td><td>ROUTE section</td><td>Read-only envelope of the legs, recomputed by crc-sync on save.</td></tr>
+  <tr><td>Add fixes on map / + Add fix</td><td>ROUTE section</td><td>Append fixes by clicking the map (scene 6), or an empty row at the end.</td></tr>
+  <tr><td>Airspaces ▾</td><td>Map, top right</td><td>Opens the layer menu (also in the SETTINGS panel).</td></tr>
+  <tr><td>Layers</td><td>Layer menu</td><td>Outlines, labels, route corridors, route centrelines: each on or off for every airspace.</td></tr>
+  <tr><td>Kind and State boxes</td><td>Layer menu</td><td>An airspace on Filter is shown when both its kind and its state are ticked.</td></tr>
+  <tr><td>Filter / On / Off</td><td>Layer menu, per airspace</td><td>On or Off wins over the boxes; Filter follows them. The word at the right says the result.</td></tr>
+  <tr><td>Reset</td><td>Layer menu</td><td>Back to the default: all layers but centrelines, every kind, ACTIVE only, no individual switches.</td></tr>
+</table>
+
+<h2>What this does not show</h2>
+<ul class="callouts">
+  <li>The rest of the editor, the card actions, conflicts, history and delete: unchanged from the approved mockup (2P-A).</li>
+  <li>The MTR note on the Strip ("route active" / "route not active" in grey in the MTR group): one read-only line, no layout change.</li>
+  <li>The map label placement algorithm: labels sit at the outline's centroid, or beside the first leg for a route.</li>
+  <li>A route picked from a DCS line drawing (open question Q3).</li>
+</ul>
+</div>
+<script>
+(function () {
+  // Base map: Adana / Incirlik area, 34.4E to 36.6E, 37.6N to 36.3N. x = (lon - 34.4) * 400, y = (37.6 - lat) * 400.
+  var BASE =
+    '<rect class="sea" width="880" height="520"/>' +
+    '<path class="land" d="M0,0 H880 V520 H560 L592,476 L708,408 L720,300 L640,300 L556,332 L470,396 L392,412 L320,352 L220,320 L92,328 L0,380 Z"/>' +
+    '<g class="gr"><line x1="0" y1="40" x2="880" y2="40"/><line x1="0" y1="240" x2="880" y2="240"/><line x1="0" y1="440" x2="880" y2="440"/>' +
+    '<line x1="40" y1="0" x2="40" y2="520"/><line x1="240" y1="0" x2="240" y2="520"/><line x1="440" y1="0" x2="440" y2="520"/><line x1="640" y1="0" x2="640" y2="520"/><line x1="840" y1="0" x2="840" y2="520"/></g>' +
+    '<text class="mt" x="4" y="36">N37 30</text><text class="mt" x="4" y="236">N37 00</text><text class="mt" x="4" y="436">N36 30</text>' +
+    '<text class="mt" x="244" y="514">E035 00</text><text class="mt" x="444" y="514">E035 30</text><text class="mt" x="644" y="514">E036 00</text>' +
+    '<circle class="afd" cx="410" cy="239" r="5"/><line class="afd" x1="403" y1="243" x2="417" y2="235"/><text class="mt" x="420" y="243">LTAG INCIRLIK</text>' +
+    '<circle class="afd" cx="352" cy="247" r="4"/><text class="mt" x="290" y="262">LTAF ADANA</text>' +
+    '<text class="mt" x="80" y="316">MERSIN</text>' +
+    '<g transform="translate(20 490)"><line class="gr" style="stroke:var(--map-text)" x1="0" y1="0" x2="66.7" y2="0"/><line class="gr" style="stroke:var(--map-text)" x1="0" y1="-4" x2="0" y2="4"/><line class="gr" style="stroke:var(--map-text)" x1="66.7" y1="-4" x2="66.7" y2="4"/><text class="mt" x="72" y="4">10 NM</text></g>';
+
+  var NAV = [['SARIN', 500, 160], ['TOPAK', 700, 248], ['TOPRAK', 740, 212], ['MISIS', 300, 222], ['YAKAP', 470, 300]];
+  function tri(x, y) { return '<path class="nav" d="M' + x + ',' + (y - 6) + ' L' + (x + 5.5) + ',' + (y + 4) + ' L' + (x - 5.5) + ',' + (y + 4) + ' Z"/>'; }
+  var NAVPTS = NAV.map(function (n) { return tri(n[1], n[2]) + '<text class="navt" x="' + (n[1] + 8) + '" y="' + (n[2] + 12) + '">' + n[0] + '</text>'; }).join('');
+
+  // Airspace outlines (sample data). act = ACTIVE solid, idle = dashed lighter with state in label.
+  function poly(pts, idle) { return '<polygon class="' + (idle ? 'a-idle' : 'a-act') + '" points="' + pts + '"/>'; }
+  function lbl(x, y, l1, l2, idle) {
+    return '<text class="' + (idle ? 'l-idle' : 'l-act') + '" x="' + x + '" y="' + y + '" text-anchor="middle">' + l1 + '</text>' +
+           '<text class="' + (idle ? 'l-idle2' : 'l-act2') + '" x="' + x + '" y="' + (y + 13) + '" text-anchor="middle">' + l2 + '</text>';
+  }
+  var LEGS = [[380, 100, 500, 160, 26.7], [500, 160, 580, 208, 66.7], [580, 208, 700, 248, 26.7]];
+  function corridor(cl) {
+    var o = '', i = '';
+    LEGS.forEach(function (l) {
+      var a = 'x1="' + l[0] + '" y1="' + l[1] + '" x2="' + l[2] + '" y2="' + l[3] + '"';
+      o += '<line class="co" ' + a + ' stroke-width="' + (l[4] + 3) + '"/>';
+      i += '<line class="ci" ' + a + ' stroke-width="' + l[4] + '"/>';
+    });
+    return o + i + (cl ? '<polyline class="cl" points="380,100 500,160 580,208 700,248"/>' : '');
+  }
+  var AS = {
+    TOROS: poly('160,40 320,40 340,120 180,128') + lbl(252, 80, 'TOROS RANGE', 'GND–FL180'),
+    KOZAN: poly('580,8 800,20 820,100 600,112') + lbl(702, 56, 'MOA KOZAN', 'FL100–FL280'),
+    VR: function (cl) { return corridor(cl) + lbl(640, 288, 'VR1207', '500–6000'); },
+    ADS: poly('180,430 330,410 450,470 420,510 220,505', true) + lbl(316, 462, 'MOA ADANA SOUTH', 'RETURNED · 5000–FL230', true),
+    W21: poly('466,426 646,408 616,474 478,494', true) + lbl(552, 444, 'W-21 KARATAS', 'SCHEDULED · GND–FL150', true)
+  };
+
+  document.querySelectorAll('svg[data-base]').forEach(function (svg) {
+    var extra = '';
+    var faint = svg.querySelector('[data-active-faint]');
+    if (faint) {
+      // While drawing: the default menu (ACTIVE only) stays on, faded so the edit stands out.
+      faint.setAttribute('opacity', '.55');
+      faint.innerHTML = AS.TOROS + AS.KOZAN + (faint.hasAttribute('data-no-route') ? '' : AS.VR(false));
+    }
+    var nav = svg.querySelector('[data-navpts]');
+    if (nav) nav.innerHTML = NAVPTS;
+    var show = svg.querySelector('[data-show]');
+    if (show) {
+      var s = show.getAttribute('data-show').split(' ');
+      var cl = s.indexOf('CL') >= 0;
+      show.innerHTML = s.filter(function (k) { return k !== 'CL'; }).map(function (k) { return k === 'VR' ? AS.VR(cl) : AS[k]; }).join('');
+    }
+    svg.innerHTML = BASE + svg.innerHTML + extra;
+  });
+
+  // Each .scene is written once (dark tokens). Wrap it in a pair: the dark original and a light clone.
+  document.querySelectorAll('.scene').forEach(function (src) {
+    var pair = document.createElement('div'); pair.className = src.hasAttribute('data-stack') ? 'pair stack' : 'pair';
+    var dark = document.createElement('div'); dark.className = 'themed dark';
+    var light = document.createElement('div'); light.className = 'themed light';
+    var d = document.createElement('div'); d.className = 'tag'; d.textContent = 'Dark';
+    var l = document.createElement('div'); l.className = 'tag'; l.textContent = 'Light';
+    var body = src.cloneNode(true); body.className = ''; body.removeAttribute('data-stack');
+    dark.appendChild(d); dark.appendChild(body);
+    light.appendChild(l); light.appendChild(body.cloneNode(true));
+    pair.appendChild(dark); pair.appendChild(light);
+    src.parentNode.replaceChild(pair, src);
+  });
+  var buttons = document.querySelectorAll('#mode button');
+  buttons.forEach(function (b) {
+    b.addEventListener('click', function () {
+      document.body.setAttribute('data-mode', b.dataset.m);
+      buttons.forEach(function (x) { x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
+    });
+  });
+})();
+</script>
+</body>
+</html>

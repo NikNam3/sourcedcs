@@ -18,7 +18,7 @@ import * as caps from './airspace-capabilities.js';
 import { mountGeometryEditor } from './airspace-geometry-editor.js';
 
 export const FIELD_LABELS = {
-  airspaceId: 'ID', name: 'NAME', type: 'TYPE', controllingFacilityId: 'CTRL FACILITY', controllingPositionId: 'CTRL POSITION',
+  kind: 'KIND', airspaceId: 'ID', name: 'NAME', type: 'TYPE', controllingFacilityId: 'CTRL FACILITY', controllingPositionId: 'CTRL POSITION',
   usingFacilityId: 'USING FACILITY', usingPositionId: 'USING POSITION', workingFrequencyMhz: 'WORK FREQ MHz',
   controlFrequencyMhz: 'RANGE FREQ MHz', altLowerFt: 'ALT LOWER ft', altUpperFt: 'ALT UPPER ft',
   geometry: 'OUTLINE', segments: 'ROUTE FIXES', defaultWidthNm: 'DEFAULT WIDTH NM',
@@ -375,9 +375,9 @@ function _el(tag, cls, text) {
  */
 export function openAirspaceEditor(o) {
   const creating = !o.record;
-  const base = creating ? { kind: 'AREA' } : o.record.definition;
+  let base = creating ? { kind: 'AREA' } : o.record.definition;
   const openedRev = creating ? null : o.record.defRev;
-  const { editable, reasons } = editableFields({ record: o.record, creating, authority: o.authority, kind: base.kind });
+  let { editable, reasons } = editableFields({ record: o.record, creating, authority: o.authority, kind: base.kind });
   const state = { draft: draftFromDefinition(creating ? null : base, o.transitionAltFt), pending: null, phase: 'form', conflict: null, choices: {}, serverMessage: null, geo: null };
   if (creating) {
     const choices = caps.controllingChoicesFor(o.signedOn);
@@ -456,6 +456,26 @@ export function openAirspaceEditor(o) {
     if (field === 'usingFacilityId' && state.draft.usingFacilityId) { state.draft.usingPositionId = ''; if (inputs.usingPositionId) inputs.usingPositionId.value = ''; }
   };
 
+  const noteEl = _el('div', 'airspace-editor-notes');
+  const impactEl = _el('div', 'airspace-editor-impact');
+  const actions = _el('div', 'airspace-editor-actions');
+  const saveBtn = _el('button', 'airspace-save-btn', 'Save');
+  const cancelBtn = _el('button', 'airspace-action-btn', 'Cancel');
+  const status = _el('span', 'airspace-editor-status');
+  actions.append(saveBtn, cancelBtn, status);
+
+  function buildForm() {
+    if (state.geo && state.geo.destroy) state.geo.destroy();
+    state.geo = null;
+    form.innerHTML = '';
+    for (const m of [inputs, rowEls, dots, wasEls, errEls]) for (const k of Object.keys(m)) delete m[k];
+  if (creating) {
+    const kindSel = document.createElement('select'); kindSel.className = 'airspace-input'; kindSel.id = 'airspace-kind';
+    for (const k of ['AREA', 'ROUTE']) kindSel.appendChild(new Option(k === 'AREA' ? 'AREA (an outline: MOA, range, danger area...)' : 'ROUTE (a corridor: an MTR)', k));
+    kindSel.value = base.kind;
+    kindSel.addEventListener('change', () => switchKind(kindSel.value));
+    inputs.kind = kindSel; addRow('kind', kindSel);
+  }
   if (creating) addRow('airspaceId', input('airspaceId', { maxlength: 24, placeholder: 'MOA-ADS', autocapitalize: 'characters' }));
   else addRow('airspaceId', _el('div', 'airspace-readonly', base.airspaceId));
   addRow('name', input('name', { maxlength: MAX_NAME_LENGTH + 10 }));
@@ -476,14 +496,6 @@ export function openAirspaceEditor(o) {
   }
   const geoHost = _el('div', 'airspace-geometry');
   form.appendChild(geoHost);
-  const noteEl = _el('div', 'airspace-editor-notes');
-  const impactEl = _el('div', 'airspace-editor-impact');
-  const actions = _el('div', 'airspace-editor-actions');
-  const saveBtn = _el('button', 'airspace-save-btn', 'Save');
-  const cancelBtn = _el('button', 'airspace-action-btn', 'Cancel');
-  const status = _el('span', 'airspace-editor-status');
-  actions.append(saveBtn, cancelBtn, status);
-
   // Fields the session may not change are read-only (and say why under the field, above).
   for (const f of SCALAR_FIELDS) {
     if (inputs[f] && !editable.has(f)) inputs[f].disabled = true;
@@ -494,6 +506,19 @@ export function openAirspaceEditor(o) {
   const geoEditable = [...GEOMETRY_FIELDS].some(f => editable.has(f));
   state.geo = mountGeometryEditor(geoHost, geoDefinition(), (patch) => { Object.assign(state.draft, patch); refresh(); });
   if (!geoEditable && state.geo && state.geo.setReadOnly) state.geo.setReadOnly(reasons.geometry || reasons.segments || 'read-only');
+
+  }
+  /** Creating: choosing AREA or ROUTE rebuilds the form for that kind (the ID, name, Position and frequencies stay). */
+  function switchKind(kind) {
+    const keep = Object.fromEntries(['airspaceId', 'name', 'controllingFacilityId', 'controllingPositionId', 'usingFacilityId', 'usingPositionId', 'workingFrequencyMhz', 'controlFrequencyMhz'].map(f => [f, state.draft[f]]));
+    base = { kind };
+    ({ editable, reasons } = editableFields({ record: null, creating: true, authority: null, kind }));
+    state.draft = { ...draftFromDefinition({ kind }, o.transitionAltFt), ...keep, type: (kind === 'ROUTE' ? ROUTE_TYPES : AREA_TYPES)[0] };
+    state.serverMessage = null;
+    buildForm();
+    refresh();
+  }
+  buildForm();
 
   body.append(form, noteEl, impactEl, actions);
 
@@ -550,10 +575,11 @@ export function openAirspaceEditor(o) {
     refresh();
   }
   function _createDefinition() {
-    const { definition } = definitionFromDraft({ kind: 'AREA' }, state.draft);
+    const { definition } = definitionFromDraft({ kind: base.kind }, state.draft);
     const out = {};
     for (const k of ['airspaceId', 'name', 'kind', 'type', 'controllingFacilityId', 'controllingPositionId', 'usingFacilityId', 'usingPositionId',
-      'workingFrequencyMhz', 'controlFrequencyMhz', 'altLowerFt', 'altUpperFt', 'geometry']) {
+      'workingFrequencyMhz', 'controlFrequencyMhz', 'altLowerFt', 'altUpperFt', 'geometry', 'segments', 'defaultWidthNm']) {
+      if (base.kind === 'ROUTE' && (k === 'altLowerFt' || k === 'altUpperFt')) continue;
       if (definition[k] !== null && definition[k] !== undefined) out[k] = definition[k];
     }
     return out;

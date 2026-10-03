@@ -5,6 +5,7 @@ import {
 } from './geojson.js';
 import { createNavpointIcon, initIcons, updateIcons, updateIffIcons } from './icons.js';
 import { initElevationContours } from './elevation.js';
+import { mountAirspaceMenuButton, refreshAirspaceLayers, registerAirspaceLayers } from './airspace-layer.js';
 import { onMaptilerKey, transformMaptilerRequest } from './maptiler-key.js';
 import { updateBullseyeCursor, updateMeasureLine } from './panels/topbar.js';
 import { applyBullseyePick } from './panels/settings-panel.js';
@@ -182,6 +183,9 @@ export function initMap(container) {
         'text-halo-width': 1,
       },
     });
+
+    // ── Airspace outlines (AIRSP-2P-B): below the tracks, above the drawings ──
+    registerAirspaceLayers();
 
     // ── Filed route overlay (from the track panel's FPL section) ───────────
     map.addSource('filed-route', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
@@ -734,6 +738,8 @@ export function initMap(container) {
       map.getSource('drawings').setData(buildDrawings());
       map.getSource('text-marks').setData(buildTextMarks());
     }
+    mountAirspaceMenuButton();
+    refreshAirspaceLayers();
   });
 }
 
@@ -828,6 +834,8 @@ export function applyMapTheme() {
   if (missionData) map.getSource('drawings').setData(buildDrawings());
   map.setPaintProperty('text-marks-labels', 'text-halo-color', light ? '#ffffff' : '#000000');
   if (missionData) map.getSource('text-marks').setData(buildTextMarks());
+  map.setPaintProperty('airspace-labels', 'text-halo-color', light ? 'rgba(255,255,255,0.8)' : 'rgba(0,0,0,0.6)');
+  refreshAirspaceLayers();
   // Re-register coalition icons with theme-correct colors
   updateIcons(light);
   // The black ATC scope, if it is on, sits over whatever theme this painted.

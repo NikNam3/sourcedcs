@@ -1,5 +1,50 @@
 {
  "exports": {
+  "airspace-draw.js": [
+   "isDrawing",
+   "snapToNavpoint",
+   "startDraw",
+   "stopDraw"
+  ],
+  "airspace-layer-menu.js": [
+   "LAYER_LABELS",
+   "MENU_KINDS",
+   "MENU_LAYERS",
+   "MENU_STATES",
+   "OVERRIDE_VALUES",
+   "checklistGroups",
+   "decide",
+   "defaultMenu",
+   "hasOutline",
+   "isDefaultMenu",
+   "kindOf",
+   "mountAirspaceLayerMenu",
+   "overrideOf",
+   "pruneOverrides",
+   "resetMenu",
+   "sanitizeMenu",
+   "setKind",
+   "setLayer",
+   "setOverride",
+   "setState"
+  ],
+  "airspace-layer.js": [
+   "OUTLINE_COLOUR",
+   "applyMenu",
+   "buildAirspaceFeatures",
+   "buildDraftFeatures",
+   "corridorRing",
+   "currentMenu",
+   "currentTheater",
+   "labelText",
+   "lastAirspaceFeatures",
+   "limitsText",
+   "mountAirspaceMenuButton",
+   "mountAirspaceMenuInSettings",
+   "refreshAirspaceLayers",
+   "registerAirspaceLayers",
+   "setDraftFeatures"
+  ],
   "altimetry.js": [
    "H_TROP",
    "ISA_EXP",
@@ -96,6 +141,23 @@
    "atcTargetClick",
    "atcTick",
    "atcView"
+  ],
+  "coords.js": [
+   "COORD_FORMATS",
+   "DEFAULT_COORD_FORMAT",
+   "bandOf",
+   "coordFormatOf",
+   "formatComponent",
+   "formatPair",
+   "fromMgrs",
+   "fromUtm",
+   "parseComponent",
+   "parseCoord",
+   "parsePair",
+   "parsePoints",
+   "toMgrs",
+   "toUtm",
+   "zoneOf"
   ],
   "dock.js": [
    "PANEL_TITLES",
@@ -262,6 +324,47 @@
   ],
   "panels/efsp/airspace-geometry-editor.js": [
    "mountGeometryEditor"
+  ],
+  "panels/efsp/airspace-geometry-model.js": [
+   "CIRCLE_POINTS",
+   "FRESHNESS_EPS_DEG",
+   "MIN_POLYGON_VERTICES",
+   "SIMPLIFY_TOLERANCE_NM",
+   "UNNAMED_LAYER",
+   "addFix",
+   "bearingTo",
+   "blankFix",
+   "canAddFix",
+   "canDeletePoint",
+   "circleToPolygon",
+   "crossingEdges",
+   "deletePoint",
+   "destination",
+   "distanceNm",
+   "drawingLayer",
+   "drawingName",
+   "findDrawing",
+   "geometryFromDrawing",
+   "insertPoint",
+   "legWidthNm",
+   "listDrawings",
+   "midpoints",
+   "missionFingerprint",
+   "movePoint",
+   "outlineFromDrawing",
+   "outlineStatus",
+   "pointsEqual",
+   "polygonGeometry",
+   "polygonProblem",
+   "refreshGeometry",
+   "removeFix",
+   "routeEnvelope",
+   "routeSummary",
+   "rowsFromSegments",
+   "segmentsFromRows",
+   "simplifyRing",
+   "sketchSvg",
+   "trimClosing"
   ],
   "panels/efsp/airspace-panel.js": [
    "airspaceActionsFor",
@@ -840,6 +943,10 @@
    "marsaActionsFor",
    "marsaBadgeFor",
    "refreshMarsaHighlight"
+  ],
+  "panels/efsp/mtr-route-note.js": [
+   "mtrRouteNote",
+   "routeForDesignator"
   ],
   "panels/efsp/ordnance-advisory.js": [
    "ORDNANCE_NO_RUNWAY_STATUS_REASON",

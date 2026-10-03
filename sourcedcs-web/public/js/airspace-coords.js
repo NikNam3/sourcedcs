@@ -38,11 +38,60 @@
     return Math.abs(c.value) <= max ? c.value : null;
   }
 
+
+  /* MGRS (H102 AP2B-Q2): "36S XC 12345 12345", spaces optional, 1-5 digits per axis; the centre of the cell. A hand copy of
+     crc-desktop's coords.js fromMgrs (UTM by the Krueger series, zones 1-60, bands C-X, no polar UPS). */
+  var MG_BANDS = 'CDEFGHJKLMNPQRSTUVWX', MG_COLS = ['ABCDEFGH', 'JKLMNPQR', 'STUVWXYZ'], MG_ROWS = 'ABCDEFGHJKLMNPQRSTUV';
+  var MG_K0 = 0.9996, MG_A = 6378137, MG_F = 1 / 298.257223563, MG_N = MG_F / (2 - MG_F), MG_E2 = MG_F * (2 - MG_F);
+  var MG_AA = (MG_A / (1 + MG_N)) * (1 + MG_N * MG_N / 4 + Math.pow(MG_N, 4) / 64);
+  var MG_ALPHA = [MG_N / 2 - (2 / 3) * MG_N * MG_N + (5 / 16) * Math.pow(MG_N, 3), (13 / 48) * MG_N * MG_N - (3 / 5) * Math.pow(MG_N, 3), (61 / 240) * Math.pow(MG_N, 3)];
+  var MG_BETA = [MG_N / 2 - (2 / 3) * MG_N * MG_N + (37 / 96) * Math.pow(MG_N, 3), MG_N * MG_N / 48 + Math.pow(MG_N, 3) / 15, (17 / 480) * Math.pow(MG_N, 3)];
+  var RAD = Math.PI / 180;
+  function mgBand(lat) { return MG_BANDS.charAt(Math.min(19, Math.max(0, Math.floor((lat + 80) / 8)))); }
+  function mgToUtmNorthing(lat, lon, zone) {
+    var lon0 = ((zone - 1) * 6 - 180 + 3) * RAD, phi = lat * RAD, dl = lon * RAD - lon0, e = Math.sqrt(MG_E2);
+    var t = Math.sinh(Math.atanh(Math.sin(phi)) - e * Math.atanh(e * Math.sin(phi)));
+    var xi = Math.atan2(t, Math.cos(dl)), y = xi;
+    for (var j = 1; j <= 3; j++) y += MG_ALPHA[j - 1] * Math.sin(2 * j * xi) * Math.cosh(2 * j * Math.atanh(Math.sin(dl) / Math.sqrt(1 + t * t)));
+    return MG_K0 * MG_AA * y + (lat < 0 ? 1e7 : 0);
+  }
+  function mgFromUtm(zone, south, easting, northing) {
+    var x = (easting - 500000) / (MG_K0 * MG_AA), y = (northing - (south ? 1e7 : 0)) / (MG_K0 * MG_AA), xi = y, eta = x, e = Math.sqrt(MG_E2);
+    for (var j = 1; j <= 3; j++) {
+      xi -= MG_BETA[j - 1] * Math.sin(2 * j * y) * Math.cosh(2 * j * x);
+      eta -= MG_BETA[j - 1] * Math.cos(2 * j * y) * Math.sinh(2 * j * x);
+    }
+    var chi = Math.asin(Math.sin(xi) / Math.cosh(eta)), phi = chi;
+    for (var i = 0; i < 8; i++) phi = Math.asin(Math.tanh(Math.atanh(Math.sin(chi)) + e * Math.atanh(e * Math.sin(phi))));
+    return [phi / RAD, ((zone - 1) * 6 - 180 + 3) + Math.atan2(Math.sinh(eta), Math.cos(xi)) / RAD];
+  }
+  function parseMgrs(text) {
+    var m = String(text || '').toUpperCase().replace(/\s+/g, '').match(/^(\d{1,2})([C-HJ-NP-X])([A-HJ-NP-Z])([A-HJ-NP-V])(\d*)$/);
+    if (!m) return null;
+    var zone = Number(m[1]);
+    if (zone < 1 || zone > 60 || m[5].length % 2 || m[5].length > 10) return null;
+    var col = MG_COLS[(zone - 1) % 3].indexOf(m[3]);
+    if (col < 0) return null;
+    var prec = m[5].length / 2, cell = Math.pow(10, 5 - prec);
+    var easting = (col + 1) * 100000 + (prec ? Number(m[5].slice(0, prec)) * cell : 0) + cell / 2;
+    var north = MG_BANDS.indexOf(m[2]) >= MG_BANDS.indexOf('N');
+    var rowIdx = (MG_ROWS.indexOf(m[4]) - (zone % 2 === 0 ? 5 : 0) + 20) % 20;
+    var northing = rowIdx * 100000 + (prec ? Number(m[5].slice(prec)) * cell : 0) + cell / 2;
+    var minLat = Math.max(-80 + 8 * MG_BANDS.indexOf(m[2]), -80);
+    var floor = mgToUtmNorthing(minLat, (zone - 1) * 6 - 180 + 3, zone) - 100000;
+    while (northing < floor) northing += 2000000;
+    var out = mgFromUtm(zone, !north, easting, northing);
+    if (mgBand(out[0]) !== m[2]) return null;
+    return [round6(out[0]), round6(out[1])];
+  }
+
   /* A pasted "lat lon" line, decimal or DMS with hemispheres:
-     "36.2083, 36.75"  |  "N36°12'30\" E036°45'00\""  |  "36 12 30 N 036 45 00 E" */
+     MGRS "36S XC 12345 12345"  |  "36.2083, 36.75"  |  "N36°12'30\" E036°45'00\""  |  "36 12 30 N 036 45 00 E" */
   function parsePair(line) {
     var s = String(line || '').toUpperCase().replace(/[,;]/g, ' ').trim();
     if (!s) return null;
+    var mgrs = parseMgrs(s);
+    if (mgrs) return mgrs;
     var lat = null, lon = null;
     if (/[NSEW]/.test(s)) {
       var re = /([NSEW])\s*([\d.\s°'′"″:]+)|([\d.\s°'′"″:]+?)\s*([NSEW])/g, m, comps = [];
@@ -105,7 +154,7 @@
       shape + dots + '<text x="' + (size - 6) + '" y="12" text-anchor="end" font-size="10" fill="currentColor">N&#8593;</text></svg>';
   }
 
-  var api = { parseComponent: parseComponent, parseCoord: parseCoord, parsePair: parsePair, parsePoints: parsePoints, outlineSvg: outlineSvg };
+  var api = { parseComponent: parseComponent, parseCoord: parseCoord, parsePair: parsePair, parsePoints: parsePoints, parseMgrs: parseMgrs, outlineSvg: outlineSvg };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.AirspaceCoords = api;
 })(typeof window !== 'undefined' ? window : globalThis);

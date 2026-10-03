@@ -35,6 +35,7 @@ const MODULES = {
   geo: '/js/geo.js',
   atc: '/js/atc-scope.js',
   airspace: '/js/panels/efsp/airspace-panel.js',
+  airspaceLayer: '/js/airspace-layer.js',
   msgRegistry: '/js/panels/efsp/efsp-message-registry.js',
 };
 

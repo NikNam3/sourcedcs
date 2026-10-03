@@ -1,4 +1,5 @@
 'use strict';
+import { refreshAirspaceLayers } from '../../airspace-layer.js';
 import { missionNow } from '../topbar.js';
 import { settings } from '../../app.js';
 import { getAllEfspAirspaces, getEfspFlightData, getAllEfspStrips, getEfspAirspaceEdits, stripsInAirspace } from './efsp-state.js';
@@ -448,6 +449,7 @@ function _buildToolbar(signedOn) {
 }
 
 export function renderAirspacePanel() {
+  refreshAirspaceLayers(); // the map's outlines follow the registry, whether or not this panel is built
   if (!_airspaceListEl) return; // not initialized yet
   const airspaces = getAllEfspAirspaces();
   const signedOn = getActingPositions();
