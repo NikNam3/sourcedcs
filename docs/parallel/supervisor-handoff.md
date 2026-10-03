@@ -1,233 +1,149 @@
 # Supervisor handoff
 
-## START HERE: state in session 4, day 2 (2026-10-02, afternoon)
+## START HERE: end of phase 1 of the architecture fixes (2026-10-03)
 
-Record: `docs/parallel/decisions.md` (this session: S-W1 … S-M-W7, H99-H101). Standing rules: H99 (the supervisor merges finished lanes into `efsp-wp5-correlation` without asking until all waves finish; never push; ask before any prod deploy, R3-79); lanes never run `git merge` (S-APP1; integration branches excepted); desk questions go up immediately and answers are read back by listing the whole `answers` collection (memory `feedback_decision_desk_for_questions`).
+You are the supervisor ("main") of parallel lanes in this monorepo. You dispatch background agents in git worktrees,
+merge their branches into `efsp-wp5-correlation`, and keep the record. Older session history is in git and in
+`docs/parallel/decisions.md`; this file only holds what you need now.
 
-**The refactor (W1-W7) is merged** into `efsp-wp5-correlation` (local only; head after `7b8f04c`): R0, STORES, WIRE, BOARD-1/2/3, APP, DATA-1/2, LOG-1/2, AUTH, TIME-B, SYNC, ESM-1 (+1T a/b/c), ESM-2a/2b, CMSG, BACKCOMPAT (window closed: `npm test` excludes the freeze suite, `npm run freeze` runs it), RENAME-A/B/C (FAA vocabulary, every wire name changed). Merged tree: crc-sync 2117/2118, freeze 48/48, crc-desktop 881/883 + 2 todo. **The final sharded Playwright run on the renamed tree was in progress** (log `scratchpad/pw-w7.log`); the two before it (post-ESM, post-W6) had 0 consistent failures.
+### Standing rules (the human's, in force)
 
-**Queued by the human (H103):** an architecture check (wiring, god files, bad paradigms, naming) after the current feature lanes finish, before more features — read-only analysis lanes + synthesis, report to the human first.
+- **H99:** merge finished lanes into `efsp-wp5-correlation` without asking. **Never push, never deploy** (R3-79: ask
+  before any prod deploy).
+- **H105:** **at most 3 agents at once.** Queue the rest and start the next when one finishes.
+- **Models:** code-writing lanes run on Sonnet, design and analysis on Opus.
+- **Lanes never run `git merge`/rebase** (the classifier refuses it). The supervisor runs every merge. If a merge
+  conflicts badly, start it yourself in a fresh `integ/<name>` worktree and give an agent the conflicted tree to
+  resolve and `git commit`.
+- Every lane reads `docs/parallel/lane-rules.md`. That file covers the worktree in `../sourcedcs-<LANE>`, branch
+  `lane/<LANE>-…`, `docs/wip/<LANE>.md`, clocks, strict state/, and Playwright only on its own `E2E_LANE`.
+- **Never touch `crc-sync/state/`** (the human's local data), **:3000** (the human's crc-sync) or **:3117** (an orphan
+  the human must stop). **Never `pkill -f`**: stop processes by PID only.
+- **Questions for the human** go to the Decision Desk the moment they arise:
+  https://claude.ai/artifact/A3gizEgbwfqCnnU831G4Y7 (`questions` collection; read answers by listing the whole
+  `answers` collection with limit 1000).
+- **Auth hardening is out of scope.** H106 AC-2: the localhost `POST /api/sync-config` hole stays a known finding.
+- **After every merge:**
+  - crc-sync: `npm test`, `npm run freeze` (on conflicts, take either side, then `freeze:update` once), `wire:record`
+    (any wire change; the protocol is 2 and stays 2 until a crc-desktop release ships 2).
+  - crc-desktop: `npm test`. Re-record `tests/fixtures/module-graph-exports.json` with
+    `GOLDEN_RECORD=1 node --test tests/module-graph.test.mjs` when a client module was added.
+  - After client merges, run the full sharded Playwright suite:
+    `cd crc-desktop && npm run e2e:sharded -- --lanes 1,2,4,5 --rerun-failed`. Failures that pass alone come from load.
+    Afterwards `git checkout -- docs/wip crc-desktop/e2e/tools/spec-timings.json`.
+- **At the next phase boundary,** clean up again: remove worktrees and merged branches, rewrite this file, and give the
+  human a relaunch prompt (memory `feedback_handoff_for_relaunch`).
 
-**Next, in order:** (1) read the W7 Playwright result; fix any consistent failure (likely a renamed name on one side only). (2) L20 (comment/doc sweep): briefings being written by `lane/L20-BRIEF` → `docs/parallel/l20/`; then launch its parallel lanes. (3) Queued small lanes: migrate the e2e specs off `classic-globals-bridge.js` and delete it; the 336 always-true `typeof` guards (client); a later data lane (S-DATA2-0 follow-ups). (4) Feature lanes, briefings ready in `docs/parallel/post-refactor/` with H100 applied: UNDO-S/C + SJ-S/C (split/join, undo), CR-S/C (ControlRelease), TOFI-REGIME (after AIRSP-2S-A), AIRSP-2 (2S-A, 2S-B, 2P-A, 2P-B with a mockup round first, 2W). Then WIRE-B (per-Facility heartbeat) and SYNC-B (resync for every store; SYNC's step-7 proposal). Doctrine question after the window: RP-F1 (GC consolidated at LC; the human: "ground and tower are two different controllers").
+### State
 
-**Human actions:** push a backup (the branch is local only); stop the orphaned `node app/server.js` on :3117 (pid 323124); before any deploy of this branch: ship crc-desktop and crc-sync together (every wire name changed), rename `ASACS_DOMAIN`/`ASACS_URL` → `CRCSYNC_DOMAIN`/`CRCSYNC_URL` in the server's `infra/.env` before the pull, delete `state/efsp-board.json`, `state/efsp-mutations.jsonl`, old `state/efsp-facility-*.json` and a `state/alerting.json` that uses `stca` (clean start; anything old now stops start-up loudly), and the INFRA3 R3-17 checks; every client gets the default dock layout once.
+`efsp-wp5-correlation` is local only, about 1,150 commits ahead of `main`. Everything is merged and green:
 
----
+| Suite | Result |
+|---|---|
+| crc-sync | 2423/2423 |
+| freeze | 48/48 |
+| freeze:selfcheck | 18/18 |
+| soak:selfcheck | PASS |
+| crc-desktop | 1137/1137 |
+| sourcedcs-web | 146/146 |
+| infra | 25/25 |
+| Playwright (full, phase 1) | see the S-ARCH-4 row in decisions.md |
 
-## Previous: state at the end of session 4, day 1 (2026-10-01)
+The only worktree is the main checkout. Two unmerged branches are kept on purpose and are superseded:
+`lane/QA-sync-cleanup` and `lane/AIRSP-2P-B-geometry`.
 
-Record: `docs/parallel/decisions.md` rows S-W1 … S-SYNCq2, H99, H100 (this session). **H99: the supervisor merges finished lanes into `efsp-wp5-correlation` without asking until all waves finish; never push, never deploy (R3-79).** S-APP1: lanes never run `git merge` (classifier denies it); the supervisor runs merges in lane worktrees, the lane resolves. Desk questions go up as soon as they arrive (memory updated).
+- **Built:** every EFSP feature the usage guide and the post-refactor list name. That covers undo (ADR 0100),
+  Split/Join (0099), control release (0101), the TOFI regime (0102), the airspace registry with server, web admin,
+  panel and geometry editor (0098), the wire protocol (0103), the heartbeat (0104), GC/LC combination and frequencies
+  (0105) and store sync (0106). The status page is https://claude.ai/artifact/RarbPFQsNAN58a3cD7nUbP, source in the
+  old session's scratchpad. Rebuild it if you need to update it.
+- **Architecture check (H103)** is done. Reports: `docs/wip/ARCH-S.md` (crc-sync), `ARCH-W.md` (web, infra, seams,
+  tests), `ARCH-C.md` (client). The combined plan is `docs/parallel/arch-check-plan.md`.
+- **Human answers (H106):** AC-1 all three phases, in order; AC-2 leave the localhost hole; AC-3 keep warn plus
+  automatic repair on sign-off; AC-4 restructure the goldens.
+- **Phase 1 (bugs) is done and merged.** The lanes were SERVER-BUGS (B2-B6), DESK-SIGNON (B1, 15 s sign-on grace),
+  DESK-RENDER (B7-B9, PTT max 30 s), WEB-DATA (B10, B11), DESK-LINKS (B12, B13, the lxsrs PTT watchdog at 1.5 s),
+  SIGNOFF-EFFECTS (every sign-off path runs `staffingChanged()`) and DEPLOY-GATE-2 (B14). Details are in decisions.md,
+  rows S-ARCH-1 to S-ARCH-4.
 
-**Merged** (local, not pushed; head after `193a785`): INFRA3, DES-RELEASE/AIRSP/SPLIT + DESK4 (post-refactor drafts, H100 applied), RENAME-PREP, R0, STORES, WIRE, BOARD-1, APP, DATA-1, DATA-2, LOG-1, BOARD-2, AUTH, BOARD-3, LOG-2, TIME-B, PW-SHARD, plus integration fixes (`457397d`, the tuning-file test dirs, `0bfe9d3` airspace-config lazy load, `c2dfd14` ws-hub tolerates results without `broadcasts`, `2b055d4` last console call + lane-rules §5). W1-W4 server lanes are done. Merged tree: crc-sync 2140/2143 (2 grpc load-timing fails), freeze 47/47, freeze:selfcheck 18/18, soak:selfcheck PASS, crc-desktop 865/866.
+### Next: phase 2 (tests and tooling), then phase 3 (structure)
 
-**In flight when the session ended (agents may have finished or died; check their branches/wips):**
-- **ESM unit** (`lane/ESM-1-client-modules`, worktree `../sourcedcs-ESM-1`): T a/b/c merged in, efsp-wp5-correlation merged in twice (last clean). ESM-1 was re-running step-9 gates. Next: read `docs/wip/ESM-1.md` report; merge the unit into efsp-wp5-correlation (expect the .js→.mjs renames; BOARD-3/AUTH/LOG-2 edits to `overflight-shared-state-names.test.js` and `client-mirror-parity.test.js` after the unit's last sync must be carried into the .mjs versions); then the full Playwright run with `npm run e2e:sharded -- --lanes 5,6,8,9,0 --rerun-failed` **on a quiet machine** (PW-SHARD could not validate under load 46-92; `git checkout -- docs/wip` after the run). Then start CMSG, ESM-2a, ESM-2b (W3 client lanes). Queued follow-up: migrate the e2e specs off `classic-globals-bridge.js` and delete it.
-- **SYNC is MERGED (S-M-SYNC); ESM-1 finished, unit head `def42b1`, NOT merged yet — do it first.** Old note: SYNC (W5, `lane/SYNC-one-mechanism`, `../sourcedcs-SYNC`): rulings S-SYNC0, S-SYNCq1, S-SYNCq2 (W5-11 reversed S-SYNC0: keep host-core's `_rebalanceRack` wrap; `observeTouches(fn(stripId))`). Merge alone when done; then W6 BACKCOMPAT, then W7 RENAME (A → B → C; desk RP-1..6, RP-F1 open).
-- Desk open: RP-1..RP-6, RP-F1. Everything else settled.
+The briefings are the reports' own fix-lane sections: `ARCH-W.md` "Proposed fix lanes", `ARCH-C.md` "Proposed fix
+lanes", and `ARCH-S.md` top 10 and sections. Give each lane the matching section plus `arch-check-plan.md`. Run 3 at
+a time.
 
-**Human actions:** stop the orphaned `node app/server.js` on :3117 (pid 323124, blocks E2E lane 7); before any deploy check the server's `crc-sync-state` volume for old partial `efsp-facility-*.json` (now a startup error, S-M-DATA1) and do INFRA3's R3-17 server checks (`docs/wip/INFRA3.md`); push a backup; the earlier list below still applies. The 10-min checkpoint loop is not running (restart `tools/checkpoint-worktrees.sh` if wanted). Agent ids: session scratchpad `agents.txt` (may be gone).
+**Phase 2:**
+1. **TMP-HYGIENE (S).** A per-process `TMPDIR` in each test preload: crc-sync `tests/helpers/isolate-state.mjs`,
+   plus equivalents for crc-desktop, sourcedcs-web and Playwright. Also split the 23 s I11 exhaustive walk in
+   `control-release-invariant.test.mjs` by depth (ARCH-W §5.1/5.2, ARCH-S #10).
+2. **E2E-STAB (S–M).**
+   - Remove the 450 ms sleeps that race the 400 ms double-tap guard. Inject the clock (ARCH-S #4: six bare
+     `Date.now()` sites in the Board) or use a test hook.
+   - Cut the 54 `waitForTimeout`s.
+   - Reset the Board per test.
+   - Add an e2e-boot unit test that starts crc-sync with Playwright's env and files. It would have caught `371bedde`.
+   - Source: ARCH-W §5.3/5.5.
+3. **FREEZE-GRAIN (M, H106 AC-4).** Per-trace id namespaces and per-record digests, so one new uuid call stops
+   rewriting 44 goldens. Re-record everything once (ARCH-W §5.4).
+4. **STORE-THROWS (S).** The six other stores' catch-alls (correlation, carrier, airspace, MARSA, runway status, SFA)
+   still answer `VALIDATION_ERROR` on a throw. Treat them like B3: `INTERNAL_ERROR`, partial audit, persist.
 
----
+**Phase 3:**
+1. **SERVER-SEAMS (M–L).**
+   - Inject the clock at the remaining `Date.now()` sites.
+   - Read config at start, not at require time (`stereo-routes`, `apt-config`, the env reads). End the
+     `facility-config` singleton.
+   - One delta builder per family and one broadcast path in `ws-hub.js` (six today).
+   - Shared store bookkeeping: sync counter, getters, `setMutationLog`, audit subject id.
+   - Bring back the rev/updatedAt helper.
+   - Split `createApp` (765 lines) and `createEfsp` (323 lines, 54-closure `rules`).
+   - Make the late-bound hooks plain dependencies. The regime locator fails silently today.
+   - Source: ARCH-S #3, 5, 6, 7, 9.
+2. **DESK-ACKS (M, plus server S).** One `send(msg, {onAck})` in place of five ack trackers. Attestation and warnings
+   become structured, with no regex on prose; `warnings[]` already exists server-side. Five refusal codes reach the
+   controller raw. A popover keeps its input on refusal. Source: ARCH-C #6.
+3. **DESK-SYNC (S–M).** One sync cursor for Boards and stores. Delete `efspBoardSeq`. Source: ARCH-C #7.
+4. **DESK-GRAPH (M–L).** Break the 59-module import cycle: leaf modules instead of importing `app.js`, an end to
+   `window.getLatestTrack` in production and to `bay-view`'s 50 re-exports, then a change bus. Source: ARCH-C #5.
+   It unblocks splitting `efsp-state.js`, `airspace-panel.js`, `strip-view.js`, `airspace-editor.js` and
+   `map-setup.js` (ARCH-C #9).
+5. **SEAMS (S).** One service-token helper and status policy (B15). Env naming: `SOURCEDCS_CRCSYNC_URL` and
+   `CRCSYNC_URL`'s two meanings. The 20 undocumented path overrides. The dead `PUBLIC_DIR`. Source: ARCH-W #7, #10, §1.4.
+6. **DESK-TIDY (S).** A topology module. Parity tests for the four client rule tables. Dead exports, naming and CSS.
+   The `innerHTML` sinks. `openPopover`. A real-server airspace e2e. Source: ARCH-C #8, #10.
 
-## Previous: state in session 3 (2026-10-01, evening)
+**After phase 3:**
+- NX-1, a soak-with-hints lane: wire the hint monitor and airborne observer into the soak, add the store-stale
+  detector from SYNC-B-S, then the human runs the 4 h soak once.
+- The other consolidation links, CD→GC, LC→AP and carrier (H104 GCLC-3), as their own design lane.
+- `definitionHistory` on the wire.
+- A route from a DCS line drawing.
+- An undone split telling clients its flight data is gone.
+- `sync-lxsrs.sh --upgrade`.
+- Declutter goes last.
 
-The record is `docs/parallel/decisions.md` (rows H79-H98, S-desk3, S-ARCH2, S-R3-80, S-M-merge4 are this session's). Rules: never push without the human's go; ask before any prod deploy (R3-79); up to 10 agents in parallel (memory `feedback_parallel_agent_budget`); auth hardening out of scope.
+### Human actions outstanding
 
-**Branch.** `efsp-wp5-correlation` (local only, not pushed; back it up = human action) now holds everything: waves 1-3, merge4 (E2E-harden, UI-B + R3-47, QAS redo, the L28 Role Bay fix). crc-sync 2083/2083, crc-desktop 865 + 1 todo, Playwright 140/140. No lane is unmerged except the refactor lanes below. The old `lane/QA-sync-cleanup`, `lane/UI-B-followup`, `lane/E2E-harden` and the ~30 `../sourcedcs-*` worktrees from waves 1-3 plus `../sourcedcs-MERGE4` can be removed.
-
-**Desk.** Every question is settled (the last ones in chat: H87-H98). Nothing open.
-
-**Refactor (in progress).** Plan `docs/wip/ARCH-plan.md`, schedule and conventions `docs/parallel/refactor/README.md`, briefings `docs/parallel/refactor/*.md`; waves W1-W7 (W7 = RENAME, briefing still to be written from `docs/parallel/research/vocabulary.md` per H96/H98), then L20. **W1 at base `45aee4c` — stopped cleanly when session 3 ended; relaunch in the next session:**
-- **R0**: worktree `../sourcedcs-R0`, branch `lane/R0-harness-prep`, step 0 committed (`3dbb46a`, `docs/wip/R0.md`). Relaunch with its briefing + "continue from your branch and `docs/wip/R0.md`; step 0 is done". Its open point for the questioner: step 1's order test assumes no Mutation yields both peer and MARSA broadcasts, but `_applyDrop` on a flight's last Strip can return both; default = try one hub trace, else the stub-level `freeze-hub-order` test.
-- **ESM-1**: not started (its empty worktree was removed). Launch fresh per `docs/parallel/refactor/ESM-1.md` (worktree `../sourcedcs-ESM1`, branch `lane/ESM-1-client-modules`, base `45aee4c` or the then-current head); it must SendMessage "main" the hash of its "sources converted" commit, from which ESM-1T a/b/c are cut.
-- **Questioner** (Opus): launch fresh with the W1 briefings; reads each lane's step-0 wip and challenges it.
-- **Also launch in W1 (slot plan, README "Slot plan")**: PW-SHARD (Sonnet), three post-refactor design agents (Opus, docs only), RENAME prep (Opus, docs only), INFRA3 (Sonnet). W2 (BOARD-1, WIRE, STORES, APP) starts as soon as R0 merges, overlapping ESM. Keep ≤10 agents, critical path (board chain) first. **Test policy S-TEST**: lanes never run full Playwright; the supervisor runs it sharded only after client-touching merges.
-- Merge: R0 alone; ESM-1 + ESM-1T as one unit; then supervisor full Playwright on lane 7, then W2. Models: lanes Sonnet 5.5, questioner Opus.
-
-**Queued after the refactor (designs settled):** formation split/join (H89-H91), control release on HANDOFF (H94), undo for every one-click move with a 10 s window (H95), TOFI separation regime effective at airspace entry (H97, with AIRSP phase 2 / ADR 0098, MTRs as `kind: ROUTE` per S-R3-80), per-Facility heartbeat (WIRE-B) and resync for every store (SYNC-B) (H88), logging (LOG-1/2 in the refactor).
-
-**Human actions outstanding:** push a backup; `docker run` check of the nginx changes; INFRA2's MariaDB init and O-9 checks; live DCS checks (wind, `mission_start`, 10-minute gRPC, carrier ship, FINAL panel, L19 chip); the 4-hour soak workflow.
-
----
-
-## Previous: state at the end of session 2 (2026-10-01)
-
-Everything older in this file is history; `docs/parallel/decisions.md` (rows H78, S-M-wave3 and the S-* rows above it) is the record.
-
-**Rules in force.** Never push or merge without the human's go (the human said "merge what's finished" once; the merges below used it). **H78: no new agents until the running ones finish; the architecture refactor takes priority after them (and maybe L20).** Auth hardening is out of scope (memory `project_auth_out_of_scope`). Questions to the human go to the Decision Desk (https://claude.ai/artifact/A3gizEgbwfqCnnU831G4Y7); answers are read back with ArtifactData (`answers` collection) and logged as `H<n>` rows.
-
-**Branches.** `efsp-wp5-correlation` (local only: nothing is on GitHub; 345+ commits over `origin/main`; **back it up first, needs the human's go**) now holds waves 1 to 3: `integ/wave3-dry` (GRPC, SOAK, DOCFOLD, TA, HYG, PARITY, L17, L19, UI-A) plus L18-server, SOAKW, QAC, INFRA2, S13, DOCS2, L28, FREEZE, ARCH, AIRSP, L20-prep. Tests on it: crc-sync 2006 pass, crc-desktop 825 pass / 2 todo. A full Playwright run (`E2E_LANE=7`, log `scratchpad/pw-real.log`, may be gone) was in progress. Branch map and merge forecast: https://claude.ai/artifact/DCTL7FNCx7jqvGiTaTRAtw (written before the last merges; the merged part is now done).
-
-**Not merged yet.**
-- `lane/QA-sync-cleanup` (QAS): conflicts with L18-server in `facility-config.js`; do not hand-merge, re-run its dead-export scan on the merged tree.
-- `lane/UI-B-followup`: conflicts in 5 files (client `efsp-ws.js`, `board-store.js`, 3 test files); it cherry-picked PARITY's four test commits. After merging it, add the two one-liners in `docs/wip/UI-B.md` (the chip's `observedAirborne: true`, and `setAirborneObserver(...)` where L19's hint monitor is built).
-- `lane/E2E-harden` (E2EH): may still be running; it also fixed `l15-metrics` (expects `NO DATA`) differently from the merge-time fix (`nothing in this window`): reconcile when merging. It conflicts only in `final-panel.js` (take the merged version).
-- Phase 2 of AIRSP (airspaces panel build) waits for the refactor's registry phase and the desk answers.
-
-**Unverified by the merge.** The INFRA2/nginx resolution (a 12-hourly cert-reload loop moved to `infra/nginx/entrypoint.d/30-reload-certs.sh`, never run against a real nginx); commit `e398dc6` ("docs(parallel): S-UIA...") also swept the human's uncommitted edit of that reload loop into history under a wrong message (not rewritten).
-
-**Next, in order.** 1) Read the Playwright result and fix real failures (known flake classes: `tactical-positions`, `l17-carrier`, `l4-drag` under load; a worktree without `npm ci` shows exactly 10 crc-sync failures). 2) Merge QAS, UI-B, E2E-harden (each needs the human's go to push, not to merge). 3) Remove DOCS2's "on a branch" markers (grep `lane/L18-server` and `SOAKW` in CLAUDE.md, briefing, guide). 4) Read the desk answers (99 new questions: S3-1..10, AIRSP-1..7, ARCH-D1..D7, R3-1..82); the blocking ones are R3-1/2/3 (merge), R3-6/7 (S13), R3-8/9/10 and ARCH-D1/D2 (refactor), R3-11/12 and AIRSP-1 (airspace panel). 5) Decide L20 before the freeze window, then the refactor per `docs/wip/ARCH-plan.md` (phase 0 = the FREEZE lane, merged; refactor rule: golden diffs must be empty except by an explicit approved change). 6) Human actions: push a backup; `docker run` check of the nginx changes; the MariaDB init path and the O-9 server checks in `docs/wip/INFRA2.md`; check the live `state/` for a persisted `efsp-facility-*.json` lacking `holdsRole` (L28); live DCS checks (wind, `mission_start`, 10-minute gRPC, carrier ship, FINAL panel, the L19 chip during a runway suspension); the 4-hour soak workflow.
-
-**Artifacts.** Feature map and concern triage (the human's fix/later/wontfix decisions live in its database): https://claude.ai/artifact/X4WHNNk45QQXCDyiranAxE; "How CRC works" walkthrough (20 levels): https://claude.ai/artifact/P2MMksGLE9ATgP7FBWx6jv; airspace panel mockup: https://claude.ai/artifact/JH2NYvGPM1zcrqRaEzgiqv; git story: https://claude.ai/artifact/DCTL7FNCx7jqvGiTaTRAtw. Worktrees: `../sourcedcs-<lane>` (about 30; remove after the merges), checkpoint loop `tools/checkpoint-worktrees.sh` (dies with the session).
-
----
-
-
-Start here if you are the supervising session for the EFSP parallel lanes. Read, in order:
-
-1. `docs/efsp-parallel-plan.md`: the lanes, the waves, the shared-file rules (§2), and your role (§1).
-2. `docs/parallel/decisions.md`: **the record.** Every ruling (P = process, D = supervisor round 1,
-   H = human, S-* = supervisor). It wins over any briefing. Lanes read it by absolute path
-   (`/home/nklx/dev/personal/sourcedcs/docs/parallel/decisions.md`), so a new row reaches them
-   without a rebase.
-3. `docs/parallel/wave1/L1.md` … `L11.md`: the wave-1 briefings. Each ends with a supervisor addendum
-   that points back at `decisions.md`.
-
-## State (2026-09-30, end of wave 1)
-
-- **Integration branch:** `efsp-wp5-correlation` @ `cfcf344`. **Nothing merged yet: waits for the human's go-ahead.**
-- **Wave 1 is finished.** Every lane is committed on its branch, in worktree `/home/nklx/dev/personal/sourcedcs-L<n>` (S-W1):
-
-  | Lane | Branch @ head | Notes |
-  |---|---|---|
-  | L1 | `lane/L1-field-state` @ `9db3fc3` | ADR 0061 (H8 read); S-L1a–d, S-R2-1 |
-  | L2 | `lane/L2-mtr` @ `21111a3` | ADR 0062 (H8); mockup approved H51; S-L2b |
-  | L3 | `lane/L3-ato-parser` @ `9b08805` | ADR 0063; S-L3 |
-  | L4 | `lane/L4-carrier-model` @ `07ecfd5` | ADR 0064 (H8); S-L4 |
-  | L5 | `lane/L5-metrics` @ `21e54e6` | ADR 0065; S-L5 |
-  | L6 | `lane/L6-soak` @ `de6db8b` | soak FAILs as expected; S-L6 |
-  | L7 | `lane/L7-obligations` @ `fbd154e` | ADR 0067; S-L7 |
-  | L8 | `lane/L8-test-debt` @ `3f252e7` | B1–B7 as todo tests; S-L8 |
-  | L9 | `lane/L9-sd-inventory` @ `74dcf4d` | report only; S-L9 |
-  | L10 | `lane/L10-iff` @ `b23bdc0` | ADR 0066 (H8), colour table in wip; desk L10-W1 |
-  | L11 | `lane/L11-atobrief-usmtf` @ `6057bf1` | ADR 0078; S-L11 |
-  | LG | `lane/LG-grpc-stream` @ `48a0014` | gRPC poll_rate 0 loop; needs a live 10-min DCS check (`docs/wip/LG.md`) |
-
-- **Dry-run integration passed (S-DRY1):** merge order L1, L2, L3, L4, L7, L5, L8, L9, L10, L11, LG (+ L6, which is tools-only and conflict-free). The one conflict and its resolution are in S-DRY1. crc-sync 1565 pass / 8 todo, crc-desktop 517, atobrief 77. The scratch worktree is `/home/nklx/.claude/jobs/142e4342/tmp/integ` (detached; remove with `git worktree remove`).
-- **At merge:** H8 ADRs to the human first; full Playwright suite; fold `docs/wip/*.md` into the guide and briefing; wire `ATOBRIEF_USMTF_TOKEN` (L11 wip); L6's npm scripts; `.env.example` gains `DCS_GRPC_POLL_RATE`/`DCS_GRPC_MAX_BACKOFF` (LG); apply the L10-W1 answer (a one-line `DEFAULT_CAPS` flip).
-- **Between waves, supervisor fixes:** F2 magnetic module (S-R2-12, variation source per desk R2-11), F3 mission-session module (S-R2-2), F4 typed time Blocks via `zulu-time.js` (S-R2-17).
-- **Wave 2 briefings are drafted** in `docs/parallel/wave2/`: L1b, L12, L13, L14, L15, L16, L23. **Still to write:** L24 (H36 archiving + L6 F3/F4), L26 (audit completeness, S-L5 + F12), L27 (Board sync correctness, S-L6; before L23 on `board-store.js`/`efsp-ws.js`). L22 (STARS) waits for L10 and L1b and starts with a mockup (H49). L25 (miztoyaml H43 fields) can run any time after L11.
-- **Merge order in wave 2:** L16 before L14 (S-W2B), L27 before L23.
-- **The local crc-sync on :3000 was killed** by L11's `pkill` (P7). The supervisor's restart was blocked by the permission classifier; the human restarts it.
-
-## The Decision Desk (how questions reach the human)
-
-- Page: https://claude.ai/artifact/A3gizEgbwfqCnnU831G4Y7. The source is
-  `docs/parallel/decision-desk.html`. Republish from that file with `url` set to the link above;
-  read the artifact first.
-- Capabilities: `db` with rule `{path:"questions", read:"view", write:"admin"}`, plus `user`.
-- The `questions` collection is written by you. Fields:
-  - identity and grouping: `lane`, `laneName`, `title`, `round`, `order`;
-  - content: `context`, `question`, `options[{key,label,description}]`;
-  - recommendation: `recommended`, `recommendNote`;
-  - state: `blocking`, `status` (`open` | `settled` | `withdrawn`), `resolution`.
-- The `answers` collection is written by the human and keyed by question id:
-  `{choice, note, updatedAt}`. `choice` may be null when only a note is given.
-- The loop:
-  1. List `answers` via ArtifactData.
-  2. For each new answer, log an `H<n>` row in `decisions.md`.
-  3. Update the question to `status:'settled'` with a one-line `resolution`. Updates to existing
-     docs need `if_version`; read the doc first.
-- Put new questions from the lanes or the questioner here, with options and a recommendation.
-  Rule on anything that isn't genuinely the human's call yourself (P2), and log it.
-
-### Open on the desk now (none blocking)
-
-L1-W1, L10-W1, L11-8 (re-asked with `research/usmtf-control-agency.md`), L3-W1, R2-9, R2-11, R2-16,
-L9-E1/E2/E3/E4/E7/E8, L1b-Q1, L12-Q2, L13-Q2, L23-Q6, L23-Q7, Q-L14-1, Q-L14-2, Q-L15-1, Q-L16-5.
-
-## Things waiting on a lane or a later wave
-
-- **L2 mockup gate (H10):** L2 makes a Strip mockup, and you publish it as an artifact for the human.
-  L2 continues with server work only until the human approves.
-- **ATC scope:**
-  - Approved as variant B of `docs/parallel/research/stars-mockups.html`
-    (https://claude.ai/artifact/WX2iTcgENzLETakrdXLfDq), recorded as H41.
-  - Built by **L22**, after L10 and L1b, **starting with a mockup for approval (H49)**; the later ERAM lane too. It includes a per-user "ATC map background" toggle for the
-    strict look.
-  - ERAM for CTR is a later lane.
-- **Coalitions:** one crc-sync server per coalition (H42); L21 is dropped.
-- **L11 is bigger than its main briefing says:** H43 puts Appendix A (every missing ATO field) in scope.
-- **Bugs for later lanes:**
-  - **L8:**
-    - B1: a transfer to JTAC strands the Strip.
-    - B2: TOFI exit is blocked while the AIC holds the line.
-    - B3: a covering reassign doesn't move the Bay.
-    - B4: a transfer lands in another Position's Bay.
-    - B5: the JTAC may bind or declare MARSA. H40 says the JTAC sees only Strips handed to it.
-  - **L1:**
-    - SetState bypasses runway suspension.
-    - NLA always queues to `rwy-05`.
-  - **L6 / wave 2:**
-    - Order keys grow without rebalancing.
-    - DROPPED Strips and FDRs are never evicted. The fix is scheduled by H36.
-  - **Questioner Q43:** typed time Blocks store strings where epoch ms is expected. Any HHMM editor
-    must resolve against the mission clock's date (`missionNow()`), never the wall date (F1 note).
-- **F1 follow-ups:**
-  - Check the theater offsets for Normandy (0), TheChannel (+2) and SinaiMap (+2) in the mission
-    editor. They sit in `crc-sync/config/theaters.json`.
-  - Magnetic variation (H15) is to be added to that same per-theater table.
-- **Pre-existing, not caused by F1:** crc-sync logs `[grpc] unit stream ended, reconnecting` in a
-  tight loop, about 5,000 times per session. It is worth a look outside the lanes.
-
-## Rules you must keep
-
-- **Never commit without the human's go-ahead.** Lanes commit on their own branches only. You merge
-  in plan §3 order, but only when the human says so.
-- **ADRs are never edited once committed** (P4). Corrections go in new ADRs.
-- **Tuning files are read once at startup and never written by code** (P5).
-- No backwards compatibility (alpha). The wire carries only what sensors know (ADR 0059).
-- Declutter behaviours stay off until the end of the EFSP work (H6).
-
-## Update (2026-09-30, after the wave-1 merge)
-
-- **Wave 1 is merged** into `efsp-wp5-correlation` (merges up to `3b27390`, then `8feeca0` = H53 + H70, ADR 0084). crc-sync 1565 pass / 8 todo, crc-desktop 517, atobrief 77. Not pushed.
-- The full Playwright run (`E2E_LANE=9`) was started just before the session paused, and its result wasn't seen: **re-run it.**
-- **Restart the local crc-sync on :3000.** `crc-sync/src` changed with the merge.
-- Desk answers H51b–H70 are logged and settled. L11-8 is still open.
-- A drafter was writing `docs/parallel/wave2/L24.md`, `L26.md` and `L27.md` (ADRs 0081–0083). Check whether they exist; they're uncommitted.
-- Next steps: integrator doc fold (`docs/wip/*.md`), F2 (WMM + theaters.json incl. Syria TA 10,000 ft, H62/H69), F3, F4, then dispatch wave 2 (L1b, L12–L16, L23, L24, L26, L27, L28, L25; L22 mockup first). The lane worktrees `../sourcedcs-L*` can be removed.
-
-## Update (2026-09-30 ~12:00)
-
-- **Merged into `efsp-wp5-correlation`** (not pushed): wave 1, H53/H70, F4, L25, the DOC fold, F3, F2, plus small fixes. crc-sync 1601 pass / 8 todo; two timing tests flake under heavy load (`ato tokenize: pathological inputs`, `grpc backoff reset`) and pass alone. crc-desktop 525. atobrief 77. python 360.
-- **Running lanes** (worktree `../sourcedcs-<id>`; agent ids in `/home/nklx/.claude/jobs/142e4342/tmp/agents.txt`): L1b, L13, L14, L15, L16, L22 (build; approved H71), L24, L27, E2E (Playwright triage: 90/98 on the last full run), and F2's follow-up (conformance grid→magnetic, S-F2).
-- **Done, awaiting merge:** L12 (`c0887fe`; merge after L27 and L1b; fix the F3 argument `missionKey`→`missionSession` in its ordnance scenario sortie 3 at merge).
-- **Not started:** L23 (after L27), L26 (after L23), L28 (last; H74/H75 answered).
-- **Merge order:** L27 → L1b → L12 → L13 → L16 → L14 → L15 → L23 → L26 → L24 → L28; L22 whenever it's ready.
-- **Safety net (P8):** `tools/checkpoint-worktrees.sh` snapshots every worktree into `refs/checkpoints/<branch>`. Restore with `git checkout refs/checkpoints/lane/<name> -- .` inside the worktree. The 10-minute loop dies with the session; re-start it.
-- **To resume a lane after a session loss:** its worktree and commits survive. Re-launch an agent with its briefing + lane-rules + "continue from your branch and `docs/wip/<LANE>.md`".
-- **Desk open:** F2-W1 (wind true vs magnetic), L11-8. **The human restarts crc-sync on :3000** after merges touching `crc-sync/src` (the supervisor's restarts are blocked).
-
-## Update (2026-09-30, ~90% session usage)
-
-- **Merged since the last update:** F2 + its follow-up (S-F2, S-F2b, H76), L22 (ADR 0088). crc-sync 1621 pass / 8 todo, crc-desktop 547.
-- **Done, unmerged, in merge order:** L27 (running) → L1b (running) → **L12** `c0887fe` → **L13** `6566dff` → **L16** `92d2a51` → **L14** `6fde891` → **L15** `e2a4ea8` → (L23) → (L26) → **L24** `14e0c1f` → (L28). Merge notes: S-L12 (F3 argument in the ordnance scenario), S-L13 (`pads:` line), S-L14 (keep both `_stripRenderSignature` lines), S-L16.
-- **Still running:** L27 (5 commits; also has persist cost + `delta.gone`, S-L24), L1b (6 commits), E2E triage (0 commits, 8 dirty files: check `refs/checkpoints/lane/E2E-triage`).
-- **Not started (new session, per the memory note: Sonnet 5.5 for code, Opus for design):** L23 (after L27; + S-L13 OPS-writes-14E, F10, B1–B7), L26 (after L23; + SetBlock id/value in the log, the cancelled-scramble count), L28 (last; H74/H75), a UI follow-up lane (S-L15, S-L16 W2/W3/W5, vul validation), wave 3 (L17/L18/L19), wave 4 (L20).
-- **Human:** restart crc-sync after merges; the live wind check (S-F2b); the live `mission_start` check (S-F3); the LG 10-minute live check; the 4-hour soak workflow; desk L11-8b.
-
-## Human-reported issues after the wave-2 merges (2026-09-30) — for the UI follow-up lane unless noted
-
-- **U1** OPS has no ORDNANCE (`3G`) field; OPS must be able to set CLEAN / HUNG. (Extends H55/S-L12: add OPS to who records HUNG.)
-- **U2** A HANDOFF proposal to CTR does not trigger the "new Strip" arrival notification at CTR (check L8/B4-adjacent transfer paths and the client's new-Strip announcement from cb96223).
-- **U3** The `IFR` field is unclear to the human. It is TOFI's `ifrActive` (guide §4.6.3: whether a flight under tactical control stays IFR, i.e. ATC keeps separation). Needs a clearer label/tooltip, or a question on the desk whether it belongs on the face at all.
-- **U4** TYPE cannot be edited.
-- **U5** A RELEASED field is missing on DEP/APP and CTR Strips.
-- **U6** ALT doesn't accept block altitudes (e.g. `FL220-FL240`, `FL220B240`), which are common in military flying. Touches `parseAltitudeFt`, the ALT/HDG conformance of ADR 0058 (a block is conformant anywhere inside it), and STCA.
-- **U7 (bug, high: a stuck Strip)** The same for HANDOFF and POINT_OUT (every cross-Facility coordination primitive). E.g. a POINT_OUT from DEP to CTR: CTR accepts, then CTR drops its (replica/peer) Strip. DEP's Strip is left with an ACTIVE point-out it can't advance or clear, and CTR no longer has a Strip, so nobody can act on it. Fix: dropping or vacating the receiver's side of an ACTIVE point-out must end the coordination on the proposer's Strip (return it to no coordination, audited), and DEP must always have a way to cancel or close its own point-out. Add scenario tests for both HANDOFF and POINT_OUT (propose → accept → receiver drops → proposer can still act; and propose → receiver drops before answering). Likely in `coordination.js` / board-store's drop path. Owner: L23 (it holds the coordination/permission area) or the UI follow-up lane if L23 is already full.
-- **U8 (UI gap)** CTR's "TOFI Exit…" exists only inside the Strip's ⋯ menu (`strip-view.js:564`, enabled while TOFI is ACTIVE, `bay-view.js:1699`). Nothing surfaces it when the mission line goes OFF_STATION/RTB, so CTR sees no obvious exit button. Fix: when the paired mission Strip is OFF_STATION or RTB, CTR's Strip shows TOFI Exit as its primary (NLA-slot) action, or a quiet indicator + one-click button, without colour unless something is wrong (ADR 0056/0058). Needs the mission Strip's state visible to CTR's client (it already receives every Strip). Also check B2 (L23): EXIT can't be accepted while AIC holds the line. Owner: the UI follow-up lane (client), with L23 for B2.
-
-## State at the end of the session (2026-09-30)
-
-- `efsp-wp5-correlation` holds wave 1 plus F2/F3/F4, L22, L25, L1b, L12, L13, L16, L14, L15, L27 and L24. crc-sync 1795 pass / 8 todo; crc-desktop 707. Not pushed. (The "U1–U8" commits are handoff notes, not fixes.)
-- **Playwright on the merged branch (S-M-e2e9 in decisions.md): 13 consistent failures**, first job of the next session:
-  - stale tests: L12's field-state stand-in, L13's placeholder wording, L16's opt-in env;
-  - cross-spec state leak: no field-state reset between spec files (a suspended 05/23 leaks into l4-chain/l4-drag);
-  - a duplicate reason line once field-state, ordnance and scramble coexist;
-  - L14 Mode 1/2 in the expanded view;
-  - l4-badges height (30 > 28 px);
-  - 4 l5-arrivals assertions.
-  The E2E triage lane (`lane/E2E-triage`, worktree `sourcedcs-E2E`) was cut before wave 2 and may still be running. Merge its test hardening only if it's still relevant.
-- **Next session** (Sonnet 5.5 for code, Opus for design): E2E fixes, then L23 (+U7, B1–B7, F10, S-L13), L26, L28, the UI follow-up lane (U1–U6, U8, S-L15, S-L16, S-L1b findings), then waves 3–4.
-- **E2E triage merged:** `seedStrip` now waits for the correlation redraw (the main race). Wave-1-era failures were flaky/ENV. **Open for the next session:** `index.html` loads dockview-core (jsdelivr) and maplibre-gl (unpkg) from CDNs; vendor them or serve them from node_modules in the harness (`page.route`), otherwise CDN hiccups keep producing ENV failures. The 13 consistent post-wave-2 failures above are separate and still open.
+- Push a backup of `efsp-wp5-correlation`.
+- Stop the orphan on :3117.
+- Local crc-sync: the old `state/` files must be moved aside (the human was given the `mv` command on 2026-10-03).
+  Expect a fresh Board.
+- **Release, together, from `main`:**
+  - merge, then tag `crc-desktop-vX.Y.Z`;
+  - in the server's `infra/.env`: rename `ASACS_*` to `CRCSYNC_*`, and set `AIRSPACE_SERVICE_TOKEN`,
+    `CRCSYNC_MAPTILER_CLIENT_KEY` and `CRCSYNC_MAPTILER_KEY`;
+  - delete the server's `state/efsp-board.json` and `state/efsp-mutations*.jsonl` (the strict state check refuses
+    them);
+  - expect the first deploy to hold crc-sync until a labelled image is built (DEPLOY-GATE-2), then check that the
+    digest in the Deploy log matches `docker inspect crc-sync`;
+  - re-enter the airspace ranges in `/airspace-admin.html`;
+  - expect one mission-session roll for missions with named drawings.
+- **Live checks:** the 4 h soak workflow; wind direction; `mission_start` on restart; a real carrier and a real FINAL
+  track; a two-controller walk of undo, control release and the GC offer; a manual crc-desktop login (popup sandbox,
+  navigation guards).
+- **Squadron data to confirm:**
+  - Incirlik runway headings 056/236;
+  - GND 275.8 and TWR 251.0, plus the CD and AP frequencies;
+  - SFA frequencies and pad names;
+  - comm-card values;
+  - the USAF ground/tower combining rule (DAFMAN 13-204v3).
