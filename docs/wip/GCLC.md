@@ -39,3 +39,24 @@ Lane GCLC, branch `lane/GCLC-combine`, base `8bbe15bc`. ADR 0105. Ruling: H104 (
 ## Squadron values needing confirmation
 
 - Incirlik GC and LC frequencies (placeholders: see `efsp-facility-incirlik.json`).
+
+## Built
+
+Server `ee270873`, client + guide `64632152`. Wire protocol stays 2 (last release speaks 1, already behind). Re-recorded: `wire-surface.json`,
+`module-graph-exports.json`, and every freeze golden whose trace carries `positions` (all hub-*/scenario-* plus
+tables-nla-coordination-config, tables-wire-message-types).
+
+Shared-file edits: `efsp-ws.js` (set-positions ack/offer, mutation-ack LUAW warning, `directedFor` primaryOnly), `facility-schema.js`,
+`facility-config.js`, `index.js` (one line), `position-store.js`, client `efsp-messages.js`, `efsp-panel.js`, `panel/tabs.js`,
+`panel/state.js`, `panel/refusal.js`, `radar-panel.js`, `index.html`, `efsp-panel.css`, `docs/efsp-usage-guide.md` (8M and three lines).
+
+Tests rewritten for the removed link: efsp-facility-config, efsp-facility-schema, efsp-metrics-tap (transfer target LC not CD), efsp-ws,
+efsp-scenario-manning, efsp-scenario-tactical (A3''). New: efsp-gclc-combination, efsp-combination-rules, e2e/gclc-combine.spec.js.
+
+## Findings
+
+- The offer is made at sign-off only. If LC's Primary signs on after GC left, nothing offers; the selector still works.
+- Client `combinedWith` cannot tell a Primary from an Observer acting at LC: an Observer at LC sharing a combined Primary sees the line.
+- Not persisted anywhere, so no `stores.js` change.
+- `ato tokenize: pathological inputs finish fast` is a timing test that failed once under load, passes alone.
+- Squadron to confirm: Incirlik GC 275.8 (GND) and LC 251.0 (TWR) are placeholders; no CD/AP frequencies shipped; USAF (DAFMAN 13-204v3) rule.
