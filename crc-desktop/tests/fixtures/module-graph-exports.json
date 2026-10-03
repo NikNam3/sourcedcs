@@ -883,12 +883,18 @@
   "panels/efsp/efsp-ws.js": [
    "_sendEfsp",
    "efspResyncReplyAsMessage",
+   "getAckedPositions",
    "getActingPositions",
+   "getSignedOnPositions",
+   "isObserverAt",
+   "noteCoveragePositions",
    "noteEfspBoardMessageForSync",
    "noteEfspHeartbeatForSync",
+   "noteEfspPositionsAck",
    "noteEfspResyncAnswered",
    "noteEfspSnapshotLanded",
    "noteEfspStoreAnswerLanded",
+   "redeclareEfspPositions",
    "replayPendingEfspMutations",
    "sendEfspAirspaceMutation",
    "sendEfspCarrierMutation",
@@ -900,7 +906,8 @@
    "sendEfspSetPositions",
    "sendEfspSfaMutation",
    "sendEfspUndo",
-   "setEfspSender"
+   "setEfspSender",
+   "setSignOnNoticeListener"
   ],
   "panels/efsp/final-panel.js": [
    "FINAL_CADENCE_S",

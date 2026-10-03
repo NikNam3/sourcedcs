@@ -41,7 +41,13 @@ class PositionStore {
       this._state.set(id, { primary: null, observers: [], pendingPrimaryRequest: null });
     }
     this._sessions = new Map(); // controllerId -> Set(positionId) currently signed on
+    // Whether a controller's connection is closed but still within the sign-on grace (ws-hub.js). Such a Primary keeps
+    // the Position for a reconnect, but never locks anyone else out: a controller signing on is treated as if the
+    // absent one had signed off (docs/wip/DESK-SIGNON.md, S-SIGNON0).
+    this._isAbsent = () => false;
   }
+
+  setAbsentCheck(fn) { this._isAbsent = typeof fn === 'function' ? fn : () => false; }
 
   isStaffed(positionId) {
     const s = this._state.get(positionId);
@@ -166,6 +172,13 @@ class PositionStore {
 
   _signOn(controllerId, controllerName, positionId, now) {
     const s = this._state.get(positionId);
+    if (s.primary && s.primary.controllerId !== controllerId && this._isAbsent(s.primary.controllerId)) {
+      // The held entry for this Position ends: the absent Primary signs off abruptly (the longest-waiting Observer, if any, is promoted).
+      const gone = s.primary.controllerId;
+      this._signOff(gone, positionId, { abrupt: true });
+      const held = this._sessions.get(gone);
+      if (held) { held.delete(positionId); if (held.size === 0) this._sessions.delete(gone); }
+    }
     if (!s.primary) {
       s.primary = { controllerId, controllerName, since: now };
     } else if (s.primary.controllerId !== controllerId) {

@@ -44,15 +44,21 @@ class WsHub {
    * @param {object} [deps.theater]      src/theater-context.js (docs/adr/0085) —
    *   the `theater` message: transition altitude and magnetic variation.
    * @param {number} [deps.wireProtocol] the protocol this server speaks (docs/adr/0103); tests only, defaults to WIRE_PROTOCOL.
+   * @param {object} [deps.wallClock]    real time, for the sign-on grace only (docs/adr/0096).
+   * @param {number} [deps.signOnGraceMs] how long a closed session keeps its sign-ons (config/sign-on-grace.json); 0 signs off at once.
    * @param {string} [deps.downloadUrl]  where `update-required` points an out-of-date client (CRCSYNC_DOWNLOAD_URL); omitted when unset.
    */
-  constructor({ trackStore, collabStore, efsp = null, picture = null, surveillance = null, clock = WALL_CLOCK, theater = null, wireProtocol = WIRE_PROTOCOL, downloadUrl = null }) {
+  constructor({ trackStore, collabStore, efsp = null, picture = null, surveillance = null, clock = WALL_CLOCK, theater = null, wireProtocol = WIRE_PROTOCOL, downloadUrl = null, wallClock = WALL_CLOCK, signOnGraceMs = 0 }) {
+    this._wall = wallClock;
+    this._signOnGraceMs = signOnGraceMs;
+    this._pendingSignOff = new Map(); // controllerId -> { session, dueAt } (wall time): a closed session still holding its Positions
     this._wireProtocol = wireProtocol;
     this._downloadUrl  = downloadUrl;
     this._refusedSeen  = new Set(); // who|clientVersion already logged at info
     this._trackStore  = trackStore;
     this._collabStore = collabStore;
     this._efsp        = efsp;
+    if (efsp && typeof efsp.setAbsentCheck === 'function') efsp.setAbsentCheck((id) => this._pendingSignOff.has(id));
     this._picture     = picture || NO_PICTURE;
     this._surv        = surveillance || createSurveillance({ collab: collabStore });
     this._wss         = null;
@@ -545,6 +551,8 @@ class WsHub {
     // so rather than showing a blank map.
     this._setCoverage(session, this._picture.coverageFor(session.controllerId));
     this._sessions.set(ws, session);
+    // Back inside the grace: the controller never signed off (the Positions it held are still its own).
+    this._pendingSignOff.delete(session.controllerId);
 
     // Same send order as the original _onConnect: status, init (if a
     // mission is loaded), weather, game-time, then a full track snapshot.
@@ -576,8 +584,41 @@ class WsHub {
     ws.on('error', () => {});
     ws.on('close', () => {
       this._sessions.delete(ws);
-      if (this._efsp) this._efsp.onDisconnect(session);
+      this._onClosed(session);
     });
+  }
+
+  /**
+   * A session closed. Its sign-ons stay for the grace so a network blip or a deploy restart is no sign-off (no repairs,
+   * no GC offers). Another live socket of the same controller keeps them too. Grace 0 signs off at once.
+   */
+  _onClosed(session) {
+    if (!this._efsp) return;
+    for (const other of this._sessions.values()) if (other.controllerId === session.controllerId) return;
+    if (!(this._signOnGraceMs > 0)) { this._efsp.onDisconnect(session); this._refreshOthersIfStaffingChanged(); return; }
+    this._pendingSignOff.set(session.controllerId, { session, dueAt: this._wall.now() + this._signOnGraceMs });
+  }
+
+  /** Signs off every closed session whose grace has run out. Run by the `signon-grace` ticker. */
+  sweepPendingSignOffs() {
+    const now = this._wall.now();
+    let any = false;
+    for (const [id, p] of [...this._pendingSignOff]) {
+      if (p.dueAt > now) continue;
+      this._pendingSignOff.delete(id);
+      if (this._efsp) this._efsp.onDisconnect(p.session);
+      any = true;
+    }
+    if (any) this._refreshOthersIfStaffingChanged();
+  }
+
+  /** Another controller's sign-off or sign-on can promote this session's Observer to Primary: tell it. */
+  _refreshOthersIfStaffingChanged(except = null) {
+    for (const [ws, session] of this._sessions) {
+      if (session === except) continue;
+      const next = this._picture.coverageFor(session.controllerId);
+      if (JSON.stringify(next.signedOnPositions) !== JSON.stringify(session.coverage.signedOnPositions)) this._refreshCoverage(ws, session);
+    }
   }
 
   /** One hub tick: describe every contact once, then serve each session. */
@@ -702,6 +743,7 @@ class WsHub {
         // controllerId it is handed.
         if (msg.type === 'efsp-set-positions') {
           this._refreshCoverage(ws, session);
+          this._refreshOthersIfStaffingChanged(session);
           // Giving up TAC_C2 while keeping JTAC narrows what this session may
           // see, and taking it back widens it: the Board it already holds is
           // wrong either way, so it gets a fresh snapshot of what it may see

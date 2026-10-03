@@ -1,6 +1,6 @@
 'use strict';
 import { _combinationEl } from './state.js';
-import { getActingPositions, sendEfspSetPositions } from '../efsp-ws.js';
+import { getActingPositions, getSignedOnPositions, sendEfspSetPositions, setSignOnNoticeListener } from '../efsp-ws.js';
 import { getAllEfspPositions, getAllEfspStrips } from '../efsp-state.js';
 import { combinationLine, combinationOf, luawInUse, offerStands, offerText } from '../combination-rules.js';
 
@@ -9,6 +9,8 @@ import { combinationLine, combinationOf, luawInUse, offerStands, offerText } fro
 // Accepting is an ordinary sign-on to GC. Nothing here blocks anything.
 
 let _offer = null; // { facilityId, offer, count }
+let _signOnNotice = ''; // the one line a reconnect shows when a Position could not be kept (docs/wip/DESK-SIGNON.md)
+setSignOnNoticeListener((text) => { _signOnNotice = text; renderCombination(); });
 
 /** `efsp-position-offer`. */
 export function noteEfspPositionOffer(msg) {
@@ -22,11 +24,11 @@ export function acceptEfspPositionOffer() {
   if (!_offer) return;
   const { facilityId, offer } = _offer;
   _offer = null;
-  sendEfspSetPositions(facilityId, [...new Set([...getActingPositions(facilityId), offer])]);
+  sendEfspSetPositions(facilityId, [...new Set([...getSignedOnPositions(facilityId), offer])]);
   renderCombination();
 }
 
-export function _resetCombinationForTest() { _offer = null; }
+export function _resetCombinationForTest() { _offer = null; _signOnNotice = ''; }
 
 /** Redraws the line. A no-op until initEfspPanel() has cached the element. */
 export function renderCombination() {
@@ -43,6 +45,12 @@ export function renderCombination() {
     const row = document.createElement('div');
     row.className = 'efsp-combination-line' + (line.severe ? ' efsp-combination-severe' : '');
     row.textContent = line.text;
+    el.appendChild(row);
+  }
+  if (_signOnNotice) {
+    const row = document.createElement('div');
+    row.className = 'efsp-signon-notice efsp-combination-line efsp-combination-severe';
+    row.textContent = _signOnNotice;
     el.appendChild(row);
   }
   if (_offer && !offerStands(_offer, positions.filter(p => !p.facilityId || p.facilityId === _offer.facilityId), acting)) _offer = null;

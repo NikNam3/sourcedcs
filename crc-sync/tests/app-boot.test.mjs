@@ -38,7 +38,7 @@ const { createApp } = await import('../src/app.js');
 
 // Today's timers, by name and period (server.js before AP had these as 11 bare setIntervals).
 const EXPECTED = [
-  ['datalink-locks', 2000], ['coverage', 250], ['clock-source', 5000], ['airport-weather', 60000], ['airspace-calendar', 60000],
+  ['signon-grace', 1000], ['datalink-locks', 2000], ['coverage', 250], ['clock-source', 5000], ['airport-weather', 60000], ['airspace-calendar', 60000],
   ['efsp-metrics', 60000], ['efsp-archiver', 60000], ['stale-reaper', 5000], ['obligations-nla', 15000],
   ['correlation', 1000], ['carrier', 1000], ['tofi-regime', 1000], ['conformance-conflict-alert', 1000],
 ];

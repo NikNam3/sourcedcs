@@ -38,6 +38,7 @@ const { TofiRegimeMonitor } = require('./efsp/tofi-regime-monitor');
 const { ConflictAlertMonitor } = require('./conflict-alert');
 const { loadAlertingConfig } = require('./alerting-config');
 const { indicatedAltFt } = require('./altimetry');
+const { loadSessionConfig } = require('./session-config');
 const { MissionClock, WALL_CLOCK } = require('./mission-clock');
 const { MissionSession } = require('./mission-session');
 const { loadTheaters } = require('./theaters');
@@ -294,7 +295,8 @@ function createApp(deps = {}) {
   });
   const { transponders, identity } = surveillance;
 
-  const wsHub       = new WsHub({ trackStore, collabStore, efsp, picture, surveillance, clock: missionClock, theater: theaterContext, downloadUrl: env.CRCSYNC_DOWNLOAD_URL || null });
+  const sessionConfig = loadSessionConfig();
+  const wsHub       = new WsHub({ trackStore, collabStore, efsp, picture, surveillance, clock: missionClock, theater: theaterContext, downloadUrl: env.CRCSYNC_DOWNLOAD_URL || null, wallClock: WALL_CLOCK, signOnGraceMs: sessionConfig.signOnGraceMs });
 
   // The radar list itself changes under everyone — an AWACS takes off or lands,
   // a ship spawns — and until this existed nothing told a client about it. A GCI
@@ -702,6 +704,7 @@ function createApp(deps = {}) {
   // stop() clears them; the soak drives them by name instead of by clock. ──────
   let lastClockSource = missionClock.source;
   const tickers = [
+    { name: 'signon-grace', periodMs: 1000, tick: () => wsHub.sweepPendingSignOffs() },
     { name: 'datalink-locks', periodMs: sensorSpecs.datalink.lockPollMs, tick: () => datalink.pollLocks() },
     { name: 'coverage', periodMs: COVERAGE_TICK_MS, tick: () => {
       const radars = currentRadars();
