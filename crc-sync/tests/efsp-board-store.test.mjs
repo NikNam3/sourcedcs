@@ -289,7 +289,7 @@ test('applyMutation never propagates an unexpected exception — it rejects the 
   const strip = createStrip(board);
   const result = board.applyMutation(mutation(strip, { kind: 'SetBlock', blockId: '9E', value: 'x' }), 'OPS', 'OPS');
   assert.equal(result.ok, false);
-  assert.equal(result.reason, 'VALIDATION_ERROR');
+  assert.equal(result.reason, 'INTERNAL_ERROR');
   // The store itself is still alive and usable afterward — a caught
   // exception on one Mutation must not leave internal state corrupted.
   const after = board.applyMutation(mutation(board.getStrip(strip.stripId), { kind: 'SetFlag', flag: 'offset', value: true }), 'OPS', 'OPS');

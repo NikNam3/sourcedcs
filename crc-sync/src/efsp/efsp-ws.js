@@ -77,7 +77,8 @@ function _handleMutation(ctx, session, msg, persist) {
 
   const stateBefore = (boardStore.getStrip(msg.stripId) || {}).state;
   const result = boardStore.applyMutation(mutation, msg.actingPositionId, session.controllerId);
-  if (result.ok && !result.replayed) persist();
+  // A throw part-way through an op leaves its earlier writes on the Board (`partial`): saved with their audit line, not dropped.
+  if ((result.ok || result.partial) && !result.replayed) persist();
 
   // Every Strip record leaving this function — ack or broadcast — goes through
   // the one stamping helper, which is where the reasons for what it adds live.

@@ -39,3 +39,15 @@ rev gets `STALE_REV` on the next edit.
 
 ### Goldens moved
 - B2: hub-random-seed1, hub-random-seed2, scenario-coordination, scenario-manning, scenarios (a sign-off now persists a repair and sends the other Boards' touched Strips as extra `efsp-board-delta` frames in the same round trip).
+
+## B3 decision
+Rollback was not chosen: the undo frame holds before-images only for a keyed op that declares a Scope, and even then only
+for the records in that Scope. An op can also have written to a peer Board, MARSA, carriers or the code allocator, none of
+which a Strip restore would undo (and the undo restore path has its own gates). A partial rollback would be a second way
+to leave the Board half-changed. So a throw is treated as a crash that audits and persists what changed:
+- `applyMutation` answers `INTERNAL_ERROR` (was `VALIDATION_ERROR`) and, when any Strip was touched, sets `partial: true`.
+- `BoardAudit#recordInternalError` writes the audit line the op never got (`outcome: 'INTERNAL_ERROR', partial: true, error`).
+- `efsp-ws.js` persists on `ok || partial`; the touched Strips were already broadcast on a refusal.
+- The replay cache keeps the refusal, so a retry is not run on top of the half-applied op.
+Not done (same catch-all exists, same shape): correlation, carrier, airspace, MARSA, runway-status and SFA stores still answer
+`VALIDATION_ERROR` on a throw. Their ops write one record, so the partial window is small; left for a later lane.

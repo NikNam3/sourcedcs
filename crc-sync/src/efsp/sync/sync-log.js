@@ -65,6 +65,9 @@ class SyncLog {
     for (const fn of this._observers) fn(id);
   }
 
+  /** Whether anything was touched since the last drain (without draining). */
+  hasTouched() { return !!this._touched && this._touched.size > 0; }
+
   /** A `gone` entry for a record that left the store: it advances the seq like a touch, but is not a touch. */
   gone(id) {
     this._append('gone', id);

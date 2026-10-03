@@ -261,7 +261,14 @@ class BoardStore {
       result = this._stripOps.dispatch(mutation, actingPositionId, by);
     } catch (err) {
       log.error('unexpected error applying Mutation — rejecting it instead of crashing', { err });
-      result = { ok: false, reason: 'VALIDATION_ERROR', detail: 'internal error processing mutation' };
+      result = { ok: false, reason: 'INTERNAL_ERROR', detail: 'internal error processing mutation' };
+      // An op that threw may already have written (docs/wip/SERVER-BUGS.md, B3). Those writes cannot be taken back in
+      // general (the undo frame holds before-images only for a scoped op, and a peer Board or MARSA may have changed
+      // too), so the throw is treated as a crash: what changed is audited, and the caller persists it (`partial`).
+      if (this._state.hasTouched()) {
+        result.partial = true;
+        this._audit.recordInternalError(mutation, actingPositionId, by, this.getStrip(mutation.stripId), err);
+      }
     } finally {
       this._activeCmid = null;
     }

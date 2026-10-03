@@ -81,6 +81,9 @@ class BoardState {
     this.recordTouch(strip.stripId);
   }
 
+  /** Whether any Strip was touched since the last drain (does not drain). */
+  hasTouched() { return this._sync.hasTouched(); }
+
   /** The ids of every Strip touched since the last drain, in first-touch order (sync/sync-log.js). */
   drainTouched() { return this._sync.drainTouched(); }
 
