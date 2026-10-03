@@ -17,10 +17,19 @@ export function registerEfspMessage(type, handler) {
   _handlers.set(type, handler);
 }
 
+const _observers = [];
+
+/** `fn(msg)` runs before the handler of every message dispatched (store sync reads the seq/epoch each family frame carries). */
+export function addEfspMessageObserver(fn) {
+  if (typeof fn !== 'function') throw new Error('addEfspMessageObserver: a function is required');
+  _observers.push(fn);
+}
+
 /** Runs the handler registered for msg.type. Returns true if one ran; an unregistered type is ignored. */
 export function dispatchEfspMessage(msg) {
   const handler = msg && _handlers.get(msg.type);
   if (!handler) return false;
+  for (const fn of _observers) fn(msg);
   handler(msg);
   return true;
 }

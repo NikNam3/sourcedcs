@@ -609,6 +609,7 @@
    "toggleOffset"
   ],
   "panels/efsp/efsp-message-registry.js": [
+   "addEfspMessageObserver",
    "dispatchEfspMessage",
    "registerEfspMessage",
    "registeredEfspTypes"
@@ -687,6 +688,7 @@
   ],
   "panels/efsp/efsp-state.js": [
    "LINES_WITH_OTHERS",
+   "STORE_SYNC",
    "_resetEfspStateForTest",
    "activeMarsaForFlightData",
    "applyEfspAirspaceDelta",
@@ -697,6 +699,7 @@
    "applyEfspMutationAck",
    "applyEfspRunwayStatusDelta",
    "applyEfspSnapshot",
+   "applyEfspStoreSlices",
    "conflictAlertsForTrack",
    "conformanceAlertsForFlightData",
    "correlatedTrackIdForStrip",
@@ -707,6 +710,9 @@
    "efspHeartbeatGapOf",
    "efspLinesWithOthers",
    "efspResyncPositionFor",
+   "efspStoreGapOf",
+   "efspStoreHeartbeatGapOf",
+   "efspStoreResyncPositionFor",
    "efspStrips",
    "getAllEfspAirspaces",
    "getAllEfspConflicts",
@@ -732,6 +738,7 @@
    "getEfspPositionLetter",
    "getEfspRack",
    "getEfspRunwayStatus",
+   "getEfspStoreSync",
    "getEfspStrip",
    "getPendingMutations",
    "isAitAuthorizedFor",
@@ -763,6 +770,7 @@
    "noteEfspHeartbeatForSync",
    "noteEfspResyncAnswered",
    "noteEfspSnapshotLanded",
+   "noteEfspStoreAnswerLanded",
    "replayPendingEfspMutations",
    "sendEfspAirspaceMutation",
    "sendEfspCarrierMutation",

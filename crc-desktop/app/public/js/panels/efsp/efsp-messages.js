@@ -5,13 +5,13 @@ import { updateTrackPanel } from '../track-panel.js';
 import { updateMap } from '../../geojson.js';
 import {
   applyEfspAlerts, applyEfspCorrelationDelta, applyEfspDelta, applyEfspMarsaDelta, applyEfspMutationAck,
-  applyEfspSnapshot, efspEpochChangeOf, getEfspFacility, getEfspStrip
+  applyEfspSnapshot, applyEfspStoreSlices, efspEpochChangeOf, getEfspFacility, getEfspStrip, STORE_SYNC
 } from './efsp-state.js';
 import { captureEfspPlacement } from './efsp-arrivals.js';
 import { applyEfspSfaDelta } from './sfa-state.js';
 import {
   efspResyncReplyAsMessage, noteEfspBoardMessageForSync, noteEfspHeartbeatForSync, noteEfspResyncAnswered,
-  noteEfspSnapshotLanded, replayPendingEfspMutations
+  noteEfspSnapshotLanded, noteEfspStoreAnswerLanded, replayPendingEfspMutations
 } from './efsp-ws.js';
 import { onEfspMetricsReportAck } from './efsp-metrics-client.js';
 import { refreshCorrelatedHighlight } from './correlation-highlight.js';
@@ -76,7 +76,16 @@ registerEfspMessage('efsp-snapshot', (msg) => {
 // The answer to this client's efsp-resync (docs/adr/0081, S-12): a snapshot or a
 // delta, tagged. Unwrapped into the message it carries, so one code path applies it.
 registerEfspMessage('efsp-resync-reply', (msg) => {
-  dispatchEfspMessage(efspResyncReplyAsMessage(msg));
+  // `stores` (crc-sync docs/adr/0106): the slices of the stores outside the Board that this client was behind in. Each
+  // replaces that store's state; the family's own handler then redraws, re-dispatched with an empty delta. Any reply
+  // that carries `stores` (or answers 'stores') settles the store resyncs in flight: a store left out was current.
+  if (msg.answer === 'stores' || msg.stores) {
+    for (const key of applyEfspStoreSlices(msg.stores)) {
+      dispatchEfspMessage({ type: STORE_SYNC.find(d => d.key === key).deltaType });
+    }
+    noteEfspStoreAnswerLanded();
+  }
+  if (msg.answer !== 'stores') dispatchEfspMessage(efspResyncReplyAsMessage(msg));
 });
 
 registerEfspMessage('efsp-board-delta', (msg) => {

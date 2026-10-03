@@ -120,23 +120,135 @@ export function applyEfspSnapshot(msg) {
   efspAitAuthorizedByFacility = msg.aitAuthorizedByFacility || {};
   efspPositionLetters = msg.positionLetters || {};
   // A snapshot after a reconnect can carry edits made while this window was away: log them against what it last held.
-  const heldAirspaces = new Map(efspAirspaces);
-  efspAirspaces.clear();
-  for (const a of msg.airspaces || []) {
-    _noteAirspaceEdit(heldAirspaces.get(a.airspaceId), a);
-    efspAirspaces.set(a.airspaceId, a);
-  }
-  for (const id of [...efspAirspaceEdits.keys()]) if (!efspAirspaces.has(id)) efspAirspaceEdits.delete(id);
-  efspCorrelations.clear();
-  for (const r of msg.correlations || []) efspCorrelations.set(r.flightDataId, r);
-  efspMarsa.clear();
-  for (const r of msg.marsa || []) efspMarsa.set(r.marsaId, r);
-  efspRunwayStatuses.clear();
-  for (const r of msg.runwayStatuses || []) efspRunwayStatuses.set(r.facilityId, r);
+  _replaceAirspaces(msg.airspaces);
+  _replaceCorrelations(msg.correlations);
+  _replaceMarsa(msg.marsa);
+  _replaceRunwayStatuses(msg.runwayStatuses);
   // crc-sync's docs/adr/0074 — the carrier's hull record (carrier-state.js).
   applyEfspCarrierSnapshot(msg);
   // crc-sync's docs/adr/0093 — who is on which SFA frequency (sfa-state.js).
   applyEfspSfaSnapshot(msg);
+  _adoptSnapshotStoreSyncs(msg);
+}
+
+function _replaceAirspaces(list) {
+  const held = new Map(efspAirspaces);
+  efspAirspaces.clear();
+  for (const a of list || []) {
+    _noteAirspaceEdit(held.get(a.airspaceId), a);
+    efspAirspaces.set(a.airspaceId, a);
+  }
+  for (const id of [...efspAirspaceEdits.keys()]) if (!efspAirspaces.has(id)) efspAirspaceEdits.delete(id);
+}
+function _replaceCorrelations(list) {
+  efspCorrelations.clear();
+  for (const r of list || []) efspCorrelations.set(r.flightDataId, r);
+}
+function _replaceMarsa(list) {
+  efspMarsa.clear();
+  for (const r of list || []) efspMarsa.set(r.marsaId, r);
+}
+function _replaceRunwayStatuses(list) {
+  efspRunwayStatuses.clear();
+  for (const r of list || []) efspRunwayStatuses.set(r.facilityId, r);
+}
+
+// Store sync (crc-sync docs/adr/0106): the six stores outside the Board each count changes with a seq inside one
+// lifetime (epoch), exactly as a Board does. `key` is the snapshot key (also the heartbeat's and the resync's);
+// `gapFromDeltas` is the server's declaration that a delta moves seq by exactly one change (stores.js `sync`), so a
+// jump from deltas alone is a lost delta; the others are caught by the heartbeat. `replace` swaps that store's whole
+// client state for a slice (what the full snapshot carries under `key`); `deltaType` is re-dispatched empty afterwards so
+// the family's own handler redraws.
+export const STORE_SYNC = [
+  { key: 'airspaces', seqKey: 'airspaceSeq', epochKey: 'airspaceEpoch', deltaType: 'efsp-airspace-delta', gapFromDeltas: true, replace: _replaceAirspaces },
+  { key: 'correlations', seqKey: 'correlationSeq', epochKey: 'correlationEpoch', deltaType: 'efsp-correlation-delta', gapFromDeltas: false, replace: _replaceCorrelations },
+  { key: 'marsa', seqKey: 'marsaSeq', epochKey: 'marsaEpoch', deltaType: 'efsp-marsa-delta', gapFromDeltas: false, replace: _replaceMarsa },
+  { key: 'runwayStatuses', seqKey: 'runwayStatusSeq', epochKey: 'runwayStatusEpoch', deltaType: 'efsp-runway-status-delta', gapFromDeltas: true, replace: _replaceRunwayStatuses },
+  { key: 'carriers', seqKey: 'carrierSeq', epochKey: 'carrierEpoch', deltaType: 'efsp-carrier-delta', gapFromDeltas: false, replace: (l) => applyEfspCarrierSnapshot({ carriers: l }) },
+  { key: 'sfaRotation', seqKey: 'sfaSeq', epochKey: 'sfaEpoch', deltaType: 'efsp-sfa-delta', gapFromDeltas: true, replace: (v) => applyEfspSfaSnapshot({ sfaRotation: v }) },
+];
+const _storeSync = new Map();        // key -> { seq, epoch }
+const _storeBehind = new Map();      // key -> consecutive heartbeats that named a seq ahead of ours
+
+function _adoptSnapshotStoreSyncs(msg) {
+  _storeSync.clear();
+  _storeBehind.clear();
+  for (const { key } of STORE_SYNC) {
+    const seq = (msg.storeSeqs || {})[key];
+    const epoch = (msg.storeEpochs || {})[key];
+    if (Number.isFinite(seq) && epoch !== undefined) _storeSync.set(key, { seq, epoch });
+  }
+}
+
+/** Where this client stands in one store: `{ seq, epoch }`, or null before a snapshot named it. */
+export function getEfspStoreSync(key) { const s = _storeSync.get(key); return s ? { ...s } : null; }
+
+/**
+ * A family delta or ack names its store's position (`airspaceSeq` + `airspaceEpoch`, ...). Call BEFORE applying it.
+ * A different epoch is another lifetime of that store (the server restarted); a seq more than one ahead of ours, on a
+ * store that declares `gapFromDeltas`, is a delta we never received. Either way the position is NOT adopted and the
+ * store's key is returned for a resync. On a store without `gapFromDeltas` a jump is left for the heartbeat to
+ * name (adopting it would hide the loss). Supplement frames carry no seq and change nothing.
+ * @returns {string[]} the store keys to resync
+ */
+export function efspStoreGapOf(msg) {
+  const out = [];
+  for (const d of STORE_SYNC) {
+    const seq = msg[d.seqKey];
+    const have = _storeSync.get(d.key);
+    if (!have || !Number.isFinite(seq)) continue;
+    const epoch = msg[d.epochKey];
+    if (epoch !== undefined && epoch !== have.epoch) { out.push(d.key); continue; }
+    if (seq > have.seq + 1) { if (d.gapFromDeltas) out.push(d.key); continue; }
+    if (seq > have.seq) have.seq = seq;
+  }
+  return out;
+}
+
+/**
+ * An efsp-heartbeat's `stores: { [key]: { seq, epoch } }` against ours. Behind on two beats in a row (a delta in flight
+ * is not a gap), or another epoch at once. A store we hold no position for is ignored (the connect snapshot names it).
+ * @returns {string[]} the store keys to resync
+ */
+export function efspStoreHeartbeatGapOf(msg) {
+  const out = [];
+  for (const [key, b] of Object.entries((msg && msg.stores) || {})) {
+    const have = _storeSync.get(key);
+    if (!have || !b) { _storeBehind.delete(key); continue; }
+    if (b.epoch !== undefined && b.epoch !== have.epoch) { out.push(key); continue; }
+    if (!Number.isFinite(b.seq) || b.seq <= have.seq) { _storeBehind.delete(key); continue; }
+    const n = (_storeBehind.get(key) || 0) + 1;
+    _storeBehind.set(key, n);
+    if (n >= 2) out.push(key);
+  }
+  return out;
+}
+
+/** What an efsp-resync for these stores must say: `{ [key]: { lastSeq, epoch } }`. null when we hold none of them. */
+export function efspStoreResyncPositionFor(keys) {
+  const stores = {};
+  for (const key of keys) {
+    const have = _storeSync.get(key);
+    if (have) stores[key] = { lastSeq: have.seq, epoch: have.epoch };
+  }
+  return Object.keys(stores).length ? { stores } : null;
+}
+
+/**
+ * An efsp-resync-reply's `stores: { [key]: { seq, epoch, slice } }`: each named store's client state is replaced by its
+ * slice and its position adopted. Returns the keys replaced, for the caller to redraw.
+ */
+export function applyEfspStoreSlices(stores) {
+  const done = [];
+  for (const d of STORE_SYNC) {
+    const r = stores && stores[d.key];
+    if (!r || !Number.isFinite(r.seq)) continue;
+    d.replace(r.slice);
+    _storeSync.set(d.key, { seq: r.seq, epoch: r.epoch });
+    _storeBehind.delete(d.key);
+    done.push(d.key);
+  }
+  return done;
 }
 
 /**
@@ -547,6 +659,8 @@ export function _resetEfspStateForTest() {
   efspBoardSeqByFacility.clear();
   efspBoardEpochByFacility.clear();
   _heartbeatBehind.clear();
+  _storeSync.clear();
+  _storeBehind.clear();
   efspBays = [];
   efspAitAuthorizedByFacility = {};
   efspPositionLetters = {};
