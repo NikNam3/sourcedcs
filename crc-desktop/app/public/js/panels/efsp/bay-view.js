@@ -14,7 +14,7 @@ import { highlightCorrelatedTrack } from './correlation-highlight.js';
 import { carrierOrderRack, carrierSignatureFor, renderCarrierStackBoard } from './carrier-panel.js';
 import { renderBayDescriptorView } from './bay-views.js';
 import { stereoRoutesCacheKey } from './efsp-stereo-routes.js';
-import { tofiExitSignatureFor } from './strip-view.js';
+import { _stripAlerts, tofiExitSignatureFor } from './strip-view.js';
 import { efspArrivalFor } from './efsp-arrivals.js';
 import { runwayStatusSignatureFor } from './runway-status-rules.js';
 import { trackRef } from '../../track-label.js';
@@ -592,14 +592,11 @@ export function _stripRenderSignature(strip) {
   // Strip, or the next render would replay it.
   parts.push('arr:' + (efspArrivalFor(strip.stripId) ? 1 : 0));
 
-  // Conformance and conflict alerts (docs/adr/0058). A conflict's countdown is
-  // part of what the Strip says, so it rebuilds each second while one lasts —
-  // only the Strips actually in a conflict.
-  const conf = conformanceAlertsForFlightData(strip.flightDataId);
-  const trackId = correlatedTrackIdForStrip(strip);
-  const conflictAlert = conflictAlertsForTrack(trackId);
-  parts.push('alr:' + conf.map(a => `${a.kind}/${a.assigned}/${a.actual ?? ''}/${a.deviationFt ?? ''}/${a.fpm ?? ''}`).join(',')
-    + ';' + conflictAlert.map(c => `${c.id}/${c.timeToCpaSec}/${c.minNm}/${c.vertFt}`).join(','));
+  // Every alert chip (conformance, conflict, runway, ordnance, SCRAMBLE, TOFI regime, ATO, ...) is named by what
+  // _stripAlerts returns, so the signature is derived from that call rather than from a hand list of its inputs: a
+  // new chip is covered the moment _stripAlerts emits it (ARCH-C §3.1, B7). A conflict's countdown is in its text,
+  // so a Strip in a conflict still rebuilds each second.
+  parts.push('alr:' + _stripAlerts(strip).map(a => `${a.key}/${a.tone}/${a.text}/${a.reason}`).join(','));
   // Runway status (docs/adr/0068): the RWY/HOOK chips read the Facility's runway record, not the Strip.
   parts.push('fld:' + runwayStatusSignatureFor(strip));
   // Surveillance hints (docs/adr/0076) are stated by the server about this Strip, not part of its own

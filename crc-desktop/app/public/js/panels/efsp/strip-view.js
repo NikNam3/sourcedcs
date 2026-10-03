@@ -481,7 +481,7 @@ function _fmtAlt(ft) {
 const _fmtClock = (sec) => `${Math.floor(sec / 60)}:${String(Math.round(sec % 60)).padStart(2, '0')}`;
 
 /** This Strip's conformance alerts and conflicts, each as { key, text, tone, reason }. */
-function _stripAlerts(strip) {
+export function _stripAlerts(strip) {
   const out = [];
   const trackId = correlatedTrackIdForStrip(strip);
   for (const c of conflictAlertsForTrack(trackId)) {

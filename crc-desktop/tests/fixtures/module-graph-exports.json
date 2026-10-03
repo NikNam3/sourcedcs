@@ -1185,6 +1185,7 @@
    "INDICATOR_ORDER",
    "STRIP_TYPE_ABBR",
    "_buildStripLayout",
+   "_stripAlerts",
    "tofiExitSignatureFor"
   ],
   "panels/efsp/time-chains.js": [
