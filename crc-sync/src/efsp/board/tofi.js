@@ -387,10 +387,11 @@ class Tofi {
     const before = deepClone(strip);
     const entered = this.markEntered(flightDataId, { trigger: 'AIRSPACE', airspaceId, by: 'system', system: true });
     if (!entered.ok) return entered;
-    // The Strip itself is unchanged (the regime lives on the flight data): push a delta without counting it as a change
-    // to an open undo's record (docs/adr/0100; an observed path, like the flight data write above).
-    strip.rev += 1; strip.updatedAt = this._clock.now(); strip.updatedBy = 'system';
-    this._touch(strip.stripId, { placementOnly: true });
+    // The Strip itself is unchanged (the regime lives on the flight data), so its rev stays: a controller holding the
+    // current rev must not be refused STALE_REV for a write that changed nothing on the Strip (docs/wip/SERVER-BUGS.md,
+    // B6). It is touched so the delta and the sync ring still carry it, unobserved so an open undo's record does not
+    // count it as a change (docs/adr/0100; the flight data write above is the observed path).
+    this._touch(strip.stripId, { unobserved: true });
     this._audit.recordSystem('TofiRegimeEntered', strip, {
       before, after: deepClone(strip), tofiRegime: { trigger: 'AIRSPACE', airspaceId, regime: entered.regime, warning: null },
     });

@@ -85,7 +85,7 @@ test('created records and placement-only touches stay inside the footprint check
   const h = new UndoHistory({ wallClock: fakeWall() });
   h.begin('a1', meta(), { strips: [S('s1')] });
   h.observe(strip('s1'));
-  h.observe({ ...strip('n1'), placementOnly: true });
+  h.observe({ ...strip('n1'), unobserved: true });
   h.observe(strip('m1', 'MRU'));
   assert.ok(h.commit({ ok: true }, { created: { strips: [S('m1', 'MRU')] } }));
 });

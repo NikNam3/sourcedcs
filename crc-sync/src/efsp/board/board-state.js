@@ -23,7 +23,7 @@ class BoardState {
     this._onTouch = null; // the undo history's hook (docs/adr/0100), set by the facade
   }
 
-  /** `fn(stripId, {placementOnly})` on every touch, before the ring entry (the undo history attributes it). */
+  /** `fn(stripId, {unobserved})` on every touch, before the ring entry (the undo history attributes it). */
   setTouchHook(fn) { this._onTouch = fn; }
 
   /** The Strip map itself (stripId -> Strip). */
@@ -45,11 +45,11 @@ class BoardState {
   }
 
   /**
-   * The kernel's touch: every touch on this Board comes here. `placementOnly` marks a rebalance re-keying a
+   * The kernel's touch: every touch on this Board comes here. `unobserved` marks a rebalance re-keying a
    * neighbour, which the undo history never counts as a change (docs/adr/0100 §4).
    */
-  recordTouch(stripId, { placementOnly = false } = {}) {
-    if (this._onTouch) this._onTouch(stripId, { placementOnly });
+  recordTouch(stripId, { unobserved = false } = {}) {
+    if (this._onTouch) this._onTouch(stripId, { unobserved });
     this._sync.touch(stripId);
   }
 

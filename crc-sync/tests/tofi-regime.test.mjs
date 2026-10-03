@@ -490,3 +490,27 @@ test('efsp-alerts carries tofiRegime, filtered by read scope to the visible flig
   assert.deepEqual(out.tofiRegime.map(a => a.flightDataId), ['f1']);
   assert.equal(readScope.filterAlerts(msg, { kind: readScope.ALL }, new Set(), () => true), msg);
 });
+
+// ── B6 (docs/wip/SERVER-BUGS.md): the system entry does not change the Strip, so it does not bump its rev ──
+
+test('B6 the system entry leaves the MISSION Strip\'s rev alone, still sends it, and a controller on that rev is not refused STALE_REV', () => {
+  const f = makeFacilities(); const log = logTo(f); const p = propose(f);
+  accept(f, p.missionId, 'DUE_REGARD');
+  const tacBoard = tac(f);
+  const before = JSON.parse(JSON.stringify(tacBoard.getStrip(p.missionId)));
+  const seq = tacBoard.currentSeq;
+  tacBoard.drainTouched();
+  const r = tacBoard.markTofiEntered(p.flightDataId, { airspaceId: 'MOA-1' });
+  assert.equal(r.ok, true, JSON.stringify(r));
+  assert.equal(tofiOf(f, p.flightDataId).separationRegime, 'DUE_REGARD', 'the regime is effective');
+  const after = tacBoard.getStrip(p.missionId);
+  assert.equal(after.rev, before.rev, 'nothing on the Strip changed, so the rev did not');
+  assert.equal(after.updatedBy, before.updatedBy);
+  assert.equal(after.updatedAt, before.updatedAt);
+  assert.deepEqual(tacBoard.drainTouched(), [p.missionId], 'it is still sent (touched, in the ring)');
+  assert.ok(tacBoard.currentSeq > seq);
+  assert.equal(log.filter(e => e.op === 'TofiRegimeEntered').length, 1, 'and audited once');
+  // A controller who read the Strip before the system entry edits it on that rev:
+  const edit = tacBoard.applyMutation(mutation({ stripId: p.missionId, baseRev: before.rev, op: { kind: 'SetFlag', flag: 'offset', value: true } }), 'TAC_C2', 'tac-c2-controller');
+  assert.equal(edit.ok, true, JSON.stringify(edit));
+});

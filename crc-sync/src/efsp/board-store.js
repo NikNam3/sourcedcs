@@ -86,7 +86,7 @@ class BoardStore {
     this._state = new BoardState({ clock });
     // docs/adr/0100: every touch is attributed by the undo history (a rebalance's are placement-only).
     this._undoHistory = undoHistory || this._ownUndoHistory(flightDataStore, rules);
-    this._state.setTouchHook((id, { placementOnly }) => this._undoHistory.observe({ facilityId: rules.facilityId, kind: 'strip', id, placementOnly }));
+    this._state.setTouchHook((id, { unobserved }) => this._undoHistory.observe({ facilityId: rules.facilityId, kind: 'strip', id, unobserved }));
     const touch = (id, opts) => this._state.recordTouch(id, opts);
     this._replay = ReplayCache.forBoard(); // clientMutationId -> compact frozen replay record (replayRecord), idempotency (§5.2, docs/adr/0081)
     this._mutationLog = null; // optional collaborator, see setMutationLog()

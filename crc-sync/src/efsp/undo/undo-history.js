@@ -32,7 +32,7 @@
 // the op applies (scope null: the op is not undoable, but its changes are still observed), `commit(result)` after it,
 // `abort()` when it threw. Every Board touch and every flight-data write calls `observe(change)`:
 //
-//   change = { facilityId, kind: 'strip' | 'flightData', id, placementOnly?, paths?, system? }
+//   change = { facilityId, kind: 'strip' | 'flightData', id, unobserved?, paths?, system? }
 //
 // inside a frame it joins that frame's footprint; outside one it is a system change (a sign-off's reassignment, a
 // tick's write) and blocks every open record whose scope it touches. A peer write (`receive*`) happens inside the
@@ -175,7 +175,7 @@ class UndoHistory {
    * One change to a record. Inside a frame it joins the footprint; outside, it is a system change.
    */
   observe(change) {
-    if (!change || change.placementOnly) return;
+    if (!change || change.unobserved) return;
     const frame = this.currentFrame;
     if (frame && !change.system) {
       const key = changeKey(change);
