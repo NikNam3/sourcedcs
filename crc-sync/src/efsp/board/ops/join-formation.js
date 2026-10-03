@@ -6,6 +6,7 @@
 
 const { deepClone } = require('../strip-util');
 const { stripScope, retireScope, union, callsignOf } = require('../../undo/scopes');
+const { warn } = require('../../warnings');
 
 function _refuse(strip, reason, detail) { return { ok: false, reason, detail, strip }; }
 
@@ -53,8 +54,8 @@ function _applyJoin(ctx, joiner, op, meta) {
   const leadBefore = deepClone(lead);
   const warnings = [];
   const a = (joinerFd.identity.aircraftType || '').trim(); const b = (leadFd.identity.aircraftType || '').trim();
-  if (a && b && a !== b) warnings.push(`mixed formation: type stays ${b}`);
-  if (elig.ground.includes(joiner.state) !== leadElig.ground.includes(lead.state)) warnings.push('one Strip is on the ground and the other airborne');
+  if (a && b && a !== b) warnings.push(warn('FORMATION_MIXED_TYPE', `mixed formation: type stays ${b}`));
+  if (elig.ground.includes(joiner.state) !== leadElig.ground.includes(lead.state)) warnings.push(warn('FORMATION_GROUND_AND_AIRBORNE', 'one Strip is on the ground and the other airborne'));
 
   const retired = ctx.retire(joiner, by);
   if (!retired.ok) return retired;
@@ -73,7 +74,7 @@ function _applyJoin(ctx, joiner, op, meta) {
     ok: true, strip: joiner,
     flightData: grown.flightData,
     flightDataList: [voided.flightData, ...(retired.flightDataList || [])],
-    warning: warnings.length ? warnings.join('; ') : undefined,
+    warnings: warnings.length ? warnings : undefined,
     joinLead: { stripId: lead.stripId, before: leadBefore },
     join: { leadFlightDataId: lead.flightDataId, joinerFlightDataId: joiner.flightDataId, joinerSize, newSize: grown.flightData.identity.flightSize },
   };

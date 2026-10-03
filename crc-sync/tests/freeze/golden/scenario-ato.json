@@ -45,11 +45,11 @@
               "cidSeq": 5,
               "droppedWallAt": [],
               "replay": [
-                ["#12#1101A#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#13","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#14","warning":null}],
-                ["#12#1202S#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#15","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#16","warning":null}],
-                ["#12#1203S#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#17","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#18","warning":null}],
-                ["#12#1901T#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#19","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#20","warning":null}],
-                ["#12#1801W#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#21","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#22","warning":null}]
+                ["#12#1101A#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#13","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#14","warnings":null}],
+                ["#12#1202S#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#15","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#16","warnings":null}],
+                ["#12#1203S#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#17","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#18","warnings":null}],
+                ["#12#1901T#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#19","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#20","warnings":null}],
+                ["#12#1801W#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#21","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#22","warnings":null}]
               ]
             }
           },
@@ -173,11 +173,11 @@
               "cidSeq": 5,
               "droppedWallAt": [],
               "replay": [
-                ["#34#1101A#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#35","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#36","warning":null}],
-                ["#34#1202S#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#37","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#38","warning":null}],
-                ["#34#1203S#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#39","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#40","warning":null}],
-                ["#34#1901T#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#41","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#42","warning":null}],
-                ["#34#1801W#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#43","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#44","warning":null}]
+                ["#34#1101A#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#35","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#36","warnings":null}],
+                ["#34#1202S#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#37","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#38","warnings":null}],
+                ["#34#1203S#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#39","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#40","warnings":null}],
+                ["#34#1901T#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#41","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#42","warnings":null}],
+                ["#34#1801W#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#43","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#44","warnings":null}]
               ]
             }
           },
@@ -280,8 +280,8 @@
               "cidSeq": 1,
               "droppedWallAt": [],
               "replay": [
-                ["#56",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#57","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#58","warning":null}],
-                ["#59",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#57","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#58","warning":null}]
+                ["#56",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#57","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#58","warnings":null}],
+                ["#59",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#57","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#58","warnings":null}]
               ]
             }
           },
@@ -309,11 +309,11 @@
               "cidSeq": 5,
               "droppedWallAt": [],
               "replay": [
-                ["#60#1101A#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#57","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#61","warning":null}],
-                ["#60#1202S#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#62","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#63","warning":null}],
-                ["#60#1203S#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#64","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#65","warning":null}],
-                ["#60#1901T#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#66","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#67","warning":null}],
-                ["#60#1801W#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#68","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#69","warning":null}]
+                ["#60#1101A#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#57","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#61","warnings":null}],
+                ["#60#1202S#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#62","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#63","warnings":null}],
+                ["#60#1203S#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#64","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#65","warnings":null}],
+                ["#60#1901T#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#66","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#67","warnings":null}],
+                ["#60#1801W#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#68","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#69","warnings":null}]
               ]
             }
           },
@@ -417,9 +417,9 @@
               "cidSeq": 3,
               "droppedWallAt": [],
               "replay": [
-                ["#81",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#82","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#83","warning":null}],
-                ["#84",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#85","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#86","warning":null}],
-                ["#87",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#88","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#89","warning":null}]
+                ["#81",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#82","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#83","warnings":null}],
+                ["#84",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#85","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#86","warnings":null}],
+                ["#87",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#88","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#89","warnings":null}]
               ]
             }
           },
@@ -559,11 +559,11 @@
               "cidSeq": 5,
               "droppedWallAt": [],
               "replay": [
-                ["#101#1101A#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#102","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#103","warning":null}],
-                ["#101#1202S#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#104","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#105","warning":null}],
-                ["#101#1203S#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#106","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#107","warning":null}],
-                ["#101#1901T#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#108","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#109","warning":null}],
-                ["#101#1801W#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#110","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#111","warning":null}]
+                ["#101#1101A#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#102","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#103","warnings":null}],
+                ["#101#1202S#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#104","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#105","warnings":null}],
+                ["#101#1203S#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#106","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#107","warnings":null}],
+                ["#101#1901T#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#108","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#109","warnings":null}],
+                ["#101#1801W#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#110","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#111","warnings":null}]
               ]
             }
           },
@@ -734,66 +734,66 @@
               "cidSeq": 1,
               "droppedWallAt": [],
               "replay": [
-                ["#123",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#124","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#125","warning":null}],
-                ["#126",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#124","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#125","warning":null}],
-                ["#137",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#124","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#125","warning":null}],
-                ["#138",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"VALIDATION_ERROR","routedTo":null,"selfCoordinated":null,"stripId":"#125","warning":null}],
-                ["#139",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"VALIDATION_ERROR","routedTo":null,"selfCoordinated":null,"stripId":"#125","warning":null}],
-                ["#140",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"VALIDATION_ERROR","routedTo":null,"selfCoordinated":null,"stripId":"#125","warning":null}],
-                ["#141",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"VALIDATION_ERROR","routedTo":null,"selfCoordinated":null,"stripId":"#125","warning":null}],
-                ["#142",{"appliedWallAt":1782009600000,"detail":"proposed departure time must be a UTC time as HHMM, e.g. 1432","flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"VALIDATION_ERROR","routedTo":null,"selfCoordinated":null,"stripId":"#125","warning":null}],
-                ["#143",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#124","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#125","warning":null}],
-                ["#144",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#124","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#125","warning":null}],
-                ["#145",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#124","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#125","warning":null}],
-                ["#146",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#124","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#125","warning":null}],
-                ["#147",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#125","warning":null}],
-                ["#148",{"appliedWallAt":1782009600000,"detail":"release time must be a UTC time as HHMM, e.g. 1432","flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"VALIDATION_ERROR","routedTo":null,"selfCoordinated":null,"stripId":"#125","warning":null}],
-                ["#149",{"appliedWallAt":1782009600000,"detail":"movement area entry time must be a UTC time as HHMM, e.g. 1432","flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"VALIDATION_ERROR","routedTo":null,"selfCoordinated":null,"stripId":"#125","warning":null}],
-                ["#150",{"appliedWallAt":1782009600000,"detail":"taxi time must be a UTC time as HHMM, e.g. 1432","flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"VALIDATION_ERROR","routedTo":null,"selfCoordinated":null,"stripId":"#125","warning":null}],
-                ["#151",{"appliedWallAt":1782009600000,"detail":"takeoff time must be a UTC time as HHMM, e.g. 1432","flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"VALIDATION_ERROR","routedTo":null,"selfCoordinated":null,"stripId":"#125","warning":null}],
-                ["#152",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#125","warning":null}],
-                ["#153",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#124","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#125","warning":null}],
-                ["#154",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#124","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#125","warning":null}],
-                ["#155",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#124","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#125","warning":null}],
-                ["#156",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#125","warning":null}],
-                ["#157",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#125","warning":null}],
-                ["#158",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"VALIDATION_ERROR","routedTo":null,"selfCoordinated":null,"stripId":"#125","warning":null}],
-                ["#159",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"VALIDATION_ERROR","routedTo":null,"selfCoordinated":null,"stripId":"#125","warning":null}],
-                ["#160",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#125","warning":null}],
-                ["#161",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#124","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#125","warning":null}],
-                ["#162",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#124","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#125","warning":null}],
-                ["#163",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#124","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#125","warning":null}],
-                ["#164",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#124","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#125","warning":null}],
-                ["#165",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#124","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#125","warning":null}],
-                ["#166",{"appliedWallAt":1782009600000,"detail":"hookRequired must be true or false, not \"77\"","flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"VALIDATION_ERROR","routedTo":null,"selfCoordinated":null,"stripId":"#125","warning":null}],
-                ["#167",{"appliedWallAt":1782009600000,"detail":"invalid ordnance state: \"77\"","flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"VALIDATION_ERROR","routedTo":null,"selfCoordinated":null,"stripId":"#125","warning":null}],
-                ["#168",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"VALIDATION_ERROR","routedTo":null,"selfCoordinated":null,"stripId":"#125","warning":null}],
-                ["#169",{"appliedWallAt":1782009600000,"detail":"invalid datalink clearance indicator","flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"VALIDATION_ERROR","routedTo":null,"selfCoordinated":null,"stripId":"#125","warning":null}],
-                ["#170",{"appliedWallAt":1782009600000,"detail":"invalid track degradation flag","flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"VALIDATION_ERROR","routedTo":null,"selfCoordinated":null,"stripId":"#125","warning":null}],
-                ["#171",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#124","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#125","warning":null}],
-                ["#172",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#124","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#125","warning":null}],
-                ["#173",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#125","warning":null}],
-                ["#174",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#125","warning":null}],
-                ["#175",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#125","warning":null}],
-                ["#176",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#124","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#125","warning":null}],
-                ["#177",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#124","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#125","warning":null}],
-                ["#178",{"appliedWallAt":1782009600000,"detail":"77 is not a configured stereo route","flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"VALIDATION_ERROR","routedTo":null,"selfCoordinated":null,"stripId":"#125","warning":null}],
-                ["#179",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#124","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#125","warning":null}],
-                ["#180",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#124","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#125","warning":null}],
-                ["#181",{"appliedWallAt":1782009600000,"detail":"MTR entry time must be a UTC time as HHMM, e.g. 1432","flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"VALIDATION_ERROR","routedTo":null,"selfCoordinated":null,"stripId":"#125","warning":null}],
-                ["#182",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#124","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#125","warning":null}],
-                ["#183",{"appliedWallAt":1782009600000,"detail":"MTR exit estimate must be a UTC time as HHMM, e.g. 1432","flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"VALIDATION_ERROR","routedTo":null,"selfCoordinated":null,"stripId":"#125","warning":null}],
-                ["#184",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#124","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#125","warning":null}],
-                ["#185",{"appliedWallAt":1782009600000,"detail":"invalid release state","flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"VALIDATION_ERROR","routedTo":null,"selfCoordinated":null,"stripId":"#125","warning":null}],
-                ["#186",{"appliedWallAt":1782009600000,"detail":"void time must be a UTC time as HHMM, e.g. 1432","flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"VALIDATION_ERROR","routedTo":null,"selfCoordinated":null,"stripId":"#125","warning":null}],
-                ["#187",{"appliedWallAt":1782009600000,"detail":"EDCT must be a UTC time as HHMM, e.g. 1432","flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"VALIDATION_ERROR","routedTo":null,"selfCoordinated":null,"stripId":"#125","warning":null}],
-                ["#188",{"appliedWallAt":1782009600000,"detail":"call-for-release time must be a UTC time as HHMM, e.g. 1432","flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"VALIDATION_ERROR","routedTo":null,"selfCoordinated":null,"stripId":"#125","warning":null}],
-                ["#189",{"appliedWallAt":1782009600000,"detail":"invalid alert status: \"77\"","flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"VALIDATION_ERROR","routedTo":null,"selfCoordinated":null,"stripId":"#125","warning":null}],
-                ["#190",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#124","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#125","warning":null}],
-                ["#191",{"appliedWallAt":1782009600000,"detail":"airspace ownership must be a direction (CONTROLLING_AGENCY or USING_AGENCY), not \"77\"","flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"VALIDATION_ERROR","routedTo":null,"selfCoordinated":null,"stripId":"#125","warning":null}],
-                ["#192",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#124","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#125","warning":null}],
-                ["#193",{"appliedWallAt":1782009600000,"detail":"invalid radar_service: \"77\"","flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"VALIDATION_ERROR","routedTo":null,"selfCoordinated":null,"stripId":"#125","warning":null}],
-                ["#194",{"appliedWallAt":1782009600000,"detail":"invalid separation_regime: \"77\"","flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"VALIDATION_ERROR","routedTo":null,"selfCoordinated":null,"stripId":"#125","warning":null}]
+                ["#123",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#124","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#125","warnings":null}],
+                ["#126",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#124","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#125","warnings":null}],
+                ["#137",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#124","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#125","warnings":null}],
+                ["#138",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"VALIDATION_ERROR","routedTo":null,"selfCoordinated":null,"stripId":"#125","warnings":null}],
+                ["#139",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"VALIDATION_ERROR","routedTo":null,"selfCoordinated":null,"stripId":"#125","warnings":null}],
+                ["#140",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"VALIDATION_ERROR","routedTo":null,"selfCoordinated":null,"stripId":"#125","warnings":null}],
+                ["#141",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"VALIDATION_ERROR","routedTo":null,"selfCoordinated":null,"stripId":"#125","warnings":null}],
+                ["#142",{"appliedWallAt":1782009600000,"detail":"proposed departure time must be a UTC time as HHMM, e.g. 1432","flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"VALIDATION_ERROR","routedTo":null,"selfCoordinated":null,"stripId":"#125","warnings":null}],
+                ["#143",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#124","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#125","warnings":null}],
+                ["#144",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#124","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#125","warnings":null}],
+                ["#145",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#124","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#125","warnings":null}],
+                ["#146",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#124","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#125","warnings":null}],
+                ["#147",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#125","warnings":null}],
+                ["#148",{"appliedWallAt":1782009600000,"detail":"release time must be a UTC time as HHMM, e.g. 1432","flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"VALIDATION_ERROR","routedTo":null,"selfCoordinated":null,"stripId":"#125","warnings":null}],
+                ["#149",{"appliedWallAt":1782009600000,"detail":"movement area entry time must be a UTC time as HHMM, e.g. 1432","flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"VALIDATION_ERROR","routedTo":null,"selfCoordinated":null,"stripId":"#125","warnings":null}],
+                ["#150",{"appliedWallAt":1782009600000,"detail":"taxi time must be a UTC time as HHMM, e.g. 1432","flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"VALIDATION_ERROR","routedTo":null,"selfCoordinated":null,"stripId":"#125","warnings":null}],
+                ["#151",{"appliedWallAt":1782009600000,"detail":"takeoff time must be a UTC time as HHMM, e.g. 1432","flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"VALIDATION_ERROR","routedTo":null,"selfCoordinated":null,"stripId":"#125","warnings":null}],
+                ["#152",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#125","warnings":null}],
+                ["#153",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#124","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#125","warnings":null}],
+                ["#154",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#124","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#125","warnings":null}],
+                ["#155",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#124","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#125","warnings":null}],
+                ["#156",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#125","warnings":null}],
+                ["#157",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#125","warnings":null}],
+                ["#158",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"VALIDATION_ERROR","routedTo":null,"selfCoordinated":null,"stripId":"#125","warnings":null}],
+                ["#159",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"VALIDATION_ERROR","routedTo":null,"selfCoordinated":null,"stripId":"#125","warnings":null}],
+                ["#160",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#125","warnings":null}],
+                ["#161",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#124","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#125","warnings":null}],
+                ["#162",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#124","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#125","warnings":null}],
+                ["#163",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#124","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#125","warnings":null}],
+                ["#164",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#124","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#125","warnings":null}],
+                ["#165",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#124","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#125","warnings":null}],
+                ["#166",{"appliedWallAt":1782009600000,"detail":"hookRequired must be true or false, not \"77\"","flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"VALIDATION_ERROR","routedTo":null,"selfCoordinated":null,"stripId":"#125","warnings":null}],
+                ["#167",{"appliedWallAt":1782009600000,"detail":"invalid ordnance state: \"77\"","flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"VALIDATION_ERROR","routedTo":null,"selfCoordinated":null,"stripId":"#125","warnings":null}],
+                ["#168",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"VALIDATION_ERROR","routedTo":null,"selfCoordinated":null,"stripId":"#125","warnings":null}],
+                ["#169",{"appliedWallAt":1782009600000,"detail":"invalid datalink clearance indicator","flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"VALIDATION_ERROR","routedTo":null,"selfCoordinated":null,"stripId":"#125","warnings":null}],
+                ["#170",{"appliedWallAt":1782009600000,"detail":"invalid track degradation flag","flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"VALIDATION_ERROR","routedTo":null,"selfCoordinated":null,"stripId":"#125","warnings":null}],
+                ["#171",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#124","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#125","warnings":null}],
+                ["#172",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#124","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#125","warnings":null}],
+                ["#173",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#125","warnings":null}],
+                ["#174",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#125","warnings":null}],
+                ["#175",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#125","warnings":null}],
+                ["#176",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#124","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#125","warnings":null}],
+                ["#177",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#124","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#125","warnings":null}],
+                ["#178",{"appliedWallAt":1782009600000,"detail":"77 is not a configured stereo route","flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"VALIDATION_ERROR","routedTo":null,"selfCoordinated":null,"stripId":"#125","warnings":null}],
+                ["#179",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#124","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#125","warnings":null}],
+                ["#180",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#124","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#125","warnings":null}],
+                ["#181",{"appliedWallAt":1782009600000,"detail":"MTR entry time must be a UTC time as HHMM, e.g. 1432","flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"VALIDATION_ERROR","routedTo":null,"selfCoordinated":null,"stripId":"#125","warnings":null}],
+                ["#182",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#124","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#125","warnings":null}],
+                ["#183",{"appliedWallAt":1782009600000,"detail":"MTR exit estimate must be a UTC time as HHMM, e.g. 1432","flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"VALIDATION_ERROR","routedTo":null,"selfCoordinated":null,"stripId":"#125","warnings":null}],
+                ["#184",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#124","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#125","warnings":null}],
+                ["#185",{"appliedWallAt":1782009600000,"detail":"invalid release state","flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"VALIDATION_ERROR","routedTo":null,"selfCoordinated":null,"stripId":"#125","warnings":null}],
+                ["#186",{"appliedWallAt":1782009600000,"detail":"void time must be a UTC time as HHMM, e.g. 1432","flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"VALIDATION_ERROR","routedTo":null,"selfCoordinated":null,"stripId":"#125","warnings":null}],
+                ["#187",{"appliedWallAt":1782009600000,"detail":"EDCT must be a UTC time as HHMM, e.g. 1432","flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"VALIDATION_ERROR","routedTo":null,"selfCoordinated":null,"stripId":"#125","warnings":null}],
+                ["#188",{"appliedWallAt":1782009600000,"detail":"call-for-release time must be a UTC time as HHMM, e.g. 1432","flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"VALIDATION_ERROR","routedTo":null,"selfCoordinated":null,"stripId":"#125","warnings":null}],
+                ["#189",{"appliedWallAt":1782009600000,"detail":"invalid alert status: \"77\"","flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"VALIDATION_ERROR","routedTo":null,"selfCoordinated":null,"stripId":"#125","warnings":null}],
+                ["#190",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#124","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#125","warnings":null}],
+                ["#191",{"appliedWallAt":1782009600000,"detail":"airspace ownership must be a direction (CONTROLLING_AGENCY or USING_AGENCY), not \"77\"","flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"VALIDATION_ERROR","routedTo":null,"selfCoordinated":null,"stripId":"#125","warnings":null}],
+                ["#192",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#124","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#125","warnings":null}],
+                ["#193",{"appliedWallAt":1782009600000,"detail":"invalid radar_service: \"77\"","flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"VALIDATION_ERROR","routedTo":null,"selfCoordinated":null,"stripId":"#125","warnings":null}],
+                ["#194",{"appliedWallAt":1782009600000,"detail":"invalid separation_regime: \"77\"","flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"VALIDATION_ERROR","routedTo":null,"selfCoordinated":null,"stripId":"#125","warnings":null}]
               ]
             }
           },
@@ -821,22 +821,22 @@
               "cidSeq": 5,
               "droppedWallAt": [],
               "replay": [
-                ["#127#1101A#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#124","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#128","warning":null}],
-                ["#127#1202S#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#129","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#130","warning":null}],
-                ["#127#1203S#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#131","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#132","warning":null}],
-                ["#127#1901T#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#133","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#134","warning":null}],
-                ["#127#1801W#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#135","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#136","warning":null}],
-                ["#195",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#124","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#128","warning":null}],
-                ["#196",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#124","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#128","warning":null}],
-                ["#197",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#124","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#128","warning":null}],
-                ["#198",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"VALIDATION_ERROR","routedTo":null,"selfCoordinated":null,"stripId":"#128","warning":null}],
-                ["#199",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#124","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#128","warning":null}],
-                ["#200",{"appliedWallAt":1782009600000,"detail":"vul window start must be a UTC time as HHMM, e.g. 1432","flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"VALIDATION_ERROR","routedTo":null,"selfCoordinated":null,"stripId":"#128","warning":null}],
-                ["#201",{"appliedWallAt":1782009600000,"detail":"vul window end must be a UTC time as HHMM, e.g. 1432","flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"VALIDATION_ERROR","routedTo":null,"selfCoordinated":null,"stripId":"#128","warning":null}],
-                ["#202",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#124","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#128","warning":null}],
-                ["#203",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"VALIDATION_ERROR","routedTo":null,"selfCoordinated":null,"stripId":"#128","warning":null}],
-                ["#204",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"VALIDATION_ERROR","routedTo":null,"selfCoordinated":null,"stripId":"#128","warning":null}],
-                ["#205",{"appliedWallAt":1782009600000,"detail":"invalid ordnance state: \"77\"","flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"VALIDATION_ERROR","routedTo":null,"selfCoordinated":null,"stripId":"#128","warning":null}]
+                ["#127#1101A#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#124","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#128","warnings":null}],
+                ["#127#1202S#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#129","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#130","warnings":null}],
+                ["#127#1203S#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#131","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#132","warnings":null}],
+                ["#127#1901T#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#133","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#134","warnings":null}],
+                ["#127#1801W#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#135","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#136","warnings":null}],
+                ["#195",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#124","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#128","warnings":null}],
+                ["#196",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#124","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#128","warnings":null}],
+                ["#197",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#124","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#128","warnings":null}],
+                ["#198",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"VALIDATION_ERROR","routedTo":null,"selfCoordinated":null,"stripId":"#128","warnings":null}],
+                ["#199",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#124","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#128","warnings":null}],
+                ["#200",{"appliedWallAt":1782009600000,"detail":"vul window start must be a UTC time as HHMM, e.g. 1432","flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"VALIDATION_ERROR","routedTo":null,"selfCoordinated":null,"stripId":"#128","warnings":null}],
+                ["#201",{"appliedWallAt":1782009600000,"detail":"vul window end must be a UTC time as HHMM, e.g. 1432","flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"VALIDATION_ERROR","routedTo":null,"selfCoordinated":null,"stripId":"#128","warnings":null}],
+                ["#202",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#124","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#128","warnings":null}],
+                ["#203",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"VALIDATION_ERROR","routedTo":null,"selfCoordinated":null,"stripId":"#128","warnings":null}],
+                ["#204",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"VALIDATION_ERROR","routedTo":null,"selfCoordinated":null,"stripId":"#128","warnings":null}],
+                ["#205",{"appliedWallAt":1782009600000,"detail":"invalid ordnance state: \"77\"","flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"VALIDATION_ERROR","routedTo":null,"selfCoordinated":null,"stripId":"#128","warnings":null}]
               ]
             }
           },
@@ -964,12 +964,12 @@
               "cidSeq": 5,
               "droppedWallAt": [],
               "replay": [
-                ["#217#1101A#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#218","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#219","warning":null}],
-                ["#217#1202S#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#220","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#221","warning":null}],
-                ["#217#1203S#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#222","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#223","warning":null}],
-                ["#217#1901T#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#224","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#225","warning":null}],
-                ["#217#1801W#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#226","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#227","warning":null}],
-                ["#228",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#218","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#219","warning":null}]
+                ["#217#1101A#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#218","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#219","warnings":null}],
+                ["#217#1202S#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#220","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#221","warnings":null}],
+                ["#217#1203S#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#222","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#223","warnings":null}],
+                ["#217#1901T#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#224","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#225","warnings":null}],
+                ["#217#1801W#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#226","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#227","warnings":null}],
+                ["#228",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#218","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#219","warnings":null}]
               ]
             }
           },
@@ -1095,11 +1095,11 @@
               "cidSeq": 5,
               "droppedWallAt": [],
               "replay": [
-                ["#241#1101A#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#242","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#243","warning":null}],
-                ["#241#1202S#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#244","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#245","warning":null}],
-                ["#241#1203S#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#246","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#247","warning":null}],
-                ["#241#1901T#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#248","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#249","warning":null}],
-                ["#241#1801W#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#250","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#251","warning":null}]
+                ["#241#1101A#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#242","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#243","warnings":null}],
+                ["#241#1202S#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#244","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#245","warnings":null}],
+                ["#241#1203S#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#246","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#247","warnings":null}],
+                ["#241#1901T#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#248","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#249","warnings":null}],
+                ["#241#1801W#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#250","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#251","warnings":null}]
               ]
             }
           },
@@ -1224,11 +1224,11 @@
               "cidSeq": 5,
               "droppedWallAt": [],
               "replay": [
-                ["#264#1101A#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#265","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#266","warning":null}],
-                ["#264#1202S#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#267","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#268","warning":null}],
-                ["#264#1203S#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#269","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#270","warning":null}],
-                ["#264#1901T#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#271","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#272","warning":null}],
-                ["#264#1801W#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#273","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#274","warning":null}]
+                ["#264#1101A#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#265","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#266","warnings":null}],
+                ["#264#1202S#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#267","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#268","warnings":null}],
+                ["#264#1203S#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#269","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#270","warnings":null}],
+                ["#264#1901T#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#271","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#272","warnings":null}],
+                ["#264#1801W#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#273","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#274","warnings":null}]
               ]
             }
           },
@@ -1350,9 +1350,9 @@
               "cidSeq": 3,
               "droppedWallAt": [],
               "replay": [
-                ["#286#1896#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#287","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#288","warning":null}],
-                ["#286#1898#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#289","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#290","warning":null}],
-                ["#286#1899#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#291","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#292","warning":null}]
+                ["#286#1896#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#287","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#288","warnings":null}],
+                ["#286#1898#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#289","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#290","warnings":null}],
+                ["#286#1899#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#291","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#292","warnings":null}]
               ]
             }
           },
@@ -1472,11 +1472,11 @@
               "cidSeq": 5,
               "droppedWallAt": [],
               "replay": [
-                ["#304#1101A#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#305","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#306","warning":null}],
-                ["#304#1202S#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#307","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#308","warning":null}],
-                ["#304#1203S#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#309","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#310","warning":null}],
-                ["#304#1901T#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#311","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#312","warning":null}],
-                ["#304#1801W#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#313","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#314","warning":null}]
+                ["#304#1101A#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#305","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#306","warnings":null}],
+                ["#304#1202S#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#307","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#308","warnings":null}],
+                ["#304#1203S#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#309","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#310","warnings":null}],
+                ["#304#1901T#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#311","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#312","warnings":null}],
+                ["#304#1801W#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#313","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#314","warnings":null}]
               ]
             }
           },
@@ -1594,11 +1594,11 @@
               "cidSeq": 5,
               "droppedWallAt": [],
               "replay": [
-                ["#304#1101A#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#305","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#306","warning":null}],
-                ["#304#1202S#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#307","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#308","warning":null}],
-                ["#304#1203S#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#309","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#310","warning":null}],
-                ["#304#1901T#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#311","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#312","warning":null}],
-                ["#304#1801W#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#313","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#314","warning":null}]
+                ["#304#1101A#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#305","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#306","warnings":null}],
+                ["#304#1202S#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#307","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#308","warnings":null}],
+                ["#304#1203S#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#309","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#310","warnings":null}],
+                ["#304#1901T#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#311","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#312","warnings":null}],
+                ["#304#1801W#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#313","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#314","warnings":null}]
               ]
             }
           },
@@ -1699,7 +1699,7 @@
               "cidSeq": 1,
               "droppedWallAt": [],
               "replay": [
-                ["#353",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#345","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#354","warning":null}]
+                ["#353",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#345","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#354","warnings":null}]
               ]
             }
           },
@@ -1727,11 +1727,11 @@
               "cidSeq": 5,
               "droppedWallAt": [],
               "replay": [
-                ["#342#1101A#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#343","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#344","warning":null}],
-                ["#342#1202S#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#345","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#346","warning":null}],
-                ["#342#1203S#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#347","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#348","warning":null}],
-                ["#342#1901T#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#349","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#350","warning":null}],
-                ["#342#1801W#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#351","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#352","warning":null}]
+                ["#342#1101A#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#343","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#344","warnings":null}],
+                ["#342#1202S#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#345","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#346","warnings":null}],
+                ["#342#1203S#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#347","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#348","warnings":null}],
+                ["#342#1901T#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#349","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#350","warnings":null}],
+                ["#342#1801W#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#351","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#352","warnings":null}]
               ]
             }
           },
@@ -1858,12 +1858,12 @@
                 ["#374",1782009600000]
               ],
               "replay": [
-                ["#366#1101A#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#367","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#368","warning":null}],
-                ["#366#1202S#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#369","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#370","warning":null}],
-                ["#366#1203S#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#371","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#372","warning":null}],
-                ["#366#1901T#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#373","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#374","warning":null}],
-                ["#366#1801W#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#375","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#376","warning":null}],
-                ["#377",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#374","warning":null}]
+                ["#366#1101A#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#367","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#368","warnings":null}],
+                ["#366#1202S#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#369","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#370","warnings":null}],
+                ["#366#1203S#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#371","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#372","warnings":null}],
+                ["#366#1901T#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#373","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#374","warnings":null}],
+                ["#366#1801W#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#375","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#376","warnings":null}],
+                ["#377",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#374","warnings":null}]
               ]
             }
           },
@@ -1988,11 +1988,11 @@
               "cidSeq": 5,
               "droppedWallAt": [],
               "replay": [
-                ["#389#1101A#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#390","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#391","warning":null}],
-                ["#389#1202S#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#392","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#393","warning":null}],
-                ["#389#1203S#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#394","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#395","warning":null}],
-                ["#389#1901T#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#396","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#397","warning":null}],
-                ["#389#1801W#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#398","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#399","warning":null}]
+                ["#389#1101A#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#390","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#391","warnings":null}],
+                ["#389#1202S#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#392","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#393","warnings":null}],
+                ["#389#1203S#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#394","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#395","warnings":null}],
+                ["#389#1901T#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#396","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#397","warnings":null}],
+                ["#389#1801W#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#398","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#399","warnings":null}]
               ]
             }
           },
@@ -2094,8 +2094,8 @@
               "cidSeq": 1,
               "droppedWallAt": [],
               "replay": [
-                ["#412",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#413","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#414","warning":null}],
-                ["#415",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#413","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#414","warning":null}]
+                ["#412",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#413","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#414","warnings":null}],
+                ["#415",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#413","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#414","warnings":null}]
               ]
             }
           },
@@ -2123,11 +2123,11 @@
               "cidSeq": 5,
               "droppedWallAt": [],
               "replay": [
-                ["#416#1101A#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#417","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#418","warning":null}],
-                ["#416#1202S#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#419","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#420","warning":null}],
-                ["#416#1203S#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#421","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#422","warning":null}],
-                ["#416#1901T#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#423","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#424","warning":null}],
-                ["#416#1801W#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#425","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#426","warning":null}]
+                ["#416#1101A#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#417","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#418","warnings":null}],
+                ["#416#1202S#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#419","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#420","warnings":null}],
+                ["#416#1203S#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#421","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#422","warnings":null}],
+                ["#416#1901T#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#423","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#424","warnings":null}],
+                ["#416#1801W#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#425","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#426","warnings":null}]
               ]
             }
           },
@@ -2252,11 +2252,11 @@
               "cidSeq": 5,
               "droppedWallAt": [],
               "replay": [
-                ["#438#1101A#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#439","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#440","warning":null}],
-                ["#438#1202S#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#441","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#442","warning":null}],
-                ["#438#1203S#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#443","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#444","warning":null}],
-                ["#438#1901T#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#445","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#446","warning":null}],
-                ["#438#1801W#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#447","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#448","warning":null}]
+                ["#438#1101A#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#439","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#440","warnings":null}],
+                ["#438#1202S#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#441","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#442","warnings":null}],
+                ["#438#1203S#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#443","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#444","warnings":null}],
+                ["#438#1901T#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#445","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#446","warnings":null}],
+                ["#438#1801W#0",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#447","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#448","warnings":null}]
               ]
             }
           },

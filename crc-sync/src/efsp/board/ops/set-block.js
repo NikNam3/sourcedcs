@@ -2,6 +2,7 @@
 
 const { MAX_FREE_TEXT } = require('../../flight-data-store');
 const { _frequencyFromBlockValue } = require('../strip-util');
+const { fromCode } = require('../../warnings');
 
 /**
  * The setTofi patch for a TOFI Block write (docs/adr/0102 for SREG). Before the flight has entered, a non-ATC value
@@ -96,7 +97,7 @@ function _applySetBlockWrite(ctx, strip, op, by, actingPositionId, clientMutatio
     ctx.state.bump(strip, by);
     const marsaVoided = ctx.marsaVoidFor(strip, op, by, actingPositionId, clientMutationId);
     return {
-      ok: true, strip, flightData: flightDataResult.flightData, warning: flightDataResult.warning,
+      ok: true, strip, flightData: flightDataResult.flightData, warnings: fromCode(flightDataResult.warning),
       marsaVoided, flightDataList: marsaVoided ? ctx.drainMarsaRegimeWrites() : undefined,
     };
   }

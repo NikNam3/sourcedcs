@@ -54,7 +54,7 @@ function replayRecord(result, appliedWallAt) {
     ok: !!result.ok,
     reason: result.reason === undefined ? null : result.reason,
     detail: result.detail === undefined ? null : result.detail,
-    warning: result.warning === undefined ? null : result.warning,
+    warnings: result.warnings === undefined ? null : result.warnings,
     routedTo: result.routedTo === undefined ? null : result.routedTo,
     selfCoordinated: result.selfCoordinated === undefined ? null : result.selfCoordinated,
     stripId: result.strip ? result.strip.stripId : null,

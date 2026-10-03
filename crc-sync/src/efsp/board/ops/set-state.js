@@ -3,6 +3,7 @@
 const { stripScope, retireScope, union, callsignOf } = require('../../undo/scopes');
 
 const { runwayInhibitFor, RUNWAY_GATED_STATES } = require('../../runway-status');
+const { warn } = require('../../warnings');
 
 /**
  * SetState is owner-checked (decisions.md S-R2-14, docs/adr/0080, B7). Until
@@ -84,7 +85,7 @@ function _applySetStateOp(ctx, strip, toState, by) {
   if (result.ok) {
     const implied = ctx.rules.bayImpliesState(strip.bayId);
     if (implied && implied !== strip.state) {
-      result.warning = `no ${strip.ownerPositionId} Bay for ${strip.state}; the Strip stays in ${strip.bayId}`;
+      result.warnings = [warn('NO_BAY_FOR_STATE', `no ${strip.ownerPositionId} Bay for ${strip.state}; the Strip stays in ${strip.bayId}`)];
     }
   }
   return result;

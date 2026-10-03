@@ -107,7 +107,7 @@ test('LUAW while combined: the sign-on ack says luaw, and putting a Strip into L
   // Not combined: no warning.
   const plain = act(efsp, c.LC, 'LC', s, { kind: 'SetState', toState: 'LUAW' });
   assert.equal(plain.ok, true);
-  assert.notEqual(plain.warning, 'LUAW_WHILE_COMBINED');
+  assert.ok(!(plain.warnings || []).some(w => w.code === 'LUAW_WHILE_COMBINED'));
   // Combined: signing on warns more strongly (a Strip is at LUAW).
   assert.equal(hold(efsp, c.LC.session, 'INCIRLIK', ['LC', 'GC']).ack.combination.luaw, true);
   // And a second departure entering LUAW while combined carries the mutation warning.
@@ -116,7 +116,8 @@ test('LUAW while combined: the sign-on ack says luaw, and putting a Strip into L
   t = mustAct(efsp, c.OPS, 'OPS', t, { kind: 'TransferStrip', toPositionId: 'LC', bayId: 'lc-runway-queue', rackId: 'rwy-05' });
   const warned = act(efsp, c.LC, 'LC', t, { kind: 'SetState', toState: 'LUAW' });
   assert.equal(warned.ok, true, 'never blocks');
-  assert.equal(warned.warning, 'LUAW_WHILE_COMBINED');
+  // B4: the op's own warning (no LC Bay for LUAW) and the combination one both arrive; the second no longer overwrites the first.
+  assert.deepEqual(warned.warnings.map(w => w.code), ['NO_BAY_FOR_STATE', 'LUAW_WHILE_COMBINED']);
 });
 
 test('no offer when LC left GC itself, when GC has no Strips, or when nobody holds LC', () => {

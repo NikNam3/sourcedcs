@@ -2,6 +2,7 @@
 
 const crypto = require('crypto');
 const { newFlags } = require('../strip-util');
+const { warn } = require('../../warnings');
 
 function _applyCreateStrip(ctx, op, actingPositionId, by) {
   // A Strip in a Bay this Facility does not have is invisible on every
@@ -119,14 +120,14 @@ function _applyCreateStrip(ctx, op, actingPositionId, by) {
   // docs/adr/0074: a recovery check-in (a MARSHAL Strip in IN_STACK) joins the
   // Marshal stack at the next free slot. The Marshal re-sequences with one
   // Move; a full stack is a warning, not a refusal of the check-in.
-  let warning;
+  let warnings;
   let carrierChanged;
   if (stripType === 'MARSHAL' && strip.state === 'IN_STACK') {
     const a = ctx.rules.carrierAppendFlight(strip.flightDataId, { by, actingPositionId });
-    if (a && a.ok === false) warning = `not in the Marshal stack: ${a.detail || a.reason}`;
+    if (a && a.ok === false) warnings = [warn('NOT_IN_MARSHAL_STACK', `not in the Marshal stack: ${a.detail || a.reason}`)];
     else if (a && a.changed && a.changed.length) carrierChanged = true;
   }
-  return { ok: true, strip, flightData: created.flightData, warning, carrierChanged };
+  return { ok: true, strip, flightData: created.flightData, warnings, carrierChanged };
 }
 
 module.exports = {

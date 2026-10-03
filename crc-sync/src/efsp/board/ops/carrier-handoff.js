@@ -3,6 +3,7 @@
 const { stripScope, retireScope, union, callsignOf } = require('../../undo/scopes');
 
 const { CARRIER_HANDOFF_EFFECTS } = require('../../carrier/handoff-effects'); // pure (docs/adr/0074)
+const { warn } = require('../../warnings');
 
 /**
  * The carrier's four handoffs, as one operation (docs/adr/0064, 0074; guide
@@ -68,7 +69,7 @@ function _applyCarrierHandoff(ctx, strip, kind, toPositionId, by, actingPosition
   strip.state = fx.toState;
   strip.ownerPositionId = dest;
   delete strip.consolidatedFrom; // a new owner by decision, not by cover (F10)
-  let warning;
+  let warnings;
   if (dest !== from.ownerPositionId) {
     const bay = ctx.placement.bayForNewOwner(dest, strip.state, strip);
     if (bay) {
@@ -76,7 +77,7 @@ function _applyCarrierHandoff(ctx, strip, kind, toPositionId, by, actingPosition
       strip.rackId = bay.rackId;
       strip.orderKey = ctx.placement.appendOrderKey(bay.bayId, bay.rackId, strip.stripId);
     } else {
-      warning = `${dest} has no Bay for this Strip; it stays in ${strip.bayId}`;
+      warnings = [warn('NO_BAY_FOR_STRIP', `${dest} has no Bay for this Strip; it stays in ${strip.bayId}`)];
     }
   } else {
     ctx.placement.relocateForImpliedState(strip, strip.state);
@@ -90,7 +91,7 @@ function _applyCarrierHandoff(ctx, strip, kind, toPositionId, by, actingPosition
   strip.updatedBy = by || null;
   ctx.touch(strip.stripId);
   return {
-    ok: true, strip, routedTo: routedTo || undefined, warning,
+    ok: true, strip, routedTo: routedTo || undefined, warnings,
     carrierHandoff: { kind, trigger: strip.carrierHandoff.trigger },
     carrierChanged: carrierChanged || undefined,
   };

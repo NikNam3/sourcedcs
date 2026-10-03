@@ -1,6 +1,7 @@
 'use strict';
 
 const { _validateAltitudeBlock } = require('../strip-util');
+const { warn } = require('../../warnings');
 
 /**
  * Approves this flight to work inside an airspace, on a frequency.
@@ -58,8 +59,8 @@ function _applyApproveAirspaceEntry(ctx, strip, op, by) {
   };
   ctx.state.bump(strip, by);
 
-  const warning = airspace.state !== 'ACTIVE' ? 'AIRSPACE_NOT_ACTIVE' : undefined;
-  return { ok: true, strip, flightData: flightDataResult.flightData, warning };
+  const warnings = airspace.state !== 'ACTIVE' ? [warn('AIRSPACE_NOT_ACTIVE')] : undefined;
+  return { ok: true, strip, flightData: flightDataResult.flightData, warnings };
 }
 
 // The RANGE slice — a flight is approved onto an airspace's working

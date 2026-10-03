@@ -5,6 +5,7 @@
 // makes on this one. BoardStore's `receiveCoordination*` delegate here.
 
 const { deepClone, trackDegradationRefusal, mintReplica } = require('./strip-util');
+const { warn } = require('../warnings');
 
 class Coordination {
   /**
@@ -223,11 +224,11 @@ class Coordination {
     this._touch(strip.stripId);
     // docs/adr/0101 (DR-3): a Strip that lands in the Marshal stack joins it at the next free slot, through the same
     // check-in a recovery CreateStrip makes. A full stack is a warning, not a refusal of the handoff.
-    let warning;
+    let warnings;
     let carrierChanged;
     if (strip.stripType === 'MARSHAL' && strip.state === 'IN_STACK') {
       const a = this._rules.carrierAppendFlight(strip.flightDataId, { by, actingPositionId });
-      if (a && a.ok === false) warning = `not in the Marshal stack: ${a.detail || a.reason}`;
+      if (a && a.ok === false) warnings = [warn('NOT_IN_MARSHAL_STACK', `not in the Marshal stack: ${a.detail || a.reason}`)];
       else if (a && a.changed && a.changed.length) carrierChanged = true;
     }
 
@@ -244,7 +245,7 @@ class Coordination {
       if (peerResult.ok) peerStrip = peerResult.strip;
     }
     this._control.assertControlInvariant(strip, by);
-    return { ok: true, strip, peerFacilityId, peerStrip, warning, carrierChanged };
+    return { ok: true, strip, peerFacilityId, peerStrip, warnings, carrierChanged };
   }
 
   _applyCoordinationReject(strip, op, by) {

@@ -33,6 +33,7 @@ const readScope = require('./read-scope');
 const frames = require('./wire/frames');
 const { VERSION, stampStrip, mergeFlightDataList, touchedStrips, boardDelta, marsaDelta, carrierDelta, sfaDelta, liveStamped } = frames;
 const skeleton = require('./wire/skeleton');
+const { warn } = require('./warnings');
 const families = require('./wire/families');
 
 // The resync window and the delta-or-snapshot decision live with the ring (sync/sync-log.js).
@@ -95,13 +96,17 @@ function _handleMutation(ctx, session, msg, persist) {
   // `result.flightDataList` (board/strip-ops.js, board/tofi.js).
   const updatedFlightDataList = mergeFlightDataList(result.flightData, result.flightDataList);
 
+  // docs/wip/SERVER-BUGS.md (B4): every warning the op made, then the one the wire adds; absent when there are none.
+  const luaw = luawWhileCombined(positionStore, msg.actingPositionId, session.controllerId, result, stateBefore);
+  const warnings = [...(result.warnings || []), ...(luaw ? [luaw] : [])];
+
   const ack = {
     version: VERSION, type: 'efsp-mutation-ack', clientMutationId: msg.clientMutationId,
     ...skeleton.subjectOf(msg),
     facilityId,
     boardSeq: boardStore.currentSeq, boardEpoch: boardStore.epoch, ok: result.ok,
     strip: stampedStrip, flightData: result.flightData, reason: result.reason, detail: result.detail,
-    warning: luawWhileCombined(positionStore, msg.actingPositionId, session.controllerId, result, stateBefore) || result.warning,
+    ...(warnings.length ? { warnings } : {}),
     routedTo: result.routedTo,
     // docs/adr/0100 §7: the server says what is undoable (the client keeps no list), and an Undo's ack says what it
     // undid and voided. Absent otherwise.
@@ -322,7 +327,7 @@ function luawWhileCombined(positionStore, actingPositionId, controllerId, result
   if (!result.ok || !result.strip || result.strip.state !== 'LUAW' || stateBefore === 'LUAW') return undefined;
   if (actingPositionId !== combination.LOCAL) return undefined;
   const held = positionStore.primaryPositionsOf(controllerId);
-  return combination.NON_LOCAL_TOWER.some(id => held.includes(id)) ? 'LUAW_WHILE_COMBINED' : undefined;
+  return combination.NON_LOCAL_TOWER.some(id => held.includes(id)) ? warn('LUAW_WHILE_COMBINED') : undefined;
 }
 
 function facilityConfig_positionIds(ctx, facilityId) { return ctx.facilityConfig.getPositionSet(facilityId); }

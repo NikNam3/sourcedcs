@@ -65,7 +65,8 @@ test('I1 transferring Strip dropped AFTER ACCEPT: control and comms both move to
   const ack = asT(w, ex, DROP);
   assert.equal(ack.ok, true);
   assert.equal(ex.T().state, 'DROPPED');
-  assert.match(ack.warning || '', /communications moved to AP by the drop/);
+  assert.deepEqual(ack.warnings.map(w => w.code), ['COMMS_MOVED_BY_DROP']);
+  assert.match(ack.warnings[0].detail, /communications moved to AP by the drop/);
   const co = ex.R().coordination;
   assert.equal(co.comms.transferred, true);
   assert.equal(co.comms.trigger, 'TRANSFERRING_RETIRED');
@@ -85,7 +86,7 @@ test('I1 transferring Strip dropped AFTER comms moved: only control moves, no wa
   const ex = ex0(w, 'I1C');
   mustR(w, ex, { kind: 'HANDOFF', action: 'TRANSFER_COMMS' });
   const ack = mustT(w, ex, DROP);
-  assert.equal(ack.warning, undefined);
+  assert.equal(ack.warnings, undefined);
   assert.equal(ex.R().coordination.control.holder, 'RECEIVING');
   assert.equal(ex.R().coordination.control.trigger, 'TRANSFERRING_RETIRED');
   assert.equal(ex.R().coordination.comms.trigger, undefined, 'comms were already the receiver\'s');

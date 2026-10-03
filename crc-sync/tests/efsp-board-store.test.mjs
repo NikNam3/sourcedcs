@@ -316,7 +316,7 @@ test('SetBlock routed to beaconAssigned surfaces a duplicate warning without fai
 
   const result = board.applyMutation(mutation(b, { kind: 'SetBlock', blockId: '5', value: aCode }), 'OPS', 'OPS');
   assert.equal(result.ok, true);
-  assert.equal(result.warning, 'DUPLICATE_IGNORED_WARNING');
+  assert.deepEqual(result.warnings, [{ code: 'DUPLICATE_IGNORED_WARNING' }]);
 });
 
 test('SetBlock routed to an flightData path fails cleanly on invalid input (reserved beacon code) and does not bump rev', () => {

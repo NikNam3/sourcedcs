@@ -231,7 +231,7 @@ class BoardStore {
 
   /**
    * Applies a client Mutation (guide §5.2). Returns
-   *   { ok:true, strip, flightData?, warning?, routedTo? }
+   *   { ok:true, strip, flightData?, warnings?, routedTo? }
    * or
    *   { ok:false, reason, strip? }
    * Never throws for an ordinary rejection.
@@ -293,7 +293,7 @@ class BoardStore {
    */
   _replayResult(record) {
     const out = { ok: record.ok, replayed: true };
-    for (const k of ['reason', 'detail', 'warning', 'routedTo', 'selfCoordinated', 'peerFacilityId']) {
+    for (const k of ['reason', 'detail', 'warnings', 'routedTo', 'selfCoordinated', 'peerFacilityId']) {
       if (record[k] !== null) out[k] = record[k];
     }
     if (record.stripId) out.strip = this.getStrip(record.stripId);

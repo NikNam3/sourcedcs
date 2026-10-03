@@ -21,6 +21,7 @@
 const { MAX_FREE_TEXT, parseAltitude, activeClearanceEntry } = require('../flight-data-store');
 const { deepClone } = require('./strip-util');
 const log = require('../../log').logger('efsp:handoff-control');
+const { warn } = require('../warnings');
 
 const SCOPES = ['TURNS', 'CLIMB', 'DESCENT', 'FULL'];
 const MARKS = ['TRANSFER_COMMS', 'TRANSFER_CONTROL'];
@@ -409,7 +410,7 @@ class HandoffControl {
    * The transferring Strip reached DROPPED (drop, join, any retirement) while the exchange is ACTIVE: whatever it still
    * holds, control and comms both, moves to the receiving side (trigger `TRANSFERRING_RETIRED`), because the receiving
    * Strip is the only live one. One audit entry, inside the drop's own.
-   * @returns {{peerFacilityId, peerStrip, controlAudit, warning?}|null}
+   * @returns {{peerFacilityId, peerStrip, controlAudit, warnings?}|null}
    */
   onTransferringRetired(strip, by) {
     const link = strip.coordination;
@@ -435,7 +436,7 @@ class HandoffControl {
     this.assertControlInvariant(strip, by);
     return {
       ...peer, controlAudit,
-      warning: holdsComms ? `communications moved to ${receiving.strip.ownerPositionId} by the drop` : undefined,
+      warnings: holdsComms ? [warn('COMMS_MOVED_BY_DROP', `communications moved to ${receiving.strip.ownerPositionId} by the drop`)] : undefined,
     };
   }
 

@@ -1,6 +1,7 @@
 'use strict';
 
 const { deepClone } = require('../strip-util');
+const { warn } = require('../../warnings');
 
 // Undo (docs/adr/0100): puts back every record the undone action touched, as it was before the action, and voids
 // the later changes made inside this Facility. The history (undo/undo-history.js) decided that the action may be
@@ -170,20 +171,20 @@ function _applyUndo(ctx, meta) {
   if (marsaChanged.length) compensators.marsa = marsaChanged.map(r => r.marsaId);
 
   const flightDataList = [];
-  let warning;
+  const warnings = [];
   for (const { id, image } of plan.images.flightData) {
     const paths = plan.paths.get(id);
     if (!image || !paths || paths.size === 0) continue;
     const r = env.flightDataStore.restorePaths(id, image, [...paths], { voidedBy, by });
     if (r.ok && r.changed) flightDataList.push(r.flightData);
-    if (r.warning) warning = r.warning;
+    if (r.warning) warnings.push(warn(r.warning));
   }
   for (const c of plan.images.codes || []) {
     if (!c || !c.holder) continue;
     if (env.flightDataStore.codeAllocator.holderOf(c.code) === c.holder) continue;
     const r = env.flightDataStore.reacquireFlightData(c.holder);
     (compensators.codes = compensators.codes || []).push(c.code);
-    if (r.warning) warning = r.warning;
+    if (r.warning) warnings.push(warn(r.warning));
   }
   let carrierChanged;
   for (const c of carrierActions) {
@@ -234,7 +235,7 @@ function _applyUndo(ctx, meta) {
       transfer: !!(subjectImage && subjectBefore && subjectImage.strip.ownerPositionId !== subjectBefore.ownerPositionId),
     },
     voided,
-    warning,
+    warnings: warnings.length ? warnings : undefined,
     flightDataList: flightDataList.length ? flightDataList : undefined,
     gone: own.gone.length ? own.gone : undefined,
     peerFacilityId: peerFacilityId && (peerStrip || peerGone) ? peerFacilityId : undefined,

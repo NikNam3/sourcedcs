@@ -220,7 +220,7 @@ test('MARK_ENTERED inside an active airspace: effective, trigger MANUAL, no warn
   LOCATION = INSIDE;
   const r = act(f, p.missionId, { kind: 'TOFI', action: 'MARK_ENTERED' });
   assert.equal(r.ok, true, JSON.stringify(r));
-  assert.equal(r.warning, undefined);
+  assert.equal(r.warnings, undefined);
   const t = tofiOf(f, p.flightDataId);
   assert.equal(t.separationRegime, 'MARSA'); assert.equal(t.pendingSeparationRegime, null);
   assert.equal(t.regimeEffective.trigger, 'MANUAL'); assert.equal(t.regimeEffective.airspaceId, 'MOA-1');
@@ -234,7 +234,7 @@ test('MARK_ENTERED without a containing airspace is allowed with the warning NOT
   accept(f, p.missionId, 'MARSA');
   const r = act(f, p.missionId, { kind: 'TOFI', action: 'MARK_ENTERED' });
   assert.equal(r.ok, true);
-  assert.equal(r.warning, 'NOT_IN_ACTIVE_AIRSPACE');
+  assert.deepEqual(r.warnings, [{ code: 'NOT_IN_ACTIVE_AIRSPACE' }]);
   assert.equal(tofiOf(f, p.flightDataId).separationRegime, 'MARSA');
   assert.equal(tofiOf(f, p.flightDataId).regimeEffective.airspaceId, null);
   assert.equal(log.find(e => e.action === 'MARK_ENTERED').tofiRegime.warning, 'NOT_IN_ACTIVE_AIRSPACE');

@@ -396,7 +396,7 @@ test('a TOFI EXIT that completes while the airspace is still booked to the using
 
   const ack = act(efsp, c.TAC_C2, 'TAC_C2', efsp.boardStoreFor('TACTICAL').getStrip(mission.stripId), { kind: 'TOFI', action: 'ACCEPT' });
   assert.equal(ack.ok, true, 'a soft interlock — airspace release and control handback are separable');
-  assert.equal(ack.warning, 'AIRSPACE_STILL_WITH_USING_AGENCY');
+  assert.deepEqual(ack.warnings, [{ code: 'AIRSPACE_STILL_WITH_USING_AGENCY' }]);
 });
 
 // ── Cross-cutting guards the scenarios depend on ─────────────────────────
@@ -526,7 +526,7 @@ test('SCENARIO a MOA sortie: Center books and activates its own MOA, a flight wo
 
   const ack = act(efsp, c.CTR, 'CTR', ctrStrip, { kind: 'ApproveAirspaceEntry', airspaceId: 'MOA-EAST' });
   assert.equal(ack.ok, true, JSON.stringify(ack));
-  assert.equal(ack.warning, undefined, 'the airspace is active, so no alert');
+  assert.equal(ack.warnings, undefined, 'the airspace is active, so no alert');
   assert.equal(ack.strip.airspaceEntry.airspaceId, 'MOA-EAST');
   assert.equal(ack.strip.airspaceEntry.frequencyMhz, 134.25, 'defaulted from the airspace, not typed in');
   assert.equal(ack.flightData.comms.workingFrequencyMhz, 134.25);
@@ -608,7 +608,7 @@ test('approving a flight into airspace nobody has activated is allowed, but warn
   // than it would be right.
   const ack = act(efsp, c.AP, 'AP', strip, { kind: 'ApproveAirspaceEntry', airspaceId: 'MOA-NORTH' });
   assert.equal(ack.ok, true, JSON.stringify(ack));
-  assert.equal(ack.warning, 'AIRSPACE_NOT_ACTIVE');
+  assert.deepEqual(ack.warnings, [{ code: 'AIRSPACE_NOT_ACTIVE' }]);
 
   const { ForwardingObligationMonitor } = await import('../src/efsp/forwarding-obligations.js');
   const monitor = new ForwardingObligationMonitor({
