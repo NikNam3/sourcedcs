@@ -6,7 +6,7 @@ const { VERSION } = require('../frames');
 function runwayStatusDelta(store, records) {
   return {
     version: VERSION, type: 'efsp-runway-status-delta',
-    runwayStatusSeq: store.currentSeq,
+    runwayStatusSeq: store.currentSeq, runwayStatusEpoch: store.epoch,
     runwayStatuses: { updated: records.filter(Boolean) },
   };
 }
@@ -40,7 +40,7 @@ module.exports = {
   head: (ctx, msg) => ({ facilityId: facilityOf(ctx, msg) }),
   refusalTail: (ctx, msg) => {
     const store = ctx.runwayStatusStore;
-    return { runwayStatus: store ? store.getRunwayStatus(facilityOf(ctx, msg)) : null, runwayStatusSeq: store ? store.currentSeq : undefined };
+    return { runwayStatus: store ? store.getRunwayStatus(facilityOf(ctx, msg)) : null, runwayStatusSeq: store ? store.currentSeq : undefined, runwayStatusEpoch: store ? store.epoch : undefined };
   },
   store: (ctx) => ctx.runwayStatusStore,
   noStore: 'no runway-status store',
@@ -71,7 +71,7 @@ module.exports = {
   },
   ack: (result, ctx) => ({
     runwayStatus: result.runwayStatus, reason: result.reason, detail: result.detail,
-    runwayStatusSeq: ctx.runwayStatusStore.currentSeq,
+    runwayStatusSeq: ctx.runwayStatusStore.currentSeq, runwayStatusEpoch: ctx.runwayStatusStore.epoch,
   }),
   broadcasts: (result, ctx) => ({ primary: runwayStatusDelta(ctx.runwayStatusStore, [result.runwayStatus]) }),
 

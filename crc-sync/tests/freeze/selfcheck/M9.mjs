@@ -4,7 +4,7 @@ export default {
   id: "M9",
   what: "the persisted body's key order: two registry entries swapped (flightData before boards)",
   file: "src/efsp/stores.js",
-  find: "module.exports = { REGISTRY, RESTORE_ORDER, PERSISTED_SHAPE, checkPersistedShape };",
-  replace: "[REGISTRY[0], REGISTRY[1]] = [REGISTRY[1], REGISTRY[0]];\nmodule.exports = { REGISTRY, RESTORE_ORDER, PERSISTED_SHAPE, checkPersistedShape };",
+  find: "module.exports = { STORE_SYNC, REGISTRY, RESTORE_ORDER, PERSISTED_SHAPE, checkPersistedShape };",
+  replace: "[REGISTRY[0], REGISTRY[1]] = [REGISTRY[1], REGISTRY[0]];\nmodule.exports = { STORE_SYNC, REGISTRY, RESTORE_ORDER, PERSISTED_SHAPE, checkPersistedShape };",
   detect: ["freeze-hub"],
 };

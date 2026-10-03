@@ -14,6 +14,7 @@ const FAMILIES = [
 
 const byType = Object.fromEntries(FAMILIES.map((f) => [f.type, f]));
 const byDeltaType = Object.fromEntries(FAMILIES.filter((f) => f.deltaType).map((f) => [f.deltaType, f]));
+const bySnapshotKey = Object.fromEntries(FAMILIES.filter((f) => f.snapshotKey).map((f) => [f.snapshotKey, f]));
 const REPLAY_KINDS = FAMILIES.map((f) => f.replayKind).filter(Boolean);
 
-module.exports = { FAMILIES, byType, byDeltaType, REPLAY_KINDS };
+module.exports = { FAMILIES, byType, byDeltaType, bySnapshotKey, REPLAY_KINDS };

@@ -130,7 +130,7 @@ test('the NLA-monitor sweep and the set-positions re-stamp are filtered too', ()
   assert.ok(restamp.positions.updated.length > 0, 'staffing is not filtered');
 });
 
-test('correlation and MARSA deltas carry only the JTAC\'s flights, and are skipped when none is left', () => {
+test('correlation and MARSA deltas carry only the JTAC\'s flights, and are sent empty when none is left (seq stays continuous, docs/adr/0106)', () => {
   const w = world();
   const jt = w.connect('c-JTAC', { TACTICAL: ['JTAC'] });
   const tc = w.connect('c-TAC_C2', { TACTICAL: ['TAC_C2'] });
@@ -138,8 +138,10 @@ test('correlation and MARSA deltas carry only the JTAC\'s flights, and are skipp
   w.hub.broadcastEfspCorrelationDelta({ correlations: [{ flightDataId: w.handed.flightDataId }, { flightDataId: w.kept.flightDataId }], stats: {} });
   assert.deepEqual(jt.ws.of('efsp-correlation-delta')[0].correlations.updated.map(c => c.flightDataId), [w.handed.flightDataId]);
   assert.equal(tc.ws.of('efsp-correlation-delta')[0].correlations.updated.length, 2);
-  w.hub.broadcastEfspCorrelationDelta({ correlations: [{ flightDataId: w.kept.flightDataId }], stats: {} });
-  assert.equal(jt.ws.of('efsp-correlation-delta').length, 1, 'nothing of the JTAC\'s: skipped');
+  w.hub.broadcastEfspCorrelationDelta({ correlations: [{ flightDataId: w.kept.flightDataId }], correlationSeq: 5, correlationEpoch: 'e', stats: {} });
+  assert.equal(jt.ws.of('efsp-correlation-delta').length, 2, 'nothing of the JTAC\'s: sent empty, carrying the seq');
+  assert.deepEqual(jt.ws.of('efsp-correlation-delta')[1].correlations.updated, []);
+  assert.equal(jt.ws.of('efsp-correlation-delta')[1].correlationSeq, 5);
   w.hub._broadcastEfsp({ type: 'efsp-marsa-delta', marsaSeq: 1, marsa: { updated: [{ marsaId: 'm1', participants: [w.kept.flightDataId, w.dep.flightDataId] }, { marsaId: 'm2', participants: [w.handed.flightDataId, w.kept.flightDataId] }] } });
   assert.deepEqual(jt.ws.of('efsp-marsa-delta')[0].marsa.updated.map(r => r.marsaId), ['m2']);
   assert.equal(tc.ws.of('efsp-marsa-delta')[0].marsa.updated.length, 2);

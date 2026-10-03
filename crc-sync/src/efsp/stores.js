@@ -86,6 +86,9 @@ const REGISTRY = [
   },
   {
     key: 'airspaces',
+    // The store's sync declaration (docs/adr/0106): `key` is its snapshot key, which is also the key of its heartbeat entry
+    // and of its resync slice; `gapFromDeltas` says a delta moves seq by exactly one change, so a client may ask at once on a jump.
+    sync: { key: 'airspaces', seqKey: 'airspaceSeq', epochKey: 'airspaceEpoch', deltaType: 'efsp-airspace-delta', gapFromDeltas: true },
     audited: true,
     // The airspace REGISTRY (docs/adr/0098): definitions per theater and their state, one store for every Facility,
     // like flightDataStore. An airspace is a theater entity that NAMES its controlling Facility rather than being
@@ -135,6 +138,9 @@ const REGISTRY = [
   },
   {
     key: 'correlations',
+    // The store's sync declaration (docs/adr/0106): `key` is its snapshot key, which is also the key of its heartbeat entry
+    // and of its resync slice; `gapFromDeltas` says a delta moves seq by exactly one change, so a client may ask at once on a jump.
+    sync: { key: 'correlations', seqKey: 'correlationSeq', epochKey: 'correlationEpoch', deltaType: 'efsp-correlation-delta', gapFromDeltas: false },
     audited: true,
     // WP5 (docs/adr/0045) — keyed by flightDataId, and shared across every Facility for the same reason flightDataStore is:
     // a correlation is a fact about one airframe, and both halves of a cross-Facility exchange are looking at
@@ -152,6 +158,9 @@ const REGISTRY = [
   },
   {
     key: 'marsa',
+    // The store's sync declaration (docs/adr/0106): `key` is its snapshot key, which is also the key of its heartbeat entry
+    // and of its resync slice; `gapFromDeltas` says a delta moves seq by exactly one change, so a client may ask at once on a jump.
+    sync: { key: 'marsa', seqKey: 'marsaSeq', epochKey: 'marsaEpoch', deltaType: 'efsp-marsa-delta', gapFromDeltas: false },
     audited: true,
     // WP6 (docs/adr/0051) — shared across every Facility for the same reason flightDataStore and correlationStore
     // are: MARSA is a fact about a set of airframes, not about one Facility's Board, and both halves of a
@@ -181,6 +190,9 @@ const REGISTRY = [
   },
   {
     key: 'runwayStatuses',
+    // The store's sync declaration (docs/adr/0106): `key` is its snapshot key, which is also the key of its heartbeat entry
+    // and of its resync slice; `gapFromDeltas` says a delta moves seq by exactly one change, so a client may ask at once on a jump.
+    sync: { key: 'runwayStatuses', seqKey: 'runwayStatusSeq', epochKey: 'runwayStatusEpoch', deltaType: 'efsp-runway-status-delta', gapFromDeltas: true },
     audited: true,
     // WP6 (docs/adr/0061), §9.7 — runway status. One instance with
     // one record per Facility that has a runway inventory, for AirspaceStore's
@@ -208,6 +220,9 @@ const REGISTRY = [
   },
   {
     key: 'carriers',
+    // The store's sync declaration (docs/adr/0106): `key` is its snapshot key, which is also the key of its heartbeat entry
+    // and of its resync slice; `gapFromDeltas` says a delta moves seq by exactly one change, so a client may ask at once on a jump.
+    sync: { key: 'carriers', seqKey: 'carrierSeq', epochKey: 'carrierEpoch', deltaType: 'efsp-carrier-delta', gapFromDeltas: false },
     audited: true,
     // docs/adr/0074 (ADR 0064 B6) — the carrier's Case, Marshal
     // stack and altimeter input, one record per hull. Shared across Facilities
@@ -235,6 +250,9 @@ const REGISTRY = [
   },
   {
     key: 'sfaRotation',
+    // The store's sync declaration (docs/adr/0106): `key` is its snapshot key, which is also the key of its heartbeat entry
+    // and of its resync slice; `gapFromDeltas` says a delta moves seq by exactly one change, so a client may ask at once on a jump.
+    sync: { key: 'sfaRotation', seqKey: 'sfaSeq', epochKey: 'sfaEpoch', deltaType: 'efsp-sfa-delta', gapFromDeltas: true },
     audited: true,
     // docs/adr/0075, 0093 — which Position is on which Single
     // Frequency Approach frequency (guide §4.7). One record, for the Facility whose
@@ -370,7 +388,11 @@ function checkPersistedShape(data, file, shape = PERSISTED_SHAPE) {
   walk(data, shape, '');
 }
 
+// The stores that resync by snapshot slice (docs/adr/0106): the registry entries with a `sync` declaration, with the
+// registry key to find the instance in `ctx.stores`.
+const STORE_SYNC = REGISTRY.filter(e => e.sync).map(e => ({ registryKey: e.key, ...e.sync }));
+
 // The order the saved body is restored in (it is not the order it is written in, see above).
 const RESTORE_ORDER = ['flightData', 'airspaces', 'boards', 'correlations', 'marsa', 'runwayStatuses', 'carriers', 'sfaRotation'];
 
-module.exports = { REGISTRY, RESTORE_ORDER, PERSISTED_SHAPE, checkPersistedShape };
+module.exports = { STORE_SYNC, REGISTRY, RESTORE_ORDER, PERSISTED_SHAPE, checkPersistedShape };

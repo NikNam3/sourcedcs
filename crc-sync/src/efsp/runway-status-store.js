@@ -76,7 +76,7 @@ class RunwayStatusStore {
     this._positions = new Map();   // facilityId -> its Position set, for resolving acknowledgers
     this._records = new Map();     // facilityId -> record
     this._views = new Map();       // facilityId -> cached status view for rule 1
-    this._sync = new SyncLog(); // the store's sequence: a counter only, no ring, no epoch (sync/sync-log.js, S3-1)
+    this._sync = new SyncLog({ epoch: true }); // the store's sequence and its lifetime (epoch, not persisted): no ring, the resync answer is the snapshot slice (docs/adr/0106)
     this._mutationLog = null;
     for (const facilityId of facilityConfig.getFacilityIds()) {
       const config = facilityConfig.getFacilityConfig(facilityId);
@@ -127,6 +127,8 @@ class RunwayStatusStore {
   setMutationLog(mutationLog) { this._mutationLog = mutationLog; }
 
   get currentSeq() { return this._sync.seq; }
+  /** The lifetime this store's seq belongs to (docs/adr/0106): new per process, never persisted. */
+  get epoch() { return this._sync.epoch; }
 
   hasRunwayStatus(facilityId) { return this._records.has(facilityId); }
 

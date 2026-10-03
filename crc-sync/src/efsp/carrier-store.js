@@ -62,7 +62,7 @@ class CarrierStore {
     this._records = new Map();
     for (const h of this._hulls) this._records.set(h.hullId, this._fresh(h.hullId));
     this._shipStates = new Map(); // hullId -> banner (derived, never persisted)
-    this._sync = new SyncLog(); // the store's sequence: a counter only, no ring, no epoch (sync/sync-log.js, S3-1)
+    this._sync = new SyncLog({ epoch: true }); // the store's sequence and its lifetime (epoch, not persisted): no ring, the resync answer is the snapshot slice (docs/adr/0106)
     this._mutationLog = null;
   }
 
@@ -78,6 +78,8 @@ class CarrierStore {
 
   setMutationLog(mutationLog) { this._mutationLog = mutationLog; }
   get currentSeq() { return this._sync.seq; }
+  /** The lifetime this store's seq belongs to (docs/adr/0106): new per process, never persisted. */
+  get epoch() { return this._sync.epoch; }
   get defaultHullId() { return this._hulls[0].hullId; }
   hullIds() { return this._hulls.map(h => h.hullId); }
   hull(hullId = this.defaultHullId) { const h = this._hulls.find(x => x.hullId === hullId); return h ? deepClone(h) : null; }

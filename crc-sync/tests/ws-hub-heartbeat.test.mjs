@@ -16,7 +16,7 @@ function fakeWs() {
 
 function fakeEfsp(currentSeq, boardsFor = (all) => all) {
   const all = { INCIRLIK: { seq: currentSeq, epoch: 'e-I' }, CENTER: { seq: currentSeq + 1, epoch: 'e-C' } };
-  return { heartbeatBoardsAll: () => all, heartbeatBoardsFor: (session, a) => boardsFor(a, session) };
+  return { heartbeatBoardsAll: () => all, heartbeatBoardsFor: (session, a) => boardsFor(a, session), heartbeatStores: () => ({ airspaces: { seq: 3, epoch: 'e-A' } }) };
 }
 
 test('_tick sends an efsp-heartbeat with the current Board sequence when EFSP is present', () => {
@@ -27,6 +27,7 @@ test('_tick sends an efsp-heartbeat with the current Board sequence when EFSP is
   const heartbeat = ws.sent.find(m => m.type === 'efsp-heartbeat');
   assert.ok(heartbeat, 'no efsp-heartbeat message was sent');
   assert.deepEqual(heartbeat.boards, { INCIRLIK: { seq: 7, epoch: 'e-I' }, CENTER: { seq: 8, epoch: 'e-C' } });
+  assert.deepEqual(heartbeat.stores, { airspaces: { seq: 3, epoch: 'e-A' } });
   assert.equal(Object.keys(heartbeat)[1], 'type', 'type stays the second key (soak and freeze prefix matchers)');
 });
 
