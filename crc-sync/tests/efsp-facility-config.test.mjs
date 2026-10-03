@@ -30,8 +30,8 @@ test('getPositionSet returns exactly INCIRLIK\'s eight Positions (RSU, SFA and P
   assert.deepEqual(getPositionSet(), ['OPS', 'CD', 'GC', 'LC', 'RSU', 'AP', 'SFA', 'PAR']);
 });
 
-test('getConsolidation matches the guide\'s default chain, un-truncated through APP, plus SFA and PAR to APP (L18)', () => {
-  assert.deepEqual(getConsolidation(), { CD: 'GC', GC: 'LC', LC: 'AP', SFA: 'AP', PAR: 'AP' });
+test('getConsolidation is the guide\'s chain except that GC ends it (a tower controller takes ground by combining, ADR 0105), plus SFA and PAR to APP (L18)', () => {
+  assert.deepEqual(getConsolidation(), { CD: 'GC', LC: 'AP', SFA: 'AP', PAR: 'AP' });
 });
 
 test('OPS, RSU and AP have no entry in the consolidation chain — OPS per the guide\'s table, RSU so a Strip never strands on a supervisory Position (ADR 0075), AP because there\'s no CTR Facility yet to cover it', () => {

@@ -28,7 +28,9 @@ class PositionStore {
    * @param {string[]} positionIds — the fixed Position set, e.g. ['OPS','CD','GC','LC'] (a Facility's Position set)
    * @param {object} consolidation — one-hop consolidation map, e.g. { CD:'GC', GC:'LC' } (guide §4.8.6 rule 2's default consolidation, cut where the Facility ends). A Position absent from this map (like OPS) is consolidated nowhere — and OPS is on no chain in the guide's default either.
    */
-  constructor(positionIds, consolidation, { clock = WALL_CLOCK } = {}) {
+  constructor(positionIds, consolidation, { clock = WALL_CLOCK, frequencies = {} } = {}) {
+    // docs/adr/0105: `{ <Position>: [ { label, mhz } ] }` from the facility config. Data only; nothing here acts on it.
+    this._frequencies = frequencies || {};
     // The mission clock (docs/adr/0079) — `since` is who has been signed on at a Position
     // from when, which a controller reads as a time of day.
     this._clock = clock;
@@ -85,9 +87,38 @@ class PositionStore {
     return this.primaryOf(positionId) === controllerId;
   }
 
+  /** The Positions `controllerId` is PRIMARY at (a controller who only observes a Position has not taken it on). */
+  primaryPositionsOf(controllerId) {
+    return [...this._state.entries()].filter(([, s]) => s.primary && s.primary.controllerId === controllerId).map(([id]) => id);
+  }
+
+  /** A Position's frequencies, `[{label, mhz}]` (a copy). */
+  frequenciesOf(positionId) {
+    return (this._frequencies[positionId] || []).map(f => ({ ...f }));
+  }
+
+  /**
+   * What `controllerId` has to monitor: the frequencies of every Position they are Primary at, so a controller who holds
+   * LC and GC has both (JO 7210.3 3-3-3). docs/adr/0105.
+   * @returns {{positionId:string, label:string, mhz:number}[]}
+   */
+  frequenciesHeldBy(controllerId) {
+    const out = [];
+    for (const positionId of this.primaryPositionsOf(controllerId)) for (const f of this.frequenciesOf(positionId)) out.push({ positionId, ...f });
+    return out;
+  }
+
+  /** The other Positions whose Primary is the same controller as `positionId`'s (a combination, docs/adr/0105). */
+  combinedWith(positionId) {
+    const c = this.primaryOf(positionId);
+    return c ? this.primaryPositionsOf(c).filter(id => id !== positionId) : [];
+  }
+
   getAll() {
     return [...this._state.entries()].map(([positionId, s]) => ({
       positionId,
+      frequencies: this.frequenciesOf(positionId),
+      combinedWith: this.combinedWith(positionId),
       primary: s.primary,
       observers: [...s.observers],
       pendingPrimaryRequest: s.pendingPrimaryRequest,

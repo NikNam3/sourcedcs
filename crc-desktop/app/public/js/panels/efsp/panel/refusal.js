@@ -5,6 +5,7 @@ import { blockLabelFor } from '../strip-template.js';
 import { getEfspFlightData, getEfspStrip } from '../efsp-state.js';
 import { renderAllOpenEfspBays } from '../bay-view.js';
 import { noteAttestationRefusal } from './control-attest.js';
+import { LUAW_WHILE_COMBINED_TEXT } from '../combination-rules.js';
 
 // Rejections that reach here have no other visible surface — a dragged
 // Strip that gets refused (e.g. by crc-sync's bay-implied-state
@@ -230,6 +231,7 @@ export function getCurrentEfspRefusal() { return _currentRefusal; }
 // controller never mistakes "accepted, but note this" for "refused".
 const MUTATION_WARNING_MESSAGES = {
   DUPLICATE_IGNORED_WARNING: 'Duplicate beacon code — assigned anyway, per policy',
+  LUAW_WHILE_COMBINED: LUAW_WHILE_COMBINED_TEXT, // crc-sync docs/adr/0105
 };
 
 export function _showMutationWarning(warning) {

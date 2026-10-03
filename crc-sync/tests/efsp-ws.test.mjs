@@ -10,7 +10,7 @@ import { slot } from './helpers/wire-slots.mjs';
 const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'efsp-ws-test-'));
 process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH = path.join(tmpDir, 'facility.json');
 
-const { handleMessage, RESYNC_RING_WINDOW } = await import('../src/efsp/efsp-ws.js');
+const { handleMessage, directedFor, RESYNC_RING_WINDOW } = await import('../src/efsp/efsp-ws.js');
 const { BoardStore } = await import('../src/efsp/board-store.js');
 import { fullRules } from "./helpers/full-rules.mjs";
 const { FlightDataStore } = await import('../src/efsp/flight-data-store.js');
@@ -256,23 +256,29 @@ test('setting signed-on positions acks with the actually-signed-on set and broad
   assert.equal(slot(result, 'primary').positions.updated.length, 8); // all of INCIRLIK's Positions reported (RSU, SFA, PAR since L18)
 });
 
-test('vacating a Position with Strips and a staffed consolidating Position reassigns them and reports the warning with routedTo', () => {
+test('GC vacated with Strips while LC is staffed: the Strips stay GC\'s, the warning is routedTo:null, and LC\'s Primary is offered GC (ADR 0105)', () => {
   const ctx = makeCtx();
   handleMessage(ctx, SESSION, { type: 'efsp-set-positions', signedOn: ['GC'] }, noopPersist); // Alice is signed on at GC
-  handleMessage(ctx, { controllerId: 'controller-2', who: 'Bob' }, { type: 'efsp-set-positions', signedOn: ['LC'] }, noopPersist); // Bob signs on at LC (the Position GC is consolidated at)
+  handleMessage(ctx, { controllerId: 'controller-2', who: 'Bob' }, { type: 'efsp-set-positions', signedOn: ['LC'] }, noopPersist); // Bob signs on at LC
 
-  // gc-coordination (not gc-taxi-in) — this fixture just needs "GC owns
-  // a Strip", and gc-taxi-in now implies TAXI_IN (Phase 2), which a fresh
-  // PROPOSED Strip can't legally jump straight to (correctly rejected by
-  // `validateBayImpliedTransition`). gc-coordination implies no state.
+  // gc-coordination implies no state, which is all this fixture needs ("GC owns a Strip").
   const strip = createStripOwnedBy(ctx, 'GC', 'gc-coordination');
 
   const result = handleMessage(ctx, SESSION, { type: 'efsp-set-positions', signedOn: [] }, noopPersist); // Alice vacates GC
-  assert.equal(result.ack.warnings.length, 1);
-  assert.deepEqual(result.ack.warnings[0], { positionId: 'GC', count: 1, routedTo: 'LC' });
-  assert.equal(slot(result, 'primary').strips.updated.length, 1);
-  assert.equal(slot(result, 'primary').strips.updated[0].stripId, strip.stripId);
-  assert.equal(ctx.boardStoreFor('INCIRLIK').getStrip(strip.stripId).ownerPositionId, 'LC');
+  assert.deepEqual(result.ack.warnings, [{ positionId: 'GC', count: 1, routedTo: null }]);
+  assert.equal(ctx.boardStoreFor('INCIRLIK').getStrip(strip.stripId).ownerPositionId, 'GC', 'nothing is reassigned to LC');
+  assert.equal(result.directed.length, 1);
+  assert.equal(result.directed[0].positionId, 'LC');
+  assert.deepEqual({ ...result.directed[0].frame, version: undefined }, { version: undefined, type: 'efsp-position-offer', facilityId: 'INCIRLIK', positionId: 'LC', offer: 'GC', count: 1 });
+  // Only LC's Primary hears it.
+  const bob = { controllerId: 'controller-2', who: 'Bob' };
+  assert.ok(directedFor(ctx, bob, result.directed[0]));
+  assert.equal(directedFor(ctx, { controllerId: 'controller-3', who: 'Cy' }, result.directed[0]), null);
+  // Accepting is an ordinary sign-on to GC: Bob now holds both, and the ack says so.
+  const accepted = handleMessage(ctx, bob, { type: 'efsp-set-positions', signedOn: ['LC', 'GC'] }, noopPersist);
+  assert.deepEqual(accepted.ack.signedOn.sort(), ['GC', 'LC']);
+  assert.deepEqual(accepted.ack.combination.positions, ['LC', 'GC']);
+  assert.equal(ctx.boardStoreFor('INCIRLIK').getStrip(strip.stripId).ownerPositionId, 'GC', 'still GC\'s, now advanceable by the one who holds GC');
 });
 
 test('vacating a Position with Strips and NO staffed consolidating Position anywhere reports routedTo:null, distinctly, and does not silently drop the Strip', () => {

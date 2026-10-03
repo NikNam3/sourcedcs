@@ -212,6 +212,9 @@ function getFacilityConfig(facilityId = DEFAULT_FACILITY_ID) { return deepClone(
 
 function getPositionSet(facilityId = DEFAULT_FACILITY_ID) { return [...(_configs().get(facilityId).positions)]; }
 
+/** A Position's frequencies, `{ <Position>: [ { label, mhz } ] }` (docs/adr/0105); `{}` when the Facility ships none. */
+function getPositionFrequencies(facilityId = DEFAULT_FACILITY_ID) { return deepClone(_configs().get(facilityId).positionFrequencies || {}); }
+
 function getConsolidation(facilityId = DEFAULT_FACILITY_ID) { return { ...(_configs().get(facilityId).consolidation) }; }
 
 /**
@@ -398,7 +401,7 @@ function coordinationBayFor(positionId, facilityId = DEFAULT_FACILITY_ID) {
 module.exports = {
   setRangePositionIds,
   DEFAULT_FACILITY_ID, getFacilityIds,
-  getFacilityConfig, getPositionSet, getPositionClass, getPositionLetter, allPositionLetters, getConsolidation, getBaysFor, getAllBays, isBlockVisible,
+  getFacilityConfig, getPositionSet, getPositionClass, getPositionLetter, allPositionLetters, getConsolidation, getPositionFrequencies, getBaysFor, getAllBays, isBlockVisible,
   getPositionRadars, radarBearingPositionIds, validateRadarSelector,
   bayImpliesState, bayHoldsStripType, bayForImpliedState, bayExists, coordinationBayFor, setFacilityConfig, validateConfig,
   getBay, getSingleFrequencyApproach, validateSfaRotationRecord, BAY_VIEWS,

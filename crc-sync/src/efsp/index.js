@@ -104,7 +104,7 @@ function createEfsp({ clock = WALL_CLOCK, wallClock = WALL_CLOCK, transitionAltF
   flightDataStore.setWriteObserver((id, paths) => undoHistory.observe({ kind: 'flightData', id, paths }));
 
   for (const facilityId of facilityIds) {
-    const positionStore = new PositionStore(facilityConfig.getPositionSet(facilityId), facilityConfig.getConsolidation(facilityId), { clock });
+    const positionStore = new PositionStore(facilityConfig.getPositionSet(facilityId), facilityConfig.getConsolidation(facilityId), { clock, frequencies: facilityConfig.getPositionFrequencies(facilityId) });
 
     const rules = {
       resolveBlockTarget:  (blockId, stripType) => blockMap.resolveBlockTarget(stripType, blockId),

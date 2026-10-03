@@ -7,6 +7,8 @@ import { markEfspBaySeen, unseenEfspArrivalsForPosition, unseenEfspArrivalsInBay
 import { noteEfspBayVisible, noteEfspSearch } from '../efsp-metrics-client.js';
 import { renderBay, setOpenEfspBays } from '../bay-view.js';
 import { renderCarrierBanner } from '../carrier-panel.js';
+import { getEfspPosition } from '../efsp-state.js';
+import { formatFrequencies } from '../combination-rules.js';
 
 // Search Bay (guide §4.3 rule 2, defect D2 — "the longest ground-control
 // dwells occurred searching the Pending bay"). A client-local pseudo-Bay,
@@ -132,6 +134,7 @@ export function _renderPositionTabs() {
     tab.dataset.positionId = positionId;
     _fillTabLabel(tab, positionId, signedOn ? _stripCountForPosition(positionId) : null,
       signedOn ? unseenEfspArrivalsForPosition(positionId) : 0, 'dot');
+    _decoratePositionTab(tab, positionId, signedOn);
     // Doubles as a drag drop-zone (guide §4.2: "other Bays reachable
     // through header drop zones that double as drag targets") —
     // bay-view.js hit-tests for this attribute during a drag and issues a
@@ -267,6 +270,24 @@ function _stripCountForPosition(positionId) {
   return _liveStrips().filter(s => s.ownerPositionId === positionId && !String(s.bayId).endsWith('-search') && s.bayId !== 'ops-filed').length;
 }
 
+/** crc-sync docs/adr/0105: a Position's frequencies where the Position is named, and a combined one says so. Runs after every _fillTabLabel of a Position tab, which rebuilds the label. */
+function _decoratePositionTab(tab, positionId, signedOn) {
+  const entry = getEfspPosition(positionId);
+  const freqText = entry ? formatFrequencies(entry.frequencies) : '';
+  tab.removeAttribute('title');
+  if (freqText) {
+    const freq = document.createElement('span');
+    freq.className = 'efsp-tab-freq';
+    freq.textContent = freqText;
+    tab.appendChild(freq);
+    tab.title = `${positionId} ${freqText}`;
+  }
+  if (signedOn && entry && entry.combinedWith && entry.combinedWith.some(id => getActingPositions().includes(id))) {
+    tab.classList.add('efsp-position-tab-combined');
+    tab.title = `${tab.title ? `${tab.title} — ` : ''}combined with ${entry.combinedWith.join(', ')}`;
+  }
+}
+
 function _refreshPositionTabMarks() {
   if (!_positionTabsEl || !_positionTabsEl.children) return;
   for (const tab of _positionTabsEl.children) {
@@ -275,6 +296,7 @@ function _refreshPositionTabMarks() {
     const signedOn = !String(tab.className).includes('efsp-position-tab-drop-only');
     _fillTabLabel(tab, positionId, signedOn ? _stripCountForPosition(positionId) : null,
       signedOn ? unseenEfspArrivalsForPosition(positionId) : 0, 'dot');
+    _decoratePositionTab(tab, positionId, signedOn);
   }
 }
 

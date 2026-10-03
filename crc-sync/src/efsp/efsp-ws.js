@@ -75,6 +75,7 @@ function _handleMutation(ctx, session, msg, persist) {
 
   const mutation = { clientMutationId: msg.clientMutationId, stripId: msg.stripId, baseRev: msg.baseRev, op: msg.op };
 
+  const stateBefore = (boardStore.getStrip(msg.stripId) || {}).state;
   const result = boardStore.applyMutation(mutation, msg.actingPositionId, session.controllerId);
   if (result.ok && !result.replayed) persist();
 
@@ -99,7 +100,8 @@ function _handleMutation(ctx, session, msg, persist) {
     facilityId,
     boardSeq: boardStore.currentSeq, boardEpoch: boardStore.epoch, ok: result.ok,
     strip: stampedStrip, flightData: result.flightData, reason: result.reason, detail: result.detail,
-    warning: result.warning, routedTo: result.routedTo,
+    warning: luawWhileCombined(positionStore, msg.actingPositionId, session.controllerId, result, stateBefore) || result.warning,
+    routedTo: result.routedTo,
     // docs/adr/0100 §7: the server says what is undoable (the client keeps no list), and an Undo's ack says what it
     // undid and voided. Absent otherwise.
     undoable: result.undoable, undone: result.undone, voided: result.voided,
@@ -314,7 +316,17 @@ function _deltaCanServe(boardStore, boardEpoch, lastSeq) {
   return canServeDelta({ seq: boardStore.currentSeq, epoch: boardStore.epoch }, boardEpoch, lastSeq);
 }
 
+/** docs/adr/0105 (H104 GCLC-2): LC putting a Strip into LUAW while the same controller also holds GC or CD. A warning, never a refusal. */
+function luawWhileCombined(positionStore, actingPositionId, controllerId, result, stateBefore) {
+  if (!result.ok || !result.strip || result.strip.state !== 'LUAW' || stateBefore === 'LUAW') return undefined;
+  if (actingPositionId !== combination.LOCAL) return undefined;
+  const held = positionStore.primaryPositionsOf(controllerId);
+  return combination.NON_LOCAL_TOWER.some(id => held.includes(id)) ? 'LUAW_WHILE_COMBINED' : undefined;
+}
+
 function facilityConfig_positionIds(ctx, facilityId) { return ctx.facilityConfig.getPositionSet(facilityId); }
+
+const combination = require('./combination'); // docs/adr/0105
 
 function _handleSetPositions(ctx, session, msg, persist) {
   const facilityId = msg.facilityId || ctx.facilityConfig.DEFAULT_FACILITY_ID;
@@ -374,8 +386,13 @@ function _handleSetPositions(ctx, session, msg, persist) {
   // the Strips to the Position that had left (docs/adr/0081, L6's F2/F5 tail).
   if ((reassignedIds.length > 0 || controlRepaired) && typeof persist === 'function') persist();
 
-  return {
-    ack: { version: VERSION, type: 'efsp-positions-ack', facilityId, signedOn: actuallySignedOn, warnings },
+  const offered = combination.offerAfterSignOff(positionStore, boardStore, facilityId, vacated, session.controllerId);
+  const result = {
+    // docs/adr/0105: `combination` is the warning for one controller holding LC with GC or CD (null otherwise), and
+    // `monitoring` the frequencies of every Position this controller is Primary at (a combination has both).
+    ack: { version: VERSION, type: 'efsp-positions-ack', facilityId, signedOn: actuallySignedOn, warnings,
+      combination: combination.combinationOf(positionStore, session.controllerId, boardStore.getAll()),
+      monitoring: positionStore.frequenciesHeldBy(session.controllerId) },
     // EVERY live Strip, not just the reassigned ones. Taking or giving up a
     // Position changes who is there to receive a transfer, which changes the
     // `nla` status stampStrip computes for Strips this message never
@@ -389,6 +406,9 @@ function _handleSetPositions(ctx, session, msg, persist) {
       { updated: boardStore.getAll().filter(s => s.state !== 'DROPPED').map(s => stampStrip(boardStore, s, facilityId, ctx)), gone: [] },
       [], positionStore.getAll().map(p => ({ ...p, facilityId }))) }),
   };
+  // The sign-on offer (docs/adr/0105) goes to LC's Primary alone, by the directed channel (docs/adr/0100 s6).
+  if (offered) result.directed = [{ facilityId, positionId: offered.positionId, primaryOnly: true, frame: { version: VERSION, type: 'efsp-position-offer', ...offered } }];
+  return result;
 }
 
 // ── The read scope (docs/adr/0080) ───────────────────────────────────────────
@@ -422,6 +442,8 @@ function directedFor(ctx, session, directed) {
   if (!session || !session.controllerId || !directed || !directed.frame) return null;
   const positionStore = ctx.positionStoreFor(directed.facilityId);
   if (!positionStore || !positionStore.signedOnBy(session.controllerId).includes(directed.positionId)) return null;
+  // A Position-level frame (the sign-on offer, docs/adr/0105) goes to the Position's Primary and names no Strip.
+  if (directed.primaryOnly) return positionStore.primaryOf(directed.positionId) === session.controllerId ? directed.frame : null;
   // Read scope (docs/adr/0080): a session that reads only what it owns hears only of what it may see.
   const scope = readScopeOf(ctx, session);
   if (scope.kind === readScope.ALL) return directed.frame;

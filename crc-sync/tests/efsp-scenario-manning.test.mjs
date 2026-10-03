@@ -30,7 +30,7 @@ const ATC = { OPS: 'INCIRLIK', CD: 'INCIRLIK', GC: 'INCIRLIK', LC: 'INCIRLIK', A
 
 // ── 21. a controller walks away with strips in front of them ────────────
 
-test('SCENARIO Ground walks away holding strips, and they route down the consolidation chain', () => {
+test('SCENARIO Ground walks away holding strips: they stay Ground\'s, LC is offered GC, and taking it makes them workable (ADR 0105)', () => {
   const efsp = createEfsp({ currentTheater: () => 'Test' });
   const c = crew(efsp, ATC);
 
@@ -43,14 +43,17 @@ test('SCENARIO Ground walks away holding strips, and they route down the consoli
   });
   assert.equal(onGround.ownerPositionId, 'GC');
 
-  // GC vacates. LC covers it (the chain is CD→GC→LC→AP), so the Strip
-  // follows rather than being left with nobody.
-  const ack = hold(efsp, c.GC.session, 'INCIRLIK', []).ack;
-  assert.deepEqual(ack.warnings, [{ positionId: 'GC', count: 1, routedTo: 'LC' }]);
-  assert.equal(efsp.boardStoreFor('INCIRLIK').getStrip(onGround.stripId).ownerPositionId, 'LC');
-  // ...into one of LC's own Bays, the only ones its panel builds (docs/adr/0080, B3).
-  const bayId = efsp.boardStoreFor('INCIRLIK').getStrip(onGround.stripId).bayId;
-  assert.ok(['lc-runway-queue', 'lc-airborne', 'lc-arrivals', 'lc-final', 'lc-landed', 'lc-coordination'].includes(bayId), `TWR owns it but it sits in ${bayId}`);
+  // GC vacates. GC ends its chain (a tower controller takes ground by combining), so nothing is reassigned: the Strip is
+  // still GC's, the warning says nobody covers it, and LC's Primary is offered GC.
+  const left = hold(efsp, c.GC.session, 'INCIRLIK', []);
+  assert.deepEqual(left.ack.warnings, [{ positionId: 'GC', count: 1, routedTo: null }]);
+  assert.equal(left.directed[0].frame.type, 'efsp-position-offer');
+  assert.equal(efsp.boardStoreFor('INCIRLIK').getStrip(onGround.stripId).ownerPositionId, 'GC');
+
+  // LC takes GC as well: one controller, two Positions, and GC's rules govern GC's Strip again.
+  const taken = hold(efsp, c.LC.session, 'INCIRLIK', ['LC', 'GC']);
+  assert.deepEqual(taken.ack.combination.with, ['GC']);
+  assert.equal(efsp.boardStoreFor('INCIRLIK').getStrip(onGround.stripId).ownerPositionId, 'GC');
 });
 
 // ── 22. nobody downstream to cover ──────────────────────────────────────
