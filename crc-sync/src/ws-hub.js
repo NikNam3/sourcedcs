@@ -596,21 +596,43 @@ class WsHub {
   _onClosed(session) {
     if (!this._efsp) return;
     for (const other of this._sessions.values()) if (other.controllerId === session.controllerId) return;
-    if (!(this._signOnGraceMs > 0)) { this._efsp.onDisconnect(session); this._refreshOthersIfStaffingChanged(); return; }
+    if (!(this._signOnGraceMs > 0)) { this._signOff(session); return; }
     this._pendingSignOff.set(session.controllerId, { session, dueAt: this._wall.now() + this._signOnGraceMs });
   }
 
   /** Signs off every closed session whose grace has run out. Run by the `signon-grace` ticker. */
   sweepPendingSignOffs() {
     const now = this._wall.now();
-    let any = false;
     for (const [id, p] of [...this._pendingSignOff]) {
       if (p.dueAt > now) continue;
       this._pendingSignOff.delete(id);
-      if (this._efsp) this._efsp.onDisconnect(p.session);
-      any = true;
+      this._signOff(p.session);
     }
-    if (any) this._refreshOthersIfStaffingChanged();
+  }
+
+  /**
+   * A closed session's sign-off, with the effects of an explicit one: the repaired Boards, the Positions and the GC offer
+   * are sent the way _onMessage sends a round trip, and the other sessions' coverage follows.
+   */
+  _signOff(session) {
+    if (!this._efsp) return;
+    const result = this._efsp.onDisconnect(session) || {};
+    const broadcasts = result.broadcasts || [];
+    for (const frame of broadcasts) this._broadcastEfsp(frame);
+    this._sendDirected(result.directed);
+    if (this._onEfspChange && broadcasts.length > 0) {
+      try { this._onEfspChange(); } catch (err) { log.error('onEfspChange failed', { err }); }
+    }
+    this._refreshOthersIfStaffingChanged();
+  }
+
+  _sendDirected(directed) {
+    for (const d of directed || []) {
+      for (const [client, s] of this._sessions) {
+        const frame = this._efsp.directedFor ? this._efsp.directedFor(s, d) : null;
+        if (frame && client.readyState === WebSocket.OPEN) client.send(JSON.stringify(frame));
+      }
+    }
   }
 
   /** Another controller's sign-off or sign-on can promote this session's Observer to Primary: tell it. */
@@ -724,12 +746,7 @@ class WsHub {
         const broadcasts = result.broadcasts || [];
         for (const frame of broadcasts) this._broadcastEfsp(frame);
         // docs/adr/0100 §6: an Undo's panel message, after its Board event, to the sessions signed on to the voided Position.
-        for (const d of result.directed || []) {
-          for (const [client, s] of this._sessions) {
-            const frame = this._efsp.directedFor ? this._efsp.directedFor(s, d) : null;
-            if (frame && client.readyState === WebSocket.OPEN) client.send(JSON.stringify(frame));
-          }
-        }
+        this._sendDirected(result.directed);
         // After the broadcasts, so a client sees the Strip change before the
         // alert change. Guarded: a monitor bug must never cost the sender's
         // round trip.

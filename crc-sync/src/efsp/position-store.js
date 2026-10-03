@@ -45,7 +45,12 @@ class PositionStore {
     // the Position for a reconnect, but never locks anyone else out: a controller signing on is treated as if the
     // absent one had signed off (docs/wip/DESK-SIGNON.md, S-SIGNON0).
     this._isAbsent = () => false;
+    // Positions whose absent Primary a sign-on ended (the takeover): read once by the caller that owns the sign-off's effects.
+    this._takenOver = [];
   }
+
+  /** The Positions whose held (absent) Primary a sign-on has ended since the last call. */
+  drainTakenOver() { const out = this._takenOver; this._takenOver = []; return out; }
 
   setAbsentCheck(fn) { this._isAbsent = typeof fn === 'function' ? fn : () => false; }
 
@@ -176,6 +181,7 @@ class PositionStore {
       // The held entry for this Position ends: the absent Primary signs off abruptly (the longest-waiting Observer, if any, is promoted).
       const gone = s.primary.controllerId;
       this._signOff(gone, positionId, { abrupt: true });
+      this._takenOver.push(positionId);
       const held = this._sessions.get(gone);
       if (held) { held.delete(positionId); if (held.size === 0) this._sessions.delete(gone); }
     }
@@ -245,8 +251,10 @@ class PositionStore {
   /** Abrupt disconnect — signs the controller off every Position they were signed on at, auto-promoting where possible (guide §4.8.6 rule 1). */
   onDisconnect(controllerId) {
     const signedOn = this._sessions.get(controllerId) || new Set();
-    for (const id of signedOn) this._signOff(controllerId, id, { abrupt: true });
+    const vacated = [...signedOn];
+    for (const id of vacated) this._signOff(controllerId, id, { abrupt: true });
     this._sessions.delete(controllerId);
+    return { vacated };
   }
 }
 
