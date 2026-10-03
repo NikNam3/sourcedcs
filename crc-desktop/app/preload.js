@@ -13,4 +13,6 @@ contextBridge.exposeInMainWorld('crcUpdate', {
 contextBridge.exposeInMainWorld('crcLinks', {
     // The booking page's URL, as crc-sync sent it (main.js lets only that origin open in the user's browser).
     allowBookingUrl: (url) => ipcRenderer.send('external-link-allow', url),
+    // The update-required frame's download page (CRCSYNC_DOWNLOAD_URL); only its origin may open.
+    allowDownloadUrl: (url) => ipcRenderer.send('external-link-allow-download', url),
 });

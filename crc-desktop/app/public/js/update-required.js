@@ -98,6 +98,8 @@ function onUpdaterStatus(status) {
 /** @param {object} frame the update-required frame ({ serverProtocol, clientProtocol, downloadUrl? }) or {} when only the close code arrived */
 export function showUpdateRequired(frame, { onRetry } = {}) {
   state = { frame: frame || {}, phase: 'idle', percent: 0, onRetry };
+  // Tell the main process which origin the overlay's download link may open (an absent URL clears it).
+  if (window.crcLinks && window.crcLinks.allowDownloadUrl) window.crcLinks.allowDownloadUrl(state.frame.downloadUrl || '');
   if (!listening && window.crcUpdate && window.crcUpdate.onStatus) {
     listening = true;
     window.crcUpdate.onStatus(onUpdaterStatus);

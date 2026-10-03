@@ -9,7 +9,7 @@ const fs   = require('fs');
 
 const config = require('./config.json');
 const { computePythonPkgDir, computeRuntimeCwd, ensureLxsrsVenv } = require('./lxsrs-setup');
-const { createExternalLinkGate } = require('./external-link');
+const { createExternalLinkGate, isCasdoorLoginUrl, isLocalAppUrl, CASDOOR_POPUP_WEB_PREFERENCES } = require('./external-link');
 const { writePendingPatchNotes, readAndClearPendingPatchNotes, readLastPatchNotes } = require('./patch-notes');
 
 const IS_LINUX = process.platform === 'linux';
@@ -92,7 +92,7 @@ app.on('ready', async () => {
     process.env.SRS_RADIO_API_PORT = String(config.srsApiPort);
     process.env.WS_PORT            = String(config.wsPort);
 
-    require('./app/server.js');
+    const localServer = require('./app/server.js');
 
     win = new BrowserWindow({
         width:  1400,
@@ -101,6 +101,8 @@ app.on('ready', async () => {
         autoHideMenuBar: true,
         webPreferences: {
             contextIsolation: true,
+            nodeIntegration: false,
+            sandbox: true,
             preload: path.join(__dirname, 'app', 'preload.js'),
         },
     });
@@ -118,12 +120,22 @@ app.on('ready', async () => {
     // calls window.open on the Casdoor authorize URL) — everything else stays
     // blocked, matching Electron's secure-by-default posture.
     win.webContents.setWindowOpenHandler(({ url }) => {
-        if (process.env.CASDOOR_ENDPOINT && url.startsWith(process.env.CASDOOR_ENDPOINT + '/login/oauth/authorize')) {
-            return { action: 'allow', overrideBrowserWindowOptions: { width: 480, height: 640, parent: win, modal: true } };
+        // The endpoint is read live from the local server: the connection widget changes it at runtime.
+        if (isCasdoorLoginUrl(url, localServer.getSyncConfig().casdoorEndpoint)) {
+            return { action: 'allow', overrideBrowserWindowOptions: { width: 480, height: 640, parent: win, modal: true, webPreferences: { ...CASDOOR_POPUP_WEB_PREFERENCES } } };
         }
         // The one link that leaves the app (S-2PA0): the airspace booking page, and only on the origin crc-sync named.
         if (externalLinks.canOpen(url)) shell.openExternal(url);
         return { action: 'deny' };
+    });
+
+    // The main window never leaves the local server (a redirect or a link would otherwise load a remote page next to the
+    // preload bridge); anything else that wants to navigate is dropped, and external pages open only via the gate above.
+    win.webContents.on('will-navigate', (event, url) => {
+        if (!isLocalAppUrl(url, config.wsPort)) event.preventDefault();
+    });
+    win.webContents.on('will-redirect', (event, url) => {
+        if (!isLocalAppUrl(url, config.wsPort)) event.preventDefault();
     });
 
     let lastUpdateStatus = { state: 'idle' };
@@ -230,6 +242,7 @@ ipcMain.handle('update-check-now', async () => {
 // The renderer reports the booking page crc-sync sent (efsp-airspace-calendar.bookingUrl); only that origin may open.
 const externalLinks = createExternalLinkGate();
 ipcMain.on('external-link-allow', (_event, bookingUrl) => { externalLinks.allow(bookingUrl); });
+ipcMain.on('external-link-allow-download', (_event, downloadUrl) => { externalLinks.allowDownload(downloadUrl); });
 ipcMain.handle('get-app-version', () => app.getVersion());
 
 // Backs the "what's new" button in the topbar — returns { version, notes }
