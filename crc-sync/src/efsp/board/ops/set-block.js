@@ -3,6 +3,24 @@
 const { MAX_FREE_TEXT } = require('../../flight-data-store');
 const { _frequencyFromBlockValue } = require('../strip-util');
 
+/**
+ * The setTofi patch for a TOFI Block write (docs/adr/0102 for SREG). Before the flight has entered, a non-ATC value
+ * replaces the pending regime (a correction of what was picked) and ATC clears it; after entry, or with nothing
+ * pending, it writes the effective regime as always (ATC also drops the entry stamp).
+ */
+function _tofiPatch(ctx, strip, target, op) {
+  if (target.field !== 'separationRegime') return { [target.field]: op.value };
+  const flightData = ctx.flightDataStore.getFlightData(strip.flightDataId);
+  const value = op.value === '' ? null : op.value;
+  const none = { pendingSeparationRegime: null, pendingSince: null, pendingFacilityId: null };
+  if (flightData && flightData.tofi && flightData.tofi.pendingSeparationRegime) {
+    if (value === null) return none;
+    if (value === 'ATC') return { separationRegime: 'ATC', ...none };
+    return { pendingSeparationRegime: value };
+  }
+  return value === 'ATC' || value === null ? { separationRegime: value, regimeEffective: null } : { separationRegime: value };
+}
+
 function _applySetBlock(ctx, strip, op, by, actingPositionId, clientMutationId) {
   const target = ctx.rules.resolveBlockTarget(op.blockId, strip.stripType);
   if (!target) return { ok: false, reason: 'VALIDATION_ERROR', strip };
@@ -60,7 +78,7 @@ function _applySetBlockWrite(ctx, strip, op, by, actingPositionId, clientMutatio
       : target.kind === 'frequency'
         ? ctx.flightDataStore.setWorkingFrequency(strip.flightDataId, _frequencyFromBlockValue(op.value), { by })
         : target.kind === 'tofi'
-          ? ctx.flightDataStore.setTofi(strip.flightDataId, { [target.field]: op.value }, { by })
+          ? ctx.flightDataStore.setTofi(strip.flightDataId, _tofiPatch(ctx, strip, target, op), { by })
           // WP6 (docs/adr/0052), guide §6.4 — the military extension
           // namespace, routed exactly like 'tofi' above.
           : target.kind === 'military'

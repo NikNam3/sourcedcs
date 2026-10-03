@@ -34,6 +34,7 @@ const { CorrelationReconciler, CORRELATION_TICK_MS } = require('./efsp/correlati
 const { SurveillanceHintMonitor } = require('./efsp/surveillance-hints');
 const { getHintsConfig } = require('./efsp/surveillance-hints-config');
 const { ConformanceMonitor } = require('./efsp/conformance');
+const { TofiRegimeMonitor } = require('./efsp/tofi-regime-monitor');
 const { ConflictAlertMonitor } = require('./conflict-alert');
 const { loadAlertingConfig } = require('./alerting-config');
 const { indicatedAltFt } = require('./altimetry');
@@ -507,6 +508,30 @@ function createApp(deps = {}) {
     // Alert text names each aircraft the way identity does (docs/adr/0059).
     callsignFor: trackSeams.callsign || ((track) => identity.labelFor(track.id)),
   });
+  // ── The TOFI separation regime (docs/adr/0102) ────────────────────────────
+  // Where a correlated flight is, relative to the airspaces ACTIVE for an MRU Facility: one answer for ACCEPT,
+  // MARK_ENTERED and the monitor. The registry's limits are indicated feet, so the track altitude is converted
+  // here (I4). No correlated contact is `located: false`, which is unknown, never outside.
+  const regimeLocator = (flightDataId, facilityId) => {
+    const trackId = efsp.correlationStore.correlatedTrackId(flightDataId);
+    const track = trackId ? trackStore.get(trackId) : null;
+    if (!track || !Number.isFinite(track.lat) || !Number.isFinite(track.lon)) return { located: false, inside: [], unknown: [] };
+    const altFt = indicatedAltFt(track.alt, grpcClient.getWeather(), theaterContext.transitionAltFt());
+    const where = efsp.airspaceStore.activeContaining({ lat: track.lat, lon: track.lon, altFt }, { usingFacilityId: facilityId });
+    return { located: true, inside: where.inside, unknown: where.unknown };
+  };
+  efsp.setRegimeLocator(regimeLocator);
+  const tofiRegimeMonitor = new TofiRegimeMonitor({
+    clock: missionClock,
+    wallClock: WALL_CLOCK,
+    flightDataStore: efsp.flightDataStore,
+    locate: regimeLocator,
+    activeMarsaFor: (flightDataId) => efsp.marsaStore.activeFor(flightDataId),
+    enter: (flightDataId, info) => efsp.markTofiEntered(flightDataId, info),
+    onEntered: (message) => wsHub.broadcastEfspMessage(message),
+    config: alertingConfig.tofiRegime,
+  });
+
   // The one place efsp-alerts is composed (docs/adr/0067). broadcastEfspAlerts
   // replaces the whole alert state, so every producer — the 1s conformance/CA
   // tick, the 15s obligation sweep, the post-Mutation hook — must send all three
@@ -515,6 +540,7 @@ function createApp(deps = {}) {
   function broadcastEfspAlerts() {
     wsHub.broadcastEfspAlerts({
       conformance: conformanceMonitor.getAll(),
+      tofiRegime: tofiRegimeMonitor.getAll(),
       conflictAlert: conflictAlertMonitor.getAll(),
       obligations: obligationMonitor.getAll(),
       surveillance: surveillanceHints ? surveillanceHints.getAll() : undefined, // docs/adr/0076: the suggestion chip and staleness
@@ -722,6 +748,8 @@ function createApp(deps = {}) {
     // run on the injected wall clock (docs/adr/0096). CA stays on the wall clock: it only
     // compares track ages, which tracks.js stamps in wall time, and shows no time
     // of day at all.
+    // docs/adr/0102: a pending regime becomes effective on the 2nd consecutive inside tick; the outside grace is wall time.
+    { name: 'tofi-regime', periodMs: 1000, tick: () => { if (tofiRegimeMonitor.tick()) broadcastEfspAlerts(); } },
     { name: 'conformance-conflict-alert', periodMs: 1000, tick: () => {
       const conformanceChanged = conformanceMonitor.tick();
       const hintsChanged = surveillanceHints ? surveillanceHints.tick() : false;
@@ -848,6 +876,7 @@ function createApp(deps = {}) {
       obligation: obligationMonitor,
       correlation: correlationReconciler,
       conformance: conformanceMonitor,
+      tofiRegime: tofiRegimeMonitor,
       conflictAlert: conflictAlertMonitor,
       surveillanceHints,
       carrier: carrierTick,

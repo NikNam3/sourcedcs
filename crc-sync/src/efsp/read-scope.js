@@ -136,6 +136,7 @@ function filterAlerts(msg, scope, flightDataIds, stripVisible) {
   return {
     ...msg,
     conformance: (msg.conformance || []).filter(a => flightDataIds.has(a.flightDataId)),
+    tofiRegime: (msg.tofiRegime || []).filter(a => flightDataIds.has(a.flightDataId)),
     obligations: (msg.obligations || []).filter(o => stripVisible(o.facilityId, o.stripId)),
     surveillance: (msg.surveillance || []).filter(h => stripVisible(h.facilityId, h.stripId)),
   };

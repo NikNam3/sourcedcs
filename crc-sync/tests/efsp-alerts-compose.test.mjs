@@ -22,12 +22,12 @@ test('app.js calls wsHub.broadcastEfspAlerts in exactly one place, the compose f
   const fn = SERVER.match(/\n *function broadcastEfspAlerts\(\) \{[\s\S]*?\n  \}\n/);
   assert.ok(fn, 'the compose function exists');
   assert.match(fn[0], /wsHub\.broadcastEfspAlerts\(/);
-  for (const key of ['conformance', 'conflictAlert', 'obligations', 'surveillance']) assert.match(fn[0], new RegExp(`${key}:`));
+  for (const key of ['conformance', 'tofiRegime', 'conflictAlert', 'obligations', 'surveillance']) assert.match(fn[0], new RegExp(`${key}:`));
 });
 
 test('a conformance-only tick does not clear obligations', () => {
   const body = SERVER.match(/\n *function broadcastEfspAlerts\(\) \{[\s\S]*?\n  \}\n/)[0];
-  const compose = new Function('wsHub', 'conformanceMonitor', 'conflictAlertMonitor', 'obligationMonitor', 'surveillanceHints',
+  const compose = new Function('wsHub', 'conformanceMonitor', 'conflictAlertMonitor', 'obligationMonitor', 'surveillanceHints', 'tofiRegimeMonitor',
     `${body}; return broadcastEfspAlerts;`);
 
   const wsHub = new WsHub({ trackStore: new TrackStore(), collabStore: new CollaborativeStore() });
@@ -41,7 +41,8 @@ test('a conformance-only tick does not clear obligations', () => {
     { getAll: () => conformance },
     { getAll: () => [] },
     { getAll: () => [obligation] },
-    { getAll: () => [hint] });
+    { getAll: () => [hint] },
+    { getAll: () => [] });
 
   broadcast(); // the 15 s sweep raised the obligation
   conformance = [{ flightDataId: 'f1', alerts: [] }];

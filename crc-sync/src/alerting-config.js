@@ -24,6 +24,7 @@ function loadAlertingConfig(override) {
   return {
     conformance: { ...shipped.conformance, ...(layer.conformance || {}) },
     conflictAlert: { ...shipped.conflictAlert, ...(layer.conflictAlert || {}) },
+    tofiRegime: { ...shipped.tofiRegime, ...(layer.tofiRegime || {}) }, // docs/adr/0102
   };
 }
 

@@ -159,7 +159,15 @@ const WRITABLE_PATHS = new Set([
  * Paths surveillance writes (docs/adr/0100 §3). An undo never restores them: the aircraft's squawk is a fact, not a
  * controller's change. A later op that writes a field from a system observation lists it here.
  */
-const OBSERVED_PATHS = Object.freeze(['identity.beaconObserved']);
+// The regime monitor's writes (docs/adr/0102, src/efsp/tofi-regime-monitor.js): an automatic AIRSPACE entry is an
+// observation of where the aircraft is, so it neither blocks an open undo nor reaches a frame's footprint. Unlike
+// the squawk, a controller's action (ACCEPT, MARK_ENTERED) writes the same fields, and restorePaths puts them back
+// when it restores the `tofi` section.
+const TOFI_MONITOR_PATHS = Object.freeze([
+  'tofi.separationRegime', 'tofi.pendingSeparationRegime', 'tofi.pendingSince', 'tofi.pendingFacilityId',
+  'tofi.regimeEffective', 'tofi.changedAt', 'tofi.changedBy',
+]);
+const OBSERVED_PATHS = Object.freeze(['identity.beaconObserved', ...TOFI_MONITOR_PATHS]);
 
 function getPath(obj, path) {
   return path.split('.').reduce((o, k) => (o == null ? o : o[k]), obj);
@@ -505,7 +513,10 @@ class FlightDataStore {
   get hasWriteObserver() { return !!this._writeObserver; }
 
   _wrote(flightDataId, paths) {
-    if (this._writeObserver) this._writeObserver(flightDataId, paths.filter(p => !OBSERVED_PATHS.includes(p)));
+    if (!this._writeObserver) return;
+    const reported = paths.filter(p => !OBSERVED_PATHS.includes(p));
+    if (paths.length && !reported.length) return; // an observed write only: no change to attribute
+    this._writeObserver(flightDataId, reported);
   }
 
   /**
@@ -529,7 +540,7 @@ class FlightDataStore {
         if (voidAppendedEntries(image.clearance && image.clearance[field], cell, voidedBy)) changed = true;
         continue;
       }
-      const kept = OBSERVED_PATHS.filter(o => o.startsWith(`${path}.`)).map(o => [o, getPath(flightData, o)]);
+      const kept = OBSERVED_PATHS.filter(o => o.startsWith(`${path}.`) && !TOFI_MONITOR_PATHS.includes(o)).map(o => [o, getPath(flightData, o)]);
       const want = getPath(image, path);
       if (JSON.stringify(getPath(flightData, path)) === JSON.stringify(want)) continue;
       setPathCreating(flightData, path, want === undefined ? undefined : JSON.parse(JSON.stringify(want)));
@@ -772,7 +783,12 @@ class FlightDataStore {
       // generic setField() path — see that method for why (mirrors
       // airspace.owner's exact template, per docs/adr/0018/0020's own
       // directive).
-      tofi: { ifrActive: false, radarService: null, separationRegime: null, changedAt: null, changedBy: null },
+      // docs/adr/0102: the regime picked at TOFI ENTRY accept waits in `pendingSeparationRegime` while
+      // `separationRegime` (what every reader uses) stays ATC, until the flight is inside an airspace active for
+      // the accepting MRU Facility or the MRU marks it entered; `regimeEffective` stamps how it became effective.
+      tofi: { ifrActive: false, radarService: null, separationRegime: null,
+        pendingSeparationRegime: null, pendingSince: null, pendingFacilityId: null, regimeEffective: null,
+        changedAt: null, changedBy: null },
       provenance,
       createdAt: now,
       updatedAt: now,
@@ -1081,10 +1097,10 @@ class FlightDataStore {
    * Rule 5 ("DUE_REGARD and MARSA are mutually exclusive") is resolved BY
    * CONSTRUCTION — separation_regime is one 5-value enum field, not two
    * independent booleans — so no cross-field validation is needed here.
-   * @param {{ifrActive?:boolean, radarService?:string|null, separationRegime?:string|null}} patch
+   * @param {{ifrActive?:boolean, radarService?:string|null, separationRegime?:string|null, pendingSeparationRegime?:string|null, pendingSince?:number|null, pendingFacilityId?:string|null, regimeEffective?:object|null}} patch
    * @returns {{ok:true, flightData}|{ok:false, reason:'NOT_FOUND'|'VALIDATION_ERROR', detail?}}
    */
-  setTofi(flightDataId, patch, { by } = {}) {
+  setTofi(flightDataId, patch, { by, system = false } = {}) {
     const flightData = this._flightDataList.get(flightDataId);
     if (!flightData) return { ok: false, reason: 'NOT_FOUND' };
     // Both fields START as null and null is a real, renderable state — "no
@@ -1102,12 +1118,31 @@ class FlightDataStore {
     if (patch.separationRegime !== undefined && patch.separationRegime !== null && !SEPARATION_REGIMES.has(patch.separationRegime)) {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: `invalid separation_regime: ${JSON.stringify(patch.separationRegime)}` };
     }
+    if (patch.pendingSeparationRegime === '') patch.pendingSeparationRegime = null;
+    if (patch.pendingSeparationRegime !== undefined && patch.pendingSeparationRegime !== null
+        && (patch.pendingSeparationRegime === 'ATC' || !SEPARATION_REGIMES.has(patch.pendingSeparationRegime))) {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: `invalid pending separation_regime: ${JSON.stringify(patch.pendingSeparationRegime)}` };
+    }
+    if (patch.pendingSince !== undefined && patch.pendingSince !== null && !Number.isFinite(patch.pendingSince)) {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: 'pendingSince must be a time or null' };
+    }
+    if (patch.pendingFacilityId !== undefined && patch.pendingFacilityId !== null && typeof patch.pendingFacilityId !== 'string') {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: 'pendingFacilityId must be a Facility id or null' };
+    }
+    if (patch.regimeEffective !== undefined && patch.regimeEffective !== null) {
+      const e = patch.regimeEffective;
+      if (typeof e !== 'object' || !Number.isFinite(e.at) || (e.trigger !== 'AIRSPACE' && e.trigger !== 'MANUAL')) {
+        return { ok: false, reason: 'VALIDATION_ERROR', detail: 'regimeEffective must be { at, trigger: AIRSPACE|MANUAL, airspaceId, facilityId, by } or null' };
+      }
+    }
     flightData.tofi = { ...flightData.tofi, ...patch, changedAt: this._clock.now(), changedBy: by || null };
     flightData.provenance['tofi'] = 'CONTROLLER_ENTERED';
     flightData.rev += 1;
     flightData.updatedAt = this._clock.now();
     flightData.updatedBy = by || null;
-    this._wrote(flightDataId, ['tofi']);
+    // The regime monitor (`system`) reports the fields it wrote, all observed paths (TOFI_MONITOR_PATHS); a
+    // controller's write reports the section, which an undo restores.
+    this._wrote(flightDataId, system ? Object.keys(patch).map(k => `tofi.${k}`).concat(['tofi.changedAt', 'tofi.changedBy']) : ['tofi']);
     return { ok: true, flightData };
   }
 
@@ -1642,5 +1677,5 @@ module.exports = {
   TRACK_DEGRADATION_FLAGS, AIRSPACE_OWNERS, RADAR_SERVICE_STATES, SEPARATION_REGIMES, MAX_FREE_TEXT,
   ORDNANCE_STATES, ALERT_STATUSES, MILITARY_WRITABLE_FIELDS, defaultMilitary,
   ensureClearance, parseAltitudeFt, parseAltitude, parseSpeed, formatAltitudeBlock, parseHeadingDeg, activeClearanceEntry,
-  normalizeMtrValue, OBSERVED_PATHS,
+  normalizeMtrValue, OBSERVED_PATHS, TOFI_MONITOR_PATHS,
 };

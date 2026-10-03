@@ -437,7 +437,7 @@ test('AIRSPACE_OWNERS has exactly the two directions the guide names, nothing el
 test('a fresh flight data\'s tofi sub-object starts at its documented defaults, not null', () => {
   const store = new FlightDataStore();
   const { flightData } = store.createFlightData(makeSeed(), { by: 'OPS' });
-  assert.deepEqual(flightData.tofi, { ifrActive: false, radarService: null, separationRegime: null, changedAt: null, changedBy: null });
+  assert.deepEqual(flightData.tofi, { ifrActive: false, radarService: null, separationRegime: null, pendingSeparationRegime: null, pendingSince: null, pendingFacilityId: null, regimeEffective: null, changedAt: null, changedBy: null });
 });
 
 test('setTofi accepts a partial patch, merging into the existing sub-object rather than replacing it, and stamps changedAt/changedBy', () => {

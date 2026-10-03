@@ -293,7 +293,7 @@ test('SCENARIO TOFI later lands on the mission line that is already there', () =
     kind: 'TOFI', action: 'ACCEPT', separationRegime: 'MARSA',
   });
   assert.equal(accepted.tofiCoordination.state, 'ACTIVE');
-  assert.equal(efsp.flightDataStore.getFlightData(ctrStrip.flightDataId).tofi.separationRegime, 'MARSA');
+  assert.equal(efsp.flightDataStore.getFlightData(ctrStrip.flightDataId).tofi.pendingSeparationRegime, 'MARSA'); // docs/adr/0102
 });
 
 // ── the pilot-request axis, which is where the defects live ─────────────

@@ -50,6 +50,7 @@ const { UndoHistory, undoEnv } = require('./undo/undo-history');
 const { ReplayCache } = require('./sync/replay-cache');
 const { REGISTRY, RESTORE_ORDER, checkPersistedShape } = require('./stores');
 const { SERVICE_ROWS } = require('./authority/airspace');
+const { stampStrip, touchedStrips, boardDelta } = require('./wire/frames');
 const log = require('../log').logger('efsp');
 
 /**
@@ -90,6 +91,9 @@ function createEfsp({ clock = WALL_CLOCK, wallClock = WALL_CLOCK, transitionAltF
   const mutationLog = new MutationLog(undefined, { clock });
   const facilities = new Map(); // facilityId -> { boardStore, positionStore, rules }
   const stores = {};            // registry key -> instance (src/efsp/stores.js)
+  // docs/adr/0102: where a flight is relative to the airspaces active for an MRU Facility. Late-bound (it needs the
+  // track store, which app.js builds after this): `locator(flightDataId, facilityId) -> { located, inside, unknown }`.
+  let regimeLocator = null;
   const buildDeps = { clock, transitionAltFt, currentTheater, codeAllocator, mutationLog, facilities, stores };
   for (const entry of REGISTRY) stores[entry.key] = entry.build(buildDeps);
   const { flightData: flightDataStore, airspaces: airspaceStore, correlations: correlationStore, marsa: marsaStore,
@@ -192,6 +196,7 @@ function createEfsp({ clock = WALL_CLOCK, wallClock = WALL_CLOCK, transitionAltF
       marsaInterlockFor:       (stripType, blockId) => blockMap.interlockFor(stripType, blockId),
       voidMarsaForAssignment:  (flightDataId, ctx) => marsaStore.voidForAssignment(flightDataId, ctx),
       activeMarsaFor:          (flightDataId) => marsaStore.activeFor(flightDataId),
+      regimeLocation:          (flightDataId, forFacilityId) => (regimeLocator ? regimeLocator(flightDataId, forFacilityId) : { located: false, inside: [], unknown: [] }),
       retireMarsaForFlightData:       (flightDataId, by) => marsaStore.onFlightDataRetired(flightDataId, by),
       // Ending or voiding a relation writes `tofi.separationRegime` back to
       // ATC on every participant. Those flight data writes are real changes no
@@ -324,6 +329,25 @@ function createEfsp({ clock = WALL_CLOCK, wallClock = WALL_CLOCK, transitionAltF
     },
 
     handleMessage: (session, msg) => handleMessage(ctx, session, msg, () => _persist({ facilities, stores, persistState, paths })),
+
+    /** Installs the regime locator (docs/adr/0102); `app.js` supplies it once the track store exists. */
+    setRegimeLocator: (fn) => { regimeLocator = fn; },
+
+    /**
+     * The TOFI regime monitor's write (docs/adr/0102): a system mutation through the MISSION Facility's Board (actor
+     * `system`, one audit entry), persisted, with the board-delta every client needs. `facilityId` is the accepting MRU
+     * Facility. @returns {{ok:true, message:object}|{ok:false, reason, detail}}
+     */
+    markTofiEntered: (flightDataId, { facilityId, airspaceId }) => {
+      const boardStore = ctx.boardStoreFor(facilityId);
+      if (!boardStore) return { ok: false, reason: 'NOT_FOUND', detail: `unknown Facility: ${facilityId}` };
+      const result = boardStore.markTofiEntered(flightDataId, { airspaceId });
+      if (!result.ok) return result;
+      _persist({ facilities, stores, persistState, paths });
+      const stamped = stampStrip(boardStore, result.strip, facilityId, ctx);
+      const touched = boardStore.drainTouched();
+      return { ok: true, message: boardDelta(ctx, boardStore, facilityId, touchedStrips(ctx, boardStore, facilityId, touched, stamped), [result.flightData]) };
+    },
 
     /**
      * The HTTP service path into the airspace registry (docs/adr/0098 §9): the same skeleton pass a panel Mutation takes

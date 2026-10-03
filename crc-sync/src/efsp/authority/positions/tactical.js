@@ -81,7 +81,8 @@ function readScopeFor(positionId) {
 // The TOFI answer (B2, docs/adr/0080; see permission.js's mayActBesideOwner):
 // on a MISSION Strip, the Position `tofiAnsweredBy` names for its owner (TAC_C2
 // for an AIC-held line) may ACCEPT, REJECT or TRANSFER_COMMS.
-const TOFI_ANSWER_ACTIONS = ['ACCEPT', 'REJECT', 'TRANSFER_COMMS'];
+// MARK_ENTERED (docs/adr/0102) is the MRU side's: the same Position answers it.
+const TOFI_ANSWER_ACTIONS = ['ACCEPT', 'REJECT', 'TRANSFER_COMMS', 'MARK_ENTERED'];
 
 const family = {
   family: 'tactical',

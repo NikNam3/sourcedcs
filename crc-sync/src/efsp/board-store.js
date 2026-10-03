@@ -350,6 +350,9 @@ class BoardStore {
   /** A TOFI EXIT was proposed against this Facility (board/tofi.js). */
   receiveTofiExitProposal(args) { return this._tofi.receiveTofiExitProposal(args); }
 
+  /** The regime monitor's entry (board/tofi.js, docs/adr/0102): a system write on this Board's MISSION Strip. */
+  markTofiEntered(flightDataId, info) { return this._tofi.markEnteredBySystem(flightDataId, info); }
+
   /** The MISSION side ACCEPTed, REJECTed or TRANSFER_COMMS'd (board/tofi.js). */
   receiveTofiResponse(args) { return this._tofi.receiveTofiResponse(args); }
 

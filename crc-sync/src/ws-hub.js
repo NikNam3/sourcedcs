@@ -75,7 +75,7 @@ class WsHub {
     // The whole EFSP alert state (docs/adr/0058, 0067), empty until a
     // monitor reports — so a client connecting to a freshly started server
     // is told "nothing is wrong" rather than keeping what it had.
-    this._efspAlerts = { conformance: [], conflictAlert: [], obligations: [], surveillance: [] };
+    this._efspAlerts = { conformance: [], conflictAlert: [], obligations: [], surveillance: [], tofiRegime: [] };
     this._onEfspChange = null;
   }
 
@@ -247,7 +247,7 @@ class WsHub {
     // Obligations (docs/adr/0067) and conformance are about flights, so a
     // session that reads only what it owns (docs/adr/0080) gets its own
     // flights' alerts and nobody else's.
-    const msg = { version: VERSION, type: 'efsp-alerts', conformance: a.conformance || [], conflictAlert, obligations: a.obligations || [], surveillance: a.surveillance || [] };
+    const msg = { version: VERSION, type: 'efsp-alerts', conformance: a.conformance || [], tofiRegime: a.tofiRegime || [], conflictAlert, obligations: a.obligations || [], surveillance: a.surveillance || [] };
     return this._efspFilter(session, msg) || msg;
   }
 
@@ -306,6 +306,9 @@ class WsHub {
 
   /** The carrier banner changed with no controller behind it (docs/adr/0074): the tick's delta, the same message a carrier op returns. */
   broadcastEfspCarrierDelta(delta) { this._broadcastEfsp(delta); }
+
+  /** A server-originated EFSP message already built (the TOFI regime monitor's board-delta, docs/adr/0102), scoped per session like any other. */
+  broadcastEfspMessage(msg) { this._broadcastEfsp(msg); }
 
   broadcastEfspCorrelationDelta(payload) {
     this._broadcastEfsp({
