@@ -181,7 +181,8 @@ services:
   # client to server.sourcedcs.page on behalf of every crc-desktop instance.
   # ─────────────────────────────────────────
   crc-sync:
-    image: ghcr.io/niknam3/sourcedcs/crc-sync:${TAG:-latest}
+    # CRC_SYNC_IMAGE is set only by deploy.yml: the digest the wire protocol gate checked (B14). Unset: the tag, as before.
+    image: ${CRC_SYNC_IMAGE:-ghcr.io/niknam3/sourcedcs/crc-sync:${TAG:-latest}}
     container_name: crc-sync
     restart: unless-stopped
     logging: *default-logging
