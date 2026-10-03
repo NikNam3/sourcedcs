@@ -1248,6 +1248,14 @@
    "showTrackPanel",
    "updateTrackPanel"
   ],
+  "ptt-controller.js": [
+   "PTT_MAX_TX_DEFAULT_S",
+   "PTT_MAX_TX_MAX_S",
+   "PTT_MAX_TX_MIN_S",
+   "PTT_REPEAT_MS",
+   "clampMaxTxSeconds",
+   "createPttController"
+  ],
   "srs-radio.js": [],
   "sync.js": [
    "_setSyncSocket",
