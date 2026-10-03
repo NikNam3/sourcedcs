@@ -41,3 +41,10 @@ See the final message of the lane; the numbers are repeated at the bottom of thi
 - Transfer-shaped NLAs (`result.transferTo`) never set the server latch (`invoke-nla.js`, `!result.transferTo`): only the client's guard protects a double tap on "Hand Off". Probably intended (the Strip is gone from the pressed Bay); worth a sentence in the briefing.
 - The machine ran at load 30-45 during this lane (other lanes' agents), so `e2e` times here (20-50 s per test) are not representative.
 - `crc-desktop/e2e/helpers/app.js`'s `seedStrip` and a few `expect.poll`s still carry `{ timeout: 10000 }`; those are above the default and left.
+
+## Numbers
+
+- crc-sync `npm test` 2423 -> 2426 (+2 board-store tests for the injected guard and the env gate, +1 test-reset hook); `npm run freeze` 48/48 unchanged; `soak:selfcheck` PASS.
+- crc-desktop `npm test` 1137 -> 1142 (e2e-boot, three hygiene rules, one more case); the client-mirror parity test now reads `NLA_GUARD_MS`.
+- Playwright, E2E_LANE=3, one process each, only the touched specs, machine at load 30-45: run 1 (13 files) 42/43 (the failure was `nla-guard`'s first draft, fixed), run 2 (17 files) 116/116, run 3 (25 files) 101/101, run 4 (6 files, the second pass of the rest) 61/61. Every changed spec has at least two green runs (the `test.fail` annotations in `l2-block-editing` show as expected failures). `update-required` 3/3 twice.
+- `/tmp/crc-e2e-lane3-*` after a run: none (before: one per config load, 55 on this lane).
