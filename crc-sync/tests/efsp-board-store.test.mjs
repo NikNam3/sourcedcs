@@ -289,7 +289,7 @@ test('applyMutation never propagates an unexpected exception — it rejects the 
   const strip = createStrip(board);
   const result = board.applyMutation(mutation(strip, { kind: 'SetBlock', blockId: '9E', value: 'x' }), 'OPS', 'OPS');
   assert.equal(result.ok, false);
-  assert.equal(result.reason, 'VALIDATION_ERROR');
+  assert.equal(result.reason, 'INTERNAL_ERROR');
   // The store itself is still alive and usable afterward — a caught
   // exception on one Mutation must not leave internal state corrupted.
   const after = board.applyMutation(mutation(board.getStrip(strip.stripId), { kind: 'SetFlag', flag: 'offset', value: true }), 'OPS', 'OPS');
@@ -316,7 +316,7 @@ test('SetBlock routed to beaconAssigned surfaces a duplicate warning without fai
 
   const result = board.applyMutation(mutation(b, { kind: 'SetBlock', blockId: '5', value: aCode }), 'OPS', 'OPS');
   assert.equal(result.ok, true);
-  assert.equal(result.warning, 'DUPLICATE_IGNORED_WARNING');
+  assert.deepEqual(result.warnings, [{ code: 'DUPLICATE_IGNORED_WARNING' }]);
 });
 
 test('SetBlock routed to an flightData path fails cleanly on invalid input (reserved beacon code) and does not bump rev', () => {

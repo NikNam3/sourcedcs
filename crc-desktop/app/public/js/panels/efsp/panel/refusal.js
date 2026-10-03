@@ -235,10 +235,12 @@ const MUTATION_WARNING_MESSAGES = {
   LUAW_WHILE_COMBINED: LUAW_WHILE_COMBINED_TEXT, // crc-sync docs/adr/0105
 };
 
+// `warning` is a text or code (the airspace panel's), or the ack's list of { code, detail? }: each one is shown.
 export function _showMutationWarning(warning) {
   if (!_mutationWarningEl) return;
   clearTimeout(_mutationWarningClearTimer);
-  _mutationWarningEl.textContent = MUTATION_WARNING_MESSAGES[warning] || warning;
+  const text = (w) => (typeof w === 'string' ? (MUTATION_WARNING_MESSAGES[w] || w) : (MUTATION_WARNING_MESSAGES[w.code] || w.detail || w.code));
+  _mutationWarningEl.textContent = Array.isArray(warning) ? warning.map(text).join(' · ') : text(warning);
   _mutationWarningClearTimer = setTimeout(() => { _mutationWarningEl.textContent = ''; }, 6000);
 }
 
@@ -269,7 +271,7 @@ export function notifyEfspMutationAck(clientMutationId, result) {
   // docs/adr/0101: the server asking for "coordinated with" is a question to the controller, not a refusal banner.
   if (!result.ok && noteAttestationRefusal(result.reason, result.detail, result.pending)) { /* asked in #efsp-control-attest */ }
   else if (!result.ok) _showMutationError(result.reason || 'Rejected', result.detail, { pending: result.pending });
-  else if (result.warning) _showMutationWarning(result.warning);
+  else if (result.warnings && result.warnings.length) _showMutationWarning(result.warnings);
   if (clientMutationId !== _pendingCreateStripMutationId) return;
   _setPendingCreateStripMutationId(null);
   // `detail` carries the only part worth reading for a whole class of

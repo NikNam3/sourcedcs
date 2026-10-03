@@ -339,7 +339,7 @@ const ENTRY_SHAPES = {
     strips: arrayOf(STRIP_SHAPE),
     cidSeq: true,
     // [cmid, record] pairs; the record is sync/replay-cache.js's replayRecord
-    replay: arrayOf(arrayOf(anyOf('ok', 'reason', 'detail', 'warning', 'routedTo', 'selfCoordinated', 'stripId', 'flightDataId',
+    replay: arrayOf(arrayOf(anyOf('ok', 'reason', 'detail', 'warnings', 'routedTo', 'selfCoordinated', 'stripId', 'flightDataId',
       'peerFacilityId', 'peerStripId', 'appliedWallAt'))),
     droppedWallAt: true,
   }),

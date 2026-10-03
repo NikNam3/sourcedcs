@@ -288,7 +288,7 @@ test('SCENARIO a flight approved into a block nobody activated: allowed, flagged
     kind: 'ApproveAirspaceEntry', airspaceId: 'MOA-COLD',
   });
   assert.equal(ack.ok, true, '§9.11 says alert, not refuse');
-  assert.equal(ack.warning, 'AIRSPACE_NOT_ACTIVE');
+  assert.deepEqual(ack.warnings, [{ code: 'AIRSPACE_NOT_ACTIVE' }]);
 
   const alerts = await obligationAlerts(efsp, facilityConfig);
   assert.equal(alerts.some(a => a.obligationType === 'UNACTIVATED_AIRSPACE_ENTRY'), true);

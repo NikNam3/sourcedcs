@@ -229,7 +229,8 @@ test('B7 a legal SetState that leaves the Strip in a Bay implying another state 
   const line = handTo(efsp, c, taskedLine(efsp, c, 'L23D3'), 'GCI', 'gci-on-station');
   const ack = act(efsp, c.GCI, 'GCI', tac(efsp, line.stripId), { kind: 'SetState', toState: 'RTB' });
   assert.equal(ack.ok, true, JSON.stringify(ack));
-  assert.match(ack.warning, /no GCI Bay for RTB; the Strip stays in gci-on-station/);
+  assert.equal(ack.warnings[0].code, 'NO_BAY_FOR_STATE');
+  assert.match(ack.warnings[0].detail, /no GCI Bay for RTB; the Strip stays in gci-on-station/);
   assert.equal(tac(efsp, line.stripId).bayId, 'gci-on-station');
 });
 

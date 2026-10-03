@@ -40,6 +40,25 @@ class BoardAudit {
   }
 
   /**
+   * An op threw part-way (docs/wip/SERVER-BUGS.md, B3). Its writes before the throw stay on the Board, so they get the
+   * audit line the normal path would have written after the op, marked `partial` with the error. `at` is the mission clock.
+   */
+  recordInternalError(mutation, actingPositionId, by, strip, err) {
+    if (!this._mutationLog) return;
+    this._mutationLog.record({
+      clientMutationId: mutation.clientMutationId || null,
+      op: mutation.op && mutation.op.kind,
+      stripId: (strip && strip.stripId) || mutation.stripId || null,
+      facilityId: this._rules.facilityId || null,
+      flightDataId: (strip && strip.flightDataId) || null,
+      ...(mutation.op && typeof mutation.op.action === 'string' ? { action: mutation.op.action } : {}),
+      actingPositionId, actorId: by || null, at: this._clock.now(),
+      outcome: 'INTERNAL_ERROR', partial: true, error: String(err && err.message ? err.message : err).slice(0, 500),
+      after: strip ? deepClone(strip) : null,
+    });
+  }
+
+  /**
    * A SYSTEM write: no client Mutation and no acting Position (a peer dropped, a Position vacated or retaken, an
    * archive). `tail` is spread after `at`, in the order given, so each site keeps the key order its JSONL line
    * always had; `flightDataFirst` puts `flightDataId` before `facilityId` (Archive's order; the others write

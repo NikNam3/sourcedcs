@@ -280,3 +280,26 @@ test('the heartbeat seq follows a Mutation, and the epoch is the Board\'s lifeti
   assert.equal(b.seq, w.efsp.boardStoreFor('TACTICAL').currentSeq);
   assert.equal(b.epoch, w.efsp.boardStoreFor('TACTICAL').epoch);
 });
+
+test('B5 the server-originated runway-status delta goes through the read scope like the other families', async () => {
+  const families = (await import('../src/efsp/wire/families/index.js')).default || (await import('../src/efsp/wire/families/index.js'));
+  const family = families.byDeltaType['efsp-runway-status-delta'];
+  assert.ok(family, 'the runway-status family is registered');
+  const w = world();
+  const jtac = w.connect('jtac', { TACTICAL: ['JTAC'] });
+  const ops = w.connect('ops', { INCIRLIK: ['OPS'] });
+  // The family has no filter today. Give it one, as a family that hides something from a scoped session would, and see
+  // that the hub's broadcast reaches it: before the fix it went out through the unfiltered path.
+  const seen = [];
+  const had = Object.prototype.hasOwnProperty.call(family, 'filter');
+  const prior = family.filter;
+  family.filter = (ctx, scope, msg) => { seen.push(scope.kind); return scope.kind === 'ALL' ? msg : null; };
+  try {
+    w.hub.broadcastEfspRunwayStatusDelta({ runwayStatusSeq: 9, runwayStatusEpoch: 'e', runwayStatuses: [{ facilityId: 'INCIRLIK' }] });
+  } finally {
+    if (had) family.filter = prior; else delete family.filter;
+  }
+  assert.ok(seen.length > 0, 'the family filter ran');
+  assert.equal(jtac.ws.of('efsp-runway-status-delta').length, 0, 'a session that reads only what it owns is not sent it');
+  assert.equal(ops.ws.of('efsp-runway-status-delta').length, 1, 'a session that reads everything is');
+});

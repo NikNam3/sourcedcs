@@ -128,8 +128,8 @@ test('the Board idempotency cache: 5,000 records, oldest out first; cmid-less ne
     assert.deepEqual(Object.keys(snap), ['strips', 'cidSeq', 'replay', 'droppedWallAt']);
     assert.equal(snap.replay[0][0], 'm-1000');
     assert.equal(snap.replay.length, 4001);
-    assert.deepEqual(Object.keys(snap.replay[0][1]), ['ok', 'reason', 'detail', 'warning', 'routedTo', 'selfCoordinated', 'stripId', 'flightDataId', 'peerFacilityId', 'peerStripId', 'appliedWallAt']);
-    assert.equal(snap.replay[0][1].warning, null, 'absent fields are null in a Board record');
+    assert.deepEqual(Object.keys(snap.replay[0][1]), ['ok', 'reason', 'detail', 'warnings', 'routedTo', 'selfCoordinated', 'stripId', 'flightDataId', 'peerFacilityId', 'peerStripId', 'appliedWallAt']);
+    assert.equal(snap.replay[0][1].warnings, null, 'absent fields are null in a Board record');
     // Restore loads every pair with a string cmid and an object record, no cap, no window.
     const many = [];
     for (let i = 0; i < 6000; i++) many.push([`r-${i}`, { ok: true, appliedWallAt: 0 }]);

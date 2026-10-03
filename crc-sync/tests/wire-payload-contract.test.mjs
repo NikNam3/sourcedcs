@@ -99,8 +99,8 @@ test('every field applyEfspMutationAck and the efsp-mutation-ack case read is on
   assert.equal(ok.ok, true);
   assert.equal(bad.ok, false);
   const seen = new Set([...Object.keys(ok), ...Object.keys(bad)]);
-  // `warning` is only attached when a warn-class check fires; `detail` only on a refusal that has prose.
-  const sometimes = new Set(['warning', 'detail']);
+  // `warnings` is only attached when a warn-class check fires; `detail` only on a refusal that has prose.
+  const sometimes = new Set(['warnings', 'detail']);
   const efspWs = fs.readFileSync(path.join(import.meta.dirname, '../src/efsp/efsp-ws.js'), 'utf8') + fs.readFileSync(path.join(import.meta.dirname, '../src/efsp/board-store.js'), 'utf8');
   for (const f of wanted) {
     if (seen.has(f)) continue;

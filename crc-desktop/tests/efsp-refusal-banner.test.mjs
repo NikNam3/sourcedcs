@@ -284,3 +284,17 @@ test('a refusal that targets no single Strip nulls both stripId and blockId', as
   assert.equal(refusal.blockId, null);
   assert.match(refusal.message, /BLUE RANGE/);
 });
+
+// ── B4 (crc-sync docs/wip/SERVER-BUGS.md): the ack's `warnings` list ─────────────────────────────
+
+test('an accepted op with several warnings shows each of them', async () => {
+  const { sandbox, els } = await settled(mountPanel());
+  const result = sandbox.applyEfspMutationAck({
+    clientMutationId: 'cm-w', ok: true,
+    warnings: [{ code: 'NO_BAY_FOR_STATE', detail: 'no LC Bay for LUAW; the Strip stays in lc-runway-queue' }, { code: 'LUAW_WHILE_COMBINED' }],
+  });
+  sandbox.notifyEfspMutationAck('cm-w', result);
+  const text = els['efsp-mutation-warning'].textContent;
+  assert.match(text, /no LC Bay for LUAW/);
+  assert.match(text, /LUAW while LC is combined/);
+});

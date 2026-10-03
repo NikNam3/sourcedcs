@@ -6,6 +6,7 @@
 
 const { deepClone, trackDegradationRefusal, mintReplica } = require('./strip-util');
 const { SEPARATION_REGIMES } = require('../flight-data-store');
+const { warn } = require('../warnings');
 
 class Tofi {
   /**
@@ -197,7 +198,7 @@ class Tofi {
     // using agency. But the two are genuinely separable in our model
     // (a MOA can stay hot after one flight leaves it), so this is the §4.6
     // verbal-path soft-interlock shape, not rule 3's hard precondition.
-    let warning;
+    let warnings;
     // The flight data this accept writes, carried out on the result so the ack and the
     // board-delta actually take it to every connected client. Without it the
     // regime the MRU controller stated on the accept landed server-side and
@@ -213,7 +214,7 @@ class Tofi {
         return { ok: false, reason: 'VALIDATION_ERROR', detail: 'separation_regime must be set back to ATC before completing a TOFI exit', strip };
       }
       if (flightData.airspace && flightData.airspace.owner === 'USING_AGENCY') {
-        warning = 'AIRSPACE_STILL_WITH_USING_AGENCY';
+        warnings = [warn('AIRSPACE_STILL_WITH_USING_AGENCY')];
       }
       // docs/adr/0102: the exchange ends, so a regime still waiting for entry (effective is ATC, the gate passed) goes with it.
       const cleared = this._clearRegime(strip.flightDataId, by);
@@ -317,7 +318,7 @@ class Tofi {
       const peerResult = peer.receiveTofiResponse({ causedBy: this._activeCmid, stripId: tofi.peerStripId, response: 'ACCEPT', by });
       if (peerResult.ok) peerStrip = peerResult.strip;
     }
-    return { ok: true, strip, flightData: writtenFlightData, peerFacilityId: tofi.peerFacilityId, peerStrip, warning, tofiRegime };
+    return { ok: true, strip, flightData: writtenFlightData, peerFacilityId: tofi.peerFacilityId, peerStrip, warnings, tofiRegime };
   }
 
   // ── The regime becomes effective (docs/adr/0102) ─────────────────────────
@@ -337,7 +338,7 @@ class Tofi {
    * @param {{trigger:'AIRSPACE'|'MANUAL', airspaceId?:string|null, by?:string|null, warning?:string}} info
    * @returns {{ok:true, flightData, regime, airspaceId, trigger, warning}|{ok:false, reason, detail}}
    */
-  markEntered(flightDataId, { trigger, airspaceId = null, by = null, warning, system = false } = {}) {
+  markEntered(flightDataId, { trigger, airspaceId = null, by = null, system = false } = {}) {
     const flightData = this._flightDataStore.getFlightData(flightDataId);
     const pending = flightData && flightData.tofi && flightData.tofi.pendingSeparationRegime;
     if (!pending) return { ok: false, reason: 'VALIDATION_ERROR', detail: 'no separation regime is waiting for entry on this flight' };
@@ -347,7 +348,7 @@ class Tofi {
       regimeEffective: { at: this._clock.now(), trigger, airspaceId, facilityId, by },
     }, { by, system });
     if (!wrote.ok) return wrote;
-    return { ok: true, flightData: wrote.flightData, regime: pending, airspaceId, trigger, warning };
+    return { ok: true, flightData: wrote.flightData, regime: pending, airspaceId, trigger };
   }
 
   /** MARK_ENTERED, on the MISSION Strip: the MRU side records that the flight is in its airspace. Allowed without a containing airspace, with a warning. */
@@ -365,13 +366,13 @@ class Tofi {
     }
     const loc = this._rules.regimeLocation(strip.flightDataId, flightData.tofi.pendingFacilityId || this._rules.facilityId);
     const hit = loc && loc.inside && loc.inside[0];
-    const warning = hit ? undefined : 'NOT_IN_ACTIVE_AIRSPACE';
-    const entered = this.markEntered(strip.flightDataId, { trigger: 'MANUAL', airspaceId: hit ? hit.airspaceId : null, by, warning });
+    const warnings = hit ? undefined : [warn('NOT_IN_ACTIVE_AIRSPACE')];
+    const entered = this.markEntered(strip.flightDataId, { trigger: 'MANUAL', airspaceId: hit ? hit.airspaceId : null, by });
     if (!entered.ok) return { ok: false, reason: entered.reason, detail: entered.detail, strip };
     this._state.bump(strip, by);
     return {
-      ok: true, strip, flightData: entered.flightData, warning,
-      tofiRegime: { trigger: 'MANUAL', airspaceId: entered.airspaceId, regime: entered.regime, warning: warning || null },
+      ok: true, strip, flightData: entered.flightData, warnings,
+      tofiRegime: { trigger: 'MANUAL', airspaceId: entered.airspaceId, regime: entered.regime, warning: warnings ? warnings[0].code : null },
     };
   }
 
@@ -386,10 +387,11 @@ class Tofi {
     const before = deepClone(strip);
     const entered = this.markEntered(flightDataId, { trigger: 'AIRSPACE', airspaceId, by: 'system', system: true });
     if (!entered.ok) return entered;
-    // The Strip itself is unchanged (the regime lives on the flight data): push a delta without counting it as a change
-    // to an open undo's record (docs/adr/0100; an observed path, like the flight data write above).
-    strip.rev += 1; strip.updatedAt = this._clock.now(); strip.updatedBy = 'system';
-    this._touch(strip.stripId, { placementOnly: true });
+    // The Strip itself is unchanged (the regime lives on the flight data), so its rev stays: a controller holding the
+    // current rev must not be refused STALE_REV for a write that changed nothing on the Strip (docs/wip/SERVER-BUGS.md,
+    // B6). It is touched so the delta and the sync ring still carry it, unobserved so an open undo's record does not
+    // count it as a change (docs/adr/0100; the flight data write above is the observed path).
+    this._touch(strip.stripId, { unobserved: true });
     this._audit.recordSystem('TofiRegimeEntered', strip, {
       before, after: deepClone(strip), tofiRegime: { trigger: 'AIRSPACE', airspaceId, regime: entered.regime, warning: null },
     });

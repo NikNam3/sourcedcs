@@ -86,7 +86,7 @@ class BoardStore {
     this._state = new BoardState({ clock });
     // docs/adr/0100: every touch is attributed by the undo history (a rebalance's are placement-only).
     this._undoHistory = undoHistory || this._ownUndoHistory(flightDataStore, rules);
-    this._state.setTouchHook((id, { placementOnly }) => this._undoHistory.observe({ facilityId: rules.facilityId, kind: 'strip', id, placementOnly }));
+    this._state.setTouchHook((id, { unobserved }) => this._undoHistory.observe({ facilityId: rules.facilityId, kind: 'strip', id, unobserved }));
     const touch = (id, opts) => this._state.recordTouch(id, opts);
     this._replay = ReplayCache.forBoard(); // clientMutationId -> compact frozen replay record (replayRecord), idempotency (§5.2, docs/adr/0081)
     this._mutationLog = null; // optional collaborator, see setMutationLog()
@@ -231,7 +231,7 @@ class BoardStore {
 
   /**
    * Applies a client Mutation (guide §5.2). Returns
-   *   { ok:true, strip, flightData?, warning?, routedTo? }
+   *   { ok:true, strip, flightData?, warnings?, routedTo? }
    * or
    *   { ok:false, reason, strip? }
    * Never throws for an ordinary rejection.
@@ -261,7 +261,14 @@ class BoardStore {
       result = this._stripOps.dispatch(mutation, actingPositionId, by);
     } catch (err) {
       log.error('unexpected error applying Mutation — rejecting it instead of crashing', { err });
-      result = { ok: false, reason: 'VALIDATION_ERROR', detail: 'internal error processing mutation' };
+      result = { ok: false, reason: 'INTERNAL_ERROR', detail: 'internal error processing mutation' };
+      // An op that threw may already have written (docs/wip/SERVER-BUGS.md, B3). Those writes cannot be taken back in
+      // general (the undo frame holds before-images only for a scoped op, and a peer Board or MARSA may have changed
+      // too), so the throw is treated as a crash: what changed is audited, and the caller persists it (`partial`).
+      if (this._state.hasTouched()) {
+        result.partial = true;
+        this._audit.recordInternalError(mutation, actingPositionId, by, this.getStrip(mutation.stripId), err);
+      }
     } finally {
       this._activeCmid = null;
     }
@@ -286,7 +293,7 @@ class BoardStore {
    */
   _replayResult(record) {
     const out = { ok: record.ok, replayed: true };
-    for (const k of ['reason', 'detail', 'warning', 'routedTo', 'selfCoordinated', 'peerFacilityId']) {
+    for (const k of ['reason', 'detail', 'warnings', 'routedTo', 'selfCoordinated', 'peerFacilityId']) {
       if (record[k] !== null) out[k] = record[k];
     }
     if (record.stripId) out.strip = this.getStrip(record.stripId);

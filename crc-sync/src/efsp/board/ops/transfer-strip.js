@@ -1,6 +1,7 @@
 'use strict';
 
 const { stripScope, retireScope, union, callsignOf } = require('../../undo/scopes');
+const { warn } = require('../../warnings');
 
 function _applyTransferStrip(ctx, strip, op, by) {
   const bayCheck = ctx.placement.requireKnownBay(op.bayId, strip);
@@ -38,7 +39,7 @@ function _applyTransferStrip(ctx, strip, op, by) {
 
   let destPositionId = op.toPositionId;
   let routedTo = null;
-  let warning;
+  let warnings;
 
   if (!ctx.rules.isStaffed(op.toPositionId)) {
     const consolidatedAt = ctx.rules.consolidatedAt(op.toPositionId);
@@ -73,13 +74,13 @@ function _applyTransferStrip(ctx, strip, op, by) {
     strip.bayId = op.bayId;
     strip.rackId = op.rackId;
     strip.orderKey = ctx.placement.resolveOrderKey(op.bayId, op.rackId, op.afterStripId || null, op.beforeStripId || null, strip.stripId);
-    if (routedTo) warning = `${routedTo} has no Bay for this Strip; it stays in ${op.bayId}`;
+    if (routedTo) warnings = [warn('NO_BAY_FOR_STRIP', `${routedTo} has no Bay for this Strip; it stays in ${op.bayId}`)];
   }
 
   const sfaFlightData = routedBay ? null : ctx.assignSfaFrequency(strip, by);
 
   ctx.state.bump(strip, by);
-  return { ok: true, strip, routedTo, selfCoordinated, warning, flightData: sfaFlightData ? sfaFlightData.flightData : undefined };
+  return { ok: true, strip, routedTo, selfCoordinated, warnings, flightData: sfaFlightData ? sfaFlightData.flightData : undefined };
 }
 
 module.exports = {

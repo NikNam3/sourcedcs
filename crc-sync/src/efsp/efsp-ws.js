@@ -33,6 +33,7 @@ const readScope = require('./read-scope');
 const frames = require('./wire/frames');
 const { VERSION, stampStrip, mergeFlightDataList, touchedStrips, boardDelta, marsaDelta, carrierDelta, sfaDelta, liveStamped } = frames;
 const skeleton = require('./wire/skeleton');
+const { warn } = require('./warnings');
 const families = require('./wire/families');
 
 // The resync window and the delta-or-snapshot decision live with the ring (sync/sync-log.js).
@@ -77,7 +78,8 @@ function _handleMutation(ctx, session, msg, persist) {
 
   const stateBefore = (boardStore.getStrip(msg.stripId) || {}).state;
   const result = boardStore.applyMutation(mutation, msg.actingPositionId, session.controllerId);
-  if (result.ok && !result.replayed) persist();
+  // A throw part-way through an op leaves its earlier writes on the Board (`partial`): saved with their audit line, not dropped.
+  if ((result.ok || result.partial) && !result.replayed) persist();
 
   // Every Strip record leaving this function — ack or broadcast — goes through
   // the one stamping helper, which is where the reasons for what it adds live.
@@ -94,13 +96,17 @@ function _handleMutation(ctx, session, msg, persist) {
   // `result.flightDataList` (board/strip-ops.js, board/tofi.js).
   const updatedFlightDataList = mergeFlightDataList(result.flightData, result.flightDataList);
 
+  // docs/wip/SERVER-BUGS.md (B4): every warning the op made, then the one the wire adds; absent when there are none.
+  const luaw = luawWhileCombined(positionStore, msg.actingPositionId, session.controllerId, result, stateBefore);
+  const warnings = [...(result.warnings || []), ...(luaw ? [luaw] : [])];
+
   const ack = {
     version: VERSION, type: 'efsp-mutation-ack', clientMutationId: msg.clientMutationId,
     ...skeleton.subjectOf(msg),
     facilityId,
     boardSeq: boardStore.currentSeq, boardEpoch: boardStore.epoch, ok: result.ok,
     strip: stampedStrip, flightData: result.flightData, reason: result.reason, detail: result.detail,
-    warning: luawWhileCombined(positionStore, msg.actingPositionId, session.controllerId, result, stateBefore) || result.warning,
+    ...(warnings.length ? { warnings } : {}),
     routedTo: result.routedTo,
     // docs/adr/0100 §7: the server says what is undoable (the client keeps no list), and an Undo's ack says what it
     // undid and voided. Absent otherwise.
@@ -321,7 +327,7 @@ function luawWhileCombined(positionStore, actingPositionId, controllerId, result
   if (!result.ok || !result.strip || result.strip.state !== 'LUAW' || stateBefore === 'LUAW') return undefined;
   if (actingPositionId !== combination.LOCAL) return undefined;
   const held = positionStore.primaryPositionsOf(controllerId);
-  return combination.NON_LOCAL_TOWER.some(id => held.includes(id)) ? 'LUAW_WHILE_COMBINED' : undefined;
+  return combination.NON_LOCAL_TOWER.some(id => held.includes(id)) ? warn('LUAW_WHILE_COMBINED') : undefined;
 }
 
 function facilityConfig_positionIds(ctx, facilityId) { return ctx.facilityConfig.getPositionSet(facilityId); }
@@ -374,7 +380,17 @@ function _handleSetPositions(ctx, session, msg, persist) {
   // checked (sign-off is not blocked, DR-6: the invariant repairs or alerts, and the alert stands until someone signs on).
   for (const id of ctx.facilityConfig.getFacilityIds()) {
     const b = ctx.boardStoreFor(id);
-    if (b && b.reconcileExchanges().length) controlRepaired = true;
+    if (!b || !(b.reconcileExchanges() > 0)) continue;
+    controlRepaired = true;
+  }
+
+  // A repair writes both halves of an exchange, so it touches the OTHER Facility's Board whichever side lost its holder:
+  // what any other Board touched is sent in this round trip, to the sessions that read it (not left for its next Mutation).
+  const peerDeltas = [];
+  for (const id of ctx.facilityConfig.getFacilityIds()) {
+    const b = id === facilityId ? null : ctx.boardStoreFor(id);
+    const touched = b ? b.drainTouched() : [];
+    if (touched.length) peerDeltas.push(boardDelta(ctx, b, id, touchedStrips(ctx, b, id, touched, null), []));
   }
 
   // The re-send below carries every live Strip, so whatever
@@ -404,7 +420,8 @@ function _handleSetPositions(ctx, session, msg, persist) {
     // Strips' status actually moved.
     broadcasts: skeleton.orderSlots({ primary: boardDelta(ctx, boardStore, facilityId,
       { updated: boardStore.getAll().filter(s => s.state !== 'DROPPED').map(s => stampStrip(boardStore, s, facilityId, ctx)), gone: [] },
-      [], positionStore.getAll().map(p => ({ ...p, facilityId }))) }),
+      [], positionStore.getAll().map(p => ({ ...p, facilityId }))),
+      peer: peerDeltas.length ? peerDeltas : null }),
   };
   // The sign-on offer (docs/adr/0105) goes to LC's Primary alone, by the directed channel (docs/adr/0100 s6).
   if (offered) result.directed = [{ facilityId, positionId: offered.positionId, primaryOnly: true, frame: { version: VERSION, type: 'efsp-position-offer', ...offered } }];

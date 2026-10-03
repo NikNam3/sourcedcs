@@ -621,13 +621,13 @@ class StripOps {
       carrierChanged = this.rules.carrierRetireFlight(strip.flightDataId, by) || undefined;
     }
     // U7: a replica that ends takes the proposer's link with it.
-    let peerFacilityId; let peerStrip; let controlAudit; let warning;
+    let peerFacilityId; let peerStrip; let controlAudit; let warnings;
     const link = strip.coordination;
     // docs/adr/0101 (TRANSFERRING_RETIRED): the proposer's Strip ends (drop, join, anything that retires it) while it
     // still holds comms or control: both move to the receiving side, so the flight is never left with nobody on it.
     const implicit = this.control.onTransferringRetired(strip, by);
     if (implicit) {
-      peerFacilityId = implicit.peerFacilityId; peerStrip = implicit.peerStrip; controlAudit = implicit.controlAudit; warning = implicit.warning;
+      peerFacilityId = implicit.peerFacilityId; peerStrip = implicit.peerStrip; controlAudit = implicit.controlAudit; warnings = implicit.warnings;
     }
     if (link && link.mintedForCoordination) {
       const peer = this.rules.peerBoard(link.peerFacilityId);
@@ -638,7 +638,7 @@ class StripOps {
       ok: true, strip,
       marsaChanged: marsaChanged && marsaChanged.length ? marsaChanged : undefined,
       flightDataList: marsaChanged && marsaChanged.length ? this.drainMarsaRegimeWrites() : undefined,
-      peerFacilityId, peerStrip, carrierChanged, controlAudit, warning,
+      peerFacilityId, peerStrip, carrierChanged, controlAudit, warnings,
     };
   }
 

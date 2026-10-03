@@ -87,7 +87,7 @@ class Placement {
     for (const s of ordered) {
       s.orderKey = fresh.get(s.stripId);
       s.rev += 1;
-      this._touch(s.stripId, { placementOnly: true }); // never a change to an undo (docs/adr/0100 §4)
+      this._touch(s.stripId, { unobserved: true }); // never a change to an undo (docs/adr/0100 §4)
     }
   }
 
