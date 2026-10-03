@@ -266,7 +266,7 @@ function aaReadForm() {
   if (!d.controllingFacilityId || !d.controllingPositionId) errs.push('Controlling Facility and Position are required.');
   if (ed.kind === 'AREA') {
     d.altLowerFt = optNum('aaLo', 'Lower limit', true); d.altUpperFt = optNum('aaHi', 'Upper limit', true);
-    if (d.altLowerFt != null && d.altUpperFt != null && d.altLowerFt > d.altUpperFt) errs.push('Lower limit is above the upper limit.');
+    if (d.altLowerFt != null && d.altUpperFt != null && d.altLowerFt >= d.altUpperFt) errs.push('The upper limit must be above the lower limit.');
     var g = ed.orig.geometry;
     if (g && g.source === 'DCS_DRAWING') d.geometry = g;
     else if (!ed.points.length) d.geometry = null;

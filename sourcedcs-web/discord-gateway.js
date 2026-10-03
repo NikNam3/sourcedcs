@@ -32,12 +32,7 @@ const FATAL_CLOSE_CODES = new Set([4004, 4010, 4011, 4012, 4013, 4014]);
 /* Close codes after which the next connection must IDENTIFY fresh, not RESUME */
 const NEEDS_FRESH_IDENTIFY_CODES = new Set([4007, 4009]);
 
-function loadJSON(file, fallback) {
-  try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return fallback; }
-}
-function saveJSON(file, data) {
-  fs.writeFileSync(file, JSON.stringify(data, null, 2), 'utf8');
-}
+const { loadJSON, saveJSON } = require('./json-file');
 
 /* The squadron-wide "day" boundary — 05:00 UTC, fixed (no DST). Every
    segment `creditMinutes` walks is already split on UTC-hour boundaries,

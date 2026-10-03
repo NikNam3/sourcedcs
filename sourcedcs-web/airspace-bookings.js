@@ -5,6 +5,10 @@
    the live arrays and the registry's definitions. */
 
 const SEPARATION_FT = 999;
+/* the registry schema's altitude bounds (crc-sync airspace-schema.js isValidAltitude): whole feet, 0..100000 */
+const MIN_ALTITUDE_FT = 0;
+const MAX_ALTITUDE_FT = 100000;
+function isValidAltitude(v) { return typeof v === 'number' && Number.isInteger(v) && v >= MIN_ALTITUDE_FT && v <= MAX_ALTITUDE_FT; }
 
 function overlap(aS, aE, bS, bE) { return aS < bE && bS < aE; }
 function sameRef(a, b) { return !!a && !!b && a.theater === b.theater && a.airspaceId === b.airspaceId; }
@@ -60,4 +64,4 @@ function planMigration({ rangeId, ref, def, bookings, allowOutOfBand, nowMs }) {
   return { refusals, moved: mine.map(b => b.id) };
 }
 
-module.exports = { SEPARATION_FT, overlap, sameRef, altitudeInBand, bandText, findAirspaceConflict, planMigration };
+module.exports = { SEPARATION_FT, MIN_ALTITUDE_FT, MAX_ALTITUDE_FT, isValidAltitude, overlap, sameRef, altitudeInBand, bandText, findAirspaceConflict, planMigration };
