@@ -17,7 +17,30 @@ env:
   IMAGE_NAME: ${{ github.repository }}/atobrief
 
 jobs:
+  # B14: a failing atobrief suite no longer reaches production (crc-sync-docker.yml and sourcedcs-web-docker.yml already test first).
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        working-directory: atobrief
+        run: npm ci
+
+      - name: atobrief tests
+        working-directory: atobrief
+        run: npm test
+
   build-and-push:
+    needs: test
     runs-on: ubuntu-latest
     permissions:
       contents: read
