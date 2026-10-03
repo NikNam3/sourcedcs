@@ -9,3 +9,6 @@
 - Undo slot shows the server's `undoable.label` verbatim, so "Mark entered <callsign>" needs no client work.
 
 ## Defaults taken
+
+- Entered label on the MRU row; the pending regime on the MRU Strip is a line in the exchange row (MISSION has no SREG on its face), on CTR/AP in the SREG cell.
+- Alert chips 'OUTSIDE AIRSPACE' / 'ENTRY UNKNOWN', tone attn.
