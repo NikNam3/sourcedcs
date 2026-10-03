@@ -329,7 +329,8 @@ class WsHub {
    * decisions.md S-L1d).
    */
   broadcastEfspRunwayStatusDelta(payload) {
-    this._broadcast({
+    // Through the read scope like every other EFSP family (docs/wip/SERVER-BUGS.md, B5): a family's own `filter` applies.
+    this._broadcastEfsp({
       version: VERSION, type: 'efsp-runway-status-delta',
       runwayStatusSeq: payload.runwayStatusSeq, runwayStatusEpoch: payload.runwayStatusEpoch,
       runwayStatuses: { updated: (payload.runwayStatuses || []).filter(Boolean) },
