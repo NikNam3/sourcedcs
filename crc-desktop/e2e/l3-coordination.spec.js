@@ -94,6 +94,13 @@ async function proposeTofiEntry(page, stripEl, note) {
   await popover.getByRole('button', { name: 'Send TOFI' }).dispatchEvent('click');
 }
 
+/** ADR 0102: the regime picked at accept waits for the airspace; Entered (MRU side) makes it effective. */
+async function markEntered(page, callsign) {
+  await goBay(page, 'TAC_C2', 'tac-c2-tasked');
+  await strip(page, callsign).getByRole('button', { name: 'Entered' }).click({ timeout: 3000 });
+  await expect.poll(() => page.evaluate((c) => [...crc.state.efspFlightDataList.values()].find(f => f.identity && f.identity.callsign === c).tofi.pendingSeparationRegime || null, callsign)).toBe(null);
+}
+
 async function setSepReg(stripEl, value) {
   const chip = stripEl.locator('.efsp-block-chip', { has: stripEl.page().locator('.efsp-block-label', { hasText: /^SEP REG$/ }) });
   await chip.locator('.efsp-block').first().click({ timeout: 3000 });
@@ -330,6 +337,7 @@ test('Accept TOFI Exit enables once CTR has set SEP REG back to ATC', async ({ b
   await mission.locator('select.efsp-tofi-regime-select').selectOption('DUE_REGARD');
   await mission.getByRole('button', { name: 'Accept TOFI Entry' }).click({ timeout: 3000 });
   await expect.poll(async () => (await recordsFor(a, 'EXIT01')).find(r => r.stripType === 'MISSION').tofi).toBe('ACTIVE');
+  await markEntered(b, 'EXIT01');
 
   await startAction(s, 'TOFI Exit…', { timeout: 3000 });
   await goBay(b, 'TAC_C2', 'tac-c2-tasked');
@@ -365,10 +373,11 @@ test('the regime stated when accepting TOFI shows in SEP REG on both sides', asy
   await mission.getByRole('button', { name: 'Accept TOFI Entry' }).click({ timeout: 3000 });
   await expect.poll(async () => (await recordsFor(a, 'SREG01')).find(r => r.stripType === 'ARRIVAL').tofi).toBe('ACTIVE');
 
-  // crc-sync writes flightData.tofi.separationRegime = DUE_REGARD on this accept —
-  // a page opened AFTERWARDS gets it in its snapshot. Neither page that was
-  // connected at the time ever receives it.
+  // ADR 0102: the accept stores DUE_REGARD as pending (SEP REG stays ATC); Entered makes it effective. Neither page
+  // that was connected at the time may miss either change.
   const flightDataRegime = (page) => page.evaluate(() => [...crc.state.efspFlightDataList.values()].find(f => f.identity && f.identity.callsign === 'SREG01').tofi.separationRegime);
+  await expect.poll(() => flightDataRegime(a), { message: 'the CTR page never learns the regime', timeout: 3000 }).toBe('ATC');
+  await markEntered(b, 'SREG01');
   await expect.poll(() => flightDataRegime(a), { message: 'the CTR page never learns the regime', timeout: 3000 }).toBe('DUE_REGARD');
   await expect.poll(() => flightDataRegime(b), { message: 'the TAC_C2 page that set it never learns it either', timeout: 3000 }).toBe('DUE_REGARD');
 });
@@ -416,6 +425,7 @@ test('CTR is told what is blocking the TOFI exit they proposed', async ({ browse
   await mission.locator('select.efsp-tofi-regime-select').selectOption('MARSA');
   await mission.getByRole('button', { name: 'Accept TOFI Entry' }).click({ timeout: 3000 });
   await expect.poll(async () => (await recordsFor(a, 'EXIT02')).find(r => r.stripType === 'ARRIVAL').tofi).toBe('ACTIVE');
+  await markEntered(b, 'EXIT02');
 
   await startAction(s, 'TOFI Exit…', { timeout: 3000 });
   await expect(s.locator('.efsp-tofi-badge')).toContainText(/EXIT[\s\S]*INITIATED/);
