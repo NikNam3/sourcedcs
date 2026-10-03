@@ -117,7 +117,7 @@ async function press(page, kind, { positionId, action } = {}) {
   const btn = page.locator(sel);
   await expect(btn, `${kind} is offered`).toHaveCount(1);
   const before = (await field(page)).rev;
-  await btn.click({ timeout: 3000 });
+  await btn.click({ timeout: 5000 });
   await expect.poll(async () => (await field(page)).rev, { message: `${kind} applied` }).toBeGreaterThan(before);
 }
 

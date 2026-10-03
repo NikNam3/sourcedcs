@@ -149,6 +149,7 @@ export function _openTofiEntryPopover(strip, anchorEl, counterparts) {
 
   const select = document.createElement('select');
   select.className = 'efsp-coordinate-primitive-select';
+  select.dataset.testid = 'tofi-counterpart';
   for (const c of counterparts) {
     const opt = document.createElement('option');
     opt.value = JSON.stringify(c);

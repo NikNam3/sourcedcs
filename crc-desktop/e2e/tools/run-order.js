@@ -89,7 +89,11 @@ function runFile(file, reuse) {
       console.log(`${String(rows.length).padStart(2)}. ${row.status.padEnd(4)} ${String(row.seconds).padStart(4)}s  ${f}  (${row.expected} ok, ${row.unexpected} failed, ${row.skipped} skipped)`);
       fs.writeFileSync(out, JSON.stringify({ mode, seed, order, rows }, null, 2));
     }
-  } finally { stopAll(); }
+  } finally {
+    stopAll();
+    // The state directory the config made for the shared servers (playwright.config.js: the creating process removes it).
+    if (process.env.E2E_STATE_DIR_OWNER === String(process.pid)) fs.rmSync(process.env.E2E_STATE_DIR, { recursive: true, force: true });
+  }
   const failed = rows.filter((r) => r.status !== 'pass');
   console.log(`\n${rows.length - failed.length}/${rows.length} files green (${mode}${mode === 'shuffle' ? ', seed ' + seed : ''}); total ${rows.reduce((a, r) => a + r.seconds, 0)}s`);
   process.exit(failed.length ? 1 : 0);

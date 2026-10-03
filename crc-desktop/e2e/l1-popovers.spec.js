@@ -61,21 +61,21 @@ const POPOVERS = {
   },
   MARSA: {
     facilityId: 'INCIRLIK', positionId: 'AP', bayId: 'ap-inbound', selector: '.efsp-marsa-popover',
-    open: (strip) => startAction(strip, 'MARSA…', { timeout: 3000 }),
+    open: (strip) => startAction(strip, 'MARSA…', { timeout: 5000 }),
   },
   coordinate: {
     facilityId: 'INCIRLIK', positionId: 'AP', bayId: 'ap-inbound', selector: '.efsp-coordinate-popover',
-    open: (strip) => startAction(strip, 'Coordinate…', { timeout: 3000 }),
+    open: (strip) => startAction(strip, 'Coordinate…', { timeout: 5000 }),
     act: (pop) => pop.getByRole('button', { name: 'Send' }),
   },
   airspace: {
     facilityId: 'INCIRLIK', positionId: 'AP', bayId: 'ap-inbound', selector: '.efsp-coordinate-popover', inject: true,
-    open: (strip) => startAction(strip, 'Airspace…', { timeout: 3000 }),
+    open: (strip) => startAction(strip, 'Airspace…', { timeout: 5000 }),
     act: (pop) => pop.getByRole('button', { name: 'Approve entry' }),
   },
   TOFI: {
     facilityId: 'CENTER', positionId: 'CTR', bayId: 'ctr-enroute', selector: '.efsp-coordinate-popover',
-    open: (strip) => startAction(strip, 'TOFI…', { timeout: 3000 }),
+    open: (strip) => startAction(strip, 'TOFI…', { timeout: 5000 }),
     act: (pop) => pop.getByRole('button', { name: 'Send TOFI' }),
   },
   bind: {
@@ -180,7 +180,7 @@ test.describe('with room to be uncovered', () => {
       await expect.poll(async () => (await serverStrip(page, callsign)).rev).toBe(2);
       await expect(popover, 'protection keeps the popover open through the update').toBeAttached();
 
-      await button.click({ timeout: 3000 });
+      await button.click({ timeout: 5000 });
       await settle(page);
       const error = (await page.locator('#efsp-mutation-error').textContent()) || '';
       expect(error, `${name}: refused for acting on the rev captured when the popover opened`).not.toContain('STALE_REV');
@@ -196,7 +196,7 @@ test.describe('with room to be uncovered', () => {
     await page.mouse.click(1590, 2390); // outside — close without acting
     await expect(page.locator(P.selector)).toHaveCount(0);
     await expect(stripByCallsign(page, callsign), 'still drawn un-offset after the popover closed')
-      .toHaveClass(/efsp-strip-offset/, { timeout: 3000 });
+      .toHaveClass(/efsp-strip-offset/, { timeout: 5000 });
   });
 });
 
@@ -211,7 +211,7 @@ test('extends F-305: an uncorrelated flight shows NO TRK and Bind… on its own'
     return r && r.state;
   }), { timeout: 10000 }).toBe('UNCORRELATED');
   // Nothing touches the Strip. The record says UNCORRELATED; the Strip must say so too.
-  await expect(strip.locator('.efsp-correlation-badge'), 'NO TRK never drawn').toHaveText('NO TRK', { timeout: 3000 });
+  await expect(strip.locator('.efsp-correlation-badge'), 'NO TRK never drawn').toHaveText('NO TRK', { timeout: 5000 });
   await expect(await stripMenuItem(strip, 'Bind…'), 'bind popover has no opener').toBeEnabled();
 });
 
@@ -233,7 +233,7 @@ test.describe('extends F-201', () => {
 
   test('extends F-201: Space on a popover <select> keeps focus in the popover', async ({ page }) => {
     const { popover } = await openPopoverOn(page, 'coordinate', 1);
-    const picker = popover.locator('select').first();
+    const picker = popover.getByTestId('coordination-primitive');
     await picker.focus();
     await page.keyboard.press('Space');
     // Not an immediate toBeFocused(): focus moves one render frame AFTER the

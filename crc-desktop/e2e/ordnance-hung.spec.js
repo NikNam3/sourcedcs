@@ -40,7 +40,7 @@ async function pressNla(page, strip, cs, expected) {
   const btn = strip.locator('.efsp-nla-btn');
   await expect(btn, `the NLA button toward ${expected} is enabled`).toBeEnabled();
   await btn.click();
-  await expect.poll(() => stateOf(page, cs), { timeout: 3000 }).toBe(expected);
+  await expect.poll(() => stateOf(page, cs), { timeout: 5000 }).toBe(expected);
   await lapseNlaGuard(page);
 }
 

@@ -81,7 +81,7 @@ async function clickMap(page, lat, lon) { const p = await px(page, lat, lon); aw
 test('create an AREA: the kind chooser, no outline yet, then pick a DCS drawing: the points are copied and Save sends them', async ({ page }) => {
   const errors = await open(page);
   const ed = await newAirspace(page);
-  await expect(fld(ed, 'KIND').locator('select')).toHaveValue('AREA');
+  await expect(fld(ed, 'KIND').locator('select.airspace-input')).toHaveValue('AREA');
   const outline = ed.locator('.asg-area');
   await expect(outline.locator('.asg-chip')).toHaveText('NONE');
   await expect(outline.locator('.asg-count')).toContainText('0 points');
@@ -254,11 +254,11 @@ test('create a ROUTE: choose the kind, type fixes in DM, MGRS and decimal, pick 
   test.setTimeout(150000);
   await open(page, ['CTR']);
   const ed = await newAirspace(page);
-  await fld(ed, 'KIND').locator('select').selectOption('ROUTE');
+  await fld(ed, 'KIND').locator('select.airspace-input').selectOption('ROUTE');
   await expect(ed.locator('.asg-route')).toBeVisible();
   await expect(ed.locator('.asg-area')).toHaveCount(0);
-  await expect(fld(ed, 'TYPE').locator('select')).toHaveValue('IR');
-  await fld(ed, 'TYPE').locator('select').selectOption('VR');
+  await expect(fld(ed, 'TYPE').locator('select.airspace-input')).toHaveValue('IR');
+  await fld(ed, 'TYPE').locator('select.airspace-input').selectOption('VR');
   await fld(ed, 'ID').locator('input').fill('VR1207');
   await fld(ed, 'NAME').locator('input').fill('VR1207 SEYHAN LOW');
   const route = ed.locator('.asg-route');

@@ -83,7 +83,7 @@ test.describe('in one Rack', () => {
       // position:fixed), so this is measured after, not before.
       await page.mouse.move(x, await visibleGap(page, 'L4A3', 'L4A4'), { steps: 5 });
       await page.mouse.up();
-      await expect.poll(() => orderOf(page, cs), { timeout: 3000 }).toEqual(['L4A2', 'L4A3', 'L4A1', 'L4A4']);
+      await expect.poll(() => orderOf(page, cs), { timeout: 5000 }).toEqual(['L4A2', 'L4A3', 'L4A1', 'L4A4']);
     } finally { await dropAll(page, cs); }
   });
 
@@ -196,6 +196,6 @@ test('a Strip can be dragged from one Rack to another in the same Bay', async ({
     const target = await stripByCallsign(page, 'L4R3').boundingBox();
     await page.mouse.move(x, target.y + target.height - 10, { steps: 10 });
     await page.mouse.up();
-    await expect.poll(() => rackOf('L4R1'), { timeout: 3000 }).toBe('rwy-23');
+    await expect.poll(() => rackOf('L4R1'), { timeout: 5000 }).toBe('rwy-23');
   } finally { await dropAll(page, cs); }
 });

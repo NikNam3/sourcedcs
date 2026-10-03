@@ -12,7 +12,7 @@
  * and make the assertion fail for load, the very race this lane removes. That the shipped value is 400 ms is asserted by
  * crc-sync's tests/efsp-board-store.test.mjs (399 ms later, swallowed, on an injected clock).
  */
-const GUARD_MS = 5000;
+const GUARD_MS = 1500;
 
 const { test, expect } = require('./helpers/test');
 const { openPanel, seedStrip, lapseNlaGuard, settle, serverTicks } = require('./helpers/app');
@@ -67,6 +67,9 @@ test.afterEach(async () => { await setGuard(0); });
 test('with the guard on, a second InvokeNla on the same Strip is swallowed', async ({ page }) => {
   await openAtLuaw(page);
   await setGuard(GUARD_MS);
+  // The walk's last press left its own latch on the Strip, and the guard now on reads it: let that window run out first.
+  // Real server wall time is this spec's subject, so this is a sleep on purpose.
+  await new Promise((resolve) => setTimeout(resolve, GUARD_MS + 200));
   const afterFirst = await pressTwice(page);
   // The negative half: give the second frame time to have been answered; it must not have moved the Strip again.
   await settle(page);

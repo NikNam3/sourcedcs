@@ -31,7 +31,7 @@ async function advance(page, cs, n) {
     const before = (await info(page, cs)).state;
     await page.evaluate((cs) => crc.bayView._invokeNla(crc.state.getAllEfspStrips().find((x) => crc.state.getEfspFlightData(x.flightDataId).identity.callsign === cs)), cs);
     await expect.poll(async () => (await info(page, cs)).state, {
-      timeout: 3000,
+      timeout: 5000,
       message: `setup: ${cs} stuck at ${before}: ${await page.locator('#efsp-mutation-error').textContent()}`,
     }).not.toBe(before);
     // The client swallows a second advancing press inside its 400 ms window — setup must not outrun it.

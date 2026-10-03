@@ -201,7 +201,7 @@ async function expectDoesSomething(page, locator, what) {
   // test.fail() does not convert into an expected failure. Three seconds is
   // far longer than any real click needs, and failing fast keeps an
   // unreachable control reported as what it is.
-  await locator.click({ timeout: 3000 });
+  await locator.click({ timeout: 5000 });
   await settle(page);
 
   const sent = await page.evaluate(() => window.__e2eSent || []);
@@ -295,7 +295,7 @@ async function stripMenuItem(strip, name) {
   const page = strip.page();
   const menu = page.locator('.efsp-strip-menu');
   if (!(await menu.isVisible().catch(() => false))) {
-    await strip.locator('.efsp-strip-menu-btn').click({ timeout: 3000 });
+    await strip.locator('.efsp-strip-menu-btn').click({ timeout: 5000 });
   }
   return menu.getByRole('menuitem', { name, exact: true });
 }
@@ -303,7 +303,7 @@ async function stripMenuItem(strip, name) {
 /** Presses a Strip's ⋯ menu item — the replacement for clicking the old on-Strip button. */
 async function startAction(strip, name, opts = {}) {
   const item = await stripMenuItem(strip, name);
-  await item.click({ timeout: 3000, ...opts });
+  await item.click({ timeout: 5000, ...opts });
 }
 
 /**

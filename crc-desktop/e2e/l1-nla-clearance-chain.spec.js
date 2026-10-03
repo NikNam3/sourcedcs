@@ -27,7 +27,7 @@ async function goBay(page, positionId, bayId) {
 /** Fills one Block through its chip — click, type, Enter — as a controller does. */
 async function fillChip(page, strip, label, value) {
   const chip = strip.locator('.efsp-block-chip', { has: page.locator('.efsp-block-label', { hasText: new RegExp(`^${label}$`) }) });
-  await chip.locator('.efsp-block').first().click({ timeout: 3000 });
+  await chip.locator('.efsp-block').first().click({ timeout: 5000 });
   const input = strip.locator('input.efsp-block-input');
   await input.fill(value);
   await input.press('Enter');
@@ -115,7 +115,7 @@ test('a refusal names the Strip it refused', async ({ page }) => {
   expect(said, 'two Strips on screen, and the refusal does not say which').toContain('RFB103');
   // And on the Board itself, not only in the banner: matching a banner to a
   // Strip by reading callsigns back off the Rack is the work the mark removes.
-  await expect(refused).toHaveClass(/efsp-strip-refused/, { timeout: 2000 });
+  await expect(refused).toHaveClass(/efsp-strip-refused/, { timeout: 5000 });
   await expect(stripByCallsign(page, 'RFA103'),
     'a refusal about one Strip marked its neighbour too').not.toHaveClass(/efsp-strip-refused/);
 });

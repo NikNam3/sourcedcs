@@ -39,7 +39,8 @@ const LANE = Number(process.env.E2E_LANE || 0);
 const SYNC_URL = `http://127.0.0.1:${3010 + LANE}`;
 // Which spec file the running crc-sync process was last reset for: "<bootId>|<file>". The boot id
 // makes a marker left by an earlier run, or by a crc-sync that has since restarted, harmless.
-const MARKER = path.join(os.tmpdir(), `crc-e2e-lane${LANE}-fresh-for`);
+// It lives in the run's state directory (playwright.config.js), so it goes when the run's directory does.
+const MARKER = path.join(process.env.E2E_STATE_DIR || os.tmpdir(), `crc-e2e-lane${LANE}-fresh-for`);
 
 async function bootId() {
   const r = await fetch(`${SYNC_URL}/__test/boot`);

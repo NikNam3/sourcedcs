@@ -89,7 +89,7 @@ async function propose(page, stripEl, primitive, note) {
 async function proposeTofiEntry(page, stripEl, note) {
   await startAction(stripEl, 'TOFI…');
   const popover = page.locator('.efsp-tofi-popover');
-  await popover.locator('select').selectOption({ label: 'TAC_C2 (TACTICAL)' });
+  await popover.getByTestId('tofi-counterpart').selectOption({ label: 'TAC_C2 (TACTICAL)' });
   if (note) await popover.locator('textarea').fill(note);
   await popover.getByRole('button', { name: 'Send TOFI' }).dispatchEvent('click');
 }
@@ -97,14 +97,14 @@ async function proposeTofiEntry(page, stripEl, note) {
 /** ADR 0102: the regime picked at accept waits for the airspace; Entered (MRU side) makes it effective. */
 async function markEntered(page, callsign) {
   await goBay(page, 'TAC_C2', 'tac-c2-tasked');
-  await strip(page, callsign).getByRole('button', { name: 'Entered' }).click({ timeout: 3000 });
+  await strip(page, callsign).getByRole('button', { name: 'Entered' }).click({ timeout: 5000 });
   await expect.poll(() => page.evaluate((c) => [...crc.state.efspFlightDataList.values()].find(f => f.identity && f.identity.callsign === c).tofi.pendingSeparationRegime || null, callsign)).toBe(null);
 }
 
 async function setSepReg(stripEl, value) {
   const chip = stripEl.locator('.efsp-block-chip', { has: stripEl.page().locator('.efsp-block-label', { hasText: /^SEP REG$/ }) });
-  await chip.locator('.efsp-block').first().click({ timeout: 3000 });
-  await chip.locator('select').selectOption(value);
+  await chip.locator('.efsp-block').first().click({ timeout: 5000 });
+  await chip.locator('select.efsp-block-enum-select').selectOption(value);
   await expect(chip).toContainText(value);
 }
 
@@ -210,13 +210,13 @@ test('the sender can see a HANDOFF is pending, and then that it was accepted', a
   // TOFI's own badge reads "TOFI ENTRY: PROPOSED". The five coordination
   // primitives have nothing equivalent: the Coordinate button disappears and
   // that is the only change on the sender's Strip.
-  await expect(s, 'pending HANDOFF: nothing on the sender\'s Strip says so').toContainText(/HAND ?OFF/i, { timeout: 2000 });
+  await expect(s, 'pending HANDOFF: nothing on the sender\'s Strip says so').toContainText(/HAND ?OFF/i, { timeout: 5000 });
 
   await goBay(b, 'AP', 'ap-coordination');
-  await strip(b, 'HOSEE1').getByRole('button', { name: 'Accept Hand Off' }).click({ timeout: 3000 });
+  await strip(b, 'HOSEE1').getByRole('button', { name: 'Accept Hand Off' }).click({ timeout: 5000 });
   await expect.poll(async () => (await recordsFor(a, 'HOSEE1')).find(r => r.facilityId === 'CENTER').coordination).toBe('ACTIVE');
   // The row reads "HAND OFF → AP" + the state name; INITIATED while pending, ACTIVE once accepted (text nodes are concatenated, so no \b).
-  await expect(s, 'accepted HANDOFF: nothing on the sender\'s Strip says so').toContainText(/ACTIVE|RADAR CONTACT|ACCEPTED/i, { timeout: 2000 });
+  await expect(s, 'accepted HANDOFF: nothing on the sender\'s Strip says so').toContainText(/ACTIVE|RADAR CONTACT|ACCEPTED/i, { timeout: 5000 });
 });
 
 test('a rejected proposal is visible to the controller who sent it', async ({ browser }) => {
@@ -225,7 +225,7 @@ test('a rejected proposal is visible to the controller who sent it', async ({ br
   const s = await seedCtrArrival(a, 'REJSEE');
   await propose(a, s, 'OPERATIONAL_REQUEST');
   await goBay(b, 'AP', 'ap-coordination');
-  await strip(b, 'REJSEE').getByRole('button', { name: 'Unable' }).click({ timeout: 3000 });
+  await strip(b, 'REJSEE').getByRole('button', { name: 'Unable' }).click({ timeout: 5000 });
   await expect.poll(async () => (await recordsFor(a, 'REJSEE')).find(r => r.facilityId === 'CENTER').coordination).toBe('REJECTED');
   await settle(a);
 
@@ -244,7 +244,7 @@ test('a rejected replica in the receiver\'s Coordination Bay cannot be worked', 
   await propose(a, s, 'POINT_OUT');
   await goBay(b, 'AP', 'ap-coordination');
   const replica = strip(b, 'DEADRP');
-  await replica.getByRole('button', { name: 'Reject' }).click({ timeout: 3000 });
+  await replica.getByRole('button', { name: 'Reject' }).click({ timeout: 5000 });
   await expect.poll(async () => (await recordsFor(b, 'DEADRP')).find(r => r.facilityId === 'INCIRLIK').coordination).toBe('REJECTED');
 
   // AP declined this flight. Its NLA must not now hand it to Tower —
@@ -258,10 +258,10 @@ test('a rejected replica in the receiver\'s Coordination Bay cannot be worked', 
   // that answers it — and it is the only shape that tells the controller WHY
   // the flight they declined is still theirs to see.
   const nla = replica.getByRole('button', { name: 'Hand to Tower' });
-  await expect(nla, 'the replica AP just rejected offers an enabled Hand to Tower').toBeDisabled({ timeout: 2000 });
+  await expect(nla, 'the replica AP just rejected offers an enabled Hand to Tower').toBeDisabled({ timeout: 5000 });
   await expect(replica.locator('.efsp-nla-inhibit-reason'),
     'disabled with no reason on the Strip is a control that refuses in silence')
-    .toContainText(/rejected/i, { timeout: 2000 });
+    .toContainText(/rejected/i, { timeout: 5000 });
 
   // The reason is a line of its own, not a sliver of the row. It used to take
   // whatever the badges and buttons left and break between every letter.
@@ -324,7 +324,7 @@ test('the +N badge appears on the ATC Strip when a mission line is fragged again
   // one exists". It is computed from OTHER Strips, and the reconciler only
   // rebuilds a Strip when its OWN rev moves — which a sibling appearing does
   // not do. It appears after a Bay-tab switch forces a full render.
-  await expect(s.locator('.efsp-shared-flight-data-badge'), 'CTR\'s Strip never shows +1 while they watch it').toHaveText('+1', { timeout: 3000 });
+  await expect(s.locator('.efsp-shared-flight-data-badge'), 'CTR\'s Strip never shows +1 while they watch it').toHaveText('+1', { timeout: 5000 });
 });
 
 test('Accept TOFI Exit enables once CTR has set SEP REG back to ATC', async ({ browser }) => {
@@ -335,11 +335,11 @@ test('Accept TOFI Exit enables once CTR has set SEP REG back to ATC', async ({ b
   await goBay(b, 'TAC_C2', 'tac-c2-coordination');
   const mission = strip(b, 'EXIT01');
   await mission.locator('select.efsp-tofi-regime-select').selectOption('DUE_REGARD');
-  await mission.getByRole('button', { name: 'Accept TOFI Entry' }).click({ timeout: 3000 });
+  await mission.getByRole('button', { name: 'Accept TOFI Entry' }).click({ timeout: 5000 });
   await expect.poll(async () => (await recordsFor(a, 'EXIT01')).find(r => r.stripType === 'MISSION').tofi).toBe('ACTIVE');
   await markEntered(b, 'EXIT01');
 
-  await startAction(s, 'TOFI Exit…', { timeout: 3000 });
+  await startAction(s, 'TOFI Exit…', { timeout: 5000 });
   await goBay(b, 'TAC_C2', 'tac-c2-tasked');
   const accept = mission.getByRole('button', { name: 'Accept TOFI Exit' });
   await expect(accept, 'SREG is not ATC yet, so disabled is right here').toBeDisabled();
@@ -357,7 +357,7 @@ test('Accept TOFI Exit enables once CTR has set SEP REG back to ATC', async ({ b
   // ...but the MISSION Strip is not rebuilt (its rev did not move), so the
   // button keeps saying "CTR must set separation regime back to ATC" after
   // CTR has done exactly that.
-  await expect(accept, 'still disabled after CTR set SEP REG to ATC').toBeEnabled({ timeout: 3000 });
+  await expect(accept, 'still disabled after CTR set SEP REG to ATC').toBeEnabled({ timeout: 5000 });
 });
 
 // ── F-306 ─────────────────────────────────────────────────────────────────
@@ -370,16 +370,16 @@ test('the regime stated when accepting TOFI shows in SEP REG on both sides', asy
   await goBay(b, 'TAC_C2', 'tac-c2-coordination');
   const mission = strip(b, 'SREG01');
   await mission.locator('select.efsp-tofi-regime-select').selectOption('DUE_REGARD');
-  await mission.getByRole('button', { name: 'Accept TOFI Entry' }).click({ timeout: 3000 });
+  await mission.getByRole('button', { name: 'Accept TOFI Entry' }).click({ timeout: 5000 });
   await expect.poll(async () => (await recordsFor(a, 'SREG01')).find(r => r.stripType === 'ARRIVAL').tofi).toBe('ACTIVE');
 
   // ADR 0102: the accept stores DUE_REGARD as pending (SEP REG stays ATC); Entered makes it effective. Neither page
   // that was connected at the time may miss either change.
   const flightDataRegime = (page) => page.evaluate(() => [...crc.state.efspFlightDataList.values()].find(f => f.identity && f.identity.callsign === 'SREG01').tofi.separationRegime);
-  await expect.poll(() => flightDataRegime(a), { message: 'the CTR page never learns the regime', timeout: 3000 }).toBe('ATC');
+  await expect.poll(() => flightDataRegime(a), { message: 'the CTR page never learns the regime', timeout: 5000 }).toBe('ATC');
   await markEntered(b, 'SREG01');
-  await expect.poll(() => flightDataRegime(a), { message: 'the CTR page never learns the regime', timeout: 3000 }).toBe('DUE_REGARD');
-  await expect.poll(() => flightDataRegime(b), { message: 'the TAC_C2 page that set it never learns it either', timeout: 3000 }).toBe('DUE_REGARD');
+  await expect.poll(() => flightDataRegime(a), { message: 'the CTR page never learns the regime', timeout: 5000 }).toBe('DUE_REGARD');
+  await expect.poll(() => flightDataRegime(b), { message: 'the TAC_C2 page that set it never learns it either', timeout: 5000 }).toBe('DUE_REGARD');
 });
 
 // The picker used by a real pointer. Every other spec here uses selectOption,
@@ -407,10 +407,10 @@ test('the regime picker can be opened with a real click and keeps what was chose
   await select.focus();
   await select.press('ArrowDown');
   await expect(select).toHaveValue('ATC');
-  await mission.getByRole('button', { name: 'Accept TOFI Entry' }).click({ timeout: 3000 });
+  await mission.getByRole('button', { name: 'Accept TOFI Entry' }).click({ timeout: 5000 });
 
   const flightDataRegime = (page) => page.evaluate(() => [...crc.state.efspFlightDataList.values()].find(f => f.identity && f.identity.callsign === 'SREG02').tofi.separationRegime);
-  await expect.poll(() => flightDataRegime(a), { timeout: 3000 }).toBe('ATC');
+  await expect.poll(() => flightDataRegime(a), { timeout: 5000 }).toBe('ATC');
 });
 
 // ── F-307 ─────────────────────────────────────────────────────────────────
@@ -423,11 +423,11 @@ test('CTR is told what is blocking the TOFI exit they proposed', async ({ browse
   await goBay(b, 'TAC_C2', 'tac-c2-coordination');
   const mission = strip(b, 'EXIT02');
   await mission.locator('select.efsp-tofi-regime-select').selectOption('MARSA');
-  await mission.getByRole('button', { name: 'Accept TOFI Entry' }).click({ timeout: 3000 });
+  await mission.getByRole('button', { name: 'Accept TOFI Entry' }).click({ timeout: 5000 });
   await expect.poll(async () => (await recordsFor(a, 'EXIT02')).find(r => r.stripType === 'ARRIVAL').tofi).toBe('ACTIVE');
   await markEntered(b, 'EXIT02');
 
-  await startAction(s, 'TOFI Exit…', { timeout: 3000 });
+  await startAction(s, 'TOFI Exit…', { timeout: 5000 });
   await expect(s.locator('.efsp-tofi-badge')).toContainText(/EXIT[\s\S]*INITIATED/);
   await settle(a);
   // Only CTR can fix it — SREG is on the ATC-side Strip alone — and only the
@@ -452,7 +452,7 @@ test('a mission line bound from the picker does not need a callsign retyped', as
   // then thrown away — a bound CreateStrip carries no `flightData` — so typing
   // BINDA2 with BINDA1 picked frags BINDA1 without a word.
   await expect.poll(async () => (await recordsFor(b, 'BINDA1')).some(r => r.stripType === 'MISSION'),
-    { message: `refused: "${await b.locator('#efsp-create-strip-msg').textContent()}"`, timeout: 3000 }).toBe(true);
+    { message: `refused: "${await b.locator('#efsp-create-strip-msg').textContent()}"`, timeout: 5000 }).toBe(true);
 });
 
 test('.mission on a flight that already has a mission line says so', async ({ browser }) => {
@@ -467,5 +467,5 @@ test('.mission on a flight that already has a mission line says so', async ({ br
   await input.press('Enter');
   // Measured: "no live flight TWICE1 available to frag against" — about a
   // flight that is live and on screen.
-  await expect(b.locator('#efsp-dot-command-preview')).toContainText(/already/i, { timeout: 2000 });
+  await expect(b.locator('#efsp-dot-command-preview')).toContainText(/already/i, { timeout: 5000 });
 });

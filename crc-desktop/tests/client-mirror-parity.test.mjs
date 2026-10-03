@@ -72,7 +72,9 @@ test('D-9: the client owner tables name exactly the states nla.js has for each s
 
 test('the 400 ms double-tap guard equals board/ops/invoke-nla.js\'s literal; the 10 s Undo window equals undo-history.js\'s UNDO_WINDOW_MS', () => {
   const src = readServer('efsp/board/ops/invoke-nla.js');
-  assert.match(src, new RegExp(`wallNow - lastInvoke\\.invokedAt < ${DOUBLE_TAP_MS}\\b`), 'board-store double-tap guard differs from DOUBLE_TAP_MS');
+  // The guard's length is a named constant now (a cell the e2e hook can change, crc-sync docs/adr/0096).
+  assert.match(src, new RegExp(`const NLA_GUARD_MS = ${DOUBLE_TAP_MS};`), 'the server double-tap guard differs from DOUBLE_TAP_MS');
+  assert.match(src, /wallNow - lastInvoke\.invokedAt < ctx\.nlaGuard\.ms\b/, 'the guard no longer compares against nlaGuard.ms');
   // docs/adr/0100 (H95): one undo window, on the server's undo history.
   const m = /const UNDO_WINDOW_MS = ([\d_]+);/.exec(readServer('efsp/undo/undo-history.js'));
   assert.ok(m, 'undo-history.js no longer declares UNDO_WINDOW_MS');

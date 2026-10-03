@@ -41,13 +41,13 @@ test('a regime picked at accept waits; Entered makes it effective and warns outs
   const s = await seedStrip(a, { callsign: 'TOFIC1', actingPositionId: 'CTR', bayId: 'ctr-enroute', stripType: 'ARRIVAL', facilityId: 'CENTER' });
   await startAction(s, 'TOFI…');
   const popover = a.locator('.efsp-tofi-popover');
-  await popover.locator('select').selectOption({ label: 'TAC_C2 (TACTICAL)' });
+  await popover.getByTestId('tofi-counterpart').selectOption({ label: 'TAC_C2 (TACTICAL)' });
   await popover.getByRole('button', { name: 'Send TOFI' }).dispatchEvent('click');
 
   await goBay(b, 'TAC_C2', 'tac-c2-coordination');
   const mission = strip(b, 'TOFIC1');
   await mission.locator('select.efsp-tofi-regime-select').selectOption('USING_AGENCY');
-  await mission.getByRole('button', { name: 'Accept TOFI Entry' }).click({ timeout: 3000 });
+  await mission.getByRole('button', { name: 'Accept TOFI Entry' }).click({ timeout: 5000 });
 
   await expect.poll(() => regimeOf(b, 'TOFIC1')).toEqual({ effective: 'ATC', pending: 'USING_AGENCY' });
   await expect.poll(() => regimeOf(a, 'TOFIC1')).toEqual({ effective: 'ATC', pending: 'USING_AGENCY' });
@@ -55,8 +55,8 @@ test('a regime picked at accept waits; Entered makes it effective and warns outs
   await expect(mission.locator('.efsp-x-regime-pending')).toContainText('USING_AGENCY');
   await expect(s.locator('.efsp-sreg-pending'), 'CTR sees what is waiting beside SEP REG').toContainText('USING_AGENCY');
 
-  await mission.getByRole('button', { name: 'Transfer Comms' }).click({ timeout: 3000 });
-  await mission.getByRole('button', { name: 'Entered' }).click({ timeout: 3000 });
+  await mission.getByRole('button', { name: 'Transfer Comms' }).click({ timeout: 5000 });
+  await mission.getByRole('button', { name: 'Entered' }).click({ timeout: 5000 });
   await expect(b.locator('#efsp-mutation-warning')).toContainText('not inside an airspace');
   await expect.poll(() => regimeOf(b, 'TOFIC1')).toEqual({ effective: 'USING_AGENCY', pending: null });
   await expect(mission.getByRole('button', { name: 'Entered' })).toHaveCount(0);

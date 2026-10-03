@@ -20,6 +20,7 @@
 const path = require('path');
 const os = require('os');
 const fs = require('fs');
+const harness = require('./e2e/helpers/harness-env');
 
 // Deliberately NOT 3000/3100: a developer almost always has the real pair
 // running while working on this, and an e2e run must never talk to it.
@@ -37,54 +38,24 @@ const REUSE = process.env.E2E_REUSE_SERVERS === '1';
 const CRC_SYNC_PORT = 3010 + LANE;
 const APP_PORT = 3110 + LANE;
 
-// Every piece of crc-sync's durable state is redirected into a throwaway
-// directory. state-paths.js's override short-circuits BOTH the read and the
-// write, so this also escapes the `config/` fallback — which is exactly what
-// made a "cleared" Board keep coming back during development.
-const STATE_DIR = fs.mkdtempSync(path.join(os.tmpdir(), `crc-e2e-lane${LANE}-`));
-const stateFile = (name) => path.join(STATE_DIR, name);
+// Every piece of crc-sync's durable state is redirected into a throwaway directory (e2e/helpers/harness-env.js builds the
+// environment and seeds the files; tests/e2e-boot.test.mjs boots crc-sync on exactly that). The directory belongs to the
+// RUNNER: a worker, or a run-order child, finds E2E_STATE_DIR already set and shares it, and only the runner seeds it and
+// (globalTeardown) removes it. Before, every config load, in the runner and in each worker, made and leaked its own.
+const OWNS_STATE_DIR = !process.env.E2E_STATE_DIR;
+process.env.E2E_STATE_DIR ??= fs.mkdtempSync(path.join(os.tmpdir(), `crc-e2e-lane${LANE}-`));
+if (OWNS_STATE_DIR) process.env.E2E_STATE_DIR_OWNER = String(process.pid);
+const STATE_DIR = process.env.E2E_STATE_DIR;
 
-const syncEnv = {
-  PORT: String(CRC_SYNC_PORT),
-  CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH: stateFile('efsp-board.json'),
-  CRCSYNC_EFSP_MUTATION_LOG_PATH: stateFile('efsp-mutations.jsonl'),
-  CRCSYNC_EFSP_AIRSPACES_PATH: stateFile('efsp-airspaces.json'),
-  CRCSYNC_EFSP_STEREO_ROUTES_PATH: stateFile('efsp-stereo-routes.json'),
-  CRCSYNC_TERRAIN_CACHE_DIR: stateFile('terrain'),
-  // WP8's durable files (crc-sync docs/adr/0065). Without these a run writes
-  // metrics into the worktree's crc-sync/state/ and reads old buckets back on
-  // the next run (L15, T11). The instrumentation config is read-only, so it
-  // points at a copy of the shipped default, never at a stale state/ override.
-  CRCSYNC_EFSP_METRICS_PATH: stateFile('efsp-metrics.json'),
-  CRCSYNC_EFSP_TRAFFIC_COUNT_PATH: stateFile('efsp-traffic-count.jsonl'),
-  CRCSYNC_EFSP_INSTRUMENTATION_CONFIG_PATH: stateFile('efsp-instrumentation.json'),
-  // No DCS, no SRS. Both clients retry forever and neither blocks the EFSP
-  // subsystem, so pointing them at a closed port keeps the run hermetic and
-  // fails fast instead of hanging on a real host.
-  //
-  // The UNPREFIXED names, because that is what crc-sync's process reads
-  // (grpc-client.js / srs-client.js). The CRCSYNC_* names are only
-  // infra/docker-compose.yml's .env keys, which compose maps onto these.
-  // Setting CRCSYNC_* here was silently ignored, so every run connected to
-  // the production defaults (server.sourcedcs.page:50051 and :5002).
-  // The NLA double-tap guard off: a spec that presses twice must not depend on how fast crc-sync received the first
-  // (crc-sync docs/adr/0096). e2e/nla-guard.spec.js turns the real 400 ms back on for itself.
-  CRCSYNC_NLA_GUARD_MS: '0',
-  DCS_GRPC_HOST: '127.0.0.1:1',
-  SRS_HOST: '127.0.0.1',
-  SRS_PORT: '1',
-};
-
-fs.writeFileSync(syncEnv.CRCSYNC_EFSP_AIRSPACES_PATH, '{}');
-// The two-route stereo table (crc-sync's docs/adr/0073) l16-picker-and-times.spec.js picks from. The
-// harness installs it itself so a plain `npx playwright test` needs no environment; E2E_STEREO_ROUTES=<file>
-// substitutes another table, and E2E_STEREO_ROUTES=none starts with an empty one (P5, T11).
-const STEREO = process.env.E2E_STEREO_ROUTES || path.join(__dirname, 'e2e', 'fixtures', 'l16-stereo-routes.json');
-fs.writeFileSync(syncEnv.CRCSYNC_EFSP_STEREO_ROUTES_PATH, STEREO === 'none' ? '[]' : fs.readFileSync(STEREO));
-fs.copyFileSync(path.join(__dirname, '..', 'crc-sync', 'config', 'efsp-instrumentation.json'), syncEnv.CRCSYNC_EFSP_INSTRUMENTATION_CONFIG_PATH);
+const syncEnv = harness.syncEnv(STATE_DIR, CRC_SYNC_PORT);
+// The two-route stereo table (crc-sync's docs/adr/0073) l16-picker-and-times.spec.js picks from. The harness installs it itself so
+// a plain `npx playwright test` needs no environment; E2E_STEREO_ROUTES=<file> substitutes another table, and
+// E2E_STEREO_ROUTES=none starts with an empty one (P5, T11).
+if (OWNS_STATE_DIR) harness.seedState(STATE_DIR, { stereo: process.env.E2E_STEREO_ROUTES || undefined });
 
 module.exports = {
   testDir: './e2e',
+  globalTeardown: require.resolve('./e2e/helpers/global-teardown.js'),
   // Per-lane, or two concurrent runs overwrite each other's screenshots and
   // traces — which is exactly the evidence a finding depends on.
   outputDir: `./test-results/lane${LANE}`,
