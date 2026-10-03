@@ -8,12 +8,13 @@
     "start": "node server.js",
     "test": "node --import ./tests/helpers/isolate-state.mjs --test tests/*.test.mjs",
     "freeze": "node --import ./tests/helpers/isolate-state.mjs --test tests/freeze/freeze-*.test.mjs",
+    "walk": "CRCSYNC_WALK_DEPTH=4 node --import ./tests/helpers/isolate-state.mjs --test tests/control-release-invariant.test.mjs",
     "wire:record": "node tools/wire-record.js",
     "soak": "node tools/soak/run.js",
     "soak:smoke": "node tools/soak/run.js --profile smoke --minutes 20",
-    "soak:selfcheck": "node tools/soak/selfcheck.mjs",
+    "soak:selfcheck": "node --import ./tests/helpers/isolate-state.mjs tools/soak/selfcheck.mjs",
     "freeze:update": "UPDATE_GOLDEN=1 node --import ./tests/helpers/isolate-state.mjs --test tests/freeze/freeze-*.test.mjs",
-    "freeze:selfcheck": "node tests/freeze/freeze-selfcheck.mjs"
+    "freeze:selfcheck": "node --import ./tests/helpers/isolate-state.mjs tests/freeze/freeze-selfcheck.mjs"
   },
   "dependencies": {
     "@grpc/grpc-js": "^1.10.0",
