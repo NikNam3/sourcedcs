@@ -24,7 +24,7 @@ merge their branches into `efsp-wp5-correlation`, and keep the record. Older ses
   `answers` collection with limit 1000).
 - **Auth hardening is out of scope.** H106 AC-2: the localhost `POST /api/sync-config` hole stays a known finding.
 - **After every merge:**
-  - crc-sync: `npm test`, `npm run freeze` (on conflicts, take either side, then `freeze:update` once), `wire:record`
+  - crc-sync: `npm test`, `npm run walk` (I11 depth 4), `npm run freeze` (on conflicts, take either side, then `freeze:update` once), `wire:record`
     (any wire change; the protocol is 2 and stays 2 until a crc-desktop release ships 2).
   - crc-desktop: `npm test`. Re-record `tests/fixtures/module-graph-exports.json` with
     `GOLDEN_RECORD=1 node --test tests/module-graph.test.mjs` when a client module was added.
