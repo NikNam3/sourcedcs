@@ -374,7 +374,17 @@ function _handleSetPositions(ctx, session, msg, persist) {
   // checked (sign-off is not blocked, DR-6: the invariant repairs or alerts, and the alert stands until someone signs on).
   for (const id of ctx.facilityConfig.getFacilityIds()) {
     const b = ctx.boardStoreFor(id);
-    if (b && b.reconcileExchanges().length) controlRepaired = true;
+    if (!b || !(b.reconcileExchanges() > 0)) continue;
+    controlRepaired = true;
+  }
+
+  // A repair writes both halves of an exchange, so it touches the OTHER Facility's Board whichever side lost its holder:
+  // what any other Board touched is sent in this round trip, to the sessions that read it (not left for its next Mutation).
+  const peerDeltas = [];
+  for (const id of ctx.facilityConfig.getFacilityIds()) {
+    const b = id === facilityId ? null : ctx.boardStoreFor(id);
+    const touched = b ? b.drainTouched() : [];
+    if (touched.length) peerDeltas.push(boardDelta(ctx, b, id, touchedStrips(ctx, b, id, touched, null), []));
   }
 
   // The re-send below carries every live Strip, so whatever
@@ -404,7 +414,8 @@ function _handleSetPositions(ctx, session, msg, persist) {
     // Strips' status actually moved.
     broadcasts: skeleton.orderSlots({ primary: boardDelta(ctx, boardStore, facilityId,
       { updated: boardStore.getAll().filter(s => s.state !== 'DROPPED').map(s => stampStrip(boardStore, s, facilityId, ctx)), gone: [] },
-      [], positionStore.getAll().map(p => ({ ...p, facilityId }))) }),
+      [], positionStore.getAll().map(p => ({ ...p, facilityId }))),
+      peer: peerDeltas.length ? peerDeltas : null }),
   };
   // The sign-on offer (docs/adr/0105) goes to LC's Primary alone, by the directed channel (docs/adr/0100 s6).
   if (offered) result.directed = [{ facilityId, positionId: offered.positionId, primaryOnly: true, frame: { version: VERSION, type: 'efsp-position-offer', ...offered } }];

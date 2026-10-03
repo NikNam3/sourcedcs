@@ -12,8 +12,14 @@ const SLOT_ORDER = ['primary', 'peer', 'marsa', 'carrier', 'sfa'];
  * read by the hub): the golden harness maps back to named keys from it instead of guessing from frame types.
  */
 function orderSlots(slots) {
-  const names = SLOT_ORDER.filter((k) => slots && slots[k]);
-  const out = names.map((k) => slots[k]);
+  // A slot may hold several frames (an array): sign-off can repair the Boards of more than one other Facility.
+  const out = [];
+  const names = [];
+  for (const k of SLOT_ORDER) {
+    const v = slots && slots[k];
+    if (!v) continue;
+    for (const frame of Array.isArray(v) ? v : [v]) { out.push(frame); names.push(k); }
+  }
   Object.defineProperty(out, 'slots', { value: names, enumerable: false });
   return out;
 }
