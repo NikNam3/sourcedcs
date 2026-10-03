@@ -40,7 +40,9 @@ const ROUTE = () => def({ airspaceId: 'VR1207', name: 'VR1207 SEYHAN LOW', kind:
   segments: [{ fix: { name: 'A', lat: 37.35, lon: 35.35 }, altLowerFt: 500, altUpperFt: 3000, widthNm: null }, { fix: { name: 'SARIN', lat: 37.2, lon: 35.65 }, altLowerFt: 1000, altUpperFt: 6000, widthNm: 10 }, { fix: { name: 'TOPAK', lat: 36.98, lon: 36.15 }, altLowerFt: null, altUpperFt: null, widthNm: null }] });
 
 async function open(page, signedOn = ['AP'], records = []) {
-  const errors = (await openPanel(page, { signedOn })).consoleErrors;
+  // CTR is CENTER's Position; the sign-on helper now waits for the server's ack, so the Facility must be right.
+  const facilityId = signedOn.includes('CTR') ? 'CENTER' : 'INCIRLIK';
+  const errors = (await openPanel(page, { signedOn, facilityId })).consoleErrors;
   await page.evaluate(() => { if (!crc.dock.isDockPanelOpen('airspace')) crc.dock.toggleDockPanel('airspace', true); });
   await expect(page.locator('#airspace-panel')).toBeVisible({ timeout: 10000 });
   await page.evaluate(() => {
