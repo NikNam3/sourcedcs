@@ -4,8 +4,8 @@
 //     overriding every path would otherwise read and write the checkout's real crc-sync/state/);
 //  2. a per-process TMPDIR root, removed on exit: os.tmpdir() reads TMPDIR at call time, so every test's mkdtemp
 //     lands inside it and nothing is left in /tmp (child processes inherit it);
-//  3. a guard: if the checkout's real crc-sync/state/ changed during the run, exit non-zero and say which files.
-//     Opt out with CRCSYNC_ALLOW_STATE_WRITES=1 (e.g. a live dev server runs from the same checkout).
+//  3. a guard: if the checkout's real crc-sync/state/ changed during the run, say which files; under CI also exit
+//     non-zero. Opt out with CRCSYNC_ALLOW_STATE_WRITES=1.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -44,8 +44,10 @@ process.on('exit', () => {
     for (const [p, v] of after) if (before.get(p) !== v) changed.push(p);
     for (const p of before.keys()) if (!after.has(p)) changed.push(`${p} (deleted)`);
     if (changed.length) {
-      process.stderr.write(`\nisolate-state: a test touched the real crc-sync/state/ :\n  ${changed.join('\n  ')}\n`);
-      process.exitCode = 1;
+      // A dev crc-sync running from this checkout (the human's :3000) writes state/ too, so locally this
+      // only warns; CI, where nothing else runs, fails the run.
+      process.stderr.write(`\nisolate-state: the real crc-sync/state/ changed during the run (a test, or a dev server from this checkout):\n  ${changed.join('\n  ')}\n`);
+      if (process.env.CI) process.exitCode = 1;
     }
   }
   if (root) { try { fs.rmSync(root, { recursive: true, force: true }); } catch {} }
