@@ -51,14 +51,17 @@ async function bootId() {
  * Gives the spec file a brand-new crc-sync: no Strips, no flight-data records, runway status as shipped, no
  * carrier/ATO/metrics/replay history, no Positions held. The hook ends the process and the
  * supervisor starts a clean one (crc-sync/src/test-reset.js), so nothing an earlier spec did, or
- * failed to undo, is visible and a spec file means the same thing alone or in any order. Called once
- * per file, by the first test of it (`_freshSync`).
+ * failed to undo, is visible and a spec file means the same thing alone or in any order. Called before
+ * every test (`_freshSync`), or, for a file whose tests build on each other (`test.use({ resetScope: 'file' })`),
+ * once per file by the first test of it. `force` skips the once-per-file marker.
  */
-async function resetSync(file) {
+async function resetSync(file, { force = false } = {}) {
   const before = await bootId();
   let marker = '';
   try { marker = fs.readFileSync(MARKER, 'utf8'); } catch (_) { /* first run */ }
-  if (marker === `${before}|${file}`) return; // a worker restart after a failed test must not wipe the rest of the file
+  // A worker restarts after a failed test; for a once-per-file file the marker lets the restart carry on with the file's
+  // Board. A failed test clears the marker (`_freshSync`'s teardown), so the next test never starts on a dirty Board.
+  if (!force && marker === `${before}|${file}`) return;
   const r = await fetch(`${SYNC_URL}/__test/reset`, { method: 'POST' });
   if (!r.ok) throw new Error(`crc-sync reset refused: HTTP ${r.status}`);
   const deadline = Date.now() + 20000;
@@ -91,10 +94,14 @@ const test = base.test.extend({
     }
     await use();
   }, { auto: true }],
-  // First test of each spec file: a new crc-sync, whatever the previous file left behind.
-  _freshSync: [async ({}, use, testInfo) => {
-    await resetSync(testInfo.file);
+  // 'test' (the default): every test starts on a new crc-sync, so a failure never leaks into the next test. A file whose
+  // tests build on each other (runway-status's serial walk) says `test.use({ resetScope: 'file' })` and gets one reset per file.
+  resetScope: ['test', { option: true }],
+  _freshSync: [async ({ resetScope }, use, testInfo) => {
+    await resetSync(testInfo.file, { force: resetScope === 'test' });
     await use();
+    // Always reset after a failed test: the worker restart that follows must not find the marker and skip the reset.
+    if (testInfo.status !== testInfo.expectedStatus) { try { fs.rmSync(MARKER, { force: true }); } catch (_) { /* nothing to clear */ } }
   }, { auto: true }],
   // The default per-test context is created by the `context` fixture, which may have been built
   // before the auto fixture ran; route it explicitly.

@@ -26,6 +26,8 @@ const { openPanel, stripByCallsign, expectRefusalIsVisible, lapseNlaGuard } = re
 const { installAppModules } = require('./helpers/modules');
 
 test.describe.configure({ mode: 'serial', timeout: 240000 });
+// The walk builds on its own earlier tests, so the Board is reset once per file, not per test (helpers/test.js).
+test.use({ resetScope: 'file' });
 
 const SHOTS = path.join(__dirname, '..', '..', 'docs', 'wip', 'L1b');
 const shot = (page, name) => page.screenshot({ path: path.join(SHOTS, `${name}.png`), fullPage: false });
