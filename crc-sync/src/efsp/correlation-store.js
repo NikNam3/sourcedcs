@@ -41,6 +41,7 @@ const { MAX_FREE_TEXT } = require('./flight-data-store');
 const { WALL_CLOCK } = require('../mission-clock');
 const { SyncLog } = require('./sync/sync-log');
 const log = require('../log').logger('efsp:correlation-store');
+const { internalError, partialAuditTail } = require('./store-throw');
 
 const CORRELATION_STATES = ['CORRELATED', 'PROVISIONAL', 'UNCORRELATED'];
 
@@ -217,7 +218,8 @@ class CorrelationStore {
       reason: result.ok ? undefined : result.reason,
       detail: result.ok ? undefined : result.detail,
       before,
-      after: result.ok ? this.getCorrelation(mutation.flightDataId) : undefined,
+      after: result.ok || result.partial ? this.getCorrelation(mutation.flightDataId) : undefined,
+      ...partialAuditTail(result),
     });
   }
 
@@ -261,6 +263,7 @@ class CorrelationStore {
     const op = mutation.op || {};
     const before = deepClone(record);
     let result;
+    const seq0 = this._sync.seq;
     try {
       switch (op.kind) {
         case 'BindTrack':   result = this._bind(record, op, actingPositionId, by); break;
@@ -272,7 +275,7 @@ class CorrelationStore {
       // Same backstop BoardStore and AirspaceStore have: one bad op must never
       // take the process down for every connected client.
       log.error('unexpected error applying a correlation op — rejecting it instead of crashing', { err });
-      result = { ok: false, reason: 'VALIDATION_ERROR', detail: 'internal error processing correlation op' };
+      result = internalError('correlation op', err, this._sync.seq !== seq0);
     }
 
     // Every result carries the record, success or not — a rejection that says

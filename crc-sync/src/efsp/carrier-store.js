@@ -38,6 +38,7 @@ const { resolveZuluHhmm } = require('./zulu-time');
 const { WALL_CLOCK } = require('../mission-clock');
 const { SyncLog } = require('./sync/sync-log');
 const log = require('../log').logger('efsp:carrier-store');
+const { internalError, partialAuditTail } = require('./store-throw');
 
 const TRANSITIONS_CAP = 200; // engineering bound: the newest transitions kept per record; no meaning attached
 const SHIP_OP = 'SetShipInput';
@@ -222,7 +223,8 @@ class CarrierStore {
       reason: result.ok ? undefined : result.reason,
       detail: result.ok ? undefined : result.detail,
       before,
-      after: result.ok && result.record ? deepClone(result.record) : undefined,
+      after: (result.ok || result.partial) && result.record ? deepClone(result.record) : undefined,
+      ...partialAuditTail(result),
       ...extra,
     });
   }
@@ -261,11 +263,12 @@ class CarrierStore {
     }
     const before = deepClone(record);
     let result;
+    const seq0 = this._sync.seq;
     try {
       result = this._dispatch(record, op, actingPositionId, by);
     } catch (err) {
       log.error('unexpected error applying a carrier op — rejecting it instead of crashing', { err });
-      result = { ok: false, reason: 'VALIDATION_ERROR', detail: 'internal error processing carrier op' };
+      result = internalError('carrier op', err, this._sync.seq !== seq0);
     }
     if (!result.record) result.record = deepClone(record);
     this._audit(mutation, actingPositionId, by, before, result);

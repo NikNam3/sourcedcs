@@ -51,6 +51,7 @@ const { MAX_FREE_TEXT } = require('./flight-data-store');
 const { WALL_CLOCK } = require('../mission-clock');
 const { SyncLog } = require('./sync/sync-log');
 const log = require('../log').logger('efsp:marsa-store');
+const { internalError, partialAuditTail } = require('./store-throw');
 
 const MARSA_STATES = ['ACTIVE', 'ENDED', 'VOIDED'];
 
@@ -242,7 +243,8 @@ class MarsaStore {
       reason: result.ok ? undefined : result.reason,
       detail: result.ok ? undefined : result.detail,
       before,
-      after: result.ok && result.relation ? deepClone(result.relation) : undefined,
+      after: (result.ok || result.partial) && result.relation ? deepClone(result.relation) : undefined,
+      ...partialAuditTail(result),
     });
   }
 
@@ -269,13 +271,16 @@ class MarsaStore {
     // `dispatch`, handled before the record lookup rather than inside it.
     if (op.kind === 'DeclareMarsa') {
       let result;
+      const seq0 = this._sync.seq;
       try {
         result = this._declare(op, actingPositionId, by);
       } catch (err) {
         log.error('unexpected error declaring MARSA — rejecting it instead of crashing', { err });
-        result = { ok: false, reason: 'VALIDATION_ERROR', detail: 'internal error processing MARSA declaration' };
+        result = internalError('MARSA declaration', err, this._sync.seq !== seq0);
+        // The relation it minted before the throw is the newest one (a Map keeps insertion order).
+        if (result.partial) result.relation = this.getRelation([...this._relations.keys()].pop());
       }
-      if (result.ok) result.flightDataList = this.drainRegimeWrites();
+      if (result.ok || result.partial) result.flightDataList = this.drainRegimeWrites();
       this._recordAudit(mutation, actingPositionId, by, null, result);
       return result;
     }
@@ -298,6 +303,7 @@ class MarsaStore {
 
     const before = deepClone(relation);
     let result;
+    const seq0 = this._sync.seq;
     try {
       switch (op.kind) {
         case 'MarkRendezvous':    result = this._markRendezvous(relation, op, by); break;
@@ -312,7 +318,7 @@ class MarsaStore {
       // Same backstop every other store has: one bad op must never take the
       // process down for every connected client.
       log.error('unexpected error applying a MARSA op — rejecting it instead of crashing', { err });
-      result = { ok: false, reason: 'VALIDATION_ERROR', detail: 'internal error processing MARSA op' };
+      result = internalError('MARSA op', err, this._sync.seq !== seq0);
     }
 
     // Every result carries the relation, success or not — a rejection that says
@@ -321,7 +327,7 @@ class MarsaStore {
     if (!result.relation) result.relation = this.getRelation(mutation.marsaId);
     // The regime writes this op made, for wire/families/marsa.js to put on the wire beside
     // the marsa-delta — see drainRegimeWrites().
-    if (result.ok) result.flightDataList = this.drainRegimeWrites();
+    if (result.ok || result.partial) result.flightDataList = this.drainRegimeWrites();
     this._recordAudit(mutation, actingPositionId, by, before, result);
     return result;
   }

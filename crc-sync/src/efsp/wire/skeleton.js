@@ -95,11 +95,12 @@ function run(family, ctx, session, msg, persist) {
 
   const result = family.apply(ctx, session, msg);
   _rememberOutcome(ctx, family.replayKind, msg, result, family.rememberId(result, msg, ctx));
-  if (family.persistWhen ? family.persistWhen(result) : result.ok) persist();
+  // `partial`: an op threw after it wrote (store-throw.js). What it wrote stays, so it is saved and broadcast like a success.
+  if (family.persistWhen ? family.persistWhen(result) : (result.ok || result.partial)) persist();
   if (result.ok && family.after) family.after(ctx, result, msg);
 
   const ack = { ...prefix(), ok: result.ok, ...family.ack(result, ctx, msg) };
-  if (!result.ok) return { ack, broadcasts: orderSlots(null) };
+  if (!result.ok && !result.partial) return { ack, broadcasts: orderSlots(null) };
   return { ack, broadcasts: orderSlots(family.broadcasts(result, ctx, msg)) };
 }
 
