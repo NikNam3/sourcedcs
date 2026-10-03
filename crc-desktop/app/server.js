@@ -176,3 +176,6 @@ const port = parseInt(process.env.WS_PORT) || 3100;
 httpServer.listen(port, () => {
   console.log(`[crc] http://localhost:${port}`);
 });
+
+// main.js reads the live Casdoor endpoint (the connection widget can change it at runtime) to allow the login popup.
+module.exports = { getSyncConfig: () => ({ ...syncConfig }) };

@@ -6,7 +6,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { createExternalLinkGate, httpOriginOf } = require('../external-link');
+const { createExternalLinkGate, httpOriginOf, isCasdoorLoginUrl, isLocalAppUrl, CASDOOR_POPUP_WEB_PREFERENCES } = require('../external-link');
 
 const BOOKING = 'https://sourcedcs.page/bookings.html';
 
@@ -80,4 +80,105 @@ test('main.js uses the gate and opens nothing else, and the helper is packaged',
   assert.ok(/shell\.openExternal\(url\)/.test(main.slice(main.indexOf('externalLinks.canOpen(url)'), main.indexOf('externalLinks.canOpen(url)') + 80)));
   const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'));
   assert.ok(pkg.build.files.includes('external-link.js'));
+});
+
+// ── B12: the update-required download link ─────────────────────────────────────────────────────────────────────
+const DOWNLOAD = 'https://downloads.example.org/download.html';
+
+test('the download origin opens alongside the booking origin, and nothing else', () => {
+  const g = gate();
+  g.allowDownload(DOWNLOAD);
+  assert.equal(g.canOpen('https://downloads.example.org/download.html'), true);
+  assert.equal(g.canOpen('https://downloads.example.org/other?x=1'), true);
+  assert.equal(g.canOpen(BOOKING), true, 'the booking origin still opens');
+  assert.equal(g.canOpen('https://example.com/'), false);
+  assert.equal(g.downloadOrigin(), 'https://downloads.example.org');
+});
+
+test('download origin: lookalikes, other scheme/port and non-http schemes stay denied', () => {
+  const g = createExternalLinkGate();
+  g.allowDownload(DOWNLOAD);
+  for (const u of ['https://downloads.example.org.evil.com/', 'https://downloads.example.org@evil.com/', 'https://evildownloads.example.org/',
+    'http://downloads.example.org/', 'https://downloads.example.org:8443/', 'javascript:alert(1)', 'file:///etc/passwd', 'data:text/html,x']) {
+    assert.equal(g.canOpen(u), false, u);
+  }
+});
+
+test('no download URL: only the booking origin opens; an absent or bad URL clears an earlier one', () => {
+  const g = gate();
+  assert.equal(g.canOpen(DOWNLOAD), false, 'never reported');
+  g.allowDownload(DOWNLOAD);
+  for (const bad of ['', undefined, null, 'javascript:1', 'not a url']) {
+    g.allowDownload(DOWNLOAD);
+    g.allowDownload(bad);
+    assert.equal(g.canOpen(DOWNLOAD), false, `after allowDownload(${String(bad)})`);
+    assert.equal(g.canOpen(BOOKING), true);
+  }
+  const only = createExternalLinkGate();
+  only.allowDownload(undefined);
+  assert.equal(only.canOpen(DOWNLOAD), false);
+  assert.equal(only.canOpen(BOOKING), false);
+});
+
+test('a new booking URL does not forget the download origin', () => {
+  const g = createExternalLinkGate();
+  g.allowDownload(DOWNLOAD);
+  g.allow(BOOKING);
+  g.allow('');
+  assert.equal(g.canOpen(DOWNLOAD), true);
+  assert.equal(g.canOpen(BOOKING), false);
+});
+
+// ── B13: the Casdoor popup and the main window ───────────────────────────────────────────────────────────────
+const CASDOOR = 'https://auth.example.org';
+
+test('the Casdoor popup needs the endpoint origin and the authorize path', () => {
+  assert.equal(isCasdoorLoginUrl(`${CASDOOR}/login/oauth/authorize?client_id=x&state=y`, CASDOOR), true);
+  assert.equal(isCasdoorLoginUrl(`${CASDOOR}/login/oauth/authorize`, `${CASDOOR}/`), true, 'a trailing slash on the endpoint');
+  assert.equal(isCasdoorLoginUrl(`${CASDOOR}/login/oauth/authorize2`, CASDOOR), false);
+  assert.equal(isCasdoorLoginUrl(`${CASDOOR}/other`, CASDOOR), false);
+  // the old startsWith matched these:
+  assert.equal(isCasdoorLoginUrl('https://auth.example.org.evil.com/login/oauth/authorize', CASDOOR), false);
+  assert.equal(isCasdoorLoginUrl('https://auth.example.org@evil.com/login/oauth/authorize', CASDOOR), false);
+  assert.equal(isCasdoorLoginUrl('http://auth.example.org/login/oauth/authorize', CASDOOR), false);
+});
+
+test('the Casdoor endpoint is read per call, so a runtime change takes effect', () => {
+  const url = 'https://other.example.net/login/oauth/authorize?client_id=x';
+  assert.equal(isCasdoorLoginUrl(url, CASDOOR), false);
+  assert.equal(isCasdoorLoginUrl(url, 'https://other.example.net'), true);
+  assert.equal(isCasdoorLoginUrl(`${CASDOOR}/login/oauth/authorize`, 'https://other.example.net'), false);
+});
+
+test('no or invalid Casdoor endpoint allows no popup', () => {
+  for (const ep of ['', undefined, null, 'not a url', 'javascript:1']) {
+    assert.equal(isCasdoorLoginUrl(`${CASDOOR}/login/oauth/authorize`, ep), false, String(ep));
+  }
+  assert.equal(isCasdoorLoginUrl('javascript:1', CASDOOR), false);
+});
+
+test('the main window may navigate only on its own local origin', () => {
+  assert.equal(isLocalAppUrl('http://localhost:3100/', 3100), true);
+  assert.equal(isLocalAppUrl('http://localhost:3100/auth-callback.html?code=1', 3100), true);
+  for (const u of ['http://localhost:3101/', 'https://localhost:3100/', 'http://localhost.evil.com:3100/', 'http://localhost:3100@evil.com/',
+    'https://evil.com/', 'file:///x', 'javascript:1', 'garbage']) {
+    assert.equal(isLocalAppUrl(u, 3100), false, u);
+  }
+});
+
+test('popup webPreferences are isolated and sandboxed with no preload', () => {
+  assert.deepEqual({ ...CASDOOR_POPUP_WEB_PREFERENCES }, { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: undefined });
+  assert.ok(Object.isFrozen(CASDOOR_POPUP_WEB_PREFERENCES));
+});
+
+test('main.js wires the popup preferences, the live endpoint, will-navigate and the download channel', () => {
+  const main = fs.readFileSync(path.join(__dirname, '..', 'main.js'), 'utf8');
+  assert.match(main, /isCasdoorLoginUrl\(url, localServer\.getSyncConfig\(\)\.casdoorEndpoint\)/);
+  assert.match(main, /webPreferences: \{ \.\.\.CASDOOR_POPUP_WEB_PREFERENCES \}/);
+  assert.match(main, /on\('will-navigate'/);
+  assert.match(main, /nodeIntegration: false,\s+sandbox: true,/);
+  assert.match(main, /ipcMain\.on\('external-link-allow-download'/);
+  assert.equal(main.includes('startsWith(process.env.CASDOOR_ENDPOINT'), false);
+  const preload = fs.readFileSync(path.join(__dirname, '..', 'app', 'preload.js'), 'utf8');
+  assert.match(preload, /allowDownloadUrl/);
 });
