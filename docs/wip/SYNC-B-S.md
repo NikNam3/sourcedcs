@@ -24,3 +24,11 @@ owned-scope continuity, tests `tests/store-resync-server.test.mjs`.
 
 ## For SYNC-B-C
 Adopt `<store>Seq`/`<store>Epoch` from acks and deltas (not from supplement frames, which carry none). `gapFromDeltas` false stores must not ask on a jump.
+
+## Not done
+- Soak `store-stale` detector: not added. `shadow.js` tracks Board state only, and the driver's restart/reconnect/ledger paths would each need store-seq handling (a lane of its own, NX-1's soak lane). `soak:selfcheck` passes unchanged.
+- Off-wire advance rate was not measured: every reconciler and carrier-tick advance now reaches the client as a delta carrying the seq, so none relies on the heartbeat.
+
+## Gates
+crc-sync npm test 2373/0, crc-desktop 1038/0, freeze 48/48 after re-record, freeze:selfcheck 18/18 (M9 retargeted), soak:selfcheck PASS.
+Re-recorded: all 38 golden files (six extra randomUUID calls renumber ids; new epoch keys).
