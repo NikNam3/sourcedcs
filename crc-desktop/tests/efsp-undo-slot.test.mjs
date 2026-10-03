@@ -140,3 +140,30 @@ test('Ctrl+Z is recognised; text entry keeps its own', async () => {
   assert.equal(slot.isTextEntryTarget({ tagName: 'INPUT' }), true);
   assert.equal(slot.isTextEntryTarget({ tagName: 'DIV' }), false);
 });
+
+test('the Undo button element survives the 250 ms countdown ticks, so a click spanning a tick is not lost (B9)', async () => {
+  const dom = (await import('./helpers/dom-stub.js')).default;
+  const el = dom.makeElement('div');
+  const g = freshGraph();
+  const gState = await g.import('panels/efsp/panel/state.js');
+  const gSlot = await g.import('panels/efsp/panel/undo-slot.js');
+  const gWs = await g.import('panels/efsp/efsp-ws.js');
+  gWs.setEfspSender('_sendEfsp', () => {});
+  let now = 1_000_000;
+  gSlot._setUndoClockForTest(() => now);
+  gSlot._resetUndoForTest();
+  globalThis.document.getElementById = (id) => (id === 'efsp-undo-slot' ? el : null);
+  gState._cachePanelElements();
+  gSlot.noteUndoAck(ack(), pending);
+  gSlot.renderUndoSlot();
+  const btn = el.children[0];
+  assert.ok(btn && btn.className === 'efsp-undo-btn');
+  assert.match(btn.textContent, /· 10 s$/);
+  now += 1500;
+  gSlot.renderUndoSlot();
+  assert.equal(el.children[0], btn, 'the same element');
+  assert.equal(el.children.length, 1);
+  assert.match(btn.textContent, /· 9 s$|· 8 s$/);
+  assert.equal((btn._listeners.click || []).length, 1, 'one click handler, not one per render');
+  globalThis.document.getElementById = () => null;
+});

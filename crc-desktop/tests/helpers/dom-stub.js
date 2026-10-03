@@ -34,6 +34,7 @@ function makeElement(tag) {
       if (this.tagName === 'select' && c.tagName === 'option' && this.value === '') this.value = c.value;
       return c;
     },
+    replaceChildren(...nodes) { this.children = []; for (const n of nodes) this.appendChild(n); },
     removeChild(c) { this.children = this.children.filter(x => x !== c); return c; },
     remove() { if (this.parentNode) this.parentNode.removeChild(this); },
     replaceWith(next) {

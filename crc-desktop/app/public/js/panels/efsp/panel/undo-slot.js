@@ -155,21 +155,28 @@ function _render() {
   if (_undoSlotEl) {
     const outcome = getUndoOutcome();
     const text = undoSlotText();
-    _undoSlotEl.replaceChildren();
     _undoSlotEl.classList.toggle('efsp-undo-refused', !!(outcome && outcome.refused));
     if (outcome) {
+      _undoSlotEl.replaceChildren();
       _undoSlotEl.textContent = outcome.text;
       _undoSlotEl.hidden = false;
     } else if (text) {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'efsp-undo-btn';
-      btn.textContent = text;
-      btn.title = 'Undo this action (Ctrl+Z or .undo)';
-      btn.addEventListener('click', requestUndo);
-      _undoSlotEl.appendChild(btn);
+      // The countdown ticks every 250 ms. The button is kept and only its text changes: a button rebuilt under the
+      // pointer between mousedown and mouseup loses the click (B9, docs/wip/ARCH-C.md §3.1).
+      let btn = _undoSlotEl.querySelector('.efsp-undo-btn');
+      if (!btn) {
+        _undoSlotEl.replaceChildren();
+        btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'efsp-undo-btn';
+        btn.title = 'Undo this action (Ctrl+Z or .undo)';
+        btn.addEventListener('click', requestUndo);
+        _undoSlotEl.appendChild(btn);
+      }
+      if (btn.textContent !== text) btn.textContent = text;
       _undoSlotEl.hidden = false;
     } else {
+      _undoSlotEl.replaceChildren();
       _undoSlotEl.hidden = true;
     }
   }
