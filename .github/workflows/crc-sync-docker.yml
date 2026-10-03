@@ -88,10 +88,31 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
             type=raw,value=dev,enable=${{ github.ref == 'refs/heads/dev' }}
 
+      # B14 / DEPLOY-GATE-2: the image carries the wire protocol it speaks, so the deploy gate reads it from the exact image it
+      # deploys (.github/scripts/protocol-gate.sh) instead of from source that may belong to a different build.
+      - name: Read the wire protocol
+        id: wire
+        run: |
+          n=$(sed -n 's/.*WIRE_PROTOCOL:[[:space:]]*\([0-9][0-9]*\).*/\1/p' crc-sync/src/wire-protocol.js | head -1)
+          [ -n "$n" ] || { echo "::error title=Wire protocol::could not read WIRE_PROTOCOL from crc-sync/src/wire-protocol.js"; exit 1; }
+          echo "protocol=$n" >> "$GITHUB_OUTPUT"
+
       - name: Build and push Docker image
+        id: build
         uses: docker/build-push-action@v5
         with:
           context: ./crc-sync
           push: true
           tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          labels: |
+            ${{ steps.meta.outputs.labels }}
+            org.sourcedcs.wire-protocol=${{ steps.wire.outputs.protocol }}
+
+      - name: Record the image digest
+        run: |
+          {
+            echo "### crc-sync image"
+            echo "- digest: \`${{ steps.build.outputs.digest }}\`"
+            echo "- wire protocol label: \`${{ steps.wire.outputs.protocol }}\`"
+            echo "- commit: \`${GITHUB_SHA}\`"
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -13,9 +13,9 @@ The key that older crc-desktop releases shipped is in git history, so it is publ
    (an origin allow-list that excludes localhost breaks the basemap). A second key for clients, separate from the server's
    terrain key, gets its own quota and is what `CRCSYNC_MAPTILER_CLIENT_KEY` is for.
 2. Set `CRCSYNC_MAPTILER_CLIENT_KEY` (and/or `CRCSYNC_MAPTILER_KEY`) in `infra/.env` on the server. Never commit it.
-3. Deploy crc-sync (the human approves every deploy; the VERSION gate applies): `git pull --ff-only`, then
-   `docker compose pull crc-sync && docker compose up -d` in `infra/`. Connected clients pick the new key up at their next
-   login (restart or re-login).
+3. Deploy crc-sync by re-running the **Deploy** workflow (Actions, "Deploy", Run workflow on `main`; the human approves the
+   `production` environment). Do not run `docker compose pull crc-sync && docker compose up -d` by hand: that pulls whatever
+   `:latest` is and bypasses the wire protocol gate. Connected clients pick the new key up at their next login (restart or re-login).
 4. Check: log in with a crc-desktop of this release; the basemap and contours draw.
 5. **Delete the old key in MapTiler.** Until then it still works, and it is public.
 
@@ -35,12 +35,24 @@ The per-frame `version: 1` is unrelated and stays 1.
   (a value's meaning) is bumped by hand with `npm run wire:record -- --bump`. A crc-desktop parity test fails if only one copy moved.
 - **Release order.** Merge to `main`, tag `crc-desktop-vX.Y.Z` from `main` (the release uploads the installers, then dispatches the crc-sync
   image, which deploys). Between the upload and the crc-sync deploy, updated clients see "the server must be updated first" for a few minutes.
-- **The gate** (`.github/scripts/protocol-gate.sh`, the "Wire protocol gate" step of `deploy.yml`, main only) compares crc-sync's number with the
-  number in the published release (`https://sourcedcs.page/api/releases/latest`, then `git show crc-desktop-v<version>:...`). When they differ
+- **The gate** (`.github/scripts/protocol-gate.sh`, the "Wire protocol gate" step of `deploy.yml`, main only; its decision table is
+  `infra/tests/protocol-gate.test.js`, run by `infra nginx check`). It resolves the crc-sync image to a **digest** (`sha-<short>` of the
+  commit when a crc-sync build triggered the deploy, otherwise the current `:latest`), reads that image's `org.sourcedcs.wire-protocol`
+  label (stamped by `crc-sync-docker.yml`, digest also in that run's summary) and compares it with the protocol in the **newest**
+  published release (`https://sourcedcs.page/api/releases/latest`, newest of the win and linux versions, then
+  `git show crc-desktop-v<version>:...`). The SSH step then deploys that same digest (`CRC_SYNC_IMAGE`), never a moving tag. When they differ
   the step reports an error: **"crc-sync speaks protocol N, the published CRC vX speaks M: publish a crc-desktop release first (tag
   crc-desktop-vX.Y.Z from main) or revert the wire change."** It holds only crc-sync: the `git pull`, the other images and the rest of the stack
-  still deploy, and the running crc-sync is left alone. A published version with no tag in the repo also holds it. If the releases API cannot be read the
-  gate warns and lets crc-sync through.
+  still deploy, and the running crc-sync is left alone. **It fails closed**: an unreadable releases API, a newest published version with no tag
+  in the repo, a tag whose `wire-protocol.js` has no readable number, or an image with no label (built before the label existed) all hold
+  crc-sync, with the reason in the error. Fix the cause and re-run Deploy; `skip_protocol_gate` is the override.
+- **Never recreate crc-sync by hand.** A bare `docker compose up -d` on the server (without `CRC_SYNC_IMAGE`) resolves crc-sync back to `:latest`
+  and recreates it from that, past the gate. Re-run the Deploy workflow instead. If you must, run the gate first and export its image:
+  `IMAGE_REPO=ghcr.io/niknam3/sourcedcs/crc-sync IMAGE_REF=latest bash .github/scripts/protocol-gate.sh` (from a checkout with all tags),
+  continue only if it prints `hold=false`, then `CRC_SYNC_IMAGE=<the image= line> docker compose pull crc-sync && CRC_SYNC_IMAGE=<same> docker compose up -d crc-sync`.
+- **A half-published release.** `crc-desktop-release.yml` fails a leg that builds no installer and has a `verify-published` job that turns the run red
+  when the releases API does not list the tagged version for both win and linux. Re-run the failed leg (uploads are idempotent), or delete the tag.
+  The gate judges by the newest published version, so a one-leg release does not hold crc-sync on the older one.
 - **`skip_protocol_gate`.** A `workflow_dispatch` input on `deploy.yml`, for the human only, that recreates crc-sync despite a mismatch (every old
   client then sees "Update required" until it updates). Use it only knowingly.
 - `crc-sync-docker.yml` runs both unit suites first; no image is built when one fails.
@@ -55,7 +67,7 @@ client against the new server (or the reverse) does not work. Decisions S-M-W7, 
 
 1. `infra/.env`: rename `ASACS_DOMAIN` / `ASACS_URL` to `CRCSYNC_DOMAIN` / `CRCSYNC_URL` (the old names are no longer read; `.env.example`).
 2. In the `crc-sync-state` volume (`/app/state`), delete: `efsp-board.json`, `efsp-mutations.jsonl`, every `efsp-facility-*.json`, and `alerting.json` if it has an `stca` key (the key is `conflictAlert` now). A state file is not migrated: an unknown key or an old shape stops start-up, with the file and the reason in the log (`checkPersistedShape`, `crc-sync/src/efsp/stores.js`). That includes a top-level `board`, a Board for a Facility that is not configured, a Strip in TRANSITING, and a facility file that is missing or invalid (`crc-sync/config/efsp-facility-*.json` are complete files; there is no merge with a copy in `state/`). The fix is always to correct or delete the named file; deleting gives a clean start.
-3. Then the usual `git pull --ff-only`, `docker compose pull main-website atobrief crc-sync`, `docker compose up -d` (root `CLAUDE.md`, "How the docker-image services deploy").
+3. Then deploy by re-running the Deploy workflow (it does the `git pull --ff-only`, `docker compose pull main-website atobrief crc-sync`, `docker compose up -d`; root `CLAUDE.md`, "How the docker-image services deploy").
 
 ## 2026-08-29 — wiki scraper incident: what's blocked and why
 
