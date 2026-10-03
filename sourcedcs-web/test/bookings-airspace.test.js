@@ -31,6 +31,18 @@ test('altitude outside the registry limits is refused; null limits mean unbounde
   } finally { h.stop(); }
 });
 
+test('an unlimited airspace still needs a whole number of feet in 0..100000 (the schema bounds)', async () => {
+  const h = await boot(REG());
+  try {
+    const open = (altitude) => body({ airspaceRef: { theater: 'Syria', airspaceId: 'OPEN-1' }, altitude });
+    for (const bad of [-5000, 1e9, 100001, 1500.5, '', null, true, 'abc']) {
+      assert.equal((await h.call('POST', '/bookings', tokens.member, open(bad))).status, 400, String(bad));
+    }
+    assert.equal((await h.call('POST', '/bookings', tokens.member, open(0))).status, 201);
+    assert.equal((await h.call('POST', '/bookings', tokens.member, open(100000))).status, 201);
+  } finally { h.stop(); }
+});
+
 test('the same airspace id in another theater has its own limits', async () => {
   const h = await boot(REG());
   try {

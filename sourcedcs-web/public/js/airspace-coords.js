@@ -107,8 +107,11 @@
       var nums = s.match(/-?\d+(?:\.\d+)?/g);
       if (!nums) return null;
       if (nums.length === 2) { lat = round6(parseFloat(nums[0])); lon = round6(parseFloat(nums[1])); }
-      else if (nums.length === 6) {
-        lat = parseComponent(nums.slice(0, 3).join(' ')); lon = parseComponent(nums.slice(3).join(' '));
+      else if (nums.length === 6 || nums.length === 4) {
+        /* 4 numbers = degrees + decimal minutes, 6 = degrees minutes seconds; signed, no hemisphere letters
+           (same rule as crc-desktop's coords.js, locked by crc-desktop/tests/web-coords-parity.test.mjs) */
+        var h = nums.length / 2;
+        lat = parseComponent(nums.slice(0, h).join(' ')); lon = parseComponent(nums.slice(h).join(' '));
         if (!lat || !lon) return null;
         lat = lat.value; lon = lon.value;
       } else return null;

@@ -164,6 +164,13 @@ router.post('/booking-resources/ranges/:id/migrate', writeOpsLimiter, auth.requi
 
   const r = await crcsync.getClient().listAirspaces(theater, { fresh: true });
   if (!r.ok) return res.status(503).json({ error: 'crc-sync unreachable', reason: r.reason });
+  /* The await let another request run: re-check that this range is still here (a concurrent migration of it would
+     otherwise run twice), and read `resources`/bookings afresh below. */
+  if (resources.ranges.findIndex(x => x.id === id) === -1) {
+    const nowDone = resources.migratedRanges && resources.migratedRanges[id];
+    if (nowDone) return res.json({ ok: true, alreadyMigrated: true, moved: nowDone.count, airspaceRef: nowDone.airspaceRef });
+    return res.status(404).json({ error: 'Range not found' });
+  }
   const entry = r.airspaces.find(a => a.definition && a.definition.airspaceId === airspaceId);
   const ref = { theater, airspaceId };
   const plan = ab.planMigration({ rangeId: id, ref, def: entry && entry.definition, bookings: store.state.bookings, allowOutOfBand: body.allowOutOfBand === true, nowMs: Date.now() });
@@ -279,8 +286,16 @@ async function lookupAirspace(ref) {
   return { def: entry.definition };
 }
 
+/* A number or a numeric string; null, '', booleans and arrays would otherwise coerce to 0 or 1. */
+function altitudeInput(v) {
+  return typeof v === 'number' || (typeof v === 'string' && v.trim() !== '') ? Number(v) : NaN;
+}
+
 function checkAirspaceAltitude(def, altitude) {
-  if (!Number.isFinite(altitude) || !ab.altitudeInBand(altitude, def)) {
+  if (!ab.isValidAltitude(altitude)) {
+    return 'altitude must be a whole number of feet between ' + ab.MIN_ALTITUDE_FT + ' and ' + ab.MAX_ALTITUDE_FT;
+  }
+  if (!ab.altitudeInBand(altitude, def)) {
     return 'altitude must be within the airspace limits (' + ab.bandText(def) + ')';
   }
   return null;
@@ -306,7 +321,7 @@ router.post('/bookings', bookingLimiter, auth.requireAuth, async (req, res) => {
     airspaceRef = { theater: r.theater, airspaceId: r.airspaceId };
     const found = await lookupAirspace(airspaceRef);
     if (found.err) return res.status(found.err.status).json({ error: found.err.error });
-    altitude = Number(b.altitude);
+    altitude = altitudeInput(b.altitude);
     const altErr = checkAirspaceAltitude(found.def, altitude);
     if (altErr) return res.status(400).json({ error: altErr });
     const conflict = ab.findAirspaceConflict(store.state.bookings, airspaceRef, start, end, altitude, null);
@@ -379,7 +394,7 @@ router.put('/bookings/:id', writeOpsLimiter, auth.requireAuth, async (req, res) 
     if (found.err) return res.status(found.err.status).json({ error: found.err.error });
     /* the registry read awaited: the booking may have been moved/cancelled meanwhile */
     if (!store.state.bookings.includes(booking)) return res.status(409).json({ error: 'Booking changed while saving; reload and try again' });
-    if (b.altitude !== undefined) altitude = Number(b.altitude);
+    if (b.altitude !== undefined) altitude = altitudeInput(b.altitude);
     const altErr = checkAirspaceAltitude(found.def, altitude);
     if (altErr) return res.status(400).json({ error: altErr });
     const conflict = ab.findAirspaceConflict(store.state.bookings, booking.airspaceRef, start, end, altitude, booking.id);
