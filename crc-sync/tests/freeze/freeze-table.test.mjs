@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { canonical, summarize, summarizeFinalState, digest, checkGolden } from './freeze-lib.mjs';
+import { canonical, summarize, summarizeFinalState, hashOf, checkGolden, checkGoldenSet } from './freeze-lib.mjs';
 import { resetDeterminism } from './freeze-determinism.mjs';
 import { legacyShape } from '../helpers/wire-slots.mjs';
 
@@ -37,7 +37,8 @@ function coordBay(p, f) { const b = facilityConfig.coordinationBayFor(p, f); ret
 
 const MISSION_T0 = Date.UTC(2026, 5, 21, 2, 40, 0);
 let cmidN = 0;
-const cmid = () => `00000000-0000-4000-8000-${(++cmidN).toString(16).padStart(12, '0')}`;
+// Not uuid-shaped: a second 00000000-0000-4000-8000-<n> counter would collide with the freeze uuid counter's ids once the golden is renumbered by appearance.
+const cmid = () => `freeze-cmid-${String(++cmidN).padStart(5, '0')}`;
 
 const FDR = { callsign: 'FREEZE1', aircraftType: 'F16', wakeCategory: 'D', departureAirport: 'LTAG', destinationAirport: 'LTAG', route: 'DCT', requestedAltitude: '250' };
 const ROLES = [
@@ -188,12 +189,12 @@ function runMatrix() {
         }
         // snapshot()/restore() round trip for the whole group
         h.efsp.persist();
-        const snapA = JSON.stringify(canonical(Object.fromEntries(FACILITIES.map(f => [f, h.efsp.boardStoreFor(f).snapshot()]))));
+        const snapA = JSON.stringify(canonical(Object.fromEntries(FACILITIES.map(f => [f, h.efsp.boardStoreFor(f).snapshot()])), true));
         const flightDataA = JSON.stringify(canonical(h.efsp.flightDataStore.snapshot()));
         const again = createEfsp({ currentTheater: () => 'Test', clock: { now: () => MISSION_T0, source: 'MISSION' } });
-        const snapB = JSON.stringify(canonical(Object.fromEntries(FACILITIES.map(f => [f, again.boardStoreFor(f).snapshot()]))));
+        const snapB = JSON.stringify(canonical(Object.fromEntries(FACILITIES.map(f => [f, again.boardStoreFor(f).snapshot()])), true));
         const flightDataB = JSON.stringify(canonical(again.flightDataStore.snapshot()));
-        roundTrips.push({ id: tag, boardsEqual: snapA === snapB, flightDataEqual: flightDataA === flightDataB, boardHash: digest(snapA), strips: JSON.parse(snapA).INCIRLIK.strips.length + JSON.parse(snapA).CENTER.strips.length + JSON.parse(snapA).TACTICAL.strips.length });
+        roundTrips.push({ id: tag, boardsEqual: snapA === snapB, flightDataEqual: flightDataA === flightDataB, boardHash: hashOf(canonical(JSON.parse(snapA))), strips: JSON.parse(snapA).INCIRLIK.strips.length + JSON.parse(snapA).CENTER.strips.length + JSON.parse(snapA).TACTICAL.strips.length });
       }
     }
   }
@@ -220,7 +221,10 @@ const matrix = runMatrix();
 
 test('freeze table: mutation matrix (op kind x role x state x owner x acting Position)', () => {
   assert.ok(matrix.cells.length > 1500, `matrix too small: ${matrix.cells.length}`);
-  checkGolden(assert, 'table-mutations', { cells: matrix.cells }, (d) => d.cells.map(c => [c.cell, c]));
+  // One golden per op kind (golden/table-mutations/<op>.json): a change to one op touches one file.
+  const byOp = {};
+  for (const c of matrix.cells) (byOp[(/ op=(\S+)$/.exec(c.cell) || [])[1] || 'unknown'] ||= { cells: [] }).cells.push(c);
+  checkGoldenSet(assert, 'table-mutations', byOp, (d) => d.cells.map(c => [c.cell, c]));
 });
 
 test('freeze table: CreateStrip (Position x stripType)', () => {

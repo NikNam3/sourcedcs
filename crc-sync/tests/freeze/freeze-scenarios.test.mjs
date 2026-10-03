@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import { HERE, canonical, summarize, summarizeCollection, summarizeFinalState, checkGolden } from './freeze-lib.mjs';
+import { HERE, canonical, summarize, summarizeCollection, summarizeFinalState, checkGolden, renumberIds } from './freeze-lib.mjs';
 
 // Golden master over the seed corpus: every tests/efsp-scenario*.test.mjs (and efsp-scenarios.test.mjs)
 // is run as-is in a child process with freeze-recorder.mjs preloaded, which pins ids / randomness / wall
@@ -66,7 +66,7 @@ test('freeze: scenario corpus is deterministic and matches its goldens', { timeo
       const raw = JSON.parse(a);
       if (process.env.FREEZE_DUMP) {
         fs.mkdirSync(process.env.FREEZE_DUMP, { recursive: true });
-        fs.writeFileSync(path.join(process.env.FREEZE_DUMP, file.replace('.test.mjs', '.full.json')), JSON.stringify(canonical(raw), null, 1));
+        fs.writeFileSync(path.join(process.env.FREEZE_DUMP, file.replace('.test.mjs', '.full.json')), renumberIds(JSON.stringify(canonical(raw), null, 1)));
       }
       assert.ok(raw.instances.length > 0 && raw.instances.some(x => x.steps.length > 0), `${file}: recorder captured no wire traffic`);
       checkGolden(assert, '' + file.replace(/^efsp-/, '').replace('.test.mjs', ''), compact(raw), unitsOf);
