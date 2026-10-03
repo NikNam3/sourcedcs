@@ -43,7 +43,7 @@ import {
   TOFI_COUNTERPARTS
 } from './bay/authority-mirror.js';
 import {
-  TOFI_ACCEPT_REGIMES, _canProposeTofiEntry, _canProposeTofiExit, _canTransferTofiComms, _dispatchTofi,
+  TOFI_ACCEPT_REGIMES, _canMarkTofiEntered, _canProposeTofiEntry, _canProposeTofiExit, _canTransferTofiComms, _dispatchTofi,
   _isPendingTofiReplica, _openTofiEntryPopover, _tofiExitPrecondition, _tofiProposerOf, _tofiRegimeChoice
 } from './bay/popovers/tofi.js';
 import {
@@ -90,7 +90,7 @@ export {
   _appendAnnotationHistory, _appendDropButton, _appendExpandButton, _appendExpandedView, _buildBlockCell,
   _buildCoordinationNoteEl, _buildCoordinationReasonEl, _buildStripEl, _canApproveAirspaceEntry,
   _canConvertToArrival, _canProposeCoordination, _canProposeTofiEntry, _canProposeTofiExit,
-  _canTransferTofiComms, _coordinationIsReplica, _coordinationProposerOf, _coordinationStateWord,
+  _canMarkTofiEntered, _canTransferTofiComms, _coordinationIsReplica, _coordinationProposerOf, _coordinationStateWord,
   _dispatchCoordination, _dispatchTofi, _expandedStripId, _isPendingCoordinationReplica, _isPendingTofiReplica,
   _isRejectedCoordinationReplica, _mountPopover, _openAirspaceEntryPopover, _openBindPopover,
   _openCoordinatePopover, _openMarsaPopover, _openTofiEntryPopover, _pendingConvertStripId, _setExpandedStripId,

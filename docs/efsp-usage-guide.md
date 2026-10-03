@@ -18,7 +18,7 @@ Built and tested (`npm test` in `crc-sync` and `crc-desktop`, both green per lan
   - **Stereo routes** — file a flight by short name (a picker in Block `9F`) and the server expands the whole route. See §4A. (The table ships empty; nothing works until somebody writes one.)
   - **MARSA** — declaring that the military is separating its own aircraft, as a relation between flights rather than a flag on one, with the pre-rendezvous course/altitude interlock. See §8D.
   - **The military Block namespace** — `ORDNANCE` (Block 3G) and `HOOK` (Block 3F) on every ATC Strip. `HUNG` ordnance raises an advisory chip on every Position's Strip for the flight (§6); arresting-gear gating (§9.7) reads a gear inventory Incirlik does not have, so it never fires. See §6.
-  - **The mission line exists from tasking** — `TAC_C2` frags a mission line against a filed flight before it moves, and TOFI later lands on the one that is already there. Accepting tactical control now requires stating the separation regime. See §8C1.
+  - **The mission line exists from tasking** — `TAC_C2` frags a mission line against a filed flight before it moves, and TOFI later lands on the one that is already there. Accepting tactical control now requires stating the separation regime, which takes effect when the flight enters an active airspace or the MRU presses Entered. See §8C1.
   - **Every Block is reachable, and amendments are visible** — the `▼` button on a Strip opens the Blocks that have no chip, and a superseded value now shows struck through in the Block itself (§3.7). Heading and initial altitude are chips on a DEPARTURE Strip; the radar vector is one on ARRIVAL/OVERFLIGHT. See §4B.
   - **MTR fields** — the military training route a flight is on, where it enters and leaves, and the altitude it wants after exit. See §4C.
   - **The runway (runway status)** — Tower owns the runway, everyone else asks; closing it or taking it out for works holds the traffic that would use it; the active runway comes from the wind at mission start. The RUNWAY STATUS panel and the runway chips on the Strip are in. See §8G.
@@ -846,8 +846,35 @@ being worked enroute (`HANDED_OFF` / `INBOUND` / `TRANSITING`).
 2. The MRU presses **Accept TOFI Entry** — and **must pick a separation regime** from
    the `<select>` beside the button. This is what the flight data records as the answer to
    "who is separating this aircraft", and it is asked rather than guessed because it
-   comes from the governing agreement. An accept without one is refused.
+   comes from the governing agreement. An accept without one is refused. The regime does
+   **not** take effect at the accept: ATC keeps separating the flight until it is inside
+   an airspace (see "When the regime takes effect" below).
 3. **Transfer Comms** is a separate press, from either side.
+
+### When the regime takes effect
+
+The regime you pick at accept is **pending**, not in force. `SEP REG` stays `ATC` and the
+MRU's Strip shows `SEP REG ATC → USING_AGENCY on entry` (CTR's `SEP REG` Block shows the
+same as `→ USING_AGENCY on entry` beside the value). It becomes the effective regime when
+either happens, and only then:
+
+- The flight is inside an airspace that is **active for the MRU's Facility** for two
+  consecutive seconds (the system notices this by itself; it needs the flight correlated to
+  a contact), or it already was at the accept.
+- The MRU presses **Entered** on the mission line (the exchange row, MRU side only). It is
+  always allowed. If the flight is not inside an active airspace, the amber line under the
+  Strips says so ("not inside an airspace active for you") and the regime is made effective
+  anyway: you are telling the system something it cannot see. Undo (10 s) puts it back to
+  pending. Picking ATC at the accept leaves nothing pending.
+
+Before entry, a non-ATC value typed into `SEP REG` replaces the pending one, and `ATC`
+clears it. A TOFI exit while a regime is still pending is not blocked by it (`SREG` is
+`ATC`), and the exit drops the pending regime.
+
+Two chips on the Strip are advisories and never change the regime: **OUTSIDE AIRSPACE**
+(after entry the flight has been outside for 10 s, or the airspace was deactivated; the MRU
+decides what that means) and **ENTRY UNKNOWN** (the airspace has no geometry or the contact
+cannot be placed, so entry is not detected: press **Entered** yourself).
 
 ### Getting it back
 

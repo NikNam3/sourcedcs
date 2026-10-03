@@ -22,7 +22,7 @@
 
 import { missionNow } from '../topbar.js';
 import {
-  conformanceAlertsForFlightData, correlatedTrackIdForStrip, getEfspAirspace, getEfspCorrelationForStrip, getEfspFlightData, getAllEfspStrips,
+  conformanceAlertsForFlightData, tofiRegimeAlertForFlightData, correlatedTrackIdForStrip, getEfspAirspace, getEfspCorrelationForStrip, getEfspFlightData, getAllEfspStrips,
   getEfspStrip, marsaForStrip, otherLiveStripsForFlightData, conflictAlertsForTrack, surveillanceHintsForStrip
 } from './efsp-state.js';
 import { clearEfspArrival, consumeEfspArrivalFlash, efspArrivalFor } from './efsp-arrivals.js';
@@ -42,7 +42,7 @@ import {
   TOFI_ACCEPT_REGIMES, TOFI_COUNTERPARTS, _appendAnnotationHistory, _appendDropButton, _appendExpandButton,
   _appendExpandedView, _buildBlockCell, _buildCoordinationNoteEl, _buildCoordinationReasonEl,
   _canApproveAirspaceEntry, _canConvertToArrival, _canProposeCoordination, _canProposeTofiEntry, _canProposeTofiExit,
-  _canTransferTofiComms, _coordinationIsReplica, _coordinationProposerOf, _coordinationStateWord,
+  _canMarkTofiEntered, _canTransferTofiComms, _coordinationIsReplica, _coordinationProposerOf, _coordinationStateWord,
   _dispatchCoordination, _dispatchCorrelation, _dispatchGesture, _dispatchHandBack, _dispatchMarsa, _dispatchTofi,
   _handBackBayFor, _invokeNla, _isPendingCoordinationReplica, _isPendingTofiReplica, _isRejectedCoordinationReplica,
   _mountPopover, _openAirspaceEntryPopover, _openBindPopover, _openCoordinatePopover, _openMarsaPopover,
@@ -240,7 +240,8 @@ function _tofiExchange(strip) {
   const tofi = strip.tofiCoordination;
   if (!tofi || tofi.state === 'REJECTED') return null;
   const awaitingComms = !!tofi.acceptedAt && !tofi.commsTransferred;
-  if (tofi.state !== 'INITIATED' && !awaitingComms) return null; // active and settled: the TOFI indicator says so
+  const awaitingEntry = _canMarkTofiEntered(strip);
+  if (tofi.state !== 'INITIATED' && !awaitingComms && !awaitingEntry) return null; // active and settled: the TOFI indicator says so
 
   const pendingIn = _isPendingTofiReplica(strip);
   const blocking = _tofiExitPrecondition(strip, tofi);
@@ -253,6 +254,8 @@ function _tofiExchange(strip) {
   let meta;
   if (awaitingComms && tofi.state !== 'INITIATED') {
     meta = _stateMeta('ACCEPTED · comms not moved');
+  } else if (awaitingEntry && tofi.state !== 'INITIATED') {
+    meta = _stateMeta('ACTIVE · regime waits for entry');
   } else if (blocking) {
     meta = _stateMeta(`${tofi.state} · blocked`);
     _addClass(meta, 'efsp-x-meta-attn');
@@ -296,13 +299,25 @@ function _tofiExchange(strip) {
       _stripButton('Reject', 'efsp-coordinate-reject-btn', { onClick: () => _dispatchTofi(strip, 'REJECT') }),
       accept,
     ]));
-  } else if (_canTransferTofiComms(strip)) {
-    row.appendChild(_exchangeButtons([
-      _stripButton('Transfer Comms', 'efsp-coordinate-btn efsp-tofi-transfer-comms-btn', {
+  } else {
+    const steps = [];
+    if (_canTransferTofiComms(strip)) {
+      steps.push(_stripButton('Transfer Comms', 'efsp-coordinate-btn efsp-tofi-transfer-comms-btn', {
         title: 'Guide §4.6.3 — a separate step from ACCEPT',
         onClick: () => _dispatchTofi(strip, 'TRANSFER_COMMS'),
-      }),
-    ]));
+      }));
+    }
+    if (awaitingEntry) {
+      const pending = getEfspFlightData(strip.flightDataId).tofi.pendingSeparationRegime;
+      const waiting = _stripEl('div', 'efsp-x-regime-pending', `SEP REG ATC → ${pending} on entry`);
+      waiting.dataset.pendingRegime = pending;
+      row.appendChild(waiting);
+      steps.push(_stripButton('Entered', 'efsp-coordinate-btn efsp-tofi-entered-btn', {
+        title: `Record that the flight is in your airspace: ${pending} becomes the separation regime now (ADR 0102)`,
+        onClick: () => _dispatchTofi(strip, 'MARK_ENTERED'),
+      }));
+    }
+    if (steps.length) row.appendChild(_exchangeButtons(steps));
   }
   return row;
 }
@@ -451,10 +466,10 @@ function _buildStripFields(strip) {
 // applies (MARSA, TOFI, an airspace, other Strips on the flight). A quiet Strip
 // has no indicator row at all. Warnings first, so they are always in the same
 // place: the left end of the row.
-export const INDICATOR_ORDER = ['conflictAlert', 'conf', 'rwy', 'gear', 'ord', 'scram', 'trk', 'marsa', 'tofi', 'airspace', 'timer', 'siblings', 'split'];
+export const INDICATOR_ORDER = ['conflictAlert', 'conf', 'rwy', 'gear', 'ord', 'scram', 'tofiRegime', 'trk', 'marsa', 'tofi', 'airspace', 'timer', 'siblings', 'split'];
 // Keys whose chips come from _stripAlerts (warnings first, left end of the row). rwy/gear:
 // Runway status (docs/adr/0068); ord: hung ordnance (0069); scram: alert/scramble (0070).
-export const ALERT_SLOT_KEYS = new Set(['conflictAlert', 'conf', 'rwy', 'gear', 'ord', 'scram']);
+export const ALERT_SLOT_KEYS = new Set(['conflictAlert', 'conf', 'rwy', 'gear', 'ord', 'scram', 'tofiRegime']);
 
 const _pad3 = (n) => String(Math.round(n)).padStart(3, '0');
 
@@ -492,6 +507,16 @@ function _stripAlerts(strip) {
       out.push({ key: 'conf', tone: 'bad', legacy: 'efsp-conf-indicator', text: `BUST ${a.deviationFt > 0 ? '+' : '−'}${Math.abs(a.deviationFt)}`,
         reason: `Reached ${_fmtAlt(a.assigned)}, now at ${_fmtAlt(a.altFt)}.` });
     }
+  }
+  // docs/adr/0102: the regime waits for the airspace; leaving it or an unknown geometry is said here, never acted on.
+  const regimeAlert = tofiRegimeAlertForFlightData(strip.flightDataId);
+  if (regimeAlert) {
+    const outside = regimeAlert.kind === 'REGIME_OUTSIDE_AIRSPACE';
+    out.push({ key: 'tofiRegime', tone: 'attn', legacy: 'efsp-tofi-regime-alert',
+      text: outside ? 'OUTSIDE AIRSPACE' : 'ENTRY UNKNOWN',
+      reason: outside
+        ? 'The flight has left the airspace its separation regime applies in. The regime is unchanged; the MRU decides.'
+        : 'The airspace or the contact cannot be placed, so entry is not detected automatically. Mark the flight entered by hand.' });
   }
   // Wave-2 advisories, each defined in its own file (docs/adr/0068, 0069, 0070).
   out.push(...runwayStatusAlertsFor(strip));

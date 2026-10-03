@@ -934,6 +934,11 @@
 .efsp-tofi-popover { border-color: #cf9b3c; }
 .efsp-tofi-transfer-comms-btn { border-color: #cf9b3c; color: #ffe3ad; }
 .efsp-tofi-badge { border-color: #cf9b3c; color: #ffe3ad; }
+.efsp-tofi-entered-btn { border-color: #cf9b3c; color: #ffe3ad; }
+/* ADR 0102: the regime that waits for the airspace, beside the effective SEP REG value */
+.efsp-block-with-pending { display: inline-flex; align-items: baseline; gap: 4px; }
+.efsp-x-regime-pending { font-size: 0.85em; color: #ffe3ad; }
+.efsp-sreg-pending { font-size: 0.8em; font-style: italic; color: #ffe3ad; border-bottom: 1px dashed #cf9b3c; white-space: nowrap; }
 /* F-307 — the exit is proposed and cannot be accepted yet. Declared after the
    base so it wins at equal specificity; the same amber as a rejection, because
    it is the same kind of fact: something is waiting on a person, and the

@@ -231,6 +231,7 @@ export function getCurrentEfspRefusal() { return _currentRefusal; }
 // controller never mistakes "accepted, but note this" for "refused".
 const MUTATION_WARNING_MESSAGES = {
   DUPLICATE_IGNORED_WARNING: 'Duplicate beacon code — assigned anyway, per policy',
+  NOT_IN_ACTIVE_AIRSPACE: 'Marked entered, but the flight is not inside an airspace active for you: the regime is now effective anyway (crc-sync docs/adr/0102)',
   LUAW_WHILE_COMBINED: LUAW_WHILE_COMBINED_TEXT, // crc-sync docs/adr/0105
 };
 
