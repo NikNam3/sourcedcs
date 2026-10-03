@@ -513,9 +513,6 @@ export function renderAirspacePanel() {
   }
 }
 
-/** The draft text under `key`, for a test. */
-export function _draftForTest(key) { return _drafts.get(key); }
-
 export function initAirspacePanel() {
   _airspaceListEl = document.getElementById('airspace-list');
   _airspaceEmptyEl = document.getElementById('airspace-empty');

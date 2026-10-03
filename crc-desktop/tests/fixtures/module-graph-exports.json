@@ -367,7 +367,6 @@
    "trimClosing"
   ],
   "panels/efsp/airspace-panel.js": [
-   "_draftForTest",
    "airspaceActionsFor",
    "deleteReason",
    "editReason",

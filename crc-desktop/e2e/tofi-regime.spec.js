@@ -4,11 +4,15 @@
  * proposes TOFI ENTRY to TAC_C2 (TACTICAL); the MRU accepts with a regime, sees it pending, and marks Entered by hand
  * (the flight is not inside any active airspace here, so the warning shows). Run on E2E_LANE=5. */
 
+const path = require('path');
+const fs = require('fs');
 const { test, expect } = require('./helpers/test');
 const { openPanel, seedStrip, startAction } = require('./helpers/app');
 
 test.describe.configure({ timeout: 60000 });
 
+const SHOTS = path.join(__dirname, '..', '..', 'docs', 'wip', 'TOFI-C');
+fs.mkdirSync(SHOTS, { recursive: true });
 const _contexts = [];
 test.afterEach(async () => { while (_contexts.length) await _contexts.pop().close().catch(() => {}); });
 
@@ -57,5 +61,5 @@ test('a regime picked at accept waits; Entered makes it effective and warns outs
   await expect.poll(() => regimeOf(b, 'TOFIC1')).toEqual({ effective: 'USING_AGENCY', pending: null });
   await expect(mission.getByRole('button', { name: 'Entered' })).toHaveCount(0);
   await expect(s.locator('.efsp-sreg-pending')).toHaveCount(0);
-  await b.screenshot({ path: '/tmp/claude-1000/-home-nklx-dev-personal-sourcedcs/d4cef332-558b-4b58-8e33-55795de26321/scratchpad/tofi-c.png' });
+  await b.screenshot({ path: path.join(SHOTS, 'tofi-c.png') });
 });

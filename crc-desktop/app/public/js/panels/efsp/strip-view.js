@@ -313,7 +313,7 @@ function _tofiExchange(strip) {
       waiting.dataset.pendingRegime = pending;
       row.appendChild(waiting);
       steps.push(_stripButton('Entered', 'efsp-coordinate-btn efsp-tofi-entered-btn', {
-        title: `Record that the flight is in your airspace: ${pending} becomes the separation regime now (ADR 0102)`,
+        title: `Record that the flight is in your airspace: ${pending} becomes the separation regime now`,
         onClick: () => _dispatchTofi(strip, 'MARK_ENTERED'),
       }));
     }
