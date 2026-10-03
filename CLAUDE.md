@@ -41,9 +41,11 @@ cd crc-sync && npm install
 npm start
 npm test   # node --test tests/*.test.mjs
 npm run freeze           # opt-in golden-replay suite (tests/freeze/, ADR 0095 §1); not part of npm test
+npm run walk             # opt-in I11 control-release walk at depth 4 (npm test runs depth 3; CRCSYNC_WALK_DEPTH=n overrides)
 npm run soak:selfcheck   # proves every soak detector fires (~40 s); not part of npm test
 npm run soak:smoke       # 20 virtual minutes of simulated EFSP traffic; `npm run soak -- --minutes 240` for the §13 run
 ```
+Test processes (all three Node suites) get a private `TMPDIR` that is removed on exit; crc-sync's preload also warns when the checkout's real `state/` changed during a run (fails under `CI`). Freeze goldens number ids per golden by first appearance and hash only `PROJECTION` (`tests/freeze/freeze-lib.mjs`); other fields are unhashed ext, cross-cutting counters go in `VOLATILE_KEYS`, and `table-mutations/` and `hub-op-matrix/` hold one file per op. Never hand-merge a golden: take either side, `npm run freeze:update`, check the diff is small, commit it separately.
 The EFSP soak harness lives in `crc-sync/tools/soak/` (flags and profiles in its `run.js`). The literal four-hour
 run is the manual-dispatch workflow `.github/workflows/crc-sync-soak.yml` ("crc-sync EFSP soak (manual)"). Run
 `soak:selfcheck` after touching `board-store.js`, `board/**`, `efsp-ws.js`, `wire/**`, `ws-hub.js`, `sync/**` or
