@@ -24,9 +24,7 @@ const MEMBERS_FILE = path.join(DATA_DIR, 'members.json');
 const VOICE_FILE = path.join(DATA_DIR, 'voice-activity.json');
 const OUT_FILE = path.join(DATA_DIR, 'activity-scores.json');
 
-function loadJSON(file, fallback) {
-  try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return fallback; }
-}
+const { loadJSON, saveJSON } = require('../json-file');
 
 /* Same conversion activity-daily-job.js does: raw { from, until } ISO
    entries -> { fromDay, untilDay } 'YYYY-MM-DD' ranges, using the same
@@ -62,7 +60,7 @@ function main() {
     store[id] = { rows, current, delta7d, updatedAt: new Date().toISOString() };
   }
 
-  fs.writeFileSync(OUT_FILE, JSON.stringify(store, null, 2), 'utf8');
+  saveJSON(OUT_FILE, store);
   console.log('[backfill] Rebuilt activity scores for ' + memberIds.length + ' member(s) -> ' + OUT_FILE);
 }
 
