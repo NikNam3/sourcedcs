@@ -34,6 +34,7 @@ function makeElement(tag) {
       if (this.tagName === 'select' && c.tagName === 'option' && this.value === '') this.value = c.value;
       return c;
     },
+    append(...nodes) { for (const n of nodes) this.appendChild(n); },
     replaceChildren(...nodes) { this.children = []; for (const n of nodes) this.appendChild(n); },
     removeChild(c) { this.children = this.children.filter(x => x !== c); return c; },
     remove() { if (this.parentNode) this.parentNode.removeChild(this); },
@@ -58,7 +59,7 @@ function makeElement(tag) {
       return this.children.reduce((found, c) => found || hit(c), null);
     },
     getBoundingClientRect() { return { top: 0, bottom: 10, left: 0, right: 10, height: 10, width: 10 }; },
-    focus() {}, select() {}, setAttribute() {}, removeAttribute() {},
+    focus() { if (globalThis.document) globalThis.document.activeElement = this; }, select() {}, setAttribute() {}, removeAttribute() {},
     set innerHTML(v) { if (v === '') this.children = []; },
     get innerHTML() { return ''; },
   };

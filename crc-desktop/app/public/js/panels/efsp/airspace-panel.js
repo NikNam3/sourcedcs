@@ -37,6 +37,10 @@ const NEW_KEY = '\u0000new';
 const _views = new Map();
 let _menuFor = null;      // the airspace whose ⋯ menu is open
 let _delayFor = null;     // the airspace whose Delay note form is open
+// In-progress text of the card forms. Every update of any airspace rebuilds every card, so what a controller has
+// typed lives here, keyed by a stable name, and is put back into the new input (B9, docs/wip/ARCH-C.md §3.1).
+const _drafts = new Map();        // draft key -> typed text
+const _draftInputs = new Map();   // draft key -> the input currently in the DOM (rebuilt each render)
 const FILTER_KEY = 'crc.airspace.filter';
 let _filter = _loadFilter(); // 'mine' | 'all'
 
@@ -411,11 +415,12 @@ function _buildAirspaceCard(airspace, signedOnPositionIds) {
     const form = _el('div', 'airspace-delay');
     const input = document.createElement('input');
     input.type = 'text'; input.className = 'airspace-input'; input.placeholder = 'Delay note (for example: after 1500Z)';
+    _keepDraft(`delay:${airspace.airspaceId}`, input);
     const send = _el('button', 'airspace-save-btn', 'Send delay');
     const cancel = _el('button', 'airspace-action-btn', 'Cancel');
     const act = actions.find(a => a.kind === 'DelayActivation');
-    send.addEventListener('click', () => { _delayFor = null; if (act) _dispatchAirspace(airspace, act, { note: input.value.trim() }); renderAirspacePanel(); });
-    cancel.addEventListener('click', () => { _delayFor = null; renderAirspacePanel(); });
+    send.addEventListener('click', () => { _delayFor = null; _drafts.delete(`delay:${airspace.airspaceId}`); if (act) _dispatchAirspace(airspace, act, { note: input.value.trim() }); renderAirspacePanel(); });
+    cancel.addEventListener('click', () => { _delayFor = null; _drafts.delete(`delay:${airspace.airspaceId}`); renderAirspacePanel(); });
     form.append(input, send, cancel);
     card.appendChild(form);
   }
@@ -424,6 +429,14 @@ function _buildAirspaceCard(airspace, signedOnPositionIds) {
   const view = _views.get(airspace.airspaceId);
   if (view) card.appendChild(view.el);
   return card;
+}
+
+/** Makes `input` a draft field: it starts with the text typed so far under `key` and records every keystroke. */
+function _keepDraft(key, input) {
+  input.dataset.draftKey = key;
+  if (_drafts.has(key)) input.value = _drafts.get(key);
+  input.addEventListener('input', () => { _drafts.set(key, input.value); });
+  _draftInputs.set(key, input);
 }
 
 function _buildToolbar(signedOn) {
@@ -458,6 +471,11 @@ export function renderAirspacePanel() {
   const active = document.activeElement;
   const focused = active && active.closest && active.closest('.airspace-editor') ? { el: active, start: active.selectionStart, end: active.selectionEnd } : null;
 
+  // The same for a draft field: its input is a new element after the rebuild, so focus and caret are put back by key.
+  const draftKey = active && active.dataset && active.dataset.draftKey;
+  const draftFocus = draftKey ? { key: draftKey, start: active.selectionStart, end: active.selectionEnd } : null;
+  _draftInputs.clear();
+
   // An open view whose airspace is gone (deleted by someone else) closes with it.
   for (const key of [..._views.keys()]) if (key !== NEW_KEY && !airspaces.some(a => a.airspaceId === key)) _closeView(key);
 
@@ -484,10 +502,19 @@ export function renderAirspacePanel() {
     _airspaceEmptyEl.textContent = airspaces.length > 0 && shown.length === 0
       ? 'None of the airspaces here is yours. Switch to ALL to see them.' : 'No airspaces configured.';
   }
+  if (draftFocus) {
+    const el = _draftInputs.get(draftFocus.key);
+    if (el) {
+      try { el.focus(); if (draftFocus.start != null) el.setSelectionRange(draftFocus.start, draftFocus.end); } catch (_) { /* no selection range */ }
+    }
+  }
   if (focused && focused.el.isConnected !== false) {
     try { focused.el.focus(); if (focused.start != null) focused.el.setSelectionRange(focused.start, focused.end); } catch (_) { /* a select has no selection range */ }
   }
 }
+
+/** The draft text under `key`, for a test. */
+export function _draftForTest(key) { return _drafts.get(key); }
 
 export function initAirspacePanel() {
   _airspaceListEl = document.getElementById('airspace-list');
