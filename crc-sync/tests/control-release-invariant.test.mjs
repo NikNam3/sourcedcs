@@ -553,13 +553,16 @@ function run(path) {
   return { w, ex };
 }
 
-test('I11 bounded exhaustive walk: every sequence of up to 4 steps of ACCEPT, comms, control, FULL, WITHDRAW, drops, undo last and staffing keeps the invariant', () => repairMode(() => {
+// Depth 3 is the default (`npm test`); the full depth-4 walk is opt-in: `npm run walk` (CRCSYNC_WALK_DEPTH=4).
+const WALK_DEPTH = Number(process.env.CRCSYNC_WALK_DEPTH) || 3;
+
+test(`I11 bounded exhaustive walk: every sequence of up to ${WALK_DEPTH} steps of ACCEPT, comms, control, FULL, WITHDRAW, drops, undo last and staffing keeps the invariant`, () => repairMode(() => {
   // Breadth first, one representative per distinct state (a sequence reaching a state already seen adds nothing new at
   // the same depth). Every refused step leaves the invariant holding, and so is checked like any other.
   const seen = new Set();
   let frontier = [[]];
   let sequences = 0;
-  for (let depth = 1; depth <= 4; depth++) {
+  for (let depth = 1; depth <= WALK_DEPTH; depth++) {
     const next = [];
     for (const path of frontier) {
       for (const name of NAMES) {
