@@ -25,7 +25,7 @@
  */
 
 const { test, expect } = require('./helpers/test');
-const { openPanel, seedStrip, stripByCallsign, expectOnTop, expectDoesSomething, startAction } = require('./helpers/app');
+const { openPanel, seedStrip, stripByCallsign, expectOnTop, expectDoesSomething, startAction, settle } = require('./helpers/app');
 
 /** The stripIds THIS test seeded — what afterEach is allowed to retire. */
 let seeded = [];
@@ -62,7 +62,7 @@ test.afterEach(async ({ page }) => {
       crc.ws.sendEfspMutation(s.ownerPositionId, s, { kind: 'DropStrip', reason: 'e2e cleanup' });
     }
   }, seeded);
-  await page.waitForTimeout(400);
+  await settle(page).catch(() => {});
 });
 
 test('the MARSA popover is on top of the Strips below it', async ({ page }) => {

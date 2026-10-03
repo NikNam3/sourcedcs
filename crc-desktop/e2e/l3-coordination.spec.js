@@ -22,7 +22,7 @@
  */
 
 const { test, expect } = require('./helpers/test');
-const { openPanel, seedStrip, startAction } = require('./helpers/app');
+const { openPanel, seedStrip, startAction, settle, frames } = require('./helpers/app');
 
 // Two controllers, a login each, and a Board that persists across tests in a
 // run — longer than the default budget, and every callsign below is unique.
@@ -164,7 +164,7 @@ test('a double-tap on Accept Hand Off accepts only the replica that was tapped',
     return null;
   }, [x, y, 'DBLAC2']);
   if (arrivedAfterMs !== null) await b.mouse.click(x, y);
-  await b.waitForTimeout(700);
+  await settle(b); // a second Accept would have been sent inside the click, so "acked and painted" proves it was not
 
   const second = (await recordsFor(b, 'DBLAC2')).find(r => r.facilityId === 'INCIRLIK');
   expect(second.coordination, `DBLAC2's Accept slid under the pointer ${arrivedAfterMs} ms after the first tap, and the second tap accepted it`).toBe('INITIATED');
@@ -227,7 +227,7 @@ test('a rejected proposal is visible to the controller who sent it', async ({ br
   await goBay(b, 'AP', 'ap-coordination');
   await strip(b, 'REJSEE').getByRole('button', { name: 'Unable' }).click({ timeout: 3000 });
   await expect.poll(async () => (await recordsFor(a, 'REJSEE')).find(r => r.facilityId === 'CENTER').coordination).toBe('REJECTED');
-  await a.waitForTimeout(300);
+  await settle(a);
 
   const onStrip = /REJECT|UNABLE/i.test(await s.innerText());
   const banner = (await a.locator('#efsp-mutation-error').textContent() || '').trim();
@@ -398,7 +398,7 @@ test('the regime picker can be opened with a real click and keeps what was chose
   await select.evaluate((el) => { el.dataset.probe = 'original'; });
 
   await select.click();
-  await b.waitForTimeout(300);
+  await frames(b);
   await expect(select, 'clicking the picker rebuilt the Strip under it').toHaveAttribute('data-probe', 'original');
   await expect(b.locator('.efsp-strip.efsp-strip-selected')).toHaveCount(0);
 
@@ -429,7 +429,7 @@ test('CTR is told what is blocking the TOFI exit they proposed', async ({ browse
 
   await startAction(s, 'TOFI Exit…', { timeout: 3000 });
   await expect(s.locator('.efsp-tofi-badge')).toContainText(/EXIT[\s\S]*INITIATED/);
-  await a.waitForTimeout(500);
+  await settle(a);
   // Only CTR can fix it — SREG is on the ATC-side Strip alone — and only the
   // MRU side is told, in the title of a disabled button.
   const onStrip = /SEP ?REG|ATC/i.test(await s.locator('.efsp-tofi-badge').evaluate(el => el.textContent + ' ' + el.title));

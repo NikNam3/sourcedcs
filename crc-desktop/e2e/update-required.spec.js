@@ -19,7 +19,15 @@ async function setServerProtocol(n) {
   if (!r.ok) throw new Error(`wire-protocol hook refused: HTTP ${r.status}`);
 }
 
+// "Nothing more happened" is proved on the page's own clock: runFor() fires every timer due in the span, so a reconnect
+// loop (the old one retried every 2 s) would show up as a new /feed socket after a few milliseconds of real time.
+async function quietFor(page, ms) {
+  await page.clock.runFor(ms);
+  await page.evaluate(() => 0); // a round trip, so the websocket events the span may have caused have arrived
+}
+
 async function open(page) {
+  await page.clock.install();
   const feeds = [];
   page.on('websocket', (ws) => { if (ws.url().includes('/feed')) feeds.push(ws.url()); });
   await page.addInitScript(([key, token]) => { try { localStorage.setItem(key, token); } catch (_) { /* private mode */ } }, ['crc-desktop-sync-token', fakeToken('e2e-update')]);
@@ -40,12 +48,13 @@ test('an older client sees Update required, does not reconnect, and Retry connec
   expect(feeds[0]).toContain('client=dev');
 
   // No reconnect storm: the old loop retried every 2 s.
-  await page.waitForTimeout(5000);
+  await quietFor(page, 5000);
   expect(feeds.length).toBe(1);
 
   await page.locator('#crc-update-retry').click();
+  await expect.poll(() => feeds.length).toBe(2);
   await expect(overlay).toBeVisible();
-  await page.waitForTimeout(4500);
+  await quietFor(page, 4500);
   expect(feeds.length).toBe(2);
 });
 
@@ -63,7 +72,7 @@ test('Retry after the server is updated connects and the overlay goes away', asy
   await setServerProtocol(CLIENT_PROTOCOL);
   await page.locator('#crc-update-retry').click();
   await expect(page.locator('#crc-update-required')).toHaveCount(0);
-  await page.waitForTimeout(1500);
+  await quietFor(page, 1500);
   expect(feeds.length).toBe(2);
   await expect(page.locator('#crc-update-required')).toHaveCount(0);
 });

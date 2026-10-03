@@ -12,7 +12,7 @@
 const path = require('path');
 const fs = require('fs');
 const { test, expect } = require('./helpers/test');
-const { openPanel, seedStrip, startAction } = require('./helpers/app');
+const { openPanel, seedStrip, startAction, settle, serverTicks } = require('./helpers/app');
 
 test.describe.configure({ timeout: 120000 });
 
@@ -161,7 +161,8 @@ test('pilot walk: "VIPER11 request a different exit fix", CTR and AP at once', a
     crc.ws.sendEfspMutation('CTR', s, { kind: 'SetBlock', blockId: '9H-TIME', value: '1445' }, 'CENTER');
     return s.ownerPositionId;
   }, CS);
-  await ap.waitForTimeout(800);
+  await settle(ctr);
+  await serverTicks(ap, 1); // a heartbeat follows the delta on AP's socket, so CTR's write has reached AP
   const stillOpen = await input.count();
   const draft = stillOpen ? await input.inputValue() : null;
   const ctrErr = (await ctr.locator('#efsp-mutation-error').textContent().catch(() => '') || '').trim();
@@ -170,6 +171,6 @@ test('pilot walk: "VIPER11 request a different exit fix", CTR and AP at once', a
   const flightDataEst = (await mtrOf(ap, CS)).exitEstimateUtc;
   note('8b', `AP's copy of the flight data has exitEstimateUtc=${flightDataEst ? new Date(flightDataEst).toISOString().slice(11, 16) : flightDataEst} while the edit is open`);
   if (stillOpen) await input.press('Enter');
-  await ap.waitForTimeout(800);
+  await settle(ap);
   note('8c', `after AP pressed Enter: EXIT=${JSON.stringify(await mine.locator('.efsp-block-9H-EXIT').textContent())}, EXIT EST=${JSON.stringify(await mine.locator('.efsp-block-9H-TIME').textContent())}`);
 });

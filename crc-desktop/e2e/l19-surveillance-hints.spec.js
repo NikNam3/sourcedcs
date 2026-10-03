@@ -11,7 +11,7 @@
  */
 
 const { test, expect } = require('./helpers/test');
-const { openPanel, seedStrip, stripByCallsign, lapseNlaGuard } = require('./helpers/app');
+const { openPanel, seedStrip, stripByCallsign, lapseNlaGuard, settle, serverTicks } = require('./helpers/app');
 
 const FLIGHT_DATA = { route: 'DCT', requestedAltitude: 'FL250', departureAirport: 'LTAG', destinationAirport: 'LTAF' };
 const ALL = ['OPS', 'CD', 'GC', 'LC', 'AP'];
@@ -30,7 +30,7 @@ test.afterEach(async ({ page }) => {
       crc.ws.sendEfspMutation(s.ownerPositionId, s, { kind: 'DropStrip', reason: 'e2e cleanup' });
     }
   }, CS).catch(() => {});
-  await page.waitForTimeout(400);
+  await settle(page).catch(() => {});
 });
 
 test('the suggestion chip: drawn, moves nothing, one click advances the flight and stamps the takeoff', async ({ page }) => {
@@ -67,7 +67,7 @@ test('the suggestion chip: drawn, moves nothing, one click advances the flight a
   await expect(chip).toContainText('AIRBORNE');
 
   // Nothing moves by itself.
-  await page.waitForTimeout(1500);
+  await serverTicks(page, 3); // the server's monitor has run a few more times
   expect((await info(page)).state).toBe('LUAW');
 
   // One input.

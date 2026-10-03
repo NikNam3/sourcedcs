@@ -11,7 +11,7 @@
  */
 
 const { test, expect } = require('./helpers/test');
-const { openPanel, seedStrip, stripByCallsign, expectRefusalIsVisible } = require('./helpers/app');
+const { openPanel, seedStrip, stripByCallsign, expectRefusalIsVisible, settle, frames } = require('./helpers/app');
 
 /** The Strip's server-side placement, read from the page's own state. */
 const placement = (page, callsign) => page.evaluate((cs) => {
@@ -60,9 +60,9 @@ test('a double-tap on NLA moves only the Strip that was tapped', async ({ page }
   // double-tap. The first Strip transfers away and the Rack reflows under
   // the pointer, which is the whole of the bug.
   await page.mouse.click(x, y);
-  await page.waitForTimeout(150);
+  await frames(page, 4); // a few paints apart, as a person's double tap is; the gap is page time, so a slow machine slows both taps
   await page.mouse.click(x, y);
-  await page.waitForTimeout(500);
+  await settle(page); // a second advance would have been sent inside the click
 
   expect((await placement(page, 'DTA101')).state).toBe('PENDING_CLEARANCE');
   expect((await placement(page, 'DTB101')).state, 'DTB101 was never tapped').toBe('PROPOSED');

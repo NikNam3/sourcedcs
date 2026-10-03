@@ -18,7 +18,7 @@
 const fs = require('fs');
 const path = require('path');
 const { test, expect } = require('./helpers/test');
-const { openPanel } = require('./helpers/app');
+const { openPanel, frames } = require('./helpers/app');
 
 const FIXTURE = fs.readFileSync(path.join(__dirname, '../../crc-sync/tests/fixtures/ato/iron-flag-26-3.txt'), 'utf8');
 const SHOTS = path.join(__dirname, '../../docs/wip/L14');
@@ -104,7 +104,7 @@ test('TAC_C2 imports an ATO; the AR group highlights together; Mode 1/2 read in 
   await page.screenshot({ path: path.join(SHOTS, 'expanded-1600.png') });
 
   await page.setViewportSize({ width: 480, height: 1400 });
-  await page.waitForTimeout(200);
+  await frames(page);
   await page.screenshot({ path: path.join(SHOTS, 'board-480.png') });
   await button.click();
   await expect(page.locator('.efsp-ato-dialog')).toBeVisible();

@@ -13,7 +13,7 @@
 const path = require('path');
 const fs = require('fs');
 const { test, expect } = require('./helpers/test');
-const { openPanel, seedStrip, stripByCallsign, lapseNlaGuard } = require('./helpers/app');
+const { openPanel, seedStrip, stripByCallsign, lapseNlaGuard, settle } = require('./helpers/app');
 
 test.describe.configure({ timeout: 120000 });
 
@@ -83,7 +83,7 @@ test.afterEach(async ({ page }) => {
       crc.ws.sendEfspMutation(s.ownerPositionId, s, { kind: 'DropStrip', reason: 'e2e cleanup' });
     }
   }, ['VIPER11', 'HAWK31', 'HAWK32', 'EAGLE41', 'EAGLE42']).catch(() => {});
-  await page.waitForTimeout(400);
+  await settle(page).catch(() => {});
 });
 
 test('alert and scramble: ALERT is quiet, SCRAMBLE lights the Board and flags ground traffic, nothing reorders, airborne clears', async ({ page }) => {

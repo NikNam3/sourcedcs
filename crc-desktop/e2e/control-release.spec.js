@@ -7,7 +7,7 @@
 
 const path = require('path');
 const { test, expect } = require('./helpers/test');
-const { openPanel, seedStrip, startAction } = require('./helpers/app');
+const { openPanel, seedStrip, startAction, settle } = require('./helpers/app');
 
 const SHOTS = path.join(__dirname, '../../docs/wip/CR-C');
 test.describe.configure({ timeout: 90000 });
@@ -94,7 +94,7 @@ test('CTR to AP: accept moves radar ID only; release, attestation, comms and con
     crc.ws.sendEfspMutation('AP', s, o);
   }, [cs, op]);
   await send(b, { kind: 'SetBlock', blockId: '9A-VECTOR', value: '270' });
-  await b.waitForTimeout(600);
+  await settle(b); // the vector's ack is in, and no prompt was raised for it
   await expect(attest).toBeHidden();
   await send(b, { kind: 'SetBlock', blockId: '7', value: '240' });
   await expect(attest).toBeVisible();

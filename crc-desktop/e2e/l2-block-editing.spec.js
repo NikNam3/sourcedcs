@@ -24,7 +24,7 @@
  */
 
 const { test, expect } = require('./helpers/test');
-const { openPanel, seedStrip, stripByCallsign, expectTouchTarget, startAction } = require('./helpers/app');
+const { openPanel, seedStrip, stripByCallsign, expectTouchTarget, startAction, settle, frames, serverTicks } = require('./helpers/app');
 
 // Candidate for the shared helper: what has keyboard focus, as tag.class.
 const focused = (page) => page.evaluate(() => {
@@ -96,7 +96,7 @@ test('F-202: a half-typed Block keeps focus when another controller updates a di
 
     await setBlockVia(page2, otherId, '8', 'LTAG', 'CD');
     await expect.poll(() => page.evaluate((i) => crc.state.getEfspFlightData(crc.state.getEfspStrip(i).flightDataId).filed.departureAirport, otherId)).toBe('LTAG');
-    await page.waitForTimeout(100); // one rAF for the batched render
+    await frames(page); // the batched render
 
     // Measured: focus is now div.efsp-strip — FOC201's own Strip element.
     expect(await focused(page), 'focus left the input on an unrelated update').toBe('input.efsp-block-input');
@@ -177,7 +177,7 @@ test('blur neither commits nor reverts a free-text Block', async ({ page }) => {
   await s.locator('.efsp-block-7').click();
   await page.keyboard.type('FL350');
   await clickAway(page);
-  await page.waitForTimeout(300);
+  await settle(page); // a blur that sent a Mutation would have put it on the wire inside the click
   expect(await page.evaluate(() => window.__l2Sent), 'blur sent a Mutation').toEqual([]);
   await expect(s.locator('input.efsp-block-input'), 'blur reverted the edit').toHaveValue('FL350');
   // (That the input then stays open, and what that costs, is F-204.)
@@ -197,7 +197,7 @@ test('F-205: arrowing through an enum Block does not commit until the controller
   await s.locator('.efsp-block-5A').click();
   await expect(s.locator('select.efsp-block-enum-select')).toBeFocused();
   await page.keyboard.press('ArrowDown');
-  await page.waitForTimeout(300);
+  await settle(page);
   // Measured: [{kind:'SetBlock', blockId:'5A', value:'CST'}] — sent on the
   // first arrow press, and the select is gone.
   expect(await page.evaluate(() => window.__l2Sent)).toEqual([]);
@@ -210,7 +210,7 @@ test('F-205: Space opens the enum select rather than leaving it', async ({ page 
   await s.locator('.efsp-block-5A').click();
   await expect(s.locator('select.efsp-block-enum-select')).toBeFocused();
   await page.keyboard.press('Space');
-  await page.waitForTimeout(200);
+  await settle(page);
   // Measured: the select is gone and focus is on the Strip.
   await expect(s.locator('select.efsp-block-enum-select')).toBeFocused({ timeout: 1000 });
 });

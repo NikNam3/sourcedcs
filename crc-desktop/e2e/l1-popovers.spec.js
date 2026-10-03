@@ -21,7 +21,7 @@
  */
 
 const { test, expect } = require('./helpers/test');
-const { openPanel, seedStrip, stripByCallsign, expectOnTop, startAction, stripMenuItem } = require('./helpers/app');
+const { openPanel, seedStrip, stripByCallsign, expectOnTop, startAction, stripMenuItem, settle, frames } = require('./helpers/app');
 
 let seq = 0;
 const uniqueCallsign = (prefix) => `${prefix}${(Date.now() + seq++) % 10000}`;
@@ -181,7 +181,7 @@ test.describe('with room to be uncovered', () => {
       await expect(popover, 'protection keeps the popover open through the update').toBeAttached();
 
       await button.click({ timeout: 3000 });
-      await page.waitForTimeout(600);
+      await settle(page);
       const error = (await page.locator('#efsp-mutation-error').textContent()) || '';
       expect(error, `${name}: refused for acting on the rev captured when the popover opened`).not.toContain('STALE_REV');
     });
@@ -238,7 +238,7 @@ test.describe('extends F-201', () => {
     await page.keyboard.press('Space');
     // Not an immediate toBeFocused(): focus moves one render frame AFTER the
     // key (renderBay), so an instant check races it and passes.
-    await page.waitForTimeout(300);
+    await frames(page); // focus moves one render frame after the key
     expect(await page.evaluate(() => crc.bayView.getSelectedEfspStripId()), 'Space on the picker selected the Strip').toBeNull();
     await expect(picker, 'focus was taken by the Strip').toBeFocused();
   });

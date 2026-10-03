@@ -31,6 +31,34 @@ async function lapseNlaGuard(page) {
   await page.clock.fastForward(NLA_GUARD_LAPSE_MS);
 }
 
+/** `n` animation frames in the page: whatever the last event scheduled for the next render has been painted. */
+const frames = (page, n = 2) => page.evaluate((k) => new Promise((resolve) => {
+  const step = (left) => (left <= 0 ? resolve() : requestAnimationFrame(() => step(left - 1)));
+  step(k);
+}), n);
+
+/**
+ * The page has caught up with what it just did, on a signal rather than a sleep: every Mutation it sent has been
+ * acked (crc.state's pending map is empty) and the render that follows has been painted. A press that would send
+ * something sends it inside the click, so after `settle` "nothing was sent" is a fact, not a guess.
+ */
+async function settle(page) {
+  await page.waitForFunction(() => crc.state.getPendingMutations().length === 0);
+  await frames(page, 2);
+}
+
+/** The server has ticked `n` more times (crc-sync's hub sends an efsp-heartbeat every tick), for "nothing moves by itself" checks. */
+const serverTicks = (page, n = 2) => page.evaluate((k) => new Promise((resolve) => {
+  const ws = crc.app._ws;
+  let seen = 0;
+  const onMessage = (ev) => {
+    let type = null;
+    try { type = JSON.parse(ev.data).type; } catch (_) { /* not JSON */ }
+    if (type === 'efsp-heartbeat' && ++seen >= k) { ws.removeEventListener('message', onMessage); resolve(); }
+  };
+  ws.addEventListener('message', onMessage);
+}), n);
+
 /**
  * Opens the panel, authenticated and connected, with the given Positions held.
  *
@@ -174,7 +202,7 @@ async function expectDoesSomething(page, locator, what) {
   // far longer than any real click needs, and failing fast keeps an
   // unreachable control reported as what it is.
   await locator.click({ timeout: 3000 });
-  await page.waitForTimeout(250);
+  await settle(page);
 
   const sent = await page.evaluate(() => window.__e2eSent || []);
   const domAfter = await page.locator('#efsp-bay-content').innerHTML();
@@ -293,7 +321,7 @@ async function dropStrips(page, callsigns) {
       crc.ws.sendEfspMutation(s.ownerPositionId, s, { kind: 'DropStrip', reason: 'e2e cleanup' });
     }
   }, callsigns);
-  await page.waitForTimeout(400);
+  await settle(page);
 }
 
 /**
@@ -322,7 +350,7 @@ async function ensureActiveRunway(page, end = '05') {
 }
 
 module.exports = {
-  ensureActiveRunway, dropStrips, lapseNlaGuard,
+  ensureActiveRunway, dropStrips, lapseNlaGuard, frames, settle, serverTicks,
   fakeToken, openPanel, openEfspPanel, seedStrip, stripByCallsign,
   expectDoesSomething, expectRefusalIsVisible, expectOnTop, expectTouchTarget,
   stripMenuItem, startAction,

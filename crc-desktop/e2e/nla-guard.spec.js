@@ -15,7 +15,7 @@
 const GUARD_MS = 5000;
 
 const { test, expect } = require('./helpers/test');
-const { openPanel, seedStrip, lapseNlaGuard } = require('./helpers/app');
+const { openPanel, seedStrip, lapseNlaGuard, settle, serverTicks } = require('./helpers/app');
 
 const SYNC = `http://127.0.0.1:${3010 + Number(process.env.E2E_LANE || 0)}`;
 const CS = 'GUARD01';
@@ -69,7 +69,8 @@ test('with the guard on, a second InvokeNla on the same Strip is swallowed', asy
   await setGuard(GUARD_MS);
   const afterFirst = await pressTwice(page);
   // The negative half: give the second frame time to have been answered; it must not have moved the Strip again.
-  await page.waitForTimeout(600);
+  await settle(page);
+  await serverTicks(page, 2); // the second frame has been answered by now
   expect(await stateOf(page), 'only the first press applied').toBe(afterFirst);
 });
 

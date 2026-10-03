@@ -14,7 +14,7 @@
 const path = require('path');
 const fs = require('fs');
 const { test, expect } = require('./helpers/test');
-const { openPanel } = require('./helpers/app');
+const { openPanel, frames } = require('./helpers/app');
 
 const OUT = path.join(__dirname, '..', '..', 'docs', 'wip', 'L22');
 fs.mkdirSync(OUT, { recursive: true });
@@ -91,7 +91,8 @@ async function inject(page, scene) {
 }
 
 async function snap(page, name) {
-  await page.waitForTimeout(1500); // tiles and glyphs
+  await page.waitForFunction(() => crc.app.map.loaded()); // tiles and glyphs (the key-less tile requests answer 403, which is loaded)
+  await frames(page, 3);
   await page.locator('#map').screenshot({ path: path.join(OUT, name), animations: 'disabled' });
 }
 

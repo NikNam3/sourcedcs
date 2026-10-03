@@ -13,7 +13,7 @@
  */
 
 const { test, expect } = require('./helpers/test');
-const { openPanel, seedStrip } = require('./helpers/app');
+const { openPanel, seedStrip, settle } = require('./helpers/app');
 
 function stripIdOf(page, callsign) {
   return page.evaluate((cs) => crc.state.getAllEfspStrips().find((s) => crc.state.getEfspFlightData(s.flightDataId).identity.callsign === cs).stripId, callsign);
@@ -47,7 +47,7 @@ async function dropAll(page, callsigns) {
       crc.ws.sendEfspMutation(s.ownerPositionId, s, { kind: 'DropStrip', reason: 'e2e cleanup' });
     }
   }, callsigns);
-  await page.waitForTimeout(400);
+  await settle(page);
 }
 
 // Extends F-305 — was a catalogued finding, now fixed.
