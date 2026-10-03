@@ -159,7 +159,7 @@ test('B3 with no Bay to fit, the Strip keeps its Bay and the reassignment says s
   assert.deepEqual(board._placement.bayForNewOwner('B', 'OTHER'), { bayId: 'b-only', rackId: 'main' });
   assert.deepEqual(board._placement.bayForNewOwner('A', 'ANY'), { bayId: 'a-1', rackId: 'main' });
   const made = board.applyMutation({
-    clientMutationId: '00000000-0000-4000-8000-000000000001', op: { kind: 'CreateStrip', bayId: 'a-1', rackId: 'main', stripType: 'DEPARTURE', flightData: { ...DEPARTURE_FLIGHT_DATA, callsign: 'L23B3' } },
+    clientMutationId: 'l23-cmid-create-b3', op: { kind: 'CreateStrip', bayId: 'a-1', rackId: 'main', stripType: 'DEPARTURE', flightData: { ...DEPARTURE_FLIGHT_DATA, callsign: 'L23B3' } },
   }, 'A', 'A');
   assert.equal(made.ok, true, JSON.stringify(made));
   const ids = board.reassignPositionStrips('A', 'B');
@@ -342,7 +342,7 @@ for (const primitive of ['POINT_OUT', 'HANDOFF']) {
     const sent = mustAct(efsp, c.AP, 'AP', dep, { kind: primitive, action: 'PROPOSE', toFacilityId: 'CENTER', toPositionId: 'CTR' });
     const accepted = mustAct(efsp, c.CTR, 'CTR', ctrOf(efsp, sent.coordination.peerStripId), { kind: primitive, action: 'ACCEPT' });
     const res = efsp.handleMessage(c.CTR.session, {
-      version: 1, type: 'efsp-mutation', clientMutationId: '00000000-0000-4000-8000-0000000000aa', facilityId: 'CENTER',
+      version: 1, type: 'efsp-mutation', clientMutationId: 'l23-cmid-replay-aa', facilityId: 'CENTER',
       actingPositionId: 'CTR', stripId: accepted.stripId, baseRev: accepted.rev, op: { kind: 'DropStrip' },
     });
     assert.equal(res.ack.ok, true);
