@@ -691,7 +691,7 @@ function createApp(deps = {}) {
   // Test-only (Playwright harness); mounts nothing unless CRCSYNC_TEST_RESET=1, see src/test-reset.js.
   // Required only here: test-reset.js mints its boot id (crypto.randomUUID) when loaded, and the soak's
   // seeded id stream must not be consumed before createEfsp.
-  if (env.CRCSYNC_TEST_RESET === '1') require('./test-reset').mountTestReset(app, { env, hooks: { setWireProtocol: (n) => wsHub.setWireProtocolForTest(n) } });
+  if (env.CRCSYNC_TEST_RESET === '1') require('./test-reset').mountTestReset(app, { env, hooks: { setWireProtocol: (n) => wsHub.setWireProtocolForTest(n), setNlaGuardMs: (ms) => efsp.setNlaGuardMs(ms) } });
 
   // ── Static hosting ───────────────────────────────────────────────────────
   // ── The airspace registry's server-to-server API, for sourcedcs-web (docs/adr/0098 §9). No token: every route 503. ──

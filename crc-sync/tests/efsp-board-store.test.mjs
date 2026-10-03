@@ -1220,7 +1220,7 @@ test('the double-tap guard reads the injected wall clock and its configured leng
   const press = (board, strip) => board.applyMutation({ clientMutationId: crypto.randomUUID(), stripId: strip.stripId, baseRev: strip.rev, op: { kind: 'InvokeNla' } }, 'OPS', 'OPS');
   for (const [guardMs, expectSecond] of [[undefined, 'PENDING_CLEARANCE'], [0, 'CLEARED']]) {
     const wall = { t: 5_000_000, now() { return this.t; } };
-    const board = new BoardStore(new FlightDataStore(), fullRules(makeRules(nla)), { wallClock: wall, ...(guardMs === undefined ? {} : { nlaGuardMs: guardMs }) });
+    const board = new BoardStore(new FlightDataStore(), fullRules(makeRules(nla)), { wallClock: wall, ...(guardMs === undefined ? {} : { nlaGuard: { ms: guardMs } }) });
     const strip = board.applyMutation(createMutation(), 'OPS', 'OPS').strip;
     press(board, strip);
     wall.t += 399; // the wall clock stands still: no real time passes in this test

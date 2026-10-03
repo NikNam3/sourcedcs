@@ -13,7 +13,7 @@
 const path = require('path');
 const fs = require('fs');
 const { test, expect } = require('./helpers/test');
-const { openPanel, seedStrip, stripByCallsign } = require('./helpers/app');
+const { openPanel, seedStrip, stripByCallsign, lapseNlaGuard } = require('./helpers/app');
 
 test.describe.configure({ timeout: 120000 });
 
@@ -54,7 +54,7 @@ const alertOf = (page, cs) => page.evaluate((c) => {
 }, cs);
 
 async function nla(page, acting, cs) {
-  await page.waitForTimeout(450); // the server's 400 ms double-tap guard
+  await lapseNlaGuard(page); // the client's double-tap window
   await mutate(page, acting, cs, { kind: 'InvokeNla' });
 }
 

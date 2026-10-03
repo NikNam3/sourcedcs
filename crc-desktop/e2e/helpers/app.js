@@ -19,6 +19,18 @@ function fakeToken(name = 'e2e-controller') {
   })}.e2e`;
 }
 
+// The client swallows a second advancing press inside DOUBLE_TAP_MS of the first (bay-view.js's _swallowRepeatAdvance,
+// F-101), and that window is browser wall time. The harness starts crc-sync with its own guard at 0
+// (CRCSYNC_NLA_GUARD_MS, nla-guard.spec.js keeps the real 400 ms), so the only guard left between two presses is the
+// client's, and `lapseNlaGuard` moves the page's clock past it instead of sleeping and hoping the server saw the
+// first press more than 400 ms ago.
+const CLOCK_INSTALLED = new WeakSet();
+const NLA_GUARD_LAPSE_MS = 450;
+async function lapseNlaGuard(page) {
+  if (!CLOCK_INSTALLED.has(page)) { await page.clock.install(); CLOCK_INSTALLED.add(page); }
+  await page.clock.fastForward(NLA_GUARD_LAPSE_MS);
+}
+
 /**
  * Opens the panel, authenticated and connected, with the given Positions held.
  *
@@ -310,7 +322,7 @@ async function ensureActiveRunway(page, end = '05') {
 }
 
 module.exports = {
-  ensureActiveRunway, dropStrips,
+  ensureActiveRunway, dropStrips, lapseNlaGuard,
   fakeToken, openPanel, openEfspPanel, seedStrip, stripByCallsign,
   expectDoesSomething, expectRefusalIsVisible, expectOnTop, expectTouchTarget,
   stripMenuItem, startAction,

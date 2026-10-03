@@ -72,12 +72,12 @@ class BoardStore {
    * @param {import('./undo/undo-history').UndoHistory} [opts.undoHistory] the process's one undo history (createEfsp
    *   shares one across the Boards, docs/adr/0100); a Board built alone gets its own on the wall clock
    */
-  constructor(flightDataStore, rules, { clock = WALL_CLOCK, wallClock = WALL_CLOCK, nlaGuardMs = NLA_GUARD_MS, undoHistory = null } = {}) {
+  constructor(flightDataStore, rules, { clock = WALL_CLOCK, wallClock = WALL_CLOCK, nlaGuard = { ms: NLA_GUARD_MS }, undoHistory = null } = {}) {
     // The mission clock (docs/adr/0079). Every Strip timestamp, every NLA gate
     // and every Mutation-log `at` reads it. The one exception is the NLA
     // double-tap/Undo latch below, which is a UI debounce measured in real
     // seconds and never shown as a time of day — see board/ops/invoke-nla.js's _applyInvokeNla.
-    // It reads the injected wall clock (docs/adr/0096), and `nlaGuardMs` is its length (the e2e harness sets 0).
+    // It reads the injected wall clock (docs/adr/0096), and `nlaGuard.ms` is its length (a shared, mutable cell: the e2e harness sets it).
     assertRules(rules); // a rule the Board reads and the caller omitted is a start-up error, not a check that is silently off
     this._clock = clock;
     this._wallNowFn = () => wallClock.now();
@@ -148,7 +148,7 @@ class BoardStore {
     // here and BoardPersistence's droppedWallAt Map is its own (snapshot, restore and archiveStrip use them); both
     // are read late, because restore replaces them.
     this._stripOps = new StripOps({
-      rules, state: this._state, audit: this._audit, placement: this._placement, clock, wallClock, nlaGuardMs, flightDataStore,
+      rules, state: this._state, audit: this._audit, placement: this._placement, clock, wallClock, nlaGuard, flightDataStore,
       coordination: this._coordination, control: this._control, tofi: this._tofi, ops: OPS,
       touch,
       activeCmid: () => this._activeCmid,

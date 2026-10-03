@@ -22,7 +22,7 @@
 
 const path = require('path');
 const { test, expect } = require('./helpers/test');
-const { openPanel, stripByCallsign, expectRefusalIsVisible } = require('./helpers/app');
+const { openPanel, stripByCallsign, expectRefusalIsVisible, lapseNlaGuard } = require('./helpers/app');
 const { installAppModules } = require('./helpers/modules');
 
 test.describe.configure({ mode: 'serial', timeout: 240000 });
@@ -173,7 +173,7 @@ async function nla(page, cs, n = 1) {
     const before = (await stripOf(page, cs)).state;
     await page.evaluate((cs) => crc.bayView._invokeNla(crc.state.getAllEfspStrips().find((x) => crc.state.getEfspFlightData(x.flightDataId).identity.callsign === cs && x.state !== 'DROPPED')), cs);
     await expect.poll(async () => (await stripOf(page, cs)).state, { message: `${cs} NLA from ${before}` }).not.toBe(before);
-    await page.waitForTimeout(450); // the server's per-Strip 400 ms double-tap guard (T5)
+    await lapseNlaGuard(page); // the client's double-tap window (T5)
   }
 }
 

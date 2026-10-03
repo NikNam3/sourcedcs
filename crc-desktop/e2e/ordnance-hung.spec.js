@@ -10,7 +10,7 @@
 const path = require('path');
 const fs = require('fs');
 const { test, expect } = require('./helpers/test');
-const { openPanel, seedStrip, stripByCallsign, ensureActiveRunway } = require('./helpers/app');
+const { openPanel, seedStrip, stripByCallsign, ensureActiveRunway, lapseNlaGuard } = require('./helpers/app');
 
 test.describe.configure({ timeout: 120000 });
 
@@ -41,7 +41,7 @@ async function pressNla(page, strip, cs, expected) {
   await expect(btn, `the NLA button toward ${expected} is enabled`).toBeEnabled();
   await btn.click();
   await expect.poll(() => stateOf(page, cs), { timeout: 3000 }).toBe(expected);
-  await page.waitForTimeout(450);
+  await lapseNlaGuard(page);
 }
 
 /** Show only this Strip, so a screenshot describes one thing. */

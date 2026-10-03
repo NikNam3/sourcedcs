@@ -52,6 +52,14 @@ function mountTestReset(app, { env = process.env, exit = (code) => process.exit(
     hooks.setWireProtocol(n);
     res.json({ ok: true, protocol: n });
   });
+  // The NLA double-tap guard's length, ms (docs/adr/0096): the harness starts at 0 (CRCSYNC_NLA_GUARD_MS) and the one spec
+  // that tests the guard sets 400. Body: { ms: <number >= 0> }.
+  app.post('/__test/nla-guard', guard, (req, res) => {
+    const ms = req.body && req.body.ms;
+    if (!Number.isFinite(ms) || ms < 0 || !hooks.setNlaGuardMs) return res.status(400).json({ error: 'ms must be a number >= 0' });
+    hooks.setNlaGuardMs(ms);
+    res.json({ ok: true, ms });
+  });
   return true;
 }
 

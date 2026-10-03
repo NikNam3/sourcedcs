@@ -5,7 +5,7 @@
 
 const path = require('path');
 const { test, expect } = require('./helpers/test');
-const { openPanel, seedStrip, stripByCallsign, startAction, dropStrips } = require('./helpers/app');
+const { openPanel, seedStrip, stripByCallsign, startAction, dropStrips, lapseNlaGuard } = require('./helpers/app');
 
 const SHOTS = path.join(__dirname, '..', '..', 'docs', 'wip', 'L28');
 test.describe.configure({ timeout: 90000 });
@@ -31,7 +31,7 @@ const stateAt = async (page, callsign, facilityId) => ((await records(page, call
 const shot = (page, name) => page.screenshot({ path: path.join(SHOTS, `${name}.png`) });
 const nla = (page, callsign) => stripByCallsign(page, callsign).locator('.efsp-nla-btn');
 async function press(page, callsign) { // the 400 ms double-tap guard is per Strip
-  await page.waitForTimeout(450);
+  await lapseNlaGuard(page);
   await nla(page, callsign).click();
 }
 async function goBay(page, positionId, bayId) {

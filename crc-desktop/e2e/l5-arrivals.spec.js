@@ -10,7 +10,7 @@
  */
 
 const { test, expect } = require('./helpers/test');
-const { openPanel, seedStrip, stripByCallsign } = require('./helpers/app');
+const { openPanel, seedStrip, stripByCallsign, lapseNlaGuard } = require('./helpers/app');
 
 test.describe.configure({ timeout: 90000 });
 
@@ -43,7 +43,7 @@ async function taxiToTower(page, cs) {
     await page.evaluate((cs) => crc.bayView._invokeNla(crc.state.getAllEfspStrips().find((x) => crc.state.getEfspFlightData(x.flightDataId).identity.callsign === cs)), cs);
     // 10 s: one Mutation round trip, measured over 3 s under load. The spec's budget is 90 s.
     await expect.poll(() => stateOf(page, cs), { timeout: 10000 }).not.toBe(before);
-    await page.waitForTimeout(450); // the server's per-Strip double-tap guard
+    await lapseNlaGuard(page); // the client's double-tap window
   }
 }
 

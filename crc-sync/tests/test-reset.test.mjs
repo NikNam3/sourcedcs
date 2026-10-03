@@ -135,3 +135,20 @@ test('the real server with the env var accepts the wire-protocol hook', async ()
     assert.equal((await post({ protocol: 9 })).status, 200);
   } finally { s.child.kill(); await s.exited; }
 });
+
+test('the nla-guard hook validates its body and calls the Boards', () => {
+  const app = fakeApp();
+  let set = null;
+  mountTestReset(app, { env: { CRCSYNC_TEST_RESET: '1' }, hooks: { setNlaGuardMs: (ms) => { set = ms; } } });
+  const route = app.routes.find(([m, p]) => m === 'POST' && p === '/__test/nla-guard');
+  assert.ok(route);
+  const handler = route[2][1];
+  const call = (body) => { const r = { status: 200, body: null }; handler({ body }, { status(c) { r.status = c; return this; }, json(b) { r.body = b; } }); return r; };
+  assert.equal(call({ ms: 'x' }).status, 400);
+  assert.equal(call({ ms: -1 }).status, 400);
+  assert.equal(set, null);
+  assert.equal(call({ ms: 400 }).status, 200);
+  assert.equal(set, 400);
+  assert.equal(call({ ms: 0 }).status, 200);
+  assert.equal(set, 0);
+});

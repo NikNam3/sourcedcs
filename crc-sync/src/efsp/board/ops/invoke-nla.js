@@ -19,7 +19,7 @@ function _applyInvokeNla(ctx, strip, by) {
   const wallNow = ctx.wallClock.now();
   const now = ctx.clock.now();
   const lastInvoke = ctx.nlaHistory.get(strip.stripId);
-  if (lastInvoke && wallNow - lastInvoke.invokedAt < ctx.nlaGuardMs) {
+  if (lastInvoke && wallNow - lastInvoke.invokedAt < ctx.nlaGuard.ms) {
     // Idempotent double-tap guard (§3.5 rule 3): a second press within
     // 400ms is discarded, not queued — the first tap already applied,
     // so from the controller's perspective this is a no-op success, not

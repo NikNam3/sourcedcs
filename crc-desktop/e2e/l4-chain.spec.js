@@ -14,7 +14,7 @@
  */
 
 const { test, expect } = require('./helpers/test');
-const { openPanel, seedStrip, stripByCallsign } = require('./helpers/app');
+const { openPanel, seedStrip, stripByCallsign, lapseNlaGuard } = require('./helpers/app');
 
 const FLIGHT_DATA = { route: 'DCT', requestedAltitude: 'FL250', departureAirport: 'LTAG', destinationAirport: 'LTAF' };
 const ALL = ['OPS', 'CD', 'GC', 'LC', 'AP'];
@@ -34,9 +34,8 @@ async function advance(page, cs, n) {
       timeout: 3000,
       message: `setup: ${cs} stuck at ${before}: ${await page.locator('#efsp-mutation-error').textContent()}`,
     }).not.toBe(before);
-    // The server drops a second NLA on the same Strip inside 400 ms, silently
-    // (`board/ops/invoke-nla.js`'s double-tap guard) — so setup must not outrun it.
-    await page.waitForTimeout(450);
+    // The client swallows a second advancing press inside its 400 ms window — setup must not outrun it.
+    await lapseNlaGuard(page);
   }
 }
 

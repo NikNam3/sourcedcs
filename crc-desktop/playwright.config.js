@@ -67,6 +67,9 @@ const syncEnv = {
   // infra/docker-compose.yml's .env keys, which compose maps onto these.
   // Setting CRCSYNC_* here was silently ignored, so every run connected to
   // the production defaults (server.sourcedcs.page:50051 and :5002).
+  // The NLA double-tap guard off: a spec that presses twice must not depend on how fast crc-sync received the first
+  // (crc-sync docs/adr/0096). e2e/nla-guard.spec.js turns the real 400 ms back on for itself.
+  CRCSYNC_NLA_GUARD_MS: '0',
   DCS_GRPC_HOST: '127.0.0.1:1',
   SRS_HOST: '127.0.0.1',
   SRS_PORT: '1',

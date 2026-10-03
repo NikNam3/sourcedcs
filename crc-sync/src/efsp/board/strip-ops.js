@@ -22,7 +22,7 @@ class StripOps {
    * @param {object} deps.placement Placement
    * @param {{now: () => number}} deps.clock the mission clock
    * @param {{now: () => number}} deps.wallClock real time (docs/adr/0096)
-   * @param {number} deps.nlaGuardMs the NLA double-tap guard's length
+   * @param {{ms: number}} deps.nlaGuard the NLA double-tap guard's length, a cell shared by every Board of a process
    * @param {object} deps.flightDataStore
    * @param {object} deps.coordination Coordination (the HANDOFF... ops call it)
    * @param {object} deps.control HandoffControl (ControlRelease, the control-axis check, retirement and owner changes)
@@ -41,7 +41,7 @@ class StripOps {
     this.placement = deps.placement;
     this.clock = deps.clock;
     this.wallClock = deps.wallClock; // docs/adr/0096: the NLA double-tap latch and the drop stamp
-    this.nlaGuardMs = deps.nlaGuardMs;
+    this.nlaGuard = deps.nlaGuard;
     this.flightDataStore = deps.flightDataStore;
     this.coordination = deps.coordination;
     this.control = deps.control;
