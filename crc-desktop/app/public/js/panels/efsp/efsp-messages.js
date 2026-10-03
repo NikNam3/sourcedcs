@@ -25,6 +25,7 @@ import { refreshArHighlight } from './ato-strip.js';
 import { onAtoAck, onAtoPreviewResult } from './ato-import.js';
 import { renderAirspacePanel } from './airspace-panel.js';
 import { noteUndoAck, noteUndoBoardEpoch, noteUndoVoided, reconcileUndoSlotEpoch } from './panel/undo-slot.js';
+import { noteEfspPositionOffer } from './panel/combination.js';
 import { renderRunwayStatusPanel } from './runway-status-panel.js';
 
 // The handlers of the EFSP message families whose state lives in bay-view.js / efsp-panel.js / efsp-state.js
@@ -129,6 +130,11 @@ registerEfspMessage('efsp-positions-ack', (msg) => {
   renderPositionControls();
   renderPositionWarnings(msg.warnings);
   refreshEfspPanel();
+});
+
+// crc-sync docs/adr/0105 (H104): GC signed off holding Strips while this controller is LC's Primary: offered GC as well.
+registerEfspMessage('efsp-position-offer', (msg) => {
+  noteEfspPositionOffer(msg);
 });
 
 // WP5 (crc-sync's docs/adr/0045) — changed correlation records, once

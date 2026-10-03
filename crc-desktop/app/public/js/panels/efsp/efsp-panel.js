@@ -2,6 +2,7 @@
 import { _cachePanelElements, _efspPanelRootEl, _mutationErrorEl } from './panel/state.js';
 import { _loadStereoRoutes, _refreshCreateStripAvailability, _wireCreateStrip } from './panel/create-strip.js';
 import { _renderPositionTabs } from './panel/tabs.js';
+import { renderCombination } from './panel/combination.js';
 import { _wireDotCommand } from './panel/dot-commands.js';
 import { dismissEfspRefusal } from './panel/refusal.js';
 import { getEfspCorrelationStats } from './efsp-state.js';
@@ -46,6 +47,7 @@ export { _dispatchDotCommand } from './panel/dot-commands.js';
 
 /** Called from app.js after any efsp-snapshot/efsp-board-delta/efsp-positions-ack lands — safe to call even when the Strip panel has never been opened yet (every render function no-ops until initEfspPanel() has cached its elements) or is currently the inactive tab (cached element references stay valid while detached — see the module comment). */
 export function refreshEfspPanel() {
+  renderCombination();
   _renderPositionTabs();
   _refreshCreateStripAvailability();
   _renderCorrelationRate();
@@ -91,6 +93,7 @@ export function initEfspPanel() {
   initAtoImport(_efspPanelRootEl); // docs/adr/0071
   _loadStereoRoutes();
   _renderPositionTabs();
+  renderCombination();
   startEfspStalenessCheck();
   return { onShow: () => { _renderPositionTabs(); _refreshCreateStripAvailability(); } };
 }

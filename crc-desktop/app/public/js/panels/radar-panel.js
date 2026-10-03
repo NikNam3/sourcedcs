@@ -2,6 +2,7 @@
 import { PANEL_TITLES, isDockPanelOpen, isPanelPinned, setPanelPinned, toggleDockPanel } from '../dock.js';
 import { hideLosProfile, showLosProfile } from './los-panel.js';
 import { getAllEfspPositions } from './efsp/efsp-state.js';
+import { formatFrequencies } from './efsp/combination-rules.js';
 import { getActingPositions, sendEfspSetPositions } from './efsp/efsp-ws.js';
 import { coverageSignedOnPositions, getActiveRadars } from '../app.js';
 
@@ -247,6 +248,15 @@ export function renderPositionControls() {
       const $label = document.createElement('span');
       $label.className = 'panel-ctrl-label';
       $label.textContent = positionId;
+      // crc-sync docs/adr/0105: the Position's frequencies where it is named.
+      const entry = getAllEfspPositions().find(p => p.positionId === positionId && (!p.facilityId || p.facilityId === facilityId));
+      const freqText = entry ? formatFrequencies(entry.frequencies) : '';
+      if (freqText) {
+        const $f = document.createElement('span');
+        $f.className = 'panel-ctrl-freq';
+        $f.textContent = freqText;
+        $label.appendChild($f);
+      }
       $row.appendChild($label);
 
       const $toggle = document.createElement('label');
@@ -283,7 +293,7 @@ export function renderPositionWarnings(warnings) {
   $el.textContent = warnings.map(w =>
     w.routedTo
       ? `${w.count} Strip(s) from ${w.positionId} routed to ${w.routedTo}`
-      : `${w.count} Strip(s) from ${w.positionId} have no Position to be consolidated at — unassigned`
+      : `${w.count} Strip(s) from ${w.positionId} stay with ${w.positionId} until someone signs on to it`
   ).join(' · ');
 }
 

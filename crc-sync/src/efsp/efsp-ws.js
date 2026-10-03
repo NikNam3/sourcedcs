@@ -331,7 +331,7 @@ function _handleSetPositions(ctx, session, msg, persist) {
   // the Strips to the Position that had left (docs/adr/0081, L6's F2/F5 tail).
   if ((reassignedIds.length > 0 || controlRepaired) && typeof persist === 'function') persist();
 
-  const offer = combination.offerAfterSignOff(positionStore, boardStore, facilityId, vacated, session.controllerId, VERSION);
+  const offered = combination.offerAfterSignOff(positionStore, boardStore, facilityId, vacated, session.controllerId);
   const result = {
     // docs/adr/0105: `combination` is the warning for one controller holding LC with GC or CD (null otherwise), and
     // `monitoring` the frequencies of every Position this controller is Primary at (a combination has both).
@@ -351,7 +351,8 @@ function _handleSetPositions(ctx, session, msg, persist) {
       { updated: boardStore.getAll().filter(s => s.state !== 'DROPPED').map(s => stampStrip(boardStore, s, facilityId, ctx)), gone: [] },
       [], positionStore.getAll().map(p => ({ ...p, facilityId }))) }),
   };
-  if (offer) result.directed = [offer];
+  // The sign-on offer (docs/adr/0105) goes to LC's Primary alone, by the directed channel (docs/adr/0100 s6).
+  if (offered) result.directed = [{ facilityId, positionId: offered.positionId, primaryOnly: true, frame: { version: VERSION, type: 'efsp-position-offer', ...offered } }];
   return result;
 }
 

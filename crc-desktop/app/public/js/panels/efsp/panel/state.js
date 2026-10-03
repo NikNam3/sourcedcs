@@ -29,6 +29,7 @@ export let _undoSlotEl = null;
 export let _undoVoidedEl = null;
 export let _controlAttestEl = null;
 export let _connectionBannerEl = null;
+export let _combinationEl = null; // crc-sync docs/adr/0105
 export let _efspPanelRootEl = null; // cached, not document.getElementById() per check — same detached-DOM reasoning as every other element above
 
 export function _setBayContentElForTest(el) { _bayContentEl = el; }
@@ -53,4 +54,5 @@ export function _cachePanelElements() {
   _undoVoidedEl = document.getElementById('efsp-undo-voided');
   _controlAttestEl = document.getElementById('efsp-control-attest');
   _connectionBannerEl = document.getElementById('efsp-connection-banner');
+  _combinationEl = document.getElementById('efsp-combination');
 }

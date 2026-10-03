@@ -38,18 +38,15 @@ function combinationOf(positionStore, controllerId, strips) {
 
 /**
  * The offer to make when `vacated` Positions have just been left: GC unstaffed with Strips and a Primary at LC who is not
- * the controller who left it. Returns the directed message (efsp-ws's `directed` shape) or null.
+ * the controller who left it. Returns `{facilityId, positionId, offer, count}` (efsp-ws makes the frame) or null.
  */
-function offerAfterSignOff(positionStore, boardStore, facilityId, vacatedIds, leavingControllerId, version) {
+function offerAfterSignOff(positionStore, boardStore, facilityId, vacatedIds, leavingControllerId) {
   if (!vacatedIds.includes(GROUND) || positionStore.isStaffed(GROUND)) return null;
   const lcPrimary = positionStore.primaryOf(LOCAL);
   if (!lcPrimary || lcPrimary === leavingControllerId) return null;
   const count = boardStore.getAll().filter(s => s.ownerPositionId === GROUND && s.state !== 'DROPPED').length;
   if (count === 0) return null;
-  return {
-    facilityId, positionId: LOCAL, primaryOnly: true,
-    frame: { version, type: 'efsp-position-offer', facilityId, positionId: LOCAL, offer: GROUND, count },
-  };
+  return { facilityId, positionId: LOCAL, offer: GROUND, count };
 }
 
 module.exports = { combinationOf, offerAfterSignOff, luawInUse, LOCAL, NON_LOCAL_TOWER, GROUND, LUAW_STATES };

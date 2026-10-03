@@ -45,7 +45,7 @@ Facility/Position map as it stands:
 
 | Facility | Positions | Notes |
 |---|---|---|
-| `INCIRLIK` | `OPS`, `CD`, `GC`, `LC`, `AP` (+ `RSU`, `SFA`, `PAR`, §8L) | Consolidation `CD→GC→LC→AP` (`SFA`, `PAR` → `AP`; `RSU` has none) |
+| `INCIRLIK` | `OPS`, `CD`, `GC`, `LC`, `AP` (+ `RSU`, `SFA`, `PAR`, §8L) | Consolidation `CD→GC` and `LC→AP` (`SFA`, `PAR` → `AP`; `RSU` has none). **`GC` ends its chain**: a tower controller takes ground by combining (§8M) |
 | `CENTER` | `CTR` | No consolidation (mirrors `OPS`) |
 | `CARRIER` | `CV_MARSHAL`, `CV_PRIFLY`, `CV_APP1`, `CV_APP2` | Consolidation `CV_APP2→CV_APP1→CV_MARSHAL`; `CV_PRIFLY` is outside it (§8K) |
 | `TACTICAL` | `TAC_C2`, `AIC`, `GCI`, `JTAC` | `AIC`/`GCI`/`JTAC` consolidated at `TAC_C2`; `AIC` and `JTAC` work only lines `TAC_C2` hands them (§8C1) |
@@ -891,7 +891,7 @@ AIC's to change`).
 - **The Position it is consolidated at.** When a Position signs off, Strips routed to the Position it is consolidated at land in that Position's own Bay
   for the line's state (else its first Bay implying no state, else they stay put with a warning, and the
   ack reports how many were `unplaced`). They carry `consolidatedFrom`, and go back to the Position they came
-  from when it is staffed again. The chain at `TACTICAL` is `AIC`/`GCI`/`JTAC` → `TAC_C2`. An unstaffed
+  from when it is staffed again. The chain at `TACTICAL` is `AIC`/`GCI`/`JTAC` → `TAC_C2`. At `INCIRLIK`, `GC` is not consolidated anywhere (§8M). An unstaffed
   Position with Strips and nowhere to consolidate still warns `routedTo: null`.
 - **Coordination.** The proposer can **Cancel** an open proposal, or **End** an accepted exchange, from the
   `⋯` menu. If the receiver drops its side, the exchange ends on the proposer's Strip too (the link is
@@ -1171,7 +1171,7 @@ for being ours; it is only not doctrine, and not to be quoted as doctrine.
 | **Bay names and Bay sets**, the Rack per runway end, the Coordination Bays | The Incirlik Bay table is the guide's §4.2 default and is itself `[SOURCE-DEFINED]`; the `CENTER`, `TACTICAL` and `CARRIER` sets, JTAC's viewing Bay and the pattern and SFA Bays are ours | `adr/0013`, `0025`, `0074`, `0075`, `0093` |
 | **Block Maps** for ARRIVAL, OVERFLIGHT and MISSION, all sub-lettered Blocks (`3A`-`3G`, `7A`, `9A-*`, `9F`, `M1`-`M8`), the CID format, the equipment suffix (naive: sorted code letters, nothing fills it today) | Ours. The DEPARTURE Block Map is the FAA strip's (guide §6.2, Annex §2.1) | `adr/0008`, `0023`, `0026`, `0056` |
 | **Which Positions exist**, their letters on the scope | Incirlik's eight (OPS, CD, GC, LC, AP, RSU, SFA, PAR), `CTR` and the tactical four are the guide's; the `CARRIER` Facility and the RSU, SFA and PAR Positions are ours. The Position letters are ours | `adr/0074`, `0075`, `0088` |
-| **Consolidation** (where an unstaffed Position's Strips go) | The guide's default (§4.8.6 rule 2) is `CD→GC→LC→AP→CTR`, `AIC`/`GCI`→`TAC_C2`→`CTR`, `CV_APP*`→`CV_MARSHAL`→`CV_PRIFLY`, `RSU`→`LC`, `SFA`/`PAR`→`AP`. We ship it with four deviations. **No `AP→CTR` and no `TAC_C2→CTR`**: consolidation stays inside one Facility (`adr/0013`). **No `RSU→LC`**: RSU is supervisory, so a Strip never strands on it (`adr/0075`). **The carrier chain is `CV_APP2→CV_APP1→CV_MARSHAL` and stops there**, without `CV_PRIFLY` (`adr/0074`). **`JTAC→TAC_C2`** is ours (`adr/0080`). So `AP`, `CTR`, `TAC_C2` and `CV_MARSHAL` end their chains, and a Strip can be left with an unstaffed Position there; sign-off warns, it does not block (guide §4.8.6) | `facility-schema.js` notes |
+| **Consolidation** (where an unstaffed Position's Strips go) | The guide's default (§4.8.6 rule 2) is `CD→GC→LC→AP→CTR`, `AIC`/`GCI`→`TAC_C2`→`CTR`, `CV_APP*`→`CV_MARSHAL`→`CV_PRIFLY`, `RSU`→`LC`, `SFA`/`PAR`→`AP`. We ship it with five deviations. **No `GC→LC`**: ground is not consolidated at local control, a controller signed on at `LC` takes `GC` by combining, with a warning (§8M, `adr/0105`, H104). **No `AP→CTR` and no `TAC_C2→CTR`**: consolidation stays inside one Facility (`adr/0013`). **No `RSU→LC`**: RSU is supervisory, so a Strip never strands on it (`adr/0075`). **The carrier chain is `CV_APP2→CV_APP1→CV_MARSHAL` and stops there**, without `CV_PRIFLY` (`adr/0074`). **`JTAC→TAC_C2`** is ours (`adr/0080`). So `GC`, `AP`, `CTR`, `TAC_C2` and `CV_MARSHAL` end their chains, and a Strip can be left with an unstaffed Position there; sign-off warns, it does not block (guide §4.8.6) | `facility-schema.js` notes |
 | **Runway status**: which states count as using the runway (`RUNWAY_GATED_STATES`: a DEPARTURE in `RUNWAY_QUEUE`, `LUAW` or `DEPARTED`; an ARRIVAL in `FINAL`), the button labels (CLOSE, OPEN, WORKS, WRK DONE, INSP OK, ACCEPT, REJECT, REQ CLS, REQ WRKS, REQ OPEN, CHG RWY, SELF CHG, ACK, WITHDRAW, BEGIN), the "works in progress" and "runway change in progress" wordings, Tower as sole authority, the wind rule for the active end, the skipped acknowledger | Ours | `adr/0061`, `0068`, `0070` |
 | **Incirlik's runway data**: runway 05/23 with true headings 56 and 236, the airport `LTAG` whose wind picks the active end, acknowledgers `OPS` and `AP`, `OPS` as inspection authority, the hot cargo and alert pad names and the alert access route, no arresting gear | Squadron data, **to verify**. The headings are approximate and true, not magnetic | `adr/0061`, `0070` |
 | **SFA, PAR and the pattern**: five UHF frequencies 232.1 to 236.1 MHz and who starts on which, glidepath tolerance, trend step, prompt hold, long-in-pattern | Ours; the frequencies are placeholders, **to verify** | `adr/0075`, `0093` |
@@ -1468,6 +1468,33 @@ and **PATTERN** (in the visual pattern, then recovered). The consolidation is `C
 - The glidepath tolerance (0.3 degrees), trend step (0.1), prompt hold (4 s), long-in-pattern (10 min) and the
   five placeholder frequencies (232.1 to 236.1 MHz) are `[SOURCE-DEFINED]`. The FINAL sample is the distance to
   the approach radar's site against a nominal 3-degree glidepath: it has never seen a live DCS track.
+
+## 8M. Taking ground: combining `LC` with `GC` (`adr/0105`)
+
+A tower controller who works ground and local together is **signed on to both**. That is a *combination*: one person,
+two Positions, two groups of Bays, and each Strip is still worked by the rules of the Position that owns it. It is not a
+consolidation: when `GC` signs off, its Strips are **not** moved to `LC` (`LC` may not advance PUSHBACK, TAXI or
+TAXI_IN, so they would only have been parked). They stay `GC`'s.
+
+- **GC signs off holding Strips.** The Strips stay with `GC` and the sign-off warns that nobody covers them
+  (`routedTo: null`). If somebody is `LC`'s Primary, they are **offered** "GC is unstaffed with N Strips. Take GC as well?"
+  with **Take GC** and **Not now**. Taking it is an ordinary sign-on to `GC`: you now hold both and `GC`'s Strips are
+  yours to advance again. The offer lapses by itself when `GC` is staffed. Signing on to `GC` from the Position selector does
+  the same.
+- **Nobody holds `GC`.** Its Strips wait. A hand-off to an empty `GC` (clearance delivery's, or `LC`'s arrival
+  press) is inhibited with "no receiving Position present" until `GC` is staffed.
+- **The warning.** Holding `LC` together with `GC` or `CD` shows a line above the Position tabs: `COMBINED LC + GC`, that
+  it is only for significantly reduced traffic (JO 7210.3 ¶2-6-5b), and which frequencies to monitor (both, ¶3-3-3). While a
+  departure is in `RUNWAY_QUEUE` or `LUAW` the line turns red and says LUAW is in use (¶2-6-5c, ¶10-3-8a4), and putting a
+  Strip into `LUAW` as `LC` while holding `GC` or `CD` shows "LUAW while LC is combined with GC/CD". Both **warn and
+  never block**: the EFSP's departure lifecycle always passes through LUAW, so a block would end the one-controller tower.
+  The wording is ours, the doctrine is the FAA's applied to a USAF field by analogy.
+- **Frequencies.** Each Position can carry frequencies (`positionFrequencies` in the facility file, `{ label, mhz }`,
+  checked like the airspace frequencies). They are shown in the Position selector and on the Position tab, and a controller
+  holding two Positions has both. Incirlik ships `GC` GND 275.8 and `LC` TWR 251.0: **placeholders, the squadron must
+  confirm them.** Nothing tunes a radio from them yet.
+- **Not changed.** `CD→GC`, `LC→AP`, `SFA`/`PAR`→`AP` and the carrier chain keep today's behaviour (Strips move and may
+  be parked). Sign-on and sign-off are not undoable one-click moves (`adr/0100`).
 
 ## 9. General controls — quick reference
 
