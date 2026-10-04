@@ -171,7 +171,7 @@ class Driver {
       if (!c) continue;
       if (payload.startsWith('{"version":1,"type":"efsp-heartbeat"')) {
         this.stats.heartbeats++;
-        if (c.connected) this._judgeStoreBeat(c, JSON.parse(payload));
+        if (this.o.storeSync && c.connected) this._judgeStoreBeat(c, JSON.parse(payload));
         continue;
       }
       if (payload.indexOf('"type":"efsp-') < 0 || payload.indexOf('"type":"efsp-') > 30) continue; // non-EFSP (status, coverage, tracks)
@@ -1221,7 +1221,7 @@ class Driver {
         this._confUp = r.alerts.conformance > 0;
       }
       this.deliver(r.out);
-      await this.storeResyncs();
+      if (this.o.storeSync) await this.storeResyncs();
       this.after(1000, tick, 'tick');
     };
     this.at(this.t0 + 1000, tick, 'tick');

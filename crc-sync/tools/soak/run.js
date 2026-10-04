@@ -61,6 +61,7 @@ async function main() {
   // The soak's Strip retention (ADR 0107): the host reads it from the environment (retention.js); the report reads it from `o`.
   if (o.retentionMin === null) o.retentionMin = require('./retention').SOAK_RETENTION_MIN_DEFAULT;
   process.env[require('./retention').ENV_KEY] = String(o.retentionMin);
+  process.env.CRCSYNC_SOAK_HINTS = '1'; // NX-1: the host runs the hint monitor and the airborne observer (host-core.js)
   const stamp = new Date().toISOString().replace(/[:.]/g, '-').replace(/Z$/, 'Z');
   const outDir = o.out || path.join(__dirname, 'out', `${stamp}-seed${o.seed}-${o.profile}-${o.minutes}m${o.inject ? `-${o.inject}` : ''}`);
   fs.mkdirSync(outDir, { recursive: true });
@@ -82,7 +83,7 @@ async function main() {
   const host = o.inproc ? new InprocHost(hostOpts) : new ForkedHost(hostOpts);
   // SOAK_DIGEST_TRACE=<file>: write the action sequence the trafficDigest hashes (for diffing two runs).
   const traceDigest = process.env.SOAK_DIGEST_TRACE ? fs.createWriteStream(process.env.SOAK_DIGEST_TRACE) : null;
-  const driver = new Driver({ ...o, traceDigest, host, startNow, outDir, stateDir, lightMs: lightS * 1000, heavyMs: heavyS * 1000 });
+  const driver = new Driver({ ...o, storeSync: true, traceDigest, host, startNow, outDir, stateDir, lightMs: lightS * 1000, heavyMs: heavyS * 1000 });
   await driver.run();
 
   const rep = report.build(driver, { ...o, commit, argv: process.argv.slice(2), stateDir });
