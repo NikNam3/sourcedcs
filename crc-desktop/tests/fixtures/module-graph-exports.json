@@ -873,6 +873,10 @@
    "marsaBadgeFor",
    "refreshMarsaHighlight"
   ],
+  "panels/efsp/mtr-advisory.js": [
+   "hasMtrData",
+   "mtrLostCommsAdvisory"
+  ],
   "panels/efsp/mtr-route-note.js": [
    "mtrRouteNote",
    "routeForDesignator"
@@ -1069,9 +1073,7 @@
    "ORDNANCE_WHEN_SET",
    "compactBlocksFor",
    "fieldSpanFor",
-   "hasMtrData",
-   "isOrdnanceSet",
-   "mtrLostCommsAdvisory"
+   "isOrdnanceSet"
   ],
   "panels/efsp/strip-template.js": [
    "ARRIVAL_BLOCK_MAP",

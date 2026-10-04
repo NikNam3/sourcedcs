@@ -9,10 +9,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { BLOCK_MAPS } from '../app/public/js/panels/efsp/strip-template.js';
-import {
-  COMPACT_BLOCKS_BY_POSITION, compactBlocksFor,
-  MTR_BLOCKS_BY_POSITION, hasMtrData, mtrLostCommsAdvisory,
-} from '../app/public/js/panels/efsp/strip-fields.js';
+import { COMPACT_BLOCKS_BY_POSITION, compactBlocksFor, MTR_BLOCKS_BY_POSITION } from '../app/public/js/panels/efsp/strip-fields.js';
+import { hasMtrData, mtrLostCommsAdvisory } from '../app/public/js/panels/efsp/mtr-advisory.js';
 
 const everyList = () => Object.entries(COMPACT_BLOCKS_BY_POSITION)
   .flatMap(([stripType, byPos]) => Object.entries(byPos).map(([positionId, list]) => ({ stripType, positionId, list })));

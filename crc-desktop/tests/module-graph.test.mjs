@@ -210,7 +210,7 @@ const NEVER_IN_A_CYCLE = [
   'geo.js', 'iff.js', 'icons.js', 'track-label.js', 'panels/efsp/efsp-change-bus.js', 'panels/efsp/efsp-message-registry.js',
   'panels/efsp/control-release-rules.js', 'panels/efsp/carrier-state.js',
   'panels/efsp/carrier-final-distance.js', 'panels/efsp/runway-status-rules.js', 'panels/efsp/facility-topology.js',
-  'panels/efsp/sync-cursor.js',
+  'panels/efsp/sync-cursor.js', 'panels/efsp/strip-template.js', 'panels/efsp/mtr-advisory.js',
 ];
 
 test('module graph: the largest import cycle stays small, and the leaves and rule modules are in none', () => {
