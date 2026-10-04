@@ -840,7 +840,7 @@ in `map-setup.js`. **Do not decide a block's text or colour anywhere else.**
 `gone`, and `droppedWallAt` in the snapshot; `FlightDataStore.archiveFlightData`; `traffic-count.js`'s `hasCountFor`.
 The archiver builds its own referenced set from every Board (a Strip is archived only when its flight data has no
 live Strip and no un-archived DROPPED one). The wire carries `gone` and `flightDataList.gone`
-(`ws-hub.js`'s `broadcastEfspBoardDelta` passes `gone`/`flightDataListGone` through; `efsp-state.js`'s
+(`wire/frames.js`'s board delta builder passes `gone`/`flightDataListGone` through; `efsp-state.js`'s
 `applyEfspDelta` handles `flightDataList.gone`). **ADR 0002's "durable" now means durable until archived.**
 - **Soak acceptance was restated, H72:** 4 h run, net-growth limit **25%** (`tools/soak/report.js`
   `THRESHOLDS.netGrowthPct`; no `--warmup-min`, no 8 h run). Measured 17.2% (old 10% gate would fail, and
@@ -896,10 +896,12 @@ and Undo paths also call and which must not be owner-checked; a `SetState` to DR
 hop); the coordination op gains `CANCEL`; `SystemCoordinationEnd` and `SystemReassign`
 (`position-retaken`) are log entries. **Per-session read scope (B6)**: `crc-sync/src/efsp/read-scope.js`
 and `efsp-ws.js`'s `readScopeOf`/`filterForSession`/`supplementFor`/`readScopeKey`; `ws-hub.js`'s
-`_broadcastEfsp`, `_efspFilter`, `_efspAlertsMsg(session)` and the connect snapshot filter every EFSP send
-(`snapshotFor(session)`, `_snapshotMessage(ctx, session)`); `broadcastEfspRunwayStatusDelta` and the
-heartbeat stay unfiltered (not flights). A Strip that becomes visible to a session arrives with its flight data,
-correlation and MARSA records. Any new EFSP broadcast must go through `_broadcastEfsp`.
+`_deliver` (public: `deliverEfsp(frames)`), `_efspFilter`, `_efspAlertsMsg(session)` and the connect snapshot filter
+every EFSP send (`snapshotFor(session)`, `_snapshotMessage(ctx, session)`); the heartbeat stays unfiltered (not
+flights). A Strip that becomes visible to a session arrives with its flight data, correlation and MARSA records.
+**Any new EFSP frame is built in `wire/frames.js` and sent through `deliverEfsp`/`_deliver`** (SERVER-SEAMS-2: the
+six older entry points, `_broadcastEfsp`, `broadcastEfspBoardDelta`, `broadcastEfspRunwayStatusDelta` and the rest,
+are gone; `broadcastEfspAlerts` stays, a per-session state send, still filtered).
 - U7: `receiveCoordinationPeerGone` ends only a PROPOSED or ACTIVE link (S-L23: a completed handoff is not a live link, so the receiver's later drop leaves the sender's Strip alone; tested).
 - Open: the two UI follow-ups above (a TAC_C2-only controller cannot Accept an AIC-held exit from the
   panel; the JTAC's drop-only tabs); GCI has no hand-back row (unchanged); `permission.js`'s module
