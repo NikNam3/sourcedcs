@@ -24,7 +24,9 @@ test('lookup: no token, web down, non-2xx, malformed and non-JSON are all {ok:fa
   assert.equal((await listUpcomingAirspaceBookings({ fetchImpl: json([]), serviceToken: '' })).ok, false);
   const down = await listUpcomingAirspaceBookings({ fetchImpl: async () => { throw new Error('ECONNREFUSED'); }, serviceToken: 't' });
   assert.deepEqual(down, { ok: false, reason: 'sourcedcs-web unreachable' });
-  assert.match((await listUpcomingAirspaceBookings({ fetchImpl: json({}, 401), serviceToken: 't' })).reason, /401/);
+  assert.match((await listUpcomingAirspaceBookings({ fetchImpl: json({}, 401), serviceToken: 't' })).reason, /rejected the service token \(HTTP 401\)/);
+  assert.match((await listUpcomingAirspaceBookings({ fetchImpl: json({}, 403), serviceToken: 't' })).reason, /rejected the service token \(HTTP 403\)/);
+  assert.match((await listUpcomingAirspaceBookings({ fetchImpl: json({}, 500), serviceToken: 't' })).reason, /returned 500/);
   assert.match((await listUpcomingAirspaceBookings({ fetchImpl: json({ not: 'a list' }), serviceToken: 't' })).reason, /malformed/);
   const notJson = async () => ({ ok: true, status: 200, json: async () => { throw new SyntaxError('bad'); } });
   assert.equal((await listUpcomingAirspaceBookings({ fetchImpl: notJson, serviceToken: 't' })).ok, false);
@@ -32,9 +34,9 @@ test('lookup: no token, web down, non-2xx, malformed and non-JSON are all {ok:fa
 
 test('lookup: a slow web is aborted at the timeout', async (t) => {
   quiet(t);
-  const slow = (_u, init) => new Promise((_res, rej) => init.signal.addEventListener('abort', () => rej(new Error('aborted'))));
+  const slow = (_u, init) => new Promise((_res, rej) => init.signal.addEventListener('abort', () => rej(Object.assign(new Error('aborted'), { name: 'AbortError' }))));
   const r = await listUpcomingAirspaceBookings({ fetchImpl: slow, serviceToken: 't', timeoutMs: 20 });
-  assert.equal(r.ok, false);
+  assert.deepEqual(r, { ok: false, reason: 'sourcedcs-web timed out' });
 });
 
 function calendar(lists, { now = Date.parse('2026-10-05T09:00:00Z'), theater = 'Syria', bookingUrl = 'https://x/bookings.html' } = {}) {

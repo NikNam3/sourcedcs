@@ -338,7 +338,7 @@ function aaWarning(ack) {
 
 function aaSend(msg, onOk) {
   aaApi('POST', '/api/airspaces/mutation', msg).then(function (res) {
-    if (aaDown(res)) { $('aaEditResult').innerHTML = '<div class="form-error">crc-sync unreachable: nothing was changed.</div>'; return; }
+    if (aaDown(res)) { $('aaEditResult').innerHTML = '<div class="form-error">crc-sync unreachable' + (res.body && res.body.reason ? ' (' + esc(res.body.reason) + ')' : '') + '. If it timed out, the change may still have been applied; resending is safe (it is idempotent), or reload to check.</div>'; return; }
     var ack = res.body || {};
     if (res.ok && !ack.reason && ack.ok !== false) { aaBanner(''); onOk(ack); return; }
     aaShowRefusal(ack, res);

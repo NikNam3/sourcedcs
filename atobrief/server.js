@@ -49,7 +49,8 @@ const io     = new Server(server);
 const CASDOOR_CLIENT_ID     = process.env.ATOBRIEF_CLIENT_ID     || '';
 const CASDOOR_CLIENT_SECRET = process.env.ATOBRIEF_CLIENT_SECRET || '';
 const CASDOOR_ENDPOINT      = process.env.CASDOOR_ENDPOINT       || '';
-// Shared secret for machine reads of the USMTF export (crc-sync, ADR 0078).
+// Shared secret for machine reads of the USMTF export (ADR 0078). Nothing sends it yet: crc-sync does not read
+// the export (its ATO import is a pasted/dropped file); only an external USMTF consumer needs this.
 // Read once at startup (P5); unset disables the service-token path.
 const USMTF_SERVICE_TOKEN   = process.env.ATOBRIEF_USMTF_TOKEN   || '';
 

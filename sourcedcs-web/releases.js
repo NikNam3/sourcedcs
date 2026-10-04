@@ -1,11 +1,10 @@
 'use strict';
 
-// crc-desktop release manifest parsing + upload auth, pulled out of
+// crc-desktop release manifest parsing and installer retention, pulled out of
 // server.js so it can be unit tested as pure functions without requiring
 // server.js (which has side effects on load -- reading env-derived config,
 // creating data directories, etc).
 
-const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 
@@ -30,20 +29,6 @@ function parseReleaseManifest(raw) {
   const size     = (raw.match(/\bsize:\s*(\d+)/) || [])[1];
   if (!version || !file) return null;
   return { version, url: '/downloads/' + encodeURIComponent(file), size: size ? parseInt(size, 10) : null };
-}
-
-/* Constant-time bearer-token check for POST /api/releases/upload (crc-desktop
-   release CI has no interactive Casdoor session, so this is a separate
-   shared-secret check rather than requireAuth/requireAdmin). Returns false
-   (never throws) for an empty/unset expectedToken, an empty provided token,
-   or a length mismatch -- crypto.timingSafeEqual throws on unequal-length
-   buffers, which a naive direct call would need to guard anyway. */
-function checkReleaseUploadToken(providedToken, expectedToken) {
-  if (!expectedToken) return false;
-  const expected = Buffer.from(expectedToken);
-  const actual   = Buffer.from(providedToken || '');
-  if (expected.length !== actual.length) return false;
-  return crypto.timingSafeEqual(expected, actual);
 }
 
 /* Installer retention. Every release uploads an installer (+ blockmap) of up
@@ -95,4 +80,4 @@ function pruneReleases(dir, { keep = 3 } = {}) {
   return deleted;
 }
 
-module.exports = { parseReleaseManifest, checkReleaseUploadToken, pruneReleases };
+module.exports = { parseReleaseManifest, pruneReleases };

@@ -10,7 +10,7 @@ const https = require('https');
 const http = require('http');
 const path = require('path');
 const store = require('./store');
-const { checkReleaseUploadToken } = require('./releases.js');
+const { requireServiceToken } = require('./service-token.js');
 
 /* ─── App config (config.json) ──────────────────────────── */
 const appConfig = store.loadJSON(path.join(__dirname, 'config.json'), {});
@@ -34,7 +34,6 @@ const CASDOOR_ENDPOINT = process.env.CASDOOR_ENDPOINT;
 /* crc-desktop's release CI has no interactive Casdoor session, so uploading
    installers/manifests is gated by a separate shared-secret bearer token
    instead of requireAuth/requireAdmin. */
-const RELEASE_UPLOAD_TOKEN = process.env.RELEASE_UPLOAD_TOKEN || '';
 
 /* ─── EFSP flight-plan service access (crc-sync, not Casdoor) ─────── */
 /* crc-sync has no interactive Casdoor session either (see the comment
@@ -47,19 +46,13 @@ const RELEASE_UPLOAD_TOKEN = process.env.RELEASE_UPLOAD_TOKEN || '';
    token claiming roles:['admin'] and it would be accepted -- that was
    explicitly rejected as a way to solve this, because it would mean
    trusting a fabricated claim instead of a real, provisioned secret. This
-   is that real secret. checkReleaseUploadToken (releases.js) is reused
-   here unrenamed -- it's already fully generic (providedToken,
-   expectedToken params, no releases-specific logic inside), just first
-   named for its original caller; a second constant-time-compare
-   implementation would be needless duplication of a security-sensitive
-   one-liner. */
-const FLIGHT_PLAN_SERVICE_TOKEN = process.env.FLIGHT_PLAN_SERVICE_TOKEN || '';
+   is that real secret. All three gates share requireServiceToken
+   (service-token.js): unset -> 503, wrong/missing -> 401, read per request. */
 
 /* Airspace registry service access (docs/adr/0098 section 9): crc-sync reads the
    upcoming airspace bookings with this shared secret, the same shape as
    FLIGHT_PLAN_SERVICE_TOKEN but a separate secret. The same token is what the
    web sends to crc-sync's /api/airspace-registry (crcsync-client.js). */
-const AIRSPACE_SERVICE_TOKEN = process.env.AIRSPACE_SERVICE_TOKEN || '';
 
 /* Low-level "make the request, collect the body" helper shared by every
    hand-rolled REST caller in this codebase (Casdoor here, Discord in
@@ -178,32 +171,9 @@ function requireBookingAdmin(req, res, next) {
   next();
 }
 
-function requireReleaseUpload(req, res, next) {
-  const auth = req.headers.authorization || '';
-  const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
-  if (!checkReleaseUploadToken(token, RELEASE_UPLOAD_TOKEN)) {
-    return res.status(401).json({ error: 'Invalid or missing release upload token' });
-  }
-  next();
-}
-
-function requireFlightPlanService(req, res, next) {
-  const auth = req.headers.authorization || '';
-  const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
-  if (!checkReleaseUploadToken(token, FLIGHT_PLAN_SERVICE_TOKEN)) {
-    return res.status(401).json({ error: 'Invalid or missing flight-plan service token' });
-  }
-  next();
-}
-
-function requireAirspaceService(req, res, next) {
-  const auth = req.headers.authorization || '';
-  const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
-  if (!checkReleaseUploadToken(token, AIRSPACE_SERVICE_TOKEN)) {
-    return res.status(401).json({ error: 'Invalid or missing airspace service token' });
-  }
-  next();
-}
+const requireReleaseUpload = requireServiceToken('release upload token', () => process.env.RELEASE_UPLOAD_TOKEN);
+const requireFlightPlanService = requireServiceToken('flight-plan service token', () => process.env.FLIGHT_PLAN_SERVICE_TOKEN);
+const requireAirspaceService = requireServiceToken('airspace service token', () => process.env.AIRSPACE_SERVICE_TOKEN);
 
 module.exports = {
   SKILL_ADMIN_ROLES, BOOKING_ADMIN_ROLES,

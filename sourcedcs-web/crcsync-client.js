@@ -78,7 +78,7 @@ function createClient(opts) {
     });
     cache.delete(String(theater || ''));   /* any outcome: the next read is fresh */
     if (!r.ok) return r;
-    if (r.status >= 500) return { ok: false, reason: 'crc-sync answered HTTP ' + r.status };
+    if (r.status >= 500) return { ok: false, reason: (typeof r.body.error === 'string' && r.body.error) || 'crc-sync answered HTTP ' + r.status };
     return { ok: true, status: r.status, ack: r.body };
   }
 

@@ -10,19 +10,14 @@
 // (`efsp.applyAsService`), so persistence, replay and the broadcast to connected panels happen once, there.
 // nginx never exposes this path (infra's crc-sync vhost denies /api/airspace-registry).
 
-const crypto = require('crypto');
 const express = require('express');
 const log = require('./log').logger('airspace-service');
+const { requireServiceToken } = require('./service-token');
 
 const MAX_THEATER_LEN = 64;
 const MAX_ID_LEN = 64;
 const MAX_MUTATION_ID_LEN = 80;
 const MAX_ACTOR_LEN = 200;
-
-const sha = (s) => crypto.createHash('sha256').update(String(s)).digest();
-function tokenMatches(given, expected) {
-  return crypto.timingSafeEqual(sha(given), sha(expected)); // hashed first: equal length, no length leak
-}
 
 const isStr = (v, max) => typeof v === 'string' && v.length > 0 && v.length <= max;
 const isInt = (v) => Number.isInteger(v);
@@ -32,19 +27,13 @@ const STATUS_BY_REASON = Object.freeze({ STALE_REV: 409, NOT_FOUND: 404, VALIDAT
 const statusOf = (ack) => (ack && ack.ok ? 200 : STATUS_BY_REASON[ack && ack.reason] || 422);
 
 /**
- * @param {{efsp:object, token?:string, broadcast?:(frames:object[])=>void}} deps
+ * @param {{efsp:object, token?:string, getToken?:()=>string, broadcast?:(frames:object[])=>void}} deps
  *   `efsp` the EFSP composition (`airspaceStore`, `applyAsService`); `broadcast` hands a result's frames to the hub
  */
-function createAirspaceService({ efsp, token = '', broadcast = () => {} }) {
+function createAirspaceService({ efsp, token = '', getToken = () => token, broadcast = () => {} }) {
   const router = express.Router();
 
-  router.use((req, res, next) => {
-    if (!token) return res.status(503).json({ error: 'airspace service not configured' });
-    const h = req.headers.authorization || '';
-    const given = h.startsWith('Bearer ') ? h.slice(7) : '';
-    if (!given || !tokenMatches(given, token)) return res.status(401).json({ error: 'Invalid or missing airspace service token' });
-    next();
-  });
+  router.use(requireServiceToken('airspace service token', getToken)); // unset 503, wrong/missing 401 (service-token.js)
 
   router.get('/theaters', (_req, res) => {
     res.json(efsp.airspaceStore.listTheaters());
