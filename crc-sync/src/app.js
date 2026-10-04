@@ -404,6 +404,7 @@ function createApp(deps = {}) {
   // have.
   const correlationReconciler = new CorrelationReconciler({
     clock: missionClock,
+    wallClock: WALL_CLOCK,
     trackStore,
     // The code the aircraft is actually sending (docs/adr/0059).
     beaconOf: trackSeams.beacon || ((t) => { const x = transponders.transponderOf(t); return x ? x.code : null; }),

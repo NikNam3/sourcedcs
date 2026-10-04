@@ -17,22 +17,9 @@ import { fileURLToPath } from 'node:url';
 
 const SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/efsp');
 
-export const WALL_ALLOW_LIST = [
-  { file: 'src/efsp/archiver.js', function: 'constructor', clock: 'wall',
-    reason: '`wallNow` is "the retention clock (a storage lifetime, like L5\'s rotation)"; the archive window is wall time (docs/adr/0082)' },
-  { file: 'src/efsp/correlation-reconciler.js', function: '_accumulate', clock: 'wall',
-    reason: 'ADR 0079 table: Correlation below-target warning throttle | wall | limits how often the log is written (code: "stays on the wall clock (_warnIfBelowTarget)")' },
-  { file: 'src/efsp/index.js', function: '_persist', clock: 'wall',
-    reason: 'Wall time of this write: the boot reconcile reads the log tail from here to find Mutations audited but never persisted (docs/adr/0081)' },
-  { file: 'src/efsp/metrics.js', function: 'constructor', clock: 'wall',
-    reason: '`wallNow` "retention only" (the metrics store\'s own doc comment)' },
-  { file: 'src/efsp/metrics.js', function: 'createEfspInstrumentation', clock: 'wall',
-    reason: 'the default of the `wallNow` handed on to the metrics and traffic-count stores, which are "retention only"' },
-  { file: 'src/efsp/mutation-log.js', function: 'constructor', clock: 'wall',
-    reason: 'Days here are WALL-clock UTC days. Retention is a storage lifetime (mutation-log.js header comment)' },
-  { file: 'src/efsp/traffic-count.js', function: 'constructor', clock: 'wall',
-    reason: '`wallNow`: "retention only"; the report windows and timestamps use the mission clock' },
-];
+// Empty since SERVER-SEAMS-1: every EFSP site takes an injected `wallClock` / `wallNow` (default WALL_CLOCK.now in
+// src/mission-clock.js, outside src/efsp). Do not add an entry: inject the clock.
+export const WALL_ALLOW_LIST = [];
 
 const walk = (dir, out = []) => {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {

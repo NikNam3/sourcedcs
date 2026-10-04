@@ -161,7 +161,7 @@ class EfspMetrics {
    * @param {() => object|null} [deps.obligationStats]  ForwardingObligationMonitor.getComplianceStats — likewise
    * @param {MissionSession} [deps.missionSession] which mission we are in (docs/adr/0086); default an in-memory one
    */
-  constructor({ path: filePath, clock = WALL_CLOCK, wallNow = () => Date.now(), config, facilityIds = [], positionStoreFor = () => null, correlationStats = null, obligationStats = null, missionSession = null } = {}) {
+  constructor({ path: filePath, clock = WALL_CLOCK, wallNow = WALL_CLOCK.now, config, facilityIds = [], positionStoreFor = () => null, correlationStats = null, obligationStats = null, missionSession = null } = {}) {
     const defaults = getInstrumentationConfig().metrics;
     this._path = filePath || METRICS_PATH;
     this._clock = clock;
@@ -795,7 +795,7 @@ class EfspMetrics {
  */
 function createEfspInstrumentation({
   efsp, facilityConfig, correlationStats = null, obligationStats = null,
-  clock = efsp.clock || WALL_CLOCK, wallNow = () => Date.now(),
+  clock = efsp.clock || WALL_CLOCK, wallNow = WALL_CLOCK.now,
   config = getInstrumentationConfig(), metricsPath, trafficCountPath,
   missionSession = new MissionSession({ path: null, clock, wallNow }),
 }) {

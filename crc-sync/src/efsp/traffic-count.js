@@ -350,7 +350,7 @@ class TrafficCount {
    * @param {() => number} [deps.wallNow]    retention only
    * @param {() => (number|null)} [deps.missionSessionOf] the metrics session (decisions.md H32) a drop belongs to
    */
-  constructor({ mutationLog, flightDataStore, boardStoreFor, facilityIds, config, path: filePath, clock = WALL_CLOCK, wallNow = () => Date.now(), missionSessionOf = () => null }) {
+  constructor({ mutationLog, flightDataStore, boardStoreFor, facilityIds, config, path: filePath, clock = WALL_CLOCK, wallNow = WALL_CLOCK.now, missionSessionOf = () => null }) {
     const defaults = getInstrumentationConfig().trafficCount;
     this._log = mutationLog;
     this._flightDataStore = flightDataStore;

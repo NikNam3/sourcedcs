@@ -51,7 +51,7 @@ class MutationLog {
    *   the stores stamp `at` with (docs/adr/0079), so each record can say which
    *   clock that was.
    */
-  constructor(filePath, { clock = WALL_CLOCK, retentionDays, wallNow = () => Date.now() } = {}) {
+  constructor(filePath, { clock = WALL_CLOCK, retentionDays, wallNow = WALL_CLOCK.now } = {}) {
     this._path = filePath || MUTATION_LOG_PATH;
     this._clock = clock;
     this._wallNow = wallNow;

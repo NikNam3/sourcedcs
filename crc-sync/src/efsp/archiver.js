@@ -24,6 +24,7 @@
 // FlightDataStore.archiveFlightData do it. The caller persists and broadcasts what a sweep returns (app.js).
 
 const log = require('../log').logger('efsp:archiver');
+const { WALL_CLOCK } = require('../mission-clock');
 
 /**
  * [SOURCE-DEFINED] (H36, docs/adr/0082) — two hours after a Strip is finished is
@@ -46,7 +47,7 @@ class Archiver {
    * @param {((stripId:string) => boolean)|null} [deps.isCounted] null: no traffic count wired
    */
   constructor({ facilityIds, boardStoreFor, flightDataStore, correlationStore = null, marsaStore = null, mutationLog = null,
-    clock, wallNow = () => Date.now(), retentionMs = ARCHIVE_AFTER_MS, isCounted = null }) {
+    clock, wallNow = WALL_CLOCK.now, retentionMs = ARCHIVE_AFTER_MS, isCounted = null }) {
     this._facilityIds = [...facilityIds];
     this._boardStoreFor = boardStoreFor;
     this._flightDataStore = flightDataStore;

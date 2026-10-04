@@ -253,7 +253,7 @@ function createEfsp({ clock = WALL_CLOCK, wallClock = WALL_CLOCK, nlaGuardMs = N
   for (const entry of REGISTRY) if (entry.audited && stores[entry.key]) stores[entry.key].setMutationLog(mutationLog);
   _restore({ facilities, stores, saved, paths, mutationLog, clock });
   // The standing list, once per id (ADR 0098 §10): a definition that does not validate stops start-up, naming it.
-  if (airspaceStore.seed(standing) > 0) _persist({ facilities, stores, persistState: { lastBody: null }, paths });
+  if (airspaceStore.seed(standing) > 0) _persist({ wallClock, facilities, stores, persistState: { lastBody: null }, paths });
 
   // F-408's clock-driven half. Built here rather than in server.js, unlike the
   // obligation monitor and the correlation reconciler, because efsp-ws.js has
@@ -332,7 +332,7 @@ function createEfsp({ clock = WALL_CLOCK, wallClock = WALL_CLOCK, nlaGuardMs = N
       return user.name || user.preferred_username || user.sub || 'unknown';
     },
 
-    handleMessage: (session, msg) => handleMessage(ctx, session, msg, () => _persist({ facilities, stores, persistState, paths })),
+    handleMessage: (session, msg) => handleMessage(ctx, session, msg, () => _persist({ wallClock, facilities, stores, persistState, paths })),
 
     /** Installs the regime locator (docs/adr/0102); `app.js` supplies it once the track store exists. */
     setRegimeLocator: (fn) => { regimeLocator = fn; },
@@ -347,7 +347,7 @@ function createEfsp({ clock = WALL_CLOCK, wallClock = WALL_CLOCK, nlaGuardMs = N
       if (!boardStore) return { ok: false, reason: 'NOT_FOUND', detail: `unknown Facility: ${facilityId}` };
       const result = boardStore.markTofiEntered(flightDataId, { airspaceId });
       if (!result.ok) return result;
-      _persist({ facilities, stores, persistState, paths });
+      _persist({ wallClock, facilities, stores, persistState, paths });
       const stamped = stampStrip(boardStore, result.strip, facilityId, ctx);
       const touched = boardStore.drainTouched();
       return { ok: true, message: boardDelta(ctx, boardStore, facilityId, touchedStrips(ctx, boardStore, facilityId, touched, stamped), [result.flightData]) };
@@ -363,7 +363,7 @@ function createEfsp({ clock = WALL_CLOCK, wallClock = WALL_CLOCK, nlaGuardMs = N
     applyAsService: (principal, msg) => {
       const ok = principal && typeof principal.sub === 'string' && principal.sub && typeof principal.name === 'string' && SERVICE_ROWS[principal.service];
       const session = { controllerId: ok ? principal.sub : null, servicePrincipal: ok ? { service: principal.service, sub: principal.sub, name: principal.name } : { service: 'INVALID_PRINCIPAL' } };
-      return handleMessage(ctx, session, { ...msg, type: 'efsp-airspace-mutation' }, () => _persist({ facilities, stores, persistState, paths }));
+      return handleMessage(ctx, session, { ...msg, type: 'efsp-airspace-mutation' }, () => _persist({ wallClock, facilities, stores, persistState, paths }));
     },
 
     /**
@@ -374,14 +374,14 @@ function createEfsp({ clock = WALL_CLOCK, wallClock = WALL_CLOCK, nlaGuardMs = N
      * correlation history — the state itself recomputes within one tick of
      * boot. This exists so a caller that genuinely needs a flush has one.
      */
-    persist: () => _persist({ facilities, stores, persistState, paths }),
+    persist: () => _persist({ wallClock, facilities, stores, persistState, paths }),
 
     /**
      * Abrupt disconnect (guide §4.8.6) — signs the controller off every Position they were signed on at, across EVERY
      * Facility (a controller may be signed on at Positions in more than one, guide §4.8.5), with the effects of an explicit
      * sign-off (efsp-ws.js `staffingChanged`). @returns {{broadcasts: object[], directed: object[]}} for the hub to send.
      */
-    onDisconnect: (session) => signOffController(ctx, session.controllerId, () => _persist({ facilities, stores, persistState, paths })),
+    onDisconnect: (session) => signOffController(ctx, session.controllerId, () => _persist({ wallClock, facilities, stores, persistState, paths })),
 
     /** Tells every Facility's PositionStore which controllers are held in the sign-on grace (ws-hub.js). */
     setAbsentCheck: (fn) => { for (const { positionStore } of facilities.values()) positionStore.setAbsentCheck(fn); },
@@ -599,7 +599,7 @@ function _restore({ facilities, stores, saved: data, mutationLog, clock }) {
   _reconcileLogTail(facilities, mutationLog, data.persistedWallAt, clock, stores.airspaces);
 }
 
-function _persist({ facilities, stores, persistState = { lastBody: null }, paths }) {
+function _persist({ wallClock, facilities, stores, persistState = { lastBody: null }, paths }) {
   try {
     // Compact, not pretty-printed: this runs after EVERY successful Mutation,
     // and indenting a snapshot that grows with the session was the largest
@@ -618,7 +618,7 @@ function _persist({ facilities, stores, persistState = { lastBody: null }, paths
     if (body === persistState.lastBody) return;
     // Wall time of this write: the boot reconcile reads the log tail from
     // here to find Mutations audited but never persisted (docs/adr/0081).
-    const payload = `{"persistedWallAt":${Date.now()},${body.slice(1)}`;
+    const payload = `{"persistedWallAt":${wallClock.now()},${body.slice(1)}`;
     // Written to a sibling and renamed, because rename is atomic on POSIX
     // and a plain write is not. This runs after EVERY successful Mutation,
     // so the process spends a meaningful fraction of a busy session inside
