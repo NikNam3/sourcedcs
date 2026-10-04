@@ -4,7 +4,8 @@ import { _renderPositionTabs, efspVisibleBayId } from './tabs.js';
 import { efspArrivalLog, forgetEfspArrivals, nextEfspArrivalExpiry, noteEfspArrivals } from '../efsp-arrivals.js';
 import { getActingPositions } from '../efsp-ws.js';
 import { getEfspFlightData, getEfspPosition } from '../efsp-state.js';
-import { renderAllOpenEfspBays, selectEfspStripById } from '../bay-view.js';
+import { selectEfspStripById } from '../bay-view.js';
+import { markEfspChanged } from '../efsp-change-bus.js';
 
 /**
  * The line under the Bay tabs: Strips that landed in a Bay the controller is
@@ -61,7 +62,7 @@ function _scheduleArrivalExpiry() {
   if (next === null) return;
   _arrivalExpiryTimer = setTimeout(() => {
     _arrivalExpiryTimer = null;
-    renderAllOpenEfspBays();
+    markEfspChanged('bays');
     _scheduleArrivalExpiry();
   }, Math.max(50, next - Date.now() + 20));
 }

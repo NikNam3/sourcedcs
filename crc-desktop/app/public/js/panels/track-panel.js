@@ -12,6 +12,7 @@ import { conformanceAlertsForFlightData, conflictAlertsForTrack } from './efsp/e
 import { history, tracks } from '../picture.js';
 import { map, mapReady } from '../map-handle.js';
 import { settings } from '../settings.js';
+import { onEfspChanged } from './efsp/efsp-change-bus.js';
 
 // ── Track info panel ─────────────────────────────────────────────────────
 // Left-clicking an aircraft track opens this persistent side panel. It
@@ -360,3 +361,5 @@ export function showGroundLabelPopup(id, clientX, clientY) {
   // that triggered the popup doesn't immediately dismiss it.
   setTimeout(() => document.addEventListener('click', onOutside, true), 0);
 }
+
+onEfspChanged(['alerts'], () => updateTrackPanel()); // a conflict alert on the open contact (efsp-change-bus.js)

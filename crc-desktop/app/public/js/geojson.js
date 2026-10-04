@@ -26,6 +26,7 @@ import {
 } from './picture.js';
 import { map, mapReady, updateZoomLimits } from './map-handle.js';
 import { settings } from './settings.js';
+import { onEfspChanged } from './panels/efsp/efsp-change-bus.js';
 
 // ── GeoJSON builders ───────────────────────────────────────────────────────
 // All functions return FeatureCollections ready for MapLibre setData().
@@ -954,3 +955,6 @@ function _doUpdateMap() {
 
 // ESM-1 (S-ESM1b): the unit tests replaced the global updateMap to count calls; this is that seam.
 export function _setUpdateMapForTest(fn) { updateMap = fn; }
+
+// The scope follows a snapshot, a correlation change, an alert change and a direct 'map' request (efsp-change-bus.js).
+onEfspChanged(['snapshot', 'correlations', 'alerts', 'map'], () => updateMap());

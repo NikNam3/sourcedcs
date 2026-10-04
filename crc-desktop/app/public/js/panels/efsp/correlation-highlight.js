@@ -1,7 +1,7 @@
 'use strict';
 import { trackRef } from '../../track-label.js';
 import { getLatestTrack } from '../../picture.js';
-import { updateMap } from '../../geojson.js';
+import { ORDER, markEfspChanged, onEfspChanged } from './efsp-change-bus.js';
 import {
   correlatedTrackIdForStrip, getEfspCorrelationForStrip, getEfspFlightData, getEfspStrip, stripIdsForTrackId
 } from './efsp-state.js';
@@ -41,7 +41,7 @@ export function highlightCorrelatedTrack(stripId) {
     : null;
   if (next === _correlatedTrackId) return _correlatedTrackId;
   _correlatedTrackId = next;
-  updateMap();
+  markEfspChanged('map');
   return _correlatedTrackId;
 }
 
@@ -195,3 +195,6 @@ function _provisionalSentence(record, strip) {
   }
   return 'provisional match';
 }
+
+// The ring is resolved before the Bays and the map that read it (efsp-change-bus.js).
+onEfspChanged(['snapshot', 'correlations'], () => refreshCorrelatedHighlight(), { order: ORDER.RESOLVE });

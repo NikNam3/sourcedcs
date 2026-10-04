@@ -4,7 +4,8 @@ import {
 } from '../strip-drag.js';
 import { carrierMoveToSlot } from '../carrier-panel.js';
 import { _isPseudoBayId } from './open-bays.js';
-import { _defaultBayFor, _defaultRackFor, _moveStrip, _transferStrip, renderAllOpenEfspBays } from '../bay-view.js';
+import { _defaultBayFor, _defaultRackFor, _moveStrip, _transferStrip } from '../bay-view.js';
+import { markEfspChanged } from '../efsp-change-bus.js';
 
 
 // ── Pointer Events drag ──────────────────────────────────────────────────
@@ -350,7 +351,7 @@ function _finishDrag(commit) {
   // tab still works fully — that's the `dropTargetEl` branch above, keyed
   // off the destination, not the source Rack.
   _efspDrag = null;
-  renderAllOpenEfspBays();
+  markEfspChanged('bays');
 }
 
 function _onStripPointerUp() { _finishDrag(true); }

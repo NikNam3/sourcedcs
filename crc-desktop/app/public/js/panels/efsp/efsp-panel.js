@@ -23,6 +23,7 @@ export {
   MUTATION_ERROR_VISIBLE_MS, MUTATION_ERROR_MESSAGES, _callsignOfFlightData, _showMutationError, getCurrentEfspRefusal,
   _showMutationWarning, notifyEfspOrphanedMutation, notifyEfspMutationAck, _setCurrentRefusalForTest
 } from './panel/refusal.js';
+import { ORDER, onEfspChanged } from './efsp-change-bus.js';
 export { _dispatchDotCommand } from './panel/dot-commands.js';
 
 // Top-level EFSP panel — mounted via dock.js's mountExistingPanel('efsp-
@@ -97,3 +98,6 @@ export function initEfspPanel() {
   startEfspStalenessCheck();
   return { onShow: () => { _renderPositionTabs(); _refreshCreateStripAvailability(); } };
 }
+
+// The panel chrome follows a snapshot, the Board, a Position change, a correlation change and an arrival (efsp-change-bus.js).
+onEfspChanged(['snapshot', 'board', 'panel', 'positions', 'correlations'], () => refreshEfspPanel(), { order: ORDER.PANEL });

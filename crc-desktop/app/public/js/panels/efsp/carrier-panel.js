@@ -12,8 +12,8 @@ import { getActingPositions, sendEfspCarrierMutation, sendEfspMutation, settleEf
 import { _callsignOfFlightData } from './efsp-panel.js';
 import { registerEfspMessage, registerEfspStoreRedraw } from './efsp-message-registry.js';
 import { applyEfspCarrierDelta } from './carrier-state.js';
-import { renderAllOpenEfspBays } from './bay-view.js';
 import { _showMutationError } from './efsp-panel.js';
+import { markEfspChanged } from './efsp-change-bus.js';
 
 // The carrier's surfaces on the Strip panel (crc-sync's docs/adr/0074, ADR 0064
 // B7; guide §4.1, §9.12): the ship banner, the Case selector, the Marshal stack
@@ -396,7 +396,7 @@ export function buildCarrierFinalLine() {
 // A Case change is ONE of these and every carrier Strip re-renders from it.
 function _redrawCarriers() {
   renderCarrierBanner();
-  renderAllOpenEfspBays();
+  markEfspChanged('bays');
 }
 registerEfspMessage('efsp-carrier-delta', (msg) => {
   applyEfspCarrierDelta(msg);
@@ -409,5 +409,5 @@ registerEfspMessage('efsp-carrier-ack', (msg) => {
   if (!msg.ok) _showMutationError(msg.reason || 'Rejected', msg.detail, { subject: 'carrier' });
   if (msg.carrier) applyEfspCarrierDelta({ carriers: { updated: [msg.carrier] } });
   renderCarrierBanner();
-  renderAllOpenEfspBays();
+  markEfspChanged('bays');
 });

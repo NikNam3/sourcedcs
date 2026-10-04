@@ -1,8 +1,7 @@
 'use strict';
 import { registerEfspMessage, registerEfspStoreRedraw, redrawEfspStore, dispatchEfspMessage } from './efsp-message-registry.js';
+import { markEfspChanged } from './efsp-change-bus.js';
 import { renderPositionControls, renderPositionWarnings } from '../radar-panel.js';
-import { updateTrackPanel } from '../track-panel.js';
-import { updateMap } from '../../geojson.js';
 import {
   applyEfspAlerts, applyEfspCorrelationDelta, applyEfspDelta, applyEfspMarsaDelta, applyEfspMutationAck,
   applyEfspSnapshot, applyEfspStoreSlices, getEfspFacility, getEfspStrip
@@ -13,23 +12,18 @@ import {
   efspResyncReplyAsMessage, noteEfspPositionsAck, replayPendingEfspMutations, settleEfspAck
 } from './efsp-ws.js';
 import { onEfspMetricsReportAck } from './efsp-metrics-client.js';
-import { refreshCorrelatedHighlight } from './correlation-highlight.js';
-import { refreshMarsaHighlight } from './marsa-badge.js';
-import { renderAllOpenEfspBays } from './bay-view.js';
 import {
   _showMutationError, noteEfspBoardArrivals, noteEfspHeartbeat, notifyEfspMutationAck,
-  notifyEfspOrphanedMutation, refreshEfspPanel, reloadEfspStereoRoutes
+  notifyEfspOrphanedMutation, reloadEfspStereoRoutes
 } from './efsp-panel.js';
-import { refreshArHighlight } from './ato-strip.js';
 import { onAtoPreviewResult } from './ato-import.js';
-import { renderAirspacePanel } from './airspace-panel.js';
 import { noteUndoAck, noteUndoBoardEpoch, noteUndoVoided, reconcileUndoSlotEpoch } from './panel/undo-slot.js';
 import { noteEfspPositionOffer } from './panel/combination.js';
-import { renderRunwayStatusPanel } from './runway-status-panel.js';
 
 // The handlers of the EFSP message families whose state lives in bay-view.js / efsp-panel.js / efsp-state.js
 // (CMSG): Board, correlation, MARSA, alerts, SFA, ATO import, positions, resync. They moved here out of app.js's
-// ws.onmessage switch with their bodies and their call order unchanged. The airspace, carrier, runway-status and
+// ws.onmessage switch. DESK-GRAPH: a handler applies state and says what changed (`markEfspChanged`, efsp-change-bus.js);
+// the panels, the Bays and the map subscribe to the topics they draw. The bus flushes once the handler has returned. The airspace, carrier, runway-status and
 // metrics families register in their own panel modules.
 
 // EFSP — sent once at connect (efsp-snapshot) plus immediately on
@@ -39,7 +33,9 @@ import { renderRunwayStatusPanel } from './runway-status-panel.js';
 registerEfspMessage('efsp-snapshot', (msg) => {
   applyEfspSnapshot(msg);
   reconcileUndoSlotEpoch(); // a new Board lifetime: nothing to undo (docs/adr/0100 §7)
-  refreshEfspPanel();
+  // The panel, the MARSA / AR / correlation highlights (resolved before the Bays that read them), the Bays, the map,
+  // the airspace and runway-status panels all redraw from a snapshot: they subscribe to 'snapshot'.
+  markEfspChanged('snapshot');
   // §9.10's route table is fetched over HTTP, not carried on the
   // snapshot — but a snapshot is the one event that means crc-sync may
   // have restarted, which is also the only way the table can change.
@@ -50,17 +46,8 @@ registerEfspMessage('efsp-snapshot', (msg) => {
   // re-render below — same reason the correlation ring is, a few lines
   // down. Resolved first, rendered second: the highlight is a class each
   // Strip reads while being built.
-  refreshMarsaHighlight();
-  refreshArHighlight(); // docs/adr/0071
-  renderAllOpenEfspBays();
-  // A reconnect brings correlations back with the rest of the snapshot,
-  // so a Strip that was selected before the drop needs its ring redrawn
-  // — otherwise it stays absent until the next reconcile delta happens
-  // to touch that flight, which could be a while on a quiet board.
-  refreshCorrelatedHighlight();
-  updateMap();
-  renderAirspacePanel();
-  renderRunwayStatusPanel();
+  // (the highlights subscribe to 'snapshot' too, ahead of the Bays; a reconnect brings correlations back with the
+  // snapshot, so a Strip selected before the drop gets its ring redrawn rather than waiting for the next delta)
   // §5.6.3 — replay every still-pending Mutation against this fresh
   // baseline. A no-op on the very first connect (nothing pending
   // yet); on a RECONNECT this is what stops a Mutation in flight at
@@ -95,8 +82,7 @@ registerEfspMessage('efsp-board-delta', (msg) => {
   noteUndoBoardEpoch(msg.facilityId || getEfspFacility(), msg.boardEpoch);
   applyEfspDelta(msg);
   if (placementBefore) noteEfspBoardArrivals(msg, placementBefore);
-  refreshEfspPanel();
-  renderAllOpenEfspBays();
+  markEfspChanged('board');
 });
 
 // Sent every 500ms unconditionally (ws-hub.js's _tick) — the genuine
@@ -117,7 +103,7 @@ registerEfspMessage('efsp-mutation-ack', (msg) => {
   const result = applyEfspMutationAck(msg);
   if (ackPlacementBefore) {
     noteEfspBoardArrivals(ackAsDelta, ackPlacementBefore);
-    refreshEfspPanel(); // the tab counts and arrivals line
+    markEfspChanged('panel'); // the tab counts and arrivals line
   }
   noteUndoBoardEpoch(msg.facilityId, msg.boardEpoch);
   // The Undo slot (docs/adr/0100 §10) takes the ack's `undoable`; an Undo's own refusal shows in the slot line.
@@ -125,7 +111,7 @@ registerEfspMessage('efsp-mutation-ack', (msg) => {
   noteUndoAck(msg, result.pending);
   if (!result.ok) console.warn('[efsp] Mutation rejected:', result.reason, msg);
   if (!handled) notifyEfspMutationAck(result);
-  renderAllOpenEfspBays();
+  markEfspChanged('ack');
 });
 
 registerEfspMessage('efsp-positions-ack', (msg) => {
@@ -133,7 +119,7 @@ registerEfspMessage('efsp-positions-ack', (msg) => {
   console.warn('[efsp] efsp-positions-ack received, signedOn =', msg.signedOn, 'warnings =', msg.warnings);
   renderPositionControls();
   renderPositionWarnings(msg.warnings);
-  refreshEfspPanel();
+  markEfspChanged('positions');
 });
 
 // crc-sync docs/adr/0105 (H104): GC signed off holding Strips while this controller is LC's Primary: offered GC as well.
@@ -146,10 +132,7 @@ registerEfspMessage('efsp-position-offer', (msg) => {
 // re-render: a re-bind has to move the ring on the scope, not just the
 // badge on the Strip.
 function _redrawCorrelations() {
-  refreshCorrelatedHighlight();
-  renderAllOpenEfspBays();
-  refreshEfspPanel();
-  updateMap();
+  markEfspChanged('correlations'); // the ring (resolved first), the Bays, the panel, the map
 }
 registerEfspMessage('efsp-correlation-delta', (msg) => {
   applyEfspCorrelationDelta(msg);
@@ -167,9 +150,7 @@ registerEfspMessage('efsp-correlation-ack', (msg) => {
   settleEfspAck(msg);
   if (!msg.ok) _showMutationError(msg.reason || 'Rejected', msg.detail, msg.correlation ? { flightDataId: msg.correlation.flightDataId } : null);
   applyEfspCorrelationDelta({ correlations: { updated: msg.correlation ? [msg.correlation] : [] } });
-  refreshCorrelatedHighlight();
-  renderAllOpenEfspBays();
-  updateMap();
+  markEfspChanged('correlations');
 });
 
 // WP6 (crc-sync's docs/adr/0051), guide §9.2. Its own delta type with its
@@ -182,8 +163,7 @@ registerEfspMessage('efsp-correlation-ack', (msg) => {
 // rather than trusting the board delta to have done one — the two
 // messages are independent and either may arrive first.
 function _redrawMarsa() {
-  refreshMarsaHighlight();
-  renderAllOpenEfspBays();
+  markEfspChanged('marsa'); // the participant highlight (resolved first), then the Bays
 }
 registerEfspMessage('efsp-marsa-delta', (msg) => {
   applyEfspMarsaDelta(msg);
@@ -198,8 +178,7 @@ registerEfspMessage('efsp-marsa-ack', (msg) => {
   settleEfspAck(msg); // a popover's Send closes on this (bay/popover-portal.js _sendFromPopover)
   if (!msg.ok) _showMutationError(msg.reason || 'Rejected', msg.detail, msg.marsa ? { flightDataIds: msg.marsa.participants } : null);
   applyEfspMarsaDelta({ marsa: { updated: msg.marsa ? [msg.marsa] : [] } });
-  refreshMarsaHighlight();
-  renderAllOpenEfspBays();
+  markEfspChanged('marsa');
 });
 
 // docs/adr/0058 — the whole conformance + short-term conflict picture,
@@ -207,23 +186,21 @@ registerEfspMessage('efsp-marsa-ack', (msg) => {
 // when it changes and once on connect; one no longer listed is cleared.
 registerEfspMessage('efsp-alerts', (msg) => {
   applyEfspAlerts(msg);
-  renderAllOpenEfspBays();
-  updateMap();
-  updateTrackPanel();
+  markEfspChanged('alerts'); // the Bays, the map, the track panel
 });
 
 // crc-sync's docs/adr/0093 — who is on which SFA frequency, sent whole on every change.
 registerEfspMessage('efsp-sfa-delta', (msg) => {
   applyEfspSfaDelta(msg);
-  renderAllOpenEfspBays();
+  markEfspChanged('sfa');
 });
-registerEfspStoreRedraw('sfaRotation', renderAllOpenEfspBays);
+registerEfspStoreRedraw('sfaRotation', () => markEfspChanged('sfa'));
 
 registerEfspMessage('efsp-sfa-ack', (msg) => {
   settleEfspAck(msg);
   if (!msg.ok) _showMutationError(msg.reason || 'Rejected', msg.detail, { subject: 'SFA rotation' });
   if (msg.sfaRotation) applyEfspSfaDelta({ sfaRotation: msg.sfaRotation });
-  renderAllOpenEfspBays();
+  markEfspChanged('sfa');
 });
 
 // WP7 (crc-sync docs/adr/0071) — the ATO import's two answers, sender only.

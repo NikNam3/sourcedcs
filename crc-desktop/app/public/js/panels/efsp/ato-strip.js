@@ -1,6 +1,7 @@
 'use strict';
 import { getAllEfspStrips, getEfspFlightData, getEfspStrip } from './efsp-state.js';
 import { getSelectedEfspStripId } from './bay-view.js';
+import { ORDER, onEfspChanged } from './efsp-change-bus.js';
 
 // What an imported ATO shows on a Strip (crc-sync's docs/adr/0071, guide §9.8,
 // §9.9 part 2, §3.10.3). Three things, all read-only:
@@ -185,3 +186,6 @@ export function appendAtoExpandedRows(panel, strip) {
     panel.appendChild(row);
   }
 }
+
+// The AR group highlight is resolved before the Bays that read it (efsp-change-bus.js).
+onEfspChanged(['snapshot'], () => refreshArHighlight(), { order: ORDER.RESOLVE });

@@ -25,6 +25,7 @@ import { _refreshOpsFiledIfStale, _renderOpsFiledCards } from './bay/ops-cards.j
 import { _efspDrag } from './bay/drag.js';
 import { _stripHasOpenPopover } from './bay/popover-portal.js';
 import { _buildBlockCell, _refusalForStrip } from './bay/block-edit.js';
+import { ORDER, onEfspChanged } from './efsp-change-bus.js';
 
 // Bay/Rack rendering + Pointer Events drag (guide §7.1-7.2, §7.5). DOM-only
 // — not unit tested (crc-desktop's test suite has no DOM harness; see the
@@ -675,3 +676,7 @@ export function _setRenderAllOpenEfspBaysForTest(fn) { renderAllOpenEfspBays = f
 export function _setSelectEfspStripByIdForTest(fn) { selectEfspStripById = fn; }
 export function _setSelectedStripIdForTest(id) { _selectedStripId = id; }
 export function _setRenderBayForTest(fn) { renderBay = fn; }
+
+// What redraws the open Bays (efsp-change-bus.js): the Board, an ack, correlation, MARSA, alerts and SFA, and a direct
+// 'bays' request from a popover, a drag or a refusal. Called through the binding so a test's replacement counts.
+onEfspChanged(['snapshot', 'board', 'ack', 'bays', 'correlations', 'marsa', 'alerts', 'sfa'], () => renderAllOpenEfspBays(), { order: ORDER.BAYS });

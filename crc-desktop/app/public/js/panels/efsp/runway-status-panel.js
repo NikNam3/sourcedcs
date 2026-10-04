@@ -7,8 +7,9 @@ import { alertPadConstraintFor } from './scramble.js';
 import { runwayStatusActionsFor, runwayStatusSubjectFor } from './runway-status-rules.js';
 import { registerEfspMessage, registerEfspStoreRedraw } from './efsp-message-registry.js';
 import { applyEfspRunwayStatusDelta } from './efsp-state.js';
-import { renderAllOpenEfspBays } from './bay-view.js';
 import { _showMutationError } from './efsp-panel.js';
+import { markEfspChanged } from './efsp-change-bus.js';
+import { onEfspChanged } from './efsp-change-bus.js';
 
 // The runway-status board — guide §9.7, crc-sync docs/adr/0061, crc-desktop
 // docs/adr/0068. Per Facility with a runway inventory: each runway's status
@@ -327,7 +328,7 @@ export function initRunwayStatusPanel() {
 // Runway status is not Strips and rides no Board's sequence (0061's rule-5 deviation).
 function _redrawRunwayStatuses() {
   renderRunwayStatusPanel();
-  renderAllOpenEfspBays(); // RWY / HOOK are derived from it
+  markEfspChanged('bays'); // RWY / HOOK are derived from it
 }
 registerEfspMessage('efsp-runway-status-delta', (msg) => {
   applyEfspRunwayStatusDelta(msg);
@@ -344,5 +345,7 @@ registerEfspMessage('efsp-runway-status-ack', (msg) => {
     applyEfspRunwayStatusDelta({ runwayStatuses: { updated: [msg.runwayStatus] } });
   }
   renderRunwayStatusPanel();
-  renderAllOpenEfspBays();
+  markEfspChanged('bays');
 });
+
+onEfspChanged(['snapshot'], () => renderRunwayStatusPanel()); // a new Board lifetime redraws the runways (efsp-change-bus.js)

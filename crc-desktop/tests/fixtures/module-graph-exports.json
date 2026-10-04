@@ -622,6 +622,15 @@
    "unseenEfspArrivalsForPosition",
    "unseenEfspArrivalsInBay"
   ],
+  "panels/efsp/efsp-change-bus.js": [
+   "EFSP_TOPICS",
+   "ORDER",
+   "batchEfspChanges",
+   "efspChangeSubscriptions",
+   "flushEfspChanges",
+   "markEfspChanged",
+   "onEfspChanged"
+  ],
   "panels/efsp/efsp-flight-plan-lookup.js": [
    "FLIGHT_PLAN_LIST_CLIENT_TIMEOUT_MS",
    "FLIGHT_PLAN_LOOKUP_CLIENT_TIMEOUT_MS",

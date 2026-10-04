@@ -12,6 +12,7 @@ import * as caps from './airspace-capabilities.js';
 import { altitudeText, openAirspaceEditor } from './airspace-editor.js';
 import { openHistoryView, openDeleteView, deleteBlockers } from './airspace-detail-views.js';
 import { applyAirspaceCalendar, nextBooking, formatBooking, bookingUrl } from './airspace-calendar.js';
+import { onEfspChanged } from './efsp-change-bus.js';
 
 // The airspace board — guide §4.2: "Airspace board (not a strip rack)", and
 // §4.1 rule 2: the `RANGE` Position "works no Strips. It owns airspace state
@@ -571,3 +572,4 @@ registerEfspMessage('efsp-airspace-ack', (msg) => {
   renderAirspacePanel();
 });
 
+onEfspChanged(['snapshot'], () => renderAirspacePanel()); // a new Board lifetime redraws the cards (efsp-change-bus.js)

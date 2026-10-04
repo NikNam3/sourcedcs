@@ -1,7 +1,7 @@
 'use strict';
 import { createStripFromFiledPlan } from '../efsp-panel.js';
 import { listFiledFlightPlansClient } from '../efsp-flight-plan-lookup.js';
-import { renderAllOpenEfspBays } from '../bay-view.js';
+import { markEfspChanged } from '../efsp-change-bus.js';
 
 
 // ── Bay/Rack rendering ───────────────────────────────────────────────────
@@ -15,7 +15,7 @@ import { renderAllOpenEfspBays } from '../bay-view.js';
 //
 // Keyed reconciliation, not destroy-and-rebuild (§7.5.4, §4.8.5 rule 3,
 // defect D6) — this fires on every incoming Board delta from ANY connected
-// client (via renderAllOpenEfspBays()'s rAF batching below), not just on a
+// client (via markEfspChanged('bays')'s rAF batching below), not just on a
 // local action, so a naive full rebuild here would silently discard an
 // in-progress drag or an open annotation/Block edit belonging to THIS
 // controller every time any OTHER controller's Mutation broadcasts.
@@ -107,6 +107,6 @@ export function _refreshOpsFiledIfStale(container) {
     _opsFiledFetchedAt = Date.now();
   }).finally(() => {
     _opsFiledFetching = false;
-    renderAllOpenEfspBays(); // picks up the fresh list if ops-filed is still the open Bay; a no-op otherwise
+    markEfspChanged('bays'); // picks up the fresh list if ops-filed is still the open Bay; a no-op otherwise
   });
 }

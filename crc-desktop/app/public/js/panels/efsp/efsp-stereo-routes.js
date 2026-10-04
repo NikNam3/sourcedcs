@@ -1,6 +1,6 @@
 'use strict';
 import { _syncAuthHeaders } from '../../sync.js';
-import { renderAllOpenEfspBays } from './bay-view.js';
+import { markEfspChanged } from './efsp-change-bus.js';
 
 // Client-side glue for §9.10's stereo route table — calls crc-sync's
 // GET /api/stereo-routes (crc-sync/src/efsp/stereo-routes.js) via
@@ -75,7 +75,7 @@ export async function listStereoRoutesClient(opts = {}) {
     const routes = data.routes.filter(r => r && r.name && r.route);
     const before = stereoRoutesCacheKey();
     _stereoRoutesCache = routes;
-    if (stereoRoutesCacheKey() !== before) renderAllOpenEfspBays();
+    if (stereoRoutesCacheKey() !== before) markEfspChanged('bays');
     return routes;
   } catch (err) {
     console.warn('[efsp] stereo route list unavailable — filing by short name will just be unavailable:', err.message);
