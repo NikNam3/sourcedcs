@@ -570,8 +570,7 @@ export function openAirspaceEditor(o) {
       : { kind: 'EditAirspace', patch };
     const id = creating ? op.definition.airspaceId : base.airspaceId;
     state.sent = { patch, creating };
-    state.pending = o.send(asPosition, id, creating ? 0 : o.record.rev, op, creating ? {} : { baseDefRev: defRev });
-    if (state.pending == null) state.pending = '?';
+    state.pending = o.send(asPosition, id, creating ? 0 : o.record.rev, op, creating ? {} : { baseDefRev: defRev }, { onAck: handleAck }) ?? '?';
     refresh();
   }
   function _createDefinition() {
@@ -642,18 +641,16 @@ export function openAirspaceEditor(o) {
       if (!res.ok) return;
       if (res.empty) { stat.textContent = 'Nothing left to save: you took theirs for everything.'; return; }
       state.sent = { patch: res.patch, creating: false };
-      state.pending = o.send(asPosition, base.airspaceId, o.record.rev, { kind: 'EditAirspace', patch: res.patch }, { baseDefRev: res.baseDefRev }) ?? '?';
+      state.pending = o.send(asPosition, base.airspaceId, o.record.rev, { kind: 'EditAirspace', patch: res.patch }, { baseDefRev: res.baseDefRev }, { onAck: handleAck }) ?? '?';
       stat.textContent = 'Sending...'; reviewBtn.disabled = true;
       state.conflictStat = stat;
     });
     discard.addEventListener('click', () => { destroy(); o.onClose({ saved: false }); });
   }
 
-  /** The panel offers every airspace ack to every open view; true = it was this one's and is handled. */
+  /** The one ack path hands this view the ack of its own send (airspace-panel.js `_sendDefinitionOp`); true = shown here. */
   function handleAck(ack) {
     if (!state.pending) return false;
-    if (state.pending !== '?' && ack.clientMutationId !== state.pending) return false;
-    if (state.pending === '?' && ack.airspaceId !== (creating ? _createDefinition().airspaceId : base.airspaceId)) return false;
     state.pending = null;
     if (ack.ok) { destroy(); o.onClose({ saved: true, ack }); return true; }
     if (ack.reason === 'STALE_REV' && !creating && Array.isArray(ack.conflicts)) { showConflict(ack); return true; }

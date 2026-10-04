@@ -4,7 +4,7 @@ import { getEfspFlightData, getEfspStrip, isAitAuthorizedFor } from '../../efsp-
 import { sendEfspMutation } from '../../efsp-ws.js';
 import { CARRIER_HANDOFF_TARGET, COORDINATION_TARGETS, canHandOffToCarrier } from '../authority-mirror.js';
 import { _resolveActingPositionId, _swallowRepeatAdvance } from '../../bay-view.js';
-import { _mountPopover, _unmountPopover } from '../popover-portal.js';
+import { _mountPopover, _sendFromPopover, _unmountPopover } from '../popover-portal.js';
 
 
 /**
@@ -69,23 +69,24 @@ export function _canProposeCoordination(strip) {
  * _dispatchMarsa/_dispatchCorrelation: those two send their own relation's or
  * correlation record's current rev, not the Strip's.
  */
-export function _dispatchCoordination(strip, primitive, action, note, targetOverride) {
+export function _dispatchCoordination(strip, primitive, action, note, targetOverride, { onAck } = {}) {
   strip = getEfspStrip(strip.stripId) || strip;
   const actingPositionId = _resolveActingPositionId(strip);
-  if (!actingPositionId) return;
+  if (!actingPositionId) return false;
   // Answering a proposal resolves the replica — ACCEPT relocates it out of the
   // Coordination Bay, REJECT takes its answer buttons away — so both reflow
   // the Rack and both are in F-101's class (lane 3 measured a double-tap on
   // Accept Hand Off accepting a second replica). PROPOSE and STAND_BY are not:
   // neither moves the Strip and neither removes a control from it.
-  if ((action === 'ACCEPT' || action === 'REJECT') && _swallowRepeatAdvance()) return;
+  if ((action === 'ACCEPT' || action === 'REJECT') && _swallowRepeatAdvance()) return false;
   if (action === 'PROPOSE') {
     const target = targetOverride || COORDINATION_TARGETS[strip.ownerPositionId];
-    if (!target) return;
-    sendEfspMutation(actingPositionId, strip, { kind: primitive, action: 'PROPOSE', toFacilityId: target.facilityId, toPositionId: target.positionId, note: note || undefined });
+    if (!target) return false;
+    sendEfspMutation(actingPositionId, strip, { kind: primitive, action: 'PROPOSE', toFacilityId: target.facilityId, toPositionId: target.positionId, note: note || undefined }, { onAck });
   } else {
-    sendEfspMutation(actingPositionId, strip, { kind: primitive, action });
+    sendEfspMutation(actingPositionId, strip, { kind: primitive, action }, { onAck });
   }
+  return true;
 }
 
 export const COORDINATION_PRIMITIVE_LABELS = {
@@ -246,8 +247,7 @@ export function _openCoordinatePopover(strip, anchorEl) {
       return;
     }
     const toCarrier = toSelect && select.value === 'HANDOFF' && toSelect.value === CARRIER_HANDOFF_TARGET.positionId;
-    _dispatchCoordination(strip, select.value, 'PROPOSE', note.value.trim(), toCarrier ? CARRIER_HANDOFF_TARGET : undefined);
-    _closeCoordinatePopover();
+    _sendFromPopover(popover, sendBtn, (onAck) => _dispatchCoordination(strip, select.value, 'PROPOSE', note.value.trim(), toCarrier ? CARRIER_HANDOFF_TARGET : undefined, { onAck }));
   });
   popover.appendChild(sendBtn);
 

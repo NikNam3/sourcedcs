@@ -17,6 +17,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
+import { createRequire } from 'node:module';
 
 import { makeElement } from './helpers/dom-stub.js';
 import { freshGraph } from './helpers/fresh-graph.mjs';
@@ -99,7 +100,7 @@ function refuse(sandbox, { stripId, op, reason, detail }) {
     clientMutationId, ok: false, reason, detail,
     strip: stripId ? sandbox.getEfspStrip(stripId) : undefined,
   });
-  sandbox.notifyEfspMutationAck(clientMutationId, result);
+  sandbox.notifyEfspMutationAck(result);
   return result;
 }
 
@@ -125,7 +126,7 @@ test('a refused CreateStrip names the callsign from the request — there is no 
     version: 1, type: 'efsp-mutation', clientMutationId, facilityId: 'INCIRLIK', actingPositionId: 'OPS',
     op: { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', flightData: { callsign: 'NEW777' } },
   });
-  sandbox.notifyEfspMutationAck(clientMutationId, sandbox.applyEfspMutationAck({
+  sandbox.notifyEfspMutationAck(sandbox.applyEfspMutationAck({
     clientMutationId, ok: false, reason: 'VALIDATION_ERROR', detail: 'beacon code pool exhausted',
   }));
   assert.match(banner.textContent, /NEW777/);
@@ -136,7 +137,7 @@ test('an ack whose request is unknown still says something, rather than nothing'
   // be indistinguishable from the control not registering at all. A replayed
   // or duplicated ack must not cost it that property.
   const { sandbox, banner } = await settled(mountPanel());
-  sandbox.notifyEfspMutationAck('never-sent', sandbox.applyEfspMutationAck({
+  sandbox.notifyEfspMutationAck(sandbox.applyEfspMutationAck({
     clientMutationId: 'never-sent', ok: false, reason: 'STALE_REV',
   }));
   assert.match(banner.textContent, /changed this Strip/);
@@ -169,12 +170,15 @@ test("VALIDATION_ERROR's detail is the sentence — no canned prefix talking ove
 test('every reason code crc-sync can reject with has a plain sentence, and an unknown one still renders', async () => {
   const { sandbox, banner, panel } = await settled(mountPanel());
   const messages = panel.MUTATION_ERROR_MESSAGES;
-  // Enumerated from `ok: false, reason:` across crc-sync/src/efsp/.
-  for (const code of ['VALIDATION_ERROR', 'NOT_FOUND', 'PERMISSION_DENIED', 'STALE_REV',
-    'NOT_HOLDING_POSITION', 'NLA_INHIBITED', 'NOT_STAFFED', 'NOT_OBSERVER', 'NOT_OWNER',
-    'NO_RECEIVING_POSITION', 'ALREADY_PRIMARY']) {
-    assert.ok(Object.prototype.hasOwnProperty.call(messages, code), `${code} has no mapping`);
-  }
+  // The server's own list (crc-sync/src/efsp/refusal-codes.js; its tests/refusal-codes.test.mjs scans source against it).
+  // A code the server gains and this table lacks fails here, naming the code.
+  const { REFUSAL_CODES } = createRequire(import.meta.url)('../../crc-sync/src/efsp/refusal-codes.js');
+  const missing = REFUSAL_CODES.filter(code => !Object.prototype.hasOwnProperty.call(messages, code));
+  assert.deepEqual(missing, [], 'add controller-facing wording for these to MUTATION_ERROR_MESSAGES (panel/refusal.js)');
+  // `null` means the server's detail is the whole message: only VALIDATION_ERROR.
+  assert.deepEqual(Object.keys(messages).filter(c => messages[c] === null), ['VALIDATION_ERROR']);
+  // The client's own two answers for a request that got no ack are worded too.
+  for (const code of ['NOT_CONNECTED', 'CONNECTION_LOST']) assert.ok(messages[code], code);
   // A code this client has never heard of is not swallowed.
   refuse(sandbox, { stripId: 'sA', op: { kind: 'DropStrip' }, reason: 'SOMETHING_NEW' });
   assert.match(banner.textContent, /SOMETHING_NEW/);
@@ -293,7 +297,7 @@ test('an accepted op with several warnings shows each of them', async () => {
     clientMutationId: 'cm-w', ok: true,
     warnings: [{ code: 'NO_BAY_FOR_STATE', detail: 'no LC Bay for LUAW; the Strip stays in lc-runway-queue' }, { code: 'LUAW_WHILE_COMBINED' }],
   });
-  sandbox.notifyEfspMutationAck('cm-w', result);
+  sandbox.notifyEfspMutationAck(result);
   const text = els['efsp-mutation-warning'].textContent;
   assert.match(text, /no LC Bay for LUAW/);
   assert.match(text, /LUAW while LC is combined/);

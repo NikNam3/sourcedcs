@@ -1,5 +1,5 @@
 'use strict';
-import { _sendEfsp, getActingPositions } from './efsp-ws.js';
+import { _sendEfsp, getActingPositions, sendEfsp } from './efsp-ws.js';
 import { facilityOfPosition } from './facility-topology.js';
 import { _showMutationError } from './efsp-panel.js';
 
@@ -184,33 +184,33 @@ export function sendAtoImport() {
     _renderAtoDialog();
     return null;
   }
-  _atoPendingImportId = _atoId();
-  _sendEfsp({
-    version: 1, type: 'efsp-ato-mutation', clientMutationId: _atoPendingImportId, facilityId: facilityOfPosition(ATO_IMPORT_POSITION),
+  _atoPendingImportId = sendEfsp({
+    version: 1, type: 'efsp-ato-mutation', clientMutationId: _atoId(), facilityId: facilityOfPosition(ATO_IMPORT_POSITION),
     actingPositionId: ATO_IMPORT_POSITION,
     op: { kind: 'ImportAto', text: _atoText, textSha1: _atoPreview.textSha1, choices: atoImportChoices(_atoPreview, _atoChoices) },
-  });
+  }, { onAck: _onAtoAck });
   _atoMessage = 'Importing…';
   _renderAtoDialog();
   return _atoPendingImportId;
 }
 
-/** app.js: case 'efsp-ato-ack'. Closes on all-ok; otherwise shows each line's result. */
-export function onAtoAck(msg) {
-  if (!msg || msg.clientMutationId !== _atoPendingImportId) return;
+/** The import's own ack (the one ack path; efsp-messages.js settles it). Closes on all-ok; otherwise shows each line's result. */
+function _onAtoAck(msg) {
   _atoPendingImportId = null;
+  if (!_atoDialogEl) return true; // the dialog was closed while the import was in flight: nothing to draw into
   if (!msg.ok) {
     _atoMessage = '';
     _showMutationError(msg.reason || 'Rejected', msg.detail, { subject: 'ATO import' });
     if (msg.reason === 'STALE_REV') _atoPreview = null;
     _renderAtoDialog();
-    return;
+    return true;
   }
   _atoResults = msg.results || [];
-  if (_atoResults.every(r => r.ok)) { closeAtoImportDialog(); return; }
+  if (_atoResults.every(r => r.ok)) { closeAtoImportDialog(); return true; }
   _atoMessage = `${_atoResults.filter(r => !r.ok).length} line(s) were not imported — see below.`;
   _atoPreview = null;
   _renderAtoDialog();
+  return true;
 }
 
 function _atoActionOptions(line) {

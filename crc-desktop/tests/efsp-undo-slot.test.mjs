@@ -95,11 +95,11 @@ test('an Undo ack clears the slot and shows "Undone; voided N" for 3 s; its own 
   slot.noteUndoAck(ack(), pending);
   slot.requestUndo();
   const undoId = sent.at(-1).clientMutationId;
-  const own = slot.noteUndoAck({
+  const own = ws.settleEfspAck({
     clientMutationId: undoId, ok: true, undone: { actionId: 'c1', label: 'Hand off VIPER1 → APP' },
     voided: [{ actingPositionId: 'APP', op: 'SetBlock' }],
   }, null);
-  assert.equal(own, true);
+  assert.equal(own, true, 'the Undo\'s own continuation handled it, so the refusal banner is skipped');
   assert.equal(slot.getUndoSlot(), null);
   assert.equal(slot.getUndoOutcome().text, 'Undone · Hand off VIPER1 → APP; voided 1 change by APP');
   tick(3000);
@@ -111,11 +111,11 @@ test('a refused Undo shows the detail; a terminal refusal ends the offer, a tran
   ws.sendEfspSetPositions('INCIRLIK', ['LC']);
   slot.noteUndoAck(ack(), pending);
   slot.requestUndo();
-  slot.noteUndoAck({ clientMutationId: sent.at(-1).clientMutationId, ok: false, reason: 'NOT_STAFFED', detail: 'LC is not staffed' }, null);
+  ws.settleEfspAck({ clientMutationId: sent.at(-1).clientMutationId, ok: false, reason: 'NOT_STAFFED', detail: 'LC is not staffed' }, null);
   assert.match(slot.getUndoOutcome().text, /Cannot undo: LC is not staffed/);
   assert.ok(slot.getUndoSlot());
   slot.requestUndo();
-  slot.noteUndoAck({ clientMutationId: sent.at(-1).clientMutationId, ok: false, reason: 'UNDO_BLOCKED', detail: 'APP changed it' }, null);
+  ws.settleEfspAck({ clientMutationId: sent.at(-1).clientMutationId, ok: false, reason: 'UNDO_BLOCKED', detail: 'APP changed it' }, null);
   assert.equal(slot.getUndoSlot(), null);
 });
 

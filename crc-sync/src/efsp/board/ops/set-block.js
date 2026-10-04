@@ -30,7 +30,7 @@ function _applySetBlock(ctx, strip, op, by, actingPositionId, clientMutationId) 
   // in effect (and any from the transferring side after ACCEPT) needs a "coordinated with" attestation. Speed is not an
   // axis. The attestation is audited with the write; nothing below changes.
   const control = ctx.control.checkControlAxis(strip, op, by);
-  if (!control.ok) return { ok: false, reason: control.reason, detail: control.detail, strip };
+  if (!control.ok) return { ok: false, reason: control.reason, detail: control.detail, strip, ...(control.attestation ? { attestation: control.attestation } : {}) };
   const result = _applySetBlockWrite(ctx, strip, op, by, actingPositionId, clientMutationId, target);
   if (result.ok) {
     if (control.audit || control.settled) result.controlAudit = { ...(control.audit || {}), ...(control.settled ? { control: control.settled } : {}) };

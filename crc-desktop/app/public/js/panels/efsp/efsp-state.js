@@ -491,7 +491,7 @@ export function applyEfspDelta(msg) {
  * else (docs/ui-findings F-103/F-207: "a refusal does not say which Strip it
  * was about"). The entry is still deleted here exactly as before; the caller
  * gets the last look at it.
- * @returns {{wasPending:boolean, pending:?object, ok:boolean, reason?:string, detail?:string, warning?:string}}
+ * @returns {{wasPending:boolean, pending:?object, ok:boolean, reason?:string, detail?:string, warnings:object[], attestation?:{with:string, needs:string[]}}}
  */
 export function applyEfspMutationAck(msg) {
   const pending = efspPendingMutations.get(msg.clientMutationId) || null;
@@ -502,7 +502,7 @@ export function applyEfspMutationAck(msg) {
   // seq) is what moves our position, so a delta lost after its ack still shows
   // up as a gap at the next heartbeat (docs/adr/0081). A refusal or a replay has
   // no delta at all and changes nothing.
-  return { wasPending: !!pending, pending, ok: !!msg.ok, reason: msg.reason, detail: msg.detail, warnings: msg.warnings || [] };
+  return { wasPending: !!pending, pending, ok: !!msg.ok, reason: msg.reason, detail: msg.detail, warnings: msg.warnings || [], attestation: msg.attestation };
 }
 
 /** Registers a just-sent efsp-mutation message as pending its ack. */

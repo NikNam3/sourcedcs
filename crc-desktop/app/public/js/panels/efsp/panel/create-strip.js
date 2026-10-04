@@ -18,6 +18,25 @@ import { refreshAtoImportButton } from '../ato-import.js';
 // mode, and every rejection path is now visible instead of silent too.
 
 export let _pendingCreateStripMutationId = null;
+
+/**
+ * Every CreateStrip the panel sends goes through here: the form is busy until the ack, and the ack's continuation (the
+ * one ack path, efsp-ws.js) puts the outcome in the form. A refusal is also banner-worthy, so this returns false.
+ */
+export function _sendCreateStrip(actingPositionId, createOp, facilityId) {
+  const id = sendEfspCreateStrip(actingPositionId, createOp, facilityId, { onAck: _onCreateStripAck });
+  _pendingCreateStripMutationId = id;
+  return id;
+}
+
+function _onCreateStripAck(ack) {
+  _pendingCreateStripMutationId = null;
+  // `detail` carries the only part worth reading for a whole class of rejection ("VALIDATION_ERROR" alone does not
+  // tell a malformed callsign from an unknown stereo route); the reason stays as the prefix.
+  const why = ack.detail ? `${ack.reason || 'rejected'} — ${ack.detail}` : (ack.reason || 'unknown error');
+  _setCreateStripMsg(ack.ok ? '' : `Rejected: ${why}`, !ack.ok);
+  return false;
+}
 // Guards the flight-plan lookup in _submitCreateStrip() against a double-
 // submit while it's in flight (up to a few seconds — a real window a
 // second Enter/click could land in, unlike the near-instant validation
@@ -486,7 +505,7 @@ async function _submitCreateStrip() {
   const createOp = bindFlightDataId
     ? { kind: 'CreateStrip', bayId: origin.bayId, rackId: 'main', stripType: origin.stripType, flightDataId: bindFlightDataId, initialState: origin.initialState || undefined }
     : { kind: 'CreateStrip', bayId: origin.bayId, rackId: 'main', stripType: origin.stripType, flightData, initialState: origin.initialState || undefined };
-  _pendingCreateStripMutationId = sendEfspCreateStrip(origin.actingPositionId, createOp, origin.facilityId);
+  _sendCreateStrip(origin.actingPositionId, createOp, origin.facilityId);
   _createStripInputEl.value = '';
   if (_createStripStereoEl) _createStripStereoEl.value = '';
   if (_createStripBindEl) _createStripBindEl.value = '';
@@ -520,7 +539,7 @@ export function createStripFromFiledPlan(plan) {
     departureAirport: '', destinationAirport: '', route: '', requestedAltitude: '',
     ...(plan.seed || {}),
   };
-  _pendingCreateStripMutationId = sendEfspCreateStrip('OPS', {
+  _sendCreateStrip('OPS', {
     kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', flightData,
   }, facilityOfPosition('OPS'));
   _setCreateStripMsg('Creating ' + plan.callsign + ' (flight plan found)…', false);
@@ -534,5 +553,4 @@ export function _wireCreateStrip() {
   _refreshCreateStripAvailability();
 }
 
-export function _setPendingCreateStripMutationId(v) { _pendingCreateStripMutationId = v; }
 export function _setPendingDuplicateCallsign(v) { _pendingDuplicateCallsign = v; }

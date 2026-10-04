@@ -414,7 +414,6 @@
    "closeAtoImportDialog",
    "getAtoImportState",
    "initAtoImport",
-   "onAtoAck",
    "onAtoPreviewResult",
    "openAtoImportDialog",
    "refreshAtoImportButton",
@@ -558,6 +557,7 @@
   ],
   "panels/efsp/bay/popover-portal.js": [
    "_mountPopover",
+   "_sendFromPopover",
    "_stripHasOpenPopover",
    "_unmountPopover"
   ],
@@ -881,6 +881,7 @@
    "stereoRoutesCacheKey"
   ],
   "panels/efsp/efsp-ws.js": [
+   "_resetEfspAcksForTest",
    "_sendEfsp",
    "efspResyncReplyAsMessage",
    "getAckedPositions",
@@ -894,8 +895,10 @@
    "noteEfspResyncAnswered",
    "noteEfspSnapshotLanded",
    "noteEfspStoreAnswerLanded",
+   "orphanEfspAcks",
    "redeclareEfspPositions",
    "replayPendingEfspMutations",
+   "sendEfsp",
    "sendEfspAirspaceMutation",
    "sendEfspCarrierMutation",
    "sendEfspCorrelationMutation",
@@ -907,7 +910,8 @@
    "sendEfspSfaMutation",
    "sendEfspUndo",
    "setEfspSender",
-   "setSignOnNoticeListener"
+   "setSignOnNoticeListener",
+   "settleEfspAck"
   ],
   "panels/efsp/facility-topology.js": [
    "DEFAULT_FACILITY_ID",
@@ -1000,8 +1004,8 @@
    "_pendingDuplicateCallsign",
    "_refreshAtoFirstPicker",
    "_refreshCreateStripAvailability",
+   "_sendCreateStrip",
    "_setCreateStripMsg",
-   "_setPendingCreateStripMutationId",
    "_setPendingDuplicateCallsign",
    "_stereoEligibleOrigin",
    "_stereoRoutes",

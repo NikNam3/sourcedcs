@@ -38,10 +38,12 @@ async function open(page, signedOn, facilityId = 'INCIRLIK') {
   // capture the panel's sends; the cmid is the ack's key
   await page.evaluate(() => {
     window.__sent = [];
-    crc.ws.setEfspSender('sendEfspAirspaceMutation', (pos, id, baseRev, op, extra = {}) => {
-      const clientMutationId = `t-${window.__sent.length + 1}`;
+    // Stub the wire, not the sender: the real sender builds the frame and keeps the form's ack continuation (sendEfsp).
+    crc.ws.setEfspSender('_sendEfsp', (m) => {
+      if (m.type !== 'efsp-airspace-mutation') return true;
+      const { version, type, clientMutationId, airspaceId: id, baseRev, actingPositionId: pos, op, ...extra } = m;
       window.__sent.push({ pos, id, baseRev, op, extra, clientMutationId });
-      return clientMutationId;
+      return true;
     });
   });
   await inject(page, SET);

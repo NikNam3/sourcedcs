@@ -5,7 +5,7 @@ import { CARRIER_HANDOFFS } from './efsp-nla.js';
 import {
   carrierBannerParts, carrierCaseValue, carrierDerivedFor, carrierDerivedStack, carrierHhmm, getEfspCarrier
 } from './carrier-state.js';
-import { getActingPositions, sendEfspCarrierMutation, sendEfspMutation } from './efsp-ws.js';
+import { getActingPositions, sendEfspCarrierMutation, sendEfspMutation, settleEfspAck } from './efsp-ws.js';
 // ESM-1: today efsp-panel.js's _callsignOfFlightData (fallback '') silently won over this file's own copy (fallback flightDataId);
 // the import keeps that effective behaviour (S-ARCH2 item 3, plan §6 queue item 3).
 import { _callsignOfFlightData } from './efsp-panel.js';
@@ -419,6 +419,7 @@ registerEfspMessage('efsp-carrier-delta', (msg) => {
 });
 
 registerEfspMessage('efsp-carrier-ack', (msg) => {
+  settleEfspAck(msg);
   if (!msg.ok) _showMutationError(msg.reason || 'Rejected', msg.detail, { subject: 'carrier' });
   if (msg.carrier) applyEfspCarrierDelta({ carriers: { updated: [msg.carrier] } });
   renderCarrierBanner();

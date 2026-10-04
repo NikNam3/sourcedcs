@@ -1,9 +1,9 @@
 'use strict';
-import { _availableCreateStripOrigins, _createStripOrigin, _missionBindCandidates, _pendingDuplicateCallsign, _setCreateStripMsg, _setPendingCreateStripMutationId, _setPendingDuplicateCallsign, _stereoEligibleOrigin, _stereoRoutes } from './create-strip.js';
+import { _availableCreateStripOrigins, _createStripOrigin, _missionBindCandidates, _pendingDuplicateCallsign, _sendCreateStrip, _setCreateStripMsg, _setPendingDuplicateCallsign, _stereoEligibleOrigin, _stereoRoutes } from './create-strip.js';
 import { _dotCommandInputEl, _dotCommandPreviewEl } from './state.js';
 import { requestUndo } from './undo-slot.js';
 import { _runEfspSearch } from './tabs.js';
-import { getActingPositions, sendEfspCorrelationMutation, sendEfspCreateStrip, sendEfspMarsaMutation, sendEfspMutation } from '../efsp-ws.js';
+import { getActingPositions, sendEfspCorrelationMutation, sendEfspMarsaMutation, sendEfspMutation } from '../efsp-ws.js';
 import { getAllEfspStrips, getEfspCorrelationForStrip, getEfspFlightData, getEfspStrip, liveStripsForCallsign, marsaForStrip } from '../efsp-state.js';
 import { getSelectedEfspStripId } from '../bay-view.js';
 import { normalizeStereoNameClient } from '../efsp-stereo-routes.js';
@@ -41,10 +41,10 @@ function _fragMissionLine(callsign) {
     return _showDotCommandError(`no live flight ${wanted} available to frag against`);
   }
 
-  _setPendingCreateStripMutationId(sendEfspCreateStrip(origin.actingPositionId, {
+  _sendCreateStrip(origin.actingPositionId, {
     kind: 'CreateStrip', bayId: origin.bayId, rackId: 'main', stripType: 'MISSION',
     flightDataId: candidate.flightDataId, initialState: origin.initialState || undefined,
-  }, origin.facilityId));
+  }, origin.facilityId);
   _setCreateStripMsg(`Fragging a mission line for ${wanted}…`, false);
 }
 
@@ -296,11 +296,11 @@ function _fileStereoByName(rawName, rawCallsign) {
   }
   _setPendingDuplicateCallsign(null);
 
-  _setPendingCreateStripMutationId(sendEfspCreateStrip(origin.actingPositionId, {
+  _sendCreateStrip(origin.actingPositionId, {
     kind: 'CreateStrip', bayId: origin.bayId, rackId: 'main', stripType: origin.stripType,
     flightData: { callsign, aircraftType: '', wakeCategory: '', stereoRouteName: known.name },
     initialState: origin.initialState || undefined,
-  }, origin.facilityId));
+  }, origin.facilityId);
   _setCreateStripMsg(`Creating ${callsign} (${known.name})…`, false);
 }
 

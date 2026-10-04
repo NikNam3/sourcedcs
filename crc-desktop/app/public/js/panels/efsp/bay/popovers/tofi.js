@@ -5,7 +5,7 @@ import { getEfspFlightData, getEfspStrip } from '../../efsp-state.js';
 import { TOFI_ANSWERED_BY, TOFI_COUNTERPARTS } from '../authority-mirror.js';
 import { _isRejectedCoordinationReplica } from './coordination.js';
 import { _resolveActingPositionId, _swallowRepeatAdvance } from '../../bay-view.js';
-import { _mountPopover, _unmountPopover } from '../popover-portal.js';
+import { _mountPopover, _sendFromPopover, _unmountPopover } from '../popover-portal.js';
 
 
 // D12 audit note: TAC_C2/AIC/GCI/JTAC must NEVER appear as keys in
@@ -82,22 +82,22 @@ function _tofiActingPositionId(strip) {
 export function _dispatchTofi(strip, action, direction, overrides = {}) {
   strip = getEfspStrip(strip.stripId) || strip; // F-107 — see _dispatchCoordination
   const actingPositionId = action === 'PROPOSE' ? _resolveActingPositionId(strip) : _tofiActingPositionId(strip);
-  if (!actingPositionId) return;
+  if (!actingPositionId) return false;
   // Same class as the coordination responses above (F-101) — accepting or
   // rejecting a TOFI takes the answer buttons off the Strip and reflows the
   // Rack under the pointer. PROPOSE and TRANSFER_COMMS leave the Strip where
   // it is and take no control off it.
-  if ((action === 'ACCEPT' || action === 'REJECT') && _swallowRepeatAdvance()) return;
+  if ((action === 'ACCEPT' || action === 'REJECT') && _swallowRepeatAdvance()) return false;
   if (action === 'ACCEPT' || action === 'REJECT') _tofiRegimeChoice.delete(strip.stripId);
   if (action === 'PROPOSE') {
     const op = { kind: 'TOFI', action: 'PROPOSE', direction, note: overrides.note || undefined };
     if (direction === 'ENTRY') {
       const target = overrides.target;
-      if (!target) return;
+      if (!target) return false;
       op.toFacilityId = target.facilityId;
       op.toPositionId = target.positionId;
     }
-    sendEfspMutation(actingPositionId, strip, op);
+    sendEfspMutation(actingPositionId, strip, op, { onAck: overrides.onAck });
   } else {
     const op = { kind: 'TOFI', action };
     // docs/adr/0053 — accepting an ENTRY means saying under which regime the
@@ -105,8 +105,9 @@ export function _dispatchTofi(strip, action, direction, overrides = {}) {
     // deliberately: §4.6.3 rule 1 and defect D14 put the regime in the
     // governing agreement, so it is asked for rather than derived.
     if (overrides.separationRegime) op.separationRegime = overrides.separationRegime;
-    sendEfspMutation(actingPositionId, strip, op);
+    sendEfspMutation(actingPositionId, strip, op, { onAck: overrides.onAck });
   }
+  return true;
 }
 
 let _openTofiPopoverEl = null;
@@ -172,8 +173,7 @@ export function _openTofiEntryPopover(strip, anchorEl, counterparts) {
       note.classList.add('efsp-coordinate-note-required');
       return;
     }
-    _dispatchTofi(strip, 'PROPOSE', 'ENTRY', { target: JSON.parse(select.value), note: note.value.trim() });
-    _closeTofiPopover();
+    _sendFromPopover(popover, sendBtn, (onAck) => _dispatchTofi(strip, 'PROPOSE', 'ENTRY', { target: JSON.parse(select.value), note: note.value.trim(), onAck }));
   });
   popover.appendChild(sendBtn);
 

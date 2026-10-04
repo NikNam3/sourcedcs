@@ -2,7 +2,7 @@
 import { toMagneticDisplay } from '../../magnetic.js';
 import { PANEL_TITLES, dock } from '../../dock.js';
 import { getAllEfspRunwayStatuses } from './efsp-state.js';
-import { getActingPositions, sendEfspRunwayStatusMutation } from './efsp-ws.js';
+import { getActingPositions, sendEfspRunwayStatusMutation, settleEfspAck } from './efsp-ws.js';
 import { alertPadConstraintFor } from './scramble.js';
 import { runwayStatusActionsFor, runwayStatusSubjectFor } from './runway-status-rules.js';
 import { registerEfspMessage } from './efsp-message-registry.js';
@@ -80,7 +80,13 @@ function _fsDispatch(record, action, btn, select) {
   }
   // §7.9: the button goes dead on the press, until the next render.
   if (btn) btn.disabled = true;
-  sendEfspRunwayStatusMutation(action.positionId, record.facilityId, record.rev, op);
+  // A press the socket could not carry gets an answer too (NOT_CONNECTED): re-render, so the dead button is not left dead.
+  sendEfspRunwayStatusMutation(action.positionId, record.facilityId, record.rev, op, {
+    onAck: (ack) => {
+      if (ack.reason === 'NOT_CONNECTED' || ack.reason === 'CONNECTION_LOST') _showMutationError(ack.reason, ack.detail, { subject: 'runway status' }); // no ack frame will show it
+      renderRunwayStatusPanel();
+    },
+  });
 }
 
 function _fsActionRow(record, actions) {
@@ -280,6 +286,7 @@ registerEfspMessage('efsp-runway-status-delta', (msg) => {
 });
 
 registerEfspMessage('efsp-runway-status-ack', (msg) => {
+  settleEfspAck(msg);
   if (!msg.ok) {
     _showMutationError(msg.reason || 'Rejected', msg.detail, { subject: runwayStatusSubjectFor(msg) });
   }
