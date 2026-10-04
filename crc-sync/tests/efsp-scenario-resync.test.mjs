@@ -39,21 +39,23 @@ async function makeClient() {
   sync.setSendToSync((m) => outbox.push(m));
   sync.setIsSyncOpen(() => true);
   const ctx = { ...(await g.import('panels/efsp/efsp-state.js')), ...(await g.import('panels/efsp/efsp-ws.js')) };
+  // The real registry and sync observer (efsp-ws.js registers it). efsp-messages.js is not imported: it pulls in the
+  // panels (their Date.now calls move the scenario's frozen clock), so the state-applying part of each handler is
+  // registered here, as the old harness ran it. The sync part (gap check, resync, answered) is the shipped observer.
+  const registry = await g.import('panels/efsp/efsp-message-registry.js');
+  registry.registerEfspMessage('efsp-snapshot', (m) => ctx.applyEfspSnapshot(m));
+  registry.registerEfspMessage('efsp-board-delta', (m) => ctx.applyEfspDelta(m));
+  registry.registerEfspMessage('efsp-mutation-ack', (m) => ctx.applyEfspMutationAck(m));
+  registry.registerEfspMessage('efsp-heartbeat', () => {});
+  registry.registerEfspMessage('efsp-resync-reply', (m) => registry.dispatchEfspMessage(ctx.efspResyncReplyAsMessage(m)));
   // Evaluates a snippet against the two modules' exports, as the old vm context did against their globals.
   const run = (code) => new Function('__ctx', `with (__ctx) { return eval(${JSON.stringify(code)}); }`)(ctx);
   return {
     outbox, run,
-    /** app.js's efsp cases, in the order it runs them. */
+    /** The registry's dispatch: the sync observer, then the family handler (an efsp-resync-reply unwraps itself). */
     deliver(msg) {
       ctx.__m = msg;
-      if (msg.type === 'efsp-resync-reply') return this.deliver(run('efspResyncReplyAsMessage(__m)'));
-      switch (msg.type) {
-        case 'efsp-snapshot': run('applyEfspSnapshot(__m); noteEfspSnapshotLanded()'); break;
-        case 'efsp-board-delta': run('noteEfspBoardMessageForSync(__m); applyEfspDelta(__m); if (!efspEpochChangeOf(__m)) noteEfspResyncAnswered(__m.facilityId || getEfspFacility())'); break;
-        case 'efsp-mutation-ack': run('noteEfspBoardMessageForSync(__m); applyEfspMutationAck(__m)'); break;
-        case 'efsp-heartbeat': run('noteEfspHeartbeatForSync(__m)'); break;
-        default: throw new Error(msg.type);
-      }
+      if (!registry.dispatchEfspMessage(msg)) throw new Error(msg.type);
     },
     stripIds: () => run('JSON.stringify(getAllEfspStrips().map(s => s.stripId + ":" + s.rev).sort())') && JSON.parse(run('JSON.stringify(getAllEfspStrips().map(s => s.stripId + ":" + s.rev).sort())')),
     seq: (f) => run(`efspResyncPositionFor(${JSON.stringify(f)}).lastBoardSeq`),
