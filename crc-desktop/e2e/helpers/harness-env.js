@@ -11,6 +11,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { fakeDcsPort } = require('./fake-dcs');
 
 const SYNC_DIR = path.join(__dirname, '..', '..', '..', 'crc-sync');
 const STEREO_FIXTURE = path.join(__dirname, '..', 'fixtures', 'l16-stereo-routes.json');
@@ -42,7 +43,11 @@ function syncEnv(stateDir, port) {
     // No DCS, no SRS. Both clients retry forever and neither blocks the EFSP subsystem, so a closed port keeps the run hermetic
     // and fails fast instead of hanging on a real host. The UNPREFIXED names, because that is what crc-sync's process reads
     // (grpc-client.js / srs-client.js); CRCSYNC_* are only infra/docker-compose.yml's .env keys.
-    DCS_GRPC_HOST: '127.0.0.1:1',
+    // Nothing listens here unless a spec starts helpers/fake-dcs.js, so this is "no DCS" for every spec that does not.
+    DCS_GRPC_HOST: `127.0.0.1:${fakeDcsPort(Number(port))}`,
+    // The mission session (which theater is loaded) belongs to the throwaway state directory: without this a loaded mission
+    // is written into the checkout's crc-sync/state/ and read back by every later run.
+    CRCSYNC_MISSION_SESSION_PATH: stateFile('mission-session.json'),
     SRS_HOST: '127.0.0.1',
     SRS_PORT: '1',
   };
