@@ -5,32 +5,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import crcLog from '../src/log.js';
+import { withPaths, APP_PATHS } from './helpers/with-paths.mjs';
 
 // GET /api/client-config (MAPKEY): the MapTiler key the client draws with. Same temp-dir setup as app-boot.test.mjs.
-const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'client-config-'));
-fs.mkdirSync(path.join(tmpDir, 'config-empty'));
-const SHIPPED = new URL('../config/', import.meta.url);
-for (const f of fs.readdirSync(SHIPPED).filter(f => f.endsWith('.json'))) {
-  fs.copyFileSync(new URL(f, SHIPPED), path.join(tmpDir, 'config-empty', f));
-}
-for (const [k, v] of Object.entries({
-  CRCSYNC_CONFIG_DIR: 'config-empty',
-  CRCSYNC_EFSP_FACILITY_CONFIG_PATH: 'incirlik.json',
-  CRCSYNC_EFSP_FACILITY_CONFIG_PATH_CENTER: 'center.json',
-  CRCSYNC_EFSP_FACILITY_CONFIG_PATH_TACTICAL: 'tactical.json',
-  CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH: 'board.json',
-  CRCSYNC_EFSP_MUTATION_LOG_PATH: 'mutations.jsonl',
-  CRCSYNC_EFSP_AIRSPACES_PATH: 'airspaces.json',
-  CRCSYNC_EFSP_TRAFFIC_COUNT_PATH: 'traffic-count.jsonl',
-  CRCSYNC_EFSP_METRICS_PATH: 'metrics.json',
-  CRCSYNC_TERRAIN_CACHE_DIR: 'terrain',
-  CRCSYNC_MISSION_SESSION_PATH: 'session.json',
-})) process.env[k] = path.join(tmpDir, v);
-process.env.CRCSYNC_STATE_DIR = tmpDir;
-fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, '{}');
-delete process.env.CRCSYNC_TEST_RESET;
-delete process.env.CRCSYNC_MAPTILER_KEY; // the cases below pass their own keys, and createApp reads only the env it is given
-delete process.env.CRCSYNC_MAPTILER_CLIENT_KEY;
+const paths = withPaths('client-config-', APP_PATHS, { stateDir: true, shippedConfig: true, extraEnv: { CRCSYNC_TEST_RESET: undefined, CRCSYNC_MAPTILER_KEY: undefined, CRCSYNC_MAPTILER_CLIENT_KEY: undefined } }).apply();
+const tmpDir = paths.dir;
+fs.writeFileSync(paths.env.CRCSYNC_EFSP_AIRSPACES_PATH, '{}');
 
 const { createApp } = await import('../src/app.js');
 
@@ -38,7 +18,7 @@ const jwt = 'x.' + Buffer.from(JSON.stringify({ name: 'ctrl' })).toString('base6
 
 async function get(env, headers) {
   const { grpcClient, srsClient } = { grpcClient: Object.assign(new EventEmitter(), { getWeather: () => ({}) }), srsClient: new EventEmitter() };
-  const app = createApp({ grpcClient, srsClient, env: { ...process.env, ...env } });
+  const app = createApp({ grpcClient, srsClient, env: { ...paths.env, ...env } });
   return new Promise((resolve, reject) => {
     const srv = app.http.listen(0, '127.0.0.1', async () => {
       try {

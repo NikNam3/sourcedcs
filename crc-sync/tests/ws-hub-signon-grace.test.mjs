@@ -3,12 +3,11 @@ import assert from 'node:assert/strict';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import { withPaths, BOARD, MUTATION_LOG } from './helpers/with-paths.mjs';
 
 // A closed session keeps its sign-ons for a grace (config/sign-on-grace.json signOnGraceMs). docs/wip/DESK-SIGNON.md.
-const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'signon-grace-'));
-process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH = path.join(tmpDir, 'facility.json');
-process.env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH = path.join(tmpDir, 'board.json');
-process.env.CRCSYNC_EFSP_MUTATION_LOG_PATH = path.join(tmpDir, 'mutations.jsonl');
+const paths = withPaths('signon-grace-', { ...BOARD, ...MUTATION_LOG, CRCSYNC_EFSP_FACILITY_CONFIG_PATH: 'facility.json' }).apply();
+const tmpDir = paths.dir;
 const { createEfsp } = await import('../src/efsp/index.js');
 const { default: WsHub } = await import('../src/ws-hub.js');
 const { default: TrackStore } = await import('../src/tracks.js');

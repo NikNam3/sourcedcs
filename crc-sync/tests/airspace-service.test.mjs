@@ -7,30 +7,13 @@ import path from 'node:path';
 import { WebSocket } from 'ws';
 import crcLog from '../src/log.js';
 import { until } from './helpers/wait.mjs';
+import { withPaths, APP_PATHS } from './helpers/with-paths.mjs';
 
 // /api/airspace-registry/* through createApp (docs/adr/0098 §9): auth, validation, the three routes, an idempotent
 // replay, and a connected panel session receiving the delta and the calendar. Same temp-dir setup as app-boot.test.mjs.
-const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'airspace-service-'));
-fs.mkdirSync(path.join(tmpDir, 'config-empty'));
-const SHIPPED = new URL('../config/', import.meta.url);
-for (const f of fs.readdirSync(SHIPPED).filter(f => f.endsWith('.json'))) fs.copyFileSync(new URL(f, SHIPPED), path.join(tmpDir, 'config-empty', f));
-for (const [k, v] of Object.entries({
-  CRCSYNC_CONFIG_DIR: 'config-empty',
-  CRCSYNC_EFSP_FACILITY_CONFIG_PATH: 'incirlik.json',
-  CRCSYNC_EFSP_FACILITY_CONFIG_PATH_CENTER: 'center.json',
-  CRCSYNC_EFSP_FACILITY_CONFIG_PATH_TACTICAL: 'tactical.json',
-  CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH: 'board.json',
-  CRCSYNC_EFSP_MUTATION_LOG_PATH: 'mutations.jsonl',
-  CRCSYNC_EFSP_AIRSPACES_PATH: 'airspaces.json',
-  CRCSYNC_EFSP_TRAFFIC_COUNT_PATH: 'traffic-count.jsonl',
-  CRCSYNC_EFSP_METRICS_PATH: 'metrics.json',
-  CRCSYNC_TERRAIN_CACHE_DIR: 'terrain',
-  CRCSYNC_MISSION_SESSION_PATH: 'session.json',
-})) process.env[k] = path.join(tmpDir, v);
-process.env.CRCSYNC_STATE_DIR = tmpDir;
-fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, '{}');
-delete process.env.CRCSYNC_TEST_RESET;
-process.on('exit', () => fs.rmSync(tmpDir, { recursive: true, force: true }));
+const paths = withPaths('airspace-service-', APP_PATHS, { stateDir: true, shippedConfig: true, extraEnv: { CRCSYNC_TEST_RESET: undefined } }).apply();
+const tmpDir = paths.dir;
+fs.writeFileSync(paths.env.CRCSYNC_EFSP_AIRSPACES_PATH, '{}');
 
 const { createApp } = await import('../src/app.js');
 const auth = await import('../src/auth.js');

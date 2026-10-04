@@ -3,12 +3,13 @@ import assert from 'node:assert/strict';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import { withPaths } from './helpers/with-paths.mjs';
 
 // createAptConfig() reads its config path when it is called (the composition root, at start), from the env it is given;
 // this file points that env at a temp file so it never touches the real config/apt-config.json.
-const tmpDir  = fs.mkdtempSync(path.join(os.tmpdir(), 'apt-config-test-'));
-const tmpFile = path.join(tmpDir, 'apt-config.json');
-process.env.CRCSYNC_APT_CONFIG_PATH = tmpFile;
+const paths = withPaths('apt-config-test-', { CRCSYNC_APT_CONFIG_PATH: 'apt-config.json' }).apply();
+const tmpDir  = paths.dir;
+const tmpFile = paths.file('apt-config.json');
 
 const { createAptConfig } = await import('../src/apt-config.js');
 const { getAptConfig, setAptConfig } = createAptConfig();

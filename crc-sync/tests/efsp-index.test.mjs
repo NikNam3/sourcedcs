@@ -4,14 +4,13 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import crypto from 'crypto';
+import { withPaths, BOARD, MUTATION_LOG } from './helpers/with-paths.mjs';
 
 // Both facility-config.js and index.js read their paths once at module
 // load — override before the first import (same pattern as every other
 // path-overridable module in this package).
-const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'efsp-index-test-'));
-process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH = path.join(tmpDir, 'facility.json');
-process.env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH = path.join(tmpDir, 'board.json');
-process.env.CRCSYNC_EFSP_MUTATION_LOG_PATH = path.join(tmpDir, 'mutations.jsonl'); // createEfsp() builds a real MutationLog — keep it off the real repo config dir
+const paths = withPaths('efsp-index-test-', { ...BOARD, ...MUTATION_LOG, CRCSYNC_EFSP_FACILITY_CONFIG_PATH: 'facility.json' }).apply();
+const tmpDir = paths.dir;
 
 const { createEfsp } = await import('../src/efsp/index.js');
 const BOARD_SNAPSHOT_PATH = process.env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH;

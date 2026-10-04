@@ -4,18 +4,18 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import crcLog from '../src/log.js';
+import { withPaths } from './helpers/with-paths.mjs';
 
 // docs/adr/0065 — the WP8 policy file. A tuning file (decisions.md P5): read
 // once, never written. Both directories are pointed at temp dirs BEFORE the
 // module (and state-paths.js, which reads them at load) is imported.
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'efsp-instr-config-'));
-const CONFIG = path.join(tmp, 'config');
-const STATE = path.join(tmp, 'state');
+const paths = withPaths('efsp-instr-config-', { CRCSYNC_CONFIG_DIR: 'config', CRCSYNC_STATE_DIR: 'state' },
+  { extraEnv: { CRCSYNC_EFSP_INSTRUMENTATION_CONFIG_PATH: undefined } }).apply();
+const tmp = paths.dir;
+const CONFIG = paths.file('config');
+const STATE = paths.file('state');
 fs.mkdirSync(CONFIG);
 fs.mkdirSync(STATE);
-process.env.CRCSYNC_CONFIG_DIR = CONFIG;
-process.env.CRCSYNC_STATE_DIR = STATE;
-delete process.env.CRCSYNC_EFSP_INSTRUMENTATION_CONFIG_PATH;
 // The shipped file is the only source of defaults (DATA-2): give the temp config/ a copy.
 const SHIPPED_TEXT = fs.readFileSync(new URL('../config/efsp-instrumentation.json', import.meta.url), 'utf8');
 fs.writeFileSync(path.join(CONFIG, 'efsp-instrumentation.json'), SHIPPED_TEXT);

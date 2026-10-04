@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { withPaths } from './helpers/with-paths.mjs';
 
 /* The radar list, ported out of the renderer (docs/adr/0042).
  *
@@ -13,7 +14,8 @@ import path from 'node:path';
  * it kept.
  */
 
-const specsPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'crcsync-radars-')), 'sensor-specs.json');
+const paths = withPaths('crcsync-radars-', { CRCSYNC_SENSOR_SPECS_PATH: 'sensor-specs.json' }).apply();
+const specsPath = paths.file('sensor-specs.json');
 fs.writeFileSync(specsPath, JSON.stringify({
   radar: {
     'E-3A': { angleFromNose: 360, rangeNm: 216, sweepMs: 10000 },
@@ -24,7 +26,6 @@ fs.writeFileSync(specsPath, JSON.stringify({
     LHA_Tarawa: { rangeNm: 100, sweepMs: 5000 },
   },
 }));
-process.env.CRCSYNC_SENSOR_SPECS_PATH = specsPath;
 
 const {
   buildRadars, loadSensorSpecs, isRadarSite, M_PER_NM,

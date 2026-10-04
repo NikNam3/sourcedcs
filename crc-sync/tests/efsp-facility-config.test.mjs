@@ -4,6 +4,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { spawnSync } from 'child_process';
+import { withPaths } from './helpers/with-paths.mjs';
 
 // facility-config.js reads its config paths once at module load — set both
 // override env vars before the first import, same pattern as
@@ -11,13 +12,15 @@ import { spawnSync } from 'child_process';
 // with its own path/env var — omitting this one would let a test that
 // mutates CENTER's config (setFacilityConfig(..., 'CENTER')) write
 // straight to the real, committed config/efsp-facility-center.json.
-const tmpDir  = fs.mkdtempSync(path.join(os.tmpdir(), 'efsp-facility-config-test-'));
-const tmpFile = path.join(tmpDir, 'efsp-facility-incirlik.json');
-const tmpFileCenter = path.join(tmpDir, 'efsp-facility-center.json');
-const tmpFileTactical = path.join(tmpDir, 'efsp-facility-tactical.json');
-process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH = tmpFile;
-process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH_CENTER = tmpFileCenter;
-process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH_TACTICAL = tmpFileTactical;
+const paths = withPaths('efsp-facility-config-test-', {
+  CRCSYNC_EFSP_FACILITY_CONFIG_PATH: 'efsp-facility-incirlik.json',
+  CRCSYNC_EFSP_FACILITY_CONFIG_PATH_CENTER: 'efsp-facility-center.json',
+  CRCSYNC_EFSP_FACILITY_CONFIG_PATH_TACTICAL: 'efsp-facility-tactical.json',
+}).apply();
+const tmpDir  = paths.dir;
+const tmpFile = paths.file('efsp-facility-incirlik.json');
+const tmpFileCenter = paths.file('efsp-facility-center.json');
+const tmpFileTactical = paths.file('efsp-facility-tactical.json');
 
 const { createFacilityConfig, validateConfig, DEFAULT_FACILITY_ID } = await import('../src/efsp/facility-config.js');
 const {

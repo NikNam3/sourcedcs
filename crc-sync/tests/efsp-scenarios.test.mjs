@@ -4,6 +4,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import crypto from 'crypto';
+import { withPaths, FACILITIES, BOARD, MUTATION_LOG, AIRSPACES } from './helpers/with-paths.mjs';
 
 // End-to-end sortie walks — creation through DROPPED, across Facility
 // boundaries, for the two flights the system is actually meant to run:
@@ -22,19 +23,14 @@ import crypto from 'crypto';
 // the real wire path, not a hand-built rules object — so a rule that exists
 // but was never wired in index.js fails here rather than silently passing.
 
-const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'efsp-scenario-test-'));
-process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH = path.join(tmpDir, 'incirlik.json');
-process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH_CENTER = path.join(tmpDir, 'center.json');
-process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH_TACTICAL = path.join(tmpDir, 'tactical.json');
-process.env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH = path.join(tmpDir, 'board.json');
-process.env.CRCSYNC_EFSP_MUTATION_LOG_PATH = path.join(tmpDir, 'mutations.jsonl');
+const paths = withPaths('efsp-scenario-test-', { ...FACILITIES, ...BOARD, ...MUTATION_LOG, ...AIRSPACES }).apply();
+const tmpDir = paths.dir;
 
 // Two airspaces covering both shapes the squadron flies: a MOA owned by the
 // Center that owns the airspace it sits in, with no control of its own, and
 // an air-to-ground range with its own control tower and frequency. Written
 // before the imports below, because facility-config derives the RANGES
 // Facility's Position set from this at require time.
-process.env.CRCSYNC_EFSP_AIRSPACES_PATH = path.join(tmpDir, 'airspaces.json');
 fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, JSON.stringify({ Test: [
   {
     airspaceId: 'MOA-EAST', name: 'East MOA', type: 'MOA',

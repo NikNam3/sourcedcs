@@ -3,10 +3,11 @@ import assert from 'node:assert/strict';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import { withPaths } from './helpers/with-paths.mjs';
 
 // state-paths.js reads CRCSYNC_STATE_DIR at module load: point it at a temp dir before any import so createEfsp()
 // below neither reads nor writes the real crc-sync/state/.
-process.env.CRCSYNC_STATE_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'efsp-block-altitude-test-'));
+withPaths('efsp-block-altitude-test-', {}, { stateDir: true }).apply();
 
 // docs/adr/0091 — block altitudes in the ALT field.
 const { FlightDataStore, parseAltitudeFt, parseAltitude, formatAltitudeBlock } = await import('../src/efsp/flight-data-store.js');

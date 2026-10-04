@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { withPaths } from './helpers/with-paths.mjs';
 
 /* Where runtime state lives, versus where shipped defaults live
  * (docs/adr/0048).
@@ -15,12 +16,11 @@ import path from 'node:path';
  * changed survives a deploy, which is the bug this replaces.
  */
 
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'crcsync-statepaths-'));
-const CONFIG = path.join(tmp, 'config');
-const STATE = path.join(tmp, 'state');
+const paths = withPaths('crcsync-statepaths-', { CRCSYNC_CONFIG_DIR: 'config', CRCSYNC_STATE_DIR: 'state' }).apply();
+const tmp = paths.dir;
+const CONFIG = paths.file('config');
+const STATE = paths.file('state');
 fs.mkdirSync(CONFIG, { recursive: true });
-process.env.CRCSYNC_CONFIG_DIR = CONFIG;
-process.env.CRCSYNC_STATE_DIR = STATE;
 
 const { readPath, writePath, statePaths, ensureDirFor, dirs } =
   await import('../src/state-paths.js');

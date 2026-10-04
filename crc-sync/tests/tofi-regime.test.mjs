@@ -10,13 +10,12 @@ import crypto from 'crypto';
 // Same three-Facility, fully-wired composition-root pattern
 // efsp-board-store-coordination.test.mjs uses for the 5 ATC<->ATC
 // primitives, extended with TACTICAL.
-const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tofi-regime-test-'));
-process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH = path.join(tmpDir, 'incirlik.json');
-process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH_CENTER = path.join(tmpDir, 'center.json');
-process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH_TACTICAL = path.join(tmpDir, 'tactical.json');
+const paths = withPaths('tofi-regime-test-', { ...FACILITIES }).apply();
+const tmpDir = paths.dir;
 
 const { BoardStore } = await import('../src/efsp/board-store.js');
 import { fullRules } from "./helpers/full-rules.mjs";
+import { withPaths, FACILITIES } from './helpers/with-paths.mjs';
 const { FlightDataStore } = await import('../src/efsp/flight-data-store.js');
 const { PositionStore } = await import('../src/efsp/position-store.js');
 const facilityConfig = (await import('../src/efsp/facility-config.js')).createFacilityConfig();
