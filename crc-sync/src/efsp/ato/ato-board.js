@@ -26,6 +26,7 @@ const crypto = require('crypto');
 const { ingestAtoText } = require('./ato-ingest');
 const { fitCallsign } = require('./callsign-fit');
 const { MAX_INPUT_BYTES } = require('./usmtf-tokenize');
+const { hullForLocation, hullCode } = require('../carrier/hull-config');
 const { isValidCodeFormat, isReserved, isSynthetic, syntheticBlock } = require('../code-allocator');
 
 // [SOURCE-DEFINED] — where an ATO lands. Guide §9.8: "TAC_C2 works mission
@@ -197,6 +198,21 @@ function _humanWarnings(ws) {
 // ── The seed and the tasking ─────────────────────────────────────────────────
 
 /** createFlightData's seed for a line: L3's flightDataSeed, re-dated, with the fitted (or typed) callsign. */
+/**
+ * Is this mission carrier-based (docs/adr/0109)? The ATO's DEPLOC and ARRLOC are free text; a line
+ * is carrier-based when either names a configured hull. Recorded on the line, never a different
+ * kind of line: a carrier mission gets its MISSION line exactly as a land-based one.
+ * @returns {{hullId:string, hullCode:string, departs:boolean, recovers:boolean}|null}
+ */
+function carrierOf(l3, hulls) {
+  const a = l3.extras.ato;
+  const dep = hullForLocation(a.departure && a.departure.location, hulls);
+  const rec = hullForLocation(a.recovery && a.recovery.location, hulls);
+  const hull = dep || rec;
+  if (!hull) return null;
+  return { hullId: hull.hullId, hullCode: hullCode(hull), departs: !!dep, recovers: !!rec };
+}
+
 function seedFor(line, callsign) {
   return { ...line.flightDataSeed, callsign };
 }
@@ -207,6 +223,7 @@ function seedFor(line, callsign) {
  * @param {{mode:'CREATE'|'BIND'|'UPDATE', atoRef:object, links:object[]}} opts
  */
 function atoTaskingFor(line, { mode, atoRef, links }) {
+  const carrier = line.carrier || null;
   const l3 = line.l3;
   const ato = { ...l3.extras.ato };
   delete ato.callsign; delete ato.seedable;
@@ -227,6 +244,7 @@ function atoTaskingFor(line, { mode, atoRef, links }) {
       ...ato,
       lineId: l3.lineId,
       callsignRaw: l3.extras.ato.callsignRaw,
+      ...(carrier ? { carrier: { ...carrier } } : {}),
       atoRef,
       iff: { modeThree: l3.extras.identityAto.modeThree || null },
       datalink: l3.extras.identityAto.datalink || null,
@@ -276,12 +294,13 @@ const SEED_PATH_OF_VALUES = new Set(Object.values(SEED_PATH_OF));
 /**
  * Parses the text and says what an import would do. Never throws, no side effects.
  *
- * @param {{text:string, flightDataList:object[], liveStrips:object[], nowUtc:number}} args
+ * @param {{text:string, flightDataList:object[], liveStrips:object[], nowUtc:number, hulls?:object[]}} args
+ *   hulls — the configured carrier hulls (carrier/hull-config.js); the default reads the shipped config
  *   liveStrips — every live Strip on every Board, each carrying its facilityId;
  *   nowUtc — the mission clock (H11), used for L3's fallback reference and the date shift (H68)
  * @returns {{ preview:object, lines:Map<string,object>, doc:object, shiftMs:number }}
  */
-function analyseAto({ text, flightDataList, liveStrips, nowUtc }) {
+function analyseAto({ text, flightDataList, liveStrips, nowUtc, hulls }) {
   const doc = ingestAtoText(text, { referenceUtc: nowUtc });
   const byFlightData = _stripsByFlightData(liveStrips);
   const flightDataById = new Map((flightDataList || []).map((f) => [f.flightDataId, f]));
@@ -307,7 +326,7 @@ function analyseAto({ text, flightDataList, liveStrips, nowUtc }) {
       own.push({ code: 'MODE3_NOT_ADOPTED', severity: 'warning', line: null,
         message: `The ATO's Mode 3 ${modeThree} can never be assigned${isSynthetic(modeThree) ? ` (it is in the ${syntheticBlock().SYNTHETIC_BLOCK_LABEL} block crc-sync gives AI aircraft)` : ''}; a new flight keeps the code crc-sync mints.` });
     }
-    const line = { l3, callsign: callsign || null, modeThree, warnings: [..._humanWarnings(l3.warnings), ...own] };
+    const line = { l3, carrier: carrierOf(l3, hulls), callsign: callsign || null, modeThree, warnings: [..._humanWarnings(l3.warnings), ...own] };
     const existing = _existingFlightDataFor(l3, flightDataList, byFlightData);
     const candidates = existing ? [] : bindCandidatesFor(line, flightDataList, liveStrips);
     let action = 'CREATE';
@@ -334,6 +353,7 @@ function analyseAto({ text, flightDataList, liveStrips, nowUtc }) {
       callsignRaw: l3.extras.ato.callsignRaw,
       atoCallsign,
       seedable: !!line.callsign,
+      ...(line.carrier ? { carrier: line.carrier } : {}), // absent = a land-based line (docs/adr/0109)
       action,
       bindCandidates: candidates,
       existingFlightDataId: line.existingFlightDataId,

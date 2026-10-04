@@ -42,13 +42,13 @@ function quietly(fn) {
   try { return { value: fn(), warns: cap.records.filter(r => r.level === 'warn').map(r => r.line) }; } finally { cap.stop(); }
 }
 
-test('with only the shipped file the defaults apply: 30-day log, 30-day metrics, 400-day count, INCIRLIK -> LTAG', () => {
+test('with only the shipped file the defaults apply: 30-day log, 30-day metrics, 400-day count, INCIRLIK -> LTAG, CARRIER -> UNION', () => {
   // The module-level load happened with only the shipped copy in config/.
   const c = getInstrumentationConfig();
   assert.deepEqual(c, {
     mutationLog: { retentionDays: 30 },
     metrics: { retentionDays: 30 },
-    trafficCount: { retentionDays: 400, homeAirports: { INCIRLIK: ['LTAG'] } },
+    trafficCount: { retentionDays: 400, homeAirports: { INCIRLIK: ['LTAG'], CARRIER: ['UNION'] } },
   });
   assert.deepEqual(c, DEFAULT_INSTRUMENTATION_CONFIG);
 });

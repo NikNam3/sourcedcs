@@ -1381,6 +1381,12 @@ line does not stop the others.
 - **ATO first, filed later.** When `OPS` types the callsign of an ATO flight that has no ATC Strip, the
   toolbar offers "file against ATO mission <msn>"; the DEPARTURE is then the same flight with the same
   code.
+- **Carrier missions** (`adr/0109`). A line whose DEPLOC or ARRLOC names the carrier (`UNION`, `CVN-72`, `USS UNION`)
+  is a carrier mission: it gets its MISSION line like any other, and the preview and the flight record the hull and
+  whether it departs from and/or recovers on it. When `CV_MARSHAL` then creates the **launch** with that callsign, the
+  launch is the same flight (same code, the line's plan, MARSA and military Blocks) and says "launches against its ATO
+  mission". If two lines share the callsign, or the flight already has a Strip, it is a new flight. Import the ATO after
+  the launch exists and the line binds to the launched flight by callsign, as for a land departure.
 
 **The AR badge.** `AR SHELL71` on a receiver, `AR ×2` on the tanker. Select any of them and the others
 are highlighted (per client). **It is not MARSA** and declares nothing, separates nothing and changes no
@@ -1485,7 +1491,10 @@ and **PATTERN** (in the visual pattern, then recovered). The consolidation is `C
   into a lane Bay does not do it; the button does** (the drag is refused with the button's name). The one
   allowed drag is a **bolter**: drag it to the Bolter Bay and the next step brings it back on final.
 - **FINAL has nothing to type.** Its identity Blocks are derived and Block 5 is off its map.
-- A launch, a trap and a recovered pattern flight each count once in the traffic count (§10).
+- A launch, a trap and a recovered pattern flight each count once in the traffic count (§10). The ship is the CARRIER
+  Facility's home field (`UNION` in `config/efsp-instrumentation.json`): a launch whose ATO line (or plan) recovers on the
+  ship is **local**, one that recovers at Incirlik is **transient**, and one with no plan or ATO line is **unknown**
+  (`adr/0109`). The ATO line carries the carrier mission's hull (§8I).
 - **Not walked against a real DCS ship**: the banner reads "hull not found" until a hull track exists; the
   deck-state board (`cv-prifly-deck`) is inert; two hulls were not tried.
 

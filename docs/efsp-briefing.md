@@ -683,6 +683,12 @@ candidates, plan, tasking, AR links, execution, the H68 whole-day date shift), `
 (H60: every vowel, leading one included, back to front; unfittable returns `null`, which differs from
 miztoyaml on that one edge), `efsp-ato-preview` / `efsp-ato-mutation` on the wire, and on the client
 `ato-import.js`, `ato-strip.js` and the OPS "file against ATO mission" picker in `efsp-panel.js`.
+- **Carrier flights have ATO lines (H109, `0109`).** `ato-board.js` `carrierOf` marks a line whose DEPLOC/ARRLOC names a hull
+  (`carrier/hull-config.js` `hullForLocation`, `hullCode`): `flightData.ato.carrier` and the preview line's `carrier`
+  (`{ hullId, hullCode, departs, recovers }`; the key is absent for land lines). `carrier/ato-bind.js` `atoFlightForLaunch`,
+  called in `board/ops/create-strip.js`, binds a MARSHAL/LAUNCH `CreateStrip` made from `flightData` to the one ATO flight with that callsign
+  that has a live MISSION line and no other live Strip (warning `BOUND_TO_ATO`). `traffic-count.js` `classifyLocality(..., { preDropState })`
+  treats the hull as the CARRIER Facility's home field (`homeAirports.CARRIER = ["UNION"]`). Tests: `efsp-scenario-carrier-ato.test.mjs`.
 - **The ATO's values live on the flight data through one setter, `flightDataStore.applyAtoTasking`**, never through
   `WRITABLE_PATHS`/`setField`: that would reopen D24 and mark ATO values as controller-typed. It may
   write only `scl`, `arInfo` and `alertStatus` (`NONE`/`ALERT`) under `military`.
@@ -1226,7 +1232,7 @@ the hard-coded 18,000 ft (TA); the `tools/miztoyaml` frequency bug (L25).
 | **Incirlik RSU/SFA/PAR:** a PAR vacated with an aircraft on final leaves the Strip with AP where AP cannot advance it; an airspace approval that rewrites a flight's frequency desyncs its SFA Rack; the FINAL panel has never seen a live DCS track; its thresholds and the placeholder frequencies are `[SOURCE-DEFINED]` | medium | human live check / L20 | L18S |
 | One `LINGERING_TRACK` in the 240-minute soak at wave 2: it did not reproduce for L19 (20 seeds at 240 min, 6 at 480), so the fix is unit-tested only. Known limit: a DCS re-mint of a lingering aircraft under a new track id is a new contact to the reconciler; a callsign memory with a position test is not built | watch | next soak run | L27, L19 |
 | The 4-hour soak's heap gates (net growth 25%, H72) need the human's workflow run; they are judged only on runs of 3 h or more with a 2 h warm-up; the unloaded p50 <= 3 ms was only measured as a proxy | acceptance | human | L24, L27, SOAKW |
-| **Merge-time decisions in the questions file** (`docs/parallel/questions-round3.md`): the archive against 1.5–3 h sorties (a returning flight loses its flight data, ATO line, MARSA and `military` Blocks; Q3-2): decided, H107, 12 h, `0107`, a DCS crash or mission restart with live Strips (Q3-4: decided H108, the Board is cleared, `0108`), carrier flights with no path into the ATO, traffic count or home-airport rule (Q3-6) | decision | human | L24, F3, L17 |
+| **Merge-time decisions in the questions file** (`docs/parallel/questions-round3.md`): the archive against 1.5–3 h sorties (a returning flight loses its flight data, ATO line, MARSA and `military` Blocks; Q3-2): decided, H107, 12 h, `0107`, a DCS crash or mission restart with live Strips (Q3-4: decided H108, the Board is cleared, `0108`), carrier flights with no path into the ATO, traffic count or home-airport rule (Q3-6): decided, H109, `0109` | decision | human | L24, F3, L17 |
 | `grpc-client.js:764` `windFrom = heading·180/π + 270` is unexplained and the DCS wind vector may be grid, not true (about -2° at Incirlik): needs a live check against the mission editor's wind. The ATIS-wind frame follows it | needs a live check | human | F2, S-F2b |
 | Six theaters have no `tmCentralMeridianDeg` (TheChannel, MarianaIslandsWWII, Kola, Afghanistan, Iraq, GermanyCW): their grid headings cannot be converted; `tools/miztoyaml/projection.py` needs the same table and a test keeping the two equal | theater work | unowned | F2 |
 | Whether DCS-gRPC sends `mission_start` to a stream that connects *after* the mission started (if so every crc-sync restart rolls the mission session; since `0108` a same-mission roll clears the Board only when the clock steps back too); a real `.miz` restart through DCS, to see the clear happen | needs a live check | human | F3, S-F3 |

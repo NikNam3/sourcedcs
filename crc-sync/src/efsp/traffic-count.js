@@ -130,6 +130,9 @@ function countability(before, after) {
   return { counted: false, excludedReason: EXCLUDED_WHEN_NOT_COUNTABLE[stripType] || 'UNCLASSIFIED_STRIP_TYPE' };
 }
 
+// The carrier family (authority/strip-types/marshal.js): a hull's own Strips.
+const CARRIER_STRIP_TYPES = new Set(['MARSHAL', 'FINAL', 'PATTERN']);
+
 function _code(v) { return typeof v === 'string' ? v.trim().toUpperCase() : ''; }
 
 /**
@@ -139,7 +142,7 @@ function _code(v) { return typeof v === 'string' ? v.trim().toUpperCase() : ''; 
  * for. `identity.homeStation` is deliberately NOT used — it is the unit's
  * home, not the field's.
  */
-function classifyLocality(strip, flightData, homeAirports) {
+function classifyLocality(strip, flightData, homeAirports, opts) {
   if (strip && strip.stripType === 'OVERFLIGHT') return { locality: 'TRANSIENT', localityBasis: 'OVERFLIGHT' };
   if (strip && strip.stripType === 'ARRIVAL' && strip.previousLeg) return { locality: 'LOCAL', localityBasis: 'CONVERTED_ARRIVAL' };
   const home = new Set((homeAirports || []).map(_code).filter(Boolean));
@@ -150,8 +153,22 @@ function classifyLocality(strip, flightData, homeAirports) {
     if (!origin) return { locality: 'UNKNOWN', localityBasis: 'NO_AIRPORT_DATA' };
     return { locality: home.has(origin) ? 'LOCAL' : 'TRANSIENT', localityBasis: 'AIRPORTS' };
   }
-  const dep = _code(filed.departureAirport);
-  const dest = _code(filed.destinationAirport);
+  let dep = _code(filed.departureAirport);
+  let dest = _code(filed.destinationAirport);
+  if (strip && CARRIER_STRIP_TYPES.has(strip.stripType)) {
+    // docs/adr/0109: the ship is the field. A carrier Strip knows one end by itself: a launch departs
+    // this hull, and a recovery (a Strip that was not a launch) lands on it. The other end is the filed
+    // plan's, else the flight's ATO line (a hull is its code, a field its ATO location), else unknown.
+    const hull = _code([...home][0]);
+    const launch = !!(opts && opts.preDropState === 'LAUNCH');
+    const ato = (flightData && flightData.ato) || {};
+    const car = ato.carrier || null;
+    const atoEnd = (place, onHull) => (onHull && car ? _code(car.hullCode) : _code(place && place.location));
+    if (launch) dep = hull;
+    else dest = hull;
+    if (!dep) dep = atoEnd(ato.departure, car && car.departs);
+    if (!dest) dest = atoEnd(ato.recovery, car && car.recovers);
+  }
   if (!dep || !dest) return { locality: 'UNKNOWN', localityBasis: 'NO_AIRPORT_DATA' };
   return { locality: home.has(dep) && home.has(dest) ? 'LOCAL' : 'TRANSIENT', localityBasis: 'AIRPORTS' };
 }
@@ -540,7 +557,7 @@ class TrafficCount {
     // The flight data that is gone (archived after the drop — wave 2's L24, S-R2-13)
     // leaves nothing to classify by: UNKNOWN, and say why.
     const { locality, localityBasis } = flightData
-      ? classifyLocality(strip, flightData, this._homeAirports[facilityId])
+      ? classifyLocality(strip, flightData, this._homeAirports[facilityId], { preDropState: entry.before && entry.before.state })
       : { locality: 'UNKNOWN', localityBasis: 'ARCHIVED' };
     const scramble = this._scramble.has(entry.stripId) || !!(flightData && flightData.military && flightData.military.alertStatus === 'SCRAMBLE');
     return {

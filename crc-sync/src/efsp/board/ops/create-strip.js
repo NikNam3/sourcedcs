@@ -3,6 +3,7 @@
 const crypto = require('crypto');
 const { newFlags } = require('../strip-util');
 const { warn } = require('../../warnings');
+const { atoFlightForLaunch } = require('../../carrier/ato-bind');
 
 function _applyCreateStrip(ctx, op, actingPositionId, by) {
   // A Strip in a Bay this Facility does not have is invisible on every
@@ -35,6 +36,14 @@ function _applyCreateStrip(ctx, op, actingPositionId, by) {
   // this one op. It also keeps the reverse direction free — WP7's ATO-first
   // case is this same op with a different strip type and acting Position.
   let created;
+  // docs/adr/0109: a carrier launch typed by callsign meets its ATO mission line when exactly one
+  // waits for it, as OPS's ATO-first picker does for a land departure.
+  let atoBound = null;
+  if (stripType === 'MARSHAL' && (op.initialState || ctx.initialStateFor(stripType)) === 'LAUNCH'
+      && (op.flightDataId === undefined || op.flightDataId === null) && op.flightData) {
+    atoBound = atoFlightForLaunch(ctx, op.flightData);
+    if (atoBound) op = { ...op, flightData: undefined, flightDataId: atoBound.flightDataId };
+  }
   if (op.flightDataId !== undefined && op.flightDataId !== null) {
     if (op.flightData) {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: 'CreateStrip takes either flightData (a new flight) or flightDataId (an existing one), not both' };
@@ -121,10 +130,14 @@ function _applyCreateStrip(ctx, op, actingPositionId, by) {
   // Marshal stack at the next free slot. The Marshal re-sequences with one
   // Move; a full stack is a warning, not a refusal of the check-in.
   let warnings;
+  if (atoBound) {
+    const msn = (atoBound.ato && atoBound.ato.missionNumber) || (atoBound.mission && atoBound.mission.missionNumber) || '?';
+    warnings = [warn('BOUND_TO_ATO', `${atoBound.identity.callsign} launches against its ATO mission ${msn}`)];
+  }
   let carrierChanged;
   if (stripType === 'MARSHAL' && strip.state === 'IN_STACK') {
     const a = ctx.rules.carrierAppendFlight(strip.flightDataId, { by, actingPositionId });
-    if (a && a.ok === false) warnings = [warn('NOT_IN_MARSHAL_STACK', `not in the Marshal stack: ${a.detail || a.reason}`)];
+    if (a && a.ok === false) warnings = [...(warnings || []), warn('NOT_IN_MARSHAL_STACK', `not in the Marshal stack: ${a.detail || a.reason}`)];
     else if (a && a.changed && a.changed.length) carrierChanged = true;
   }
   return { ok: true, strip, flightData: created.flightData, warnings, carrierChanged };

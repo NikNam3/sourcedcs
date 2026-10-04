@@ -63,4 +63,28 @@ function radarIsHull(hullId, radar) {
   return !!hull.match.type && radar.shipType === hull.match.type;
 }
 
-module.exports = { getHulls, getHull, getDefaultHull, radarIsHull };
+function _key(s) { return String(s == null ? '' : s).toUpperCase().replace(/[^A-Z0-9]/g, ''); }
+
+/**
+ * Which configured hull does a USMTF location (an ATO's DEPLOC/ARRLOC text) name?
+ * A hull is named by its DCS unit name (UNION), its id (CVN-72), its label or its type (CVN_72),
+ * on its own or as one word of the text ("USS UNION"); case, spaces, hyphens and underscores do
+ * not matter. An airfield code never matches. `hullList` is for a caller that already holds the
+ * hulls (the pure ATO module is handed them, docs/adr/0109). Returns a copy or null.
+ */
+function hullForLocation(text, hullList) {
+  const list = hullList || hulls();
+  const raw = String(text == null ? '' : text).trim();
+  if (!raw) return null;
+  const words = new Set([_key(raw), ...raw.split(/[\s,;/]+/).map(_key).filter(Boolean)]);
+  for (const h of list) {
+    const keys = [h.hullId, h.label, h.match && h.match.unitName, h.match && h.match.type].map(_key).filter(Boolean);
+    if (keys.some((k) => words.has(k))) return JSON.parse(JSON.stringify(h));
+  }
+  return null;
+}
+
+/** The code a hull goes by in the traffic count and on an ATO line: its DCS unit name, else its id. */
+function hullCode(hull) { return hull ? String((hull.match && hull.match.unitName) || hull.hullId).toUpperCase() : null; }
+
+module.exports = { getHulls, getHull, getDefaultHull, radarIsHull, hullForLocation, hullCode };

@@ -4,6 +4,6 @@
   "metrics":      { "retentionDays": 30 },
   "trafficCount": {
     "retentionDays": 400,
-    "homeAirports": { "INCIRLIK": ["LTAG"] }
+    "homeAirports": { "INCIRLIK": ["LTAG"], "CARRIER": ["UNION"] }
   }
 }
