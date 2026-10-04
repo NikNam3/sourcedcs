@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  combinationLine, combinationOf, formatFrequencies, luawInUse, offerStands, offerText,
+  combinationLine, combinationOf, formatFrequencies, hatRows, luawInUse, nonLocalCitation, vacatedBetween,
 } from '../app/public/js/panels/efsp/combination-rules.js';
 
 // crc-sync docs/adr/0105 (H104): the words and the rules behind the COMBINED line, the offer and the frequencies.
@@ -43,12 +43,83 @@ test('LUAW is in use while a DEPARTURE is in RUNWAY_QUEUE or LUAW at the Facilit
   assert.equal(luawInUse([{ stripType: 'DEPARTURE', state: 'LUAW', facilityId: 'CENTER' }], 'INCIRLIK'), false);
 });
 
-test('the offer reads "Take GC as well?" and lapses once GC has a Primary or is taken', () => {
-  const offer = { facilityId: 'INCIRLIK', offer: 'GC', count: 3 };
-  assert.equal(offerText(offer), 'GC is unstaffed with 3 Strips. Take GC as well?');
-  assert.equal(offerText({ ...offer, count: 1 }), 'GC is unstaffed with 1 Strip. Take GC as well?');
-  assert.equal(offerStands(offer, [{ positionId: 'GC', primary: null }], ['LC']), true);
-  assert.equal(offerStands(offer, [{ positionId: 'GC', primary: { controllerId: 'x' } }], ['LC']), false);
-  assert.equal(offerStands(offer, [{ positionId: 'GC', primary: null }], ['LC', 'GC']), false);
-  assert.equal(offerStands(null, [], []), false);
+test('AP, SFA and PAR cite the radar-approach paragraph, OPS, CD and GC the reduced-traffic one', () => {
+  assert.match(nonLocalCitation(['GC']), /¶2-6-5b/);
+  assert.match(nonLocalCitation(['CD']), /¶2-6-5b/);
+  assert.match(nonLocalCitation(['OPS']), /¶2-6-5b/);
+  for (const id of ['AP', 'SFA', 'PAR']) { assert.match(nonLocalCitation([id]), /¶2-6-12/); assert.doesNotMatch(nonLocalCitation([id]), /¶2-6-5b/); }
+  assert.match(nonLocalCitation(['GC', 'AP']), /¶2-6-5b.*¶2-6-12/);
+  const ap = { positionId: 'AP', primary: { controllerId: 'a' }, combinedWith: ['LC'] };
+  assert.match(combinationLine(combinationOf([ap, { ...LC, combinedWith: ['AP'] }], ['AP', 'LC']), false).text, /COMBINED LC \+ AP.*¶2-6-12/);
+});
+
+// ADR 0110: the hat rows. `self` decides who is Primary; the offers are the server's, standing on each Position entry.
+const strip = (owner, extra = {}) => ({ stripId: `s-${owner}-${Math.random()}`, ownerPositionId: owner, state: 'CLEARED', stripType: 'DEPARTURE', ...extra });
+const ap = (offers) => ({ positionId: 'AP', facilityId: 'INCIRLIK', primary: { controllerId: 'me' }, observers: [], hatOffers: offers });
+const lcGone = { positionId: 'LC', facilityId: 'INCIRLIK', primary: null, observers: [], hatOffers: [] };
+
+test('a hat row is made for the Primary of the Position the offer is on, with the count and callsigns', () => {
+  const strips = [strip('LC'), strip('LC'), strip('LC', { state: 'DROPPED' })];
+  const rows = hatRows([ap([{ positionId: 'LC', count: 2, onRunway: 0, observersFirst: false }]), lcGone], 'me', strips, ['AP'],
+    { callsignOf: (s) => 'VIPER1' });
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].kind, 'take');
+  assert.equal(rows[0].positionId, 'LC');
+  assert.match(rows[0].text, /^LC is unstaffed with 2 Strips \(VIPER1, VIPER1\)\. Take LC as well\?/);
+  assert.match(rows[0].text, /¶2-6-12/, 'the preview of the combination it would make');
+  assert.equal(rows[0].severe, false);
+  assert.equal(rows[0].label, 'Take LC');
+});
+
+test('an Observer of the offered-to Position, or another controller, is never offered the hat', () => {
+  const offer = [{ positionId: 'LC', count: 1, onRunway: 0, observersFirst: false }];
+  const asObserver = { ...ap(offer), primary: { controllerId: 'x' }, observers: [{ controllerId: 'me' }] };
+  assert.deepEqual(hatRows([asObserver, lcGone], 'me', [strip('LC')], []), []);
+  assert.deepEqual(hatRows([ap(offer), lcGone], 'someone-else', [strip('LC')], ['AP']), []);
+  assert.deepEqual(hatRows([ap(offer), lcGone], null, [strip('LC')], ['AP']), [], 'no self yet: no row');
+});
+
+test('an offer is severe when a Strip is on the runway, and says so', () => {
+  const rows = hatRows([ap([{ positionId: 'LC', count: 2, onRunway: 1, observersFirst: false }]), lcGone], 'me', [strip('LC'), strip('LC')], ['AP']);
+  assert.equal(rows[0].severe, true);
+  assert.match(rows[0].text, /1 on the runway/);
+  assert.match(rows[0].text, /¶2-6-5c/);
+});
+
+test('GC offered to LC\'s Primary cites ¶2-6-5b, and CD to GC\'s Primary (no LC) carries no combination warning', () => {
+  const lc = { positionId: 'LC', facilityId: 'INCIRLIK', primary: { controllerId: 'me' }, observers: [], hatOffers: [{ positionId: 'GC', count: 3, onRunway: 0, observersFirst: false }] };
+  const [gc] = hatRows([lc], 'me', [strip('GC'), strip('GC'), strip('GC')], ['LC'], { callsignOf: () => 'X' });
+  assert.match(gc.text, /^GC is unstaffed with 3 Strips \(X, X, X\)\. Take GC as well\? Combined with LC: only at significantly reduced traffic \(JO 7210\.3 ¶2-6-5b\)\./);
+  const gcP = { positionId: 'GC', facilityId: 'INCIRLIK', primary: { controllerId: 'me' }, observers: [], hatOffers: [{ positionId: 'CD', count: 1, onRunway: 0, observersFirst: false }] };
+  const [cd] = hatRows([gcP], 'me', [strip('CD')], ['GC'], { callsignOf: () => 'X' });
+  assert.equal(cd.text, 'CD is unstaffed with 1 Strip (X). Take CD as well?');
+  assert.doesNotMatch(cd.text, /¶/);
+});
+
+test('an Observer of a Position with no Primary and Strips is asked "Take it?"; with no Strips, or once it has a Primary, not', () => {
+  const obs = { positionId: 'LC', facilityId: 'INCIRLIK', primary: null, observers: [{ controllerId: 'me' }], hatOffers: [] };
+  const rows = hatRows([obs], 'me', [strip('LC')], ['GC']);
+  assert.equal(rows[0].kind, 'observer');
+  assert.match(rows[0].text, /^LC has no Primary and 1 Strip/);
+  assert.deepEqual(hatRows([obs], 'me', [], ['GC']), []);
+  assert.deepEqual(hatRows([{ ...obs, primary: { controllerId: 'x' } }], 'me', [strip('LC')], ['GC']), []);
+});
+
+test('"Not now" and a self-vacated Position hide a row until its count or runway count grows', () => {
+  const offer = (count, onRunway = 0) => [ap([{ positionId: 'LC', count, onRunway, observersFirst: false }]), lcGone];
+  const strips = (n) => Array.from({ length: n }, () => strip('LC'));
+  const hidden = new Map([['LC', { count: 2, onRunway: 0 }]]);
+  assert.equal(hatRows(offer(2), 'me', strips(2), ['AP'], { hidden }).length, 0);
+  assert.equal(hatRows(offer(1), 'me', strips(1), ['AP'], { hidden }).length, 0, 'shrinking does not bring it back');
+  assert.equal(hatRows(offer(3), 'me', strips(3), ['AP'], { hidden }).length, 1, 'a new Strip does');
+  assert.equal(hatRows(offer(2, 1), 'me', strips(2), ['AP'], { hidden }).length, 1, 'a Strip onto the runway does');
+});
+
+test('an offer for a Position this controller already holds is not shown', () => {
+  assert.deepEqual(hatRows([ap([{ positionId: 'LC', count: 1, onRunway: 0, observersFirst: false }])], 'me', [strip('LC')], ['AP', 'LC']), []);
+});
+
+test('vacatedBetween names what the controller left', () => {
+  assert.deepEqual(vacatedBetween({ INCIRLIK: ['LC', 'GC'] }, { INCIRLIK: ['LC'] }), ['GC']);
+  assert.deepEqual(vacatedBetween({}, { INCIRLIK: ['LC'] }), []);
 });

@@ -1846,12 +1846,13 @@
 #efsp-undo-slot.efsp-undo-refused { color: #ff5c5c; }
 .efsp-undo-voided-msg { color: #e0a83c; cursor: pointer; padding: 1px 0; }
 
-/* crc-sync docs/adr/0105: LC combined with GC/CD, the offer to take GC, and a Position's frequencies. */
+/* crc-sync docs/adr/0105, 0110: LC combined with a non-local Position, the standing offers to take a hat, and a Position's frequencies. */
 #efsp-combination { font-size: 11px; padding: 4px 8px; border-top: 1px solid #2a3038; }
 #efsp-combination[hidden] { display: none; }
 .efsp-combination-line { color: #e0a83c; }
 .efsp-combination-line.efsp-combination-severe { color: #ff7a59; font-weight: 600; }
-.efsp-position-offer { color: #9fb3c8; display: flex; gap: 6px; align-items: center; padding: 2px 0; }
+.efsp-position-offer { color: #9fb3c8; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 2px 0; }
+.efsp-position-offer.efsp-combination-severe { color: #ff7a59; font-weight: 600; }
 .efsp-position-offer button { font: inherit; color: #e6edf3; background: #2a3441; border: 1px solid #44566b; border-radius: 3px; padding: 2px 8px; cursor: pointer; }
 .efsp-tab-freq { margin-left: 6px; font-size: 10px; opacity: 0.7; }
 .efsp-position-tab-combined { box-shadow: inset 0 -2px 0 #e0a83c; }

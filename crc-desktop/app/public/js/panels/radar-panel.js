@@ -276,11 +276,13 @@ export function renderPositionWarnings(warnings) {
   if (!_positionWarningsEl) return;
   const $el = _positionWarningsEl;
   if (!warnings || warnings.length === 0) { $el.textContent = ''; return; }
-  $el.textContent = warnings.map(w =>
-    w.routedTo
-      ? `${w.count} Strip(s) from ${w.positionId} routed to ${w.routedTo}`
-      : `${w.count} Strip(s) from ${w.positionId} stay with ${w.positionId} until someone signs on to it`
-  ).join(' · ');
+  $el.textContent = warnings.map(w => {
+    if (w.routedTo) return `${w.count} Strip(s) from ${w.positionId} routed to ${w.routedTo}`; // a TACTICAL hand-back
+    const runway = w.onRunway ? ` (${w.onRunway} on the runway)` : '';
+    return w.offeredTo
+      ? `${w.count} Strip(s)${runway} stay with ${w.positionId}; ${w.offeredTo} is offered ${w.positionId} (nobody has taken it yet)`
+      : `${w.count} Strip(s)${runway} stay with ${w.positionId} until someone signs on to it (nobody is offered it)`;
+  }).join(' · ');
 }
 
 // Updates the topbar Panels-control button's badge (number of active radars)

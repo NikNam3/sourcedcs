@@ -18,7 +18,6 @@ import {
 } from './efsp-panel.js';
 import { onAtoPreviewResult } from './ato-import.js';
 import { noteUndoAck, noteUndoBoardEpoch, noteUndoVoided, reconcileUndoSlotEpoch } from './panel/undo-slot.js';
-import { noteEfspPositionOffer } from './panel/combination.js';
 
 // The handlers of the EFSP message families whose state lives in bay-view.js / efsp-panel.js / efsp-state.js
 // (CMSG): Board, correlation, MARSA, alerts, SFA, ATO import, positions, resync. They moved here out of app.js's
@@ -120,11 +119,6 @@ registerEfspMessage('efsp-positions-ack', (msg) => {
   renderPositionControls();
   renderPositionWarnings(msg.warnings);
   markEfspChanged('positions');
-});
-
-// crc-sync docs/adr/0105 (H104): GC signed off holding Strips while this controller is LC's Primary: offered GC as well.
-registerEfspMessage('efsp-position-offer', (msg) => {
-  noteEfspPositionOffer(msg);
 });
 
 // WP5 (crc-sync's docs/adr/0045) — changed correlation records, once

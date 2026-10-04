@@ -239,13 +239,14 @@ const MUTATION_WARNING_MESSAGES = {
   DUPLICATE_IGNORED_WARNING: 'Duplicate beacon code — assigned anyway, per policy',
   NOT_IN_ACTIVE_AIRSPACE: 'Marked entered, but the flight is not inside an airspace active for you: the regime is now effective anyway (crc-sync docs/adr/0102)',
   LUAW_WHILE_COMBINED: LUAW_WHILE_COMBINED_TEXT, // crc-sync docs/adr/0105
+  UNSTAFFED_RECEIVER: 'The receiving Position is unstaffed: it has been offered to another controller', // docs/adr/0110; the server's detail (names both) wins
 };
 
 // `warning` is a text or code (the airspace panel's), or the ack's list of { code, detail? }: each one is shown.
 export function _showMutationWarning(warning) {
   if (!_mutationWarningEl) return;
   clearTimeout(_mutationWarningClearTimer);
-  const text = (w) => (typeof w === 'string' ? (MUTATION_WARNING_MESSAGES[w] || w) : (MUTATION_WARNING_MESSAGES[w.code] || w.detail || w.code));
+  const text = (w) => (typeof w === 'string' ? (MUTATION_WARNING_MESSAGES[w] || w) : (w.code === 'UNSTAFFED_RECEIVER' && w.detail ? w.detail : (MUTATION_WARNING_MESSAGES[w.code] || w.detail || w.code)));
   _mutationWarningEl.textContent = Array.isArray(warning) ? warning.map(text).join(' · ') : text(warning);
   _mutationWarningClearTimer = setTimeout(() => { _mutationWarningEl.textContent = ''; }, 6000);
 }
