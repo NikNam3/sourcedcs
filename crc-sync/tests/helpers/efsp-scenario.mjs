@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import crypto from 'crypto';
+import fs from 'fs';
 
 // Shared harness for the end-to-end sortie walks. Deliberately takes the
 // `efsp` facade as a parameter rather than importing it: every scenario file
@@ -28,6 +29,20 @@ export async function lapseNlaGuard(wallClock) {
   if (wallClock && wallClock.step) wallClock.step(NLA_DOUBLE_TAP_MS + 10);
   else await new Promise(resolve => setTimeout(resolve, NLA_DOUBLE_TAP_MS + 10));
 }
+
+/**
+ * A fresh EFSP over an emptied Board snapshot, with one controller per Position of `staffed` (Position -> Facility).
+ * `createEfsp` is a parameter for the reason this file imports no src: each scenario sets its env paths first.
+ * The snapshot path comes from CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH, like the scenario's own.
+ */
+export function freshEfsp(createEfsp, staffed, opts) {
+  fs.rmSync(process.env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH, { force: true });
+  const efsp = createEfsp(opts);
+  return { efsp, c: crew(efsp, staffed) };
+}
+
+/** A Strip re-read at its current rev (every op bumps it), from the Board of its Facility (default INCIRLIK). */
+export const freshStrip = (efsp, strip, facilityId = strip.facilityId || 'INCIRLIK') => efsp.boardStoreFor(facilityId).getStrip(strip.stripId);
 
 /** One controller per Position, each declaring what it holds the way a real client does. */
 export function crew(efsp, spec) {

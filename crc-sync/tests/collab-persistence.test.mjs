@@ -11,6 +11,7 @@ import os from 'node:os';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import crcLog from '../src/log.js';
+import { sleep, until } from './helpers/wait.mjs';
 
 const require = createRequire(import.meta.url);
 const grpc = require('@grpc/grpc-js');
@@ -20,14 +21,6 @@ const missionPkg = grpc.loadPackageDefinition(protoLoader.loadSync(
   path.join(ROOT, 'dcs/mission/v0/mission.proto'), { keepCase: true, includeDirs: [ROOT] }));
 const missionDef = missionPkg.dcs.mission.v0.MissionService.service;
 
-const sleep = (ms) => new Promise(r => setTimeout(r, ms));
-async function until(pred, ms = 4000) {
-  const end = Date.now() + ms;
-  while (!pred()) {
-    if (Date.now() > end) throw new Error('timed out waiting');
-    await sleep(10);
-  }
-}
 
 // ── fake DCS-gRPC: whatever `fake.units` holds is streamed on each StreamUnits ──
 const fake = { units: [], calls: [] };

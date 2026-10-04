@@ -5,6 +5,7 @@ import { createRequire } from 'module';
 import WsHub from '../src/ws-hub.js';
 import TrackStore from '../src/tracks.js';
 import CollaborativeStore from '../src/collab-store.js';
+import { fakeWs } from './helpers/ws.mjs';
 
 /* docs/adr/0085: the theater's facts on the server, on the wire, and on the
  * client. The client half (crc-desktop/app/public/js/magnetic.js) is loaded
@@ -101,11 +102,6 @@ test('the date moves variation: a new mission day, or the first mission sample a
 
 // ── the wire ─────────────────────────────────────────────────────────────
 
-const OPEN = 1;
-function fakeWs() {
-  const sent = [];
-  return { readyState: OPEN, send: (raw) => sent.push(JSON.parse(raw)), sent, on() {} };
-}
 function hubWith(theater) {
   return new WsHub({ trackStore: new TrackStore(), collabStore: new CollaborativeStore(), theater });
 }

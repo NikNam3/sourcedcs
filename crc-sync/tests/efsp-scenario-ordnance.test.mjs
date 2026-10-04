@@ -30,14 +30,14 @@ fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, '{}');
 
 const { createEfsp } = await import('../src/efsp/index.js');
 const { hungOrdnanceAdvisoryFor } = await import('../src/efsp/runway-status.js');
-const { crew, act, mustAct, jumpTo, advance, DEPARTURE_FLIGHT_DATA } = await import('./helpers/efsp-scenario.mjs');
+const { crew, act, mustAct, jumpTo, advance, freshStrip, DEPARTURE_FLIGHT_DATA } = await import('./helpers/efsp-scenario.mjs');
 
 const efsp = createEfsp();
 const c = crew(efsp, {
   OPS: 'INCIRLIK', CD: 'INCIRLIK', GC: 'INCIRLIK', LC: 'INCIRLIK', AP: 'INCIRLIK', CTR: 'CENTER', TAC_C2: 'TACTICAL',
 });
 
-const fresh = (s) => efsp.boardStoreFor(s.facilityId || 'INCIRLIK').getStrip(s.stripId);
+const fresh = (s) => freshStrip(efsp, s);
 const flightDataOf = (s) => efsp.flightDataStore.getFlightData(s.flightDataId);
 const runwayStatus = () => efsp.runwayStatusStore.getRunwayStatus('INCIRLIK');
 const advisory = (s) => hungOrdnanceAdvisoryFor(fresh(s), flightDataOf(s), runwayStatus());

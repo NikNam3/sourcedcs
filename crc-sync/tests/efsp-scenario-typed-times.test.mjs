@@ -31,7 +31,7 @@ fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, '{}');
 const { createEfsp } = await import('../src/efsp/index.js');
 const facilityConfig = (await import('../src/efsp/facility-config.js')).createFacilityConfig();
 const { ForwardingObligationMonitor } = await import('../src/efsp/forwarding-obligations.js');
-const { crew, act, mustAct, jumpTo, advance, DEPARTURE_FLIGHT_DATA } = await import('./helpers/efsp-scenario.mjs');
+const { crew, act, mustAct, jumpTo, advance, freshStrip: fresh, DEPARTURE_FLIGHT_DATA } = await import('./helpers/efsp-scenario.mjs');
 
 const ATC = { OPS: 'INCIRLIK', CD: 'INCIRLIK', GC: 'INCIRLIK', LC: 'INCIRLIK', AP: 'INCIRLIK' };
 const MINUTE = 60 * 1000;
@@ -62,7 +62,6 @@ async function cleared(efsp, c, callsign) {
   return jumpTo(efsp, c.CD, 'CD', strip, 'CLEARED');
 }
 
-const fresh = (efsp, strip) => efsp.boardStoreFor('INCIRLIK').getStrip(strip.stripId);
 
 // ── 1. a typed void time expires ─────────────────────────────────────────
 

@@ -6,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { WebSocket } from 'ws';
 import crcLog from '../src/log.js';
+import { until } from './helpers/wait.mjs';
 
 // /api/airspace-registry/* through createApp (docs/adr/0098 §9): auth, validation, the three routes, an idempotent
 // replay, and a connected panel session receiving the delta and the calendar. Same temp-dir setup as app-boot.test.mjs.
@@ -167,7 +168,6 @@ function connect(c) {
   ws.on('message', (d) => frames.push(JSON.parse(d.toString())));
   return { ws, frames, ready: new Promise((res, rej) => { ws.on('open', res); ws.on('error', rej); }) };
 }
-async function until(pred, ms = 3000) { const end = Date.now() + ms; while (!pred()) { if (Date.now() > end) throw new Error('timed out'); await new Promise(r => setTimeout(r, 10)); } }
 
 test('a web edit reaches a connected panel as an efsp-airspace-delta; the calendar arrives on connect and on change', async (t) => {
   quiet(t);

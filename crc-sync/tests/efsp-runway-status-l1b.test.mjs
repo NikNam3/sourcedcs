@@ -5,17 +5,12 @@ import TrackStore from '../src/tracks.js';
 import CollaborativeStore from '../src/collab-store.js';
 import runwayStatus from '../src/efsp/runway-status.js';
 import permission from '../src/efsp/permission.js';
+import { fakeWs, OPEN } from './helpers/ws.mjs';
 
 // L1b's two server-side changes (docs/adr/0068): the public runway-status
 // broadcaster (decisions.md S-L1d) and the generic "runway works + inspection"
 // suspension that replaced the barrier change (decisions.md H52).
 
-const OPEN = 1; // WebSocket.OPEN
-
-function fakeWs(readyState = OPEN) {
-  const sent = [];
-  return { readyState, send: (raw) => sent.push(JSON.parse(raw)), sent };
-}
 
 test('broadcastEfspRunwayStatusDelta sends the same efsp-runway-status-delta a runway-status op returns, to every open client', () => {
   const hub = new WsHub({ trackStore: new TrackStore(), collabStore: new CollaborativeStore(), efsp: null });

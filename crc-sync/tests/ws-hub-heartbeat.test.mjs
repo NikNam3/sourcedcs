@@ -3,16 +3,11 @@ import assert from 'node:assert/strict';
 import WsHub from '../src/ws-hub.js';
 import TrackStore from '../src/tracks.js';
 import CollaborativeStore from '../src/collab-store.js';
+import { fakeWs } from './helpers/ws.mjs';
 
 // Narrowly scoped to the EFSP heartbeat message shape (guide §5.6 rule 5).
 // The picture itself is ws-hub-coverage.test.mjs.
 
-const OPEN = 1; // WebSocket.OPEN
-
-function fakeWs() {
-  const sent = [];
-  return { readyState: OPEN, send: (raw) => sent.push(JSON.parse(raw)), sent };
-}
 
 function fakeEfsp(currentSeq, boardsFor = (all) => all) {
   const all = { INCIRLIK: { seq: currentSeq, epoch: 'e-I' }, CENTER: { seq: currentSeq + 1, epoch: 'e-C' } };

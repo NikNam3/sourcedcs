@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import { fakeWs } from './helpers/ws.mjs';
 
 // B6 at the hub (docs/adr/0080): every path that carries EFSP state to a
 // session goes through the read scope. L8's J4 reaches only the resync; these
@@ -26,11 +27,6 @@ const CollaborativeStore = (await import('../src/collab-store.js')).default;
 const { createEfsp } = await import('../src/efsp/index.js');
 const { crew, mustAct, jumpTo, airborneDeparture, DEPARTURE_FLIGHT_DATA } = await import('./helpers/efsp-scenario.mjs');
 
-const OPEN = 1;
-const fakeWs = () => {
-  const sent = [];
-  return { readyState: OPEN, send: (raw) => sent.push(JSON.parse(raw)), on() {}, sent, of(type) { return sent.filter(m => m.type === type); } };
-};
 
 /** A hub over a fresh EFSP with TAC_C2 holding two lines, one handed to JTAC, and one Incirlik departure. */
 function world() {

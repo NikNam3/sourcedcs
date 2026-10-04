@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import { fakeWs } from './helpers/ws.mjs';
 
 // docs/adr/0100 §6 at the hub (S-UNDO0): an Undo's `efsp-undo-voided` goes, after the round trip's broadcasts, to
 // the sessions signed on to the voided Position and to nobody else, and respects the read scope (docs/adr/0080).
@@ -24,11 +25,6 @@ const CollaborativeStore = (await import('../src/collab-store.js')).default;
 const { createEfsp } = await import('../src/efsp/index.js');
 const { DEPARTURE_FLIGHT_DATA } = await import('./helpers/efsp-scenario.mjs');
 
-const OPEN = 1;
-const fakeWs = () => {
-  const sent = [];
-  return { readyState: OPEN, send: (raw) => sent.push(JSON.parse(raw)), on() {}, sent, of(type) { return sent.filter(m => m.type === type); } };
-};
 
 function world() {
   fs.rmSync(process.env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH, { force: true });
