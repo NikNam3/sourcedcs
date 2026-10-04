@@ -1,5 +1,5 @@
 'use strict';
-import { bearingDeg, haversineM } from '../geo.js';
+import { NM_M, bearingDeg, haversineM } from '../geo.js';
 import { magneticText } from '../magnetic.js';
 import { buildRangeRing, updateMap } from '../geojson.js';
 import { escapeHtml } from '../html-escape.js';
@@ -155,7 +155,7 @@ export function updateBullseyeCursor(e) {
 
   const rect   = map.getCanvas().getBoundingClientRect();
   const cursor = map.unproject([e.clientX - rect.left, e.clientY - rect.top]);
-  const distNm = haversineM(be.lat, be.lon, cursor.lat, cursor.lng) / 1852;
+  const distNm = haversineM(be.lat, be.lon, cursor.lat, cursor.lng) / NM_M;
   const hdg    = magneticText(bearingDeg(be.lat, be.lon, cursor.lat, cursor.lng), be.lat, be.lon);
 
   $cursorBra.textContent = `${hdg}/${Math.round(distNm).toString().padStart(3, '0')}`;
@@ -172,7 +172,7 @@ export function updateBullseyeCursor(e) {
 
 export function updateMeasureLine(lng1, lat1, lng2, lat2) {
   if (!mapReady) return;
-  const distNm  = Math.round(haversineM(lat1, lng1, lat2, lng2) / 1852);
+  const distNm  = Math.round(haversineM(lat1, lng1, lat2, lng2) / NM_M);
   const bearing = magneticText(bearingDeg(lat1, lng1, lat2, lng2), lat1, lng1);
   const label   = `${bearing} / ${distNm.toString().padStart(3,'0')}`;
   map.getSource('measure').setData({

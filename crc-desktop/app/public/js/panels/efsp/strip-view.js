@@ -206,7 +206,7 @@ function _coordinationExchange(strip) {
   if (chips.length) {
     const wrap = _stripEl('div', 'efsp-coordination-badges efsp-handoff-chips');
     for (const c of chips) {
-      const chip = _stripEl('span', `efsp-handoff-chip efsp-handoff-chip-${c.key} efsp-handoff-tone-${c.tone}${c.held ? ' efsp-handoff-held' : ''}`, c.text);
+      const chip = _stripEl('span', `efsp-handoff-chip efsp-handoff-chip-${c.key} efsp-handoff-tone-${c.tone}${c.mine ? ' efsp-handoff-mine' : ''}`, c.text);
       chip.title = c.title;
       chip.dataset.chip = c.key;
       wrap.appendChild(chip);

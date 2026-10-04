@@ -57,7 +57,7 @@ test('steps: after control moved only the comms step can remain; nothing before 
 test('chips: who holds comms and control, the release in effect, withdrawn, requested, refused, repaired', () => {
   const t = strip('TRANSFERRING');
   assert.deepEqual(R.handoffChips(t).map(c => c.text), ['COMMS: CTR', 'CTRL: CTR']);
-  assert.ok(R.handoffChips(t).every(c => c.held), 'CTR holds both');
+  assert.ok(R.handoffChips(t).every(c => c.mine), 'CTR holds both');
   const r = strip('RECEIVING', { comms: { transferred: true, at: NOW }, release: { scopes: ['TURNS', 'CLIMB'], climbLimitFt: 24000, condition: 'after DME', effectiveAt: null, grantedAt: NOW } });
   assert.deepEqual(R.handoffChips(r).map(c => c.text), ['COMMS: AP', 'CTRL: CTR', 'RELEASE: Turns + Climb ≤ 24000 ft · after DME']);
   const w = strip('RECEIVING', { release: { scopes: ['FULL'], condition: null, effectiveAt: null, withdrawnAt: NOW } });

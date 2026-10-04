@@ -5,6 +5,7 @@
 // tests/airspace-geometry.test.mjs exercises it. Points are `[lat, lon]` in WGS84 decimal degrees, the closing point is
 // never repeated.
 
+import { NM_M } from '../../geo.js';
 import { MAX_POLYGON_VERTICES, MAX_ROUTE_SEGMENTS, polygonSelfIntersects, deriveRouteEnvelope } from './airspace-validate.js';
 
 export const MIN_POLYGON_VERTICES = 3;
@@ -13,7 +14,6 @@ export const SIMPLIFY_TOLERANCE_NM = 0.1;
 export const CIRCLE_POINTS = 64;
 export const FRESHNESS_EPS_DEG = 1e-6;
 const NM_PER_DEG = 60;
-const M_PER_NM = 1852;
 const EARTH_R_M = 6371008.8;
 const rad = Math.PI / 180;
 
@@ -154,7 +154,7 @@ export function drawingLayer(d) { return (d && d.layerName) ? String(d.layerName
 
 /** The raw points of a drawing as an outline: circle and oval become 64 points, a rectangle its 4 corners. */
 function _rawRing(d) {
-  if (d.polygonMode === 'circle' && d.lat != null && d.lon != null && d.radius) return { points: circleToPolygon(d.lat, d.lon, d.radius), shape: `circle ${Math.round(d.radius / M_PER_NM)} NM`, rawCount: CIRCLE_POINTS };
+  if (d.polygonMode === 'circle' && d.lat != null && d.lon != null && d.radius) return { points: circleToPolygon(d.lat, d.lon, d.radius), shape: `circle ${Math.round(d.radius / NM_M)} NM`, rawCount: CIRCLE_POINTS };
   const pts = Array.isArray(d.points) ? d.points.filter(p => p && Number.isFinite(p.lat) && Number.isFinite(p.lon)).map(p => [p.lat, p.lon]) : [];
   const closed = d.closed || d.primitiveType === 'Polygon' || ['rect', 'oval', 'triangle'].includes(d.polygonMode);
   if (!closed || pts.length < MIN_POLYGON_VERTICES) return { points: null, shape: pts.length >= 2 ? 'open line' : 'no points', rawCount: pts.length };

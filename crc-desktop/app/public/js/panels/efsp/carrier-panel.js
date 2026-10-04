@@ -1,5 +1,5 @@
 'use strict';
-import { projectPos } from '../../geo.js';
+import { NM_M, projectPos } from '../../geo.js';
 import { correlatedTrackIdForStrip, getEfspStrip } from './efsp-state.js';
 import { CARRIER_HANDOFFS } from './efsp-nla.js';
 import {
@@ -392,14 +392,14 @@ export function buildCarrierFinalLine() {
   if (!s || !s.found || s.stale || s.headingRef !== 'TRUE' || !Number.isFinite(s.finalBearingDeg)
       || !Number.isFinite(s.lat) || !Number.isFinite(s.lon)) return empty;
   const out = (s.finalBearingDeg + 180) % 360;
-  const [endLat, endLon] = projectPos(s.lat, s.lon, out, CARRIER_FINAL_LINE_NM * 1852);
+  const [endLat, endLon] = projectPos(s.lat, s.lon, out, CARRIER_FINAL_LINE_NM * NM_M);
   const features = [{
     type: 'Feature',
     geometry: { type: 'LineString', coordinates: [[s.lon, s.lat], [endLon, endLat]] },
     properties: { kind: 'carrier-final', color: '#9ad1ff' },
   }];
   for (let nm = 5; nm < CARRIER_FINAL_LINE_NM; nm += 5) {
-    const [tLat, tLon] = projectPos(s.lat, s.lon, out, nm * 1852);
+    const [tLat, tLon] = projectPos(s.lat, s.lon, out, nm * NM_M);
     const [aLat, aLon] = projectPos(tLat, tLon, (out + 90) % 360, 600);
     const [bLat, bLon] = projectPos(tLat, tLon, (out + 270) % 360, 600);
     features.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: [[aLon, aLat], [bLon, bLat]] }, properties: { kind: 'carrier-final-tick', color: '#9ad1ff' } });

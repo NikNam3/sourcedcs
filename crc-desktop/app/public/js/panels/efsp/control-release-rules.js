@@ -66,7 +66,7 @@ export function requestSummary(req) {
 }
 
 /**
- * The standing lines a HANDOFF row carries after ACCEPT, as `{key, text, title, tone, held}`; `held` means the Position
+ * The standing lines a HANDOFF row carries after ACCEPT, as `{key, text, title, tone, mine}`; `mine` means the Position
  * of this Strip holds it. Empty when this is not an ACTIVE HANDOFF.
  */
 export function handoffChips(strip) {
@@ -76,9 +76,9 @@ export function handoffChips(strip) {
   const chips = [];
   const comms = commsHolderPosition(strip);
   const control = controlHolderPosition(strip);
-  chips.push({ key: 'comms', text: `COMMS: ${comms}`, held: comms === me, tone: 'on',
+  chips.push({ key: 'comms', text: `COMMS: ${comms}`, mine: comms === me, tone: 'on',
     title: co.comms.transferred ? `communications with ${comms}${co.comms.at ? ` since ${_zulu(co.comms.at)}` : ''}${co.comms.trigger ? ` (${co.comms.trigger})` : ''}` : `${comms} is still on the frequency` });
-  chips.push({ key: 'control', text: `CTRL: ${control}`, held: control === me, tone: 'on',
+  chips.push({ key: 'control', text: `CTRL: ${control}`, mine: control === me, tone: 'on',
     title: controlMoved(co) ? `control with ${control}${co.control.at ? ` since ${_zulu(co.control.at)}` : ''}` : `${control} still has control: instructions outside a release need coordinating` });
   if (!controlMoved(co)) {
     const rel = co.release;

@@ -1,5 +1,5 @@
 'use strict';
-import { haversineM, kinematics, projectPos, verticalFpm } from './geo.js';
+import { NM_M, haversineM, kinematics, projectPos, verticalFpm } from './geo.js';
 import { getIff, iffColor } from './iff.js';
 import {
   emergencyColor, infoLine, isAir, shouldLabel, trackCodeTag, trackEmergency, trackIsIdent, trackName,
@@ -357,7 +357,7 @@ function getDeclutteredIds() {
   }
 
   const hidden = new Set();
-  const HORIZ_M = 0.5 * 1852; // 0.5 nm in metres
+  const HORIZ_M = 0.5 * NM_M; // 0.5 nm in metres
   const VERT_FT = 1000;
 
   for (const [code, t] of byCode) {
@@ -605,7 +605,7 @@ function buildApproachVector() {
   if (approachRwyCourseTrue == null) return { type: 'FeatureCollection', features: [] };
   const course     = approachRwyCourseTrue;                // aircraft course TO runway, true (airport-selector.js)
   const reciprocal = (course + 180) % 360;                 // outbound from threshold
-  const FAF_M      = 15 * 1852;
+  const FAF_M      = 15 * NM_M;
 
   const [fafLat, fafLon] = projectPos(selectedApt.lat, selectedApt.lon, reciprocal, FAF_M);
 
@@ -653,7 +653,7 @@ export function buildExtendedCenterline() {
   const reciprocal  = (_aprtRwyTrueDeg + 180) % 360;
 
   const lengthNm = settings.extCenterlineNm || 25;
-  const lengthM  = lengthNm * 1852;
+  const lengthM  = lengthNm * NM_M;
   const [startLat, startLon] = projectPos(_aprtSelectedApt.lat, _aprtSelectedApt.lon, reciprocal, lengthM);
   const color = settings.lightMode ? 'rgba(40,40,40,0.7)' : 'rgba(255,255,255,0.5)';
 
@@ -672,7 +672,7 @@ export function buildExtendedCenterline() {
     const d       = i * minorNm;
     const isMajor = (i * minorNm) % majorNm === 0; // majorNm is always a multiple of minorNm
     const halfWidthM = isMajor ? MAJOR_HALF_WIDTH_M : MINOR_HALF_WIDTH_M;
-    const [tLat, tLon] = projectPos(_aprtSelectedApt.lat, _aprtSelectedApt.lon, reciprocal, d * 1852);
+    const [tLat, tLon] = projectPos(_aprtSelectedApt.lat, _aprtSelectedApt.lon, reciprocal, d * NM_M);
     const [aLat, aLon] = projectPos(tLat, tLon, (_aprtRwyTrueDeg + 90) % 360, halfWidthM);
     const [bLat, bLon] = projectPos(tLat, tLon, (_aprtRwyTrueDeg + 270) % 360, halfWidthM);
     features.push({
@@ -715,13 +715,13 @@ export function buildRangeRing() {
     const hasApp = active.some(r => r.id === `app:${selectedApt.name}`);
     const hasApt = active.some(r => r.id === `apt:${selectedApt.name}`);
     if (hasApp) {
-      features.push(_makeRing(selectedApt.lat, selectedApt.lon, 80 * 1852, 'range'));
+      features.push(_makeRing(selectedApt.lat, selectedApt.lon, 80 * NM_M, 'range'));
     } else if (hasApt) {
-      features.push(_makeRing(selectedApt.lat, selectedApt.lon, 20 * 1852, 'range'));
-      features.push(_makeRing(selectedApt.lat, selectedApt.lon,  2 * 1852, 'ground'));
+      features.push(_makeRing(selectedApt.lat, selectedApt.lon, 20 * NM_M, 'range'));
+      features.push(_makeRing(selectedApt.lat, selectedApt.lon,  2 * NM_M, 'ground'));
     } else {
       // Airport selected but no radar active: show small reference ring
-      features.push(_makeRing(selectedApt.lat, selectedApt.lon, 20 * 1852, 'range'));
+      features.push(_makeRing(selectedApt.lat, selectedApt.lon, 20 * NM_M, 'range'));
     }
   }
 

@@ -73,8 +73,8 @@
    "_setApproachRwyCourse",
    "_setBullseyePickTarget",
    "_setCoverageDatalink",
-   "_setCoverageHeldPositions",
    "_setCoverageRadars",
+   "_setCoverageSignedOnPositions",
    "_setDrag",
    "_setMap",
    "_setMapReady",
@@ -175,6 +175,7 @@
    "updateElevationContours"
   ],
   "geo.js": [
+   "NM_M",
    "bearingDeg",
    "clearTrackRename",
    "haversineM",
