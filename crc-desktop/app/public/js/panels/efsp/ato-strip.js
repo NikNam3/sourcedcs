@@ -90,7 +90,6 @@ export function arJoinFor(strip) {
 }
 
 export function isArHighlighted(stripId) { return _arHighlightStripIds.has(stripId); }
-export function getArHighlightStripIds() { return [..._arHighlightStripIds]; }
 
 /**
  * Selecting any participant highlights the others. Called from bay-view.js's

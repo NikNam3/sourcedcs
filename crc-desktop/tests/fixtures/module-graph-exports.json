@@ -1,7 +1,6 @@
 {
  "exports": {
   "airspace-draw.js": [
-   "isDrawing",
    "snapToNavpoint",
    "startDraw",
    "stopDraw"
@@ -11,7 +10,6 @@
    "MENU_KINDS",
    "MENU_LAYERS",
    "MENU_STATES",
-   "OVERRIDE_VALUES",
    "checklistGroups",
    "decide",
    "defaultMenu",
@@ -82,7 +80,6 @@
    "_setMapReady",
    "_setMeasure",
    "_setSelectedApt",
-   "_setSettingsForTest",
    "_ws",
    "aircraftTypes",
    "applyCoverage",
@@ -276,7 +273,6 @@
    "applyAirspaceCalendar",
    "bookingUrl",
    "formatBooking",
-   "getAirspaceCalendar",
    "nextBooking"
   ],
   "panels/efsp/airspace-capabilities.js": [
@@ -431,7 +427,6 @@
    "arSignatureFor",
    "atoAlertsFor",
    "atoExpandedRowsFor",
-   "getArHighlightStripIds",
    "highlightArParticipants",
    "isArHighlighted",
    "refreshArHighlight"
@@ -629,7 +624,6 @@
   ],
   "panels/efsp/carrier-panel.js": [
    "CARRIER_CAPABILITIES",
-   "CARRIER_POSITION_IDS",
    "buildCarrierFinalLine",
    "carrierActingFor",
    "carrierDecorateNlaButton",
@@ -653,8 +647,7 @@
    "carrierDerivedStack",
    "carrierDerivedText",
    "carrierHhmm",
-   "getEfspCarrier",
-   "isCarrierDerivedBlock"
+   "getEfspCarrier"
   ],
   "panels/efsp/combination-rules.js": [
    "LOCAL_POSITION",
@@ -708,7 +701,6 @@
    "consumeEfspArrivalFlash",
    "efspArrivalFor",
    "efspArrivalLog",
-   "efspArrivalsVersion",
    "forgetEfspArrivals",
    "markEfspBaySeen",
    "nextEfspArrivalExpiry",
@@ -767,10 +759,8 @@
    "TOFI_ELIGIBLE_STATES",
    "TOFI_EXIT_DUE_MISSION_STATES",
    "TOFI_OP_KINDS",
-   "UNDO_WINDOW_MS",
    "canActOnState",
    "isEfspBoardStale",
-   "isUndoAvailable",
    "isWithinDoubleTapWindow",
    "nlaButtonLabel",
    "nlaLabelFor",
@@ -985,7 +975,6 @@
    "noteEfspBoardArrivals"
   ],
   "panels/efsp/panel/combination.js": [
-   "_resetCombinationForTest",
    "acceptEfspPositionOffer",
    "dismissEfspPositionOffer",
    "noteEfspPositionOffer",
@@ -1306,8 +1295,6 @@
    "emergencyColor",
    "infoLine",
    "isAir",
-   "isGround",
-   "isSea",
    "pickerText",
    "shouldLabel",
    "tagEditable",

@@ -9,8 +9,8 @@ import * as serverConfig from "./helpers/server-config.mjs";
 
 import * as c from '../app/public/js/panels/efsp/efsp-nla.js';
 import {
-  NLA_LABELS, nlaLabelFor, DOUBLE_TAP_MS, UNDO_WINDOW_MS,
-  isWithinDoubleTapWindow, isUndoAvailable,
+  NLA_LABELS, nlaLabelFor, DOUBLE_TAP_MS,
+  isWithinDoubleTapWindow,
   DEFAULT_STALE_THRESHOLD_SECONDS, isEfspBoardStale,
   STATE_OWNERS_BY_STRIP_TYPE, DEPARTURE_STATE_OWNERS, ARRIVAL_STATE_OWNERS, OVERFLIGHT_STATE_OWNERS, MISSION_STATE_OWNERS, canActOnState,
 } from '../app/public/js/panels/efsp/efsp-nla.js';
@@ -77,21 +77,6 @@ test('isWithinDoubleTapWindow is false at exactly 400ms and beyond', () => {
 
 test('isWithinDoubleTapWindow is false when there was no prior invoke (null)', () => {
   assert.equal(isWithinDoubleTapWindow(null, 5000), false);
-});
-
-// ── Undo window ──────────────────────────────────────────────────────────
-
-test('isUndoAvailable is true just under 30s after the last NLA invoke', () => {
-  assert.equal(isUndoAvailable(1000, 1000 + UNDO_WINDOW_MS - 1), true);
-});
-
-test('isUndoAvailable is false at exactly 30s and beyond', () => {
-  assert.equal(isUndoAvailable(1000, 1000 + UNDO_WINDOW_MS), false);
-  assert.equal(isUndoAvailable(1000, 1000 + UNDO_WINDOW_MS + 1), false);
-});
-
-test('isUndoAvailable is false when there was no prior invoke (null)', () => {
-  assert.equal(isUndoAvailable(null, 5000), false);
 });
 
 // ── Board staleness (guide §5.6 rule 5) ─────────────────────────────────

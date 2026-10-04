@@ -211,7 +211,6 @@ export function canActOnState(actingPositionId, stripType, state) {
 }
 
 export const DOUBLE_TAP_MS = 400;
-export const UNDO_WINDOW_MS = 10000; // H95 / docs/adr/0100: crc-sync's UNDO_WINDOW_MS (src/efsp/undo/undo-history.js)
 
 /**
  * @param {number|null} lastInvokedAt timestamp of the last advancing press, or null
@@ -224,10 +223,6 @@ export const UNDO_WINDOW_MS = 10000; // H95 / docs/adr/0100: crc-sync's UNDO_WIN
  */
 export function isWithinDoubleTapWindow(lastInvokedAt, now) {
   return lastInvokedAt != null && (now - lastInvokedAt) < DOUBLE_TAP_MS;
-}
-
-export function isUndoAvailable(lastInvokedAt, now) {
-  return lastInvokedAt != null && (now - lastInvokedAt) < UNDO_WINDOW_MS;
 }
 
 // Board staleness (guide §5.6 rule 5) — "a controller MUST never be unable

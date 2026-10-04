@@ -34,7 +34,6 @@ export const CARRIER_CAPABILITIES = {
   CV_APP1:    { setsCase: false, sequencesStack: false, editsShipInput: false },
   CV_APP2:    { setsCase: false, sequencesStack: false, editsShipInput: false },
 };
-export const CARRIER_POSITION_IDS = Object.keys(CARRIER_CAPABILITIES);
 const CARRIER_CASES = ['I', 'II', 'III'];
 
 /** The signed-on CV Position that has this capability, or null. Pure over `signedOnIds`. */

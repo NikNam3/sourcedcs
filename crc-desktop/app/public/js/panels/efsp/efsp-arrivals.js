@@ -23,7 +23,6 @@ export const ARRIVAL_LOG_LIMIT = 3;
 
 // stripId -> { bayId, positionId, from, callsign, at, seenAt, bayUnseen, flashed }
 const _efspArrivals = new Map();
-let _efspArrivalsTouched = 0; // bumped on every change, for cheap "did anything move" checks
 
 /** Where each Strip a delta is about to update currently sits. Call BEFORE applying it. */
 export function captureEfspPlacement(msg, getStrip) {
@@ -83,15 +82,12 @@ export function noteEfspArrivals(before, updated, ctx) {
     _efspArrivals.set(strip.stripId, entry);
     found.push({ stripId: strip.stripId, ...entry });
   }
-  if (found.length) _efspArrivalsTouched += 1;
   return found;
 }
 
 /** Forget arrivals for Strips that no longer exist on this client (a delta's `gone`). */
 export function forgetEfspArrivals(stripIds) {
-  let changed = false;
-  for (const id of stripIds || []) changed = _efspArrivals.delete(id) || changed;
-  if (changed) _efspArrivalsTouched += 1;
+  for (const id of stripIds || []) _efspArrivals.delete(id);
 }
 
 function _isFresh(entry, now) {
@@ -121,7 +117,7 @@ export function consumeEfspArrivalFlash(stripId, now = Date.now()) {
 
 /** The controller touched the Strip: it has been noticed. */
 export function clearEfspArrival(stripId) {
-  if (_efspArrivals.delete(stripId)) _efspArrivalsTouched += 1;
+  _efspArrivals.delete(stripId);
 }
 
 /** Arrivals in this Bay the controller has not had in front of them yet. */
@@ -139,11 +135,9 @@ export function unseenEfspArrivalsForPosition(positionId) {
 
 /** The controller opened this Bay: everything in it has been seen, and drops off the arrivals line. */
 export function markEfspBaySeen(bayId) {
-  let changed = false;
   for (const e of _efspArrivals.values()) {
-    if (e.bayId === bayId && e.bayUnseen) { e.bayUnseen = false; changed = true; }
+    if (e.bayId === bayId && e.bayUnseen) e.bayUnseen = false;
   }
-  if (changed) _efspArrivalsTouched += 1;
 }
 
 /** The arrivals line: unseen arrivals in OTHER Bays, newest first. */
@@ -166,6 +160,5 @@ export function nextEfspArrivalExpiry(now = Date.now()) {
   return next;
 }
 
-export function efspArrivalsVersion() { return _efspArrivalsTouched; }
 
-export function _resetEfspArrivalsForTest() { _efspArrivals.clear(); _efspArrivalsTouched = 0; }
+export function _resetEfspArrivalsForTest() { _efspArrivals.clear(); }

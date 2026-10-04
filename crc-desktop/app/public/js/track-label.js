@@ -34,8 +34,6 @@ export function emergencyColor(kind) {
 }
 
 export function isAir(t)    { return !!t && t.domain === 'AIR'; }
-export function isSea(t)    { return !!t && t.domain === 'SEA'; }
-export function isGround(t) { return !!t && t.domain === 'GROUND'; }
 
 /** The contact's name: its flight, datalink name or tag; else its code; else its track number. */
 export function trackName(t) {

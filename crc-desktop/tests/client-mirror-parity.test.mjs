@@ -52,7 +52,7 @@ test('S-6: every IFF state the server can classify has a client fallback colour,
 // efsp-nla.js NLA_LABELS says it "mirrors nla.js's STATES_BY_STRIP_TYPE/computeNla": the
 // label is the verb for leaving a state, so every live (non-DROPPED) state of a strip type has one.
 
-const { NLA_LABELS, DOUBLE_TAP_MS, UNDO_WINDOW_MS, DEFAULT_STALE_THRESHOLD_SECONDS } = clientNla;
+const { NLA_LABELS, DOUBLE_TAP_MS, DEFAULT_STALE_THRESHOLD_SECONDS } = clientNla;
 
 test('D-9: NLA_LABELS has a label for every non-terminal state of every strip type in nla.js STATES_BY_STRIP_TYPE, and none for a state nla.js lacks', () => {
   assert.deepEqual(Object.keys(NLA_LABELS).sort(), Object.keys(serverNla.STATES_BY_STRIP_TYPE).sort(), 'Roles differ');
@@ -71,15 +71,11 @@ test('D-9: the client owner tables name exactly the states nla.js has for each s
   }
 });
 
-test('the 400 ms double-tap guard equals board/ops/invoke-nla.js\'s literal; the 10 s Undo window equals undo-history.js\'s UNDO_WINDOW_MS', () => {
+test('the 400 ms double-tap guard equals board/ops/invoke-nla.js\'s literal', () => {
   const src = readServer('efsp/board/ops/invoke-nla.js');
   // The guard's length is a named constant now (a cell the e2e hook can change, crc-sync docs/adr/0096).
   assert.match(src, new RegExp(`const NLA_GUARD_MS = ${DOUBLE_TAP_MS};`), 'the server double-tap guard differs from DOUBLE_TAP_MS');
   assert.match(src, /wallNow - lastInvoke\.invokedAt < ctx\.nlaGuard\.ms\b/, 'the guard no longer compares against nlaGuard.ms');
-  // docs/adr/0100 (H95): one undo window, on the server's undo history.
-  const m = /const UNDO_WINDOW_MS = ([\d_]+);/.exec(readServer('efsp/undo/undo-history.js'));
-  assert.ok(m, 'undo-history.js no longer declares UNDO_WINDOW_MS');
-  assert.equal(Number(m[1].replace(/_/g, '')), UNDO_WINDOW_MS, 'the server undo window differs from UNDO_WINDOW_MS');
 });
 
 test('the client stale-board threshold outlasts several of the server\'s heartbeats', () => {

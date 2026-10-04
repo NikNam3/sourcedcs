@@ -24,7 +24,6 @@ export function applyAirspaceCalendar(msg) {
   return _calendar;
 }
 
-export function getAirspaceCalendar() { return _calendar; }
 export function bookingUrl() { return _calendar.bookingUrl; }
 export function _resetAirspaceCalendarForTest() { _calendar = { theater: null, byAirspace: {}, bookingUrl: null }; }
 

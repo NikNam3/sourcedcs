@@ -738,7 +738,6 @@ function _updateCoalitionBtn($btn) {
 }
 
 // ESM-1 (S-ESM1c): test seams for the app state the unit tests set directly in the old shared scope.
-export function _setSettingsForTest(v) { settings = v; }
 export function _setCoverageRadars(v) { coverageRadars = v; }
 export function _setCoverageDatalink(v) { coverageDatalink = v; }
 export function _setCoverageHeldPositions(v) { coverageSignedOnPositions = v; }
