@@ -41,13 +41,17 @@ function syncEnv(stateDir, port) {
     // received the first. e2e/nla-guard.spec.js turns a guard back on for itself through the test hook.
     CRCSYNC_NLA_GUARD_MS: '0',
     // No DCS, no SRS. Both clients retry forever and neither blocks the EFSP subsystem, so a closed port keeps the run hermetic
-    // and fails fast instead of hanging on a real host. The UNPREFIXED names, because that is what crc-sync's process reads
-    // (grpc-client.js / srs-client.js); CRCSYNC_* are only infra/docker-compose.yml's .env keys.
+    // and fails fast instead of hanging on a real host. crc-sync reads CRCSYNC_* first and the unprefixed names second
+    // (grpc-client.js / srs-client.js), and dotenv never overrides a key already set, so both are set here: a CRCSYNC_* key
+    // in crc-sync/.env must not point a run at a real DCS.
     // Nothing listens here unless a spec starts helpers/fake-dcs.js, so this is "no DCS" for every spec that does not.
+    CRCSYNC_DCS_GRPC_HOST: `127.0.0.1:${fakeDcsPort(Number(port))}`,
     DCS_GRPC_HOST: `127.0.0.1:${fakeDcsPort(Number(port))}`,
     // The mission session (which theater is loaded) belongs to the throwaway state directory: without this a loaded mission
     // is written into the checkout's crc-sync/state/ and read back by every later run.
     CRCSYNC_MISSION_SESSION_PATH: stateFile('mission-session.json'),
+    CRCSYNC_SRS_HOST: '127.0.0.1',
+    CRCSYNC_SRS_PORT: '1',
     SRS_HOST: '127.0.0.1',
     SRS_PORT: '1',
   };
