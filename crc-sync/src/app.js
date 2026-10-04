@@ -217,8 +217,8 @@ function createApp(deps = {}) {
   const trackStore  = new TrackStore();
   const collabStore = new CollaborativeStore({ persist: true, identityOf: (id) => trackStore.get(id) });
   const atisStore   = new AtisStore();
-  const grpcClient  = deps.grpcClient || new GrpcClient();
-  const srsClient   = deps.srsClient || new SrsClient();
+  const grpcClient  = deps.grpcClient || new GrpcClient({ env });
+  const srsClient   = deps.srsClient || new SrsClient({ env });
   // EFSP (src/efsp/) is durably persisted (docs/adr/0002-durable-board-
   // persistence.md) — deliberately NOT cleared below on mission reload,
   // unlike trackStore/collabStore. Strips represent real controller work

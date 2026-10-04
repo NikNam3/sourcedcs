@@ -8,15 +8,20 @@ const srsLog = require('./log').logger('srs');
 
 const PROTO_ROOT = process.env.DCS_GRPC_PROTO_PATH ||
   path.join(__dirname, '../protos');
-const DCS_HOST  = process.env.DCS_GRPC_HOST || 'server.sourcedcs.page:50051';
+const DEFAULT_DCS_HOST = 'server.sourcedcs.page:50051';
+// The root `.env` name wins, so compose passes it straight through; the bare name is what a local run and the e2e harness set.
+const dcsHostOf = (env) => env.CRCSYNC_DCS_GRPC_HOST || env.DCS_GRPC_HOST || DEFAULT_DCS_HOST;
 // StreamUnits options, whole seconds. DCS-gRPC's stream_units() builds a
 // tokio interval from poll_rate, which panics on 0: the task dies after the
 // initial full sync and the stream ends with status OK, so a 0 here turns the
 // unit stream into a full re-sync every ~1.5 s (docs/parallel/research/
 // grpc-reconnect-loop.md). 1 is the floor. max_backoff caps how long DCS-gRPC
 // waits between polls of a unit that isn't changing.
-const POLL_RATE   = Math.max(1, parseInt(process.env.DCS_GRPC_POLL_RATE, 10) || 1);
-const MAX_BACKOFF = Math.max(POLL_RATE, parseInt(process.env.DCS_GRPC_MAX_BACKOFF, 10) || 5);
+function streamOptions(env) {
+  const pollRate   = Math.max(1, parseInt(env.DCS_GRPC_POLL_RATE, 10) || 1);
+  const maxBackoff = Math.max(pollRate, parseInt(env.DCS_GRPC_MAX_BACKOFF, 10) || 5);
+  return { poll_rate: pollRate, max_backoff: maxBackoff };
+}
 
 // GroupCategory numeric values to include (AIRPLANE=1, HELICOPTER=2, GROUND=3, SHIP=4)
 const ALLOWED_CATS = new Set([1, 2, 3, 4]);
@@ -62,9 +67,11 @@ class GrpcClient extends EventEmitter {
    * @param {number} [opts.backoffBaseMs]  first reconnect delay
    * @param {number} [opts.backoffCapMs]   longest reconnect delay
    * @param {number} [opts.stableMs]       stream lifetime that resets the backoff
+   * @param {object} [opts.env]            the environment (default process.env): `CRCSYNC_DCS_GRPC_HOST` ?? `DCS_GRPC_HOST`, `DCS_GRPC_POLL_RATE`, `DCS_GRPC_MAX_BACKOFF`
    */
   constructor(opts = {}) {
     super();
+    this._env          = opts.env || process.env;
     this._keepaliveMs  = opts.keepaliveMs   || UNIT_KEEPALIVE_MS;
     this._backoffBase  = opts.backoffBaseMs || BACKOFF_BASE_MS;
     this._backoffCap   = opts.backoffCapMs  || BACKOFF_CAP_MS;
@@ -104,6 +111,7 @@ class GrpcClient extends EventEmitter {
   }
 
   connect() {
+    const dcsHost = dcsHostOf(this._env);
     try {
       const missionPkg = loadSvc('dcs/mission/v0/mission.proto');
       const coalPkg    = loadSvc('dcs/coalition/v0/coalition.proto');
@@ -115,14 +123,14 @@ class GrpcClient extends EventEmitter {
       const unitPkg    = loadSvc('dcs/unit/v0/unit.proto');
       const creds      = grpc.credentials.createInsecure();
 
-      this._missionSvc = new missionPkg.dcs.mission.v0.MissionService(DCS_HOST, creds, CHANNEL_OPTS);
-      this._coalSvc    = new coalPkg.dcs.coalition.v0.CoalitionService(DCS_HOST, creds, CHANNEL_OPTS);
-      this._worldSvc   = new worldPkg.dcs.world.v0.WorldService(DCS_HOST, creds, CHANNEL_OPTS);
-      this._customSvc  = new customPkg.dcs.custom.v0.CustomService(DCS_HOST, creds, CHANNEL_OPTS);
-      this._atmSvc     = new atmPkg.dcs.atmosphere.v0.AtmosphereService(DCS_HOST, creds, CHANNEL_OPTS);
-      this._timerSvc   = new timerPkg.dcs.timer.v0.TimerService(DCS_HOST, creds, CHANNEL_OPTS);
-      this._srsSvc     = new srsPkg.dcs.srs.v0.SrsService(DCS_HOST, creds, CHANNEL_OPTS);
-      this._unitSvc    = new unitPkg.dcs.unit.v0.UnitService(DCS_HOST, creds, CHANNEL_OPTS);
+      this._missionSvc = new missionPkg.dcs.mission.v0.MissionService(dcsHost, creds, CHANNEL_OPTS);
+      this._coalSvc    = new coalPkg.dcs.coalition.v0.CoalitionService(dcsHost, creds, CHANNEL_OPTS);
+      this._worldSvc   = new worldPkg.dcs.world.v0.WorldService(dcsHost, creds, CHANNEL_OPTS);
+      this._customSvc  = new customPkg.dcs.custom.v0.CustomService(dcsHost, creds, CHANNEL_OPTS);
+      this._atmSvc     = new atmPkg.dcs.atmosphere.v0.AtmosphereService(dcsHost, creds, CHANNEL_OPTS);
+      this._timerSvc   = new timerPkg.dcs.timer.v0.TimerService(dcsHost, creds, CHANNEL_OPTS);
+      this._srsSvc     = new srsPkg.dcs.srs.v0.SrsService(dcsHost, creds, CHANNEL_OPTS);
+      this._unitSvc    = new unitPkg.dcs.unit.v0.UnitService(dcsHost, creds, CHANNEL_OPTS);
       this._icao       = require('../data/icao.json');
     } catch (e) {
       log.error('proto load failed', { error: e.message });
@@ -200,7 +208,7 @@ class GrpcClient extends EventEmitter {
     // Cancel previous stream — its events will be ignored via the closure guard below
     if (this._unitStream) { try { this._unitStream.cancel(); } catch (_) {} }
 
-    const stream = this._missionSvc.StreamUnits({ poll_rate: POLL_RATE, max_backoff: MAX_BACKOFF });
+    const stream = this._missionSvc.StreamUnits(streamOptions(this._env));
     this._unitStream = stream;
     const startedAt = Date.now();
 
@@ -777,4 +785,6 @@ return net.lua2json(result)
   }
 }
 
+GrpcClient.dcsHostOf = dcsHostOf;
+GrpcClient.streamOptions = streamOptions;
 module.exports = GrpcClient;
