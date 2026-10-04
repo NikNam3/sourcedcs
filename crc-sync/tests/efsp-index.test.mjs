@@ -179,6 +179,7 @@ test('a HANDOFF interrupted mid-PROPOSE (before ACCEPT) round-trips both replica
   const efsp1 = createEfsp();
   const ctr = { controllerId: 'ctr', who: 'Ctr1' };
   efsp1.handleMessage(ctr, { type: 'efsp-set-positions', facilityId: 'CENTER', signedOn: ['CTR'] });
+  efsp1.handleMessage({ controllerId: 'ap', who: 'Ap1' }, { type: 'efsp-set-positions', facilityId: 'INCIRLIK', signedOn: ['AP'] }); // F4: a HANDOFF is minted at a staffed Position
 
   const created = efsp1.handleMessage(ctr, createCtrStripMsg());
   assert.equal(created.ack.ok, true, JSON.stringify(created.ack));

@@ -59,6 +59,8 @@ function makeFacilities({ aitAuthorized = {} } = {}) {
       coordinationEligibleState: (stripType) => coordination.coordinationEligibleState(stripType),
     };
     const boardStore = new BoardStore(flightDataStore, fullRules(rules));
+    // F4 (docs/adr/0110): a HANDOFF is only minted at a staffed (or offered) Position, so every Position here has a controller.
+    for (const id of facilityConfig.getPositionSet(facilityId)) positionStore.setSignedOnPositions(`fixture-${id}`, id, [id]);
     facilities.set(facilityId, { boardStore, positionStore });
   }
   return facilities;

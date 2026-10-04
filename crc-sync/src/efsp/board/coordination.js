@@ -181,7 +181,9 @@ class Coordination {
     // full resync (reconnect) would ever pick it up. peerFacilityId/
     // peerStrip let _handleMutation broadcast a SECOND efsp-board-delta,
     // scoped to the peer Facility, alongside the normal one for this side.
-    return { ok: true, strip, peerFacilityId: op.toFacilityId, peerStrip: proposal.strip };
+    // The replica was minted at an unstaffed Position that a staffed one is offered (F4 below): the sender is told.
+    const warnings = proposal.offeredTo ? [warn('UNSTAFFED_RECEIVER', `${op.toPositionId} is unstaffed: offered to ${proposal.offeredTo}`)] : undefined;
+    return { ok: true, strip, peerFacilityId: op.toFacilityId, peerStrip: proposal.strip, warnings };
   }
 
   _applyCoordinationAccept(strip, op, by, actingPositionId) {
@@ -403,6 +405,13 @@ class Coordination {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: `no Coordination Bay configured for ${toPositionId}` };
     }
 
+    // F4 (docs/adr/0110, docs/adr/0101 invariant I): a HANDOFF replica is minted at a Position that is staffed, or at one a
+    // staffed Position is offered the hat of; with nobody on either, nobody could ever ACCEPT it.
+    const offeredTo = this._rules.isStaffed(toPositionId) ? null : this._rules.consolidatedAt(toPositionId);
+    if (primitive === 'HANDOFF' && !this._rules.isStaffed(toPositionId) && !offeredTo) {
+      return { ok: false, reason: 'NO_RECEIVING_POSITION', detail: `${toPositionId} is unstaffed and nobody is offered it` };
+    }
+
     // The replica carries the SENDER's own strip type/EfspState (docs/adr/0022) from the moment it's minted, not a
     // separate "not yet accepted" pseudo-state — coordination.state is what actually tracks PROPOSED/ACTIVE/REJECTED.
     // fromState is guaranteed to be one of coordination.js's COORDINATION_ELIGIBLE_STATES combos (checked by
@@ -437,7 +446,7 @@ class Coordination {
       }),
     });
     this._audit.recordPeer('InterfacilityCoordinationProposal', strip, null, { causedBy, fromFacilityId, by });
-    return { ok: true, strip };
+    return { ok: true, strip, offeredTo: offeredTo || undefined };
   }
 
   /**
