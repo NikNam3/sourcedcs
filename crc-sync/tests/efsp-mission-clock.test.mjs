@@ -9,14 +9,13 @@ import crypto from 'crypto';
 // Date.now(). Every test here runs a fake clock set to a mission day seven years
 // before the wall clock, so a single stray Date.now() shows up as a timestamp
 // in the wrong decade rather than as a few milliseconds of drift.
-const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'efsp-mission-clock-test-'));
-process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH = path.join(tmpDir, 'facility.json');
-process.env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH = path.join(tmpDir, 'board.json');
-process.env.CRCSYNC_EFSP_MUTATION_LOG_PATH = path.join(tmpDir, 'mutations.jsonl');
+const paths = withPaths('efsp-mission-clock-test-', { ...BOARD, ...MUTATION_LOG, CRCSYNC_EFSP_FACILITY_CONFIG_PATH: 'facility.json' }).apply();
+const tmpDir = paths.dir;
 
 const { createEfsp } = await import('../src/efsp/index.js');
 const { BoardStore } = await import('../src/efsp/board-store.js');
 import { fullRules } from "./helpers/full-rules.mjs";
+import { withPaths, BOARD, MUTATION_LOG } from './helpers/with-paths.mjs';
 const { FlightDataStore } = await import('../src/efsp/flight-data-store.js');
 const { ConformanceMonitor } = await import('../src/efsp/conformance.js');
 

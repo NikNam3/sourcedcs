@@ -6,14 +6,13 @@ import path from 'path';
 import crypto from 'crypto';
 import { slot } from './helpers/wire-slots.mjs';
 
-const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'efsp-ws-coordination-test-'));
-process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH = path.join(tmpDir, 'incirlik.json');
-process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH_CENTER = path.join(tmpDir, 'center.json');
-process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH_TACTICAL = path.join(tmpDir, 'tactical.json');
+const paths = withPaths('efsp-ws-coordination-test-', { ...FACILITIES }).apply();
+const tmpDir = paths.dir;
 
 const { handleMessage } = await import('../src/efsp/efsp-ws.js');
 const { BoardStore } = await import('../src/efsp/board-store.js');
 import { fullRules } from "./helpers/full-rules.mjs";
+import { withPaths, FACILITIES } from './helpers/with-paths.mjs';
 const { FlightDataStore } = await import('../src/efsp/flight-data-store.js');
 const { PositionStore } = await import('../src/efsp/position-store.js');
 const facilityConfig = (await import('../src/efsp/facility-config.js')).createFacilityConfig();

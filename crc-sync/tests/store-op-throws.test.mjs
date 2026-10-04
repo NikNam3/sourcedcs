@@ -11,7 +11,6 @@ import crcLog from '../src/log.js';
 // store's sync-seq `advance` (called when a record is written) run and then throw.
 
 prologue('store-op-throws-');
-process.env.CRCSYNC_EFSP_AIRSPACES_PATH = process.env.CRCSYNC_EFSP_AIRSPACES_PATH; // set by the prologue
 fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, JSON.stringify({ Test: [
   { airspaceId: 'MOA-THR', name: 'Throw MOA', type: 'MOA', controllingFacilityId: 'CENTER', controllingPositionId: 'CTR', workingFrequencyMhz: 134.25 },
 ] }));

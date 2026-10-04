@@ -5,6 +5,7 @@ import os from 'os';
 import path from 'path';
 import crypto from 'crypto';
 import { slot } from './helpers/wire-slots.mjs';
+import { withPaths, FACILITIES, BOARD, MUTATION_LOG, AIRSPACES } from './helpers/with-paths.mjs';
 
 // The server half of the EFSP UI catalogue (docs/ui-findings/) — the findings
 // whose cause turned out to be in crc-sync rather than in the panel:
@@ -20,13 +21,8 @@ import { slot } from './helpers/wire-slots.mjs';
 // the real wire path — because every one of these is about what actually
 // reaches a client, and a hand-built rules object cannot answer that.
 
-const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'efsp-ui-findings-test-'));
-process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH = path.join(tmpDir, 'incirlik.json');
-process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH_CENTER = path.join(tmpDir, 'center.json');
-process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH_TACTICAL = path.join(tmpDir, 'tactical.json');
-process.env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH = path.join(tmpDir, 'board.json');
-process.env.CRCSYNC_EFSP_MUTATION_LOG_PATH = path.join(tmpDir, 'mutations.jsonl');
-process.env.CRCSYNC_EFSP_AIRSPACES_PATH = path.join(tmpDir, 'airspaces.json');
+const paths = withPaths('efsp-ui-findings-test-', { ...FACILITIES, ...BOARD, ...MUTATION_LOG, ...AIRSPACES }).apply();
+const tmpDir = paths.dir;
 fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, JSON.stringify({}));
 
 const { createEfsp } = await import('../src/efsp/index.js');

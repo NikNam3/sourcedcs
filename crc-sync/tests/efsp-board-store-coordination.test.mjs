@@ -7,12 +7,12 @@ import crypto from 'crypto';
 
 // facility-config.js reads its paths once at module load — override both
 // before import (same isolation efsp-facility-config.test.mjs uses).
-const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'efsp-board-store-coordination-test-'));
-process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH = path.join(tmpDir, 'incirlik.json');
-process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH_CENTER = path.join(tmpDir, 'center.json');
+const paths = withPaths('efsp-board-store-coordination-test-', { CRCSYNC_EFSP_FACILITY_CONFIG_PATH: 'incirlik.json', CRCSYNC_EFSP_FACILITY_CONFIG_PATH_CENTER: 'center.json' }).apply();
+const tmpDir = paths.dir;
 
 const { BoardStore } = await import('../src/efsp/board-store.js');
 import { fullRules } from "./helpers/full-rules.mjs";
+import { withPaths } from './helpers/with-paths.mjs';
 const { FlightDataStore } = await import('../src/efsp/flight-data-store.js');
 const { PositionStore } = await import('../src/efsp/position-store.js');
 const facilityConfig = (await import('../src/efsp/facility-config.js')).createFacilityConfig();

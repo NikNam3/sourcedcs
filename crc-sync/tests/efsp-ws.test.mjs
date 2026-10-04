@@ -7,12 +7,13 @@ import crypto from 'crypto';
 import { slot } from './helpers/wire-slots.mjs';
 
 // facility-config.js reads its path at module load — override before import.
-const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'efsp-ws-test-'));
-process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH = path.join(tmpDir, 'facility.json');
+const paths = withPaths('efsp-ws-test-', { CRCSYNC_EFSP_FACILITY_CONFIG_PATH: 'facility.json' }).apply();
+const tmpDir = paths.dir;
 
 const { handleMessage, directedFor, RESYNC_RING_WINDOW } = await import('../src/efsp/efsp-ws.js');
 const { BoardStore } = await import('../src/efsp/board-store.js');
 import { fullRules } from "./helpers/full-rules.mjs";
+import { withPaths } from './helpers/with-paths.mjs';
 const { FlightDataStore } = await import('../src/efsp/flight-data-store.js');
 const { CorrelationStore } = await import('../src/efsp/correlation-store.js');
 const { PositionStore } = await import('../src/efsp/position-store.js');

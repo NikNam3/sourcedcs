@@ -44,4 +44,23 @@ function poolEntryFor(config, rackId) {
   return (config && Array.isArray(config.pool) ? config.pool : []).find(p => p.rackId === rackId) || null;
 }
 
-module.exports = { SFA_TRANSFERS, poolEntryFor };
+/** True when `bay` is the SFA frequencies Bay of a Facility that has a Single Frequency Approach `config`. */
+function isSfaBay(bay, config) {
+  return !!bay && bay.view === 'sfa-freqs' && !!config;
+}
+
+/** The frequency (MHz) a Rack carries in the SFA pool of `bay`, or null (not an SFA Bay, or no such Rack). */
+function frequencyForRack(bay, config, rackId) {
+  if (!isSfaBay(bay, config)) return null;
+  const entry = poolEntryFor(config, rackId);
+  return entry ? entry.mhz : null;
+}
+
+/** The Rack that carries `mhz` in the SFA pool of `bay`, or null. */
+function rackForFrequency(bay, config, mhz) {
+  if (!isSfaBay(bay, config)) return null;
+  const entry = (Array.isArray(config.pool) ? config.pool : []).find(p => p.mhz === mhz);
+  return entry ? entry.rackId : null;
+}
+
+module.exports = { SFA_TRANSFERS, poolEntryFor, isSfaBay, frequencyForRack, rackForFrequency };

@@ -140,20 +140,8 @@ function buildFacilityRules({ facilityId, facilityConfig, permissionRules, posit
     // are the same functions for every Facility (a Facility without an SFA Bay
     // answers null).
     bayDescriptor:           (bayId) => facilityConfig.getBay(bayId, facilityId),
-    sfaFrequencyFor:         (bayId, rackId) => {
-      const bay = facilityConfig.getBay(bayId, facilityId);
-      const sfa = facilityConfig.getSingleFrequencyApproach(facilityId);
-      if (!bay || bay.view !== 'sfa-freqs' || !sfa) return null;
-      const entry = sfaModel.poolEntryFor(sfa, rackId);
-      return entry ? entry.mhz : null;
-    },
-    sfaRackFor:              (bayId, mhz) => {
-      const bay = facilityConfig.getBay(bayId, facilityId);
-      const sfa = facilityConfig.getSingleFrequencyApproach(facilityId);
-      if (!bay || bay.view !== 'sfa-freqs' || !sfa) return null;
-      const entry = sfa.pool.find(p => p.mhz === mhz);
-      return entry ? entry.rackId : null;
-    },
+    sfaFrequencyFor:         (bayId, rackId) => sfaModel.frequencyForRack(facilityConfig.getBay(bayId, facilityId), facilityConfig.getSingleFrequencyApproach(facilityId), rackId),
+    sfaRackFor:              (bayId, mhz) => sfaModel.rackForFrequency(facilityConfig.getBay(bayId, facilityId), facilityConfig.getSingleFrequencyApproach(facilityId), mhz),
     sfaTransfers:            sfaModel.SFA_TRANSFERS,
     sfaRotationReceiver:     () => permission.sfaRotationReceiver(),
     canSendSfaRotationTransfer: (actingPositionId) => permission.canSendSfaRotationTransfer(actingPositionId),

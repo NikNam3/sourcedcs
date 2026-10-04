@@ -3,19 +3,20 @@ import assert from 'node:assert/strict';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import { withPaths } from './helpers/with-paths.mjs';
 
 // stereo-routes.js resolves and reads its config path once at module load, so
 // the override goes in before the first import — same pattern as
 // efsp-facility-config.test.mjs. Without it, setStereoRoutes() below would
 // write straight into the real, committed config/efsp-stereo-routes.json.
-const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'efsp-stereo-routes-test-'));
-const tmpFile = path.join(tmpDir, 'efsp-stereo-routes.json');
+const paths = withPaths('efsp-stereo-routes-test-', { CRCSYNC_EFSP_STEREO_ROUTES_PATH: 'efsp-stereo-routes.json' }).apply();
+const tmpDir = paths.dir;
+const tmpFile = paths.file('efsp-stereo-routes.json');
 const FIXTURE = [
   { name: 'PACK 1', description: 'north departure', departureAirport: 'LTAG', destinationAirport: 'LTAG', route: 'LTAG DCT ALPHA DCT LTAG', requestedAltitude: '250', remarks: 'squadron standard' },
   { name: 'PACK 2', route: 'LTAG DCT BRAVO', active: false },
 ];
 fs.writeFileSync(tmpFile, JSON.stringify(FIXTURE));
-process.env.CRCSYNC_EFSP_STEREO_ROUTES_PATH = tmpFile;
 
 const { createStereoRoutes, toFlightDataFiledSeed, validateStereoRoutes, normalizeStereoName, MAX_FREE_TEXT } = await import('../src/efsp/stereo-routes.js');
 const { getStereoRoutes, getActiveStereoRoutes, resolveStereoRoute, setStereoRoutes } = createStereoRoutes();

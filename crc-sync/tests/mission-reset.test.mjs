@@ -6,34 +6,15 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import crcLog from '../src/log.js';
+import { withPaths, APP_PATHS } from './helpers/with-paths.mjs';
 
 // The mission reset (docs/adr/0108, decisions.md H108): a DCS crash or a mission restart clears the Board, a reconnect or a crc-sync
 // restart into the same mission does not. createApp with a fake gRPC client, so the real wiring (mission-session.js ->
 // app.js -> efsp.resetForMission -> deliverEfsp -> the archiver's roll-over sweep) is what is judged. Every path points into a
 // temp dir BEFORE anything under src/ is required.
 
-const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mission-reset-'));
-fs.mkdirSync(path.join(tmpDir, 'config-empty'));
-const SHIPPED = new URL('../config/', import.meta.url);
-for (const f of fs.readdirSync(SHIPPED).filter(f => f.endsWith('.json'))) {
-  fs.copyFileSync(new URL(f, SHIPPED), path.join(tmpDir, 'config-empty', f));
-}
-const PATHS = {
-  CRCSYNC_CONFIG_DIR: 'config-empty',
-  CRCSYNC_EFSP_FACILITY_CONFIG_PATH: 'incirlik.json',
-  CRCSYNC_EFSP_FACILITY_CONFIG_PATH_CENTER: 'center.json',
-  CRCSYNC_EFSP_FACILITY_CONFIG_PATH_TACTICAL: 'tactical.json',
-  CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH: 'board.json',
-  CRCSYNC_EFSP_MUTATION_LOG_PATH: 'mutations.jsonl',
-  CRCSYNC_EFSP_AIRSPACES_PATH: 'airspaces.json',
-  CRCSYNC_EFSP_TRAFFIC_COUNT_PATH: 'traffic-count.jsonl',
-  CRCSYNC_EFSP_METRICS_PATH: 'metrics.json',
-  CRCSYNC_TERRAIN_CACHE_DIR: 'terrain',
-  CRCSYNC_MISSION_SESSION_PATH: 'session.json',
-};
-for (const [k, v] of Object.entries(PATHS)) process.env[k] = path.join(tmpDir, v);
-process.env.CRCSYNC_STATE_DIR = tmpDir;
-delete process.env.CRCSYNC_TEST_RESET;
+const paths = withPaths('mission-reset-', APP_PATHS, { stateDir: true, shippedConfig: true, extraEnv: { CRCSYNC_TEST_RESET: undefined } }).apply();
+const tmpDir = paths.dir;
 
 const { createApp } = await import('../src/app.js');
 const { crew, mustAct, airborneDeparture, handedToCenter, mustCarrierAct, mustSfaAct, DEPARTURE_FLIGHT_DATA } = await import('./helpers/efsp-scenario.mjs');
@@ -47,18 +28,18 @@ const T = (hhmm) => `2016-06-21T${hhmm}:00`;
 function quiet() { const cap = crcLog.capture(); return cap; }
 
 function wipeState() {
-  for (const [k, v] of Object.entries(PATHS)) {
+  for (const [k, v] of Object.entries(APP_PATHS)) {
     if (k === 'CRCSYNC_CONFIG_DIR' || k === 'CRCSYNC_TERRAIN_CACHE_DIR' || k.startsWith('CRCSYNC_EFSP_FACILITY')) continue;
     fs.rmSync(path.join(tmpDir, v), { force: true });
   }
-  fs.writeFileSync(path.join(tmpDir, PATHS.CRCSYNC_EFSP_AIRSPACES_PATH.split('/').pop()), '{}');
+  fs.writeFileSync(path.join(tmpDir, APP_PATHS.CRCSYNC_EFSP_AIRSPACES_PATH.split('/').pop()), '{}');
 }
 
 /** An app on a fake gRPC client, started, with every frame it delivers captured. */
 function boot() {
   const grpcClient = Object.assign(new EventEmitter(), { getWeather: () => ({}), evalLua: async () => null, getAptWeather: async () => ({}) });
   const srsClient = new EventEmitter();
-  const app = createApp({ grpcClient, srsClient, env: { ...process.env } });
+  const app = createApp({ grpcClient, srsClient, env: { ...paths.env } });
   const frames = [];
   const real = app.wsHub.deliverEfsp.bind(app.wsHub);
   app.wsHub.deliverEfsp = (f) => { frames.push(...[].concat(f)); return real(f); };

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { withPaths, FACILITIES, AIRSPACES } from './helpers/with-paths.mjs';
 
 /* Coverage follows the Positions you hold (docs/adr/0042, docs/adr/0043).
  *
@@ -13,13 +14,10 @@ import path from 'node:path';
  * not the radar ids docs/adr/0041 would have caught us writing down.
  */
 
-const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'crcsync-poscov-'));
+const paths = withPaths('crcsync-poscov-', { ...FACILITIES, ...AIRSPACES }).apply();
+const tmpDir = paths.dir;
 // Point every facility config at files that do not exist, so _loadOne falls
 // back to the defaults — the pattern every other EFSP test file uses.
-process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH = path.join(tmpDir, 'incirlik.json');
-process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH_CENTER = path.join(tmpDir, 'center.json');
-process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH_TACTICAL = path.join(tmpDir, 'tactical.json');
-process.env.CRCSYNC_EFSP_AIRSPACES_PATH = path.join(tmpDir, 'airspaces.json');
 fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, '{}'); // no code default for the empty table (DATA-2)
 
 const facilityConfig = (await import('../src/efsp/facility-config.js')).createFacilityConfig();

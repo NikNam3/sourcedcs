@@ -4,16 +4,12 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import crypto from 'crypto';
+import { withPaths, FACILITIES, BOARD, MUTATION_LOG, AIRSPACES } from './helpers/with-paths.mjs';
 
 // docs/adr/0058 — the flight's assigned altitude and heading, on the flight data.
 
-const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'efsp-clearance-test-'));
-process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH = path.join(tmpDir, 'incirlik.json');
-process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH_CENTER = path.join(tmpDir, 'center.json');
-process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH_TACTICAL = path.join(tmpDir, 'tactical.json');
-process.env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH = path.join(tmpDir, 'board.json');
-process.env.CRCSYNC_EFSP_MUTATION_LOG_PATH = path.join(tmpDir, 'mutations.jsonl');
-process.env.CRCSYNC_EFSP_AIRSPACES_PATH = path.join(tmpDir, 'airspaces.json');
+const paths = withPaths('efsp-clearance-test-', { ...FACILITIES, ...BOARD, ...MUTATION_LOG, ...AIRSPACES }).apply();
+const tmpDir = paths.dir;
 fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, JSON.stringify({}));
 
 const { createEfsp } = await import('../src/efsp/index.js');
