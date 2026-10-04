@@ -1,6 +1,6 @@
 'use strict';
 
-const { VERSION, liveStamped } = require('../frames');
+const { correlationDelta, liveStamped } = require('../frames');
 const readScope = require('../../read-scope');
 
 /**
@@ -61,11 +61,7 @@ module.exports = {
   // deliberately NOT a section of efsp-board-delta: a correlation is not a
   // Strip and rides no Board's sequence.
   broadcasts: (result, ctx) => ({
-    primary: {
-      version: VERSION, type: 'efsp-correlation-delta',
-      correlationSeq: ctx.correlationStore.currentSeq, correlationEpoch: ctx.correlationStore.epoch,
-      correlations: { updated: [result.correlation] },
-    },
+    primary: correlationDelta(ctx.correlationStore, [result.correlation]),
   }),
 
   // Correlation records, one per live flight data and sent whole for the same reason

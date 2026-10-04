@@ -18,9 +18,10 @@ const GRACE = 15000;
 const SNAP = () => process.env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH;
 
 function rig(staffed) {
-  const w = makeWorld(createEfsp, helpers, staffed ? { staffed } : {});
+  const pendingSignOffs = new Map(); // the hub's grace Map, shared with the PositionStores through createEfsp's isAbsent
+  const w = makeWorld(createEfsp, helpers, { ...(staffed ? { staffed } : {}), pendingSignOffs });
   let wall = 1_000_000;
-  const hub = new WsHub({ trackStore: new TrackStore(), collabStore: new CollaborativeStore(), efsp: w.efsp, wallClock: { now: () => wall }, signOnGraceMs: GRACE });
+  const hub = new WsHub({ trackStore: new TrackStore(), collabStore: new CollaborativeStore(), efsp: w.efsp, wallClock: { now: () => wall }, signOnGraceMs: GRACE, pendingSignOffs });
   const clients = new Set();
   hub._wss = { clients };
   function connect(sub) {

@@ -18,6 +18,9 @@ const { WIRE_KEYS } = await import('../src/surveillance/presentation.js');
 
 const APP = { id: 'app:X', sweepMs: 3000, caps: { height: false, ssr: true, mode4: false } };
 
+// The hub's `onEfspChange` dependency; a test points `fn` at its own hook (it defaults to none).
+const hook = { fn: () => {} };
+
 function setup() {
   const trackStore = new TrackStore();
   trackStore.update({
@@ -37,7 +40,7 @@ function setup() {
     illuminated: () => new Map(Object.entries(lit)),
     radars: () => [APP],
   };
-  const hub = new WsHub({ trackStore, collabStore, picture, surveillance });
+  const hub = new WsHub({ trackStore, collabStore, picture, surveillance, onEfspChange: () => hook.fn() });
   const session = { controllerId: 'c1', lastSent: new Map(), labelRevs: new Map() };
   hub._setCoverage(session, picture.coverageFor());
   return { hub, session, records, collabStore };
@@ -258,13 +261,13 @@ test('a fresh hub already has an efsp-alerts message with all three keys empty â
   assert.deepEqual([msg.conformance, msg.conflictAlert, msg.obligations], [[], [], []]);
 });
 
-test('setOnEfspChange fires after an EFSP message that broadcast, not after one that only acked, and a throw is contained', () => {
+test('onEfspChange fires after an EFSP message that broadcast, not after one that only acked, and a throw is contained', () => {
   const { hub, session } = setup();
   const ws = fakeWs();
   let result = { ack: { type: 'efsp-ack' }, broadcasts: [] };
   hub._efsp = { handleMessage: () => result };
   let fired = 0;
-  hub.setOnEfspChange(() => { fired += 1; });
+  hook.fn = () => { fired += 1; };
 
   hub._onMessage(ws, session, JSON.stringify({ type: 'efsp-mutation' }));
   assert.equal(fired, 0, 'an ack alone changed nothing');
@@ -273,7 +276,7 @@ test('setOnEfspChange fires after an EFSP message that broadcast, not after one 
   hub._onMessage(ws, session, JSON.stringify({ type: 'efsp-mutation' }));
   assert.equal(fired, 1);
 
-  hub.setOnEfspChange(() => { throw new Error('monitor bug'); });
+  hook.fn = () => { throw new Error('monitor bug'); };
   const cap = crcLog.capture();
   try {
     assert.doesNotThrow(() => hub._onMessage(ws, session, JSON.stringify({ type: 'efsp-mutation' })));
@@ -282,12 +285,27 @@ test('setOnEfspChange fires after an EFSP message that broadcast, not after one 
   assert.equal(ws.sent.filter(m => m.type === 'efsp-ack').length, 3, 'the sender still got every ack');
 });
 
+test('deliverEfsp: every server-originated frame runs the post-change hook once, an empty list does not, and the hook is not re-entered', () => {
+  const { hub } = setup();
+  const sent = [];
+  hub._broadcastEfsp = (m) => sent.push(m.type);
+  let fired = 0;
+  hook.fn = () => { fired += 1; hub.deliverEfsp({ type: 'efsp-from-the-hook' }); };
+  hub.deliverEfsp([]);
+  hub.deliverEfsp(null);
+  assert.equal(fired, 0);
+  hub.deliverEfsp({ type: 'efsp-carrier-delta' });
+  hub.deliverEfsp([{ type: 'efsp-board-delta' }, { type: 'efsp-board-delta' }]);
+  assert.equal(fired, 2, 'one hook run per delivery');
+  assert.deepEqual(sent, ['efsp-carrier-delta', 'efsp-from-the-hook', 'efsp-board-delta', 'efsp-board-delta', 'efsp-from-the-hook']);
+});
+
 test('a handler result with an ack and no broadcasts array (metrics report/request, resync answers) is sent, not thrown on', () => {
   const { hub, session } = setup();
   const ws = fakeWs();
   hub._efsp = { handleMessage: () => ({ ack: { type: 'efsp-metrics-ack' } }) };
   let fired = 0;
-  hub.setOnEfspChange(() => { fired += 1; });
+  hook.fn = () => { fired += 1; };
   assert.doesNotThrow(() => hub._onMessage(ws, session, JSON.stringify({ type: 'efsp-metrics-report' })));
   assert.deepEqual(ws.sent.map(m => m.type), ['efsp-metrics-ack']);
   assert.equal(fired, 0, 'nothing was broadcast, so nothing changed');

@@ -5,7 +5,7 @@
 // _restore restores every entry, each by looping over this list.
 //
 //   key       the key in the persisted body (and in ctx.stores)
-//   build     (deps) -> instance | null. deps = { clock, transitionAltFt, currentTheater, codeAllocator, mutationLog,
+//   build     (deps) -> instance | null. deps = { clock, transitionAltFt, onFlightDataWrite, currentTheater, codeAllocator, mutationLog,
 //             facilities, stores }. `facilities` (facilityId -> { boardStore, positionStore, rules }) is
 //             filled after the stores are built, so a closure may read it lazily, never at build time.
 //             `stores` fills in registry order as each entry is built.
@@ -78,7 +78,7 @@ const REGISTRY = [
   },
   {
     key: 'flightData',
-    build: ({ clock, transitionAltFt, codeAllocator, stereoRoutes }) => new FlightDataStore(codeAllocator, { clock, transitionAltFt, stereoRoutes }),
+    build: ({ clock, transitionAltFt, codeAllocator, stereoRoutes, onFlightDataWrite }) => new FlightDataStore(codeAllocator, { clock, transitionAltFt, stereoRoutes, onWrite: onFlightDataWrite }),
     snapshot: (s) => s.snapshot(),
     restore: (s, data) => s.restore(data),
   },

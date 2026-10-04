@@ -49,9 +49,8 @@ const crypto = require('crypto');
 
 const { MAX_FREE_TEXT } = require('./flight-data-store');
 const { WALL_CLOCK } = require('../mission-clock');
-const { SyncLog } = require('./sync/sync-log');
+const { SyncedStore } = require('./synced-store');
 const log = require('../log').logger('efsp:marsa-store');
-const { internalError, partialAuditTail } = require('./store-throw');
 
 const MARSA_STATES = ['ACTIVE', 'ENDED', 'VOIDED'];
 
@@ -89,7 +88,7 @@ function capText(value) {
   return s.length > MAX_FREE_TEXT ? s.slice(0, MAX_FREE_TEXT) : s;
 }
 
-class MarsaStore {
+class MarsaStore extends SyncedStore {
   /**
    * @param {object} [deps]
    * @param {(flightDataId:string)=>boolean} [deps.flightDataExists]
@@ -111,12 +110,10 @@ class MarsaStore {
    *   direct SREG write while an ACTIVE relation holds the flight data.
    */
   constructor({ flightDataExists, setSeparationRegime, clock = WALL_CLOCK, mutationLog = null } = {}) {
-    this._clock = clock; // the mission clock, docs/adr/0079
+    super({ clock, mutationLog });
     this._flightDataExists = flightDataExists || (() => true);
     this._setSeparationRegime = setSeparationRegime || (() => ({ ok: true }));
     this._relations = new Map(); // marsaId -> relation
-    this._sync = new SyncLog({ epoch: true }); // the store's sequence and its lifetime (epoch, not persisted): no ring, the resync answer is the snapshot slice (docs/adr/0106)
-    this._mutationLog = mutationLog; // the Mutation log (docs/adr/0081); null for a fixture with none
     // The flight data _applyRegime wrote during the op currently being applied, for
     // the caller to drain and broadcast. See drainRegimeWrites().
     this._regimeWrites = [];
@@ -149,20 +146,6 @@ class MarsaStore {
     return [...byId.values()];
   }
 
-  /**
-   * Same wiring the other stores have. What it records is what a CONTROLLER
-   * asked for, refusals included — a refused DeclareMarsa leaves no relation at
-   * all, so without this it would leave no trace anywhere.
-   *
-   * Interlock voids ARE logged here, unlike correlation-store.js's reconciler
-   * sweep, and the difference is rate: that sweep runs at 1Hz forever, while an
-   * interlock void happens at most once per relation and is precisely the event
-   * an after-action review goes looking for.
-   */
-
-  get currentSeq() { return this._sync.seq; }
-  /** The lifetime this store's seq belongs to (docs/adr/0106): new per process, never persisted. */
-  get epoch() { return this._sync.epoch; }
 
   getRelation(marsaId) {
     const relation = this._relations.get(marsaId);
@@ -193,10 +176,9 @@ class MarsaStore {
   }
 
   _touch(relation, by, transition) {
-    relation.rev += 1;
+    this._bump(relation);
     relation.updatedAt = this._clock.now();
     relation.updatedBy = by || null;
-    this._sync.advance();
     if (transition) {
       relation.transitions.push({
         at: relation.updatedAt,
@@ -221,29 +203,21 @@ class MarsaStore {
   }
 
   _recordAudit(mutation, actingPositionId, by, before, result) {
-    if (!this._mutationLog) return;
-    this._mutationLog.record({
-      clientMutationId: mutation.clientMutationId,
-      op: mutation.op && mutation.op.kind,
+    this._writeAudit(mutation, {
       // Its own id field, not stripId/flightDataId/airspaceId — a MARSA op targets a
       // relation BETWEEN several flights, so no single one of those names it.
       // The reasoning airspace-store.js's own audit comment gives for adding
       // airspaceId rather than letting stripId stand in for something it is
       // not: readers key on whichever id is present.
-      marsaId: (result.relation && result.relation.marsaId) || mutation.marsaId || null,
       // Theater-wide (docs/adr/0013); the flights it concerns are named instead
       // (docs/adr/0083): the relation's participants, or the op's own.
-      facilityId: null,
-      flightDataIds: this._auditFlightDataIds(mutation, result, before),
-      actingPositionId,
-      actorId: by || null,
-      at: this._clock.now(),
-      ok: result.ok,
-      reason: result.ok ? undefined : result.reason,
-      detail: result.ok ? undefined : result.detail,
-      before,
-      after: (result.ok || result.partial) && result.relation ? deepClone(result.relation) : undefined,
-      ...partialAuditTail(result),
+      subject: {
+        marsaId: (result.relation && result.relation.marsaId) || mutation.marsaId || null,
+        facilityId: null,
+        flightDataIds: this._auditFlightDataIds(mutation, result, before),
+      },
+      actingPositionId, by, result, before,
+      after: () => (result.relation ? deepClone(result.relation) : undefined),
     });
   }
 
@@ -269,16 +243,9 @@ class MarsaStore {
     // baseRev to check — the same shape CreateStrip has in board/strip-ops.js's
     // `dispatch`, handled before the record lookup rather than inside it.
     if (op.kind === 'DeclareMarsa') {
-      let result;
-      const seq0 = this._sync.seq;
-      try {
-        result = this._declare(op, actingPositionId, by);
-      } catch (err) {
-        log.error('unexpected error declaring MARSA — rejecting it instead of crashing', { err });
-        result = internalError('MARSA declaration', err, this._sync.seq !== seq0);
-        // The relation it minted before the throw is the newest one (a Map keeps insertion order).
-        if (result.partial) result.relation = this.getRelation([...this._relations.keys()].pop());
-      }
+      const result = this._guarded('MARSA declaration', log, () => this._declare(op, actingPositionId, by));
+      // The relation it minted before a throw is the newest one (a Map keeps insertion order).
+      if (result.partial) result.relation = this.getRelation([...this._relations.keys()].pop());
       if (result.ok || result.partial) result.flightDataList = this.drainRegimeWrites();
       this._recordAudit(mutation, actingPositionId, by, null, result);
       return result;
@@ -301,24 +268,17 @@ class MarsaStore {
     }
 
     const before = deepClone(relation);
-    let result;
-    const seq0 = this._sync.seq;
-    try {
+    const result = this._guarded('MARSA op', log, () => {
       switch (op.kind) {
-        case 'MarkRendezvous':    result = this._markRendezvous(relation, op, by); break;
-        case 'AddParticipant':    result = this._addParticipant(relation, op, by); break;
-        case 'RemoveParticipant': result = this._removeParticipant(relation, op, by); break;
-        case 'EndMarsa':          result = this._end(relation, op, by); break;
-        case 'VoidMarsa':         result = this._void(relation, 'MANUAL', capText(op.note), by); break;
+        case 'MarkRendezvous':    return this._markRendezvous(relation, op, by);
+        case 'AddParticipant':    return this._addParticipant(relation, op, by);
+        case 'RemoveParticipant': return this._removeParticipant(relation, op, by);
+        case 'EndMarsa':          return this._end(relation, op, by);
+        case 'VoidMarsa':         return this._void(relation, 'MANUAL', capText(op.note), by);
         default:
-          result = { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown MARSA op: ${op.kind}` };
+          return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown MARSA op: ${op.kind}` };
       }
-    } catch (err) {
-      // Same backstop every other store has: one bad op must never take the
-      // process down for every connected client.
-      log.error('unexpected error applying a MARSA op — rejecting it instead of crashing', { err });
-      result = internalError('MARSA op', err, this._sync.seq !== seq0);
-    }
+    });
 
     // Every result carries the relation, success or not — a rejection that says
     // nothing about current state leaves the client rendering its own guess

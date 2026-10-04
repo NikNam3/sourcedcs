@@ -32,7 +32,8 @@ const stack = (efsp) => efsp.carrierStore.getRecord().stacks.MAIN.entries;
 const view = (efsp) => efsp.carrierStore.view();
 const wait = (ms) => new Promise(r => setTimeout(r, ms));
 
-const fresh = () => freshEfsp(createEfsp, STAFFED);
+const nlaSink = { fn: () => {} }; // createEfsp's onNlaDelta; a test points it at its own list
+const fresh = () => freshEfsp(createEfsp, STAFFED, { onNlaDelta: (p) => nlaSink.fn(p) });
 
 function checkIn(efsp, c, callsign, { flightDataId } = {}) {
   return mustAct(efsp, c.CV_MARSHAL, 'CV_MARSHAL', null, {
@@ -315,7 +316,7 @@ test('typed values are what a controller reads: EEAT and Charlie time as Zulu HH
 test('a Case change re-states every carrier Strip\'s NLA: Commence becomes To pattern at once', () => {
   const { efsp, c } = fresh();
   const deltas = [];
-  efsp.nlaStatusMonitor.setOnDelta((p) => deltas.push(p));
+  nlaSink.fn = (p) => deltas.push(p);
   const a = checkIn(efsp, c, 'AAA11');
   efsp.nlaStatusMonitor.tick(); deltas.length = 0;
   assert.equal(efsp.boardStoreFor('CARRIER').nlaStatusFor(strip(efsp, a.stripId)).carrierHandoff, 'MARSHAL_TO_APPROACH');

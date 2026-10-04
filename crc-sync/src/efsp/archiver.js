@@ -61,7 +61,7 @@ class Archiver {
     this._warnedNoCounter = false;
   }
 
-  /** Wired by app.js to the traffic count (L5), which is built outside createEfsp. */
+  /** Wired by createEfspInstrumentation (metrics.js) to the traffic count (L5), which is built outside createEfsp and needs the facade this archiver belongs to. */
   setIsCounted(fn) { this._isCounted = fn; }
 
   /**

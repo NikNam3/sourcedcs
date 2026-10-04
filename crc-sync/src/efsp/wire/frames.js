@@ -86,6 +86,45 @@ function boardDelta(ctx, boardStore, facilityId, strips, flightDataList, positio
   };
 }
 
+/**
+ * An efsp-board-delta a SERVER-originated change sends (the NLA-status sweep, the archiver): `payload` is
+ * `{ facilityId, boardSeq, boardEpoch?, strips, gone, flightDataListGone }`. The Board's own epoch names the lifetime when the
+ * caller did not stamp one (docs/adr/0081). Flight data appears only as `gone`: neither caller ever updates one here.
+ */
+function serverBoardDelta(payload, boardStoreFor) {
+  const board = boardStoreFor ? boardStoreFor(payload.facilityId) : null;
+  return {
+    version: VERSION, type: 'efsp-board-delta',
+    boardSeq: payload.boardSeq,
+    boardEpoch: payload.boardEpoch !== undefined ? payload.boardEpoch : (board ? board.epoch : undefined),
+    facilityId: payload.facilityId,
+    strips: { updated: payload.strips || [], gone: payload.gone || [] },
+    flightDataList: payload.flightDataListGone && payload.flightDataListGone.length ? { updated: [], gone: payload.flightDataListGone } : { updated: [] },
+    positions: { updated: [] },
+  };
+}
+
+/**
+ * An efsp-correlation-delta (docs/adr/0045): its own delta type and seq, a correlation is not a Strip. With a `store`
+ * it carries the store's seq and lifetime (docs/adr/0106); with none it is the seq-less supplement a filtered Strip brings.
+ */
+function correlationDelta(store, correlations, stats) {
+  const frame = { version: VERSION, type: 'efsp-correlation-delta' };
+  if (store) { frame.correlationSeq = store.currentSeq; frame.correlationEpoch = store.epoch; }
+  frame.correlations = { updated: correlations };
+  if (stats !== undefined) frame.stats = stats;
+  return frame;
+}
+
+/** Its own delta type with its own seq (rule 5's deliberate deviation, docs/adr/0061). */
+function runwayStatusDelta(store, records) {
+  return {
+    version: VERSION, type: 'efsp-runway-status-delta',
+    runwayStatusSeq: store.currentSeq, runwayStatusEpoch: store.epoch,
+    runwayStatuses: { updated: records.filter(Boolean) },
+  };
+}
+
 /** The whole rotation record, sent whole: small. Its own delta type and seq, like efsp-carrier-delta. */
 function sfaDelta(sfaStore) {
   return { version: VERSION, type: 'efsp-sfa-delta', sfaSeq: sfaStore.currentSeq, sfaEpoch: sfaStore.epoch, sfaRotation: sfaStore.view() };
@@ -116,4 +155,4 @@ function liveStamped(ctx) {
   return out;
 }
 
-module.exports = { VERSION, stampStrip, mergeFlightDataList, touchedStrips, boardDelta, marsaDelta, carrierDelta, sfaDelta, liveStamped };
+module.exports = { VERSION, stampStrip, mergeFlightDataList, touchedStrips, boardDelta, serverBoardDelta, correlationDelta, runwayStatusDelta, marsaDelta, carrierDelta, sfaDelta, liveStamped };

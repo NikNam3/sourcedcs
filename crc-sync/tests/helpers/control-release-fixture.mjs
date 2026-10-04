@@ -36,9 +36,9 @@ export function fakeWallClock(start = 1_000_000) {
   return wall;
 }
 
-export function makeWorld(createEfsp, helpers, { clock, wallClock, staffed = STAFFED } = {}) {
+export function makeWorld(createEfsp, helpers, { clock, wallClock, staffed = STAFFED, pendingSignOffs = null } = {}) {
   fs.rmSync(process.env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH, { force: true });
-  const efsp = createEfsp({ ...(clock ? { clock } : {}), ...(wallClock ? { wallClock } : {}) });
+  const efsp = createEfsp({ ...(clock ? { clock } : {}), ...(wallClock ? { wallClock } : {}), ...(pendingSignOffs ? { isAbsent: (id) => pendingSignOffs.has(id) } : {}) });
   const c = helpers.crew(efsp, staffed);
   return { efsp, c, clock };
 }

@@ -813,6 +813,10 @@ function createEfspInstrumentation({
     facilityIds, config: config.trafficCount, path: trafficCountPath, env, clock, wallNow,
     missionSessionOf: () => missionSession.currentSeq(),
   });
+  // The archiver (docs/adr/0082) leaves a Strip alone until the traffic count has it. The count is built here, beside the tap
+  // that wraps the facade, so this is the one place the cycle efsp.archiver <-> traffic count closes (efsp.archiver is built
+  // inside createEfsp, before there is a count to ask).
+  if (efsp.archiver && typeof efsp.archiver.setIsCounted === 'function') efsp.archiver.setIsCounted((stripId) => trafficCount.hasCountFor(stripId));
   efsp.mutationLog.onRecord((entry) => {
     // A retake (`position-retaken`) hands covered Strips back; it is not a loss of
     // a Position, so only a vacated one counts (docs/adr/0083). SystemCoordinationEnd

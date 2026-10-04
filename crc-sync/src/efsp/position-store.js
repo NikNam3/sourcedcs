@@ -28,7 +28,7 @@ class PositionStore {
    * @param {string[]} positionIds — the fixed Position set, e.g. ['OPS','CD','GC','LC'] (a Facility's Position set)
    * @param {object} consolidation — one-hop consolidation map, e.g. { CD:'GC', GC:'LC' } (guide §4.8.6 rule 2's default consolidation, cut where the Facility ends). A Position absent from this map (like OPS) is consolidated nowhere — and OPS is on no chain in the guide's default either.
    */
-  constructor(positionIds, consolidation, { clock = WALL_CLOCK, frequencies = {} } = {}) {
+  constructor(positionIds, consolidation, { clock = WALL_CLOCK, frequencies = {}, isAbsent = () => false } = {}) {
     // docs/adr/0105: `{ <Position>: [ { label, mhz } ] }` from the facility config. Data only; nothing here acts on it.
     this._frequencies = frequencies || {};
     // The mission clock (docs/adr/0079) — `since` is who has been signed on at a Position
@@ -44,15 +44,13 @@ class PositionStore {
     // Whether a controller's connection is closed but still within the sign-on grace (ws-hub.js). Such a Primary keeps
     // the Position for a reconnect, but never locks anyone else out: a controller signing on is treated as if the
     // absent one had signed off (docs/wip/DESK-SIGNON.md, S-SIGNON0).
-    this._isAbsent = () => false;
+    this._isAbsent = isAbsent;
     // Positions whose absent Primary a sign-on ended (the takeover): read once by the caller that owns the sign-off's effects.
     this._takenOver = [];
   }
 
   /** The Positions whose held (absent) Primary a sign-on has ended since the last call. */
   drainTakenOver() { const out = this._takenOver; this._takenOver = []; return out; }
-
-  setAbsentCheck(fn) { this._isAbsent = typeof fn === 'function' ? fn : () => false; }
 
   isStaffed(positionId) {
     const s = this._state.get(positionId);

@@ -51,7 +51,8 @@ const {
 const ATC = { OPS: 'INCIRLIK', CD: 'INCIRLIK', GC: 'INCIRLIK', LC: 'INCIRLIK', AP: 'INCIRLIK', CTR: 'CENTER' };
 const RWY = '05/23';
 
-let efsp = createEfsp({ wallClock: steppedWallClock() });
+const nlaSink = { fn: () => {} }; // createEfsp's onNlaDelta; captureDeltas points it at its own list
+let efsp = createEfsp({ wallClock: steppedWallClock(), onNlaDelta: (p) => nlaSink.fn(p) });
 let c = crew(efsp, ATC);
 
 // ── local helpers (the shared harness is append-only and L8 is adding to it;
@@ -121,7 +122,7 @@ function finishAndInspect(e = efsp, crewOf = c) {
 /** Captures what the NLA status monitor puts on the ordinary board-delta. */
 function captureDeltas(e = efsp) {
   const payloads = [];
-  e.nlaStatusMonitor.setOnDelta(p => payloads.push(p));
+  nlaSink.fn = p => payloads.push(p);
   return {
     stripFor: (s) => payloads.flatMap(p => p.strips).filter(x => x.stripId === s.stripId).at(-1),
     clear: () => { payloads.length = 0; },

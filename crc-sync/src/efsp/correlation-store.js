@@ -39,9 +39,8 @@
 
 const { MAX_FREE_TEXT } = require('./flight-data-store');
 const { WALL_CLOCK } = require('../mission-clock');
-const { SyncLog } = require('./sync/sync-log');
+const { SyncedStore } = require('./synced-store');
 const log = require('../log').logger('efsp:correlation-store');
-const { internalError, partialAuditTail } = require('./store-throw');
 
 const CORRELATION_STATES = ['CORRELATED', 'PROVISIONAL', 'UNCORRELATED'];
 
@@ -72,7 +71,7 @@ function capText(value) {
   return s.length > MAX_FREE_TEXT ? s.slice(0, MAX_FREE_TEXT) : s;
 }
 
-class CorrelationStore {
+class CorrelationStore extends SyncedStore {
   /**
    * @param {{flightDataExists?:(flightDataId:string)=>boolean}} [deps] — injected the same
    *   way the Board's `liveStripsForFlightData` rule is (index.js; used by board/strip-ops.js), and for the same reason: this
@@ -80,11 +79,9 @@ class CorrelationStore {
    *   composition root the stores it would need do not all exist yet.
    */
   constructor({ flightDataExists, clock = WALL_CLOCK, mutationLog = null } = {}) {
-    this._clock = clock; // the mission clock, docs/adr/0079
+    super({ clock, mutationLog });
     this._flightDataExists = flightDataExists || (() => true);
     this._records = new Map(); // flightDataId -> record
-    this._sync = new SyncLog({ epoch: true }); // the store's sequence and its lifetime (epoch, not persisted): no ring, the resync answer is the snapshot slice (docs/adr/0106)
-    this._mutationLog = mutationLog; // the Mutation log (docs/adr/0081); null for a fixture with none
   }
 
   /**
@@ -97,9 +94,6 @@ class CorrelationStore {
    * in the record's own transitions[]. Same split airspace-store.js documents.
    */
 
-  get currentSeq() { return this._sync.seq; }
-  /** The lifetime this store's seq belongs to (docs/adr/0106): new per process, never persisted. */
-  get epoch() { return this._sync.epoch; }
 
   _seed(flightDataId) {
     const record = {
@@ -179,10 +173,9 @@ class CorrelationStore {
   }
 
   _touch(record, by, transition) {
-    record.rev += 1;
+    this._bump(record);
     record.updatedAt = this._clock.now();
     record.updatedBy = by || null;
-    this._sync.advance();
     if (transition) {
       record.transitions.push({
         at: record.updatedAt,
@@ -199,26 +192,15 @@ class CorrelationStore {
   }
 
   _recordAudit(mutation, actingPositionId, by, before, result) {
-    if (!this._mutationLog) return;
-    this._mutationLog.record({
-      clientMutationId: mutation.clientMutationId,
-      op: mutation.op && mutation.op.kind,
+    this._writeAudit(mutation, {
       // No stripId and no airspaceId: a correlation op targets the flight data. A third
       // distinct id field, for the reason airspace-store.js's own audit
       // comment gives — readers key on whichever id is present, rather than
       // one field standing in for something it is not.
-      flightDataId: mutation.flightDataId,
       // Theater-wide: the flight data belongs to no Facility (docs/adr/0013, docs/adr/0083).
-      facilityId: null,
-      actingPositionId,
-      actorId: by || null,
-      at: this._clock.now(),
-      ok: result.ok,
-      reason: result.ok ? undefined : result.reason,
-      detail: result.ok ? undefined : result.detail,
-      before,
-      after: result.ok || result.partial ? this.getCorrelation(mutation.flightDataId) : undefined,
-      ...partialAuditTail(result),
+      subject: { flightDataId: mutation.flightDataId, facilityId: null },
+      actingPositionId, by, result, before,
+      after: () => this.getCorrelation(mutation.flightDataId),
     });
   }
 
@@ -261,21 +243,14 @@ class CorrelationStore {
 
     const op = mutation.op || {};
     const before = deepClone(record);
-    let result;
-    const seq0 = this._sync.seq;
-    try {
+    const result = this._guarded('correlation op', log, () => {
       switch (op.kind) {
-        case 'BindTrack':   result = this._bind(record, op, actingPositionId, by); break;
-        case 'UnbindTrack': result = this._unbind(record, op, actingPositionId, by); break;
+        case 'BindTrack':   return this._bind(record, op, actingPositionId, by);
+        case 'UnbindTrack': return this._unbind(record, op, actingPositionId, by);
         default:
-          result = { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown correlation op: ${op.kind}` };
+          return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown correlation op: ${op.kind}` };
       }
-    } catch (err) {
-      // Same backstop BoardStore and AirspaceStore have: one bad op must never
-      // take the process down for every connected client.
-      log.error('unexpected error applying a correlation op — rejecting it instead of crashing', { err });
-      result = internalError('correlation op', err, this._sync.seq !== seq0);
-    }
+    });
 
     // Every result carries the record, success or not — a rejection that says
     // nothing about current state leaves the client rendering its own guess
@@ -388,9 +363,8 @@ class CorrelationStore {
           if (hadWarning) {
             this._touch(record, null, { reason: 'WARNING_RETRACTED', fromTrackId: null });
           } else {
-            record.rev += 1;
+            this._bump(record);
             record.updatedAt = now;
-            this._sync.advance();
           }
           changed.push(this.getCorrelation(flightDataId));
         }
@@ -420,9 +394,8 @@ class CorrelationStore {
             detail: warning ? warning.detail : null,
           });
         } else {
-          record.rev += 1;
+          this._bump(record);
           record.updatedAt = now;
-          this._sync.advance();
         }
         changed.push(this.getCorrelation(flightDataId));
       }

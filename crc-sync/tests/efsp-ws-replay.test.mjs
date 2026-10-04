@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { serverBoardDelta, correlationDelta, runwayStatusDelta } from '../src/efsp/wire/frames.js';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -188,12 +189,12 @@ test('every efsp-board-delta carries boardEpoch', () => {
   const resync = efsp.handleMessage(c.AP.session, { type: 'efsp-resync', facilityId: 'INCIRLIK', lastBoardSeq: efsp.boardStoreFor('INCIRLIK').currentSeq, boardEpoch: epochOf('INCIRLIK') });
   cases.push(['resync delta', resync.ack, 'INCIRLIK']);
 
-  // ws-hub's broadcastEfspBoardDelta (the NLA-status monitor, and L24's archiver).
+  // serverBoardDelta, delivered by ws-hub (the NLA-status monitor, and L24's archiver).
   const hub = new WsHub({ trackStore: { getAll: () => [] }, collabStore: {}, efsp });
   const sent = [];
   hub._broadcastEfsp = (m) => sent.push(m);
-  hub.broadcastEfspBoardDelta({ facilityId: 'INCIRLIK', boardSeq: efsp.boardStoreFor('INCIRLIK').currentSeq, strips: [] });
-  cases.push(['ws-hub broadcastEfspBoardDelta', sent[0], 'INCIRLIK']);
+  hub.deliverEfsp(serverBoardDelta({ facilityId: 'INCIRLIK', boardSeq: efsp.boardStoreFor('INCIRLIK').currentSeq, strips: [] }, efsp.boardStoreFor));
+  cases.push(['serverBoardDelta', sent[0], 'INCIRLIK']);
 
   for (const [name, msg, fid] of cases) {
     assert.ok(msg, `${name}: no message`);

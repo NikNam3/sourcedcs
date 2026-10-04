@@ -499,19 +499,17 @@ class FlightDataStore {
    *   — every timestamp on the flight data is a time a controller reads — and the
    *   theater's transition altitude, which decides how a block's text writes
    *   an end (FL or feet). A fixture that omits it gets 18,000 ft.
+   * @param {(flightDataId:string, paths:string[]) => void} [deps.onWrite] the undo history's hook (docs/adr/0100): called after every
+   *   controller or system write but an observed one. Omitted, nothing is observed.
    */
-  constructor(codeAllocator, { clock = WALL_CLOCK, transitionAltFt = () => defaultTransitionAltFt(), stereoRoutes = createStereoRoutes() } = {}) {
+  constructor(codeAllocator, { clock = WALL_CLOCK, transitionAltFt = () => defaultTransitionAltFt(), stereoRoutes = createStereoRoutes(), onWrite = null } = {}) {
     this._clock = clock;
     this._stereoRoutes = stereoRoutes; // the table of canned routes, read at start by the composition root
     this._transitionAltFt = transitionAltFt;
     this._codeAllocator = codeAllocator || new CodeAllocator();
     this._flightDataList = new Map(); // flightDataId -> FlightDataRecord
-    this._writeObserver = null;       // (flightDataId, paths) after every controller or system write (docs/adr/0100)
+    this._writeObserver = onWrite;    // (flightDataId, paths) after every controller or system write (docs/adr/0100)
   }
-
-  /** The undo history's hook (docs/adr/0100): `fn(flightDataId, paths)` after every write but an observed one. */
-  setWriteObserver(fn) { this._writeObserver = fn; }
-  get hasWriteObserver() { return !!this._writeObserver; }
 
   _wrote(flightDataId, paths) {
     if (!this._writeObserver) return;

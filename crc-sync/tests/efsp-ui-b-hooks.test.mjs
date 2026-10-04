@@ -33,7 +33,8 @@ test('RUNWAY_CHANGE has its own label in the inhibit reason; WORKS and unknown k
   for (const kind of runwayStatus.SUSPENSION_KINDS) assert.ok(runwayStatus.SUSPENSION_LABELS[kind], `${kind} has a label`);
 });
 
-const efsp = createEfsp();
+const airborne = { fn: undefined }; // createEfsp's airborneEvidence; a test points it at its own evidence
+const efsp = createEfsp({ airborneEvidence: (strip) => (airborne.fn ? airborne.fn(strip) : false) });
 const c = crew(efsp, { OPS: 'INCIRLIK', GC: 'INCIRLIK', LC: 'INCIRLIK' });
 const RWY = '05/23';
 const fs1 = (member, positionId, op) => {
@@ -60,7 +61,7 @@ test('an observed departure may be recorded while the runway is suspended; a typ
   fs1(c.OPS, 'OPS', { kind: 'RequestRunwayStatus', runwayId: RWY, action: 'WORKS', note: 'BAK-12' });
   fs1(c.LC, 'LC', { kind: 'AcceptRunwayRequest', runwayId: RWY });
   const vouched = new Set();
-  efsp.boardStoreFor('INCIRLIK').setAirborneObserver((s) => vouched.has(s.stripId));
+  airborne.fn = (s) => vouched.has(s.stripId);
 
   const s = queuedA;
   // typed: refused, whatever flag it carries when nobody vouches
@@ -82,7 +83,7 @@ test('an observed departure may be recorded while the runway is suspended; a typ
 });
 
 test('the bypass never skips the owner check, and a Strip that waits for no inhibit carries no bypass', () => {
-  efsp.boardStoreFor('INCIRLIK').setAirborneObserver(() => true);
+  airborne.fn = () => true;
   const s = queuedB;
   const wrong = efsp.handleMessage(c.GC.session, { version: 1, type: 'efsp-mutation', clientMutationId: crypto.randomUUID(),
     facilityId: 'INCIRLIK', actingPositionId: 'GC', stripId: s.stripId, baseRev: strip(s).rev, op: { kind: 'SetState', toState: 'DEPARTED', observedAirborne: true } }).ack;
@@ -103,7 +104,7 @@ test('the bypass never skips the owner check, and a Strip that waits for no inhi
 // whole service; the Board half is tested above.
 test('app.js wires every Board\'s airborne observer to the chip\'s own AIRBORNE_ADVANCE hint', () => {
   const server = fs.readFileSync(new URL('../src/app.js', import.meta.url), 'utf8');
-  assert.match(server, /getFacilityIds\(\)\)\s*\{[^}]*setAirborneObserver\(.*surveillanceHints\.getAll\(\).*AIRBORNE_ADVANCE/s);
+  assert.match(server, /airborneEvidence:[^\n]*hintsLink\.get\(\)[^\n]*hints\.getAll\(\)[^\n]*AIRBORNE_ADVANCE/);
   const chip = fs.readFileSync(new URL('../../crc-desktop/app/public/js/panels/efsp/strip-view.js', import.meta.url), 'utf8');
   assert.match(chip, /toState: h\.toState, observedAirborne: true/);
 });

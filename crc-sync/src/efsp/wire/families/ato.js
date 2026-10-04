@@ -1,6 +1,6 @@
 'use strict';
 
-const { VERSION, stampStrip } = require('../frames');
+const { VERSION, stampStrip, boardDelta } = require('../frames');
 const { orderSlots } = require('../slots');
 
 // Both ATO messages are CUSTOM families: they declare `handle()` instead of the skeleton's hooks, because their shape
@@ -127,12 +127,9 @@ function handleAtoMutation(ctx, session, msg, persist) {
   if (!exec.applied) return { ack, broadcasts: orderSlots(null) };
   return {
     ack,
-    broadcasts: orderSlots({ primary: {
-      version: VERSION, type: 'efsp-board-delta', boardSeq: boardStore.currentSeq, boardEpoch: boardStore.epoch, facilityId,
-      strips: { updated: exec.strips.map((s) => stampStrip(boardStore, boardStore.getStrip(s.stripId) || s, facilityId, ctx)), gone: [] },
-      flightDataList: { updated: exec.flightDataIds.map((id) => ctx.flightDataStore.getFlightData(id)).filter(Boolean) },
-      positions: { updated: [] },
-    } }),
+    broadcasts: orderSlots({ primary: boardDelta(ctx, boardStore, facilityId,
+      { updated: exec.strips.map((s) => stampStrip(boardStore, boardStore.getStrip(s.stripId) || s, facilityId, ctx)), gone: [] },
+      exec.flightDataIds.map((id) => ctx.flightDataStore.getFlightData(id)).filter(Boolean)) }),
   };
 }
 

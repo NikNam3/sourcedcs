@@ -18,8 +18,9 @@ const { loadSessionConfig } = await import('../src/session-config.js');
 const GRACE = 15000;
 function rig() {
   let wall = 1_000_000;
-  const efsp = createEfsp();
-  const hub = new WsHub({ trackStore: new TrackStore(), collabStore: new CollaborativeStore(), efsp, wallClock: { now: () => wall }, signOnGraceMs: GRACE });
+  const pendingSignOffs = new Map(); // shared with the PositionStores through createEfsp's isAbsent
+  const efsp = createEfsp({ isAbsent: (id) => pendingSignOffs.has(id) });
+  const hub = new WsHub({ trackStore: new TrackStore(), collabStore: new CollaborativeStore(), efsp, wallClock: { now: () => wall }, signOnGraceMs: GRACE, pendingSignOffs });
   const ps = efsp.positionStoreFor('INCIRLIK');
   function connect(sub) {
     const handlers = {};

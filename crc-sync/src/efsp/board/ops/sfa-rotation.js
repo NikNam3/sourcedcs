@@ -49,10 +49,7 @@ function _applySfaRotation(ctx, strip, by, actingPositionId) {
     kind: 'SFA_ROTATION', trigger: fx.trigger, label: fx.label, at: now, by: by || null,
     from: from.ownerPositionId, to: dest, fromStripType: from.stripType, toStripType: strip.stripType, frequencyRackId: from.rackId,
   };
-  strip.rev += 1;
-  strip.updatedAt = now;
-  strip.updatedBy = by || null;
-  ctx.touch(strip.stripId);
+  ctx.state.bump(strip, by, now);
   return { ok: true, strip, sfaTransfer: { kind: 'SFA_ROTATION', trigger: fx.trigger } };
 }
 

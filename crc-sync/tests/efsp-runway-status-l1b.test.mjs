@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { serverBoardDelta, correlationDelta, runwayStatusDelta } from '../src/efsp/wire/frames.js';
 import WsHub from '../src/ws-hub.js';
 import TrackStore from '../src/tracks.js';
 import CollaborativeStore from '../src/collab-store.js';
@@ -12,23 +13,23 @@ import { fakeWs, OPEN } from './helpers/ws.mjs';
 // suspension that replaced the barrier change (decisions.md H52).
 
 
-test('broadcastEfspRunwayStatusDelta sends the same efsp-runway-status-delta a runway-status op returns, to every open client', () => {
+test('deliverEfsp(runwayStatusDelta) sends the same efsp-runway-status-delta a runway-status op returns, to every open client', () => {
   const hub = new WsHub({ trackStore: new TrackStore(), collabStore: new CollaborativeStore(), efsp: null });
   const a = fakeWs();
   const b = fakeWs();
   const closed = { readyState: 3, send: () => { throw new Error('must not send on a closed socket'); } };
   hub._wss = { clients: [a, closed, b] };
   const record = { facilityId: 'INCIRLIK', rev: 3, activeRunway: '23' };
-  hub.broadcastEfspRunwayStatusDelta({ runwayStatusSeq: 9, runwayStatuses: [record, null] });
+  hub.deliverEfsp(runwayStatusDelta({ currentSeq: 9, epoch: undefined }, [record, null]));
   for (const ws of [a, b]) {
     assert.deepEqual(ws.sent, [{ version: 1, type: 'efsp-runway-status-delta', runwayStatusSeq: 9, runwayStatuses: { updated: [record] } }]);
   }
 });
 
-test('broadcastEfspRunwayStatusDelta is a no-op before the WebSocket server exists', () => {
+test('deliverEfsp is a no-op before the WebSocket server exists', () => {
   const hub = new WsHub({ trackStore: new TrackStore(), collabStore: new CollaborativeStore(), efsp: null });
   hub._wss = null;
-  hub.broadcastEfspRunwayStatusDelta({ runwayStatusSeq: 1, runwayStatuses: [] });
+  hub.deliverEfsp(runwayStatusDelta({ currentSeq: 1, epoch: 'e' }, []));
 });
 
 test('H52: the suspension is generic runway works — no barrier-specific kind, status, op or request action remains', () => {

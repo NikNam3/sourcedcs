@@ -12,22 +12,22 @@ import CollaborativeStore from '../src/collab-store.js';
  * obligations every 15 s and after a Mutation — and WsHub.broadcastEfspAlerts
  * replaces the whole state. So server.js must compose the message in exactly
  * one place, from all three monitors, or one producer erases another's slice.
- * createApp builds a whole service, so this reads src/app.js.
+ * createApp builds a whole service, so this reads src/app/monitors.js.
  */
 
-const SERVER = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'src', 'app.js'), 'utf8');
+const SERVER = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'src', 'app', 'monitors.js'), 'utf8');
 
-test('app.js calls wsHub.broadcastEfspAlerts in exactly one place, the compose function', () => {
-  assert.equal(SERVER.match(/wsHub\.broadcastEfspAlerts\(/g).length, 1);
+test('app/monitors.js calls broadcastEfspAlerts on the hub in exactly one place, the compose function', () => {
+  assert.equal(SERVER.match(/hubLink\.get\(\)\.broadcastEfspAlerts\(/g).length, 1);
   const fn = SERVER.match(/\n *function broadcastEfspAlerts\(\) \{[\s\S]*?\n  \}\n/);
   assert.ok(fn, 'the compose function exists');
-  assert.match(fn[0], /wsHub\.broadcastEfspAlerts\(/);
+  assert.match(fn[0], /hubLink\.get\(\)\.broadcastEfspAlerts\(/);
   for (const key of ['conformance', 'tofiRegime', 'conflictAlert', 'obligations', 'surveillance']) assert.match(fn[0], new RegExp(`${key}:`));
 });
 
 test('a conformance-only tick does not clear obligations', () => {
   const body = SERVER.match(/\n *function broadcastEfspAlerts\(\) \{[\s\S]*?\n  \}\n/)[0];
-  const compose = new Function('wsHub', 'conformanceMonitor', 'conflictAlertMonitor', 'obligationMonitor', 'surveillanceHints', 'tofiRegimeMonitor',
+  const compose = new Function('hubLink', 'conformanceMonitor', 'conflictAlertMonitor', 'obligationMonitor', 'surveillanceHints', 'tofiRegimeMonitor',
     `${body}; return broadcastEfspAlerts;`);
 
   const wsHub = new WsHub({ trackStore: new TrackStore(), collabStore: new CollaborativeStore() });
@@ -37,7 +37,7 @@ test('a conformance-only tick does not clear obligations', () => {
   let conformance = [];
   const hint = { facilityId: 'INCIRLIK', stripId: 's1', kind: 'AIRBORNE_ADVANCE' };
   const obligation = { facilityId: 'INCIRLIK', stripId: 's1', obligationType: 'VOID_TIME_EXPIRED', severity: 'OVERDUE', dueAt: 1, since: 1 };
-  const broadcast = compose(wsHub,
+  const broadcast = compose({ get: () => wsHub },
     { getAll: () => conformance },
     { getAll: () => [] },
     { getAll: () => [obligation] },
