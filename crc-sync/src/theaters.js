@@ -14,7 +14,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { CONFIG_DIR, STATE_DIR } = require('./state-paths');
+const { dirs } = require('./state-paths');
 const { readShipped } = require('./tuning-file');
 const log = require('./log').logger('theaters');
 
@@ -42,10 +42,11 @@ function _validVariationOverride(v) {
  *   magneticVariation?:{fixedDeg?:number, offsetDeg?:number}}>} only entries with a finite offset;
  *   an invalid optional field is dropped with a warning, the rest of the entry kept
  */
-function loadTheaters(override) {
+function loadTheaters(override, env = process.env) {
+  const { configDir, stateDir } = dirs(env);
   const layers = override
     ? [_read(override)]
-    : [_read(path.join(CONFIG_DIR, 'theaters.json')), _read(path.join(STATE_DIR, 'theaters.json'))];
+    : [_read(path.join(configDir, 'theaters.json')), _read(path.join(stateDir, 'theaters.json'))];
   if (!layers[0]) log.warn('no theater table — every theater runs its mission clock on offset 0');
   const merged = {};
   for (const layer of layers) {
@@ -86,6 +87,11 @@ function _readDefaultTransitionAltFt() {
   if (!(Number.isFinite(v) && v > 0)) throw new Error('[theaters] config/theaters.json: defaultTransitionAltFt must be a positive number');
   return v;
 }
-const DEFAULT_TRANSITION_ALT_FT = _readDefaultTransitionAltFt();
+let DEFAULT_TRANSITION_ALT_FT = null;
+/** The default transition altitude, read on first use (not when this file is required). */
+function defaultTransitionAltFt() {
+  if (DEFAULT_TRANSITION_ALT_FT === null) DEFAULT_TRANSITION_ALT_FT = _readDefaultTransitionAltFt();
+  return DEFAULT_TRANSITION_ALT_FT;
+}
 
-module.exports = { loadTheaters, DEFAULT_TRANSITION_ALT_FT };
+module.exports = { loadTheaters, defaultTransitionAltFt };

@@ -17,8 +17,9 @@ for (const [k, v] of Object.entries({
   CRCSYNC_EFSP_FACILITY_CONFIG_PATH_CARRIER: 'carrier.json',
 })) process.env[k] = path.join(tmpDir, v);
 
-const fc = await import('../src/efsp/facility-config.js');
+const fc = (await import('../src/efsp/facility-config.js')).createFacilityConfig();
 const permission = await import('../src/efsp/permission.js');
+const classPermission = (await import('./helpers/permission.mjs')).classPermission();
 const nla = await import('../src/efsp/nla.js');
 const { CorrelationReconciler, INELIGIBLE_STATES } = await import('../src/efsp/correlation-reconciler.js');
 
@@ -137,15 +138,15 @@ test('singleFrequencyApproach is rejected when malformed (guide §4.7: at least 
 
 test('permission rows: one capability table; PAR and SFA get ordinary Strip ops and no coordination, TOFI, conversion or airspace op', () => {
   for (const id of ['RSU', 'SFA', 'PAR']) {
-    const ops = permission.PERMISSIONS[id];
+    const ops = classPermission.PERMISSIONS[id];
     for (const k of [...permission.COORDINATION_OP_KINDS, ...permission.TOFI_OP_KINDS, ...permission.AP_CTR_ONLY_OP_KINDS, ...permission.AIRSPACE_ENTRY_OP_KINDS]) {
       assert.equal(ops.has(k), false, `${id} must not hold ${k}`);
     }
     assert.equal(ops.has('MoveStrip') && ops.has('TransferStrip') && ops.has('SetState'), true, id);
   }
-  assert.equal(permission.canMutate('RSU', 'CreateStrip'), true);
-  assert.equal(permission.canMutate('SFA', 'CreateStrip'), false, 'SFA\'s Strips arrive from APP');
-  assert.equal(permission.canMutate('PAR', 'CreateStrip'), false, 'PAR\'s arrive by the rotation');
+  assert.equal(classPermission.canMutate('RSU', 'CreateStrip'), true);
+  assert.equal(classPermission.canMutate('SFA', 'CreateStrip'), false, 'SFA\'s Strips arrive from APP');
+  assert.equal(classPermission.canMutate('PAR', 'CreateStrip'), false, 'PAR\'s arrive by the rotation');
   assert.equal(permission.canCreateStripType('RSU', 'PATTERN'), true);
   assert.equal(permission.canCreateStripType('RSU', 'ARRIVAL'), false);
   assert.equal(permission.canCreateStripType('PAR', 'FINAL'), false);

@@ -24,7 +24,9 @@ const { DatalinkFeed } = require('./surveillance/datalink');
 const auth            = require('./auth');
 const { createEfsp }  = require('./efsp');
 const { statePaths } = require('./state-paths');
-const efspFacilityConfig = require('./efsp/facility-config');
+const { createFacilityConfig } = require('./efsp/facility-config');
+const { createStereoRoutes } = require('./efsp/stereo-routes');
+const { createAptConfig } = require('./apt-config');
 const { buildRadars, loadSensorSpecs } = require('./radars');
 const { TerrainStore } = require('./terrain');
 const { CoverageEngine } = require('./coverage');
@@ -47,12 +49,11 @@ const { createAirspaceService } = require('./airspace-service');
 const { listUpcomingAirspaceBookings } = require('./efsp/booking-lookup');
 const { AirspaceCalendar } = require('./efsp/airspace-calendar');
 const { lookupFlightPlan, toFlightDataFiledSeed, listFiledFlightPlans } = require('./efsp/flight-plan-lookup');
-const efspStereoRoutes = require('./efsp/stereo-routes');
 const { createEfspInstrumentation } = require('./efsp/metrics');
 const { archiveDeltas } = require('./efsp/archiver');
 const { CarrierTick } = require('./efsp/carrier-tick');
 const { carrierDelta } = require('./efsp/efsp-ws');
-const { USER_COALITION } = require('./surveillance/iff');
+const { ownCoalitionFrom } = require('./surveillance/iff');
 const { wireCollabSession } = require('./collab-wiring');
 const log = require('./log').logger('app');
 const authLog = require('./log').logger('auth');
@@ -228,7 +229,7 @@ function createApp(deps = {}) {
   // The mission clock (docs/adr/0079): in-game Zulu, fed by the gRPC game-time
   // poll below. Every EFSP time a controller reads — gates, deadlines, Strip
   // clocks, Mutation timestamps — comes from here, never from Date.now().
-  const theaters     = loadTheaters();
+  const theaters     = loadTheaters(undefined, env);
   const missionClock = deps.clock || new MissionClock({ offsetHoursFor: (theatre) => theaters[theatre]?.utcOffsetHours ?? null });
   // The map the mission is on (docs/adr/0085): transition altitude, and what
   // "magnetic" means at a position on the mission date. The one place a typed
@@ -237,7 +238,12 @@ function createApp(deps = {}) {
   const boardPaths   = deps.paths || statePaths('efsp-board.json', env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH);
   // The airspace registry is scoped to the loaded mission's theater (docs/adr/0098 §2); the MissionSession is built below.
   const theaterSource = { current: () => null };
-  const efsp        = createEfsp({ clock: missionClock, wallClock: WALL_CLOCK, nlaGuardMs: nlaGuardFromEnv(env), transitionAltFt: () => theaterContext.transitionAltFt(), currentTheater: () => theaterSource.current(), paths: boardPaths });
+  // Configuration that used to be read when a module was required is read here, once, from `env` (ADR 0095 §4).
+  const efspFacilityConfig = createFacilityConfig({ env });
+  const stereoRoutes = createStereoRoutes({ env });
+  const aptConfig = createAptConfig({ env });
+  const ownCoalition = ownCoalitionFrom(env);
+  const efsp        = createEfsp({ env, facilityConfig: efspFacilityConfig, stereoRoutes, clock: missionClock, wallClock: WALL_CLOCK, nlaGuardMs: nlaGuardFromEnv(env), transitionAltFt: () => theaterContext.transitionAltFt(), currentTheater: () => theaterSource.current(), paths: boardPaths });
 
   // ── The radar picture (docs/adr/0042) ────────────────────────────────────
   // Radars, their sweep phase, terrain masking and who may look through what
@@ -252,8 +258,8 @@ function createApp(deps = {}) {
   // The radar list is rebuilt per tick rather than cached: it depends on live
   // tracks (an AWACS taking off is a new radar) and the cost is a walk over the
   // airfield list plus the tracks, which the sweep does anyway.
-  const sensorSpecs  = loadSensorSpecs();
-  const terrainStore = new TerrainStore();
+  const sensorSpecs  = loadSensorSpecs(undefined, env);
+  const terrainStore = new TerrainStore({ env });
   const coverageEngine = new CoverageEngine({ terrain: terrainStore });
 
   function currentRadars() {
@@ -268,6 +274,7 @@ function createApp(deps = {}) {
     facilityConfig: efspFacilityConfig,
     positionStoreFor: efsp.positionStoreFor,
     radars: currentRadars,
+    ownCoalition,
   });
 
   const picture = {
@@ -293,7 +300,7 @@ function createApp(deps = {}) {
   // radar is locked on (docs/adr/0059). Ticked with the hub; locks polled from
   // the mission on their own, slower, rhythm.
   const datalink = new DatalinkFeed({
-    evalLua: (lua) => grpcClient.evalLua(lua), trackStore, config: sensorSpecs.datalink,
+    evalLua: (lua) => grpcClient.evalLua(lua), trackStore, config: sensorSpecs.datalink, ownCoalition,
   });
 
   const surveillance = createSurveillance({
@@ -301,6 +308,7 @@ function createApp(deps = {}) {
     collab: collabStore,
     srs: srsClient,
     sensorSpecs,
+    ownCoalition,
     correlationStore: efsp.correlationStore,
     flightDataStore: efsp.flightDataStore,
     env: () => ({ weather: grpcClient.getWeather(), transitionAltFt: theaterContext.transitionAltFt() }),
@@ -308,7 +316,7 @@ function createApp(deps = {}) {
   const { transponders, identity } = surveillance;
 
   const sessionConfig = loadSessionConfig();
-  const wsHub       = new WsHub({ trackStore, collabStore, efsp, picture, surveillance, clock: missionClock, theater: theaterContext, downloadUrl: env.CRCSYNC_DOWNLOAD_URL || null, wallClock: WALL_CLOCK, signOnGraceMs: sessionConfig.signOnGraceMs });
+  const wsHub       = new WsHub({ trackStore, collabStore, efsp, picture, surveillance, clock: missionClock, theater: theaterContext, downloadUrl: env.CRCSYNC_DOWNLOAD_URL || null, wallClock: WALL_CLOCK, signOnGraceMs: sessionConfig.signOnGraceMs, aptConfig });
 
   // The radar list itself changes under everyone — an AWACS takes off or lands,
   // a ship spawns — and until this existed nothing told a client about it. A GCI
@@ -420,6 +428,7 @@ function createApp(deps = {}) {
   // wraps efsp.handleMessage/onDisconnect (ws-hub.js looks them up per message,
   // and no socket connects before server.listen).
   const efspInstrumentation = createEfspInstrumentation({
+    env,
     efsp,
     facilityConfig: efspFacilityConfig,
     clock: missionClock,
@@ -464,7 +473,7 @@ function createApp(deps = {}) {
   const carrierTick = new CarrierTick({
     carrierStore: efsp.carrierStore,
     tracks: () => trackStore.getAll(),
-    ownCoalition: () => USER_COALITION,
+    ownCoalition: () => ownCoalition,
     clock: missionClock,
     convergenceAt: (lat, lon) => theaterContext.convergenceAt(lat, lon),
     variationAt: (lat, lon) => theaterContext.variationAt(lat, lon),
@@ -641,7 +650,7 @@ function createApp(deps = {}) {
   // already in memory.
   app.get('/api/stereo-routes', auth.requireAuth, (_req, res) => {
     try {
-      res.json({ ok: true, routes: efspStereoRoutes.getActiveStereoRoutes() });
+      res.json({ ok: true, routes: stereoRoutes.getActiveStereoRoutes() });
     } catch (err) {
       stereoLog.error('unexpected error, responding 503 instead of crashing', { err });
       res.status(503).json({ ok: false, reason: 'stereo route lookup failed unexpectedly' });

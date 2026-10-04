@@ -29,6 +29,8 @@ for (const [k, v] of Object.entries({
 process.env.CRCSYNC_STATE_DIR = tmpDir;
 fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, '{}');
 delete process.env.CRCSYNC_TEST_RESET;
+delete process.env.CRCSYNC_MAPTILER_KEY; // the cases below pass their own keys, and createApp reads only the env it is given
+delete process.env.CRCSYNC_MAPTILER_CLIENT_KEY;
 
 const { createApp } = await import('../src/app.js');
 
@@ -36,7 +38,7 @@ const jwt = 'x.' + Buffer.from(JSON.stringify({ name: 'ctrl' })).toString('base6
 
 async function get(env, headers) {
   const { grpcClient, srsClient } = { grpcClient: Object.assign(new EventEmitter(), { getWeather: () => ({}) }), srsClient: new EventEmitter() };
-  const app = createApp({ grpcClient, srsClient, env });
+  const app = createApp({ grpcClient, srsClient, env: { ...process.env, ...env } });
   return new Promise((resolve, reject) => {
     const srv = app.http.listen(0, '127.0.0.1', async () => {
       try {

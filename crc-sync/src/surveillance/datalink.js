@@ -18,7 +18,7 @@
 //
 // Players and AI both count. Everything here is [SOURCE-DEFINED].
 
-const { USER_COALITION } = require('./iff');
+const { DEFAULT_OWN_COALITION } = require('./iff');
 const { validateDatalinkConfig } = require('./sensor-config');
 
 function hashId(id) {
@@ -40,7 +40,7 @@ class DatalinkFeed {
    * @param {{participants:string[], pliPeriodMs:number, lockPollMs:number}} deps.config  sensor-specs.json `datalink`
    * @param {number} [deps.ownCoalition]
    */
-  constructor({ evalLua = null, trackStore, config, ownCoalition = USER_COALITION }) {
+  constructor({ evalLua = null, trackStore, config, ownCoalition = DEFAULT_OWN_COALITION }) {
     this._eval = evalLua;
     this._tracks = trackStore;
     validateDatalinkConfig(config);

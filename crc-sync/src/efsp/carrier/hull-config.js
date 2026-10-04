@@ -40,14 +40,16 @@ function _load() {
   return hulls;
 }
 
-const HULLS = _load();
+// Read on first use (createEfsp's carrier store asks for the hulls at start-up), not when this file is required.
+let _hulls = null;
+function hulls() { return _hulls || (_hulls = _load()); }
 
 /** Every configured hull (copies). */
-function getHulls() { return JSON.parse(JSON.stringify(HULLS)); }
+function getHulls() { return JSON.parse(JSON.stringify(hulls())); }
 /** One hull by id, or null. */
-function getHull(hullId) { const h = HULLS.find(x => x.hullId === hullId); return h ? JSON.parse(JSON.stringify(h)) : null; }
+function getHull(hullId) { const h = hulls().find(x => x.hullId === hullId); return h ? JSON.parse(JSON.stringify(h)) : null; }
 /** The hull v1 runs (H29: one hull, one stack). */
-function getDefaultHull() { return JSON.parse(JSON.stringify(HULLS[0])); }
+function getDefaultHull() { return JSON.parse(JSON.stringify(hulls()[0])); }
 
 /**
  * Does this radar belong to this hull? By DCS unit name when the hull names one,
@@ -55,7 +57,7 @@ function getDefaultHull() { return JSON.parse(JSON.stringify(HULLS[0])); }
  * carries `unitName` and `shipType` (radars.js).
  */
 function radarIsHull(hullId, radar) {
-  const hull = HULLS.find(x => x.hullId === hullId);
+  const hull = hulls().find(x => x.hullId === hullId);
   if (!hull || !radar) return false;
   if (hull.match.unitName) return radar.unitName === hull.match.unitName;
   return !!hull.match.type && radar.shipType === hull.match.type;

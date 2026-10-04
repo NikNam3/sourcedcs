@@ -27,7 +27,7 @@ fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, JSON.stringify({ Test:
 ] }));
 
 const { createEfsp } = await import('../src/efsp/index.js');
-const facilityConfig = await import('../src/efsp/facility-config.js');
+const facilityConfig = (await import('../src/efsp/facility-config.js')).createFacilityConfig();
 const { createEfspInstrumentation } = await import('../src/efsp/metrics.js');
 const { crew, hold, act, mustAct, jumpTo, advance, DEPARTURE_FLIGHT_DATA, airborneDeparture } = await import('./helpers/efsp-scenario.mjs');
 

@@ -37,8 +37,11 @@ const { displayBearing } = require('./ship-state');
 
 const { loadCommCard } = require('../../comm-card');
 
-const COMM_CARD = loadCommCard(); // read once at startup; a bad file stops it (P5)
-const APPROACH_TYPES = Object.freeze([...COMM_CARD.approachTypes]);
+// Read on first use (a bad file stops start-up: the carrier store validates a field then), not when this file is required (P5).
+let _commCard = null;
+function commCard() { return _commCard || (_commCard = loadCommCard()); }
+/** The approach types the comm card lists. */
+function approachTypes() { return Object.freeze([...commCard().approachTypes]); }
 const FUEL_MAX_LB = 100000; // [SOURCE-DEFINED] sanity bound
 const BINGO_FIELD_MAX_LEN = 32; // engineering bound on the typed field, not a rule
 
@@ -47,7 +50,7 @@ const RULE_6 = 'store the approach button, not a frequency (§9.12 rule 6)';
 function defaultCarrierFlight() {
   return {
     eeatUtc: null,        // epoch ms, mission Zulu (decisions H11) — issued before launch (§9.12 rule 7)
-    approachType: null,   // one of APPROACH_TYPES
+    approachType: null,   // one of approachTypes()
     approachButton: null, // integer — a BUTTON, never a frequency (§9.12 rule 6)
     bingoField: null,     // ICAO or name
     bingoFuelLb: null,    // integer lb
@@ -69,7 +72,7 @@ function _isObj(v) {
  * The button rule is the comm card's: while `approachButtons.buttons` is empty any integer in min..max (H31, no
  * defaults until the squadron supplies its buttons); once it lists some, membership in `buttons[].button`.
  */
-function _validateButton(value, card = COMM_CARD) {
+function _validateButton(value, card = commCard()) {
   const { min, max, buttons } = card.approachButtons;
   const listed = buttons.map((e) => e.button);
   const rule = listed.length
@@ -99,7 +102,7 @@ function _validateFuel(field, value) {
  * Validate and normalise one field. `null` always clears.
  * @returns {{ok:true, value:any} | {ok:false, reason:'VALIDATION_ERROR', detail:string}}
  */
-function validateCarrierFlightField(field, value, card = COMM_CARD) {
+function validateCarrierFlightField(field, value, card = commCard()) {
   if (!CARRIER_FLIGHT_FIELDS.includes(field)) return _fail(`unknown carrier field '${field}'`);
   if (value === null) return { ok: true, value: null };
   switch (field) {
@@ -229,7 +232,7 @@ function marshalMessage({ flightData = null, derived = null, caseValue = null, s
 }
 
 module.exports = {
-  APPROACH_TYPES,
+  approachTypes,
   CARRIER_FLIGHT_FIELDS,
   MARSHAL_MESSAGE_FIELDS,
   defaultCarrierFlight,

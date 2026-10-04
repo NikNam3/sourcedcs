@@ -41,8 +41,8 @@ const log = require('../log').logger('efsp:stereo-routes');
 // Squadron data a live edit would rewrite (setStereoRoutes), so it reads from
 // state/ if a live copy exists and always writes there — see state-paths.js
 // and docs/adr/0048 for why that split exists at all.
-const { read: STEREO_ROUTES_PATH, write: STEREO_ROUTES_WRITE_PATH } =
-  statePaths('efsp-stereo-routes.json', process.env.CRCSYNC_EFSP_STEREO_ROUTES_PATH);
+// The paths are resolved when createStereoRoutes() is called (the composition root, at start), never when this
+// file is required (docs/adr/0095 §4).
 
 // The same ceiling flight-data-store.js puts on controller-entered free text, and for
 // the same reason: a stereo route seeds flight data, and flight data is broadcast whole
@@ -126,7 +126,7 @@ function validateStereoRoutes(candidate) {
 // Ships empty as config/efsp-stereo-routes.json (see this module's header for why an
 // invented default would be defect D11). No code copy of that `[]` exists (DATA-2, H88): an
 // unreadable or invalid file is a startup error naming it.
-function _load() {
+function _load(STEREO_ROUTES_PATH) {
   let onDisk;
   try {
     onDisk = JSON.parse(fs.readFileSync(STEREO_ROUTES_PATH, 'utf8'));
@@ -138,33 +138,6 @@ function _load() {
   return onDisk;
 }
 
-let stereoRoutes = _load();
-
-/** Every configured route, active or not — the editor/audit view. */
-function getStereoRoutes() { return deepClone(stereoRoutes); }
-
-/** Just the filable ones, which is what a picker should ever show. */
-function getActiveStereoRoutes() {
-  return deepClone(stereoRoutes.filter(r => r.active !== false));
-}
-
-/**
- * Looks a route up by short name, case- and spacing-insensitively.
- *
- * Returns the record INCLUDING its `active` flag rather than filtering
- * inactive routes out here: "does this name exist" and "may it be filed" are
- * two different questions, and the caller that refuses an inactive route
- * wants to say so specifically rather than report it as a typo.
- *
- * @returns {object|null} a clone, so a caller mutating the result cannot
- *   corrupt the table.
- */
-function resolveStereoRoute(name) {
-  const key = normalizeStereoName(name);
-  if (!key) return null;
-  const found = stereoRoutes.find(r => normalizeStereoName(r.name) === key);
-  return found ? deepClone(found) : null;
-}
 
 /**
  * The flat flight data seed a resolved route expands to — deliberately the same key
@@ -188,31 +161,69 @@ function toFlightDataFiledSeed(route) {
 }
 
 /**
- * Replaces the whole table (guide §8.4 — an explicit reload step, not a live
- * mutation). No editing UI calls this; it exists so one is additive later,
- * and so tests can exercise the load path — the same standing this function
- * has in airspace-schema.js and facility-config.js.
- *
- * §8.4's "configuration changes MUST be versioned, attributed, and recorded"
- * is satisfied trivially while the only edit path is a file plus a restart.
- * An editor cannot just call this from a button: it has to bring versioning
- * and attribution with it. That debt is recorded in docs/adr/0050.
+ * One table of stereo routes, read now. The composition root builds it and hands it to the flight data store and the
+ * routes endpoint.
+ * @param {{env?: NodeJS.ProcessEnv}} [deps]
  */
-function setStereoRoutes(next) {
-  const check = validateStereoRoutes(next);
-  if (!check.ok) return check;
-  stereoRoutes = deepClone(next);
-  try {
-    ensureDirFor(STEREO_ROUTES_WRITE_PATH);
-    fs.writeFileSync(STEREO_ROUTES_WRITE_PATH, JSON.stringify(stereoRoutes, null, 2));
-  } catch (e) {
-    log.warn('failed to persist stereo routes', { error: e.message });
+function createStereoRoutes({ env = process.env } = {}) {
+  const { read: STEREO_ROUTES_PATH, write: STEREO_ROUTES_WRITE_PATH } =
+    statePaths('efsp-stereo-routes.json', env.CRCSYNC_EFSP_STEREO_ROUTES_PATH, env);
+  let stereoRoutes = _load(STEREO_ROUTES_PATH);
+
+  /** Every configured route, active or not — the editor/audit view. */
+  function getStereoRoutes() { return deepClone(stereoRoutes); }
+
+  /** Just the filable ones, which is what a picker should ever show. */
+  function getActiveStereoRoutes() {
+    return deepClone(stereoRoutes.filter(r => r.active !== false));
   }
-  return { ok: true };
+
+  /**
+   * Looks a route up by short name, case- and spacing-insensitively.
+   *
+   * Returns the record INCLUDING its `active` flag rather than filtering
+   * inactive routes out here: "does this name exist" and "may it be filed" are
+   * two different questions, and the caller that refuses an inactive route
+   * wants to say so specifically rather than report it as a typo.
+   *
+   * @returns {object|null} a clone, so a caller mutating the result cannot
+   *   corrupt the table.
+   */
+  function resolveStereoRoute(name) {
+    const key = normalizeStereoName(name);
+    if (!key) return null;
+    const found = stereoRoutes.find(r => normalizeStereoName(r.name) === key);
+    return found ? deepClone(found) : null;
+  }
+
+  /**
+   * Replaces the whole table (guide §8.4 — an explicit reload step, not a live
+   * mutation). No editing UI calls this; it exists so one is additive later,
+   * and so tests can exercise the load path — the same standing this function
+   * has in airspace-schema.js and facility-config.js.
+   *
+   * §8.4's "configuration changes MUST be versioned, attributed, and recorded"
+   * is satisfied trivially while the only edit path is a file plus a restart.
+   * An editor cannot just call this from a button: it has to bring versioning
+   * and attribution with it. That debt is recorded in docs/adr/0050.
+   */
+  function setStereoRoutes(next) {
+    const check = validateStereoRoutes(next);
+    if (!check.ok) return check;
+    stereoRoutes = deepClone(next);
+    try {
+      ensureDirFor(STEREO_ROUTES_WRITE_PATH);
+      fs.writeFileSync(STEREO_ROUTES_WRITE_PATH, JSON.stringify(stereoRoutes, null, 2));
+    } catch (e) {
+      log.warn('failed to persist stereo routes', { error: e.message });
+    }
+    return { ok: true };
+  }
+
+  return { getStereoRoutes, getActiveStereoRoutes, resolveStereoRoute, toFlightDataFiledSeed, setStereoRoutes };
 }
 
 module.exports = {
-  getStereoRoutes, getActiveStereoRoutes, resolveStereoRoute, toFlightDataFiledSeed,
-  setStereoRoutes, validateStereoRoutes, normalizeStereoName,
+  createStereoRoutes, toFlightDataFiledSeed, validateStereoRoutes, normalizeStereoName,
   MAX_FREE_TEXT,
 };

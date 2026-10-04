@@ -35,7 +35,8 @@ const { SCRAMBLE_PRE_AIRBORNE: _SCRAMBLE_PRE } = require('./alert-scramble');
 const authority = require('./authority');
 const countLog = require('../log').logger('efsp:traffic-count');
 
-const TRAFFIC_COUNT_PATH = writePath('efsp-traffic-count.jsonl', process.env.CRCSYNC_EFSP_TRAFFIC_COUNT_PATH);
+/** Where the traffic count is written, from `env`; resolved by the constructor, never when this file is required. */
+const trafficCountFilePath = (env = process.env) => writePath('efsp-traffic-count.jsonl', env.CRCSYNC_EFSP_TRAFFIC_COUNT_PATH, env);
 const { DAY_MS } = require('../units');
 
 /**
@@ -350,7 +351,7 @@ class TrafficCount {
    * @param {() => number} [deps.wallNow]    retention only
    * @param {() => (number|null)} [deps.missionSessionOf] the metrics session (decisions.md H32) a drop belongs to
    */
-  constructor({ mutationLog, flightDataStore, boardStoreFor, facilityIds, config, path: filePath, clock = WALL_CLOCK, wallNow = WALL_CLOCK.now, missionSessionOf = () => null }) {
+  constructor({ mutationLog, flightDataStore, boardStoreFor, facilityIds, config, path: filePath, clock = WALL_CLOCK, wallNow = WALL_CLOCK.now, missionSessionOf = () => null, env = process.env }) {
     const defaults = getInstrumentationConfig().trafficCount;
     this._log = mutationLog;
     this._flightDataStore = flightDataStore;
@@ -358,7 +359,7 @@ class TrafficCount {
     this._facilityIds = [...(facilityIds || [])];
     this._retentionDays = config && Number.isInteger(config.retentionDays) && config.retentionDays >= 1 ? config.retentionDays : defaults.retentionDays;
     this._homeAirports = (config && config.homeAirports) || defaults.homeAirports;
-    this._path = filePath || TRAFFIC_COUNT_PATH;
+    this._path = filePath || trafficCountFilePath(env);
     this._clock = clock;
     this._wallNow = wallNow;
     this._missionSessionOf = missionSessionOf;

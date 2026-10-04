@@ -16,7 +16,7 @@
 // theater-settings.js is removed, docs/adr/0085).
 
 const magnetic = require('./magnetic');
-const { DEFAULT_TRANSITION_ALT_FT } = require('./theaters');
+const { defaultTransitionAltFt } = require('./theaters');
 
 const { DAY_MS } = require('./units');
 
@@ -78,7 +78,7 @@ class TheaterContext {
   // message yet" (no theater known), config/theaters.json `defaultTransitionAltFt`.
   transitionAltFt() {
     const e = this.entry();
-    return (e && e.transitionAltFt) || DEFAULT_TRANSITION_ALT_FT;
+    return (e && e.transitionAltFt) || defaultTransitionAltFt();
   }
 
   _override() { const e = this.entry(); return (e && e.magneticVariation) || null; }
@@ -160,4 +160,4 @@ class TheaterContext {
   }
 }
 
-module.exports = { TheaterContext, DEFAULT_TRANSITION_ALT_FT };
+module.exports = { TheaterContext, defaultTransitionAltFt };

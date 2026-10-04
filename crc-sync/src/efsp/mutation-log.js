@@ -42,7 +42,10 @@ function escapeRegExp(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
 // instead of the real squadron-wide log (CRCSYNC_EFSP_MUTATION_LOG_PATH).
 // Append-only audit state, so it lives in state/ rather than config/ — it was
 // previously written into the image and committed to git (see state-paths.js).
-const MUTATION_LOG_PATH = writePath('efsp-mutations.jsonl', process.env.CRCSYNC_EFSP_MUTATION_LOG_PATH);
+/** Where the log is written, from `env`; resolved by the constructor, never when this file is required. */
+function mutationLogPath(env = process.env) {
+  return writePath('efsp-mutations.jsonl', env.CRCSYNC_EFSP_MUTATION_LOG_PATH, env);
+}
 
 class MutationLog {
   /**
@@ -51,8 +54,8 @@ class MutationLog {
    *   the stores stamp `at` with (docs/adr/0079), so each record can say which
    *   clock that was.
    */
-  constructor(filePath, { clock = WALL_CLOCK, retentionDays, wallNow = WALL_CLOCK.now } = {}) {
-    this._path = filePath || MUTATION_LOG_PATH;
+  constructor(filePath, { clock = WALL_CLOCK, retentionDays, wallNow = WALL_CLOCK.now, env = process.env } = {}) {
+    this._path = filePath || mutationLogPath(env);
     this._clock = clock;
     this._wallNow = wallNow;
     this._retentionDays = Number.isInteger(retentionDays) && retentionDays >= 1
@@ -207,4 +210,4 @@ class MutationLog {
   }
 }
 
-module.exports = { MutationLog, MUTATION_LOG_PATH, };
+module.exports = { MutationLog, mutationLogPath };

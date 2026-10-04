@@ -30,7 +30,6 @@ const { CarrierStore } = require('./carrier-store');
 const { SfaStore } = require('./sfa-store');
 const authority = require('./authority');
 const carrierHulls = require('./carrier/hull-config');
-const facilityConfig = require('./facility-config');
 const log = require('../log').logger('efsp:stores');
 
 // The Blocks that held the assigned altitude and heading as Strip annotations before docs/adr/0058 moved them onto
@@ -80,7 +79,7 @@ const REGISTRY = [
   },
   {
     key: 'flightData',
-    build: ({ clock, transitionAltFt, codeAllocator }) => new FlightDataStore(codeAllocator, { clock, transitionAltFt }),
+    build: ({ clock, transitionAltFt, codeAllocator, stereoRoutes }) => new FlightDataStore(codeAllocator, { clock, transitionAltFt, stereoRoutes }),
     snapshot: (s) => s.snapshot(),
     restore: (s, data) => s.restore(data),
   },
@@ -93,7 +92,7 @@ const REGISTRY = [
     // The airspace REGISTRY (docs/adr/0098): definitions per theater and their state, one store for every Facility,
     // like flightDataStore. An airspace is a theater entity that NAMES its controlling Facility rather than being
     // replicated into each one, so there is no D13 replication question: the record has one home.
-    build: ({ clock, currentTheater, facilities, stores }) => {
+    build: ({ clock, currentTheater, facilities, stores, facilityConfig }) => {
       // The Strips working an AREA: non-DROPPED Strips whose `airspaceEntry` names it, on any Facility's Board.
       const occupantsFor = (airspaceId) => {
         const out = [];
@@ -128,7 +127,7 @@ const REGISTRY = [
           positionsOf: (id) => (facilityConfig.getFacilityIds().includes(id) ? facilityConfig.getPositionSet(id) : []),
           facilityOfPosition: (positionId) => facilityConfig.getFacilityIds().find(f => facilityConfig.getPositionSet(f).includes(positionId)) || null,
         },
-        authority: { rowOf: authority.airspaceRowOf },
+        authority: { rowOf: (positionId) => authority.airspaceRowFor(positionId, facilityConfig.getPositionClass) },
       });
     },
     snapshot: (s) => s.snapshot(),
@@ -201,7 +200,7 @@ const REGISTRY = [
     // Staffing is read lazily through `facilities`, the same
     // shape airspaceStore's occupancyFor has: an unstaffed acknowledger of a
     // runway change reverts or is skipped (decisions.md H20).
-    build: ({ clock, facilities }) => new RunwayStatusStore(facilityConfig, {
+    build: ({ clock, facilities, facilityConfig }) => new RunwayStatusStore(facilityConfig, {
       clock,
       isStaffed: (facilityId, positionId) => {
         const f = facilities.get(facilityId);
@@ -258,7 +257,7 @@ const REGISTRY = [
     // docs/adr/0075, 0093 — which Position is on which Single
     // Frequency Approach frequency (guide §4.7). One record, for the Facility whose
     // config carries a `singleFrequencyApproach` (INCIRLIK); null where none does.
-    build: ({ clock }) => {
+    build: ({ clock, facilityConfig }) => {
       const sfaConfig = facilityConfig.getSingleFrequencyApproach();
       return sfaConfig
         ? new SfaStore({ config: sfaConfig, positions: facilityConfig.getPositionSet(), facilityId: facilityConfig.DEFAULT_FACILITY_ID, clock })

@@ -22,7 +22,7 @@ for (const [k, v] of Object.entries({
 fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, '{}');
 
 const runwayStatus = await import('../src/efsp/runway-status.js');
-const facilityConfig = (await import('../src/efsp/facility-config.js')).default;
+const facilityConfig = (await import('../src/efsp/facility-config.js')).createFacilityConfig();
 
 const {
   LEGAL_TRANSITIONS, RUNWAY_STATUSES, canGo, normalizeRunwayEnd, buildStatusView,

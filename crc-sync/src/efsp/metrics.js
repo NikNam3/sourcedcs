@@ -51,7 +51,8 @@ const { TrafficCount, hourKey } = require('./traffic-count');
 const { HOUR_MS, DAY_MS } = require('../units');
 const log = require('../log').logger('efsp:metrics');
 
-const METRICS_PATH = writePath('efsp-metrics.json', process.env.CRCSYNC_EFSP_METRICS_PATH);
+/** Where the metrics are written, from `env`; resolved by the constructor, never when this file is required. */
+const metricsFilePath = (env = process.env) => writePath('efsp-metrics.json', env.CRCSYNC_EFSP_METRICS_PATH, env);
 
 const VERSION = 1;
 // The caps below (sample, event, session and dedupe counts, the 720 h window) are
@@ -161,9 +162,9 @@ class EfspMetrics {
    * @param {() => object|null} [deps.obligationStats]  ForwardingObligationMonitor.getComplianceStats — likewise
    * @param {MissionSession} [deps.missionSession] which mission we are in (docs/adr/0086); default an in-memory one
    */
-  constructor({ path: filePath, clock = WALL_CLOCK, wallNow = WALL_CLOCK.now, config, facilityIds = [], positionStoreFor = () => null, correlationStats = null, obligationStats = null, missionSession = null } = {}) {
+  constructor({ path: filePath, clock = WALL_CLOCK, wallNow = WALL_CLOCK.now, config, facilityIds = [], positionStoreFor = () => null, correlationStats = null, obligationStats = null, missionSession = null, env = process.env } = {}) {
     const defaults = getInstrumentationConfig().metrics;
-    this._path = filePath || METRICS_PATH;
+    this._path = filePath || metricsFilePath(env);
     this._clock = clock;
     this._wallNow = wallNow;
     this._session = missionSession || new MissionSession({ path: null, clock, wallNow });
@@ -796,7 +797,7 @@ class EfspMetrics {
 function createEfspInstrumentation({
   efsp, facilityConfig, correlationStats = null, obligationStats = null,
   clock = efsp.clock || WALL_CLOCK, wallNow = WALL_CLOCK.now,
-  config = getInstrumentationConfig(), metricsPath, trafficCountPath,
+  config = getInstrumentationConfig(), metricsPath, trafficCountPath, env = process.env,
   missionSession = new MissionSession({ path: null, clock, wallNow }),
 }) {
   const facilityIds = facilityConfig.getFacilityIds();
@@ -804,12 +805,12 @@ function createEfspInstrumentation({
   if (dup.length) log.warn('Position ids exist in more than one Facility — metrics keyed by positionId will merge them (docs/adr/0065)', { positionIds: dup });
 
   const metrics = new EfspMetrics({
-    path: metricsPath, clock, wallNow, config: config.metrics, facilityIds,
+    path: metricsPath, env, clock, wallNow, config: config.metrics, facilityIds,
     positionStoreFor: efsp.positionStoreFor, correlationStats, obligationStats, missionSession,
   });
   const trafficCount = new TrafficCount({
     mutationLog: efsp.mutationLog, flightDataStore: efsp.flightDataStore, boardStoreFor: efsp.boardStoreFor,
-    facilityIds, config: config.trafficCount, path: trafficCountPath, clock, wallNow,
+    facilityIds, config: config.trafficCount, path: trafficCountPath, env, clock, wallNow,
     missionSessionOf: () => missionSession.currentSeq(),
   });
   efsp.mutationLog.onRecord((entry) => {

@@ -30,7 +30,7 @@ for (const [k, v] of Object.entries({
 fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, '{}');
 
 const { createEfsp } = await import('../src/efsp/index.js');
-const facilityConfig = await import('../src/efsp/facility-config.js');
+const facilityConfig = (await import('../src/efsp/facility-config.js')).createFacilityConfig();
 const { TrafficCount } = await import('../src/efsp/traffic-count.js');
 const { activeScrambles, conflictingGroundStrips, alertPadConstraint } = await import('../src/efsp/alert-scramble.js');
 const { crew, mustAct, act, jumpTo, advance, DEPARTURE_FLIGHT_DATA } = await import('./helpers/efsp-scenario.mjs');

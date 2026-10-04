@@ -40,7 +40,8 @@ const authority = require('./authority');
 const { NO_STRIP_OP_CLASSES } = require('./authority/classes');
 const nla = require('./nla');
 const blockMap = require('./block-map');
-const facilityConfig = require('./facility-config');
+const { createFacilityConfig } = require('./facility-config');
+const { createStereoRoutes } = require('./stereo-routes');
 const coordination = require('./coordination');
 const { handleMessage, signOffController, snapshotMessage, filterForSession, supplementFor, readScopeKey, directedFor, heartbeatBoardsAll, heartbeatBoardsFor, heartbeatStores } = require('./efsp-ws');
 const { NlaStatusMonitor } = require('./nla-status-monitor');
@@ -77,10 +78,12 @@ const log = require('../log').logger('efsp');
  *   or worse, restored a snapshot somebody had committed to git. It lives in
  *   data/ now; see src/state-paths.js.
  */
-function createEfsp({ clock = WALL_CLOCK, wallClock = WALL_CLOCK, nlaGuardMs = NLA_GUARD_MS, transitionAltFt, currentTheater = () => null,
-  paths = statePaths('efsp-board.json', process.env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH),
-  standingPaths = statePaths('efsp-airspaces.json', process.env.CRCSYNC_EFSP_AIRSPACES_PATH) } = {}) {
-  facilityConfig.load(); // the Facilities' JSON is read here, not when the module is required (docs/wip/DATA-1.md)
+function createEfsp({ env = process.env, facilityConfig = createFacilityConfig({ env }), stereoRoutes = createStereoRoutes({ env }), clock = WALL_CLOCK, wallClock = WALL_CLOCK, nlaGuardMs = NLA_GUARD_MS, transitionAltFt, currentTheater = () => null,
+  paths = statePaths('efsp-board.json', env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH, env),
+  standingPaths = statePaths('efsp-airspaces.json', env.CRCSYNC_EFSP_AIRSPACES_PATH, env) } = {}) {
+  // The Facilities' config and the stereo routes are read when they are built: the composition root builds them and
+  // passes them in (docs/adr/0095 §4); a caller that passes neither gets them read now from `env`.
+  const permissionRules = permission.createPermission({ classOf: facilityConfig.getPositionClass });
   // The saved snapshot is read ONCE, here, with the same strict shape check the restore uses, and the RANGES Facility's
   // Positions are derived from it (and from the standing list's ids not yet seeded) before any Facility is built: the
   // definitions are data in the registry now, and a Position of RANGES must exist when its PositionStore is made.
@@ -90,13 +93,13 @@ function createEfsp({ clock = WALL_CLOCK, wallClock = WALL_CLOCK, nlaGuardMs = N
   assertAuthorityCoverage(facilityConfig);
   const nlaGuard = { ms: nlaGuardMs }; // one cell for every Board: the e2e hook changes it at run time (setNlaGuardMs)
   const codeAllocator = new CodeAllocator();
-  const mutationLog = new MutationLog(undefined, { clock });
+  const mutationLog = new MutationLog(undefined, { clock, env });
   const facilities = new Map(); // facilityId -> { boardStore, positionStore, rules }
   const stores = {};            // registry key -> instance (src/efsp/stores.js)
   // docs/adr/0102: where a flight is relative to the airspaces active for an MRU Facility. Late-bound (it needs the
   // track store, which app.js builds after this): `locator(flightDataId, facilityId) -> { located, inside, unknown }`.
   let regimeLocator = null;
-  const buildDeps = { clock, transitionAltFt, currentTheater, codeAllocator, mutationLog, facilities, stores };
+  const buildDeps = { clock, transitionAltFt, currentTheater, codeAllocator, mutationLog, facilities, stores, facilityConfig, stereoRoutes };
   for (const entry of REGISTRY) stores[entry.key] = entry.build(buildDeps);
   const { flightData: flightDataStore, airspaces: airspaceStore, correlations: correlationStore, marsa: marsaStore,
     runwayStatuses: runwayStatusStore, carriers: carrierStore, sfaRotation: sfaStore } = stores;
@@ -125,8 +128,8 @@ function createEfsp({ clock = WALL_CLOCK, wallClock = WALL_CLOCK, nlaGuardMs = N
       isValidStripType:         (stripType) => blockMap.isValidStripType(stripType),
       isStaffed:          (positionId) => positionStore.isStaffed(positionId),
       consolidatedAt: (positionId) => positionStore.consolidatedAt(positionId),
-      canMutate:           (actingPositionId, opKind) => permission.canMutate(actingPositionId, opKind),
-      canMutateAction:     (actingPositionId, opKind, action) => permission.canMutateAction(actingPositionId, opKind, action),
+      canMutate:           (actingPositionId, opKind) => permissionRules.canMutate(actingPositionId, opKind),
+      canMutateAction:     (actingPositionId, opKind, action) => permissionRules.canMutateAction(actingPositionId, opKind, action),
       // docs/adr/0101 — which control axis (TURNS, ALTITUDE) a Block write is, from the Block Map's own tags.
       controlAxisFor:      (stripType, blockId) => blockMap.controlAxisFor(stripType, blockId),
       canCreateStripType:  (actingPositionId, stripType) => permission.canCreateStripType(actingPositionId, stripType),
@@ -294,6 +297,7 @@ function createEfsp({ clock = WALL_CLOCK, wallClock = WALL_CLOCK, nlaGuardMs = N
     // key -> instance, for every entry of the persisted-store registry (stores.js)
     stores,
     facilityConfig,
+    permission: permissionRules, // the class-dependent predicates (permission.js's createPermission), for the wire families
     nlaStatusMonitor,
     runwayStatusStore,
     // The real, Facility-aware accessors WP4A's wire protocol uses.
@@ -316,7 +320,7 @@ function createEfsp({ clock = WALL_CLOCK, wallClock = WALL_CLOCK, nlaGuardMs = N
   };
 
   return {
-    flightDataStore, mutationLog, clock, wallClock, undoHistory,
+    flightDataStore, mutationLog, clock, wallClock, undoHistory, facilityConfig, stereoRoutes,
     /** Tests only (src/test-reset.js): the NLA double-tap guard's length, ms, for every Board. */
     setNlaGuardMs: (ms) => { nlaGuard.ms = ms; },
     airspaceStore, correlationStore, marsaStore, nlaStatusMonitor, runwayStatusStore, carrierStore, sfaStore,

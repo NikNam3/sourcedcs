@@ -9,7 +9,7 @@ import { prologue, makeWorld, exchange, holders, fakeWallClock } from './helpers
 
 prologue('control-release-inv-');
 const { createEfsp } = await import('../src/efsp/index.js');
-const facilityConfig = await import('../src/efsp/facility-config.js');
+const facilityConfig = (await import('../src/efsp/facility-config.js')).createFacilityConfig();
 const helpers = await import('./helpers/efsp-scenario.mjs');
 const { ForwardingObligationMonitor } = await import('../src/efsp/forwarding-obligations.js');
 const { controlInvariantRefusal } = (await import('../src/efsp/board/ops/undo.js')).default;

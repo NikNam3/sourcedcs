@@ -9,7 +9,7 @@ import path from 'path';
 // short name does and does not win a standing release.
 //
 // Its own file rather than an addition to efsp-scenario-military.test.mjs
-// because it needs a standing-release envelope configured BEFORE createEfsp()
+// because it needs a standing-release envelope configured BEFORE createEfsp({ facilityConfig, stereoRoutes })
 // (index.js reads facilityConfig's standingReleases once, at construction),
 // and a facility-config edit is not something to inflict on another file's
 // shared board.
@@ -53,11 +53,11 @@ fs.writeFileSync(process.env.CRCSYNC_EFSP_STEREO_ROUTES_PATH, JSON.stringify([
   { name: 'PACK 9', route: 'LTAG DCT RETIRED', active: false },
 ]));
 
-const facilityConfig = await import('../src/efsp/facility-config.js');
-const stereoRoutes = await import('../src/efsp/stereo-routes.js');
+const facilityConfig = (await import('../src/efsp/facility-config.js')).createFacilityConfig();
+const stereoRoutes = (await import('../src/efsp/stereo-routes.js')).createStereoRoutes();
 
 // The agreement, as facility configuration (§4.6.2 — "model standing
-// releases as facility configuration"). Written before createEfsp() below,
+// releases as facility configuration"). Written before createEfsp({ facilityConfig, stereoRoutes }) below,
 // because index.js reads standingReleases once at construction.
 facilityConfig.setFacilityConfig({
   ...facilityConfig.getFacilityConfig('INCIRLIK'),
@@ -85,7 +85,7 @@ test('SCENARIO a squadron jet files PACK 1 by phone and flies it', async () => {
   // name produces a complete flight data." OPS is given a callsign and four
   // characters of route name and nothing else — which is exactly §9.10's
   // "a filing path that does not require a full flight-plan form."
-  const efsp = createEfsp();
+  const efsp = createEfsp({ facilityConfig, stereoRoutes });
   const c = crew(efsp, ATC);
 
   const ack = fileStereo(efsp, c, 'PACK11', 'PACK1');
@@ -118,7 +118,7 @@ test('SCENARIO a squadron jet files PACK 1 by phone and flies it', async () => {
 // ── 2. the standing release is for the NAME ──────────────────────────────
 
 test('SCENARIO the standing release is for the route\'s name, not its text', async () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ facilityConfig, stereoRoutes });
   const c = crew(efsp, ATC);
 
   // (a) filed on PACK 1 and held: the agreement covers it, so it pushes.
@@ -179,7 +179,7 @@ test('SCENARIO the standing release is for the route\'s name, not its text', asy
 // ── 3. refusals cost nothing ─────────────────────────────────────────────
 
 test('SCENARIO a mistyped stereo name creates no Strip and burns no beacon code', () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ facilityConfig, stereoRoutes });
   const c = crew(efsp, ATC);
   const before = efsp.boardStoreFor('INCIRLIK').getAll().length;
 
@@ -206,7 +206,7 @@ test('SCENARIO a mistyped stereo name creates no Strip and burns no beacon code'
 // ── 4. deactivation is not retroactive ───────────────────────────────────
 
 test('SCENARIO retiring a stereo route stops new filings and leaves the flight already on it alone', async () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ facilityConfig, stereoRoutes });
   const c = crew(efsp, ATC);
 
   let airborne = fileStereo(efsp, c, 'PACK41', 'PACK1').strip;
@@ -245,7 +245,7 @@ test('SCENARIO a stereo name is local symbology and never leaves as the route (�
   // — trivially true given one flight data serves both Facilities, and asserted
   // anyway because it is the kind of property that stops being true the
   // moment somebody decides to "save bandwidth" by sending the short name.
-  const efsp = createEfsp();
+  const efsp = createEfsp({ facilityConfig, stereoRoutes });
   const c = crew(efsp, { ...ATC, CTR: 'CENTER' });
 
   let strip = fileStereo(efsp, c, 'PACK51', 'PACK1').strip;
@@ -274,7 +274,7 @@ test('SCENARIO "request change to PACK 2" on a taxiing flight keeps its squawk a
   // remedies were bad: hand-editing the route dropped the label, left PACK 1's
   // altitude behind and put the flight outside the PACK 2 envelope; dropping
   // and re-filing minted a new beacon code for an aircraft already squawking.
-  const efsp = createEfsp();
+  const efsp = createEfsp({ facilityConfig, stereoRoutes });
   const c = crew(efsp, ATC);
 
   let strip = fileStereo(efsp, c, 'PACK61', 'PACK1').strip;
@@ -299,7 +299,7 @@ test('SCENARIO a re-filed flight moves into the NEW route\'s standing-release en
   // The half that the hand-edit workaround got silently wrong: after
   // switching, the flight must be covered by the envelope for the route it
   // is now flying, and not by the one for the route it left.
-  const efsp = createEfsp();
+  const efsp = createEfsp({ facilityConfig, stereoRoutes });
   const c = crew(efsp, ATC);
 
   let strip = fileStereo(efsp, c, 'PACK62', 'PACK1').strip;
@@ -330,7 +330,7 @@ test('SCENARIO "request PACK 1" from a flight that filed a plain route the norma
   // exists from a DD1801 or a hand entry, and the pilot asks for the standard
   // route on first contact. Before 9F was writable there was no way to record
   // that at all.
-  const efsp = createEfsp();
+  const efsp = createEfsp({ facilityConfig, stereoRoutes });
   const c = crew(efsp, ATC);
 
   let strip = mustAct(efsp, c.OPS, 'OPS', null, {
@@ -348,7 +348,7 @@ test('SCENARIO "request PACK 1" from a flight that filed a plain route the norma
 });
 
 test('SCENARIO cancelling a stereo un-labels the flight but leaves it a route to fly', async () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ facilityConfig, stereoRoutes });
   const c = crew(efsp, ATC);
   const strip = fileStereo(efsp, c, 'PACK64', 'PACK1').strip;
 
@@ -359,7 +359,7 @@ test('SCENARIO cancelling a stereo un-labels the flight but leaves it a route to
 });
 
 test('SCENARIO a mistyped re-file on a live Strip changes nothing at all', () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ facilityConfig, stereoRoutes });
   const c = crew(efsp, ATC);
   const strip = fileStereo(efsp, c, 'PACK65', 'PACK1').strip;
   const before = JSON.stringify(flightDataOf(efsp, strip));

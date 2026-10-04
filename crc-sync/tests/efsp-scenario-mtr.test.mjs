@@ -26,7 +26,7 @@ for (const [k, v] of Object.entries({
 fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, '{}');
 
 const { createEfsp } = await import('../src/efsp/index.js');
-const facilityConfig = await import('../src/efsp/facility-config.js');
+const facilityConfig = (await import('../src/efsp/facility-config.js')).createFacilityConfig();
 const { computeDueObligations } = await import('../src/efsp/forwarding-obligations.js');
 const {
   crew, act, mustAct, mustMarsaAct, jumpTo, DEPARTURE_FLIGHT_DATA, handedToCenter,
@@ -40,7 +40,7 @@ const clock = { now: () => MISSION_START + (Date.now() - WALL_START), source: 'M
 const zulu = (hh, mm) => Date.UTC(2016, 5, 21, hh, mm);
 
 const ATC = { OPS: 'INCIRLIK', CD: 'INCIRLIK', GC: 'INCIRLIK', LC: 'INCIRLIK', AP: 'INCIRLIK', CTR: 'CENTER' };
-const efsp = createEfsp({ clock });
+const efsp = createEfsp({ clock, facilityConfig });
 const c = crew(efsp, ATC);
 
 const flightDataOf = (strip) => efsp.flightDataStore.getFlightData(strip.flightDataId);
@@ -214,7 +214,7 @@ test('sortie 7: the six values survive a crc-sync restart', () => {
   ctr = mustAct(efsp, c.CTR, 'CTR', ctr, { kind: 'SetBlock', blockId: '9H-ALT', value: '080' });
   efsp.persist();
 
-  const reborn = createEfsp({ clock });
+  const reborn = createEfsp({ clock, facilityConfig });
   assert.deepEqual(reborn.flightDataStore.getFlightData(ctr.flightDataId).military.mtr, {
     designator: 'IR107', entryFix: 'A', entryTimeUtc: zulu(14, 5),
     exitFix: 'F', exitEstimateUtc: zulu(14, 32), requestedAltitudeAfterExit: '080',

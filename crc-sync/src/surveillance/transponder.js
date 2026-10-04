@@ -28,8 +28,7 @@
 // (`transponder.mode4For`). Ground vehicles have no IFF. What an answer MEANS
 // on the scope is surveillance/iff.js's job, not this module's.
 
-const { SYNTHETIC_BLOCK_START, SYNTHETIC_BLOCK_SIZE } = require('../synthetic-block');
-const { USER_COALITION } = require('./iff');
+const { DEFAULT_OWN_COALITION } = require('./iff');
 const { validateTransponderConfig } = require('./sensor-config');
 
 const EMERGENCIES = { '7500': 'HIJACK', '7600': 'RADIO', '7700': 'GENERAL' };
@@ -49,8 +48,8 @@ function octalCode(value) {
   return /^[0-7]{4}$/.test(code) ? code : null;
 }
 
-function coalitionClass(coalition) {
-  if (coalition === USER_COALITION) return 'own';
+function coalitionClass(coalition, ownCoalition) {
+  if (coalition === ownCoalition) return 'own';
   if (coalition === 1 || coalition == null || coalition === 0) return 'neutral';
   return 'hostile';
 }
@@ -68,9 +67,14 @@ class Transponders {
    * @param {{getTransponder:(playerName:string)=>object|null}|null} deps.srs
    * @param {{syntheticFor:string[], mode4For:string[]}} deps.config sensor-specs.json `transponder`
    */
-  constructor({ srs = null, config } = {}) {
+  constructor({ srs = null, config, ownCoalition = DEFAULT_OWN_COALITION } = {}) {
+    this._ownCoalition = ownCoalition;
     this._srs = srs || null;
     validateTransponderConfig(config);
+    // The AI block comes from this very config (sensor-specs.json `transponder.syntheticBlock`), so the model and its
+    // spec cannot disagree and nothing is read when this file is required.
+    this._blockStart = parseInt(config.syntheticBlock.first, 8);
+    this._blockSize = parseInt(config.syntheticBlock.last, 8) - this._blockStart + 1;
     this._syntheticFor = new Set(config.syntheticFor);
     this._mode4For = new Set(config.mode4For);
     this._synthetic = new Map(); // trackId -> code
@@ -91,7 +95,7 @@ class Transponders {
       return { code, ident: entry.squawkStatus === 2, emergency: (code && EMERGENCIES[code]) || null };
     }
 
-    if (!this._syntheticFor.has(coalitionClass(track.coalition))) return null;
+    if (!this._syntheticFor.has(coalitionClass(track.coalition, this._ownCoalition))) return null;
     const code = this._syntheticCode(String(track.id));
     return code ? { code, ident: false, emergency: null } : null;
   }
@@ -109,7 +113,7 @@ class Transponders {
     if (!track) return false;
     const cat = track.category;
     if (cat !== 1 && cat !== 2 && cat !== 4) return false;
-    if (coalitionClass(track.coalition) !== 'own') return false; // the crypto key, not the colour
+    if (coalitionClass(track.coalition, this._ownCoalition) !== 'own') return false; // the crypto key, not the colour
     if (track.player) {
       const e = this._srs ? this._srs.getTransponder(track.player) : null;
       // squawkStatus undefined (the legacy SRS block) is "on", as in transponderOf.
@@ -121,9 +125,9 @@ class Transponders {
   _syntheticCode(id) {
     const held = this._synthetic.get(id);
     if (held) return held;
-    const start = hashId(id) % SYNTHETIC_BLOCK_SIZE;
-    for (let i = 0; i < SYNTHETIC_BLOCK_SIZE; i++) {
-      const n = SYNTHETIC_BLOCK_START + ((start + i) % SYNTHETIC_BLOCK_SIZE);
+    const start = hashId(id) % this._blockSize;
+    for (let i = 0; i < this._blockSize; i++) {
+      const n = this._blockStart + ((start + i) % this._blockSize);
       const code = n.toString(8).padStart(4, '0');
       if (this._inUse.has(code)) continue;
       this._inUse.add(code);

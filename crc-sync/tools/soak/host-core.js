@@ -52,11 +52,10 @@ function createHost(env, { stateDir }) {
   if (!path.resolve(BOARD_SNAPSHOT_PATH).startsWith(path.resolve(stateDir) + path.sep)) {
     throw new Error(`soak: BOARD_SNAPSHOT_PATH ${BOARD_SNAPSHOT_PATH} is not inside the temp state dir ${stateDir} — refusing to run`);
   }
-  const { MUTATION_LOG_PATH } = req('efsp/mutation-log.js');
+  const MUTATION_LOG_PATH = req('efsp/mutation-log.js').mutationLogPath();
   if (!path.resolve(MUTATION_LOG_PATH).startsWith(path.resolve(stateDir) + path.sep)) {
     throw new Error(`soak: MUTATION_LOG_PATH ${MUTATION_LOG_PATH} is not inside the temp state dir — refusing to run`);
   }
-  const facilityConfig = req('efsp/facility-config.js');
   const { createApp } = req('app.js');
   const { MissionSession } = req('mission-session.js');
 
@@ -71,7 +70,7 @@ function createHost(env, { stateDir }) {
   const missionSession = new MissionSession({ path: null, clock });
   missionSession.noteMissionLoad({ theatre: SOAK_THEATER, waypoints: [], drawings: [] });
   const app = createApp({
-    env: {},
+    env: process.env,
     paths: boardPaths,
     grpcClient: Object.assign(new EventEmitter(), { getWeather: () => ({}), evalLua: async () => null, getAptWeather: async () => ({}) }),
     srsClient: Object.assign(new EventEmitter(), { getTransponder: () => null }),
@@ -90,7 +89,7 @@ function createHost(env, { stateDir }) {
   const ticker = Object.fromEntries(app.tickers.map((t) => [t.name, t.tick]));
   hub._wss = { clients: new Set() }; // never attach(): no timer, no real server (T3)
 
-  const facilityIds = facilityConfig.getFacilityIds();
+  const facilityIds = efsp.facilityConfig.getFacilityIds();
 
   // ── per-command capture ────────────────────────────────────────────────
   let out = [];

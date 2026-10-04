@@ -18,7 +18,7 @@ for (const [k, v] of Object.entries({
 })) process.env[k] = path.join(tmpDir, v);
 
 const { EfspMetrics, percentile, duplicatePositionIds, TTF_SAMPLE_CAP } = await import('../src/efsp/metrics.js');
-const facilityConfig = await import('../src/efsp/facility-config.js');
+const facilityConfig = (await import('../src/efsp/facility-config.js')).createFacilityConfig();
 const { MissionSession } = await import('../src/mission-session.js');
 
 const HOUR = 3600000;

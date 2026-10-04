@@ -4,7 +4,7 @@
 // transponder sends, who each contact is, and the datalink feed. ws-hub.js
 // asks it about a contact; presentation.js turns the answers into the wire.
 
-const { DEFAULT_TRANSITION_ALT_FT } = require('../theaters');
+const { defaultTransitionAltFt } = require('../theaters');
 const { Transponders } = require('./transponder');
 const { loadSensorSpecs } = require('../radars');
 const { TrackNumbers } = require('./track-numbers');
@@ -22,9 +22,10 @@ const NO_FLIGHT_DATA_LIST = { getFlightData: () => null };
  * @param {object} [deps.flightDataStore]
  * @param {object} [deps.datalink]            DatalinkFeed, or null
  * @param {() => {weather:object, transitionAltFt:number}} [deps.env]
+ * @param {number} [deps.ownCoalition]        which DCS coalition is own (iff.js's ownCoalitionFrom)
  */
-function createSurveillance({ collab, srs = null, sensorSpecs = loadSensorSpecs(), correlationStore, flightDataStore, datalink = null, env }) {
-  const transponders = new Transponders({ srs, config: sensorSpecs.transponder });
+function createSurveillance({ collab, srs = null, sensorSpecs = loadSensorSpecs(), correlationStore, flightDataStore, datalink = null, env, ownCoalition }) {
+  const transponders = new Transponders({ srs, config: sensorSpecs.transponder, ownCoalition });
   const trackNumbers = new TrackNumbers();
   const identity = new Identity({
     correlationStore: correlationStore || NO_CORRELATIONS,
@@ -36,7 +37,7 @@ function createSurveillance({ collab, srs = null, sensorSpecs = loadSensorSpecs(
     transponders, trackNumbers, identity, datalink,
     // [SOURCE-DEFINED] (docs/adr/0085, H62): with no injected env, i.e. before any
     // `theater` message, the transition altitude is config/theaters.json's default.
-    env: env || (() => ({ weather: {}, transitionAltFt: DEFAULT_TRANSITION_ALT_FT })),
+    env: env || (() => ({ weather: {}, transitionAltFt: defaultTransitionAltFt() })),
 
     /**
      * Everything about a contact that does not depend on which controller is

@@ -12,7 +12,8 @@ const wallFollows = (m) => { const raw = m.tick.bind(m); m.tick = (t, w = t) => 
 
 const { instantPhase, debouncedPhase, PHASES } = await import('../src/efsp/airborne.js');
 const { SurveillanceHintMonitor, EXPECTS, UNEXPECTING } = await import('../src/efsp/surveillance-hints.js');
-const { normalizeHintsConfig, DEFAULT_HINTS_CONFIG, loadHintsConfig } = await import('../src/efsp/surveillance-hints-config.js');
+const { normalizeHintsConfig, defaultHintsConfig, loadHintsConfig } = await import('../src/efsp/surveillance-hints-config.js');
+const DEFAULT_HINTS_CONFIG = defaultHintsConfig();
 const { STATES_BY_STRIP_TYPE } = await import('../src/efsp/nla.js');
 const { EfspMetrics } = await import('../src/efsp/metrics.js');
 

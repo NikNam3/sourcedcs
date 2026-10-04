@@ -43,7 +43,7 @@ const MISSION = { theatre: THEATER, airports: [], waypoints: [], drawings: [], c
 
 async function boot({ token = TOKEN, bookings = { ok: true, bookings: [] }, mission = true } = {}) {
   const grpcClient = Object.assign(new EventEmitter(), { getWeather: () => ({}), evalLua: async () => null, getAptWeather: async () => ({}) });
-  const app = createApp({ grpcClient, srsClient: new EventEmitter(), env: token ? { AIRSPACE_SERVICE_TOKEN: token, CRCSYNC_SOURCEDCS_WEB_PUBLIC_URL: 'https://web.test/' } : {}, bookingLookup: async () => bookings });
+  const app = createApp({ grpcClient, srsClient: new EventEmitter(), env: token ? { ...process.env, AIRSPACE_SERVICE_TOKEN: token, CRCSYNC_SOURCEDCS_WEB_PUBLIC_URL: 'https://web.test/' } : { ...process.env }, bookingLookup: async () => bookings });
   await new Promise(r => app.server.listen(0, '127.0.0.1', r));
   app.start();
   if (mission) grpcClient.emit('mission-load', MISSION);

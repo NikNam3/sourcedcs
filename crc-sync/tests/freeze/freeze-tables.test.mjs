@@ -13,10 +13,11 @@ import { HERE, canonical, digest, checkGolden } from './freeze-lib.mjs';
 const require = createRequire(import.meta.url);
 const SRC = path.resolve(HERE, '../../src');
 const permission = require('../../src/efsp/permission.js');
+const classPermission = (await import('../helpers/permission.mjs')).classPermission();
 const nla = require('../../src/efsp/nla.js');
 const coordination = require('../../src/efsp/coordination.js');
 const blockMap = require('../../src/efsp/block-map.js');
-const facilityConfig = require('../../src/efsp/facility-config.js');
+const facilityConfig = require('../../src/efsp/facility-config.js').createFacilityConfig();
 const wireFamilies = require('../../src/efsp/wire/families');
 
 const plain = (v) => {
@@ -37,7 +38,7 @@ test('freeze tables: permission tables', () => {
   for (const k of ['PERMISSIONS', 'CREATE_STRIP_TYPE_PERMISSIONS', 'STATE_OWNERS_BY_STRIP_TYPE', 'OP_KINDS', 'COORDINATION_OP_KINDS', 'AP_CTR_ONLY_OP_KINDS',
     'TOFI_OP_KINDS', 'AIRSPACE_ENTRY_OP_KINDS', 'TOFI_COUNTERPARTS', 'NO_STRIP_OP_CLASSES', 'RUNWAY_STATUS_OP_OWNERS', 'TACTICAL_CAPABILITIES',
     'READ_SCOPES', 'CARRIER_CAPABILITIES', 'MARSHAL_STATE_OWNERS', 'FINAL_STATE_OWNERS', 'PATTERN_STATE_OWNERS']) {
-    rows.push({ id: `permission.${k}`, v: canonical(plain(permission[k])) });
+    rows.push({ id: `permission.${k}`, v: canonical(plain(k === 'PERMISSIONS' ? classPermission.PERMISSIONS : permission[k])) });
   }
   checkGolden(assert, 'tables-permission-data', { rows }, units);
 });
@@ -45,7 +46,7 @@ test('freeze tables: permission tables', () => {
 test('freeze tables: permission decisions (Position x op kind, Position x role x state, Position x created stripType)', () => {
   const rows = [];
   for (const p of POSITIONS) {
-    rows.push({ id: `canMutate ${p}`, v: Object.fromEntries(permission.OP_KINDS.map(k => [k, permission.canMutate(p, k)])) });
+    rows.push({ id: `canMutate ${p}`, v: Object.fromEntries(permission.OP_KINDS.map(k => [k, classPermission.canMutate(p, k)])) });
     rows.push({ id: `canCreateStripType ${p}`, v: Object.fromEntries(Object.keys(nla.STATES_BY_STRIP_TYPE).map(r => [r, permission.canCreateStripType(p, r)])) });
     for (const [stripType, states] of Object.entries(nla.STATES_BY_STRIP_TYPE)) {
       rows.push({ id: `canActOnState ${p} ${stripType}`, v: Object.fromEntries(states.map(s => [s, permission.canActOnState(p, stripType, s)])) });

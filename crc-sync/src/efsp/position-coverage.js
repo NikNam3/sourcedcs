@@ -28,7 +28,7 @@
 // has it gets the datalink feed (surveillance/datalink.js) alongside whatever
 // radars it looks through.
 
-const { USER_COALITION } = require('../surveillance/iff');
+const { DEFAULT_OWN_COALITION } = require('../surveillance/iff');
 const { radarIsHull } = require('./carrier/hull-config');
 const log = require('../log').logger('efsp:position-coverage');
 
@@ -45,7 +45,7 @@ const ATC_CLASSES = new Set(['MILITARY_ATC', 'CIVIL_ATC']);
  * whatever mission is loaded, so a persisted id list would be the inclusion
  * list docs/adr/0041 condemned, in a new costume.
  */
-function selectorMatches(selector, radar, { ownCoalition = USER_COALITION } = {}) {
+function selectorMatches(selector, radar, { ownCoalition = DEFAULT_OWN_COALITION } = {}) {
   if (!selector || selector.kind !== radar.type) return false;
 
   if (selector.airport) {
@@ -99,7 +99,8 @@ class PositionCoverage {
    *   than an array because the list changes every time an AWACS takes off,
    *   and this object outlives any one of them.
    */
-  constructor({ facilityConfig, positionStoreFor, radars }) {
+  constructor({ facilityConfig, positionStoreFor, radars, ownCoalition = DEFAULT_OWN_COALITION }) {
+    this._ownCoalition = ownCoalition;
     this._facilityConfig = facilityConfig;
     this._positionStoreFor = positionStoreFor;
     this._radars = radars;
@@ -137,7 +138,7 @@ class PositionCoverage {
     const radars = this._radars() || [];
     const byId = new Map(radars.map(r => [r.id, r]));
     const signedOn = this.signedOnPositions(controllerId);
-    const opts = { ownCoalition: USER_COALITION };
+    const opts = { ownCoalition: this._ownCoalition };
 
     const grantedBy = new Map(); // radarId -> [positionId]
     const radarBearingPositions = [];
@@ -181,7 +182,7 @@ class PositionCoverage {
    */
   activeRadars() {
     const radars = this._radars() || [];
-    const opts = { ownCoalition: USER_COALITION };
+    const opts = { ownCoalition: this._ownCoalition };
     const wanted = new Set();
 
     for (const facilityId of this._facilityConfig.getFacilityIds()) {

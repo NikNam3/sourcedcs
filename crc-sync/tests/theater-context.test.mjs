@@ -10,7 +10,8 @@ import CollaborativeStore from '../src/collab-store.js';
  * client. The client half (crc-desktop/app/public/js/magnetic.js) is loaded
  * here as-is, so the parity checks run against the file the app ships. */
 
-const { TheaterContext, DEFAULT_TRANSITION_ALT_FT } = await import('../src/theater-context.js');
+const { TheaterContext, defaultTransitionAltFt } = await import('../src/theater-context.js');
+const DEFAULT_TRANSITION_ALT_FT = defaultTransitionAltFt();
 const { loadTheaters } = await import('../src/theaters.js');
 const M = await import('../src/magnetic.js');
 

@@ -50,7 +50,7 @@ function isMonitorSet(code) { return MONITOR_SET.has(code); }
 let _block = null;
 function syntheticBlock() {
   if (_block) return _block;
-  const b = require('../synthetic-block');
+  const b = require('../synthetic-block').syntheticBlock();
   for (const c of RESERVED_CODES) {
     const n = parseInt(c, 8);
     if (n >= b.SYNTHETIC_BLOCK_START && n < b.SYNTHETIC_BLOCK_START + b.SYNTHETIC_BLOCK_SIZE) {

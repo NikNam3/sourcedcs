@@ -25,11 +25,11 @@ const { isValidFrequency, MIN_FREQUENCY_MHZ, MAX_FREQUENCY_MHZ } = require('./ai
 // expanding a short name into a route IS seed interpretation. Putting it in
 // board/ops/create-strip.js's _applyCreateStrip instead would mean any second creation
 // path — or a test constructing a FlightDataStore directly — silently skips it.
-const stereoRoutes = require('./stereo-routes');
+const { createStereoRoutes, toFlightDataFiledSeed: stereoSeedOf } = require('./stereo-routes');
 const { resolveZuluHhmm, resolveTypedTime, formatZuluHhmm } = require('./zulu-time');
 const { setCarrierFlightField } = require('./carrier/flight-record');
 const { WALL_CLOCK } = require('../mission-clock');
-const { DEFAULT_TRANSITION_ALT_FT } = require('../theaters');
+const { defaultTransitionAltFt } = require('../theaters');
 
 const { voidAppendedEntries } = require('./undo/append-only');
 
@@ -447,7 +447,7 @@ function normalizeTypedTime(path, value, nowMs, startMs = null) {
  * `transitionAltFt` is the theater's, used only to write a block's text.
  * Returns { ok: true, value } or { ok: false, detail }. Empty clears to null.
  */
-function normalizeMtrValue(path, value, nowMs, transitionAltFt = DEFAULT_TRANSITION_ALT_FT) {
+function normalizeMtrValue(path, value, nowMs, transitionAltFt = defaultTransitionAltFt()) {
   if (TYPED_TIME_LABELS[path]) return normalizeTypedTime(path, value, nowMs);
   const text = value == null ? '' : String(value).trim().toUpperCase();
   if (text === '') return { ok: true, value: null };
@@ -500,8 +500,9 @@ class FlightDataStore {
    *   theater's transition altitude, which decides how a block's text writes
    *   an end (FL or feet). A fixture that omits it gets 18,000 ft.
    */
-  constructor(codeAllocator, { clock = WALL_CLOCK, transitionAltFt = () => DEFAULT_TRANSITION_ALT_FT } = {}) {
+  constructor(codeAllocator, { clock = WALL_CLOCK, transitionAltFt = () => defaultTransitionAltFt(), stereoRoutes = createStereoRoutes() } = {}) {
     this._clock = clock;
+    this._stereoRoutes = stereoRoutes; // the table of canned routes, read at start by the composition root
     this._transitionAltFt = transitionAltFt;
     this._codeAllocator = codeAllocator || new CodeAllocator();
     this._flightDataList = new Map(); // flightDataId -> FlightDataRecord
@@ -628,7 +629,7 @@ class FlightDataStore {
     let stereoName = '';
     const requestedStereo = seed.stereoRouteName;
     if (requestedStereo != null && String(requestedStereo).trim() !== '') {
-      const route = stereoRoutes.resolveStereoRoute(requestedStereo);
+      const route = this._stereoRoutes.resolveStereoRoute(requestedStereo);
       if (!route) {
         return { ok: false, reason: 'VALIDATION_ERROR', detail: `${requestedStereo} is not a configured stereo route` };
       }
@@ -639,7 +640,7 @@ class FlightDataStore {
       if (route.active === false) {
         return { ok: false, reason: 'VALIDATION_ERROR', detail: `${route.name} is not an active stereo route` };
       }
-      stereoSeed = stereoRoutes.toFlightDataFiledSeed(route);
+      stereoSeed = stereoSeedOf(route);
       stereoName = route.name; // the CANONICAL spelling, not whatever was typed
     }
     // The stereo is a template ("file me the usual"); an explicitly supplied
@@ -879,7 +880,7 @@ class FlightDataStore {
         // controller who wants the route gone edits Block 9.
         value = '';
       } else {
-        const route = stereoRoutes.resolveStereoRoute(requested);
+        const route = this._stereoRoutes.resolveStereoRoute(requested);
         if (!route) {
           return { ok: false, reason: 'VALIDATION_ERROR', detail: `${requested} is not a configured stereo route` };
         }
@@ -915,7 +916,7 @@ class FlightDataStore {
     //                          clearance already issued is a separate field
     //                          and a separate conversation with the pilot.
     if (stereoExpansion) {
-      const seed = stereoRoutes.toFlightDataFiledSeed(stereoExpansion);
+      const seed = stereoSeedOf(stereoExpansion);
       for (const key of ['route', 'requestedAltitude', 'departureAirport', 'destinationAirport']) {
         flightData.filed[key] = seed[key];
         flightData.provenance[`filed.${key}`] = 'COMPUTER_GENERATED';

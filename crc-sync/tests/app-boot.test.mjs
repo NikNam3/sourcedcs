@@ -55,7 +55,7 @@ const timeouts = () => process.getActiveResourcesInfo().filter((r) => r === 'Tim
 test('createApp: ticker names and periods are the ones server.js had', async (t) => {
   { const cap = crcLog.capture(); t.after(() => cap.stop()); }
   const { correlation } = await import('../src/efsp/correlation-reconciler.js').then((m) => ({ correlation: m.CORRELATION_TICK_MS }));
-  const app = createApp({ ...fakes(), env: {} });
+  const app = createApp({ ...fakes(), env: { ...process.env } });
   assert.deepEqual(app.tickers.map((x) => [x.name, x.periodMs]), EXPECTED.map(([n, p]) => [n, n === 'correlation' ? correlation : p]));
 });
 
@@ -64,7 +64,7 @@ test('createApp: every ticker runs once, start() installs and stop() clears time
   const { grpcClient, srsClient } = fakes();
   const baseTimers = timeouts();
   const baseGrpc = grpcClient.eventNames().length;
-  const app = createApp({ grpcClient, srsClient, env: {} });
+  const app = createApp({ grpcClient, srsClient, env: { ...process.env } });
 
   for (const tk of app.tickers) await tk.tick();
 
@@ -81,7 +81,7 @@ test('createApp: every ticker runs once, start() installs and stop() clears time
 
 test('createApp: the express app serves /js/config.js without listening', async (t) => {
   { const cap = crcLog.capture(); t.after(() => cap.stop()); }
-  const app = createApp({ ...fakes(), env: {} });
+  const app = createApp({ ...fakes(), env: { ...process.env } });
   await new Promise((resolve, reject) => {
     const srv = app.http.listen(0, '127.0.0.1', async () => {
       try {
