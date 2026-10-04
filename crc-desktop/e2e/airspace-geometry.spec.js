@@ -47,10 +47,12 @@ async function open(page, signedOn = ['AP'], records = []) {
   await expect(page.locator('#airspace-panel')).toBeVisible({ timeout: 10000 });
   await page.evaluate(() => {
     window.__sent = [];
-    crc.ws.setEfspSender('sendEfspAirspaceMutation', (pos, id, baseRev, op, extra = {}) => {
-      const clientMutationId = `t-${window.__sent.length + 1}`;
+    // Stub the wire, not the sender: the real sender builds the frame and keeps the form's ack continuation (sendEfsp).
+    crc.ws.setEfspSender('_sendEfsp', (m) => {
+      if (m.type !== 'efsp-airspace-mutation') return true;
+      const { version, type, clientMutationId, airspaceId: id, baseRev, actingPositionId: pos, op, ...extra } = m;
       window.__sent.push({ pos, id, baseRev, op, extra, clientMutationId });
-      return clientMutationId;
+      return true;
     });
   });
   await page.waitForFunction(() => crc.app.mapReady === true, null, { timeout: 20000 });
