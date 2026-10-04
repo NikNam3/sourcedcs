@@ -202,9 +202,10 @@ test('module graph: no module reads another module\'s export without importing i
 
 /* 9. The import cycle cannot grow back (DESK-GRAPH; docs/wip/ARCH-C.md 1.2).
  * Before DESK-GRAPH one strongly connected component held 59 of 106 modules (app.js, bay-view.js's re-exports and
- * the renderers called by hand pulled everything into it). After: 39 of 114. The bound below is the size at the end of
- * DESK-GRAPH; lower it when a lane shrinks the cycle, never raise it. Leaves and rule modules must stay outside any cycle. */
-const LARGEST_CYCLE_MAX = 2;
+ * the renderers called by hand pulled everything into it); DESK-GRAPH left 39 of 114 and DESK-SPLIT removed the rest: the
+ * graph has no import cycle at all. The bound stays 0 (never raise it): a new back-edge is a state read that belongs in a
+ * leaf, or a call that belongs on the change bus (efsp-change-bus.js). */
+const LARGEST_CYCLE_MAX = 0;
 const NEVER_IN_A_CYCLE = [
   'settings.js', 'picture.js', 'map-handle.js', 'view-state.js', 'scope-constants.js', 'format.js', 'html-escape.js',
   'geo.js', 'iff.js', 'icons.js', 'track-label.js', 'panels/efsp/efsp-change-bus.js', 'panels/efsp/efsp-message-registry.js',
@@ -216,7 +217,7 @@ const NEVER_IN_A_CYCLE = [
 test('module graph: the largest import cycle stays small, and the leaves and rule modules are in none', () => {
   const cs = cycles(graph());
   const largest = Math.max(0, ...cs.map(c => c.length));
-  assert.ok(largest <= LARGEST_CYCLE_MAX, `the largest import cycle holds ${largest} modules (limit ${LARGEST_CYCLE_MAX}): ${cs.find(c => c.length === largest).join(', ')}`);
+  assert.ok(largest <= LARGEST_CYCLE_MAX, `the largest import cycle holds ${largest} modules (limit ${LARGEST_CYCLE_MAX}): ${(cs.find(c => c.length === largest) || []).join(', ')}`);
   const inCycle = new Set(cs.flat());
   const present = NEVER_IN_A_CYCLE.filter(f => fs.existsSync(path.join(JS, f)));
   assert.deepEqual(present.filter(f => inCycle.has(f)), []);

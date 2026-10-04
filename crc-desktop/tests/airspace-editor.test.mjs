@@ -4,10 +4,7 @@
 import './helpers/client-env.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  editableFields, lockReason, draftFromDefinition, definitionFromDraft, dirtyFields, buildPatch, validateDraft, wasText, impactNote,
-  conflictModel, resolveConflicts, altitudeText, parseAltitudeText, parseFrequencyText, RESTART_NOTE,
-} from '../app/public/js/panels/efsp/airspace-editor.js';
+import { editableFields, lockReason, draftFromDefinition, definitionFromDraft, dirtyFields, buildPatch, validateDraft, wasText, impactNote, conflictModel, resolveConflicts, altitudeText, parseAltitudeText, parseFrequencyText, RESTART_NOTE } from '../app/public/js/panels/efsp/airspace-draft.js';
 
 const def = (extra = {}) => ({
   airspaceId: 'R-TOROS', name: 'TOROS RANGE', kind: 'AREA', type: 'RANGE', controllingFacilityId: 'INCIRLIK', controllingPositionId: 'AP',

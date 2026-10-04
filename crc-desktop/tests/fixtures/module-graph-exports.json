@@ -268,7 +268,7 @@
    "openDeleteView",
    "openHistoryView"
   ],
-  "panels/efsp/airspace-editor.js": [
+  "panels/efsp/airspace-draft.js": [
    "FIELD_LABELS",
    "GEOMETRY_FIELDS",
    "RESTART_NOTE",
@@ -282,13 +282,15 @@
    "editableFields",
    "impactNote",
    "lockReason",
-   "openAirspaceEditor",
    "parseAltitudeText",
    "parseFrequencyText",
    "resolveConflicts",
    "validateDraft",
    "valueText",
    "wasText"
+  ],
+  "panels/efsp/airspace-editor.js": [
+   "openAirspaceEditor"
   ],
   "panels/efsp/airspace-geometry-editor.js": [
    "mountGeometryEditor"
