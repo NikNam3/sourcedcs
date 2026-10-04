@@ -112,5 +112,5 @@ test('wind: tower readout, weather popup and ATIS text show crc-sync\'s MAGNETIC
   assert.match(aprt, /\$\{windDir\}°M @ \$\{wx\.windKt\} kt/, 'tower readout says M');
   assert.match(aprt, /wx && wx\.windFromMagnetic != null \? String\(wx\.windFromMagnetic\)/, 'ATIS uses magnetic');
   assert.match(aprt, /'Wind not available\.'/, 'unknown variation: no true value read as magnetic');
-  assert.match(read('js/panels/airport-selector.js'), /\$\{windDir\}°M @ \$\{d\.windKt\} kt/);
+  assert.match(read('js/panels/airport-selector.js'), /\$\{escapeHtml\(windDir\)\}°M @ \$\{escapeHtml\(d\.windKt\)\} kt/);
 });
