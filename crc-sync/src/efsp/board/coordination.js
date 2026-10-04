@@ -173,10 +173,7 @@ class Coordination {
       acceptedAt: null, acceptedBy: null,
       lastStandByAt: null, // OPERATIONAL_REQUEST-only (docs/adr/0022) — stamped by _applyCoordinationStandBy
     };
-    strip.rev += 1;
-    strip.updatedAt = now;
-    strip.updatedBy = by || null;
-    this._touch(strip.stripId);
+    this._state.bump(strip, by, now);
     // Bug found in live testing: receiveCoordinationProposal mints a real
     // Strip in the PEER Facility's own BoardStore (a live-in-memory side
     // effect, correct), but nothing surfaced that to efsp-ws.js — meaning
@@ -218,10 +215,7 @@ class Coordination {
       strip.rackId = this._placement.placementRack(strip, targetBay);
       strip.orderKey = this._placement.resolveOrderKey(targetBay.bayId, strip.rackId, null, null, strip.stripId);
     }
-    strip.rev += 1;
-    strip.updatedAt = now;
-    strip.updatedBy = by || null;
-    this._touch(strip.stripId);
+    this._state.bump(strip, by, now);
     // docs/adr/0101 (DR-3): a Strip that lands in the Marshal stack joins it at the next free slot, through the same
     // check-in a recovery CreateStrip makes. A full stack is a warning, not a refusal of the handoff.
     let warnings;
@@ -485,10 +479,7 @@ class Coordination {
     } else {
       strip.coordination.state = 'REJECTED';
     }
-    strip.rev += 1;
-    strip.updatedAt = now;
-    strip.updatedBy = by || null;
-    this._touch(strip.stripId);
+    this._state.bump(strip, by, now);
     this._audit.recordPeer('InterfacilityCoordinationResponse', strip, before, { causedBy, fromFacilityId: strip.coordination.peerFacilityId, by, action: response });
     return { ok: true, strip };
   }

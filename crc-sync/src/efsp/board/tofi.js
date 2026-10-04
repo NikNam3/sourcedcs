@@ -147,8 +147,7 @@ class Tofi {
         note: op.note || null,
         initiatedAt: now, initiatedBy: by || null, acceptedAt: null, acceptedBy: null,
       };
-      strip.rev += 1; strip.updatedAt = now; strip.updatedBy = by || null;
-      this._touch(strip.stripId);
+      this._state.bump(strip, by, now);
       return { ok: true, strip, peerFacilityId: op.toFacilityId, peerStrip: proposal.strip };
     }
 
@@ -173,8 +172,7 @@ class Tofi {
       note: op.note || null,
       initiatedAt: now, initiatedBy: by || null, acceptedAt: null, acceptedBy: null,
     };
-    strip.rev += 1; strip.updatedAt = now; strip.updatedBy = by || null;
-    this._touch(strip.stripId);
+    this._state.bump(strip, by, now);
     return { ok: true, strip, peerFacilityId: prior.peerFacilityId, peerStrip: exitResult.strip };
   }
 
@@ -309,8 +307,7 @@ class Tofi {
       }
     }
 
-    strip.rev += 1; strip.updatedAt = now; strip.updatedBy = by || null;
-    this._touch(strip.stripId);
+    this._state.bump(strip, by, now);
 
     let peerStrip = null;
     const peer = this._rules.peerBoard(tofi.peerFacilityId);
@@ -470,8 +467,7 @@ class Tofi {
     tofi.commsTransferred = true;
     tofi.commsTransferredAt = now;
     tofi.commsTransferredBy = by || null;
-    strip.rev += 1; strip.updatedAt = now; strip.updatedBy = by || null;
-    this._touch(strip.stripId);
+    this._state.bump(strip, by, now);
 
     let peerStrip = null;
     const peer = this._rules.peerBoard(tofi.peerFacilityId);
@@ -535,10 +531,7 @@ class Tofi {
         note: note || null,
         initiatedAt: reusedAt, initiatedBy: by || null, acceptedAt: null, acceptedBy: null,
       };
-      existing.rev += 1;
-      existing.updatedAt = reusedAt;
-      existing.updatedBy = by || null;
-      this._touch(existing.stripId);
+      this._state.bump(existing, by, reusedAt);
       this._audit.recordPeer('TofiProposal', existing, existingBefore, { causedBy, fromFacilityId, by });
       return { ok: true, strip: existing };
     }
@@ -593,8 +586,7 @@ class Tofi {
     strip.tofiCoordination.initiatedBy = by || null;
     strip.tofiCoordination.acceptedAt = null;
     strip.tofiCoordination.acceptedBy = null;
-    strip.rev += 1; strip.updatedAt = now; strip.updatedBy = by || null;
-    this._touch(strip.stripId);
+    this._state.bump(strip, by, now);
     this._audit.recordPeer('TofiExitProposal', strip, before, { causedBy, fromFacilityId: strip.tofiCoordination.peerFacilityId, by });
     return { ok: true, strip };
   }
@@ -623,10 +615,7 @@ class Tofi {
       tofi.commsTransferredAt = now;
       tofi.commsTransferredBy = by || null;
     }
-    strip.rev += 1;
-    strip.updatedAt = now;
-    strip.updatedBy = by || null;
-    this._touch(strip.stripId);
+    this._state.bump(strip, by, now);
     this._audit.recordPeer('TofiResponse', strip, before, { causedBy, fromFacilityId: tofi.peerFacilityId, by, action: response });
     return { ok: true, strip };
   }

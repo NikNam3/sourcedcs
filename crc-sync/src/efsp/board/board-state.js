@@ -65,12 +65,12 @@ class BoardState {
   }
 
   /**
-   * One Strip changed by `by`: rev+1, updatedAt from the clock, updatedBy, touch.
-   * The four lines used to be repeated at every write site.
+   * One Strip changed by `by`: rev+1, updatedAt, updatedBy, touch: the one place that block lives. `at` is the instant the
+   * op already read from the clock (default: read it now), so a Strip's stamp and the op's own stamps agree.
    */
-  bump(strip, by) {
+  bump(strip, by, at = this._clock.now()) {
     strip.rev += 1;
-    strip.updatedAt = this._clock.now();
+    strip.updatedAt = at;
     strip.updatedBy = by || null;
     this.recordTouch(strip.stripId);
   }

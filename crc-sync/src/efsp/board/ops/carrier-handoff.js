@@ -86,10 +86,7 @@ function _applyCarrierHandoff(ctx, strip, kind, toPositionId, by, actingPosition
     kind, trigger: row ? row.trigger : null, label, at: now, by: by || null,
     from: from.ownerPositionId, to: dest, fromStripType: from.stripType, toStripType: strip.stripType,
   };
-  strip.rev += 1;
-  strip.updatedAt = now;
-  strip.updatedBy = by || null;
-  ctx.touch(strip.stripId);
+  ctx.state.bump(strip, by, now);
   return {
     ok: true, strip, routedTo: routedTo || undefined, warnings,
     carrierHandoff: { kind, trigger: strip.carrierHandoff.trigger },
