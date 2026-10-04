@@ -16,7 +16,7 @@ test('LC with GC: the COMBINED line names both frequencies and the tabs carry th
   await expect(line).toContainText('GC GND 275.8');
   await expect(page.locator('.efsp-position-tab[data-position-id="GC"] .efsp-tab-freq')).toHaveText('GND 275.8');
   await expect(page.locator('.efsp-position-tab[data-position-id="LC"]')).toHaveClass(/efsp-position-tab-combined/);
-  await page.screenshot({ path: 'test-results/gclc-combined-line.png' });
+  await page.screenshot({ path: test.info().outputPath('gclc-combined-line.png') });
 });
 
 test('LC alone has no COMBINED line; an offer to take GC signs the controller on to GC', async ({ page }) => {
@@ -27,7 +27,7 @@ test('LC alone has no COMBINED line; an offer to take GC signs the controller on
   })));
   const offer = page.locator('#efsp-combination .efsp-position-offer');
   await expect(offer).toContainText('GC is unstaffed with 3 Strips. Take GC as well?');
-  await page.screenshot({ path: 'test-results/gclc-offer.png' });
+  await page.screenshot({ path: test.info().outputPath('gclc-offer.png') });
   await offer.locator('.efsp-offer-take').click();
   await expect(page.locator('#efsp-combination .efsp-combination-line')).toContainText('COMBINED LC + GC');
   await expect(offer).toHaveCount(0);

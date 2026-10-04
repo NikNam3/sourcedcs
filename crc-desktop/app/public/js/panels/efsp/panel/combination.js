@@ -28,7 +28,6 @@ export function acceptEfspPositionOffer() {
   renderCombination();
 }
 
-export function _resetCombinationForTest() { _offer = null; _signOnNotice = ''; }
 
 /** Redraws the line. A no-op until initEfspPanel() has cached the element. */
 export function renderCombination() {

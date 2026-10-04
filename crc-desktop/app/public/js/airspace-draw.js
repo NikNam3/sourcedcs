@@ -37,8 +37,6 @@ function hitAt(point, withMids) {
   return best;
 }
 
-export function isDrawing() { return !!_session; }
-
 const _el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 
 /** The navpoint within SNAP_PX of a screen point, or null. Navpoints are the loaded mission's `waypoints`. */

@@ -1,4 +1,5 @@
 'use strict';
+import { NM_M } from '../geo.js';
 import { PANEL_TITLES, isDockPanelOpen, isPanelPinned, setPanelPinned, toggleDockPanel } from '../dock.js';
 import { hideLosProfile, showLosProfile } from './los-panel.js';
 import { getAllEfspPositions } from './efsp/efsp-state.js';
@@ -81,7 +82,7 @@ export function renderCoverageList() {
 
     const $range = document.createElement('span');
     $range.className = 'radar-row-range';
-    $range.textContent = `${Math.round(r.rangeM / 1852)}nm`;
+    $range.textContent = `${Math.round(r.rangeM / NM_M)}nm`;
     $range.title = `${TYPE_LABELS[r.type] || r.type.toUpperCase()} — range in crc-sync's model, not the real site's`;
 
     $row.appendChild($label);

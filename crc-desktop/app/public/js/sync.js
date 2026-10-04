@@ -1,6 +1,7 @@
 'use strict';
 import { loadMaptilerKey } from './maptiler-key.js';
 import { WIRE_PROTOCOL } from './wire-protocol.js';
+import { escapeHtml } from './html-escape.js';
 
 // crc-sync client — Casdoor login (via a popup, main.js's
 // setWindowOpenHandler allow-lists the Casdoor authorize URL), the
@@ -135,8 +136,8 @@ function hideLoginGate() {
 
 function _connFieldRow(label, id, value) {
   return `<label style="display:flex;flex-direction:column;gap:4px;font-size:10px;letter-spacing:1px;">
-    ${label}
-    <input id="${id}" value="${(value || '').replace(/"/g, '&quot;')}" style="background:#0d130d;color:#c8d8c8;
+    ${escapeHtml(label)}
+    <input id="${escapeHtml(id)}" value="${escapeHtml(value)}" style="background:#0d130d;color:#c8d8c8;
       border:1px solid #2a3a2a;padding:7px 8px;font-family:inherit;font-size:12px;letter-spacing:0.5px;border-radius:2px;">
   </label>`;
 }

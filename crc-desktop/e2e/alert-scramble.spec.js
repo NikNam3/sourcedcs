@@ -1,7 +1,7 @@
 'use strict';
 
 /* L13 — alert and scramble in a real browser (guide §9.6, crc-sync's
- * docs/adr/0070). Screenshots land in docs/wip/L13/; the walk is written up in
+ * docs/adr/0070). Screenshots go to the test output directory (test-results/); the walk is written up in
  * docs/wip/L13.md.
  *
  * The things §9.6 and its [GAP] promise are hard assertions: the Board-wide
@@ -17,13 +17,11 @@ const { openPanel, seedStrip, stripByCallsign, lapseNlaGuard, settle } = require
 
 test.describe.configure({ timeout: 120000 });
 
-const SHOTS = path.join(__dirname, '..', '..', 'docs', 'wip', 'L13');
-fs.mkdirSync(SHOTS, { recursive: true });
-const shot = (target, name) => target.screenshot({ path: path.join(SHOTS, `${name}.png`) });
+const shot = (target, name) => target.screenshot({ path: test.info().outputPath(`${name}.png`) });
 /** The whole Strip panel, clipped from a page screenshot: the panel re-renders on every delta, so an element screenshot can lose its node mid-capture. */
 async function panelShot(page, name) {
   const box = await page.locator('#efsp-panel').boundingBox();
-  await page.screenshot({ path: path.join(SHOTS, `${name}.png`), clip: box });
+  await page.screenshot({ path: test.info().outputPath(`${name}.png`), clip: box });
 }
 
 async function goBay(page, positionId, bayId) {

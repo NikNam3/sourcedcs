@@ -6,7 +6,7 @@
  * acknowledgements, and the pilot requests the client can show.
  *
  * crc-desktop docs/adr/0068 (the client) over crc-sync docs/adr/0061 (the
- * server). Screenshots go to docs/wip/L1b/ — each is listed with what it proves
+ * server). Screenshots go to the test output directory (test-results/) — each is listed with what it proves
  * in docs/wip/L1b.md.
  *
  * Several controllers, each in their own browser context, because the D21
@@ -29,8 +29,7 @@ test.describe.configure({ mode: 'serial', timeout: 240000 });
 // The walk builds on its own earlier tests, so the Board is reset once per file, not per test (helpers/test.js).
 test.use({ resetScope: 'file' });
 
-const SHOTS = path.join(__dirname, '..', '..', 'docs', 'wip', 'L1b');
-const shot = (page, name) => page.screenshot({ path: path.join(SHOTS, `${name}.png`), fullPage: false });
+const shot = (page, name) => page.screenshot({ path: test.info().outputPath(`${name}.png`), fullPage: false });
 
 const FLIGHT_DATA = { route: 'DCT', requestedAltitude: 'FL250', departureAirport: 'LTAG', destinationAirport: 'LTAF' };
 const RUN = String(Date.now()).slice(-3); // callsigns unique per run, since the Board is shared
@@ -118,6 +117,22 @@ async function press(page, kind, { positionId, action } = {}) {
   await expect(btn, `${kind} is offered`).toHaveCount(1);
   const before = (await field(page)).rev;
   await btn.click({ timeout: 5000 });
+  await expect.poll(async () => (await field(page)).rev, { message: `${kind} applied` }).toBeGreaterThan(before);
+}
+
+/** An action that asks for a reason (Close, Reject): the inline form, not a native dialog. */
+async function pressWithReason(page, kind, { positionId, action } = {}, reason = '') {
+  await front(page, 'runwayStatus');
+  let sel = `#runway-status-panel button[data-kind="${kind}"]`;
+  if (positionId) sel += `[data-position-id="${positionId}"]`;
+  if (action) sel += `[data-action="${action}"]`;
+  await expect(page.locator(sel), `${kind} is offered`).toHaveCount(1);
+  const before = (await field(page)).rev;
+  await page.locator(sel).click({ timeout: 5000 });
+  const input = page.locator('#runway-status-panel .runway-status-reason-input');
+  await expect(input, 'the reason is asked for inline').toBeVisible();
+  await input.fill(reason);
+  await page.locator('#runway-status-panel .runway-status-reason-send').click();
   await expect.poll(async () => (await field(page)).rev, { message: `${kind} applied` }).toBeGreaterThan(before);
 }
 
@@ -379,8 +394,7 @@ test('Phase 3 walk: a runway change needs OPS and AP (each a different person), 
   await front(lc, 'runwayStatus');
   await lc.locator('#runway-status-panel select.runway-status-to-end').selectOption('05');
   await press(lc, 'ProposeRunwayChange', { positionId: 'LC' });
-  app.once('dialog', (d) => d.accept('wind is 240 at 15'));
-  await press(app, 'RejectRunwayChange', { positionId: 'AP' });
+  await pressWithReason(app, 'RejectRunwayChange', { positionId: 'AP' }, 'wind is 240 at 15');
   await front(lc, 'runwayStatus');
   await expect(lc.locator('#runway-status-panel .runway-status-change-rejected')).toHaveText(/^REJECTED by AP \(iceman\) \d{4}Z — wind is 240 at 15$/);
   expect((await field(lc)).activeRunway).toBe('23');

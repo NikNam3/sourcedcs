@@ -45,9 +45,9 @@ import {
   _canMarkTofiEntered, _canTransferTofiComms, _coordinationIsReplica, _coordinationProposerOf, _coordinationStateWord,
   _dispatchCoordination, _dispatchCorrelation, _dispatchGesture, _dispatchHandBack, _dispatchMarsa, _dispatchTofi,
   _handBackBayFor, _invokeNla, _isPendingCoordinationReplica, _isPendingTofiReplica, _isRejectedCoordinationReplica,
-  _mountPopover, _openAirspaceEntryPopover, _openBindPopover, _openCoordinatePopover, _openMarsaPopover,
+  _openAirspaceEntryPopover, _openBindPopover, _openCoordinatePopover, _openMarsaPopover,
   _openTofiEntryPopover, _pendingConvertStripId, _resolveActingPositionId, _swallowRepeatAdvance,
-  _tofiExitPrecondition, _tofiProposerOf, _tofiRegimeChoice, _unmountPopover
+  _tofiExitPrecondition, _tofiProposerOf, _tofiRegimeChoice, openPopover
 } from './bay-view.js';
 import { _setPendingConvertStripId } from './bay-view.js';
 import { _openJoinPopover, _openSplitPopover } from './bay/popovers/formation.js';
@@ -206,7 +206,7 @@ function _coordinationExchange(strip) {
   if (chips.length) {
     const wrap = _stripEl('div', 'efsp-coordination-badges efsp-handoff-chips');
     for (const c of chips) {
-      const chip = _stripEl('span', `efsp-handoff-chip efsp-handoff-chip-${c.key} efsp-handoff-tone-${c.tone}${c.held ? ' efsp-handoff-held' : ''}`, c.text);
+      const chip = _stripEl('span', `efsp-handoff-chip efsp-handoff-chip-${c.key} efsp-handoff-tone-${c.tone}${c.mine ? ' efsp-handoff-mine' : ''}`, c.text);
       chip.title = c.title;
       chip.dataset.chip = c.key;
       wrap.appendChild(chip);
@@ -855,20 +855,12 @@ function _stripMenuItems(strip) {
   return items;
 }
 
-let _openStripMenuEl = null;
+let _stripMenuHandle = null;
 
-function _closeStripMenu() {
-  _unmountPopover(_openStripMenuEl);
-  _openStripMenuEl = null;
-  document.removeEventListener('pointerdown', _onDocPointerDownCloseStripMenu, true);
-}
-
-function _onDocPointerDownCloseStripMenu(e) {
-  if (_openStripMenuEl && !_openStripMenuEl.contains(e.target)) _closeStripMenu();
-}
+function _closeStripMenu() { if (_stripMenuHandle) _stripMenuHandle.close(); }
 
 function _openStripMenu(strip, anchor) {
-  const wasOpenHere = _openStripMenuEl && _openStripMenuEl.dataset.stripId === strip.stripId;
+  const wasOpenHere = _stripMenuHandle && _stripMenuHandle.el.dataset.stripId === strip.stripId;
   _closeStripMenu();
   if (wasOpenHere) return; // the ⋯ button toggles
   strip = getEfspStrip(strip.stripId) || strip; // F-107: act on the live record
@@ -878,7 +870,6 @@ function _openStripMenu(strip, anchor) {
   const menu = _stripEl('div', 'efsp-strip-menu efsp-strip-menu-popover');
   menu.dataset.stripId = strip.stripId;
   menu.setAttribute('role', 'menu');
-  menu.addEventListener('pointerdown', (e) => e.stopPropagation());
   let group = null;
   const buttons = [];
   for (const item of items) {
@@ -901,13 +892,7 @@ function _openStripMenu(strip, anchor) {
         e.stopPropagation();
         // Items that change the menu in place (Convert's first press) return false.
         const keepOpen = item.run(anchor, btn) === false;
-        if (!keepOpen && _openStripMenuEl === menu) {
-          // Close the menu unless the action opened a popover of its own, which
-          // _open*Popover's own close-previous handling does not know about.
-          _unmountPopover(menu);
-          _openStripMenuEl = null;
-          document.removeEventListener('pointerdown', _onDocPointerDownCloseStripMenu, true);
-        }
+        if (!keepOpen && _stripMenuHandle && _stripMenuHandle.el === menu) _closeStripMenu();
       });
       buttons.push(btn);
     }
@@ -923,10 +908,9 @@ function _openStripMenu(strip, anchor) {
     if (buttons[next]) buttons[next].focus();
   });
 
-  _openStripMenuEl = menu;
-  _mountPopover(menu, anchor, strip, _closeStripMenu);
-  if (buttons[0] && typeof buttons[0].focus === 'function') buttons[0].focus();
-  setTimeout(() => document.addEventListener('pointerdown', _onDocPointerDownCloseStripMenu, true), 0);
+  _stripMenuHandle = openPopover({
+    el: menu, anchor, strip, focus: buttons[0] || null, onClose: () => { _stripMenuHandle = null; },
+  });
 }
 
 function _buildStripTools(strip) {

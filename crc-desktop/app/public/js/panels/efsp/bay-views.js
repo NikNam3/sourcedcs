@@ -1,5 +1,5 @@
 'use strict';
-import { haversineM } from '../../geo.js';
+import { NM_M, haversineM } from '../../geo.js';
 import { missionNow } from '../topbar.js';
 import {
   correlatedTrackIdForStrip, getEfspBays, getEfspFlightData, getEfspRunwayStatus, getEfspRack, getEfspStrip
@@ -41,7 +41,6 @@ export const FINAL_GLIDEPATH_NOMINAL_DEG = 3.0;  // [SOURCE-DEFINED] nominal gli
 export const FINAL_DECISION_HEIGHT_FT = 200;     // [SOURCE-DEFINED] decision height above the field when the Strip gives none
 const FINAL_REFRESH_MS = 1000;            // the cadence bar and the mile calls are read off the clock, not an event
 const NM_FT = 6076.12;
-const NM_M = 1852;
 
 const _fin = (v) => typeof v === 'number' && Number.isFinite(v);
 

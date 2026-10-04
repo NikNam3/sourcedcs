@@ -23,7 +23,7 @@ export let _pendingCreateStripMutationId = null;
  * Every CreateStrip the panel sends goes through here: the form is busy until the ack, and the ack's continuation (the
  * one ack path, efsp-ws.js) puts the outcome in the form. A refusal is also banner-worthy, so this returns false.
  */
-export function _sendCreateStrip(actingPositionId, createOp, facilityId) {
+export function _sendCreateStrip(actingPositionId, createOp, facilityId = facilityOfPosition(actingPositionId)) {
   const id = sendEfspCreateStrip(actingPositionId, createOp, facilityId, { onAck: _onCreateStripAck });
   _pendingCreateStripMutationId = id;
   return id;
@@ -131,11 +131,11 @@ export function _setCreateStripMsg(text, isError) {
 // (entirely plausible under low manning) must be able to originate any of
 // the three, not just whichever this list happened to check first.
 const CREATE_STRIP_ORIGINS = [
-  { actingPositionId: 'OPS', facilityId: 'INCIRLIK', bayId: 'ops-proposed',    stripType: undefined,     label: 'OPS · Departure' },
-  { actingPositionId: 'AP', facilityId: 'INCIRLIK', bayId: 'ap-inbound',     stripType: 'ARRIVAL',     label: 'AP · Arrival' },
-  { actingPositionId: 'AP', facilityId: 'INCIRLIK', bayId: 'ap-overflight',  stripType: 'OVERFLIGHT',  label: 'AP · Overflight' },
-  { actingPositionId: 'CTR', facilityId: 'CENTER',   bayId: 'ctr-enroute',     stripType: 'ARRIVAL',     label: 'CTR · Arrival' },
-  { actingPositionId: 'CTR', facilityId: 'CENTER',   bayId: 'ctr-overflight',  stripType: 'OVERFLIGHT',  label: 'CTR · Overflight' },
+  { actingPositionId: 'OPS', bayId: 'ops-proposed',    stripType: undefined,     label: 'OPS · Departure' },
+  { actingPositionId: 'AP', bayId: 'ap-inbound',     stripType: 'ARRIVAL',     label: 'AP · Arrival' },
+  { actingPositionId: 'AP', bayId: 'ap-overflight',  stripType: 'OVERFLIGHT',  label: 'AP · Overflight' },
+  { actingPositionId: 'CTR', bayId: 'ctr-enroute',     stripType: 'ARRIVAL',     label: 'CTR · Arrival' },
+  { actingPositionId: 'CTR', bayId: 'ctr-overflight',  stripType: 'OVERFLIGHT',  label: 'CTR · Overflight' },
   // WP4A second slice — TAC_C2/GCI self-originate a standalone MISSION
   // Strip (guide §9.8), for a mission that never needs to touch ATC-
   // controlled airspace at all. Distinct from a MISSION Strip minted as a
@@ -147,8 +147,8 @@ const CREATE_STRIP_ORIGINS = [
   // narrower On Station/Committed/Coordination set), so its origin starts
   // already ON_STATION rather than at MISSION's default TASKED, matching
   // the one Bay it actually has to land in.
-  { actingPositionId: 'TAC_C2', facilityId: 'TACTICAL', bayId: 'tac-c2-tasked', stripType: 'MISSION', label: 'TAC_C2 · Mission' },
-  { actingPositionId: 'GCI', facilityId: 'TACTICAL',   bayId: 'gci-on-station', stripType: 'MISSION', label: 'GCI · Mission', initialState: 'ON_STATION' },
+  { actingPositionId: 'TAC_C2', bayId: 'tac-c2-tasked', stripType: 'MISSION', label: 'TAC_C2 · Mission' },
+  { actingPositionId: 'GCI', bayId: 'gci-on-station', stripType: 'MISSION', label: 'GCI · Mission', initialState: 'ON_STATION' },
 ];
 
 function _createStripOriginKey(o) { return `${o.actingPositionId}:${o.stripType || 'DEPARTURE'}`; }
@@ -505,7 +505,7 @@ async function _submitCreateStrip() {
   const createOp = bindFlightDataId
     ? { kind: 'CreateStrip', bayId: origin.bayId, rackId: 'main', stripType: origin.stripType, flightDataId: bindFlightDataId, initialState: origin.initialState || undefined }
     : { kind: 'CreateStrip', bayId: origin.bayId, rackId: 'main', stripType: origin.stripType, flightData, initialState: origin.initialState || undefined };
-  _sendCreateStrip(origin.actingPositionId, createOp, origin.facilityId);
+  _sendCreateStrip(origin.actingPositionId, createOp);
   _createStripInputEl.value = '';
   if (_createStripStereoEl) _createStripStereoEl.value = '';
   if (_createStripBindEl) _createStripBindEl.value = '';

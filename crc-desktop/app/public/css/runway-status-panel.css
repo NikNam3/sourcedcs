@@ -105,6 +105,8 @@
   margin-top: 6px;
 }
 .runway-status-action-btn,
+.runway-status-reason-send,
+.runway-status-reason-cancel,
 .runway-status-to-end {
   min-height: 26px;
   padding: 2px 8px;
@@ -116,6 +118,25 @@
   font-size: 11px;
 }
 .runway-status-action-btn:disabled { color: var(--efsp-faint, #56616c); cursor: default; }
+
+/* The inline reason form an action opens (it was a blocking window.prompt): a whole row under the buttons. */
+.runway-status-reason {
+  display: flex;
+  flex: 1 0 100%;
+  gap: 4px;
+  align-items: center;
+}
+.runway-status-reason-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 26px;
+  padding: 2px 6px;
+  background: var(--efsp-strip, #1c2228);
+  border: 1px solid #4a5560;
+  color: var(--efsp-text, #d8e0e6);
+  font: inherit;
+  font-size: 11px;
+}
 
 /* On a Strip (docs/adr/0068): the runway it will use is not open, it is queued
    for the inactive end, or a hook arrival has no rigged gear. The chip's tone

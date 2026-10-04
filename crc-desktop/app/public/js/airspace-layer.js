@@ -5,11 +5,11 @@
 // state a dashed lighter grey one with its state in the label; orange-red is never used here (ADR 0056/0058).
 // The builders are pure (tests/airspace-layer.test.mjs); `registerAirspaceLayers` and `refreshAirspaceLayers` touch the map.
 
+import { NM_M } from './geo.js';
 import { decide, mountAirspaceLayerMenu, pruneOverrides, sanitizeMenu } from './airspace-layer-menu.js';
 import { map, mapReady, missionData, saveSettings, settings } from './app.js';
 import { getAllEfspAirspaces } from './panels/efsp/efsp-state.js';
 
-const CORRIDOR_NM_M = 1852;
 const ROUND = 12; // arc points per join/cap
 
 export const OUTLINE_COLOUR = { dark: { active: '#9aa5b0', other: '#6c7782' }, light: { active: '#4d5963', other: '#8d98a3' } };
@@ -31,7 +31,7 @@ export function labelText(record, transitionAltFt) {
 
 // ── the route corridor (buffered by leg width) ──────────────────────────────────────────────────
 
-function _local(origin) { const k = Math.cos(origin[0] * Math.PI / 180); return { to: ([lat, lon]) => [(lon - origin[1]) * k * 60 * CORRIDOR_NM_M, (lat - origin[0]) * 60 * CORRIDOR_NM_M], from: ([x, y]) => [origin[0] + y / (60 * CORRIDOR_NM_M), origin[1] + x / (k * 60 * CORRIDOR_NM_M)] }; }
+function _local(origin) { const k = Math.cos(origin[0] * Math.PI / 180); return { to: ([lat, lon]) => [(lon - origin[1]) * k * 60 * NM_M, (lat - origin[0]) * 60 * NM_M], from: ([x, y]) => [origin[0] + y / (60 * NM_M), origin[1] + x / (k * 60 * NM_M)] }; }
 const _dot = (a, b) => a[0] * b[0] + a[1] * b[1];
 function _arc(c, from, to, steps, ccw) {
   const a0 = Math.atan2(from[1] - c[1], from[0] - c[0]); let a1 = Math.atan2(to[1] - c[1], to[0] - c[0]);
@@ -51,7 +51,7 @@ export function corridorRing(rows, defaultWidthNm) {
   if (pts.length < 2) return null;
   const { to, from } = _local([pts[0].lat, pts[0].lon]);
   const P = pts.map(r => to([r.lat, r.lon]));
-  const half = pts.map((r, i) => ((i < pts.length - 1 ? (r.widthNm ?? defaultWidthNm) : (pts[i - 1].widthNm ?? defaultWidthNm)) * CORRIDOR_NM_M) / 2);
+  const half = pts.map((r, i) => ((i < pts.length - 1 ? (r.widthNm ?? defaultWidthNm) : (pts[i - 1].widthNm ?? defaultWidthNm)) * NM_M) / 2);
   const legs = [];
   for (let i = 0; i < P.length - 1; i++) {
     const dx = P[i + 1][0] - P[i][0]; const dy = P[i + 1][1] - P[i][1]; const len = Math.hypot(dx, dy) || 1;

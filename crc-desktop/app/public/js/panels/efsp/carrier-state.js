@@ -49,9 +49,6 @@ export function carrierDerivedFor(flightDataId) {
   return carrierDerivedStack().find(e => e.flightDataId === flightDataId) || null;
 }
 
-/** Is the (possibly derived) value one a controller may NOT type? Every Block of kind `carrier-derived`. */
-export function isCarrierDerivedBlock(def) { return !!def && def.target && def.target.kind === 'carrier-derived'; }
-
 function _pad(n, w = 2) { return String(n).padStart(w, '0'); }
 
 /** `1432` for a Zulu epoch ms; '' when none. */

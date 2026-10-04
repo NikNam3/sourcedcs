@@ -66,15 +66,19 @@ function _fsWindText(source) {
   return `from the mission wind${wind ? ` (${wind})` : ''} ${_fsZulu(source.at)}`.trim();
 }
 
-function _fsDispatch(record, action, btn, select) {
+// An action that needs a reason asks for it inline (DESK-TIDY-2: it was a blocking window.prompt). The draft lives here, not
+// in the DOM, because the panel is rebuilt on every runway-status frame: a half-typed reason must survive that.
+let _reasonDraft = null; // { key, text, fresh }
+
+function _fsActionKey(action) { return [action.kind, action.runwayId || '', action.action || '', action.positionId].join('|'); }
+
+function _fsDispatch(record, action, btn, select, reasonText) {
   const op = { kind: action.kind };
   if (action.runwayId) op.runwayId = action.runwayId;
   if (action.action) op.action = action.action;
   if (action.needs === 'toEnd') op.toRunwayId = select ? select.value : (action.toEnds || [])[0];
   if (action.needs === 'reason') {
-    const what = action.kind === 'CloseRunway' ? `Close runway ${action.runwayId}` : action.title.replace(/^as \S+ — /, '');
-    const text = window.prompt(`${what[0].toUpperCase()}${what.slice(1)} — reason?`);
-    if (text === null) return; // Cancel aborts (the airspace Deny precedent)
+    const text = (reasonText || '').trim();
     if (action.kind === 'CloseRunway') op.reason = text || null;
     else op.note = text || null;
   }
@@ -87,6 +91,44 @@ function _fsDispatch(record, action, btn, select) {
       renderRunwayStatusPanel();
     },
   });
+}
+
+function _fsAskReason(action) {
+  const key = _fsActionKey(action);
+  _reasonDraft = _reasonDraft && _reasonDraft.key === key ? null : { key, text: '', fresh: true }; // the button toggles
+  renderRunwayStatusPanel();
+}
+
+/** The inline reason form: Enter sends, Escape or Cancel abandons (the airspace Deny precedent); an empty reason is allowed. */
+function _fsReasonForm(record, action, actionBtn) {
+  const what = action.kind === 'CloseRunway' ? `Close runway ${action.runwayId}` : action.title.replace(/^as \S+ — /, '');
+  const form = _fsEl('div', 'runway-status-reason');
+  const input = _fsEl('input', 'runway-status-reason-input');
+  input.type = 'text';
+  input.placeholder = `${what[0].toUpperCase()}${what.slice(1)} — reason?`;
+  input.value = _reasonDraft.text;
+  const cancel = () => { _reasonDraft = null; renderRunwayStatusPanel(); };
+  const send = () => {
+    const text = input.value;
+    _reasonDraft = null;
+    _fsDispatch(record, action, actionBtn, null, text);
+  };
+  input.addEventListener('input', () => { if (_reasonDraft) _reasonDraft.text = input.value; });
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); send(); }
+    else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); cancel(); }
+  });
+  const sendBtn = _fsEl('button', 'runway-status-reason-send', 'Send');
+  sendBtn.addEventListener('click', send);
+  const cancelBtn = _fsEl('button', 'runway-status-reason-cancel', 'Cancel');
+  cancelBtn.addEventListener('click', cancel);
+  form.append(input, sendBtn, cancelBtn);
+  if (_reasonDraft.fresh) {
+    _reasonDraft.fresh = false;
+    // after the row is attached: the panel builds detached, then appends
+    Promise.resolve().then(() => { if (typeof input.focus === 'function') input.focus(); });
+  }
+  return form;
 }
 
 function _fsActionRow(record, actions) {
@@ -108,8 +150,12 @@ function _fsActionRow(record, actions) {
     btn.dataset.kind = action.kind;
     btn.dataset.positionId = action.positionId;
     if (action.action) btn.dataset.action = action.action;
-    btn.addEventListener('click', () => _fsDispatch(record, action, btn, select));
+    if (action.needs === 'reason') btn.addEventListener('click', () => _fsAskReason(action));
+    else btn.addEventListener('click', () => _fsDispatch(record, action, btn, select));
     row.appendChild(btn);
+    if (action.needs === 'reason' && _reasonDraft && _reasonDraft.key === _fsActionKey(action)) {
+      row.appendChild(_fsReasonForm(record, action, btn));
+    }
   }
   return row;
 }

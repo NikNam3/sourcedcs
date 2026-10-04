@@ -34,7 +34,7 @@ import {
 } from './bay/popovers/coordination.js';
 import { _refreshOpsFiledIfStale, _renderOpsFiledCards } from './bay/ops-cards.js';
 import { _efspDrag } from './bay/drag.js';
-import { _mountPopover, _stripHasOpenPopover, _unmountPopover } from './bay/popover-portal.js';
+import { _stripHasOpenPopover, openPopover } from './bay/popover-portal.js';
 import { _buildBlockCell, _refusalForStrip } from './bay/block-edit.js';
 import { _openBindPopover } from './bay/popovers/bind.js';
 import { _openMarsaPopover } from './bay/popovers/marsa.js';
@@ -92,10 +92,10 @@ export {
   _canConvertToArrival, _canProposeCoordination, _canProposeTofiEntry, _canProposeTofiExit,
   _canMarkTofiEntered, _canTransferTofiComms, _coordinationIsReplica, _coordinationProposerOf, _coordinationStateWord,
   _dispatchCoordination, _dispatchTofi, _expandedStripId, _isPendingCoordinationReplica, _isPendingTofiReplica,
-  _isRejectedCoordinationReplica, _mountPopover, _openAirspaceEntryPopover, _openBindPopover,
+  _isRejectedCoordinationReplica, _openAirspaceEntryPopover, _openBindPopover,
   _openCoordinatePopover, _openMarsaPopover, _openTofiEntryPopover, _pendingConvertStripId, _setExpandedStripId,
   _setPendingConvertStripId, _stripHasOpenPopover, _tofiExitPrecondition, _tofiProposerOf, _tofiRegimeChoice,
-  _unmountPopover, getOpenEfspBayIds, setOpenEfspBays
+  getOpenEfspBayIds, openPopover, setOpenEfspBays
 };
 
 export let _selectedStripId = null; // click-to-select state for the non-drag move path

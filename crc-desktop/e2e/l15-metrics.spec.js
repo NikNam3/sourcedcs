@@ -14,7 +14,6 @@ const { openPanel, seedStrip, stripByCallsign, frames } = require('./helpers/app
 
 test.describe.configure({ timeout: 60000 });
 
-const SHOTS = path.join(__dirname, '..', '..', 'docs', 'wip', 'L15');
 const FLIGHT_DATA = { route: 'DCT', requestedAltitude: 'FL250', departureAirport: 'LTAG', destinationAirport: 'LTAF' };
 
 const metricRow = (page, id) => page.locator(`#metrics-panel .metrics-row[data-metric="${id}"]`);
@@ -104,10 +103,10 @@ test('what a controller does is measured and shown on METRICS', async ({ page })
   await page.locator('#metrics-panel .metrics-toggle').click();
   await expect(page.locator('#metrics-panel .metrics-per-position')).toContainText('OPS');
 
-  await page.screenshot({ path: path.join(SHOTS, 'metrics-1600.png'), fullPage: false });
+  await page.screenshot({ path: test.info().outputPath('metrics-1600.png'), fullPage: false });
   await page.setViewportSize({ width: 480, height: 1000 });
   await frames(page);
-  await page.locator('#metrics-panel').screenshot({ path: path.join(SHOTS, 'metrics-480.png') });
+  await page.locator('#metrics-panel').screenshot({ path: test.info().outputPath('metrics-480.png') });
 });
 
 test('the panel needs no Position and polls only while it is on screen', async ({ page }) => {

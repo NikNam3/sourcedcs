@@ -2,7 +2,7 @@
 import { _setSyncSocket, getSyncFeedUrl } from './sync.js';
 import { noteCoveragePositions, redeclareEfspPositions } from './panels/efsp/efsp-ws.js';
 import { UPDATE_REQUIRED_CLOSE, hideUpdateRequired, isUpdateRequiredShown, showUpdateRequired } from './update-required.js';
-import { kinematics } from './geo.js';
+import { NM_M, kinematics } from './geo.js';
 import { refreshAirspaceLayers } from './airspace-layer.js';
 import { applyTheaterFacts } from './magnetic.js';
 import { getUserCoalition, loadUserCoalition, toggleUserCoalition } from './iff.js';
@@ -36,7 +36,7 @@ export const STALE_MS         = 10000;
 export const MIN_SPD_KT_PPL   = 30;
 
 const CRC_RANGE_NM     = 200;
-export const CRC_RANGE_M      = CRC_RANGE_NM * 1852;
+export const CRC_RANGE_M      = CRC_RANGE_NM * NM_M;
 
 // Default label position and geometry constants (used by geojson.js + map-setup.js)
 export const TEXT_SIZE_PX      = 11;
@@ -738,7 +738,6 @@ function _updateCoalitionBtn($btn) {
 }
 
 // ESM-1 (S-ESM1c): test seams for the app state the unit tests set directly in the old shared scope.
-export function _setSettingsForTest(v) { settings = v; }
 export function _setCoverageRadars(v) { coverageRadars = v; }
 export function _setCoverageDatalink(v) { coverageDatalink = v; }
-export function _setCoverageHeldPositions(v) { coverageSignedOnPositions = v; }
+export function _setCoverageSignedOnPositions(v) { coverageSignedOnPositions = v; }

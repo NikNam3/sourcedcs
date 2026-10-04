@@ -2,7 +2,7 @@
 
 /* L22 — the ATC scope in the STARS scheme (crc-sync's docs/adr/0088), in the
  * real app: the four scenes of the approved mockup (docs/wip/L22-mockup.html,
- * H71), drawn by the product code and photographed into docs/wip/L22/.
+ * H71), drawn by the product code and photographed into the test output directory.
  *
  * The rig has no DCS, so the picture is injected the way the wire would
  * deliver it: a coverage message, an EFSP snapshot (Strips, flight-data records,
@@ -16,8 +16,6 @@ const fs = require('fs');
 const { test, expect } = require('./helpers/test');
 const { openPanel, frames } = require('./helpers/app');
 
-const OUT = path.join(__dirname, '..', '..', 'docs', 'wip', 'L22');
-fs.mkdirSync(OUT, { recursive: true });
 
 // LTAG, and the mockup's layout: 100 px = 10 NM, (430, 330) = the field.
 const LTAG = { lat: 37.002, lon: 35.426 };
@@ -93,7 +91,7 @@ async function inject(page, scene) {
 async function snap(page, name) {
   await page.waitForFunction(() => crc.app.map.loaded()); // tiles and glyphs (the key-less tile requests answer 403, which is loaded)
   await frames(page, 3);
-  await page.locator('#map').screenshot({ path: path.join(OUT, name), animations: 'disabled' });
+  await page.locator('#map').screenshot({ path: test.info().outputPath(name), animations: 'disabled' });
 }
 
 async function openScope(page, signedOn) {

@@ -5,15 +5,15 @@
  *
  * As in airspace-panel.spec.js the rig has no DCS mission: the mission (drawings, navpoints, theatre) is delivered as the
  * `init` frame through the page's own WebSocket handler, the airspaces as an `efsp-airspace-delta`, and the panel's sends
- * are captured through the sender setter. Set SHOTS=1 to write screenshots into docs/wip/AIRSP-2P-B/.
+ * are captured through the sender setter. Set SHOTS=1 to write screenshots into the test's output directory.
  */
 
 const path = require('path');
 const { test, expect } = require('./helpers/test');
 const { openPanel } = require('./helpers/app');
 
-const SHOTS = process.env.SHOTS === '1' ? path.join(__dirname, '../../docs/wip/AIRSP-2P-B') : null;
-const shot = async (locator, name) => { if (SHOTS) await locator.screenshot({ path: path.join(SHOTS, `${name}.png`) }); };
+const SHOTS = process.env.SHOTS === '1';
+const shot = async (locator, name) => { if (SHOTS) await locator.screenshot({ path: test.info().outputPath(`${name}.png`) }); };
 
 const sq = [[36.2, 35.2], [36.2, 35.8], [36.7, 35.8], [36.7, 35.2]];
 const dr = (name, layerName, pts, extra = {}) => ({ primitiveType: 'Polygon', polygonMode: 'free', closed: true, name, layerName, points: pts.map(([lat, lon]) => ({ lat, lon })), ...extra });

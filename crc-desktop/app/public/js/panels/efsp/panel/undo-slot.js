@@ -33,7 +33,7 @@ export function getUndoOutcome() {
 }
 export function getUndoVoidedMessages() { return _voidedMessages.slice(); }
 
-/** The slot line: "Undo · Hand off VIPER1 → APP · 7 s", or null. */
+/** The slot line: "Undo · Hand off VIPER1 → AP · 7 s", or null. */
 export function undoSlotText() {
   const slot = getUndoSlot();
   if (!slot) return null;
@@ -45,7 +45,7 @@ function _positionsOf(voided) {
   return [...new Set((voided || []).map(v => v.actingPositionId).filter(Boolean))];
 }
 
-/** "Undone · Hand off VIPER1; voided 1 change by TWR" */
+/** "Undone · Hand off VIPER1; voided 1 change by LC" */
 export function undoOutcomeText(undone, voided) {
   const base = `Undone · ${undone && undone.label ? undone.label : 'last action'}`;
   const n = (voided || []).length;
@@ -54,7 +54,7 @@ export function undoOutcomeText(undone, voided) {
   return `${base}; voided ${n} change${n === 1 ? '' : 's'}${by.length ? ` by ${by.join(', ')}` : ''}`;
 }
 
-/** The panel message for a voided Position: "TWR undid Hand off VIPER1; your annotation on VIPER1 was voided". */
+/** The panel message for a voided Position: "LC undid Hand off VIPER1; your annotation on VIPER1 was voided". */
 export function undoVoidedMessageText(msg) {
   const items = (msg.voided || []).map(v => v.summary || v.op).filter(Boolean);
   const what = items.length ? items.join(', ') : 'a change of yours';

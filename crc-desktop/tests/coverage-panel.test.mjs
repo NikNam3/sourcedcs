@@ -50,7 +50,7 @@ async function load({ radars = [], signedOnPositions = [] } = {}) {
   const losPanel = await g.import('panels/los-panel.js');
   // What app.js holds once a `coverage` message has landed.
   app._setCoverageRadars(radars);
-  app._setCoverageHeldPositions(signedOnPositions);
+  app._setCoverageSignedOnPositions(signedOnPositions);
   return { sandbox: radarPanel, list, losPanel };
 }
 

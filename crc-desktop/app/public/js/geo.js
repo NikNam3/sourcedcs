@@ -7,6 +7,9 @@ import { sendToSync } from './sync.js';
 // alike) purely for trail/heading rendering, independent of the shared
 // multiplayer state below.
 
+/** Metres in a nautical mile: the one definition (was NM_M, M_PER_NM, CORRIDOR_NM_M and 20 inline 1852s). */
+export const NM_M = 1852;
+
 export function haversineM(lat1, lon1, lat2, lon2) {
   const R  = 6371000;
   const φ1 = lat1 * Math.PI / 180, φ2 = lat2 * Math.PI / 180;

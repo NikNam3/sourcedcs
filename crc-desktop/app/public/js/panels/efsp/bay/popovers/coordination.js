@@ -4,7 +4,7 @@ import { getEfspFlightData, getEfspStrip, isAitAuthorizedFor } from '../../efsp-
 import { sendEfspMutation } from '../../efsp-ws.js';
 import { CARRIER_HANDOFF_TARGET, COORDINATION_TARGETS, canHandOffToCarrier } from '../authority-mirror.js';
 import { _resolveActingPositionId, _swallowRepeatAdvance } from '../../bay-view.js';
-import { _mountPopover, _sendFromPopover, _unmountPopover } from '../popover-portal.js';
+import { openPopover, _sendFromPopover } from '../popover-portal.js';
 
 
 /**
@@ -162,18 +162,9 @@ export function _buildCoordinationReasonEl(text) {
   return el;
 }
 
-let _openCoordinatePopoverEl = null;
+let _openPopoverHandle = null;
 
-function _closeCoordinatePopover() {
-  if (!_openCoordinatePopoverEl) return;
-  _unmountPopover(_openCoordinatePopoverEl);
-  _openCoordinatePopoverEl = null;
-  document.removeEventListener('pointerdown', _onDocPointerDownCloseCoordinatePopover, true);
-}
-
-function _onDocPointerDownCloseCoordinatePopover(e) {
-  if (_openCoordinatePopoverEl && !_openCoordinatePopoverEl.contains(e.target)) _closeCoordinatePopover();
-}
+function _closeCoordinatePopover() { if (_openPopoverHandle) _openPopoverHandle.close(); }
 
 /** Opens the primitive-choice popover — mirrors _openHighlightPopover's exact pattern (anchor, outside-click close, deferred listener). */
 export function _openCoordinatePopover(strip, anchorEl) {
@@ -183,7 +174,6 @@ export function _openCoordinatePopover(strip, anchorEl) {
 
   const popover = document.createElement('div');
   popover.className = 'efsp-coordinate-popover';
-  popover.addEventListener('pointerdown', (e) => e.stopPropagation());
 
   if (degraded) {
     const warn = document.createElement('div');
@@ -251,7 +241,5 @@ export function _openCoordinatePopover(strip, anchorEl) {
   });
   popover.appendChild(sendBtn);
 
-  _openCoordinatePopoverEl = popover;
-  _mountPopover(popover, anchorEl, strip, _closeCoordinatePopover);
-  setTimeout(() => document.addEventListener('pointerdown', _onDocPointerDownCloseCoordinatePopover, true), 0);
+  _openPopoverHandle = openPopover({ el: popover, anchor: anchorEl, strip, onClose: () => { _openPopoverHandle = null; } });
 }

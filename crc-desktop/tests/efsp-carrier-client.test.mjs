@@ -35,7 +35,7 @@ test('the capability mirror agrees with permission.js, Position by Position', ()
     assert.equal(caps.sequencesStack, permission.canSequenceMarshalStack(id), `${id} sequencesStack`);
     assert.equal(caps.editsShipInput, permission.canEditShipStateInput(id), `${id} editsShipInput`);
   }
-  assert.deepEqual(panel.CARRIER_POSITION_IDS.sort(), [...permission.CARRIER_CAPABILITIES ? Object.keys(permission.CARRIER_CAPABILITIES) : []].sort());
+  assert.deepEqual(Object.keys(panel.CARRIER_CAPABILITIES).sort(), Object.keys(permission.CARRIER_CAPABILITIES).sort());
   assert.equal(panel.carrierActingFor('setsCase', ['CV_MARSHAL', 'CV_APP1']), null);
   assert.equal(panel.carrierActingFor('setsCase', ['CV_MARSHAL', 'CV_PRIFLY']), 'CV_PRIFLY');
 });

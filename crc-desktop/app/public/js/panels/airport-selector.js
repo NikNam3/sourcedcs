@@ -1,5 +1,6 @@
 'use strict';
 import { _syncAuthHeaders } from '../sync.js';
+import { escapeHtml } from '../html-escape.js';
 import { requestTrueFromMagnetic } from '../magnetic.js';
 import { updateMap } from '../geojson.js';
 import { $aptDisplay, updateAptDisplay, updateTopbarUI } from './topbar.js';
@@ -41,9 +42,12 @@ function populateAptDropdown($dd) {
     const el       = document.createElement('div');
     const isActive = selectedApt && selectedApt.name === a.name;
     el.className   = 'apt-option' + (isActive ? ' active' : '');
-    el.innerHTML   =
-      `<span>${a.icao || a.name}</span>` +
-      `<span class="apt-opt-name">${a.icao ? a.name : ''}</span>`;
+    const code = document.createElement('span');
+    code.textContent = a.icao || a.name;
+    const full = document.createElement('span');
+    full.className = 'apt-opt-name';
+    full.textContent = a.icao ? a.name : '';
+    el.append(code, full);
     el.addEventListener('click', () => {
       _setSelectedApt(a);
       $dd.classList.remove('open');
@@ -124,7 +128,7 @@ export function showAptWeatherPanel(label, lat, lon, elevM, clientX, clientY) {
   if (!panel) return;
 
   panel.innerHTML =
-    `<div class="awp-header"><span class="awp-label">${label}</span>` +
+    `<div class="awp-header"><span class="awp-label">${escapeHtml(label)}</span>` +
     `<button class="awp-close" id="awp-close">✕</button></div>` +
     `<div class="awp-body" id="awp-body"><div class="awp-loading">FETCHING…</div></div>`;
 
@@ -146,16 +150,16 @@ export function showAptWeatherPanel(label, lat, lon, elevM, clientX, clientY) {
       const body = document.getElementById('awp-body');
       if (!body) return;
       if (d.error) {
-        body.innerHTML = `<div class="awp-err">${d.error}</div>`;
+        body.innerHTML = `<div class="awp-err">${escapeHtml(d.error)}</div>`;
         return;
       }
       const inhg  = (d.pressureHpa / 33.8639).toFixed(2);
       // Tower/ATIS wind: magnetic, converted by crc-sync (decisions H76).
       const windDir = d.windFromMagnetic == null ? '---' : String(d.windFromMagnetic).padStart(3, '0');
       body.innerHTML =
-        `<div class="awp-row"><span class="awp-k">QNH</span><span class="awp-v">${d.pressureHpa} hPa / ${inhg} inHg</span></div>` +
-        `<div class="awp-row"><span class="awp-k">TEMP</span><span class="awp-v">${d.tempC}°C</span></div>` +
-        `<div class="awp-row"><span class="awp-k">WIND</span><span class="awp-v">${windDir}°M @ ${d.windKt} kt</span></div>`;
+        `<div class="awp-row"><span class="awp-k">QNH</span><span class="awp-v">${escapeHtml(d.pressureHpa)} hPa / ${escapeHtml(inhg)} inHg</span></div>` +
+        `<div class="awp-row"><span class="awp-k">TEMP</span><span class="awp-v">${escapeHtml(d.tempC)}°C</span></div>` +
+        `<div class="awp-row"><span class="awp-k">WIND</span><span class="awp-v">${escapeHtml(windDir)}°M @ ${escapeHtml(d.windKt)} kt</span></div>`;
     })
     .catch(() => {
       const body = document.getElementById('awp-body');

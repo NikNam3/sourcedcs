@@ -13,7 +13,6 @@ export const MENU_LAYERS = ['outlines', 'labels', 'corridors', 'centrelines'];
 export const LAYER_LABELS = { outlines: 'Outlines', labels: 'Labels', corridors: 'Route corridors', centrelines: 'Route centrelines' };
 export const MENU_KINDS = ['MOA', 'RANGE', 'DANGER', 'RESTRICTED', 'PROHIBITED', 'WARNING', 'ROUTE'];
 export const MENU_STATES = ['SCHEDULED', 'ACTIVE', 'RELEASED', 'RETURNED'];
-export const OVERRIDE_VALUES = ['filter', 'on', 'off'];
 
 export function defaultMenu() {
   return {

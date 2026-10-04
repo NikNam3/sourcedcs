@@ -1,7 +1,8 @@
 'use strict';
-import { bearingDeg, haversineM } from '../geo.js';
+import { NM_M, bearingDeg, haversineM } from '../geo.js';
 import { magneticText } from '../magnetic.js';
 import { buildRangeRing, updateMap } from '../geojson.js';
+import { escapeHtml } from '../html-escape.js';
 import {
   STALE_MS, getBullseye, grpcStatus, lastUpdateMs, map, mapReady, noRadarsActive, selectedApt, settings, srsStatus
 } from '../app.js';
@@ -110,12 +111,11 @@ function _showPatchNotesModal(version, notes) {
   el.id = 'crc-patch-notes-modal';
   el.style.cssText = 'position:fixed;inset:0;background:rgba(5,8,5,0.75);display:flex;' +
     'align-items:center;justify-content:center;z-index:100000;font-family:"Courier New",monospace;';
-  const safeNotes = notes.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   el.innerHTML = `
     <div style="background:#0d130d;border:1px solid #2a3a2a;padding:22px;width:420px;max-height:70vh;
       display:flex;flex-direction:column;gap:14px;color:#c8d8c8;">
-      <div style="font-size:13px;letter-spacing:2px;color:#39ff7a;">WHAT'S NEW IN CRC v${version}</div>
-      <div style="font-size:11px;line-height:1.6;white-space:pre-wrap;overflow-y:auto;color:#c8d8c8;">${safeNotes}</div>
+      <div style="font-size:13px;letter-spacing:2px;color:#39ff7a;">WHAT'S NEW IN CRC v${escapeHtml(version)}</div>
+      <div style="font-size:11px;line-height:1.6;white-space:pre-wrap;overflow-y:auto;color:#c8d8c8;">${escapeHtml(notes)}</div>
       <button id="crc-patch-notes-close" style="align-self:flex-end;padding:7px 16px;background:#132313;color:#39ff7a;
         border:1px solid #2a3a2a;cursor:pointer;font-family:inherit;font-size:10px;letter-spacing:1px;">CLOSE</button>
     </div>`;
@@ -155,7 +155,7 @@ export function updateBullseyeCursor(e) {
 
   const rect   = map.getCanvas().getBoundingClientRect();
   const cursor = map.unproject([e.clientX - rect.left, e.clientY - rect.top]);
-  const distNm = haversineM(be.lat, be.lon, cursor.lat, cursor.lng) / 1852;
+  const distNm = haversineM(be.lat, be.lon, cursor.lat, cursor.lng) / NM_M;
   const hdg    = magneticText(bearingDeg(be.lat, be.lon, cursor.lat, cursor.lng), be.lat, be.lon);
 
   $cursorBra.textContent = `${hdg}/${Math.round(distNm).toString().padStart(3, '0')}`;
@@ -172,7 +172,7 @@ export function updateBullseyeCursor(e) {
 
 export function updateMeasureLine(lng1, lat1, lng2, lat2) {
   if (!mapReady) return;
-  const distNm  = Math.round(haversineM(lat1, lng1, lat2, lng2) / 1852);
+  const distNm  = Math.round(haversineM(lat1, lng1, lat2, lng2) / NM_M);
   const bearing = magneticText(bearingDeg(lat1, lng1, lat2, lng2), lat1, lng1);
   const label   = `${bearing} / ${distNm.toString().padStart(3,'0')}`;
   map.getSource('measure').setData({

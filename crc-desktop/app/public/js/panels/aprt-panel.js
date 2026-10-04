@@ -1,5 +1,6 @@
 'use strict';
 import { _syncAuthHeaders, sendToSync } from '../sync.js';
+import { escapeHtml } from '../html-escape.js';
 import { currentTheaterFacts, magneticVariationAt, requestTrueFromMagnetic } from '../magnetic.js';
 import { getUserCoalition } from '../iff.js';
 import { updateMap } from '../geojson.js';
@@ -112,10 +113,18 @@ export function _updateAprtRefCard() {
     if (clouds.length === 0) {
       $cldRows.innerHTML = '<div class="aprt-ref-row"><span class="aprt-ref-k">CLD</span><span class="aprt-ref-v dim">—</span></div>';
     } else {
-      $cldRows.innerHTML = clouds.map((c, i) =>
-        `<div class="aprt-ref-row"><span class="aprt-ref-k">${i === 0 ? 'CLD' : ''}</span>` +
-        `<span class="aprt-ref-v">${CLOUD_LABELS[c.cover] || c.cover}${c.base ? ' ' + Number(c.base).toLocaleString() + ' ft' : ''}</span></div>`
-      ).join('');
+      $cldRows.replaceChildren(...clouds.map((c, i) => {
+        const row = document.createElement('div');
+        row.className = 'aprt-ref-row';
+        const k = document.createElement('span');
+        k.className = 'aprt-ref-k';
+        k.textContent = i === 0 ? 'CLD' : '';
+        const v = document.createElement('span');
+        v.className = 'aprt-ref-v';
+        v.textContent = (CLOUD_LABELS[c.cover] || c.cover) + (c.base ? ' ' + Number(c.base).toLocaleString() + ' ft' : '');
+        row.append(k, v);
+        return row;
+      }));
     }
   }
 
@@ -404,9 +413,12 @@ function _renderAprtAptList(filter) {
     const row      = document.createElement('div');
     const isActive = _aprtSelectedApt && _aprtSelectedApt.name === a.name;
     row.className  = 'aprt-apt-row' + (isActive ? ' active' : '');
-    row.innerHTML  =
-      `<span>${a.icao || a.name}</span>` +
-      `<span class="aprt-apt-sub">${a.icao ? a.name : ''}</span>`;
+    const code = document.createElement('span');
+    code.textContent = a.icao || a.name;
+    const sub = document.createElement('span');
+    sub.className = 'aprt-apt-sub';
+    sub.textContent = a.icao ? a.name : '';
+    row.append(code, sub);
     row.addEventListener('click', (e) => {
       e.stopPropagation();
       _aprtSelectedApt = a;

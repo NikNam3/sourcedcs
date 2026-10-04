@@ -7,7 +7,6 @@ const path = require('path');
 const { test, expect } = require('./helpers/test');
 const { openPanel, seedStrip, stripByCallsign, startAction, dropStrips, lapseNlaGuard } = require('./helpers/app');
 
-const SHOTS = path.join(__dirname, '..', '..', 'docs', 'wip', 'L28');
 test.describe.configure({ timeout: 90000 });
 test.use({ viewport: { width: 1500, height: 1000 } });
 
@@ -28,7 +27,7 @@ const records = (page, callsign) => page.evaluate((c) => [...crc.state.efspStrip
   .filter(s => (crc.state.efspFlightDataList.get(s.flightDataId) || {}).identity && crc.state.efspFlightDataList.get(s.flightDataId).identity.callsign === c && s.state !== 'DROPPED')
   .map(s => ({ facilityId: s.facilityId, owner: s.ownerPositionId, bayId: s.bayId, state: s.state, stripType: s.stripType })), callsign);
 const stateAt = async (page, callsign, facilityId) => ((await records(page, callsign)).find(r => r.facilityId === facilityId) || {}).state || null;
-const shot = (page, name) => page.screenshot({ path: path.join(SHOTS, `${name}.png`) });
+const shot = (page, name) => page.screenshot({ path: test.info().outputPath(`${name}.png`) });
 const nla = (page, callsign) => stripByCallsign(page, callsign).locator('.efsp-nla-btn');
 async function press(page, callsign) { // the 400 ms double-tap guard is per Strip
   await lapseNlaGuard(page);

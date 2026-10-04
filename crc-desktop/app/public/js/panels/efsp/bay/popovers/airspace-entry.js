@@ -4,7 +4,7 @@ import { getAllEfspAirspaces, getEfspStrip } from '../../efsp-state.js';
 import { AIRSPACE_ENTRY_POSITIONS, CONVERT_TO_ARRIVAL_POSITIONS } from '../authority-mirror.js';
 import { _isRejectedCoordinationReplica } from './coordination.js';
 import { _resolveActingPositionId } from '../../bay-view.js';
-import { _mountPopover, _unmountPopover } from '../popover-portal.js';
+import { openPopover } from '../popover-portal.js';
 
 
 // Only the Positions that hold an airborne flight approve one into an
@@ -33,20 +33,9 @@ export function _canApproveAirspaceEntry(strip) {
   return !!_resolveActingPositionId(strip);
 }
 
-let _openAirspacePopoverEl = null;
+let _openPopoverHandle = null;
 
-function _closeAirspacePopover() {
-  _unmountPopover(_openAirspacePopoverEl);
-  _openAirspacePopoverEl = null;
-  document.removeEventListener('pointerdown', _onDocPointerDownCloseAirspacePopover, true);
-}
-
-// Same fix, same reason (see _onDocPointerDownCloseBindPopover). This one
-// took no event argument at all, so it closed on every pointerdown — which
-// made the airspace <select> and its Send button unreachable by pointer.
-function _onDocPointerDownCloseAirspacePopover(e) {
-  if (_openAirspacePopoverEl && !_openAirspacePopoverEl.contains(e.target)) _closeAirspacePopover();
-}
+function _closeAirspacePopover() { if (_openPopoverHandle) _openPopoverHandle.close(); }
 
 export function _openAirspaceEntryPopover(strip, anchorEl) {
   _closeAirspacePopover();
@@ -54,16 +43,13 @@ export function _openAirspaceEntryPopover(strip, anchorEl) {
 
   const popover = document.createElement('div');
   popover.className = 'efsp-coordinate-popover';
-  popover.addEventListener('pointerdown', (e) => e.stopPropagation());
 
   if (airspaces.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'efsp-coordinate-degraded-warning';
     empty.textContent = 'No airspaces configured';
     popover.appendChild(empty);
-    _openAirspacePopoverEl = popover;
-    _mountPopover(popover, anchorEl, strip, _closeAirspacePopover);
-    setTimeout(() => document.addEventListener('pointerdown', _onDocPointerDownCloseAirspacePopover, true), 0);
+    _openPopoverHandle = openPopover({ el: popover, anchor: anchorEl, strip, onClose: () => { _openPopoverHandle = null; } });
     return;
   }
 
@@ -98,7 +84,5 @@ export function _openAirspaceEntryPopover(strip, anchorEl) {
   });
   popover.appendChild(sendBtn);
 
-  _openAirspacePopoverEl = popover;
-  _mountPopover(popover, anchorEl, strip, _closeAirspacePopover);
-  setTimeout(() => document.addEventListener('pointerdown', _onDocPointerDownCloseAirspacePopover, true), 0);
+  _openPopoverHandle = openPopover({ el: popover, anchor: anchorEl, strip, onClose: () => { _openPopoverHandle = null; } });
 }

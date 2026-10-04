@@ -44,7 +44,7 @@ function _fragMissionLine(callsign) {
   _sendCreateStrip(origin.actingPositionId, {
     kind: 'CreateStrip', bayId: origin.bayId, rackId: 'main', stripType: 'MISSION',
     flightDataId: candidate.flightDataId, initialState: origin.initialState || undefined,
-  }, origin.facilityId);
+  });
   _setCreateStripMsg(`Fragging a mission line for ${wanted}…`, false);
 }
 
@@ -300,7 +300,7 @@ function _fileStereoByName(rawName, rawCallsign) {
     kind: 'CreateStrip', bayId: origin.bayId, rackId: 'main', stripType: origin.stripType,
     flightData: { callsign, aircraftType: '', wakeCategory: '', stereoRouteName: known.name },
     initialState: origin.initialState || undefined,
-  }, origin.facilityId);
+  });
   _setCreateStripMsg(`Creating ${callsign} (${known.name})…`, false);
 }
 
