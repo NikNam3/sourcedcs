@@ -115,7 +115,7 @@ test('a message type nobody has heard of that ends in -mutation is still counted
   assert.equal(r.byReason.X, 1);
 });
 
-test('transfers: no receiving Position is a failure with its cause; a consolidated transfer is routed; neither is a non-transfer', () => {
+test('transfers: no receiving Position is a failure with its cause; a transfer into an unstaffed Position with a hat-taker is delivered and counted toUnstaffed; neither is a non-transfer', () => {
   const before = body().metrics.transfers;
   const strip = newStrip('TAP2');
   hold(efsp, c.LC.session, 'INCIRLIK', []);
@@ -124,14 +124,14 @@ test('transfers: no receiving Position is a failure with its cause; a consolidat
   assert.equal(refused.reason, 'NO_RECEIVING_POSITION');
   hold(efsp, c.AP.session, 'INCIRLIK', ['AP']);
   const routed = mustAct(efsp, c.OPS, 'OPS', efsp.boardStoreFor('INCIRLIK').getStrip(strip.stripId), { kind: 'TransferStrip', toPositionId: 'LC', bayId: 'lc-coordination', rackId: 'main' });
-  assert.equal(routed.ownerPositionId, 'AP');
+  assert.equal(routed.ownerPositionId, 'LC', 'delivered to the unstaffed LC, offered to AP (docs/adr/0110 s4)');
   hold(efsp, c.LC.session, 'INCIRLIK', ['LC']);
 
   const t = body().metrics.transfers;
   assert.equal(t.attempts - before.attempts, 2);
   assert.equal(t.failed - before.failed, 1);
   assert.equal(t.succeeded - before.succeeded, 1);
-  assert.equal(t.routedToConsolidated - before.routedToConsolidated, 1);
+  assert.equal(t.toUnstaffed - before.toUnstaffed, 1);
   assert.equal((t.byCause.NO_RECEIVING_POSITION || 0) - (before.byCause.NO_RECEIVING_POSITION || 0), 1);
   assert.equal(t.byKind.TRANSFER.attempts - before.byKind.TRANSFER.attempts, 2);
 });
@@ -285,14 +285,16 @@ test('efsp-set-positions and efsp-resync are neither mutations nor rejections', 
   assert.equal(body().metrics.rejectedMutations.mutations, before);
 });
 
-test('a SystemReassign in the log is counted', () => {
+test('a SystemReassign in the log is counted (only a TACTICAL handBack moves Strips now, docs/adr/0110)', () => {
   const before = body().metrics.systemReassigned.total;
-  let strip = newStrip('TAP7');
-  strip = jumpTo(efsp, c.OPS, 'OPS', strip, 'DEPARTED');
-  mustAct(efsp, c.OPS, 'OPS', strip, { kind: 'TransferStrip', toPositionId: 'LC', bayId: 'lc-airborne', rackId: 'main' });
-  hold(efsp, c.LC.session, 'INCIRLIK', []); // LC vacates; AP is where it is consolidated and the Strip follows
-  assert.equal(efsp.boardStoreFor('INCIRLIK').getStrip(strip.stripId).ownerPositionId, 'AP');
-  hold(efsp, c.LC.session, 'INCIRLIK', ['LC']);
+  const t = crew(efsp, { TAC_C2: 'TACTICAL', AIC: 'TACTICAL' });
+  const strip = mustAct(efsp, t.TAC_C2, 'TAC_C2', null, {
+    kind: 'CreateStrip', bayId: 'tac-c2-tasked', rackId: 'main', stripType: 'MISSION', flightData: { callsign: 'TAP7' },
+  });
+  efsp.boardStoreFor('TACTICAL').getStrip(strip.stripId).ownerPositionId = 'AIC'; // handed to AIC without walking the lifecycle
+  hold(efsp, t.AIC.session, 'TACTICAL', []); // AIC vacates; the line is handed back to TAC_C2
+  assert.equal(efsp.boardStoreFor('TACTICAL').getStrip(strip.stripId).ownerPositionId, 'TAC_C2');
+  hold(efsp, t.AIC.session, 'TACTICAL', ['AIC']);
   const moved = efsp.mutationLog.readAll().filter(e => e.op === 'SystemReassign' && e.reason !== 'position-retaken').length;
   assert.ok(efsp.mutationLog.readAll().some(e => e.op === 'SystemReassign' && e.stripId === strip.stripId));
   assert.equal(body().metrics.systemReassigned.total, moved, 'one per reassigned Strip, every one in the log');

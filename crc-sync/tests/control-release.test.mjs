@@ -430,18 +430,18 @@ test('an owner change on the side that does NOT hold control leaves the control 
   assert.deepEqual(ex.R().coordination.separationResponsibilityRef, { facilityId: 'CENTER', positionId: 'CTR' });
 });
 
-test('a consolidation reassignment carries control with the Strip too', () => {
+test('a sign-off moves nothing: the Strip and control stay with the vacated Position, which AP is offered (docs/adr/0110)', () => {
   const w = world();
   const ex = ex0(w, 'OWN3');
   mustR(w, ex, { kind: 'HANDOFF', action: 'TRANSFER_CONTROL' });
   const handed = mustR(w, ex, { kind: 'TransferStrip', toPositionId: 'LC', bayId: 'lc-coordination', rackId: 'main' });
   assert.equal(handed.ownerPositionId, 'LC');
   assert.equal(ex.R().coordination.separationResponsibilityRef.positionId, 'LC');
-  // LC signs off: its Strips follow the consolidation to AP, and control with them.
+  // LC signs off: nothing moves. AP is the first staffed member of LC's list, so LC is covered (offered), and control stays LC's.
   helpers.hold(w.efsp, w.c.LC.session, 'INCIRLIK', []);
-  assert.equal(ex.R().ownerPositionId, 'AP');
-  assert.equal(ex.R().coordination.separationResponsibilityRef.positionId, 'AP');
-  assert.equal(ex.T().coordination.separationResponsibilityRef.positionId, 'AP');
+  assert.equal(ex.R().ownerPositionId, 'LC');
+  assert.equal(ex.R().coordination.separationResponsibilityRef.positionId, 'LC');
+  assert.equal(ex.T().coordination.separationResponsibilityRef.positionId, 'LC');
 });
 
 // ── undo (H95, DR-5) ────────────────────────────────────────────────────────────────────────────────────────────────

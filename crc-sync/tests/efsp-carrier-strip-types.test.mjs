@@ -125,12 +125,12 @@ test('state authority: Marshal to Commence, lane to the end of the approach, Pri
   assert.equal(permission.canActOnState('CV_PRIFLY', 'FINAL', 'BALL'), false);
 });
 
-test('the CARRIER Facility: four MILITARY_ATC Positions, Bays that imply carrier states, PriFly out of the consolidation chain', () => {
+test('the CARRIER Facility: four MILITARY_ATC Positions, Bays that imply carrier states, PriFly on the offer lists (H111)', () => {
   const c = facilityConfig.getFacilityConfig('CARRIER');
   assert.deepEqual(c.positions, ['CV_MARSHAL', 'CV_PRIFLY', 'CV_APP1', 'CV_APP2']);
   for (const p of c.positions) assert.equal(facilityConfig.getPositionClass(p), 'MILITARY_ATC');
-  assert.deepEqual(c.consolidation, { CV_APP2: 'CV_APP1', CV_APP1: 'CV_MARSHAL' });
-  assert.ok(!Object.keys(c.consolidation).includes('CV_PRIFLY') && !Object.values(c.consolidation).includes('CV_PRIFLY'));
+  // The lists themselves are asserted once, in efsp-facility-config.test.mjs; here only that every Position can be offered and be offered to.
+  for (const p of c.positions) assert.ok(Array.isArray(c.consolidation[p]) && c.consolidation[p].length === 3, p);
   assert.equal(facilityConfig.bayImpliesState('cv-marshal-stack', 'CARRIER'), 'IN_STACK');
   assert.equal(facilityConfig.bayImpliesState('cv-app2-bolter', 'CARRIER'), 'BOLTER_WAVEOFF');
   assert.deepEqual(facilityConfig.getBaysFor('CV_PRIFLY', 'CARRIER')[0].rackIds, ['initial', 'break', 'downwind', 'groove']);

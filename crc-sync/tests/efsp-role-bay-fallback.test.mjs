@@ -38,18 +38,20 @@ test('bayForImpliedState never falls back to a strip type Bay', () => {
   }
 });
 
-test('SCENARIO LC vacated: a LUAW DEPARTURE reassigned to AP lands in ap-coordination, not ap-overflight; and goes back on retake', () => {
+test('SCENARIO LC vacated: a LUAW DEPARTURE stays LC\'s in its own Bay, never parked in ap-coordination or ap-overflight (docs/adr/0110)', () => {
   const efsp = createEfsp();
   const c = crew(efsp, ATC);
   let s = mustAct(efsp, c.OPS, 'OPS', null, { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE', flightData: { ...DEPARTURE_FLIGHT_DATA, callsign: 'RBF1', departureRunway: '05' } });
   s = jumpTo(efsp, c.OPS, 'OPS', s, 'RUNWAY_QUEUE');
   s = mustAct(efsp, c.OPS, 'OPS', s, { kind: 'TransferStrip', toPositionId: 'LC', bayId: 'lc-runway-queue', rackId: 'rwy-05' });
   s = jumpTo(efsp, c.LC, 'LC', s, 'LUAW');
+  const bayBefore = efsp.boardStoreFor('INCIRLIK').getStrip(s.stripId).bayId;
 
   hold(efsp, c.LC.session, 'INCIRLIK', []);
   let at = efsp.boardStoreFor('INCIRLIK').getStrip(s.stripId);
-  assert.equal(at.ownerPositionId, 'AP');
-  assert.equal(at.bayId, 'ap-coordination');
+  assert.equal(at.ownerPositionId, 'LC');
+  assert.equal(at.bayId, bayBefore);
+  assert.ok(!at.consolidatedFrom);
 
   hold(efsp, c.LC.session, 'INCIRLIK', ['LC']);
   at = efsp.boardStoreFor('INCIRLIK').getStrip(s.stripId);

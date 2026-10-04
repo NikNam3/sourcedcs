@@ -181,22 +181,38 @@ test('the replay window forgets entries older than 10 minutes', () => {
   } finally { Date.now = realNow; }
 });
 
-test('a consolidation reassignment persists the Board', () => {
+test('a handBack reassignment persists the Board (TACTICAL: the only sign-off that moves a Strip, docs/adr/0110)', () => {
+  const efsp = createEfsp();
+  const c = crew(efsp, { TAC_C2: 'TACTICAL', AIC: 'TACTICAL' });
+  const made = efsp.handleMessage(c.TAC_C2.session, {
+    version: 1, type: 'efsp-mutation', clientMutationId: crypto.randomUUID(), facilityId: 'TACTICAL', actingPositionId: 'TAC_C2',
+    op: { kind: 'CreateStrip', bayId: 'tac-c2-tasked', rackId: 'main', stripType: 'MISSION', flightData: { callsign: 'VACATE1' } },
+  });
+  assert.equal(made.ack.ok, true, JSON.stringify(made.ack));
+  const strip = made.ack.strip;
+  // Hand it to AIC without walking the lifecycle: this test is about what a vacated Position's hand-back leaves on disk.
+  efsp.boardStoreFor('TACTICAL').getStrip(strip.stripId).ownerPositionId = 'AIC';
+  efsp.persist();
+  const beforeText = fs.readFileSync(process.env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH, 'utf8');
+  const out = efsp.handleMessage(c.AIC.session, { type: 'efsp-set-positions', facilityId: 'TACTICAL', signedOn: [] });
+  const moved = out.ack.warnings.find(w => w.positionId === 'AIC');
+  assert.deepEqual(moved, { positionId: 'AIC', count: 1, routedTo: 'TAC_C2' }, JSON.stringify(out.ack));
+  assert.notEqual(fs.readFileSync(process.env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH, 'utf8'), beforeText, 'the snapshot was rewritten');
+  const efsp2 = restart();
+  assert.equal(efsp2.boardStoreFor('TACTICAL').getStrip(strip.stripId).ownerPositionId, 'TAC_C2', 'the hand-back survives a restart');
+});
+
+test('a sign-off on an ATC Facility moves nothing: the Strips stay with the vacated Position and the snapshot is not rewritten (docs/adr/0110)', () => {
   const efsp = createEfsp();
   const c = crew(efsp, { OPS: 'INCIRLIK', CD: 'INCIRLIK', GC: 'INCIRLIK' });
-  const strip = efsp.handleMessage(c.OPS.session, createMsg('VACATE1')).ack.strip;
-  // Hand it to CD without walking the lifecycle: this test is about what a
-  // vacated Position's reassignment leaves on disk, not about the transfer.
+  const strip = efsp.handleMessage(c.OPS.session, createMsg('VACATE2')).ack.strip;
   efsp.boardStoreFor('INCIRLIK').getStrip(strip.stripId).ownerPositionId = 'CD';
   efsp.persist();
   const beforeText = fs.readFileSync(process.env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH, 'utf8');
-  // CD walks away: its Strips go down the consolidation chain.
   const out = efsp.handleMessage(c.CD.session, { type: 'efsp-set-positions', facilityId: 'INCIRLIK', signedOn: [] });
-  const moved = out.ack.warnings.find(w => w.positionId === 'CD');
-  assert.ok(moved && moved.routedTo, JSON.stringify(out.ack));
-  assert.notEqual(fs.readFileSync(process.env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH, 'utf8'), beforeText, 'the snapshot was rewritten');
-  const efsp2 = restart();
-  assert.equal(efsp2.boardStoreFor('INCIRLIK').getStrip(strip.stripId).ownerPositionId, moved.routedTo, 'the reassignment survives a restart');
+  assert.deepEqual(out.ack.warnings.find(w => w.positionId === 'CD'), { positionId: 'CD', count: 1, offeredTo: 'GC' });
+  assert.equal(fs.readFileSync(process.env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH, 'utf8'), beforeText);
+  assert.equal(restart().boardStoreFor('INCIRLIK').getStrip(strip.stripId).ownerPositionId, 'CD');
 });
 
 test('the snapshot is written compact, and not rewritten when nothing changed', () => {
