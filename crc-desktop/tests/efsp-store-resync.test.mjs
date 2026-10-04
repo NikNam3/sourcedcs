@@ -19,18 +19,19 @@ const snap = () => ({
 async function load() {
   const g = freshGraph();
   const S = await g.import('panels/efsp/efsp-state.js');
+  const C = await g.import('panels/efsp/sync-cursor.js');
   S._resetEfspStateForTest();
   S.applyEfspSnapshot(snap());
-  return { S, g };
+  return { S, C, g };
 }
 
 test('the snapshot names every store position; a store it does not name is held as nothing', async () => {
-  const { S } = await load();
+  const { S, C } = await load();
   for (const k of KEYS) assert.deepEqual(S.getEfspStoreSync(k), { seq: 3, epoch: `e-${k}` });
   const s = snap(); delete s.storeSeqs.marsa; delete s.storeEpochs.marsa;
   S.applyEfspSnapshot(s);
   assert.equal(S.getEfspStoreSync('marsa'), null);
-  assert.equal(S.efspStoreResyncPositionFor(['marsa']), null);
+  assert.equal(C.resyncPositionOf('store:marsa'), null);
 });
 
 for (const [key, seqKey, epochKey, gapFromDeltas] of [
@@ -39,31 +40,31 @@ for (const [key, seqKey, epochKey, gapFromDeltas] of [
   ['carriers', 'carrierSeq', 'carrierEpoch', false], ['sfaRotation', 'sfaSeq', 'sfaEpoch', true],
 ]) {
   test(`${key}: the next delta is adopted, a skipped one ${gapFromDeltas ? 'asks at once' : 'is left to the heartbeat'}, another epoch asks at once`, async () => {
-    const { S } = await load();
+    const { S, C } = await load();
     const e = `e-${key}`;
-    assert.deepEqual(S.efspStoreGapOf({ [seqKey]: 4, [epochKey]: e }), []);
+    assert.deepEqual(S.efspFrameGapsOf({ [seqKey]: 4, [epochKey]: e }), []);
     assert.equal(S.getEfspStoreSync(key).seq, 4);
-    assert.deepEqual(S.efspStoreGapOf({ [seqKey]: 4, [epochKey]: e }), [], 'an ack repeating its delta is no gap');
-    assert.deepEqual(S.efspStoreGapOf({ [seqKey]: 6, [epochKey]: e }), gapFromDeltas ? [key] : []);
+    assert.deepEqual(S.efspFrameGapsOf({ [seqKey]: 4, [epochKey]: e }), [], 'an ack repeating its delta is no gap');
+    assert.deepEqual(S.efspFrameGapsOf({ [seqKey]: 6, [epochKey]: e }), gapFromDeltas ? [`store:${key}`] : []);
     assert.equal(S.getEfspStoreSync(key).seq, 4, 'a jump is never adopted');
-    assert.deepEqual(S.efspStoreGapOf({ [seqKey]: 5, [epochKey]: 'other' }), [key]);
+    assert.deepEqual(S.efspFrameGapsOf({ [seqKey]: 5, [epochKey]: 'other' }), [`store:${key}`]);
     assert.equal(S.getEfspStoreSync(key).epoch, e);
-    assert.deepEqual(S.efspStoreGapOf({ [seqKey]: 5 }), [], 'no epoch on the frame: not a change');
+    assert.deepEqual(S.efspFrameGapsOf({ [seqKey]: 5 }), [], 'no epoch on the frame: not a change');
     // the heartbeat: behind on two beats, epoch at once, equal resets
     const beat = (seq, epoch = e) => ({ stores: { [key]: { seq, epoch } } });
-    assert.deepEqual(S.efspStoreHeartbeatGapOf(beat(7)), []);
-    assert.deepEqual(S.efspStoreHeartbeatGapOf(beat(7)), [key]);
-    assert.deepEqual(S.efspStoreHeartbeatGapOf(beat(5)), []);
-    assert.deepEqual(S.efspStoreHeartbeatGapOf(beat(5, 'restarted')), [key]);
+    assert.deepEqual(C.heartbeatGaps(beat(7)), []);
+    assert.deepEqual(C.heartbeatGaps(beat(7)), [`store:${key}`]);
+    assert.deepEqual(C.heartbeatGaps(beat(5)), []);
+    assert.deepEqual(C.heartbeatGaps(beat(5, 'restarted')), [`store:${key}`]);
     // the slice replaces the state and adopts the position
     assert.deepEqual(S.applyEfspStoreSlices({ [key]: { seq: 9, epoch: 'new', slice: key === 'sfaRotation' ? { v: 2 } : [] } }), [key]);
     assert.deepEqual(S.getEfspStoreSync(key), { seq: 9, epoch: 'new' });
-    assert.deepEqual(S.efspStoreResyncPositionFor([key]), { stores: { [key]: { lastSeq: 9, epoch: 'new' } } });
+    assert.deepEqual(C.resyncPositionOf(`store:${key}`), { stores: { [key]: { lastSeq: 9, epoch: 'new' } } });
   });
 }
 
 test('a slice replaces that store only: its records go, the others stay', async () => {
-  const { S } = await load();
+  const { S, C } = await load();
   assert.equal(S.getAllEfspAirspaces().length, 1);
   S.applyEfspStoreSlices({ airspaces: { seq: 8, epoch: 'e-airspaces', slice: [{ airspaceId: 'A2', defRev: 1, definition: {} }] } });
   assert.deepEqual(S.getAllEfspAirspaces().map(a => a.airspaceId), ['A2']);
@@ -72,9 +73,9 @@ test('a slice replaces that store only: its records go, the others stay', async 
 });
 
 test('a heartbeat for a store we hold no position for changes nothing', async () => {
-  const { S } = await load();
-  assert.deepEqual(S.efspStoreHeartbeatGapOf({ stores: { nope: { seq: 9, epoch: 'x' } } }), []);
-  assert.deepEqual(S.efspStoreHeartbeatGapOf({}), []);
+  const { S, C } = await load();
+  assert.deepEqual(C.heartbeatGaps({ stores: { nope: { seq: 9, epoch: 'x' } } }), []);
+  assert.deepEqual(C.heartbeatGaps({}), []);
 });
 
 // ── through the registry: the request, one in flight, the reply ──────────────
@@ -88,7 +89,6 @@ async function wired() {
   for (const m of ['efsp-messages', 'airspace-panel', 'carrier-panel', 'runway-status-panel']) await g.import(`panels/efsp/${m}.js`);
   S._resetEfspStateForTest();
   S.applyEfspSnapshot(snap());
-  ws.noteEfspSnapshotLanded();
   const sent = [];
   ws.setEfspSender('_sendEfsp', (m) => sent.push(m));
   const resyncs = () => sent.filter(m => m.type === 'efsp-resync');
@@ -106,7 +106,6 @@ test('a skipped airspace delta asks for one airspace resync, a second is held wh
   assert.deepEqual(S.getEfspStoreSync('airspaces'), { seq: 6, epoch: 'e-airspaces' });
   reg.dispatchEfspMessage({ type: 'efsp-airspace-delta', airspaceSeq: 8, airspaceEpoch: 'e-airspaces', airspaces: { updated: [], removed: [] } });
   assert.equal(resyncs().length, 2, 'answered, so a new gap may ask again');
-  assert.equal(ws.noteEfspStoreAnswerLanded.length, 0);
 });
 
 test('a heartbeat two beats behind in a store asks for that store, and only that one; an epoch change asks at once', async () => {
@@ -140,10 +139,32 @@ test('a delta answer\'s stores are applied beside the Board delta, and a snapsho
     stores: { sfaRotation: { seq: 4, epoch: 'new', slice: { v: 2 } } } });
   assert.deepEqual(S.getEfspStoreSync('sfaRotation'), { seq: 4, epoch: 'new' });
   assert.deepEqual((await sfa()).getEfspSfa(), { v: 2 });
-  assert.equal(S.getEfspBoardSeq(), 2);
+  assert.equal(S.efspResyncPositionFor(S.getEfspFacility()).lastBoardSeq, 2);
   reg.dispatchEfspMessage({ type: 'efsp-heartbeat', stores: { sfaRotation: { seq: 4, epoch: 'again' } } });
   assert.equal(resyncs().length, 2);
   reg.dispatchEfspMessage({ type: 'efsp-resync-reply', answer: 'snapshot', ...snap() });
   reg.dispatchEfspMessage({ type: 'efsp-heartbeat', stores: { sfaRotation: { seq: 3, epoch: 'third' } } });
   assert.equal(resyncs().length, 3, 'the snapshot cleared the one in flight');
+});
+
+test('every store has a redraw, and a slice redraws through it instead of dispatching a synthetic frame', async () => {
+  const { S, reg } = await wired();
+  assert.deepEqual(reg.registeredEfspStoreRedraws(), S.STORE_SYNC.map(d => d.key).sort());
+  const dispatched = [];
+  const observer = (m) => dispatched.push(m.type);
+  reg.addEfspMessageObserver(observer);
+  reg.dispatchEfspMessage({ type: 'efsp-resync-reply', answer: 'stores', stores: { airspaces: { seq: 4, epoch: 'e-airspaces', slice: [] } } });
+  assert.deepEqual(dispatched, ['efsp-resync-reply'], 'no efsp-airspace-delta was faked');
+  assert.deepEqual(S.getAllEfspAirspaces(), []);
+});
+
+test('Board and store requests share one in-flight rule: a Board epoch change asks once, the delta of the new lifetime does not answer it', async () => {
+  const { reg, resyncs } = await wired();
+  const stale = { type: 'efsp-board-delta', facilityId: 'INCIRLIK', boardSeq: 1, boardEpoch: 'other', strips: { updated: [], gone: [] }, flightDataList: { updated: [] }, positions: { updated: [] } };
+  reg.dispatchEfspMessage(stale);
+  reg.dispatchEfspMessage(stale);
+  assert.deepEqual(resyncs(), [{ version: 1, type: 'efsp-resync', facilityId: 'INCIRLIK', lastBoardSeq: 1, boardEpoch: 'b' }]);
+  reg.dispatchEfspMessage({ ...stale, boardSeq: 2, boardEpoch: 'b' });
+  reg.dispatchEfspMessage(stale);
+  assert.equal(resyncs().length, 2, 'a delta from our own lifetime answered it');
 });

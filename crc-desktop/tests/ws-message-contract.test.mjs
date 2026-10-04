@@ -150,22 +150,24 @@ test('efsp-resync is answered with an efsp-resync-reply (answer: snapshot | delt
 
 // S-12 (ruling in decisions.md): the resync path is reachable from the shipped UI. A sender
 // that nothing calls is the dead path the todo here used to name.
-test('S-12: efsp-resync is wired: sendEfspResync is reached from app.js through the two triggers (no reconnect trigger, R3-47)', () => {
+test('S-12: efsp-resync is wired: one registry observer in efsp-ws.js reaches sendEfspResync for both triggers (no reconnect trigger, R3-47)', () => {
   const WS = readClient('panels/efsp/efsp-ws.js');
   assert.match(WS, /type:\s*'efsp-resync'/);
-  // each trigger is called from a registered message handler (efsp-messages.js) ...
-  for (const trigger of ['noteEfspBoardMessageForSync', 'noteEfspHeartbeatForSync']) {
-    assert.ok((APP + MESSAGES).includes(`${trigger}(`), `no message handler calls ${trigger}`);
-    // ... and each reaches requestEfspResync -> sendEfspResync inside efsp-ws.js
-    const from = WS.indexOf(`function ${trigger}(`);
-    assert.ok(from > 0, `${trigger} missing from efsp-ws.js`);
-    assert.match(WS.slice(from, WS.indexOf('\n}\n', from)), /requestEfspResync\(/, `${trigger} does not request a resync`);
-  }
+  // the one trigger is the registry's observer, so every frame passes it before its handler ...
+  assert.match(WS, /addEfspMessageObserver\(noteEfspFrameForSync\)/);
+  const from = WS.indexOf('function noteEfspFrameForSync(');
+  assert.ok(from > 0, 'noteEfspFrameForSync missing from efsp-ws.js');
+  const body = WS.slice(from, WS.indexOf('\n}\n', from));
+  // ... which asks for a resync on a frame gap (Board or store lifetime, skipped store seq) and on a heartbeat gap
+  assert.match(body, /efspFrameGapsOf\(msg\)[\s\S]*requestEfspResync\(/, 'a frame gap does not request a resync');
+  assert.match(body, /heartbeatGaps\(msg\)[\s\S]*requestEfspResync\(/, 'a heartbeat gap does not request a resync');
+  // the handlers no longer call a trigger themselves
+  for (const gone of ['noteEfspBoardMessageForSync', 'noteEfspHeartbeatForSync', 'noteEfspStoreAnswerLanded']) assert.equal((APP + MESSAGES + WS).includes(gone), false, `${gone} is back`);
   // R3-47: a reconnect is recovered by the connect snapshot, so nothing resyncs on open
   assert.equal((APP + MESSAGES).includes('resyncHeldEfspBoardsOnOpen'), false, 'app.js resyncs on reconnect again');
   assert.equal(WS.includes('function resyncHeldEfspBoardsOnOpen('), false);
   const req = WS.indexOf('function requestEfspResync(');
-  assert.match(WS.slice(req, WS.indexOf('\n}\n', req)), /sendEfspResync\(/);
+  assert.match(WS.slice(req, WS.indexOf('\n}\n', req)), /_sendEfsp\(\{ version: 1, type: 'efsp-resync'/);
 });
 
 // CMSG: the registry itself. A type registered twice would let a later module silently replace an earlier handler.

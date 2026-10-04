@@ -1,17 +1,16 @@
 'use strict';
-import { registerEfspMessage, dispatchEfspMessage } from './efsp-message-registry.js';
+import { registerEfspMessage, registerEfspStoreRedraw, redrawEfspStore, dispatchEfspMessage } from './efsp-message-registry.js';
 import { renderPositionControls, renderPositionWarnings } from '../radar-panel.js';
 import { updateTrackPanel } from '../track-panel.js';
 import { updateMap } from '../../geojson.js';
 import {
   applyEfspAlerts, applyEfspCorrelationDelta, applyEfspDelta, applyEfspMarsaDelta, applyEfspMutationAck,
-  applyEfspSnapshot, applyEfspStoreSlices, efspEpochChangeOf, getEfspFacility, getEfspStrip, STORE_SYNC
+  applyEfspSnapshot, applyEfspStoreSlices, getEfspFacility, getEfspStrip
 } from './efsp-state.js';
 import { captureEfspPlacement } from './efsp-arrivals.js';
 import { applyEfspSfaDelta } from './sfa-state.js';
 import {
-  efspResyncReplyAsMessage, noteEfspBoardMessageForSync, noteEfspHeartbeatForSync, noteEfspResyncAnswered,
-  noteEfspPositionsAck, noteEfspSnapshotLanded, noteEfspStoreAnswerLanded, replayPendingEfspMutations, settleEfspAck
+  efspResyncReplyAsMessage, noteEfspPositionsAck, replayPendingEfspMutations, settleEfspAck
 } from './efsp-ws.js';
 import { onEfspMetricsReportAck } from './efsp-metrics-client.js';
 import { refreshCorrelatedHighlight } from './correlation-highlight.js';
@@ -40,7 +39,6 @@ import { renderRunwayStatusPanel } from './runway-status-panel.js';
 registerEfspMessage('efsp-snapshot', (msg) => {
   applyEfspSnapshot(msg);
   reconcileUndoSlotEpoch(); // a new Board lifetime: nothing to undo (docs/adr/0100 §7)
-  noteEfspSnapshotLanded();
   refreshEfspPanel();
   // §9.10's route table is fetched over HTTP, not carried on the
   // snapshot — but a snapshot is the one event that means crc-sync may
@@ -79,13 +77,10 @@ registerEfspMessage('efsp-snapshot', (msg) => {
 // delta, tagged. Unwrapped into the message it carries, so one code path applies it.
 registerEfspMessage('efsp-resync-reply', (msg) => {
   // `stores` (crc-sync docs/adr/0106): the slices of the stores outside the Board that this client was behind in. Each
-  // replaces that store's state; the family's own handler then redraws, re-dispatched with an empty delta. Any reply
-  // that carries `stores` (or answers 'stores') settles the store resyncs in flight: a store left out was current.
+  // replaces that store's state, and its family redraws through the store (registerEfspStoreRedraw). The in-flight
+  // requests are settled by efsp-ws.js's observer, which sees this reply first.
   if (msg.answer === 'stores' || msg.stores) {
-    for (const key of applyEfspStoreSlices(msg.stores)) {
-      dispatchEfspMessage({ type: STORE_SYNC.find(d => d.key === key).deltaType });
-    }
-    noteEfspStoreAnswerLanded();
+    for (const key of applyEfspStoreSlices(msg.stores)) redrawEfspStore(key);
   }
   if (msg.answer !== 'stores') dispatchEfspMessage(efspResyncReplyAsMessage(msg));
 });
@@ -95,11 +90,8 @@ registerEfspMessage('efsp-board-delta', (msg) => {
   // tell a Strip that just arrived in one of this controller's Bays
   // from one that merely changed (efsp-arrivals.js, docs/adr/0057).
   const placementBefore = captureEfspPlacement(msg, getEfspStrip);
-  // A delta from another Board lifetime asks for a resync (answered with a snapshot).
-  noteEfspBoardMessageForSync(msg);
   noteUndoBoardEpoch(msg.facilityId || getEfspFacility(), msg.boardEpoch);
   applyEfspDelta(msg);
-  if (!efspEpochChangeOf(msg)) noteEfspResyncAnswered(msg.facilityId || getEfspFacility());
   if (placementBefore) noteEfspBoardArrivals(msg, placementBefore);
   refreshEfspPanel();
   renderAllOpenEfspBays();
@@ -109,9 +101,8 @@ registerEfspMessage('efsp-board-delta', (msg) => {
 // periodic signal a staleness check needs, since "no message" on a
 // quiet Board is not itself evidence the connection died (guide §5.6
 // rule 5). See efsp-panel.js's staleness interval.
-registerEfspMessage('efsp-heartbeat', (msg) => {
-  noteEfspHeartbeat();
-  noteEfspHeartbeatForSync(msg);
+registerEfspMessage('efsp-heartbeat', () => {
+  noteEfspHeartbeat(); // the gap check and the retry clock run in efsp-ws.js's observer
 });
 
 registerEfspMessage('efsp-mutation-ack', (msg) => {
@@ -121,7 +112,6 @@ registerEfspMessage('efsp-mutation-ack', (msg) => {
   // the two comes second sees no Bay change and adds nothing.
   const ackAsDelta = { strips: { updated: msg.strip ? [msg.strip] : [] } };
   const ackPlacementBefore = captureEfspPlacement(ackAsDelta, getEfspStrip);
-  noteEfspBoardMessageForSync(msg);
   const result = applyEfspMutationAck(msg);
   if (ackPlacementBefore) {
     noteEfspBoardArrivals(ackAsDelta, ackPlacementBefore);
@@ -153,13 +143,17 @@ registerEfspMessage('efsp-position-offer', (msg) => {
 // per server reconcile tick. updateMap() matters as much as the
 // re-render: a re-bind has to move the ring on the scope, not just the
 // badge on the Strip.
-registerEfspMessage('efsp-correlation-delta', (msg) => {
-  applyEfspCorrelationDelta(msg);
+function _redrawCorrelations() {
   refreshCorrelatedHighlight();
   renderAllOpenEfspBays();
   refreshEfspPanel();
   updateMap();
+}
+registerEfspMessage('efsp-correlation-delta', (msg) => {
+  applyEfspCorrelationDelta(msg);
+  _redrawCorrelations();
 });
+registerEfspStoreRedraw('correlations', _redrawCorrelations);
 
 registerEfspMessage('efsp-correlation-ack', (msg) => {
   // _showMutationError's signature is (reason, detail, context) — this
@@ -185,11 +179,15 @@ registerEfspMessage('efsp-correlation-ack', (msg) => {
 // in the same round trip, which is why this case does a full re-render
 // rather than trusting the board delta to have done one — the two
 // messages are independent and either may arrive first.
-registerEfspMessage('efsp-marsa-delta', (msg) => {
-  applyEfspMarsaDelta(msg);
+function _redrawMarsa() {
   refreshMarsaHighlight();
   renderAllOpenEfspBays();
+}
+registerEfspMessage('efsp-marsa-delta', (msg) => {
+  applyEfspMarsaDelta(msg);
+  _redrawMarsa();
 });
+registerEfspStoreRedraw('marsa', _redrawMarsa);
 
 registerEfspMessage('efsp-marsa-ack', (msg) => {
   // Same one-argument bug as efsp-correlation-ack above, same fix. A
@@ -217,6 +215,7 @@ registerEfspMessage('efsp-sfa-delta', (msg) => {
   applyEfspSfaDelta(msg);
   renderAllOpenEfspBays();
 });
+registerEfspStoreRedraw('sfaRotation', renderAllOpenEfspBays);
 
 registerEfspMessage('efsp-sfa-ack', (msg) => {
   settleEfspAck(msg);

@@ -2,6 +2,9 @@
 import { applyEfspCarrierSnapshot } from './carrier-state.js';
 import { applyEfspSfaSnapshot } from './sfa-state.js';
 import { diffDefinitions } from './airspace-validate.js';
+import {
+  adoptCursor, boardCursorName, clearCursors, epochMoved, getCursor, replaceCursor, resyncPositionOf, storeCursorName, storeFrameGap
+} from './sync-cursor.js';
 
 // Client-side mirror of the EFSP Board — plain module-level Maps, matching
 // app.js's existing style (tracks/history/settings are also plain globals,
@@ -16,15 +19,9 @@ import { diffDefinitions } from './airspace-validate.js';
 export const efspStrips = new Map();     // stripId -> Strip
 export const efspFlightDataList = new Map();       // flightDataId -> FlightDataRecord
 const efspPositions = new Map();  // positionId -> PositionStaffing
-let efspBoardSeq = 0;
 let efspFacility = null;
-// Board sync position, per Facility (docs/adr/0081). A seq only means something
-// inside one Board lifetime, and each Facility has its own Board: the last seq
-// read and the epoch (lifetime) it belongs to. `efspBoardSeq` stays as the
-// default Facility's seq for the existing readers.
-const efspBoardSeqByFacility = new Map();
-const efspBoardEpochByFacility = new Map();
-const _heartbeatBehind = new Map(); // facilityId -> consecutive heartbeats that named a seq ahead of ours
+// Board sync position, per Facility (docs/adr/0081): the cursor `board:<facilityId>` in sync-cursor.js, the same
+// bookkeeping the stores use.
 let efspBays = [];
 // WP4A gap-closure (docs/adr/0022) — facilityId -> is AIT authorized (a
 // written directive on file) there. Lets bay-view.js disable the AIT
@@ -111,12 +108,9 @@ export function applyEfspSnapshot(msg) {
   for (const f of msg.flightDataList || []) efspFlightDataList.set(f.flightDataId, f);
   for (const p of msg.positions || []) efspPositions.set(p.positionId, p);
   efspFacility = (msg.facilities || [])[0] || null; // the default Facility comes first (crc-sync docs/adr/0104)
-  efspBoardSeq = (msg.boardSeqByFacility || {})[efspFacility];
-  efspBoardSeqByFacility.clear();
-  efspBoardEpochByFacility.clear();
-  for (const [f, q] of Object.entries(msg.boardSeqByFacility || {})) efspBoardSeqByFacility.set(f, q);
-  for (const [f, e] of Object.entries(msg.boardEpochByFacility || {})) efspBoardEpochByFacility.set(f, e);
-  _heartbeatBehind.clear();
+  clearCursors(); // a snapshot replaces every position, the Boards' and the stores' (named below)
+  for (const [f, seq] of Object.entries(msg.boardSeqByFacility || {})) adoptCursor(boardCursorName(f), { seq });
+  for (const [f, epoch] of Object.entries(msg.boardEpochByFacility || {})) adoptCursor(boardCursorName(f), { epoch });
   efspBays = msg.bays || [];
   efspAitAuthorizedByFacility = msg.aitAuthorizedByFacility || {};
   efspPositionLetters = msg.positionLetters || {};
@@ -155,84 +149,45 @@ function _replaceRunwayStatuses(list) {
 }
 
 // Store sync (crc-sync docs/adr/0106): the six stores outside the Board each count changes with a seq inside one
-// lifetime (epoch), exactly as a Board does. `key` is the snapshot key (also the heartbeat's and the resync's);
-// `gapFromDeltas` is the server's declaration that a delta moves seq by exactly one change (stores.js `sync`), so a
-// jump from deltas alone is a lost delta; the others are caught by the heartbeat. `replace` swaps that store's whole
-// client state for a slice (what the full snapshot carries under `key`); `deltaType` is re-dispatched empty afterwards so
-// the family's own handler redraws.
+// lifetime (epoch), exactly as a Board does, and are cursors `store:<key>` in sync-cursor.js. `key` is the snapshot
+// key (also the heartbeat's and the resync's); `gapFromDeltas` is the server's declaration that a delta moves seq by
+// exactly one change (stores.js `sync`), so a jump from deltas alone is a lost delta; the others are caught by the
+// heartbeat. `replace` swaps that store's whole client state for a slice (what the full snapshot carries under `key`).
+// The family's panel registers how it redraws after that (efsp-message-registry.js `registerEfspStoreRedraw`).
 export const STORE_SYNC = [
-  { key: 'airspaces', seqKey: 'airspaceSeq', epochKey: 'airspaceEpoch', deltaType: 'efsp-airspace-delta', gapFromDeltas: true, replace: _replaceAirspaces },
-  { key: 'correlations', seqKey: 'correlationSeq', epochKey: 'correlationEpoch', deltaType: 'efsp-correlation-delta', gapFromDeltas: false, replace: _replaceCorrelations },
-  { key: 'marsa', seqKey: 'marsaSeq', epochKey: 'marsaEpoch', deltaType: 'efsp-marsa-delta', gapFromDeltas: false, replace: _replaceMarsa },
-  { key: 'runwayStatuses', seqKey: 'runwayStatusSeq', epochKey: 'runwayStatusEpoch', deltaType: 'efsp-runway-status-delta', gapFromDeltas: true, replace: _replaceRunwayStatuses },
-  { key: 'carriers', seqKey: 'carrierSeq', epochKey: 'carrierEpoch', deltaType: 'efsp-carrier-delta', gapFromDeltas: false, replace: (l) => applyEfspCarrierSnapshot({ carriers: l }) },
-  { key: 'sfaRotation', seqKey: 'sfaSeq', epochKey: 'sfaEpoch', deltaType: 'efsp-sfa-delta', gapFromDeltas: true, replace: (v) => applyEfspSfaSnapshot({ sfaRotation: v }) },
+  { key: 'airspaces', seqKey: 'airspaceSeq', epochKey: 'airspaceEpoch', gapFromDeltas: true, replace: _replaceAirspaces },
+  { key: 'correlations', seqKey: 'correlationSeq', epochKey: 'correlationEpoch', gapFromDeltas: false, replace: _replaceCorrelations },
+  { key: 'marsa', seqKey: 'marsaSeq', epochKey: 'marsaEpoch', gapFromDeltas: false, replace: _replaceMarsa },
+  { key: 'runwayStatuses', seqKey: 'runwayStatusSeq', epochKey: 'runwayStatusEpoch', gapFromDeltas: true, replace: _replaceRunwayStatuses },
+  { key: 'carriers', seqKey: 'carrierSeq', epochKey: 'carrierEpoch', gapFromDeltas: false, replace: (l) => applyEfspCarrierSnapshot({ carriers: l }) },
+  { key: 'sfaRotation', seqKey: 'sfaSeq', epochKey: 'sfaEpoch', gapFromDeltas: true, replace: (v) => applyEfspSfaSnapshot({ sfaRotation: v }) },
 ];
-const _storeSync = new Map();        // key -> { seq, epoch }
-const _storeBehind = new Map();      // key -> consecutive heartbeats that named a seq ahead of ours
 
 function _adoptSnapshotStoreSyncs(msg) {
-  _storeSync.clear();
-  _storeBehind.clear();
   for (const { key } of STORE_SYNC) {
     const seq = (msg.storeSeqs || {})[key];
     const epoch = (msg.storeEpochs || {})[key];
-    if (Number.isFinite(seq) && epoch !== undefined) _storeSync.set(key, { seq, epoch });
+    if (Number.isFinite(seq) && epoch !== undefined) adoptCursor(storeCursorName(key), { seq, epoch });
   }
 }
 
 /** Where this client stands in one store: `{ seq, epoch }`, or null before a snapshot named it. */
-export function getEfspStoreSync(key) { const s = _storeSync.get(key); return s ? { ...s } : null; }
+export function getEfspStoreSync(key) { return getCursor(storeCursorName(key)); }
 
 /**
- * A family delta or ack names its store's position (`airspaceSeq` + `airspaceEpoch`, ...). Call BEFORE applying it.
- * A different epoch is another lifetime of that store (the server restarted); a seq more than one ahead of ours, on a
- * store that declares `gapFromDeltas`, is a delta we never received. Either way the position is NOT adopted and the
- * store's key is returned for a resync. On a store without `gapFromDeltas` a jump is left for the heartbeat to
- * name (adopting it would hide the loss). Supplement frames carry no seq and change nothing.
- * @returns {string[]} the store keys to resync
+ * Every cursor a frame contradicts, by name (`board:<facilityId>`, `store:<key>`): a delta or ack from another Board
+ * lifetime or another store lifetime, or a store delta that skipped a seq. Ask BEFORE applying it. A store position
+ * is adopted here when the frame is the next one (see `storeFrameGap`); a Board's is adopted by the delta/ack itself.
+ * @returns {string[]} the cursor names to resync
  */
-export function efspStoreGapOf(msg) {
+export function efspFrameGapsOf(msg) {
   const out = [];
+  const board = efspEpochChangeOf(msg);
+  if (board) out.push(boardCursorName(board));
   for (const d of STORE_SYNC) {
-    const seq = msg[d.seqKey];
-    const have = _storeSync.get(d.key);
-    if (!have || !Number.isFinite(seq)) continue;
-    const epoch = msg[d.epochKey];
-    if (epoch !== undefined && epoch !== have.epoch) { out.push(d.key); continue; }
-    if (seq > have.seq + 1) { if (d.gapFromDeltas) out.push(d.key); continue; }
-    if (seq > have.seq) have.seq = seq;
+    if (storeFrameGap(storeCursorName(d.key), { seq: msg[d.seqKey], epoch: msg[d.epochKey], gapFromDeltas: d.gapFromDeltas })) out.push(storeCursorName(d.key));
   }
   return out;
-}
-
-/**
- * An efsp-heartbeat's `stores: { [key]: { seq, epoch } }` against ours. Behind on two beats in a row (a delta in flight
- * is not a gap), or another epoch at once. A store we hold no position for is ignored (the connect snapshot names it).
- * @returns {string[]} the store keys to resync
- */
-export function efspStoreHeartbeatGapOf(msg) {
-  const out = [];
-  for (const [key, b] of Object.entries((msg && msg.stores) || {})) {
-    const have = _storeSync.get(key);
-    if (!have || !b) { _storeBehind.delete(key); continue; }
-    if (b.epoch !== undefined && b.epoch !== have.epoch) { out.push(key); continue; }
-    if (!Number.isFinite(b.seq) || b.seq <= have.seq) { _storeBehind.delete(key); continue; }
-    const n = (_storeBehind.get(key) || 0) + 1;
-    _storeBehind.set(key, n);
-    if (n >= 2) out.push(key);
-  }
-  return out;
-}
-
-/** What an efsp-resync for these stores must say: `{ [key]: { lastSeq, epoch } }`. null when we hold none of them. */
-export function efspStoreResyncPositionFor(keys) {
-  const stores = {};
-  for (const key of keys) {
-    const have = _storeSync.get(key);
-    if (have) stores[key] = { lastSeq: have.seq, epoch: have.epoch };
-  }
-  return Object.keys(stores).length ? { stores } : null;
 }
 
 /**
@@ -245,8 +200,7 @@ export function applyEfspStoreSlices(stores) {
     const r = stores && stores[d.key];
     if (!r || !Number.isFinite(r.seq)) continue;
     d.replace(r.slice);
-    _storeSync.set(d.key, { seq: r.seq, epoch: r.epoch });
-    _storeBehind.delete(d.key);
+    replaceCursor(storeCursorName(d.key), { seq: r.seq, epoch: r.epoch });
     done.push(d.key);
   }
   return done;
@@ -410,65 +364,23 @@ export function stripsInAirspace(airspaceId) {
   return getAllEfspStrips().filter(s => s.state !== 'DROPPED' && s.airspaceEntry && s.airspaceEntry.airspaceId === airspaceId);
 }
 
-/**
- * Board sync (docs/adr/0081). The Facility a delta or ack is about, and whether
- * its Board lifetime is the one we hold. A different epoch means the server
- * restarted (or restored): our seq names a point in a Board that no longer
- * exists, so the message's seq is NOT adopted and the caller must resync
- * (the server answers a different epoch with a snapshot).
- * @returns {{facilityId:?string, epochChanged:boolean}}
- */
-function _boardSyncOf(msg) {
-  const facilityId = msg.facilityId || efspFacility || null;
-  const known = efspBoardEpochByFacility.get(facilityId);
-  const epochChanged = known !== undefined && msg.boardEpoch !== undefined && msg.boardEpoch !== known;
-  return { facilityId, epochChanged };
-}
+function _boardFacilityOf(msg) { return msg.facilityId || efspFacility || null; }
 
 function _adoptBoardSeq(msg) {
   if (!Number.isFinite(msg.boardSeq)) return;
-  const { facilityId, epochChanged } = _boardSyncOf(msg);
-  if (epochChanged) return;
-  if (msg.boardEpoch !== undefined && facilityId) efspBoardEpochByFacility.set(facilityId, msg.boardEpoch);
-  if (facilityId) efspBoardSeqByFacility.set(facilityId, msg.boardSeq);
-  if (!facilityId || facilityId === efspFacility) efspBoardSeq = msg.boardSeq;
+  const facilityId = _boardFacilityOf(msg);
+  if (!facilityId || epochMoved(boardCursorName(facilityId), msg.boardEpoch)) return;
+  adoptCursor(boardCursorName(facilityId), { seq: msg.boardSeq, epoch: msg.boardEpoch });
 }
 
-/** The Facility whose Board lifetime a delta/ack contradicts, or null. Ask BEFORE applying it. */
+/** The Facility whose Board lifetime a delta/ack contradicts (the server restarted or restored: our seq names a Board that no longer exists), or null. Ask BEFORE applying it. */
 export function efspEpochChangeOf(msg) {
-  const { facilityId, epochChanged } = _boardSyncOf(msg);
-  return epochChanged ? facilityId : null;
+  const facilityId = _boardFacilityOf(msg);
+  return facilityId && epochMoved(boardCursorName(facilityId), msg.boardEpoch) ? facilityId : null;
 }
 
 /** What an efsp-resync for this Facility must say: where we are. null when we hold no Board for it. */
-export function efspResyncPositionFor(facilityId) {
-  if (!efspBoardEpochByFacility.has(facilityId)) return null;
-  return { facilityId, lastBoardSeq: efspBoardSeqByFacility.get(facilityId), boardEpoch: efspBoardEpochByFacility.get(facilityId) };
-}
-
-
-/**
- * An efsp-heartbeat names every Board this session is sent: `boards: { [facilityId]: { seq, epoch } }`
- * (crc-sync docs/adr/0104). Deltas arrive in order on one socket, so after every delta the two must
- * be equal: ahead means a change reached us in no delta. Seqs jump by more than one per change
- * (a rebalance bumps one per Strip it re-keys), so only the heartbeat can tell. Two beats in a row,
- * so a delta in flight is not a gap. A different epoch is a different Board lifetime: at once.
- * @returns {string[]} the Facilities to resync
- */
-export function efspHeartbeatGapOf(msg) {
-  const out = [];
-  for (const [facilityId, b] of Object.entries(msg.boards || {})) {
-    const ours = efspBoardSeqByFacility.get(facilityId);
-    const knownEpoch = efspBoardEpochByFacility.get(facilityId);
-    if (ours === undefined) { _heartbeatBehind.delete(facilityId); continue; }
-    if (b.epoch !== undefined && knownEpoch !== undefined && b.epoch !== knownEpoch) { out.push(facilityId); continue; }
-    if (!Number.isFinite(b.seq) || b.seq <= ours) { _heartbeatBehind.delete(facilityId); continue; }
-    const n = (_heartbeatBehind.get(facilityId) || 0) + 1;
-    _heartbeatBehind.set(facilityId, n);
-    if (n >= 2) out.push(facilityId);
-  }
-  return out;
-}
+export function efspResyncPositionFor(facilityId) { return resyncPositionOf(boardCursorName(facilityId)); }
 
 export function applyEfspDelta(msg) {
   for (const s of (msg.strips && msg.strips.updated) || []) efspStrips.set(s.stripId, s);
@@ -549,8 +461,7 @@ export function getEfspPosition(positionId) { return efspPositions.get(positionI
 export function getAllEfspStrips() { return [...efspStrips.values()]; }
 export function getAllEfspPositions() { return [...efspPositions.values()]; }
 /** The Board epoch (lifetime) this client holds for a Facility, or undefined. */
-export function getEfspBoardEpoch(facilityId) { return efspBoardEpochByFacility.get(facilityId); }
-export function getEfspBoardSeq() { return efspBoardSeq; }
+export function getEfspBoardEpoch(facilityId) { const c = getCursor(boardCursorName(facilityId)); return c ? c.epoch : undefined; }
 export function getEfspFacility() { return efspFacility; }
 export function getEfspBays() { return efspBays; }
 export function isAitAuthorizedFor(facilityId) { return !!efspAitAuthorizedByFacility[facilityId]; }
@@ -656,13 +567,8 @@ export function _resetEfspStateForTest() {
   efspConformance.clear();
   efspTofiRegime.clear();
   efspConflicts = [];
-  efspBoardSeq = 0;
   efspFacility = null;
-  efspBoardSeqByFacility.clear();
-  efspBoardEpochByFacility.clear();
-  _heartbeatBehind.clear();
-  _storeSync.clear();
-  _storeBehind.clear();
+  clearCursors();
   efspBays = [];
   efspAitAuthorizedByFacility = {};
   efspPositionLetters = {};

@@ -11,10 +11,11 @@ import {
   applyEfspSnapshot, applyEfspDelta, applyEfspMutationAck,
   registerPendingMutation, getPendingMutations, rebaseForResend,
   getEfspStrip, getEfspFlightData, getEfspPosition, getAllEfspStrips, getAllEfspPositions,
-  getEfspRack, searchEfspStrips, getEfspBoardSeq, getEfspFacility, getEfspBays,
+  getEfspRack, searchEfspStrips, getEfspFacility, getEfspBays,
   applyEfspAlerts, getEfspObligation, getEfspObligations,
   _resetEfspStateForTest,
 } from '../app/public/js/panels/efsp/efsp-state.js';
+import { boardCursorName, getCursor } from '../app/public/js/panels/efsp/sync-cursor.js';
 
 function strip(overrides = {}) {
   return { stripId: 's1', flightDataId: 'f1', rev: 1, bayId: 'b1', rackId: 'r1', orderKey: 'A', state: 'PROPOSED', ...overrides };
@@ -28,7 +29,7 @@ test('applyEfspSnapshot populates strips/flightDataList/positions and boardSeq/f
     strips: [strip()], flightDataList: [{ flightDataId: 'f1' }], positions: [{ positionId: 'OPS' }],
     bays: [{ bayId: 'b1' }],
   });
-  assert.equal(getEfspBoardSeq(), 5);
+  assert.equal(getCursor(boardCursorName(getEfspFacility())).seq, 5);
   assert.equal(getEfspFacility(), 'INCIRLIK');
   assert.deepEqual(getEfspStrip('s1'), strip());
   assert.ok(getEfspFlightData('f1'));
@@ -50,7 +51,6 @@ test('applyEfspDelta updates changed strips and removes gone ones, leaving other
 
   assert.equal(getEfspStrip('s1').rev, 2);
   assert.equal(getEfspStrip('s2'), null);
-  assert.equal(getEfspBoardSeq(), 2);
 });
 
 test('applyEfspDelta updates flight data and Positions too', () => {
@@ -62,7 +62,7 @@ test('applyEfspDelta updates flight data and Positions too', () => {
 test('applyEfspDelta with a non-finite boardSeq leaves the current one unchanged', () => {
   applyEfspSnapshot({ facilities: ['INCIRLIK'], boardSeqByFacility: { INCIRLIK: 7 }, strips: [], flightDataList: [], positions: [] });
   applyEfspDelta({ strips: { updated: [], gone: [] }, flightDataList: { updated: [] }, positions: { updated: [] } });
-  assert.equal(getEfspBoardSeq(), 7);
+  assert.equal(getCursor(boardCursorName(getEfspFacility())).seq, 7);
 });
 
 // ── applyEfspMutationAck ─────────────────────────────────────────────────

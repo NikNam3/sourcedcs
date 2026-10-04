@@ -9,7 +9,7 @@ import { getActingPositions, sendEfspCarrierMutation, sendEfspMutation, settleEf
 // ESM-1: today efsp-panel.js's _callsignOfFlightData (fallback '') silently won over this file's own copy (fallback flightDataId);
 // the import keeps that effective behaviour (S-ARCH2 item 3, plan §6 queue item 3).
 import { _callsignOfFlightData } from './efsp-panel.js';
-import { registerEfspMessage } from './efsp-message-registry.js';
+import { registerEfspMessage, registerEfspStoreRedraw } from './efsp-message-registry.js';
 import { applyEfspCarrierDelta } from './carrier-state.js';
 import { renderAllOpenEfspBays } from './bay-view.js';
 import { _showMutationError } from './efsp-panel.js';
@@ -412,11 +412,15 @@ export function buildCarrierFinalLine() {
 // crc-sync's docs/adr/0074 — the carrier's hull record (Case, Marshal
 // stack with its derived fields, ship banner), sent whole on every change.
 // A Case change is ONE of these and every carrier Strip re-renders from it.
-registerEfspMessage('efsp-carrier-delta', (msg) => {
-  applyEfspCarrierDelta(msg);
+function _redrawCarriers() {
   renderCarrierBanner();
   renderAllOpenEfspBays();
+}
+registerEfspMessage('efsp-carrier-delta', (msg) => {
+  applyEfspCarrierDelta(msg);
+  _redrawCarriers();
 });
+registerEfspStoreRedraw('carriers', _redrawCarriers);
 
 registerEfspMessage('efsp-carrier-ack', (msg) => {
   settleEfspAck(msg);

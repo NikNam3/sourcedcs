@@ -4,7 +4,7 @@ import { missionNow } from '../topbar.js';
 import { settings } from '../../app.js';
 import { getAllEfspAirspaces, getEfspFlightData, getAllEfspStrips, getEfspAirspaceEdits, stripsInAirspace } from './efsp-state.js';
 import { getActingPositions, sendEfspAirspaceMutation, settleEfspAck } from './efsp-ws.js';
-import { registerEfspMessage } from './efsp-message-registry.js';
+import { registerEfspMessage, registerEfspStoreRedraw } from './efsp-message-registry.js';
 import { applyEfspAirspaceDelta } from './efsp-state.js';
 import { _showMutationError, _showMutationWarning } from './efsp-panel.js';
 import { formatZuluHhmm } from './strip-template.js';
@@ -539,6 +539,7 @@ registerEfspMessage('efsp-airspace-delta', (msg) => {
   applyEfspAirspaceDelta(msg);
   renderAirspacePanel();
 });
+registerEfspStoreRedraw('airspaces', renderAirspacePanel);
 
 // The booking calendar (crc-sync's airspace-calendar.js, ADR 0098 §9): information only, it changes no state. The
 // booking page's URL is also reported to the app's main process, which opens a link to that origin and no other (S-2PA0).
