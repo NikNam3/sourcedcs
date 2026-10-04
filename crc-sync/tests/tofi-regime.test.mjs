@@ -45,7 +45,7 @@ function makeFacilities(entries = null) {
   undoHistory.attach(undoEnv({ boardFor: (id) => { const x = facilities.get(id); return x ? x.boardStore : null; }, flightDataStore }));
 
   for (const facilityId of facilityConfig.getFacilityIds()) {
-    const positionStore = new PositionStore(facilityConfig.getPositionSet(facilityId), facilityConfig.getConsolidation(facilityId));
+    const positionStore = new PositionStore(facilityConfig.getPositionSet(facilityId), facilityConfig.getHatMaps(facilityId));
     const rules = {
       resolveBlockTarget: (blockId, stripType) => blockMap.resolveBlockTarget(stripType, blockId),
       bayImpliesState: (bayId) => facilityConfig.bayImpliesState(bayId, facilityId),

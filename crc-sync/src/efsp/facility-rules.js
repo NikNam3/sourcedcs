@@ -39,6 +39,7 @@ function buildFacilityRules({ facilityId, facilityConfig, permissionRules, posit
     isValidStripType:         (stripType) => blockMap.isValidStripType(stripType),
     isStaffed:          (positionId) => positionStore.isStaffed(positionId),
     consolidatedAt: (positionId) => positionStore.consolidatedAt(positionId),
+    handBackTo: (positionId) => positionStore.handBackTo(positionId),
     canMutate:           (actingPositionId, opKind) => permissionRules.canMutate(actingPositionId, opKind),
     canMutateAction:     (actingPositionId, opKind, action) => permissionRules.canMutateAction(actingPositionId, opKind, action),
     // docs/adr/0101 — which control axis (TURNS, ALTITUDE) a Block write is, from the Block Map's own tags.

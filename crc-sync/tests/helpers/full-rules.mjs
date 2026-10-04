@@ -39,6 +39,7 @@ export const DEFAULT_RULES = {
   coordinationEffect: () => null,
   coordinationEligibleState: (stripType) => coordination.coordinationEligibleState(stripType),
   consolidatedAt: () => null,
+  handBackTo: () => null,
   drainMarsaRegimeWrites: () => [],
   facilityId: null,
   formationEligibility: (stripType) => require('../../src/efsp/authority').formationEligibility(stripType),

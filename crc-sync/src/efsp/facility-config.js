@@ -102,9 +102,8 @@ function createFacilityConfig({ env = process.env } = {}) {
   // getAllBays() to return here — and because the client builds its Position
   // tabs from Bays, a range Position correctly never grows a strip-rack tab.
   //
-  // Absent from `consolidation` deliberately: consolidation exists to re-route
-  // Strips away from a vacated Position (defect D19), and a Position that owns
-  // no Strips has none to strand.
+  // Absent from `consolidation` and `handBack` deliberately: they exist for a vacated
+  // Position's Strips (defect D19), and a Position that owns no Strips has none to strand.
   function _rangesConfig() {
     return {
       facility: 'RANGES',
@@ -113,6 +112,7 @@ function createFacilityConfig({ env = process.env } = {}) {
         rangePositionIds.map(id => [id, 'USING_AGENCY'])
       ),
       consolidation: {},
+      handBack: {},
       positionLetters: {},
       // `hiddenBlocks`, not the `blockVisibility` inclusion list docs/adr/0041
       // replaced — this config is derived and never persisted, so the stale key
@@ -217,7 +217,14 @@ function createFacilityConfig({ env = process.env } = {}) {
   /** A Position's frequencies, `{ <Position>: [ { label, mhz } ] }` (docs/adr/0105); `{}` when the Facility ships none. */
   function getPositionFrequencies(facilityId = DEFAULT_FACILITY_ID) { return deepClone(_configs().get(facilityId).positionFrequencies || {}); }
 
-  function getConsolidation(facilityId = DEFAULT_FACILITY_ID) { return { ...(_configs().get(facilityId).consolidation) }; }
+  /** `{ <Position>: [Position, ...] }`: who is offered a Position's hat, in order (docs/adr/0110). */
+  function getConsolidation(facilityId = DEFAULT_FACILITY_ID) { return deepClone(_configs().get(facilityId).consolidation); }
+
+  /** What a PositionStore is built with: `{ consolidation, handBack }`. */
+  function getHatMaps(facilityId = DEFAULT_FACILITY_ID) { return { consolidation: getConsolidation(facilityId), handBack: getHandBack(facilityId) }; }
+
+  /** `{ <Position>: Position }`: the TACTICAL one-hop reassignment (docs/adr/0110 decision 7). */
+  function getHandBack(facilityId = DEFAULT_FACILITY_ID) { return { ...(_configs().get(facilityId).handBack) }; }
 
   /**
    * WP4A second slice — a Position's doctrinal class (guide §4.1's own Class
@@ -404,7 +411,7 @@ function createFacilityConfig({ env = process.env } = {}) {
   return {
     setRangePositionIds,
     DEFAULT_FACILITY_ID, getFacilityIds,
-    getFacilityConfig, getPositionSet, getPositionClass, getPositionLetter, allPositionLetters, getConsolidation, getPositionFrequencies, getBaysFor, getAllBays, isBlockVisible,
+    getFacilityConfig, getPositionSet, getPositionClass, getPositionLetter, allPositionLetters, getConsolidation, getHandBack, getHatMaps, getPositionFrequencies, getBaysFor, getAllBays, isBlockVisible,
     getPositionRadars, radarBearingPositionIds, validateRadarSelector,
     bayImpliesState, bayHoldsStripType, bayForImpliedState, bayExists, coordinationBayFor, setFacilityConfig, validateConfig,
     getBay, getSingleFrequencyApproach, validateSfaRotationRecord, BAY_VIEWS,

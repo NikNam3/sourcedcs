@@ -38,16 +38,21 @@ function _applyTransferStrip(ctx, strip, op, by) {
   if (full) return { ok: false, reason: full.reason, detail: full.detail, strip };
 
   let destPositionId = op.toPositionId;
-  let routedTo = null;
+  let routedTo = null;      // TACTICAL only: the hand-back target an unstaffed Position's line is routed to (docs/adr/0110 decision 7)
   let warnings;
 
   if (!ctx.rules.isStaffed(op.toPositionId)) {
-    const consolidatedAt = ctx.rules.consolidatedAt(op.toPositionId);
-    if (!consolidatedAt || !ctx.rules.isStaffed(consolidatedAt)) {
-      return { ok: false, reason: 'NO_RECEIVING_POSITION', strip };
+    const handBack = ctx.rules.handBackTo(op.toPositionId);
+    if (handBack) {
+      destPositionId = handBack;
+      routedTo = handBack;
+    } else {
+      // docs/adr/0110 §4: delivered to the unstaffed Position when a staffed one stands offered its hat (consolidatedAt),
+      // and said so; with nobody to offer it to, it is refused as it always was.
+      const offeredTo = ctx.rules.consolidatedAt(op.toPositionId);
+      if (!offeredTo) return { ok: false, reason: 'NO_RECEIVING_POSITION', strip };
+      warnings = [warn('UNSTAFFED_RECEIVER', `${op.toPositionId} is unstaffed: offered to ${offeredTo}`)];
     }
-    destPositionId = consolidatedAt;
-    routedTo = consolidatedAt;
   }
 
   // Self-coordination (guide §4.8.3): when the same controller who is
@@ -74,7 +79,7 @@ function _applyTransferStrip(ctx, strip, op, by) {
     strip.bayId = op.bayId;
     strip.rackId = op.rackId;
     strip.orderKey = ctx.placement.resolveOrderKey(op.bayId, op.rackId, op.afterStripId || null, op.beforeStripId || null, strip.stripId);
-    if (routedTo) warnings = [warn('NO_BAY_FOR_STRIP', `${routedTo} has no Bay for this Strip; it stays in ${op.bayId}`)];
+    if (routedTo) warnings = [...(warnings || []), warn('NO_BAY_FOR_STRIP', `${routedTo} has no Bay for this Strip; it stays in ${op.bayId}`)];
   }
 
   const sfaFlightData = routedBay ? null : ctx.assignSfaFrequency(strip, by);

@@ -31,11 +31,14 @@
     "PAR": "P"
   },
   "consolidation": {
-    "CD": "GC",
-    "LC": "AP",
-    "SFA": "AP",
-    "PAR": "AP"
+    "CD": ["GC", "LC", "AP"],
+    "GC": ["LC", "AP"],
+    "LC": ["AP"],
+    "RSU": ["LC"],
+    "SFA": ["AP"],
+    "PAR": ["AP"]
   },
+  "handBack": {},
   "positionFrequencies": {
     "GC": [
       {

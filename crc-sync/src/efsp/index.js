@@ -117,7 +117,7 @@ function createEfsp({ env = process.env, facilityConfig = createFacilityConfig({
   }));
 
   for (const facilityId of facilityIds) {
-    const positionStore = new PositionStore(facilityConfig.getPositionSet(facilityId), facilityConfig.getConsolidation(facilityId), { clock, frequencies: facilityConfig.getPositionFrequencies(facilityId), isAbsent });
+    const positionStore = new PositionStore(facilityConfig.getPositionSet(facilityId), facilityConfig.getHatMaps(facilityId), { clock, frequencies: facilityConfig.getPositionFrequencies(facilityId), isAbsent });
 
     const rules = buildFacilityRules({ facilityId, facilityConfig, permissionRules, positionStore, facilities, stores: { airspaceStore, marsaStore, runwayStatusStore, carrierStore }, regimeLocator });
 

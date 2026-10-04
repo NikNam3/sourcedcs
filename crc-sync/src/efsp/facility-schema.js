@@ -268,24 +268,22 @@ const isPlainObject = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
 //  positionLetters: the one character an ATC scope draws on a contact this Position owns (docs/adr/0088, the
 //    STARS "position symbol"). [SOURCE-DEFINED] (docs/adr/0088): the letters are ours; one A-Z or 0-9 each.
 //    The whole tactical side shares `M`, shown on a flight under tactical control after TOFI (H48).
-//  consolidation: where an unstaffed Position's Strips go, one hop: `{ CD: 'GC' }` reads "CD is consolidated at
-//    GC" (guide §4.5 rule 3, §4.8.6; JO 7210.3 para 2-2-3, 2-6-5). Walked to the end by position-store.js (the
-//    staffing fallback). Guide §4.8.6 rule 2 gives the default: CD, GC, LC, AP, then CTR; AIC and GCI to TAC_C2,
-//    then CTR; CV_APP* to CV_MARSHAL to CV_PRIFLY; RSU to LC; SFA and PAR to AP. The shipped maps DEVIATE from it
-//    in three places, and none of the three is the guide's: [SOURCE-DEFINED] (docs/adr/0013) there is no AP to
-//    CTR (nor TAC_C2 to CTR): consolidation is INTRAFACILITY, never crossing a Facility, which is a different
-//    thing from the cross-Facility handoff of §4.6 (position-store.js is scoped to one Facility's staffing).
-//    [SOURCE-DEFINED] (docs/adr/0075) there is no RSU to LC: RSU is absent on purpose, as OPS is, so a Strip
-//    never strands on a supervisory Position. [SOURCE-DEFINED] (docs/adr/0074) the carrier chain is CV_APP2 to
-//    CV_APP1 to CV_MARSHAL and stops there, omitting CV_PRIFLY, for the same reason. The rest ships as the guide
-//    has it: CD to GC to LC to AP, SFA and PAR to AP, AIC and GCI to TAC_C2. [SOURCE-DEFINED] (docs/adr/0080)
-//    JTAC to TAC_C2 is ours, so a line stays with the Position that handed it over. CENTER's CTR and RANGES have
-//    no entry: CTR is the Facility's only Position, so there is nowhere inside it to consolidate to (and it
-//    owns Strips, `ctr-enroute`), and a RANGE Position owns no Strips at all (guide §4.1 rule 2). So AP, CTR,
-//    TAC_C2 and CV_MARSHAL end their chains: guide §4.8.6 rule 3 calls a Strip left owned by an unstaffed
-//    Position with no consolidation path defect D19, and the Facility boundary is what leaves it open here;
-//    the mitigation is rule 5's "warn, do not block" (the controller is warned of the stranding before
-//    leaving). GC ends its chain: a tower controller takes ground by COMBINING (docs/adr/0105, H104), not by consolidation.
+//  consolidation: who is OFFERED the hat of an unstaffed Position, in order: `{ CD: ['GC', 'LC', 'AP'] }` reads "when
+//    CD is unstaffed, the first of GC, LC, AP that is staffed is offered CD" (docs/adr/0110; JO 7210.3 para 2-2-3,
+//    2-6-5: one controller signed on and responsible for each open position, consolidated ones included). Nothing moves:
+//    an unstaffed Position's Strips stay its own, and taking the hat is an ordinary sign-on (a combination, docs/adr/0105).
+//    A list is read off the file, never walked: CV_APP1 and CV_APP2 name each other. Each list is non-empty, names
+//    Positions of this Facility, not the Position itself, no repeats. Guide §4.8.6 rule 2's default chain is not
+//    followed: the order is the squadron's (docs/parallel/decisions.md H111: AP last on every tower list; the carrier's
+//    Marshal first, then the lanes, then PriFly; the other lane takes a lane's Position). [SOURCE-DEFINED] (docs/adr/0013)
+//    there is no AP to CTR (nor TAC_C2 to CTR): consolidation is INTRAFACILITY, never crossing a Facility. OPS and AP have
+//    no list (OPS is not a control position, guide §4.1 rule 3); CENTER's CTR and RANGES have none; so a sign-off there
+//    warns `offeredTo: null` (guide §4.8.6 rule 3, defect D19: warn, do not block). A Position with NO list is also one an
+//    unstaffed hand-off is refused at (NO_RECEIVING_POSITION): removing GC's line restores ADR 0105's behaviour for GC.
+//  handBack: the TACTICAL reassignment, one hop: `{ AIC: 'TAC_C2' }` reads "AIC's Strips are handed back to TAC_C2 when AIC
+//    is unstaffed and TAC_C2 is staffed" (docs/adr/0080 F10: a line TAC_C2 delegated goes back, and returns when AIC
+//    is staffed again). TAC_C2 can work every MISSION state, which is why this one keeps moving Strips (docs/adr/0110
+//    decision 7). Keeps the loop check; a Position is in `consolidation` or `handBack`, never both.
 //  positionRadars: which radars each Position works through, as selectors, never radar ids (docs/adr/0042,
 //    0043). [SOURCE-DEFINED] (docs/adr/0042, 0043): which scope sits at which console is squadron data, not
 //    doctrine; the guide says nothing about it. A radar's id is derived from live mission data, so a stored id
@@ -359,7 +357,7 @@ const isPlainObject = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
 // Keys every facility file must carry (a shipped file is complete: nothing is merged in from the code).
 // `singleFrequencyApproach`, `runwayStatus` and `positionFrequencies` are the only optional ones: a Facility without those Bays has none.
 const REQUIRED_KEYS = Object.freeze({
-  facility: 'string', positions: 'array', positionClasses: 'object', positionLetters: 'object', consolidation: 'object',
+  facility: 'string', positions: 'array', positionClasses: 'object', positionLetters: 'object', consolidation: 'object', handBack: 'object',
   positionRadars: 'object', hiddenBlocks: 'object', bays: 'object', dataOnly: 'boolean', standingReleases: 'array', aitAuthorized: 'boolean',
 });
 
@@ -367,7 +365,7 @@ const REQUIRED_KEYS = Object.freeze({
  * A complete facility file: every required key present with the right type, then validateConfig's checks,
  * then the cross-references. Bays point to Racks they name themselves (non-empty, no repeats), a bayId is
  * unique in the Facility, `holdsStripType` names a strip type the Block Map knows, every Position has a class, and the
- * consolidation joins Positions of this Facility and has no loop.
+ * consolidation lists and handBack join Positions of this Facility (handBack has no loop).
  * Returns {ok:true} or {ok:false, reason:'VALIDATION_ERROR', detail}.
  */
 function validateFacilityConfig(candidate, expectedFacilityId) {
@@ -390,14 +388,29 @@ function validateFacilityConfig(candidate, expectedFacilityId) {
   for (const positionId of candidate.positions) {
     if (typeof candidate.positionClasses[positionId] !== 'string') return fail(`positionClasses has no class for Position ${positionId}`);
   }
-  for (const [from, to] of Object.entries(candidate.consolidation)) {
+  for (const [from, list] of Object.entries(candidate.consolidation)) {
     if (!positions.has(from)) return fail(`consolidation names unknown Position ${from}`);
-    if (!positions.has(to)) return fail(`consolidation.${from} names unknown Position ${to}`);
+    if (!Array.isArray(list)) {
+      return fail(`consolidation.${from} must be a list of Positions offered the hat, in order (docs/adr/0110), e.g. ${JSON.stringify([list])}; a one-hop move of Strips is handBack`);
+    }
+    if (!list.length) return fail(`consolidation.${from} must not be empty (leave ${from} out instead)`);
+    const seen = new Set();
+    for (const to of list) {
+      if (!positions.has(to)) return fail(`consolidation.${from} names unknown Position ${to}`);
+      if (to === from) return fail(`consolidation.${from} names itself`);
+      if (seen.has(to)) return fail(`consolidation.${from} names ${to} twice`);
+      seen.add(to);
+    }
+    if (Object.prototype.hasOwnProperty.call(candidate.handBack, from)) return fail(`${from} is in both consolidation and handBack`);
   }
-  for (const start of Object.keys(candidate.consolidation)) {
+  for (const [from, to] of Object.entries(candidate.handBack)) {
+    if (!positions.has(from)) return fail(`handBack names unknown Position ${from}`);
+    if (typeof to !== 'string' || !positions.has(to)) return fail(`handBack.${from} names unknown Position ${to}`);
+  }
+  for (const start of Object.keys(candidate.handBack)) {
     const seen = new Set([start]);
-    for (let at = candidate.consolidation[start]; at !== undefined; at = candidate.consolidation[at]) {
-      if (seen.has(at)) return fail(`consolidation loops back to ${at}`);
+    for (let at = candidate.handBack[start]; at !== undefined; at = candidate.handBack[at]) {
+      if (seen.has(at)) return fail(`handBack loops back to ${at}`);
       seen.add(at);
     }
   }
