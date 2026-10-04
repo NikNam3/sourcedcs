@@ -199,3 +199,26 @@ test('module graph: no module reads another module\'s export without importing i
   }
   assert.deepEqual([...new Set(missed)], []);
 });
+
+/* 9. The import cycle cannot grow back (DESK-GRAPH; docs/wip/ARCH-C.md 1.2).
+ * Before DESK-GRAPH one strongly connected component held 59 of 106 modules (app.js, bay-view.js's re-exports and
+ * the renderers called by hand pulled everything into it). After: 39 of 114. The bound below is the size at the end of
+ * DESK-GRAPH; lower it when a lane shrinks the cycle, never raise it. Leaves and rule modules must stay outside any cycle. */
+const LARGEST_CYCLE_MAX = 39;
+const NEVER_IN_A_CYCLE = [
+  'settings.js', 'picture.js', 'map-handle.js', 'view-state.js', 'scope-constants.js', 'format.js', 'html-escape.js',
+  'geo.js', 'iff.js', 'icons.js', 'track-label.js', 'panels/efsp/efsp-change-bus.js', 'panels/efsp/efsp-message-registry.js',
+  'panels/efsp/control-release-rules.js', 'panels/efsp/carrier-state.js',
+  'panels/efsp/carrier-final-distance.js', 'panels/efsp/runway-status-rules.js', 'panels/efsp/facility-topology.js',
+  'panels/efsp/sync-cursor.js',
+];
+
+test('module graph: the largest import cycle stays small, and the leaves and rule modules are in none', () => {
+  const cs = cycles(graph());
+  const largest = Math.max(0, ...cs.map(c => c.length));
+  assert.ok(largest <= LARGEST_CYCLE_MAX, `the largest import cycle holds ${largest} modules (limit ${LARGEST_CYCLE_MAX}): ${cs.find(c => c.length === largest).join(', ')}`);
+  const inCycle = new Set(cs.flat());
+  const present = NEVER_IN_A_CYCLE.filter(f => fs.existsSync(path.join(JS, f)));
+  assert.deepEqual(present.filter(f => inCycle.has(f)), []);
+  assert.ok(present.length >= NEVER_IN_A_CYCLE.length - 2, 'the list names modules that exist');
+});

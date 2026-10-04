@@ -71,6 +71,7 @@ async function mount({ metrics = true } = {}) {
   const sync = await g.import('sync.js');
   const geojson = await g.import('geojson.js');
   const bay = await g.import('panels/efsp/bay-view.js');
+  const stripEl = await g.import('panels/efsp/bay/strip-element.js');
   await g.import('panels/efsp/strip-view.js');
   const metricsClient = await g.import('panels/efsp/efsp-metrics-client.js');
   const panel = await g.import('panels/efsp/efsp-panel.js');
@@ -95,7 +96,7 @@ async function mount({ metrics = true } = {}) {
   });
   panel.initEfspPanel();
   const flush = () => { if (metrics) metricsClient.flushEfspMetricsNow(); return reports.flatMap(r => r.events.map(e => ({ positionId: r.positionId, facilityId: r.facilityId, ...e }))); };
-  return { els, sandbox: { ...panel, ...bay, getEfspStrip: state.getEfspStrip, document: d }, ws, metricsClient, mutations, reports, flush };
+  return { els, sandbox: { ...panel, ...bay, ...stripEl, getEfspStrip: state.getEfspStrip, document: d }, ws, metricsClient, mutations, reports, flush };
 }
 
 const nextTask = () => new Promise(resolve => setImmediate(resolve));

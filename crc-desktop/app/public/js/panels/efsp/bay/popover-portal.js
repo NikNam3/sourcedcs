@@ -1,7 +1,5 @@
 'use strict';
-import { renderAllOpenEfspBays } from '../bay-view.js';
-
-
+import { markEfspChanged } from '../efsp-change-bus.js';
 
 // ── The popover portal (F-001, F-108, F-109) ─────────────────────────────
 //
@@ -259,6 +257,6 @@ function _requestPostPopoverRender() {
   _postPopoverRenderTimer = setTimeout(() => {
     _postPopoverRenderTimer = null;
     if (_openPopovers.size > 0) return;
-    renderAllOpenEfspBays();
+    markEfspChanged('bays');
   }, 0);
 }

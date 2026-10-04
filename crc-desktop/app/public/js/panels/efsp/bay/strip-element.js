@@ -10,12 +10,12 @@ import { _buildStripLayout } from '../strip-view.js';
 import { setAttention, toggleFlip, toggleOffset } from '../efsp-gestures.js';
 import { noteEfspGesture } from '../efsp-metrics-client.js';
 import {
-  STRIP_CONTROL_SELECTOR, _dispatchGesture, _onStripKeydown, _resolveActingPositionId, _selectStrip,
-  _selectedStripId, _stripRenderSignature, _swallowRepeatAdvance, renderAllOpenEfspBays
+  STRIP_CONTROL_SELECTOR, _dispatchGesture, _onStripKeydown, _resolveActingPositionId, _selectStrip, _selectedStripId, _stripRenderSignature, _swallowRepeatAdvance
 } from '../bay-view.js';
 import { _blockLabel, _buildBlockCell, _refusalForStrip, _setRestoredEditInThisStrip } from './block-edit.js';
 import { _cycleHighlight, _openHighlightPopover } from './popovers/highlight.js';
 import { _onStripPointerDown } from './drag.js';
+import { markEfspChanged } from '../efsp-change-bus.js';
 
 
 // Two presses, not one, and not a modal. Dropping is the one Strip action with
@@ -168,7 +168,7 @@ export function _appendAnnotationHistory(container, strip, blockId, limit) {
     overflow.addEventListener('click', (e) => {
       e.stopPropagation();
       _expandedStripId = strip.stripId;
-      renderAllOpenEfspBays();
+      markEfspChanged('bays');
     });
     overflow.addEventListener('pointerdown', (e) => e.stopPropagation());
     history.appendChild(overflow);
@@ -200,7 +200,7 @@ export function _appendExpandButton(container, strip) {
   btn.addEventListener('click', (e) => {
     e.stopPropagation();
     _expandedStripId = expanded ? null : strip.stripId;
-    renderAllOpenEfspBays();
+    markEfspChanged('bays');
   });
   btn.addEventListener('pointerdown', (e) => e.stopPropagation());
   container.appendChild(btn);
@@ -315,7 +315,7 @@ export function _appendExpandedView(el, strip) {
   collapse.addEventListener('click', (e) => {
     e.stopPropagation();
     _expandedStripId = null;
-    renderAllOpenEfspBays();
+    markEfspChanged('bays');
   });
   collapse.addEventListener('pointerdown', (e) => e.stopPropagation());
   appendAtoExpandedRows(panel, strip); // docs/adr/0071 — read-only

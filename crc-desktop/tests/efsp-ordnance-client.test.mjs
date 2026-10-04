@@ -151,12 +151,11 @@ test('ordnanceAlertsFor: nothing for CLEAN/LOADED/EXPENDED, a DROPPED Strip, an 
 async function renderStrip({ strip, flightData, signedOn, runwayStatus }) {
   globalThis.document.getElementById = () => null;
   globalThis.document.createElement = makeElement;
-  globalThis.getLatestTrack = () => null; // window.getLatestTrack / getAllTracks, set by app.js's startApp()
-  globalThis.getAllTracks = () => [];
   const g = freshGraph();
   const state = await g.import('panels/efsp/efsp-state.js');
   const ws = await g.import('panels/efsp/efsp-ws.js');
   const bay = await g.import('panels/efsp/bay-view.js');
+  const stripEl = await g.import('panels/efsp/bay/strip-element.js');
   const template = await g.import('panels/efsp/strip-fields.js');
   await g.import('panels/efsp/strip-view.js');
   ws.setEfspSender('_sendEfsp', () => {});
@@ -165,7 +164,7 @@ async function renderStrip({ strip, flightData, signedOn, runwayStatus }) {
   bay._setRenderAllOpenEfspBaysForTest(() => {});
   state.applyEfspSnapshot({ strips: [strip], flightDataList: [flightData], positions: [], bays: [], airspaces: [], correlations: [], marsa: [],
     runwayStatuses: runwayStatus ? [runwayStatus] : [] });
-  return { el: bay._buildStripEl(strip), sandbox: template };
+  return { el: stripEl._buildStripEl(strip), sandbox: template };
 }
 
 const appArrival = () => ({

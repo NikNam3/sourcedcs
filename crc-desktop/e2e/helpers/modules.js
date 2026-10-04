@@ -19,7 +19,10 @@ const MODULES = {
   ws: '/js/panels/efsp/efsp-ws.js',
   sync: '/js/sync.js',
   dock: '/js/dock.js', // crc.dock.dock is the dockview instance (null until initDock runs)
-  app: '/js/app.js',
+  app: '/js/app.js', // crc.app._ws, applySnapshot, applyCoverage
+  mapHandle: '/js/map-handle.js', // crc.mapHandle.map, .mapReady
+  settings: '/js/settings.js', // crc.settings.settings
+  picture: '/js/picture.js', // crc.picture.history, .labelOffsets, .latestFromServer
   bayView: '/js/panels/efsp/bay-view.js',
   carrier: '/js/panels/efsp/carrier-state.js',
   nla: '/js/panels/efsp/efsp-nla.js',

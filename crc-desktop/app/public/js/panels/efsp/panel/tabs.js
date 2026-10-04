@@ -5,7 +5,8 @@ import { efspLinesWithOthers, getAllEfspStrips, getEfspBays, withOthersBayId } f
 import { getActingPositions } from '../efsp-ws.js';
 import { markEfspBaySeen, unseenEfspArrivalsForPosition, unseenEfspArrivalsInBay } from '../efsp-arrivals.js';
 import { noteEfspBayVisible, noteEfspSearch } from '../efsp-metrics-client.js';
-import { renderBay, setOpenEfspBays } from '../bay-view.js';
+import { renderBay } from '../bay-view.js';
+import { setOpenEfspBays } from '../bay/open-bays.js';
 import { renderCarrierBanner } from '../carrier-panel.js';
 import { getEfspPosition } from '../efsp-state.js';
 import { formatFrequencies } from '../combination-rules.js';

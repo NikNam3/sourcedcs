@@ -1,5 +1,6 @@
 'use strict';
 import { pickerText } from '../../../../track-label.js';
+import { getAllTracks, getLatestTrack } from '../../../../picture.js';
 import { openPopover } from '../popover-portal.js';
 import { _dispatchCorrelation } from '../../bay-view.js';
 
@@ -21,9 +22,7 @@ export function _openBindPopover(strip, anchorEl, candidateTrackIds) {
 
   const ids = candidateTrackIds && candidateTrackIds.length
     ? candidateTrackIds
-    : (typeof window !== 'undefined' && typeof window.getAllTracks === 'function'
-      ? window.getAllTracks().filter(t => t.domain === 'AIR').map(t => String(t.id))
-      : []);
+    : getAllTracks().filter(t => t.domain === 'AIR').map(t => String(t.id));
 
   if (ids.length === 0) {
     const empty = document.createElement('div');
@@ -36,8 +35,7 @@ export function _openBindPopover(strip, anchorEl, candidateTrackIds) {
   }
 
   for (const trackId of ids) {
-    const track = typeof window !== 'undefined' && typeof window.getLatestTrack === 'function'
-      ? window.getLatestTrack(trackId) : null;
+    const track = getLatestTrack(trackId);
     const row = document.createElement('button');
     row.className = 'efsp-coordinate-submit';
     row.textContent = track ? pickerText(track) : String(trackId);

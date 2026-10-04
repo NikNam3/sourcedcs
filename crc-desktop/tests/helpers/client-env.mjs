@@ -6,8 +6,7 @@
  * (sibling imports evaluate in order), or preload it: `node --import ./tests/helpers/client-env.mjs --test …`.
  *
  * It defines only what is missing, so a test can still replace any of it afterwards (`document.getElementById = …`,
- * `globalThis.fetch = …`). `window` is globalThis, as in the old vm sandboxes: `globalThis.getLatestTrack = …` is
- * what client code reads as `window.getLatestTrack`. Only true browser globals live here; client functions are
+ * `globalThis.fetch = …`). `window` is globalThis, as in the old vm sandboxes. Only true browser globals live here; client functions are
  * imported, and replaced through the modules' explicit setters (docs/wip/ESM-1.md, "Setters").
  */
 

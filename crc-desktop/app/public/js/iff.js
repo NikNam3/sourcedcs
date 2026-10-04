@@ -1,6 +1,6 @@
 'use strict';
 import { sendToSync } from './sync.js';
-import { settings } from './app.js';
+import { settings } from './settings.js';
 
 // ── IFF state constants ────────────────────────────────────────────────────
 // Keep this list byte-identical to crc-sync/src/surveillance/iff.js's IFF_STATES

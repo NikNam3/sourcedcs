@@ -9,7 +9,9 @@
 // The session holds a COPY of the points; nothing reaches the airspace until Done hands them back to the editor, and the
 // editor's own Save sends them (AIRSP-3: the form is the draft).
 
-import { map, mapReady, missionData, settings } from './app.js';
+import { map, mapReady } from './map-handle.js';
+import { missionData } from './picture.js';
+import { settings } from './settings.js';
 import { buildDraftFeatures, corridorRing, setDraftFeatures } from './airspace-layer.js';
 import { formatPair, coordFormatOf } from './coords.js';
 import {

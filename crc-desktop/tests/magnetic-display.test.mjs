@@ -43,13 +43,13 @@ test('the Airport panel has no heading-correction or transition-altitude input; 
 });
 
 test('hdgCorrection is not a setting: not in DEFAULTS, read nowhere, only stripped from an old saved object', () => {
-  const app = read('js/app.js');
+  const app = read('js/settings.js');
   const defaults = app.slice(app.indexOf('const DEFAULTS = {'), app.indexOf('let settings = { ...DEFAULTS };'));
   assert.ok(defaults.length > 100, 'found the DEFAULTS block');
   assert.equal(defaults.includes('hdgCorrection'), false);
   for (const [file, src] of clientJs()) {
     const uses = src.split('\n').filter(l => l.includes('hdgCorrection'));
-    if (file === path.join('js', 'app.js')) assert.deepEqual(uses.map(l => l.trim()), ['delete settings.hdgCorrection;']);
+    if (file === path.join('js', 'settings.js')) assert.deepEqual(uses.map(l => l.trim()), ['delete settings.hdgCorrection;']);
     else assert.deepEqual(uses, [], file);
   }
 });

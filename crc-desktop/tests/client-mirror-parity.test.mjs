@@ -16,7 +16,7 @@ import { createRequire } from 'node:module';
 import { readClient, readServer, constLiteral } from './helpers/mirror-source.mjs';
 import * as clientNla from '../app/public/js/panels/efsp/efsp-nla.js';
 import * as rules from '../app/public/js/panels/efsp/runway-status-rules.js';
-import { formatZuluHhmm } from '../app/public/js/panels/efsp/strip-template.js';
+import { formatZuluHhmm } from '../app/public/js/format.js';
 import { COMPACT_BLOCKS_BY_POSITION } from '../app/public/js/panels/efsp/strip-fields.js';
 import { haversineM } from '../app/public/js/geo.js';
 import * as serverConfig from "./helpers/server-config.mjs";

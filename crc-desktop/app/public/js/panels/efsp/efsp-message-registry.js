@@ -4,8 +4,10 @@
 // by type. Each family's module registers its handlers at load with registerEfspMessage(); app.js's
 // ws.onmessage makes one dispatchEfspMessage(msg) call and knows no EFSP type by name.
 //
-// A leaf module on purpose (it imports nothing): every family module imports it to register, so it must be
+// A leaf module on purpose (it imports only the change bus, itself a leaf): every family module imports it to register, so it must be
 // fully evaluated before any of them runs, whichever module a graph is entered from.
+
+import { batchEfspChanges } from './efsp-change-bus.js';
 
 const _handlers = new Map();
 
@@ -29,8 +31,11 @@ export function addEfspMessageObserver(fn) {
 export function dispatchEfspMessage(msg) {
   const handler = msg && _handlers.get(msg.type);
   if (!handler) return false;
-  for (const fn of _observers) fn(msg);
-  handler(msg);
+  // The change bus flushes once the handler has applied its state (efsp-change-bus.js).
+  batchEfspChanges(() => {
+    for (const fn of _observers) fn(msg);
+    handler(msg);
+  });
   return true;
 }
 
@@ -52,7 +57,7 @@ export function registerEfspStoreRedraw(key, fn) {
 export function redrawEfspStore(key) {
   const fn = _storeRedraws.get(key);
   if (!fn) throw new Error(`redrawEfspStore: no redraw registered for ${key}`);
-  fn();
+  batchEfspChanges(fn);
 }
 
 /** The store keys with a redraw, sorted (a test checks they are exactly STORE_SYNC's). */

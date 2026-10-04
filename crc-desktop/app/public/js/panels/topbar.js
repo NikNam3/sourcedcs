@@ -3,9 +3,11 @@ import { NM_M, bearingDeg, haversineM } from '../geo.js';
 import { magneticText } from '../magnetic.js';
 import { buildRangeRing, updateMap } from '../geojson.js';
 import { escapeHtml } from '../html-escape.js';
-import {
-  STALE_MS, getBullseye, grpcStatus, lastUpdateMs, map, mapReady, noRadarsActive, selectedApt, settings, srsStatus
-} from '../app.js';
+import { STALE_MS } from '../scope-constants.js';
+import { getBullseye } from '../picture.js';
+import { grpcStatus, lastUpdateMs, noRadarsActive, selectedApt, srsStatus } from '../view-state.js';
+import { map, mapReady } from '../map-handle.js';
+import { settings } from '../settings.js';
 
 // ── Topbar chrome: status dots, update banner, patch notes, Zulu clock,
 // bullseye cursor readout and measure-line labels. Split out of the former

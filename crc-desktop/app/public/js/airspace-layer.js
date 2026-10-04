@@ -7,7 +7,9 @@
 
 import { NM_M } from './geo.js';
 import { decide, mountAirspaceLayerMenu, pruneOverrides, sanitizeMenu } from './airspace-layer-menu.js';
-import { map, mapReady, missionData, saveSettings, settings } from './app.js';
+import { map, mapReady } from './map-handle.js';
+import { missionData } from './picture.js';
+import { saveSettings, settings } from './settings.js';
 import { getAllEfspAirspaces } from './panels/efsp/efsp-state.js';
 
 const ROUND = 12; // arc points per join/cap

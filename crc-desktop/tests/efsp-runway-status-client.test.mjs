@@ -516,12 +516,11 @@ async function renderStripWithField({ strip, flightData, records }) {
   globalThis.document.getElementById = () => null;
   globalThis.document.createElement = makeElement;
   globalThis.prompt = () => null;
-  globalThis.getLatestTrack = () => null; // window.getLatestTrack / getAllTracks, set by app.js's startApp()
-  globalThis.getAllTracks = () => [];
   const g = freshGraph();
   const st = await g.import('panels/efsp/efsp-state.js');
   const ws = await g.import('panels/efsp/efsp-ws.js');
   const bay = await g.import('panels/efsp/bay-view.js');
+  const stripEl = await g.import('panels/efsp/bay/strip-element.js');
   await g.import('panels/efsp/strip-view.js');
   await g.import('panels/efsp/runway-status-rules.js');
   ws.setEfspSender('_sendEfsp', () => {});
@@ -529,7 +528,7 @@ async function renderStripWithField({ strip, flightData, records }) {
   ws.setEfspSender('sendEfspMutation', () => 'mid');
   bay._setRenderAllOpenEfspBaysForTest(() => {});
   st.applyEfspSnapshot({ strips: [strip], flightDataList: [flightData], positions: [], bays: [], airspaces: [], correlations: [], marsa: [], runwayStatuses: records });
-  return bay._buildStripEl(strip);
+  return stripEl._buildStripEl(strip);
 }
 
 const STRIP_FLIGHT_DATA = (extra = {}) => ({

@@ -63,12 +63,11 @@ const STRIPS = [
 async function mount({ strips = STRIPS, flightDataList = FLIGHT_DATA_LIST } = {}) {
   const sent = [];
   globalThis.document.getElementById = () => null;
-  globalThis.getLatestTrack = () => null; // window.getLatestTrack / getAllTracks, as app.js's startApp() sets them
-  globalThis.getAllTracks = () => [];
   const g = freshGraph();
   const state = await g.import('panels/efsp/efsp-state.js');
   const ws = await g.import('panels/efsp/efsp-ws.js');
   const bay = await g.import('panels/efsp/bay-view.js');
+  const stripEl = await g.import('panels/efsp/bay/strip-element.js');
   const stripView = await g.import('panels/efsp/strip-view.js');
   const ato = await g.import('panels/efsp/ato-strip.js');
   ws.setEfspSender('_sendEfsp', () => {});
@@ -79,13 +78,13 @@ async function mount({ strips = STRIPS, flightDataList = FLIGHT_DATA_LIST } = {}
   }
   bay._setRenderAllOpenEfspBaysForTest(() => {});
   state.applyEfspSnapshot({ strips, flightDataList, positions: [], bays: [], airspaces: [], correlations: [], marsa: [] });
-  const build = (stripId) => bay._buildStripEl(state.getEfspStrip(stripId));
+  const build = (stripId) => stripEl._buildStripEl(state.getEfspStrip(stripId));
   const select = (stripId) => {
     const cur = bay.getSelectedEfspStripId();
     if (stripId === null) { if (cur) bay._selectStrip(cur); } else if (cur !== stripId) bay._selectStrip(stripId);
     ato.highlightArParticipants(stripId);
   };
-  return { sandbox: { ...ato, ...stripView }, bay, sent, build, select };
+  return { sandbox: { ...ato, ...stripView }, bay, stripEl, sent, build, select };
 }
 
 const slot = (el, key) => descendants(el).find(c => c.dataset && c.dataset.slot === key);
@@ -155,7 +154,7 @@ test('the Mode 3 conflict shows only when the ATO\'s code and the assigned code 
 test('the ▼ rows are on the DEPARTURE and MISSION Strips of a bound flight, read-only, and absent without an ATO', async () => {
   const m = await mount();
   for (const id of ['s-viper', 's-viper-dep']) {
-    m.bay._setExpandedStripId(id);
+    m.stripEl._setExpandedStripId(id);
     const el = m.build(id);
     const rows = descendants(el).filter(e => (e.className || '').includes('efsp-ato-row'));
     const byLabel = Object.fromEntries(rows.map(r => [r.dataset.atoRow, r.children[1].textContent]));
@@ -169,7 +168,7 @@ test('the ▼ rows are on the DEPARTURE and MISSION Strips of a bound flight, re
     assert.equal(byLabel['ATO missing'], 'packageId');
     for (const r of rows) assert.equal(descendants(r).some(e => e.tagName === 'input' || e.tagName === 'select'), false, 'no editor');
   }
-  m.bay._setExpandedStripId('s-plain');
+  m.stripEl._setExpandedStripId('s-plain');
   assert.equal(descendants(m.build('s-plain')).some(e => (e.className || '').includes('efsp-ato-row')), false);
 });
 

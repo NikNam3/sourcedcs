@@ -1,5 +1,7 @@
 'use strict';
-import { COALITION_COLOR, GROUND_COLOR, LIGHT_COALITION_COLOR, map, mapReady, settings } from './app.js';
+import { COALITION_COLOR, GROUND_COLOR, LIGHT_COALITION_COLOR } from './scope-constants.js';
+import { map, mapReady } from './map-handle.js';
+import { settings } from './settings.js';
 
 // ── Track icon factories ───────────────────────────────────────────────────
 // Each function renders to a canvas and returns raw ImageData for MapLibre.

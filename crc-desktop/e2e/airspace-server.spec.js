@@ -45,7 +45,7 @@ async function open(page, { controller, withMap = false } = {}) {
   // crc-sync has loaded the fake mission once the page has been sent its theatre (the `init` frame); only then does the registry have a theater.
   await expect.poll(() => page.evaluate(() => crc.airspaceLayer.currentTheater()), { timeout: 20000 }).toBe('Syria');
   if (withMap) {
-    await page.waitForFunction(() => crc.app.mapReady === true, null, { timeout: 20000 });
+    await page.waitForFunction(() => crc.mapHandle.mapReady === true, null, { timeout: 20000 });
     await page.evaluate((m) => crc.app._ws.onmessage({ data: JSON.stringify(m) }), MISSION());
   }
   return errors;

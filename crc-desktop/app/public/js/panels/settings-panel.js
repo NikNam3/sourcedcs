@@ -4,8 +4,11 @@ import { applyColors, applyMapTheme } from '../map-setup.js';
 import { clearElevationContours, updateElevationContours } from '../elevation.js';
 import { hideLosProfile } from './los-panel.js';
 import { initToolsTab } from './tools-panel.js';
-import { applyScale, bullseyePickTarget, history, map, mapReady, missionData, saveSettings, settings } from '../app.js';
-import { _setBullseyePickTarget } from '../app.js';
+import { applyScale } from '../geojson.js';
+import { _setBullseyePickTarget, bullseyePickTarget } from '../view-state.js';
+import { history, missionData } from '../picture.js';
+import { map, mapReady } from '../map-handle.js';
+import { saveSettings, settings } from '../settings.js';
 import { mountAirspaceMenuInSettings } from '../airspace-layer.js';
 import { coordFormatOf } from '../coords.js';
 

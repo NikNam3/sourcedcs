@@ -12,11 +12,12 @@ import { applyBullseyePick } from './panels/settings-panel.js';
 import { closeAptWeatherPanel, showAptWeatherPanel } from './panels/airport-selector.js';
 import { closeTrackPanel, showGroundLabelPopup, showTrackPanel } from './panels/track-panel.js';
 import { selectStripForTrack } from './panels/efsp/correlation-highlight.js';
-import {
-  TEXT_OFFSET_EM, TEXT_SIZE_PX, _drag, _measure, applyScale, bullseyePickTarget, getTextSizePx, labelOffsets, map,
-  mapReady, missionData, settings, tracks
-} from './app.js';
-import { _setDrag, _setMap, _setMapReady, _setMeasure } from './app.js';
+import { getTextSizePx, TEXT_OFFSET_EM, TEXT_SIZE_PX } from './scope-constants.js';
+import { _drag, _measure, _setDrag, _setMap, _setMapReady, _setMeasure, map, mapReady } from './map-handle.js';
+import { applyScale } from './geojson.js';
+import { bullseyePickTarget } from './view-state.js';
+import { labelOffsets, missionData, tracks } from './picture.js';
+import { settings } from './settings.js';
 
 // ── Map initialisation ────────────────────────────────────────────────────
 // Sets up all MapLibre sources, layers, and event handlers.

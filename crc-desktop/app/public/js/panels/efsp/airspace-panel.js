@@ -1,17 +1,18 @@
 'use strict';
 import { refreshAirspaceLayers } from '../../airspace-layer.js';
 import { missionNow } from '../topbar.js';
-import { settings } from '../../app.js';
+import { settings } from '../../settings.js';
 import { getAllEfspAirspaces, getEfspFlightData, getAllEfspStrips, getEfspAirspaceEdits, stripsInAirspace } from './efsp-state.js';
 import { getActingPositions, sendEfspAirspaceMutation, settleEfspAck } from './efsp-ws.js';
 import { registerEfspMessage, registerEfspStoreRedraw } from './efsp-message-registry.js';
 import { applyEfspAirspaceDelta } from './efsp-state.js';
 import { _showMutationError, _showMutationWarning } from './efsp-panel.js';
-import { formatZuluHhmm } from './strip-template.js';
+import { formatZuluHhmm } from '../../format.js';
 import * as caps from './airspace-capabilities.js';
 import { altitudeText, openAirspaceEditor } from './airspace-editor.js';
 import { openHistoryView, openDeleteView, deleteBlockers } from './airspace-detail-views.js';
 import { applyAirspaceCalendar, nextBooking, formatBooking, bookingUrl } from './airspace-calendar.js';
+import { onEfspChanged } from './efsp-change-bus.js';
 
 // The airspace board — guide §4.2: "Airspace board (not a strip rack)", and
 // §4.1 rule 2: the `RANGE` Position "works no Strips. It owns airspace state
@@ -571,3 +572,4 @@ registerEfspMessage('efsp-airspace-ack', (msg) => {
   renderAirspacePanel();
 });
 
+onEfspChanged(['snapshot'], () => renderAirspacePanel()); // a new Board lifetime redraws the cards (efsp-change-bus.js)

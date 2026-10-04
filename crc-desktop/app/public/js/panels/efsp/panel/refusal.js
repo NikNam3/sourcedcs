@@ -2,9 +2,9 @@
 import { _mutationErrorEl, _mutationWarningEl } from './state.js';
 import { blockLabelFor } from '../strip-template.js';
 import { getEfspFlightData, getEfspStrip } from '../efsp-state.js';
-import { renderAllOpenEfspBays } from '../bay-view.js';
 import { noteAttestationRefusal } from './control-attest.js';
 import { LUAW_WHILE_COMBINED_TEXT } from '../combination-rules.js';
+import { markEfspChanged } from '../efsp-change-bus.js';
 
 // Rejections that reach here have no other visible surface — a dragged
 // Strip that gets refused (e.g. by crc-sync's bay-implied-state
@@ -178,7 +178,7 @@ export function dismissEfspRefusal() {
     _mutationErrorEl.dataset.reason = '';
     delete _mutationErrorEl.dataset.stripId;
   }
-  if (had && had.stripId) renderAllOpenEfspBays();
+  if (had && had.stripId) markEfspChanged('bays');
 }
 
 /**
@@ -217,7 +217,7 @@ export function dismissEfspRefusal() {
  *   at       Date.now() when the refusal was raised. Never null.
  *
  * ORDERING GUARANTEE. app.js calls notifyEfspMutationAck (and, for the other
- * ack types, _showMutationError) BEFORE renderAllOpenEfspBays(), so by the
+ * ack types, _showMutationError) BEFORE markEfspChanged('bays'), so by the
  * time a render runs in response to a refusal this accessor is already
  * populated — a Strip built during that render can read it straight away, with
  * no deferral and no second pass. The mirror of that holds on the way out:

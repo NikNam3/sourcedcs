@@ -16,7 +16,8 @@
 //     altitude: { ft, ref: 'QNH'|'STD', source: 'MODE_C'|'RADAR'|'DATALINK' } | null,
 //     dl: { lock } | null }
 
-import { aircraftTypes, settings } from './app.js';
+import { aircraftTypes } from './picture.js';
+import { settings } from './settings.js';
 
 const EMERGENCY_TAG = { HIJACK: 'HIJ', RADIO: 'RDF', GENERAL: 'EMR' };
 

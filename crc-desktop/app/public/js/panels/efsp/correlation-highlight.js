@@ -1,10 +1,12 @@
 'use strict';
 import { trackRef } from '../../track-label.js';
-import { updateMap } from '../../geojson.js';
+import { getLatestTrack } from '../../picture.js';
+import { ORDER, markEfspChanged, onEfspChanged } from './efsp-change-bus.js';
 import {
   correlatedTrackIdForStrip, getEfspCorrelationForStrip, getEfspFlightData, getEfspStrip, stripIdsForTrackId
 } from './efsp-state.js';
-import { getOpenEfspBayIds, getSelectedEfspStripId, selectEfspStripById } from './bay-view.js';
+import { getSelectedEfspStripId, selectEfspStripById } from './bay-view.js';
+import { getOpenEfspBayIds } from './bay/open-bays.js';
 
 // Coupled selection (EFSPImplementationGuide.md §6.6 rule 4): "Selecting a
 // Strip MUST highlight its track within 1 second, and vice versa."
@@ -39,7 +41,7 @@ export function highlightCorrelatedTrack(stripId) {
     : null;
   if (next === _correlatedTrackId) return _correlatedTrackId;
   _correlatedTrackId = next;
-  updateMap();
+  markEfspChanged('map');
   return _correlatedTrackId;
 }
 
@@ -131,8 +133,7 @@ export function correlationBadgeFor(strip) {
   // correlated, the contact's label IS this Strip's callsign (crc-sync's
   // docs/adr/0059), and `TRK VIPER11` under a Strip reading VIPER11 says
   // nothing.
-  const track = typeof window !== 'undefined' && typeof window.getLatestTrack === 'function'
-    ? window.getLatestTrack(record.trackId) : null;
+  const track = getLatestTrack(record.trackId);
 
   // Correlation is a system-wide fact and is worked out against every contact
   // the server has; coverage is per-controller (crc-sync's docs/adr/0042). So a
@@ -194,3 +195,6 @@ function _provisionalSentence(record, strip) {
   }
   return 'provisional match';
 }
+
+// The ring is resolved before the Bays and the map that read it (efsp-change-bus.js).
+onEfspChanged(['snapshot', 'correlations'], () => refreshCorrelatedHighlight(), { order: ORDER.RESOLVE });

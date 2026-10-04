@@ -1,10 +1,8 @@
 'use strict';
 import { isWithinDoubleTapWindow } from './efsp-nla.js';
+import { getLatestTrack } from '../../picture.js';
 import {
-  conformanceAlertsForFlightData, correlatedTrackIdForStrip, efspLinesWithOthers, getEfspAirspace, getEfspBays,
-  getEfspCorrelationForStrip, getEfspFlightData, getEfspMarsa, getEfspObligation, getEfspRack, getEfspStrip,
-  isWithOthersBayId, marsaForStrip, otherLiveStripsForFlightData, searchEfspStrips, conflictAlertsForTrack,
-  surveillanceHintsForStrip
+  efspLinesWithOthers, getEfspAirspace, getEfspBays, getEfspCorrelationForStrip, getEfspFlightData, getEfspMarsa, getEfspObligation, getEfspRack, getEfspStrip, isWithOthersBayId, marsaForStrip, otherLiveStripsForFlightData, searchEfspStrips, surveillanceHintsForStrip
 } from './efsp-state.js';
 import { getActingPositions, sendEfspCorrelationMutation, sendEfspMarsaMutation, sendEfspMutation } from './efsp-ws.js';
 import { noteEfspStripSelected } from './efsp-metrics-client.js';
@@ -20,36 +18,14 @@ import { runwayStatusSignatureFor } from './runway-status-rules.js';
 import { trackRef } from '../../track-label.js';
 import { getActiveEfspSearchQuery } from './efsp-panel.js';
 import { computeRackReconciliation } from './strip-drag.js';
-import {
-  _isPseudoBayId, _openBayContainers, _stripElById, getOpenEfspBayIds, setOpenEfspBays
-} from './bay/open-bays.js';
-import {
-  CHIP_HISTORY_LIMIT, _appendAnnotationHistory, _appendDropButton, _appendExpandButton, _appendExpandedView,
-  _buildStripEl, _expandedStripId, _setExpandedStripId
-} from './bay/strip-element.js';
-import {
-  COORDINATION_PRIMITIVE_LABELS, _buildCoordinationNoteEl, _buildCoordinationReasonEl, _canProposeCoordination,
-  _coordinationIsReplica, _coordinationProposerOf, _coordinationStateWord, _dispatchCoordination,
-  _isPendingCoordinationReplica, _isRejectedCoordinationReplica, _openCoordinatePopover
-} from './bay/popovers/coordination.js';
+import { _isPseudoBayId, _openBayContainers, _stripElById } from './bay/open-bays.js';
+import { _appendExpandedView, _buildStripEl, _expandedStripId, _setExpandedStripId } from './bay/strip-element.js';
+import { _dispatchCoordination, _isRejectedCoordinationReplica } from './bay/popovers/coordination.js';
 import { _refreshOpsFiledIfStale, _renderOpsFiledCards } from './bay/ops-cards.js';
 import { _efspDrag } from './bay/drag.js';
-import { _stripHasOpenPopover, openPopover } from './bay/popover-portal.js';
+import { _stripHasOpenPopover } from './bay/popover-portal.js';
 import { _buildBlockCell, _refusalForStrip } from './bay/block-edit.js';
-import { _openBindPopover } from './bay/popovers/bind.js';
-import { _openMarsaPopover } from './bay/popovers/marsa.js';
-import {
-  AIRSPACE_ENTRY_POSITIONS, CONVERT_TO_ARRIVAL_POSITIONS, COORDINATION_TARGETS, HAND_BACK_TO, TOFI_ANSWERED_BY,
-  TOFI_COUNTERPARTS
-} from './bay/authority-mirror.js';
-import {
-  TOFI_ACCEPT_REGIMES, _canMarkTofiEntered, _canProposeTofiEntry, _canProposeTofiExit, _canTransferTofiComms, _dispatchTofi,
-  _isPendingTofiReplica, _openTofiEntryPopover, _tofiExitPrecondition, _tofiProposerOf, _tofiRegimeChoice
-} from './bay/popovers/tofi.js';
-import {
-  _canApproveAirspaceEntry, _canConvertToArrival, _openAirspaceEntryPopover, _pendingConvertStripId,
-  _setPendingConvertStripId
-} from './bay/popovers/airspace-entry.js';
+import { ORDER, onEfspChanged } from './efsp-change-bus.js';
 
 // Bay/Rack rendering + Pointer Events drag (guide §7.1-7.2, §7.5). DOM-only
 // — not unit tested (crc-desktop's test suite has no DOM harness; see the
@@ -82,21 +58,6 @@ import {
 //            (_openBlockEdit); an abandoned one survives a rebuild rather
 //            than blocking it.
 
-
-// ESM-2a: the Bay view's features live in bay/*; every name this file used to export is still exported from here.
-export {
-  AIRSPACE_ENTRY_POSITIONS, CHIP_HISTORY_LIMIT, CONVERT_TO_ARRIVAL_POSITIONS, COORDINATION_PRIMITIVE_LABELS,
-  COORDINATION_TARGETS, HAND_BACK_TO, TOFI_ACCEPT_REGIMES, TOFI_ANSWERED_BY, TOFI_COUNTERPARTS,
-  _appendAnnotationHistory, _appendDropButton, _appendExpandButton, _appendExpandedView, _buildBlockCell,
-  _buildCoordinationNoteEl, _buildCoordinationReasonEl, _buildStripEl, _canApproveAirspaceEntry,
-  _canConvertToArrival, _canProposeCoordination, _canProposeTofiEntry, _canProposeTofiExit,
-  _canMarkTofiEntered, _canTransferTofiComms, _coordinationIsReplica, _coordinationProposerOf, _coordinationStateWord,
-  _dispatchCoordination, _dispatchTofi, _expandedStripId, _isPendingCoordinationReplica, _isPendingTofiReplica,
-  _isRejectedCoordinationReplica, _openAirspaceEntryPopover, _openBindPopover,
-  _openCoordinatePopover, _openMarsaPopover, _openTofiEntryPopover, _pendingConvertStripId, _setExpandedStripId,
-  _setPendingConvertStripId, _stripHasOpenPopover, _tofiExitPrecondition, _tofiProposerOf, _tofiRegimeChoice,
-  getOpenEfspBayIds, openPopover, setOpenEfspBays
-};
 
 export let _selectedStripId = null; // click-to-select state for the non-drag move path
 
@@ -570,8 +531,7 @@ export function _stripRenderSignature(strip) {
     // (crc-sync's docs/adr/0042) — so the track has to be looked at, not just
     // the record. A Map lookup, and Strips are not re-rendered on radar
     // sweeps, so this costs nothing per sweep.
-    const track = correlation.trackId && typeof window !== 'undefined' && typeof window.getLatestTrack === 'function'
-      ? window.getLatestTrack(correlation.trackId) : null;
+    const track = correlation.trackId ? getLatestTrack(correlation.trackId) : null;
     parts.push('cor:' + [
       correlation.rev, correlation.state, correlation.trackId || '', correlation.matchedBy || '',
       correlation.binding ? 1 : 0,
@@ -716,3 +676,7 @@ export function _setRenderAllOpenEfspBaysForTest(fn) { renderAllOpenEfspBays = f
 export function _setSelectEfspStripByIdForTest(fn) { selectEfspStripById = fn; }
 export function _setSelectedStripIdForTest(id) { _selectedStripId = id; }
 export function _setRenderBayForTest(fn) { renderBay = fn; }
+
+// What redraws the open Bays (efsp-change-bus.js): the Board, an ack, correlation, MARSA, alerts and SFA, and a direct
+// 'bays' request from a popover, a drag or a refusal. Called through the binding so a test's replacement counts.
+onEfspChanged(['snapshot', 'board', 'ack', 'bays', 'correlations', 'marsa', 'alerts', 'sfa'], () => renderAllOpenEfspBays(), { order: ORDER.BAYS });

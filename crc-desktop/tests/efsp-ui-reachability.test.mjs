@@ -24,7 +24,7 @@ import { freshGraph } from './helpers/fresh-graph.mjs';
 import { BLOCK_MAPS, isBlockEditable, enumSelectOptionsFor, isBooleanToggleBlock } from '../app/public/js/panels/efsp/strip-template.js';
 import { COMPACT_BLOCKS_BY_POSITION, compactBlocksFor as _compactBlocksFor } from '../app/public/js/panels/efsp/strip-fields.js';
 import { INDICATOR_ORDER } from '../app/public/js/panels/efsp/strip-view.js';
-import { HAND_BACK_TO, TOFI_ANSWERED_BY } from '../app/public/js/panels/efsp/bay-view.js';
+import { HAND_BACK_TO, TOFI_ANSWERED_BY } from '../app/public/js/panels/efsp/bay/authority-mirror.js';
 import * as domStub from './helpers/dom-stub.js';
 import * as serverConfig from "./helpers/server-config.mjs";
 
@@ -40,7 +40,11 @@ const SANDBOX_MODULES = [
   'panels/efsp/bay-view.js', 'panels/efsp/strip-view.js', 'panels/efsp/efsp-state.js', 'panels/efsp/efsp-arrivals.js',
   'panels/efsp/efsp-stereo-routes.js', 'panels/efsp/strip-template.js', 'panels/efsp/strip-fields.js', 'panels/efsp/efsp-ws.js',
   'panels/efsp/efsp-panel.js', 'panels/efsp/carrier-state.js', 'panels/efsp/carrier-panel.js', 'panels/efsp/scramble.js',
-  'panels/efsp/airspace-panel.js',
+  'panels/efsp/airspace-panel.js', 'picture.js',
+  // bay-view.js no longer re-exports the bay/* features: the facade finds them in their own modules.
+  'panels/efsp/bay/strip-element.js', 'panels/efsp/bay/popovers/coordination.js', 'panels/efsp/bay/popovers/tofi.js',
+  'panels/efsp/bay/popovers/airspace-entry.js', 'panels/efsp/bay/popovers/marsa.js', 'panels/efsp/bay/popovers/bind.js',
+  'panels/efsp/bay/popover-portal.js', 'panels/efsp/bay/block-edit.js', 'panels/efsp/bay/authority-mirror.js', 'panels/efsp/bay/open-bays.js',
 ];
 async function loadSandbox() {
   const g = freshGraph();
@@ -424,9 +428,7 @@ async function renderStrip({ strip, flightData, signedOn, airspaces = [], correl
   // (an arrival flashes only where the controller can see it).
   sandbox._setActiveBayId(strip.bayId);
   sandbox._setBayContentElForTest({ isConnected: true, offsetParent: {} });
-  const liveTracks = new Map(tracks.map(t => [String(t.id), t]));
-  globalThis.getLatestTrack = (id) => liveTracks.get(String(id)) || null;
-  globalThis.getAllTracks = () => [...liveTracks.values()];
+  for (const t of tracks) sandbox.latestFromServer.set(String(t.id), t);
 
   // Fixtures written before docs/adr/0058 put the assigned altitude/heading
   // history on the Strip; crc-sync used to move such notes onto the flight

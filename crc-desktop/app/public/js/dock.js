@@ -8,7 +8,8 @@ import { initEfspPanel } from './panels/efsp/efsp-panel.js';
 import { initAirspacePanel } from './panels/efsp/airspace-panel.js';
 import { initRunwayStatusPanel } from './panels/efsp/runway-status-panel.js';
 import { initMetricsPanel } from './panels/metrics-panel.js';
-import { getActiveRadars, map } from './app.js';
+import { getActiveRadars } from './picture.js';
+import { map } from './map-handle.js';
 
 // ── Dockview bootstrap ────────────────────────────────────────────────────
 // Owns the dockview grid that replaces individually hand-positioned

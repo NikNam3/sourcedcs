@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 
 import './helpers/client-env.mjs';
 import * as L from '../app/public/js/track-label.js';
-import { settings } from '../app/public/js/app.js';
+import { settings } from '../app/public/js/settings.js';
 
 settings.transitionAltFt = 18000;
 

@@ -55,7 +55,7 @@ async function open(page, signedOn = ['AP'], records = []) {
       return true;
     });
   });
-  await page.waitForFunction(() => crc.app.mapReady === true, null, { timeout: 20000 });
+  await page.waitForFunction(() => crc.mapHandle.mapReady === true, null, { timeout: 20000 });
   await page.evaluate((m) => crc.app._ws.onmessage({ data: JSON.stringify(m) }), MISSION());
   await inject(page, records);
   return errors;
@@ -77,7 +77,7 @@ async function edit(page, id) {
   return ed;
 }
 const outlineIds = (page) => page.evaluate(() => crc.airspaceLayer.lastAirspaceFeatures().outlines.features.map(f => f.properties.id).sort());
-const px = (page, lat, lon) => page.evaluate(([a, o]) => { const p = crc.app.map.project([o, a]); const r = crc.app.map.getCanvas().getBoundingClientRect(); return { x: r.left + p.x, y: r.top + p.y }; }, [lat, lon]);
+const px = (page, lat, lon) => page.evaluate(([a, o]) => { const p = crc.mapHandle.map.project([o, a]); const r = crc.mapHandle.map.getCanvas().getBoundingClientRect(); return { x: r.left + p.x, y: r.top + p.y }; }, [lat, lon]);
 async function clickMap(page, lat, lon) { const p = await px(page, lat, lon); await page.mouse.click(p.x, p.y); }
 
 test('create an AREA: the kind chooser, no outline yet, then pick a DCS drawing: the points are copied and Save sends them', async ({ page }) => {
@@ -210,7 +210,7 @@ test('Draw on map: click points, click the first to close, drag a point across a
   await open(page);
   const ed = await newAirspace(page);
   await fld(ed, 'NAME').locator('input').fill('MOA DRAWN');
-  await page.evaluate(() => crc.app.map.jumpTo({ center: [35.5, 36.5], zoom: 8 }));
+  await page.evaluate(() => crc.mapHandle.map.jumpTo({ center: [35.5, 36.5], zoom: 8 }));
   await ed.locator('#asg-draw').click();
   const bar = page.locator('.asd-bar');
   await expect(bar).toBeVisible();
@@ -300,7 +300,7 @@ test('create a ROUTE: choose the kind, type fixes in DM, MGRS and decimal, pick 
 
 test('the coordinate format is a per-user setting: MGRS shows the position as one MGRS cell, and every format is still accepted', async ({ page }) => {
   await open(page, ['CTR'], [rec(ROUTE(), {})]);
-  await page.evaluate(() => { crc.app.settings.coordFormat = 'MGRS'; });
+  await page.evaluate(() => { crc.settings.settings.coordFormat = 'MGRS'; });
   const ed = await edit(page, 'VR1207');
   const route = ed.locator('.asg-route');
   const lat0 = route.locator('input[data-row="0"][data-field="lat"]');
@@ -309,7 +309,7 @@ test('the coordinate format is a per-user setting: MGRS shows the position as on
   const mgrs = await lat0.inputValue();
   await lat0.fill('N37 21.0 E035 21.0'); await lat0.blur(); // DM accepted while MGRS is shown
   await expect(lat0).toHaveValue(mgrs);
-  await page.evaluate(() => { crc.app.settings.coordFormat = 'DM'; });
+  await page.evaluate(() => { crc.settings.settings.coordFormat = 'DM'; });
 });
 
 test('the route editor is read-only while ACTIVE (R3-23), and shows the derived envelope', async ({ page }) => {
@@ -381,7 +381,7 @@ test('the same menu is in the settings panel, and the coordinate format is chose
 test('labels carry the name and the limits, FL from the transition altitude; a non-active state is in the label', async ({ page }) => {
   const g = { source: 'POLYGON', points: sq };
   await open(page, ['AP'], [rec(def({ geometry: g, altLowerFt: null, altUpperFt: 18000 }), { state: 'ACTIVE' })]);
-  await page.evaluate(() => { crc.app.settings.transitionAltFt = 10000; });
+  await page.evaluate(() => { crc.settings.settings.transitionAltFt = 10000; });
   await page.evaluate(() => crc.airspace.renderAirspacePanel());
   const text = await page.evaluate(() => crc.airspaceLayer.lastAirspaceFeatures().labels.features[0].properties.text);
   expect(text).toBe('MOA ADANA SOUTH\nGND–FL180');
@@ -393,7 +393,7 @@ test('Add fixes on map: a click appends a fix, a click near a navpoint snaps to 
   const ed = await edit(page, 'VR1207');
   const route = ed.locator('.asg-route');
   await expect(route.locator('.asg-chip')).toHaveText('2 FIXES · 1 LEGS');
-  await page.evaluate(() => crc.app.map.jumpTo({ center: [35.75, 37.1], zoom: 8.5 }));
+  await page.evaluate(() => crc.mapHandle.map.jumpTo({ center: [35.75, 37.1], zoom: 8.5 }));
   await route.locator('#asg-add-on-map').click();
   const bar = page.locator('.asd-bar');
   await expect(bar.locator('.asd-title')).toContainText('ADDING FIXES ROUTE');

@@ -4,7 +4,8 @@ import { escapeHtml } from '../html-escape.js';
 import { currentTheaterFacts, magneticVariationAt, requestTrueFromMagnetic } from '../magnetic.js';
 import { getUserCoalition } from '../iff.js';
 import { updateMap } from '../geojson.js';
-import { atisActive, missionData, saveSettings, settings } from '../app.js';
+import { atisActive, missionData } from '../picture.js';
+import { saveSettings, settings } from '../settings.js';
 
 // ── APRT / Theater side panel ─────────────────────────────────────────────
 // Split out of the former ui.js "god file" (history). It was the single

@@ -2,7 +2,18 @@
 import { _setSyncSocket, getSyncFeedUrl } from './sync.js';
 import { noteCoveragePositions, redeclareEfspPositions } from './panels/efsp/efsp-ws.js';
 import { UPDATE_REQUIRED_CLOSE, hideUpdateRequired, isUpdateRequiredShown, showUpdateRequired } from './update-required.js';
-import { NM_M, kinematics } from './geo.js';
+import { kinematics } from './geo.js';
+import { settings, saveSettings, loadSettings } from './settings.js';
+import { map, mapReady, updateZoomLimits } from './map-handle.js';
+import { FADE_DURATION_MS, HISTORY_MAX } from './scope-constants.js';
+import {
+  coverageDatalink, coverageRadars, coverageSignedOnPositions, history, labelOffsets, lastSweepMs, latestFromServer,
+  setAircraftTypes, setAtisActive, setCoverage, setMissionData, tracks, zeroSpeedSinceMs
+} from './picture.js';
+import {
+  _pulseBright, grpcStatus, noRadarsActive, selectedRef, setGrpcStatus, setLastUpdateMs, setNoRadarsActive, setPulseBright,
+  setSelectedRef, setSrsStatus
+} from './view-state.js';
 import { refreshAirspaceLayers } from './airspace-layer.js';
 import { applyTheaterFacts } from './magnetic.js';
 import { getUserCoalition, loadUserCoalition, toggleUserCoalition } from './iff.js';
@@ -25,27 +36,6 @@ import {
 import { dispatchEfspMessage } from './panels/efsp/efsp-message-registry.js';
 import './panels/efsp/efsp-messages.js';
 
-// ── Constants ─────────────────────────────────────────────────────────────
-
-export const COALITION_COLOR       = { 1: '#888888', 2: '#cc4444', 3: '#4488cc' };
-export const LIGHT_COALITION_COLOR = { 1: '#505050', 2: '#cc0000', 3: '#004499' }; // higher contrast on light map
-export const GROUND_COLOR          = { 1: '#7a7a68', 2: '#aa6644', 3: '#557799' };
-export const HISTORY_MAX      = 10;
-export const FADE_DURATION_MS = 10000;
-export const STALE_MS         = 10000;
-export const MIN_SPD_KT_PPL   = 30;
-
-const CRC_RANGE_NM     = 200;
-export const CRC_RANGE_M      = CRC_RANGE_NM * NM_M;
-
-// Default label position and geometry constants (used by geojson.js + map-setup.js)
-export const TEXT_SIZE_PX      = 11;
-export const TEXT_OFFSET_EM    = [4.0, -0.5]; // em units [right, up] from icon
-const LEADER_ICON_GAP   = 7;
-const LABEL_HALF_W      = 30;
-const LABEL_HALF_H      = 13;
-export const LABEL_EDGE_MARGIN = 2;
-
 // Radar sweep
 // Beam width for the debug overlay only. Detection is crc-sync's, and it
 // computes the instant the beam crosses a contact's bearing rather than
@@ -66,86 +56,11 @@ const SHIP_RADAR_HEIGHT_M    = 40;
 
 // ── State ─────────────────────────────────────────────────────────────────
 
-// The radar picture is server-authoritative (crc-sync's docs/adr/0042). This
-// renderer no longer derives radars, owns a sweep phase, or decides what it is
-// allowed to see: crc-sync sends only the contacts the Positions this
-// controller holds can actually see, each stamped with `illuminatedAt` — when
-// the beam last passed over it. What each contact carries is only what those
-// sensors could know (crc-sync's docs/adr/0059); track-label.js reads it.
-//
-// Two maps, and the distinction between them is load-bearing:
-//   latestFromServer — every contact in this controller's coverage, with
-//     who it is (label, IFF) updated at once rather than waiting for a beam.
-//   tracks — the contacts still inside the fade window, i.e. what is on the
-//     scope right now. Position and altitude stay gated on illumination on
-//     purpose: that IS the radar simulation, computed once on the server.
-export const latestFromServer = new Map(); // id → track (as delivered, incl. illuminatedAt)
-export const tracks           = new Map(); // id → track (displayed)
-// ESM-1 (S-ESM1b): ran at script load; startApp() now calls it, so importing app.js starts nothing.
-function _publishTrackAccessors() {
-window.getAllTracks    = () => [...latestFromServer.values()];
-window.getLatestTrack   = (id) => latestFromServer.get(String(id)) || null;
-}
-export const history          = new Map(); // id → [{lat, lon, altFt, timestamp}, ...] — altFt null when no sensor gives one
-export const labelOffsets     = new Map(); // id → [dLat, dLon] relative to track
-
-// When the server says each contact was last illuminated. Replaces the local
-// `lastSweepMs` the deleted sweep loop used to write, and is the one clock the
-// fade is computed against — so two controllers watching one contact see it
-// decay together.
-export const lastSweepMs      = new Map(); // trackId → illuminatedAt, from the server
-export const zeroSpeedSinceMs = new Map(); // trackId → timestamp when 0-speed-airborne first detected
-
-// Static reference data loaded at startup
-export let aircraftTypes = {};
-let airportsDb    = {};
-
-export let missionData      = null;
-let weather          = { pressurePa: 101325, tempK: 288.15 }; // ISA defaults until server sends live data
-export let atisActive       = []; // [{ frequency, ownerId }] — who's currently transmitting ATIS where, from crc-sync
-export let grpcStatus       = 'disconnected';
-export let noRadarsActive   = false; // true when the Positions we are signed on to grant no radar at all
-export let srsStatus        = 'disconnected';
-export let lastUpdateMs     = null;
-export let mapReady         = false;
-export let map;
-export let _drag            = null;
-export let _measure         = null;
-export let bullseyePickTarget = null; // 'blue' | 'red' | null — awaiting a map click to set bullseye override
-export let _pulseBright     = true;
-export let selectedRef      = null; // string track id (reference)
-export let selectedApt      = null;
+// The picture, the map handle, the settings and the small view state live in leaf modules (picture.js, map-handle.js,
+// settings.js, view-state.js); this module writes them from the socket.
 export let _ws              = null;
-export let approachRwyCourse = null; // used for approach-vector line
-// ESM-1: setters for the bindings other modules assign (map-setup.js, settings-panel.js, airport-selector.js);
-// an imported binding is read-only, so the assignment moved behind these.
-export function _setMap(v) { map = v; }
-export function _setMapReady(v) { mapReady = v; }
-export function _setDrag(v) { _drag = v; }
-export function _setMeasure(v) { _measure = v; }
-export function _setBullseyePickTarget(v) { bullseyePickTarget = v; }
-export function _setSelectedApt(v) { selectedApt = v; }
-export function _setApproachRwyCourse(v) { approachRwyCourse = v; }
-
-// ── Coverage ──────────────────────────────────────────────────────────────
-// What this controller is looking through, as crc-sync's `coverage` message
-// last stated it. Not a selection: it follows the Positions they hold
-// (crc-sync's docs/adr/0042), so there is nothing here for a user to toggle
-// and the radar selector that used to own it is gone. Ground, Clearance
-// Delivery and Operations have no scope, and a controller holding only those
-// correctly gets an empty list — the banner says so rather than the map going
-// quietly blank.
-export let coverageRadars = [];          // [{id, type, label, lat, lon, elevM, rangeM, sweepMs, sweepStart, grantedBy, ...}]
-export let coverageSignedOnPositions = [];   // [{facilityId, positionId, isPrimary}]
-export let coverageDatalink = false;     // whether a Position we are signed on to is on the datalink
-
-/** Every radar this controller is looking through. */
-export function getActiveRadars() { return coverageRadars; }
-
-/** The approach radar for an airfield, if we are looking through it — used by the extended centerline. */
-export function coverageApproachFor(airportName) {
-  return coverageRadars.find(r => r.type === 'approach' && r.airport === airportName) || null;
-}
+let airportsDb    = {};
+let weather          = { pressurePa: 101325, tempK: 288.15 }; // ISA defaults until server sends live data
 
 // ── Static data ───────────────────────────────────────────────────────────
 
@@ -159,124 +74,12 @@ async function loadStaticData() {
     // Remove comment keys so they don't appear in type lookups
     Object.keys(at).filter(k => k.startsWith('_comment')).forEach(k => delete at[k]);
     delete ap._comment;
-    aircraftTypes = at;
+    setAircraftTypes(at);
     airportsDb    = ap;
-    console.log(`[crc] loaded ${Object.keys(aircraftTypes).length} aircraft types, ${Object.keys(airportsDb).length} airports`);
+    console.log(`[crc] loaded ${Object.keys(at).length} aircraft types, ${Object.keys(airportsDb).length} airports`);
   } catch (e) {
     console.warn('[crc-desktop] failed to load static data:', e);
   }
-}
-
-// ── Settings ──────────────────────────────────────────────────────────────
-
-const DEFAULTS = {
-  pplEnabled:    true,
-  pplDuration:   60,
-  trailEnabled:  true,
-  trailLength:   10,
-  shipsEnabled:      false,
-  hideGroundUnits:   false,
-  braColor:      '#4488cc',
-  radarDebug:    false,
-  textMarksEnabled: false, // DCS mission-editor Text objects, shown as a map layer
-  extCenterlineNm: 25, // extended AP-radar centerline length
-  scale:         1.0,
-  lightMode:     false,
-  showElevation: false, // computed contour lines + height labels (elevation.js), zoom-independent
-  fadeGraceMs:    10000, // ms at full brightness after last sweep before fading starts
-  navDeclutter:    false, // hide navpoints whose names contain digits (off: H70)
-  navDeclutter5:   false, // hide navpoints whose names are not exactly 5 letters (off: H70)
-  trailIntervalMs: 5000, // minimum ms between trail dot recordings
-  // Auto-hide labels for sequential-squawk formation flights. OFF, and forced
-  // off once for existing installs below: every declutter behaviour stays
-  // disabled until the end of the EFSP work (decision H6). The code path in
-  // geojson.js's getDeclutteredIds() is kept — REVISIT then.
-  declutter:       false,
-  airspaceMenu:    null,   // the airspace layer menu's choices (airspace-layer-menu.js); null = its default (ACTIVE only). Per user, never synced
-  coordFormat:     'DM',   // how coordinates are shown and prefilled: 'DMS' | 'DM' | 'MGRS' (coords.js, H102 AP2B-Q2); input accepts all
-  showDatalinkLocks: true, // draw the datalink's radar-lock lines (geojson.js's buildDatalinkLines)
-  transitionAltFt: 18000, // ft — how an ASSIGNED altitude is written. The theater's, from crc-sync's `theater` message (its docs/adr/0085); not a setting. [SOURCE-DEFINED] (docs/adr/0085): 18,000 ft is only the fallback until the first `theater` message (sent on connect); the other client files read it with no fallback of their own
-  aprtManualWx:    {},    // per-airport manually-entered vis/cloud data, keyed by ICAO — squadron-wide, see crc-sync's apt-config.js
-  aprtAtisFreq:    {},    // per-airport saved ATIS frequency, keyed by ICAO — squadron-wide, see crc-sync's apt-config.js
-  aprtAtisRwy:     {},    // per-airport saved ATIS runway, keyed by ICAO — squadron-wide, see crc-sync's apt-config.js
-  aprtAtisInfo:    {},    // per-airport saved ATIS info letter, keyed by ICAO — squadron-wide, see crc-sync's apt-config.js
-  bullseyeOverride: {     // manual bullseye position override, per coalition
-    blue: { enabled: false, lat: null, lon: null },
-    red:  { enabled: false, lat: null, lon: null },
-  },
-  // ── Colours ───────────────────────────────────────────────────────────────
-  colFriendly:    '#4488cc',
-  colBogey:       '#ccaa00',
-  colNeutral:     '#888888',
-  colBandit:      '#cc6600',
-  colHostile:     '#cc2222',
-  colEmergGen:    '#cc2222',   // 7700 general emergency
-  colEmergRadio:  '#b8a000',   // 7600 radio failure
-  colEmergHijack: '#cc6600',   // 7500 hijack
-  colRangeRing:   '#8aaa6a',
-  colNavpoint:    '#3a5a3a',
-};
-
-export let settings = { ...DEFAULTS };
-
-function loadSettings() {
-  try {
-    const raw = localStorage.getItem('crc-desktop-settings');
-    if (raw) settings = { ...DEFAULTS, ...JSON.parse(raw) };
-  } catch (_) {}
-  // H6: a saved settings object carries the old `declutter: true` default;
-  // switch it off once. A controller may still turn it back on by hand.
-  if (!settings.declutterOffH6) { settings.declutter = false; settings.declutterOffH6 = true; }
-  // H70: navpoint declutter goes off too, once, until AIRAC data replaces it.
-  if (!settings.navDeclutterOffH70) { settings.navDeclutter = false; settings.navDeclutter5 = false; settings.navDeclutterOffH70 = true; }
-  // H15: headings are magnetic from crc-sync's model; the manual correction is gone.
-  delete settings.hdgCorrection;
-}
-
-export function saveSettings() {
-  localStorage.setItem('crc-desktop-settings', JSON.stringify(settings));
-}
-
-// Effective bullseye positions, combining live mission data with any
-// user-configured overrides from the settings panel (per coalition).
-export function getBullseye() {
-  const base = (missionData && missionData.bullseye) || {};
-  const ov   = settings.bullseyeOverride || {};
-  const pick = (side) => {
-    const o = ov[side];
-    if (o && o.enabled && o.lat != null && o.lon != null) return { lat: o.lat, lon: o.lon };
-    return base[side] || null;
-  };
-  return { blue: pick('blue'), red: pick('red') };
-}
-
-// A contact's altitude is crc-sync's (its src/altimetry.js), and arrives only
-// when a sensor could know it (docs/adr/0059). Nothing here computes one.
-
-// `crc-desktop-enabled-radars` in localStorage, and the load/save pair that
-// owned it, are gone: coverage is not a per-client preference any more, so
-// there is nothing to persist. A leftover key from a previous version is
-// harmless and simply never read again.
-
-// ── Scale helpers ─────────────────────────────────────────────────────────
-
-function getScale()         { return settings.scale || 1.0; }
-export function getTextSizePx()    { return TEXT_SIZE_PX    * getScale(); }
-export function getLeaderIconGap() { return LEADER_ICON_GAP * getScale(); }
-export function getLabelHalfW()    { return LABEL_HALF_W    * getScale(); }
-function getLabelHalfH()    { return LABEL_HALF_H    * getScale(); }
-
-export function applyScale() {
-  if (!mapReady) return;
-  const s = getScale();
-  map.setLayoutProperty('unit-squares',      'icon-size',     s);
-  map.setLayoutProperty('unit-emerg-square', 'icon-size',     s);
-  map.setLayoutProperty('unit-labels',       'text-size',     getTextSizePx());
-  map.setLayoutProperty('navpt-labels',      'text-size',     9 * s);
-  map.setPaintProperty('trail-dots',         'circle-radius', 1.5 * s);
-  map.setPaintProperty('leader-lines',       'line-width',    0.75 * s);
-  map.setPaintProperty('ppl-lines',          'line-width',    s);
-  updateMap();
 }
 
 // ── History management ────────────────────────────────────────────────────
@@ -338,13 +141,13 @@ setInterval(() => {
       zeroSpeedSinceMs.delete(id);
       history.delete(id);
       labelOffsets.delete(id);
-      if (id === selectedRef) selectedRef = null;
+      if (id === selectedRef) setSelectedRef(null);
       changed = true;
     }
   }
 
   if (changed) {
-    lastUpdateMs = now;
+    setLastUpdateMs(now);
     updateMap();
   }
 
@@ -368,7 +171,7 @@ function resetDisplayedTracks() {
   zeroSpeedSinceMs.clear();
   history.clear();
   labelOffsets.clear();
-  selectedRef = null;
+  setSelectedRef(null);
   updateMap();
 }
 
@@ -385,7 +188,7 @@ export function applySnapshot(trackList) {
     latestFromServer.set(t.id, t);
     _receiveIllumination(t);
   }
-  lastUpdateMs = Date.now();
+  setLastUpdateMs(Date.now());
   updateMap();
   refreshRadarPanelData();
 }
@@ -441,7 +244,7 @@ function applyDelta(updated, relabeled, gone) {
     }
   }
 
-  if (changed) { lastUpdateMs = Date.now(); updateMap(); }
+  if (changed) { setLastUpdateMs(Date.now()); updateMap(); }
 }
 
 /**
@@ -451,15 +254,13 @@ function applyDelta(updated, relabeled, gone) {
  * Clearance Delivery controller rather than a fault.
  */
 export function applyCoverage(msg) {
-  coverageRadars = msg.radars || [];
-  coverageSignedOnPositions = msg.signedOnPositions || [];
+  setCoverage(msg.radars || [], msg.signedOnPositions || [], !!msg.datalink);
   noteCoveragePositions(coverageSignedOnPositions); // Primary or Observer, per Position
-  coverageDatalink = !!msg.datalink;
 
   // The datalink is a picture too (crc-sync's docs/adr/0059): a tactical
   // controller whose AWACS is still on the ground sees their own aircraft.
   const nowNoRadars = coverageRadars.length === 0 && !coverageDatalink;
-  if (nowNoRadars !== noRadarsActive) { noRadarsActive = nowNoRadars; updateNoAwacsUI(); }
+  if (nowNoRadars !== noRadarsActive) { setNoRadarsActive(nowNoRadars); updateNoAwacsUI(); }
 
   refreshRadarPanelData();
   updateRadarBadge();
@@ -468,47 +269,6 @@ export function applyCoverage(msg) {
   // dock.js's notifyCoverageChanged.
   notifyCoverageChanged();
   updateMap();
-}
-
-// ── Zoom + pan limits ─────────────────────────────────────────────────────
-// Computes the bounding rectangle of all active radar coverage areas (each
-// radar treated as a square), then enforces that rectangle as the map bounds
-// and sets minZoom so the full coverage area is always visible.
-export function updateZoomLimits() {
-  if (!mapReady) return;
-  const radars = getActiveRadars();
-
-  if (radars.length === 0) {
-    map.setMaxBounds(null);
-    map.setMinZoom(2);
-    return;
-  }
-
-  let minLat = Infinity, maxLat = -Infinity;
-  let minLon = Infinity, maxLon = -Infinity;
-
-  for (const r of radars) {
-    const latDeg = r.rangeM / 111320;
-    const lonDeg = r.rangeM / (111320 * Math.cos(r.lat * Math.PI / 180)) * 1.5;
-    minLat = Math.min(minLat, r.lat - latDeg);
-    maxLat = Math.max(maxLat, r.lat + latDeg);
-    minLon = Math.min(minLon, r.lon - lonDeg);
-    maxLon = Math.max(maxLon, r.lon + lonDeg);
-  }
-
-  // Aggressive: pad only 3% so the view is tightly constrained
-  const padLat = (maxLat - minLat) * 0.03;
-  const padLon = (maxLon - minLon) * 0.03;
-
-  map.setMaxBounds([
-    [minLon - padLon, minLat - padLat],
-    [maxLon + padLon, maxLat + padLat],
-  ]);
-
-  // minZoom: just enough to see the full coverage rect at screen size
-  const spanDeg = Math.max(maxLat - minLat, (maxLon - minLon) * 0.65);
-  const minZoom = spanDeg > 12 ? 4 : spanDeg > 5 ? 5 : spanDeg > 2 ? 6 : 7;
-  map.setMinZoom(minZoom);
 }
 
 // ── WebSocket ─────────────────────────────────────────────────────────────
@@ -557,8 +317,8 @@ async function connect() {
         updateGameTime(msg);
         break;
       case 'status':
-        grpcStatus = msg.grpc;
-        srsStatus  = msg.srs;
+        setGrpcStatus(msg.grpc);
+        setSrsStatus(msg.srs);
         updateStatusUI();
         updateMap();
         break;
@@ -569,7 +329,7 @@ async function connect() {
         if (msg.missionId && msg.missionId !== prevMissionId) {
           localStorage.setItem('crc-desktop-mission-id', msg.missionId);
         }
-        missionData = msg;
+        setMissionData(msg);
         if (mapReady) {
           map.getSource('airports').setData(buildAirports());
           map.getSource('bullseye').setData(buildBullseye());
@@ -606,7 +366,7 @@ async function connect() {
         // on connect, on every /api/atis-transmit start/stop, and on a
         // periodic tick so a crashed client's entry still clears for
         // everyone once it goes stale (see crc-sync's AtisStore.getActive()).
-        atisActive = msg.active || [];
+        setAtisActive(msg.active || []);
         _updateAprtRefCard();
         break;
       case 'apt-config':
@@ -655,8 +415,8 @@ async function connect() {
 
   ws.onclose = (event) => {
     if (_ws === ws) { _ws = null; _setSyncSocket(null); }
-    grpcStatus = 'disconnected';
-    srsStatus  = 'disconnected';
+    setGrpcStatus('disconnected');
+    setSrsStatus('disconnected');
     updateStatusUI();
     updateMap();
     if (event && event.code === UPDATE_REQUIRED_CLOSE) {
@@ -681,7 +441,7 @@ setInterval(() => {
 }, 500);
 
 setInterval(() => {
-  _pulseBright = !_pulseBright;
+  setPulseBright(!_pulseBright);
   let hasIdent = false, hasEmerg = false;
   for (const t of tracks.values()) {
     if (trackIsIdent(t))   hasIdent = true;
@@ -700,7 +460,6 @@ setInterval(() => {
 // ESM-1: the boot sequence ran at script-execution time, after every earlier script. A module is evaluated in
 // dependency order instead, so main.js calls this once every module has been evaluated (S-ESM1a).
 export function startApp() {
-_publishTrackAccessors();
 _startTrackFadeBeat();
 _startMaintenanceBeats();
 loadSettings();
@@ -736,8 +495,3 @@ function _updateCoalitionBtn($btn) {
   $btn.textContent = blue ? 'BLUE' : 'RED';
   $btn.classList.toggle('coalition-red', !blue);
 }
-
-// ESM-1 (S-ESM1c): test seams for the app state the unit tests set directly in the old shared scope.
-export function _setCoverageRadars(v) { coverageRadars = v; }
-export function _setCoverageDatalink(v) { coverageDatalink = v; }
-export function _setCoverageSignedOnPositions(v) { coverageSignedOnPositions = v; }

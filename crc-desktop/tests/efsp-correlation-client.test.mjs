@@ -11,12 +11,14 @@ import './helpers/client-env.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
+import { latestFromServer } from '../app/public/js/picture.js';
 import * as state from '../app/public/js/panels/efsp/efsp-state.js';
 import {
   highlightCorrelatedTrack, getCorrelatedHighlightTrackId, refreshCorrelatedHighlight,
   selectStripForTrack, correlationBadgeFor,
 } from '../app/public/js/panels/efsp/correlation-highlight.js';
-import { setOpenEfspBays, _setSelectedStripIdForTest, _setSelectEfspStripByIdForTest } from '../app/public/js/panels/efsp/bay-view.js';
+import { _setSelectedStripIdForTest, _setSelectEfspStripByIdForTest } from '../app/public/js/panels/efsp/bay-view.js';
+import { setOpenEfspBays } from '../app/public/js/panels/efsp/bay/open-bays.js';
 import { _setUpdateMapForTest } from '../app/public/js/geojson.js';
 
 // The old test stubbed these as plain globals; the modules now read their imports, so each goes through the
@@ -30,8 +32,7 @@ _setSelectEfspStripByIdForTest((stripId) => { selectedStripId = stripId; _setSel
 const select = (id) => { selectedStripId = id; _setSelectedStripIdForTest(id); };
 setOpenEfspBays([{ containerEl: null, bayId: 'ap-departures' }]);
 
-const liveTracks = new Map();
-globalThis.getLatestTrack = (id) => liveTracks.get(String(id)) || null; // window === globalThis (client-env.mjs)
+const liveTracks = latestFromServer;
 
 function strip(stripId, flightDataId, bayId = 'ap-departures') {
   return {

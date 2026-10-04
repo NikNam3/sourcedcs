@@ -4,8 +4,8 @@ import { escapeHtml } from '../html-escape.js';
 import { requestTrueFromMagnetic } from '../magnetic.js';
 import { updateMap } from '../geojson.js';
 import { $aptDisplay, updateAptDisplay, updateTopbarUI } from './topbar.js';
-import { approachRwyCourse, missionData, selectedApt } from '../app.js';
-import { _setApproachRwyCourse, _setSelectedApt } from '../app.js';
+import { _setApproachRwyCourse, _setSelectedApt, approachRwyCourse, selectedApt } from '../view-state.js';
+import { missionData } from '../picture.js';
 
 // ── Airport selector (topbar dropdown + runway course input) and the
 // airport-weather popup shown when left-clicking an airport label on the

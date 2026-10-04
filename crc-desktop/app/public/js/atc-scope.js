@@ -8,7 +8,9 @@ import {
   stripIdsForTrackId
 } from './panels/efsp/efsp-state.js';
 import { getActingPositions, sendEfspMutation } from './panels/efsp/efsp-ws.js';
-import { coverageDatalink, coverageRadars, history, lastSweepMs, map, mapReady, settings, tracks } from './app.js';
+import { coverageDatalink, coverageRadars, history, lastSweepMs, tracks } from './picture.js';
+import { map, mapReady } from './map-handle.js';
+import { settings } from './settings.js';
 
 // The ATC scope in the STARS scheme (crc-sync's docs/adr/0088; decisions H5,
 // H41 variant B, H47, H48, H50, H71).

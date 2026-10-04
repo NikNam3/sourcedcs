@@ -1,5 +1,6 @@
 'use strict';
 import { NM_M, haversineM } from '../../geo.js';
+import { getLatestTrack } from '../../picture.js';
 import { missionNow } from '../topbar.js';
 import {
   correlatedTrackIdForStrip, getEfspBays, getEfspFlightData, getEfspRunwayStatus, getEfspRack, getEfspStrip
@@ -12,7 +13,7 @@ import { getActingPositions, sendEfspMutation, sendEfspSfaMutation } from './efs
 import { patternBoardModel, renderPatternBoard } from './pattern-board.js';
 import { createFinalTracker, renderFinalPanel } from './final-panel.js';
 import { runwayForStrip } from './runway-status-rules.js';
-import { getActiveRadars } from '../../app.js';
+import { getActiveRadars } from '../../picture.js';
 
 // Bay descriptor views (crc-sync docs/adr/0075, 0093): a Bay whose descriptor says
 // `view: 'pattern' | 'final' | 'sfa-freqs'` mounts a component, instead of (or
@@ -232,7 +233,7 @@ function _renderFinal(container, bay) {
     if (!_finalTrackers.has(strip.stripId)) _finalTrackers.set(strip.stripId, createFinalTracker());
     const flightData = getEfspFlightData(strip.flightDataId);
     const trackId = correlatedTrackIdForStrip(strip);
-    const track = trackId && typeof window !== 'undefined' && typeof window.getLatestTrack === 'function' ? window.getLatestTrack(trackId) : null;
+    const track = trackId ? getLatestTrack(trackId) : null;
     let runwayText = '--';
     const r = runwayForStrip({ ...strip, stripType: 'ARRIVAL' }, flightData, getEfspRunwayStatus(bay.facilityId));
     if (r) runwayText = r.end || r.runwayId;

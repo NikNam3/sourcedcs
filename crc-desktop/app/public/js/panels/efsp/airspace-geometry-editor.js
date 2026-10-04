@@ -11,7 +11,8 @@
 // Nothing here is saved: every action fills the form buffer, Cancel in the editor undoes it, Save sends it (AIRSP-3).
 // The pure half (what a pick copies, the outline's state, the table <-> segments) is airspace-geometry-model.js.
 
-import { missionData, settings } from '../../app.js';
+import { missionData } from '../../picture.js';
+import { settings } from '../../settings.js';
 import { startDraw, stopDraw } from '../../airspace-draw.js';
 import { coordFormatOf, formatComponent, formatPair, parseCoord, parsePair, parsePoints } from '../../coords.js';
 import { MAX_POLYGON_VERTICES, MAX_ROUTE_SEGMENTS, MAX_WIDTH_NM } from './airspace-validate.js';
