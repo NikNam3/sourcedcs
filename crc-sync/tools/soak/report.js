@@ -263,7 +263,7 @@ function summary(rep, outDir) {
   row('R2 ambiguous replay', m.restart.ambiguousReplay.map(x => `${x.op}:${x.outcome}`).join(' ') || '-', 'reported');
   row('orderKeys max / p99', `${k.maxLen} / ${k.p99Len} (${k.worstRack})`, `<= ${k.threshold}`);
   row('rebalances / exhausted throws', `${k.rebalances} / ${k.exhaustedThrows}`, 'info');
-  row('strip retention', mem.retention, 'info');
+  L.push(mem.retention);
   row('heap slope (post-GC)', `${mem.slopeMBPerHour} MB/h R²=${mem.r2}`, mem.judged ? `<= ${rep.harness.thresholds.heapSlopeMBPerHour}` : 'NOT JUDGED (info)');
   row('heap net growth', `${mem.netGrowthPct}% (${mem.baselineHeapMB}->${mem.endHeapMB} MB)`, mem.judged ? `<= ${rep.harness.thresholds.netGrowthPct}%` : 'NOT JUDGED (info)');
   row('per-DROPPED-Strip / residual', `${mem.perDroppedStripKB} KB / ${mem.residualSlopeMBPerHour} MB/h`, 'attribution');
