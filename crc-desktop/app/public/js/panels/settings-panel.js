@@ -1,6 +1,7 @@
 'use strict';
-import { buildBullseye, buildNavpoints, buildTextMarks, updateMap } from '../geojson.js';
-import { applyColors, applyMapTheme } from '../map-setup.js';
+import { markEfspChanged } from './efsp/efsp-change-bus.js';
+import { buildBullseye, buildNavpoints, buildTextMarks } from '../geojson.js';
+import { applyColors, applyMapTheme } from '../map-style.js';
 import { clearElevationContours, updateElevationContours } from '../elevation.js';
 import { hideLosProfile } from './los-panel.js';
 import { initToolsTab } from './tools-panel.js';
@@ -77,30 +78,30 @@ export function initSettings() {
   coordSel.addEventListener('change', () => { settings.coordFormat = coordFormatOf(coordSel.value); saveSettings(); });
   mountAirspaceMenuInSettings();
 
-  const persist = (key, val) => { settings[key] = val; saveSettings(); updateMap(); };
+  const persist = (key, val) => { settings[key] = val; saveSettings(); markEfspChanged('map'); };
 
   els.pplEnabled.addEventListener('change', () => persist('pplEnabled',  els.pplEnabled.checked));
   els.pplDuration.addEventListener('input', () => {
     settings.pplDuration = parseInt(els.pplDuration.value);
     els.pplVal.textContent = settings.pplDuration + 's';
-    saveSettings(); updateMap();
+    saveSettings(); markEfspChanged('map');
   });
   els.trailEn.addEventListener('change', () => persist('trailEnabled', els.trailEn.checked));
   els.trailLength.addEventListener('input', () => {
     settings.trailLength = parseInt(els.trailLength.value);
     els.trailLenVal.textContent = settings.trailLength;
-    saveSettings(); updateMap();
+    saveSettings(); markEfspChanged('map');
   });
   els.trailInterval.addEventListener('input', () => {
     settings.trailIntervalMs = parseInt(els.trailInterval.value);
     els.trailIntervalVal.textContent = (settings.trailIntervalMs / 1000).toFixed(0) + 's';
     history.clear(); // reset trail so old close-together dots are dropped
-    saveSettings(); updateMap();
+    saveSettings(); markEfspChanged('map');
   });
   els.fadeGrace.addEventListener('input', () => {
     settings.fadeGraceMs = parseInt(els.fadeGrace.value);
     els.fadeGraceVal.textContent = (settings.fadeGraceMs / 1000).toFixed(1) + 's';
-    saveSettings(); updateMap();
+    saveSettings(); markEfspChanged('map');
   });
   els.scale.addEventListener('input', () => {
     settings.scale = parseFloat(els.scale.value);
@@ -285,7 +286,7 @@ function initColorSettings() {
       if (key === 'braColor') {
         const $bra = document.getElementById('cursor-bra');
         if ($bra) $bra.style.color = inp.value;
-        updateMap();
+        markEfspChanged('map');
         return;
       }
       applyColors();
@@ -311,7 +312,7 @@ function initColorSettings() {
       if (key === 'braColor') {
         const $bra = document.getElementById('cursor-bra');
         if ($bra) $bra.style.color = def;
-        updateMap();
+        markEfspChanged('map');
       } else {
         applyColors();
       }
@@ -330,7 +331,7 @@ function initColorSettings() {
     $declutter.addEventListener('change', () => {
       settings.declutter = $declutter.checked;
       saveSettings();
-      updateMap();
+      markEfspChanged('map');
     });
   }
 
@@ -354,12 +355,12 @@ function initColorSettings() {
 
   if ($shipsEn) {
     $shipsEn.checked = settings.shipsEnabled;
-    $shipsEn.addEventListener('change', () => { settings.shipsEnabled = $shipsEn.checked; saveSettings(); updateMap(); });
+    $shipsEn.addEventListener('change', () => { settings.shipsEnabled = $shipsEn.checked; saveSettings(); markEfspChanged('map'); });
   }
 
   if ($hideGroundUnits) {
     $hideGroundUnits.checked = settings.hideGroundUnits ?? false;
-    $hideGroundUnits.addEventListener('change', () => { settings.hideGroundUnits = $hideGroundUnits.checked; saveSettings(); updateMap(); });
+    $hideGroundUnits.addEventListener('change', () => { settings.hideGroundUnits = $hideGroundUnits.checked; saveSettings(); markEfspChanged('map'); });
   }
 
   const $extCenterlineNm = document.getElementById('set-ext-centerline-nm');
@@ -369,7 +370,7 @@ function initColorSettings() {
       const v = parseInt($extCenterlineNm.value, 10);
       settings.extCenterlineNm = Number.isFinite(v) && v > 0 ? v : 25;
       saveSettings();
-      updateMap();
+      markEfspChanged('map');
     });
   }
 }

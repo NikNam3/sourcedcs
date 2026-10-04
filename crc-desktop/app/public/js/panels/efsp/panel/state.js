@@ -67,3 +67,8 @@ export function _isEfspPanelShowing() {
 export function efspVisibleBayId() {
   return _activeBayId && _isEfspPanelShowing() ? _activeBayId : null;
 }
+
+// The active Bay search's text (null when none is active). Here, not in tabs.js, so bay-view.js reads it without importing the tabs.
+export let _searchQuery = null;
+export function _setSearchQuery(v) { _searchQuery = v; }
+export function getActiveEfspSearchQuery() { return _searchQuery; }

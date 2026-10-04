@@ -1,8 +1,8 @@
 'use strict';
+import { markEfspChanged } from './panels/efsp/efsp-change-bus.js';
 import { kinematics, projectPos } from './geo.js';
 import { atcBlockLines, atcEmergencyTag } from './track-label.js';
-import { updateMap } from './geojson.js';
-import { applyAtcBackground } from './map-setup.js';
+
 import {
   conformanceAlertsForFlightData, getEfspFlightData, getEfspPositionLetter, getEfspStrip, conflictAlertsForTrack,
   stripIdsForTrackId
@@ -460,7 +460,7 @@ export function atcTick() {
   if (black !== _atcBlackApplied) {
     // Set after applying: restoring the theme marks the background dirty
     // (applyMapTheme -> atcBackgroundDirty), and that must not loop.
-    applyAtcBackground(black);
+    markEfspChanged('atcBackground');
     _atcBlackApplied = black;
   }
   // The block follows the app's label scale (applyScale sets it on the
@@ -473,7 +473,7 @@ export function atcTick() {
     }
   }
   for (const t of tracks.values()) {
-    if (t.scheme === 'ATC') { updateMap(); return; }
+    if (t.scheme === 'ATC') { markEfspChanged('map'); return; }
   }
 }
 

@@ -1,9 +1,11 @@
 'use strict';
+import { markEfspChanged } from './efsp/efsp-change-bus.js';
+import { _setAprtRwyTrueDeg, _setAprtSelectedApt, _aprtSelectedApt } from '../view-state.js';
 import { _syncAuthHeaders, sendToSync } from '../sync.js';
 import { escapeHtml } from '../html-escape.js';
 import { currentTheaterFacts, magneticVariationAt, requestTrueFromMagnetic } from '../magnetic.js';
 import { getUserCoalition } from '../iff.js';
-import { updateMap } from '../geojson.js';
+
 import { atisActive, missionData } from '../picture.js';
 import { saveSettings, settings } from '../settings.js';
 
@@ -15,8 +17,6 @@ import { saveSettings, settings } from '../settings.js';
 // applies the UTC offset (docs/adr/0079) and owns the transition altitude and
 // magnetic variation (docs/adr/0085), all from its config/theaters.json.
 
-export let _aprtSelectedApt = null;
-
 // Numeric heading parsed from the APRT panel's runway field, for the
 // extended AP-radar centerline (geojson.js buildExtendedCenterline()).
 // Cached rather than read from the DOM every map-update tick. The runway
@@ -24,27 +24,26 @@ export let _aprtSelectedApt = null;
 // conversion (its docs/adr/0085 — a typed magnetic value is never converted
 // in the client). No centerline is drawn until it answers.
 let _aprtRwyHeading = null;  // magnetic, from the runway number
-export let _aprtRwyTrueDeg = null;  // the same, in true, from crc-sync
 let _aprtRwyReq = 0;
 
 /** Test seam: the selected airfield and its runway's true bearing, as a click and crc-sync's answer set them. */
-export function _setAprtRunwayForTest(apt, trueDeg) { _aprtSelectedApt = apt; _aprtRwyTrueDeg = trueDeg; }
+export function _setAprtRunwayForTest(apt, trueDeg) { _setAprtSelectedApt(apt); _setAprtRwyTrueDeg(trueDeg); }
 
 export function _updateAprtRwyHeading() {
   const raw = ((document.getElementById('aprt-atis-rwy') || {}).value || '').toUpperCase().trim();
   const m = raw.match(/^(\d{1,2})([LRC]?)$/);
   _aprtRwyHeading = m ? parseInt(m[1], 10) * 10 : null;
-  _aprtRwyTrueDeg = null;
+  _setAprtRwyTrueDeg(null);
   const req = ++_aprtRwyReq;
   const apt = _aprtSelectedApt;
   if (_aprtRwyHeading != null && apt) {
     requestTrueFromMagnetic(_aprtRwyHeading, apt.lat, apt.lon).then((t) => {
       if (req !== _aprtRwyReq) return; // a newer entry replaced it
-      _aprtRwyTrueDeg = t;
-      updateMap();
+      _setAprtRwyTrueDeg(t);
+      markEfspChanged('map');
     });
   }
-  updateMap();
+  markEfspChanged('map');
 }
 
 // Per-app-session id so crc-sync can tell "my own next 5s loop tick" apart
@@ -422,7 +421,7 @@ function _renderAprtAptList(filter) {
     row.append(code, sub);
     row.addEventListener('click', (e) => {
       e.stopPropagation();
-      _aprtSelectedApt = a;
+      _setAprtSelectedApt(a);
       _renderAprtAptList(document.getElementById('aprt-search').value || '');
       // Restore this airport's squadron-wide saved ATIS setup (freq/rwy/info
       // — see crc-sync's apt-config.js; settings.aprtAtis* here is just this

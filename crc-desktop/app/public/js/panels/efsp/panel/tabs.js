@@ -1,6 +1,6 @@
 'use strict';
 import { ORDER, onEfspChanged } from '../efsp-change-bus.js';
-import { _activeBayId, _activePositionTab, _bayContentEl, _bayTabsEl, _positionTabsEl, _setActiveBayId, _setActivePositionTab, _isEfspPanelShowing, efspVisibleBayId } from './state.js';
+import { _activeBayId, _activePositionTab, _bayContentEl, _bayTabsEl, _positionTabsEl, _setActiveBayId, _setActivePositionTab, _isEfspPanelShowing, efspVisibleBayId, _searchQuery, _setSearchQuery } from './state.js';
 import { _renderArrivalsLine } from './arrivals.js';
 import { efspLinesWithOthers, getAllEfspStrips, getEfspBays, withOthersBayId } from '../efsp-state.js';
 import { getActingPositions } from '../efsp-ws.js';
@@ -18,7 +18,6 @@ import { formatFrequencies } from '../combination-rules.js';
 // for why. _searchQuery is null when no search is active for the current
 // Position tab; switching Position tabs implicitly drops it (matches the
 // existing "Bay set recomposes on Position change" behavior elsewhere).
-let _searchQuery = null;
 
 function _searchBayId(positionId) { return `${positionId}-search`; }
 
@@ -107,19 +106,18 @@ export function computePositionTabs(bays, signedOnPositionIds) {
 export function _runEfspSearch(query) {
   const trimmed = (query || '').trim();
   if (!trimmed) {
-    _searchQuery = null;
+    _setSearchQuery(null);
     if (_activeBayId && _activeBayId.endsWith('-search')) _setActiveBayId(null);
     _renderPositionTabs();
     return;
   }
   noteEfspSearch(_activePositionTab, _activeBayId); // §11.5, docs/adr/0072 — before the Bay switches to the results
-  _searchQuery = trimmed;
+  _setSearchQuery(trimmed);
   if (_activePositionTab) _setActiveBayId(_searchBayId(_activePositionTab));
   _renderPositionTabs();
 }
 
 /** Read by bay-view.js's renderBay() when asked to render a search pseudo-Bay — see its `-search` bayId branch. */
-export function getActiveEfspSearchQuery() { return _searchQuery; }
 
 export function _renderPositionTabs() {
   if (!_positionTabsEl) return; // not initialized yet — initEfspPanel() hasn't run

@@ -1,8 +1,9 @@
 'use strict';
+import { markEfspChanged, onEfspChanged } from './efsp/efsp-change-bus.js';
 import { hasMissionTime, missionClockSource, missionNow } from '../mission-clock.js';
 import { NM_M, bearingDeg, haversineM } from '../geo.js';
 import { magneticText } from '../magnetic.js';
-import { buildRangeRing, updateMap } from '../geojson.js';
+import { buildRangeRing } from '../geojson.js';
 import { escapeHtml } from '../html-escape.js';
 import { STALE_MS } from '../scope-constants.js';
 import { getBullseye } from '../picture.js';
@@ -144,7 +145,7 @@ export function checkStale() {
     && Date.now() - lastUpdateMs > STALE_MS;
   const wasStale = $stale.classList.contains('visible');
   $stale.classList.toggle('visible', isStale);
-  if (isStale !== wasStale) updateMap();
+  if (isStale !== wasStale) markEfspChanged('map');
 }
 
 // ── Bullseye cursor BRA ────────────────────────────────────────────────────
@@ -206,3 +207,5 @@ export function initZuluClock() {
         : 'DCS mission time — no UTC offset is configured for this theater, so this may be hours out';
   }, 1000);
 }
+
+onEfspChanged(['scope'], () => updateTopbarUI()); // the scope was redrawn (efsp-change-bus.js)

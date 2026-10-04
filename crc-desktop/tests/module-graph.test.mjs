@@ -204,7 +204,7 @@ test('module graph: no module reads another module\'s export without importing i
  * Before DESK-GRAPH one strongly connected component held 59 of 106 modules (app.js, bay-view.js's re-exports and
  * the renderers called by hand pulled everything into it). After: 39 of 114. The bound below is the size at the end of
  * DESK-GRAPH; lower it when a lane shrinks the cycle, never raise it. Leaves and rule modules must stay outside any cycle. */
-const LARGEST_CYCLE_MAX = 11;
+const LARGEST_CYCLE_MAX = 2;
 const NEVER_IN_A_CYCLE = [
   'settings.js', 'picture.js', 'map-handle.js', 'view-state.js', 'scope-constants.js', 'format.js', 'html-escape.js',
   'geo.js', 'iff.js', 'icons.js', 'track-label.js', 'panels/efsp/efsp-change-bus.js', 'panels/efsp/efsp-message-registry.js',

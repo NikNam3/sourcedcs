@@ -201,10 +201,12 @@
    "updateZoomLimits"
   ],
   "map-setup.js": [
+   "initMap"
+  ],
+  "map-style.js": [
    "applyAtcBackground",
    "applyColors",
-   "applyMapTheme",
-   "initMap"
+   "applyMapTheme"
   ],
   "maptiler-key.js": [
    "_resetMaptilerKeyForTest",
@@ -220,7 +222,6 @@
    "updateGameTime"
   ],
   "panels/airport-selector.js": [
-   "approachRwyCourseTrue",
    "closeAptWeatherPanel",
    "initAptSelector",
    "initRwyInput",
@@ -228,8 +229,6 @@
    "showAptWeatherPanel"
   ],
   "panels/aprt-panel.js": [
-   "_aprtRwyTrueDeg",
-   "_aprtSelectedApt",
    "_setAprtRunwayForTest",
    "_updateAprtRefCard",
    "_updateAprtRwyHeading",
@@ -969,18 +968,20 @@
    "_mutationErrorEl",
    "_mutationWarningEl",
    "_positionTabsEl",
+   "_searchQuery",
    "_setActiveBayId",
    "_setActivePositionTab",
    "_setBayContentElForTest",
+   "_setSearchQuery",
    "_undoSlotEl",
    "_undoVoidedEl",
-   "efspVisibleBayId"
+   "efspVisibleBayId",
+   "getActiveEfspSearchQuery"
   ],
   "panels/efsp/panel/tabs.js": [
    "_renderPositionTabs",
    "_runEfspSearch",
-   "computePositionTabs",
-   "getActiveEfspSearchQuery"
+   "computePositionTabs"
   ],
   "panels/efsp/panel/undo-slot.js": [
    "UNDO_OUTCOME_MS",
@@ -1296,11 +1297,17 @@
    "viewFor"
   ],
   "view-state.js": [
+   "_aprtRwyTrueDeg",
+   "_aprtSelectedApt",
    "_pulseBright",
    "_setApproachRwyCourse",
+   "_setApproachRwyCourseTrue",
+   "_setAprtRwyTrueDeg",
+   "_setAprtSelectedApt",
    "_setBullseyePickTarget",
    "_setSelectedApt",
    "approachRwyCourse",
+   "approachRwyCourseTrue",
    "bullseyePickTarget",
    "grpcStatus",
    "lastUpdateMs",
