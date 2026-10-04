@@ -101,11 +101,11 @@ Findings the walks below rely on:
   not built.
 - **F2. The 0105 offer is made only at sign-off** (`combination.js:43`, S-WAVEB-4 "LC signing on later gets none"), only
   for GC, only to LC, and is lost on reconnect (the client holds it in a module variable, `panel/combination.js:11`).
-- **F4. A HANDOFF replica is minted at its receiving Position whether or not that Position is staffed**
-  (`board/coordination.js` reads no staffing; ADR 0101's table says "minted at a Position that must be staffed or
-  consolidated"). Not this ADR's to fix; with standing offers it at least prompts someone (W13).
 - **F3. The client cannot tell whether it is a Position's Primary**: it guesses its controller id from the Positions it
   acts at (`panel/arrivals.js:72-76`). S-WAVEB-4 "client can't tell Primary from Observer for the COMBINED line".
+- **F4. A HANDOFF replica is minted at its receiving Position whether or not that Position is staffed**
+  (no staffing check found in `board/coordination.js` or the HANDOFF ops; ADR 0101's table says "minted at a Position that must be staffed or
+  consolidated"). Not this ADR's to fix; with standing offers it at least prompts someone (W13).
 
 ## Options considered
 
@@ -214,6 +214,9 @@ check (fixes F3).
 - otherwise: `NO_RECEIVING_POSITION`, as today. The NLA gates are unchanged, so the NLA is inhibited "no receiving
   Position present" exactly when today.
 - Q in `handBack` (TACTICAL): today's routing to the hand-back target, unchanged.
+- `SfaRotation` keeps its own refusal of an unstaffed receiver (`board/ops/sfa-rotation.js:30`): a rotation is a
+  frequency change for an aircraft on final, and handing it to nobody is never right. Undo keeps refusing a restore to
+  an owner no longer staffed (`board/strip-ops.js:250`).
 
 This **changes ADR 0105 decision 4** for GC: with LC (or AP) staffed, CD's CLEARED→PUSHBACK and LC's LANDED→TAXI_IN
 into an empty GC are delivered to GC and offered, instead of inhibited. With nobody on LC or AP they are inhibited as in
