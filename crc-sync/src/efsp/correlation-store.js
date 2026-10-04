@@ -493,6 +493,19 @@ class CorrelationStore extends SyncedStore {
     return retired;
   }
 
+  /**
+   * The mission reset (docs/adr/0108): every record and binding goes. The flights they were about ended with their Strips.
+   * The sequence moves once, so a client whose seq differs resyncs even though the delta has nothing to update.
+   * @returns {number} the records forgotten
+   */
+  forgetAll() {
+    const n = this._records.size;
+    if (!n) return 0;
+    this._records.clear();
+    this._sync.advance();
+    return n;
+  }
+
   /** Forgets records whose flight data is gone — flight data lifecycle governs correlation lifecycle, with no separate retention policy. */
   evictMissingFlightDataList() {
     let dropped = 0;

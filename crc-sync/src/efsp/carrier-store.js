@@ -449,6 +449,28 @@ class CarrierStore extends SyncedStore {
     return n;
   }
 
+  /**
+   * The mission reset (docs/adr/0108): each hull goes back to the start of a recovery (Case, empty stacks, default ship inputs).
+   * The ship banner is derived from DCS, not stored, so it stays. One audit entry per hull that had anything to clear.
+   * @returns {string[]} the hulls that changed
+   */
+  resetForMission(by = 'system') {
+    const changed = [];
+    for (const [hullId, record] of this._records) {
+      const fresh = this._fresh(hullId);
+      const slice = (r) => JSON.stringify([r.recoveryCase, r.stacks, r.shipInputs]);
+      if (slice(record) === slice(fresh)) continue;
+      const before = deepClone(record);
+      record.recoveryCase = fresh.recoveryCase;
+      record.stacks = fresh.stacks;
+      record.shipInputs = fresh.shipInputs;
+      this._touch(record, by, 'MissionReset', null);
+      this._audit({ clientMutationId: null, hullId, op: { kind: 'MissionReset' } }, null, by, before, { ok: true, record });
+      changed.push(hullId);
+    }
+    return changed;
+  }
+
   // ── persistence (durable per docs/adr/0002; Case and stack are declarations) ──
 
   snapshot() { return [...this._records.values()].map(deepClone); }

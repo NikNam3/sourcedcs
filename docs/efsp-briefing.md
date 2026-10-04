@@ -772,6 +772,18 @@ does). Users: the wind-derived runway (H22), the metrics session number (H32), t
   *after* the mission has started (if it does, every crc-sync restart rolls the session: restart against
   a running server and watch `[mission-session]` in the log); a real `.miz` restart through DCS.
 
+**Mission reset (H108, `0108`).** At a real mission roll-over the system clears the per-mission state.
+`mission-session.js` decides (`onMissionReset(fn)`, beside `onNewSession`): at once for `MISSION_CHANGED`, `CLOCK_STEP_BACK` and a
+`MISSION_START` that names a different fingerprint; for a `MISSION_START` on the SAME fingerprint (or none known) only once
+`observeClock()` sees the clock more than `CONFIRM_STEP_BACK_MS` (60 s) behind the old session's high-water mark within
+`CONFIRM_WINDOW_MS` (10 min wall); never for FIRST, a reconnect or a restart (the pending confirmation is memory only). `app.js`
+subscribes: `efsp.resetForMission(session)` (`src/efsp/mission-reset.js`: each Board's `BoardStore.resetForMission`, which
+force-retires every live Strip through `StripOps#retire(strip, 'system', { force: true })` and writes one `MissionResetStrip`
+entry per Strip and one `MissionReset` entry per Board; then `marsaStore`, `carrierStore`, `runwayStatusStore`, `sfaStore`
+`resetForMission()` and `correlationStore.forgetAll()`), persists, delivers one board-delta per Board plus one delta per store whose
+seq moved through `deliverEfsp`, and runs the archiver's roll-over sweep, which files what was just dropped. Kept: the active
+runway and its wind source, config, airspaces, the Mutation log, metrics. See `docs/wip/MISSION-CLEAR.md` for the walks not done.
+
 **Typed time Blocks (F4, bugfix, no ADR).** `flight-data-store.js`'s `TYPED_TIME_LABELS` and
 `normalizeTypedTime(path, value, nowMs)` are the **only** rule for a typed time: a finite number is epoch
 ms already, empty clears to null, a string goes through `resolveZuluHhmm` against the injected clock, and
@@ -1214,10 +1226,10 @@ the hard-coded 18,000 ft (TA); the `tools/miztoyaml` frequency bug (L25).
 | **Incirlik RSU/SFA/PAR:** a PAR vacated with an aircraft on final leaves the Strip with AP where AP cannot advance it; an airspace approval that rewrites a flight's frequency desyncs its SFA Rack; the FINAL panel has never seen a live DCS track; its thresholds and the placeholder frequencies are `[SOURCE-DEFINED]` | medium | human live check / L20 | L18S |
 | One `LINGERING_TRACK` in the 240-minute soak at wave 2: it did not reproduce for L19 (20 seeds at 240 min, 6 at 480), so the fix is unit-tested only. Known limit: a DCS re-mint of a lingering aircraft under a new track id is a new contact to the reconciler; a callsign memory with a position test is not built | watch | next soak run | L27, L19 |
 | The 4-hour soak's heap gates (net growth 25%, H72) need the human's workflow run; they are judged only on runs of 3 h or more with a 2 h warm-up; the unloaded p50 <= 3 ms was only measured as a proxy | acceptance | human | L24, L27, SOAKW |
-| **Merge-time decisions in the questions file** (`docs/parallel/questions-round3.md`): the archive against 1.5–3 h sorties (a returning flight loses its flight data, ATO line, MARSA and `military` Blocks; Q3-2): decided, H107, 12 h, `0107`, a DCS crash or mission restart with live Strips (Q3-4), carrier flights with no path into the ATO, traffic count or home-airport rule (Q3-6) | decision | human | L24, F3, L17 |
+| **Merge-time decisions in the questions file** (`docs/parallel/questions-round3.md`): the archive against 1.5–3 h sorties (a returning flight loses its flight data, ATO line, MARSA and `military` Blocks; Q3-2): decided, H107, 12 h, `0107`, a DCS crash or mission restart with live Strips (Q3-4: decided H108, the Board is cleared, `0108`), carrier flights with no path into the ATO, traffic count or home-airport rule (Q3-6) | decision | human | L24, F3, L17 |
 | `grpc-client.js:764` `windFrom = heading·180/π + 270` is unexplained and the DCS wind vector may be grid, not true (about -2° at Incirlik): needs a live check against the mission editor's wind. The ATIS-wind frame follows it | needs a live check | human | F2, S-F2b |
 | Six theaters have no `tmCentralMeridianDeg` (TheChannel, MarianaIslandsWWII, Kola, Afghanistan, Iraq, GermanyCW): their grid headings cannot be converted; `tools/miztoyaml/projection.py` needs the same table and a test keeping the two equal | theater work | unowned | F2 |
-| Whether DCS-gRPC sends `mission_start` to a stream that connects *after* the mission started (if so every crc-sync restart rolls the mission session); a real `.miz` restart through DCS | needs a live check | human | F3, S-F3 |
+| Whether DCS-gRPC sends `mission_start` to a stream that connects *after* the mission started (if so every crc-sync restart rolls the mission session; since `0108` a same-mission roll clears the Board only when the clock steps back too); a real `.miz` restart through DCS, to see the clear happen | needs a live check | human | F3, S-F3 |
 | An MTR (any plain `flightData` Block) amendment overwrites: no history, no `op.value` in the log (`SetBlock` now records `blockId`/`value`, which narrows it) | known gap | later slice (H25) | L2 |
 | Changing only the MTR designator leaves the old exit fix with no warning (H23 keeps MTRs free text) | low | with an MTR route table | L2, L16 |
 | Stale text: `marsa-store.js:37–41` says obligations cannot retract; ADR `0042` names `radar-specs.json` (it is `sensor-specs.json`); `correlation-reconciler.js:50–52` claims a test forces an eligibility decision it doesn't; `permission.js`'s module header says "no coordination primitives are built"; comments in `efsp-ws.js:6`, `facility-config.js:5,42`, `mutation-log.js:5,41` still name the deleted `theater-settings.js`; ADRs `0048` (table) and `0079` ("`gameTimeOffset` is gone") describe a `theater-settings.json` that no longer exists, which belongs in the next errata ADR; `atobrief/server.js`'s header comment names port 3000 for the presenter URL (the default is 4000); `docs/wip/L18.md` and `L13.md` (see `docs/wip/DOCFOLD.md`) | stale text | L20 | L4, S-L7, L23, F2 |

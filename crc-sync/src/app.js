@@ -38,6 +38,7 @@ const { AirspaceCalendar } = require('./efsp/airspace-calendar');
 const { serverBoardDelta } = require('./efsp/wire/frames');
 const { ownCoalitionFrom } = require('./surveillance/iff');
 const { lateBinding } = require('./app/late-binding');
+const log = require('./log').logger('app');
 const { mountAuthRoutes, mountApiRoutes } = require('./app/http-routes');
 const { buildRadarPicture } = require('./app/radar-picture');
 const { buildMonitors } = require('./app/monitors');
@@ -161,6 +162,15 @@ function createApp(deps = {}) {
   // ── Archiving finished flights (H36, docs/adr/0082) ───────────────────────
   const archive = createArchiveSweep({ efsp, deliver: (frames) => hubLink.get().deliverEfsp(frames) });
   missionSession.onNewSession((session) => archive(efsp.archiver.onMissionSessionChange(session)));
+  // H108 (docs/adr/0108): a real mission roll-over clears the Board and the per-mission stores. mission-session.js decides when
+  // (onMissionReset: never for a reconnect or a restart onto the same mission), the reset's own deltas go out through the normal
+  // path, and the roll-over sweep then files what the reset dropped, with its flight data.
+  missionSession.onMissionReset((session) => {
+    const { frames, summary } = efsp.resetForMission(session);
+    if (frames.length) hubLink.get().deliverEfsp(frames);
+    log.info('mission reset: Board and per-mission state cleared', { missionSession: session.seq, sessionReason: session.reason, ...summary });
+    archive(efsp.archiver.onMissionSessionChange(session));
+  });
 
   // ── The hub ────────────────────────────────────────────────────────────────
   const sessionConfig = loadSessionConfig();

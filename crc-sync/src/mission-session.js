@@ -27,6 +27,17 @@
 // A plain gRPC reconnect, or a crc-sync restart onto the same running mission,
 // keeps the session: same fingerprint, and the clock carried on.
 //
+// The MISSION RESET (docs/adr/0108, decisions.md H108) is a second, narrower question on top of the first: of the rolls above,
+// which ones are sure enough that the Board is cleared? `onMissionReset(fn)` fires for
+//   - MISSION_CHANGED and CLOCK_STEP_BACK, at once: a different fingerprint, or a clock that provably went back;
+//   - MISSION_START with a DIFFERENT fingerprint from the session before it, at once;
+//   - MISSION_START with the SAME fingerprint (or none known before): only once the mission clock is then seen
+//     more than CONFIRM_STEP_BACK_MS behind the old session's high-water mark, within CONFIRM_WINDOW_MS (wall). A bare
+//     mission_start is not enough: whether DCS-gRPC sends one to a stream that connects mid-mission is still unchecked
+//     live (S-F3), and a spurious one must never clear a Board. A real restart puts the clock back to the mission's start.
+// Never for FIRST, a reconnect, or a restart onto the same mission. The pending confirmation is memory only: a crc-sync
+// restart inside the window loses it, which errs toward not clearing.
+//
 // Persisted under state/ (docs/adr/0048), so a restart knows what it was in.
 
 const fs = require('fs');
@@ -48,6 +59,11 @@ const LAST_AT_PERSIST_MS = 60 * 1000;
 // fingerprint into the session the step opened instead of opening another.
 // [SOURCE-DEFINED] (docs/adr/0086): the two-minute window for that.
 const CLOCK_ROLL_ADOPT_MS = 2 * 60 * 1000;
+
+// [SOURCE-DEFINED] (docs/adr/0108): the same-fingerprint mission_start clears only once the clock is seen this far behind
+// the old session's highest reading (a paused mission steps back at most one 5 s poll), within this much wall time.
+const CONFIRM_STEP_BACK_MS = 60 * 1000;
+const CONFIRM_WINDOW_MS = 10 * 60 * 1000;
 
 const REASONS = Object.freeze(['FIRST', 'MISSION_START', 'MISSION_CHANGED', 'CLOCK_STEP_BACK']);
 
@@ -84,6 +100,8 @@ class MissionSession {
     this._clock = clock;
     this._wallNow = wallNow;
     this._listeners = new Set();
+    this._resetListeners = new Set();
+    this._pendingReset = null; // { seq, lastAt, wallAt }: a same-fingerprint mission_start waiting for the clock to confirm it
     this._pendingStart = false;
     this._persistedLastAt = null;
     this._state = this._load() || this._fresh(1, 'FIRST', null, null);
@@ -108,6 +126,15 @@ class MissionSession {
   onNewSession(fn) {
     this._listeners.add(fn);
     return () => this._listeners.delete(fn);
+  }
+
+  /**
+   * `fn(session, previous)` when the roll-over is sure enough to clear the per-mission state (see the header). Registered after
+   * onNewSession's listeners, it runs after them for an immediate reset. Returns an unsubscribe.
+   */
+  onMissionReset(fn) {
+    this._resetListeners.add(fn);
+    return () => this._resetListeners.delete(fn);
   }
 
   // ── inputs (server.js wires these to grpc-client.js) ──
@@ -150,6 +177,7 @@ class MissionSession {
     if ((this._clock.source || 'WALL') === 'WALL') return false;
     const now = this._clock.now();
     if (!Number.isFinite(now)) return false;
+    this._confirmPendingReset(now);
     const s = this._state;
     if (s.lastAt !== null && now < s.lastAt - CLOCK_STEP_BACK_MS) {
       this._roll('CLOCK_STEP_BACK', s.fingerprint, s.theatre, now);
@@ -179,6 +207,8 @@ class MissionSession {
 
   _roll(reason, fingerprint, theatre, lastAt = null) {
     const previous = this.current();
+    const previousLastAt = this._state.lastAt;
+    this._pendingReset = null;
     this._state = this._fresh(previous.seq + 1, reason, fingerprint, theatre, lastAt);
     this._persist();
     log.info('session', { seq: this._state.seq, reason, theater: theatre || 'unknown', mission: fingerprint || 'unknown' });
@@ -186,6 +216,30 @@ class MissionSession {
     for (const fn of this._listeners) {
       try { fn(session, previous); } catch (e) { log.warn('onNewSession listener failed', { error: e.message }); }
     }
+    if (reason === 'MISSION_START' && (previous.fingerprint === null || fingerprint === previous.fingerprint)) {
+      // Same mission content (or nothing known to compare): the clock has to say it was restarted.
+      this._pendingReset = { seq: session.seq, lastAt: previousLastAt, wallAt: this._wallNow() };
+      log.info('mission_start with an unchanged mission: the Board is cleared only if the mission clock confirms a restart', { seq: session.seq });
+    } else {
+      this._fireReset(session, previous);
+    }
+  }
+
+  _fireReset(session, previous) {
+    log.info('mission reset', { seq: session.seq, reason: session.reason });
+    for (const fn of this._resetListeners) {
+      try { fn(session, previous); } catch (e) { log.warn('onMissionReset listener failed', { error: e.message }); }
+    }
+  }
+
+  /** A pending same-fingerprint mission_start: confirmed by a clock reading well behind the old session, dropped by time or a later roll. */
+  _confirmPendingReset(now) {
+    const p = this._pendingReset;
+    if (!p) return;
+    if (p.seq !== this._state.seq || this._wallNow() - p.wallAt > CONFIRM_WINDOW_MS) { this._pendingReset = null; return; }
+    if (p.lastAt === null || !(now < p.lastAt - CONFIRM_STEP_BACK_MS)) return;
+    this._pendingReset = null;
+    this._fireReset(this.current(), { ...this.current(), seq: p.seq - 1 });
   }
 
   _load() {
@@ -236,4 +290,4 @@ class MissionSession {
   }
 }
 
-module.exports = { MissionSession, missionFingerprint, CLOCK_STEP_BACK_MS };
+module.exports = { MissionSession, missionFingerprint, CLOCK_STEP_BACK_MS, CONFIRM_STEP_BACK_MS, CONFIRM_WINDOW_MS };

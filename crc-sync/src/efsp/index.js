@@ -50,6 +50,7 @@ const { ReplayCache } = require('./sync/replay-cache');
 const { REGISTRY, RESTORE_ORDER, checkPersistedShape } = require('./stores');
 const { SERVICE_ROWS } = require('./authority/airspace');
 const { stampStrip, touchedStrips, boardDelta } = require('./wire/frames');
+const { resetForMission } = require('./mission-reset');
 const log = require('../log').logger('efsp');
 
 /**
@@ -280,6 +281,16 @@ function createEfsp({ env = process.env, facilityConfig = createFacilityConfig({
     heartbeatStores: () => heartbeatStores(ctx),
 
     archiver,
+
+    /**
+     * The mission reset (docs/adr/0108): a real mission roll-over ends every live Strip and resets the per-mission stores. Persisted
+     * here; the caller delivers `frames` and runs the archiver's roll-over sweep. @returns {{frames: object[], summary: object}}
+     */
+    resetForMission: (session = null) => {
+      const r = resetForMission(ctx, facilityIds, session);
+      _persist({ wallClock, facilities, stores, persistState, paths });
+      return r;
+    },
   };
 }
 

@@ -653,6 +653,32 @@ class MarsaStore extends SyncedStore {
     return dropped;
   }
 
+  /**
+   * The mission reset (docs/adr/0108): any relation still ACTIVE after the Strips ended (a participant without a Strip) ends,
+   * as `PARTICIPANT_RETIRED`, which is what it is: the flights are gone. Finished relations stay until their flight data is
+   * archived (evictMissingFlightDataList). One audit entry per relation ended.
+   * @returns {string[]} the marsaIds ended
+   */
+  resetForMission(by = 'system') {
+    this._regimeWrites = [];
+    const ended = [];
+    for (const relation of this._relations.values()) {
+      if (relation.state !== 'ACTIVE') continue;
+      const before = deepClone(relation);
+      this._finish(relation, 'PARTICIPANT_RETIRED', 'mission reset', by);
+      ended.push(relation.marsaId);
+      if (this._mutationLog) {
+        this._mutationLog.record({
+          clientMutationId: null, op: 'MissionReset', marsaId: relation.marsaId, facilityId: null,
+          flightDataIds: [...relation.participants], actingPositionId: null, actorId: by, at: this._clock.now(),
+          ok: true, before, after: deepClone(relation),
+        });
+      }
+    }
+    this._regimeWrites = [];
+    return ended;
+  }
+
   // ── Persistence (durable per docs/adr/0002) ─────────────────────────────
 
   snapshot() {
