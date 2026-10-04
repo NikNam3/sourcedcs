@@ -20,7 +20,7 @@
 // (_canProposeTofiEntry and friends) stay where
 // efsp-coordination-client.test.mjs's drift checks find them.
 
-import { missionNow } from '../topbar.js';
+import { missionNow } from '../../mission-clock.js';
 import {
   conformanceAlertsForFlightData, tofiRegimeAlertForFlightData, correlatedTrackIdForStrip, getEfspAirspace, getEfspCorrelationForStrip, getEfspFlightData, getAllEfspStrips,
   getEfspStrip, marsaForStrip, otherLiveStripsForFlightData, conflictAlertsForTrack, surveillanceHintsForStrip
@@ -62,7 +62,7 @@ import { OBLIGATION_LABELS, handoffChips, handoffSteps } from './control-release
 import { holdsFormationGrant, joinOffer, splitChipFor, splitOffer } from './formation-rules.js';
 import { scrambleAlertsFor } from './scramble.js';
 import { convertStripToArrival } from './panel/create-strip.js';
-import { efspVisibleBayId } from './panel/tabs.js';
+import { efspVisibleBayId } from './panel/state.js';
 import { noteEfspArrivalShown } from './panel/arrivals.js';
 import { arJoinFor, atoAlertsFor, isArHighlighted } from './ato-strip.js';
 import { runwayStatusAlertsFor } from './runway-status-rules.js';

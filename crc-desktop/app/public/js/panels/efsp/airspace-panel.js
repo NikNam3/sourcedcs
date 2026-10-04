@@ -1,6 +1,6 @@
 'use strict';
 import { refreshAirspaceLayers } from '../../airspace-layer.js';
-import { missionNow } from '../topbar.js';
+import { missionNow } from '../../mission-clock.js';
 import { settings } from '../../settings.js';
 import { getAllEfspAirspaces, getEfspFlightData, getAllEfspStrips, getEfspAirspaceEdits, stripsInAirspace } from './efsp-state.js';
 import { getActingPositions, sendEfspAirspaceMutation, settleEfspAck } from './efsp-ws.js';

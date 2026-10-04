@@ -1,5 +1,5 @@
 'use strict';
-import { _activeBayId, _activePositionTab, _bayContentEl, _bayTabsEl, _positionTabsEl, _setActiveBayId, _setActivePositionTab } from './state.js';
+import { _activeBayId, _activePositionTab, _bayContentEl, _bayTabsEl, _positionTabsEl, _setActiveBayId, _setActivePositionTab, _isEfspPanelShowing, efspVisibleBayId } from './state.js';
 import { _renderArrivalsLine } from './arrivals.js';
 import { efspLinesWithOthers, getAllEfspStrips, getEfspBays, withOthersBayId } from '../efsp-state.js';
 import { getActingPositions } from '../efsp-ws.js';
@@ -302,13 +302,3 @@ function _refreshPositionTabMarks() {
 }
 
 /** Whether the Strip panel is actually on screen (a docked tab behind another is not). */
-function _isEfspPanelShowing() {
-  if (!_bayContentEl) return false;
-  if (_bayContentEl.isConnected === false) return false;
-  return _bayContentEl.offsetParent !== null;
-}
-
-/** The Bay the controller is looking at right now, or null when the panel is hidden. */
-export function efspVisibleBayId() {
-  return _activeBayId && _isEfspPanelShowing() ? _activeBayId : null;
-}

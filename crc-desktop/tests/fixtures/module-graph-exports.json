@@ -209,6 +209,12 @@
    "onMaptilerKey",
    "transformMaptilerRequest"
   ],
+  "mission-clock.js": [
+   "hasMissionTime",
+   "missionClockSource",
+   "missionNow",
+   "updateGameTime"
+  ],
   "panels/airport-selector.js": [
    "approachRwyCourseTrue",
    "closeAptWeatherPanel",
@@ -949,6 +955,7 @@
    "_dotCommandInputEl",
    "_dotCommandPreviewEl",
    "_efspPanelRootEl",
+   "_isEfspPanelShowing",
    "_mutationErrorEl",
    "_mutationWarningEl",
    "_positionTabsEl",
@@ -956,13 +963,13 @@
    "_setActivePositionTab",
    "_setBayContentElForTest",
    "_undoSlotEl",
-   "_undoVoidedEl"
+   "_undoVoidedEl",
+   "efspVisibleBayId"
   ],
   "panels/efsp/panel/tabs.js": [
    "_renderPositionTabs",
    "_runEfspSearch",
    "computePositionTabs",
-   "efspVisibleBayId",
    "getActiveEfspSearchQuery"
   ],
   "panels/efsp/panel/undo-slot.js": [
@@ -1165,10 +1172,8 @@
    "checkStale",
    "initUpdateStatus",
    "initZuluClock",
-   "missionNow",
    "updateAptDisplay",
    "updateBullseyeCursor",
-   "updateGameTime",
    "updateMeasureLine",
    "updateNoAwacsUI",
    "updateStatusUI",

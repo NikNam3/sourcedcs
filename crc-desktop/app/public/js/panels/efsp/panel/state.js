@@ -56,3 +56,14 @@ export function _cachePanelElements() {
   _connectionBannerEl = document.getElementById('efsp-connection-banner');
   _combinationEl = document.getElementById('efsp-combination');
 }
+
+export function _isEfspPanelShowing() {
+  if (!_bayContentEl) return false;
+  if (_bayContentEl.isConnected === false) return false;
+  return _bayContentEl.offsetParent !== null;
+}
+
+/** The Bay the controller is looking at right now, or null when the panel is hidden. */
+export function efspVisibleBayId() {
+  return _activeBayId && _isEfspPanelShowing() ? _activeBayId : null;
+}

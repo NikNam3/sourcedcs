@@ -1,6 +1,7 @@
 'use strict';
 import { _bayTabsEl, _setActiveBayId, _setActivePositionTab } from './state.js';
-import { _renderPositionTabs, efspVisibleBayId } from './tabs.js';
+import { _renderPositionTabs } from './tabs.js';
+import { efspVisibleBayId } from './state.js';
 import { efspArrivalLog, forgetEfspArrivals, nextEfspArrivalExpiry, noteEfspArrivals } from '../efsp-arrivals.js';
 import { getActingPositions } from '../efsp-ws.js';
 import { getEfspFlightData, getEfspPosition } from '../efsp-state.js';

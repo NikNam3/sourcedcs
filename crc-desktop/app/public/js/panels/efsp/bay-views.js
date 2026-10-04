@@ -1,7 +1,7 @@
 'use strict';
 import { NM_M, haversineM } from '../../geo.js';
 import { getLatestTrack } from '../../picture.js';
-import { missionNow } from '../topbar.js';
+import { missionNow } from '../../mission-clock.js';
 import {
   correlatedTrackIdForStrip, getEfspBays, getEfspFlightData, getEfspRunwayStatus, getEfspRack, getEfspStrip
 } from './efsp-state.js';
