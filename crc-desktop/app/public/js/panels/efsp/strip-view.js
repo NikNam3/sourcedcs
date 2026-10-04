@@ -26,7 +26,8 @@ import {
   getEfspStrip, marsaForStrip, otherLiveStripsForFlightData, conflictAlertsForTrack, surveillanceHintsForStrip
 } from './efsp-state.js';
 import { clearEfspArrival, consumeEfspArrivalFlash, efspArrivalFor } from './efsp-arrivals.js';
-import { blockLabelFor, blockTitleFor, formatZuluHhmm } from './strip-template.js';
+import { blockLabelFor, blockTitleFor } from './strip-template.js';
+import { formatZuluHhmm } from '../../format.js';
 import { nlaButtonLabel, tofiExitDueFor } from './efsp-nla.js';
 import { toggleOffset } from './efsp-gestures.js';
 import { getActingPositions, sendEfspMutation } from './efsp-ws.js';

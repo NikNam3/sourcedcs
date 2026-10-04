@@ -2,7 +2,7 @@
 // Communications, ControlRelease and transfer of control on an interfacility HANDOFF (crc-sync docs/adr/0101).
 // Pure: what the Strip says and which steps it offers. The server decides (and refuses); this keeps no authority table
 // and no copy of the Block Map's control axis — the attestation prompt is driven by the server's own refusal.
-import { formatZuluHhmm } from './strip-template.js';
+import { formatZuluHhmm } from '../../format.js';
 
 export const RELEASE_SCOPES = ['TURNS', 'CLIMB', 'DESCENT', 'FULL'];
 export const RELEASE_SCOPE_LABELS = { TURNS: 'Turns', CLIMB: 'Climb', DESCENT: 'Descent', FULL: 'Full' };

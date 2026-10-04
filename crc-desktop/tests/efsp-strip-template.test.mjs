@@ -12,8 +12,9 @@ import {
   activeAnnotationValue, hasActiveAnnotationEntry, annotationHistory, supersededAnnotationEntries,
   isBlockEditable, CONFIRM_VACATED_ELIGIBLE_BLOCKS,
   enumSelectOptionsFor, isBooleanToggleBlock, blockLabelFor,
-  ZULU_HHMM_BLOCKS, formatZuluHhmm, blockTitleFor, isEnumBlockClearable, blockValueHintFor,
+  ZULU_HHMM_BLOCKS, blockTitleFor, isEnumBlockClearable, blockValueHintFor,
 } from '../app/public/js/panels/efsp/strip-template.js';
+import { formatZuluHhmm } from '../app/public/js/format.js';
 
 // strip-template.js reads the stereo cache through efsp-stereo-routes.js's cachedStereoRoutesClient()
 // (docs/adr/0073). The stereo cache is swapped per test through the module's own fetch path: an ok

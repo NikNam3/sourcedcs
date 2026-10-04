@@ -7,7 +7,7 @@ import { getActingPositions, sendEfspAirspaceMutation, settleEfspAck } from './e
 import { registerEfspMessage, registerEfspStoreRedraw } from './efsp-message-registry.js';
 import { applyEfspAirspaceDelta } from './efsp-state.js';
 import { _showMutationError, _showMutationWarning } from './efsp-panel.js';
-import { formatZuluHhmm } from './strip-template.js';
+import { formatZuluHhmm } from '../../format.js';
 import * as caps from './airspace-capabilities.js';
 import { altitudeText, openAirspaceEditor } from './airspace-editor.js';
 import { openHistoryView, openDeleteView, deleteBlockers } from './airspace-detail-views.js';

@@ -3,7 +3,8 @@ import { getEfspFlightData } from './efsp-state.js';
 import { resolveTimeChain, timeChainForBlock } from './time-chains.js';
 import { carrierDerivedText, getEfspCarrier } from './carrier-state.js';
 import { mtrLostCommsAdvisory } from './strip-fields.js';
-import { carrierFinalDistanceText } from './carrier-panel.js';
+import { carrierFinalDistanceText } from './carrier-final-distance.js';
+import { formatZuluHhmm } from '../../format.js';
 import { cachedStereoRoutesClient } from './efsp-stereo-routes.js';
 
 // The Departure Block Map as data (EFSPImplementationGuide.md §6.2, §6.5)
@@ -733,13 +734,6 @@ export function editRedirectFor(blockId, stripType, flightData) {
 export const ZULU_HHMM_BLOCKS = new Set([
   '6', '9G-TIME', '9H-TIME', '14', '14B', '14C', '14D', '16', '17', '18', 'M6', 'M7',
 ]);
-
-/** Epoch ms as the four-digit Zulu time a Strip shows ('1432'), or '' for no time. Mirrors crc-sync's zulu-time.js. */
-export function formatZuluHhmm(ms) {
-  if (ms == null || ms === '' || !Number.isFinite(Number(ms))) return '';
-  const d = new Date(Number(ms));
-  return String(d.getUTCHours()).padStart(2, '0') + String(d.getUTCMinutes()).padStart(2, '0');
-}
 
 // A hover title for a field's label, where the label alone does not say
 // enough. Only the MTR fields today (docs/adr/0062). EXIT ALT carries §9.4's

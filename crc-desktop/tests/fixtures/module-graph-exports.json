@@ -118,6 +118,9 @@
    "initElevationContours",
    "updateElevationContours"
   ],
+  "format.js": [
+   "formatZuluHhmm"
+  ],
   "geo.js": [
    "NM_M",
    "bearingDeg",
@@ -531,13 +534,15 @@
    "_expandedStripId",
    "_setExpandedStripId"
   ],
+  "panels/efsp/carrier-final-distance.js": [
+   "carrierFinalDistanceText"
+  ],
   "panels/efsp/carrier-panel.js": [
    "CARRIER_CAPABILITIES",
    "buildCarrierFinalLine",
    "carrierActingFor",
    "carrierDecorateNlaButton",
    "carrierExtraNlaButtons",
-   "carrierFinalDistanceText",
    "carrierMoveToSlot",
    "carrierOrderRack",
    "carrierSignatureFor",
@@ -1085,7 +1090,6 @@
    "editRedirectFor",
    "enumSelectOptionsFor",
    "formatBlock3",
-   "formatZuluHhmm",
    "hasActiveAnnotationEntry",
    "isBlockEditable",
    "isBooleanToggleBlock",
