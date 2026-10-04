@@ -25,16 +25,15 @@ const permission = require('./permission');
 const authority = require('./authority');
 const { validateSfaRotationRecord } = require('./facility-config');
 const { WALL_CLOCK } = require('../mission-clock');
-const { SyncLog } = require('./sync/sync-log');
+const { SyncedStore } = require('./synced-store');
 const log = require('../log').logger('efsp:sfa-store');
-const { internalError, partialAuditTail } = require('./store-throw');
 
 const TRANSITIONS_CAP = 100; // engineering bound: the newest transitions kept per record; no meaning attached
 const SET_OP = 'SetSfaRotation';
 
 function deepClone(o) { return o == null ? o : JSON.parse(JSON.stringify(o)); }
 
-class SfaStore {
+class SfaStore extends SyncedStore {
   /**
    * @param {object} deps
    * @param {object} deps.config the Facility's `singleFrequencyApproach` (facility-config.js)
@@ -43,14 +42,12 @@ class SfaStore {
    * @param {{now:()=>number}} [deps.clock] the mission clock
    */
   constructor({ config, positions, facilityId = 'INCIRLIK', clock = WALL_CLOCK, mutationLog = null } = {}) {
+    super({ clock, mutationLog });
     if (!config) throw new Error('SfaStore needs a singleFrequencyApproach config');
     this._config = deepClone(config);
     this._positions = [...(positions || [])];
     this._facilityId = facilityId;
-    this._clock = clock;
     this._record = this._fresh();
-    this._sync = new SyncLog({ epoch: true }); // the store's sequence and its lifetime (epoch, not persisted): no ring, the resync answer is the snapshot slice (docs/adr/0106)
-    this._mutationLog = mutationLog; // the Mutation log (docs/adr/0081); null for a fixture with none
   }
 
   _fresh() {
@@ -59,9 +56,6 @@ class SfaStore {
     return { facilityId: this._facilityId, rev: 0, rotation: ok ? deepClone(initial) : {}, transitions: [] };
   }
 
-  get currentSeq() { return this._sync.seq; }
-  /** The lifetime this store's seq belongs to (docs/adr/0106): new per process, never persisted. */
-  get epoch() { return this._sync.epoch; }
   get jurisdiction() { return this._config.jurisdiction; }
 
   /** The wire view: the record plus the config the client needs to draw the pool, sent whole (it is small). */
@@ -81,22 +75,10 @@ class SfaStore {
   positionOn(rackId) { return this._record.rotation[rackId] || null; }
 
   _audit(mutation, actingPositionId, by, before, result) {
-    if (!this._mutationLog) return;
-    const op = mutation.op || {};
-    this._mutationLog.record({
-      clientMutationId: mutation.clientMutationId,
-      op: op.kind,
-      facilityId: this._facilityId,
-      sfaRackId: op.rackId,
-      actingPositionId,
-      actorId: by || null,
-      at: this._clock.now(),
-      ok: result.ok,
-      reason: result.ok ? undefined : result.reason,
-      detail: result.ok ? undefined : result.detail,
-      before,
-      after: result.ok || result.partial ? deepClone(this._record) : undefined,
-      ...partialAuditTail(result),
+    this._writeAudit(mutation, {
+      subject: { facilityId: this._facilityId, sfaRackId: (mutation.op || {}).rackId },
+      actingPositionId, by, result, before,
+      after: () => deepClone(this._record),
     });
   }
 
@@ -107,14 +89,7 @@ class SfaStore {
    */
   apply(mutation, actingPositionId, by) {
     const before = deepClone(this._record);
-    let result;
-    const seq0 = this._sync.seq;
-    try {
-      result = this._dispatch(mutation, actingPositionId, by);
-    } catch (err) {
-      log.error('unexpected error applying an SFA op — rejecting it instead of crashing', { err });
-      result = internalError('SFA op', err, this._sync.seq !== seq0);
-    }
+    const result = this._guarded('SFA op', log, () => this._dispatch(mutation, actingPositionId, by));
     this._audit(mutation, actingPositionId, by, before, result);
     return result;
   }
@@ -149,8 +124,7 @@ class SfaStore {
     const same = JSON.stringify(Object.entries(next).sort()) === JSON.stringify(Object.entries(this._record.rotation).sort());
     if (same) return { ok: true, changed: false, record: deepClone(this._record) };
     this._record.rotation = next;
-    this._record.rev += 1;
-    this._sync.advance();
+    this._bump(this._record);
     this._record.transitions.push({
       at: this._clock.now(), by: by || null, rackId: op.rackId, positionId: op.positionId,
     });

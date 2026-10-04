@@ -22,12 +22,11 @@
 // Authority is the registry's (authority/airspace.js, ADR 0098 §11), not this file's: the store asks it.
 
 const { WALL_CLOCK } = require('../mission-clock');
-const { SyncLog } = require('./sync/sync-log');
+const { SyncedStore } = require('./synced-store');
 const schema = require('./airspace-schema');
 const containment = require('./airspace/containment');
 const log = require('../log').logger('efsp:airspace-store');
 const airspaceAuthority = require('./authority/airspace');
-const { internalError, partialAuditTail } = require('./store-throw');
 
 const AIRSPACE_STATES = ['SCHEDULED', 'ACTIVE', 'RELEASED', 'RETURNED'];
 
@@ -105,7 +104,7 @@ function deriveRangePositionIds(savedAirspaces, standing) {
   return [...new Set(ids)];
 }
 
-class AirspaceStore {
+class AirspaceStore extends SyncedStore {
   /**
    * @param {object} deps
    * @param {{now:()=>number}} [deps.clock] the mission clock (docs/adr/0079): a booking window and every timestamp here is read as a time of day
@@ -120,7 +119,7 @@ class AirspaceStore {
    */
   constructor({ clock = WALL_CLOCK, currentTheater = () => null, occupantsFor = () => [], routeOccupancyFor = () => 0,
     facilityLookup = null, authority = null, mutationLog = null } = {}) {
-    this._clock = clock;
+    super({ clock, mutationLog });
     this._currentTheater = currentTheater;
     this._occupantsFor = occupantsFor;
     this._routeOccupancyFor = routeOccupancyFor;
@@ -128,19 +127,8 @@ class AirspaceStore {
     this._rowOf = authority ? authority.rowOf : () => ({ create: null, edit: null, delete: null, use: false });
     this._byTheater = new Map(); // theater -> Map(airspaceId -> record)
     this._seeded = new Map();    // theater -> Set(airspaceId) imported from the standing list at least once
-    this._sync = new SyncLog({ epoch: true }); // the store's sequence and its lifetime (epoch, not persisted): no ring, the resync answer is the snapshot slice (docs/adr/0106)
-    this._mutationLog = mutationLog; // the Mutation log (docs/adr/0081); null for a fixture with none
   }
 
-  /**
-   * Same wiring the Board's audit has (board/audit.js): who activated a block, who refused a request and why, and when a
-   * definition moved are exactly the questions an after-action review asks. The record's own `transitions` hold where
-   * the airspace has BEEN; this holds what was asked for, refusals included.
-   */
-
-  get currentSeq() { return this._sync.seq; }
-  /** The lifetime this store's seq belongs to (docs/adr/0106): new per process, never persisted. */
-  get epoch() { return this._sync.epoch; }
 
   // ── reading ────────────────────────────────────────────────────────────
 
@@ -245,37 +233,28 @@ class AirspaceStore {
       const first = this._record(theater, result.created[0]);
       facilityId = first ? first.definition.controllingFacilityId : null;
     }
-    this._mutationLog.record({
-      clientMutationId: mutation.clientMutationId,
-      op: op.kind,
+    this._writeAudit(mutation, {
       // No stripId: an airspace op targets no Strip. Readers key on whichever id is present.
-      airspaceId: mutation.airspaceId,
-      theater: theater || null,
-      facilityId,
+      subject: { airspaceId: mutation.airspaceId, theater: theater || null, facilityId },
       actingPositionId: actor.positionId || null,
-      actorId: actor.controllerId || null,
-      ...(actor.actorName ? { actorName: actor.actorName } : {}),
-      via: actor.via,
-      at: this._clock.now(),
-      ok: result.ok,
-      // A refusal is the interesting half of an authority model, so failures are logged too (unlike BoardStore's).
-      reason: result.ok ? undefined : result.reason,
-      detail: result.ok ? undefined : result.detail,
-      ...(result.changes ? { changes: result.changes } : {}),
-      ...(result.created ? { created: result.created } : {}),
-      ...(result.skipped ? { skipped: result.skipped } : {}),
-      ...(result.warning ? { warning: result.warning } : {}),
+      by: actor.controllerId,
+      actorExtra: { ...(actor.actorName ? { actorName: actor.actorName } : {}), via: actor.via },
+      result,
+      resultExtra: {
+        ...(result.changes ? { changes: result.changes } : {}),
+        ...(result.created ? { created: result.created } : {}),
+        ...(result.skipped ? { skipped: result.skipped } : {}),
+        ...(result.warning ? { warning: result.warning } : {}),
+      },
       before,
       after: afterRecord ? viewOf(afterRecord) : undefined,
-      ...partialAuditTail(result),
     });
   }
 
   _touch(record, by, transition) {
-    record.rev += 1;
+    this._bump(record);
     record.updatedAt = this._clock.now();
     record.updatedBy = by || null;
-    this._sync.advance();
     if (transition) record.transitions.push({ ...transition, at: record.updatedAt, by: by || null });
   }
 
@@ -294,32 +273,18 @@ class AirspaceStore {
   apply(mutation, actor) {
     const op = mutation.op || {};
     const theater = actor.service ? (mutation.theater || (op.kind === 'ImportAirspaces' ? op.theater : null) || null) : this.currentTheater();
-    let result; let before;
-    const seq0 = this._sync.seq;
-    try {
+    let before;
+    const result = this._guarded('airspace op', log, () => {
       if (!VIAS.includes(actor.via)) throw new Error(`unknown via ${actor.via}`);
-      if (!AIRSPACE_OP_KINDS.includes(op.kind)) {
-        result = verr(`unknown airspace op: ${op.kind}`);
-      } else if (!theater) {
-        result = actor.service ? verr('a service op names its theater') : refuse('NOT_FOUND', 'no mission loaded');
-      } else if (op.kind === 'ImportAirspaces') {
-        result = this._import(mutation, op, actor, theater);
-      } else if (op.kind === 'CreateAirspace') {
-        result = this._create(mutation, op, actor, theater);
-      } else {
-        const record = this._record(theater, mutation.airspaceId);
-        if (!record) {
-          result = refuse('NOT_FOUND');
-        } else {
-          before = viewOf(record);
-          result = this._applyToRecord(mutation, op, actor, theater, record);
-        }
-      }
-    } catch (err) {
-      // Same backstop as BoardStore.applyMutation: one bad op must never take the process down for every client.
-      log.error('unexpected error applying an airspace op — rejecting it instead of crashing', { err });
-      result = internalError('airspace op', err, this._sync.seq !== seq0);
-    }
+      if (!AIRSPACE_OP_KINDS.includes(op.kind)) return verr(`unknown airspace op: ${op.kind}`);
+      if (!theater) return actor.service ? verr('a service op names its theater') : refuse('NOT_FOUND', 'no mission loaded');
+      if (op.kind === 'ImportAirspaces') return this._import(mutation, op, actor, theater);
+      if (op.kind === 'CreateAirspace') return this._create(mutation, op, actor, theater);
+      const record = this._record(theater, mutation.airspaceId);
+      if (!record) return refuse('NOT_FOUND');
+      before = viewOf(record);
+      return this._applyToRecord(mutation, op, actor, theater, record);
+    });
     // Every result carries the record, success or not: the client renders from the ack either way, and a rejection that
     // says nothing about the current state leaves the board showing whatever the client last guessed.
     if (result.airspace === undefined && mutation.airspaceId && !result.removed) result.airspace = this.getAirspace(mutation.airspaceId, theater);

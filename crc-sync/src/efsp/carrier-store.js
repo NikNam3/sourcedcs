@@ -36,9 +36,8 @@ const permission = require('./permission');
 const carrier = require('./carrier');
 const { resolveZuluHhmm } = require('./zulu-time');
 const { WALL_CLOCK } = require('../mission-clock');
-const { SyncLog } = require('./sync/sync-log');
+const { SyncedStore } = require('./synced-store');
 const log = require('../log').logger('efsp:carrier-store');
-const { internalError, partialAuditTail } = require('./store-throw');
 
 const TRANSITIONS_CAP = 200; // engineering bound: the newest transitions kept per record; no meaning attached
 const SHIP_OP = 'SetShipInput';
@@ -46,7 +45,7 @@ const CASE_OP = 'SetCase';
 
 function deepClone(o) { return o == null ? o : JSON.parse(JSON.stringify(o)); }
 
-class CarrierStore {
+class CarrierStore extends SyncedStore {
   /**
    * @param {object} deps
    * @param {object[]} deps.hulls hull configs (carrier/hull-config.js)
@@ -55,7 +54,7 @@ class CarrierStore {
    * @param {{now:()=>number}} [deps.clock] the mission clock
    */
   constructor({ hulls, flightDataExists, isStaffed, clock = WALL_CLOCK, mutationLog = null } = {}) {
-    this._clock = clock;
+    super({ clock, mutationLog });
     this._flightDataExists = flightDataExists || (() => true);
     this._isStaffed = isStaffed || (() => false);
     if (!hulls || !hulls.length) throw new Error('CarrierStore needs at least one hull (config/efsp-carriers.json)');
@@ -63,8 +62,6 @@ class CarrierStore {
     this._records = new Map();
     for (const h of this._hulls) this._records.set(h.hullId, this._fresh(h.hullId));
     this._shipStates = new Map(); // hullId -> banner (derived, never persisted)
-    this._sync = new SyncLog({ epoch: true }); // the store's sequence and its lifetime (epoch, not persisted): no ring, the resync answer is the snapshot slice (docs/adr/0106)
-    this._mutationLog = mutationLog; // the Mutation log (docs/adr/0081); null for a fixture with none
   }
 
   _fresh(hullId) {
@@ -77,9 +74,6 @@ class CarrierStore {
     };
   }
 
-  get currentSeq() { return this._sync.seq; }
-  /** The lifetime this store's seq belongs to (docs/adr/0106): new per process, never persisted. */
-  get epoch() { return this._sync.epoch; }
   get defaultHullId() { return this._hulls[0].hullId; }
   hullIds() { return this._hulls.map(h => h.hullId); }
   hull(hullId = this.defaultHullId) { const h = this._hulls.find(x => x.hullId === hullId); return h ? deepClone(h) : null; }
@@ -207,30 +201,18 @@ class CarrierStore {
   // ── audit ───────────────────────────────────────────────────────────────
 
   _audit(mutation, actingPositionId, by, before, result, extra = {}) {
-    if (!this._mutationLog) return;
-    const op = mutation.op || {};
-    this._mutationLog.record({
-      clientMutationId: mutation.clientMutationId,
-      op: op.kind,
+    this._writeAudit(mutation, {
       // Its own id field: a carrier op targets a ship's recovery, which no
       // single stripId/flightDataId/marsaId names (marsa-store.js's reasoning).
-      carrierHullId: mutation.hullId || this.defaultHullId,
-      actingPositionId,
-      actorId: by || null,
-      at: this._clock.now(),
-      ok: result.ok,
-      reason: result.ok ? undefined : result.reason,
-      detail: result.ok ? undefined : result.detail,
-      before,
-      after: (result.ok || result.partial) && result.record ? deepClone(result.record) : undefined,
-      ...partialAuditTail(result),
-      ...extra,
+      subject: { carrierHullId: mutation.hullId || this.defaultHullId },
+      actingPositionId, by, result, before,
+      after: () => (result.record ? deepClone(result.record) : undefined),
+      extra,
     });
   }
 
   _touch(record, by, op, detail) {
-    record.rev += 1;
-    this._sync.advance();
+    this._bump(record);
     record.transitions.push({ at: this._clock.now(), by: by || null, op, detail: detail == null ? null : String(detail).slice(0, 200) });
     if (record.transitions.length > TRANSITIONS_CAP) record.transitions.splice(0, record.transitions.length - TRANSITIONS_CAP);
   }
@@ -261,14 +243,7 @@ class CarrierStore {
       return stale;
     }
     const before = deepClone(record);
-    let result;
-    const seq0 = this._sync.seq;
-    try {
-      result = this._dispatch(record, op, actingPositionId, by);
-    } catch (err) {
-      log.error('unexpected error applying a carrier op — rejecting it instead of crashing', { err });
-      result = internalError('carrier op', err, this._sync.seq !== seq0);
-    }
+    const result = this._guarded('carrier op', log, () => this._dispatch(record, op, actingPositionId, by));
     if (!result.record) result.record = deepClone(record);
     this._audit(mutation, actingPositionId, by, before, result);
     return result;
@@ -349,7 +324,7 @@ class CarrierStore {
     if (!r.ok) return r;
     record.stacks[stackId] = r.stack;
     if (!quiet) this._touch(record, by, op.kind, op.flightDataId || null);
-    else { record.rev += 1; this._sync.advance(); }
+    else this._bump(record);
     return { ok: true, record: deepClone(record), changed: r.changed };
   }
 

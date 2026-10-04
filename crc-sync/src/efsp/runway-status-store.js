@@ -29,7 +29,7 @@
 
 const crypto = require('crypto');
 const { WALL_CLOCK } = require('../mission-clock');
-const { SyncLog } = require('./sync/sync-log');
+const { SyncedStore } = require('./synced-store');
 const permission = require('./permission');
 const authority = require('./authority');
 const {
@@ -37,7 +37,6 @@ const {
   REQUEST_ACTIONS,
 } = require('./runway-status');
 const log = require('../log').logger('efsp:runway-status-store');
-const { internalError, partialAuditTail } = require('./store-throw');
 
 function deepClone(obj) { return obj === undefined ? undefined : JSON.parse(JSON.stringify(obj)); }
 
@@ -56,7 +55,7 @@ const REQUEST_VERBS = { CLOSE: 'close', OPEN: 'open', WORKS: 'suspend for works'
 // from the mission wind). Audited under this id, never a Position.
 const SYSTEM_ACTOR = 'crc-sync';
 
-class RunwayStatusStore {
+class RunwayStatusStore extends SyncedStore {
   /**
    * @param {object} facilityConfig — facility-config.js (injected, the
    *   AirspaceStore precedent, so a test can pass a fixture exposing
@@ -70,15 +69,13 @@ class RunwayStatusStore {
    *   the controllerId Primary at that Position — for SelfCoordinateRunwayChange
    */
   constructor(facilityConfig, { clock = WALL_CLOCK, isStaffed, primaryOf, mutationLog = null } = {}) {
-    this._clock = clock;
+    super({ clock, mutationLog });
     this._isStaffed = isStaffed || (() => false);
     this._primaryOf = primaryOf || (() => null);
     this._inventories = new Map(); // facilityId -> runwayStatus inventory (config, read once)
     this._positions = new Map();   // facilityId -> its Position set, for resolving acknowledgers
     this._records = new Map();     // facilityId -> record
     this._views = new Map();       // facilityId -> cached status view for rule 1
-    this._sync = new SyncLog({ epoch: true }); // the store's sequence and its lifetime (epoch, not persisted): no ring, the resync answer is the snapshot slice (docs/adr/0106)
-    this._mutationLog = mutationLog; // the Mutation log (docs/adr/0081); null for a fixture with none
     for (const facilityId of facilityConfig.getFacilityIds()) {
       const config = facilityConfig.getFacilityConfig(facilityId);
       if (!config || !config.runwayStatus) continue; // no inventory, no record
@@ -124,11 +121,6 @@ class RunwayStatusStore {
     };
   }
 
-  /** The same wiring every EFSP store has; refusals are logged too (see _recordAudit). */
-
-  get currentSeq() { return this._sync.seq; }
-  /** The lifetime this store's seq belongs to (docs/adr/0106): new per process, never persisted. */
-  get epoch() { return this._sync.epoch; }
 
   hasRunwayStatus(facilityId) { return this._records.has(facilityId); }
 
@@ -195,37 +187,28 @@ class RunwayStatusStore {
   // ── the audit trail ────────────────────────────────────────────────────
 
   _recordAudit(mutation, actingPositionId, by, before, result) {
-    if (!this._mutationLog) return;
-    const op = mutation.op || {};
-    this._mutationLog.record({
-      clientMutationId: mutation.clientMutationId,
-      op: op.kind,
+    // Refusals are the interesting half of an authority model — a refused BeginRunwayChange above all — so they are
+    // logged, STALE_REV included.
+    this._writeAudit(mutation, {
       // Its own id field: Mutation-log readers key on whichever id is present
       // (stripId / airspaceId / flightDataId / marsaId), and a runway-status op is about
       // a Facility's field, not any of those.
-      runwayStatusFacilityId: mutation.facilityId,
-      // The one name every reader keys on (docs/adr/0083).
-      facilityId: mutation.facilityId ?? null,
-      runwayId: op.runwayId ?? null,
+      subject: {
+        runwayStatusFacilityId: mutation.facilityId,
+        // The one name every reader keys on (docs/adr/0083).
+        facilityId: mutation.facilityId ?? null,
+        runwayId: (mutation.op || {}).runwayId ?? null,
+      },
       actingPositionId: actingPositionId ?? null,
-      actorId: by || null,
-      at: this._clock.now(),
-      ok: result.ok,
-      // Refusals are the interesting half of an authority model — a refused
-      // BeginRunwayChange above all — so they are logged, STALE_REV included.
-      reason: result.ok ? undefined : result.reason,
-      detail: result.ok ? undefined : result.detail,
-      before,
-      after: result.ok || result.partial ? deepClone(this._records.get(mutation.facilityId)) : undefined,
-      ...partialAuditTail(result),
+      by, result, before,
+      after: () => deepClone(this._records.get(mutation.facilityId)),
     });
   }
 
   _touch(record, by, transition) {
-    record.rev += 1;
+    this._bump(record);
     record.updatedAt = this._clock.now();
     record.updatedBy = by || null;
-    this._sync.advance();
     this._views.delete(record.facilityId);
     if (transition) record.transitions.push({ ...transition, at: record.updatedAt, by: by || null });
   }
@@ -244,35 +227,24 @@ class RunwayStatusStore {
    * @param {string} by — controllerId
    */
   apply(mutation, actingPositionId, by) {
-    let result;
     let before = null;
-    const seq0 = this._sync.seq;
-    try {
+    const result = this._guarded('runway-status op', log, () => {
       mutation = mutation && typeof mutation === 'object' ? mutation : {};
       const op = mutation.op && typeof mutation.op === 'object' ? mutation.op : {};
       const record = this._records.get(mutation.facilityId);
-      if (!record) {
-        result = { ok: false, reason: 'NOT_FOUND', detail: `no runway status at ${mutation.facilityId}` };
-      } else if (mutation.baseRev !== undefined && mutation.baseRev !== null && record.rev !== mutation.baseRev) {
-        // Audited, like correlation-store.js and unlike airspace-store.js,
-        // which returns here without a trace.
-        before = deepClone(record);
-        result = { ok: false, reason: 'STALE_REV', detail: `runway status is at rev ${record.rev}, not ${mutation.baseRev}` };
-      } else if (!permission.canActOnRunwayStatus(actingPositionId, op.kind)) {
-        before = deepClone(record);
-        result = Object.prototype.hasOwnProperty.call(permission.RUNWAY_STATUS_OP_OWNERS, op.kind)
+      if (!record) return { ok: false, reason: 'NOT_FOUND', detail: `no runway status at ${mutation.facilityId}` };
+      before = deepClone(record);
+      if (mutation.baseRev !== undefined && mutation.baseRev !== null && record.rev !== mutation.baseRev) {
+        // Audited, like correlation-store.js and unlike airspace-store.js, which returns here without a trace.
+        return { ok: false, reason: 'STALE_REV', detail: `runway status is at rev ${record.rev}, not ${mutation.baseRev}` };
+      }
+      if (!permission.canActOnRunwayStatus(actingPositionId, op.kind)) {
+        return Object.prototype.hasOwnProperty.call(permission.RUNWAY_STATUS_OP_OWNERS, op.kind)
           ? { ok: false, reason: 'PERMISSION_DENIED', detail: `${op.kind} is not ${actingPositionId}'s` }
           : { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown runway-status op: ${op.kind}` };
-      } else {
-        before = deepClone(record);
-        result = this._dispatch(record, op, actingPositionId, by);
       }
-    } catch (err) {
-      // The backstop every EFSP store has: one bad op must never take the
-      // process down for every connected client.
-      log.error('unexpected error applying a runway-status op — rejecting it instead of crashing', { err });
-      result = internalError('runway-status op', err, this._sync.seq !== seq0);
-    }
+      return this._dispatch(record, op, actingPositionId, by);
+    });
     result.runwayStatus = this.getRunwayStatus(mutation && mutation.facilityId);
     this._recordAudit(mutation || {}, actingPositionId, by, before, result);
     return result;
