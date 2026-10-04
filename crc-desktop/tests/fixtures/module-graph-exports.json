@@ -346,6 +346,17 @@
    "routeFlightCount",
    "visibleAirspaces"
   ],
+  "panels/efsp/airspace-state.js": [
+   "_replaceAirspaces",
+   "_resetAirspaceState",
+   "applyEfspAirspaceDelta",
+   "efspAirspaceEdits",
+   "efspAirspaces",
+   "getAllEfspAirspaces",
+   "getEfspAirspace",
+   "getEfspAirspaceEdits",
+   "stripsInAirspace"
+  ],
   "panels/efsp/airspace-validate.js": [
    "ACTIVATION_BY_KIND",
    "AREA_TYPES",
@@ -374,6 +385,17 @@
    "isValidFrequency",
    "polygonSelfIntersects",
    "validateAirspaceDefinition"
+  ],
+  "panels/efsp/alerts-state.js": [
+   "_resetAlertsState",
+   "applyEfspAlerts",
+   "conflictAlertsForTrack",
+   "conformanceAlertsForFlightData",
+   "getAllEfspConflicts",
+   "getEfspObligation",
+   "getEfspObligations",
+   "surveillanceHintsForStrip",
+   "tofiRegimeAlertForFlightData"
   ],
   "panels/efsp/annotation-editor.js": [
    "applyAnnotationLocally"
@@ -560,6 +582,11 @@
    "setStripSigner",
    "stripSigner"
   ],
+  "panels/efsp/board-data.js": [
+   "efspStrips",
+   "getAllEfspStrips",
+   "getEfspStrip"
+  ],
   "panels/efsp/carrier-final-distance.js": [
    "carrierFinalDistanceText"
   ],
@@ -628,6 +655,17 @@
    "highlightCorrelatedTrack",
    "refreshCorrelatedHighlight",
    "selectStripForTrack"
+  ],
+  "panels/efsp/correlation-state.js": [
+   "_replaceCorrelations",
+   "_resetCorrelationState",
+   "applyEfspCorrelationDelta",
+   "correlatedTrackIdForStrip",
+   "getAllEfspCorrelations",
+   "getEfspCorrelation",
+   "getEfspCorrelationForStrip",
+   "getEfspCorrelationStats",
+   "stripIdsForTrackId"
   ],
   "panels/efsp/dot-command.js": [
    "parseDotCommand"
@@ -878,6 +916,16 @@
    "marsaBadgeFor",
    "refreshMarsaHighlight"
   ],
+  "panels/efsp/marsa-state.js": [
+   "_replaceMarsa",
+   "_resetMarsaState",
+   "activeMarsaForFlightData",
+   "applyEfspMarsaDelta",
+   "getAllEfspMarsa",
+   "getEfspMarsa",
+   "marsaForStrip",
+   "marsaParticipantStripIds"
+  ],
   "panels/efsp/mtr-advisory.js": [
    "hasMtrData",
    "mtrLostCommsAdvisory"
@@ -1037,6 +1085,13 @@
    "runwayStatusSignatureFor",
    "runwayStatusSubjectFor",
    "runwayStatusViewOf"
+  ],
+  "panels/efsp/runway-status-state.js": [
+   "_replaceRunwayStatuses",
+   "_resetRunwayStatusState",
+   "applyEfspRunwayStatusDelta",
+   "getAllEfspRunwayStatuses",
+   "getEfspRunwayStatus"
   ],
   "panels/efsp/scramble.js": [
    "GROUND_STATES",

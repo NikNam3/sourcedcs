@@ -189,6 +189,8 @@ test('module graph: no module reads another module\'s export without importing i
     const code = codeOnly(src);
     const imported = new Set();
     for (const m of src.matchAll(/^\s*import\s*\{([^}]*)\}\s*from/gm)) for (const x of m[1].split(',')) { const t = x.trim().split(/\s+as\s+/).pop(); if (t) imported.add(t); }
+    // `export { a, b } from './x.js'` re-exports; it is not a read of a or b (efsp-state.js keeps its split-out stores' names).
+    for (const m of src.matchAll(/^\s*export\s*\{([^}]*)\}\s*from/gm)) for (const x of m[1].split(',')) { const t = x.trim().split(/\s+as\s+/).pop(); if (t) imported.add(t); }
     const local = localNames(code);
     const allow = new Set(SHADOW_ALLOW[f] || []);
     for (const m of code.matchAll(/(?<![.\w$])([A-Za-z_$][\w$]*)(?!\s*:(?!:))/g)) {

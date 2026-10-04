@@ -1,10 +1,21 @@
 'use strict';
 import { applyEfspCarrierSnapshot } from './carrier-state.js';
 import { applyEfspSfaSnapshot } from './sfa-state.js';
-import { diffDefinitions } from './airspace-validate.js';
-import {
-  adoptCursor, boardCursorName, clearCursors, epochMoved, getCursor, replaceCursor, resyncPositionOf, storeCursorName, storeFrameGap
-} from './sync-cursor.js';
+import { adoptCursor, boardCursorName, clearCursors, epochMoved, getCursor, replaceCursor, resyncPositionOf, storeCursorName, storeFrameGap } from './sync-cursor.js';
+import { efspStrips, getAllEfspStrips } from './board-data.js';
+import { _replaceAirspaces, _resetAirspaceState } from './airspace-state.js';
+import { _replaceCorrelations, _resetCorrelationState } from './correlation-state.js';
+import { _replaceMarsa, _resetMarsaState } from './marsa-state.js';
+import { _replaceRunwayStatuses, _resetRunwayStatusState } from './runway-status-state.js';
+import { _resetAlertsState } from './alerts-state.js';
+
+// The stores split out of this file (DESK-SPLIT) keep their public names here, so importers read them from one place.
+export { efspStrips, getEfspStrip, getAllEfspStrips } from './board-data.js';
+export { applyEfspMarsaDelta, getEfspMarsa, getAllEfspMarsa, activeMarsaForFlightData, marsaForStrip, marsaParticipantStripIds } from './marsa-state.js';
+export { applyEfspRunwayStatusDelta, getEfspRunwayStatus, getAllEfspRunwayStatuses } from './runway-status-state.js';
+export { applyEfspCorrelationDelta, getEfspCorrelation, getAllEfspCorrelations, getEfspCorrelationStats, getEfspCorrelationForStrip, correlatedTrackIdForStrip, stripIdsForTrackId } from './correlation-state.js';
+export { efspAirspaces, efspAirspaceEdits, applyEfspAirspaceDelta, getEfspAirspaceEdits, getEfspAirspace, getAllEfspAirspaces, stripsInAirspace } from './airspace-state.js';
+export { getEfspObligation, getEfspObligations, applyEfspAlerts, surveillanceHintsForStrip, conformanceAlertsForFlightData, tofiRegimeAlertForFlightData, getAllEfspConflicts, conflictAlertsForTrack } from './alerts-state.js';
 
 // Client-side mirror of the EFSP Board — plain module-level Maps, matching
 // app.js's existing style (tracks/history/settings are also plain globals,
@@ -16,18 +27,22 @@ import {
 //
 // An ES module: the browser and node:test both import it directly, no build step.
 
-export const efspStrips = new Map();     // stripId -> Strip
 export const efspFlightDataList = new Map();       // flightDataId -> FlightDataRecord
+
 const efspPositions = new Map();  // positionId -> PositionStaffing
+
 let efspFacility = null;
+
 // Board sync position, per Facility (docs/adr/0081): the cursor `board:<facilityId>` in sync-cursor.js, the same
 // bookkeeping the stores use.
 let efspBays = [];
+
 // WP4A gap-closure (docs/adr/0022) — facilityId -> is AIT authorized (a
 // written directive on file) there. Lets bay-view.js disable the AIT
 // option proactively instead of letting a PROPOSE submit-and-silently-fail
 // against the server-side check.
 let efspAitAuthorizedByFacility = {};
+
 // crc-sync's docs/adr/0088 — facilityId -> { positionId -> the one character
 // an ATC scope draws on a contact that Position owns }. Config, so it rides
 // the snapshot only.
@@ -36,6 +51,7 @@ let efspPositionLetters = {};
 // clientMutationId -> the original efsp-mutation message sent, kept until
 // its ack arrives — replayed against a fresh baseline on reconnect (§5.6.3).
 const efspPendingMutations = new Map();
+
 // clientMutationId -> when it was sent (this client's wall clock), for the CreateStrip resend window below.
 const efspPendingSentAt = new Map();
 
@@ -47,69 +63,6 @@ const efspPendingSentAt = new Map();
 // than this, the form hears CONNECTION_LOST and the controller checks the Board: re-sending could create the Strip
 // twice. tests/create-strip-resend-window.test.mjs keeps it under the server's window.
 export const CREATE_STRIP_RESEND_WINDOW_MS = 9 * 60 * 1000;
-
-// §4.6.1's timed forwarding obligations (docs/adr/0021, 0067) — stripId ->
-// every obligation due on it right now. Full state from efsp-alerts, like
-// conformance: one that is no longer due is simply not in the next message.
-const efspObligations = new Map(); // stripId -> [{ facilityId, stripId, obligationType, severity, dueAt, since }]
-
-// The RANGE slice — airspaceId -> the airspace record (state, window, pending
-// request, history, plus its static definition). Theater-wide rather than
-// per-Facility: an airspace names its controlling Facility rather than being
-// replicated into each one.
-export const efspAirspaces = new Map();
-
-// The definition edits THIS window has seen arrive (airspaceId -> [{ defRev, at, by, changes: [{ field, from, to }] }],
-// oldest first, bounded). crc-sync keeps the full trail (`definitionHistory`) but does not put it on the wire (its record
-// view strips it), so the History view shows what this window watched change, and says so; the Mutation log has the rest.
-export const efspAirspaceEdits = new Map();
-const AIRSPACE_EDIT_LOG_CAP = 50;
-
-/** A record arrived over `previous`: when its definition revision moved, log the edit (what changed, when, by whom). */
-function _noteAirspaceEdit(previous, next) {
-  if (!previous || !(next.defRev > previous.defRev)) return;
-  const log = efspAirspaceEdits.get(next.airspaceId) || [];
-  log.push({ defRev: next.defRev, at: next.updatedAt, by: next.updatedBy || null, missed: next.defRev - previous.defRev - 1,
-    changes: diffDefinitions(previous.definition, next.definition) });
-  while (log.length > AIRSPACE_EDIT_LOG_CAP) log.shift();
-  efspAirspaceEdits.set(next.airspaceId, log);
-}
-
-// WP5 (crc-sync's docs/adr/0045) — flightDataId -> the correlation record: which
-// surveillance contact this airframe is, on what evidence, and any warning.
-//
-// Keyed by flightDataId, not stripId, and that is the point. One flight data legitimately has
-// several Strips — per-Facility replicas, a TOFI MISSION Strip, an arrival
-// converted in place — and they are all one airframe. A per-Strip correlation
-// would let two of them disagree about which contact it is, which is the
-// identity-reconciliation defect the subsystem exists to prevent.
-const efspCorrelations = new Map();
-// The correlation rate, as the server last reported it (guide §6.6 rule 6).
-let efspCorrelationStats = null;
-
-// WP6 (crc-sync's docs/adr/0051) — marsaId -> the MARSA relation: which
-// flights have declared that military authority is separating them, on whose
-// declaration, and whether it is still standing.
-//
-// Keyed by marsaId with flightDataId PARTICIPANTS, which is what makes §9.2's "model
-// it as an edge, not a flag" real on this side too. A per-Strip flag could not
-// say who else is in the relation, and two Strips of one airframe could carry
-// different answers. Finished relations stay in the Map on purpose: a VOIDED
-// one is the alert §9.2 rule 2 requires, and dropping it would erase the
-// warning for whoever just reconnected.
-const efspMarsa = new Map();
-const efspRunwayStatuses = new Map(); // facilityId -> runway-status record (crc-sync docs/adr/0061)
-
-// docs/adr/0058 — what crc-sync's conformance and conflict monitors say is
-// WRONG right now. Sent whole on every change (efsp-alerts), so a flight that
-// conforms again simply is not in the next message.
-const efspConformance = new Map(); // flightDataId -> [{ kind, assigned, actual?, altFt?, fpm?, deviationFt?, since }]
-// docs/adr/0076 (crc-sync) — surveillance informs, the controller advances: the
-// suggestion chip and the staleness indication, stripId -> hints. Full state in
-// efsp-alerts, so one that no longer applies is simply not in the next message.
-const efspSurveillanceHints = new Map(); // stripId -> [{ kind: 'AIRBORNE_ADVANCE'|'STALE', stripState, toState?, since, afterSec? }]
-const efspTofiRegime = new Map(); // flightDataId -> { kind: 'REGIME_OUTSIDE_AIRSPACE'|'AWAITING_ENTRY_UNKNOWN', since } (crc-sync docs/adr/0102)
-let efspConflicts = [];            // [{ id, a, b, aCallsign, bCallsign, timeToCpaSec, minNm, vertFt, aAt, bAt }]
 
 export function applyEfspSnapshot(msg) {
   efspStrips.clear();
@@ -135,28 +88,6 @@ export function applyEfspSnapshot(msg) {
   // crc-sync's docs/adr/0093 — who is on which SFA frequency (sfa-state.js).
   applyEfspSfaSnapshot(msg);
   _adoptSnapshotStoreSyncs(msg);
-}
-
-function _replaceAirspaces(list) {
-  const held = new Map(efspAirspaces);
-  efspAirspaces.clear();
-  for (const a of list || []) {
-    _noteAirspaceEdit(held.get(a.airspaceId), a);
-    efspAirspaces.set(a.airspaceId, a);
-  }
-  for (const id of [...efspAirspaceEdits.keys()]) if (!efspAirspaces.has(id)) efspAirspaceEdits.delete(id);
-}
-function _replaceCorrelations(list) {
-  efspCorrelations.clear();
-  for (const r of list || []) efspCorrelations.set(r.flightDataId, r);
-}
-function _replaceMarsa(list) {
-  efspMarsa.clear();
-  for (const r of list || []) efspMarsa.set(r.marsaId, r);
-}
-function _replaceRunwayStatuses(list) {
-  efspRunwayStatuses.clear();
-  for (const r of list || []) efspRunwayStatuses.set(r.facilityId, r);
 }
 
 // Store sync (crc-sync docs/adr/0106): the six stores outside the Board each count changes with a seq inside one
@@ -215,164 +146,6 @@ export function applyEfspStoreSlices(stores) {
     done.push(d.key);
   }
   return done;
-}
-
-/**
- * An efsp-marsa-delta — its own message type with its own seq, like the
- * airspace and correlation deltas. A relation is not a Strip and rides no
- * Board's sequence.
- *
- * The record arrives whole, so a void needs nothing cleared here: `voidedBy`
- * simply comes back set, and a relation that a controller later re-declares is
- * a different record with a different marsaId. That is docs/adr/0045's shape,
- * and obligations now clear themselves too (full state in efsp-alerts).
- */
-export function applyEfspMarsaDelta(msg) {
-  for (const r of (msg.marsa && msg.marsa.updated) || []) efspMarsa.set(r.marsaId, r);
-}
-
-export function getEfspMarsa(marsaId) { return efspMarsa.get(marsaId) || null; }
-export function getAllEfspMarsa() { return [...efspMarsa.values()]; }
-
-/** The ACTIVE relation this flight is in, or null. At most one — crc-sync enforces it. */
-export function activeMarsaForFlightData(flightDataId) {
-  if (!flightDataId) return null;
-  for (const relation of efspMarsa.values()) {
-    if (relation.state === 'ACTIVE' && relation.participants.includes(flightDataId)) return relation;
-  }
-  return null;
-}
-
-/**
- * The relation this Strip should render: the ACTIVE one if there is one, else
- * the most recently finished one this flight was in.
- *
- * Showing a finished relation is the point rather than clutter. §9.2 rule 2
- * requires a void to "alert every participant Strip", and the void is exactly
- * the moment the relation stops being ACTIVE — a badge that only rendered live
- * relations would make the alert vanish at the instant it is raised.
- */
-export function marsaForStrip(strip) {
-  if (!strip) return null;
-  const active = activeMarsaForFlightData(strip.flightDataId);
-  if (active) return active;
-  let latest = null;
-  for (const relation of efspMarsa.values()) {
-    if (!relation.participants.includes(strip.flightDataId)) continue;
-    if (!latest || (relation.endedAt || 0) > (latest.endedAt || 0)) latest = relation;
-  }
-  return latest;
-}
-
-/**
- * The other live Strips in this flight's ACTIVE relation — §9.2 rule 5:
- * "selecting one participant MUST highlight the others."
- *
- * A linear walk rather than a maintained index, the same reasoning
- * otherLiveStripsForFlightData and stripIdsForTrackId already document: the Strip
- * count is in the tens, and a relation has a handful of participants. Returns
- * every Strip of every participant, which is right — one participant worked by
- * two Facilities has two Strips and both are in the relation.
- */
-export function marsaParticipantStripIds(strip) {
-  const relation = strip ? activeMarsaForFlightData(strip.flightDataId) : null;
-  if (!relation) return [];
-  const others = new Set(relation.participants.filter(id => id !== strip.flightDataId));
-  if (others.size === 0) return [];
-  return getAllEfspStrips()
-    .filter(s => s.state !== 'DROPPED' && others.has(s.flightDataId))
-    .map(s => s.stripId);
-}
-
-/**
- * An efsp-runway-status-delta (guide §9.7, crc-sync docs/adr/0061) — its own
- * message type on its own seq, like MARSA and airspace: a runway is not a
- * Strip and rides no Board's sequence. One record per Facility, sent whole, so
- * a delta simply replaces it (docs/adr/0068).
- */
-export function applyEfspRunwayStatusDelta(msg) {
-  for (const r of (msg && msg.runwayStatuses && msg.runwayStatuses.updated) || []) {
-    if (r && r.facilityId) efspRunwayStatuses.set(r.facilityId, r);
-  }
-}
-
-/** The Facility's runway-status record exactly as the server sent it, or null (L12/L13 read this — do not rename). */
-export function getEfspRunwayStatus(facilityId) { return efspRunwayStatuses.get(facilityId) || null; }
-export function getAllEfspRunwayStatuses() { return [...efspRunwayStatuses.values()]; }
-
-/**
- * An efsp-correlation-delta — its own message type with its own seq, like the
- * airspace delta. Changed records only, once per server reconcile tick.
- *
- * Note what does NOT need to happen here: clearing a warning. The record
- * arrives whole, so a retracted warning simply comes back as `warning: null`.
- * Obligations clear the same way in spirit: the next efsp-alerts omits them.
- */
-export function applyEfspCorrelationDelta(msg) {
-  for (const r of (msg.correlations && msg.correlations.updated) || []) {
-    efspCorrelations.set(r.flightDataId, r);
-  }
-  if (msg.stats) efspCorrelationStats = msg.stats;
-}
-
-export function getEfspCorrelation(flightDataId) { return efspCorrelations.get(flightDataId) || null; }
-export function getAllEfspCorrelations() { return [...efspCorrelations.values()]; }
-export function getEfspCorrelationStats() { return efspCorrelationStats; }
-
-/** The correlation for whichever airframe this Strip is about. */
-export function getEfspCorrelationForStrip(strip) {
-  return strip ? getEfspCorrelation(strip.flightDataId) : null;
-}
-
-/** The contact this Strip is bound to, or null. What the map highlight reads. */
-export function correlatedTrackIdForStrip(strip) {
-  const record = getEfspCorrelationForStrip(strip);
-  return record && record.trackId ? record.trackId : null;
-}
-
-/**
- * The reverse lookup, for a click on the map: which live Strips are about the
- * airframe this contact is?
- *
- * A linear walk rather than a maintained index — the same reasoning
- * otherLiveStripsForFlightData already documents, and the Strip count is in the tens.
- * Returns several when one flight data has several Strips, which is the ordinary case
- * after a cross-Facility handoff.
- */
-export function stripIdsForTrackId(trackId) {
-  const wanted = String(trackId);
-  const flightDataIds = new Set();
-  for (const record of efspCorrelations.values()) {
-    if (record.trackId === wanted) flightDataIds.add(record.flightDataId);
-  }
-  if (flightDataIds.size === 0) return [];
-  return getAllEfspStrips()
-    .filter(s => s.state !== 'DROPPED' && flightDataIds.has(s.flightDataId))
-    .map(s => s.stripId);
-}
-
-/** An efsp-airspace-delta — its own message type, since airspaces are not Strips and ride no Board's seq. */
-export function applyEfspAirspaceDelta(msg) {
-  for (const a of (msg.airspaces && msg.airspaces.updated) || []) {
-    _noteAirspaceEdit(efspAirspaces.get(a.airspaceId), a);
-    efspAirspaces.set(a.airspaceId, a);
-  }
-  // A deleted airspace (ADR 0098 §8): gone from every client, with the edits this window kept for it.
-  for (const id of (msg.airspaces && msg.airspaces.removed) || []) {
-    efspAirspaces.delete(id);
-    efspAirspaceEdits.delete(id);
-  }
-}
-
-/** The definition edits this window has seen for an airspace, oldest first. */
-export function getEfspAirspaceEdits(airspaceId) { return [...(efspAirspaceEdits.get(airspaceId) || [])]; }
-
-export function getEfspAirspace(airspaceId) { return efspAirspaces.get(airspaceId) || null; }
-export function getAllEfspAirspaces() { return [...efspAirspaces.values()]; }
-
-/** Live Strips approved into this airspace — what a range controller sees of the flights in their block, read-only. */
-export function stripsInAirspace(airspaceId) {
-  return getAllEfspStrips().filter(s => s.state !== 'DROPPED' && s.airspaceEntry && s.airspaceEntry.airspaceId === airspaceId);
 }
 
 function _boardFacilityOf(msg) { return msg.facilityId || efspFacility || null; }
@@ -435,20 +208,6 @@ export function registerPendingMutation(msg, sentAt = Date.now()) {
   efspPendingSentAt.set(msg.clientMutationId, sentAt);
 }
 
-/**
- * The one obligation a Strip's badge shows: OVERDUE before WARNING, then the
- * earliest dueAt. null when nothing is due. See getEfspObligations for all.
- */
-export function getEfspObligation(stripId) {
-  const list = efspObligations.get(stripId);
-  if (!list || !list.length) return null;
-  return list.slice().sort((a, b) =>
-    ((b.severity === 'OVERDUE') - (a.severity === 'OVERDUE')) || (a.dueAt - b.dueAt))[0];
-}
-
-/** Every obligation due on this Strip right now; [] when none. */
-export function getEfspObligations(stripId) { return efspObligations.get(stripId) || []; }
-
 export function getPendingMutations() {
   return [...efspPendingMutations.values()];
 }
@@ -478,15 +237,19 @@ export function rebaseForResend(clientMutationId, now = Date.now()) {
   return { ...original, baseRev: current.rev };
 }
 
-export function getEfspStrip(stripId) { return efspStrips.get(stripId) || null; }
 export function getEfspFlightData(flightDataId) { return efspFlightDataList.get(flightDataId) || null; }
+
 export function getEfspPosition(positionId) { return efspPositions.get(positionId) || null; }
-export function getAllEfspStrips() { return [...efspStrips.values()]; }
+
 export function getAllEfspPositions() { return [...efspPositions.values()]; }
+
 /** The Board epoch (lifetime) this client holds for a Facility, or undefined. */
 export function getEfspBoardEpoch(facilityId) { const c = getCursor(boardCursorName(facilityId)); return c ? c.epoch : undefined; }
+
 export function getEfspFacility() { return efspFacility; }
+
 export function getEfspBays() { return efspBays; }
+
 export function isAitAuthorizedFor(facilityId) { return !!efspAitAuthorizedByFacility[facilityId]; }
 
 /** The ATC-scope letter for a Position (docs/adr/0088), searched across Facilities; null when none is configured. */
@@ -561,6 +324,7 @@ export function searchEfspStrips(query) {
 export const LINES_WITH_OTHERS = { TAC_C2: ['AIC', 'JTAC'] };
 
 export function withOthersBayId(positionId) { return `${positionId}-with`; }
+
 export function isWithOthersBayId(bayId) { return typeof bayId === 'string' && bayId.endsWith('-with'); }
 
 /** Live MISSION lines held by the Positions `positionId` has handed lines to, newest first. */
@@ -580,70 +344,14 @@ export function _resetEfspStateForTest() {
   efspPositions.clear();
   efspPendingMutations.clear();
   efspPendingSentAt.clear();
-  efspObligations.clear();
-  efspSurveillanceHints.clear();
-  efspCorrelations.clear();
-  efspCorrelationStats = null;
-  efspMarsa.clear();
-  efspAirspaces.clear();
-  efspAirspaceEdits.clear();
-  efspRunwayStatuses.clear();
-  efspConformance.clear();
-  efspTofiRegime.clear();
-  efspConflicts = [];
+  _resetAlertsState();
+  _resetCorrelationState();
+  _resetMarsaState();
+  _resetAirspaceState();
+  _resetRunwayStatusState();
   efspFacility = null;
   clearCursors();
   efspBays = [];
   efspAitAuthorizedByFacility = {};
   efspPositionLetters = {};
-}
-
-/** Applies an efsp-alerts message: the complete current conformance, conflict and obligation picture. */
-export function applyEfspAlerts(msg) {
-  efspConformance.clear();
-  for (const r of (msg && msg.conformance) || []) if (r.alerts && r.alerts.length) efspConformance.set(r.flightDataId, r.alerts);
-  efspConflicts = (msg && msg.conflictAlert) || [];
-  efspTofiRegime.clear();
-  for (const r of (msg && msg.tofiRegime) || []) efspTofiRegime.set(r.flightDataId, r);
-  efspSurveillanceHints.clear();
-  for (const h of (msg && msg.surveillance) || []) {
-    if (!efspSurveillanceHints.has(h.stripId)) efspSurveillanceHints.set(h.stripId, []);
-    efspSurveillanceHints.get(h.stripId).push(h);
-  }
-  efspObligations.clear();
-  for (const o of (msg && msg.obligations) || []) {
-    if (!efspObligations.has(o.stripId)) efspObligations.set(o.stripId, []);
-    efspObligations.get(o.stripId).push(o);
-  }
-}
-
-/**
- * The surveillance hints standing on this Strip right now (docs/adr/0076).
- * A hint written against another state of the Strip is stale itself — the
- * Strip moved since the server looked — and is not returned.
- */
-export function surveillanceHintsForStrip(strip) {
-  if (!strip) return [];
-  return (efspSurveillanceHints.get(strip.stripId) || []).filter(h => h.stripState === strip.state);
-}
-
-/** What is wrong with this flight's conformance right now; [] when it conforms. */
-export function conformanceAlertsForFlightData(flightDataId) { return efspConformance.get(flightDataId) || []; }
-
-/** The TOFI regime alert standing on this flight ({ kind, since }), or null (crc-sync docs/adr/0102). */
-export function tofiRegimeAlertForFlightData(flightDataId) { return efspTofiRegime.get(flightDataId) || null; }
-
-/** Every current short-term conflict. */
-export function getAllEfspConflicts() { return efspConflicts; }
-
-/** The conflicts this track is in, each seen from its side: { other, otherCallsign, timeToCpaSec, minNm, vertFt, id }. */
-export function conflictAlertsForTrack(trackId) {
-  if (trackId == null) return [];
-  const id = String(trackId);
-  return efspConflicts.filter(c => c.a === id || c.b === id).map(c => ({
-    id: c.id,
-    other: c.a === id ? c.b : c.a,
-    otherCallsign: c.a === id ? c.bCallsign : c.aCallsign,
-    timeToCpaSec: c.timeToCpaSec, minNm: c.minNm, vertFt: c.vertFt,
-  }));
 }
