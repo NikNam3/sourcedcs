@@ -23,11 +23,10 @@
 // is wired up; if DD175 lookup is wanted later, it needs a real design
 // decision about token forwarding, not just a second URL here.
 
-const log = require('../log').logger('efsp:flight-plan-lookup');
+const { webCall, LOOKUP_TIMEOUT_MS } = require('./web-call');
 
-const SOURCEDCS_WEB_URL = process.env.CRCSYNC_SOURCEDCS_WEB_URL || 'http://localhost:7000';
-const LOOKUP_TIMEOUT_MS = 3000;
-const FLIGHT_PLAN_SERVICE_TOKEN = process.env.FLIGHT_PLAN_SERVICE_TOKEN || '';
+// Read per call (an injected `opts` wins), never at require time.
+const webUrl = (opts) => String(opts.baseUrl || process.env.CRCSYNC_SOURCEDCS_WEB_URL || 'http://localhost:7000').replace(/\/+$/, '');
 
 /**
  * @param {string} callsign
@@ -35,33 +34,14 @@ const FLIGHT_PLAN_SERVICE_TOKEN = process.env.FLIGHT_PLAN_SERVICE_TOKEN || '';
  * @returns {Promise<{found:true, plan:object}|{found:false, reason:string}>} never throws, never rejects
  */
 async function lookupFlightPlan(callsign, opts = {}) {
-  const fetchImpl = opts.fetchImpl || fetch;
-  const baseUrl = opts.baseUrl || SOURCEDCS_WEB_URL;
-  const timeoutMs = opts.timeoutMs ?? LOOKUP_TIMEOUT_MS;
-
   if (!callsign || typeof callsign !== 'string') return { found: false, reason: 'no callsign given' };
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const res = await fetchImpl(`${baseUrl}/api/fpl1801/by-callsign/${encodeURIComponent(callsign)}`, {
-      signal: controller.signal,
-    });
-    if (res.status === 404) return { found: false, reason: 'no active flight plan for this callsign' };
-    if (!res.ok) return { found: false, reason: `sourcedcs-web returned ${res.status}` };
-
-    const plan = await res.json();
-    if (!plan || typeof plan !== 'object' || Array.isArray(plan)) return { found: false, reason: 'malformed response from sourcedcs-web' };
-    return { found: true, plan };
-  } catch (err) {
-    // Network error, DNS failure, connection refused, timeout/abort, or a
-    // JSON parse failure on a non-JSON body — all land here. Logged once,
-    // never thrown further, never left as an unhandled rejection.
-    log.warn('sourcedcs-web unreachable or errored', { error: err.message });
-    return { found: false, reason: 'sourcedcs-web unreachable' };
-  } finally {
-    clearTimeout(timer);
-  }
+  const r = await webCall({ fetchImpl: opts.fetchImpl, url: `${webUrl(opts)}/api/fpl1801/by-callsign/${encodeURIComponent(callsign)}`, timeoutMs: opts.timeoutMs });
+  if (r.status === 404) return { found: false, reason: 'no active flight plan for this callsign' };
+  if (!r.ok) return { found: false, reason: r.reason };
+  const plan = r.body;
+  if (!plan || typeof plan !== 'object' || Array.isArray(plan)) return { found: false, reason: 'malformed response from sourcedcs-web' };
+  return { found: true, plan };
 }
 
 /**
@@ -127,40 +107,23 @@ function toFlightDataFiledSeed(plan) {
  * @returns {Promise<{ok:true, plans:Array<{id, callsign, submittedByName, submittedAt, seed}>}|{ok:false, reason:string}>}
  */
 async function listFiledFlightPlans(opts = {}) {
-  const fetchImpl = opts.fetchImpl || fetch;
-  const baseUrl = opts.baseUrl || SOURCEDCS_WEB_URL;
-  const timeoutMs = opts.timeoutMs ?? LOOKUP_TIMEOUT_MS;
-  const serviceToken = opts.serviceToken ?? FLIGHT_PLAN_SERVICE_TOKEN;
-
+  const serviceToken = opts.serviceToken ?? (process.env.FLIGHT_PLAN_SERVICE_TOKEN || '');
   if (!serviceToken) return { ok: false, reason: 'FLIGHT_PLAN_SERVICE_TOKEN is not configured' };
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const res = await fetchImpl(`${baseUrl}/api/fpl1801/service/all`, {
-      headers: { Authorization: `Bearer ${serviceToken}` },
-      signal: controller.signal,
-    });
-    if (!res.ok) return { ok: false, reason: `sourcedcs-web returned ${res.status}` };
+  const r = await webCall({ fetchImpl: opts.fetchImpl, url: `${webUrl(opts)}/api/fpl1801/service/all`, token: serviceToken, timeoutMs: opts.timeoutMs });
+  if (!r.ok) return r;
+  const raw = r.body;
+  if (!Array.isArray(raw)) return { ok: false, reason: 'malformed response from sourcedcs-web' };
 
-    const raw = await res.json();
-    if (!Array.isArray(raw)) return { ok: false, reason: 'malformed response from sourcedcs-web' };
+  const plans = raw.map((plan) => ({
+    id: plan && plan.id != null ? plan.id : null,
+    callsign: (plan && plan.aircraftId) || '',
+    submittedByName: (plan && plan.submittedBy && plan.submittedBy.name) || null,
+    submittedAt: (plan && plan.submittedAt) || null,
+    seed: toFlightDataFiledSeed(plan),
+  })).filter((p) => p.callsign); // a plan with no aircraftId at all can't seed a CreateStrip — drop it rather than surface an unusable card
 
-    const plans = raw.map((plan) => ({
-      id: plan && plan.id != null ? plan.id : null,
-      callsign: (plan && plan.aircraftId) || '',
-      submittedByName: (plan && plan.submittedBy && plan.submittedBy.name) || null,
-      submittedAt: (plan && plan.submittedAt) || null,
-      seed: toFlightDataFiledSeed(plan),
-    })).filter((p) => p.callsign); // a plan with no aircraftId at all can't seed a CreateStrip — drop it rather than surface an unusable card
-
-    return { ok: true, plans };
-  } catch (err) {
-    log.warn('sourcedcs-web unreachable or errored (list)', { error: err.message });
-    return { ok: false, reason: 'sourcedcs-web unreachable' };
-  } finally {
-    clearTimeout(timer);
-  }
+  return { ok: true, plans };
 }
 
 module.exports = {

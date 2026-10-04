@@ -176,7 +176,13 @@ test('a non-2xx response (e.g. 401 from an expired/wrong token) resolves {ok:fal
   const fetchImpl = async () => ({ ok: false, status: 401, json: async () => ({ error: 'invalid token' }) });
   const result = await listFiledFlightPlans({ fetchImpl, serviceToken: 'wrong' });
   assert.equal(result.ok, false);
-  assert.match(result.reason, /401/);
+  assert.match(result.reason, /rejected the service token \(HTTP 401\)/);
+});
+
+test('a slow sourcedcs-web is aborted and reported as timed out', async () => {
+  const slow = (_u, init) => new Promise((_res, rej) => init.signal.addEventListener('abort', () => rej(Object.assign(new Error('aborted'), { name: 'AbortError' }))));
+  const result = await listFiledFlightPlans({ fetchImpl: slow, serviceToken: 't', timeoutMs: 20 });
+  assert.deepEqual(result, { ok: false, reason: 'sourcedcs-web timed out' });
 });
 
 test('a non-array response body is treated as malformed, not a throw', async () => {
