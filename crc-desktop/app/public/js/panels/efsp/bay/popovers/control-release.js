@@ -4,7 +4,7 @@
 import { getEfspStrip } from '../../efsp-state.js';
 import { sendEfspMutation } from '../../efsp-ws.js';
 import { _resolveActingPositionId } from '../../bay-view.js';
-import { _mountPopover, _unmountPopover } from '../popover-portal.js';
+import { _mountPopover, _sendFromPopover, _unmountPopover } from '../popover-portal.js';
 import { missionNow } from '../../../topbar.js';
 import {
   RELEASE_SCOPES, RELEASE_SCOPE_LABELS, buildGrantOp, buildRefuseOp, buildRequestOp, buildStepOp, handoffPositions,
@@ -27,11 +27,11 @@ function _el(tag, cls, text) {
 }
 
 /** Sends one HANDOFF step as the Position the controller acts as on the Strip (re-read at dispatch, F-107). */
-export function _dispatchHandoffOp(strip, op) {
+export function _dispatchHandoffOp(strip, op, { onAck } = {}) {
   strip = getEfspStrip(strip.stripId) || strip;
   const acting = _resolveActingPositionId(strip);
   if (!acting) return false;
-  sendEfspMutation(acting, strip, op);
+  sendEfspMutation(acting, strip, op, { onAck });
   return true;
 }
 
@@ -119,8 +119,7 @@ export function _openControlReleasePopover(strip, anchorEl, form) {
     const built = build();
     if (built.error) { error.textContent = built.error; return; }
     error.textContent = '';
-    if (_dispatchHandoffOp(strip, built.op)) _close();
-    else error.textContent = 'sign on to the Position that holds this Strip first';
+    if (!_sendFromPopover(popover, send, (onAck) => _dispatchHandoffOp(strip, built.op, { onAck }))) error.textContent = 'sign on to the Position that holds this Strip first';
   };
   send.addEventListener('click', (e) => { e.stopPropagation(); submit(); });
   popover.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); submit(); } });

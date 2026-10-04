@@ -168,6 +168,7 @@ registerEfspMessage('efsp-correlation-ack', (msg) => {
   // A correlation op registers nothing pending (efsp-ws.js: the §5.6.3
   // replay machinery is keyed on Strip identity), so the flight can only
   // be named from whatever record the ack carries back.
+  settleEfspAck(msg);
   if (!msg.ok) _showMutationError(msg.reason || 'Rejected', msg.detail, msg.correlation ? { flightDataId: msg.correlation.flightDataId } : null);
   applyEfspCorrelationDelta({ correlations: { updated: msg.correlation ? [msg.correlation] : [] } });
   refreshCorrelatedHighlight();
@@ -194,6 +195,7 @@ registerEfspMessage('efsp-marsa-ack', (msg) => {
   // Same one-argument bug as efsp-correlation-ack above, same fix. A
   // relation is named by its participants, not by one Strip — §9.2's
   // "model it as an edge, not a flag" applies to the refusal too.
+  settleEfspAck(msg); // a popover's Send closes on this (bay/popover-portal.js _sendFromPopover)
   if (!msg.ok) _showMutationError(msg.reason || 'Rejected', msg.detail, msg.marsa ? { flightDataIds: msg.marsa.participants } : null);
   applyEfspMarsaDelta({ marsa: { updated: msg.marsa ? [msg.marsa] : [] } });
   refreshMarsaHighlight();
@@ -217,6 +219,7 @@ registerEfspMessage('efsp-sfa-delta', (msg) => {
 });
 
 registerEfspMessage('efsp-sfa-ack', (msg) => {
+  settleEfspAck(msg);
   if (!msg.ok) _showMutationError(msg.reason || 'Rejected', msg.detail, { subject: 'SFA rotation' });
   if (msg.sfaRotation) applyEfspSfaDelta({ sfaRotation: msg.sfaRotation });
   renderAllOpenEfspBays();

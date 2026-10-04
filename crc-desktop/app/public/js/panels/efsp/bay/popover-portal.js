@@ -119,6 +119,25 @@ export function _unmountPopover(popover) {
   _requestPostPopoverRender();
 }
 
+/**
+ * A popover's Send (DESK-ACKS): the popover stays open, input intact, until the server answers. An accepted ack closes it;
+ * a refusal leaves it open (the refusal banner says why), so a note or a form that was refused is not lost. `send(onAck)`
+ * dispatches and returns true when something was sent. The button is dead while the request is in flight. A popover the
+ * controller closed meanwhile (outside click, Escape, another popover) is left alone when the ack lands.
+ * @returns {boolean} whether a request went out
+ */
+export function _sendFromPopover(popover, button, send) {
+  if (button) button.disabled = true;
+  const sent = send((ack) => {
+    if (button) button.disabled = false;
+    const open = _openPopovers.get(popover);
+    if (ack.ok && open) open.close();
+    return false; // not handled here: a refusal still gets the banner
+  });
+  if (!sent && button) button.disabled = false;
+  return !!sent;
+}
+
 /** Does any open popover belong to this Strip? The portalled replacement for six `el.contains(...)` checks. */
 export function _stripHasOpenPopover(stripId) {
   if (!stripId) return false;

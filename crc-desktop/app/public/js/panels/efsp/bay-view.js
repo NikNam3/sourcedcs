@@ -137,11 +137,12 @@ export function _swallowRepeatAdvance() {
   return false;
 }
 
-export function _dispatchMarsa(strip, marsaId, op) {
+export function _dispatchMarsa(strip, marsaId, op, { onAck } = {}) {
   const actingPositionId = _resolveActingPositionId(strip);
-  if (!actingPositionId) return;
+  if (!actingPositionId) return false;
   const relation = marsaId ? getEfspMarsa(marsaId) : null;
-  sendEfspMarsaMutation(actingPositionId, marsaId, relation ? relation.rev : undefined, op);
+  sendEfspMarsaMutation(actingPositionId, marsaId, relation ? relation.rev : undefined, op, { onAck });
+  return true;
 }
 
 export function _dispatchCorrelation(strip, op) {

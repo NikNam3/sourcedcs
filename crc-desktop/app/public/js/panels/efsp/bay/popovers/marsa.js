@@ -1,7 +1,7 @@
 'use strict';
 import { activeMarsaForFlightData, getAllEfspStrips, getEfspFlightData, marsaForStrip } from '../../efsp-state.js';
 import { MARSA_EXPANSION, marsaActionsFor } from '../../marsa-badge.js';
-import { _mountPopover, _unmountPopover } from '../popover-portal.js';
+import { _mountPopover, _sendFromPopover, _unmountPopover } from '../popover-portal.js';
 import { _dispatchMarsa, selectEfspStripById } from '../../bay-view.js';
 
 
@@ -86,11 +86,10 @@ export function _openMarsaPopover(strip, anchorEl) {
     btn.textContent = action.label;
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
-      _closeMarsaPopover();
       const op = action.kind === 'RemoveParticipant'
         ? { kind: 'RemoveParticipant', flightDataId: strip.flightDataId }
         : { kind: action.kind };
-      _dispatchMarsa(strip, action.marsaId, op);
+      _sendFromPopover(popover, btn, (onAck) => _dispatchMarsa(strip, action.marsaId, op, { onAck }));
     });
     popover.appendChild(btn);
   }
@@ -186,14 +185,13 @@ function _buildMarsaDeclareForm(strip) {
   send.textContent = 'Declare';
   send.addEventListener('click', (e) => {
     e.stopPropagation();
-    _closeMarsaPopover();
-    _dispatchMarsa(strip, undefined, {
+    _sendFromPopover(_openMarsaPopoverEl, send, (onAck) => _dispatchMarsa(strip, undefined, {
       kind: 'DeclareMarsa',
       participants: [strip.flightDataId, other.value],
       startEvent: startEvent.value,
       endCondition: endCondition.value,
       declaringCallsign: (declaring.value || '').trim(),
-    });
+    }, { onAck }));
   });
   wrap.appendChild(send);
   return wrap;
@@ -216,8 +214,7 @@ function _buildMarsaAddForm(strip, active) {
   add.textContent = 'Add to MARSA';
   add.addEventListener('click', (e) => {
     e.stopPropagation();
-    _closeMarsaPopover();
-    _dispatchMarsa(strip, active && active.marsaId, { kind: 'AddParticipant', flightDataId: other.value });
+    _sendFromPopover(_openMarsaPopoverEl, add, (onAck) => _dispatchMarsa(strip, active && active.marsaId, { kind: 'AddParticipant', flightDataId: other.value }, { onAck }));
   });
   wrap.appendChild(add);
   return wrap;

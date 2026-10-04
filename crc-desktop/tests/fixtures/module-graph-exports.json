@@ -557,6 +557,7 @@
   ],
   "panels/efsp/bay/popover-portal.js": [
    "_mountPopover",
+   "_sendFromPopover",
    "_stripHasOpenPopover",
    "_unmountPopover"
   ],

@@ -3,7 +3,7 @@
 // Validation is formation-rules.js's; the server gates again and a refusal lands in the usual refusal banner.
 import { getAllEfspStrips, getEfspFlightData } from '../../efsp-state.js';
 import { sendEfspMutation } from '../../efsp-ws.js';
-import { _mountPopover, _unmountPopover } from '../popover-portal.js';
+import { _mountPopover, _sendFromPopover, _unmountPopover } from '../popover-portal.js';
 import { _resolveActingPositionId } from '../../bay-view.js';
 import {
   ASSIGNMENT_KINDS, ASSIGNMENT_LABELS, buildJoinOp, buildSplitOp, isGroundFormationState, joinLeadCandidates,
@@ -36,10 +36,10 @@ function _callsignOf(strip) {
 }
 
 /** Sends one formation op on `strip` as its owner; false when no Position is signed on to act. */
-export function dispatchFormationOp(strip, op) {
+export function dispatchFormationOp(strip, op, { onAck } = {}) {
   const acting = _resolveActingPositionId(strip);
   if (!acting) return false;
-  sendEfspMutation(acting, strip, op);
+  sendEfspMutation(acting, strip, op, { onAck });
   return true;
 }
 
@@ -122,8 +122,7 @@ export function _openSplitPopover(strip, anchorEl) {
       { strip, flightData });
     if (!built.ok) { error.textContent = built.error; return; }
     error.textContent = '';
-    if (dispatchFormationOp(strip, built.op)) _closeFormationPopover();
-    else error.textContent = 'sign on to the Position that holds this Strip first';
+    if (!_sendFromPopover(popover, send, (onAck) => dispatchFormationOp(strip, built.op, { onAck }))) error.textContent = 'sign on to the Position that holds this Strip first';
   };
   send.addEventListener('click', (e) => { e.stopPropagation(); submit(); });
   popover.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); submit(); } });
@@ -150,8 +149,7 @@ export function _openJoinPopover(strip, anchorEl) {
     row.title = `${lead.stripType} ${String(lead.state).replace(/_/g, ' ')}`;
     row.addEventListener('click', (e) => {
       e.stopPropagation();
-      _closeFormationPopover();
-      dispatchFormationOp(strip, buildJoinOp(lead));
+      _sendFromPopover(popover, row, (onAck) => dispatchFormationOp(strip, buildJoinOp(lead), { onAck }));
     });
     popover.appendChild(row);
   }
