@@ -2,8 +2,8 @@
 import { getActingPositions, sendEfspMutation } from '../../efsp-ws.js';
 import { getAllEfspAirspaces, getEfspStrip } from '../../efsp-state.js';
 import { AIRSPACE_ENTRY_POSITIONS, CONVERT_TO_ARRIVAL_POSITIONS } from '../authority-mirror.js';
-import { _isRejectedCoordinationReplica } from './coordination.js';
-import { _resolveActingPositionId } from '../../bay-view.js';
+import { _isRejectedCoordinationReplica } from '../coordination-rules.js';
+import { _resolveActingPositionId } from '../dispatch.js';
 import { openPopover } from '../popover-portal.js';
 
 

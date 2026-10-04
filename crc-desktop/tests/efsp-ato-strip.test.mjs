@@ -67,6 +67,7 @@ async function mount({ strips = STRIPS, flightDataList = FLIGHT_DATA_LIST } = {}
   const state = await g.import('panels/efsp/efsp-state.js');
   const ws = await g.import('panels/efsp/efsp-ws.js');
   const bay = await g.import('panels/efsp/bay-view.js');
+  const sel = await g.import('panels/efsp/bay/selection.js');
   const stripEl = await g.import('panels/efsp/bay/strip-element.js');
   const stripView = await g.import('panels/efsp/strip-view.js');
   const ato = await g.import('panels/efsp/ato-strip.js');
@@ -80,8 +81,8 @@ async function mount({ strips = STRIPS, flightDataList = FLIGHT_DATA_LIST } = {}
   state.applyEfspSnapshot({ strips, flightDataList, positions: [], bays: [], airspaces: [], correlations: [], marsa: [] });
   const build = (stripId) => stripEl._buildStripEl(state.getEfspStrip(stripId));
   const select = (stripId) => {
-    const cur = bay.getSelectedEfspStripId();
-    if (stripId === null) { if (cur) bay._selectStrip(cur); } else if (cur !== stripId) bay._selectStrip(stripId);
+    const cur = sel.getSelectedEfspStripId();
+    if (stripId === null) { if (cur) sel._selectStrip(cur); } else if (cur !== stripId) sel._selectStrip(stripId);
     ato.highlightArParticipants(stripId);
   };
   return { sandbox: { ...ato, ...stripView }, bay, stripEl, sent, build, select };

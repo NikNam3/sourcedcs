@@ -1,31 +1,20 @@
 'use strict';
-import { isWithinDoubleTapWindow } from './efsp-nla.js';
-import { getLatestTrack } from '../../picture.js';
-import {
-  efspLinesWithOthers, getEfspAirspace, getEfspBays, getEfspCorrelationForStrip, getEfspFlightData, getEfspMarsa, getEfspObligation, getEfspRack, getEfspStrip, isWithOthersBayId, marsaForStrip, otherLiveStripsForFlightData, searchEfspStrips, surveillanceHintsForStrip
-} from './efsp-state.js';
-import { getActingPositions, sendEfspCorrelationMutation, sendEfspMarsaMutation, sendEfspMutation } from './efsp-ws.js';
-import { noteEfspStripSelected } from './efsp-metrics-client.js';
-import { highlightMarsaParticipants, isMarsaHighlighted } from './marsa-badge.js';
-import { arSignatureFor, highlightArParticipants } from './ato-strip.js';
-import { highlightCorrelatedTrack } from './correlation-highlight.js';
-import { carrierOrderRack, carrierSignatureFor, renderCarrierStackBoard } from './carrier-panel.js';
+import { efspLinesWithOthers, getEfspBays, getEfspRack, getEfspStrip, isWithOthersBayId, searchEfspStrips } from './efsp-state.js';
+import { carrierOrderRack, renderCarrierStackBoard } from './carrier-panel.js';
 import { renderBayDescriptorView } from './bay-views.js';
-import { stereoRoutesCacheKey } from './efsp-stereo-routes.js';
-import { _stripAlerts, tofiExitSignatureFor } from './strip-view.js';
-import { efspArrivalFor } from './efsp-arrivals.js';
-import { runwayStatusSignatureFor } from './runway-status-rules.js';
-import { trackRef } from '../../track-label.js';
 import { getActiveEfspSearchQuery } from './efsp-panel.js';
 import { computeRackReconciliation } from './strip-drag.js';
-import { _isPseudoBayId, _openBayContainers, _stripElById } from './bay/open-bays.js';
-import { _appendExpandedView, _buildStripEl, _expandedStripId, _setExpandedStripId } from './bay/strip-element.js';
-import { _dispatchCoordination, _isRejectedCoordinationReplica } from './bay/popovers/coordination.js';
+import { _isPseudoBayId, _openBayContainers } from './bay/open-bays.js';
+import { _buildStripEl, _expandedStripId } from './bay/strip-element.js';
 import { _refreshOpsFiledIfStale, _renderOpsFiledCards } from './bay/ops-cards.js';
 import { _efspDrag } from './bay/drag.js';
 import { _stripHasOpenPopover } from './bay/popover-portal.js';
-import { _buildBlockCell, _refusalForStrip } from './bay/block-edit.js';
+import { _buildBlockCell } from './bay/block-edit.js';
 import { ORDER, onEfspChanged } from './efsp-change-bus.js';
+import { _moveStrip } from './bay/dispatch.js';
+import { _clearSelectedStrip, _selectedStripId } from './bay/selection.js';
+import { setStripSigner } from './bay/strip-signer.js';
+import { _stripElNeedsRebuild, _stripRenderSignature } from './bay/strip-signature.js';
 
 // Bay/Rack rendering + Pointer Events drag (guide §7.1-7.2, §7.5). DOM-only
 // — not unit tested (crc-desktop's test suite has no DOM harness; see the
@@ -59,99 +48,6 @@ import { ORDER, onEfspChanged } from './efsp-change-bus.js';
 //            than blocking it.
 
 
-export let _selectedStripId = null; // click-to-select state for the non-drag move path
-
-export function getSelectedEfspStripId() { return _selectedStripId; }
-
-// The board-wide double-tap guard (guide §3.5 rule 3, lane 1's F-101).
-//
-// crc-sync has a 400ms guard too, keyed per stripId, and that is the right key
-// for the bug it was written for: one controller pressing one Strip's button
-// twice. It is structurally incapable of catching this one. The first press
-// transfers the Strip away, the Rack reflows, and the NEIGHBOUR's button is
-// now exactly where the pointer is — so the second tap is an ordinary first
-// click on a different Strip, which no per-Strip guard can see.
-//
-// Lane 4 measured it on every transfer-shaped step, and the worst case is the
-// one to design against: a double-tap on "Hand Off to AP" pressed "Line Up
-// and Wait" for the jet that slid up underneath. The Strip that arrives under
-// the pointer need not even be in the same state as the one tapped, so this is
-// a runway clearance nobody gave.
-//
-// Hence a board-wide window: any advancing press within DOUBLE_TAP_MS of
-// another advancing press is discarded. Silently, and raising no banner —
-// §3.5 rule 3 is explicit that a double tap is "success, not an error", and
-// the server's own guard was deliberately left as a silent no-op for the same
-// reason. The cost is that a controller who genuinely meant two presses inside
-// 400ms presses once more.
-//
-// efsp-nla.js has exported isWithinDoubleTapWindow/DOUBLE_TAP_MS for exactly
-// this since Phase 1 ("so the button visibly disables … without waiting on a
-// round trip") and nothing in app/public/js had ever called it.
-let _lastAdvancingPressAt = null;
-
-/** @returns {boolean} true when this press is the tail of a double tap and must be dropped. */
-export function _swallowRepeatAdvance() {
-  const now = Date.now();
-  if (isWithinDoubleTapWindow(_lastAdvancingPressAt, now)) return true;
-  _lastAdvancingPressAt = now;
-  return false;
-}
-
-export function _dispatchMarsa(strip, marsaId, op, { onAck } = {}) {
-  const actingPositionId = _resolveActingPositionId(strip);
-  if (!actingPositionId) return false;
-  const relation = marsaId ? getEfspMarsa(marsaId) : null;
-  sendEfspMarsaMutation(actingPositionId, marsaId, relation ? relation.rev : undefined, op, { onAck });
-  return true;
-}
-
-export function _dispatchCorrelation(strip, op) {
-  const actingPositionId = _resolveActingPositionId(strip);
-  if (!actingPositionId) return;
-  const record = getEfspCorrelationForStrip(strip);
-  sendEfspCorrelationMutation(actingPositionId, strip.flightDataId, record ? record.rev : 0, op);
-}
-
-export function _selectStrip(stripId) {
-  _selectedStripId = _selectedStripId === stripId ? null : stripId;
-  noteEfspStripSelected(_selectedStripId); // docs/adr/0072
-  _afterSelectionChanged();
-}
-
-/**
- * Selects a Strip without the toggle. Called when a click on the MAP resolves
- * to this Strip (correlation-highlight.js's selectStripForTrack) — clicking a
- * contact twice must not deselect its Strip, which is what _selectStrip's
- * toggle would do.
- */
-export function selectEfspStripById(stripId) {
-  if (!getEfspStrip(stripId)) return false;
-  _selectedStripId = stripId;
-  noteEfspStripSelected(_selectedStripId); // docs/adr/0072
-  _afterSelectionChanged();
-  const el = _stripElById(stripId);
-  if (el && typeof el.scrollIntoView === 'function') {
-    el.scrollIntoView({ block: 'nearest' });
-  }
-  return true;
-}
-
-function _afterSelectionChanged() {
-  // §9.2 rule 5 — "selecting one participant MUST highlight the others."
-  // Resolved BEFORE the re-render below, not after, because the highlight is a
-  // class each Strip element reads while it is being built. Doing it the other
-  // way round would leave the highlight one selection behind, which is the kind
-  // of off-by-one that looks like a race and is not.
-  highlightMarsaParticipants(_selectedStripId);
-  highlightArParticipants(_selectedStripId); // docs/adr/0071
-  renderAllOpenEfspBays();
-  // Ring the selected Strip's contact on the map (guide §6.6 rule 4). One Map
-  // lookup plus the existing rAF-batched updateMap() — see
-  // correlation-highlight.js on why the 1s budget is not a concern here.
-  highlightCorrelatedTrack(_selectedStripId);
-}
-
 // Non-drag move path (WCAG 2.2 SC 2.5.7): select a Strip, then click a
 // Rack's header to move the selection there — no pointer drag required.
 function _onRackHeaderClick(bayId, rackId) {
@@ -160,165 +56,7 @@ function _onRackHeaderClick(bayId, rackId) {
   const strip = getEfspStrip(_selectedStripId);
   if (!strip) return;
   _moveStrip(strip, bayId, rackId, null, null);
-  _selectedStripId = null;
-}
-
-/**
- * Space and Enter on a Strip toggle its selection — the keyboard half of the
- * non-drag move path (§7.8.1, WCAG 2.2 SC 2.5.7), which _onRackHeaderClick
- * then acts on.
- *
- * They belong to whatever control the controller is actually IN, though, and
- * this listener sits on the Strip element, so every key pressed inside a Block
- * input, an enum <select> or a popover field used to bubble up to it. That one
- * omission produced four catalogued defects (lane 2's F-201, F-203, F-205, and
- * half of F-202): a Space typed into a Block was preventDefault()ed and
- * toggled selection instead of being typed, and Enter committed a Block AND
- * moved the selection, so the next click on a Rack header moved a Strip nobody
- * had meant to select.
- *
- * Guarding on the event's TARGET rather than patching the four call sites is
- * deliberate: it covers every popover's fields without any of them knowing
- * about this handler, and any control added later. Neither half of the
- * mechanism could simply be deleted — this one is the drag-free move path, and
- * renderBay()'s refocus keeps focus off <body>.
- *
- * It could not reach the MARSA and bind popovers, which were a separate defect
- * rather than a gap here: those two appended their popover INTO the <button>
- * that opens it, so a Space typed in a field bubbled to the button and
- * ACTIVATED it, re-opening the popover with an empty form — no guard on this
- * handler could have helped, since the keypress never reached this handler at
- * all. Fixed where it belonged, in the anchoring: every popover is portalled
- * out of the Strip now (F-001's _mountPopover), and none of them is a
- * descendant of a control that handles its events.
- *
- * Escape collapses the expanded view (F-208) — see _appendExpandedView for
- * why that surface needs more than one way out.
- */
-export function _onStripKeydown(e, strip) {
-  if (_keyTargetIsStripControl(e)) return;
-  if (e.key === 'Escape' && _expandedStripId === strip.stripId) {
-    e.preventDefault();
-    _setExpandedStripId(null);
-    renderAllOpenEfspBays();
-    return;
-  }
-  if (e.key === 'Enter' || e.key === ' ') {
-    e.preventDefault();
-    _selectStrip(strip.stripId);
-  }
-}
-
-/**
- * Did this keydown start on a control INSIDE the Strip rather than on the
- * Strip element itself? Anything that handles Space or Enter on its own owns
- * them while it has focus: a text input, a <select>, a <button>, and the
- * click-to-edit Block cell, which is a <span tabindex="0"> with its own
- * Enter/Space handler rather than a native control.
- */
-function _keyTargetIsStripControl(e) {
-  const t = e.target;
-  if (!t || t === e.currentTarget) return false;
-  if (t.isContentEditable) return true;
-  const tag = (t.tagName || '').toLowerCase();
-  if (tag === 'input' || tag === 'select' || tag === 'textarea' || tag === 'button' || tag === 'option') return true;
-  return !!(t.classList && t.classList.contains('efsp-block-editable'));
-}
-
-// The Position a controller acts as for a Mutation on this Strip — its
-// current Owner if signed on, else whichever signed-on Position happens to be first.
-// Shared by every dispatch helper below (NLA, move, transfer, gestures).
-export function _resolveActingPositionId(strip) {
-  const positions = getActingPositions();
-  return positions.includes(strip.ownerPositionId) ? strip.ownerPositionId : positions[0];
-}
-
-/**
- * @returns {boolean} whether a Mutation was actually sent — the caller uses it
- *   to give the press its <50ms feedback (§7.9) without lying about a press
- *   that went nowhere.
- */
-export function _invokeNla(strip) {
-  const actingPositionId = _resolveActingPositionId(strip);
-  if (!actingPositionId) return false;
-  // F-101 — board-wide, because the Strip this press lands on after a reflow
-  // is not the Strip the previous press was about. See _swallowRepeatAdvance.
-  if (_swallowRepeatAdvance()) return false;
-  sendEfspMutation(actingPositionId, strip, { kind: 'InvokeNla' });
-  return true;
-}
-
-export function _moveStrip(strip, bayId, rackId, afterStripId, beforeStripId) {
-  const actingPositionId = _resolveActingPositionId(strip);
-  if (!actingPositionId) return;
-  sendEfspMutation(actingPositionId, strip, { kind: 'MoveStrip', bayId, rackId, afterStripId, beforeStripId });
-}
-
-// Owning Position hand-off (guide §4.5) — distinct from _moveStrip, which
-// only ever reorders/relocates a Strip within its CURRENT owner's own Bay
-// set. Appends to the end of the destination Bay/Rack; the guide doesn't
-// mandate letting the sender pick an exact insertion point mid-transfer,
-// and the receiving controller can always reorder locally afterward.
-export function _transferStrip(strip, toPositionId, bayId, rackId) {
-  const actingPositionId = _resolveActingPositionId(strip);
-  if (!actingPositionId) return;
-  sendEfspMutation(actingPositionId, strip, { kind: 'TransferStrip', toPositionId, bayId, rackId });
-}
-
-/**
- * The Bay a hand-back lands in: the receiving Position's Bay implying the
- * Strip's state, else its first Bay implying none — the client mirror of
- * crc-sync's board/placement.js `bayForNewOwner` (the server rule is authoritative).
- * @returns {{bayId:string, rackId:string}|null}
- */
-export function _handBackBayFor(strip, toPositionId) {
-  const bays = getEfspBays().filter(b => b.positionId === toPositionId && (!b.facilityId || b.facilityId === strip.facilityId));
-  const bay = bays.find(b => b.impliesState === strip.state) || bays.find(b => !b.impliesState) || null;
-  return bay ? { bayId: bay.bayId, rackId: (bay.rackIds && bay.rackIds[0]) || 'main' } : null;
-}
-
-export function _dispatchHandBack(strip, toPositionId) {
-  strip = getEfspStrip(strip.stripId) || strip; // F-107 — see _dispatchCoordination
-  const actingPositionId = _resolveActingPositionId(strip);
-  if (actingPositionId !== strip.ownerPositionId) return; // only its owner hands a line on
-  const bay = _handBackBayFor(strip, toPositionId);
-  if (!bay) return;
-  sendEfspMutation(actingPositionId, strip, { kind: 'TransferStrip', toPositionId, bayId: bay.bayId, rackId: bay.rackId });
-}
-
-// Anything on a Strip that is a control of its own. A click, double-click or
-// right-click that lands on one of these belongs to the control, never to the
-// Strip's select / flip / highlight gestures underneath it.
-export const STRIP_CONTROL_SELECTOR = '.efsp-block-editable, .efsp-block-input, button, select, option, label, input, textarea';
-
-// The four paper gestures (guide §7.3, defect D4) — efsp-gestures.js's
-// toggleOffset/toggleFlip/setHighlight/setAttention are pure and each
-// already dispatch exactly one Mutation; this is the one shared plumbing
-// point that resolves actingPositionId and hands them a bound
-// sendMutation(strip, op), matching _invokeNla/_moveStrip/_transferStrip's
-// own pattern. `extraArgs` covers setHighlight/setAttention's `color` param.
-export function _dispatchGesture(strip, gestureFn, ...extraArgs) {
-  // F-107 — see _dispatchCoordination. Highlight is dispatched from a popover,
-  // and setHighlight reads strip.flags to decide whether this colour clears or
-  // replaces, so a stale capture gets that wrong as well as the rev.
-  strip = getEfspStrip(strip.stripId) || strip;
-  // A dead replica refuses every Flag write (F-303) — say nothing rather than
-  // raise a refusal banner for a double-click.
-  if (_isRejectedCoordinationReplica(strip)) return;
-  const actingPositionId = _resolveActingPositionId(strip);
-  if (!actingPositionId) return;
-  gestureFn(strip, ...extraArgs, (s, op) => sendEfspMutation(actingPositionId, s, op));
-  return actingPositionId; // truthy only when dispatched — what the gesture metric counts (docs/adr/0072)
-}
-
-/** The first configured Bay for a Position — used as the transfer landing spot when the drop target is a Position tab rather than a specific Bay tab. crc-sync's facility-config.js Bay ordering intentionally puts each Position's "entry" Bay first (e.g. CD's Pending Clearance, GC's Pushback). */
-export function _defaultBayFor(positionId) {
-  return getEfspBays().find(b => b.positionId === positionId) || null;
-}
-
-export function _defaultRackFor(bayId) {
-  const bay = getEfspBays().find(b => b.bayId === bayId);
-  return bay ? bay.rackIds[0] : 'main';
+  _clearSelectedStrip();
 }
 
 export function renderBay(container, bayId) {
@@ -452,150 +190,6 @@ export function _isProtectedStripEl(el) {
   return false;
 }
 
-/**
- * Everything a Strip RENDERS that does not live on the Strip record, as one
- * short string the reconciler can compare.
- *
- * `rev` is the Strip's own optimistic-concurrency counter and it moves only
- * when a Mutation changes THAT Strip. _buildStripEl reads a great deal more
- * than that, all of it keyed somewhere else and all of it able to change while
- * `rev` stands still (lane 3's F-305, measured on six separate surfaces):
- *
- *   strip.nla      what pressing the NLA would do right now. crc-sync moves it
- *                  when Position staffing or a clock deadline changes, and
- *                  deliberately does NOT bump `rev` to say so — `rev` is
- *                  concurrency control, and bumping it outside a Mutation
- *                  would invalidate every controller's in-flight edit.
- *   flight data    every Block value, and flightData.tofi.separationRegime, which is
- *                  what the TOFI exit gate reads. A regime set on the ATC-side
- *                  Strip left the MRU's "Accept TOFI Exit" disabled forever.
- *   siblings       the +N shared-flight-data badge is computed from OTHER Strips.
- *   obligation     §4.6.1's alerts live in their own store. An OVERDUE
- *                  obligation that only appears once the controller happens to
- *                  touch that Strip is not an alarm.
- *   MARSA          the relation and rule 5's participant highlight.
- *   correlation    §6.6's badge, and the Bind… button that comes with it — so
- *                  on a fresh Strip the bind popover could not be opened at all.
- *   airspace       a range controller activates and returns an airspace
- *                  without touching any Strip.
- *   the refusal    F-103's Strip-level marker is panel chrome (efsp-panel.js's
- *                  getCurrentEfspRefusal) and moves on its own.
- *
- * The answer for client-local state was already established — selection and
- * expansion are stamped on the element so the reconciler can see them. This is
- * that answer generalized rather than a sixth special case, and it is a
- * signature rather than a full rebuild because guide §7.5.4 and defect D6
- * require keyed reconciliation: a rebuild destroys in-progress work.
- *
- * Cheap on purpose — it runs for every Strip on every board delta. Every line
- * is a field read or a Map lookup bar the sibling walk, which _buildStripEl
- * already does once per Strip anyway.
- */
-export function _stripRenderSignature(strip) {
-  const parts = [];
-
-  // `undefined` (a record from a server that does not compute it) and `null`
-  // (this State has no NLA at all) are different answers and must compare
-  // differently.
-  parts.push('nla:' + (strip.nla === undefined ? '?' : JSON.stringify(strip.nla)));
-  // Which Position the controller is acting as decides which controls render.
-  parts.push('act:' + (_resolveActingPositionId(strip) || ''));
-
-  const flightData = getEfspFlightData(strip.flightDataId);
-  parts.push('flightData:' + (flightData ? flightData.rev : ''));
-  parts.push('stereo:' + stereoRoutesCacheKey()); // Block 9F's options (docs/adr/0073)
-
-  const siblings = otherLiveStripsForFlightData(strip.flightDataId, strip.stripId);
-  // Not just the count: the badge's title names each sibling's Facility,
-  // Position and strip type, and a sibling that moves desk changes it.
-  parts.push('sib:' + siblings.map(s => `${s.stripId}/${s.facilityId || '?'}/${s.ownerPositionId}/${s.stripType}`).sort().join(','));
-
-  const obligation = getEfspObligation(strip.stripId);
-  parts.push('obl:' + (obligation ? `${obligation.obligationType}/${obligation.severity}` : ''));
-
-  const relation = marsaForStrip(strip);
-  parts.push('mrs:' + (relation
-    ? `${relation.marsaId}/${relation.rev}/${relation.state}/${relation.rendezvousAt ? 1 : 0}/${relation.voidedBy || ''}`
-    : ''));
-  parts.push('mhl:' + (isMarsaHighlighted(strip.stripId) ? 1 : 0));
-  parts.push('car:' + carrierSignatureFor(strip)); // crc-sync docs/adr/0074 — a Case change moves every carrier Strip's derived fields
-  parts.push('tx:' + tofiExitSignatureFor(strip)); // UI-A U8 — the mission line's state decides CTR's primary action
-  parts.push('ar:' + arSignatureFor(strip)); // docs/adr/0071 — the AR join lives on OTHER flights' Strips
-
-  const correlation = getEfspCorrelationForStrip(strip);
-  if (!correlation) {
-    parts.push('cor:');
-  } else {
-    // Whether the bound contact is inside THIS controller's coverage is part
-    // of what the badge says (`TRK ··`), and coverage is per-controller
-    // (crc-sync's docs/adr/0042) — so the track has to be looked at, not just
-    // the record. A Map lookup, and Strips are not re-rendered on radar
-    // sweeps, so this costs nothing per sweep.
-    const track = correlation.trackId ? getLatestTrack(correlation.trackId) : null;
-    parts.push('cor:' + [
-      correlation.rev, correlation.state, correlation.trackId || '', correlation.matchedBy || '',
-      correlation.binding ? 1 : 0,
-      (correlation.warning && correlation.warning.kind) || '',
-      ((correlation.warning && correlation.warning.candidateTrackIds) || []).join('+'),
-      track ? trackRef(track) : '·',
-    ].join('/'));
-  }
-
-  const entry = strip.airspaceEntry;
-  const airspace = entry ? getEfspAirspace(entry.airspaceId) : null;
-  parts.push('asp:' + (airspace ? `${airspace.rev}/${airspace.state}` : ''));
-
-  const refusal = _refusalForStrip(strip);
-  parts.push('ref:' + (refusal ? `${refusal.at}/${refusal.blockId || ''}` : ''));
-
-  // Whether it carries the just-arrived edge (docs/adr/0057). Only the fact,
-  // never the flash: marking the flash played must not itself rebuild the
-  // Strip, or the next render would replay it.
-  parts.push('arr:' + (efspArrivalFor(strip.stripId) ? 1 : 0));
-
-  // Every alert chip (conformance, conflict, runway, ordnance, SCRAMBLE, TOFI regime, ATO, ...) is named by what
-  // _stripAlerts returns, so the signature is derived from that call rather than from a hand list of its inputs: a
-  // new chip is covered the moment _stripAlerts emits it (ARCH-C §3.1, B7). A conflict's countdown is in its text,
-  // so a Strip in a conflict still rebuilds each second.
-  parts.push('alr:' + _stripAlerts(strip).map(a => `${a.key}/${a.tone}/${a.text}/${a.reason}`).join(','));
-  // Runway status (docs/adr/0068): the RWY/HOOK chips read the Facility's runway record, not the Strip.
-  parts.push('fld:' + runwayStatusSignatureFor(strip));
-  // Surveillance hints (docs/adr/0076) are stated by the server about this Strip, not part of its own
-  // record; whether the chip can be accepted also depends on which Position the controller holds (S-L14).
-  parts.push('sur:' + surveillanceHintsForStrip(strip).map(h => `${h.kind}/${h.contactPhase}/${h.since}`).join(',')
-    + (getActingPositions().includes(strip.ownerPositionId) ? '/m' : ''));
-
-  return parts.join('|');
-}
-
-/**
- * Does this already-rendered Strip element differ from what it should be?
- *
- * Every input is an argument rather than read from module state, so the rule
- * can be tested directly — the reconciler that calls it needs a Rack, a Bay
- * and a populated store, and a rule buried inside it is a rule nothing checks.
- *
- * Four ways a Strip goes stale, and only the first is the Strip's own record:
- *  - `rev` moved — somebody changed the Strip.
- *  - selection changed — client-local, does not move `rev`.
- *  - expansion changed — client-local, does not move `rev` either. This one
- *    was missing, so the expand toggle set its state, asked for a re-render,
- *    and the reconciler reused every element unchanged. The button did
- *    nothing visible at all.
- *  - something the Strip RENDERS but does not own changed — the flight data, a
- *    sibling, an obligation, a MARSA relation, a correlation, the airspace,
- *    a refusal, or `strip.nla`. See _stripRenderSignature; this was the same
- *    omission as expansion, six more times over (F-305).
- */
-export function _stripElNeedsRebuild(el, wanted, selectedStripId, expandedStripId) {
-  const id = el.dataset.stripId;
-  if (el.dataset.rev !== String(wanted.rev)) return true;
-  if (el.classList.contains('efsp-strip-selected') !== (id === selectedStripId)) return true;
-  if ((el.dataset.expanded === '1') !== (id === expandedStripId)) return true;
-  if (el.dataset.sig !== _stripRenderSignature(wanted)) return true;
-  return false;
-}
-
 function _reconcileRackStrips(rackEl, bayId, rackId) {
   const wanted = bayId.endsWith('-search') ? searchEfspStrips(getActiveEfspSearchQuery())
     : isWithOthersBayId(bayId) ? efspLinesWithOthers(bayId.slice(0, -'-with'.length))
@@ -673,10 +267,11 @@ export function renderAllOpenEfspBays() {
 
 // ESM-1 (S-ESM1b): the unit tests replaced these globals to count calls; these are those seams.
 export function _setRenderAllOpenEfspBaysForTest(fn) { renderAllOpenEfspBays = fn; }
-export function _setSelectEfspStripByIdForTest(fn) { selectEfspStripById = fn; }
-export function _setSelectedStripIdForTest(id) { _selectedStripId = id; }
 export function _setRenderBayForTest(fn) { renderBay = fn; }
 
 // What redraws the open Bays (efsp-change-bus.js): the Board, an ack, correlation, MARSA, alerts and SFA, and a direct
 // 'bays' request from a popover, a drag or a refusal. Called through the binding so a test's replacement counts.
-onEfspChanged(['snapshot', 'board', 'ack', 'bays', 'correlations', 'marsa', 'alerts', 'sfa'], () => renderAllOpenEfspBays(), { order: ORDER.BAYS });
+// The signature reads strip-view.js's alerts, which imports strip-element.js, so the element builder is handed it here.
+setStripSigner(_stripRenderSignature);
+
+onEfspChanged(['snapshot', 'board', 'ack', 'bays', 'selection', 'correlations', 'marsa', 'alerts', 'sfa'], () => renderAllOpenEfspBays(), { order: ORDER.BAYS });

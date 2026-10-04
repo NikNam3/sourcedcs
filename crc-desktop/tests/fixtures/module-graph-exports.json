@@ -392,33 +392,11 @@
    "refreshArHighlight"
   ],
   "panels/efsp/bay-view.js": [
-   "STRIP_CONTROL_SELECTOR",
-   "_defaultBayFor",
-   "_defaultRackFor",
-   "_dispatchCorrelation",
-   "_dispatchGesture",
-   "_dispatchHandBack",
-   "_dispatchMarsa",
-   "_handBackBayFor",
-   "_invokeNla",
    "_isProtectedStripEl",
-   "_moveStrip",
-   "_onStripKeydown",
-   "_resolveActingPositionId",
-   "_selectStrip",
-   "_selectedStripId",
    "_setRenderAllOpenEfspBaysForTest",
    "_setRenderBayForTest",
-   "_setSelectEfspStripByIdForTest",
-   "_setSelectedStripIdForTest",
-   "_stripElNeedsRebuild",
-   "_stripRenderSignature",
-   "_swallowRepeatAdvance",
-   "_transferStrip",
-   "getSelectedEfspStripId",
    "renderAllOpenEfspBays",
-   "renderBay",
-   "selectEfspStripById"
+   "renderBay"
   ],
   "panels/efsp/bay-views.js": [
    "FINAL_DECISION_HEIGHT_FT",
@@ -448,6 +426,26 @@
    "_buildBlockCell",
    "_refusalForStrip",
    "_setRestoredEditInThisStrip"
+  ],
+  "panels/efsp/bay/coordination-rules.js": [
+   "_coordinationIsReplica",
+   "_isPendingCoordinationReplica",
+   "_isRejectedCoordinationReplica"
+  ],
+  "panels/efsp/bay/dispatch.js": [
+   "STRIP_CONTROL_SELECTOR",
+   "_defaultBayFor",
+   "_defaultRackFor",
+   "_dispatchCorrelation",
+   "_dispatchGesture",
+   "_dispatchHandBack",
+   "_dispatchMarsa",
+   "_handBackBayFor",
+   "_invokeNla",
+   "_moveStrip",
+   "_resolveActingPositionId",
+   "_swallowRepeatAdvance",
+   "_transferStrip"
   ],
   "panels/efsp/bay/drag.js": [
    "_efspDrag",
@@ -491,12 +489,9 @@
    "_buildCoordinationNoteEl",
    "_buildCoordinationReasonEl",
    "_canProposeCoordination",
-   "_coordinationIsReplica",
    "_coordinationProposerOf",
    "_coordinationStateWord",
    "_dispatchCoordination",
-   "_isPendingCoordinationReplica",
-   "_isRejectedCoordinationReplica",
    "_openCoordinatePopover"
   ],
   "panels/efsp/bay/popovers/formation.js": [
@@ -524,6 +519,15 @@
    "_tofiProposerOf",
    "_tofiRegimeChoice"
   ],
+  "panels/efsp/bay/selection.js": [
+   "_clearSelectedStrip",
+   "_selectStrip",
+   "_selectedStripId",
+   "_setSelectEfspStripByIdForTest",
+   "_setSelectedStripIdForTest",
+   "getSelectedEfspStripId",
+   "selectEfspStripById"
+  ],
   "panels/efsp/bay/strip-element.js": [
    "CHIP_HISTORY_LIMIT",
    "_appendAnnotationHistory",
@@ -532,7 +536,16 @@
    "_appendExpandedView",
    "_buildStripEl",
    "_expandedStripId",
+   "_onStripKeydown",
    "_setExpandedStripId"
+  ],
+  "panels/efsp/bay/strip-signature.js": [
+   "_stripElNeedsRebuild",
+   "_stripRenderSignature"
+  ],
+  "panels/efsp/bay/strip-signer.js": [
+   "setStripSigner",
+   "stripSigner"
   ],
   "panels/efsp/carrier-final-distance.js": [
    "carrierFinalDistanceText"

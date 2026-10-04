@@ -9,13 +9,13 @@ import { appendAtoExpandedRows } from '../ato-strip.js';
 import { _buildStripLayout } from '../strip-view.js';
 import { setAttention, toggleFlip, toggleOffset } from '../efsp-gestures.js';
 import { noteEfspGesture } from '../efsp-metrics-client.js';
-import {
-  STRIP_CONTROL_SELECTOR, _dispatchGesture, _onStripKeydown, _resolveActingPositionId, _selectStrip, _selectedStripId, _stripRenderSignature, _swallowRepeatAdvance
-} from '../bay-view.js';
+import { STRIP_CONTROL_SELECTOR, _dispatchGesture, _resolveActingPositionId, _swallowRepeatAdvance } from './dispatch.js';
+import { _selectStrip, _selectedStripId } from './selection.js';
 import { _blockLabel, _buildBlockCell, _refusalForStrip, _setRestoredEditInThisStrip } from './block-edit.js';
 import { _cycleHighlight, _openHighlightPopover } from './popovers/highlight.js';
 import { _onStripPointerDown } from './drag.js';
 import { markEfspChanged } from '../efsp-change-bus.js';
+import { stripSigner } from './strip-signer.js';
 
 
 // Two presses, not one, and not a modal. Dropping is the one Strip action with
@@ -337,11 +337,9 @@ export function _buildStripEl(strip) {
   // way. Without this the toggle set _expandedStripId, asked for a re-render,
   // and the reconciler reused every element unchanged: nothing on screen moved.
   el.dataset.expanded = _expandedStripId === strip.stripId ? '1' : '0';
-  // Everything this element renders that lives OUTSIDE the Strip record —
-  // strip.nla, the flight data, siblings, obligation, MARSA, correlation, airspace,
-  // the refusal. Same mechanism as `expanded` above, generalized: see
-  // _stripRenderSignature for the six surfaces that were stale without it.
-  el.dataset.sig = _stripRenderSignature(strip);
+  // Everything this element renders OUTSIDE the Strip record (bay/strip-signature.js), stamped through the signer bay-view.js registers.
+  const sign = stripSigner();
+  if (sign) el.dataset.sig = sign(strip);
   el.dataset.positionId = strip.ownerPositionId; // read during drag drop-target resolution
   if (strip.flags.offset) el.classList.add('efsp-strip-offset');
   if (strip.flags.flipped) el.classList.add('efsp-strip-flipped');
@@ -419,3 +417,65 @@ export function _buildStripEl(strip) {
 
 // ESM-1 (S-ESM1c): test seams for state the unit tests set directly in the old shared scope.
 export function _setExpandedStripId(v) { _expandedStripId = v; }
+
+/**
+ * Space and Enter on a Strip toggle its selection — the keyboard half of the
+ * non-drag move path (§7.8.1, WCAG 2.2 SC 2.5.7), which _onRackHeaderClick
+ * then acts on.
+ *
+ * They belong to whatever control the controller is actually IN, though, and
+ * this listener sits on the Strip element, so every key pressed inside a Block
+ * input, an enum <select> or a popover field used to bubble up to it. That one
+ * omission produced four catalogued defects (lane 2's F-201, F-203, F-205, and
+ * half of F-202): a Space typed into a Block was preventDefault()ed and
+ * toggled selection instead of being typed, and Enter committed a Block AND
+ * moved the selection, so the next click on a Rack header moved a Strip nobody
+ * had meant to select.
+ *
+ * Guarding on the event's TARGET rather than patching the four call sites is
+ * deliberate: it covers every popover's fields without any of them knowing
+ * about this handler, and any control added later. Neither half of the
+ * mechanism could simply be deleted — this one is the drag-free move path, and
+ * renderBay()'s refocus keeps focus off <body>.
+ *
+ * It could not reach the MARSA and bind popovers, which were a separate defect
+ * rather than a gap here: those two appended their popover INTO the <button>
+ * that opens it, so a Space typed in a field bubbled to the button and
+ * ACTIVATED it, re-opening the popover with an empty form — no guard on this
+ * handler could have helped, since the keypress never reached this handler at
+ * all. Fixed where it belonged, in the anchoring: every popover is portalled
+ * out of the Strip now (F-001's _mountPopover), and none of them is a
+ * descendant of a control that handles its events.
+ *
+ * Escape collapses the expanded view (F-208) — see _appendExpandedView for
+ * why that surface needs more than one way out.
+ */
+export function _onStripKeydown(e, strip) {
+  if (_keyTargetIsStripControl(e)) return;
+  if (e.key === 'Escape' && _expandedStripId === strip.stripId) {
+    e.preventDefault();
+    _setExpandedStripId(null);
+    markEfspChanged('bays');
+    return;
+  }
+  if (e.key === 'Enter' || e.key === ' ') {
+    e.preventDefault();
+    _selectStrip(strip.stripId);
+  }
+}
+
+/**
+ * Did this keydown start on a control INSIDE the Strip rather than on the
+ * Strip element itself? Anything that handles Space or Enter on its own owns
+ * them while it has focus: a text input, a <select>, a <button>, and the
+ * click-to-edit Block cell, which is a <span tabindex="0"> with its own
+ * Enter/Space handler rather than a native control.
+ */
+function _keyTargetIsStripControl(e) {
+  const t = e.target;
+  if (!t || t === e.currentTarget) return false;
+  if (t.isContentEditable) return true;
+  const tag = (t.tagName || '').toLowerCase();
+  if (tag === 'input' || tag === 'select' || tag === 'textarea' || tag === 'button' || tag === 'option') return true;
+  return !!(t.classList && t.classList.contains('efsp-block-editable'));
+}

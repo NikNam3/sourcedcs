@@ -27,7 +27,7 @@ import {
   getMarsaHighlightStripIds, isMarsaHighlighted,
   MARSA_EXPANSION,
 } from '../app/public/js/panels/efsp/marsa-badge.js';
-import { _setSelectedStripIdForTest } from '../app/public/js/panels/efsp/bay-view.js';
+import { _setSelectedStripIdForTest } from '../app/public/js/panels/efsp/bay/selection.js';
 
 const require = createRequire(import.meta.url);
 

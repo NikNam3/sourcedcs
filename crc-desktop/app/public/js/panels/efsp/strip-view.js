@@ -38,9 +38,7 @@ import { ordnanceAlertsFor } from './ordnance-advisory.js';
 import { compactBlocksFor, fieldSpanFor } from './strip-fields.js';
 import { carrierDecorateNlaButton, carrierExtraNlaButtons } from './carrier-panel.js';
 import { sfaExtraNlaButtons } from './bay-views.js';
-import {
-  _dispatchCorrelation, _dispatchGesture, _dispatchHandBack, _dispatchMarsa, _handBackBayFor, _invokeNla, _resolveActingPositionId, _swallowRepeatAdvance
-} from './bay-view.js';
+import { _dispatchCorrelation, _dispatchGesture, _dispatchHandBack, _dispatchMarsa, _handBackBayFor, _invokeNla, _resolveActingPositionId, _swallowRepeatAdvance } from './bay/dispatch.js';
 import { AIRSPACE_ENTRY_POSITIONS, COORDINATION_TARGETS, HAND_BACK_TO, TOFI_COUNTERPARTS } from './bay/authority-mirror.js';
 import { _buildBlockCell } from './bay/block-edit.js';
 import { openPopover } from './bay/popover-portal.js';
@@ -48,9 +46,8 @@ import {
   _canApproveAirspaceEntry, _canConvertToArrival, _openAirspaceEntryPopover, _pendingConvertStripId
 } from './bay/popovers/airspace-entry.js';
 import { _openBindPopover } from './bay/popovers/bind.js';
-import {
-  _buildCoordinationNoteEl, _buildCoordinationReasonEl, _canProposeCoordination, _coordinationIsReplica, _coordinationProposerOf, _coordinationStateWord, _dispatchCoordination, _isPendingCoordinationReplica, _isRejectedCoordinationReplica, _openCoordinatePopover, COORDINATION_PRIMITIVE_LABELS
-} from './bay/popovers/coordination.js';
+import { _buildCoordinationNoteEl, _buildCoordinationReasonEl, _canProposeCoordination, _coordinationProposerOf, _coordinationStateWord, _dispatchCoordination, _openCoordinatePopover, COORDINATION_PRIMITIVE_LABELS } from './bay/popovers/coordination.js';
+import { _coordinationIsReplica, _isPendingCoordinationReplica, _isRejectedCoordinationReplica } from './bay/coordination-rules.js';
 import { _openMarsaPopover } from './bay/popovers/marsa.js';
 import {
   _canMarkTofiEntered, _canProposeTofiEntry, _canProposeTofiExit, _canTransferTofiComms, _dispatchTofi, _isPendingTofiReplica, _openTofiEntryPopover, _tofiExitPrecondition, _tofiProposerOf, _tofiRegimeChoice, TOFI_ACCEPT_REGIMES

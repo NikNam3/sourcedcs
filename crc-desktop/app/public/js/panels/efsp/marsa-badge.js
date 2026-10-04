@@ -1,6 +1,6 @@
 'use strict';
 import { getEfspStrip, marsaForStrip, marsaParticipantStripIds } from './efsp-state.js';
-import { getSelectedEfspStripId } from './bay-view.js';
+import { getSelectedEfspStripId } from './bay/selection.js';
 import { ORDER, onEfspChanged } from './efsp-change-bus.js';
 
 // MARSA on the Strip (EFSPImplementationGuide.md §9.2 rules 2, 5 and 6) —
@@ -166,4 +166,4 @@ export function marsaActionsFor(strip) {
 }
 
 // The participant highlight is resolved before the Bays that read it (efsp-change-bus.js).
-onEfspChanged(['snapshot', 'marsa'], () => refreshMarsaHighlight(), { order: ORDER.RESOLVE });
+onEfspChanged(['snapshot', 'marsa', 'selection'], () => refreshMarsaHighlight(), { order: ORDER.RESOLVE });

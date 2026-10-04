@@ -1,7 +1,7 @@
 'use strict';
 import { _callsignOfFlightData } from './refusal.js';
 import { _createStripBindEl, _createStripBtnEl, _createStripInputEl, _createStripMsgEl, _createStripTypeEl, _createStripStereoEl } from './state.js';
-import { _resolveActingPositionId } from '../bay-view.js';
+import { _resolveActingPositionId } from '../bay/dispatch.js';
 import { getActingPositions, sendEfspCreateStrip, sendEfspMutation } from '../efsp-ws.js';
 import { facilityOfPosition } from '../facility-topology.js';
 import { getAllEfspStrips, getEfspFlightData, liveStripsForCallsign } from '../efsp-state.js';

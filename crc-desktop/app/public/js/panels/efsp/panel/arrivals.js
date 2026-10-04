@@ -4,7 +4,7 @@ import { _renderPositionTabs, efspVisibleBayId } from './tabs.js';
 import { efspArrivalLog, forgetEfspArrivals, nextEfspArrivalExpiry, noteEfspArrivals } from '../efsp-arrivals.js';
 import { getActingPositions } from '../efsp-ws.js';
 import { getEfspFlightData, getEfspPosition } from '../efsp-state.js';
-import { selectEfspStripById } from '../bay-view.js';
+import { selectEfspStripById } from '../bay/selection.js';
 import { markEfspChanged } from '../efsp-change-bus.js';
 
 /**

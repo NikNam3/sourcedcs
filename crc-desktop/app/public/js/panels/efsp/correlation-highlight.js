@@ -5,7 +5,7 @@ import { ORDER, markEfspChanged, onEfspChanged } from './efsp-change-bus.js';
 import {
   correlatedTrackIdForStrip, getEfspCorrelationForStrip, getEfspFlightData, getEfspStrip, stripIdsForTrackId
 } from './efsp-state.js';
-import { getSelectedEfspStripId, selectEfspStripById } from './bay-view.js';
+import { getSelectedEfspStripId, selectEfspStripById } from './bay/selection.js';
 import { getOpenEfspBayIds } from './bay/open-bays.js';
 
 // Coupled selection (EFSPImplementationGuide.md §6.6 rule 4): "Selecting a
@@ -197,4 +197,4 @@ function _provisionalSentence(record, strip) {
 }
 
 // The ring is resolved before the Bays and the map that read it (efsp-change-bus.js).
-onEfspChanged(['snapshot', 'correlations'], () => refreshCorrelatedHighlight(), { order: ORDER.RESOLVE });
+onEfspChanged(['snapshot', 'correlations', 'selection'], () => refreshCorrelatedHighlight(), { order: ORDER.RESOLVE });

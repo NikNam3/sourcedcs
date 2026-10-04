@@ -2,7 +2,8 @@
 import { activeMarsaForFlightData, getAllEfspStrips, getEfspFlightData, marsaForStrip } from '../../efsp-state.js';
 import { MARSA_EXPANSION, marsaActionsFor } from '../../marsa-badge.js';
 import { openPopover, _sendFromPopover } from '../popover-portal.js';
-import { _dispatchMarsa, selectEfspStripById } from '../../bay-view.js';
+import { _dispatchMarsa } from '../dispatch.js';
+import { selectEfspStripById } from '../selection.js';
 
 
 

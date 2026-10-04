@@ -2,7 +2,7 @@
 import { pickerText } from '../../../../track-label.js';
 import { getAllTracks, getLatestTrack } from '../../../../picture.js';
 import { openPopover } from '../popover-portal.js';
-import { _dispatchCorrelation } from '../../bay-view.js';
+import { _dispatchCorrelation } from '../dispatch.js';
 
 
 let _openPopoverHandle = null;

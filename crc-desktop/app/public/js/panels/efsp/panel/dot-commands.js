@@ -5,7 +5,7 @@ import { requestUndo } from './undo-slot.js';
 import { _runEfspSearch } from './tabs.js';
 import { getActingPositions, sendEfspCorrelationMutation, sendEfspMarsaMutation, sendEfspMutation } from '../efsp-ws.js';
 import { getAllEfspStrips, getEfspCorrelationForStrip, getEfspFlightData, getEfspStrip, liveStripsForCallsign, marsaForStrip } from '../efsp-state.js';
-import { getSelectedEfspStripId } from '../bay-view.js';
+import { getSelectedEfspStripId } from '../bay/selection.js';
 import { normalizeStereoNameClient } from '../efsp-stereo-routes.js';
 import { parseDotCommand } from '../dot-command.js';
 import { buildJoinOp, buildSplitOp, joinLeadCandidates, parseSplitCommand } from '../formation-rules.js';

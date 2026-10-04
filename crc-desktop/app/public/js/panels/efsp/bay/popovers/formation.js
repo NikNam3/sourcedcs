@@ -4,7 +4,7 @@
 import { getAllEfspStrips, getEfspFlightData } from '../../efsp-state.js';
 import { sendEfspMutation } from '../../efsp-ws.js';
 import { openPopover, _sendFromPopover } from '../popover-portal.js';
-import { _resolveActingPositionId } from '../../bay-view.js';
+import { _resolveActingPositionId } from '../dispatch.js';
 import {
   ASSIGNMENT_KINDS, ASSIGNMENT_LABELS, buildJoinOp, buildSplitOp, isGroundFormationState, joinLeadCandidates,
   parseAssignmentValue, splitRemainderText,
