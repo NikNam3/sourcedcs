@@ -696,7 +696,7 @@ function createApp(deps = {}) {
   // ── Static hosting ───────────────────────────────────────────────────────
   // ── The airspace registry's server-to-server API, for sourcedcs-web (docs/adr/0098 §9). No token: every route 503. ──
   app.use('/api/airspace-registry', createAirspaceService({
-    efsp, token: env.AIRSPACE_SERVICE_TOKEN || '', broadcast: (frames) => wsHub.broadcastEfspFrames(frames),
+    efsp, getToken: () => env.AIRSPACE_SERVICE_TOKEN, broadcast: (frames) => wsHub.broadcastEfspFrames(frames),
   }));
 
   // ── The booking calendar, information only: the web's upcoming airspace bookings, pulled on a ticker and sent to

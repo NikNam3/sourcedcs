@@ -1,0 +1,13 @@
+{
+  "cases": [
+    { "name": "unset", "expected": null, "header": "Bearer anything", "status": 503 },
+    { "name": "empty", "expected": "", "header": "Bearer anything", "status": 503 },
+    { "name": "no header", "expected": "secret", "header": null, "status": 401 },
+    { "name": "not a bearer header", "expected": "secret", "header": "Basic secret", "status": 401 },
+    { "name": "empty bearer", "expected": "secret", "header": "Bearer ", "status": 401 },
+    { "name": "wrong", "expected": "secret", "header": "Bearer nope", "status": 401 },
+    { "name": "wrong, longer", "expected": "secret", "header": "Bearer secret-and-more", "status": 401 },
+    { "name": "wrong, shorter", "expected": "secret", "header": "Bearer sec", "status": 401 },
+    { "name": "right", "expected": "secret", "header": "Bearer secret", "status": "next" }
+  ]
+}

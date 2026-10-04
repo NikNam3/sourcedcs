@@ -10,7 +10,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { parseReleaseManifest, checkReleaseUploadToken } = require('../releases.js');
+const { parseReleaseManifest } = require('../releases.js');
 
 /* ══════════════════════════════════════════════════════════
    parseReleaseManifest
@@ -85,35 +85,6 @@ test('parseReleaseManifest: returns null for null/empty input (e.g. file not fou
 test('parseReleaseManifest: size is null when absent (still returns version/url)', () => {
   const raw = `version: 1.0.0\npath: App.AppImage\nsha512: xyz\n`;
   assert.deepEqual(parseReleaseManifest(raw), { version: '1.0.0', url: '/downloads/App.AppImage', size: null });
-});
-
-/* ══════════════════════════════════════════════════════════
-   checkReleaseUploadToken
-══════════════════════════════════════════════════════════ */
-
-test('checkReleaseUploadToken: correct token matches', () => {
-  assert.equal(checkReleaseUploadToken('secret123', 'secret123'), true);
-});
-
-test('checkReleaseUploadToken: wrong token does not match', () => {
-  assert.equal(checkReleaseUploadToken('wrong', 'secret123'), false);
-});
-
-test('checkReleaseUploadToken: no expected token configured -> always false, never throws', () => {
-  // RELEASE_UPLOAD_TOKEN defaults to '' when unset -- must fail closed,
-  // not accidentally accept an empty-string "token".
-  assert.equal(checkReleaseUploadToken('', ''), false);
-  assert.equal(checkReleaseUploadToken('anything', ''), false);
-});
-
-test('checkReleaseUploadToken: missing/empty provided token does not match a real one', () => {
-  assert.equal(checkReleaseUploadToken('', 'secret123'), false);
-  assert.equal(checkReleaseUploadToken(undefined, 'secret123'), false);
-});
-
-test('checkReleaseUploadToken: length mismatch does not throw (crypto.timingSafeEqual would)', () => {
-  assert.doesNotThrow(() => checkReleaseUploadToken('short', 'a-much-longer-secret-token'));
-  assert.equal(checkReleaseUploadToken('short', 'a-much-longer-secret-token'), false);
 });
 
 /* ══════════════════════════════════════════════════════════
