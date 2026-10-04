@@ -239,7 +239,19 @@ test('SCENARIO A3\' a consolidation reassignment lands the line in a Bay the con
   assert.ok(baysOf('TAC_C2').includes(after.bayId), `TAC_C2 owns it but it sits in ${after.bayId}`);
 });
 
-test('SCENARIO A3\'\' at Incirlik GND ends its chain: GND walks away and the Strip stays GND\'s, not LC\'s (ADR 0105)', () => {
+test('SCENARIO A3 F10 the hand-back is given back when AIC is staffed again, and a line TAC_C2 passed on by decision stays passed on (docs/adr/0080, handBack)', () => {
+  const efsp = freshEfsp();
+  const c = crew(efsp, ALL);
+  const m = toAic(efsp, c, taskedLine(efsp, c, 'VAC15'));
+  hold(efsp, c.AIC.session, 'TACTICAL', []);
+  assert.equal(tac(efsp, m.stripId).ownerPositionId, 'TAC_C2');
+  assert.equal(tac(efsp, m.stripId).consolidatedFrom, 'AIC');
+  hold(efsp, c.AIC.session, 'TACTICAL', ['AIC']);
+  assert.equal(tac(efsp, m.stripId).ownerPositionId, 'AIC', 'returned');
+  assert.equal(tac(efsp, m.stripId).consolidatedFrom, undefined);
+});
+
+test('SCENARIO A3\'\' at Incirlik GND is on an offer list: GND walks away and the Strip stays GND\'s, not LC\'s (ADR 0110)', () => {
   const efsp = freshEfsp();
   const c = crew(efsp, { OPS: 'INCIRLIK', GC: 'INCIRLIK', LC: 'INCIRLIK', AP: 'INCIRLIK' });
   const strip = mustAct(efsp, c.OPS, 'OPS', null, {

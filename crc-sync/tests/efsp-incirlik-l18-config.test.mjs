@@ -26,16 +26,13 @@ const { CorrelationReconciler, INELIGIBLE_STATES } = await import('../src/efsp/c
 const clone = (o) => JSON.parse(JSON.stringify(o));
 const valid = (cfg) => fc.validateConfig(cfg);
 
-test('INCIRLIK has RSU, SFA and PAR: MILITARY_ATC (so CA keeps them), unique letters, consolidation chain without RSU', () => {
+test('INCIRLIK has RSU, SFA and PAR: MILITARY_ATC (so CA keeps them), unique letters', () => {
   const cfg = fc.getFacilityConfig();
   assert.deepEqual(cfg.positions, ['OPS', 'CD', 'GC', 'LC', 'RSU', 'AP', 'SFA', 'PAR']);
   for (const id of ['RSU', 'SFA', 'PAR']) assert.equal(fc.getPositionClass(id), 'MILITARY_ATC', id);
   assert.deepEqual([cfg.positionLetters.RSU, cfg.positionLetters.SFA, cfg.positionLetters.PAR], ['R', 'S', 'P']);
   const letters = Object.values(cfg.positionLetters);
   assert.equal(new Set(letters).size, letters.length, 'a letter is unique inside the Facility');
-  assert.equal(cfg.consolidation.SFA, 'AP');
-  assert.equal(cfg.consolidation.PAR, 'AP');
-  assert.equal('RSU' in cfg.consolidation, false, 'a Strip never strands on a supervisory Position');
 });
 
 test('radars: RSU the airport radar, SFA AP\'s picture, PAR the precision approach radar alone', () => {

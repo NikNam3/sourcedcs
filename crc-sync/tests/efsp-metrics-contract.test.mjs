@@ -78,7 +78,7 @@ const METRICS_SHAPE = {
   staleness: { status: STATUS, target: { kind: STR }, total: NUM_OR_NULL, byPosition: OBJ, byState: OBJ, byHour: OBJ },
   transfers: {
     status: STATUS, target: { kind: STR, value: NUM },
-    attempts: NUM, succeeded: NUM, failed: NUM, failureRate: NUM_OR_NULL, routedToConsolidated: NUM, inhibitedPress: NUM,
+    attempts: NUM, succeeded: NUM, failed: NUM, failureRate: NUM_OR_NULL, toUnstaffed: NUM, inhibitedPress: NUM,
     byCause: OBJ, byKind: { TRANSFER: { attempts: NUM, failed: NUM }, NLA_TRANSFER: { attempts: NUM, failed: NUM } }, byHour: OBJ,
   },
   obligations: { status: STATUS, live: 'object|null' },

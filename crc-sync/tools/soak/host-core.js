@@ -101,6 +101,8 @@ function createHost(env, { stateDir }) {
   // ── per-command capture ────────────────────────────────────────────────
   let out = [];
   let sender = null;
+  let sendingMutation = false;
+  let dyingSend = false;            // the current `send` is the R2 message the host dies on
   const causeStack = [];
   let touched = [];                 // [{fid, id, cause}] this command
   let carried = new Set();          // `${fid}|${id}` carried by a board-delta broadcast this command
@@ -147,11 +149,13 @@ function createHost(env, { stateDir }) {
   // ── fake sockets (tests/ws-hub-heartbeat.test.mjs:11-15's precedent) ───
   const sockets = new Map(); // clientId -> { ws, handlers, session }
   function deliver(clientId, payload) {
-    if (inject.dropAck && clientId === sender && payload.startsWith('{"version":1,"type":"efsp-mutation-ack"') && payload.includes('"ok":true')) {
+    // Not the R2 message the host is about to die on: its ack is already lost by design, so swallowing it would spend the fault on nothing.
+    if (inject.dropAck && !dyingSend && clientId === sender && payload.startsWith('{"version":1,"type":"efsp-mutation-ack"') && payload.includes('"ok":true')) {
       inject.dropAck = false;
       return; // selfcheck: the host swallows one ack
     }
-    if (inject.dropBroadcast && clientId !== sender && payload.startsWith('{"version":1,"type":"efsp-board-delta"') && !payload.includes('"updated":[],"gone":[]')) {
+    // Only a Mutation's broadcast is checked against its ack (driver `_checkBroadcast`): a staffing re-send swallowed instead would spend the fault unseen.
+    if (inject.dropBroadcast && sendingMutation && clientId !== sender && payload.startsWith('{"version":1,"type":"efsp-board-delta"') && !payload.includes('"updated":[],"gone":[]')) {
       inject.dropBroadcast = false;
       return; // selfcheck: one board-delta withheld from one client
     }
@@ -331,9 +335,12 @@ function createHost(env, { stateDir }) {
         const s = sockets.get(cmd.clientId);
         if (!s) { reply.noSocket = true; break; }
         sender = cmd.clientId;
+        dyingSend = !!cmd.dieAfter;
+        sendingMutation = !!(cmd.msg && cmd.msg.type === 'efsp-mutation');
         const t0 = performance.now();
         s.handlers.message(JSON.stringify(cmd.msg));
         reply.serverMs = performance.now() - t0;
+        dyingSend = false;
         if (cmd.dieAfter) {
           // R2: the Mutation applied and persisted; the process dies before
           // its ack reaches anyone.

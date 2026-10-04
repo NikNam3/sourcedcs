@@ -43,10 +43,10 @@ test('SCENARIO Ground walks away holding strips: they stay Ground\'s, LC is offe
   });
   assert.equal(onGround.ownerPositionId, 'GC');
 
-  // GC vacates. GC ends its chain (a tower controller takes ground by combining), so nothing is reassigned: the Strip is
-  // still GC's, the warning says nobody covers it, and LC's Primary is offered GC.
+  // GC vacates. Nothing is reassigned (docs/adr/0110): the Strip is still GC's, the warning says LC is offered GC, and LC's
+  // Primary is offered GC (the standing hatOffers; the legacy frame still goes out until CONSOL-C).
   const left = hold(efsp, c.GC.session, 'INCIRLIK', []);
-  assert.deepEqual(left.ack.warnings, [{ positionId: 'GC', count: 1, routedTo: null }]);
+  assert.deepEqual(left.ack.warnings, [{ positionId: 'GC', count: 1, offeredTo: 'LC' }]);
   assert.equal(left.directed[0].frame.type, 'efsp-position-offer');
   assert.equal(efsp.boardStoreFor('INCIRLIK').getStrip(onGround.stripId).ownerPositionId, 'GC');
 
@@ -65,11 +65,10 @@ test('SCENARIO the last controller leaves and the strips are visibly stranded, n
   const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'STRAND1' });
   assert.equal(strip.ownerPositionId, 'AP');
 
-  // AP has no Position to be consolidated at (the chain ends there), so this is
-  // defect D19's boundary: the warning has to be distinct from "routed", and
-  // the Strip must not quietly disappear.
+  // AP has no offer list (the chain ends there), so this is defect D19's boundary: the warning has to be distinct
+  // (`offeredTo: null`), and the Strip must not quietly disappear.
   const ack = hold(efsp, c.AP.session, 'INCIRLIK', []).ack;
-  assert.deepEqual(ack.warnings, [{ positionId: 'AP', count: 1, routedTo: null }]);
+  assert.deepEqual(ack.warnings, [{ positionId: 'AP', count: 1, offeredTo: null }]);
   const stranded = efsp.boardStoreFor('INCIRLIK').getStrip(strip.stripId);
   assert.equal(stranded.ownerPositionId, 'AP', 'still owned by an unstaffed Position — surfaced, not hidden');
   assert.equal(stranded.state, 'HANDED_OFF');

@@ -34,10 +34,8 @@ const reject = (c, fragment) => {
   assert.match(r.detail, new RegExp(fragment));
 };
 
-test('the shipped Incirlik config has no GC consolidation and carries GC and LC frequencies', () => {
+test('the shipped Incirlik config carries GC and LC frequencies (the offer lists are asserted in efsp-facility-config.test.mjs)', () => {
   const c = shipped();
-  assert.equal('GC' in c.consolidation, false);
-  assert.deepEqual(c.consolidation, { CD: 'GC', LC: 'AP', SFA: 'AP', PAR: 'AP' });
   assert.deepEqual(Object.keys(c.positionFrequencies).sort(), ['GC', 'LC']);
   assert.deepEqual(schema.validateFacilityConfig(c, 'INCIRLIK'), { ok: true });
 });
@@ -56,7 +54,7 @@ test('positionFrequencies is checked: known Position, array of { label, mhz }, i
 });
 
 test('PositionStore carries frequencies and is combined-Position aware', () => {
-  const store = new PositionStore(['GC', 'LC', 'AP'], { LC: 'AP' }, { frequencies: { GC: [{ label: 'GND', mhz: 275.8 }], LC: [{ label: 'TWR', mhz: 251 }] } });
+  const store = new PositionStore(['GC', 'LC', 'AP'], { consolidation: { LC: ['AP'] } }, { frequencies: { GC: [{ label: 'GND', mhz: 275.8 }], LC: [{ label: 'TWR', mhz: 251 }] } });
   store.setSignedOnPositions('a', 'Alice', ['LC', 'GC']);
   assert.deepEqual(store.frequenciesHeldBy('a'), [{ positionId: 'LC', label: 'TWR', mhz: 251 }, { positionId: 'GC', label: 'GND', mhz: 275.8 }]
     .sort((x, y) => store.primaryPositionsOf('a').indexOf(x.positionId) - store.primaryPositionsOf('a').indexOf(y.positionId)));
@@ -132,11 +130,13 @@ test('no offer when LC left GC itself, when GC has no Strips, or when nobody hol
   assert.ok(combination.LUAW_STATES.includes('LUAW'));
 });
 
-test('an NLA into an empty GC is inhibited, no longer silently routed to LC', async () => {
+test('an empty GC with LC staffed is offered to LC; CD is offered to the first staffed of GC, LC, AP (docs/adr/0110: GC is back on an offer list)', () => {
   const efsp = createEfsp({ currentTheater: () => 'Test' });
-  const c = crew(efsp, { OPS: 'INCIRLIK', CD: 'INCIRLIK', LC: 'INCIRLIK' });
-  const fac = efsp.boardStoreFor('INCIRLIK');
-  assert.equal(efsp.positionStoreFor('INCIRLIK').consolidatedAt('GC'), null);
-  assert.equal(efsp.positionStoreFor('INCIRLIK').consolidatedAt('CD'), null, 'CD follows GC and GC ends the chain');
-  assert.ok(fac);
+  const c = crew(efsp, { OPS: 'INCIRLIK', CD: 'INCIRLIK' });
+  const positions = efsp.positionStoreFor('INCIRLIK');
+  assert.equal(positions.consolidatedAt('GC'), null, 'nobody on LC or AP');
+  crew(efsp, { LC: 'INCIRLIK' });
+  assert.equal(positions.consolidatedAt('GC'), 'LC');
+  assert.equal(positions.consolidatedAt('LC'), null, 'LC is staffed: AP is empty');
+  assert.ok(c.CD);
 });

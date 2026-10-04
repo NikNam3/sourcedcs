@@ -221,17 +221,17 @@ test('I4 a transferring Strip archived while the exchange is ACTIVE, and the mis
 
 // ── I5: a Position signs off while owning an exchange Strip ─────────────────────────────────────────────────────────
 
-test('I5 sign-off with a covering Position: the Strip follows consolidation to a staffed Position; nothing is repaired', () => {
+test('I5 sign-off with a staffed Position offered the hat: the Strip stays, the Position counts as covered; nothing is repaired (docs/adr/0110)', () => {
   const w = world();
   const ex = ex0(w, 'I5A');
   mustR(w, ex, { kind: 'HANDOFF', action: 'TRANSFER_COMMS' });
   mustR(w, ex, { kind: 'HANDOFF', action: 'TRANSFER_CONTROL' });
   mustR(w, ex, { kind: 'TransferStrip', toPositionId: 'LC', bayId: 'lc-coordination', rackId: 'main' });
   hold(w.efsp, w.c.LC.session, 'INCIRLIK', []);
-  assert.equal(ex.R().ownerPositionId, 'AP');
+  assert.equal(ex.R().ownerPositionId, 'LC');
   holds(w, ex);
   assert.equal(repairs(w).length, 0);
-  assert.equal(ex.R().coordination.separationResponsibilityRef.positionId, 'AP');
+  assert.equal(ex.R().coordination.separationResponsibilityRef.positionId, 'LC');
 });
 
 test('I5 sign-off with nobody to cover: the sign-off is not blocked; the holder moves to the live, staffed side and both panels say so', () => repairMode(() => {

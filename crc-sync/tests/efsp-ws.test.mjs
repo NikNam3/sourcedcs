@@ -36,7 +36,7 @@ function makeCtx() {
   const facilities = new Map();
 
   for (const facilityId of facilityIds) {
-    const positionStore = new PositionStore(facilityConfig.getPositionSet(facilityId), facilityConfig.getConsolidation(facilityId));
+    const positionStore = new PositionStore(facilityConfig.getPositionSet(facilityId), facilityConfig.getHatMaps(facilityId));
     const rules = {
       resolveBlockTarget: (blockId, stripType) => blockMap.resolveBlockTarget(stripType, blockId),
       bayImpliesState: (bayId) => facilityConfig.bayImpliesState(bayId, facilityId),
@@ -258,7 +258,7 @@ test('setting signed-on positions acks with the actually-signed-on set and broad
   assert.equal(slot(result, 'primary').positions.updated.length, 8); // all of INCIRLIK's Positions reported (RSU, SFA, PAR since L18)
 });
 
-test('GC vacated with Strips while LC is staffed: the Strips stay GC\'s, the warning is routedTo:null, and LC\'s Primary is offered GC (ADR 0105)', () => {
+test('GC vacated with Strips while LC is staffed: the Strips stay GC\'s, the warning is offeredTo:LC, LC\'s Positions entry carries the standing hatOffer, and the legacy frame still goes out (ADR 0105, 0110)', () => {
   const ctx = makeCtx();
   handleMessage(ctx, SESSION, { type: 'efsp-set-positions', signedOn: ['GC'] }, noopPersist); // Alice is signed on at GC
   handleMessage(ctx, { controllerId: 'controller-2', who: 'Bob' }, { type: 'efsp-set-positions', signedOn: ['LC'] }, noopPersist); // Bob signs on at LC
@@ -267,12 +267,15 @@ test('GC vacated with Strips while LC is staffed: the Strips stay GC\'s, the war
   const strip = createStripOwnedBy(ctx, 'GC', 'gc-coordination');
 
   const result = handleMessage(ctx, SESSION, { type: 'efsp-set-positions', signedOn: [] }, noopPersist); // Alice vacates GC
-  assert.deepEqual(result.ack.warnings, [{ positionId: 'GC', count: 1, routedTo: null }]);
+  assert.deepEqual(result.ack.warnings, [{ positionId: 'GC', count: 1, offeredTo: 'LC' }]);
   assert.equal(ctx.boardStoreFor('INCIRLIK').getStrip(strip.stripId).ownerPositionId, 'GC', 'nothing is reassigned to LC');
+  const lcEntry = slot(result, 'primary').positions.updated.find(p => p.positionId === 'LC');
+  assert.deepEqual(lcEntry.hatOffers, [{ positionId: 'GC', count: 1, onRunway: 0, observersFirst: false }]);
+  assert.equal('consolidatedPositions' in lcEntry, false);
   assert.equal(result.directed.length, 1);
   assert.equal(result.directed[0].positionId, 'LC');
   assert.deepEqual({ ...result.directed[0].frame, version: undefined }, { version: undefined, type: 'efsp-position-offer', facilityId: 'INCIRLIK', positionId: 'LC', offer: 'GC', count: 1 });
-  // Only LC's Primary hears it.
+  // LEGACY frame (CONSOL-C removes it): only LC's Primary hears it.
   const bob = { controllerId: 'controller-2', who: 'Bob' };
   assert.ok(directedFor(ctx, bob, result.directed[0]));
   assert.equal(directedFor(ctx, { controllerId: 'controller-3', who: 'Cy' }, result.directed[0]), null);
@@ -283,7 +286,7 @@ test('GC vacated with Strips while LC is staffed: the Strips stay GC\'s, the war
   assert.equal(ctx.boardStoreFor('INCIRLIK').getStrip(strip.stripId).ownerPositionId, 'GC', 'still GC\'s, now advanceable by the one who holds GC');
 });
 
-test('vacating a Position with Strips and NO staffed consolidating Position anywhere reports routedTo:null, distinctly, and does not silently drop the Strip', () => {
+test('vacating a Position with Strips and nobody on its offer list reports offeredTo:null, distinctly, and does not silently drop the Strip', () => {
   const ctx = makeCtx();
   handleMessage(ctx, SESSION, { type: 'efsp-set-positions', signedOn: ['GC'] }, noopPersist); // GC signed on, but nobody signed on at LC
   // gc-coordination (not gc-taxi-in) — this fixture just needs "GC owns
@@ -293,7 +296,7 @@ test('vacating a Position with Strips and NO staffed consolidating Position anyw
   const strip = createStripOwnedBy(ctx, 'GC', 'gc-coordination');
 
   const result = handleMessage(ctx, SESSION, { type: 'efsp-set-positions', signedOn: [] }, noopPersist);
-  assert.deepEqual(result.ack.warnings, [{ positionId: 'GC', count: 1, routedTo: null }]);
+  assert.deepEqual(result.ack.warnings, [{ positionId: 'GC', count: 1, offeredTo: null }]);
   // Strip ownership is untouched — still GC, which is now unstaffed; this
   // is the D19 boundary condition itself, surfaced rather than hidden.
   assert.equal(ctx.boardStoreFor('INCIRLIK').getStrip(strip.stripId).ownerPositionId, 'GC');
@@ -306,17 +309,27 @@ test('vacating a Position that owns no Strips produces no warnings at all', () =
   assert.deepEqual(result.ack.warnings, []);
 });
 
-test('a non-abrupt vacate does NOT auto-promote a waiting Observer, so its Strips still need routing (position-store.js\'s promotion-is-a-prompt rule feeds straight into the strand check)', () => {
+test('a non-abrupt vacate does NOT auto-promote a waiting Observer; the Observer takes the Position by declaring it again (F1, docs/adr/0110 §3)', () => {
   const ctx = makeCtx();
+  const bob = { controllerId: 'controller-2', who: 'Bob' };
   handleMessage(ctx, SESSION, { type: 'efsp-set-positions', signedOn: ['GC'] }, noopPersist); // Alice Primary
-  handleMessage(ctx, { controllerId: 'controller-2', who: 'Bob' }, { type: 'efsp-set-positions', signedOn: ['GC'] }, noopPersist); // Bob Observer
+  handleMessage(ctx, bob, { type: 'efsp-set-positions', signedOn: ['GC'] }, noopPersist); // Bob Observer
 
   createStripOwnedBy(ctx, 'GC', 'gc-coordination'); // see the comment above the other two uses of this fixture
 
   const result = handleMessage(ctx, SESSION, { type: 'efsp-set-positions', signedOn: [] }, noopPersist); // Alice explicitly vacates
-  assert.equal(ctx.positionStoreFor('INCIRLIK').isStaffed('GC'), false); // Bob was NOT auto-promoted — an explicit prompt is required, not built here
-  assert.equal(result.ack.warnings.length, 1); // so the Strip genuinely needed routing, and GC has no Position it is consolidated at staffed in this fixture
-  assert.equal(result.ack.warnings[0].routedTo, null);
+  assert.equal(ctx.positionStoreFor('INCIRLIK').isStaffed('GC'), false); // Bob was NOT auto-promoted
+  assert.deepEqual(result.ack.warnings, [{ positionId: 'GC', count: 1, offeredTo: null }]);
+  const gcEntry = slot(result, 'primary').positions.updated.find(p => p.positionId === 'GC');
+  assert.equal(gcEntry.primary, null);
+  assert.deepEqual(gcEntry.observers.map(o => o.controllerId), ['controller-2'], 'the Observer prompt reads primary:null with observers');
+
+  // Bob re-sends the same declared set: the wire path F1 lacked.
+  const taken = handleMessage(ctx, bob, { type: 'efsp-set-positions', signedOn: ['GC'] }, noopPersist);
+  assert.equal(ctx.positionStoreFor('INCIRLIK').primaryOf('GC'), 'controller-2');
+  assert.deepEqual(taken.ack.signedOn, ['GC']);
+  const after = slot(taken, 'primary').positions.updated.find(p => p.positionId === 'GC');
+  assert.equal(after.primary.controllerId, 'controller-2');
 });
 
 // ── WP5 correlation ops — the third dispatch path (docs/adr/0045) ─────────

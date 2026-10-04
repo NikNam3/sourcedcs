@@ -123,7 +123,7 @@ test('every refusal is logged exactly once', () => {
 test('every entry written by any path names its facilityId, and its flight data where it has one', () => {
   const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'AUD2' });
   const handed = handedToCenter(efsp, c, strip);
-  // A correlation and a MARSA, a runway-status op, a consolidation reassignment.
+  // A correlation and a MARSA, a runway-status op, a return of a legacy reassigned Strip.
   send(c.OPS, { type: 'efsp-correlation-mutation', clientMutationId: crypto.randomUUID(), flightDataId: handed.flightDataId, baseRev: 0, actingPositionId: 'OPS', op: { kind: 'BindTrack', trackId: '9' } });
   const other = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'AUD3' });
   send(c.OPS, { type: 'efsp-marsa-mutation', clientMutationId: crypto.randomUUID(), actingPositionId: 'OPS', op: { kind: 'DeclareMarsa', participants: [strip.flightDataId, other.flightDataId], startEvent: 'LOCAL_DECLARATION', endCondition: 'MTR_COMPLETE', declaringCallsign: 'AUD2' } });
@@ -131,7 +131,10 @@ test('every entry written by any path names its facilityId, and its flight data 
   let tw = mustAct(efsp, c.OPS, 'OPS', null, { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE', flightData: { ...DEPARTURE_FLIGHT_DATA, callsign: 'AUD8' } });
   tw = jumpTo(efsp, c.OPS, 'OPS', tw, 'DEPARTED');
   mustAct(efsp, c.OPS, 'OPS', tw, { kind: 'TransferStrip', toPositionId: 'LC', bayId: 'lc-airborne', rackId: 'main' });
-  hold(efsp, c.LC.session, 'INCIRLIK', []); // LC vacates; its Strips go to the Position it is consolidated at (AP)
+  // A Board persisted before docs/adr/0110 may hold a Strip the old reassignment moved to AP: it goes home when LC is staffed again.
+  const legacy = efsp.boardStoreFor('INCIRLIK').getStrip(tw.stripId);
+  legacy.ownerPositionId = 'AP'; legacy.consolidatedFrom = 'LC';
+  hold(efsp, c.LC.session, 'INCIRLIK', []);
   hold(efsp, c.LC.session, 'INCIRLIK', ['LC']);
 
   const all = efsp.mutationLog.readAll();

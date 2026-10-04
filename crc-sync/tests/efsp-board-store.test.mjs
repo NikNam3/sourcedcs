@@ -785,8 +785,22 @@ test('TransferStrip to an unstaffed Position with no consolidating Position is r
   assert.equal(board.getStrip(strip.stripId).ownerPositionId, 'OPS');
 });
 
-test('TransferStrip to an unstaffed Position with a staffed consolidating Position routes there instead, and reports routedTo', () => {
-  const { board } = makeStore(); // fixture: UNSTAFFED -> consolidated at COVER, and COVER is staffed
+test('TransferStrip to an unstaffed Position with a staffed hat-taker is delivered there with UNSTAFFED_RECEIVER (docs/adr/0110 §4)', () => {
+  const { board } = makeStore(); // fixture: UNSTAFFED is offered to COVER, and COVER is staffed
+  const strip = createStrip(board, 'OPS');
+  const result = board.applyMutation(
+    mutation(strip, { kind: 'TransferStrip', toPositionId: 'UNSTAFFED', bayId: 'x', rackId: 'y' }),
+    'OPS', 'OPS'
+  );
+  assert.equal(result.ok, true);
+  assert.equal(result.strip.ownerPositionId, 'UNSTAFFED');
+  assert.equal(result.routedTo, null);
+  assert.deepEqual(result.warnings.map(w => w.code), ['UNSTAFFED_RECEIVER']);
+  assert.match(result.warnings[0].detail, /offered to COVER/);
+});
+
+test('TransferStrip to an unstaffed handBack source is routed to its staffed target and reports routedTo (TACTICAL, docs/adr/0110 decision 7)', () => {
+  const { board } = makeStore({ handBackTo: (id) => (id === 'UNSTAFFED' ? 'COVER' : null) });
   const strip = createStrip(board, 'OPS');
   const result = board.applyMutation(
     mutation(strip, { kind: 'TransferStrip', toPositionId: 'UNSTAFFED', bayId: 'x', rackId: 'y' }),

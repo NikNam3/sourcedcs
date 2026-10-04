@@ -274,39 +274,44 @@ test('S-L24 a refused TOFI retires the strip it minted through the same path (ar
   assert.ok(efsp.boardStoreFor('TACTICAL')._droppedWallAt.has(minted.stripId));
 });
 
-// ── F10: the Position an unstaffed one is consolidated at gives the Strips back ────────────────────────
+// ── F10: what a sign-off leaves behind (docs/adr/0110: nothing moves on an ATC Facility; TACTICAL's handBack is in efsp-scenario-tactical) ──
 
-test('F10 Strips routed to a consolidating Position go back, into the returning Position\'s Bay, when it is staffed again', () => {
+test('a Strip stays CD\'s when CD signs off and is workable again when CD is staffed (docs/adr/0110: no routing, so nothing to return)', () => {
   const efsp = freshEfsp();
   const c = crew(efsp, { OPS: 'INCIRLIK', CD: 'INCIRLIK', GC: 'INCIRLIK' });
   let s = mustAct(efsp, c.OPS, 'OPS', null, { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE', flightData: { ...DEPARTURE_FLIGHT_DATA, callsign: 'L23F1' } });
   s = mustAct(efsp, c.OPS, 'OPS', s, { kind: 'InvokeNla' }); // Send to Clearance: the Strip is CD's now
   assert.equal(inc(efsp, s.stripId).ownerPositionId, 'CD');
-  assert.equal(inc(efsp, s.stripId).state, 'PENDING_CLEARANCE');
+  const bay = inc(efsp, s.stripId).bayId;
 
   hold(efsp, c.CD.session, 'INCIRLIK', []);
-  assert.equal(inc(efsp, s.stripId).ownerPositionId, 'GC', 'covered by GND');
-  assert.equal(inc(efsp, s.stripId).consolidatedFrom, 'CD');
-  assert.ok(baysOf('GC', 'INCIRLIK').includes(inc(efsp, s.stripId).bayId));
+  assert.equal(inc(efsp, s.stripId).ownerPositionId, 'CD', 'GC is offered CD; the Strip does not move');
+  assert.equal(inc(efsp, s.stripId).consolidatedFrom, undefined);
+  assert.equal(inc(efsp, s.stripId).bayId, bay);
 
-  const newCd = { controllerId: 'c-CD2', who: 'CD2' };
-  const back = hold(efsp, newCd, 'INCIRLIK', ['CD']);
+  const back = hold(efsp, { controllerId: 'c-CD2', who: 'CD2' }, 'INCIRLIK', ['CD']);
   const after = inc(efsp, s.stripId);
-  assert.equal(after.ownerPositionId, 'CD', 'returned');
+  assert.equal(after.ownerPositionId, 'CD');
   assert.equal(after.bayId, 'cd-pending-clearance');
-  assert.equal(after.consolidatedFrom, undefined);
-  assert.ok(slot(back, 'primary').strips.updated.some(x => x.stripId === s.stripId), 'the return is broadcast');
+  assert.equal(slot(back, 'primary').positions.updated.find(p => p.positionId === 'GC').hatOffers.length, 0, 'the offer lapsed with the sign-on');
 });
 
-test('F10 a Strip the consolidating Position transferred on by decision does not come back', () => {
+test('F10 legacy: a Strip a Board persisted with consolidatedFrom (the old reassignment) goes home into the returning Position\'s Bay, and one transferred on by decision does not', () => {
   const efsp = freshEfsp();
   const c = crew(efsp, { OPS: 'INCIRLIK', CD: 'INCIRLIK', GC: 'INCIRLIK', LC: 'INCIRLIK' });
-  let s = mustAct(efsp, c.OPS, 'OPS', null, { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE', flightData: { ...DEPARTURE_FLIGHT_DATA, callsign: 'L23F2' } });
-  s = mustAct(efsp, c.OPS, 'OPS', s, { kind: 'InvokeNla' });
+  const make = (callsign) => {
+    let s = mustAct(efsp, c.OPS, 'OPS', null, { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE', flightData: { ...DEPARTURE_FLIGHT_DATA, callsign } });
+    return mustAct(efsp, c.OPS, 'OPS', s, { kind: 'InvokeNla' });
+  };
+  const home = make('L23F2'); const decided = make('L23F3');
   hold(efsp, c.CD.session, 'INCIRLIK', []);
-  mustAct(efsp, c.GC, 'GC', inc(efsp, s.stripId), { kind: 'TransferStrip', toPositionId: 'LC', bayId: 'lc-coordination', rackId: 'main' });
+  for (const s of [home, decided]) { const x = inc(efsp, s.stripId); x.ownerPositionId = 'GC'; x.consolidatedFrom = 'CD'; x.bayId = 'gc-coordination'; }
+  mustAct(efsp, c.GC, 'GC', inc(efsp, decided.stripId), { kind: 'TransferStrip', toPositionId: 'LC', bayId: 'lc-coordination', rackId: 'main' });
   hold(efsp, { controllerId: 'c-CD3', who: 'CD3' }, 'INCIRLIK', ['CD']);
-  assert.equal(inc(efsp, s.stripId).ownerPositionId, 'LC');
+  assert.equal(inc(efsp, home.stripId).ownerPositionId, 'CD');
+  assert.equal(inc(efsp, home.stripId).bayId, 'cd-pending-clearance');
+  assert.equal(inc(efsp, home.stripId).consolidatedFrom, undefined);
+  assert.equal(inc(efsp, decided.stripId).ownerPositionId, 'LC');
 });
 
 // ── U7: a coordination link cannot outlive the side that could answer it ───

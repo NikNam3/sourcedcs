@@ -31,7 +31,7 @@ function makeCtx() {
   const facilities = new Map();
 
   for (const facilityId of facilityConfig.getFacilityIds()) {
-    const positionStore = new PositionStore(facilityConfig.getPositionSet(facilityId), facilityConfig.getConsolidation(facilityId));
+    const positionStore = new PositionStore(facilityConfig.getPositionSet(facilityId), facilityConfig.getHatMaps(facilityId));
     const rules = {
       resolveBlockTarget: (blockId, stripType) => blockMap.resolveBlockTarget(stripType, blockId),
       bayImpliesState: (bayId) => facilityConfig.bayImpliesState(bayId, facilityId),

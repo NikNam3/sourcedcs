@@ -272,41 +272,43 @@ test('a rotation applies to an ARRIVAL at INBOUND only: a Strip already on final
   refused(act(efsp, c.OPS, 'OPS', dep, { kind: 'SfaRotation' }), 'PERMISSION_DENIED', null, 'OPS holds no rotation right');
 });
 
-test('LATE ARRIVAL: SFA vacates with aircraft on its frequencies; the Strips go to AP, every frequency is unchanged, and they come back to their own Racks when SFA returns', () => {
+test('LATE ARRIVAL: SFA vacates with aircraft on its frequencies; the Strips stay SFA\'s, AP is offered the hat, every frequency is unchanged (docs/adr/0110)', () => {
   const { efsp, c } = fresh();
   const a = sfaArrival(efsp, c, 'freq-1');
   const b = sfaArrival(efsp, c, 'freq-5');
   const result = hold(efsp, c.SFA.session, 'INCIRLIK', []);
-  assert.deepEqual(result.ack.warnings, [{ positionId: 'SFA', count: 2, routedTo: 'AP' }]);
-  for (const [s, mhz] of [[a, MS['freq-1']], [b, MS['freq-5']]]) {
+  assert.deepEqual(result.ack.warnings, [{ positionId: 'SFA', count: 2, offeredTo: 'AP' }]);
+  for (const [s, mhz, rack] of [[a, MS['freq-1'], 'freq-1'], [b, MS['freq-5'], 'freq-5']]) {
     const now = strip(efsp, s);
-    assert.equal(now.ownerPositionId, 'AP', 'the covering Position holds them');
-    assert.equal(now.bayId, 'ap-inbound', 'in the Bay APP works inbound aircraft from, not a frequency Rack APP does not have');
+    assert.equal(now.ownerPositionId, 'SFA', 'nothing moved');
+    assert.equal(now.bayId, 'sfa-frequencies');
+    assert.equal(now.rackId, rack);
     assert.equal(freqOf(efsp, s), mhz, 'the frequency did not change when the controller did');
   }
-  // SFA returns late: the consolidation hand-back puts each aircraft back on ITS frequency Rack
+  const ap = result.broadcasts[0].positions.updated.find(p => p.positionId === 'AP');
+  assert.deepEqual(ap.hatOffers, [{ positionId: 'SFA', count: 2, onRunway: 0, observersFirst: false }]);
+  // SFA returns late: nothing to give back, the offer lapses
   hold(efsp, c.SFA.session, 'INCIRLIK', ['SFA']);
   for (const [s, rack] of [[a, 'freq-1'], [b, 'freq-5']]) {
     const now = strip(efsp, s);
     assert.equal(now.ownerPositionId, 'SFA');
-    assert.equal(now.bayId, 'sfa-frequencies');
     assert.equal(now.rackId, rack);
     assert.equal(freqOf(efsp, s), MS[rack]);
   }
 });
 
-test('LATE ARRIVAL: PAR vacates with an aircraft on final; the Strip is not lost (it goes to AP, which cannot advance it: the trap L17 recorded for the Marshal), and PAR gets it back', () => {
+test('LATE ARRIVAL: PAR vacates with an aircraft on final; the Strip is not lost and not parked at AP (which cannot advance it): it stays PAR\'s and AP is offered PAR', () => {
   const { efsp, c } = fresh();
   const s = sfaArrival(efsp, c);
   mustAct(efsp, c.SFA, 'SFA', strip(efsp, s), { kind: 'SfaRotation' });
   const r = hold(efsp, c.PAR.session, 'INCIRLIK', []);
-  assert.deepEqual(r.ack.warnings, [{ positionId: 'PAR', count: 1, routedTo: 'AP' }]);
+  assert.deepEqual(r.ack.warnings, [{ positionId: 'PAR', count: 1, offeredTo: 'AP' }]);
   const now = strip(efsp, s);
-  assert.equal(now.ownerPositionId, 'AP');
+  assert.equal(now.ownerPositionId, 'PAR');
   assert.equal(now.state, 'ON_FINAL');
-  assert.ok(efsp.boardStoreFor('INCIRLIK').getRack(now.bayId, now.rackId).some(x => x.stripId === s.stripId), 'on a visible Rack of APP');
+  assert.equal(now.bayId, 'par-final');
   assert.equal(freqOf(efsp, s), MS['freq-2']);
-  refused(act(efsp, c.AP, 'AP', now, { kind: 'SetState', toState: 'BALL' }), 'PERMISSION_DENIED', null, 'APP holds a FINAL Strip it has no authority to advance');
+  refused(act(efsp, c.AP, 'AP', now, { kind: 'SetState', toState: 'BALL' }), 'NOT_OWNER', null, 'AP does not own it until it takes the hat and the Strip is not its');
   hold(efsp, c.PAR.session, 'INCIRLIK', ['PAR']);
   const back = strip(efsp, s);
   assert.equal(back.ownerPositionId, 'PAR');
@@ -361,16 +363,15 @@ test('the pilot CANCELS: an RSU Drop takes the Strip off the Board and a dropped
   assert.equal(live(efsp).length, 0);
 });
 
-test('LATE ARRIVAL: an aircraft is already in the pattern when RSU leaves; the Strip is not stranded on a Position outside the chain, it stays with RSU\'s seat empty', () => {
+test('LATE ARRIVAL: an aircraft is already in the pattern when RSU leaves; the Strip stays RSU\'s and LC is offered RSU (docs/adr/0110: RSU is back on a list)', () => {
   const { efsp, c } = fresh();
   const s = patternStrip(efsp, c, 'base');
   const r = hold(efsp, c.RSU.session, 'INCIRLIK', []);
   const now = strip(efsp, s);
-  // RSU has no Position to be consolidated at (ADR 0075: a supervisory Position the chain does not name), so nothing is
-  // re-routed and nothing is lost: the Strip stays owned by RSU in its Bay, and the ack says so.
+  // Nothing is re-routed and nothing is lost: the Strip stays owned by RSU in its Bay, and the ack names who is offered it.
   assert.equal(now.ownerPositionId, 'RSU');
   assert.equal(now.bayId, 'rsu-pattern');
-  assert.deepEqual(r.ack.warnings, [{ positionId: 'RSU', count: 1, routedTo: null }], 'the ack says nobody covers it');
+  assert.deepEqual(r.ack.warnings, [{ positionId: 'RSU', count: 1, offeredTo: 'LC' }]);
   hold(efsp, c.RSU.session, 'INCIRLIK', ['RSU']); // RSU back, late
   mustAct(efsp, c.RSU, 'RSU', strip(efsp, s), { kind: 'MoveStrip', bayId: 'rsu-pattern', rackId: 'final' });
 });

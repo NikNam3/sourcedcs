@@ -77,6 +77,7 @@ function _handleMutation(ctx, session, msg, persist) {
   const mutation = { clientMutationId: msg.clientMutationId, stripId: msg.stripId, baseRev: msg.baseRev, op: msg.op };
 
   const stateBefore = (boardStore.getStrip(msg.stripId) || {}).state;
+  const offersBefore = offersSignature(ctx);
   const result = boardStore.applyMutation(mutation, msg.actingPositionId, session.controllerId);
   // A throw part-way through an op leaves its earlier writes on the Board (`partial`): saved with their audit line, not dropped.
   if ((result.ok || result.partial) && !result.replayed) persist();
@@ -134,8 +135,13 @@ function _handleMutation(ctx, session, msg, persist) {
     return { ack, broadcasts: skeleton.orderSlots({ primary: boardDelta(ctx, boardStore, facilityId, touchedStrips(ctx, boardStore, facilityId, touched, null), []) }) };
   }
 
+  // docs/adr/0110 §6: a Mutation that changed who is offered what (a hand-off into an unstaffed Position, an Undo of one, a
+  // Strip dropped at one) carries that Facility's Positions; one that did not carries none, as before.
+  const offersAfter = offersSignature(ctx);
+  const offersMoved = [...offersAfter.keys()].filter(id => offersAfter.get(id) !== offersBefore.get(id));
   const slots = {
-    primary: boardDelta(ctx, boardStore, facilityId, touchedStrips(ctx, boardStore, facilityId, touched, stampedStrip), updatedFlightDataList),
+    primary: boardDelta(ctx, boardStore, facilityId, touchedStrips(ctx, boardStore, facilityId, touched, stampedStrip), updatedFlightDataList,
+      offersMoved.includes(facilityId) ? positionsWire(ctx, facilityId) : []),
   };
   // docs/adr/0100 §6 (H100 Q-U2 b): an Undo that voided another Position's Mutations tells that Position by a panel
   // message, sent by the hub after this round trip's broadcasts to the sessions signed on to it (directedFor).
@@ -168,6 +174,16 @@ function _handleMutation(ctx, session, msg, persist) {
     // flightDataList: one shared FlightDataStore (docs/adr/0013) — already covered by the primary broadcast's flightDataList.updated
     slots.peer = boardDelta(ctx, peerBoardStore, result.peerFacilityId,
       touchedStrips(ctx, peerBoardStore, result.peerFacilityId, peerTouched, peerStamped), []);
+  }
+
+  // Another Facility's offers moved (a cross-Facility replica minted at an unstaffed Position): its Positions ride the peer slot.
+  for (const id of offersMoved) {
+    if (id === facilityId) continue;
+    const peers = slots.peer ? (Array.isArray(slots.peer) ? slots.peer : [slots.peer]) : [];
+    const own = peers.find(f => f.facilityId === id);
+    if (own) own.positions = { updated: positionsWire(ctx, id) };
+    else { const b = ctx.boardStoreFor(id); peers.push(boardDelta(ctx, b, id, { updated: [], gone: [] }, [], positionsWire(ctx, id))); }
+    slots.peer = peers.length === 1 ? peers[0] : peers;
   }
 
   // WP6 (docs/adr/0051) — a Strip Mutation can change a MARSA relation without
@@ -315,7 +331,7 @@ function _resyncAnswer(ctx, session, msg) {
       // Facility (docs/adr/0013), so this list is NOT facility-scoped —
       // it's the same full set a snapshot would carry.
       ctx.flightDataStore.getAll(),
-      positionStore.getAll().map(p => ({ ...p, facilityId }))),
+      positionsWire(ctx, facilityId)),
   };
 }
 
@@ -329,7 +345,30 @@ function luawWhileCombined(positionStore, actingPositionId, controllerId, result
   if (!result.ok || !result.strip || result.strip.state !== 'LUAW' || stateBefore === 'LUAW') return undefined;
   if (actingPositionId !== combination.LOCAL) return undefined;
   const held = positionStore.primaryPositionsOf(controllerId);
-  return combination.NON_LOCAL_TOWER.some(id => held.includes(id)) ? warn('LUAW_WHILE_COMBINED') : undefined;
+  return combination.NON_LOCAL.some(id => held.includes(id)) ? warn('LUAW_WHILE_COMBINED') : undefined;
+}
+
+/**
+ * Every Position entry of a Facility as the wire carries it: the store's own plus `facilityId` and the standing `hatOffers`
+ * (docs/adr/0110 §6). The one place Positions are serialised.
+ */
+function positionsWire(ctx, facilityId) {
+  const positionStore = ctx.positionStoreFor(facilityId);
+  const strips = ctx.boardStoreFor(facilityId).getAll();
+  return positionStore.getAll().map(p => ({ ...p, facilityId, hatOffers: combination.hatOffersFor(positionStore, p.positionId, strips) }));
+}
+
+/** Per Facility, the offers standing now as a string: a before/after compare says whether a round trip changed any (docs/adr/0110 §6). */
+function offersSignature(ctx) {
+  const out = new Map();
+  for (const facilityId of ctx.facilityConfig.getFacilityIds()) {
+    const positionStore = ctx.positionStoreFor(facilityId);
+    const boardStore = ctx.boardStoreFor(facilityId);
+    if (!positionStore || !boardStore) continue;
+    const strips = boardStore.getAll();
+    out.set(facilityId, JSON.stringify(positionStore.positionIds().map(id => [id, positionStore.observersOf(id).length > 0, combination.hatOffersFor(positionStore, id, strips)])));
+  }
+  return out;
 }
 
 function facilityConfig_positionIds(ctx, facilityId) { return ctx.facilityConfig.getPositionSet(facilityId); }
@@ -350,7 +389,7 @@ function _handleSetPositions(ctx, session, msg, persist) {
   // A takeover (a sign-on that ended an absent Primary's held entry) is a sign-off of that Position too: same effects.
   const takenOver = positionStore.drainTakenOver();
   const fx = staffingChanged(ctx, session.controllerId, [{ facilityId, signedOn: actuallySignedOn, vacated: [...vacated, ...takenOver], staffedBefore }], persist);
-  const { warnings, offered } = fx.byFacility.get(facilityId);
+  const { warnings } = fx.byFacility.get(facilityId);
   const result = {
     // docs/adr/0105: `combination` is the warning for one controller holding LC with GC or CD (null otherwise), and
     // `monitoring` the frequencies of every Position this controller is Primary at (a combination has both).
@@ -359,8 +398,9 @@ function _handleSetPositions(ctx, session, msg, persist) {
       monitoring: positionStore.frequenciesHeldBy(session.controllerId) },
     broadcasts: skeleton.orderSlots({ primary: fx.primary.get(facilityId), peer: fx.peer.length ? fx.peer : null }),
   };
-  // The sign-on offer (docs/adr/0105) goes to LC's Primary alone, by the directed channel (docs/adr/0100 s6).
-  if (offered) result.directed = [{ facilityId, positionId: offered.positionId, primaryOnly: true, frame: { version: VERSION, type: 'efsp-position-offer', ...offered } }];
+  // LEGACY, removed with the client's handler in CONSOL-C: the one-shot GC offer to LC's Primary (docs/adr/0105), directed channel.
+  const legacy = fx.directed.filter(d => d.facilityId === facilityId);
+  if (legacy.length) result.directed = legacy;
   return result;
 }
 
@@ -370,11 +410,10 @@ function _handleSetPositions(ctx, session, msg, persist) {
  * disconnect has the same effects as an explicit one (docs/wip/SIGNOFF-EFFECTS.md).
  *
  * `changes` is `[{ facilityId, signedOn, vacated, staffedBefore }]`, one per Facility whose staffing moved, the Position
- * store already updated. Does: (1) the Strips of a Position left unstaffed go to where it was consolidated (or a visible
- * warning); (2) a Position that gained a Primary gets its routed-away Strips back; (3) the control invariant is repaired on
+ * store already updated. Does: (1) a Position left unstaffed with Strips warns who is offered its hat (nothing moves; TACTICAL hands the Strips back, docs/adr/0110); (2) a Position that gained a Primary gets its routed-away Strips back; (3) the control invariant is repaired on
  * every Facility's Board (docs/adr/0101, sign-off is never blocked, DR-6); (4) the other Boards' touched Strips are sent;
- * (5) the Board is persisted when 1-3 changed it; (6) the GC offer to LC's Primary (docs/adr/0105).
- * @returns {{byFacility: Map, primary: Map, peer: object[], directed: object[]}} per changed Facility `{warnings, offered}`,
+ * (5) the Board is persisted when 1-3 changed it; (6) the legacy GC offer to LC's Primary (docs/adr/0105, going with CONSOL-C).
+ * @returns {{byFacility: Map, primary: Map, peer: object[], directed: object[]}} per changed Facility `{warnings}`,
  *   its full-Board delta, the other Boards' deltas, and the directed offers.
  */
 function staffingChanged(ctx, controllerId, changes, persist) {
@@ -397,21 +436,30 @@ function staffingChanged(ctx, controllerId, changes, persist) {
       const owned = boardStore.getAll().filter(s => s.ownerPositionId === positionId && s.state !== 'DROPPED');
       if (owned.length === 0) continue;
 
-      const consolidatedAt = positionStore.consolidatedAt(positionId);
-      if (consolidatedAt) {
-        const moved = boardStore.reassignPositionStrips(positionId, consolidatedAt);
-        reassignedIds.push(...moved);
-        const warning = { positionId, count: owned.length, routedTo: consolidatedAt };
-        if (moved.unplaced && moved.unplaced.length) warning.unplaced = moved.unplaced.length; // no Bay of the Position they were consolidated at fits: they stay where they were
-        warnings.push(warning);
+      if (positionStore.hasHandBack(positionId)) {
+        // TACTICAL (docs/adr/0110 decision 7): the line was delegated, so it is handed back; it returns when this Position is staffed.
+        const handBack = positionStore.handBackTo(positionId);
+        if (handBack) {
+          const moved = boardStore.reassignPositionStrips(positionId, handBack);
+          reassignedIds.push(...moved);
+          const warning = { positionId, count: owned.length, routedTo: handBack };
+          if (moved.unplaced && moved.unplaced.length) warning.unplaced = moved.unplaced.length; // no Bay of the Position they were handed back to fits: they stay where they were
+          warnings.push(warning);
+        } else {
+          warnings.push({ positionId, count: owned.length, routedTo: null });
+        }
       } else {
-        // Defect D19 boundary: the consolidation chain bottomed out with nobody staffing any link. MUST be a visible,
-        // distinct condition — never a Strip silently left owned by an unstaffed Position with no signal to anyone (guide §4.8.6 rule 3).
-        warnings.push({ positionId, count: owned.length, routedTo: null });
+        // docs/adr/0110 §2: nothing moves. The Strips stay this Position's and the first staffed member of its list is
+        // offered the hat. `offeredTo: null` is defect D19's boundary: nobody to offer it to, a visible warning, never a block
+        // (guide §4.8.6 rule 3, rule 5). `onRunway` names an aircraft in LUAW or on FINAL (LC left with VIPER1 in LUAW).
+        const warning = { positionId, count: owned.length, offeredTo: positionStore.hatTakerOf(positionId) };
+        const onRunway = combination.onRunwayCount(owned);
+        if (onRunway) warning.onRunway = onRunway;
+        warnings.push(warning);
       }
     }
     if (reassignedIds.length > 0) boardChanged = true;
-    byFacility.set(c.facilityId, { warnings, offered: null });
+    byFacility.set(c.facilityId, { warnings });
   }
 
   // docs/adr/0101: a change of staffing is when a HANDOFF holder can lose its staffed owner. Every Facility's exchanges are
@@ -440,16 +488,16 @@ function staffingChanged(ctx, controllerId, changes, persist) {
     const positionStore = ctx.positionStoreFor(c.facilityId);
     primary.set(c.facilityId, boardDelta(ctx, boardStore, c.facilityId,
       { updated: boardStore.getAll().filter(s => s.state !== 'DROPPED').map(s => stampStrip(boardStore, s, c.facilityId, ctx)), gone: [] },
-      [], positionStore.getAll().map(p => ({ ...p, facilityId: c.facilityId }))));
+      [], positionsWire(ctx, c.facilityId)));
     boardStore.drainTouched();
   }
   // A consolidation reassignment or a repair changes the Board; a restart before the next Mutation must not undo it (docs/adr/0081).
   if (boardChanged && typeof persist === 'function') persist();
 
+  // LEGACY (CONSOL-C removes it with the client's handler): the one-shot GC offer to LC's Primary, beside the standing hatOffers.
   const directed = [];
   for (const c of changes) {
-    const offered = combination.offerAfterSignOff(ctx.positionStoreFor(c.facilityId), ctx.boardStoreFor(c.facilityId), c.facilityId, c.vacated, controllerId);
-    byFacility.get(c.facilityId).offered = offered;
+    const offered = combination.legacyOfferAfterSignOff(ctx.positionStoreFor(c.facilityId), ctx.boardStoreFor(c.facilityId), c.facilityId, c.vacated, controllerId);
     if (offered) directed.push({ facilityId: c.facilityId, positionId: offered.positionId, primaryOnly: true, frame: { version: VERSION, type: 'efsp-position-offer', ...offered } });
   }
   return { byFacility, primary, peer, directed };
@@ -604,7 +652,9 @@ function heartbeatBoardsFor(ctx, session, all = heartbeatBoardsAll(ctx)) {
  */
 function _snapshotMessage(ctx, session = null) {
   const full = _fullSnapshotMessage(ctx);
-  return session ? readScope.filterSnapshot(full, readScopeOf(ctx, session)) : full;
+  if (!session) return full;
+  // docs/adr/0110 §6: who this session is, so its client can tell Primary from Observer at a Position (the Take Q row, the COMBINED line).
+  return { ...readScope.filterSnapshot(full, readScopeOf(ctx, session)), self: { controllerId: session.controllerId || null } };
 }
 
 /** The snapshot keys the families own, in registry order (airspaces, correlations, marsa, runwayStatuses, carriers, sfaRotation). */
@@ -645,7 +695,7 @@ function _fullSnapshotMessage(ctx) {
     boardEpochByFacility[facilityId] = boardStore.epoch;
     aitAuthorizedByFacility[facilityId] = !!facilityConfig.getFacilityConfig(facilityId).aitAuthorized;
     for (const s of boardStore.getAll().filter(s => s.state !== 'DROPPED')) strips.push(stampStrip(boardStore, s, facilityId, ctx));
-    for (const p of positionStore.getAll()) positions.push({ ...p, facilityId });
+    positions.push(...positionsWire(ctx, facilityId));
     bays.push(...facilityConfig.getAllBays(facilityId));
   }
 

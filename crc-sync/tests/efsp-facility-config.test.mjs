@@ -24,7 +24,7 @@ const tmpFileTactical = paths.file('efsp-facility-tactical.json');
 
 const { createFacilityConfig, validateConfig, DEFAULT_FACILITY_ID } = await import('../src/efsp/facility-config.js');
 const {
-  getFacilityIds, getFacilityConfig, getPositionSet, getPositionClass, getConsolidation, getBaysFor, getAllBays,
+  getFacilityIds, getFacilityConfig, getPositionSet, getPositionClass, getConsolidation, getHandBack, getBaysFor, getAllBays,
   bayImpliesState, bayForImpliedState, coordinationBayFor, setFacilityConfig, isBlockVisible,
   getShippedConfig,
 } = createFacilityConfig();
@@ -34,15 +34,28 @@ test('getPositionSet returns exactly INCIRLIK\'s eight Positions (RSU, SFA and P
   assert.deepEqual(getPositionSet(), ['OPS', 'CD', 'GC', 'LC', 'RSU', 'AP', 'SFA', 'PAR']);
 });
 
-test('getConsolidation is the guide\'s chain except that GC ends it (a tower controller takes ground by combining, ADR 0105), plus SFA and PAR to APP (L18)', () => {
-  assert.deepEqual(getConsolidation(), { CD: 'GC', LC: 'AP', SFA: 'AP', PAR: 'AP' });
+// The ONE place the shipped offer lists are asserted (docs/adr/0110 §1, decisions.md H111): an answer that changes a list is a
+// one-line edit to its config file plus the matching line here. `consolidation` is who is OFFERED the hat, in order.
+test('getConsolidation: the shipped Incirlik offer lists (H111 Q-C1 a: AP is last on every tower list; RSU, SFA and PAR as ADR 0110 recommends)', () => {
+  assert.deepEqual(getConsolidation(), {
+    CD: ['GC', 'LC', 'AP'], GC: ['LC', 'AP'], LC: ['AP'], RSU: ['LC'], SFA: ['AP'], PAR: ['AP'],
+  });
 });
 
-test('OPS, RSU and AP have no entry in the consolidation chain — OPS per the guide\'s table, RSU so a Strip never strands on a supervisory Position (ADR 0075), AP because there\'s no CTR Facility yet to cover it', () => {
-  const chain = getConsolidation();
-  assert.equal('OPS' in chain, false);
-  assert.equal('RSU' in chain, false);
-  assert.equal('AP' in chain, false);
+test('OPS and AP have no offer list: OPS is not a control position (guide 4.1 rule 3), AP would reach CTR across a Facility (ADR 0013)', () => {
+  const lists = getConsolidation();
+  assert.equal('OPS' in lists, false);
+  assert.equal('AP' in lists, false);
+});
+
+test('the shipped carrier offer lists (H111 Q-C2: a Position is offered to the most important staffed one first, Marshal, then the lanes, then PriFly)', () => {
+  assert.deepEqual(getConsolidation('CARRIER'), {
+    CV_APP1: ['CV_MARSHAL', 'CV_APP2', 'CV_PRIFLY'],
+    CV_APP2: ['CV_MARSHAL', 'CV_APP1', 'CV_PRIFLY'],
+    CV_PRIFLY: ['CV_MARSHAL', 'CV_APP1', 'CV_APP2'],
+    CV_MARSHAL: ['CV_APP1', 'CV_APP2', 'CV_PRIFLY'],
+  });
+  assert.deepEqual(getHandBack('CARRIER'), {});
 });
 
 test('every Position in the Position set has at least one Bay, including a Coordination Bay (WP4A seam, present but inert) — except RSU, SFA and PAR, which sit on no Facility boundary (ADR 0075)', () => {
@@ -276,11 +289,9 @@ test('getPositionClass resolves every Position\'s doctrinal class, searching acr
   assert.equal(getPositionClass('NOT_A_POSITION'), null);
 });
 
-test('AIC/GCI -> TAC_C2 is a legal intrafacility consolidation entry, but TAC_C2 -> CTR is NOT — that hop would cross a Facility boundary (mirrors docs/adr/0013 point 4\'s identical APP -> CTR rejection)', () => {
-  const chain = getConsolidation('TACTICAL');
-  assert.equal(chain.AIC, 'TAC_C2');
-  assert.equal(chain.GCI, 'TAC_C2');
-  assert.equal('TAC_C2' in chain, false);
+test('TACTICAL keeps its reassignment, as handBack: AIC, GCI and JTAC to TAC_C2 (docs/adr/0110 decision 7), no offer lists', () => {
+  assert.deepEqual(getHandBack('TACTICAL'), { AIC: 'TAC_C2', GCI: 'TAC_C2', JTAC: 'TAC_C2' });
+  assert.deepEqual(getConsolidation('TACTICAL'), {});
 });
 
 test('every TACTICAL Position has at least one Bay, including a Coordination Bay — except JTAC, whose single read-only viewing Bay is deliberately not a Coordination Bay (it never holds any coordination or TOFI grant)', () => {

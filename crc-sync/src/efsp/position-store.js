@@ -26,16 +26,17 @@ const { WALL_CLOCK } = require('../mission-clock');
 class PositionStore {
   /**
    * @param {string[]} positionIds — the fixed Position set, e.g. ['OPS','CD','GC','LC'] (a Facility's Position set)
-   * @param {object} consolidation — one-hop consolidation map, e.g. { CD:'GC', GC:'LC' } (guide §4.8.6 rule 2's default consolidation, cut where the Facility ends). A Position absent from this map (like OPS) is consolidated nowhere — and OPS is on no chain in the guide's default either.
+   * @param {{consolidation?:object, handBack?:object}} maps — `consolidation`: who is offered a Position's hat, in order, e.g. { CD:['GC','LC','AP'] } (docs/adr/0110; read, never walked); `handBack`: the TACTICAL one-hop reassignment, e.g. { AIC:'TAC_C2' }. A Position in neither (like OPS) has nobody to take it.
    */
-  constructor(positionIds, consolidation, { clock = WALL_CLOCK, frequencies = {}, isAbsent = () => false } = {}) {
+  constructor(positionIds, { consolidation = {}, handBack = {} } = {}, { clock = WALL_CLOCK, frequencies = {}, isAbsent = () => false } = {}) {
     // docs/adr/0105: `{ <Position>: [ { label, mhz } ] }` from the facility config. Data only; nothing here acts on it.
     this._frequencies = frequencies || {};
     // The mission clock (docs/adr/0079) — `since` is who has been signed on at a Position
     // from when, which a controller reads as a time of day.
     this._clock = clock;
     this._positionIds = new Set(positionIds);
-    this._consolidation = consolidation || {};
+    this._consolidation = consolidation;
+    this._handBack = handBack;
     this._state = new Map(); // positionId -> { primary, observers:[], pendingPrimaryRequest }
     for (const id of positionIds) {
       this._state.set(id, { primary: null, observers: [], pendingPrimaryRequest: null });
@@ -72,24 +73,32 @@ class PositionStore {
   }
 
   /**
-   * Walks the consolidation to its end (guide §4.8.6 rule 3: "If that
-   * Position is also unstaffed, follow the consolidation to its end"),
-   * returning the first STAFFED Position found, or null if the chain
-   * bottoms out with nobody signed on at any link (defect D19's boundary —
-   * callers must treat null distinctly from a stranding they failed to
-   * detect, not silently swallow it).
+   * The Position that covers `positionId` while it is unstaffed, or null: the first member of its `consolidation` list that
+   * is staffed (docs/adr/0110: read, never walked), else its `handBack` target when that is staffed (TACTICAL). null is
+   * defect D19's boundary: callers treat it as "nobody to offer or route to", never swallow it. A Primary inside the
+   * sign-on grace counts as staffed.
    */
   consolidatedAt(positionId) {
-    let current = this._consolidation[positionId] || null;
-    const seen = new Set([positionId]);
-    while (current) {
-      if (seen.has(current)) return null; // cycle guard — configuration bug, never a real chain
-      seen.add(current);
-      if (this.isStaffed(current)) return current;
-      current = this._consolidation[current] || null;
-    }
+    return this.hatTakerOf(positionId) || this.handBackTo(positionId);
+  }
+
+  /** The first member of `positionId`'s `consolidation` list that is staffed: who is offered its hat. null when none is (or it has no list). */
+  hatTakerOf(positionId) {
+    for (const id of this._consolidation[positionId] || []) if (this.isStaffed(id)) return id;
     return null;
   }
+
+  /** The Facility's Position ids. */
+  positionIds() { return [...this._positionIds]; }
+
+  /** The staffed `handBack` target of `positionId` (TACTICAL: its Strips are reassigned there), or null. */
+  handBackTo(positionId) {
+    const to = this._handBack[positionId];
+    return to && this.isStaffed(to) ? to : null;
+  }
+
+  /** True when `positionId` is a `handBack` source: its Strips move rather than wait for the hat. */
+  hasHandBack(positionId) { return Object.prototype.hasOwnProperty.call(this._handBack, positionId); }
 
   /** True when `controllerId` already holds Primary at `positionId` — the Phase-1 self-coordination test (guide §4.8.3). */
   isSelfCoordinated(controllerId, positionId) {
@@ -131,9 +140,6 @@ class PositionStore {
       primary: s.primary,
       observers: [...s.observers],
       pendingPrimaryRequest: s.pendingPrimaryRequest,
-      consolidatedPositions: [...this._positionIds].filter(
-        id => id !== positionId && !this.isStaffed(id) && this.consolidatedAt(id) === positionId
-      ),
     }));
   }
 
@@ -165,12 +171,28 @@ class PositionStore {
     }
     for (const id of after) {
       if (!before.has(id)) this._signOn(controllerId, controllerName, id, now);
+      else this._promoteObserver(controllerId, id, now);
     }
 
     if (after.size > 0) this._sessions.set(controllerId, after);
     else this._sessions.delete(controllerId);
 
     return { signedOn: [...after], vacated };
+  }
+
+  /**
+   * Declaring a Position this controller already observes, when it has no Primary, makes them its Primary (guide §4.8.2
+   * rule 2; docs/adr/0110 §3, finding F1: an Observer left behind by a normal sign-off had no way to take over). Never when
+   * there is a Primary: that is a request (requestPrimary), not a declaration.
+   */
+  _promoteObserver(controllerId, positionId, now) {
+    const s = this._state.get(positionId);
+    if (!s || s.primary) return;
+    const me = s.observers.find(o => o.controllerId === controllerId);
+    if (!me) return;
+    s.observers = s.observers.filter(o => o !== me);
+    s.primary = { controllerId, controllerName: me.controllerName, since: now };
+    s.pendingPrimaryRequest = null;
   }
 
   _signOn(controllerId, controllerName, positionId, now) {

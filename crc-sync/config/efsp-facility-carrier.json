@@ -19,9 +19,12 @@
     "CV_APP2": "2"
   },
   "consolidation": {
-    "CV_APP2": "CV_APP1",
-    "CV_APP1": "CV_MARSHAL"
+    "CV_APP1": ["CV_MARSHAL", "CV_APP2", "CV_PRIFLY"],
+    "CV_APP2": ["CV_MARSHAL", "CV_APP1", "CV_PRIFLY"],
+    "CV_PRIFLY": ["CV_MARSHAL", "CV_APP1", "CV_APP2"],
+    "CV_MARSHAL": ["CV_APP1", "CV_APP2", "CV_PRIFLY"]
   },
+  "handBack": {},
   "positionRadars": {
     "CV_MARSHAL": [
       {

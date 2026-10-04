@@ -42,12 +42,12 @@ function _applyCarrierHandoff(ctx, strip, kind, toPositionId, by, actingPosition
   });
   if (!v.ok) return { ok: false, reason: v.reason || 'VALIDATION_ERROR', detail: v.detail, strip };
 
-  let routedTo = null;
+  // docs/adr/0110 §4: a hand-off into an unstaffed Position is delivered there when a staffed one stands offered its hat.
+  let warnings;
   if (fx.owner === 'TO' && !ctx.rules.isStaffed(dest)) {
-    const consolidatedAt = ctx.rules.consolidatedAt(dest);
-    if (!consolidatedAt || !ctx.rules.isStaffed(consolidatedAt)) return { ok: false, reason: 'NO_RECEIVING_POSITION', strip };
-    dest = consolidatedAt;
-    routedTo = consolidatedAt;
+    const offeredTo = ctx.rules.consolidatedAt(dest);
+    if (!offeredTo) return { ok: false, reason: 'NO_RECEIVING_POSITION', strip };
+    warnings = [warn('UNSTAFFED_RECEIVER', `${dest} is unstaffed: offered to ${offeredTo}`)];
   }
 
   // The stack effect: Commence marks the flight pushed (nobody renumbers, the
@@ -69,7 +69,6 @@ function _applyCarrierHandoff(ctx, strip, kind, toPositionId, by, actingPosition
   strip.state = fx.toState;
   strip.ownerPositionId = dest;
   delete strip.consolidatedFrom; // a new owner by decision, not by cover (F10)
-  let warnings;
   if (dest !== from.ownerPositionId) {
     const bay = ctx.placement.bayForNewOwner(dest, strip.state, strip);
     if (bay) {
@@ -77,7 +76,7 @@ function _applyCarrierHandoff(ctx, strip, kind, toPositionId, by, actingPosition
       strip.rackId = bay.rackId;
       strip.orderKey = ctx.placement.appendOrderKey(bay.bayId, bay.rackId, strip.stripId);
     } else {
-      warnings = [warn('NO_BAY_FOR_STRIP', `${dest} has no Bay for this Strip; it stays in ${strip.bayId}`)];
+      warnings = [...(warnings || []), warn('NO_BAY_FOR_STRIP', `${dest} has no Bay for this Strip; it stays in ${strip.bayId}`)];
     }
   } else {
     ctx.placement.relocateForImpliedState(strip, strip.state);
@@ -88,7 +87,7 @@ function _applyCarrierHandoff(ctx, strip, kind, toPositionId, by, actingPosition
   };
   ctx.state.bump(strip, by, now);
   return {
-    ok: true, strip, routedTo: routedTo || undefined, warnings,
+    ok: true, strip, warnings,
     carrierHandoff: { kind, trigger: strip.carrierHandoff.trigger },
     carrierChanged: carrierChanged || undefined,
   };

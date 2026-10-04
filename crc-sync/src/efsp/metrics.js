@@ -112,7 +112,7 @@ function summarize(samples) {
 function ratio(num, den) { return den > 0 ? num / den : null; }
 
 function _transfers(b) {
-  return b.transfers || (b.transfers = { attempts: 0, succeeded: 0, failed: 0, routedToConsolidated: 0, inhibitedPress: 0, byCause: {}, byKind: {} });
+  return b.transfers || (b.transfers = { attempts: 0, succeeded: 0, failed: 0, toUnstaffed: 0, inhibitedPress: 0, byCause: {}, byKind: {} });
 }
 
 /** Every hour key of the `n` hours ending with the hour containing `endMs`, ascending. */
@@ -323,7 +323,7 @@ class EfspMetrics {
   }
 
   /** Metric 7: one transfer attempt and its outcome. */
-  recordTransfer({ at = this._clock.now(), kind, ok, cause, routedTo }) {
+  recordTransfer({ at = this._clock.now(), kind, ok, cause, toUnstaffed }) {
     this._record(at, (b) => {
       const t = _transfers(b);
       t.attempts += 1;
@@ -331,7 +331,7 @@ class EfspMetrics {
       k.attempts += 1;
       if (ok) {
         t.succeeded += 1;
-        if (routedTo) t.routedToConsolidated += 1;
+        if (toUnstaffed) t.toUnstaffed += 1; // delivered to an unstaffed Position (docs/adr/0110 §4) or routed to a TACTICAL hand-back target
       } else {
         t.failed += 1;
         k.failed += 1;
@@ -691,14 +691,14 @@ class EfspMetrics {
     }
 
     // 7 — transfers
-    const tr = { attempts: 0, succeeded: 0, failed: 0, routedToConsolidated: 0, inhibitedPress: 0, byCause: {}, byKind: {} };
+    const tr = { attempts: 0, succeeded: 0, failed: 0, toUnstaffed: 0, inhibitedPress: 0, byCause: {}, byKind: {} };
     for (const k of TRANSFER_KINDS) tr.byKind[k] = { attempts: 0, failed: 0 };
     const trByHour = {};
     for (const [h, b] of entries) {
       const t = b.transfers;
       if (!t) continue;
       tr.attempts += t.attempts; tr.succeeded += t.succeeded; tr.failed += t.failed;
-      tr.routedToConsolidated += t.routedToConsolidated; tr.inhibitedPress += t.inhibitedPress || 0;
+      tr.toUnstaffed += t.toUnstaffed; tr.inhibitedPress += t.inhibitedPress || 0;
       for (const [k, v] of Object.entries(t.byCause)) inc(tr.byCause, k, v);
       for (const [k, v] of Object.entries(t.byKind)) {
         const row = tr.byKind[k] || (tr.byKind[k] = { attempts: 0, failed: 0 });
@@ -773,7 +773,7 @@ class EfspMetrics {
         status: !this._tapInstalled ? 'NOT_INSTRUMENTED' : tr.attempts > 0 ? 'COLLECTING' : 'NO_DATA',
         target: { kind: 'AT_MOST', value: TRANSFER_FAILURE_TARGET },
         attempts: tr.attempts, succeeded: tr.succeeded, failed: tr.failed,
-        failureRate: ratio(tr.failed, tr.attempts), routedToConsolidated: tr.routedToConsolidated,
+        failureRate: ratio(tr.failed, tr.attempts), toUnstaffed: tr.toUnstaffed,
         inhibitedPress: tr.inhibitedPress,
         byCause: tr.byCause, byKind: tr.byKind, byHour: trByHour,
       },
@@ -948,7 +948,7 @@ function createEfspInstrumentation({
     if (msg.type === 'efsp-mutation') {
       const kind = op === 'TransferStrip' ? 'TRANSFER' : pre && pre.nlaTransfer ? 'NLA_TRANSFER' : null;
       if (kind) {
-        metrics.recordTransfer({ at, kind, ok, cause: ack.reason, routedTo: ack.routedTo });
+        metrics.recordTransfer({ at, kind, ok, cause: ack.reason, toUnstaffed: !!ack.routedTo || (ack.warnings || []).some(w => w.code === 'UNSTAFFED_RECEIVER') });
         if (rec) { rec.transfers.attempts += 1; if (!ok) rec.transfers.failed += 1; }
       } else if (pre && pre.inhibitedPress) {
         metrics.recordInhibitedPress({ at });

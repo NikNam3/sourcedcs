@@ -61,13 +61,37 @@ test('holdsStripType must be a known strip type', () => {
   reject(c, 'holdsStripType "NOPE" is not a strip type');
 });
 
-test('the consolidation chain names known Positions and has no loop', () => {
-  const a = shipped('INCIRLIK'); a.consolidation.CD = 'NOPE';
+test('consolidation is a list of offered Positions: known members, not itself, no repeats, non-empty, never a string', () => {
+  const a = shipped('INCIRLIK'); a.consolidation.CD = ['GC', 'NOPE'];
   reject(a, 'consolidation.CD names unknown Position NOPE');
-  const b = shipped('INCIRLIK'); b.consolidation.NOPE = 'CD';
+  const b = shipped('INCIRLIK'); b.consolidation.NOPE = ['CD'];
   reject(b, 'consolidation names unknown Position NOPE');
-  const c = shipped('INCIRLIK'); c.consolidation.AP = 'LC';
-  reject(c, 'consolidation loops');
+  const self = shipped('INCIRLIK'); self.consolidation.CD = ['GC', 'CD'];
+  reject(self, 'consolidation.CD names itself');
+  const rep = shipped('INCIRLIK'); rep.consolidation.CD = ['GC', 'GC'];
+  reject(rep, 'consolidation.CD names GC twice');
+  const empty = shipped('INCIRLIK'); empty.consolidation.CD = [];
+  reject(empty, 'consolidation.CD must not be empty');
+  const str = shipped('INCIRLIK'); str.consolidation.CD = 'GC';
+  reject(str, 'must be a list of Positions offered the hat');
+  reject(str, 'handBack');
+});
+
+test('consolidation lists have no loop check: two lanes may name each other (docs/adr/0110 §1)', () => {
+  assert.equal(schema.validateFacilityConfig(shipped('CARRIER'), 'CARRIER').ok, true);
+  const c = shipped('INCIRLIK'); c.consolidation.AP = ['LC']; // LC: [AP] and AP: [LC]
+  assert.equal(schema.validateFacilityConfig(c, 'INCIRLIK').ok, true);
+});
+
+test('handBack is the one-hop shape with a loop check, and a Position is in consolidation or handBack, not both', () => {
+  const a = shipped('TACTICAL'); a.handBack.AIC = 'NOPE';
+  reject(a, 'handBack.AIC names unknown Position NOPE');
+  const b = shipped('TACTICAL'); b.handBack.TAC_C2 = 'AIC';
+  reject(b, 'handBack loops');
+  const c = shipped('TACTICAL'); c.consolidation.AIC = ['TAC_C2'];
+  reject(c, 'AIC is in both consolidation and handBack');
+  const d = shipped('TACTICAL'); delete d.handBack;
+  reject(d, 'missing required key handBack');
 });
 
 test('every Position needs a class', () => {

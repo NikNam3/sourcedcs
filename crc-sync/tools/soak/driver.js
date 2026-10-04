@@ -22,12 +22,9 @@ const { PROFILES, CREWS, POSITION_FACILITY, SCRIPT_WEIGHTS, SCRIPTS, NLA_FALLBAC
 const FACILITIES = ['INCIRLIK', 'CENTER', 'TACTICAL', 'RANGES'];
 const NLA_GUARD_MS = 400 + 10; // NLA_DOUBLE_TAP_MS + 10, briefing §5.2
 const EVENTS_CAP = 50;
-// Where a CD-owned departure goes back to when the Position CD is consolidated at was handed it.
-const RETURN_BAY = {
-  PENDING_CLEARANCE: { position: 'CD', bayId: 'cd-pending-clearance' },
-  CLEARED: { position: 'CD', bayId: 'cd-cleared' },
-  HELD: { position: 'CD', bayId: 'cd-held' },
-};
+// docs/adr/0110: a vacated Position's Strips stay its own and the first staffed member of its offer list is offered the hat.
+// These are the Positions the soak's drivers offer a hat to, in the shipped Incirlik order (config/efsp-facility-incirlik.json).
+const HAT_OFFERS = { CD: ['GC', 'LC', 'AP'], GC: ['LC', 'AP'], LC: ['AP'] };
 const MIN = 60000;
 
 class Heap {
@@ -563,6 +560,25 @@ class Driver {
     return this.drainThen(f, () => this.stepFlight(f, result));
   }
 
+  /**
+   * The flight's actor Position has no client at it. When that Position is unstaffed and a client holds the next Position on its
+   * offer list, that client takes the hat after the flight has waited a little (docs/adr/0110), else the churn-back retakes it.
+   */
+  async waitForHat(f, positionId, facilityId = 'INCIRLIK') {
+    this.stats.waitingForHat = (this.stats.waitingForHat || 0) + 1;
+    if (f.attempts >= 2 && facilityId === 'INCIRLIK' && !this.positions.get(`${facilityId}|${positionId}`)) {
+      const taker = (HAT_OFFERS[positionId] || []).map(p => this.clientForPosition(p)).find(Boolean);
+      if (taker && !taker.hatPending) {
+        taker.hatPending = true;
+        this.stats.hatTaken = (this.stats.hatTaken || 0) + 1;
+        const signedOn = [...new Set([...(taker.holds[facilityId] || []), positionId])];
+        taker.holds[facilityId] = signedOn;
+        try { await this.send(taker, { type: 'efsp-set-positions', facilityId, signedOn }); } finally { taker.hatPending = false; }
+      }
+    }
+    return this.waitActor(f);
+  }
+
   waitActor(f) {
     f.attempts++;
     if (f.attempts > 80) return this.resume(f, { ok: false, reason: 'ACTOR_UNAVAILABLE' });
@@ -609,7 +625,7 @@ class Driver {
     if (!s || s.dropped) return this.resume(f, { ok: false, reason: 'GONE' });
     const actor = s.ownerPositionId;
     const client = this.clientForPosition(actor);
-    if (!client) return this.waitActor(f);
+    if (!client) return this.waitForHat(f, actor, it.facilityId);
     if (it.op.kind === 'InvokeNla') {
       const last = this.lastNla.get(it.stripId);
       if (last !== undefined && this.now - last < NLA_GUARD_MS) { this.after(NLA_GUARD_MS, () => this.execIntent(f), 'nla-guard'); return; }
@@ -655,7 +671,7 @@ class Driver {
     if (f.walkPresses >= it.max) return this.resume(f, { ok: false, reason: 'WALK_EXHAUSTED', strip: s });
     const actor = s.ownerPositionId;
     const client = this.clientForPosition(actor);
-    if (!client) return this.waitActor(f);
+    if (!client) return this.waitForHat(f, actor, it.facilityId);
     const last = this.lastNla.get(it.stripId);
     if (last !== undefined && this.now - last < NLA_GUARD_MS) { this.after(NLA_GUARD_MS, () => this.execIntent(f), 'nla-guard'); return null; }
 
@@ -677,23 +693,6 @@ class Driver {
         this.after(this.thinkMs(), () => this.execIntent(f), 'walk');
         return null;
       });
-    }
-    // The Position a vacated Position is consolidated at was handed a Strip it may
-    // not advance (the vacated Position's work, routed along the consolidation
-    // chain). It goes back once that Position is staffed again; until then the flight waits.
-    const notMine = ack.reason === 'PERMISSION_DENIED' && /is not (\w+)'s to advance/.exec(ack.detail || '');
-    if (notMine && s.stripType === 'DEPARTURE' && RETURN_BAY[s.state]) {
-      this.stats.consolidationStranded = (this.stats.consolidationStranded || 0) + 1;
-      const home = RETURN_BAY[s.state];
-      if (this.clientForPosition(home.position)) {
-        const cur = ack.strip || s;
-        const back = await this.send(client, { version: 1, type: 'efsp-mutation', facilityId: it.facilityId, actingPositionId: actor, stripId: it.stripId, baseRev: cur.rev, op: { kind: 'TransferStrip', toPositionId: home.position, bayId: home.bayId, rackId: 'main' } }, { label: `f${f.id}|handback` });
-        if (back && back.ok) { this.stats.consolidationHandedBack = (this.stats.consolidationHandedBack || 0) + 1; this.after(this.thinkMs(), () => this.execIntent(f), 'walk'); return null; }
-      }
-      f.attempts++;
-      if (f.attempts > 40) return this.resume(f, { ok: false, reason: ack.reason, ack });
-      this.after(this.rng.uniform(15000, 45000), () => this.execIntent(f), 'stranded');
-      return null;
     }
     if (ack.reason === 'NLA_INHIBITED') {
       f.inhibited++;
@@ -1080,6 +1079,11 @@ class Driver {
     this.lifetime++;
     this.note(`restart|${idx}`);
     await this.host.start(this.now);
+    // A fault injected before this restart and not yet spent died with the old process (the injection sits in the middle third,
+    // where the restart is too): arm it again, or the selfcheck depends on which of the two comes first.
+    const injectedAlready = this.now >= this.t0 + (this.tEnd - this.t0) * 0.4;
+    if (injectedAlready && this.o.inject === 'drop-ack' && this.ledger.lost === 0) await this.call('inject', { fault: 'drop-ack' });
+    if (injectedAlready && this.o.inject === 'drop-broadcast' && this.ledger.broadcastMissing === 0) await this.call('inject', { fault: 'drop-broadcast' });
     const post = (await this.call('truth')).truth;
     // The server's truth after a restart replaces what the driver knew.
     for (const [fid, t] of Object.entries(post.facilities)) {
@@ -1297,7 +1301,7 @@ class Driver {
       this.after(this.rngNet.exp(60 / p.conflictsPerHour * MIN), conflict, 'conflict');
     };
     this.at(this.t0 + this.rngNet.exp(60 / p.conflictsPerHour * MIN), conflict, 'conflict');
-    // Staffing churn: CD vacated for a few minutes (SystemReassign to the Position it is consolidated at).
+    // Staffing churn: CD vacated for a few minutes (its Strips stay CD's and GC is offered the hat; the flights wait for it, docs/adr/0110).
     const churn = async () => {
       const c = [...this.clients.values()].find(x => x.connected && x.declared && (x.holds.INCIRLIK || []).includes('CD'));
       if (c && (c.holds.INCIRLIK || []).length > 1) {

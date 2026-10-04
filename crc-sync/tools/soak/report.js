@@ -146,7 +146,7 @@ function build(d, meta) {
       refusals: { expected: L.expectedCount, unexpected: L.unexpectedCount, unexpectedExamples: L.unexpected },
       doubleTapNoop: s.doubleTapNoop, doubleTapNotGuarded: s.doubleTapNotGuarded, undo: s.undo,
       storms: s.storms, stormMoves: s.stormMoves, janitorDrops: s.janitorDrops,
-      consolidationStranded: s.consolidationStranded || 0, consolidationHandedBack: s.consolidationHandedBack || 0,
+      waitingForHat: s.waitingForHat || 0, hatTaken: s.hatTaken || 0,
       orphans: [...s.orphans.values()].filter(o => !o.resolved).length, orphansEver: s.orphans.size,
       orphanExamples: [...s.orphans.entries()].slice(0, 10).map(([id, o]) => ({ stripId: id, ...o })),
       liveStrips: { min: s.liveStrips.min === Infinity ? 0 : s.liveStrips.min, max: s.liveStrips.max, end: s.liveStrips.end, slopePerHour: r2(ols(s.liveStrips.series.filter(p => p[0] / 60 >= warmupMin).map(p => p[0] / 3600), s.liveStrips.series.filter(p => p[0] / 60 >= warmupMin).map(p => p[1])).slope) },
