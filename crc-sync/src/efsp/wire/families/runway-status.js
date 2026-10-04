@@ -1,15 +1,6 @@
 'use strict';
 
-const { VERSION } = require('../frames');
-
-/** Its own delta type with its own seq (rule 5's deliberate deviation, docs/adr/0061). */
-function runwayStatusDelta(store, records) {
-  return {
-    version: VERSION, type: 'efsp-runway-status-delta',
-    runwayStatusSeq: store.currentSeq, runwayStatusEpoch: store.epoch,
-    runwayStatuses: { updated: records.filter(Boolean) },
-  };
-}
+const { runwayStatusDelta } = require('../frames');
 
 const facilityOf = (ctx, msg) => msg.facilityId || ctx.facilityConfig.DEFAULT_FACILITY_ID;
 

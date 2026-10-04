@@ -282,6 +282,21 @@ test('setOnEfspChange fires after an EFSP message that broadcast, not after one 
   assert.equal(ws.sent.filter(m => m.type === 'efsp-ack').length, 3, 'the sender still got every ack');
 });
 
+test('deliverEfsp: every server-originated frame runs the post-change hook once, an empty list does not, and the hook is not re-entered', () => {
+  const { hub } = setup();
+  const sent = [];
+  hub._broadcastEfsp = (m) => sent.push(m.type);
+  let fired = 0;
+  hub.setOnEfspChange(() => { fired += 1; hub.deliverEfsp({ type: 'efsp-from-the-hook' }); });
+  hub.deliverEfsp([]);
+  hub.deliverEfsp(null);
+  assert.equal(fired, 0);
+  hub.deliverEfsp({ type: 'efsp-carrier-delta' });
+  hub.deliverEfsp([{ type: 'efsp-board-delta' }, { type: 'efsp-board-delta' }]);
+  assert.equal(fired, 2, 'one hook run per delivery');
+  assert.deepEqual(sent, ['efsp-carrier-delta', 'efsp-from-the-hook', 'efsp-board-delta', 'efsp-board-delta', 'efsp-from-the-hook']);
+});
+
 test('a handler result with an ack and no broadcasts array (metrics report/request, resync answers) is sent, not thrown on', () => {
   const { hub, session } = setup();
   const ws = fakeWs();

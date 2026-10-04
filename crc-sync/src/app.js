@@ -52,7 +52,7 @@ const { lookupFlightPlan, toFlightDataFiledSeed, listFiledFlightPlans } = requir
 const { createEfspInstrumentation } = require('./efsp/metrics');
 const { archiveDeltas } = require('./efsp/archiver');
 const { CarrierTick } = require('./efsp/carrier-tick');
-const { carrierDelta } = require('./efsp/efsp-ws');
+const { carrierDelta, correlationDelta, runwayStatusDelta, serverBoardDelta } = require('./efsp/wire/frames');
 const { ownCoalitionFrom } = require('./surveillance/iff');
 const { wireCollabSession } = require('./collab-wiring');
 const log = require('./log').logger('app');
@@ -382,11 +382,7 @@ function createApp(deps = {}) {
           if (r.ok && !r.skipped) efsp.persist();
           if (r.ok && r.changed) {
             // The same delta a runway-status op sends (decisions.md S-L1d).
-            wsHub.broadcastEfspRunwayStatusDelta({
-              runwayStatusSeq: efsp.runwayStatusStore.currentSeq,
-              runwayStatusEpoch: efsp.runwayStatusStore.epoch,
-              runwayStatuses: [efsp.runwayStatusStore.getRunwayStatus(facilityId)],
-            });
+            wsHub.deliverEfsp(runwayStatusDelta(efsp.runwayStatusStore, [efsp.runwayStatusStore.getRunwayStatus(facilityId)]));
             efsp.nlaStatusMonitor.tick();
             fieldLog.info('active runway from the mission wind', { facilityId, activeRunway: r.activeRunway, windFromDegTrue: w.windFrom, windKt: w.windKt });
           }
@@ -425,7 +421,7 @@ function createApp(deps = {}) {
     correlationStore: efsp.correlationStore,
     boardStoreFor: efsp.boardStoreFor,
     facilityConfig: efspFacilityConfig,
-    onDelta: (payload) => wsHub.broadcastEfspCorrelationDelta({ ...payload, correlationSeq: efsp.correlationStore.currentSeq, correlationEpoch: efsp.correlationStore.epoch }),
+    onDelta: (payload) => wsHub.deliverEfsp(correlationDelta(efsp.correlationStore, payload.correlations || [], payload.stats)),
   });
 
   // ── WP8 instrumentation (docs/adr/0065) — the §11.5 metric set, the §11.4
@@ -452,7 +448,7 @@ function createApp(deps = {}) {
     const payloads = archiveDeltas(r, efsp.boardStoreFor);
     if (!payloads.length) return undefined;
     efsp.persist();
-    for (const p of payloads) wsHub.broadcastEfspBoardDelta(p);
+    wsHub.deliverEfsp(payloads.map((p) => serverBoardDelta(p, efsp.boardStoreFor)));
     const n = payloads.reduce((sum, p) => sum + p.gone.length, 0);
     archiverLog.info('archived Strips and flight data', { strips: n, flightDataList: r.flightDataIds.length });
     return n;
@@ -468,7 +464,7 @@ function createApp(deps = {}) {
   // obligation sweep's tick rather than taking one of its own — in short,
   // VOID_TIME_EXPIRED is raised as an alert there and rendered as an inhibit
   // reason here, and two cadences would let the two disagree.
-  efsp.nlaStatusMonitor.setOnDelta((payload) => wsHub.broadcastEfspBoardDelta(payload));
+  efsp.nlaStatusMonitor.setOnDelta((payload) => wsHub.deliverEfsp(serverBoardDelta(payload, efsp.boardStoreFor)));
   wsHub.setOnEfspChange(() => { if (obligationMonitor.tick()) broadcastEfspAlerts(); });
 
   // ── The carrier's ship banner (docs/adr/0074, ADR 0064 B6) — matched to the
@@ -483,7 +479,7 @@ function createApp(deps = {}) {
     convergenceAt: (lat, lon) => theaterContext.convergenceAt(lat, lon),
     variationAt: (lat, lon) => theaterContext.variationAt(lat, lon),
     weatherPa: () => { const w = grpcClient.getWeather(); return w && Number.isFinite(w.pressurePa) ? w.pressurePa : null; },
-    onChange: () => wsHub.broadcastEfspCarrierDelta(carrierDelta(efsp.carrierStore)),
+    onChange: () => wsHub.deliverEfsp(carrierDelta(efsp.carrierStore)),
   });
 
   // ── Conformance and short-term conflict alerting (docs/adr/0058) ─────────
@@ -549,7 +545,7 @@ function createApp(deps = {}) {
     locate: regimeLocator,
     activeMarsaFor: (flightDataId) => efsp.marsaStore.activeFor(flightDataId),
     enter: (flightDataId, info) => efsp.markTofiEntered(flightDataId, info),
-    onEntered: (message) => wsHub.broadcastEfspMessage(message),
+    onEntered: (message) => wsHub.deliverEfsp(message),
     config: alertingConfig.tofiRegime,
   });
 
@@ -703,7 +699,7 @@ function createApp(deps = {}) {
   // ── Static hosting ───────────────────────────────────────────────────────
   // ── The airspace registry's server-to-server API, for sourcedcs-web (docs/adr/0098 §9). No token: every route 503. ──
   app.use('/api/airspace-registry', createAirspaceService({
-    efsp, getToken: () => env.AIRSPACE_SERVICE_TOKEN, broadcast: (frames) => wsHub.broadcastEfspFrames(frames),
+    efsp, getToken: () => env.AIRSPACE_SERVICE_TOKEN, broadcast: (frames) => wsHub.deliverEfsp(frames),
   }));
 
   // ── The booking calendar, information only: the web's upcoming airspace bookings, pulled on a ticker and sent to

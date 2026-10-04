@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { serverBoardDelta, correlationDelta, runwayStatusDelta } from '../src/efsp/wire/frames.js';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -112,8 +113,8 @@ test('the NLA-monitor sweep and the set-positions re-stamp are filtered too', ()
   const tc = w.connect('c-TAC_C2', { TACTICAL: ['TAC_C2'] });
   jt.ws.sent.length = 0; tc.ws.sent.length = 0;
   const all = w.efsp.boardStoreFor('TACTICAL').getAll().filter(s => s.state !== 'DROPPED');
-  // The monitor's payload shape (broadcastEfspBoardDelta): every changed Strip.
-  w.hub.broadcastEfspBoardDelta({ facilityId: 'TACTICAL', boardSeq: 1, strips: all, gone: [] });
+  // The monitor's payload shape (serverBoardDelta): every changed Strip.
+  w.hub.deliverEfsp(serverBoardDelta({ facilityId: 'TACTICAL', boardSeq: 1, strips: all, gone: [] }, w.efsp.boardStoreFor));
   assert.deepEqual(jt.ws.of('efsp-board-delta')[0].strips.updated.map(s => s.stripId), [w.handed.stripId]);
   assert.equal(tc.ws.of('efsp-board-delta')[0].strips.updated.length, all.length);
   jt.ws.sent.length = 0;
@@ -131,10 +132,10 @@ test('correlation and MARSA deltas carry only the JTAC\'s flights, and are sent 
   const jt = w.connect('c-JTAC', { TACTICAL: ['JTAC'] });
   const tc = w.connect('c-TAC_C2', { TACTICAL: ['TAC_C2'] });
   jt.ws.sent.length = 0; tc.ws.sent.length = 0;
-  w.hub.broadcastEfspCorrelationDelta({ correlations: [{ flightDataId: w.handed.flightDataId }, { flightDataId: w.kept.flightDataId }], stats: {} });
+  w.hub.deliverEfsp(correlationDelta({}, [{ flightDataId: w.handed.flightDataId }, { flightDataId: w.kept.flightDataId }], {}));
   assert.deepEqual(jt.ws.of('efsp-correlation-delta')[0].correlations.updated.map(c => c.flightDataId), [w.handed.flightDataId]);
   assert.equal(tc.ws.of('efsp-correlation-delta')[0].correlations.updated.length, 2);
-  w.hub.broadcastEfspCorrelationDelta({ correlations: [{ flightDataId: w.kept.flightDataId }], correlationSeq: 5, correlationEpoch: 'e', stats: {} });
+  w.hub.deliverEfsp(correlationDelta({ currentSeq: 5, epoch: 'e' }, [{ flightDataId: w.kept.flightDataId }], {}));
   assert.equal(jt.ws.of('efsp-correlation-delta').length, 2, 'nothing of the JTAC\'s: sent empty, carrying the seq');
   assert.deepEqual(jt.ws.of('efsp-correlation-delta')[1].correlations.updated, []);
   assert.equal(jt.ws.of('efsp-correlation-delta')[1].correlationSeq, 5);
@@ -164,7 +165,7 @@ test('efsp-alerts\' conformance and obligations are scoped the same way', () => 
 test('a controller holding JTAC and TAC_C2 sees everything; giving up TAC_C2 sends a filtered snapshot; taking it back sends a full one', () => {
   const w = world();
   const both = w.connect('both', { TACTICAL: ['JTAC', 'TAC_C2'] });
-  w.hub.broadcastEfspBoardDelta({ facilityId: 'TACTICAL', boardSeq: 1, strips: w.efsp.boardStoreFor('TACTICAL').getAll(), gone: [] });
+  w.hub.deliverEfsp(serverBoardDelta({ facilityId: 'TACTICAL', boardSeq: 1, strips: w.efsp.boardStoreFor('TACTICAL').getAll(), gone: [] }, w.efsp.boardStoreFor));
   assert.equal(both.ws.of('efsp-board-delta')[0].strips.updated.length, 2, 'union semantics: TAC_C2 reads ALL');
   both.ws.sent.length = 0;
 
@@ -189,7 +190,7 @@ test('a controller holding JTAC and TAC_C2 sees everything; giving up TAC_C2 sen
 test('a session holding nothing still sees everything (H58)', () => {
   const w = world();
   const nobody = w.connect('nobody');
-  w.hub.broadcastEfspBoardDelta({ facilityId: 'TACTICAL', boardSeq: 1, strips: w.efsp.boardStoreFor('TACTICAL').getAll(), gone: [] });
+  w.hub.deliverEfsp(serverBoardDelta({ facilityId: 'TACTICAL', boardSeq: 1, strips: w.efsp.boardStoreFor('TACTICAL').getAll(), gone: [] }, w.efsp.boardStoreFor));
   assert.equal(nobody.ws.of('efsp-board-delta')[0].strips.updated.length, 2);
   const late = fakeWs();
   w.clients.add(late);
@@ -291,7 +292,7 @@ test('B5 the server-originated runway-status delta goes through the read scope l
   const prior = family.filter;
   family.filter = (ctx, scope, msg) => { seen.push(scope.kind); return scope.kind === 'ALL' ? msg : null; };
   try {
-    w.hub.broadcastEfspRunwayStatusDelta({ runwayStatusSeq: 9, runwayStatusEpoch: 'e', runwayStatuses: [{ facilityId: 'INCIRLIK' }] });
+    w.hub.deliverEfsp(runwayStatusDelta({ currentSeq: 9, epoch: 'e' }, [{ facilityId: 'INCIRLIK' }]));
   } finally {
     if (had) family.filter = prior; else delete family.filter;
   }

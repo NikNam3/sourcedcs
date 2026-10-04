@@ -84,6 +84,7 @@ class WsHub {
     // is told "nothing is wrong" rather than keeping what it had.
     this._efspAlerts = { conformance: [], conflictAlert: [], obligations: [], surveillance: [], tofiRegime: [] };
     this._onEfspChange = null;
+    this._inEfspChange = false;
   }
 
   attach(httpServer) {
@@ -174,58 +175,6 @@ class WsHub {
   setSrsStatus(s)     { this._srsStatus = s; this._broadcastStatus(); }
 
   /**
-   * One changed-Strips-only board delta per NLA-status sweep, from
-   * nla-status-monitor.js's onDelta (docs/ui-findings/lane4.md F-408).
-   *
-   * The ORDINARY efsp-board-delta is request-driven — efsp-ws.js returns it
-   * from handleMessage and _onMessage below sends it. This is the one that is
-   * not: a Strip's NLA inhibit status can change with no message at all behind
-   * it, because a release time or an EDCT window passing is the clock's doing,
-   * not a controller's. Same justification broadcastEfspCorrelationDelta gives
-   * for being server-originated immediate state: the thing that changed is
-   * state, and nothing else was ever going to tell anyone about it.
-   *
-   * `strips.gone` is empty for that sweep: it never removes a Strip, it only
-   * re-states ones that are still there. The archiver (docs/adr/0082) is the
-   * other caller, and the only sender of `gone` Strips and `flightDataList.gone` here.
-   */
-  _boardEpochFor(facilityId) {
-    const board = this._efsp && typeof this._efsp.boardStoreFor === 'function' ? this._efsp.boardStoreFor(facilityId) : null;
-    return board ? board.epoch : undefined;
-  }
-
-  broadcastEfspBoardDelta(payload) {
-    this._broadcastEfsp({
-      version: VERSION, type: 'efsp-board-delta',
-      boardSeq: payload.boardSeq,
-      // Every board-delta names its Board lifetime (docs/adr/0081). The
-      // caller's stamp wins; otherwise the Board's own current epoch.
-      boardEpoch: payload.boardEpoch !== undefined ? payload.boardEpoch : this._boardEpochFor(payload.facilityId),
-      facilityId: payload.facilityId,
-      strips: { updated: payload.strips || [], gone: payload.gone || [] },
-      flightDataList: payload.flightDataListGone && payload.flightDataListGone.length ? { updated: [], gone: payload.flightDataListGone } : { updated: [] },
-      positions: { updated: [] },
-    });
-  }
-
-  /**
-   * WP5 (docs/adr/0045) — one changed-records-only correlation delta per
-   * reconcile tick, from correlation-reconciler.js's onDelta.
-   *
-   * Immediate rather than riding the 500ms per-client tick, for two reasons:
-   * that tick is per-session and would need correlation-seq bookkeeping the
-   * store does not have, and stacking 500ms on top of the 1s reconcile would
-   * take the new-contact case to 1.5s and blow §6.6 rule 4's benchmark. One
-   * changed-only delta a second is less traffic than the heartbeat already
-   * sends unconditionally.
-   *
-   * Worth naming plainly: this is server-originated immediate STATE with no
-   * ack and no Mutation behind it, which is new here (obligations, which ride
-   * efsp-alerts, are the other — docs/adr/0067). It is justified
-   * because the record IS state, and it is the only EFSP state that changes
-   * without a Mutation, because surveillance is not a controller.
-   */
-  /**
    * docs/adr/0058 — the WHOLE current alert state, conformance and short-term
    * conflict, each time it changes. Full state rather than a delta: it is
    * small (only flights with something wrong are in it), it clears itself by
@@ -298,51 +247,31 @@ class WsHub {
   setOnEfspChange(fn) { this._onEfspChange = fn; }
 
   /**
-   * Frames a caller with no session produced (the HTTP service path of the airspace registry, docs/adr/0098 §9): sent
-   * the way _onMessage sends a round trip's broadcasts, then the obligation re-check.
+   * THE way an EFSP frame leaves the hub (ARCH-S #3). Every producer hands over FINISHED frames, built in wire/frames.js
+   * or by its family; the hub builds none. Each frame goes through the read scope (`_broadcastEfsp`, docs/adr/0080), and
+   * when anything was sent the post-change hook runs, so the obligation re-check follows a controller's op, a monitor's
+   * delta, the carrier tick, the archiver and the HTTP airspace path alike. A round trip's `directed` frames go between
+   * the broadcasts and the hook.
+   * @param {{broadcasts?: object[], directed?: object[]}} out
    */
-  broadcastEfspFrames(frames) {
-    for (const frame of frames || []) this._broadcastEfsp(frame);
-    if (this._onEfspChange && frames && frames.length > 0) {
-      try { this._onEfspChange(); } catch (err) { log.error('onEfspChange failed', { err }); }
+  _deliver({ broadcasts, directed } = {}) {
+    const frames = broadcasts || [];
+    for (const frame of frames) this._broadcastEfsp(frame);
+    // docs/adr/0100 §6: an Undo's panel message, after its Board event, to the sessions signed on to the voided Position.
+    this._sendDirected(directed);
+    // After the broadcasts, so a client sees the Strip change before the alert change. Guarded: a monitor bug must
+    // never cost the sender's round trip. Not re-entered: the hook may itself send frames.
+    if (this._onEfspChange && frames.length > 0 && !this._inEfspChange) {
+      this._inEfspChange = true;
+      try { this._onEfspChange(); } catch (err) { log.error('onEfspChange failed', { err }); } finally { this._inEfspChange = false; }
     }
   }
 
+  /** Server-originated EFSP frames (a monitor, the carrier tick, the archiver, the HTTP airspace path): one frame or a list. */
+  deliverEfsp(frames) { this._deliver({ broadcasts: [].concat(frames || []).filter(Boolean) }); }
+
   /** The booking calendar (docs/adr/0098 §9): information, the same for everyone; the last one is also sent on connect. */
   broadcastAirspaceCalendar(msg) { this._calendarMsg = msg; this._broadcast(msg); }
-
-  /** The carrier banner changed with no controller behind it (docs/adr/0074): the tick's delta, the same message a carrier op returns. */
-  broadcastEfspCarrierDelta(delta) { this._broadcastEfsp(delta); }
-
-  /** A server-originated EFSP message already built (the TOFI regime monitor's board-delta, docs/adr/0102), scoped per session like any other. */
-  broadcastEfspMessage(msg) { this._broadcastEfsp(msg); }
-
-  broadcastEfspCorrelationDelta(payload) {
-    this._broadcastEfsp({
-      version: VERSION, type: 'efsp-correlation-delta',
-      // The store's seq and lifetime after this reconcile's changes (docs/adr/0106), so every advance the reconciler made reaches the client.
-      correlationSeq: payload.correlationSeq, correlationEpoch: payload.correlationEpoch,
-      correlations: { updated: payload.correlations || [] },
-      stats: payload.stats,
-    });
-  }
-
-  /**
-   * Runway status (guide §9.7, docs/adr/0061) changed with no controller's op
-   * behind it — today only the active end derived from the mission wind at
-   * load (decisions.md H22). The same efsp-runway-status-delta a runway-status op
-   * returns from handleMessage, on runway status's own sequence (0061's rule-5
-   * deviation), so a client needs one handler for both (docs/adr/0068,
-   * decisions.md S-L1d).
-   */
-  broadcastEfspRunwayStatusDelta(payload) {
-    // Through the read scope like every other EFSP family (docs/wip/SERVER-BUGS.md, B5): a family's own `filter` applies.
-    this._broadcastEfsp({
-      version: VERSION, type: 'efsp-runway-status-delta',
-      runwayStatusSeq: payload.runwayStatusSeq, runwayStatusEpoch: payload.runwayStatusEpoch,
-      runwayStatuses: { updated: (payload.runwayStatuses || []).filter(Boolean) },
-    });
-  }
 
   // Live "who's transmitting ATIS on which frequency" list, from
   // AtisStore.getActive() — called by server.js after every
@@ -618,12 +547,7 @@ class WsHub {
   _signOff(session) {
     if (!this._efsp) return;
     const result = this._efsp.onDisconnect(session) || {};
-    const broadcasts = result.broadcasts || [];
-    for (const frame of broadcasts) this._broadcastEfsp(frame);
-    this._sendDirected(result.directed);
-    if (this._onEfspChange && broadcasts.length > 0) {
-      try { this._onEfspChange(); } catch (err) { log.error('onEfspChange failed', { err }); }
-    }
+    this._deliver(result);
     this._refreshOthersIfStaffingChanged();
   }
 
@@ -744,16 +668,7 @@ class WsHub {
         // 0074 carrier, 0093 SFA rotation), sent immediately on the same round trip, never left for the next op.
         // Not every handler goes through the skeleton: the metrics report/request and the resync answers
         // return `{ ack }` alone, which means nothing to broadcast.
-        const broadcasts = result.broadcasts || [];
-        for (const frame of broadcasts) this._broadcastEfsp(frame);
-        // docs/adr/0100 §6: an Undo's panel message, after its Board event, to the sessions signed on to the voided Position.
-        this._sendDirected(result.directed);
-        // After the broadcasts, so a client sees the Strip change before the
-        // alert change. Guarded: a monitor bug must never cost the sender's
-        // round trip.
-        if (this._onEfspChange && broadcasts.length > 0) {
-          try { this._onEfspChange(); } catch (err) { log.error('onEfspChange failed', { err }); }
-        }
+        this._deliver(result);
         // Declaring a different signed-on set is what changes a controller's
         // coverage (docs/adr/0042) — signing on to AP gives you the RAPCON's
         // scopes, signing off takes them away again. Done here rather than

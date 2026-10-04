@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { serverBoardDelta, correlationDelta, runwayStatusDelta } from '../src/efsp/wire/frames.js';
 import { fullRules } from './helpers/full-rules.mjs';
 import fs from 'fs';
 import os from 'os';
@@ -502,7 +503,7 @@ test('createEfsp exposes the archiver, and hasCountFor answers from the traffic 
   assert.equal((r.stripsByFacility.INCIRLIK || []).includes(dropped.stripId), false);
 });
 
-test('archiveDeltas + broadcastEfspBoardDelta: one delta per Facility, gone Strips and flightDataList.gone, seq continuous', async () => {
+test('archiveDeltas + serverBoardDelta: one delta per Facility, gone Strips and flightDataList.gone, seq continuous', async () => {
   const { archiveDeltas } = await import('../src/efsp/archiver.js');
   const WsHub = (await import('../src/ws-hub.js')).default;
   const TrackStore = (await import('../src/tracks.js')).default;
@@ -518,7 +519,7 @@ test('archiveDeltas + broadcastEfspBoardDelta: one delta per Facility, gone Stri
   const r = archiverFor().sweep();
   offset = 0;
   assert.deepEqual(archiveDeltas({ stripsByFacility: {}, flightDataIds: [] }, efsp.boardStoreFor), [], 'an empty sweep sends nothing');
-  for (const p of archiveDeltas(r, efsp.boardStoreFor)) hub.broadcastEfspBoardDelta(p);
+  for (const p of archiveDeltas(r, efsp.boardStoreFor)) hub.deliverEfsp(serverBoardDelta(p, efsp.boardStoreFor));
 
   const inc = sent.find(m => m.facilityId === 'INCIRLIK');
   const cen = sent.find(m => m.facilityId === 'CENTER');
@@ -532,7 +533,7 @@ test('archiveDeltas + broadcastEfspBoardDelta: one delta per Facility, gone Stri
 
   // The NLA-status sweep's delta is unchanged: no gone, and no flightDataList.gone key.
   sent.length = 0;
-  hub.broadcastEfspBoardDelta({ facilityId: 'INCIRLIK', boardSeq: 1, strips: [] });
+  hub.deliverEfsp(serverBoardDelta({ facilityId: 'INCIRLIK', boardSeq: 1, strips: [] }, efsp.boardStoreFor));
   assert.deepEqual(sent[0].strips.gone, []);
   assert.deepEqual(Object.keys(sent[0].flightDataList), ['updated']);
 });

@@ -557,7 +557,7 @@ function supplementFor(ctx, session, filtered) {
   if (flightDataIds.size === 0) return [];
   const out = [];
   const records = ctx.correlationStore ? [...flightDataIds].map(id => ctx.correlationStore.getCorrelation(id)).filter(Boolean) : [];
-  if (records.length) out.push({ version: VERSION, type: 'efsp-correlation-delta', correlations: { updated: records } });
+  if (records.length) out.push(frames.correlationDelta(null, records));
   const relations = ctx.marsaStore ? ctx.marsaStore.getAll().filter(r => (r.participants || []).some(id => flightDataIds.has(id))) : [];
   if (relations.length) {
     // A supplement is a partial: it names no seq, so it cannot move the client's marsaSeq past a change it never got (docs/adr/0106).
