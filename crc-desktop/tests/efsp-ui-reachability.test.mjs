@@ -23,7 +23,7 @@ import { createRequire } from 'node:module';
 import { freshGraph } from './helpers/fresh-graph.mjs';
 import { BLOCK_MAPS, isBlockEditable, enumSelectOptionsFor, isBooleanToggleBlock } from '../app/public/js/panels/efsp/strip-template.js';
 import { COMPACT_BLOCKS_BY_POSITION, compactBlocksFor as _compactBlocksFor } from '../app/public/js/panels/efsp/strip-fields.js';
-import { INDICATOR_ORDER } from '../app/public/js/panels/efsp/strip-view.js';
+import { INDICATOR_ORDER } from '../app/public/js/panels/efsp/strip-alerts.js';
 import { HAND_BACK_TO, TOFI_ANSWERED_BY } from '../app/public/js/panels/efsp/bay/authority-mirror.js';
 import * as domStub from './helpers/dom-stub.js';
 import * as serverConfig from "./helpers/server-config.mjs";
@@ -37,7 +37,7 @@ const require = createRequire(import.meta.url);
  * explicit test setter (a module cannot have an imported function replaced from outside).
  */
 const SANDBOX_MODULES = [
-  'panels/efsp/bay-view.js', 'panels/efsp/strip-view.js', 'panels/efsp/efsp-state.js', 'panels/efsp/efsp-arrivals.js',
+  'panels/efsp/bay-view.js', 'panels/efsp/strip-view.js', 'panels/efsp/strip-dom.js', 'panels/efsp/strip-exchanges.js', 'panels/efsp/strip-alerts.js', 'panels/efsp/strip-indicators.js', 'panels/efsp/strip-menu.js', 'panels/efsp/efsp-state.js', 'panels/efsp/efsp-arrivals.js',
   'panels/efsp/efsp-stereo-routes.js', 'panels/efsp/strip-template.js', 'panels/efsp/strip-fields.js', 'panels/efsp/efsp-ws.js',
   'panels/efsp/efsp-panel.js', 'panels/efsp/carrier-state.js', 'panels/efsp/carrier-panel.js', 'panels/efsp/scramble.js',
   'panels/efsp/airspace-panel.js', 'picture.js',

@@ -70,7 +70,7 @@ async function mount({ strips = STRIPS, flightDataList = FLIGHT_DATA_LIST } = {}
   const sel = await g.import('panels/efsp/bay/selection.js');
   const stripEl = await g.import('panels/efsp/bay/strip-element.js');
   const expanded = await g.import('panels/efsp/bay/strip-expanded.js');
-  const stripView = await g.import('panels/efsp/strip-view.js');
+  const stripView = await g.import('panels/efsp/strip-alerts.js');
   const ato = await g.import('panels/efsp/ato-strip.js');
   ws.setEfspSender('_sendEfsp', () => {});
   ws.sendEfspSetPositions('TACTICAL', ['TAC_C2']);

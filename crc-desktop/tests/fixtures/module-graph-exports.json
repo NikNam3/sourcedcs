@@ -1063,6 +1063,18 @@
    "sfaRotationOffered",
    "sfaRotationRows"
   ],
+  "panels/efsp/strip-alerts.js": [
+   "ALERT_SLOT_KEYS",
+   "INDICATOR_ORDER",
+   "_stripAlerts"
+  ],
+  "panels/efsp/strip-dom.js": [
+   "STRIP_TYPE_ABBR",
+   "_addClass",
+   "_stateMeta",
+   "_stripButton",
+   "_stripEl"
+  ],
   "panels/efsp/strip-drag.js": [
    "DRAG_THRESHOLD_PX",
    "cachedTopToViewportY",
@@ -1070,6 +1082,15 @@
    "computeRackReconciliation",
    "hasExceededDragThreshold",
    "scrollCompensatedY"
+  ],
+  "panels/efsp/strip-exchanges.js": [
+   "_coordinationExchange",
+   "_marsaExchange",
+   "_pairedMissionStrip",
+   "_tofiExchange",
+   "_tofiExitIsPrimary",
+   "_trackExchange",
+   "tofiExitSignatureFor"
   ],
   "panels/efsp/strip-fields.js": [
    "COMPACT_BLOCKS_BY_POSITION",
@@ -1081,6 +1102,12 @@
    "compactBlocksFor",
    "fieldSpanFor",
    "isOrdnanceSet"
+  ],
+  "panels/efsp/strip-indicators.js": [
+   "_buildIndicatorSlots"
+  ],
+  "panels/efsp/strip-menu.js": [
+   "_buildStripTools"
   ],
   "panels/efsp/strip-template.js": [
    "ARRIVAL_BLOCK_MAP",
@@ -1115,12 +1142,7 @@
    "typedTimeBehindPlan"
   ],
   "panels/efsp/strip-view.js": [
-   "ALERT_SLOT_KEYS",
-   "INDICATOR_ORDER",
-   "STRIP_TYPE_ABBR",
-   "_buildStripLayout",
-   "_stripAlerts",
-   "tofiExitSignatureFor"
+   "_buildStripLayout"
   ],
   "panels/efsp/sync-cursor.js": [
    "RESYNC_RETRY_HEARTBEATS",

@@ -19,7 +19,7 @@ async function load(alertStatus) {
   const g = freshGraph();
   const state = await g.import('panels/efsp/efsp-state.js');
   const view = await g.import('panels/efsp/bay/strip-signature.js');
-  const stripView = await g.import('panels/efsp/strip-view.js');
+  const stripView = await g.import('panels/efsp/strip-alerts.js');
   const strips = [strip('s-taxi', 'f-taxi', 'DEPARTURE', 'TAXI'), strip('s-viper', 'f-viper', 'DEPARTURE', 'CLEARED')];
   state.applyEfspSnapshot({
     strips, positions: [], bays: [], boardSeq: 1,
