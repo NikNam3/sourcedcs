@@ -6,15 +6,15 @@
     "Nevada":             { "utcOffsetHours": -8, "transitionAltFt": 18000, "tmCentralMeridianDeg": -117 },
     "Normandy":           { "utcOffsetHours": 0, "transitionAltFt": 18000, "tmCentralMeridianDeg": -3 },
     "PersianGulf":        { "utcOffsetHours": 4, "transitionAltFt": 18000, "tmCentralMeridianDeg": 57 },
-    "TheChannel":         { "utcOffsetHours": 2, "transitionAltFt": 18000 },
+    "TheChannel":         { "utcOffsetHours": 2, "transitionAltFt": 18000, "tmCentralMeridianDeg": 3 },
     "Syria":              { "utcOffsetHours": 3, "transitionAltFt": 10000, "tmCentralMeridianDeg": 39 },
     "MarianaIslands":     { "utcOffsetHours": 10, "transitionAltFt": 18000, "tmCentralMeridianDeg": 147 },
     "MarianaIslandsWWII": { "utcOffsetHours": 10, "transitionAltFt": 18000 },
     "Falklands":          { "utcOffsetHours": -3, "transitionAltFt": 18000, "tmCentralMeridianDeg": -57 },
     "SinaiMap":           { "utcOffsetHours": 2, "transitionAltFt": 18000, "tmCentralMeridianDeg": 33 },
-    "Kola":               { "utcOffsetHours": 3, "transitionAltFt": 18000 },
+    "Kola":               { "utcOffsetHours": 3, "transitionAltFt": 18000, "tmCentralMeridianDeg": 21 },
     "Afghanistan":        { "utcOffsetHours": 4.5, "transitionAltFt": 18000 },
     "Iraq":               { "utcOffsetHours": 3, "transitionAltFt": 18000 },
-    "GermanyCW":          { "utcOffsetHours": 1, "transitionAltFt": 18000 }
+    "GermanyCW":          { "utcOffsetHours": 1, "transitionAltFt": 18000, "tmCentralMeridianDeg": 21 }
   }
 }

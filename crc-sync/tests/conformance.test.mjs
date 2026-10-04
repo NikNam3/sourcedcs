@@ -179,7 +179,7 @@ test('a genuine 20° deviation still alerts, and the reported actual is magnetic
 });
 
 test('unknown magnetic course (no projection for the theater, or no converter): no heading alert at all', async () => {
-  const { monitor, track } = await syriaMonitor(0, { theatre: 'Kola', at: [68, 33] });
+  const { monitor, track } = await syriaMonitor(0, { theatre: 'Afghanistan', at: [34, 66] });
   track.course = 180; // way off 050 in any frame
   for (let t = 0; t <= 120; t += 5) monitor.tick(t * S);
   assert.deepEqual(monitor.getAll(), []);
