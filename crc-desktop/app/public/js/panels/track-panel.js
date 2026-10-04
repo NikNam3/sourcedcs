@@ -7,7 +7,7 @@ import {
   altitudeLong, assignedAltText, assignedBlockText, tagEditable, trackName, trackNameSuffix, typeText
 } from '../track-label.js';
 import { _flightDataForTrack, buildFiledRoute, parseFiledRouteWaypoints, updateMap } from '../geojson.js';
-import { dock, ensureTrackPanel } from '../dock.js';
+import { dock, ensureTrackPanel } from '../dock-handle.js';
 import { conformanceAlertsForFlightData, conflictAlertsForTrack } from './efsp/efsp-state.js';
 import { history, tracks } from '../picture.js';
 import { map, mapReady } from '../map-handle.js';

@@ -100,16 +100,20 @@
    "toUtm",
    "zoneOf"
   ],
-  "dock.js": [
+  "dock-handle.js": [
    "PANEL_TITLES",
    "dock",
    "ensureTrackPanel",
-   "initDock",
    "isDockPanelOpen",
    "isPanelPinned",
-   "notifyCoverageChanged",
+   "registerDockActions",
+   "setDock",
    "setPanelPinned",
    "toggleDockPanel"
+  ],
+  "dock.js": [
+   "initDock",
+   "notifyCoverageChanged"
   ],
   "elevation.js": [
    "clearElevationContours",

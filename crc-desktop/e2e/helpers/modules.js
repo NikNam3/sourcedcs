@@ -18,12 +18,14 @@ const MODULES = {
   state: '/js/panels/efsp/efsp-state.js',
   ws: '/js/panels/efsp/efsp-ws.js',
   sync: '/js/sync.js',
-  dock: '/js/dock.js', // crc.dock.dock is the dockview instance (null until initDock runs)
+  dock: '/js/dock-handle.js', // crc.dock.dock is the dockview instance (null until initDock runs); toggleDockPanel etc. delegate to dock.js
   app: '/js/app.js', // crc.app._ws, applySnapshot, applyCoverage
   mapHandle: '/js/map-handle.js', // crc.mapHandle.map, .mapReady
   settings: '/js/settings.js', // crc.settings.settings
   picture: '/js/picture.js', // crc.picture.history, .labelOffsets, .latestFromServer
   bayView: '/js/panels/efsp/bay-view.js',
+  dispatch: '/js/panels/efsp/bay/dispatch.js',
+  selection: '/js/panels/efsp/bay/selection.js',
   carrier: '/js/panels/efsp/carrier-state.js',
   nla: '/js/panels/efsp/efsp-nla.js',
   sfa: '/js/panels/efsp/sfa-state.js',

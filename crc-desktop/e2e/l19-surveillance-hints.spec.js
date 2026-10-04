@@ -44,7 +44,7 @@ test('the suggestion chip: drawn, moves nothing, one click advances the flight a
   // To LUAW, with the page's own NLA, as l4-chain does.
   for (let i = 0; i < 6; i++) {
     const before = (await info(page)).state;
-    await page.evaluate((cs) => crc.bayView._invokeNla(crc.state.getAllEfspStrips().find((x) => x.state !== 'DROPPED' && crc.state.getEfspFlightData(x.flightDataId).identity.callsign === cs)), CS);
+    await page.evaluate((cs) => crc.dispatch._invokeNla(crc.state.getAllEfspStrips().find((x) => x.state !== 'DROPPED' && crc.state.getEfspFlightData(x.flightDataId).identity.callsign === cs)), CS);
     await expect.poll(async () => (await info(page)).state, { timeout: 5000, message: `stuck at ${before}` }).not.toBe(before);
     await lapseNlaGuard(page); // the client's double-tap window
   }

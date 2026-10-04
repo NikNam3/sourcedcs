@@ -10,6 +10,9 @@ import { initRunwayStatusPanel } from './panels/efsp/runway-status-panel.js';
 import { initMetricsPanel } from './panels/metrics-panel.js';
 import { getActiveRadars } from './picture.js';
 import { map } from './map-handle.js';
+import { PANEL_TITLES, registerDockActions, setDock } from './dock-handle.js';
+
+registerDockActions({ ensureTrackPanel, isDockPanelOpen, toggleDockPanel, isPanelPinned, setPanelPinned });
 
 // ── Dockview bootstrap ────────────────────────────────────────────────────
 // Owns the dockview grid that replaces individually hand-positioned
@@ -31,32 +34,10 @@ import { map } from './map-handle.js';
 // not a valid bare identifier, hence the bracket access below.
 const DockviewCore = window['dockview-core'];
 
-// Single source of truth for every panel's user-facing name. Every spot
-// that displays a panel's name — its dockview tab title, its row label in
-// the radars-panel's Panels section (panels/radar-panel.js's panelControlRows()), the
-// topbar RADARS/PANELS button's own text — reads from here, so renaming a
-// panel means changing exactly one string instead of hunting through both
-// files and the static HTML and hoping none of the copies drift apart (this
-// exact drift is what prompted consolidating it: the topbar button's label
-// used to be hardcoded in index.html separately from the panel's own title
-// here in dock.js). `map` has no entry — it uses dockview's own default
-// (the tab shows its id) via createNoCloseTab, and nothing has asked for
-// that to change.
-export const PANEL_TITLES = {
-  track:    'TRACK INFO',
-  radars:   'PANELS',
-  settings: 'SETTINGS',
-  airport:  'AIRPORT',
-  radio:    'RADIO',
-  efsp:     'FLIGHT STRIPS',
-  airspace: 'AIRSPACE',
-  runwayStatus: 'RUNWAY STATUS',
-  metrics:  'METRICS',
-};
 
 const DOCK_LAYOUT_KEY = 'crc-desktop-dock-layout-v2';
 
-export let dock = null;
+let dock = null;
 
 export function initDock() {
   const root = document.getElementById('dock-root');
@@ -85,6 +66,7 @@ export function initDock() {
       }
     },
   });
+  setDock(dock);
 
   loadDockLayout();
   // The radars-panel's own init() (panels/radar-panel.js's initRadarPanel, invoked by
@@ -220,7 +202,7 @@ const PANEL_SIDE = {
 // Track Info's reopen path: clicking a track on the map (showTrackPanel, in
 // panels/track-panel.js) calls this to get-or-create the panel before activating it, rather
 // than relying on a permanent required-panel restore.
-export function ensureTrackPanel() {
+function ensureTrackPanel() {
   const existing = dock.api.getPanel('track');
   if (existing) return existing;
   const anchor = leftGroupAnchor('track');
@@ -346,7 +328,7 @@ const DOCKABLE_PANELS = {
   }, true),
 };
 
-export function isDockPanelOpen(id) {
+function isDockPanelOpen(id) {
   return !!(dock && dock.api.getPanel(id));
 }
 
@@ -357,7 +339,7 @@ export function isDockPanelOpen(id) {
 // airport radar yanked focus away from the panel the user was working in to
 // the newly-opened Airport panel. It matters more now, not less — coverage can
 // change because a colleague took a Position, i.e. with no local input at all.
-export function toggleDockPanel(id, open, { preserveFocus } = {}) {
+function toggleDockPanel(id, open, { preserveFocus } = {}) {
   const optionsFn = DOCKABLE_PANELS[id];
   if (!optionsFn) return;
   const existing = dock.api.getPanel(id);
@@ -543,11 +525,11 @@ function _loadPinnedPanels() {
 
 let _pinnedPanels = _loadPinnedPanels();
 
-export function isPanelPinned(id) {
+function isPanelPinned(id) {
   return !!_pinnedPanels[id];
 }
 
-export function setPanelPinned(id, pinned) {
+function setPanelPinned(id, pinned) {
   _pinnedPanels[id] = pinned;
   try {
     localStorage.setItem(PINNED_PANELS_KEY, JSON.stringify(_pinnedPanels));

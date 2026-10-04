@@ -47,7 +47,7 @@ async function openAtLuaw(page) {
   await open(page);
   for (let i = 0; i < 6; i++) {
     const before = await stateOf(page);
-    await page.evaluate((cs) => crc.bayView._invokeNla(crc.state.getAllEfspStrips().find((x) => x.state !== 'DROPPED' && crc.state.getEfspFlightData(x.flightDataId).identity.callsign === cs)), CS);
+    await page.evaluate((cs) => crc.dispatch._invokeNla(crc.state.getAllEfspStrips().find((x) => x.state !== 'DROPPED' && crc.state.getEfspFlightData(x.flightDataId).identity.callsign === cs)), CS);
     await expect.poll(() => stateOf(page), { message: `stuck at ${before}` }).not.toBe(before);
     await lapseNlaGuard(page);
   }

@@ -1,6 +1,6 @@
 'use strict';
 import { toMagneticDisplay } from '../../magnetic.js';
-import { PANEL_TITLES, dock } from '../../dock.js';
+import { PANEL_TITLES, dock } from '../../dock-handle.js';
 import { getAllEfspRunwayStatuses } from './efsp-state.js';
 import { getActingPositions, sendEfspRunwayStatusMutation, settleEfspAck } from './efsp-ws.js';
 import { alertPadConstraintFor } from './scramble.js';
