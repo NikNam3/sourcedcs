@@ -200,6 +200,15 @@
    "mapReady",
    "updateZoomLimits"
   ],
+  "map-interactions.js": [
+   "wireMapInteractions"
+  ],
+  "map-layers-overlays.js": [
+   "addOverlayLayers"
+  ],
+  "map-layers-tracks.js": [
+   "addTrackLayers"
+  ],
   "map-setup.js": [
    "initMap"
   ],
