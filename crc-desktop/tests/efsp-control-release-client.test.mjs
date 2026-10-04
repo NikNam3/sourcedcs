@@ -94,17 +94,18 @@ test('effective time: HHMM on the mission day, a time over 12 h past rolls to to
   assert.equal(R.parseEffectiveAt('2460', NOW), null);
 });
 
-test('attestation request: the server\'s own sentence, and nothing else', () => {
-  const source = fs.readFileSync(new URL('../../crc-sync/src/efsp/board/handoff-control.js', import.meta.url), 'utf8');
-  assert.ok(source.includes('is a control instruction and ${why}: coordinate with ${other} and say so (coordinatedWith)'), 'the sentence the client parses');
+test('attestation request: read from the ack\'s structured field, never from the server\'s sentence', () => {
   const op = { kind: 'SetBlock', blockId: '9A-HDG', value: '270' };
-  const detail = 'TURNS is a control instruction and control has not transferred: coordinate with AP and say so (coordinatedWith)';
-  assert.deepEqual(R.attestationRequest('VALIDATION_ERROR', detail, op), { needs: 'TURNS', with: 'AP', detail });
-  assert.equal(R.attestationRequest('VALIDATION_ERROR', 'CLIMB and DESCENT is a control instruction and outside the release in effect: coordinate with CTR and say so (coordinatedWith)', op).needs, 'CLIMB and DESCENT');
-  assert.equal(R.attestationRequest('VALIDATION_ERROR', detail, { ...op, coordinatedWith: 'AP' }), null, 'already attested');
-  assert.equal(R.attestationRequest('VALIDATION_ERROR', 'coordinatedWith must be AP, the other party of this HANDOFF (got X)', op), null);
-  assert.equal(R.attestationRequest('PERMISSION_DENIED', detail, op), null);
-  assert.equal(R.attestationRequest('VALIDATION_ERROR', detail, { kind: 'HANDOFF' }), null);
+  const turns = { with: 'AP', needs: ['TURNS'] };
+  assert.deepEqual(R.attestationRequest(turns, op), { needs: 'TURNS', with: 'AP' });
+  assert.equal(R.attestationRequest({ with: 'CTR', needs: ['CLIMB', 'DESCENT'] }, op).needs, 'CLIMB and DESCENT');
+  assert.equal(R.attestationRequest(turns, { ...op, coordinatedWith: 'AP' }), null, 'already attested');
+  assert.equal(R.attestationRequest(undefined, op), null, 'a refusal without the field is an ordinary refusal');
+  assert.equal(R.attestationRequest({ with: 'AP', needs: [] }, op), null);
+  assert.equal(R.attestationRequest(turns, { kind: 'HANDOFF' }), null);
+  // No regex over server prose anywhere in the module.
+  const rules = fs.readFileSync(new URL('../app/public/js/panels/efsp/control-release-rules.js', import.meta.url), 'utf8');
+  assert.ok(!/is a control instruction/.test(rules), 'the server sentence is not matched on the client');
 });
 
 test('obligation labels cover exactly the control-invariant obligations the server raises', () => {
@@ -124,11 +125,11 @@ test('the carrier target: CV_MARSHAL in CARRIER, offered only to AP and CTR for 
 test('the attestation line holds the refused write and re-sends it only on the click', async () => {
   const A = await import('../app/public/js/panels/efsp/panel/control-attest.js');
   A._resetControlAttestForTest();
-  const detail = 'TURNS is a control instruction and control has not transferred: coordinate with AP and say so (coordinatedWith)';
   const pending = { stripId: 'S1', actingPositionId: 'CTR', facilityId: 'CENTER', op: { kind: 'SetBlock', blockId: '9A-HDG', value: '270' } };
-  assert.equal(A.noteAttestationRefusal('STALE_REV', null, pending), false);
+  assert.equal(A.noteAttestationRefusal({ ok: false, reason: 'STALE_REV', pending }), false);
+  assert.equal(A.noteAttestationRefusal({ ok: false, reason: 'VALIDATION_ERROR', detail: 'TURNS is a control instruction ...', pending }), false, 'the sentence alone asks nothing');
   assert.equal(A.getControlAttestation(), null);
-  assert.equal(A.noteAttestationRefusal('VALIDATION_ERROR', detail, pending), true);
+  assert.equal(A.noteAttestationRefusal({ ok: false, reason: 'VALIDATION_ERROR', attestation: { with: 'AP', needs: ['TURNS'] }, pending }), true);
   assert.equal(A.getControlAttestation().with, 'AP');
   A.dismissControlAttestation();
   assert.equal(A.getControlAttestation(), null);

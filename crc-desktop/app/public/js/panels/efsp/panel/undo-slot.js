@@ -63,24 +63,11 @@ export function undoVoidedMessageText(msg) {
 }
 
 /**
- * An efsp-mutation-ack came in. `pending` is the original request (efsp-state's `result.pending`) when the
- * client sent it. Returns true when the ack was an Undo's own ack (the caller then skips the refusal banner:
- * the slot line is the surface for it).
+ * An efsp-mutation-ack came in (any Mutation): when it offers something to undo (`undoable`), that becomes the slot.
+ * `pending` is the original request (efsp-state's `result.pending`) when the client sent it. An Undo's OWN answer is not
+ * handled here: it is the continuation `_onUndoAck`, registered by requestUndo() through the one ack path (efsp-ws.js).
  */
 export function noteUndoAck(msg, pending) {
-  if (msg.clientMutationId && msg.clientMutationId === _pendingUndoId) {
-    _pendingUndoId = null;
-    if (msg.ok) {
-      _slot = null;
-      _outcome = { text: undoOutcomeText(msg.undone, msg.voided), refused: false, until: _clock() + UNDO_OUTCOME_MS };
-    } else {
-      // Terminal refusals end the offer; a transient one (not staffed, Bay full) leaves the slot to retry.
-      if (['UNDO_UNAVAILABLE', 'UNDO_BLOCKED', 'NOT_FOUND'].includes(msg.reason)) _slot = null;
-      _outcome = { text: `Cannot undo: ${msg.detail || msg.reason || 'refused'}`, refused: true, until: _clock() + UNDO_OUTCOME_MS };
-    }
-    _kick();
-    return true;
-  }
   if (msg.ok && msg.undoable && msg.undoable.actionId) {
     const facilityId = msg.facilityId || (pending && pending.facilityId) || undefined;
     _slot = {
@@ -94,7 +81,21 @@ export function noteUndoAck(msg, pending) {
     };
     _kick();
   }
-  return false;
+}
+
+/** The Undo's own ack. True: the slot line is its surface, so the caller skips the refusal banner. */
+function _onUndoAck(msg) {
+  _pendingUndoId = null;
+  if (msg.ok) {
+    _slot = null;
+    _outcome = { text: undoOutcomeText(msg.undone, msg.voided), refused: false, until: _clock() + UNDO_OUTCOME_MS };
+  } else {
+    // Terminal refusals end the offer; a transient one (not staffed, Bay full) leaves the slot to retry.
+    if (['UNDO_UNAVAILABLE', 'UNDO_BLOCKED', 'NOT_FOUND', 'CONNECTION_LOST'].includes(msg.reason)) _slot = null;
+    _outcome = { text: `Cannot undo: ${msg.detail || msg.reason || 'refused'}`, refused: true, until: _clock() + UNDO_OUTCOME_MS };
+  }
+  _kick();
+  return true;
 }
 
 /** A frame carrying a Facility's Board epoch arrived (ack, delta, snapshot): a new lifetime means no undo. */
@@ -132,7 +133,7 @@ export function requestUndo() {
   }
   const positions = getActingPositions();
   const actingPositionId = positions.includes(slot.actingPositionId) ? slot.actingPositionId : (slot.actingPositionId || positions[0]);
-  _pendingUndoId = sendEfspUndo(actingPositionId, slot);
+  _pendingUndoId = sendEfspUndo(actingPositionId, slot, { onAck: _onUndoAck });
   return true;
 }
 

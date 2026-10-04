@@ -142,13 +142,12 @@ export function openDeleteView({ record, flights, authority, zulu, send, onClose
   del.addEventListener('click', () => {
     if (del.disabled || !authority) return;
     status.textContent = 'Sending...'; del.disabled = true;
-    state.pending = send(authority.positionId, def.airspaceId, record.rev, { kind: 'DeleteAirspace' }, { baseDefRev: record.defRev }) ?? '?';
+    state.pending = send(authority.positionId, def.airspaceId, record.rev, { kind: 'DeleteAirspace' }, { baseDefRev: record.defRev }, { onAck: handleAck }) ?? '?';
   });
   close.addEventListener('click', () => { el.remove(); onClose({ saved: false }); });
 
   function handleAck(ack) {
     if (!state.pending) return false;
-    if (state.pending !== '?' ? ack.clientMutationId !== state.pending : ack.airspaceId !== def.airspaceId) return false;
     state.pending = null;
     if (ack.ok) { el.remove(); onClose({ saved: true, ack }); return true; }
     // The server's own list of blockers (strings), or its reason, replaces the panel's guess.

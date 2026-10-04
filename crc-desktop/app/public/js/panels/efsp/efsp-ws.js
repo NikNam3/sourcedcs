@@ -41,10 +41,55 @@ function efspClientMutationId() {
 export function _sendEfsp(msg) {
   if (!isSyncOpen()) {
     console.warn('[efsp] WebSocket not open — message NOT sent (silently dropped by sendToSync):', msg);
-    return;
+    return false;
   }
   sendToSync(msg);
+  return true;
 }
+
+// The one ack path (DESK-ACKS). Every EFSP request that wants its answer goes through sendEfsp(msg, { onAck }): the
+// continuation is kept by clientMutationId and run by settleEfspAck() when the family's ack handler sees the ack
+// (efsp-messages.js, airspace-panel.js, ato-import.js). Replaces the per-feature trackers (the Undo slot's, CreateStrip's,
+// the ATO dialog's, the airspace views') that each matched an ack by hand.
+//
+// `onAck(ack, result)` returns true when it has shown the outcome itself, so the caller skips its default surface (the red
+// refusal banner). `result` is efsp-state's applyEfspMutationAck() result for a Strip Mutation ack, undefined otherwise.
+// `pending: true` also registers the Mutation for replay after a reconnect (efsp-state.js): only a Strip Mutation or a
+// CreateStrip may be replayed; anything else is cheap to reissue by hand.
+const _acks = new Map(); // clientMutationId -> { onAck, replayable }
+
+export function sendEfsp(msg, { pending = false, onAck } = {}) {
+  const id = msg.clientMutationId;
+  if (pending) registerPendingMutation(msg);
+  if (onAck) _acks.set(id, { onAck, replayable: pending });
+  if (_sendEfsp(msg) === false && onAck && !pending) {
+    // Nothing went out, so no ack will ever come: answer the continuation now, but after the caller has stored the id.
+    queueMicrotask(() => settleEfspAck({ clientMutationId: id, ok: false, reason: 'NOT_CONNECTED', detail: 'not connected to crc-sync' }));
+  }
+  return id;
+}
+
+/** The family's ack handler calls this. True when the request's own continuation handled the outcome (skip the default surface). */
+export function settleEfspAck(ack, result) {
+  const entry = _acks.get(ack.clientMutationId);
+  if (!entry) return false;
+  _acks.delete(ack.clientMutationId);
+  return entry.onAck(ack, result) === true;
+}
+
+/**
+ * A (re)connect: a request that was in flight on the dead socket will never be answered. Each non-replayable continuation
+ * hears `CONNECTION_LOST`, so a form or slot never waits forever; a replayable Mutation keeps its continuation and is
+ * re-sent after the snapshot (replayPendingEfspMutations), with the same id.
+ */
+export function orphanEfspAcks() {
+  for (const [id, entry] of [..._acks]) {
+    if (entry.replayable) continue;
+    settleEfspAck({ clientMutationId: id, ok: false, reason: 'CONNECTION_LOST', detail: 'the connection to crc-sync dropped before the answer came' });
+  }
+}
+
+export function _resetEfspAcksForTest() { _acks.clear(); }
 
 /**
  * Sends a Mutation targeting an existing Strip. Caller MUST only pass a
@@ -56,7 +101,7 @@ export function _sendEfsp(msg) {
  * (NLA/move/transfer/gesture/coordination) all just pass their Strip
  * through unchanged.
  */
-export function sendEfspMutation(actingPositionId, strip, op) {
+export function sendEfspMutation(actingPositionId, strip, op, { onAck } = {}) {
   const msg = {
     version: 1, type: 'efsp-mutation',
     clientMutationId: efspClientMutationId(),
@@ -66,9 +111,7 @@ export function sendEfspMutation(actingPositionId, strip, op) {
     baseRev: strip.rev,
     op,
   };
-  registerPendingMutation(msg);
-  _sendEfsp(msg);
-  return msg.clientMutationId;
+  return sendEfsp(msg, { pending: true, onAck });
 }
 
 /**
@@ -77,7 +120,7 @@ export function sendEfspMutation(actingPositionId, strip, op) {
  * registered as pending: the replay-on-reconnect machinery would rebase it, and a stale Undo must not be re-sent
  * by guesswork (undo-slot.js tracks its own ack).
  */
-export function sendEfspUndo(actingPositionId, slot) {
+export function sendEfspUndo(actingPositionId, slot, { onAck } = {}) {
   const msg = {
     version: 1, type: 'efsp-mutation',
     clientMutationId: efspClientMutationId(),
@@ -86,12 +129,11 @@ export function sendEfspUndo(actingPositionId, slot) {
     stripId: slot.stripId,
     op: { kind: 'Undo', actionId: slot.actionId },
   };
-  _sendEfsp(msg);
-  return msg.clientMutationId;
+  return sendEfsp(msg, { onAck });
 }
 
 /** CreateStrip has no existing Strip to derive facilityId from — an explicit param, defaulting to INCIRLIK for back-compat with every pre-WP4A call site (efsp-panel.js's OPS-only DEPARTURE form). */
-export function sendEfspCreateStrip(actingPositionId, createOp, facilityId = DEFAULT_EFSP_FACILITY_ID) {
+export function sendEfspCreateStrip(actingPositionId, createOp, facilityId = DEFAULT_EFSP_FACILITY_ID, { onAck } = {}) {
   const msg = {
     version: 1, type: 'efsp-mutation',
     clientMutationId: efspClientMutationId(),
@@ -99,9 +141,7 @@ export function sendEfspCreateStrip(actingPositionId, createOp, facilityId = DEF
     actingPositionId,
     op: createOp,
   };
-  registerPendingMutation(msg);
-  _sendEfsp(msg);
-  return msg.clientMutationId;
+  return sendEfsp(msg, { pending: true, onAck });
 }
 
 /**
@@ -154,6 +194,7 @@ function _notice(text) { if (_noticeListener) _noticeListener(text); }
  * The ack is the truth (noteEfspPositionsAck) and the coverage that follows says Primary or Observer.
  */
 export function redeclareEfspPositions() {
+  orphanEfspAcks();
   const facilities = Object.keys(_declaredByFacility).filter(f => _declaredByFacility[f].length > 0);
   _redeclare = facilities.length ? { expectPrimary: new Set(_primaryKeys), acksPending: new Set(facilities) } : null;
   for (const f of facilities) _sendEfsp({ version: 1, type: 'efsp-set-positions', facilityId: f, signedOn: _declaredByFacility[f] });
@@ -199,16 +240,15 @@ export function noteCoveragePositions(list) {
  * pending mutation: the replay-on-reconnect machinery (§5.6.3) is keyed on
  * Strip identity, and an airspace op is cheap to simply reissue by hand.
  */
-export function sendEfspAirspaceMutation(actingPositionId, airspaceId, baseRev, op, extra = {}) {
+export function sendEfspAirspaceMutation(actingPositionId, airspaceId, baseRev, op, extra = {}, { onAck } = {}) {
   const clientMutationId = efspClientMutationId();
   // `extra` carries `baseDefRev` for the definition ops (docs/adr/0098 §4): the revision the form was opened on, which
   // the server checks field by field. Returns the id so the caller can match the ack to the form that sent it.
-  _sendEfsp({
+  return sendEfsp({
     version: 1, type: 'efsp-airspace-mutation',
     clientMutationId,
     airspaceId, baseRev, actingPositionId, op, ...extra,
-  });
-  return clientMutationId;
+  }, { onAck });
 }
 
 /**
@@ -223,12 +263,12 @@ export function sendEfspAirspaceMutation(actingPositionId, airspaceId, baseRev, 
  * airspace op is not: §5.6.3's replay machinery is keyed on Strip identity,
  * and a bind is cheap to reissue.
  */
-export function sendEfspCorrelationMutation(actingPositionId, flightDataId, baseRev, op) {
-  _sendEfsp({
+export function sendEfspCorrelationMutation(actingPositionId, flightDataId, baseRev, op, { onAck } = {}) {
+  return sendEfsp({
     version: 1, type: 'efsp-correlation-mutation',
     clientMutationId: efspClientMutationId(),
     flightDataId, baseRev, actingPositionId, op,
-  });
+  }, { onAck });
 }
 
 /**
@@ -243,12 +283,12 @@ export function sendEfspCorrelationMutation(actingPositionId, flightDataId, base
  * Not registered as a pending mutation, for the reason the airspace and
  * correlation sends give: §5.6.3's replay machinery is keyed on Strip identity.
  */
-export function sendEfspMarsaMutation(actingPositionId, marsaId, baseRev, op) {
-  _sendEfsp({
+export function sendEfspMarsaMutation(actingPositionId, marsaId, baseRev, op, { onAck } = {}) {
+  return sendEfsp({
     version: 1, type: 'efsp-marsa-mutation',
     clientMutationId: efspClientMutationId(),
     marsaId, baseRev, actingPositionId, op,
-  });
+  }, { onAck });
 }
 
 /**
@@ -259,12 +299,12 @@ export function sendEfspMarsaMutation(actingPositionId, marsaId, baseRev, op) {
  * correlation and MARSA sends give: §5.6.3's replay machinery is keyed on
  * Strip identity, and a runway-status op is cheap to reissue by hand.
  */
-export function sendEfspRunwayStatusMutation(actingPositionId, facilityId, baseRev, op) {
-  _sendEfsp({
+export function sendEfspRunwayStatusMutation(actingPositionId, facilityId, baseRev, op, { onAck } = {}) {
+  return sendEfsp({
     version: 1, type: 'efsp-runway-status-mutation',
     clientMutationId: efspClientMutationId(),
     facilityId, baseRev, actingPositionId, op,
-  });
+  }, { onAck });
 }
 
 /**
@@ -275,12 +315,12 @@ export function sendEfspRunwayStatusMutation(actingPositionId, facilityId, baseR
  * resent whole on every change). Not registered as a pending mutation, for the
  * reason the airspace and MARSA sends give.
  */
-export function sendEfspCarrierMutation(actingPositionId, hullId, baseRev, op) {
-  _sendEfsp({
+export function sendEfspCarrierMutation(actingPositionId, hullId, baseRev, op, { onAck } = {}) {
+  return sendEfsp({
     version: 1, type: 'efsp-carrier-mutation',
     clientMutationId: efspClientMutationId(),
     hullId, baseRev, actingPositionId, op,
-  });
+  }, { onAck });
 }
 
 /**
@@ -288,12 +328,12 @@ export function sendEfspCarrierMutation(actingPositionId, hullId, baseRev, op) {
  * Its own message type because it targets the approach's rotation, not a Strip. Not
  * registered as a pending mutation, for the reason the carrier and MARSA sends give.
  */
-export function sendEfspSfaMutation(actingPositionId, baseRev, op) {
-  _sendEfsp({
+export function sendEfspSfaMutation(actingPositionId, baseRev, op, { onAck } = {}) {
+  return sendEfsp({
     version: 1, type: 'efsp-sfa-mutation',
     clientMutationId: efspClientMutationId(),
     baseRev, actingPositionId, op,
-  });
+  }, { onAck });
 }
 
 /**

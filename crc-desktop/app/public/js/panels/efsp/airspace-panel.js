@@ -3,7 +3,7 @@ import { refreshAirspaceLayers } from '../../airspace-layer.js';
 import { missionNow } from '../topbar.js';
 import { settings } from '../../app.js';
 import { getAllEfspAirspaces, getEfspFlightData, getAllEfspStrips, getEfspAirspaceEdits, stripsInAirspace } from './efsp-state.js';
-import { getActingPositions, sendEfspAirspaceMutation } from './efsp-ws.js';
+import { getActingPositions, sendEfspAirspaceMutation, settleEfspAck } from './efsp-ws.js';
 import { registerEfspMessage } from './efsp-message-registry.js';
 import { applyEfspAirspaceDelta } from './efsp-state.js';
 import { _showMutationError, _showMutationWarning } from './efsp-panel.js';
@@ -220,7 +220,11 @@ function _setView(key, view) {
 function _othersOf(airspaceId) {
   return getAllEfspAirspaces().filter(a => a.airspaceId !== airspaceId).map(a => a.definition);
 }
-const _sendDefinitionOp = (...args) => sendEfspAirspaceMutation(...args);
+// An ack for a form this window has open is answered in that form (the one ack path, efsp-ws.js): the form hands its
+// handleAck as `onAck`, and it is only called while that form is still open, otherwise the ack falls to the banner.
+const _sendDefinitionOp = (positionId, airspaceId, baseRev, op, extra, { onAck } = {}) => sendEfspAirspaceMutation(
+  positionId, airspaceId, baseRev, op, extra,
+  { onAck: onAck && ((ack) => [..._views.values()].some(v => v.handleAck === onAck) && onAck(ack)) });
 
 function _openEditor(airspace) {
   const signedOn = getActingPositions();
@@ -547,10 +551,7 @@ registerEfspMessage('efsp-airspace-calendar', (msg) => {
 
 registerEfspMessage('efsp-airspace-ack', (msg) => {
   // An ack for a form this window has open is shown in that form (inline, on the field or beside Save), not as a banner.
-  let handled = false;
-  for (const view of [..._views.values()]) {
-    if (view.handleAck(msg)) { handled = true; break; }
-  }
+  const handled = settleEfspAck(msg);
   if (!msg.ok) {
     if (!handled) {
       console.warn('[efsp] airspace op rejected:', msg.reason, msg);

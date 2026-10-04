@@ -199,12 +199,12 @@ export function buildRefuseOp(reason) {
 }
 
 /**
- * Is this refusal the server asking for "coordinated with"? (crc-sync handoff-control.js `checkControlAxis`: a
- * VALIDATION_ERROR on a SetBlock whose detail ends in "(coordinatedWith)".) -> `{with, needs}` or null.
+ * Is this refusal the server asking for "coordinated with"? The ack carries `attestation: {with, needs:[scope…]}` (crc-sync
+ * handoff-control.js `checkControlAxis`); only a SetBlock that has not already attested can be answered by one.
+ * -> `{with, needs}` (needs as the words a controller reads, "CLIMB and DESCENT") or null.
  */
-export function attestationRequest(reason, detail, op) {
-  if (reason !== 'VALIDATION_ERROR' || !op || op.kind !== 'SetBlock' || op.coordinatedWith) return null;
-  const m = /^(.+?) is a control instruction and .*coordinate with (\S+) and say so \(coordinatedWith\)$/.exec(String(detail || ''));
-  if (!m) return null;
-  return { needs: m[1], with: m[2], detail };
+export function attestationRequest(attestation, op) {
+  if (!attestation || !op || op.kind !== 'SetBlock' || op.coordinatedWith) return null;
+  if (typeof attestation.with !== 'string' || !Array.isArray(attestation.needs) || !attestation.needs.length) return null;
+  return { needs: attestation.needs.join(' and '), with: attestation.with };
 }

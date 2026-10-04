@@ -11,7 +11,7 @@ import { captureEfspPlacement } from './efsp-arrivals.js';
 import { applyEfspSfaDelta } from './sfa-state.js';
 import {
   efspResyncReplyAsMessage, noteEfspBoardMessageForSync, noteEfspHeartbeatForSync, noteEfspResyncAnswered,
-  noteEfspPositionsAck, noteEfspSnapshotLanded, noteEfspStoreAnswerLanded, replayPendingEfspMutations
+  noteEfspPositionsAck, noteEfspSnapshotLanded, noteEfspStoreAnswerLanded, replayPendingEfspMutations, settleEfspAck
 } from './efsp-ws.js';
 import { onEfspMetricsReportAck } from './efsp-metrics-client.js';
 import { refreshCorrelatedHighlight } from './correlation-highlight.js';
@@ -22,7 +22,7 @@ import {
   notifyEfspOrphanedMutation, refreshEfspPanel, reloadEfspStereoRoutes
 } from './efsp-panel.js';
 import { refreshArHighlight } from './ato-strip.js';
-import { onAtoAck, onAtoPreviewResult } from './ato-import.js';
+import { onAtoPreviewResult } from './ato-import.js';
 import { renderAirspacePanel } from './airspace-panel.js';
 import { noteUndoAck, noteUndoBoardEpoch, noteUndoVoided, reconcileUndoSlotEpoch } from './panel/undo-slot.js';
 import { noteEfspPositionOffer } from './panel/combination.js';
@@ -70,6 +70,7 @@ registerEfspMessage('efsp-snapshot', (msg) => {
   // ack could never otherwise arrive on the dead connection —
   // defect D6, "the worst failure mode in the system").
   replayPendingEfspMutations((orphaned) => {
+    settleEfspAck({ clientMutationId: orphaned.clientMutationId, ok: false, reason: 'CONNECTION_LOST', detail: 'its target is no longer on the Board' });
     notifyEfspOrphanedMutation(orphaned);
   });
 });
@@ -128,9 +129,10 @@ registerEfspMessage('efsp-mutation-ack', (msg) => {
   }
   noteUndoBoardEpoch(msg.facilityId, msg.boardEpoch);
   // The Undo slot (docs/adr/0100 §10) takes the ack's `undoable`; an Undo's own refusal shows in the slot line.
-  const wasUndoAck = noteUndoAck(msg, result.pending);
+  const handled = settleEfspAck(msg, result); // the request's own continuation (Undo, CreateStrip, ...), if it left one
+  noteUndoAck(msg, result.pending);
   if (!result.ok) console.warn('[efsp] Mutation rejected:', result.reason, msg);
-  if (!wasUndoAck) notifyEfspMutationAck(msg.clientMutationId, result);
+  if (!handled) notifyEfspMutationAck(result);
   renderAllOpenEfspBays();
 });
 
@@ -226,7 +228,7 @@ registerEfspMessage('efsp-ato-preview-result', (msg) => {
 });
 
 registerEfspMessage('efsp-ato-ack', (msg) => {
-  onAtoAck(msg);
+  settleEfspAck(msg); // sendAtoImport's continuation (ato-import.js)
 });
 
 // WP8 (docs/adr/0065, 0072): the ack for the client measurements efsp-metrics-client.js reports.

@@ -36,7 +36,7 @@ async function mount({ signedOn = ['TAC_C2'] } = {}) {
   root.appendChild(toolbar);
   api.initAtoImport(root);
   const button = toolbar.children.find(c => c.className === 'efsp-ato-import-btn');
-  return { sent, errors, root, toolbar, button, api };
+  return { sent, errors, root, toolbar, button, api, ws };
 }
 
 const PREVIEW = {
@@ -147,14 +147,14 @@ test('the ack closes the dialog when every line imported, and lists the refusals
   previewed(ok);
   ok.api.setAtoLineChoice('1901T#0', { action: 'SKIP' });
   const id = ok.api.sendAtoImport();
-  ok.api.onAtoAck({ clientMutationId: id, ok: true, results: [{ lineId: '1101A#0', ok: true, action: 'BIND' }, { lineId: '1901T#0', ok: true, action: 'SKIP' }] });
+  ok.ws.settleEfspAck({ clientMutationId: id, ok: true, results: [{ lineId: '1101A#0', ok: true, action: 'BIND' }, { lineId: '1901T#0', ok: true, action: 'SKIP' }] });
   assert.equal(ok.api.getAtoImportState().open, false);
 
   const bad = await mount();
   previewed(bad);
   bad.api.setAtoLineChoice('1901T#0', { action: 'SKIP' });
   const id2 = bad.api.sendAtoImport();
-  bad.api.onAtoAck({ clientMutationId: id2, ok: true, results: [{ lineId: '1101A#0', ok: false, action: 'BIND', reason: 'VALIDATION_ERROR', detail: 'VIPER11 already has a live MISSION Strip' }] });
+  bad.ws.settleEfspAck({ clientMutationId: id2, ok: true, results: [{ lineId: '1101A#0', ok: false, action: 'BIND', reason: 'VALIDATION_ERROR', detail: 'VIPER11 already has a live MISSION Strip' }] });
   const state = bad.api.getAtoImportState();
   assert.equal(state.open, true);
   assert.match(state.message, /1 line/);
@@ -163,7 +163,7 @@ test('the ack closes the dialog when every line imported, and lists the refusals
   previewed(refused);
   refused.api.setAtoLineChoice('1901T#0', { action: 'SKIP' });
   const id3 = refused.api.sendAtoImport();
-  refused.api.onAtoAck({ clientMutationId: id3, ok: false, reason: 'STALE_REV', detail: 'the ATO changed since the preview' });
+  refused.ws.settleEfspAck({ clientMutationId: id3, ok: false, reason: 'STALE_REV', detail: 'the ATO changed since the preview' });
   assert.deepEqual(refused.errors.map(e => e.reason), ['STALE_REV']);
   assert.equal(refused.api.getAtoImportState().preview, null, 'preview again before importing');
 });

@@ -414,7 +414,6 @@
    "closeAtoImportDialog",
    "getAtoImportState",
    "initAtoImport",
-   "onAtoAck",
    "onAtoPreviewResult",
    "openAtoImportDialog",
    "refreshAtoImportButton",
@@ -881,6 +880,7 @@
    "stereoRoutesCacheKey"
   ],
   "panels/efsp/efsp-ws.js": [
+   "_resetEfspAcksForTest",
    "_sendEfsp",
    "efspResyncReplyAsMessage",
    "getAckedPositions",
@@ -894,8 +894,10 @@
    "noteEfspResyncAnswered",
    "noteEfspSnapshotLanded",
    "noteEfspStoreAnswerLanded",
+   "orphanEfspAcks",
    "redeclareEfspPositions",
    "replayPendingEfspMutations",
+   "sendEfsp",
    "sendEfspAirspaceMutation",
    "sendEfspCarrierMutation",
    "sendEfspCorrelationMutation",
@@ -907,7 +909,8 @@
    "sendEfspSfaMutation",
    "sendEfspUndo",
    "setEfspSender",
-   "setSignOnNoticeListener"
+   "setSignOnNoticeListener",
+   "settleEfspAck"
   ],
   "panels/efsp/final-panel.js": [
    "FINAL_CADENCE_S",
@@ -991,8 +994,8 @@
    "_pendingDuplicateCallsign",
    "_refreshAtoFirstPicker",
    "_refreshCreateStripAvailability",
+   "_sendCreateStrip",
    "_setCreateStripMsg",
-   "_setPendingCreateStripMutationId",
    "_setPendingDuplicateCallsign",
    "_stereoEligibleOrigin",
    "_stereoRoutes",

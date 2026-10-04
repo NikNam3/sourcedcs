@@ -1,6 +1,5 @@
 'use strict';
 import { _mutationErrorEl, _mutationWarningEl } from './state.js';
-import { _pendingCreateStripMutationId, _setCreateStripMsg, _setPendingCreateStripMutationId } from './create-strip.js';
 import { blockLabelFor } from '../strip-template.js';
 import { getEfspFlightData, getEfspStrip } from '../efsp-state.js';
 import { renderAllOpenEfspBays } from '../bay-view.js';
@@ -33,8 +32,8 @@ import { LUAW_WHILE_COMBINED_TEXT } from '../combination-rules.js';
 // click-to-dismiss (initEfspPanel) for the controller who is done with it.
 export const MUTATION_ERROR_VISIBLE_MS = 30000;
 
-// Reason codes as something a controller can act on. Enumerated from every
-// `ok: false, reason:` in crc-sync's src/efsp/ rather than guessed. The code
+// Reason codes as something a controller can act on. One entry per code in crc-sync's REFUSAL_CODES
+// (src/efsp/refusal-codes.js); tests/efsp-refusal-banner.test.mjs fails when the server gains one this table lacks. The code
 // itself stays on the element's `title` and `data-reason`, so it is still
 // greppable against the server.
 //
@@ -54,6 +53,13 @@ export const MUTATION_ERROR_MESSAGES = {
   ALREADY_PRIMARY: 'You are already Primary at that Position',
   NOT_OBSERVER: 'You are not an observer at that Position',
   ASSIGNMENT_REQUIRED: 'The departing part needs a heading, speed or altitude assignment', // docs/adr/0099 (SplitFormation)
+  BAY_FULL: 'That Bay is full — clear a Strip from it or use another Bay',
+  UNDO_BLOCKED: 'Something has changed since that action, so it can no longer be undone',
+  UNDO_UNAVAILABLE: 'There is nothing left to undo — the window has passed',
+  INTERNAL_ERROR: 'crc-sync hit an internal error handling that — check the Strip before trying again, and report it if it repeats',
+  // Not server codes: the client's own answers when the request never got one (efsp-ws.js sendEfsp / orphanEfspAcks).
+  NOT_CONNECTED: 'Not connected to crc-sync — nothing was sent',
+  CONNECTION_LOST: 'The connection to crc-sync dropped before it answered — check whether that went through',
 };
 
 function _refusalSentence(reason, detail) {
@@ -245,16 +251,6 @@ export function _showMutationWarning(warning) {
 }
 
 /**
- * Called from app.js after every efsp-mutation-ack. Two things happen on
- * rejection: (1) the general error banner always shows the reason (so a
- * refused drag/drop is never silent — see _showMutationError above), and
- * (2) if this ack is specifically the CreateStrip we're waiting on,
- * "Creating…" is replaced with the concrete rejection reason too. Without
- * (2), a rejected CreateStrip (e.g. a malformed callsign that slipped past
- * client-side validation) would silently vanish exactly like the old
- * window.prompt() bug did.
- */
-/**
  * Called from app.js when replayPendingEfspMutations() (efsp-state.js)
  * finds a pending Mutation whose target Strip no longer exists in the
  * fresh post-reconnect snapshot (guide §5.6.3). This is the orphaned case
@@ -265,22 +261,16 @@ export function notifyEfspOrphanedMutation(original) {
   _showMutationError('Could not resync', `a pending ${label} could not be replayed — its target Strip no longer exists`, { pending: original });
 }
 
-export function notifyEfspMutationAck(clientMutationId, result) {
-  // `result.pending` is the request this ack answers (efsp-state.js) — the
-  // only place the refused Strip and the refused value exist. F-103/F-207.
-  // docs/adr/0101: the server asking for "coordinated with" is a question to the controller, not a refusal banner.
-  if (!result.ok && noteAttestationRefusal(result.reason, result.detail, result.pending)) { /* asked in #efsp-control-attest */ }
-  else if (!result.ok) _showMutationError(result.reason || 'Rejected', result.detail, { pending: result.pending });
+/**
+ * Called from efsp-messages.js after an efsp-mutation-ack that no continuation handled (efsp-ws.js settleEfspAck). A
+ * refusal always shows the red banner (so a refused drag/drop is never silent), except the server asking for "coordinated
+ * with", which is a question to the controller (docs/adr/0101); an accepted one shows its warnings, amber.
+ * `result.pending` is the request this ack answers (efsp-state.js), the only place the refused Strip and value exist.
+ */
+export function notifyEfspMutationAck(result) {
+  if (!result.ok && noteAttestationRefusal(result)) return; // asked in #efsp-control-attest
+  if (!result.ok) _showMutationError(result.reason || 'Rejected', result.detail, { pending: result.pending });
   else if (result.warnings && result.warnings.length) _showMutationWarning(result.warnings);
-  if (clientMutationId !== _pendingCreateStripMutationId) return;
-  _setPendingCreateStripMutationId(null);
-  // `detail` carries the only part worth reading for a whole class of
-  // rejection — "VALIDATION_ERROR" alone doesn't distinguish a malformed
-  // callsign from "PACK9 is not a configured stereo route". It was being
-  // dropped on the floor; the reason stays as the prefix so nothing that
-  // relied on it has changed.
-  const why = result.detail ? `${result.reason || 'rejected'} — ${result.detail}` : (result.reason || 'unknown error');
-  _setCreateStripMsg(result.ok ? '' : `Rejected: ${why}`, !result.ok);
 }
 
 // ESM-1 (S-ESM1c): the unit tests set the refusal on screen directly in the old shared scope; this is that seam.
