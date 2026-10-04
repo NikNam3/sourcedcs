@@ -7,6 +7,7 @@
 const fs = require('fs');
 const path = require('path');
 const { ols, r2, r3 } = require('./metrics');
+const { STORE_STALE_BEATS } = require('./shadow');
 const { REBALANCE_KEY_LENGTH } = require('../../src/efsp/order-key');
 const { RING_MAX } = require('../../src/efsp/sync/sync-log');
 const { APPLIED_MUTATIONS_CAP } = require('../../src/efsp/sync/replay-cache');
@@ -165,6 +166,7 @@ function build(d, meta) {
       resync: s.resync,
       restart: s.restart,
       injectedShadowDrops: s.injectedShadowDrops,
+      storeSync: s.storeSync,
     },
     orderKeys: { maxLen, p99Len: p99, threshold: meta.thresholds.maxKeyLen, rebalances, rebalancedStrips, exhaustedThrows: exhausted, histogram: hist, worstRack: worst, firstOverThresholdMin: overAt.length ? overAt[0] : null, series: 'timeline.ndjson#orderKeys' },
     memory: {
@@ -220,6 +222,7 @@ function build(d, meta) {
   gate(ss.count > 0, `mutations.silentStaleness ${ss.count} > 0 (${Object.entries(ss.byCause).map(([k, v]) => `${k}:${v}`).join(', ')})`);
   gate(s.resync.resyncDivergence > 0, `mutations.resync.resyncDivergence ${s.resync.resyncDivergence} > 0`);
   gate(s.resync.acrossRestartDivergence.count > 0, `mutations.resync.acrossRestartDivergence ${s.resync.acrossRestartDivergence.count} > 0 (H4)`);
+  gate(s.storeSync.stale > 0, `mutations.storeSync.stale ${s.storeSync.stale} > 0 (store-stale: ${JSON.stringify(s.storeSync.staleByKey)}; a store stayed behind the heartbeat for ${STORE_STALE_BEATS} beats)`);
   gate(s.restart.boardLostOnRestart > 0, `mutations.restart.boardLostOnRestart ${s.restart.boardLostOnRestart} > 0`);
   gate(maxLen > T.maxKeyLen, `orderKeys.maxLen ${maxLen} > ${T.maxKeyLen} (worst ${worst})`);
   if (!memPolicy.judged) warnings.unshift(`memory.slope not judged: ${memPolicy.reason}; per-DROPPED-Strip and residual rows kept`);
@@ -259,6 +262,7 @@ function summary(rep, outDir) {
   row('silentStaleness', `${m.silentStaleness.count} ${JSON.stringify(m.silentStaleness.byCause)}`, '0');
   row('resync delta/snapshot/diverge', `${m.resync.delta}/${m.resync.snapshot}/${m.resync.resyncDivergence}`, 'div 0');
   row('acrossRestartDivergence (H4)', `${m.resync.acrossRestartDivergence.count} (probes ${m.resync.acrossRestartDivergence.probes})`, '0');
+  row('store-stale / store resyncs', `${m.storeSync.stale} / ${m.storeSync.resyncs} (${m.storeSync.heartbeatsJudged} beats)`, 'stale 0');
   row('boardLostOnRestart', m.restart.boardLostOnRestart, '0');
   row('R2 ambiguous replay', m.restart.ambiguousReplay.map(x => `${x.op}:${x.outcome}`).join(' ') || '-', 'reported');
   row('orderKeys max / p99', `${k.maxLen} / ${k.p99Len} (${k.worstRack})`, `<= ${k.threshold}`);

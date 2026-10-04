@@ -20,6 +20,23 @@ function compared(s) {
   return o;
 }
 
+// The six sequenced stores outside the Board (docs/adr/0106), as `stores.js` STORE_SYNC declares them. A test
+// (tests/soak-store-stale.test.mjs) keeps this table equal to the registry's.
+const STORE_SYNC = [
+  { key: 'airspaces', seqKey: 'airspaceSeq', epochKey: 'airspaceEpoch', gapFromDeltas: true },
+  { key: 'correlations', seqKey: 'correlationSeq', epochKey: 'correlationEpoch', gapFromDeltas: false },
+  { key: 'marsa', seqKey: 'marsaSeq', epochKey: 'marsaEpoch', gapFromDeltas: false },
+  { key: 'runwayStatuses', seqKey: 'runwayStatusSeq', epochKey: 'runwayStatusEpoch', gapFromDeltas: true },
+  { key: 'carriers', seqKey: 'carrierSeq', epochKey: 'carrierEpoch', gapFromDeltas: false },
+  { key: 'sfaRotation', seqKey: 'sfaSeq', epochKey: 'sfaEpoch', gapFromDeltas: true },
+];
+const STORE_DELTA_TYPES = new Set(['efsp-airspace-delta', 'efsp-correlation-delta', 'efsp-marsa-delta', 'efsp-runway-status-delta', 'efsp-carrier-delta', 'efsp-sfa-delta']);
+// The shipped client asks for a slice after this many heartbeats in a row named a seq ahead of its own
+// (crc-desktop sync-cursor.js heartbeatGaps); the soak's `store-stale` detector allows STORE_STALE_BEATS
+// heartbeats behind, which a working resync never needs.
+const BEATS_BEFORE_RESYNC = 2;
+const STORE_STALE_BEATS = 6;
+
 class Shadow {
   constructor(facilityIds) {
     this.facilityIds = facilityIds;
@@ -30,6 +47,66 @@ class Shadow {
     for (const f of facilityIds) { this.strips.set(f, new Map()); this.boardSeq.set(f, -1); }
     // Every stripId -> rev regression a delta tried to apply (a delta carrying an OLDER rev than the replica holds).
     this.regressions = 0;
+    // The six stores' cursors, the way sync-cursor.js keeps them: key -> { seq, epoch, behind }, plus the keys the
+    // client would ask a slice for (`wantResync`) and those that have stayed behind past the bound (`stale`).
+    this.stores = new Map();
+    this.wantResync = new Set();
+    this.stale = new Set();
+  }
+
+  /** The connect snapshot (or a Board snapshot answer): every named store's position is replaced. */
+  adoptStoreSnapshot(msg) {
+    const seqs = msg.storeSeqs || {}; const epochs = msg.storeEpochs || {};
+    for (const { key } of STORE_SYNC) {
+      if (!Number.isFinite(seqs[key])) continue;
+      this.stores.set(key, { seq: seqs[key], epoch: epochs[key], behind: 0 });
+      this.wantResync.delete(key); this.stale.delete(key);
+    }
+  }
+
+  /**
+   * A delta or ack carrying a store's `<seqKey>`/`<epochKey>` (sync-cursor.js storeFrameGap): another epoch, or on a
+   * `gapFromDeltas` store a seq more than one ahead, is NOT adopted and asks for a slice; a jump on any other store is
+   * left for the heartbeat. A frame the shadow never receives (a drop) therefore leaves the cursor behind.
+   */
+  noteStoreFrame(msg) {
+    for (const d of STORE_SYNC) {
+      const seq = msg[d.seqKey];
+      if (!Number.isFinite(seq)) continue;
+      const c = this.stores.get(d.key);
+      if (!c) continue;
+      const epoch = msg[d.epochKey];
+      if (epoch !== undefined && c.epoch !== undefined && epoch !== c.epoch) { this.wantResync.add(d.key); continue; }
+      if (seq > c.seq + 1) { if (d.gapFromDeltas) this.wantResync.add(d.key); continue; }
+      if (seq > c.seq) c.seq = seq;
+    }
+  }
+
+  /**
+   * An efsp-heartbeat's `stores` (sync-cursor.js heartbeatGaps). Another epoch asks at once; ahead on two beats in a row
+   * asks; ahead on STORE_STALE_BEATS beats in a row is `store-stale`.
+   * @returns {string[]} the keys newly past the bound
+   */
+  noteHeartbeat(stores) {
+    const flagged = [];
+    for (const [key, b] of Object.entries(stores || {})) {
+      const c = this.stores.get(key);
+      if (!c || !b) continue;
+      if (b.epoch !== undefined && c.epoch !== undefined && b.epoch !== c.epoch) { this.wantResync.add(key); c.behind++; }
+      else if (Number.isFinite(b.seq) && b.seq > c.seq) { c.behind++; if (c.behind >= BEATS_BEFORE_RESYNC) this.wantResync.add(key); }
+      else { c.behind = 0; this.wantResync.delete(key); this.stale.delete(key); continue; }
+      if (c.behind >= STORE_STALE_BEATS && !this.stale.has(key)) { this.stale.add(key); flagged.push(key); }
+    }
+    return flagged;
+  }
+
+  /** A slice answered a stores resync: `{ [key]: { seq, epoch } }` replaces those positions. */
+  applyStoreSlices(slices) {
+    for (const [key, b] of Object.entries(slices || {})) {
+      if (!Number.isFinite(b.seq)) continue;
+      this.stores.set(key, { seq: b.seq, epoch: b.epoch, behind: 0 });
+      this.wantResync.delete(key); this.stale.delete(key);
+    }
   }
 
   _fac(fid) {
@@ -97,4 +174,4 @@ class Shadow {
   }
 }
 
-module.exports = { Shadow, COMPARED, compared };
+module.exports = { Shadow, COMPARED, compared, STORE_SYNC, STORE_DELTA_TYPES, STORE_STALE_BEATS, BEATS_BEFORE_RESYNC };

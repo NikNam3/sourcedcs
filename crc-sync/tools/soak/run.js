@@ -6,7 +6,7 @@
 //   node tools/soak/run.js [--minutes 10] [--seed 1] [--profile realistic|stress|smoke]
 //        [--realtime] [--restarts n] [--restart-at m,m] [--crew three|full|solo]
 //        [--sample-every s] [--out dir] [--keep-state] [--inproc] [--prune-retired]
-//        [--inject drop-ack|drop-broadcast|leak|skip-shadow-client] [--quiet]
+//        [--inject drop-ack|drop-broadcast|leak|skip-shadow-client|drop-store-delta] [--quiet]
 //        [--warmup-min m] [--retention-min m] [--judge-memory] [--threshold-<name> <value>]
 //
 // Exit: 0 PASS, 1 FAIL (verdict), 2 harness error.
