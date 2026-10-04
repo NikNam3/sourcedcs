@@ -1,5 +1,6 @@
 'use strict';
 
+import { escapeHtml } from './html-escape.js';
 import { createPttController, clampMaxTxSeconds, PTT_MAX_TX_DEFAULT_S } from './ptt-controller.js';
 
 // ── SRS Radio panel ──────────────────────────────────────────────────────────
@@ -177,10 +178,10 @@ import { createPttController, clampMaxTxSeconds, PTT_MAX_TX_DEFAULT_S } from './
     top.className = 'srs-slot' + (r.tx ? ' srs-slot-tx' : '') + (r.rx ? ' srs-slot-rx' : '');
     const modBadge = isIntercom
       ? `<span class="srs-slot-mod srs-slot-mod-fixed" title="Intercom">IC</span>`
-      : `<span class="srs-slot-mod" data-slot="${r.slot}" title="Click to cycle modulation">${r.modulation.slice(0,2)}</span>`;
+      : `<span class="srs-slot-mod" data-slot="${escapeHtml(r.slot)}" title="Click to cycle modulation">${escapeHtml(r.modulation.slice(0,2))}</span>`;
     top.innerHTML =
-      `<span class="srs-slot-n">${r.slot + 1}</span>` +
-      (isIntercom ? `` : `<span class="srs-slot-freq" data-slot="${r.slot}" title="Click to set frequency">${r.freq_mhz.toFixed(3)}</span>`) +
+      `<span class="srs-slot-n">${escapeHtml(r.slot + 1)}</span>` +
+      (isIntercom ? `` : `<span class="srs-slot-freq" data-slot="${escapeHtml(r.slot)}" title="Click to set frequency">${escapeHtml(r.freq_mhz.toFixed(3))}</span>`) +
       modBadge +
       (r.tx ? `<span class="srs-slot-txbadge">TX</span>` : '');
     const rm = document.createElement('span');
@@ -193,8 +194,8 @@ import { createPttController, clampMaxTxSeconds, PTT_MAX_TX_DEFAULT_S } from './
     const volRow = document.createElement('div');
     volRow.className = 'srs-slot-volrow';
     volRow.innerHTML =
-      `<input class="srs-slot-vol" type="range" min="0" max="5" step="0.1" value="${vol}" data-slot="${r.slot}" title="Per-radio output volume">` +
-      `<span class="srs-slot-vol-lbl" data-slot="${r.slot}">${vol.toFixed(1)}x</span>`;
+      `<input class="srs-slot-vol" type="range" min="0" max="5" step="0.1" value="${escapeHtml(vol)}" data-slot="${escapeHtml(r.slot)}" title="Per-radio output volume">` +
+      `<span class="srs-slot-vol-lbl" data-slot="${escapeHtml(r.slot)}">${escapeHtml(vol.toFixed(1))}x</span>`;
     wrap.appendChild(volRow);
     return wrap;
   }
@@ -273,13 +274,13 @@ import { createPttController, clampMaxTxSeconds, PTT_MAX_TX_DEFAULT_S } from './
             top.className = 'srs-slot' + (r.tx ? ' srs-slot-tx' : '') + (r.rx ? ' srs-slot-rx' : '');
             const _isIcom = r.modulation === 'INTERCOM';
             top.innerHTML =
-              `<span class="srs-slot-n">${r.slot + 1}</span>` +
-              (_isIcom ? `` : `<span class="srs-slot-freq" data-slot="${r.slot}" title="Click to set frequency">${r.freq_mhz.toFixed(3)}</span>`) +
+              `<span class="srs-slot-n">${escapeHtml(r.slot + 1)}</span>` +
+              (_isIcom ? `` : `<span class="srs-slot-freq" data-slot="${escapeHtml(r.slot)}" title="Click to set frequency">${escapeHtml(r.freq_mhz.toFixed(3))}</span>`) +
               (_isIcom
                 ? `<span class="srs-slot-mod srs-slot-mod-fixed" title="Intercom">IC</span>`
-                : `<span class="srs-slot-mod" data-slot="${r.slot}" title="Click to cycle modulation">${r.modulation.slice(0,2)}</span>`) +
+                : `<span class="srs-slot-mod" data-slot="${escapeHtml(r.slot)}" title="Click to cycle modulation">${escapeHtml(r.modulation.slice(0,2))}</span>`) +
               (r.tx ? `<span class="srs-slot-txbadge">TX</span>` : '') +
-              `<span class="srs-slot-rm" data-slot="${r.slot}" title="Remove radio">✕</span>`;
+              `<span class="srs-slot-rm" data-slot="${escapeHtml(r.slot)}" title="Remove radio">✕</span>`;
           }
         }
         // Update slider value only when not actively dragging

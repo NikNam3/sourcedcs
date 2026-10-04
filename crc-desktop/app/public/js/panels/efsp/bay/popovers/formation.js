@@ -3,25 +3,16 @@
 // Validation is formation-rules.js's; the server gates again and a refusal lands in the usual refusal banner.
 import { getAllEfspStrips, getEfspFlightData } from '../../efsp-state.js';
 import { sendEfspMutation } from '../../efsp-ws.js';
-import { _mountPopover, _sendFromPopover, _unmountPopover } from '../popover-portal.js';
+import { openPopover, _sendFromPopover } from '../popover-portal.js';
 import { _resolveActingPositionId } from '../../bay-view.js';
 import {
   ASSIGNMENT_KINDS, ASSIGNMENT_LABELS, buildJoinOp, buildSplitOp, isGroundFormationState, joinLeadCandidates,
   parseAssignmentValue, splitRemainderText,
 } from '../../formation-rules.js';
 
-let _openFormationPopoverEl = null;
+let _openPopoverHandle = null;
 
-function _closeFormationPopover() {
-  _unmountPopover(_openFormationPopoverEl);
-  _openFormationPopoverEl = null;
-  document.removeEventListener('pointerdown', _onDocPointerDownCloseFormationPopover, true);
-}
-
-// Tests the target, for the reason spelled out on _onDocPointerDownCloseBindPopover (bind.js).
-function _onDocPointerDownCloseFormationPopover(e) {
-  if (_openFormationPopoverEl && !_openFormationPopoverEl.contains(e.target)) _closeFormationPopover();
-}
+function _closeFormationPopover() { if (_openPopoverHandle) _openPopoverHandle.close(); }
 
 function _el(tag, cls, text) {
   const n = document.createElement(tag);
@@ -44,9 +35,7 @@ export function dispatchFormationOp(strip, op, { onAck } = {}) {
 }
 
 function _mount(popover, strip, anchorEl) {
-  _openFormationPopoverEl = popover;
-  _mountPopover(popover, anchorEl, strip, _closeFormationPopover);
-  setTimeout(() => document.addEventListener('pointerdown', _onDocPointerDownCloseFormationPopover, true), 0);
+  _openPopoverHandle = openPopover({ el: popover, anchor: anchorEl, strip, onClose: () => { _openPopoverHandle = null; } });
 }
 
 /** The Split form: Leaving [k], Callsign, Assignment (hidden on a ground Strip), Back from MARSA, Split. */
@@ -58,7 +47,6 @@ export function _openSplitPopover(strip, anchorEl) {
 
   const popover = _el('div', 'efsp-coordinate-popover efsp-formation-popover');
   popover.dataset.formation = 'split';
-  popover.addEventListener('pointerdown', (e) => e.stopPropagation());
 
   const leavingRow = _el('div', 'efsp-formation-row');
   leavingRow.appendChild(_el('label', 'efsp-formation-label', 'Leaving'));
@@ -136,7 +124,6 @@ export function _openJoinPopover(strip, anchorEl) {
   _closeFormationPopover();
   const popover = _el('div', 'efsp-coordinate-popover efsp-formation-popover');
   popover.dataset.formation = 'join';
-  popover.addEventListener('pointerdown', (e) => e.stopPropagation());
   popover.appendChild(_el('div', 'efsp-formation-heading', `${_callsignOf(strip)} joins …`));
 
   const leads = joinLeadCandidates(strip, getAllEfspStrips());

@@ -3,6 +3,7 @@
 // sync.js's login gate. The decision (what to say, which button) is `viewFor`, a pure function, so it is tested as a table.
 
 import { WIRE_PROTOCOL } from './wire-protocol.js';
+import { escapeHtml } from './html-escape.js';
 
 export const UPDATE_REQUIRED_CLOSE = 4426;
 
@@ -40,10 +41,6 @@ const ID = 'crc-update-required';
 const BTN = 'padding:10px 26px;background:#132313;color:#39ff7a;border:1px solid #2a3a2a;cursor:pointer;font-family:inherit;letter-spacing:2px;font-size:12px;';
 const BTN2 = 'padding:6px 16px;background:transparent;color:#5a7a5a;border:1px solid #2a3a2a;cursor:pointer;font-family:inherit;letter-spacing:1.5px;font-size:10px;';
 
-function esc(s) {
-  return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-}
-
 function render() {
   if (!state) return;
   let el = document.getElementById(ID);
@@ -60,11 +57,11 @@ function render() {
     serverProtocol: f.serverProtocol ?? null, hasUpdater: !!(window.crcUpdate && window.crcUpdate.checkNow),
     phase: state.phase, percent: state.percent, downloadUrl: f.downloadUrl,
   });
-  const link = v.showLink && /^https?:\/\//.test(f.downloadUrl || '') ? `<a id="crc-update-link" href="${esc(f.downloadUrl)}" target="_blank" rel="noopener" style="color:#39ff7a;font-size:11px;">${esc(f.downloadUrl)}</a>` : '';
+  const link = v.showLink && /^https?:\/\//.test(f.downloadUrl || '') ? `<a id="crc-update-link" href="${escapeHtml(f.downloadUrl)}" target="_blank" rel="noopener" style="color:#39ff7a;font-size:11px;">${escapeHtml(f.downloadUrl)}</a>` : '';
   el.dataset.kind = v.kind;
   el.innerHTML =
     '<div style="font-size:14px;letter-spacing:3px;color:#39ff7a;">CRC SYNC</div>' +
-    '<div style="font-size:11px;letter-spacing:1.5px;" id="crc-update-text">' + esc(v.text) + '</div>' + link +
+    '<div style="font-size:11px;letter-spacing:1.5px;" id="crc-update-text">' + escapeHtml(v.text) + '</div>' + link +
     (v.button === 'check' ? `<button id="crc-update-check" style="${BTN}">CHECK FOR UPDATE</button>` : '') +
     (v.button === 'restart' ? `<button id="crc-update-restart" style="${BTN}">RESTART TO UPDATE</button>` : '') +
     (v.retry ? `<button id="crc-update-retry" style="${BTN2}">RETRY</button>` : '');

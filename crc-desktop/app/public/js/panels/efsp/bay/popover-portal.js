@@ -45,7 +45,7 @@ import { renderAllOpenEfspBays } from '../bay-view.js';
 // _isProtectedStripEl used to ask `stripEl.contains(popoverEl)`, which a
 // portalled popover answers false to every time — the protection all six rely
 // on would have evaporated silently. It is keyed on the Strip id now.
-const _openPopovers = new Map(); // popover element -> { stripId, anchorEl, close }
+const _openPopovers = new Map(); // popover element -> { stripId, anchorEl, close, armed }
 
 // Above the panel chrome (.efsp-bay-tabs and the topbar are 50, the airport
 // selector 100) and below srs-radio.css's full-screen modal at 200, which
@@ -106,9 +106,39 @@ function _placePopover(popover, anchorEl) {
 export function _mountPopover(popover, anchorEl, strip, close) {
   popover.style.zIndex = POPOVER_Z_INDEX;
   _popoverRoot(anchorEl).appendChild(popover);
-  _openPopovers.set(popover, { stripId: strip && strip.stripId, anchorEl, close });
+  const entry = { stripId: strip && strip.stripId, anchorEl, close, armed: false };
+  _openPopovers.set(popover, entry);
   _placePopover(popover, anchorEl);
   _startPopoverTracking();
+  // Outside-click is armed one tick later, so the event that opened the popover (a contextmenu, a click that bubbles to a
+  // document listener) cannot also close it.
+  setTimeout(() => { entry.armed = true; }, 0);
+}
+
+/**
+ * The one popover/menu opener (DESK-TIDY-2, ARCH-C 3.3). The caller builds `el`; the portal owns what every popover
+ * shares: position (portalled, flipped, clamped), one open at a time (opening closes whichever is open), outside
+ * pointerdown and Escape close, the stop of pointerdown inside it (the Bay must not start a drag), optional first focus,
+ * and the deferred render a close owes its Strip. `onClose` runs once, whichever way it closed.
+ * @param {{ el: HTMLElement, anchor: HTMLElement, strip?: {stripId?: string}, onClose?: () => void, focus?: HTMLElement|null }} o
+ * @returns {{ el: HTMLElement, close: () => void }}
+ */
+export function openPopover({ el, anchor, strip, onClose, focus }) {
+  _closeAllPopovers();
+  let closed = false;
+  const handle = {
+    el,
+    close() {
+      if (closed) return;
+      closed = true;
+      _unmountPopover(el);
+      if (onClose) onClose();
+    },
+  };
+  el.addEventListener('pointerdown', (e) => e.stopPropagation());
+  _mountPopover(el, anchor, strip, handle.close);
+  if (focus && typeof focus.focus === 'function') focus.focus();
+  return handle;
 }
 
 export function _unmountPopover(popover) {
@@ -159,6 +189,7 @@ function _startPopoverTracking() {
   window.addEventListener('scroll', _onPopoverViewportChange, true);
   window.addEventListener('resize', _onPopoverViewportChange);
   document.addEventListener('keydown', _onDocKeydownClosePopover, true);
+  document.addEventListener('pointerdown', _onDocPointerDownClosePopover, true);
 }
 
 function _stopPopoverTracking() {
@@ -167,6 +198,15 @@ function _stopPopoverTracking() {
   window.removeEventListener('scroll', _onPopoverViewportChange, true);
   window.removeEventListener('resize', _onPopoverViewportChange);
   document.removeEventListener('keydown', _onDocKeydownClosePopover, true);
+  document.removeEventListener('pointerdown', _onDocPointerDownClosePopover, true);
+}
+
+// Capture phase on `document`: it runs before the popover's own handlers, so it must test the target (a bare close would
+// tear the pressed row out of the DOM between pointerdown and pointerup and no click would ever fire on it).
+function _onDocPointerDownClosePopover(e) {
+  for (const [popover, entry] of [..._openPopovers]) {
+    if (entry.armed && !popover.contains(e.target)) entry.close();
+  }
 }
 
 function _onPopoverViewportChange() {

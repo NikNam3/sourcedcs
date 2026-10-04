@@ -1,27 +1,14 @@
 'use strict';
 import { activeMarsaForFlightData, getAllEfspStrips, getEfspFlightData, marsaForStrip } from '../../efsp-state.js';
 import { MARSA_EXPANSION, marsaActionsFor } from '../../marsa-badge.js';
-import { _mountPopover, _sendFromPopover, _unmountPopover } from '../popover-portal.js';
+import { openPopover, _sendFromPopover } from '../popover-portal.js';
 import { _dispatchMarsa, selectEfspStripById } from '../../bay-view.js';
 
 
 
-let _openMarsaPopoverEl = null;
+let _openPopoverHandle = null;
 
-function _closeMarsaPopover() {
-  _unmountPopover(_openMarsaPopoverEl);
-  _openMarsaPopoverEl = null;
-  document.removeEventListener('pointerdown', _onDocPointerDownCloseMarsaPopover, true);
-}
-
-// Tests the target, for the reason spelled out on
-// _onDocPointerDownCloseBindPopover above. This popover is the one where it
-// hurt most: it is the only one carrying <select>s and a text input, so
-// pressing ANY of its own controls dismissed it, and Declare / Rendezvous /
-// End / Void could never be clicked at all.
-function _onDocPointerDownCloseMarsaPopover(e) {
-  if (_openMarsaPopoverEl && !_openMarsaPopoverEl.contains(e.target)) _closeMarsaPopover();
-}
+function _closeMarsaPopover() { if (_openPopoverHandle) _openPopoverHandle.close(); }
 
 /**
  * The relation's actions, and — for a declaration — who is in it.
@@ -35,7 +22,6 @@ export function _openMarsaPopover(strip, anchorEl) {
   _closeMarsaPopover();
   const popover = document.createElement('div');
   popover.className = 'efsp-coordinate-popover efsp-marsa-popover';
-  popover.addEventListener('pointerdown', (e) => e.stopPropagation());
 
   const relation = marsaForStrip(strip);
   const active = relation && relation.state === 'ACTIVE' ? relation : null;
@@ -94,7 +80,6 @@ export function _openMarsaPopover(strip, anchorEl) {
     popover.appendChild(btn);
   }
 
-  _openMarsaPopoverEl = popover;
   // F-110 lived here: `anchorEl.appendChild(popover)`, where anchorEl is the
   // MARSA… <button> whose own click handler opens it. Every click inside the
   // popover — into the declarer field, onto a candidate <select> — bubbled to
@@ -103,8 +88,7 @@ export function _openMarsaPopover(strip, anchorEl) {
   // popover is portalled out now (see _mountPopover) and is no longer a
   // descendant of anything that reopens it. It also stops an <input> and two
   // <select>s being nested inside a <button>, which was invalid HTML.
-  _mountPopover(popover, anchorEl, strip, _closeMarsaPopover);
-  setTimeout(() => document.addEventListener('pointerdown', _onDocPointerDownCloseMarsaPopover, true), 0);
+  _openPopoverHandle = openPopover({ el: popover, anchor: anchorEl, strip, onClose: () => { _openPopoverHandle = null; } });
 }
 
 /** Which other live flights this one could be put into a relation with. */
@@ -185,7 +169,7 @@ function _buildMarsaDeclareForm(strip) {
   send.textContent = 'Declare';
   send.addEventListener('click', (e) => {
     e.stopPropagation();
-    _sendFromPopover(_openMarsaPopoverEl, send, (onAck) => _dispatchMarsa(strip, undefined, {
+    _sendFromPopover(_openPopoverHandle && _openPopoverHandle.el, send, (onAck) => _dispatchMarsa(strip, undefined, {
       kind: 'DeclareMarsa',
       participants: [strip.flightDataId, other.value],
       startEvent: startEvent.value,
@@ -214,7 +198,7 @@ function _buildMarsaAddForm(strip, active) {
   add.textContent = 'Add to MARSA';
   add.addEventListener('click', (e) => {
     e.stopPropagation();
-    _sendFromPopover(_openMarsaPopoverEl, add, (onAck) => _dispatchMarsa(strip, active && active.marsaId, { kind: 'AddParticipant', flightDataId: other.value }, { onAck }));
+    _sendFromPopover(_openPopoverHandle && _openPopoverHandle.el, add, (onAck) => _dispatchMarsa(strip, active && active.marsaId, { kind: 'AddParticipant', flightDataId: other.value }, { onAck }));
   });
   wrap.appendChild(add);
   return wrap;

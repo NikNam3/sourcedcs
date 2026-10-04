@@ -5,7 +5,7 @@ import { getEfspFlightData, getEfspStrip } from '../../efsp-state.js';
 import { TOFI_ANSWERED_BY, TOFI_COUNTERPARTS } from '../authority-mirror.js';
 import { _isRejectedCoordinationReplica } from './coordination.js';
 import { _resolveActingPositionId, _swallowRepeatAdvance } from '../../bay-view.js';
-import { _mountPopover, _sendFromPopover, _unmountPopover } from '../popover-portal.js';
+import { openPopover, _sendFromPopover } from '../popover-portal.js';
 
 
 // D12 audit note: TAC_C2/AIC/GCI/JTAC must NEVER appear as keys in
@@ -110,18 +110,9 @@ export function _dispatchTofi(strip, action, direction, overrides = {}) {
   return true;
 }
 
-let _openTofiPopoverEl = null;
+let _openPopoverHandle = null;
 
-function _closeTofiPopover() {
-  if (!_openTofiPopoverEl) return;
-  _unmountPopover(_openTofiPopoverEl);
-  _openTofiPopoverEl = null;
-  document.removeEventListener('pointerdown', _onDocPointerDownCloseTofiPopover, true);
-}
-
-function _onDocPointerDownCloseTofiPopover(e) {
-  if (_openTofiPopoverEl && !_openTofiPopoverEl.contains(e.target)) _closeTofiPopover();
-}
+function _closeTofiPopover() { if (_openPopoverHandle) _openPopoverHandle.close(); }
 
 /**
  * TOFI ENTRY's popover — structurally simpler than _openCoordinatePopover:
@@ -139,7 +130,6 @@ export function _openTofiEntryPopover(strip, anchorEl, counterparts) {
 
   const popover = document.createElement('div');
   popover.className = 'efsp-coordinate-popover efsp-tofi-popover';
-  popover.addEventListener('pointerdown', (e) => e.stopPropagation());
 
   if (degraded) {
     const warn = document.createElement('div');
@@ -177,9 +167,7 @@ export function _openTofiEntryPopover(strip, anchorEl, counterparts) {
   });
   popover.appendChild(sendBtn);
 
-  _openTofiPopoverEl = popover;
-  _mountPopover(popover, anchorEl, strip, _closeTofiPopover);
-  setTimeout(() => document.addEventListener('pointerdown', _onDocPointerDownCloseTofiPopover, true), 0);
+  _openPopoverHandle = openPopover({ el: popover, anchor: anchorEl, strip, onClose: () => { _openPopoverHandle = null; } });
 }
 
 /** Which Position proposed a TOFI. The MISSION-side Strip is always the receiving MRU's record, for both directions — _isPendingTofiReplica's own split. */

@@ -4,20 +4,15 @@
 import { getEfspStrip } from '../../efsp-state.js';
 import { sendEfspMutation } from '../../efsp-ws.js';
 import { _resolveActingPositionId } from '../../bay-view.js';
-import { _mountPopover, _sendFromPopover, _unmountPopover } from '../popover-portal.js';
+import { openPopover, _sendFromPopover } from '../popover-portal.js';
 import { missionNow } from '../../../topbar.js';
 import {
   RELEASE_SCOPES, RELEASE_SCOPE_LABELS, buildGrantOp, buildRefuseOp, buildRequestOp, buildStepOp, handoffPositions,
 } from '../../control-release-rules.js';
 
-let _openEl = null;
+let _openPopoverHandle = null;
 
-function _close() {
-  _unmountPopover(_openEl);
-  _openEl = null;
-  document.removeEventListener('pointerdown', _onDocPointerDown, true);
-}
-function _onDocPointerDown(e) { if (_openEl && !_openEl.contains(e.target)) _close(); }
+function _close() { if (_openPopoverHandle) _openPopoverHandle.close(); }
 
 function _el(tag, cls, text) {
   const n = document.createElement(tag);
@@ -66,7 +61,6 @@ export function _openControlReleasePopover(strip, anchorEl, form) {
   const p = handoffPositions(strip);
   const popover = _el('div', 'efsp-coordinate-popover efsp-formation-popover efsp-release-popover');
   popover.dataset.release = form;
-  popover.addEventListener('pointerdown', (e) => e.stopPropagation());
   const error = _el('div', 'efsp-coordinate-degraded-warning efsp-formation-error');
   error.setAttribute('role', 'alert');
   let build;
@@ -125,7 +119,5 @@ export function _openControlReleasePopover(strip, anchorEl, form) {
   popover.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); submit(); } });
   popover.appendChild(send);
 
-  _openEl = popover;
-  _mountPopover(popover, anchorEl, strip, _close);
-  setTimeout(() => document.addEventListener('pointerdown', _onDocPointerDown, true), 0);
+  _openPopoverHandle = openPopover({ el: popover, anchor: anchorEl, strip, onClose: () => { _openPopoverHandle = null; } });
 }

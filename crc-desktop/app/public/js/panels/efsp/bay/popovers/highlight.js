@@ -3,7 +3,7 @@ import { getEfspStrip } from '../../efsp-state.js';
 import { setHighlight } from '../../efsp-gestures.js';
 import { noteEfspGesture } from '../../efsp-metrics-client.js';
 import { _dispatchGesture } from '../../bay-view.js';
-import { _mountPopover, _unmountPopover } from '../popover-portal.js';
+import { openPopover } from '../popover-portal.js';
 
 
 // Small, fixed swatch set for Highlight (guide §7.3) — deliberately NOT
@@ -31,18 +31,9 @@ export function _cycleHighlight(strip) {
   return _dispatchGesture(strip, setHighlight, _nextHighlightColor(live.flags.highlight));
 }
 
-let _openHighlightPopoverEl = null;
+let _openPopoverHandle = null;
 
-function _closeHighlightPopover() {
-  if (!_openHighlightPopoverEl) return;
-  _unmountPopover(_openHighlightPopoverEl);
-  _openHighlightPopoverEl = null;
-  document.removeEventListener('pointerdown', _onDocPointerDownCloseHighlightPopover, true);
-}
-
-function _onDocPointerDownCloseHighlightPopover(e) {
-  if (_openHighlightPopoverEl && !_openHighlightPopoverEl.contains(e.target)) _closeHighlightPopover();
-}
+function _closeHighlightPopover() { if (_openPopoverHandle) _openPopoverHandle.close(); }
 
 export function _openHighlightPopover(strip, anchorEl) {
   _closeHighlightPopover();
@@ -53,7 +44,6 @@ export function _openHighlightPopover(strip, anchorEl) {
     swatch.className = 'efsp-highlight-swatch';
     swatch.style.background = color;
     swatch.title = color;
-    swatch.addEventListener('pointerdown', (e) => e.stopPropagation());
     swatch.addEventListener('click', (e) => {
       e.stopPropagation();
       const acting = _dispatchGesture(strip, setHighlight, color); noteEfspGesture('HIGHLIGHT', 'contextmenu+swatch', acting);
@@ -61,9 +51,5 @@ export function _openHighlightPopover(strip, anchorEl) {
     });
     popover.appendChild(swatch);
   }
-  _openHighlightPopoverEl = popover;
-  _mountPopover(popover, anchorEl, strip, _closeHighlightPopover);
-  // Deferred so the contextmenu event that opened this doesn't immediately
-  // close it via the same pointerdown-outside listener.
-  setTimeout(() => document.addEventListener('pointerdown', _onDocPointerDownCloseHighlightPopover, true), 0);
+  _openPopoverHandle = openPopover({ el: popover, anchor: anchorEl, strip, onClose: () => { _openPopoverHandle = null; } });
 }
