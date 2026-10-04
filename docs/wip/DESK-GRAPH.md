@@ -11,7 +11,8 @@ Branch `lane/DESK-GRAPH-desk-graph`, commits `f58b0209..HEAD` (cut from the tree
 | Custom `window.*` names read by production | `getLatestTrack`, `getAllTracks` (5 modules) | none (`tests/no-window-globals.test.mjs`) |
 | `bay-view.js` re-exports | 48 names | 0 |
 | Hand-kept renderer lists in `efsp-messages.js` | 12 `renderAllOpenEfspBays`, 6 `refreshEfspPanel`, 6 `updateMap`, ... | `markEfspChanged(topic)` (the bus) |
-| crc-desktop `npm test` | 1174 | see report |
+| crc-desktop `npm test` | 1174 | 1183 |
+| crc-sync `npm test` / freeze | 2460 / 52 | 2460 (one timing test failed under load, passed alone) / 52 |
 
 ## What was done
 
