@@ -44,10 +44,10 @@ test('SCENARIO Ground walks away holding strips: they stay Ground\'s, LC is offe
   assert.equal(onGround.ownerPositionId, 'GC');
 
   // GC vacates. Nothing is reassigned (docs/adr/0110): the Strip is still GC's, the warning says LC is offered GC, and LC's
-  // Primary is offered GC (the standing hatOffers; the legacy frame still goes out until CONSOL-C).
+  // Primary is offered GC (the standing hatOffers; no frame is sent, docs/adr/0110).
   const left = hold(efsp, c.GC.session, 'INCIRLIK', []);
   assert.deepEqual(left.ack.warnings, [{ positionId: 'GC', count: 1, offeredTo: 'LC' }]);
-  assert.equal(left.directed[0].frame.type, 'efsp-position-offer');
+  assert.equal(left.directed, undefined, 'no directed offer frame: the offer is standing state');
   assert.equal(efsp.boardStoreFor('INCIRLIK').getStrip(onGround.stripId).ownerPositionId, 'GC');
 
   // LC takes GC as well: one controller, two Positions, and GC's rules govern GC's Strip again.

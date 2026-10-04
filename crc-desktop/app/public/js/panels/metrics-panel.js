@@ -231,7 +231,7 @@ function _cell(id, block, windowId, ctx) {
       const causes = _topEntries(block.byCause);
       const extra = [
         causes ? `causes: ${causes}` : null,
-        block.routedToConsolidated ? `${block.routedToConsolidated} routed to a consolidated Position` : null,
+        block.toUnstaffed ? `${block.toUnstaffed} to an unstaffed Position (offered to another controller)` : null,
         block.inhibitedPress ? `${block.inhibitedPress} inhibited ${block.inhibitedPress === 1 ? 'press' : 'presses'} (not attempts)` : null,
       ].filter(Boolean).join(' · ');
       return {

@@ -32,6 +32,7 @@ let efspAitAuthorizedByFacility = {};
 // an ATC scope draws on a contact that Position owns }. Config, so it rides
 // the snapshot only.
 let efspPositionLetters = {};
+let efspSelf = null; // { controllerId } from the snapshot and the resync snapshot (crc-sync docs/adr/0110): who "I" am in a Position's primary/observers
 
 // clientMutationId -> the original efsp-mutation message sent, kept until
 // its ack arrives — replayed against a fresh baseline on reconnect (§5.6.3).
@@ -125,6 +126,7 @@ export function applyEfspSnapshot(msg) {
   efspBays = msg.bays || [];
   efspAitAuthorizedByFacility = msg.aitAuthorizedByFacility || {};
   efspPositionLetters = msg.positionLetters || {};
+  if (msg.self) efspSelf = msg.self;
   // A snapshot after a reconnect can carry edits made while this window was away: log them against what it last held.
   _replaceAirspaces(msg.airspaces);
   _replaceCorrelations(msg.correlations);
@@ -482,6 +484,7 @@ export function getEfspStrip(stripId) { return efspStrips.get(stripId) || null; 
 export function getEfspFlightData(flightDataId) { return efspFlightDataList.get(flightDataId) || null; }
 export function getEfspPosition(positionId) { return efspPositions.get(positionId) || null; }
 export function getAllEfspStrips() { return [...efspStrips.values()]; }
+export function getEfspSelf() { return efspSelf; }
 export function getAllEfspPositions() { return [...efspPositions.values()]; }
 /** The Board epoch (lifetime) this client holds for a Facility, or undefined. */
 export function getEfspBoardEpoch(facilityId) { const c = getCursor(boardCursorName(facilityId)); return c ? c.epoch : undefined; }
@@ -596,6 +599,7 @@ export function _resetEfspStateForTest() {
   efspBays = [];
   efspAitAuthorizedByFacility = {};
   efspPositionLetters = {};
+  efspSelf = null;
 }
 
 /** Applies an efsp-alerts message: the complete current conformance, conflict and obligation picture. */

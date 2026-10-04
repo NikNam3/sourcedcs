@@ -57,7 +57,7 @@ function metricsBlock({ withSeries = true } = {}) {
     staleness: { status: 'COLLECTING', target: { kind: 'TRENDING_DOWN' }, total: 3, byPosition: { GC: 3 }, byState: { COASTING: 3 }, byHour: s({ [H2]: { missionSession: 2, total: 2 }, [H3]: { missionSession: 2, total: 1 } }) },
     transfers: {
       status: 'COLLECTING', target: { kind: 'AT_MOST', value: 0.005 },
-      attempts: 200, succeeded: 199, failed: 1, failureRate: 0.005, routedToConsolidated: 2, inhibitedPress: 1,
+      attempts: 200, succeeded: 199, failed: 1, failureRate: 0.005, toUnstaffed: 2, inhibitedPress: 1,
       byCause: { STALE_REV: 1 }, byKind: { TRANSFER: { attempts: 150, failed: 1 }, NLA_TRANSFER: { attempts: 50, failed: 0 } }, byHour: {},
     },
     obligations: { status: 'NOT_INSTRUMENTED', live: null },
@@ -89,7 +89,7 @@ function freshBody() {
     correlation: { status: 'NOT_INSTRUMENTED', target: { kind: 'AT_LEAST', value: 0.95 }, windowRate: null, live: null, byHour: {} },
     rejectedMutations: { status: 'NO_DATA', target: { kind: 'TRENDING_DOWN' }, mutations: 0, total: 0, byReason: {}, byType: {}, byOp: {}, byPosition: {}, byHour: {} },
     staleness: { status: 'NOT_INSTRUMENTED', target: { kind: 'TRENDING_DOWN' }, total: null, byPosition: {}, byState: {}, byHour: {} },
-    transfers: { status: 'NO_DATA', target: { kind: 'AT_MOST', value: 0.005 }, attempts: 0, succeeded: 0, failed: 0, failureRate: null, routedToConsolidated: 0, inhibitedPress: 0, byCause: {}, byKind: { TRANSFER: { attempts: 0, failed: 0 }, NLA_TRANSFER: { attempts: 0, failed: 0 } }, byHour: {} },
+    transfers: { status: 'NO_DATA', target: { kind: 'AT_MOST', value: 0.005 }, attempts: 0, succeeded: 0, failed: 0, failureRate: null, toUnstaffed: 0, inhibitedPress: 0, byCause: {}, byKind: { TRANSFER: { attempts: 0, failed: 0 }, NLA_TRANSFER: { attempts: 0, failed: 0 } }, byHour: {} },
     obligations: { status: 'NOT_INSTRUMENTED', live: null },
     systemReassigned: { total: 0, byHour: {} },
   };
@@ -137,6 +137,7 @@ test('verdicts: met, not met, and the trend for the trending-down metrics', () =
   assert.match(row(m, 'gestureInputs').cells.mission.title, /OFFSET/);
   assert.equal(row(m, 'correlation').cells.mission.verdict, 'NOT MET');
   assert.equal(row(m, 'transfers').cells.mission.verdict, 'MET', '0.5% is at the ceiling, not over it');
+  assert.match(row(m, 'transfers').cells.mission.detail, /2 to an unstaffed Position/, 'transfers.toUnstaffed (docs/adr/0110) replaces routedToConsolidated');
   // Search per staffed hour 4, 3, 2 over the three complete hours (15Z is still filling).
   assert.equal(row(m, 'searchInvocations').cells.mission.verdict, 'TRENDING ↓');
   // Rejected 1, 3, 2: rose then fell — the last step.

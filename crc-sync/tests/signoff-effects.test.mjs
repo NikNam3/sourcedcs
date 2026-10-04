@@ -104,13 +104,14 @@ test('grace expiry leaving GC unstaffed with Strips: LC\'s Primary is offered GC
   const gc = r.connect('c-GC'); const lc = r.connect('c-LC'); const ops = r.connect('c-OPS');
   gc.drop();
   r.advance(GRACE + 1);
-  const offer = lc.frames.find(f => f.type === 'efsp-position-offer');
-  assert.ok(offer, 'LC\'s Primary was offered GC');
-  assert.deepEqual({ positionId: offer.positionId, offer: offer.offer, count: offer.count }, { positionId: 'LC', offer: 'GC', count: 1 });
-  assert.equal(ops.frames.some(f => f.type === 'efsp-position-offer'), false, 'only LC hears the offer');
+  // The offer is standing state (docs/adr/0110): GC's Strips make LC's Position entry carry it, and every session is sent that entry.
+  assert.equal(lc.frames.some(f => f.type === 'efsp-position-offer'), false, 'no one-shot frame any more');
+  const entry = lc.frames.filter(f => f.type === 'efsp-board-delta').flatMap(f => f.positions ? f.positions.updated : []).find(p => p.positionId === 'LC');
+  assert.deepEqual(entry && entry.hatOffers, [{ positionId: 'GC', count: 1, onRunway: 0, observersFirst: false }], 'LC\'s Position entry carries the offer');
+  assert.equal(ops.frames.some(f => f.type === 'efsp-position-offer'), false);
 });
 
-test('a takeover during the grace: the taker\'s sign-on runs the shared effects (repair persisted, GC offer, watcher sees the Primary)', () => {
+test('a takeover during the grace: the taker\'s sign-on runs the shared effects (repair persisted, watcher sees the Primary)', () => {
   const r = rig({ OPS: 'INCIRLIK', GC: 'INCIRLIK', LC: 'INCIRLIK' });
   const created = helpers.mustAct(r.w.efsp, r.w.c.OPS, 'OPS', null, {
     kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main',

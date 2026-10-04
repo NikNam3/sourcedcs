@@ -41,7 +41,6 @@
       "efsp-metrics",
       "efsp-metrics-report-ack",
       "efsp-mutation-ack",
-      "efsp-position-offer",
       "efsp-positions-ack",
       "efsp-resync-reply",
       "efsp-runway-status-ack",

@@ -398,9 +398,6 @@ function _handleSetPositions(ctx, session, msg, persist) {
       monitoring: positionStore.frequenciesHeldBy(session.controllerId) },
     broadcasts: skeleton.orderSlots({ primary: fx.primary.get(facilityId), peer: fx.peer.length ? fx.peer : null }),
   };
-  // LEGACY, removed with the client's handler in CONSOL-C: the one-shot GC offer to LC's Primary (docs/adr/0105), directed channel.
-  const legacy = fx.directed.filter(d => d.facilityId === facilityId);
-  if (legacy.length) result.directed = legacy;
   return result;
 }
 
@@ -412,9 +409,9 @@ function _handleSetPositions(ctx, session, msg, persist) {
  * `changes` is `[{ facilityId, signedOn, vacated, staffedBefore }]`, one per Facility whose staffing moved, the Position
  * store already updated. Does: (1) a Position left unstaffed with Strips warns who is offered its hat (nothing moves; TACTICAL hands the Strips back, docs/adr/0110); (2) a Position that gained a Primary gets its routed-away Strips back; (3) the control invariant is repaired on
  * every Facility's Board (docs/adr/0101, sign-off is never blocked, DR-6); (4) the other Boards' touched Strips are sent;
- * (5) the Board is persisted when 1-3 changed it; (6) the legacy GC offer to LC's Primary (docs/adr/0105, going with CONSOL-C).
- * @returns {{byFacility: Map, primary: Map, peer: object[], directed: object[]}} per changed Facility `{warnings}`,
- *   its full-Board delta, the other Boards' deltas, and the directed offers.
+ * (5) the Board is persisted when 1-3 changed it.
+ * @returns {{byFacility: Map, primary: Map, peer: object[]}} per changed Facility `{warnings}`,
+ *   its full-Board delta, and the other Boards' deltas. The hat offers are standing state on the Position entries (docs/adr/0110), not frames.
  */
 function staffingChanged(ctx, controllerId, changes, persist) {
   const byFacility = new Map();
@@ -494,19 +491,13 @@ function staffingChanged(ctx, controllerId, changes, persist) {
   // A consolidation reassignment or a repair changes the Board; a restart before the next Mutation must not undo it (docs/adr/0081).
   if (boardChanged && typeof persist === 'function') persist();
 
-  // LEGACY (CONSOL-C removes it with the client's handler): the one-shot GC offer to LC's Primary, beside the standing hatOffers.
-  const directed = [];
-  for (const c of changes) {
-    const offered = combination.legacyOfferAfterSignOff(ctx.positionStoreFor(c.facilityId), ctx.boardStoreFor(c.facilityId), c.facilityId, c.vacated, controllerId);
-    if (offered) directed.push({ facilityId: c.facilityId, positionId: offered.positionId, primaryOnly: true, frame: { version: VERSION, type: 'efsp-position-offer', ...offered } });
-  }
-  return { byFacility, primary, peer, directed };
+  return { byFacility, primary, peer };
 }
 
 /**
  * A controller's connection is gone and its sign-on grace ran out: sign them off every Position at every Facility
  * (guide §4.8.6 rule 1: the longest-waiting Observer is promoted) with the same effects as an explicit sign-off.
- * @returns {{broadcasts: object[], directed: object[]}} the frames to send; empty when they held nothing
+ * @returns {{broadcasts: object[]}} the frames to send; empty when they held nothing
  */
 function signOffController(ctx, controllerId, persist) {
   const changes = [];
@@ -517,10 +508,10 @@ function signOffController(ctx, controllerId, persist) {
     const { vacated } = positionStore.onDisconnect(controllerId);
     if (vacated.length) changes.push({ facilityId, signedOn: [], vacated, staffedBefore });
   }
-  if (changes.length === 0) return { broadcasts: [], directed: [] };
+  if (changes.length === 0) return { broadcasts: [] };
   const fx = staffingChanged(ctx, controllerId, changes, persist);
   const [first, ...rest] = changes.map(c => fx.primary.get(c.facilityId));
-  return { broadcasts: skeleton.orderSlots({ primary: first, peer: [...rest, ...fx.peer] }), directed: fx.directed };
+  return { broadcasts: skeleton.orderSlots({ primary: first, peer: [...rest, ...fx.peer] }) };
 }
 
 // ── The read scope (docs/adr/0080) ───────────────────────────────────────────
@@ -554,8 +545,6 @@ function directedFor(ctx, session, directed) {
   if (!session || !session.controllerId || !directed || !directed.frame) return null;
   const positionStore = ctx.positionStoreFor(directed.facilityId);
   if (!positionStore || !positionStore.signedOnBy(session.controllerId).includes(directed.positionId)) return null;
-  // A Position-level frame (the sign-on offer, docs/adr/0105) goes to the Position's Primary and names no Strip.
-  if (directed.primaryOnly) return positionStore.primaryOf(directed.positionId) === session.controllerId ? directed.frame : null;
   // Read scope (docs/adr/0080): a session that reads only what it owns hears only of what it may see.
   const scope = readScopeOf(ctx, session);
   if (scope.kind === readScope.ALL) return directed.frame;

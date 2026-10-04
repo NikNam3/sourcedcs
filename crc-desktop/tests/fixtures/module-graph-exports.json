@@ -566,14 +566,15 @@
   "panels/efsp/combination-rules.js": [
    "LOCAL_POSITION",
    "LUAW_WHILE_COMBINED_TEXT",
-   "NON_LOCAL_TOWER",
+   "NON_LOCAL",
    "combinationLine",
    "combinationOf",
    "formatFrequencies",
    "formatFrequency",
+   "hatRows",
    "luawInUse",
-   "offerStands",
-   "offerText"
+   "nonLocalCitation",
+   "vacatedBetween"
   ],
   "panels/efsp/control-release-rules.js": [
    "OBLIGATION_LABELS",
@@ -771,6 +772,7 @@
    "getEfspPositionLetter",
    "getEfspRack",
    "getEfspRunwayStatus",
+   "getEfspSelf",
    "getEfspStoreSync",
    "getEfspStrip",
    "getPendingMutations",
@@ -893,9 +895,6 @@
    "noteEfspBoardArrivals"
   ],
   "panels/efsp/panel/combination.js": [
-   "acceptEfspPositionOffer",
-   "dismissEfspPositionOffer",
-   "noteEfspPositionOffer",
    "renderCombination"
   ],
   "panels/efsp/panel/control-attest.js": [

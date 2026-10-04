@@ -7,7 +7,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { LINES_WITH_OTHERS, getEfspRack, applyEfspSnapshot, _resetEfspStateForTest } from '../app/public/js/panels/efsp/efsp-state.js';
-import { LOCAL_POSITION, NON_LOCAL_TOWER } from '../app/public/js/panels/efsp/combination-rules.js';
+import { LOCAL_POSITION, NON_LOCAL } from '../app/public/js/panels/efsp/combination-rules.js';
 import { handoffSteps, buildStepOp } from '../app/public/js/panels/efsp/control-release-rules.js';
 import { _canMarkTofiEntered } from '../app/public/js/panels/efsp/bay/popovers/tofi.js';
 
@@ -28,11 +28,10 @@ test('LINES_WITH_OTHERS: a Position lists exactly the owners whose line it answe
   }
 });
 
-// docs/adr/0110: the server's list is every Incirlik Position but LC and RSU (OPS, CD, GC, AP, SFA, PAR). The client still has GC and CD:
-// CONSOL-C generalises combination-rules.js and removes the `todo`. Until then this reports the gap without failing the run.
-test('combination-rules: LC and the non-local Positions are combination.js\'s', { todo: 'CONSOL-C: combination-rules.js still lists GC and CD only' }, () => {
+// docs/adr/0110: the server's non-local list (every Incirlik Position but LC and RSU: OPS, CD, GC, AP, SFA, PAR) is the client's.
+test('combination-rules: LC and the non-local Positions are combination.js\'s', () => {
   assert.equal(LOCAL_POSITION, combination.LOCAL);
-  assert.deepEqual([...NON_LOCAL_TOWER].sort(), [...combination.NON_LOCAL].sort());
+  assert.deepEqual([...NON_LOCAL].sort(), [...combination.NON_LOCAL].sort());
 });
 
 test('handoffSteps: every step it can offer is an action the server accepts, and every server action is offered somewhere', () => {
