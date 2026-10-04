@@ -909,6 +909,15 @@
    "setEfspSender",
    "setSignOnNoticeListener"
   ],
+  "panels/efsp/facility-topology.js": [
+   "DEFAULT_FACILITY_ID",
+   "FACILITY_POSITIONS",
+   "RANGES_FACILITY_ID",
+   "allFacilityIds",
+   "facilityOfPosition",
+   "positionsOf",
+   "shippedFacilityIds"
+  ],
   "panels/efsp/final-panel.js": [
    "FINAL_CADENCE_S",
    "FINAL_CALL_PRIORITY",

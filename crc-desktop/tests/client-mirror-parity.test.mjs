@@ -141,27 +141,7 @@ test('D-9: every Position a client authority table names is a Position some Faci
   for (const [id, where] of named) assert.ok(real.has(id), `${where} names Position ${id}, which no Facility in facility-config.js has`);
 });
 
-// ── Position lists and Facility ids (radar-panel.js, efsp-ws.js) ────────────
-
-test('D-9: EFSP_FACILITY_POSITIONS is facility-config.js\'s Position set for every Facility it lists', () => {
-  const client = constLiteral(readClient('panels/radar-panel.js'), 'EFSP_FACILITY_POSITIONS', 'radar-panel.js');
-  for (const [facilityId, positions] of Object.entries(client)) {
-    assert.deepEqual(positions, serverFacilities.getPositionSet(facilityId), `Facility ${facilityId}`);
-  }
-});
-
-test('D-9: the only Facility radar-panel.js does not list is the one whose Positions are derived from airspace config', () => {
-  const client = constLiteral(readClient('panels/radar-panel.js'), 'EFSP_FACILITY_POSITIONS', 'radar-panel.js');
-  const unlisted = serverFacilities.getFacilityIds().filter(f => !(f in client));
-  assert.deepEqual(unlisted, ['RANGES'], `a new Facility (${unlisted}) has no "acting as" checkboxes until it is listed or derived`);
-});
-
-test('D-9: efsp-ws.js tracks signed-on Positions for every server Facility, and its default Facility is the server\'s', () => {
-  const src = readClient(EFSP + 'efsp-ws.js');
-  const signedOn = constLiteral(src, '_actingPositionsByFacility', 'efsp-ws.js');
-  assert.deepEqual(Object.keys(signedOn).sort(), [...serverFacilities.getFacilityIds()].sort());
-  assert.equal(/const DEFAULT_EFSP_FACILITY_ID = '([A-Z]+)'/.exec(src)[1], serverFacilities.DEFAULT_FACILITY_ID);
-});
+// Position lists and Facility ids: efsp/facility-topology.js, held to crc-sync's configs by facility-topology-parity.test.mjs.
 
 // ── pure helpers copied across (geo.js, strip-template.js, bay-view.js) ─────
 

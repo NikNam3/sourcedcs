@@ -1,5 +1,6 @@
 'use strict';
 import { COORDINATION_ELIGIBLE_STATES } from '../efsp-nla.js';
+import { facilityOfPosition } from '../facility-topology.js';
 
 
 // ── WP4A: cross-Facility coordination (guide §4.6, docs/adr/0015-0016) ──
@@ -15,13 +16,13 @@ import { COORDINATION_ELIGIBLE_STATES } from '../efsp-nla.js';
 // other side. A real multi-Facility topology would need a picker; this
 // slice deliberately doesn't build one it can't yet exercise.
 export const COORDINATION_TARGETS = {
-  AP: { facilityId: 'CENTER', positionId: 'CTR' },
-  CTR: { facilityId: 'INCIRLIK', positionId: 'AP' },
+  AP: { facilityId: facilityOfPosition('CTR'), positionId: 'CTR' },
+  CTR: { facilityId: facilityOfPosition('AP'), positionId: 'AP' },
 };
 
 // docs/adr/0101 (DR-3): APP or CTR may also hand an ARRIVAL in its coordination-eligible state to the carrier's Marshal (the Strip never leaves
 // the EFSP). The only primitive it takes is a HANDOFF; the server refuses the rest ("CV_MARSHAL does not take ...").
-export const CARRIER_HANDOFF_TARGET = { facilityId: 'CARRIER', positionId: 'CV_MARSHAL' };
+export const CARRIER_HANDOFF_TARGET = { facilityId: facilityOfPosition('CV_MARSHAL'), positionId: 'CV_MARSHAL' };
 export const CARRIER_HANDOFF_STRIP_TYPE = 'ARRIVAL';
 
 /** Can this Strip be handed to the Marshal? (A key of COORDINATION_TARGETS holding an ARRIVAL in that state.) */
@@ -43,10 +44,11 @@ export function canHandOffToCarrier(strip) {
 // TWO candidates (TAC_C2, GCI) — CTR-initiated TOFI must let the controller
 // choose. TAC_C2/GCI-initiated TOFI has exactly one candidate (CTR) and
 // skips the picker, behaving like today's deterministic stub.
+const at = (positionId) => ({ facilityId: facilityOfPosition(positionId), positionId });
 export const TOFI_COUNTERPARTS = {
-  CTR:    [{ facilityId: 'TACTICAL', positionId: 'TAC_C2' }, { facilityId: 'TACTICAL', positionId: 'GCI' }],
-  TAC_C2: [{ facilityId: 'CENTER', positionId: 'CTR' }],
-  GCI:    [{ facilityId: 'CENTER', positionId: 'CTR' }],
+  CTR:    [at('TAC_C2'), at('GCI')],
+  TAC_C2: [at('CTR')],
+  GCI:    [at('CTR')],
 };
 // H2 / H40 (docs/adr/0080): the Positions a working tactical Position may hand
 // a line back to — the only place it may transfer one. A mirror of

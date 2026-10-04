@@ -5,6 +5,7 @@ import {
   efspStoreResyncPositionFor, getPendingMutations, rebaseForResend, registerPendingMutation
 } from './efsp-state.js';
 import { addEfspMessageObserver } from './efsp-message-registry.js';
+import { allFacilityIds, DEFAULT_FACILITY_ID } from './facility-topology.js';
 
 // Client-side EFSP WebSocket helpers — constructs efsp-mutation/efsp-
 // set-positions/efsp-resync messages, sends them via sync.js's existing
@@ -19,8 +20,7 @@ import { addEfspMessageObserver } from './efsp-message-registry.js';
 // globally unique across Facilities in this slice (OPS/CD/GC/LC/AP vs
 // CTR never collide), which is what lets getActingPositions() below still
 // return one flat, facility-agnostic list for every pre-WP4A call site.
-const DEFAULT_EFSP_FACILITY_ID = 'INCIRLIK';
-let _actingPositionsByFacility = { INCIRLIK: [], CENTER: [], TACTICAL: [], CARRIER: [], RANGES: [] };
+let _actingPositionsByFacility = Object.fromEntries(allFacilityIds().map(f => [f, []]));
 let _ackedByFacility = {};     // facilityId -> the last `signedOn` the SERVER acknowledged (e2e waits on this, not on the claim)
 let _declaredByFacility = {};   // facilityId -> positionIds the controller asked for
 let _observerKeys = new Set(); // 'facility/position' where the controller is Observer (coverage message)
@@ -91,7 +91,7 @@ export function sendEfspUndo(actingPositionId, slot) {
 }
 
 /** CreateStrip has no existing Strip to derive facilityId from — an explicit param, defaulting to INCIRLIK for back-compat with every pre-WP4A call site (efsp-panel.js's OPS-only DEPARTURE form). */
-export function sendEfspCreateStrip(actingPositionId, createOp, facilityId = DEFAULT_EFSP_FACILITY_ID) {
+export function sendEfspCreateStrip(actingPositionId, createOp, facilityId = DEFAULT_FACILITY_ID) {
   const msg = {
     version: 1, type: 'efsp-mutation',
     clientMutationId: efspClientMutationId(),

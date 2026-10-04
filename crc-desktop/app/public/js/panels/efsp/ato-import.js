@@ -1,5 +1,6 @@
 'use strict';
 import { _sendEfsp, getActingPositions } from './efsp-ws.js';
+import { facilityOfPosition } from './facility-topology.js';
 import { _showMutationError } from './efsp-panel.js';
 
 // Importing a USMTF ATO into TACTICAL's Board (crc-sync's docs/adr/0071, guide
@@ -185,7 +186,7 @@ export function sendAtoImport() {
   }
   _atoPendingImportId = _atoId();
   _sendEfsp({
-    version: 1, type: 'efsp-ato-mutation', clientMutationId: _atoPendingImportId, facilityId: 'TACTICAL',
+    version: 1, type: 'efsp-ato-mutation', clientMutationId: _atoPendingImportId, facilityId: facilityOfPosition(ATO_IMPORT_POSITION),
     actingPositionId: ATO_IMPORT_POSITION,
     op: { kind: 'ImportAto', text: _atoText, textSha1: _atoPreview.textSha1, choices: atoImportChoices(_atoPreview, _atoChoices) },
   });
