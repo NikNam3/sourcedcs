@@ -184,21 +184,44 @@ test('unchanged units outlive the 12 s reaper, gone removes one at once, a lost 
 
 // ── 4. Backoff, and one 'ended' line a minute ───────────────────────────────
 
-const intervals = (calls) => calls.slice(1).map((c, i) => c.at - calls[i].at);
-
-// Each interval sits in its jitter window [50 %, 100 %] of min(cap, base·2^k)
-// (plus a little for the round trip), and they never shrink before the cap.
-function assertBackoff(gaps, base, cap) {
-  gaps.forEach((gap, k) => {
-    const nominal = Math.min(cap, base * 2 ** k);
-    assert.ok(gap >= nominal / 2 - 5 && gap <= nominal + 80,
-      `retry ${k}: ${gap} ms outside [${nominal / 2}, ${nominal}]`);
-    if (k > 0 && nominal < cap) assert.ok(gap >= gaps[k - 1] - 20, `retry ${k} shrank: ${gaps.join(', ')}`);
+// Load-robust by construction: these tests assert on the delays the client COMPUTED (every call of _backoffDelay with
+// its retry index and answer), never on how long a real timer happened to take on a busy machine. A gap between two
+// real calls can only be longer than the delay (a timer never fires early), so it is checked from below only.
+function trackBackoff(t) {
+  const calls = [];
+  const real = GrpcClient.prototype._backoffDelay;
+  t.mock.method(GrpcClient.prototype, '_backoffDelay', function (retries) {
+    const delay = real.call(this, retries);
+    calls.push({ retries, delay });
+    return delay;
   });
+  return calls;
 }
+
+// Each delay sits in its jitter window [50 %, 100 %] of min(cap, base*2^k), never below the base.
+function assertWindow({ retries, delay }, base, cap) {
+  const nominal = Math.min(cap, base * 2 ** retries);
+  assert.ok(delay >= Math.max(base, Math.round(nominal / 2)) && delay <= nominal,
+    `retry ${retries}: ${delay} ms outside [${nominal / 2}, ${nominal}]`);
+}
+
+test('the backoff delay is min(cap, base*2^n) jittered to 50-100 %, from a scripted jitter source', () => {
+  const base = 50, cap = 400;
+  const at = (r) => new GrpcClient({ backoffBaseMs: base, backoffCapMs: cap, random: () => r });
+  const low = at(0), high = at(0.999999);
+  const nominal = (k) => Math.min(cap, base * 2 ** k);
+  for (let k = 0; k < 12; k++) {
+    assert.equal(low._backoffDelay(k), Math.max(base, Math.round(nominal(k) / 2)), `retry ${k} at the bottom of the window`);
+    assert.equal(high._backoffDelay(k), nominal(k), `retry ${k} at the top of the window`);
+    if (k > 0) assert.ok(low._backoffDelay(k) >= low._backoffDelay(k - 1), `retry ${k} shrank at the bottom of the window`);
+    if (k > 0) assert.ok(high._backoffDelay(k) >= high._backoffDelay(k - 1), `retry ${k} shrank at the top of the window`);
+  }
+  low.close(); high.close();
+});
 
 test('a stream the server ends straight away is retried with growing, jittered delays and logged once', async (t) => {
   const sink = quietConsole(t);
+  const delays = trackBackoff(t);
   const base = 50, cap = 400;
   // Data then an OK end every time, exactly what poll_rate 0 did: data on its
   // own must not reset the backoff.
@@ -207,10 +230,11 @@ test('a stream the server ends straight away is retried with growing, jittered d
     (call) => { call.end(); },
   );
   startClient(t, { keepaliveMs: 50, backoffBaseMs: base, backoffCapMs: cap });
-  await until(() => fake.unitCalls.length >= 8 && fake.eventCalls.length >= 8, 10000);
+  await until(() => fake.unitCalls.length >= 8 && fake.eventCalls.length >= 8, 20000);
 
-  assertBackoff(intervals(fake.unitCalls).slice(0, 7), base, cap);
-  assertBackoff(intervals(fake.eventCalls).slice(0, 7), base, cap);
+  // Two streams, so each retry index appears once per stream, and it only grows until the cap.
+  for (const d of delays) assertWindow(d, base, cap);
+  for (let k = 0; k < 7; k++) assert.ok(delays.filter(d => d.retries === k).length >= 2, `retry ${k} happened for both streams: ${delays.map(d => d.retries).join(',')}`);
 
   const ended = sink.records.filter(r => r.message.includes('unit stream ended'));
   assert.equal(ended.length, 1, `one line in the first minute, got: ${ended.map(r => r.line).join(' | ')}`);
@@ -218,6 +242,7 @@ test('a stream the server ends straight away is retried with growing, jittered d
 
 test('a stream that stayed up resets the backoff', async (t) => {
   quietConsole(t);
+  const delays = trackBackoff(t);
   const base = 50, cap = 400, stableMs = 300;
   let n = 0;
   // Four immediate ends, one stream that holds 400 ms, then immediate ends again.
@@ -228,15 +253,12 @@ test('a stream that stayed up resets the backoff', async (t) => {
     else call.end();
   });
   startClient(t, { backoffBaseMs: base, backoffCapMs: cap, stableMs });
-  await until(() => fake.unitCalls.length >= 7, 10000);
-  const gaps = intervals(fake.unitCalls);
-  // gaps[3] followed the 4th end (retry 3, nominal 400). gaps[4] is the
-  // healthy 5th stream's lifetime plus retry 0 (nominal 50), and gaps[5] is
-  // retry 1 (nominal 100); without the reset they'd be retries 4 and 5, at
-  // the 400 ms cap.
-  assert.ok(gaps[3] >= 200, `retry 3 backed off: ${gaps.join(', ')}`);
-  assert.ok(gaps[4] - (stableMs + 100) <= base + 30, `after a healthy stream the delay restarts at ${base} ms: ${gaps.join(', ')}`);
-  assert.ok(gaps[5] <= 2 * base + 40, `and grows from there: ${gaps.join(', ')}`);
+  await until(() => fake.unitCalls.length >= 7, 20000);
+  // The unit stream's retry indexes: 0, 1, 2, 3 after the four quick ends; the fifth stream lived past stableMs, so
+  // the index restarts at 0 and grows again (without the reset they would be 4 and 5, at the cap).
+  // (The event stream, held open by the fake, never retries.)
+  assert.deepEqual(delays.slice(0, 6).map(d => d.retries), [0, 1, 2, 3, 0, 1], delays.map(d => d.retries).join(','));
+  for (const d of delays) assertWindow(d, base, cap);
 });
 
 test('the reconnect delay never drops below the base, so the rate has a floor', async (t) => {

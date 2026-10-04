@@ -148,12 +148,22 @@ test('ato tokenize: input over 1 MiB is refused', () => {
   assert.deepEqual(codes(r), ['INPUT_TOO_LARGE']);
 });
 
-test('ato tokenize: pathological inputs finish fast', () => {
-  for (const text of ['A/'.repeat(200000), '//'.repeat(200000), '\n'.repeat(500000), 'A\n'.repeat(200000),
-    `AMSNDAT/${'1'.repeat(400000)}`, `5REFUEL\n${'/A '.repeat(150000)}`, 'X:'.repeat(300000)]) {
-    const t0 = process.hrtime.bigint();
-    tokenize(text);
-    const ms = Number(process.hrtime.bigint() - t0) / 1e6;
-    assert.ok(ms < 1000, `took ${ms} ms`);
+// Pathological inputs must scale LINEARLY, not finish inside a wall budget: a budget fails when 2400 other tests share
+// the machine, and linearity is the property that matters. Best of three runs per size cuts scheduling noise; doubling
+// the input FOUR times must cost well under 10x (a linear tokenizer costs about 4x with allocation noise, a quadratic
+// one 16x); a size that takes under 5 ms is too small to judge. The 1 MiB INPUT_TOO_LARGE cap (above) stays the real guard, and a generous absolute ceiling catches a hang.
+const bestOf = (n, fn) => { let best = Infinity; for (let i = 0; i < n; i++) { const t0 = process.hrtime.bigint(); fn(); best = Math.min(best, Number(process.hrtime.bigint() - t0) / 1e6); } return best; };
+
+test('ato tokenize: pathological inputs scale linearly', () => {
+  const shapes = {
+    'A/ pairs': (n) => 'A/'.repeat(n), 'slashes': (n) => '//'.repeat(n), 'newlines': (n) => '\n'.repeat(n), 'A newline': (n) => 'A\n'.repeat(n),
+    'one long field': (n) => `AMSNDAT/${'1'.repeat(n * 2)}`, 'refuel fields': (n) => `5REFUEL\n${'/A '.repeat(n * 0.75)}`, 'colons': (n) => 'X:'.repeat(n * 1.5),
+  };
+  for (const [name, make] of Object.entries(shapes)) {
+    const n = 50000;
+    const small = bestOf(3, () => tokenize(make(n)));
+    const large = bestOf(3, () => tokenize(make(4 * n)));
+    assert.ok(large < 5000, `${name}: ${large} ms for the larger input`);
+    if (small >= 5) assert.ok(large < 10 * small, `${name}: quadrupling the input cost ${(large / small).toFixed(1)}x (${small.toFixed(1)} ms -> ${large.toFixed(1)} ms)`);
   }
 });
