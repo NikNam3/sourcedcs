@@ -26,8 +26,6 @@
 
 const fs = require('fs');
 
-const carrierModel = require('./carrier');
-const sfaModel = require('./sfa');
 const { NLA_GUARD_MS } = require('./board/ops/invoke-nla');
 const airspaceSchema = require('./airspace-schema');
 const { deriveRangePositionIds } = require('./airspace-store');
@@ -38,11 +36,10 @@ const { PositionStore } = require('./position-store');
 const permission = require('./permission');
 const authority = require('./authority');
 const { NO_STRIP_OP_CLASSES } = require('./authority/classes');
-const nla = require('./nla');
-const blockMap = require('./block-map');
 const { createFacilityConfig } = require('./facility-config');
 const { createStereoRoutes } = require('./stereo-routes');
-const coordination = require('./coordination');
+const { createRegimeLocator } = require('./regime-locator');
+const { buildFacilityRules } = require('./facility-rules');
 const { handleMessage, signOffController, snapshotMessage, filterForSession, supplementFor, readScopeKey, directedFor, heartbeatBoardsAll, heartbeatBoardsFor, heartbeatStores } = require('./efsp-ws');
 const { NlaStatusMonitor } = require('./nla-status-monitor');
 const { Archiver } = require('./archiver');
@@ -65,6 +62,10 @@ const log = require('../log').logger('efsp');
  * @param {(trackId:string) => ({lat:number, lon:number, altFt:number}|null)} [deps.locateTrack] where a contact is, for the TOFI
  *   regime locator (docs/adr/0102), altitude in indicated feet. A real server passes it; omitting it logs an error at the first
  *   regime question and every flight stays unlocated. A fixture with no tracks passes `() => null`.
+ * @param {(payload:object) => void} [deps.onNlaDelta] where the NLA-status sweep's changed-Strips payload goes (app.js hands it to the hub); omitted, the sweep's deltas are dropped
+ * @param {(strip:object) => boolean} [deps.airborneEvidence] whether the server itself vouches a Strip's aircraft is airborne (the hint monitor's
+ *   AIRBORNE_ADVANCE); omitted, no SetState is ever let past the runway gate (docs/wip/UI-B.md)
+ * @param {(controllerId:string) => boolean} [deps.isAbsent] whether a controller's connection is closed but within the sign-on grace (the hub's)
  * @param {() => string|null} [deps.currentTheater] the loaded mission's theater (docs/adr/0098 §2); airspaces are scoped
  *   to it, and with no mission loaded the panel's list is empty. A fixture that omits it has no mission.
  * @param {{read:string, write:string}} [deps.standingPaths] where the theater-keyed standing airspace list is read from
@@ -81,7 +82,7 @@ const log = require('../log').logger('efsp');
  *   or worse, restored a snapshot somebody had committed to git. It lives in
  *   data/ now; see src/state-paths.js.
  */
-function createEfsp({ env = process.env, facilityConfig = createFacilityConfig({ env }), stereoRoutes = createStereoRoutes({ env }), clock = WALL_CLOCK, wallClock = WALL_CLOCK, nlaGuardMs = NLA_GUARD_MS, transitionAltFt, currentTheater = () => null, locateTrack = null,
+function createEfsp({ env = process.env, facilityConfig = createFacilityConfig({ env }), stereoRoutes = createStereoRoutes({ env }), clock = WALL_CLOCK, wallClock = WALL_CLOCK, nlaGuardMs = NLA_GUARD_MS, transitionAltFt, currentTheater = () => null, locateTrack = null, onNlaDelta = null, airborneEvidence = null, isAbsent = () => false,
   paths = statePaths('efsp-board.json', env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH, env),
   standingPaths = statePaths('efsp-airspaces.json', env.CRCSYNC_EFSP_AIRSPACES_PATH, env) } = {}) {
   // The Facilities' config and the stereo routes are read when they are built: the composition root builds them and
@@ -99,176 +100,27 @@ function createEfsp({ env = process.env, facilityConfig = createFacilityConfig({
   const mutationLog = new MutationLog(undefined, { clock, env });
   const facilities = new Map(); // facilityId -> { boardStore, positionStore, rules }
   const stores = {};            // registry key -> instance (src/efsp/stores.js)
-  const buildDeps = { clock, transitionAltFt, currentTheater, codeAllocator, mutationLog, facilities, stores, facilityConfig, stereoRoutes };
+  // docs/adr/0100: one undo history for the process, every Board reports to it; the wall clock times its 10 s. Its environment is
+  // attached once the stores it reads exist; the flight data store reports its writes to it from its constructor.
+  const undoHistory = new UndoHistory({ wallClock });
+  const onFlightDataWrite = (id, paths) => undoHistory.observe({ kind: 'flightData', id, paths });
+  const buildDeps = { onFlightDataWrite, clock, transitionAltFt, currentTheater, codeAllocator, mutationLog, facilities, stores, facilityConfig, stereoRoutes };
   for (const entry of REGISTRY) stores[entry.key] = entry.build(buildDeps);
   const { flightData: flightDataStore, airspaces: airspaceStore, correlations: correlationStore, marsa: marsaStore,
     runwayStatuses: runwayStatusStore, carriers: carrierStore, sfaRotation: sfaStore } = stores;
-  // docs/adr/0102: where a flight is relative to the airspaces active for an MRU Facility: `(flightDataId, facilityId) ->
-  // { located, inside, unknown }`. The track source is a dependency (`locateTrack`), so the locator is built here with
-  // the stores it reads and is never installed later. No correlated contact is `located: false`, which is unknown,
-  // never outside. Without a `locateTrack` NOTHING can be located: that is a wiring mistake in a real server, so the
-  // first question says so loudly (once); a fixture with no track store passes `locateTrack: () => null` to mean it.
-  let warnedNoTrackSource = false;
-  const regimeLocator = (flightDataId, forFacilityId) => {
-    if (!locateTrack) {
-      if (!warnedNoTrackSource) {
-        warnedNoTrackSource = true;
-        log.error('createEfsp was given no locateTrack: every TOFI regime question answers "unknown" and stays pending', { flightDataId });
-      }
-      return { located: false, inside: [], unknown: [] };
-    }
-    const trackId = correlationStore.correlatedTrackId(flightDataId);
-    const where = trackId ? locateTrack(trackId) : null;
-    if (!where) return { located: false, inside: [], unknown: [] };
-    const found = airspaceStore.activeContaining(where, { usingFacilityId: forFacilityId });
-    return { located: true, inside: found.inside, unknown: found.unknown };
-  };
+  const regimeLocator = createRegimeLocator({ locateTrack, correlationStore, airspaceStore });
   const facilityIds = facilityConfig.getFacilityIds();
-  // docs/adr/0100: one undo history for the process, every Board reports to it; the wall clock times its 10 s.
-  const undoHistory = new UndoHistory({ wallClock });
   undoHistory.attach(undoEnv({
     boardFor: (facilityId) => { const f = facilities.get(facilityId); return f ? f.boardStore : null; },
     flightDataStore, carrierStore, marsaStore,
   }));
-  flightDataStore.setWriteObserver((id, paths) => undoHistory.observe({ kind: 'flightData', id, paths }));
 
   for (const facilityId of facilityIds) {
-    const positionStore = new PositionStore(facilityConfig.getPositionSet(facilityId), facilityConfig.getConsolidation(facilityId), { clock, frequencies: facilityConfig.getPositionFrequencies(facilityId) });
+    const positionStore = new PositionStore(facilityConfig.getPositionSet(facilityId), facilityConfig.getConsolidation(facilityId), { clock, frequencies: facilityConfig.getPositionFrequencies(facilityId), isAbsent });
 
-    const rules = {
-      resolveBlockTarget:  (blockId, stripType) => blockMap.resolveBlockTarget(stripType, blockId),
-      isBlockVisible:      (stripType, blockId) => facilityConfig.isBlockVisible(stripType, blockId, facilityId),
-      bayImpliesState:     (bayId) => facilityConfig.bayImpliesState(bayId, facilityId),
-      bayHoldsStripType:        (bayId) => facilityConfig.bayHoldsStripType(bayId, facilityId),
-      bayExists:           (bayId) => facilityConfig.bayExists(bayId, facilityId),
-      bayForImpliedState:  (positionId, state) => facilityConfig.bayForImpliedState(positionId, state, facilityId),
-      coordinationBayFor:  (positionId) => facilityConfig.coordinationBayFor(positionId, facilityId),
-      computeNla:          (strip, flightData, now, ctx) => nla.computeNla(strip, flightData, now, ctx),
-      isValidState:        (state, stripType) => nla.isValidState(state, stripType),
-      isValidStripType:         (stripType) => blockMap.isValidStripType(stripType),
-      isStaffed:          (positionId) => positionStore.isStaffed(positionId),
-      consolidatedAt: (positionId) => positionStore.consolidatedAt(positionId),
-      canMutate:           (actingPositionId, opKind) => permissionRules.canMutate(actingPositionId, opKind),
-      canMutateAction:     (actingPositionId, opKind, action) => permissionRules.canMutateAction(actingPositionId, opKind, action),
-      // docs/adr/0101 — which control axis (TURNS, ALTITUDE) a Block write is, from the Block Map's own tags.
-      controlAxisFor:      (stripType, blockId) => blockMap.controlAxisFor(stripType, blockId),
-      canCreateStripType:  (actingPositionId, stripType) => permission.canCreateStripType(actingPositionId, stripType),
-      canActOnState:       (actingPositionId, stripType, state) => permission.canActOnState(actingPositionId, stripType, state),
-      isSelfCoordinated:   (controllerId, positionId) => positionStore.isSelfCoordinated(controllerId, positionId),
-      // docs/adr/0080 — the tactical capability table and the Bay lookups the
-      // ownership, hand-back and consolidation rules read.
-      baysFor:             (positionId) => facilityConfig.getBaysFor(positionId, facilityId),
-      handBackTargetsFor:  (positionId) => permission.handBackTargetsFor(positionId),
-      mayActBesideOwner:   (actingPositionId, strip, op) => permission.mayActBesideOwner(actingPositionId, strip, op),
-      // WP4A (docs/adr/0015) — this Facility's own id, and a lazy accessor
-      // to the OTHER Facility's BoardStore instance for cross-Facility
-      // coordination. Lazy (a closure over `facilities`, resolved at call
-      // time, not at construction time) because both Facilities'
-      // BoardStore instances don't exist yet on the first iteration of
-      // this loop — see the wiring loop below.
-      facilityId,
-      // WP4A (docs/adr/0017) — this Facility's own standing-release
-      // envelopes (facility-config.js data, §4.6.2), a plain array rather
-      // than a function since it's cheap, small config, not derived state.
-      standingReleases: facilityConfig.getFacilityConfig(facilityId).standingReleases || [],
-      // WP4A gap-closure (docs/adr/0022) — is a written directive on file
-      // for AIT at this Facility? Guide §4.6 rule 7: "configuration, not a
-      // default." Plain config value, same shape as standingReleases above.
-      aitAuthorized: !!facilityConfig.getFacilityConfig(facilityId).aitAuthorized,
-      peerBoard: (otherFacilityId) => {
-        const other = facilities.get(otherFacilityId);
-        return other ? other.boardStore : null;
-      },
-      // How many live (non-DROPPED) Strips still reference this flight data, across
-      // EVERY Facility, excluding one Strip by id. Deliberately global rather
-      // than this Facility's own Board: the FlightDataStore and its CodeAllocator
-      // are shared across all Facilities (see this file's module comment),
-      // so "is anyone still using this beacon code" is only answerable by
-      // looking at all of them. Same lazy-closure-over-`facilities` shape as
-      // peerBoard above, for the same construction-order reason.
-      liveStripsForFlightData: (flightDataId, excludeStripId) => {
-        let n = 0;
-        for (const { boardStore } of facilities.values()) {
-          for (const s of boardStore.getAll()) {
-            if (s.flightDataId === flightDataId && s.stripId !== excludeStripId && s.state !== 'DROPPED') n++;
-          }
-        }
-        return n;
-      },
-      formationEligibility: (stripType) => authority.formationEligibility(stripType),
-      coordinationEffect: (primitive) => coordination.coordinationEffect(primitive),
-      // WP4A gap-closure (docs/adr/0022) — which EfspState a strip type
-      // must be in to PROPOSE a coordination link (see coordination.js).
-      coordinationEligibleState: (stripType) => coordination.coordinationEligibleState(stripType),
-      tofiEligibleState: (stripType) => coordination.tofiEligibleState(stripType),
-      // WP4A second slice — TOFI's target resolution (permission.js).
-      tofiCounterparts: (actingPositionId) => permission.tofiCounterparts(actingPositionId),
-      // The RANGE slice — the airspace an entry approval names, so the Strip
-      // op can default the frequency from it and see whether it is active.
-      // The store is shared across every Facility, so this rule is the same
-      // function for all of them.
-      airspaceFor: (airspaceId) => airspaceStore.getAirspace(airspaceId),
-      // WP6 (docs/adr/0051), §9.2 — the three hooks MARSA needs inside a Strip
-      // Mutation. All three are plain closures over the one shared store, with
-      // no per-Facility scoping, because a relation is not a Facility's
-      // property: a tanker worked by CENTER and a receiver worked by INCIRLIK
-      // are in one relation, and a clearance issued at either end must void it.
-      //
-      // marsaInterlockFor is the Block Map lookup rather than a list of Block
-      // ids held in the Board — see block-map.js's interlockFor() for why
-      // that separation matters (the same Block id means opposite things on
-      // different strip types).
-      marsaInterlockFor:       (stripType, blockId) => blockMap.interlockFor(stripType, blockId),
-      voidMarsaForAssignment:  (flightDataId, ctx) => marsaStore.voidForAssignment(flightDataId, ctx),
-      activeMarsaFor:          (flightDataId) => marsaStore.activeFor(flightDataId),
-      regimeLocation:          (flightDataId, forFacilityId) => regimeLocator(flightDataId, forFacilityId),
-      retireMarsaForFlightData:       (flightDataId, by) => marsaStore.onFlightDataRetired(flightDataId, by),
-      // Ending or voiding a relation writes `tofi.separationRegime` back to
-      // ATC on every participant. Those flight data writes are real changes no
-      // marsa-delta can carry (a relation is not flight data), so the Board drains
-      // them onto its own result and efsp-ws.js puts them in the board-delta's
-      // `flightDataList.updated` — see marsa-store.js's drainRegimeWrites() (F-111).
-      drainMarsaRegimeWrites:  () => marsaStore.drainRegimeWrites(),
-      // WP6 (docs/adr/0061), §9.7 rule 1 — this Facility's runway status view
-      // (null where there are no runways, which never inhibits). Cached in the
-      // store, so every NLA stamp can afford to ask.
-      runwayStatusFor:           () => runwayStatusStore.statusView(facilityId),
-      // docs/adr/0074 — the carrier hooks the Board reads (board/strip-ops.js). The NLA out of
-      // IN_STACK depends on the Case and on the staffed lane the stack feeds.
-      carrierCase:             () => carrierStore.caseValue(),
-      carrierLaneFor:          (strip) => carrierStore.laneFor(strip.flightDataId),
-      carrierInStack:          (strip) => carrierStore.inStack(strip.flightDataId),
-      canRecordCarrierHandoff: (actingPositionId, kind) => permission.canRecordCarrierHandoff(actingPositionId, kind),
-      validateCarrierHandoff: (kind, args) => carrierModel.validateCarrierHandoff(kind, args),
-      carrierHandoffs:        carrierModel.CARRIER_HANDOFFS,
-      carrierApplyEffect:      (effect, flightDataId, meta) => carrierStore.applyEffect(effect, flightDataId, meta),
-      carrierAppendFlight:     (flightDataId, meta) => carrierStore.appendFlight(flightDataId, meta),
-      carrierRetireFlight:     (flightDataId, by) => carrierStore.onFlightDataRetired(flightDataId, by),
-      // docs/adr/0075, 0093 — Bay descriptor flags (`capacity`, `view`) and Single
-      // Frequency Approach. All plain reads of the one Facility config, so they
-      // are the same functions for every Facility (a Facility without an SFA Bay
-      // answers null).
-      bayDescriptor:           (bayId) => facilityConfig.getBay(bayId, facilityId),
-      sfaFrequencyFor:         (bayId, rackId) => {
-        const bay = facilityConfig.getBay(bayId, facilityId);
-        const sfa = facilityConfig.getSingleFrequencyApproach(facilityId);
-        if (!bay || bay.view !== 'sfa-freqs' || !sfa) return null;
-        const entry = sfaModel.poolEntryFor(sfa, rackId);
-        return entry ? entry.mhz : null;
-      },
-      sfaRackFor:              (bayId, mhz) => {
-        const bay = facilityConfig.getBay(bayId, facilityId);
-        const sfa = facilityConfig.getSingleFrequencyApproach(facilityId);
-        if (!bay || bay.view !== 'sfa-freqs' || !sfa) return null;
-        const entry = sfa.pool.find(p => p.mhz === mhz);
-        return entry ? entry.rackId : null;
-      },
-      sfaTransfers:            sfaModel.SFA_TRANSFERS,
-      sfaRotationReceiver:     () => permission.sfaRotationReceiver(),
-      canSendSfaRotationTransfer: (actingPositionId) => permission.canSendSfaRotationTransfer(actingPositionId),
-    };
+    const rules = buildFacilityRules({ facilityId, facilityConfig, permissionRules, positionStore, facilities, stores: { airspaceStore, marsaStore, runwayStatusStore, carrierStore }, regimeLocator });
 
-    const boardStore = new BoardStore(flightDataStore, rules, { clock, wallClock, undoHistory, nlaGuard, mutationLog, controlInvariantMode: () => (env.CRCSYNC_CONTROL_INVARIANT === 'throw' ? 'throw' : 'repair') });
+    const boardStore = new BoardStore(flightDataStore, rules, { clock, wallClock, undoHistory, nlaGuard, mutationLog, airborneObserver: airborneEvidence, controlInvariantMode: () => (env.CRCSYNC_CONTROL_INVARIANT === 'throw' ? 'throw' : 'repair') });
     facilities.set(facilityId, { boardStore, positionStore, rules });
   }
 
@@ -280,7 +132,7 @@ function createEfsp({ env = process.env, facilityConfig = createFacilityConfig({
   // obligation monitor and the correlation reconciler, because efsp-ws.js has
   // to tell it what it has already put on the wire (see its note()) — so it
   // has to be reachable from `ctx`. server.js supplies the broadcast and the
-  // tick; see setOnDelta.
+  // tick; its delta goes to `onNlaDelta`.
   const nlaStatusMonitor = new NlaStatusMonitor({
     clock,
     boardStoreFor: (facilityId) => {
@@ -288,6 +140,7 @@ function createEfsp({ env = process.env, facilityConfig = createFacilityConfig({
       return f ? f.boardStore : null;
     },
     facilityConfig,
+    onDelta: onNlaDelta,
   });
 
   // What _persist last wrote, so an unchanged Board is not written again (docs/adr/0081).
@@ -405,8 +258,6 @@ function createEfsp({ env = process.env, facilityConfig = createFacilityConfig({
      */
     onDisconnect: (session) => signOffController(ctx, session.controllerId, () => _persist({ wallClock, facilities, stores, persistState, paths })),
 
-    /** Tells every Facility's PositionStore which controllers are held in the sign-on grace (ws-hub.js). */
-    setAbsentCheck: (fn) => { for (const { positionStore } of facilities.values()) positionStore.setAbsentCheck(fn); },
 
     /** Sent once at connect, appended to ws-hub.js's existing connect-time send order. */
     snapshotFor: (session = null) => snapshotMessage(ctx, session),

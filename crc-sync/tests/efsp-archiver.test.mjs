@@ -402,8 +402,7 @@ test('the monitors prune against the live set after archiving (V8)', async () =>
   const { CorrelationReconciler } = await import('../src/efsp/correlation-reconciler.js');
   const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'MON1' });
 
-  const nlaMon = new NlaStatusMonitor({ clock: efsp.clock, boardStoreFor: efsp.boardStoreFor, facilityConfig });
-  nlaMon.setOnDelta(() => {});
+  const nlaMon = new NlaStatusMonitor({ clock: efsp.clock, boardStoreFor: efsp.boardStoreFor, facilityConfig, onDelta: () => {} });
   nlaMon.tick();
   assert.ok(nlaMon._last.has(strip.stripId));
 

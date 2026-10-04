@@ -59,7 +59,7 @@ class StripOps {
     this._droppedWallAtOf = deps.droppedWallAt;
     this.initialStateFor = deps.initialStateFor;
     this._undoHistoryOf = deps.undoHistory;
-    this.airborneObserver = undefined;
+    this.airborneObserver = deps.airborneObserver;
   }
 
   /** The Board's audit (board/audit.js): the Undo op writes its own entry (docs/adr/0100 §8). */
@@ -76,12 +76,8 @@ class StripOps {
   /** The kernel's `recordTouch` (board/board-state.js); `observeTouches` sees every call. */
   touch(stripId) { this._touchOf(stripId); }
 
-  /**
-   * Who vouches that a Strip's aircraft is observed airborne (L19's hint
-   * monitor: a standing AIRBORNE_ADVANCE hint for the Strip). Unset, no
-   * SetState is ever let past the runway gate.
-   */
-  setAirborneObserver(fn) { this.airborneObserver = fn; }
+  // `airborneObserver` (a dependency): who vouches that a Strip's aircraft is observed airborne (L19's hint monitor: a
+  // standing AIRBORNE_ADVANCE hint for the Strip). Unset, no SetState is ever let past the runway gate.
 
   /** Runs one op of the table: the one way an op reaches another (InvokeNla -> TransferStrip, SetState -> DropStrip). */
   run(kind, strip, op, meta) { return this._ops.get(kind).apply(this, strip, op, meta); }

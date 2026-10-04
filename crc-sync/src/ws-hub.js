@@ -47,19 +47,23 @@ class WsHub {
    * @param {object} [deps.wallClock]    real time, for the sign-on grace only (docs/adr/0096).
    * @param {number} [deps.signOnGraceMs] how long a closed session keeps its sign-ons (config/sign-on-grace.json); 0 signs off at once.
    * @param {string} [deps.downloadUrl]  where `update-required` points an out-of-date client (CRCSYNC_DOWNLOAD_URL); omitted when unset.
+   * @param {Map} [deps.pendingSignOffs] controllerId -> { session, dueAt }: the sessions closed but still within the sign-on grace. The
+   *   composition root creates the Map and hands it to createEfsp's `isAbsent` as well, so the PositionStores see it; omitted, the hub owns one.
+   * @param {() => void} [deps.onEfspChange] after any delivery of EFSP frames (`_deliver`), so the obligation re-check follows a controller's
+   *   op, a monitor's delta, the carrier tick and the archiver alike and a re-cleared Strip's badge clears with the Mutation that cleared it
+   *   (docs/adr/0067). It closes the hub <-> alert-monitor cycle, which is why it is a dependency and not something the hub builds.
    */
-  constructor({ trackStore, collabStore, efsp = null, picture = null, surveillance = null, clock = WALL_CLOCK, theater = null, wireProtocol = WIRE_PROTOCOL, downloadUrl = null, wallClock = WALL_CLOCK, signOnGraceMs = 0, aptConfig = createAptConfig() }) {
+  constructor({ trackStore, collabStore, efsp = null, picture = null, surveillance = null, clock = WALL_CLOCK, theater = null, wireProtocol = WIRE_PROTOCOL, downloadUrl = null, wallClock = WALL_CLOCK, signOnGraceMs = 0, aptConfig = createAptConfig(), pendingSignOffs = new Map(), onEfspChange = null }) {
     this._aptConfig = aptConfig; // per-airport ATIS config, built by the composition root
     this._wall = wallClock;
     this._signOnGraceMs = signOnGraceMs;
-    this._pendingSignOff = new Map(); // controllerId -> { session, dueAt } (wall time): a closed session still holding its Positions
+    this._pendingSignOff = pendingSignOffs; // controllerId -> { session, dueAt } (wall time): a closed session still holding its Positions
     this._wireProtocol = wireProtocol;
     this._downloadUrl  = downloadUrl;
     this._refusedSeen  = new Set(); // who|clientVersion already logged at info
     this._trackStore  = trackStore;
     this._collabStore = collabStore;
     this._efsp        = efsp;
-    if (efsp && typeof efsp.setAbsentCheck === 'function') efsp.setAbsentCheck((id) => this._pendingSignOff.has(id));
     this._picture     = picture || NO_PICTURE;
     this._surv        = surveillance || createSurveillance({ collab: collabStore });
     this._wss         = null;
@@ -83,7 +87,7 @@ class WsHub {
     // monitor reports — so a client connecting to a freshly started server
     // is told "nothing is wrong" rather than keeping what it had.
     this._efspAlerts = { conformance: [], conflictAlert: [], obligations: [], surveillance: [], tofiRegime: [] };
-    this._onEfspChange = null;
+    this._onEfspChange = onEfspChange;
     this._inEfspChange = false;
   }
 
@@ -237,14 +241,6 @@ class WsHub {
       }
     }
   }
-
-  /**
-   * Called after any EFSP message that broadcast something, so server.js can
-   * re-evaluate obligations at once rather than on the next 15 s sweep — a
-   * re-cleared Strip's badge clears with the Mutation that cleared it
-   * (docs/adr/0067).
-   */
-  setOnEfspChange(fn) { this._onEfspChange = fn; }
 
   /**
    * THE way an EFSP frame leaves the hub (ARCH-S #3). Every producer hands over FINISHED frames, built in wire/frames.js

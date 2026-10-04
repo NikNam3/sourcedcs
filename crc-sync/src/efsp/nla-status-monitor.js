@@ -65,9 +65,6 @@ class NlaStatusMonitor {
     this._last = new Map(); // stripId -> statusKey, as last put on the wire
   }
 
-  /** Wired after construction, the way the Board (board-store.js) and marsa-store.js take their MutationLog — the store is built in index.js's composition root, and only server.js has the WsHub to broadcast through. */
-  setOnDelta(onDelta) { this._onDelta = onDelta || (() => {}); }
-
   /**
    * efsp-ws.js calls this for every Strip it stamps, so this sweep knows what
    * each client has already been told. Without it, the first tick after any

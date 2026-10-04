@@ -71,8 +71,10 @@ class BoardStore {
    * @param {object} [opts]
    * @param {import('./undo/undo-history').UndoHistory} [opts.undoHistory] the process's one undo history (createEfsp
    *   shares one across the Boards, docs/adr/0100); a Board built alone gets its own on the wall clock
+   * @param {(strip:object) => boolean} [opts.airborneObserver] who vouches that a Strip's aircraft is observed airborne (the hint
+   *   monitor's AIRBORNE_ADVANCE); unset, no SetState is ever let past the runway gate
    */
-  constructor(flightDataStore, rules, { clock = WALL_CLOCK, wallClock = WALL_CLOCK, nlaGuard = { ms: NLA_GUARD_MS }, undoHistory = null, mutationLog = null, controlInvariantMode = () => (process.env.CRCSYNC_CONTROL_INVARIANT === 'throw' ? 'throw' : 'repair') } = {}) {
+  constructor(flightDataStore, rules, { clock = WALL_CLOCK, wallClock = WALL_CLOCK, nlaGuard = { ms: NLA_GUARD_MS }, undoHistory = null, mutationLog = null, airborneObserver = undefined, controlInvariantMode = () => (process.env.CRCSYNC_CONTROL_INVARIANT === 'throw' ? 'throw' : 'repair') } = {}) {
     // The mission clock (docs/adr/0079). Every Strip timestamp, every NLA gate
     // and every Mutation-log `at` reads it. The one exception is the NLA
     // double-tap/Undo latch below, which is a UI debounce measured in real
@@ -155,16 +157,14 @@ class BoardStore {
       droppedWallAt: () => this._persistence.droppedWallAt,
       initialStateFor,
       undoHistory: () => this._undoHistory,
+      airborneObserver,
     });
   }
 
-  /** A Board built alone (tests, tools): its own history over this Board and its peers, and the flight data's writes if unobserved. */
+  /** A Board built alone (tests, tools): its own history over this Board and its peers. Flight data writes reach a history only through the store's `onWrite`. */
   _ownUndoHistory(flightDataStore, rules) {
     const history = new UndoHistory({ wallClock: { now: () => this._wallNowFn() } });
     history.attach(undoEnv({ boardFor: (f) => (f === rules.facilityId ? this : rules.peerBoard(f)), flightDataStore }));
-    if (flightDataStore && flightDataStore.setWriteObserver && !flightDataStore.hasWriteObserver) {
-      flightDataStore.setWriteObserver((id, paths) => history.observe({ kind: 'flightData', id, paths }));
-    }
     return history;
   }
 
@@ -307,12 +307,6 @@ class BoardStore {
    * efsp-ws.js stamps the result onto every Strip record it puts on the wire.
    */
   nlaStatusFor(strip, now = this._clock.now()) { return this._stripOps.nlaStatusFor(strip, now); }
-
-  /**
-   * Who vouches that a Strip's aircraft is observed airborne (board/strip-ops.js). Unset, no
-   * SetState is ever let past the runway gate.
-   */
-  setAirborneObserver(fn) { this._stripOps.setAirborneObserver(fn); }
 
 
   // ── Peer calls (rules.peerBoard) ────────────────────────────────────────

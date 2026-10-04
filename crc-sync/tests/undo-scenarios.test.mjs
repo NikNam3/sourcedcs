@@ -40,7 +40,7 @@ let n = 0;
 function fresh(spec = ALL) {
   fs.rmSync(process.env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH, { force: true });
   wallNow = 1_000_000;
-  const efsp = createEfsp({ wallClock });
+  const efsp = createEfsp({ wallClock, airborneEvidence: (strip) => (efsp.__airborne ? efsp.__airborne(strip) : false) });
   return { efsp, c: crew(efsp, spec) };
 }
 
@@ -236,7 +236,7 @@ test('U4: Commence undone is UnmarkPushed; a PriFly removal undone is Reinsert; 
 
 test('U6: the chip\'s SetState (observedAirborne) undone: the state is back and the takeoff stamp cleared', () => {
   const { efsp, c } = fresh();
-  board(efsp).setAirborneObserver(() => true);
+  efsp.__airborne = () => true;
   let s = mustAct(efsp, c.OPS, 'OPS', null, {
     kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE', flightData: { ...DEPARTURE_FLIGHT_DATA, callsign: 'CHIP1' },
   });

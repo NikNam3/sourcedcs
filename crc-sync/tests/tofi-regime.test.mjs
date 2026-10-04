@@ -39,11 +39,10 @@ function makeFacilities(entries = null) {
   const mutationLog = entries ? { record: (e) => entries.push(e) } : null;
   LOCATION = { located: false, inside: [], unknown: [] };
   WALL_NOW = 1_000_000;
-  const flightDataStore = new FlightDataStore();
-  const facilities = new Map();
   const undoHistory = new UndoHistory({ wallClock: { now: () => WALL_NOW } });
+  const flightDataStore = new FlightDataStore(undefined, { onWrite: (id, paths) => undoHistory.observe({ kind: 'flightData', id, paths }) });
+  const facilities = new Map();
   undoHistory.attach(undoEnv({ boardFor: (id) => { const x = facilities.get(id); return x ? x.boardStore : null; }, flightDataStore }));
-  flightDataStore.setWriteObserver((id, paths) => undoHistory.observe({ kind: 'flightData', id, paths }));
 
   for (const facilityId of facilityConfig.getFacilityIds()) {
     const positionStore = new PositionStore(facilityConfig.getPositionSet(facilityId), facilityConfig.getConsolidation(facilityId));
