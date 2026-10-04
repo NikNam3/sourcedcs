@@ -5,7 +5,7 @@ import { getAllEfspRunwayStatuses } from './efsp-state.js';
 import { getActingPositions, sendEfspRunwayStatusMutation, settleEfspAck } from './efsp-ws.js';
 import { alertPadConstraintFor } from './scramble.js';
 import { runwayStatusActionsFor, runwayStatusSubjectFor } from './runway-status-rules.js';
-import { registerEfspMessage } from './efsp-message-registry.js';
+import { registerEfspMessage, registerEfspStoreRedraw } from './efsp-message-registry.js';
 import { applyEfspRunwayStatusDelta } from './efsp-state.js';
 import { renderAllOpenEfspBays } from './bay-view.js';
 import { _showMutationError } from './efsp-panel.js';
@@ -325,11 +325,15 @@ export function initRunwayStatusPanel() {
 // The runway-status family's wire handlers (CMSG; moved out of app.js's ws.onmessage).
 // WP6 §9.7 (crc-sync docs/adr/0061, crc-desktop 0068). Its own delta with its own seq —
 // Runway status is not Strips and rides no Board's sequence (0061's rule-5 deviation).
-registerEfspMessage('efsp-runway-status-delta', (msg) => {
-  applyEfspRunwayStatusDelta(msg);
+function _redrawRunwayStatuses() {
   renderRunwayStatusPanel();
   renderAllOpenEfspBays(); // RWY / HOOK are derived from it
+}
+registerEfspMessage('efsp-runway-status-delta', (msg) => {
+  applyEfspRunwayStatusDelta(msg);
+  _redrawRunwayStatuses();
 });
+registerEfspStoreRedraw('runwayStatuses', _redrawRunwayStatuses);
 
 registerEfspMessage('efsp-runway-status-ack', (msg) => {
   settleEfspAck(msg);

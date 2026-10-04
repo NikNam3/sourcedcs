@@ -39,7 +39,7 @@ test('a websocket killed mid-session reconnects, sends no resync, and converges 
     ws.on('framereceived', (f) => { try { if (JSON.parse(f.payload).type === 'efsp-snapshot') snapshotsAfterReconnect++; } catch (_) { /* not JSON */ } });
   });
 
-  const before = await page.evaluate(() => ({ epoch: crc.state.efspResyncPositionFor(crc.state.getEfspFacility()).boardEpoch, seq: crc.state.getEfspBoardSeq() }));
+  const before = await page.evaluate(() => ({ epoch: crc.state.efspResyncPositionFor(crc.state.getEfspFacility()).boardEpoch, seq: crc.state.efspResyncPositionFor(crc.state.getEfspFacility()).lastBoardSeq }));
   expect(before.epoch).toBeTruthy();
   expect(before.seq).not.toBeUndefined();
 

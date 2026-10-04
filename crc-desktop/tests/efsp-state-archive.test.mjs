@@ -7,8 +7,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  applyEfspSnapshot, applyEfspDelta, getEfspFlightData, getEfspStrip, getEfspBoardSeq, _resetEfspStateForTest,
+  applyEfspSnapshot, applyEfspDelta, getEfspFlightData, getEfspStrip, getEfspFacility, _resetEfspStateForTest,
 } from '../app/public/js/panels/efsp/efsp-state.js';
+import { boardCursorName, getCursor } from '../app/public/js/panels/efsp/sync-cursor.js';
 
 test.beforeEach(() => _resetEfspStateForTest());
 
@@ -23,7 +24,7 @@ test('applyEfspDelta: flightDataList.gone removes archived flight data, and leav
   assert.equal(getEfspFlightData('f2'), null);
   assert.ok(getEfspFlightData('f1'));
   assert.ok(getEfspStrip('s1'));
-  assert.equal(getEfspBoardSeq(), 5);
+  assert.equal(getCursor(boardCursorName(getEfspFacility())).seq, 5);
 });
 
 test('applyEfspDelta: a delta with no flightDataList.gone (every other sender) removes nothing', () => {

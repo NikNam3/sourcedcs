@@ -57,7 +57,7 @@ async function inject(page, scene) {
   await page.evaluate((sc) => {
     crc.app.applyCoverage({ radars: sc.radars, signedOnPositions: sc.signedOn, datalink: !!sc.datalink });
     crc.state.applyEfspSnapshot({
-      boardSeq: crc.state.getEfspBoardSeq(), facility: crc.state.getEfspFacility(), bays: crc.state.getEfspBays(), positions: crc.state.getAllEfspPositions(),
+      boardSeq: crc.state.efspResyncPositionFor(crc.state.getEfspFacility()).lastBoardSeq, facility: crc.state.getEfspFacility(), bays: crc.state.getEfspBays(), positions: crc.state.getAllEfspPositions(),
       strips: sc.strips, flightDataList: sc.flightDataList, correlations: sc.correlations,
       positionLetters: {
         INCIRLIK: { OPS: 'O', CD: 'D', GC: 'G', LC: 'T', AP: 'A' }, CENTER: { CTR: 'C' },
