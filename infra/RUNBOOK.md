@@ -69,6 +69,10 @@ client against the new server (or the reverse) does not work. Decisions S-M-W7, 
 2. In the `crc-sync-state` volume (`/app/state`), delete: `efsp-board.json`, `efsp-mutations.jsonl`, every `efsp-facility-*.json`, and `alerting.json` if it has an `stca` key (the key is `conflictAlert` now). A state file is not migrated: an unknown key or an old shape stops start-up, with the file and the reason in the log (`checkPersistedShape`, `crc-sync/src/efsp/stores.js`). That includes a top-level `board`, a Board for a Facility that is not configured, a Strip in TRANSITING, and a facility file that is missing or invalid (`crc-sync/config/efsp-facility-*.json` are complete files; there is no merge with a copy in `state/`). The fix is always to correct or delete the named file; deleting gives a clean start.
 3. Then deploy by re-running the Deploy workflow (it does the `git pull --ff-only`, `docker compose pull main-website atobrief crc-sync`, `docker compose up -d`; root `CLAUDE.md`, "How the docker-image services deploy").
 
+## Consolidation as offers (crc-sync ADR 0110): before the deploy
+
+`consolidation` in the facility config is now a list of Positions offered the hat (`"CD": ["GC", "LC", "AP"]`), and there is a new required key `handBack` (`{}` where empty). Strict state refuses the old shape. Check the `crc-sync-state` volume (`/app/state`) for any `efsp-facility-*.json`: no code writes these files, so one exists only if someone placed it. If there is one, delete it (the shipped file applies) or convert its `consolidation` values to lists and add `"handBack": {}`; a copy with a string value stops start-up with the file and the reason in the log. The same release changes the wire (protocol 2): release crc-desktop after the merge to `main`, as in "Wire protocol and the deploy gate" above.
+
 ## 2026-08-29 — wiki scraper incident: what's blocked and why
 
 The droplet hit a load average of ~145 (1 vCPU) with 811 MB swap in use. Root cause,

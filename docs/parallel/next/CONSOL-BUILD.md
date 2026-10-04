@@ -137,3 +137,9 @@ Playwright suite, S-TEST).
 Server ~1 lane: about 10 source files, mostly small edits; `staffingChanged` and the positions helper are the real work;
 ~21 test files touched, most for fixtures and field names; the soak driver change is the riskiest. Client ~0.6 lane:
 one panel module rewritten, rules and tests, one spec, the guide sections.
+
+## Status
+
+**CONSOL-S built** (branch `lane/CONSOL-S-consol-s`, notes `docs/wip/CONSOL-S.md`). ADR 0110 is not edited (S4). Shipped lists are decisions.md
+H111; S1 is built switchable (delete GC's line from `efsp-facility-incirlik.json`'s `consolidation`). CONSOL-C is not started; its file list is in
+the wip note. `efsp-position-offer` is still sent beside `hatOffers` until CONSOL-C removes it.
