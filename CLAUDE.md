@@ -56,6 +56,11 @@ warm-up covers the soak's finished-Strip retention (the soak host keeps 2 h; pro
 DROPPED Strips, so a shorter run (including `soak:smoke`) reports them as **not judged**, which is neither a failure
 nor a pass. `--warmup-min <m>` overrides the warm-up and `--judge-memory` forces the gate (the selfcheck `leak` case
 uses it). The not-judged rule is `memoryPolicy()` in `tools/soak/report.js` (`docs/wip/SOAKW.md`).
+The soak host runs the surveillance hint monitor and the Boards' airborne observer as `createApp` builds them
+(`surveillanceHints` is left unset), and the shadow clients track the six stores' seq/epoch like the shipped client
+(`tools/soak/shadow.js`; heartbeat `stores`, store frames, a slice resync after two beats behind): a store still behind
+after 6 heartbeats is the **`store-stale`** failure (`mutations.storeSync.stale`; selfcheck case `drop-store-delta`).
+The soak never rolls the mission, so the mission reset (ADR 0108) is not exercised (`docs/wip/NX-1.md`).
 
 ### crc-desktop (Electron)
 ```bash

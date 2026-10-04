@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Proves the soak's detectors fire (briefing §6 step 9): a soak whose
 // detectors are unproven is not evidence. Runs `--profile smoke --minutes 20
-// --seed 7` five times — clean, and with each injected fault — and exits
+// --seed 7` five times — clean, and with each injected fault (drop-ack, drop-broadcast, leak, skip-shadow-client, drop-store-delta) — and exits
 // non-zero if any detector stays silent.
 //
 // NOT named *.test.* on purpose: crc-sync's `npm test` must not collect it (T1).
@@ -34,6 +34,7 @@ const quiet = (rep) => {
   for (const k of ['lost', 'duplicateAck', 'auditMissing', 'auditDuplicate', 'auditWrongSource', 'auditOrphan', 'internalErrors', 'broadcastMissing']) if (m[k] > 0) bad.push(`${k}=${m[k]}`);
   if (m.replayNotIdempotent.count > 0) bad.push(`replayNotIdempotent=${m.replayNotIdempotent.count}`);
   if (m.resync.resyncDivergence > 0) bad.push(`resyncDivergence=${m.resync.resyncDivergence}`);
+  if (m.storeSync.stale > 0) bad.push(`storeSync.stale=${m.storeSync.stale}`);
   if (m.restart.boardLostOnRestart > 0) bad.push(`boardLostOnRestart=${m.restart.boardLostOnRestart}`);
   if (m.silentStaleness.count > 0 && Object.keys(m.silentStaleness.byCause).some(c => c !== 'REBALANCE_SIDE_EFFECT')) bad.push(`silentStaleness=${JSON.stringify(m.silentStaleness.byCause)}`);
   return bad;
@@ -48,6 +49,7 @@ const cases = [
   { name: 'drop-broadcast', extra: ['--inject', 'drop-broadcast'], expect: (rep) => (injectedStale(rep) >= 1 ? null : `silentStaleness (not H1) = ${injectedStale(rep)}, expected >= 1`) },
   { name: 'leak', extra: ['--inject', 'leak', '--judge-memory'], expect: (rep) => (rep.memory.r2 > 0.9 && rep.verdict.failures.some(f => f.startsWith('memory.slope')) ? null : `heap slope ${rep.memory.slopeMBPerHour} MB/h R²=${rep.memory.r2}; expected a memory FAIL with R² > 0.9`) },
   { name: 'skip-shadow-client', extra: ['--inject', 'skip-shadow-client'], expect: (rep) => (rep.mutations.injectedShadowDrops >= 1 && injectedStale(rep) >= 1 ? null : `dropped ${rep.mutations.injectedShadowDrops}, silentStaleness (not H1) = ${injectedStale(rep)}, expected >= 1`) },
+  { name: 'drop-store-delta', extra: ['--inject', 'drop-store-delta'], expect: (rep) => (rep.mutations.storeSync.injectedDrops >= 1 && rep.mutations.storeSync.stale >= 1 && rep.verdict.failures.some(f => f.startsWith('mutations.storeSync.stale')) ? null : `dropped ${rep.mutations.storeSync.injectedDrops}, store-stale ${rep.mutations.storeSync.stale}, expected both >= 1 and a verdict failure`) },
 ];
 
 let failed = 0;
@@ -67,6 +69,7 @@ function describe(name, rep) {
     case 'drop-ack': return `lost=${m.lost}`;
     case 'drop-broadcast': return `silentStaleness (not H1)=${injectedStale(rep)} broadcastMissing=${m.broadcastMissing}`;
     case 'leak': return `slope ${rep.memory.slopeMBPerHour} MB/h, R² ${rep.memory.r2}`;
+    case 'drop-store-delta': return `store-stale=${m.storeSync.stale} ${JSON.stringify(m.storeSync.staleByKey)}`;
     default: return `silentStaleness (not H1)=${injectedStale(rep)}`;
   }
 }

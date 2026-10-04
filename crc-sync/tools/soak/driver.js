@@ -13,7 +13,7 @@ const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
 const { Rng } = require('./prng');
-const { Shadow } = require('./shadow');
+const { Shadow, STORE_SYNC, STORE_DELTA_TYPES, STORE_STALE_BEATS } = require('./shadow');
 const { Ledger, wireLevel } = require('./ledger');
 const { Sky } = require('./sky');
 const { Latency } = require('./metrics');
@@ -114,6 +114,8 @@ class Driver {
       resync: { delta: 0, snapshot: 0, resyncDivergence: 0, divergenceExamples: [], acrossRestartDivergence: { count: 0, examples: [], probes: 0, notExercised: 0 } },
       restart: { boardLostOnRestart: 0, lostExamples: [], restartDiffs: [], oracleOlder: 0, oracleNewer: 0, ambiguousReplay: [] },
       shadowRegressions: 0, injectedShadowDrops: 0,
+      // docs/adr/0106: the six stores' cursors. `stale` = a store that stayed behind the heartbeat for STORE_STALE_BEATS beats.
+      storeSync: { stale: 0, staleByKey: {}, staleExamples: [], resyncs: 0, resyncsByKey: {}, repaired: 0, heartbeatsJudged: 0, deltasByType: {}, injectedDrops: 0 },
       uncarried: { count: 0, byCause: {} },
       alerts: { conformanceMax: 0, conflictAlertMax: 0, conflictAlertRaised: 0, conformanceRaised: 0 },
       lost: 0,
@@ -121,6 +123,7 @@ class Driver {
     this.samples = [];   // light + heavy samples, numbers only
     this.persistTotal = 0;
     this.injectShadowDrop = opts.inject === 'skip-shadow-client';
+    this.injectStoreDrop = opts.inject === 'drop-store-delta'; // selfcheck: one store delta never reaches one client, and no store resync is sent
   }
 
   _addClient(id, holds, observer, passive = false) {
@@ -166,7 +169,11 @@ class Driver {
     for (const [clientId, payload] of out) {
       const c = this.clients.get(clientId);
       if (!c) continue;
-      if (payload.startsWith('{"version":1,"type":"efsp-heartbeat"')) { this.stats.heartbeats++; continue; }
+      if (payload.startsWith('{"version":1,"type":"efsp-heartbeat"')) {
+        this.stats.heartbeats++;
+        if (this.o.storeSync && c.connected) this._judgeStoreBeat(c, JSON.parse(payload));
+        continue;
+      }
       if (payload.indexOf('"type":"efsp-') < 0 || payload.indexOf('"type":"efsp-') > 30) continue; // non-EFSP (status, coverage, tracks)
       let msg = JSON.parse(payload);
       if (msg.type === 'efsp-resync-reply') { // R3-47: the answer to an efsp-resync, unwrapped as the shipped client does
@@ -177,6 +184,16 @@ class Driver {
         facts.resyncAnswer = msg;
         continue; // the caller applies it
       }
+      if (msg.type === 'efsp-snapshot') c.shadow.adoptStoreSnapshot(msg); // a client always adopts the positions; `discard` only skips the Board replica
+      if (STORE_DELTA_TYPES.has(msg.type)) {
+        const by = this.stats.storeSync.deltasByType; by[msg.type] = (by[msg.type] || 0) + 1;
+        if (this.injectStoreDrop && !c.passive && c.connected && c.continuous && this.now > this.t0 + 3 * MIN) {
+          this.injectStoreDrop = false; this.stats.storeSync.injectedDrops++; this.noStoreResyncFor = c.id;
+          this.event('injectedStoreDrop', { client: c.id, type: msg.type });
+          continue; // selfcheck: the driver drops one store delta on its side; nothing later repairs it
+        }
+      }
+      if (msg.type !== 'efsp-snapshot') c.shadow.noteStoreFrame(msg);
       switch (msg.type) {
         case 'efsp-snapshot':
           this._learnSnapshot(msg);
@@ -241,6 +258,50 @@ class Driver {
       }
     }
     return facts;
+  }
+
+  /** The heartbeat's `stores` against this client's cursors; a store past the bound is a `store-stale` finding. */
+  _judgeStoreBeat(c, msg) {
+    this.stats.storeSync.heartbeatsJudged++;
+    for (const key of c.shadow.noteHeartbeat(msg.stores)) {
+      const ss = this.stats.storeSync;
+      ss.stale++; ss.staleByKey[key] = (ss.staleByKey[key] || 0) + 1;
+      const cur = c.shadow.stores.get(key);
+      const ex = { client: c.id, store: key, shadowSeq: cur && cur.seq, serverSeq: msg.stores[key].seq, shadowEpoch: cur && cur.epoch, serverEpoch: msg.stores[key].epoch, beats: STORE_STALE_BEATS };
+      if (ss.staleExamples.length < 10) ss.staleExamples.push(ex);
+      this.event('storeStale', ex);
+    }
+  }
+
+  /**
+   * What a shipped client does about a store gap (sync-cursor.js, efsp-ws.js): ask `efsp-resync { stores }` and take the
+   * slice's position. Run after a command's output is delivered. Skipped for a client that is not connected.
+   */
+  async storeResyncs() {
+    for (const c of this.clients.values()) {
+      if (c.id === this.noStoreResyncFor) continue; // the selfcheck's victim never asks
+      if (!c.connected || !c.shadow.wantResync.size) continue;
+      const keys = [...c.shadow.wantResync];
+      const stores = {};
+      for (const k of keys) { const cur = c.shadow.stores.get(k); stores[k] = { lastSeq: cur.seq, epoch: cur.epoch }; }
+      const r = await this.call('send', { clientId: c.id, msg: { type: 'efsp-resync', stores } });
+      this.stats.storeSync.resyncs++;
+      for (const k of keys) this.stats.storeSync.resyncsByKey[k] = (this.stats.storeSync.resyncsByKey[k] || 0) + 1;
+      this.note(`store-resync|${c.id}|${keys.join(',')}`);
+      const rest = [];
+      let answered = false;
+      for (const [cid, payload] of r.out) {
+        if (cid === c.id && payload.startsWith('{"version":1,"type":"efsp-resync-reply"') && payload.includes('"answer":"stores"')) {
+          const m = JSON.parse(payload);
+          c.shadow.applyStoreSlices(m.stores);
+          this.stats.storeSync.repaired += Object.keys(m.stores || {}).length;
+          answered = true;
+        } else rest.push([cid, payload]);
+      }
+      if (!answered) this.event('lost', { type: 'efsp-resync', client: c.id, stores: keys });
+      for (const k of keys) { c.shadow.wantResync.delete(k); const cur = c.shadow.stores.get(k); if (answered && cur && !c.shadow.stale.has(k)) cur.behind = 0; }
+      this.deliver(rest);
+    }
   }
 
   /** A connected controller other than the sender (whose own ack would repair the dropped delta). */
@@ -1160,6 +1221,7 @@ class Driver {
         this._confUp = r.alerts.conformance > 0;
       }
       this.deliver(r.out);
+      if (this.o.storeSync) await this.storeResyncs();
       this.after(1000, tick, 'tick');
     };
     this.at(this.t0 + 1000, tick, 'tick');

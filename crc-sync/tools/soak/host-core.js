@@ -19,6 +19,9 @@ const v8 = require('v8');
 const { EventEmitter } = require('events');
 const { SRC } = require('./host-env');
 const { retentionMinFromEnv } = require('./retention');
+// NX-1: the soak CLI (run.js) sets this so the host runs the hint monitor and the airborne observer as createApp builds them.
+// The freeze corpus (tests/freeze, golden traces) builds this host without it and keeps its recorded frames.
+const HINTS_ON = process.env.CRCSYNC_SOAK_HINTS === '1';
 const SOAK_THEATER = 'Soak'; // must match host-client.js's standing-list key
 
 const req = (rel) => require(path.join(SRC, rel));
@@ -65,8 +68,9 @@ function createHost(env, { stateDir }) {
   // The service itself, as server.js builds it (src/app.js), with no DCS, no SRS and no listening socket.
   // Three seams say what the soak's synthetic tracks are: no transponder model (the squawk map is the beacon),
   // no identity model (the track's own callsign), no theater (a course is taken as already magnetic). The
-  // soak has no sensors, so no hint monitor and no airborne observer (docs/wip/APP.md, Findings), and its
-  // MissionSession lives in memory. Time comes from `clock`; nothing is started, the driver calls the tickers.
+  // soak has no sensors but run.js's soak runs the hint monitor and the airborne observer (CRCSYNC_SOAK_HINTS=1): surveillanceHints is left
+  // unset, so createApp builds the SurveillanceHintMonitor and wires every Board's airborneEvidence, as in production
+  // (docs/wip/NX-1.md). Its MissionSession lives in memory. Time comes from `clock`; nothing is started, the driver calls the tickers.
   // Its mission is in the standing list's theater (ADR 0098: airspaces are scoped to the loaded mission's theater).
   const missionSession = new MissionSession({ path: null, clock });
   missionSession.noteMissionLoad({ theatre: SOAK_THEATER, waypoints: [], drawings: [] });
@@ -78,7 +82,7 @@ function createHost(env, { stateDir }) {
     clock,
     archiveRetentionMs: retentionMinFromEnv() * 60000, // ADR 0107: the soak's own retention, not production's 12 h
     missionSession,
-    surveillanceHints: null,
+    ...(HINTS_ON ? {} : { surveillanceHints: null }), // unset builds the hint monitor and wires airborneEvidence (see HINTS_ON)
     trackSeams: {
       beacon: (t) => { const c = squawks.get(String(t.id)); return c === undefined ? null : c; },
       callsign: (track) => track.callsign,
@@ -87,7 +91,8 @@ function createHost(env, { stateDir }) {
   });
   env.configureLog(); // createApp reset the logger's sink; the soak reads its output (host-env.js)
   const { efsp, trackStore, collabStore, wsHub: hub, monitors } = app;
-  const { correlation: reconciler, conformance, conflictAlert, obligation: obligationMonitor } = monitors;
+  const { correlation: reconciler, conformance, conflictAlert, obligation: obligationMonitor, surveillanceHints } = monitors;
+  if (HINTS_ON && !surveillanceHints) throw new Error('soak: createApp built no hint monitor (CRCSYNC_SOAK_HINTS=1)');
   const ticker = Object.fromEntries(app.tickers.map((t) => [t.name, t.tick]));
   hub._wss = { clients: new Set() }; // never attach(): no timer, no real server (T3)
 
@@ -135,6 +140,8 @@ function createHost(env, { stateDir }) {
     }
   }
 
+  // How often the hint monitor said AIRBORNE_ADVANCE during the run (proves the monitor and the airborne observer are live).
+  const hintStats = { airborneAdvance: 0 };
   const obligationAlerts = 0; // the monitor's onAlert hook is gone (obligations are state, ADR 0067); the field keeps the sample's shape
 
   // ── fake sockets (tests/ws-hub-heartbeat.test.mjs:11-15's precedent) ───
@@ -237,6 +244,11 @@ function createHost(env, { stateDir }) {
     c['airspace.transitions'] = asTransitions;
     c['marsa.relations'] = efsp.marsaStore._relations.size;
     c['nlaStatus.last'] = efsp.nlaStatusMonitor._last.size;
+    if (surveillanceHints) {
+      c['hints.mem'] = surveillanceHints._mem.size;
+      c['hints.active'] = surveillanceHints.getAll().length;
+      c['hints.airborneEver'] = hintStats.airborneAdvance;
+    }
     c['conformance.mem'] = conformance._mem.size;
     c['conformance.alerts'] = conformance._alerts.size;
     c['hub.sessions'] = hub._sessions.size;
@@ -340,6 +352,7 @@ function createHost(env, { stateDir }) {
         if (what.has('reconcile')) reply.correlation = ticker.correlation();
         if (what.has('conformanceConflictAlert')) {
           ticker['conformance-conflict-alert']();
+          if (surveillanceHints) hintStats.airborneAdvance = Math.max(hintStats.airborneAdvance, surveillanceHints.getAll().filter(h => h.kind === 'AIRBORNE_ADVANCE').length);
           reply.alerts = { conformance: conformance._alerts.size, conflictAlert: conflictAlert.getAll().length };
         }
         if (what.has('obligationsNla')) {
