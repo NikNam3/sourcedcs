@@ -801,6 +801,7 @@
    "reloadEfspStereoRoutes"
   ],
   "panels/efsp/efsp-state.js": [
+   "CREATE_STRIP_RESEND_WINDOW_MS",
    "LINES_WITH_OTHERS",
    "STORE_SYNC",
    "_resetEfspStateForTest",

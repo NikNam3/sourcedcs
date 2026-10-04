@@ -68,7 +68,9 @@ registerEfspMessage('efsp-snapshot', (msg) => {
   // ack could never otherwise arrive on the dead connection —
   // defect D6, "the worst failure mode in the system").
   replayPendingEfspMutations((orphaned) => {
-    settleEfspAck({ clientMutationId: orphaned.clientMutationId, ok: false, reason: 'CONNECTION_LOST', detail: 'its target is no longer on the Board' });
+    const detail = orphaned.stripId ? 'its target is no longer on the Board'
+      : 'too long disconnected to re-send safely: check the Board before creating it again';
+    settleEfspAck({ clientMutationId: orphaned.clientMutationId, ok: false, reason: 'CONNECTION_LOST', detail });
     notifyEfspOrphanedMutation(orphaned);
   });
 });

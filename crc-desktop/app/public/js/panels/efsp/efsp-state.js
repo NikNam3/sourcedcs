@@ -36,6 +36,17 @@ let efspPositionLetters = {};
 // clientMutationId -> the original efsp-mutation message sent, kept until
 // its ack arrives — replayed against a fresh baseline on reconnect (§5.6.3).
 const efspPendingMutations = new Map();
+// clientMutationId -> when it was sent (this client's wall clock), for the CreateStrip resend window below.
+const efspPendingSentAt = new Map();
+
+// How long after its send a pending CreateStrip may still be re-sent after a reconnect. A CreateStrip has no Strip
+// to rebase against, so a resend is safe only while crc-sync can still answer its clientMutationId from the replay
+// cache. A running crc-sync keeps the last 5000 cmids, but across a RESTART only the last
+// REPLAY_PERSIST_WINDOW_MS (10 min, crc-sync/src/efsp/sync/replay-cache.js) survive in the Board snapshot. The
+// send precedes the apply, so a send younger than the window is always inside it; one minute of margin. Older
+// than this, the form hears CONNECTION_LOST and the controller checks the Board: re-sending could create the Strip
+// twice. tests/create-strip-resend-window.test.mjs keeps it under the server's window.
+export const CREATE_STRIP_RESEND_WINDOW_MS = 9 * 60 * 1000;
 
 // §4.6.1's timed forwarding obligations (docs/adr/0021, 0067) — stripId ->
 // every obligation due on it right now. Full state from efsp-alerts, like
@@ -408,6 +419,7 @@ export function applyEfspDelta(msg) {
 export function applyEfspMutationAck(msg) {
   const pending = efspPendingMutations.get(msg.clientMutationId) || null;
   efspPendingMutations.delete(msg.clientMutationId);
+  efspPendingSentAt.delete(msg.clientMutationId);
   if (msg.strip) efspStrips.set(msg.strip.stripId, msg.strip);
   if (msg.flightData) efspFlightDataList.set(msg.flightData.flightDataId, msg.flightData);
   // The ack's boardSeq is deliberately NOT adopted: its broadcast delta (same
@@ -418,8 +430,9 @@ export function applyEfspMutationAck(msg) {
 }
 
 /** Registers a just-sent efsp-mutation message as pending its ack. */
-export function registerPendingMutation(msg) {
+export function registerPendingMutation(msg, sentAt = Date.now()) {
   efspPendingMutations.set(msg.clientMutationId, msg);
+  efspPendingSentAt.set(msg.clientMutationId, sentAt);
 }
 
 /**
@@ -447,14 +460,19 @@ export function getPendingMutations() {
  * the target Strip no longer exists locally at all (caller should surface that distinctly,
  * not silently drop the mutation).
  */
-export function rebaseForResend(clientMutationId) {
+export function rebaseForResend(clientMutationId, now = Date.now()) {
   const original = efspPendingMutations.get(clientMutationId);
   if (!original) return null;
   // A CreateStrip has no target Strip and no baseRev, so there is nothing to rebase: it is re-sent as it was, with the
-  // same clientMutationId. That is safe because crc-sync's replay cache answers a cmid it already applied with the
-  // original outcome (`replayed: true`, the Strip as it is now) and applies one it never saw (or lost to a restart)
-  // fresh, so a lost ack neither duplicates the Strip nor loses it (BoardStore.applyMutation, docs/adr/0081).
-  if (!original.stripId) return { ...original };
+  // same clientMutationId. That is safe only while crc-sync's replay cache still holds that cmid: it answers one it
+  // already applied with the original outcome (`replayed: true`) and applies one it never saw fresh, so a lost ack
+  // neither duplicates the Strip nor loses it (BoardStore.applyMutation, docs/adr/0081). Past
+  // CREATE_STRIP_RESEND_WINDOW_MS a restart may have dropped the cmid, so it is not re-sent (null: the caller's
+  // orphan path answers CONNECTION_LOST).
+  if (!original.stripId) {
+    const sentAt = efspPendingSentAt.get(clientMutationId);
+    return sentAt !== undefined && now - sentAt < CREATE_STRIP_RESEND_WINDOW_MS ? { ...original } : null;
+  }
   const current = efspStrips.get(original.stripId);
   if (!current) return null;
   return { ...original, baseRev: current.rev };
@@ -561,6 +579,7 @@ export function _resetEfspStateForTest() {
   efspFlightDataList.clear();
   efspPositions.clear();
   efspPendingMutations.clear();
+  efspPendingSentAt.clear();
   efspObligations.clear();
   efspSurveillanceHints.clear();
   efspCorrelations.clear();

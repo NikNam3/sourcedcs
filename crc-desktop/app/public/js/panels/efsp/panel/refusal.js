@@ -258,7 +258,9 @@ export function _showMutationWarning(warning) {
  */
 export function notifyEfspOrphanedMutation(original) {
   const label = original.op && original.op.kind ? original.op.kind : 'change';
-  _showMutationError('Could not resync', `a pending ${label} could not be replayed — its target Strip no longer exists`, { pending: original });
+  const why = original.stripId ? 'its target Strip no longer exists'
+    : 'the connection was down too long to re-send it safely; check the Board before creating it again';
+  _showMutationError('Could not resync', `a pending ${label} could not be replayed — ${why}`, { pending: original });
 }
 
 /**
