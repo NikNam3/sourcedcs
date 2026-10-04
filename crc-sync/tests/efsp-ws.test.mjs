@@ -258,7 +258,7 @@ test('setting signed-on positions acks with the actually-signed-on set and broad
   assert.equal(slot(result, 'primary').positions.updated.length, 8); // all of INCIRLIK's Positions reported (RSU, SFA, PAR since L18)
 });
 
-test('GC vacated with Strips while LC is staffed: the Strips stay GC\'s, the warning is offeredTo:LC, LC\'s Positions entry carries the standing hatOffer, and the legacy frame still goes out (ADR 0105, 0110)', () => {
+test('GC vacated with Strips while LC is staffed: the Strips stay GC\'s, the warning is offeredTo:LC, LC\'s Positions entry carries the standing hatOffer, and no frame is sent (ADR 0105, 0110)', () => {
   const ctx = makeCtx();
   handleMessage(ctx, SESSION, { type: 'efsp-set-positions', signedOn: ['GC'] }, noopPersist); // Alice is signed on at GC
   handleMessage(ctx, { controllerId: 'controller-2', who: 'Bob' }, { type: 'efsp-set-positions', signedOn: ['LC'] }, noopPersist); // Bob signs on at LC
@@ -272,13 +272,8 @@ test('GC vacated with Strips while LC is staffed: the Strips stay GC\'s, the war
   const lcEntry = slot(result, 'primary').positions.updated.find(p => p.positionId === 'LC');
   assert.deepEqual(lcEntry.hatOffers, [{ positionId: 'GC', count: 1, onRunway: 0, observersFirst: false }]);
   assert.equal('consolidatedPositions' in lcEntry, false);
-  assert.equal(result.directed.length, 1);
-  assert.equal(result.directed[0].positionId, 'LC');
-  assert.deepEqual({ ...result.directed[0].frame, version: undefined }, { version: undefined, type: 'efsp-position-offer', facilityId: 'INCIRLIK', positionId: 'LC', offer: 'GC', count: 1 });
-  // LEGACY frame (CONSOL-C removes it): only LC's Primary hears it.
+  assert.equal(result.directed, undefined, 'the offer is standing state, not a directed frame (docs/adr/0110)');
   const bob = { controllerId: 'controller-2', who: 'Bob' };
-  assert.ok(directedFor(ctx, bob, result.directed[0]));
-  assert.equal(directedFor(ctx, { controllerId: 'controller-3', who: 'Cy' }, result.directed[0]), null);
   // Accepting is an ordinary sign-on to GC: Bob now holds both, and the ack says so.
   const accepted = handleMessage(ctx, bob, { type: 'efsp-set-positions', signedOn: ['LC', 'GC'] }, noopPersist);
   assert.deepEqual(accepted.ack.signedOn.sort(), ['GC', 'LC']);

@@ -60,18 +60,4 @@ function hatOffersFor(positionStore, positionId, strips) {
   return out;
 }
 
-/**
- * LEGACY, removed by CONSOL-C with the client's handler: the one-shot `efsp-position-offer` frame ADR 0105 sent to LC's
- * Primary when GC was left with Strips. The standing `hatOffers` replace it (docs/adr/0110); it is still sent so the shipped
- * client has an offer until CONSOL-C lands.
- */
-function legacyOfferAfterSignOff(positionStore, boardStore, facilityId, vacatedIds, leavingControllerId) {
-  if (!vacatedIds.includes('GC') || positionStore.isStaffed('GC')) return null;
-  const lcPrimary = positionStore.primaryOf(LOCAL);
-  if (!lcPrimary || lcPrimary === leavingControllerId) return null;
-  const count = boardStore.getAll().filter(s => s.ownerPositionId === 'GC' && s.state !== 'DROPPED').length;
-  if (count === 0) return null;
-  return { facilityId, positionId: LOCAL, offer: 'GC', count };
-}
-
-module.exports = { combinationOf, hatOffersFor, legacyOfferAfterSignOff, luawInUse, onRunwayCount, LOCAL, NON_LOCAL, LUAW_STATES };
+module.exports = { combinationOf, hatOffersFor, luawInUse, onRunwayCount, LOCAL, NON_LOCAL, LUAW_STATES };
