@@ -5,10 +5,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import * as F from '../app/public/js/panels/efsp/formation-rules.js';
+import * as serverConfig from "./helpers/server-config.mjs";
 
 const require = createRequire(import.meta.url);
 const authority = require('../../crc-sync/src/efsp/authority/index.js');
-const permission = require('../../crc-sync/src/efsp/permission.js');
+const permission = serverConfig.permission;
 
 test('the eligibility and ground-state mirrors equal the server registry', () => {
   for (const type of authority.stripTypeNames()) {

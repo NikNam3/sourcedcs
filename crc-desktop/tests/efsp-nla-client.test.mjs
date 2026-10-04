@@ -5,6 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
+import * as serverConfig from "./helpers/server-config.mjs";
 
 import * as c from '../app/public/js/panels/efsp/efsp-nla.js';
 import {
@@ -160,7 +161,7 @@ test('MISSION states use their own independent table (WP4A second slice)', () =>
 });
 
 test('this client mirror stays in lockstep with the real, authoritative server table (permission.js) — this is a UX convenience, not a second source of truth, so drift here would be silently misleading, not just cosmetic', () => {
-  const server = require('../../crc-sync/src/efsp/permission.js');
+  const server = serverConfig.permission;
   assert.deepEqual(STATE_OWNERS_BY_STRIP_TYPE, server.STATE_OWNERS_BY_STRIP_TYPE);
   assert.deepEqual(DEPARTURE_STATE_OWNERS, server.DEPARTURE_STATE_OWNERS);
   assert.deepEqual(ARRIVAL_STATE_OWNERS, server.ARRIVAL_STATE_OWNERS);
@@ -170,7 +171,7 @@ test('this client mirror stays in lockstep with the real, authoritative server t
 
 // crc-sync's docs/adr/0074: the carrier's strip types. The server tables are authoritative; these are the mirrors.
 test('the carrier state owners and handoff table mirror the server exactly', () => {
-  const server = require('../../crc-sync/src/efsp/permission.js');
+  const server = serverConfig.permission;
   const transfers = require('../../crc-sync/src/efsp/carrier/handoffs.js');
   assert.deepEqual(c.MARSHAL_STATE_OWNERS, server.MARSHAL_STATE_OWNERS);
   assert.deepEqual(c.FINAL_STATE_OWNERS, server.FINAL_STATE_OWNERS);

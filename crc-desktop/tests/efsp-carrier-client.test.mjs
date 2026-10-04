@@ -3,6 +3,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import * as serverConfig from "./helpers/server-config.mjs";
 
 import { createRequire } from 'node:module';
 import './helpers/client-env.mjs';
@@ -11,7 +12,7 @@ import * as panel from '../app/public/js/panels/efsp/carrier-panel.js';
 import { sendEfspSetPositions } from '../app/public/js/panels/efsp/efsp-ws.js';
 
 const require = createRequire(import.meta.url);
-const permission = require('../../crc-sync/src/efsp/permission.js');
+const permission = serverConfig.permission;
 const { CarrierStore } = require('../../crc-sync/src/efsp/carrier-store.js');
 const hullConfig = require('../../crc-sync/src/efsp/carrier/hull-config.js');
 

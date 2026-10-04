@@ -5,10 +5,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as S from '../app/public/js/panels/efsp/sfa-state.js';
-import permission from '../../crc-sync/src/efsp/permission.js';
+import * as serverConfig from "./helpers/server-config.mjs";
+const permission = serverConfig.permission;
 import { SFA_TRANSFERS } from '../../crc-sync/src/efsp/sfa.js';
 import { SfaStore } from '../../crc-sync/src/efsp/sfa-store.js';
-import facilityConfig from '../../crc-sync/src/efsp/facility-config.js';
+const facilityConfig = serverConfig.facilityConfig;
 
 const clock = { now: () => Date.UTC(2026, 5, 1, 9, 0), source: 'TEST' };
 /** A real record view from the real store, so the client is tested against exactly what the server sends. */

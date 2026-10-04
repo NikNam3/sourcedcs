@@ -19,14 +19,15 @@ import * as rules from '../app/public/js/panels/efsp/runway-status-rules.js';
 import { formatZuluHhmm } from '../app/public/js/panels/efsp/strip-template.js';
 import { COMPACT_BLOCKS_BY_POSITION } from '../app/public/js/panels/efsp/strip-fields.js';
 import { haversineM } from '../app/public/js/geo.js';
+import * as serverConfig from "./helpers/server-config.mjs";
 
 const require = createRequire(import.meta.url);
 
 const serverIff = require('../../crc-sync/src/surveillance/iff.js');
 const serverNla = require('../../crc-sync/src/efsp/nla.js');
 const serverRunwayStatus = require('../../crc-sync/src/efsp/runway-status.js');
-const serverPermission = require('../../crc-sync/src/efsp/permission.js');
-const serverFacilities = require('../../crc-sync/src/efsp/facility-config.js');
+const serverPermission = serverConfig.permission;
+const serverFacilities = serverConfig.facilityConfig;
 const serverZulu = require('../../crc-sync/src/efsp/zulu-time.js');
 const serverGeo = require('../../crc-sync/src/geo.js');
 

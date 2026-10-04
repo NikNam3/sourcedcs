@@ -8,11 +8,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import * as caps from '../app/public/js/panels/efsp/airspace-capabilities.js';
+import * as serverConfig from "./helpers/server-config.mjs";
 
 const require = createRequire(import.meta.url);
 const SYNC = path.join(import.meta.dirname, '../../crc-sync');
 const authority = require('../../crc-sync/src/efsp/authority');
-const facilityConfig = require('../../crc-sync/src/efsp/facility-config.js');
+const facilityConfig = serverConfig.facilityConfig;
 const airspace = require('../../crc-sync/src/efsp/authority/airspace.js');
 
 const shipped = fs.readdirSync(path.join(SYNC, 'config')).filter(f => /^efsp-facility-.*\.json$/.test(f))
@@ -26,7 +27,7 @@ test('the Facility -> Position table is the shipped Facility configs\'', () => {
 test('every Position of every shipped Facility has the row the server gives it', () => {
   for (const c of shipped) {
     for (const p of c.positions) {
-      assert.deepEqual(caps.airspaceRowOf(p), authority.airspaceRowOf(p), `${c.facility}/${p}`);
+      assert.deepEqual(caps.airspaceRowOf(p), serverConfig.airspaceRowOf(p), `${c.facility}/${p}`);
     }
   }
 });
@@ -56,7 +57,7 @@ const DEFS = [
 
 test('definitionAuthority agrees with the server for every Position, action and definition', () => {
   const facilityOf = caps.facilityOfPosition;
-  const rowOf = authority.airspaceRowOf;
+  const rowOf = serverConfig.airspaceRowOf;
   for (const def of DEFS) {
     for (const p of POSITIONS) {
       for (const action of ['create', 'edit', 'delete']) {
@@ -70,7 +71,7 @@ test('definitionAuthority agrees with the server for every Position, action and 
 
 test('isUsing and isControlling agree with the server', () => {
   const facilityOf = caps.facilityOfPosition;
-  const rowOf = (p) => (p === 'RNG1' ? airspace.rowFor('RNG1', { familyRows: authority.AIRSPACE_ROWS, classOf: () => 'USING_AGENCY' }) : authority.airspaceRowOf(p));
+  const rowOf = (p) => (p === 'RNG1' ? airspace.rowFor('RNG1', { familyRows: authority.AIRSPACE_ROWS, classOf: () => 'USING_AGENCY' }) : serverConfig.airspaceRowOf(p));
   for (const def of DEFS) {
     for (const p of POSITIONS) {
       assert.equal(caps.isUsing(def, p), airspace.isUsing(def, p, { rowOf, facilityOf }), `${p} ${JSON.stringify(def)}`);
