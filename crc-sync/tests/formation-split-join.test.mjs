@@ -323,7 +323,7 @@ test('S11b JoinFormation with no lead on this Board is not undoable (scope null)
   assert.equal(jn.undo.scope({ rules: { facilityId: 'INCIRLIK' }, state: { get: () => null } }, lone, { leadStripId: 'nope' }), null);
 });
 
-test('S12 a joined Strip is archived after 2 h with its voided flight data', () => {
+test('S12 a joined Strip is archived after the retention with its voided flight data', () => {
   const lead = formation(2);
   const a = split(lead, 'AP', { size: 1, callsign: 'A1', assignment: hdg() });
   const part = board.getStrip(a.splitStripId);

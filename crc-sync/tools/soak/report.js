@@ -26,8 +26,9 @@ const THRESHOLDS = {
   appliedMax: APPLIED_MUTATIONS_CAP, // sync/replay-cache.js
 };
 
-// Strip retention (ADR 0082), read from the archiver, in minutes.
-const RETENTION_MIN = require('../../src/efsp/archiver').ARCHIVE_AFTER_MS / 60000;
+// Strip retention the soak host runs with (ADR 0082, 0107), in minutes: NOT production's 12 h (see retention.js).
+const { SOAK_RETENTION_MIN_DEFAULT: RETENTION_MIN, describeRetention } = require('./retention');
+const PRODUCTION_RETENTION_MS = require('../../src/efsp/archiver').ARCHIVE_AFTER_MS;
 // Shortest run whose heap slope is judged by default (the retention plus an hour to fit).
 const MEMORY_MIN_RUN_MIN = 180;
 
@@ -35,13 +36,13 @@ const MEMORY_MIN_RUN_MIN = 180;
 // RETENTION_MIN before the archiver takes it, so until then the heap fills by design.
 // Judged only when the run is >= 3 h and the warm-up covers the retention; `judgeMemory`
 // (--judge-memory) forces it for a detector proof such as the selfcheck's leak case.
-function memoryPolicy({ minutes, warmupMin = null, judgeMemory = false }) {
+function memoryPolicy({ minutes, warmupMin = null, judgeMemory = false, retentionMin = RETENTION_MIN }) {
   const explicit = Number.isFinite(warmupMin) && warmupMin !== null;
   const base = Math.max(minutes * 0.1, Math.min(20, minutes * 0.25));
-  const warmup = explicit ? warmupMin : (minutes >= MEMORY_MIN_RUN_MIN ? Math.max(base, RETENTION_MIN) : base);
+  const warmup = explicit ? warmupMin : (minutes >= MEMORY_MIN_RUN_MIN ? Math.max(base, retentionMin) : base);
   if (judgeMemory) return { warmup, judged: true, reason: null };
-  if (minutes < MEMORY_MIN_RUN_MIN) return { warmup, judged: false, reason: `run ${minutes} min < ${MEMORY_MIN_RUN_MIN} min: heap still filling to the ${RETENTION_MIN} min Strip retention (ADR 0082)` };
-  if (warmup < RETENTION_MIN) return { warmup, judged: false, reason: `warm-up ${warmup} min < ${RETENTION_MIN} min Strip retention (ADR 0082)` };
+  if (minutes < MEMORY_MIN_RUN_MIN) return { warmup, judged: false, reason: `run ${minutes} min < ${MEMORY_MIN_RUN_MIN} min: heap still filling to the ${retentionMin} min Strip retention (ADR 0082)` };
+  if (warmup < retentionMin) return { warmup, judged: false, reason: `warm-up ${warmup} min < ${retentionMin} min Strip retention (ADR 0082)` };
   return { warmup, judged: true, reason: null };
 }
 
@@ -167,7 +168,7 @@ function build(d, meta) {
     },
     orderKeys: { maxLen, p99Len: p99, threshold: meta.thresholds.maxKeyLen, rebalances, rebalancedStrips, exhaustedThrows: exhausted, histogram: hist, worstRack: worst, firstOverThresholdMin: overAt.length ? overAt[0] : null, series: 'timeline.ndjson#orderKeys' },
     memory: {
-      judged: memPolicy.judged, notJudgedReason: memPolicy.reason, retentionMinutes: RETENTION_MIN,
+      judged: memPolicy.judged, notJudgedReason: memPolicy.reason, retentionMinutes: meta.retentionMin || RETENTION_MIN, retention: describeRetention(meta.retentionMin || RETENTION_MIN, PRODUCTION_RETENTION_MS),
       warmupMinutes: r2(warmupMin), lifetime, fromMin: inLife.length ? inLife[0].tMin : null, toMin: inLife.length ? inLife[inLife.length - 1].tMin : null, series: memSeries === heavy ? 'post-GC heavy samples' : 'light samples (too few heavy samples)', points: memSeries.length,
       baselineHeapMB: r2(baseline), endHeapMB: r2(end), slopeMBPerHour: r2(fit.slope), r2: r3(fit.r2), netGrowthPct: r2(netGrowthPct),
       perDroppedStripKB: r2(perDroppedKB), residualSlopeMBPerHour: r2(residual),
@@ -262,6 +263,7 @@ function summary(rep, outDir) {
   row('R2 ambiguous replay', m.restart.ambiguousReplay.map(x => `${x.op}:${x.outcome}`).join(' ') || '-', 'reported');
   row('orderKeys max / p99', `${k.maxLen} / ${k.p99Len} (${k.worstRack})`, `<= ${k.threshold}`);
   row('rebalances / exhausted throws', `${k.rebalances} / ${k.exhaustedThrows}`, 'info');
+  L.push(mem.retention);
   row('heap slope (post-GC)', `${mem.slopeMBPerHour} MB/h R²=${mem.r2}`, mem.judged ? `<= ${rep.harness.thresholds.heapSlopeMBPerHour}` : 'NOT JUDGED (info)');
   row('heap net growth', `${mem.netGrowthPct}% (${mem.baselineHeapMB}->${mem.endHeapMB} MB)`, mem.judged ? `<= ${rep.harness.thresholds.netGrowthPct}%` : 'NOT JUDGED (info)');
   row('per-DROPPED-Strip / residual', `${mem.perDroppedStripKB} KB / ${mem.residualSlopeMBPerHour} MB/h`, 'attribution');
@@ -291,4 +293,4 @@ function write(outDir, rep) {
   return text;
 }
 
-module.exports = { memoryPolicy, RETENTION_MIN, MEMORY_MIN_RUN_MIN, build, write, summary, THRESHOLDS };
+module.exports = { memoryPolicy, RETENTION_MIN, PRODUCTION_RETENTION_MS, MEMORY_MIN_RUN_MIN, build, write, summary, THRESHOLDS };

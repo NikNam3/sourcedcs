@@ -1,6 +1,6 @@
 'use strict';
 
-// Archiving finished flights (H36, docs/adr/0082): a DROPPED Strip leaves memory and the Board snapshot 2 h after its drop, or at
+// Archiving finished flights (H36, docs/adr/0082): a DROPPED Strip leaves memory and the Board snapshot 12 h after its drop, or at
 // the next mission session (F3), once the traffic count has it; its Flight data goes with its last Strip. The Mutation log keeps
 // the history. Archiving a Board's Strips is a Board change nobody asked for, so it is persisted and delivered like one.
 

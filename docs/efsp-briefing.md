@@ -833,7 +833,7 @@ in `map-setup.js`. **Do not decide a block's text or colour anywhere else.**
   light mode. The spec is `crc-desktop/e2e/l22-stars-scope.spec.js`, writing into `docs/wip/L22/`.
 
 **Archiving finished flights (L24, `0082`; H36, H72, H73).** `crc-sync/src/efsp/archiver.js`
-(`Archiver`, `ARCHIVE_AFTER_MS` = 2 h, `sweepChanged`, `archiveDeltas`), on the `createEfsp` facade as
+(`Archiver`, `ARCHIVE_AFTER_MS` = 12 h (was 2 h; H107, `0107`), `sweepChanged`, `archiveDeltas`), on the `createEfsp` facade as
 `efsp.archiver`, swept every 60 s and rolled on `missionSession.onNewSession` in `src/app.js`'s [then `server.js`'s]
 "Archiving finished flights" block. `BoardStore` gains `archiveStrip`, `droppedWallAtOf` (stamped in
 `_retireStrip`; any other DROPPED Strip is stamped the first time a sweep sees it), `getDeltaSince`'s
@@ -1126,12 +1126,12 @@ checkpoint): in `drop-broadcast` mode the driver now judges the starved client's
 at the drop (`where: 'post-drop'`). The soak host now builds `createEfspInstrumentation` as `src/app.js` does (through `createApp`, `tools/soak/host-core.js`),
 so efsp-mutation refusals and `unaudited` pre-store refusals get a `source: 'wire'` line, and the ledger
 expects **exactly one audit line per answered Mutation from the right writer** (`auditWrongSource` replaced
-`auditForRefusal`; the gate got stricter). **The heap slope is not fleet ramp-up**: a finished Strip stays 2 h
-before the archiver removes it (`0082`), so `strips.dropped` climbs until then (about 42/h, 26-37 KB each);
+`auditForRefusal`; the gate got stricter). **The heap slope is not fleet ramp-up**: a finished Strip stays 2 h in the soak
+(12 h in production, `0107`; the soak host sets its own retention) before the archiver removes it (`0082`), so `strips.dropped` climbs until then (about 42/h, 26-37 KB each);
 10 min gives 5.8 MB/h, 240 min gives -0.3 and passes; a 130-minute warm-up on a 180-minute run passes.
 `--warmup-min <m>` overrides the warm-up. **SOAKW** (merged):
 `memoryPolicy()` in `tools/soak/report.js` judges `memory.slope` and `memory.netGrowth` only on runs of 3 h or
-more with a warm-up of at least the retention (`ARCHIVE_AFTER_MS`, read from `archiver.js`); the default
+more with a warm-up of at least the soak's retention (`tools/soak/retention.js`, 2 h; `--retention-min` overrides; not production's `ARCHIVE_AFTER_MS`, `0107`); the default
 warm-up on such runs is `max(10 %..25 % rule, retention)`; shorter runs print `NOT JUDGED` (a pass, with the
 per-DROPPED-Strip KB and residual rows kept and `report.json` carrying `memory.judged: false` and
 `notJudgedReason`); `--judge-memory` forces the gate and the selfcheck `leak` case uses it, so a 20-minute run
@@ -1214,7 +1214,7 @@ the hard-coded 18,000 ft (TA); the `tools/miztoyaml` frequency bug (L25).
 | **Incirlik RSU/SFA/PAR:** a PAR vacated with an aircraft on final leaves the Strip with AP where AP cannot advance it; an airspace approval that rewrites a flight's frequency desyncs its SFA Rack; the FINAL panel has never seen a live DCS track; its thresholds and the placeholder frequencies are `[SOURCE-DEFINED]` | medium | human live check / L20 | L18S |
 | One `LINGERING_TRACK` in the 240-minute soak at wave 2: it did not reproduce for L19 (20 seeds at 240 min, 6 at 480), so the fix is unit-tested only. Known limit: a DCS re-mint of a lingering aircraft under a new track id is a new contact to the reconciler; a callsign memory with a position test is not built | watch | next soak run | L27, L19 |
 | The 4-hour soak's heap gates (net growth 25%, H72) need the human's workflow run; they are judged only on runs of 3 h or more with a 2 h warm-up; the unloaded p50 <= 3 ms was only measured as a proxy | acceptance | human | L24, L27, SOAKW |
-| **Merge-time decisions in the questions file** (`docs/parallel/questions-round3.md`): the 2 h archive against 1.5–3 h sorties (a returning flight loses its flight data, ATO line, MARSA and `military` Blocks; Q3-2), a DCS crash or mission restart with live Strips (Q3-4), carrier flights with no path into the ATO, traffic count or home-airport rule (Q3-6) | decision | human | L24, F3, L17 |
+| **Merge-time decisions in the questions file** (`docs/parallel/questions-round3.md`): the archive against 1.5–3 h sorties (a returning flight loses its flight data, ATO line, MARSA and `military` Blocks; Q3-2): decided, H107, 12 h, `0107`, a DCS crash or mission restart with live Strips (Q3-4), carrier flights with no path into the ATO, traffic count or home-airport rule (Q3-6) | decision | human | L24, F3, L17 |
 | `grpc-client.js:764` `windFrom = heading·180/π + 270` is unexplained and the DCS wind vector may be grid, not true (about -2° at Incirlik): needs a live check against the mission editor's wind. The ATIS-wind frame follows it | needs a live check | human | F2, S-F2b |
 | Six theaters have no `tmCentralMeridianDeg` (TheChannel, MarianaIslandsWWII, Kola, Afghanistan, Iraq, GermanyCW): their grid headings cannot be converted; `tools/miztoyaml/projection.py` needs the same table and a test keeping the two equal | theater work | unowned | F2 |
 | Whether DCS-gRPC sends `mission_start` to a stream that connects *after* the mission started (if so every crc-sync restart rolls the mission session); a real `.miz` restart through DCS | needs a live check | human | F3, S-F3 |
