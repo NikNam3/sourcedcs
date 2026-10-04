@@ -15,7 +15,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
-import { canonical, summarize, summarizeCollection, summarizeFinalState, digest, hashOf } from './freeze-lib.mjs';
+import { canonical, renumberIds, summarize, summarizeCollection, summarizeFinalState, digest, hashOf } from './freeze-lib.mjs';
 
 const require = createRequire(import.meta.url);
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -23,6 +23,18 @@ export const SOAK = path.resolve(HERE, '../../tools/soak');
 export const SRC = path.resolve(HERE, '../../src');
 export const START_NOW = Date.UTC(2026, 5, 21, 2, 40, 0);
 const CHECKPOINT_EVERY = 25;
+
+/**
+ * An efsp-alerts frame with every slice ordered by its records' content, ids renumbered inside each record. The server sorts the
+ * obligations by raw stripId, so their order follows the value of the uuids, which a different id stream changes (S-ARCH-8's leftover):
+ * hashing the frame in a content order makes it follow the renumbered ids instead.
+ */
+function sortedAlerts(msg) {
+  const key = (r) => renumberIds(JSON.stringify(canonical(r)));
+  const out = {};
+  for (const [k, v] of Object.entries(msg)) out[k] = Array.isArray(v) ? [...v].sort((a, b) => (key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0)) : v;
+  return out;
+}
 
 export class Recorder {
   constructor({ stateDir, startNow, full = true, checkpointEvery = CHECKPOINT_EVERY }) {
@@ -73,7 +85,7 @@ export class Recorder {
       if (payload.startsWith('{"version":1,"type":"efsp-heartbeat"')) continue;
       const msg = JSON.parse(payload);
       let m;
-      if (!this.full) m = `${msg.type}#${msg.boardSeq === undefined ? '' : msg.boardSeq} h=${hashOf(canonical(msg))}`;
+      if (!this.full) m = `${msg.type}#${msg.boardSeq === undefined ? '' : msg.boardSeq} h=${hashOf(canonical(msg.type === 'efsp-alerts' ? sortedAlerts(msg) : msg))}`;
       else if (msg.type === 'efsp-snapshot' || (msg.type === 'efsp-resync-reply' && msg.answer === 'snapshot')) m = this._snapshotView(msg);
       else m = summarize(msg);
       const prev = groups[groups.length - 1];
