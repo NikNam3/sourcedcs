@@ -200,8 +200,9 @@ test('a ROUTE never warns about occupancy (a count only)', () => {
 
 test('Delete: guarded (RETURNED, no pending request, no flights), with the blockers listed; the audit keeps the full definition', () => {
   const occupants = { 'MOA-1': [{ stripId: 's1', callsign: 'VIPER 1', frequencyMhz: null }] };
-  const { store } = makeRegistry({ defs: [MOA, RANGE], occupants });
-  const log = LOG(); store.setMutationLog(log);
+  const log = LOG();
+  const { store } = makeRegistry({ defs: [MOA, RANGE], occupants, mutationLog: log });
+  log.lines.length = 0; // the seeding import is not what these tests look at
   const r = del(store, 'MOA-1');
   assert.equal(r.ok, false);
   assert.match(r.detail, /1 flight is working it \(VIPER 1\)/);
@@ -291,8 +292,9 @@ test('authority: an airspace with a using Facility needs a request, like one wit
 });
 
 test('authority: SQUADRON_ADMIN creates, edits and deletes in any theater, audited as WEB with actorId=sub and no Position; it never acts on state', () => {
-  const { store } = makeRegistry({ defs: [MOA] });
-  const log = LOG(); store.setMutationLog(log);
+  const log = LOG();
+  const { store } = makeRegistry({ defs: [MOA], mutationLog: log });
+  log.lines.length = 0; // the seeding import is not what these tests look at
   const r = store.apply({ clientMutationId: 'w1', theater: 'Other', op: { kind: 'CreateAirspace', definition: { ...NEW, controllingFacilityId: 'INCIRLIK', controllingPositionId: 'AP' } } }, admin('sub-123'));
   assert.equal(r.ok, true, JSON.stringify(r));
   assert.equal(store.apply({ theater: 'Other', airspaceId: 'MOA-NEW', baseDefRev: 1, op: { kind: 'EditAirspace', patch: { name: 'Web edited' } } }, admin('sub-123')).ok, true);
@@ -379,8 +381,9 @@ test('ROUTE: an edit re-derives the envelope; a client cannot send altitudes', (
 // ── import and seed ──────────────────────────────────────────────────────
 
 test('Import: additive, existing ids skipped and reported, one audit entry with created[] and skipped[]', () => {
-  const { store } = makeRegistry({ defs: [MOA] });
-  const log = LOG(); store.setMutationLog(log);
+  const log = LOG();
+  const { store } = makeRegistry({ defs: [MOA], mutationLog: log });
+  log.lines.length = 0; // the seeding import is not what these tests look at
   const r = store.apply({ clientMutationId: 'i1', theater: THEATER, op: { kind: 'ImportAirspaces', theater: THEATER, source: 'ACO', definitions: [MOA, NEW] } }, admin());
   assert.equal(r.ok, true, JSON.stringify(r));
   assert.deepEqual(r.created, ['MOA-NEW']);
@@ -453,8 +456,9 @@ test('no mission loaded: panel ops answer NOT_FOUND "no mission loaded", getAll 
 // ── audit and sequence ───────────────────────────────────────────────────
 
 test('audit: before/after include the definition; facilityId is never null on create; every outcome is one entry; via is recorded', () => {
-  const { store } = makeRegistry({ defs: [MOA] });
-  const log = LOG(); store.setMutationLog(log);
+  const log = LOG();
+  const { store } = makeRegistry({ defs: [MOA], mutationLog: log });
+  log.lines.length = 0; // the seeding import is not what these tests look at
   create(store, NEW);
   edit(store, 'MOA-1', { name: 'Edited' });
   edit(store, 'MOA-1', { airspaceId: 'NOPE' });            // a refusal

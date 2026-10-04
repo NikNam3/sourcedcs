@@ -72,7 +72,7 @@ class BoardStore {
    * @param {import('./undo/undo-history').UndoHistory} [opts.undoHistory] the process's one undo history (createEfsp
    *   shares one across the Boards, docs/adr/0100); a Board built alone gets its own on the wall clock
    */
-  constructor(flightDataStore, rules, { clock = WALL_CLOCK, wallClock = WALL_CLOCK, nlaGuard = { ms: NLA_GUARD_MS }, undoHistory = null } = {}) {
+  constructor(flightDataStore, rules, { clock = WALL_CLOCK, wallClock = WALL_CLOCK, nlaGuard = { ms: NLA_GUARD_MS }, undoHistory = null, mutationLog = null, controlInvariantMode = () => (process.env.CRCSYNC_CONTROL_INVARIANT === 'throw' ? 'throw' : 'repair') } = {}) {
     // The mission clock (docs/adr/0079). Every Strip timestamp, every NLA gate
     // and every Mutation-log `at` reads it. The one exception is the NLA
     // double-tap/Undo latch below, which is a UI debounce measured in real
@@ -92,10 +92,9 @@ class BoardStore {
     this._state.setTouchHook((id, { unobserved }) => this._undoHistory.observe({ facilityId: rules.facilityId, kind: 'strip', id, unobserved }));
     const touch = (id, opts) => this._state.recordTouch(id, opts);
     this._replay = ReplayCache.forBoard(); // clientMutationId -> compact frozen replay record (replayRecord), idempotency (§5.2, docs/adr/0081)
-    this._mutationLog = null; // optional collaborator, see setMutationLog()
+    this._mutationLog = mutationLog; // the process's Mutation log; null for a Board built alone (a fixture)
     // The Mutation-log entries for a client Mutation and a peer write (board/audit.js).
-    // `mutationLog` is read late: setMutationLog() can come after construction.
-    this._audit = new BoardAudit({ rules, clock, mutationLog: () => this._mutationLog });
+    this._audit = new BoardAudit({ rules, clock, mutationLog });
     // Order keys and Bays (board/placement.js). touch is the kernel's recordTouch; rebalanceRack is late-bound to the
     // facade (host-core wraps it); rejectedReplicaRefusal is StripOps' (board/strip-ops.js).
     this._placement = new Placement({
@@ -113,8 +112,8 @@ class BoardStore {
     this._control = new HandoffControl({
       rules, state: this._state, audit: this._audit, clock, flightDataStore,
       activeCmid: () => this._activeCmid,
-      mutationLog: () => this._mutationLog,
-      invariantMode: () => (process.env.CRCSYNC_CONTROL_INVARIANT === 'throw' ? 'throw' : 'repair'),
+      mutationLog,
+      invariantMode: controlInvariantMode,
     });
     this._coordination = new Coordination({
       rules, state: this._state, audit: this._audit, placement: this._placement, clock, flightDataStore,
@@ -197,7 +196,6 @@ class BoardStore {
     return r;
   }
 
-  setMutationLog(mutationLog) { this._mutationLog = mutationLog; }
 
   get currentSeq() { return this._state.seq; }
   /** This Board lifetime's name (docs/adr/0081). A delta is valid only within one epoch. */

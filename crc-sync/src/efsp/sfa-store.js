@@ -42,7 +42,7 @@ class SfaStore {
    * @param {string} [deps.facilityId]
    * @param {{now:()=>number}} [deps.clock] the mission clock
    */
-  constructor({ config, positions, facilityId = 'INCIRLIK', clock = WALL_CLOCK } = {}) {
+  constructor({ config, positions, facilityId = 'INCIRLIK', clock = WALL_CLOCK, mutationLog = null } = {}) {
     if (!config) throw new Error('SfaStore needs a singleFrequencyApproach config');
     this._config = deepClone(config);
     this._positions = [...(positions || [])];
@@ -50,7 +50,7 @@ class SfaStore {
     this._clock = clock;
     this._record = this._fresh();
     this._sync = new SyncLog({ epoch: true }); // the store's sequence and its lifetime (epoch, not persisted): no ring, the resync answer is the snapshot slice (docs/adr/0106)
-    this._mutationLog = null;
+    this._mutationLog = mutationLog; // the Mutation log (docs/adr/0081); null for a fixture with none
   }
 
   _fresh() {
@@ -59,7 +59,6 @@ class SfaStore {
     return { facilityId: this._facilityId, rev: 0, rotation: ok ? deepClone(initial) : {}, transitions: [] };
   }
 
-  setMutationLog(mutationLog) { this._mutationLog = mutationLog; }
   get currentSeq() { return this._sync.seq; }
   /** The lifetime this store's seq belongs to (docs/adr/0106): new per process, never persisted. */
   get epoch() { return this._sync.epoch; }

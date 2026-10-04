@@ -69,7 +69,7 @@ class RunwayStatusStore {
    * @param {(facilityId:string, positionId:string)=>string|null} [deps.primaryOf]
    *   the controllerId Primary at that Position — for SelfCoordinateRunwayChange
    */
-  constructor(facilityConfig, { clock = WALL_CLOCK, isStaffed, primaryOf } = {}) {
+  constructor(facilityConfig, { clock = WALL_CLOCK, isStaffed, primaryOf, mutationLog = null } = {}) {
     this._clock = clock;
     this._isStaffed = isStaffed || (() => false);
     this._primaryOf = primaryOf || (() => null);
@@ -78,7 +78,7 @@ class RunwayStatusStore {
     this._records = new Map();     // facilityId -> record
     this._views = new Map();       // facilityId -> cached status view for rule 1
     this._sync = new SyncLog({ epoch: true }); // the store's sequence and its lifetime (epoch, not persisted): no ring, the resync answer is the snapshot slice (docs/adr/0106)
-    this._mutationLog = null;
+    this._mutationLog = mutationLog; // the Mutation log (docs/adr/0081); null for a fixture with none
     for (const facilityId of facilityConfig.getFacilityIds()) {
       const config = facilityConfig.getFacilityConfig(facilityId);
       if (!config || !config.runwayStatus) continue; // no inventory, no record
@@ -125,7 +125,6 @@ class RunwayStatusStore {
   }
 
   /** The same wiring every EFSP store has; refusals are logged too (see _recordAudit). */
-  setMutationLog(mutationLog) { this._mutationLog = mutationLog; }
 
   get currentSeq() { return this._sync.seq; }
   /** The lifetime this store's seq belongs to (docs/adr/0106): new per process, never persisted. */

@@ -216,7 +216,7 @@ function createApp(deps = {}) {
 
   // ── Core components ──────────────────────────────────────────────────────
   const trackStore  = new TrackStore();
-  const collabStore = new CollaborativeStore({ persist: true, identityOf: (id) => trackStore.get(id) });
+  const collabStore = new CollaborativeStore({ env, persist: true, identityOf: (id) => trackStore.get(id) });
   const atisStore   = new AtisStore();
   const grpcClient  = deps.grpcClient || new GrpcClient();
   const srsClient   = deps.srsClient || new SrsClient();
@@ -236,14 +236,24 @@ function createApp(deps = {}) {
   // magnetic value becomes true, and the source of the `theater` message.
   const theaterContext = new TheaterContext({ theaters, clock: missionClock });
   const boardPaths   = deps.paths || statePaths('efsp-board.json', env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH);
-  // The airspace registry is scoped to the loaded mission's theater (docs/adr/0098 §2); the MissionSession is built below.
-  const theaterSource = { current: () => null };
+  // F3 mission session (docs/adr/0086, decisions.md S-R2-2): which mission we are in. Built before the EFSP because the
+  // airspace registry is scoped to the loaded mission's theater (docs/adr/0098 §2); H22's wind-derived runway, H32's
+  // metrics session and H36's archiver read it too. Registered BEFORE the mission-load handler below, so that handler
+  // already sees the session this load belongs to.
+  const missionSession = deps.missionSession || new MissionSession({ clock: missionClock, env });
   // Configuration that used to be read when a module was required is read here, once, from `env` (ADR 0095 §4).
   const efspFacilityConfig = createFacilityConfig({ env });
   const stereoRoutes = createStereoRoutes({ env });
   const aptConfig = createAptConfig({ env });
   const ownCoalition = ownCoalitionFrom(env);
-  const efsp        = createEfsp({ env, facilityConfig: efspFacilityConfig, stereoRoutes, clock: missionClock, wallClock: WALL_CLOCK, nlaGuardMs: nlaGuardFromEnv(env), transitionAltFt: () => theaterContext.transitionAltFt(), currentTheater: () => theaterSource.current(), paths: boardPaths });
+  // Where a correlated track is, for the TOFI regime (docs/adr/0102): the registry's limits are indicated feet, so the
+  // track altitude is converted here (I4). A track with no position is not located.
+  const locateTrack = (trackId) => {
+    const track = trackStore.get(trackId);
+    if (!track || !Number.isFinite(track.lat) || !Number.isFinite(track.lon)) return null;
+    return { lat: track.lat, lon: track.lon, altFt: indicatedAltFt(track.alt, grpcClient.getWeather(), theaterContext.transitionAltFt()) };
+  };
+  const efsp        = createEfsp({ env, facilityConfig: efspFacilityConfig, stereoRoutes, clock: missionClock, wallClock: WALL_CLOCK, nlaGuardMs: nlaGuardFromEnv(env), transitionAltFt: () => theaterContext.transitionAltFt(), currentTheater: () => missionSession.current().theatre || null, locateTrack, paths: boardPaths });
 
   // ── The radar picture (docs/adr/0042) ────────────────────────────────────
   // Radars, their sweep phase, terrain masking and who may look through what
@@ -341,12 +351,7 @@ function createApp(deps = {}) {
     }
   }
 
-  // ── F3 mission session (docs/adr/0086, decisions.md S-R2-2) ───────────────
-  // Which mission we are in: H22's wind-derived runway, H32's metrics session and
-  // H36's archiver all read it. Registered BEFORE the mission-load handler below,
-  // so that handler already sees the session this load belongs to.
-  const missionSession = deps.missionSession || new MissionSession({ clock: missionClock });
-  theaterSource.current = () => missionSession.current().theatre || null;
+  // ── F3 mission session: built above, before the EFSP that needs its theater ──
   let lastMissionData = null;
   // A clock step back opens a session with no mission-load behind it: the wind
   // is re-read then too (a load-driven session is handled in the handler below).
@@ -536,15 +541,7 @@ function createApp(deps = {}) {
   // Where a correlated flight is, relative to the airspaces ACTIVE for an MRU Facility: one answer for ACCEPT,
   // MARK_ENTERED and the monitor. The registry's limits are indicated feet, so the track altitude is converted
   // here (I4). No correlated contact is `located: false`, which is unknown, never outside.
-  const regimeLocator = (flightDataId, facilityId) => {
-    const trackId = efsp.correlationStore.correlatedTrackId(flightDataId);
-    const track = trackId ? trackStore.get(trackId) : null;
-    if (!track || !Number.isFinite(track.lat) || !Number.isFinite(track.lon)) return { located: false, inside: [], unknown: [] };
-    const altFt = indicatedAltFt(track.alt, grpcClient.getWeather(), theaterContext.transitionAltFt());
-    const where = efsp.airspaceStore.activeContaining({ lat: track.lat, lon: track.lon, altFt }, { usingFacilityId: facilityId });
-    return { located: true, inside: where.inside, unknown: where.unknown };
-  };
-  efsp.setRegimeLocator(regimeLocator);
+  const regimeLocator = efsp.regimeLocator; // built inside createEfsp from the `locateTrack` it was given
   const tofiRegimeMonitor = new TofiRegimeMonitor({
     clock: missionClock,
     wallClock: WALL_CLOCK,

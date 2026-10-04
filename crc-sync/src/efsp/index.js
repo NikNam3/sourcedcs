@@ -62,6 +62,9 @@ const log = require('../log').logger('efsp');
  *   reads — a gate, a deadline, a Strip clock, a Mutation's `at` — is in-game
  *   Zulu. app.js passes the real one; a fixture that omits it gets the wall
  *   clock, which is what the mission clock itself answers before DCS does.
+ * @param {(trackId:string) => ({lat:number, lon:number, altFt:number}|null)} [deps.locateTrack] where a contact is, for the TOFI
+ *   regime locator (docs/adr/0102), altitude in indicated feet. A real server passes it; omitting it logs an error at the first
+ *   regime question and every flight stays unlocated. A fixture with no tracks passes `() => null`.
  * @param {() => string|null} [deps.currentTheater] the loaded mission's theater (docs/adr/0098 §2); airspaces are scoped
  *   to it, and with no mission loaded the panel's list is empty. A fixture that omits it has no mission.
  * @param {{read:string, write:string}} [deps.standingPaths] where the theater-keyed standing airspace list is read from
@@ -78,7 +81,7 @@ const log = require('../log').logger('efsp');
  *   or worse, restored a snapshot somebody had committed to git. It lives in
  *   data/ now; see src/state-paths.js.
  */
-function createEfsp({ env = process.env, facilityConfig = createFacilityConfig({ env }), stereoRoutes = createStereoRoutes({ env }), clock = WALL_CLOCK, wallClock = WALL_CLOCK, nlaGuardMs = NLA_GUARD_MS, transitionAltFt, currentTheater = () => null,
+function createEfsp({ env = process.env, facilityConfig = createFacilityConfig({ env }), stereoRoutes = createStereoRoutes({ env }), clock = WALL_CLOCK, wallClock = WALL_CLOCK, nlaGuardMs = NLA_GUARD_MS, transitionAltFt, currentTheater = () => null, locateTrack = null,
   paths = statePaths('efsp-board.json', env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH, env),
   standingPaths = statePaths('efsp-airspaces.json', env.CRCSYNC_EFSP_AIRSPACES_PATH, env) } = {}) {
   // The Facilities' config and the stereo routes are read when they are built: the composition root builds them and
@@ -96,13 +99,30 @@ function createEfsp({ env = process.env, facilityConfig = createFacilityConfig({
   const mutationLog = new MutationLog(undefined, { clock, env });
   const facilities = new Map(); // facilityId -> { boardStore, positionStore, rules }
   const stores = {};            // registry key -> instance (src/efsp/stores.js)
-  // docs/adr/0102: where a flight is relative to the airspaces active for an MRU Facility. Late-bound (it needs the
-  // track store, which app.js builds after this): `locator(flightDataId, facilityId) -> { located, inside, unknown }`.
-  let regimeLocator = null;
   const buildDeps = { clock, transitionAltFt, currentTheater, codeAllocator, mutationLog, facilities, stores, facilityConfig, stereoRoutes };
   for (const entry of REGISTRY) stores[entry.key] = entry.build(buildDeps);
   const { flightData: flightDataStore, airspaces: airspaceStore, correlations: correlationStore, marsa: marsaStore,
     runwayStatuses: runwayStatusStore, carriers: carrierStore, sfaRotation: sfaStore } = stores;
+  // docs/adr/0102: where a flight is relative to the airspaces active for an MRU Facility: `(flightDataId, facilityId) ->
+  // { located, inside, unknown }`. The track source is a dependency (`locateTrack`), so the locator is built here with
+  // the stores it reads and is never installed later. No correlated contact is `located: false`, which is unknown,
+  // never outside. Without a `locateTrack` NOTHING can be located: that is a wiring mistake in a real server, so the
+  // first question says so loudly (once); a fixture with no track store passes `locateTrack: () => null` to mean it.
+  let warnedNoTrackSource = false;
+  const regimeLocator = (flightDataId, forFacilityId) => {
+    if (!locateTrack) {
+      if (!warnedNoTrackSource) {
+        warnedNoTrackSource = true;
+        log.error('createEfsp was given no locateTrack: every TOFI regime question answers "unknown" and stays pending', { flightDataId });
+      }
+      return { located: false, inside: [], unknown: [] };
+    }
+    const trackId = correlationStore.correlatedTrackId(flightDataId);
+    const where = trackId ? locateTrack(trackId) : null;
+    if (!where) return { located: false, inside: [], unknown: [] };
+    const found = airspaceStore.activeContaining(where, { usingFacilityId: forFacilityId });
+    return { located: true, inside: found.inside, unknown: found.unknown };
+  };
   const facilityIds = facilityConfig.getFacilityIds();
   // docs/adr/0100: one undo history for the process, every Board reports to it; the wall clock times its 10 s.
   const undoHistory = new UndoHistory({ wallClock });
@@ -201,7 +221,7 @@ function createEfsp({ env = process.env, facilityConfig = createFacilityConfig({
       marsaInterlockFor:       (stripType, blockId) => blockMap.interlockFor(stripType, blockId),
       voidMarsaForAssignment:  (flightDataId, ctx) => marsaStore.voidForAssignment(flightDataId, ctx),
       activeMarsaFor:          (flightDataId) => marsaStore.activeFor(flightDataId),
-      regimeLocation:          (flightDataId, forFacilityId) => (regimeLocator ? regimeLocator(flightDataId, forFacilityId) : { located: false, inside: [], unknown: [] }),
+      regimeLocation:          (flightDataId, forFacilityId) => regimeLocator(flightDataId, forFacilityId),
       retireMarsaForFlightData:       (flightDataId, by) => marsaStore.onFlightDataRetired(flightDataId, by),
       // Ending or voiding a relation writes `tofi.separationRegime` back to
       // ATC on every participant. Those flight data writes are real changes no
@@ -248,12 +268,10 @@ function createEfsp({ env = process.env, facilityConfig = createFacilityConfig({
       canSendSfaRotationTransfer: (actingPositionId) => permission.canSendSfaRotationTransfer(actingPositionId),
     };
 
-    const boardStore = new BoardStore(flightDataStore, rules, { clock, wallClock, undoHistory, nlaGuard });
-    boardStore.setMutationLog(mutationLog);
+    const boardStore = new BoardStore(flightDataStore, rules, { clock, wallClock, undoHistory, nlaGuard, mutationLog, controlInvariantMode: () => (env.CRCSYNC_CONTROL_INVARIANT === 'throw' ? 'throw' : 'repair') });
     facilities.set(facilityId, { boardStore, positionStore, rules });
   }
 
-  for (const entry of REGISTRY) if (entry.audited && stores[entry.key]) stores[entry.key].setMutationLog(mutationLog);
   _restore({ facilities, stores, saved, paths, mutationLog, clock });
   // The standing list, once per id (ADR 0098 §10): a definition that does not validate stops start-up, naming it.
   if (airspaceStore.seed(standing) > 0) _persist({ wallClock, facilities, stores, persistState: { lastBody: null }, paths });
@@ -338,8 +356,8 @@ function createEfsp({ env = process.env, facilityConfig = createFacilityConfig({
 
     handleMessage: (session, msg) => handleMessage(ctx, session, msg, () => _persist({ wallClock, facilities, stores, persistState, paths })),
 
-    /** Installs the regime locator (docs/adr/0102); `app.js` supplies it once the track store exists. */
-    setRegimeLocator: (fn) => { regimeLocator = fn; },
+    /** The TOFI regime locator (docs/adr/0102), built from `locateTrack`: the regime monitor asks it too. */
+    regimeLocator,
 
     /**
      * The TOFI regime monitor's write (docs/adr/0102): a system mutation through the MISSION Facility's Board (actor

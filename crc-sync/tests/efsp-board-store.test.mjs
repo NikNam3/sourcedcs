@@ -36,10 +36,10 @@ function makeRules(overrides = {}) {
   };
 }
 
-function makeStore(rulesOverrides) {
+function makeStore(rulesOverrides, { mutationLog = null } = {}) {
   const flightDataStore = new FlightDataStore();
   const wall = { t: Date.now(), now() { return this.t; } }; // a stepped wall clock (docs/adr/0096)
-  const board = new BoardStore(flightDataStore, fullRules(makeRules(rulesOverrides)), { wallClock: wall });
+  const board = new BoardStore(flightDataStore, fullRules(makeRules(rulesOverrides)), { wallClock: wall, mutationLog });
   return { board, flightDataStore, wall };
 }
 
@@ -832,9 +832,8 @@ test('reassignPositionStrips leaves a DROPPED Strip untouched (it is not strande
 });
 
 test('reassignPositionStrips is recorded in the mutation log as a system action, not attributed to any acting Position', () => {
-  const { board } = makeStore();
   const recorded = [];
-  board.setMutationLog({ record: (entry) => recorded.push(entry) });
+  const { board } = makeStore(undefined, { mutationLog: { record: (entry) => recorded.push(entry) } });
   createStrip(board, 'GC');
   recorded.length = 0;
 
@@ -865,9 +864,8 @@ test('TransferStrip stamps selfCoordinated=true when isSelfCoordinated says the 
 });
 
 test('a self-coordinated TransferStrip is recorded distinctly in the mutation log, never silently collapsed (defect D20)', () => {
-  const { board } = makeStore({ isSelfCoordinated: () => true });
   const recorded = [];
-  board.setMutationLog({ record: (entry) => recorded.push(entry) });
+  const { board } = makeStore({ isSelfCoordinated: () => true }, { mutationLog: { record: (entry) => recorded.push(entry) } });
 
   const strip = createStrip(board, 'OPS');
   recorded.length = 0;
@@ -878,9 +876,8 @@ test('a self-coordinated TransferStrip is recorded distinctly in the mutation lo
 });
 
 test('a two-party TransferStrip (isSelfCoordinated=false) is recorded as such, not conflated with a self-coordinated one', () => {
-  const { board } = makeStore({ isSelfCoordinated: () => false });
   const recorded = [];
-  board.setMutationLog({ record: (entry) => recorded.push(entry) });
+  const { board } = makeStore({ isSelfCoordinated: () => false }, { mutationLog: { record: (entry) => recorded.push(entry) } });
 
   const strip = createStrip(board, 'OPS');
   recorded.length = 0;
@@ -1003,9 +1000,8 @@ test('DropStrip releases the flight data\'s beacon code back to the allocator', 
 // ── Mutation log wiring ─────────────────────────────────────────────────────
 
 test('a successful Mutation is recorded to the attached mutation log with actingPositionId/actorId/before/after', () => {
-  const { board } = makeStore();
   const recorded = [];
-  board.setMutationLog({ record: (entry) => recorded.push(entry) });
+  const { board } = makeStore(undefined, { mutationLog: { record: (entry) => recorded.push(entry) } });
 
   const strip = createStrip(board, 'OPS', {}); // CreateStrip itself is recorded too
   board.applyMutation(mutation(strip, { kind: 'SetFlag', flag: 'offset', value: true }), 'OPS', 'controller-A');
@@ -1020,9 +1016,8 @@ test('a successful Mutation is recorded to the attached mutation log with acting
 });
 
 test('a failed Mutation is NOT recorded to the mutation log', () => {
-  const { board } = makeStore();
   const recorded = [];
-  board.setMutationLog({ record: (entry) => recorded.push(entry) });
+  const { board } = makeStore(undefined, { mutationLog: { record: (entry) => recorded.push(entry) } });
 
   const strip = createStrip(board);
   recorded.length = 0; // ignore the CreateStrip entry

@@ -79,12 +79,12 @@ class CorrelationStore {
    *   store has no business reaching into the FlightDataStore, and in index.js's
    *   composition root the stores it would need do not all exist yet.
    */
-  constructor({ flightDataExists, clock = WALL_CLOCK } = {}) {
+  constructor({ flightDataExists, clock = WALL_CLOCK, mutationLog = null } = {}) {
     this._clock = clock; // the mission clock, docs/adr/0079
     this._flightDataExists = flightDataExists || (() => true);
     this._records = new Map(); // flightDataId -> record
     this._sync = new SyncLog({ epoch: true }); // the store's sequence and its lifetime (epoch, not persisted): no ring, the resync answer is the snapshot slice (docs/adr/0106)
-    this._mutationLog = null;
+    this._mutationLog = mutationLog; // the Mutation log (docs/adr/0081); null for a fixture with none
   }
 
   /**
@@ -96,7 +96,6 @@ class CorrelationStore {
    * second, re-binds would drown the log. Where the correlation has BEEN lives
    * in the record's own transitions[]. Same split airspace-store.js documents.
    */
-  setMutationLog(mutationLog) { this._mutationLog = mutationLog; }
 
   get currentSeq() { return this._sync.seq; }
   /** The lifetime this store's seq belongs to (docs/adr/0106): new per process, never persisted. */

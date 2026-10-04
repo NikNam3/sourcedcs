@@ -34,7 +34,9 @@ const INSIDE = { located: true, inside: [{ airspaceId: 'MOA-1', kind: 'AREA', na
 // docs/adr/0100: one undo history for the three Boards, timed by this wall clock.
 let WALL_NOW = 1_000_000;
 
-function makeFacilities() {
+/** `entries`, when given, collects what the Boards write to the Mutation log. */
+function makeFacilities(entries = null) {
+  const mutationLog = entries ? { record: (e) => entries.push(e) } : null;
   LOCATION = { located: false, inside: [], unknown: [] };
   WALL_NOW = 1_000_000;
   const flightDataStore = new FlightDataStore();
@@ -88,7 +90,7 @@ function makeFacilities() {
         return n;
       },
     };
-    const boardStore = new BoardStore(flightDataStore, fullRules(rules), { undoHistory });
+    const boardStore = new BoardStore(flightDataStore, fullRules(rules), { undoHistory, mutationLog });
     facilities.set(facilityId, { boardStore, positionStore });
   }
   return facilities;
@@ -146,12 +148,6 @@ function completeEntry(facilities) {
 const { evaluateRegime, TofiRegimeMonitor } = await import('../src/efsp/tofi-regime-monitor.js');
 const readScope = await import('../src/efsp/read-scope.js');
 
-function logTo(facilities) {
-  const entries = [];
-  for (const { boardStore } of facilities.values()) boardStore.setMutationLog({ record: (e) => entries.push(e) });
-  return entries;
-}
-
 function propose(facilities) {
   const atc = createCtrStrip(facilities);
   const proposed = proposeEntry(facilities, atc);
@@ -191,7 +187,7 @@ test('ACCEPT with a non-ATC regime outside any airspace: ATC stays effective, th
 });
 
 test('ACCEPT with a non-ATC regime while already inside an active airspace: effective at accept, trigger AIRSPACE, audited', () => {
-  const f = makeFacilities(); const log = logTo(f); const p = propose(f);
+  const log = []; const f = makeFacilities(log); const p = propose(f);
   LOCATION = INSIDE;
   const r = accept(f, p.missionId, 'USING_AGENCY');
   assert.equal(r.ok, true);
@@ -216,7 +212,7 @@ test('ACCEPT under an active MARSA relation is refused for a conflicting regime 
 // ── MARK_ENTERED ─────────────────────────────────────────────────────────
 
 test('MARK_ENTERED inside an active airspace: effective, trigger MANUAL, no warning, one audit entry', () => {
-  const f = makeFacilities(); const log = logTo(f); const p = propose(f);
+  const log = []; const f = makeFacilities(log); const p = propose(f);
   accept(f, p.missionId, 'MARSA');
   LOCATION = INSIDE;
   const r = act(f, p.missionId, { kind: 'TOFI', action: 'MARK_ENTERED' });
@@ -231,7 +227,7 @@ test('MARK_ENTERED inside an active airspace: effective, trigger MANUAL, no warn
 });
 
 test('MARK_ENTERED without a containing airspace is allowed with the warning NOT_IN_ACTIVE_AIRSPACE, in the result and the audit', () => {
-  const f = makeFacilities(); const log = logTo(f); const p = propose(f);
+  const log = []; const f = makeFacilities(log); const p = propose(f);
   accept(f, p.missionId, 'MARSA');
   const r = act(f, p.missionId, { kind: 'TOFI', action: 'MARK_ENTERED' });
   assert.equal(r.ok, true);
@@ -443,7 +439,7 @@ function monitorFor(f, over = {}) {
 }
 
 test('the monitor makes a pending regime effective on the second inside tick through the Board: actor system, one audit entry, a delta', () => {
-  const f = makeFacilities(); const log = logTo(f); const p = propose(f);
+  const log = []; const f = makeFacilities(log); const p = propose(f);
   accept(f, p.missionId, 'USING_AGENCY');
   const { monitor, sent } = monitorFor(f);
   LOCATION = INSIDE;
@@ -495,7 +491,7 @@ test('efsp-alerts carries tofiRegime, filtered by read scope to the visible flig
 // ── B6 (docs/wip/SERVER-BUGS.md): the system entry does not change the Strip, so it does not bump its rev ──
 
 test('B6 the system entry leaves the MISSION Strip\'s rev alone, still sends it, and a controller on that rev is not refused STALE_REV', () => {
-  const f = makeFacilities(); const log = logTo(f); const p = propose(f);
+  const log = []; const f = makeFacilities(log); const p = propose(f);
   accept(f, p.missionId, 'DUE_REGARD');
   const tacBoard = tac(f);
   const before = JSON.parse(JSON.stringify(tacBoard.getStrip(p.missionId)));

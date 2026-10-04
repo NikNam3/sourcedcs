@@ -38,7 +38,7 @@ class HandoffControl {
    * @param {{now: () => number}} deps.clock the mission clock (every `at`, `effectiveAt` and gate here, H11)
    * @param {object} deps.flightDataStore
    * @param {() => string|null} deps.activeCmid the clientMutationId being applied, read late
-   * @param {() => object|null} deps.mutationLog read late
+   * @param {object|null} deps.mutationLog the Mutation log, or null (a Board built alone)
    * @param {() => 'repair'|'throw'} deps.invariantMode what `assertControlInvariant` does with a violation it finds
    */
   constructor({ rules, state, audit, clock, flightDataStore, activeCmid, mutationLog, invariantMode }) {
@@ -48,7 +48,7 @@ class HandoffControl {
     this._clock = clock;
     this._flightDataStore = flightDataStore;
     this._activeCmidOf = activeCmid;
-    this._mutationLogOf = mutationLog;
+    this._mutationLog = mutationLog;
     this._invariantModeOf = invariantMode;
   }
 
@@ -531,9 +531,8 @@ class HandoffControl {
   }
 
   _recordRepair(strip, fields, before = null) {
-    const mutationLog = this._mutationLogOf();
-    if (!mutationLog) return;
-    mutationLog.record({
+    if (!this._mutationLog) return;
+    this._mutationLog.record({
       clientMutationId: null, causedBy: this._activeCmid || null, op: 'InterfacilityControlRepair',
       stripId: strip.stripId, flightDataId: strip.flightDataId || null, facilityId: this._rules.facilityId || null,
       actingPositionId: null, actorId: 'system', at: this._clock.now(),

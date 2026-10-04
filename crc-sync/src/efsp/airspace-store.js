@@ -119,7 +119,7 @@ class AirspaceStore {
    * @param {{rowOf:(positionId:string)=>object}} [deps.authority] the airspace rows (authority/index.js's airspaceRowOf)
    */
   constructor({ clock = WALL_CLOCK, currentTheater = () => null, occupantsFor = () => [], routeOccupancyFor = () => 0,
-    facilityLookup = null, authority = null } = {}) {
+    facilityLookup = null, authority = null, mutationLog = null } = {}) {
     this._clock = clock;
     this._currentTheater = currentTheater;
     this._occupantsFor = occupantsFor;
@@ -129,7 +129,7 @@ class AirspaceStore {
     this._byTheater = new Map(); // theater -> Map(airspaceId -> record)
     this._seeded = new Map();    // theater -> Set(airspaceId) imported from the standing list at least once
     this._sync = new SyncLog({ epoch: true }); // the store's sequence and its lifetime (epoch, not persisted): no ring, the resync answer is the snapshot slice (docs/adr/0106)
-    this._mutationLog = null;
+    this._mutationLog = mutationLog; // the Mutation log (docs/adr/0081); null for a fixture with none
   }
 
   /**
@@ -137,7 +137,6 @@ class AirspaceStore {
    * definition moved are exactly the questions an after-action review asks. The record's own `transitions` hold where
    * the airspace has BEEN; this holds what was asked for, refusals included.
    */
-  setMutationLog(mutationLog) { this._mutationLog = mutationLog; }
 
   get currentSeq() { return this._sync.seq; }
   /** The lifetime this store's seq belongs to (docs/adr/0106): new per process, never persisted. */

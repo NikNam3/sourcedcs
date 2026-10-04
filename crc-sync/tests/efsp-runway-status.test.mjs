@@ -249,8 +249,7 @@ function fixtureConfig(runwayStatusOverride) {
 let logN = 0;
 function freshStore({ runwayStatusOverride, deps } = {}) {
   const logPath = path.join(tmpDir, `store-${++logN}.jsonl`);
-  const store = new RunwayStatusStore(fixtureConfig(runwayStatusOverride), deps);
-  store.setMutationLog(new MutationLog(logPath));
+  const store = new RunwayStatusStore(fixtureConfig(runwayStatusOverride), { ...deps, mutationLog: new MutationLog(logPath) });
   const log = () => (fs.existsSync(logPath) ? fs.readFileSync(logPath, 'utf8').trim().split('\n').filter(Boolean).map(l => JSON.parse(l)) : []);
   return { store, log };
 }

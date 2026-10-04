@@ -10,15 +10,13 @@ class BoardAudit {
    * @param {object} deps
    * @param {object} deps.rules the Board's rules (facilityId)
    * @param {{now: () => number}} deps.clock the mission clock
-   * @param {() => object|null} deps.mutationLog the facade's current Mutation log, read late (setMutationLog)
+   * @param {object|null} deps.mutationLog the Mutation log, or null (a Board built alone)
    */
   constructor({ rules, clock, mutationLog }) {
     this._rules = rules;
     this._clock = clock;
-    this._mutationLogOf = mutationLog;
+    this._mutationLog = mutationLog;
   }
-
-  get _mutationLog() { return this._mutationLogOf(); }
 
   /**
    * The entry a PEER write leaves on THIS Board (docs/adr/0083): coordination and

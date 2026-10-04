@@ -110,13 +110,13 @@ class MarsaStore {
    *   The other half of keeping the two agreed is board/ops/set-block.js refusing a
    *   direct SREG write while an ACTIVE relation holds the flight data.
    */
-  constructor({ flightDataExists, setSeparationRegime, clock = WALL_CLOCK } = {}) {
+  constructor({ flightDataExists, setSeparationRegime, clock = WALL_CLOCK, mutationLog = null } = {}) {
     this._clock = clock; // the mission clock, docs/adr/0079
     this._flightDataExists = flightDataExists || (() => true);
     this._setSeparationRegime = setSeparationRegime || (() => ({ ok: true }));
     this._relations = new Map(); // marsaId -> relation
     this._sync = new SyncLog({ epoch: true }); // the store's sequence and its lifetime (epoch, not persisted): no ring, the resync answer is the snapshot slice (docs/adr/0106)
-    this._mutationLog = null;
+    this._mutationLog = mutationLog; // the Mutation log (docs/adr/0081); null for a fixture with none
     // The flight data _applyRegime wrote during the op currently being applied, for
     // the caller to drain and broadcast. See drainRegimeWrites().
     this._regimeWrites = [];
@@ -159,7 +159,6 @@ class MarsaStore {
    * interlock void happens at most once per relation and is precisely the event
    * an after-action review goes looking for.
    */
-  setMutationLog(mutationLog) { this._mutationLog = mutationLog; }
 
   get currentSeq() { return this._sync.seq; }
   /** The lifetime this store's seq belongs to (docs/adr/0106): new per process, never persisted. */
