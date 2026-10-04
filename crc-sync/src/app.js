@@ -9,7 +9,6 @@
 
 const express     = require('express');
 const http        = require('http');
-const path        = require('path');
 const rateLimit   = require('express-rate-limit');
 
 const GrpcClient      = require('./grpc-client');
@@ -63,12 +62,10 @@ const archiverLog = require('./log').logger('efsp:archiver');
 const fplLog = require('./log').logger('efsp:flight-plan-lookup');
 const stereoLog = require('./log').logger('efsp:stereo-routes');
 
-const PUBLIC_DIR = path.join(__dirname, '..', 'public');
-
 // ── CORS, scoped — only /api/auth/token is ever called cross-origin, from
 // crc-desktop's Electron renderer at http://localhost:<wsPort>. Everything
 // else on this API is called server-to-server (crc-desktop's local server
-// proxies it) or same-origin (this service's own public/ frontend). ────────
+// proxies it) or called by the service-token holders (sourcedcs-web). ────────
 const LOCALHOST_ORIGIN_RE = /^http:\/\/localhost:\d+$/;
 function corsForLocalhost(req, res, next) {
   const origin = req.headers.origin;
@@ -696,7 +693,6 @@ function createApp(deps = {}) {
   // seeded id stream must not be consumed before createEfsp.
   if (env.CRCSYNC_TEST_RESET === '1') require('./test-reset').mountTestReset(app, { env, hooks: { setWireProtocol: (n) => wsHub.setWireProtocolForTest(n), setNlaGuardMs: (ms) => efsp.setNlaGuardMs(ms) } });
 
-  // ── Static hosting ───────────────────────────────────────────────────────
   // ── The airspace registry's server-to-server API, for sourcedcs-web (docs/adr/0098 §9). No token: every route 503. ──
   app.use('/api/airspace-registry', createAirspaceService({
     efsp, getToken: () => env.AIRSPACE_SERVICE_TOKEN, broadcast: (frames) => wsHub.deliverEfsp(frames),
@@ -712,8 +708,6 @@ function createApp(deps = {}) {
     bookingUrl: env.CRCSYNC_SOURCEDCS_WEB_PUBLIC_URL ? `${String(env.CRCSYNC_SOURCEDCS_WEB_PUBLIC_URL).replace(/\/+$/, '')}/bookings.html` : null,
     onChange: (msg) => wsHub.broadcastAirspaceCalendar(msg),
   });
-
-  app.use(express.static(PUBLIC_DIR));
 
   // ── Tickers: every timer the service runs, by name. start() installs them,
   // stop() clears them; the soak drives them by name instead of by clock. ──────
