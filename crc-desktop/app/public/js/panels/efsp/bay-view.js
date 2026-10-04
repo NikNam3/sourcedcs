@@ -1,5 +1,6 @@
 'use strict';
 import { isWithinDoubleTapWindow } from './efsp-nla.js';
+import { getLatestTrack } from '../../picture.js';
 import {
   conformanceAlertsForFlightData, correlatedTrackIdForStrip, efspLinesWithOthers, getEfspAirspace, getEfspBays,
   getEfspCorrelationForStrip, getEfspFlightData, getEfspMarsa, getEfspObligation, getEfspRack, getEfspStrip,
@@ -570,8 +571,7 @@ export function _stripRenderSignature(strip) {
     // (crc-sync's docs/adr/0042) — so the track has to be looked at, not just
     // the record. A Map lookup, and Strips are not re-rendered on radar
     // sweeps, so this costs nothing per sweep.
-    const track = correlation.trackId && typeof window !== 'undefined' && typeof window.getLatestTrack === 'function'
-      ? window.getLatestTrack(correlation.trackId) : null;
+    const track = correlation.trackId ? getLatestTrack(correlation.trackId) : null;
     parts.push('cor:' + [
       correlation.rev, correlation.state, correlation.trackId || '', correlation.matchedBy || '',
       correlation.binding ? 1 : 0,

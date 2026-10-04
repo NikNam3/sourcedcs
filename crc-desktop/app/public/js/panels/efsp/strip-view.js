@@ -58,7 +58,7 @@ import { scrambleAlertsFor } from './scramble.js';
 import { convertStripToArrival, efspVisibleBayId, noteEfspArrivalShown } from './efsp-panel.js';
 import { arJoinFor, atoAlertsFor, isArHighlighted } from './ato-strip.js';
 import { runwayStatusAlertsFor } from './runway-status-rules.js';
-import { settings } from '../../app.js';
+import { settings } from '../../settings.js';
 
 export const STRIP_TYPE_ABBR = { DEPARTURE: 'DEP', ARRIVAL: 'ARR', OVERFLIGHT: 'OVF', MISSION: 'MSN', MARSHAL: 'MAR', FINAL: 'FNL', PATTERN: 'PAT' };
 

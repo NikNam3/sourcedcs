@@ -63,8 +63,6 @@ const STRIPS = [
 async function mount({ strips = STRIPS, flightDataList = FLIGHT_DATA_LIST } = {}) {
   const sent = [];
   globalThis.document.getElementById = () => null;
-  globalThis.getLatestTrack = () => null; // window.getLatestTrack / getAllTracks, as app.js's startApp() sets them
-  globalThis.getAllTracks = () => [];
   const g = freshGraph();
   const state = await g.import('panels/efsp/efsp-state.js');
   const ws = await g.import('panels/efsp/efsp-ws.js');

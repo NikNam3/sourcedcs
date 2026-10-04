@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import { initToolsTab } from '../app/public/js/panels/tools-panel.js';
 import { buildExtendedCenterline } from '../app/public/js/geojson.js';
 import { _setAprtRunwayForTest } from '../app/public/js/panels/aprt-panel.js';
-import { _setCoverageRadars } from '../app/public/js/app.js';
+import { _setCoverageRadars } from '../app/public/js/picture.js';
 
 test('the Tools tab altitude calculator runs: 10,000 ft indicated at QNH 29.92 and 15 C is about 10,000 ft true', () => {
   const values = { 'tool-alt-temp': '15', 'tool-alt-qnh': '29.92', 'tool-alt-ind': '10000' };

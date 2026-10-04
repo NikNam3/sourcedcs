@@ -1,5 +1,6 @@
 'use strict';
 import { trackRef } from '../../track-label.js';
+import { getLatestTrack } from '../../picture.js';
 import { updateMap } from '../../geojson.js';
 import {
   correlatedTrackIdForStrip, getEfspCorrelationForStrip, getEfspFlightData, getEfspStrip, stripIdsForTrackId
@@ -131,8 +132,7 @@ export function correlationBadgeFor(strip) {
   // correlated, the contact's label IS this Strip's callsign (crc-sync's
   // docs/adr/0059), and `TRK VIPER11` under a Strip reading VIPER11 says
   // nothing.
-  const track = typeof window !== 'undefined' && typeof window.getLatestTrack === 'function'
-    ? window.getLatestTrack(record.trackId) : null;
+  const track = getLatestTrack(record.trackId);
 
   // Correlation is a system-wide fact and is worked out against every contact
   // the server has; coverage is per-controller (crc-sync's docs/adr/0042). So a

@@ -79,17 +79,17 @@ async function inject(page, scene) {
         const [lat, lon] = crc.geo.projectPos(t.lat, t.lon, (t._h + 180) % 360, ms * 5 * i);
         pts.push({ lat, lon, altFt: t.altitude ? t.altitude.ft : null, timestamp: now - t._stale - i * 5000 });
       }
-      crc.app.history.set(t.id, pts);
+      crc.picture.history.set(t.id, pts);
     }
     crc.state.applyEfspAlerts(sc.alerts);
-    crc.app.labelOffsets.clear();
-    crc.app.map.jumpTo({ center: [sc.center.lon, sc.center.lat], zoom: sc.zoom });
+    crc.picture.labelOffsets.clear();
+    crc.mapHandle.map.jumpTo({ center: [sc.center.lon, sc.center.lat], zoom: sc.zoom });
     crc.geojson.updateMap();
   }, scene);
 }
 
 async function snap(page, name) {
-  await page.waitForFunction(() => crc.app.map.loaded()); // tiles and glyphs (the key-less tile requests answer 403, which is loaded)
+  await page.waitForFunction(() => crc.mapHandle.map.loaded()); // tiles and glyphs (the key-less tile requests answer 403, which is loaded)
   await frames(page, 3);
   await page.locator('#map').screenshot({ path: test.info().outputPath(name), animations: 'disabled' });
 }
@@ -99,8 +99,8 @@ async function openScope(page, signedOn) {
   await openPanel(page, { signedOn: signedOn[facilities[0]], facilityId: facilities[0], controller: `l22-${facilities.join('-')}-${Date.now()}` });
   for (const f of facilities.slice(1)) await page.evaluate(([fac, h]) => crc.ws.sendEfspSetPositions(fac, h), [f, signedOn[f]]);
   await page.evaluate(() => crc.dock.toggleDockPanel && crc.dock.toggleDockPanel('efsp', false));
-  await page.waitForFunction(() => typeof crc.app.mapReady !== 'undefined' && crc.app.mapReady);
-  await page.evaluate(() => crc.app.map.resize());
+  await page.waitForFunction(() => typeof crc.mapHandle.mapReady !== 'undefined' && crc.mapHandle.mapReady);
+  await page.evaluate(() => crc.mapHandle.map.resize());
 }
 
 // ── Scene 1 / 4: an AP-only scope ─────────────────────────────────────────
@@ -156,7 +156,7 @@ function appScene() {
 
 test('scene 1: an AP-only scope, map background on', async ({ page }) => {
   await openScope(page, { INCIRLIK: ['AP'] });
-  await page.evaluate(() => { crc.app.settings.atcMapBackground = true; });
+  await page.evaluate(() => { crc.settings.settings.atcMapBackground = true; });
   await inject(page, appScene());
   const labels = await page.evaluate(() => crc.geojson.buildLabels().features.filter(f => f.properties.scheme === 'ATC').length);
   expect(labels).toBeGreaterThan(5);
@@ -165,9 +165,9 @@ test('scene 1: an AP-only scope, map background on', async ({ page }) => {
 
 test('scene 4: "ATC map background" off — the black strict-STARS scope', async ({ page }) => {
   await openScope(page, { INCIRLIK: ['AP'] });
-  await page.evaluate(() => { crc.app.settings.atcMapBackground = false; });
+  await page.evaluate(() => { crc.settings.settings.atcMapBackground = false; });
   await inject(page, appScene());
-  await page.waitForFunction(() => crc.app.map.getPaintProperty('Background', 'background-color') === '#000000');
+  await page.waitForFunction(() => crc.mapHandle.map.getPaintProperty('Background', 'background-color') === '#000000');
   await snap(page, 'scene4-black-scope.png');
 });
 

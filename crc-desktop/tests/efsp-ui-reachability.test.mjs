@@ -40,7 +40,7 @@ const SANDBOX_MODULES = [
   'panels/efsp/bay-view.js', 'panels/efsp/strip-view.js', 'panels/efsp/efsp-state.js', 'panels/efsp/efsp-arrivals.js',
   'panels/efsp/efsp-stereo-routes.js', 'panels/efsp/strip-template.js', 'panels/efsp/strip-fields.js', 'panels/efsp/efsp-ws.js',
   'panels/efsp/efsp-panel.js', 'panels/efsp/carrier-state.js', 'panels/efsp/carrier-panel.js', 'panels/efsp/scramble.js',
-  'panels/efsp/airspace-panel.js',
+  'panels/efsp/airspace-panel.js', 'picture.js',
 ];
 async function loadSandbox() {
   const g = freshGraph();
@@ -424,9 +424,7 @@ async function renderStrip({ strip, flightData, signedOn, airspaces = [], correl
   // (an arrival flashes only where the controller can see it).
   sandbox._setActiveBayId(strip.bayId);
   sandbox._setBayContentElForTest({ isConnected: true, offsetParent: {} });
-  const liveTracks = new Map(tracks.map(t => [String(t.id), t]));
-  globalThis.getLatestTrack = (id) => liveTracks.get(String(id)) || null;
-  globalThis.getAllTracks = () => [...liveTracks.values()];
+  for (const t of tracks) sandbox.latestFromServer.set(String(t.id), t);
 
   // Fixtures written before docs/adr/0058 put the assigned altitude/heading
   // history on the Strip; crc-sync used to move such notes onto the flight

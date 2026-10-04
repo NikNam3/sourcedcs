@@ -151,8 +151,6 @@ test('ordnanceAlertsFor: nothing for CLEAN/LOADED/EXPENDED, a DROPPED Strip, an 
 async function renderStrip({ strip, flightData, signedOn, runwayStatus }) {
   globalThis.document.getElementById = () => null;
   globalThis.document.createElement = makeElement;
-  globalThis.getLatestTrack = () => null; // window.getLatestTrack / getAllTracks, set by app.js's startApp()
-  globalThis.getAllTracks = () => [];
   const g = freshGraph();
   const state = await g.import('panels/efsp/efsp-state.js');
   const ws = await g.import('panels/efsp/efsp-ws.js');

@@ -10,7 +10,8 @@ import assert from 'node:assert/strict';
 import './helpers/client-env.mjs';
 import * as A from '../app/public/js/atc-scope.js';
 import * as L from '../app/public/js/track-label.js';
-import { settings, _setCoverageRadars, _setCoverageDatalink } from '../app/public/js/app.js';
+import { settings } from '../app/public/js/settings.js';
+import { _setCoverageRadars, _setCoverageDatalink } from '../app/public/js/picture.js';
 
 settings.transitionAltFt = 18000;
 

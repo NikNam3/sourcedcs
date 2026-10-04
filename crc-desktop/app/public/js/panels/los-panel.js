@@ -1,6 +1,7 @@
 'use strict';
 import { losBeamProfile } from '../los.js';
-import { getActiveRadars, settings } from '../app.js';
+import { getActiveRadars } from '../picture.js';
+import { settings } from '../settings.js';
 
 // ── LOS terrain profile chart ─────────────────────────────────────────────
 // Shown while hovering a radar row in the coverage list: a terrain-vs-distance

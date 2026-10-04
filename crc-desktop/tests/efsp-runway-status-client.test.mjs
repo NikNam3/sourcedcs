@@ -516,8 +516,6 @@ async function renderStripWithField({ strip, flightData, records }) {
   globalThis.document.getElementById = () => null;
   globalThis.document.createElement = makeElement;
   globalThis.prompt = () => null;
-  globalThis.getLatestTrack = () => null; // window.getLatestTrack / getAllTracks, set by app.js's startApp()
-  globalThis.getAllTracks = () => [];
   const g = freshGraph();
   const st = await g.import('panels/efsp/efsp-state.js');
   const ws = await g.import('panels/efsp/efsp-ws.js');

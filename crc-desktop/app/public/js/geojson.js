@@ -18,11 +18,14 @@ import {
 import { getCorrelatedHighlightTrackId } from './panels/efsp/correlation-highlight.js';
 import { buildCarrierFinalLine } from './panels/efsp/carrier-panel.js';
 import {
-  CRC_RANGE_M, FADE_DURATION_MS, HISTORY_MAX, LABEL_EDGE_MARGIN, MIN_SPD_KT_PPL, STALE_MS, TEXT_OFFSET_EM,
-  _pulseBright, approachRwyCourse, coverageApproachFor, getActiveRadars, getBullseye, getLabelHalfW,
-  getLeaderIconGap, getTextSizePx, grpcStatus, history, labelOffsets, lastSweepMs, lastUpdateMs, latestFromServer,
-  map, mapReady, missionData, selectedApt, selectedRef, settings, tracks, updateZoomLimits, zeroSpeedSinceMs
-} from './app.js';
+  CRC_RANGE_M, FADE_DURATION_MS, getLabelHalfW, getLeaderIconGap, getScale, getTextSizePx, HISTORY_MAX, LABEL_EDGE_MARGIN, MIN_SPD_KT_PPL, STALE_MS, TEXT_OFFSET_EM
+} from './scope-constants.js';
+import { _pulseBright, approachRwyCourse, grpcStatus, lastUpdateMs, selectedApt, selectedRef } from './view-state.js';
+import {
+  coverageApproachFor, getActiveRadars, getBullseye, history, labelOffsets, lastSweepMs, latestFromServer, missionData, tracks, zeroSpeedSinceMs
+} from './picture.js';
+import { map, mapReady, updateZoomLimits } from './map-handle.js';
+import { settings } from './settings.js';
 
 // ── GeoJSON builders ───────────────────────────────────────────────────────
 // All functions return FeatureCollections ready for MapLibre setData().
@@ -901,6 +904,19 @@ function buildDatalinkLines() {
 }
 
 let _mapRafId = null;
+
+export function applyScale() {
+  if (!mapReady) return;
+  const s = getScale();
+  map.setLayoutProperty('unit-squares',      'icon-size',     s);
+  map.setLayoutProperty('unit-emerg-square', 'icon-size',     s);
+  map.setLayoutProperty('unit-labels',       'text-size',     getTextSizePx());
+  map.setLayoutProperty('navpt-labels',      'text-size',     9 * s);
+  map.setPaintProperty('trail-dots',         'circle-radius', 1.5 * s);
+  map.setPaintProperty('leader-lines',       'line-width',    0.75 * s);
+  map.setPaintProperty('ppl-lines',          'line-width',    s);
+  updateMap();
+}
 
 export function updateMap() {
   if (_mapRafId !== null) return;

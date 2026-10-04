@@ -1,5 +1,6 @@
 'use strict';
 import { NM_M, projectPos } from '../../geo.js';
+import { getLatestTrack } from '../../picture.js';
 import { correlatedTrackIdForStrip, getEfspStrip } from './efsp-state.js';
 import { CARRIER_HANDOFFS } from './efsp-nla.js';
 import {
@@ -361,7 +362,7 @@ export function carrierFinalDistanceText(strip) {
   const s = view && view.shipState;
   if (!s || !Number.isFinite(s.lat) || !Number.isFinite(s.lon) || !strip) return '';
   const trackId = correlatedTrackIdForStrip(strip);
-  const track = trackId && typeof window !== 'undefined' && typeof window.getLatestTrack === 'function' ? window.getLatestTrack(trackId) : null;
+  const track = trackId ? getLatestTrack(trackId) : null;
   if (!track || !Number.isFinite(track.lat) || !Number.isFinite(track.lon)) return '';
   const R = 3440.065; // earth radius, NM
   const rad = Math.PI / 180;

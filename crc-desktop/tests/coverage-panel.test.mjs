@@ -45,12 +45,12 @@ async function load({ radars = [], signedOnPositions = [] } = {}) {
   globalThis.document.createElement = makeElement;
 
   const g = freshGraph();
-  const app = await g.import('app.js');
+  const picture = await g.import('picture.js');
   const radarPanel = await g.import('panels/radar-panel.js');
   const losPanel = await g.import('panels/los-panel.js');
-  // What app.js holds once a `coverage` message has landed.
-  app._setCoverageRadars(radars);
-  app._setCoverageSignedOnPositions(signedOnPositions);
+  // What picture.js holds once a `coverage` message has landed.
+  picture._setCoverageRadars(radars);
+  picture._setCoverageSignedOnPositions(signedOnPositions);
   return { sandbox: radarPanel, list, losPanel };
 }
 

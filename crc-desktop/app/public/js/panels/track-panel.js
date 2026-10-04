@@ -1,5 +1,6 @@
 'use strict';
 import { clearTrackRename, kinematics, setTrackRename, verticalFpm } from '../geo.js';
+import { getLatestTrack } from '../picture.js';
 import { magneticText } from '../magnetic.js';
 import { clearIffOverride, getIff, iffColor, setIffOverride } from '../iff.js';
 import {
@@ -8,7 +9,9 @@ import {
 import { _flightDataForTrack, buildFiledRoute, parseFiledRouteWaypoints, updateMap } from '../geojson.js';
 import { dock, ensureTrackPanel } from '../dock.js';
 import { conformanceAlertsForFlightData, conflictAlertsForTrack } from './efsp/efsp-state.js';
-import { history, map, mapReady, settings, tracks } from '../app.js';
+import { history, tracks } from '../picture.js';
+import { map, mapReady } from '../map-handle.js';
+import { settings } from '../settings.js';
 
 // ── Track info panel ─────────────────────────────────────────────────────
 // Left-clicking an aircraft track opens this persistent side panel. It
@@ -84,7 +87,7 @@ export function initTrackPanel() {
     // Fresh (non-sweep-gated) lookup: an IFF declaration is crc-sync's
     // shared state, not a radar return, so it should reflect immediately —
     // not wait for the simulated radar beam to next illuminate this track.
-    const t        = _trackPanelId != null ? window.getLatestTrack(_trackPanelId) : null;
+    const t        = _trackPanelId != null ? getLatestTrack(_trackPanelId) : null;
     const override = t ? t.iffOverride : null;
     $panel.querySelectorAll('.tp-iff-btn').forEach(btn => {
       const col = cols[btn.dataset.state] || '#888888';
@@ -97,7 +100,7 @@ export function initTrackPanel() {
 
   function _refreshCallsign() {
     if (_trackPanelId == null) return;
-    const t = window.getLatestTrack(_trackPanelId);
+    const t = getLatestTrack(_trackPanelId);
     if (t) document.getElementById('tp-callsign').textContent = trackName(t) + trackNameSuffix(t);
   }
 
@@ -258,8 +261,8 @@ export function updateTrackPanel() {
 
   // Who the contact is (its name, IFF, tag) reflects immediately, independent
   // of the sweep-gated `t` used for position and altitude below — see
-  // window.getLatestTrack's definition in app.js.
-  const fresh = window.getLatestTrack(_trackPanelId) || t;
+  // getLatestTrack's definition in picture.js.
+  const fresh = getLatestTrack(_trackPanelId) || t;
 
   const hist     = history.get(_trackPanelId) || [];
   const { heading, speedKt } = kinematics(hist);
@@ -315,7 +318,7 @@ export function showGroundLabelPopup(id, clientX, clientY) {
   if (!popup || !input) return;
 
   // Pre-fill with the vehicle's existing tag
-  const t = window.getLatestTrack(id);
+  const t = getLatestTrack(id);
   input.value = (t && t.label && t.label.tag) || '';
 
   // Position near the click, keeping it inside the viewport

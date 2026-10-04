@@ -1,5 +1,6 @@
 'use strict';
-import { map, mapReady, settings } from './app.js';
+import { map, mapReady } from './map-handle.js';
+import { settings } from './settings.js';
 import { maptilerKey, onMaptilerKey } from './maptiler-key.js';
 
 // ── Elevation contour overlay ────────────────────────────────────────────

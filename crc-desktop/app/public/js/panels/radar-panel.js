@@ -6,7 +6,7 @@ import { getAllEfspPositions } from './efsp/efsp-state.js';
 import { FACILITY_POSITIONS, shippedFacilityIds, RANGES_FACILITY_ID } from './efsp/facility-topology.js';
 import { formatFrequencies } from './efsp/combination-rules.js';
 import { getSignedOnPositions, isObserverAt, sendEfspSetPositions } from './efsp/efsp-ws.js';
-import { coverageSignedOnPositions, getActiveRadars } from '../app.js';
+import { coverageSignedOnPositions, getActiveRadars } from '../picture.js';
 
 // ── Coverage panel: the radars this controller is looking through ─────────
 //
