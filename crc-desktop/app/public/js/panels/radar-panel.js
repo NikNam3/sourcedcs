@@ -2,6 +2,7 @@
 import { PANEL_TITLES, isDockPanelOpen, isPanelPinned, setPanelPinned, toggleDockPanel } from '../dock.js';
 import { hideLosProfile, showLosProfile } from './los-panel.js';
 import { getAllEfspPositions } from './efsp/efsp-state.js';
+import { FACILITY_POSITIONS, shippedFacilityIds, RANGES_FACILITY_ID } from './efsp/facility-topology.js';
 import { formatFrequencies } from './efsp/combination-rules.js';
 import { getSignedOnPositions, isObserverAt, sendEfspSetPositions } from './efsp/efsp-ws.js';
 import { coverageSignedOnPositions, getActiveRadars } from '../app.js';
@@ -174,24 +175,7 @@ export function renderPanelControls() {
 // Facility's held set is sent independently (sendEfspSetPositions(
 // facilityId, held)) since each has its own PositionStore instance
 // server-side — checking CTR never touches INCIRLIK's held set at all.
-const EFSP_FACILITY_POSITIONS = {
-  INCIRLIK: ['OPS', 'CD', 'GC', 'LC', 'RSU', 'AP', 'SFA', 'PAR'], // RSU, SFA and PAR: crc-sync's docs/adr/0075
-  CENTER: ['CTR'],
-  // WP4A second slice — TAC_C2/AIC/GCI/JTAC (crc-sync's facility-config.js
-  // DEFAULT_TACTICAL_CONFIG.positions). JTAC is included the same way as
-  // every other Position here even though it's read-only server-side (no
-  // ownership/mutation grant, permission.js) — holding it just means
-  // "viewing," which this checkbox UI has no separate concept for and
-  // doesn't need one: the backend enforces the read-only-ness regardless
-  // of what this list renders.
-  TACTICAL: ['TAC_C2', 'AIC', 'GCI', 'JTAC'],
-  // crc-sync's docs/adr/0074 — the carrier's four Positions (DEFAULT_CARRIER_CONFIG).
-  CARRIER: ['CV_MARSHAL', 'CV_PRIFLY', 'CV_APP1', 'CV_APP2'],
-  // RANGES is deliberately absent: its Position set is DERIVED server-side
-  // from the airspace config (a Position exists only for a range with
-  // control of its own), so there is nothing static to list. Those Positions
-  // come from the snapshot instead — see _efspPositionsFor below.
-};
+// The Facility -> Position table is efsp/facility-topology.js's; RANGES comes from the snapshot (_efspPositionsFor).
 
 /**
  * The Positions to offer for a Facility. Static for the three Strip
@@ -204,7 +188,7 @@ const EFSP_FACILITY_POSITIONS = {
  * the drift it would prevent.
  */
 function _efspPositionsFor(facilityId) {
-  if (EFSP_FACILITY_POSITIONS[facilityId]) return EFSP_FACILITY_POSITIONS[facilityId];
+  if (FACILITY_POSITIONS[facilityId]) return FACILITY_POSITIONS[facilityId];
   return getAllEfspPositions()
     .filter(p => p.facilityId === facilityId)
     .map(p => p.positionId);
@@ -212,8 +196,8 @@ function _efspPositionsFor(facilityId) {
 
 /** Every Facility with at least one Position to act as — RANGES disappears entirely when no range is configured. */
 function _efspFacilityIds() {
-  const ids = Object.keys(EFSP_FACILITY_POSITIONS);
-  if (_efspPositionsFor('RANGES').length > 0) ids.push('RANGES');
+  const ids = shippedFacilityIds();
+  if (_efspPositionsFor(RANGES_FACILITY_ID).length > 0) ids.push(RANGES_FACILITY_ID);
   return ids;
 }
 

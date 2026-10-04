@@ -3,6 +3,7 @@ import { _callsignOfFlightData } from './refusal.js';
 import { _createStripBindEl, _createStripBtnEl, _createStripInputEl, _createStripMsgEl, _createStripTypeEl, _createStripStereoEl } from './state.js';
 import { _resolveActingPositionId } from '../bay-view.js';
 import { getActingPositions, sendEfspCreateStrip, sendEfspMutation } from '../efsp-ws.js';
+import { facilityOfPosition } from '../facility-topology.js';
 import { getAllEfspStrips, getEfspFlightData, liveStripsForCallsign } from '../efsp-state.js';
 import { listStereoRoutesClient } from '../efsp-stereo-routes.js';
 import { lookupFlightPlanClient } from '../efsp-flight-plan-lookup.js';
@@ -521,7 +522,7 @@ export function createStripFromFiledPlan(plan) {
   };
   _pendingCreateStripMutationId = sendEfspCreateStrip('OPS', {
     kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', flightData,
-  }, 'INCIRLIK');
+  }, facilityOfPosition('OPS'));
   _setCreateStripMsg('Creating ' + plan.callsign + ' (flight plan found)…', false);
 }
 

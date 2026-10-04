@@ -2,6 +2,7 @@
 import { isSyncOpen, sendToSync } from '../sync.js';
 import { getEfspBays } from './efsp/efsp-state.js';
 import { getActingPositions } from './efsp/efsp-ws.js';
+import { DEFAULT_FACILITY_ID } from './efsp/facility-topology.js';
 import { registerEfspMessage } from './efsp/efsp-message-registry.js';
 
 // The METRICS dock panel — guide §11.5 "instrument from day one", and the
@@ -341,7 +342,7 @@ export function renderTrafficModel(body, facilityId) {
     return { ok: false, error: (body && (body.detail || body.reason)) || 'no traffic count yet' };
   }
   const facilities = Object.keys(body.facilities).sort();
-  const id = facilities.includes(facilityId) ? facilityId : (facilities.includes('INCIRLIK') ? 'INCIRLIK' : facilities[0]);
+  const id = facilities.includes(facilityId) ? facilityId : (facilities.includes(DEFAULT_FACILITY_ID) ? DEFAULT_FACILITY_ID : facilities[0]);
   const f = body.facilities[id] || {};
   const t = f.totals || {};
   const n = (x) => (Number.isFinite(x) ? x : 0);
@@ -543,7 +544,7 @@ function renderMetricsPanel() {
 
 function _defaultTrafficFacility() {
   const facilities = [...new Set((getEfspBays() || []).map(b => b.facilityId).filter(Boolean))];
-  return facilities.find(f => getActingPositions(f).length > 0) || 'INCIRLIK';
+  return facilities.find(f => getActingPositions(f).length > 0) || DEFAULT_FACILITY_ID;
 }
 
 function _renderTrafficSection(content) {

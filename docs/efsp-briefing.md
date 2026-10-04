@@ -1321,6 +1321,12 @@ sorties and pilot requests by hand. A standing rule since `S-M-e2efix-l23`: ever
   than calling `InvokeNla` directly — the 400ms double-tap guard silently swallows a second press, so
   a chain walked without it passes while doing half of what it claims. And remember the shared board:
   absolute counts in a scenario file belong to the whole file, not to your test.
+  **The guard does not cover every advance.** `board/ops/invoke-nla.js` sets the latch only when the NLA did
+  not transfer (`if (applied.ok && !result.transferTo) nlaHistory.set(...)`), and a carrier handoff returns before
+  it. So a double tap on a transfer-shaped NLA such as "Hand Off to AP" is guarded only on the client
+  (`_swallowRepeatAdvance`, `bay-view.js`, a board-wide 400 ms window in browser time); the server evaluates a
+  second press afresh instead of discarding it as a no-op success. The e2e harness turns the server guard off
+  (`CRCSYNC_NLA_GUARD_MS=0`), so no spec shows the difference.
 - **Then add the matching UI check.** A green sortie proves the server does the right thing and says
   nothing about whether a controller can ask for it.
   `crc-desktop/tests/efsp-ui-reachability.test.mjs` renders the real `bay-view.js` and

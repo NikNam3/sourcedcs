@@ -77,6 +77,7 @@ test('TOFI eligibility covers every airborne ATC-side strip type, and never MISS
  * the arrays come from the sandbox's realm, so they are copied before a
  * deepStrictEqual that compares prototypes.
  */
+import * as mirror from '../app/public/js/panels/efsp/bay/authority-mirror.js'; // COORDINATION_TARGETS/TOFI_COUNTERPARTS derive their Facilities, so they are imported, not read as literals
 const bayViewSrc = readClient('panels/efsp/bay/authority-mirror.js'); // ESM-2a: the hand-copied authority tables
 function bayViewValue(name) {
   return constLiteral(bayViewSrc, name, 'authority-mirror.js');
@@ -109,7 +110,7 @@ test('the Positions the client offers Convert to Arrival to are exactly the ones
 // the Coordinate menu render for a Position at all.
 test('D12: no MRU or non-ATC Position is a key of the client\'s COORDINATION_TARGETS', () => {
   const facilityConfig = require('../../crc-sync/src/efsp/facility-config.js');
-  for (const id of Object.keys(bayViewValue('COORDINATION_TARGETS'))) {
+  for (const id of Object.keys(mirror.COORDINATION_TARGETS)) {
     assert.ok(!['MRU', 'MRU_POSITION', 'NON_ATC'].includes(facilityConfig.getPositionClass(id)), id);
     for (const k of server.COORDINATION_OP_KINDS) assert.ok(server.PERMISSIONS[id].has(k), `${id} ${k}`);
   }
@@ -119,7 +120,7 @@ test('D12: no MRU or non-ATC Position is a key of the client\'s COORDINATION_TAR
 // a TOFI proposal the server refuses as "not a valid TOFI counterpart", or
 // hides one it would accept.
 test('the client TOFI_COUNTERPARTS mirror equals permission.js\'s', () => {
-  assert.deepEqual(bayViewValue('TOFI_COUNTERPARTS'), JSON.parse(JSON.stringify(server.TOFI_COUNTERPARTS)));
+  assert.deepEqual(JSON.parse(JSON.stringify(mirror.TOFI_COUNTERPARTS)), JSON.parse(JSON.stringify(server.TOFI_COUNTERPARTS)));
 });
 
 test('a range Position works no Strips — the class refusal is a rule, not an absent table entry', () => {

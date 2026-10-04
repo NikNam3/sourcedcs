@@ -13,13 +13,8 @@
 //   use                 true        may schedule, request activation and release for an airspace whose usingFacilityId is the
 //                                   Position's Facility (the `airspaceUse` capability, DA-7: TAC_C2) or whose usingPositionId is it
 
-/** Facility -> its Position ids (config/efsp-facility-*.json). RANGES is derived from the airspaces' usingPositionId at start-up. */
-export const FACILITY_POSITIONS = {
-  INCIRLIK: ['OPS', 'CD', 'GC', 'LC', 'RSU', 'AP', 'SFA', 'PAR'],
-  CENTER: ['CTR'],
-  TACTICAL: ['TAC_C2', 'AIC', 'GCI', 'JTAC'],
-  CARRIER: ['CV_MARSHAL', 'CV_PRIFLY', 'CV_APP1', 'CV_APP2'],
-};
+import { FACILITY_POSITIONS, facilityOfPosition, shippedFacilityIds, positionsOf } from './facility-topology.js';
+export { FACILITY_POSITIONS, facilityOfPosition, positionsOf };
 
 const ATC_OWN = { create: 'OWN', edit: 'OWN', delete: 'OWN', use: false };
 /** The `airspace` column of the Position families, by Position. A Position with no entry has no row (it controls no airspace). */
@@ -36,18 +31,8 @@ export const CLASS_ROWS = {
 
 const NO_ROW = { create: null, edit: null, delete: null, use: false };
 
-/** The Facility a Position belongs to: a shipped one, else RANGES (a range-control Position), null for no Position. */
-export function facilityOfPosition(positionId) {
-  if (!positionId) return null;
-  for (const [facility, positions] of Object.entries(FACILITY_POSITIONS)) if (positions.includes(positionId)) return facility;
-  return 'RANGES';
-}
-
 /** Every Facility id a definition may name as controlling or using (RANGES is not one: it has no panel of its own). */
-export function facilityIds() { return Object.keys(FACILITY_POSITIONS); }
-
-/** The Position ids of a shipped Facility ([] for anything else). */
-export function positionsOf(facilityId) { return [...(FACILITY_POSITIONS[facilityId] || [])]; }
+export function facilityIds() { return shippedFacilityIds(); }
 
 /** The registry's row for one Position: its family's row merged over its class's row. */
 export function airspaceRowOf(positionId) {
