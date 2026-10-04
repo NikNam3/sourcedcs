@@ -18,6 +18,7 @@ const fs = require('fs');
 const v8 = require('v8');
 const { EventEmitter } = require('events');
 const { SRC } = require('./host-env');
+const { retentionMinFromEnv } = require('./retention');
 const SOAK_THEATER = 'Soak'; // must match host-client.js's standing-list key
 
 const req = (rel) => require(path.join(SRC, rel));
@@ -75,6 +76,7 @@ function createHost(env, { stateDir }) {
     grpcClient: Object.assign(new EventEmitter(), { getWeather: () => ({}), evalLua: async () => null, getAptWeather: async () => ({}) }),
     srsClient: Object.assign(new EventEmitter(), { getTransponder: () => null }),
     clock,
+    archiveRetentionMs: retentionMinFromEnv() * 60000, // ADR 0107: the soak's own retention, not production's 12 h
     missionSession,
     surveillanceHints: null,
     trackSeams: {

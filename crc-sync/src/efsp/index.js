@@ -82,7 +82,7 @@ const log = require('../log').logger('efsp');
  *   or worse, restored a snapshot somebody had committed to git. It lives in
  *   data/ now; see src/state-paths.js.
  */
-function createEfsp({ env = process.env, facilityConfig = createFacilityConfig({ env }), stereoRoutes = createStereoRoutes({ env }), clock = WALL_CLOCK, wallClock = WALL_CLOCK, nlaGuardMs = NLA_GUARD_MS, transitionAltFt, currentTheater = () => null, locateTrack = null, onNlaDelta = null, airborneEvidence = null, isAbsent = () => false,
+function createEfsp({ env = process.env, facilityConfig = createFacilityConfig({ env }), stereoRoutes = createStereoRoutes({ env }), clock = WALL_CLOCK, wallClock = WALL_CLOCK, nlaGuardMs = NLA_GUARD_MS, transitionAltFt, currentTheater = () => null, locateTrack = null, onNlaDelta = null, airborneEvidence = null, isAbsent = () => false, archiveRetentionMs = undefined,
   paths = statePaths('efsp-board.json', env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH, env),
   standingPaths = statePaths('efsp-airspaces.json', env.CRCSYNC_EFSP_AIRSPACES_PATH, env) } = {}) {
   // The Facilities' config and the stereo routes are read when they are built: the composition root builds them and
@@ -156,6 +156,7 @@ function createEfsp({ env = process.env, facilityConfig = createFacilityConfig({
       return f ? f.boardStore : null;
     },
     flightDataStore, correlationStore, marsaStore, mutationLog, clock,
+    retentionMs: archiveRetentionMs, // undefined: ARCHIVE_AFTER_MS (12 h, ADR 0107); only the soak host shortens it
   });
 
   const ctx = {

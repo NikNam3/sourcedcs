@@ -7,7 +7,7 @@
 // L6's 4-hour soak measured it: the snapshot grew from 23 KB to 470 KB and a
 // Mutation's p50 from 0.8 to 13 ms. The rules, exactly as S-R2-13 fixed them:
 //
-//   1. A Strip is archived when it is DROPPED and either 2 h of wall time have
+//   1. A Strip is archived when it is DROPPED and either 12 h of wall time have
 //      passed since its drop or the mission session rolls over (F3, ADR 0086),
 //      and L5's traffic count has its record.
 //   2. The flight data is archived only if it had a Strip and every Strip that
@@ -27,10 +27,11 @@ const log = require('../log').logger('efsp:archiver');
 const { WALL_CLOCK } = require('../mission-clock');
 
 /**
- * [SOURCE-DEFINED] (H36, docs/adr/0082) — two hours after a Strip is finished is
- * the human's decision, not tuning, so a constant rather than a config file.
+ * [SOURCE-DEFINED] (H36 docs/adr/0082, H107 docs/adr/0107) — twelve hours after a Strip is finished is
+ * the human's decision, not tuning, so a constant rather than a config file. It was two hours; sorties
+ * run 6-8 hours and the returning flight must still find its flight data.
  */
-const ARCHIVE_AFTER_MS = 2 * 60 * 60 * 1000;
+const ARCHIVE_AFTER_MS = 12 * 60 * 60 * 1000;
 
 class Archiver {
   /**

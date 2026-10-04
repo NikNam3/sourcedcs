@@ -497,7 +497,7 @@ function monitors() {
   let g = newDeparture(w, 'MON3'); g = chain(w, 'INCIRLIK', g, 'HANDED_OFF');
   byOwner(w, 'INCIRLIK', g, { kind: 'DropStrip' });
   w.tick(['obligationsNla']);
-  w.advance(2 * 3600 * 1000 + 1000);
+  w.advance(12 * 3600 * 1000 + 1000);
   w.tick(['obligationsNla']);
   w.tick(['obligationsNla']);
   w.send('app', { version: 1, type: 'efsp-resync', facilityId: 'INCIRLIK', lastBoardSeq: 0 }, 'resync-after-archive');

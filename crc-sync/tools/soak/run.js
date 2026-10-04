@@ -7,7 +7,7 @@
 //        [--realtime] [--restarts n] [--restart-at m,m] [--crew three|full|solo]
 //        [--sample-every s] [--out dir] [--keep-state] [--inproc] [--prune-retired]
 //        [--inject drop-ack|drop-broadcast|leak|skip-shadow-client] [--quiet]
-//        [--warmup-min m] [--judge-memory] [--threshold-<name> <value>]
+//        [--warmup-min m] [--retention-min m] [--judge-memory] [--threshold-<name> <value>]
 //
 // Exit: 0 PASS, 1 FAIL (verdict), 2 harness error.
 
@@ -21,7 +21,7 @@ const { PROFILES, CREWS } = require('./traffic');
 const report = require('./report');
 
 function parseArgs(argv) {
-  const o = { minutes: 10, seed: 1, profile: 'realistic', realtime: false, restarts: null, restartAt: null, crew: null, sampleEvery: null, out: null, keepState: false, inproc: false, pruneRetired: false, inject: null, quiet: false, warmupMin: null, judgeMemory: false, thresholds: { ...report.THRESHOLDS } };
+  const o = { minutes: 10, seed: 1, profile: 'realistic', realtime: false, restarts: null, restartAt: null, crew: null, sampleEvery: null, out: null, keepState: false, inproc: false, pruneRetired: false, inject: null, quiet: false, warmupMin: null, retentionMin: null, judgeMemory: false, thresholds: { ...report.THRESHOLDS } };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]; const v = () => argv[++i];
     switch (a) {
@@ -42,6 +42,7 @@ function parseArgs(argv) {
       case '--quiet': o.quiet = true; break;
       case '--judge-memory': o.judgeMemory = true; break;
       case '--warmup-min': o.warmupMin = Number(v()); break;
+      case '--retention-min': o.retentionMin = Number(v()); break;
       default:
         if (a.startsWith('--threshold-')) { o.thresholds[a.slice(12)] = Number(v()); break; }
         throw new Error(`unknown option ${a}`);
@@ -50,12 +51,16 @@ function parseArgs(argv) {
   if (!PROFILES[o.profile]) throw new Error(`unknown profile ${o.profile}`);
   if (o.crew && !CREWS[o.crew]) throw new Error(`unknown crew ${o.crew}`);
   if (o.warmupMin !== null && !(o.warmupMin >= 0 && o.warmupMin < o.minutes)) throw new Error('--warmup-min must be >= 0 and shorter than --minutes');
+  if (o.retentionMin !== null && !(o.retentionMin > 0)) throw new Error('--retention-min must be > 0');
   if (!(o.minutes > 0)) throw new Error('--minutes must be > 0');
   return o;
 }
 
 async function main() {
   const o = parseArgs(process.argv.slice(2));
+  // The soak's Strip retention (ADR 0107): the host reads it from the environment (retention.js); the report reads it from `o`.
+  if (o.retentionMin === null) o.retentionMin = require('./retention').SOAK_RETENTION_MIN_DEFAULT;
+  process.env[require('./retention').ENV_KEY] = String(o.retentionMin);
   const stamp = new Date().toISOString().replace(/[:.]/g, '-').replace(/Z$/, 'Z');
   const outDir = o.out || path.join(__dirname, 'out', `${stamp}-seed${o.seed}-${o.profile}-${o.minutes}m${o.inject ? `-${o.inject}` : ''}`);
   fs.mkdirSync(outDir, { recursive: true });

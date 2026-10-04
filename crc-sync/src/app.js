@@ -138,6 +138,7 @@ function createApp(deps = {}) {
     env, facilityConfig: efspFacilityConfig, stereoRoutes, clock: missionClock, wallClock: WALL_CLOCK, nlaGuardMs: nlaGuardFromEnv(env),
     transitionAltFt: () => theaterContext.transitionAltFt(), currentTheater: () => missionSession.current().theatre || null, locateTrack,
     paths: boardPaths,
+    archiveRetentionMs: deps.archiveRetentionMs, // the soak host only (ADR 0107)
     isAbsent: (controllerId) => pendingSignOffs.has(controllerId),
     // F-408's clock-driven half: the changed-Strips-only delta of the NLA-status sweep (docs/ui-findings/lane4.md F-408).
     onNlaDelta: (payload) => hubLink.get().deliverEfsp(serverBoardDelta(payload, efsp.boardStoreFor)),

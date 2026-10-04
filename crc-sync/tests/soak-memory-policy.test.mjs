@@ -2,11 +2,24 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
-const { memoryPolicy, RETENTION_MIN, MEMORY_MIN_RUN_MIN } = require('../tools/soak/report.js');
-const { ARCHIVE_AFTER_MS } = require('../src/efsp/archiver.js');
+const { memoryPolicy, RETENTION_MIN, MEMORY_MIN_RUN_MIN, PRODUCTION_RETENTION_MS } = require('../tools/soak/report.js');
+const { describeRetention, retentionMinFromEnv, ENV_KEY } = require('../tools/soak/retention.js');
 
-test('retention is read from the archiver, not hard-coded', () => {
-  assert.equal(RETENTION_MIN, ARCHIVE_AFTER_MS / 60000);
+test('the soak judges against its own 2 h retention, not production\'s 12 h (ADR 0107)', () => {
+  assert.equal(RETENTION_MIN, 120);
+  assert.equal(PRODUCTION_RETENTION_MS, 12 * 3600 * 1000);
+  assert.equal(memoryPolicy({ minutes: 240 }).judged, true, 'a 4 h run is still judged');
+  assert.equal(describeRetention(120, PRODUCTION_RETENTION_MS), 'soak retention 2 h (production 12 h)');
+});
+
+test('--retention-min travels by environment and drives the policy', () => {
+  assert.equal(retentionMinFromEnv({}), 120);
+  assert.equal(retentionMinFromEnv({ [ENV_KEY]: '45' }), 45);
+  assert.equal(retentionMinFromEnv({ [ENV_KEY]: 'x' }), 120);
+  const p = memoryPolicy({ minutes: 240, retentionMin: 200 });
+  assert.equal(p.judged, true);
+  assert.ok(p.warmup >= 200);
+  assert.equal(memoryPolicy({ minutes: 240, warmupMin: 100, retentionMin: 200 }).judged, false);
 });
 
 test('runs under 3 h are not judged, with a reason', () => {
