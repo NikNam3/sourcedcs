@@ -261,6 +261,9 @@
    "positionsOf",
    "usingPositionFor"
   ],
+  "panels/efsp/airspace-card.js": [
+   "_buildAirspaceCard"
+  ],
   "panels/efsp/airspace-detail-views.js": [
    "HISTORY_FOOTNOTE",
    "deleteBlockers",
@@ -337,12 +340,20 @@
    "trimClosing"
   ],
   "panels/efsp/airspace-panel.js": [
+   "initAirspacePanel",
+   "renderAirspacePanel"
+  ],
+  "panels/efsp/airspace-rules.js": [
+   "_altText",
+   "_flightsOf",
+   "_formatFrequency",
+   "_formatWindow",
+   "_transitionAlt",
+   "_zulu",
    "airspaceActionsFor",
    "deleteReason",
    "editReason",
    "groupByFacility",
-   "initAirspacePanel",
-   "renderAirspacePanel",
    "routeFlightCount",
    "visibleAirspaces"
   ],
@@ -385,6 +396,27 @@
    "isValidFrequency",
    "polygonSelfIntersects",
    "validateAirspaceDefinition"
+  ],
+  "panels/efsp/airspace-view-state.js": [
+   "NEW_KEY",
+   "_delayFor",
+   "_draftInputs",
+   "_drafts",
+   "_filter",
+   "_menuFor",
+   "_saveFilter",
+   "_setDelayFor",
+   "_setMenuFor",
+   "_views"
+  ],
+  "panels/efsp/airspace-views.js": [
+   "_closeView",
+   "_dispatchAirspace",
+   "_el",
+   "_openCreate",
+   "_openDelete",
+   "_openEditor",
+   "_openHistory"
   ],
   "panels/efsp/alerts-state.js": [
    "_resetAlertsState",
