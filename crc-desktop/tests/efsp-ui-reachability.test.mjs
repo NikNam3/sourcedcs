@@ -26,6 +26,7 @@ import { COMPACT_BLOCKS_BY_POSITION, compactBlocksFor as _compactBlocksFor } fro
 import { INDICATOR_ORDER } from '../app/public/js/panels/efsp/strip-view.js';
 import { HAND_BACK_TO, TOFI_ANSWERED_BY } from '../app/public/js/panels/efsp/bay-view.js';
 import * as domStub from './helpers/dom-stub.js';
+import * as serverConfig from "./helpers/server-config.mjs";
 
 const require = createRequire(import.meta.url);
 
@@ -2509,8 +2510,8 @@ test('a Strip drawn before the stereo list landed is rebuilt once it does — th
 
 // ── L23: the tactical hand-back and the proposer's way out (docs/adr/0080) ──
 
-const _serverPermission = require('../../crc-sync/src/efsp/permission.js');
-const _serverFacilityConfig = require('../../crc-sync/src/efsp/facility-config.js');
+const _serverPermission = serverConfig.permission;
+const _serverFacilityConfig = serverConfig.facilityConfig;
 
 /** Renders a Strip with the real TACTICAL Bays loaded, the way the panel has them after a snapshot. */
 async function renderTactical(strip, signedOn, flightData = FDR) {

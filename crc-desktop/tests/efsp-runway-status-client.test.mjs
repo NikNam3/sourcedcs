@@ -9,6 +9,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import * as serverConfig from "./helpers/server-config.mjs";
 
 import { createRequire } from 'node:module';
 import './helpers/client-env.mjs';
@@ -19,7 +20,7 @@ import * as rules from '../app/public/js/panels/efsp/runway-status-rules.js';
 
 const require = createRequire(import.meta.url);
 const serverRunwayStatus = require('../../crc-sync/src/efsp/runway-status.js');
-const serverPermission = require('../../crc-sync/src/efsp/permission.js');
+const serverPermission = serverConfig.permission;
 const { RunwayStatusStore } = require('../../crc-sync/src/efsp/runway-status-store.js');
 
 // ── fixtures ────────────────────────────────────────────────────────────────

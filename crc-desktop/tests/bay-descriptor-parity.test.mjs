@@ -11,9 +11,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { readClient } from './helpers/mirror-source.mjs';
+import * as serverConfig from "./helpers/server-config.mjs";
 
 const require = createRequire(import.meta.url);
-const facilities = require('../../crc-sync/src/efsp/facility-config.js');
+const facilities = serverConfig.facilityConfig;
 const nla = require('../../crc-sync/src/efsp/nla.js');
 
 const JS_DIR = path.join(import.meta.dirname, '../app/public/js');

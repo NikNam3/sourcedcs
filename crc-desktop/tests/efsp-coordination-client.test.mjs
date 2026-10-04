@@ -9,11 +9,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { readClient, constLiteral } from './helpers/mirror-source.mjs';
+import * as serverConfig from "./helpers/server-config.mjs";
 
 import { COORDINATION_OP_KINDS, COORDINATION_ELIGIBLE_STATES, TOFI_OP_KINDS, TOFI_ELIGIBLE_STATES } from '../app/public/js/panels/efsp/efsp-nla.js';
 const require = createRequire(import.meta.url);
 
-const server = require('../../crc-sync/src/efsp/permission.js');
+const server = serverConfig.permission;
 const serverCoordination = require('../../crc-sync/src/efsp/coordination.js');
 
 test('the client mirror of the 5 coordination primitives stays in lockstep with permission.js\'s COORDINATION_OP_KINDS', () => {
@@ -109,7 +110,7 @@ test('the Positions the client offers Convert to Arrival to are exactly the ones
 // lives here; until now it did not. A key in COORDINATION_TARGETS is what makes
 // the Coordinate menu render for a Position at all.
 test('D12: no MRU or non-ATC Position is a key of the client\'s COORDINATION_TARGETS', () => {
-  const facilityConfig = require('../../crc-sync/src/efsp/facility-config.js');
+  const facilityConfig = serverConfig.facilityConfig;
   for (const id of Object.keys(mirror.COORDINATION_TARGETS)) {
     assert.ok(!['MRU', 'MRU_POSITION', 'NON_ATC'].includes(facilityConfig.getPositionClass(id)), id);
     for (const k of server.COORDINATION_OP_KINDS) assert.ok(server.PERMISSIONS[id].has(k), `${id} ${k}`);

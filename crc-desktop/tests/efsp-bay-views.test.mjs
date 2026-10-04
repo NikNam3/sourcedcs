@@ -9,6 +9,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { makeElement, descendants } from './helpers/dom-stub.js';
+import * as serverConfig from "./helpers/server-config.mjs";
 
 import * as V from '../app/public/js/panels/efsp/bay-views.js';
 import { applyEfspSnapshot } from '../app/public/js/panels/efsp/efsp-state.js';
@@ -16,8 +17,8 @@ import { getEfspSfa, applyEfspSfaSnapshot, _resetEfspSfaStateForTest } from '../
 import { setEfspSender, sendEfspSetPositions } from '../app/public/js/panels/efsp/efsp-ws.js';
 
 const require = createRequire(import.meta.url);
-const facilityConfig = require('../../crc-sync/src/efsp/facility-config.js');
-const permission = require('../../crc-sync/src/efsp/permission.js');
+const facilityConfig = serverConfig.facilityConfig;
+const permission = serverConfig.permission;
 const { SfaStore } = require('../../crc-sync/src/efsp/sfa-store.js');
 const { renderBayDescriptorView, sfaExtraNlaButtons } = V;
 
