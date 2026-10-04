@@ -44,6 +44,7 @@ const SANDBOX_MODULES = [
   // bay-view.js no longer re-exports the bay/* features: the facade finds them in their own modules.
   'panels/efsp/bay/strip-element.js', 'panels/efsp/bay/popovers/coordination.js', 'panels/efsp/bay/popovers/tofi.js',
   'panels/efsp/bay/popovers/airspace-entry.js', 'panels/efsp/bay/popovers/marsa.js', 'panels/efsp/bay/popovers/bind.js',
+  'panels/efsp/panel/state.js', 'panels/efsp/panel/staleness.js', 'panels/efsp/panel/tabs.js', 'panels/efsp/panel/arrivals.js', 'panels/efsp/panel/create-strip.js', 'panels/efsp/panel/refusal.js', 'panels/efsp/panel/dot-commands.js',
   'panels/efsp/bay/dispatch.js', 'panels/efsp/bay/selection.js', 'panels/efsp/bay/strip-signature.js', 'panels/efsp/bay/coordination-rules.js',
   'panels/efsp/bay/popover-portal.js', 'panels/efsp/bay/block-edit.js', 'panels/efsp/bay/authority-mirror.js', 'panels/efsp/bay/open-bays.js',
 ];

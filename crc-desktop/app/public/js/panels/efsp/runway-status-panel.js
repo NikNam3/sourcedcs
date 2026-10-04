@@ -7,7 +7,7 @@ import { alertPadConstraintFor } from './scramble.js';
 import { runwayStatusActionsFor, runwayStatusSubjectFor } from './runway-status-rules.js';
 import { registerEfspMessage, registerEfspStoreRedraw } from './efsp-message-registry.js';
 import { applyEfspRunwayStatusDelta } from './efsp-state.js';
-import { _showMutationError } from './efsp-panel.js';
+import { _showMutationError } from './panel/refusal.js';
 import { markEfspChanged } from './efsp-change-bus.js';
 import { onEfspChanged } from './efsp-change-bus.js';
 

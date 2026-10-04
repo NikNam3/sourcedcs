@@ -9,10 +9,10 @@ import {
 import { getActingPositions, sendEfspCarrierMutation, sendEfspMutation, settleEfspAck } from './efsp-ws.js';
 // ESM-1: today efsp-panel.js's _callsignOfFlightData (fallback '') silently won over this file's own copy (fallback flightDataId);
 // the import keeps that effective behaviour (S-ARCH2 item 3, plan §6 queue item 3).
-import { _callsignOfFlightData } from './efsp-panel.js';
+import { _callsignOfFlightData } from './panel/refusal.js';
 import { registerEfspMessage, registerEfspStoreRedraw } from './efsp-message-registry.js';
 import { applyEfspCarrierDelta } from './carrier-state.js';
-import { _showMutationError } from './efsp-panel.js';
+import { _showMutationError } from './panel/refusal.js';
 import { markEfspChanged } from './efsp-change-bus.js';
 
 // The carrier's surfaces on the Strip panel (crc-sync's docs/adr/0074, ADR 0064

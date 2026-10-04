@@ -1,5 +1,5 @@
 'use strict';
-import { getCurrentEfspRefusal } from '../efsp-panel.js';
+import { getCurrentEfspRefusal } from '../panel/refusal.js';
 import {
   CONFIRM_VACATED_ELIGIBLE_BLOCKS, blockValueHintFor, editRedirectFor, enumSelectOptionsFor,
   hasActiveAnnotationEntry, isBlockEditable, isBooleanToggleBlock, isEnumBlockClearable, resolveBlockValue

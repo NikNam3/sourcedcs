@@ -61,7 +61,9 @@ import { _dispatchHandoffStep, _openControlReleasePopover } from './bay/popovers
 import { OBLIGATION_LABELS, handoffChips, handoffSteps } from './control-release-rules.js';
 import { holdsFormationGrant, joinOffer, splitChipFor, splitOffer } from './formation-rules.js';
 import { scrambleAlertsFor } from './scramble.js';
-import { convertStripToArrival, efspVisibleBayId, noteEfspArrivalShown } from './efsp-panel.js';
+import { convertStripToArrival } from './panel/create-strip.js';
+import { efspVisibleBayId } from './panel/tabs.js';
+import { noteEfspArrivalShown } from './panel/arrivals.js';
 import { arJoinFor, atoAlertsFor, isArHighlighted } from './ato-strip.js';
 import { runwayStatusAlertsFor } from './runway-status-rules.js';
 import { settings } from '../../settings.js';

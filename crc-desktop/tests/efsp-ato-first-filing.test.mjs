@@ -9,6 +9,7 @@ import assert from 'node:assert/strict';
 import './helpers/client-env.mjs';
 import domStub from './helpers/dom-stub.js';
 import { freshGraph } from './helpers/fresh-graph.mjs';
+import { panelFacade } from './helpers/panel-facade.mjs';
 
 const { makeElement } = domStub;
 
@@ -57,7 +58,7 @@ async function mount({ strips, flightDataList }) {
   const g = freshGraph();
   const state = await g.import('panels/efsp/efsp-state.js');
   const ws = await g.import('panels/efsp/efsp-ws.js');
-  const panel = await g.import('panels/efsp/efsp-panel.js');
+  const panel = await panelFacade(g);
   ws.setEfspSender('_sendEfsp', () => {});
   ws.sendEfspSetPositions('INCIRLIK', ['OPS']); // getActingPositions() = ['OPS']
   ws.setEfspSender('sendEfspCreateStrip', (actingPositionId, op, facilityId) => { sent.push({ actingPositionId, op, facilityId }); return 'mid'; });

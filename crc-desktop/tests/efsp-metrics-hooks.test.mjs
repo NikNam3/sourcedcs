@@ -11,6 +11,7 @@ import assert from 'node:assert/strict';
 import './helpers/client-env.mjs';
 import domStub from './helpers/dom-stub.js';
 import { freshGraph } from './helpers/fresh-graph.mjs';
+import { panelFacade } from './helpers/panel-facade.mjs';
 
 const { makeElement, descendants } = domStub;
 const IDS = [
@@ -75,7 +76,7 @@ async function mount({ metrics = true } = {}) {
   const selection = await g.import('panels/efsp/bay/selection.js');
   await g.import('panels/efsp/strip-view.js');
   const metricsClient = await g.import('panels/efsp/efsp-metrics-client.js');
-  const panel = await g.import('panels/efsp/efsp-panel.js');
+  const panel = await panelFacade(g);
   if (!metrics) metricsClient._setEfspMetricsClientForTest(NO_METRICS);
 
   ws.setEfspSender('_sendEfsp', () => {});

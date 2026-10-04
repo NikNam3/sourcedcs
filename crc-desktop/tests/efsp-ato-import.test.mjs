@@ -12,6 +12,7 @@ import assert from 'node:assert/strict';
 import './helpers/client-env.mjs';
 import domStub from './helpers/dom-stub.js';
 import { freshGraph } from './helpers/fresh-graph.mjs';
+import { panelFacade } from './helpers/panel-facade.mjs';
 
 const { makeElement, descendants } = domStub;
 
@@ -23,7 +24,7 @@ async function mount({ signedOn = ['TAC_C2'] } = {}) {
   const sent = [];
   const g = freshGraph(); // a new instance of the client modules per mount, as the old vm context was
   const ws = await g.import('panels/efsp/efsp-ws.js');
-  const panel = await g.import('panels/efsp/efsp-panel.js');
+  const panel = await panelFacade(g);
   const api = await g.import('panels/efsp/ato-import.js');
   ws.setEfspSender('_sendEfsp', () => {});
   ws.sendEfspSetPositions('TACTICAL', signedOn); // what getActingPositions() reads

@@ -2,7 +2,7 @@
 import { efspLinesWithOthers, getEfspBays, getEfspRack, getEfspStrip, isWithOthersBayId, searchEfspStrips } from './efsp-state.js';
 import { carrierOrderRack, renderCarrierStackBoard } from './carrier-panel.js';
 import { renderBayDescriptorView } from './bay-views.js';
-import { getActiveEfspSearchQuery } from './efsp-panel.js';
+import { getActiveEfspSearchQuery } from './panel/tabs.js';
 import { computeRackReconciliation } from './strip-drag.js';
 import { _isPseudoBayId, _openBayContainers } from './bay/open-bays.js';
 import { _buildStripEl, _expandedStripId } from './bay/strip-element.js';

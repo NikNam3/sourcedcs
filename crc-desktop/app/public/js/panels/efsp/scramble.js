@@ -2,8 +2,8 @@
 import { getAllEfspStrips, getEfspFlightData, getEfspRunwayStatus, getEfspStrip } from './efsp-state.js';
 import { getActingPositions } from './efsp-ws.js';
 import { selectEfspStripById } from './bay/selection.js';
-import { _renderPositionTabs } from './efsp-panel.js';
-import { _setActiveBayId, _setActivePositionTab } from './efsp-panel.js';
+import { _renderPositionTabs } from './panel/tabs.js';
+import { _setActiveBayId, _setActivePositionTab } from './panel/state.js';
 
 // Guide §9.6 — alert and scramble, on the client (crc-sync's docs/adr/0070).
 //
