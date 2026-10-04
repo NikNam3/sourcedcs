@@ -391,14 +391,14 @@ class HandoffControl {
       return {
         ok: false, reason: 'VALIDATION_ERROR', strip,
         detail: `${scopes.needed.join(' and ')} is a control instruction and ${why}: coordinate with ${other} and say so (coordinatedWith)`,
-        coordinateWith: other, needs: scopes.needed,
+        // The structured half of the request: the client keys on this, never on the sentence above (DESK-ACKS).
+        attestation: { with: other, needs: scopes.needed },
       };
     }
     if (!accepted.has(op.coordinatedWith)) {
       return {
         ok: false, reason: 'VALIDATION_ERROR', strip,
         detail: `coordinatedWith must be ${other}, the other party of this HANDOFF (got ${op.coordinatedWith})`,
-        coordinateWith: other, needs: scopes.needed,
       };
     }
     return { ok: true, audit: { controlAxis: scopes.needed.join('+'), coordinatedWith: op.coordinatedWith }, ...extra };

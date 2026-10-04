@@ -107,6 +107,8 @@ function _handleMutation(ctx, session, msg, persist) {
     boardSeq: boardStore.currentSeq, boardEpoch: boardStore.epoch, ok: result.ok,
     strip: stampedStrip, flightData: result.flightData, reason: result.reason, detail: result.detail,
     ...(warnings.length ? { warnings } : {}),
+    // docs/adr/0101: a control write that needs "coordinated with" is refused with who and what, as data.
+    ...(result.attestation ? { attestation: result.attestation } : {}),
     routedTo: result.routedTo,
     // docs/adr/0100 §7: the server says what is undoable (the client keeps no list), and an Undo's ack says what it
     // undid and voided. Absent otherwise.

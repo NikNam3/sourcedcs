@@ -278,6 +278,10 @@ test('control-axis matrix: {receiver, transferring} x {TURNS, CLIMB, DESCENT} x 
             refused(ack, 'VALIDATION_ERROR', label);
             assert.ok(ack.detail.includes(other), `${label}: the refusal names ${other}: ${ack.detail}`);
             assert.ok(ack.detail.includes(axis.scope === 'TURNS' ? 'TURNS' : axis.scope), `${label}: and the scope: ${ack.detail}`);
+            // DESK-ACKS: the same request as data, so no client parses the sentence above.
+            assert.equal(ack.attestation.with, other, `${label}: attestation.with`);
+            assert.ok(Array.isArray(ack.attestation.needs) && ack.attestation.needs.length > 0, `${label}: attestation.needs`);
+            assert.ok(ack.attestation.needs.every(n => ack.detail.includes(n)), `${label}: needs are the scopes the sentence names`);
           }
           if (ack.ok) {
             const entry = log(w).filter(e => e.op === 'SetBlock').pop();
@@ -295,7 +299,9 @@ test('control-axis matrix: {receiver, transferring} x {TURNS, CLIMB, DESCENT} x 
 test('coordinatedWith must be the other party\'s Position id', () => {
   const w = world();
   const ex = ex0(w, 'CW1');
-  refused(asR(w, ex, { kind: 'SetBlock', blockId: '9A-VECTOR', value: '270', coordinatedWith: 'LC' }), 'VALIDATION_ERROR', 'a third Position');
+  const third = asR(w, ex, { kind: 'SetBlock', blockId: '9A-VECTOR', value: '270', coordinatedWith: 'LC' });
+  refused(third, 'VALIDATION_ERROR', 'a third Position');
+  assert.equal(third.attestation, undefined, 'a wrong party is a refusal, not a request to attest');
   refused(asR(w, ex, { kind: 'SetBlock', blockId: '9A-VECTOR', value: '270', coordinatedWith: 'AP' }), 'VALIDATION_ERROR', 'oneself');
   refused(asT(w, ex, { kind: 'SetBlock', blockId: '9A-VECTOR', value: '270', coordinatedWith: 'CTR' }), 'VALIDATION_ERROR', 'oneself');
   mustT(w, ex, { kind: 'SetBlock', blockId: '9A-VECTOR', value: '270', coordinatedWith: 'AP' });
