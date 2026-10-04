@@ -13,7 +13,7 @@ const after = { stripId: 's1', rev: 2 };
 
 function build(facilityId) {
   const lines = [];
-  const audit = new BoardAudit({ rules: { facilityId }, clock: { now: () => 1234 }, mutationLog: () => ({ record: (e) => lines.push(JSON.stringify(e)) }) });
+  const audit = new BoardAudit({ rules: { facilityId }, clock: { now: () => 1234 }, mutationLog: { record: (e) => lines.push(JSON.stringify(e)) } });
   return { audit, lines };
 }
 
@@ -54,6 +54,6 @@ test('a Strip without flight data, and a Board without a facility id, write null
 });
 
 test('no Mutation log, no entry and no throw', () => {
-  const audit = new BoardAudit({ rules: {}, clock: { now: () => 1 }, mutationLog: () => null });
+  const audit = new BoardAudit({ rules: {}, clock: { now: () => 1 }, mutationLog: null });
   assert.doesNotThrow(() => audit.recordSystem('Archive', strip, {}));
 });

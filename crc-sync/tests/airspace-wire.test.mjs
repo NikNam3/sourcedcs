@@ -23,7 +23,7 @@ const STANDING = process.env.CRCSYNC_EFSP_AIRSPACES_PATH;
 const LOGFILE = process.env.CRCSYNC_EFSP_MUTATION_LOG_PATH;
 
 const { createEfsp } = await import('../src/efsp/index.js');
-const facilityConfig = await import('../src/efsp/facility-config.js');
+const facilityConfig = (await import('../src/efsp/facility-config.js')).createFacilityConfig();
 const { createEfspInstrumentation } = await import('../src/efsp/metrics.js');
 const { crew } = await import('./helpers/efsp-scenario.mjs');
 
@@ -33,7 +33,7 @@ const RANGE = { airspaceId: 'RANGE-1', name: 'Test Range', type: 'RANGE', contro
 const ADMIN = { service: 'SQUADRON_ADMIN', sub: 'sub-1', name: 'Web Admin' };
 
 let theater = THEATER;
-const start = () => createEfsp({ currentTheater: () => theater });
+const start = () => createEfsp({ currentTheater: () => theater, facilityConfig });
 const reset = ({ standing = {}, keepBoard = false } = {}) => {
   theater = THEATER;
   fs.writeFileSync(STANDING, JSON.stringify(standing));

@@ -27,7 +27,7 @@ function _num(section, key, raw, fallback, source, { min }) {
   return fallback;
 }
 
-function normalizeHintsConfig(raw, source = 'config', d = DEFAULT_HINTS_CONFIG) {
+function normalizeHintsConfig(raw, source = 'config', d = defaultHintsConfig()) {
   d = d || { airborne: {}, staleness: {} }; // strict: validating the shipped file
   const obj = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
   const sec = (n) => (obj[n] && typeof obj[n] === 'object' ? obj[n] : {});
@@ -44,7 +44,12 @@ function normalizeHintsConfig(raw, source = 'config', d = DEFAULT_HINTS_CONFIG) 
 }
 
 // The defaults are the shipped JSON, validated strictly; no literal copy in code (H88).
-const DEFAULT_HINTS_CONFIG = normalizeHintsConfig(readShipped(CONFIG_NAME), `config/${CONFIG_NAME}`, null);
+// Read on first use, not when this file is required.
+let DEFAULT_HINTS_CONFIG = null;
+function defaultHintsConfig() {
+  if (!DEFAULT_HINTS_CONFIG) DEFAULT_HINTS_CONFIG = normalizeHintsConfig(readShipped(CONFIG_NAME), `config/${CONFIG_NAME}`, null);
+  return DEFAULT_HINTS_CONFIG;
+}
 
 function loadHintsConfig(filePath = readPath(CONFIG_NAME, process.env.CRCSYNC_EFSP_SURVEILLANCE_HINTS_PATH)) {
   let raw;
@@ -52,14 +57,16 @@ function loadHintsConfig(filePath = readPath(CONFIG_NAME, process.env.CRCSYNC_EF
     raw = JSON.parse(fs.readFileSync(filePath, 'utf8'));
   } catch (e) {
     log.warn('could not read file — using the shipped defaults', { file: filePath, error: e.message });
-    return DEFAULT_HINTS_CONFIG;
+    return defaultHintsConfig();
   }
   return normalizeHintsConfig(raw, filePath);
 }
 
-// Once, at load (P5).
-const HINTS_CONFIG = loadHintsConfig();
+// Once, on first use (P5): app.js asks for it at start-up.
+let HINTS_CONFIG = null;
+function getHintsConfig() {
+  if (!HINTS_CONFIG) HINTS_CONFIG = loadHintsConfig();
+  return HINTS_CONFIG;
+}
 
-function getHintsConfig() { return HINTS_CONFIG; }
-
-module.exports = { DEFAULT_HINTS_CONFIG, getHintsConfig, loadHintsConfig, normalizeHintsConfig };
+module.exports = { defaultHintsConfig, getHintsConfig, loadHintsConfig, normalizeHintsConfig };

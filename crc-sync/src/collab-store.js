@@ -15,6 +15,7 @@
 
 const fs = require('fs');
 const { statePaths, ensureDirFor } = require('./state-paths');
+const { WALL_CLOCK } = require('./mission-clock');
 const { IFF_STATES } = require('./surveillance/iff');
 const log = require('./log').logger('collab-store');
 
@@ -60,8 +61,8 @@ class CollaborativeStore {
    * @param {() => number} [deps.wallNow]
    * @param {number} [deps.clockGraceMs]
    */
-  constructor({ persist = false, path: filePath, identityOf = () => null, sessionSeq = () => 0, wallNow = () => Date.now(), clockGraceMs = CLOCK_GRACE_MS } = {}) {
-    this._paths = persist ? statePaths(FILE_NAME, filePath || process.env.CRCSYNC_COLLAB_PATH) : null;
+  constructor({ persist = false, path: filePath, identityOf = () => null, sessionSeq = () => 0, wallNow = WALL_CLOCK.now, clockGraceMs = CLOCK_GRACE_MS, env = process.env } = {}) {
+    this._paths = persist ? statePaths(FILE_NAME, filePath || env.CRCSYNC_COLLAB_PATH, env) : null;
     this._identityOf = identityOf;
     this._sessionSeq = sessionSeq;
     this._wallNow = wallNow;

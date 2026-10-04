@@ -19,10 +19,10 @@ function load(script, configDir) {
 const CASES = [
   ['alerting', "require('./src/alerting-config').loadAlertingConfig()", 'alerting.json'],
   ['session', "require('./src/session-config').loadSessionConfig()", 'sign-on-grace.json'],
-  ['surveillance hints', "require('./src/efsp/surveillance-hints-config')", 'efsp-surveillance-hints.json'],
-  ['carrier hulls', "require('./src/efsp/carrier/hull-config')", 'efsp-carriers.json'],
+  ['surveillance hints', "require('./src/efsp/surveillance-hints-config').getHintsConfig()", 'efsp-surveillance-hints.json'],
+  ['carrier hulls', "require('./src/efsp/carrier/hull-config').getHulls()", 'efsp-carriers.json'],
   ['sensor specs', "require('./src/radars').loadSensorSpecs()", 'sensor-specs.json'],
-  ['theaters', "require('./src/theaters')", 'theaters.json'],
+  ['theaters', "require('./src/theaters').defaultTransitionAltFt()", 'theaters.json'],
 ];
 
 for (const [label, script, file] of CASES) {
@@ -40,7 +40,7 @@ test('the shipped files load: the defaults are the JSON values', () => {
     const t = require('./src/theaters');
     const s = require('./src/radars').loadSensorSpecs();
     const h = require('./src/efsp/carrier/hull-config').getDefaultHull();
-    console.log(JSON.stringify([a.conflictAlert.lateralNm, t.DEFAULT_TRANSITION_ALT_FT, s.shipRadarDefault, s.defaultCaps.awacs, h.hullId]));
+    console.log(JSON.stringify([a.conflictAlert.lateralNm, t.defaultTransitionAltFt(), s.shipRadarDefault, s.defaultCaps.awacs, h.hullId]));
   `, path.join(ROOT, 'config'));
   assert.equal(r.status, 0, r.stderr);
   assert.deepEqual(JSON.parse(r.stdout.trim().split('\n').pop()), [3, 18000, { rangeNm: 40, sweepMs: 5000 }, { height: true, ssr: true, mode4: true }, 'CVN-72']);

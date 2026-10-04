@@ -80,7 +80,7 @@ function _homeAirports(raw, fallback, source) {
  * Validates a parsed config object field by field against the defaults.
  * Pure apart from log.warn; exported so tests need no file.
  */
-function normalizeInstrumentationConfig(raw, source = 'config', d = DEFAULT_INSTRUMENTATION_CONFIG) {
+function normalizeInstrumentationConfig(raw, source = 'config', d = defaultInstrumentationConfig()) {
   d = d || { mutationLog: {}, metrics: {}, trafficCount: {} }; // strict: validating the shipped file
   const obj = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
   const section = (name) => (obj[name] && typeof obj[name] === 'object' ? obj[name] : {});
@@ -94,8 +94,12 @@ function normalizeInstrumentationConfig(raw, source = 'config', d = DEFAULT_INST
   });
 }
 
-/** The shipped defaults, validated strictly. Throws (naming the file) when it is missing or has a gap. */
-const DEFAULT_INSTRUMENTATION_CONFIG = normalizeInstrumentationConfig(readShipped(CONFIG_NAME), `config/${CONFIG_NAME}`, null);
+/** The shipped defaults, validated strictly, read on first use (not when this file is required). Throws (naming the file) when it is missing or has a gap. */
+let DEFAULT_INSTRUMENTATION_CONFIG = null;
+function defaultInstrumentationConfig() {
+  if (!DEFAULT_INSTRUMENTATION_CONFIG) DEFAULT_INSTRUMENTATION_CONFIG = normalizeInstrumentationConfig(readShipped(CONFIG_NAME), `config/${CONFIG_NAME}`, null);
+  return DEFAULT_INSTRUMENTATION_CONFIG;
+}
 
 /** Reads and validates one file. A missing or unparseable file is the shipped defaults, with a warning. */
 function loadInstrumentationConfig(filePath = resolveInstrumentationConfigPath()) {
@@ -104,18 +108,20 @@ function loadInstrumentationConfig(filePath = resolveInstrumentationConfigPath()
     raw = JSON.parse(fs.readFileSync(filePath, 'utf8'));
   } catch (e) {
     log.warn('could not read file — using the shipped defaults', { file: filePath, error: e.message });
-    return DEFAULT_INSTRUMENTATION_CONFIG;
+    return defaultInstrumentationConfig();
   }
   return normalizeInstrumentationConfig(raw, filePath);
 }
 
-// Once, at load (P5).
-const INSTRUMENTATION_CONFIG = loadInstrumentationConfig();
-
-function getInstrumentationConfig() { return INSTRUMENTATION_CONFIG; }
+// Once, on first use (P5): the first store that needs a default reads it, which is at start-up.
+let INSTRUMENTATION_CONFIG = null;
+function getInstrumentationConfig() {
+  if (!INSTRUMENTATION_CONFIG) INSTRUMENTATION_CONFIG = loadInstrumentationConfig();
+  return INSTRUMENTATION_CONFIG;
+}
 
 module.exports = {
-  DEFAULT_INSTRUMENTATION_CONFIG,
+  defaultInstrumentationConfig,
   getInstrumentationConfig,
   loadInstrumentationConfig,
   normalizeInstrumentationConfig,

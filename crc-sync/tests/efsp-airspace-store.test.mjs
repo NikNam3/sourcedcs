@@ -274,7 +274,7 @@ test('the pre-0098 array snapshot is refused loudly, never read as an empty regi
 test('the RANGES Facility config is derived, never loaded from or written to disk', async () => {
   // Its Position set comes from the registry's definitions, so an on-disk override would freeze a `positions` array
   // that goes stale the moment an airspace is added or removed.
-  const facilityConfig = await import('../src/efsp/facility-config.js');
+  const facilityConfig = (await import('../src/efsp/facility-config.js')).createFacilityConfig();
   const result = facilityConfig.setFacilityConfig({ positions: ['FAKE_RANGE'] }, 'RANGES');
   assert.equal(result.ok, false);
   assert.match(result.detail, /derived from the airspace config/);

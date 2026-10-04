@@ -9,7 +9,6 @@
 //             facilities, stores }. `facilities` (facilityId -> { boardStore, positionStore, rules }) is
 //             filled after the stores are built, so a closure may read it lazily, never at build time.
 //             `stores` fills in registry order as each entry is built.
-//   audited   true: createEfsp hands the instance the Mutation log (setMutationLog)
 //   snapshot  (store, all) -> json. A null store (sfaRotation where no Facility has an SFA) is the entry's own
 //             concern. The ARRAY ORDER is the persisted body's JSON key order.
 //   restore   (store, data, all) -> void, `data` being that key's value in the saved body. Skipped for a null store.
@@ -30,7 +29,6 @@ const { CarrierStore } = require('./carrier-store');
 const { SfaStore } = require('./sfa-store');
 const authority = require('./authority');
 const carrierHulls = require('./carrier/hull-config');
-const facilityConfig = require('./facility-config');
 const log = require('../log').logger('efsp:stores');
 
 // The Blocks that held the assigned altitude and heading as Strip annotations before docs/adr/0058 moved them onto
@@ -80,7 +78,7 @@ const REGISTRY = [
   },
   {
     key: 'flightData',
-    build: ({ clock, transitionAltFt, codeAllocator }) => new FlightDataStore(codeAllocator, { clock, transitionAltFt }),
+    build: ({ clock, transitionAltFt, codeAllocator, stereoRoutes }) => new FlightDataStore(codeAllocator, { clock, transitionAltFt, stereoRoutes }),
     snapshot: (s) => s.snapshot(),
     restore: (s, data) => s.restore(data),
   },
@@ -89,11 +87,10 @@ const REGISTRY = [
     // The store's sync declaration (docs/adr/0106): `key` is its snapshot key, which is also the key of its heartbeat entry
     // and of its resync slice; `gapFromDeltas` says a delta moves seq by exactly one change, so a client may ask at once on a jump.
     sync: { key: 'airspaces', seqKey: 'airspaceSeq', epochKey: 'airspaceEpoch', deltaType: 'efsp-airspace-delta', gapFromDeltas: true },
-    audited: true,
     // The airspace REGISTRY (docs/adr/0098): definitions per theater and their state, one store for every Facility,
     // like flightDataStore. An airspace is a theater entity that NAMES its controlling Facility rather than being
     // replicated into each one, so there is no D13 replication question: the record has one home.
-    build: ({ clock, currentTheater, facilities, stores }) => {
+    build: ({ clock, currentTheater, facilities, stores, facilityConfig, mutationLog }) => {
       // The Strips working an AREA: non-DROPPED Strips whose `airspaceEntry` names it, on any Facility's Board.
       const occupantsFor = (airspaceId) => {
         const out = [];
@@ -122,13 +119,13 @@ const REGISTRY = [
         return flights.size;
       };
       return new AirspaceStore({
-        clock, currentTheater, occupantsFor, routeOccupancyFor,
+        clock, mutationLog, currentTheater, occupantsFor, routeOccupancyFor,
         facilityLookup: {
           hasFacility: (id) => facilityConfig.getFacilityIds().includes(id),
           positionsOf: (id) => (facilityConfig.getFacilityIds().includes(id) ? facilityConfig.getPositionSet(id) : []),
           facilityOfPosition: (positionId) => facilityConfig.getFacilityIds().find(f => facilityConfig.getPositionSet(f).includes(positionId)) || null,
         },
-        authority: { rowOf: authority.airspaceRowOf },
+        authority: { rowOf: (positionId) => authority.airspaceRowFor(positionId, facilityConfig.getPositionClass) },
       });
     },
     snapshot: (s) => s.snapshot(),
@@ -141,11 +138,11 @@ const REGISTRY = [
     // The store's sync declaration (docs/adr/0106): `key` is its snapshot key, which is also the key of its heartbeat entry
     // and of its resync slice; `gapFromDeltas` says a delta moves seq by exactly one change, so a client may ask at once on a jump.
     sync: { key: 'correlations', seqKey: 'correlationSeq', epochKey: 'correlationEpoch', deltaType: 'efsp-correlation-delta', gapFromDeltas: false },
-    audited: true,
     // WP5 (docs/adr/0045) — keyed by flightDataId, and shared across every Facility for the same reason flightDataStore is:
     // a correlation is a fact about one airframe, and both halves of a cross-Facility exchange are looking at
     // the same one. There is no D13 replication question here either — the record has one home.
-    build: ({ clock, stores }) => new CorrelationStore({
+    build: ({ clock, stores, mutationLog }) => new CorrelationStore({
+      mutationLog,
       clock,
       flightDataExists: (flightDataId) => !!stores.flightData.getFlightData(flightDataId),
     }),
@@ -161,7 +158,6 @@ const REGISTRY = [
     // The store's sync declaration (docs/adr/0106): `key` is its snapshot key, which is also the key of its heartbeat entry
     // and of its resync slice; `gapFromDeltas` says a delta moves seq by exactly one change, so a client may ask at once on a jump.
     sync: { key: 'marsa', seqKey: 'marsaSeq', epochKey: 'marsaEpoch', deltaType: 'efsp-marsa-delta', gapFromDeltas: false },
-    audited: true,
     // WP6 (docs/adr/0051) — shared across every Facility for the same reason flightDataStore and correlationStore
     // are: MARSA is a fact about a set of airframes, not about one Facility's Board, and both halves of a
     // cross-Facility exchange are looking at the same relation. There is no D13 replication question here
@@ -172,7 +168,8 @@ const REGISTRY = [
     // §4.8.3 requires the regime to actually change when a flight enters a MARSA
     // block — "if a second controller takes TAC_C2 ten minutes later, the state
     // must already be correct, or they inherit a lie."
-    build: ({ clock, stores }) => new MarsaStore({
+    build: ({ clock, stores, mutationLog }) => new MarsaStore({
+      mutationLog,
       clock,
       flightDataExists: (flightDataId) => !!stores.flightData.getFlightData(flightDataId),
       setSeparationRegime: (flightDataId, separationRegime, { by } = {}) =>
@@ -194,15 +191,14 @@ const REGISTRY = [
     // The store's sync declaration (docs/adr/0106): `key` is its snapshot key, which is also the key of its heartbeat entry
     // and of its resync slice; `gapFromDeltas` says a delta moves seq by exactly one change, so a client may ask at once on a jump.
     sync: { key: 'runwayStatuses', seqKey: 'runwayStatusSeq', epochKey: 'runwayStatusEpoch', deltaType: 'efsp-runway-status-delta', gapFromDeltas: true },
-    audited: true,
     // WP6 (docs/adr/0061), §9.7 — runway status. One instance with
     // one record per Facility that has a runway inventory, for AirspaceStore's
     // reason — nothing about a runway is ever handed across a boundary.
     // Staffing is read lazily through `facilities`, the same
     // shape airspaceStore's occupancyFor has: an unstaffed acknowledger of a
     // runway change reverts or is skipped (decisions.md H20).
-    build: ({ clock, facilities }) => new RunwayStatusStore(facilityConfig, {
-      clock,
+    build: ({ clock, facilities, facilityConfig, mutationLog }) => new RunwayStatusStore(facilityConfig, {
+      clock, mutationLog,
       isStaffed: (facilityId, positionId) => {
         const f = facilities.get(facilityId);
         return !!f && f.positionStore.isStaffed(positionId);
@@ -224,12 +220,12 @@ const REGISTRY = [
     // The store's sync declaration (docs/adr/0106): `key` is its snapshot key, which is also the key of its heartbeat entry
     // and of its resync slice; `gapFromDeltas` says a delta moves seq by exactly one change, so a client may ask at once on a jump.
     sync: { key: 'carriers', seqKey: 'carrierSeq', epochKey: 'carrierEpoch', deltaType: 'efsp-carrier-delta', gapFromDeltas: false },
-    audited: true,
     // docs/adr/0074 (ADR 0064 B6) — the carrier's Case, Marshal
     // stack and altimeter input, one record per hull. Shared across Facilities
     // like flightDataStore (there is exactly one CARRIER Facility; nothing is replicated).
     // Lane feeding reads CARRIER staffing lazily through `facilities`.
-    build: ({ clock, facilities, stores }) => new CarrierStore({
+    build: ({ clock, facilities, stores, mutationLog }) => new CarrierStore({
+      mutationLog,
       hulls: carrierHulls.getHulls(),
       clock,
       flightDataExists: (flightDataId) => !!stores.flightData.getFlightData(flightDataId),
@@ -254,14 +250,13 @@ const REGISTRY = [
     // The store's sync declaration (docs/adr/0106): `key` is its snapshot key, which is also the key of its heartbeat entry
     // and of its resync slice; `gapFromDeltas` says a delta moves seq by exactly one change, so a client may ask at once on a jump.
     sync: { key: 'sfaRotation', seqKey: 'sfaSeq', epochKey: 'sfaEpoch', deltaType: 'efsp-sfa-delta', gapFromDeltas: true },
-    audited: true,
     // docs/adr/0075, 0093 — which Position is on which Single
     // Frequency Approach frequency (guide §4.7). One record, for the Facility whose
     // config carries a `singleFrequencyApproach` (INCIRLIK); null where none does.
-    build: ({ clock }) => {
+    build: ({ clock, facilityConfig, mutationLog }) => {
       const sfaConfig = facilityConfig.getSingleFrequencyApproach();
       return sfaConfig
-        ? new SfaStore({ config: sfaConfig, positions: facilityConfig.getPositionSet(), facilityId: facilityConfig.DEFAULT_FACILITY_ID, clock })
+        ? new SfaStore({ config: sfaConfig, positions: facilityConfig.getPositionSet(), facilityId: facilityConfig.DEFAULT_FACILITY_ID, clock, mutationLog })
         : null;
     },
     snapshot: (s) => (s ? s.snapshot() : null),

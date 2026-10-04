@@ -34,7 +34,7 @@ for (const [k, v] of Object.entries({
 fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, '{}');
 
 const { createEfsp } = await import('../src/efsp/index.js');
-const facilityConfig = await import('../src/efsp/facility-config.js');
+const facilityConfig = (await import('../src/efsp/facility-config.js')).createFacilityConfig();
 const { CorrelationReconciler } = await import('../src/efsp/correlation-reconciler.js');
 const { octalCode } = await import('../src/surveillance/transponder.js');
 const {

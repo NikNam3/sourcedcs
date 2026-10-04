@@ -11,7 +11,7 @@
 // silence (or a radar that never asked) is a bogey. classifyIff() takes only
 // those answers — it never sees the track — so it cannot read the coalition.
 //
-// USER_COALITION stays here as "which side's crypto our interrogators hold".
+// ownCoalitionFrom() stays here as "which side's crypto our interrogators hold".
 // Only the sensor model reads it (transponder.js, datalink.js, position
 // coverage), to decide what a contact would transmit; classification never
 // does.
@@ -21,7 +21,12 @@
 // before ever sending them here.
 const IFF_STATES = ['friendly', 'neutral', 'bogey', 'bandit', 'hostile'];
 
-const USER_COALITION = parseInt(process.env.CRCSYNC_COALITION, 10) === 2 ? 2 : 3; // 3=BLUE (default), 2=RED
+const DEFAULT_OWN_COALITION = 3; // BLUE
+
+/** Which DCS coalition is "own" (it models the Mode 4 crypto key), from `CRCSYNC_COALITION`: 3=BLUE (default), 2=RED. Read by the composition root. */
+function ownCoalitionFrom(env = process.env) {
+  return parseInt(env.CRCSYNC_COALITION, 10) === 2 ? 2 : DEFAULT_OWN_COALITION;
+}
 
 /**
  * What an interrogation got back, as the scope colours it (docs/adr/0066).
@@ -43,4 +48,4 @@ function classifyIff({ declared = null, datalink = false, mode4 = false, mode3 =
   return 'bogey';
 }
 
-module.exports = { IFF_STATES, USER_COALITION, classifyIff };
+module.exports = { IFF_STATES, DEFAULT_OWN_COALITION, ownCoalitionFrom, classifyIff };

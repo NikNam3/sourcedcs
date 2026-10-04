@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 // docs/adr/0059 — the datalink feed: own participants report themselves, and
 // what their radar is locked on.
 const { DatalinkFeed, luaString } = await import('../src/surveillance/datalink.js');
-const { USER_COALITION } = await import('../src/surveillance/iff.js');
+const { DEFAULT_OWN_COALITION: USER_COALITION } = await import('../src/surveillance/iff.js');
 
 const HOSTILE = USER_COALITION === 3 ? 2 : 3;
 const CONFIG = { participants: ['F-16C_50', 'E-3A'], pliPeriodMs: 4000, lockPollMs: 2000 };

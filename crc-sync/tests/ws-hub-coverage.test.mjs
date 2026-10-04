@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import WsHub from '../src/ws-hub.js';
 import TrackStore from '../src/tracks.js';
 import CollaborativeStore from '../src/collab-store.js';
+import { fakeWs } from './helpers/ws.mjs';
 
 /* Each session is delivered only what its Positions can see (docs/adr/0042).
  *
@@ -12,12 +13,6 @@ import CollaborativeStore from '../src/collab-store.js';
  * thing to two controllers at one board.
  */
 
-const OPEN = 1;
-
-function fakeWs() {
-  const sent = [];
-  return { readyState: OPEN, send: (raw) => sent.push(JSON.parse(raw)), sent };
-}
 
 const SSR_2D = { height: false, ssr: true };
 const RADARS = [

@@ -78,11 +78,12 @@ class CorrelationReconciler {
    * @param {(payload:object)=>void} [deps.onDelta] — called ONCE per tick with
    *   the records that changed plus the stats, or not at all on a quiet tick.
    */
-  constructor({ trackStore, flightDataStore, correlationStore, boardStoreFor, facilityConfig, beaconOf, onDelta, clock = WALL_CLOCK }) {
+  constructor({ trackStore, flightDataStore, correlationStore, boardStoreFor, facilityConfig, beaconOf, onDelta, clock = WALL_CLOCK, wallClock = WALL_CLOCK }) {
     // The mission clock (docs/adr/0079) — what the correlation records are
     // stamped with. The below-target warning's rate limit is a log throttle
     // and stays on the wall clock (_warnIfBelowTarget).
     this._clock = clock;
+    this._wallClock = wallClock;
     if (typeof beaconOf !== 'function') throw new Error('CorrelationReconciler needs beaconOf');
     this._beaconOf = beaconOf;
     this._trackStore = trackStore;
@@ -335,7 +336,7 @@ class CorrelationReconciler {
       this._matchedTickSum += rate.correlated + rate.provisional;
       this._eligibleTickSum += rate.eligible;
       if (this._minRateSeen == null || rate.rate < this._minRateSeen) this._minRateSeen = rate.rate;
-      this._warnIfBelowTarget(rate, Date.now());
+      this._warnIfBelowTarget(rate, this._wallClock.now());
     }
     this._lastRate = rate.rate;
     this._lastEligible = rate.eligible;

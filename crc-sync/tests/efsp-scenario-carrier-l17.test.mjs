@@ -23,7 +23,7 @@ for (const [k, v] of Object.entries({
 fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, '{}');
 
 const { createEfsp } = await import('../src/efsp/index.js');
-const { crew, hold, act, mustAct, carrierAct, mustCarrierAct, advance } = await import('./helpers/efsp-scenario.mjs');
+const { crew, hold, freshEfsp, act, mustAct, carrierAct, mustCarrierAct, advance } = await import('./helpers/efsp-scenario.mjs');
 
 const STAFFED = { CV_MARSHAL: 'CARRIER', CV_PRIFLY: 'CARRIER', CV_APP1: 'CARRIER', CV_APP2: 'CARRIER' };
 const strip = (efsp, id) => efsp.boardStoreFor('CARRIER').getStrip(id);
@@ -32,11 +32,7 @@ const stack = (efsp) => efsp.carrierStore.getRecord().stacks.MAIN.entries;
 const view = (efsp) => efsp.carrierStore.view();
 const wait = (ms) => new Promise(r => setTimeout(r, ms));
 
-function fresh() {
-  fs.rmSync(process.env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH, { force: true });
-  const efsp = createEfsp();
-  return { efsp, c: crew(efsp, STAFFED) };
-}
+const fresh = () => freshEfsp(createEfsp, STAFFED);
 
 function checkIn(efsp, c, callsign, { flightDataId } = {}) {
   return mustAct(efsp, c.CV_MARSHAL, 'CV_MARSHAL', null, {

@@ -54,12 +54,22 @@
 const fs = require('fs');
 const path = require('path');
 
-const CONFIG_DIR = process.env.CRCSYNC_CONFIG_DIR || path.join(__dirname, '../config');
-const STATE_DIR = process.env.CRCSYNC_STATE_DIR || path.join(__dirname, '../state');
+/**
+ * The two directories, resolved from `env` when called, not when this file is required (ADR 0095 §4): a test or the
+ * composition root picks the environment, and nothing here remembers a stale one.
+ * @param {NodeJS.ProcessEnv} [env]
+ * @returns {{configDir:string, stateDir:string}}
+ */
+function dirs(env = process.env) {
+  return {
+    configDir: env.CRCSYNC_CONFIG_DIR || path.join(__dirname, '../config'),
+    stateDir: env.CRCSYNC_STATE_DIR || path.join(__dirname, '../state'),
+  };
+}
 
 /** Where a runtime-mutable file is written. Always the state directory. */
-function writePath(name, override) {
-  return override || path.join(STATE_DIR, name);
+function writePath(name, override, env = process.env) {
+  return override || path.join(dirs(env).stateDir, name);
 }
 
 /**
@@ -69,24 +79,25 @@ function writePath(name, override) {
  * Resolved per call rather than once at load, because "does the live copy
  * exist" changes the first time anything writes one.
  */
-function readPath(name, override) {
+function readPath(name, override, env = process.env) {
   if (override) return override;
-  const live = path.join(STATE_DIR, name);
+  const { configDir, stateDir } = dirs(env);
+  const live = path.join(stateDir, name);
   try {
     if (fs.existsSync(live)) return live;
   } catch {
     // An unreadable state directory is a deployment problem, not a reason to
     // fail: fall back to the shipped default, which is better than nothing.
   }
-  return path.join(CONFIG_DIR, name);
+  return path.join(configDir, name);
 }
 
 /**
- * Both, for a module that reads once at load and writes later.
+ * Both, for a module that reads once at start and writes later.
  * @returns {{read:string, write:string}}
  */
-function statePaths(name, override) {
-  return { read: readPath(name, override), write: writePath(name, override) };
+function statePaths(name, override, env = process.env) {
+  return { read: readPath(name, override, env), write: writePath(name, override, env) };
 }
 
 /**
@@ -100,4 +111,4 @@ function ensureDirFor(filePath) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
 }
 
-module.exports = { CONFIG_DIR, STATE_DIR, readPath, writePath, statePaths, ensureDirFor };
+module.exports = { dirs, readPath, writePath, statePaths, ensureDirFor };

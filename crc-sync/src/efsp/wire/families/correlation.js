@@ -1,7 +1,6 @@
 'use strict';
 
 const { VERSION, liveStamped } = require('../frames');
-const permission = require('../../permission');
 const readScope = require('../../read-scope');
 
 /**
@@ -44,7 +43,7 @@ module.exports = {
   // Refused by class, not by table: a range Position is the using agency, has
   // no flights to identify (§4.1 rule 2) and, under docs/adr/0042, no scope on
   // which to have seen anything.
-  permit: (ctx, msg) => permission.canCorrelate(msg.actingPositionId) ? null
+  permit: (ctx, msg) => ctx.permission.canCorrelate(msg.actingPositionId) ? null
     : { reason: 'PERMISSION_DENIED', detail: `${msg.actingPositionId} works no flights, so it identifies no contacts` },
 
   apply: (ctx, session, msg) => ctx.correlationStore.apply(

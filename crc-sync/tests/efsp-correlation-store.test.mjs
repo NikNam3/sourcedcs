@@ -17,8 +17,8 @@ const { MAX_FREE_TEXT } = await import('../src/efsp/flight-data-store.js');
 
 const FDR = 'flight-data-1';
 
-function store({ flightDataList = [FDR] } = {}) {
-  return new CorrelationStore({ flightDataExists: (id) => flightDataList.includes(id) });
+function store({ flightDataList = [FDR], mutationLog = null } = {}) {
+  return new CorrelationStore({ mutationLog, flightDataExists: (id) => flightDataList.includes(id) });
 }
 
 function bind(s, { flightDataId = FDR, trackId = '101', note, baseRev } = {}) {
@@ -141,8 +141,7 @@ test('a binding note is capped at the free-text ceiling that rides every broadca
 
 test('a controller op is logged against its flight data, and a REFUSAL is logged too', () => {
   const entries = [];
-  const s = store();
-  s.setMutationLog({ record: (e) => entries.push(e) });
+  const s = store({ mutationLog: { record: (e) => entries.push(e) } });
 
   bind(s, { trackId: '101' });
   s.apply({ clientMutationId: 'bad', flightDataId: FDR, baseRev: 0, op: { kind: 'BindTrack', trackId: '9' } }, 'AP', 'c');
@@ -159,8 +158,7 @@ test('a controller op is logged against its flight data, and a REFUSAL is logged
 
 test('reconciler changes are NOT logged — at a tick a second they would drown it', () => {
   const entries = [];
-  const s = store();
-  s.setMutationLog({ record: (e) => entries.push(e) });
+  const s = store({ mutationLog: { record: (e) => entries.push(e) } });
   s.reconcile(new Map([[FDR, resolvedTo('101', 'BEACON', 'CORRELATED')]]));
   s.reconcile(new Map([[FDR, null]]));
   assert.equal(entries.length, 0, 'where it has BEEN lives in transitions[] instead');

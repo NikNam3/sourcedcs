@@ -15,7 +15,7 @@ const {
   activeScrambles, conflictingGroundStrips, accessRouteText, alertPadConstraint, validateAlertPadConfig,
 } = require('../src/efsp/alert-scramble.js');
 const nla = require('../src/efsp/nla.js');
-const facilityConfig = require('../src/efsp/facility-config.js');
+const facilityConfig = require('../src/efsp/facility-config.js').createFacilityConfig();
 
 // ── fixtures ─────────────────────────────────────────────────────────────
 

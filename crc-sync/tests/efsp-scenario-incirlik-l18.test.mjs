@@ -31,7 +31,7 @@ fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, '{}');
 const { createEfsp } = await import('../src/efsp/index.js');
 const { snapshotMessage } = await import('../src/efsp/efsp-ws.js');
 const {
-  crew, hold, act, mustAct, advance, sfaAct, mustSfaAct,
+  crew, hold, freshEfsp, act, mustAct, advance, sfaAct, mustSfaAct,
 } = await import('./helpers/efsp-scenario.mjs');
 
 const STAFFED = { OPS: 'INCIRLIK', LC: 'INCIRLIK', RSU: 'INCIRLIK', AP: 'INCIRLIK', SFA: 'INCIRLIK', PAR: 'INCIRLIK' };
@@ -42,11 +42,7 @@ const live = (efsp) => board(efsp).getAll().filter(s => s.state !== 'DROPPED');
 const mutations = () => fs.readFileSync(process.env.CRCSYNC_EFSP_MUTATION_LOG_PATH, 'utf8').trim().split('\n').map(l => JSON.parse(l));
 let n = 0;
 
-function fresh() {
-  fs.rmSync(process.env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH, { force: true });
-  const efsp = createEfsp();
-  return { efsp, c: crew(efsp, STAFFED) };
-}
+const fresh = () => freshEfsp(createEfsp, STAFFED);
 
 function refused(ack, reason, detail, label = '') {
   assert.equal(ack.ok, false, `${label} should be refused: ${JSON.stringify(ack)}`);

@@ -14,9 +14,10 @@ const RX1 = 'flight-data-viper11';
 const RX2 = 'flight-data-viper12';
 const OUTSIDER = 'flight-data-hawg01';
 
-function makeStore({ known = [TANKER, RX1, RX2, OUTSIDER] } = {}) {
+function makeStore({ known = [TANKER, RX1, RX2, OUTSIDER], mutationLog = null } = {}) {
   const regimes = new Map();
   const store = new MarsaStore({
+    mutationLog,
     flightDataExists: (flightDataId) => known.includes(flightDataId),
     setSeparationRegime: (flightDataId, separationRegime) => {
       regimes.set(flightDataId, separationRegime);
@@ -246,9 +247,8 @@ test('an assignment to a flight in no relation voids nothing', () => {
 // ── the audit trail ─────────────────────────────────────────────────────────
 
 test('refusals are audited too — a rejected ask must leave a trace somewhere', () => {
-  const { store } = makeStore();
   const entries = [];
-  store.setMutationLog({ record: (e) => entries.push(e) });
+  const { store } = makeStore({ mutationLog: { record: (e) => entries.push(e) } });
 
   const { marsaId } = declare(store).relation;
   op(store, marsaId, { kind: 'AddParticipant', flightDataId: 'flight-data-ghost' });
@@ -265,9 +265,8 @@ test('refusals are audited too — a rejected ask must leave a trace somewhere',
 });
 
 test('an interlock void is logged under the clientMutationId of the clearance that caused it', () => {
-  const { store } = makeStore();
   const entries = [];
-  store.setMutationLog({ record: (e) => entries.push(e) });
+  const { store } = makeStore({ mutationLog: { record: (e) => entries.push(e) } });
   declare(store);
   store.voidForAssignment(RX1, {
     cause: 'CONTROLLER_COURSE_CHANGE', blockId: '20',

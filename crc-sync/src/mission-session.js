@@ -79,8 +79,8 @@ class MissionSession {
    * @param {{now:()=>number, source?:string}} [deps.clock] the mission clock (H11)
    * @param {() => number} [deps.wallNow] only for the reconnect adopt window
    */
-  constructor({ path: filePath, clock = WALL_CLOCK, wallNow = () => Date.now() } = {}) {
-    this._paths = filePath === null ? null : statePaths(FILE_NAME, filePath || process.env.CRCSYNC_MISSION_SESSION_PATH);
+  constructor({ path: filePath, clock = WALL_CLOCK, wallNow = WALL_CLOCK.now, env = process.env } = {}) {
+    this._paths = filePath === null ? null : statePaths(FILE_NAME, filePath || env.CRCSYNC_MISSION_SESSION_PATH, env);
     this._clock = clock;
     this._wallNow = wallNow;
     this._listeners = new Set();

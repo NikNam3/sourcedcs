@@ -4,8 +4,6 @@
 // facility-config.js), part of the authority registry. A class rule covers a
 // future Position of that class with no edit to any Position family.
 
-const facilityConfig = require('../facility-config');
-
 // WP4A second slice (docs/adr/0025) — defect D12: "TAC_C2, GCI, AIC and
 // JTAC MUST NOT be given HANDOFF or POINT_OUT" (guide §4.1 rule 1), which
 // this generalizes to all 5 COORDINATION_OP_KINDS. Read from the facility
@@ -20,8 +18,8 @@ const facilityConfig = require('../facility-config');
 // typo that accidentally grants a coordination kind to an MRU Position's
 // entry gets silently corrected by this loop, not just documented against.
 const MRU_OR_NON_ATC_CLASSES = new Set(['MRU', 'MRU_POSITION', 'NON_ATC']);
-function _isMruOrNonAtc(positionId) {
-  return MRU_OR_NON_ATC_CLASSES.has(facilityConfig.getPositionClass(positionId));
+function _isMruOrNonAtc(classOf, positionId) {
+  return MRU_OR_NON_ATC_CLASSES.has(classOf(positionId));
 }
 
 // Guide §4.1's `RANGE` row: Class "Using agency", Primitives "no strip
@@ -37,8 +35,8 @@ function _isMruOrNonAtc(positionId) {
 // This makes the refusal the rule it is meant to be, and keeps holding if
 // someone later adds a table entry for a range Position by mistake.
 const NO_STRIP_OP_CLASSES = new Set(['USING_AGENCY']);
-function _worksNoStrips(positionId) {
-  return NO_STRIP_OP_CLASSES.has(facilityConfig.getPositionClass(positionId));
+function _worksNoStrips(classOf, positionId) {
+  return NO_STRIP_OP_CLASSES.has(classOf(positionId));
 }
 
 // B5 (docs/adr/0080, decisions.md H40): a NON_ATC Position (JTAC) has no scope
@@ -46,8 +44,8 @@ function _worksNoStrips(positionId) {
 // flight is nor declare MARSA. Derived from the class, so a future non-ATC
 // Position is covered with no edit here.
 const NO_SCOPE_CLASSES = new Set(['NON_ATC']);
-function _hasNoScope(positionId) {
-  return NO_SCOPE_CLASSES.has(facilityConfig.getPositionClass(positionId));
+function _hasNoScope(classOf, positionId) {
+  return NO_SCOPE_CLASSES.has(classOf(positionId));
 }
 
 module.exports = { MRU_OR_NON_ATC_CLASSES, NO_STRIP_OP_CLASSES, NO_SCOPE_CLASSES, _isMruOrNonAtc, _worksNoStrips, _hasNoScope };

@@ -45,13 +45,13 @@ fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, '{}');
 
 const { createEfsp } = await import('../src/efsp/index.js');
 const {
-  crew, hold, act, mustAct, jumpTo, advance, DEPARTURE_FLIGHT_DATA, NLA_DOUBLE_TAP_MS,
+  crew, hold, act, mustAct, jumpTo, advance, DEPARTURE_FLIGHT_DATA, steppedWallClock, lapseNlaGuard,
 } = await import('./helpers/efsp-scenario.mjs');
 
 const ATC = { OPS: 'INCIRLIK', CD: 'INCIRLIK', GC: 'INCIRLIK', LC: 'INCIRLIK', AP: 'INCIRLIK', CTR: 'CENTER' };
 const RWY = '05/23';
 
-let efsp = createEfsp();
+let efsp = createEfsp({ wallClock: steppedWallClock() });
 let c = crew(efsp, ATC);
 
 // ── local helpers (the shared harness is append-only and L8 is adding to it;
@@ -76,7 +76,6 @@ const runway = (e = efsp) => e.runwayStatusStore.getRunwayStatus('INCIRLIK').run
 const runwayStatus = (e = efsp) => e.runwayStatusStore.getRunwayStatus('INCIRLIK');
 const strip = (s, e = efsp) => e.boardStoreFor('INCIRLIK').getStrip(s.stripId);
 const mutations = () => fs.readFileSync(process.env.CRCSYNC_EFSP_MUTATION_LOG_PATH, 'utf8').trim().split('\n').map(l => JSON.parse(l));
-const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
 let n = 0;
 /** A DEPARTURE parked at `state`, owned by the right Position, in the right Bay and Rack. */
@@ -287,7 +286,7 @@ test('sortie 11: crc-sync restarts mid-suspension and the runway comes back SUSP
   const queued = departure('RUNWAY_QUEUE');
   suspendForRunwayWorks();
   efsp.persist();
-  const reborn = createEfsp();
+  const reborn = createEfsp({ wallClock: steppedWallClock() });
   const rwy = runway(reborn);
   assert.equal(rwy.status, 'SUSPENDED_WORKS');
   assert.equal(rwy.suspension.positionId, 'LC');
@@ -307,7 +306,7 @@ test('sortie 11: crc-sync restarts mid-suspension and the runway comes back SUSP
   reborn.persist();
   efsp = reborn;
   c = rc;
-  await sleep(NLA_DOUBLE_TAP_MS + 10);
+  await lapseNlaGuard(efsp.wallClock);
 });
 
 test('sortie 14: a closed runway holds its traffic too, and a Strip with nothing filed is judged against the active runway', () => {
@@ -432,7 +431,7 @@ test('sortie 12: a restart mid runway-change keeps the acknowledgements already 
   mustRunwayStatusAct(efsp, c.LC, 'LC', { kind: 'ProposeRunwayChange', toRunwayId: '23' });
   mustRunwayStatusAct(efsp, c.AP, 'AP', { kind: 'AckRunwayChange' });
   efsp.persist();
-  const reborn = createEfsp();
+  const reborn = createEfsp({ wallClock: steppedWallClock() });
   const rc = crew(reborn, ATC);
   const ch = runwayChange(reborn);
   assert.equal(ch.state, 'PROPOSED');

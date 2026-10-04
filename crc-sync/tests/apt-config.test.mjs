@@ -4,15 +4,14 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
-// apt-config.js reads its config path once at module load, so the override
-// env var must be set before the first import — this file gets its own
-// isolated module registry (node:test runs each file in its own worker), so
-// this never touches the real config/apt-config.json.
+// createAptConfig() reads its config path when it is called (the composition root, at start), from the env it is given;
+// this file points that env at a temp file so it never touches the real config/apt-config.json.
 const tmpDir  = fs.mkdtempSync(path.join(os.tmpdir(), 'apt-config-test-'));
 const tmpFile = path.join(tmpDir, 'apt-config.json');
 process.env.CRCSYNC_APT_CONFIG_PATH = tmpFile;
 
-const { getAptConfig, setAptConfig } = await import('../src/apt-config.js');
+const { createAptConfig } = await import('../src/apt-config.js');
+const { getAptConfig, setAptConfig } = createAptConfig();
 
 test('getAptConfig starts empty when no config file exists yet', () => {
   assert.deepEqual(getAptConfig(), {});

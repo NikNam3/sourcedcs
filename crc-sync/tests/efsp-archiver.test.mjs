@@ -28,7 +28,7 @@ const { createEfsp } = await import('../src/efsp/index.js');
 const { Archiver, ARCHIVE_AFTER_MS, sweepChanged } = await import('../src/efsp/archiver.js');
 const { TrafficCount } = await import('../src/efsp/traffic-count.js');
 const { MissionSession } = await import('../src/mission-session.js');
-const facilityConfig = await import('../src/efsp/facility-config.js');
+const facilityConfig = (await import('../src/efsp/facility-config.js')).createFacilityConfig();
 const {
   crew, act, mustAct, jumpTo, mustMarsaAct, airborneDeparture, handedToCenter, DEPARTURE_FLIGHT_DATA,
 } = await import('./helpers/efsp-scenario.mjs');

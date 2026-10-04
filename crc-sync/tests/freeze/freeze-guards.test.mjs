@@ -29,7 +29,7 @@ Object.assign(process.env, {
 fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, '{}');
 
 const { createEfsp } = await import('../../src/efsp/index.js');
-const facilityConfig = await import('../../src/efsp/facility-config.js');
+const facilityConfig = (await import('../../src/efsp/facility-config.js')).createFacilityConfig();
 const { BoardStore } = await import('../../src/efsp/board-store.js');
 
 function walk(dir, out = []) {

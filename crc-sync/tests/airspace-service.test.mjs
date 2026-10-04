@@ -6,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { WebSocket } from 'ws';
 import crcLog from '../src/log.js';
+import { until } from './helpers/wait.mjs';
 
 // /api/airspace-registry/* through createApp (docs/adr/0098 §9): auth, validation, the three routes, an idempotent
 // replay, and a connected panel session receiving the delta and the calendar. Same temp-dir setup as app-boot.test.mjs.
@@ -43,7 +44,7 @@ const MISSION = { theatre: THEATER, airports: [], waypoints: [], drawings: [], c
 
 async function boot({ token = TOKEN, bookings = { ok: true, bookings: [] }, mission = true } = {}) {
   const grpcClient = Object.assign(new EventEmitter(), { getWeather: () => ({}), evalLua: async () => null, getAptWeather: async () => ({}) });
-  const app = createApp({ grpcClient, srsClient: new EventEmitter(), env: token ? { AIRSPACE_SERVICE_TOKEN: token, CRCSYNC_SOURCEDCS_WEB_PUBLIC_URL: 'https://web.test/' } : {}, bookingLookup: async () => bookings });
+  const app = createApp({ grpcClient, srsClient: new EventEmitter(), env: token ? { ...process.env, AIRSPACE_SERVICE_TOKEN: token, CRCSYNC_SOURCEDCS_WEB_PUBLIC_URL: 'https://web.test/' } : { ...process.env }, bookingLookup: async () => bookings });
   await new Promise(r => app.server.listen(0, '127.0.0.1', r));
   app.start();
   if (mission) grpcClient.emit('mission-load', MISSION);
@@ -167,7 +168,6 @@ function connect(c) {
   ws.on('message', (d) => frames.push(JSON.parse(d.toString())));
   return { ws, frames, ready: new Promise((res, rej) => { ws.on('open', res); ws.on('error', rej); }) };
 }
-async function until(pred, ms = 3000) { const end = Date.now() + ms; while (!pred()) { if (Date.now() > end) throw new Error('timed out'); await new Promise(r => setTimeout(r, 10)); } }
 
 test('a web edit reaches a connected panel as an efsp-airspace-delta; the calendar arrives on connect and on change', async (t) => {
   quiet(t);

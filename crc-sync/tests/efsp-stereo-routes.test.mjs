@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { execFileSync } from 'child_process';
 
 // stereo-routes.js resolves and reads its config path once at module load, so
 // the override goes in before the first import — same pattern as
@@ -18,10 +17,8 @@ const FIXTURE = [
 fs.writeFileSync(tmpFile, JSON.stringify(FIXTURE));
 process.env.CRCSYNC_EFSP_STEREO_ROUTES_PATH = tmpFile;
 
-const {
-  getStereoRoutes, getActiveStereoRoutes, resolveStereoRoute, toFlightDataFiledSeed,
-  setStereoRoutes, validateStereoRoutes, normalizeStereoName, MAX_FREE_TEXT,
-} = await import('../src/efsp/stereo-routes.js');
+const { createStereoRoutes, toFlightDataFiledSeed, validateStereoRoutes, normalizeStereoName, MAX_FREE_TEXT } = await import('../src/efsp/stereo-routes.js');
+const { getStereoRoutes, getActiveStereoRoutes, resolveStereoRoute, setStereoRoutes } = createStereoRoutes();
 
 // ── normalisation ────────────────────────────────────────────────────────
 
@@ -204,20 +201,14 @@ test('setStereoRoutes replaces the table and persists it to the write path', () 
   setStereoRoutes(FIXTURE);
 });
 
-// _load()'s recovery path needs a genuinely fresh module instance, and the
-// CJS require cache is keyed on the resolved filename — an import() with a
-// cache-busting query string still hands back the same instance. So: a child
-// process per case. The real failure this guards is crc-sync refusing to boot
-// because somebody left a trailing comma in a squadron config file.
+// A fresh table per case: createStereoRoutes() reads its file when it is called, from the env it is given, so a case
+// is an in-process call with its own env (no child process, no module cache to bust). The real failure this guards is
+// crc-sync refusing to boot because somebody left a trailing comma in a squadron config file.
 function loadInChildProcess(fileContents) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'efsp-stereo-load-'));
   const file = path.join(dir, 'efsp-stereo-routes.json');
   if (fileContents !== null) fs.writeFileSync(file, fileContents);
-  const modulePath = path.join(import.meta.dirname, '../src/efsp/stereo-routes.js');
-  const out = execFileSync(process.execPath, [
-    '-e', `process.stdout.write(JSON.stringify(require(${JSON.stringify(modulePath)}).getStereoRoutes()))`,
-  ], { env: { ...process.env, CRCSYNC_EFSP_STEREO_ROUTES_PATH: file }, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
-  return JSON.parse(out);
+  return createStereoRoutes({ env: { ...process.env, CRCSYNC_EFSP_STEREO_ROUTES_PATH: file } }).getStereoRoutes();
 }
 
 // DATA-2 (H88): there is no code copy of the empty table, so an unusable file is a

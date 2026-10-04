@@ -8,11 +8,19 @@
 
 const { loadSensorSpecs } = require('./radars');
 
-const { first, last } = loadSensorSpecs().transponder.syntheticBlock;
+let _block = null;
+/** @returns {{SYNTHETIC_BLOCK_START:number, SYNTHETIC_BLOCK_SIZE:number, SYNTHETIC_BLOCK_LABEL:string}} read on first use, not when this file is required */
+function syntheticBlock() {
+  if (_block) return _block;
+  const { first, last } = loadSensorSpecs().transponder.syntheticBlock;
+  const start = parseInt(first, 8);
+  _block = Object.freeze({
+    SYNTHETIC_BLOCK_START: start,
+    SYNTHETIC_BLOCK_SIZE: parseInt(last, 8) - start + 1,
+    /** For refusal and warning texts: "6000\u20136777". */
+    SYNTHETIC_BLOCK_LABEL: `${first}\u2013${last}`,
+  });
+  return _block;
+}
 
-const SYNTHETIC_BLOCK_START = parseInt(first, 8);
-const SYNTHETIC_BLOCK_SIZE = parseInt(last, 8) - SYNTHETIC_BLOCK_START + 1;
-/** For refusal and warning texts: "6000\u20136777". */
-const SYNTHETIC_BLOCK_LABEL = `${first}\u2013${last}`;
-
-module.exports = { SYNTHETIC_BLOCK_START, SYNTHETIC_BLOCK_SIZE, SYNTHETIC_BLOCK_LABEL };
+module.exports = { syntheticBlock };

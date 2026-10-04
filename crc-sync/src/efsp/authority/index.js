@@ -236,12 +236,23 @@ for (const f of positionFamilies) {
 // D12, enforced structurally rather than merely by careful hand-authoring
 // above (docs/adr/0020's own directive — see MRU_OR_NON_ATC_CLASSES'
 // comment). Any Position whose facility-config class is MRU/MRU_POSITION/
-// NON_ATC loses every one of the 5 COORDINATION_OP_KINDS here, regardless
-// of what PERMISSIONS[positionId] was constructed with above.
-for (const [positionId, ops] of Object.entries(PERMISSIONS)) {
-  if (_isMruOrNonAtc(positionId)) {
-    for (const opKind of [...COORDINATION_OP_KINDS, ...COORDINATION_STEP_OP_KINDS]) ops.delete(opKind);
+// NON_ATC loses every one of the 5 COORDINATION_OP_KINDS, regardless
+// of what PERMISSIONS[positionId] was constructed with above. The classes live in
+// the facility config, which is built at start and not required here, so the strip-back
+// is a function of a `classOf` and permission.js's createPermission() applies it.
+/**
+ * @param {(positionId:string) => string|null} classOf facility-config's getPositionClass
+ * @returns {Record<string, Set<string>>} a copy of PERMISSIONS with the D12 strip-back applied
+ */
+function permissionsFor(classOf) {
+  const out = {};
+  for (const [positionId, ops] of Object.entries(PERMISSIONS)) {
+    out[positionId] = new Set(ops);
+    if (_isMruOrNonAtc(classOf, positionId)) {
+      for (const opKind of [...COORDINATION_OP_KINDS, ...COORDINATION_STEP_OP_KINDS]) out[positionId].delete(opKind);
+    }
   }
+  return out;
 }
 
 // A family's `ownsStates` column (incirlik-military.js: RSU, SFA and PAR),
@@ -274,8 +285,8 @@ const AIRSPACE_ROWS = {};
 for (const f of positionFamilies) Object.assign(AIRSPACE_ROWS, f.airspace || {});
 const airspaceAuthority = require('./airspace');
 /** @returns {{create:string|null, edit:string|null, delete:string|null, use:boolean}} a Position's airspace row (its class's row when no family lists it). */
-function airspaceRowOf(positionId) {
-  return airspaceAuthority.rowFor(positionId, { familyRows: AIRSPACE_ROWS, classOf: (id) => require('../facility-config').getPositionClass(id) });
+function airspaceRowFor(positionId, classOf) {
+  return airspaceAuthority.rowFor(positionId, { familyRows: AIRSPACE_ROWS, classOf });
 }
 
 /** permission.js's mayActBesideOwner: every family's non-owner Block writes. */
@@ -307,7 +318,7 @@ function positionIds() { return [...positionOwner.keys()]; }
  * gate: permission.js's one-Position predicates are the gates, D21).
  * @returns {{family:string, ops:Set<string>, createsStripTypes:Set<string>|null, capabilities:object}|null}
  */
-function capabilitiesFor(positionId) {
+function capabilitiesFor(positionId, classOf = null) {
   const family = positionFamilyOf(positionId);
   if (!family) return null;
   const capabilities = {};
@@ -317,7 +328,7 @@ function capabilitiesFor(positionId) {
   }
   return {
     family,
-    ops: PERMISSIONS[positionId] || new Set(),
+    ops: (classOf ? permissionsFor(classOf) : PERMISSIONS)[positionId] || new Set(),
     createsStripTypes: CREATE_STRIP_TYPE_PERMISSIONS[positionId] || null,
     capabilities,
   };
@@ -333,7 +344,7 @@ module.exports = {
   runwayInspectionRefusal, selfCoordinationRefusal, sfaJurisdictionRefusal,
   registerStripTypeFamily, registerPositionFamily,
   positionFamilyOf, positionFamily, positionIds, capabilitiesFor, creatorsOf,
-  airspaceRowOf, airspaceAuthority, AIRSPACE_ROWS,
+  airspaceRowFor, airspaceAuthority, AIRSPACE_ROWS, permissionsFor,
   PERMISSIONS, CREATE_STRIP_TYPE_PERMISSIONS, COORDINATION_ACTIONS, replicaOnReceipt, RUNWAY_STATUS_OP_OWNERS, NON_OWNER_BLOCK_WRITES, TOFI_COUNTERPARTS,
   stripTypeFamily, stripTypeNames, formationEligibility, stateOwners, initialStateFor, replicaStateOnReceipt, senderStateOnAccept,
   STATES_BY_STRIP_TYPE, STATE_OWNERS_BY_STRIP_TYPE, DEFAULT_INITIAL_STATE_BY_STRIP_TYPE, REPLICA_STATE_ON_RECEIPT, SENDER_STATE_ON_ACCEPT,

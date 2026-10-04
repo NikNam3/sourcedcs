@@ -4,6 +4,7 @@ import WsHub from '../src/ws-hub.js';
 import TrackStore from '../src/tracks.js';
 import CollaborativeStore from '../src/collab-store.js';
 import crcLog from '../src/log.js';
+import { fakeWs } from './helpers/ws.mjs';
 
 /* docs/adr/0059: the client is told what its sensors know, and nothing else.
  *
@@ -15,8 +16,6 @@ import crcLog from '../src/log.js';
 const { createSurveillance } = await import('../src/surveillance/index.js');
 const { WIRE_KEYS } = await import('../src/surveillance/presentation.js');
 
-const OPEN = 1;
-const fakeWs = () => { const sent = []; return { readyState: OPEN, send: (r) => sent.push(JSON.parse(r)), sent }; };
 const APP = { id: 'app:X', sweepMs: 3000, caps: { height: false, ssr: true, mode4: false } };
 
 function setup() {

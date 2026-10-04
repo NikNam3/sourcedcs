@@ -7,12 +7,12 @@
 
 const fs = require('fs');
 const path = require('path');
-const { CONFIG_DIR, readPath } = require('./state-paths');
+const { dirs, readPath } = require('./state-paths');
 const log = require('./log').logger('tuning');
 
 /** The shipped default, parsed. Throws with the file name when it is missing or invalid. */
 function readShipped(name) {
-  const file = path.join(CONFIG_DIR, name);
+  const file = path.join(dirs().configDir, name);
   try {
     return JSON.parse(fs.readFileSync(file, 'utf8'));
   } catch (e) {
@@ -30,7 +30,7 @@ function readShipped(name) {
  */
 function readLayer(name, override, shipped, opts) {
   const file = readPath(name, override);
-  if (file === path.join(CONFIG_DIR, name)) return null; // no state copy: the shipped file is the whole answer
+  if (file === path.join(dirs().configDir, name)) return null; // no state copy: the shipped file is the whole answer
   let layer;
   try {
     layer = JSON.parse(fs.readFileSync(file, 'utf8'));

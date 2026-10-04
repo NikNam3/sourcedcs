@@ -59,7 +59,7 @@ Module._load = function (request, parent, isMain) {
 function finalState(efsp) {
   const out = { boards: {}, flightData: null };
   try {
-    for (const f of require('../../src/efsp/facility-config.js').getFacilityIds()) {
+    for (const f of efsp.facilityConfig.getFacilityIds()) {
       const b = efsp.boardStoreFor(f);
       if (b) out.boards[f] = clone(b.snapshot());
     }

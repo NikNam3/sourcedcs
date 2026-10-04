@@ -39,6 +39,7 @@ fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, '{}');
 const { createEfsp } = await import('../src/efsp/index.js');
 const {
   crew, act, mustAct, marsaAct, mustMarsaAct, airborneDeparture, DEPARTURE_FLIGHT_DATA,
+  freshStrip,
 } = await import('./helpers/efsp-scenario.mjs');
 
 const ATC = { OPS: 'INCIRLIK', CD: 'INCIRLIK', GC: 'INCIRLIK', LC: 'INCIRLIK', AP: 'INCIRLIK', CTR: 'CENTER' };
@@ -62,7 +63,7 @@ function declareAr(participants, declaringCallsign) {
 }
 
 /** Re-read a Strip at its current rev, since every op bumps it. */
-const fresh = (strip) => efsp.boardStoreFor('INCIRLIK').getStrip(strip.stripId);
+const fresh = (strip) => freshStrip(efsp, strip);
 
 // ── Sortie 1 — the acceptance criterion ─────────────────────────────────────
 

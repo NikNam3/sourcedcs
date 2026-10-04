@@ -28,6 +28,7 @@ const path = require('path');
 const zlib = require('zlib');
 
 const { haversineM } = require('./geo');
+const { dirs } = require('./state-paths');
 const log = require('./log').logger('terrain');
 
 // Fixed sampling zoom, independent of anything a client is looking at.
@@ -44,13 +45,10 @@ const TILE_SIZE = 512;   // terrain-rgb-v2 tile pixel dimensions
 const GRID_STRIDE = 4;   // sample every 4th pixel -> 128x128 grid per tile
 const GRID_N = TILE_SIZE / GRID_STRIDE;
 
-const MAPTILER_KEY = process.env.CRCSYNC_MAPTILER_KEY || '';
 // Under state/, not config/ (baked into the image, hand-edited squadron data)
 // and not data/ (baked into the image, shipped reference tables) — this is a
 // few megabytes of derived cache. In the compose stack it is a volume
 // (infra/docker-compose.yml's crc-sync-state). See src/state-paths.js.
-const CACHE_DIR = process.env.CRCSYNC_TERRAIN_CACHE_DIR
-  || path.join(__dirname, '../state/terrain-cache');
 
 const FETCH_TIMEOUT_MS = 15000;
 const MAX_CONCURRENT_FETCHES = 6;
@@ -240,7 +238,7 @@ class TerrainStore {
    * @param {(url:string)=>Promise<Buffer>} [opts.fetchTile] — injected so a
    *   test can drive the decoder and the cache without a network.
    */
-  constructor({ key = MAPTILER_KEY, cacheDir = CACHE_DIR, fetchTile } = {}) {
+  constructor({ env = process.env, key = env.CRCSYNC_MAPTILER_KEY || '', cacheDir = env.CRCSYNC_TERRAIN_CACHE_DIR || path.join(dirs(env).stateDir, 'terrain-cache'), fetchTile } = {}) {
     this._key = key;
     this._cacheDir = cacheDir;
     this._fetchTile = fetchTile || ((url) => this._httpGet(url));

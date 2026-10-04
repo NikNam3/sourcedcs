@@ -27,6 +27,7 @@ const { crew, act, mustAct, airborneDeparture, DEPARTURE_FLIGHT_DATA } = await i
 const traffic = require('../src/efsp/traffic-count.js');
 const authority = require('../src/efsp/authority');
 const permission = require('../src/efsp/permission.js');
+const classPermission = (await import('./helpers/permission.mjs')).classPermission();
 const OPS_MODULES = require('../src/efsp/board/ops');
 
 const efsp = createEfsp();
@@ -370,10 +371,10 @@ test('S16 a ground split needs no assignment; the same on an airborne state is r
 
 test('S17 grants: every ATC Position may; tactical and carrier Positions may not', () => {
   for (const p of ['OPS', 'CD', 'GC', 'LC', 'AP', 'CTR', 'RSU', 'SFA', 'PAR']) {
-    for (const k of permission.FORMATION_OP_KINDS) assert.equal(permission.canMutate(p, k), true, `${p} ${k}`);
+    for (const k of permission.FORMATION_OP_KINDS) assert.equal(classPermission.canMutate(p, k), true, `${p} ${k}`);
   }
   for (const p of ['TAC_C2', 'GCI', 'AIC', 'JTAC', 'CV_MARSHAL', 'CV_PRIFLY', 'CV_APP1', 'CV_APP2']) {
-    for (const k of permission.FORMATION_OP_KINDS) assert.equal(permission.canMutate(p, k), false, `${p} ${k}`);
+    for (const k of permission.FORMATION_OP_KINDS) assert.equal(classPermission.canMutate(p, k), false, `${p} ${k}`);
   }
   assert.ok(!permission.OP_KINDS.includes('SplitFormation'), 'a literal grant, not an OP_KINDS entry');
 });

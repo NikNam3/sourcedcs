@@ -16,10 +16,11 @@ import { fullRules } from "./helpers/full-rules.mjs";
 const { FlightDataStore } = await import('../src/efsp/flight-data-store.js');
 const { CorrelationStore } = await import('../src/efsp/correlation-store.js');
 const { PositionStore } = await import('../src/efsp/position-store.js');
-const facilityConfig = await import('../src/efsp/facility-config.js');
+const facilityConfig = (await import('../src/efsp/facility-config.js')).createFacilityConfig();
 const blockMap = await import('../src/efsp/block-map.js');
 const nla = await import('../src/efsp/nla.js');
 const permission = await import('../src/efsp/permission.js');
+const classPermission = (await import('./helpers/permission.mjs')).classPermission();
 const coordination = await import('../src/efsp/coordination.js');
 
 // Mirrors index.js's real multi-Facility `rules`/ctx wiring exactly (not a
@@ -45,7 +46,7 @@ function makeCtx() {
       isValidStripType: (stripType) => blockMap.isValidStripType(stripType),
       isStaffed: (id) => positionStore.isStaffed(id),
       consolidatedAt: (id) => positionStore.consolidatedAt(id),
-      canMutate: (actingPositionId, opKind) => permission.canMutate(actingPositionId, opKind),
+      canMutate: (actingPositionId, opKind) => classPermission.canMutate(actingPositionId, opKind),
       canCreateStripType: (actingPositionId, stripType) => permission.canCreateStripType(actingPositionId, stripType),
       canActOnState: (actingPositionId, stripType, state) => permission.canActOnState(actingPositionId, stripType, state),
       isSelfCoordinated: (controllerId, id) => positionStore.isSelfCoordinated(controllerId, id),
@@ -66,7 +67,7 @@ function makeCtx() {
   // shape rather than a hand-simplified one.
   const correlationStore = new CorrelationStore({ flightDataExists: (id) => !!flightDataStore.getFlightData(id) });
   return {
-    flightDataStore, facilityConfig, correlationStore,
+    flightDataStore, facilityConfig, correlationStore, permission: classPermission,
     boardStoreFor: (facilityId = facilityConfig.DEFAULT_FACILITY_ID) => (facilities.get(facilityId) || {}).boardStore || null,
     positionStoreFor: (facilityId = facilityConfig.DEFAULT_FACILITY_ID) => (facilities.get(facilityId) || {}).positionStore || null,
   };

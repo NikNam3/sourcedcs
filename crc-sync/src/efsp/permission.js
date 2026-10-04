@@ -47,73 +47,8 @@ const { MARSHAL_STATE_OWNERS } = require('./authority/strip-types/marshal');
 const { FINAL_STATE_OWNERS } = require('./authority/strip-types/final');
 const { PATTERN_STATE_OWNERS } = require('./authority/strip-types/pattern');
 const {
-  PERMISSIONS, CREATE_STRIP_TYPE_PERMISSIONS, STATE_OWNERS_BY_STRIP_TYPE, RUNWAY_STATUS_OP_OWNERS, NON_OWNER_BLOCK_WRITES, TOFI_COUNTERPARTS,
+  CREATE_STRIP_TYPE_PERMISSIONS, STATE_OWNERS_BY_STRIP_TYPE, RUNWAY_STATUS_OP_OWNERS, NON_OWNER_BLOCK_WRITES, TOFI_COUNTERPARTS,
 } = authority;
-
-/**
- * @param {string} actingPositionId — exactly one Position; never a set
- * @param {string} opKind
- * @returns {boolean}
- */
-function canMutate(actingPositionId, opKind) {
-  if (_worksNoStrips(actingPositionId)) return false;
-  const allowed = PERMISSIONS[actingPositionId];
-  return !!allowed && allowed.has(opKind);
-}
-
-/**
- * canMutate for one ACTION of an op kind (docs/adr/0101): a Position whose grant of a coordination kind is narrower
- * than the kind (CV_MARSHAL answers a HANDOFF, never proposes) lists its actions in the registry's COORDINATION_ACTIONS.
- */
-function canMutateAction(actingPositionId, opKind, action) {
-  if (!canMutate(actingPositionId, opKind)) return false;
-  const rows = Object.prototype.hasOwnProperty.call(authority.COORDINATION_ACTIONS, actingPositionId) ? authority.COORDINATION_ACTIONS[actingPositionId] : null;
-  if (!rows || !Object.prototype.hasOwnProperty.call(rows, opKind)) return true;
-  return rows[opKind].includes(action);
-}
-
-/**
- * May this Position bind or unbind a surveillance contact to a flight
- * (WP5, docs/adr/0045)?
- *
- * Refused by CLASS, on the same basis as canMutate's first line: guide §4.1
- * rule 2 makes a range Position the using agency, which "works no Strips" and
- * has no flights to identify. Under docs/adr/0042 it has no scope either, so
- * there is nothing for it to have seen.
- *
- * Everything else may. A correlation is not a clearance and no Position owns
- * a flight data — a controller who can see the contact must be able to say so, even
- * about a flight whose Strip belongs to somebody else. That includes an MRU:
- * D12 is about being asked to provide ATC SERVICE (handoffs, point-outs), and
- * "which blip is this" is not that.
- */
-function canCorrelate(actingPositionId) {
-  return !_worksNoStrips(actingPositionId) && !_hasNoScope(actingPositionId);
-}
-
-/**
- * May this Position declare, amend, end or void a MARSA relation (WP6,
- * docs/adr/0051)?
- *
- * Refused by CLASS, the same first line canMutate and canCorrelate share: guide
- * §4.1 rule 2 makes a range Position the using agency, which "works no Strips"
- * and therefore has no flights to put into a relation.
- *
- * Everything else may, INCLUDING an MRU (TAC_C2/GCI). That is deliberate and it
- * is not D12: D12 is about an MRU being asked to provide ATC SERVICE —
- * handoffs, point-outs, separation — and MARSA is the precise opposite. It is
- * the military authority saying it will separate its own aircraft, which is the
- * MRU's own assertion to make. §9.2 rule 1 puts the declaration with the tanker
- * and makes it verbal; whichever Position takes that call records it.
- *
- * Kept as its own predicate rather than an entry in OP_KINDS for the reason the
- * module comment gives about the flat table: every PERMISSIONS entry built with
- * a `.filter()` would pick a new op kind up silently, which is the
- * maximally-permissive trap D21 exists to catch.
- */
-function canDeclareMarsa(actingPositionId) {
-  return !_worksNoStrips(actingPositionId) && !_hasNoScope(actingPositionId);
-}
 
 /**
  * Exactly two parameters: ONE acting Position, never a signed-on set — D21 by
@@ -178,9 +113,89 @@ function canActOnState(actingPositionId, stripType, state) {
   return !!owners && owners.includes(actingPositionId);
 }
 
+/**
+ * The predicates that read a Position's CLASS (facility-config's `positionClasses`): which ops it may do at all, whether
+ * it may correlate or declare MARSA. Built by the composition root from the facility config it built, so nothing here
+ * reads configuration when this file is required (docs/adr/0095 §4).
+ * @param {{classOf:(positionId:string)=>string|null}} deps facility-config's getPositionClass
+ */
+function createPermission({ classOf }) {
+  if (typeof classOf !== 'function') throw new Error('createPermission needs classOf (facility-config getPositionClass)');
+  const PERMISSIONS = authority.permissionsFor(classOf); // the registry's table with the D12 strip-back applied
+  const worksNoStrips = (positionId) => _worksNoStrips(classOf, positionId);
+  const hasNoScope = (positionId) => _hasNoScope(classOf, positionId);
+
+  /**
+   * @param {string} actingPositionId — exactly one Position; never a set
+   * @param {string} opKind
+   * @returns {boolean}
+   */
+  function canMutate(actingPositionId, opKind) {
+    if (worksNoStrips(actingPositionId)) return false;
+    const allowed = PERMISSIONS[actingPositionId];
+    return !!allowed && allowed.has(opKind);
+  }
+
+  /**
+   * canMutate for one ACTION of an op kind (docs/adr/0101): a Position whose grant of a coordination kind is narrower
+   * than the kind (CV_MARSHAL answers a HANDOFF, never proposes) lists its actions in the registry's COORDINATION_ACTIONS.
+   */
+  function canMutateAction(actingPositionId, opKind, action) {
+    if (!canMutate(actingPositionId, opKind)) return false;
+    const rows = Object.prototype.hasOwnProperty.call(authority.COORDINATION_ACTIONS, actingPositionId) ? authority.COORDINATION_ACTIONS[actingPositionId] : null;
+    if (!rows || !Object.prototype.hasOwnProperty.call(rows, opKind)) return true;
+    return rows[opKind].includes(action);
+  }
+
+  /**
+   * May this Position bind or unbind a surveillance contact to a flight
+   * (WP5, docs/adr/0045)?
+   *
+   * Refused by CLASS, on the same basis as canMutate's first line: guide §4.1
+   * rule 2 makes a range Position the using agency, which "works no Strips" and
+   * has no flights to identify. Under docs/adr/0042 it has no scope either, so
+   * there is nothing for it to have seen.
+   *
+   * Everything else may. A correlation is not a clearance and no Position owns
+   * a flight data — a controller who can see the contact must be able to say so, even
+   * about a flight whose Strip belongs to somebody else. That includes an MRU:
+   * D12 is about being asked to provide ATC SERVICE (handoffs, point-outs), and
+   * "which blip is this" is not that.
+   */
+  function canCorrelate(actingPositionId) {
+    return !worksNoStrips(actingPositionId) && !hasNoScope(actingPositionId);
+  }
+
+  /**
+   * May this Position declare, amend, end or void a MARSA relation (WP6,
+   * docs/adr/0051)?
+   *
+   * Refused by CLASS, the same first line canMutate and canCorrelate share: guide
+   * §4.1 rule 2 makes a range Position the using agency, which "works no Strips"
+   * and therefore has no flights to put into a relation.
+   *
+   * Everything else may, INCLUDING an MRU (TAC_C2/GCI). That is deliberate and it
+   * is not D12: D12 is about an MRU being asked to provide ATC SERVICE —
+   * handoffs, point-outs, separation — and MARSA is the precise opposite. It is
+   * the military authority saying it will separate its own aircraft, which is the
+   * MRU's own assertion to make. §9.2 rule 1 puts the declaration with the tanker
+   * and makes it verbal; whichever Position takes that call records it.
+   *
+   * Kept as its own predicate rather than an entry in OP_KINDS for the reason the
+   * module comment gives about the flat table: every PERMISSIONS entry built with
+   * a `.filter()` would pick a new op kind up silently, which is the
+   * maximally-permissive trap D21 exists to catch.
+   */
+  function canDeclareMarsa(actingPositionId) {
+    return !worksNoStrips(actingPositionId) && !hasNoScope(actingPositionId);
+  }
+
+  return { PERMISSIONS, canMutate, canMutateAction, canCorrelate, canDeclareMarsa };
+}
+
 module.exports = {
-  canMutate, canMutateAction, canCorrelate, canDeclareMarsa, canCreateStripType, canActOnState, tofiCounterparts,
-  PERMISSIONS, CREATE_STRIP_TYPE_PERMISSIONS, STATE_OWNERS_BY_STRIP_TYPE,
+  createPermission, canCreateStripType, canActOnState, tofiCounterparts,
+  CREATE_STRIP_TYPE_PERMISSIONS, STATE_OWNERS_BY_STRIP_TYPE,
   DEPARTURE_STATE_OWNERS, ARRIVAL_STATE_OWNERS, OVERFLIGHT_STATE_OWNERS, MISSION_STATE_OWNERS,
   OP_KINDS, COORDINATION_OP_KINDS, AP_CTR_ONLY_OP_KINDS, TOFI_OP_KINDS, AIRSPACE_ENTRY_OP_KINDS, FORMATION_OP_KINDS, TOFI_COUNTERPARTS,
   NO_STRIP_OP_CLASSES,

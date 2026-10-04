@@ -3,7 +3,7 @@
 const { WebSocketServer, WebSocket } = require('ws');
 const { presentTrack, labelPart } = require('./surveillance/presentation');
 const { createSurveillance } = require('./surveillance');
-const { getAptConfig, setAptConfig } = require('./apt-config');
+const { createAptConfig } = require('./apt-config');
 const { consumeTicket } = require('./auth');
 const { WALL_CLOCK } = require('./mission-clock');
 const { WIRE_PROTOCOL } = require('./wire-protocol');
@@ -48,7 +48,8 @@ class WsHub {
    * @param {number} [deps.signOnGraceMs] how long a closed session keeps its sign-ons (config/sign-on-grace.json); 0 signs off at once.
    * @param {string} [deps.downloadUrl]  where `update-required` points an out-of-date client (CRCSYNC_DOWNLOAD_URL); omitted when unset.
    */
-  constructor({ trackStore, collabStore, efsp = null, picture = null, surveillance = null, clock = WALL_CLOCK, theater = null, wireProtocol = WIRE_PROTOCOL, downloadUrl = null, wallClock = WALL_CLOCK, signOnGraceMs = 0 }) {
+  constructor({ trackStore, collabStore, efsp = null, picture = null, surveillance = null, clock = WALL_CLOCK, theater = null, wireProtocol = WIRE_PROTOCOL, downloadUrl = null, wallClock = WALL_CLOCK, signOnGraceMs = 0, aptConfig = createAptConfig() }) {
+    this._aptConfig = aptConfig; // per-airport ATIS config, built by the composition root
     this._wall = wallClock;
     this._signOnGraceMs = signOnGraceMs;
     this._pendingSignOff = new Map(); // controllerId -> { session, dueAt } (wall time): a closed session still holding its Positions
@@ -366,7 +367,7 @@ class WsHub {
   // field of `game-time`: it is a few hundred numbers that change once per
   // mission load or mission day, and `game-time` goes out every 5 s.
   _theaterMsg() { return { version: VERSION, type: 'theater', ...this._theater.wireBody() }; }
-  _aptConfigMsg() { return { version: VERSION, type: 'apt-config', airports: getAptConfig() }; }
+  _aptConfigMsg() { return { version: VERSION, type: 'apt-config', airports: this._aptConfig.getAptConfig() }; }
   _initMsg() {
     return {
       version:   VERSION,
@@ -779,7 +780,7 @@ class WsHub {
     // same squadron-wide-config deal, keyed by airport (msg.key) instead of
     // a single flat object.
     if (msg.type === 'aptConfigSet') {
-      if (setAptConfig(msg.key, msg)) this._broadcast(this._aptConfigMsg());
+      if (this._aptConfig.setAptConfig(msg.key, msg)) this._broadcast(this._aptConfigMsg());
       return;
     }
 

@@ -2,14 +2,15 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 const {
-  canMutate, canCorrelate, canDeclareMarsa, canCreateStripType, canActOnState, tofiCounterparts,
-  PERMISSIONS, CREATE_STRIP_TYPE_PERMISSIONS, STATE_OWNERS_BY_STRIP_TYPE,
+  canCreateStripType, canActOnState, tofiCounterparts,
+  CREATE_STRIP_TYPE_PERMISSIONS, STATE_OWNERS_BY_STRIP_TYPE,
   DEPARTURE_STATE_OWNERS, ARRIVAL_STATE_OWNERS, MISSION_STATE_OWNERS,
   OP_KINDS, COORDINATION_OP_KINDS, AP_CTR_ONLY_OP_KINDS, TOFI_OP_KINDS, AIRSPACE_ENTRY_OP_KINDS,
   NO_STRIP_OP_CLASSES,
   TACTICAL_CAPABILITIES, READ_SCOPES, handBackTargetsFor, tofiAnswererFor, readScopeFor,
 } = await import('../src/efsp/permission.js');
-const facilityConfig = (await import('../src/efsp/facility-config.js')).default;
+const facilityConfig = (await import('../src/efsp/facility-config.js')).createFacilityConfig();
+const { PERMISSIONS, canMutate, canCorrelate, canDeclareMarsa } = (await import('./helpers/permission.mjs')).classPermission(facilityConfig);
 
 test('canMutate has exactly two parameters — structurally cannot accept a "signed-on set" (guards defect D21 by construction)', () => {
   assert.equal(canMutate.length, 2);

@@ -1,7 +1,6 @@
 'use strict';
 
 const { boardDelta, marsaDelta, liveStamped } = require('../frames');
-const permission = require('../../permission');
 const readScope = require('../../read-scope');
 
 /**
@@ -51,7 +50,7 @@ module.exports = {
 
   // Refused by class, not by table — a range Position is the using agency and
   // works no Strips (§4.1 rule 2), so it has no flights to put into a relation.
-  permit: (ctx, msg) => permission.canDeclareMarsa(msg.actingPositionId) ? null
+  permit: (ctx, msg) => ctx.permission.canDeclareMarsa(msg.actingPositionId) ? null
     : { reason: 'PERMISSION_DENIED', detail: `${msg.actingPositionId} works no flights, so it declares no MARSA` },
 
   // DeclareMarsa is the case that matters: a retried declaration minted a

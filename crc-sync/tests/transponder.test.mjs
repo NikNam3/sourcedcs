@@ -9,7 +9,7 @@ const SHIPPED = loadSensorSpecs().transponder;
 class Transponders extends RawTransponders {
   constructor(deps = {}) { super({ ...deps, config: { ...SHIPPED, ...(deps.config || {}) } }); }
 }
-const { USER_COALITION } = await import('../src/surveillance/iff.js');
+const { DEFAULT_OWN_COALITION: USER_COALITION } = await import('../src/surveillance/iff.js');
 const { isSynthetic, CodeAllocator } = await import('../src/efsp/code-allocator.js');
 
 const HOSTILE = USER_COALITION === 3 ? 2 : 3;
@@ -134,7 +134,7 @@ test('the transponder config has no defaults in code: a missing or invalid key i
 });
 
 test('the synthetic block is sensor-specs.json `transponder.syntheticBlock` (DATA-3): shipped 6000-6777, validated at load', async () => {
-  const { SYNTHETIC_BLOCK_START, SYNTHETIC_BLOCK_SIZE, SYNTHETIC_BLOCK_LABEL } = await import('../src/synthetic-block.js');
+  const { SYNTHETIC_BLOCK_START, SYNTHETIC_BLOCK_SIZE, SYNTHETIC_BLOCK_LABEL } = (await import('../src/synthetic-block.js')).syntheticBlock();
   assert.equal(SYNTHETIC_BLOCK_START, 0o6000);
   assert.equal(SYNTHETIC_BLOCK_SIZE, 0o1000);
   assert.equal(SYNTHETIC_BLOCK_LABEL, '6000\u20136777');

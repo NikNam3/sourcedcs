@@ -69,7 +69,7 @@ const {
   displayBearing,
 } = require('./ship-state');
 const {
-  APPROACH_TYPES,
+  approachTypes,
   CARRIER_FLIGHT_FIELDS,
   MARSHAL_MESSAGE_FIELDS,
   defaultCarrierFlight,
@@ -146,7 +146,7 @@ module.exports = {
   applyShipStateInput,
   normalizeShipInputs,
   displayBearing,
-  APPROACH_TYPES,
+  approachTypes,
   CARRIER_FLIGHT_FIELDS,
   MARSHAL_MESSAGE_FIELDS,
   defaultCarrierFlight,

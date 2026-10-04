@@ -68,6 +68,7 @@ class GrpcClient extends EventEmitter {
    * @param {number} [opts.backoffCapMs]   longest reconnect delay
    * @param {number} [opts.stableMs]       stream lifetime that resets the backoff
    * @param {object} [opts.env]            the environment (default process.env): `CRCSYNC_DCS_GRPC_HOST` ?? `DCS_GRPC_HOST`, `DCS_GRPC_POLL_RATE`, `DCS_GRPC_MAX_BACKOFF`
+   * @param {() => number} [opts.random]   the jitter's source, in [0, 1); Math.random unless a test scripts it
    */
   constructor(opts = {}) {
     super();
@@ -76,6 +77,7 @@ class GrpcClient extends EventEmitter {
     this._backoffBase  = opts.backoffBaseMs || BACKOFF_BASE_MS;
     this._backoffCap   = opts.backoffCapMs  || BACKOFF_CAP_MS;
     this._stableMs     = opts.stableMs      || STREAM_STABLE_MS;
+    this._random       = opts.random        || Math.random;
     this._unitRetries  = 0;
     this._eventRetries = 0;
     this._unitEndsSinceLog = 0;
@@ -385,7 +387,7 @@ class GrpcClient extends EventEmitter {
   // (one attempt per base, 1 s by default) however the jitter falls.
   _backoffDelay(retries) {
     const nominal = Math.min(this._backoffCap, this._backoffBase * 2 ** Math.min(retries, 30));
-    return Math.max(this._backoffBase, Math.round(nominal * (0.5 + Math.random() / 2)));
+    return Math.max(this._backoffBase, Math.round(nominal * (0.5 + this._random() / 2)));
   }
 
   // A clean end is abnormal for this stream (DCS-gRPC holds it open for the

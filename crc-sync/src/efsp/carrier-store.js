@@ -54,7 +54,7 @@ class CarrierStore {
    * @param {(positionId:string)=>boolean} [deps.isStaffed] CARRIER Position staffing, for lane feeding
    * @param {{now:()=>number}} [deps.clock] the mission clock
    */
-  constructor({ hulls, flightDataExists, isStaffed, clock = WALL_CLOCK } = {}) {
+  constructor({ hulls, flightDataExists, isStaffed, clock = WALL_CLOCK, mutationLog = null } = {}) {
     this._clock = clock;
     this._flightDataExists = flightDataExists || (() => true);
     this._isStaffed = isStaffed || (() => false);
@@ -64,7 +64,7 @@ class CarrierStore {
     for (const h of this._hulls) this._records.set(h.hullId, this._fresh(h.hullId));
     this._shipStates = new Map(); // hullId -> banner (derived, never persisted)
     this._sync = new SyncLog({ epoch: true }); // the store's sequence and its lifetime (epoch, not persisted): no ring, the resync answer is the snapshot slice (docs/adr/0106)
-    this._mutationLog = null;
+    this._mutationLog = mutationLog; // the Mutation log (docs/adr/0081); null for a fixture with none
   }
 
   _fresh(hullId) {
@@ -77,7 +77,6 @@ class CarrierStore {
     };
   }
 
-  setMutationLog(mutationLog) { this._mutationLog = mutationLog; }
   get currentSeq() { return this._sync.seq; }
   /** The lifetime this store's seq belongs to (docs/adr/0106): new per process, never persisted. */
   get epoch() { return this._sync.epoch; }

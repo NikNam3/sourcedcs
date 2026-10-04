@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  APPROACH_TYPES, CARRIER_FLIGHT_FIELDS, MARSHAL_MESSAGE_FIELDS,
+  approachTypes, CARRIER_FLIGHT_FIELDS, MARSHAL_MESSAGE_FIELDS,
   defaultCarrierFlight, validateCarrierFlightField, setCarrierFlightField, normalizeCarrierFlight,
   carrierFlightOf, marshalMessage,
 } from '../src/efsp/carrier/flight-record.js';
@@ -18,7 +18,7 @@ test('defaults: every field present and null', () => {
   });
   assert.deepEqual([...CARRIER_FLIGHT_FIELDS], Object.keys(defaultCarrierFlight()));
   assert.notEqual(defaultCarrierFlight(), defaultCarrierFlight(), 'a fresh object each time');
-  assert.deepEqual([...APPROACH_TYPES], ['TACAN', 'ICLS', 'ACLS', 'PAR', 'VISUAL']);
+  assert.deepEqual([...approachTypes()], ['TACAN', 'ICLS', 'ACLS', 'PAR', 'VISUAL']);
 });
 
 test('validators accept and normalise good values', () => {

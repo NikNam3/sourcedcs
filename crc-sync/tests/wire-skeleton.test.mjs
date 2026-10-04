@@ -51,7 +51,7 @@ test('each of the six mutation families\' gate refusal is logged once, with its 
   })) process.env[k] = path.join(tmpDir, v);
   fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, '{}');
   const { createEfsp } = await import('../src/efsp/index.js');
-  const facilityConfig = await import('../src/efsp/facility-config.js');
+  const facilityConfig = (await import('../src/efsp/facility-config.js')).createFacilityConfig();
   const { createEfspInstrumentation } = await import('../src/efsp/metrics.js');
   const efsp = createEfsp();
   const cap = crcLog.capture();

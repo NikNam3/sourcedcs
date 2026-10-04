@@ -9,7 +9,7 @@ import { createRequire } from 'node:module';
 // A using-agency (range) Position is refused by class (authority/classes.js) and needs no family.
 
 const require = createRequire(import.meta.url);
-const facilityConfig = require('../src/efsp/facility-config.js');
+const facilityConfig = require('../src/efsp/facility-config.js').createFacilityConfig();
 const authority = require('../src/efsp/authority');
 const { NO_STRIP_OP_CLASSES } = require('../src/efsp/authority/classes.js');
 

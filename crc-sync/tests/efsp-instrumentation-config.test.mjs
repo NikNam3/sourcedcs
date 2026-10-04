@@ -20,18 +20,20 @@ delete process.env.CRCSYNC_EFSP_INSTRUMENTATION_CONFIG_PATH;
 const SHIPPED_TEXT = fs.readFileSync(new URL('../config/efsp-instrumentation.json', import.meta.url), 'utf8');
 fs.writeFileSync(path.join(CONFIG, 'efsp-instrumentation.json'), SHIPPED_TEXT);
 
-// The module loads at import — with writeFileSync stubbed to throw, so a load
-// that writes anything fails the import itself.
+// The first use loads it — with writeFileSync stubbed to throw, so a load
+// that writes anything fails here.
 const realWrite = fs.writeFileSync;
 const realAppend = fs.appendFileSync;
 fs.writeFileSync = () => { throw new Error('instrumentation-config must never write'); };
 fs.appendFileSync = () => { throw new Error('instrumentation-config must never write'); };
 const mod = await import('../src/efsp/instrumentation-config.js');
+mod.getInstrumentationConfig(); // the first use is what reads the files (not the import): still inside the stub
 fs.writeFileSync = realWrite;
 fs.appendFileSync = realAppend;
 
+const DEFAULT_INSTRUMENTATION_CONFIG = mod.defaultInstrumentationConfig();
 const {
-  DEFAULT_INSTRUMENTATION_CONFIG, getInstrumentationConfig, loadInstrumentationConfig,
+  getInstrumentationConfig, loadInstrumentationConfig,
   normalizeInstrumentationConfig, resolveInstrumentationConfigPath,
 } = mod;
 
@@ -109,13 +111,13 @@ test('the shipped config file parses to exactly the defaults', () => {
 test('a missing or invalid shipped file is a startup error that names the file', async () => {
   const { spawnSync } = await import('child_process');
   const empty = fs.mkdtempSync(path.join(os.tmpdir(), 'efsp-instr-empty-'));
-  const r = spawnSync(process.execPath, ['-e', "require('./src/efsp/instrumentation-config')"], {
+  const r = spawnSync(process.execPath, ['-e', "require('./src/efsp/instrumentation-config').getInstrumentationConfig()"], {
     cwd: new URL('..', import.meta.url).pathname, env: { ...process.env, CRCSYNC_CONFIG_DIR: empty, CRCSYNC_STATE_DIR: empty }, encoding: 'utf8',
   });
   assert.notEqual(r.status, 0);
   assert.match(r.stderr, /efsp-instrumentation\.json/);
   fs.writeFileSync(path.join(empty, 'efsp-instrumentation.json'), JSON.stringify({ mutationLog: { retentionDays: 30 } }));
-  const r2 = spawnSync(process.execPath, ['-e', "require('./src/efsp/instrumentation-config')"], {
+  const r2 = spawnSync(process.execPath, ['-e', "require('./src/efsp/instrumentation-config').getInstrumentationConfig()"], {
     cwd: new URL('..', import.meta.url).pathname, env: { ...process.env, CRCSYNC_CONFIG_DIR: empty, CRCSYNC_STATE_DIR: empty }, encoding: 'utf8',
   });
   assert.notEqual(r2.status, 0, 'a gap in the shipped file is an error too');

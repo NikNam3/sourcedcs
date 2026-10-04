@@ -19,7 +19,7 @@ for (const [k, v] of Object.entries({
 fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, '{}');
 
 const { createEfsp } = await import('../src/efsp/index.js');
-const facilityConfig = await import('../src/efsp/facility-config.js');
+const facilityConfig = (await import('../src/efsp/facility-config.js')).createFacilityConfig();
 const { crew, hold, act, mustAct, jumpTo, advance, DEPARTURE_FLIGHT_DATA, airborneDeparture } = await import('./helpers/efsp-scenario.mjs');
 
 const ATC = { OPS: 'INCIRLIK', GC: 'INCIRLIK', LC: 'INCIRLIK', AP: 'INCIRLIK', CTR: 'CENTER' };
@@ -33,7 +33,7 @@ function centerStrip(efsp, id) { return efsp.boardStoreFor('CENTER').getStrip(id
 // ── 12. point out ────────────────────────────────────────────────────────
 
 test('SCENARIO a flight pointed out to Center: the data stays with Approach, the separation moves', () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ facilityConfig });
   const c = crew(efsp, ATC);
 
   const strip = flight(efsp, c, 'PONT1');
@@ -65,7 +65,7 @@ test('SCENARIO a flight pointed out to Center: the data stays with Approach, the
 // ── 13. operational request with a stand by ──────────────────────────────
 
 test('SCENARIO an operational request that gets a stand by before an answer', () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ facilityConfig });
   const c = crew(efsp, ATC);
 
   const asked = mustAct(efsp, c.AP, 'AP', flight(efsp, c, 'REQ1'), {
@@ -89,7 +89,7 @@ test('SCENARIO an operational request that gets a stand by before an answer', ()
 // ── 14. AIT without a written directive ──────────────────────────────────
 
 test('SCENARIO automated information transfer is refused without a directive on file', () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ facilityConfig });
   const c = crew(efsp, ATC);
 
   // Guide §4.6 rule 7: AIT is "configuration, not a default" — neither
@@ -107,7 +107,7 @@ test('SCENARIO automated information transfer is refused without a directive on 
   const incirlik = facilityConfig.getFacilityConfig('INCIRLIK');
   facilityConfig.setFacilityConfig({ ...incirlik, aitAuthorized: true }, 'INCIRLIK');
   try {
-    const authorized = createEfsp();
+    const authorized = createEfsp({ facilityConfig });
     const c2 = crew(authorized, ATC);
     const proposed = mustAct(authorized, c2.AP, 'AP', flight(authorized, c2, 'AIT2'), {
       kind: 'AIT', action: 'PROPOSE', toFacilityId: 'CENTER', toPositionId: 'CTR',
@@ -121,7 +121,7 @@ test('SCENARIO automated information transfer is refused without a directive on 
 // ── 15. an overflight ────────────────────────────────────────────────────
 
 test('SCENARIO a flight transiting Center that never touches Incirlik', async () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ facilityConfig });
   const c = crew(efsp, ATC);
 
   // CTR originates it directly — there is no departure to convert, because
@@ -152,7 +152,7 @@ test('SCENARIO a flight transiting Center that never touches Incirlik', async ()
 // ── 16. pop-up arrival versus a real handoff ─────────────────────────────
 
 test('SCENARIO an unannounced inbound, against the same flight arriving properly', async () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ facilityConfig });
   const c = crew(efsp, ATC);
 
   // Pop-up: nobody handed it over, so AP originates the Strip itself.
@@ -185,7 +185,7 @@ test('SCENARIO an unannounced inbound, against the same flight arriving properly
 // ── 23. one controller holding both ends ─────────────────────────────────
 
 test('SCENARIO a single controller working both Approach and Center hands a flight to themselves', () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ facilityConfig });
   const solo = { controllerId: 'c-solo', who: 'Solo' };
   const c = crew(efsp, { OPS: 'INCIRLIK' });
   hold(efsp, solo, 'INCIRLIK', ['AP']);
@@ -210,7 +210,7 @@ test('SCENARIO a single controller working both Approach and Center hands a flig
 
 
 test('a Strip cannot be created, moved or transferred into a Bay that does not exist', () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ facilityConfig });
   const c = crew(efsp, ATC);
 
   // Found by a typo in this very file: `ctr-overflights` for `ctr-overflight`
@@ -235,7 +235,7 @@ test('a Strip cannot be created, moved or transferred into a Bay that does not e
 });
 
 test('converting a flight for its return leg archives the departure annotations rather than erasing them', () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ facilityConfig });
   const c = crew(efsp, ATC);
 
   let strip = flight(efsp, c, 'ARCH1');
@@ -266,7 +266,7 @@ function createOverflight(efsp, c, callsign, who = 'CTR', bayId = 'ctr-overfligh
 const appStrip = (efsp, id) => efsp.boardStoreFor('INCIRLIK').getStrip(id);
 
 test('SCENARIO an IN_SECTOR overflight at CENTER hands off to AP, arrives INBOUND, and the sender goes HANDED_OFF on accept', async () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ facilityConfig });
   const c = crew(efsp, ATC);
 
   let strip = createOverflight(efsp, c, 'OVFH1');
@@ -296,7 +296,7 @@ test('SCENARIO an IN_SECTOR overflight at CENTER hands off to AP, arrives INBOUN
 });
 
 test('an INBOUND overflight cannot propose coordination, and neither can a HANDED_OFF one', async () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ facilityConfig });
   const c = crew(efsp, ATC);
   const strip = createOverflight(efsp, c, 'OVFH2');
   const refused = act(efsp, c.CTR, 'CTR', strip, { kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'INCIRLIK', toPositionId: 'AP' });
@@ -309,7 +309,7 @@ test('an INBOUND overflight cannot propose coordination, and neither can a HANDE
 });
 
 test('POINT_OUT from an IN_SECTOR overflight leaves both states unchanged', async () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ facilityConfig });
   const c = crew(efsp, ATC);
   let strip = createOverflight(efsp, c, 'OVFP1');
   strip = await advance(efsp, c.CTR, 'CTR', strip);
@@ -322,7 +322,7 @@ test('POINT_OUT from an IN_SECTOR overflight leaves both states unchanged', asyn
 });
 
 test('a rejected overflight HANDOFF leaves the sender IN_SECTOR', async () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ facilityConfig });
   const c = crew(efsp, ATC);
   let strip = createOverflight(efsp, c, 'OVFR1');
   strip = await advance(efsp, c.CTR, 'CTR', strip);
@@ -332,7 +332,7 @@ test('a rejected overflight HANDOFF leaves the sender IN_SECTOR', async () => {
 });
 
 test('an overflight\'s state never moves it between Bays, and ARRIVAL\'s INBOUND Bay is not its home', async () => {
-  const efsp = createEfsp();
+  const efsp = createEfsp({ facilityConfig });
   const c = crew(efsp, ATC);
   let strip = createOverflight(efsp, c, 'OVFB1');
   strip = await advance(efsp, c.CTR, 'CTR', strip);

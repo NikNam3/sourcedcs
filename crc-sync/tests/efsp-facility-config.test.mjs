@@ -19,11 +19,12 @@ process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH = tmpFile;
 process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH_CENTER = tmpFileCenter;
 process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH_TACTICAL = tmpFileTactical;
 
+const { createFacilityConfig, validateConfig, DEFAULT_FACILITY_ID } = await import('../src/efsp/facility-config.js');
 const {
   getFacilityIds, getFacilityConfig, getPositionSet, getPositionClass, getConsolidation, getBaysFor, getAllBays,
-  bayImpliesState, bayForImpliedState, coordinationBayFor, setFacilityConfig, validateConfig, isBlockVisible,
-  getShippedConfig, DEFAULT_FACILITY_ID,
-} = await import('../src/efsp/facility-config.js');
+  bayImpliesState, bayForImpliedState, coordinationBayFor, setFacilityConfig, isBlockVisible,
+  getShippedConfig,
+} = createFacilityConfig();
 const { DEPARTURE_BLOCK_MAP, OVERFLIGHT_BLOCK_MAP, MISSION_BLOCK_MAP, requiredBlocksFor } = await import('../src/efsp/block-map.js');
 
 test('getPositionSet returns exactly INCIRLIK\'s eight Positions (RSU, SFA and PAR since L18, ADR 0075)', () => {
@@ -329,7 +330,7 @@ test('setFacilityConfig rejects an unknown facilityId without throwing', () => {
 // ── Position letters (docs/adr/0088) ──────────────────────────────────────
 
 test('position letters: T/A/C for the ATC scopes, M for every tactical Position (H41 S5, H48)', async () => {
-  const { getPositionLetter, allPositionLetters } = await import('../src/efsp/facility-config.js');
+  const { getPositionLetter, allPositionLetters } = createFacilityConfig();
   assert.equal(getPositionLetter('LC'), 'T');
   assert.equal(getPositionLetter('AP'), 'A');
   assert.equal(getPositionLetter('CTR'), 'C');
@@ -368,7 +369,7 @@ function inChild({ config, state }, body, extraEnv = {}) {
   for (const k of ['CRCSYNC_EFSP_FACILITY_CONFIG_PATH', 'CRCSYNC_EFSP_FACILITY_CONFIG_PATH_CENTER', 'CRCSYNC_EFSP_FACILITY_CONFIG_PATH_TACTICAL', 'CRCSYNC_EFSP_FACILITY_CONFIG_PATH_CARRIER']) {
     if (!(k in extraEnv)) delete env[k];
   }
-  return spawnSync(process.execPath, ['-e', `const fc = require('./src/efsp/facility-config.js'); ${body}`], { cwd: CHILD_CWD, encoding: 'utf8', env });
+  return spawnSync(process.execPath, ['-e', `const fc = require('./src/efsp/facility-config.js').createFacilityConfig(); ${body}`], { cwd: CHILD_CWD, encoding: 'utf8', env });
 }
 const posOf = (id = 'INCIRLIK') => `console.log(JSON.stringify(fc.getPositionSet('${id}')))`;
 

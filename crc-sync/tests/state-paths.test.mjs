@@ -22,12 +22,18 @@ fs.mkdirSync(CONFIG, { recursive: true });
 process.env.CRCSYNC_CONFIG_DIR = CONFIG;
 process.env.CRCSYNC_STATE_DIR = STATE;
 
-const { readPath, writePath, statePaths, ensureDirFor, CONFIG_DIR, STATE_DIR } =
+const { readPath, writePath, statePaths, ensureDirFor, dirs } =
   await import('../src/state-paths.js');
 
 test('the two directories come from the environment, so a container can point them anywhere', () => {
-  assert.equal(CONFIG_DIR, CONFIG);
-  assert.equal(STATE_DIR, STATE);
+  assert.deepEqual(dirs(), { configDir: CONFIG, stateDir: STATE });
+});
+
+test('the environment is an argument: an injected env wins over process.env and nothing is remembered between calls', () => {
+  const other = { CRCSYNC_CONFIG_DIR: '/c', CRCSYNC_STATE_DIR: '/s' };
+  assert.deepEqual(dirs(other), { configDir: '/c', stateDir: '/s' });
+  assert.equal(writePath('x.json', undefined, other), path.join('/s', 'x.json'));
+  assert.equal(writePath('x.json'), path.join(STATE, 'x.json'));
 });
 
 test('a write always goes to the state directory, never next to the shipped defaults', () => {

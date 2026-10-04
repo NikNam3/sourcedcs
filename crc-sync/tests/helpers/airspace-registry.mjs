@@ -31,7 +31,7 @@ export const RANGE = { airspaceId: 'RANGE-1', name: 'Test Range', type: 'RANGE',
 export const SQUARE = { source: 'POLYGON', points: [[36.0, 35.0], [36.0, 36.0], [37.0, 36.0], [37.0, 35.0]] };
 
 /** @param {{defs?:object[], theater?:string|null, occupants?:object, routeCount?:number, clock?:object}} [o] */
-export function makeRegistry({ defs = [MOA, RANGE], theater = THEATER, occupants = {}, routeCount = 0, clock } = {}) {
+export function makeRegistry({ defs = [MOA, RANGE], theater = THEATER, occupants = {}, routeCount = 0, clock, mutationLog = null } = {}) {
   const state = { theater, occupants, routeCount };
   const store = new AirspaceStore({
     ...(clock ? { clock } : {}),
@@ -40,6 +40,7 @@ export function makeRegistry({ defs = [MOA, RANGE], theater = THEATER, occupants
     routeOccupancyFor: () => state.routeCount,
     facilityLookup: lookup,
     authority: { rowOf },
+    mutationLog,
   });
   if (defs.length) {
     const r = store.apply({ op: { kind: 'ImportAirspaces', theater: THEATER, source: 'STANDING', definitions: defs } },

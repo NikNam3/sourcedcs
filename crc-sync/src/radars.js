@@ -28,7 +28,7 @@ const path = require('path');
 const fs = require('fs');
 
 const { checkOnGround } = require('./geo');
-const { CONFIG_DIR } = require('./state-paths');
+const { dirs } = require('./state-paths');
 const { readShipped, checkLayerKeys } = require('./tuning-file');
 const { validateDatalinkConfig, validateTransponderConfig } = require('./surveillance/sensor-config');
 const log = require('./log').logger('radars');
@@ -71,8 +71,9 @@ function presentationFor(kind, specs) {
 
 // Overridable so tests drive a fixture without touching disk — the same
 // env-var pattern every other config/*.json path in this package uses.
-const SENSOR_SPECS_PATH = process.env.CRCSYNC_SENSOR_SPECS_PATH
-  || path.join(__dirname, '../config/sensor-specs.json');
+function sensorSpecsPath(env = process.env) {
+  return env.CRCSYNC_SENSOR_SPECS_PATH || path.join(__dirname, '../config/sensor-specs.json');
+}
 
 // Helipads/FARPs/FOBs are not radar sites. Matches the original's own filter.
 const HELIPAD_RE = /helipad|farp|fob/i;
@@ -84,10 +85,11 @@ const HELIPAD_RE = /helipad|farp|fob/i;
  * and `carrierRadar` are replaced whole by a layer that has them; the other
  * sections merge key by key. An unknown `presentation` value keeps the shipped one.
  */
-function loadSensorSpecs(specsPath = SENSOR_SPECS_PATH) {
+function loadSensorSpecs(specsPath, env = process.env) {
+  specsPath = specsPath || sensorSpecsPath(env);
   const shipped = readShipped('sensor-specs.json');
   let cfg = {};
-  if (path.resolve(specsPath) !== path.join(CONFIG_DIR, 'sensor-specs.json')) {
+  if (path.resolve(specsPath) !== path.join(dirs(env).configDir, 'sensor-specs.json')) {
     try {
       cfg = JSON.parse(fs.readFileSync(specsPath, 'utf8'));
     } catch (e) {

@@ -32,7 +32,7 @@ fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, '{}');
 const { createEfsp } = await import('../src/efsp/index.js');
 const { BoardStore, REPLAY_PERSIST_WINDOW_MS } = await import('../src/efsp/board-store.js');
 const { FlightDataStore } = await import('../src/efsp/flight-data-store.js');
-const facilityConfig = await import('../src/efsp/facility-config.js');
+const facilityConfig = (await import('../src/efsp/facility-config.js')).createFacilityConfig();
 const { TrafficCount, reconcileTrafficCount } = await import('../src/efsp/traffic-count.js');
 const { crew, DEPARTURE_FLIGHT_DATA } = await import('./helpers/efsp-scenario.mjs');
 

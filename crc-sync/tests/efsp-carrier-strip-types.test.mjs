@@ -7,8 +7,9 @@ import assert from 'node:assert/strict';
 
 const nla = await import('../src/efsp/nla.js');
 const permission = await import('../src/efsp/permission.js');
+const classPermission = (await import('./helpers/permission.mjs')).classPermission();
 const blockMap = await import('../src/efsp/block-map.js');
-const facilityConfig = await import('../src/efsp/facility-config.js');
+const facilityConfig = (await import('../src/efsp/facility-config.js')).createFacilityConfig();
 const { INELIGIBLE_STATES, CorrelationReconciler } = await import('../src/efsp/correlation-reconciler.js');
 
 const CARRIER_STRIP_TYPES = ['MARSHAL', 'FINAL', 'PATTERN'];
@@ -76,23 +77,23 @@ test('Block Maps: derived Blocks are not writable by SetBlock; carrier Blocks ro
 });
 
 test('permissions: only the Marshal creates, only as MARSHAL; no CV Position proposes a coordination, TOFIs or converts (the Marshal answers a HANDOFF, docs/adr/0101)', () => {
-  assert.equal(permission.canMutate('CV_MARSHAL', 'CreateStrip'), true);
+  assert.equal(classPermission.canMutate('CV_MARSHAL', 'CreateStrip'), true);
   assert.equal(permission.canCreateStripType('CV_MARSHAL', 'MARSHAL'), true);
   assert.equal(permission.canCreateStripType('CV_MARSHAL', 'FINAL'), false);
   assert.equal(permission.canCreateStripType('CV_MARSHAL', 'PATTERN'), false);
-  for (const p of ['CV_PRIFLY', 'CV_APP1', 'CV_APP2']) assert.equal(permission.canMutate(p, 'CreateStrip'), false, p);
+  for (const p of ['CV_PRIFLY', 'CV_APP1', 'CV_APP2']) assert.equal(classPermission.canMutate(p, 'CreateStrip'), false, p);
   for (const p of ['CV_MARSHAL', 'CV_PRIFLY', 'CV_APP1', 'CV_APP2']) {
     // The Marshal alone holds HANDOFF and ControlRelease, and only their receiving actions (DR-3).
     const held = p === 'CV_MARSHAL' ? ['HANDOFF', 'ControlRelease'] : [];
     for (const k of [...permission.COORDINATION_OP_KINDS, 'ControlRelease', 'TOFI', 'ConvertToArrival', 'ApproveAirspaceEntry', 'ClearAirspaceEntry']) {
-      assert.equal(permission.canMutate(p, k), held.includes(k), `${p}/${k}`);
+      assert.equal(classPermission.canMutate(p, k), held.includes(k), `${p}/${k}`);
     }
-    assert.equal(permission.canMutateAction(p, 'HANDOFF', 'PROPOSE'), false, `${p} never proposes`);
-    assert.equal(permission.canMutateAction(p, 'HANDOFF', 'CANCEL'), false, `${p} never cancels`);
-    assert.equal(permission.canMutateAction(p, 'HANDOFF', 'ACCEPT'), p === 'CV_MARSHAL');
-    assert.equal(permission.canMutateAction(p, 'ControlRelease', 'GRANT'), false);
-    assert.equal(permission.canMutateAction(p, 'ControlRelease', 'REQUEST'), p === 'CV_MARSHAL');
-    assert.equal(permission.canMutate(p, 'TransferStrip'), true);
+    assert.equal(classPermission.canMutateAction(p, 'HANDOFF', 'PROPOSE'), false, `${p} never proposes`);
+    assert.equal(classPermission.canMutateAction(p, 'HANDOFF', 'CANCEL'), false, `${p} never cancels`);
+    assert.equal(classPermission.canMutateAction(p, 'HANDOFF', 'ACCEPT'), p === 'CV_MARSHAL');
+    assert.equal(classPermission.canMutateAction(p, 'ControlRelease', 'GRANT'), false);
+    assert.equal(classPermission.canMutateAction(p, 'ControlRelease', 'REQUEST'), p === 'CV_MARSHAL');
+    assert.equal(classPermission.canMutate(p, 'TransferStrip'), true);
   }
 });
 
