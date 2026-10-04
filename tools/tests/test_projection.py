@@ -71,3 +71,22 @@ class TestDms:
         # Basic format check: N??°??'??" E???°??'??"
         assert "'" in result
         assert '"' in result
+
+
+class TestAddedTheaters:
+    """TheChannel, Kola, GermanyCW (pydcs 55dc18a): the DCS map origin lands in the right region."""
+
+    def test_the_channel_origin(self):
+        lat, lon = dcs_to_latlon(0, 0, "TheChannel")
+        assert lat == pytest.approx(50.8751, abs=1e-3)
+        assert lon == pytest.approx(1.5875, abs=1e-3)
+
+    def test_kola_origin(self):
+        lat, lon = dcs_to_latlon(0, 0, "Kola")
+        assert lat == pytest.approx(68.0, abs=1e-3)
+        assert lon == pytest.approx(22.5, abs=1e-3)
+
+    def test_germany_cw_centre(self):
+        lat, lon = dcs_to_latlon(-450000, -450000, "GermanyCW")
+        assert lat == pytest.approx(50.4551, abs=1e-3)
+        assert lon == pytest.approx(14.1588, abs=1e-3)

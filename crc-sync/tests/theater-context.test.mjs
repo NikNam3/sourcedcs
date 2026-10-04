@@ -69,9 +69,9 @@ test('a DCS grid course → magnetic goes through convergence, then variation; u
   const [lat, lon] = [37, 35.43];
   const want = M.normDeg(90 + M.convergenceAt(lat, lon, THEATERS.Syria) - ctx.variationAt(lat, lon));
   assert.ok(Math.abs(ctx.gridToMagnetic(90, lat, lon) - want) < 1e-9);
-  const kola = new TheaterContext({ theaters: THEATERS, clock: clock() });
-  kola.setMission({ theatre: 'Kola', airports: [{ lat: 68, lon: 33 }] });
-  assert.equal(kola.gridToMagnetic(90, 68, 33), null, 'Kola has no central meridian in the table yet');
+  const afg = new TheaterContext({ theaters: THEATERS, clock: clock() });
+  afg.setMission({ theatre: 'Afghanistan', airports: [{ lat: 34, lon: 66 }] });
+  assert.equal(afg.gridToMagnetic(90, 34, 66), null, 'Afghanistan has no sourced central meridian (docs/wip/THEATERS.md)');
 });
 
 test('the theater override reaches every conversion', () => {
