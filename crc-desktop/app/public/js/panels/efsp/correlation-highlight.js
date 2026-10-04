@@ -5,7 +5,8 @@ import { updateMap } from '../../geojson.js';
 import {
   correlatedTrackIdForStrip, getEfspCorrelationForStrip, getEfspFlightData, getEfspStrip, stripIdsForTrackId
 } from './efsp-state.js';
-import { getOpenEfspBayIds, getSelectedEfspStripId, selectEfspStripById } from './bay-view.js';
+import { getSelectedEfspStripId, selectEfspStripById } from './bay-view.js';
+import { getOpenEfspBayIds } from './bay/open-bays.js';
 
 // Coupled selection (EFSPImplementationGuide.md §6.6 rule 4): "Selecting a
 // Strip MUST highlight its track within 1 second, and vice versa."

@@ -2,10 +2,7 @@
 import { isWithinDoubleTapWindow } from './efsp-nla.js';
 import { getLatestTrack } from '../../picture.js';
 import {
-  conformanceAlertsForFlightData, correlatedTrackIdForStrip, efspLinesWithOthers, getEfspAirspace, getEfspBays,
-  getEfspCorrelationForStrip, getEfspFlightData, getEfspMarsa, getEfspObligation, getEfspRack, getEfspStrip,
-  isWithOthersBayId, marsaForStrip, otherLiveStripsForFlightData, searchEfspStrips, conflictAlertsForTrack,
-  surveillanceHintsForStrip
+  efspLinesWithOthers, getEfspAirspace, getEfspBays, getEfspCorrelationForStrip, getEfspFlightData, getEfspMarsa, getEfspObligation, getEfspRack, getEfspStrip, isWithOthersBayId, marsaForStrip, otherLiveStripsForFlightData, searchEfspStrips, surveillanceHintsForStrip
 } from './efsp-state.js';
 import { getActingPositions, sendEfspCorrelationMutation, sendEfspMarsaMutation, sendEfspMutation } from './efsp-ws.js';
 import { noteEfspStripSelected } from './efsp-metrics-client.js';
@@ -21,36 +18,13 @@ import { runwayStatusSignatureFor } from './runway-status-rules.js';
 import { trackRef } from '../../track-label.js';
 import { getActiveEfspSearchQuery } from './efsp-panel.js';
 import { computeRackReconciliation } from './strip-drag.js';
-import {
-  _isPseudoBayId, _openBayContainers, _stripElById, getOpenEfspBayIds, setOpenEfspBays
-} from './bay/open-bays.js';
-import {
-  CHIP_HISTORY_LIMIT, _appendAnnotationHistory, _appendDropButton, _appendExpandButton, _appendExpandedView,
-  _buildStripEl, _expandedStripId, _setExpandedStripId
-} from './bay/strip-element.js';
-import {
-  COORDINATION_PRIMITIVE_LABELS, _buildCoordinationNoteEl, _buildCoordinationReasonEl, _canProposeCoordination,
-  _coordinationIsReplica, _coordinationProposerOf, _coordinationStateWord, _dispatchCoordination,
-  _isPendingCoordinationReplica, _isRejectedCoordinationReplica, _openCoordinatePopover
-} from './bay/popovers/coordination.js';
+import { _isPseudoBayId, _openBayContainers, _stripElById } from './bay/open-bays.js';
+import { _appendExpandedView, _buildStripEl, _expandedStripId, _setExpandedStripId } from './bay/strip-element.js';
+import { _dispatchCoordination, _isRejectedCoordinationReplica } from './bay/popovers/coordination.js';
 import { _refreshOpsFiledIfStale, _renderOpsFiledCards } from './bay/ops-cards.js';
 import { _efspDrag } from './bay/drag.js';
-import { _stripHasOpenPopover, openPopover } from './bay/popover-portal.js';
+import { _stripHasOpenPopover } from './bay/popover-portal.js';
 import { _buildBlockCell, _refusalForStrip } from './bay/block-edit.js';
-import { _openBindPopover } from './bay/popovers/bind.js';
-import { _openMarsaPopover } from './bay/popovers/marsa.js';
-import {
-  AIRSPACE_ENTRY_POSITIONS, CONVERT_TO_ARRIVAL_POSITIONS, COORDINATION_TARGETS, HAND_BACK_TO, TOFI_ANSWERED_BY,
-  TOFI_COUNTERPARTS
-} from './bay/authority-mirror.js';
-import {
-  TOFI_ACCEPT_REGIMES, _canMarkTofiEntered, _canProposeTofiEntry, _canProposeTofiExit, _canTransferTofiComms, _dispatchTofi,
-  _isPendingTofiReplica, _openTofiEntryPopover, _tofiExitPrecondition, _tofiProposerOf, _tofiRegimeChoice
-} from './bay/popovers/tofi.js';
-import {
-  _canApproveAirspaceEntry, _canConvertToArrival, _openAirspaceEntryPopover, _pendingConvertStripId,
-  _setPendingConvertStripId
-} from './bay/popovers/airspace-entry.js';
 
 // Bay/Rack rendering + Pointer Events drag (guide §7.1-7.2, §7.5). DOM-only
 // — not unit tested (crc-desktop's test suite has no DOM harness; see the
@@ -83,21 +57,6 @@ import {
 //            (_openBlockEdit); an abandoned one survives a rebuild rather
 //            than blocking it.
 
-
-// ESM-2a: the Bay view's features live in bay/*; every name this file used to export is still exported from here.
-export {
-  AIRSPACE_ENTRY_POSITIONS, CHIP_HISTORY_LIMIT, CONVERT_TO_ARRIVAL_POSITIONS, COORDINATION_PRIMITIVE_LABELS,
-  COORDINATION_TARGETS, HAND_BACK_TO, TOFI_ACCEPT_REGIMES, TOFI_ANSWERED_BY, TOFI_COUNTERPARTS,
-  _appendAnnotationHistory, _appendDropButton, _appendExpandButton, _appendExpandedView, _buildBlockCell,
-  _buildCoordinationNoteEl, _buildCoordinationReasonEl, _buildStripEl, _canApproveAirspaceEntry,
-  _canConvertToArrival, _canProposeCoordination, _canProposeTofiEntry, _canProposeTofiExit,
-  _canMarkTofiEntered, _canTransferTofiComms, _coordinationIsReplica, _coordinationProposerOf, _coordinationStateWord,
-  _dispatchCoordination, _dispatchTofi, _expandedStripId, _isPendingCoordinationReplica, _isPendingTofiReplica,
-  _isRejectedCoordinationReplica, _openAirspaceEntryPopover, _openBindPopover,
-  _openCoordinatePopover, _openMarsaPopover, _openTofiEntryPopover, _pendingConvertStripId, _setExpandedStripId,
-  _setPendingConvertStripId, _stripHasOpenPopover, _tofiExitPrecondition, _tofiProposerOf, _tofiRegimeChoice,
-  getOpenEfspBayIds, openPopover, setOpenEfspBays
-};
 
 export let _selectedStripId = null; // click-to-select state for the non-drag move path
 

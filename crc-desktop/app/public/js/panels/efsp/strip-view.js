@@ -38,18 +38,26 @@ import { compactBlocksFor, fieldSpanFor } from './strip-fields.js';
 import { carrierDecorateNlaButton, carrierExtraNlaButtons } from './carrier-panel.js';
 import { sfaExtraNlaButtons } from './bay-views.js';
 import {
-  AIRSPACE_ENTRY_POSITIONS, CHIP_HISTORY_LIMIT, COORDINATION_PRIMITIVE_LABELS, COORDINATION_TARGETS, HAND_BACK_TO,
-  TOFI_ACCEPT_REGIMES, TOFI_COUNTERPARTS, _appendAnnotationHistory, _appendDropButton, _appendExpandButton,
-  _appendExpandedView, _buildBlockCell, _buildCoordinationNoteEl, _buildCoordinationReasonEl,
-  _canApproveAirspaceEntry, _canConvertToArrival, _canProposeCoordination, _canProposeTofiEntry, _canProposeTofiExit,
-  _canMarkTofiEntered, _canTransferTofiComms, _coordinationIsReplica, _coordinationProposerOf, _coordinationStateWord,
-  _dispatchCoordination, _dispatchCorrelation, _dispatchGesture, _dispatchHandBack, _dispatchMarsa, _dispatchTofi,
-  _handBackBayFor, _invokeNla, _isPendingCoordinationReplica, _isPendingTofiReplica, _isRejectedCoordinationReplica,
-  _openAirspaceEntryPopover, _openBindPopover, _openCoordinatePopover, _openMarsaPopover,
-  _openTofiEntryPopover, _pendingConvertStripId, _resolveActingPositionId, _swallowRepeatAdvance,
-  _tofiExitPrecondition, _tofiProposerOf, _tofiRegimeChoice, openPopover
+  _dispatchCorrelation, _dispatchGesture, _dispatchHandBack, _dispatchMarsa, _handBackBayFor, _invokeNla, _resolveActingPositionId, _swallowRepeatAdvance
 } from './bay-view.js';
-import { _setPendingConvertStripId } from './bay-view.js';
+import { AIRSPACE_ENTRY_POSITIONS, COORDINATION_TARGETS, HAND_BACK_TO, TOFI_COUNTERPARTS } from './bay/authority-mirror.js';
+import { _buildBlockCell } from './bay/block-edit.js';
+import { openPopover } from './bay/popover-portal.js';
+import {
+  _canApproveAirspaceEntry, _canConvertToArrival, _openAirspaceEntryPopover, _pendingConvertStripId
+} from './bay/popovers/airspace-entry.js';
+import { _openBindPopover } from './bay/popovers/bind.js';
+import {
+  _buildCoordinationNoteEl, _buildCoordinationReasonEl, _canProposeCoordination, _coordinationIsReplica, _coordinationProposerOf, _coordinationStateWord, _dispatchCoordination, _isPendingCoordinationReplica, _isRejectedCoordinationReplica, _openCoordinatePopover, COORDINATION_PRIMITIVE_LABELS
+} from './bay/popovers/coordination.js';
+import { _openMarsaPopover } from './bay/popovers/marsa.js';
+import {
+  _canMarkTofiEntered, _canProposeTofiEntry, _canProposeTofiExit, _canTransferTofiComms, _dispatchTofi, _isPendingTofiReplica, _openTofiEntryPopover, _tofiExitPrecondition, _tofiProposerOf, _tofiRegimeChoice, TOFI_ACCEPT_REGIMES
+} from './bay/popovers/tofi.js';
+import {
+  _appendAnnotationHistory, _appendDropButton, _appendExpandButton, _appendExpandedView, CHIP_HISTORY_LIMIT
+} from './bay/strip-element.js';
+import { _setPendingConvertStripId } from './bay/popovers/airspace-entry.js';
 import { _openJoinPopover, _openSplitPopover } from './bay/popovers/formation.js';
 import { _dispatchHandoffStep, _openControlReleasePopover } from './bay/popovers/control-release.js';
 import { OBLIGATION_LABELS, handoffChips, handoffSteps } from './control-release-rules.js';
