@@ -120,6 +120,22 @@ async function press(page, kind, { positionId, action } = {}) {
   await expect.poll(async () => (await field(page)).rev, { message: `${kind} applied` }).toBeGreaterThan(before);
 }
 
+/** An action that asks for a reason (Close, Reject): the inline form, not a native dialog. */
+async function pressWithReason(page, kind, { positionId, action } = {}, reason = '') {
+  await front(page, 'runwayStatus');
+  let sel = `#runway-status-panel button[data-kind="${kind}"]`;
+  if (positionId) sel += `[data-position-id="${positionId}"]`;
+  if (action) sel += `[data-action="${action}"]`;
+  await expect(page.locator(sel), `${kind} is offered`).toHaveCount(1);
+  const before = (await field(page)).rev;
+  await page.locator(sel).click({ timeout: 5000 });
+  const input = page.locator('#runway-status-panel .runway-status-reason-input');
+  await expect(input, 'the reason is asked for inline').toBeVisible();
+  await input.fill(reason);
+  await page.locator('#runway-status-panel .runway-status-reason-send').click();
+  await expect.poll(async () => (await field(page)).rev, { message: `${kind} applied` }).toBeGreaterThan(before);
+}
+
 const offered = (page, kind) => page.locator(`#runway-status-panel button[data-kind="${kind}"]`);
 
 /** Back to OPEN with no change open, whatever the walk left (briefing T12). Needs LC and OPS held. */
@@ -378,8 +394,7 @@ test('Phase 3 walk: a runway change needs OPS and AP (each a different person), 
   await front(lc, 'runwayStatus');
   await lc.locator('#runway-status-panel select.runway-status-to-end').selectOption('05');
   await press(lc, 'ProposeRunwayChange', { positionId: 'LC' });
-  app.once('dialog', (d) => d.accept('wind is 240 at 15'));
-  await press(app, 'RejectRunwayChange', { positionId: 'AP' });
+  await pressWithReason(app, 'RejectRunwayChange', { positionId: 'AP' }, 'wind is 240 at 15');
   await front(lc, 'runwayStatus');
   await expect(lc.locator('#runway-status-panel .runway-status-change-rejected')).toHaveText(/^REJECTED by AP \(iceman\) \d{4}Z — wind is 240 at 15$/);
   expect((await field(lc)).activeRunway).toBe('23');

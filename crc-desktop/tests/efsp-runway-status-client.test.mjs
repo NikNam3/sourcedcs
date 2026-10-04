@@ -378,12 +378,12 @@ test('HOOK on a hook-required ARRIVAL inbound, handed to tower or on final when 
 const { makeElement, descendants } = domStub;
 
 /** Renders the real RUNWAY STATUS panel; returns the list element and every dispatch. */
-async function renderRunwayStatusBoard({ records, signedOn, prompt = () => 'a reason', scrambling = false }) {
+async function renderRunwayStatusBoard({ records, signedOn, scrambling = false }) {
   const sent = [];
   const nodes = { 'runway-status-list': makeElement('div'), 'runway-status-empty': makeElement('div') };
   globalThis.document.getElementById = (id) => nodes[id] || null;
   globalThis.document.createElement = makeElement;
-  globalThis.prompt = prompt; // window.prompt
+  globalThis.prompt = () => { throw new Error('window.prompt is a blocking dialog: the reason is asked for inline'); };
   const g = freshGraph();
   const st = await g.import('panels/efsp/efsp-state.js');
   const ws = await g.import('panels/efsp/efsp-ws.js');
@@ -399,7 +399,7 @@ async function renderRunwayStatusBoard({ records, signedOn, prompt = () => 'a re
   }
   st.applyEfspSnapshot(snapshot);
   panel.initRunwayStatusPanel();
-  return { list: nodes['runway-status-list'], empty: nodes['runway-status-empty'], sent };
+  return { list: nodes['runway-status-list'], empty: nodes['runway-status-empty'], sent, panel };
 }
 
 // Objects built inside the vm sandbox have that realm's prototypes; compare them as data.
@@ -447,14 +447,25 @@ test('OPS\'s button sends the request to tower with the record\'s rev, as OPS, a
 });
 
 test('LC begins works with the record\'s rev; Close asks for a reason and Cancel aborts', async () => {
-  const board = await renderRunwayStatusBoard({ records: [record({ rev: 3 })], signedOn: ['LC'], prompt: () => null });
+  const board = await renderRunwayStatusBoard({ records: [record({ rev: 3 })], signedOn: ['LC'] });
   press(button(board.list, 'BeginRunwayWorks', 'LC'));
   assert.deepEqual(plain(board.sent[0]), { actingPositionId: 'LC', facilityId: 'INCIRLIK', baseRev: 3, op: { kind: 'BeginRunwayWorks', runwayId: '05/23' } });
   press(button(board.list, 'CloseRunway', 'LC'));
-  assert.equal(board.sent.length, 1, 'Cancel on the reason prompt sends nothing');
-  const again = await renderRunwayStatusBoard({ records: [record({ rev: 3 })], signedOn: ['LC'], prompt: () => 'FOD' });
-  press(button(again.list, 'CloseRunway', 'LC'));
-  assert.deepEqual(plain(again.sent[0].op), { kind: 'CloseRunway', runwayId: '05/23', reason: 'FOD' });
+  assert.equal(board.sent.length, 1, 'Close asks for the reason first: nothing is sent yet');
+  const cancel = descendants(board.list).find(n => n.className === 'runway-status-reason-cancel');
+  press(cancel);
+  assert.equal(board.sent.length, 1, 'Cancel sends nothing');
+  assert.equal(descendants(board.list).some(n => n.className === 'runway-status-reason-input'), false, 'and the form is gone');
+  press(button(board.list, 'CloseRunway', 'LC'));
+  const input = descendants(board.list).find(n => n.className === 'runway-status-reason-input');
+  input.value = 'FOD';
+  for (const fn of input._listeners.input || []) fn({});
+  // a runway-status frame rebuilds the panel: the half-typed reason is still there
+  board.panel.renderRunwayStatusPanel();
+  const kept = descendants(board.list).find(n => n.className === 'runway-status-reason-input');
+  assert.equal(kept.value, 'FOD');
+  for (const fn of kept._listeners.keydown || []) fn({ key: 'Enter', preventDefault() {}, stopPropagation() {} });
+  assert.deepEqual(plain(board.sent[1].op), { kind: 'CloseRunway', runwayId: '05/23', reason: 'FOD' });
 });
 
 test('a runway change shows each acknowledger, a self-coordinated ack says so, and the proposal picks its end from a list', async () => {
