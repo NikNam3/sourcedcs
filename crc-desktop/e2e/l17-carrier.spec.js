@@ -6,7 +6,7 @@
  * talk-down (FINAL) has nothing to type, and a Case I recovery is an altitude list.
  *
  * Two controllers, one browser context each: the Marshal seat (with both approach lanes) and
- * PriFly. Screenshots go to docs/wip/L17/. The Board lives for the whole run, so every test drops
+ * PriFly. Screenshots go to the test output directory (test-results/). The Board lives for the whole run, so every test drops
  * what it made and puts the Case back to III, and callsigns are unique per test.
  */
 
@@ -14,7 +14,6 @@ const path = require('path');
 const { test, expect } = require('./helpers/test');
 const { openPanel, lapseNlaGuard } = require('./helpers/app');
 
-const SHOTS = path.join(__dirname, '../../docs/wip/L17');
 test.use({ viewport: { width: 1400, height: 1000 } });
 test.setTimeout(60000);
 
@@ -81,8 +80,8 @@ test('01 PriFly sets the Case; every Position sees it change at once, and only P
   await pri.locator('.carrier-case-select').selectOption('II');
   await expect(marshal.locator('[data-carrier-case="value"]')).toHaveText('II');
   await expect(marshal.locator('[data-carrier-banner="text"]')).toContainText('hull not found'); // no DCS in the harness: the banner says so rather than showing a stale number
-  await marshal.screenshot({ path: path.join(SHOTS, '01-case-and-banner-marshal.png') });
-  await pri.screenshot({ path: path.join(SHOTS, '01-case-selector-prifly.png') });
+  await marshal.screenshot({ path: test.info().outputPath('01-case-and-banner-marshal.png') });
+  await pri.screenshot({ path: test.info().outputPath('01-case-selector-prifly.png') });
   await setCase(pri, 'III');
 });
 
@@ -103,7 +102,7 @@ test('02 the slot board shows what the slot means; a drag to a slot is one Move 
   await expect(strip(marshal, a).locator('.efsp-block-C7.efsp-block-editable')).toHaveCount(0);
   await expect(strip(marshal, a).locator('.efsp-block-C6.efsp-block-editable')).toHaveCount(0);
   await expect(strip(marshal, a).locator('.efsp-block-C8.efsp-block-editable')).toHaveCount(0);
-  await marshal.screenshot({ path: path.join(SHOTS, '02-stack-board.png') });
+  await marshal.screenshot({ path: test.info().outputPath('02-stack-board.png') });
 
   // low state: drag CCC's row onto slot 0, one gesture
   const before = await marshal.evaluate(() => crc.carrier.carrierDerivedStack().map(e => e.flightDataId));
@@ -115,13 +114,13 @@ test('02 the slot board shows what the slot means; a drag to a slot is one Move 
   await marshal.mouse.move(s.x + 32, s.y + s.height / 2 - 8, { steps: 4 });
   await marshal.mouse.move(t.x + 30, t.y + t.height / 2, { steps: 10 });
   await expect(target).toHaveClass(/efsp-drop-target/);
-  await marshal.screenshot({ path: path.join(SHOTS, '02-drag-to-slot-preview.png') });
+  await marshal.screenshot({ path: test.info().outputPath('02-drag-to-slot-preview.png') });
   await marshal.mouse.up();
   await expect.poll(() => marshal.evaluate(() => crc.carrier.carrierDerivedStack().map(e => e.flightDataId))).not.toEqual(before);
   const after = await marshal.evaluate(() => crc.carrier.carrierDerivedStack().map(e => [crc.state.getEfspFlightData(e.flightDataId).identity.callsign, e.stackIndex, e.angels]));
   expect(after).toEqual([[c, 0, 6], [a, 1, 7], [b, 2, 8]]);
   await expect(strip(marshal, c).locator('.efsp-block-C7')).toHaveText('6');
-  await marshal.screenshot({ path: path.join(SHOTS, '02-after-resequence.png') });
+  await marshal.screenshot({ path: test.info().outputPath('02-after-resequence.png') });
   await cleanUp(marshal, pri);
   await setCase(pri, 'III');
 });
@@ -143,7 +142,7 @@ test('03 Case II handoffs: Commence feeds a lane, See you hands to PriFly, Radar
   await expect(seeYou).toHaveText('See you');
   await expect(seeYou).toHaveAttribute('data-carrier-trigger', 'PILOT_SEE_YOU');
   await strip(marshal, a).scrollIntoViewIfNeeded();
-  await marshal.screenshot({ path: path.join(SHOTS, '03-two-handoff-buttons.png') });
+  await marshal.screenshot({ path: test.info().outputPath('03-two-handoff-buttons.png') });
   await commence.click();
   await waitStrip(marshal, a, s => s.state === 'COMMENCED' && s.ownerPositionId === 'CV_APP1' && s.trigger === 'CONTROLLER_INITIATED', 'Commence');
   await expect.poll(() => marshal.evaluate(() => crc.carrier.carrierDerivedStack().map(e => [e.stackIndex, e.status]))).toEqual([[0, 'PUSHED'], [1, 'HOLDING']]);
@@ -153,7 +152,7 @@ test('03 Case II handoffs: Commence feeds a lane, See you hands to PriFly, Radar
   await waitStrip(pri, b, s => s.stripType === 'PATTERN' && s.ownerPositionId === 'CV_PRIFLY' && s.trigger === 'PILOT_SEE_YOU', 'See you');
   await openBay(pri, 'CV_PRIFLY', 'cv-prifly-pattern');
   await expect(strip(pri, b)).toBeVisible();
-  await pri.screenshot({ path: path.join(SHOTS, '03-prifly-pattern.png') });
+  await pri.screenshot({ path: test.info().outputPath('03-prifly-pattern.png') });
   await expect.poll(() => marshal.evaluate(() => crc.carrier.carrierDerivedStack().map(e => e.stackIndex))).toEqual([0]);
 
   // Radar contact at the lane: same Strip, now FINAL
@@ -168,7 +167,7 @@ test('03 Case II handoffs: Commence feeds a lane, See you hands to PriFly, Radar
   await expect(onFinal.locator('input, select')).toHaveCount(0);
   await expect(onFinal.locator('.efsp-block-C16')).toBeVisible();
   await onFinal.scrollIntoViewIfNeeded();
-  await marshal.screenshot({ path: path.join(SHOTS, '03-final-nothing-to-type.png') });
+  await marshal.screenshot({ path: test.info().outputPath('03-final-nothing-to-type.png') });
   await onFinal.locator('.efsp-nla-btn[data-carrier-handoff="FINAL_TO_LSO"]').click();
   await waitStrip(marshal, a, s => s.state === 'BALL' && s.trigger === 'PILOT_BALL_CALL', 'Ball');
   await expect(strip(marshal, a).locator('.efsp-nla-btn')).toHaveText('Trapped');
@@ -199,7 +198,7 @@ test('04 Case I is an altitude list: no push column, the flight goes to the patt
   const angels = board.locator('.carrier-slot-angels-input').first();
   await angels.fill('3'); await angels.press('Enter');
   await expect(board.locator('.carrier-slot-occupied')).toContainText('A3');
-  await marshal.screenshot({ path: path.join(SHOTS, '04-case-i-list.png') });
+  await marshal.screenshot({ path: test.info().outputPath('04-case-i-list.png') });
   const toPattern = strip(marshal, a).locator('.efsp-nla-btn[data-carrier-handoff="MARSHAL_TO_PATTERN_CASE_I"]');
   await expect(toPattern).toHaveText('To pattern');
   await expect(strip(marshal, a).locator('.efsp-nla-btn[data-carrier-handoff="MARSHAL_TO_PRIFLY"]')).toHaveCount(0);
@@ -222,6 +221,6 @@ test('05 a refusal is visible: a Marshal cannot set the Case, and a frequency is
     crc.ws.sendEfspMutation('CV_MARSHAL', s, { kind: 'SetBlock', blockId: 'C10', value: '251.000' });
   }, a);
   await expect(marshal.locator('#efsp-mutation-error')).toContainText(/frequency/i);
-  await marshal.screenshot({ path: path.join(SHOTS, '05-refusals.png') });
+  await marshal.screenshot({ path: test.info().outputPath('05-refusals.png') });
   await cleanUp(marshal);
 });

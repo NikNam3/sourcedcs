@@ -14,7 +14,6 @@ const { openPanel, seedStrip, stripByCallsign } = require('./helpers/app');
 
 test.describe.configure({ timeout: 90000 });
 
-const SHOTS = path.join(__dirname, '..', '..', 'docs', 'wip', 'L16');
 
 const flightDataOf = (page, callsign) => page.evaluate((cs) => {
   const s = [...crc.state.efspStrips.values()].find(x => (crc.state.efspFlightDataList.get(x.flightDataId) || {}).identity?.callsign === cs);
@@ -54,10 +53,10 @@ test('9F is a select of the configured stereo routes, never free text', async ({
   await expect(s.locator('.efsp-block-9')).toHaveText('LTAG DCT ALPHA DCT LTAG');
   await expect(s.locator('.efsp-block-7')).toHaveText('250');
   await only(page, CS);
-  await page.screenshot({ path: path.join(SHOTS, 'picker-pack1.png') });
+  await page.screenshot({ path: test.info().outputPath('picker-pack1.png') });
   await page.setViewportSize({ width: 480, height: 1000 });
   await s.locator('.efsp-block-9F').scrollIntoViewIfNeeded();
-  await page.screenshot({ path: path.join(SHOTS, 'picker-pack1-480.png') });
+  await page.screenshot({ path: test.info().outputPath('picker-pack1-480.png') });
   await page.setViewportSize({ width: 1600, height: 1000 });
 
   // Switch.
@@ -102,11 +101,11 @@ test('§10.5: departure, off-block and takeoff time each follow an explicit orde
   await expect(row('17').locator('.efsp-block-17')).toHaveAttribute('title', /~1430Z estimate: P-time, from the filed DD-1801/);
   await only(page, CS);
   await row('17').scrollIntoViewIfNeeded();
-  await page.screenshot({ path: path.join(SHOTS, 'times-estimates-full.png') });
-  await s.screenshot({ path: path.join(SHOTS, 'times-estimates-strip.png') });
+  await page.screenshot({ path: test.info().outputPath('times-estimates-full.png') });
+  await s.screenshot({ path: test.info().outputPath('times-estimates-strip.png') });
   await page.setViewportSize({ width: 480, height: 1000 });
   await row('17').scrollIntoViewIfNeeded();
-  await page.screenshot({ path: path.join(SHOTS, 'times-estimates-480.png') });
+  await page.screenshot({ path: test.info().outputPath('times-estimates-480.png') });
   await page.setViewportSize({ width: 1600, height: 1000 });
 
   // "off-block time 1425": typed, the estimate goes, TAKEOFF now follows it.

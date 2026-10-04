@@ -6,7 +6,7 @@
  *
  * Several controllers at once, one browser context each (a context has one
  * localStorage, so the fake token is per context). Screenshots go to
- * docs/wip/L23/. Callsigns are unique per test: the Board lives for the run.
+ * the test output directory. Callsigns are unique per test: the Board lives for the run.
  */
 
 const path = require('path');
@@ -16,7 +16,6 @@ const { openPanel, startAction, stripMenuItem } = require('./helpers/app');
 /** A mission line's callsign is not in Block 1 (that is the ATC Strips'), so find the Strip by its text. */
 const stripByCallsign = (page, callsign) => page.locator('.efsp-strip', { hasText: callsign }).first();
 
-const SHOTS = path.join(__dirname, '../../docs/wip/L23');
 test.use({ viewport: { width: 1400, height: 900 } });
 // Each test opens two or three browser contexts and walks a flight through several states; every wait
 // in it is on state (waitStrip / expect.poll), so the only time limit that can bite is the test's own,
@@ -88,7 +87,7 @@ test('01/02 a JTAC session is sent only what TAC_C2 handed it, and hands it back
   await expect.poll(() => liveCount(jt.page)).toBe(1);
   expect(await stripOf(jt.page, b), 'TAC_C2\'s other line never reached the JTAC').toBeNull();
   expect(await liveCount(tac.page)).toBe(2);
-  await jt.page.screenshot({ path: path.join(SHOTS, '01-jtac-sees-only-handed.png') });
+  await jt.page.screenshot({ path: test.info().outputPath('01-jtac-sees-only-handed.png') });
 
   // Holding only JTAC there is no TAC_C2 tab to drag to: the menu has the hand-back.
   await startAction(stripByCallsign(jt.page, a), 'Hand back to TAC_C2');
@@ -97,8 +96,8 @@ test('01/02 a JTAC session is sent only what TAC_C2 handed it, and hands it back
   await expect.poll(() => liveCount(jt.page)).toBe(0);
   await openBay(tac.page, 'TAC_C2', 'tac-c2-on-station');
   await expect(stripByCallsign(tac.page, a)).toBeVisible();
-  await tac.page.screenshot({ path: path.join(SHOTS, '02-jtac-hands-back-tac-c2-side.png') });
-  await jt.page.screenshot({ path: path.join(SHOTS, '02-jtac-hands-back-jtac-side.png') });
+  await tac.page.screenshot({ path: test.info().outputPath('02-jtac-hands-back-tac-c2-side.png') });
+  await jt.page.screenshot({ path: test.info().outputPath('02-jtac-hands-back-jtac-side.png') });
   await tac.context.close(); await jt.context.close();
 });
 
@@ -118,7 +117,7 @@ test('03 an AIC-held line: NLA disabled with the server\'s reason, a hand-back i
   await expect(menu.getByRole('menuitem', { name: 'Hand back to TAC_C2', exact: true })).toBeEnabled();
   // A regex, not exact: a disabled item carries its reason in its name.
   for (const name of [/^Coordinate/, /^TOFI/]) await expect(menu.getByRole('menuitem', { name })).toHaveCount(0);
-  await aic.page.screenshot({ path: path.join(SHOTS, '03-aic-hand-back-menu.png') });
+  await aic.page.screenshot({ path: test.info().outputPath('03-aic-hand-back-menu.png') });
   await menu.getByRole('menuitem', { name: 'Hand back to TAC_C2', exact: true }).click();
   await waitStrip(tac.page, line, s => s.ownerPositionId === 'TAC_C2');
   await tac.context.close(); await aic.context.close();
@@ -134,7 +133,7 @@ test('04 AIC walks away: the line lands in TAC_C2\'s On Station tab, where TAC_C
   await waitStrip(tac.page, line, s => s.ownerPositionId === 'TAC_C2' && s.bayId === 'tac-c2-on-station');
   await openBay(tac.page, 'TAC_C2', 'tac-c2-on-station');
   await expect(stripByCallsign(tac.page, line)).toBeVisible();
-  await tac.page.screenshot({ path: path.join(SHOTS, '04-consolidated-lands-in-tab.png') });
+  await tac.page.screenshot({ path: test.info().outputPath('04-consolidated-lands-in-tab.png') });
   await tac.context.close(); await aic.context.close();
 });
 
@@ -176,14 +175,14 @@ test('05 CTR proposes the TOFI exit while AIC holds the line, and the TAC_C2 pos
   await openBay(combo.page, 'AIC', 'aic-on-station');
   const strip = stripByCallsign(combo.page, line);
   await expect(strip).toBeVisible();
-  await combo.page.screenshot({ path: path.join(SHOTS, '05-tofi-exit-answered-before.png') });
+  await combo.page.screenshot({ path: test.info().outputPath('05-tofi-exit-answered-before.png') });
   await strip.getByRole('button', { name: 'Accept TOFI Exit' }).click();
   await expect.poll(() => ctr.page.evaluate((c) => {
     const s = crc.state.getAllEfspStrips().find(x => x.stripType === 'OVERFLIGHT' && crc.state.getEfspFlightData(x.flightDataId).identity.callsign === c);
     return s.tofiCoordination && s.tofiCoordination.state;
   }, line)).toBe('COMPLETE');
   expect((await stripOf(combo.page, line, 'MISSION')).ownerPositionId, 'answering did not move the line').toBe('AIC');
-  await combo.page.screenshot({ path: path.join(SHOTS, '05-tofi-exit-answered.png') });
+  await combo.page.screenshot({ path: test.info().outputPath('05-tofi-exit-answered.png') });
   await ctr.context.close(); await combo.context.close();
 });
 
@@ -205,7 +204,7 @@ test('06 one controller holding CTR and AIC: Coordinate is offered on CTR\'s Str
   await expect(stripByCallsign(combo.page, overflight)).toBeVisible();
   await expect(await stripMenuItem(stripByCallsign(combo.page, overflight), 'Coordinate…')).toBeVisible();
   await combo.page.keyboard.press('Escape');
-  await combo.page.screenshot({ path: path.join(SHOTS, '06-ctr-aic-coordinate-on-ctr.png') });
+  await combo.page.screenshot({ path: test.info().outputPath('06-ctr-aic-coordinate-on-ctr.png') });
 
   await openBay(combo.page, 'AIC', 'aic-on-station');
   const line = stripByCallsign(combo.page, mission);
@@ -214,6 +213,6 @@ test('06 one controller holding CTR and AIC: Coordinate is offered on CTR\'s Str
   await expect(combo.page.locator('.efsp-strip-menu').getByRole('menuitem', { name: /^Coordinate/ })).toHaveCount(0);
   await expect(combo.page.locator('.efsp-strip-menu').getByRole('menuitem', { name: /^TOFI/ })).toHaveCount(0);
   await expect(combo.page.locator('.efsp-strip-menu').getByRole('menuitem', { name: 'Hand back to TAC_C2', exact: true })).toBeVisible();
-  await combo.page.screenshot({ path: path.join(SHOTS, '06-ctr-aic-no-coordinate-on-aic.png') });
+  await combo.page.screenshot({ path: test.info().outputPath('06-ctr-aic-no-coordinate-on-aic.png') });
   await tac.context.close(); await combo.context.close();
 });

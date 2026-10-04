@@ -5,7 +5,7 @@
  * row start (a `:has()` rule — asserted by x-coordinate, not by existence),
  * the refusal at the cell, the lost-comms note in ▼, and narrow Bays.
  *
- * Screenshots land in docs/wip/L2/ for the wave-1 merge (H9).
+ * Screenshots go to the test output directory (test-results/).
  *
  * The Board persists across tests in a run, so every callsign is unique.
  */
@@ -16,8 +16,7 @@ const { openPanel, seedStrip, stripByCallsign, expectRefusalIsVisible, frames } 
 
 test.describe.configure({ timeout: 60000 });
 
-const SHOTS = path.join(__dirname, '..', '..', 'docs', 'wip', 'L2');
-const shot = (name) => path.join(SHOTS, name);
+const shot = (name) => test.info().outputPath(name);
 
 async function goBay(page, positionId, bayId) {
   await page.locator(`#efsp-position-tabs .efsp-position-tab[data-position-id="${positionId}"]`).click();

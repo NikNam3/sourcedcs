@@ -6,7 +6,7 @@
  * acknowledgements, and the pilot requests the client can show.
  *
  * crc-desktop docs/adr/0068 (the client) over crc-sync docs/adr/0061 (the
- * server). Screenshots go to docs/wip/L1b/ — each is listed with what it proves
+ * server). Screenshots go to the test output directory (test-results/) — each is listed with what it proves
  * in docs/wip/L1b.md.
  *
  * Several controllers, each in their own browser context, because the D21
@@ -29,8 +29,7 @@ test.describe.configure({ mode: 'serial', timeout: 240000 });
 // The walk builds on its own earlier tests, so the Board is reset once per file, not per test (helpers/test.js).
 test.use({ resetScope: 'file' });
 
-const SHOTS = path.join(__dirname, '..', '..', 'docs', 'wip', 'L1b');
-const shot = (page, name) => page.screenshot({ path: path.join(SHOTS, `${name}.png`), fullPage: false });
+const shot = (page, name) => page.screenshot({ path: test.info().outputPath(`${name}.png`), fullPage: false });
 
 const FLIGHT_DATA = { route: 'DCT', requestedAltitude: 'FL250', departureAirport: 'LTAG', destinationAirport: 'LTAF' };
 const RUN = String(Date.now()).slice(-3); // callsigns unique per run, since the Board is shared

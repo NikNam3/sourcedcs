@@ -81,3 +81,18 @@ test('no spec or helper sets an assertion or click timeout under the 5 s default
   }
   assert.deepEqual(bad, []);
 });
+
+// DESK-TIDY-2: a spec run must not modify tracked files. Every screenshot goes to test.info().outputPath(...) (under the
+// gitignored test-results/); none to docs/wip or a relative path.
+test('no spec writes a screenshot anywhere but test.info().outputPath', () => {
+  const bad = [];
+  for (const f of specs) {
+    const src = fs.readFileSync(path.join(E2E, f), 'utf8');
+    const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    for (const m of code.matchAll(/\.screenshot\(\s*\{[^}]*?path:\s*([^,}]+(?:\([^)]*\))?[^,}]*)/g)) {
+      if (!/test\.info\(\)\.outputPath\(|^shot\(/.test(m[1].trim()) || /docs\/wip|docs', 'wip/.test(m[1])) bad.push(`${f}: ${m[1].trim()}`);
+    }
+    if (/docs[/'", ]+wip/.test(code)) bad.push(`${f}: names docs/wip in code`);
+  }
+  assert.deepEqual(bad, []);
+});

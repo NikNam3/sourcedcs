@@ -32,7 +32,7 @@ test('a one-click move fills the Undo slot; Ctrl+Z undoes it and the slot shows 
   await expect(slot(page)).toContainText('Undone');
   await expect.poll(() => stateOf(page, 'UNDO11')).toBe(before);
   await expect(slot(page).locator('button')).toHaveCount(0, { timeout: 5000 });
-  await page.screenshot({ path: 'test-results/undo-c-after-undo.png' });
+  await page.screenshot({ path: test.info().outputPath('undo-c-after-undo.png') });
 });
 
 test('.undo sends the slot action, with no Strip selected', async ({ page }) => {
@@ -64,7 +64,7 @@ test('a voided controller sees a dismissible panel message and no marker on the 
   const msg = page.locator('#efsp-undo-voided .efsp-undo-voided-msg');
   await expect(msg).toHaveText('LC undid Hand off UNDO13 → APP; your annotation on UNDO13 was voided');
   await expect(strip.locator('[class*="undo"]')).toHaveCount(0);
-  await page.screenshot({ path: 'test-results/undo-c-voided-message.png' });
+  await page.screenshot({ path: test.info().outputPath('undo-c-voided-message.png') });
   await msg.click();
   await expect(msg).toHaveCount(0);
 });

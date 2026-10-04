@@ -16,10 +16,9 @@ const { openPanel, seedStrip, startAction, settle, serverTicks } = require('./he
 
 test.describe.configure({ timeout: 120000 });
 
-const SHOTS = path.join(__dirname, '..', '..', 'docs', 'wip', 'L2');
 const notes = [];
 const note = (step, text) => notes.push(`${step}: ${text}`);
-test.afterAll(() => fs.writeFileSync(path.join(SHOTS, 'walk-notes.txt'), notes.join('\n') + '\n'));
+test.afterAll(() => fs.writeFileSync(test.info().outputPath('walk-notes.txt'), notes.join('\n') + '\n'));
 
 const _contexts = [];
 test.afterEach(async () => { while (_contexts.length) await _contexts.pop().close().catch(() => {}); });
@@ -81,7 +80,7 @@ test('pilot walk: "VIPER11 request a different exit fix", CTR and AP at once', a
   await expect(a.locator('.efsp-strip-fields .efsp-block-9H-TIME')).toHaveText('1432');
   note('1', `CTR posted IR107/F/1432/FL190; AP's replica showed them without a reload. AP face: ${(await faceIds(a)).join(' ')}`);
   await only(ap, CS);
-  await a.screenshot({ path: path.join(SHOTS, 'walk-1-app-replica.png') });
+  await a.screenshot({ path: test.info().outputPath('walk-1-app-replica.png') });
 
   // AP takes the flight.
   const accept = a.getByRole('button', { name: 'Accept Hand Off' });
@@ -107,7 +106,7 @@ test('pilot walk: "VIPER11 request a different exit fix", CTR and AP at once', a
   await expect(c.locator('.efsp-strip-fields .efsp-block-9H-EXIT')).toHaveText('E', { timeout: 5000 });
   note('2b', 'CTR\'s Strip showed E within the poll; nothing on either Strip says it was amended');
   await only(ap, CS);
-  await mine.screenshot({ path: path.join(SHOTS, 'walk-2-amended.png') });
+  await mine.screenshot({ path: test.info().outputPath('walk-2-amended.png') });
 
   // ── 3. "…approved FL210": the controller writes ALT. The advisory follows. ──
   // ADR 0101: Accept moved radar ID only, so CTR hands over control first (an altitude is a control instruction).
@@ -118,14 +117,14 @@ test('pilot walk: "VIPER11 request a different exit fix", CTR and AP at once', a
   const adv = mine.locator('.efsp-mtr-lostcomms');
   await expect(adv).toContainText('FL210');
   note('3', `AP wrote ALT FL210; ▼ advisory reads: "${(await adv.textContent()).trim()}"`);
-  await mine.screenshot({ path: path.join(SHOTS, 'walk-3-approved.png') });
+  await mine.screenshot({ path: test.info().outputPath('walk-3-approved.png') });
   await mine.locator('.efsp-expand-btn').click();
 
   // ── 4. "cancel IR107, direct home." ───────────────────────────────────────
   await edit(mine, '9G-MTR', '');
   await expect(mine.locator('.efsp-strip-fields .efsp-block-9H-EXIT')).toHaveText('E');
   note('4', `MTR cleared; exit fields stayed on the face: ${(await faceIds(mine)).filter(id => /^9[GH]/.test(id)).join(' ')}`);
-  await mine.screenshot({ path: path.join(SHOTS, 'walk-4-cancelled.png') });
+  await mine.screenshot({ path: test.info().outputPath('walk-4-cancelled.png') });
   for (const id of ['9H-EXIT', '9H-TIME', '9H-ALT']) await edit(mine, id, '');
   await expect(mine.locator('.efsp-strip-fields .efsp-block-9G-MTR')).toHaveCount(0);
   note('4b', 'after clearing all, the MTR row went');
@@ -144,7 +143,7 @@ test('pilot walk: "VIPER11 request a different exit fix", CTR and AP at once', a
   await expect(mine.locator('.efsp-strip-fields .efsp-block-refused')).toHaveCount(1);
   note('6', `1472 refused: "${(await ap.locator('#efsp-mutation-error').textContent()).trim()}"; cell marked refused`);
   await only(ap, CS);
-  await ap.locator('#efsp-panel').screenshot({ path: path.join(SHOTS, 'walk-6-typo.png') });
+  await ap.locator('#efsp-panel').screenshot({ path: test.info().outputPath('walk-6-typo.png') });
   await ap.keyboard.press('Escape');
 
   // ── 7. On AP's ARRIVAL: the M11 group, no entry on the face. ─────────────

@@ -1,7 +1,7 @@
 'use strict';
 
 /* L12 — hung ordnance on the Strip (guide §9.5, crc-sync's docs/adr/0069),
- * in a real browser against a real crc-sync. Screenshots go to docs/wip/L12/
+ * in a real browser against a real crc-sync. Screenshots go to the test output directory
  * and are described in docs/wip/L12.md.
  *
  * Client runway status (getEfspRunwayStatus) is L1b's real client; nothing is stubbed.
@@ -14,9 +14,7 @@ const { openPanel, seedStrip, stripByCallsign, ensureActiveRunway, lapseNlaGuard
 
 test.describe.configure({ timeout: 120000 });
 
-const SHOTS = path.join(__dirname, '..', '..', 'docs', 'wip', 'L12');
-fs.mkdirSync(SHOTS, { recursive: true });
-const shot = (name) => path.join(SHOTS, name);
+const shot = (name) => test.info().outputPath(name);
 
 // The real runway-status client (L1b) is loaded, so the reason names the configured pad.
 const PAD_SENTENCE = 'Hung ordnance. SOURCE practice: after landing, taxi to Hot cargo pad';

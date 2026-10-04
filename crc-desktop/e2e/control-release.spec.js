@@ -2,14 +2,13 @@
 
 /* CR-C (crc-sync docs/adr/0101): the HANDOFF steps after ACCEPT, from both Facilities at once. ACCEPT moves radar ID and
  * the Strip; communications, ControlRelease and control are their own marks. CTR (CENTER) hands to AP (INCIRLIK) and to
- * CV_MARSHAL (CARRIER). Screenshots go to docs/wip/CR-C/. Run on E2E_LANE=5. The Board lives for the whole run, so
+ * CV_MARSHAL (CARRIER). Screenshots go to the test output directory (test-results/). Run on E2E_LANE=5. The Board lives for the whole run, so
  * every callsign is unique. */
 
 const path = require('path');
 const { test, expect } = require('./helpers/test');
 const { openPanel, seedStrip, startAction, settle } = require('./helpers/app');
 
-const SHOTS = path.join(__dirname, '../../docs/wip/CR-C');
 test.describe.configure({ timeout: 90000 });
 
 const _contexts = [];
@@ -32,7 +31,7 @@ const goBay = async (page, positionId, bayId) => {
   await page.locator(`#efsp-position-tabs .efsp-position-tab[data-position-id="${positionId}"]`).click();
   await page.locator(`#efsp-bay-tabs .efsp-bay-tab[data-bay-id="${bayId}"]`).click();
 };
-const shot = (page, name) => page.screenshot({ path: path.join(SHOTS, name) });
+const shot = (page, name) => page.screenshot({ path: test.info().outputPath(name) });
 
 async function proposeHandoff(page, callsign, toPositionId) {
   const s = await seedStrip(page, { callsign, actingPositionId: 'CTR', bayId: 'ctr-enroute', stripType: 'ARRIVAL', facilityId: 'CENTER' });
