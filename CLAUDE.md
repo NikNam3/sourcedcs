@@ -51,7 +51,8 @@ run is the manual-dispatch workflow `.github/workflows/crc-sync-soak.yml` ("crc-
 `soak:selfcheck` after touching `board-store.js`, `board/**`, `efsp-ws.js`, `wire/**`, `ws-hub.js`, `sync/**` or
 `tools/soak/host-core.js`. The wave-2 findings the soak used to fail on are fixed (`docs/efsp-briefing.md` §3I/§4 has the state), and the `drop-broadcast` selfcheck detector fires
 again (`docs/wip/SOAK.md`). `memory.slope` and `memory.netGrowth` are judged only on runs of 3 hours or more whose
-warm-up covers the 2 h finished-Strip retention (ADR 0082): the heap keeps filling until the archiver starts removing
+warm-up covers the soak's finished-Strip retention (the soak host keeps 2 h; production archives after 12 h, ADR 0107;
+`--retention-min` overrides it): the heap keeps filling until the archiver starts removing
 DROPPED Strips, so a shorter run (including `soak:smoke`) reports them as **not judged**, which is neither a failure
 nor a pass. `--warmup-min <m>` overrides the warm-up and `--judge-memory` forces the gate (the selfcheck `leak` case
 uses it). The not-judged rule is `memoryPolicy()` in `tools/soak/report.js` (`docs/wip/SOAKW.md`).

@@ -29,7 +29,7 @@ Built and tested (`npm test` in `crc-sync` and `crc-desktop`, both green per lan
 - **ATC scopes draw STARS-style blocks** at `LC`, `AP` and `CTR`: white for yours, flashing for a handoff to you, green for someone else's. See §8F.
 - **Headings are magnetic** (World Magnetic Model), and the transition altitude is per theater. See §8J.
 - **Time Blocks and altitude blocks** — estimated times show in italics with their source on hover (§4B), and `ALT` takes a block such as `FL220-FL240`.
-- **Finished flights are archived** after 2 hours or at the next mission, and a mission session decides which mission is current. See §8J. Every Mutation and refusal has exactly one audit entry (§10).
+- **Finished flights are archived** after 12 hours or at the next mission, and a mission session decides which mission is current. See §8J. Every Mutation and refusal has exactly one audit entry (§10).
 - **The tactical Positions are fenced**: a JTAC is sent only the lines it was handed, `AIC` hands back and cannot advance a line, and `TAC_C2` answers the TOFI exit on an AIC-held line. See §8C1.
 - **Metrics and a traffic count**: the METRICS panel (PANELS → METRICS) and, behind it, two read endpoints on crc-sync. See §10.
 - **ATO import** — `TAC_C2` pastes or drops a USMTF ATO (atobrief exports one) and it becomes mission lines on the Board, with the air-refuelling tanker/receiver join shown on the Strips. See §8I.
@@ -1211,7 +1211,7 @@ for being ours; it is only not doctrine, and not to be quoted as doctrine.
 | **Airspace**: the `type` label set, working and range-control frequencies and approving a flight onto one, MOAs around Incirlik belonging to `CTR`, the shipped airspace list (empty) | Ours (squadron practice and the project owner's airspace picture). Only "ATC approves activation" is sourced (guide §9.11) | `adr/0036`, `0037` |
 | **The ATO import**: the USMTF set layouts (from a community wiki), the vowel-cut rule, one ATO at a time | Ours | `adr/0071`, `0078` |
 | **Metrics notes**: they say `[SOURCE-DEFINED]` on screen, on purpose | Ours | `adr/0072` |
-| **Instrumentation and archiving** (the 2 h retention of finished flights) | Ours, tunable in config | `adr/0065`, `0082` |
+| **Instrumentation and archiving** (the 12 h retention of finished flights) | Ours, tunable in config | `adr/0065`, `0082`, `0107` |
 
 **What is sourced, with its clause:** the cross-Facility primitives (HANDOFF, POINT_OUT, TRAFFIC, OPERATIONAL_REQUEST,
 AIT; guide §4.6), the forwarding-obligation timers (§4.6.1, §4.6.2), MARSA (§9.2), amendments (§3.7), beacon codes
@@ -1402,7 +1402,7 @@ active runway and the archiving of finished flights (§8J) key off.
 
 ### Archiving finished flights
 
-A dropped flight stays on the server for **2 hours** after its drop, or until the **next mission** (a new
+A dropped flight stays on the server for **12 hours** after its drop (sorties run 6-8 hours, and the returning flight must still find its flight data, ATO line and MARSA; `adr/0107`), or until the **next mission** (a new
 mission session, above), whichever comes first. Then it is *archived*: gone from every screen, from the
 server's memory and from the Board snapshot. Its history is the **Mutation log**
 (`state/efsp-mutations*.jsonl`), which gets one `Archive` line per Strip and one `ArchiveFlightData` line per
