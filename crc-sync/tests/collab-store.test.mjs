@@ -59,7 +59,8 @@ test('a bare store never writes a file', () => {
   assert.equal(store.getAll().length, 1);
 });
 
-test('the clock grace opens the gate when no game time ever arrives', async () => {
+test('the clock grace opens the gate when no game time ever arrives', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] }); // the grace is a timer: step it, never wait for it
   const p = file();
   mk(p).declare('5', 'hostile', 'A');
   const b = mk(p, { clockGraceMs: 30, identityOf: () => null });
@@ -67,7 +68,7 @@ test('the clock grace opens the gate when no game time ever arrives', async () =
   assert.equal(b.get('5'), null);
   b.observeUnit(VIPER); // streamed while the gate is closed: not shown yet
   assert.equal(b.get('5'), null);
-  await new Promise(r => setTimeout(r, 80));
+  t.mock.timers.tick(30);
   b.observeUnit(VIPER);
   assert.equal(b.get('5').iff.state, 'hostile');
   b.close();

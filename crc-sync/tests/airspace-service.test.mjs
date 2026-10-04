@@ -180,6 +180,11 @@ test('a web edit reaches a connected panel as an efsp-airspace-delta; the calend
   const before = p.frames.length;
   const other = await post(c, create({ theater: 'Caucasus', clientMutationId: 'oth' }));
   assert.equal(other.status, 200);
-  await new Promise(r => setTimeout(r, 150));
-  assert.ok(!p.frames.slice(before).some(f => f.type === 'efsp-airspace-delta'));
+  // frames arrive in order, so a same-theater sentinel's delta marks the point by which the other theater's would have come
+  const sentinel = await post(c, create({ airspaceId: 'MOA-S', op: { kind: 'CreateAirspace', definition: { ...MOA, airspaceId: 'MOA-S', name: 'Sentinel' } } }));
+  assert.equal(sentinel.status, 200);
+  await until(() => p.frames.slice(before).some(f => f.type === 'efsp-airspace-delta'));
+  const deltas = p.frames.slice(before).filter(f => f.type === 'efsp-airspace-delta');
+  assert.equal(deltas.length, 1, 'only the sentinel (this theater) was broadcast');
+  assert.equal(deltas[0].airspaces.updated[0].definition.airspaceId, 'MOA-S');
 });

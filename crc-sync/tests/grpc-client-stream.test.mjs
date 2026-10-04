@@ -119,10 +119,13 @@ test('StreamUnits asks for a non-zero poll_rate and a max_backoff (never 0x0800)
 test('a held-open unit stream is asked for exactly once', async (t) => {
   quietConsole(t);
   fake.reset(dcsStreamUnits([1, 2, 3]));
-  const c = startClient(t);
+  // A 50 ms reconnect floor instead of 1 s: a stream that ended and was re-asked would show within a few of these, so the
+  // old 5 s hold is not needed to prove "exactly once".
+  const c = startClient(t, { backoffBaseMs: 50, backoffCapMs: 100 });
   let units = 0;
   c.on('unit', () => units++);
-  await sleep(5000);
+  await until(() => units >= 3);
+  await sleep(500);
   assert.equal(fake.unitCalls.length, 1);
   assert.equal(c.getStatus(), 'connected');
   assert.ok(units >= 3);
