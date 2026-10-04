@@ -47,9 +47,8 @@ function createFeedHandlers({ grpcClient, srsClient, trackStore, surveillance, m
       // rather than leaving a stale binding pointing at a contact that is gone.
       correlationReconciler.resetPicture('MISSION_RELOAD');
       // Do NOT add efsp.boardStore.clear()/efsp.flightDataStore.clear() here — EFSP
-      // Strips are durably persisted and MUST survive a mission reload, unlike
-      // tracks/the IFF overlay (see createApp's EFSP comment and
-      // docs/adr/0002-durable-board-persistence.md).
+      // Strips are durably persisted and a bare mission-load (every gRPC connect) MUST NOT clear them (docs/adr/0002). The Board is
+      // cleared only by the mission reset, which mission-session.js decides and app.js wires (docs/adr/0108).
       // A mission is running even when GetTheatre failed, so that is an unknown
       // theater (offset 0, flagged), not "no theater yet" (the wall clock).
       missionClock.setTheatre(missionData.theatre || 'UNKNOWN');

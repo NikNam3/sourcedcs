@@ -132,6 +132,21 @@ class SfaStore extends SyncedStore {
     return { ok: true, changed: true, record: deepClone(this._record) };
   }
 
+  /**
+   * The mission reset (docs/adr/0108): the rotation goes back to the configured start. @returns {boolean} whether it changed
+   */
+  resetForMission(by = 'system') {
+    const fresh = this._fresh();
+    if (JSON.stringify(Object.entries(fresh.rotation).sort()) === JSON.stringify(Object.entries(this._record.rotation).sort())) return false;
+    const before = deepClone(this._record);
+    this._record.rotation = fresh.rotation;
+    this._bump(this._record);
+    this._record.transitions.push({ at: this._clock.now(), by, rackId: null, positionId: null, op: 'MissionReset' });
+    if (this._record.transitions.length > TRANSITIONS_CAP) this._record.transitions.splice(0, this._record.transitions.length - TRANSITIONS_CAP);
+    this._audit({ clientMutationId: null, op: { kind: 'MissionReset' } }, null, by, before, { ok: true });
+    return true;
+  }
+
   // ── persistence ─────────────────────────────────────────────────────────
 
   snapshot() { return deepClone(this._record); }

@@ -667,6 +667,31 @@ class RunwayStatusStore extends SyncedStore {
     return { ok: true, changed: from !== end, activeRunway: end };
   }
 
+  /**
+   * The mission reset (docs/adr/0108): every runway is OPEN again with no suspension, closure, inspection or pending request,
+   * no runway change is open, and the pads are empty. What is kept: the active runway and where it came from. It belongs to the
+   * session's wind, which the mission-load that follows re-reads for the new session (setActiveRunwayFromWind), and a stale value
+   * is the safer answer if that read fails. Audited as a system change, one entry per Facility that had anything to clear.
+   * @returns {string[]} the Facilities that changed
+   */
+  resetForMission(by = SYSTEM_ACTOR) {
+    const changed = [];
+    for (const [facilityId, record] of this._records) {
+      const fresh = this._seed(facilityId);
+      const slice = (r) => JSON.stringify([r.runways, r.runwayChange, r.hotCargoPad, r.alertPad]);
+      if (slice(record) === slice(fresh)) continue;
+      const before = deepClone(record);
+      record.runways = fresh.runways;
+      record.runwayChange = null;
+      record.hotCargoPad = fresh.hotCargoPad;
+      record.alertPad = fresh.alertPad;
+      this._touch(record, by, { op: 'MissionReset', positionId: null });
+      this._recordAudit({ facilityId, op: { kind: 'MissionReset' } }, null, by, before, { ok: true });
+      changed.push(facilityId);
+    }
+    return changed;
+  }
+
   // ── persistence (durable per docs/adr/0002) ────────────────────────────
 
   /** State only — the inventory comes from config on every boot. */

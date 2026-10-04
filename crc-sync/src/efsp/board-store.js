@@ -424,6 +424,41 @@ class BoardStore {
     return back.map(s => s.stripId);
   }
 
+  /**
+   * The mission reset (docs/adr/0108, decisions.md H108): the DCS mission rolled over, so every live Strip on this Board
+   * ends. One system pass: each live Strip goes to DROPPED through `retire` (so its flight data, MARSA, carrier stack,
+   * peer link and code are released exactly as a controller's Drop would), with one `MissionResetStrip` entry each (the
+   * traffic count reads those, like any drop) and one `MissionReset` entry for the Board with the counts. Not a client
+   * Mutation: no acting Position, no Undo. Refuses nothing: an active TOFI exchange ends with the flight.
+   * @param {{session?: {seq?:number, reason?:string}|null}} [opts]
+   * @returns {{facilityId:string|null, dropped:string[], flightDataIds:string[]}}
+   */
+  resetForMission({ session = null } = {}) {
+    const live = this.getAll().filter(s => s.state !== 'DROPPED');
+    const befores = new Map(live.map(s => [s.stripId, deepClone(s)]));
+    for (const strip of live) {
+      if (strip.state === 'DROPPED') continue;
+      this._stripOps.retire(strip, 'system', { force: true });
+    }
+    const extra = { missionSession: session ? (session.seq ?? null) : null, sessionReason: session ? (session.reason ?? null) : null };
+    const dropped = [];
+    const flightDataIds = new Set();
+    for (const strip of live) {
+      if (strip.state !== 'DROPPED') continue;
+      dropped.push(strip.stripId);
+      flightDataIds.add(strip.flightDataId);
+      this._audit.recordSystem('MissionResetStrip', strip, { before: befores.get(strip.stripId), after: deepClone(strip), reason: 'mission-reset', ...extra });
+    }
+    if (this._mutationLog) {
+      this._mutationLog.record({
+        clientMutationId: null, op: 'MissionReset', facilityId: this._rules.facilityId || null,
+        actingPositionId: null, actorId: 'system', at: this._clock.now(),
+        reason: 'mission-reset', strips: dropped.length, flightDataList: flightDataIds.size, ...extra,
+      });
+    }
+    return { facilityId: this._rules.facilityId || null, dropped, flightDataIds: [...flightDataIds] };
+  }
+
   /** When this DROPPED Strip dropped, in wall ms (board/persistence.js). Null for a live Strip. */
   droppedWallAtOf(stripId) { return this._persistence.droppedWallAtOf(stripId); }
 

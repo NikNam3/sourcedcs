@@ -227,3 +227,107 @@ test('onNewSession: unsubscribe, and a failing listener does not stop the others
   quiet(() => s.noteMissionLoad(SYRIA));
   assert.deepEqual(heard, ['a', 'c', 'c']);
 });
+
+// ── onMissionReset (docs/adr/0108, decisions.md H108): which rolls are sure enough to clear the Board ──
+
+const { CONFIRM_STEP_BACK_MS, CONFIRM_WINDOW_MS } = await import('../src/mission-session.js');
+
+function buildWithReset(c) {
+  const b = build(c);
+  const resets = [];
+  b.s.onMissionReset((session) => resets.push({ seq: session.seq, reason: session.reason }));
+  return { ...b, resets };
+}
+
+test('reset: never for FIRST, the first load, a reconnect, or a restart onto the same mission', () => {
+  const c = clocks();
+  const { s, resets, p } = buildWithReset(c);
+  quiet(() => s.noteMissionLoad(SYRIA));
+  run(c, s, 10 * MIN);
+  quiet(() => s.noteMissionLoad(SYRIA)); // reconnect
+  run(c, s, 10 * MIN);
+  const again = new MissionSession({ path: p, clock: c.clock, wallNow: c.wallNow });
+  const r2 = [];
+  again.onMissionReset(() => r2.push(1));
+  quiet(() => again.noteMissionLoad(SYRIA));
+  run(c, again, MIN);
+  assert.deepEqual(resets, []);
+  assert.deepEqual(r2, []);
+});
+
+test('reset: a changed fingerprint and a clock step-back clear at once', () => {
+  const c = clocks();
+  const { s, resets } = buildWithReset(c);
+  quiet(() => s.noteMissionLoad(SYRIA));
+  run(c, s, 30 * MIN);
+  quiet(() => s.noteMissionLoad(SYRIA_OTHER));
+  assert.deepEqual(resets.map(r => r.reason), ['MISSION_CHANGED']);
+  run(c, s, 30 * MIN);
+  c.m -= CLOCK_STEP_BACK_MS + MIN; // the same .miz reloaded without a mission_start
+  quiet(() => s.observeClock());
+  assert.deepEqual(resets.map(r => r.reason), ['MISSION_CHANGED', 'CLOCK_STEP_BACK']);
+});
+
+test('reset: mission_start for another mission clears at once; for the same mission it waits for the clock', () => {
+  const c = clocks();
+  const { s, resets } = buildWithReset(c);
+  quiet(() => s.noteMissionLoad(SYRIA));
+  run(c, s, 30 * MIN);
+  s.noteMissionStart();
+  quiet(() => s.noteMissionLoad(CAUCASUS));
+  assert.deepEqual(resets.map(r => r.reason), ['MISSION_START']);
+
+  run(c, s, 30 * MIN);
+  s.noteMissionStart();
+  quiet(() => s.noteMissionLoad(CAUCASUS)); // same fingerprint as the session before it
+  assert.equal(resets.length, 1, 'a bare mission_start is not enough');
+  run(c, s, 2 * MIN); // the clock carries on: a spurious mission_start
+  assert.equal(resets.length, 1);
+  assert.equal(s.currentSeq(), 3, 'it is still a new session (the existing roll decision)');
+});
+
+test('reset: mission_start for the same mission, then the clock back at the start, clears once', () => {
+  const c = clocks();
+  const { s, resets } = buildWithReset(c);
+  quiet(() => s.noteMissionLoad(SYRIA));
+  run(c, s, 30 * MIN);
+  s.noteMissionStart();
+  quiet(() => s.noteMissionLoad(SYRIA));
+  c.m = T0 + 5000; // DCS reports the restarted clock
+  quiet(() => s.observeClock());
+  assert.deepEqual(resets.map(r => r.reason), ['MISSION_START']);
+  quiet(() => s.observeClock());
+  run(c, s, MIN);
+  assert.equal(resets.length, 1, 'once');
+});
+
+test('reset: the same-mission confirmation expires, and a pause step is not a confirmation', () => {
+  const c = clocks();
+  const { s, resets } = buildWithReset(c);
+  quiet(() => s.noteMissionLoad(SYRIA));
+  run(c, s, 30 * MIN);
+  s.noteMissionStart();
+  quiet(() => s.noteMissionLoad(SYRIA));
+  c.m -= CONFIRM_STEP_BACK_MS - 5000; // less than the confirmation margin
+  quiet(() => s.observeClock());
+  assert.equal(resets.length, 0);
+  c.w += CONFIRM_WINDOW_MS + MIN; // wall time passes beyond the window
+  c.m -= 2 * MIN; // behind the old session by more than the margin, but not a step-back of the new one
+  quiet(() => s.observeClock());
+  assert.equal(resets.length, 0, 'too late: the window closed');
+});
+
+test('reset: a restart of crc-sync inside the confirmation window loses it (errs toward not clearing)', () => {
+  const c = clocks();
+  const { s, p } = buildWithReset(c);
+  quiet(() => s.noteMissionLoad(SYRIA));
+  run(c, s, 30 * MIN);
+  s.noteMissionStart();
+  quiet(() => s.noteMissionLoad(SYRIA));
+  const again = new MissionSession({ path: p, clock: c.clock, wallNow: c.wallNow });
+  const r = [];
+  again.onMissionReset(() => r.push(1));
+  c.m = T0;
+  quiet(() => again.observeClock());
+  assert.deepEqual(r, []);
+});

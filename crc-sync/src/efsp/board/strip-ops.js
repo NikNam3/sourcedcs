@@ -591,7 +591,7 @@ class StripOps {
    * ACTIVE pointing at a Strip that no longer exists), and neither the remove
    * indicator nor the beacon release ever happened on that path at all.
    */
-  retire(strip, by) {
+  retire(strip, by, { force = false } = {}) {
     // WP4A second slice, guide §4.6.3 rule 2: "the Strip stays live and
     // posted throughout tactical control... dropping the Strip breaks all
     // three [separation-model fields]." A hard rejection, not a soft warn
@@ -601,7 +601,8 @@ class StripOps {
     // coordination nicety. Applies on EITHER side of the exchange (the
     // ATC-side Strip and the MISSION-side Strip both carry their own
     // tofiCoordination record — see receiveTofiProposal).
-    if (strip.tofiCoordination && strip.tofiCoordination.state === 'ACTIVE') {
+    // `force`: the mission reset (docs/adr/0108) ends every Strip, tactical control included: the flight no longer exists.
+    if (!force && strip.tofiCoordination && strip.tofiCoordination.state === 'ACTIVE') {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: 'cannot drop a Strip under active tactical control — complete a TOFI exit first', strip };
     }
     strip.state = 'DROPPED';
