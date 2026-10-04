@@ -1400,6 +1400,23 @@ minutes. A reconnect, or a crc-sync restart onto the same mission, stays in the 
 session number is what the metrics (§10) and the traffic count are bucketed by, and what the wind-derived
 active runway and the archiving of finished flights (§8J) key off.
 
+### A new mission clears the Board
+
+When crc-sync is sure DCS started a **new mission** (a DCS crash and restart, a different mission loaded, or the same
+mission restarted), the Board is cleared for you, once, by the system: every live Strip on every Facility is dropped
+(including a line under TOFI tactical control), runway works, suspensions and runway changes are over (every runway is
+OPEN), the carrier goes back to a fresh recovery (Case, empty Marshal stack, default ship inputs), MARSA relations end, the
+SFA rotation returns to its configured start, and correlations are forgotten. ALERT and SCRAMBLE flags, coordination and TOFI
+links go with their Strips. Your airspace definitions and bookings, the Facility configuration, Position staffing and the stereo
+routes are **not** touched. The dropped Strips are filed like any drop (traffic count, Mutation log: one `MissionResetStrip`
+line per Strip and one `MissionReset` line per Board with the counts, actor `system`). ATO MISSION lines on TACTICAL go too: import the ATO again.
+There is no Undo for it. A pending edit of yours on a cleared Strip fails with "no longer on the Board".
+
+What does **not** clear it: a crc-sync restart, a lost and regained link to DCS, or a `mission_start` on the **same** mission
+while the mission clock simply carries on. A `mission_start` for the same mission clears only once the mission clock is then seen
+more than a minute behind where it was (a real restart puts it back at the mission start), within ten minutes. If DCS crashed
+and came back with the same mission and a clock that did not go back, nothing is cleared: drop the old Strips by hand.
+
 ### Archiving finished flights
 
 A dropped flight stays on the server for **2 hours** after its drop, or until the **next mission** (a new
@@ -1407,7 +1424,7 @@ mission session, above), whichever comes first. Then it is *archived*: gone from
 server's memory and from the Board snapshot. Its history is the **Mutation log**
 (`state/efsp-mutations*.jsonl`), which gets one `Archive` line per Strip and one `ArchiveFlightData` line per
 flight record; there is **no lookup in the app** (H73). Consequences: an archived drop cannot be undone
-(Undo answers "not found"), live Strips are never touched by archiving (a mission change included), and
+(Undo answers "not found"), archiving never touches a live Strip (a new mission drops them first, see above), and
 the traffic count is unaffected because every drop is counted before it can be archived. The sweep runs
 once a minute; a Strip dropped by an unusual route (a `SetState` to `DROPPED`, a refused TOFI) may be
 archived one sweep late, and a drop that was not counted at a mission change waits for the age sweep, so
