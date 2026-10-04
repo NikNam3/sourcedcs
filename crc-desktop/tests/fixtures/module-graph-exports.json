@@ -535,14 +535,16 @@
    "selectEfspStripById"
   ],
   "panels/efsp/bay/strip-element.js": [
+   "_buildStripEl",
+   "_onStripKeydown"
+  ],
+  "panels/efsp/bay/strip-expanded.js": [
    "CHIP_HISTORY_LIMIT",
    "_appendAnnotationHistory",
    "_appendDropButton",
    "_appendExpandButton",
    "_appendExpandedView",
-   "_buildStripEl",
    "_expandedStripId",
-   "_onStripKeydown",
    "_setExpandedStripId"
   ],
   "panels/efsp/bay/strip-signature.js": [

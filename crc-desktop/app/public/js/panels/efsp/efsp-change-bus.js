@@ -27,6 +27,7 @@ export const EFSP_TOPICS = Object.freeze({
   sfa: 'an SFA frequency rotation changed',
   bays: 'the open Bays must redraw (a popover closed, a Strip moved, a refusal landed)',
   map: 'the scope must redraw',
+  tabs: 'the active Position or Bay tab changed; the tab chrome and the open Bay redraw',
   selection: 'the selected Strip changed (the highlights re-resolve, then the Bays redraw)',
 });
 

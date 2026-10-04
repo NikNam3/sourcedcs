@@ -1,8 +1,8 @@
 'use strict';
+import { markEfspChanged } from './efsp-change-bus.js';
 import { getAllEfspStrips, getEfspFlightData, getEfspRunwayStatus, getEfspStrip } from './efsp-state.js';
 import { getActingPositions } from './efsp-ws.js';
 import { selectEfspStripById } from './bay/selection.js';
-import { _renderPositionTabs } from './panel/tabs.js';
 import { _setActiveBayId, _setActivePositionTab } from './panel/state.js';
 
 // Guide §9.6 — alert and scramble, on the client (crc-sync's docs/adr/0070).
@@ -156,7 +156,7 @@ function _revealScrambleStrip(stripId) {
   if (strip && signedOn.includes(strip.ownerPositionId)) {
     _setActivePositionTab(strip.ownerPositionId); // eslint-disable-line no-global-assign
     _setActiveBayId(strip.bayId); // eslint-disable-line no-global-assign
-    _renderPositionTabs();
+    markEfspChanged('tabs');
   }
   selectEfspStripById(stripId);
 }

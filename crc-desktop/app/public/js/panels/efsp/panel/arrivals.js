@@ -1,6 +1,5 @@
 'use strict';
 import { _bayTabsEl, _setActiveBayId, _setActivePositionTab } from './state.js';
-import { _renderPositionTabs } from './tabs.js';
 import { efspVisibleBayId } from './state.js';
 import { efspArrivalLog, forgetEfspArrivals, nextEfspArrivalExpiry, noteEfspArrivals } from '../efsp-arrivals.js';
 import { getActingPositions } from '../efsp-ws.js';
@@ -47,7 +46,7 @@ export function _renderArrivalsLine() {
     row.addEventListener('click', () => {
       _setActivePositionTab(e.positionId);
       _setActiveBayId(e.bayId);
-      _renderPositionTabs();
+      markEfspChanged('tabs');
       selectEfspStripById(e.stripId);
     });
     line.appendChild(row);

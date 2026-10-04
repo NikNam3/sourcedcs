@@ -11,7 +11,6 @@ import { _stripAlerts, tofiExitSignatureFor } from '../strip-view.js';
 import { efspArrivalFor } from '../efsp-arrivals.js';
 import { runwayStatusSignatureFor } from '../runway-status-rules.js';
 import { trackRef } from '../../../track-label.js';
-import { _buildStripEl } from './strip-element.js';
 import { _refusalForStrip } from './block-edit.js';
 
 // The render signature (DESK-SPLIT, split out of bay-view.js): what the reconciler compares to decide a Strip element is stale.

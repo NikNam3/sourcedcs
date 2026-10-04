@@ -1,4 +1,5 @@
 'use strict';
+import { ORDER, onEfspChanged } from '../efsp-change-bus.js';
 import { _activeBayId, _activePositionTab, _bayContentEl, _bayTabsEl, _positionTabsEl, _setActiveBayId, _setActivePositionTab, _isEfspPanelShowing, efspVisibleBayId } from './state.js';
 import { _renderArrivalsLine } from './arrivals.js';
 import { efspLinesWithOthers, getAllEfspStrips, getEfspBays, withOthersBayId } from '../efsp-state.js';
@@ -302,3 +303,6 @@ function _refreshPositionTabMarks() {
 }
 
 /** Whether the Strip panel is actually on screen (a docked tab behind another is not). */
+
+// A tab switch from outside this module (the arrivals line, a scramble row) marks 'tabs' (efsp-change-bus.js).
+onEfspChanged(['tabs'], () => _renderPositionTabs(), { order: ORDER.PANEL });

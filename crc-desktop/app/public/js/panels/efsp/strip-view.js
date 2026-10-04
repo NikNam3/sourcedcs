@@ -52,9 +52,7 @@ import { _openMarsaPopover } from './bay/popovers/marsa.js';
 import {
   _canMarkTofiEntered, _canProposeTofiEntry, _canProposeTofiExit, _canTransferTofiComms, _dispatchTofi, _isPendingTofiReplica, _openTofiEntryPopover, _tofiExitPrecondition, _tofiProposerOf, _tofiRegimeChoice, TOFI_ACCEPT_REGIMES
 } from './bay/popovers/tofi.js';
-import {
-  _appendAnnotationHistory, _appendDropButton, _appendExpandButton, _appendExpandedView, CHIP_HISTORY_LIMIT
-} from './bay/strip-element.js';
+import { _appendAnnotationHistory, _appendDropButton, _appendExpandButton, _appendExpandedView, CHIP_HISTORY_LIMIT } from './bay/strip-expanded.js';
 import { _setPendingConvertStripId } from './bay/popovers/airspace-entry.js';
 import { _openJoinPopover, _openSplitPopover } from './bay/popovers/formation.js';
 import { _dispatchHandoffStep, _openControlReleasePopover } from './bay/popovers/control-release.js';

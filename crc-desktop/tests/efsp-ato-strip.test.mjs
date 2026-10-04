@@ -69,6 +69,7 @@ async function mount({ strips = STRIPS, flightDataList = FLIGHT_DATA_LIST } = {}
   const bay = await g.import('panels/efsp/bay-view.js');
   const sel = await g.import('panels/efsp/bay/selection.js');
   const stripEl = await g.import('panels/efsp/bay/strip-element.js');
+  const expanded = await g.import('panels/efsp/bay/strip-expanded.js');
   const stripView = await g.import('panels/efsp/strip-view.js');
   const ato = await g.import('panels/efsp/ato-strip.js');
   ws.setEfspSender('_sendEfsp', () => {});
@@ -85,7 +86,7 @@ async function mount({ strips = STRIPS, flightDataList = FLIGHT_DATA_LIST } = {}
     if (stripId === null) { if (cur) sel._selectStrip(cur); } else if (cur !== stripId) sel._selectStrip(stripId);
     ato.highlightArParticipants(stripId);
   };
-  return { sandbox: { ...ato, ...stripView }, bay, stripEl, sent, build, select };
+  return { sandbox: { ...ato, ...stripView }, bay, stripEl, expanded, sent, build, select };
 }
 
 const slot = (el, key) => descendants(el).find(c => c.dataset && c.dataset.slot === key);
@@ -155,7 +156,7 @@ test('the Mode 3 conflict shows only when the ATO\'s code and the assigned code 
 test('the ▼ rows are on the DEPARTURE and MISSION Strips of a bound flight, read-only, and absent without an ATO', async () => {
   const m = await mount();
   for (const id of ['s-viper', 's-viper-dep']) {
-    m.stripEl._setExpandedStripId(id);
+    m.expanded._setExpandedStripId(id);
     const el = m.build(id);
     const rows = descendants(el).filter(e => (e.className || '').includes('efsp-ato-row'));
     const byLabel = Object.fromEntries(rows.map(r => [r.dataset.atoRow, r.children[1].textContent]));
@@ -169,7 +170,7 @@ test('the ▼ rows are on the DEPARTURE and MISSION Strips of a bound flight, re
     assert.equal(byLabel['ATO missing'], 'packageId');
     for (const r of rows) assert.equal(descendants(r).some(e => e.tagName === 'input' || e.tagName === 'select'), false, 'no editor');
   }
-  m.stripEl._setExpandedStripId('s-plain');
+  m.expanded._setExpandedStripId('s-plain');
   assert.equal(descendants(m.build('s-plain')).some(e => (e.className || '').includes('efsp-ato-row')), false);
 });
 
