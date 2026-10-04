@@ -443,13 +443,18 @@ export function getPendingMutations() {
 /**
  * Rebuilds a pending mutation's baseRev against the CURRENT local Strip
  * (post-reconnect, after a fresh snapshot/delta has landed) — the concrete
- * "rebase" step of §5.6.3's replay. Returns null if the target Strip no
- * longer exists locally at all (caller should surface that distinctly,
+ * "rebase" step of §5.6.3's replay. Returns null for an unknown id, or if
+ * the target Strip no longer exists locally at all (caller should surface that distinctly,
  * not silently drop the mutation).
  */
 export function rebaseForResend(clientMutationId) {
   const original = efspPendingMutations.get(clientMutationId);
-  if (!original || !original.stripId) return null; // CreateStrip has no stripId/baseRev to rebase
+  if (!original) return null;
+  // A CreateStrip has no target Strip and no baseRev, so there is nothing to rebase: it is re-sent as it was, with the
+  // same clientMutationId. That is safe because crc-sync's replay cache answers a cmid it already applied with the
+  // original outcome (`replayed: true`, the Strip as it is now) and applies one it never saw (or lost to a restart)
+  // fresh, so a lost ack neither duplicates the Strip nor loses it (BoardStore.applyMutation, docs/adr/0081).
+  if (!original.stripId) return { ...original };
   const current = efspStrips.get(original.stripId);
   if (!current) return null;
   return { ...original, baseRev: current.rev };

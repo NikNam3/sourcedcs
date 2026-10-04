@@ -132,9 +132,10 @@ test('rebaseForResend returns null when the target Strip no longer exists locall
   assert.equal(rebaseForResend('m1'), null);
 });
 
-test('rebaseForResend returns null for a CreateStrip mutation (no stripId to rebase against)', () => {
-  registerPendingMutation({ clientMutationId: 'm1', op: { kind: 'CreateStrip' } });
-  assert.equal(rebaseForResend('m1'), null);
+test('rebaseForResend re-sends a CreateStrip as it was (no stripId to rebase; the server replay cache keys on the same cmid)', () => {
+  const create = { clientMutationId: 'm1', facilityId: 'INCIRLIK', op: { kind: 'CreateStrip' } };
+  registerPendingMutation(create);
+  assert.deepEqual(rebaseForResend('m1'), create);
 });
 
 test('rebaseForResend returns null for an unknown clientMutationId', () => {

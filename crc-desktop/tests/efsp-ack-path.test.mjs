@@ -76,3 +76,19 @@ test('a (re)connect answers CONNECTION_LOST to a request in flight, but keeps a 
   assert.equal(heard.mut, 'acked', 'its own ack still reaches it after the replay');
   assert.equal(ws.settleEfspAck({ clientMutationId: undoId, ok: true }), false, 'the orphaned one is gone');
 });
+
+test('a pending CreateStrip is re-sent after a reconnect with the same id, not reported orphaned, and its ack still reaches the form', async () => {
+  const { ws, sent } = await load();
+  let heard = null;
+  const id = ws.sendEfspCreateStrip('OPS', { kind: 'CreateStrip', fields: { callsign: 'VIPER 1' } }, 'INCIRLIK', { onAck: (a) => { heard = a; } });
+  ws.redeclareEfspPositions();
+  const before = sent.length;
+  const orphans = [];
+  ws.replayPendingEfspMutations((o) => orphans.push(o));
+  assert.deepEqual(orphans, []);
+  assert.equal(sent.length, before + 1);
+  assert.equal(sent.at(-1).clientMutationId, id);
+  assert.equal(heard, null, 'the form keeps waiting: no CONNECTION_LOST');
+  assert.equal(ws.settleEfspAck({ clientMutationId: id, ok: true }), false);
+  assert.equal(heard.ok, true);
+});
