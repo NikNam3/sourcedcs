@@ -4,14 +4,14 @@
 /* Dark-cockpit PAR panel: grey when the approach is normal; amber = needs attention; orange-red = a sensor failed;
    red = past a safety limit. Tokens are crc-desktop's own (efsp-panel.css :root). */
 :root{
-  --bg:#0d0d0d;--panel:#14181c;--well:#0e1114;--strip:#1c2228;--line:#2e3740;--line2:#4a5560;
+  --bg:#0d0d0d;--panel:#14181c;--well:#0b0e11;--strip:#1c2228;--line:#2e3740;--line2:#4a5560;
   --text:#d8e0e6;--muted:#8c9aa6;--faint:#56616c;--attn:#e0a83c;--attn-t:#ffe0a8;--bad:#ff8a4c;--danger:#ff5c5c;
-  --trace:#8c9aa6;--grid:#1d242b;--plot:#e6edf3;
+  --grid:#181e24;
   --mono:'Consolas','DejaVu Sans Mono',ui-monospace,monospace;
   color-scheme:dark}
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:var(--bg);color:var(--text);font:13px/1.45 var(--mono);padding-block:24px 60px;padding-inline:16px}
-main{max-width:1180px;margin:0 auto;display:grid;gap:22px}
+main{max-width:1180px;margin:0 auto;display:grid;gap:20px}
 h1{font-size:19px;font-weight:600}
 h2{font-size:14px;color:#fff;border-bottom:1px solid var(--line);padding-bottom:4px;font-weight:600}
 p{color:var(--muted);max-width:860px}
@@ -19,7 +19,7 @@ a{color:#8ec7ff}
 
 /* ---- the panel ---- */
 .par{background:var(--panel);border:1px solid var(--line);font-size:11px;font-variant-numeric:tabular-nums;max-width:860px;display:grid;min-width:0}
-.ptitle{background:var(--well);border-bottom:1px solid var(--line);padding:4px 8px;color:var(--muted);font-size:10.5px;letter-spacing:.06em}
+.ptitle{background:#0e1114;border-bottom:1px solid var(--line);padding:4px 8px;color:var(--muted);font-size:10.5px;letter-spacing:.06em}
 .row{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 0;padding:5px 8px;border-bottom:1px solid var(--line)}
 .k{color:var(--muted);font-size:10px;letter-spacing:.05em;margin:0 4px 0 12px}
 .v{color:var(--text)}
@@ -30,7 +30,7 @@ a{color:#8ec7ff}
 .flag{font-size:10.5px;padding:0 5px;border:1px solid;border-radius:2px;margin-left:8px;letter-spacing:.04em}
 .flag.bad{color:var(--bad);border-color:var(--bad)}
 .scopes{display:grid;gap:4px;padding:6px 8px}
-.scope{position:relative;background:var(--well);border:1px solid var(--line);user-select:none;touch-action:none;cursor:crosshair}
+.scope{position:relative;background:var(--well);border:1px solid var(--line);user-select:none;cursor:default}
 .scope svg{display:block;width:100%}
 .scope .cap{position:absolute;left:6px;top:3px;color:var(--faint);font-size:10px;letter-spacing:.06em;pointer-events:none}
 .scope .win{position:absolute;right:6px;top:3px;color:var(--faint);font-size:10px;pointer-events:none}
@@ -43,15 +43,17 @@ a{color:#8ec7ff}
 .terms{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:6px 8px 8px;border-top:1px solid var(--line)}
 .terms button{min-height:40px;font:inherit;font-size:12px;color:var(--text);background:var(--strip);border:1px solid var(--line2);border-radius:3px;cursor:pointer}
 .terms button:hover{border-color:var(--muted)}
-.terms button:focus-visible,.states button:focus-visible{outline:2px solid #8ec7ff;outline-offset:1px}
+button:focus-visible,input:focus-visible{outline:2px solid #8ec7ff;outline-offset:1px}
 
 /* ---- page chrome around the mockup ---- */
-.states{display:flex;flex-wrap:wrap;gap:6px}
-.states button{font:inherit;font-size:11.5px;color:var(--muted);background:var(--panel);border:1px solid var(--line);padding:4px 10px;border-radius:3px;cursor:pointer}
-.states button[aria-pressed="true"]{color:#fff;border-color:var(--line2);background:var(--strip)}
+.bar{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.bar .lbl{color:var(--faint);font-size:11px;margin-right:4px;min-width:84px}
+.bar button{font:inherit;font-size:11.5px;color:var(--muted);background:var(--panel);border:1px solid var(--line);padding:4px 10px;border-radius:3px;cursor:pointer}
+.bar button[aria-pressed="true"]{color:#fff;border-color:var(--line2);background:var(--strip)}
+.bar label{display:flex;gap:6px;align-items:center;color:var(--muted);font-size:11.5px;cursor:pointer}
 .layout{display:grid;grid-template-columns:minmax(0,860px) minmax(220px,1fr);gap:22px;align-items:start}
-.notes{display:grid;gap:10px;font-size:12px}
-.notes h3{font-size:12px;color:#fff;font-weight:600}
+.notes{display:grid;gap:12px;font-size:12px}
+.notes h3{font-size:12px;color:#fff;font-weight:600;margin-bottom:2px}
 .notes p{font-size:12px}
 .tw{overflow-x:auto;max-width:860px}
 table.t{border-collapse:collapse;font-size:12px;width:100%}
@@ -62,19 +64,29 @@ table.t th{color:var(--muted);font-weight:400;background:var(--panel)}
 </style></head><body><main>
 <p><a href="index.html">← mockups</a></p>
 <header>
-<h1>PAR panel <span style="color:var(--muted);font-size:12px;font-weight:400">mockup, revision 2, 2026-10-05</span></h1>
-<p>A normal crc-desktop panel, opened from Panels like the EFSP or Settings and placed wherever the controller wants. It shows the
-precision approach radar picture for the aircraft on final and nothing the controller already knows. When the approach is normal the
-panel is all grey. Colour appears only when something needs attention.</p>
+<h1>PAR panel <span style="color:var(--muted);font-size:12px;font-weight:400">mockup, revision 3, 2026-10-05</span></h1>
+<p>A normal crc-desktop panel. It shows the precision approach radar picture for the aircraft on final and nothing the controller
+already knows. When the approach is normal the panel is all grey except the track. Colour elsewhere appears only when something needs attention.</p>
 </header>
 
-<div class="states" role="group" aria-label="Sample situation">
-  <button type="button" data-state="normal" aria-pressed="true">On glidepath, on course</button>
-  <button type="button" data-state="slight" aria-pressed="false">Slightly above, slightly left</button>
-  <button type="button" data-state="wellright" aria-pressed="false">Well right of course</button>
-  <button type="button" data-state="belowsafety" aria-pressed="false">Below the safety limit</button>
+<div class="bar" role="group" aria-label="Sample situation"><span class="lbl">Situation</span>
+  <button type="button" data-state="fly" aria-pressed="false">▶ Fly the approach</button>
+  <button type="button" data-state="normal" aria-pressed="true">On glidepath</button>
+  <button type="button" data-state="slight" aria-pressed="false">Slightly above, left</button>
+  <button type="button" data-state="wellright" aria-pressed="false">Well right</button>
+  <button type="button" data-state="belowsafety" aria-pressed="false">Below safety limit</button>
   <button type="button" data-state="lost" aria-pressed="false">Contact lost</button>
   <button type="button" data-state="elfail" aria-pressed="false">Elevation failed</button>
+</div>
+<div class="bar" role="group" aria-label="Track style to compare"><span class="lbl">Track style</span>
+  <button type="button" data-style="grey" aria-pressed="false">A · revision 2 (white)</button>
+  <button type="button" data-style="cyan" aria-pressed="true">B · cyan</button>
+  <button type="button" data-style="green" aria-pressed="false">C · phosphor green</button>
+  <button type="button" data-style="halo" aria-pressed="false">D · white, haloed</button>
+  <button type="button" data-style="magenta" aria-pressed="false">E · magenta</button>
+</div>
+<div class="bar"><span class="lbl">Settings</span>
+  <label><input type="checkbox" id="autoset" checked> PAR autoscale <span style="color:var(--faint)">(a switch in the Settings panel)</span></label>
 </div>
 
 <div class="layout">
@@ -105,10 +117,12 @@ panel is all grey. Colour appears only when something needs attention.</p>
 </section>
 
 <aside class="notes">
-  <div><h3>Try the scopes</h3>
-  <p>Wheel: zoom range (both scopes together). Shift + wheel: zoom height or lateral offset (this scope only). Drag: pan. Double-click: back to the default window.</p></div>
-  <div><h3>What changed from revision 1</h3>
-  <p>Gone: the docking picture, "need −750", the required-calls list, the suggested call, the cadence bar and the coloured bands. Scopes are grey traces on the panel's own background. Deviation numbers are plain text unless they are a problem.</p></div>
+  <div><h3>Zoom</h3>
+  <p>Touchdown stays in the bottom-left corner of the elevation scope and on the left edge of the azimuth scope, always. Wheel: zoom range (both scopes). Shift + wheel: zoom height or lateral offset (this scope). No panning.</p></div>
+  <div><h3>Autoscale</h3>
+  <p>With the setting on, the window follows the aircraft so the track sits at the golden-ratio point (61.8 % of the range width, likewise in height) until the window is down to 10 NM; from there it stays at 10 NM. A manual zoom pauses autoscale (the window label says so); double-click resumes it. With the setting off the window stays where the controller put it.</p></div>
+  <div><h3>Track styles</h3>
+  <p>B to E give the track its own colour and dim the reference lines so the plot stands out. Amber and red stay reserved for problems, so a coloured track turns amber or red only when it is one.</p></div>
 </aside>
 </div>
 
@@ -116,20 +130,28 @@ panel is all grey. Colour appears only when something needs attention.</p>
 <h2>When colour appears</h2>
 <div class="tw"><table class="t">
 <tr><th>Colour</th><th>Means</th><th>Where on this panel</th></tr>
-<tr><td><span class="sw" style="background:var(--muted)"></span>grey</td><td>Normal. The controller reads it when needed.</td><td>Everything while the aircraft is within tolerance, including "slightly" off: the plot shows it and the controller says it.</td></tr>
+<tr><td><span class="sw" style="background:var(--muted)"></span>grey</td><td>Normal.</td><td>Everything while the aircraft is within tolerance, including "slightly" off.</td></tr>
+<tr><td><span class="sw" style="background:#6fd3ff"></span>track colour</td><td>The aircraft (style under review).</td><td>The current plot and its trail.</td></tr>
 <tr><td><span class="sw" style="background:var(--attn)"></span>amber</td><td>Look at this now.</td><td>Azimuth or elevation past the "well" tolerance; no radar plot for 3 s.</td></tr>
 <tr><td><span class="sw" style="background:var(--bad)"></span>orange-red</td><td>Something failed.</td><td>Elevation or azimuth data unavailable; that scope is blanked with the reason.</td></tr>
 <tr><td><span class="sw" style="background:var(--danger)"></span>red</td><td>Past a safety limit.</td><td>Below the lower safety limit, or outside the azimuth safety limit, before DA.</td></tr>
 </table></div>
-<p>The tolerances are ours: no public source gives numbers for "slightly", "well" or the safety lines. Proposed: on glidepath within ±0.2°, "well" beyond 0.5°, lower safety limit 0.7° below; on course within ±0.5°, "well" beyond 1.5°, safety limit ±2.5°. They would live in a tuning file and need your sign-off.</p>
+<p>The tolerances are ours (no public source gives numbers for "slightly", "well" or the safety lines): on glidepath within ±0.2°, "well" beyond 0.5°, lower safety limit 0.7° below; on course within ±0.5°, "well" beyond 1.5°, safety limit ±2.5°. A tuning file, to be signed off.</p>
 </section>
 </main>
 
 <script>
 (function () {
   'use strict';
-  var FT_PER_NM = 6076.12, TCH = 50, GPA = 3.0, DA_HAT = 202, TDZE = 238, rad = Math.PI / 180;
+  var FT_PER_NM = 6076.12, TCH = 50, GPA = 3.0, DA_HAT = 202, TDZE = 238, rad = Math.PI / 180, PHI = 0.618;
   var TOL = { elWell: 0.5, elSafety: 0.7, azWell: 1.5, azSafety: 2.5 };
+  var STYLES = {
+    grey:    { plot: '#e6edf3', trail: '#8c9aa6', ref: '#8c9aa6', refDash: '#8c9aa6', shape: 'square', halo: false },
+    cyan:    { plot: '#6fd3ff', trail: '#6fd3ff', ref: '#5f6b76', refDash: '#46505a', shape: 'circle', halo: true },
+    green:   { plot: '#5ce68a', trail: '#5ce68a', ref: '#5f6b76', refDash: '#46505a', shape: 'square', halo: true },
+    halo:    { plot: '#ffffff', trail: '#c9d3db', ref: '#4f5a65', refDash: '#3c4650', shape: 'circle', halo: true, ring: true },
+    magenta: { plot: '#e58bff', trail: '#e58bff', ref: '#5f6b76', refDash: '#46505a', shape: 'diamond', halo: true }
+  };
   var STATES = {
     normal:      { r: 3.2, el: 0.05, az: -0.1, elTrend: 0,     azTrend: 0,    gs: 142, vs: -750 },
     slight:      { r: 3.6, el: 0.35, az: -0.9, elTrend: -0.03, azTrend: 0.05, gs: 140, vs: -820 },
@@ -138,17 +160,32 @@ panel is all grey. Colour appears only when something needs attention.</p>
     lost:        { r: 1.9, el: 0.08, az: -0.2, elTrend: 0,     azTrend: 0,    gs: 140, vs: -740, lost: 4 },
     elfail:      { r: 3.6, el: null, az: -0.3, elTrend: 0,     azTrend: 0,    gs: 142, vs: null, elFail: true }
   };
-  var DEFAULT = { r0: 0, r1: 10, h0: 0, h1: 3500, y0: -1200, y1: 1200 };
-  var view = Object.assign({}, DEFAULT), state = 'normal';
-  var css = getComputedStyle(document.documentElement);
-  function tok(n) { return css.getPropertyValue(n).trim(); }
+  // The view is anchored at touchdown: range 0..rMax, height 0..hMax, lateral -yMax..+yMax.
+  var view = { rMax: 10, hMax: 3500, yMax: 1200 }, auto = true, paused = false, state = 'normal', style = 'cyan';
+  var fly = null; // { t0, simT } while flying
 
   function gpHeight(r, offDeg) { return TCH + r * FT_PER_NM * Math.tan((GPA + (offDeg || 0)) * rad); }
   function lateral(r, deg) { return r * FT_PER_NM * Math.tan(deg * rad); }
-  function trail(s) {
-    var pts = [], dr = s.gs / 3600;
-    for (var i = 11; i >= 0; i--) pts.push({ r: s.r + i * dr, el: s.el === null ? null : s.el - s.elTrend * i * 0.2, az: s.az - s.azTrend * i * 0.2 });
-    return pts;
+  function flyAt(t) { // a sample approach from 14 NM, sim seconds since start
+    var r = Math.max(0.2, 14 - 145 * t / 3600);
+    return { r: r, el: 0.25 * Math.sin(t / 40) - 0.05, az: 0.8 * Math.sin(t / 55 + 1) * Math.min(1, r / 4), gs: 145, vs: -770 };
+  }
+  function current() {
+    if (fly) {
+      var p = flyAt(fly.simT), pts = [];
+      for (var i = 11; i >= 0; i--) pts.push(flyAt(Math.max(0, fly.simT - i)));
+      return Object.assign({ elTrend: 0, azTrend: 0, pts: pts }, p);
+    }
+    var s = STATES[state], dr = s.gs / 3600, out = [];
+    for (var j = 11; j >= 0; j--) out.push({ r: s.r + j * dr, el: s.el === null ? null : s.el - s.elTrend * j * 0.2, az: s.az - s.azTrend * j * 0.2 });
+    return Object.assign({ pts: out }, s);
+  }
+  function autoscale(s) {
+    if (!auto || paused) return;
+    view.rMax = Math.max(10, s.r / PHI);
+    var hTrack = s.el === null ? gpHeight(s.r, 0) : gpHeight(s.r, s.el);
+    view.hMax = Math.max(gpHeight(view.rMax, 0) * 1.08, hTrack / PHI);
+    view.yMax = Math.max(lateral(view.rMax, TOL.azSafety) * 1.15, Math.abs(lateral(s.r, s.az)) / PHI);
   }
   function svgEl(name, attrs) {
     var e = document.createElementNS('http://www.w3.org/2000/svg', name);
@@ -168,70 +205,76 @@ panel is all grey. Colour appears only when something needs attention.</p>
     if (Math.abs(s.az) >= TOL.azSafety) return 'danger';
     return Math.abs(s.az) > TOL.azWell ? 'attn' : '';
   }
+  function mark(g, x, y, st, fill, hollow) {
+    var size = 4.5, a = { fill: hollow ? 'none' : fill, stroke: hollow ? fill : (st.halo ? '#0b0e11' : 'none'), 'stroke-width': hollow ? 1.6 : (st.halo ? 2.5 : 0), 'paint-order': 'stroke' };
+    if (st.ring && !hollow) g.appendChild(svgEl('circle', { cx: x, cy: y, r: 8, fill: 'none', stroke: fill, 'stroke-width': 1, opacity: 0.6 }));
+    if (st.shape === 'circle') g.appendChild(svgEl('circle', Object.assign({ cx: x, cy: y, r: size }, a)));
+    else if (st.shape === 'diamond') g.appendChild(svgEl('path', Object.assign({ d: 'M' + x + ' ' + (y - 6) + 'L' + (x + 6) + ' ' + y + 'L' + x + ' ' + (y + 6) + 'L' + (x - 6) + ' ' + y + 'Z' }, a)));
+    else g.appendChild(svgEl('rect', Object.assign({ x: x - size, y: y - size, width: size * 2, height: size * 2 }, a)));
+  }
 
-  function draw(kind) {
-    var svg = document.getElementById(kind + 'svg');
+  function draw(kind, s) {
+    var svg = document.getElementById(kind + 'svg'), st = STYLES[style];
     var w = svg.clientWidth || 800, h = +svg.getAttribute('height');
     svg.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
     while (svg.firstChild) svg.removeChild(svg.firstChild);
-    var s = STATES[state], L = 40, R = w - 8, T = 18, B = h - 16;
-    var y0 = kind === 'el' ? view.h0 : view.y0, y1 = kind === 'el' ? view.h1 : view.y1;
-    var X = function (r) { return L + (r - view.r0) / (view.r1 - view.r0) * (R - L); };
-    var Y = function (v) { return B - (v - y0) / (y1 - y0) * (B - T); };
+    var L = 40, R = w - 8, T = 18, B = h - 16;
+    var lo = kind === 'el' ? 0 : -view.yMax, hi = kind === 'el' ? view.hMax : view.yMax;
+    var X = function (r) { return L + r / view.rMax * (R - L); };
+    var Y = function (v) { return B - (v - lo) / (hi - lo) * (B - T); };
     var defs = svgEl('defs', {}), clip = svgEl('clipPath', { id: 'c' + kind });
     clip.appendChild(svgEl('rect', { x: L, y: T, width: R - L, height: B - T })); defs.appendChild(clip); svg.appendChild(defs);
     var g = svgEl('g', {}), pg = svgEl('g', { 'clip-path': 'url(#c' + kind + ')' });
     svg.appendChild(g); svg.appendChild(pg);
-    var rs = niceStep(view.r1 - view.r0, 8);
-    for (var r = Math.ceil(view.r0 / rs) * rs; r <= view.r1 + 1e-9; r += rs) {
-      g.appendChild(svgEl('line', { x1: X(r), x2: X(r), y1: T, y2: B, stroke: tok('--grid') }));
-      var t = svgEl('text', { x: X(r), y: h - 3, 'text-anchor': 'middle', fill: tok('--faint'), 'font-size': 10 });
-      t.textContent = Math.abs(r) < 1e-9 ? 'TD' : String(+r.toFixed(2)); g.appendChild(t);
+    var rs = niceStep(view.rMax, 8);
+    for (var r = 0; r <= view.rMax + 1e-9; r += rs) {
+      g.appendChild(svgEl('line', { x1: X(r), x2: X(r), y1: T, y2: B, stroke: getVar('--grid') }));
+      var t = svgEl('text', { x: X(r), y: h - 3, 'text-anchor': r === 0 ? 'start' : 'middle', fill: getVar('--faint'), 'font-size': 10 });
+      t.textContent = r === 0 ? 'TD' : String(+r.toFixed(2)); g.appendChild(t);
     }
-    var vs = niceStep(y1 - y0, 4);
-    for (var v = Math.ceil(y0 / vs) * vs; v <= y1 + 1e-9; v += vs) {
-      g.appendChild(svgEl('line', { x1: L, x2: R, y1: Y(v), y2: Y(v), stroke: tok('--grid') }));
-      var tv = svgEl('text', { x: L - 4, y: Y(v) + 3, 'text-anchor': 'end', fill: tok('--faint'), 'font-size': 10 });
+    var vs = niceStep(hi - lo, 4);
+    for (var v = Math.ceil(lo / vs) * vs; v <= hi + 1e-9; v += vs) {
+      g.appendChild(svgEl('line', { x1: L, x2: R, y1: Y(v), y2: Y(v), stroke: getVar('--grid') }));
+      var tv = svgEl('text', { x: L - 4, y: Y(v) + 3, 'text-anchor': 'end', fill: getVar('--faint'), 'font-size': 10 });
       tv.textContent = kind === 'el' ? String(Math.round(v)) : (Math.abs(v) < 1e-9 ? '0' : Math.abs(Math.round(v)) + (v < 0 ? 'L' : 'R'));
       g.appendChild(tv);
     }
-    var failed = kind === 'el' && s.elFail;
     function path(fn, dash) {
       var d = '';
-      for (var i = 0; i <= 60; i++) { var rr = view.r0 + (view.r1 - view.r0) * i / 60; d += (i ? 'L' : 'M') + X(rr).toFixed(1) + ' ' + Y(fn(rr)).toFixed(1); }
-      pg.appendChild(svgEl('path', { d: d, fill: 'none', stroke: tok('--trace'), 'stroke-width': dash ? 1 : 1.4, 'stroke-dasharray': dash ? '5 4' : 'none', opacity: dash ? 0.5 : 0.9 }));
+      for (var i = 0; i <= 60; i++) { var rr = view.rMax * i / 60; d += (i ? 'L' : 'M') + X(rr).toFixed(1) + ' ' + Y(fn(rr)).toFixed(1); }
+      pg.appendChild(svgEl('path', { d: d, fill: 'none', stroke: dash ? st.refDash : st.ref, 'stroke-width': dash ? 1 : 1.3, 'stroke-dasharray': dash ? '5 4' : 'none' }));
     }
-    if (failed) {
-      var ft = svgEl('text', { x: (L + R) / 2, y: (T + B) / 2, 'text-anchor': 'middle', fill: tok('--bad'), 'font-size': 12 });
+    if (kind === 'el' && s.elFail) {
+      var ft = svgEl('text', { x: (L + R) / 2, y: (T + B) / 2, 'text-anchor': 'middle', fill: getVar('--bad'), 'font-size': 12 });
       ft.textContent = 'NO ELEVATION DATA'; svg.appendChild(ft);
     } else {
       if (kind === 'el') {
         path(function (rr) { return gpHeight(rr, 0); });
         path(function (rr) { return gpHeight(rr, -TOL.elSafety); }, true);
         var rDA = (DA_HAT - TCH) / (FT_PER_NM * Math.tan(GPA * rad));
-        pg.appendChild(svgEl('line', { x1: X(rDA), x2: X(rDA), y1: Y(DA_HAT) - 8, y2: Y(DA_HAT) + 8, stroke: tok('--muted') }));
-        var dt = svgEl('text', { x: X(rDA) + 4, y: Y(DA_HAT) + 16, fill: tok('--faint'), 'font-size': 10 }); dt.textContent = 'DA'; pg.appendChild(dt);
+        pg.appendChild(svgEl('line', { x1: X(rDA), x2: X(rDA), y1: Y(DA_HAT) - 7, y2: Y(DA_HAT) + 7, stroke: st.ref }));
+        var dt = svgEl('text', { x: X(rDA) + 4, y: Y(DA_HAT) + 15, fill: getVar('--faint'), 'font-size': 10 }); dt.textContent = 'DA'; pg.appendChild(dt);
       } else {
         path(function () { return 0; });
         path(function (rr) { return lateral(rr, TOL.azSafety); }, true);
         path(function (rr) { return lateral(rr, -TOL.azSafety); }, true);
       }
-      var pts = trail(s), cur = pts[pts.length - 1];
+      var pts = s.pts, cur = pts[pts.length - 1];
+      var sev = severity(kind, s), col = sev === 'danger' ? getVar('--danger') : sev === 'attn' ? getVar('--attn') : st.plot;
       pts.slice(0, -1).forEach(function (p, i) {
         var yy = kind === 'el' ? gpHeight(p.r, p.el) : lateral(p.r, p.az);
-        pg.appendChild(svgEl('circle', { cx: X(p.r), cy: Y(yy), r: 1.8, fill: tok('--muted'), opacity: (0.15 + i * 0.06).toFixed(2) }));
+        pg.appendChild(svgEl('circle', { cx: X(p.r), cy: Y(yy), r: 1.9, fill: sev ? col : st.trail, opacity: (0.18 + i * 0.06).toFixed(2) }));
       });
       var yc = kind === 'el' ? gpHeight(cur.r, cur.el) : lateral(cur.r, cur.az);
-      var sev = severity(kind, s), col = sev === 'danger' ? tok('--danger') : sev === 'attn' ? tok('--attn') : tok('--plot');
-      if (s.lost) pg.appendChild(svgEl('rect', { x: X(cur.r) - 4, y: Y(yc) - 4, width: 8, height: 8, fill: 'none', stroke: tok('--attn'), 'stroke-width': 1.5 }));
-      else pg.appendChild(svgEl('rect', { x: X(cur.r) - 4, y: Y(yc) - 4, width: 8, height: 8, fill: col }));
+      mark(pg, X(cur.r), Y(yc), st, s.lost ? getVar('--attn') : col, !!s.lost);
     }
-    document.getElementById(kind + 'win').textContent = view.r0.toFixed(1) + '–' + view.r1.toFixed(1) + ' NM · ' + (kind === 'el'
-      ? Math.round(y0) + '–' + Math.round(y1) + ' ft'
-      : '±' + Math.round(Math.max(Math.abs(y0), Math.abs(y1))) + ' ft');
+    var label = '0–' + view.rMax.toFixed(1) + ' NM · ' + (kind === 'el' ? '0–' + Math.round(view.hMax) + ' ft' : '±' + Math.round(view.yMax) + ' ft');
+    document.getElementById(kind + 'win').textContent = label + (auto ? (paused ? ' · AUTO paused (double-click)' : ' · AUTO') : '');
   }
-  function text() {
-    var s = STATES[state];
+  var cssCache = getComputedStyle(document.documentElement);
+  function getVar(n) { return cssCache.getPropertyValue(n).trim(); }
+
+  function text(s) {
     document.getElementById('rng').firstChild.nodeValue = s.r.toFixed(1);
     document.getElementById('gs').textContent = s.gs + ' kt';
     document.getElementById('vs').textContent = s.vs === null ? '—' : String(s.vs).replace('-', '−');
@@ -252,42 +295,45 @@ panel is all grey. Colour appears only when something needs attention.</p>
     var msg = document.getElementById('msg'); msg.textContent = '';
     if (s.lost) { var m = document.createElement('div'); m.className = 'msg attn'; m.textContent = 'NO PLOT ' + s.lost + ' s'; msg.appendChild(m); }
   }
-  function render() { text(); draw('el'); draw('az'); }
+  function render() { var s = current(); autoscale(s); text(s); draw('el', s); draw('az', s); }
 
+  // Zoom only, anchored at touchdown. A manual zoom pauses autoscale; double-click resumes it.
   ['el', 'az'].forEach(function (kind) {
-    var box = document.getElementById(kind), svg = document.getElementById(kind + 'svg'), drag = null;
-    function frac(e) { var b = svg.getBoundingClientRect(); return { x: (e.clientX - b.left - 40) / (b.width - 48), y: 1 - (e.clientY - b.top - 18) / (b.height - 34) }; }
+    var box = document.getElementById(kind);
     box.addEventListener('wheel', function (e) {
       e.preventDefault();
-      var f = frac(e), z = e.deltaY > 0 ? 1.15 : 1 / 1.15;
-      if (e.shiftKey) {
-        var a = kind === 'el' ? 'h' : 'y', lo = view[a + '0'], hi = view[a + '1'], at = lo + f.y * (hi - lo);
-        view[a + '0'] = at - (at - lo) * z; view[a + '1'] = at + (hi - at) * z;
-      } else {
-        var at2 = view.r0 + f.x * (view.r1 - view.r0);
-        view.r0 = Math.max(-0.5, at2 - (at2 - view.r0) * z); view.r1 = Math.max(view.r0 + 0.3, at2 + (view.r1 - at2) * z);
-      }
+      var z = e.deltaY > 0 ? 1.15 : 1 / 1.15;
+      if (e.shiftKey) { if (kind === 'el') view.hMax = Math.max(150, view.hMax * z); else view.yMax = Math.max(100, view.yMax * z); }
+      else view.rMax = Math.min(40, Math.max(0.5, view.rMax * z));
+      if (auto) paused = true;
       render();
     }, { passive: false });
-    box.addEventListener('pointerdown', function (e) { drag = { x: e.clientX, y: e.clientY, v: Object.assign({}, view) }; box.setPointerCapture(e.pointerId); });
-    box.addEventListener('pointermove', function (e) {
-      if (!drag) return;
-      var b = svg.getBoundingClientRect(), dx = (e.clientX - drag.x) / (b.width - 48), dy = (e.clientY - drag.y) / (b.height - 34);
-      var dr = dx * (drag.v.r1 - drag.v.r0); view.r0 = drag.v.r0 - dr; view.r1 = drag.v.r1 - dr;
-      var a = kind === 'el' ? 'h' : 'y', dv = dy * (drag.v[a + '1'] - drag.v[a + '0']);
-      view[a + '0'] = drag.v[a + '0'] + dv; view[a + '1'] = drag.v[a + '1'] + dv;
+    box.addEventListener('dblclick', function () {
+      paused = false;
+      if (!auto) view = { rMax: 10, hMax: 3500, yMax: 1200 };
       render();
     });
-    box.addEventListener('pointerup', function () { drag = null; });
-    box.addEventListener('dblclick', function () { view = Object.assign({}, DEFAULT); render(); });
   });
-  document.querySelectorAll('.states button').forEach(function (b) {
+  document.getElementById('autoset').addEventListener('change', function (e) { auto = e.target.checked; paused = false; render(); });
+  function press(group, attr, value) {
+    document.querySelectorAll('[data-' + attr + ']').forEach(function (o) { o.setAttribute('aria-pressed', String(o.dataset[attr] === value)); });
+  }
+  document.querySelectorAll('[data-state]').forEach(function (b) {
     b.addEventListener('click', function () {
-      state = b.dataset.state;
-      document.querySelectorAll('.states button').forEach(function (o) { o.setAttribute('aria-pressed', String(o === b)); });
-      render();
+      var v = b.dataset.state; press('state', 'state', v);
+      if (v === 'fly') { fly = { last: performance.now(), simT: 0 }; requestAnimationFrame(tick); }
+      else { fly = null; state = v; render(); }
     });
   });
+  document.querySelectorAll('[data-style]').forEach(function (b) {
+    b.addEventListener('click', function () { style = b.dataset.style; press('style', 'style', style); render(); });
+  });
+  function tick(now) { // 12x real time so the 14 NM approach takes about 30 s
+    if (!fly) return;
+    fly.simT += (now - fly.last) / 1000 * 12; fly.last = now;
+    render();
+    if (flyAt(fly.simT).r > 0.2) requestAnimationFrame(tick);
+  }
   window.addEventListener('resize', render);
   render();
 })();
