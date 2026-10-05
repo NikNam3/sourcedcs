@@ -38,8 +38,23 @@ the files directly. `app/public/js/package.json` (`{"type":"module"}`) makes Nod
 in the asar (`app/**/*`; `tests/packaging-config.test.js` checks it), while `app/package.json` stays CommonJS for
 `app/server.js`.
 
+- **The import graph has no cycle.** `tests/module-graph.test.mjs` bounds the largest strongly connected component at
+  `LARGEST_CYCLE_MAX = 0` (59 of 106 modules before phase 3); never raise it. Shared state lives in **leaf modules**, which
+  import nothing from the app: `settings.js`, `map-handle.js` (the map, drag, measure), `picture.js` (tracks, coverage,
+  mission data), `view-state.js`, `scope-constants.js`, `format.js`, `html-escape.js`, `dock-handle.js`, `map-style.js`, and under
+  `panels/efsp/` `facility-topology.js`, `sync-cursor.js`, `efsp-change-bus.js`, `efsp-message-registry.js`, `board-data.js`.
+  No module imports `app.js` for state (only `main.js` imports `startApp`); `app.js` owns the socket and writes the leaves.
+  A new module that needs shared state reads a leaf; if it needs a leaf that would import it back, the leaf is wrong.
+- **The change bus** (`panels/efsp/efsp-change-bus.js`) replaces hand-kept renderer lists: a message handler applies state and
+  calls `markEfspChanged(topic, ...)`; a view subscribes once at load with `onEfspChanged(topics, fn, {order})` (order RESOLVE,
+  PANEL, BAYS, VIEW). `dispatchEfspMessage` batches, so the flush is once per frame. An unknown topic throws.
+- **No `window` globals.** Production code puts nothing on `window` and reads nothing custom from it
+  (`tests/no-window-globals.test.mjs` allows browser APIs and the preload's `crcLinks` and `crcUpdate`). The one exception is
+  the test-only `window.crc.<module>` that `e2e/helpers/modules.js` builds with dynamic imports; **a spec that calls a moved
+  function must be updated to the module that now holds it** (e.g. `crc.dispatch._invokeNla`).
+- No `innerHTML` with an unescaped dynamic part: `html-escape.js`'s `escapeHtml`, enforced by `tests/html-sinks.test.mjs`.
 - A module imports what it uses from another module. Code outside a module replaces a function or a binding only
-  through that module's explicit setter (`setSendToSync`, `setEfspSender`, `_set…`/`_set…ForTest`).
+  through that module's explicit setter (`setSendToSync`, `setEfspSender`, `_set…`/`_set…ForTest`; 47 such seams remained after DESK-TIDY-2).
 - Client unit tests are `tests/*.test.mjs`. They import `tests/helpers/client-env.mjs` first (the browser-ish globals),
   and `tests/helpers/fresh-graph.mjs` when a test needs a new instance of the module graph.
 - `tests/module-graph.test.mjs` checks the graph: every file reachable from `main.js`, every module evaluates as an
