@@ -35,7 +35,7 @@ test('LC alone has no COMBINED line; the standing offer to take GC signs the con
     await openPanel(a, { signedOn: ['OPS', 'CD', 'GC'], controller: 'gclc-ground' });
     await seedStrip(a, { callsign: 'GCL101', stripType: 'DEPARTURE', flightData: { route: 'DCT', requestedAltitude: 'FL250', departureAirport: 'LTAG', destinationAirport: 'LTAF' } });
     for (let i = 0; i < 6 && (await stripOwner(a, 'GCL101')) !== 'GC'; i++) {
-      await a.evaluate((cs) => crc.bayView._invokeNla(crc.state.getAllEfspStrips().find((x) => crc.state.getEfspFlightData(x.flightDataId).identity.callsign === cs)), 'GCL101');
+      await a.evaluate((cs) => crc.dispatch._invokeNla(crc.state.getAllEfspStrips().find((x) => crc.state.getEfspFlightData(x.flightDataId).identity.callsign === cs)), 'GCL101');
       await lapseNlaGuard(a);
       await expect.poll(() => a.evaluate(() => crc.state.getPendingMutations().length)).toBe(0);
     }
