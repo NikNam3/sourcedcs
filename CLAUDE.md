@@ -118,7 +118,7 @@ YAML package schema is documented in `docs/atobrief/yaml-format.md` (seven secti
 - JSON-file persistence for events, applications, and squadron data (stored in a Docker volume, `data/`)
 - Multer file uploads (gallery images, and separately, crc-desktop release installers)
 - Casdoor OAuth token exchange
-- **crc-desktop release hosting** — `releases.js` (`parseReleaseManifest`, `checkReleaseUploadToken`), `POST /api/releases/upload` (CI-only, bearer-token gated — see "How to build and release crc-desktop"), `GET /api/releases/latest`, static `/downloads`, and `public/download.html`. Installers land in `data/releases/`, same Docker volume as everything else.
+- **crc-desktop release hosting** — `releases.js` (`parseReleaseManifest`; the token gate is `requireServiceToken` in `service-token.js`), `POST /api/releases/upload` (CI-only, bearer-token gated — see "How to build and release crc-desktop"), `GET /api/releases/latest`, static `/downloads`, and `public/download.html`. Installers land in `data/releases/`, same Docker volume as everything else.
 
 `data/*.json` is gitignored runtime data (prod: the `sourcedcs-web-data` volume); first-boot defaults are in `data-seed/`, copied by `seed.js` only where absent.
 
