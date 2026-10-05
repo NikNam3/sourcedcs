@@ -91,11 +91,12 @@ ul.l{margin:6px 0 0 18px;color:var(--muted);font-size:12.5px} ul.l li{margin:3px
 shouldn't have to order them." Two dock panels for crc-desktop, each beside the EFSP Strip panel. Static mockups with sample data;
 the research, sources, data plan, build plan and open questions are in <code>docs/wip/PANELS-DESIGN.md</code>.</p>
 <div class="two" style="margin-top:16px">
-<a class="card" href="par-panel.html"><h3>PAR panel →</h3>
-<p>Elevation and azimuth scopes against range from touchdown, with glidepath, centreline, slightly/well bands, safety limits,
-DA and a 12-plot trail; the JO 7110.65 §5-12 call the picture suggests; the required-call checklist; Landing assured / Missed approach.</p>
-<ul class="l"><li>States: approaching glidepath, on glidepath, slightly above coming down, well below past the safety limit, well right of course, at decision altitude, lost contact, elevation failure</li>
-<li>Same panel for the carrier lanes (Mode III talk-down, 3.5°, moving touchdown)</li>
+<a class="card" href="par-panel.html"><h3>PAR panel (revision 2) →</h3>
+<p>A normal panel, placed wherever the controller wants. Elevation and azimuth scopes against range from touchdown, zoomable and
+pannable on both axes, with the glidepath, centreline, safety limits, DA and a short plot trail. Dark cockpit: all grey while the
+approach is normal; amber, orange-red or red only when something needs attention. Landing assured / Missed approach.</p>
+<ul class="l"><li>Interactive: pick a situation and zoom or pan the scopes</li>
+<li>Removed after review: docking picture, required-calls list, suggested call, cadence bar, coloured bands, "need" vertical speed</li>
 <li>Needs a server-computed PAR sample: the wire altitude is rounded to 100 ft and today's FINAL measures to the radar site, not the threshold</li></ul></a>
 <a class="card" href="marshal-stack-panel.html"><h3>Marshal stack panel →</h3>
 <p>The Case III stack as a ladder (top slot up): angels, DME, EAT, fuel against bingo, approach and lane, push countdown and Commence;
@@ -107,7 +108,7 @@ marshal instructions for the selected flight; a re-clear list after any change; 
 <h2>Summary</h2>
 <table class="data">
 <tr><th></th><th>PAR panel</th><th>Marshal stack panel</th></tr>
-<tr><td>Replaces</td><td>The FINAL Bay view's rendering (final-panel.js); its model (calls, cadence, terminals) is reused</td><td>The slot board and re-sort inside the <code>cv-marshal-stack</code> Bay; the Bay stays, unordered</td></tr>
+<tr><td>Replaces</td><td>The FINAL Bay view's rendering (final-panel.js); its terminal buttons are reused</td><td>The slot board and re-sort inside the <code>cv-marshal-stack</code> Bay; the Bay stays, unordered</td></tr>
 <tr><td>Positions</td><td>PAR (INCIRLIK), CV_APP1 / CV_APP2</td><td>CV_MARSHAL (edits); other carrier Positions read-only</td></tr>
 <tr><td>New server data</td><td><code>parApproaches</code> geometry, a <code>par</code> radar kind (≤ 1 s update), <code>surveillance/par.js</code> sample, <code>efsp-par-sample</code> message (wire protocol bump)</td><td><code>pushedAt</code>, <code>lowStateAt</code>, lane per entry, marshal message in the view, <code>Delta</code> op</td></tr>
 <tr><td>Build</td><td>Two Sonnet lanes (server, then client), or one long one</td><td>One Sonnet lane</td></tr>
