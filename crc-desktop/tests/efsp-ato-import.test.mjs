@@ -95,6 +95,19 @@ test('Preview sends the text as a read-only efsp-ato-preview, and the preview re
   assert.match(text, /1300Z–1500Z/);
 });
 
+test('a carrier-based line carries its hull tag; a land-based one has none (H109)', async () => {
+  const m = await mount();
+  m.api.openAtoImportDialog();
+  m.api.setAtoImportText('UNCLAS');
+  m.api.requestAtoPreview();
+  const req = m.sent[m.sent.length - 1];
+  const lines = [{ ...PREVIEW.lines[0], carrier: { hullId: 'CVN-72', hullCode: 'UNION<b>', departs: true, recovers: true } }, PREVIEW.lines[1]];
+  m.api.onAtoPreviewResult({ type: 'efsp-ato-preview-result', requestId: req.requestId, ok: true, preview: { ...PREVIEW, lines } });
+  const dialog = m.root.children.find(c => c.className === 'efsp-ato-dialog');
+  const tags = descendants(dialog).filter(e => e.className === 'efsp-ato-carrier');
+  assert.deepEqual(tags.map(e => e.textContent), ['UNION<b>']);
+});
+
 test('a stale preview answer is ignored', async () => {
   const m = await mount();
   m.api.openAtoImportDialog();

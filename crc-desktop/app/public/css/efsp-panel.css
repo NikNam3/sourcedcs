@@ -1770,6 +1770,7 @@
 .efsp-ato-lines { display: flex; flex-direction: column; gap: 4px; }
 .efsp-ato-line { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; padding: 4px; border: 1px solid var(--efsp-line); font-size: 12px; }
 .efsp-ato-cell { white-space: nowrap; }
+.efsp-ato-carrier { font-size: 11px; font-weight: 600; padding: 0 4px; border: 1px solid currentColor; border-radius: 3px; }
 .efsp-ato-missing { color: var(--efsp-attn-text); font-size: 11px; }
 .efsp-ato-changes { flex-basis: 100%; font-size: 11px; color: var(--efsp-muted); overflow-wrap: anywhere; }
 .efsp-ato-line-warnings { flex-basis: 100%; }
