@@ -231,7 +231,7 @@ Position** (the `par-final` / `cv-appN-final` Bay's single Strip). With none, "N
   from the server), radar status (AZ / EL), flight (callsign, type, beacon).
 - **Elevation scope** (top): range from touchdown 0 to 10 NM on x (touchdown at left), height above TDZE on y,
   vertically exaggerated. Glidepath line, "slightly" band, lower safety limit line, the DA mark, every-mile range
-  marks, the target with its last 8 plots (1 s apart) as a fading trail.
+  marks, the target with its last 12 plots (1 s apart) as a fading trail.
 - **Azimuth scope** (bottom): same range axis; course centreline, "slightly" band, the course safety-limit wedge,
   target and trail. Both scopes share the range axis so a vertical cursor at the target lines up.
 - **Readouts**: range (NM, 0.1), elevation deviation (ft and °, with ON/SLIGHTLY/WELL and trend), azimuth deviation
@@ -312,7 +312,7 @@ A dock panel for CV_MARSHAL (read-only for the other carrier Positions), beside 
 | a PAR sensor that "sees" final | approach radar (3 s sweep, no height) | radar kind **`par`** per configured approach: `sweepMs` 1000 (S5: < 1 s), `caps.height: true` (it measures elevation itself), coverage 10 NM, ±10° az, -1° to +7° el (S4, S5); `[SOURCE-DEFINED]` figures in `sensor-specs.json` |
 | runway end geometry | headings in Facility config | `parApproaches` in `efsp-facility-incirlik.json`: per end `thresholdLat/Lon`, `tdzeFt`, `gpaDeg` 3.0, `tchFt` 50, `daFt`, `facMagOverride?` (later: from DCS `getRunways`) |
 | carrier touchdown | ship position, final bearing | hull config `touchdownOffsetM` (aft and port of the DCS unit origin) and `glideslopeDeg` 3.5 `[SOURCE-DEFINED]` |
-| the sample | - | `surveillance/par.js` (pure): `{ stripId, at, rangeNm, heightFt, elevDevFt, elevDevDeg, azDevFt, azDevDeg, gsKt, vsFpm, trackMag, elevBand, azBand, elevTrend, azTrend, belowSafety, outsideCourse, plotAgeS, elevationAvailable }`, plus a short history (last 8) |
+| the sample | - | `surveillance/par.js` (pure): `{ stripId, at, rangeNm, heightFt, elevDevFt, elevDevDeg, azDevFt, azDevDeg, gsKt, vsFpm, trackMag, elevBand, azBand, elevTrend, azTrend, belowSafety, outsideCourse, plotAgeS, elevationAvailable }`, plus a short history (last 12) |
 | delivery | - | wire message `efsp-par-sample`, 1 Hz, **only** to sessions signed on to the owning Position, only while its PAR radar sees the contact (the ADR 0059 rule: a session is told what its own sensors know). **Wire protocol bump** (ADR 0103, `npm run wire:record`) |
 | tuning | client constants | `config/par.json` bands, trend thresholds, no-plot timeout, read once (P5) |
 
@@ -359,7 +359,7 @@ second to merge re-records). PAR-2 follows PAR-1. If PAR must be one lane, it is
 - PAR deviation bands and safety limits: the §3.1 table, `[SOURCE-DEFINED]`.
 - Incirlik RWY 05 sample: TDZE 238 ft, GPA 3.0°, TCH 50 ft, DA 440 ft (HAT 200), course 051°M. TDZE and course are
   **sample values for the mockup**, not verified data; the course assumes about 5° east variation `[SOURCE-DEFINED]`.
-- No-plot timeout 3 s, trail 8 plots at 1 s.
+- No-plot timeout 3 s, trail 12 plots at 1 s.
 - Carrier sample: CVN-72, BRC 360°M, angled deck 9° (ADR 0064), final bearing 351°M, marshal radial 171°M,
   Charlie 2040Z.
 
