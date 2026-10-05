@@ -128,6 +128,7 @@ class GrpcClient extends EventEmitter {
     this._icao               = null;
     this._missionFetchActive = false; // prevents duplicate retry loops
     this._missionRetryTimer  = null;
+    this._protos = null; // the loaded service packages, set by connect()
     this._missionWaitingReady = null; // attempt number of a fetch parked until the channel is READY
     // ISA defaults — overwritten by live weather polls
     this._weather    = { pressurePa: ISA_P0, tempK: ISA_T0 };
@@ -280,7 +281,7 @@ class GrpcClient extends EventEmitter {
   _fetchMissionWithRetry(attempt = 0) {
     if (this._closed) return;
     this._missionFetchActive = true;
-    if (!this._channelReady()) {
+    if (this._protos && !this._channelReady()) { // _protos: connect() ran
       // No point asking while the channel is down (the call would only queue, then fail when the attempt is
       // abandoned, one warning per call); _watchChannel runs this again the moment the channel is READY.
       this._missionWaitingReady = attempt;
