@@ -305,6 +305,12 @@ function _atoLineRow(l) {
     `M1 ${iff.modeOne || '—'} M2 ${iff.modeTwo || '—'} M3 ${iff.modeThree || '—'}`,
   ];
   for (const c of cells) row.appendChild(_atoEl('span', 'efsp-ato-cell', c));
+  // H109: a carrier-based line says which hull (`carrier` is absent on a land-based one). textContent: a hull code is server text.
+  if (l.carrier && l.carrier.hullCode) {
+    const tag = _atoEl('span', 'efsp-ato-carrier', String(l.carrier.hullCode));
+    tag.title = `Carrier-based line (${l.carrier.hullCode})`;
+    row.appendChild(tag);
+  }
   if (l.missing && l.missing.length) row.appendChild(_atoEl('span', 'efsp-ato-missing', `missing: ${l.missing.join(', ')}`));
 
   const choice = _atoChoices.get(l.lineId) || { action: l.action };

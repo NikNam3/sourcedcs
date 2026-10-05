@@ -1383,6 +1383,7 @@ line does not stop the others.
   launch is the same flight (same code, the line's plan, MARSA and military Blocks) and says "launches against its ATO
   mission". If two lines share the callsign, or the flight already has a Strip, it is a new flight. Import the ATO after
   the launch exists and the line binds to the launched flight by callsign, as for a land departure.
+  In the preview a carrier line carries the hull tag (`UNION`) beside its cells; there is no tag on the Strip.
 
 **The AR badge.** `AR SHELL71` on a receiver, `AR ×2` on the tanker. Select any of them and the others
 are highlighted (per client). **It is not MARSA** and declares nothing, separates nothing and changes no
@@ -1412,7 +1413,7 @@ SFA rotation returns to its configured start, and correlations are forgotten. AL
 links go with their Strips. Your airspace definitions and bookings, the Facility configuration, Position staffing and the stereo
 routes are **not** touched. The dropped Strips are filed like any drop (traffic count, Mutation log: one `MissionResetStrip`
 line per Strip and one `MissionReset` line per Board with the counts, actor `system`). ATO MISSION lines on TACTICAL go too: import the ATO again.
-There is no Undo for it. A pending edit of yours on a cleared Strip fails with "no longer on the Board".
+There is no Undo for it. You are told: a notice "New mission — the Board was cleared (N Strips)" appears with the Undo messages (click to dismiss), an open popover on a cleared Strip closes, and a pending edit of yours on one fails with "no longer on the Board".
 
 What does **not** clear it: a crc-sync restart, a lost and regained link to DCS, or a `mission_start` on the **same** mission
 while the mission clock simply carries on. A `mission_start` for the same mission clears only once the mission clock is then seen
@@ -1575,7 +1576,7 @@ squadron's (H111). `TACTICAL` alone still hands lines back to `TAC_C2` (§8C1).
 - **Drag** a Strip onto another Position's tab to transfer it (same-Facility only); onto a Bay tab within your own Position to move it there.
 - **Search**: `.find <text>` dot-command, or the search icon — matches callsign/beacon, opens a temporary search-results Bay.
 - **Dot-commands**: `.drop [reason]`, `.undo` (undoes the action in the Undo slot, no Strip needs selecting), `.find <text>`, `.bind <track id>`, `.unbind`, `.stereo <NAME> <CALLSIGN>`, and for MARSA (§8D) `.marsa <CALLSIGN> [DECLARER]`, `.rendezvous`, `.endmarsa`, `.voidmarsa` — all but `.find`, `.stereo` and `.undo` apply to whichever Strip is currently selected.
-- **Undo** (ADR 0100): every one-click move you made (NLA step, hand-off, carrier hand-over, SFA rotation, surveillance chip, TOFI Exit, Split/Join) can be undone for 10 seconds, by the Position that did it. The panel shows one slot, "Undo · Hand off VIPER1 → APP · 7 s"; click it, press Ctrl+Z with the panel in use, or type `.undo`. The newest undoable action replaces the slot. Changes other controllers in your Facility made to the same records in the meantime are voided (a voided clearance stays visible, marked VOIDED); the Position that made them gets a message in its panel ("LC undid Hand off VIPER1; your annotation was voided", click to dismiss; nothing is marked on the Strip). An Undo is refused if another Facility has since answered, or the Strip was dropped and archived; the slot line says why.
+- **Undo** (ADR 0100): every one-click move you made (NLA step, hand-off, carrier hand-over, SFA rotation, surveillance chip, TOFI Exit, Split/Join) can be undone for 10 seconds, by the Position that did it. The panel shows one slot, "Undo · Hand off VIPER1 → APP · 7 s"; click it, press Ctrl+Z with the panel in use, or type `.undo`. The newest undoable action replaces the slot. Changes other controllers in your Facility made to the same records in the meantime are voided (a voided clearance stays visible, marked VOIDED); the Position that made them gets a message in its panel ("LC undid Hand off VIPER1; your annotation was voided", click to dismiss; nothing is marked on the Strip). An Undo is refused if another Facility has since answered, or the Strip was dropped and archived; the slot line says why. Undoing a Split removes the part's Strip and its flight data on every client at once.
 
 ## 10. Metrics and the traffic count
 

@@ -118,6 +118,25 @@ export function noteUndoVoided(msg) {
   if (_voidedMessages.length > MAX_VOIDED_MESSAGES) _voidedMessages.shift();
   _render();
 }
+/**
+ * A board delta marked `missionReset` ({at, strips}, H108): "New mission: the Board was cleared (N Strips)". One notice per
+ * reset (`at`); a second Facility's delta of the same reset adds its count. Dismissed with a click, like the voided messages.
+ */
+export function noteMissionReset(reset) {
+  if (!reset || !Number.isFinite(reset.strips)) return;
+  const key = `mission-reset:${reset.at}`;
+  const existing = _voidedMessages.find(m => m.key === key);
+  if (existing) existing.strips += reset.strips;
+  else {
+    _voidedMessages.push({ id: _nextId++, key, strips: reset.strips, text: '' });
+    if (_voidedMessages.length > MAX_VOIDED_MESSAGES) _voidedMessages.shift();
+  }
+  for (const m of _voidedMessages) if (m.key === key) m.text = missionResetText(m.strips);
+  _render();
+}
+export function missionResetText(n) {
+  return `New mission \u2014 the Board was cleared (${n} ${n === 1 ? 'Strip' : 'Strips'})`;
+}
 export function dismissUndoVoided(id) {
   _voidedMessages = _voidedMessages.filter(m => m.id !== id);
   _render();

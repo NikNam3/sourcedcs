@@ -59,6 +59,13 @@ test('applyEfspDelta updates flight data and Positions too', () => {
   assert.equal(getAllEfspPositions().length, 1);
 });
 
+test('applyEfspDelta drops flight data named in flightDataList.gone (an undone Split, ADR 0099/0100)', () => {
+  applyEfspDelta({ boardSeq: 1, strips: { updated: [], gone: [] }, flightDataList: { updated: [{ flightDataId: 'part', rev: 1 }, { flightDataId: 'lead', rev: 1 }] }, positions: { updated: [] } });
+  applyEfspDelta({ boardSeq: 2, strips: { updated: [], gone: [] }, flightDataList: { updated: [{ flightDataId: 'lead', rev: 2 }], gone: ['part'] }, positions: { updated: [] } });
+  assert.equal(getEfspFlightData('part'), null);
+  assert.equal(getEfspFlightData('lead').rev, 2);
+});
+
 test('applyEfspDelta with a non-finite boardSeq leaves the current one unchanged', () => {
   applyEfspSnapshot({ facilities: ['INCIRLIK'], boardSeqByFacility: { INCIRLIK: 7 }, strips: [], flightDataList: [], positions: [] });
   applyEfspDelta({ strips: { updated: [], gone: [] }, flightDataList: { updated: [] }, positions: { updated: [] } });

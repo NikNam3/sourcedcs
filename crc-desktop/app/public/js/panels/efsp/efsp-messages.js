@@ -4,7 +4,7 @@ import { markEfspChanged } from './efsp-change-bus.js';
 import { renderPositionControls, renderPositionWarnings } from '../radar-panel.js';
 import {
   applyEfspAlerts, applyEfspCorrelationDelta, applyEfspDelta, applyEfspMarsaDelta, applyEfspMutationAck,
-  applyEfspSnapshot, applyEfspStoreSlices, getEfspFacility, getEfspStrip
+  applyEfspSnapshot, applyEfspStoreSlices, getEfspFacility, getEfspStrip, getPendingMutations
 } from './efsp-state.js';
 import { captureEfspPlacement } from './efsp-arrivals.js';
 import { applyEfspSfaDelta } from './sfa-state.js';
@@ -17,7 +17,8 @@ import { noteEfspBoardArrivals } from './panel/arrivals.js';
 import { noteEfspHeartbeat } from './panel/staleness.js';
 import { reloadEfspStereoRoutes } from './panel/create-strip.js';
 import { onAtoPreviewResult } from './ato-import.js';
-import { noteUndoAck, noteUndoBoardEpoch, noteUndoVoided, reconcileUndoSlotEpoch } from './panel/undo-slot.js';
+import { noteUndoAck, noteUndoBoardEpoch, noteUndoVoided, noteMissionReset, reconcileUndoSlotEpoch } from './panel/undo-slot.js';
+import { closePopoversForStrips } from './bay/popover-portal.js';
 
 // The handlers of the EFSP message families whose state lives in bay-view.js / efsp-panel.js / efsp-state.js
 // (CMSG): Board, correlation, MARSA, alerts, SFA, ATO import, positions, resync. They moved here out of app.js's
@@ -79,7 +80,20 @@ registerEfspMessage('efsp-board-delta', (msg) => {
   // from one that merely changed (efsp-arrivals.js, docs/adr/0057).
   const placementBefore = captureEfspPlacement(msg, getEfspStrip);
   noteUndoBoardEpoch(msg.facilityId || getEfspFacility(), msg.boardEpoch);
+  const goneIds = (msg.strips && msg.strips.gone) || [];
   applyEfspDelta(msg);
+  if (goneIds.length) closePopoversForStrips(goneIds); // a popover on a Strip that left the Board has nothing to act on
+  if (msg.missionReset) {
+    // H108: the Board was cleared for a new mission. A Mutation still pending on a Strip the reset removed takes the existing
+    // orphan path (the same one a reconnect uses); its own ack, if one still comes, answers NOT_FOUND.
+    noteMissionReset(msg.missionReset);
+    const gone = new Set(goneIds);
+    for (const p of getPendingMutations()) {
+      if (!p.stripId || !gone.has(p.stripId)) continue;
+      settleEfspAck({ clientMutationId: p.clientMutationId, ok: false, reason: 'CONNECTION_LOST', detail: 'its target is no longer on the Board' });
+      notifyEfspOrphanedMutation(p);
+    }
+  }
   if (placementBefore) noteEfspBoardArrivals(msg, placementBefore);
   markEfspChanged('board');
 });
