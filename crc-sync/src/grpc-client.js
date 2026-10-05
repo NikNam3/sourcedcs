@@ -44,11 +44,24 @@ const BACKOFF_CAP_MS    = 30000;
 const STREAM_STABLE_MS  = 5000;
 const END_LOG_WINDOW_MS = 60000; // at most one 'unit stream ended' line per window
 const GAMETIME_POLL_MS  =  5000; // poll scenario current time every 5 s
+// How long a channel may take to become READY before the attempt is abandoned
+// and a fresh one started. grpc-js opens its TCP connection with no connect
+// timeout, so a host that drops SYNs would otherwise cost the kernel's SYN
+// retry window (~127 s on Linux) before anything is retried, however soon DCS
+// is back. Abandoned attempts are retried after a jittered backoff capped at
+// CONNECT_BACKOFF_CAP_MS (a blackholed host costs nothing to retry, so the cap
+// is lower than the streams'). Lines about it: first one, then one a minute.
+const CONNECT_TIMEOUT_MS     = 10000;
+const CONNECT_BACKOFF_CAP_MS =  5000;
+const ABANDON_LOG_WINDOW_MS  = 60000;
 
 const PROTO_OPTS = { keepCase: true, includeDirs: [PROTO_ROOT] };
 
 // Keep the HTTP/2 connection alive between reconnects
 const CHANNEL_OPTS = {
+  // Private subchannel pool: closing the channel drops its connection attempt
+  // for real instead of leaving it in grpc-js's global pool for the next client.
+  'grpc.use_local_subchannel_pool': 1,
   'grpc.keepalive_time_ms': 10000,
   'grpc.keepalive_timeout_ms': 5000,
   'grpc.keepalive_permit_without_calls': 1,
@@ -67,6 +80,8 @@ class GrpcClient extends EventEmitter {
    * @param {number} [opts.backoffBaseMs]  first reconnect delay
    * @param {number} [opts.backoffCapMs]   longest reconnect delay
    * @param {number} [opts.stableMs]       stream lifetime that resets the backoff
+   * @param {number} [opts.connectTimeoutMs]    longest wait for the channel to become READY
+   * @param {number} [opts.connectBackoffCapMs] longest pause between abandoned attempts
    * @param {object} [opts.env]            the environment (default process.env): `CRCSYNC_DCS_GRPC_HOST` ?? `DCS_GRPC_HOST`, `DCS_GRPC_POLL_RATE`, `DCS_GRPC_MAX_BACKOFF`
    * @param {() => number} [opts.random]   the jitter's source, in [0, 1); Math.random unless a test scripts it
    */
@@ -78,6 +93,14 @@ class GrpcClient extends EventEmitter {
     this._backoffCap   = opts.backoffCapMs  || BACKOFF_CAP_MS;
     this._stableMs     = opts.stableMs      || STREAM_STABLE_MS;
     this._random       = opts.random        || Math.random;
+    this._connectTimeout    = opts.connectTimeoutMs    || CONNECT_TIMEOUT_MS;
+    this._connectBackoffCap = opts.connectBackoffCapMs || CONNECT_BACKOFF_CAP_MS;
+    this._channel           = null; // the one channel all eight clients share
+    this._connectTimer      = null; // abandon timer while the channel is not READY
+    this._rebuildTimer      = null; // pause between an abandoned attempt and the next
+    this._connectRetries    = 0;
+    this._abandonsSinceLog  = 0;
+    this._abandonLoggedAt   = -Infinity;
     this._unitRetries  = 0;
     this._eventRetries = 0;
     this._unitEndsSinceLog = 0;
@@ -113,7 +136,6 @@ class GrpcClient extends EventEmitter {
   }
 
   connect() {
-    const dcsHost = dcsHostOf(this._env);
     try {
       const missionPkg = loadSvc('dcs/mission/v0/mission.proto');
       const coalPkg    = loadSvc('dcs/coalition/v0/coalition.proto');
@@ -123,16 +145,7 @@ class GrpcClient extends EventEmitter {
       const timerPkg   = loadSvc('dcs/timer/v0/timer.proto');
       const srsPkg     = loadSvc('dcs/srs/v0/srs.proto');
       const unitPkg    = loadSvc('dcs/unit/v0/unit.proto');
-      const creds      = grpc.credentials.createInsecure();
-
-      this._missionSvc = new missionPkg.dcs.mission.v0.MissionService(dcsHost, creds, CHANNEL_OPTS);
-      this._coalSvc    = new coalPkg.dcs.coalition.v0.CoalitionService(dcsHost, creds, CHANNEL_OPTS);
-      this._worldSvc   = new worldPkg.dcs.world.v0.WorldService(dcsHost, creds, CHANNEL_OPTS);
-      this._customSvc  = new customPkg.dcs.custom.v0.CustomService(dcsHost, creds, CHANNEL_OPTS);
-      this._atmSvc     = new atmPkg.dcs.atmosphere.v0.AtmosphereService(dcsHost, creds, CHANNEL_OPTS);
-      this._timerSvc   = new timerPkg.dcs.timer.v0.TimerService(dcsHost, creds, CHANNEL_OPTS);
-      this._srsSvc     = new srsPkg.dcs.srs.v0.SrsService(dcsHost, creds, CHANNEL_OPTS);
-      this._unitSvc    = new unitPkg.dcs.unit.v0.UnitService(dcsHost, creds, CHANNEL_OPTS);
+      this._protos = { missionPkg, coalPkg, worldPkg, customPkg, atmPkg, timerPkg, srsPkg, unitPkg };
       this._icao       = require('../data/icao.json');
     } catch (e) {
       log.error('proto load failed', { error: e.message });
@@ -140,6 +153,7 @@ class GrpcClient extends EventEmitter {
       return;
     }
 
+    this._buildClients();
     this._startUnitStream();
     this._startEventStream();
     this._startUnitKeepalive();
@@ -147,6 +161,102 @@ class GrpcClient extends EventEmitter {
     this._startGameTimePoll();
 
     this._fetchMissionWithRetry();
+  }
+
+  // One channel for all eight service clients, with a private subchannel
+  // pool, watched until it is READY. Called at start and again for every
+  // abandoned attempt.
+  _buildClients() {
+    const dcsHost = dcsHostOf(this._env);
+    const { missionPkg, coalPkg, worldPkg, customPkg, atmPkg, timerPkg, srsPkg, unitPkg } = this._protos;
+    const creds   = grpc.credentials.createInsecure();
+    const channel = new grpc.Channel(dcsHost, creds, CHANNEL_OPTS);
+    const opts    = { channelOverride: channel };
+    this._channel    = channel;
+    this._missionSvc = new missionPkg.dcs.mission.v0.MissionService(dcsHost, creds, opts);
+    this._coalSvc    = new coalPkg.dcs.coalition.v0.CoalitionService(dcsHost, creds, opts);
+    this._worldSvc   = new worldPkg.dcs.world.v0.WorldService(dcsHost, creds, opts);
+    this._customSvc  = new customPkg.dcs.custom.v0.CustomService(dcsHost, creds, opts);
+    this._atmSvc     = new atmPkg.dcs.atmosphere.v0.AtmosphereService(dcsHost, creds, opts);
+    this._timerSvc   = new timerPkg.dcs.timer.v0.TimerService(dcsHost, creds, opts);
+    this._srsSvc     = new srsPkg.dcs.srs.v0.SrsService(dcsHost, creds, opts);
+    this._unitSvc    = new unitPkg.dcs.unit.v0.UnitService(dcsHost, creds, opts);
+    this._watchChannel(channel, channel.getConnectivityState(true));
+  }
+
+  // Follows the channel's connectivity. READY clears the abandon timer; the
+  // first state that is not READY (the start, or a lost connection) arms it.
+  // The timer is not re-armed by CONNECTING <-> TRANSIENT_FAILURE flips, so
+  // the bound is the time since the channel was last READY.
+  _watchChannel(channel, state) {
+    if (this._closed || channel !== this._channel) return; // stale
+    if (state === grpc.connectivityState.SHUTDOWN) return;
+    if (state === grpc.connectivityState.READY) {
+      clearTimeout(this._connectTimer);
+      this._connectTimer = null;
+      this._connectRetries = 0;
+    } else if (!this._connectTimer) {
+      this._connectTimer = setTimeout(() => {
+        this._connectTimer = null;
+        if (channel === this._channel && channel.getConnectivityState(false) !== grpc.connectivityState.READY) {
+          this._abandonAttempt(channel);
+        }
+      }, this._connectTimeout);
+    }
+    try {
+      channel.watchConnectivityState(state, Infinity, (err) => {
+        if (err) return;
+        if (this._closed || channel !== this._channel) return;
+        this._watchChannel(channel, channel.getConnectivityState(false));
+      });
+    } catch (_) { /* channel shut down */ }
+  }
+
+  // The channel did not become READY in time: drop it (its connection attempt
+  // with it), drop the streams on it, and after a backoff build a fresh set of
+  // clients and restart the streams on them.
+  _abandonAttempt(channel) {
+    const delay = this._backoffDelay(this._connectRetries++, this._connectBackoffCap);
+    this._logAbandon(delay);
+    this._closeClients();
+    this._setState('reconnecting');
+    this._rebuildTimer = setTimeout(() => {
+      this._rebuildTimer = null;
+      if (this._closed) return;
+      this._buildClients();
+      this._startUnitStream();
+      this._startEventStream();
+    }, delay);
+  }
+
+  _logAbandon(delay) {
+    this._abandonsSinceLog++;
+    const now = Date.now();
+    if (now - this._abandonLoggedAt < ABANDON_LOG_WINDOW_MS) return;
+    const n = this._abandonsSinceLog;
+    log.warn(n > 1 ? 'DCS-gRPC still not answering, connection attempts abandoned in the last 60s' : 'DCS-gRPC did not answer, connection attempt abandoned',
+      { host: dcsHostOf(this._env), attempts: n, timeoutMs: this._connectTimeout, retryInMs: delay });
+    this._abandonLoggedAt  = now;
+    this._abandonsSinceLog = 0;
+  }
+
+  // Cancels both streams (their late events are stale from here on), drops
+  // the stream retry timers and closes the shared channel. The service
+  // fields go null so nothing starts a call on a closed channel.
+  _closeClients() {
+    clearTimeout(this._connectTimer);
+    clearTimeout(this._unitTimer);
+    clearTimeout(this._eventTimer);
+    this._connectTimer = this._unitTimer = this._eventTimer = null;
+    this._lastUnits.clear();
+    const streams = [this._unitStream, this._eventStream];
+    this._unitStream = this._eventStream = null;
+    for (const st of streams) { if (st) { try { st.cancel(); } catch (_) {} } }
+    const channel = this._channel;
+    this._channel = null;
+    this._missionSvc = this._coalSvc = this._worldSvc = this._customSvc =
+      this._atmSvc = this._timerSvc = this._srsSvc = this._unitSvc = null;
+    if (channel) { try { channel.close(); } catch (_) {} }
   }
 
   // Start a mission-data retry loop if one isn't already running.
@@ -161,6 +271,10 @@ class GrpcClient extends EventEmitter {
   _fetchMissionWithRetry(attempt = 0) {
     if (this._closed) return;
     this._missionFetchActive = true;
+    if (!this._worldSvc) { // between an abandoned attempt and its rebuild
+      this._missionRetryTimer = setTimeout(() => this._fetchMissionWithRetry(attempt), 1000);
+      return;
+    }
     this.fetchMissionData()
       .then(data => {
         if (this._closed) return;
@@ -189,18 +303,11 @@ class GrpcClient extends EventEmitter {
   // server never calls this (it runs for the process lifetime); the tests do.
   close() {
     this._closed = true;
-    for (const t of [this._unitTimer, this._eventTimer, this._missionRetryTimer, this._statusTimer]) clearTimeout(t);
+    for (const t of [this._unitTimer, this._eventTimer, this._missionRetryTimer, this._statusTimer, this._connectTimer, this._rebuildTimer]) clearTimeout(t);
     for (const t of [this._weatherTimer, this._gameTimeTimer, this._keepaliveTimer]) clearInterval(t);
-    this._unitTimer = this._eventTimer = this._missionRetryTimer = this._statusTimer = null;
+    this._missionRetryTimer = this._statusTimer = this._rebuildTimer = null;
     this._weatherTimer = this._gameTimeTimer = this._keepaliveTimer = null;
-    this._lastUnits.clear();
-    const streams = [this._unitStream, this._eventStream];
-    this._unitStream = this._eventStream = null; // their late events are now stale
-    for (const st of streams) { if (st) { try { st.cancel(); } catch (_) {} } }
-    for (const svc of [this._missionSvc, this._coalSvc, this._worldSvc, this._customSvc,
-                       this._atmSvc, this._timerSvc, this._srsSvc, this._unitSvc]) {
-      if (svc) { try { svc.close(); } catch (_) {} }
-    }
+    this._closeClients();
     this._state = 'disconnected';
   }
 
@@ -385,8 +492,8 @@ class GrpcClient extends EventEmitter {
   // min(cap, base * 2^n), jittered to 50-100 % so many clients don't retry
   // in step, but never below the base: a hard floor on the reconnect rate
   // (one attempt per base, 1 s by default) however the jitter falls.
-  _backoffDelay(retries) {
-    const nominal = Math.min(this._backoffCap, this._backoffBase * 2 ** Math.min(retries, 30));
+  _backoffDelay(retries, cap = this._backoffCap) {
+    const nominal = Math.min(cap, this._backoffBase * 2 ** Math.min(retries, 30));
     return Math.max(this._backoffBase, Math.round(nominal * (0.5 + this._random() / 2)));
   }
 
@@ -398,7 +505,7 @@ class GrpcClient extends EventEmitter {
     const now = Date.now();
     if (now - this._unitEndLoggedAt < END_LOG_WINDOW_MS) return;
     const n = this._unitEndsSinceLog;
-    log.info(n > 1 ? 'unit stream ended repeatedly in the last 60s, reconnecting' : 'unit stream ended, reconnecting', { ends: n, retryInMs: delay });
+    log.info(n > 1 ? 'unit stream ended repeatedly in the last 60s, reconnecting' : 'unit stream ended, reconnecting', delay == null ? { ends: n, retry: 'already scheduled' } : { ends: n, retryInMs: delay });
     this._unitEndLoggedAt  = now;
     this._unitEndsSinceLog = 0;
   }
