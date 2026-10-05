@@ -98,3 +98,22 @@ test('read scope: a session that reads only what it owns is not told of a Strip 
   assert.equal(board.getStrip(line.stripId).ownerPositionId, 'TAC_C2');
   assert.equal(jtac.ws.of('efsp-undo-voided').length, 0, 'JTAC reads only its own Strips, and this one is not');
 });
+
+test('DESK-NOTICES: an undone Split sends the removed part\'s flight data id in the delta\'s flightDataList.gone', () => {
+  const w = world();
+  const ops = w.connect('c-OPS', { INCIRLIK: ['OPS', 'LC', 'AP'] });
+  const board = w.efsp.boardStoreFor('INCIRLIK');
+  let s = w.send(ops, 'INCIRLIK', 'OPS', null, { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE', flightData: { ...DEPARTURE_FLIGHT_DATA, callsign: 'SPL1', aircraftType: 'F-16C', flightSize: 4 } }).strip;
+  s = w.send(ops, 'INCIRLIK', 'OPS', s, { kind: 'SetState', toState: 'HANDED_OFF' }).strip;
+  s = w.send(ops, 'INCIRLIK', 'OPS', s, { kind: 'TransferStrip', toPositionId: 'AP', bayId: 'ap-departures', rackId: 'main' }).strip;
+  const split = w.send(ops, 'INCIRLIK', 'AP', board.getStrip(s.stripId), { kind: 'SplitFormation', size: 2, callsign: 'SPL2', assignment: { kind: 'HEADING', value: '270' } });
+  assert.equal(split.ok, true, JSON.stringify(split));
+  const partFd = board.getStrip(split.splitStripId).flightDataId;
+  ops.ws.sent.length = 0;
+  const undone = w.send(ops, 'INCIRLIK', 'AP', board.getStrip(s.stripId), { kind: 'Undo', actionId: split.undoable.actionId });
+  assert.equal(undone.ok, true, JSON.stringify(undone));
+  const deltas = ops.ws.of('efsp-board-delta');
+  const gone = deltas.flatMap(d => (d.flightDataList && d.flightDataList.gone) || []);
+  assert.deepEqual(gone, [partFd]);
+  assert.ok(deltas.some(d => d.strips.gone.includes(split.splitStripId)), 'the part Strip is gone in the same delta');
+});

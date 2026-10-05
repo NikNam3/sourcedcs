@@ -74,14 +74,14 @@ function touchedStrips(ctx, boardStore, facilityId, touchedIds, first) {
  * `boardSeq` (docs/adr/0081): a seq only means something within one Board
  * lifetime, and the epoch names the lifetime.
  */
-function boardDelta(ctx, boardStore, facilityId, strips, flightDataList, positions = []) {
+function boardDelta(ctx, boardStore, facilityId, strips, flightDataList, positions = [], flightDataGone = []) {
   return {
     version: VERSION, type: 'efsp-board-delta',
     boardSeq: boardStore ? boardStore.currentSeq : undefined,
     boardEpoch: boardStore ? boardStore.epoch : undefined,
     facilityId,
     strips,
-    flightDataList: { updated: flightDataList },
+    flightDataList: flightDataGone && flightDataGone.length ? { updated: flightDataList, gone: flightDataGone } : { updated: flightDataList },
     positions: { updated: positions },
   };
 }

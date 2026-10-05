@@ -141,7 +141,7 @@ function _handleMutation(ctx, session, msg, persist) {
   const offersMoved = [...offersAfter.keys()].filter(id => offersAfter.get(id) !== offersBefore.get(id));
   const slots = {
     primary: boardDelta(ctx, boardStore, facilityId, touchedStrips(ctx, boardStore, facilityId, touched, stampedStrip), updatedFlightDataList,
-      offersMoved.includes(facilityId) ? positionsWire(ctx, facilityId) : []),
+      offersMoved.includes(facilityId) ? positionsWire(ctx, facilityId) : [], result.flightDataGone || []),
   };
   // docs/adr/0100 §6 (H100 Q-U2 b): an Undo that voided another Position's Mutations tells that Position by a panel
   // message, sent by the hub after this round trip's broadcasts to the sessions signed on to it (directedFor).

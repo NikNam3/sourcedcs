@@ -237,6 +237,8 @@ function _applyUndo(ctx, meta) {
     voided,
     warnings: warnings.length ? warnings : undefined,
     flightDataList: flightDataList.length ? flightDataList : undefined,
+    // The flight data an undone Split created is archived above; clients are told by the delta's flightDataList.gone.
+    flightDataGone: compensators.archivedFlightData && compensators.archivedFlightData.length ? compensators.archivedFlightData : undefined,
     gone: own.gone.length ? own.gone : undefined,
     peerFacilityId: peerFacilityId && (peerStrip || peerGone) ? peerFacilityId : undefined,
     peerStrip: peerStrip || undefined,
