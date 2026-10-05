@@ -58,8 +58,12 @@ test('the controller\'s own move into another Bay IS an arrival — across Posit
   assert.equal(within[0].from, 'lc-runway-queue', 'same Position, so the Bay it came from');
 });
 
-test('a Strip this controller just created is not an arrival; one somebody else created is', () => {
-  assert.equal(A.noteEfspArrivals(new Map(), [strip({ updatedBy: ME })], ctx()).length, 0);
+test('a Strip this controller just created is not an arrival in the Bay in view; out of view it is; one somebody else created always is', () => {
+  assert.equal(A.noteEfspArrivals(new Map(), [strip({ updatedBy: ME })], ctx({ visibleBayId: 'lc-runway-queue' })).length, 0);
+  const mineOutOfView = A.noteEfspArrivals(new Map(), [strip({ stripId: 's3', updatedBy: ME })], ctx());
+  assert.equal(mineOutOfView.length, 1, 'made into a Bay out of view: the controller did not see where it went');
+  assert.equal(mineOutOfView[0].bayUnseen, true);
+  assert.equal(mineOutOfView[0].from, 'you', 'your own new Strip is not "from another controller"');
   assert.equal(A.noteEfspArrivals(new Map(), [strip({ stripId: 's2', updatedBy: OTHER })], ctx()).length, 1);
 });
 
@@ -89,8 +93,8 @@ test('UI-A U2: a replica minted for a proposal my own controller made is still a
   const found = A.noteEfspArrivals(new Map(), [replica], ctx({ signedOnPositions: ['AP', 'CTR'] }));
   assert.equal(found.length, 1);
   assert.equal(found[0].from, 'AP');
-  // ...while an ordinary Strip I made myself stays quiet.
-  assert.equal(A.noteEfspArrivals(new Map(), [strip({ stripId: 's9', updatedBy: ME })], ctx()).length, 0);
+  // ...while an ordinary Strip I made myself into the Bay in view stays quiet.
+  assert.equal(A.noteEfspArrivals(new Map(), [strip({ stripId: 's9', updatedBy: ME })], ctx({ visibleBayId: 'lc-runway-queue' })).length, 0);
 });
 
 test('the flash is consumed exactly once, and the edge fades 30 s after it was first seen', () => {

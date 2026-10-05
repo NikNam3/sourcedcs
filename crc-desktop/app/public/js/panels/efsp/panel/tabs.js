@@ -10,7 +10,7 @@ import { renderBay } from '../bay-view.js';
 import { setOpenEfspBays } from '../bay/open-bays.js';
 import { renderCarrierBanner } from '../carrier-panel.js';
 import { getEfspPosition } from '../efsp-state.js';
-import { formatFrequencies } from '../combination-rules.js';
+import { LOCAL_POSITION, NON_LOCAL, formatFrequencies } from '../combination-rules.js';
 
 // Search Bay (guide §4.3 rule 2, defect D2 — "the longest ground-control
 // dwells occurred searching the Pending bay"). A client-local pseudo-Bay,
@@ -282,9 +282,15 @@ function _decoratePositionTab(tab, positionId, signedOn) {
     tab.appendChild(freq);
     tab.title = `${positionId} ${freqText}`;
   }
-  if (signedOn && entry && entry.combinedWith && entry.combinedWith.some(id => getActingPositions().includes(id))) {
-    tab.classList.add('efsp-position-tab-combined');
+  const combinedHere = signedOn && entry && entry.combinedWith ? entry.combinedWith.filter(id => getActingPositions().includes(id)) : [];
+  if (combinedHere.length) {
     tab.title = `${tab.title ? `${tab.title} — ` : ''}combined with ${entry.combinedWith.join(', ')}`;
+    // Colour only for the combination that carries a warning (LC with a non-local Position, crc-sync docs/adr/0105,
+    // 0110): any other combination is just how the work is split, and an amber mark on every tab of a controller who
+    // holds several Positions says nothing (human, 2026-10-05).
+    const warns = positionId === LOCAL_POSITION ? combinedHere.some(id => NON_LOCAL.includes(id))
+      : NON_LOCAL.includes(positionId) && combinedHere.includes(LOCAL_POSITION);
+    if (warns) tab.classList.add('efsp-position-tab-combined');
   }
 }
 

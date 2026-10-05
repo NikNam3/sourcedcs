@@ -135,11 +135,24 @@ test('working several Positions, your own hand-off to a Bay you are not looking 
   await expect(page.locator('#efsp-arrivals-line .efsp-arrival-row')).toContainText('from GC');
 });
 
-test('creating a Strip yourself is not announced', async ({ page }) => {
+test('creating a Strip yourself into the Bay you are looking at is not announced', async ({ page }) => {
   await openPanel(page, { signedOn: ['OPS'], controller: 'solo-ctl-2' });
   await goBay(page, 'OPS', 'ops-proposed');
   await seedStrip(page, { callsign: 'ARV801', stripType: 'DEPARTURE', flightData: FLIGHT_DATA });
   await expect(page.locator('#efsp-bay-tabs .efsp-tab-new')).toHaveCount(0);
   await expect(page.locator('#efsp-arrivals-line')).toBeHidden();
   await expect(page.locator('.efsp-strip-arrived')).toHaveCount(0);
+});
+
+test('creating a Strip yourself into a Bay you are not looking at is announced (you did not see where it went)', async ({ page }) => {
+  await openPanel(page, { signedOn: ['OPS'], controller: 'solo-ctl-3' });
+  await goBay(page, 'OPS', 'ops-filed');
+  // Not seedStrip: it waits for the Strip on screen, and this one lands in a Bay out of view.
+  await page.evaluate((fd) => crc.ws.sendEfspCreateStrip('OPS', {
+    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE',
+    flightData: { callsign: 'ARV802', aircraftType: 'F16', wakeCategory: 'D', ...fd },
+  }, 'INCIRLIK'), FLIGHT_DATA);
+  await expect(page.locator('#efsp-bay-tabs .efsp-tab-new')).toHaveText('+1');
+  await expect(page.locator('#efsp-arrivals-line')).toContainText('ARV802');
+  await expect(page.locator('#efsp-arrivals-line')).toContainText('from you');
 });

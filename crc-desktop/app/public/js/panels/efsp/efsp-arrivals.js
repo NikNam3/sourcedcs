@@ -15,8 +15,9 @@
 //    Strip went; OR
 //  - a Strip that is new to this client and was made by somebody else: a
 //    coordination or TOFI replica, another controller's new Strip.
-// Not an arrival: a Strip this controller just created, a reorder within a
-// Bay, or any change that leaves a Strip where it was.
+// Not an arrival: a Strip this controller just created into the Bay in view, a
+// reorder within a Bay, or any change that leaves a Strip where it was. Their own
+// new Strip made into a Bay out of view IS one: they did not see where it went.
 
 export const ARRIVAL_FRESH_MS = 30000; // how long a seen arrival keeps its amber edge
 export const ARRIVAL_LOG_LIMIT = 3;
@@ -68,14 +69,15 @@ export function noteEfspArrivals(before, updated, ctx) {
     if (strip.state === 'DROPPED') continue;
     if (!signedOn.has(strip.ownerPositionId)) continue;
     if (prev && prev.bayId === strip.bayId) continue;           // it did not move
-    // A Strip this controller just made. NOT a coordination/TOFI replica, though: the exchange
-    // mints it at the receiving Position, and a controller who holds both ends (UI-A U2: one
-    // person on AP and CTR) is still being told that a proposal has arrived there.
-    if (!prev && !_isMintedReplica(strip) && (!strip.updatedBy || mine.has(strip.updatedBy))) continue;
     const inView = ctx.visibleBayId === strip.bayId;
+    // A Strip this controller just made, in the Bay they are looking at: they watched it appear. Made into a Bay out of
+    // view it IS an arrival (human, 2026-10-05: one controller on every Position made an OVERFLIGHT and was not told
+    // where it went). NOT a coordination/TOFI replica either way: the exchange mints it at the receiving Position, and
+    // a controller who holds both ends (UI-A U2: one person on AP and CTR) is still told a proposal has arrived there.
+    if (!prev && inView && !_isMintedReplica(strip) && (!strip.updatedBy || mine.has(strip.updatedBy))) continue;
     const entry = {
       bayId: strip.bayId, positionId: strip.ownerPositionId,
-      from: _arrivalSource(strip, prev),
+      from: !prev && !_isMintedReplica(strip) && strip.updatedBy && mine.has(strip.updatedBy) ? 'you' : _arrivalSource(strip, prev),
       callsign: ctx.callsignOf ? ctx.callsignOf(strip) : strip.stripId,
       at: ctx.now, seenAt: null, bayUnseen: !inView, flashed: false,
     };
