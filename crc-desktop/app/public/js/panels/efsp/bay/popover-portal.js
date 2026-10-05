@@ -173,6 +173,13 @@ export function _stripHasOpenPopover(stripId) {
   return false;
 }
 
+/** Closes every open popover that belongs to one of `stripIds` (the Strips left the Board: a reset, a drop, an archive). */
+export function closePopoversForStrips(stripIds) {
+  const ids = new Set(stripIds || []);
+  if (!ids.size) return;
+  for (const entry of [..._openPopovers.values()]) if (ids.has(entry.stripId)) entry.close();
+}
+
 function _closeAllPopovers() {
   for (const entry of [..._openPopovers.values()]) entry.close();
 }

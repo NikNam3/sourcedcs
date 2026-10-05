@@ -151,6 +151,11 @@ test('a different mission (changed fingerprint) clears the Board in one audited 
   assert.ok(deltas.length >= 1);
   const gone = new Set(deltas.flatMap(f => f.strips.gone));
   assert.ok(gone.size >= 3, 'the dropped Strips are `gone` in the deltas');
+  // DESK-NOTICES (H108): the reset's own deltas say so, with the count each Board dropped (the archiver's later deltas do not)
+  const marked = deltas.filter(f => f.missionReset);
+  assert.ok(marked.length >= 2 && marked.length < deltas.length + 1);
+  assert.ok(marked.every(f => Number.isFinite(f.missionReset.at) && f.missionReset.strips > 0));
+  assert.equal(marked.reduce((n, f) => n + f.missionReset.strips, 0), summaries.reduce((n, e) => n + e.strips, 0));
   assert.ok(h.frames.some(f => f.type === 'efsp-runway-status-delta'));
   assert.ok(h.frames.some(f => f.type === 'efsp-carrier-delta' && f.carrierSeq > carrierSeq));
   assert.ok(h.frames.some(f => f.type === 'efsp-sfa-delta'));

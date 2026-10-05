@@ -42,7 +42,10 @@ function resetForMission(ctx, facilityIds, session = null) {
   // The Strips each Board touched, peers included (a link that ended on a Strip the reset did not name is in the same delta).
   for (const { facilityId, boardStore } of touchedBoards) {
     const strips = touchedStrips(ctx, boardStore, facilityId, boardStore.drainTouched(), null);
-    frames.push(boardDelta(ctx, boardStore, facilityId, strips, []));
+    // The one wire signal (DESK-NOTICES, H108): a client cannot tell this from ordinary drops, so the delta says so.
+    const delta = boardDelta(ctx, boardStore, facilityId, strips, []);
+    delta.missionReset = { at: ctx.clock ? ctx.clock.now() : null, strips: summary.boards[facilityId] };
+    frames.push(delta);
   }
 
   if (stores.marsa) summary.marsaEnded = stores.marsa.resetForMission().length;

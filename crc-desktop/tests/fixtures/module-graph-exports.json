@@ -541,6 +541,7 @@
    "_sendFromPopover",
    "_stripHasOpenPopover",
    "_unmountPopover",
+   "closePopoversForStrips",
    "openPopover"
   ],
   "panels/efsp/bay/popovers/airspace-entry.js": [
@@ -1083,6 +1084,8 @@
    "getUndoVoidedMessages",
    "isTextEntryTarget",
    "isUndoKey",
+   "missionResetText",
+   "noteMissionReset",
    "noteUndoAck",
    "noteUndoBoardEpoch",
    "noteUndoVoided",
