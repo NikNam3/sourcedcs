@@ -64,7 +64,7 @@ table.t th{color:var(--muted);font-weight:400;background:var(--panel)}
 </style></head><body><main>
 <p><a href="index.html">← mockups</a></p>
 <header>
-<h1>PAR panel <span style="color:var(--muted);font-size:12px;font-weight:400">mockup, revision 3, 2026-10-05</span></h1>
+<h1>PAR panel <span style="color:var(--muted);font-size:12px;font-weight:400">mockup, revision 3, approved 2026-10-05</span></h1>
 <p>A normal crc-desktop panel. It shows the precision approach radar picture for the aircraft on final and nothing the controller
 already knows. When the approach is normal the panel is all grey except the track. Colour elsewhere appears only when something needs attention.</p>
 </header>
@@ -80,10 +80,10 @@ already knows. When the approach is normal the panel is all grey except the trac
 </div>
 <div class="bar" role="group" aria-label="Track style to compare"><span class="lbl">Track style</span>
   <button type="button" data-style="grey" aria-pressed="false">A · revision 2 (white)</button>
-  <button type="button" data-style="cyan" aria-pressed="true">B · cyan</button>
+  <button type="button" data-style="cyan" aria-pressed="false">B · cyan</button>
   <button type="button" data-style="green" aria-pressed="false">C · phosphor green</button>
   <button type="button" data-style="halo" aria-pressed="false">D · white, haloed</button>
-  <button type="button" data-style="magenta" aria-pressed="false">E · magenta</button>
+  <button type="button" data-style="magenta" aria-pressed="true">E · magenta (approved)</button>
 </div>
 <div class="bar"><span class="lbl">Settings</span>
   <label><input type="checkbox" id="autoset" checked> PAR autoscale <span style="color:var(--faint)">(a switch in the Settings panel)</span></label>
@@ -131,7 +131,7 @@ already knows. When the approach is normal the panel is all grey except the trac
 <div class="tw"><table class="t">
 <tr><th>Colour</th><th>Means</th><th>Where on this panel</th></tr>
 <tr><td><span class="sw" style="background:var(--muted)"></span>grey</td><td>Normal.</td><td>Everything while the aircraft is within tolerance, including "slightly" off.</td></tr>
-<tr><td><span class="sw" style="background:#6fd3ff"></span>track colour</td><td>The aircraft (style under review).</td><td>The current plot and its trail.</td></tr>
+<tr><td><span class="sw" style="background:#e58bff"></span>magenta</td><td>The aircraft (style E, approved).</td><td>The current plot and its trail.</td></tr>
 <tr><td><span class="sw" style="background:var(--attn)"></span>amber</td><td>Look at this now.</td><td>Azimuth or elevation past the "well" tolerance; no radar plot for 3 s.</td></tr>
 <tr><td><span class="sw" style="background:var(--bad)"></span>orange-red</td><td>Something failed.</td><td>Elevation or azimuth data unavailable; that scope is blanked with the reason.</td></tr>
 <tr><td><span class="sw" style="background:var(--danger)"></span>red</td><td>Past a safety limit.</td><td>Below the lower safety limit, or outside the azimuth safety limit, before DA.</td></tr>
@@ -161,7 +161,7 @@ already knows. When the approach is normal the panel is all grey except the trac
     elfail:      { r: 3.6, el: null, az: -0.3, elTrend: 0,     azTrend: 0,    gs: 142, vs: null, elFail: true }
   };
   // The view is anchored at touchdown: range 0..rMax, height 0..hMax, lateral -yMax..+yMax.
-  var view = { rMax: 10, hMax: 3500, yMax: 1200 }, auto = true, paused = false, state = 'normal', style = 'cyan';
+  var view = { rMax: 10, hMax: 3500, yMax: 1200 }, auto = true, paused = false, state = 'normal', style = 'magenta';
   var fly = null; // { t0, simT } while flying
 
   function gpHeight(r, offDeg) { return TCH + r * FT_PER_NM * Math.tan((GPA + (offDeg || 0)) * rad); }
