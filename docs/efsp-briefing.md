@@ -792,7 +792,7 @@ force-retires every live Strip through `StripOps#retire(strip, 'system', { force
 entry per Strip and one `MissionReset` entry per Board; then `marsaStore`, `carrierStore`, `runwayStatusStore`, `sfaStore`
 `resetForMission()` and `correlationStore.forgetAll()`), persists, delivers one board-delta per Board plus one delta per store whose
 seq moved through `deliverEfsp`, and runs the archiver's roll-over sweep, which files what was just dropped. Kept: the active
-runway and its wind source, config, airspaces, the Mutation log, metrics. See `docs/wip/MISSION-CLEAR.md` for the walks not done.
+runway and its wind source, config, airspaces, the Mutation log, metrics. See `docs/wip/folded-phase3/MISSION-CLEAR.md` for the walks not done.
 
 **Typed time Blocks (F4, bugfix, no ADR).** `flight-data-store.js`'s `TYPED_TIME_LABELS` and
 `normalizeTypedTime(path, value, nowMs)` are the **only** rule for a typed time: a finite number is epoch

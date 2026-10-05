@@ -60,7 +60,7 @@ The soak host runs the surveillance hint monitor and the Boards' airborne observ
 (`surveillanceHints` is left unset), and the shadow clients track the six stores' seq/epoch like the shipped client
 (`tools/soak/shadow.js`; heartbeat `stores`, store frames, a slice resync after two beats behind): a store still behind
 after 6 heartbeats is the **`store-stale`** failure (`mutations.storeSync.stale`; selfcheck case `drop-store-delta`).
-The soak never rolls the mission, so the mission reset (ADR 0108) is not exercised (`docs/wip/NX-1.md`).
+The soak never rolls the mission, so the mission reset (ADR 0108) is not exercised (`docs/wip/folded-phase3/NX-1.md`).
 
 ### crc-desktop (Electron)
 ```bash
