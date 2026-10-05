@@ -20,7 +20,7 @@ import {
   MIN_POLYGON_VERTICES, addFix, blankFix, canAddFix, geometryFromDrawing, legWidthNm, listDrawings, outlineStatus, polygonGeometry,
   polygonProblem, refreshGeometry, removeFix, rowsFromSegments, routeEnvelope, routeSummary, segmentsFromRows, sketchSvg,
 } from './airspace-geometry-model.js';
-import { altitudeText, parseAltitudeText } from './airspace-editor.js';
+import { altitudeText, parseAltitudeText } from './airspace-draft.js';
 
 const _el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 const same = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);

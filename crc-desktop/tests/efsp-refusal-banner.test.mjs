@@ -21,6 +21,7 @@ import { createRequire } from 'node:module';
 
 import { makeElement } from './helpers/dom-stub.js';
 import { freshGraph } from './helpers/fresh-graph.mjs';
+import { panelFacade } from './helpers/panel-facade.mjs';
 
 // Unref'd, so a panel timer — the refusal banner's 30 s auto-clear above
 // all — never holds the test process open until it fires. That one timer
@@ -71,7 +72,7 @@ async function mountPanel() {
   const g = freshGraph();
   const L = (f) => g.import(`panels/efsp/${f}`);
   const [state, ws, panel, bayView, geojson] = await Promise.all([
-    L('efsp-state.js'), L('efsp-ws.js'), L('efsp-panel.js'), L('bay-view.js'), g.import('geojson.js'),
+    L('efsp-state.js'), L('efsp-ws.js'), panelFacade(g), L('bay-view.js'), g.import('geojson.js'),
   ]);
 
   let rerenders = 0;

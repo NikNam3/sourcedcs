@@ -87,7 +87,7 @@ test('TAC_C2 imports an ATO; the AR group highlights together; Mode 1/2 read in 
 
   // Select SHELL 71 the way a controller does: a click on the Strip body.
   await stripEl(page, shellId).click({ position: { x: 6, y: 6 } });
-  await page.waitForFunction((id) => crc.bayView.getSelectedEfspStripId() === id, shellId);
+  await page.waitForFunction((id) => crc.selection.getSelectedEfspStripId() === id, shellId);
   await expect(stripEl(page, viperId)).toHaveClass(/efsp-strip-ar-participant/);
   await expect(stripEl(page, dudeId)).toHaveClass(/efsp-strip-ar-participant/);
   await expect(stripEl(page, snakeId)).not.toHaveClass(/efsp-strip-ar-participant/);

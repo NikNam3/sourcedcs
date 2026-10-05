@@ -133,7 +133,7 @@ async function lineSandbox({ strips = STRIPS, flightDataList = FLIGHT_DATA_LIST,
   const g = freshGraph();
   const st = await g.import('panels/efsp/efsp-state.js');
   const ws = await g.import('panels/efsp/efsp-ws.js');
-  const bay = await g.import('panels/efsp/bay-view.js');
+  const bay = await g.import('panels/efsp/bay/selection.js');
   const scramble = await g.import('panels/efsp/scramble.js');
   ws.setEfspSender('_sendEfsp', () => {});
   ws.sendEfspSetPositions('INCIRLIK', signedOn);

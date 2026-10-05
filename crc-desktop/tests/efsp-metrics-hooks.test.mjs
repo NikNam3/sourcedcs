@@ -11,6 +11,7 @@ import assert from 'node:assert/strict';
 import './helpers/client-env.mjs';
 import domStub from './helpers/dom-stub.js';
 import { freshGraph } from './helpers/fresh-graph.mjs';
+import { panelFacade } from './helpers/panel-facade.mjs';
 
 const { makeElement, descendants } = domStub;
 const IDS = [
@@ -72,9 +73,10 @@ async function mount({ metrics = true } = {}) {
   const geojson = await g.import('geojson.js');
   const bay = await g.import('panels/efsp/bay-view.js');
   const stripEl = await g.import('panels/efsp/bay/strip-element.js');
+  const selection = await g.import('panels/efsp/bay/selection.js');
   await g.import('panels/efsp/strip-view.js');
   const metricsClient = await g.import('panels/efsp/efsp-metrics-client.js');
-  const panel = await g.import('panels/efsp/efsp-panel.js');
+  const panel = await panelFacade(g);
   if (!metrics) metricsClient._setEfspMetricsClientForTest(NO_METRICS);
 
   ws.setEfspSender('_sendEfsp', () => {});
@@ -96,7 +98,7 @@ async function mount({ metrics = true } = {}) {
   });
   panel.initEfspPanel();
   const flush = () => { if (metrics) metricsClient.flushEfspMetricsNow(); return reports.flatMap(r => r.events.map(e => ({ positionId: r.positionId, facilityId: r.facilityId, ...e }))); };
-  return { els, sandbox: { ...panel, ...bay, ...stripEl, getEfspStrip: state.getEfspStrip, document: d }, ws, metricsClient, mutations, reports, flush };
+  return { els, sandbox: { ...panel, ...bay, ...selection, ...stripEl, getEfspStrip: state.getEfspStrip, document: d }, ws, metricsClient, mutations, reports, flush };
 }
 
 const nextTask = () => new Promise(resolve => setImmediate(resolve));

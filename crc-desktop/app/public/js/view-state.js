@@ -13,6 +13,9 @@ export let selectedApt      = null;
 export let approachRwyCourse = null; // used for approach-vector line
 export let bullseyePickTarget = null; // 'blue' | 'red' | null — awaiting a map click to set bullseye override
 export let _pulseBright     = true;
+export let approachRwyCourseTrue = null; // approachRwyCourse at selectedApt, in true (airport-selector.js writes it)
+export let _aprtSelectedApt = null;      // the APRT panel's airfield (aprt-panel.js writes it)
+export let _aprtRwyTrueDeg = null;       // its runway in true, from crc-sync
 
 export function setGrpcStatus(v) { grpcStatus = v; }
 export function setSrsStatus(v) { srsStatus = v; }
@@ -23,3 +26,6 @@ export function setPulseBright(v) { _pulseBright = v; }
 export function _setSelectedApt(v) { selectedApt = v; }
 export function _setApproachRwyCourse(v) { approachRwyCourse = v; }
 export function _setBullseyePickTarget(v) { bullseyePickTarget = v; }
+export function _setApproachRwyCourseTrue(v) { approachRwyCourseTrue = v; }
+export function _setAprtSelectedApt(v) { _aprtSelectedApt = v; }
+export function _setAprtRwyTrueDeg(v) { _aprtRwyTrueDeg = v; }

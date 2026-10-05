@@ -15,6 +15,7 @@ import assert from 'node:assert/strict';
 import './helpers/client-env.mjs';
 import domStub from './helpers/dom-stub.js';
 import { freshGraph } from './helpers/fresh-graph.mjs';
+import { panelFacade } from './helpers/panel-facade.mjs';
 
 // Unref'd, so a panel timer — the refusal banner's 30 s auto-clear above all — never holds the test
 // process open until it fires. That one timer kept `npm test` (and so `npm run dev-check`) waiting
@@ -70,7 +71,7 @@ async function mountPanel({ signedOn = ['OPS'], stereoRoutes = ROUTES, lookupSpy
   const g = freshGraph();
   const state = await g.import('panels/efsp/efsp-state.js');
   const ws = await g.import('panels/efsp/efsp-ws.js');
-  const panel = await g.import('panels/efsp/efsp-panel.js');
+  const panel = await panelFacade(g);
   ws.setEfspSender('_sendEfsp', () => {});
   for (const p of signedOn) ws.sendEfspSetPositions(p === 'CTR' ? 'CENTER' : 'INCIRLIK', [p]); // getActingPositions() = signedOn
   ws.setEfspSender('sendEfspCreateStrip', (actingPositionId, op, facilityId) => { sent.push({ actingPositionId, op, facilityId }); return 'mid'; });

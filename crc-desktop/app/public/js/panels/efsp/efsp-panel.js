@@ -13,18 +13,8 @@ import { startEfspStalenessCheck } from './panel/staleness.js';
 
 // The feature modules live in panel/ (ESM-2b): state.js (shared state), staleness.js, tabs.js (Position and Bay
 // tabs, search), arrivals.js, create-strip.js, refusal.js (refusal banner, warning, mutation acks) and
-// dot-commands.js. This file keeps init and the refresh entry point, and re-exports every name it exported before.
-export { _activePositionTab, _activeBayId, _setActivePositionTab, _setActiveBayId, _setBayContentElForTest } from './panel/state.js';
-export { noteEfspHeartbeat } from './panel/staleness.js';
-export { computePositionTabs, _runEfspSearch, getActiveEfspSearchQuery, _renderPositionTabs, efspVisibleBayId } from './panel/tabs.js';
-export { noteEfspBoardArrivals, noteEfspArrivalShown } from './panel/arrivals.js';
-export { reloadEfspStereoRoutes, convertStripToArrival, createStripFromFiledPlan } from './panel/create-strip.js';
-export {
-  MUTATION_ERROR_VISIBLE_MS, MUTATION_ERROR_MESSAGES, _callsignOfFlightData, _showMutationError, getCurrentEfspRefusal,
-  _showMutationWarning, notifyEfspOrphanedMutation, notifyEfspMutationAck, _setCurrentRefusalForTest
-} from './panel/refusal.js';
+// dot-commands.js. This file keeps init and the refresh entry point; importers use the feature modules directly (DESK-SPLIT).
 import { ORDER, onEfspChanged } from './efsp-change-bus.js';
-export { _dispatchDotCommand } from './panel/dot-commands.js';
 
 // Top-level EFSP panel — mounted via dock.js's mountExistingPanel('efsp-
 // panel', initEfspPanel). Owns the position-tab / Bay-tab chrome (guide

@@ -6,13 +6,13 @@ import { clearIffOverride, getIff, iffColor, setIffOverride } from '../iff.js';
 import {
   altitudeLong, assignedAltText, assignedBlockText, tagEditable, trackName, trackNameSuffix, typeText
 } from '../track-label.js';
-import { _flightDataForTrack, buildFiledRoute, parseFiledRouteWaypoints, updateMap } from '../geojson.js';
-import { dock, ensureTrackPanel } from '../dock.js';
+import { _flightDataForTrack, buildFiledRoute, parseFiledRouteWaypoints } from '../geojson.js';
+import { dock, ensureTrackPanel } from '../dock-handle.js';
 import { conformanceAlertsForFlightData, conflictAlertsForTrack } from './efsp/efsp-state.js';
 import { history, tracks } from '../picture.js';
 import { map, mapReady } from '../map-handle.js';
 import { settings } from '../settings.js';
-import { onEfspChanged } from './efsp/efsp-change-bus.js';
+import { markEfspChanged, onEfspChanged } from './efsp/efsp-change-bus.js';
 
 // ── Track info panel ─────────────────────────────────────────────────────
 // Left-clicking an aircraft track opens this persistent side panel. It
@@ -45,7 +45,7 @@ export function initTrackPanel() {
       if (_trackPanelId == null) return;
       setIffOverride(_trackPanelId, btn.dataset.state);
       _refreshIffButtons();
-      updateMap();
+      markEfspChanged('map');
     });
   });
 
@@ -54,7 +54,7 @@ export function initTrackPanel() {
     if (_trackPanelId == null) return;
     clearIffOverride(_trackPanelId);
     _refreshIffButtons();
-    updateMap();
+    markEfspChanged('map');
   });
 
   // Tag controls: a name for a contact nothing else identifies. Disabled
@@ -63,7 +63,7 @@ export function initTrackPanel() {
   const commitRename = () => {
     if (_trackPanelId == null) return;
     setTrackRename(_trackPanelId, $renameInput.value);
-    updateMap();
+    markEfspChanged('map');
     _refreshCallsign();
   };
   document.getElementById('tp-rename-set').addEventListener('click', (e) => {
@@ -74,7 +74,7 @@ export function initTrackPanel() {
     if (_trackPanelId == null) return;
     clearTrackRename(_trackPanelId);
     $renameInput.value = '';
-    updateMap();
+    markEfspChanged('map');
     _refreshCallsign();
   });
   $renameInput.addEventListener('keydown', (e) => {
@@ -338,7 +338,7 @@ export function showGroundLabelPopup(id, clientX, clientY) {
   function commit() {
     setTrackRename(id, input.value);
     close();
-    updateMap();
+    markEfspChanged('map');
   }
 
   function close() {
@@ -362,4 +362,4 @@ export function showGroundLabelPopup(id, clientX, clientY) {
   setTimeout(() => document.addEventListener('click', onOutside, true), 0);
 }
 
-onEfspChanged(['alerts'], () => updateTrackPanel()); // a conflict alert on the open contact (efsp-change-bus.js)
+onEfspChanged(['alerts', 'scope'], () => updateTrackPanel()); // a conflict alert on the open contact (efsp-change-bus.js)

@@ -1,7 +1,9 @@
 'use strict';
+import { markEfspChanged, onEfspChanged } from './efsp/efsp-change-bus.js';
+import { hasMissionTime, missionClockSource, missionNow } from '../mission-clock.js';
 import { NM_M, bearingDeg, haversineM } from '../geo.js';
 import { magneticText } from '../magnetic.js';
-import { buildRangeRing, updateMap } from '../geojson.js';
+import { buildRangeRing } from '../geojson.js';
 import { escapeHtml } from '../html-escape.js';
 import { STALE_MS } from '../scope-constants.js';
 import { getBullseye } from '../picture.js';
@@ -143,7 +145,7 @@ export function checkStale() {
     && Date.now() - lastUpdateMs > STALE_MS;
   const wasStale = $stale.classList.contains('visible');
   $stale.classList.toggle('visible', isStale);
-  if (isStale !== wasStale) updateMap();
+  if (isStale !== wasStale) markEfspChanged('map');
 }
 
 // ── Bullseye cursor BRA ────────────────────────────────────────────────────
@@ -187,48 +189,23 @@ export function updateMeasureLine(lng1, lat1, lng2, lat2) {
 }
 
 // ── Zulu clock (DCS in-game time) ─────────────────────────────────────────
-// crc-sync owns the mission clock (crc-sync/src/mission-clock.js, docs/adr/
-// 0079): it converts DCS's in-game local time to Zulu with the theater's fixed
-// offset and sends the result as `game-time` { zuluMs, source } after every
-// poll. This side only advances it in real time between messages — there is
-// no offset, and no clock arithmetic, here.
-//
-// missionNow() is the client's one answer to "what time is it" for anything a
-// controller reads as a time of day (a booking window, how long an exchange
-// has waited). Before the first message it is the wall clock, which is also
-// what the server answers before DCS does.
-
-let _missionAnchorWallMs = null; // Date.now() when the last game-time arrived
-let _missionAnchorZuluMs = null; // what it said
-let _missionClockSource  = 'WALL';
-
-export function updateGameTime(msg) {
-  if (!Number.isFinite(msg.zuluMs)) return;
-  _missionAnchorWallMs = Date.now();
-  _missionAnchorZuluMs = msg.zuluMs;
-  _missionClockSource  = msg.source || 'WALL';
-}
-
-export function missionNow() {
-  if (_missionAnchorZuluMs === null) return Date.now();
-  return _missionAnchorZuluMs + (Date.now() - _missionAnchorWallMs);
-}
-
 export function initZuluClock() {
   const $el = document.getElementById('zulu-clock');
   if (!$el) return;
   setInterval(() => {
-    if (_missionAnchorZuluMs === null) {
+    if (!hasMissionTime()) {
       $el.textContent = '--:--:--Z';
       return;
     }
     // WALL: DCS is not answering, so this is real time, not mission time.
     // MISSION_NO_OFFSET: mission time on a theater crc-sync has no offset for.
     // Either way the controller has to be able to tell.
-    const flag = _missionClockSource === 'WALL' ? ' WALL' : _missionClockSource === 'MISSION_NO_OFFSET' ? ' ?' : '';
+    const flag = missionClockSource() === 'WALL' ? ' WALL' : missionClockSource() === 'MISSION_NO_OFFSET' ? ' ?' : '';
     $el.textContent = `${new Date(missionNow()).toISOString().slice(11, 19)}Z${flag}`;
-    $el.title = _missionClockSource === 'MISSION' ? 'DCS mission time (Zulu)'
-      : _missionClockSource === 'WALL' ? 'DCS is not reporting mission time — showing real UTC'
+    $el.title = missionClockSource() === 'MISSION' ? 'DCS mission time (Zulu)'
+      : missionClockSource() === 'WALL' ? 'DCS is not reporting mission time — showing real UTC'
         : 'DCS mission time — no UTC offset is configured for this theater, so this may be hours out';
   }, 1000);
 }
+
+onEfspChanged(['scope'], () => updateTopbarUI()); // the scope was redrawn (efsp-change-bus.js)

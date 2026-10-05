@@ -12,10 +12,10 @@ import {
   efspResyncReplyAsMessage, noteEfspPositionsAck, replayPendingEfspMutations, settleEfspAck
 } from './efsp-ws.js';
 import { onEfspMetricsReportAck } from './efsp-metrics-client.js';
-import {
-  _showMutationError, noteEfspBoardArrivals, noteEfspHeartbeat, notifyEfspMutationAck,
-  notifyEfspOrphanedMutation, reloadEfspStereoRoutes
-} from './efsp-panel.js';
+import { _showMutationError, notifyEfspMutationAck, notifyEfspOrphanedMutation } from './panel/refusal.js';
+import { noteEfspBoardArrivals } from './panel/arrivals.js';
+import { noteEfspHeartbeat } from './panel/staleness.js';
+import { reloadEfspStereoRoutes } from './panel/create-strip.js';
 import { onAtoPreviewResult } from './ato-import.js';
 import { noteUndoAck, noteUndoBoardEpoch, noteUndoVoided, reconcileUndoSlotEpoch } from './panel/undo-slot.js';
 

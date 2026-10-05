@@ -3,9 +3,9 @@
 // The server gates again; a refusal lands in the usual banner.
 import { getEfspStrip } from '../../efsp-state.js';
 import { sendEfspMutation } from '../../efsp-ws.js';
-import { _resolveActingPositionId } from '../../bay-view.js';
+import { _resolveActingPositionId } from '../dispatch.js';
 import { openPopover, _sendFromPopover } from '../popover-portal.js';
-import { missionNow } from '../../../topbar.js';
+import { missionNow } from '../../../../mission-clock.js';
 import {
   RELEASE_SCOPES, RELEASE_SCOPE_LABELS, buildGrantOp, buildRefuseOp, buildRequestOp, buildStepOp, handoffPositions,
 } from '../../control-release-rules.js';

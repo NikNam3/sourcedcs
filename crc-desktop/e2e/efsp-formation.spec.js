@@ -11,7 +11,7 @@ const CALLSIGNS = ['FORMA1', 'FORMB3', 'FORMC5'];
 async function select(page, callsign) {
   await page.evaluate((cs) => {
     const s = crc.state.getAllEfspStrips().find((x) => x.state !== 'DROPPED' && crc.state.getEfspFlightData(x.flightDataId).identity.callsign === cs);
-    if (crc.bayView.getSelectedEfspStripId() !== s.stripId) crc.bayView.selectEfspStripById(s.stripId);
+    if (crc.selection.getSelectedEfspStripId() !== s.stripId) crc.selection.selectEfspStripById(s.stripId);
   }, callsign);
 }
 

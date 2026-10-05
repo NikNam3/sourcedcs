@@ -239,7 +239,7 @@ test.describe('extends F-201', () => {
     // Not an immediate toBeFocused(): focus moves one render frame AFTER the
     // key (renderBay), so an instant check races it and passes.
     await frames(page); // focus moves one render frame after the key
-    expect(await page.evaluate(() => crc.bayView.getSelectedEfspStripId()), 'Space on the picker selected the Strip').toBeNull();
+    expect(await page.evaluate(() => crc.selection.getSelectedEfspStripId()), 'Space on the picker selected the Strip').toBeNull();
     await expect(picker, 'focus was taken by the Strip').toBeFocused();
   });
 });

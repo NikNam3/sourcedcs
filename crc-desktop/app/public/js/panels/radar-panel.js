@@ -1,6 +1,7 @@
 'use strict';
+import { onEfspChanged } from './efsp/efsp-change-bus.js';
 import { NM_M } from '../geo.js';
-import { PANEL_TITLES, isDockPanelOpen, isPanelPinned, setPanelPinned, toggleDockPanel } from '../dock.js';
+import { PANEL_TITLES, isDockPanelOpen, isPanelPinned, setPanelPinned, toggleDockPanel } from '../dock-handle.js';
 import { hideLosProfile, showLosProfile } from './los-panel.js';
 import { getAllEfspPositions } from './efsp/efsp-state.js';
 import { FACILITY_POSITIONS, shippedFacilityIds, RANGES_FACILITY_ID } from './efsp/facility-topology.js';
@@ -317,3 +318,5 @@ export function initRadarPanel() {
     onClose: hideLosProfile,
   };
 }
+
+onEfspChanged(['scope'], () => updateRadarBadge()); // the scope was redrawn (efsp-change-bus.js)

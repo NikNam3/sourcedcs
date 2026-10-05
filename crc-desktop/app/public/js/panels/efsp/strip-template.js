@@ -2,7 +2,7 @@
 import { getEfspFlightData } from './efsp-state.js';
 import { resolveTimeChain, timeChainForBlock } from './time-chains.js';
 import { carrierDerivedText, getEfspCarrier } from './carrier-state.js';
-import { mtrLostCommsAdvisory } from './strip-fields.js';
+import { mtrLostCommsAdvisory } from './mtr-advisory.js';
 import { carrierFinalDistanceText } from './carrier-final-distance.js';
 import { formatZuluHhmm } from '../../format.js';
 import { cachedStereoRoutesClient } from './efsp-stereo-routes.js';

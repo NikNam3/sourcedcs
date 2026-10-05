@@ -1,12 +1,12 @@
 'use strict';
-import { getCurrentEfspRefusal } from '../efsp-panel.js';
+import { getCurrentEfspRefusal } from '../panel/refusal.js';
 import {
   CONFIRM_VACATED_ELIGIBLE_BLOCKS, blockValueHintFor, editRedirectFor, enumSelectOptionsFor,
   hasActiveAnnotationEntry, isBlockEditable, isBooleanToggleBlock, isEnumBlockClearable, resolveBlockValue
 } from '../strip-template.js';
 import { getEfspFlightData, getEfspStrip } from '../efsp-state.js';
 import { sendEfspMutation } from '../efsp-ws.js';
-import { _resolveActingPositionId } from '../bay-view.js';
+import { _resolveActingPositionId } from './dispatch.js';
 
 
 /**

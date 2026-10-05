@@ -2,7 +2,7 @@
 import { getEfspStrip } from '../../efsp-state.js';
 import { setHighlight } from '../../efsp-gestures.js';
 import { noteEfspGesture } from '../../efsp-metrics-client.js';
-import { _dispatchGesture } from '../../bay-view.js';
+import { _dispatchGesture } from '../dispatch.js';
 import { openPopover } from '../popover-portal.js';
 
 

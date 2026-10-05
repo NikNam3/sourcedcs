@@ -23,7 +23,7 @@ import { createRequire } from 'node:module';
 import { freshGraph } from './helpers/fresh-graph.mjs';
 import { BLOCK_MAPS, isBlockEditable, enumSelectOptionsFor, isBooleanToggleBlock } from '../app/public/js/panels/efsp/strip-template.js';
 import { COMPACT_BLOCKS_BY_POSITION, compactBlocksFor as _compactBlocksFor } from '../app/public/js/panels/efsp/strip-fields.js';
-import { INDICATOR_ORDER } from '../app/public/js/panels/efsp/strip-view.js';
+import { INDICATOR_ORDER } from '../app/public/js/panels/efsp/strip-alerts.js';
 import { HAND_BACK_TO, TOFI_ANSWERED_BY } from '../app/public/js/panels/efsp/bay/authority-mirror.js';
 import * as domStub from './helpers/dom-stub.js';
 import * as serverConfig from "./helpers/server-config.mjs";
@@ -37,13 +37,15 @@ const require = createRequire(import.meta.url);
  * explicit test setter (a module cannot have an imported function replaced from outside).
  */
 const SANDBOX_MODULES = [
-  'panels/efsp/bay-view.js', 'panels/efsp/strip-view.js', 'panels/efsp/efsp-state.js', 'panels/efsp/efsp-arrivals.js',
+  'panels/efsp/bay-view.js', 'panels/efsp/strip-view.js', 'panels/efsp/strip-dom.js', 'panels/efsp/strip-exchanges.js', 'panels/efsp/strip-alerts.js', 'panels/efsp/strip-indicators.js', 'panels/efsp/strip-menu.js', 'panels/efsp/efsp-state.js', 'panels/efsp/efsp-arrivals.js',
   'panels/efsp/efsp-stereo-routes.js', 'panels/efsp/strip-template.js', 'panels/efsp/strip-fields.js', 'panels/efsp/efsp-ws.js',
   'panels/efsp/efsp-panel.js', 'panels/efsp/carrier-state.js', 'panels/efsp/carrier-panel.js', 'panels/efsp/scramble.js',
   'panels/efsp/airspace-panel.js', 'picture.js',
   // bay-view.js no longer re-exports the bay/* features: the facade finds them in their own modules.
   'panels/efsp/bay/strip-element.js', 'panels/efsp/bay/popovers/coordination.js', 'panels/efsp/bay/popovers/tofi.js',
   'panels/efsp/bay/popovers/airspace-entry.js', 'panels/efsp/bay/popovers/marsa.js', 'panels/efsp/bay/popovers/bind.js',
+  'panels/efsp/panel/state.js', 'panels/efsp/panel/staleness.js', 'panels/efsp/panel/tabs.js', 'panels/efsp/panel/arrivals.js', 'panels/efsp/panel/create-strip.js', 'panels/efsp/panel/refusal.js', 'panels/efsp/panel/dot-commands.js',
+  'panels/efsp/bay/dispatch.js', 'panels/efsp/bay/selection.js', 'panels/efsp/bay/strip-signature.js', 'panels/efsp/bay/coordination-rules.js',
   'panels/efsp/bay/popover-portal.js', 'panels/efsp/bay/block-edit.js', 'panels/efsp/bay/authority-mirror.js', 'panels/efsp/bay/open-bays.js',
 ];
 async function loadSandbox() {

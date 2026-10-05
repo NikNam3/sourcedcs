@@ -8,7 +8,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import './helpers/client-env.mjs';
 
-import { airspaceActionsFor } from '../app/public/js/panels/efsp/airspace-panel.js';
+import { airspaceActionsFor } from '../app/public/js/panels/efsp/airspace-rules.js';
 
 /** A range with a control tower of its own: a real using agency, distinct from the controlling one. */
 function range(state, extra = {}) {

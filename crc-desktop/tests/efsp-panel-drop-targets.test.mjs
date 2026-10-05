@@ -9,7 +9,7 @@ import './helpers/client-env.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { computePositionTabs } from '../app/public/js/panels/efsp/efsp-panel.js';
+import { computePositionTabs } from '../app/public/js/panels/efsp/panel/tabs.js';
 
 const BAYS = [
   { bayId: 'ops-proposed', positionId: 'OPS', facilityId: 'INCIRLIK' },

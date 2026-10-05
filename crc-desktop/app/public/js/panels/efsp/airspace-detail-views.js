@@ -10,7 +10,7 @@
 //
 // Model functions are pure (tests/airspace-detail-views.test.mjs); the open* functions draw.
 
-import { FIELD_LABELS, valueText } from './airspace-editor.js';
+import { FIELD_LABELS, valueText } from './airspace-draft.js';
 
 function _el(tag, cls, text) {
   const e = document.createElement(tag);

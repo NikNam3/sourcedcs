@@ -1,10 +1,11 @@
 'use strict';
+import { markEfspChanged } from './efsp/efsp-change-bus.js';
 import { _syncAuthHeaders } from '../sync.js';
 import { escapeHtml } from '../html-escape.js';
 import { requestTrueFromMagnetic } from '../magnetic.js';
-import { updateMap } from '../geojson.js';
+
 import { $aptDisplay, updateAptDisplay, updateTopbarUI } from './topbar.js';
-import { _setApproachRwyCourse, _setSelectedApt, approachRwyCourse, selectedApt } from '../view-state.js';
+import { _setApproachRwyCourse, _setApproachRwyCourseTrue, _setSelectedApt, approachRwyCourse, selectedApt } from '../view-state.js';
 import { missionData } from '../picture.js';
 
 // ── Airport selector (topbar dropdown + runway course input) and the
@@ -54,7 +55,7 @@ function populateAptDropdown($dd) {
       updateAptDisplay();
       updateTopbarUI();
       resolveApproachCourse();
-      updateMap();
+      markEfspChanged('map');
     });
     $list.appendChild(el);
   }
@@ -93,17 +94,16 @@ export function initAptSelector() {
 // value is converted by crc-sync, never here (its docs/adr/0085): until the
 // answer comes back, no approach vector is drawn.
 
-export let approachRwyCourseTrue = null; // approachRwyCourse at selectedApt, in true
 let _approachCourseReq = 0;
 
 export function resolveApproachCourse() {
   const req = ++_approachCourseReq;
-  approachRwyCourseTrue = null;
+  _setApproachRwyCourseTrue(null);
   if (approachRwyCourse == null || !selectedApt) return;
   requestTrueFromMagnetic(approachRwyCourse, selectedApt.lat, selectedApt.lon).then((t) => {
     if (req !== _approachCourseReq) return; // a newer entry replaced it
-    approachRwyCourseTrue = t;
-    updateMap();
+    _setApproachRwyCourseTrue(t);
+    markEfspChanged('map');
   });
 }
 
@@ -115,7 +115,7 @@ export function initRwyInput() {
     const val = parseInt($rwyInput.value, 10);
     _setApproachRwyCourse((!isNaN(val) && val >= 0 && val <= 360) ? val % 360 : null);
     resolveApproachCourse();
-    updateMap();
+    markEfspChanged('map');
   });
   $rwyInput.addEventListener('click', e => e.stopPropagation());
 }

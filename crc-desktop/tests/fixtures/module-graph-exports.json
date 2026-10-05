@@ -100,16 +100,20 @@
    "toUtm",
    "zoneOf"
   ],
-  "dock.js": [
+  "dock-handle.js": [
    "PANEL_TITLES",
    "dock",
    "ensureTrackPanel",
-   "initDock",
    "isDockPanelOpen",
    "isPanelPinned",
-   "notifyCoverageChanged",
+   "registerDockActions",
+   "setDock",
    "setPanelPinned",
    "toggleDockPanel"
+  ],
+  "dock.js": [
+   "initDock",
+   "notifyCoverageChanged"
   ],
   "elevation.js": [
    "clearElevationContours",
@@ -196,11 +200,22 @@
    "mapReady",
    "updateZoomLimits"
   ],
+  "map-interactions.js": [
+   "wireMapInteractions"
+  ],
+  "map-layers-overlays.js": [
+   "addOverlayLayers"
+  ],
+  "map-layers-tracks.js": [
+   "addTrackLayers"
+  ],
   "map-setup.js": [
+   "initMap"
+  ],
+  "map-style.js": [
    "applyAtcBackground",
    "applyColors",
-   "applyMapTheme",
-   "initMap"
+   "applyMapTheme"
   ],
   "maptiler-key.js": [
    "_resetMaptilerKeyForTest",
@@ -209,8 +224,13 @@
    "onMaptilerKey",
    "transformMaptilerRequest"
   ],
+  "mission-clock.js": [
+   "hasMissionTime",
+   "missionClockSource",
+   "missionNow",
+   "updateGameTime"
+  ],
   "panels/airport-selector.js": [
-   "approachRwyCourseTrue",
    "closeAptWeatherPanel",
    "initAptSelector",
    "initRwyInput",
@@ -218,8 +238,6 @@
    "showAptWeatherPanel"
   ],
   "panels/aprt-panel.js": [
-   "_aprtRwyTrueDeg",
-   "_aprtSelectedApt",
    "_setAprtRunwayForTest",
    "_updateAprtRefCard",
    "_updateAprtRwyHeading",
@@ -252,6 +270,9 @@
    "positionsOf",
    "usingPositionFor"
   ],
+  "panels/efsp/airspace-card.js": [
+   "_buildAirspaceCard"
+  ],
   "panels/efsp/airspace-detail-views.js": [
    "HISTORY_FOOTNOTE",
    "deleteBlockers",
@@ -259,7 +280,7 @@
    "openDeleteView",
    "openHistoryView"
   ],
-  "panels/efsp/airspace-editor.js": [
+  "panels/efsp/airspace-draft.js": [
    "FIELD_LABELS",
    "GEOMETRY_FIELDS",
    "RESTART_NOTE",
@@ -273,13 +294,15 @@
    "editableFields",
    "impactNote",
    "lockReason",
-   "openAirspaceEditor",
    "parseAltitudeText",
    "parseFrequencyText",
    "resolveConflicts",
    "validateDraft",
    "valueText",
    "wasText"
+  ],
+  "panels/efsp/airspace-editor.js": [
+   "openAirspaceEditor"
   ],
   "panels/efsp/airspace-geometry-editor.js": [
    "mountGeometryEditor"
@@ -326,14 +349,33 @@
    "trimClosing"
   ],
   "panels/efsp/airspace-panel.js": [
+   "initAirspacePanel",
+   "renderAirspacePanel"
+  ],
+  "panels/efsp/airspace-rules.js": [
+   "_altText",
+   "_flightsOf",
+   "_formatFrequency",
+   "_formatWindow",
+   "_transitionAlt",
+   "_zulu",
    "airspaceActionsFor",
    "deleteReason",
    "editReason",
    "groupByFacility",
-   "initAirspacePanel",
-   "renderAirspacePanel",
    "routeFlightCount",
    "visibleAirspaces"
+  ],
+  "panels/efsp/airspace-state.js": [
+   "_replaceAirspaces",
+   "_resetAirspaceState",
+   "applyEfspAirspaceDelta",
+   "efspAirspaceEdits",
+   "efspAirspaces",
+   "getAllEfspAirspaces",
+   "getEfspAirspace",
+   "getEfspAirspaceEdits",
+   "stripsInAirspace"
   ],
   "panels/efsp/airspace-validate.js": [
    "ACTIVATION_BY_KIND",
@@ -364,6 +406,38 @@
    "polygonSelfIntersects",
    "validateAirspaceDefinition"
   ],
+  "panels/efsp/airspace-view-state.js": [
+   "NEW_KEY",
+   "_delayFor",
+   "_draftInputs",
+   "_drafts",
+   "_filter",
+   "_menuFor",
+   "_saveFilter",
+   "_setDelayFor",
+   "_setMenuFor",
+   "_views"
+  ],
+  "panels/efsp/airspace-views.js": [
+   "_closeView",
+   "_dispatchAirspace",
+   "_el",
+   "_openCreate",
+   "_openDelete",
+   "_openEditor",
+   "_openHistory"
+  ],
+  "panels/efsp/alerts-state.js": [
+   "_resetAlertsState",
+   "applyEfspAlerts",
+   "conflictAlertsForTrack",
+   "conformanceAlertsForFlightData",
+   "getAllEfspConflicts",
+   "getEfspObligation",
+   "getEfspObligations",
+   "surveillanceHintsForStrip",
+   "tofiRegimeAlertForFlightData"
+  ],
   "panels/efsp/annotation-editor.js": [
    "applyAnnotationLocally"
   ],
@@ -392,33 +466,11 @@
    "refreshArHighlight"
   ],
   "panels/efsp/bay-view.js": [
-   "STRIP_CONTROL_SELECTOR",
-   "_defaultBayFor",
-   "_defaultRackFor",
-   "_dispatchCorrelation",
-   "_dispatchGesture",
-   "_dispatchHandBack",
-   "_dispatchMarsa",
-   "_handBackBayFor",
-   "_invokeNla",
    "_isProtectedStripEl",
-   "_moveStrip",
-   "_onStripKeydown",
-   "_resolveActingPositionId",
-   "_selectStrip",
-   "_selectedStripId",
    "_setRenderAllOpenEfspBaysForTest",
    "_setRenderBayForTest",
-   "_setSelectEfspStripByIdForTest",
-   "_setSelectedStripIdForTest",
-   "_stripElNeedsRebuild",
-   "_stripRenderSignature",
-   "_swallowRepeatAdvance",
-   "_transferStrip",
-   "getSelectedEfspStripId",
    "renderAllOpenEfspBays",
-   "renderBay",
-   "selectEfspStripById"
+   "renderBay"
   ],
   "panels/efsp/bay-views.js": [
    "FINAL_DECISION_HEIGHT_FT",
@@ -448,6 +500,26 @@
    "_buildBlockCell",
    "_refusalForStrip",
    "_setRestoredEditInThisStrip"
+  ],
+  "panels/efsp/bay/coordination-rules.js": [
+   "_coordinationIsReplica",
+   "_isPendingCoordinationReplica",
+   "_isRejectedCoordinationReplica"
+  ],
+  "panels/efsp/bay/dispatch.js": [
+   "STRIP_CONTROL_SELECTOR",
+   "_defaultBayFor",
+   "_defaultRackFor",
+   "_dispatchCorrelation",
+   "_dispatchGesture",
+   "_dispatchHandBack",
+   "_dispatchMarsa",
+   "_handBackBayFor",
+   "_invokeNla",
+   "_moveStrip",
+   "_resolveActingPositionId",
+   "_swallowRepeatAdvance",
+   "_transferStrip"
   ],
   "panels/efsp/bay/drag.js": [
    "_efspDrag",
@@ -491,12 +563,9 @@
    "_buildCoordinationNoteEl",
    "_buildCoordinationReasonEl",
    "_canProposeCoordination",
-   "_coordinationIsReplica",
    "_coordinationProposerOf",
    "_coordinationStateWord",
    "_dispatchCoordination",
-   "_isPendingCoordinationReplica",
-   "_isRejectedCoordinationReplica",
    "_openCoordinatePopover"
   ],
   "panels/efsp/bay/popovers/formation.js": [
@@ -524,15 +593,40 @@
    "_tofiProposerOf",
    "_tofiRegimeChoice"
   ],
+  "panels/efsp/bay/selection.js": [
+   "_clearSelectedStrip",
+   "_selectStrip",
+   "_selectedStripId",
+   "_setSelectEfspStripByIdForTest",
+   "_setSelectedStripIdForTest",
+   "getSelectedEfspStripId",
+   "selectEfspStripById"
+  ],
   "panels/efsp/bay/strip-element.js": [
+   "_buildStripEl",
+   "_onStripKeydown"
+  ],
+  "panels/efsp/bay/strip-expanded.js": [
    "CHIP_HISTORY_LIMIT",
    "_appendAnnotationHistory",
    "_appendDropButton",
    "_appendExpandButton",
    "_appendExpandedView",
-   "_buildStripEl",
    "_expandedStripId",
    "_setExpandedStripId"
+  ],
+  "panels/efsp/bay/strip-signature.js": [
+   "_stripElNeedsRebuild",
+   "_stripRenderSignature"
+  ],
+  "panels/efsp/bay/strip-signer.js": [
+   "setStripSigner",
+   "stripSigner"
+  ],
+  "panels/efsp/board-data.js": [
+   "efspStrips",
+   "getAllEfspStrips",
+   "getEfspStrip"
   ],
   "panels/efsp/carrier-final-distance.js": [
    "carrierFinalDistanceText"
@@ -603,6 +697,17 @@
    "highlightCorrelatedTrack",
    "refreshCorrelatedHighlight",
    "selectStripForTrack"
+  ],
+  "panels/efsp/correlation-state.js": [
+   "_replaceCorrelations",
+   "_resetCorrelationState",
+   "applyEfspCorrelationDelta",
+   "correlatedTrackIdForStrip",
+   "getAllEfspCorrelations",
+   "getEfspCorrelation",
+   "getEfspCorrelationForStrip",
+   "getEfspCorrelationStats",
+   "stripIdsForTrackId"
   ],
   "panels/efsp/dot-command.js": [
    "parseDotCommand"
@@ -694,34 +799,8 @@
    "tofiExitDueFor"
   ],
   "panels/efsp/efsp-panel.js": [
-   "MUTATION_ERROR_MESSAGES",
-   "MUTATION_ERROR_VISIBLE_MS",
-   "_activeBayId",
-   "_activePositionTab",
-   "_callsignOfFlightData",
-   "_dispatchDotCommand",
-   "_renderPositionTabs",
-   "_runEfspSearch",
-   "_setActiveBayId",
-   "_setActivePositionTab",
-   "_setBayContentElForTest",
-   "_setCurrentRefusalForTest",
-   "_showMutationError",
-   "_showMutationWarning",
-   "computePositionTabs",
-   "convertStripToArrival",
-   "createStripFromFiledPlan",
-   "efspVisibleBayId",
-   "getActiveEfspSearchQuery",
-   "getCurrentEfspRefusal",
    "initEfspPanel",
-   "noteEfspArrivalShown",
-   "noteEfspBoardArrivals",
-   "noteEfspHeartbeat",
-   "notifyEfspMutationAck",
-   "notifyEfspOrphanedMutation",
-   "refreshEfspPanel",
-   "reloadEfspStereoRoutes"
+   "refreshEfspPanel"
   ],
   "panels/efsp/efsp-state.js": [
    "CREATE_STRIP_RESEND_WINDOW_MS",
@@ -880,6 +959,20 @@
    "marsaBadgeFor",
    "refreshMarsaHighlight"
   ],
+  "panels/efsp/marsa-state.js": [
+   "_replaceMarsa",
+   "_resetMarsaState",
+   "activeMarsaForFlightData",
+   "applyEfspMarsaDelta",
+   "getAllEfspMarsa",
+   "getEfspMarsa",
+   "marsaForStrip",
+   "marsaParticipantStripIds"
+  ],
+  "panels/efsp/mtr-advisory.js": [
+   "hasMtrData",
+   "mtrLostCommsAdvisory"
+  ],
   "panels/efsp/mtr-route-note.js": [
    "mtrRouteNote",
    "routeForDesignator"
@@ -961,21 +1054,24 @@
    "_dotCommandInputEl",
    "_dotCommandPreviewEl",
    "_efspPanelRootEl",
+   "_isEfspPanelShowing",
    "_mutationErrorEl",
    "_mutationWarningEl",
    "_positionTabsEl",
+   "_searchQuery",
    "_setActiveBayId",
    "_setActivePositionTab",
    "_setBayContentElForTest",
+   "_setSearchQuery",
    "_undoSlotEl",
-   "_undoVoidedEl"
+   "_undoVoidedEl",
+   "efspVisibleBayId",
+   "getActiveEfspSearchQuery"
   ],
   "panels/efsp/panel/tabs.js": [
    "_renderPositionTabs",
    "_runEfspSearch",
-   "computePositionTabs",
-   "efspVisibleBayId",
-   "getActiveEfspSearchQuery"
+   "computePositionTabs"
   ],
   "panels/efsp/panel/undo-slot.js": [
    "UNDO_OUTCOME_MS",
@@ -1030,6 +1126,13 @@
    "runwayStatusSubjectFor",
    "runwayStatusViewOf"
   ],
+  "panels/efsp/runway-status-state.js": [
+   "_replaceRunwayStatuses",
+   "_resetRunwayStatusState",
+   "applyEfspRunwayStatusDelta",
+   "getAllEfspRunwayStatuses",
+   "getEfspRunwayStatus"
+  ],
   "panels/efsp/scramble.js": [
    "GROUND_STATES",
    "SCRAMBLE_PRE_AIRBORNE",
@@ -1055,6 +1158,18 @@
    "sfaRotationOffered",
    "sfaRotationRows"
   ],
+  "panels/efsp/strip-alerts.js": [
+   "ALERT_SLOT_KEYS",
+   "INDICATOR_ORDER",
+   "_stripAlerts"
+  ],
+  "panels/efsp/strip-dom.js": [
+   "STRIP_TYPE_ABBR",
+   "_addClass",
+   "_stateMeta",
+   "_stripButton",
+   "_stripEl"
+  ],
   "panels/efsp/strip-drag.js": [
    "DRAG_THRESHOLD_PX",
    "cachedTopToViewportY",
@@ -1062,6 +1177,15 @@
    "computeRackReconciliation",
    "hasExceededDragThreshold",
    "scrollCompensatedY"
+  ],
+  "panels/efsp/strip-exchanges.js": [
+   "_coordinationExchange",
+   "_marsaExchange",
+   "_pairedMissionStrip",
+   "_tofiExchange",
+   "_tofiExitIsPrimary",
+   "_trackExchange",
+   "tofiExitSignatureFor"
   ],
   "panels/efsp/strip-fields.js": [
    "COMPACT_BLOCKS_BY_POSITION",
@@ -1072,9 +1196,13 @@
    "ORDNANCE_WHEN_SET",
    "compactBlocksFor",
    "fieldSpanFor",
-   "hasMtrData",
-   "isOrdnanceSet",
-   "mtrLostCommsAdvisory"
+   "isOrdnanceSet"
+  ],
+  "panels/efsp/strip-indicators.js": [
+   "_buildIndicatorSlots"
+  ],
+  "panels/efsp/strip-menu.js": [
+   "_buildStripTools"
   ],
   "panels/efsp/strip-template.js": [
    "ARRIVAL_BLOCK_MAP",
@@ -1109,12 +1237,7 @@
    "typedTimeBehindPlan"
   ],
   "panels/efsp/strip-view.js": [
-   "ALERT_SLOT_KEYS",
-   "INDICATOR_ORDER",
-   "STRIP_TYPE_ABBR",
-   "_buildStripLayout",
-   "_stripAlerts",
-   "tofiExitSignatureFor"
+   "_buildStripLayout"
   ],
   "panels/efsp/sync-cursor.js": [
    "RESYNC_RETRY_HEARTBEATS",
@@ -1177,10 +1300,8 @@
    "checkStale",
    "initUpdateStatus",
    "initZuluClock",
-   "missionNow",
    "updateAptDisplay",
    "updateBullseyeCursor",
-   "updateGameTime",
    "updateMeasureLine",
    "updateNoAwacsUI",
    "updateStatusUI",
@@ -1295,11 +1416,17 @@
    "viewFor"
   ],
   "view-state.js": [
+   "_aprtRwyTrueDeg",
+   "_aprtSelectedApt",
    "_pulseBright",
    "_setApproachRwyCourse",
+   "_setApproachRwyCourseTrue",
+   "_setAprtRwyTrueDeg",
+   "_setAprtSelectedApt",
    "_setBullseyePickTarget",
    "_setSelectedApt",
    "approachRwyCourse",
+   "approachRwyCourseTrue",
    "bullseyePickTarget",
    "grpcStatus",
    "lastUpdateMs",

@@ -1,5 +1,5 @@
 'use strict';
-import { createStripFromFiledPlan } from '../efsp-panel.js';
+import { createStripFromFiledPlan } from '../panel/create-strip.js';
 import { listFiledFlightPlansClient } from '../efsp-flight-plan-lookup.js';
 import { markEfspChanged } from '../efsp-change-bus.js';
 

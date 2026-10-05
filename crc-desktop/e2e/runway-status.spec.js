@@ -188,7 +188,7 @@ async function setState(page, cs, toState) {
 async function nla(page, cs, n = 1) {
   for (let i = 0; i < n; i++) {
     const before = (await stripOf(page, cs)).state;
-    await page.evaluate((cs) => crc.bayView._invokeNla(crc.state.getAllEfspStrips().find((x) => crc.state.getEfspFlightData(x.flightDataId).identity.callsign === cs && x.state !== 'DROPPED')), cs);
+    await page.evaluate((cs) => crc.dispatch._invokeNla(crc.state.getAllEfspStrips().find((x) => crc.state.getEfspFlightData(x.flightDataId).identity.callsign === cs && x.state !== 'DROPPED')), cs);
     await expect.poll(async () => (await stripOf(page, cs)).state, { message: `${cs} NLA from ${before}` }).not.toBe(before);
     await lapseNlaGuard(page); // the client's double-tap window (T5)
   }
@@ -386,7 +386,7 @@ test('Phase 3 walk: a runway change needs OPS and AP (each a different person), 
 
   // Pilot request "request runway 23": LC moves the Strip to 23's rack and
   // the advisory follows the rack (the chip goes).
-  await lc.evaluate((cs) => crc.bayView._moveStrip(crc.state.getAllEfspStrips().find((s) => crc.state.getEfspFlightData(s.flightDataId).identity.callsign === cs && s.state !== 'DROPPED'), 'lc-runway-queue', 'rwy-23', null, null), DEP);
+  await lc.evaluate((cs) => crc.dispatch._moveStrip(crc.state.getAllEfspStrips().find((s) => crc.state.getEfspFlightData(s.flightDataId).identity.callsign === cs && s.state !== 'DROPPED'), 'lc-runway-queue', 'rwy-23', null, null), DEP);
   await expect.poll(async () => (await stripOf(lc, DEP)).rackId).toBe('rwy-23');
   await expect(chip(stripByCallsign(lc, DEP))).toHaveCount(0);
 

@@ -3,8 +3,8 @@ import { TOFI_ELIGIBLE_STATES } from '../../efsp-nla.js';
 import { getActingPositions, sendEfspMutation } from '../../efsp-ws.js';
 import { getEfspFlightData, getEfspStrip } from '../../efsp-state.js';
 import { TOFI_ANSWERED_BY, TOFI_COUNTERPARTS } from '../authority-mirror.js';
-import { _isRejectedCoordinationReplica } from './coordination.js';
-import { _resolveActingPositionId, _swallowRepeatAdvance } from '../../bay-view.js';
+import { _isRejectedCoordinationReplica } from '../coordination-rules.js';
+import { _resolveActingPositionId, _swallowRepeatAdvance } from '../dispatch.js';
 import { openPopover, _sendFromPopover } from '../popover-portal.js';
 
 

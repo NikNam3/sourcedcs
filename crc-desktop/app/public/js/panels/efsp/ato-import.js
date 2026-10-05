@@ -1,7 +1,7 @@
 'use strict';
 import { _sendEfsp, getActingPositions, sendEfsp } from './efsp-ws.js';
 import { facilityOfPosition } from './facility-topology.js';
-import { _showMutationError } from './efsp-panel.js';
+import { _showMutationError } from './panel/refusal.js';
 
 // Importing a USMTF ATO into TACTICAL's Board (crc-sync's docs/adr/0071, guide
 // §9.8). TAC_C2 pastes or drops the text (decision H65: paste/drop only), sees

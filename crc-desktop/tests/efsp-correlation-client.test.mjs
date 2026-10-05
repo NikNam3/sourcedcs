@@ -17,7 +17,7 @@ import {
   highlightCorrelatedTrack, getCorrelatedHighlightTrackId, refreshCorrelatedHighlight,
   selectStripForTrack, correlationBadgeFor,
 } from '../app/public/js/panels/efsp/correlation-highlight.js';
-import { _setSelectedStripIdForTest, _setSelectEfspStripByIdForTest } from '../app/public/js/panels/efsp/bay-view.js';
+import { _setSelectedStripIdForTest, _setSelectEfspStripByIdForTest } from '../app/public/js/panels/efsp/bay/selection.js';
 import { setOpenEfspBays } from '../app/public/js/panels/efsp/bay/open-bays.js';
 import { _setUpdateMapForTest } from '../app/public/js/geojson.js';
 

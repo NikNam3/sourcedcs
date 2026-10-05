@@ -105,6 +105,6 @@ test('the bypass never skips the owner check, and a Strip that waits for no inhi
 test('app.js wires every Board\'s airborne observer to the chip\'s own AIRBORNE_ADVANCE hint', () => {
   const server = fs.readFileSync(new URL('../src/app.js', import.meta.url), 'utf8');
   assert.match(server, /airborneEvidence:[^\n]*hintsLink\.get\(\)[^\n]*hints\.getAll\(\)[^\n]*AIRBORNE_ADVANCE/);
-  const chip = fs.readFileSync(new URL('../../crc-desktop/app/public/js/panels/efsp/strip-view.js', import.meta.url), 'utf8');
+  const chip = fs.readFileSync(new URL('../../crc-desktop/app/public/js/panels/efsp/strip-indicators.js', import.meta.url), 'utf8');
   assert.match(chip, /toState: h\.toState, observedAirborne: true/);
 });

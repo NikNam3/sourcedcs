@@ -9,7 +9,7 @@ import { applyAirspaceCalendar, nextBooking, formatBooking, _resetAirspaceCalend
 import {
   applyEfspSnapshot, applyEfspAirspaceDelta, getAllEfspAirspaces, getEfspAirspaceEdits, _resetEfspStateForTest,
 } from '../app/public/js/panels/efsp/efsp-state.js';
-import { airspaceActionsFor, editReason, deleteReason, visibleAirspaces, groupByFacility } from '../app/public/js/panels/efsp/airspace-panel.js';
+import { airspaceActionsFor, editReason, deleteReason, visibleAirspaces, groupByFacility } from '../app/public/js/panels/efsp/airspace-rules.js';
 
 const def = (extra = {}) => ({
   airspaceId: 'R-TOROS', name: 'TOROS RANGE', kind: 'AREA', type: 'RANGE', controllingFacilityId: 'INCIRLIK', controllingPositionId: 'AP',

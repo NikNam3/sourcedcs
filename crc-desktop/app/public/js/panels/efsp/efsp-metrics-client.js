@@ -1,9 +1,9 @@
 'use strict';
 import { isSyncOpen } from '../../sync.js';
-import { missionNow } from '../topbar.js';
+import { missionNow } from '../../mission-clock.js';
 import { getAllEfspStrips, getEfspBays, getEfspStrip } from './efsp-state.js';
 import { _sendEfsp, getActingPositions } from './efsp-ws.js';
-import { efspVisibleBayId } from './efsp-panel.js';
+import { efspVisibleBayId } from './panel/state.js';
 
 // The three §11.5 metrics only a client can observe (docs/adr/0072, the client
 // half of docs/adr/0065):

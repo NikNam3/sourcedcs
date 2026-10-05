@@ -180,12 +180,12 @@ test('a Strip can be dragged from one Rack to another in the same Bay', async ({
     for (const c of cs) {
       await seedStrip(page, { callsign: c, stripType: 'DEPARTURE', flightData: { route: 'DCT', requestedAltitude: 'FL250', departureAirport: 'LTAG', destinationAirport: 'LTAF' } });
       for (let i = 0; i < 5; i++) {
-        await page.evaluate((c) => crc.bayView._invokeNla(crc.state.getAllEfspStrips().find((s) => crc.state.getEfspFlightData(s.flightDataId).identity.callsign === c)), c);
+        await page.evaluate((c) => crc.dispatch._invokeNla(crc.state.getAllEfspStrips().find((s) => crc.state.getEfspFlightData(s.flightDataId).identity.callsign === c)), c);
         await settle(page);
         await lapseNlaGuard(page); // the client's board-wide double-tap window
       }
     }
-    await page.evaluate(() => crc.bayView._moveStrip(crc.state.getAllEfspStrips().find((s) => crc.state.getEfspFlightData(s.flightDataId).identity.callsign === 'L4R3'), 'lc-runway-queue', 'rwy-23', null, null));
+    await page.evaluate(() => crc.dispatch._moveStrip(crc.state.getAllEfspStrips().find((s) => crc.state.getEfspFlightData(s.flightDataId).identity.callsign === 'L4R3'), 'lc-runway-queue', 'rwy-23', null, null));
     await settle(page);
     await openBay(page, 'lc-runway-queue', 'LC');
     const rackOf = (c) => page.evaluate((c) => crc.state.getAllEfspStrips().find((s) => crc.state.getEfspFlightData(s.flightDataId).identity.callsign === c).rackId, c);

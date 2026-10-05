@@ -7,11 +7,6 @@ import {
 } from './track-label.js';
 import { atcDisplay, atcPalette } from './atc-scope.js';
 import { losVisibleRangeM } from './los.js';
-import { updateTopbarUI } from './panels/topbar.js';
-import { updateRadarBadge } from './panels/radar-panel.js';
-import { approachRwyCourseTrue } from './panels/airport-selector.js';
-import { updateTrackPanel } from './panels/track-panel.js';
-import { _aprtRwyTrueDeg, _aprtSelectedApt } from './panels/aprt-panel.js';
 import {
   conformanceAlertsForFlightData, getAllEfspConflicts, getEfspFlightData, getEfspStrip, conflictAlertsForTrack, stripIdsForTrackId
 } from './panels/efsp/efsp-state.js';
@@ -20,13 +15,13 @@ import { buildCarrierFinalLine } from './panels/efsp/carrier-panel.js';
 import {
   CRC_RANGE_M, FADE_DURATION_MS, getLabelHalfW, getLeaderIconGap, getScale, getTextSizePx, HISTORY_MAX, LABEL_EDGE_MARGIN, MIN_SPD_KT_PPL, STALE_MS, TEXT_OFFSET_EM
 } from './scope-constants.js';
-import { _pulseBright, approachRwyCourse, grpcStatus, lastUpdateMs, selectedApt, selectedRef } from './view-state.js';
+import { _aprtRwyTrueDeg, _aprtSelectedApt, _pulseBright, approachRwyCourse, approachRwyCourseTrue, grpcStatus, lastUpdateMs, selectedApt, selectedRef } from './view-state.js';
 import {
   coverageApproachFor, getActiveRadars, getBullseye, history, labelOffsets, lastSweepMs, latestFromServer, missionData, tracks, zeroSpeedSinceMs
 } from './picture.js';
 import { map, mapReady, updateZoomLimits } from './map-handle.js';
 import { settings } from './settings.js';
-import { onEfspChanged } from './panels/efsp/efsp-change-bus.js';
+import { markEfspChanged, onEfspChanged } from './panels/efsp/efsp-change-bus.js';
 
 // ── GeoJSON builders ───────────────────────────────────────────────────────
 // All functions return FeatureCollections ready for MapLibre setData().
@@ -948,9 +943,7 @@ function _doUpdateMap() {
     map.getSource('radar-debug').setData({ type: 'FeatureCollection', features: [] });
   }
   updateZoomLimits();
-  updateTopbarUI();
-  updateRadarBadge();
-  updateTrackPanel();
+  markEfspChanged('scope'); // the topbar, the radar badge and the track panel follow (efsp-change-bus.js)
 }
 
 // ESM-1 (S-ESM1b): the unit tests replaced the global updateMap to count calls; this is that seam.

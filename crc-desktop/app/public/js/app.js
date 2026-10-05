@@ -22,9 +22,8 @@ import {
   buildAirports, buildBullseye, buildDrawings, buildNavpoints, buildRadarDebug, buildTextMarks, updateMap
 } from './geojson.js';
 import { initDock, notifyCoverageChanged } from './dock.js';
-import {
-  checkStale, initUpdateStatus, initZuluClock, updateGameTime, updateNoAwacsUI, updateStatusUI, updateTopbarUI
-} from './panels/topbar.js';
+import { checkStale, initUpdateStatus, initZuluClock, updateNoAwacsUI, updateStatusUI, updateTopbarUI } from './panels/topbar.js';
+import { updateGameTime } from './mission-clock.js';
 import { applyLightMode } from './panels/settings-panel.js';
 import {
   refreshRadarPanelData, updateRadarBadge
