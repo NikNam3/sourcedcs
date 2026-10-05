@@ -4,7 +4,7 @@ A working reference for the Electronic Flight Strip Panel — what's built, how 
 
 ## 1. Status right now
 
-Built and tested (`npm test` in `crc-sync` and `crc-desktop`, both green per lane; the Playwright suite has not been recorded on the merged branch, see the briefing). This reflects `efsp-wp5-correlation`, including Incirlik's RSU/SFA/PAR (§8L) and OVERFLIGHT's four-state lifecycle (`adr/0087`):
+Built and tested (`npm test` in `crc-sync` and `crc-desktop`, both green per lane; the last full Playwright run is recorded in the briefing's §1). This reflects `efsp-wp5-correlation`, including Incirlik's RSU/SFA/PAR (§8L) and OVERFLIGHT's four-state lifecycle (`adr/0087`):
 
 - **WP0-WP4** (guide): domain model, Mutation protocol, Position staffing/combination, Block Map, Bays/Racks/drag, Strip states/NLA/strip transfer, 10 s Undo.
 - **WP4A first slice**: a second Facility (`CENTER`/`CTR`) alongside `INCIRLIK`'s five Positions; the 5 cross-Facility coordination primitives (`HANDOFF`/`POINT_OUT`/`TRAFFIC`/`OPERATIONAL_REQUEST`/`AIT`) between `AP` and `CTR`; per-Facility Strip replication (two independent Strips linked by `coordination`, not one moved Strip); `EDCT`/`CALL_FOR_RELEASE` departure release states + standing-release envelopes; airspace ownership as a direction; track-degradation soft interlock; timed forwarding-obligation alerts — see §8.
@@ -29,6 +29,8 @@ Built and tested (`npm test` in `crc-sync` and `crc-desktop`, both green per lan
 - **ATC scopes draw STARS-style blocks** at `LC`, `AP` and `CTR`: white for yours, flashing for a handoff to you, green for someone else's. See §8F.
 - **Headings are magnetic** (World Magnetic Model), and the transition altitude is per theater. See §8J.
 - **Time Blocks and altitude blocks** — estimated times show in italics with their source on hover (§4B), and `ALT` takes a block such as `FL220-FL240`.
+- **Taking a hat** — when you leave a Position that still has Strips, nothing moves; the next controller on its list is offered it, also if they sign on later or reconnect. See §8M.
+- **A new mission clears the Board** — once, by the system, with a notice. See §8J.
 - **Finished flights are archived** after 12 hours or at the next mission, and a mission session decides which mission is current. See §8J. Every Mutation and refusal has exactly one audit entry (§10).
 - **The tactical Positions are fenced**: a JTAC is sent only the lines it was handed, `AIC` hands back and cannot advance a line, and `TAC_C2` answers the TOFI exit on an AIC-held line. See §8C1.
 - **Metrics and a traffic count**: the METRICS panel (PANELS → METRICS) and, behind it, two read endpoints on crc-sync. See §10.
@@ -1207,7 +1209,7 @@ for being ours; it is only not doctrine, and not to be quoted as doctrine.
 | **Airspace**: the `type` label set, working and range-control frequencies and approving a flight onto one, MOAs around Incirlik belonging to `CTR`, the shipped airspace list (empty) | Ours (squadron practice and the project owner's airspace picture). Only "ATC approves activation" is sourced (guide §9.11) | `adr/0036`, `0037` |
 | **The ATO import**: the USMTF set layouts (from a community wiki), the vowel-cut rule, one ATO at a time | Ours | `adr/0071`, `0078` |
 | **Metrics notes**: they say `[SOURCE-DEFINED]` on screen, on purpose | Ours | `adr/0072` |
-| **Instrumentation and archiving** (the 12 h retention of finished flights) | Ours, tunable in config | `adr/0065`, `0082`, `0107` |
+| **Instrumentation and archiving** (the 12 h retention of finished flights) | Ours. The instrumentation thresholds are tunable in config; the 12 h retention is a constant (`ARCHIVE_AFTER_MS`), not a setting | `adr/0065`, `0082`, `0107` |
 
 **What is sourced, with its clause:** the cross-Facility primitives (HANDOFF, POINT_OUT, TRAFFIC, OPERATIONAL_REQUEST,
 AIT; guide §4.6), the forwarding-obligation timers (§4.6.1, §4.6.2), MARSA (§9.2), amendments (§3.7), beacon codes
@@ -1251,7 +1253,7 @@ accept):
 | `OPS`, `AP` | `ACK` or `REJECT` a proposed change |
 | `LC`, `OPS` and `AP` all | `SELF CHG` changes the runway in one input |
 
-Close and every rejection prompt for a reason (`window.prompt`); optional notes are not asked for. When
+Close and every rejection ask for a reason in an inline row under the buttons (type it, **Enter** sends, **Escape** or Cancel abandons; what you typed survives the panel redrawing); optional notes are not asked for. When
 a request is waiting on you as `LC` the tab reads `RUNWAY STATUS (1)`. A refused action shows in the
 Strip panel's banner, starting with the runway it was about.
 
@@ -1399,7 +1401,7 @@ loses that peer. A re-import with a changed tanker rewires the join.
 
 crc-sync decides which mission it is in (`state/mission-session.json`). A **new session** starts on a DCS
 `mission_start`, on a load of a different mission, or when the mission clock steps back by more than 5
-minutes. A reconnect, or a crc-sync restart onto the same mission, stays in the same session. The
+minutes (the last two clear the Board at once, below). A reconnect, or a crc-sync restart onto the same mission, stays in the same session. The
 session number is what the metrics (§10) and the traffic count are bucketed by, and what the wind-derived
 active runway and the archiving of finished flights (§8J) key off.
 
@@ -1431,7 +1433,7 @@ flight record; there is **no lookup in the app** (H73). Consequences: an archive
 the traffic count is unaffected because every drop is counted before it can be archived. The sweep runs
 once a minute; a Strip dropped by an unusual route (a `SetState` to `DROPPED`, a refused TOFI) may be
 archived one sweep late, and a drop that was not counted at a mission change waits for the age sweep, so
-it may stay up to 2 h.
+it may stay up to 12 h.
 
 ### Headings are magnetic, and the transition altitude
 
@@ -1633,7 +1635,7 @@ are not traffic. `CENTER` and `TACTICAL` show locality `UNKNOWN` by design, beca
 home airport. Obligation figures are counts, not rates: only `ADVANCE_FORWARDING` and
 `VOID_TIME_EXPIRED` can ever be "met".
 
-**Retries and reconnects.** A retried Mutation is answered with its original outcome and the record as it
+**Retries and reconnects.** If crc-sync cannot be reached when you press a button, the red banner says so ("Not connected to crc-sync — nothing was sent"); if the link drops before the answer, it says "The connection to crc-sync dropped before it answered — check whether that went through", and a form or the Undo slot that was waiting stops waiting. A **Create Strip** you sent just before a drop is sent again by itself after the reconnect with the same id, so a lost answer neither doubles nor loses the Strip. A Send from a popover (coordination, TOFI, split, join, release, MARSA) closes the popover when it is accepted; when it is refused the popover **stays open with what you typed** and the red banner says why. A retried Mutation is answered with its original outcome and the record as it
 is now, on every path (Board ops, airspace, correlation, MARSA), and for 10 minutes across a crc-sync
 restart (Board ops only). A resync is served as a delta only within one Board lifetime: the client sends
 back the `boardEpoch` from its last snapshot, delta or ack, and without it (or after a restart) it gets a
