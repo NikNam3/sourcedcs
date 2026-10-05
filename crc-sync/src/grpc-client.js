@@ -128,6 +128,7 @@ class GrpcClient extends EventEmitter {
     this._icao               = null;
     this._missionFetchActive = false; // prevents duplicate retry loops
     this._missionRetryTimer  = null;
+    this._missionWaitingReady = null; // attempt number of a fetch parked until the channel is READY
     // ISA defaults — overwritten by live weather polls
     this._weather    = { pressurePa: ISA_P0, tempK: ISA_T0 };
     // Reference position for weather queries: the first airport's lat/lon, set when mission data
@@ -184,6 +185,10 @@ class GrpcClient extends EventEmitter {
     this._watchChannel(channel, channel.getConnectivityState(true));
   }
 
+  _channelReady() {
+    return !!this._channel && this._channel.getConnectivityState(false) === grpc.connectivityState.READY;
+  }
+
   // Follows the channel's connectivity. READY clears the abandon timer; the
   // first state that is not READY (the start, or a lost connection) arms it.
   // The timer is not re-armed by CONNECTING <-> TRANSIENT_FAILURE flips, so
@@ -195,6 +200,10 @@ class GrpcClient extends EventEmitter {
       clearTimeout(this._connectTimer);
       this._connectTimer = null;
       this._connectRetries = 0;
+      if (this._missionWaitingReady != null) {
+        clearTimeout(this._missionRetryTimer);
+        this._fetchMissionWithRetry(this._missionWaitingReady);
+      }
     } else if (!this._connectTimer) {
       this._connectTimer = setTimeout(() => {
         this._connectTimer = null;
@@ -271,10 +280,15 @@ class GrpcClient extends EventEmitter {
   _fetchMissionWithRetry(attempt = 0) {
     if (this._closed) return;
     this._missionFetchActive = true;
-    if (!this._worldSvc) { // between an abandoned attempt and its rebuild
-      this._missionRetryTimer = setTimeout(() => this._fetchMissionWithRetry(attempt), 1000);
+    if (!this._channelReady()) {
+      // No point asking while the channel is down (the call would only queue, then fail when the attempt is
+      // abandoned, one warning per call); _watchChannel runs this again the moment the channel is READY.
+      this._missionWaitingReady = attempt;
+      clearTimeout(this._missionRetryTimer);
+      this._missionRetryTimer = setTimeout(() => this._fetchMissionWithRetry(attempt), 5000);
       return;
     }
+    this._missionWaitingReady = null;
     this.fetchMissionData()
       .then(data => {
         if (this._closed) return;

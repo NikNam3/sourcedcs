@@ -450,7 +450,10 @@ function _readSnapshot(paths) {
     raw = fs.readFileSync(paths.read, 'utf8');
   } catch (e) {
     if (e.code !== 'ENOENT') throw new Error(`[efsp] cannot read the Board snapshot ${paths.read}: ${e.message}`);
-    log.warn('no prior Board snapshot to restore (first run)', { path: paths.read });
+    // paths.read can be the shipped config/ fallback; the Board is written to paths.write, so that is the path to show.
+    const fields = { willWriteTo: paths.write };
+    if (paths.read !== paths.write) fields.alsoLookedAt = paths.read;
+    log.warn('no prior Board snapshot to restore (first run); the Board will be saved to the willWriteTo path', fields);
     return null;
   }
   let data;
