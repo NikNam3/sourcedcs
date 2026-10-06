@@ -91,17 +91,18 @@ ul.l{margin:6px 0 0 18px;color:var(--muted);font-size:12.5px} ul.l li{margin:3px
 shouldn't have to order them." Two dock panels for crc-desktop, each beside the EFSP Strip panel. Static mockups with sample data;
 the research, sources, data plan, build plan and open questions are in <code>docs/wip/PANELS-DESIGN.md</code>.</p>
 <div class="two" style="margin-top:16px">
-<a class="card" href="par-panel.html"><h3>PAR panel (revision 3) →</h3>
+<a class="card" href="par-panel.html"><h3>PAR panel (revision 4) →</h3>
 <p>A normal panel, placed wherever the controller wants. Elevation and azimuth scopes against range from touchdown, zoomable on both axes with touchdown fixed in the corner, an optional autoscale, with the glidepath, centreline, safety limits, DA and a short plot trail. Dark cockpit: all grey while the
 approach is normal; amber, orange-red or red only when something needs attention. Landing assured / Missed approach.</p>
 <ul class="l"><li>Interactive: pick a situation, fly a sample approach, compare five track styles, zoom the scopes</li>
 <li>Removed after review: docking picture, required-calls list, suggested call, cadence bar, coloured bands, "need" vertical speed</li>
 <li>Needs a server-computed PAR sample: the wire altitude is rounded to 100 ft and today's FINAL measures to the radar site, not the threshold</li></ul></a>
-<a class="card" href="marshal-stack-panel.html"><h3>Marshal stack panel →</h3>
-<p>The Case III stack as a ladder (top slot up): angels, DME, EAT, fuel against bingo, approach and lane, push countdown and Commence;
-marshal instructions for the selected flight; a re-clear list after any change; the commenced flights.</p>
-<ul class="l"><li>States: assigning a slot, a push, a low-state flight moved down the stack, Case I → III, handed to approach and final, Delta 4</li>
-<li>Every gesture is an existing stack op (ADR 0064 / 0074); the Bay stops ordering and loses its slot board</li>
+<a class="card" href="marshal-stack-panel.html"><h3>Marshal stack panel (revision 2) →</h3>
+<p>A normal panel for CV_MARSHAL: the stack as it is flown, top slot up, with angels, DME, EAT, fuel against bingo and approach.
+Drag a holding flight to re-sequence; the flights whose clearance changed are marked until you click them as passed. Dark cockpit:
+amber only for low or old fuel reports, a flight past its EAT and an unpassed clearance change; red at bingo.</p>
+<ul class="l"><li>Interactive: pick a situation, drag rows, Delta, Commence, change the Marshal settings</li>
+<li>Removed after the PAR review: docking picture, annotations, marshal-instructions box, read-back checklist, push countdown, coloured rows</li>
 <li>Small server additions: <code>pushedAt</code>, <code>lowStateAt</code>, lane in the view, a <code>Delta</code> op</li></ul></a>
 </div>
 <h2>Summary</h2>
