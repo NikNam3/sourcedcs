@@ -97,13 +97,12 @@ approach is normal; amber, orange-red or red only when something needs attention
 <ul class="l"><li>Interactive: pick a situation, fly a sample approach, compare five track styles, zoom the scopes</li>
 <li>Removed after review: docking picture, required-calls list, suggested call, cadence bar, coloured bands, "need" vertical speed</li>
 <li>Needs a server-computed PAR sample: the wire altitude is rounded to 100 ft and today's FINAL measures to the radar site, not the threshold</li></ul></a>
-<a class="card" href="marshal-stack-panel.html"><h3>Marshal stack panel (revision 2) →</h3>
-<p>A normal panel for CV_MARSHAL: the stack as it is flown, top slot up, with angels, DME, EAT, fuel against bingo and approach.
-Drag a holding flight to re-sequence; the flights whose clearance changed are marked until you click them as passed. Dark cockpit:
-amber only for low or old fuel reports, a flight past its EAT and an unpassed clearance change; red at bingo.</p>
-<ul class="l"><li>Interactive: pick a situation, drag rows, Delta, Commence, change the Marshal settings</li>
-<li>Removed after the PAR review: docking picture, annotations, marshal-instructions box, read-back checklist, push countdown, coloured rows</li>
-<li>Small server additions: <code>pushedAt</code>, <code>lowStateAt</code>, lane in the view, a <code>Delta</code> op</li></ul></a>
+<a class="card" href="marshal-stack-panel.html"><h3>Marshal / recovery board (revision 3) →</h3>
+<p>Laid out after a real CATCC Case III recovery board: every recovering aircraft in landing order (SEQ, A/C, TYPE, FUEL:EAT, ANG,
+STATUS) beside a schematic of the approach placing each aircraft by DME, holding flights listed under it, TO GO at the foot. Dark
+cockpit: amber for low fuel, past EAT, an unpassed clearance change; red at bingo or a foul deck.</p>
+<ul class="l"><li>Interactive: situations, drag HOLD rows, Delta, Commence, compare B612 with the app font</li>
+<li>Needs from the server: <code>pushedAt</code>, lane in the view, a <code>Delta</code> op, deck state (not modelled yet)</li></ul></a>
 </div>
 <h2>Summary</h2>
 <table class="data">

@@ -1,60 +1,68 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Marshal Stack Mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=B612:wght@400;700&family=B612+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
-/* Dark-cockpit Marshal stack panel: grey when the stack is in order; amber = needs attention now; red = at or below bingo.
-   Tokens are crc-desktop's own (efsp-panel.css :root). */
+/* Recovery board after the CATCC status board's layout (aircraft in landing order + the Case III pattern), on crc-desktop's
+   dark-cockpit rules: grey when in order; amber = needs attention; red = at bingo or a foul deck. */
 :root{
   --bg:#0d0d0d;--panel:#14181c;--well:#0b0e11;--strip:#1c2228;--line:#2e3740;--line2:#4a5560;
-  --text:#d8e0e6;--muted:#8c9aa6;--faint:#56616c;--attn:#e0a83c;--attn-t:#ffe0a8;--bad:#ff8a4c;--danger:#ff5c5c;--go:#4a7dbf;
+  --text:#d8e0e6;--muted:#8c9aa6;--faint:#56616c;--attn:#e0a83c;--attn-t:#ffe0a8;--danger:#ff5c5c;--go:#4a7dbf;
   --mono:'Consolas','DejaVu Sans Mono',ui-monospace,monospace;
+  --ui:var(--mono);--num:var(--mono);
   color-scheme:dark}
+body.b612{--ui:'B612','Segoe UI',sans-serif;--num:'B612 Mono','Consolas',monospace}
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:var(--bg);color:var(--text);font:13px/1.45 var(--mono);padding-block:24px 60px;padding-inline:16px}
-main{max-width:1180px;margin:0 auto;display:grid;gap:20px}
+main{max-width:1240px;margin:0 auto;display:grid;gap:20px}
 h1{font-size:19px;font-weight:600}
 h2{font-size:14px;color:#fff;border-bottom:1px solid var(--line);padding-bottom:4px;font-weight:600}
-p{color:var(--muted);max-width:880px}
+p{color:var(--muted);max-width:900px}
 a{color:#8ec7ff}
 button:focus-visible,input:focus-visible{outline:2px solid #8ec7ff;outline-offset:1px}
 
 /* ---- the panel ---- */
-.mp{background:var(--panel);border:1px solid var(--line);font-size:11px;font-variant-numeric:tabular-nums;max-width:880px;min-width:0}
-.ptitle{background:#0e1114;border-bottom:1px solid var(--line);padding:4px 8px;color:var(--muted);font-size:10.5px;letter-spacing:.06em}
-.row{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 0;padding:5px 8px;border-bottom:1px solid var(--line)}
-.k{color:var(--muted);font-size:10px;letter-spacing:.05em;margin:0 4px 0 12px}
-.row>.k:first-child{margin-left:0}
-.v{color:var(--text)}
-.case{color:#fff;font-size:14px;margin-right:2px}
-.clock{margin-left:auto;color:#fff;font-size:14px}
-.inp{font:inherit;color:var(--text);background:var(--well);border:1px solid var(--line2);padding:0 5px;width:58px}
-.btn{font:inherit;font-size:11px;color:var(--text);background:var(--strip);border:1px solid var(--line2);border-radius:3px;padding:2px 10px;cursor:pointer}
+.rb{background:var(--panel);border:1px solid var(--line);font-family:var(--ui);font-size:12px;font-variant-numeric:tabular-nums;min-width:0}
+.ptitle{background:#0e1114;border-bottom:1px solid var(--line);padding:4px 10px;color:var(--muted);font-size:10.5px;letter-spacing:.06em;font-family:var(--mono)}
+.deck{display:none;padding:4px 10px;font-weight:700;letter-spacing:.08em;color:#fff;background:var(--danger)}
+.deck.on{display:block}
+.hdr{display:flex;flex-wrap:wrap;align-items:center;gap:4px 20px;padding:7px 12px;border-bottom:1px solid var(--line2);background:#101418;font-size:13px;letter-spacing:.03em}
+.hdr .k{color:var(--muted)}
+.hdr b{font-family:var(--num);font-weight:700;color:#fff}
+.hdr .right{margin-left:auto;display:flex;gap:14px;align-items:center}
+.hdr input{font-family:var(--num);font-size:12px;color:var(--text);background:var(--well);border:1px solid var(--line2);padding:0 5px;width:62px}
+.btn{font:inherit;font-size:11.5px;color:var(--text);background:var(--strip);border:1px solid var(--line2);border-radius:3px;padding:2px 10px;cursor:pointer}
 .btn:hover{border-color:var(--muted)}
+.body{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(260px,1fr)}
+.tablecol{border-right:1px solid var(--line);display:flex;flex-direction:column;min-width:0}
 .tw{overflow-x:auto}
-table.ladder{border-collapse:collapse;width:100%}
-.ladder th{font-weight:400;color:var(--faint);font-size:10px;letter-spacing:.05em;text-align:left;padding:4px 6px;border-bottom:1px solid var(--line);white-space:nowrap}
-.ladder td{padding:5px 6px;border-bottom:1px solid #1c2229;white-space:nowrap}
-.ladder tr.hold{cursor:grab}
-.ladder tr.hold:hover td{background:#171c21}
-.ladder tr.dragging td{opacity:.35}
-.ladder tr.over td{box-shadow:inset 0 2px 0 var(--muted)}
-.ladder .slot{color:var(--faint);width:28px}
-.ladder .cs{color:#fff}
-.ladder .ty{color:var(--muted)}
-.ladder tr.pushed td{color:var(--faint)}
-.ladder tr.pushed .cs{color:var(--muted)}
-.ladder tr.vac td{color:var(--faint)}
-.chg{color:var(--attn)}
-.fuel.attn{color:var(--attn)}
-.fuel.danger{color:var(--danger)}
-.age{color:var(--faint);margin-left:6px}
-.age.attn{color:var(--attn)}
-.late{color:var(--attn)}
+table.bd{border-collapse:collapse;width:100%}
+.bd th{font-weight:400;color:var(--muted);font-size:10.5px;letter-spacing:.08em;text-align:left;padding:6px 8px;border-bottom:1px solid var(--line2);white-space:nowrap}
+.bd td{padding:0 8px;height:32px;border-bottom:1px solid var(--line);border-right:1px solid var(--line);font-family:var(--num);font-size:14px;white-space:nowrap}
+.bd td:last-child{border-right:none}
+.bd td.st{font-family:var(--ui);font-size:12.5px;text-align:center}
+.bd td.ac{color:#fff;font-weight:700}
+.bd td.ty{color:var(--muted);font-family:var(--ui);font-size:12px}
+.bd tr.hold{cursor:grab}
+.bd tr.hold:hover td{background:#171c21}
+.bd tr.dragging td{opacity:.35}
+.bd tr.over td{box-shadow:inset 0 2px 0 var(--muted)}
+.bd tr.done td{color:var(--faint)}
+.bd tr.done td.ac{color:var(--muted);font-weight:400}
+.chg{color:var(--attn)!important}
+.fuel-attn{color:var(--attn)!important}
+.fuel-danger{color:var(--danger)!important}
+.late{color:var(--attn)!important}
 .act{text-align:right;width:1%}
-.commence{font:inherit;font-size:11px;color:#fff;background:var(--go);border:1px solid #6b9be0;border-radius:3px;padding:2px 10px;cursor:pointer}
-.foot{display:flex;flex-wrap:wrap;gap:4px 16px;padding:5px 8px;color:var(--faint);font-size:10.5px}
+.commence{font:inherit;font-family:var(--ui);font-size:11.5px;color:#fff;background:var(--go);border:1px solid #6b9be0;border-radius:3px;padding:2px 10px;cursor:pointer}
+.togo{margin-top:auto;display:flex;justify-content:flex-end;align-items:baseline;gap:14px;padding:8px 14px;border-top:1px solid var(--line2)}
+.togo span{color:var(--muted);letter-spacing:.08em;font-size:12px}
+.togo b{font-family:var(--num);font-size:22px;color:#fff}
+.patcol{padding:10px 12px;min-width:0}
+.patcol svg{display:block;width:100%;max-width:360px;margin:0 auto}
 
 /* settings sketch */
-.setp{background:var(--panel);border:1px solid var(--line);max-width:880px;font-size:11.5px}
+.setp{background:var(--panel);border:1px solid var(--line);font-size:11.5px}
 .stabs{display:flex;flex-wrap:wrap;gap:2px;padding:4px 6px 0;background:#0e1114;border-bottom:1px solid var(--line)}
 .stabs span{padding:3px 10px;color:var(--muted);border:1px solid var(--line);border-bottom:none;background:var(--strip)}
 .stabs span.on{color:#fff;background:var(--panel)}
@@ -67,73 +75,82 @@ table.ladder{border-collapse:collapse;width:100%}
 .bar .lbl{color:var(--faint);font-size:11px;margin-right:4px;min-width:84px}
 .bar button{font:inherit;font-size:11.5px;color:var(--muted);background:var(--panel);border:1px solid var(--line);padding:4px 10px;border-radius:3px;cursor:pointer}
 .bar button[aria-pressed="true"]{color:#fff;border-color:var(--line2);background:var(--strip)}
-.layout{display:grid;grid-template-columns:minmax(0,880px) minmax(220px,1fr);gap:22px;align-items:start}
-.notes{display:grid;gap:12px;font-size:12px}
+.notes{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;font-size:12px}
 .notes h3{font-size:12px;color:#fff;font-weight:600;margin-bottom:2px}
 .notes p{font-size:12px}
 table.t{border-collapse:collapse;font-size:12px;width:100%}
 table.t td,table.t th{border:1px solid var(--line);padding:4px 7px;text-align:left;vertical-align:top}
 table.t th{color:var(--muted);font-weight:400;background:var(--panel)}
 .sw{display:inline-block;width:10px;height:10px;border-radius:2px;vertical-align:-1px;margin-right:6px}
-@media (max-width:980px){.layout{grid-template-columns:1fr}}
+@media (max-width:900px){.body{grid-template-columns:1fr}.tablecol{border-right:none;border-bottom:1px solid var(--line)}}
 </style></head><body><main>
 <p><a href="index.html">← mockups</a></p>
 <header>
-<h1>Marshal stack panel <span style="color:var(--muted);font-size:12px;font-weight:400">mockup, revision 2, 2026-10-06</span></h1>
-<p>A normal crc-desktop panel for CV_MARSHAL (read-only at the other carrier Positions). It shows the stack the way it is flown, top slot
-up, so the Strip Bay can go back to holding Strips without ordering them. The Marshal knows the procedures; the panel keeps the numbers
-and shows only what has gone wrong or changed. Sample: CVN-72, Case III, Charlie 2040Z. Callsigns and fuel are invented.</p>
+<h1>Marshal / recovery board <span style="color:var(--muted);font-size:12px;font-weight:400">mockup, revision 3, 2026-10-06</span></h1>
+<p>Laid out after a CATCC Case III recovery board: every recovering aircraft in landing order, next to land at the top, beside a
+schematic of the approach that shows where each one is. Kept on crc-desktop's rules: grey while the recovery is in order, colour only
+for a problem. Editable at CV_MARSHAL, read-only at the other carrier Positions. Callsigns, fuel and times are invented.</p>
 </header>
 
 <div class="bar" role="group" aria-label="Sample situation"><span class="lbl">Situation</span>
-  <button type="button" data-state="normal" aria-pressed="true">Stack in order</button>
+  <button type="button" data-state="normal" aria-pressed="true">Recovery in order</button>
   <button type="button" data-state="low" aria-pressed="false">Low state</button>
   <button type="button" data-state="late" aria-pressed="false">Past EAT, not pushed</button>
   <button type="button" data-state="delta" aria-pressed="false">Delta 4</button>
-  <button type="button" data-state="caseone" aria-pressed="false">Case I</button>
+  <button type="button" data-state="foul" aria-pressed="false">Foul deck</button>
 </div>
+<div class="bar" role="group" aria-label="Font to compare"><span class="lbl">Font</span>
+  <button type="button" data-font="mono" aria-pressed="false">crc-desktop (Consolas)</button>
+  <button type="button" data-font="b612" aria-pressed="true">B612 (Airbus cockpit font)</button>
+</div>
+
+<section class="rb" aria-label="Recovery board panel">
+  <div class="ptitle">MARSHAL</div>
+  <div class="deck" id="deck">FOUL DECK</div>
+  <div class="hdr">
+    <span><span class="k">CVN-72 · CASE</span> <b>III</b></span>
+    <span><span class="k">APPROACH</span> <b>CV-1</b></span>
+    <span><span class="k">BRC</span> <b>346</b></span>
+    <span><span class="k">FB</span> <b>337</b></span>
+    <span><span class="k">CHARLIE</span> <input id="charlie" value="2040Z" aria-label="Charlie time"></span>
+    <button type="button" class="btn" id="deltaBtn">Delta…</button>
+    <span class="right"><b id="clock">2041:48Z</b></span>
+  </div>
+  <div class="body">
+    <div class="tablecol">
+      <div class="tw"><table class="bd" id="board"></table></div>
+      <div class="togo"><span>TO GO</span><b id="togo">8</b></div>
+    </div>
+    <div class="patcol"><svg id="pattern" viewBox="0 0 360 600" role="img" aria-label="Case III approach pattern"></svg></div>
+  </div>
+</section>
 
 <section class="setp" aria-label="Settings panel sketch">
   <div class="ptitle">SETTINGS <span style="color:var(--faint);letter-spacing:0">· sketch: one tab per panel</span></div>
   <div class="stabs"><span>General</span><span>EFSP</span><span>Radar</span><span>PAR</span><span class="on">Marshal</span><span>SRS</span></div>
   <div class="sbody">
     <label>Low-state margin above bingo <input type="number" id="setmargin" value="1.0" step="0.1" min="0" max="5"> k lb</label>
-    <label>Fuel report old after <input type="number" id="setage" value="10" step="1" min="1" max="60"> min</label>
     <label><input type="checkbox" id="setmark" checked> Mark changed clearances until passed</label>
   </div>
 </section>
 
-<div class="layout">
-<section class="mp" aria-label="Marshal stack panel">
-  <div class="ptitle">MARSHAL</div>
-  <div class="row" id="hdr">
-    <span class="k">CVN-72</span><span class="k">CASE</span><span class="case" id="case">III</span>
-    <span class="k">BRC</span><span class="v">360</span>
-    <span class="k">FB</span><span class="v">351</span>
-    <span class="k">RADIAL</span><span class="v" id="radial">171</span>
-    <span class="k">CHARLIE</span><span id="charliewrap"><input class="inp" id="charlie" value="2040Z" aria-label="Charlie time"></span>
-    <button type="button" class="btn" id="deltaBtn" style="margin-left:8px">Delta…</button>
-    <span class="clock" id="clock">2041:48Z</span>
-  </div>
-  <div class="tw"><table class="ladder" id="ladder"></table></div>
-  <div class="foot" id="foot"></div>
-</section>
-<aside class="notes">
+<div class="notes">
+  <div><h3>Reading the board</h3>
+  <p>FUEL:EAT is the fuel state in thousands of pounds and the EAT minute, as on the real board. ANG is the holding altitude; DME is not shown because it is always angels + 15. STATUS is HOLD, COMM (commenced), APP A / APP B (the approach lane) or TRAP. SEQ is the landing order. TO GO counts the aircraft still to recover.</p></div>
   <div><h3>Try it</h3>
-  <p>Drag a holding flight to another slot: everyone it passes gets new angels, DME and EAT, marked amber until you click the row to say the new clearance has been passed. "Commence" sits on the next flight to push.</p></div>
-  <div><h3>What changed from revision 1</h3>
-  <p>Gone: the docking picture, the numbered annotations, the marshal-instructions box, the read-back checklist, the push countdown and the coloured row backgrounds. The ladder is grey; amber and red mark only the problems below.</p></div>
-</aside>
+  <p>Drag a HOLD row to re-sequence: the flights whose angels or EAT changed show those values amber until you click the row to say the new clearance was passed. Commence sits on the next flight to push. The pattern on the right places commenced and approaching aircraft by DME from the radar picture.</p></div>
+  <div><h3>Kept from the real board, changed for ours</h3>
+  <p>Kept: landing order, FUEL:EAT, the approach schematic, TO GO, the header strip. Changed: the yellow and orange text on normal values is grey here; the green bar (deck status) shows only when the deck is foul, and needs deck state from the server, which is not modelled yet.</p></div>
 </div>
 
 <section style="display:grid;gap:8px">
 <h2>When colour appears</h2>
-<div style="overflow-x:auto;max-width:880px"><table class="t">
-<tr><th>Colour</th><th>Means</th><th>Where on this panel</th></tr>
-<tr><td><span class="sw" style="background:var(--muted)"></span>grey</td><td>Normal.</td><td>The whole ladder while every flight holds where it was told, with fuel above the margin.</td></tr>
-<tr><td><span class="sw" style="background:var(--attn)"></span>amber</td><td>Look at this now.</td><td>Fuel within the low-state margin of bingo; a fuel report older than the setting; a flight past its EAT that has not pushed; an angels, DME or EAT that changed and has not been passed yet.</td></tr>
-<tr><td><span class="sw" style="background:var(--danger)"></span>red</td><td>At or below bingo.</td><td>The fuel state.</td></tr>
-<tr><td><span class="sw" style="background:var(--go)"></span>blue</td><td>The one action due.</td><td>Commence on the next flight to push (the app's one filled button).</td></tr>
+<div style="overflow-x:auto"><table class="t">
+<tr><th>Colour</th><th>Means</th><th>Where</th></tr>
+<tr><td><span class="sw" style="background:var(--muted)"></span>grey</td><td>Normal.</td><td>The whole board while every flight holds or flies where it was told, with fuel above the margin.</td></tr>
+<tr><td><span class="sw" style="background:var(--attn)"></span>amber</td><td>Look at this now.</td><td>Fuel within the low-state margin of bingo; a flight past its EAT that has not pushed; angels or EAT changed and not yet passed.</td></tr>
+<tr><td><span class="sw" style="background:var(--danger)"></span>red</td><td>Act now.</td><td>Fuel at or below bingo; foul deck (needs deck state from the server).</td></tr>
+<tr><td><span class="sw" style="background:var(--go)"></span>blue</td><td>The one action due.</td><td>Commence on the next flight to push.</td></tr>
 </table></div>
 </section>
 </main>
@@ -141,126 +158,152 @@ and shows only what has gone wrong or changed. Sample: CVN-72, Case III, Charlie
 <script>
 (function () {
   'use strict';
-  var BASE = [ // bottom of the stack first; pushed flights keep their slots
-    { cs: 'RAVEN 201', ty: 'F/A-18C', fuel: 5.1, bingo: 4.0, rep: 3, appr: 'ACLS', pushed: '2040:00' },
-    { cs: 'RAVEN 203', ty: 'F/A-18C', fuel: 5.3, bingo: 4.0, rep: 3, appr: 'ACLS', pushed: '2041:02' },
-    { cs: 'VICTORY 105', ty: 'F/A-18C', fuel: 5.6, bingo: 4.0, rep: 4, appr: 'ACLS' },
-    { cs: 'SLAM 401', ty: 'F-14B', fuel: 6.8, bingo: 4.5, rep: 6, appr: 'ICLS' },
-    { cs: 'LIBERTY 600', ty: 'E-2D', fuel: 6.1, bingo: 3.0, rep: 7, appr: 'TACAN' },
-    { cs: 'TEXACO 701', ty: 'S-3B', fuel: 9.8, bingo: 3.5, rep: 5, appr: 'TACAN' },
-    { cs: 'RAVEN 205', ty: 'F/A-18C', fuel: 5.9, bingo: 4.0, rep: 1, appr: 'ACLS' },
-    { cs: 'FELIX 101', ty: 'F-14B', fuel: 7.2, bingo: 4.5, rep: 4, appr: 'ICLS' }
+  // Flights still recovering. 'app' = on the approach (lane, DME from radar); 'comm' = commenced; 'hold' = in marshal.
+  var BASE = [
+    { ac: 'RAVEN 201', ty: 'F/A-18C', fuel: 4.8, bingo: 3.5, st: 'app', lane: 'A', dme: 4.1, eat: 40 },
+    { ac: 'SLAM 300',  ty: 'F-14B',   fuel: 8.3, bingo: 4.5, st: 'app', lane: 'B', dme: 7.6, eat: 41 },
+    { ac: 'RAVEN 203', ty: 'F/A-18C', fuel: 7.8, bingo: 4.0, st: 'app', lane: 'A', dme: 10.8, eat: 42 },
+    { ac: 'VICTORY 105', ty: 'F/A-18C', fuel: 5.6, bingo: 4.0, st: 'comm', lane: 'B', dme: 19.5, eat: 43 },
+    { ac: 'LIBERTY 600', ty: 'E-2D', fuel: 6.1, bingo: 3.0, st: 'hold', slot: 4 },
+    { ac: 'TEXACO 701', ty: 'S-3B', fuel: 9.8, bingo: 3.5, st: 'hold', slot: 5 },
+    { ac: 'RAVEN 205', ty: 'F/A-18C', fuel: 5.9, bingo: 4.0, st: 'hold', slot: 6 },
+    { ac: 'FELIX 101', ty: 'F-14B', fuel: 7.2, bingo: 4.5, st: 'hold', slot: 7 }
   ];
-  var CASE1_ANGELS = { 'VICTORY 105': 4, 'SLAM 401': 5, 'LIBERTY 600': 6, 'TEXACO 701': 7, 'RAVEN 205': 8, 'FELIX 101': 9 };
-  var flights, charlie, clock, caseNum, changed, settings = { margin: 1.0, age: 10, mark: true };
-
-  function hhmm(min) { var h = Math.floor(min / 60) % 24, m = ((min % 60) + 60) % 60; return String(h).padStart(2, '0') + String(m).padStart(2, '0'); }
-  function parseZ(t) { var m = /^(\d{2})(\d{2})Z?$/.exec(String(t).trim()); return m ? +m[1] * 60 + +m[2] : null; }
-  function derived(slot) { var a = 6 + slot; return { angels: a, dme: a + 15, eat: charlie === null ? null : charlie + slot }; }
+  var flights, charlie, clock, foul, changed, settings = { margin: 1.0, mark: true };
+  function hhmm(min) { var h = Math.floor(min / 60) % 24, m = ((min % 60) + 60) % 60; return String(h).padStart(2, '0') + String(Math.floor(m)).padStart(2, '0'); }
+  function clockText(t) { return hhmm(Math.floor(t)) + ':' + String(Math.round((t % 1) * 60)).padStart(2, '0') + 'Z'; }
+  function holding() { return flights.filter(function (f) { return f.st === 'hold'; }); }
+  function eatOf(f) { return f.st === 'hold' ? charlie + f.slot : 20 * 60 + f.eat; }
+  function angelsOf(f) { return f.st === 'hold' ? 6 + f.slot : null; }
 
   function load(state) {
     flights = BASE.map(function (f) { return Object.assign({}, f); });
-    charlie = 20 * 60 + 40; clock = 20 * 60 + 41.8; caseNum = 3; changed = {};
-    if (state === 'low') flights[6].fuel = 4.4;                       // RAVEN 205, 0.4 above bingo
-    if (state === 'late') clock = 20 * 60 + 43.3;                     // VICTORY 105's EAT 2042 has passed
-    if (state === 'delta') { applyDelta(4); }
-    if (state === 'caseone') { caseNum = 1; flights = flights.filter(function (f) { return !f.pushed; }); }
-    flights.forEach(function (f) { if (f.cs === 'LIBERTY 600') f.rep = state === 'normal' ? 7 : 12; });
+    charlie = 20 * 60 + 40; clock = 20 * 60 + 41.8; foul = false; changed = {};
+    if (state === 'low') flights[6].fuel = 4.5;
+    if (state === 'late') clock = 20 * 60 + 45.3;   // LIBERTY 600's EAT 2044 has passed
+    if (state === 'delta') applyDelta(4);
+    if (state === 'foul') foul = true;
   }
-  function snapshot() { var m = {}; flights.forEach(function (f, i) { if (!f.pushed) m[f.cs] = derived(i); }); return m; }
-  function markChanges(before) {
+  function snap() { var m = {}; holding().forEach(function (f) { m[f.ac] = { ang: angelsOf(f), eat: eatOf(f) }; }); return m; }
+  function mark(before) {
     if (!settings.mark) return;
-    flights.forEach(function (f, i) {
-      if (f.pushed || !before[f.cs]) return;
-      var now = derived(i), was = before[f.cs], c = changed[f.cs] || {};
-      if (now.angels !== was.angels) c.angels = true;
-      if (now.dme !== was.dme) c.dme = true;
-      if (now.eat !== was.eat) c.eat = true;
-      if (Object.keys(c).length) changed[f.cs] = c;
+    holding().forEach(function (f) {
+      var b = before[f.ac]; if (!b) return;
+      var c = changed[f.ac] || {};
+      if (b.ang !== angelsOf(f)) c.ang = true;
+      if (b.eat !== eatOf(f)) c.eat = true;
+      if (c.ang || c.eat) changed[f.ac] = c;
     });
   }
-  function applyDelta(n) { var before = snapshot(); charlie += n; markChanges(before); }
+  function applyDelta(n) { var b = snap(); charlie += n; mark(b); }
+  function ordered() { // landing order: on approach by DME, commenced, then holding by slot
+    var app = flights.filter(function (f) { return f.st === 'app'; }).sort(function (a, b) { return a.dme - b.dme; });
+    var comm = flights.filter(function (f) { return f.st === 'comm'; });
+    var hold = holding().sort(function (a, b) { return a.slot - b.slot; });
+    return app.concat(comm, hold);
+  }
 
+  function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
   function render() {
-    document.getElementById('case').textContent = caseNum === 1 ? 'I' : 'III';
-    document.getElementById('clock').textContent = hhmm(Math.floor(clock)) + ':' + String(Math.round((clock % 1) * 60)).padStart(2, '0') + 'Z';
-    document.getElementById('charlie').value = charlie === null ? '' : hhmm(charlie) + 'Z';
-    document.getElementById('charliewrap').hidden = caseNum === 1;
-    document.getElementById('deltaBtn').hidden = caseNum === 1;
-    document.getElementById('radial').textContent = caseNum === 1 ? '—' : '171';
-    var t = document.getElementById('ladder'); t.textContent = '';
-    var head = document.createElement('tr');
-    (caseNum === 1 ? ['#', 'ANGELS', 'FLIGHT', 'TYPE', 'STATE / BINGO', 'APPR', '']
-                   : ['SLOT', 'ANGELS', 'DME', 'EAT', 'FLIGHT', 'TYPE', 'STATE / BINGO', 'APPR', '']).forEach(function (h) {
-      var th = document.createElement('th'); th.textContent = h; head.appendChild(th);
+    document.getElementById('deck').classList.toggle('on', foul);
+    document.getElementById('clock').textContent = clockText(clock);
+    document.getElementById('charlie').value = hhmm(charlie) + 'Z';
+    var t = document.getElementById('board'); t.textContent = '';
+    var hr = el('tr'); ['SEQ', 'A/C', 'TYPE', 'FUEL:EAT', 'ANG', 'STATUS', ''].forEach(function (h) { hr.appendChild(el('th', '', h)); }); t.appendChild(hr);
+    var list = ordered(), nextHold = holding().sort(function (a, b) { return a.slot - b.slot; })[0];
+    list.forEach(function (f, i) {
+      var tr = el('tr', f.st === 'hold' ? 'hold' : ''), c = changed[f.ac] || {};
+      tr.appendChild(el('td', '', String(i + 1)));
+      tr.appendChild(el('td', 'ac', f.ac));
+      tr.appendChild(el('td', 'ty', f.ty));
+      var fe = el('td'), m = f.fuel - f.bingo;
+      var fs = el('span', m <= 0 ? 'fuel-danger' : m <= settings.margin ? 'fuel-attn' : '', f.fuel.toFixed(1));
+      var late = f === nextHold && clock >= eatOf(f) + 1;
+      var es = el('span', c.eat ? 'chg' : late ? 'late' : '', String(eatOf(f) % 60).padStart(2, '0'));
+      fe.appendChild(fs); fe.appendChild(document.createTextNode(':')); fe.appendChild(es); tr.appendChild(fe);
+      tr.appendChild(el('td', c.ang ? 'chg' : '', angelsOf(f) === null ? '' : String(angelsOf(f))));
+      tr.appendChild(el('td', 'st', f.st === 'app' ? 'APP ' + f.lane : f.st === 'comm' ? 'COMM' : 'HOLD'));
+      var act = el('td', 'act');
+      if (f === nextHold) {
+        var b = el('button', 'commence', 'Commence'); b.type = 'button';
+        b.addEventListener('click', function (e) { e.stopPropagation(); var e2 = eatOf(f) - 20 * 60; f.st = 'comm'; f.lane = 'A'; f.dme = 21; f.eat = e2; delete f.slot; delete changed[f.ac]; render(); });
+        act.appendChild(b);
+      }
+      tr.appendChild(act);
+      if (f.st === 'hold') {
+        tr.addEventListener('click', function () { if (changed[f.ac]) { delete changed[f.ac]; render(); } });
+        drag(tr, f);
+      }
+      t.appendChild(tr);
     });
-    t.appendChild(head);
-    var nextIdx = flights.findIndex(function (f) { return !f.pushed; });
-    for (var i = flights.length - 1; i >= 0; i--) t.appendChild(rowFor(flights[i], i, i === nextIdx));
-    var holding = flights.filter(function (f) { return !f.pushed; }).length;
-    var foot = document.getElementById('foot'); foot.textContent = '';
-    [holding + ' holding', (flights.length - holding) + ' pushed', caseNum === 1 ? 'Case I: port holding, angels typed per flight' : 'marshal 171 radial · angels + 15 DME · one minute apart'].forEach(function (x) {
-      var s = document.createElement('span'); s.textContent = x; foot.appendChild(s);
-    });
+    document.getElementById('togo').textContent = String(flights.length);
+    pattern(list);
   }
-  function td(tr, text, cls) { var c = document.createElement('td'); if (cls) c.className = cls; c.textContent = text; tr.appendChild(c); return c; }
-  function rowFor(f, i, isNext) {
-    var tr = document.createElement('tr'), d = derived(i), c = changed[f.cs] || {};
-    tr.className = f.pushed ? 'pushed' : 'hold';
-    td(tr, caseNum === 1 ? String(i + 1) : String(i), 'slot');
-    if (caseNum === 1) {
-      td(tr, 'A' + CASE1_ANGELS[f.cs]);
-    } else {
-      td(tr, 'A' + d.angels, c.angels ? 'chg' : '');
-      td(tr, String(d.dme), c.dme ? 'chg' : '');
-      var late = !f.pushed && isNext && d.eat !== null && clock >= d.eat + 1;
-      td(tr, d.eat === null ? '—' : hhmm(d.eat), c.eat || late ? (late ? 'late' : 'chg') : '');
-    }
-    td(tr, f.cs, 'cs'); td(tr, f.ty, 'ty');
-    var fc = document.createElement('td');
-    var fs = document.createElement('span'), margin = f.fuel - f.bingo;
-    fs.className = 'fuel' + (margin <= 0 ? ' danger' : margin <= settings.margin ? ' attn' : '');
-    fs.textContent = f.fuel.toFixed(1) + ' / ' + f.bingo.toFixed(1);
-    fc.appendChild(fs);
-    if (!f.pushed && f.rep >= settings.age) { var ag = document.createElement('span'); ag.className = 'age attn'; ag.textContent = 'reported ' + f.rep + ' min ago'; fc.appendChild(ag); }
-    tr.appendChild(fc);
-    td(tr, f.appr, 'ty');
-    var act = document.createElement('td'); act.className = 'act';
-    if (f.pushed) act.textContent = 'pushed ' + f.pushed;
-    else if (isNext && caseNum === 3) {
-      var b = document.createElement('button'); b.type = 'button'; b.className = 'commence'; b.textContent = 'Commence';
-      b.addEventListener('click', function (e) { e.stopPropagation(); f.pushed = hhmm(Math.floor(clock)) + ':' + String(Math.round((clock % 1) * 60)).padStart(2, '0'); delete changed[f.cs]; render(); });
-      act.appendChild(b);
-    }
-    tr.appendChild(act);
-    if (!f.pushed) {
-      tr.addEventListener('click', function () { if (changed[f.cs]) { delete changed[f.cs]; render(); } });
-      if (caseNum === 3) dragRow(tr, i);
-    }
-    return tr;
-  }
-  var dragFrom = null;
-  function dragRow(tr, i) {
+  var dragging = null;
+  function drag(tr, f) {
     tr.draggable = true;
-    tr.addEventListener('dragstart', function (e) { dragFrom = i; tr.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(i)); });
-    tr.addEventListener('dragend', function () { tr.classList.remove('dragging'); dragFrom = null; });
-    tr.addEventListener('dragover', function (e) { if (dragFrom !== null && dragFrom !== i) { e.preventDefault(); tr.classList.add('over'); } });
+    tr.addEventListener('dragstart', function (e) { dragging = f; tr.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', f.ac); });
+    tr.addEventListener('dragend', function () { dragging = null; tr.classList.remove('dragging'); });
+    tr.addEventListener('dragover', function (e) { if (dragging && dragging !== f) { e.preventDefault(); tr.classList.add('over'); } });
     tr.addEventListener('dragleave', function () { tr.classList.remove('over'); });
     tr.addEventListener('drop', function (e) {
       e.preventDefault(); tr.classList.remove('over');
-      if (dragFrom === null || dragFrom === i) return;
-      var before = snapshot(), f = flights.splice(dragFrom, 1)[0];
-      flights.splice(i, 0, f); markChanges(before); render();
+      if (!dragging || dragging === f) return;
+      var before = snap(), hs = holding().sort(function (a, b) { return a.slot - b.slot; });
+      var slots = hs.map(function (h) { return h.slot; });
+      hs.splice(hs.indexOf(dragging), 1); hs.splice(hs.indexOf(f), 0, dragging);
+      hs.forEach(function (h, k) { h.slot = slots[k]; });
+      mark(before); render();
+    });
+  }
+
+  // The Case III pattern, ship at the top, final coming up from the bottom (after the real board's schematic).
+  function sv(name, attrs, text) {
+    var e = document.createElementNS('http://www.w3.org/2000/svg', name);
+    for (var k in attrs) e.setAttribute(k, attrs[k]);
+    if (text !== undefined) e.textContent = text;
+    return e;
+  }
+  function pattern(list) {
+    var svg = document.getElementById('pattern'); while (svg.firstChild) svg.removeChild(svg.firstChild);
+    var css = getComputedStyle(document.body), num = css.getPropertyValue('--num'), muted = '#8c9aa6', faint = '#56616c', text = '#d8e0e6';
+    var X = 220, top = 50, perNm = 38; // final course: DME 0 at the ship, 12 at the bottom
+    function Y(d) { return top + d * perNm; }
+    var g = sv('g', { fill: 'none', stroke: '#5f6b76', 'stroke-width': 2 });
+    g.appendChild(sv('line', { x1: X, y1: Y(0), x2: X, y2: Y(13.5) }));
+    // the penetration from marshal: down the left side, turning onto final at about 10 DME
+    g.appendChild(sv('path', { d: 'M ' + (X - 100) + ' ' + Y(-0.6) + ' L ' + (X - 100) + ' ' + Y(9) + ' C ' + (X - 100) + ' ' + Y(12.8) + ', ' + X + ' ' + Y(12.8) + ', ' + X + ' ' + Y(10.5) }));
+    svg.appendChild(g);
+    svg.appendChild(sv('rect', { x: X - 6, y: Y(0) - 26, width: 12, height: 44, rx: 4, fill: '#c9d1d7', transform: 'rotate(9 ' + X + ' ' + (Y(0) - 4) + ')' }));
+    [2, 4, 6, 8, 10, 12].forEach(function (d) {
+      svg.appendChild(sv('line', { x1: X - 6, x2: X + 6, y1: Y(d), y2: Y(d), stroke: '#5f6b76', 'stroke-width': 2 }));
+      svg.appendChild(sv('text', { x: X - 12, y: Y(d) + 5, 'text-anchor': 'end', fill: faint, 'font-family': num, 'font-size': 14 }, String(d)));
+    });
+    svg.appendChild(sv('text', { x: X - 100, y: Y(-0.6) - 8, 'text-anchor': 'middle', fill: faint, 'font-family': num, 'font-size': 11 }, 'FROM MARSHAL'));
+    var plane = 'M0 -12 L2.5 -3.5 L13 1.5 L13 4 L2.5 2 L1.7 8.5 L5 11 L5 12.5 L0 11 L-5 12.5 L-5 11 L-1.7 8.5 L-2.5 2 L-13 4 L-13 1.5 L-2.5 -3.5 Z';
+    list.forEach(function (f) {
+      if (f.st === 'hold') return;
+      var onFinal = f.dme <= 10.5, x = onFinal ? X : X - 100, y = onFinal ? Y(f.dme) : Y(Math.max(0, 20.5 - f.dme) * 0.9);
+      var m = f.fuel - f.bingo, fc = m <= 0 ? '#ff5c5c' : m <= settings.margin ? '#e0a83c' : text;
+      svg.appendChild(sv('path', { d: plane, transform: 'translate(' + x + ' ' + y + ')', fill: '#e6edf3' }));
+      var lx = onFinal ? x + 22 : x + 20;
+      svg.appendChild(sv('text', { x: lx, y: y - 1, fill: text, 'font-family': num, 'font-size': 14 }, f.ac.split(' ')[1] + ' ' + f.lane));
+      svg.appendChild(sv('text', { x: lx, y: y + 16, fill: fc === text ? muted : fc, 'font-family': num, 'font-size': 13 }, f.fuel.toFixed(1)));
+    });
+    var hold = list.filter(function (f) { return f.st === 'hold'; });
+    svg.appendChild(sv('text', { x: 14, y: 520, fill: faint, 'font-family': num, 'font-size': 11 }, 'IN MARSHAL'));
+    hold.forEach(function (f, i) {
+      var m = f.fuel - f.bingo, c = m <= 0 ? '#ff5c5c' : m <= settings.margin ? '#e0a83c' : text;
+      svg.appendChild(sv('text', { x: 14, y: 540 + i * 17, fill: c, 'font-family': num, 'font-size': 14 }, f.ac.split(' ')[1] + '  A' + angelsOf(f)));
     });
   }
 
   document.getElementById('deltaBtn').addEventListener('click', function () { applyDelta(4); render(); });
   document.getElementById('charlie').addEventListener('change', function (e) {
-    var v = parseZ(e.target.value); if (v === null) { render(); return; }
-    var before = snapshot(); charlie = v; markChanges(before); render();
+    var m = /^(\d{2})(\d{2})Z?$/.exec(e.target.value.trim()); if (!m) { render(); return; }
+    var b = snap(); charlie = +m[1] * 60 + +m[2]; mark(b); render();
   });
   document.getElementById('setmargin').addEventListener('input', function (e) { var v = parseFloat(e.target.value); if (isFinite(v)) { settings.margin = v; render(); } });
-  document.getElementById('setage').addEventListener('input', function (e) { var v = parseFloat(e.target.value); if (isFinite(v)) { settings.age = v; render(); } });
   document.getElementById('setmark').addEventListener('change', function (e) { settings.mark = e.target.checked; if (!settings.mark) changed = {}; render(); });
   document.querySelectorAll('[data-state]').forEach(function (b) {
     b.addEventListener('click', function () {
@@ -268,6 +311,13 @@ and shows only what has gone wrong or changed. Sample: CVN-72, Case III, Charlie
       load(b.dataset.state); render();
     });
   });
+  document.querySelectorAll('[data-font]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      document.querySelectorAll('[data-font]').forEach(function (o) { o.setAttribute('aria-pressed', String(o === b)); });
+      document.body.classList.toggle('b612', b.dataset.font === 'b612'); render();
+    });
+  });
+  document.body.classList.add('b612');
   load('normal'); render();
 })();
 </script>
