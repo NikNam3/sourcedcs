@@ -83,7 +83,7 @@ table.t th{color:var(--muted);font-weight:400;background:var(--panel)}
 </style></head><body><main>
 <p><a href="index.html">← mockups</a></p>
 <header>
-<h1>Marshal / recovery board <span style="color:var(--muted);font-size:12px;font-weight:400">mockup, revision 5, 2026-10-07</span></h1>
+<h1>Marshal / recovery board <span style="color:var(--muted);font-size:12px;font-weight:400">mockup, revision 6, 2026-10-07</span></h1>
 <p>Laid out after a CATCC Case III recovery board: every recovering aircraft in landing order, next to land at the top, beside a
 schematic of the approach that shows where each one is. Kept on crc-desktop's rules: grey while the recovery is in order, colour only
 for a problem. Editable at CV_MARSHAL, read-only at the other carrier Positions. Callsigns, fuel and times are invented.</p>
@@ -134,7 +134,7 @@ for a problem. Editable at CV_MARSHAL, read-only at the other carrier Positions.
   <div><h3>Reading the board</h3>
   <p>SIDE is the side number (modex): on the carrier an aircraft is known by it, not its callsign. FUEL:EAT is the fuel state in thousands of pounds and the EAT minute, as on the real board. ANG is the holding altitude; the table leaves out DME because it is always angels + 15. MARSHAL in the header is the marshal radial (set by the Marshal, default the final bearing + 180) and the DME range the stack occupies, the position to pass on. STATUS is HOLD, COMM (commenced), APP A / APP B (the approach lane) or TRAP. SEQ is the landing order. TO GO counts the aircraft still to recover.</p></div>
   <div><h3>Try it</h3>
-  <p>Drag a HOLD row to re-sequence: the flights whose angels or EAT changed show those values amber until you click the row to say the new clearance was passed. Commence sits on the next flight to push. The picture on the right places commenced and approaching aircraft on the final bearing by DME (0–12 nm to scale, compressed beyond), a bolter on the downwind, and the holding flights at the marshal stack with their angels.</p></div>
+  <p>Drag a HOLD row to re-sequence: the flights whose angels or EAT changed show those values amber until you click the row to say the new clearance was passed. Commence sits on the next flight to push; a commenced flight can be sent Back to stack (it takes the next free slot at the top, its new angels and EAT amber until passed). The picture on the right places commenced and approaching aircraft on the final bearing by DME (0–12 nm to scale, compressed beyond), a bolter on the downwind, and the holding flights at the marshal stack with their angels.</p></div>
   <div><h3>Kept from the real board, changed for ours</h3>
   <p>Kept: landing order, FUEL:EAT, the approach schematic, TO GO, the header strip. Changed: the yellow and orange text on normal values is grey here; the green bar (deck status) shows only when the deck is foul, and needs deck state from the server, which is not modelled yet.</p></div>
 </div>
@@ -225,6 +225,17 @@ for a problem. Editable at CV_MARSHAL, read-only at the other carrier Positions.
         var b = el('button', 'commence', 'Commence'); b.type = 'button';
         b.addEventListener('click', function (e) { e.stopPropagation(); var e2 = eatOf(f) - 20 * 60; f.st = 'comm'; f.lane = 'A'; f.dme = 21; f.eat = e2; delete f.slot; delete changed[f.ac]; render(); });
         act.appendChild(b);
+      }
+      if (f.st === 'comm') {
+        var back = el('button', 'btn', 'Back to stack'); back.type = 'button';
+        back.addEventListener('click', function (e) {
+          e.stopPropagation();
+          var top = holding().reduce(function (m, h) { return Math.max(m, h.slot); }, 3);
+          f.st = 'hold'; f.slot = top + 1; delete f.dme; delete f.eat;
+          if (settings.mark) changed[f.ac] = { ang: true, eat: true };
+          render();
+        });
+        act.appendChild(back);
       }
       tr.appendChild(act);
       if (f.st === 'hold') {
