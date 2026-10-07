@@ -22,11 +22,11 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 .ptitle{background:#0e1114;border-bottom:1px solid var(--line);padding:4px 10px;color:var(--muted);font-size:10.5px;letter-spacing:.06em;display:flex;gap:10px}
 .ptitle .r{margin-left:auto;color:var(--faint);letter-spacing:0}
 .map{position:relative;background:var(--well)}
-.map svg{display:block;width:min(100%,calc(100vh - 120px));height:auto;margin:0 auto}
+.map svg{display:block;width:100%;height:calc(100vh - 120px);min-height:420px}
 .map{display:flex;justify-content:center}
 .panel:fullscreen{display:flex;flex-direction:column;background:var(--panel)}
 .panel:fullscreen .map{flex:1;align-items:center}
-.panel:fullscreen .map svg{width:min(100vw,calc(100vh - 60px))}
+.panel:fullscreen .map svg{height:calc(100vh - 60px)}
 .fs{font:inherit;font-size:10.5px;color:var(--muted);background:none;border:1px solid var(--line);border-radius:3px;padding:0 6px;cursor:pointer;margin-left:8px}
 .legend{display:flex;flex-wrap:wrap;gap:4px 16px;padding:6px 10px;color:var(--faint);font-size:11px;border-top:1px solid var(--line)}
 /* management */
@@ -50,7 +50,7 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 </style></head><body><main>
 <p><a href="index.html">← mockups</a></p>
 <header>
-<h1>Carrier map and carrier management <span style="color:var(--muted);font-size:12px;font-weight:400">mockup, revision 3, 2026-10-07</span></h1>
+<h1>Carrier map and carrier management <span style="color:var(--muted);font-size:12px;font-weight:400">mockup, revision 4, 2026-10-07</span></h1>
 <p>Two normal panels. The <b>carrier map</b> is a radar picture fixed on the ship, always north-up, with range rings (the 10 nm ring
 always), the final bearing, the marshal stack, the bolter pattern and the recovery tanker. The <b>carrier management</b> panel is
 where BRC, final bearing, weather, the recovery tanker and the marshal position are set or overridden; everything else (the map, the
@@ -65,7 +65,7 @@ recovery board) only shows them. Sample: CVN-72, Case III. Side numbers and valu
 <div class="two">
 <section class="panel" id="mapPanel" aria-label="Carrier map panel">
   <div class="ptitle">CARRIER MAP <span class="r"><span id="maprange">range 30 nm · wheel to zoom</span><button type="button" class="fs" id="fsBtn">Fullscreen</button></span></div>
-  <div class="map" id="mapbox"><svg id="map" viewBox="0 0 600 600" role="img" aria-label="Carrier map, north up"></svg></div>
+  <div class="map" id="mapbox"><svg id="map" role="img" aria-label="Carrier map, north up"></svg></div>
   <div class="legend" id="legend"></div>
 </section>
 
@@ -98,7 +98,7 @@ recovery board) only shows them. Sample: CVN-72, Case III. Side numbers and valu
 
 <div class="notes">
   <div><h3>Map</h3>
-  <p>Fixed on the ship and always north-up (zoom 2.5 to 65 nm), range rings in dark green (the 10 nm ring brighter); the wheel changes the range, the centre never moves. The 10 nm ring is always drawn and labelled; the other rings follow the range (spacing in the map's Settings tab). The ship symbol points along its BRC. Zoomed to 12 nm or less, the pattern appears: in Case III the bolter/waveoff racetrack (upwind to 4 DME, downwind 2 nm abeam at 1,200 ft, turn-in at 4/6/8 nm), in Case I/II the break and landing pattern and the spin pattern. Aircraft are labelled by side number and altitude in hundreds of feet; colour only for a problem (amber low state, red at bingo).</p></div>
+  <p>Fixed on the ship and always north-up (zoom 2.5 to 65 nm; the range is the radius that fits the shorter side, rings carry on into the corners); an extended centreline runs astern along the final bearing to the edge, a tick every mile; range rings in dark green (the 10 nm ring brighter); the wheel changes the range, the centre never moves. The 10 nm ring is always drawn and labelled; the other rings follow the range (spacing in the map's Settings tab). The ship symbol points along its BRC. Zoomed to 12 nm or less, the pattern appears: in Case III the bolter/waveoff racetrack (upwind to 4 DME, downwind 2 nm abeam at 1,200 ft, turn-in at 4/6/8 nm), in Case I/II the break and landing pattern and the spin pattern. Aircraft are labelled by side number and altitude in hundreds of feet; colour only for a problem (amber low state, red at bingo).</p></div>
   <div><h3>Case I</h3>
   <p>The marshal stack and the final-bearing line give way to the port holding circle (left-hand, tangent to the BRC, ship at 3 o'clock, at most 5 nm across) and the initial 3 nm astern (CV NATOPS 6.2.1). The 10 nm ring stays.</p></div>
   <div><h3>Management</h3>
@@ -109,7 +109,7 @@ recovery board) only shows them. Sample: CVN-72, Case III. Side numbers and valu
 <script>
 (function () {
   'use strict';
-  var C = { cs: 300, cy: 300 }, range = 30, caseNum = 3;
+  var C = { cs: 300, cy: 300, w: 600, h: 600, k: 9 }, range = 30, caseNum = 3;
   var defaults = { brc: '346', fb: null, radial: null };
   var AIR = [ // bearing from the ship (true), range nm, altitude ft, fuel/bingo; role
     { side: '201', brg: 157, rng: 4.1, alt: 1200, fuel: 4.8, bingo: 3.5 },
@@ -125,28 +125,39 @@ recovery board) only shows them. Sample: CVN-72, Case III. Side numbers and valu
   function fb() { return num('fb', (num('brc', 346) - 9 + 360) % 360); }
   function radial() { return num('radial', (fb() + 180) % 360); }
   function sv(n, a, t) { var e = document.createElementNS('http://www.w3.org/2000/svg', n); for (var k in a) e.setAttribute(k, a[k]); if (t !== undefined) e.textContent = t; return e; }
-  function pt(brg, nm) { var r = nm / range * 270, a = brg * Math.PI / 180; return { x: C.cs + r * Math.sin(a), y: C.cy - r * Math.cos(a) }; }
+  function pt(brg, nm) { var r = nm * C.k, a = brg * Math.PI / 180; return { x: C.cs + r * Math.sin(a), y: C.cy - r * Math.cos(a) }; }
   var grey = '#5f6b76', faint = '#56616c', muted = '#8c9aa6', text = '#d8e0e6', grid = '#1b2128', ring = '#1f5a2e', ring10 = '#2f8a45', ringText = '#3f9a55';
   function fuelCol(a) { var m = a.fuel - a.bingo; return m <= 0 ? '#ff5c5c' : m <= 1.0 ? '#e0a83c' : null; }
 
   function draw() {
     var svg = document.getElementById('map'); while (svg.firstChild) svg.removeChild(svg.firstChild);
-    svg.appendChild(sv('rect', { x: 0, y: 0, width: 600, height: 600, fill: '#0b0e11' }));
+    // range = the radius that fits the shorter side; rings continue out to the corners
+    C.w = svg.clientWidth || 600; C.h = svg.clientHeight || 600; C.cs = C.w / 2; C.cy = C.h / 2;
+    C.k = (Math.min(C.w, C.h) / 2 - 24) / range;
+    svg.setAttribute('viewBox', '0 0 ' + C.w + ' ' + C.h);
+    var reach = Math.hypot(C.w, C.h) / 2 / C.k;
+    svg.appendChild(sv('rect', { x: 0, y: 0, width: C.w, height: C.h, fill: '#0b0e11' }));
     // rings: every 5 nm up to 20, then every 10; the 10 nm ring always and stronger
     var step = range <= 5 ? 1 : range <= 15 ? 2.5 : range <= 40 ? 5 : 10;
-    for (var r = step; r <= range + 1e-9; r += step) {
-      var R = r / range * 270, ten = Math.abs(r - 10) < 1e-9;
+    for (var r = step; r <= reach + 1e-9; r += step) {
+      var R = r * C.k, ten = Math.abs(r - 10) < 1e-9;
       svg.appendChild(sv('circle', { cx: C.cs, cy: C.cy, r: R, fill: 'none', stroke: ten ? ring10 : ring, 'stroke-width': ten ? 1.6 : 1.2 }));
       if (ten || r % 10 === 0 || range <= 12) svg.appendChild(sv('text', { x: C.cs + 4, y: C.cy - R - 4, fill: ringText, 'font-family': 'Consolas, monospace', 'font-size': 11 }, String(+r.toFixed(1))));
     }
-    if (range < 10) { var R10 = 10 / range * 270; svg.appendChild(sv('circle', { cx: C.cs, cy: C.cy, r: R10, fill: 'none', stroke: ring10, 'stroke-width': 1.6 })); }
+    if (range < 10) { var R10 = 10 * C.k; svg.appendChild(sv('circle', { cx: C.cs, cy: C.cy, r: R10, fill: 'none', stroke: ring10, 'stroke-width': 1.6 })); }
     // north
-    svg.appendChild(sv('text', { x: C.cs, y: 18, 'text-anchor': 'middle', fill: muted, 'font-family': 'Consolas, monospace', 'font-size': 12 }, 'N'));
+    svg.appendChild(sv('text', { x: C.cs + 14, y: 18, 'text-anchor': 'middle', fill: muted, 'font-family': 'Consolas, monospace', 'font-size': 12 }, 'N'));
     for (var b = 0; b < 360; b += 30) {
-      var o = pt(b, range * 1.04), i2 = pt(b, range);
+      var o = pt(b, range * 1.04), i2 = pt(b, range * 0.98);
       svg.appendChild(sv('line', { x1: i2.x, y1: i2.y, x2: o.x, y2: o.y, stroke: grid }));
     }
     var brc = num('brc', 346);
+    var ecA = pt((fb() + 180) % 360, reach), ecB = pt(fb(), 2);
+    svg.appendChild(sv('line', { x1: ecB.x, y1: ecB.y, x2: ecA.x, y2: ecA.y, stroke: '#3d4852', 'stroke-width': 1 }));
+    for (var t = 1; t <= Math.min(reach, 20); t++) { // a short tick every nm astern
+      var tp = pt((fb() + 180) % 360, t), tq = shipPtTick(fb(), -t);
+      svg.appendChild(sv('line', { x1: tq[0].x, y1: tq[0].y, x2: tq[1].x, y2: tq[1].y, stroke: '#3d4852' }));
+    }
     if (caseNum === 3 || caseNum === 2) {
       // final bearing extended astern, then the marshal radial and the stack fixes
       var mr = radial(), f = pt((fb() + 180) % 360, Math.min(range, 12)), m0 = pt(mr, num('fix', 21)), m1 = pt(mr, num('fix', 21) + 8);
@@ -157,7 +168,7 @@ recovery board) only shows them. Sample: CVN-72, Case III. Side numbers and valu
       svg.appendChild(sv('text', { x: lab.x, y: lab.y, 'text-anchor': 'middle', fill: faint, 'font-family': 'Consolas, monospace', 'font-size': 11 }, 'MARSHAL ' + String(Math.round(mr)).padStart(3, '0') + '° ' + num('fix', 21) + '+'));
     } else {
       // Case I port holding: left-hand circle tangent to the BRC, ship at 3 o'clock, 5 nm across; the initial 3 nm astern
-      var centre = pt((brc + 270) % 360, 2.5), rr = 2.5 / range * 270;
+      var centre = pt((brc + 270) % 360, 2.5), rr = 2.5 * C.k;
       svg.appendChild(sv('circle', { cx: centre.x, cy: centre.y, r: rr, fill: 'none', stroke: grey, 'stroke-dasharray': '4 3' }));
       var ini = pt((brc + 180) % 360, 3);
       svg.appendChild(sv('circle', { cx: ini.x, cy: ini.y, r: 3, fill: grey }));
@@ -190,8 +201,9 @@ recovery board) only shows them. Sample: CVN-72, Case III. Side numbers and valu
   // A point given in the ship's frame: 'along' nm ahead on the axis (negative = astern), 'lat' nm to starboard (negative = port).
   function shipPt(axis, along, lat) {
     var a = axis * Math.PI / 180, e = along * Math.sin(a) + lat * Math.cos(a), n = along * Math.cos(a) - lat * Math.sin(a);
-    var k = 270 / range; return { x: C.cs + e * k, y: C.cy - n * k };
+    var k = C.k; return { x: C.cs + e * k, y: C.cy - n * k };
   }
+  function shipPtTick(axis, along) { var w = 0.12 * Math.max(1, range / 15); return [shipPt(axis, along, -w), shipPt(axis, along, w)]; }
   function pathOf(pts) { return pts.map(function (q, i) { return (i ? 'L ' : 'M ') + q.x.toFixed(1) + ' ' + q.y.toFixed(1); }).join(' '); }
   function arc(axis, cAlong, cLat, r, from, to) { // degrees in the ship frame, 0 = ahead, 90 = starboard
     var out = []; for (var i = 0; i <= 16; i++) { var t = (from + (to - from) * i / 16) * Math.PI / 180; out.push(shipPt(axis, cAlong + r * Math.cos(t), cLat + r * Math.sin(t))); } return out;
@@ -215,7 +227,7 @@ recovery board) only shows them. Sample: CVN-72, Case III. Side numbers and valu
       svg.appendChild(sv('path', Object.assign({ d: pathOf(pts2) }, st)));
       label(svg, ini, 'INITIAL 800');
       label(svg, shipPt(brc, -0.2, -1.6), 'DOWNWIND 600');
-      svg.appendChild(sv('circle', Object.assign({ cx: C.cs, cy: C.cy, r: 3 / range * 270 }, st, { opacity: 0.6 })));
+      svg.appendChild(sv('circle', Object.assign({ cx: C.cs, cy: C.cy, r: 3 * C.k }, st, { opacity: 0.6 })));
       label(svg, shipPt(brc, 2.9, 0.3), 'SPIN 1200 · 3 nm');
     }
   }
