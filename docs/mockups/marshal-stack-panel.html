@@ -83,7 +83,7 @@ table.t th{color:var(--muted);font-weight:400;background:var(--panel)}
 </style></head><body><main>
 <p><a href="index.html">← mockups</a></p>
 <header>
-<h1>Marshal / recovery board <span style="color:var(--muted);font-size:12px;font-weight:400">mockup, revision 6, 2026-10-07</span></h1>
+<h1>Marshal / recovery board <span style="color:var(--muted);font-size:12px;font-weight:400">mockup, revision 7, 2026-10-07</span></h1>
 <p>Laid out after a CATCC Case III recovery board: every recovering aircraft in landing order, next to land at the top, beside a
 schematic of the approach that shows where each one is. Kept on crc-desktop's rules: grey while the recovery is in order, colour only
 for a problem. Editable at CV_MARSHAL, read-only at the other carrier Positions. Callsigns, fuel and times are invented.</p>
@@ -107,7 +107,7 @@ for a problem. Editable at CV_MARSHAL, read-only at the other carrier Positions.
     <span><span class="k">APPROACH</span> <b>CV-1</b></span>
     <span><span class="k">BRC</span> <b>346</b></span>
     <span><span class="k">FB</span> <b>337</b></span>
-    <span><span class="k">MARSHAL</span> <input id="radial" value="157" aria-label="Marshal radial" style="width:44px">° <b id="mpos">21–28</b> <span class="k">DME</span></span>
+    <span><span class="k">MARSHAL</span> <b id="mrad">157</b>° <b id="mpos">21–28</b> <span class="k">DME</span></span>
     <span><span class="k">CHARLIE</span> <input id="charlie" value="2040Z" aria-label="Charlie time"></span>
     <button type="button" class="btn" id="deltaBtn">Delta…</button>
     <span class="right"><b id="clock">2041:48Z</b></span>
@@ -132,7 +132,7 @@ for a problem. Editable at CV_MARSHAL, read-only at the other carrier Positions.
 
 <div class="notes">
   <div><h3>Reading the board</h3>
-  <p>SIDE is the side number (modex): on the carrier an aircraft is known by it, not its callsign. FUEL:EAT is the fuel state in thousands of pounds and the EAT minute, as on the real board. ANG is the holding altitude; the table leaves out DME because it is always angels + 15. MARSHAL in the header is the marshal radial (set by the Marshal, default the final bearing + 180) and the DME range the stack occupies, the position to pass on. STATUS is HOLD, COMM (commenced), APP A / APP B (the approach lane) or TRAP. SEQ is the landing order. TO GO counts the aircraft still to recover.</p></div>
+  <p>SIDE is the side number (modex): on the carrier an aircraft is known by it, not its callsign. FUEL:EAT is the fuel state in thousands of pounds and the EAT minute, as on the real board. ANG is the holding altitude; the table leaves out DME because it is always angels + 15. MARSHAL in the header is the marshal radial and the DME range the stack occupies, the position to pass on. It is read-only here: the radial and first fix are set in the carrier management panel. STATUS is HOLD, COMM (commenced), APP A / APP B (the approach lane) or TRAP. SEQ is the landing order. TO GO counts the aircraft still to recover.</p></div>
   <div><h3>Try it</h3>
   <p>Drag a HOLD row to re-sequence: the flights whose angels or EAT changed show those values amber until you click the row to say the new clearance was passed. Commence sits on the next flight to push; a commenced flight can be sent Back to stack (it takes the next free slot at the top, its new angels and EAT amber until passed). The picture on the right places commenced and approaching aircraft on the final bearing by DME (0–12 nm to scale, compressed beyond), a bolter on the downwind, and the holding flights at the marshal stack with their angels.</p></div>
   <div><h3>Kept from the real board, changed for ours</h3>
@@ -326,10 +326,6 @@ for a problem. Editable at CV_MARSHAL, read-only at the other carrier Positions.
   }
 
   document.getElementById('deltaBtn').addEventListener('click', function () { applyDelta(4); render(); });
-  document.getElementById('radial').addEventListener('change', function (e) {
-    var v = parseInt(e.target.value, 10); if (isFinite(v) && v >= 0 && v <= 360) radial = String(v % 360).padStart(3, '0');
-    e.target.value = radial; render();
-  });
   document.getElementById('charlie').addEventListener('change', function (e) {
     var m = /^(\d{2})(\d{2})Z?$/.exec(e.target.value.trim()); if (!m) { render(); return; }
     var b = snap(); charlie = +m[1] * 60 + +m[2]; mark(b); render();

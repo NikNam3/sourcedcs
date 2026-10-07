@@ -1,0 +1,231 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Carrier Map Mockup</title>
+<style>
+/* Carrier map + carrier management, on crc-desktop's dark-cockpit rules: grey when normal; amber = needs attention;
+   red = act now. Tokens are crc-desktop's own (efsp-panel.css :root). */
+:root{
+  --bg:#0d0d0d;--panel:#14181c;--well:#0b0e11;--strip:#1c2228;--line:#2e3740;--line2:#4a5560;
+  --text:#d8e0e6;--muted:#8c9aa6;--faint:#56616c;--attn:#e0a83c;--danger:#ff5c5c;
+  --mono:'Consolas','DejaVu Sans Mono',ui-monospace,monospace;
+  color-scheme:dark}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font:13px/1.45 var(--mono);padding-block:24px 60px;padding-inline:16px}
+main{max-width:1240px;margin:0 auto;display:grid;gap:20px}
+h1{font-size:19px;font-weight:600}
+h2{font-size:14px;color:#fff;border-bottom:1px solid var(--line);padding-bottom:4px;font-weight:600}
+p{color:var(--muted);max-width:900px}
+a{color:#8ec7ff}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid #8ec7ff;outline-offset:1px}
+.two{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(300px,1fr);gap:20px;align-items:start}
+@media (max-width:980px){.two{grid-template-columns:1fr}}
+.panel{background:var(--panel);border:1px solid var(--line);font-size:12px;min-width:0}
+.ptitle{background:#0e1114;border-bottom:1px solid var(--line);padding:4px 10px;color:var(--muted);font-size:10.5px;letter-spacing:.06em;display:flex;gap:10px}
+.ptitle .r{margin-left:auto;color:var(--faint);letter-spacing:0}
+.map{position:relative;background:var(--well)}
+.map svg{display:block;width:100%;height:auto}
+.legend{display:flex;flex-wrap:wrap;gap:4px 16px;padding:6px 10px;color:var(--faint);font-size:11px;border-top:1px solid var(--line)}
+/* management */
+.grp{padding:8px 10px;border-bottom:1px solid var(--line);display:grid;gap:6px}
+.grp h3{font-size:10.5px;color:var(--muted);font-weight:400;letter-spacing:.08em}
+.f{display:grid;grid-template-columns:120px 1fr;gap:8px;align-items:center}
+.f label{color:var(--muted)}
+.val{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.val input,.val select{font:inherit;color:var(--text);background:var(--well);border:1px solid var(--line2);padding:1px 5px;width:76px}
+.val select{width:auto}
+.src{color:var(--faint);font-size:11px}
+.reset{font:inherit;font-size:11px;color:var(--muted);background:none;border:1px solid var(--line);border-radius:3px;padding:0 6px;cursor:pointer}
+.reset[hidden]{display:none}
+.bar{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.bar .lbl{color:var(--faint);font-size:11px;margin-right:4px;min-width:84px}
+.bar button{font:inherit;font-size:11.5px;color:var(--muted);background:var(--panel);border:1px solid var(--line);padding:4px 10px;border-radius:3px;cursor:pointer}
+.bar button[aria-pressed="true"]{color:#fff;border-color:var(--line2);background:var(--strip)}
+.notes{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;font-size:12px}
+.notes h3{font-size:12px;color:#fff;font-weight:600;margin-bottom:2px}
+.notes p{font-size:12px}
+</style></head><body><main>
+<p><a href="index.html">← mockups</a></p>
+<header>
+<h1>Carrier map and carrier management <span style="color:var(--muted);font-size:12px;font-weight:400">mockup, revision 1, 2026-10-07</span></h1>
+<p>Two normal panels. The <b>carrier map</b> is a radar picture fixed on the ship, always north-up, with range rings (the 10 nm ring
+always), the final bearing, the marshal stack, the bolter pattern and the recovery tanker. The <b>carrier management</b> panel is
+where BRC, final bearing, weather, the recovery tanker and the marshal position are set or overridden; everything else (the map, the
+recovery board) only shows them. Sample: CVN-72, Case III. Side numbers and values are invented.</p>
+</header>
+
+<div class="bar" role="group" aria-label="Sample situation"><span class="lbl">Situation</span>
+  <button type="button" data-case="3" aria-pressed="true">Case III</button>
+  <button type="button" data-case="1" aria-pressed="false">Case I</button>
+</div>
+
+<div class="two">
+<section class="panel" aria-label="Carrier map panel">
+  <div class="ptitle">CARRIER MAP <span class="r" id="maprange">range 30 nm · wheel to zoom</span></div>
+  <div class="map" id="mapbox"><svg id="map" viewBox="0 0 600 600" role="img" aria-label="Carrier map, north up"></svg></div>
+  <div class="legend" id="legend"></div>
+</section>
+
+<section class="panel" aria-label="Carrier management panel">
+  <div class="ptitle">CARRIER MANAGEMENT <span class="r">CV_PRIFLY / CV_MARSHAL edit · others read</span></div>
+  <div class="grp"><h3>SHIP</h3>
+    <div class="f"><label for="brc">BRC</label><div class="val"><input id="brc" value="346"><span class="src" id="brcsrc">ship's heading from DCS</span><button class="reset" type="button" data-reset="brc" hidden>Use DCS</button></div></div>
+    <div class="f"><label for="fb">Final bearing</label><div class="val"><input id="fb" value="337"><span class="src" id="fbsrc">BRC − 9° (angled deck)</span><button class="reset" type="button" data-reset="fb" hidden>Use default</button></div></div>
+    <div class="f"><label for="case">Case</label><div class="val"><select id="case"><option>I</option><option>II</option><option selected>III</option></select></div></div>
+    <div class="f"><label for="ramp">Ramp time</label><div class="val"><input id="ramp" value="2040Z"><span class="src">the Charlie / ramp time EATs are worked back from</span></div></div>
+  </div>
+  <div class="grp"><h3>MARSHAL</h3>
+    <div class="f"><label for="radial">Radial</label><div class="val"><input id="radial" value="157"><span class="src" id="radsrc">final bearing + 180</span><button class="reset" type="button" data-reset="radial" hidden>Use default</button></div></div>
+    <div class="f"><label for="fix">First fix</label><div class="val"><input id="fix" value="21"> DME <span class="src">angels 6; each fix angels + 15</span></div></div>
+  </div>
+  <div class="grp"><h3>WEATHER AT THE SHIP</h3>
+    <div class="f"><label for="ceil">Ceiling</label><div class="val"><input id="ceil" value="800"> ft <span class="src">from DCS</span></div></div>
+    <div class="f"><label for="vis">Visibility</label><div class="val"><input id="vis" value="3"> nm <span class="src">from DCS</span></div></div>
+    <div class="f"><label for="wod">Wind over deck</label><div class="val"><input id="wod" value="28"> kt <span class="src">from DCS + ship speed</span></div></div>
+    <div class="f"><label for="alt">Altimeter</label><div class="val"><input id="alt" value="29.96"> <span class="src">from DCS</span></div></div>
+  </div>
+  <div class="grp"><h3>RECOVERY TANKER</h3>
+    <div class="f"><label for="tkr">Side number</label><div class="val"><input id="tkr" value="701"></div></div>
+    <div class="f"><label for="tkralt">Altitude</label><div class="val"><input id="tkralt" value="6000"> ft</div></div>
+    <div class="f"><label for="give">Give</label><div class="val"><input id="give" value="4.0"> k lb</div></div>
+    <div class="f"><label for="tkrside">Pattern side</label><div class="val"><select id="tkrside"><option value="port" selected>port</option><option value="stbd">starboard</option></select><span class="src">racetrack, downwind 4 nm abeam (CV NATOPS 6.10.3: 3–5 nm)</span></div></div>
+  </div>
+</section>
+</div>
+
+<div class="notes">
+  <div><h3>Map</h3>
+  <p>Fixed on the ship and always north-up; the wheel changes the range, the centre never moves. The 10 nm ring is always drawn and labelled; the other rings follow the range (spacing in the map's Settings tab). The ship symbol points along its BRC. Aircraft are labelled by side number and altitude in hundreds of feet; colour only for a problem (amber low state, red at bingo).</p></div>
+  <div><h3>Case I</h3>
+  <p>The marshal stack and the final-bearing line give way to the port holding circle (left-hand, tangent to the BRC, ship at 3 o'clock, at most 5 nm across) and the initial 3 nm astern (CV NATOPS 6.2.1). The 10 nm ring stays.</p></div>
+  <div><h3>Management</h3>
+  <p>Each value says where it comes from (DCS, a default, or a person). Typing a value overrides it; "Use DCS" or "Use default" puts the automatic value back. The recovery board and the map read these values and never edit them.</p></div>
+</div>
+</main>
+
+<script>
+(function () {
+  'use strict';
+  var C = { cs: 300, cy: 300 }, range = 30, caseNum = 3;
+  var defaults = { brc: '346', fb: null, radial: null };
+  var AIR = [ // bearing from the ship (true), range nm, altitude ft, fuel/bingo; role
+    { side: '201', brg: 157, rng: 4.1, alt: 1200, fuel: 4.8, bingo: 3.5 },
+    { side: '102', brg: 157, rng: 7.6, alt: 1200, fuel: 8.3, bingo: 4.5 },
+    { side: '203', brg: 157, rng: 10.8, alt: 1300, fuel: 7.8, bingo: 4.0 },
+    { side: '105', brg: 157, rng: 19.5, alt: 6100, fuel: 5.6, bingo: 4.0 },
+    { side: '600', hold: 10, fuel: 6.1, bingo: 3.0 },
+    { side: '205', hold: 12, fuel: 4.5, bingo: 4.0 },
+    { side: '101', hold: 13, fuel: 7.2, bingo: 4.5 }
+  ];
+  function v(id) { return document.getElementById(id).value; }
+  function num(id, d) { var x = parseFloat(v(id)); return isFinite(x) ? x : d; }
+  function fb() { return num('fb', (num('brc', 346) - 9 + 360) % 360); }
+  function radial() { return num('radial', (fb() + 180) % 360); }
+  function sv(n, a, t) { var e = document.createElementNS('http://www.w3.org/2000/svg', n); for (var k in a) e.setAttribute(k, a[k]); if (t !== undefined) e.textContent = t; return e; }
+  function pt(brg, nm) { var r = nm / range * 270, a = brg * Math.PI / 180; return { x: C.cs + r * Math.sin(a), y: C.cy - r * Math.cos(a) }; }
+  var grey = '#5f6b76', faint = '#56616c', muted = '#8c9aa6', text = '#d8e0e6', grid = '#1b2128';
+  function fuelCol(a) { var m = a.fuel - a.bingo; return m <= 0 ? '#ff5c5c' : m <= 1.0 ? '#e0a83c' : null; }
+
+  function draw() {
+    var svg = document.getElementById('map'); while (svg.firstChild) svg.removeChild(svg.firstChild);
+    svg.appendChild(sv('rect', { x: 0, y: 0, width: 600, height: 600, fill: '#0b0e11' }));
+    // rings: every 5 nm up to 20, then every 10; the 10 nm ring always and stronger
+    var step = range <= 15 ? 2.5 : range <= 40 ? 5 : 10;
+    for (var r = step; r <= range + 1e-9; r += step) {
+      var R = r / range * 270, ten = Math.abs(r - 10) < 1e-9;
+      svg.appendChild(sv('circle', { cx: C.cs, cy: C.cy, r: R, fill: 'none', stroke: ten ? grey : grid, 'stroke-width': ten ? 1.4 : 1 }));
+      if (ten || r % 10 === 0) svg.appendChild(sv('text', { x: C.cs + 4, y: C.cy - R - 4, fill: ten ? muted : faint, 'font-family': 'Consolas, monospace', 'font-size': 11 }, String(r)));
+    }
+    if (range < 10) { var R10 = 10 / range * 270; svg.appendChild(sv('circle', { cx: C.cs, cy: C.cy, r: R10, fill: 'none', stroke: grey, 'stroke-width': 1.4 })); }
+    // north
+    svg.appendChild(sv('text', { x: C.cs, y: 18, 'text-anchor': 'middle', fill: muted, 'font-family': 'Consolas, monospace', 'font-size': 12 }, 'N'));
+    for (var b = 0; b < 360; b += 30) {
+      var o = pt(b, range * 1.04), i2 = pt(b, range);
+      svg.appendChild(sv('line', { x1: i2.x, y1: i2.y, x2: o.x, y2: o.y, stroke: grid }));
+    }
+    var brc = num('brc', 346);
+    if (caseNum === 3 || caseNum === 2) {
+      // final bearing extended astern, then the marshal radial and the stack fixes
+      var mr = radial(), f = pt((fb() + 180) % 360, Math.min(range, 12)), m0 = pt(mr, num('fix', 21)), m1 = pt(mr, num('fix', 21) + 8);
+      svg.appendChild(sv('line', { x1: C.cs, y1: C.cy, x2: f.x, y2: f.y, stroke: grey, 'stroke-width': 1.4 }));
+      svg.appendChild(sv('line', { x1: f.x, y1: f.y, x2: pt(mr, num('fix', 21)).x, y2: pt(mr, num('fix', 21)).y, stroke: grey, 'stroke-dasharray': '4 4' }));
+      svg.appendChild(sv('line', { x1: m0.x, y1: m0.y, x2: m1.x, y2: m1.y, stroke: grey, 'stroke-width': 3, opacity: 0.6 }));
+      var lab = pt(mr, num('fix', 21) + 9);
+      svg.appendChild(sv('text', { x: lab.x, y: lab.y, 'text-anchor': 'middle', fill: faint, 'font-family': 'Consolas, monospace', 'font-size': 11 }, 'MARSHAL ' + String(Math.round(mr)).padStart(3, '0') + '° ' + num('fix', 21) + '+'));
+    } else {
+      // Case I port holding: left-hand circle tangent to the BRC, ship at 3 o'clock, 5 nm across; the initial 3 nm astern
+      var centre = pt((brc + 270) % 360, 2.5), rr = 2.5 / range * 270;
+      svg.appendChild(sv('circle', { cx: centre.x, cy: centre.y, r: rr, fill: 'none', stroke: grey, 'stroke-dasharray': '4 3' }));
+      var ini = pt((brc + 180) % 360, 3);
+      svg.appendChild(sv('circle', { cx: ini.x, cy: ini.y, r: 3, fill: grey }));
+      svg.appendChild(sv('text', { x: ini.x + 6, y: ini.y + 4, fill: faint, 'font-family': 'Consolas, monospace', 'font-size': 11 }, 'INITIAL'));
+    }
+    // recovery tanker racetrack: downwind 4 nm abeam on the chosen side, from 10 nm ahead to 6 nm astern
+    var side = v('tkrside') === 'stbd' ? 90 : 270, a1 = pt((brc + side) % 360, 4), ahead = pt(brc, 10), astern = pt((brc + 180) % 360, 6);
+    function off(p, q) { return { x: p.x + (q.x - C.cs), y: p.y + (q.y - C.cy) }; }
+    var p1 = off(ahead, a1), p2 = off(astern, a1), p3 = astern, p4 = ahead;
+    svg.appendChild(sv('path', { d: 'M ' + p4.x + ' ' + p4.y + ' L ' + p1.x + ' ' + p1.y + ' L ' + p2.x + ' ' + p2.y + ' L ' + p3.x + ' ' + p3.y + ' Z', fill: 'none', stroke: grey, 'stroke-dasharray': '2 4', opacity: 0.7 }));
+    var tk = off(pt(brc, 2), a1);
+    plane(svg, tk.x, tk.y, (brc + 180) % 360, v('tkr') + ' ' + String(Math.round(num('tkralt', 6000) / 100)).padStart(3, '0'), 'TKR give ' + v('give'), null);
+    // the ship, pointing along its BRC
+    var hd = brc * Math.PI / 180;
+    svg.appendChild(sv('path', { d: 'M 0 -12 L 5 6 L -5 6 Z', transform: 'translate(' + C.cs + ' ' + C.cy + ') rotate(' + brc + ')', fill: '#c9d1d7' }));
+    // aircraft
+    AIR.forEach(function (a) {
+      var brg = a.brg, rng = a.rng, alt = a.alt;
+      if (a.hold !== undefined) { if (caseNum === 1) return; brg = radial(); rng = num('fix', 21) + (a.hold - 6); alt = a.hold * 1000; }
+      else if (caseNum === 1) return;
+      var p = pt(brg, rng);
+      if (rng > range) return;
+      plane(svg, p.x, p.y, (brg + 180) % 360, a.side + ' ' + String(Math.round(alt / 100)).padStart(3, '0'), null, fuelCol(a));
+    });
+    document.getElementById('maprange').textContent = 'range ' + range + ' nm · wheel to zoom';
+    var lg = document.getElementById('legend'); lg.textContent = '';
+    ['north up', 'centre: CVN-72, BRC ' + String(brc).padStart(3, '0'), caseNum === 1 ? 'Case I: port holding, initial' : 'final bearing ' + String(Math.round(fb())).padStart(3, '0') + ' · marshal ' + String(Math.round(radial())).padStart(3, '0') + '°', 'tanker ' + v('tkr')].forEach(function (x) { var s = document.createElement('span'); s.textContent = x; lg.appendChild(s); });
+  }
+  function plane(svg, x, y, hdg, l1, l2, col) {
+    svg.appendChild(sv('path', { d: 'M0 -7 L4 6 L0 3.5 L-4 6 Z', transform: 'translate(' + x + ' ' + y + ') rotate(' + hdg + ')', fill: col || '#e6edf3' }));
+    svg.appendChild(sv('text', { x: x + 9, y: y - 3, fill: col || text, 'font-family': 'Consolas, monospace', 'font-size': 11 }, l1));
+    if (l2) svg.appendChild(sv('text', { x: x + 9, y: y + 10, fill: muted, 'font-family': 'Consolas, monospace', 'font-size': 10 }, l2));
+  }
+
+  document.getElementById('mapbox').addEventListener('wheel', function (e) {
+    e.preventDefault(); range = Math.min(80, Math.max(5, Math.round(range * (e.deltaY > 0 ? 1.2 : 1 / 1.2))));
+    draw();
+  }, { passive: false });
+  function srcUpdate() {
+    var brcOver = v('brc') !== defaults.brc, fbAuto = String((num('brc', 346) - 9 + 360) % 360), radAuto = String((fb() + 180) % 360);
+    document.getElementById('brcsrc').textContent = brcOver ? 'set by the controller' : "ship's heading from DCS";
+    document.querySelector('[data-reset="brc"]').hidden = !brcOver;
+    if (defaults.fb === null) document.getElementById('fb').value = fbAuto;
+    document.getElementById('fbsrc').textContent = defaults.fb === null ? 'BRC − 9° (angled deck)' : 'set by the controller';
+    document.querySelector('[data-reset="fb"]').hidden = defaults.fb === null;
+    if (defaults.radial === null) document.getElementById('radial').value = radAuto;
+    document.getElementById('radsrc').textContent = defaults.radial === null ? 'final bearing + 180' : 'set by the controller';
+    document.querySelector('[data-reset="radial"]').hidden = defaults.radial === null;
+  }
+  ['brc', 'fb', 'radial', 'fix', 'tkr', 'tkralt', 'give', 'tkrside', 'ceil', 'vis', 'wod', 'alt', 'ramp', 'case'].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', function () {
+      if (id === 'fb') defaults.fb = v('fb');
+      if (id === 'radial') defaults.radial = v('radial');
+      if (id === 'case') caseNum = { I: 1, II: 2, III: 3 }[v('case')];
+      srcUpdate(); draw();
+    });
+  });
+  document.querySelectorAll('.reset').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var k = b.dataset.reset;
+      if (k === 'brc') document.getElementById('brc').value = defaults.brc;
+      if (k === 'fb') defaults.fb = null;
+      if (k === 'radial') defaults.radial = null;
+      srcUpdate(); draw();
+    });
+  });
+  document.querySelectorAll('[data-case]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      document.querySelectorAll('[data-case]').forEach(function (o) { o.setAttribute('aria-pressed', String(o === b)); });
+      caseNum = +b.dataset.case; document.getElementById('case').value = caseNum === 1 ? 'I' : 'III'; draw();
+    });
+  });
+  srcUpdate(); draw();
+})();
+</script>
+</body></html>
