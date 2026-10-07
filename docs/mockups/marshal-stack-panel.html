@@ -83,7 +83,7 @@ table.t th{color:var(--muted);font-weight:400;background:var(--panel)}
 </style></head><body><main>
 <p><a href="index.html">← mockups</a></p>
 <header>
-<h1>Marshal / recovery board <span style="color:var(--muted);font-size:12px;font-weight:400">mockup, revision 4, 2026-10-07</span></h1>
+<h1>Marshal / recovery board <span style="color:var(--muted);font-size:12px;font-weight:400">mockup, revision 5, 2026-10-07</span></h1>
 <p>Laid out after a CATCC Case III recovery board: every recovering aircraft in landing order, next to land at the top, beside a
 schematic of the approach that shows where each one is. Kept on crc-desktop's rules: grey while the recovery is in order, colour only
 for a problem. Editable at CV_MARSHAL, read-only at the other carrier Positions. Callsigns, fuel and times are invented.</p>
@@ -107,6 +107,7 @@ for a problem. Editable at CV_MARSHAL, read-only at the other carrier Positions.
     <span><span class="k">APPROACH</span> <b>CV-1</b></span>
     <span><span class="k">BRC</span> <b>346</b></span>
     <span><span class="k">FB</span> <b>337</b></span>
+    <span><span class="k">MARSHAL</span> <input id="radial" value="157" aria-label="Marshal radial" style="width:44px">° <b id="mpos">21–28</b> <span class="k">DME</span></span>
     <span><span class="k">CHARLIE</span> <input id="charlie" value="2040Z" aria-label="Charlie time"></span>
     <button type="button" class="btn" id="deltaBtn">Delta…</button>
     <span class="right"><b id="clock">2041:48Z</b></span>
@@ -131,7 +132,7 @@ for a problem. Editable at CV_MARSHAL, read-only at the other carrier Positions.
 
 <div class="notes">
   <div><h3>Reading the board</h3>
-  <p>FUEL:EAT is the fuel state in thousands of pounds and the EAT minute, as on the real board. ANG is the holding altitude; DME is not shown because it is always angels + 15. STATUS is HOLD, COMM (commenced), APP A / APP B (the approach lane) or TRAP. SEQ is the landing order. TO GO counts the aircraft still to recover.</p></div>
+  <p>SIDE is the side number (modex): on the carrier an aircraft is known by it, not its callsign. FUEL:EAT is the fuel state in thousands of pounds and the EAT minute, as on the real board. ANG is the holding altitude; the table leaves out DME because it is always angels + 15. MARSHAL in the header is the marshal radial (set by the Marshal, default the final bearing + 180) and the DME range the stack occupies, the position to pass on. STATUS is HOLD, COMM (commenced), APP A / APP B (the approach lane) or TRAP. SEQ is the landing order. TO GO counts the aircraft still to recover.</p></div>
   <div><h3>Try it</h3>
   <p>Drag a HOLD row to re-sequence: the flights whose angels or EAT changed show those values amber until you click the row to say the new clearance was passed. Commence sits on the next flight to push. The picture on the right places commenced and approaching aircraft on the final bearing by DME (0–12 nm to scale, compressed beyond), a bolter on the downwind, and the holding flights at the marshal stack with their angels.</p></div>
   <div><h3>Kept from the real board, changed for ours</h3>
@@ -155,16 +156,16 @@ for a problem. Editable at CV_MARSHAL, read-only at the other carrier Positions.
   'use strict';
   // Flights still recovering. 'app' = on the approach (lane, DME from radar); 'comm' = commenced; 'hold' = in marshal.
   var BASE = [
-    { ac: 'RAVEN 201', ty: 'F/A-18C', fuel: 4.8, bingo: 3.5, st: 'app', lane: 'A', dme: 4.1, eat: 40 },
-    { ac: 'SLAM 300',  ty: 'F-14B',   fuel: 8.3, bingo: 4.5, st: 'app', lane: 'B', dme: 7.6, eat: 41 },
-    { ac: 'RAVEN 203', ty: 'F/A-18C', fuel: 7.8, bingo: 4.0, st: 'app', lane: 'A', dme: 10.8, eat: 42 },
-    { ac: 'VICTORY 105', ty: 'F/A-18C', fuel: 5.6, bingo: 4.0, st: 'comm', lane: 'B', dme: 19.5, eat: 43 },
-    { ac: 'LIBERTY 600', ty: 'E-2D', fuel: 6.1, bingo: 3.0, st: 'hold', slot: 4 },
-    { ac: 'TEXACO 701', ty: 'S-3B', fuel: 9.8, bingo: 3.5, st: 'hold', slot: 5 },
-    { ac: 'RAVEN 205', ty: 'F/A-18C', fuel: 5.9, bingo: 4.0, st: 'hold', slot: 6 },
-    { ac: 'FELIX 101', ty: 'F-14B', fuel: 7.2, bingo: 4.5, st: 'hold', slot: 7 }
+    { ac: '201', ty: 'F/A-18C', fuel: 4.8, bingo: 3.5, st: 'app', lane: 'A', dme: 4.1, eat: 40 },
+    { ac: '102',  ty: 'F-14B',   fuel: 8.3, bingo: 4.5, st: 'app', lane: 'B', dme: 7.6, eat: 41 },
+    { ac: '203', ty: 'F/A-18C', fuel: 7.8, bingo: 4.0, st: 'app', lane: 'A', dme: 10.8, eat: 42 },
+    { ac: '105', ty: 'F/A-18C', fuel: 5.6, bingo: 4.0, st: 'comm', lane: 'B', dme: 19.5, eat: 43 },
+    { ac: '600', ty: 'E-2D', fuel: 6.1, bingo: 3.0, st: 'hold', slot: 4 },
+    { ac: '701', ty: 'S-3B', fuel: 9.8, bingo: 3.5, st: 'hold', slot: 5 },
+    { ac: '205', ty: 'F/A-18C', fuel: 5.9, bingo: 4.0, st: 'hold', slot: 6 },
+    { ac: '101', ty: 'F-14B', fuel: 7.2, bingo: 4.5, st: 'hold', slot: 7 }
   ];
-  var flights, charlie, clock, foul, changed, settings = { margin: 1.0, mark: true };
+  var radial = '157', flights, charlie, clock, foul, changed, settings = { margin: 1.0, mark: true };
   function hhmm(min) { var h = Math.floor(min / 60) % 24, m = ((min % 60) + 60) % 60; return String(h).padStart(2, '0') + String(Math.floor(m)).padStart(2, '0'); }
   function clockText(t) { return hhmm(Math.floor(t)) + ':' + String(Math.round((t % 1) * 60)).padStart(2, '0') + 'Z'; }
   function holding() { return flights.filter(function (f) { return f.st === 'hold'; }); }
@@ -205,7 +206,7 @@ for a problem. Editable at CV_MARSHAL, read-only at the other carrier Positions.
     document.getElementById('clock').textContent = clockText(clock);
     document.getElementById('charlie').value = hhmm(charlie) + 'Z';
     var t = document.getElementById('board'); t.textContent = '';
-    var hr = el('tr'); ['SEQ', 'A/C', 'TYPE', 'FUEL:EAT', 'ANG', 'STATUS', ''].forEach(function (h) { hr.appendChild(el('th', '', h)); }); t.appendChild(hr);
+    var hr = el('tr'); ['SEQ', 'SIDE', 'TYPE', 'FUEL:EAT', 'ANG', 'STATUS', ''].forEach(function (h) { hr.appendChild(el('th', '', h)); }); t.appendChild(hr);
     var list = ordered(), nextHold = holding().sort(function (a, b) { return a.slot - b.slot; })[0];
     list.forEach(function (f, i) {
       var tr = el('tr', f.st === 'hold' ? 'hold' : ''), c = changed[f.ac] || {};
@@ -267,12 +268,15 @@ for a problem. Editable at CV_MARSHAL, read-only at the other carrier Positions.
     var svg = document.getElementById('pattern'); while (svg.firstChild) svg.removeChild(svg.firstChild);
     var num = getComputedStyle(document.body).getPropertyValue('--num');
     var muted = '#8c9aa6', faint = '#56616c', text = '#d8e0e6', ref = '#5f6b76';
-    var X = 250, TOP = 46, PER = 32, LIN = 12, FAR = 30, COMP = 120;
-    function Y(d) { return d <= LIN ? TOP + d * PER : TOP + LIN * PER + (Math.min(d, FAR) - LIN) * COMP / (FAR - LIN); }
+    var X = 230, TOP = 46, PER = 30, LIN = 12, MF = 21, GAP = 48, PERF = 15;
+    function Y(d) { return d <= LIN ? TOP + d * PER : d <= MF ? TOP + LIN * PER + (d - LIN) * GAP / (MF - LIN) : TOP + LIN * PER + GAP + (d - MF) * PERF; }
     var abeam = 2 * PER, turnIn = 6;
     var g = sv('g', { fill: 'none', stroke: ref, 'stroke-width': 1.6 });
     g.appendChild(sv('line', { x1: X, y1: Y(0), x2: X, y2: Y(LIN) }));
-    g.appendChild(sv('line', { x1: X, y1: Y(LIN), x2: X, y2: Y(FAR), 'stroke-dasharray': '4 4' }));
+    var holdAll = list.filter(function (f) { return f.st === 'hold'; });
+    var topFix = Math.max(MF + 1, holdAll.reduce(function (m, f) { return Math.max(m, angelsOf(f) + 15); }, MF));
+    g.appendChild(sv('line', { x1: X, y1: Y(LIN), x2: X, y2: Y(MF), 'stroke-dasharray': '4 4' }));
+    g.appendChild(sv('line', { x1: X, y1: Y(MF), x2: X, y2: Y(topFix + 1) }));
     // bolter / waveoff: upwind past the ship, left to 2 nm abeam, downwind, turn in at 6 nm
     g.appendChild(sv('path', { d: 'M ' + X + ' ' + Y(0) + ' L ' + X + ' ' + (Y(0) - 20) + ' C ' + X + ' ' + (Y(0) - 52) + ', ' + (X - abeam) + ' ' + (Y(0) - 52) + ', ' + (X - abeam) + ' ' + (Y(0) - 20) +
       ' L ' + (X - abeam) + ' ' + Y(turnIn) + ' C ' + (X - abeam) + ' ' + (Y(turnIn) + 40) + ', ' + X + ' ' + (Y(turnIn) + 40) + ', ' + X + ' ' + (Y(turnIn) + 8), 'stroke-dasharray': '2 4', opacity: 0.8 }));
@@ -283,13 +287,10 @@ for a problem. Editable at CV_MARSHAL, read-only at the other carrier Positions.
       svg.appendChild(sv('line', { x1: X - 5, x2: X + 5, y1: Y(d), y2: Y(d), stroke: ref, 'stroke-width': 1.6 }));
       svg.appendChild(sv('text', { x: X + 10, y: Y(d) + 4, fill: faint, 'font-family': num, 'font-size': 12 }, String(d)));
     });
-    [20, 30].forEach(function (d) {
-      svg.appendChild(sv('line', { x1: X - 4, x2: X + 4, y1: Y(d), y2: Y(d), stroke: ref }));
-      svg.appendChild(sv('text', { x: X + 10, y: Y(d) + 4, fill: faint, 'font-family': num, 'font-size': 12 }, String(d)));
-    });
+    svg.appendChild(sv('text', { x: X + 10, y: Y(MF) + 4, fill: faint, 'font-family': num, 'font-size': 12 }, String(MF)));
     var plane = 'M0 -11 L2.3 -3.2 L12 1.4 L12 3.7 L2.3 1.8 L1.6 7.8 L4.6 10 L4.6 11.5 L0 10 L-4.6 11.5 L-4.6 10 L-1.6 7.8 L-2.3 1.8 L-12 3.7 L-12 1.4 L-2.3 -3.2 Z';
     function fuelCol(f) { var m = f.fuel - f.bingo; return m <= 0 ? '#ff5c5c' : m <= settings.margin ? '#e0a83c' : null; }
-    function side(f) { return f.ac.split(' ')[1]; }
+    function side(f) { return f.ac; }
     list.forEach(function (f) {
       if (f.st === 'hold') return;
       var bolter = f.st === 'bolter', x = bolter ? X - abeam : X, y = Y(f.dme), rot = bolter ? 180 : 0;
@@ -298,18 +299,26 @@ for a problem. Editable at CV_MARSHAL, read-only at the other carrier Positions.
       svg.appendChild(sv('text', { x: lx, y: y - 1, 'text-anchor': anchor, fill: text, 'font-family': num, 'font-size': 13 }, side(f) + ' ' + (f.lane || '')));
       svg.appendChild(sv('text', { x: lx, y: y + 14, 'text-anchor': anchor, fill: fuelCol(f) || muted, 'font-family': num, 'font-size': 12 }, f.fuel.toFixed(1)));
     });
-    // the marshal stack: one racetrack glyph at the far end, the holding flights beside it, highest at the top
-    var hold = list.filter(function (f) { return f.st === 'hold'; }).slice().sort(function (a, b) { return angelsOf(b) - angelsOf(a); });
-    var sy = Y(FAR) + 26;
-    svg.appendChild(sv('rect', { x: X - 26, y: sy, width: 52, height: 18, rx: 9, fill: 'none', stroke: ref, 'stroke-width': 1.6 }));
-    svg.appendChild(sv('text', { x: X - 34, y: sy + 13, 'text-anchor': 'end', fill: faint, 'font-family': num, 'font-size': 11 }, 'MARSHAL 157R'));
-    hold.forEach(function (f, i) {
-      svg.appendChild(sv('text', { x: X + 36, y: sy + 13 + i * 16, fill: fuelCol(f) || text, 'font-family': num, 'font-size': 13 }, side(f) + '  A' + angelsOf(f)));
+    // the marshal stack along the marshal radial: each flight's fix on the line at angels + 15 DME (the first fix 21 DME, angels 6),
+    // the racetrack's inbound leg on the radial, the outbound leg on the hot side
+    var y0 = Y(MF) - 6, y1 = Y(topFix + 1), hot = 34;
+    svg.appendChild(sv('path', { d: 'M ' + X + ' ' + y0 + ' L ' + X + ' ' + y1 + ' C ' + X + ' ' + (y1 + 22) + ', ' + (X - hot) + ' ' + (y1 + 22) + ', ' + (X - hot) + ' ' + y1 +
+      ' L ' + (X - hot) + ' ' + y0 + ' C ' + (X - hot) + ' ' + (y0 - 22) + ', ' + X + ' ' + (y0 - 22) + ', ' + X + ' ' + y0, fill: 'none', stroke: ref, 'stroke-width': 1.4, 'stroke-dasharray': '3 3' }));
+    holdAll.forEach(function (f) {
+      var d = angelsOf(f) + 15, y = Y(d);
+      svg.appendChild(sv('line', { x1: X - 4, x2: X + 4, y1: y, y2: y, stroke: '#c9d1d7', 'stroke-width': 1.6 }));
+      svg.appendChild(sv('text', { x: X + 10, y: y + 4, fill: fuelCol(f) || text, 'font-family': num, 'font-size': 12 }, side(f) + '  A' + angelsOf(f) + '  ' + d));
     });
-    svg.setAttribute('viewBox', '0 0 360 ' + Math.max(600, sy + 30 + hold.length * 16));
+    svg.appendChild(sv('text', { x: X - hot - 8, y: (y0 + y1) / 2 + 4, 'text-anchor': 'end', fill: faint, 'font-family': num, 'font-size': 11 }, 'MARSHAL ' + radial + '°'));
+    document.getElementById('mpos').textContent = MF + '–' + topFix;
+    svg.setAttribute('viewBox', '0 0 360 ' + Math.max(600, Y(topFix + 1) + 40));
   }
 
   document.getElementById('deltaBtn').addEventListener('click', function () { applyDelta(4); render(); });
+  document.getElementById('radial').addEventListener('change', function (e) {
+    var v = parseInt(e.target.value, 10); if (isFinite(v) && v >= 0 && v <= 360) radial = String(v % 360).padStart(3, '0');
+    e.target.value = radial; render();
+  });
   document.getElementById('charlie').addEventListener('change', function (e) {
     var m = /^(\d{2})(\d{2})Z?$/.exec(e.target.value.trim()); if (!m) { render(); return; }
     var b = snap(); charlie = +m[1] * 60 + +m[2]; mark(b); render();
