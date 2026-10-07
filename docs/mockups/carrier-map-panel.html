@@ -10,19 +10,24 @@
   color-scheme:dark}
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:var(--bg);color:var(--text);font:13px/1.45 var(--mono);padding-block:24px 60px;padding-inline:16px}
-main{max-width:1240px;margin:0 auto;display:grid;gap:20px}
+main{max-width:none;margin:0 auto;display:grid;gap:20px}
 h1{font-size:19px;font-weight:600}
 h2{font-size:14px;color:#fff;border-bottom:1px solid var(--line);padding-bottom:4px;font-weight:600}
 p{color:var(--muted);max-width:900px}
 a{color:#8ec7ff}
 button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid #8ec7ff;outline-offset:1px}
-.two{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(300px,1fr);gap:20px;align-items:start}
-@media (max-width:980px){.two{grid-template-columns:1fr}}
+.two{display:grid;grid-template-columns:1fr;gap:20px;align-items:start}
+@media (min-width:1700px){.two{grid-template-columns:minmax(0,1fr) 440px}}
 .panel{background:var(--panel);border:1px solid var(--line);font-size:12px;min-width:0}
 .ptitle{background:#0e1114;border-bottom:1px solid var(--line);padding:4px 10px;color:var(--muted);font-size:10.5px;letter-spacing:.06em;display:flex;gap:10px}
 .ptitle .r{margin-left:auto;color:var(--faint);letter-spacing:0}
 .map{position:relative;background:var(--well)}
-.map svg{display:block;width:100%;height:auto}
+.map svg{display:block;width:min(100%,calc(100vh - 120px));height:auto;margin:0 auto}
+.map{display:flex;justify-content:center}
+.panel:fullscreen{display:flex;flex-direction:column;background:var(--panel)}
+.panel:fullscreen .map{flex:1;align-items:center}
+.panel:fullscreen .map svg{width:min(100vw,calc(100vh - 60px))}
+.fs{font:inherit;font-size:10.5px;color:var(--muted);background:none;border:1px solid var(--line);border-radius:3px;padding:0 6px;cursor:pointer;margin-left:8px}
 .legend{display:flex;flex-wrap:wrap;gap:4px 16px;padding:6px 10px;color:var(--faint);font-size:11px;border-top:1px solid var(--line)}
 /* management */
 .grp{padding:8px 10px;border-bottom:1px solid var(--line);display:grid;gap:6px}
@@ -45,7 +50,7 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 </style></head><body><main>
 <p><a href="index.html">← mockups</a></p>
 <header>
-<h1>Carrier map and carrier management <span style="color:var(--muted);font-size:12px;font-weight:400">mockup, revision 1, 2026-10-07</span></h1>
+<h1>Carrier map and carrier management <span style="color:var(--muted);font-size:12px;font-weight:400">mockup, revision 2, 2026-10-07</span></h1>
 <p>Two normal panels. The <b>carrier map</b> is a radar picture fixed on the ship, always north-up, with range rings (the 10 nm ring
 always), the final bearing, the marshal stack, the bolter pattern and the recovery tanker. The <b>carrier management</b> panel is
 where BRC, final bearing, weather, the recovery tanker and the marshal position are set or overridden; everything else (the map, the
@@ -58,8 +63,8 @@ recovery board) only shows them. Sample: CVN-72, Case III. Side numbers and valu
 </div>
 
 <div class="two">
-<section class="panel" aria-label="Carrier map panel">
-  <div class="ptitle">CARRIER MAP <span class="r" id="maprange">range 30 nm · wheel to zoom</span></div>
+<section class="panel" id="mapPanel" aria-label="Carrier map panel">
+  <div class="ptitle">CARRIER MAP <span class="r"><span id="maprange">range 30 nm · wheel to zoom</span><button type="button" class="fs" id="fsBtn">Fullscreen</button></span></div>
   <div class="map" id="mapbox"><svg id="map" viewBox="0 0 600 600" role="img" aria-label="Carrier map, north up"></svg></div>
   <div class="legend" id="legend"></div>
 </section>
@@ -93,7 +98,7 @@ recovery board) only shows them. Sample: CVN-72, Case III. Side numbers and valu
 
 <div class="notes">
   <div><h3>Map</h3>
-  <p>Fixed on the ship and always north-up; the wheel changes the range, the centre never moves. The 10 nm ring is always drawn and labelled; the other rings follow the range (spacing in the map's Settings tab). The ship symbol points along its BRC. Aircraft are labelled by side number and altitude in hundreds of feet; colour only for a problem (amber low state, red at bingo).</p></div>
+  <p>Fixed on the ship and always north-up, range rings in dark green (the 10 nm ring brighter); the wheel changes the range, the centre never moves. The 10 nm ring is always drawn and labelled; the other rings follow the range (spacing in the map's Settings tab). The ship symbol points along its BRC. Aircraft are labelled by side number and altitude in hundreds of feet; colour only for a problem (amber low state, red at bingo).</p></div>
   <div><h3>Case I</h3>
   <p>The marshal stack and the final-bearing line give way to the port holding circle (left-hand, tangent to the BRC, ship at 3 o'clock, at most 5 nm across) and the initial 3 nm astern (CV NATOPS 6.2.1). The 10 nm ring stays.</p></div>
   <div><h3>Management</h3>
@@ -121,7 +126,7 @@ recovery board) only shows them. Sample: CVN-72, Case III. Side numbers and valu
   function radial() { return num('radial', (fb() + 180) % 360); }
   function sv(n, a, t) { var e = document.createElementNS('http://www.w3.org/2000/svg', n); for (var k in a) e.setAttribute(k, a[k]); if (t !== undefined) e.textContent = t; return e; }
   function pt(brg, nm) { var r = nm / range * 270, a = brg * Math.PI / 180; return { x: C.cs + r * Math.sin(a), y: C.cy - r * Math.cos(a) }; }
-  var grey = '#5f6b76', faint = '#56616c', muted = '#8c9aa6', text = '#d8e0e6', grid = '#1b2128';
+  var grey = '#5f6b76', faint = '#56616c', muted = '#8c9aa6', text = '#d8e0e6', grid = '#1b2128', ring = '#1f5a2e', ring10 = '#2f8a45', ringText = '#3f9a55';
   function fuelCol(a) { var m = a.fuel - a.bingo; return m <= 0 ? '#ff5c5c' : m <= 1.0 ? '#e0a83c' : null; }
 
   function draw() {
@@ -131,10 +136,10 @@ recovery board) only shows them. Sample: CVN-72, Case III. Side numbers and valu
     var step = range <= 15 ? 2.5 : range <= 40 ? 5 : 10;
     for (var r = step; r <= range + 1e-9; r += step) {
       var R = r / range * 270, ten = Math.abs(r - 10) < 1e-9;
-      svg.appendChild(sv('circle', { cx: C.cs, cy: C.cy, r: R, fill: 'none', stroke: ten ? grey : grid, 'stroke-width': ten ? 1.4 : 1 }));
-      if (ten || r % 10 === 0) svg.appendChild(sv('text', { x: C.cs + 4, y: C.cy - R - 4, fill: ten ? muted : faint, 'font-family': 'Consolas, monospace', 'font-size': 11 }, String(r)));
+      svg.appendChild(sv('circle', { cx: C.cs, cy: C.cy, r: R, fill: 'none', stroke: ten ? ring10 : ring, 'stroke-width': ten ? 1.6 : 1.2 }));
+      if (ten || r % 10 === 0) svg.appendChild(sv('text', { x: C.cs + 4, y: C.cy - R - 4, fill: ringText, 'font-family': 'Consolas, monospace', 'font-size': 11 }, String(r)));
     }
-    if (range < 10) { var R10 = 10 / range * 270; svg.appendChild(sv('circle', { cx: C.cs, cy: C.cy, r: R10, fill: 'none', stroke: grey, 'stroke-width': 1.4 })); }
+    if (range < 10) { var R10 = 10 / range * 270; svg.appendChild(sv('circle', { cx: C.cs, cy: C.cy, r: R10, fill: 'none', stroke: ring10, 'stroke-width': 1.6 })); }
     // north
     svg.appendChild(sv('text', { x: C.cs, y: 18, 'text-anchor': 'middle', fill: muted, 'font-family': 'Consolas, monospace', 'font-size': 12 }, 'N'));
     for (var b = 0; b < 360; b += 30) {
@@ -164,7 +169,7 @@ recovery board) only shows them. Sample: CVN-72, Case III. Side numbers and valu
     var p1 = off(ahead, a1), p2 = off(astern, a1), p3 = astern, p4 = ahead;
     svg.appendChild(sv('path', { d: 'M ' + p4.x + ' ' + p4.y + ' L ' + p1.x + ' ' + p1.y + ' L ' + p2.x + ' ' + p2.y + ' L ' + p3.x + ' ' + p3.y + ' Z', fill: 'none', stroke: grey, 'stroke-dasharray': '2 4', opacity: 0.7 }));
     var tk = off(pt(brc, 2), a1);
-    plane(svg, tk.x, tk.y, (brc + 180) % 360, v('tkr') + ' ' + String(Math.round(num('tkralt', 6000) / 100)).padStart(3, '0'), 'TKR give ' + v('give'), null);
+    plane(svg, tk.x, tk.y, (brc + 180) % 360, v('tkr') + ' ' + String(Math.round(num('tkralt', 6000) / 100)).padStart(3, '0'), 'TKR', null);
     // the ship, pointing along its BRC
     var hd = brc * Math.PI / 180;
     svg.appendChild(sv('path', { d: 'M 0 -12 L 5 6 L -5 6 Z', transform: 'translate(' + C.cs + ' ' + C.cy + ') rotate(' + brc + ')', fill: '#c9d1d7' }));
@@ -225,6 +230,12 @@ recovery board) only shows them. Sample: CVN-72, Case III. Side numbers and valu
       caseNum = +b.dataset.case; document.getElementById('case').value = caseNum === 1 ? 'I' : 'III'; draw();
     });
   });
+  document.getElementById('fsBtn').addEventListener('click', function () {
+    var el = document.getElementById('mapPanel');
+    if (document.fullscreenElement) document.exitFullscreen().catch(function () {});
+    else if (el.requestFullscreen) el.requestFullscreen().catch(function () {});
+  });
+  document.addEventListener('fullscreenchange', function () { document.getElementById('fsBtn').textContent = document.fullscreenElement ? 'Exit fullscreen' : 'Fullscreen'; });
   srcUpdate(); draw();
 })();
 </script>
