@@ -1,7 +1,5 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Marshal Stack Mockup</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=B612:wght@400;700&family=B612+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
 /* Recovery board after the CATCC status board's layout (aircraft in landing order + the Case III pattern), on crc-desktop's
    dark-cockpit rules: grey when in order; amber = needs attention; red = at bingo or a foul deck. */
@@ -11,7 +9,6 @@
   --mono:'Consolas','DejaVu Sans Mono',ui-monospace,monospace;
   --ui:var(--mono);--num:var(--mono);
   color-scheme:dark}
-body.b612{--ui:'B612','Segoe UI',sans-serif;--num:'B612 Mono','Consolas',monospace}
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:var(--bg);color:var(--text);font:13px/1.45 var(--mono);padding-block:24px 60px;padding-inline:16px}
 main{max-width:1240px;margin:0 auto;display:grid;gap:20px}
@@ -86,7 +83,7 @@ table.t th{color:var(--muted);font-weight:400;background:var(--panel)}
 </style></head><body><main>
 <p><a href="index.html">← mockups</a></p>
 <header>
-<h1>Marshal / recovery board <span style="color:var(--muted);font-size:12px;font-weight:400">mockup, revision 3, 2026-10-06</span></h1>
+<h1>Marshal / recovery board <span style="color:var(--muted);font-size:12px;font-weight:400">mockup, revision 4, 2026-10-07</span></h1>
 <p>Laid out after a CATCC Case III recovery board: every recovering aircraft in landing order, next to land at the top, beside a
 schematic of the approach that shows where each one is. Kept on crc-desktop's rules: grey while the recovery is in order, colour only
 for a problem. Editable at CV_MARSHAL, read-only at the other carrier Positions. Callsigns, fuel and times are invented.</p>
@@ -97,12 +94,10 @@ for a problem. Editable at CV_MARSHAL, read-only at the other carrier Positions.
   <button type="button" data-state="low" aria-pressed="false">Low state</button>
   <button type="button" data-state="late" aria-pressed="false">Past EAT, not pushed</button>
   <button type="button" data-state="delta" aria-pressed="false">Delta 4</button>
+  <button type="button" data-state="bolter" aria-pressed="false">Bolter</button>
   <button type="button" data-state="foul" aria-pressed="false">Foul deck</button>
 </div>
-<div class="bar" role="group" aria-label="Font to compare"><span class="lbl">Font</span>
-  <button type="button" data-font="mono" aria-pressed="false">crc-desktop (Consolas)</button>
-  <button type="button" data-font="b612" aria-pressed="true">B612 (Airbus cockpit font)</button>
-</div>
+
 
 <section class="rb" aria-label="Recovery board panel">
   <div class="ptitle">MARSHAL</div>
@@ -121,7 +116,7 @@ for a problem. Editable at CV_MARSHAL, read-only at the other carrier Positions.
       <div class="tw"><table class="bd" id="board"></table></div>
       <div class="togo"><span>TO GO</span><b id="togo">8</b></div>
     </div>
-    <div class="patcol"><svg id="pattern" viewBox="0 0 360 600" role="img" aria-label="Case III approach pattern"></svg></div>
+    <div class="patcol"><svg id="pattern" viewBox="0 0 360 640" role="img" aria-label="Case III picture"></svg></div>
   </div>
 </section>
 
@@ -138,7 +133,7 @@ for a problem. Editable at CV_MARSHAL, read-only at the other carrier Positions.
   <div><h3>Reading the board</h3>
   <p>FUEL:EAT is the fuel state in thousands of pounds and the EAT minute, as on the real board. ANG is the holding altitude; DME is not shown because it is always angels + 15. STATUS is HOLD, COMM (commenced), APP A / APP B (the approach lane) or TRAP. SEQ is the landing order. TO GO counts the aircraft still to recover.</p></div>
   <div><h3>Try it</h3>
-  <p>Drag a HOLD row to re-sequence: the flights whose angels or EAT changed show those values amber until you click the row to say the new clearance was passed. Commence sits on the next flight to push. The pattern on the right places commenced and approaching aircraft by DME from the radar picture.</p></div>
+  <p>Drag a HOLD row to re-sequence: the flights whose angels or EAT changed show those values amber until you click the row to say the new clearance was passed. Commence sits on the next flight to push. The picture on the right places commenced and approaching aircraft on the final bearing by DME (0–12 nm to scale, compressed beyond), a bolter on the downwind, and the holding flights at the marshal stack with their angels.</p></div>
   <div><h3>Kept from the real board, changed for ours</h3>
   <p>Kept: landing order, FUEL:EAT, the approach schematic, TO GO, the header strip. Changed: the yellow and orange text on normal values is grey here; the green bar (deck status) shows only when the deck is foul, and needs deck state from the server, which is not modelled yet.</p></div>
 </div>
@@ -183,6 +178,7 @@ for a problem. Editable at CV_MARSHAL, read-only at the other carrier Positions.
     if (state === 'late') clock = 20 * 60 + 45.3;   // LIBERTY 600's EAT 2044 has passed
     if (state === 'delta') applyDelta(4);
     if (state === 'foul') foul = true;
+    if (state === 'bolter') { flights[0].st = 'bolter'; flights[0].dme = 3.2; }
   }
   function snap() { var m = {}; holding().forEach(function (f) { m[f.ac] = { ang: angelsOf(f), eat: eatOf(f) }; }); return m; }
   function mark(before) {
@@ -197,7 +193,7 @@ for a problem. Editable at CV_MARSHAL, read-only at the other carrier Positions.
   }
   function applyDelta(n) { var b = snap(); charlie += n; mark(b); }
   function ordered() { // landing order: on approach by DME, commenced, then holding by slot
-    var app = flights.filter(function (f) { return f.st === 'app'; }).sort(function (a, b) { return a.dme - b.dme; });
+    var app = flights.filter(function (f) { return f.st === 'app' || f.st === 'bolter'; }).sort(function (a, b) { return (a.st === 'bolter' ? 6 : a.dme) - (b.st === 'bolter' ? 6 : b.dme); });
     var comm = flights.filter(function (f) { return f.st === 'comm'; });
     var hold = holding().sort(function (a, b) { return a.slot - b.slot; });
     return app.concat(comm, hold);
@@ -222,7 +218,7 @@ for a problem. Editable at CV_MARSHAL, read-only at the other carrier Positions.
       var es = el('span', c.eat ? 'chg' : late ? 'late' : '', String(eatOf(f) % 60).padStart(2, '0'));
       fe.appendChild(fs); fe.appendChild(document.createTextNode(':')); fe.appendChild(es); tr.appendChild(fe);
       tr.appendChild(el('td', c.ang ? 'chg' : '', angelsOf(f) === null ? '' : String(angelsOf(f))));
-      tr.appendChild(el('td', 'st', f.st === 'app' ? 'APP ' + f.lane : f.st === 'comm' ? 'COMM' : 'HOLD'));
+      tr.appendChild(el('td', 'st', f.st === 'app' ? 'APP ' + f.lane : f.st === 'bolter' ? 'BOLTER' : f.st === 'comm' ? 'COMM' : 'HOLD'));
       var act = el('td', 'act');
       if (f === nextHold) {
         var b = el('button', 'commence', 'Commence'); b.type = 'button';
@@ -257,7 +253,10 @@ for a problem. Editable at CV_MARSHAL, read-only at the other carrier Positions.
     });
   }
 
-  // The Case III pattern, ship at the top, final coming up from the bottom (after the real board's schematic).
+  // The Case III picture after the CV NATOPS / Hornet pocket-checklist profile: ship at the top, one line along the final bearing
+  // (the marshal radial reciprocal, corrected onto the final bearing by 12 nm), 0-12 nm to scale, beyond that compressed out to the
+  // marshal fixes (angels + 15 DME); the bolter/waveoff racetrack on the left (2 nm abeam, turning in at 6 nm). Milestones are not
+  // labelled: the controller knows them.
   function sv(name, attrs, text) {
     var e = document.createElementNS('http://www.w3.org/2000/svg', name);
     for (var k in attrs) e.setAttribute(k, attrs[k]);
@@ -266,36 +265,48 @@ for a problem. Editable at CV_MARSHAL, read-only at the other carrier Positions.
   }
   function pattern(list) {
     var svg = document.getElementById('pattern'); while (svg.firstChild) svg.removeChild(svg.firstChild);
-    var css = getComputedStyle(document.body), num = css.getPropertyValue('--num'), muted = '#8c9aa6', faint = '#56616c', text = '#d8e0e6';
-    var X = 220, top = 50, perNm = 38; // final course: DME 0 at the ship, 12 at the bottom
-    function Y(d) { return top + d * perNm; }
-    var g = sv('g', { fill: 'none', stroke: '#5f6b76', 'stroke-width': 2 });
-    g.appendChild(sv('line', { x1: X, y1: Y(0), x2: X, y2: Y(13.5) }));
-    // the penetration from marshal: down the left side, turning onto final at about 10 DME
-    g.appendChild(sv('path', { d: 'M ' + (X - 100) + ' ' + Y(-0.6) + ' L ' + (X - 100) + ' ' + Y(9) + ' C ' + (X - 100) + ' ' + Y(12.8) + ', ' + X + ' ' + Y(12.8) + ', ' + X + ' ' + Y(10.5) }));
+    var num = getComputedStyle(document.body).getPropertyValue('--num');
+    var muted = '#8c9aa6', faint = '#56616c', text = '#d8e0e6', ref = '#5f6b76';
+    var X = 250, TOP = 46, PER = 32, LIN = 12, FAR = 30, COMP = 120;
+    function Y(d) { return d <= LIN ? TOP + d * PER : TOP + LIN * PER + (Math.min(d, FAR) - LIN) * COMP / (FAR - LIN); }
+    var abeam = 2 * PER, turnIn = 6;
+    var g = sv('g', { fill: 'none', stroke: ref, 'stroke-width': 1.6 });
+    g.appendChild(sv('line', { x1: X, y1: Y(0), x2: X, y2: Y(LIN) }));
+    g.appendChild(sv('line', { x1: X, y1: Y(LIN), x2: X, y2: Y(FAR), 'stroke-dasharray': '4 4' }));
+    // bolter / waveoff: upwind past the ship, left to 2 nm abeam, downwind, turn in at 6 nm
+    g.appendChild(sv('path', { d: 'M ' + X + ' ' + Y(0) + ' L ' + X + ' ' + (Y(0) - 20) + ' C ' + X + ' ' + (Y(0) - 52) + ', ' + (X - abeam) + ' ' + (Y(0) - 52) + ', ' + (X - abeam) + ' ' + (Y(0) - 20) +
+      ' L ' + (X - abeam) + ' ' + Y(turnIn) + ' C ' + (X - abeam) + ' ' + (Y(turnIn) + 40) + ', ' + X + ' ' + (Y(turnIn) + 40) + ', ' + X + ' ' + (Y(turnIn) + 8), 'stroke-dasharray': '2 4', opacity: 0.8 }));
     svg.appendChild(g);
-    svg.appendChild(sv('rect', { x: X - 6, y: Y(0) - 26, width: 12, height: 44, rx: 4, fill: '#c9d1d7', transform: 'rotate(9 ' + X + ' ' + (Y(0) - 4) + ')' }));
+    // the ship, angled deck
+    svg.appendChild(sv('path', { d: 'M ' + (X - 7) + ' ' + (Y(0) + 12) + ' L ' + (X - 9) + ' ' + (Y(0) - 18) + ' L ' + (X + 1) + ' ' + (Y(0) - 26) + ' L ' + (X + 9) + ' ' + (Y(0) - 14) + ' L ' + (X + 7) + ' ' + (Y(0) + 12) + ' Z', fill: '#c9d1d7' }));
     [2, 4, 6, 8, 10, 12].forEach(function (d) {
-      svg.appendChild(sv('line', { x1: X - 6, x2: X + 6, y1: Y(d), y2: Y(d), stroke: '#5f6b76', 'stroke-width': 2 }));
-      svg.appendChild(sv('text', { x: X - 12, y: Y(d) + 5, 'text-anchor': 'end', fill: faint, 'font-family': num, 'font-size': 14 }, String(d)));
+      svg.appendChild(sv('line', { x1: X - 5, x2: X + 5, y1: Y(d), y2: Y(d), stroke: ref, 'stroke-width': 1.6 }));
+      svg.appendChild(sv('text', { x: X + 10, y: Y(d) + 4, fill: faint, 'font-family': num, 'font-size': 12 }, String(d)));
     });
-    svg.appendChild(sv('text', { x: X - 100, y: Y(-0.6) - 8, 'text-anchor': 'middle', fill: faint, 'font-family': num, 'font-size': 11 }, 'FROM MARSHAL'));
-    var plane = 'M0 -12 L2.5 -3.5 L13 1.5 L13 4 L2.5 2 L1.7 8.5 L5 11 L5 12.5 L0 11 L-5 12.5 L-5 11 L-1.7 8.5 L-2.5 2 L-13 4 L-13 1.5 L-2.5 -3.5 Z';
+    [20, 30].forEach(function (d) {
+      svg.appendChild(sv('line', { x1: X - 4, x2: X + 4, y1: Y(d), y2: Y(d), stroke: ref }));
+      svg.appendChild(sv('text', { x: X + 10, y: Y(d) + 4, fill: faint, 'font-family': num, 'font-size': 12 }, String(d)));
+    });
+    var plane = 'M0 -11 L2.3 -3.2 L12 1.4 L12 3.7 L2.3 1.8 L1.6 7.8 L4.6 10 L4.6 11.5 L0 10 L-4.6 11.5 L-4.6 10 L-1.6 7.8 L-2.3 1.8 L-12 3.7 L-12 1.4 L-2.3 -3.2 Z';
+    function fuelCol(f) { var m = f.fuel - f.bingo; return m <= 0 ? '#ff5c5c' : m <= settings.margin ? '#e0a83c' : null; }
+    function side(f) { return f.ac.split(' ')[1]; }
     list.forEach(function (f) {
       if (f.st === 'hold') return;
-      var onFinal = f.dme <= 10.5, x = onFinal ? X : X - 100, y = onFinal ? Y(f.dme) : Y(Math.max(0, 20.5 - f.dme) * 0.9);
-      var m = f.fuel - f.bingo, fc = m <= 0 ? '#ff5c5c' : m <= settings.margin ? '#e0a83c' : text;
-      svg.appendChild(sv('path', { d: plane, transform: 'translate(' + x + ' ' + y + ')', fill: '#e6edf3' }));
-      var lx = onFinal ? x + 22 : x + 20;
-      svg.appendChild(sv('text', { x: lx, y: y - 1, fill: text, 'font-family': num, 'font-size': 14 }, f.ac.split(' ')[1] + ' ' + f.lane));
-      svg.appendChild(sv('text', { x: lx, y: y + 16, fill: fc === text ? muted : fc, 'font-family': num, 'font-size': 13 }, f.fuel.toFixed(1)));
+      var bolter = f.st === 'bolter', x = bolter ? X - abeam : X, y = Y(f.dme), rot = bolter ? 180 : 0;
+      svg.appendChild(sv('path', { d: plane, transform: 'translate(' + x + ' ' + y + ') rotate(' + rot + ')', fill: '#e6edf3' }));
+      var lx = bolter ? x - 16 : x - 18, anchor = 'end';
+      svg.appendChild(sv('text', { x: lx, y: y - 1, 'text-anchor': anchor, fill: text, 'font-family': num, 'font-size': 13 }, side(f) + ' ' + (f.lane || '')));
+      svg.appendChild(sv('text', { x: lx, y: y + 14, 'text-anchor': anchor, fill: fuelCol(f) || muted, 'font-family': num, 'font-size': 12 }, f.fuel.toFixed(1)));
     });
-    var hold = list.filter(function (f) { return f.st === 'hold'; });
-    svg.appendChild(sv('text', { x: 14, y: 520, fill: faint, 'font-family': num, 'font-size': 11 }, 'IN MARSHAL'));
+    // the marshal stack: one racetrack glyph at the far end, the holding flights beside it, highest at the top
+    var hold = list.filter(function (f) { return f.st === 'hold'; }).slice().sort(function (a, b) { return angelsOf(b) - angelsOf(a); });
+    var sy = Y(FAR) + 26;
+    svg.appendChild(sv('rect', { x: X - 26, y: sy, width: 52, height: 18, rx: 9, fill: 'none', stroke: ref, 'stroke-width': 1.6 }));
+    svg.appendChild(sv('text', { x: X - 34, y: sy + 13, 'text-anchor': 'end', fill: faint, 'font-family': num, 'font-size': 11 }, 'MARSHAL 157R'));
     hold.forEach(function (f, i) {
-      var m = f.fuel - f.bingo, c = m <= 0 ? '#ff5c5c' : m <= settings.margin ? '#e0a83c' : text;
-      svg.appendChild(sv('text', { x: 14, y: 540 + i * 17, fill: c, 'font-family': num, 'font-size': 14 }, f.ac.split(' ')[1] + '  A' + angelsOf(f)));
+      svg.appendChild(sv('text', { x: X + 36, y: sy + 13 + i * 16, fill: fuelCol(f) || text, 'font-family': num, 'font-size': 13 }, side(f) + '  A' + angelsOf(f)));
     });
+    svg.setAttribute('viewBox', '0 0 360 ' + Math.max(600, sy + 30 + hold.length * 16));
   }
 
   document.getElementById('deltaBtn').addEventListener('click', function () { applyDelta(4); render(); });
@@ -311,13 +322,6 @@ for a problem. Editable at CV_MARSHAL, read-only at the other carrier Positions.
       load(b.dataset.state); render();
     });
   });
-  document.querySelectorAll('[data-font]').forEach(function (b) {
-    b.addEventListener('click', function () {
-      document.querySelectorAll('[data-font]').forEach(function (o) { o.setAttribute('aria-pressed', String(o === b)); });
-      document.body.classList.toggle('b612', b.dataset.font === 'b612'); render();
-    });
-  });
-  document.body.classList.add('b612');
   load('normal'); render();
 })();
 </script>
