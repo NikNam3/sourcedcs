@@ -9,6 +9,8 @@ import { AIRSPACE_ENTRY_POSITIONS, COORDINATION_TARGETS, HAND_BACK_TO, TOFI_COUN
 import { openPopover } from './bay/popover-portal.js';
 import { _canApproveAirspaceEntry, _canConvertToArrival, _openAirspaceEntryPopover, _pendingConvertStripId } from './bay/popovers/airspace-entry.js';
 import { _openBindPopover } from './bay/popovers/bind.js';
+import { _openDivertPopover } from './bay/popovers/divert.js';
+import { divertOffer } from './divert-rules.js';
 import { _canProposeCoordination, _dispatchCoordination, _openCoordinatePopover } from './bay/popovers/coordination.js';
 import { _isPendingCoordinationReplica, _isRejectedCoordinationReplica } from './bay/coordination-rules.js';
 import { _openMarsaPopover } from './bay/popovers/marsa.js';
@@ -169,6 +171,15 @@ function _stripMenuItems(strip) {
         _setPendingConvertStripId(null);
         convertStripToArrival(strip);
       } });
+  }
+
+  const divert = divertOffer(strip);
+  if (divert) {
+    const canAct = !!acting && acting === strip.ownerPositionId;
+    items.push({ group: 'Flight', key: 'divert', label: 'Divert…', cls: 'efsp-divert-btn', enabled: divert.enabled && canAct,
+      reason: !divert.enabled ? divert.reason : (!canAct ? `you do not hold ${strip.ownerPositionId}` : ''),
+      title: 'a new destination and a new clearance for this flight',
+      run: (anchor) => _openDivertPopover(strip, anchor) });
   }
 
   // Strip

@@ -10,6 +10,7 @@ import { splitChipFor } from './formation-rules.js';
 import { arJoinFor } from './ato-strip.js';
 import { _stripEl } from './strip-dom.js';
 import { ALERT_SLOT_KEYS, INDICATOR_ORDER } from './strip-alerts.js';
+import { divertChipFor } from './divert-rules.js';
 
 // The indicator slots on a Strip's face (DESK-SPLIT, split out of strip-view.js): standing state, always drawn, lit or dim.
 
@@ -138,6 +139,14 @@ export function _buildIndicatorSlots(strip, el, obligation, alerts) {
     slots.appendChild(_indicator('prevLeg', `${strip.previousLeg.stripType} ×${count}`, 'on', 'efsp-previous-leg-badge',
       Object.entries(strip.previousLeg.annotations)
         .map(([blockId, cell]) => `${blockId}: ${(cell.entries || []).map(e => e.value).join(' / ')}`).join('\n')));
+  }
+  // The latest divert: the destination it replaced struck through, the new one beside it (crc-sync docs/adr/0111 §4).
+  const divert = divertChipFor(strip, formatZuluHhmm);
+  if (divert) {
+    const chip = _indicator('divert', '', 'on', 'efsp-divert-chip', divert.title);
+    if (divert.from) chip.appendChild(_stripEl('s', 'efsp-divert-old', divert.from));
+    chip.appendChild(document.createTextNode(` ${divert.to}`));
+    slots.appendChild(chip);
   }
   return slots.children && slots.children.length === 0 ? null : slots;
 }

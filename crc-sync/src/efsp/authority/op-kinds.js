@@ -22,6 +22,8 @@ const OP_KINDS = [
   // comment for why that exclusion pattern exists, and why it applies here
   // too, not just to those 5.
   'ConvertToArrival',
+  // docs/adr/0111 — a new destination and a new clearance on the Strip an AP/CTR holds.
+  'Divert',
   // WP4A second slice (docs/adr/0025) — TOFI (guide §4.6.3), the ATC<->MRU
   // sub-protocol. Deliberately NOT folded into COORDINATION_OP_KINDS below
   // (that set is specifically the 5 ATC<->ATC primitives) and deliberately
@@ -52,7 +54,7 @@ const COORDINATION_STEP_OP_KINDS = ['ControlRelease'];
 // (docs/adr/0023). Kept separate from COORDINATION_OP_KINDS since it isn't
 // one (no cross-Facility exchange, no replica — a same-Facility in-place
 // role change), but needs the identical exclusion from OPS/CD/GC/LC.
-const AP_CTR_ONLY_OP_KINDS = ['ConvertToArrival'];
+const AP_CTR_ONLY_OP_KINDS = ['ConvertToArrival', 'Divert'];
 
 // Approving a flight into an airspace is something the Position working that
 // airborne flight does — AP and CTR here, since they are the Positions that

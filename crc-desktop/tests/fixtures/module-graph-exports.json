@@ -569,6 +569,10 @@
    "_dispatchCoordination",
    "_openCoordinatePopover"
   ],
+  "panels/efsp/bay/popovers/divert.js": [
+   "_openDivertPopover",
+   "dispatchDivert"
+  ],
   "panels/efsp/bay/popovers/formation.js": [
    "_openJoinPopover",
    "_openSplitPopover",
@@ -709,6 +713,14 @@
    "getEfspCorrelationForStrip",
    "getEfspCorrelationStats",
    "stripIdsForTrackId"
+  ],
+  "panels/efsp/divert-rules.js": [
+   "DIVERTABLE_STATES",
+   "DIVERT_FIELDS",
+   "DIVERT_POSITIONS",
+   "buildDivertOp",
+   "divertChipFor",
+   "divertOffer"
   ],
   "panels/efsp/dot-command.js": [
    "parseDotCommand"
