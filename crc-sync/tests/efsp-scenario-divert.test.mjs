@@ -18,11 +18,16 @@ for (const [k, v] of Object.entries({
   CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH: 'board.json',
   CRCSYNC_EFSP_MUTATION_LOG_PATH: 'mutations.jsonl',
   CRCSYNC_EFSP_AIRSPACES_PATH: 'airspaces.json',
+  CRCSYNC_EFSP_TRAFFIC_COUNT_PATH: 'traffic-count.jsonl',
+  CRCSYNC_EFSP_METRICS_PATH: 'metrics.json',
+  CRCSYNC_EFSP_INSTRUMENTATION_CONFIG_PATH: 'instrumentation.json',
 })) process.env[k] = path.join(tmpDir, v);
 fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, '{}');
 
 const { createEfsp } = await import('../src/efsp/index.js');
-const { crew, hold, freshEfsp, act, mustAct, DEPARTURE_FLIGHT_DATA, airborneDeparture, handedToCenter } = await import('./helpers/efsp-scenario.mjs');
+const { crew, hold, freshEfsp, act, mustAct, advance, DEPARTURE_FLIGHT_DATA, airborneDeparture, handedToCenter } = await import('./helpers/efsp-scenario.mjs');
+const { TrafficCount } = await import('../src/efsp/traffic-count.js');
+const facilityConfig = (await import('../src/efsp/facility-config.js')).createFacilityConfig();
 
 const STAFFED = { OPS: 'INCIRLIK', CD: 'INCIRLIK', GC: 'INCIRLIK', LC: 'INCIRLIK', AP: 'INCIRLIK', CTR: 'CENTER', CV_MARSHAL: 'CARRIER' };
 const world = () => freshEfsp(createEfsp, STAFFED);
@@ -168,4 +173,45 @@ test('Divert is undoable: strip type, state, destination and the altitude histor
   const fd = efsp.flightDataStore.getFlightData(undone.flightDataId);
   assert.equal(fd.filed.destinationAirport, 'OSDI');
   assert.deepEqual(fd.clearance.altitude.entries.map(e => e.status), ['VOIDED'], 'append-only: voided, not erased');
+});
+
+test('a divert on a handed-off flight: the sender cannot, the receiver only once control has transferred', () => {
+  const { efsp, c } = world();
+  const o = overflightAt(efsp, c, 'CTR', 'OVR8');
+  const atSector = mustAct(efsp, c.CTR, 'CTR', o, { kind: 'SetState', toState: 'IN_SECTOR' });
+  const proposed = mustAct(efsp, c.CTR, 'CTR', atSector, { kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'INCIRLIK', toPositionId: 'AP' });
+  const replica = mustAct(efsp, c.AP, 'AP', apBoard(efsp).getStrip(proposed.coordination.peerStripId), { kind: 'HANDOFF', action: 'ACCEPT' });
+  const sender = ctrBoard(efsp).getStrip(o.stripId);
+  assert.equal(act(efsp, c.CTR, 'CTR', sender, { kind: 'Divert', destination: 'LTAG' }).ok, false, 'a HANDED_OFF sender does not divert');
+  const early = act(efsp, c.AP, 'AP', replica, { kind: 'Divert', destination: 'LTAG' });
+  assert.equal(early.ok, false);
+  assert.match(early.detail, /control of this flight has not transferred/);
+  mustAct(efsp, c.AP, 'AP', replica, { kind: 'HANDOFF', action: 'TRANSFER_CONTROL' });
+  const late = act(efsp, c.AP, 'AP', apBoard(efsp).getStrip(replica.stripId), { kind: 'Divert', destination: 'LTAG' });
+  assert.equal(late.ok, true, JSON.stringify(late));
+  assert.equal(late.strip.stripType, 'ARRIVAL');
+});
+
+test('traffic count: an overflight that became an arrival counts as an arrival, an arrival that became an overflight as an overflight', async () => {
+  const { efsp, c } = world();
+  const counter = new TrafficCount({
+    mutationLog: efsp.mutationLog, flightDataStore: efsp.flightDataStore, boardStoreFor: efsp.boardStoreFor,
+    facilityIds: facilityConfig.getFacilityIds(), config: { retentionDays: 400, homeAirports: { INCIRLIK: ['LTAG'] } },
+  });
+  // overflight at AP -> Incirlik -> flown down and off the runway
+  let a = overflightAt(efsp, c, 'AP', 'CNT1');
+  a = mustAct(efsp, c.AP, 'AP', a, { kind: 'Divert', destination: 'LTAG' });
+  const board = apBoard(efsp);
+  for (let i = 0; i < 12 && a.state !== 'DROPPED'; i++) a = await advance(efsp, c[a.ownerPositionId], a.ownerPositionId, board.getStrip(a.stripId));
+  assert.equal(a.state, 'DROPPED');
+  // arrival at AP -> untowered -> an overflight, worked and dropped
+  let b = mustAct(efsp, c.AP, 'AP', null, { kind: 'CreateStrip', bayId: 'ap-inbound', rackId: 'main', stripType: 'ARRIVAL', flightData: { callsign: 'CNT2', aircraftType: 'C-130', wakeCategory: 'H', originAirport: 'LLRD' } });
+  b = mustAct(efsp, c.AP, 'AP', b, { kind: 'Divert', destination: 'LTAI' });
+  assert.equal(b.stripType, 'OVERFLIGHT');
+  for (let i = 0; i < 6 && b.state !== 'DROPPED'; i++) b = await advance(efsp, c.AP, 'AP', board.getStrip(b.stripId));
+  const records = counter.records();
+  assert.equal(records.find(r => r.stripId === a.stripId).stripType, 'ARRIVAL');
+  assert.equal(records.find(r => r.stripId === b.stripId).stripType, 'OVERFLIGHT');
+  assert.equal(records.find(r => r.stripId === b.stripId).counted, true);
+  assert.equal(counter.reconcile().ok, true);
 });
