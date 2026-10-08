@@ -195,15 +195,18 @@ const MARSHAL_MESSAGE_FIELDS = Object.freeze([
  * @param {object} [args.derived]  marshal-stack.deriveEntry() for this flight, or null
  * @param {string} [args.caseValue] the recovery Case (the record's value)
  * @param {object} [args.shipState]
- * @param {*}      [args.shipWx]   whatever L17 sources; null when unknown
+ * @param {object} [args.state]    the resolved carrier state (carrier-state.js, ADR 0113): the altimeter in force and the
+ *                                 ship's weather come from it, overrides included; without it the banner's altimeter is used
+ * @param {*}      [args.shipWx]   overrides the weather built from `state`
  * @param {number} [args.magneticVariationDeg]
  */
-function marshalMessage({ flightData = null, derived = null, caseValue = null, shipState = null, shipWx = null, magneticVariationDeg = null } = {}) {
+function marshalMessage({ flightData = null, derived = null, caseValue = null, shipState = null, state = null, shipWx = null, magneticVariationDeg = null } = {}) {
   const identity = _isObj(flightData) && _isObj(flightData.identity) ? flightData.identity : {};
   const c = carrierFlightOf(flightData);
   const d = _isObj(derived) ? derived : {};
   const s = _isObj(shipState) ? shipState : {};
   const ref = s.headingRef === 'GRID' ? 'GRID' : 'TRUE';
+  const wx = _isObj(state) && _isObj(state.weather) ? state.weather : null;
   const values = {
     callsign: identity.callsign ?? null,
     type: identity.aircraftType ?? null,
@@ -215,8 +218,8 @@ function marshalMessage({ flightData = null, derived = null, caseValue = null, s
     eatPush: d.pushTimeUtc ?? null,
     expectedFinalBearing: d.expectedFinalBearingDeg ?? s.finalBearingDeg ?? null,
     approachButton: c.approachButton,
-    altimeter: s.altimeterInHg ?? null,
-    shipWx: shipWx ?? null,
+    altimeter: (wx ? wx.altimeter.value : s.altimeterInHg) ?? null,
+    shipWx: shipWx ?? (wx ? { ceilingFt: wx.ceiling.value, visibilityNm: wx.visibility.value, windOverDeckKt: wx.windOverDeck.value } : null),
     fuelLowState: c.lowStateLb,
     bingoField: c.bingoField,
     bingoFuel: c.bingoFuelLb,

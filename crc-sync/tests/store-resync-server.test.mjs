@@ -62,7 +62,7 @@ test('the snapshot carries storeSeqs and storeEpochs; the heartbeat names every 
 test('a carrier ack and delta carry carrierSeq and carrierEpoch', () => {
   const efsp = createEfsp();
   const c = crew(efsp, { CV_PRIFLY: 'CARRIER' });
-  const r = mustCarrierAct(efsp, c.CV_PRIFLY, 'CV_PRIFLY', { kind: 'SetCase', to: 'II' });
+  const r = mustCarrierAct(efsp, c.CV_PRIFLY, 'CV_PRIFLY', { kind: 'SetCarrierState', field: 'case', value: 'II' });
   const delta = r.broadcasts.find(f => f.type === 'efsp-carrier-delta');
   for (const m of [r.ack, delta]) {
     assert.equal(m.carrierSeq, efsp.carrierStore.currentSeq);
@@ -74,7 +74,7 @@ test('a carrier ack and delta carry carrierSeq and carrierEpoch', () => {
 test('a stores-only resync answers each store whose seq or epoch differs with its slice, and only those', () => {
   const efsp = createEfsp();
   const c = crew(efsp, { CV_PRIFLY: 'CARRIER', CD: 'INCIRLIK' });
-  mustCarrierAct(efsp, c.CV_PRIFLY, 'CV_PRIFLY', { kind: 'SetCase', to: 'I' });
+  mustCarrierAct(efsp, c.CV_PRIFLY, 'CV_PRIFLY', { kind: 'SetCarrierState', field: 'case', value: 'I' });
   const beat = efsp.heartbeatStores();
   const have = Object.fromEntries(KEYS.map(k => [k, { lastSeq: beat[k].seq, epoch: beat[k].epoch }]));
 

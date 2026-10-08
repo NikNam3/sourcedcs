@@ -251,7 +251,8 @@ class CarrierStore extends SyncedStore {
       subject: { carrierHullId: mutation.hullId || this.defaultHullId },
       actingPositionId, by, result, before,
       after: () => (result.record ? deepClone(result.record) : undefined),
-      extra,
+      // A state change names the field it set or cleared (the typed value is in `after`, the old one in `before`).
+      extra: mutation.op && mutation.op.kind === STATE_OP ? { field: mutation.op.field, ...extra } : extra,
     });
   }
 

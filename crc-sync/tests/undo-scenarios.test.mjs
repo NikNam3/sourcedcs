@@ -214,7 +214,7 @@ test('U4: Commence undone is UnmarkPushed; a PriFly removal undone is Reinsert; 
   assert.deepEqual(u.broadcasts.slots, ['primary', 'carrier'], 'U19: Board then carrier');
   assert.equal(log().filter(e => e.op === 'Stack:UnmarkPushed').pop().causedBy, u.ack.clientMutationId);
 
-  carrierAct(efsp, c.CV_PRIFLY, 'CV_PRIFLY', { kind: 'SetCase', to: 'II' });
+  carrierAct(efsp, c.CV_PRIFLY, 'CV_PRIFLY', { kind: 'SetCarrierState', field: 'case', value: 'II' });
   const seeYou = send(efsp, c.CV_MARSHAL, 'CV_MARSHAL', get(efsp, a, 'CARRIER'), { kind: 'CarrierHandoff', transfer: 'MARSHAL_TO_PRIFLY' });
   assert.equal(seeYou.ack.ok, true, JSON.stringify(seeYou.ack));
   assert.deepEqual(stack(efsp).map(e => e.flightDataId), [b.flightDataId]);

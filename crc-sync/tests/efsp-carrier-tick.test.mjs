@@ -77,7 +77,7 @@ test('a one-degree turn republishes, a track that vanishes goes stale, and a mis
 test('the Case advisory speaks only when the Case is less restrictive than the weather floor (night), and never blocks', () => {
   const r = rig(SHIP);
   r.tick.tick();
-  r.store.apply({ clientMutationId: 'x', op: { kind: 'SetCase', to: 'I' } }, 'CV_PRIFLY', 'c');
+  r.store.apply({ clientMutationId: 'x', op: { kind: 'SetCarrierState', field: 'case', value: 'I' } }, 'CV_PRIFLY', 'c');
   assert.equal(r.store.view().advisory, null, 'day: nothing to say');
   r.t.v = Date.UTC(2026, 5, 1, 21, 0);
   const v = r.store.view();

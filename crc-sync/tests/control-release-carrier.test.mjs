@@ -131,7 +131,7 @@ test('I9 the Marshal Strip retired by carrierRetireFlight / recovery path: same 
 test('I9 CarrierHandoff after control moved: control follows the owner (Marshal -> lane), on both Boards', () => {
   const w = world();
   const ex = toMarshal(w, 'CVI9C');
-  mustCarrierAct(w.efsp, w.c.CV_PRIFLY, 'CV_PRIFLY', { kind: 'SetCase', to: 'II' });
+  mustCarrierAct(w.efsp, w.c.CV_PRIFLY, 'CV_PRIFLY', { kind: 'SetCarrierState', field: 'case', value: 'II' });
   mustAct(w.efsp, w.c.CV_MARSHAL, 'CV_MARSHAL', ex.R(), { kind: 'HANDOFF', action: 'ACCEPT' });
   mustAct(w.efsp, w.c.CV_MARSHAL, 'CV_MARSHAL', ex.R(), { kind: 'HANDOFF', action: 'TRANSFER_CONTROL' });
   assert.equal(ex.T().coordination.separationResponsibilityRef.positionId, 'CV_MARSHAL');

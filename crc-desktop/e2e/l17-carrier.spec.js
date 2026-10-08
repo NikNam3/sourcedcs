@@ -213,7 +213,7 @@ test('05 a refusal is visible: a Marshal cannot set the Case, and a frequency is
   const a = cs('GGG');
   await checkIn(marshal, a);
   // the server refuses a Case op from the Marshal, and the panel says so
-  await marshal.evaluate(() => crc.ws.sendEfspCarrierMutation('CV_MARSHAL', undefined, undefined, { kind: 'SetCase', to: 'I' }));
+  await marshal.evaluate(() => crc.ws.sendEfspCarrierMutation('CV_MARSHAL', undefined, undefined, { kind: 'SetCarrierState', field: 'case', value: 'I' }));
   await expect(marshal.locator('#efsp-mutation-error')).toContainText(/PERMISSION_DENIED|Case/i);
   await openBay(marshal, 'CV_MARSHAL', 'cv-marshal-stack');
   await marshal.evaluate((c) => {

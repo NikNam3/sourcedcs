@@ -86,7 +86,7 @@ test('laneFor alternates, falls back to the staffed lane, and is null when neith
 
 test('assignLanes: HOLDING entries in push order; PUSHED entries count but are skipped; gaps do not count', () => {
   const stack = {
-    stackId: 'MAIN', hullId: 'CVN-72', charlieTimeUtc: 0, marshalRadialDeg: null,
+    stackId: 'MAIN', hullId: 'CVN-72',
     entries: [
       { flightDataId: 'a', stackIndex: 0, status: 'PUSHED', caseIAngels: null },
       { flightDataId: 'b', stackIndex: 1, status: 'HOLDING', caseIAngels: null },
