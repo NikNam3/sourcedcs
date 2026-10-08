@@ -1368,6 +1368,13 @@
    "getScale",
    "getTextSizePx"
   ],
+  "settings-registry.js": [
+   "getSetting",
+   "onSettingsTabsChanged",
+   "registerSettingsTab",
+   "setSetting",
+   "settingsTabs"
+  ],
   "settings.js": [
    "loadSettings",
    "saveSettings",

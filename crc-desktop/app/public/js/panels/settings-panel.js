@@ -12,6 +12,7 @@ import { map, mapReady } from '../map-handle.js';
 import { saveSettings, settings } from '../settings.js';
 import { mountAirspaceMenuInSettings } from '../airspace-layer.js';
 import { coordFormatOf } from '../coords.js';
+import { getSetting, onSettingsTabsChanged, setSetting, settingsTabs } from '../settings-registry.js';
 
 // ── Settings panel: tab switching, per-tab wiring (map display, bullseye
 // override, colours, tools) and the bullseye pick-on-map mode. Split out of
@@ -20,15 +21,13 @@ import { coordFormatOf } from '../coords.js';
 export function initSettings() {
   const panel   = document.getElementById('settings-panel');
 
-  // ── Tab switching ─────────────────────────────────────────────────────
-  panel.querySelectorAll('.stab').forEach(btn => {
-    btn.addEventListener('click', () => {
-      panel.querySelectorAll('.stab').forEach(b => b.classList.remove('active'));
-      panel.querySelectorAll('.stab-pane').forEach(p => { p.style.display = 'none'; });
-      btn.classList.add('active');
-      document.getElementById('stab-' + btn.dataset.pane).style.display = '';
-    });
+  // ── Tab switching (delegated: registered tabs are added later) ───────
+  panel.querySelector('.settings-tabs').addEventListener('click', (e) => {
+    const btn = e.target.closest('.stab');
+    if (btn) selectSettingsTab(panel, btn.dataset.pane);
   });
+  renderRegisteredTabs(panel);
+  onSettingsTabsChanged(() => renderRegisteredTabs(panel));
 
   const els = {
     pplEnabled:     document.getElementById('set-ppl-enabled'),
@@ -146,6 +145,87 @@ export function initSettings() {
 
   // ── Tools tab ─────────────────────────────────────────────────────────
   initToolsTab();
+}
+
+// ── Registered tabs (settings-registry.js) ───────────────────────────────
+// One tab and pane per registerSettingsTab(); they sit before SRS. Rebuilt whenever the registry changes.
+
+function selectSettingsTab(panel, pane) {
+  panel.querySelectorAll('.stab').forEach(b => b.classList.toggle('active', b.dataset.pane === pane));
+  panel.querySelectorAll('.stab-pane').forEach(p => { p.style.display = p.id === 'stab-' + pane ? '' : 'none'; });
+}
+
+function fieldRow(f) {
+  const row = document.createElement('div');
+  row.className = 'setting-row';
+  const label = document.createElement('span');
+  label.textContent = f.label || f.key;
+  row.appendChild(label);
+  let input;
+  if (f.type === 'toggle') {
+    const wrap = document.createElement('label');
+    wrap.className = 'toggle';
+    input = document.createElement('input');
+    input.type = 'checkbox';
+    input.checked = !!getSetting(f.key);
+    input.addEventListener('change', () => setSetting(f.key, input.checked));
+    const slider = document.createElement('span');
+    slider.className = 'toggle-slider';
+    wrap.append(input, slider);
+    row.appendChild(wrap);
+  } else if (f.type === 'number') {
+    const wrap = document.createElement('span');
+    input = document.createElement('input');
+    input.type = 'number';
+    for (const a of ['min', 'max', 'step']) if (f[a] !== undefined) input.setAttribute(a, f[a]);
+    input.style.width = '70px';
+    input.value = getSetting(f.key);
+    input.addEventListener('change', () => { input.value = setSetting(f.key, input.value); });
+    wrap.appendChild(input);
+    if (f.unit) wrap.append(' ' + f.unit);
+    row.appendChild(wrap);
+  } else {
+    input = document.createElement('select');
+    input.className = 'setting-select';
+    for (const o of f.options) {
+      const opt = document.createElement('option');
+      opt.value = Array.isArray(o) ? o[0] : o;
+      opt.textContent = Array.isArray(o) ? o[1] : o;
+      input.appendChild(opt);
+    }
+    input.value = getSetting(f.key);
+    input.addEventListener('change', () => setSetting(f.key, input.value));
+    row.appendChild(input);
+  }
+  input.id = 'set-' + f.key;
+  return row;
+}
+
+function renderRegisteredTabs(panel) {
+  const bar = panel.querySelector('.settings-tabs');
+  const active = panel.querySelector('.stab.active')?.dataset.pane;
+  panel.querySelectorAll('.stab[data-reg], .stab-pane[data-reg]').forEach(n => n.remove());
+  const anchorBtn = bar.querySelector('.stab[data-pane="srs"]');
+  const anchorPane = document.getElementById('stab-srs');
+  for (const t of settingsTabs()) {
+    const btn = document.createElement('button');
+    btn.className = 'stab';
+    btn.dataset.pane = t.id;
+    btn.dataset.reg = '1';
+    btn.textContent = t.label;
+    bar.insertBefore(btn, anchorBtn);
+    const pane = document.createElement('div');
+    pane.id = 'stab-' + t.id;
+    pane.className = 'stab-pane';
+    pane.dataset.reg = '1';
+    pane.style.display = 'none';
+    const group = document.createElement('div');
+    group.className = 'setting-group';
+    for (const f of t.fields) group.appendChild(fieldRow(f));
+    pane.appendChild(group);
+    anchorPane.parentNode.insertBefore(pane, anchorPane);
+  }
+  if (active) selectSettingsTab(panel, document.getElementById('stab-' + active) ? active : 'general');
 }
 
 // ── Bullseye pick-on-map mode ────────────────────────────────────────────
