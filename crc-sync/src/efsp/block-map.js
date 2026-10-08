@@ -435,7 +435,7 @@ const MISSION_BLOCK_MAP = {
 //    for the kind, so SetBlock on one is a VALIDATION_ERROR by the same route as
 //    a `system` Block: CASE, MARSHAL DME, ANGELS, EAT/PUSH and EXPECTED FINAL
 //    BEARING cannot be typed (WP7A bullets 2 and 5, D16). The marshal radial
-//    (C5) is set through the stack op SetMarshalRadial, and a Case I altitude
+//    (C5) is set through SetCarrierState (field radial, docs/adr/0113), and a Case I altitude
 //    through SetCaseIAngels, never through SetBlock.
 //  - `carrier` Blocks write flightData.military.carrier.<field> through
 //    flight-data-store.js's setCarrier(): EEAT, approach, button, bingo and low state
