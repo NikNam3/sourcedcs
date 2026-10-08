@@ -13,6 +13,8 @@ const authority = require('./authority');
 const nla = require('./nla');
 const blockMap = require('./block-map');
 const coordination = require('./coordination');
+const { createDivertDestinations } = require('./divert-destination');
+const icaoByName = require('../../data/icao.json');
 
 /**
  * @param {object} deps
@@ -26,7 +28,14 @@ const coordination = require('./coordination');
  */
 function buildFacilityRules({ facilityId, facilityConfig, permissionRules, positionStore, facilities, stores, regimeLocator }) {
   const { airspaceStore, marsaStore, runwayStatusStore, carrierStore } = stores;
+  // docs/adr/0111 §3: a field we run is one a Facility config names, or a carrier hull.
+  const divertDestinationFor = createDivertDestinations({
+    airportIcaos: () => facilityConfig.getFacilityIds().map(id => (facilityConfig.getFacilityConfig(id).runwayStatus || {}).airportIcao).filter(Boolean),
+    hullIds: () => carrierStore.hullIds(),
+    icaoByName,
+  });
   return {
+    divertDestinationFor,
     resolveBlockTarget:  (blockId, stripType) => blockMap.resolveBlockTarget(stripType, blockId),
     isBlockVisible:      (stripType, blockId) => facilityConfig.isBlockVisible(stripType, blockId, facilityId),
     bayImpliesState:     (bayId) => facilityConfig.bayImpliesState(bayId, facilityId),

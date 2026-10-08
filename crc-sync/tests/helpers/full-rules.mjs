@@ -40,6 +40,7 @@ export const DEFAULT_RULES = {
   coordinationEligibleState: (stripType) => coordination.coordinationEligibleState(stripType),
   consolidatedAt: () => null,
   handBackTo: () => null,
+  divertDestinationFor: (text) => ({ kind: 'OTHER', code: String(text || '').toUpperCase() }),
   drainMarsaRegimeWrites: () => [],
   facilityId: null,
   formationEligibility: (stripType) => require('../../src/efsp/authority').formationEligibility(stripType),

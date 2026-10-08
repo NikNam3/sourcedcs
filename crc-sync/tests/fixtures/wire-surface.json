@@ -64,6 +64,7 @@
       "ControlRelease",
       "ConvertToArrival",
       "CreateStrip",
+      "Divert",
       "DropStrip",
       "HANDOFF",
       "InvokeNla",

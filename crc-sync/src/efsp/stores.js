@@ -283,7 +283,7 @@ const mapOf = (shape) => ({ '*': shape });
 const STRIP_HANDOFF = anyOf('at', 'by', 'from', 'fromStripType', 'kind', 'label', 'to', 'toStripType', 'trigger', 'frequencyRackId');
 const STRIP_SHAPE = {
   ...anyOf('stripId', 'cid', 'flightDataId', 'rev', 'stripType', 'state', 'ownerPositionId', 'bayId', 'rackId', 'orderKey',
-    'annotations', 'flags', 'createdAt', 'updatedAt', 'updatedBy', 'consolidatedFrom', 'endReason', 'joinedInto', 'splitFrom'),
+    'annotations', 'flags', 'createdAt', 'updatedAt', 'updatedBy', 'consolidatedFrom', 'diverts', 'endReason', 'joinedInto', 'splitFrom'),
   coordination: anyOf('primitive', 'state', 'note', 'peerFacilityId', 'peerPositionId', 'peerStripId', 'mintedForCoordination',
     'dataOwnerPositionRef', 'separationResponsibilityRef', 'radarIdTransferred', 'lastForwardedEtaUtc',
     'comms', 'control', 'release', 'releaseRequest', 'repair',

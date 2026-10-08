@@ -10,7 +10,7 @@ const REQUIRED_RULES = [
   'bayImpliesState', 'baysFor', 'canActOnState', 'canCreateStripType', 'canMutate', 'canMutateAction', 'controlAxisFor', 'canRecordCarrierHandoff',
   'canSendSfaRotationTransfer', 'carrierAppendFlight', 'carrierApplyEffect', 'carrierCase', 'carrierInStack',
   'carrierLaneFor', 'carrierRetireFlight', 'carrierHandoffs', 'computeNla', 'coordinationBayFor', 'coordinationEffect',
-  'coordinationEligibleState', 'consolidatedAt', 'drainMarsaRegimeWrites', 'facilityId', 'formationEligibility', 'runwayStatusFor',
+  'coordinationEligibleState', 'consolidatedAt', 'divertDestinationFor', 'drainMarsaRegimeWrites', 'facilityId', 'formationEligibility', 'runwayStatusFor',
   'handBackTargetsFor', 'handBackTo', 'isBlockVisible', 'isStaffed', 'isSelfCoordinated', 'isValidStripType', 'isValidState',
   'liveStripsForFlightData', 'marsaInterlockFor', 'mayActBesideOwner', 'peerBoard', 'regimeLocation', 'resolveBlockTarget', 'retireMarsaForFlightData',
   'sfaFrequencyFor', 'sfaRackFor', 'sfaRotationReceiver', 'sfaTransfers', 'standingReleases', 'tofiCounterparts',
