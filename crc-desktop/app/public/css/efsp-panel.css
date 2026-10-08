@@ -1873,3 +1873,12 @@
 #efsp-control-attest { order: 1; font-size: 11px; padding: 4px 8px; border-top: 1px solid #2a3038; color: #e0a83c; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 #efsp-control-attest[hidden] { display: none; }
 #efsp-control-attest button { font: inherit; color: #e6edf3; background: #2a3441; border: 1px solid #44566b; border-radius: 3px; padding: 2px 8px; cursor: pointer; }
+
+/* crc-sync docs/adr/0111 — Divert: the chip keeps the replaced destination struck through; the form is one input per clearance field. */
+.efsp-divert-chip { border-color: var(--efsp-line-2); color: var(--efsp-text); }
+.efsp-divert-old { color: var(--efsp-muted); text-decoration: line-through; }
+.efsp-divert-popover { display: flex; flex-direction: column; gap: 6px; min-width: 240px; }
+.efsp-divert-row { display: flex; align-items: center; gap: 8px; }
+.efsp-divert-label { width: 6em; color: var(--efsp-muted); }
+.efsp-divert-input { flex: 1; }
+.efsp-divert-error:empty { display: none; }

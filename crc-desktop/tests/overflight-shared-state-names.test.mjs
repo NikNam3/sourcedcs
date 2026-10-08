@@ -30,6 +30,8 @@ const ALLOWED = {
   'crc-sync/src/efsp/board/ops/sfa-rotation.js': 'comments only (moved from board-store.js); SFA rotation is keyed by Role',
   'crc-sync/src/efsp/board/strip-ops.js': 'comments only (moved from board-store.js)',
   'crc-sync/src/efsp/board/ops/create-strip.js': 'a comment only (the old ARRIVAL-or-PROPOSED binary); the initial state comes from the Role family (moved from board-store.js)',
+  'crc-sync/src/efsp/board/ops/divert.js': 'Divert is keyed by Role: DIVERTABLE names the states per Role (ADR 0111)',
+  'crc-desktop/app/public/js/panels/efsp/divert-rules.js': 'DIVERTABLE_STATES is keyed by Role (mirror of the server table)',
   'crc-sync/src/efsp/board/ops/convert-to-arrival.js': 'ConvertToArrival checks the Role (moved from board-store.js)',
   'crc-sync/src/efsp/board/placement.js': 'comments only (the nlaCtx context and stripTypeBayFor\'s Role Bay rule); stripTypeBayFor keeps an OVERFLIGHT out of ARRIVAL\'s Bays by Role',
   'crc-sync/src/efsp/board/coordination.js': 'a comment only (the replica carries the sender\'s Role/EfspState); the tables it reads are passed in, keyed by Role',
