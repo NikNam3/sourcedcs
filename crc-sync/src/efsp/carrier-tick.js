@@ -14,7 +14,7 @@
 //    heading becomes a TRUE heading (decisions H15), and the magnetic variation
 //    at the ship (the World Magnetic Model at the mission date, ADR 0085), which
 //    the client needs to show bearings magnetic;
-//  - the theater sea-level pressure (the default altimeter);
+//  - the theater sea-level pressure (the DCS altimeter) and the wind at the ship (with the ship's speed, the DCS wind over deck);
 //  - night, from the mission clock and the ship's position (carrier/sun.js).
 
 const carrier = require('./carrier');
@@ -30,9 +30,10 @@ class CarrierTick {
    * @param {(lat:number, lon:number)=>number|null} [deps.convergenceAt]
    * @param {(lat:number, lon:number)=>number|null} [deps.variationAt]
    * @param {()=>number|null} [deps.weatherPa]
+   * @param {(lat:number, lon:number)=>({windFromDeg:number, windKt:number}|null)} [deps.windAt] the wind at a point, last known (asks DCS in the background)
    * @param {(hullId:string)=>void} [deps.onChange] called once per tick that changed a banner
    */
-  constructor({ carrierStore, tracks, ownCoalition, clock, convergenceAt, variationAt, weatherPa, onChange }) {
+  constructor({ carrierStore, tracks, ownCoalition, clock, convergenceAt, variationAt, weatherPa, windAt, onChange }) {
     this._store = carrierStore;
     this._tracks = tracks;
     this._own = ownCoalition || (() => null);
@@ -40,14 +41,15 @@ class CarrierTick {
     this._convergenceAt = convergenceAt || (() => null);
     this._variationAt = variationAt || (() => null);
     this._weatherPa = weatherPa || (() => null);
+    this._windAt = windAt || (() => null);
     this._onChange = onChange || (() => {});
-    // The advisory's weather: night at the ship, nothing else (the ship's own
-    // ceiling and visibility are not sourced; ADR 0064 B8). Unknown stays quiet.
+    // The advisory's weather: night at the ship from the sun; the ceiling and visibility are the ones a controller typed (DCS-gRPC
+    // gives neither; ADR 0064 B8, ADR 0113). Unknown stays quiet.
     this._store.setWeatherSource((hullId) => {
       const s = this._store.getShipState(hullId);
       if (!s || !Number.isFinite(s.lat) || !Number.isFinite(s.lon)) return null;
       const night = isNight(s.lat, s.lon, this._clock.now());
-      return night == null ? null : { night, ceilingFt: null, visibilityNm: null };
+      return night == null ? null : { night };
     });
   }
 
@@ -64,7 +66,7 @@ class CarrierTick {
       if (track) {
         const gamma = this._convergenceAt(track.lat, track.lon);
         next = carrier.buildShipState({
-          hull, track, now, inputs: this._store.shipInputs(hullId),
+          hull, track, now,
           weatherPa: this._weatherPa(), gridConvergenceDeg: Number.isFinite(gamma) ? gamma : null,
         });
         const v = this._variationAt(track.lat, track.lon);
@@ -74,13 +76,16 @@ class CarrierTick {
         next = carrier.staleFrom(prev, now);
         next.hullProblem = carrier.hullMatchProblem(hull, tracks, { ownCoalition: this._own() });
       } else {
-        next = carrier.buildShipState({ hull, track: null, now, inputs: this._store.shipInputs(hullId), weatherPa: this._weatherPa() });
+        next = carrier.buildShipState({ hull, track: null, now, weatherPa: this._weatherPa() });
         next.hullProblem = carrier.hullMatchProblem(hull, tracks, { ownCoalition: this._own() });
         next.magneticVariationDeg = null;
       }
+      // The wind at the ship, for the wind over deck. Only a ship that is found has a place to ask about; a lost track keeps the last wind, as the banner keeps its last values.
+      const windMoved = track ? this._store.setShipWind(hullId, this._windAt(track.lat, track.lon)) : false;
       // `hullProblem` and the variation are not in shipStateChanged's compare:
       // fold a change of either in so a banner that says "hull ambiguous" moves.
-      if (this._store.setShipState(hullId, next) || (prev && (prev.hullProblem !== next.hullProblem || prev.magneticVariationDeg !== next.magneticVariationDeg) && this._store.setShipState(hullId, { ...next, _rev: now }))) {
+      const bannerMoved = this._store.setShipState(hullId, next) || (prev && (prev.hullProblem !== next.hullProblem || prev.magneticVariationDeg !== next.magneticVariationDeg) && this._store.setShipState(hullId, { ...next, _rev: now }));
+      if (windMoved || bannerMoved) {
         any = true;
         this._onChange(hullId);
       }

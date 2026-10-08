@@ -1,8 +1,8 @@
 'use strict';
 
-// Client mirror of the carrier's record (crc-sync's docs/adr/0074, ADR 0064):
-// the recovery Case, the Marshal stack with its DERIVED angels / DME / push
-// time, the ship banner. Plain module-level state like efsp-state.js, an ES
+// Client mirror of the carrier's record (crc-sync's docs/adr/0074, ADR 0064, 0113):
+// the recovery Case, the carrier state (every value with its source and override),
+// the Marshal stack with its DERIVED angels / DME / push time, the ship banner. Plain module-level state like efsp-state.js, an ES
 // module whose exports node:test imports directly.
 //
 // The server sends the whole hull view on every change (`efsp-carrier-delta`)
@@ -81,31 +81,53 @@ export function carrierDerivedText(field, flightDataId, ship) {
     case 'marshalDme': return d && d.marshalDme != null ? String(d.marshalDme) : (d && caseValue === 'I' ? '≤5 NM' : '');
     case 'eatPush': return d && d.pushTimeUtc != null ? carrierHhmm(d.pushTimeUtc) : '';
     case 'marshalRadial': return d && d.marshalRadialDeg != null ? carrierBearingText(d.marshalRadialDisplay) : (d && caseValue === 'I' ? 'overhead' : '');
-    case 'expectedFinalBearing': return d ? carrierBearingText(d.expectedFinalBearingDisplay) : (ship && ship.finalBearingDisplay ? carrierBearingText(ship.finalBearingDisplay) : '');
-    // FINAL's three derived fields (deck, final bearing, distance): the ship's own banner, never typed.
-    case 'finalBearing': return ship && ship.finalBearingDisplay ? carrierBearingText(ship.finalBearingDisplay) : '';
+    case 'expectedFinalBearing': return d ? carrierBearingText(d.expectedFinalBearingDisplay) : carrierBearingText(c && c.state ? c.state.finalBearing.display : null);
+    // FINAL's three derived fields (deck, final bearing, distance): the final bearing in force (the ship's heading less the deck, or a controller's override).
+    case 'finalBearing': return carrierBearingText(c && c.state ? c.state.finalBearing.display : null);
     case 'deck': return c && c.hullId ? c.hullId : '';
     case 'callsign': case 'aircraftType': return '';
     default: return '';
   }
 }
 
+/** The resolved carrier state (every value with its `source` and `override`), or null before the first snapshot. */
+export function carrierStateOf(view = getEfspCarrier()) {
+  return view && view.state ? view.state : null;
+}
+
+/**
+ * Where a value comes from, as words: 'DCS', 'default', 'set' (a controller typed it, and the automatic value is beside it),
+ * or 'not known'. The automatic value is the server's (`entry.default`); nothing is worked out here.
+ */
+export function carrierSourceText(entry, format = (v) => String(v)) {
+  if (!entry) return '';
+  switch (entry.source) {
+    case 'override': return entry.default != null ? `set (${format(entry.default)} automatic)` : 'set';
+    case 'dcs': return 'DCS';
+    case 'default': return 'default';
+    default: return 'not known';
+  }
+}
+
 /**
  * The text of the ship banner (guide §9.12 rule 5: heading, final bearing,
  * speed, time, altimeter, shared by every carrier Position). Says what is wrong
- * rather than showing a stale number as live.
+ * rather than showing a stale number as live. BRC, final bearing and altimeter are the values in force
+ * (the game's, or a controller's override: `view.state`).
  * @returns {{text:string, problem:string|null, parts:Object<string,string>}}
  */
 export function carrierBannerParts(view = getEfspCarrier()) {
   const s = view && view.shipState;
   if (!s) return { text: 'hull not found', problem: 'hull not found', parts: {} };
+  const st = carrierStateOf(view);
   const parts = {};
   parts.hull = (view.hullId || '');
   if (!s.found) return { text: s.hullProblem || 'hull not found', problem: s.hullProblem || 'hull not found', parts };
-  parts.brc = s.brcDisplay && s.brcDisplay.value != null ? carrierBearingText(s.brcDisplay) : '';
-  parts.finalBearing = s.finalBearingDisplay && s.finalBearingDisplay.value != null ? carrierBearingText(s.finalBearingDisplay) : '';
+  parts.brc = st && st.brc.value != null ? carrierBearingText(st.brc.display) : '';
+  parts.finalBearing = st && st.finalBearing.value != null ? carrierBearingText(st.finalBearing.display) : '';
   parts.speed = s.speedKt != null ? `${s.speedKt} KT` : '';
-  parts.altimeter = s.altimeterInHg != null ? `${s.altimeterInHg.toFixed(2)}${s.altimeterSource === 'SET' ? '' : ' (wx)'}` : '';
+  const alt = st ? st.weather.altimeter : null;
+  parts.altimeter = alt && alt.value != null ? `${alt.value.toFixed(2)}${alt.source === 'override' ? '' : ' (wx)'}` : '';
   parts.time = carrierHhmm(s.atUtc) ? `${carrierHhmm(s.atUtc)}Z` : '';
   let problem = null;
   if (s.stale) problem = 'ship track lost — last known values';

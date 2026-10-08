@@ -98,6 +98,18 @@ function setCase(current, to, { by = null, at = null, note = null } = {}) {
   };
 }
 
+/**
+ * "Use default": the Case goes back to DEFAULT_CASE and counts as nobody's setting again (source 'default'). The history keeps
+ * the step. A Case that is already the default and was never set is refused as a no-op, as setCase refuses a same-Case call.
+ */
+function clearCase(current, { by = null, at = null, note = null } = {}) {
+  if (!current || typeof current !== 'object' || !isCase(current.value)) return _fail('current recovery Case is not a valid record');
+  if (typeof at !== 'number' || !Number.isFinite(at)) return _fail('`at` must be the mission clock time (epoch ms, Zulu)');
+  if (current.value === DEFAULT_CASE && current.setBy == null) return _fail(`recovery Case is already the default, ${DEFAULT_CASE}`);
+  const entry = { at, by, from: current.value, to: DEFAULT_CASE, note: note == null ? 'default' : String(note) };
+  return { ok: true, case: { value: DEFAULT_CASE, setBy: null, setAt: null, history: [...(Array.isArray(current.history) ? current.history : []), entry] } };
+}
+
 function _num(v) {
   return typeof v === 'number' && Number.isFinite(v);
 }
@@ -143,6 +155,7 @@ module.exports = {
   initialRecoveryCase,
   normalizeRecoveryCase,
   setCase,
+  clearCase,
   caseFloor,
   caseAdvisory,
   isSequencedCase,

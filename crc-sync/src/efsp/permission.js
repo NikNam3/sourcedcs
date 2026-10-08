@@ -34,7 +34,7 @@ const {
   TACTICAL_CAPABILITIES, READ_SCOPES, TOFI_ANSWER_ACTIONS, handBackTargetsFor, tofiAnswererFor, readScopeFor,
 } = require('./authority/positions/tactical');
 const {
-  CARRIER_CAPABILITIES, canSetRecoveryCase, canSequenceMarshalStack, canEditShipStateInput, canRecordCarrierHandoff,
+  CARRIER_CAPABILITIES, canEditCarrierState, canSequenceMarshalStack, canRecordCarrierHandoff,
 } = require('./authority/positions/carrier');
 const {
   INCIRLIK_CAPABILITIES, canRotateSfa, canSendSfaRotationTransfer, sfaRotationReceiver, sfaControllerPositions, incirlikPositionsWith,
@@ -201,7 +201,7 @@ module.exports = {
   NO_STRIP_OP_CLASSES,
   canActOnRunwayStatus, RUNWAY_STATUS_OP_OWNERS,
   TACTICAL_CAPABILITIES, READ_SCOPES, handBackTargetsFor, tofiAnswererFor, readScopeFor, mayActBesideOwner,
-  CARRIER_CAPABILITIES, canSetRecoveryCase, canSequenceMarshalStack, canEditShipStateInput, canRecordCarrierHandoff,
+  CARRIER_CAPABILITIES, canEditCarrierState, canSequenceMarshalStack, canRecordCarrierHandoff,
   MARSHAL_STATE_OWNERS, FINAL_STATE_OWNERS, PATTERN_STATE_OWNERS,
   INCIRLIK_CAPABILITIES, canRotateSfa, canSendSfaRotationTransfer, sfaRotationReceiver, sfaControllerPositions, incirlikPositionsWith,
 };

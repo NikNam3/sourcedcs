@@ -63,7 +63,7 @@ function seed(h) {
     baseRev: rs.rev, actingPositionId: 'LC', op: { kind: 'CloseRunway', runwayId: rs.runways[0].runwayId },
   }).ack;
   assert.equal(closed.ok, true, JSON.stringify(closed));
-  mustCarrierAct(efsp, c.CV_PRIFLY, 'CV_PRIFLY', { kind: 'SetCase', to: 'II' });
+  mustCarrierAct(efsp, c.CV_PRIFLY, 'CV_PRIFLY', { kind: 'SetCarrierState', field: 'case', value: 'II' });
   mustSfaAct(efsp, c.AP, 'AP', { kind: 'SetSfaRotation', rackId: 'freq-4', positionId: 'PAR' });
   assert.ok(live(efsp).length >= 3, 'the Board has live Strips');
   assert.equal(runwayStatus(efsp).runways[0].status, 'CLOSED');

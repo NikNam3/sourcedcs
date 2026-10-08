@@ -98,21 +98,21 @@ test('permissions: only the Marshal creates, only as MARSHAL; no CV Position pro
 });
 
 test('ship-level predicates take exactly one Position (D21)', () => {
-  assert.equal(permission.canSetRecoveryCase.length, 1);
+  assert.equal(permission.canEditCarrierState.length, 1);
   assert.equal(permission.canSequenceMarshalStack.length, 1);
-  assert.equal(permission.canEditShipStateInput.length, 1);
-  assert.equal(permission.canSetRecoveryCase('CV_PRIFLY'), true);
-  assert.equal(permission.canSetRecoveryCase('CV_MARSHAL'), false);
+  // the carrier management panel (decisions H119): PriFly and the Marshal edit it, the lanes read
+  assert.equal(permission.canEditCarrierState('CV_PRIFLY'), true);
+  assert.equal(permission.canEditCarrierState('CV_MARSHAL'), true);
+  assert.equal(permission.canEditCarrierState('CV_APP1'), false);
+  assert.equal(permission.canEditCarrierState('CV_APP2'), false);
   assert.equal(permission.canSequenceMarshalStack('CV_MARSHAL'), true);
   assert.equal(permission.canSequenceMarshalStack('CV_PRIFLY'), false);
-  assert.equal(permission.canEditShipStateInput('CV_APP1'), false);
-  assert.equal(permission.canEditShipStateInput('CV_PRIFLY'), true);
   assert.equal(permission.canRecordCarrierHandoff('CV_MARSHAL', 'MARSHAL_TO_APPROACH'), true);
   assert.equal(permission.canRecordCarrierHandoff('CV_APP1', 'MARSHAL_TO_APPROACH'), false);
   assert.equal(permission.canRecordCarrierHandoff('CV_APP2', 'FINAL_TO_LSO'), true);
   assert.equal(permission.canRecordCarrierHandoff('CV_MARSHAL', 'nonsense'), false);
   // a Position of another Facility has none of them
-  assert.equal(permission.canSetRecoveryCase('LC'), false);
+  assert.equal(permission.canEditCarrierState('LC'), false);
 });
 
 test('state authority: Marshal to Commence, lane to the end of the approach, PriFly the pattern', () => {

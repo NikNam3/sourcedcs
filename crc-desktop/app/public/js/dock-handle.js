@@ -24,6 +24,7 @@ export const PANEL_TITLES = {
   efsp:     'FLIGHT STRIPS',
   airspace: 'AIRSPACE',
   runwayStatus: 'RUNWAY STATUS',
+  carrier:  'CARRIER',
   metrics:  'METRICS',
 };
 

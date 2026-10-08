@@ -109,7 +109,7 @@ test('marshalMessage fills from flight data, derivation and ship state; bearings
   };
   const shipState = { finalBearingDeg: 115, altimeterInHg: 29.92, headingRef: 'TRUE' };
   const derived = deriveEntry({ flightDataId: 'f', stackIndex: 2, status: 'HOLDING', caseIAngels: null },
-    { caseValue: 'III', charlieTimeUtc: T + 3_600_000, shipState });
+    { caseValue: 'III', rampTimeUtc: T + 3_600_000 + 360_000, finalBearingDeg: 115, marshalRadialDeg: 295, marshalRadialSource: 'FINAL_BEARING', firstFixDme: 21, fixToRampMs: 360_000, pushSpacingMs: 60_000 });
   const m = Object.fromEntries(marshalMessage({ flightData, derived, caseValue: 'III', shipState, magneticVariationDeg: 5 }).map((x) => [x.key, x]));
   assert.equal(m.callsign.value, 'HORNET 11');
   assert.equal(m.type.value, 'FA18C');
@@ -123,6 +123,11 @@ test('marshalMessage fills from flight data, derivation and ship state; bearings
   assert.deepEqual(m.expectedFinalBearing.display, { value: 110, ref: 'M' });
   assert.equal(m.approachButton.value, 15);
   assert.equal(m.altimeter.value, 29.92);
+  // with the resolved state, the altimeter in force (an override included) and the ship's weather come from it
+  const state = { weather: { altimeter: { value: 30.05 }, ceiling: { value: 800 }, visibility: { value: 3 }, windOverDeck: { value: 28 } } };
+  const withState = Object.fromEntries(marshalMessage({ flightData, derived, caseValue: 'III', shipState, state }).map((x) => [x.key, x]));
+  assert.equal(withState.altimeter.value, 30.05);
+  assert.deepEqual(withState.shipWx.value, { ceilingFt: 800, visibilityNm: 3, windOverDeckKt: 28 });
   assert.equal(m.fuelLowState.value, 7200);
   assert.equal(m.bingoField.value, 'LCRA');
   assert.equal(m.bingoFuel.value, 4500);

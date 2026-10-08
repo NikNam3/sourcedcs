@@ -1,0 +1,10 @@
+{
+  "_comment": "Carrier recovery tuning (docs/adr/0113). Read once at startup, never written by code (P5); a copy in state/efsp-carrier-recovery.json overrides it key by key (an unknown key stops start-up). firstFixDme: the DME of the first marshal fix, slot 0 (each slot above it is one mile and 1,000 ft higher; NATOPS 6.4.1.1 'angels +15' with the base altitude 6,000 ft gives 21). pushSpacingSec: the interval between aircraft departing marshal and between aircraft at the ramp (NATOPS 6.4.5, one minute). fixToRampSec: how long an aircraft takes from its marshal fix to the ramp, which is what an EAT is worked back by from the ramp time (ADR 0113): [SOURCE-DEFINED], ours, not NATOPS. The profile it stands for is NATOPS 6.4.7.2: 250 KIAS and 4,000 fpm to the platform (5,000 ft, 20 DME), 2,000 fpm to the 10 DME fix, level at 1,200 ft through the 6 DME gate; 21 DME down to the 8 DME configuration fix at 250 kt is 13 nm in 3.1 min, and the last 8 nm at an assumed average of 150 kt is 3.2 min: 6.3 min, taken as 6 min. tanker: the recovery tanker's pattern defaults (NATOPS 6.10.3 sets no altitude; 6,000 ft and a port pattern are ours).",
+  "firstFixDme": 21,
+  "pushSpacingSec": 60,
+  "fixToRampSec": 360,
+  "tanker": {
+    "altitudeFt": 6000,
+    "patternSide": "port"
+  }
+}

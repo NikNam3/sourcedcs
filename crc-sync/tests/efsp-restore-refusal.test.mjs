@@ -114,3 +114,16 @@ test('an unknown top-level key stops start-up; the keys the current build writes
   fs.writeFileSync(file, JSON.stringify({ ...body, fieldStates: [] }));
   assertRefusedUntouched(() => createEfsp(), /unknown key "fieldStates"/);
 });
+
+test('a carrier record from before docs/adr/0113 (shipInputs, a stack with a Charlie time) stops start-up, naming the key', () => {
+  const { body } = savedBoard();
+  assert.ok(Array.isArray(body.carriers) && body.carriers[0].overrides, 'this build saves the carrier overrides');
+  const withShipInputs = JSON.parse(JSON.stringify(body));
+  withShipInputs.carriers[0].shipInputs = { altimeterInHg: 29.92 };
+  fs.writeFileSync(file, JSON.stringify(withShipInputs));
+  assertRefusedUntouched(() => createEfsp(), /carriers\[\]\.shipInputs/);
+  const withCharlie = JSON.parse(JSON.stringify(body));
+  withCharlie.carriers[0].stacks.MAIN.charlieTimeUtc = 1;
+  fs.writeFileSync(file, JSON.stringify(withCharlie));
+  assertRefusedUntouched(() => createEfsp(), /charlieTimeUtc/);
+});

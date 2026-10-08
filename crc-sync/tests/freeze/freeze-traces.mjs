@@ -308,11 +308,16 @@ function opMatrix() {
 
   // Carrier.
   const cm = (id, acting, op) => w.family(id, 'efsp-carrier-mutation', { actingPositionId: acting, op });
-  cm('marshal', 'CV_MARSHAL', { kind: 'SetCase', to: 'II' });
-  cm('prifly', 'CV_PRIFLY', { kind: 'SetCase', to: 'I' });
-  cm('marshal', 'CV_MARSHAL', { kind: 'SetShipInput', input: { altimeterInHg: 29.92 } });
-  cm('cvapp1', 'CV_APP1', { kind: 'SetShipInput', input: { altimeterInHg: 30.01 } });
-  cm('marshal', 'CV_MARSHAL', { kind: 'SetMarshalRadial', marshalRadialDeg: 190 });
+  // The carrier state (docs/adr/0113): PriFly and the Marshal type over it, the approach lane is refused, null clears.
+  cm('marshal', 'CV_MARSHAL', { kind: 'SetCarrierState', field: 'case', value: 'II' });
+  cm('prifly', 'CV_PRIFLY', { kind: 'SetCarrierState', field: 'case', value: 'I' });
+  cm('prifly', 'CV_PRIFLY', { kind: 'SetCarrierState', field: 'case', value: null });
+  cm('marshal', 'CV_MARSHAL', { kind: 'SetCarrierState', field: 'altimeter', value: 29.92 });
+  cm('cvapp1', 'CV_APP1', { kind: 'SetCarrierState', field: 'altimeter', value: 30.01 });
+  cm('marshal', 'CV_MARSHAL', { kind: 'SetCarrierState', field: 'rampTime', value: '2040' });
+  cm('prifly', 'CV_PRIFLY', { kind: 'SetCarrierState', field: 'firstFix', value: 24 });
+  cm('prifly', 'CV_PRIFLY', { kind: 'SetCarrierState', field: 'tankerOnStation', value: true });
+  cm('marshal', 'CV_MARSHAL', { kind: 'SetCarrierState', field: 'rampTime', value: null });
 
   // ATO import over the wire: preview, import, replay, refusal by a non-tactical Position.
   const ojw = path.resolve(path.dirname(new URL(import.meta.url).pathname), '../../../atobrief/test/fixtures/usmtf/ojw1v5-export.txt');

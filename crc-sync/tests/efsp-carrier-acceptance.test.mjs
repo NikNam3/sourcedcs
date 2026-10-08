@@ -10,7 +10,7 @@ import assert from 'node:assert/strict';
 
 import {
   emptyStack, insertAt, deriveStack, deriveEntry, validateStack, normalizeStack, applyStackOp, STACK_OP_KINDS,
-  buildShipState, applyShipStateInput, defaultShipInputs, normDeg,
+  buildShipState, normDeg, resolveState, emptyOverrides, validateField, initialRecoveryCase, loadRecoveryTuning,
   defaultCarrierFlight, setCarrierFlightField, normalizeCarrierFlight, marshalMessage,
 } from '../src/efsp/carrier/index.js';
 import { getDefaultHull } from '../src/efsp/carrier/hull-config.js';
@@ -18,7 +18,12 @@ import { getDefaultHull } from '../src/efsp/carrier/hull-config.js';
 const DEFAULT_HULL = Object.freeze(getDefaultHull());
 
 const CHARLIE = Date.UTC(2026, 8, 30, 14, 30, 0);
-const SHIP = Object.freeze({ finalBearingDeg: 115, headingRef: 'TRUE' });
+const FIX_TO_RAMP = 360_000;
+// What the derivation reads (carrier-state.js recoveryInputs), with the ramp time such that slot 0's EAT is CHARLIE.
+const withShip = (caseValue = 'III') => ({
+  caseValue, rampTimeUtc: CHARLIE + FIX_TO_RAMP, finalBearingDeg: 115, marshalRadialDeg: 295, marshalRadialSource: 'FINAL_BEARING',
+  firstFixDme: 21, fixToRampMs: FIX_TO_RAMP, pushSpacingMs: 60_000,
+});
 
 function deepFreeze(o) {
   if (o && typeof o === 'object' && !Object.isFrozen(o)) {
@@ -32,17 +37,17 @@ function fiveStack({ caseIAngels = null } = {}) {
   const entries = ['flight-data-a', 'flight-data-b', 'flight-data-c', 'flight-data-d', 'flight-data-e'].map((flightDataId, i) => ({
     flightDataId, stackIndex: i, status: 'HOLDING', caseIAngels: caseIAngels == null ? null : caseIAngels + i,
   }));
-  return deepFreeze({ ...emptyStack({ hullId: 'CVN-72' }), charlieTimeUtc: CHARLIE, entries });
+  return deepFreeze({ ...emptyStack({ hullId: 'CVN-72' }), entries });
 }
 
 test('Inserting an aircraft low in the marshal stack renumbers altitude, DME and push time for everyone above it, in one gesture.', () => {
   const stack = fiveStack();
-  const before = deriveStack(stack, { caseValue: 'III', shipState: SHIP });
+  const before = deriveStack(stack, withShip());
 
   const result = insertAt(stack, { flightDataId: 'flight-data-low', stackIndex: 1 }); // ONE call
 
   assert.equal(result.ok, true);
-  const after = new Map(deriveStack(result.stack, { caseValue: 'III', shipState: SHIP }).map((d) => [d.flightDataId, d]));
+  const after = new Map(deriveStack(result.stack, withShip()).map((d) => [d.flightDataId, d]));
   // the entry below is untouched
   assert.deepEqual(after.get('flight-data-a'), before[0]);
   // every entry formerly at ≥ 1 moved up together: index +1, angels +1, DME +1, push +60 s
@@ -74,8 +79,8 @@ test('Marshal DME, angels and push time are not independently editable.', () => 
   const caseI = applyStackOp(stack, { kind: 'SetCaseIAngels', flightDataId: 'flight-data-b', caseIAngels: 12 });
   assert.equal(caseI.ok, true);
   assert.deepEqual(
-    deriveStack(caseI.stack, { caseValue: 'III', shipState: SHIP }),
-    deriveStack(stack, { caseValue: 'III', shipState: SHIP }),
+    deriveStack(caseI.stack, withShip()),
+    deriveStack(stack, withShip()),
   );
   for (const kind of ['SetAngels', 'SetDme', 'SetMarshalDme', 'SetPushTime']) {
     const r = applyStackOp(stack, { kind, flightDataId: 'flight-data-b', value: 12 });
@@ -92,7 +97,7 @@ test('Marshal DME, angels and push time are not independently editable.', () => 
   // (c) restore drops them, and the derivation recomputes §9.12's values whatever was supplied
   const junk = { ...stack, entries: stack.entries.map((e) => ({ ...e, angels: 40, marshalDme: 1, pushTimeUtc: 0 })) };
   const restored = normalizeStack(junk).stack;
-  const d = deriveStack(restored, { caseValue: 'III', shipState: SHIP })[2];
+  const d = deriveStack(restored, withShip())[2];
   assert.equal(d.angels, 8);
   assert.equal(d.marshalDme, 23);
   assert.equal(d.pushTimeUtc, CHARLIE + 120_000);
@@ -103,7 +108,7 @@ test('Marshal DME, angels and push time are not independently editable.', () => 
   assert.throws(() => { d.pushTimeUtc = 1; }, TypeError);
 });
 
-test('Final bearing is computed from ship heading and cannot be hand-entered.', () => {
+test('Final bearing is computed from ship heading; a typed one is an override beside it, and DCS\'s value is untouched (ADR 0113).', () => {
   const track = { id: 7, name: 'UNION', type: 'CVN_72', coalition: 3, category: 4, lat: 34.5, lon: 34, heading: 211.4, groundSpeed: 12 };
   const H = track.heading;
   const s = buildShipState({ hull: DEFAULT_HULL, track, now: CHARLIE });
@@ -111,11 +116,7 @@ test('Final bearing is computed from ship heading and cannot be hand-entered.', 
   // changing only the heading changes the final bearing
   const turned = buildShipState({ hull: DEFAULT_HULL, track: { ...track, heading: 250 }, now: CHARLIE });
   assert.equal(turned.finalBearingDeg, 241);
-  // it cannot be entered
-  const typed = applyShipStateInput(defaultShipInputs(), { finalBearingDeg: 200 });
-  assert.equal(typed.ok, false);
-  assert.equal(typed.reason, 'VALIDATION_ERROR');
-  // and a finalBearingDeg riding on any input is ignored
+  // the banner is the game's: a finalBearingDeg riding on the hull, the track or an `inputs` argument is ignored
   const sneaky = buildShipState({
     hull: { ...DEFAULT_HULL, finalBearingDeg: 200 },
     track: { ...track, finalBearingDeg: 200, brcDeg: 200 },
@@ -123,13 +124,18 @@ test('Final bearing is computed from ship heading and cannot be hand-entered.', 
     now: CHARLIE,
   });
   assert.equal(sneaky.finalBearingDeg, s.finalBearingDeg);
+  // a controller's value goes through validateField into an override; the resolved state shows both and says which is in force
+  const tuning = loadRecoveryTuning();
+  const typed = validateField('finalBearing', 200, { variationDeg: 0 });
+  const st = resolveState({ overrides: { ...emptyOverrides(), [typed.key]: typed.stored }, recoveryCase: initialRecoveryCase(), shipState: { ...s, headingRef: 'TRUE' }, hull: DEFAULT_HULL, tuning });
+  assert.deepEqual([st.finalBearing.value, st.finalBearing.source, st.finalBearing.default], [200, 'override', s.finalBearingDeg]);
 });
 
 test('Changing the Case re-derives every carrier entry at once — one Case value, every derived field follows', () => {
   const stack = fiveStack({ caseIAngels: 2 });
-  const iii = deriveStack(stack, { caseValue: 'III', shipState: SHIP });
-  const i = deriveStack(stack, { caseValue: 'I', shipState: SHIP });
-  const ii = deriveStack(stack, { caseValue: 'II', shipState: SHIP });
+  const iii = deriveStack(stack, withShip());
+  const i = deriveStack(stack, withShip('I'));
+  const ii = deriveStack(stack, withShip('II'));
   // one changed input, no stack op: EVERY entry differs in every sequenced field
   assert.equal(iii.length, 5);
   for (let k = 0; k < 5; k++) {
@@ -160,8 +166,8 @@ test('EEAT set before launch is still present on the recovery marshal message', 
   };
   // … and later, on recovery, the marshal message built from the stack derivation carries it
   const derived = deriveEntry({ flightDataId: 'flight-data-a', stackIndex: 0, status: 'HOLDING', caseIAngels: null },
-    { caseValue: 'III', charlieTimeUtc: CHARLIE, shipState: SHIP });
-  const eeat = marshalMessage({ flightData, derived, caseValue: 'III', shipState: SHIP }).find((x) => x.key === 'eeat');
+    withShip());
+  const eeat = marshalMessage({ flightData, derived, caseValue: 'III', shipState: { finalBearingDeg: 115, headingRef: 'TRUE' } }).find((x) => x.key === 'eeat');
   assert.equal(eeat.value, EEAT);
   // E2 — the restore path keeps it
   assert.equal(normalizeCarrierFlight(JSON.parse(JSON.stringify(flightData.military.carrier))).eeatUtc, EEAT);

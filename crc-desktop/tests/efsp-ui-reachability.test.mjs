@@ -2614,7 +2614,7 @@ async function carrierRender(strip, { signedOn, caseValue = 'II' }) {
   const { CarrierStore } = require('../../crc-sync/src/efsp/carrier-store.js');
   const hullConfig = require('../../crc-sync/src/efsp/carrier/hull-config.js');
   const store = new CarrierStore({ hulls: hullConfig.getHulls(), clock: { now: () => Date.UTC(2026, 5, 1, 9, 0), source: 'T' } });
-  if (caseValue !== 'III') store.apply({ clientMutationId: 'c', op: { kind: 'SetCase', to: caseValue } }, 'CV_PRIFLY', 'p');
+  if (caseValue !== 'III') store.apply({ clientMutationId: 'c', op: { kind: 'SetCarrierState', field: 'case', value: caseValue } }, 'CV_PRIFLY', 'p');
   store.apply({ clientMutationId: 'a', op: { kind: 'Append', flightDataId: 'f1' } }, 'CV_MARSHAL', 'm');
   r.sandbox.applyEfspCarrierSnapshot({ carriers: [JSON.parse(JSON.stringify(store.view()))] });
   r.el = r.sandbox._buildStripEl(strip);

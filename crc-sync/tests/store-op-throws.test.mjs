@@ -120,8 +120,8 @@ run('runway status', (efsp, c) => {
 
 run('carrier', (efsp, c) => ({
   store: efsp.carrierStore, member: c.CV_PRIFLY, slot: 'carrier',
-  msg: msgOf('efsp-carrier-mutation', c.CV_PRIFLY, { actingPositionId: 'CV_PRIFLY', op: { kind: 'SetShipInput', input: { altimeterInHg: 29.92 } } }),
-  view: (e) => e.carrierStore.getAll ? e.carrierStore.getAll() : e.carrierStore.shipInputs(),
+  msg: msgOf('efsp-carrier-mutation', c.CV_PRIFLY, { actingPositionId: 'CV_PRIFLY', op: { kind: 'SetCarrierState', field: 'altimeter', value: 29.92 } }),
+  view: (e) => e.carrierStore.getAll(),
 }));
 
 run('SFA', (efsp, c) => ({

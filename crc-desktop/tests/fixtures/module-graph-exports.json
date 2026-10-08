@@ -636,10 +636,12 @@
   "panels/efsp/carrier-final-distance.js": [
    "carrierFinalDistanceText"
   ],
+  "panels/efsp/carrier-management-panel.js": [
+   "initCarrierManagementPanel",
+   "renderCarrierManagement"
+  ],
   "panels/efsp/carrier-panel.js": [
-   "CARRIER_CAPABILITIES",
    "buildCarrierFinalLine",
-   "carrierActingFor",
    "carrierDecorateNlaButton",
    "carrierExtraNlaButtons",
    "carrierMoveToSlot",
@@ -648,6 +650,13 @@
    "carrierStackRows",
    "renderCarrierBanner",
    "renderCarrierStackBoard"
+  ],
+  "panels/efsp/carrier-send.js": [
+   "CARRIER_CAPABILITIES",
+   "carrierActingFor",
+   "sendCarrier",
+   "sendCarrierState",
+   "signedOnCarrierIds"
   ],
   "panels/efsp/carrier-state.js": [
    "_resetEfspCarrierStateForTest",
@@ -660,6 +669,8 @@
    "carrierDerivedStack",
    "carrierDerivedText",
    "carrierHhmm",
+   "carrierSourceText",
+   "carrierStateOf",
    "getEfspCarrier"
   ],
   "panels/efsp/combination-rules.js": [
