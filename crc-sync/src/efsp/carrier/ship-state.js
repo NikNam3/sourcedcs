@@ -6,8 +6,8 @@
 // position, time and altimeter are shared by every carrier Position, and
 // final bearing is computed from ship heading, not typed. This is how the
 // real system does it." So ShipState is BUILT from a DCS ship track, never
-// written. The one value DCS does not give per ship — the altimeter — is the
-// only controller input (applyShipStateInput), and it accepts nothing else.
+// written: it holds what the GAME says. What a controller overrides (BRC, final
+// bearing, the altimeter, ...) is carrier-state.js's, with its source (docs/adr/0113).
 //
 // Provenance:
 //   §9.12 (binding)   — final bearing is computed from ship heading; ship state
@@ -35,10 +35,6 @@ const { normDeg, gridToTrue, toMagnetic } = require('./angles');
 const SHIP_CATEGORY = 4; // DCS unit category for ships (radars.js uses the same test)
 const MS_TO_KT = 1.943844;
 const PA_PER_INHG = 3386.389;
-const ALTIMETER_MIN_INHG = 27.0; // [SOURCE-DEFINED]
-const ALTIMETER_MAX_INHG = 32.0; // [SOURCE-DEFINED]
-
-const SHIP_INPUT_KEYS = Object.freeze(['altimeterInHg']);
 
 function _fail(detail) {
   return { ok: false, reason: 'VALIDATION_ERROR', detail };
@@ -135,28 +131,19 @@ function inHgFromPa(pa) {
 // ── Ship state ───────────────────────────────────────────────────────────────
 
 /**
- * Build the banner from a DCS ship track. Nothing here is typed by anyone
- * except, through `inputs`, the altimeter.
+ * Build the banner from a DCS ship track. Nothing here is typed by anyone.
  *
  * @param {object} args
  * @param {object} args.hull               HullConfig
  * @param {object|null} args.track         the matched ship track (tracks.js shape), or null
  * @param {number} args.now                mission clock now(), epoch ms Zulu (decisions H11)
- * @param {object} [args.inputs]           ShipInputs — { altimeterInHg } set by a controller
  * @param {number} [args.weatherPa]        theater sea-level pressure (grpc-client 'weather'), the default altimeter
  * @param {number} [args.gridConvergenceDeg] true = grid + γ; unknown → the heading stays GRID, labelled
  */
-function buildShipState({ hull, track = null, now = null, inputs = null, weatherPa = null, gridConvergenceDeg = null } = {}) {
+function buildShipState({ hull, track = null, now = null, weatherPa = null, gridConvergenceDeg = null } = {}) {
   const hullId = _isObj(hull) && typeof hull.hullId === 'string' ? hull.hullId : null;
-  let altimeterInHg = null;
-  let altimeterSource = null;
-  if (_isObj(inputs) && _finite(inputs.altimeterInHg)) {
-    altimeterInHg = inputs.altimeterInHg;
-    altimeterSource = 'SET';
-  } else if (inHgFromPa(weatherPa) != null) {
-    altimeterInHg = inHgFromPa(weatherPa);
-    altimeterSource = 'THEATER_WEATHER';
-  }
+  const altimeterInHg = inHgFromPa(weatherPa);
+  const altimeterSource = altimeterInHg != null ? 'THEATER_WEATHER' : null;
   const atUtc = _finite(now) ? now : null;
 
   if (!_isObj(track)) {
@@ -235,42 +222,6 @@ function shipStateChanged(prev, next, { headingStepDeg = 1 } = {}) {
   return false;
 }
 
-/** ShipInputs — what a controller may set. Today: the altimeter only. */
-function defaultShipInputs() {
-  return { altimeterInHg: null };
-}
-
-/**
- * The ONLY controller-writable path into the banner. Accepts exactly
- * { altimeterInHg } — a number in 27.00–32.00, or null to fall back to the
- * theater weather. Any other key is refused: final bearing is computed from
- * ship heading (§9.12 rule 5) and cannot be entered.
- */
-function applyShipStateInput(inputs, input) {
-  const current = _isObj(inputs) ? inputs : defaultShipInputs();
-  if (!_isObj(input)) return _fail('input must be an object');
-  const keys = Object.keys(input);
-  if (keys.length === 0) return _fail('input is empty');
-  for (const k of keys) {
-    if (!SHIP_INPUT_KEYS.includes(k)) {
-      return _fail(`'${k}' cannot be entered: final bearing is computed from ship heading (§9.12 rule 5) and cannot be entered; only the altimeter is a controller input`);
-    }
-  }
-  const v = input.altimeterInHg;
-  if (v !== null && !(_finite(v) && v >= ALTIMETER_MIN_INHG && v <= ALTIMETER_MAX_INHG)) {
-    return _fail(`altimeterInHg must be ${ALTIMETER_MIN_INHG.toFixed(2)}–${ALTIMETER_MAX_INHG.toFixed(2)} inHg, or null to use the theater weather`);
-  }
-  return { ok: true, inputs: { ...current, altimeterInHg: v === null ? null : Math.round(v * 100) / 100 } };
-}
-
-function normalizeShipInputs(raw) {
-  const out = defaultShipInputs();
-  if (_isObj(raw) && _finite(raw.altimeterInHg) && raw.altimeterInHg >= ALTIMETER_MIN_INHG && raw.altimeterInHg <= ALTIMETER_MAX_INHG) {
-    out.altimeterInHg = raw.altimeterInHg;
-  }
-  return out;
-}
-
 /**
  * A bearing as a controller reads it (decisions H15: magnetic, always).
  * `ref` is the reference the bearing was computed in (ShipState.headingRef).
@@ -293,9 +244,6 @@ function displayBearing(deg, { ref = 'TRUE', magneticVariationDeg = null } = {})
 
 module.exports = {
   SHIP_CATEGORY,
-  SHIP_INPUT_KEYS,
-  ALTIMETER_MIN_INHG,
-  ALTIMETER_MAX_INHG,
   validateHullConfig,
   matchHullTrack,
   hullMatchProblem,
@@ -304,8 +252,5 @@ module.exports = {
   buildShipState,
   staleFrom,
   shipStateChanged,
-  defaultShipInputs,
-  applyShipStateInput,
-  normalizeShipInputs,
   displayBearing,
 };

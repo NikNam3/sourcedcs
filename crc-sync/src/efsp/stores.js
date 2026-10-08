@@ -29,6 +29,7 @@ const { CarrierStore } = require('./carrier-store');
 const { SfaStore } = require('./sfa-store');
 const authority = require('./authority');
 const carrierHulls = require('./carrier/hull-config');
+const { loadRecoveryTuning } = require('./carrier/recovery-tuning');
 const log = require('../log').logger('efsp:stores');
 
 // The Blocks that held the assigned altitude and heading as Strip annotations before docs/adr/0058 moved them onto
@@ -220,13 +221,14 @@ const REGISTRY = [
     // The store's sync declaration (docs/adr/0106): `key` is its snapshot key, which is also the key of its heartbeat entry
     // and of its resync slice; `gapFromDeltas` says a delta moves seq by exactly one change, so a client may ask at once on a jump.
     sync: { key: 'carriers', seqKey: 'carrierSeq', epochKey: 'carrierEpoch', deltaType: 'efsp-carrier-delta', gapFromDeltas: false },
-    // docs/adr/0074 (ADR 0064 B6) — the carrier's Case, Marshal
-    // stack and altimeter input, one record per hull. Shared across Facilities
+    // docs/adr/0074 (ADR 0064 B6), 0113 — the carrier's Case, Marshal
+    // stack and the overrides over the ship's state, one record per hull. Shared across Facilities
     // like flightDataStore (there is exactly one CARRIER Facility; nothing is replicated).
     // Lane feeding reads CARRIER staffing lazily through `facilities`.
     build: ({ clock, facilities, stores, mutationLog }) => new CarrierStore({
       mutationLog,
       hulls: carrierHulls.getHulls(),
+      tuning: loadRecoveryTuning(process.env.CRCSYNC_EFSP_CARRIER_RECOVERY_PATH),
       clock,
       flightDataExists: (flightDataId) => !!stores.flightData.getFlightData(flightDataId),
       isStaffed: (positionId) => {
@@ -355,8 +357,10 @@ const ENTRY_SHAPES = {
     alertPad: PAD_SHAPE, hotCargoPad: PAD_SHAPE,
   }),
   carriers: arrayOf({
-    ...anyOf('hullId', 'recoveryCase', 'rev', 'shipInputs', 'transitions'),
-    stacks: mapOf({ ...anyOf('charlieTimeUtc', 'hullId', 'marshalRadialDeg', 'stackId'),
+    ...anyOf('hullId', 'recoveryCase', 'rev', 'transitions'),
+    overrides: anyOf('altimeterInHg', 'brcDeg', 'ceilingFt', 'finalBearingDeg', 'firstFixDme', 'marshalRadialDeg', 'rampTimeUtc',
+      'tankerAltitudeFt', 'tankerGiveKlb', 'tankerOnStation', 'tankerPatternSide', 'tankerSideNumber', 'visibilityNm', 'windOverDeckKt'),
+    stacks: mapOf({ ...anyOf('hullId', 'stackId'),
       entries: arrayOf(anyOf('caseIAngels', 'flightDataId', 'stackIndex', 'status')) }),
   }),
   sfaRotation: anyOf('facilityId', 'rev', 'rotation', 'transitions'),

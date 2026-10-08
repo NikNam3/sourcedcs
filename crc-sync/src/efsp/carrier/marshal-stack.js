@@ -4,10 +4,11 @@
 //
 // §9.12: "Case III — one integer drives four displayed fields." The stored
 // record holds ONLY authoritative values: which flight (flightDataId) sits at which
-// stack index, whether it has pushed, the Charlie time, the marshal radial
-// the controller set (if any), and — Case I only — the squadron-assigned
-// altitude. Angels, marshal DME, push time, the push window, the marshal
-// radial actually flown and the expected final bearing are DERIVED, every
+// stack index, whether it has pushed, and — Case I only — the squadron-assigned
+// altitude. The ramp time (Charlie), the marshal radial and the first fix are
+// the SHIP's, not the stack's: carrier-state.js holds them with their sources
+// (docs/adr/0113). Angels, marshal DME, push time (the EAT), the push window, the
+// marshal radial actually flown and the expected final bearing are DERIVED, every
 // time, by deriveEntry(); none of them can be stored (validateStack refuses
 // them by name) and none of them has an op that writes it. That is WP7A
 // acceptance bullet 2 as a property of the data, not a UI convention — the
@@ -15,12 +16,12 @@
 // `system` Block.
 //
 // Provenance:
-//   §9.12 (binding)  — angels = 6 + stackIndex; marshalDme = angels + 15;
-//                      pushTime = charlieTime + stackIndex minutes; arrive
+//   §9.12 (binding)  — angels = 6 + stackIndex; marshalDme = angels + 15 (the
+//                      first fix is 21 DME, overridable, ADR 0113); arrive
 //                      ±10 s; minimum 6,000 ft; 1,000 ft separation; Case I
 //                      altitudes from 2,000 ft, within 5 NM, not push-timed.
-//   decisions H27    — the marshal radial is settable by the Marshal
-//                      controller and defaults to final bearing + 180. (The
+//   decisions H27    — the marshal radial is settable (by the Marshal or PriFly,
+//                      carrier-state.js) and defaults to final bearing + 180. (The
 //                      guide's text says "the 180 relative to BRC"; the human
 //                      chose the final-bearing reciprocal, which differs by
 //                      the angled-deck offset. docs/adr/0064 records it.)
@@ -43,7 +44,7 @@ const { normDeg, reciprocal, angularDiff } = require('./angles');
 const { isSequencedCase, isCase } = require('./recovery-case');
 
 const ENTRY_KEYS = Object.freeze(['flightDataId', 'stackIndex', 'status', 'caseIAngels']);
-const STACK_KEYS = Object.freeze(['stackId', 'hullId', 'charlieTimeUtc', 'marshalRadialDeg', 'entries']);
+const STACK_KEYS = Object.freeze(['stackId', 'hullId', 'entries']);
 const ENTRY_STATUSES = Object.freeze(['HOLDING', 'PUSHED']);
 const STACK_DEFAULTS = Object.freeze({ maxIndex: 19 }); // [SOURCE-DEFINED] — L4 briefing Q4
 const DEFAULT_STACK_ID = 'MAIN'; // [SOURCE-DEFINED] — decisions H29, one stack in v1
@@ -51,7 +52,6 @@ const DEFAULT_STACK_ID = 'MAIN'; // [SOURCE-DEFINED] — decisions H29, one stac
 // §9.12 numbers.
 const MIN_ANGELS = 6;
 const DME_PLUS = 15;
-const PUSH_SPACING_MS = 60_000;
 const PUSH_TOLERANCE_MS = 10_000;
 // Case I: "from 2,000 ft AGL"; the ceiling of 20 is a sanity bound, [SOURCE-DEFINED].
 const CASE_I_MIN_ANGELS = 2;
@@ -67,8 +67,7 @@ const DERIVED_KEYS = Object.freeze([
 const DERIVED_DETAIL = 'angels/DME/push time are derived from the stack index (§9.12) and cannot be set';
 
 const STACK_OP_KINDS = Object.freeze([
-  'InsertAt', 'Append', 'Move', 'Remove', 'CloseUp', 'MarkPushed',
-  'SetCharlieTime', 'SetCaseIAngels', 'SetMarshalRadial',
+  'InsertAt', 'Append', 'Move', 'Remove', 'CloseUp', 'MarkPushed', 'SetCaseIAngels',
 ]);
 
 function _fail(detail, reason = 'VALIDATION_ERROR') {
@@ -91,7 +90,7 @@ function _validCaseIAngels(v) {
 // ── Shape ────────────────────────────────────────────────────────────────────
 
 function emptyStack({ stackId = DEFAULT_STACK_ID, hullId } = {}) {
-  return { stackId, hullId: hullId == null ? null : hullId, charlieTimeUtc: null, marshalRadialDeg: null, entries: [] };
+  return { stackId, hullId: hullId == null ? null : hullId, entries: [] };
 }
 
 /**
@@ -107,12 +106,6 @@ function validateStack(stack, opts = STACK_DEFAULTS) {
   }
   if (typeof stack.stackId !== 'string' || !stack.stackId) return _fail('stackId must be a non-empty string');
   if (stack.hullId != null && typeof stack.hullId !== 'string') return _fail('hullId must be a string or null');
-  if (stack.charlieTimeUtc != null && !Number.isFinite(stack.charlieTimeUtc)) {
-    return _fail('charlieTimeUtc must be epoch ms (mission Zulu) or null');
-  }
-  if (stack.marshalRadialDeg != null && (normDeg(stack.marshalRadialDeg) == null || normDeg(stack.marshalRadialDeg) !== stack.marshalRadialDeg)) {
-    return _fail('marshalRadialDeg must be a bearing in [0, 360) degrees true, or null');
-  }
   if (!Array.isArray(stack.entries)) return _fail('entries must be an array');
   const seenFlightData = new Set();
   let prev = -1;
@@ -152,8 +145,6 @@ function normalizeStack(raw, { stackId = DEFAULT_STACK_ID, hullId = null, maxInd
   const stack = {
     stackId: typeof src.stackId === 'string' && src.stackId ? src.stackId : stackId,
     hullId: typeof src.hullId === 'string' ? src.hullId : hullId,
-    charlieTimeUtc: Number.isFinite(src.charlieTimeUtc) ? src.charlieTimeUtc : null,
-    marshalRadialDeg: normDeg(src.marshalRadialDeg),
     entries: [],
   };
   const rawEntries = Array.isArray(src.entries) ? src.entries.slice() : [];
@@ -190,22 +181,27 @@ function normalizeStack(raw, { stackId = DEFAULT_STACK_ID, hullId = null, maxInd
 // ── Derivation ───────────────────────────────────────────────────────────────
 
 /**
- * The displayed fields of one entry, as a pure function of the entry, the
- * Case, the stack's Charlie time and radial, and the ship state. Returns a new,
- * frozen object. The Case is a parameter: nothing stored carries it.
+ * The displayed fields of one entry, as a pure function of the entry and the recovery's inputs (carrier-state.js
+ * `recoveryInputs`): the Case, the ramp time, the final bearing, the marshal radial in force and where it came from, the
+ * first fix, and the two tuned durations. Returns a new, frozen object. The Case is a parameter: nothing stored carries it.
  *
- * All bearings are degrees TRUE (decisions H15); convert at display with
- * angles.toMagnetic().
+ * Push time is the EAT (docs/adr/0113, CV NATOPS glossary: "the future time at which an aircraft is cleared to depart inbound
+ * ... from a preassigned fix"). It is worked BACK from the ramp time: slot N is expected at the ramp N * pushSpacing after
+ * the first aircraft (NATOPS 6.4.5, one minute apart), and leaves its fix `fixToRamp` earlier than that.
+ *
+ * All bearings are degrees TRUE (decisions H15); convert at display with angles.toMagnetic().
  */
-function deriveEntry(entry, { caseValue, charlieTimeUtc = null, marshalRadialDeg = null, shipState = null } = {}) {
+function deriveEntry(entry, inputs = {}) {
+  const { caseValue, rampTimeUtc = null, finalBearingDeg = null, marshalRadialDeg = null, marshalRadialSource = null,
+    firstFixDme = null, fixToRampMs = 0, pushSpacingMs = 60_000 } = _isObj(inputs) ? inputs : {};
   const e = _isObj(entry) ? entry : {};
-  const fb = shipState && Number.isFinite(shipState.finalBearingDeg) ? normDeg(shipState.finalBearingDeg) : null;
+  const fb = Number.isFinite(finalBearingDeg) ? normDeg(finalBearingDeg) : null;
   const base = {
     flightDataId: e.flightDataId ?? null,
     stackIndex: Number.isInteger(e.stackIndex) ? e.stackIndex : null,
     status: e.status ?? null,
     caseValue: isCase(caseValue) ? caseValue : null,
-    expectedFinalBearingDeg: fb, // computed in ship-state.js, never here
+    expectedFinalBearingDeg: fb, // computed in carrier-state.js, never here
   };
 
   if (!isSequencedCase(caseValue) || base.stackIndex == null) {
@@ -217,7 +213,9 @@ function deriveEntry(entry, { caseValue, charlieTimeUtc = null, marshalRadialDeg
       ...base,
       angels: _validCaseIAngels(e.caseIAngels) ? e.caseIAngels : null,
       marshalDme: null,
+      firstFixDme: null,
       pushTimeUtc: null,
+      rampEtaUtc: null,
       pushWindowUtc: null,
       marshalRadialDeg: null,
       marshalRadialSource: null,
@@ -226,43 +224,34 @@ function deriveEntry(entry, { caseValue, charlieTimeUtc = null, marshalRadialDeg
   }
 
   const angels = MIN_ANGELS + base.stackIndex;
-  const marshalDme = angels + DME_PLUS;
-  const pushTimeUtc = Number.isFinite(charlieTimeUtc) ? charlieTimeUtc + base.stackIndex * PUSH_SPACING_MS : null;
+  // Slot 0 holds at the first fix; each slot above it is one mile and 1,000 ft higher (NATOPS 6.4.1.1: angels + 15, with the
+  // base altitude 6,000 ft, is 21 DME; the first fix is the Marshal's to change, ADR 0113).
+  const marshalDme = Number.isFinite(firstFixDme) ? firstFixDme + base.stackIndex : angels + DME_PLUS;
+  const rampEtaUtc = Number.isFinite(rampTimeUtc) ? rampTimeUtc + base.stackIndex * pushSpacingMs : null;
+  const pushTimeUtc = rampEtaUtc == null ? null : rampEtaUtc - fixToRampMs;
   const pushWindowUtc = pushTimeUtc == null
     ? null
     : Object.freeze([pushTimeUtc - PUSH_TOLERANCE_MS, pushTimeUtc + PUSH_TOLERANCE_MS]);
-  const setRadial = normDeg(marshalRadialDeg);
-  let radial = null;
-  let radialSource = null;
-  if (setRadial != null) {
-    radial = setRadial;
-    radialSource = 'SET';
-  } else if (fb != null) {
-    radial = reciprocal(fb); // decisions H27: default final bearing + 180
-    radialSource = 'FINAL_BEARING';
-  }
+  const radial = normDeg(marshalRadialDeg);
   return Object.freeze({
     ...base,
     angels,
     marshalDme,
+    firstFixDme: Number.isFinite(firstFixDme) ? firstFixDme : DME_PLUS + MIN_ANGELS,
     pushTimeUtc,
+    rampEtaUtc,
     pushWindowUtc,
     marshalRadialDeg: radial,
-    marshalRadialSource: radialSource,
+    marshalRadialSource: radial == null ? null : marshalRadialSource,
     minimumAltitudeOk: angels >= MIN_ANGELS,
   });
 }
 
 /** Every entry derived, in stackIndex order. A frozen array. */
-function deriveStack(stack, { caseValue, shipState = null } = {}) {
+function deriveStack(stack, inputs = {}) {
   const s = _isObj(stack) ? stack : {};
   const entries = Array.isArray(s.entries) ? s.entries.slice().sort((a, b) => a.stackIndex - b.stackIndex) : [];
-  return Object.freeze(entries.map((e) => deriveEntry(e, {
-    caseValue,
-    charlieTimeUtc: s.charlieTimeUtc,
-    marshalRadialDeg: s.marshalRadialDeg,
-    shipState,
-  })));
+  return Object.freeze(entries.map((e) => deriveEntry(e, inputs)));
 }
 
 /**
@@ -278,8 +267,9 @@ function checkConsistency(derived, { radialToleranceDeg = RADIAL_TOLERANCE_DEG }
   const out = [];
   for (const d of list) {
     if (!_isObj(d) || !isSequencedCase(d.caseValue)) continue;
-    if (!(Number.isFinite(d.angels) && Number.isFinite(d.marshalDme) && d.angels + DME_PLUS === d.marshalDme)) {
-      out.push({ flightDataId: d.flightDataId, code: 'DME_NOT_ANGELS_PLUS_15', detail: `angels ${d.angels} + 15 ≠ DME ${d.marshalDme}` });
+    const fixOffset = Number.isFinite(d.firstFixDme) ? d.firstFixDme - MIN_ANGELS : DME_PLUS; // 15 unless the Marshal moved the first fix
+    if (!(Number.isFinite(d.angels) && Number.isFinite(d.marshalDme) && d.angels + fixOffset === d.marshalDme)) {
+      out.push({ flightDataId: d.flightDataId, code: 'DME_NOT_ANGELS_PLUS_15', detail: `angels ${d.angels} + ${fixOffset} ≠ DME ${d.marshalDme}` });
     }
     if (!(Number.isFinite(d.angels) && d.angels >= MIN_ANGELS)) {
       out.push({ flightDataId: d.flightDataId, code: 'BELOW_MINIMUM_ALTITUDE', detail: `angels ${d.angels} is below the §9.12 minimum of ${MIN_ANGELS}` });
@@ -463,22 +453,6 @@ function markPushed(stack, { flightDataId } = {}, opts = STACK_DEFAULTS) {
   return _result(stack, entries, new Set([flightDataId]));
 }
 
-/**
- * Charlie time — when stack index 0 is due to push. Mission Zulu epoch ms
- * (decisions H11), or null to clear. Shifts every push time together; changes
- * nothing else. `changed` = every HOLDING entry.
- */
-function setCharlieTime(stack, { charlieTimeUtc } = {}, opts = STACK_DEFAULTS) {
-  const v = validateStack(stack, opts);
-  if (!v.ok) return v;
-  if (charlieTimeUtc !== null && !Number.isFinite(charlieTimeUtc)) {
-    return _fail('charlieTimeUtc must be epoch ms (mission Zulu) or null');
-  }
-  if (charlieTimeUtc === stack.charlieTimeUtc) return _fail('Charlie time is unchanged');
-  const changed = new Set(stack.entries.filter((e) => e.status === 'HOLDING').map((e) => e.flightDataId));
-  return _result(stack, _copyEntries(stack), changed, { charlieTimeUtc });
-}
-
 /** Case I only: the squadron-assigned altitude — the one per-entry value a controller types. */
 function setCaseIAngels(stack, { flightDataId, caseIAngels } = {}, opts = STACK_DEFAULTS) {
   const v = validateStack(stack, opts);
@@ -492,24 +466,6 @@ function setCaseIAngels(stack, { flightDataId, caseIAngels } = {}, opts = STACK_
   return _result(stack, entries, new Set([flightDataId]));
 }
 
-/**
- * The marshal radial, set by the Marshal controller (decisions H27), degrees
- * TRUE; null returns to the default, final bearing + 180. One value for the
- * stack, so every entry's message changes. Out-of-range input is refused, not
- * wrapped: 360 is not a radial anyone typed on purpose into a true field.
- */
-function setMarshalRadial(stack, { marshalRadialDeg } = {}, opts = STACK_DEFAULTS) {
-  const v = validateStack(stack, opts);
-  if (!v.ok) return v;
-  if (marshalRadialDeg !== null
-      && !(typeof marshalRadialDeg === 'number' && Number.isFinite(marshalRadialDeg) && marshalRadialDeg >= 0 && marshalRadialDeg < 360)) {
-    return _fail('marshalRadialDeg must be a bearing in [0, 360) degrees true, or null for the default (final bearing + 180)');
-  }
-  if (marshalRadialDeg === stack.marshalRadialDeg) return _fail('marshal radial is unchanged');
-  const changed = new Set(stack.entries.map((e) => e.flightDataId));
-  return _result(stack, _copyEntries(stack), changed, { marshalRadialDeg });
-}
-
 const _DISPATCH = {
   InsertAt: (s, op, o) => insertAt(s, op, o),
   Append: (s, op, o) => append(s, op, o),
@@ -517,9 +473,7 @@ const _DISPATCH = {
   Remove: (s, op, o) => remove(s, op, o),
   CloseUp: (s, op, o) => closeUp(s, op, o),
   MarkPushed: (s, op, o) => markPushed(s, op, o),
-  SetCharlieTime: (s, op, o) => setCharlieTime(s, op, o),
   SetCaseIAngels: (s, op, o) => setCaseIAngels(s, op, o),
-  SetMarshalRadial: (s, op, o) => setMarshalRadial(s, op, o),
 };
 
 /**
@@ -558,8 +512,6 @@ module.exports = {
   remove,
   closeUp,
   markPushed,
-  setCharlieTime,
   setCaseIAngels,
-  setMarshalRadial,
   applyStackOp,
 };

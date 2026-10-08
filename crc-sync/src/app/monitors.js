@@ -18,6 +18,7 @@ const { indicatedAltFt } = require('../altimetry');
 const { WALL_CLOCK } = require('../mission-clock');
 const { createEfspInstrumentation } = require('../efsp/metrics');
 const { CarrierTick } = require('../efsp/carrier-tick');
+const { createShipWind } = require('./ship-wind');
 const { carrierDelta, correlationDelta } = require('../efsp/wire/frames');
 
 /**
@@ -140,6 +141,7 @@ function buildMonitors({ env, efsp, facilityConfig, missionClock, missionSession
   // ── The carrier's ship banner (docs/adr/0074, ADR 0064 B6) — matched to the live ship track once a second, republished only
   // when it changed enough to matter. Own coalition, grid convergence and magnetic variation are injected: the model owns none
   // of them (decisions H15, H42).
+  const shipWind = createShipWind({ grpcClient });
   const carrierTick = new CarrierTick({
     carrierStore: efsp.carrierStore,
     tracks: () => trackStore.getAll(),
@@ -148,6 +150,7 @@ function buildMonitors({ env, efsp, facilityConfig, missionClock, missionSession
     convergenceAt: (lat, lon) => theaterContext.convergenceAt(lat, lon),
     variationAt: (lat, lon) => theaterContext.variationAt(lat, lon),
     weatherPa: () => { const w = grpcClient.getWeather(); return w && Number.isFinite(w.pressurePa) ? w.pressurePa : null; },
+    windAt: (lat, lon) => shipWind.get(lat, lon),
     onChange: () => deliver(carrierDelta(efsp.carrierStore)),
   });
 

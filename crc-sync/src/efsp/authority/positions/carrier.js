@@ -61,26 +61,26 @@ const CREATE_STRIP_TYPE_PERMISSIONS = {
  * entries because the Case, the stack and the ship input are not Strip ops: they
  * go to the CarrierStore (carrier-store.js), which asks these.
  *
- *  setsCase        the recovery Case is PriFly's alone (guide §4.1); Marshal may not
- *  sequencesStack  every stack op, including the marshal radial (H27) and Charlie time
- *  editsShipInput  the one thing a controller may enter on the banner: the altimeter
+ *  editsCarrierState  the carrier management panel's values (docs/adr/0113, decisions H119): the Case, BRC, final bearing,
+ *                     ramp time, marshal radial and first fix, weather at the ship, the recovery tanker. PriFly and the
+ *                     Marshal; the approach lanes read. (The Case was PriFly's alone before; H119 gives both the panel.)
+ *  sequencesStack     every stack op: who lands in which slot
  *
  * A carrier transfer's sender is read from CARRIER_HANDOFFS[kind].from (the
  * model's own data), not repeated here.
  */
 const CARRIER_CAPABILITIES = {
-  CV_MARSHAL: { setsCase: false, sequencesStack: true,  editsShipInput: true },
-  CV_PRIFLY:  { setsCase: true,  sequencesStack: false, editsShipInput: true },
-  CV_APP1:    { setsCase: false, sequencesStack: false, editsShipInput: false },
-  CV_APP2:    { setsCase: false, sequencesStack: false, editsShipInput: false },
+  CV_MARSHAL: { editsCarrierState: true,  sequencesStack: true },
+  CV_PRIFLY:  { editsCarrierState: true,  sequencesStack: false },
+  CV_APP1:    { editsCarrierState: false, sequencesStack: false },
+  CV_APP2:    { editsCarrierState: false, sequencesStack: false },
 };
 
 function _carrierCap(positionId, key) {
   return Object.prototype.hasOwnProperty.call(CARRIER_CAPABILITIES, positionId) && CARRIER_CAPABILITIES[positionId][key] === true;
 }
-function canSetRecoveryCase(actingPositionId) { return _carrierCap(actingPositionId, 'setsCase'); }
+function canEditCarrierState(actingPositionId) { return _carrierCap(actingPositionId, 'editsCarrierState'); }
 function canSequenceMarshalStack(actingPositionId) { return _carrierCap(actingPositionId, 'sequencesStack'); }
-function canEditShipStateInput(actingPositionId) { return _carrierCap(actingPositionId, 'editsShipInput'); }
 /** May this Position record this carrier transfer (the model's `from` list)? */
 function canRecordCarrierHandoff(actingPositionId, kind) {
   const row = typeof kind === 'string' && Object.prototype.hasOwnProperty.call(CARRIER_HANDOFFS, kind) ? CARRIER_HANDOFFS[kind] : null;
@@ -98,5 +98,5 @@ const family = {
 };
 
 module.exports = {
-  family, CARRIER_CAPABILITIES, canSetRecoveryCase, canSequenceMarshalStack, canEditShipStateInput, canRecordCarrierHandoff,
+  family, CARRIER_CAPABILITIES, canEditCarrierState, canSequenceMarshalStack, canRecordCarrierHandoff,
 };

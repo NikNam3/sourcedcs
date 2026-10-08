@@ -8,19 +8,22 @@
 // many flights, so they live neither on the Board nor on flight data, for the reason
 // airspace (ADR 0034) and MARSA (ADR 0051) do not. One record per hull:
 //
-//   { hullId, rev, recoveryCase, stacks: { [stackId]: MarshalStack }, shipInputs, transitions[] }
+//   { hullId, rev, recoveryCase, overrides, stacks: { [stackId]: MarshalStack }, transitions[] }
 //
 // v1 has one hull and one `MAIN` stack (decisions H29), so a second stack or
 // hull is additive. Entries are keyed by flightDataId, never by Strip or track id.
 //
 // WHAT IS STORED AND WHAT IS NOT. The stored record holds only authoritative
-// values (the Case, the stack index of each flight, the Charlie time, the
-// marshal radial, the altimeter a controller set). Angels, DME, push time and
-// the ship banner are DERIVED, every time a view is built, and are never
-// written anywhere (§9.12 rule 1, D16): marshal-stack.js refuses an entry that
-// carries one, and this store never builds one. The ship state is held in
-// memory only (`setShipState`), published by a server tick, and re-derived after
-// a restart.
+// values: the Case, the stack index of each flight, and the OVERRIDES a
+// controller typed over the ship's state (BRC, final bearing, ramp time, marshal
+// radial, first fix, weather, the recovery tanker; carrier/carrier-state.js,
+// docs/adr/0113). Every value of that state is resolved, with its source (DCS,
+// default, override), each time a view is built. Angels, DME, push time and the
+// ship banner are DERIVED the same way, and are never written anywhere (§9.12
+// rule 1, D16): marshal-stack.js refuses an entry that carries one, and this store
+// never builds one. The ship state and the wind at the ship are held in memory
+// only (`setShipState`, `setShipWind`), published by a server tick, and
+// re-derived after a restart.
 //
 // Built on marsa-store.js: own record map, per-record rev with STALE_REV, a
 // monotonic `_sync` seq, an audit line for every op INCLUDING refusals, a never-
@@ -40,8 +43,7 @@ const { SyncedStore } = require('./synced-store');
 const log = require('../log').logger('efsp:carrier-store');
 
 const TRANSITIONS_CAP = 200; // engineering bound: the newest transitions kept per record; no meaning attached
-const SHIP_OP = 'SetShipInput';
-const CASE_OP = 'SetCase';
+const STATE_OP = 'SetCarrierState';
 
 function deepClone(o) { return o == null ? o : JSON.parse(JSON.stringify(o)); }
 
@@ -52,9 +54,11 @@ class CarrierStore extends SyncedStore {
    * @param {(flightDataId:string)=>boolean} [deps.flightDataExists]
    * @param {(positionId:string)=>boolean} [deps.isStaffed] CARRIER Position staffing, for lane feeding
    * @param {{now:()=>number}} [deps.clock] the mission clock
+   * @param {object} [deps.tuning] carrier/recovery-tuning.js (the shipped file when absent)
    */
-  constructor({ hulls, flightDataExists, isStaffed, clock = WALL_CLOCK, mutationLog = null } = {}) {
+  constructor({ hulls, flightDataExists, isStaffed, clock = WALL_CLOCK, mutationLog = null, tuning = null } = {}) {
     super({ clock, mutationLog });
+    this._tuning = tuning || carrier.loadRecoveryTuning();
     this._flightDataExists = flightDataExists || (() => true);
     this._isStaffed = isStaffed || (() => false);
     if (!hulls || !hulls.length) throw new Error('CarrierStore needs at least one hull (config/efsp-carriers.json)');
@@ -62,14 +66,15 @@ class CarrierStore extends SyncedStore {
     this._records = new Map();
     for (const h of this._hulls) this._records.set(h.hullId, this._fresh(h.hullId));
     this._shipStates = new Map(); // hullId -> banner (derived, never persisted)
+    this._shipWinds = new Map();  // hullId -> { windFromDeg, windKt } at the ship (derived, never persisted)
   }
 
   _fresh(hullId) {
     return {
       hullId, rev: 0,
       recoveryCase: carrier.initialRecoveryCase(),
+      overrides: carrier.emptyOverrides(),
       stacks: { [carrier.DEFAULT_STACK_ID]: carrier.emptyStack({ stackId: carrier.DEFAULT_STACK_ID, hullId }) },
-      shipInputs: carrier.defaultShipInputs(),
       transitions: [],
     };
   }
@@ -94,6 +99,28 @@ class CarrierStore extends SyncedStore {
     return !!r && Object.values(r.stacks).some(s => s.entries.some(e => e.flightDataId === flightDataId));
   }
 
+  /** The magnetic variation at the ship, or null (a typed magnetic bearing cannot be converted without it). */
+  _variation(hullId) {
+    const ship = this._shipStates.get(hullId);
+    return ship && Number.isFinite(ship.magneticVariationDeg) ? ship.magneticVariationDeg : null;
+  }
+
+  /** One hull's resolved state (every value with its source, carrier/carrier-state.js) and what the stack derives from. */
+  _resolve(record) {
+    const state = carrier.resolveState({
+      overrides: record.overrides, recoveryCase: record.recoveryCase, shipState: this._shipStates.get(record.hullId) || null,
+      hull: this._hulls.find(h => h.hullId === record.hullId) || null, shipWind: this._shipWinds.get(record.hullId) || null,
+      tuning: this._tuning, variationDeg: this._variation(record.hullId),
+    });
+    return { state, inputs: carrier.recoveryInputs(state, this._tuning) };
+  }
+
+  /** The resolved state of a hull (copies), for the callers that read one value: `state.brc.value`, `state.rampTime.source`, ... */
+  state(hullId = this.defaultHullId) {
+    const r = this._records.get(hullId);
+    return r ? deepClone(this._resolve(r).state) : null;
+  }
+
   /**
    * The staffed CV_APP lane the stack would feed this flight to, or null
    * (carrier/handoffs.js: alternating by push ordinal, the other lane when the
@@ -102,8 +129,9 @@ class CarrierStore extends SyncedStore {
   laneFor(flightDataId, hullId = this.defaultHullId) {
     const r = this._records.get(hullId);
     if (!r) return null;
+    const { inputs } = this._resolve(r);
     for (const stack of Object.values(r.stacks)) {
-      const derived = carrier.deriveStack(stack, { caseValue: r.recoveryCase.value, shipState: null });
+      const derived = carrier.deriveStack(stack, inputs);
       const lane = carrier.assignLanes(derived, { isStaffed: this._isStaffed }).find(l => l.flightDataId === flightDataId);
       if (lane) return lane.lane;
     }
@@ -111,7 +139,7 @@ class CarrierStore extends SyncedStore {
   }
 
   /**
-   * The wire view of one hull: the record, the banner, and the DERIVED stack,
+   * The wire view of one hull: the record, the resolved state, the banner, and the DERIVED stack,
    * so crc-desktop never reimplements the arithmetic (ADR 0064 B6: one
    * implementation beats a client copy under a parity test).
    */
@@ -119,18 +147,18 @@ class CarrierStore extends SyncedStore {
     const r = this._records.get(hullId);
     if (!r) return null;
     const shipState = this._shipStates.get(hullId) || null;
-    const caseValue = r.recoveryCase.value;
+    const { state, inputs } = this._resolve(r);
     const derived = {};
     const consistency = {};
     for (const [stackId, stack] of Object.entries(r.stacks)) {
       // One implementation of every bearing's magnetic display (H15): the
       // client draws `display`, it never converts.
-      const ref = shipState && shipState.headingRef === 'GRID' ? 'GRID' : 'TRUE';
-      const mv = shipState && Number.isFinite(shipState.magneticVariationDeg) ? shipState.magneticVariationDeg : null;
-      derived[stackId] = carrier.deriveStack(stack, { caseValue, shipState }).map(e => ({
+      const mv = this._variation(hullId);
+      const ref = (v) => (v == null ? 'TRUE' : v);
+      derived[stackId] = carrier.deriveStack(stack, inputs).map(e => ({
         ...e,
-        marshalRadialDisplay: carrier.displayBearing(e.marshalRadialDeg, { ref, magneticVariationDeg: mv }),
-        expectedFinalBearingDisplay: carrier.displayBearing(e.expectedFinalBearingDeg, { ref, magneticVariationDeg: mv }),
+        marshalRadialDisplay: carrier.displayBearing(e.marshalRadialDeg, { ref: ref(state.radial.ref), magneticVariationDeg: mv }),
+        expectedFinalBearingDisplay: carrier.displayBearing(e.expectedFinalBearingDeg, { ref: ref(state.finalBearing.ref), magneticVariationDeg: mv }),
       }));
       // §9.12's "SHOULD validate": non-empty only when something is wrong (ADR 0058).
       consistency[stackId] = carrier.checkConsistency(derived[stackId]);
@@ -144,16 +172,16 @@ class CarrierStore extends SyncedStore {
       const last = Math.min(carrier.STACK_DEFAULTS.maxIndex, top + 1); // one open slot above the stack: a drop there appends
       slots[stackId] = [];
       for (let i = 0; i <= last; i++) {
-        const d = carrier.deriveEntry({ flightDataId: null, stackIndex: i, status: 'HOLDING', caseIAngels: null }, {
-          caseValue, charlieTimeUtc: stack.charlieTimeUtc, marshalRadialDeg: stack.marshalRadialDeg, shipState });
+        const d = carrier.deriveEntry({ flightDataId: null, stackIndex: i, status: 'HOLDING', caseIAngels: null }, inputs);
         slots[stackId].push({ stackIndex: i, angels: d.angels, marshalDme: d.marshalDme, pushTimeUtc: d.pushTimeUtc });
       }
     }
     const lanes = {};
     for (const [stackId, stack] of Object.entries(r.stacks)) {
-      const d = carrier.deriveStack(stack, { caseValue, shipState });
-      lanes[stackId] = carrier.assignLanes(d, { isStaffed: this._isStaffed });
+      lanes[stackId] = carrier.assignLanes(carrier.deriveStack(stack, inputs), { isStaffed: this._isStaffed });
     }
+    // The banner is what the GAME says about the ship (BRC, final bearing, altimeter as DCS has them). The values in force,
+    // overrides included, are `state`; the client draws those.
     let banner = deepClone(shipState);
     if (banner) {
       const ref = banner.headingRef === 'GRID' ? 'GRID' : 'TRUE';
@@ -161,8 +189,12 @@ class CarrierStore extends SyncedStore {
       banner.brcDisplay = carrier.displayBearing(banner.brcDeg, { ref, magneticVariationDeg: mv });
       banner.finalBearingDisplay = carrier.displayBearing(banner.finalBearingDeg, { ref, magneticVariationDeg: mv });
     }
+    const { overrides, ...rest } = deepClone(r);
     return {
-      ...deepClone(r),
+      ...rest,
+      overrides,
+      state,
+      tuning: { fixToRampMs: this._tuning.fixToRampMs, pushSpacingMs: this._tuning.pushSpacingMs },
       shipState: banner,
       derived, slots, lanes, consistency,
       advisory: this._advisory(hullId),
@@ -173,15 +205,18 @@ class CarrierStore extends SyncedStore {
   getAll() { return this.hullIds().map(id => this.view(id)); }
 
   _advisory(hullId) {
-    const wx = this._wx && this._wx(hullId);
-    if (!wx) return null;
-    return carrier.caseAdvisory(this.caseValue(hullId), wx);
+    const base = this._wx && this._wx(hullId);
+    const r = this._records.get(hullId);
+    if (!base || !r) return null;
+    // The ceiling and visibility are the ones a controller typed (DCS-gRPC gives neither); night is from the sun.
+    const { weather } = this._resolve(r).state;
+    return carrier.caseAdvisory(this.caseValue(hullId), { ...base, ceilingFt: weather.ceiling.value, visibilityNm: weather.visibility.value });
   }
 
-  /** server.js injects the weather the advisory reads: `(hullId) => { ceilingFt, visibilityNm, night }` or null. */
+  /** server.js injects the weather the advisory reads: `(hullId) => { night }` or null. */
   setWeatherSource(fn) { this._wx = typeof fn === 'function' ? fn : null; }
 
-  // ── the banner (derived, published by a tick) ───────────────────────────
+  // ── the banner and the wind (derived, published by a tick) ───────────────
 
   /**
    * Sets the banner for a hull; true when it changed enough to broadcast
@@ -196,7 +231,16 @@ class CarrierStore extends SyncedStore {
     return true;
   }
   getShipState(hullId = this.defaultHullId) { return deepClone(this._shipStates.get(hullId) || null); }
-  shipInputs(hullId = this.defaultHullId) { const r = this._records.get(hullId); return r ? deepClone(r.shipInputs) : null; }
+
+  /** The wind DCS reports at the ship ({ windFromDeg (true), windKt }, whole numbers), or null. True when it moved. Not audited, not persisted. */
+  setShipWind(hullId, wind) {
+    const prev = this._shipWinds.get(hullId) || null;
+    const next = wind && Number.isFinite(wind.windFromDeg) && Number.isFinite(wind.windKt) ? { windFromDeg: wind.windFromDeg, windKt: wind.windKt } : null;
+    if ((prev && next && prev.windFromDeg === next.windFromDeg && prev.windKt === next.windKt) || (!prev && !next)) return false;
+    if (next) this._shipWinds.set(hullId, next); else this._shipWinds.delete(hullId);
+    this._sync.advance();
+    return true;
+  }
 
   // ── audit ───────────────────────────────────────────────────────────────
 
@@ -220,8 +264,8 @@ class CarrierStore extends SyncedStore {
   // ── controller ops ──────────────────────────────────────────────────────
 
   /**
-   * The one entry point for a controller-driven carrier op (SetCase, a stack
-   * op, SetShipInput). Never throws. `changed` on a stack op is the flightDataIds
+   * The one entry point for a controller-driven carrier op (SetCarrierState, a stack
+   * op). Never throws. `changed` on a stack op is the flightDataIds
    * whose derived display moved, in stack order, for the one delta.
    *
    * @param {{clientMutationId:string, hullId?:string, baseRev?:number, op:object}} mutation
@@ -250,35 +294,12 @@ class CarrierStore extends SyncedStore {
   }
 
   _dispatch(record, op, actingPositionId, by) {
-    if (op.kind === CASE_OP) {
-      if (!permission.canSetRecoveryCase(actingPositionId)) {
-        return { ok: false, reason: 'PERMISSION_DENIED', detail: `${actingPositionId} does not set the recovery Case — PriFly owns it (guide §4.1)` };
-      }
-      // PriFly's call is never refused on the weather (D11): the advisory only advises.
-      const r = carrier.setCase(record.recoveryCase, op.to, { by, at: this._clock.now(), note: op.note });
-      if (!r.ok) return r;
-      record.recoveryCase = r.case;
-      this._touch(record, by, CASE_OP, `${r.case.history[r.case.history.length - 1].from} -> ${r.case.value}`);
-      // One record changes, and every client re-renders every carrier Strip from it.
-      return { ok: true, record: deepClone(record), changed: 'ALL' };
-    }
-    if (op.kind === SHIP_OP) {
-      if (!permission.canEditShipStateInput(actingPositionId)) {
-        return { ok: false, reason: 'PERMISSION_DENIED', detail: `${actingPositionId} may not enter the altimeter` };
-      }
-      const r = carrier.applyShipStateInput(record.shipInputs, op.input);
-      if (!r.ok) return r;
-      record.shipInputs = r.inputs;
-      this._touch(record, by, SHIP_OP, JSON.stringify(op.input));
-      return { ok: true, record: deepClone(record), changed: [], shipInputsChanged: true };
-    }
+    if (op.kind === STATE_OP) return this._setState(record, op, actingPositionId, by);
     if (carrier.STACK_OP_KINDS.includes(op.kind)) {
       if (!permission.canSequenceMarshalStack(actingPositionId)) {
         return { ok: false, reason: 'PERMISSION_DENIED', detail: `${actingPositionId} does not sequence the Marshal stack` };
       }
-      const prepared = this._prepare(record, op);
-      if (!prepared.ok) return prepared;
-      return this._stackOp(record, prepared.op, by, false);
+      return this._stackOp(record, op, by, false);
     }
     // SetAngels, SetDme and anything else: say why (WP7A bullet 2, D16).
     const r = carrier.applyStackOp(this._stackOf(record, op.stackId), op);
@@ -286,27 +307,35 @@ class CarrierStore extends SyncedStore {
   }
 
   /**
-   * A controller types what a controller reads: a Charlie time as Zulu HHMM and
-   * a marshal radial MAGNETIC (decisions H15). Both are converted here, on the
-   * server, once (the client never converts a typed magnetic value), and the
-   * model only ever holds epoch ms and a TRUE bearing.
+   * `{ kind: 'SetCarrierState', field, value }`: type a value over the ship's state, or clear the override with `value: null`
+   * ("Use DCS" / "Use default", ADR 0113). PriFly and the Marshal both edit it; every other Position reads.
+   *
+   * A controller types what a controller reads: a MAGNETIC bearing, a Zulu HHMM, feet, knots. The conversion happens here, on the
+   * server, once (the client never converts a typed value), and the record only ever holds a TRUE bearing and epoch ms.
+   * The Case is PriFly's call and is never refused on the weather (D11): the advisory only advises.
    */
-  _prepare(record, op) {
-    if (op.kind === 'SetCharlieTime' && typeof op.hhmm === 'string') {
-      const at = resolveZuluHhmm(op.hhmm, this._clock.now());
-      if (at == null) return { ok: false, reason: 'VALIDATION_ERROR', detail: `Charlie time must be a Zulu time, HHMM (not ${JSON.stringify(op.hhmm)})` };
-      return { ok: true, op: { ...op, charlieTimeUtc: at } };
+  _setState(record, op, actingPositionId, by) {
+    if (!permission.canEditCarrierState(actingPositionId)) {
+      return { ok: false, reason: 'PERMISSION_DENIED', detail: `${actingPositionId} does not set the carrier state — PriFly and the Marshal do` };
     }
-    if (op.kind === 'SetMarshalRadial' && op.marshalRadialMagDeg !== undefined) {
-      const ship = this._shipStates.get(record.hullId);
-      const variation = ship && Number.isFinite(ship.magneticVariationDeg) ? ship.magneticVariationDeg : null;
-      if (op.marshalRadialMagDeg === null) return { ok: true, op: { ...op, marshalRadialDeg: null } };
-      if (variation == null) return { ok: false, reason: 'VALIDATION_ERROR', detail: 'the magnetic variation at the ship is not known, so a magnetic radial cannot be converted' };
-      const mag = Number(op.marshalRadialMagDeg);
-      if (!Number.isFinite(mag)) return { ok: false, reason: 'VALIDATION_ERROR', detail: 'the marshal radial must be a magnetic bearing, 0 to 360' };
-      return { ok: true, op: { ...op, marshalRadialDeg: carrier.normDeg(mag + variation) } };
+    const at = this._clock.now();
+    if (op.field === carrier.CASE_FIELD) {
+      const r = (op.value === null || op.value === undefined || op.value === '')
+        ? carrier.clearCase(record.recoveryCase, { by, at, note: op.note })
+        : carrier.setCase(record.recoveryCase, op.value, { by, at, note: op.note });
+      if (!r.ok) return r;
+      const last = r.case.history[r.case.history.length - 1];
+      record.recoveryCase = r.case;
+      this._touch(record, by, STATE_OP, `case ${last.from} -> ${r.case.value}`);
+      // One record changes, and every client re-renders every carrier Strip from it.
+      return { ok: true, record: deepClone(record), changed: 'ALL' };
     }
-    return { ok: true, op };
+    const v = carrier.validateField(op.field, op.value, { variationDeg: this._variation(record.hullId), now: at });
+    if (!v.ok) return v;
+    if (record.overrides[v.key] === v.stored) return { ok: true, record: deepClone(record), changed: [], unchanged: true };
+    record.overrides[v.key] = v.stored;
+    this._touch(record, by, STATE_OP, `${op.field} ${v.stored === null ? 'cleared' : JSON.stringify(v.stored)}`);
+    return { ok: true, record: deepClone(record), changed: 'ALL' };
   }
 
   _stackOf(record, stackId) {
@@ -450,7 +479,7 @@ class CarrierStore extends SyncedStore {
   }
 
   /**
-   * The mission reset (docs/adr/0108): each hull goes back to the start of a recovery (Case, empty stacks, default ship inputs).
+   * The mission reset (docs/adr/0108): each hull goes back to the start of a recovery (Case, empty stacks, no overrides).
    * The ship banner is derived from DCS, not stored, so it stays. One audit entry per hull that had anything to clear.
    * @returns {string[]} the hulls that changed
    */
@@ -458,12 +487,12 @@ class CarrierStore extends SyncedStore {
     const changed = [];
     for (const [hullId, record] of this._records) {
       const fresh = this._fresh(hullId);
-      const slice = (r) => JSON.stringify([r.recoveryCase, r.stacks, r.shipInputs]);
+      const slice = (r) => JSON.stringify([r.recoveryCase, r.stacks, r.overrides]);
       if (slice(record) === slice(fresh)) continue;
       const before = deepClone(record);
       record.recoveryCase = fresh.recoveryCase;
       record.stacks = fresh.stacks;
-      record.shipInputs = fresh.shipInputs;
+      record.overrides = fresh.overrides;
       this._touch(record, by, 'MissionReset', null);
       this._audit({ clientMutationId: null, hullId, op: { kind: 'MissionReset' } }, null, by, before, { ok: true, record });
       changed.push(hullId);
@@ -490,7 +519,7 @@ class CarrierStore extends SyncedStore {
         rev: Number.isInteger(saved.rev) ? saved.rev : 0,
         recoveryCase: carrier.normalizeRecoveryCase(saved.recoveryCase),
         stacks,
-        shipInputs: carrier.normalizeShipInputs(saved.shipInputs),
+        overrides: carrier.normalizeOverrides(saved.overrides),
         transitions: Array.isArray(saved.transitions) ? saved.transitions.slice(-TRANSITIONS_CAP) : [],
       });
     }

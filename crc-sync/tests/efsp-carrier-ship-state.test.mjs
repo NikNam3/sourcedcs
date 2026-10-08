@@ -5,7 +5,7 @@ import { normDeg, reciprocal, angularDiff, gridToTrue, toMagnetic } from '../src
 import {
   validateHullConfig, matchHullTrack, hullMatchProblem,
   computeFinalBearing, inHgFromPa, buildShipState, staleFrom, shipStateChanged,
-  defaultShipInputs, applyShipStateInput, normalizeShipInputs, displayBearing,
+  displayBearing,
 } from '../src/efsp/carrier/ship-state.js';
 import { getDefaultHull } from '../src/efsp/carrier/hull-config.js';
 
@@ -132,12 +132,11 @@ test('buildShipState: no track → not found, FB unavailable; null groundSpeed �
   assert.equal(buildShipState({ hull: DEFAULT_HULL, track: ship({ groundSpeed: null }), now: NOW }).speedKt, null);
 });
 
-test('buildShipState altimeter: controller input wins, else theater weather, else null', () => {
+test('buildShipState altimeter: the theater weather, else null; a typed altimeter is carrier-state.js\'s, not the banner\'s (ADR 0113)', () => {
   assert.equal(buildShipState({ hull: DEFAULT_HULL, track: ship(), now: NOW, weatherPa: 101325 }).altimeterInHg, 29.92);
   assert.equal(buildShipState({ hull: DEFAULT_HULL, track: ship(), now: NOW, weatherPa: 101325 }).altimeterSource, 'THEATER_WEATHER');
-  const set = buildShipState({ hull: DEFAULT_HULL, track: ship(), now: NOW, weatherPa: 101325, inputs: { altimeterInHg: 30.12 } });
-  assert.equal(set.altimeterInHg, 30.12);
-  assert.equal(set.altimeterSource, 'SET');
+  const ignored = buildShipState({ hull: DEFAULT_HULL, track: ship(), now: NOW, weatherPa: 101325, inputs: { altimeterInHg: 30.12 } });
+  assert.equal(ignored.altimeterInHg, 29.92, 'an `inputs` argument is not read');
   assert.equal(buildShipState({ hull: DEFAULT_HULL, track: ship(), now: NOW }).altimeterInHg, null);
 });
 
@@ -193,25 +192,6 @@ test('shipStateChanged: a sub-degree turn is not a change; 1° is', () => {
   assert.equal(shipStateChanged(null, a), true);
   const slow = buildShipState({ hull: DEFAULT_HULL, track: ship({ groundSpeed: 5 }), now: NOW });
   assert.equal(shipStateChanged(a, slow), true);
-});
-
-test('applyShipStateInput accepts the altimeter only', () => {
-  const r = applyShipStateInput(defaultShipInputs(), { altimeterInHg: 29.87 });
-  assert.equal(r.ok, true);
-  assert.equal(r.inputs.altimeterInHg, 29.87);
-  assert.equal(applyShipStateInput(r.inputs, { altimeterInHg: null }).inputs.altimeterInHg, null);
-  for (const k of ['finalBearingDeg', 'brcDeg', 'headingDeg', 'speedKt', 'lat', 'lon']) {
-    const bad = applyShipStateInput(defaultShipInputs(), { [k]: 200 });
-    assert.equal(bad.ok, false, k);
-    assert.equal(bad.reason, 'VALIDATION_ERROR');
-    assert.match(bad.detail, /final bearing is computed from ship heading \(§9\.12 rule 5\)/);
-  }
-  assert.equal(applyShipStateInput(defaultShipInputs(), { altimeterInHg: 35 }).ok, false);
-  assert.equal(applyShipStateInput(defaultShipInputs(), { altimeterInHg: '29.92' }).ok, false);
-  assert.equal(applyShipStateInput(defaultShipInputs(), {}).ok, false);
-  assert.equal(applyShipStateInput(defaultShipInputs(), null).ok, false);
-  assert.deepEqual(normalizeShipInputs({ altimeterInHg: 99, junk: 1 }), { altimeterInHg: null });
-  assert.deepEqual(normalizeShipInputs({ altimeterInHg: 30.01 }), { altimeterInHg: 30.01 });
 });
 
 test('displayBearing: magnetic with a variation, labelled T or G otherwise (decisions H15)', () => {
