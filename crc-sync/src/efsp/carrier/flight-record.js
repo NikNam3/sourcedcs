@@ -55,6 +55,7 @@ function defaultCarrierFlight() {
     bingoField: null,     // ICAO or name
     bingoFuelLb: null,    // integer lb
     lowStateLb: null,     // integer lb — the marshal message's FUEL/LOW STATE
+    sideNumber: null,     // the aircraft's side number (modex), 1-8 letters or digits: how the carrier regime names it (docs/adr/0114, H117)
   };
 }
 
@@ -125,6 +126,11 @@ function validateCarrierFlightField(field, value, card = commCard()) {
     case 'bingoFuelLb':
     case 'lowStateLb':
       return _validateFuel(field, value);
+    case 'sideNumber': {
+      const t = typeof value === 'number' ? String(value) : (typeof value === 'string' ? value.trim() : '');
+      if (!/^[A-Za-z0-9]{1,8}$/.test(t)) return _fail('sideNumber must be 1 to 8 letters or digits');
+      return { ok: true, value: t.toUpperCase() };
+    }
     default:
       return _fail(`unknown carrier field '${field}'`);
   }

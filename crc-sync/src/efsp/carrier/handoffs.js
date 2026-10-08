@@ -77,6 +77,19 @@ const CARRIER_HANDOFFS = Object.freeze({
     source: '§9.12',
     guide: '§9.12 rule 4 — Case II Marshal → PriFly fires on a pilot report',
   }),
+  // docs/adr/0114, decisions H117: the Marshal sends a COMMENCED flight back into the stack (CV NATOPS 6.4.9 item 2 does this on
+  // Delta for commenced aircraft above 7,000 ft; here it is the Marshal's manual call). The Strip is the lane's, so this is the
+  // one carrier transfer the Marshal makes on a Strip it does not own (permission.js mayActBesideOwner).
+  COMMENCED_TO_MARSHAL: _row({
+    trigger: 'CONTROLLER_INITIATED',
+    from: ['CV_MARSHAL'], to: Object.freeze(['CV_MARSHAL']),
+    cases: ['II', 'III'],
+    ownershipChange: true, stripTypeChange: null, // MARSHAL stays MARSHAL, COMMENCED -> IN_STACK
+    stackEffect: 'RETURN_TO_STACK',
+    label: 'Back to stack',
+    source: '[SOURCE-DEFINED]',
+    guide: 'decisions H117 — the Marshal sends a commenced aircraft back into the stack',
+  }),
   MARSHAL_TO_PATTERN_CASE_I: _row({
     trigger: 'CONTROLLER_INITIATED',
     from: ['CV_MARSHAL'], to: Object.freeze(['CV_PRIFLY']),

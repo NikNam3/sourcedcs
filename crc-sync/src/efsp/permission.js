@@ -69,6 +69,8 @@ function canActOnRunwayStatus(actingPositionId, opKind) {
  *  - TOFI answer (B2): on a MISSION Strip, the Position `tofiAnsweredBy` names
  *    for its owner (TAC_C2 for an AIC-held line; AIC "works under TAC_C2's
  *    TOFI", guide §4.1, ADR 0025) may ACCEPT, REJECT or TRANSFER_COMMS.
+ *  - Back to stack (docs/adr/0114, H117): the Marshal's CarrierHandoff COMMENCED_TO_MARSHAL on a COMMENCED MARSHAL Strip the
+ *    lane holds.
  *  - OPS alert status (S-L13, H56): OPS owns Block 14E on a DEPARTURE at every
  *    state until it is DROPPED, whoever holds the Strip. Likewise 3G ORDNANCE (UI-A U1).
  * The acting Position must still hold the op kind (canMutate runs first).
@@ -77,6 +79,10 @@ function mayActBesideOwner(actingPositionId, strip, op) {
   if (!strip || !op) return false;
   if (op.kind === 'TOFI' && strip.stripType === 'MISSION' && TOFI_ANSWER_ACTIONS.includes(op.action)) {
     return tofiAnswererFor(strip.ownerPositionId) === actingPositionId;
+  }
+  // docs/adr/0114: Back to stack. The Marshal sends a COMMENCED flight (the lane's Strip) back into its stack.
+  if (op.kind === 'CarrierHandoff' && op.transfer === 'COMMENCED_TO_MARSHAL') {
+    return actingPositionId === 'CV_MARSHAL' && strip.stripType === 'MARSHAL' && strip.state === 'COMMENCED';
   }
   if (op.kind === 'SetBlock' && strip.state !== 'DROPPED') {
     return NON_OWNER_BLOCK_WRITES.some(r => r.blockId === op.blockId && r.stripType === strip.stripType && r.positions.includes(actingPositionId));

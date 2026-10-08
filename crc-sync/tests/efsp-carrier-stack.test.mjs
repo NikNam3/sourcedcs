@@ -33,7 +33,7 @@ function stackOf(ids, { pushed = [], gaps = [] } = {}) {
   const entries = [];
   for (const id of ids) {
     while (gaps.includes(idx)) idx++;
-    entries.push({ flightDataId: id, stackIndex: idx, status: pushed.includes(id) ? 'PUSHED' : 'HOLDING', caseIAngels: null });
+    entries.push({ flightDataId: id, stackIndex: idx, status: pushed.includes(id) ? 'PUSHED' : 'HOLDING', caseIAngels: null, pushedAtUtc: null, eatUtc: null });
     idx++;
   }
   return deepFreeze({ ...s, entries });
@@ -49,8 +49,8 @@ function indexOf(stack, id) {
 test('emptyStack is keyed by stackId (decisions H29) and holds no derived value', () => {
   const s = emptyStack({ hullId: 'CVN-72' });
   assert.equal(s.stackId, DEFAULT_STACK_ID);
-  assert.deepEqual(s, { stackId: 'MAIN', hullId: 'CVN-72', entries: [] });
-  assert.deepEqual([...ENTRY_KEYS], ['flightDataId', 'stackIndex', 'status', 'caseIAngels']);
+  assert.deepEqual(s, { stackId: 'MAIN', hullId: 'CVN-72', entries: [], deltaMs: 0 });
+  assert.deepEqual([...ENTRY_KEYS], ['flightDataId', 'stackIndex', 'status', 'caseIAngels', 'pushedAtUtc', 'eatUtc']);
   assert.equal(STACK_DEFAULTS.maxIndex, 19);
 });
 
@@ -331,10 +331,13 @@ test('applyStackOp dispatches every STACK_OP_KIND and refuses anything else', ()
     CloseUp: { fromIndex: 1 },
     MarkPushed: { flightDataId: 'a' },
     SetCaseIAngels: { flightDataId: 'a', caseIAngels: 2 },
+    Delta: { minutes: 4 },
+    BackToStack: { flightDataId: 'a' },
   };
   assert.deepEqual(Object.keys(ops).sort(), [...STACK_OP_KINDS].sort());
   for (const [kind, op] of Object.entries(ops)) {
-    const r = applyStackOp(s, { kind, ...op });
+    const base = kind === 'BackToStack' ? applyStackOp(s, { kind: 'MarkPushed', flightDataId: 'a' }).stack : s;
+    const r = applyStackOp(base, { kind, ...op });
     assert.equal(r.ok, true, kind);
     assert.equal(validateStack(r.stack).ok, true, kind);
   }

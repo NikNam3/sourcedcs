@@ -12,6 +12,7 @@
 
 const CARRIER_HANDOFF_EFFECTS = Object.freeze({
   MARSHAL_TO_APPROACH:       Object.freeze({ stripType: 'MARSHAL', state: 'IN_STACK',  toStripType: 'MARSHAL', toState: 'COMMENCED',  owner: 'TO',   defaultTo: null }),
+  COMMENCED_TO_MARSHAL:      Object.freeze({ stripType: 'MARSHAL', state: 'COMMENCED', toStripType: 'MARSHAL', toState: 'IN_STACK',   owner: 'TO',   defaultTo: 'CV_MARSHAL' }),
   APPROACH_TO_FINAL:         Object.freeze({ stripType: 'MARSHAL', state: 'COMMENCED', toStripType: 'FINAL',   toState: 'ON_FINAL',   owner: 'SAME', defaultTo: null }),
   FINAL_TO_LSO:              Object.freeze({ stripType: 'FINAL',   state: 'ON_FINAL',  toStripType: 'FINAL',   toState: 'BALL',       owner: 'SAME', defaultTo: null }),
   MARSHAL_TO_PRIFLY:         Object.freeze({ stripType: 'MARSHAL', state: 'IN_STACK',  toStripType: 'PATTERN', toState: 'IN_PATTERN', owner: 'TO',   defaultTo: 'CV_PRIFLY' }),

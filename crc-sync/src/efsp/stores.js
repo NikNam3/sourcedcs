@@ -360,8 +360,8 @@ const ENTRY_SHAPES = {
     ...anyOf('hullId', 'recoveryCase', 'rev', 'transitions'),
     overrides: anyOf('altimeterInHg', 'brcDeg', 'ceilingFt', 'finalBearingDeg', 'firstFixDme', 'marshalRadialDeg', 'rampTimeUtc',
       'tankerAltitudeFt', 'tankerGiveKlb', 'tankerOnStation', 'tankerPatternSide', 'tankerSideNumber', 'visibilityNm', 'windOverDeckKt'),
-    stacks: mapOf({ ...anyOf('hullId', 'stackId'),
-      entries: arrayOf(anyOf('caseIAngels', 'flightDataId', 'stackIndex', 'status')) }),
+    stacks: mapOf({ ...anyOf('deltaMs', 'hullId', 'stackId'),
+      entries: arrayOf(anyOf('caseIAngels', 'eatUtc', 'flightDataId', 'pushedAtUtc', 'stackIndex', 'status')) }),
   }),
   sfaRotation: anyOf('facilityId', 'rev', 'rotation', 'transitions'),
 };

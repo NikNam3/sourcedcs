@@ -471,6 +471,7 @@ const MARSHAL_BLOCK_MAP = {
   'C13': { required: false, target: { kind: 'carrier', field: 'bingoField' } },
   'C14': { required: false, target: { kind: 'carrier', field: 'bingoFuelLb' } },
   'C15': { required: false, target: { kind: 'carrier', field: 'eeatUtc' } }, // writable on the LAUNCH Strip too
+  'C18': { required: false, target: { kind: 'carrier', field: 'sideNumber' } }, // docs/adr/0114: the carrier regime names an aircraft by it
   // Free note, annotation-routed like every strip type's remarks cell.
   'C24': { required: false, target: { kind: 'annotation' } },
   ..._CARRIER_CHROME,
@@ -488,6 +489,7 @@ const FINAL_BLOCK_MAP = {
   'C1':  { required: true,  target: { kind: 'carrier-derived', field: 'callsign' } },
   'C2':  { required: true,  target: { kind: 'carrier-derived', field: 'aircraftType' } },
   'C9':  { required: false, target: { kind: 'carrier-derived', field: 'expectedFinalBearing' } },
+  'C18': { required: false, target: { kind: 'carrier-derived', field: 'sideNumber' } },
   'C16': { required: false, target: { kind: 'carrier-derived', field: 'deck' } },
   'C17': { required: false, target: { kind: 'carrier-derived', field: 'finalDistance' } },
   '2':  _CARRIER_CHROME['2'], '4': _CARRIER_CHROME['4'], '4A': _CARRIER_CHROME['4A'],
