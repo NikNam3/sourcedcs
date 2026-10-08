@@ -54,7 +54,7 @@ select.carrier-mgmt-input { padding: 0 2px; }
 .carrier-mgmt-input[hidden], .carrier-mgmt-value[hidden], .carrier-mgmt-reset[hidden] { display: none; }
 
 .carrier-mgmt-value { color: var(--efsp-text, #d8e0e6); }
-.carrier-mgmt-unit { color: var(--efsp-muted, #8c9aa6); margin-left: -4px; }
+.carrier-mgmt-unit { color: var(--efsp-muted, #8c9aa6); }
 .carrier-mgmt-src { color: var(--efsp-faint, #56616c); font-size: 11px; }
 
 .carrier-mgmt-reset {

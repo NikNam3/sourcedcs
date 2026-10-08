@@ -1,9 +1,10 @@
 'use strict';
 
-/* L17 (crc-sync docs/adr/0074) — the carrier on screen, as a recovery is flown: PriFly sets the
- * Case and every Position sees it change, the Marshal stack's slot board shows the derived
- * angels/DME/push and re-sequences by one drag, the four handoffs are four buttons, the
- * talk-down (FINAL) has nothing to type, and a Case I recovery is an altitude list.
+/* L17 (crc-sync docs/adr/0074) — the carrier on screen, as a recovery is flown: PriFly and the Marshal
+ * set the Case in the carrier management panel (crc-sync docs/adr/0113) and every Position sees it
+ * change, the Marshal stack's slot board shows the derived angels/DME/push and re-sequences by one
+ * drag, the four handoffs are four buttons, the talk-down (FINAL) has nothing to type, and a Case I
+ * recovery is an altitude list.
  *
  * Two controllers, one browser context each: the Marshal seat (with both approach lanes) and
  * PriFly. Screenshots go to the test output directory (test-results/). The Board lives for the whole run, so every test drops
@@ -65,24 +66,53 @@ async function cleanUp(...pages) {
   }
   await expect.poll(() => pages[0].evaluate(() => crc.state.getAllEfspStrips().filter(s => s.state !== 'DROPPED' && s.facilityId === 'CARRIER').length)).toBe(0);
 }
+/** Types a value over the carrier state as PriFly, through the page's own send function (the panel itself is test 01 and 06). */
+const typeState = (page, field, value, acting = 'CV_PRIFLY') => page.evaluate(([a, f, v]) => crc.ws.sendEfspCarrierMutation(a, undefined, undefined, { kind: 'SetCarrierState', field: f, value: v }), [acting, field, value]);
 async function setCase(pri, value) {
   if (await pri.evaluate(() => crc.carrier.carrierCaseValue()) === value) return;
-  await pri.locator('.carrier-case-select').selectOption(value);
+  await typeState(pri, 'case', value);
   await waitCase(pri, value);
 }
+/**
+ * Opens the carrier management panel BESIDE the Strip panel: in the same tab group the other would be detached from the document
+ * (dockview), so the banner and the stack board would not be there to read (the runway-status spec's `besideStrips`).
+ */
+async function openCarrierPanel(page) {
+  await page.evaluate(() => {
+    const p = crc.dock.dock.api.getPanel('carrier');
+    if (p) crc.dock.dock.api.removePanel(p);
+    crc.dock.dock.addPanel({ id: 'carrier', component: 'carrier', title: crc.dock.PANEL_TITLES.carrier, position: { referencePanel: 'efsp', direction: 'right' } });
+    crc.dock.dock.api.getPanel('efsp').api.setActive();
+  });
+  await expect(page.locator('#carrier-mgmt-panel')).toBeVisible({ timeout: 10000 });
+  await expect(page.locator('#efsp-panel')).toBeVisible();
+  return page.locator('#carrier-mgmt-panel');
+}
 
-test('01 PriFly sets the Case; every Position sees it change at once, and only PriFly has the selector', async ({ browser, baseURL }) => {
-  const marshal = await controller(browser, baseURL, 'e2e-cv-marshal1', ['CV_MARSHAL', 'CV_APP1', 'CV_APP2']);
+test('01 PriFly sets the Case in the carrier panel; every Position sees it change at once; the lanes only read', async ({ browser, baseURL }) => {
+  const marshal = await controller(browser, baseURL, 'e2e-cv-marshal1', ['CV_MARSHAL']);
   const pri = await controller(browser, baseURL, 'e2e-cv-prifly1', ['CV_PRIFLY']);
-  await expect(pri.locator('.carrier-case-select')).toBeVisible();
-  await expect(marshal.locator('.carrier-case-select')).toHaveCount(0);
-  await expect(marshal.locator('[data-carrier-case="value"]')).toHaveText('III'); // the most restrictive until PriFly says otherwise
-  await pri.locator('.carrier-case-select').selectOption('II');
+  const lane = await controller(browser, baseURL, 'e2e-cv-lane1', ['CV_APP1', 'CV_APP2']);
+  const priPanel = await openCarrierPanel(pri);
+  const lanePanel = await openCarrierPanel(lane);
+  const marshalPanel = await openCarrierPanel(marshal);
+  await expect(priPanel.locator('[data-carrier-field="case"]')).toBeVisible();
+  await expect(marshalPanel.locator('[data-carrier-field="case"]')).toBeVisible(); // the Marshal edits too (decisions H119)
+  await expect(lanePanel.locator('[data-carrier-field="case"]')).toBeHidden();
+  await expect(lanePanel.locator('[data-carrier-value="case"]')).toHaveText('III'); // the most restrictive until somebody says otherwise
+  await expect(lanePanel.locator('[data-carrier-source="case"]')).toContainText('default');
+  await priPanel.locator('[data-carrier-field="case"]').selectOption('II');
   await expect(marshal.locator('[data-carrier-case="value"]')).toHaveText('II');
+  await expect(lanePanel.locator('[data-carrier-value="case"]')).toHaveText('II');
+  await expect(lanePanel.locator('[data-carrier-source="case"]')).toContainText('set');
   await expect(marshal.locator('[data-carrier-banner="text"]')).toContainText('hull not found'); // no DCS in the harness: the banner says so rather than showing a stale number
   await marshal.screenshot({ path: test.info().outputPath('01-case-and-banner-marshal.png') });
-  await pri.screenshot({ path: test.info().outputPath('01-case-selector-prifly.png') });
-  await setCase(pri, 'III');
+  await pri.screenshot({ path: test.info().outputPath('01-carrier-panel-prifly.png') });
+  await lane.screenshot({ path: test.info().outputPath('01-carrier-panel-lane-reads.png') });
+  // "Use default" puts the Case back
+  await priPanel.locator('[data-carrier-reset="case"]').click();
+  await waitCase(marshal, 'III');
+  await expect(lanePanel.locator('[data-carrier-source="case"]')).toContainText('default');
 });
 
 test('02 the slot board shows what the slot means; a drag to a slot is one Move and everyone above moves up together', async ({ browser, baseURL }) => {
@@ -208,13 +238,15 @@ test('04 Case I is an altitude list: no push column, the flight goes to the patt
   await setCase(pri, 'III');
 });
 
-test('05 a refusal is visible: a Marshal cannot set the Case, and a frequency is not a button', async ({ browser, baseURL }) => {
+test('05 a refusal is visible: an approach lane cannot set the carrier state, and a frequency is not a button', async ({ browser, baseURL }) => {
+  const lane = await controller(browser, baseURL, 'e2e-cv-lane5', ['CV_APP1']);
   const marshal = await controller(browser, baseURL, 'e2e-cv-marshal5', ['CV_MARSHAL']);
   const a = cs('GGG');
   await checkIn(marshal, a);
-  // the server refuses a Case op from the Marshal, and the panel says so
-  await marshal.evaluate(() => crc.ws.sendEfspCarrierMutation('CV_MARSHAL', undefined, undefined, { kind: 'SetCarrierState', field: 'case', value: 'I' }));
-  await expect(marshal.locator('#efsp-mutation-error')).toContainText(/PERMISSION_DENIED|Case/i);
+  // the server refuses a state op from a lane, and the panel says so
+  await typeState(lane, 'case', 'I', 'CV_APP1');
+  await expect(lane.locator('#efsp-mutation-error')).toContainText(/PERMISSION_DENIED|carrier state/i);
+  expect(await lane.evaluate(() => crc.carrier.carrierCaseValue())).toBe('III');
   await openBay(marshal, 'CV_MARSHAL', 'cv-marshal-stack');
   await marshal.evaluate((c) => {
     const s = crc.state.getAllEfspStrips().find(x => crc.state.getEfspFlightData(x.flightDataId).identity.callsign === c);
@@ -223,4 +255,77 @@ test('05 a refusal is visible: a Marshal cannot set the Case, and a frequency is
   await expect(marshal.locator('#efsp-mutation-error')).toContainText(/frequency/i);
   await marshal.screenshot({ path: test.info().outputPath('05-refusals.png') });
   await cleanUp(marshal);
+});
+
+test('06 the carrier panel: typing over a value, where it comes from, "Use default", PriFly and the Marshal at once, the ramp time on the stack board', async ({ browser, baseURL }) => {
+  const marshal = await controller(browser, baseURL, 'e2e-cv-marshal6', ['CV_MARSHAL']);
+  const pri = await controller(browser, baseURL, 'e2e-cv-prifly6', ['CV_PRIFLY']);
+  const lane = await controller(browser, baseURL, 'e2e-cv-lane6', ['CV_APP2']);
+  const mp = await openCarrierPanel(marshal);
+  const pp = await openCarrierPanel(pri);
+  const lp = await openCarrierPanel(lane);
+  await setCase(pri, 'II');
+  const a = cs('HHH'); const b = cs('JJJ');
+  await checkIn(marshal, a); await checkIn(marshal, b);
+
+  // nothing typed: the first fix is the default, the ramp time is not known, and no EAT is invented
+  await expect(mp.locator('[data-carrier-field="firstFix"]')).toHaveValue('21');
+  await expect(mp.locator('[data-carrier-source="firstFix"]')).toContainText('default');
+  await expect(mp.locator('[data-carrier-source="rampTime"]')).toHaveText('not known');
+  await expect(mp.locator('[data-carrier-reset="rampTime"]')).toBeHidden();
+  await openBay(marshal, 'CV_MARSHAL', 'cv-marshal-stack');
+  const board = marshal.locator('.carrier-stack-board');
+  await expect(board.locator('.carrier-stack-ramp')).toHaveText('RAMP —');
+  await expect(board.locator('.carrier-slot[data-slot-index="0"] .carrier-slot-push')).toHaveText('');
+  await marshal.screenshot({ path: test.info().outputPath('06-before.png') });
+
+  // The Marshal types the ramp time, PriFly the weather and the first fix, at the same moment
+  const ramp = mp.locator('[data-carrier-field="rampTime"]');
+  await ramp.fill('2040'); await ramp.press('Enter');
+  const ceiling = pp.locator('[data-carrier-field="ceiling"]');
+  await ceiling.fill('800'); await ceiling.press('Enter');
+  const fix = pp.locator('[data-carrier-field="firstFix"]');
+  await fix.fill('24'); await fix.press('Enter');
+  for (const panel of [mp, pp, lp]) {
+    await expect(panel.locator('[data-carrier-source="rampTime"]')).toContainText('set');
+    await expect(panel.locator('[data-carrier-source="ceiling"]')).toContainText('set');
+    await expect(panel.locator('[data-carrier-source="firstFix"]')).toHaveText('set · automatic 21');
+  }
+  await expect(lp.locator('[data-carrier-value="rampTime"]')).toHaveText('2040');
+  await expect(lp.locator('[data-carrier-field="rampTime"]')).toBeHidden();
+  await expect(lp.locator('[data-carrier-reset="firstFix"]')).toBeHidden(); // the lanes only read
+  await expect(board.locator('.carrier-stack-ramp')).toHaveText('RAMP 2040Z');
+  // the first fix moved every slot's DME, and an EAT now exists, worked back from the ramp time
+  await expect(board.locator('.carrier-slot[data-slot-index="0"]')).toContainText('24 DME');
+  await expect(board.locator('.carrier-slot[data-slot-index="1"]')).toContainText('25 DME');
+  const eat = await board.locator('.carrier-slot[data-slot-index="0"] .carrier-slot-push').textContent();
+  expect(eat).toMatch(/^\d{4}Z$/);
+  expect(eat).not.toBe('2040Z'); // an EAT is when it leaves its fix, before it is at the ramp
+  await marshal.screenshot({ path: test.info().outputPath('06-typed-marshal.png') });
+  await lane.screenshot({ path: test.info().outputPath('06-typed-lane-reads.png') });
+
+  // a magnetic bearing cannot be converted without a ship (the harness has none): refused, and nothing changes
+  const brc = mp.locator('[data-carrier-field="brc"]');
+  await brc.fill('100'); await brc.press('Enter');
+  await expect(marshal.locator('#efsp-mutation-error')).toContainText(/magnetic variation/i);
+  await expect(mp.locator('[data-carrier-source="brc"]')).toHaveText('not known');
+
+  // "Use default" and an empty field both give the automatic value back
+  await mp.locator('[data-carrier-reset="firstFix"]').click();
+  await expect(mp.locator('[data-carrier-source="firstFix"]')).toContainText('default');
+  await expect(mp.locator('[data-carrier-field="firstFix"]')).toHaveValue('21');
+  await expect(board.locator('.carrier-slot[data-slot-index="0"]')).toContainText('21 DME');
+  await ceiling.fill(''); await ceiling.press('Enter');
+  await expect(pp.locator('[data-carrier-source="ceiling"]')).toHaveText('not known');
+  await ramp.fill(''); await ramp.press('Enter');
+  await expect(board.locator('.carrier-stack-ramp')).toHaveText('RAMP —');
+  await expect(board.locator('.carrier-slot[data-slot-index="0"] .carrier-slot-push')).toHaveText('');
+
+  // the tanker: a select and a number
+  await pp.locator('[data-carrier-field="tankerOnStation"]').selectOption('true');
+  await expect(lp.locator('[data-carrier-value="tankerOnStation"]')).toHaveText('yes');
+  await pp.locator('[data-carrier-reset="tankerOnStation"]').click();
+  await expect(lp.locator('[data-carrier-value="tankerOnStation"]')).toHaveText('no');
+  await cleanUp(marshal, pri);
+  await setCase(pri, 'III');
 });

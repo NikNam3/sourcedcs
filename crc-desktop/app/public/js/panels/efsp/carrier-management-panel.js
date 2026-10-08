@@ -77,6 +77,13 @@ function _shown(def, entry) {
   }
 }
 
+/** What a read-only select value is called: `true` is "yes", `stbd` is "starboard". */
+function _label(def, text) {
+  if (def.kind !== 'select') return text;
+  const hit = def.options.find(([v]) => v === text);
+  return hit ? hit[1] : text;
+}
+
 /** The reference letter of a bearing (M, or T / G when it is not magnetic), '' otherwise. */
 function _refOf(def, entry) {
   if (def.kind !== 'bearing' || !entry || !entry.display || entry.display.value == null) return '';
@@ -192,7 +199,7 @@ export function renderCarrierManagement() {
     input.hidden = !canEdit;
     value.hidden = canEdit;
     if (!typing && input.dataset.dirty !== '1') input.value = text;
-    value.textContent = text === '' ? '—' : text;
+    value.textContent = text === '' ? '—' : _label(def, text);
     unit.textContent = def.kind === 'bearing' ? (ref ? `°${ref}` : '') : def.kind === 'time' ? 'Z' : (def.unit ? ` ${def.unit}` : '');
     src.textContent = _sourceText(def, entry, view);
     reset.hidden = !(canEdit && entry && entry.source === 'override');
