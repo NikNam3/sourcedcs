@@ -625,7 +625,7 @@ import { createPttController, clampMaxTxSeconds, PTT_MAX_TX_DEFAULT_S } from './
 
   // ── Settings tab wiring (refresh devices when RADIO tab opens) ─────────────
 
-  document.querySelectorAll('.stab[data-pane="radio"]').forEach(btn => {
+  document.querySelectorAll('.stab[data-pane="srs"]').forEach(btn => {
     btn.addEventListener('click', () => {
       _pollDevices();
       _rebuildIntercomUnitSelect(_state.unit_id);

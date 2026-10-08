@@ -22,6 +22,7 @@ const MODULES = {
   app: '/js/app.js', // crc.app._ws, applySnapshot, applyCoverage
   mapHandle: '/js/map-handle.js', // crc.mapHandle.map, .mapReady
   settings: '/js/settings.js', // crc.settings.settings
+  settingsRegistry: '/js/settings-registry.js', // crc.settingsRegistry.registerSettingsTab
   picture: '/js/picture.js', // crc.picture.history, .labelOffsets, .latestFromServer
   bayView: '/js/panels/efsp/bay-view.js',
   dispatch: '/js/panels/efsp/bay/dispatch.js',
