@@ -4,9 +4,11 @@ import { getLatestTrack } from '../../picture.js';
 import { correlatedTrackIdForStrip, getEfspStrip } from './efsp-state.js';
 import { CARRIER_HANDOFFS } from './efsp-nla.js';
 import {
-  carrierBannerParts, carrierCaseValue, carrierDerivedFor, carrierDerivedStack, carrierHhmm, getEfspCarrier
+  carrierBannerParts, carrierBearingText, carrierCaseValue, carrierDerivedFor, carrierDerivedStack, carrierHhmm, carrierStateOf, getEfspCarrier
 } from './carrier-state.js';
-import { getActingPositions, sendEfspCarrierMutation, sendEfspMutation, settleEfspAck } from './efsp-ws.js';
+import { getActingPositions, sendEfspMutation, settleEfspAck } from './efsp-ws.js';
+import { carrierActingFor, sendCarrier, signedOnCarrierIds } from './carrier-send.js';
+import { renderCarrierManagement } from './carrier-management-panel.js';
 // ESM-1: today efsp-panel.js's _callsignOfFlightData (fallback '') silently won over this file's own copy (fallback flightDataId);
 // the import keeps that effective behaviour (S-ARCH2 item 3, plan §6 queue item 3).
 import { _callsignOfFlightData } from './panel/refusal.js';
@@ -24,30 +26,10 @@ import { markEfspChanged } from './efsp-change-bus.js';
 // the hull view; carrier-state.js formats them. A controller cannot type a
 // derived value because no control here accepts one: the Marshal's only number
 // for a flight is its slot, set by dragging the Strip onto a slot (one gesture,
-// one `Move`), and the other things the Marshal types (Charlie time, the
-// marshal radial, the Case I altitude) are inputs, never results.
-
-// Client mirror of crc-sync's CARRIER_CAPABILITIES (authority/positions/carrier.js, read through permission.js) (drift-tested). A UX
-// convenience: the server's predicates are the authority.
-export const CARRIER_CAPABILITIES = {
-  CV_MARSHAL: { setsCase: false, sequencesStack: true,  editsShipInput: true },
-  CV_PRIFLY:  { setsCase: true,  sequencesStack: false, editsShipInput: true },
-  CV_APP1:    { setsCase: false, sequencesStack: false, editsShipInput: false },
-  CV_APP2:    { setsCase: false, sequencesStack: false, editsShipInput: false },
-};
-const CARRIER_CASES = ['I', 'II', 'III'];
-
-/** The signed-on CV Position that has this capability, or null. Pure over `signedOnIds`. */
-export function carrierActingFor(capability, signedOnIds) {
-  for (const id of signedOnIds || []) {
-    if (CARRIER_CAPABILITIES[id] && CARRIER_CAPABILITIES[id][capability]) return id;
-  }
-  return null;
-}
-
-function _signedOnCarrierIds() {
-  return getActingPositions('CARRIER').filter(id => CARRIER_CAPABILITIES[id]);
-}
+// one `Move`), and the Case I altitude is an input, never a result. The Case, the
+// ramp time, the marshal radial and the rest of the ship's state are typed in the
+// carrier management panel (carrier-management-panel.js), not here: this panel's
+// banner and stack board only show them.
 
 function _cel(tag, className, text) {
   const el = document.createElement(tag);
@@ -56,15 +38,10 @@ function _cel(tag, className, text) {
   return el;
 }
 
-function _sendCarrier(capability, op) {
-  const acting = carrierActingFor(capability, _signedOnCarrierIds());
-  if (!acting) return false;
-  const view = getEfspCarrier();
-  sendEfspCarrierMutation(acting, view ? view.hullId : undefined, undefined, op);
-  return true;
-}
+const _sendCarrier = sendCarrier;
+const _signedOnCarrierIds = signedOnCarrierIds;
 
-// ── The ship banner and the Case selector ─────────────────────────────────
+// ── The ship banner and the Case ──────────────────────────────────────────
 
 /** Draws the banner into #efsp-carrier-banner when this controller is signed on at a carrier Position; hides it otherwise. */
 export function renderCarrierBanner() {
@@ -92,51 +69,19 @@ export function renderCarrierBanner() {
     root.appendChild(p);
   }
 
-  // Case: one setting for the whole ship, PriFly's alone. Everyone else reads it.
+  // The Case, read-only here: one setting for the whole ship, set in the carrier management panel by PriFly or the Marshal.
   const caseRow = _cel('div', 'carrier-case-row');
   caseRow.appendChild(_cel('span', 'carrier-case-label', 'CASE'));
   const current = view.recoveryCase ? view.recoveryCase.value : null;
-  if (carrierActingFor('setsCase', signedOn)) {
-    const sel = _cel('select', 'carrier-case-select');
-    sel.dataset.carrierCase = 'select';
-    for (const c of CARRIER_CASES) {
-      const o = _cel('option', null, c);
-      o.value = c;
-      if (c === current) o.selected = true;
-      sel.appendChild(o);
-    }
-    sel.addEventListener('change', () => {
-      if (sel.value !== current) _sendCarrier('setsCase', { kind: 'SetCase', to: sel.value });
-    });
-    caseRow.appendChild(sel);
-  } else {
-    const ro = _cel('span', 'carrier-case-value', current || '—');
-    ro.dataset.carrierCase = 'value';
-    ro.title = 'The recovery Case is set by PriFly';
-    caseRow.appendChild(ro);
-  }
+  const ro = _cel('span', 'carrier-case-value', current || '—');
+  ro.dataset.carrierCase = 'value';
+  ro.title = 'The recovery Case is set in the carrier panel';
+  caseRow.appendChild(ro);
   // The weather only ADVISES; it never blocks PriFly (ADR 0064, D11).
   if (view.advisory) {
     const adv = _cel('span', 'carrier-case-advisory', view.advisory.detail);
     adv.dataset.carrierCase = 'advisory';
     caseRow.appendChild(adv);
-  }
-  // The one thing a controller may enter on the banner: the altimeter.
-  if (carrierActingFor('editsShipInput', signedOn)) {
-    const alt = _cel('input', 'carrier-altimeter-input');
-    alt.type = 'text';
-    alt.placeholder = 'altimeter';
-    alt.size = 6;
-    alt.title = 'Altimeter setting (inHg), Enter to set; empty to use the theater weather';
-    alt.dataset.carrierInput = 'altimeter';
-    alt.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        const raw = alt.value.trim();
-        _sendCarrier('editsShipInput', { kind: 'SetShipInput', input: { altimeterInHg: raw === '' ? null : Number(raw) } });
-        alt.value = '';
-      } else if (e.key === 'Escape') { alt.value = ''; alt.blur(); }
-    });
-    caseRow.appendChild(alt);
   }
   root.appendChild(caseRow);
 }
@@ -269,35 +214,20 @@ export function renderCarrierStackBoard(container) {
   board = _cel('div', 'carrier-stack-board');
   const caseValue = view.recoveryCase ? view.recoveryCase.value : null;
   const sequenced = caseValue === 'II' || caseValue === 'III';
-  const stack = (view.stacks && view.stacks.MAIN) || {};
 
   const head = _cel('div', 'carrier-stack-head');
   head.appendChild(_cel('span', 'carrier-stack-title', `MARSHAL STACK · CASE ${caseValue || '—'}${sequenced ? '' : ' · altitude list'}`));
-  if (sequenced && canSequence) {
-    const charlie = _cel('input', 'carrier-charlie-input');
-    charlie.type = 'text'; charlie.size = 5; charlie.maxLength = 4;
-    charlie.placeholder = stack.charlieTimeUtc != null ? `C ${carrierHhmm(stack.charlieTimeUtc)}Z` : 'Charlie HHMM';
-    charlie.title = 'Charlie time (Zulu HHMM): when slot 0 is due to push. Enter to set.';
-    charlie.dataset.carrierInput = 'charlie';
-    charlie.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') { _sendCarrier('sequencesStack', { kind: 'SetCharlieTime', hhmm: charlie.value.trim() }); charlie.value = ''; }
-      else if (e.key === 'Escape') { charlie.value = ''; charlie.blur(); }
-    });
-    head.appendChild(charlie);
-    const radial = _cel('input', 'carrier-radial-input');
-    radial.type = 'text'; radial.size = 5; radial.maxLength = 3;
-    const defaultRadial = stack.marshalRadialDeg == null;
-    radial.placeholder = defaultRadial ? 'radial (default)' : 'radial set';
-    radial.title = 'Marshal radial, magnetic. Empty and Enter returns to the default (final bearing + 180).';
-    radial.dataset.carrierInput = 'radial';
-    radial.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        const raw = radial.value.trim();
-        _sendCarrier('sequencesStack', { kind: 'SetMarshalRadial', marshalRadialMagDeg: raw === '' ? null : Number(raw) });
-        radial.value = '';
-      } else if (e.key === 'Escape') { radial.value = ''; radial.blur(); }
-    });
-    head.appendChild(radial);
+  if (sequenced) {
+    // The ramp time and the marshal radial, read-only: typed in the carrier management panel (crc-sync docs/adr/0113).
+    const st = carrierStateOf(view);
+    if (st) {
+      const ramp = _cel('span', 'carrier-stack-ramp', st.rampTime.value != null ? `RAMP ${carrierHhmm(st.rampTime.value)}Z` : 'RAMP —');
+      ramp.dataset.carrierStack = 'ramp';
+      head.appendChild(ramp);
+      const radial = _cel('span', 'carrier-stack-radial', `RADIAL ${st.radial.value != null ? carrierBearingText(st.radial.display) : '—'}`);
+      radial.dataset.carrierStack = 'radial';
+      head.appendChild(radial);
+    }
   }
   board.appendChild(head);
 
@@ -350,8 +280,9 @@ export function carrierSignatureFor(strip) {
   if (!view) return '';
   const d = carrierDerivedFor(strip.flightDataId);
   const s = view.shipState || {};
+  const fb = carrierStateOf(view) ? carrierStateOf(view).finalBearing.value : null;
   return [view.recoveryCase && view.recoveryCase.value, d ? `${d.stackIndex}/${d.angels}/${d.marshalDme}/${d.pushTimeUtc}/${d.status}/${(d.marshalRadialDisplay || {}).value}/${(d.expectedFinalBearingDisplay || {}).value}` : '',
-    s.finalBearingDeg, s.found ? 1 : 0].join('|');
+    fb, s.found ? 1 : 0].join('|');
 }
 
 // ── The final-bearing line on the map ───────────────────────────────────
@@ -372,9 +303,10 @@ export function buildCarrierFinalLine() {
   if (!getActingPositions('CARRIER').length) return empty;
   const view = getEfspCarrier();
   const s = view && view.shipState;
-  if (!s || !s.found || s.stale || s.headingRef !== 'TRUE' || !Number.isFinite(s.finalBearingDeg)
+  const fb = carrierStateOf(view) ? carrierStateOf(view).finalBearing : null;
+  if (!s || !s.found || s.stale || !fb || fb.ref !== 'TRUE' || !Number.isFinite(fb.value)
       || !Number.isFinite(s.lat) || !Number.isFinite(s.lon)) return empty;
-  const out = (s.finalBearingDeg + 180) % 360;
+  const out = (fb.value + 180) % 360;
   const [endLat, endLon] = projectPos(s.lat, s.lon, out, CARRIER_FINAL_LINE_NM * NM_M);
   const features = [{
     type: 'Feature',
@@ -396,6 +328,7 @@ export function buildCarrierFinalLine() {
 // A Case change is ONE of these and every carrier Strip re-renders from it.
 function _redrawCarriers() {
   renderCarrierBanner();
+  renderCarrierManagement();
   markEfspChanged('bays');
 }
 registerEfspMessage('efsp-carrier-delta', (msg) => {
@@ -409,5 +342,6 @@ registerEfspMessage('efsp-carrier-ack', (msg) => {
   if (!msg.ok) _showMutationError(msg.reason || 'Rejected', msg.detail, { subject: 'carrier' });
   if (msg.carrier) applyEfspCarrierDelta({ carriers: { updated: [msg.carrier] } });
   renderCarrierBanner();
+  renderCarrierManagement();
   markEfspChanged('bays');
 });

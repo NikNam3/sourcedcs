@@ -175,7 +175,12 @@ function resolveState({ overrides, recoveryCase, shipState = null, hull = null, 
   const o = overrides || emptyOverrides();
   const ship = shipState && shipState.found ? shipState : null;
   const shipRef = ship && ship.headingRef ? ship.headingRef : null; // 'TRUE' | 'GRID'
-  const bearing = (entry, ref) => ({ ...entry, ref: ref || null, display: displayBearing(entry.value, { ref: ref || 'TRUE', magneticVariationDeg: variationDeg }) });
+  // `display` is the value in force as a controller reads it (magnetic, H15); `defaultDisplay` the automatic one beside an override.
+  const bearing = (entry, ref) => ({
+    ...entry, ref: ref || null,
+    display: displayBearing(entry.value, { ref: ref || 'TRUE', magneticVariationDeg: variationDeg }),
+    defaultDisplay: displayBearing(entry.default, { ref: shipRef || 'TRUE', magneticVariationDeg: variationDeg }),
+  });
 
   // BRC: the ship's heading from DCS (whole degrees), unless typed.
   const brcAuto = ship && _finite(ship.brcDeg) ? ship.brcDeg : null;

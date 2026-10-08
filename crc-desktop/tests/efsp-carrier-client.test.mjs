@@ -9,6 +9,7 @@ import { createRequire } from 'node:module';
 import './helpers/client-env.mjs';
 import * as state from '../app/public/js/panels/efsp/carrier-state.js';
 import * as panel from '../app/public/js/panels/efsp/carrier-panel.js';
+import * as send from '../app/public/js/panels/efsp/carrier-send.js';
 import { sendEfspSetPositions } from '../app/public/js/panels/efsp/efsp-ws.js';
 
 const require = createRequire(import.meta.url);
@@ -23,21 +24,22 @@ const clock = { now: () => Date.UTC(2026, 5, 1, 9, 0), source: 'TEST' };
 function viewWith(ops = []) {
   const store = new CarrierStore({ hulls: hullConfig.getHulls(), clock });
   store.setShipState('CVN-72', { hullId: 'CVN-72', found: true, stale: false, headingRef: 'TRUE', brcDeg: 12, finalBearingDeg: 3, speedKt: 15, magneticVariationDeg: 5, altimeterInHg: 29.92, altimeterSource: 'SET', atUtc: Date.UTC(2026, 5, 1, 9, 5), lat: 35, lon: 36 });
-  store.apply({ clientMutationId: 'a', op: { kind: 'SetCase', to: 'II' } }, 'CV_PRIFLY', 'p');
+  store.apply({ clientMutationId: 'a', op: { kind: 'SetCarrierState', field: 'case', value: 'II' } }, 'CV_PRIFLY', 'p');
   for (const f of ['f1', 'f2']) store.apply({ clientMutationId: f, op: { kind: 'Append', flightDataId: f } }, 'CV_MARSHAL', 'm');
   for (const op of ops) store.apply({ clientMutationId: Math.random().toString(), op }, 'CV_MARSHAL', 'm');
   return store.view();
 }
 
 test('the capability mirror agrees with permission.js, Position by Position', () => {
-  for (const [id, caps] of Object.entries(panel.CARRIER_CAPABILITIES)) {
-    assert.equal(caps.setsCase, permission.canSetRecoveryCase(id), `${id} setsCase`);
+  for (const [id, caps] of Object.entries(send.CARRIER_CAPABILITIES)) {
+    assert.equal(caps.editsCarrierState, permission.canEditCarrierState(id), `${id} editsCarrierState`);
     assert.equal(caps.sequencesStack, permission.canSequenceMarshalStack(id), `${id} sequencesStack`);
-    assert.equal(caps.editsShipInput, permission.canEditShipStateInput(id), `${id} editsShipInput`);
+    assert.deepEqual(Object.keys(caps).sort(), Object.keys(permission.CARRIER_CAPABILITIES[id]).sort(), `${id}: the same capabilities`);
   }
-  assert.deepEqual(Object.keys(panel.CARRIER_CAPABILITIES).sort(), Object.keys(permission.CARRIER_CAPABILITIES).sort());
-  assert.equal(panel.carrierActingFor('setsCase', ['CV_MARSHAL', 'CV_APP1']), null);
-  assert.equal(panel.carrierActingFor('setsCase', ['CV_MARSHAL', 'CV_PRIFLY']), 'CV_PRIFLY');
+  assert.deepEqual(Object.keys(send.CARRIER_CAPABILITIES).sort(), Object.keys(permission.CARRIER_CAPABILITIES).sort());
+  assert.equal(send.carrierActingFor('editsCarrierState', ['CV_APP1', 'CV_APP2']), null);
+  assert.equal(send.carrierActingFor('editsCarrierState', ['CV_APP1', 'CV_PRIFLY']), 'CV_PRIFLY');
+  assert.equal(send.carrierActingFor('editsCarrierState', ['CV_MARSHAL', 'CV_PRIFLY']), 'CV_MARSHAL', 'either edits; the first signed-on one acts');
 });
 
 test('the derived fields are formatted from what the server sent, never computed here', () => {
@@ -53,7 +55,7 @@ test('the derived fields are formatted from what the server sent, never computed
 
 test('Case I has no DME, no push time and no radial: placeholders, and an unassigned altitude says so', () => {
   const store = new CarrierStore({ hulls: hullConfig.getHulls(), clock });
-  store.apply({ clientMutationId: 'a', op: { kind: 'SetCase', to: 'I' } }, 'CV_PRIFLY', 'p');
+  store.apply({ clientMutationId: 'a', op: { kind: 'SetCarrierState', field: 'case', value: 'I' } }, 'CV_PRIFLY', 'p');
   store.apply({ clientMutationId: 'b', op: { kind: 'Append', flightDataId: 'f1' } }, 'CV_MARSHAL', 'm');
   state._resetEfspCarrierStateForTest();
   state.applyEfspCarrierDelta({ carriers: { updated: [store.view()] } });
@@ -76,7 +78,7 @@ test('the banner says what is wrong rather than showing a stale number as live',
   assert.equal(state.carrierBannerParts({ hullId: 'CVN-72', shipState: { found: false, hullProblem: 'hull ambiguous — configure unitName' } }).text, 'hull ambiguous — configure unitName');
   assert.equal(state.carrierBannerParts(null).text, 'hull not found');
   // an unknown variation labels the bearing T, never magnetic
-  const noVar = { ...v, shipState: { ...v.shipState, brcDisplay: { value: 12, ref: 'T' } } };
+  const noVar = { ...v, state: { ...v.state, brc: { ...v.state.brc, display: { value: 12, ref: 'T' } } } };
   assert.match(state.carrierBannerParts(noVar).text, /BRC 012T/);
 });
 
@@ -112,8 +114,12 @@ test('the final-bearing line: from the ship along the reciprocal of the final be
   const [lon, lat] = line.features[0].geometry.coordinates[1];
   assert.ok(lat < 35 && Math.abs(lon - 36) < 0.1, 'final bearing 003 true: the line runs south of the ship (reciprocal 183)');
   assert.equal(line.features.filter(f => f.properties.kind === 'carrier-final-tick').length, 2);
-  for (const bad of [{ stale: true }, { headingRef: 'GRID' }, { found: false }, { finalBearingDeg: null }]) {
+  for (const bad of [{ stale: true }, { found: false }]) {
     state.applyEfspCarrierSnapshot({ carriers: [{ ...v, shipState: { ...v.shipState, ...bad } }] });
+    assert.equal(panel.buildCarrierFinalLine().features.length, 0, JSON.stringify(bad));
+  }
+  for (const bad of [{ ref: 'GRID' }, { value: null }]) {
+    state.applyEfspCarrierSnapshot({ carriers: [{ ...v, state: { ...v.state, finalBearing: { ...v.state.finalBearing, ...bad } } }] });
     assert.equal(panel.buildCarrierFinalLine().features.length, 0, JSON.stringify(bad));
   }
   sendEfspSetPositions('CARRIER', []);
