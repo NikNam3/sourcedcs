@@ -50,7 +50,7 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 </style></head><body><main>
 <p><a href="index.html">← mockups</a></p>
 <header>
-<h1>Carrier map and carrier management <span style="color:var(--muted);font-size:12px;font-weight:400">mockup, revision 4, 2026-10-07</span></h1>
+<h1>Carrier map and carrier management <span style="color:var(--muted);font-size:12px;font-weight:400">mockup, revision 5, 2026-10-08</span></h1>
 <p>Two normal panels. The <b>carrier map</b> is a radar picture fixed on the ship, always north-up, with range rings (the 10 nm ring
 always), the final bearing, the marshal stack, the bolter pattern and the recovery tanker. The <b>carrier management</b> panel is
 where BRC, final bearing, weather, the recovery tanker and the marshal position are set or overridden; everything else (the map, the
@@ -58,8 +58,11 @@ recovery board) only shows them. Sample: CVN-72, Case III. Side numbers and valu
 </header>
 
 <div class="bar" role="group" aria-label="Sample situation"><span class="lbl">Situation</span>
-  <button type="button" data-case="3" aria-pressed="true">Case III</button>
-  <button type="button" data-case="1" aria-pressed="false">Case I</button>
+  <button type="button" data-case="3" data-sit="c3" aria-pressed="true">Case III</button>
+  <button type="button" data-case="3" data-sit="c3bolter" aria-pressed="false">Case III, a bolter</button>
+  <button type="button" data-case="1" data-sit="c1" aria-pressed="false">Case I, nobody in the pattern</button>
+  <button type="button" data-case="1" data-sit="c1busy" aria-pressed="false">Case I, holding + pattern + spin</button>
+  <label style="display:flex;gap:6px;align-items:center;color:var(--muted);font-size:11.5px;margin-left:10px"><input type="checkbox" id="tkron" checked> Tanker on station</label>
 </div>
 
 <div class="two">
@@ -98,9 +101,9 @@ recovery board) only shows them. Sample: CVN-72, Case III. Side numbers and valu
 
 <div class="notes">
   <div><h3>Map</h3>
-  <p>Fixed on the ship and always north-up (zoom 2.5 to 65 nm; the range is the radius that fits the shorter side, rings carry on into the corners); an extended centreline runs astern along the final bearing to the edge, a tick every mile; range rings in dark green (the 10 nm ring brighter); the wheel changes the range, the centre never moves. The 10 nm ring is always drawn and labelled; the other rings follow the range (spacing in the map's Settings tab). The ship symbol points along its BRC. Zoomed to 12 nm or less, the pattern appears: in Case III the bolter/waveoff racetrack (upwind to 4 DME, downwind 2 nm abeam at 1,200 ft, turn-in at 4/6/8 nm), in Case I/II the break and landing pattern and the spin pattern. Aircraft are labelled by side number and altitude in hundreds of feet; colour only for a problem (amber low state, red at bingo).</p></div>
+  <p>Fixed on the ship and always north-up (zoom 2.5 to 65 nm; the range is the radius that fits the shorter side, rings carry on into the corners); an extended centreline runs astern along the final bearing to the edge, a tick every mile; range rings in dark green (the 10 nm ring brighter); the wheel changes the range, the centre never moves. The 10 nm ring is always drawn and labelled; the other rings follow the range (spacing in the map's Settings tab). The ship symbol points along its BRC. The patterns appear only while an aircraft is in them: in Case III the bolter/waveoff racetrack, in Case I/II port holding, the break and landing pattern (with the initial) and the spin circle; the tanker's racetrack only while the tanker is on station. No altitudes or distances are written on them. Aircraft are labelled by side number and altitude in hundreds of feet; colour only for a problem (amber low state, red at bingo).</p></div>
   <div><h3>Case I</h3>
-  <p>The marshal stack and the final-bearing line give way to the port holding circle (left-hand, tangent to the BRC, ship at 3 o'clock, at most 5 nm across) and the initial 3 nm astern (CV NATOPS 6.2.1). The 10 nm ring stays.</p></div>
+  <p>The marshal stack gives way to port holding (left-hand, tangent to the BRC, ship at 3 o'clock, at most 5 nm across, CV NATOPS 6.2.1), drawn while someone holds there, and the landing pattern with the initial 3 nm astern while someone flies it. The 10 nm ring stays.</p></div>
   <div><h3>Management</h3>
   <p>Each value says where it comes from (DCS, a default, or a person). Typing a value overrides it; "Use DCS" or "Use default" puts the automatic value back. The recovery board and the map read these values and never edit them.</p></div>
 </div>
@@ -109,7 +112,7 @@ recovery board) only shows them. Sample: CVN-72, Case III. Side numbers and valu
 <script>
 (function () {
   'use strict';
-  var C = { cs: 300, cy: 300, w: 600, h: 600, k: 9 }, range = 30, caseNum = 3;
+  var C = { cs: 300, cy: 300, w: 600, h: 600, k: 9 }, range = 30, caseNum = 3, sit = 'c3';
   var defaults = { brc: '346', fb: null, radial: null };
   var AIR = [ // bearing from the ship (true), range nm, altitude ft, fuel/bingo; role
     { side: '201', brg: 157, rng: 4.1, alt: 1200, fuel: 4.8, bingo: 3.5 },
@@ -120,6 +123,22 @@ recovery board) only shows them. Sample: CVN-72, Case III. Side numbers and valu
     { side: '205', hold: 12, fuel: 4.5, bingo: 4.0 },
     { side: '101', hold: 13, fuel: 7.2, bingo: 4.5 }
   ];
+  // Traffic in the patterns, per situation, in the ship's frame (nm ahead, nm to starboard; axis 'fb' or 'brc')
+  var EXTRA = {
+    c3: [], c1: [],
+    c3bolter: [{ side: '201', axis: 'fb', along: -1.5, lat: -2, hdgOff: 180, alt: 1200, fuel: 4.6, bingo: 3.5, in: 'bolter' }],
+    c1busy: [
+      { side: '400', axis: 'brc', along: 0.5, lat: -5, hdgOff: 0, alt: 4000, fuel: 6.2, bingo: 3.5, in: 'portHold' },
+      { side: '410', axis: 'brc', along: -2.2, lat: 0, hdgOff: 0, alt: 800, fuel: 5.4, bingo: 3.5, in: 'landing' },
+      { side: '411', axis: 'brc', along: -0.4, lat: -1.25, hdgOff: 180, alt: 600, fuel: 5.1, bingo: 3.5, in: 'landing' },
+      { side: '402', axis: 'brc', along: 2.1, lat: 2.1, hdgOff: 225, alt: 1200, fuel: 4.9, bingo: 3.5, in: 'spin' }
+    ]
+  };
+  function occupancy() {
+    var o = { tanker: document.getElementById('tkron').checked };
+    (EXTRA[sit] || []).forEach(function (a) { o[a.in] = true; });
+    return o;
+  }
   function v(id) { return document.getElementById(id).value; }
   function num(id, d) { var x = parseFloat(v(id)); return isFinite(x) ? x : d; }
   function fb() { return num('fb', (num('brc', 346) - 9 + 360) % 360); }
@@ -152,6 +171,7 @@ recovery board) only shows them. Sample: CVN-72, Case III. Side numbers and valu
       svg.appendChild(sv('line', { x1: i2.x, y1: i2.y, x2: o.x, y2: o.y, stroke: grid }));
     }
     var brc = num('brc', 346);
+    var occ = occupancy();
     var ecA = pt((fb() + 180) % 360, reach), ecB = pt(fb(), 2);
     svg.appendChild(sv('line', { x1: ecB.x, y1: ecB.y, x2: ecA.x, y2: ecA.y, stroke: '#3d4852', 'stroke-width': 1 }));
     for (var t = 1; t <= Math.min(reach, 20); t++) { // a short tick every nm astern
@@ -167,26 +187,29 @@ recovery board) only shows them. Sample: CVN-72, Case III. Side numbers and valu
       var lab = pt(mr, num('fix', 21) + 9);
       svg.appendChild(sv('text', { x: lab.x, y: lab.y, 'text-anchor': 'middle', fill: faint, 'font-family': 'Consolas, monospace', 'font-size': 11 }, 'MARSHAL ' + String(Math.round(mr)).padStart(3, '0') + '° ' + num('fix', 21) + '+'));
     } else {
-      // Case I port holding: left-hand circle tangent to the BRC, ship at 3 o'clock, 5 nm across; the initial 3 nm astern
-      var centre = pt((brc + 270) % 360, 2.5), rr = 2.5 * C.k;
-      svg.appendChild(sv('circle', { cx: centre.x, cy: centre.y, r: rr, fill: 'none', stroke: grey, 'stroke-dasharray': '4 3' }));
-      var ini = pt((brc + 180) % 360, 3);
-      svg.appendChild(sv('circle', { cx: ini.x, cy: ini.y, r: 3, fill: grey }));
-      if (range > 12) svg.appendChild(sv('text', { x: ini.x + 6, y: ini.y + 4, fill: faint, 'font-family': 'Consolas, monospace', 'font-size': 11 }, 'INITIAL'));
+      // Case I port holding: left-hand circle tangent to the BRC, ship at 3 o'clock, 5 nm across; drawn only while someone holds there
+      if (occ.portHold) {
+        var centre = pt((brc + 270) % 360, 2.5), rr = 2.5 * C.k;
+        svg.appendChild(sv('circle', { cx: centre.x, cy: centre.y, r: rr, fill: 'none', stroke: grey, 'stroke-dasharray': '4 3' }));
+      }
     }
     // recovery tanker racetrack: downwind 4 nm abeam on the chosen side, from 10 nm ahead to 6 nm astern
+    if (occ.tanker) {
     var side = v('tkrside') === 'stbd' ? 90 : 270, a1 = pt((brc + side) % 360, 4), ahead = pt(brc, 10), astern = pt((brc + 180) % 360, 6);
     function off(p, q) { return { x: p.x + (q.x - C.cs), y: p.y + (q.y - C.cy) }; }
     var p1 = off(ahead, a1), p2 = off(astern, a1), p3 = astern, p4 = ahead;
     svg.appendChild(sv('path', { d: 'M ' + p4.x + ' ' + p4.y + ' L ' + p1.x + ' ' + p1.y + ' L ' + p2.x + ' ' + p2.y + ' L ' + p3.x + ' ' + p3.y + ' Z', fill: 'none', stroke: grey, 'stroke-dasharray': '2 4', opacity: 0.7 }));
     var tk = off(pt(brc, 2), a1);
     plane(svg, tk.x, tk.y, (brc + 180) % 360, v('tkr') + ' ' + String(Math.round(num('tkralt', 6000) / 100)).padStart(3, '0'), 'TKR', null);
-    if (range <= 12) drawPattern(svg, brc);
+    }
+    drawPattern(svg, brc);
     // the ship, pointing along its BRC
     var hd = brc * Math.PI / 180;
     svg.appendChild(sv('path', { d: 'M 0 -12 L 5 6 L -5 6 Z', transform: 'translate(' + C.cs + ' ' + C.cy + ') rotate(' + brc + ')', fill: '#c9d1d7' }));
     // aircraft
+    var moved = (EXTRA[sit] || []).map(function (a) { return a.side; });
     AIR.forEach(function (a) {
+      if (moved.indexOf(a.side) >= 0) return; // shown where it is now (the pattern)
       var brg = a.brg, rng = a.rng, alt = a.alt;
       if (a.hold !== undefined) { if (caseNum === 1) return; brg = radial(); rng = num('fix', 21) + (a.hold - 6); alt = a.hold * 1000; }
       else if (caseNum === 1) return;
@@ -194,9 +217,13 @@ recovery board) only shows them. Sample: CVN-72, Case III. Side numbers and valu
       if (rng > range) return;
       plane(svg, p.x, p.y, (brg + 180) % 360, a.side + ' ' + String(Math.round(alt / 100)).padStart(3, '0'), null, fuelCol(a));
     });
+    (EXTRA[sit] || []).forEach(function (a) {
+      var ax = a.axis === 'fb' ? fb() : brc, q = shipPt(ax, a.along, a.lat);
+      plane(svg, q.x, q.y, (ax + a.hdgOff) % 360, a.side + ' ' + String(Math.round(a.alt / 100)).padStart(3, '0'), null, fuelCol(a));
+    });
     document.getElementById('maprange').textContent = 'range ' + range + ' nm · wheel to zoom';
     var lg = document.getElementById('legend'); lg.textContent = '';
-    ['north up', 'centre: CVN-72, BRC ' + String(brc).padStart(3, '0'), caseNum === 1 ? 'Case I: port holding, initial' : 'final bearing ' + String(Math.round(fb())).padStart(3, '0') + ' · marshal ' + String(Math.round(radial())).padStart(3, '0') + '°', 'tanker ' + v('tkr')].forEach(function (x) { var s = document.createElement('span'); s.textContent = x; lg.appendChild(s); });
+    ['north up', 'centre: CVN-72, BRC ' + String(brc).padStart(3, '0'), caseNum === 1 ? 'Case I: port holding, initial' : 'final bearing ' + String(Math.round(fb())).padStart(3, '0') + ' · marshal ' + String(Math.round(radial())).padStart(3, '0') + '°', (occ.tanker ? 'tanker ' + v('tkr') : 'no tanker on station')].forEach(function (x) { var s = document.createElement('span'); s.textContent = x; lg.appendChild(s); });
   }
   // A point given in the ship's frame: 'along' nm ahead on the axis (negative = astern), 'lat' nm to starboard (negative = port).
   function shipPt(axis, along, lat) {
@@ -210,26 +237,24 @@ recovery board) only shows them. Sample: CVN-72, Case III. Side numbers and valu
   }
   function label(svg, q, t) { svg.appendChild(sv('text', { x: q.x + 4, y: q.y - 4, fill: faint, 'font-family': 'Consolas, monospace', 'font-size': 10 }, t)); }
   function drawPattern(svg, brc) {
-    var st = { fill: 'none', stroke: grey, 'stroke-width': 1.2, 'stroke-dasharray': '3 3' };
-    if (caseNum === 3) {
-      // Case III bolter / waveoff: upwind on the final bearing to 4 DME, left turn to downwind 2 nm abeam (port) at 1,200 ft,
+    var occ = occupancy(), st = { fill: 'none', stroke: grey, 'stroke-width': 1.2, 'stroke-dasharray': '3 3' };
+    if (caseNum === 3 && occ.bolter) {
+      // Case III bolter / waveoff: upwind on the final bearing to 4 DME, left turn to downwind 2 nm abeam (port),
       // downwind past the ship, left turn back onto final at the assigned approach turn (4, 6 or 8 nm; drawn for 6)
       var f = fb(), turnIn = 6;
       var pts = [shipPt(f, 0, 0), shipPt(f, 4, 0)].concat(arc(f, 4, -1, 1, 90, -90)).concat([shipPt(f, -turnIn, -2)]).concat(arc(f, -turnIn, -1, 1, -90, -270));
       svg.appendChild(sv('path', Object.assign({ d: pathOf(pts) }, st)));
-      label(svg, shipPt(f, 0, -2.2), '1200 · 2 nm abeam');
-      [4, 6, 8].forEach(function (d) { var q = shipPt(f, -d, 0); svg.appendChild(sv('circle', { cx: q.x, cy: q.y, r: 2.5, fill: d === turnIn ? grey : 'none', stroke: grey })); });
-    } else {
-      // Case I/II break and landing pattern: initial 3 nm astern at 800 ft on the BRC, break at the bow, downwind 600 ft
-      // 1.25 nm abeam (port), the 180 abeam the stern, approach turn to the angled-deck centreline; the spin pattern 1,200 ft within 3 nm
+    }
+    if (caseNum !== 3 && occ.landing) {
+      // Case I/II break and landing pattern: the initial 3 nm astern on the BRC, break at the bow, downwind 1.25 nm abeam
+      // (port), the 180 abeam the stern, approach turn to the angled-deck centreline
       var ini = shipPt(brc, -3, 0), bow = shipPt(brc, 0.4, 0);
       var pts2 = [ini, bow].concat(arc(brc, 0.4, -0.625, 0.625, 90, -90)).concat([shipPt(brc, -0.6, -1.25)]).concat(arc(fb(), -0.9, -0.625, 0.625, -90, -270));
       svg.appendChild(sv('path', Object.assign({ d: pathOf(pts2) }, st)));
-      label(svg, ini, 'INITIAL 800');
-      label(svg, shipPt(brc, -0.2, -1.6), 'DOWNWIND 600');
-      svg.appendChild(sv('circle', Object.assign({ cx: C.cs, cy: C.cy, r: 3 * C.k }, st, { opacity: 0.6 })));
-      label(svg, shipPt(brc, 2.9, 0.3), 'SPIN 1200 · 3 nm');
+      svg.appendChild(sv('circle', { cx: ini.x, cy: ini.y, r: 3, fill: grey }));
+      label(svg, ini, 'INITIAL');
     }
+    if (caseNum !== 3 && occ.spin) svg.appendChild(sv('circle', Object.assign({ cx: C.cs, cy: C.cy, r: 3 * C.k }, st, { opacity: 0.6 })));
   }
   function plane(svg, x, y, hdg, l1, l2, col) {
     svg.appendChild(sv('path', { d: 'M0 -7 L4 6 L0 3.5 L-4 6 Z', transform: 'translate(' + x + ' ' + y + ') rotate(' + hdg + ')', fill: col || '#e6edf3' }));
@@ -272,7 +297,8 @@ recovery board) only shows them. Sample: CVN-72, Case III. Side numbers and valu
   document.querySelectorAll('[data-case]').forEach(function (b) {
     b.addEventListener('click', function () {
       document.querySelectorAll('[data-case]').forEach(function (o) { o.setAttribute('aria-pressed', String(o === b)); });
-      caseNum = +b.dataset.case; document.getElementById('case').value = caseNum === 1 ? 'I' : 'III'; draw();
+      caseNum = +b.dataset.case; sit = b.dataset.sit; document.getElementById('case').value = caseNum === 1 ? 'I' : 'III';
+      if (sit === 'c1busy' && range > 8) range = 8; draw();
     });
   });
   document.getElementById('fsBtn').addEventListener('click', function () {
@@ -281,6 +307,7 @@ recovery board) only shows them. Sample: CVN-72, Case III. Side numbers and valu
     else if (el.requestFullscreen) el.requestFullscreen().catch(function () {});
   });
   document.addEventListener('fullscreenchange', function () { document.getElementById('fsBtn').textContent = document.fullscreenElement ? 'Exit fullscreen' : 'Fullscreen'; });
+  document.getElementById('tkron').addEventListener('change', draw);
   srcUpdate(); draw();
 })();
 </script>
