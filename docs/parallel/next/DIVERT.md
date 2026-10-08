@@ -25,8 +25,8 @@ A **Divert** action on a Strip held by CTR or AP: one input, the **new destinati
 |---|---|---|
 | OVERFLIGHT (INBOUND, IN_SECTOR) | a field we run (Incirlik; the carrier; later Konya/Akrotiri) | ARRIVAL for that field at INBOUND, handed on as usual (CTR→AP, or to CV_MARSHAL) |
 | OVERFLIGHT | outside our airspace, untowered, or no Facility | stays OVERFLIGHT with the new destination; handed off at the boundary or terminated when out of range |
-| ARRIVAL (to be confirmed by the human — the supervisor proposed it, H114 note) | another field we run | ARRIVAL for the new field |
-| ARRIVAL (same) | outside / untowered / no Facility | OVERFLIGHT with the new destination |
+| ARRIVAL (confirmed, H120) | another field we run | ARRIVAL for the new field |
+| ARRIVAL (H120) | outside / untowered / no Facility | OVERFLIGHT with the new destination |
 
 - Same Strip id and flight data (plan, ATO line, MARSA, correlation stay).
 - The destination and the new clearance (route, altitude) are an **audited amendment** (who, when, old → new), shown struck
@@ -34,8 +34,11 @@ A **Divert** action on a Strip held by CTR or AP: one input, the **new destinati
 - Undoable for 10 s like every one-click move (ADR 0100). Refused while a coordination/TOFI exchange is open (same guard as
   Convert to Arrival). Departures: refused with a clear reason.
 - Traffic count: an overflight that became an arrival counts as an arrival.
-- Ask the human (via the supervisor) only: whether an ARRIVAL may divert (row 3/4), and which clearance fields the divert
-  form shows (default: destination, route, cleared altitude).
+- **Clearance fields (H120):** the human said "just research the corresponding FAA order". Take the divert form's fields
+  from FAA JO 7110.65 (amended clearances and route/altitude/destination changes, e.g. chapter 4-2 and 4-5; check the
+  current edition at https://www.faa.gov/air_traffic/publications/atpubs/atc_html/) and cite the exact paragraphs in
+  ADR 0111. Show only what the order makes part of the amended clearance; the controller fills them, the app never tells
+  them what to say.
 
 ## Gates
 
