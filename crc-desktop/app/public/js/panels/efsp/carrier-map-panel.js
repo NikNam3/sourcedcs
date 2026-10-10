@@ -47,6 +47,7 @@ let _els = null;
 let _sig = '';
 let _geom = null;
 let _resize = null;
+let _timer = null;
 
 function _el(tag, className, text) {
   const node = document.createElement(tag);
@@ -340,6 +341,11 @@ export function initCarrierMapPanel() {
   _els = null;
   _sig = '';
   renderCarrierMap();
+  if (!_timer) {
+    // a setting another panel owns (the MARSHAL panel's low-state margin) changes no frame: a light redraw once a second, only
+    // while the panel is in the document (a redraw that changes nothing is a signature compare)
+    _timer = setInterval(() => { if (_bodyEl && _bodyEl.isConnected) renderCarrierMap(); }, 1000);
+  }
   return { onShow: () => { _sig = ''; renderCarrierMap(); } };
 }
 

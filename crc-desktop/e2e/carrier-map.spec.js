@@ -50,6 +50,13 @@ async function mapPage(browser, baseURL, name) {
       crc.carrierMap.renderCarrierMap();
     };
     window.__cmApply();
+    // a snapshot or a store resync replaces every correlation without a delta: keep the spec's in place
+    setInterval(() => {
+      const updated = Object.entries(window.__cm.corr)
+        .filter(([fd, tid]) => { const r = crc.state.getEfspCorrelation(fd); return !r || r.trackId !== tid; })
+        .map(([flightDataId, trackId]) => ({ flightDataId, trackId }));
+      if (updated.length) { crc.state.applyEfspCorrelationDelta({ correlations: { updated } }); crc.carrierMap.renderCarrierMap(); }
+    }, 100);
     crc.settingsRegistry.setSetting('carrierMapRangeNm', 30);
     crc.settingsRegistry.setSetting('carrierMapRingSpacing', 'auto');
     const p = crc.dock.dock.api.getPanel('carrierMap');
