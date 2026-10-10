@@ -67,6 +67,8 @@ Since phase 3 (S-ARCH-31 to S-ARCH-35):
    4. CARRIER-MAP;
    5. PAR-1 (ADR 0112);
    6. PAR-2.
+   Done 2026-10-10: SETTINGS-TABS, DIVERT, CARRIER-STATE, MARSHAL-BOARD (S-ARCH-37, H120–H122). After CARRIER-MAP:
+   **SIDE-SWAP** (H122: side number and callsign swap places on carrier Strips), then PAR-1, PAR-2.
 2. **DIVERT** (ADR 0111): briefing **`docs/parallel/next/DIVERT.md`**. The supervisor recommends running it right after
    SETTINGS-TABS. Ask the human first whether an ARRIVAL may divert too (proposed, not yet answered).
 3. **Older queue** (briefing §4/§5):
