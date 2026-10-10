@@ -17,7 +17,7 @@ only holds what you need now.
   attention, orange-red failed, red past a limit); show only what the controller needs, never tell them their job; panels
   are ordinary dockable panels; app-wide font only. Label anything we invented as ours, never as real-world practice; cite
   real sources (the human asks for them).
-- **Models:** code lanes on Sonnet, design on Opus. Lanes never merge or rebase; the supervisor merges.
+- **Models:** every agent on Opus 5.5 (human, 2026-10-10). Lanes never merge or rebase; the supervisor merges.
 - **Every lane runs both unit suites** (client and server tests read each other's files). **e2e specs reach client modules
   through `crc.<module>`**: a lane that moves a function updates every spec, including specs merged after it branched.
 - Never touch `crc-sync/state/` (the human's data) or **:3000** (the human's crc-sync). Never `pkill -f`; stop by PID. In this

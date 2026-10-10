@@ -1,8 +1,7 @@
 # Briefing: the carrier and PAR panels (build lanes)
 
 Written 2026-10-08 by the supervisor after the human approved the designs. **One agent at a time (H112)**: run these lanes
-in the order below, each in its own worktree per `docs/parallel/lane-rules.md`, Sonnet for code (Opus only if a lane is
-mostly design). Every lane runs **both unit suites**, commits at every green step, and follows the **dark-cockpit rule**
+in the order below, each in its own worktree per `docs/parallel/lane-rules.md`, Opus 5.5 for every lane (human, 2026-10-10). Every lane runs **both unit suites**, commits at every green step, and follows the **dark-cockpit rule**
 (memory `feedback_dark_cockpit_ui`, decisions H115–H119): grey unless something is a problem (amber = needs attention,
 orange-red = something failed, red = past a limit), show only what the controller needs, never tell them their job,
 panels are ordinary dockable panels, app-wide font only (Consolas stack), tokens from `crc-desktop/app/public/css/efsp-panel.css`.
