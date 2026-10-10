@@ -2,7 +2,7 @@
 
 /* L17 (crc-sync docs/adr/0074) — the carrier on screen, as a recovery is flown: PriFly and the Marshal
  * set the Case in the carrier management panel (crc-sync docs/adr/0113) and every Position sees it
- * change, the Marshal stack's slot board shows the derived angels/DME/push and re-sequences by one
+ * change, the MARSHAL panel (crc-sync docs/adr/0114) shows the derived angels and EAT and re-sequences by one
  * drag, the four handoffs are four buttons, the talk-down (FINAL) has nothing to type, and a Case I
  * recovery is an altitude list.
  *
@@ -89,6 +89,20 @@ async function openCarrierPanel(page) {
   return page.locator('#carrier-mgmt-panel');
 }
 
+/** Opens the MARSHAL panel beside the Strip panel (the carrier panel's reason: a tab group detaches the inactive one). */
+async function openMarshalPanel(page) {
+  await page.evaluate(() => {
+    const p = crc.dock.dock.api.getPanel('marshal');
+    if (p) crc.dock.dock.api.removePanel(p);
+    crc.dock.dock.addPanel({ id: 'marshal', component: 'marshal', title: crc.dock.PANEL_TITLES.marshal, position: { referencePanel: 'efsp', direction: 'right' } });
+    crc.dock.dock.api.getPanel('efsp').api.setActive();
+  });
+  await expect(page.locator('#marshal-panel')).toBeVisible({ timeout: 10000 });
+  await expect(page.locator('#efsp-panel')).toBeVisible();
+  return page.locator('#marshal-panel');
+}
+const rowOf = (panel, callsign) => panel.locator('tr.mb-row', { has: panel.page().locator('[data-cell="side"]', { hasText: callsign }) });
+
 test('01 PriFly sets the Case in the carrier panel; every Position sees it change at once; the lanes only read', async ({ browser, baseURL }) => {
   const marshal = await controller(browser, baseURL, 'e2e-cv-marshal1', ['CV_MARSHAL']);
   const pri = await controller(browser, baseURL, 'e2e-cv-prifly1', ['CV_PRIFLY']);
@@ -115,41 +129,32 @@ test('01 PriFly sets the Case in the carrier panel; every Position sees it chang
   await expect(lanePanel.locator('[data-carrier-source="case"]')).toContainText('default');
 });
 
-test('02 the slot board shows what the slot means; a drag to a slot is one Move and everyone above moves up together', async ({ browser, baseURL }) => {
+test('02 the MARSHAL panel lists the stack in landing order; a drag onto another holding row is one Move and everyone above moves up together', async ({ browser, baseURL }) => {
   const marshal = await controller(browser, baseURL, 'e2e-cv-marshal2', ['CV_MARSHAL']);
   const pri = await controller(browser, baseURL, 'e2e-cv-prifly2', ['CV_PRIFLY']);
   await setCase(pri, 'II');
   const a = cs('AAA'); const b = cs('BBB'); const c = cs('CCC');
   await checkIn(marshal, a); await checkIn(marshal, b); await checkIn(marshal, c);
   await openBay(marshal, 'CV_MARSHAL', 'cv-marshal-stack');
-  const board = marshal.locator('.carrier-stack-board');
-  await expect(board).toBeVisible();
-  await expect(board.locator('.carrier-slot-occupied')).toHaveCount(3);
-  await expect(board.locator('.carrier-slot[data-slot-index="0"]')).toContainText('A6');
-  await expect(board.locator('.carrier-slot[data-slot-index="0"]')).toContainText('21 DME');
-  await expect(board.locator('.carrier-slot[data-slot-index="2"]')).toContainText('A8');
+  const panel = await openMarshalPanel(marshal);
+  await expect(panel.locator('tr.mb-hold')).toHaveCount(3);
+  await expect(rowOf(panel, a).locator('[data-cell="ang"]')).toHaveText('6');
+  await expect(rowOf(panel, c).locator('[data-cell="ang"]')).toHaveText('8');
+  await expect(panel.locator('tr.mb-row').nth(0)).toContainText(a);
   // no control anywhere takes an angels, DME or push value for Case II
   await expect(strip(marshal, a).locator('.efsp-block-C7.efsp-block-editable')).toHaveCount(0);
   await expect(strip(marshal, a).locator('.efsp-block-C6.efsp-block-editable')).toHaveCount(0);
   await expect(strip(marshal, a).locator('.efsp-block-C8.efsp-block-editable')).toHaveCount(0);
   await marshal.screenshot({ path: test.info().outputPath('02-stack-board.png') });
 
-  // low state: drag CCC's row onto slot 0, one gesture
+  // one gesture: CCC's row dropped on AAA's
   const before = await marshal.evaluate(() => crc.carrier.carrierDerivedStack().map(e => e.flightDataId));
-  const src = board.locator('.carrier-slot[data-slot-index="2"]');
-  const target = board.locator('.carrier-slot[data-slot-index="0"]');
-  const s = await src.boundingBox(); const t = await target.boundingBox();
-  await marshal.mouse.move(s.x + 30, s.y + s.height / 2);
-  await marshal.mouse.down();
-  await marshal.mouse.move(s.x + 32, s.y + s.height / 2 - 8, { steps: 4 });
-  await marshal.mouse.move(t.x + 30, t.y + t.height / 2, { steps: 10 });
-  await expect(target).toHaveClass(/efsp-drop-target/);
-  await marshal.screenshot({ path: test.info().outputPath('02-drag-to-slot-preview.png') });
-  await marshal.mouse.up();
+  await rowOf(panel, c).dragTo(rowOf(panel, a));
   await expect.poll(() => marshal.evaluate(() => crc.carrier.carrierDerivedStack().map(e => e.flightDataId))).not.toEqual(before);
   const after = await marshal.evaluate(() => crc.carrier.carrierDerivedStack().map(e => [crc.state.getEfspFlightData(e.flightDataId).identity.callsign, e.stackIndex, e.angels]));
   expect(after).toEqual([[c, 0, 6], [a, 1, 7], [b, 2, 8]]);
   await expect(strip(marshal, c).locator('.efsp-block-C7')).toHaveText('6');
+  await expect(panel.locator('tr.mb-row').nth(0)).toContainText(c);
   await marshal.screenshot({ path: test.info().outputPath('02-after-resequence.png') });
   await cleanUp(marshal, pri);
   await setCase(pri, 'III');
@@ -219,15 +224,15 @@ test('04 Case I is an altitude list: no push column, the flight goes to the patt
   await setCase(pri, 'I');
   await waitCase(marshal, 'I');
   await openBay(marshal, 'CV_MARSHAL', 'cv-marshal-stack');
-  const board = marshal.locator('.carrier-stack-board');
-  await expect(board.locator('.carrier-stack-title')).toContainText('altitude list');
-  await expect(board.locator('.carrier-slot-push')).toHaveCount(0);
-  await expect(board.locator('.carrier-slot-dme')).toHaveCount(0);
-  await expect(board.locator('.carrier-slot-occupied')).toHaveCount(1);
-  await expect(board.locator('.carrier-slot-occupied')).toContainText('assign'); // no altitude until the squadron assigns one
-  const angels = board.locator('.carrier-slot-angels-input').first();
+  const panel = await openMarshalPanel(marshal);
+  await expect(panel.locator('[data-marshal="case"]')).toHaveText('I');
+  await expect(panel.locator('[data-marshal-action="commence"]')).toHaveCount(0); // Case I has no push time
+  await expect(panel.locator('[data-marshal="picture"]')).toBeHidden(); // the Case III picture is for II and III
+  await expect(panel.locator('tr.mb-hold')).toHaveCount(1);
+  const angels = panel.locator('[data-marshal-input="angels"]').first();
+  await expect(angels).toHaveValue(''); // no altitude until the squadron assigns one
   await angels.fill('3'); await angels.press('Enter');
-  await expect(board.locator('.carrier-slot-occupied')).toContainText('A3');
+  await expect(panel.locator('[data-marshal-input="angels"]').first()).toHaveValue('3');
   await marshal.screenshot({ path: test.info().outputPath('04-case-i-list.png') });
   const toPattern = strip(marshal, a).locator('.efsp-nla-btn[data-carrier-handoff="MARSHAL_TO_PATTERN_CASE_I"]');
   await expect(toPattern).toHaveText('To pattern');
@@ -257,7 +262,7 @@ test('05 a refusal is visible: an approach lane cannot set the carrier state, an
   await cleanUp(marshal);
 });
 
-test('06 the carrier panel: typing over a value, where it comes from, "Use default", PriFly and the Marshal at once, the ramp time on the stack board', async ({ browser, baseURL }) => {
+test('06 the carrier panel: typing over a value, where it comes from, "Use default", PriFly and the Marshal at once, the ramp time on the recovery board', async ({ browser, baseURL }) => {
   const marshal = await controller(browser, baseURL, 'e2e-cv-marshal6', ['CV_MARSHAL']);
   const pri = await controller(browser, baseURL, 'e2e-cv-prifly6', ['CV_PRIFLY']);
   const lane = await controller(browser, baseURL, 'e2e-cv-lane6', ['CV_APP2']);
@@ -274,9 +279,11 @@ test('06 the carrier panel: typing over a value, where it comes from, "Use defau
   await expect(mp.locator('[data-carrier-source="rampTime"]')).toHaveText('not known');
   await expect(mp.locator('[data-carrier-reset="rampTime"]')).toBeHidden();
   await openBay(marshal, 'CV_MARSHAL', 'cv-marshal-stack');
-  const board = marshal.locator('.carrier-stack-board');
-  await expect(board.locator('.carrier-stack-ramp')).toHaveText('RAMP —');
-  await expect(board.locator('.carrier-slot[data-slot-index="0"] .carrier-slot-push')).toHaveText('');
+  const board = await openMarshalPanel(marshal);
+  const eatOf = (n) => board.locator(`tr.mb-hold[data-seq="${n}"] [data-part="eat"]`);
+  const dmeOf = (i) => marshal.evaluate((k) => crc.carrier.carrierDerivedStack()[k].marshalDme, i);
+  await expect(board.locator('[data-marshal="ramp"]')).toHaveText('—');
+  await expect(eatOf(1)).toHaveText('--');
   await marshal.screenshot({ path: test.info().outputPath('06-before.png') });
 
   // The Marshal types the ramp time, PriFly the weather and the first fix, at the same moment
@@ -294,13 +301,11 @@ test('06 the carrier panel: typing over a value, where it comes from, "Use defau
   await expect(lp.locator('[data-carrier-value="rampTime"]')).toHaveText('2040');
   await expect(lp.locator('[data-carrier-field="rampTime"]')).toBeHidden();
   await expect(lp.locator('[data-carrier-reset="firstFix"]')).toBeHidden(); // the lanes only read
-  await expect(board.locator('.carrier-stack-ramp')).toHaveText('RAMP 2040Z');
+  await expect(board.locator('[data-marshal="ramp"]')).toHaveText('2040Z');
   // the first fix moved every slot's DME, and an EAT now exists, worked back from the ramp time
-  await expect(board.locator('.carrier-slot[data-slot-index="0"]')).toContainText('24 DME');
-  await expect(board.locator('.carrier-slot[data-slot-index="1"]')).toContainText('25 DME');
-  const eat = await board.locator('.carrier-slot[data-slot-index="0"] .carrier-slot-push').textContent();
-  expect(eat).toMatch(/^\d{4}Z$/);
-  expect(eat).not.toBe('2040Z'); // an EAT is when it leaves its fix, before it is at the ramp
+  expect([await dmeOf(0), await dmeOf(1)]).toEqual([24, 25]);
+  await expect(eatOf(1)).toHaveText(/^\d\d$/);
+  expect(await eatOf(1).textContent()).toBe('34'); // 2040Z ramp less the 6 minutes from the fix to the ramp
   await marshal.screenshot({ path: test.info().outputPath('06-typed-marshal.png') });
   await lane.screenshot({ path: test.info().outputPath('06-typed-lane-reads.png') });
 
@@ -314,12 +319,12 @@ test('06 the carrier panel: typing over a value, where it comes from, "Use defau
   await mp.locator('[data-carrier-reset="firstFix"]').click();
   await expect(mp.locator('[data-carrier-source="firstFix"]')).toContainText('default');
   await expect(mp.locator('[data-carrier-field="firstFix"]')).toHaveValue('21');
-  await expect(board.locator('.carrier-slot[data-slot-index="0"]')).toContainText('21 DME');
+  expect(await dmeOf(0)).toBe(21);
   await ceiling.fill(''); await ceiling.press('Enter');
   await expect(pp.locator('[data-carrier-source="ceiling"]')).toHaveText('not known');
   await ramp.fill(''); await ramp.press('Enter');
-  await expect(board.locator('.carrier-stack-ramp')).toHaveText('RAMP —');
-  await expect(board.locator('.carrier-slot[data-slot-index="0"] .carrier-slot-push')).toHaveText('');
+  await expect(board.locator('[data-marshal="ramp"]')).toHaveText('—');
+  await expect(eatOf(1)).toHaveText('--');
 
   // the tanker: a select and a number
   await pp.locator('[data-carrier-field="tankerOnStation"]').selectOption('true');
