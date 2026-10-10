@@ -187,7 +187,22 @@ export function _buildStripLayout(el, strip, obligation) {
       const from = el.querySelector && el.querySelector('.efsp-strip-from');
       if (from && from.remove) from.remove();
     };
-    el.addEventListener('pointerdown', noticed, true);
+    // A pointer press is noticed when it ENDS, never at pointerdown (MARSHAL-FIX). Taking the "from" line out
+    // moves everything below it in the tab, the step buttons included, and a press whose pointerup lands on a
+    // different button than its pointerdown is no click at all: the first press of "Comms to CV_MARSHAL" on a
+    // just-accepted Strip did nothing (its pointerup hit "Control to …", which had moved up under the pointer).
+    // Also clearing the arrival at pointerdown changed the render signature (`arr:`), so any render during
+    // the press rebuilt the Strip under the button. The keyboard path is unchanged: a key press moves no pointer.
+    const noticeOnRelease = () => {
+      const done = () => {
+        document.removeEventListener('pointerup', done, true);
+        document.removeEventListener('pointercancel', done, true);
+        noticed();
+      };
+      document.addEventListener('pointerup', done, true);
+      document.addEventListener('pointercancel', done, true);
+    };
+    el.addEventListener('pointerdown', noticeOnRelease, true);
     el.addEventListener('keydown', noticed, true);
   }
 
