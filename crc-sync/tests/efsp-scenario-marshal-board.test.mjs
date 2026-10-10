@@ -110,3 +110,13 @@ test('the side number is a Block (C18) on the flight, typed by the Marshal, show
   assert.equal(clear.ack.ok, true, JSON.stringify(clear.ack));
   assert.equal(efsp.flightDataStore.getFlightData(a.flightDataId).military.carrier.sideNumber, null);
 });
+
+test('the approach turn (C19) is 4, 6 or 8 nm and nothing else', () => {
+  const { efsp, c } = fresh();
+  const a = checkIn(efsp, c, 'AAA11');
+  const turn = () => efsp.flightDataStore.getFlightData(a.flightDataId).military.carrier.approachTurnNm;
+  assert.equal(send(efsp, c.CV_MARSHAL, 'CV_MARSHAL', get(efsp, a), { kind: 'SetBlock', blockId: 'C19', value: '8' }).ack.ok, true);
+  assert.equal(turn(), 8);
+  assert.equal(send(efsp, c.CV_MARSHAL, 'CV_MARSHAL', get(efsp, a), { kind: 'SetBlock', blockId: 'C19', value: '5' }).ack.ok, false);
+  assert.equal(turn(), 8);
+});
