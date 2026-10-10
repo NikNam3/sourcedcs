@@ -49,8 +49,8 @@ As tests: `crc-sync/tests/efsp-marshal-marks.test.mjs` (store, 12) and `efsp-sce
 `crc-desktop/e2e/marshal-board.spec.js` test 07 (two pages, reload, pass, the setting).
 - **Delta then reload**: spec 07 (the Marshal's page reloads, the marks are there); **Delta then restart**: the wire walk persists,
   builds a new EFSP from the snapshot, the marks are back, the PassClearance line is in the Mutation log with its values.
-- **Pass on one Marshal while the other has it open**: spec 07 (a second controller as Observer at CV_MARSHAL; their click passes
-  nothing; the Marshal's click clears it on both pages). Wire walk: PriFly refused, second click a quiet no-op. Store test: another
+- **Pass on one Marshal while the other has it open**: spec 07 (a second controller as Observer at CV_MARSHAL sees the same marks;
+  the Marshal's click clears it on both pages). Wire walk: PriFly refused, second click a quiet no-op. Store test: another
   Marshal's Delta between read and click refuses the pass and leaves the mark.
 - **Back to stack then Undo**: both marked; Undo leaves the flight PUSHED with no marks.
 - **A marked flight that commences**: the mark goes; the Commence undone brings it back. **That leaves** (DropStrip): its mark goes,
@@ -63,5 +63,6 @@ As tests: `crc-sync/tests/efsp-marshal-marks.test.mjs` (store, 12) and `efsp-sce
 - `wire:record`: "WIRE_PROTOCOL stays 2 (last release speaks 1); surface unchanged." It does not scan carrier op kinds or stack
   entry keys (as CARRIER-STATE and MARSHAL-BOARD found), so this wire change is not detected by it; the release carries it anyway
   because 2 is already ahead.
-- An Observer at CV_MARSHAL reads the same board; a click on a marked row there clears nothing (spec 07 checks the mark is still
-  there half a second later; whether the click is not sent or refused by the Primary gate, the result is the same).
+- An Observer at CV_MARSHAL reads the same board and sees the same marks (spec 07). Whether their click on a marked row is not
+  sent (`getActingPositions` holds only Primaries) or refused by the Primary gate is not asserted in a spec (the no-waitForTimeout
+  rule leaves no clean way to assert "nothing happened"); the server-side refusal for a non-Marshal is walked (PriFly).

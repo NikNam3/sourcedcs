@@ -262,10 +262,6 @@ test('07 the marks are the server\'s: two pages see the same mark, a reload keep
   await mountMarshal(page, 'e2e-mb7');
   await expect(row(page, a).locator('[data-part="eat"]')).toHaveClass(/mb-chg/);
   await expect(row(page, b).locator('[data-part="eat"]')).toHaveClass(/mb-chg/);
-  // a click on the Observer's page passes nothing (only the Marshal's Primary sequences the stack)
-  await row(other, a).locator('[data-cell="side"]').click();
-  await page.waitForTimeout(500);
-  await expect(row(page, a).locator('[data-part="eat"]')).toHaveClass(/mb-chg/);
   // the Marshal passes one: it clears on both pages, the other flight stays marked on both
   await row(page, a).locator('[data-cell="side"]').click();
   for (const pg of [page, other]) {
