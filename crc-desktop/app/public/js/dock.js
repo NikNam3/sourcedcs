@@ -9,6 +9,7 @@ import { initAirspacePanel } from './panels/efsp/airspace-panel.js';
 import { initRunwayStatusPanel } from './panels/efsp/runway-status-panel.js';
 import { initCarrierManagementPanel } from './panels/efsp/carrier-management-panel.js';
 import { initMarshalPanel } from './panels/efsp/marshal-panel.js';
+import { initCarrierMapPanel } from './panels/efsp/carrier-map-panel.js';
 import { initMetricsPanel } from './panels/metrics-panel.js';
 import { getActiveRadars } from './picture.js';
 import { map } from './map-handle.js';
@@ -59,6 +60,7 @@ export function initDock() {
         case 'runwayStatus': return mountExistingPanel('runway-status-panel', initRunwayStatusPanel);
         case 'carrier':  return mountExistingPanel('carrier-mgmt-panel', initCarrierManagementPanel);
         case 'marshal':  return mountExistingPanel('marshal-panel', initMarshalPanel);
+        case 'carrierMap': return mountExistingPanel('carrier-map-panel', initCarrierMapPanel);
         case 'metrics':  return mountExistingPanel('metrics-panel', initMetricsPanel);
         default: throw new Error(`[dock] unknown panel component: ${options.name}`);
       }
@@ -186,7 +188,7 @@ function addMissingRequiredPanels() {
 // (it lands wherever the active group happens to be, sometimes merging
 // into completely the wrong group — both reproduced firsthand while
 // building this). `excludeId` leaves out the panel currently being placed.
-const LEFT_CLUSTER = ['track', 'radars', 'airport', 'efsp', 'airspace', 'runwayStatus', 'carrier', 'marshal', 'metrics'];
+const LEFT_CLUSTER = ['track', 'radars', 'airport', 'efsp', 'airspace', 'runwayStatus', 'carrier', 'marshal', 'carrierMap', 'metrics'];
 
 function leftGroupAnchor(excludeId) {
   return LEFT_CLUSTER.filter(id => id !== excludeId).find(id => dock.api.getPanel(id));
@@ -198,7 +200,7 @@ function leftGroupAnchor(excludeId) {
 // remembered size to come back to.
 const PANEL_SIDE = {
   track: 'left', radars: 'left', airport: 'left', efsp: 'left', airspace: 'left',
-  runwayStatus: 'left', carrier: 'left', marshal: 'left', metrics: 'left',
+  runwayStatus: 'left', carrier: 'left', marshal: 'left', carrierMap: 'left', metrics: 'left',
   settings: 'right',
   radio: 'bottom',
 };
@@ -321,6 +323,14 @@ const DOCKABLE_PANELS = {
     const anchor = leftGroupAnchor('marshal');
     return withRememberedPlacement('marshal', {
       id: 'marshal', component: 'marshal', title: PANEL_TITLES.marshal,
+      position: anchor ? { referencePanel: anchor } : { referencePanel: 'map', direction: 'left' },
+    }, !anchor);
+  },
+  // The carrier map (docs/wip/CARRIER-MAP.md): fixed on the ship, north-up. Everyone reads it.
+  carrierMap: () => {
+    const anchor = leftGroupAnchor('carrierMap');
+    return withRememberedPlacement('carrierMap', {
+      id: 'carrierMap', component: 'carrierMap', title: PANEL_TITLES.carrierMap,
       position: anchor ? { referencePanel: anchor } : { referencePanel: 'map', direction: 'left' },
     }, !anchor);
   },

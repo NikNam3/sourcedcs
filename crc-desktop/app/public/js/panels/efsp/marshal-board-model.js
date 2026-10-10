@@ -89,6 +89,8 @@ export function buildBoard({ view, strips, flightDataOf, dmeOf, now, marginKlb: 
   const stripByFd = new Map();
   for (const s of strips || []) {
     if (!s || s.state === 'DROPPED' || !['MARSHAL', 'FINAL', 'PATTERN'].includes(s.stripType) || !s.flightDataId) continue;
+    // PATTERN is also an airfield's Strip type (Incirlik's TWR): only the carrier's Strips are in the recovery.
+    if (s.facilityId && s.facilityId !== 'CARRIER') continue;
     if (!stripByFd.has(s.flightDataId)) stripByFd.set(s.flightDataId, s);
   }
   const ids = new Set([...byFd.keys(), ...stripByFd.keys()]);

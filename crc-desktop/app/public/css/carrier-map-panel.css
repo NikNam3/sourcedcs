@@ -1,0 +1,31 @@
+/* The CARRIER MAP panel (docs/wip/CARRIER-MAP.md; mockup docs/mockups/carrier-map-panel.html, revision 5). The picture fills the
+   panel like the radar map fills its own (H121). Colours are efsp-panel.css's tokens in dark-cockpit use: grey; the header's note is
+   amber (--efsp-attn) only when the picture cannot be trusted. The ring greens are the approved mockup's. The font is the app's own. */
+
+#carrier-map-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  color: var(--efsp-text, #d8e0e6);
+  background: #0b0e11;
+  font-family: 'Consolas', 'DejaVu Sans Mono', monospace;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+#carrier-map-body { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+#carrier-map-body[hidden] { display: none; }
+
+.cm-hdr {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 2px 16px;
+  padding: 4px 10px; background: #101418; border-bottom: 1px solid var(--efsp-line, #2e3740);
+}
+.cm-k { color: var(--efsp-muted, #8c9aa6); }
+.cm-hdr b { font-weight: 700; color: var(--efsp-text, #d8e0e6); }
+.cm-problem { color: var(--efsp-attn, #e0a83c); }
+.cm-problem:empty { display: none; }
+.cm-right { margin-left: auto; }
+
+.cm-wrap { position: relative; flex: 1; min-height: 0; overflow: hidden; cursor: default; }
+.cm-svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.cm-svg text { font-family: 'Consolas', 'DejaVu Sans Mono', monospace; pointer-events: none; }

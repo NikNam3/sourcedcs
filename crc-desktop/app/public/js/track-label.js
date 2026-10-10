@@ -82,6 +82,15 @@ export function altitudeShort(t) {
   return String(Math.round(a.ft / 100)).padStart(3, '0') + ALT_MARK[a.source];
 }
 
+/**
+ * The carrier map's label (decisions H117: side numbers only in the carrier regime): '201 012' — the side number typed on the
+ * flight's Strip and the altitude in hundreds of feet. A contact with no side number is named as everywhere else.
+ */
+export function sideAltText(t, sideNumber) {
+  const name = sideNumber || (trackName(t) + trackNameSuffix(t));
+  return [name, altitudeShort(t)].filter(Boolean).join(' ');
+}
+
 /** 'FL180' or '4,500 ft', for the track panel. */
 export function altitudeText(ft, ref) {
   if (!Number.isFinite(ft)) return '—';
