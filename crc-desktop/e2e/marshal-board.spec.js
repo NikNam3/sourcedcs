@@ -1,8 +1,9 @@
 'use strict';
 
 /* The MARSHAL panel, the recovery board (crc-sync docs/adr/0114; mockup docs/mockups/marshal-stack-panel.html, revision 7), in the
- * situations the mockup walks: a recovery in order, a low state, a flight past its EAT, a Delta, a bolter and Back to stack. One
- * controller signed on as the Marshal and both approach lanes. The Board lives for the whole run, so every test drops what it made
+ * situations the mockup walks: a recovery in order, a low state, a flight past its EAT, a Delta, a bolter and Back to stack; and
+ * the "changed, not yet passed" marks, which live on the server (ADR 0115): two pages see the same mark, a reload keeps it. One
+ * controller signed on as the Marshal and both approach lanes (07 adds a second controller at the carrier). The Board lives for the whole run, so every test drops what it made
  * and clears the ramp time; side numbers are unique per test.
  */
 
@@ -17,11 +18,18 @@ const unique = () => String((Date.now() + seq++) % 100000);
 const _contexts = [];
 test.afterEach(async () => { while (_contexts.length) await _contexts.pop().close().catch(() => {}); });
 
-async function marshalPage(browser, baseURL, name) {
+const ALL_CARRIER = ['CV_MARSHAL', 'CV_APP1', 'CV_APP2', 'CV_PRIFLY'];
+
+async function marshalPage(browser, baseURL, name, signedOn = ALL_CARRIER) {
   const context = await browser.newContext({ baseURL, viewport: { width: 1400, height: 1000 } });
   _contexts.push(context);
   const page = await context.newPage();
-  await openPanel(page, { signedOn: ['CV_MARSHAL', 'CV_APP1', 'CV_APP2', 'CV_PRIFLY'], facilityId: 'CARRIER', controller: name });
+  return mountMarshal(page, name, signedOn);
+}
+
+/** Signs on and docks the MARSHAL panel; also what a reload goes through (openPanel navigates afresh). */
+async function mountMarshal(page, name, signedOn = ALL_CARRIER) {
+  await openPanel(page, { signedOn, facilityId: 'CARRIER', controller: name });
   await page.waitForFunction(() => typeof crc.carrier.getEfspCarrier === 'function' && !!crc.carrier.getEfspCarrier());
   await page.evaluate(() => {
     const p = crc.dock.dock.api.getPanel('marshal');
@@ -227,5 +235,49 @@ test('06 Back to stack: the commenced flight returns at the top with new angels 
   await page.screenshot({ path: test.info().outputPath('06-back-to-stack.png') });
   await row(page, a).locator('[data-cell="side"]').click();
   await expect(row(page, a).locator('[data-cell="ang"]')).not.toHaveClass(/mb-chg/);
+  await cleanUp(page);
+});
+
+test('07 the marks are the server\'s: two pages see the same mark, a reload keeps it, passing it on one clears it on both', async ({ browser, baseURL }) => {
+  const page = await marshalPage(browser, baseURL, 'e2e-mb7');
+  // a second controller at the Marshal's Position with the board open: the Position is held, so this one is its Observer
+  const other = await marshalPage(browser, baseURL, 'e2e-mb7b', ['CV_MARSHAL']);
+  expect(await other.evaluate(() => crc.ws.isObserverAt('CARRIER', 'CV_MARSHAL'))).toBe(true);
+  const [a, b] = [`6${unique()}`, `7${unique()}`];
+  await typeState(page, 'rampTime', rampIn(30));
+  await flight(page, { side: a, fuel: 7000, bingo: 4000 });
+  await flight(page, { side: b, fuel: 7000, bingo: 4000 });
+  for (const pg of [page, other]) {
+    await expect(row(pg, a).locator('[data-part="eat"]')).not.toHaveClass(/mb-chg/);
+  }
+  const p = panelOf(page);
+  await p.locator('[data-marshal-action="delta-open"]').click();
+  await p.locator('[data-marshal-input="delta"]').fill('4');
+  await p.locator('[data-marshal-action="delta-send"]').click();
+  for (const pg of [page, other]) {
+    await expect(row(pg, a).locator('[data-part="eat"]')).toHaveClass(/mb-chg/);
+    await expect(row(pg, b).locator('[data-part="eat"]')).toHaveClass(/mb-chg/);
+  }
+  // the Marshal reloads: the marks are still there (they were never the window's)
+  await mountMarshal(page, 'e2e-mb7');
+  await expect(row(page, a).locator('[data-part="eat"]')).toHaveClass(/mb-chg/);
+  await expect(row(page, b).locator('[data-part="eat"]')).toHaveClass(/mb-chg/);
+  // a click on the Observer's page passes nothing (only the Marshal's Primary sequences the stack)
+  await row(other, a).locator('[data-cell="side"]').click();
+  await page.waitForTimeout(500);
+  await expect(row(page, a).locator('[data-part="eat"]')).toHaveClass(/mb-chg/);
+  // the Marshal passes one: it clears on both pages, the other flight stays marked on both
+  await row(page, a).locator('[data-cell="side"]').click();
+  for (const pg of [page, other]) {
+    await expect(row(pg, a).locator('[data-part="eat"]')).not.toHaveClass(/mb-chg/);
+    await expect(row(pg, b).locator('[data-part="eat"]')).toHaveClass(/mb-chg/);
+  }
+  // the setting is this controller's: off, nothing shows here, and the mark is still on the other page
+  await page.evaluate(() => crc.settingsRegistry.setSetting('marshalMarkChanged', false));
+  await expect(row(page, b).locator('[data-part="eat"]')).not.toHaveClass(/mb-chg/);
+  await expect(row(other, b).locator('[data-part="eat"]')).toHaveClass(/mb-chg/);
+  await page.evaluate(() => crc.settingsRegistry.setSetting('marshalMarkChanged', true));
+  await expect(row(page, b).locator('[data-part="eat"]')).toHaveClass(/mb-chg/);
+  await page.screenshot({ path: test.info().outputPath('07-shared-marks.png') });
   await cleanUp(page);
 });
