@@ -634,6 +634,7 @@
    "getEfspStrip"
   ],
   "panels/efsp/carrier-final-distance.js": [
+   "carrierDistanceNm",
    "carrierFinalDistanceText"
   ],
   "panels/efsp/carrier-management-panel.js": [
@@ -644,12 +645,8 @@
    "buildCarrierFinalLine",
    "carrierDecorateNlaButton",
    "carrierExtraNlaButtons",
-   "carrierMoveToSlot",
-   "carrierOrderRack",
    "carrierSignatureFor",
-   "carrierStackRows",
-   "renderCarrierBanner",
-   "renderCarrierStackBoard"
+   "renderCarrierBanner"
   ],
   "panels/efsp/carrier-send.js": [
    "CARRIER_CAPABILITIES",
@@ -992,6 +989,33 @@
    "getEfspMarsa",
    "marsaForStrip",
    "marsaParticipantStripIds"
+  ],
+  "panels/efsp/marshal-board-model.js": [
+   "KIND_RANK",
+   "buildBoard",
+   "clockText",
+   "compareLanding",
+   "createMarks",
+   "dropSlot",
+   "eatMinuteText",
+   "fuelLevel",
+   "fuelText",
+   "marginKlb",
+   "marksOf",
+   "passMarks",
+   "statusOf",
+   "updateMarks"
+  ],
+  "panels/efsp/marshal-panel.js": [
+   "initMarshalPanel",
+   "renderMarshal"
+  ],
+  "panels/efsp/marshal-picture.js": [
+   "PICTURE",
+   "pictureModel",
+   "racetrackPath",
+   "renderMarshalPicture",
+   "yOfDme"
   ],
   "panels/efsp/mtr-advisory.js": [
    "hasMtrData",
