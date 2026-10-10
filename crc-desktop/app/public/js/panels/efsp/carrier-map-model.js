@@ -238,12 +238,13 @@ export function occupancy({ caseValue, rows, tankerOnStation, contactOf }) {
  * steps up and down beside the symbol. Placed in the order given (the panel puts a problem first). A label that moved gets a leader.
  *
  * @param {{id:string, x:number, y:number, w:number, h:number}[]} labels  symbol position and label box size, pixels
- * @param {{dx?:number, dy?:number, maxSteps?:number}} [o] the label's own place: its box's left edge `dx` right of the symbol,
- *   its top `dy` above it
+ * @param {{dx?:number, dy?:number, maxSteps?:number, obstacles?:{x:number,y:number,w:number,h:number}[]}} [o] the label's own
+ *   place: its box's left edge `dx` right of the symbol, its top `dy` above it; `obstacles`, boxes no label may cover (the ship,
+ *   the symbols, the stack's name)
  * @returns {Map<string, {x:number, y:number, moved:boolean}>} each label box's top-left
  */
-export function declutter(labels, { dx = 10, dy = 14, maxSteps = 8 } = {}) {
-  const placed = [];
+export function declutter(labels, { dx = 10, dy = 14, maxSteps = 8, obstacles = [] } = {}) {
+  const placed = obstacles.map((b) => ({ ...b }));
   const out = new Map();
   const hits = (b) => placed.some((p) => b.x < p.x + p.w && p.x < b.x + b.w && b.y < p.y + p.h && p.y < b.y + b.h);
   for (const l of labels) {

@@ -200,6 +200,7 @@ function _draw(svg, m, w, h) {
   const textAttrs = (extra) => ({ 'font-size': font, ...extra });
 
   svg.appendChild(sv('rect', { x: 0, y: 0, width: w, height: h, fill: COL.bg }));
+  let stackLabelBox = null;
 
   // range rings to the corners; the 10 nm ring always (H119)
   const rings = sv('g', { 'data-layer': 'rings', fill: 'none' });
@@ -209,7 +210,7 @@ function _draw(svg, m, w, h) {
     if (r.label) rings.appendChild(sv('text', textAttrs({ x: cx + 4, y: cy - R - 4, fill: COL.ringText, class: 'cm-ringlabel', 'data-ring-label': String(r.nm) }), String(r.nm)));
   }
   svg.appendChild(rings);
-  svg.appendChild(sv('text', textAttrs({ x: cx, y: 14, 'text-anchor': 'middle', fill: COL.muted }), 'N'));
+  svg.appendChild(sv('text', textAttrs({ x: cx - 6, y: 14, 'text-anchor': 'end', fill: COL.muted, 'data-cm': 'north' }), 'N'));
 
   // the extended centreline astern along the final bearing, a tick every mile
   if (m.fb != null) {
@@ -236,7 +237,10 @@ function _draw(svg, m, w, h) {
     for (const f of s.fixes) { const p = P(f.at); g.appendChild(sv('line', { x1: p.x - ux, y1: p.y - uy, x2: p.x + ux, y2: p.y + uy, 'data-fix-dme': String(f.dme) })); }
     svg.appendChild(g);
     const l = P(s.labelAt);
-    svg.appendChild(sv('text', textAttrs({ x: l.x, y: l.y, 'text-anchor': 'middle', fill: COL.faint, 'data-cm': 'stack-label' }), `MARSHAL ${s.text} ${s.firstFix}`));
+    const text = `MARSHAL ${s.text} ${s.firstFix}`;
+    svg.appendChild(sv('text', textAttrs({ x: l.x, y: l.y, 'text-anchor': 'middle', fill: COL.faint, 'data-cm': 'stack-label' }), text));
+    const tw = text.length * font * 0.6;
+    stackLabelBox = { x: l.x - tw / 2, y: l.y - font, w: tw, h: font * 1.2 };
   }
 
   // the patterns, only while occupied, no altitude or distance on them
@@ -278,7 +282,10 @@ function _draw(svg, m, w, h) {
   const boxes = shown.map((a) => ({
     id: a.id, x: a.p.x, y: a.p.y, w: Math.ceil(Math.max(a.label.length, a.tanker ? 3 : 0) * font * 0.6) + 2, h: lineH * (a.tanker ? 2 : 1),
   }));
-  const placed = declutter(boxes, { dx: 9, dy: Math.round(font * 0.9) });
+  // labels keep clear of the ship, of every symbol and of the stack's name
+  const obstacles = [{ x: cx - 12, y: cy - 12, w: 24, h: 24 }, ...shown.map((a) => ({ x: a.p.x - 5, y: a.p.y - 5, w: 10, h: 10 }))];
+  if (stackLabelBox) obstacles.push(stackLabelBox);
+  const placed = declutter(boxes, { dx: 9, dy: Math.round(font * 0.9), obstacles });
   const tracks = sv('g', { 'data-layer': 'tracks' });
   const labels = sv('g', { 'data-layer': 'labels' });
   for (const a of shown) {

@@ -154,3 +154,10 @@ test('declutter: labels that would overlap are moved, the first keeps its place,
   const apart = m.declutter([{ id: 'x', x: 0, y: 0, w: 50, h: 13 }, { id: 'y', x: 0, y: 200, w: 50, h: 13 }]);
   assert.equal(apart.get('y').moved, false, 'labels far apart stay put');
 });
+
+test('declutter: a label keeps clear of the obstacles (the ship, the symbols, the stack\'s name)', () => {
+  const out = m.declutter([{ id: 'a', x: 100, y: 100, w: 60, h: 13 }], { dx: 9, dy: 10, obstacles: [{ x: 105, y: 85, w: 30, h: 20 }] });
+  const b = out.get('a');
+  assert.equal(b.moved, true);
+  assert.ok(!(b.x < 135 && 105 < b.x + 60 && b.y < 105 && 85 < b.y + 13));
+});
