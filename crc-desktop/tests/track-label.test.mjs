@@ -104,3 +104,11 @@ test('an assigned altitude follows the theater transition altitude (lane TA)', (
     assert.equal(L.assignedBlockText({ lowFt: 16000, highFt: 20000 }), '16,000-FL200');
   } finally { settings.transitionAltFt = saved; }
 });
+
+test('the carrier map label: side number and altitude in hundreds; no side number, the contact\'s usual name', () => {
+  const t = { id: 7, domain: 'AIR', label: { callsign: 'VIPER11', source: 'FLIGHT_DATA', trackNumber: 'T07' }, altitude: { ft: 1240, ref: 'QNH', source: 'MODE_C' } };
+  assert.equal(L.sideAltText(t, '201'), '201 012');
+  assert.equal(L.sideAltText(t, ''), 'VIPER11 012');
+  assert.equal(L.sideAltText({ ...t, altitude: null }, '201'), '201');
+  assert.equal(L.sideAltText({ ...t, label: { ...t.label, source: 'FLIGHT_DATA_PROVISIONAL' } }, ''), 'VIPER11? 012');
+});

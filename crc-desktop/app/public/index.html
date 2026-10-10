@@ -28,6 +28,7 @@
   <link rel="stylesheet" href="./css/runway-status-panel.css"/>
   <link rel="stylesheet" href="./css/carrier-management-panel.css"/>
   <link rel="stylesheet" href="./css/marshal-panel.css"/>
+  <link rel="stylesheet" href="./css/carrier-map-panel.css"/>
   <link rel="stylesheet" href="./css/metrics-panel.css"/>
 </head>
 <body>
@@ -258,6 +259,13 @@
 <div id="marshal-panel" class="dock-unmounted">
   <div id="marshal-empty" class="efsp-empty">No carrier.</div>
   <div id="marshal-body" hidden></div>
+</div>
+
+<!-- CARRIER MAP (docs/wip/CARRIER-MAP.md, decisions H119, S-ARCH-36, H121): a radar picture fixed on the ship, north-up, with the
+     marshal stack, the centreline and the patterns while occupied. Everyone reads it. Its own panel, like the MARSHAL panel. -->
+<div id="carrier-map-panel" class="dock-unmounted">
+  <div id="carrier-map-empty" class="efsp-empty">No carrier.</div>
+  <div id="carrier-map-body" hidden></div>
 </div>
 
 <!-- METRICS (guide §11.5 + §11.4 traffic count, docs/adr/0072). Read-only;
