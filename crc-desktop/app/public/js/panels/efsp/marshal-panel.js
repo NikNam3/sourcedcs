@@ -8,7 +8,7 @@ import { getAllEfspStrips, getEfspFlightData, getEfspPosition, getEfspPositionLe
 import { sendEfspMutation } from './efsp-ws.js';
 import { onEfspChanged } from './efsp-change-bus.js';
 import {
-  buildBoard, clockText, createMarks, dropSlot, eatMinuteText, fuelText, marksOf, passMarks, updateMarks
+  buildBoard, clockText, dropSlot, eatMinuteText, fuelText, marksOf, passClearanceOp
 } from './marshal-board-model.js';
 import { pictureModel, renderMarshalPicture } from './marshal-picture.js';
 
@@ -33,7 +33,6 @@ registerSettingsTab('marshal', [
 let _emptyEl = null;
 let _bodyEl = null;
 let _els = null;
-const _marks = createMarks();
 let _tableSig = '';
 let _pictureSig = '';
 let _lastBoard = null;
@@ -46,6 +45,9 @@ function _el(tag, className, text) {
   if (text != null) node.textContent = text;
   return node;
 }
+
+/** This controller's setting: show the server's "changed, not yet passed" marks (the marks themselves are shared, ADR 0115). */
+function _marksShown() { return getSetting('marshalMarkChanged') !== false; }
 
 function _canSequence() { return !!carrierActingFor('sequencesStack', signedOnCarrierIds()); }
 
@@ -234,9 +236,11 @@ function _drawRow(r, m, { canSequence, caseValue, sequenced }) {
   tr.appendChild(act);
 
   if (r.kind === 'hold') {
+    // A click on a marked row says the new clearance was passed: the server clears the mark for every Marshal (ADR 0115).
     tr.addEventListener('click', (e) => {
       if (e.target.closest('input, button')) return;
-      if (_lastBoard && passMarks(_marks, r)) renderMarshal();
+      const op = canSequence ? passClearanceOp(r, { enabled: _marksShown() }) : null;
+      if (op) _sendStackOp(op);
     });
     if (canSequence) _wireDrag(tr, r);
   }
@@ -303,7 +307,7 @@ export function renderMarshal() {
   const canSequence = _canSequence();
   const board = _collect(view);
   _lastBoard = board;
-  updateMarks(_marks, board.rows, { enabled: getSetting('marshalMarkChanged') !== false });
+  const shown = { enabled: _marksShown() };
 
   // header (cheap text, set every time)
   _els.hullK.textContent = view.hullId;
@@ -326,7 +330,7 @@ export function renderMarshal() {
 
   // the table: rebuilt only when something it shows changed, so a click is never lost to a redraw
   const ctx = { canSequence, caseValue, sequenced };
-  const sig = [caseValue, canSequence ? 1 : 0, board.rows.map((r) => _rowSignature(r, marksOf(_marks, r.flightDataId), canSequence)).join('|'),
+  const sig = [caseValue, canSequence ? 1 : 0, board.rows.map((r) => _rowSignature(r, marksOf(r, shown), canSequence)).join('|'),
     board.vacancies.map((v) => v.slot).join(',')].join('#');
   const typing = _els.tbody.contains(document.activeElement) && document.activeElement.tagName === 'INPUT';
   if (sig !== _tableSig && !_dragging && !typing) {
@@ -340,7 +344,7 @@ export function renderMarshal() {
           if (!placed.has(v.slot) && v.slot < r.slot) { placed.add(v.slot); _els.tbody.appendChild(_drawVacancy(v, canSequence)); }
         }
       }
-      _els.tbody.appendChild(_drawRow(r, marksOf(_marks, r.flightDataId), ctx));
+      _els.tbody.appendChild(_drawRow(r, marksOf(r, shown), ctx));
     }
   }
 

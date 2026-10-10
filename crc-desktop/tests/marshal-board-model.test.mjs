@@ -69,26 +69,20 @@ test('a vacancy below the top of the stack is listed so the Marshal can close it
   assert.deepEqual(b.vacancies.map((v) => v.slot), [1, 2]);
 });
 
-test('the marks: a changed angels or EAT is amber until passed; a first EAT is not a change; Back to stack marks both', () => {
-  const marks = m.createMarks();
-  const rows = (ang, eat, kind = 'hold') => [{ flightDataId: 'c', kind, angels: ang, eatUtc: eat }];
-  m.updateMarks(marks, rows(6, null));
-  m.updateMarks(marks, rows(6, T));
-  assert.deepEqual(m.marksOf(marks, 'c'), { angels: false, eat: false });
-  m.updateMarks(marks, rows(6, T + 4 * MIN));
-  assert.deepEqual(m.marksOf(marks, 'c'), { angels: false, eat: true });
-  m.updateMarks(marks, rows(7, T + 4 * MIN));
-  assert.deepEqual(m.marksOf(marks, 'c'), { angels: true, eat: true });
-  assert.equal(m.passMarks(marks, rows(7, T + 4 * MIN)[0]), true);
-  m.updateMarks(marks, rows(7, T + 4 * MIN));
-  assert.deepEqual(m.marksOf(marks, 'c'), { angels: false, eat: false });
-  m.updateMarks(marks, rows(7, T + 4 * MIN, 'comm'));
-  m.updateMarks(marks, rows(10, T + 9 * MIN));
-  assert.deepEqual(m.marksOf(marks, 'c'), { angels: true, eat: true }, 'returned to the stack');
-  m.updateMarks(marks, rows(10, T + 9 * MIN), { enabled: false });
-  assert.deepEqual(m.marksOf(marks, 'c'), { angels: false, eat: false }, 'the setting off shows nothing');
-  m.updateMarks(marks, []);
-  assert.equal(marks.flights.size, 0, 'a flight that left leaves no mark');
+test('the marks are the server\'s: a holding row shows its entry\'s `unpassed`, the setting only hides them here (ADR 0115)', () => {
+  const b = build([{ ...entry('c', 0), unpassed: ['angels', 'eat'] }, { ...entry('d', 1), unpassed: ['eat'] }, entry('e', 2)],
+    [strip('c', 'MARSHAL', 'IN_STACK'), strip('d', 'MARSHAL', 'IN_STACK'), strip('e', 'MARSHAL', 'IN_STACK')]);
+  const row = (id) => b.rows.find((r) => r.flightDataId === id);
+  assert.deepEqual(m.marksOf(row('c')), { angels: true, eat: true });
+  assert.deepEqual(m.marksOf(row('d')), { angels: false, eat: true });
+  assert.deepEqual(m.marksOf(row('e')), { angels: false, eat: false });
+  assert.deepEqual(m.marksOf(row('c'), { enabled: false }), { angels: false, eat: false }, 'the setting off shows nothing');
+  // a row that is not holding never shows one (the server clears it at Commence anyway)
+  assert.deepEqual(m.marksOf({ ...row('c'), kind: 'comm' }), { angels: false, eat: false });
+  // the click: the op names the values as shown, so the server can refuse a clearance that changed again
+  assert.deepEqual(m.passClearanceOp(row('d')), { kind: 'PassClearance', flightDataId: 'd', angels: row('d').angels, eatUtc: row('d').eatUtc });
+  assert.equal(m.passClearanceOp(row('e')), null, 'nothing to pass: no op');
+  assert.equal(m.passClearanceOp(row('d'), { enabled: false }), null, 'a controller who does not see the mark does not clear it');
 });
 
 test('a drag: dropped on another holding row it takes that row\'s slot; anything else is no move', () => {

@@ -1029,16 +1029,14 @@
    "buildBoard",
    "clockText",
    "compareLanding",
-   "createMarks",
    "dropSlot",
    "eatMinuteText",
    "fuelLevel",
    "fuelText",
    "marginKlb",
    "marksOf",
-   "passMarks",
-   "statusOf",
-   "updateMarks"
+   "passClearanceOp",
+   "statusOf"
   ],
   "panels/efsp/marshal-panel.js": [
    "initMarshalPanel",
