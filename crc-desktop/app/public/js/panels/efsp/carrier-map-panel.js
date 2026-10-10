@@ -9,7 +9,7 @@ import { correlatedTrackIdForStrip, getAllEfspStrips, getEfspFlightData, getEfsp
 import { onEfspChanged } from './efsp-change-bus.js';
 import { buildBoard, fuelLevel } from './marshal-board-model.js';
 import {
-  RANGE_DEFAULT_NM, RANGE_MAX_NM, RANGE_MIN_NM, bolterRacetrack, centreline, clampRange, declutter, distanceNm, landingPattern,
+  RANGE_DEFAULT_NM, RANGE_MAX_NM, RANGE_MIN_NM, bolterRacetrack, extendedCentreline, clampRange, declutter, distanceNm, landingPattern,
   marshalStack, occupancy, portHolding, ringSpacingFor, ringsFor, scaleFor, spinCircle, tankerRacetrack, toFrame, wheelRange,
 } from './carrier-map-model.js';
 
@@ -212,7 +212,7 @@ function _draw(svg, m, w, h) {
 
   // the extended centreline astern along the final bearing, a tick every mile
   if (m.fb != null) {
-    const c = centreline(m.fb, reach);
+    const c = extendedCentreline(m.fb, reach);
     const g = sv('g', { 'data-cm': 'centreline', 'data-bearing': String(m.fb), stroke: COL.line, 'stroke-width': 1 });
     const a = P(c.from);
     const b = P(c.to);

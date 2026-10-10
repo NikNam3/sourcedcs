@@ -130,7 +130,7 @@ export function distanceNm(p) { return Math.hypot(p.e, p.n); }
  * bearing a short way ahead (2 nm, the mockup's). Ticks are given as points with the unit vector across the line; the panel draws
  * them a fixed number of pixels long.
  */
-export function centreline(finalBearingDeg, reachNm) {
+export function extendedCentreline(finalBearingDeg, reachNm) {
   const astern = (finalBearingDeg + 180) % 360;
   const ticks = [];
   for (let nm = 1; nm <= Math.floor(reachNm); nm++) ticks.push(polar(astern, nm));
