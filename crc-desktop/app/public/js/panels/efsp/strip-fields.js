@@ -127,7 +127,33 @@ export function compactBlocksFor(stripType, positionId, flightData) {
     ? MTR_BLOCKS_BY_POSITION[stripType][positionId] : null;
   if (mtr) list = [...list, ...mtr];
   const map = _blockMapFor(stripType);
-  return map ? list.filter(id => Object.prototype.hasOwnProperty.call(map, id)) : list;
+  const out = map ? list.filter(id => Object.prototype.hasOwnProperty.call(map, id)) : list;
+  return sideNumberLeads(stripType, flightData) ? _swapSideAndCallsign(out) : out;
+}
+
+// ── The carrier's side number (decisions.md H122, H117; crc-sync's docs/adr/0114) ──
+//
+// The carrier regime names an aircraft by its side number, so on a carrier Strip
+// the side number (C18) takes the callsign's slot (C1's place and width) and the
+// callsign takes the side number's. Only once a side number is typed: until then
+// the callsign keeps the big slot, so a Strip is never led by an empty field.
+// Every strip type whose Block Map has both C1 and C18 is a carrier Strip that
+// swaps (MARSHAL, FINAL); PATTERN has no side number Block and is unchanged.
+export function sideNumberLeads(stripType, flightData) {
+  const map = _blockMapFor(stripType);
+  if (!map || !map.C1 || !map.C18) return false;
+  const carrier = flightData && flightData.military && flightData.military.carrier;
+  return !!(carrier && String(carrier.sideNumber || '').trim());
+}
+
+function _swapSideAndCallsign(list) {
+  const c1 = list.indexOf('C1');
+  const c18 = list.indexOf('C18');
+  if (c1 < 0 || c18 < 0) return list;
+  const out = [...list];
+  out[c1] = 'C18';
+  out[c18] = 'C1';
+  return out;
 }
 
 // ── Ordnance (guide §9.5, crc-sync's docs/adr/0069) ────────────────────────
@@ -151,7 +177,10 @@ export function isOrdnanceSet(flightData) {
   return !!state && state !== 'CLEAN';
 }
 
-export function fieldSpanFor(blockId) {
+/** `sideLeads` (sideNumberLeads): the side number has the callsign's slot, so it takes the callsign's width too. */
+export function fieldSpanFor(blockId, sideLeads = false) {
+  if (sideLeads && blockId === 'C18') return fieldSpanFor('C1');
+  if (sideLeads && blockId === 'C1') return fieldSpanFor('C18');
   return FIELD_SPANS[blockId] || 1;
 }
 

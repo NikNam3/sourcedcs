@@ -9,7 +9,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { BLOCK_MAPS } from '../app/public/js/panels/efsp/strip-template.js';
-import { COMPACT_BLOCKS_BY_POSITION, compactBlocksFor, MTR_BLOCKS_BY_POSITION } from '../app/public/js/panels/efsp/strip-fields.js';
+import { COMPACT_BLOCKS_BY_POSITION, compactBlocksFor, fieldSpanFor, MTR_BLOCKS_BY_POSITION, sideNumberLeads } from '../app/public/js/panels/efsp/strip-fields.js';
 import { hasMtrData, mtrLostCommsAdvisory } from '../app/public/js/panels/efsp/mtr-advisory.js';
 
 const everyList = () => Object.entries(COMPACT_BLOCKS_BY_POSITION)
@@ -200,4 +200,33 @@ test('ALERT (14E) is on OPS, CD, GC and LC — the ground Positions — and nowh
   assert.equal(BLOCK_MAPS.ARRIVAL['14E'], undefined);
   assert.equal(BLOCK_MAPS.OVERFLIGHT['14E'], undefined);
   assert.equal(BLOCK_MAPS.DEPARTURE['14E'].label, 'ALERT');
+});
+
+// H122 (H117, crc-sync docs/adr/0114): on a carrier Strip the side number and the callsign swap places.
+test('a carrier Strip with a side number leads with it in the callsign\'s slot and width; the callsign takes SIDE\'s', () => {
+  const withSide = { military: { carrier: { sideNumber: '104' } } };
+  for (const stripType of ['MARSHAL', 'FINAL']) {
+    const plain = compactBlocksFor(stripType, 'CV_MARSHAL', null);
+    const swapped = compactBlocksFor(stripType, 'CV_MARSHAL', withSide);
+    assert.equal(swapped[plain.indexOf('C1')], 'C18', stripType);
+    assert.equal(swapped[plain.indexOf('C18')], 'C1', stripType);
+    assert.deepEqual([...swapped].sort(), [...plain].sort(), `${stripType}: the same fields, only two moved`);
+    assert.equal(sideNumberLeads(stripType, withSide), true);
+  }
+  assert.equal(fieldSpanFor('C18', true), fieldSpanFor('C1'));
+  assert.equal(fieldSpanFor('C1', true), fieldSpanFor('C18'));
+  assert.equal(fieldSpanFor('C1'), 2);
+  assert.equal(fieldSpanFor('C18'), 1);
+});
+
+test('no side number yet: the callsign keeps the big slot; non-carrier and PATTERN Strips never swap', () => {
+  for (const fd of [null, {}, { military: { carrier: {} } }, { military: { carrier: { sideNumber: '  ' } } }]) {
+    assert.equal(sideNumberLeads('MARSHAL', fd), false);
+    assert.equal(compactBlocksFor('MARSHAL', 'CV_MARSHAL', fd)[0], 'C1');
+  }
+  const withSide = { military: { carrier: { sideNumber: '104' } } };
+  for (const stripType of ['PATTERN', 'DEPARTURE', 'ARRIVAL', 'OVERFLIGHT', 'MISSION']) {
+    assert.equal(sideNumberLeads(stripType, withSide), false, stripType);
+  }
+  assert.deepEqual(compactBlocksFor('PATTERN', 'CV_PRIFLY', withSide), compactBlocksFor('PATTERN', 'CV_PRIFLY', null));
 });

@@ -1278,7 +1278,8 @@
    "ORDNANCE_WHEN_SET",
    "compactBlocksFor",
    "fieldSpanFor",
-   "isOrdnanceSet"
+   "isOrdnanceSet",
+   "sideNumberLeads"
   ],
   "panels/efsp/strip-indicators.js": [
    "_buildIndicatorSlots"
