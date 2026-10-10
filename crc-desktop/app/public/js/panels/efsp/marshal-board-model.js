@@ -6,8 +6,8 @@
 // No arithmetic of the recovery lives here. Angels, DME, EAT and the push time come from the server's hull view; this module
 // only chooses the order they are listed in, names the status, and compares fuel with bingo for the colour. Colour is the
 // dark-cockpit rule (memory feedback_dark_cockpit_ui): a row is grey while it is in order; amber means look now (fuel within
-// the margin of bingo, a flight past its EAT that has not pushed, a clearance changed and not yet passed); red is fuel at or
-// below bingo. Nothing here tells the controller what to do.
+// the margin of bingo, a flight past its EAT that has not pushed, a clearance changed and not yet passed, which the server
+// marks); red is fuel at or below bingo. Nothing here tells the controller what to do.
 
 const LANE_LETTER = Object.freeze({ CV_APP1: 'A', CV_APP2: 'B' });
 const KLB = 1000;
@@ -128,6 +128,8 @@ export function buildBoard({ view, strips, flightDataOf, dmeOf, now, marginKlb: 
       eatUtc: entry && entry.pushTimeUtc != null ? entry.pushTimeUtc : null,
       pushWindowEndUtc: entry && entry.pushWindowUtc ? entry.pushWindowUtc[1] : null,
       pushedAtUtc: entry && entry.pushedAtUtc != null ? entry.pushedAtUtc : null,
+      // the angels / EAT changed and not yet passed to the pilot, as the server keeps them (docs/adr/0115)
+      unpassed: entry && Array.isArray(entry.unpassed) ? entry.unpassed : [],
       turnNm: [4, 6, 8].includes(carrier.approachTurnNm) ? carrier.approachTurnNm : null,
       dme: Number.isFinite(dme) ? dme : null,
       inStack: !!entry,
@@ -168,63 +170,23 @@ export function compareLanding(a, b) {
 // ── the clearance marks (amber until passed) ─────────────────────────────
 
 /**
- * Keeps, per flight, the angels and EAT the pilot was last told, and whether either has changed since. A mark is this
- * controller's: it lives in the panel, not on the server (a second Marshal controller sees the marks they have not cleared
- * themselves; the setting is per-controller too). The first time a flight is seen holding, what is shown is what it was told.
- * An EAT that appears from nothing (the ramp time was just set) is not a change. A flight that was commenced and is holding again
- * (Back to stack) comes back with both marked.
+ * Which of a row's angels / EAT show amber. The marks are the server's (crc-sync docs/adr/0115): the stack entry's `unpassed`,
+ * shared by every Marshal controller and kept across a reload. The server decides what counts as a change; this only reads it.
+ * `enabled` is this controller's setting (`marshalMarkChanged`): off, nothing shows amber here, and the marks stay on the server.
  */
-export function createMarks() {
-  return { flights: new Map() };
+export function marksOf(row, { enabled = true } = {}) {
+  const u = enabled && row && row.kind === 'hold' && Array.isArray(row.unpassed) ? row.unpassed : [];
+  return { angels: u.includes('angels'), eat: u.includes('eat') };
 }
 
-export function updateMarks(marks, rows, { enabled = true } = {}) {
-  const live = new Set(rows.map((r) => r.flightDataId));
-  for (const id of [...marks.flights.keys()]) if (!live.has(id)) marks.flights.delete(id);
-  for (const r of rows) {
-    let m = marks.flights.get(r.flightDataId);
-    if (!m) { m = { told: null, angels: false, eat: false, wasCommenced: false }; marks.flights.set(r.flightDataId, m); }
-    if (r.kind !== 'hold') {
-      m.wasCommenced = true;
-      m.told = null;
-      m.angels = false;
-      m.eat = false;
-      continue;
-    }
-    const cur = { angels: r.angels, eat: r.eatUtc };
-    if (!enabled) { m.told = cur; m.angels = false; m.eat = false; m.wasCommenced = false; continue; }
-    if (!m.told) m.told = { ...cur };
-    // a value that appears from nothing (the ramp time was just set) was never told, so it is not a change
-    if (m.told.angels == null && cur.angels != null) m.told.angels = cur.angels;
-    if (m.told.eat == null && cur.eat != null) m.told.eat = cur.eat;
-    if (m.wasCommenced) {
-      m.angels = true;
-      m.eat = true;
-      m.wasCommenced = false;
-    } else {
-      if (cur.angels != null && m.told.angels !== cur.angels) m.angels = true;
-      if (cur.eat != null && m.told.eat !== cur.eat) m.eat = true;
-    }
-  }
-  return marks;
-}
-
-/** The marker for a row: which of its angels / EAT show amber. */
-export function marksOf(marks, flightDataId) {
-  const m = marks.flights.get(flightDataId);
-  return { angels: !!(m && m.angels), eat: !!(m && m.eat) };
-}
-
-/** The controller clicked the row: the new clearance was passed. */
-export function passMarks(marks, row) {
-  const m = marks.flights.get(row.flightDataId);
-  if (!m) return false;
-  const had = m.angels || m.eat;
-  m.angels = false;
-  m.eat = false;
-  m.told = { angels: row.angels, eat: row.eatUtc };
-  m.wasCommenced = false;
-  return had;
+/**
+ * The stack op for "the new clearance was passed" (the Marshal clicked the row), or null when this controller sees nothing to
+ * pass. It names the angels and EAT as shown, so the server refuses it if they changed again before the click.
+ */
+export function passClearanceOp(row, { enabled = true } = {}) {
+  const m = marksOf(row, { enabled });
+  if (!m.angels && !m.eat) return null;
+  return { kind: 'PassClearance', flightDataId: row.flightDataId, angels: row.angels, eatUtc: row.eatUtc };
 }
 
 // ── drag to re-sequence ───────────────────────────────────────────────────

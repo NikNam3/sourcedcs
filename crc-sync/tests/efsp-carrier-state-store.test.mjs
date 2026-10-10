@@ -77,7 +77,8 @@ test('a ramp time changed while flights are in marshal moves every EAT together 
   const before = store.getRecord().stacks.MAIN.entries;
   set('rampTime', '2050', 'CV_MARSHAL');
   assert.deepEqual(eats(store), [ramp + 600_000 - fix, ramp + 660_000 - fix, ramp + 720_000 - fix]);
-  assert.deepEqual(store.getRecord().stacks.MAIN.entries, before, 'the stack holds no time, so nothing in it moved');
+  assert.deepEqual(store.getRecord().stacks.MAIN.entries, before.map((e) => ({ ...e, unpassed: ['eat'] })),
+    'the stack holds no time, so nothing in it moved; every EAT that moved is marked until passed (ADR 0115)');
   // a flight that has pushed keeps its place and status; its derived EAT follows the ramp time (the push time is not stored yet, MARSHAL-BOARD's pushedAt)
   store.applyEffect('MARK_PUSHED', 'f0');
   set('rampTime', '2100');

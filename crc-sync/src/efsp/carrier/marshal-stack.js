@@ -47,7 +47,11 @@ const { isSequencedCase, isCase } = require('./recovery-case');
 // (BackToStack): the mission-clock moment it left its fix and the EAT it was working to then. They are FACTS OF A PAST EVENT,
 // not derived values: a later ramp-time change or Delta moves a holding flight's EAT, never one that has pushed (docs/adr/0114).
 // `deltaMs` is the stack's Delta (CV NATOPS 6.4.9): the delay added to every HOLDING flight's EAT.
-const ENTRY_KEYS = Object.freeze(['flightDataId', 'stackIndex', 'status', 'caseIAngels', 'pushedAtUtc', 'eatUtc']);
+// `unpassed` is the part of a HOLDING flight's clearance that changed and has not been passed to the pilot yet ('angels',
+// 'eat'; docs/adr/0115): the server sets it (markClearanceChanges, BackToStack) and the Marshal clears it (PassClearance).
+// It is shared by every Marshal controller and kept with the stack; a flight that commences or leaves takes it with it.
+const ENTRY_KEYS = Object.freeze(['flightDataId', 'stackIndex', 'status', 'caseIAngels', 'pushedAtUtc', 'eatUtc', 'unpassed']);
+const CLEARANCE_FIELDS = Object.freeze(['angels', 'eat']);
 const STACK_KEYS = Object.freeze(['stackId', 'hullId', 'entries', 'deltaMs']);
 const ENTRY_STATUSES = Object.freeze(['HOLDING', 'PUSHED']);
 const STACK_DEFAULTS = Object.freeze({ maxIndex: 19 }); // [SOURCE-DEFINED] — L4 briefing Q4
@@ -71,7 +75,7 @@ const DERIVED_KEYS = Object.freeze([
 const DERIVED_DETAIL = 'angels/DME/push time are derived from the stack index (§9.12) and cannot be set';
 
 const STACK_OP_KINDS = Object.freeze([
-  'InsertAt', 'Append', 'Move', 'Remove', 'CloseUp', 'MarkPushed', 'SetCaseIAngels', 'Delta', 'BackToStack',
+  'InsertAt', 'Append', 'Move', 'Remove', 'CloseUp', 'MarkPushed', 'SetCaseIAngels', 'Delta', 'BackToStack', 'PassClearance',
 ]);
 
 // CV NATOPS 6.4.9 (p. 6-17): "the number of minutes of delay (even increments but never less than four)".
@@ -102,6 +106,11 @@ function emptyStack({ stackId = DEFAULT_STACK_ID, hullId } = {}) {
 }
 
 function _validTime(v) { return v === null || (Number.isFinite(v) && v >= 0); }
+function _validUnpassed(v) {
+  return Array.isArray(v) && v.every((f, i) => CLEARANCE_FIELDS.includes(f) && v.indexOf(f) === i);
+}
+/** The fields in their one order ('angels' before 'eat'), each once. */
+function _sortFields(fields) { return CLEARANCE_FIELDS.filter((f) => fields.includes(f)); }
 function _validDelta(v) { return Number.isFinite(v) && v >= 0 && v % 60_000 === 0; }
 
 /**
@@ -144,6 +153,12 @@ function validateStack(stack, opts = STACK_DEFAULTS) {
     if (e.status === 'HOLDING' && (e.pushedAtUtc != null || e.eatUtc != null)) {
       return _fail(`entry ${e.flightDataId}: a holding flight has no push time on record`);
     }
+    if (e.unpassed !== undefined && !_validUnpassed(e.unpassed)) {
+      return _fail(`entry ${e.flightDataId}: unpassed must be a list of ${CLEARANCE_FIELDS.join(', ')}, each once`);
+    }
+    if (e.status === 'PUSHED' && e.unpassed && e.unpassed.length) {
+      return _fail(`entry ${e.flightDataId}: a flight that has pushed has no clearance left to pass`);
+    }
   }
   return { ok: true, stack };
 }
@@ -184,6 +199,7 @@ function normalizeStack(raw, { stackId = DEFAULT_STACK_ID, hullId = null, maxInd
       caseIAngels: _validCaseIAngels(e.caseIAngels) ? e.caseIAngels : null,
       pushedAtUtc: status === 'PUSHED' && _validTime(e.pushedAtUtc) ? (e.pushedAtUtc ?? null) : null,
       eatUtc: status === 'PUSHED' && _validTime(e.eatUtc) ? (e.eatUtc ?? null) : null,
+      unpassed: status === 'HOLDING' && _validUnpassed(e.unpassed) ? _sortFields(e.unpassed) : [],
     });
   }
   cleaned.sort((a, b) => a.stackIndex - b.stackIndex);
@@ -222,6 +238,8 @@ function deriveEntry(entry, inputs = {}) {
     stackIndex: Number.isInteger(e.stackIndex) ? e.stackIndex : null,
     status: e.status ?? null,
     pushedAtUtc: Number.isFinite(e.pushedAtUtc) ? e.pushedAtUtc : null,
+    // A stored fact, not derived: what of the clearance shown has not been passed yet (docs/adr/0115).
+    unpassed: e.status === 'HOLDING' && _validUnpassed(e.unpassed) ? Object.freeze(_sortFields(e.unpassed)) : Object.freeze([]),
     caseValue: isCase(caseValue) ? caseValue : null,
     expectedFinalBearingDeg: fb, // computed in carrier-state.js, never here
   };
@@ -388,7 +406,7 @@ function insertAt(stack, { flightDataId, stackIndex, caseIAngels = null } = {}, 
   if (!_checkFlightDataId(flightDataId)) return _fail('flightDataId must be a non-empty string');
   if (stack.entries.some((e) => e.flightDataId === flightDataId)) return _fail(`${flightDataId} is already in the stack — use Move to re-sequence it`);
   if (!_validCaseIAngels(caseIAngels)) return _fail(`caseIAngels must be an integer ${CASE_I_MIN_ANGELS}..${CASE_I_MAX_ANGELS} or null`);
-  const placed = _placeAt(_copyEntries(stack), { flightDataId, status: 'HOLDING', caseIAngels, pushedAtUtc: null, eatUtc: null }, stackIndex, _maxIndex(opts));
+  const placed = _placeAt(_copyEntries(stack), { flightDataId, status: 'HOLDING', caseIAngels, pushedAtUtc: null, eatUtc: null, unpassed: [] }, stackIndex, _maxIndex(opts));
   if (!placed.ok) return placed;
   return _result(stack, placed.entries, new Set([flightDataId, ...placed.shifted]));
 }
@@ -482,7 +500,8 @@ function markPushed(stack, { flightDataId } = {}, opts = STACK_DEFAULTS) {
   // kept on the entry so a later ramp-time change or Delta cannot rewrite them (docs/adr/0114).
   const pushedAtUtc = _isObj(opts) && Number.isFinite(opts.nowMs) ? opts.nowMs : null;
   const eatUtc = _isObj(opts) && Number.isFinite(opts.eatUtc) ? opts.eatUtc : null;
-  const entries = _copyEntries(stack).map((e) => (e.flightDataId === flightDataId ? { ...e, status: 'PUSHED', pushedAtUtc, eatUtc } : e));
+  // It has left its fix: whatever was not passed is moot now (docs/adr/0115).
+  const entries = _copyEntries(stack).map((e) => (e.flightDataId === flightDataId ? { ...e, status: 'PUSHED', pushedAtUtc, eatUtc, unpassed: [] } : e));
   return _result(stack, entries, new Set([flightDataId]));
 }
 
@@ -500,7 +519,8 @@ function backToStack(stack, { flightDataId } = {}, opts = STACK_DEFAULTS) {
   const rest = _copyEntries(stack).filter((e) => e.flightDataId !== flightDataId);
   const index = _highest(rest) + 1;
   if (index > _maxIndex(opts)) return _fail(`the stack is full: there is no slot above ${_highest(rest)}`);
-  rest.push({ ...entry, stackIndex: index, status: 'HOLDING', pushedAtUtc: null, eatUtc: null });
+  // Both its angels and its EAT are new to the pilot, whatever they read (decisions H117: "new angels/EAT marked until passed").
+  rest.push({ ...entry, stackIndex: index, status: 'HOLDING', pushedAtUtc: null, eatUtc: null, unpassed: [...CLEARANCE_FIELDS] });
   return _result(stack, rest, new Set([flightDataId]));
 }
 
@@ -539,6 +559,62 @@ function setCaseIAngels(stack, { flightDataId, caseIAngels } = {}, opts = STACK_
   return _result(stack, entries, new Set([flightDataId]));
 }
 
+/**
+ * PassClearance (docs/adr/0115): the Marshal has passed the flight its angels and EAT as they stand, so nothing of its clearance
+ * is left unpassed. The op names the values the Marshal read (`angels`, `eatUtc`, each a number or null); `opts.current` is what
+ * the derivation gives now. They must agree: a clearance that changed again between the read and the click has not been passed.
+ * Nothing left to pass is not a refusal (two Marshals clicked the same row): `unchanged: true`, nothing written.
+ */
+function passClearance(stack, { flightDataId, angels, eatUtc } = {}, opts = STACK_DEFAULTS) {
+  const v = validateStack(stack, opts);
+  if (!v.ok) return v;
+  const entry = stack.entries.find((e) => e.flightDataId === flightDataId);
+  if (!entry) return _fail(`${flightDataId} is not in the stack`, 'NOT_FOUND');
+  if (entry.status !== 'HOLDING') return _fail(`${flightDataId} has commenced: there is no clearance in the stack to pass`);
+  const num = (x) => x === null || Number.isFinite(x);
+  if (!num(angels) || !num(eatUtc)) return _fail('PassClearance names the angels and EAT that were passed (a number or null each)');
+  const cur = _isObj(opts) && _isObj(opts.current) ? opts.current : null;
+  if (cur && (cur.angels !== angels || cur.eatUtc !== eatUtc)) {
+    return _fail(`${flightDataId}'s angels or EAT changed again before it was passed: look at the row again`);
+  }
+  if (!entry.unpassed || entry.unpassed.length === 0) return { ok: true, stack, changed: [], unchanged: true, passed: [] };
+  const passed = _sortFields(entry.unpassed);
+  const entries = _copyEntries(stack).map((e) => (e.flightDataId === flightDataId ? { ...e, unpassed: [] } : e));
+  return { ..._result(stack, entries, new Set([flightDataId])), passed };
+}
+
+/**
+ * The server's one rule for what counts as a change to a holding flight's clearance (docs/adr/0115; the rules MARSHAL-BOARD's
+ * client had, ADR 0114 decision 8). `before` and `after` are derived stacks (deriveStack) either side of one op or state
+ * change. A field is marked when the flight was HOLDING both times and the value moved from one it had to another: an angels or
+ * EAT that appears from nothing (the ramp time first set, a Case I altitude first typed) was never told, so it is not a change;
+ * one that goes away (the ramp time cleared) leaves nothing to pass. A mark stays until passed, even if the value moves back.
+ * Returns the stack with the marks added (the same object when nothing was added).
+ */
+function markClearanceChanges(stack, before, after) {
+  const was = new Map((Array.isArray(before) ? before : []).map((d) => [d.flightDataId, d]));
+  const add = new Map();
+  for (const d of Array.isArray(after) ? after : []) {
+    const b = was.get(d.flightDataId);
+    if (!b || b.status !== 'HOLDING' || d.status !== 'HOLDING') continue;
+    const fields = [];
+    if (b.angels != null && d.angels != null && b.angels !== d.angels) fields.push('angels');
+    if (b.pushTimeUtc != null && d.pushTimeUtc != null && b.pushTimeUtc !== d.pushTimeUtc) fields.push('eat');
+    if (fields.length) add.set(d.flightDataId, fields);
+  }
+  let touched = false;
+  const entries = stack.entries.map((e) => {
+    const f = add.get(e.flightDataId);
+    if (!f || e.status !== 'HOLDING') return e;
+    const had = Array.isArray(e.unpassed) ? e.unpassed : [];
+    const next = _sortFields([...had, ...f]);
+    if (next.length === had.length) return e;
+    touched = true;
+    return { ...e, unpassed: next };
+  });
+  return touched ? { ...stack, entries } : stack;
+}
+
 const _DISPATCH = {
   InsertAt: (s, op, o) => insertAt(s, op, o),
   Append: (s, op, o) => append(s, op, o),
@@ -549,6 +625,7 @@ const _DISPATCH = {
   Delta: (s, op, o) => delta(s, op, o),
   BackToStack: (s, op, o) => backToStack(s, op, o),
   SetCaseIAngels: (s, op, o) => setCaseIAngels(s, op, o),
+  PassClearance: (s, op, o) => passClearance(s, op, o),
 };
 
 /**
@@ -591,5 +668,8 @@ module.exports = {
   delta,
   DELTA_MIN_MINUTES,
   setCaseIAngels,
+  passClearance,
+  markClearanceChanges,
+  CLEARANCE_FIELDS,
   applyStackOp,
 };
