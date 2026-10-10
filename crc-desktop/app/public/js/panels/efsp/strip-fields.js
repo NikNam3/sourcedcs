@@ -45,8 +45,8 @@ export const COMPACT_BLOCKS_BY_STRIP_TYPE = {
   // enters for the flight (approach, button, low state, bingo, EEAT). EEAT is on
   // the face because it is "the field most likely to be missed" (§9.12 rule 7).
   // FINAL has nothing to type: callsign, type, final bearing, deck, distance.
-  MARSHAL:    ['C1', 'C2', 'C3', 'C7', 'C6', 'C8', 'C5', 'C9', 'C4', 'C10', 'C12', 'C13', 'C14', 'C15'],
-  FINAL:      ['C1', 'C2', 'C9', 'C16', 'C17'],
+  MARSHAL:    ['C1', 'C2', 'C18', 'C3', 'C7', 'C6', 'C8', 'C5', 'C9', 'C4', 'C10', 'C12', 'C13', 'C14', 'C15', 'C19'],
+  FINAL:      ['C1', 'C2', 'C18', 'C9', 'C16', 'C17', 'C19'],
   PATTERN:    ['C1', 'C2', 'C24'],
 };
 

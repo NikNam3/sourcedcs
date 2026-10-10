@@ -45,6 +45,7 @@ function approachTypes() { return Object.freeze([...commCard().approachTypes]); 
 const FUEL_MAX_LB = 100000; // [SOURCE-DEFINED] sanity bound
 const BINGO_FIELD_MAX_LEN = 32; // engineering bound on the typed field, not a rule
 
+const APPROACH_TURNS_NM = Object.freeze([4, 6, 8]); // decisions H118: "the assigned approach turn (4, 6 or 8 nm)"
 const RULE_6 = 'store the approach button, not a frequency (§9.12 rule 6)';
 
 function defaultCarrierFlight() {
@@ -56,6 +57,7 @@ function defaultCarrierFlight() {
     bingoFuelLb: null,    // integer lb
     lowStateLb: null,     // integer lb — the marshal message's FUEL/LOW STATE
     sideNumber: null,     // the aircraft's side number (modex), 1-8 letters or digits: how the carrier regime names it (docs/adr/0114, H117)
+    approachTurnNm: null, // the DME at which this flight turns onto final after a bolter or waveoff: 4, 6 or 8 (H118)
   };
 }
 
@@ -126,6 +128,11 @@ function validateCarrierFlightField(field, value, card = commCard()) {
     case 'bingoFuelLb':
     case 'lowStateLb':
       return _validateFuel(field, value);
+    case 'approachTurnNm': {
+      const n = typeof value === 'string' && /^\d+$/.test(value.trim()) ? Number(value) : value;
+      if (!APPROACH_TURNS_NM.includes(n)) return _fail(`approachTurnNm must be one of ${APPROACH_TURNS_NM.join(', ')} (the assigned approach turn, nm DME)`);
+      return { ok: true, value: n };
+    }
     case 'sideNumber': {
       const t = typeof value === 'number' ? String(value) : (typeof value === 'string' ? value.trim() : '');
       if (!/^[A-Za-z0-9]{1,8}$/.test(t)) return _fail('sideNumber must be 1 to 8 letters or digits');
@@ -241,6 +248,7 @@ function marshalMessage({ flightData = null, derived = null, caseValue = null, s
 }
 
 module.exports = {
+  APPROACH_TURNS_NM,
   approachTypes,
   CARRIER_FLIGHT_FIELDS,
   MARSHAL_MESSAGE_FIELDS,

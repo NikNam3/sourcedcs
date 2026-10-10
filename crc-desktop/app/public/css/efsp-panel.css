@@ -1794,29 +1794,14 @@
 .carrier-case-label { color: #6a7580; }
 .carrier-case-value { font-weight: 700; color: #cfd8df; }
 .carrier-case-advisory { color: #ffb347; }
-.carrier-case-select, .carrier-altimeter-input, .carrier-charlie-input, .carrier-radial-input, .carrier-slot-angels-input {
+.carrier-case-select, .carrier-altimeter-input, .carrier-charlie-input, .carrier-radial-input {
   background: #1c2228; color: #cfd8df; border: 1px solid #2a3038; font: inherit; min-height: 26px;
 }
-.carrier-stack-board { margin: 6px 8px; border: 1px solid #2a3038; background: #151b21; }
-.carrier-stack-head { display: flex; gap: 8px; align-items: center; padding: 4px 6px; border-bottom: 1px solid #2a3038; flex-wrap: wrap; }
-.carrier-stack-title { font-weight: 700; color: #cfd8df; margin-right: auto; }
-.carrier-stack-empty { padding: 6px; color: #6a7580; }
-.carrier-stack-warning { padding: 4px 6px; color: #ffb347; }
-.carrier-slot { display: flex; gap: 10px; align-items: center; padding: 1px 6px; min-height: 24px; user-select: none; border-bottom: 1px solid #20262c; font-variant-numeric: tabular-nums; }
-.carrier-slot-vacant { color: #5a6570; border-style: dashed; }
-.carrier-slot-occupied { color: #cfd8df; }
-.carrier-slot.efsp-drop-target { background: #2a4d33; outline: 1px solid #39ff7a; }
-.carrier-slot-index { width: 1.6em; color: #6a7580; }
-.carrier-slot-call { min-width: 7em; font-weight: 700; }
-.carrier-slot-closeup { margin-left: auto; min-height: 24px; background: #1c2228; color: #a8b4bd; border: 1px dashed #4a5560; cursor: pointer; font: inherit; }
-.carrier-slot-pushed { color: #6a9ebf; }
 .efsp-carrier-handoff { border-width: 2px; }
 .efsp-carrier-trigger-controller-initiated { border-style: solid; }
 .efsp-carrier-trigger-radar-acquisition { border-style: double; }
 .efsp-carrier-trigger-pilot-ball-call { border-style: dashed; }
 .efsp-carrier-trigger-pilot-see-you { border-style: dotted; }
-.carrier-slot-draggable { cursor: grab; }
-.carrier-slot-dragging { opacity: 0.6; cursor: grabbing; }
 
 /* docs/adr/0076 — the suggestion chip is the one indicator that is also a control. */
 .efsp-strip .efsp-ind.efsp-surveillance-chip[role="button"] { cursor: pointer; }

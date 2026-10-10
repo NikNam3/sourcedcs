@@ -3,33 +3,26 @@ import { NM_M, projectPos } from '../../geo.js';
 import { getLatestTrack } from '../../picture.js';
 import { correlatedTrackIdForStrip, getEfspStrip } from './efsp-state.js';
 import { CARRIER_HANDOFFS } from './efsp-nla.js';
-import {
-  carrierBannerParts, carrierBearingText, carrierCaseValue, carrierDerivedFor, carrierDerivedStack, carrierHhmm, carrierStateOf, getEfspCarrier
-} from './carrier-state.js';
+import { carrierBannerParts, carrierCaseValue, carrierDerivedFor, carrierStateOf, getEfspCarrier } from './carrier-state.js';
 import { getActingPositions, sendEfspMutation, settleEfspAck } from './efsp-ws.js';
-import { carrierActingFor, sendCarrier, signedOnCarrierIds } from './carrier-send.js';
+import { signedOnCarrierIds } from './carrier-send.js';
 import { renderCarrierManagement } from './carrier-management-panel.js';
-// ESM-1: today efsp-panel.js's _callsignOfFlightData (fallback '') silently won over this file's own copy (fallback flightDataId);
-// the import keeps that effective behaviour (S-ARCH2 item 3, plan §6 queue item 3).
-import { _callsignOfFlightData } from './panel/refusal.js';
 import { registerEfspMessage, registerEfspStoreRedraw } from './efsp-message-registry.js';
 import { applyEfspCarrierDelta } from './carrier-state.js';
 import { _showMutationError } from './panel/refusal.js';
 import { markEfspChanged } from './efsp-change-bus.js';
 
 // The carrier's surfaces on the Strip panel (crc-sync's docs/adr/0074, ADR 0064
-// B7; guide §4.1, §9.12): the ship banner, the Case selector, the Marshal stack
-// board, and the handoff buttons beside the NLA.
+// B7; guide §4.1, §9.12): the ship banner, the Case (read-only) and the handoff buttons
+// beside the NLA. The Marshal stack board that used to sit above the stack Bay is the MARSHAL
+// panel now (marshal-panel.js, crc-sync docs/adr/0114); the Bay keeps the Strips.
 //
 // What this file does NOT do is arithmetic. Angels, DME, push time, the final
 // bearing and every magnetic conversion are computed by crc-sync and arrive in
 // the hull view; carrier-state.js formats them. A controller cannot type a
-// derived value because no control here accepts one: the Marshal's only number
-// for a flight is its slot, set by dragging the Strip onto a slot (one gesture,
-// one `Move`), and the Case I altitude is an input, never a result. The Case, the
-// ramp time, the marshal radial and the rest of the ship's state are typed in the
-// carrier management panel (carrier-management-panel.js), not here: this panel's
-// banner and stack board only show them.
+// derived value because no control here accepts one. The Case, the ramp time, the marshal
+// radial and the rest of the ship's state are typed in the carrier management panel
+// (carrier-management-panel.js), not here: this panel's banner only shows them.
 
 function _cel(tag, className, text) {
   const el = document.createElement(tag);
@@ -38,7 +31,6 @@ function _cel(tag, className, text) {
   return el;
 }
 
-const _sendCarrier = sendCarrier;
 const _signedOnCarrierIds = signedOnCarrierIds;
 
 // ── The ship banner and the Case ──────────────────────────────────────────
@@ -84,160 +76,6 @@ export function renderCarrierBanner() {
     caseRow.appendChild(adv);
   }
   root.appendChild(caseRow);
-}
-
-// ── The Marshal stack board ───────────────────────────────────────────────
-
-let _carrierDragSlot = null;
-
-/** Slot rows for the board: every slot 0..top+2, each either a flight's derived entry or a vacancy with the server's preview of what it WOULD read. */
-export function carrierStackRows(view = getEfspCarrier(), stackId = 'MAIN') {
-  if (!view) return [];
-  const byIndex = new Map(((view.derived && view.derived[stackId]) || []).map(e => [e.stackIndex, e]));
-  const slots = (view.slots && view.slots[stackId]) || [];
-  const top = Math.max(-1, ...[...byIndex.keys()]);
-  return slots.map(slot => {
-    const entry = byIndex.get(slot.stackIndex) || null;
-    return { stackIndex: slot.stackIndex, entry, preview: slot, vacantBelowTop: !entry && slot.stackIndex < top };
-  });
-}
-
-/** Orders the Strips of the stack Bay by stack slot (the Bay is "ordered by stackIndex"); every other Bay is left alone. */
-export function carrierOrderRack(bayId, strips) {
-  if (bayId !== 'cv-marshal-stack') return strips;
-  const idx = new Map(carrierDerivedStack().map(e => [e.flightDataId, e.stackIndex]));
-  return strips.slice().sort((a, b) => (idx.has(a.flightDataId) ? idx.get(a.flightDataId) : 1e9) - (idx.has(b.flightDataId) ? idx.get(b.flightDataId) : 1e9));
-}
-
-/** Moves a Strip's flight to a slot: ONE gesture, ONE `Move` (§9.12 rule 2). Called by the drag's drop and by the slot's own hand. */
-export function carrierMoveToSlot(strip, toIndex) {
-  if (!strip || !Number.isInteger(toIndex)) return false;
-  return _sendCarrier('sequencesStack', { kind: 'Move', flightDataId: strip.flightDataId, toIndex });
-}
-
-/**
- * Dragging a row of the board to another slot: ONE gesture, ONE `Move`. The board
- * is the whole stack in a few lines, so re-sequencing never needs the Strip below
- * it in view. (Dragging the Strip itself onto a slot works too: bay-view.js's
- * drop-target lookup knows `data-efsp-drop-slot`.)
- */
-function _wireSlotDrag(el, row) {
-  el.addEventListener('pointerdown', (e) => {
-    if (e.button !== 0 || e.target.closest('input, button, select')) return;
-    e.preventDefault(); // no text selection while dragging
-    const start = { x: e.clientX, y: e.clientY };
-    let moved = false;
-    let over = null;
-    const slotAt = (x, y) => { const t = document.elementFromPoint(x, y); return t ? t.closest('.carrier-slot[data-slot-index]') : null; };
-    const move = (ev) => {
-      if (!moved && Math.hypot(ev.clientX - start.x, ev.clientY - start.y) < 4) return;
-      moved = true;
-      el.classList.add('carrier-slot-dragging');
-      const target = slotAt(ev.clientX, ev.clientY);
-      if (target !== over) {
-        if (over) over.classList.remove('efsp-drop-target');
-        if (target && target !== el) target.classList.add('efsp-drop-target');
-        over = target;
-      }
-    };
-    const up = (ev) => {
-      document.removeEventListener('pointermove', move);
-      document.removeEventListener('pointerup', up);
-      el.classList.remove('carrier-slot-dragging');
-      if (over) over.classList.remove('efsp-drop-target');
-      const target = moved ? slotAt(ev.clientX, ev.clientY) : null;
-      if (target && target !== el) {
-        _sendCarrier('sequencesStack', { kind: 'Move', flightDataId: row.entry.flightDataId, toIndex: Number(target.dataset.slotIndex) });
-      }
-    };
-    document.addEventListener('pointermove', move);
-    document.addEventListener('pointerup', up);
-  });
-}
-
-function _slotRowEl(row, caseValue, sequenced, canSequence) {
-  const el = _cel('div', 'carrier-slot' + (row.entry ? ' carrier-slot-occupied' : ' carrier-slot-vacant'));
-  el.dataset.slotIndex = String(row.stackIndex);
-  if (row.entry && canSequence) { el.classList.add('carrier-slot-draggable'); el.title = 'Drag to another slot to re-sequence'; _wireSlotDrag(el, row); }
-  // Same attribute the Position/Bay tabs carry: the Strip drag hit-tests for it.
-  if (canSequence) el.dataset.efspDropSlot = String(row.stackIndex);
-  el.appendChild(_cel('span', 'carrier-slot-index', String(row.stackIndex)));
-  const entry = row.entry;
-  const shown = entry || row.preview;
-  el.appendChild(_cel('span', 'carrier-slot-call', entry ? _callsignOfFlightData(entry.flightDataId) : '—'));
-  el.appendChild(_cel('span', 'carrier-slot-angels', shown.angels != null ? `A${shown.angels}` : (entry ? 'assign' : '')));
-  if (sequenced) {
-    el.appendChild(_cel('span', 'carrier-slot-dme', shown.marshalDme != null ? `${shown.marshalDme} DME` : ''));
-    el.appendChild(_cel('span', 'carrier-slot-push', shown.pushTimeUtc != null ? `${carrierHhmm(shown.pushTimeUtc)}Z` : ''));
-  }
-  if (entry) {
-    const st = _cel('span', 'carrier-slot-status carrier-slot-' + String(entry.status || '').toLowerCase(), entry.status === 'PUSHED' ? 'pushed' : 'holding');
-    el.appendChild(st);
-    if (caseValue === 'I' && canSequence) {
-      // Case I: the stack is a list of squadron-assigned altitudes, not a timed stack (§9.12 rule 3).
-      const inp = _cel('input', 'carrier-slot-angels-input');
-      inp.type = 'text'; inp.size = 3; inp.placeholder = 'angels';
-      inp.dataset.carrierInput = 'angels';
-      inp.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-          const raw = inp.value.trim();
-          _sendCarrier('sequencesStack', { kind: 'SetCaseIAngels', flightDataId: entry.flightDataId, caseIAngels: raw === '' ? null : Number(raw) });
-          inp.value = '';
-        } else if (e.key === 'Escape') { inp.value = ''; inp.blur(); }
-      });
-      el.appendChild(inp);
-    }
-  } else if (row.vacantBelowTop && canSequence) {
-    const close = _cel('button', 'carrier-slot-closeup', 'Close up');
-    close.title = 'Everyone above this gap moves down one slot';
-    close.dataset.carrierAction = 'closeup';
-    close.addEventListener('click', (e) => { e.stopPropagation(); _sendCarrier('sequencesStack', { kind: 'CloseUp', fromIndex: row.stackIndex }); });
-    el.appendChild(close);
-  }
-  return el;
-}
-
-/**
- * Draws the stack board into a container (renderBay's `cv-marshal-stack` branch),
- * above the ordinary Rack of Strips: vacancies as empty slots, the derived
- * fields per slot, Charlie time and marshal radial for the Marshal.
- */
-export function renderCarrierStackBoard(container) {
-  if (!container) return;
-  let board = container.querySelector(':scope > .carrier-stack-board');
-  const view = getEfspCarrier();
-  const canSequence = !!carrierActingFor('sequencesStack', _signedOnCarrierIds());
-  if (!view) { if (board) board.remove(); return; }
-  // Never rebuild under an input being typed in.
-  if (board && board.contains(document.activeElement) && document.activeElement.tagName === 'INPUT') return;
-  if (board) board.remove();
-  board = _cel('div', 'carrier-stack-board');
-  const caseValue = view.recoveryCase ? view.recoveryCase.value : null;
-  const sequenced = caseValue === 'II' || caseValue === 'III';
-
-  const head = _cel('div', 'carrier-stack-head');
-  head.appendChild(_cel('span', 'carrier-stack-title', `MARSHAL STACK · CASE ${caseValue || '—'}${sequenced ? '' : ' · altitude list'}`));
-  if (sequenced) {
-    // The ramp time and the marshal radial, read-only: typed in the carrier management panel (crc-sync docs/adr/0113).
-    const st = carrierStateOf(view);
-    if (st) {
-      const ramp = _cel('span', 'carrier-stack-ramp', st.rampTime.value != null ? `RAMP ${carrierHhmm(st.rampTime.value)}Z` : 'RAMP —');
-      ramp.dataset.carrierStack = 'ramp';
-      head.appendChild(ramp);
-      const radial = _cel('span', 'carrier-stack-radial', `RADIAL ${st.radial.value != null ? carrierBearingText(st.radial.display) : '—'}`);
-      radial.dataset.carrierStack = 'radial';
-      head.appendChild(radial);
-    }
-  }
-  board.appendChild(head);
-
-  const rows = carrierStackRows(view);
-  if (rows.length === 0) board.appendChild(_cel('div', 'carrier-stack-empty', 'No flight in the stack.'));
-  for (const row of rows) board.appendChild(_slotRowEl(row, caseValue, sequenced, canSequence));
-  if (view.consistency && view.consistency.MAIN && view.consistency.MAIN.length) {
-    board.appendChild(_cel('div', 'carrier-stack-warning', view.consistency.MAIN.map(c => c.detail).join(' · ')));
-  }
-  container.insertBefore(board, container.firstChild);
 }
 
 // ── Handoff buttons ────────────────────────────────────────────────────

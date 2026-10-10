@@ -320,6 +320,8 @@ export const MARSHAL_BLOCK_MAP = {
   'C13': { required: false, label: 'BINGO',    target: { kind: 'carrier', field: 'bingoField' } },
   'C14': { required: false, label: 'BNG FUEL', target: { kind: 'carrier', field: 'bingoFuelLb' } },
   'C15': { required: false, label: 'EEAT',     target: { kind: 'carrier', field: 'eeatUtc' } },
+  'C18': { required: false, label: 'SIDE',     target: { kind: 'carrier', field: 'sideNumber' } },
+  'C19': { required: false, label: 'TURN',     target: { kind: 'carrier', field: 'approachTurnNm' } },
   'C24': { required: false, label: 'NOTE',     target: { kind: 'annotation' } },
   ..._CARRIER_CHROME,
 };
@@ -328,6 +330,8 @@ export const FINAL_BLOCK_MAP = {
   'C1':  { required: true,  label: 'CALLSIGN', target: { kind: 'carrier-derived', field: 'callsign' } },
   'C2':  { required: true,  label: 'TYPE',     target: { kind: 'carrier-derived', field: 'aircraftType' } },
   'C9':  { required: false, label: 'FNL BRG',  target: { kind: 'carrier-derived', field: 'expectedFinalBearing' } },
+  'C18': { required: false, label: 'SIDE',     target: { kind: 'carrier-derived', field: 'sideNumber' } },
+  'C19': { required: false, label: 'TURN',     target: { kind: 'carrier-derived', field: 'approachTurnNm' } },
   'C16': { required: false, label: 'DECK',     target: { kind: 'carrier-derived', field: 'deck' } },
   'C17': { required: false, label: 'DIST',     target: { kind: 'carrier-derived', field: 'finalDistance' } },
   '2':  _CARRIER_CHROME['2'], '4': _CARRIER_CHROME['4'], '4A': _CARRIER_CHROME['4A'],
@@ -535,6 +539,8 @@ export function resolveBlockValue(blockId, flightData, strip) {
     if (t.field === 'finalDistance') text = carrierFinalDistanceText(strip);
     else if (t.field === 'callsign') text = flightData && flightData.identity ? (flightData.identity.callsign || '') : '';
     else if (t.field === 'aircraftType') text = flightData && flightData.identity ? (flightData.identity.aircraftType || '') : '';
+    else if (t.field === 'approachTurnNm') text = flightData && flightData.military && flightData.military.carrier && flightData.military.carrier.approachTurnNm != null ? String(flightData.military.carrier.approachTurnNm) : '';
+    else if (t.field === 'sideNumber') text = flightData && flightData.military && flightData.military.carrier ? (flightData.military.carrier.sideNumber || '') : '';
     else {
       const c = getEfspCarrier();
       text = carrierDerivedText(t.field, strip ? strip.flightDataId : null, c ? c.shipState : null);

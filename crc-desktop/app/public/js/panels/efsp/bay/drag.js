@@ -2,7 +2,6 @@
 import {
   cachedTopToViewportY, computeInsertionIndex, hasExceededDragThreshold, scrollCompensatedY
 } from '../strip-drag.js';
-import { carrierMoveToSlot } from '../carrier-panel.js';
 import { _isPseudoBayId } from './open-bays.js';
 import { _defaultBayFor, _defaultRackFor, _moveStrip, _transferStrip } from './dispatch.js';
 import { markEfspChanged } from '../efsp-change-bus.js';
@@ -157,8 +156,7 @@ function _capturePointer() {
 // visually underneath the cursor instead.
 function _findDropTargetAt(clientX, clientY) {
   const el = document.elementFromPoint(clientX, clientY);
-  // A Marshal stack slot (crc-sync docs/adr/0074) is a drop target too: one gesture, one Move.
-  return el ? el.closest('[data-efsp-drop-position], [data-efsp-drop-slot]') : null;
+  return el ? el.closest('[data-efsp-drop-position]') : null;
 }
 
 /**
@@ -311,9 +309,7 @@ function _finishDrag(commit) {
   // computeInsertionIndex() always resolves to SOME neighbor position
   // whenever the Rack has other Strips in it (it never itself reports "no
   // change"), so a plain click could silently reorder or relocate a Strip.
-  if (commit && hasMoved && dropTargetEl && dropTargetEl.dataset.efspDropSlot !== undefined) {
-    carrierMoveToSlot(strip, Number(dropTargetEl.dataset.efspDropSlot));
-  } else if (commit && hasMoved && dropTargetEl) {
+  if (commit && hasMoved && dropTargetEl) {
     const toPositionId = dropTargetEl.dataset.efspDropPosition;
     const explicitBayId = dropTargetEl.dataset.efspDropBay || null;
     if (toPositionId === strip.ownerPositionId && explicitBayId) {

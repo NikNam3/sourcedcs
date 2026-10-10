@@ -1,6 +1,5 @@
 'use strict';
 import { efspLinesWithOthers, getEfspBays, getEfspRack, getEfspStrip, isWithOthersBayId, searchEfspStrips } from './efsp-state.js';
-import { carrierOrderRack, renderCarrierStackBoard } from './carrier-panel.js';
 import { renderBayDescriptorView } from './bay-views.js';
 import { getActiveEfspSearchQuery } from './panel/state.js';
 import { computeRackReconciliation } from './strip-drag.js';
@@ -111,8 +110,6 @@ export function renderBay(container, bayId) {
     _reconcileRackStrips(rackEl, bayId, rackId);
   }
 
-  // The Marshal stack's slot board (crc-sync docs/adr/0074): vacancies, derived fields, drop targets.
-  if (bayId === 'cv-marshal-stack') renderCarrierStackBoard(container);
   // The Bay's descriptor view (crc-sync docs/adr/0093): the pattern board, the FINAL panel or the SFA rotation header.
   renderBayDescriptorView(container, bay);
 
@@ -194,7 +191,7 @@ export function _isProtectedStripEl(el) {
 function _reconcileRackStrips(rackEl, bayId, rackId) {
   const wanted = bayId.endsWith('-search') ? searchEfspStrips(getActiveEfspSearchQuery())
     : isWithOthersBayId(bayId) ? efspLinesWithOthers(bayId.slice(0, -'-with'.length))
-      : carrierOrderRack(bayId, getEfspRack(bayId, rackId)); // the Marshal stack Bay is ordered by slot (docs/adr/0074)
+      : getEfspRack(bayId, rackId);
   const wantedById = new Map(wanted.map(s => [s.stripId, s]));
   const existingEls = new Map(
     [...rackEl.children].filter(el => el.classList.contains('efsp-strip')).map(el => [el.dataset.stripId, el])

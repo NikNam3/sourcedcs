@@ -115,6 +115,7 @@ function panelControlRows() {
     { id: 'airspace', label: PANEL_TITLES.airspace },
     { id: 'runwayStatus', label: PANEL_TITLES.runwayStatus },
     { id: 'carrier',  label: PANEL_TITLES.carrier },
+    { id: 'marshal',  label: PANEL_TITLES.marshal },
     { id: 'metrics',  label: PANEL_TITLES.metrics },
   ];
 }

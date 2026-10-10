@@ -57,6 +57,7 @@ import './panels/efsp/airspace-panel.js';
 import './panels/efsp/runway-status-rules.js';
 import './panels/efsp/runway-status-panel.js';
 import './panels/efsp/carrier-management-panel.js';
+import './panels/efsp/marshal-panel.js';
 import './panels/metrics-panel.js';
 import './app.js';
 import { atcTick } from './atc-scope.js';
