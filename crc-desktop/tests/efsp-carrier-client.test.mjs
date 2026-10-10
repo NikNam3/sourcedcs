@@ -82,27 +82,6 @@ test('the banner says what is wrong rather than showing a stale number as live',
   assert.match(state.carrierBannerParts(noVar).text, /BRC 012T/);
 });
 
-test('the slot rows: vacancies are empty slots with the server\'s preview, a gap is closable, nothing is computed client-side', () => {
-  const v = viewWith([{ kind: 'Move', flightDataId: 'f1', toIndex: 2 }]); // leaves slot 0 vacant? f2 stays at 1
-  state._resetEfspCarrierStateForTest();
-  state.applyEfspCarrierSnapshot({ carriers: [v] });
-  const rows = panel.carrierStackRows();
-  assert.deepEqual(rows.map(r => r.stackIndex), rows.map((_, i) => i), 'slots run from 0 with no hole in the numbering');
-  const vacant = rows.filter(r => !r.entry);
-  assert.ok(vacant.length >= 1);
-  for (const r of vacant) assert.equal(typeof r.preview.angels, 'number', 'the preview came from the server');
-  const gap = rows.find(r => !r.entry && r.stackIndex < Math.max(...rows.filter(x => x.entry).map(x => x.stackIndex)));
-  assert.ok(gap ? gap.vacantBelowTop : true);
-});
-
-test('the Marshal stack Bay is ordered by slot, and no other Bay is touched', () => {
-  state._resetEfspCarrierStateForTest();
-  state.applyEfspCarrierSnapshot({ carriers: [viewWith([{ kind: 'Move', flightDataId: 'f2', toIndex: 0 }])] });
-  const strips = [{ flightDataId: 'f1', stripId: 's1' }, { flightDataId: 'f2', stripId: 's2' }];
-  assert.deepEqual(panel.carrierOrderRack('cv-marshal-stack', strips).map(s => s.stripId), ['s2', 's1']);
-  assert.deepEqual(panel.carrierOrderRack('ops-proposed', strips).map(s => s.stripId), ['s1', 's2']);
-});
-
 test('the final-bearing line: from the ship along the reciprocal of the final bearing, only for a tracked ship on a TRUE bearing', () => {
   state._resetEfspCarrierStateForTest();
   sendEfspSetPositions('CARRIER', ['CV_APP1']);

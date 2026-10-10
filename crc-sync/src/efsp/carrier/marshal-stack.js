@@ -43,8 +43,12 @@
 const { normDeg, reciprocal, angularDiff } = require('./angles');
 const { isSequencedCase, isCase } = require('./recovery-case');
 
-const ENTRY_KEYS = Object.freeze(['flightDataId', 'stackIndex', 'status', 'caseIAngels']);
-const STACK_KEYS = Object.freeze(['stackId', 'hullId', 'entries']);
+// `pushedAtUtc` and `eatUtc` are written once, when the flight commences (MarkPushed), and cleared when it returns to the stack
+// (BackToStack): the mission-clock moment it left its fix and the EAT it was working to then. They are FACTS OF A PAST EVENT,
+// not derived values: a later ramp-time change or Delta moves a holding flight's EAT, never one that has pushed (docs/adr/0114).
+// `deltaMs` is the stack's Delta (CV NATOPS 6.4.9): the delay added to every HOLDING flight's EAT.
+const ENTRY_KEYS = Object.freeze(['flightDataId', 'stackIndex', 'status', 'caseIAngels', 'pushedAtUtc', 'eatUtc']);
+const STACK_KEYS = Object.freeze(['stackId', 'hullId', 'entries', 'deltaMs']);
 const ENTRY_STATUSES = Object.freeze(['HOLDING', 'PUSHED']);
 const STACK_DEFAULTS = Object.freeze({ maxIndex: 19 }); // [SOURCE-DEFINED] — L4 briefing Q4
 const DEFAULT_STACK_ID = 'MAIN'; // [SOURCE-DEFINED] — decisions H29, one stack in v1
@@ -67,8 +71,12 @@ const DERIVED_KEYS = Object.freeze([
 const DERIVED_DETAIL = 'angels/DME/push time are derived from the stack index (§9.12) and cannot be set';
 
 const STACK_OP_KINDS = Object.freeze([
-  'InsertAt', 'Append', 'Move', 'Remove', 'CloseUp', 'MarkPushed', 'SetCaseIAngels',
+  'InsertAt', 'Append', 'Move', 'Remove', 'CloseUp', 'MarkPushed', 'SetCaseIAngels', 'Delta', 'BackToStack',
 ]);
+
+// CV NATOPS 6.4.9 (p. 6-17): "the number of minutes of delay (even increments but never less than four)".
+const DELTA_MIN_MINUTES = 4;
+const DELTA_MAX_MINUTES = 60; // [SOURCE-DEFINED] sanity bound; NATOPS sets none
 
 function _fail(detail, reason = 'VALIDATION_ERROR') {
   return { ok: false, reason, detail };
@@ -90,8 +98,11 @@ function _validCaseIAngels(v) {
 // ── Shape ────────────────────────────────────────────────────────────────────
 
 function emptyStack({ stackId = DEFAULT_STACK_ID, hullId } = {}) {
-  return { stackId, hullId: hullId == null ? null : hullId, entries: [] };
+  return { stackId, hullId: hullId == null ? null : hullId, entries: [], deltaMs: 0 };
 }
+
+function _validTime(v) { return v === null || (Number.isFinite(v) && v >= 0); }
+function _validDelta(v) { return Number.isFinite(v) && v >= 0 && v % 60_000 === 0; }
 
 /**
  * Strict — for mutations. Refuses any entry key outside ENTRY_KEYS (derived
@@ -107,6 +118,7 @@ function validateStack(stack, opts = STACK_DEFAULTS) {
   if (typeof stack.stackId !== 'string' || !stack.stackId) return _fail('stackId must be a non-empty string');
   if (stack.hullId != null && typeof stack.hullId !== 'string') return _fail('hullId must be a string or null');
   if (!Array.isArray(stack.entries)) return _fail('entries must be an array');
+  if (stack.deltaMs !== undefined && !_validDelta(stack.deltaMs)) return _fail('deltaMs must be a whole number of minutes in ms, 0 or more');
   const seenFlightData = new Set();
   let prev = -1;
   for (const e of stack.entries) {
@@ -127,6 +139,11 @@ function validateStack(stack, opts = STACK_DEFAULTS) {
     if (!_validCaseIAngels(e.caseIAngels)) {
       return _fail(`entry ${e.flightDataId}: caseIAngels must be an integer ${CASE_I_MIN_ANGELS}..${CASE_I_MAX_ANGELS} or null`);
     }
+    if (e.pushedAtUtc !== undefined && !_validTime(e.pushedAtUtc)) return _fail(`entry ${e.flightDataId}: pushedAtUtc must be epoch ms or null`);
+    if (e.eatUtc !== undefined && !_validTime(e.eatUtc)) return _fail(`entry ${e.flightDataId}: eatUtc must be epoch ms or null`);
+    if (e.status === 'HOLDING' && (e.pushedAtUtc != null || e.eatUtc != null)) {
+      return _fail(`entry ${e.flightDataId}: a holding flight has no push time on record`);
+    }
   }
   return { ok: true, stack };
 }
@@ -146,6 +163,7 @@ function normalizeStack(raw, { stackId = DEFAULT_STACK_ID, hullId = null, maxInd
     stackId: typeof src.stackId === 'string' && src.stackId ? src.stackId : stackId,
     hullId: typeof src.hullId === 'string' ? src.hullId : hullId,
     entries: [],
+    deltaMs: _validDelta(src.deltaMs) ? src.deltaMs : 0,
   };
   const rawEntries = Array.isArray(src.entries) ? src.entries.slice() : [];
   const cleaned = [];
@@ -158,11 +176,14 @@ function normalizeStack(raw, { stackId = DEFAULT_STACK_ID, hullId = null, maxInd
       dropped.push({ flightDataId: e.flightDataId, why: `stackIndex out of range 0..${max}` });
       continue;
     }
+    const status = ENTRY_STATUSES.includes(e.status) ? e.status : 'HOLDING';
     cleaned.push({
       flightDataId: e.flightDataId,
       stackIndex: e.stackIndex,
-      status: ENTRY_STATUSES.includes(e.status) ? e.status : 'HOLDING',
+      status,
       caseIAngels: _validCaseIAngels(e.caseIAngels) ? e.caseIAngels : null,
+      pushedAtUtc: status === 'PUSHED' && _validTime(e.pushedAtUtc) ? (e.pushedAtUtc ?? null) : null,
+      eatUtc: status === 'PUSHED' && _validTime(e.eatUtc) ? (e.eatUtc ?? null) : null,
     });
   }
   cleaned.sort((a, b) => a.stackIndex - b.stackIndex);
@@ -193,13 +214,14 @@ function normalizeStack(raw, { stackId = DEFAULT_STACK_ID, hullId = null, maxInd
  */
 function deriveEntry(entry, inputs = {}) {
   const { caseValue, rampTimeUtc = null, finalBearingDeg = null, marshalRadialDeg = null, marshalRadialSource = null,
-    firstFixDme = null, fixToRampMs = 0, pushSpacingMs = 60_000 } = _isObj(inputs) ? inputs : {};
+    firstFixDme = null, fixToRampMs = 0, pushSpacingMs = 60_000, deltaMs = 0 } = _isObj(inputs) ? inputs : {};
   const e = _isObj(entry) ? entry : {};
   const fb = Number.isFinite(finalBearingDeg) ? normDeg(finalBearingDeg) : null;
   const base = {
     flightDataId: e.flightDataId ?? null,
     stackIndex: Number.isInteger(e.stackIndex) ? e.stackIndex : null,
     status: e.status ?? null,
+    pushedAtUtc: Number.isFinite(e.pushedAtUtc) ? e.pushedAtUtc : null,
     caseValue: isCase(caseValue) ? caseValue : null,
     expectedFinalBearingDeg: fb, // computed in carrier-state.js, never here
   };
@@ -227,8 +249,14 @@ function deriveEntry(entry, inputs = {}) {
   // Slot 0 holds at the first fix; each slot above it is one mile and 1,000 ft higher (NATOPS 6.4.1.1: angels + 15, with the
   // base altitude 6,000 ft, is 21 DME; the first fix is the Marshal's to change, ADR 0113).
   const marshalDme = Number.isFinite(firstFixDme) ? firstFixDme + base.stackIndex : angels + DME_PLUS;
-  const rampEtaUtc = Number.isFinite(rampTimeUtc) ? rampTimeUtc + base.stackIndex * pushSpacingMs : null;
-  const pushTimeUtc = rampEtaUtc == null ? null : rampEtaUtc - fixToRampMs;
+  // A flight that has commenced keeps the EAT it worked to and the moment it left (docs/adr/0114): a later ramp-time change or
+  // Delta never rewrites a push time in the past. A holding flight's EAT follows the ramp time and the stack's Delta.
+  const pushed = e.status === 'PUSHED';
+  const holdRampEta = Number.isFinite(rampTimeUtc) ? rampTimeUtc + base.stackIndex * pushSpacingMs + (Number.isFinite(deltaMs) ? deltaMs : 0) : null;
+  const rampEtaUtc = pushed
+    ? (Number.isFinite(e.pushedAtUtc) ? e.pushedAtUtc + fixToRampMs : holdRampEta)
+    : holdRampEta;
+  const pushTimeUtc = pushed && Number.isFinite(e.eatUtc) ? e.eatUtc : (rampEtaUtc == null ? null : rampEtaUtc - fixToRampMs);
   const pushWindowUtc = pushTimeUtc == null
     ? null
     : Object.freeze([pushTimeUtc - PUSH_TOLERANCE_MS, pushTimeUtc + PUSH_TOLERANCE_MS]);
@@ -251,7 +279,8 @@ function deriveEntry(entry, inputs = {}) {
 function deriveStack(stack, inputs = {}) {
   const s = _isObj(stack) ? stack : {};
   const entries = Array.isArray(s.entries) ? s.entries.slice().sort((a, b) => a.stackIndex - b.stackIndex) : [];
-  return Object.freeze(entries.map((e) => deriveEntry(e, inputs)));
+  const withDelta = { ...(_isObj(inputs) ? inputs : {}), deltaMs: Number.isFinite(s.deltaMs) ? s.deltaMs : 0 };
+  return Object.freeze(entries.map((e) => deriveEntry(e, withDelta)));
 }
 
 /**
@@ -359,7 +388,7 @@ function insertAt(stack, { flightDataId, stackIndex, caseIAngels = null } = {}, 
   if (!_checkFlightDataId(flightDataId)) return _fail('flightDataId must be a non-empty string');
   if (stack.entries.some((e) => e.flightDataId === flightDataId)) return _fail(`${flightDataId} is already in the stack — use Move to re-sequence it`);
   if (!_validCaseIAngels(caseIAngels)) return _fail(`caseIAngels must be an integer ${CASE_I_MIN_ANGELS}..${CASE_I_MAX_ANGELS} or null`);
-  const placed = _placeAt(_copyEntries(stack), { flightDataId, status: 'HOLDING', caseIAngels }, stackIndex, _maxIndex(opts));
+  const placed = _placeAt(_copyEntries(stack), { flightDataId, status: 'HOLDING', caseIAngels, pushedAtUtc: null, eatUtc: null }, stackIndex, _maxIndex(opts));
   if (!placed.ok) return placed;
   return _result(stack, placed.entries, new Set([flightDataId, ...placed.shifted]));
 }
@@ -449,8 +478,52 @@ function markPushed(stack, { flightDataId } = {}, opts = STACK_DEFAULTS) {
   const entry = stack.entries.find((e) => e.flightDataId === flightDataId);
   if (!entry) return _fail(`${flightDataId} is not in the stack`, 'NOT_FOUND');
   if (entry.status === 'PUSHED') return _fail(`${flightDataId} has already pushed`);
-  const entries = _copyEntries(stack).map((e) => (e.flightDataId === flightDataId ? { ...e, status: 'PUSHED' } : e));
+  // The moment it left, and the EAT it was working to (the store reads both from the mission clock and the derivation):
+  // kept on the entry so a later ramp-time change or Delta cannot rewrite them (docs/adr/0114).
+  const pushedAtUtc = _isObj(opts) && Number.isFinite(opts.nowMs) ? opts.nowMs : null;
+  const eatUtc = _isObj(opts) && Number.isFinite(opts.eatUtc) ? opts.eatUtc : null;
+  const entries = _copyEntries(stack).map((e) => (e.flightDataId === flightDataId ? { ...e, status: 'PUSHED', pushedAtUtc, eatUtc } : e));
   return _result(stack, entries, new Set([flightDataId]));
+}
+
+/**
+ * Back to stack (decisions H117; CV NATOPS 6.4.9 item 2 does it for commenced aircraft above 7,000 ft, here it is the Marshal's
+ * manual call): a commenced flight returns to marshal at the next free slot at the TOP of the stack, the slot above the highest
+ * entry. Nobody else moves. Its push time on record is cleared; the derivation gives it the EAT of its new slot.
+ */
+function backToStack(stack, { flightDataId } = {}, opts = STACK_DEFAULTS) {
+  const v = validateStack(stack, opts);
+  if (!v.ok) return v;
+  const entry = stack.entries.find((e) => e.flightDataId === flightDataId);
+  if (!entry) return _fail(`${flightDataId} is not in the stack`, 'NOT_FOUND');
+  if (entry.status !== 'PUSHED') return _fail(`${flightDataId} has not commenced, so there is nothing to send back`);
+  const rest = _copyEntries(stack).filter((e) => e.flightDataId !== flightDataId);
+  const index = _highest(rest) + 1;
+  if (index > _maxIndex(opts)) return _fail(`the stack is full: there is no slot above ${_highest(rest)}`);
+  rest.push({ ...entry, stackIndex: index, status: 'HOLDING', pushedAtUtc: null, eatUtc: null });
+  return _result(stack, rest, new Set([flightDataId]));
+}
+
+/**
+ * Delta (CV NATOPS 6.4.9, p. 6-17): "the number of minutes of delay (even increments but never less than four)". Moves the EATs
+ * of the HOLDING flights by that much and nobody else: the stack's `deltaMs` grows, the derivation adds it to a holding flight's
+ * EAT, and a flight that has pushed keeps the EAT on record. Each Delta adds to the last (Delta 4 then Delta 6 is ten minutes).
+ * `changed` is the holding flights, TOP of the stack first: NATOPS issues the new EATs "from the latest to the earliest (i.e.,
+ * top of the holding pattern to the bottom)" so no two aircraft ever hold the same EAT.
+ */
+function delta(stack, { minutes } = {}, opts = STACK_DEFAULTS) {
+  const v = validateStack(stack, opts);
+  if (!v.ok) return v;
+  if (!Number.isInteger(minutes) || minutes < DELTA_MIN_MINUTES || minutes % 2 !== 0) {
+    return _fail(`Delta is an even number of minutes, never less than ${DELTA_MIN_MINUTES} (CV NATOPS 6.4.9)`);
+  }
+  if (minutes > DELTA_MAX_MINUTES) return _fail(`Delta ${minutes} is more than ${DELTA_MAX_MINUTES} minutes`);
+  const holding = stack.entries.filter((e) => e.status === 'HOLDING');
+  if (holding.length === 0) return _fail('nobody is holding in the stack, so there is no EAT to move');
+  const total = (Number.isFinite(stack.deltaMs) ? stack.deltaMs : 0) + minutes * 60_000;
+  const next = { ...stack, deltaMs: total, entries: _copyEntries(stack) };
+  const changed = holding.slice().sort((a, b) => b.stackIndex - a.stackIndex).map((e) => e.flightDataId);
+  return { ok: true, stack: next, changed };
 }
 
 /** Case I only: the squadron-assigned altitude — the one per-entry value a controller types. */
@@ -473,6 +546,8 @@ const _DISPATCH = {
   Remove: (s, op, o) => remove(s, op, o),
   CloseUp: (s, op, o) => closeUp(s, op, o),
   MarkPushed: (s, op, o) => markPushed(s, op, o),
+  Delta: (s, op, o) => delta(s, op, o),
+  BackToStack: (s, op, o) => backToStack(s, op, o),
   SetCaseIAngels: (s, op, o) => setCaseIAngels(s, op, o),
 };
 
@@ -512,6 +587,9 @@ module.exports = {
   remove,
   closeUp,
   markPushed,
+  backToStack,
+  delta,
+  DELTA_MIN_MINUTES,
   setCaseIAngels,
   applyStackOp,
 };

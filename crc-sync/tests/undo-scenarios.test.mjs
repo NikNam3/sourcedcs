@@ -200,7 +200,7 @@ function checkIn(efsp, c, callsign) {
 }
 const stack = (efsp) => efsp.carrierStore.getRecord().stacks.MAIN.entries;
 
-test('U4: Commence undone is UnmarkPushed; a PriFly removal undone is Reinsert; a refilled index blocks', () => {
+test('U4: Commence undone is RestoreEntry; a PriFly removal undone is Reinsert; a refilled index blocks', () => {
   const { efsp, c } = fresh(CARRIER);
   const a = checkIn(efsp, c, 'AAA11');
   const b = checkIn(efsp, c, 'BBB22');
@@ -212,7 +212,7 @@ test('U4: Commence undone is UnmarkPushed; a PriFly removal undone is Reinsert; 
   assert.equal(stack(efsp)[0].status, 'HOLDING');
   assert.deepEqual([get(efsp, a, 'CARRIER').state, get(efsp, a, 'CARRIER').ownerPositionId], ['IN_STACK', 'CV_MARSHAL']);
   assert.deepEqual(u.broadcasts.slots, ['primary', 'carrier'], 'U19: Board then carrier');
-  assert.equal(log().filter(e => e.op === 'Stack:UnmarkPushed').pop().causedBy, u.ack.clientMutationId);
+  assert.equal(log().filter(e => e.op === 'Stack:RestoreEntry').pop().causedBy, u.ack.clientMutationId);
 
   carrierAct(efsp, c.CV_PRIFLY, 'CV_PRIFLY', { kind: 'SetCarrierState', field: 'case', value: 'II' });
   const seeYou = send(efsp, c.CV_MARSHAL, 'CV_MARSHAL', get(efsp, a, 'CARRIER'), { kind: 'CarrierHandoff', transfer: 'MARSHAL_TO_PRIFLY' });

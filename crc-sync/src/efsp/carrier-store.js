@@ -172,7 +172,7 @@ class CarrierStore extends SyncedStore {
       const last = Math.min(carrier.STACK_DEFAULTS.maxIndex, top + 1); // one open slot above the stack: a drop there appends
       slots[stackId] = [];
       for (let i = 0; i <= last; i++) {
-        const d = carrier.deriveEntry({ flightDataId: null, stackIndex: i, status: 'HOLDING', caseIAngels: null }, inputs);
+        const d = carrier.deriveEntry({ flightDataId: null, stackIndex: i, status: 'HOLDING', caseIAngels: null }, { ...inputs, deltaMs: stack.deltaMs });
         slots[stackId].push({ stackIndex: i, angels: d.angels, marshalDme: d.marshalDme, pushTimeUtc: d.pushTimeUtc });
       }
     }
@@ -335,6 +335,9 @@ class CarrierStore extends SyncedStore {
     if (!v.ok) return v;
     if (record.overrides[v.key] === v.stored) return { ok: true, record: deepClone(record), changed: [], unchanged: true };
     record.overrides[v.key] = v.stored;
+    // A new ramp time starts the schedule afresh: a Delta (docs/adr/0114) was a delay on the OLD one, and the Marshal who types
+    // a new ramp time has already allowed for it.
+    if (v.key === 'rampTimeUtc') for (const stack of Object.values(record.stacks)) stack.deltaMs = 0;
     this._touch(record, by, STATE_OP, `${op.field} ${v.stored === null ? 'cleared' : JSON.stringify(v.stored)}`);
     return { ok: true, record: deepClone(record), changed: 'ALL' };
   }
@@ -350,10 +353,23 @@ class CarrierStore extends SyncedStore {
     if ((op.kind === 'InsertAt' || op.kind === 'Append') && !this._flightDataExists(op.flightDataId)) {
       return { ok: false, reason: 'NOT_FOUND', detail: `unknown flight data ${op.flightDataId}` };
     }
-    const r = carrier.applyStackOp(stack, op);
+    const opts = { ...carrier.STACK_DEFAULTS };
+    if (op.kind === 'Delta' || op.kind === 'MarkPushed') {
+      const { inputs } = this._resolve(record);
+      if (op.kind === 'Delta' && !Number.isFinite(inputs.rampTimeUtc)) {
+        return { ok: false, reason: 'VALIDATION_ERROR', detail: 'no ramp time is set, so there is no EAT to move' };
+      }
+      if (op.kind === 'MarkPushed') {
+        // The moment it commences and the EAT it was working to, from the mission clock and the derivation (docs/adr/0114).
+        opts.nowMs = this._clock.now();
+        const entry = stack.entries.find(e => e.flightDataId === op.flightDataId);
+        if (entry) opts.eatUtc = carrier.deriveEntry(entry, { ...inputs, deltaMs: stack.deltaMs }).pushTimeUtc;
+      }
+    }
+    const r = carrier.applyStackOp(stack, op, opts);
     if (!r.ok) return r;
     record.stacks[stackId] = r.stack;
-    if (!quiet) this._touch(record, by, op.kind, op.flightDataId || null);
+    if (!quiet) this._touch(record, by, op.kind, op.kind === 'Delta' ? op.minutes : (op.flightDataId || null));
     else this._bump(record);
     return { ok: true, record: deepClone(record), changed: r.changed };
   }
@@ -362,14 +378,16 @@ class CarrierStore extends SyncedStore {
 
   /**
    * A stack effect of a carrier handoff or a Strip's retirement, audited under
-   * the Position that acted. `MARK_PUSHED` (Commence) never renumbers anyone;
-   * `REMOVE_NO_CLOSE_UP` leaves a vacancy (decisions H28).
+   * the Position that acted. `MARK_PUSHED` (Commence) never renumbers anyone and records when the flight left and the EAT it
+   * worked to (docs/adr/0114); `RETURN_TO_STACK` (Back to stack) takes the next free slot at the top; `REMOVE_NO_CLOSE_UP`
+   * leaves a vacancy (decisions H28).
    * @returns {{ok:boolean, reason?:string, detail?:string, changed?:Array}}
    */
   applyEffect(effect, flightDataId, { hullId = this.defaultHullId, by = null, actingPositionId = null, clientMutationId = null } = {}) {
     const record = this._records.get(hullId);
     if (!record) return { ok: false, reason: 'NOT_FOUND', detail: `unknown hull ${hullId}` };
     const op = effect === 'MARK_PUSHED' ? { kind: 'MarkPushed', flightDataId }
+      : effect === 'RETURN_TO_STACK' ? { kind: 'BackToStack', flightDataId }
       : effect === 'REMOVE_NO_CLOSE_UP' ? { kind: 'Remove', flightDataId, closeUp: false }
       : null;
     if (!op) return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown stack effect ${effect}` };
@@ -393,18 +411,26 @@ class CarrierStore extends SyncedStore {
   }
 
   /**
-   * What putting `image` back needs: nothing, `UnmarkPushed` (Commence undone) or `Reinsert` at the vacated index
-   * (a PriFly removal or a retirement undone). A Reinsert is refused when that index has been refilled since.
-   * @returns {{ok:true, action:'NONE'|'UNMARK_PUSHED'|'REINSERT'}|{ok:false, reason:'UNDO_BLOCKED', detail:string}}
+   * What putting `image` back needs: nothing, `RestoreEntry` (Commence or Back to stack undone: the entry goes back as it was,
+   * slot, status and the push time on record) or `Reinsert` at the vacated index (a PriFly removal or a retirement undone).
+   * Either is refused when the slot it needs has been refilled since.
+   * @returns {{ok:true, action:'NONE'|'RESTORE_ENTRY'|'REINSERT'}|{ok:false, reason:'UNDO_BLOCKED', detail:string}}
    */
   restoreCheck(flightDataId, image) {
     if (!image) return { ok: true, action: 'NONE' };
     const now = this.entryImage(flightDataId);
-    if (now) {
-      return now.entry.status === 'PUSHED' && image.entry.status !== 'PUSHED' ? { ok: true, action: 'UNMARK_PUSHED' } : { ok: true, action: 'NONE' };
-    }
     const record = this._records.get(image.hullId);
     const stack = record && record.stacks[image.stackId];
+    if (now) {
+      const a = now.entry;
+      const b = image.entry;
+      if (a.status === b.status && a.stackIndex === b.stackIndex) return { ok: true, action: 'NONE' };
+      const occupant = stack && stack.entries.find(e => e.stackIndex === b.stackIndex && e.flightDataId !== flightDataId);
+      if (occupant) {
+        return { ok: false, reason: 'UNDO_BLOCKED', detail: `Marshal stack slot ${b.stackIndex} has been refilled by ${occupant.flightDataId}` };
+      }
+      return { ok: true, action: 'RESTORE_ENTRY' };
+    }
     if (!stack) return { ok: false, reason: 'UNDO_BLOCKED', detail: `the Marshal stack ${image.stackId} is gone` };
     const occupant = stack.entries.find(e => e.stackIndex === image.entry.stackIndex);
     if (occupant) {
@@ -414,7 +440,7 @@ class CarrierStore extends SyncedStore {
   }
 
   /**
-   * Applies what restoreCheck said (`UnmarkPushed` / `Reinsert`), audited with `causedBy` = the Undo's id.
+   * Applies what restoreCheck said (`RestoreEntry` / `Reinsert`), audited with `causedBy` = the Undo's id.
    * @returns {{ok:boolean, changed:string[]}}
    */
   restoreEntry(flightDataId, image, { causedBy = null, by = null } = {}) {
@@ -425,9 +451,9 @@ class CarrierStore extends SyncedStore {
     const before = deepClone(record);
     const stack = record.stacks[image.stackId];
     let kind;
-    if (check.action === 'UNMARK_PUSHED') {
-      kind = 'UnmarkPushed';
-      stack.entries = stack.entries.map(e => (e.flightDataId === flightDataId ? { ...e, status: image.entry.status } : e));
+    if (check.action === 'RESTORE_ENTRY') {
+      kind = 'RestoreEntry';
+      stack.entries = [...stack.entries.filter(e => e.flightDataId !== flightDataId), deepClone(image.entry)].sort((a, b) => a.stackIndex - b.stackIndex);
     } else {
       kind = 'Reinsert';
       stack.entries = [...stack.entries, deepClone(image.entry)].sort((a, b) => a.stackIndex - b.stackIndex);

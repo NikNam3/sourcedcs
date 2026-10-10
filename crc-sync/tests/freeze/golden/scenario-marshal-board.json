@@ -1,0 +1,491 @@
+{
+  "instances": [
+    {
+      "steps": [
+        {"n":0,"who":"c-CV_MARSHAL","in":{"facilityId":"CARRIER","signedOn":["CV_MARSHAL"],"type":"efsp-set-positions"},"out":{"ack":{"combination":null,"facilityId":"CARRIER","monitoring":[],"signedOn":["CV_MARSHAL"],"type":"efsp-positions-ack","version":1,"warnings":[]},"broadcast":{"facilityId":"CARRIER","flightDataList":{"updated":[]},"positions":{"updated":{"~big":"a02c1c76b5","chars":713,"keys":"array[4]"}},"strips":{"gone":[],"updated":[]},"type":"efsp-board-delta","version":1}},"audit":[]},
+        {"n":1,"who":"c-CV_PRIFLY","in":{"facilityId":"CARRIER","signedOn":["CV_PRIFLY"],"type":"efsp-set-positions"},"out":{"ack":{"combination":null,"facilityId":"CARRIER","monitoring":[],"signedOn":["CV_PRIFLY"],"type":"efsp-positions-ack","version":1,"warnings":[]},"broadcast":{"facilityId":"CARRIER","flightDataList":{"updated":[]},"positions":{"updated":{"~big":"c2f0ae4cef","chars":790,"keys":"array[4]"}},"strips":{"gone":[],"updated":[]},"type":"efsp-board-delta","version":1}},"audit":[]},
+        {"n":2,"who":"c-CV_APP1","in":{"facilityId":"CARRIER","signedOn":["CV_APP1"],"type":"efsp-set-positions"},"out":{"ack":{"combination":null,"facilityId":"CARRIER","monitoring":[],"signedOn":["CV_APP1"],"type":"efsp-positions-ack","version":1,"warnings":[]},"broadcast":{"facilityId":"CARRIER","flightDataList":{"updated":[]},"positions":{"updated":{"~big":"a8180f25d7","chars":863,"keys":"array[4]"}},"strips":{"gone":[],"updated":[]},"type":"efsp-board-delta","version":1}},"audit":[]},
+        {"n":3,"who":"c-CV_APP2","in":{"facilityId":"CARRIER","signedOn":["CV_APP2"],"type":"efsp-set-positions"},"out":{"ack":{"combination":null,"facilityId":"CARRIER","monitoring":[],"signedOn":["CV_APP2"],"type":"efsp-positions-ack","version":1,"warnings":[]},"broadcast":{"facilityId":"CARRIER","flightDataList":{"updated":[]},"positions":{"updated":{"~big":"9ee206cf55","chars":936,"keys":"array[4]"}},"strips":{"gone":[],"updated":[]},"type":"efsp-board-delta","version":1}},"audit":[]},
+        {"n":4,"who":"c-CV_MARSHAL","in":{"actingPositionId":"CV_MARSHAL","clientMutationId":"#1","facilityId":"CARRIER","op":{"bayId":"cv-marshal-stack","flightData":{"aircraftType":"F-18C","callsign":"AAA11"},"kind":"CreateStrip","rackId":"main","stripType":"MARSHAL"},"type":"efsp-mutation","version":1},"out":{"ack":{"clientMutationId":"#1","facilityId":"CARRIER","flightData":"F #2 r1 AAA11 sq=0001 h=ca66c42b0e","ok":true,"strip":"S #3 r1 MARSHAL/IN_STACK @CV_MARSHAL cv-marshal-stack/main:V h=efecf4c5a6","type":"efsp-mutation-ack","version":1},"broadcast":{"facilityId":"CARRIER","flightDataList":{"updated":["F #2 r1 AAA11 sq=0001 h=ca66c42b0e"]},"positions":{"updated":[]},"strips":{"gone":[],"updated":["S #3 r1 MARSHAL/IN_STACK @CV_MARSHAL cv-marshal-stack/main:V h=efecf4c5a6"]},"type":"efsp-board-delta","version":1},"carrierBroadcast":{"carrierSeq":1,"carriers":{"updated":{"~big":"36fac66670","chars":3120,"keys":"array[1]"}},"type":"efsp-carrier-delta","version":1}},"audit":[{"actingPositionId":"CV_MARSHAL","actorId":"c-CV_MARSHAL","after":{"hullId":"CVN-72","overrides":{"altimeterInHg":null,"brcDeg":null,"ceilingFt":null,"finalBearingDeg":null,"firstFixDme":null,"marshalRadialDeg":null,"rampTimeUtc":null,"tankerAltitudeFt":null,"tankerGiveKlb":null,"tankerOnStation":null,"tankerPatternSide":null,"tankerSideNumber":null,"visibilityNm":null,"windOverDeckKt":null},"recoveryCase":{"history":[],"setAt":null,"setBy":null,"value":"III"},"rev":1,"stacks":{"MAIN":{"deltaMs":0,"entries":[{"caseIAngels":null,"eatUtc":null,"flightDataId":"#2","pushedAtUtc":null,"stackIndex":0,"status":"HOLDING"}],"hullId":"CVN-72","stackId":"MAIN"}},"transitions":[{"at":1782009600000,"by":"c-CV_MARSHAL","detail":"#2","op":"Append"}]},"at":1782009600000,"before":{"hullId":"CVN-72","overrides":{"altimeterInHg":null,"brcDeg":null,"ceilingFt":null,"finalBearingDeg":null,"firstFixDme":null,"marshalRadialDeg":null,"rampTimeUtc":null,"tankerAltitudeFt":null,"tankerGiveKlb":null,"tankerOnStation":null,"tankerPatternSide":null,"tankerSideNumber":null,"visibilityNm":null,"windOverDeckKt":null},"recoveryCase":{"history":[],"setAt":null,"setBy":null,"value":"III"},"rev":0,"stacks":{"MAIN":{"deltaMs":0,"entries":[],"hullId":"CVN-72","stackId":"MAIN"}},"transitions":[]},"carrierHullId":"CVN-72","clientMutationId":null,"ok":true,"op":"Stack:Append"},{"actingPositionId":"CV_MARSHAL","actorId":"c-CV_MARSHAL","after":"S #3 r1 MARSHAL/IN_STACK @CV_MARSHAL cv-marshal-stack/main:V h=efecf4c5a6","at":1782009600000,"before":null,"clientMutationId":"#1","facilityId":"CARRIER","flightDataId":"#2","op":"CreateStrip","stripId":"#3"}]},
+        {"n":5,"who":"c-CV_MARSHAL","in":{"actingPositionId":"CV_MARSHAL","clientMutationId":"#4","facilityId":"CARRIER","op":{"bayId":"cv-marshal-stack","flightData":{"aircraftType":"F-18C","callsign":"BBB22"},"kind":"CreateStrip","rackId":"main","stripType":"MARSHAL"},"type":"efsp-mutation","version":1},"out":{"ack":{"clientMutationId":"#4","facilityId":"CARRIER","flightData":"F #5 r1 BBB22 sq=0002 h=02fcb12e28","ok":true,"strip":"S #6 r1 MARSHAL/IN_STACK @CV_MARSHAL cv-marshal-stack/main:Vt h=c491d097ae","type":"efsp-mutation-ack","version":1},"broadcast":{"facilityId":"CARRIER","flightDataList":{"updated":["F #5 r1 BBB22 sq=0002 h=02fcb12e28"]},"positions":{"updated":[]},"strips":{"gone":[],"updated":["S #6 r1 MARSHAL/IN_STACK @CV_MARSHAL cv-marshal-stack/main:Vt h=c491d097ae"]},"type":"efsp-board-delta","version":1},"carrierBroadcast":{"carrierSeq":2,"carriers":{"updated":{"~big":"60c242966f","chars":3958,"keys":"array[1]"}},"type":"efsp-carrier-delta","version":1}},"audit":[{"actingPositionId":"CV_MARSHAL","actorId":"c-CV_MARSHAL","after":{"hullId":"CVN-72","overrides":{"altimeterInHg":null,"brcDeg":null,"ceilingFt":null,"finalBearingDeg":null,"firstFixDme":null,"marshalRadialDeg":null,"rampTimeUtc":null,"tankerAltitudeFt":null,"tankerGiveKlb":null,"tankerOnStation":null,"tankerPatternSide":null,"tankerSideNumber":null,"visibilityNm":null,"windOverDeckKt":null},"recoveryCase":{"history":[],"setAt":null,"setBy":null,"value":"III"},"rev":2,"stacks":{"MAIN":{"deltaMs":0,"entries":[{"caseIAngels":null,"eatUtc":null,"flightDataId":"#2","pushedAtUtc":null,"stackIndex":0,"status":"HOLDING"},{"caseIAngels":null,"eatUtc":null,"flightDataId":"#5","pushedAtUtc":null,"stackIndex":1,"status":"HOLDING"}],"hullId":"CVN-72","stackId":"MAIN"}},"transitions":[{"at":1782009600000,"by":"c-CV_MARSHAL","detail":"#2","op":"Append"},{"at":1782009600000,"by":"c-CV_MARSHAL","detail":"#5","op":"Append"}]},"at":1782009600000,"before":{"hullId":"CVN-72","overrides":{"altimeterInHg":null,"brcDeg":null,"ceilingFt":null,"finalBearingDeg":null,"firstFixDme":null,"marshalRadialDeg":null,"rampTimeUtc":null,"tankerAltitudeFt":null,"tankerGiveKlb":null,"tankerOnStation":null,"tankerPatternSide":null,"tankerSideNumber":null,"visibilityNm":null,"windOverDeckKt":null},"recoveryCase":{"history":[],"setAt":null,"setBy":null,"value":"III"},"rev":1,"stacks":{"MAIN":{"deltaMs":0,"entries":[{"caseIAngels":null,"eatUtc":null,"flightDataId":"#2","pushedAtUtc":null,"stackIndex":0,"status":"HOLDING"}],"hullId":"CVN-72","stackId":"MAIN"}},"transitions":[{"at":1782009600000,"by":"c-CV_MARSHAL","detail":"#2","op":"Append"}]},"carrierHullId":"CVN-72","clientMutationId":null,"ok":true,"op":"Stack:Append"},{"actingPositionId":"CV_MARSHAL","actorId":"c-CV_MARSHAL","after":"S #6 r1 MARSHAL/IN_STACK @CV_MARSHAL cv-marshal-stack/main:Vt h=c491d097ae","at":1782009600000,"before":null,"clientMutationId":"#4","facilityId":"CARRIER","flightDataId":"#5","op":"CreateStrip","stripId":"#6"}]},
+        {"n":6,"who":"c-CV_MARSHAL","in":{"actingPositionId":"CV_MARSHAL","clientMutationId":"#7","facilityId":"CARRIER","op":{"bayId":"cv-marshal-stack","flightData":{"aircraftType":"F-18C","callsign":"DDD44"},"kind":"CreateStrip","rackId":"main","stripType":"MARSHAL"},"type":"efsp-mutation","version":1},"out":{"ack":{"clientMutationId":"#7","facilityId":"CARRIER","flightData":"F #8 r1 DDD44 sq=0003 h=16fe58e962","ok":true,"strip":"S #9 r1 MARSHAL/IN_STACK @CV_MARSHAL cv-marshal-stack/main:Vth h=742fc6a864","type":"efsp-mutation-ack","version":1},"broadcast":{"facilityId":"CARRIER","flightDataList":{"updated":["F #8 r1 DDD44 sq=0003 h=16fe58e962"]},"positions":{"updated":[]},"strips":{"gone":[],"updated":["S #9 r1 MARSHAL/IN_STACK @CV_MARSHAL cv-marshal-stack/main:Vth h=742fc6a864"]},"type":"efsp-board-delta","version":1},"carrierBroadcast":{"carrierSeq":3,"carriers":{"updated":{"~big":"0af71cfe6d","chars":4796,"keys":"array[1]"}},"type":"efsp-carrier-delta","version":1}},"audit":[{"actingPositionId":"CV_MARSHAL","actorId":"c-CV_MARSHAL","after":{"hullId":"CVN-72","overrides":{"altimeterInHg":null,"brcDeg":null,"ceilingFt":null,"finalBearingDeg":null,"firstFixDme":null,"marshalRadialDeg":null,"rampTimeUtc":null,"tankerAltitudeFt":null,"tankerGiveKlb":null,"tankerOnStation":null,"tankerPatternSide":null,"tankerSideNumber":null,"visibilityNm":null,"windOverDeckKt":null},"recoveryCase":{"history":[],"setAt":null,"setBy":null,"value":"III"},"rev":3,"stacks":{"MAIN":{"deltaMs":0,"entries":[{"caseIAngels":null,"eatUtc":null,"flightDataId":"#2","pushedAtUtc":null,"stackIndex":0,"status":"HOLDING"},{"caseIAngels":null,"eatUtc":null,"flightDataId":"#5","pushedAtUtc":null,"stackIndex":1,"status":"HOLDING"},{"caseIAngels":null,"eatUtc":null,"flightDataId":"#8","pushedAtUtc":null,"stackIndex":2,"status":"HOLDING"}],"hullId":"CVN-72","stackId":"MAIN"}},"transitions":[{"at":1782009600000,"by":"c-CV_MARSHAL","detail":"#2","op":"Append"},{"at":1782009600000,"by":"c-CV_MARSHAL","detail":"#5","op":"Append"},{"at":1782009600000,"by":"c-CV_MARSHAL","detail":"#8","op":"Append"}]},"at":1782009600000,"before":{"hullId":"CVN-72","overrides":{"altimeterInHg":null,"brcDeg":null,"ceilingFt":null,"finalBearingDeg":null,"firstFixDme":null,"marshalRadialDeg":null,"rampTimeUtc":null,"tankerAltitudeFt":null,"tankerGiveKlb":null,"tankerOnStation":null,"tankerPatternSide":null,"tankerSideNumber":null,"visibilityNm":null,"windOverDeckKt":null},"recoveryCase":{"history":[],"setAt":null,"setBy":null,"value":"III"},"rev":2,"stacks":{"MAIN":{"deltaMs":0,"entries":[{"caseIAngels":null,"eatUtc":null,"flightDataId":"#2","pushedAtUtc":null,"stackIndex":0,"status":"HOLDING"},{"caseIAngels":null,"eatUtc":null,"flightDataId":"#5","pushedAtUtc":null,"stackIndex":1,"status":"HOLDING"}],"hullId":"CVN-72","stackId":"MAIN"}},"transitions":[{"at":1782009600000,"by":"c-CV_MARSHAL","detail":"#2","op":"Append"},{"at":1782009600000,"by":"c-CV_MARSHAL","detail":"#5","op":"Append"}]},"carrierHullId":"CVN-72","clientMutationId":null,"ok":true,"op":"Stack:Append"},{"actingPositionId":"CV_MARSHAL","actorId":"c-CV_MARSHAL","after":"S #9 r1 MARSHAL/IN_STACK @CV_MARSHAL cv-marshal-stack/main:Vth h=742fc6a864","at":1782009600000,"before":null,"clientMutationId":"#7","facilityId":"CARRIER","flightDataId":"#8","op":"CreateStrip","stripId":"#9"}]},
+        {"n":7,"who":"c-CV_PRIFLY","in":{"actingPositionId":"CV_PRIFLY","clientMutationId":"#10","op":{"field":"rampTime","kind":"SetCarrierState","value":"2040"},"type":"efsp-carrier-mutation","version":1},"out":{"ack":{"carrier":{"advisory":null,"consistency":{"MAIN":[]},"derived":{"~big":"2d728c67b6","chars":1462,"keys":["MAIN"]},"hull":{"angledDeckDeg":9,"hullId":"CVN-72","label":"CVN-72","match":{"coalition":"own","type":"CVN_72","unitName":"UNION"}},"hullId":"CVN-72","lanes":{"MAIN":[{"flightDataId":"#2","lane":"CV_APP1","pushOrdinal":0},{"flightDataId":"#5","lane":"CV_APP2","pushOrdinal":1},{"flightDataId":"#8","lane":"CV_APP1","pushOrdinal":2}]},"overrides":{"altimeterInHg":null,"brcDeg":null,"ceilingFt":null,"finalBearingDeg":null,"firstFixDme":null,"marshalRadialDeg":null,"rampTimeUtc":1781988000000,"tankerAltitudeFt":null,"tankerGiveKlb":null,"tankerOnStation":null,"tankerPatternSide":null,"tankerSideNumber":null,"visibilityNm":null,"windOverDeckKt":null},"recoveryCase":{"history":[],"setAt":null,"setBy":null,"value":"III"},"rev":4,"shipState":null,"slots":{"MAIN":[{"angels":6,"marshalDme":21,"pushTimeUtc":1781987640000,"stackIndex":0},{"angels":7,"marshalDme":22,"pushTimeUtc":1781987700000,"stackIndex":1},{"angels":8,"marshalDme":23,"pushTimeUtc":1781987760000,"stackIndex":2},{"angels":9,"marshalDme":24,"pushTimeUtc":1781987820000,"stackIndex":3}]},"stacks":{"MAIN":{"deltaMs":0,"entries":[{"caseIAngels":null,"eatUtc":null,"flightDataId":"#2","pushedAtUtc":null,"stackIndex":0,"status":"HOLDING"},{"caseIAngels":null,"eatUtc":null,"flightDataId":"#5","pushedAtUtc":null,"stackIndex":1,"status":"HOLDING"},{"caseIAngels":null,"eatUtc":null,"flightDataId":"#8","pushedAtUtc":null,"stackIndex":2,"status":"HOLDING"}],"hullId":"CVN-72","stackId":"MAIN"}},"state":{"~big":"89bafa2d15","chars":1431,"keys":["brc","case","finalBearing","firstFix","radial","rampTime","tanker","weather"]},"transitions":[{"at":1782009600000,"by":"c-CV_MARSHAL","detail":"#2","op":"Append"},{"at":1782009600000,"by":"c-CV_MARSHAL","detail":"#5","op":"Append"},{"at":1782009600000,"by":"c-CV_MARSHAL","detail":"#8","op":"Append"},{"at":1782009600000,"by":"c-CV_PRIFLY","detail":"rampTime 1781988000000","op":"SetCarrierState"}],"tuning":{"fixToRampMs":360000,"pushSpacingMs":60000}},"carrierSeq":4,"changed":"ALL","clientMutationId":"#10","ok":true,"type":"efsp-carrier-ack","version":1},"carrierBroadcast":{"carrierSeq":4,"carriers":{"updated":{"~big":"bef1578da9","chars":5089,"keys":"array[1]"}},"type":"efsp-carrier-delta","version":1}},"audit":[{"actingPositionId":"CV_PRIFLY","actorId":"c-CV_PRIFLY","after":{"hullId":"CVN-72","overrides":{"altimeterInHg":null,"brcDeg":null,"ceilingFt":null,"finalBearingDeg":null,"firstFixDme":null,"marshalRadialDeg":null,"rampTimeUtc":1781988000000,"tankerAltitudeFt":null,"tankerGiveKlb":null,"tankerOnStation":null,"tankerPatternSide":null,"tankerSideNumber":null,"visibilityNm":null,"windOverDeckKt":null},"recoveryCase":{"history":[],"setAt":null,"setBy":null,"value":"III"},"rev":4,"stacks":{"MAIN":{"deltaMs":0,"entries":[{"caseIAngels":null,"eatUtc":null,"flightDataId":"#2","pushedAtUtc":null,"stackIndex":0,"status":"HOLDING"},{"caseIAngels":null,"eatUtc":null,"flightDataId":"#5","pushedAtUtc":null,"stackIndex":1,"status":"HOLDING"},{"caseIAngels":null,"eatUtc":null,"flightDataId":"#8","pushedAtUtc":null,"stackIndex":2,"status":"HOLDING"}],"hullId":"CVN-72","stackId":"MAIN"}},"transitions":[{"at":1782009600000,"by":"c-CV_MARSHAL","detail":"#2","op":"Append"},{"at":1782009600000,"by":"c-CV_MARSHAL","detail":"#5","op":"Append"},{"at":1782009600000,"by":"c-CV_MARSHAL","detail":"#8","op":"Append"},{"at":1782009600000,"by":"c-CV_PRIFLY","detail":"rampTime 1781988000000","op":"SetCarrierState"}]},"at":1782009600000,"before":{"hullId":"CVN-72","overrides":{"altimeterInHg":null,"brcDeg":null,"ceilingFt":null,"finalBearingDeg":null,"firstFixDme":null,"marshalRadialDeg":null,"rampTimeUtc":null,"tankerAltitudeFt":null,"tankerGiveKlb":null,"tankerOnStation":null,"tankerPatternSide":null,"tankerSideNumber":null,"visibilityNm":null,"windOverDeckKt":null},"recoveryCase":{"history":[],"setAt":null,"setBy":null,"value":"III"},"rev":3,"stacks":{"MAIN":{"deltaMs":0,"entries":[{"caseIAngels":null,"eatUtc":null,"flightDataId":"#2","pushedAtUtc":null,"stackIndex":0,"status":"HOLDING"},{"caseIAngels":null,"eatUtc":null,"flightDataId":"#5","pushedAtUtc":null,"stackIndex":1,"status":"HOLDING"},{"caseIAngels":null,"eatUtc":null,"flightDataId":"#8","pushedAtUtc":null,"stackIndex":2,"status":"HOLDING"}],"hullId":"CVN-72","stackId":"MAIN"}},"transitions":[{"at":1782009600000,"by":"c-CV_MARSHAL","detail":"#2","op":"Append"},{"at":1782009600000,"by":"c-CV_MARSHAL","detail":"#5","op":"Append"},{"at":1782009600000,"by":"c-CV_MARSHAL","detail":"#8","op":"Append"}]},"carrierHullId":"CVN-72","clientMutationId":"#10","field":"rampTime","ok":true,"op":"SetCarrierState"}]},
+        {"n":8,"who":"c-CV_MARSHAL","in":{"actingPositionId":"CV_MARSHAL","baseRev":1,"clientMutationId":"#11","facilityId":"CARRIER","op":{"kind":"CarrierHandoff","toPositionId":"CV_APP1","transfer":"MARSHAL_TO_APPROACH"},"stripId":"#3","type":"efsp-mutation","version":1},"out":{"ack":{"clientMutationId":"#11","facilityId":"CARRIER","ok":true,"strip":"S #3 r2 MARSHAL/COMMENCED @CV_APP1 cv-app1-lane/main:V h=41517598bc","stripId":"#3","type":"efsp-mutation-ack","version":1},"broadcast":{"facilityId":"CARRIER","flightDataList":{"updated":[]},"positions":{"updated":[]},"strips":{"gone":[],"updated":["S #3 r2 MARSHAL/COMMENCED @CV_APP1 cv-app1-lane/main:V h=41517598bc"]},"type":"efsp-board-delta","version":1},"carrierBroadcast":{"carrierSeq":5,"carriers":{"updated":{"~big":"5a4ce805cf","chars":5132,"keys":"array[1]"}},"type":"efsp-carrier-delta","version":1}},"audit":[{"actingPositionId":"CV_MARSHAL","actorId":"c-CV_MARSHAL","after":{"hullId":"CVN-72","overrides":{"altimeterInHg":null,"brcDeg":null,"ceilingFt":null,"finalBearingDeg":null,"firstFixDme":null,"marshalRadialDeg":null,"rampTimeUtc":1781988000000,"tankerAltitudeFt":null,"tankerGiveKlb":null,"tankerOnStation":null,"tankerPatternSide":null,"tankerSideNumber":null,"visibilityNm":null,"windOverDeckKt":null},"recoveryCase":{"history":[],"setAt":null,"setBy":null,"value":"III"},"rev":5,"stacks":{"MAIN":{"deltaMs":0,"entries":[{"caseIAngels":null,"eatUtc":1781987640000,"flightDataId":"#2","pushedAtUtc":1782009600000,"stackIndex":0,"status":"PUSHED"},{"caseIAngels":null,"eatUtc":null,"flightDataId":"#5","pushedAtUtc":null,"stackIndex":1,"status":"HOLDING"},{"caseIAngels":null,"eatUtc":null,"flightDataId":"#8","pushedAtUtc":null,"stackIndex":2,"status":"HOLDING"}],"hullId":"CVN-72","stackId":"MAIN"}},"transitions":[{"at":1782009600000,"by":"c-CV_MARSHAL","detail":"#2","op":"Append"},{"at":1782009600000,"by":"c-CV_MARSHAL","detail":"#5","op":"Append"},{"at":1782009600000,"by":"c-CV_MARSHAL","detail":"#8","op":"Append"},{"at":1782009600000,"by":"c-CV_PRIFLY","detail":"rampTime 1781988000000","op":"SetCarrierState"},{"at":1782009600000,"by":"c-CV_MARSHAL","detail":"#2","op":"MarkPushed"}]},"at":1782009600000,"before":{"hullId":"CVN-72","overrides":{"altimeterInHg":null,"brcDeg":null,"ceilingFt":null,"finalBearingDeg":null,"firstFixDme":null,"marshalRadialDeg":null,"rampTimeUtc":1781988000000,"tankerAltitudeFt":null,"tankerGiveKlb":null,"tankerOnStation":null,"tankerPatternSide":null,"tankerSideNumber":null,"visibilityNm":null,"windOverDeckKt":null},"recoveryCase":{"history":[],"setAt":null,"setBy":null,"value":"III"},"rev":4,"stacks":{"MAIN":{"deltaMs":0,"entries":[{"caseIAngels":null,"eatUtc":null,"flightDataId":"#2","pushedAtUtc":null,"stackIndex":0,"status":"HOLDING"},{"caseIAngels":null,"eatUtc":null,"flightDataId":"#5","pushedAtUtc":null,"stackIndex":1,"status":"HOLDING"},{"caseIAngels":null,"eatUtc":null,"flightDataId":"#8","pushedAtUtc":null,"stackIndex":2,"status":"HOLDING"}],"hullId":"CVN-72","stackId":"MAIN"}},"transitions":[{"at":1782009600000,"by":"c-CV_MARSHAL","detail":"#2","op":"Append"},{"at":1782009600000,"by":"c-CV_MARSHAL","detail":"#5","op":"Append"},{"at":1782009600000,"by":"c-CV_MARSHAL","detail":"#8","op":"Append"},{"at":1782009600000,"by":"c-CV_PRIFLY","detail":"rampTime 1781988000000","op":"SetCarrierState"}]},"carrierHullId":"CVN-72","clientMutationId":"#11","ok":true,"op":"Stack:MarkPushed"},{"actingPositionId":"CV_MARSHAL","actorId":"c-CV_MARSHAL","after":"S #3 r2 MARSHAL/COMMENCED @CV_APP1 cv-app1-lane/main:V h=41517598bc","at":1782009600000,"before":"S #3 r1 MARSHAL/IN_STACK @CV_MARSHAL cv-marshal-stack/main:V h=efecf4c5a6","carrierHandoff":"MARSHAL_TO_APPROACH","carrierTrigger":"CONTROLLER_INITIATED","clientMutationId":"#11","facilityId":"CARRIER","flightDataId":"#2","op":"CarrierHandoff","stripId":"#3"}]},
+        {"n":9,"who":"c-CV_APP1","in":{"actingPositionId":"CV_APP1","baseRev":2,"clientMutationId":"#12","facilityId":"CARRIER","op":{"kind":"CarrierHandoff","transfer":"COMMENCED_TO_MARSHAL"},"stripId":"#3","type":"efsp-mutation","version":1},"out":{"ack":{"clientMutationId":"#12","detail":"CV_APP1 may not record COMMENCED_TO_MARSHAL","facilityId":"CARRIER","ok":false,"reason":"PERMISSION_DENIED","stripId":"#3","type":"efsp-mutation-ack","version":1}},"audit":[]},
+        {"n":10,"who":"c-CV_PRIFLY","in":{"actingPositionId":"CV_PRIFLY","baseRev":2,"clientMutationId":"#13","facilityId":"CARRIER","op":{"kind":"CarrierHandoff","transfer":"COMMENCED_TO_MARSHAL"},"stripId":"#3","type":"efsp-mutation","version":1},"out":{"ack":{"clientMutationId":"#13","detail":"CV_PRIFLY may not record COMMENCED_TO_MARSHAL","facilityId":"CARRIER","ok":false,"reason":"PERMISSION_DENIED","stripId":"#3","type":"efsp-mutation-ack","version":1}},"audit":[]},
+        {"n":11,"who":"c-CV_MARSHAL","in":{"actingPositionId":"CV_MARSHAL","baseRev":2,"clientMutationId":"#14","facilityId":"CARRIER","op":{"kind":"CarrierHandoff","transfer":"COMMENCED_TO_MARSHAL"},"stripId":"#3","type":"efsp-mutation","version":1},"out":{"ack":{"clientMutationId":"#14","facilityId":"CARRIER","ok":true,"strip":"S #3 r3 MARSHAL/IN_STACK @CV_MARSHAL cv-marshal-stack/main:Vth9 h=ddff3e8eec","stripId":"#3","type":"efsp-mutation-ack","version":1},"broadcast":{"facilityId":"CARRIER","flightDataList":{"updated":[]},"positions":{"updated":[]},"strips":{"gone":[],"updated":["S #3 r3 MARSHAL/IN_STACK @CV_MARSHAL cv-marshal-stack/main:Vth9 h=ddff3e8eec"]},"type":"efsp-board-delta","version":1},"carrierBroadcast":{"carrierSeq":6,"carriers":{"updated":{"~big":"fa6365d53f","chars":5377,"keys":"array[1]"}},"type":"efsp-carrier-delta","version":1}},"audit":[{"actingPositionId":"CV_MARSHAL","actorId":"c-CV_MARSHAL","after":{"hullId":"CVN-72","overrides":{"altimeterInHg":null,"brcDeg":null,"ceilingFt":null,"finalBearingDeg":null,"firstFixDme":null,"marshalRadialDeg":null,"rampTimeUtc":1781988000000,"tankerAltitudeFt":null,"tankerGiveKlb":null,"tankerOnStation":null,"tankerPatternSide":null,"tankerSideNumber":null,"visibilityNm":null,"windOverDeckKt":null},"recoveryCase":{"history":[],"setAt":null,"setBy":null,"value":"III"},"rev":6,"stacks":{"MAIN":{"deltaMs":0,"entries":[{"caseIAngels":null,"eatUtc":null,"flightDataId":"#5","pushedAtUtc":null,"stackIndex":1,"status":"HOLDING"},{"caseIAngels":null,"eatUtc":null,"flightDataId":"#8","pushedAtUtc":null,"stackIndex":2,"status":"HOLDING"},{"caseIAngels":null,"eatUtc":null,"flightDataId":"#2","pushedAtUtc":null,"stackIndex":3,"status":"HOLDING"}],"hullId":"CVN-72","stackId":"MAIN"}},"transitions":[{"at":1782009600000,"by":"c-CV_MARSHAL","detail":"#2","op":"Append"},{"at":1782009600000,"by":"c-CV_MARSHAL","detail":"#5","op":"Append"},{"at":1782009600000,"by":"c-CV_MARSHAL","detail":"#8","op":"Append"},{"at":1782009600000,"by":"c-CV_PRIFLY","detail":"rampTime 1781988000000","op":"SetCarrierState"},{"at":1782009600000,"by":"c-CV_MARSHAL","detail":"#2","op":"MarkPushed"},{"at":1782009600000,"by":"c-CV_MARSHAL","detail":"#2","op":"BackToStack"}]},"at":1782009600000,"before":{"hullId":"CVN-72","overrides":{"altimeterInHg":null,"brcDeg":null,"ceilingFt":null,"finalBearingDeg":null,"firstFixDme":null,"marshalRadialDeg":null,"rampTimeUtc":1781988000000,"tankerAltitudeFt":null,"tankerGiveKlb":null,"tankerOnStation":null,"tankerPatternSide":null,"tankerSideNumber":null,"visibilityNm":null,"windOverDeckKt":null},"recoveryCase":{"history":[],"setAt":null,"setBy":null,"value":"III"},"rev":5,"stacks":{"MAIN":{"deltaMs":0,"entries":[{"caseIAngels":null,"eatUtc":1781987640000,"flightDataId":"#2","pushedAtUtc":1782009600000,"stackIndex":0,"status":"PUSHED"},{"caseIAngels":null,"eatUtc":null,"flightDataId":"#5","pushedAtUtc":null,"stackIndex":1,"status":"HOLDING"},{"caseIAngels":null,"eatUtc":null,"flightDataId":"#8","pushedAtUtc":null,"stackIndex":2,"status":"HOLDING"}],"hullId":"CVN-72","stackId":"MAIN"}},"transitions":[{"at":1782009600000,"by":"c-CV_MARSHAL","detail":"#2","op":"Append"},{"at":1782009600000,"by":"c-CV_MARSHAL","detail":"#5","op":"Append"},{"at":1782009600000,"by":"c-CV_MARSHAL","detail":"#8","op":"Append"},{"at":1782009600000,"by":"c-CV_PRIFLY","detail":"rampTime 1781988000000","op":"SetCarrierState"},{"at":1782009600000,"by":"c-CV_MARSHAL","detail":"#2","op":"MarkPushed"}]},"carrierHullId":"CVN-72","clientMutationId":"#14","ok":true,"op":"Stack:BackToStack"},{"actingPositionId":"CV_MARSHAL","actorId":"c-CV_MARSHAL","after":"S #3 r3 MARSHAL/IN_STACK @CV_MARSHAL cv-marshal-stack/main:Vth9 h=ddff3e8eec","at":1782009600000,"before":"S #3 r2 MARSHAL/COMMENCED @CV_APP1 cv-app1-lane/main:V h=41517598bc","carrierHandoff":"COMMENCED_TO_MARSHAL","carrierTrigger":"CONTROLLER_INITIATED","clientMutationId":"#14","facilityId":"CARRIER","flightDataId":"#2","op":"CarrierHandoff","stripId":"#3"}]},
+        {"n":12,"who":"c-CV_MARSHAL","in":{"actingPositionId":"CV_MARSHAL","baseRev":3,"clientMutationId":"#15","facilityId":"CARRIER","op":{"actionId":"#14","kind":"Undo"},"stripId":"#3","type":"efsp-mutation","version":1},"out":{"ack":{"clientMutationId":"#15","facilityId":"CARRIER","ok":true,"strip":"S #3 r4 MARSHAL/COMMENCED @CV_APP1 cv-app1-lane/main:V h=0c8a6f9f01","stripId":"#3","type":"efsp-mutation-ack","undone":{"actionId":"#14","label":"Back to stack AAA11","op":"CarrierHandoff","transfer":true},"version":1,"voided":[]},"broadcast":{"facilityId":"CARRIER","flightDataList":{"updated":[]},"positions":{"updated":[]},"strips":{"gone":[],"updated":["S #3 r4 MARSHAL/COMMENCED @CV_APP1 cv-app1-lane/main:V h=0c8a6f9f01"]},"type":"efsp-board-delta","version":1},"carrierBroadcast":{"carrierSeq":7,"carriers":{"updated":{"~big":"31b07ed329","chars":5349,"keys":"array[1]"}},"type":"efsp-carrier-delta","version":1}},"audit":[{"actingPositionId":null,"actorId":"c-CV_MARSHAL","after":{"hullId":"CVN-72","overrides":{"altimeterInHg":null,"brcDeg":null,"ceilingFt":null,"finalBearingDeg":null,"firstFixDme":null,"marshalRadialDeg":null,"rampTimeUtc":1781988000000,"tankerAltitudeFt":null,"tankerGiveKlb":null,"tankerOnStation":null,"tankerPatternSide":null,"tankerSideNumber":null,"visibilityNm":null,"windOverDeckKt":null},"recoveryCase":{"history":[],"setAt":null,"setBy":null,"value":"III"},"rev":7,"stacks":{"MAIN":{"deltaMs":0,"entries":[{"caseIAngels":null,"eatUtc":1781987640000,"flightDataId":"#2","pushedAtUtc":1782009600000,"stackIndex":0,"status":"PUSHED"},{"caseIAngels":null,"eatUtc":null,"flightDataId":"#5","pushedAtUtc":null,"stackIndex":1,"status":"HOLDING"},{"caseIAngels":null,"eatUtc":null,"flightDataId":"#8","pushedAtUtc":null,"stackIndex":2,"status":"HOLDING"}],"hullId":"CVN-72","stackId":"MAIN"}},"transitions":{"~big":"0b5c46d3c6","chars":731,"keys":"array[7]"}},"at":1782009600000,"before":{"hullId":"CVN-72","overrides":{"altimeterInHg":null,"brcDeg":null,"ceilingFt":null,"finalBearingDeg":null,"firstFixDme":null,"marshalRadialDeg":null,"rampTimeUtc":1781988000000,"tankerAltitudeFt":null,"tankerGiveKlb":null,"tankerOnStation":null,"tankerPatternSide":null,"tankerSideNumber":null,"visibilityNm":null,"windOverDeckKt":null},"recoveryCase":{"history":[],"setAt":null,"setBy":null,"value":"III"},"rev":6,"stacks":{"MAIN":{"deltaMs":0,"entries":[{"caseIAngels":null,"eatUtc":null,"flightDataId":"#5","pushedAtUtc":null,"stackIndex":1,"status":"HOLDING"},{"caseIAngels":null,"eatUtc":null,"flightDataId":"#8","pushedAtUtc":null,"stackIndex":2,"status":"HOLDING"},{"caseIAngels":null,"eatUtc":null,"flightDataId":"#2","pushedAtUtc":null,"stackIndex":3,"status":"HOLDING"}],"hullId":"CVN-72","stackId":"MAIN"}},"transitions":[{"at":1782009600000,"by":"c-CV_MARSHAL","detail":"#2","op":"Append"},{"at":1782009600000,"by":"c-CV_MARSHAL","detail":"#5","op":"Append"},{"at":1782009600000,"by":"c-CV_MARSHAL","detail":"#8","op":"Append"},{"at":1782009600000,"by":"c-CV_PRIFLY","detail":"rampTime 1781988000000","op":"SetCarrierState"},{"at":1782009600000,"by":"c-CV_MARSHAL","detail":"#2","op":"MarkPushed"},{"at":1782009600000,"by":"c-CV_MARSHAL","detail":"#2","op":"BackToStack"}]},"carrierHullId":"CVN-72","causedBy":"#15","clientMutationId":null,"ok":true,"op":"Stack:RestoreEntry"},{"actingPositionId":"CV_MARSHAL","actorId":"c-CV_MARSHAL","after":"S #3 r4 MARSHAL/COMMENCED @CV_APP1 cv-app1-lane/main:V h=0c8a6f9f01","at":1782009600000,"before":"S #3 r3 MARSHAL/IN_STACK @CV_MARSHAL cv-marshal-stack/main:Vth9 h=ddff3e8eec","clientMutationId":"#15","compensators":{"carrier":["#2"]},"facilityId":"CARRIER","flightDataId":"#2","op":"Undo","records":[],"stripId":"#3","undoneActionId":"#14","undoneOp":"CarrierHandoff","voided":[]}]}
+      ],
+      "orphanAudit": [],
+      "final": {
+        "boards": {
+          "INCIRLIK": {
+            "n": 0,
+            "h": "97d170e155",
+            "rows": [],
+            "rest": {
+              "cidSeq": 0,
+              "droppedWallAt": [],
+              "replay": []
+            }
+          },
+          "CENTER": {
+            "n": 0,
+            "h": "97d170e155",
+            "rows": [],
+            "rest": {
+              "cidSeq": 0,
+              "droppedWallAt": [],
+              "replay": []
+            }
+          },
+          "TACTICAL": {
+            "n": 0,
+            "h": "97d170e155",
+            "rows": [],
+            "rest": {
+              "cidSeq": 0,
+              "droppedWallAt": [],
+              "replay": []
+            }
+          },
+          "CARRIER": {
+            "n": 3,
+            "h": "035926d8e4",
+            "rows": [
+              "S #3 r4 MARSHAL/COMMENCED @CV_APP1 cv-app1-lane/main:V h=0c8a6f9f01",
+              "S #6 r1 MARSHAL/IN_STACK @CV_MARSHAL cv-marshal-stack/main:Vt h=c491d097ae",
+              "S #9 r1 MARSHAL/IN_STACK @CV_MARSHAL cv-marshal-stack/main:Vth h=742fc6a864"
+            ],
+            "rest": {
+              "cidSeq": 3,
+              "droppedWallAt": [],
+              "replay": [
+                ["#1",{"appliedWallAt":1000000,"detail":null,"flightDataId":"#2","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#3","warnings":null}],
+                ["#4",{"appliedWallAt":1000000,"detail":null,"flightDataId":"#5","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#6","warnings":null}],
+                ["#7",{"appliedWallAt":1000000,"detail":null,"flightDataId":"#8","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#9","warnings":null}],
+                ["#11",{"appliedWallAt":1000000,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#3","warnings":null}],
+                ["#12",{"appliedWallAt":1000000,"detail":"CV_APP1 may not record COMMENCED_TO_MARSHAL","flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"PERMISSION_DENIED","routedTo":null,"selfCoordinated":null,"stripId":null,"warnings":null}],
+                ["#13",{"appliedWallAt":1000000,"detail":"CV_PRIFLY may not record COMMENCED_TO_MARSHAL","flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"PERMISSION_DENIED","routedTo":null,"selfCoordinated":null,"stripId":null,"warnings":null}],
+                ["#14",{"appliedWallAt":1000000,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#3","warnings":null}],
+                ["#15",{"appliedWallAt":1000000,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#3","warnings":null}]
+              ]
+            }
+          },
+          "RANGES": {
+            "n": 0,
+            "h": "97d170e155",
+            "rows": [],
+            "rest": {
+              "cidSeq": 0,
+              "droppedWallAt": [],
+              "replay": []
+            }
+          }
+        },
+        "flightData": {
+          "n": 3,
+          "h": "8b1d0b1907",
+          "rows": [
+            "F #2 r1 AAA11 sq=0001 h=ca66c42b0e",
+            "F #5 r1 BBB22 sq=0002 h=02fcb12e28",
+            "F #8 r1 DDD44 sq=0003 h=16fe58e962"
+          ],
+          "rest": {
+            "codeCursor": 3,
+            "codes": [
+              ["0001","#2"],
+              ["0002","#5"],
+              ["0003","#8"]
+            ]
+          }
+        },
+        "airspaces": {
+          "h": "bf21a9e8fb",
+          "v": {
+            "byTheater": {},
+            "seeded": {}
+          }
+        },
+        "correlations": {
+          "n": 0,
+          "h": "97d170e155",
+          "rows": []
+        },
+        "marsa": {
+          "n": 0,
+          "h": "97d170e155",
+          "rows": []
+        },
+        "runwayStatuses": {
+          "n": 1,
+          "h": "8b6b3af46c",
+          "rows": [
+            "INCIRLIK h=89de413b69"
+          ]
+        },
+        "carriers": {
+          "n": 1,
+          "h": "f2a8088f60",
+          "rows": [
+            "CVN-72 h=edf79ea5d3"
+          ]
+        }
+      }
+    },
+    {
+      "steps": [
+        {"n":0,"who":"c-CV_MARSHAL","in":{"facilityId":"CARRIER","signedOn":["CV_MARSHAL"],"type":"efsp-set-positions"},"out":{"ack":{"combination":null,"facilityId":"CARRIER","monitoring":[],"signedOn":["CV_MARSHAL"],"type":"efsp-positions-ack","version":1,"warnings":[]},"broadcast":{"facilityId":"CARRIER","flightDataList":{"updated":[]},"positions":{"updated":{"~big":"a02c1c76b5","chars":713,"keys":"array[4]"}},"strips":{"gone":[],"updated":[]},"type":"efsp-board-delta","version":1}},"audit":[]},
+        {"n":1,"who":"c-CV_PRIFLY","in":{"facilityId":"CARRIER","signedOn":["CV_PRIFLY"],"type":"efsp-set-positions"},"out":{"ack":{"combination":null,"facilityId":"CARRIER","monitoring":[],"signedOn":["CV_PRIFLY"],"type":"efsp-positions-ack","version":1,"warnings":[]},"broadcast":{"facilityId":"CARRIER","flightDataList":{"updated":[]},"positions":{"updated":{"~big":"c2f0ae4cef","chars":790,"keys":"array[4]"}},"strips":{"gone":[],"updated":[]},"type":"efsp-board-delta","version":1}},"audit":[]},
+        {"n":2,"who":"c-CV_APP1","in":{"facilityId":"CARRIER","signedOn":["CV_APP1"],"type":"efsp-set-positions"},"out":{"ack":{"combination":null,"facilityId":"CARRIER","monitoring":[],"signedOn":["CV_APP1"],"type":"efsp-positions-ack","version":1,"warnings":[]},"broadcast":{"facilityId":"CARRIER","flightDataList":{"updated":[]},"positions":{"updated":{"~big":"a8180f25d7","chars":863,"keys":"array[4]"}},"strips":{"gone":[],"updated":[]},"type":"efsp-board-delta","version":1}},"audit":[]},
+        {"n":3,"who":"c-CV_APP2","in":{"facilityId":"CARRIER","signedOn":["CV_APP2"],"type":"efsp-set-positions"},"out":{"ack":{"combination":null,"facilityId":"CARRIER","monitoring":[],"signedOn":["CV_APP2"],"type":"efsp-positions-ack","version":1,"warnings":[]},"broadcast":{"facilityId":"CARRIER","flightDataList":{"updated":[]},"positions":{"updated":{"~big":"9ee206cf55","chars":936,"keys":"array[4]"}},"strips":{"gone":[],"updated":[]},"type":"efsp-board-delta","version":1}},"audit":[]},
+        {"n":4,"who":"c-CV_MARSHAL","in":{"actingPositionId":"CV_MARSHAL","clientMutationId":"#16","facilityId":"CARRIER","op":{"bayId":"cv-marshal-stack","flightData":{"aircraftType":"F-18C","callsign":"AAA11"},"kind":"CreateStrip","rackId":"main","stripType":"MARSHAL"},"type":"efsp-mutation","version":1},"out":{"ack":{"clientMutationId":"#16","facilityId":"CARRIER","flightData":"F #17 r1 AAA11 sq=0001 h=ca66c42b0e","ok":true,"strip":"S #18 r1 MARSHAL/IN_STACK @CV_MARSHAL cv-marshal-stack/main:V h=efecf4c5a6","type":"efsp-mutation-ack","version":1},"broadcast":{"facilityId":"CARRIER","flightDataList":{"updated":["F #17 r1 AAA11 sq=0001 h=ca66c42b0e"]},"positions":{"updated":[]},"strips":{"gone":[],"updated":["S #18 r1 MARSHAL/IN_STACK @CV_MARSHAL cv-marshal-stack/main:V h=efecf4c5a6"]},"type":"efsp-board-delta","version":1},"carrierBroadcast":{"carrierSeq":1,"carriers":{"updated":{"~big":"36fac66670","chars":3120,"keys":"array[1]"}},"type":"efsp-carrier-delta","version":1}},"audit":[{"actingPositionId":"CV_MARSHAL","actorId":"c-CV_MARSHAL","after":{"hullId":"CVN-72","overrides":{"altimeterInHg":null,"brcDeg":null,"ceilingFt":null,"finalBearingDeg":null,"firstFixDme":null,"marshalRadialDeg":null,"rampTimeUtc":null,"tankerAltitudeFt":null,"tankerGiveKlb":null,"tankerOnStation":null,"tankerPatternSide":null,"tankerSideNumber":null,"visibilityNm":null,"windOverDeckKt":null},"recoveryCase":{"history":[],"setAt":null,"setBy":null,"value":"III"},"rev":1,"stacks":{"MAIN":{"deltaMs":0,"entries":[{"caseIAngels":null,"eatUtc":null,"flightDataId":"#17","pushedAtUtc":null,"stackIndex":0,"status":"HOLDING"}],"hullId":"CVN-72","stackId":"MAIN"}},"transitions":[{"at":1782009600000,"by":"c-CV_MARSHAL","detail":"#17","op":"Append"}]},"at":1782009600000,"before":{"hullId":"CVN-72","overrides":{"altimeterInHg":null,"brcDeg":null,"ceilingFt":null,"finalBearingDeg":null,"firstFixDme":null,"marshalRadialDeg":null,"rampTimeUtc":null,"tankerAltitudeFt":null,"tankerGiveKlb":null,"tankerOnStation":null,"tankerPatternSide":null,"tankerSideNumber":null,"visibilityNm":null,"windOverDeckKt":null},"recoveryCase":{"history":[],"setAt":null,"setBy":null,"value":"III"},"rev":0,"stacks":{"MAIN":{"deltaMs":0,"entries":[],"hullId":"CVN-72","stackId":"MAIN"}},"transitions":[]},"carrierHullId":"CVN-72","clientMutationId":null,"ok":true,"op":"Stack:Append"},{"actingPositionId":"CV_MARSHAL","actorId":"c-CV_MARSHAL","after":"S #18 r1 MARSHAL/IN_STACK @CV_MARSHAL cv-marshal-stack/main:V h=efecf4c5a6","at":1782009600000,"before":null,"clientMutationId":"#16","facilityId":"CARRIER","flightDataId":"#17","op":"CreateStrip","stripId":"#18"}]},
+        {"n":5,"who":"c-CV_MARSHAL","in":{"actingPositionId":"CV_MARSHAL","baseRev":1,"clientMutationId":"#19","facilityId":"CARRIER","op":{"kind":"CarrierHandoff","transfer":"COMMENCED_TO_MARSHAL"},"stripId":"#18","type":"efsp-mutation","version":1},"out":{"ack":{"clientMutationId":"#19","detail":"Back to stack applies to a MARSHAL Strip in COMMENCED, not MARSHAL in IN_STACK","facilityId":"CARRIER","ok":false,"reason":"VALIDATION_ERROR","strip":"S #18 r1 MARSHAL/IN_STACK @CV_MARSHAL cv-marshal-stack/main:V h=efecf4c5a6","stripId":"#18","type":"efsp-mutation-ack","version":1}},"audit":[]},
+        {"n":6,"who":"c-CV_MARSHAL","in":{"actingPositionId":"CV_MARSHAL","baseRev":1,"clientMutationId":"#20","facilityId":"CARRIER","op":{"kind":"CarrierHandoff","toPositionId":"CV_APP1","transfer":"MARSHAL_TO_APPROACH"},"stripId":"#18","type":"efsp-mutation","version":1},"out":{"ack":{"clientMutationId":"#20","facilityId":"CARRIER","ok":true,"strip":"S #18 r2 MARSHAL/COMMENCED @CV_APP1 cv-app1-lane/main:V h=41517598bc","stripId":"#18","type":"efsp-mutation-ack","version":1},"broadcast":{"facilityId":"CARRIER","flightDataList":{"updated":[]},"positions":{"updated":[]},"strips":{"gone":[],"updated":["S #18 r2 MARSHAL/COMMENCED @CV_APP1 cv-app1-lane/main:V h=41517598bc"]},"type":"efsp-board-delta","version":1},"carrierBroadcast":{"carrierSeq":2,"carriers":{"updated":{"~big":"b0b0088094","chars":3198,"keys":"array[1]"}},"type":"efsp-carrier-delta","version":1}},"audit":[{"actingPositionId":"CV_MARSHAL","actorId":"c-CV_MARSHAL","after":{"hullId":"CVN-72","overrides":{"altimeterInHg":null,"brcDeg":null,"ceilingFt":null,"finalBearingDeg":null,"firstFixDme":null,"marshalRadialDeg":null,"rampTimeUtc":null,"tankerAltitudeFt":null,"tankerGiveKlb":null,"tankerOnStation":null,"tankerPatternSide":null,"tankerSideNumber":null,"visibilityNm":null,"windOverDeckKt":null},"recoveryCase":{"history":[],"setAt":null,"setBy":null,"value":"III"},"rev":2,"stacks":{"MAIN":{"deltaMs":0,"entries":[{"caseIAngels":null,"eatUtc":null,"flightDataId":"#17","pushedAtUtc":1782009600000,"stackIndex":0,"status":"PUSHED"}],"hullId":"CVN-72","stackId":"MAIN"}},"transitions":[{"at":1782009600000,"by":"c-CV_MARSHAL","detail":"#17","op":"Append"},{"at":1782009600000,"by":"c-CV_MARSHAL","detail":"#17","op":"MarkPushed"}]},"at":1782009600000,"before":{"hullId":"CVN-72","overrides":{"altimeterInHg":null,"brcDeg":null,"ceilingFt":null,"finalBearingDeg":null,"firstFixDme":null,"marshalRadialDeg":null,"rampTimeUtc":null,"tankerAltitudeFt":null,"tankerGiveKlb":null,"tankerOnStation":null,"tankerPatternSide":null,"tankerSideNumber":null,"visibilityNm":null,"windOverDeckKt":null},"recoveryCase":{"history":[],"setAt":null,"setBy":null,"value":"III"},"rev":1,"stacks":{"MAIN":{"deltaMs":0,"entries":[{"caseIAngels":null,"eatUtc":null,"flightDataId":"#17","pushedAtUtc":null,"stackIndex":0,"status":"HOLDING"}],"hullId":"CVN-72","stackId":"MAIN"}},"transitions":[{"at":1782009600000,"by":"c-CV_MARSHAL","detail":"#17","op":"Append"}]},"carrierHullId":"CVN-72","clientMutationId":"#20","ok":true,"op":"Stack:MarkPushed"},{"actingPositionId":"CV_MARSHAL","actorId":"c-CV_MARSHAL","after":"S #18 r2 MARSHAL/COMMENCED @CV_APP1 cv-app1-lane/main:V h=41517598bc","at":1782009600000,"before":"S #18 r1 MARSHAL/IN_STACK @CV_MARSHAL cv-marshal-stack/main:V h=efecf4c5a6","carrierHandoff":"MARSHAL_TO_APPROACH","carrierTrigger":"CONTROLLER_INITIATED","clientMutationId":"#20","facilityId":"CARRIER","flightDataId":"#17","op":"CarrierHandoff","stripId":"#18"}]},
+        {"n":7,"who":"c-CV_APP1","in":{"actingPositionId":"CV_APP1","baseRev":2,"clientMutationId":"#21","facilityId":"CARRIER","op":{"kind":"CarrierHandoff","transfer":"APPROACH_TO_FINAL"},"stripId":"#18","type":"efsp-mutation","version":1},"out":{"ack":{"clientMutationId":"#21","facilityId":"CARRIER","ok":true,"strip":"S #18 r3 FINAL/ON_FINAL @CV_APP1 cv-app1-final/main:V h=672d11ca15","stripId":"#18","type":"efsp-mutation-ack","version":1},"broadcast":{"facilityId":"CARRIER","flightDataList":{"updated":[]},"positions":{"updated":[]},"strips":{"gone":[],"updated":["S #18 r3 FINAL/ON_FINAL @CV_APP1 cv-app1-final/main:V h=672d11ca15"]},"type":"efsp-board-delta","version":1}},"audit":[{"actingPositionId":"CV_APP1","actorId":"c-CV_APP1","after":"S #18 r3 FINAL/ON_FINAL @CV_APP1 cv-app1-final/main:V h=672d11ca15","at":1782009600000,"before":"S #18 r2 MARSHAL/COMMENCED @CV_APP1 cv-app1-lane/main:V h=41517598bc","carrierHandoff":"APPROACH_TO_FINAL","carrierTrigger":"RADAR_ACQUISITION","clientMutationId":"#21","facilityId":"CARRIER","flightDataId":"#17","op":"CarrierHandoff","stripId":"#18"}]},
+        {"n":8,"who":"c-CV_MARSHAL","in":{"actingPositionId":"CV_MARSHAL","baseRev":3,"clientMutationId":"#22","facilityId":"CARRIER","op":{"kind":"CarrierHandoff","transfer":"COMMENCED_TO_MARSHAL"},"stripId":"#18","type":"efsp-mutation","version":1},"out":{"ack":{"clientMutationId":"#22","detail":"CV_APP1 holds this Strip","facilityId":"CARRIER","ok":false,"reason":"NOT_OWNER","strip":"S #18 r3 FINAL/ON_FINAL @CV_APP1 cv-app1-final/main:V h=672d11ca15","stripId":"#18","type":"efsp-mutation-ack","version":1}},"audit":[]}
+      ],
+      "orphanAudit": [],
+      "final": {
+        "boards": {
+          "INCIRLIK": {
+            "n": 0,
+            "h": "97d170e155",
+            "rows": [],
+            "rest": {
+              "cidSeq": 0,
+              "droppedWallAt": [],
+              "replay": []
+            }
+          },
+          "CENTER": {
+            "n": 0,
+            "h": "97d170e155",
+            "rows": [],
+            "rest": {
+              "cidSeq": 0,
+              "droppedWallAt": [],
+              "replay": []
+            }
+          },
+          "TACTICAL": {
+            "n": 0,
+            "h": "97d170e155",
+            "rows": [],
+            "rest": {
+              "cidSeq": 0,
+              "droppedWallAt": [],
+              "replay": []
+            }
+          },
+          "CARRIER": {
+            "n": 1,
+            "h": "e4e18b3059",
+            "rows": [
+              "S #18 r3 FINAL/ON_FINAL @CV_APP1 cv-app1-final/main:V h=672d11ca15"
+            ],
+            "rest": {
+              "cidSeq": 1,
+              "droppedWallAt": [],
+              "replay": [
+                ["#16",{"appliedWallAt":1000000,"detail":null,"flightDataId":"#17","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#18","warnings":null}],
+                ["#19",{"appliedWallAt":1000000,"detail":"Back to stack applies to a MARSHAL Strip in COMMENCED, not MARSHAL in IN_STACK","flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"VALIDATION_ERROR","routedTo":null,"selfCoordinated":null,"stripId":"#18","warnings":null}],
+                ["#20",{"appliedWallAt":1000000,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#18","warnings":null}],
+                ["#21",{"appliedWallAt":1000000,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#18","warnings":null}],
+                ["#22",{"appliedWallAt":1000000,"detail":"CV_APP1 holds this Strip","flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"NOT_OWNER","routedTo":null,"selfCoordinated":null,"stripId":"#18","warnings":null}]
+              ]
+            }
+          },
+          "RANGES": {
+            "n": 0,
+            "h": "97d170e155",
+            "rows": [],
+            "rest": {
+              "cidSeq": 0,
+              "droppedWallAt": [],
+              "replay": []
+            }
+          }
+        },
+        "flightData": {
+          "n": 1,
+          "h": "a971d9a144",
+          "rows": [
+            "F #17 r1 AAA11 sq=0001 h=ca66c42b0e"
+          ],
+          "rest": {
+            "codeCursor": 1,
+            "codes": [
+              ["0001","#17"]
+            ]
+          }
+        },
+        "airspaces": {
+          "h": "bf21a9e8fb",
+          "v": {
+            "byTheater": {},
+            "seeded": {}
+          }
+        },
+        "correlations": {
+          "n": 0,
+          "h": "97d170e155",
+          "rows": []
+        },
+        "marsa": {
+          "n": 0,
+          "h": "97d170e155",
+          "rows": []
+        },
+        "runwayStatuses": {
+          "n": 1,
+          "h": "8b6b3af46c",
+          "rows": [
+            "INCIRLIK h=89de413b69"
+          ]
+        },
+        "carriers": {
+          "n": 1,
+          "h": "85806b0ce2",
+          "rows": [
+            "CVN-72 h=8e357bbbf9"
+          ]
+        }
+      }
+    },
+    {
+      "steps": [
+        {"n":0,"who":"c-CV_MARSHAL","in":{"facilityId":"CARRIER","signedOn":["CV_MARSHAL"],"type":"efsp-set-positions"},"out":{"ack":{"combination":null,"facilityId":"CARRIER","monitoring":[],"signedOn":["CV_MARSHAL"],"type":"efsp-positions-ack","version":1,"warnings":[]},"broadcast":{"facilityId":"CARRIER","flightDataList":{"updated":[]},"positions":{"updated":{"~big":"a02c1c76b5","chars":713,"keys":"array[4]"}},"strips":{"gone":[],"updated":[]},"type":"efsp-board-delta","version":1}},"audit":[]},
+        {"n":1,"who":"c-CV_PRIFLY","in":{"facilityId":"CARRIER","signedOn":["CV_PRIFLY"],"type":"efsp-set-positions"},"out":{"ack":{"combination":null,"facilityId":"CARRIER","monitoring":[],"signedOn":["CV_PRIFLY"],"type":"efsp-positions-ack","version":1,"warnings":[]},"broadcast":{"facilityId":"CARRIER","flightDataList":{"updated":[]},"positions":{"updated":{"~big":"c2f0ae4cef","chars":790,"keys":"array[4]"}},"strips":{"gone":[],"updated":[]},"type":"efsp-board-delta","version":1}},"audit":[]},
+        {"n":2,"who":"c-CV_APP1","in":{"facilityId":"CARRIER","signedOn":["CV_APP1"],"type":"efsp-set-positions"},"out":{"ack":{"combination":null,"facilityId":"CARRIER","monitoring":[],"signedOn":["CV_APP1"],"type":"efsp-positions-ack","version":1,"warnings":[]},"broadcast":{"facilityId":"CARRIER","flightDataList":{"updated":[]},"positions":{"updated":{"~big":"a8180f25d7","chars":863,"keys":"array[4]"}},"strips":{"gone":[],"updated":[]},"type":"efsp-board-delta","version":1}},"audit":[]},
+        {"n":3,"who":"c-CV_APP2","in":{"facilityId":"CARRIER","signedOn":["CV_APP2"],"type":"efsp-set-positions"},"out":{"ack":{"combination":null,"facilityId":"CARRIER","monitoring":[],"signedOn":["CV_APP2"],"type":"efsp-positions-ack","version":1,"warnings":[]},"broadcast":{"facilityId":"CARRIER","flightDataList":{"updated":[]},"positions":{"updated":{"~big":"9ee206cf55","chars":936,"keys":"array[4]"}},"strips":{"gone":[],"updated":[]},"type":"efsp-board-delta","version":1}},"audit":[]},
+        {"n":4,"who":"c-CV_MARSHAL","in":{"actingPositionId":"CV_MARSHAL","clientMutationId":"#23","facilityId":"CARRIER","op":{"bayId":"cv-marshal-stack","flightData":{"aircraftType":"F-18C","callsign":"AAA11"},"kind":"CreateStrip","rackId":"main","stripType":"MARSHAL"},"type":"efsp-mutation","version":1},"out":{"ack":{"clientMutationId":"#23","facilityId":"CARRIER","flightData":"F #24 r1 AAA11 sq=0001 h=ca66c42b0e","ok":true,"strip":"S #25 r1 MARSHAL/IN_STACK @CV_MARSHAL cv-marshal-stack/main:V h=efecf4c5a6","type":"efsp-mutation-ack","version":1},"broadcast":{"facilityId":"CARRIER","flightDataList":{"updated":["F #24 r1 AAA11 sq=0001 h=ca66c42b0e"]},"positions":{"updated":[]},"strips":{"gone":[],"updated":["S #25 r1 MARSHAL/IN_STACK @CV_MARSHAL cv-marshal-stack/main:V h=efecf4c5a6"]},"type":"efsp-board-delta","version":1},"carrierBroadcast":{"carrierSeq":1,"carriers":{"updated":{"~big":"36fac66670","chars":3120,"keys":"array[1]"}},"type":"efsp-carrier-delta","version":1}},"audit":[{"actingPositionId":"CV_MARSHAL","actorId":"c-CV_MARSHAL","after":{"hullId":"CVN-72","overrides":{"altimeterInHg":null,"brcDeg":null,"ceilingFt":null,"finalBearingDeg":null,"firstFixDme":null,"marshalRadialDeg":null,"rampTimeUtc":null,"tankerAltitudeFt":null,"tankerGiveKlb":null,"tankerOnStation":null,"tankerPatternSide":null,"tankerSideNumber":null,"visibilityNm":null,"windOverDeckKt":null},"recoveryCase":{"history":[],"setAt":null,"setBy":null,"value":"III"},"rev":1,"stacks":{"MAIN":{"deltaMs":0,"entries":[{"caseIAngels":null,"eatUtc":null,"flightDataId":"#24","pushedAtUtc":null,"stackIndex":0,"status":"HOLDING"}],"hullId":"CVN-72","stackId":"MAIN"}},"transitions":[{"at":1782009600000,"by":"c-CV_MARSHAL","detail":"#24","op":"Append"}]},"at":1782009600000,"before":{"hullId":"CVN-72","overrides":{"altimeterInHg":null,"brcDeg":null,"ceilingFt":null,"finalBearingDeg":null,"firstFixDme":null,"marshalRadialDeg":null,"rampTimeUtc":null,"tankerAltitudeFt":null,"tankerGiveKlb":null,"tankerOnStation":null,"tankerPatternSide":null,"tankerSideNumber":null,"visibilityNm":null,"windOverDeckKt":null},"recoveryCase":{"history":[],"setAt":null,"setBy":null,"value":"III"},"rev":0,"stacks":{"MAIN":{"deltaMs":0,"entries":[],"hullId":"CVN-72","stackId":"MAIN"}},"transitions":[]},"carrierHullId":"CVN-72","clientMutationId":null,"ok":true,"op":"Stack:Append"},{"actingPositionId":"CV_MARSHAL","actorId":"c-CV_MARSHAL","after":"S #25 r1 MARSHAL/IN_STACK @CV_MARSHAL cv-marshal-stack/main:V h=efecf4c5a6","at":1782009600000,"before":null,"clientMutationId":"#23","facilityId":"CARRIER","flightDataId":"#24","op":"CreateStrip","stripId":"#25"}]},
+        {"n":5,"who":"c-CV_MARSHAL","in":{"actingPositionId":"CV_MARSHAL","baseRev":1,"clientMutationId":"#26","facilityId":"CARRIER","op":{"blockId":"C18","kind":"SetBlock","value":"201"},"stripId":"#25","type":"efsp-mutation","version":1},"out":{"ack":{"clientMutationId":"#26","facilityId":"CARRIER","flightData":"F #24 r2 AAA11 sq=0001 h=5c2958fcde","ok":true,"strip":"S #25 r2 MARSHAL/IN_STACK @CV_MARSHAL cv-marshal-stack/main:V h=1c6e5a6e20","stripId":"#25","type":"efsp-mutation-ack","version":1},"broadcast":{"facilityId":"CARRIER","flightDataList":{"updated":["F #24 r2 AAA11 sq=0001 h=5c2958fcde"]},"positions":{"updated":[]},"strips":{"gone":[],"updated":["S #25 r2 MARSHAL/IN_STACK @CV_MARSHAL cv-marshal-stack/main:V h=1c6e5a6e20"]},"type":"efsp-board-delta","version":1}},"audit":[{"actingPositionId":"CV_MARSHAL","actorId":"c-CV_MARSHAL","after":"S #25 r2 MARSHAL/IN_STACK @CV_MARSHAL cv-marshal-stack/main:V h=1c6e5a6e20","at":1782009600000,"before":"S #25 r1 MARSHAL/IN_STACK @CV_MARSHAL cv-marshal-stack/main:V h=efecf4c5a6","blockId":"C18","clientMutationId":"#26","facilityId":"CARRIER","flightDataId":"#24","op":"SetBlock","stripId":"#25","value":"201"}]},
+        {"n":6,"who":"c-CV_MARSHAL","in":{"actingPositionId":"CV_MARSHAL","baseRev":2,"clientMutationId":"#27","facilityId":"CARRIER","op":{"blockId":"C18","kind":"SetBlock","value":"TOO LONG NUMBER"},"stripId":"#25","type":"efsp-mutation","version":1},"out":{"ack":{"clientMutationId":"#27","detail":"sideNumber must be 1 to 8 letters or digits","facilityId":"CARRIER","ok":false,"reason":"VALIDATION_ERROR","strip":"S #25 r2 MARSHAL/IN_STACK @CV_MARSHAL cv-marshal-stack/main:V h=1c6e5a6e20","stripId":"#25","type":"efsp-mutation-ack","version":1}},"audit":[]},
+        {"n":7,"who":"c-CV_MARSHAL","in":{"actingPositionId":"CV_MARSHAL","baseRev":2,"clientMutationId":"#28","facilityId":"CARRIER","op":{"blockId":"C18","kind":"SetBlock","value":""},"stripId":"#25","type":"efsp-mutation","version":1},"out":{"ack":{"clientMutationId":"#28","facilityId":"CARRIER","flightData":"F #24 r3 AAA11 sq=0001 h=f65510ecd4","ok":true,"strip":"S #25 r3 MARSHAL/IN_STACK @CV_MARSHAL cv-marshal-stack/main:V h=0bc45fb765","stripId":"#25","type":"efsp-mutation-ack","version":1},"broadcast":{"facilityId":"CARRIER","flightDataList":{"updated":["F #24 r3 AAA11 sq=0001 h=f65510ecd4"]},"positions":{"updated":[]},"strips":{"gone":[],"updated":["S #25 r3 MARSHAL/IN_STACK @CV_MARSHAL cv-marshal-stack/main:V h=0bc45fb765"]},"type":"efsp-board-delta","version":1}},"audit":[{"actingPositionId":"CV_MARSHAL","actorId":"c-CV_MARSHAL","after":"S #25 r3 MARSHAL/IN_STACK @CV_MARSHAL cv-marshal-stack/main:V h=0bc45fb765","at":1782009600000,"before":"S #25 r2 MARSHAL/IN_STACK @CV_MARSHAL cv-marshal-stack/main:V h=1c6e5a6e20","blockId":"C18","clientMutationId":"#28","facilityId":"CARRIER","flightDataId":"#24","op":"SetBlock","stripId":"#25","value":""}]}
+      ],
+      "orphanAudit": [],
+      "final": {
+        "boards": {
+          "INCIRLIK": {
+            "n": 0,
+            "h": "97d170e155",
+            "rows": [],
+            "rest": {
+              "cidSeq": 0,
+              "droppedWallAt": [],
+              "replay": []
+            }
+          },
+          "CENTER": {
+            "n": 0,
+            "h": "97d170e155",
+            "rows": [],
+            "rest": {
+              "cidSeq": 0,
+              "droppedWallAt": [],
+              "replay": []
+            }
+          },
+          "TACTICAL": {
+            "n": 0,
+            "h": "97d170e155",
+            "rows": [],
+            "rest": {
+              "cidSeq": 0,
+              "droppedWallAt": [],
+              "replay": []
+            }
+          },
+          "CARRIER": {
+            "n": 1,
+            "h": "939c48d6e3",
+            "rows": [
+              "S #25 r3 MARSHAL/IN_STACK @CV_MARSHAL cv-marshal-stack/main:V h=0bc45fb765"
+            ],
+            "rest": {
+              "cidSeq": 1,
+              "droppedWallAt": [],
+              "replay": [
+                ["#23",{"appliedWallAt":1000000,"detail":null,"flightDataId":"#24","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#25","warnings":null}],
+                ["#26",{"appliedWallAt":1000000,"detail":null,"flightDataId":"#24","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#25","warnings":null}],
+                ["#27",{"appliedWallAt":1000000,"detail":"sideNumber must be 1 to 8 letters or digits","flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"VALIDATION_ERROR","routedTo":null,"selfCoordinated":null,"stripId":"#25","warnings":null}],
+                ["#28",{"appliedWallAt":1000000,"detail":null,"flightDataId":"#24","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#25","warnings":null}]
+              ]
+            }
+          },
+          "RANGES": {
+            "n": 0,
+            "h": "97d170e155",
+            "rows": [],
+            "rest": {
+              "cidSeq": 0,
+              "droppedWallAt": [],
+              "replay": []
+            }
+          }
+        },
+        "flightData": {
+          "n": 1,
+          "h": "e0750dbcb1",
+          "rows": [
+            "F #24 r3 AAA11 sq=0001 h=f65510ecd4"
+          ],
+          "rest": {
+            "codeCursor": 1,
+            "codes": [
+              ["0001","#24"]
+            ]
+          }
+        },
+        "airspaces": {
+          "h": "bf21a9e8fb",
+          "v": {
+            "byTheater": {},
+            "seeded": {}
+          }
+        },
+        "correlations": {
+          "n": 0,
+          "h": "97d170e155",
+          "rows": []
+        },
+        "marsa": {
+          "n": 0,
+          "h": "97d170e155",
+          "rows": []
+        },
+        "runwayStatuses": {
+          "n": 1,
+          "h": "8b6b3af46c",
+          "rows": [
+            "INCIRLIK h=89de413b69"
+          ]
+        },
+        "carriers": {
+          "n": 1,
+          "h": "7591ec9377",
+          "rows": [
+            "CVN-72 h=d78503e233"
+          ]
+        }
+      }
+    },
+    {
+      "steps": [
+        {"n":0,"who":"c-CV_MARSHAL","in":{"facilityId":"CARRIER","signedOn":["CV_MARSHAL"],"type":"efsp-set-positions"},"out":{"ack":{"combination":null,"facilityId":"CARRIER","monitoring":[],"signedOn":["CV_MARSHAL"],"type":"efsp-positions-ack","version":1,"warnings":[]},"broadcast":{"facilityId":"CARRIER","flightDataList":{"updated":[]},"positions":{"updated":{"~big":"a02c1c76b5","chars":713,"keys":"array[4]"}},"strips":{"gone":[],"updated":[]},"type":"efsp-board-delta","version":1}},"audit":[]},
+        {"n":1,"who":"c-CV_PRIFLY","in":{"facilityId":"CARRIER","signedOn":["CV_PRIFLY"],"type":"efsp-set-positions"},"out":{"ack":{"combination":null,"facilityId":"CARRIER","monitoring":[],"signedOn":["CV_PRIFLY"],"type":"efsp-positions-ack","version":1,"warnings":[]},"broadcast":{"facilityId":"CARRIER","flightDataList":{"updated":[]},"positions":{"updated":{"~big":"c2f0ae4cef","chars":790,"keys":"array[4]"}},"strips":{"gone":[],"updated":[]},"type":"efsp-board-delta","version":1}},"audit":[]},
+        {"n":2,"who":"c-CV_APP1","in":{"facilityId":"CARRIER","signedOn":["CV_APP1"],"type":"efsp-set-positions"},"out":{"ack":{"combination":null,"facilityId":"CARRIER","monitoring":[],"signedOn":["CV_APP1"],"type":"efsp-positions-ack","version":1,"warnings":[]},"broadcast":{"facilityId":"CARRIER","flightDataList":{"updated":[]},"positions":{"updated":{"~big":"a8180f25d7","chars":863,"keys":"array[4]"}},"strips":{"gone":[],"updated":[]},"type":"efsp-board-delta","version":1}},"audit":[]},
+        {"n":3,"who":"c-CV_APP2","in":{"facilityId":"CARRIER","signedOn":["CV_APP2"],"type":"efsp-set-positions"},"out":{"ack":{"combination":null,"facilityId":"CARRIER","monitoring":[],"signedOn":["CV_APP2"],"type":"efsp-positions-ack","version":1,"warnings":[]},"broadcast":{"facilityId":"CARRIER","flightDataList":{"updated":[]},"positions":{"updated":{"~big":"9ee206cf55","chars":936,"keys":"array[4]"}},"strips":{"gone":[],"updated":[]},"type":"efsp-board-delta","version":1}},"audit":[]},
+        {"n":4,"who":"c-CV_MARSHAL","in":{"actingPositionId":"CV_MARSHAL","clientMutationId":"#29","facilityId":"CARRIER","op":{"bayId":"cv-marshal-stack","flightData":{"aircraftType":"F-18C","callsign":"AAA11"},"kind":"CreateStrip","rackId":"main","stripType":"MARSHAL"},"type":"efsp-mutation","version":1},"out":{"ack":{"clientMutationId":"#29","facilityId":"CARRIER","flightData":"F #30 r1 AAA11 sq=0001 h=ca66c42b0e","ok":true,"strip":"S #31 r1 MARSHAL/IN_STACK @CV_MARSHAL cv-marshal-stack/main:V h=efecf4c5a6","type":"efsp-mutation-ack","version":1},"broadcast":{"facilityId":"CARRIER","flightDataList":{"updated":["F #30 r1 AAA11 sq=0001 h=ca66c42b0e"]},"positions":{"updated":[]},"strips":{"gone":[],"updated":["S #31 r1 MARSHAL/IN_STACK @CV_MARSHAL cv-marshal-stack/main:V h=efecf4c5a6"]},"type":"efsp-board-delta","version":1},"carrierBroadcast":{"carrierSeq":1,"carriers":{"updated":{"~big":"36fac66670","chars":3120,"keys":"array[1]"}},"type":"efsp-carrier-delta","version":1}},"audit":[{"actingPositionId":"CV_MARSHAL","actorId":"c-CV_MARSHAL","after":{"hullId":"CVN-72","overrides":{"altimeterInHg":null,"brcDeg":null,"ceilingFt":null,"finalBearingDeg":null,"firstFixDme":null,"marshalRadialDeg":null,"rampTimeUtc":null,"tankerAltitudeFt":null,"tankerGiveKlb":null,"tankerOnStation":null,"tankerPatternSide":null,"tankerSideNumber":null,"visibilityNm":null,"windOverDeckKt":null},"recoveryCase":{"history":[],"setAt":null,"setBy":null,"value":"III"},"rev":1,"stacks":{"MAIN":{"deltaMs":0,"entries":[{"caseIAngels":null,"eatUtc":null,"flightDataId":"#30","pushedAtUtc":null,"stackIndex":0,"status":"HOLDING"}],"hullId":"CVN-72","stackId":"MAIN"}},"transitions":[{"at":1782009600000,"by":"c-CV_MARSHAL","detail":"#30","op":"Append"}]},"at":1782009600000,"before":{"hullId":"CVN-72","overrides":{"altimeterInHg":null,"brcDeg":null,"ceilingFt":null,"finalBearingDeg":null,"firstFixDme":null,"marshalRadialDeg":null,"rampTimeUtc":null,"tankerAltitudeFt":null,"tankerGiveKlb":null,"tankerOnStation":null,"tankerPatternSide":null,"tankerSideNumber":null,"visibilityNm":null,"windOverDeckKt":null},"recoveryCase":{"history":[],"setAt":null,"setBy":null,"value":"III"},"rev":0,"stacks":{"MAIN":{"deltaMs":0,"entries":[],"hullId":"CVN-72","stackId":"MAIN"}},"transitions":[]},"carrierHullId":"CVN-72","clientMutationId":null,"ok":true,"op":"Stack:Append"},{"actingPositionId":"CV_MARSHAL","actorId":"c-CV_MARSHAL","after":"S #31 r1 MARSHAL/IN_STACK @CV_MARSHAL cv-marshal-stack/main:V h=efecf4c5a6","at":1782009600000,"before":null,"clientMutationId":"#29","facilityId":"CARRIER","flightDataId":"#30","op":"CreateStrip","stripId":"#31"}]},
+        {"n":5,"who":"c-CV_MARSHAL","in":{"actingPositionId":"CV_MARSHAL","baseRev":1,"clientMutationId":"#32","facilityId":"CARRIER","op":{"blockId":"C19","kind":"SetBlock","value":"8"},"stripId":"#31","type":"efsp-mutation","version":1},"out":{"ack":{"clientMutationId":"#32","facilityId":"CARRIER","flightData":"F #30 r2 AAA11 sq=0001 h=5c2958fcde","ok":true,"strip":"S #31 r2 MARSHAL/IN_STACK @CV_MARSHAL cv-marshal-stack/main:V h=1c6e5a6e20","stripId":"#31","type":"efsp-mutation-ack","version":1},"broadcast":{"facilityId":"CARRIER","flightDataList":{"updated":["F #30 r2 AAA11 sq=0001 h=5c2958fcde"]},"positions":{"updated":[]},"strips":{"gone":[],"updated":["S #31 r2 MARSHAL/IN_STACK @CV_MARSHAL cv-marshal-stack/main:V h=1c6e5a6e20"]},"type":"efsp-board-delta","version":1}},"audit":[{"actingPositionId":"CV_MARSHAL","actorId":"c-CV_MARSHAL","after":"S #31 r2 MARSHAL/IN_STACK @CV_MARSHAL cv-marshal-stack/main:V h=1c6e5a6e20","at":1782009600000,"before":"S #31 r1 MARSHAL/IN_STACK @CV_MARSHAL cv-marshal-stack/main:V h=efecf4c5a6","blockId":"C19","clientMutationId":"#32","facilityId":"CARRIER","flightDataId":"#30","op":"SetBlock","stripId":"#31","value":"8"}]},
+        {"n":6,"who":"c-CV_MARSHAL","in":{"actingPositionId":"CV_MARSHAL","baseRev":2,"clientMutationId":"#33","facilityId":"CARRIER","op":{"blockId":"C19","kind":"SetBlock","value":"5"},"stripId":"#31","type":"efsp-mutation","version":1},"out":{"ack":{"clientMutationId":"#33","detail":"approachTurnNm must be one of 4, 6, 8 (the assigned approach turn, nm DME)","facilityId":"CARRIER","ok":false,"reason":"VALIDATION_ERROR","strip":"S #31 r2 MARSHAL/IN_STACK @CV_MARSHAL cv-marshal-stack/main:V h=1c6e5a6e20","stripId":"#31","type":"efsp-mutation-ack","version":1}},"audit":[]}
+      ],
+      "orphanAudit": [],
+      "final": {
+        "boards": {
+          "INCIRLIK": {
+            "n": 0,
+            "h": "97d170e155",
+            "rows": [],
+            "rest": {
+              "cidSeq": 0,
+              "droppedWallAt": [],
+              "replay": []
+            }
+          },
+          "CENTER": {
+            "n": 0,
+            "h": "97d170e155",
+            "rows": [],
+            "rest": {
+              "cidSeq": 0,
+              "droppedWallAt": [],
+              "replay": []
+            }
+          },
+          "TACTICAL": {
+            "n": 0,
+            "h": "97d170e155",
+            "rows": [],
+            "rest": {
+              "cidSeq": 0,
+              "droppedWallAt": [],
+              "replay": []
+            }
+          },
+          "CARRIER": {
+            "n": 1,
+            "h": "39b00628ec",
+            "rows": [
+              "S #31 r2 MARSHAL/IN_STACK @CV_MARSHAL cv-marshal-stack/main:V h=1c6e5a6e20"
+            ],
+            "rest": {
+              "cidSeq": 1,
+              "droppedWallAt": [],
+              "replay": [
+                ["#29",{"appliedWallAt":1000000,"detail":null,"flightDataId":"#30","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#31","warnings":null}],
+                ["#32",{"appliedWallAt":1000000,"detail":null,"flightDataId":"#30","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#31","warnings":null}],
+                ["#33",{"appliedWallAt":1000000,"detail":"approachTurnNm must be one of 4, 6, 8 (the assigned approach turn, nm DME)","flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"VALIDATION_ERROR","routedTo":null,"selfCoordinated":null,"stripId":"#31","warnings":null}]
+              ]
+            }
+          },
+          "RANGES": {
+            "n": 0,
+            "h": "97d170e155",
+            "rows": [],
+            "rest": {
+              "cidSeq": 0,
+              "droppedWallAt": [],
+              "replay": []
+            }
+          }
+        },
+        "flightData": {
+          "n": 1,
+          "h": "9045ee4982",
+          "rows": [
+            "F #30 r2 AAA11 sq=0001 h=5c2958fcde"
+          ],
+          "rest": {
+            "codeCursor": 1,
+            "codes": [
+              ["0001","#30"]
+            ]
+          }
+        },
+        "airspaces": {
+          "h": "bf21a9e8fb",
+          "v": {
+            "byTheater": {},
+            "seeded": {}
+          }
+        },
+        "correlations": {
+          "n": 0,
+          "h": "97d170e155",
+          "rows": []
+        },
+        "marsa": {
+          "n": 0,
+          "h": "97d170e155",
+          "rows": []
+        },
+        "runwayStatuses": {
+          "n": 1,
+          "h": "8b6b3af46c",
+          "rows": [
+            "INCIRLIK h=89de413b69"
+          ]
+        },
+        "carriers": {
+          "n": 1,
+          "h": "7591ec9377",
+          "rows": [
+            "CVN-72 h=d78503e233"
+          ]
+        }
+      }
+    }
+  ]
+}

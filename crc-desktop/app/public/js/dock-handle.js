@@ -25,6 +25,7 @@ export const PANEL_TITLES = {
   airspace: 'AIRSPACE',
   runwayStatus: 'RUNWAY STATUS',
   carrier:  'CARRIER',
+  marshal:  'MARSHAL',
   metrics:  'METRICS',
 };
 

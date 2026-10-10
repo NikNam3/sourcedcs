@@ -80,12 +80,13 @@ export const NLA_LABELS = {
 // The carrier's handoffs (guide §9.12: four different buttons, four trigger
 // types, "MUST NOT be unified behind one button"). A client mirror of
 // crc-sync's carrier/handoffs.js, drift-tested like the tables below. `seeYou`
-// (MARSHAL_TO_PRIFLY) is the Case II second button beside the NLA.
+// (MARSHAL_TO_PRIFLY) is the Case II second button beside the NLA; COMMENCED_TO_MARSHAL (Back to stack) is the MARSHAL panel's.
 export const CARRIER_HANDOFFS = {
   MARSHAL_TO_APPROACH:       { label: 'Commence',      trigger: 'CONTROLLER_INITIATED', from: ['CV_MARSHAL'], cases: ['II', 'III'] },
   APPROACH_TO_FINAL:         { label: 'Radar contact', trigger: 'RADAR_ACQUISITION',    from: ['CV_APP1', 'CV_APP2'], cases: ['II', 'III'] },
   FINAL_TO_LSO:              { label: 'Ball',          trigger: 'PILOT_BALL_CALL',      from: ['CV_APP1', 'CV_APP2'], cases: ['I', 'II', 'III'] },
   MARSHAL_TO_PRIFLY:         { label: 'See you',       trigger: 'PILOT_SEE_YOU',        from: ['CV_MARSHAL'], cases: ['II'] },
+  COMMENCED_TO_MARSHAL:      { label: 'Back to stack', trigger: 'CONTROLLER_INITIATED', from: ['CV_MARSHAL'], cases: ['II', 'III'] },
   MARSHAL_TO_PATTERN_CASE_I: { label: 'To pattern',    trigger: 'CONTROLLER_INITIATED', from: ['CV_MARSHAL'], cases: ['I'] },
 };
 

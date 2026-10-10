@@ -8,6 +8,7 @@ import { initEfspPanel } from './panels/efsp/efsp-panel.js';
 import { initAirspacePanel } from './panels/efsp/airspace-panel.js';
 import { initRunwayStatusPanel } from './panels/efsp/runway-status-panel.js';
 import { initCarrierManagementPanel } from './panels/efsp/carrier-management-panel.js';
+import { initMarshalPanel } from './panels/efsp/marshal-panel.js';
 import { initMetricsPanel } from './panels/metrics-panel.js';
 import { getActiveRadars } from './picture.js';
 import { map } from './map-handle.js';
@@ -57,6 +58,7 @@ export function initDock() {
         case 'airspace': return mountExistingPanel('airspace-panel', initAirspacePanel);
         case 'runwayStatus': return mountExistingPanel('runway-status-panel', initRunwayStatusPanel);
         case 'carrier':  return mountExistingPanel('carrier-mgmt-panel', initCarrierManagementPanel);
+        case 'marshal':  return mountExistingPanel('marshal-panel', initMarshalPanel);
         case 'metrics':  return mountExistingPanel('metrics-panel', initMetricsPanel);
         default: throw new Error(`[dock] unknown panel component: ${options.name}`);
       }
@@ -184,7 +186,7 @@ function addMissingRequiredPanels() {
 // (it lands wherever the active group happens to be, sometimes merging
 // into completely the wrong group — both reproduced firsthand while
 // building this). `excludeId` leaves out the panel currently being placed.
-const LEFT_CLUSTER = ['track', 'radars', 'airport', 'efsp', 'airspace', 'runwayStatus', 'carrier', 'metrics'];
+const LEFT_CLUSTER = ['track', 'radars', 'airport', 'efsp', 'airspace', 'runwayStatus', 'carrier', 'marshal', 'metrics'];
 
 function leftGroupAnchor(excludeId) {
   return LEFT_CLUSTER.filter(id => id !== excludeId).find(id => dock.api.getPanel(id));
@@ -196,7 +198,7 @@ function leftGroupAnchor(excludeId) {
 // remembered size to come back to.
 const PANEL_SIDE = {
   track: 'left', radars: 'left', airport: 'left', efsp: 'left', airspace: 'left',
-  runwayStatus: 'left', carrier: 'left', metrics: 'left',
+  runwayStatus: 'left', carrier: 'left', marshal: 'left', metrics: 'left',
   settings: 'right',
   radio: 'bottom',
 };
@@ -311,6 +313,14 @@ const DOCKABLE_PANELS = {
     const anchor = leftGroupAnchor('carrier');
     return withRememberedPlacement('carrier', {
       id: 'carrier', component: 'carrier', title: PANEL_TITLES.carrier,
+      position: anchor ? { referencePanel: anchor } : { referencePanel: 'map', direction: 'left' },
+    }, !anchor);
+  },
+  // The recovery board (crc-sync docs/adr/0114). Everyone at the carrier reads it; the Marshal sequences.
+  marshal: () => {
+    const anchor = leftGroupAnchor('marshal');
+    return withRememberedPlacement('marshal', {
+      id: 'marshal', component: 'marshal', title: PANEL_TITLES.marshal,
       position: anchor ? { referencePanel: anchor } : { referencePanel: 'map', direction: 'left' },
     }, !anchor);
   },
