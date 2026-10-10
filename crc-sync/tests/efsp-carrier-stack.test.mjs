@@ -50,7 +50,7 @@ test('emptyStack is keyed by stackId (decisions H29) and holds no derived value'
   const s = emptyStack({ hullId: 'CVN-72' });
   assert.equal(s.stackId, DEFAULT_STACK_ID);
   assert.deepEqual(s, { stackId: 'MAIN', hullId: 'CVN-72', entries: [], deltaMs: 0 });
-  assert.deepEqual([...ENTRY_KEYS], ['flightDataId', 'stackIndex', 'status', 'caseIAngels', 'pushedAtUtc', 'eatUtc']);
+  assert.deepEqual([...ENTRY_KEYS], ['flightDataId', 'stackIndex', 'status', 'caseIAngels', 'pushedAtUtc', 'eatUtc', 'unpassed']);
   assert.equal(STACK_DEFAULTS.maxIndex, 19);
 });
 
@@ -333,6 +333,7 @@ test('applyStackOp dispatches every STACK_OP_KIND and refuses anything else', ()
     SetCaseIAngels: { flightDataId: 'a', caseIAngels: 2 },
     Delta: { minutes: 4 },
     BackToStack: { flightDataId: 'a' },
+    PassClearance: { flightDataId: 'a', angels: null, eatUtc: null },
   };
   assert.deepEqual(Object.keys(ops).sort(), [...STACK_OP_KINDS].sort());
   for (const [kind, op] of Object.entries(ops)) {

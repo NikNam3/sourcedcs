@@ -290,7 +290,11 @@ class CarrierStore extends SyncedStore {
     const before = deepClone(record);
     const result = this._guarded('carrier op', log, () => this._dispatch(record, op, actingPositionId, by));
     if (!result.record) result.record = deepClone(record);
-    this._audit(mutation, actingPositionId, by, before, result);
+    // Passing a clearance is audited with what was passed: which flight, which fields, the values (docs/adr/0115).
+    const extra = result.ok && op.kind === 'PassClearance'
+      ? { flightDataId: op.flightDataId, passed: result.passed || [], angels: op.angels, eatUtc: op.eatUtc }
+      : {};
+    this._audit(mutation, actingPositionId, by, before, result, extra);
     return result;
   }
 
@@ -320,6 +324,8 @@ class CarrierStore extends SyncedStore {
       return { ok: false, reason: 'PERMISSION_DENIED', detail: `${actingPositionId} does not set the carrier state — PriFly and the Marshal do` };
     }
     const at = this._clock.now();
+    // A Case or ramp-time change moves holding flights' angels or EATs: those are marked until passed (docs/adr/0115).
+    const derivedBefore = this._derivedAll(record);
     if (op.field === carrier.CASE_FIELD) {
       const r = (op.value === null || op.value === undefined || op.value === '')
         ? carrier.clearCase(record.recoveryCase, { by, at, note: op.note })
@@ -327,6 +333,7 @@ class CarrierStore extends SyncedStore {
       if (!r.ok) return r;
       const last = r.case.history[r.case.history.length - 1];
       record.recoveryCase = r.case;
+      this._markChanges(record, derivedBefore);
       this._touch(record, by, STATE_OP, `case ${last.from} -> ${r.case.value}`);
       // One record changes, and every client re-renders every carrier Strip from it.
       return { ok: true, record: deepClone(record), changed: 'ALL' };
@@ -338,8 +345,28 @@ class CarrierStore extends SyncedStore {
     // A new ramp time starts the schedule afresh: a Delta (docs/adr/0114) was a delay on the OLD one, and the Marshal who types
     // a new ramp time has already allowed for it.
     if (v.key === 'rampTimeUtc') for (const stack of Object.values(record.stacks)) stack.deltaMs = 0;
+    this._markChanges(record, derivedBefore);
     this._touch(record, by, STATE_OP, `${op.field} ${v.stored === null ? 'cleared' : JSON.stringify(v.stored)}`);
     return { ok: true, record: deepClone(record), changed: 'ALL' };
+  }
+
+  /** Every stack of a record, derived as it stands: { [stackId]: derived[] }. */
+  _derivedAll(record) {
+    const { inputs } = this._resolve(record);
+    const out = {};
+    for (const [stackId, stack] of Object.entries(record.stacks)) out[stackId] = carrier.deriveStack(stack, inputs);
+    return out;
+  }
+
+  /**
+   * The server decides what counts as a change to a holding flight's clearance (docs/adr/0115): compare each stack, derived,
+   * with `before` and mark the angels or EAT that moved (carrier.markClearanceChanges). Called after every op that can move one.
+   */
+  _markChanges(record, before) {
+    const after = this._derivedAll(record);
+    for (const [stackId, stack] of Object.entries(record.stacks)) {
+      record.stacks[stackId] = carrier.markClearanceChanges(stack, before[stackId] || [], after[stackId] || []);
+    }
   }
 
   _stackOf(record, stackId) {
@@ -354,6 +381,12 @@ class CarrierStore extends SyncedStore {
       return { ok: false, reason: 'NOT_FOUND', detail: `unknown flight data ${op.flightDataId}` };
     }
     const opts = { ...carrier.STACK_DEFAULTS };
+    const derivedBefore = this._derivedAll(record);
+    if (op.kind === 'PassClearance') {
+      // What the flight's clearance reads now; the op must name the same values (it was passed as read).
+      const d = derivedBefore[stackId].find(e => e.flightDataId === op.flightDataId);
+      if (d) opts.current = { angels: d.angels, eatUtc: d.pushTimeUtc };
+    }
     if (op.kind === 'Delta' || op.kind === 'MarkPushed') {
       const { inputs } = this._resolve(record);
       if (op.kind === 'Delta' && !Number.isFinite(inputs.rampTimeUtc)) {
@@ -368,10 +401,12 @@ class CarrierStore extends SyncedStore {
     }
     const r = carrier.applyStackOp(stack, op, opts);
     if (!r.ok) return r;
+    if (r.unchanged) return { ok: true, record: deepClone(record), changed: [], unchanged: true, passed: [] };
     record.stacks[stackId] = r.stack;
+    this._markChanges(record, derivedBefore);
     if (!quiet) this._touch(record, by, op.kind, op.kind === 'Delta' ? op.minutes : (op.flightDataId || null));
     else this._bump(record);
-    return { ok: true, record: deepClone(record), changed: r.changed };
+    return { ok: true, record: deepClone(record), changed: r.changed, ...(r.passed ? { passed: r.passed } : {}) };
   }
 
   // ── effects of carrier handoffs (called by board/ops/carrier-handoff.js through the rules) ────
