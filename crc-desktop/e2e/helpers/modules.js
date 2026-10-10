@@ -43,6 +43,7 @@ const MODULES = {
   airspace: '/js/panels/efsp/airspace-panel.js',
   airspaceLayer: '/js/airspace-layer.js',
   msgRegistry: '/js/panels/efsp/efsp-message-registry.js',
+  carrierMap: '/js/panels/efsp/carrier-map-panel.js', // crc.carrierMap.renderCarrierMap, carrierMapGeometry
 };
 
 /** Runs after page.goto('/'). Resolves once every module is imported and `window.crc` exists. */
