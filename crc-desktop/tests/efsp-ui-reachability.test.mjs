@@ -459,7 +459,7 @@ async function renderStrip({ strip, flightData, signedOn, airspaces = [], correl
     return seen;
   };
   const portal = sandbox.document.body;
-  return { el, sent, sandbox, pointerDownOn, keyDownOnDocument, portal, winListeners };
+  return { el, sent, sandbox, pointerDownOn, keyDownOnDocument, portal, winListeners, docListeners };
 }
 
 const FDR = {
@@ -2149,10 +2149,38 @@ test('a Strip that just arrived flashes on its first build only, and keeps its a
   assert.ok(second.classList.contains('efsp-strip-arrived'), 'still marked new');
   assert.equal(second.classList.contains('efsp-strip-arrived-flash'), false, 'the flash played again on an unrelated rebuild');
 
-  // The controller touches it: noticed.
+  // The controller touches it: noticed once the press ends, not while it is held (MARSHAL-FIX, below).
   fire(second, 'pointerdown', { target: second, currentTarget: second, button: 0, pointerType: 'mouse' });
+  for (const fn of [...(r.docListeners.pointerup || [])]) fn({ target: second, stopPropagation() {}, preventDefault() {} });
   assert.equal(second.classList.contains('efsp-strip-arrived'), false);
   assert.equal(r.sandbox.efspArrivalFor('s1'), null);
+});
+
+test('pressing a button on a just-arrived Strip moves nothing until the press ends, so the press is a click (MARSHAL-FIX)', async () => {
+  // Measured in control-release.spec.js (CTR to CV_MARSHAL): clearing the arrival at pointerdown took the "from" line
+  // out of the tab, the step buttons moved up, and the pointerup landed on "Control to CV_MARSHAL" instead of the
+  // "Comms to CV_MARSHAL" it went down on: no click, nothing sent. Clearing it also changed the render signature, so a
+  // render during the press rebuilt the Strip under the button.
+  const strip = stripAt({ ownerPositionId: 'LC', state: 'RUNWAY_QUEUE', bayId: 'lc-runway-queue', updatedBy: 'c-gnd' });
+  const r = await renderStrip({ strip, flightData: FDR, signedOn: ['LC'] });
+  r.sandbox.noteEfspArrivals(new Map([['s1', { bayId: 'gc-taxi-out', ownerPositionId: 'GC' }]]), [strip],
+    { signedOnPositions: ['LC'], myControllerIds: ['c-twr'], visibleBayId: 'lc-runway-queue', now: Date.now(), callsignOf: () => 'VIPER1' });
+  const el = r.sandbox._buildStripEl(strip);
+  el.dataset.sig = r.sandbox._stripRenderSignature(strip);
+  const button = descendants(el).find(c => c.tagName === 'button');
+  assert.ok(button, 'the Strip has a button to press');
+  const listenersBefore = [(r.docListeners.pointerup || []).length, (r.docListeners.pointercancel || []).length];
+
+  fire(el, 'pointerdown', { target: button, currentTarget: el, button: 0, pointerType: 'mouse' });
+  assert.ok(descendants(el).some(c => c.textContent === 'from GC'), 'the "from" line left the tab while the button was held');
+  assert.ok(el.classList.contains('efsp-strip-arrived'));
+  assert.equal(r.sandbox._stripElNeedsRebuild(el, strip, null, null), false, 'a render during the press would rebuild the Strip under the button');
+
+  for (const fn of [...(r.docListeners.pointerup || [])]) fn({ target: button, stopPropagation() {}, preventDefault() {} });
+  assert.equal(r.sandbox.efspArrivalFor('s1'), null, 'the press, once over, is the controller noticing the Strip');
+  assert.equal(descendants(el).some(c => c.textContent === 'from GC'), false);
+  assert.deepEqual([(r.docListeners.pointerup || []).length, (r.docListeners.pointercancel || []).length], listenersBefore,
+    'the release listener outlived its press');
 });
 
 test('an arrival is part of the render signature, so it appears (and clears) without the Strip\'s rev moving', async () => {
