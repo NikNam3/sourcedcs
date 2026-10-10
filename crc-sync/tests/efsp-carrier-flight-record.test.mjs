@@ -14,7 +14,7 @@ const T = Date.UTC(2026, 8, 30, 13, 45, 0);
 
 test('defaults: every field present and null', () => {
   assert.deepEqual(defaultCarrierFlight(), {
-    eeatUtc: null, approachType: null, approachButton: null, bingoField: null, bingoFuelLb: null, lowStateLb: null, sideNumber: null,
+    eeatUtc: null, approachType: null, approachButton: null, bingoField: null, bingoFuelLb: null, lowStateLb: null, sideNumber: null, approachTurnNm: null,
   });
   assert.deepEqual([...CARRIER_FLIGHT_FIELDS], Object.keys(defaultCarrierFlight()));
   assert.notEqual(defaultCarrierFlight(), defaultCarrierFlight(), 'a fresh object each time');
