@@ -60,6 +60,7 @@
     "efspOpKinds": [
       "AIT",
       "ApproveAirspaceEntry",
+      "CarrierHandoff",
       "ClearAirspaceEntry",
       "ControlRelease",
       "ConvertToArrival",
@@ -75,11 +76,234 @@
       "SetBlock",
       "SetFlag",
       "SetState",
+      "SfaRotation",
       "SplitFormation",
       "TOFI",
       "TRAFFIC",
       "TransferStrip",
       "Undo"
+    ],
+    "storeOpKinds": {
+      "efsp-airspace-mutation": [
+        "ApproveActivation",
+        "CreateAirspace",
+        "DelayActivation",
+        "DeleteAirspace",
+        "DenyActivation",
+        "EditAirspace",
+        "ImportAirspaces",
+        "ReleaseAirspace",
+        "RequestActivation",
+        "ReturnAirspace",
+        "ScheduleAirspace"
+      ],
+      "efsp-ato-mutation": [
+        "ImportAto"
+      ],
+      "efsp-carrier-mutation": [
+        "Append",
+        "BackToStack",
+        "CloseUp",
+        "Delta",
+        "InsertAt",
+        "MarkPushed",
+        "Move",
+        "PassClearance",
+        "Remove",
+        "SetCarrierState",
+        "SetCaseIAngels"
+      ],
+      "efsp-correlation-mutation": [
+        "BindTrack",
+        "UnbindTrack"
+      ],
+      "efsp-marsa-mutation": [
+        "AddParticipant",
+        "DeclareMarsa",
+        "EndMarsa",
+        "MarkRendezvous",
+        "RemoveParticipant",
+        "VoidMarsa"
+      ],
+      "efsp-runway-status-mutation": [
+        "AcceptRunwayRequest",
+        "AckRunwayChange",
+        "BeginRunwayChange",
+        "BeginRunwayWorks",
+        "CloseRunway",
+        "CompleteInspection",
+        "CompleteRunwayChange",
+        "CompleteRunwayWorks",
+        "OpenRunway",
+        "ProposeRunwayChange",
+        "RejectRunwayChange",
+        "RejectRunwayRequest",
+        "RequestRunwayStatus",
+        "SelfCoordinateRunwayChange",
+        "WithdrawRunwayChange"
+      ],
+      "efsp-sfa-mutation": [
+        "SetSfaRotation"
+      ]
+    },
+    "carrier": {
+      "handoffs": [
+        "APPROACH_TO_FINAL",
+        "COMMENCED_TO_MARSHAL",
+        "FINAL_TO_LSO",
+        "MARSHAL_TO_APPROACH",
+        "MARSHAL_TO_PATTERN_CASE_I",
+        "MARSHAL_TO_PRIFLY"
+      ],
+      "triggerTypes": [
+        "CONTROLLER_INITIATED",
+        "PILOT_BALL_CALL",
+        "PILOT_SEE_YOU",
+        "RADAR_ACQUISITION"
+      ],
+      "cases": [
+        "I",
+        "II",
+        "III"
+      ],
+      "stateFields": [
+        "altimeter",
+        "brc",
+        "case",
+        "ceiling",
+        "finalBearing",
+        "firstFix",
+        "radial",
+        "rampTime",
+        "tankerAltitude",
+        "tankerGive",
+        "tankerOnStation",
+        "tankerPatternSide",
+        "tankerSide",
+        "visibility",
+        "windOverDeck"
+      ],
+      "entryStatuses": [
+        "HOLDING",
+        "PUSHED"
+      ],
+      "clearanceFields": [
+        "angels",
+        "eat"
+      ],
+      "stackKeys": [
+        "deltaMs",
+        "entries",
+        "hullId",
+        "stackId"
+      ],
+      "entryKeys": [
+        "caseIAngels",
+        "eatUtc",
+        "flightDataId",
+        "pushedAtUtc",
+        "stackIndex",
+        "status",
+        "unpassed"
+      ],
+      "flightFields": [
+        "approachButton",
+        "approachTurnNm",
+        "approachType",
+        "bingoField",
+        "bingoFuelLb",
+        "eeatUtc",
+        "lowStateLb",
+        "sideNumber"
+      ],
+      "viewKeys": [
+        "advisory",
+        "consistency",
+        "derived",
+        "hull",
+        "hullId",
+        "lanes",
+        "overrides",
+        "recoveryCase",
+        "rev",
+        "shipState",
+        "slots",
+        "stacks",
+        "state",
+        "transitions",
+        "tuning"
+      ],
+      "stateKeys": [
+        "brc",
+        "case",
+        "finalBearing",
+        "firstFix",
+        "radial",
+        "rampTime",
+        "tanker",
+        "weather"
+      ],
+      "derivedEntryKeys": [
+        "angels",
+        "caseValue",
+        "expectedFinalBearingDeg",
+        "expectedFinalBearingDisplay",
+        "firstFixDme",
+        "flightDataId",
+        "marshalDme",
+        "marshalRadialDeg",
+        "marshalRadialDisplay",
+        "marshalRadialSource",
+        "minimumAltitudeOk",
+        "pushTimeUtc",
+        "pushWindowUtc",
+        "pushedAtUtc",
+        "rampEtaUtc",
+        "stackIndex",
+        "status",
+        "unpassed"
+      ]
+    },
+    "sfaTransfers": [
+      "SFA_ROTATION"
+    ],
+    "storeSync": [
+      {
+        "key": "airspaces",
+        "seqKey": "airspaceSeq",
+        "epochKey": "airspaceEpoch",
+        "deltaType": "efsp-airspace-delta"
+      },
+      {
+        "key": "carriers",
+        "seqKey": "carrierSeq",
+        "epochKey": "carrierEpoch",
+        "deltaType": "efsp-carrier-delta"
+      },
+      {
+        "key": "correlations",
+        "seqKey": "correlationSeq",
+        "epochKey": "correlationEpoch",
+        "deltaType": "efsp-correlation-delta"
+      },
+      {
+        "key": "marsa",
+        "seqKey": "marsaSeq",
+        "epochKey": "marsaEpoch",
+        "deltaType": "efsp-marsa-delta"
+      },
+      {
+        "key": "runwayStatuses",
+        "seqKey": "runwayStatusSeq",
+        "epochKey": "runwayStatusEpoch",
+        "deltaType": "efsp-runway-status-delta"
+      },
+      {
+        "key": "sfaRotation",
+        "seqKey": "sfaSeq",
+        "epochKey": "sfaEpoch",
+        "deltaType": "efsp-sfa-delta"
+      }
     ],
     "frameKeys": {
       "status": [
@@ -124,6 +348,59 @@
         "clientProtocol",
         "downloadUrl",
         "serverProtocol",
+        "type",
+        "version"
+      ],
+      "efsp-board-delta": [
+        "boardEpoch",
+        "boardSeq",
+        "facilityId",
+        "flightDataList",
+        "positions",
+        "strips",
+        "type",
+        "version"
+      ],
+      "efsp-airspace-delta": [
+        "airspaceEpoch",
+        "airspaceSeq",
+        "airspaces",
+        "type",
+        "version"
+      ],
+      "efsp-correlation-delta": [
+        "correlationEpoch",
+        "correlationSeq",
+        "correlations",
+        "stats",
+        "type",
+        "version"
+      ],
+      "efsp-marsa-delta": [
+        "marsa",
+        "marsaEpoch",
+        "marsaSeq",
+        "type",
+        "version"
+      ],
+      "efsp-runway-status-delta": [
+        "runwayStatusEpoch",
+        "runwayStatusSeq",
+        "runwayStatuses",
+        "type",
+        "version"
+      ],
+      "efsp-carrier-delta": [
+        "carrierEpoch",
+        "carrierSeq",
+        "carriers",
+        "type",
+        "version"
+      ],
+      "efsp-sfa-delta": [
+        "sfaEpoch",
+        "sfaRotation",
+        "sfaSeq",
         "type",
         "version"
       ]
