@@ -100,14 +100,17 @@ the panel scrolls).
 3. **Signing off PAR while holding AP keeps the sample** (ADR 0110 hat): expected, but worth a line in the guide.
 4. The FINAL Bay's flight line and the carrier Strip's DIST Block both show the range on a carrier lane (the Strip stays under the line).
    Harmless; the supervisor may prefer the line without range on the carrier.
-5. PAR-1 open point (b) (PriFly/Marshal see no DIST) is unchanged: the PAR panel shows only samples sent to this session.
+5. H124 (2) (side number leads on every carrier view) is met by the PAR flight row, the picks and the FINAL Bay line on a carrier lane
+   (`flightName`, par-model.js); the PriFly chip is CARRIER-FOLLOWUP's. H124 (1) (carrier course = final bearing in force) is a server
+   change for that lane; the panel draws whatever `approach` the sample carries.
+6. PAR-1 open point (b) (PriFly/Marshal see no DIST) is unchanged: the PAR panel shows only samples sent to this session.
 
 ## Gates
 
 | Gate | Before | After |
 |---|---|---|
-| crc-desktop `npm test` | 1247 | see report |
-| crc-sync `npm test` | 2643 (1 timing flake in the grpc client's abandon test under load) | see report |
+| crc-desktop `npm test` | 1247 | 1253 (all pass: the FINAL component's 10 tests and 3 bay-view final tests gone, 15 PAR model tests and 4 bay-view final tests added) |
+| crc-sync `npm test` | 2643 (1 timing flake in the grpc client's abandon test, run beside the desktop suite) | 2643 (all pass; no crc-sync file changed) |
 | module-graph fixture | | re-recorded: `final-panel.js` gone; `par-model.js`, `par-panel.js` added; `bay-views.js` exports `finalKindOf`, `finalRowModel` instead of `finalSampleFor`, `finalTerminalOp` |
 | no-cycle / no-window-globals / html-sinks | | green (`par-model.js` added to `NEVER_IN_A_CYCLE`) |
 | Playwright (E2E_LANE=3, each file alone) | | `par-panel` 7/7, `l18-incirlik` 3/3, `l17-carrier` 6/6, `side-swap` 2/2, `settings-tabs` 1/1, `smoke` 1/1 |
