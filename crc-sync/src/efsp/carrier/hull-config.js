@@ -11,25 +11,44 @@
 //
 // `{ "hulls": [ HullConfig ] }`. A hull that fails validateHullConfig (angledDeckDeg
 // missing, DATA-3) is a startup error naming the file and the hull, as is an unreadable file or one with no hull (DATA-2, H88: no code copy of the CVN-72 `UNION` hull,
-// decisions H13/H26, is kept).
+// decisions H13/H26, is kept). A key this build does not know, at any level (the removed hull `approach`, ADR 0116),
+// is a startup error naming the file and the key path, like every strict state/ file (H127); `_comment`-style keys are free.
 // v1 has one hull and one stack (H29); the keys allow more.
 
 const fs = require('fs');
 const { readPath } = require('../../state-paths');
 const { validateHullConfig } = require('./ship-state');
+const { anyOf, arrayOf, checkShape } = require('../../persisted-shape');
 
 const CARRIERS_FILE = 'efsp-carriers.json';
 
+// Every key the file may hold (ship-state.js's HullConfig), checked on the shipped file and on a state/ copy alike.
+const CARRIERS_SHAPE = {
+  hulls: arrayOf({
+    ...anyOf('hullId', 'label', 'angledDeckDeg'),
+    match: anyOf('unitName', 'type', 'coalition'),
+  }),
+};
+
+function _checkKeys(raw, file) {
+  checkShape(raw, CARRIERS_SHAPE, {
+    freeUnderscore: true,
+    unknownKey: (at) => new Error(`[efsp-carriers] ${file} has an unknown key "${at}" (this build's hull config has no such key; an older build's, e.g. the removed hull "approach"?): delete it`),
+    arrayWhereObject: (at) => new Error(`[efsp-carriers] ${file} holds an array at "${at}", which this build keeps as an object: correct it`),
+  });
+}
+
 function _load() {
   const file = readPath(CARRIERS_FILE, process.env.CRCSYNC_EFSP_CARRIERS_PATH);
-  let list;
+  let list, raw;
   try {
-    const raw = JSON.parse(fs.readFileSync(file, 'utf8'));
+    raw = JSON.parse(fs.readFileSync(file, 'utf8'));
     if (!Array.isArray(raw.hulls)) throw new Error('no "hulls" array');
     list = raw.hulls;
   } catch (e) {
     throw new Error(`[efsp-carriers] cannot read ${file}: ${e.message}`);
   }
+  _checkKeys(raw, file);
   const hulls = [];
   for (const h of list) {
     const v = validateHullConfig(h);
