@@ -165,7 +165,11 @@ archiving (L24), Board sync correctness (L27), the tactical Positions (L23), aud
 block altitudes (U6), magnetic headings (F2), mission sessions (F3), typed time Blocks (F4), the carrier
 Positions and Facility (L17), the suggestion chip and staleness (L19), the UI follow-up (UI-A), the
 per-theater transition altitude (TA), the client-mirror parity tests (PARITY), the soak fixes (SOAK), and
-Incirlik's pattern board and FINAL component (L18, both halves).
+Incirlik's pattern board and FINAL component (L18, both halves; the FINAL component is now the PAR panel, §3K).
+
+**The panels and Divert** (`0111`-`0116`). See §3K: the tabbed Settings panel, Divert, the carrier's state and the NATOPS EAT,
+the MARSHAL recovery board and its marks, the CARRIER MAP, the side number, the PAR sample and panel, and the PAR as an airfield
+feature only.
 
 ## 3A. The RANGE Position
 
@@ -1442,7 +1446,7 @@ both CV lanes; the DCS wind direction at the ship against a real DCS.
 
 ## 4. What's left, and the known bugs
 
-**Not built, in the guide's order.** WP7A: Incirlik's RSU/SFA/PAR is built (§3J); the carrier Positions (L17) have never met a real DCS ship. WP8's §10.3 suggestion chip
+**Not built, in the guide's order.** WP7A: Incirlik's RSU/SFA/PAR is built (§3J), with the PAR panel (§3K); the carrier Positions (L17) and their panels (§3K) have never met a real DCS ship. WP8's §10.3 suggestion chip
 and §10.4 staleness (L19) and OVERFLIGHT's four-state lifecycle (L28, `0087`) are built. Everything else in WP6 to WP8 that the guide names is built: the runway-status
 panel, `HUNG`, alert/scramble, the ATO import and AR join, the metrics dashboard. L20 and UI-B are complete.
 
@@ -1464,8 +1468,13 @@ and all 15 architecture-check bugs B1-B15 (§3K). ARCH-S/W/C's findings that pha
 | **The soak never rolls the mission** (`MissionSession` bound directly, the clock never steps back), so `0108`'s reset is unexercised; a future host command calling `noteMissionStart` with a new fingerprint would do it. `hints.airborneEver` stays 0 (no synthetic airborne-on-ground-Strip traffic) and no soak runs the production 12 h retention | test debt | later soak lane | NX-1, ARCHIVE-12H |
 | **Soak seed 2's heap slope is 0.92 MB/h (R^2 0.6)**, near the 1.0 MB/h gate, with a real trend; seed 1 is 0.45. If the human's workflow run (`crc-sync-soak.yml`, minutes 240, seed 1, realistic, realtime false, selfcheck true; a second run with seed 2) fails on slope, the first suspect is the per-Strip snapshot growth (31 KB to 289 KB over 4 h). It needs the branch pushed | acceptance | human | S-ARCH-23, NX-1 |
 | Three theaters have no `tmCentralMeridianDeg` (MarianaIslandsWWII, Afghanistan, Iraq): pydcs has no terrain for them and nothing citable was found, so their grid headings cannot be converted; needs an export from someone with the maps. `projection.py` still defaults an unknown theater to Syria | theater work | unowned | F2, THEATERS |
-| **Carrier, never seen live:** the banner reads "hull not found" without a real ship; the weather advisory knows only night; the carrier's final Bays have no `capacity: 1`; two hulls, the deck-state board (`0064` B8) and the in-browser final-bearing line are not walked; the carrier's consolidation (`0110`) has never been exercised against a vacated carrier Position | medium | human live check / L17 owner | L17, S-L17, L18S, CONSOL-S |
-| **Incirlik RSU/SFA/PAR:** an airspace approval that rewrites a flight's frequency desyncs its SFA Rack; the FINAL panel has never seen a live DCS track; its thresholds and the placeholder frequencies are `[SOURCE-DEFINED]` | medium | human live check | L18S |
+| **Carrier, never seen live:** the banner reads "hull not found" without a real ship, so the CARRIER panel, the MARSHAL board's DME placement and APP order, the CARRIER MAP and DIST have only seen an injected ship; the DCS wind at the ship (`ship-wind.js`) and its direction convention are unchecked; the carrier's final Bays have no `capacity: 1`; two hulls, the deck-state board (`0064` B8) are not walked; the carrier's consolidation (`0110`) has never been exercised against a vacated carrier Position | medium | human live check / L17 owner | L17, S-L17, L18S, CONSOL-S, CARRIER-STATE, CARRIER-MAP |
+| **Incirlik RSU/SFA/PAR:** an airspace approval that rewrites a flight's frequency desyncs its SFA Rack; the PAR sample and panel have never seen a live DCS track (fix timing against the 500 ms frame, the DCS Incirlik elevation); the placeholder frequencies and PAR coverage are `[SOURCE-DEFINED]` | medium | human live check | L18S, PAR-1, PAR-2 |
+| **Squadron data owed for the panels:** the LTAG PAR plate (RWY 05/23 thresholds, now worked out from the ARP assuming a 10,000 ft runway; TDZE, `null` = DCS elevation; TCH 50; DH 200; published GPA) into `config/efsp-facility-incirlik.json` `parApproaches`; `fixToRampSec` 360 measured (approach speed under it assumed); CVN-72 data (angled deck, side numbers in use; the carrier glideslope and touchdown point are **no longer needed**: no carrier PAR since `0116`); the tanker defaults | data | human / squadron | PAR-1, CARRIER-STATE, `0116` |
+| **`state/` notes for the next deploy:** a Board snapshot from before CARRIER-STATE (`carriers[].shipInputs`, a stack with `charlieTimeUtc`/`marshalRadialDeg`) **refuses start-up**; the fix is deleting `state/efsp-board.json` and `state/efsp-mutations.jsonl` (the local :3000 was cleared, H122; the production volume is the human's call). A `state/efsp-carriers.json` copy that still has a hull `approach` starts (the key is ignored, `0116`); delete it. A test host copying `config/` must copy `efsp-carrier-recovery.json` too | release check | human / supervisor | CARRIER-STATE, `0116`, H122 |
+| **`wire:record` still does not scan** record contents (Strip, flight data outside the carrier flight fields, airspace/correlation/MARSA/runway/SFA records, the hull view's `hull` contents), ack payloads, `efsp-heartbeat`, the snapshot's fixed keys, op argument names and `REFUSAL_CODES`. A change there needs `--bump` by hand. Adding refusal codes or argument names to the surface is the human's open question (S-ARCH-43) | tooling | next wire lane | WIRE-RECORD, S-ARCH-43 |
+| **Carrier panel defaults to confirm:** the receiver may Divert only after TRANSFER_CONTROL (conservative, kept); a mark stays until passed even when the value moves back; PassClearance has no Undo; a flight with no side number is listed by callsign; the 6 nm turn-in drawn when none is assigned; the spin rule (3.5 nm, 1,000 ft) | decision | human | S-ARCH-37, S-ARCH-41, MARSHAL-BOARD, CARRIER-MAP |
+| A Marshal Observer's click on a marked row: whether it is not sent or refused by the Primary gate is not asserted in a spec; the server refusal for a non-Marshal is walked. The divert chip sits after the ordered indicator slots (not in `INDICATOR_ORDER`); a Strip moved by a TransferStrip without `rackId` is in the Board but unrendered | low | unowned | MARSHAL-MARKS, DIVERT |
 | The client still derives runway-change acknowledgers and the inspection authority from the permission table's owners when a record lacks `runwayChangeAcknowledgers` / `inspectionAuthorityPositionId` (L26; `runway-status-rules.js` carries the fallback). Agrees for Incirlik, wrong for any other config | low | unowned | L1b, L26 |
 | `strip-alerts.js`'s conformance reason line reads `a.assigned` (the nearest edge), so a block-altitude bust says "from FL240" without the block; use `a.block` (the line numbers moved in DESK-SPLIT; the note predates it) | low | unowned | U6 |
 | GCI-held lines are not in `TAC_C2`'s "with AIC/JTAC" tab (GCI is not a delegate: UI-B skipped it with the reason); the metrics `time-to-find` counts that tab as a Bay; `srs-radio.js` has no unit test | low | unowned | UI-A, UI-B |
@@ -1483,9 +1492,10 @@ and all 15 architecture-check bugs B1-B15 (§3K). ARCH-S/W/C's findings that pha
 | Two cosmetic behaviours left alone by decision (D-3): a double 6xxx warning, and a `rev` bump on an unchanged ATO re-import | cosmetic | none | L20PREP |
 
 **Human actions outstanding.** The LG 10-minute live check; one run of the four-hour soak workflow (above); the live wind check (S-F2b) and the live `mission_start` check (S-F3); a live walk of
-a real DCS ship against the carrier banner and of a real FINAL track; L19's taxi/line-up/take-off-without-Airborne walk; the `.env` and MariaDB `init.sh` items from HYG (CLAUDE.md); the squadron
+a real DCS ship against the carrier banner, CARRIER panel, MARSHAL board and CARRIER MAP, and of a real PAR track at Incirlik; L19's taxi/line-up/take-off-without-Airborne walk; the `.env` and MariaDB `init.sh` items from HYG (CLAUDE.md); the squadron
 data above. **Release checks:** crc-sync and crc-desktop ship together (`0110`'s offer frame is gone); look for any `state/efsp-facility-*.json` on the server volume before the first deploy of `0110`
-(strict state refuses the old `consolidation` shape; RUNBOOK); clear `efsp-metrics.json` and `efsp-traffic-count.jsonl` on a machine with state when F3 reaches it (its session counter restarts at 1).
+(strict state refuses the old `consolidation` shape; RUNBOOK); delete `state/efsp-board.json` and `state/efsp-mutations.jsonl` before the first deploy of
+CARRIER-STATE (the old carrier shape refuses start-up) and any hull `approach` in `state/efsp-carriers.json`; clear `efsp-metrics.json` and `efsp-traffic-count.jsonl` on a machine with state when F3 reaches it (its session counter restarts at 1).
 **Integrator actions outstanding:** the L3↔L11 cross-test above; the unloaded crc-sync run; then remove the remaining `docs/wip/*.md`.
 
 **Deferred with reasons, not forgotten:**
@@ -1531,7 +1541,9 @@ data above. **Release checks:** crc-sync and crc-desktop ship together (`0110`'s
 The plan was `docs/efsp-parallel-plan.md` (history) and then `docs/parallel/arch-check-plan.md`; `docs/parallel/decisions.md` is what is actually dispatched. Each lane works in its own worktree
 `/home/nklx/dev/personal/sourcedcs-<lane>` on `lane/<lane>-…`, reads `docs/parallel/lane-rules.md`, and leaves `docs/wip/<lane>.md` for the next fold. **Everything that was dispatched is merged
 into `efsp-wp5-correlation`**: waves 1-3, the refactor W1-W7 and the rename, L20, the post-refactor features (ADRs `0098`-`0106`), and the architecture check's three phases (bugs, tests and tooling,
-structure: §3K) with ARCHIVE-12H, MISSION-CLEAR, CARRIER-ATO, NX-1, THEATERS, CONSOL-DESIGN/S/C, SERVER-TIDY, DESK-SPLIT (its 12 committed commits, S-ARCH-31) and DESK-NOTICES.
+structure: §3K) with ARCHIVE-12H, MISSION-CLEAR, CARRIER-ATO, NX-1, THEATERS, CONSOL-DESIGN/S/C, SERVER-TIDY, DESK-SPLIT (its 12 committed commits, S-ARCH-31) and DESK-NOTICES,
+then the panels: SETTINGS-TABS, DIVERT, CARRIER-STATE, MARSHAL-BOARD, CARRIER-MAP, MARSHAL-FIX, MARSHAL-MARKS, SIDE-SWAP, WIRE-RECORD, PAR-1, PAR-2 and
+CARRIER-FOLLOWUP (§3K), and this docs pass (DOCS-PANELS).
 
 **The one-agent rule (H112).** Since 2026-10-05 **one agent works at a time** (it replaces H105's three); a stopped agent is not resumed, a fresh one is launched. Every briefing requires both unit
 suites (S-ARCH-16). The supervisor runs the sharded Playwright after a merge that touched the client (`lane-rules.md` 7).
@@ -1547,6 +1559,9 @@ suites (S-ARCH-16). The supervisor runs the sharded Playwright after a merge tha
 | The cleanup list at the end of §4 (`facilityView`, underscore exports, CSP, CSS split, bare `Date.now()` sites) | each rewrites import lines or shared contracts; do them one at a time | DESK-TIDY-2, SERVER-SEAMS-1/2 |
 | A soak that rolls the mission, and the human's 240-minute workflow run | tools lane / human action | NX-1 |
 | The live checks in §4 | need a real DCS server and a real ship | human |
+| The squadron data in §4 (LTAG PAR plate, `fixToRampSec`, CVN-72) | data, not code: config files only | human / squadron |
+| Refusal codes and op argument names on the wire surface | waits for the human's answer (S-ARCH-43) | next wire lane |
+| The deck-state board (`0064` B8) | not designed | later carrier lane |
 
 **What to keep true while working** (§3K's traps): both unit suites in every lane; client modules are leaves plus the change bus with no cycle; no `window.*`; `deliverEfsp` is the one server delivery
 path; `SyncedStore` for a new sequenced store; config factories and `createApp({env})`; `withPaths` for private test paths; e2e specs reach modules through `crc.<module>` and follow a moved function;
