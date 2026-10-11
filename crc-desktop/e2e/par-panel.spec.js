@@ -431,4 +431,3 @@ test('07 a carrier lane has no PAR (H125): no sample, the FINAL line by side num
   await row.locator('.efsp-final-terminal[data-terminal="WAVEOFF"]').click();
   await waitStrip(page, call, s => s.state === 'BOLTER_WAVEOFF', 'waveoff');
 });
-});
