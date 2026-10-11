@@ -9,7 +9,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { BLOCK_MAPS } from '../app/public/js/panels/efsp/strip-template.js';
-import { COMPACT_BLOCKS_BY_POSITION, compactBlocksFor, fieldSpanFor, MTR_BLOCKS_BY_POSITION, sideNumberLeads } from '../app/public/js/panels/efsp/strip-fields.js';
+import { COMPACT_BLOCKS_BY_POSITION, compactBlocksFor, fieldSpanFor, MTR_BLOCKS_BY_POSITION, leadingFlightName, sideNumberLeads } from '../app/public/js/panels/efsp/strip-fields.js';
 import { hasMtrData, mtrLostCommsAdvisory } from '../app/public/js/panels/efsp/mtr-advisory.js';
 
 const everyList = () => Object.entries(COMPACT_BLOCKS_BY_POSITION)
@@ -251,4 +251,16 @@ test('no side number yet: the callsign keeps the big slot; non-carrier Strips an
   assert.deepEqual(compactBlocksFor('FINAL', 'PAR', withSide), compactBlocksFor('FINAL', 'PAR', null));
   assert.equal(sideNumberLeads('PATTERN', 'RSU', withSide), false);
   assert.deepEqual(compactBlocksFor('PATTERN', 'RSU', withSide), ['C1', 'C2', 'C24']);
+});
+
+test('leadingFlightName (H124): a carrier Strip is named by its side number once typed, else the callsign; Incirlik by the callsign', () => {
+  const fd = (side) => ({ identity: { callsign: 'NAVY 1' }, military: { carrier: { sideNumber: side } } });
+  assert.equal(leadingFlightName({ stripType: 'PATTERN', ownerPositionId: 'CV_PRIFLY' }, fd('203')), '203');
+  assert.equal(leadingFlightName({ stripType: 'MARSHAL', ownerPositionId: 'CV_MARSHAL' }, fd(' 204 ')), '204');
+  assert.equal(leadingFlightName({ stripType: 'FINAL', ownerPositionId: 'CV_APP1' }, fd('205')), '205');
+  assert.equal(leadingFlightName({ stripType: 'FINAL', ownerPositionId: 'CV_APP1' }, fd('  ')), 'NAVY 1', 'no side number yet');
+  assert.equal(leadingFlightName({ stripType: 'FINAL', ownerPositionId: 'PAR' }, fd('205')), 'NAVY 1', 'Incirlik PAR: callsign');
+  assert.equal(leadingFlightName({ stripType: 'PATTERN', ownerPositionId: 'RSU' }, fd('205')), 'NAVY 1', 'Incirlik RSU: callsign');
+  assert.equal(leadingFlightName(null, fd('205')), 'NAVY 1');
+  assert.equal(leadingFlightName({ stripType: 'FINAL', ownerPositionId: 'CV_APP1' }, null), '');
 });

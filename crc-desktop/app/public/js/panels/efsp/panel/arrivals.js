@@ -5,6 +5,7 @@ import { efspArrivalLog, forgetEfspArrivals, nextEfspArrivalExpiry, noteEfspArri
 import { getActingPositions } from '../efsp-ws.js';
 import { getEfspFlightData, getEfspPosition } from '../efsp-state.js';
 import { selectEfspStripById } from '../bay/selection.js';
+import { leadingFlightName } from '../strip-fields.js';
 import { markEfspChanged } from '../efsp-change-bus.js';
 
 /**
@@ -78,8 +79,8 @@ export function noteEfspBoardArrivals(msg, placementBefore) {
   noteEfspArrivals(placementBefore, (msg.strips && msg.strips.updated) || [], {
     signedOnPositions: signedOn, myControllerIds: mine, visibleBayId: efspVisibleBayId(), now: Date.now(),
     callsignOf: (strip) => {
-      const flightData = getEfspFlightData(strip.flightDataId);
-      return (flightData && flightData.identity && flightData.identity.callsign) || strip.stripId;
+      // A carrier Strip is named by its side number, as on its face (H124).
+      return leadingFlightName(strip, getEfspFlightData(strip.flightDataId)) || strip.stripId;
     },
   });
   forgetEfspArrivals(msg.strips && msg.strips.gone);

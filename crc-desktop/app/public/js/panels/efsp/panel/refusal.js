@@ -1,6 +1,7 @@
 'use strict';
 import { _mutationErrorEl, _mutationWarningEl } from './state.js';
 import { blockLabelFor } from '../strip-template.js';
+import { leadingFlightName } from '../strip-fields.js';
 import { getEfspFlightData, getEfspStrip } from '../efsp-state.js';
 import { noteAttestationRefusal } from './control-attest.js';
 import { LUAW_WHILE_COMBINED_TEXT } from '../combination-rules.js';
@@ -98,7 +99,8 @@ function _refusalSubject(context) {
   const op = (pending && pending.op) || context.op || null;
   const stripId = (pending && pending.stripId) || context.stripId || null;
   const strip = stripId ? getEfspStrip(stripId) : null;
-  const callsign = (strip && _callsignOfFlightData(strip.flightDataId))
+  // A carrier Strip is named by its side number, as on its face (H124).
+  const callsign = (strip && leadingFlightName(strip, getEfspFlightData(strip.flightDataId)))
     || _callsignOfFlightData(context.flightDataId)
     || (op && op.flightData && op.flightData.callsign)   // a refused CreateStrip has no Strip yet — the callsign is in the op
     || _callsignOfFlightData(op && op.flightDataId)

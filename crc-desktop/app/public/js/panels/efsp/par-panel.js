@@ -6,8 +6,8 @@ import { getActingPositions, sendEfspMutation } from './efsp-ws.js';
 import { onEfspChanged } from './efsp-change-bus.js';
 import { parSampleTimes, parSamples, parSampleFor } from './par-samples.js';
 import {
-  DEFAULT_VIEW, PAR_DEFAULTS, autoscaleView, createTrailFilter, effectiveGpa, flightName, gpHeightFt, headerModel, lateralFt,
-  niceStep, noPlotState, pickFlight, rangeAtDaNm, readoutModel, replot, severity, terminalOp, terminalsFor, zoomView,
+  DEFAULT_VIEW, PAR_DEFAULTS, autoscaleView, createTrailFilter, effectiveGpa, gpHeightFt, headerModel, lateralFt,
+  niceStep, noPlotState, pickFlight, rangeAtDaNm, readoutModel, replot, parTerminalOp, parTerminals, severity, zoomView,
 } from './par-model.js';
 
 // The PAR panel (decisions H115, H116, H122; mockup docs/mockups/par-panel.html, revision 4; lane note docs/wip/PAR-2.md). An
@@ -71,14 +71,13 @@ function _num(key, fallback) {
   return typeof v === 'number' && Number.isFinite(v) ? v : fallback;
 }
 
-/** The flight a Strip names (H122): side number on a carrier lane, the callsign elsewhere; its type and beacon. */
-export function parFlightOf(stripId, approachKind) {
+/** The flight a Strip names: its callsign (the PAR is an airfield feature, H125), its type and beacon. */
+export function parFlightOf(stripId) {
   const strip = getEfspStrip(stripId);
   const fd = strip ? getEfspFlightData(strip.flightDataId) : null;
   const identity = (fd && fd.identity) || {};
-  const carrier = fd && fd.military && fd.military.carrier;
   return {
-    name: flightName({ approachKind, callsign: identity.callsign || '', sideNumber: carrier ? carrier.sideNumber : '' }),
+    name: identity.callsign || '',
     type: identity.aircraftType || '',
     beacon: identity.beaconAssigned || '',
   };
@@ -297,7 +296,7 @@ function _windowText(kind, autoscale) {
   return `0–${v.rMax.toFixed(1)} NM · ${span}${auto}`;
 }
 
-function _renderPicks(samples, approachKindOf) {
+function _renderPicks(samples) {
   const picks = _els.picks;
   picks.hidden = samples.length < 2;
   const sig = samples.length < 2 ? '' : samples.map(s => s.stripId).join(',');
@@ -316,19 +315,18 @@ function _renderPicks(samples, approachKindOf) {
   }
   for (const b of picks.children) {
     const s = samples.find(x => x.stripId === b.dataset.parPick);
-    const name = (s && parFlightOf(s.stripId, approachKindOf(s)).name) || b.dataset.parPick;
+    const name = (s && parFlightOf(s.stripId).name) || b.dataset.parPick;
     if (b.textContent !== name) b.textContent = name;
     b.setAttribute('aria-pressed', String(b.dataset.parPick === _shown));
   }
 }
 
 function _renderTerminals(sample) {
-  const kind = sample.approach && sample.approach.kind === 'CARRIER' ? 'CARRIER' : 'RUNWAY';
-  const sig = `${sample.stripId}|${kind}`;
+  const sig = sample.stripId;
   if (_els.termSig === sig) return;
   _els.termSig = sig;
   _els.terms.textContent = '';
-  for (const t of terminalsFor(kind)) {
+  for (const t of parTerminals()) {
     const b = _el('button', 'par-term', t.label);
     b.type = 'button';
     b.dataset.terminal = t.id;
@@ -337,7 +335,7 @@ function _renderTerminals(sample) {
       if (!strip) return;
       const facility = strip.facilityId || sample.facilityId;
       if (!getActingPositions(facility).includes(strip.ownerPositionId)) return;
-      const op = terminalOp(kind, t);
+      const op = parTerminalOp(t);
       if (op) sendEfspMutation(strip.ownerPositionId, strip, op);
     });
     _els.terms.appendChild(b);
@@ -359,8 +357,7 @@ export function renderParPanel() {
   if (!_els) _build();
   if (id !== _shown) { _paused = false; _els.termSig = ''; }
   _shown = id;
-  const kindOf = (s) => (s.approach ? s.approach.kind : null);
-  _renderPicks(samples, kindOf);
+  _renderPicks(samples);
 
   const approach = sample.approach || null;
   const gpa = effectiveGpa(approach, _num('parGpa', PAR_DEFAULTS.gpaDeg));
@@ -373,7 +370,7 @@ export function renderParPanel() {
   const np = noPlotState(sample, { receivedAtMs: times.receivedAt, nowMs: now, firstSeenMs: _firstSeen.get(id) });
   if (!_trails.has(id)) _trails.set(id, createTrailFilter());
   const trail = _trails.get(id).apply(sample);
-  const flight = parFlightOf(id, kindOf(sample));
+  const flight = parFlightOf(id);
   const ro = readoutModel({ sample, plot, flight, sev, noPlot: np });
   const hd = headerModel(approach, gpa);
 

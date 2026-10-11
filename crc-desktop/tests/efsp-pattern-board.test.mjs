@@ -22,16 +22,16 @@ const click = (el) => (el._listeners.click || []).forEach(fn => fn({}));
 // ---- pattern board --------------------------------------------------------------------------
 
 const strips = [
-  { stripId: 'a', callsign: 'VIPR 11', type: 'F-16', intent: 'FULL_STOP', legId: 'initial', enteredPatternS: 800, order: 1 },
-  { stripId: 'b', callsign: 'HAWG 41', type: 'A-10', intent: 'LOW_APPROACH', legId: 'initial', enteredPatternS: 700, order: 2 },
-  { stripId: 'c', callsign: 'RAGE 31', type: 'F-16', intent: 'TOUCH_AND_GO', legId: 'final', enteredPatternS: 900, order: 1 },
-  { stripId: 'd', callsign: 'PACK 61', type: 'F-15E', intent: 'TOUCH_AND_GO', legId: 'final', enteredPatternS: 100, order: 2 },
+  { stripId: 'a', name: 'VIPR 11', type: 'F-16', intent: 'FULL_STOP', legId: 'initial', enteredPatternS: 800, order: 1 },
+  { stripId: 'b', name: 'HAWG 41', type: 'A-10', intent: 'LOW_APPROACH', legId: 'initial', enteredPatternS: 700, order: 2 },
+  { stripId: 'c', name: 'RAGE 31', type: 'F-16', intent: 'TOUCH_AND_GO', legId: 'final', enteredPatternS: 900, order: 1 },
+  { stripId: 'd', name: 'PACK 61', type: 'F-15E', intent: 'TOUCH_AND_GO', legId: 'final', enteredPatternS: 100, order: 2 },
 ];
 
 test('the board has one column per leg, chips in rack order, minutes from the mission clock', () => {
   const m = P.patternBoardModel({ legs: P.RSU_LEGS, strips, nowS: 1000 });
   assert.deepEqual(m.columns.map(c => [c.legId, c.count]), [['closed', 0], ['initial', 2], ['base', 0], ['final', 2]]);
-  assert.deepEqual(m.columns[1].chips.map(c => c.callsign), ['VIPR 11', 'HAWG 41']);
+  assert.deepEqual(m.columns[1].chips.map(c => c.name), ['VIPR 11', 'HAWG 41']);
   assert.equal(m.columns[1].chips[0].minutes, 3);
   assert.equal(m.columns[1].chips[0].intent, 'Full stop');
   assert.equal(m.total, 4);
@@ -52,15 +52,15 @@ test('a closed or suspended runway with aircraft in the pattern is advised, an e
 });
 
 test('a Strip whose rack is not a leg is shown as UNPLACED, never hidden', () => {
-  const m = P.patternBoardModel({ legs: P.RSU_LEGS, strips: [{ stripId: 'x', callsign: 'LOST 1', legId: 'main' }], nowS: 0 });
+  const m = P.patternBoardModel({ legs: P.RSU_LEGS, strips: [{ stripId: 'x', name: 'LOST 1', legId: 'main' }], nowS: 0 });
   const un = m.columns.find(c => c.legId === P.UNPLACED_LEG);
-  assert.deepEqual(un.chips.map(c => c.callsign), ['LOST 1']);
+  assert.deepEqual(un.chips.map(c => c.name), ['LOST 1']);
   assert.equal(m.total, 1);
 });
 
 test('PriFly uses the same component with its own legs, and a missing clock gives no minutes', () => {
   assert.deepEqual(P.PRIFLY_LEGS.map(l => l.id), ['initial', 'break', 'downwind', 'groove']);
-  const m = P.patternBoardModel({ legs: P.PRIFLY_LEGS, strips: [{ stripId: 'x', callsign: 'A', legId: 'groove', enteredPatternS: 5 }] });
+  const m = P.patternBoardModel({ legs: P.PRIFLY_LEGS, strips: [{ stripId: 'x', name: 'A', legId: 'groove', enteredPatternS: 5 }] });
   assert.equal(m.columns[3].chips[0].minutes, null);
   assert.equal(m.columns[3].chips[0].long, false);
 });

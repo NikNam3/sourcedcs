@@ -155,6 +155,18 @@ export function sideNumberLeads(stripType, positionId, flightData) {
   return !!(carrier && String(carrier.sideNumber || '').trim());
 }
 
+/**
+ * The name a carrier view gives a flight (decisions H124: "on every carrier operation the side number is more important than
+ * the callsign"): the side number when it leads on the Strip (`sideNumberLeads`), else the callsign. Every view off the Strip
+ * that names a flight (the PriFly pattern chip, the MARSHAL board, the FINAL Bay line, toasts and menus) uses this, so it
+ * agrees with the Strip face; Incirlik's Strips name the callsign as before.
+ */
+export function leadingFlightName(strip, flightData) {
+  const callsign = (flightData && flightData.identity && flightData.identity.callsign) || '';
+  if (!strip || !sideNumberLeads(strip.stripType, strip.ownerPositionId, flightData)) return callsign;
+  return String(flightData.military.carrier.sideNumber).trim();
+}
+
 function _swapSideAndCallsign(list) {
   const c1 = list.indexOf('C1');
   const c18 = list.indexOf('C18');

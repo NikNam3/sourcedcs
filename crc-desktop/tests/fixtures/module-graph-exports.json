@@ -476,9 +476,12 @@
    "bayDescriptorFor",
    "finalKindOf",
    "finalRowModel",
+   "finalTerminalOp",
+   "finalTerminalsFor",
    "patternLegsFor",
    "patternOpFor",
    "patternStripsFor",
+   "refreshDistBlocks",
    "renderBayDescriptorView",
    "sfaExtraNlaButtons"
   ],
@@ -633,7 +636,8 @@
   ],
   "panels/efsp/carrier-final-distance.js": [
    "carrierDistanceNm",
-   "carrierFinalDistanceText"
+   "carrierFinalDistanceText",
+   "shipDistanceNm"
   ],
   "panels/efsp/carrier-management-panel.js": [
    "initCarrierManagementPanel",
@@ -1170,12 +1174,13 @@
    "autoscaleView",
    "createTrailFilter",
    "effectiveGpa",
-   "flightName",
    "gpHeightFt",
    "headerModel",
    "lateralFt",
    "niceStep",
    "noPlotState",
+   "parTerminalOp",
+   "parTerminals",
    "pickFlight",
    "plotAgeNow",
    "rangeAtDaNm",
@@ -1183,8 +1188,6 @@
    "replot",
    "sensorReasonText",
    "severity",
-   "terminalOp",
-   "terminalsFor",
    "zoomView"
   ],
   "panels/efsp/par-panel.js": [
@@ -1306,6 +1309,7 @@
    "compactBlocksFor",
    "fieldSpanFor",
    "isOrdnanceSet",
+   "leadingFlightName",
    "sideNumberLeads"
   ],
   "panels/efsp/strip-indicators.js": [
