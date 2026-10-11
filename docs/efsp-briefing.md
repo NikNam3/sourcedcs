@@ -23,7 +23,10 @@ before any ADR or note older than the rename). **L20** (the comment and pointer 
 sweep) is complete (S-L20-DONE). After the rename came the post-refactor features (ADRs `0098`-`0106`, not folded here, §3K) and the
 **architecture check (H103)**: its 15 bugs and its three phases (bugs, tests and tooling, structure) are merged, and so are ARCHIVE-12H (`0107`),
 MISSION-CLEAR (`0108`), CARRIER-ATO (`0109`), consolidation as hat offers (`0110`), NX-1, THEATERS, DESK-SPLIT and DESK-NOTICES: §3K says what changed
-and the traps. **Phase 3 is done**; §4 lists what is open, §5 what is queued, and **one agent works at a time (H112)**.
+and the traps. After phase 3 came the **panels** (§3K, "Panels and Divert"): the tabbed Settings panel, Divert (`0111`), the carrier's one
+state and the NATOPS EAT (`0113`), the MARSHAL recovery board (`0114`) and its server-side marks (`0115`), the CARRIER MAP, the side number
+leading on carrier Strips and views, the wire-surface scan of the carrier half, the PAR sample and panel (`0112`) and, reversing the carrier
+half of `0112`, **the PAR as an airfield feature** (`0116`). **Phase 3 is done**; §4 lists what is open, §5 what is queued, and **one agent works at a time (H112)**.
 
 If you are a lane agent, your own briefing in `docs/parallel/wave2/` and
 `docs/parallel/lane-rules.md` come first, and **`docs/parallel/decisions.md` overrides both**. If you
@@ -33,19 +36,20 @@ are the supervising session, start at `docs/parallel/supervisor-handoff.md`.
 
 Integration branch `efsp-wp5-correlation`. It carries waves 1-3 (including UI-B, QAS, E2E-harden), the
 architecture refactor W1-W7 (FREEZE, then BOARD, WIRE, SYNC, AUTH, APP, DATA, TIME, LOG, the ES-module client, BACKCOMPAT
-and the W7 RENAME), L20, the post-refactor features, and the whole architecture check (phases 1-3) plus everything after it (§3K). Not pushed.
+and the W7 RENAME), L20, the post-refactor features, and the whole architecture check (phases 1-3) plus everything after it (§3K), up to
+CARRIER-FOLLOWUP (`3b68795f`). Not pushed.
 
-Green, as recorded by the supervisor on the DESK-SPLIT / DESK-NOTICES tree (decisions.md S-ARCH-31, S-ARCH-32; this docs lane ran nothing): **crc-sync**
-`npm test` **2541**, **freeze** (`npm run freeze`, opt-in) **53/53**, **walk** (`npm run walk`, depth 4) **23/23**, `soak:selfcheck` PASS,
-**crc-desktop** `npm test` **1198**. sourcedcs-web, atobrief, infra and the Python `tools/tests` were last counted earlier (web 151 and infra 27 at S-ARCH-11, pytest 363 at S-ARCH-28; not re-measured).
-**Playwright:** the last full sharded run (S-ARCH-32, on the DESK-SPLIT tree) was **190/195**; the 5 consistent failures were `consol-hat` (4) and `gclc-combine` (1) calling
-`crc.bayView._invokeNla`, which DESK-SPLIT moved to `crc.dispatch`; the supervisor's fix (`crc.dispatch._invokeNla`) re-ran them 6/6, and the DESK-NOTICES merge ran smoke/l14/undo/formation/consol-hat 12/12.
-The run before it (S-ARCH-26, DESK-GRAPH tree) was 191/191. Under load many specs fail that pass alone: re-run a failure alone before counting it (S-ARCH-14's rule). Every spec must
+Green, as recorded on the CARRIER-FOLLOWUP tree (`docs/wip/CARRIER-FOLLOWUP.md`; DOCS-PANELS re-ran both unit suites on its docs-only branch, see its
+report): **crc-sync** `npm test` **2640**, **freeze** (`npm run freeze`, opt-in) **56/56**, **walk** (`npm run walk`, depth 4) **23/23**, `soak:selfcheck` PASS,
+**crc-desktop** `npm test` **1254**; `wire:record` says protocol stays **2**. sourcedcs-web, atobrief, infra and the Python `tools/tests` were last counted earlier (web 151 and infra 27 at S-ARCH-11, pytest 363 at S-ARCH-28; not re-measured).
+**Playwright:** the last full sharded run (S-ARCH-45, on the PAR-2 tree `0fe5bfe3`) was **226/227**, the one failure (`mtr-pilot-walk`) load-only.
+CARRIER-FOLLOWUP ran its specs each alone on `E2E_LANE=3` (`par-panel` 7/7, `l17-carrier` 6/6, `carrier-map` 7/7, `marshal-board` 7/7, `side-swap` 2/2,
+`l18-incirlik` 3/3); a sharded run on its tree is the supervisor's. Under load many specs fail that pass alone: re-run a failure alone before counting it (S-ARCH-14's rule). Every spec must
 `require('./helpers/test')` and leave no Strips on the Board (E2E-fix, §3J). `ordnance-hung`'s "pilot walks" test needs `runway-status.spec.js` to have run first (it
 relies on the active runway), as on the baseline. A fresh worktree needs `npm ci` in `crc-sync`, `crc-desktop` and `crc-desktop/app` (a missing `app/node_modules` fails the packaging test).
 Restart the local crc-sync on :3000 after any `crc-sync/src` change.
 
-ADRs: `0001`-`0110` except `0090` and `0092` (0095 structure, 0096 clocks, 0097 logging, 0098-0106 the post-refactor features, 0107 12 h archive, 0108 mission reset, 0109 carrier ATO lines, 0110 consolidation, which stays "Proposed" as committed: its acceptance is decisions.md S-ARCH-25 plus H111/H113, P4). `0077` is the L20 house style; `0090` and `0092` were not used (TA took none: it applies `0085`/H62), `0060` is the errata ADR.
+ADRs: `0001`-`0116` except `0090` and `0092` (0095 structure, 0096 clocks, 0097 logging, 0098-0106 the post-refactor features, 0107 12 h archive, 0108 mission reset, 0109 carrier ATO lines, 0111 Divert, 0112 the PAR sample (its carrier half replaced by 0116), 0113 carrier state and EAT, 0114 recovery board, 0115 the marks on the stack entry, 0116 the PAR is an airfield feature; 0110 consolidation, which stays "Proposed" as committed: its acceptance is decisions.md S-ARCH-25 plus H111/H113, P4). `0077` is the L20 house style; `0090` and `0092` were not used (TA took none: it applies `0085`/H62), `0060` is the errata ADR.
 **An ADR is never edited once committed (P4)**: a correction is a new ADR.
 
 **Layout (ADR `0095`).** `board-store.js` is the `BoardStore` facade; the work is in `board/` (collaborators) and
@@ -85,17 +89,20 @@ crc-sync/src/efsp/zulu-time.js            typed HHMM -> epoch ms against the mis
 crc-sync/src/efsp/forwarding-obligations.js  obligations as state, retracting (0067)
 crc-sync/src/efsp/metrics.js, traffic-count.js  WP8 metrics, §11.4 traffic count, log retention (0065)
 crc-sync/src/efsp/ato/                    USMTF ATO parser: text -> mission lines, creates nothing (0063)
-crc-sync/src/efsp/carrier/                pure carrier model: stack, Case, ship banner, transfers, sun, hull config (0064, 0074)
-crc-sync/src/efsp/carrier-store.js        CarrierStore: Case, stack, ship settings, handoffs; its own wire messages (L17, 0074)
+crc-sync/src/efsp/carrier/                pure carrier model: carrier state (carrier-state.js), stack + Delta + marks (marshal-stack.js), ship banner, handoffs, sun, hull config (0064, 0074, 0113-0115)
+crc-sync/src/efsp/carrier-store.js        CarrierStore: SetCarrierState, the stack ops, handoffs; its own wire messages (L17, 0074, 0113)
+crc-sync/config/efsp-carrier-recovery.json  carrier tuning: firstFixDme 21, pushSpacingSec 60, fixToRampSec 360 (ours), tanker defaults (0113)
+crc-sync/src/surveillance/par.js, par-monitor.js  the PAR sample, airfield final Bays only, `par-sample` frame outside deliverEfsp (0112, 0116)
 crc-sync/src/efsp/carrier-tick.js         the ship-state tick from the hull's track (L17)
-crc-sync/config/efsp-carriers.json        the hulls (id, radars, callsign)
+crc-sync/config/efsp-carriers.json        the hulls (id, radars, callsign, angled deck; no `approach` since 0116)
 crc-sync/src/efsp/airborne.js, surveillance-hints.js  "detected airborne" phase and the suggestion/staleness monitor (L19, 0076)
 crc-sync/config/efsp-surveillance-hints.json  its four thresholds, read once (P5)
 crc-sync/src/efsp/block-map.js            the Block Maps, the interlock tags, MILITARY_BLOCK_NAMESPACE
 crc-sync/tools/soak/                      the WP8 soak harness (npm run soak / soak:smoke / soak:selfcheck)
 crc-sync/src/state-paths.js               shipped defaults (config/) vs runtime state (state/)
 crc-desktop/app/public/js/                leaves (settings, map-handle, picture, view-state, ...), no import cycle (bound 0), no window globals (§3K)
-crc-desktop/app/public/js/panels/efsp/    the Strip panel, the change bus, sync-cursor, facility-topology, the airspace board, correlation-highlight, carrier-state/carrier-panel (L17), final-panel and pattern-board (L18)
+crc-desktop/app/public/js/panels/efsp/    the Strip panel, the change bus, sync-cursor, facility-topology, the airspace board, correlation-highlight, carrier-state/carrier-panel (L17), carrier-management-panel (0113), marshal-panel + marshal-board-model (0114/0115), carrier-map-panel + carrier-map-model, carrier-final-distance (DIST), par-panel + par-model (0112/0116), pattern-board (L18), bay-views (the FINAL Bay line)
+crc-desktop/app/public/js/settings-registry.js  registerSettingsTab: one Settings tab per panel (SETTINGS-TABS)
 atobrief/public/js/usmtf-ato.js           atobrief's USMTF ATO export (0078)
 docs/adr/                                 the reasoning behind every decision below
 docs/efsp-usage-guide.md                  how a controller actually drives it
@@ -531,7 +538,8 @@ table. **Wired by L17 (`0074`, §3J)**: the CARRIER Facility, the strip types, t
 (H13/H26). Every bearing is held **true**; grid convergence and magnetic variation are injected (F2
 supplies both), and a value is labelled `G`/`T` when one is missing, never shown as magnetic.
 Marshal radial defaults to final bearing + 180 and is settable (H27); no automatic compression
-(H28); an insertion ripple stops at the first vacancy; `lowStateLb` is not M17.
+(H28); an insertion ripple stops at the first vacancy; `lowStateLb` is not M17. [Since `0113`: push time is no longer
+Charlie + slot; the EAT is worked back from the ramp time, and the Case, radial and ramp time are carrier state (§3K).]
 
 **Metrics, traffic count, log retention (L5, `0065`).** Server only. `GET /api/efsp/metrics`
 (`?hours`, `?missionSession`) and `GET /api/efsp/traffic-count` (`facilityId`, `from`, `to`,
@@ -964,19 +972,14 @@ no clearance altitude). Pre-existing `crc-sync npm test` failures at U6's base a
 
 **Incirlik RSU / SFA / PAR (L18, `0075`).** The client half was built standalone and
 unit-tested; the server half and the mounting came with `lane/L18-server`, now merged
-(below): `panels/efsp/final-panel.js` (the FINAL component, shared by PAR and the carrier Final lane:
-pure model `finalCallsDue`, `createFinalTracker`, `finalViewModel`, `terminalActionsFor` plus
-`renderFinalPanel`; zero input elements, a test holds it; a free-running 5 s cadence bar off the mission
-clock, because a voice call cannot be observed and a tap per call is data entry, guide 7.10; required calls
-(mile, glidepath intercept, decision altitude, trend) prompt from sample crossings and clear after 4 s) and
-`pattern-board.js` (RSU: closed, initial, base, final; PriFly: initial, break, downwind, groove; configured
-by leg list; advisories only, nothing refuses; a "Next leg" button is the touch alternative to drag; a
-Strip whose Rack is not a leg shows in an UNPLACED column). `css/efsp-pattern-final.css` and the tags in
-`index.html`; `tests/efsp-final-panel.test.mjs` (18 tests, stand-in data). Defaults, all `[SOURCE-DEFINED]`:
-PAR's terminal events reuse the FINAL strip type's states (Landing assured, Ball to `BALL`; Missed approach,
-Waveoff to `BOLTER_WAVEOFF`; no new state, `nla.js` is L17's); glidepath tolerance 0.3 deg, trend step
-0.1 deg, prompt hold 4 s, long-in-pattern 10 min, more than one on the last leg advised; chip actions
-Landed (`RECOVERED`) and Drop (`DROPPED`).
+(below). L18's FINAL talk-down component (cadence bar, call prompts, 0.3 deg tolerance) is **gone**: PAR-2 replaced it with
+the PAR panel and a one-line FINAL Bay view, and `0116` took the carrier out of the PAR (§3K, "Panels and Divert").
+What stays from L18's client half is `pattern-board.js` (RSU: closed, initial, base, final; PriFly: initial, break,
+downwind, groove; configured by leg list; advisories only, nothing refuses; a "Next leg" button is the touch alternative
+to drag; a Strip whose Rack is not a leg shows in an UNPLACED column; tests now in `tests/efsp-pattern-board.test.mjs`).
+Defaults, all `[SOURCE-DEFINED]`: PAR's terminal events reuse the FINAL strip type's states (Landing assured, Ball to
+`BALL`; Missed approach, Waveoff to `BOLTER_WAVEOFF`; no new state, `nla.js` is L17's); long-in-pattern 10 min, more
+than one on the last leg advised; chip actions Landed (`RECOVERED`) and Drop (`DROPPED`).
 - **Server half (L18 server, ADR `0093`, merged).** Built on L17
   plus this client half (re-run PARITY's tests on the merged tree). `facility-config.js`
   gives INCIRLIK eight Positions (`RSU`, `SFA`, `PAR` all `MILITARY_ATC`: a new class would silently drop CA,
@@ -1001,23 +1004,19 @@ Landed (`RECOVERED`) and Drop (`DROPPED`).
   Bays by `bayId`): `view` (`'pattern' | 'final' | 'sfa-freqs'`), `replacesRacks` (the component is the Bay's
   interface; RSU's and PAR's replace their racks, the carrier's PriFly pattern and final Bays carry `view`
   and keep them) and `capacity` (enforced by the server; the occupant is named in the refusal);
-  `validateConfig` rejects unknown keys. Client: `sfa-state.js`, `bay-views.js`; the FINAL sample is the
-  distance to the radar's site, glidepath against a nominal 3 degrees and decision height + 200 ft
-  (carrier: distance to the ship), all `[SOURCE-DEFINED]`. It also regenerated the shipped
+  `validateConfig` rejects unknown keys. Client: `sfa-state.js`, `bay-views.js` [L18's own client-side FINAL sample was
+  replaced by the server's PAR sample, `0112`]. It also regenerated the shipped
   `config/efsp-facility-incirlik.json`, which overrode `DEFAULT_CONFIG` then (the loader spread on-disk JSON
   over it; since DATA-1 the four facility JSON files are complete, a missing or invalid one is a start-up error and nothing is merged). Tests: crc-sync 1922, crc-desktop 771, `efsp-scenario-incirlik-l18.test.mjs` walks the
   acceptance (rotation moves the controller, the frequency stays), switch frequency, switch controller,
   cancel, late arrival and restart; `e2e/l18-incirlik.spec.js` 3/3 on `E2E_LANE=9`.
-  - **It fixed a bug in the client half that only a browser shows**: `pattern-board.js` and `final-panel.js`
-    both declared a top-level `finite`, and `_el` collided with `metrics-panel.js`, so one script failed to
-    load; the Node tests load one module each. A test now holds the Bay-view scripts' top-level names unique
-    across `index.html`.
+  - **It fixed a bug in the client half that only a browser shows**: two Bay-view scripts both declared a
+    top-level `finite`, and `_el` collided with `metrics-panel.js`, so one script failed to load (since the ES-module
+    client this class of bug cannot recur).
   - Open: `capacity: 1` could enforce "one at a time" on the carrier's final Bays (not set: a behaviour
-    change in L17's design); a PAR vacated with an aircraft on final leaves the Strip in AP's coordination
-    Bay where AP cannot advance it (the same shape as L17's watch item, §3J); an airspace approval that
-    rewrites a flight's frequency desyncs its SFA Rack (the Rack is a placement, the flight data is the truth);
-    the FINAL panel has never seen a live DCS track (the harness shows `--`). `docs/wip/L18.md` is stale
-    on `BARRIER_CHANGE` (it is `WORKS`) and on the SFA state.
+    change in L17's design); an airspace approval that rewrites a flight's frequency desyncs its SFA Rack (the Rack
+    is a placement, the flight data is the truth). [A PAR vacated with an aircraft on final: `0110`, the Strip stays
+    PAR's and AP is offered the hat.] `docs/wip/L18.md` is stale on `BARRIER_CHANGE` (it is `WORKS`) and on the SFA state.
 
 **Carrier Positions and the CARRIER Facility (L17, `0074`).** New: `carrier-store.js` (the `CarrierStore`),
 `carrier-tick.js` (the ship state from the hull's track), `carrier/hull-config.js`, `carrier/sun.js`,
@@ -1035,13 +1034,13 @@ Landed (`RECOVERED`) and Drop (`DROPPED`).
   each in its own replay-cache kind (`carrier`); the `CarrierHandoff` op, and `carrierHandoff` /
   `carrierTrigger` audit fields. `normalizeStack` returns `{ok, stack, dropped}`, not the stack (the first
   restore silently emptied the stack; the crash-replay tests caught it).
-- **Behaviour.** The recovery Case is PriFly's, one setting for the ship, as one delta; the night floor is the
+- **Behaviour.** The recovery Case is one setting for the ship, as one delta [PriFly's then; since `0113` PriFly or the Marshal set it in the CARRIER panel]; the night floor is the
   sun more than 6 degrees below the horizon at the ship, from the mission clock. FINAL's identity Blocks
   are `carrier-derived` and Block 5 is off its map, so nothing is writable on FINAL by construction. The
   four handoffs (Commence, Radar contact, Ball, See you) are explicit `CarrierHandoff` ops beside the NLA,
   one implementation; a drag into a handoff Bay is refused with the button's name, a bolter is the one
-  allowed drag. A recovery check-in is appended to the stack at the next free slot. Typed Charlie time (Zulu
-  HHMM) and marshal radial (magnetic) are converted server-side.
+  allowed drag. A recovery check-in is appended to the stack at the next free slot. Typed values (Zulu HHMM, magnetic
+  bearings) are converted server-side [since `0113` through the one `SetCarrierState` op; the stack holds no time or radial].
 - **Two bugs it found.** A dropped launch Strip released the flight's squawk and the bound recovery
   `CreateStrip` did not re-claim it (a duplicate code was possible): fixed in `_applyCreateStrip`
   (`reacquireFlightData`). A Case change left every carrier Strip's stamped `nla` stale until the NLA status monitor
@@ -1050,7 +1049,7 @@ Landed (`RECOVERED`) and Drop (`DROPPED`).
   gRPC), so the tick is unit-tested with a built track and a real DCS ship is a live check for the human;
   a Playwright run combining five spec files failed three `l17-carrier` and two `tactical-positions` tests
   that pass alone; deck-state board contents (`0064` B8) are not built; the weather advisory knows only
-  night. Traffic count: a launch, a trap and a recovered pattern flight each count once.
+  night [since `0113` also typed ceiling and visibility]. Traffic count: a launch, a trap and a recovered pattern flight each count once.
 - Shared-file hunks to expect on a merge: `efsp-ws.js`, `ws-hub.js`, `index.js`, `replay-cache.js`,
   `traffic-count.js`, `board-store.js`, and on the client `strip-view.js`, `bay-view.js`, `efsp-state.js`,
   `radar-panel.js`'s `EFSP_FACILITY_POSITIONS` (a new `CARRIER` line, a one-line merge with L18),
@@ -1198,7 +1197,7 @@ files); `playwright.config.js` installs `e2e/fixtures/l16-stereo-routes.json` by
 listening (ports 3019/3119), stop them by PID. Remaining fragility: l15's traffic count and l1-popovers'
 correlation redraw are load-sensitive.
 
-## 3K. Phase 3 and after — structure, seams, consolidation, and the traps
+## 3K. Phase 3 and after — structure, seams, consolidation, the panels, and the traps
 
 Phase 3 of the architecture check (H103/H106, `docs/parallel/arch-check-plan.md`) is merged, with ARCHIVE-12H,
 MISSION-CLEAR, CARRIER-ATO, NX-1, CONSOL (ADR `0110`), DESK-SPLIT and DESK-NOTICES after it. No lane in it changed the wire
@@ -1356,6 +1355,69 @@ the human chose to leave (AC-2).
   (`e2e-spec-hygiene.test.mjs` enforces it and bans `docs/wip` in a spec's code). Setter seams that tests genuinely need stay (47 after DESK-TIDY-2); the 164 underscore exports
   and the `efspFlightDataList` rename were not done.
 
+### Panels and Divert (ADRs `0111`-`0116`; SETTINGS-TABS to CARRIER-FOLLOWUP)
+
+Designs approved by the human (H115-H123, mockups `docs/mockups/{par-panel,marshal-stack-panel,carrier-map-panel}.html`), built one
+lane at a time (H112), merged S-ARCH-37 to S-ARCH-45 plus CARRIER-FOLLOWUP. `WIRE_PROTOCOL` stays **2** throughout (already ahead of the last
+release, 1, so every change ships together). Lane notes: `docs/wip/{SETTINGS-TABS,DIVERT,CARRIER-STATE,MARSHAL-BOARD,MARSHAL-FIX,MARSHAL-MARKS,
+CARRIER-MAP,SIDE-SWAP,WIRE-RECORD,PAR-1,PAR-2,CARRIER-FOLLOWUP}.md`; where a later lane reverses an earlier one, the later wins (below).
+
+- **SETTINGS-TABS (client).** `settings-registry.js` (a leaf importing only `settings.js`): `registerSettingsTab(id, fields, {label})` at
+  module load, `getSetting(key)` where used; fields `toggle`/`number`/`select`, keys global (prefix with the panel), stored per controller in
+  localStorage `crc-desktop-settings`, never synced. Registered tabs sit before SRS. Static tabs renamed DECLTR -> RADAR, RADIO -> SRS.
+  Registered today: `par`, `marshal`, `carrier-map`. The CARRIER panel has none.
+- **DIVERT (`0111`).** `Divert` Board op, AP/CTR only, owner only; OVERFLIGHT at INBOUND/IN_SECTOR and ARRIVAL at INBOUND. Destination
+  classified by `rules.divertDestinationFor` (a Facility's `runwayStatus.airportIcao` or a hull id = ours, `data/icao.json` maps names):
+  ours -> ARRIVAL at INBOUND; not ours -> OVERFLIGHT (an ARRIVAL becomes OVERFLIGHT at IN_SECTOR). Form fields from FAA JO 7110.65 ¶4-2-1,
+  ¶4-2-5, ¶4-5-7; blank = unchanged; altitude through the clearance history; `strip.diverts` append-only (persisted shape; split parts do not
+  copy it); 10 s Undo. Refused for departures, open coordination or TOFI, the sender of an ACTIVE HANDOFF, and the receiver before
+  TRANSFER_CONTROL (the conservative default, kept, S-ARCH-37). No new refusal code. `facility-rules.js` now reads `data/icao.json`.
+- **CARRIER-STATE (`0113`).** One state per hull, each value `{value, source: dcs|default|override|none, override, default}`; one op
+  `SetCarrierState {field, value}` (null clears) replaces `SetCase`, `SetShipInput`, `SetCharlieTime`, `SetMarshalRadial`; capability
+  `editsCarrierState` for CV_PRIFLY and CV_MARSHAL; every change audited, last-writer-wins per field. Bearings typed magnetic, refused with no
+  ship. **EAT per CV NATOPS** (H118): `EAT(N) = rampTime + N × pushSpacing − fixToRamp`, `pushTimeUtc` on the derived entry now means the EAT,
+  `rampEtaUtc` beside it; ADR 0064's EAT = Charlie + slot is gone, so **the Strip's EAT/PUSH Block reads 6 min earlier than before for the same
+  input**. Tuning `config/efsp-carrier-recovery.json` (`firstFixDme` 21, `pushSpacingSec` 60, `fixToRampSec` 360 ours, tanker 6,000 ft/port ours);
+  `marshalDme = firstFix + slot`. Ceiling/visibility have no DCS source (`none` until typed); wind over deck from `app/ship-wind.js`. The banner
+  (`ShipState`) holds only what the game says. Client `carrier-management-panel.js`, `carrier-send.js`.
+- **MARSHAL-BOARD (`0114`) and MARSHAL-MARKS (`0115`).** Stack entry gains `pushedAtUtc`, `eatUtc` (written at Commence, cleared by Back to
+  stack) and `unpassed` (`['angels'|'eat']`, HOLDING only, decided server-side by `markClearanceChanges`); stack gains `deltaMs`. Stack ops `Delta`
+  (even, >= 4, 60 cap ours; holding flights only; a new ramp time clears it), `BackToStack` (handoff `COMMENCED_TO_MARSHAL`, Case II/III, next slot
+  at the top, marks both), `PassClearance` (Marshal only, refused if the value moved since read; no Undo, like Move/Delta/CloseUp). Flight fields
+  `sideNumber` (`C18`) and `approachTurnNm` (`C19`). Client `marshal-panel.js`, `marshal-board-model.js` (pure; `buildBoard` takes CARRIER Strips
+  only), `marshal-picture.js`. **Removed:** `carrierOrderRack`, the stack slot board and its drop target, the client-side marks.
+- **MARSHAL-FIX.** `strip-view.js` notices a just-arrived Strip when the press **ends** (pointerup/pointercancel), not at pointerdown: removing the
+  "from" line mid-press moved the step buttons 34 px, so the click landed on no button (`control-release.spec.js:141`).
+- **CARRIER-MAP (client, no ADR).** SVG panel (`carrier-map-panel.js`, `carrier-map-model.js`), not a second MapLibre map (glyphs need the
+  MapTiler key; Web Mercator; no ordered stack labels). North-up on the ship, 2.5-65 nm, no fullscreen (H121), no basemap (H123). Patterns only
+  while occupied, from Strip state (spin by geometry, ours); labels via `track-label.js` `sideAltText`. Settings `carrierMapRangeNm`,
+  `carrierMapRingSpacing`.
+- **SIDE-SWAP and the side number (H122, H124 (2)).** `sideNumberLeads(stripType, positionId, flightData)` in `strip-fields.js` (strip type with C1
+  and C18, owned by a CARRIER Position, side number typed) swaps C1/C18 and their spans; PATTERN gained a read-only C18 shown only while it leads.
+  `leadingFlightName()` names the flight in the PriFly chip (callsign to `aka`), the carrier FINAL line, the refusal banner and the arrivals
+  line. Bay search matches the side number.
+- **WIRE-RECORD.** `tools/wire-surface.js` now reads the server's own lists: the Board op table (adds `CarrierHandoff`, `SfaRotation`), every store
+  family's op kinds, carrier handoff/Case/field names, stack/entry/view keys, `STORE_SYNC`, every delta's frame keys; a probe test and a
+  completeness test. The CLAUDE.md line is in.
+- **PAR-1 (`0112`) and PAR-2.** `surveillance/par.js` + `par-monitor.js`: a `par-sample` frame every 500 ms to sessions signed on to the FINAL
+  Strip's owner (a sensor output: no seq, outside `deliverEfsp`); range along course from the threshold, height above TDZE, EL/AZ deviation, GS/VS,
+  INOP per scope (`NO_APPROACH`, `NO_TDZE`), 12-plot trail. Incirlik `parApproaches` in the facility file, `config/par.json` (3.06°, 500 ms).
+  Client leaf `par-samples.js`, bus topic `par`; `par-panel.js` + `par-model.js` (PAR Settings tab: `parAutoscale`, `parGpa`, `parTolEl`, `parTolAz`).
+  **`final-panel.js` is deleted**: the FINAL Bay (`bay-views.js`, `view: 'final'`) is one line per flight with the terminal ops, updated in place.
+- **CARRIER-FOLLOWUP (`0116`, H125/H126): the PAR is an airfield feature.** This reverses PAR-1/PAR-2's carrier half and voids H124 (1). `ParMonitor`
+  samples only final Bays of a Facility with `runwayStatus`; `par.js` lost `carrierTouchdown`, `validateHullApproach`, `kind`, `hullId`,
+  `NO_SHIP`, `NO_COURSE`; the hull config has no `approach`. The PAR panel is callsign/runway/Landing assured + Missed approach only. The carrier
+  FINAL Bay line: side number, **no range**, Ball (`CarrierHandoff FINAL_TO_LSO`) and Waveoff (`SetState BOLTER_WAVEOFF`), a label not a link.
+  **DIST (`C17`)** on a carrier Strip: `carrier-final-distance.js` `carrierDistanceNm`, ship (banner) to correlated contact, the same for every
+  carrier Position; at Incirlik the PAR range to the threshold. `bay-views.js refreshDistBlocks()` rewrites `.efsp-block-C17` in place at most
+  1 Hz on `scope`/`par`. **Fresh ship position:** `shipStateChanged`'s `positionStepNm` 0.05 NM (ours) republishes the banner as the ship moves
+  (about every 6 s at 30 kt).
+
+**Not walked, from the lane notes:** a real DCS ship and real contacts in any carrier panel (every spec injects a ship); a divert with an ACTIVE
+TOFI, on the AP replica while CTR still holds communications, a split part of a diverted formation, a diverted flight in MARSA; a Case change while
+a flight is commenced; two Marshal Primaries (one Position has one Primary); a PAR live track (fix timing vs the 500 ms frame), a controller holding
+both CV lanes; the DCS wind direction at the ship against a real DCS.
+
 ### Traps, in the order they were hit
 
 1. **A lane runs BOTH unit suites**, whichever side it edits. Three merges in a row broke the other side's tests (SERVER-SEAMS-1 left 34 crc-desktop parity tests on removed singletons:
@@ -1370,6 +1432,13 @@ the human chose to leave (AC-2).
 8. **e2e specs reach modules through `crc.<module>` and must follow a moved function** (`crc.dispatch._invokeNla`, S-ARCH-32). `consol-hat` and `gclc-combine` call it.
 9. **Goldens:** never hand-merge; take either side, `npm run freeze:update`, check the diff is small, commit it separately. `wire:record` after any wire change (S-ARCH-9 and `CLAUDE.md`).
 10. **Playwright under load fails specs that pass alone**; re-run a failure alone before counting it (S-ARCH-14's rule). The last full run is in §1.
+11. **A figure that moves on a Strip or in a Bay view is updated in place**, never by rebuilding DOM at the sample rate: a FINAL view rebuilt at 2 Hz
+    detached its buttons under a click (PAR-2), and a Bay redraws only on Board topics, so DIST needs `refreshDistBlocks` (CARRIER-FOLLOWUP).
+    Likewise nothing may move under a held press (MARSHAL-FIX).
+12. **The harness has no DCS ship**: a carrier spec injects one under every carrier frame (copy `e2e/carrier-map.spec.js` `mapPage`), and correlations
+    it injects must be re-applied (a resync replaces them without a delta).
+13. **`wire:record` does not see** record contents, ack payloads, the heartbeat, the snapshot's fixed keys, op argument names or `REFUSAL_CODES`:
+    a change there needs `npm run wire:record -- --bump`.
 
 ## 4. What's left, and the known bugs
 
