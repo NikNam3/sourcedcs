@@ -37,9 +37,9 @@ const TRAIL_KEYS = Object.freeze(['rangeNm', 'heightFt', 'elevDeg', 'elevDevDeg'
 const INOP_REASONS = Object.freeze(['NO_APPROACH', 'NO_SHIP', 'NO_TDZE', 'NO_COURSE']);
 
 const _fin = (v) => typeof v === 'number' && Number.isFinite(v);
-const _r = (v, step) => (_fin(v) ? Math.round(v / step) * step : null);
-const _r2 = (v) => (_fin(v) ? Math.round(v * 100) / 100 : null);
-const _r0 = (v) => (_fin(v) ? Math.round(v) : null);
+const _r = (v, step) => (_fin(v) ? Math.round(v / step) * step + 0 : null); // + 0: never -0 on the wire
+const _r2 = (v) => (_fin(v) ? Math.round(v * 100) / 100 + 0 : null);
+const _r0 = (v) => (_fin(v) ? Math.round(v) + 0 : null);
 const normDeg = (d) => ((d % 360) + 360) % 360;
 
 /** A point `distM` metres from (lat, lon) on true bearing `brgDeg` (great circle; exact enough for a few hundred metres or 20 NM). */
@@ -50,10 +50,16 @@ function offsetPoint(lat, lon, brgDeg, distM) {
   return { lat: la2 / RAD, lon: lo2 / RAD };
 }
 
-/** East/north metres of `p` from `ref` (local tangent plane, under 0.1 % error inside 20 NM). */
+/**
+ * East/north metres of `p` from `ref` on the azimuthal equidistant projection centred on `ref`: the great-circle distance
+ * along the initial bearing from `ref`. A radar measures range and angle from where it stands, and this is that, exactly.
+ */
 function enuM(ref, p) {
-  const midLat = ((ref.lat + p.lat) / 2) * RAD;
-  return { e: (p.lon - ref.lon) * RAD * EARTH_R_M * Math.cos(midLat), n: (p.lat - ref.lat) * RAD * EARTH_R_M };
+  const la1 = ref.lat * RAD, la2 = p.lat * RAD, dLo = (p.lon - ref.lon) * RAD;
+  const a = Math.sin((la2 - la1) / 2) ** 2 + Math.cos(la1) * Math.cos(la2) * Math.sin(dLo / 2) ** 2;
+  const d = 2 * EARTH_R_M * Math.asin(Math.min(1, Math.sqrt(a)));
+  const brg = Math.atan2(Math.sin(dLo) * Math.cos(la2), Math.cos(la1) * Math.sin(la2) - Math.sin(la1) * Math.cos(la2) * Math.cos(dLo));
+  return { e: d * Math.sin(brg), n: d * Math.cos(brg) };
 }
 
 /**
