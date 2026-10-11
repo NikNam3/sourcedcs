@@ -329,3 +329,24 @@ test('06 the final bearing overridden moves the centreline; the ship track lost 
   await expect(map(page).locator('[data-cm="svg"]')).toBeVisible();
   await cleanUp(page);
 });
+
+test('07 the DIST Block measures from the live ship (H125): the ship moves on, the figure follows it with no Board change', async ({ browser, baseURL }) => {
+  const page = await mapPage(browser, baseURL, 'e2e-cm7');
+  const fin = await flight(page, { side: `5${unique()}`.slice(0, 3) });
+  await act(page, fin, { kind: 'InvokeNla' });
+  await waitStrip(page, fin, s => s.state === 'COMMENCED', 'commenced');
+  await lapseNlaGuard(page);
+  await act(page, fin, { kind: 'InvokeNla' });
+  await waitStrip(page, fin, s => s.stripType === 'FINAL' && s.state === 'ON_FINAL', 'on final');
+  await contact(page, 'cm71', { brg: 171, nm: 4, altFt: 1200, callsign: fin });
+  await page.locator('.efsp-position-tab[data-position-id="CV_APP1"]').click();
+  await page.locator('.efsp-bay-tab', { hasText: 'cv-app1-final' }).first().click();
+  const dist = page.locator('.efsp-strip', { has: page.getByText(fin, { exact: true }) }).first().locator('.efsp-block-C17');
+  const scope = () => page.evaluate(() => crc.changeBus.markEfspChanged('scope'));
+  await expect.poll(async () => { await scope(); return dist.textContent(); }, { timeout: 5000 }).toBe('4.0 NM');
+  // The ship steams 1 NM towards the contact (the server republishes its banner every 0.05 NM): DIST follows, nothing on the Board changed.
+  await setShip(page, { lat: SHIP.lat - 1 / 60 });
+  await expect.poll(async () => { await scope(); return dist.textContent(); }, { timeout: 5000 }).toBe('3.0 NM');
+  await setShip(page, { lat: SHIP.lat });
+  await cleanUp(page);
+});

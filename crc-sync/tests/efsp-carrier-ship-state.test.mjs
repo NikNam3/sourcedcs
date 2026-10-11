@@ -75,20 +75,15 @@ test('the shipped hull is CVN-72 unit UNION (decisions H13/H26) and validates', 
   assert.equal(DEFAULT_HULL.angledDeckDeg, 9);
 });
 
-// Every hull carries its PAR approach geometry (docs/adr/0112).
-const APPROACH = { touchdownAftM: 90, touchdownPortM: 10, deckHeightFt: 66, tchFt: 0, decisionHeightFt: 200, glideslopeDeg: 3.5 };
-
 test('validateHullConfig refusals', () => {
   assert.equal(validateHullConfig(null).ok, false);
   assert.equal(validateHullConfig({ hullId: '', match: { type: 'CVN_72' } }).ok, false);
   assert.match(validateHullConfig({ hullId: 'X', match: {} }).detail, /never a track id/);
   assert.equal(validateHullConfig({ hullId: 'X', match: { type: 'CVN_72', coalition: 'blue' }, angledDeckDeg: 9 }).ok, false);
   assert.equal(validateHullConfig({ hullId: 'X', match: { type: 'CVN_72' }, angledDeckDeg: -1 }).ok, false);
-  assert.equal(validateHullConfig({ hullId: 'X', match: { type: 'CVN_72' }, angledDeckDeg: 8.5, approach: APPROACH }).ok, true);
-  // docs/adr/0112: the approach is required, every key checked, no unknown key
-  assert.match(validateHullConfig({ hullId: 'X', match: { type: 'CVN_72' }, angledDeckDeg: 9 }).detail, /approach is required/);
-  assert.match(validateHullConfig({ hullId: 'X', match: { type: 'CVN_72' }, angledDeckDeg: 9, approach: { ...APPROACH, glideslopeDeg: 6 } }).detail, /glideslopeDeg/);
-  assert.match(validateHullConfig({ hullId: 'X', match: { type: 'CVN_72' }, angledDeckDeg: 9, approach: { ...APPROACH, tdze: 1 } }).detail, /unknown key tdze/);
+  assert.equal(validateHullConfig({ hullId: 'X', match: { type: 'CVN_72' }, angledDeckDeg: 8.5 }).ok, true);
+  // docs/adr/0116 (H125): the carrier has no PAR, so a hull needs no approach geometry; a hull without one starts again.
+  assert.equal(validateHullConfig({ hullId: 'X', match: { type: 'CVN_72' }, angledDeckDeg: 9 }).ok, true);
 });
 
 test('computeFinalBearing: BRC − angled deck, with the wrap (BRC 5, offset 9 → 356)', () => {
@@ -159,7 +154,7 @@ test('matchHullTrack: by unit name, by type, ambiguous type → null, non-ships 
   const plane = ship({ id: 103, name: 'UNION', category: 0 });
   const red = ship({ id: 104, name: 'UNION', coalition: RED });
   assert.equal(matchHullTrack(DEFAULT_HULL, [plane, other, union, red], { ownCoalition: BLUE }), union, 'unit name first');
-  const byType = { hullId: 'H', match: { type: 'CVN_72' }, angledDeckDeg: 9, approach: APPROACH };
+  const byType = { hullId: 'H', match: { type: 'CVN_72' }, angledDeckDeg: 9 };
   assert.equal(matchHullTrack(byType, [union], { ownCoalition: BLUE }), union);
   assert.equal(matchHullTrack(byType, [union, other], { ownCoalition: BLUE }), null, 'ambiguous → no guess');
   assert.equal(hullMatchProblem(byType, [union, other], { ownCoalition: BLUE }), 'hull ambiguous — configure unitName');
@@ -169,7 +164,7 @@ test('matchHullTrack: by unit name, by type, ambiguous type → null, non-ships 
   assert.equal(matchHullTrack(DEFAULT_HULL, [red], { ownCoalition: BLUE }), null, 'own coalition only');
   assert.equal(matchHullTrack(DEFAULT_HULL, [union], {}), null, 'unknown own coalition matches nothing');
   assert.equal(hullMatchProblem(DEFAULT_HULL, [union], {}), 'own coalition unknown');
-  const any = { hullId: 'H', match: { unitName: 'UNION', coalition: 'any' }, angledDeckDeg: 9, approach: APPROACH };
+  const any = { hullId: 'H', match: { unitName: 'UNION', coalition: 'any' }, angledDeckDeg: 9 };
   assert.equal(matchHullTrack(any, [red], {}), red);
   assert.equal(matchHullTrack(DEFAULT_HULL, new Map([[1, union]]).values(), { ownCoalition: BLUE }), union, 'any iterable');
   assert.equal(hullMatchProblem(DEFAULT_HULL, [], { ownCoalition: BLUE }), 'hull not found');
@@ -199,6 +194,21 @@ test('shipStateChanged: a sub-degree turn is not a change; 1° is', () => {
   assert.equal(shipStateChanged(null, a), true);
   const slow = buildShipState({ hull: DEFAULT_HULL, track: ship({ groundSpeed: 5 }), now: NOW });
   assert.equal(shipStateChanged(a, slow), true);
+});
+
+test('shipStateChanged: the position re-sends after 0.05 NM from where it was last published (CARRIER-FOLLOWUP)', () => {
+  const a = buildShipState({ hull: DEFAULT_HULL, track: ship(), now: NOW });
+  // 0.04 NM north: inside the step; 0.06 NM: past it. Heading, speed unchanged.
+  const near = buildShipState({ hull: DEFAULT_HULL, track: ship({ lat: 34.5 + 0.04 / 60 }), now: NOW + 1000 });
+  const far = buildShipState({ hull: DEFAULT_HULL, track: ship({ lat: 34.5 + 0.06 / 60 }), now: NOW + 2000 });
+  assert.equal(shipStateChanged(a, near), false, 'a few tens of metres is not a change');
+  assert.equal(shipStateChanged(a, far), true, 'a ship that has moved on re-sends its position');
+  assert.equal(shipStateChanged(a, far, { positionStepNm: 0.1 }), false);
+  // A ship steaming straight at 30 kt (15.4 m/s) for 6 s has moved about 93 m: one re-send.
+  const sixS = buildShipState({ hull: DEFAULT_HULL, track: ship({ lat: 34.5 + (93 / 1852) / 60 }), now: NOW + 6000 });
+  assert.equal(shipStateChanged(a, sixS), true);
+  const noPos = { ...a, lat: null, lon: null };
+  assert.equal(shipStateChanged(noPos, a), true, 'a position appearing is a change');
 });
 
 test('displayBearing: magnetic with a variation, labelled T or G otherwise (decisions H15)', () => {

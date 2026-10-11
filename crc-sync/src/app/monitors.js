@@ -158,7 +158,7 @@ function buildMonitors({ env, efsp, facilityConfig, missionClock, missionSession
     onChange: () => deliver(carrierDelta(efsp.carrierStore)),
   });
 
-  // ── The PAR sample (docs/adr/0112): each aircraft on a final, measured against its approach, for the Position working it.
+  // ── The PAR sample (docs/adr/0112; airfield only, ADR 0116): each aircraft on a final, measured against its approach, for the Position working it.
   // The hub sends it (`sendParSamples`, the `par` ticker); the airfield elevation is DCS's, for an approach whose TDZE the
   // config leaves to DCS. ──────────────────────────────────────────────────
   const parMonitor = new ParMonitor({
@@ -168,10 +168,6 @@ function buildMonitors({ env, efsp, facilityConfig, missionClock, missionSession
     correlatedTrackId: (id) => efsp.correlationStore.correlatedTrackId(id),
     runwayViewOf: (facilityId) => efsp.runwayStatusStore.statusView(facilityId),
     trackOf: (id) => trackStore.get(id),
-    tracks: () => trackStore.getAll(),
-    carrierStore: efsp.carrierStore,
-    ownCoalition: () => ownCoalition,
-    convergenceAt: (lat, lon) => theaterContext.convergenceAt(lat, lon),
     variationAt: (lat, lon) => theaterContext.variationAt(lat, lon),
     airportElevationFt: (icao) => {
       const data = hubLink.get().getMissionData();

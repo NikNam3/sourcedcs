@@ -42,3 +42,4 @@
 .efsp-sfa-on { color: #8ec7ff; min-width: 36px; }
 .efsp-sfa-spare { color: #5d6973; }
 .efsp-sfa-select { font: inherit; color: inherit; background: #232c35; border: 1px solid #34404a; border-radius: 3px; min-height: 24px; }
+span.efsp-final-name:hover { border-color: transparent; }

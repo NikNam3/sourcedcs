@@ -4,7 +4,9 @@ import {
   getEfspBays, getEfspFlightData, getEfspRunwayStatus, getEfspRack, getEfspStrip
 } from './efsp-state.js';
 import { parSampleFor } from './par-samples.js';
-import { terminalOp, terminalsFor } from './par-model.js';
+import { parTerminalOp, parTerminals } from './par-model.js';
+import { leadingFlightName } from './strip-fields.js';
+import { carrierFinalDistanceText } from './carrier-final-distance.js';
 import { parFlightOf, parShownStripId, showParFlight } from './par-panel.js';
 import { onEfspChanged } from './efsp-change-bus.js';
 import {
@@ -23,10 +25,12 @@ import { patternBoardModel, renderPatternBoard } from './pattern-board.js';
 // What each view does:
 //   pattern    pattern-board.js over the Bay's racks (a leg is a Rack): Move between
 //              legs, Landed, Drop. Advisories only; the board never refuses.
-//   final      one line per aircraft on the final (§7.10: nothing to type): its name
-//              picks it for the PAR panel (par-panel.js, which draws the picture from
-//              the server's PAR sample, crc-sync docs/adr/0112), its range to touchdown,
-//              and FINAL's two terminal buttons, the only gestures.
+//   final      one line per aircraft on the final (§7.10: nothing to type). At an airfield
+//              its name picks it for the PAR panel (par-panel.js, which draws the picture
+//              from the server's PAR sample, crc-sync docs/adr/0112), its range to
+//              touchdown, and Landing assured / Missed approach. On the carrier (no PAR,
+//              H125, crc-sync docs/adr/0116) the side number leads (H124), no range (the
+//              Strip's DIST Block carries it, H126), and Ball / Waveoff.
 //   sfa-freqs  a header over the frequency racks: which controller is on which
 //              frequency, editable by the jurisdiction Position only (guide §4.7).
 //
@@ -67,8 +71,9 @@ export function patternStripsFor(bay, rackOf, flightDataOf) {
       const flightData = flightDataOf ? flightDataOf(s.flightDataId) : null;
       const identity = (flightData && flightData.identity) || {};
       const joinedMs = (s.carrierHandoff && s.carrierHandoff.at) || s.createdAt;
+      const name = leadingFlightName(s, flightData);
       out.push({
-        stripId: s.stripId, callsign: identity.callsign || '', type: identity.aircraftType || '',
+        stripId: s.stripId, name, aka: name !== (identity.callsign || '') ? (identity.callsign || '') : '', type: identity.aircraftType || '',
         legId: s.rackId, enteredPatternS: _fin(joinedMs) ? joinedMs / 1000 : undefined, order: order++,
       });
     }
@@ -92,10 +97,35 @@ export function finalKindOf(bay) {
   return bay && bay.facilityId === 'CARRIER' ? 'CARRIER' : 'RUNWAY';
 }
 
-/** One flight line's text: its name (H122), and its range to touchdown from this controller's PAR sample, '' without one. */
-export function finalRowModel(strip, kind, par = parSampleFor(strip.stripId)) {
+// The carrier final's terminal ops (ADR 0064, 0075): "Ball" is the recorded FINAL_TO_LSO handoff, "Waveoff" the state change.
+// At an airfield they are the PAR's (par-model.js PAR_TERMINALS).
+const CARRIER_FINAL_TERMINALS = Object.freeze([
+  Object.freeze({ id: 'BALL', label: 'Ball', toState: 'BALL' }),
+  Object.freeze({ id: 'WAVEOFF', label: 'Waveoff', toState: 'BOLTER_WAVEOFF' }),
+]);
+
+/** The two terminal actions of a final kind ('RUNWAY' | 'CARRIER'), as plain data. */
+export function finalTerminalsFor(kind) {
+  return kind === 'CARRIER' ? CARRIER_FINAL_TERMINALS.map(a => ({ ...a })) : parTerminals();
+}
+
+/** The op a terminal button sends: FINAL's own state, or the carrier's recorded Ball handoff. */
+export function finalTerminalOp(kind, terminal) {
+  if (!terminal) return null;
+  if (kind === 'CARRIER' && terminal.toState === 'BALL') return { kind: 'CarrierHandoff', transfer: 'FINAL_TO_LSO' };
+  return parTerminalOp(terminal);
+}
+
+/**
+ * One flight line's text. At an airfield: the callsign and the range to touchdown from this controller's PAR sample ('' without
+ * one). On the carrier: the side number leading (H124) and no range (H126: the Strip's DIST Block carries it).
+ */
+export function finalRowModel(strip, kind, par = kind === 'CARRIER' ? null : parSampleFor(strip.stripId), flightDataOf = getEfspFlightData) {
+  if (kind === 'CARRIER') {
+    return { stripId: strip.stripId, name: leadingFlightName(strip, flightDataOf(strip.flightDataId)) || '—', range: '' };
+  }
   const nm = par && par.plot && Number.isFinite(par.plot.rangeNm) ? par.plot.rangeNm : null;
-  return { stripId: strip.stripId, name: parFlightOf(strip.stripId, kind).name || '—', range: nm == null ? '' : `${nm.toFixed(1)} NM` };
+  return { stripId: strip.stripId, name: parFlightOf(strip.stripId).name || '—', range: nm == null ? '' : `${nm.toFixed(1)} NM` };
 }
 
 // ── DOM ─────────────────────────────────────────────────────────────────────
@@ -188,7 +218,7 @@ function _renderFinal(container, bay) {
       row.dataset.shown = strip.stripId === shown ? '1' : '';
       const [name, range] = row.children;
       if (name.textContent !== m.name) name.textContent = m.name;
-      if (range.textContent !== m.range) range.textContent = m.range;
+      if (kind !== 'CARRIER' && range.textContent !== m.range) range.textContent = m.range;
     }
     return;
   }
@@ -208,18 +238,25 @@ function _renderFinal(container, bay) {
     row.className = 'efsp-final-row';
     row.dataset.stripId = strip.stripId;
     row.dataset.shown = strip.stripId === shown ? '1' : '';
-    const name = document.createElement('button');
-    name.type = 'button';
-    name.className = 'efsp-final-name';
-    name.textContent = m.name;
-    name.title = 'Show in the PAR panel';
-    name.addEventListener('click', () => showParFlight(strip.stripId));
-    const range = document.createElement('span');
-    range.className = 'efsp-final-range';
-    range.textContent = m.range;
+    const cells = [];
+    if (kind === 'CARRIER') {
+      // No PAR on the carrier (H125): the name is a label, not a link to a panel.
+      cells.push(Object.assign(document.createElement('span'), { className: 'efsp-final-name', textContent: m.name }));
+    } else {
+      const name = document.createElement('button');
+      name.type = 'button';
+      name.className = 'efsp-final-name';
+      name.textContent = m.name;
+      name.title = 'Show in the PAR panel';
+      name.addEventListener('click', () => showParFlight(strip.stripId));
+      const range = document.createElement('span');
+      range.className = 'efsp-final-range';
+      range.textContent = m.range;
+      cells.push(name, range);
+    }
     const term = document.createElement('div');
     term.className = 'efsp-final-terminals';
-    for (const t of terminalsFor(kind)) {
+    for (const t of finalTerminalsFor(kind)) {
       const b = document.createElement('button');
       b.type = 'button';
       b.className = 'efsp-final-terminal';
@@ -229,12 +266,12 @@ function _renderFinal(container, bay) {
         // the owner must be signed on here when the button is pressed, not when it was drawn
         const s = getEfspStrip(strip.stripId) || strip;
         if (!_signedOnAt(bay).includes(s.ownerPositionId)) return;
-        const op = terminalOp(kind, t);
+        const op = finalTerminalOp(kind, t);
         if (op) _send(s, op);
       });
       term.appendChild(b);
     }
-    row.append(name, range, term);
+    row.append(...cells, term);
     wrap.appendChild(row);
   }
   _replace(mount, wrap);
@@ -335,3 +372,20 @@ export function sfaExtraNlaButtons(strip) {
   });
   return [btn];
 }
+
+// The DIST Block (C17) measures between two moving things: the contact (every sweep) and the ship (republished each 0.05 NM).
+// A Bay redraws only on a Board change, so the figure is rewritten in place, at most once a second, on every Strip on screen.
+let _distAt = -Infinity;
+export function refreshDistBlocks(root = typeof document !== 'undefined' ? document : null, nowMs = Date.now()) {
+  if (!root || typeof root.querySelectorAll !== 'function') return;
+  if (nowMs - _distAt < 1000) return;
+  _distAt = nowMs;
+  for (const el of root.querySelectorAll('.efsp-strip[data-strip-id] .efsp-block-C17')) {
+    const stripEl = el.closest('.efsp-strip[data-strip-id]');
+    const strip = stripEl ? getEfspStrip(stripEl.dataset.stripId) : null;
+    if (!strip) continue;
+    const text = carrierFinalDistanceText(strip);
+    if (el.textContent !== text) el.textContent = text;
+  }
+}
+onEfspChanged(['scope', 'par'], () => refreshDistBlocks());

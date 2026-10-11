@@ -74,7 +74,7 @@ test('pattern: legs are the Bay\'s racks, a Strip\'s leg is its rack, and time i
   assert.deepEqual(V.patternLegsFor(b).map(l => l.id), ['closed', 'initial', 'base', 'final']);
   const s = { stripId: 's1', flightDataId: 'f1', bayId: 'rsu-pattern', rackId: 'base', createdAt: 60000, updatedAt: 999000 };
   const list = V.patternStripsFor(b, (bayId, rackId) => (bayId === 'rsu-pattern' && rackId === 'base' ? [s] : []), () => ({ identity: { callsign: 'VIPER 11', aircraftType: 'F-16C' } }));
-  assert.deepEqual(list, [{ stripId: 's1', callsign: 'VIPER 11', type: 'F-16C', legId: 'base', enteredPatternS: 60, order: 0 }]);
+  assert.deepEqual(list, [{ stripId: 's1', name: 'VIPER 11', aka: '', type: 'F-16C', legId: 'base', enteredPatternS: 60, order: 0 }]);
 });
 
 test('pattern mount: hides the racks (RSU replaces them), draws the board, and its three gestures send the right ops as the owner', () => {
@@ -128,17 +128,29 @@ test('a Bay with no view is left alone, and a stale view is removed when a Bay s
   assert.equal([...c2.children].some(x => x.className === 'efsp-bay-view'), false);
 });
 
-test('final: one line per flight, named by its callsign at a runway and its side number on a carrier lane (H122), its range from the PAR sample', () => {
+test('final: one line per flight; at a runway the callsign and the PAR range; on the carrier the side number leads (H124) and no range (H126)', () => {
   const strip = { stripId: 's1', flightDataId: 'f1' };
   putFlightData('f1', { identity: { callsign: 'VIPER 11' }, military: { carrier: { sideNumber: '201' } } });
   putStrip({ ...strip, bayId: 'par-final', rackId: 'main', ownerPositionId: 'PAR', state: 'ON_FINAL', stripType: 'FINAL' });
-  const par = { stripId: 's1', approach: { id: 'LTAG-05', kind: 'RUNWAY' }, plot: { rangeNm: 3.04 } };
+  const par = { stripId: 's1', approach: { id: 'LTAG-05' }, plot: { rangeNm: 3.04 } };
   assert.deepEqual(V.finalRowModel(strip, 'RUNWAY', par), { stripId: 's1', name: 'VIPER 11', range: '3.0 NM' });
-  assert.equal(V.finalRowModel(strip, 'CARRIER', par).name, '201');
   assert.equal(V.finalRowModel(strip, 'RUNWAY', { ...par, plot: null }).range, '', 'no plot, no range');
   assert.equal(V.finalRowModel(strip, 'RUNWAY', null).range, '', 'not this controller\'s final');
+  const cv = { stripId: 'c1', flightDataId: 'fc', stripType: 'FINAL', ownerPositionId: 'CV_APP1' };
+  putFlightData('fc', { identity: { callsign: 'NAVY 1' }, military: { carrier: { sideNumber: '201' } } });
+  assert.deepEqual(V.finalRowModel(cv, 'CARRIER'), { stripId: 'c1', name: '201', range: '' });
+  putFlightData('fc', { identity: { callsign: 'NAVY 1' }, military: { carrier: { sideNumber: '' } } });
+  assert.equal(V.finalRowModel(cv, 'CARRIER').name, 'NAVY 1', 'no side number yet: the callsign');
   assert.equal(V.finalKindOf(bay('par-final')), 'RUNWAY');
   assert.equal(V.finalKindOf(bay('cv-app1-final')), 'CARRIER');
+  assert.deepEqual(V.finalTerminalsFor('RUNWAY').map(t => t.label), ['Landing assured', 'Missed approach']);
+  assert.deepEqual(V.finalTerminalsFor('CARRIER').map(t => t.label), ['Ball', 'Waveoff']);
+  const [ball, waveoff] = V.finalTerminalsFor('CARRIER');
+  assert.deepEqual(V.finalTerminalOp('CARRIER', ball), { kind: 'CarrierHandoff', transfer: 'FINAL_TO_LSO' });
+  assert.deepEqual(V.finalTerminalOp('CARRIER', waveoff), { kind: 'SetState', toState: 'BOLTER_WAVEOFF' });
+  const [assured] = V.finalTerminalsFor('RUNWAY');
+  assert.deepEqual(V.finalTerminalOp('RUNWAY', assured), { kind: 'SetState', toState: 'BALL' });
+  assert.equal(V.finalTerminalOp('RUNWAY', null), null);
 });
 
 test('final mount: PAR\'s Strip becomes a flight line with no input in it, racks hidden, and a terminal button sends the owner\'s op', () => {

@@ -8,7 +8,7 @@
  */
 
 const { test, expect } = require('./helpers/test');
-const { openPanel } = require('./helpers/app');
+const { openPanel, serverTicks } = require('./helpers/app');
 
 test.use({ viewport: { width: 1500, height: 1100 } });
 test.setTimeout(90000);
@@ -19,7 +19,7 @@ const FT_PER_NM = 6076.12;
 const RAD = Math.PI / 180;
 
 const APPROACH_05 = {
-  id: 'LTAG-05', kind: 'RUNWAY', label: 'PAR RWY 05', runwayEnd: '05', airportIcao: 'LTAG', hullId: null,
+  id: 'LTAG-05', label: 'PAR RWY 05', runwayEnd: '05', airportIcao: 'LTAG',
   gpaDeg: 3.06, gpaPublished: false, tchFt: 50, tdzeFt: 238, dhFt: 200, daFt: 438, courseTrueDeg: 56, courseDisplay: { value: 51, ref: 'M' },
 };
 const R_DA = (200 - 50) / (FT_PER_NM * Math.tan(3.06 * RAD)); // where the glidepath reaches DA
@@ -386,7 +386,7 @@ test('06 Landing assured from the PAR panel; the controller signs off: the sampl
   await page.waitForFunction(() => crc.ws.getAckedPositions('INCIRLIK').includes('PAR'));
 });
 
-test('07 a carrier lane: the flight by its side number (H122), Ball and Waveoff keep their ops', async ({ page }) => {
+test('07 a carrier lane has no PAR (H125): no sample, the FINAL line by side number (H124) with no range (H126), Ball and Waveoff keep their ops', async ({ page }) => {
   await openPanel(page, { signedOn: ['CV_MARSHAL', 'CV_APP1', 'CV_APP2', 'CV_PRIFLY'], facilityId: 'CARRIER', controller: `e2e-par-cv-${unique()}` });
   await page.waitForFunction(() => typeof crc.carrier.getEfspCarrier === 'function' && !!crc.carrier.getEfspCarrier());
   await installSampleInjection(page);
@@ -412,25 +412,22 @@ test('07 a carrier lane: the flight by its side number (H122), Ball and Waveoff 
   await openBay(page, 'CV_APP1', 'cv-app1-lane');
   await page.locator('.efsp-strip', { has: page.getByText(call, { exact: true }) }).first().locator('.efsp-nla-btn[data-carrier-handoff="APPROACH_TO_FINAL"]').click();
   await waitStrip(page, call, s => s.stripType === 'FINAL' && s.state === 'ON_FINAL', 'Radar contact');
-  const id = (await stripOf(page, call)).stripId;
-  const deck = {
-    id: 'CVN-72', kind: 'CARRIER', label: 'CVN-72', runwayEnd: null, airportIcao: null, hullId: 'CVN-72',
-    gpaDeg: 3.5, gpaPublished: true, tchFt: 0, tdzeFt: 66, dhFt: 200, daFt: 266, courseTrueDeg: null, courseDisplay: { value: null, ref: null },
-  };
-  await inject(page, [sample(id, { r: 2.5, approach: deck, facilityId: 'CARRIER', positionId: 'CV_APP1' })]);
+  // No PAR on the carrier (H125, crc-sync docs/adr/0116): the server sends this lane no sample, the FINAL Bay line names the
+  // flight by its side number (H124), has no range (H126) and no link to the PAR panel, and keeps Ball / Waveoff.
+  await page.evaluate(() => {
+    window.__parSeen = [];
+    crc.msgRegistry.addEfspMessageObserver((msg) => { if (msg && msg.type === 'par-sample') window.__parSeen.push(...(msg.samples || [])); });
+  });
   await openBay(page, 'CV_APP1', 'cv-app1-final');
-  await expect(page.locator('.efsp-final-row .efsp-final-name')).toHaveText(side);
-  await expect(page.locator('.efsp-final-row .efsp-final-range')).toHaveText('2.5 NM');
-  await expect(page.locator('.efsp-final-row .efsp-final-terminal')).toHaveText(['Ball', 'Waveoff']);
-  await openFromBay(page, 'CV_APP1', 'cv-app1-final', side);
-  await expect(field(page, 'name')).toHaveText(side);
-  await expect(field(page, 'title')).toHaveText('CVN-72');
-  await expect(field(page, 'gpa')).toHaveText('3.50°');
-  await expect(field(page, 'fac')).toBeHidden();
-  await expect(panel(page).locator('.par-term')).toHaveText(['Ball', 'Waveoff']);
-  await panel(page).screenshot({ path: test.info().outputPath('07-carrier.png') });
-  await page.evaluate(() => { window.__par.samples = null; });
-  await panel(page).locator('.par-term[data-terminal="WAVEOFF"]').click();
+  const row = page.locator('.efsp-final-row');
+  await expect(row.locator('.efsp-final-name')).toHaveText(side);
+  await expect(row.locator('span.efsp-final-name')).toHaveCount(1);
+  await expect(row.locator('button.efsp-final-name')).toHaveCount(0);
+  await expect(row.locator('.efsp-final-range')).toHaveCount(0);
+  await expect(row.locator('.efsp-final-terminal')).toHaveText(['Ball', 'Waveoff']);
+  await serverTicks(page, 3); // the PAR ticks every 500 ms, the hub's heartbeat no faster
+  expect(await page.evaluate(() => window.__parSeen.length)).toBe(0);
+  expect(await page.evaluate(() => crc.parSamples.parSamples().length)).toBe(0);
+  await row.locator('.efsp-final-terminal[data-terminal="WAVEOFF"]').click();
   await waitStrip(page, call, s => s.state === 'BOLTER_WAVEOFF', 'waveoff');
-  await expect(panel(page).locator('#par-empty')).toBeVisible({ timeout: 5000 });
 });

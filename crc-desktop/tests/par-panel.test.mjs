@@ -72,12 +72,6 @@ test('no plot: amber at 3 s of plot age (frame age + time since it came), or 3 s
   assert.equal(M.noPlotState({ ...none, sensor: { elevation: 'INOP', azimuth: 'INOP', reason: 'NO_APPROACH' } }, { nowMs: 9000, firstSeenMs: 0 }).amber, false);
 });
 
-test('the flight\'s name (H122): the side number on a carrier lane once typed, the callsign at a runway and before one is typed', () => {
-  assert.equal(M.flightName({ approachKind: 'CARRIER', callsign: 'NAVY 1', sideNumber: '203' }), '203');
-  assert.equal(M.flightName({ approachKind: 'CARRIER', callsign: 'NAVY 1', sideNumber: '  ' }), 'NAVY 1');
-  assert.equal(M.flightName({ approachKind: 'RUNWAY', callsign: 'VIPER 21', sideNumber: '203' }), 'VIPER 21');
-});
-
 test('several flights: the controller\'s pick holds while it is sent; otherwise the one nearest touchdown', () => {
   const a = { stripId: 'a', plot: { rangeNm: 6 } };
   const b = { stripId: 'b', plot: { rangeNm: 2 } };
@@ -149,24 +143,17 @@ test('readout: the flight row and deviations as the mockup writes them; INOP bla
   assert.equal(M.readoutModel({ sample: s, plot: plot({ rangeNm: -0.12 }) }).range, '−0.1');
 });
 
-test('header: runway and carrier', () => {
+test('header: the runway (the PAR is airfield-only, H125)', () => {
   assert.deepEqual(M.headerModel(approach(), 3.06), { title: 'RWY 05 · LTAG', gpa: '3.06°', tch: '50', da: '438', fac: '051M' });
-  const cv = M.headerModel({ id: 'CVN-72', kind: 'CARRIER', label: 'CVN-72', tchFt: 0, daFt: 266, courseDisplay: { value: null, ref: null } }, 3.5);
-  assert.equal(cv.title, 'CVN-72');
-  assert.equal(cv.fac, '');
   assert.equal(M.headerModel(null, 3).title, 'NO APPROACH');
 });
 
-test('terminals keep the FINAL view\'s ops: PAR\'s states, the carrier\'s recorded Ball handoff', () => {
-  assert.deepEqual(M.terminalsFor('RUNWAY').map(t => t.label), ['Landing assured', 'Missed approach']);
-  assert.deepEqual(M.terminalsFor('CARRIER').map(t => t.label), ['Ball', 'Waveoff']);
-  const [assured, missed] = M.terminalsFor('RUNWAY');
-  assert.deepEqual(M.terminalOp('RUNWAY', assured), { kind: 'SetState', toState: 'BALL' });
-  assert.deepEqual(M.terminalOp('RUNWAY', missed), { kind: 'SetState', toState: 'BOLTER_WAVEOFF' });
-  const [ball, waveoff] = M.terminalsFor('CARRIER');
-  assert.deepEqual(M.terminalOp('CARRIER', ball), { kind: 'CarrierHandoff', transfer: 'FINAL_TO_LSO' });
-  assert.deepEqual(M.terminalOp('CARRIER', waveoff), { kind: 'SetState', toState: 'BOLTER_WAVEOFF' });
-  assert.equal(M.terminalOp('RUNWAY', null), null);
+test('terminals keep the FINAL view\'s ops: PAR\'s states only (no Ball / Waveoff in the PAR, H125)', () => {
+  assert.deepEqual(M.parTerminals().map(t => t.label), ['Landing assured', 'Missed approach']);
+  const [assured, missed] = M.parTerminals();
+  assert.deepEqual(M.parTerminalOp(assured), { kind: 'SetState', toState: 'BALL' });
+  assert.deepEqual(M.parTerminalOp(missed), { kind: 'SetState', toState: 'BOLTER_WAVEOFF' });
+  assert.equal(M.parTerminalOp(null), null);
 });
 
 test('the panel never tells the controller their job: no call prompts, no cadence (H115)', () => {

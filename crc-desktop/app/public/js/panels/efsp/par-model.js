@@ -18,32 +18,25 @@ export const ZOOM_STEP = 1.15;
 export const LIMITS = Object.freeze({ rMin: 0.5, rMax: 40, hMin: 150, yMin: 100 });
 
 // The terminal ops stay the FINAL view's (ADR 0064, 0075): PAR's "Landing assured" and "Missed approach" are FINAL's own
-// states; on the carrier lane "Ball" is the recorded FINAL_TO_LSO handoff and "Waveoff" the state change.
-export const PAR_TERMINALS = Object.freeze({
-  RUNWAY: Object.freeze([
-    Object.freeze({ id: 'ASSURED', label: 'Landing assured', toState: 'BALL' }),
-    Object.freeze({ id: 'MISSED', label: 'Missed approach', toState: 'BOLTER_WAVEOFF' }),
-  ]),
-  CARRIER: Object.freeze([
-    Object.freeze({ id: 'BALL', label: 'Ball', toState: 'BALL' }),
-    Object.freeze({ id: 'WAVEOFF', label: 'Waveoff', toState: 'BOLTER_WAVEOFF' }),
-  ]),
-});
+// states. The PAR is an airfield feature only (decisions H125, crc-sync docs/adr/0116): the carrier's Ball / Waveoff are the
+// carrier FINAL Bay line's (bay-views.js).
+export const PAR_TERMINALS = Object.freeze([
+  Object.freeze({ id: 'ASSURED', label: 'Landing assured', toState: 'BALL' }),
+  Object.freeze({ id: 'MISSED', label: 'Missed approach', toState: 'BOLTER_WAVEOFF' }),
+]);
 
 const _PM_RAD = Math.PI / 180;
 const _pmFin = (v) => typeof v === 'number' && Number.isFinite(v);
 const _PM_MINUS = '−';
 
-/** The two terminal actions of an approach kind ('RUNWAY' | 'CARRIER'), as plain data. */
-export function terminalsFor(kind) {
-  return (kind === 'CARRIER' ? PAR_TERMINALS.CARRIER : PAR_TERMINALS.RUNWAY).map(a => ({ ...a }));
+/** The PAR's two terminal actions, as plain data. */
+export function parTerminals() {
+  return PAR_TERMINALS.map(a => ({ ...a }));
 }
 
-/** The op a terminal button sends: FINAL's own state, or the carrier's recorded Ball handoff. */
-export function terminalOp(kind, terminal) {
-  if (!terminal) return null;
-  if (kind === 'CARRIER' && terminal.toState === 'BALL') return { kind: 'CarrierHandoff', transfer: 'FINAL_TO_LSO' };
-  return { kind: 'SetState', toState: terminal.toState };
+/** The op a terminal button sends: FINAL's own state. */
+export function parTerminalOp(terminal) {
+  return terminal ? { kind: 'SetState', toState: terminal.toState } : null;
 }
 
 /** The glidepath angle in use: the approach's published angle wins; otherwise the controller's default (H116). */
@@ -119,13 +112,6 @@ export function noPlotState(sample, { receivedAtMs, nowMs, firstSeenMs } = {}) {
   }
   if (_pmFin(firstSeenMs) && _pmFin(nowMs) && nowMs - firstSeenMs >= NO_PLOT_MS) return { amber: true, seconds: null };
   return none;
-}
-
-/** The name the flight row shows (H122): the side number on a carrier lane when one is typed, else the callsign. */
-export function flightName({ approachKind, callsign, sideNumber } = {}) {
-  const side = String(sideNumber || '').trim();
-  if (approachKind === 'CARRIER' && side) return side;
-  return callsign || '';
 }
 
 /**
@@ -232,9 +218,7 @@ function _pmCourse(approach) {
 /** The approach header's text pieces. */
 export function headerModel(approach, gpaDeg) {
   if (!approach) return { title: 'NO APPROACH', gpa: '', tch: '', da: '', fac: '' };
-  const title = approach.kind === 'CARRIER'
-    ? `${approach.label || approach.hullId || 'CARRIER'}`
-    : [approach.runwayEnd ? `RWY ${approach.runwayEnd}` : (approach.label || ''), approach.airportIcao || ''].filter(Boolean).join(' · ');
+  const title = [approach.runwayEnd ? `RWY ${approach.runwayEnd}` : (approach.label || ''), approach.airportIcao || ''].filter(Boolean).join(' · ');
   return {
     title,
     gpa: _pmFin(gpaDeg) ? `${gpaDeg.toFixed(2)}°` : '',

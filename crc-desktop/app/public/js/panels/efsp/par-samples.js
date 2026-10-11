@@ -2,7 +2,7 @@
 
 // The PAR samples this session is sent (crc-sync docs/adr/0112): one per aircraft on a final worked by a Position this
 // controller is signed on to, keyed by Strip id, replaced whole by every `par-sample` frame. A leaf: it imports nothing,
-// so every reader (the FINAL view, the carrier DIST Block, the PAR panel) can import it without a cycle.
+// so every reader (the FINAL view, the airfield DIST Block, the PAR panel) can import it without a cycle.
 //
 // A sample is { stripId, facilityId, positionId, approach, sensor, plot, plotAgeMs, trail } (crc-sync
 // surveillance/par.js). `plotAgeMs` is how old the plot was when the frame left the server; `receivedAt` (this client's

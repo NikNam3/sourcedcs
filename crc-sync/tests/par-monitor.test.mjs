@@ -12,7 +12,6 @@ import runwayStatus from '../src/efsp/runway-status.js';
 
 const FT_PER_NM = 6076.12;
 const INCIRLIK_CFG = JSON.parse(fs.readFileSync(new URL('../config/efsp-facility-incirlik.json', import.meta.url), 'utf8'));
-const HULL = JSON.parse(fs.readFileSync(new URL('../config/efsp-carriers.json', import.meta.url), 'utf8')).hulls[0];
 const TUNING = { defaultGlideslopeDeg: 3.06, sampleMs: 500, trailPlots: 12, coverage: { rangeNm: 20, azimuthHalfDeg: 15, elevationMinDeg: -1, elevationMaxDeg: 7, apexBeyondNm: 0.5 } };
 const OWN = 2;
 const DCS_LTAG_ELEV_FT = 160; // what DCS says the airfield is at (the config leaves TDZE to DCS)
@@ -40,10 +39,6 @@ function world({ activeRunway = '05', aptElevFt = DCS_LTAG_ELEV_FT } = {}) {
     correlatedTrackId: (id) => corr.get(id) || null,
     runwayViewOf: (fid) => (fid === 'INCIRLIK' ? runwayStatus.buildStatusView(INCIRLIK_CFG.runwayStatus, runwayRecord) : null),
     trackOf: (id) => tracks.get(id),
-    tracks: () => tracks.getAll(),
-    carrierStore: { defaultHullId: HULL.hullId, hull: () => JSON.parse(JSON.stringify(HULL)) },
-    ownCoalition: () => OWN,
-    convergenceAt: () => 0,
     variationAt: () => 5,
     airportElevationFt: (icao) => (icao === 'LTAG' ? aptElevFt : null),
     wallClock: wall,
@@ -86,7 +81,6 @@ test('PAR at Incirlik: the threshold of the runway the flight lands on, TDZE fro
   assert.equal(e.facilityId, 'INCIRLIK');
   assert.deepEqual(Object.keys(e.approach), [...par.APPROACH_KEYS]);
   assert.equal(e.approach.id, 'LTAG-05');
-  assert.equal(e.approach.kind, 'RUNWAY');
   assert.equal(e.approach.gpaDeg, 3.06);
   assert.equal(e.approach.gpaPublished, false, 'no published angle: the controller\'s default may replace it (H116)');
   assert.equal(e.approach.tdzeFt, DCS_LTAG_ELEV_FT);
@@ -205,80 +199,18 @@ test('walk: an aircraft below DA keeps its sample, to the foot; nothing changes 
   assert.equal(e.sensor.elevation, 'OK');
 });
 
-// ── the carrier ──────────────────────────────────────────────────────────
+// ── the carrier: no PAR (decisions H125, docs/adr/0116) ─────────────────
 
-function ship(w, { lat = 35, lon = 33.5, heading = 0 } = {}) {
-  w.tracks.update({ id: 900, callsign: 'UNION', name: 'UNION', coalition: OWN, type: 'CVN_72', category: 4, lat, lon, alt: 0, heading, groundSpeed: 12, verticalSpeed: 0 });
-}
-function laneGeom(shipPos, heading) {
-  const td = par.carrierTouchdown({ shipLat: shipPos.lat, shipLon: shipPos.lon, headingTrueDeg: heading, aftM: HULL.approach.touchdownAftM, portM: HULL.approach.touchdownPortM });
-  return { refLat: td.lat, refLon: td.lon, courseTrueDeg: (heading - HULL.angledDeckDeg + 360) % 360 };
-}
-
-test('the carrier lane: the touchdown point on the live ship, the landing area\'s course, 3.5 degrees published', () => {
+test('a carrier FINAL Strip on a carrier final Bay gets no sample: the PAR is an airfield feature only', () => {
   const w = world();
-  ship(w, { heading: 0 });
+  w.tracks.update({ id: 900, callsign: 'UNION', name: 'UNION', coalition: OWN, type: 'CVN_72', category: 4, lat: 35, lon: 33.5, alt: 0, heading: 0, groundSpeed: 12, verticalSpeed: 0 });
   w.onFinal('CARRIER', 'cv-app1-final', 'CV_APP1', { trackId: 21 });
-  const g = laneGeom({ lat: 35, lon: 33.5 }, 0);
-  w.fly(21, on(g, 3, gp(3, 3.5, 0), HULL.approach.deckHeightFt));
-  const [e] = w.monitor.tick();
-  assert.equal(e.positionId, 'CV_APP1');
-  assert.equal(e.approach.kind, 'CARRIER');
-  assert.equal(e.approach.hullId, 'CVN-72');
-  assert.equal(e.approach.gpaDeg, 3.5);
-  assert.equal(e.approach.gpaPublished, true);
-  assert.equal(e.approach.courseTrueDeg, 351);
-  assert.deepEqual(e.approach.courseDisplay, { value: 346, ref: 'M' });
-  assert.equal(e.plot.rangeNm, 3);
-  assert.equal(e.plot.elevDevFt, 0);
-  assert.equal(e.plot.azDevFt, 0);
-});
-
-test('walk: a second aircraft on the same carrier final: two samples, each its own trail', () => {
-  const w = world();
-  ship(w);
-  const g = laneGeom({ lat: 35, lon: 33.5 }, 0);
-  const a = w.onFinal('CARRIER', 'cv-app1-final', 'CV_APP1', { trackId: 22 });
-  const b = w.onFinal('CARRIER', 'cv-app1-final', 'CV_APP1', { trackId: 23 });
-  w.fly(22, on(g, 2, gp(2, 3.5, 0), 66));
-  w.fly(23, on(g, 5, gp(5, 3.5, 0), 66));
-  w.monitor.tick();
-  w.fly(22, on(g, 1.9, gp(1.9, 3.5, 0), 66));
-  const out = w.monitor.tick();
-  assert.deepEqual(out.map(e => e.stripId), [a.stripId, b.stripId]);
-  assert.equal(out[0].trail.length, 1);
-  assert.equal(out[1].trail.length, 0, 'b did not move: no second plot');
-  assert.equal(out[0].plot.rangeNm, 1.9);
-  assert.equal(out[1].plot.rangeNm, 5);
-});
-
-test('walk: the carrier turns under an aircraft on final: the course and the touchdown point follow the ship; the trail keeps what was measured', () => {
-  const w = world();
-  ship(w, { heading: 0 });
-  const g0 = laneGeom({ lat: 35, lon: 33.5 }, 0);
-  w.onFinal('CARRIER', 'cv-app2-final', 'CV_APP2', { trackId: 24 });
-  w.fly(24, on(g0, 4, gp(4, 3.5, 0), 66));
-  const before = w.monitor.tick()[0];
-  assert.equal(before.plot.azDevFt, 0);
-  ship(w, { heading: 10, lat: 35.001 }); // turned 10 degrees right and moved on
-  w.fly(24, on(g0, 3.9, gp(3.9, 3.5, 0), 66)); // the aircraft flew the old line
-  const after = w.monitor.tick()[0];
-  assert.equal(after.approach.courseTrueDeg, 1);
-  // The deck swung right (351 -> 001): the line the aircraft flew now lies east of the new centreline, which is right of course
-  // for a pilot flying 001, by about 4 NM * sin 10 degrees.
-  assert.ok(after.plot.azDevFt > 4000 && after.plot.azDevFt < 4300, `now well right of the new centreline: ${after.plot.azDevFt}`);
-  assert.equal(after.trail[0].azDevFt, 0, 'the earlier plot as it was measured');
-});
-
-test('no ship (the hull is not found): both scopes INOP, no plot; the approach is still named', () => {
-  const w = world();
-  w.onFinal('CARRIER', 'cv-app1-final', 'CV_APP1', { trackId: 25 });
-  w.fly(25, { lat: 35, lon: 33.4, altFt: 1200 });
-  const [e] = w.monitor.tick();
-  assert.deepEqual(e.sensor, { elevation: 'INOP', azimuth: 'INOP', reason: 'NO_SHIP' });
-  assert.equal(e.approach.hullId, 'CVN-72');
-  assert.equal(e.plot, null);
-  assert.equal(e.plotAgeMs, null);
+  w.onFinal('CARRIER', 'cv-app2-final', 'CV_APP2', { trackId: 22 });
+  w.fly(21, { lat: 34.95, lon: 33.5, altFt: 1000 });
+  assert.deepEqual(w.monitor.tick(), []);
+  const s = w.onFinal('INCIRLIK', 'par-final', 'PAR', { trackId: 11 });
+  w.fly(11, on(RWY05, 5, gp(5), DCS_LTAG_ELEV_FT));
+  assert.deepEqual(w.monitor.tick().map(e => e.stripId), [s.stripId], 'only the airfield\'s final');
 });
 
 test('a Strip with no correlated contact is sampled with no plot (the panel says so); only ON_FINAL FINAL Strips in a final Bay count', () => {

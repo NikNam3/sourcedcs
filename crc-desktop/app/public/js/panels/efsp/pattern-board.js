@@ -42,7 +42,9 @@ const _pbFinite = (v) => typeof v === 'number' && Number.isFinite(v);
 /**
  * @param {object} p
  * @param {Array<{id,label}>} p.legs         the Bay's racks, in left-to-right order
- * @param {Array<object>} p.strips           { stripId, callsign, type?, intent?, legId, enteredPatternS?, order? }
+ * @param {Array<object>} p.strips           { stripId, name, aka?, type?, intent?, legId, enteredPatternS?, order? }
+ *                                           name: what the chip leads with (the side number on a carrier Strip once typed, else the
+ *                                           callsign, decisions H124); aka: the callsign beside it when the side number leads
  * @param {number} p.nowS                    mission clock, seconds
  * @param {string} [p.runwayOpenStatus]          'OPEN' | 'SUSPENDED' | 'CLOSED'
  * @param {number} [p.longMin]
@@ -68,7 +70,8 @@ export function patternBoardModel({ legs, strips, nowS, runwayOpenStatus, longMi
     const minutes = _pbFinite(s.enteredPatternS) && _pbFinite(nowS) ? Math.max(0, Math.floor((nowS - s.enteredPatternS) / 60)) : null;
     const chip = {
       stripId: s.stripId,
-      callsign: s.callsign || '',
+      name: s.name || '',
+      aka: s.aka || '',
       type: s.type || '',
       intent: INTENT_LABELS[s.intent] || (s.intent || ''),
       minutes,
@@ -88,7 +91,7 @@ export function patternBoardModel({ legs, strips, nowS, runwayOpenStatus, longMi
     advisories.push({ kind: 'CROWDED_FINAL', text: `${last.count} on ${last.label.toLowerCase()}: advisory`, stripIds: last.chips.map(c => c.stripId) });
   }
   for (const c of longOnes) {
-    advisories.push({ kind: 'LONG_IN_PATTERN', text: `${c.callsign} ${c.minutes} min in pattern`, stripIds: [c.stripId] });
+    advisories.push({ kind: 'LONG_IN_PATTERN', text: `${c.name} ${c.minutes} min in pattern`, stripIds: [c.stripId] });
   }
   const total = columns.reduce((n, c) => n + c.count, 0);
   if (runwayOpenStatus && runwayOpenStatus !== 'OPEN' && total > 0) {
@@ -146,9 +149,9 @@ export function renderPatternBoard(model, { doc, legs, onMove, onAction } = {}) 
       c.dataset.stripId = chip.stripId;
       c.draggable = true;
       c.addEventListener('dragstart', (e) => { if (e && e.dataTransfer && e.dataTransfer.setData) e.dataTransfer.setData('text/plain', chip.stripId); });
-      c.appendChild(_pbEl(d, 'div', 'efsp-pattern-cs', chip.callsign));
+      c.appendChild(_pbEl(d, 'div', 'efsp-pattern-cs', chip.name));
       c.appendChild(_pbEl(d, 'div', 'efsp-pattern-meta',
-        [chip.type, chip.intent, chip.minutes === null ? '' : `${chip.minutes} min`].filter(Boolean).join(' · ')));
+        [chip.aka, chip.type, chip.intent, chip.minutes === null ? '' : `${chip.minutes} min`].filter(Boolean).join(' · ')));
       const acts = _pbEl(d, 'div', 'efsp-pattern-actions');
       const nxt = nextLeg(legList, chip.legId);
       if (nxt) {
