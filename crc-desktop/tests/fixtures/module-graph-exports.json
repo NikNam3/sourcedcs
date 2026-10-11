@@ -1276,9 +1276,11 @@
    "FIELD_SPANS",
    "MTR_BLOCKS_BY_POSITION",
    "ORDNANCE_WHEN_SET",
+   "SIDE_ONLY_WHEN_LEADING",
    "compactBlocksFor",
    "fieldSpanFor",
-   "isOrdnanceSet"
+   "isOrdnanceSet",
+   "sideNumberLeads"
   ],
   "panels/efsp/strip-indicators.js": [
    "_buildIndicatorSlots"

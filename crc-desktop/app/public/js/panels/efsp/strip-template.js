@@ -341,6 +341,7 @@ export const FINAL_BLOCK_MAP = {
 export const PATTERN_BLOCK_MAP = {
   'C1':  { required: true,  label: 'CALLSIGN', target: { kind: 'flightData', path: 'identity.callsign' } },
   'C2':  { required: true,  label: 'TYPE',     target: { kind: 'flightData', path: 'identity.aircraftType' } },
+  'C18': { required: false, label: 'SIDE',     target: { kind: 'carrier-derived', field: 'sideNumber' } },
   'C24': { required: false, label: 'NOTE',     target: { kind: 'annotation' } },
   ..._CARRIER_CHROME,
 };

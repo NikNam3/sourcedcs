@@ -499,9 +499,12 @@ const FINAL_BLOCK_MAP = {
 };
 
 // PATTERN: identity and a free annotation. Shared with RSU (L18).
+// C18: the side number the Marshal typed, read here (decisions.md H122: on a carrier
+// Strip it leads; the client draws it only once one is set, so RSU's Strips are unchanged).
 const PATTERN_BLOCK_MAP = {
   'C1':  { required: true,  target: { kind: 'flightData', path: 'identity.callsign' } },
   'C2':  { required: true,  target: { kind: 'flightData', path: 'identity.aircraftType' } },
+  'C18': { required: false, target: { kind: 'carrier-derived', field: 'sideNumber' } },
   'C24': { required: false, target: { kind: 'annotation' } },
   ..._CARRIER_CHROME,
 };

@@ -304,8 +304,9 @@ export function getEfspRack(bayId, rackId) {
  * live Strip objects, still in their real Bay/Rack (no re-parenting) —
  * matches efsp-panel.js's existing precedent that "which Bay is
  * in view" is per-controller local state, not Board state. Matches
- * callsign or beacon code, case-insensitive substring. Excludes DROPPED,
- * same as getEfspRack.
+ * callsign, beacon code or carrier side number (decisions.md H117/H122: the
+ * carrier names an aircraft by it), case-insensitive substring. Excludes
+ * DROPPED, same as getEfspRack.
  */
 export function searchEfspStrips(query) {
   const q = (query || '').trim().toLowerCase();
@@ -315,7 +316,9 @@ export function searchEfspStrips(query) {
     const flightData = getEfspFlightData(s.flightDataId);
     const callsign = (flightData && flightData.identity && flightData.identity.callsign) || '';
     const beacon = (flightData && flightData.identity && flightData.identity.beaconAssigned) || '';
-    return callsign.toLowerCase().includes(q) || beacon.toLowerCase().includes(q);
+    const carrier = flightData && flightData.military && flightData.military.carrier;
+    const side = String((carrier && carrier.sideNumber) || '');
+    return callsign.toLowerCase().includes(q) || beacon.toLowerCase().includes(q) || side.toLowerCase().includes(q);
   });
 }
 
