@@ -1,11 +1,9 @@
 'use strict';
-import { NM_M, haversineM } from '../../geo.js';
-import { getLatestTrack } from '../../picture.js';
 import { missionNow } from '../../mission-clock.js';
 import {
-  correlatedTrackIdForStrip, getEfspBays, getEfspFlightData, getEfspRunwayStatus, getEfspRack, getEfspStrip
+  getEfspBays, getEfspFlightData, getEfspRunwayStatus, getEfspRack, getEfspStrip
 } from './efsp-state.js';
-import { getEfspCarrier } from './carrier-state.js';
+import { parSampleFor } from './par-samples.js';
 import {
   SFA_ROTATION_LABEL, getEfspSfa, sfaRotatingPosition, sfaRotationOffered, sfaRotationRows
 } from './sfa-state.js';
@@ -13,7 +11,6 @@ import { getActingPositions, sendEfspMutation, sendEfspSfaMutation } from './efs
 import { patternBoardModel, renderPatternBoard } from './pattern-board.js';
 import { createFinalTracker, renderFinalPanel } from './final-panel.js';
 import { runwayForStrip } from './runway-status-rules.js';
-import { getActiveRadars } from '../../picture.js';
 
 // Bay descriptor views (crc-sync docs/adr/0075, 0093): a Bay whose descriptor says
 // `view: 'pattern' | 'final' | 'sfa-freqs'` mounts a component, instead of (or
@@ -26,8 +23,8 @@ import { getActiveRadars } from '../../picture.js';
 //   pattern    pattern-board.js over the Bay's racks (a leg is a Rack): Move between
 //              legs, Landed, Drop. Advisories only; the board never refuses.
 //   final      final-panel.js for the Bay's one Strip (§7.10: nothing to type). Its
-//              sample comes from the Strip's correlated contact and the approach
-//              radar; its two terminal buttons are the only gestures.
+//              sample is the server's PAR sample (crc-sync docs/adr/0112); its two
+//              terminal buttons are the only gestures.
 //   sfa-freqs  a header over the frequency racks: which controller is on which
 //              frequency, editable by the jurisdiction Position only (guide §4.7).
 //
@@ -38,10 +35,7 @@ import { getActiveRadars } from '../../picture.js';
 //
 // Pure model builders first (unit-tested), DOM second.
 
-export const FINAL_GLIDEPATH_NOMINAL_DEG = 3.0;  // [SOURCE-DEFINED] nominal glidepath; no runway geometry exists client-side
-export const FINAL_DECISION_HEIGHT_FT = 200;     // [SOURCE-DEFINED] decision height above the field when the Strip gives none
 const FINAL_REFRESH_MS = 1000;            // the cadence bar and the mile calls are read off the clock, not an event
-const NM_FT = 6076.12;
 
 const _fin = (v) => typeof v === 'number' && Number.isFinite(v);
 
@@ -94,27 +88,24 @@ export function patternOpFor(desc) {
 // ── final ───────────────────────────────────────────────────────────────────
 
 /**
- * The FINAL sample for one Strip (final-panel.js's input), from what the client already has: the contact
- * the Strip is correlated to and the reference point it is measured from. No runway geometry exists
- * client-side, so distance is to the reference point (the approach radar's site for PAR, the ship for the
- * carrier), and the glidepath deviation is against a nominal 3 degrees from the field elevation. Every
- * missing input leaves its field undefined, which final-panel.js shows as `--` and never prompts on.
- * @param {object} i { kind, strip, callsign, runway, track, ref:{lat,lon,elevM?}, nowS }
+ * The FINAL sample for one Strip (final-panel.js's input), from the server's PAR sample (crc-sync docs/adr/0112): range
+ * along the final approach course from the runway threshold or the carrier's touchdown point, the height the PAR
+ * measured (exact, not the 100 ft SSR altitude), the glidepath deviation against the approach's angle, and its DA. With no
+ * PAR sample (not this controller's final) or no plot yet, every measured field stays undefined, which final-panel.js
+ * shows as `--` and never prompts on. Nothing is measured from the approach radar's site or the ship's centre any more:
+ * that was the FINAL range bug (docs/wip/PANELS-DESIGN.md finding 1).
+ * @param {object} i { kind, strip, callsign, runway, par (parSampleFor(stripId)), nowS }
  */
-export function finalSampleFor({ kind, strip, callsign, runway, track, ref, nowS } = {}) {
+export function finalSampleFor({ kind, strip, callsign, runway, par, nowS } = {}) {
   const sample = { kind, stripId: strip ? strip.stripId : null, callsign: callsign || '', runway: runway || '--', nowS, decisionAltFt: undefined };
-  const elevFt = ref && _fin(ref.elevM) ? ref.elevM * 3.28084 : null;
-  if (kind === 'PAR' && elevFt !== null) sample.decisionAltFt = elevFt + FINAL_DECISION_HEIGHT_FT;
-  if (!track || !ref || !_fin(track.lat) || !_fin(track.lon) || !_fin(ref.lat) || !_fin(ref.lon)) return sample;
-  sample.distanceNm = haversineM(ref.lat, ref.lon, track.lat, track.lon) / NM_M;
-  const altFt = track.altitude && _fin(track.altitude.ft) ? track.altitude.ft : null;
-  if (altFt !== null) {
-    sample.altitudeFt = altFt;
-    if (elevFt !== null && sample.distanceNm >= 0.3) {
-      const above = altFt - elevFt;
-      sample.glidepathDevDeg = Math.atan2(above, sample.distanceNm * NM_FT) * 180 / Math.PI - FINAL_GLIDEPATH_NOMINAL_DEG;
-    }
-  }
+  const a = par && par.approach;
+  if (a && _fin(a.daFt)) sample.decisionAltFt = a.daFt;
+  if (a && a.runwayEnd && sample.runway === '--') sample.runway = a.runwayEnd;
+  const p = par && par.plot;
+  if (!p || !_fin(p.rangeNm)) return sample;
+  sample.distanceNm = p.rangeNm;
+  if (_fin(p.heightFt) && a && _fin(a.tdzeFt)) sample.altitudeFt = a.tdzeFt + p.heightFt;
+  if (_fin(p.elevDevDeg) && p.rangeNm >= 0.3) sample.glidepathDevDeg = p.elevDevDeg;
   return sample;
 }
 
@@ -201,18 +192,6 @@ function _renderPattern(container, bay) {
   _replace(mount, board);
 }
 
-function _approachReference() {
-  const radars = getActiveRadars();
-  const r = radars.find(x => x.type === 'approach') || null;
-  return r ? { lat: r.lat, lon: r.lon, elevM: r.elevM } : null;
-}
-
-function _carrierReference() {
-  const view = getEfspCarrier();
-  const s = view && view.shipState;
-  return s && _fin(s.lat) && _fin(s.lon) ? { lat: s.lat, lon: s.lon } : null;
-}
-
 function _renderFinal(container, bay) {
   const mount = _mountPoint(container, bay.bayId);
   const kind = bay.facilityId === 'CARRIER' ? 'CARRIER' : 'PAR';
@@ -232,14 +211,12 @@ function _renderFinal(container, bay) {
     gone.delete(strip.stripId);
     if (!_finalTrackers.has(strip.stripId)) _finalTrackers.set(strip.stripId, createFinalTracker());
     const flightData = getEfspFlightData(strip.flightDataId);
-    const trackId = correlatedTrackIdForStrip(strip);
-    const track = trackId ? getLatestTrack(trackId) : null;
     let runwayText = '--';
     const r = runwayForStrip({ ...strip, stripType: 'ARRIVAL' }, flightData, getEfspRunwayStatus(bay.facilityId));
     if (r) runwayText = r.end || r.runwayId;
     const sample = finalSampleFor({
-      kind, strip, callsign: flightData && flightData.identity ? flightData.identity.callsign : '', runway: runwayText, track,
-      ref: kind === 'CARRIER' ? _carrierReference() : _approachReference(),
+      kind, strip, callsign: flightData && flightData.identity ? flightData.identity.callsign : '', runway: runwayText,
+      par: parSampleFor(strip.stripId),
       nowS: missionNow() / 1000,
     });
     const vm = _finalTrackers.get(strip.stripId).update(sample);

@@ -128,24 +128,26 @@ test('a Bay with no view is left alone, and a stale view is removed when a Bay s
   assert.equal([...c2.children].some(x => x.className === 'efsp-bay-view'), false);
 });
 
-test('final: the sample is distance to the radar site and a glidepath against a nominal 3 degrees, every missing input leaving its field undefined', () => {
+test('final: the sample is the server\'s PAR sample (range from the threshold, exact height, its DA); without one nothing is measured', () => {
   const strip = { stripId: 's1' };
-  const ref = { lat: 37.0, lon: 35.4, elevM: 76 };
-  // 3 NM out on a 3 degree path: height above the field = 3 * 6076 * tan(3 deg) = 955 ft
-  const lat3nm = ref.lat + 3 / 60;
-  const onPath = V.finalSampleFor({ kind: 'PAR', strip, callsign: 'V11', runway: '05', nowS: 10, ref, track: { lat: lat3nm, lon: ref.lon, altitude: { ft: 76 * 3.28084 + 955 } } });
-  assert.ok(Math.abs(onPath.distanceNm - 3) < 0.02, `distance ${onPath.distanceNm}`);
-  assert.ok(Math.abs(onPath.glidepathDevDeg) < 0.1, `on path, deviation ${onPath.glidepathDevDeg}`);
-  assert.ok(Math.abs(onPath.decisionAltFt - (76 * 3.28084 + V.FINAL_DECISION_HEIGHT_FT)) < 0.01);
-  const high = V.finalSampleFor({ kind: 'PAR', strip, ref, nowS: 1, track: { lat: lat3nm, lon: ref.lon, altitude: { ft: 76 * 3.28084 + 1900 } } });
-  assert.ok(high.glidepathDevDeg > 1, 'well above the path');
-  const noAlt = V.finalSampleFor({ kind: 'PAR', strip, ref, nowS: 1, track: { lat: lat3nm, lon: ref.lon } });
-  assert.equal(noAlt.altitudeFt, undefined); assert.equal(noAlt.glidepathDevDeg, undefined);
-  const noTrack = V.finalSampleFor({ kind: 'PAR', strip, ref, nowS: 1, track: null });
-  assert.equal(noTrack.distanceNm, undefined);
-  const noRef = V.finalSampleFor({ kind: 'CARRIER', strip, ref: null, nowS: 1, track: { lat: 1, lon: 1 } });
-  assert.equal(noRef.distanceNm, undefined);
-  assert.equal(noRef.decisionAltFt, undefined, 'no decision height on a deck');
+  const approach = { id: 'LTAG-05', runwayEnd: '05', tdzeFt: 160, daFt: 360, gpaDeg: 3.06 };
+  const par = { stripId: 's1', approach, plot: { rangeNm: 3, heightFt: 1024, elevDevDeg: 0.12, elevDevFt: 38, azDevFt: -40 } };
+  const onPath = V.finalSampleFor({ kind: 'PAR', strip, callsign: 'V11', runway: '05', nowS: 10, par });
+  assert.equal(onPath.distanceNm, 3, 'the PAR\'s range from the threshold, never from the radar site');
+  assert.equal(onPath.altitudeFt, 160 + 1024, 'TDZE + the measured height, to the foot');
+  assert.equal(onPath.glidepathDevDeg, 0.12);
+  assert.equal(onPath.decisionAltFt, 360);
+  assert.equal(V.finalSampleFor({ kind: 'PAR', strip, par }).runway, '05', 'the approach names the runway when the Strip does not');
+  const short = V.finalSampleFor({ kind: 'PAR', strip, par: { ...par, plot: { ...par.plot, rangeNm: 0.2 } } });
+  assert.equal(short.glidepathDevDeg, undefined, 'no glidepath figure inside 0.3 NM');
+  const noHeight = V.finalSampleFor({ kind: 'PAR', strip, par: { ...par, plot: { rangeNm: 2, heightFt: null, elevDevDeg: null } } });
+  assert.equal(noHeight.altitudeFt, undefined); assert.equal(noHeight.glidepathDevDeg, undefined);
+  const noPlot = V.finalSampleFor({ kind: 'PAR', strip, par: { ...par, plot: null } });
+  assert.equal(noPlot.distanceNm, undefined);
+  assert.equal(noPlot.decisionAltFt, 360);
+  const none = V.finalSampleFor({ kind: 'CARRIER', strip, par: null, nowS: 1 });
+  assert.equal(none.distanceNm, undefined);
+  assert.equal(none.decisionAltFt, undefined);
 });
 
 test('final: PAR\'s terminals are FINAL\'s own states; the carrier\'s Ball keeps its recorded handoff', () => {

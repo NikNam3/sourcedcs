@@ -372,5 +372,28 @@
         "accessRoute": "ALERT ACCESS TAXIWAY"
       }
     }
+  },
+  "parApproaches": {
+    "_comment": "PAR approaches per runway end (docs/adr/0112), read once at start-up, never written by code (P5). EVERY VALUE IS [SOURCE-DEFINED] until someone copies the LTAG PAR plate (DoD FLIP; owed by the squadron, PANELS-DESIGN Q-P1). thresholdLat/Lon: the landing threshold, worked out as the airfield reference point (37.0021 N, 35.4258 E, the DCS map centre crc-desktop uses) moved 1,524 m (half an assumed 10,000 ft runway) along the runway's true heading, so it assumes the reference point is mid-runway. courseTrueDeg: the final approach course, degrees TRUE (the runway's endHeadingsTrue; shown magnetic through the theater's variation). tdzeFt: touchdown zone elevation, feet MSL; null takes the DCS airfield's elevation, which is what the aircraft fly over in DCS (the real LTAG is 238 ft). tchFt: threshold crossing height (50 ft, the usual figure). decisionHeightFt: decision height above TDZE (200 ft, HAT; DA = TDZE + this). glideslopeDeg: the published glidepath angle, or null for none, in which case the controller's default applies (H116: 3.06 unless the controller changes it).",
+    "05": {
+      "label": "PAR RWY 05",
+      "thresholdLat": 36.99444,
+      "thresholdLon": 35.41157,
+      "courseTrueDeg": 56,
+      "tdzeFt": null,
+      "tchFt": 50,
+      "decisionHeightFt": 200,
+      "glideslopeDeg": null
+    },
+    "23": {
+      "label": "PAR RWY 23",
+      "thresholdLat": 37.00976,
+      "thresholdLon": 35.44003,
+      "courseTrueDeg": 236,
+      "tdzeFt": null,
+      "tchFt": 50,
+      "decisionHeightFt": 200,
+      "glideslopeDeg": null
+    }
   }
 }

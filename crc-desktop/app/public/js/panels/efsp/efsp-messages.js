@@ -8,6 +8,7 @@ import {
 } from './efsp-state.js';
 import { captureEfspPlacement } from './efsp-arrivals.js';
 import { applyEfspSfaDelta } from './sfa-state.js';
+import { applyParSamples, clearParSamples } from './par-samples.js';
 import {
   efspResyncReplyAsMessage, noteEfspPositionsAck, replayPendingEfspMutations, settleEfspAck
 } from './efsp-ws.js';
@@ -32,6 +33,9 @@ import { closePopoversForStrips } from './bay/popover-portal.js';
 // board-broadcast.md — the guide's <200ms remote-change budget).
 registerEfspMessage('efsp-snapshot', (msg) => {
   applyEfspSnapshot(msg);
+  // A connect (or a new read scope) starts with no PAR sample: a new session that works no final is sent none, not an
+  // empty one (crc-sync WsHub#sendParSamples), so an old one must not linger (docs/adr/0112).
+  clearParSamples();
   reconcileUndoSlotEpoch(); // a new Board lifetime: nothing to undo (docs/adr/0100 §7)
   // The panel, the MARSA / AR / correlation highlights (resolved before the Bays that read them), the Bays, the map,
   // the airspace and runway-status panels all redraw from a snapshot: they subscribe to 'snapshot'.
@@ -198,6 +202,13 @@ registerEfspMessage('efsp-alerts', (msg) => {
 });
 
 // crc-sync's docs/adr/0093 — who is on which SFA frequency, sent whole on every change.
+// The PAR sample (crc-sync docs/adr/0112): a sensor's output, not a store delta (no seq, no resync); sent every half second
+// to a controller working a final, one empty frame when that ends.
+registerEfspMessage('par-sample', (msg) => {
+  applyParSamples(msg);
+  markEfspChanged('par');
+});
+
 registerEfspMessage('efsp-sfa-delta', (msg) => {
   applyEfspSfaDelta(msg);
   markEfspChanged('sfa');

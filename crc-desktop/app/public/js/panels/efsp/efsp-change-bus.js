@@ -32,6 +32,7 @@ export const EFSP_TOPICS = Object.freeze({
   tabs: 'the active Position or Bay tab changed; the tab chrome and the open Bay redraw',
   airspace: 'the airspace cards must redraw (an inline form or a menu opened or closed)',
   selection: 'the selected Strip changed (the highlights re-resolve, then the Bays redraw)',
+  par: 'a PAR sample arrived (crc-sync docs/adr/0112: the aircraft on the finals this controller works)',
 });
 
 /** Subscriber order within one flush. */

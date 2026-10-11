@@ -1,11 +1,12 @@
 {
-  "_comment": "The carrier hulls the EFSP's CARRIER Facility knows (docs/adr/0064, 0074). Read once at startup, never written by code (P5); a copy in state/efsp-carriers.json overrides it. match: the DCS unit name first (unitName, exact), then type, and never a track id (ids re-mint on every restart). coalition 'own' means the server's own coalition (CRCSYNC_COALITION). angledDeckDeg: degrees the landing area is angled to port; REQUIRED on every hull (a number in [0, 45); 0 for a straight deck; a missing value stops start-up, no per-type fallback). 9 for a Nimitz-class hull (CVN_71 to CVN_75) is [SOURCE-DEFINED]: the squadron verifies it. The squadron's carrier is CVN-72, DCS unit UNION (decisions H13, H26). One hull in v1 (H29).",
+  "_comment": "The carrier hulls the EFSP's CARRIER Facility knows (docs/adr/0064, 0074). Read once at startup, never written by code (P5); a copy in state/efsp-carriers.json overrides it. match: the DCS unit name first (unitName, exact), then type, and never a track id (ids re-mint on every restart). coalition 'own' means the server's own coalition (CRCSYNC_COALITION). angledDeckDeg: degrees the landing area is angled to port; REQUIRED on every hull (a number in [0, 45); 0 for a straight deck; a missing value stops start-up, no per-type fallback). 9 for a Nimitz-class hull (CVN_71 to CVN_75) is [SOURCE-DEFINED]: the squadron verifies it. The squadron's carrier is CVN-72, DCS unit UNION (decisions H13, H26). One hull in v1 (H29). approach (docs/adr/0112), REQUIRED on every hull: where the carrier's touchdown point is and its glideslope, for the PAR sample of the CV_APP lanes. touchdownAftM / touchdownPortM: metres aft of and to port of the DCS unit's position, along the ship's heading; deckHeightFt: the flight deck above the sea (the TDZE); tchFt: the glideslope's height over the touchdown point (0: it meets the deck there); decisionHeightFt: 200 (the carrier's 200-1/2 minimum, CV NATOPS via PANELS-DESIGN S7); glideslopeDeg 3.5 (the optical glideslope's nominal angle, PANELS-DESIGN S10, to be confirmed by the squadron). For CVN-72 every value is [SOURCE-DEFINED]: the touchdown offsets and the deck height are estimates for a Nimitz-class hull, not measured on the DCS model.",
   "hulls": [
     {
       "hullId": "CVN-72",
       "label": "CVN-72",
       "match": { "unitName": "UNION", "type": "CVN_72", "coalition": "own" },
-      "angledDeckDeg": 9
+      "angledDeckDeg": 9,
+      "approach": { "touchdownAftM": 90, "touchdownPortM": 10, "deckHeightFt": 66, "tchFt": 0, "decisionHeightFt": 200, "glideslopeDeg": 3.5 }
     }
   ]
 }

@@ -19,7 +19,7 @@ const COVERAGE_TICK_MS = 250;
  * @returns {{name: string, periodMs: number, tick: Function}[]}
  */
 function buildTickers({ wsHub, efsp, trackStore, collabStore, atisStore, surveillance, theaterContext, missionClock, picture, monitors, airportWeather, airspaceCalendar, archive, missionState }) {
-  const { obligationMonitor, correlationReconciler, efspInstrumentation, conformanceMonitor, surveillanceHints, conflictAlertMonitor, tofiRegimeMonitor, carrierTick, broadcastEfspAlerts } = monitors;
+  const { obligationMonitor, correlationReconciler, efspInstrumentation, conformanceMonitor, surveillanceHints, conflictAlertMonitor, tofiRegimeMonitor, carrierTick, parMonitor, broadcastEfspAlerts } = monitors;
   const { sensorSpecs, coverageEngine, positionCoverage, currentRadars, datalink } = picture;
 
   // The radar list itself changes under everyone — an AWACS takes off or lands, a ship spawns — and until this existed nothing
@@ -71,6 +71,8 @@ function buildTickers({ wsHub, efsp, trackStore, collabStore, atisStore, surveil
     } },
     { name: 'correlation', periodMs: CORRELATION_TICK_MS, tick: () => correlationReconciler.tick() },
     { name: 'carrier', periodMs: 1000, tick: () => carrierTick.tick() },
+    // docs/adr/0112: the PAR sample, to the Position working each final only (config/par.json sampleMs, under 1 s, H115).
+    { name: 'par', periodMs: parMonitor.sampleMs, tick: () => wsHub.sendParSamples(parMonitor.tick()) },
     // Conformance and the hints stamp mission time (the `since` they report is shown to
     // controllers); their pure durations (the heading grace, the airborne hold, staleness)
     // run on the injected wall clock (docs/adr/0096). CA stays on the wall clock: it only

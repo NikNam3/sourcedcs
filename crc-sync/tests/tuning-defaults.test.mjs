@@ -22,6 +22,7 @@ const CASES = [
   ['surveillance hints', "require('./src/efsp/surveillance-hints-config').getHintsConfig()", 'efsp-surveillance-hints.json'],
   ['carrier hulls', "require('./src/efsp/carrier/hull-config').getHulls()", 'efsp-carriers.json'],
   ['carrier recovery', "require('./src/efsp/carrier/recovery-tuning').loadRecoveryTuning()", 'efsp-carrier-recovery.json'],
+  ['PAR', "require('./src/surveillance/par-tuning').loadParTuning()", 'par.json'],
   ['sensor specs', "require('./src/radars').loadSensorSpecs()", 'sensor-specs.json'],
   ['theaters', "require('./src/theaters').defaultTransitionAltFt()", 'theaters.json'],
 ];

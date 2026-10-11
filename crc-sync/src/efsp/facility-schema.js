@@ -9,6 +9,7 @@ const blockMap = require('./block-map');
 const runwayStatus = require('./runway-status'); // pure, requires nothing back (docs/adr/0061)
 const { validateAlertPadConfig } = require('./alert-scramble'); // pure (docs/adr/0070)
 const { isValidFrequency, MIN_FREQUENCY_MHZ, MAX_FREQUENCY_MHZ } = require('./airspace-schema'); // the one frequency check (docs/adr/0105)
+const { validateParApproaches } = require('../surveillance/par'); // pure (docs/adr/0112)
 
 /**
  * Validates a candidate facility config (guide §8.3): every required Block
@@ -85,6 +86,12 @@ function validateConfig(candidate) {
   }
   if (candidate.runwayStatus && candidate.runwayStatus.pads) {
     const problem = validateAlertPadConfig(candidate.runwayStatus.pads.alert);
+    if (problem) return { ok: false, reason: 'VALIDATION_ERROR', detail: problem };
+  }
+  // The PAR approaches (docs/adr/0112): one per runway end the inventory names, so a Facility without a runway inventory has none.
+  if (candidate.parApproaches !== undefined) {
+    const ends = ((candidate.runwayStatus && candidate.runwayStatus.runways) || []).flatMap(r => (Array.isArray(r.ends) ? r.ends : []));
+    const problem = validateParApproaches(candidate.parApproaches, ends);
     if (problem) return { ok: false, reason: 'VALIDATION_ERROR', detail: problem };
   }
   return { ok: true };
@@ -354,8 +361,13 @@ const isPlainObject = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
 //    is the route §9.6 keeps clear for alert scrambles, marked constrained while a scramble is active
 //    (docs/adr/0070), a [SOURCE-DEFINED] placeholder name.
 
+//  parApproaches (optional): the PAR approach to each runway end (docs/adr/0112): threshold, final approach course
+//    (true), TDZE (null: the DCS airfield elevation), TCH, decision height and the published glidepath angle (null:
+//    none, the controller's default applies, H116). Shape checked by surveillance/par.js's validateParApproaches.
+//    [SOURCE-DEFINED] until someone copies the plate. Read once at start-up, never written by code (P5).
+
 // Keys every facility file must carry (a shipped file is complete: nothing is merged in from the code).
-// `singleFrequencyApproach`, `runwayStatus` and `positionFrequencies` are the only optional ones: a Facility without those Bays has none.
+// `singleFrequencyApproach`, `runwayStatus`, `positionFrequencies` and `parApproaches` are the only optional ones: a Facility without those Bays has none.
 const REQUIRED_KEYS = Object.freeze({
   facility: 'string', positions: 'array', positionClasses: 'object', positionLetters: 'object', consolidation: 'object', handBack: 'object',
   positionRadars: 'object', hiddenBlocks: 'object', bays: 'object', dataOnly: 'boolean', standingReleases: 'array', aitAuthorized: 'boolean',
