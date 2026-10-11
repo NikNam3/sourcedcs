@@ -1,11 +1,11 @@
 # Supervisor handoff
 
-## START HERE: carrier and PAR panels designed and approved, build next (2026-10-08)
+## START HERE: the carrier and PAR panels are built and merged (2026-10-11)
 
 You are the supervisor ("main") of lanes in this monorepo. You dispatch background agents in git worktrees, merge their
 branches into `efsp-wp5-correlation`, and keep the record. History is in git and in `docs/parallel/decisions.md`
-(S-ARCH-1 to S-ARCH-35, H107 to H119); the EFSP state for any reader is `docs/efsp-briefing.md` (§1, §3K, §4, §5). This file
-only holds what you need now.
+(S-ARCH-1 to S-ARCH-46, H107 to H127); the EFSP state for any reader is `docs/efsp-briefing.md` (§1, §3K, §4, §5), brought
+up to date by DOCS-PANELS. This file only holds what you need now.
 
 ### Standing rules (the human's, in force)
 
@@ -34,63 +34,42 @@ only holds what you need now.
 
 ### State
 
-`efsp-wp5-correlation` is local only, 1,430 commits ahead of `main`. Everything is merged and green; the only worktree is
-the main checkout (kept on purpose: branches `lane/QA-sync-cleanup`, `lane/AIRSP-2P-B-geometry`).
+`efsp-wp5-correlation` is local only, about 1,550 commits ahead of `main`. Everything is merged and green; the only
+worktree is the main checkout (branches `lane/QA-sync-cleanup`, `lane/AIRSP-2P-B-geometry` kept on purpose).
 
-| Suite | Result (2026-10-08) |
+| Suite | Result (2026-10-11, tree `07749161`) |
 |---|---|
-| crc-sync | 2544/2544 |
-| freeze | 53/53 |
-| crc-desktop | 1198/1198 |
-| walk / soak:selfcheck | 23/23 / PASS at the last server merge (GRPC-CONNECT) |
-| Playwright (full, sharded) | 190/195 + the 5 fixed (6/6) on the DESK-SPLIT tree; the later client changes ran their own specs |
+| crc-sync | 2647/2647 (`grpc-client-connect.test.mjs` fails now and then under load, passes alone: a timing bound) |
+| freeze | 56/56 |
+| crc-desktop | 1254/1254 |
+| walk / soak:selfcheck / wire:record | 23/23 / PASS / protocol 2, surface unchanged |
+| Playwright (full, sharded) | 224/228 on the CARRIER-FOLLOWUP tree; the two failures and `runway-status` (serial, skipped 2) pass alone. HULL-STRICT is server-only and ran no Playwright |
 
-Since phase 3 (S-ARCH-31 to S-ARCH-35):
-- **Live findings fixed:**
-  - your own new Strip made into a Bay out of view is announced ("from you");
-  - the amber tab mark shows only for the LC + non-local combination;
-  - a DCS-gRPC connect attempt not READY after 10 s is abandoned and rebuilt (`grpc-client.js`, one shared channel);
-  - the first-run Board log names `state/`.
-- **Mission reset vs crc-sync restart:** explained to the human (`mission-session.js`). The live checks are still owed (below).
-- **Designs approved** (mockups in `docs/mockups/`, published at https://claude.ai/artifact/EA92HZDXSC7cmDHdAMmx7X):
-  - **PAR panel** (H115, H116);
-  - **Marshal / recovery board** (H117, H118);
-  - **carrier map** and **carrier management** (H119 plus the 2026-10-08 notes).
-- Research note `docs/wip/PANELS-DESIGN.md`. Its designs are superseded by the mockups; its research and code findings hold.
+Built 2026-10-08 to 2026-10-11 (S-ARCH-37 to S-ARCH-46; every agent on Opus 5.5 since H121):
+SETTINGS-TABS, DIVERT (ADR 0111), CARRIER-STATE (0113), MARSHAL-BOARD (0114), MARSHAL-FIX, CARRIER-MAP, MARSHAL-MARKS (0115),
+SIDE-SWAP, WIRE-RECORD, PAR-1 (0112), PAR-2, CARRIER-FOLLOWUP (0116: PAR is airfield-only, H125), DOCS-PANELS, HULL-STRICT.
+The usage-guide wording of every lane is placed; `docs/wip/<LANE>.md` hold the details.
 
-### Next (one lane at a time)
+### Next (one lane at a time, Opus)
 
-1. **Build the panels:** briefing **`docs/parallel/next/CARRIER-PANELS.md`**, lanes in this order:
-   1. SETTINGS-TABS;
-   2. CARRIER-STATE (ADR 0113);
-   3. MARSHAL-BOARD (ADR 0114);
-   4. CARRIER-MAP;
-   5. PAR-1 (ADR 0112);
-   6. PAR-2.
-   Done 2026-10-10: SETTINGS-TABS, DIVERT, CARRIER-STATE, MARSHAL-BOARD (S-ARCH-37, H120–H122). After CARRIER-MAP:
-   **MARSHAL-FIX** (S-ARCH-38: control-release.spec.js:141 fails, the Marshal stack Strip rebuilds during a press), then **MARSHAL-MARKS** (H123: the passed/changed marks on the server), then **SIDE-SWAP** (H122: side number and callsign swap places on carrier Strips), then **WIRE-RECORD** (S-ARCH-41: `tools/wire-record.js` also scans carrier op kinds, `STACK_OP_KINDS`, handoff names, `ENTRY_KEYS`/`STACK_KEYS`; before PAR-1, a wire change), then PAR-1 (merged), PAR-2, then **CARRIER-FOLLOWUP** (H124/H125: side number leads in every carrier view; fresh ship position on the client; carrier out of the PAR; DIST = range to the live ship for every carrier Position; ADR 0116) — merged; then DOCS-PANELS (briefing + guide), then **HULL-STRICT** (H127: unknown hull-config keys refuse start-up).
-2. **DIVERT** (ADR 0111): briefing **`docs/parallel/next/DIVERT.md`**. The supervisor recommends running it right after
-   SETTINGS-TABS. Ask the human first whether an ARRIVAL may divert too (proposed, not yet answered).
-3. **Older queue** (briefing §4/§5):
-   - does a mission-reset drop count as traffic;
-   - should a carrier recovery remember its launch;
-   - `definitionHistory` on the wire;
-   - a route from a DCS line drawing;
-   - the correlation seq-jump decision;
-   - a soak that rolls the mission;
-   - the cleanup row;
-   - declutter last.
-4. **Settings tabs** are a human request (H116): every panel gets a tab. SETTINGS-TABS builds the frame first so later lanes
-   only register their tab.
+Nothing is queued. Ask the human what next. Candidates (briefing §4/§5):
+- the flaky `grpc-client-connect` timing test;
+- `wire:record` also scanning refusal codes / op argument names (asked, not answered);
+- the older queue: does a mission-reset drop count as traffic; should a carrier recovery remember its launch;
+  `definitionHistory` on the wire; a route from a DCS line drawing; the correlation seq-jump decision; a soak that rolls
+  the mission; the cleanup row; declutter last;
+- a deck-state board (foul deck) if the human wants it; a basemap under the carrier map only to show land (H123, later).
 
 ### Human actions outstanding
 
+
 - **Push a backup** of `efsp-wp5-correlation`.
-- Untracked in the repo root, the human's: `crc-sync/│` (stray file) and `state-backup-2026-10-03/`.
+- Untracked in the repo root, the human's: `crc-sync/│` (stray file), `state-backup-2026-10-03/`, `tools.zip`, and `state-backup-2026-10-10/` (the local Board the supervisor moved aside, H122).
 - **Release together from `main`** (crc-sync and crc-desktop must ship together):
   - merge, then tag `crc-desktop-vX.Y.Z`;
   - in the server's `infra/.env`: `ASACS_*` → `CRCSYNC_*`, set `AIRSPACE_SERVICE_TOKEN` and both MapTiler keys;
   - delete the server's `state/efsp-board.json` and `state/efsp-mutations*.jsonl`, and check for any `state/efsp-facility-*.json`;
+  - remove `approach` (or any unknown key) from a server `state/efsp-carriers.json`, or crc-sync refuses to start (H127);
   - check the deploy digest;
   - re-enter the airspace ranges;
   - re-import the ATO each mission.
@@ -108,5 +87,5 @@ Since phase 3 (S-ARCH-31 to S-ARCH-35):
   - comm card;
   - the DAFMAN combining rule;
   - projection data for MarianaIslandsWWII, Afghanistan and Iraq;
-  - the LTAG PAR plate (threshold, TCH, DA);
-  - the carrier glideslope (3.5°?).
+  - the LTAG PAR plate (threshold, TDZE, TCH, DA, glidepath angle);
+  - the carrier fix-to-ramp time (`fixToRampSec`, ours: 6 min) and CVN-72 data (the carrier glideslope is no longer needed, H125).
