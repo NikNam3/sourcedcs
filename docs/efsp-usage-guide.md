@@ -35,11 +35,13 @@ Built and tested (`npm test` in `crc-sync` and `crc-desktop`, both green per lan
 - **The tactical Positions are fenced**: a JTAC is sent only the lines it was handed, `AIC` hands back and cannot advance a line, and `TAC_C2` answers the TOFI exit on an AIC-held line. See §8C1.
 - **Metrics and a traffic count**: the METRICS panel (PANELS → METRICS) and, behind it, two read endpoints on crc-sync. See §10.
 - **ATO import** — `TAC_C2` pastes or drops a USMTF ATO (atobrief exports one) and it becomes mission lines on the Board, with the air-refuelling tanker/receiver join shown on the Strips. See §8I.
-- **The carrier** — a `CARRIER` Facility with four Positions (`CV_MARSHAL`, `CV_PRIFLY`, `CV_APP1`, `CV_APP2`): a ship banner, PriFly's recovery Case, the Marshal stack board and four handoff buttons, from launch to recovery. See §8K. Not yet seen against a real DCS ship.
+- **The carrier** — a `CARRIER` Facility with four Positions (`CV_MARSHAL`, `CV_PRIFLY`, `CV_APP1`, `CV_APP2`): a read-only ship banner, the **CARRIER** panel (BRC, final bearing, Case, ramp time, marshal position, weather at the ship, recovery tanker; PriFly and the Marshal set them), the **MARSHAL** panel (the recovery board: re-sequence, Commence, Back to stack, Delta, changed clearances marked until passed), the **CARRIER MAP** panel (a radar picture fixed on the ship), and four handoff buttons, from launch to recovery. Every carrier view names an aircraft by its **side number**. There is no PAR on the carrier. See §8K. Not yet seen against a real DCS ship.
 - **Suggestions from surveillance** — a quiet `AIRBORNE? ▸` chip when a departure Strip still says it is on the ground but the aircraft is flying, a `STALE` badge when it was ignored, and a takeoff time stamped when a Strip enters Airborne. Surveillance informs; nothing moves by itself. See §8F.
-- **Incirlik's pattern board and FINAL component** (RSU, SFA, PAR): the panels are mounted on the RSU and PAR Positions. See §8L.
+- **Incirlik's pattern board and the PAR panel** (RSU, SFA, PAR): RSU's pattern board, SFA's frequency rotation, and PAR's elevation and azimuth scopes measured by crc-sync. See §8L.
+- **Divert** — `AP` and `CTR` give a flight a new destination and a new clearance on the same Strip. See §8.
+- **Settings has one tab per panel** (General, Colours, Radar, SRS, Tools, and PAR, Marshal and Carrier map for the panels that have settings of their own). See §9.
 
-Not built: WP6's arresting-gear data (DCS has no wires), the carrier's deck-state board and weather beyond night (`adr/0064` B8). `docs/efsp-briefing.md` is the current handoff note.
+Not built: WP6's arresting-gear data (DCS has no wires) and the carrier's deck-state board (`adr/0064` B8). `docs/efsp-briefing.md` is the current handoff note.
 
 **Every time EFSP works with is in-game Zulu**: the DCS mission clock, never your PC's clock or real-world UTC. Every typed time (release, void, EDCT, MTR entry and exit, …) is typed as `HHMM` (`1432` or `14:32Z`) and dated by the mission's date: the nearest such time within 12 hours. Anything that is not a time is refused at the cell.
 
@@ -328,7 +330,9 @@ Positions at once.
   `VIPER11 → lc-runway-queue from GC`. Click it to open the Bay with the Strip
   selected. Opening the Bay clears the tab and the line.
 - In the Bay you **are** looking at: the Strip flashes once and keeps an amber edge
-  and a **from GC** line in its tab until you touch it, or for 30 seconds.
+  and a **from GC** line in its tab until you touch it, or for 30 seconds. A press clears
+  them when it ends, not when it starts, so a button you press on that Strip does not
+  move under your pointer.
 
 Not announced: a Strip you just created, a reorder within a Bay, or a change that
 leaves a Strip where it was. The "from" line names the Position it came from, or the
@@ -653,6 +657,32 @@ repair by the system shows as `CONTROL MOVED` and a `… MOVED BY THE SYSTEM` ch
 then **to CV_MARSHAL**. The Marshal gets it in `cv-marshal-coordination`, Accepts, and the flight joins the stack at the next
 free slot as a Marshal Strip; from then on the same chips and steps apply, with the Marshal as the receiver (it can Accept or
 Reject, record comms and control and request a release, but proposes nothing).
+
+### Divert: a new destination and a new clearance (`docs/adr/0111`)
+
+**Divert…** is in the Strip's `⋯` menu for `AP` and `CTR`. The flight is now going to a different airport, on the same Strip
+and the same flight data. Type the new destination; fill the route, the altitude (and its restrictions), holding and special
+information you gave the pilot. A field you leave blank stays as it was; a route you type replaces the whole route. The form's
+fields and their order are the clearance items of FAA JO 7110.65 ¶4-2-1 (clearance limit, route, altitude data, holding,
+special information); ¶4-2-5 is why the altitude restrictions sit beside the maintain altitude (an amended route or altitude
+restates them), ¶4-5-7 the maintain altitude. What you say on frequency is yours: the form stores the result.
+
+| The Strip now | New destination | Result |
+|---|---|---|
+| OVERFLIGHT (`INBOUND`, `IN_SECTOR`) | Incirlik or the carrier (a field we run) | an ARRIVAL at `INBOUND`, handed on as usual (`CTR` to `AP`, or to `CV_MARSHAL`) |
+| OVERFLIGHT | anywhere else (outside our airspace, untowered, no Facility) | stays an OVERFLIGHT with you, with the new destination, until you hand it off or terminate it |
+| ARRIVAL at `INBOUND` | another field we run | an ARRIVAL for it |
+| ARRIVAL at `INBOUND` | anywhere else | an OVERFLIGHT at `IN_SECTOR` |
+
+A name is enough ("Incirlik" finds `LTAG`). The old destination stays on the Strip, struck through, and the new altitude
+goes into the altitude history like any other. **Undo** works for 10 seconds; diverting back is a second divert, and both
+are in the audit. A departure does not divert (the menu item is greyed with the reason, and the server refuses it): a
+departure that turns back is told to call Center. An ARRIVAL already with the tower is the tower's. Divert is refused while
+a coordination proposal or a TOFI is open on the Strip, on the sending side of an accepted HANDOFF, and on the receiving side
+until control has moved (a new route or altitude is a control instruction); the refusal says which.
+
+The Divert action, the table above and the guards are ours; only the clearance items are the FAA's. A carrier flight has
+no Divert: the Marshal drops its Strip.
 
 ### Forwarding obligations — the timer indicator
 
@@ -1175,9 +1205,9 @@ disagree. **It never moves a Strip by itself**; the controller does (`adr/0076`)
 Every declutter behaviour is off until the EFSP work is finished, and was switched off once on
 existing installs:
 
-- **Settings › DECLTR › Sequential squawk declutter** (hides the labels of formation followers
+- **Settings › RADAR › Sequential squawk declutter** (hides the labels of formation followers
   squawking sequential codes close to their lead).
-- **Settings › DECLTR › navpoint declutter** ("Hide numbered navpoints", "5-letter names only").
+- **Settings › RADAR › navpoint declutter** ("Hide numbered navpoints", "5-letter names only").
   The map shows every navpoint (`WP1`, `NAV003`, …) until it is reworked with AIRAC data.
 
 You can turn either back on in Settings; it stays as you set it.
@@ -1573,12 +1603,15 @@ squadron's (H111). `TACTICAL` alone still hands lines back to `TAC_C2` (§8C1).
 
 ## 9. General controls — quick reference
 
-- Set which Position(s) you're acting as under **Panels → Acting As** (grouped by Facility — `INCIRLIK`, `CENTER`, `TACTICAL` and, once any range is configured, `RANGES` are independent checkbox groups).
+- Set which Position(s) you're acting as under **Panels → Acting As** (grouped by Facility — `INCIRLIK`, `CENTER`, `TACTICAL`, `CARRIER` and, once any range is configured, `RANGES` are independent checkbox groups).
 - Each signed-on Position gets its own tab; each Position's Bays (§3) are its own tabs underneath.
 - **Drag** a Strip onto another Position's tab to transfer it (same-Facility only); onto a Bay tab within your own Position to move it there.
-- **Search**: `.find <text>` dot-command, or the search icon — matches callsign/beacon, opens a temporary search-results Bay.
+- **Search**: `.find <text>` dot-command, or the search icon — matches callsign/beacon (and a carrier aircraft's side number), opens a temporary search-results Bay.
 - **Dot-commands**: `.drop [reason]`, `.undo` (undoes the action in the Undo slot, no Strip needs selecting), `.find <text>`, `.bind <track id>`, `.unbind`, `.stereo <NAME> <CALLSIGN>`, and for MARSA (§8D) `.marsa <CALLSIGN> [DECLARER]`, `.rendezvous`, `.endmarsa`, `.voidmarsa` — all but `.find`, `.stereo` and `.undo` apply to whichever Strip is currently selected.
-- **Undo** (ADR 0100): every one-click move you made (NLA step, hand-off, carrier hand-over, SFA rotation, surveillance chip, TOFI Exit, Split/Join) can be undone for 10 seconds, by the Position that did it. The panel shows one slot, "Undo · Hand off VIPER1 → APP · 7 s"; click it, press Ctrl+Z with the panel in use, or type `.undo`. The newest undoable action replaces the slot. Changes other controllers in your Facility made to the same records in the meantime are voided (a voided clearance stays visible, marked VOIDED); the Position that made them gets a message in its panel ("LC undid Hand off VIPER1; your annotation was voided", click to dismiss; nothing is marked on the Strip). An Undo is refused if another Facility has since answered, or the Strip was dropped and archived; the slot line says why. Undoing a Split removes the part's Strip and its flight data on every client at once.
+- **Undo** (ADR 0100): every one-click move you made (NLA step, hand-off, carrier handoff, SFA rotation, surveillance chip, TOFI Exit, Split/Join, Divert) can be undone for 10 seconds, by the Position that did it. The panel shows one slot, "Undo · Hand off VIPER1 → APP · 7 s"; click it, press Ctrl+Z with the panel in use, or type `.undo`. The newest undoable action replaces the slot. Changes other controllers in your Facility made to the same records in the meantime are voided (a voided clearance stays visible, marked VOIDED); the Position that made them gets a message in its panel ("LC undid Hand off VIPER1; your annotation was voided", click to dismiss; nothing is marked on the Strip). An Undo is refused if another Facility has since answered, or the Strip was dropped and archived; the slot line says why. Undoing a Split removes the part's Strip and its flight data on every client at once.
+- **Settings** has one tab per panel: General, Colours, Radar (declutter, navpoints, track visibility, extended centreline,
+  debug), SRS and Tools, and one for each panel that has settings of its own: **PAR** (§8L), **Marshal** and **Carrier map**
+  (§8K). The values are yours and are kept on this computer; nobody else sees them.
 
 ## 10. Metrics and the traffic count
 
