@@ -94,7 +94,7 @@ crc-sync/src/efsp/carrier-store.js        CarrierStore: SetCarrierState, the sta
 crc-sync/config/efsp-carrier-recovery.json  carrier tuning: firstFixDme 21, pushSpacingSec 60, fixToRampSec 360 (ours), tanker defaults (0113)
 crc-sync/src/surveillance/par.js, par-monitor.js  the PAR sample, airfield final Bays only, `par-sample` frame outside deliverEfsp (0112, 0116)
 crc-sync/src/efsp/carrier-tick.js         the ship-state tick from the hull's track (L17)
-crc-sync/config/efsp-carriers.json        the hulls (id, radars, callsign, angled deck; no `approach` since 0116)
+crc-sync/config/efsp-carriers.json        the hulls (`hullId`, `label`, `match` {`unitName`, `type`, `coalition`}, `angledDeckDeg`; an unknown key refuses start-up, H127)
 crc-sync/src/efsp/airborne.js, surveillance-hints.js  "detected airborne" phase and the suggestion/staleness monitor (L19, 0076)
 crc-sync/config/efsp-surveillance-hints.json  its four thresholds, read once (P5)
 crc-sync/src/efsp/block-map.js            the Block Maps, the interlock tags, MILITARY_BLOCK_NAMESPACE
