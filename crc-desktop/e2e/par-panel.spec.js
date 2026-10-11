@@ -8,7 +8,7 @@
  */
 
 const { test, expect } = require('./helpers/test');
-const { openPanel } = require('./helpers/app');
+const { openPanel, serverTicks } = require('./helpers/app');
 
 test.use({ viewport: { width: 1500, height: 1100 } });
 test.setTimeout(90000);
@@ -425,7 +425,7 @@ test('07 a carrier lane has no PAR (H125): no sample, the FINAL line by side num
   await expect(row.locator('button.efsp-final-name')).toHaveCount(0);
   await expect(row.locator('.efsp-final-range')).toHaveCount(0);
   await expect(row.locator('.efsp-final-terminal')).toHaveText(['Ball', 'Waveoff']);
-  await page.waitForTimeout(1500); // three PAR ticks
+  await serverTicks(page, 3); // the PAR ticks every 500 ms, the hub's heartbeat no faster
   expect(await page.evaluate(() => window.__parSeen.length)).toBe(0);
   expect(await page.evaluate(() => crc.parSamples.parSamples().length)).toBe(0);
   await row.locator('.efsp-final-terminal[data-terminal="WAVEOFF"]').click();
