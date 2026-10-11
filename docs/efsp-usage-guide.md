@@ -35,11 +35,13 @@ Built and tested (`npm test` in `crc-sync` and `crc-desktop`, both green per lan
 - **The tactical Positions are fenced**: a JTAC is sent only the lines it was handed, `AIC` hands back and cannot advance a line, and `TAC_C2` answers the TOFI exit on an AIC-held line. See §8C1.
 - **Metrics and a traffic count**: the METRICS panel (PANELS → METRICS) and, behind it, two read endpoints on crc-sync. See §10.
 - **ATO import** — `TAC_C2` pastes or drops a USMTF ATO (atobrief exports one) and it becomes mission lines on the Board, with the air-refuelling tanker/receiver join shown on the Strips. See §8I.
-- **The carrier** — a `CARRIER` Facility with four Positions (`CV_MARSHAL`, `CV_PRIFLY`, `CV_APP1`, `CV_APP2`): a ship banner, PriFly's recovery Case, the Marshal stack board and four handoff buttons, from launch to recovery. See §8K. Not yet seen against a real DCS ship.
+- **The carrier** — a `CARRIER` Facility with four Positions (`CV_MARSHAL`, `CV_PRIFLY`, `CV_APP1`, `CV_APP2`): a read-only ship banner, the **CARRIER** panel (BRC, final bearing, Case, ramp time, marshal position, weather at the ship, recovery tanker; PriFly and the Marshal set them), the **MARSHAL** panel (the recovery board: re-sequence, Commence, Back to stack, Delta, changed clearances marked until passed), the **CARRIER MAP** panel (a radar picture fixed on the ship), and four handoff buttons, from launch to recovery. Every carrier view names an aircraft by its **side number**. There is no PAR on the carrier. See §8K. Not yet seen against a real DCS ship.
 - **Suggestions from surveillance** — a quiet `AIRBORNE? ▸` chip when a departure Strip still says it is on the ground but the aircraft is flying, a `STALE` badge when it was ignored, and a takeoff time stamped when a Strip enters Airborne. Surveillance informs; nothing moves by itself. See §8F.
-- **Incirlik's pattern board and FINAL component** (RSU, SFA, PAR): the panels are mounted on the RSU and PAR Positions. See §8L.
+- **Incirlik's pattern board and the PAR panel** (RSU, SFA, PAR): RSU's pattern board, SFA's frequency rotation, and PAR's elevation and azimuth scopes measured by crc-sync. See §8L.
+- **Divert** — `AP` and `CTR` give a flight a new destination and a new clearance on the same Strip. See §8.
+- **Settings has one tab per panel** (General, Colours, Radar, SRS, Tools, and PAR, Marshal and Carrier map for the panels that have settings of their own). See §9.
 
-Not built: WP6's arresting-gear data (DCS has no wires), the carrier's deck-state board and weather beyond night (`adr/0064` B8). `docs/efsp-briefing.md` is the current handoff note.
+Not built: WP6's arresting-gear data (DCS has no wires) and the carrier's deck-state board (`adr/0064` B8). `docs/efsp-briefing.md` is the current handoff note.
 
 **Every time EFSP works with is in-game Zulu**: the DCS mission clock, never your PC's clock or real-world UTC. Every typed time (release, void, EDCT, MTR entry and exit, …) is typed as `HHMM` (`1432` or `14:32Z`) and dated by the mission's date: the nearest such time within 12 hours. Anything that is not a time is refused at the cell.
 
@@ -328,7 +330,9 @@ Positions at once.
   `VIPER11 → lc-runway-queue from GC`. Click it to open the Bay with the Strip
   selected. Opening the Bay clears the tab and the line.
 - In the Bay you **are** looking at: the Strip flashes once and keeps an amber edge
-  and a **from GC** line in its tab until you touch it, or for 30 seconds.
+  and a **from GC** line in its tab until you touch it, or for 30 seconds. A press clears
+  them when it ends, not when it starts, so a button you press on that Strip does not
+  move under your pointer.
 
 Not announced: a Strip you just created, a reorder within a Bay, or a change that
 leaves a Strip where it was. The "from" line names the Position it came from, or the
@@ -653,6 +657,32 @@ repair by the system shows as `CONTROL MOVED` and a `… MOVED BY THE SYSTEM` ch
 then **to CV_MARSHAL**. The Marshal gets it in `cv-marshal-coordination`, Accepts, and the flight joins the stack at the next
 free slot as a Marshal Strip; from then on the same chips and steps apply, with the Marshal as the receiver (it can Accept or
 Reject, record comms and control and request a release, but proposes nothing).
+
+### Divert: a new destination and a new clearance (`docs/adr/0111`)
+
+**Divert…** is in the Strip's `⋯` menu for `AP` and `CTR`. The flight is now going to a different airport, on the same Strip
+and the same flight data. Type the new destination; fill the route, the altitude (and its restrictions), holding and special
+information you gave the pilot. A field you leave blank stays as it was; a route you type replaces the whole route. The form's
+fields and their order are the clearance items of FAA JO 7110.65 ¶4-2-1 (clearance limit, route, altitude data, holding,
+special information); ¶4-2-5 is why the altitude restrictions sit beside the maintain altitude (an amended route or altitude
+restates them), ¶4-5-7 the maintain altitude. What you say on frequency is yours: the form stores the result.
+
+| The Strip now | New destination | Result |
+|---|---|---|
+| OVERFLIGHT (`INBOUND`, `IN_SECTOR`) | Incirlik or the carrier (a field we run) | an ARRIVAL at `INBOUND`, handed on as usual (`CTR` to `AP`, or to `CV_MARSHAL`) |
+| OVERFLIGHT | anywhere else (outside our airspace, untowered, no Facility) | stays an OVERFLIGHT with you, with the new destination, until you hand it off or terminate it |
+| ARRIVAL at `INBOUND` | another field we run | an ARRIVAL for it |
+| ARRIVAL at `INBOUND` | anywhere else | an OVERFLIGHT at `IN_SECTOR` |
+
+A name is enough ("Incirlik" finds `LTAG`). The old destination stays on the Strip, struck through, and the new altitude
+goes into the altitude history like any other. **Undo** works for 10 seconds; diverting back is a second divert, and both
+are in the audit. A departure does not divert (the menu item is greyed with the reason, and the server refuses it): a
+departure that turns back is told to call Center. An ARRIVAL already with the tower is the tower's. Divert is refused while
+a coordination proposal or a TOFI is open on the Strip, on the sending side of an accepted HANDOFF, and on the receiving side
+until control has moved (a new route or altitude is a control instruction); the refusal says which.
+
+The Divert action, the table above and the guards are ours; only the clearance items are the FAA's. A carrier flight has
+no Divert: the Marshal drops its Strip.
 
 ### Forwarding obligations — the timer indicator
 
@@ -1175,9 +1205,9 @@ disagree. **It never moves a Strip by itself**; the controller does (`adr/0076`)
 Every declutter behaviour is off until the EFSP work is finished, and was switched off once on
 existing installs:
 
-- **Settings › DECLTR › Sequential squawk declutter** (hides the labels of formation followers
+- **Settings › RADAR › Sequential squawk declutter** (hides the labels of formation followers
   squawking sequential codes close to their lead).
-- **Settings › DECLTR › navpoint declutter** ("Hide numbered navpoints", "5-letter names only").
+- **Settings › RADAR › navpoint declutter** ("Hide numbered navpoints", "5-letter names only").
   The map shows every navpoint (`WP1`, `NAV003`, …) until it is reworked with AIRAC data.
 
 You can turn either back on in Settings; it stays as you set it.
@@ -1199,8 +1229,9 @@ for being ours; it is only not doctrine, and not to be quoted as doctrine.
 | **Consolidation** (who is offered an unstaffed Position) | The guide's default (§4.8.6 rule 2) moves an unstaffed Position's Strips along a chain. We ship the FAA meaning instead (JO 7210.3 ¶2-2-3: one controller signed on and responsible for each open position, including consolidated ones): **no Strip moves at a sign-off at any ATC Facility**, and the next controller takes the hat, offered in an ordered list per Position (`adr/0110`, H111; the lists are in the Facility table and the facility files' `consolidation`). The order is the squadron's: AP last on every tower list, carrier Marshal first, then the approach lanes, then PriFly (H111). RSU → LC and SFA/PAR → AP are the guide's defaults. Nothing crosses a Facility (`adr/0013`), so `OPS`, `AP`, `CTR` and `TAC_C2` have no list. `TACTICAL` keeps the guide's hand-back to `TAC_C2` as `handBack` (`adr/0080`); `JTAC → TAC_C2` is ours. Sign-off warns, it does not block (guide §4.8.6) | `facility-schema.js` notes |
 | **Runway status**: which states count as using the runway (`RUNWAY_GATED_STATES`: a DEPARTURE in `RUNWAY_QUEUE`, `LUAW` or `DEPARTED`; an ARRIVAL in `FINAL`), the button labels (CLOSE, OPEN, WORKS, WRK DONE, INSP OK, ACCEPT, REJECT, REQ CLS, REQ WRKS, REQ OPEN, CHG RWY, SELF CHG, ACK, WITHDRAW, BEGIN), the "works in progress" and "runway change in progress" wordings, Tower as sole authority, the wind rule for the active end, the skipped acknowledger | Ours | `adr/0061`, `0068`, `0070` |
 | **Incirlik's runway data**: runway 05/23 with true headings 56 and 236, the airport `LTAG` whose wind picks the active end, acknowledgers `OPS` and `AP`, `OPS` as inspection authority, the hot cargo and alert pad names and the alert access route, no arresting gear | Squadron data, **to verify**. The headings are approximate and true, not magnetic | `adr/0061`, `0070` |
-| **SFA, PAR and the pattern**: five UHF frequencies 232.1 to 236.1 MHz and who starts on which, glidepath tolerance, trend step, prompt hold, long-in-pattern | Ours; the frequencies are placeholders, **to verify** | `adr/0075`, `0093` |
-| **Carrier figures**: default Case III, approach types and button range, Marshal stack limit and radial tolerance, the angled deck, night as the sun 6 degrees below the horizon, the alternating CV_APP lanes | Ours, where the guide's §9.12 gives none. Not yet seen against a real DCS ship | `adr/0064`, `0074` |
+| **SFA, PAR and the pattern**: five UHF frequencies 232.1 to 236.1 MHz and who starts on which, long-in-pattern; the PAR's coverage (20 NM, ±15°, −1° to +7°, from the AN/FPN-68A), its 500 ms sample, the 3-second no-plot age, the PAR panel's look | Ours; the frequencies are placeholders, **to verify**. The PAR defaults (3.06° glideslope, ±1° per axis, no tolerance below DA) are the squadron's (H116); the approach geometry (thresholds, TDZE, TCH, DA) is a placeholder until copied from the plate | `adr/0075`, `0093`, `0112` |
+| **Carrier figures**: default Case III, approach types and button range, Marshal stack limit, the angled deck, night as the sun 6 degrees below the horizon, the alternating CV_APP lanes; the 6-minute fix-to-ramp time under every EAT, the tanker's 6,000 ft and port pattern, Delta's 60-minute cap, the 6 nm approach turn when none is assigned, the carrier map's figures NATOPS leaves open and its spin rule (3.5 nm, 1,000 ft), DIST to the ship's centre | Ours, where the guide's §9.12 and CV NATOPS give none. Sourced from CV NATOPS: ramp time, EAT, the marshal fix (angels + 15, 21 DME), one minute between pushes, Delta, the pattern shapes. Not yet seen against a real DCS ship | `adr/0064`, `0074`, `0113`-`0116` |
+| **Divert**: the action itself, which destinations make an ARRIVAL or an OVERFLIGHT, the guards, a blank field meaning "unchanged" | Ours. The form's fields and their order are FAA JO 7110.65 ¶4-2-1, ¶4-2-5, ¶4-5-7 | `adr/0111` |
 | **Radar picture**: which scope sits at which console (`positionRadars`), the figures and kinds in `sensor-specs.json` (range, sweep, 2D or height-finding, SSR, Mode 4), which scheme draws which radar (ATC or TACTICAL), the datalink membership | Ours. DCS publishes none of it, and none of it describes a real system | `adr/0042`, `0043`, `0059`, `0066`, `0088` |
 | **The synthetic code block `6000`-`6777`** that crc-sync gives AI aircraft | Ours; not a real code allocation | `adr/0059` |
 | **Conformance and Conflict Alert thresholds** (`config/alerting.json`) | Ours, not a published standard. The tactical Positions get no CA: a squadron decision | `adr/0058`, `0059` |
@@ -1454,7 +1485,7 @@ the variation goes in that file's `magneticVariation` (`fixedDeg` or `offsetDeg`
 the ATIS text give the wind **magnetic** (`NNN°M`; the reference card's tooltip shows the true value, and
 the ATIS says "Wind not available." when the variation is unknown, H76).
 
-## 8K. The carrier (`CARRIER` Facility, `adr/0074`)
+## 8K. The carrier (`CARRIER` Facility, `adr/0074`, `0113`-`0116`)
 
 Sign on to `CV_MARSHAL`, `CV_PRIFLY`, `CV_APP1` or `CV_APP2` under **Panels → Acting As** (group `CARRIER`). A carrier
 Strip has one of three strip types: **MARSHAL** (launch, then the stack), **FINAL** (the groove: nothing to type)
@@ -1467,24 +1498,107 @@ as well as their own, so a Marshal who takes an approach lane can advance its St
 there is no source in the repo for one. A hand-off into an empty carrier Position that somebody is offered is delivered
 there and says so; one nobody is offered is refused.
 
-- **The banner** across the top of the Strip panel is computed from DCS (ship speed, heading, final bearing,
-  the ship's own weather where it is known). Only the **altimeter** can be set. A `T` or `G` suffix on a
-  bearing means the variation or the convergence is missing, so it is not shown as magnetic; "hull not found"
-  and "ship track lost" are shown as they are.
-- **The recovery Case** is **PriFly's**: one setting for the whole ship, a selector in the banner. The other
-  three Positions see it read-only, and every carrier Strip's next step changes at once when it changes. A
-  weather advisory shows only when the Case you set is less restrictive than the floor, and never blocks.
-  Today the floor knows only **night** (the sun more than 6 degrees below the horizon at the ship, from the
-  mission clock); the ship's own ceiling and visibility are not sourced.
-- **The Marshal stack board** (`cv-marshal-stack` Bay): one row per flight with slot, flight, angels, DME and
-  push time. **The slot is the only number you set for a flight**: drag a row (or the Strip) to the slot you
-  want and everyone above it moves up together. Taking a flight out leaves a gap; press **Close up** on it to
-  compress the stack. Commence never moves anyone. A recovery check-in is appended at the next free slot,
-  and a full stack is a warning.
-  - **Case I** is an altitude list: type the squadron-assigned angels (2 to 20) per flight; there are no DME
-    or push columns.
-  - **Case II and III**: type the **Charlie time** as Zulu `HHMM` and the **marshal radial** as a **magnetic**
-    bearing; Enter sets, and an empty Enter on the radial returns to the default (final bearing + 180).
+Four panels belong to the carrier, each an ordinary dockable panel opened from **PANELS**: the Strip panel's carrier
+Bays, **CARRIER** (the ship's state), **MARSHAL** (the recovery board) and **CARRIER MAP** (the picture around the
+ship). There is **no PAR on the carrier** (`adr/0116`): the PAR panel is Incirlik's (§8L).
+
+### The side number names the aircraft
+
+In the carrier regime an aircraft is named by its **side number**. The Marshal types it in the Strip's **SIDE** Block
+(`C18`); from then on it leads everywhere the carrier names that flight:
+
+- **On a carrier Strip** (MARSHAL, FINAL, PATTERN owned by a carrier Position) the side number moves to the first, wide
+  field and the callsign moves to SIDE's place. Until a side number is typed the callsign leads (a PATTERN Strip then shows
+  no SIDE at all). Incirlik's FINAL and PATTERN Strips are unchanged.
+- **On the MARSHAL board, the CARRIER MAP labels, the FINAL Bay line, PriFly's pattern board** (the callsign beside it on
+  the chip's second line), **the refusal banner and the "arrived from" line**. A flight with no side number yet is shown
+  by its callsign; on the MARSHAL board that row is grey.
+- The Bay search finds a Strip by its side number too.
+
+### The banner and the CARRIER panel (`adr/0113`)
+
+- **The banner** across the top of the Strip panel is read-only: the ship's speed and heading from DCS and the values in
+  force from the CARRIER panel. A `T` or `G` suffix on a bearing means the variation or the convergence is missing, so it
+  is not shown as magnetic; "hull not found" and "ship track lost" are shown as they are. It says when the Case is less
+  restrictive than the weather you typed (or night) allows; it never blocks.
+- **The CARRIER panel** shows the ship's state: BRC, final bearing, Case, ramp time, the marshal radial and first fix,
+  the weather at the ship (ceiling, visibility, wind over deck, altimeter), and the recovery tanker (side number,
+  altitude, give, pattern side, on station). Beside each value it says where it comes from: **DCS**, **default**,
+  **set**, or **not known**. `CV_PRIFLY` and `CV_MARSHAL` type over a value (Enter sets it, Esc puts it back); **Use DCS**
+  or **Use default** beside a value that was typed puts the automatic value back (**Clear** for a value with none), and an
+  empty field and Enter does the same. Everyone else at the carrier sees the values and cannot change them. Every change
+  is audited.
+- **Bearings are typed magnetic.** If the ship cannot be found there is no magnetic variation to convert with, and a
+  typed bearing is refused until it can.
+- Ceiling and visibility have no DCS source: they read "not known" until somebody types them. The wind over deck is the
+  DCS wind at the ship less the ship's own motion. The tanker's 6,000 ft and port pattern defaults are ours (CV NATOPS
+  sets none), and the panel says so.
+- **The Case** is set here by PriFly or the Marshal (III unless set), one setting for the whole ship; every carrier Strip's
+  next step changes at once when it changes. It is never refused on the weather.
+
+### Ramp time and EAT (CV NATOPS)
+
+- The **ramp time** is the time the first aircraft of a Case III recovery is expected at the ramp (the Charlie time,
+  CV NATOPS glossary). It has no default; type it as Zulu `HHMM`.
+- An aircraft's **EAT** is when it leaves its marshal fix inbound (CV NATOPS 6.4.4). It is worked back from the ramp
+  time: one minute apart per slot (6.4.5), less the time an aircraft takes from its fix to the ramp, **6 minutes**
+  unless the squadron changes `fixToRampSec` (that figure is ours, worked out from the 6.4.7.2 profile). Changing the ramp
+  time moves every holding EAT together; nobody changes slots. With no ramp time there is no EAT.
+- **The EAT/PUSH Block on the Strip now reads this EAT, six minutes earlier than the old "Charlie + slot" figure for the
+  same ramp time.** That is the NATOPS definition, not a fault.
+- The marshal fix is on the marshal radial (final bearing + 180 by default) at the first fix, **21 DME** at angels 6, one
+  mile and 1,000 ft higher per slot (CV NATOPS 6.4.1.1: angels + 15). The radial and the first fix are set in the
+  CARRIER panel.
+
+### The MARSHAL panel: the recovery board (`adr/0114`, `0115`)
+
+- It lists every aircraft in the recovery in landing order, next to land at the top: sequence, side number, type, fuel
+  (thousands of pounds) and EAT minute, angels, and status (**HOLD**, **COMM**, **APP A** or **B**, **BOLTER**, **BALL**,
+  **PATTERN**). Its header shows the Case, the ramp time and the marshal position (`MARSHAL` radial and first fix),
+  read-only: they are set in the CARRIER panel. Beside it is the Case III picture of the stack. Only the Marshal changes
+  anything; the other carrier Positions read it.
+- **Drag** a HOLD row onto another HOLD row to re-sequence. A recovery check-in joins at the next free slot. A flight that
+  leaves the stack leaves a gap (a vacancy row); **Close up** on it compresses the stack.
+- **Commence** is on the next flight to push. The flight keeps the EAT it was working to and the time it left: a later
+  ramp time or Delta does not rewrite it.
+- **Back to stack** (Case II and III) sends a commenced flight back into holding: it takes the next free slot at the top,
+  with a new angels and EAT.
+- **Delta…** (CV NATOPS 6.4.9: even minutes, never less than four) moves the EATs of the aircraft **holding**; commenced
+  aircraft are not moved. It needs a ramp time and somebody holding; a new ramp time clears it. The 60-minute cap is ours.
+- **Changed, not yet passed.** An angels or EAT that changed (a re-sequence, a Delta, a new ramp time, Back to stack)
+  shows amber until you click the row to say you passed it to the pilot. The marks are the ship's, not your window's:
+  every Marshal controller sees the same ones, they are still there after a reload or a crc-sync restart, and when you
+  click the row it clears for everyone. If the clearance changed again just before your click, the click is refused:
+  read the row again and pass the new value. A mark stays until passed, even if the value moves back. Commence clears it.
+  Only the Marshal clears a mark; the other carrier Positions see it. **Settings → Marshal → "Mark changed clearances
+  until passed"** hides the amber on your screen only (and then your click passes nothing).
+- **Colours.** Grey unless something is wrong. Amber is fuel within the margin above bingo (Settings → Marshal,
+  1.0 k lb by default), a flight past its EAT that has not pushed, and a changed clearance not yet passed; red is fuel at
+  or below bingo. Fuel and bingo are the Strip's Low state and Bingo fuel Blocks.
+- The side number (`C18`) and the approach turn (`C19`: 4, 6 or 8 nm; drawn at 6 when none is assigned, ours) are Strip
+  Blocks the Marshal types; the FINAL Strip shows them read-only.
+
+### The CARRIER MAP panel
+
+- A radar picture fixed on the ship, **north up**, behaving like the radar map: the wheel zooms (2.5 to 65 nm), a double
+  click zooms in, Shift and double click out; the ship stays in the middle and there is no pan. Range rings are dark
+  green and the **10 nm ring** is always drawn; the ring spacing and the range are in **Settings → Carrier map**. There is
+  no basemap.
+- The extended centreline runs astern along the final bearing in force, with a tick every mile. In Case II and III the
+  marshal radial and the fixes in use are drawn. Aircraft are labelled by side number and altitude in hundreds of feet;
+  amber is fuel within the margin of bingo and red at or below it (Settings → Marshal). The recovery tanker is labelled
+  `TKR`. The header carries the hull, Case, BRC, FB and range; it turns amber only for a lost ship track or a bearing it
+  cannot draw.
+- **A pattern is drawn only while someone is in it**, from the Strips: the bolter racetrack (turning in at each flight's
+  approach turn) while a FINAL Strip is BOLTER/WAVEOFF; port holding while a flight holds in Case I or II (Case II with
+  holding flights draws both the stack and port holding); the break and landing pattern with the initial while a flight
+  is in the pattern, or the spin circle when its contact is within 3.5 nm of the ship at 1,000 ft or above (that rule
+  is ours); the tanker's racetrack while the tanker is on station. The patterns carry no altitude or distance labels.
+  Their shapes follow CV NATOPS 6.2, 6.4.8 and 6.10.3; the figures NATOPS leaves open (the bolter's 2 nm abeam, the break
+  point, the 180, the tanker's 4 nm abeam) are ours.
+
+### Launch, handoffs and the final
+
 - **On the launch Strip** set EEAT (Zulu `HHMM`, Block `C15`), approach, button (a number 1 to 20, never a
   frequency), bingo and low state. They are on the flight, so they are on the recovery Strip too. The
   squawk the launch Strip held is re-claimed by the recovery Strip if you dropped the launch Strip in
@@ -1494,15 +1608,23 @@ there and says so; one nobody is offered is refused.
   only: the pilot has the ship, to PriFly as PATTERN). Case I has its own **To pattern**. **Dragging a Strip
   into a lane Bay does not do it; the button does** (the drag is refused with the button's name). The one
   allowed drag is a **bolter**: drag it to the Bolter Bay and the next step brings it back on final.
+- **The carrier final.** The approach controller works the final from the **FINAL Bay's flight line** and the
+  **CARRIER MAP**. The line names each aircraft on the final by its side number and carries **Ball** and **Waveoff**;
+  it has no range and no link to a PAR panel.
+- **DIST** (Block `C17`) on a carrier Strip is the range from the ship to the aircraft, the same figure for every
+  carrier Position (PriFly, the Marshal, the approach lanes), updated about once a second as both move. With no radar
+  contact it is blank. The MARSHAL board's DME is the same measurement.
 - **FINAL has nothing to type.** Its identity Blocks are derived and Block 5 is off its map.
+- **PriFly's pattern board** (initial, break, downwind, groove) names each aircraft by its side number once the
+  Marshal has typed it, with the callsign beside it; until then by its callsign.
 - A launch, a trap and a recovered pattern flight each count once in the traffic count (§10). The ship is the CARRIER
   Facility's home field (`UNION` in `config/efsp-instrumentation.json`): a launch whose ATO line (or plan) recovers on the
   ship is **local**, one that recovers at Incirlik is **transient**, and one with no plan or ATO line is **unknown**
   (`adr/0109`). The ATO line carries the carrier mission's hull (§8I).
-- **Not walked against a real DCS ship**: the banner reads "hull not found" until a hull track exists; the
-  deck-state board (`cv-prifly-deck`) is inert; two hulls were not tried.
+- **Not walked against a real DCS ship**: the banner reads "hull not found" until a hull track exists, so no panel has
+  shown live contacts around a real ship; the deck-state board (`cv-prifly-deck`) is inert; two hulls were not tried.
 
-## 8L. Incirlik: RSU, SFA and PAR (`adr/0075`, `0093`)
+## 8L. Incirlik: RSU, SFA and PAR (`adr/0075`, `0093`, `0112`)
 
 - **Eight Positions** at `INCIRLIK`: `OPS`, `CD`, `GC`, `LC`, `RSU`, `AP`, `SFA`, `PAR`.
 - **RSU** (runway supervisory unit): the **pattern board** (closed, initial, base, final as columns). Each
@@ -1514,18 +1636,39 @@ there and says so; one nobody is offered is refused.
   and **Rotate to PAR** beside the next step. **Filing a Strip on a frequency Rack assigns it that
   frequency; rotating never changes it** (the frequency belongs to the flight, D17). Only **`AP`** edits the
   rotation record (a select per frequency); `SFA` and `PAR` cannot.
-- **PAR** (precision approach): one aircraft on final at a time, shown in the **FINAL panel**: nothing to type
-  (a test holds it to zero inputs), a 5-second cadence bar off the mission clock, and prompts for the required
-  calls (mile, glidepath intercept, decision altitude, trend) that clear after 4 s. Two terminal buttons:
-  **Landing assured** (to `BALL`) and **Missed approach** (to the `par-missed` Bay, state `BOLTER_WAVEOFF`).
-  A rotation to PAR is refused while PAR is unstaffed or already has an aircraft on final.
+- **PAR** (precision approach radar) is an airfield feature, Incirlik's only. One aircraft on final at a time
+  (`par-final`); a rotation to PAR is refused while PAR is unstaffed or already has an aircraft on final. The **FINAL
+  Bay** shows one line per flight: its callsign (click it to show it in the PAR panel and open the panel), its range to
+  touchdown, and **Landing assured** (to `BALL`) and **Missed approach** (to the `par-missed` Bay, state
+  `BOLTER_WAVEOFF`).
+- **The PAR is your Position's own sensor.** While you are signed on to `PAR` and an aircraft is on your final, crc-sync
+  measures it twice a second: range from the runway threshold along the final approach course, its height above the
+  touchdown zone to the foot, how far above or below the glidepath and left or right of the course it is (left and right
+  as the pilot sees them), its ground speed and vertical speed. Nobody else is sent these numbers. If you sign off, the
+  next controller to sign on to your Position sees the same approach, with its trail; if you also hold `AP`, signing off
+  `PAR` alone keeps the picture, because `AP` takes PAR's hat (§8M).
+- **The PAR panel** (PANELS → PAR, a tab in the left panel group until you move it) shows the approach (runway, glidepath
+  angle, TCH, DA, final approach course), the aircraft (callsign, type, beacon, ground speed, vertical speed, range to
+  touchdown), and two scopes: elevation and azimuth against range from touchdown. Touchdown is always in the bottom-left
+  corner. The wheel zooms the range of both scopes; Shift+wheel zooms the height (elevation) or the lateral offset
+  (azimuth) of the scope under the pointer. There is no panning. With **Autoscale** on (Settings → PAR) the window
+  follows the aircraft until it is 10 NM wide; any zoom pauses it, a double-click resumes it.
+- **Colours.** The panel is grey while the approach is normal; the aircraft is the magenta diamond with its trail. Red
+  means outside your tolerance (±1° by default per axis, Settings → PAR) above DA; below DA nothing is coloured and the
+  dashed tolerance lines stop at DA. Amber `NO PLOT` means no new radar plot for 3 seconds (DCS has not moved the
+  aircraft, or it is outside the PAR's coverage: 20 NM, 15° either side, up to 7° up). An orange-red scope with
+  `NO ELEVATION DATA` or `NO AZIMUTH DATA` has failed; the reason is under it.
+- If the approach publishes no glidepath angle, your default glideslope (Settings → PAR, 3.06°) is used. With more than
+  one aircraft on your finals their names appear above the header; click one to watch it, and your choice stays until it
+  leaves the final. **Landing assured** and **Missed approach** are in the panel and on the aircraft's line in the FINAL
+  Bay. PAR's FINAL Strip shows the PAR's range to the threshold in DIST.
 - **A vacated Position's Strips stay with it** (`adr/0110`). `SFA` and `PAR` offer the hat to `AP`, `RSU` to `LC`: the
   next controller takes it (§8M) or the Strips wait. A PAR vacated with an aircraft on final leaves the Strip with `PAR`
   until `AP` takes the hat; an SFA rotation onto an unstaffed Position is still refused, because the aircraft would be
   handed to nobody.
-- The glidepath tolerance (0.3 degrees), trend step (0.1), prompt hold (4 s), long-in-pattern (10 min) and the
-  five placeholder frequencies (232.1 to 236.1 MHz) are `[SOURCE-DEFINED]`. The FINAL sample is the distance to
-  the approach radar's site against a nominal 3-degree glidepath: it has never seen a live DCS track.
+- **Placeholders.** Every approach figure (threshold, TDZE, TCH, DA, glidepath angle) is a placeholder until the squadron
+  copies the real plate (`config/efsp-facility-incirlik.json`, `parApproaches`); the five frequencies (232.1 to 236.1 MHz),
+  the long-in-pattern advisory (10 min) and the PAR coverage figures are ours. The PAR has never seen a live DCS track.
 
 ## 8M. Taking a hat: consolidation at every Facility (`adr/0105`, `adr/0110`)
 
@@ -1573,12 +1716,15 @@ squadron's (H111). `TACTICAL` alone still hands lines back to `TAC_C2` (§8C1).
 
 ## 9. General controls — quick reference
 
-- Set which Position(s) you're acting as under **Panels → Acting As** (grouped by Facility — `INCIRLIK`, `CENTER`, `TACTICAL` and, once any range is configured, `RANGES` are independent checkbox groups).
+- Set which Position(s) you're acting as under **Panels → Acting As** (grouped by Facility — `INCIRLIK`, `CENTER`, `TACTICAL`, `CARRIER` and, once any range is configured, `RANGES` are independent checkbox groups).
 - Each signed-on Position gets its own tab; each Position's Bays (§3) are its own tabs underneath.
 - **Drag** a Strip onto another Position's tab to transfer it (same-Facility only); onto a Bay tab within your own Position to move it there.
-- **Search**: `.find <text>` dot-command, or the search icon — matches callsign/beacon, opens a temporary search-results Bay.
+- **Search**: `.find <text>` dot-command, or the search icon — matches callsign/beacon (and a carrier aircraft's side number), opens a temporary search-results Bay.
 - **Dot-commands**: `.drop [reason]`, `.undo` (undoes the action in the Undo slot, no Strip needs selecting), `.find <text>`, `.bind <track id>`, `.unbind`, `.stereo <NAME> <CALLSIGN>`, and for MARSA (§8D) `.marsa <CALLSIGN> [DECLARER]`, `.rendezvous`, `.endmarsa`, `.voidmarsa` — all but `.find`, `.stereo` and `.undo` apply to whichever Strip is currently selected.
-- **Undo** (ADR 0100): every one-click move you made (NLA step, hand-off, carrier hand-over, SFA rotation, surveillance chip, TOFI Exit, Split/Join) can be undone for 10 seconds, by the Position that did it. The panel shows one slot, "Undo · Hand off VIPER1 → APP · 7 s"; click it, press Ctrl+Z with the panel in use, or type `.undo`. The newest undoable action replaces the slot. Changes other controllers in your Facility made to the same records in the meantime are voided (a voided clearance stays visible, marked VOIDED); the Position that made them gets a message in its panel ("LC undid Hand off VIPER1; your annotation was voided", click to dismiss; nothing is marked on the Strip). An Undo is refused if another Facility has since answered, or the Strip was dropped and archived; the slot line says why. Undoing a Split removes the part's Strip and its flight data on every client at once.
+- **Undo** (ADR 0100): every one-click move you made (NLA step, hand-off, carrier handoff, SFA rotation, surveillance chip, TOFI Exit, Split/Join, Divert) can be undone for 10 seconds, by the Position that did it. The panel shows one slot, "Undo · Hand off VIPER1 → APP · 7 s"; click it, press Ctrl+Z with the panel in use, or type `.undo`. The newest undoable action replaces the slot. Changes other controllers in your Facility made to the same records in the meantime are voided (a voided clearance stays visible, marked VOIDED); the Position that made them gets a message in its panel ("LC undid Hand off VIPER1; your annotation was voided", click to dismiss; nothing is marked on the Strip). An Undo is refused if another Facility has since answered, or the Strip was dropped and archived; the slot line says why. Undoing a Split removes the part's Strip and its flight data on every client at once.
+- **Settings** has one tab per panel: General, Colours, Radar (declutter, navpoints, track visibility, extended centreline,
+  debug), SRS and Tools, and one for each panel that has settings of its own: **PAR** (§8L), **Marshal** and **Carrier map**
+  (§8K). The values are yours and are kept on this computer; nobody else sees them.
 
 ## 10. Metrics and the traffic count
 
