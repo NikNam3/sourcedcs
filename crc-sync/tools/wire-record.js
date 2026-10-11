@@ -5,8 +5,12 @@ const HELP = `wire:record (docs/adr/0103)
 
 Usage: npm run wire:record [-- --bump] [-- --help]
 
-Run it after any change to the wire: a message type, an EFSP op kind, the top-level keys of a frame. tests/wire-protocol.test.mjs
-fails until you do. It:
+Run it after any change to the wire: a message type; an op kind (the Board's op table, or any store family's: airspace, ATO,
+carrier stack and SetCarrierState, correlation, MARSA, runway status, SFA); a carrier value or key (handoff names, trigger types,
+Case, SetCarrierState fields, stack and stack-entry keys, the hull view's and a derived entry's keys, the carrier flight fields);
+an SFA transfer name; a synced store's seq/epoch/delta names; the top-level keys of a hub frame or a store delta.
+tests/wire-protocol.test.mjs fails until you do. What the scan does not see (keys inside a Strip or another store's record, ack
+payloads, the snapshot's fixed keys) needs --bump. It:
   1. re-records the wire surface into tests/fixtures/wire-surface.json;
   2. reads the protocol of the last released client: the newest 'crc-desktop-v*' tag, then
      crc-desktop/app/public/js/wire-protocol.js at that tag;

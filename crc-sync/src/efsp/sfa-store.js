@@ -165,4 +165,4 @@ class SfaStore extends SyncedStore {
   }
 }
 
-module.exports = { SfaStore };
+module.exports = { SfaStore, SET_OP };

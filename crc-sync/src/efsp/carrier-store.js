@@ -588,4 +588,4 @@ class CarrierStore extends SyncedStore {
   }
 }
 
-module.exports = { CarrierStore };
+module.exports = { CarrierStore, STATE_OP };
