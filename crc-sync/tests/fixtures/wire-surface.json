@@ -281,11 +281,9 @@
       ],
       "approach": [
         "id",
-        "kind",
         "label",
         "runwayEnd",
         "airportIcao",
-        "hullId",
         "gpaDeg",
         "gpaPublished",
         "tchFt",
@@ -317,9 +315,7 @@
       ],
       "inopReasons": [
         "NO_APPROACH",
-        "NO_SHIP",
-        "NO_TDZE",
-        "NO_COURSE"
+        "NO_TDZE"
       ]
     },
     "storeSync": [
