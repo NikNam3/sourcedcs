@@ -4,13 +4,14 @@ import {
   getEfspBays, getEfspFlightData, getEfspRunwayStatus, getEfspRack, getEfspStrip
 } from './efsp-state.js';
 import { parSampleFor } from './par-samples.js';
+import { terminalOp, terminalsFor } from './par-model.js';
+import { parFlightOf, parShownStripId, showParFlight } from './par-panel.js';
+import { onEfspChanged } from './efsp-change-bus.js';
 import {
   SFA_ROTATION_LABEL, getEfspSfa, sfaRotatingPosition, sfaRotationOffered, sfaRotationRows
 } from './sfa-state.js';
 import { getActingPositions, sendEfspMutation, sendEfspSfaMutation } from './efsp-ws.js';
 import { patternBoardModel, renderPatternBoard } from './pattern-board.js';
-import { createFinalTracker, renderFinalPanel } from './final-panel.js';
-import { runwayForStrip } from './runway-status-rules.js';
 
 // Bay descriptor views (crc-sync docs/adr/0075, 0093): a Bay whose descriptor says
 // `view: 'pattern' | 'final' | 'sfa-freqs'` mounts a component, instead of (or
@@ -22,9 +23,10 @@ import { runwayForStrip } from './runway-status-rules.js';
 // What each view does:
 //   pattern    pattern-board.js over the Bay's racks (a leg is a Rack): Move between
 //              legs, Landed, Drop. Advisories only; the board never refuses.
-//   final      final-panel.js for the Bay's one Strip (§7.10: nothing to type). Its
-//              sample is the server's PAR sample (crc-sync docs/adr/0112); its two
-//              terminal buttons are the only gestures.
+//   final      one line per aircraft on the final (§7.10: nothing to type): its name
+//              picks it for the PAR panel (par-panel.js, which draws the picture from
+//              the server's PAR sample, crc-sync docs/adr/0112), its range to touchdown,
+//              and FINAL's two terminal buttons, the only gestures.
 //   sfa-freqs  a header over the frequency racks: which controller is on which
 //              frequency, editable by the jurisdiction Position only (guide §4.7).
 //
@@ -34,8 +36,6 @@ import { runwayForStrip } from './runway-status-rules.js';
 // hidden rack costs nothing and the Strips keep the one render path.
 //
 // Pure model builders first (unit-tested), DOM second.
-
-const FINAL_REFRESH_MS = 1000;            // the cadence bar and the mile calls are read off the clock, not an event
 
 const _fin = (v) => typeof v === 'number' && Number.isFinite(v);
 
@@ -87,43 +87,20 @@ export function patternOpFor(desc) {
 
 // ── final ───────────────────────────────────────────────────────────────────
 
-/**
- * The FINAL sample for one Strip (final-panel.js's input), from the server's PAR sample (crc-sync docs/adr/0112): range
- * along the final approach course from the runway threshold or the carrier's touchdown point, the height the PAR
- * measured (exact, not the 100 ft SSR altitude), the glidepath deviation against the approach's angle, and its DA. With no
- * PAR sample (not this controller's final) or no plot yet, every measured field stays undefined, which final-panel.js
- * shows as `--` and never prompts on. Nothing is measured from the approach radar's site or the ship's centre any more:
- * that was the FINAL range bug (docs/wip/PANELS-DESIGN.md finding 1).
- * @param {object} i { kind, strip, callsign, runway, par (parSampleFor(stripId)), nowS }
- */
-export function finalSampleFor({ kind, strip, callsign, runway, par, nowS } = {}) {
-  const sample = { kind, stripId: strip ? strip.stripId : null, callsign: callsign || '', runway: runway || '--', nowS, decisionAltFt: undefined };
-  const a = par && par.approach;
-  if (a && _fin(a.daFt)) sample.decisionAltFt = a.daFt;
-  if (a && a.runwayEnd && sample.runway === '--') sample.runway = a.runwayEnd;
-  const p = par && par.plot;
-  if (!p || !_fin(p.rangeNm)) return sample;
-  sample.distanceNm = p.rangeNm;
-  if (_fin(p.heightFt) && a && _fin(a.tdzeFt)) sample.altitudeFt = a.tdzeFt + p.heightFt;
-  if (_fin(p.elevDevDeg) && p.rangeNm >= 0.3) sample.glidepathDevDeg = p.elevDevDeg;
-  return sample;
+/** The approach kind of a FINAL Bay: the carrier's lanes or a runway's PAR (the terminal labels and ops differ). */
+export function finalKindOf(bay) {
+  return bay && bay.facilityId === 'CARRIER' ? 'CARRIER' : 'RUNWAY';
 }
 
-/**
- * The op a terminal button sends. PAR's "Landing assured" and "Missed approach" are FINAL's own states, set
- * by the owner (ADR 0075). The carrier's "Ball" is its recorded FINAL_TO_LSO handoff, so the trigger type
- * is kept (ADR 0074); its "Waveoff" is the state change.
- */
-export function finalTerminalOp(kind, terminal) {
-  if (kind === 'CARRIER' && terminal && terminal.toState === 'BALL') return { kind: 'CarrierHandoff', transfer: 'FINAL_TO_LSO' };
-  return terminal ? { kind: 'SetState', toState: terminal.toState } : null;
+/** One flight line's text: its name (H122), and its range to touchdown from this controller's PAR sample, '' without one. */
+export function finalRowModel(strip, kind, par = parSampleFor(strip.stripId)) {
+  const nm = par && par.plot && Number.isFinite(par.plot.rangeNm) ? par.plot.rangeNm : null;
+  return { stripId: strip.stripId, name: parFlightOf(strip.stripId, kind).name || '—', range: nm == null ? '' : `${nm.toFixed(1)} NM` };
 }
 
 // ── DOM ─────────────────────────────────────────────────────────────────────
 
-const _finalTrackers = new Map(); // stripId -> final-panel tracker
-const _finalMounts = new Set();   // containers showing a final view, refreshed on a timer
-let _finalTimer = null;
+const _finalMounts = new Set();   // containers showing a final view, redrawn on every PAR sample
 
 function _signedOnAt(bay) {
   return getActingPositions(bay.facilityId);
@@ -194,12 +171,12 @@ function _renderPattern(container, bay) {
 
 function _renderFinal(container, bay) {
   const mount = _mountPoint(container, bay.bayId);
-  const kind = bay.facilityId === 'CARRIER' ? 'CARRIER' : 'PAR';
+  const kind = finalKindOf(bay);
   const live = [];
   for (const rackId of bay.rackIds || []) live.push(...getEfspRack(bay.bayId, rackId));
   const signedOn = _signedOnAt(bay);
-  const gone = new Set([..._finalTrackers.keys()]);
   const wrap = document.createElement('div');
+  wrap.className = 'efsp-final-list';
   wrap.dataset.bayView = 'final';
   if (live.length === 0) {
     const none = document.createElement('div');
@@ -207,43 +184,52 @@ function _renderFinal(container, bay) {
     none.textContent = kind === 'CARRIER' ? 'No aircraft on final.' : 'No aircraft on final. Rotate an aircraft in from SFA or AP.';
     wrap.appendChild(none);
   }
+  const shown = parShownStripId();
   for (const strip of live) {
-    gone.delete(strip.stripId);
-    if (!_finalTrackers.has(strip.stripId)) _finalTrackers.set(strip.stripId, createFinalTracker());
-    const flightData = getEfspFlightData(strip.flightDataId);
-    let runwayText = '--';
-    const r = runwayForStrip({ ...strip, stripType: 'ARRIVAL' }, flightData, getEfspRunwayStatus(bay.facilityId));
-    if (r) runwayText = r.end || r.runwayId;
-    const sample = finalSampleFor({
-      kind, strip, callsign: flightData && flightData.identity ? flightData.identity.callsign : '', runway: runwayText,
-      par: parSampleFor(strip.stripId),
-      nowS: missionNow() / 1000,
-    });
-    const vm = _finalTrackers.get(strip.stripId).update(sample);
-    const panel = renderFinalPanel(vm, {
-      doc: document,
-      onTerminal: ({ id, toState }) => {
+    const m = finalRowModel(strip, kind);
+    const row = document.createElement('div');
+    row.className = 'efsp-final-row';
+    row.dataset.stripId = strip.stripId;
+    row.dataset.shown = strip.stripId === shown ? '1' : '';
+    const name = document.createElement('button');
+    name.type = 'button';
+    name.className = 'efsp-final-name';
+    name.textContent = m.name;
+    name.title = 'Show in the PAR panel';
+    name.addEventListener('click', () => showParFlight(strip.stripId));
+    const range = document.createElement('span');
+    range.className = 'efsp-final-range';
+    range.textContent = m.range;
+    const term = document.createElement('div');
+    term.className = 'efsp-final-terminals';
+    for (const t of terminalsFor(kind)) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'efsp-final-terminal';
+      b.dataset.terminal = t.id;
+      b.textContent = t.label;
+      b.addEventListener('click', () => {
         if (!signedOn.includes(strip.ownerPositionId)) return;
-        const op = finalTerminalOp(kind, { id, toState });
+        const op = terminalOp(kind, t);
         if (op) _send(strip, op);
-      },
-    });
-    wrap.appendChild(panel);
+      });
+      term.appendChild(b);
+    }
+    row.append(name, range, term);
+    wrap.appendChild(row);
   }
-  for (const id of gone) _finalTrackers.delete(id); // a Strip that left final starts fresh if it returns
   _replace(mount, wrap);
   _finalMounts.add(container);
-  if (!_finalTimer && typeof setInterval === 'function') {
-    _finalTimer = setInterval(() => {
-      for (const c of [..._finalMounts]) {
-        if (!c.isConnected) { _finalMounts.delete(c); continue; }
-        const bay = bayDescriptorFor(c.dataset.efspBayView);
-        if (bay && !_busy(c)) _renderFinal(c, bay);
-      }
-    }, FINAL_REFRESH_MS);
-    if (_finalTimer && typeof _finalTimer.unref === 'function') _finalTimer.unref(); // node (tests): never hold the process open
-  }
 }
+
+// A PAR sample moves the ranges (twice a second while a final is worked): redraw the final lists on screen.
+onEfspChanged('par', () => {
+  for (const c of [..._finalMounts]) {
+    if (c.isConnected === false) { _finalMounts.delete(c); continue; }
+    const bay = bayDescriptorFor(c.dataset.efspBayView);
+    if (bay && bay.view === 'final' && !_busy(c)) _renderFinal(c, bay);
+  }
+});
 
 function _renderSfaHeader(container, bay) {
   const view = getEfspSfa();

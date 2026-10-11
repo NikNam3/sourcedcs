@@ -1,0 +1,55 @@
+/* The PAR panel (docs/wip/PAR-2.md; mockup docs/mockups/par-panel.html, revision 4; decisions H115, H116). Dark cockpit: grey unless
+   a problem. Red (--efsp-danger) outside a tolerance above DA; amber (--efsp-attn) only for no plot for 3 s; orange-red (--efsp-bad)
+   for an INOP scope. The track is the approved style E (magenta, drawn in par-panel.js). The font is the app's own. */
+
+#par-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: auto;
+  color: var(--efsp-text, #d8e0e6);
+  background: #14181c;
+  font-family: 'Consolas', 'DejaVu Sans Mono', monospace;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+#par-body { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+#par-body[hidden] { display: none; }
+
+.par-picks { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px 8px; border-bottom: 1px solid var(--efsp-line, #2e3740); }
+.par-picks[hidden] { display: none; }
+.par-pick { font: inherit; color: var(--efsp-muted, #8c9aa6); background: var(--efsp-strip, #1c2228); border: 1px solid var(--efsp-line, #2e3740);
+  border-radius: 3px; padding: 2px 10px; min-height: 26px; cursor: pointer; }
+.par-pick[aria-pressed="true"] { color: #fff; border-color: var(--efsp-line-2, #4a5560); }
+
+.par-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 0; padding: 5px 8px; border-bottom: 1px solid var(--efsp-line, #2e3740); }
+.par-k { color: var(--efsp-muted, #8c9aa6); font-size: 10px; letter-spacing: .05em; margin: 0 4px 0 12px; }
+.par-v { color: var(--efsp-text, #d8e0e6); }
+.par-row [hidden] { display: none; }
+.par-cs { color: #fff; font-size: 15px; margin-right: 10px; }
+.par-right { margin-left: auto; }
+.par-range span { font-size: 24px; color: #fff; line-height: 1; }
+.par-range small { font-size: 11px; color: var(--efsp-muted, #8c9aa6); margin-left: 4px; }
+.par-flag { font-size: 10.5px; padding: 0 5px; border: 1px solid; border-radius: 2px; margin-left: 8px; letter-spacing: .04em; }
+.par-bad { color: var(--efsp-bad, #ff8a4c); border-color: var(--efsp-bad, #ff8a4c); }
+
+.par-scopes { display: flex; flex-direction: column; gap: 4px; padding: 6px 8px; flex: 1; min-height: 220px; }
+.par-scope { position: relative; background: #0b0e11; border: 1px solid var(--efsp-line, #2e3740); user-select: none; cursor: default; min-height: 90px; }
+.par-scope[data-par-scope="el"] { flex: 3; }
+.par-scope[data-par-scope="az"] { flex: 2; }
+.par-svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.par-svg text { font-family: 'Consolas', 'DejaVu Sans Mono', monospace; font-size: 10px; pointer-events: none; }
+.par-cap { position: absolute; left: 6px; top: 3px; color: var(--efsp-faint, #56616c); font-size: 10px; letter-spacing: .06em; pointer-events: none; z-index: 1; }
+.par-win { position: absolute; right: 6px; top: 3px; color: var(--efsp-faint, #56616c); font-size: 10px; pointer-events: none; z-index: 1; }
+
+.par-dev { display: flex; flex-wrap: wrap; gap: 4px 18px; padding: 2px 8px 6px; color: var(--efsp-muted, #8c9aa6); }
+.par-dev b { font-weight: 400; color: var(--efsp-text, #d8e0e6); }
+.par-dev .par-danger, .par-dev .par-danger b { color: var(--efsp-danger, #ff5c5c); }
+.par-msg { margin: 0 8px 6px; padding: 4px 8px; border: 1px solid; font-size: 11.5px; }
+.par-msg:empty { display: none; }
+.par-msg.par-attn { color: var(--efsp-attn-text, #ffe0a8); border-color: var(--efsp-attn, #e0a83c); }
+
+.par-terms { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 6px 8px 8px; border-top: 1px solid var(--efsp-line, #2e3740); }
+.par-term { min-height: var(--efsp-tap, 44px); font: inherit; font-size: 12px; color: var(--efsp-text, #d8e0e6); background: var(--efsp-strip, #1c2228);
+  border: 1px solid var(--efsp-line-2, #4a5560); border-radius: 3px; cursor: pointer; }
+.par-term:hover { border-color: var(--efsp-muted, #8c9aa6); }

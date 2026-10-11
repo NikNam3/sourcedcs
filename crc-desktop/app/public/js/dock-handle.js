@@ -27,6 +27,7 @@ export const PANEL_TITLES = {
   carrier:  'CARRIER',
   marshal:  'MARSHAL',
   carrierMap: 'CARRIER MAP',
+  par:      'PAR',
   metrics:  'METRICS',
 };
 

@@ -10,6 +10,7 @@ import { initRunwayStatusPanel } from './panels/efsp/runway-status-panel.js';
 import { initCarrierManagementPanel } from './panels/efsp/carrier-management-panel.js';
 import { initMarshalPanel } from './panels/efsp/marshal-panel.js';
 import { initCarrierMapPanel } from './panels/efsp/carrier-map-panel.js';
+import { initParPanel } from './panels/efsp/par-panel.js';
 import { initMetricsPanel } from './panels/metrics-panel.js';
 import { getActiveRadars } from './picture.js';
 import { map } from './map-handle.js';
@@ -61,6 +62,7 @@ export function initDock() {
         case 'carrier':  return mountExistingPanel('carrier-mgmt-panel', initCarrierManagementPanel);
         case 'marshal':  return mountExistingPanel('marshal-panel', initMarshalPanel);
         case 'carrierMap': return mountExistingPanel('carrier-map-panel', initCarrierMapPanel);
+        case 'par':      return mountExistingPanel('par-panel', initParPanel);
         case 'metrics':  return mountExistingPanel('metrics-panel', initMetricsPanel);
         default: throw new Error(`[dock] unknown panel component: ${options.name}`);
       }
@@ -188,7 +190,7 @@ function addMissingRequiredPanels() {
 // (it lands wherever the active group happens to be, sometimes merging
 // into completely the wrong group — both reproduced firsthand while
 // building this). `excludeId` leaves out the panel currently being placed.
-const LEFT_CLUSTER = ['track', 'radars', 'airport', 'efsp', 'airspace', 'runwayStatus', 'carrier', 'marshal', 'carrierMap', 'metrics'];
+const LEFT_CLUSTER = ['track', 'radars', 'airport', 'efsp', 'airspace', 'runwayStatus', 'carrier', 'marshal', 'carrierMap', 'par', 'metrics'];
 
 function leftGroupAnchor(excludeId) {
   return LEFT_CLUSTER.filter(id => id !== excludeId).find(id => dock.api.getPanel(id));
@@ -200,7 +202,7 @@ function leftGroupAnchor(excludeId) {
 // remembered size to come back to.
 const PANEL_SIDE = {
   track: 'left', radars: 'left', airport: 'left', efsp: 'left', airspace: 'left',
-  runwayStatus: 'left', carrier: 'left', marshal: 'left', carrierMap: 'left', metrics: 'left',
+  runwayStatus: 'left', carrier: 'left', marshal: 'left', carrierMap: 'left', par: 'left', metrics: 'left',
   settings: 'right',
   radio: 'bottom',
 };
@@ -331,6 +333,14 @@ const DOCKABLE_PANELS = {
     const anchor = leftGroupAnchor('carrierMap');
     return withRememberedPlacement('carrierMap', {
       id: 'carrierMap', component: 'carrierMap', title: PANEL_TITLES.carrierMap,
+      position: anchor ? { referencePanel: anchor } : { referencePanel: 'map', direction: 'left' },
+    }, !anchor);
+  },
+  // The PAR picture (docs/wip/PAR-2.md, H115): the final this controller works.
+  par: () => {
+    const anchor = leftGroupAnchor('par');
+    return withRememberedPlacement('par', {
+      id: 'par', component: 'par', title: PANEL_TITLES.par,
       position: anchor ? { referencePanel: anchor } : { referencePanel: 'map', direction: 'left' },
     }, !anchor);
   },

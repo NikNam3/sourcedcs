@@ -128,37 +128,20 @@ test('a Bay with no view is left alone, and a stale view is removed when a Bay s
   assert.equal([...c2.children].some(x => x.className === 'efsp-bay-view'), false);
 });
 
-test('final: the sample is the server\'s PAR sample (range from the threshold, exact height, its DA); without one nothing is measured', () => {
-  const strip = { stripId: 's1' };
-  const approach = { id: 'LTAG-05', runwayEnd: '05', tdzeFt: 160, daFt: 360, gpaDeg: 3.06 };
-  const par = { stripId: 's1', approach, plot: { rangeNm: 3, heightFt: 1024, elevDevDeg: 0.12, elevDevFt: 38, azDevFt: -40 } };
-  const onPath = V.finalSampleFor({ kind: 'PAR', strip, callsign: 'V11', runway: '05', nowS: 10, par });
-  assert.equal(onPath.distanceNm, 3, 'the PAR\'s range from the threshold, never from the radar site');
-  assert.equal(onPath.altitudeFt, 160 + 1024, 'TDZE + the measured height, to the foot');
-  assert.equal(onPath.glidepathDevDeg, 0.12);
-  assert.equal(onPath.decisionAltFt, 360);
-  assert.equal(V.finalSampleFor({ kind: 'PAR', strip, par }).runway, '05', 'the approach names the runway when the Strip does not');
-  const short = V.finalSampleFor({ kind: 'PAR', strip, par: { ...par, plot: { ...par.plot, rangeNm: 0.2 } } });
-  assert.equal(short.glidepathDevDeg, undefined, 'no glidepath figure inside 0.3 NM');
-  const noHeight = V.finalSampleFor({ kind: 'PAR', strip, par: { ...par, plot: { rangeNm: 2, heightFt: null, elevDevDeg: null } } });
-  assert.equal(noHeight.altitudeFt, undefined); assert.equal(noHeight.glidepathDevDeg, undefined);
-  const noPlot = V.finalSampleFor({ kind: 'PAR', strip, par: { ...par, plot: null } });
-  assert.equal(noPlot.distanceNm, undefined);
-  assert.equal(noPlot.decisionAltFt, 360);
-  const none = V.finalSampleFor({ kind: 'CARRIER', strip, par: null, nowS: 1 });
-  assert.equal(none.distanceNm, undefined);
-  assert.equal(none.decisionAltFt, undefined);
+test('final: one line per flight, named by its callsign at a runway and its side number on a carrier lane (H122), its range from the PAR sample', () => {
+  const strip = { stripId: 's1', flightDataId: 'f1' };
+  putFlightData('f1', { identity: { callsign: 'VIPER 11' }, military: { carrier: { sideNumber: '201' } } });
+  putStrip({ ...strip, bayId: 'par-final', rackId: 'main', ownerPositionId: 'PAR', state: 'ON_FINAL', stripType: 'FINAL' });
+  const par = { stripId: 's1', approach: { id: 'LTAG-05', kind: 'RUNWAY' }, plot: { rangeNm: 3.04 } };
+  assert.deepEqual(V.finalRowModel(strip, 'RUNWAY', par), { stripId: 's1', name: 'VIPER 11', range: '3.0 NM' });
+  assert.equal(V.finalRowModel(strip, 'CARRIER', par).name, '201');
+  assert.equal(V.finalRowModel(strip, 'RUNWAY', { ...par, plot: null }).range, '', 'no plot, no range');
+  assert.equal(V.finalRowModel(strip, 'RUNWAY', null).range, '', 'not this controller\'s final');
+  assert.equal(V.finalKindOf(bay('par-final')), 'RUNWAY');
+  assert.equal(V.finalKindOf(bay('cv-app1-final')), 'CARRIER');
 });
 
-test('final: PAR\'s terminals are FINAL\'s own states; the carrier\'s Ball keeps its recorded handoff', () => {
-  assert.deepEqual(V.finalTerminalOp('PAR', { id: 'ASSURED', toState: 'BALL' }), { kind: 'SetState', toState: 'BALL' });
-  assert.deepEqual(V.finalTerminalOp('PAR', { id: 'MISSED', toState: 'BOLTER_WAVEOFF' }), { kind: 'SetState', toState: 'BOLTER_WAVEOFF' });
-  assert.deepEqual(V.finalTerminalOp('CARRIER', { id: 'BALL', toState: 'BALL' }), { kind: 'CarrierHandoff', transfer: 'FINAL_TO_LSO' });
-  assert.deepEqual(V.finalTerminalOp('CARRIER', { id: 'WAVEOFF', toState: 'BOLTER_WAVEOFF' }), { kind: 'SetState', toState: 'BOLTER_WAVEOFF' });
-  assert.equal(V.finalTerminalOp('PAR', null), null);
-});
-
-test('final mount: PAR\'s Strip becomes the panel with no input in it, racks hidden, and a terminal button sends the owner\'s op', () => {
+test('final mount: PAR\'s Strip becomes a flight line with no input in it, racks hidden, and a terminal button sends the owner\'s op', () => {
   const b = bay('par-final');
   setHeld({ INCIRLIK: ['PAR'] });
   addStrip({ stripId: 'p1', flightDataId: 'f1', bayId: 'par-final', rackId: 'main', ownerPositionId: 'PAR', rev: 2, state: 'ON_FINAL', stripType: 'FINAL' }, { identity: { callsign: 'VIPER 11' } });
@@ -167,23 +150,41 @@ test('final mount: PAR\'s Strip becomes the panel with no input in it, racks hid
   assert.equal([...c.children].filter(x => x.className === 'efsp-rack').every(r => r.style.display === 'none'), true);
   const all = descendants(c);
   assert.equal(all.some(e => /^(input|select|textarea)$/.test(e.tagName)), false, 'nothing to type on final (§7.10)');
-  const buttons = all.filter(e => e.tagName === 'button');
-  assert.equal(buttons.length, 2);
-  click(buttons[1]);
+  const terms = all.filter(e => e.className === 'efsp-final-terminal');
+  assert.deepEqual(terms.map(t => t.textContent), ['Landing assured', 'Missed approach']);
+  assert.ok(all.some(e => e.className === 'efsp-final-name' && e.textContent === 'VIPER 11'));
+  click(terms[1]);
   assert.deepEqual(sent.pop(), { position: 'PAR', stripId: 'p1', op: { kind: 'SetState', toState: 'BOLTER_WAVEOFF' } });
-  click(buttons[0]);
+  click(terms[0]);
   assert.deepEqual(sent.pop().op, { kind: 'SetState', toState: 'BALL' });
   // not the owner: a tap does nothing
   setHeld({ INCIRLIK: ['LC'] });
   const c2 = containerFor(b);
   renderBayDescriptorView(c2, b);
-  descendants(c2).filter(e => e.tagName === 'button').forEach(click);
+  descendants(c2).filter(e => e.className === 'efsp-final-terminal').forEach(click);
   assert.equal(sent.length, 0);
   // an empty Bay says so, rather than drawing nothing
   clearBoard();
   const c3 = containerFor(b);
   renderBayDescriptorView(c3, b);
   assert.ok(descendants(c3).some(e => e.className === 'efsp-final-none'));
+});
+
+test('final mount on a carrier lane: Ball is the recorded FINAL_TO_LSO handoff, Waveoff the state change; the racks stay', () => {
+  const b = bay('cv-app1-final');
+  setHeld({ CARRIER: ['CV_APP1'] });
+  addStrip({ stripId: 'c1', flightDataId: 'f2', bayId: 'cv-app1-final', rackId: 'main', ownerPositionId: 'CV_APP1', rev: 1, state: 'ON_FINAL', stripType: 'FINAL' }, { identity: { callsign: 'NAVY 1' }, military: { carrier: { sideNumber: '203' } } });
+  const c = containerFor(b);
+  renderBayDescriptorView(c, b);
+  assert.equal([...c.children].filter(x => x.className === 'efsp-rack').every(r => r.style.display !== 'none'), true);
+  const all = descendants(c);
+  assert.ok(all.some(e => e.className === 'efsp-final-name' && e.textContent === '203'));
+  const terms = all.filter(e => e.className === 'efsp-final-terminal');
+  assert.deepEqual(terms.map(t => t.textContent), ['Ball', 'Waveoff']);
+  click(terms[0]);
+  assert.deepEqual(sent.pop().op, { kind: 'CarrierHandoff', transfer: 'FINAL_TO_LSO' });
+  click(terms[1]);
+  assert.deepEqual(sent.pop().op, { kind: 'SetState', toState: 'BOLTER_WAVEOFF' });
 });
 
 test('sfa header: every pool frequency is a row; the rack headers say the frequency and the controller; only AP gets selects', () => {
@@ -260,7 +261,7 @@ test('no top-level name of the Bay-view scripts is declared by any other script 
       declared.get(m[1]).add(f);
     }
   }
-  const mine = ['pattern-board.js', 'final-panel.js', 'bay-views.js', 'sfa-state.js'];
+  const mine = ['pattern-board.js', 'par-model.js', 'bay-views.js', 'sfa-state.js'];
   for (const f of files.filter(x => mine.some(n => x.endsWith(n)))) {
     for (const [name, where] of declared) {
       if (where.has(f) && where.size > 1) assert.fail(`${name} is declared in ${[...where].join(' and ')}`);
