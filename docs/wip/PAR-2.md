@@ -109,7 +109,7 @@ the panel scrolls).
 
 | Gate | Before | After |
 |---|---|---|
-| crc-desktop `npm test` | 1247 | 1253 (all pass: the FINAL component's 10 tests and 3 bay-view final tests gone, 15 PAR model tests and 4 bay-view final tests added) |
+| crc-desktop `npm test` | 1247 | 1253 (all pass: the FINAL component's tests gone, the bay-view final tests rewritten, 15 PAR model tests added) |
 | crc-sync `npm test` | 2643 (1 timing flake in the grpc client's abandon test, run beside the desktop suite) | 2643 (all pass; no crc-sync file changed) |
 | module-graph fixture | | re-recorded: `final-panel.js` gone; `par-model.js`, `par-panel.js` added; `bay-views.js` exports `finalKindOf`, `finalRowModel` instead of `finalSampleFor`, `finalTerminalOp` |
 | no-cycle / no-window-globals / html-sinks | | green (`par-model.js` added to `NEVER_IN_A_CYCLE`) |
