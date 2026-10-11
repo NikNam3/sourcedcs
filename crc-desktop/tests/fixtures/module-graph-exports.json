@@ -473,8 +473,6 @@
    "renderBay"
   ],
   "panels/efsp/bay-views.js": [
-   "FINAL_DECISION_HEIGHT_FT",
-   "FINAL_GLIDEPATH_NOMINAL_DEG",
    "bayDescriptorFor",
    "finalSampleFor",
    "finalTerminalOp",
@@ -1175,6 +1173,13 @@
    "undoSlotText",
    "undoVoidedMessageText",
    "wireUndoKeys"
+  ],
+  "panels/efsp/par-samples.js": [
+   "applyParSamples",
+   "clearParSamples",
+   "parSampleFor",
+   "parSampleTimes",
+   "parSamples"
   ],
   "panels/efsp/pattern-board.js": [
    "INTENT_LABELS",
