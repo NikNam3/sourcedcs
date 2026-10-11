@@ -174,17 +174,34 @@ function _renderFinal(container, bay) {
   const kind = finalKindOf(bay);
   const live = [];
   for (const rackId of bay.rackIds || []) live.push(...getEfspRack(bay.bayId, rackId));
-  const signedOn = _signedOnAt(bay);
+  _finalMounts.add(container);
+  const shown = parShownStripId();
+  // The list is rebuilt only when its flights change; a PAR sample (twice a second) rewrites the text in place, so a button
+  // is never replaced under the controller's click.
+  const sig = `${kind}|${live.map(s => s.stripId).join(',')}`;
+  const existing = [...mount.children].find(el => el.dataset && el.dataset.bayView === 'final');
+  if (existing && existing.dataset.sig === sig) {
+    for (const strip of live) {
+      const row = [...existing.children].find(el => el.dataset.stripId === strip.stripId);
+      if (!row) continue;
+      const m = finalRowModel(strip, kind);
+      row.dataset.shown = strip.stripId === shown ? '1' : '';
+      const [name, range] = row.children;
+      if (name.textContent !== m.name) name.textContent = m.name;
+      if (range.textContent !== m.range) range.textContent = m.range;
+    }
+    return;
+  }
   const wrap = document.createElement('div');
   wrap.className = 'efsp-final-list';
   wrap.dataset.bayView = 'final';
+  wrap.dataset.sig = sig;
   if (live.length === 0) {
     const none = document.createElement('div');
     none.className = 'efsp-final-none';
     none.textContent = kind === 'CARRIER' ? 'No aircraft on final.' : 'No aircraft on final. Rotate an aircraft in from SFA or AP.';
     wrap.appendChild(none);
   }
-  const shown = parShownStripId();
   for (const strip of live) {
     const m = finalRowModel(strip, kind);
     const row = document.createElement('div');
@@ -209,9 +226,11 @@ function _renderFinal(container, bay) {
       b.dataset.terminal = t.id;
       b.textContent = t.label;
       b.addEventListener('click', () => {
-        if (!signedOn.includes(strip.ownerPositionId)) return;
+        // the owner must be signed on here when the button is pressed, not when it was drawn
+        const s = getEfspStrip(strip.stripId) || strip;
+        if (!_signedOnAt(bay).includes(s.ownerPositionId)) return;
         const op = terminalOp(kind, t);
-        if (op) _send(strip, op);
+        if (op) _send(s, op);
       });
       term.appendChild(b);
     }
@@ -219,7 +238,6 @@ function _renderFinal(container, bay) {
     wrap.appendChild(row);
   }
   _replace(mount, wrap);
-  _finalMounts.add(container);
 }
 
 // A PAR sample moves the ranges (twice a second while a final is worked): redraw the final lists on screen.

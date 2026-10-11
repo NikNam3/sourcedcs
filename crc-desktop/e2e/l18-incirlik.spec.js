@@ -1,7 +1,8 @@
 'use strict';
 
 /* L18 server half (crc-sync docs/adr/0075, 0093) on screen: RSU's pattern board, SFA's frequency racks with the
- * rotation header and "Rotate to PAR", and PAR's FINAL panel with nothing to type. One controller holds RSU, AP,
+ * rotation header and "Rotate to PAR", and PAR's FINAL Bay (the flight line, nothing to type; the picture is the PAR panel's,
+ * e2e/par-panel.spec.js). One controller holds RSU, AP,
  * SFA and PAR. Run on E2E_LANE=9. The Board lives for the whole run, so every test drops what it made. */
 
 const { test, expect } = require('./helpers/test');
@@ -65,10 +66,12 @@ test('01 SFA: filed on a frequency Rack, rotated to PAR with the frequency uncha
   expect((await stripOf(page, call)).mhz).toBe(233.1);
 
   await openBay(page, 'PAR', 'par-final');
-  const final = page.locator('.efsp-final');
+  const final = page.locator('.efsp-final-list');
   await expect(final).toBeVisible();
   await expect(final.locator('input, select, textarea')).toHaveCount(0); // 7.10: nothing to type
-  await expect(page.locator('.efsp-strip:visible')).toHaveCount(0);       // PAR's racks are replaced by the panel
+  await expect(page.locator('.efsp-strip:visible')).toHaveCount(0);       // PAR's racks are replaced by the flight line
+  await expect(final.locator('.efsp-final-name')).toHaveText(call);       // a callsign at Incirlik (H122)
+  await expect(final.locator('.efsp-final-terminal')).toHaveText(['Landing assured', 'Missed approach']);
   await final.locator('.efsp-final-terminal').first().click();            // Landing assured
   await waitStrip(page, call, s => s.state === 'BALL', 'BALL');
 });

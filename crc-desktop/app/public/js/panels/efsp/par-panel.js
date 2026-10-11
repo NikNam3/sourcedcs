@@ -299,16 +299,26 @@ function _windowText(kind, autoscale) {
 
 function _renderPicks(samples, approachKindOf) {
   const picks = _els.picks;
-  picks.textContent = '';
   picks.hidden = samples.length < 2;
-  if (samples.length < 2) return;
-  for (const s of samples) {
-    const b = _el('button', 'par-pick', parFlightOf(s.stripId, approachKindOf(s)).name || s.stripId);
-    b.type = 'button';
-    b.dataset.parPick = s.stripId;
-    b.setAttribute('aria-pressed', String(s.stripId === _shown));
-    b.addEventListener('click', () => { _selected = s.stripId; renderParPanel(); });
-    picks.appendChild(b);
+  const sig = samples.length < 2 ? '' : samples.map(s => s.stripId).join(',');
+  if (picks.dataset.sig !== sig) {
+    // rebuilt only when the flights change, never under a click
+    picks.dataset.sig = sig;
+    picks.textContent = '';
+    if (!sig) return;
+    for (const s of samples) {
+      const b = _el('button', 'par-pick', '');
+      b.type = 'button';
+      b.dataset.parPick = s.stripId;
+      b.addEventListener('click', () => { _selected = s.stripId; renderParPanel(); });
+      picks.appendChild(b);
+    }
+  }
+  for (const b of picks.children) {
+    const s = samples.find(x => x.stripId === b.dataset.parPick);
+    const name = (s && parFlightOf(s.stripId, approachKindOf(s)).name) || b.dataset.parPick;
+    if (b.textContent !== name) b.textContent = name;
+    b.setAttribute('aria-pressed', String(b.dataset.parPick === _shown));
   }
 }
 
