@@ -86,15 +86,6 @@ test('coverage: 20 NM, 15 degrees either side, -1 to +7 degrees from an antenna 
   assert.equal(par.inCoverage(RWY, at(RWY, -3), COV), false, 'behind the antenna');
 });
 
-test('the carrier touchdown point: aft along the ship\'s heading and to port', () => {
-  const ship = { shipLat: 35, shipLon: 33 };
-  const north = par.carrierTouchdown({ ...ship, headingTrueDeg: 0, aftM: 90, portM: 10 });
-  assert.ok(north.lat < 35 && Math.abs((35 - north.lat) * 111195 - 90) < 0.5, 'aft = south when heading north');
-  assert.ok(north.lon < 33, 'port = west when heading north');
-  const east = par.carrierTouchdown({ ...ship, headingTrueDeg: 90, aftM: 90, portM: 10 });
-  assert.ok(east.lon < 33 && east.lat > 35, 'heading east: aft is west, port is north');
-});
-
 test('validateParApproaches: every key checked, ends must exist, null TDZE and null GPA allowed', () => {
   const ok = { label: 'PAR RWY 05', thresholdLat: 37, thresholdLon: 35, courseTrueDeg: 56, tdzeFt: null, tchFt: 50, decisionHeightFt: 200, glideslopeDeg: null };
   assert.equal(par.validateParApproaches({ _comment: 'x', '05': ok }, ['05', '23']), null);

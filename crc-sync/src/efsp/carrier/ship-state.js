@@ -32,7 +32,6 @@
 // on every crc-sync restart (docs/adr/0045).
 
 const { normDeg, gridToTrue, toMagnetic } = require('./angles');
-const { validateHullApproach } = require('../../surveillance/par'); // pure (docs/adr/0112)
 
 const SHIP_CATEGORY = 4; // DCS unit category for ships (radars.js uses the same test)
 const MS_TO_KT = 1.943844;
@@ -54,8 +53,7 @@ function _finite(v) {
 
 /**
  * HullConfig = { hullId, match: { unitName?, type?, coalition?: 'own'|'any' },
- *                angledDeckDeg: number, approach: { touchdownAftM, touchdownPortM, deckHeightFt, tchFt,
- *                decisionHeightFt, glideslopeDeg } (docs/adr/0112), label? }
+ *                angledDeckDeg: number, label? }
  */
 function validateHullConfig(hull) {
   if (!_isObj(hull)) return _fail('hull config must be an object');
@@ -70,8 +68,6 @@ function validateHullConfig(hull) {
     return _fail(`${hull.hullId}: angledDeckDeg is required: degrees to port in [0, 45), 0 for a straight deck (config/efsp-carriers.json, no per-type fallback)`);
   }
   if (hull.label != null && typeof hull.label !== 'string') return _fail(`${hull.hullId}: label must be a string`);
-  const approachProblem = validateHullApproach(hull.approach, hull.hullId);
-  if (approachProblem) return _fail(approachProblem);
   return { ok: true, hull };
 }
 

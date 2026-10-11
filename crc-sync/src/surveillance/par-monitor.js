@@ -5,28 +5,23 @@
 // Strip, and to nobody else (`WsHub#sendParSamples`).
 //
 // "On a final" is one Board fact: a FINAL Strip in state ON_FINAL in a Bay whose descriptor says `view: 'final'`
-// (Incirlik's `par-final`, the carrier's `cv-app1-final` / `cv-app2-final`; docs/adr/0075, 0093). Missed approach, Landing
-// assured, Ball and Waveoff all move the Strip out of that state, so its sample ends with the op that ended the talk-down,
-// and a Strip that comes back starts a fresh trail.
+// (Incirlik's `par-final`; docs/adr/0075, 0093) at an AIRFIELD Facility (one with `runwayStatus`). The PAR is an airfield
+// feature only (decisions H125, docs/adr/0116): the carrier's final Bays (`cv-app1-final` / `cv-app2-final`) get no sample.
+// Missed approach and Landing assured move the Strip out of that state, so its sample ends with the op that ended the
+// talk-down, and a Strip that comes back starts a fresh trail.
 //
-// The approach:
-//   - an airfield Facility: its `parApproaches` (Facility config) for the runway end the Strip lands on, resolved the way
-//     every other runway question is (runway-status.js resolveRunwayForStrip: the flight's assigned landing runway, else
-//     the active runway);
-//   - the CARRIER Facility: the hull's `approach` (config/efsp-carriers.json) on the LIVE ship track, matched each tick
-//     (the banner in the carrier store only republishes on a whole-degree BRC step, so its position can be minutes old).
+// The approach: the Facility's `parApproaches` (Facility config) for the runway end the Strip lands on, resolved the way
+// every other runway question is (runway-status.js resolveRunwayForStrip: the flight's assigned landing runway, else the
+// active runway).
 //
 // A plot is taken when DCS has moved the aircraft since the last one and it is inside the PAR's volume. Otherwise the
 // sample keeps its last plot and `plotAgeMs` grows: the client's "NO PLOT" after 3 s (H115) reads it. The age is a pure
 // duration on the injected wall clock (docs/adr/0096).
 
 const par = require('./par');
-const { matchHullTrack, displayBearing } = require('../efsp/carrier/ship-state');
-const { gridToTrue, normDeg } = require('../efsp/carrier/angles');
+const { displayBearing } = require('../efsp/carrier/ship-state');
 const { resolveRunwayForStrip } = require('../efsp/runway-status');
 const { WALL_CLOCK } = require('../mission-clock');
-
-const CARRIER_FACILITY = 'CARRIER';
 
 const _fin = (v) => typeof v === 'number' && Number.isFinite(v);
 
@@ -39,31 +34,27 @@ class ParMonitor {
    * @param {(flightDataId:string)=>string|null} d.correlatedTrackId
    * @param {(facilityId:string)=>object|null} d.runwayViewOf  runwayStatusStore.statusView
    * @param {(trackId:string)=>object|null} d.trackOf
-   * @param {()=>object[]} d.tracks          every live track (to find the ship)
-   * @param {object} [d.carrierStore]        hullIds(), hull(id), defaultHullId
-   * @param {()=>number|null} [d.ownCoalition]
-   * @param {(lat:number, lon:number)=>number|null} [d.convergenceAt]
    * @param {(lat:number, lon:number)=>number|null} [d.variationAt]
    * @param {(icao:string)=>number|null} [d.airportElevationFt] the DCS airfield elevation, for an approach with `tdzeFt: null`
    * @param {{now:()=>number}} [d.wallClock]
    * @param {object} d.tuning                par-tuning.js
    */
-  constructor({ facilityConfig, boardStoreFor, flightDataOf, correlatedTrackId, runwayViewOf, trackOf, tracks, carrierStore = null,
-    ownCoalition = () => null, convergenceAt = () => null, variationAt = () => null, airportElevationFt = () => null,
-    wallClock = WALL_CLOCK, tuning }) {
+  constructor({ facilityConfig, boardStoreFor, flightDataOf, correlatedTrackId, runwayViewOf, trackOf,
+    variationAt = () => null, airportElevationFt = () => null, wallClock = WALL_CLOCK, tuning }) {
     Object.assign(this, { _fc: facilityConfig, _board: boardStoreFor, _fd: flightDataOf, _corr: correlatedTrackId, _rwy: runwayViewOf,
-      _track: trackOf, _tracks: tracks, _carrier: carrierStore, _own: ownCoalition, _conv: convergenceAt, _var: variationAt,
-      _aptElev: airportElevationFt, _wall: wallClock, _tuning: tuning });
+      _track: trackOf, _var: variationAt, _aptElev: airportElevationFt, _wall: wallClock, _tuning: tuning });
     this._state = new Map(); // `${facilityId}:${stripId}` -> { fix, plot, plotAt, trail }
   }
 
   /** How often the hub should run `tick()` (config/par.json). */
   get sampleMs() { return this._tuning.sampleMs; }
 
-  /** The final Bays: [{ facilityId, bayId, positionId }]. Read from the config each tick (cheap) so a test reload is seen. */
+  /** The final Bays at airfield Facilities: [{ facilityId, bayId, positionId }]. Read from the config each tick (cheap) so a test reload is seen. */
   _finalBays() {
     const out = [];
     for (const facilityId of this._fc.getFacilityIds()) {
+      const cfg = this._fc.getFacilityConfig(facilityId);
+      if (!cfg || !cfg.runwayStatus) continue; // not an airfield: no PAR (H125)
       for (const bay of this._fc.getAllBays(facilityId)) if (bay.view === 'final') out.push({ facilityId, bayId: bay.bayId, positionId: bay.positionId });
     }
     return out;
@@ -74,7 +65,6 @@ class ParMonitor {
     const now = this._wall.now();
     const seen = new Set();
     const out = [];
-    const carrierGeom = new Map(); // hullId -> geometry, once per tick
     for (const { facilityId, bayId } of this._finalBays()) {
       const board = this._board(facilityId);
       if (!board) continue;
@@ -82,8 +72,7 @@ class ParMonitor {
         if (strip.bayId !== bayId || strip.stripType !== 'FINAL' || strip.state !== 'ON_FINAL') continue;
         const key = `${facilityId}:${strip.stripId}`;
         seen.add(key);
-        const geom = facilityId === CARRIER_FACILITY ? this._carrierGeometry(carrierGeom) : this._runwayGeometry(facilityId, strip);
-        out.push(this._sample(key, facilityId, strip, geom, now));
+        out.push(this._sample(key, facilityId, strip, this._runwayGeometry(facilityId, strip), now));
       }
     }
     for (const key of [...this._state.keys()]) if (!seen.has(key)) this._state.delete(key);
@@ -140,7 +129,7 @@ class ParMonitor {
     const gpaDeg = published ? a.glideslopeDeg : this._tuning.defaultGlideslopeDeg;
     const v = this._var(a.thresholdLat, a.thresholdLon);
     const approach = {
-      id: `${icao || facilityId}-${r.end}`, kind: 'RUNWAY', label: a.label, runwayEnd: r.end, airportIcao: icao, hullId: null,
+      id: `${icao || facilityId}-${r.end}`, label: a.label, runwayEnd: r.end, airportIcao: icao,
       gpaDeg, gpaPublished: published, tchFt: a.tchFt, tdzeFt, dhFt: a.decisionHeightFt,
       daFt: tdzeFt === null ? null : tdzeFt + a.decisionHeightFt,
       courseTrueDeg: a.courseTrueDeg,
@@ -150,53 +139,6 @@ class ParMonitor {
     const sensor = tdzeFt === null ? { elevation: 'INOP', azimuth: 'OK', reason: 'NO_TDZE' } : { elevation: 'OK', azimuth: 'OK', reason: null };
     return { approach, ref, sensor };
   }
-
-  /** The carrier lane's approach on the live ship: the touchdown point moves with the ship, the course turns with it. */
-  _carrierGeometry(cache) {
-    const store = this._carrier;
-    const hullId = store ? store.defaultHullId : null;
-    if (cache.has(hullId)) return cache.get(hullId);
-    const hull = hullId ? store.hull(hullId) : null;
-    let geom;
-    if (!hull || !hull.approach) {
-      geom = { approach: null, ref: null, sensor: { elevation: 'INOP', azimuth: 'INOP', reason: 'NO_APPROACH' } };
-    } else {
-      const a = hull.approach;
-      const ship = matchHullTrack(hull, this._tracks() || [], { ownCoalition: this._own() });
-      const approach = {
-        id: hull.hullId, kind: 'CARRIER', label: hull.label || hull.hullId, runwayEnd: null, airportIcao: null, hullId: hull.hullId,
-        gpaDeg: a.glideslopeDeg, gpaPublished: true, tchFt: a.tchFt, tdzeFt: a.deckHeightFt, dhFt: a.decisionHeightFt,
-        daFt: a.deckHeightFt + a.decisionHeightFt, courseTrueDeg: null, courseDisplay: { value: null, ref: null },
-      };
-      if (!ship || !_fin(ship.lat) || !_fin(ship.lon)) {
-        geom = { approach, ref: null, sensor: { elevation: 'INOP', azimuth: 'INOP', reason: 'NO_SHIP' } };
-      } else {
-        // The live heading: DCS's grid heading made true with the grid convergence at the ship (H15); with no convergence
-        // the grid heading stands (a degree or two, a few metres at the touchdown point).
-        const grid = normDeg(ship.heading);
-        const gamma = this._conv(ship.lat, ship.lon);
-        const known = grid == null ? null : gridToTrue(grid, _fin(gamma) ? gamma : null);
-        const trueHdg = known ?? grid;
-        if (trueHdg == null) {
-          geom = { approach, ref: null, sensor: { elevation: 'INOP', azimuth: 'INOP', reason: 'NO_COURSE' } };
-        } else {
-          const td = par.carrierTouchdown({ shipLat: ship.lat, shipLon: ship.lon, headingTrueDeg: trueHdg, aftM: a.touchdownAftM, portM: a.touchdownPortM });
-          // The landing area's centreline: the hull's heading less the angled deck (ship-state.js computeFinalBearing).
-          const course = normDeg(trueHdg - hull.angledDeckDeg);
-          const v = this._var(ship.lat, ship.lon);
-          approach.courseTrueDeg = Math.round(course * 10) / 10;
-          approach.courseDisplay = displayBearing(course, { ref: known == null ? 'GRID' : 'TRUE', magneticVariationDeg: _fin(v) ? v : null });
-          geom = {
-            approach,
-            ref: { refLat: td.lat, refLon: td.lon, courseTrueDeg: course, tdzeFt: a.deckHeightFt, tchFt: a.tchFt, gpaDeg: a.glideslopeDeg },
-            sensor: { elevation: 'OK', azimuth: 'OK', reason: null },
-          };
-        }
-      }
-    }
-    cache.set(hullId, geom);
-    return geom;
-  }
 }
 
-module.exports = { ParMonitor, CARRIER_FACILITY };
+module.exports = { ParMonitor };

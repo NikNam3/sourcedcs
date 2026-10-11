@@ -5,12 +5,10 @@
 // the aircraft's position each tick and keeps the history; ws-hub.js sends the result to the Position that works the
 // final, and nobody else.
 //
-// The geometry of one approach is a REFERENCE POINT and a course:
-//   - a runway: the landing threshold (Facility config `parApproaches`, per runway end);
-//   - a carrier lane: the touchdown point on the angled deck, worked out from the ship's live position and heading and
-//     the hull's `approach` offsets (config/efsp-carriers.json), so it moves with the ship.
+// The geometry of one approach is a REFERENCE POINT and a course: the landing threshold (Facility config `parApproaches`,
+// per runway end). The PAR is an airfield feature only (decisions H125, docs/adr/0116): the carrier has none.
 // Range is measured ALONG the final approach course from that point (positive on the approach side), height above the
-// touchdown zone elevation (TDZE: the threshold for a runway, the flight deck for a carrier), and the glidepath passes
+// touchdown zone elevation (TDZE), and the glidepath passes
 // over the reference point at the threshold crossing height (TCH) at the glidepath angle (GPA). That is the model the
 // approved mockup draws (docs/mockups/par-panel.html rev 4: `gpHeight(r) = TCH + r * tan(GPA)`) and the one JO 7110.65
 // 5-12 speaks in ("(number of miles) MILES FROM TOUCHDOWN", deviations above/below glidepath, left/right of course).
@@ -29,18 +27,17 @@ const RAD = Math.PI / 180;
 /** The keys of one sample entry, in wire order (tools/wire-surface.js records them). */
 const SAMPLE_KEYS = Object.freeze(['stripId', 'facilityId', 'positionId', 'approach', 'sensor', 'plot', 'plotAgeMs', 'trail']);
 /** The keys of `approach`. */
-const APPROACH_KEYS = Object.freeze(['id', 'kind', 'label', 'runwayEnd', 'airportIcao', 'hullId', 'gpaDeg', 'gpaPublished', 'tchFt', 'tdzeFt', 'dhFt', 'daFt', 'courseTrueDeg', 'courseDisplay']);
+const APPROACH_KEYS = Object.freeze(['id', 'label', 'runwayEnd', 'airportIcao', 'gpaDeg', 'gpaPublished', 'tchFt', 'tdzeFt', 'dhFt', 'daFt', 'courseTrueDeg', 'courseDisplay']);
 /** The keys of `plot` (and of each `trail` entry, which has no gsKt / vsFpm). */
 const PLOT_KEYS = Object.freeze(['rangeNm', 'heightFt', 'elevDeg', 'elevDevDeg', 'elevDevFt', 'azDeg', 'azDevFt', 'gsKt', 'vsFpm']);
 const TRAIL_KEYS = Object.freeze(['rangeNm', 'heightFt', 'elevDeg', 'elevDevDeg', 'elevDevFt', 'azDeg', 'azDevFt']);
 /** Why a scope is INOP. */
-const INOP_REASONS = Object.freeze(['NO_APPROACH', 'NO_SHIP', 'NO_TDZE', 'NO_COURSE']);
+const INOP_REASONS = Object.freeze(['NO_APPROACH', 'NO_TDZE']);
 
 const _fin = (v) => typeof v === 'number' && Number.isFinite(v);
 const _r = (v, step) => (_fin(v) ? Math.round(v / step) * step + 0 : null); // + 0: never -0 on the wire
 const _r2 = (v) => (_fin(v) ? Math.round(v * 100) / 100 + 0 : null);
 const _r0 = (v) => (_fin(v) ? Math.round(v) + 0 : null);
-const normDeg = (d) => ((d % 360) + 360) % 360;
 
 /** A point `distM` metres from (lat, lon) on true bearing `brgDeg` (great circle; exact enough for a few hundred metres or 20 NM). */
 function offsetPoint(lat, lon, brgDeg, distM) {
@@ -60,15 +57,6 @@ function enuM(ref, p) {
   const d = 2 * EARTH_R_M * Math.asin(Math.min(1, Math.sqrt(a)));
   const brg = Math.atan2(Math.sin(dLo) * Math.cos(la2), Math.cos(la1) * Math.sin(la2) - Math.sin(la1) * Math.cos(la2) * Math.cos(dLo));
   return { e: d * Math.sin(brg), n: d * Math.cos(brg) };
-}
-
-/**
- * Where the carrier's touchdown point is now: `aftM` behind the ship's DCS position along its heading and `portM` to its
- * left. `headingTrueDeg` is the ship's live heading (the hull, not the BRC a controller typed).
- */
-function carrierTouchdown({ shipLat, shipLon, headingTrueDeg, aftM, portM }) {
-  const aft = offsetPoint(shipLat, shipLon, normDeg(headingTrueDeg + 180), aftM);
-  return portM ? offsetPoint(aft.lat, aft.lon, normDeg(headingTrueDeg - 90), portM) : aft;
 }
 
 /**
@@ -155,7 +143,6 @@ function trailEntry(plot) {
 // ── Approach geometry config ───────────────────────────────────────────────
 
 const RUNWAY_APPROACH_KEYS = Object.freeze(['label', 'thresholdLat', 'thresholdLon', 'courseTrueDeg', 'tdzeFt', 'tchFt', 'decisionHeightFt', 'glideslopeDeg']);
-const HULL_APPROACH_KEYS = Object.freeze(['touchdownAftM', 'touchdownPortM', 'deckHeightFt', 'tchFt', 'decisionHeightFt', 'glideslopeDeg']);
 const GPA_MIN = 2, GPA_MAX = 4.5;
 
 const _num = (v, lo, hi) => _fin(v) && v >= lo && v <= hi;
@@ -187,23 +174,9 @@ function validateParApproaches(cfg, ends) {
   return null;
 }
 
-/** A hull's `approach` (required on every hull): where the touchdown point is on the ship and the glideslope. Problem string or null. */
-function validateHullApproach(a, hullId) {
-  const at = `${hullId}: approach`;
-  if (!a || typeof a !== 'object' || Array.isArray(a)) return `${at} is required: { ${HULL_APPROACH_KEYS.join(', ')} } (config/efsp-carriers.json, docs/adr/0112)`;
-  for (const k of Object.keys(a)) if (!k.startsWith('_') && !HULL_APPROACH_KEYS.includes(k)) return `${at}: unknown key ${k}`;
-  if (!_num(a.touchdownAftM, -200, 400)) return `${at}.touchdownAftM must be metres aft of the DCS unit position, -200 to 400`;
-  if (!_num(a.touchdownPortM, -100, 100)) return `${at}.touchdownPortM must be metres to port of the DCS unit position, -100 to 100`;
-  if (!_num(a.deckHeightFt, 0, 200)) return `${at}.deckHeightFt must be feet above the sea, 0 to 200`;
-  if (!_num(a.tchFt, 0, 200)) return `${at}.tchFt must be feet from 0 to 200`;
-  if (!_num(a.decisionHeightFt, 50, 1000)) return `${at}.decisionHeightFt must be feet above the deck, 50 to 1000`;
-  if (!_num(a.glideslopeDeg, GPA_MIN, GPA_MAX)) return `${at}.glideslopeDeg must be degrees from ${GPA_MIN} to ${GPA_MAX}`;
-  return null;
-}
-
 module.exports = {
-  SAMPLE_KEYS, APPROACH_KEYS, PLOT_KEYS, TRAIL_KEYS, INOP_REASONS, RUNWAY_APPROACH_KEYS, HULL_APPROACH_KEYS,
+  SAMPLE_KEYS, APPROACH_KEYS, PLOT_KEYS, TRAIL_KEYS, INOP_REASONS, RUNWAY_APPROACH_KEYS,
   FT_PER_M, FT_PER_NM,
-  offsetPoint, carrierTouchdown, measure, inCoverage, trailEntry,
-  validateParApproaches, validateHullApproach,
+  offsetPoint, measure, inCoverage, trailEntry,
+  validateParApproaches,
 };

@@ -75,20 +75,15 @@ test('the shipped hull is CVN-72 unit UNION (decisions H13/H26) and validates', 
   assert.equal(DEFAULT_HULL.angledDeckDeg, 9);
 });
 
-// Every hull carries its PAR approach geometry (docs/adr/0112).
-const APPROACH = { touchdownAftM: 90, touchdownPortM: 10, deckHeightFt: 66, tchFt: 0, decisionHeightFt: 200, glideslopeDeg: 3.5 };
-
 test('validateHullConfig refusals', () => {
   assert.equal(validateHullConfig(null).ok, false);
   assert.equal(validateHullConfig({ hullId: '', match: { type: 'CVN_72' } }).ok, false);
   assert.match(validateHullConfig({ hullId: 'X', match: {} }).detail, /never a track id/);
   assert.equal(validateHullConfig({ hullId: 'X', match: { type: 'CVN_72', coalition: 'blue' }, angledDeckDeg: 9 }).ok, false);
   assert.equal(validateHullConfig({ hullId: 'X', match: { type: 'CVN_72' }, angledDeckDeg: -1 }).ok, false);
-  assert.equal(validateHullConfig({ hullId: 'X', match: { type: 'CVN_72' }, angledDeckDeg: 8.5, approach: APPROACH }).ok, true);
-  // docs/adr/0112: the approach is required, every key checked, no unknown key
-  assert.match(validateHullConfig({ hullId: 'X', match: { type: 'CVN_72' }, angledDeckDeg: 9 }).detail, /approach is required/);
-  assert.match(validateHullConfig({ hullId: 'X', match: { type: 'CVN_72' }, angledDeckDeg: 9, approach: { ...APPROACH, glideslopeDeg: 6 } }).detail, /glideslopeDeg/);
-  assert.match(validateHullConfig({ hullId: 'X', match: { type: 'CVN_72' }, angledDeckDeg: 9, approach: { ...APPROACH, tdze: 1 } }).detail, /unknown key tdze/);
+  assert.equal(validateHullConfig({ hullId: 'X', match: { type: 'CVN_72' }, angledDeckDeg: 8.5 }).ok, true);
+  // docs/adr/0116 (H125): the carrier has no PAR, so a hull needs no approach geometry; a hull without one starts again.
+  assert.equal(validateHullConfig({ hullId: 'X', match: { type: 'CVN_72' }, angledDeckDeg: 9 }).ok, true);
 });
 
 test('computeFinalBearing: BRC − angled deck, with the wrap (BRC 5, offset 9 → 356)', () => {
@@ -159,7 +154,7 @@ test('matchHullTrack: by unit name, by type, ambiguous type → null, non-ships 
   const plane = ship({ id: 103, name: 'UNION', category: 0 });
   const red = ship({ id: 104, name: 'UNION', coalition: RED });
   assert.equal(matchHullTrack(DEFAULT_HULL, [plane, other, union, red], { ownCoalition: BLUE }), union, 'unit name first');
-  const byType = { hullId: 'H', match: { type: 'CVN_72' }, angledDeckDeg: 9, approach: APPROACH };
+  const byType = { hullId: 'H', match: { type: 'CVN_72' }, angledDeckDeg: 9 };
   assert.equal(matchHullTrack(byType, [union], { ownCoalition: BLUE }), union);
   assert.equal(matchHullTrack(byType, [union, other], { ownCoalition: BLUE }), null, 'ambiguous → no guess');
   assert.equal(hullMatchProblem(byType, [union, other], { ownCoalition: BLUE }), 'hull ambiguous — configure unitName');
@@ -169,7 +164,7 @@ test('matchHullTrack: by unit name, by type, ambiguous type → null, non-ships 
   assert.equal(matchHullTrack(DEFAULT_HULL, [red], { ownCoalition: BLUE }), null, 'own coalition only');
   assert.equal(matchHullTrack(DEFAULT_HULL, [union], {}), null, 'unknown own coalition matches nothing');
   assert.equal(hullMatchProblem(DEFAULT_HULL, [union], {}), 'own coalition unknown');
-  const any = { hullId: 'H', match: { unitName: 'UNION', coalition: 'any' }, angledDeckDeg: 9, approach: APPROACH };
+  const any = { hullId: 'H', match: { unitName: 'UNION', coalition: 'any' }, angledDeckDeg: 9 };
   assert.equal(matchHullTrack(any, [red], {}), red);
   assert.equal(matchHullTrack(DEFAULT_HULL, new Map([[1, union]]).values(), { ownCoalition: BLUE }), union, 'any iterable');
   assert.equal(hullMatchProblem(DEFAULT_HULL, [], { ownCoalition: BLUE }), 'hull not found');
