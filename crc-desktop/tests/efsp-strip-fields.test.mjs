@@ -203,15 +203,18 @@ test('ALERT (14E) is on OPS, CD, GC and LC — the ground Positions — and nowh
 });
 
 // H122 (H117, crc-sync docs/adr/0114): on a carrier Strip the side number and the callsign swap places.
+const CARRIER_OWNER = { MARSHAL: 'CV_MARSHAL', FINAL: 'CV_APP1', PATTERN: 'CV_PRIFLY' };
+
 test('a carrier Strip with a side number leads with it in the callsign\'s slot and width; the callsign takes SIDE\'s', () => {
   const withSide = { military: { carrier: { sideNumber: '104' } } };
   for (const stripType of ['MARSHAL', 'FINAL']) {
-    const plain = compactBlocksFor(stripType, 'CV_MARSHAL', null);
-    const swapped = compactBlocksFor(stripType, 'CV_MARSHAL', withSide);
+    const owner = CARRIER_OWNER[stripType];
+    const plain = compactBlocksFor(stripType, owner, null);
+    const swapped = compactBlocksFor(stripType, owner, withSide);
     assert.equal(swapped[plain.indexOf('C1')], 'C18', stripType);
     assert.equal(swapped[plain.indexOf('C18')], 'C1', stripType);
     assert.deepEqual([...swapped].sort(), [...plain].sort(), `${stripType}: the same fields, only two moved`);
-    assert.equal(sideNumberLeads(stripType, withSide), true);
+    assert.equal(sideNumberLeads(stripType, owner, withSide), true);
   }
   assert.equal(fieldSpanFor('C18', true), fieldSpanFor('C1'));
   assert.equal(fieldSpanFor('C1', true), fieldSpanFor('C18'));
@@ -219,14 +222,33 @@ test('a carrier Strip with a side number leads with it in the callsign\'s slot a
   assert.equal(fieldSpanFor('C18'), 1);
 });
 
-test('no side number yet: the callsign keeps the big slot; non-carrier and PATTERN Strips never swap', () => {
+test('every carrier strip type has a side number Block, so every carrier Strip can swap', () => {
+  for (const stripType of Object.keys(CARRIER_OWNER)) {
+    assert.ok(BLOCK_MAPS[stripType].C1 && BLOCK_MAPS[stripType].C18, stripType);
+    assert.equal(sideNumberLeads(stripType, CARRIER_OWNER[stripType], { military: { carrier: { sideNumber: '104' } } }), true, stripType);
+  }
+});
+
+test('a carrier PATTERN Strip: SIDE only on the face once it leads, then first; the callsign after TYPE', () => {
+  const withSide = { military: { carrier: { sideNumber: '104' } } };
+  assert.deepEqual(compactBlocksFor('PATTERN', 'CV_PRIFLY', null), ['C1', 'C2', 'C24']);
+  assert.deepEqual(compactBlocksFor('PATTERN', 'CV_PRIFLY', withSide), ['C18', 'C2', 'C1', 'C24']);
+});
+
+test('no side number yet: the callsign keeps the big slot; non-carrier Strips and Incirlik\'s FINAL/PATTERN never swap', () => {
   for (const fd of [null, {}, { military: { carrier: {} } }, { military: { carrier: { sideNumber: '  ' } } }]) {
-    assert.equal(sideNumberLeads('MARSHAL', fd), false);
-    assert.equal(compactBlocksFor('MARSHAL', 'CV_MARSHAL', fd)[0], 'C1');
+    for (const stripType of Object.keys(CARRIER_OWNER)) {
+      assert.equal(sideNumberLeads(stripType, CARRIER_OWNER[stripType], fd), false, stripType);
+      assert.equal(compactBlocksFor(stripType, CARRIER_OWNER[stripType], fd)[0], 'C1', stripType);
+    }
   }
   const withSide = { military: { carrier: { sideNumber: '104' } } };
-  for (const stripType of ['PATTERN', 'DEPARTURE', 'ARRIVAL', 'OVERFLIGHT', 'MISSION']) {
-    assert.equal(sideNumberLeads(stripType, withSide), false, stripType);
+  for (const stripType of ['DEPARTURE', 'ARRIVAL', 'OVERFLIGHT', 'MISSION']) {
+    assert.equal(sideNumberLeads(stripType, 'AP', withSide), false, stripType);
   }
-  assert.deepEqual(compactBlocksFor('PATTERN', 'CV_PRIFLY', withSide), compactBlocksFor('PATTERN', 'CV_PRIFLY', null));
+  // PAR (FINAL) and RSU (PATTERN) are Incirlik's: the same strip types, not carrier Strips.
+  assert.equal(sideNumberLeads('FINAL', 'PAR', withSide), false);
+  assert.deepEqual(compactBlocksFor('FINAL', 'PAR', withSide), compactBlocksFor('FINAL', 'PAR', null));
+  assert.equal(sideNumberLeads('PATTERN', 'RSU', withSide), false);
+  assert.deepEqual(compactBlocksFor('PATTERN', 'RSU', withSide), ['C1', 'C2', 'C24']);
 });

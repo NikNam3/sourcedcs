@@ -108,7 +108,7 @@ function _buildStripTab(strip, arrival) {
 function _buildStripFields(strip) {
   const grid = _stripEl('div', 'efsp-strip-fields');
   const flightData = getEfspFlightData(strip.flightDataId);
-  const sideLeads = sideNumberLeads(strip.stripType, flightData); // H122: on a carrier Strip the side number has the callsign's slot
+  const sideLeads = sideNumberLeads(strip.stripType, strip.ownerPositionId, flightData); // H122: on a carrier Strip the side number has the callsign's slot
   for (const id of compactBlocksFor(strip.stripType, strip.ownerPositionId, flightData)) {
     const span = fieldSpanFor(id, sideLeads);
     const chip = _stripEl('span', `efsp-block-chip efsp-field${span > 1 ? ' efsp-field-w' + span : ''}`);

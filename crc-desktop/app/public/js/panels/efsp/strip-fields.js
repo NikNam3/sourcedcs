@@ -24,6 +24,7 @@
 // as an unlabelled field.
 import { BLOCK_MAPS } from './strip-template.js';
 import { hasMtrData } from './mtr-advisory.js';
+import { facilityOfPosition } from './facility-topology.js';
 
 export const COMPACT_BLOCKS_SHARED = [
   '1', '3', '5', '5A', '7', '8', '8A', '8B', '9', '22', '24A', 'IFR', 'RSVC', 'SREG',
@@ -45,9 +46,10 @@ export const COMPACT_BLOCKS_BY_STRIP_TYPE = {
   // enters for the flight (approach, button, low state, bingo, EEAT). EEAT is on
   // the face because it is "the field most likely to be missed" (§9.12 rule 7).
   // FINAL has nothing to type: callsign, type, final bearing, deck, distance.
+  // PATTERN's SIDE (C18) is read-only and drawn only once it leads (SIDE_ONLY_WHEN_LEADING).
   MARSHAL:    ['C1', 'C2', 'C18', 'C3', 'C7', 'C6', 'C8', 'C5', 'C9', 'C4', 'C10', 'C12', 'C13', 'C14', 'C15', 'C19'],
   FINAL:      ['C1', 'C2', 'C18', 'C9', 'C16', 'C17', 'C19'],
-  PATTERN:    ['C1', 'C2', 'C24'],
+  PATTERN:    ['C1', 'C2', 'C18', 'C24'],
 };
 
 // ── Per-Position lists ─────────────────────────────────────────────────────
@@ -127,8 +129,10 @@ export function compactBlocksFor(stripType, positionId, flightData) {
     ? MTR_BLOCKS_BY_POSITION[stripType][positionId] : null;
   if (mtr) list = [...list, ...mtr];
   const map = _blockMapFor(stripType);
-  const out = map ? list.filter(id => Object.prototype.hasOwnProperty.call(map, id)) : list;
-  return sideNumberLeads(stripType, flightData) ? _swapSideAndCallsign(out) : out;
+  let out = map ? list.filter(id => Object.prototype.hasOwnProperty.call(map, id)) : list;
+  const sideLeads = sideNumberLeads(stripType, positionId, flightData);
+  if (!sideLeads && SIDE_ONLY_WHEN_LEADING.includes(stripType)) out = out.filter(id => id !== 'C18');
+  return sideLeads ? _swapSideAndCallsign(out) : out;
 }
 
 // ── The carrier's side number (decisions.md H122, H117; crc-sync's docs/adr/0114) ──
@@ -137,11 +141,16 @@ export function compactBlocksFor(stripType, positionId, flightData) {
 // the side number (C18) takes the callsign's slot (C1's place and width) and the
 // callsign takes the side number's. Only once a side number is typed: until then
 // the callsign keeps the big slot, so a Strip is never led by an empty field.
-// Every strip type whose Block Map has both C1 and C18 is a carrier Strip that
-// swaps (MARSHAL, FINAL); PATTERN has no side number Block and is unchanged.
-export function sideNumberLeads(stripType, flightData) {
+// A carrier Strip is one owned by a CARRIER Position (MARSHAL, FINAL, PATTERN):
+// FINAL and PATTERN are also Incirlik's strip types (PAR, RSU), which never swap.
+// PATTERN's SIDE is read-only, so it is on the face only while it leads: an RSU
+// Strip, or a carrier one with no side number, looks as it always did.
+export const SIDE_ONLY_WHEN_LEADING = ['PATTERN'];
+
+export function sideNumberLeads(stripType, positionId, flightData) {
   const map = _blockMapFor(stripType);
   if (!map || !map.C1 || !map.C18) return false;
+  if (facilityOfPosition(positionId) !== 'CARRIER') return false;
   const carrier = flightData && flightData.military && flightData.military.carrier;
   return !!(carrier && String(carrier.sideNumber || '').trim());
 }

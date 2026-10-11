@@ -183,6 +183,13 @@ test('searchEfspStrips matches beacon code as a substring', () => {
   assert.deepEqual(searchEfspStrips('234').map(s => s.stripId), ['s1']);
 });
 
+test('searchEfspStrips matches a carrier side number (H117/H122: the carrier names an aircraft by it)', () => {
+  const fd = { ...flightData(), military: { carrier: { sideNumber: '407' } } };
+  applyEfspSnapshot({ boardSeq: 1, strips: [strip({ flightDataId: 'f1' })], flightDataList: [fd], positions: [] });
+  assert.deepEqual(searchEfspStrips('407').map(s => s.stripId), ['s1']);
+  assert.deepEqual(searchEfspStrips('408'), []);
+});
+
 test('searchEfspStrips with an empty or whitespace-only query returns no results, not everything', () => {
   applyEfspSnapshot({ boardSeq: 1, strips: [strip({ flightDataId: 'f1' })], flightDataList: [flightData()], positions: [] });
   assert.deepEqual(searchEfspStrips(''), []);
