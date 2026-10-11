@@ -44,6 +44,9 @@ const MODULES = {
   airspaceLayer: '/js/airspace-layer.js',
   msgRegistry: '/js/panels/efsp/efsp-message-registry.js',
   carrierMap: '/js/panels/efsp/carrier-map-panel.js', // crc.carrierMap.renderCarrierMap, carrierMapGeometry
+  par: '/js/panels/efsp/par-panel.js', // crc.par.parPanelView, parShownStripId, showParFlight
+  parSamples: '/js/panels/efsp/par-samples.js', // crc.parSamples.applyParSamples (a spec injects a PAR sample)
+  changeBus: '/js/panels/efsp/efsp-change-bus.js', // crc.changeBus.markEfspChanged
 };
 
 /** Runs after page.goto('/'). Resolves once every module is imported and `window.crc` exists. */
