@@ -31,6 +31,7 @@ const authority = require('./authority');
 const carrierHulls = require('./carrier/hull-config');
 const { loadRecoveryTuning } = require('./carrier/recovery-tuning');
 const log = require('../log').logger('efsp:stores');
+const { anyOf, arrayOf, mapOf, checkShape } = require('../persisted-shape');
 
 // The Blocks that held the assigned altitude and heading as Strip annotations before docs/adr/0058 moved them onto
 // the flight record. A Strip that still has history in one is the old shape: the migration that moved it is gone
@@ -273,14 +274,7 @@ const REGISTRY = [
 // an unknown persisted shape and stops start-up, naming the file and the key path, before any store restores (the
 // file is left untouched). It catches a snapshot written in the old vocabulary (`fdrs`, `fdrId`, `role`, ...), which
 // would otherwise restore half-read. A future persisted `version` key (S3-4) would pick one of several such shapes.
-//
-//   true          any value, not looked into
-//   { k: shape }  an object whose keys must be among these
-//   { '[]': s }   an array; each object element has shape s
-//   { '*': s }    an object keyed by ids (Facilities, Block ids, Position ids, stacks); each value has shape s
-const anyOf = (...names) => Object.fromEntries(names.map(n => [n, true]));
-const arrayOf = (shape) => ({ '[]': shape });
-const mapOf = (shape) => ({ '*': shape });
+// The shape notation (true, { k }, '[]', '*') is persisted-shape.js's.
 
 const STRIP_HANDOFF = anyOf('at', 'by', 'from', 'fromStripType', 'kind', 'label', 'to', 'toStripType', 'trigger', 'frequencyRackId');
 const STRIP_SHAPE = {
@@ -370,23 +364,12 @@ const PERSISTED_SHAPE = { persistedWallAt: true, ...Object.fromEntries(REGISTRY.
 
 /** Throws naming `file` and the first key path the shape does not know. */
 function checkPersistedShape(data, file, shape = PERSISTED_SHAPE) {
-  const walk = (v, s, at) => {
-    if (s === true || v === null || typeof v !== 'object') return;
-    if (Array.isArray(v)) {
-      // An array where the shape expects an object is an older shape (e.g. the pre-ADR-0098 airspaces array): refused, never half read.
-      if (!s['[]']) throw new Error(`[efsp] the Board snapshot ${file} holds an array at "${at}", which this build keeps as an object (an unknown persisted shape, H88; an older build's?): delete state/efsp-board.json and state/efsp-mutations.jsonl to start clean`);
-      v.forEach(e => walk(e, s['[]'], `${at}[]`));
-      return;
-    }
-    for (const [k, child] of Object.entries(v)) {
-      const sub = s['*'] || (Object.prototype.hasOwnProperty.call(s, k) ? s[k] : undefined);
-      if (sub === undefined) {
-        throw new Error(`[efsp] the Board snapshot ${file} has an unknown key "${at ? `${at}.` : ''}${k}" (an unknown persisted shape, H88; an older build's names?): delete state/efsp-board.json and state/efsp-mutations.jsonl to start clean`);
-      }
-      walk(child, sub, at ? `${at}.${k}` : k);
-    }
-  };
-  walk(data, shape, '');
+  const fix = 'delete state/efsp-board.json and state/efsp-mutations.jsonl to start clean';
+  checkShape(data, shape, {
+    // An array where the shape expects an object is an older shape (e.g. the pre-ADR-0098 airspaces array): refused, never half read.
+    arrayWhereObject: (at) => new Error(`[efsp] the Board snapshot ${file} holds an array at "${at}", which this build keeps as an object (an unknown persisted shape, H88; an older build's?): ${fix}`),
+    unknownKey: (at) => new Error(`[efsp] the Board snapshot ${file} has an unknown key "${at}" (an unknown persisted shape, H88; an older build's names?): ${fix}`),
+  });
 }
 
 // The stores that resync by snapshot slice (docs/adr/0106): the registry entries with a `sync` declaration, with the
