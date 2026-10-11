@@ -117,6 +117,7 @@ function panelControlRows() {
     { id: 'carrier',  label: PANEL_TITLES.carrier },
     { id: 'marshal',  label: PANEL_TITLES.marshal },
     { id: 'carrierMap', label: PANEL_TITLES.carrierMap },
+    { id: 'par',      label: PANEL_TITLES.par },
     { id: 'metrics',  label: PANEL_TITLES.metrics },
   ];
 }
