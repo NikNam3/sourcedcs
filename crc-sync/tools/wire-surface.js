@@ -89,6 +89,7 @@ function frameKeys() {
     'apt-config': keys(hub._aptConfigMsg()),
     'init': keys(hub._initMsg()),
     'update-required': keys(new WsHub({ trackStore: new TrackStore(), collabStore: new Collab(), downloadUrl: 'x' })._updateRequiredMsg(1)),
+    'par-sample': keys(hub._parSampleMsg([])),
     // Every store delta, from the builder the server sends it with (frames.js; the airspace delta is built in its family).
     'efsp-board-delta': keys(frames.boardDelta(null, stubStore(), 'F', [], [], [], ['gone'])),
     'efsp-airspace-delta': keys(airspaceDelta),
@@ -165,6 +166,12 @@ function storeSync() {
     .sort((a, b) => a.key.localeCompare(b.key));
 }
 
+// The PAR sample's entry, approach, plot and trail keys and the INOP reasons (docs/adr/0112), from the lists par.js builds them by.
+function parSurface() {
+  const par = require(path.join(SRC, 'surveillance', 'par.js'));
+  return { sample: [...par.SAMPLE_KEYS], approach: [...par.APPROACH_KEYS], plot: [...par.PLOT_KEYS], trail: [...par.TRAIL_KEYS], inopReasons: [...par.INOP_REASONS] };
+}
+
 function computeSurface() {
   const { clientToServer, serverToClient } = messageTypes();
   const { SFA_TRANSFERS } = require(path.join(EFSP, 'sfa.js'));
@@ -174,6 +181,7 @@ function computeSurface() {
     storeOpKinds: storeOpKinds(),
     carrier: carrierSurface(),
     sfaTransfers: keys(SFA_TRANSFERS),
+    par: parSurface(),
     storeSync: storeSync(),
     frameKeys: frameKeys(),
   };

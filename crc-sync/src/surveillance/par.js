@@ -1,0 +1,203 @@
+'use strict';
+
+// The PAR sample (docs/adr/0112): what a precision approach radar tells the controller working a final about the
+// aircraft on it. Pure: no clock, no store, no require of anything stateful. par-monitor.js feeds it the geometry and
+// the aircraft's position each tick and keeps the history; ws-hub.js sends the result to the Position that works the
+// final, and nobody else.
+//
+// The geometry of one approach is a REFERENCE POINT and a course:
+//   - a runway: the landing threshold (Facility config `parApproaches`, per runway end);
+//   - a carrier lane: the touchdown point on the angled deck, worked out from the ship's live position and heading and
+//     the hull's `approach` offsets (config/efsp-carriers.json), so it moves with the ship.
+// Range is measured ALONG the final approach course from that point (positive on the approach side), height above the
+// touchdown zone elevation (TDZE: the threshold for a runway, the flight deck for a carrier), and the glidepath passes
+// over the reference point at the threshold crossing height (TCH) at the glidepath angle (GPA). That is the model the
+// approved mockup draws (docs/mockups/par-panel.html rev 4: `gpHeight(r) = TCH + r * tan(GPA)`) and the one JO 7110.65
+// 5-12 speaks in ("(number of miles) MILES FROM TOUCHDOWN", deviations above/below glidepath, left/right of course).
+//
+// Every number in the sample is exact (to 1 ft, 0.01 NM, 0.01 degree): the PAR measures height itself. The 100 ft
+// rounding the radar picture applies (presentation.js) is a property of SSR Mode C, not of a PAR.
+
+const FT_PER_M = 3.28084;
+const FT_PER_NM = 6076.12;
+const M_PER_NM = 1852;
+const KT_PER_MS = 1.943844;
+const FPM_PER_MS = 196.8504;
+const EARTH_R_M = 6371008.8;
+const RAD = Math.PI / 180;
+
+/** The keys of one sample entry, in wire order (tools/wire-surface.js records them). */
+const SAMPLE_KEYS = Object.freeze(['stripId', 'facilityId', 'positionId', 'approach', 'sensor', 'plot', 'plotAgeMs', 'trail']);
+/** The keys of `approach`. */
+const APPROACH_KEYS = Object.freeze(['id', 'kind', 'label', 'runwayEnd', 'airportIcao', 'hullId', 'gpaDeg', 'gpaPublished', 'tchFt', 'tdzeFt', 'dhFt', 'daFt', 'courseTrueDeg', 'courseDisplay']);
+/** The keys of `plot` (and of each `trail` entry, which has no gsKt / vsFpm). */
+const PLOT_KEYS = Object.freeze(['rangeNm', 'heightFt', 'elevDeg', 'elevDevDeg', 'elevDevFt', 'azDeg', 'azDevFt', 'gsKt', 'vsFpm']);
+const TRAIL_KEYS = Object.freeze(['rangeNm', 'heightFt', 'elevDeg', 'elevDevDeg', 'elevDevFt', 'azDeg', 'azDevFt']);
+/** Why a scope is INOP. */
+const INOP_REASONS = Object.freeze(['NO_APPROACH', 'NO_SHIP', 'NO_TDZE', 'NO_COURSE']);
+
+const _fin = (v) => typeof v === 'number' && Number.isFinite(v);
+const _r = (v, step) => (_fin(v) ? Math.round(v / step) * step : null);
+const _r2 = (v) => (_fin(v) ? Math.round(v * 100) / 100 : null);
+const _r0 = (v) => (_fin(v) ? Math.round(v) : null);
+const normDeg = (d) => ((d % 360) + 360) % 360;
+
+/** A point `distM` metres from (lat, lon) on true bearing `brgDeg` (great circle; exact enough for a few hundred metres or 20 NM). */
+function offsetPoint(lat, lon, brgDeg, distM) {
+  const la = lat * RAD, lo = lon * RAD, b = brgDeg * RAD, dr = distM / EARTH_R_M;
+  const la2 = Math.asin(Math.sin(la) * Math.cos(dr) + Math.cos(la) * Math.sin(dr) * Math.cos(b));
+  const lo2 = lo + Math.atan2(Math.sin(b) * Math.sin(dr) * Math.cos(la), Math.cos(dr) - Math.sin(la) * Math.sin(la2));
+  return { lat: la2 / RAD, lon: lo2 / RAD };
+}
+
+/** East/north metres of `p` from `ref` (local tangent plane, under 0.1 % error inside 20 NM). */
+function enuM(ref, p) {
+  const midLat = ((ref.lat + p.lat) / 2) * RAD;
+  return { e: (p.lon - ref.lon) * RAD * EARTH_R_M * Math.cos(midLat), n: (p.lat - ref.lat) * RAD * EARTH_R_M };
+}
+
+/**
+ * Where the carrier's touchdown point is now: `aftM` behind the ship's DCS position along its heading and `portM` to its
+ * left. `headingTrueDeg` is the ship's live heading (the hull, not the BRC a controller typed).
+ */
+function carrierTouchdown({ shipLat, shipLon, headingTrueDeg, aftM, portM }) {
+  const aft = offsetPoint(shipLat, shipLon, normDeg(headingTrueDeg + 180), aftM);
+  return portM ? offsetPoint(aft.lat, aft.lon, normDeg(headingTrueDeg - 90), portM) : aft;
+}
+
+/**
+ * One measurement of an aircraft against one approach.
+ * @param {object} g geometry { refLat, refLon, courseTrueDeg|null, tdzeFt|null, tchFt, gpaDeg }
+ * @param {object} p the aircraft { lat, lon, altFt (true MSL, exact), gsMs?, vsMs? }
+ * @returns {object} a `plot` (PLOT_KEYS). With no course, range is the straight-line distance and the azimuth is null;
+ *   with no TDZE, the height and every elevation figure are null. Past the reference point (range <= 0) there is no
+ *   angle, only feet.
+ */
+function measure(g, p) {
+  const v = enuM({ lat: g.refLat, lon: g.refLon }, p);
+  let alongM, crossM = null;
+  if (_fin(g.courseTrueDeg)) {
+    const c = g.courseTrueDeg * RAD;
+    // The aircraft flies the course TOWARDS the reference point, so it is on the approach side when its offset points
+    // against the course. Right of course (as the pilot sees it) is the course + 90 direction.
+    alongM = -(v.e * Math.sin(c) + v.n * Math.cos(c));
+    crossM = v.e * Math.cos(c) - v.n * Math.sin(c);
+  } else {
+    alongM = Math.hypot(v.e, v.n);
+  }
+  const alongFt = alongM * FT_PER_M;
+  const heightFt = _fin(g.tdzeFt) && _fin(p.altFt) ? p.altFt - g.tdzeFt : null;
+  const ahead = alongFt > 0;
+  let elevDeg = null, elevDevDeg = null, elevDevFt = null;
+  if (heightFt !== null) {
+    if (ahead) {
+      elevDeg = Math.atan2(heightFt - g.tchFt, alongFt) / RAD;
+      elevDevDeg = elevDeg - g.gpaDeg;
+      elevDevFt = heightFt - (g.tchFt + alongFt * Math.tan(g.gpaDeg * RAD));
+    } else {
+      elevDevFt = heightFt - g.tchFt; // over or past the threshold: against the crossing height
+    }
+  }
+  const crossFt = crossM === null ? null : crossM * FT_PER_M;
+  const azDeg = crossFt !== null && ahead ? Math.atan2(crossFt, alongFt) / RAD : null;
+  return {
+    rangeNm: _r2(alongM / M_PER_NM),
+    heightFt: _r0(heightFt),
+    elevDeg: _r2(elevDeg),
+    elevDevDeg: _r2(elevDevDeg),
+    elevDevFt: _r0(elevDevFt),
+    azDeg: _r2(azDeg),
+    azDevFt: _r0(crossFt),
+    gsKt: _fin(p.gsMs) ? Math.round(p.gsMs * KT_PER_MS) : null,
+    vsFpm: _fin(p.vsMs) ? _r(p.vsMs * FPM_PER_MS, 10) : null,
+  };
+}
+
+/**
+ * Is the aircraft inside the PAR's coverage volume? The antenna is modelled at TDZE, `apexBeyondNm` beyond the reference
+ * point along the course (a PAR sits beside the touchdown zone, not on the threshold), and covers out to `rangeNm`,
+ * `azimuthHalfDeg` either side of the course and `elevationMinDeg` to `elevationMaxDeg` (config/par.json).
+ * With no course the azimuth limit is not applied; with no height the elevation limit is not.
+ */
+function inCoverage(g, p, cov) {
+  const v = enuM({ lat: g.refLat, lon: g.refLon }, p);
+  const apexFt = cov.apexBeyondNm * FT_PER_NM;
+  let alongFt, crossFt = 0;
+  if (_fin(g.courseTrueDeg)) {
+    const c = g.courseTrueDeg * RAD;
+    alongFt = -(v.e * Math.sin(c) + v.n * Math.cos(c)) * FT_PER_M + apexFt;
+    crossFt = (v.e * Math.cos(c) - v.n * Math.sin(c)) * FT_PER_M;
+  } else {
+    alongFt = Math.hypot(v.e, v.n) * FT_PER_M + apexFt;
+  }
+  if (!(alongFt > 0) || Math.hypot(alongFt, crossFt) > (cov.rangeNm + cov.apexBeyondNm) * FT_PER_NM) return false;
+  if (_fin(g.courseTrueDeg) && Math.abs(Math.atan2(crossFt, alongFt) / RAD) > cov.azimuthHalfDeg) return false;
+  if (_fin(g.tdzeFt) && _fin(p.altFt)) {
+    const el = Math.atan2(p.altFt - g.tdzeFt, alongFt) / RAD;
+    if (el < cov.elevationMinDeg || el > cov.elevationMaxDeg) return false;
+  }
+  return true;
+}
+
+/** A trail entry: the plot without the speeds. */
+function trailEntry(plot) {
+  const out = {};
+  for (const k of TRAIL_KEYS) out[k] = plot[k];
+  return out;
+}
+
+// ── Approach geometry config ───────────────────────────────────────────────
+
+const RUNWAY_APPROACH_KEYS = Object.freeze(['label', 'thresholdLat', 'thresholdLon', 'courseTrueDeg', 'tdzeFt', 'tchFt', 'decisionHeightFt', 'glideslopeDeg']);
+const HULL_APPROACH_KEYS = Object.freeze(['touchdownAftM', 'touchdownPortM', 'deckHeightFt', 'tchFt', 'decisionHeightFt', 'glideslopeDeg']);
+const GPA_MIN = 2, GPA_MAX = 4.5;
+
+const _num = (v, lo, hi) => _fin(v) && v >= lo && v <= hi;
+
+/**
+ * A Facility's `parApproaches` (optional): runway end -> the PAR approach to it. Every value is [SOURCE-DEFINED] until
+ * someone copies the plate. `tdzeFt` null means "the DCS airfield's elevation" (what the aircraft actually fly over);
+ * `glideslopeDeg` null means "no published angle": the controller's default applies (H116). Returns a problem string or null.
+ * @param {object} cfg the `parApproaches` value
+ * @param {string[]} ends every runway end the Facility's `runwayStatus` names
+ */
+function validateParApproaches(cfg, ends) {
+  if (!cfg || typeof cfg !== 'object' || Array.isArray(cfg)) return 'parApproaches must be an object keyed by runway end';
+  for (const [end, a] of Object.entries(cfg)) {
+    if (end.startsWith('_')) continue;
+    const at = `parApproaches.${end}`;
+    if (!ends.includes(end)) return `${at}: no runway end ${end} in runwayStatus`;
+    if (!a || typeof a !== 'object' || Array.isArray(a)) return `${at} must be an object`;
+    for (const k of Object.keys(a)) if (!k.startsWith('_') && !RUNWAY_APPROACH_KEYS.includes(k)) return `${at}: unknown key ${k}`;
+    if (typeof a.label !== 'string' || !a.label) return `${at}.label must be a non-empty string`;
+    if (!_num(a.thresholdLat, -90, 90)) return `${at}.thresholdLat must be a latitude`;
+    if (!_num(a.thresholdLon, -180, 180)) return `${at}.thresholdLon must be a longitude`;
+    if (!(_fin(a.courseTrueDeg) && a.courseTrueDeg >= 0 && a.courseTrueDeg < 360)) return `${at}.courseTrueDeg must be degrees true in [0, 360)`;
+    if (a.tdzeFt !== null && !_num(a.tdzeFt, -1500, 15000)) return `${at}.tdzeFt must be feet MSL or null (the DCS airfield elevation)`;
+    if (!_num(a.tchFt, 0, 200)) return `${at}.tchFt must be feet from 0 to 200`;
+    if (!_num(a.decisionHeightFt, 50, 1000)) return `${at}.decisionHeightFt must be feet above TDZE from 50 to 1000`;
+    if (a.glideslopeDeg !== null && !_num(a.glideslopeDeg, GPA_MIN, GPA_MAX)) return `${at}.glideslopeDeg must be degrees from ${GPA_MIN} to ${GPA_MAX}, or null (no published angle)`;
+  }
+  return null;
+}
+
+/** A hull's `approach` (required on every hull): where the touchdown point is on the ship and the glideslope. Problem string or null. */
+function validateHullApproach(a, hullId) {
+  const at = `${hullId}: approach`;
+  if (!a || typeof a !== 'object' || Array.isArray(a)) return `${at} is required: { ${HULL_APPROACH_KEYS.join(', ')} } (config/efsp-carriers.json, docs/adr/0112)`;
+  for (const k of Object.keys(a)) if (!k.startsWith('_') && !HULL_APPROACH_KEYS.includes(k)) return `${at}: unknown key ${k}`;
+  if (!_num(a.touchdownAftM, -200, 400)) return `${at}.touchdownAftM must be metres aft of the DCS unit position, -200 to 400`;
+  if (!_num(a.touchdownPortM, -100, 100)) return `${at}.touchdownPortM must be metres to port of the DCS unit position, -100 to 100`;
+  if (!_num(a.deckHeightFt, 0, 200)) return `${at}.deckHeightFt must be feet above the sea, 0 to 200`;
+  if (!_num(a.tchFt, 0, 200)) return `${at}.tchFt must be feet from 0 to 200`;
+  if (!_num(a.decisionHeightFt, 50, 1000)) return `${at}.decisionHeightFt must be feet above the deck, 50 to 1000`;
+  if (!_num(a.glideslopeDeg, GPA_MIN, GPA_MAX)) return `${at}.glideslopeDeg must be degrees from ${GPA_MIN} to ${GPA_MAX}`;
+  return null;
+}
+
+module.exports = {
+  SAMPLE_KEYS, APPROACH_KEYS, PLOT_KEYS, TRAIL_KEYS, INOP_REASONS, RUNWAY_APPROACH_KEYS, HULL_APPROACH_KEYS,
+  FT_PER_M, FT_PER_NM,
+  offsetPoint, carrierTouchdown, measure, inCoverage, trailEntry,
+  validateParApproaches, validateHullApproach,
+};

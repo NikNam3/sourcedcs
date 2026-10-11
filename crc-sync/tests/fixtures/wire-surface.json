@@ -51,6 +51,7 @@
       "efsp-undo-voided",
       "game-time",
       "init",
+      "par-sample",
       "snapshot",
       "status",
       "theater",
@@ -267,6 +268,60 @@
     "sfaTransfers": [
       "SFA_ROTATION"
     ],
+    "par": {
+      "sample": [
+        "stripId",
+        "facilityId",
+        "positionId",
+        "approach",
+        "sensor",
+        "plot",
+        "plotAgeMs",
+        "trail"
+      ],
+      "approach": [
+        "id",
+        "kind",
+        "label",
+        "runwayEnd",
+        "airportIcao",
+        "hullId",
+        "gpaDeg",
+        "gpaPublished",
+        "tchFt",
+        "tdzeFt",
+        "dhFt",
+        "daFt",
+        "courseTrueDeg",
+        "courseDisplay"
+      ],
+      "plot": [
+        "rangeNm",
+        "heightFt",
+        "elevDeg",
+        "elevDevDeg",
+        "elevDevFt",
+        "azDeg",
+        "azDevFt",
+        "gsKt",
+        "vsFpm"
+      ],
+      "trail": [
+        "rangeNm",
+        "heightFt",
+        "elevDeg",
+        "elevDevDeg",
+        "elevDevFt",
+        "azDeg",
+        "azDevFt"
+      ],
+      "inopReasons": [
+        "NO_APPROACH",
+        "NO_SHIP",
+        "NO_TDZE",
+        "NO_COURSE"
+      ]
+    },
     "storeSync": [
       {
         "key": "airspaces",
@@ -348,6 +403,12 @@
         "clientProtocol",
         "downloadUrl",
         "serverProtocol",
+        "type",
+        "version"
+      ],
+      "par-sample": [
+        "at",
+        "samples",
         "type",
         "version"
       ],

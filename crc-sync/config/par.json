@@ -1,0 +1,13 @@
+{
+  "_comment": "The PAR sample (docs/adr/0112). Read once at startup, never written by code (P5); a copy in state/par.json overrides it key by key (an unknown key stops start-up). defaultGlideslopeDeg: the glidepath angle of an approach that publishes none (decisions H116: 3.06; a published angle wins, and each controller's PAR settings tab has its own default, so the client recomputes the elevation deviation when `gpaPublished` is false). sampleMs: how often the sample is sent to the Position working the final (H115: under 1 s; the AN/FPN-68A quotes an update period under one second, PANELS-DESIGN S5). trailPlots: how many earlier plots ride along with each sample, oldest first, so a controller who signs on mid-approach sees the trend at once. coverage: the PAR's volume, from an antenna at TDZE `apexBeyondNm` beyond the threshold or touchdown along the course: AN/FPN-68A (PAR-2020) range 20 NM in clear air, azimuth 30 degrees (15 either side), elevation -1 to +7 degrees (PANELS-DESIGN S5; AIM 4-5-4 gives the older 10 NM, 20 degrees, 7 degrees). apexBeyondNm 0.5 is [SOURCE-DEFINED] (ours: a PAR stands beside the touchdown zone). A contact outside the volume, or one DCS has not moved for a while, gets no new plot; the sample keeps its last plot and says how old it is.",
+  "defaultGlideslopeDeg": 3.06,
+  "sampleMs": 500,
+  "trailPlots": 12,
+  "coverage": {
+    "rangeNm": 20,
+    "azimuthHalfDeg": 15,
+    "elevationMinDeg": -1,
+    "elevationMaxDeg": 7,
+    "apexBeyondNm": 0.5
+  }
+}

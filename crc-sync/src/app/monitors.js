@@ -20,6 +20,10 @@ const { createEfspInstrumentation } = require('../efsp/metrics');
 const { CarrierTick } = require('../efsp/carrier-tick');
 const { createShipWind } = require('./ship-wind');
 const { carrierDelta, correlationDelta } = require('../efsp/wire/frames');
+const { ParMonitor } = require('../surveillance/par-monitor');
+const { loadParTuning } = require('../surveillance/par-tuning');
+
+const FT_PER_M = 3.28084;
 
 /**
  * @param {object} deps
@@ -154,6 +158,30 @@ function buildMonitors({ env, efsp, facilityConfig, missionClock, missionSession
     onChange: () => deliver(carrierDelta(efsp.carrierStore)),
   });
 
+  // ── The PAR sample (docs/adr/0112): each aircraft on a final, measured against its approach, for the Position working it.
+  // The hub sends it (`sendParSamples`, the `par` ticker); the airfield elevation is DCS's, for an approach whose TDZE the
+  // config leaves to DCS. ──────────────────────────────────────────────────
+  const parMonitor = new ParMonitor({
+    facilityConfig,
+    boardStoreFor: (facilityId) => { try { return efsp.boardStoreFor(facilityId); } catch { return null; } },
+    flightDataOf: (id) => efsp.flightDataStore.getFlightData(id),
+    correlatedTrackId: (id) => efsp.correlationStore.correlatedTrackId(id),
+    runwayViewOf: (facilityId) => efsp.runwayStatusStore.statusView(facilityId),
+    trackOf: (id) => trackStore.get(id),
+    tracks: () => trackStore.getAll(),
+    carrierStore: efsp.carrierStore,
+    ownCoalition: () => ownCoalition,
+    convergenceAt: (lat, lon) => theaterContext.convergenceAt(lat, lon),
+    variationAt: (lat, lon) => theaterContext.variationAt(lat, lon),
+    airportElevationFt: (icao) => {
+      const data = hubLink.get().getMissionData();
+      const apt = data && (data.airports || []).find(a => a.icao === icao);
+      return apt && Number.isFinite(apt.elev) ? apt.elev * FT_PER_M : null;
+    },
+    wallClock: WALL_CLOCK,
+    tuning: loadParTuning(),
+  });
+
   // The one place efsp-alerts is composed (docs/adr/0067). broadcastEfspAlerts replaces the whole alert state, so every
   // producer — the 1s conformance/CA tick, the 15s obligation sweep, the post-delivery hook — must send all slices, or it would
   // erase the others'.
@@ -171,7 +199,7 @@ function buildMonitors({ env, efsp, facilityConfig, missionClock, missionSession
 
   return {
     obligationMonitor, correlationReconciler, efspInstrumentation, conformanceMonitor, surveillanceHints, conflictAlertMonitor,
-    tofiRegimeMonitor, carrierTick, broadcastEfspAlerts, recheckObligations,
+    tofiRegimeMonitor, carrierTick, parMonitor, broadcastEfspAlerts, recheckObligations,
   };
 }
 

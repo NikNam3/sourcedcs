@@ -257,6 +257,7 @@ function createApp(deps = {}) {
       conflictAlert: monitors.conflictAlertMonitor,
       surveillanceHints: monitors.surveillanceHints,
       carrier: monitors.carrierTick,
+      par: monitors.parMonitor,
       instrumentation: monitors.efspInstrumentation,
     },
     // The stores and models the soak host reads and drives directly.

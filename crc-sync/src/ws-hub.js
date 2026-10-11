@@ -266,6 +266,34 @@ class WsHub {
   /** Server-originated EFSP frames (a monitor, the carrier tick, the archiver, the HTTP airspace path): one frame or a list. */
   deliverEfsp(frames) { this._deliver({ broadcasts: [].concat(frames || []).filter(Boolean) }); }
 
+  /**
+   * The PAR sample (docs/adr/0112): one frame per session per PAR tick, carrying only the samples of the finals worked by a
+   * Position this session is signed on to (Primary or Observer), never anyone else's. A session that had samples and now has
+   * none is sent one empty frame, so its panel clears; a session that never had any is sent nothing. Not an EFSP frame: it is
+   * a sensor's output, like the track `delta`, with no sequence, no resync and nothing to audit, so it does not go through
+   * `deliverEfsp` (whose post-change hook would re-run the obligation check twice a second for nothing).
+   * @param {object[]} samples ParMonitor#tick()'s entries
+   */
+  sendParSamples(samples) {
+    if (!this._efsp) return;
+    const list = samples || [];
+    const facilities = [...new Set(list.map(s => s.facilityId))];
+    for (const [ws, session] of this._sessions) {
+      if (ws.readyState !== WebSocket.OPEN) continue;
+      const held = new Set();
+      for (const facilityId of facilities) {
+        const store = this._efsp.positionStoreFor(facilityId);
+        for (const positionId of store ? store.signedOnBy(session.controllerId) : []) held.add(`${facilityId}:${positionId}`);
+      }
+      const mine = list.filter(s => held.has(`${s.facilityId}:${s.positionId}`));
+      if (mine.length === 0 && !session.parSampled) continue;
+      session.parSampled = mine.length > 0;
+      ws.send(JSON.stringify(this._parSampleMsg(mine)));
+    }
+  }
+
+  _parSampleMsg(samples) { return { version: VERSION, type: 'par-sample', at: this._clock.now(), samples }; }
+
   /** The booking calendar (docs/adr/0098 §9): information, the same for everyone; the last one is also sent on connect. */
   broadcastAirspaceCalendar(msg) { this._calendarMsg = msg; this._broadcast(msg); }
 
