@@ -94,6 +94,8 @@ test('01 a MARSHAL Strip: callsign big until a side number is typed, then the si
   await expect(f).toBeVisible();
   await bigSlotIs(f, 'C18', 'C1');
   await expect(fields(f).first()).toContainText(side);
+  // The FINAL Bay line above the racks leads with it too (H124).
+  await expect(page.locator('.efsp-final-row .efsp-final-name')).toHaveText(side);
   await f.scrollIntoViewIfNeeded();
   await page.screenshot({ path: test.info().outputPath('01-final-side-big.png') });
 
@@ -145,6 +147,13 @@ test('02 a PATTERN Strip at PriFly: side number first once one is set, else the 
   await expect(fields(plain).first().locator('.efsp-block-C1')).toHaveCount(1);
   await expect(fields(plain).first()).toContainText(noSide);
   await expect(plain.locator('.efsp-strip-fields .efsp-block-C18')).toHaveCount(0); // no empty SIDE on the face
+  // The PriFly pattern board's chip leads with the side number, the callsign beside it; the other still by its callsign (H124).
+  const idOf = (c) => page.evaluate((cs) => crc.state.getAllEfspStrips().find(x => x.state !== 'DROPPED' && (crc.state.getEfspFlightData(x.flightDataId) || { identity: {} }).identity.callsign === cs).stripId, c);
+  const ledChip = page.locator(`.efsp-pattern-chip[data-strip-id="${await idOf(withSide)}"]`);
+  await expect(ledChip.locator('.efsp-pattern-cs')).toHaveText(side);
+  await expect(ledChip.locator('.efsp-pattern-meta')).toContainText(withSide);
+  const plainChip = page.locator(`.efsp-pattern-chip[data-strip-id="${await idOf(noSide)}"]`);
+  await expect(plainChip.locator('.efsp-pattern-cs')).toHaveText(noSide);
   await led.scrollIntoViewIfNeeded();
   await page.screenshot({ path: test.info().outputPath('02-pattern-side-big.png') });
 
