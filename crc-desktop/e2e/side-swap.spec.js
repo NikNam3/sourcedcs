@@ -99,3 +99,59 @@ test('01 a MARSHAL Strip: callsign big until a side number is typed, then the si
 
   await cleanUp(page);
 });
+
+const setCase = async (page, value) => {
+  if (await page.evaluate(() => crc.carrier.carrierCaseValue()) === value) return;
+  await page.evaluate((v) => crc.ws.sendEfspCarrierMutation('CV_PRIFLY', undefined, undefined, { kind: 'SetCarrierState', field: 'case', value: v }), value);
+  await expect.poll(() => page.evaluate(() => crc.carrier.carrierCaseValue()), { timeout: 10000 }).toBe(value);
+};
+
+test('02 a PATTERN Strip at PriFly: side number first once one is set, else the callsign and no SIDE field; the search finds the side number', async ({ page }) => {
+  await openPanel(page, { signedOn: ['CV_MARSHAL', 'CV_APP1', 'CV_APP2', 'CV_PRIFLY'], facilityId: 'CARRIER', controller: 'e2e-side-swap2' });
+  await page.waitForFunction(() => typeof crc.carrier.getEfspCarrier === 'function' && !!crc.carrier.getEfspCarrier());
+  await setCase(page, 'II');
+  const withSide = `SWP${unique()}`;
+  const noSide = `SWQ${unique()}`;
+  const side = `3${unique()}`.slice(0, 3);
+  for (const c of [withSide, noSide]) {
+    await page.evaluate((cs) => crc.ws.sendEfspCreateStrip('CV_MARSHAL', {
+      kind: 'CreateStrip', bayId: 'cv-marshal-stack', rackId: 'main', stripType: 'MARSHAL', flightData: { callsign: cs, aircraftType: 'F-18C' },
+    }, 'CARRIER'), c);
+    await waitStrip(page, c, s => s.state === 'IN_STACK', `${c} checked in`);
+  }
+  await page.evaluate(([c, v]) => {
+    const s = crc.state.getAllEfspStrips().find(x => x.state !== 'DROPPED' && (crc.state.getEfspFlightData(x.flightDataId) || { identity: {} }).identity.callsign === c);
+    crc.ws.sendEfspMutation('CV_MARSHAL', s, { kind: 'SetBlock', blockId: 'C18', value: v });
+  }, [withSide, side]);
+  await expect.poll(() => page.evaluate((c) => {
+    const x = crc.state.getAllEfspStrips().find(y => y.state !== 'DROPPED' && (crc.state.getEfspFlightData(y.flightDataId) || { identity: {} }).identity.callsign === c);
+    const f = crc.state.getEfspFlightData(x.flightDataId);
+    return (f.military && f.military.carrier && f.military.carrier.sideNumber) || null;
+  }, withSide)).toBe(side);
+
+  // See you: both go to PriFly as PATTERN Strips.
+  await openBay(page, 'CV_MARSHAL', 'cv-marshal-stack');
+  for (const c of [withSide, noSide]) {
+    await strip(page, c).locator('.efsp-nla-btn[data-carrier-handoff="MARSHAL_TO_PRIFLY"]').click();
+    await waitStrip(page, c, s => s.stripType === 'PATTERN' && s.ownerPositionId === 'CV_PRIFLY', `${c} See you`);
+  }
+  await openBay(page, 'CV_PRIFLY', 'cv-prifly-pattern');
+  const led = strip(page, withSide);
+  await expect(led).toBeVisible();
+  await bigSlotIs(led, 'C18', 'C1');
+  await expect(fields(led).first()).toContainText(side);
+  await expect(fieldOf(led, 'C1')).toContainText(withSide);
+  const plain = strip(page, noSide);
+  await expect(fields(plain).first().locator('.efsp-block-C1')).toHaveCount(1);
+  await expect(fields(plain).first()).toContainText(noSide);
+  await expect(plain.locator('.efsp-strip-fields .efsp-block-C18')).toHaveCount(0); // no empty SIDE on the face
+  await led.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: test.info().outputPath('02-pattern-side-big.png') });
+
+  // The Bay search finds the Strip by its side number.
+  const found = await page.evaluate((v) => crc.state.searchEfspStrips(v).map(s => (crc.state.getEfspFlightData(s.flightDataId) || { identity: {} }).identity.callsign), side);
+  expect(found).toContain(withSide);
+
+  await cleanUp(page);
+  await setCase(page, 'III');
+});
