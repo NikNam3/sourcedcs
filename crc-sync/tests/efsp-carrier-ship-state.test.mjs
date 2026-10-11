@@ -201,6 +201,21 @@ test('shipStateChanged: a sub-degree turn is not a change; 1° is', () => {
   assert.equal(shipStateChanged(a, slow), true);
 });
 
+test('shipStateChanged: the position re-sends after 0.05 NM from where it was last published (CARRIER-FOLLOWUP)', () => {
+  const a = buildShipState({ hull: DEFAULT_HULL, track: ship(), now: NOW });
+  // 0.04 NM north: inside the step; 0.06 NM: past it. Heading, speed unchanged.
+  const near = buildShipState({ hull: DEFAULT_HULL, track: ship({ lat: 34.5 + 0.04 / 60 }), now: NOW + 1000 });
+  const far = buildShipState({ hull: DEFAULT_HULL, track: ship({ lat: 34.5 + 0.06 / 60 }), now: NOW + 2000 });
+  assert.equal(shipStateChanged(a, near), false, 'a few tens of metres is not a change');
+  assert.equal(shipStateChanged(a, far), true, 'a ship that has moved on re-sends its position');
+  assert.equal(shipStateChanged(a, far, { positionStepNm: 0.1 }), false);
+  // A ship steaming straight at 30 kt (15.4 m/s) for 6 s has moved about 93 m: one re-send.
+  const sixS = buildShipState({ hull: DEFAULT_HULL, track: ship({ lat: 34.5 + (93 / 1852) / 60 }), now: NOW + 6000 });
+  assert.equal(shipStateChanged(a, sixS), true);
+  const noPos = { ...a, lat: null, lon: null };
+  assert.equal(shipStateChanged(noPos, a), true, 'a position appearing is a change');
+});
+
 test('displayBearing: magnetic with a variation, labelled T or G otherwise (decisions H15)', () => {
   assert.deepEqual(displayBearing(115, { ref: 'TRUE', magneticVariationDeg: 5 }), { value: 110, ref: 'M' });
   assert.deepEqual(displayBearing(2, { ref: 'TRUE', magneticVariationDeg: 5 }), { value: 357, ref: 'M' });

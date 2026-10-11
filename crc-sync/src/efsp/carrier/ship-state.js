@@ -23,7 +23,8 @@
 //                       value and SAYS so (headingRef: 'GRID').
 //   [SOURCE-DEFINED]  — the altimeter's sane band 27.00–32.00 inHg; the 1°
 //                       re-broadcast step (`shipStateChanged`'s default
-//                       `headingStepDeg`).
+//                       `headingStepDeg`) and the 0.05 NM position step
+//                       (`positionStepNm`, lane CARRIER-FOLLOWUP).
 //
 // No clock, no store, no disk: `now` is passed in (the mission clock's now(),
 // decisions H11) and the hull config is data the caller loads. The hull is
@@ -205,13 +206,33 @@ function staleFrom(previous, now) {
   return { ...previous, stale: true, staleSinceUtc: _finite(now) ? now : null };
 }
 
+const M_PER_NM = 1852;
+const EARTH_M = 6371000;
+
+/** Metres between two positions (equirectangular: exact enough for a step of tens of metres). */
+function _movedM(a, b) {
+  const rad = Math.PI / 180;
+  const x = (b.lon - a.lon) * rad * Math.cos(((a.lat + b.lat) / 2) * rad);
+  const y = (b.lat - a.lat) * rad;
+  return Math.hypot(x, y) * EARTH_M;
+}
+
 /**
  * Should the banner be re-broadcast? BRC moves only in whole-degree steps of
  * at least `headingStepDeg`, so a ship in a turn does not re-send every tick.
- * [SOURCE-DEFINED] (docs/adr/0064) — the 1° default step is ours.
+ * The position moves in steps of `positionStepNm` from where it was last
+ * published, so everything a client measures from the ship (the carrier map,
+ * the DIST Block, the Marshal's DME, the final-bearing line) is at most that
+ * far out: a ship at 30 kt re-sends about every 6 s, one at anchor never.
+ * [SOURCE-DEFINED] (docs/adr/0064) — the 1° and 0.05 NM default steps are ours.
  */
-function shipStateChanged(prev, next, { headingStepDeg = 1 } = {}) {
+function shipStateChanged(prev, next, { headingStepDeg = 1, positionStepNm = 0.05 } = {}) {
   if (!_isObj(prev) || !_isObj(next)) return prev !== next;
+  if (_finite(prev.lat) && _finite(prev.lon) && _finite(next.lat) && _finite(next.lon)) {
+    if (_movedM(prev, next) >= positionStepNm * M_PER_NM) return true;
+  } else if ((prev.lat == null) !== (next.lat == null) || (prev.lon == null) !== (next.lon == null)) {
+    return true;
+  }
   if (prev.brcDeg !== next.brcDeg) {
     if (prev.brcDeg == null || next.brcDeg == null) return true;
     const d = Math.abs(prev.brcDeg - next.brcDeg) % 360;
