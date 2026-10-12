@@ -39,7 +39,7 @@ async function proposeHandoff(page, callsign, toPositionId) {
   const popover = page.locator('.efsp-coordinate-popover');
   await popover.locator('.efsp-coordinate-primitive-select').selectOption('HANDOFF');
   if (toPositionId) await popover.locator('.efsp-coordinate-target-select').selectOption(toPositionId);
-  await popover.getByRole('button', { name: 'Send' }).dispatchEvent('click');
+  await popover.locator('.efsp-coordinate-send-btn').dispatchEvent('click');
   await popover.waitFor({ state: 'detached' });
 }
 

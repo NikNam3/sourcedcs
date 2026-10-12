@@ -66,7 +66,7 @@ const POPOVERS = {
   coordinate: {
     facilityId: 'INCIRLIK', positionId: 'AP', bayId: 'ap-inbound', selector: '.efsp-coordinate-popover',
     open: (strip) => startAction(strip, 'Coordinate…', { timeout: 5000 }),
-    act: (pop) => pop.getByRole('button', { name: 'Send' }),
+    act: (pop) => pop.locator('.efsp-coordinate-send-btn'),
   },
   airspace: {
     facilityId: 'INCIRLIK', positionId: 'AP', bayId: 'ap-inbound', selector: '.efsp-coordinate-popover', inject: true,

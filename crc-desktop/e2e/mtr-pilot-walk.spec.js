@@ -64,7 +64,7 @@ test('pilot walk: "VIPER11 request a different exit fix", CTR and AP at once', a
   await startAction(c, 'Coordinate…');
   const pop = ctr.locator('.efsp-coordinate-popover');
   await pop.locator('.efsp-coordinate-primitive-select').selectOption('HANDOFF');
-  await pop.getByRole('button', { name: 'Send' }).dispatchEvent('click');
+  await pop.locator('.efsp-coordinate-send-btn').dispatchEvent('click');
   await goBay(ap, 'AP', 'ap-coordination');
   const a = stripOf(ap, CS);
   await expect(a).toBeVisible();

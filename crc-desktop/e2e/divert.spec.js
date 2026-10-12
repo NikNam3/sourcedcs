@@ -60,7 +60,7 @@ async function handOff(from, callsign, toPositionId) {
   const popover = from.locator('.efsp-coordinate-popover');
   await popover.locator('.efsp-coordinate-primitive-select').selectOption('HANDOFF');
   if (toPositionId !== 'AP') await popover.locator('.efsp-coordinate-target-select').selectOption(toPositionId);
-  await popover.getByRole('button', { name: 'Send' }).dispatchEvent('click');
+  await popover.locator('.efsp-coordinate-send-btn').dispatchEvent('click');
 }
 
 test('an overflight diverted to Incirlik becomes an arrival on the same Strip, shows the old destination struck through, and is handed to AP', async ({ browser }) => {

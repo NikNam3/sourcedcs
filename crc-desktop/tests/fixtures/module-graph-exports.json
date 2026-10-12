@@ -568,7 +568,8 @@
    "_coordinationProposerOf",
    "_coordinationStateWord",
    "_dispatchCoordination",
-   "_openCoordinatePopover"
+   "_openCoordinatePopover",
+   "coordinationSendLabel"
   ],
   "panels/efsp/bay/popovers/divert.js": [
    "_openDivertPopover",

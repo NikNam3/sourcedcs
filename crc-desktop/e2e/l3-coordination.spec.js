@@ -82,7 +82,7 @@ async function propose(page, stripEl, primitive, note) {
   const popover = page.locator('.efsp-coordinate-popover');
   await popover.locator('.efsp-coordinate-primitive-select').selectOption(primitive);
   if (note) await popover.locator('textarea').fill(note);
-  await popover.getByRole('button', { name: 'Send' }).dispatchEvent('click');
+  await popover.locator('.efsp-coordinate-send-btn').dispatchEvent('click');
 }
 
 /** Proposes TOFI ENTRY from CTR's Strip to TAC_C2. */
@@ -182,7 +182,7 @@ test('the Coordinate popover can be reached on a lone Strip, even after scrollin
   // popover opens off the bottom. Layout containment on the Strip keeps the
   // popover out of the Bay's scrollable overflow, so this does not help.
   await a.locator('#efsp-bay-content').evaluate((el) => { el.scrollTop = el.scrollHeight; });
-  const send = popover.getByRole('button', { name: 'Send' });
+  const send = popover.locator('.efsp-coordinate-send-btn');
   const verdict = await hitTest(send);
   expect(verdict.onTop, `Send is at ${verdict.rect}, the Bay is ${verdict.bay}, and ${verdict.hit} is what is there`).toBe(true);
 });
