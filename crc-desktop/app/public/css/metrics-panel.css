@@ -42,6 +42,7 @@
   padding: 6px 0;
   border-bottom: 1px solid var(--efsp-line);
 }
+.metrics-grid-one .metrics-row { grid-template-columns: minmax(130px, 1.2fr) minmax(0, 2fr); } /* T23: one window */
 .metrics-row-head { color: var(--efsp-muted); text-transform: uppercase; letter-spacing: 0.04em; font-size: 10px; }
 .metrics-metric { color: var(--efsp-text); }
 .metrics-target { color: var(--efsp-muted); }
@@ -88,11 +89,10 @@
 .metrics-tone-bad.metrics-reconciliation { color: var(--efsp-bad); }
 .metrics-tone-muted.metrics-reconciliation { color: var(--efsp-muted); }
 .metrics-reconciliation { margin: 4px 0; }
-.metrics-footnote, .metrics-footnotes { color: var(--efsp-muted); margin-top: 6px; font-size: 10px; }
-.metrics-footnotes div { margin-top: 2px; }
 
 /* Narrow dock: the two windows sit under the metric's name. */
 @container (max-width: 520px) {
   .metrics-row { grid-template-columns: 1fr 1fr; }
+  .metrics-grid-one .metrics-row { grid-template-columns: 1fr; }
   .metrics-name { grid-column: 1 / -1; }
 }

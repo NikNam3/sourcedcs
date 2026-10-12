@@ -501,10 +501,14 @@ test('a controller can hand a flight to Center — the Coordinate button offers 
   const offered = select.children.map(o => o.value);
   assert.deepEqual(offered.sort(), ['AIT', 'HANDOFF', 'OPERATIONAL_REQUEST', 'POINT_OUT', 'TRAFFIC'].sort());
 
+  // T20: the Send button names its target, with one candidate as with several.
+  assert.ok(findByText(el, 'Hand off to CTR'), 'the button names the primitive and the target');
   select.value = 'POINT_OUT';
-  click(findByText(el, 'Send'));
+  for (const fn of select._listeners.change || []) fn({});
+  click(findByText(el, 'Point out to CTR'));
   assert.equal(sent[0].op.kind, 'POINT_OUT');
   assert.equal(sent[0].op.action, 'PROPOSE');
+  assert.equal(sent[0].op.toPositionId, 'CTR');
 });
 
 test('the receiving controller can accept, reject or say stand by', async () => {
@@ -1538,7 +1542,7 @@ test('acting from a popover uses the Strip as it is NOW, not as it was when the 
   // Not MARSA or bind: _dispatchMarsa and _dispatchCorrelation send their own
   // relation's and correlation record's current rev, never the Strip's.
   const cases = [
-    { ...POPOVER_CASES[0], act: (r) => click(findByText(r.el, 'Send')) },
+    { ...POPOVER_CASES[0], act: (r) => click(findByText(r.el, 'Hand off to CTR')) },
     { ...POPOVER_CASES[1], act: (r) => click(findByText(r.el, 'Send TOFI')) },
     { ...POPOVER_CASES[3], act: (r) => click(findByText(r.el, 'Approve entry')) },
     { ...POPOVER_CASES[5], act: (r) => click(descendants(openPopoverIn(r))[0]) },

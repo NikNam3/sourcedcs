@@ -63,7 +63,7 @@ test('an overflight walks INBOUND, IN_SECTOR, is handed CTR to AP, and is droppe
     await startAction(stripByCallsign(ctr, callsign), 'Coordinate…');
     const popover = ctr.locator('.efsp-coordinate-popover');
     await popover.locator('.efsp-coordinate-primitive-select').selectOption('HANDOFF');
-    await popover.getByRole('button', { name: 'Send' }).dispatchEvent('click');
+    await popover.locator('.efsp-coordinate-send-btn').dispatchEvent('click');
     await expect.poll(() => stateAt(ap, callsign, 'INCIRLIK')).toBe('INBOUND');
     expect((await records(ap, callsign)).find(r => r.facilityId === 'INCIRLIK')).toMatchObject({ stripType: 'OVERFLIGHT', owner: 'AP' });
     await ap.locator('#efsp-position-tabs .efsp-position-tab[data-position-id="AP"]').click();

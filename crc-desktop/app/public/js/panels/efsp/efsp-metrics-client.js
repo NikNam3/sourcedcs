@@ -28,16 +28,17 @@ import { efspVisibleBayId } from './panel/state.js';
 // — a duration is not a time of day (H11).
 
 // Code constants, not a tuning file (decisions.md P5). docs/adr/0072.
-// [SOURCE-DEFINED] (docs/adr/0072) — TTF_CAP_MS: a Bay entry open longer than this
-// is not counted as a time-to-first-touch, and the metrics panel says so. The rest
-// are engineering bounds (flush cadence, queue and age caps, a visibility poll).
+// TTF_WINDOW_MS is ours (live test T21, docs/wip/LT-UI.md): only a first selection within this long of a Bay coming on
+// screen counts as a find. A selection later than that is the controller coming back to the Bay to work a Strip (amend it,
+// drop it), not a search, and counting it made the p95 67 s. The metrics panel names the window. The rest are engineering
+// bounds (flush cadence, queue and age caps, a visibility poll).
 export const EFSP_METRICS_LIMITS = Object.freeze({
   FLUSH_MS: 10 * 1000,          // flush at most this long after an event is queued
   FLUSH_AT: 20,                 // ...or as soon as this many are queued
   MAX_PER_REPORT: 100,          // crc-sync's per-report cap (metrics.js MAX_EVENTS_PER_REPORT)
   QUEUE_CAP: 500,               // while disconnected; the oldest is dropped past this
   MAX_AGE_MS: 5 * 60 * 1000,    // older than this at flush time: dropped, not sent
-  TTF_CAP_MS: 10 * 60 * 1000,   // a Bay entry open this long is abandoned
+  TTF_WINDOW_MS: 30 * 1000,     // a Bay entry with no selection this long is abandoned: not a find
   VISIBILITY_CHECK_MS: 1000,    // how often an open Bay entry checks the panel is still on screen
 });
 
@@ -196,7 +197,7 @@ export function createEfspMetricsClient(deps) {
   // Starts when a Bay BECOMES visible; stops at the first selection of a Strip
   // in that Bay (any Strip, for the search pseudo-Bay: its results are Strips
   // of other Bays). Abandoned, with no sample, when the controller leaves the
-  // Bay, hides the panel, or 10 minutes pass. A selection in the same task as
+  // Bay, hides the panel, or TTF_WINDOW_MS (30 s, ours) passes. A selection in the same task as
   // the Bay entry is not a find — that is the arrivals line opening a Bay and
   // selecting a Strip in one click (T6).
 
@@ -216,7 +217,7 @@ export function createEfspMetricsClient(deps) {
     watchTimer = deps.setTimer(() => {
       watchTimer = null;
       if (!entry) return;
-      if (deps.perfNow() - entry.startedAt > L.TTF_CAP_MS) { _abandon(); return; }
+      if (deps.perfNow() - entry.startedAt > L.TTF_WINDOW_MS) { _abandon(); return; }
       const visible = deps.visibleBayId();
       if (visible !== entry.bayId) {
         _abandon();
@@ -252,7 +253,7 @@ export function createEfspMetricsClient(deps) {
     _stopWatch();
     if (done.sameTask) { stats.ttfNotAFind += 1; return; }
     const latencyMs = Math.max(0, Math.round(deps.perfNow() - done.startedAt));
-    if (latencyMs > L.TTF_CAP_MS) { stats.ttfAbandoned += 1; return; }
+    if (latencyMs > L.TTF_WINDOW_MS) { stats.ttfAbandoned += 1; return; }
     stats.ttfSamples += 1;
     _enqueue(done.positionId, { kind: 'TIME_TO_FIND', bayId: done.bayId, latencyMs });
   }

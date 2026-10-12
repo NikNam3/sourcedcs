@@ -15,6 +15,11 @@ setSignOnNoticeListener((text) => { _signOnNotice = text; renderCombination(); }
 // Position -> { count, onRunway }: a row hidden by "Not now", or for a Position this controller left itself, until its count grows.
 const _hidden = new Map();
 let _heldBefore = {}; // facility -> Positions acked last render, to see what this controller vacated
+// T26: the combination line's `key` when the controller clicked it away; it stays hidden until the combination changes.
+let _ackedCombinationKey = null;
+
+/** Clears the acknowledgement (a test). */
+export function _resetCombinationAckForTest() { _ackedCombinationKey = null; }
 
 const _liveCount = (positionId) => getAllEfspStrips().filter(s => s.ownerPositionId === positionId && s.state !== 'DROPPED').length;
 const _callsignOf = (strip) => {
@@ -43,10 +48,17 @@ export function renderCombination() {
   const lcFacility = facilityOf('LC');
   const facilityPositions = positions.filter(p => !p.facilityId || p.facilityId === lcFacility);
   const line = combinationLine(combinationOf(facilityPositions, acting), luawInUse(getAllEfspStrips(), lcFacility));
-  if (line) {
+  if (!line) _ackedCombinationKey = null; // the combination ended: the next one is shown
+  if (line && line.key !== _ackedCombinationKey) {
     const row = document.createElement('div');
-    row.className = 'efsp-combination-line' + (line.severe ? ' efsp-combination-severe' : '');
+    row.className = 'efsp-combination-line efsp-combination-ackable' + (line.severe ? ' efsp-combination-severe' : '');
     row.textContent = line.text;
+    row.title = 'click to acknowledge';
+    row.setAttribute('role', 'button');
+    row.tabIndex = 0;
+    const ack = () => { _ackedCombinationKey = line.key; renderCombination(); };
+    row.addEventListener('click', ack);
+    row.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); ack(); } });
     el.appendChild(row);
   }
   if (_signOnNotice) {

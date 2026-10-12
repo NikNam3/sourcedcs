@@ -5,7 +5,7 @@ import { markEfspChanged } from '../efsp-change-bus.js';
 import { _stripElById } from './open-bays.js';
 
 // Click-to-select state for the non-drag move path (DESK-SPLIT, split out of bay-view.js). Selecting marks the 'selection'
-// topic: the three highlights (MARSA, ATO join, correlated contact) re-resolve first (ORDER.RESOLVE), then the Bays redraw
+// topic: the highlights (MARSA, ATO join) re-resolve first (ORDER.RESOLVE), then the Bays redraw
 // (efsp-change-bus.js), so this module imports no renderer and no highlight.
 export let _selectedStripId = null;
 
@@ -42,7 +42,7 @@ export function selectEfspStripById(stripId) {
 }
 
 function _afterSelectionChanged() {
-  // §9.2 rule 5 — "selecting one participant MUST highlight the others." The highlights (MARSA, ATO join, the ringed contact)
+  // §9.2 rule 5 — "selecting one participant MUST highlight the others." The highlights (MARSA, ATO join)
   // subscribe to 'selection' at ORDER.RESOLVE, so they resolve BEFORE the Bays redraw: the highlight is a class each Strip
   // element reads while it is being built, and the other way round leaves it one selection behind.
   markEfspChanged('selection');

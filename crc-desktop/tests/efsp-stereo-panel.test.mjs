@@ -106,18 +106,20 @@ function mounted(opts) {
 
 // ── the picker ───────────────────────────────────────────────────────────
 
-test('with no table installed the toolbar is unchanged — the stereo picker never appears', async () => {
-  // The SHIPPED state: config/efsp-stereo-routes.json is empty, and there
-  // is no editor. A squadron that has not written a table must not be shown
-  // an empty dropdown to puzzle over.
+test('with no table installed the picker stays in place, disabled and empty, with no text (H134, LT-Q2)', async () => {
+  // The SHIPPED state: config/efsp-stereo-routes.json is empty. The toolbar keeps its shape; the picker says nothing.
   const { els } = await mounted({ stereoRoutes: [] });
-  assert.equal(els['efsp-create-strip-stereo'].hidden, true);
+  const select = els['efsp-create-strip-stereo'];
+  assert.equal(select.hidden, false);
+  assert.equal(select.disabled, true);
+  assert.equal(select.children.length, 0);
 });
 
 test('with a table installed the picker appears, blank-first, one option per route', async () => {
   const { els } = await mounted();
   const select = els['efsp-create-strip-stereo'];
   assert.equal(select.hidden, false);
+  assert.equal(select.disabled, false);
   assert.deepEqual(select.children.map(o => o.value), ['', 'PACK 1', 'PACK 2']);
   // The description rides along where there is one — a bare "PACK 2" in a
   // list of eight is not a choice anybody can make.

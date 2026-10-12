@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  combinationLine, combinationOf, formatFrequencies, hatRows, luawInUse, nonLocalCitation, vacatedBetween,
+  combinationLine, combinationOf, formatFrequencies, hatRows, luawInUse, vacatedBetween,
 } from '../app/public/js/panels/efsp/combination-rules.js';
 
 // crc-sync docs/adr/0105 (H104): the words and the rules behind the COMBINED line, the offer and the frequencies.
@@ -24,16 +24,19 @@ test('LC with GC or CD, held by one controller, is a combination; GC alone, or G
   assert.equal(combinationOf([GC, { ...LC, combinedWith: [] }], ['GC', 'LC']), null, 'two controllers, no combination');
 });
 
-test('the line is stronger while LUAW is in use, and names both frequencies', () => {
+test('the line is only the frequencies to monitor; stronger, and saying why, while LUAW is in use (T26)', () => {
   const combo = combinationOf([GC, LC], ['GC', 'LC']);
   const calm = combinationLine(combo, false);
   const luaw = combinationLine(combo, true);
   assert.equal(calm.severe, false);
-  assert.match(calm.text, /¶2-6-5b/);
-  assert.match(calm.text, /LC TWR 251\.0 and GC GND 275\.8/);
+  assert.equal(calm.text, 'Monitor TWR 251.0, GND 275.8');
+  assert.doesNotMatch(calm.text, /¶|JO 7210|COMBINED/);
   assert.equal(luaw.severe, true);
-  assert.match(luaw.text, /LUAW in use/);
+  assert.equal(luaw.text, 'LUAW in use while LC is combined. Monitor TWR 251.0, GND 275.8');
+  assert.notEqual(calm.key, luaw.key, 'LUAW starting is a change: an acknowledged line comes back');
   assert.equal(combinationLine(null, true), null);
+  const bare = combinationOf([{ ...GC, frequencies: [] }, { ...LC, frequencies: [] }], ['GC', 'LC']);
+  assert.equal(combinationLine(bare, false), null, 'nothing to monitor and no problem: no line');
 });
 
 test('LUAW is in use while a DEPARTURE is in RUNWAY_QUEUE or LUAW at the Facility', () => {
@@ -43,14 +46,12 @@ test('LUAW is in use while a DEPARTURE is in RUNWAY_QUEUE or LUAW at the Facilit
   assert.equal(luawInUse([{ stripType: 'DEPARTURE', state: 'LUAW', facilityId: 'CENTER' }], 'INCIRLIK'), false);
 });
 
-test('AP, SFA and PAR cite the radar-approach paragraph, OPS, CD and GC the reduced-traffic one', () => {
-  assert.match(nonLocalCitation(['GC']), /¶2-6-5b/);
-  assert.match(nonLocalCitation(['CD']), /¶2-6-5b/);
-  assert.match(nonLocalCitation(['OPS']), /¶2-6-5b/);
-  for (const id of ['AP', 'SFA', 'PAR']) { assert.match(nonLocalCitation([id]), /¶2-6-12/); assert.doesNotMatch(nonLocalCitation([id]), /¶2-6-5b/); }
-  assert.match(nonLocalCitation(['GC', 'AP']), /¶2-6-5b.*¶2-6-12/);
-  const ap = { positionId: 'AP', primary: { controllerId: 'a' }, combinedWith: ['LC'] };
-  assert.match(combinationLine(combinationOf([ap, { ...LC, combinedWith: ['AP'] }], ['AP', 'LC']), false).text, /COMBINED LC \+ AP.*¶2-6-12/);
+test('the combination key names its Positions, so taking AP as well is a new combination', () => {
+  const ap = { positionId: 'AP', primary: { controllerId: 'a' }, combinedWith: ['LC'], frequencies: [{ label: 'APP', mhz: 360.1 }] };
+  const lcGc = combinationLine(combinationOf([GC, LC], ['GC', 'LC']), false);
+  const lcGcAp = combinationLine(combinationOf([GC, ap, { ...LC, combinedWith: ['GC', 'AP'] }], ['GC', 'LC', 'AP']), false);
+  assert.notEqual(lcGc.key, lcGcAp.key);
+  assert.equal(lcGcAp.text, 'Monitor TWR 251.0, GND 275.8, APP 360.1');
 });
 
 // ADR 0110: the hat rows. `self` decides who is Primary; the offers are the server's, standing on each Position entry.
@@ -66,7 +67,7 @@ test('a hat row is made for the Primary of the Position the offer is on, with th
   assert.equal(rows[0].kind, 'take');
   assert.equal(rows[0].positionId, 'LC');
   assert.match(rows[0].text, /^LC is unstaffed with 2 Strips \(VIPER1, VIPER1\)\. Take LC as well\?/);
-  assert.match(rows[0].text, /¶2-6-12/, 'the preview of the combination it would make');
+  assert.doesNotMatch(rows[0].text, /¶/, 'T26: no rule text');
   assert.equal(rows[0].severe, false);
   assert.equal(rows[0].label, 'Take LC');
 });
@@ -83,13 +84,13 @@ test('an offer is severe when a Strip is on the runway, and says so', () => {
   const rows = hatRows([ap([{ positionId: 'LC', count: 2, onRunway: 1, observersFirst: false }]), lcGone], 'me', [strip('LC'), strip('LC')], ['AP']);
   assert.equal(rows[0].severe, true);
   assert.match(rows[0].text, /1 on the runway/);
-  assert.match(rows[0].text, /¶2-6-5c/);
+  assert.doesNotMatch(rows[0].text, /¶/);
 });
 
-test('GC offered to LC\'s Primary cites ¶2-6-5b, and CD to GC\'s Primary (no LC) carries no combination warning', () => {
+test('GC offered to LC\'s Primary, and CD to GC\'s Primary, carry no rule text (T26)', () => {
   const lc = { positionId: 'LC', facilityId: 'INCIRLIK', primary: { controllerId: 'me' }, observers: [], hatOffers: [{ positionId: 'GC', count: 3, onRunway: 0, observersFirst: false }] };
   const [gc] = hatRows([lc], 'me', [strip('GC'), strip('GC'), strip('GC')], ['LC'], { callsignOf: () => 'X' });
-  assert.match(gc.text, /^GC is unstaffed with 3 Strips \(X, X, X\)\. Take GC as well\? Combined with LC: only at significantly reduced traffic \(JO 7210\.3 ¶2-6-5b\)\./);
+  assert.equal(gc.text, 'GC is unstaffed with 3 Strips (X, X, X). Take GC as well?');
   const gcP = { positionId: 'GC', facilityId: 'INCIRLIK', primary: { controllerId: 'me' }, observers: [], hatOffers: [{ positionId: 'CD', count: 1, onRunway: 0, observersFirst: false }] };
   const [cd] = hatRows([gcP], 'me', [strip('CD')], ['GC'], { callsignOf: () => 'X' });
   assert.equal(cd.text, 'CD is unstaffed with 1 Strip (X). Take CD as well?');

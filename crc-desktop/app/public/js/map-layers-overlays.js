@@ -166,11 +166,11 @@ export function addOverlayLayers() {
     },
   });
 
-  // ── Ring around the selected Strip's contact (guide §6.6 rule 4) ─────
+  // ── Ring around a Strip's contact, from "Show on map" (H129) ─────────
   // A SECOND source, deliberately not `ref-dot`. That one is the BRA
   // reference track — a different, simultaneously-meaningful selection that
-  // buildRangeRing also reads — so overloading it would make selecting a
-  // Strip silently move the controller's bullseye reference. Wider radius
+  // buildRangeRing also reads — so overloading it would make "Show on map"
+  // silently move the controller's bullseye reference. Wider radius
   // and a distinct stroke so both rings can sit on one contact and still
   // read as two different things; not the attention red, which guide §7.7
   // rule 4 reserves.

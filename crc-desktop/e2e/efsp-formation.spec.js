@@ -39,8 +39,9 @@ test('Split… turns a 4-ship into 2+2, Join formation… turns it back into one
 
   const part = stripByCallsign(page, 'FORMB3');
   await expect(part).toBeVisible({ timeout: 10000 });
-  await expect(part.locator('.efsp-split-chip')).toHaveText('SPLIT');
-  await expect(part.locator('.efsp-split-chip')).toHaveAttribute('title', /split from FORMA1 at \d{4}Z/);
+  // T19: the part is an ordinary flight on the face; the split stays in the audit only.
+  await expect(part.locator('.efsp-split-chip')).toHaveCount(0);
+  await expect(part.locator('[data-slot="split"]')).toHaveCount(0);
   expect(await page.evaluate(() => crc.state.getAllEfspStrips().filter((s) => s.state !== 'DROPPED'
     && ['FORMA1', 'FORMB3'].includes(crc.state.getEfspFlightData(s.flightDataId).identity.callsign)).length)).toBe(2);
 

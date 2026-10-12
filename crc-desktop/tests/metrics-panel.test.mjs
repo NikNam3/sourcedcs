@@ -111,7 +111,7 @@ function nullRatesBody() {
   return b;
 }
 
-const cells = (model) => model.rows.flatMap(r => [r.cells.mission, r.cells.lastHour]);
+const cells = (model) => model.rows.flatMap(r => [r.cells.mission, r.cells.lastHour]).filter(Boolean);
 const row = (model, id) => model.rows.find(r => r.id === id);
 
 test('Every metric in §11.5 is collected and visible.', () => {
@@ -128,6 +128,23 @@ test('Every metric in §11.5 is collected and visible.', () => {
       assert.notEqual(c.verdict, 'NOT INSTRUMENTED', `${r.id} is collected`);
     }
   }
+});
+
+test('T23: a mission shorter than an hour shows one window, so each metric is printed once', () => {
+  const b = collectingBody();
+  b.missionSession.startedAt = NOW - 20 * 60000; // began 20 min ago: its last hour is the whole mission
+  const m = renderMetricsModel(b);
+  assert.deepEqual(m.windows.map(w => w.id), ['mission']);
+  for (const r of m.rows) assert.equal(r.cells.lastHour, null, `${r.id}: printed once`);
+  const long = renderMetricsModel(collectingBody());
+  assert.deepEqual(long.windows.map(w => w.id), ['mission', 'lastHour'], 'a longer mission keeps both windows');
+});
+
+test('T21/T24: time-to-find says what it measures, and the panel carries no provenance notes', () => {
+  const m = renderMetricsModel(collectingBody());
+  assert.match(row(m, 'timeToFind').name, /first Strip selected within 30 s of opening a Bay/);
+  assert.equal(m.footnotes, undefined);
+  assert.ok(!JSON.stringify(m).includes('SOURCE-DEFINED'));
 });
 
 test('verdicts: met, not met, and the trend for the trending-down metrics', () => {
@@ -271,7 +288,7 @@ test('traffic count: a partition line that sums, overlapping subsets labelled as
   assert.deepEqual(t.byHour.map(h => h.hour), ['1300Z', '1400Z']);
   assert.deepEqual(t.byType.map(r => r.type), ['F-16C', 'C-130']);
   assert.deepEqual(t.excluded, [{ reason: 'NEVER_WORKED', count: 1 }]);
-  assert.match(t.policy, /^\[SOURCE-DEFINED\]/, 'verbatim');
+  assert.equal(t.policy, undefined, 'T24: no provenance note in the panel');
   assert.deepEqual(t.facilities, ['CENTER', 'INCIRLIK']);
 });
 

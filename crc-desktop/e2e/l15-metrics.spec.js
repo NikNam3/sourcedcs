@@ -70,6 +70,15 @@ test('what a controller does is measured and shown on METRICS', async ({ page })
     }
   }
 
+  // T23: the harness's mission is minutes old, so it IS its last hour: one window, each metric printed once.
+  for (const row of await page.locator('#metrics-panel .metrics-row[data-metric]').all()) {
+    await expect(row.locator('.metrics-cell')).toHaveCount(1);
+  }
+  // T24: no provenance notes; T21: the targets are labelled ours, time-to-find says what it counts.
+  await expect(page.locator('#metrics-panel')).not.toContainText('SOURCE-DEFINED');
+  await expect(page.locator('#metrics-panel .metrics-row-head .metrics-name')).toHaveText('Metric · target (ours)');
+  await expect(metricRow(page, 'timeToFind').locator('.metrics-metric')).toContainText('within 30 s of opening a Bay');
+
   await expect(missionCell(page, 'searchInvocations').locator('.metrics-value')).toContainText('2 searches');
   await expect(missionCell(page, 'timeToFind').locator('.metrics-value')).toContainText('n=1');
   await expect(missionCell(page, 'timeToFind').locator('.metrics-verdict')).toHaveText('MET');

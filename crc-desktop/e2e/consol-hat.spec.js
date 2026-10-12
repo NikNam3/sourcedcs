@@ -66,14 +66,14 @@ test('LC signs off with a Strip: AP is offered LC, takes it, and the combination
   await expect(row).toContainText('LC is unstaffed with 1 Strip');
   await expect(row).toContainText('HAT101');
   await expect(row).toContainText('Take LC as well?');
-  await expect(row).toContainText('¶2-6-12');
+  await expect(row).not.toContainText('¶'); // T26: no rule text
   // Nothing moved: the Strip is still LC's, and the leaver was told who is offered it.
   expect(await ownerOf(a, 'HAT101')).toBe('LC');
   await expect.poll(() => acks.some(m => (m.warnings || []).some(w => w.positionId === 'LC' && w.offeredTo === 'AP' && !w.routedTo))).toBe(true);
   await ap.screenshot({ path: test.info().outputPath('consol-offer.png') });
 
   await row.locator('.efsp-offer-take').click();
-  await expect(ap.locator('#efsp-combination .efsp-combination-line').first()).toContainText('COMBINED LC + AP');
+  await expect(ap.locator('#efsp-combination .efsp-combination-line').first()).toContainText('Monitor TWR 251.0');
   await expect(offerRow(ap, 'LC')).toHaveCount(0);
   expect(await ap.evaluate(() => crc.ws.getActingPositions('INCIRLIK').sort())).toEqual(['AP', 'LC']);
 });

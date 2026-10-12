@@ -110,9 +110,6 @@ test('menu offers and join candidates', () => {
   assert.deepEqual(F.buildJoinOp(other), { kind: 'JoinFormation', leadStripId: 's2', leadBaseRev: 3 });
 });
 
-test('SPLIT chip carries the lineage', () => {
-  assert.equal(F.splitChipFor(strip(), null, null, null), null);
-  const part = strip({ splitFrom: { stripId: 's1', flightDataId: 'f1', at: 123, actionId: null } });
-  const chip = F.splitChipFor(part, () => null, () => fd(), () => '1432');
-  assert.deepEqual(chip, { text: 'SPLIT', title: 'split from VIPER1 at 1432Z' });
+test('a split part has no lineage chip: it is an ordinary flight on the face (live test T19)', () => {
+  assert.equal(F.splitChipFor, undefined);
 });

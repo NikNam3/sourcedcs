@@ -183,18 +183,3 @@ export function buildJoinOp(lead) {
 export function splitRemainderText(size, n) {
   return `of ${n}, ${n - size} remain`;
 }
-
-/**
- * The `SPLIT` lineage chip on the part that left a formation: title "split from VIPER1 at 1432Z".
- * `getFlightData` and `formatClock` are injected so the chip is testable without the client state.
- * @returns {{text:string, title:string}|null}
- */
-export function splitChipFor(strip, getStrip, getFlightData, formatClock) {
-  const from = strip && strip.splitFrom;
-  if (!from) return null;
-  const leadFd = from.flightDataId ? getFlightData(from.flightDataId) : null;
-  const lead = (leadFd && leadFd.identity && leadFd.identity.callsign) || null;
-  const at = from.at != null ? formatClock(from.at) : '';
-  const title = `split from ${lead || 'its formation'}${at ? ` at ${at}Z` : ''}`;
-  return { text: 'SPLIT', title };
-}

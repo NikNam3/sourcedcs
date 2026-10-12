@@ -5,53 +5,89 @@ import { ORDER, markEfspChanged, onEfspChanged } from './efsp-change-bus.js';
 import {
   correlatedTrackIdForStrip, getEfspCorrelationForStrip, getEfspFlightData, getEfspStrip, stripIdsForTrackId
 } from './efsp-state.js';
-import { getSelectedEfspStripId, selectEfspStripById } from './bay/selection.js';
+import { selectEfspStripById } from './bay/selection.js';
+import { map, mapReady } from '../../map-handle.js';
 import { getOpenEfspBayIds } from './bay/open-bays.js';
 
-// Coupled selection (EFSPImplementationGuide.md §6.6 rule 4): "Selecting a
-// Strip MUST highlight its track within 1 second, and vice versa."
+// "Show on map" (H129, live test T10) and contact -> Strip.
+//
+// The guide's §6.6 rule 4 ("Selecting a Strip MUST highlight its track within
+// 1 second, and vice versa") is ours, not an FAA rule, and its Strip -> contact
+// half is gone: a ring on every Strip click was noise (H129). The ring is now
+// asked for, from the Strip's ⋯ menu ("Show on map"): it rings the contact,
+// brings it into view if it is off the map, and goes away by itself after
+// RING_SHOW_MS (ours, logged in docs/wip/LT-UI.md).
 //
 // The one place the EFSP domain and the map domain touch. It lives in its own
 // file so bay-view.js stays free of map globals and geojson.js stays free of
 // EFSP ones — the split guide §7.5 rule 1 asks for ("keep the panel and the
 // map as separate components over shared state"), with this as the seam.
-//
-// The 1-second budget is almost free here, and it is worth saying why rather
-// than instrumenting it: the Strip panel and the map run in ONE renderer, so
-// Strip -> contact is a Map lookup plus the existing rAF-batched updateMap().
-// There is no code path in which it takes a frame, let alone a second. What
-// the budget actually bounds is a contact the server has not bound yet, and
-// that is governed by crc-sync's reconcile tick, not by anything here.
 
-// The contact whose ring is currently drawn, or null.
+/** How long a "Show on map" ring stays (ours: long enough to find it, short enough to need no dismissing). */
+export const RING_SHOW_MS = 8000;
+
+// The Strip whose contact is ringed, the contact itself, and the timer that ends it.
+let _ringStripId = null;
 let _correlatedTrackId = null;
+let _ringTimer = null;
 
 export function getCorrelatedHighlightTrackId() { return _correlatedTrackId; }
 
-/**
- * Strip -> contact. Called from bay-view.js's _selectStrip.
- *
- * Passing null (nothing selected) clears the ring, which is right: the ring
- * says "this is the Strip you have selected", so with no selection it has
- * nothing to say.
- */
-export function highlightCorrelatedTrack(stripId) {
-  const next = stripId
-    ? correlatedTrackIdForStrip(getEfspStrip(stripId))
-    : null;
-  if (next === _correlatedTrackId) return _correlatedTrackId;
-  _correlatedTrackId = next;
+function _setRing(trackId) {
+  if (trackId === _correlatedTrackId) return;
+  _correlatedTrackId = trackId;
   markEfspChanged('map');
-  return _correlatedTrackId;
 }
 
-/** Re-resolves the ring against the current records — called when a correlation delta lands. */
-export function refreshCorrelatedHighlight() {
-  highlightCorrelatedTrack(getSelectedEfspStripId());
+/** Clears the ring now (the timer, or a test). */
+export function clearShownOnMap() {
+  if (_ringTimer) clearTimeout(_ringTimer);
+  _ringTimer = null;
+  _ringStripId = null;
+  _setRing(null);
+}
+
+/** The contact "Show on map" would ring for this Strip, or null: correlated (or provisional) and in this controller's picture. */
+export function showOnMapTrackFor(strip) {
+  const trackId = strip ? correlatedTrackIdForStrip(strip) : null;
+  return trackId && getLatestTrack(trackId) ? trackId : null;
 }
 
 /**
- * Contact -> Strip. Called from the map's own click handlers.
+ * Strip -> contact, from the ⋯ menu. Rings the contact for RING_SHOW_MS and
+ * pans the map to it if it is off screen (the zoom is left alone). Returns the
+ * ringed contact id, or null when there is nothing in the picture to show.
+ */
+export function showStripOnMap(stripId) {
+  const trackId = showOnMapTrackFor(getEfspStrip(stripId));
+  if (!trackId) return null;
+  if (_ringTimer) clearTimeout(_ringTimer);
+  _ringStripId = stripId;
+  _setRing(trackId);
+  _bringIntoView(getLatestTrack(trackId));
+  _ringTimer = setTimeout(clearShownOnMap, RING_SHOW_MS);
+  return trackId;
+}
+
+function _bringIntoView(track) {
+  if (!mapReady || !map || !track || !Number.isFinite(track.lat) || !Number.isFinite(track.lon)) return;
+  const bounds = map.getBounds();
+  if (bounds && bounds.contains([track.lon, track.lat])) return;
+  map.easeTo({ center: [track.lon, track.lat] });
+}
+
+/** Re-resolves a ring that is showing against the current records — a re-bind moves it, a lost contact ends it. */
+export function refreshCorrelatedHighlight() {
+  if (!_ringStripId) return;
+  const trackId = showOnMapTrackFor(getEfspStrip(_ringStripId));
+  if (trackId) _setRing(trackId);
+  else clearShownOnMap();
+}
+
+/**
+ * Contact -> Strip. Called from the map's own click handlers. Kept by LT-Q3's
+ * default (docs/wip/LT-UI.md): it draws no ring, it only selects. To drop it,
+ * remove the one call in map-interactions.js.
  *
  * Three cases, and the middle one is a judgement rather than an oversight:
  *
@@ -140,11 +176,8 @@ export function correlationBadgeFor(strip) {
   // Strip can legitimately be correlated to a contact THIS controller cannot
   // see — an en-route flight bound on somebody else's radar, say.
   //
-  // Say so, rather than showing a bare track id and a ring that never appears.
-  // Before this the badge read `TRK 101`, which looks like a callsign, and
-  // clicking the Strip did nothing visible. §6.6 rule 4 asks that selecting a
-  // Strip highlight its contact; when the contact is outside your picture the
-  // honest answer is that there is nothing to highlight.
+  // Say so, rather than showing a bare track id that looks like a callsign:
+  // "Show on map" has nothing to ring when the contact is outside your picture.
   if (!track) {
     return {
       text: 'TRK ··',
@@ -196,5 +229,5 @@ function _provisionalSentence(record, strip) {
   return 'provisional match';
 }
 
-// The ring is resolved before the Bays and the map that read it (efsp-change-bus.js).
-onEfspChanged(['snapshot', 'correlations', 'selection'], () => refreshCorrelatedHighlight(), { order: ORDER.RESOLVE });
+// A ring that is showing is re-resolved before the map reads it (efsp-change-bus.js). Selection no longer moves it (H129).
+onEfspChanged(['snapshot', 'correlations'], () => refreshCorrelatedHighlight(), { order: ORDER.RESOLVE });

@@ -82,6 +82,16 @@ export const COORDINATION_PRIMITIVE_LABELS = {
   OPERATIONAL_REQUEST: 'Operational Request', AIT: 'AIT',
 };
 
+/** The verb on the Send button (live test T20): the button says what it does and to whom, "Hand off to CTR". */
+const COORDINATION_SEND_VERBS = {
+  HANDOFF: 'Hand off', POINT_OUT: 'Point out', TRAFFIC: 'Traffic', OPERATIONAL_REQUEST: 'Request', AIT: 'AIT',
+};
+
+/** "Hand off to CTR": the Send button's text for a primitive and a target Position. */
+export function coordinationSendLabel(primitive, toPositionId) {
+  return `${COORDINATION_SEND_VERBS[primitive] || COORDINATION_PRIMITIVE_LABELS[primitive] || primitive} to ${toPositionId}`;
+}
+
 // ── F-302/F-304 display helpers ─────────────────────────────────────────
 
 /** Which Position asked. The replica's `peerPositionId` IS the proposer; on the sender's own Strip the proposer is its owner. */
@@ -187,9 +197,17 @@ export function _openCoordinatePopover(strip, anchorEl) {
   note.placeholder = degraded ? 'Verbal coordination note (required)' : 'Note (optional)';
   popover.appendChild(note);
 
+  // T20: the button names its target whether there is one candidate or a choice ("Hand off to CTR", "Point out to CTR").
   const sendBtn = document.createElement('button');
   sendBtn.className = 'efsp-coordinate-send-btn';
-  sendBtn.textContent = 'Send';
+  const defaultTarget = COORDINATION_TARGETS[strip.ownerPositionId];
+  const relabel = () => {
+    const to = toSelect && select.value === 'HANDOFF' ? toSelect.value : defaultTarget.positionId;
+    sendBtn.textContent = coordinationSendLabel(select.value, to);
+  };
+  select.addEventListener('change', relabel);
+  if (toSelect) toSelect.addEventListener('change', relabel);
+  relabel();
   sendBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     if (degraded && !note.value.trim()) {
