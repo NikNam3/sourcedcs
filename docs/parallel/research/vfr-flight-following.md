@@ -260,3 +260,200 @@ STARS scratch-pad note on an unassociated target. Whether we need a **VFR flag**
 FAA marks VFR only through the equipment suffix and the absence of a clearance, so a flag would be **ours** (LT-VQ2).
 
 ---
+## V3. Clearing or approving a VFR aircraft into special use airspace, Class B or Class C
+
+### What the orders say
+
+**Restricted areas — permission from the using (or controlling) agency, by regulation.**
+- 14 CFR 73.13: *"No person may operate an aircraft within a restricted area between the designated altitudes and during
+  the time of designation, unless he has the advance permission of (a) The using agency described in § 73.15; or (b) The
+  controlling agency described in § 73.17."*
+- 14 CFR 73.15 (c): *"The using agency shall— (1) Schedule activities within the restricted area; (2) Authorize transit
+  through, or flight within, the restricted area as feasible; and (3) Contain within the restricted area all activities
+  …"*; (b): under a joint-use letter *"the using agency would notify the controlling agency whenever the controlling
+  agency may grant permission for transit through the restricted area …"*
+- 14 CFR 73.17: *"the controlling agency is the FAA facility that may authorize transit through or flight within a
+  restricted area in accordance with a joint-use letter issued under § 73.15."*
+- 14 CFR 91.133 (a): *"No person may operate an aircraft within a restricted area … contrary to the restrictions imposed,
+  or within a prohibited area, unless that person has the permission of the using or controlling agency, as
+  appropriate."*
+- JO 7400.2R ¶23-1-5 a: *"The letter of procedure/letter of agreement provides for the operation of nonparticipating IFR
+  and/or VFR aircraft within the area. Flight within an active restricted area is controlled by the using agency except
+  when the area has been returned to the controlling agency. During such periods, the controlling agency may permit
+  nonparticipating aircraft operations in the restricted area."*
+- AIM ¶3-4-3 a: *"Penetration of restricted areas without authorization from the using or controlling agency may be
+  extremely hazardous …"*
+
+**MOAs and warning areas — VFR aircraft need nothing.**
+- JO 7400.2R ¶25-1-6 a: *"In effect, MOAs are always joint use in that **VFR aircraft are not denied access**, and IFR
+  aircraft may be routed through the airspace, by agreement between controlling and using agencies, when approved
+  separation can be provided from the MOA activity."* ¶25-1-1: a MOA exists *"to separate or segregate certain
+  non−hazardous military flight activities from IFR aircraft and to identify for VFR aircraft where these activities are
+  conducted."*
+- AIM ¶3-4-5 c: *"Pilots operating under VFR should exercise extreme caution while flying within a MOA when military
+  activity is being conducted. … Prior to entering an active MOA, pilots should contact the controlling agency for
+  traffic advisories."*
+- JO 7400.2R ¶24-1-3 d (warning areas): *"Nonparticipating VFR pilots, while not excluded from warning areas, are on
+  notice that military activity, which may be hazardous to nonparticipating aircraft, is conducted in those areas."*
+
+**ATCAAs — IFR segregation, not a VFR restriction.** P/CG ATC ASSIGNED AIRSPACE: *"Airspace … assigned by ATC, for the
+purpose of providing air traffic segregation between the specified activities being conducted within the assigned
+airspace and other IFR air traffic."* (same words, JO 7400.2R ¶21-7-4 a). JO 7400.2R ¶21-1-3 b NOTE 1 (SUA types):
+*"Air Traffic Control Assigned Airspace (ATCAAs) below FL 180 … must not be used as a substitute for SUA …"*;
+NOTE 2: *"Since ATCAAs and ALTRVs are not depicted on aeronautical charts, they do not inform the flying public of the
+location of the activity …"*
+
+**What ATC does for its own traffic near active SUA (JO 7110.65BB §9-3, first research Q8).**
+- ¶9-3-1: the SUA rules do not apply when *"a. The pilot informs you that permission has been obtained from the using
+  agency to operate in the airspace. b. The using agency informs you they have given permission for the aircraft to
+  operate in the airspace. NOTE- Using agency permission may be relayed to the pilot. c. The restricted/warning area,
+  MOA, ATCAA, or stationary ALTRV has been released to the controlling agency."*
+- ¶9-3-2: *"… separate nonparticipating aircraft from active special use airspace …"* NOTE: *"Nonparticipating aircraft
+  refers to those aircraft **for which you have separation responsibility** and which have not been authorized by the
+  using agency to operate in/through the special use airspace, ATCAA, or stationary ALTRV. VFR traffic is not prohibited
+  from transiting stationary ALTRVs or transitional hazard areas (THA)."*
+- ¶9-3-4: *"If a LOA/LOP has been coordinated with the Using Agency and permission has been granted to transit the area:
+  a. Comply with the instruction/clearances issued by the Using Agency …"* NOTE: *"The FAA has no jurisdictional
+  authority over the use of nonjoint use prohibited/restricted/warning area airspace; therefore, clearance cannot be
+  issued for flight therein without the appropriate approval."*
+- ¶2-1-16 b (surface areas, the nearest written analogue for a controller giving advisories): *"Coordinate with the
+  appropriate control tower for transit authorization when you are providing radar traffic advisory service to an
+  aircraft that will enter another facility's airspace. NOTE- The pilot is not expected to obtain his/her own
+  authorization through each area when in contact with a radar facility."*
+
+**Class B — an ATC clearance.**
+- 14 CFR 91.131 (a)(1): *"The operator must receive an ATC clearance from the ATC facility having jurisdiction for that
+  area before operating an aircraft in that area."*
+- JO 7110.65BB ¶7-9-2 a: *"VFR aircraft must obtain an ATC clearance to operate in Class B airspace."* Phraseology:
+  *"CLEARED THROUGH/TO ENTER/OUT OF BRAVO AIRSPACE, and as appropriate, VIA (route). MAINTAIN (altitude) WHILE IN BRAVO
+  AIRSPACE. or CLEARED AS REQUESTED. … REMAIN OUTSIDE BRAVO AIRSPACE."* b: *"Approve/deny requests from VFR aircraft to
+  operate in Class B airspace based on workload, operational limitations and traffic conditions."* d: *"Inform VFR
+  aircraft when leaving Class B airspace."*
+
+**Class C — two-way radio contact, not a clearance.**
+- 14 CFR 91.130 (c)(1): *"Each person must establish two-way radio communications with the ATC facility … providing air
+  traffic services prior to entering that airspace and thereafter maintain those communications while within that
+  airspace."*
+- JO 7110.65BB ¶7-8-4: *"If the controller responds to a radio call with, "(a/c call sign) standby," radio communications
+  have been established and the pilot can enter Class C airspace. If workload or traffic conditions prevent immediate
+  provision of Class C services, inform the pilot to remain outside Class C airspace until conditions permit …"*
+  Phraseology *"(A/c call sign) REMAIN OUTSIDE CHARLIE AIRSPACE AND STANDBY."* ¶7-8-1: *"Class C services are designed to
+  keep ATC informed of all aircraft within Class C airspace, not to exclude operations."*
+
+**"VFR … APPROVED".** No such phrase for airspace entry in the paragraphs read. The approval words the orders use are
+*"CHANGE TO ADVISORY FREQUENCY APPROVED"* / *"FREQUENCY CHANGE APPROVED"* (¶7-6-11) — **silent** on an "approved into the
+area" phrase. The using agency's own words (¶9-3-4 a "instruction/clearances issued by the Using Agency") are not
+prescribed by FAA orders.
+
+**The record.** For Class B the clearance is an ATC clearance like any other (recorded where the facility records
+clearances: strip, voice recorder; JO 7210.3EE ¶6-1-6 d *"Control instructions or coordination not recorded on a voice
+recorder must be documented on the flight progress strip"*). For SUA the using agency's permission is a coordination
+(¶9-3-1 a–b) — no FAA form or automation field for it is named in the orders: **silent**. ERAM's SAA status (first
+research Q9, ¶5-13-10) records the airspace's state, not an aircraft's permission.
+
+### Answer in plain words
+
+| Airspace (active) | What a VFR aircraft needs | Who gives it | FAA words |
+|---|---|---|---|
+| **MOA** | **Nothing.** VFR aircraft are not denied access (7400.2R ¶25-1-6 a); the pilot is advised to call for traffic advisories (AIM ¶3-4-5 c) | — | none |
+| **Warning area** | Nothing (7400.2R ¶24-1-3 d) | — | none |
+| **ATCAA** | Nothing written for VFR: an ATCAA segregates activities **from IFR traffic** (P/CG). **Inference:** most ATCAAs sit in or near Class A where VFR does not fly | — | none |
+| **Restricted area** | **Advance permission** (14 CFR 73.13, 91.133) | The **using agency**, or the controlling agency under the joint-use letter (73.15–73.17) | Permission, relayed by ATC (¶9-3-1 NOTE); no FAA phrase |
+| **Class B** | An **ATC clearance** (91.131 (a)(1), ¶7-9-2 a) | The ATC facility with jurisdiction | **"CLEARED THROUGH/TO ENTER BRAVO AIRSPACE"** |
+| **Class C** | **Two-way radio contact** (91.130 (c)(1), ¶7-8-4) | — (the controller may say "remain outside") | callsign acknowledged; **"REMAIN OUTSIDE CHARLIE AIRSPACE AND STANDBY"** to refuse |
+
+A controller giving flight following does **not** need to approve a VFR aircraft into an active MOA; for a restricted area
+the permission is the **using agency's** (Incirlik OPS for an Incirlik range), and the controller working the aircraft
+coordinates or relays it (¶9-3-1 a–b; by analogy ¶2-1-16 b — **inference**). Our airspace types carry no Class B/C.
+
+### What it means for our app
+
+- Our `ApproveAirspaceEntry` (Board op, on a Strip) is the **using agency's permission** of ¶9-3-1 a–b / 73.15 (c)(2) —
+  the first research already mapped it so (Q9). It needs a Strip; that is consistent with V2 (flight following creates
+  one).
+- H134's alert on an **uncorrelated contact inside active airspace** is ours for a MOA (FAA: VFR may enter, nothing to
+  approve) and FAA-backed only for a restricted/prohibited area (73.13, 91.133). H132 already says build it anyway, so
+  the ADR should say which part is ours. Our airspace `type` is **never read for behaviour** (`airspace-schema.js`),
+  so "MOA vs restricted" would be a new behaviour (LT-VQ4).
+- "Clearing a VFR aircraft into the airspace" in FAA words is: **start flight following (V1/V2) and then record the using
+  agency's permission (`ApproveAirspaceEntry`)**. There is no FAA act that approves an untracked, unidentified contact.
+
+---
+
+## V4. Mode C Intruder (MCI): base altitude, the safety alert, and who is "tracked"
+
+### What the orders say
+
+**Definitions (P/CG, 7-9-26).** CONFLICT ALERT: *"… between tracked targets (known IFR or VFR aircraft) that require
+his/her immediate attention/action."* MODE C INTRUDER ALERT: *"A function of certain air traffic control automated
+systems designed to alert radar controllers to existing or pending situations between a tracked target (known IFR or VFR
+aircraft) and an untracked target (unknown IFR or VFR aircraft) that requires immediate attention/action."* (quoted in
+first research Q12.)
+
+**Base altitude and adaptation (JO 7210.3EE).**
+- **STARS ¶12-6-12:** *"a. Use the nominal value of parameters specified in the appropriate NAS Configuration Management
+  Document and Site Program Bulletins for the MCI Alert functions, except for the base altitude parameter … These
+  parameters are set by the Operational Support Facility (OSF). b. MCI Alert base altitude must be set at any value
+  between ground level and 500 feet AGL at the discretion of the facility air traffic manager. Any instance of base
+  altitudes above 500 feet AGL must be documented by the OSF. c. Facility air traffic managers are authorized to
+  temporarily adjust the MCI Alert base altitude at a sector(s)/position(s) when excessive MCI Alerts derogate the
+  separation of IFR traffic. For the purpose of this section, temporary is considered to be of less than 4 hours
+  duration … Log each occurrence on FAA Form 7230−4 … d. Facility air traffic managers are authorized to inhibit the
+  display of MCI Alert at specified sectors/position."*
+- **ERAM ¶8-2-5:** *"a. Use the approved MCI CA preset values as defined in the ERAM Site Adaptation Manual (SAM) … b. MCI
+  Alert base altitude must be set at any value between ground level and 5,000 feet MSL at the discretion of the facility
+  air traffic manager. When a facility's or sector's ground level is above 5,000 feet MSL, base altitudes may be set to
+  1,500 AGL. … c. … temporarily adjust the Mode C Intruder Alert base altitude at a sector(s) when excessive MCI alerts
+  derogate the separation of IFR traffic … 3. Facility air traffic managers are authorized to inhibit the situation
+  display of MCI Alert at specified sectors."*
+- CA: ERAM ¶8-2-4 (*"approved CA preset values as defined in the ERAM Site Adaptation Manual"*, inhibit at sectors and in
+  Aircraft Alert Volumes); STARS ¶12-6-7 b (*"authorized to inhibit CA at specific operating positions"*).
+- STARS ¶12-6-3 b: *"Display Mode C on untracked (unassociated) targets within each controller's area of responsibility by
+  setting the altitude filters to encompass all altitudes within the controller's jurisdiction. …"*
+
+**The controller's side (JO 7110.65BB).**
+- ¶5-14-6 (STARS) / ¶5-13-1 (ERAM) a: *"When a CA or MCI alert is displayed, evaluate the reason for the alert without
+  delay and take appropriate action."* b: *"If another controller is involved in the alert, initiate coordination …"* c:
+  suppress (one alert) / inhibit (STARS: *"only … for aircraft routinely engaged in operations where approved separation
+  criteria do not apply"*); c.3: *"Computer entry of a message suppressing a CA/MCI alert constitutes acknowledgment for
+  the alert …"*; c.4: *"CA/MCI alert may not be suppressed or inhibited at or for another control position without being
+  coordinated."*
+- ¶2-1-6, SAFETY ALERT: *"Issue a safety alert to an aircraft if you are aware the aircraft is in a position/altitude that,
+  in your judgment, places it in unsafe proximity to terrain, obstructions, or other aircraft."* NOTE b: *"Recognition of
+  situations of unsafe proximity may result from MSAW/E-MSAW, automatic altitude readouts, Conflict/Mode C Intruder Alert,
+  observations on a PAR scope, or pilot reports."* b: *"Aircraft Conflict/Mode C Intruder Alert. Immediately
+  issue/initiate an alert to an aircraft if you are aware of another aircraft at an altitude that you believe places them
+  in unsafe proximity."* Phraseology *"TRAFFIC ALERT (call sign) (position of aircraft) ADVISE YOU TURN LEFT/RIGHT
+  (heading), and/or CLIMB/DESCEND (specific altitude if appropriate) IMMEDIATELY."*
+- AIM ¶4-1-16 b.1: *"Controllers will immediately issue an alert to the pilot of an aircraft **under their control** if
+  they are aware of another aircraft which is **not under their control** …"*
+- ¶7-8-2 a.4 / ¶7-9-5 a / ¶7-6-1 a.1: safety alerts are part of the service to VFR aircraft receiving Class C, Class B and
+  basic radar service.
+
+### Answer in plain words
+
+- **Base altitude:** a per-facility (and temporarily per-position) adaptation: **STARS ground to 500 ft AGL**, **ERAM ground
+  to 5,000 ft MSL** (1,500 AGL where the ground is above 5,000 MSL). Below it, no MCI alert. The alert can be inhibited at
+  a position; one alert can be suppressed, which acknowledges it. The other MCI parameters (look-ahead, distances) are
+  set nationally in non-public documents: **silent** here.
+- **A VFR aircraft on flight following is tracked**: it has a computer-assigned discrete code and an associated track
+  (V2), so it is one of the "known IFR or VFR aircraft". Against another tracked aircraft it gets **CA**; against an
+  untracked Mode C target it is the **tracked** side of an **MCI** alert.
+- **A VFR aircraft squawking 1200 with no service is untracked**: it is the **intruder** in MCI (when it reports Mode C
+  altitude — the function's name; a primary-only target with no altitude is not processed, **inference**, first
+  research Q12) and never part of a CA pair.
+- **The alert goes to the controller working the tracked aircraft**, who issues a safety alert to *their* aircraft about
+  the other one (¶2-1-6 b, AIM ¶4-1-16 b.1). Starting flight following on the intruder turns a future MCI into a CA and
+  lets the controller issue traffic to both.
+
+### What it means for our app
+
+H134 LT-RQ16 a (CA between correlated tracks, MCI-type between correlated and uncorrelated above a base altitude, nothing
+between two uncorrelated) is the FAA model, and **"correlated to a live Strip" is our "tracked"** — so starting flight
+following (a Strip, correlated) is exactly how a controller moves a VFR aircraft from MCI-intruder to CA-tracked. The base
+altitude should be a **facility setting** (STARS: ground–500 ft AGL; ERAM: ground–5,000 ft MSL), defaulting to the
+terminal or en route value by Facility kind, with a per-Position override and inhibit (7210.3EE ¶12-6-12 c–d, ¶8-2-5 c).
+A tag does **not** make a contact tracked (a tag is not an association, P/CG ASSOCIATED needs flight identification in
+the automation — our tag is closer to a scratch-pad note). The intruder must report altitude (our SSR/Mode C presentation).
+
+---
