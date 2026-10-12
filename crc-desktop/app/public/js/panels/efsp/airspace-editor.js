@@ -52,9 +52,14 @@ export function openAirspaceEditor(o) {
   el.appendChild(body);
   const inputs = {}; const rowEls = {}; const dots = {}; const wasEls = {}; const errEls = {};
 
-  const asPosition = creating ? (caps.createPositionsFor(o.signedOn)[0] || {}).positionId : (o.authority && o.authority.positionId);
+  // T27: a create is sent as the draft's controlling Position when held (else OPS of its Facility, else the first creator),
+  // so it follows the CTRL FACILITY/POSITION pickers; an edit acts as the Position the panel chose (authorityFor).
+  const actingPosition = () => (creating
+    ? caps.createActingPositionFor(o.signedOn, { controllingFacilityId: state.draft.controllingFacilityId, controllingPositionId: state.draft.controllingPositionId })
+    : (o.authority && o.authority.positionId));
   head.appendChild(_el('span', 'airspace-editor-as', `${creating ? 'Creating' : 'Editing'} as `));
-  head.appendChild(_el('strong', '', asPosition || '?'));
+  const asEl = _el('strong', 'airspace-editor-as-position', actingPosition() || '?');
+  head.appendChild(asEl);
   if (!creating) {
     head.appendChild(_el('span', 'airspace-editor-meta', `definition rev ${openedRev}`));
     head.appendChild(_el('span', 'airspace-editor-meta', `opened ${o.zulu(o.now())}`));
@@ -185,6 +190,7 @@ export function openAirspaceEditor(o) {
   // ── refresh: dirty marks, was-text, errors, Save ──
   let latest = null;
   function refresh() {
+    asEl.textContent = actingPosition() || '?';
     const dirty = creating ? [] : dirtyFields(base, state.draft, o.transitionAltFt);
     latest = validateDraft(base, state.draft, { creating, editable, others: o.others });
     for (const f of SCALAR_FIELDS) {
@@ -230,7 +236,7 @@ export function openAirspaceEditor(o) {
       : { kind: 'EditAirspace', patch };
     const id = creating ? op.definition.airspaceId : base.airspaceId;
     state.sent = { patch, creating };
-    state.pending = o.send(asPosition, id, creating ? 0 : o.record.rev, op, creating ? {} : { baseDefRev: defRev }, { onAck: handleAck }) ?? '?';
+    state.pending = o.send(actingPosition(), id, creating ? 0 : o.record.rev, op, creating ? {} : { baseDefRev: defRev }, { onAck: handleAck }) ?? '?';
     refresh();
   }
   function _createDefinition() {
@@ -301,7 +307,7 @@ export function openAirspaceEditor(o) {
       if (!res.ok) return;
       if (res.empty) { stat.textContent = 'Nothing left to save: you took theirs for everything.'; return; }
       state.sent = { patch: res.patch, creating: false };
-      state.pending = o.send(asPosition, base.airspaceId, o.record.rev, { kind: 'EditAirspace', patch: res.patch }, { baseDefRev: res.baseDefRev }, { onAck: handleAck }) ?? '?';
+      state.pending = o.send(actingPosition(), base.airspaceId, o.record.rev, { kind: 'EditAirspace', patch: res.patch }, { baseDefRev: res.baseDefRev }, { onAck: handleAck }) ?? '?';
       stat.textContent = 'Sending...'; reviewBtn.disabled = true;
       state.conflictStat = stat;
     });
