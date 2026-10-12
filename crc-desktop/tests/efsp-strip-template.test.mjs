@@ -431,6 +431,7 @@ test('9F is a select of the configured stereo routes, never free text', async ()
     assert.deepEqual(enumSelectOptionsFor('9F'), ['PACK 1', 'PACK 2'], 'no FDR is no current route, not a throw');
     assert.equal(isBlockEditable('9F', 'DEPARTURE'), true);
     assert.equal(isEnumBlockClearable('9F'), true, '"—" clears the label and keeps the route (0050)');
+    assert.equal(isEnumBlockClearable('24A'), true, 'T13: airspace ownership clears back to undecided');
     assert.equal(isBooleanToggleBlock('9F'), false);
     // T3: a route retired since the flight filed stays on it and selected.
     assert.deepEqual(enumSelectOptionsFor('9F', makeFlightData({ filed: { stereoRouteName: 'PACK 9' } })), ['PACK 1', 'PACK 2', 'PACK 9']);

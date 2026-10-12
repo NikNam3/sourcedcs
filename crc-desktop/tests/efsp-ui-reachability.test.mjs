@@ -1914,6 +1914,16 @@ test('"—" is offered only where the server accepts a clear, and clears with ""
   fire(degr, 'change');
   assert.equal(fixed.sent.length, 0, 'a clear the server refuses was sent anyway');
 
+  // T13 (LT-AIRSPACE-FIX): airspace ownership, once set, can be cleared back to undecided.
+  const owned = await renderStrip({ strip, flightData: { ...FDR, airspace: { owner: 'USING_AGENCY', changedAt: null, changedBy: null, transitions: [] } }, signedOn });
+  const arspc = openEnum(owned.el, '24A');
+  assert.ok(blankOption(arspc), 'a set ARSPC must offer "—" to clear it (T13)');
+  arspc.value = '';
+  fire(arspc, 'change');
+  assert.equal(owned.sent.length, 1, 'clearing ARSPC sent nothing');
+  assert.equal(owned.sent[0].op.blockId, '24A');
+  assert.equal(owned.sent[0].op.value, '');
+
   // But an UNSET Block keeps it: the picker has to be able to show "no value",
   // and without a blank the first real pick would not move selectedIndex and
   // so would fire no 'change' at all.
