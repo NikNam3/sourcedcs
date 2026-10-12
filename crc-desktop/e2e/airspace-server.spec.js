@@ -32,8 +32,12 @@ const MISSION = () => ({
   drawings: [{ primitiveType: 'Polygon', polygonMode: 'free', closed: true, name: 'ADANA SOUTH MOA', layerName: 'Common', points: sq.map(([lat, lon]) => ({ lat, lon })) }],
 });
 
-async function open(page, { controller, withMap = false } = {}) {
-  const errors = (await openPanel(page, { signedOn: ['AP'], facilityId: 'INCIRLIK', controller })).consoleErrors;
+async function open(page, { controller, withMap = false, signedOn = ['AP'], also = null } = {}) {
+  const errors = (await openPanel(page, { signedOn, facilityId: 'INCIRLIK', controller })).consoleErrors;
+  if (also) { // a second Facility at once (T27: OPS at INCIRLIK and CTR at CENTER), acked by the server like the first
+    await page.evaluate(([f, h]) => crc.ws.sendEfspSetPositions(f, h), [also.facilityId, also.signedOn]);
+    await page.waitForFunction(([f, h]) => { const a = crc.ws.getAckedPositions(f); return h.every(p => a.includes(p)); }, [also.facilityId, also.signedOn]);
+  }
   await page.evaluate(() => { if (!crc.dock.isDockPanelOpen('airspace')) crc.dock.toggleDockPanel('airspace', true); });
   await expect(page.locator('#airspace-panel')).toBeVisible({ timeout: 10000 });
   await page.evaluate(() => {
@@ -132,4 +136,76 @@ test('a geometry picked from a DCS drawing is accepted by crc-sync and reaches t
   await expect.poll(() => lastAck(page).then(a => a && a.airspace && a.airspace.defRev)).toBe(2);
   expect((await lastAck(page)).ok).toBe(true);
   await expect.poll(() => serverRecord(other, 'MOA-GEO').then(r => r && r.definition.geometry)).toBeFalsy();
+});
+
+test('T27: OPS + CTR combined creates a CENTER MOA, sent as CTR (the draft\'s controlling Position), and crc-sync accepts it', async ({ page }) => {
+  const errors = await open(page, { signedOn: ['OPS'], also: { facilityId: 'CENTER', signedOn: ['CTR'] } });
+  const ed = await createAirspace(page, 'MOA-GAZIPASA', 'GAZIPASA');
+  await fld(ed, 'CTRL FACILITY').locator('select').selectOption('CENTER');
+  await expect(fld(ed, 'CTRL POSITION').locator('select')).toHaveValue('CTR');
+  await expect(ed.locator('.airspace-editor-as-position')).toHaveText('CTR');
+  await page.evaluate(() => {
+    window.__sentAirspace = [];
+    const orig = crc.app._ws.send.bind(crc.app._ws);
+    crc.app._ws.send = (data) => { try { const m = JSON.parse(data); if (m.type === 'efsp-airspace-mutation') window.__sentAirspace.push(m); } catch (_) { /* not JSON */ } return orig(data); };
+  });
+  await ed.locator('.airspace-save-btn').click();
+  await expect.poll(() => lastAck(page).then(a => a && a.airspaceId)).toBe('MOA-GAZIPASA');
+  const ack = await lastAck(page);
+  expect(ack.ok, `crc-sync said ${ack.reason}: ${ack.detail}`).toBe(true);
+  expect(ack.airspace.definition).toMatchObject({ controllingFacilityId: 'CENTER', controllingPositionId: 'CTR' });
+  expect((await page.evaluate(() => window.__sentAirspace)).map(m => m.actingPositionId)).toEqual(['CTR']);
+
+  // edit and delete act as CTR too (OPS has no say over a CENTER airspace)
+  await menuAction(page, 'MOA-GAZIPASA', 'edit');
+  const edit = card(page, 'MOA-GAZIPASA').locator('.airspace-editor');
+  await expect(edit.locator('.airspace-editor-as-position')).toHaveText('CTR');
+  await fld(edit, 'WORK FREQ').locator('input').fill('139.300');
+  await edit.locator('.airspace-save-btn').click();
+  await expect.poll(() => lastAck(page).then(a => a && a.airspace && a.airspace.defRev)).toBe(2);
+  expect((await lastAck(page)).ok).toBe(true);
+  await menuAction(page, 'MOA-GAZIPASA', 'delete');
+  await card(page, 'MOA-GAZIPASA').locator('.airspace-delete .airspace-save-btn').click();
+  await expect.poll(() => lastAck(page).then(a => a && a.removed)).toBe('MOA-GAZIPASA');
+  expect((await page.evaluate(() => window.__sentAirspace)).map(m => m.actingPositionId)).toEqual(['CTR', 'CTR', 'CTR']);
+  expect(errors.filter(e => !/MapTiler|403|tile|glyph|Failed to load resource/i.test(e))).toEqual([]);
+});
+
+test('T27: a refusal names who may do it, never "OPS of CENTER"', async ({ page }) => {
+  await open(page, { signedOn: ['OPS'] });
+  // OPS alone may not pick CENTER in the editor (the pickers offer only what it may create), so send the create directly
+  await page.evaluate(() => crc.ws.sendEfspAirspaceMutation('OPS', 'MOA-NOPE', 0,
+    { kind: 'CreateAirspace', definition: { airspaceId: 'MOA-NOPE', name: 'NOPE', kind: 'AREA', type: 'MOA', controllingFacilityId: 'CENTER', controllingPositionId: 'CTR' } }));
+  await expect.poll(() => lastAck(page).then(a => a && a.airspaceId)).toBe('MOA-NOPE');
+  const ack = await lastAck(page);
+  expect(ack).toMatchObject({ ok: false, reason: 'PERMISSION_DENIED', detail: 'OPS may not create MOA-NOPE: only CTR may' });
+});
+
+test('T28: an airspace made from a DCS drawing is drawn instead of that drawing, and the drawing returns when the airspace is not drawn', async ({ page }) => {
+  await open(page, { withMap: true });
+  const ed = await createAirspace(page, 'MOA-T28', 'MOA T28');
+  const outline = ed.locator('.asg-area');
+  await outline.locator('#asg-pick').click();
+  await outline.locator('.asg-drawing', { hasText: 'ADANA SOUTH MOA' }).click();
+  await ed.locator('.airspace-save-btn').click();
+  await expect.poll(() => lastAck(page).then(a => a && a.airspaceId)).toBe('MOA-T28');
+  expect((await lastAck(page)).ok).toBe(true);
+  // the default menu draws ACTIVE airspaces only: a RETURNED one is not drawn, so its drawing stays
+  expect(await page.evaluate(() => crc.airspaceLayer.hiddenDrawingIndices())).toEqual([]);
+  // draw this one (a per-airspace "on" in the layer menu): its outline replaces the drawing
+  await page.evaluate(() => {
+    const menu = crc.airspaceLayer.currentMenu();
+    const t = crc.airspaceLayer.currentTheater();
+    crc.airspaceLayer.applyMenu({ ...menu, overrides: { ...(menu.overrides || {}), [t]: { ...((menu.overrides || {})[t] || {}), 'MOA-T28': 'on' } } });
+  });
+  await expect.poll(() => page.evaluate(() => crc.airspaceLayer.lastAirspaceFeatures().outlines.features.map(f => f.properties.id))).toContain('MOA-T28');
+  expect(await page.evaluate(() => crc.airspaceLayer.hiddenDrawingIndices())).toEqual([0]);
+  expect(JSON.stringify(await page.evaluate(() => crc.mapHandle.map.getFilter('drawing-lines')))).toContain('[0]');
+  // switched off again: the drawing is back
+  await page.evaluate(() => {
+    const menu = crc.airspaceLayer.currentMenu();
+    const t = crc.airspaceLayer.currentTheater();
+    crc.airspaceLayer.applyMenu({ ...menu, overrides: { ...(menu.overrides || {}), [t]: { ...((menu.overrides || {})[t] || {}), 'MOA-T28': 'off' } } });
+  });
+  await expect.poll(() => page.evaluate(() => crc.airspaceLayer.hiddenDrawingIndices())).toEqual([]);
 });

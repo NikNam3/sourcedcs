@@ -241,6 +241,18 @@ test('F-206: choosing "—" on a set enum Block clears it', async ({ page }) => 
   await expect(s.locator('.efsp-block-RSVC')).toHaveText('', { timeout: 5000 });
 });
 
+test('T13: ARSPC (Block 24A) once set can be cleared back to blank, and crc-sync keeps it cleared', async ({ page }) => {
+  await openPanel(page, { signedOn: ['CTR'], facilityId: 'CENTER', controller: 'ctr-controller' });
+  const s = await seedStrip(page, { callsign: 'ENM213', actingPositionId: 'CTR', bayId: 'ctr-enroute', stripType: 'ARRIVAL', facilityId: 'CENTER' });
+  await s.locator('.efsp-block-24A').click();
+  await s.locator('select.efsp-block-enum-select').selectOption('USING_AGENCY');
+  await expect(s.locator('.efsp-block-24A')).toHaveText('USING_AGENCY');
+  await s.locator('.efsp-block-24A').click();
+  await s.locator('select.efsp-block-enum-select').selectOption('');
+  await expect(s.locator('.efsp-block-24A')).toHaveText('', { timeout: 5000 });
+  await expect(page.locator('#efsp-mutation-error')).not.toContainText('airspace ownership');
+});
+
 // ── F-207 (extends F-103) ────────────────────────────────────────────────
 
 test('F-207: a refused Block edit keeps what was typed and marks the Block', async ({ page }) => {
