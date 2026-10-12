@@ -821,3 +821,128 @@ trajectory conflict, and only for **active** airspace (as the FAA's does). Follo
 **airspace conflict** (P/CG term), alert the Position working the flight (the FAA alerts the sector with the flight),
 make it acknowledgeable, and **exclude aircraft with using-agency approval** (our `airspaceEntry`/MRU approval = ¶9-3-1
 a–b). A predictive look-ahead (warn before entry) would be closer to EDST — **human decides** (LT-RQ5).
+
+---
+
+## Q10 (T4) — which radars present ground vehicles
+
+### What the sources say
+
+- **P/CG, AIRPORT SURVEILLANCE RADAR:** *"Approach control radar used to detect and display an aircraft's position in the
+  terminal area."* **AIR ROUTE SURVEILLANCE RADAR:** *"ARTCC radar used primarily to detect and display an aircraft's
+  position while en route between terminal areas."* (Both defined by what they are for: aircraft.)
+- **P/CG, MOVING TARGET INDICATOR:** *"An electronic device which will permit radar scope presentation only from targets
+  which are in motion. A partial remedy for ground clutter."* **GROUND CLUTTER:** *"A pattern produced on the radar scope by
+  ground returns … The effect of ground clutter is minimized by the use of moving target indicator (MTI) circuits in the
+  radar equipment resulting in a radar presentation which displays only targets which are in motion."*
+- **AIM (Basic with Chg 1–3, 7-9-26) ¶4-5-1 b.1(b):** *"… using beacon radar and electronically eliminating stationary and
+  slow moving targets by a method called moving target indicator (MTI) usually negate the problem."* (c): *"radar beacon
+  and MTI are very effectively used to combat ground clutter … A negative characteristic of MTI is that an aircraft flying
+  a speed that coincides with the canceling signal of the MTI (tangential or "blind" speed) may not be displayed …"*
+- **P/CG, AIRPORT SURFACE DETECTION EQUIPMENT (ASDE):** *"Surveillance equipment specifically designed to detect aircraft,
+  vehicular traffic, and other objects, on the surface of an airport, and to present the image on a tower display."*
+  JO 7110.65BB ¶3-6-1 b: *"Use ASDE systems to augment visual observation of aircraft landing or departing, and aircraft
+  or vehicular movements on runways and taxiways …"*
+- **GCI/AWACS:** FAA orders are silent. USAF E-3 fact sheet (archived copy at gulflink.health.mil; af.mil and tinker.af.mil
+  copies return 403): *"The radar combined with an identification friend or foe subsystem can look down to detect …"*
+  low-flying aircraft *"… by eliminating ground clutter returns that confuse other radar systems."* (Ground-moving-target
+  radars such as JSTARS exist but are a different sensor; nothing read here.)
+
+### Answer in plain words
+
+Air-surveillance radars (ASR, ARSR, and by the fact sheet AWACS) are built to show **aircraft**; their MTI/clutter
+processing removes **stationary and slow-moving** returns (AIM ¶4-5-1), which is what ground vehicles mostly are. The FAA
+radar that shows vehicles is **ASDE (surface movement radar)**, on the tower display only. **Inference:** a fast vehicle
+on a road could still pass MTI on a real ASR; the sources do not say how often, and the ATC orders never treat vehicles
+as radar traffic outside ASDE. Military approach radars (RAPCON/GCA ASR/PAR) are covered by the same ASR definition.
+
+### What it means for LT-GROUND
+
+The supervisor's proposal matches the sources: air-surveillance radars do not present ground vehicles (stationary or
+slow ones removed by MTI; aircraft on the ground are the separate H6 question). ADR 0121 should cite P/CG MTI / GROUND
+CLUTTER and AIM ¶4-5-1, and say that **no ASDE is modelled**. Whether to keep a speed gate (show fast-moving vehicles,
+like a real MTI) is **the human's choice** (LT-RQ11); simplest FAA-shaped answer: none.
+
+---
+
+## Q11 (T12) — acquiring a track by its assigned beacon code
+
+### What the orders say
+
+- **JO 7110.65BB ¶5-3-3 d** (EN ROUTE): *"An aircraft may be considered identified when the full data block is
+  automatically associated with the target symbol of an aircraft that is squawking a discrete code assigned by the
+  computer."*
+- **¶5-2-1 b:** *"… issue beacon codes assigned by the computer. … NOTE- The computer will assign only discrete beacon
+  codes unless all the discrete codes allocated to a facility are in use."* b.2 NOTE: an ARTCC-computer code *"will cause
+  auto-acquisition of the aircraft prior to handoff. When an airborne aircraft that has been assigned a beacon code by the
+  ARTCC computer and whose flight plan will terminate in another facility's area cancels ATC service, appropriate action
+  should be taken to remove flight plan information on that aircraft."*
+- **¶5-3-4 a** (TERMINAL): *"Consider an auto-acquired aircraft as identified when the data block is displayed and is
+  visible to you, and … 1. The radar or beacon identification procedures have been used to confirm the identity of the
+  tagged target. 2. The aircraft is being handed off using a NAS automated system and one of the following does not appear
+  in the data block: "CST", "NAT", "NT", "AMB", "OLD", "AM", or "TRK"."*
+- **¶5-4-6 e** NOTE: *"When the beacon code received from the aircraft does not match the computer assigned beacon code,
+  the code received (ERAM, MEARTS) or the site-adapted code … (STARS) will be displayed in the data block. When the
+  aircraft changes to the computer assigned code, the code is automatically removed from the data block."*
+- **JO 7210.3EE ¶12-6-6 a** (STARS): *"Establish automatic acquisition areas for arrivals and overflights …"*, *"for
+  departing aircraft 1 mile or less from the runway end"*, *"automatic termination areas for arriving aircraft 1 mile or
+  less from the runway threshold …"*.
+- ¶5-2-12 a: *"Inform an aircraft with an operable transponder that the assigned beacon code is not being displayed."*
+
+### Answer in plain words
+
+- FAA automation acquires a track by matching the **assigned discrete code** of an **active flight plan** to the code the
+  target is squawking, inside an acquisition area; the data block then follows the target. A mismatch shows the
+  received code in the data block until the pilot squawks the assigned one.
+- **Whether an earlier flight's association blocks the match: silent** — the orders do not describe the tracker's
+  internals. What they do say: codes are **discrete** (one flight per code while in use), a flight's data is removed when
+  it terminates/cancels (¶5-2-1 b.2 NOTE), and tracks terminate automatically near the arrival runway (7210.3 ¶12-6-6 a.4).
+  **Inference:** a dropped/terminated flight holds no code, so it cannot block a new flight assigned that code; two
+  *active* flights with the same code would be a duplicate the FAA prevents at assignment, not resolves at correlation.
+
+### What it means for LT-CORRELATION
+
+The beacon rung should match the **assigned code of an active Strip** against the squawked code, with no
+"former holder" exclusion from a dropped flight (inference above) — but changing ADR 0076 S-L27 is a supervisor/human
+call (the briefing already says ask first; LT-RQ12). Separately, T12's own cause (code source: SRS vs synthetic AI codes,
+octal formatting) is a bug to find, not an FAA question; the FAA behaviour to show while unmatched is the received code
+in the data block (¶5-4-6 e NOTE), i.e. our `NO TRK` cell could show "squawking 0003, assigned 0003" — useful for the
+debug.
+
+---
+
+## Questions for the human
+
+Each with options and a recommendation (R). Ids `LT-RQ*` so the supervisor can put them on the Decision Desk.
+
+| Id | For | Question | Options | R |
+|---|---|---|---|---|
+| LT-RQ1 | Q4/T7 | Which letters for the wake category indicator in Block 3? | A. CWT category A–I (JO 7110.65BB Chg 2 terminal), derived from the type by a JO 7360.1K table, overridable. B. Legacy `H/` (heavy/super only, as en route). C. ICAO WTC L/M/H/J (what the DD-1801 gives today). | **A** (current terminal order; derived, so nobody types it) |
+| LT-RQ2 | Q4/T7 | Block 3 format | A. `[count/][indicator/]TYPE[/suffix]`, e.g. `2/G/F16/P`, `F16/P` (indicator in the old `H/` slot; the order shows no example). B. ICAO order `F16/M` (WTC after type). | **A** |
+| LT-RQ3 | Q5/T8 | Label for Block 1 | A. `ACID` (FAA, ¶2-3-5 b). B. Keep `CALLSIGN`. | **A** with tooltip "aircraft identification" |
+| LT-RQ4 | Q5/T8 | Approve the Q5 label table as drafted? | A. Approve as is. B. Approve with edits (list). C. Keep current labels, add FAA tooltips only. | **A** |
+| LT-RQ5 | Q1/T1 | The five SFA frequencies: which three rotate, what are the other two? (7610.14A ¶7-1-5 is silent) | A. Facility config lists ≥5 UHF frequencies and marks 3 as the AP↔PAR rotation pool; the other 2 are AP's own (initial contact) and spare. B. All five in one pool, any 3 in use at a time. | **A** |
+| LT-RQ6 | Q2/T5 | Where does the PAR Strip go when the aircraft lands? (¶5-12-9 "CONTACT (terminal control function) AFTER LANDING") | A. To LC (tower), who owns the runway and passes it to GC/drops it. B. To GC directly. C. Dropped at touchdown. | **A** |
+| LT-RQ7 | Q2/T5 | "Landing assured" button name | A. Split into FAA steps: "Cleared to land" (relay, optional) and "Landed" (leaves PAR). B. One button "Landed". | **A** |
+| LT-RQ8 | Q3/T11 | When does altitude conformance stop on a PAR final? | A. At PAR's "Begin descent" (¶5-12-3), a FINAL action. B. When PAR accepts the handoff. | **A** if the action is added, else **B** |
+| LT-RQ9 | Q3/T11 | Heading conformance during the PAR final | A. None (PAR's headings recorded, not alerted; course deviation is PAR's verbal job). B. Against PAR's latest heading. | **A** |
+| LT-RQ10 | Q6/T17 | Conformance while MARSA with a tanker | A. No altitude/heading conformance from "MARSA declared" to "MARSA terminated". B. Model the AR block and check against it. | **A** |
+| LT-RQ11 | Q10/T4 | Ground vehicles on air-surveillance radars | A. Never presented. B. Presented only above a speed gate (MTI-like). | **A** |
+| LT-RQ12 | Q11/T12 | Drop the former-holder exclusion (ADR 0076 S-L27) for the beacon rung? | A. Yes for the beacon rung (assigned discrete code of an active Strip wins). B. Keep as is. | **A** |
+| LT-RQ13 | Q8/T27 | Using agency rights on a MOA another Facility controls | A. Using agency (OPS) schedules/activates/releases and approves entry; only the controlling Position defines (create/edit shape). B. OPS may also create/define. C. Keep today's rule. | **A** |
+| LT-RQ14 | Q9/T29 | Airspace alert timing | A. On entry only (actual containment; ours, labelled). B. Predictive look-ahead like EDST's aircraft-to-airspace probe. C. Both. | **A** now, B later if wanted |
+| LT-RQ15 | Q6/T14 | "MARSA voided" notice lifetime (orders silent) | A. Until acknowledged by a controller holding either Strip. B. Fixed time (e.g. 60 s). C. Until MARSA re-declared or terminated. | **A** |
+
+## For the supervisor
+
+- **Edition:** cite **JO 7610.14A** (effective 8-7-25, Chg 2 7-9-26), not "7610.14 with Chg 1 (3-21-24)"; ¶7-1-5 unchanged.
+- **JO 7110.65BB Chg 2 (1-22-26)** changed Block 3 from the `H/` heavy indicator to the CWT "wake category indicator"
+  (terminal only); TBL 2-3-3/4/5 are in ¶2-3-4, ¶2-3-6 is the type designator rule.
+- **Our ARRIVAL/OVERFLIGHT block numbers do not match the FAA's** (ETA is FAA Block 8, coordination fix Block 7, altitude
+  Block 9; overflight Block 7 is the coordination indicator, not requested altitude). The table keeps our ids (wire/state
+  keys) and fixes only labels/tooltips; renumbering would be a separate, wire-changing decision.
+- **Our Blocks 19–24 reuse en route numbers with different meanings**; labelled "ours".
+- **Q7/Q9:** the FAA has real equivalents (ERAM Group Suppression/STARS inhibit; EDST aircraft-to-airspace "Blue" alert),
+  so T16 and T29 are not purely ours — ADRs 0118/0119 should cite ¶5-13-1 c, ¶5-14-6 c, ¶13-1-1/13-1-2 and the P/CG.
+- Sources not readable: AETCI 11-204, ATP-3.3.4.2 / T.O. 1-1C-1 (AR rendezvous geometry, the "1 NM"), CV NATOPS/CATCC
+  (carrier final), JO 7110.126 (CWT, cancelled into 7110.65), af.mil pages (403).
