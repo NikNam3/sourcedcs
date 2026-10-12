@@ -4,14 +4,14 @@ import crypto from 'crypto';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { slot } from './helpers/wire-slots.mjs';
 
-/* L18's walks (docs/adr/0075, 0093): Incirlik's RSU, SFA and PAR on the wire.
+/* L18's walks (docs/adr/0075, 0093), as docs/adr/0117 left them: Incirlik's RSU and PAR on the wire, and the single
+ * frequency approach between AP and PAR (no SFA Position; JO 7610.14A para 7-1-5, JO 7110.65BB para 4-7-3, 5-10-15).
  *
  * Not just the lifecycle. Each flow is walked the way pilots disturb it
  * (decisions memory "walk pilot requests"): a pilot who SWITCHES (asks for a
  * different frequency, goes back round the pattern), CANCELS (a missed
- * approach, a drop, a rotation that finds PAR unstaffed), and ARRIVES LATE (the
+ * approach, a drop, a handoff that finds PAR unstaffed), and ARRIVES LATE (the
  * receiving Position signs on after the aircraft is ready, a Position
  * vacates with an aircraft on its frequency).
  */
@@ -29,12 +29,11 @@ for (const [k, v] of Object.entries({
 fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, '{}');
 
 const { createEfsp } = await import('../src/efsp/index.js');
-const { snapshotMessage } = await import('../src/efsp/efsp-ws.js');
 const {
-  crew, hold, freshEfsp, act, mustAct, advance, sfaAct, mustSfaAct,
+  crew, hold, freshEfsp, act, mustAct, advance,
 } = await import('./helpers/efsp-scenario.mjs');
 
-const STAFFED = { OPS: 'INCIRLIK', LC: 'INCIRLIK', RSU: 'INCIRLIK', AP: 'INCIRLIK', SFA: 'INCIRLIK', PAR: 'INCIRLIK' };
+const STAFFED = { OPS: 'INCIRLIK', GC: 'INCIRLIK', LC: 'INCIRLIK', RSU: 'INCIRLIK', AP: 'INCIRLIK', PAR: 'INCIRLIK' };
 const MS = { 'freq-1': 232.1, 'freq-2': 233.1, 'freq-3': 234.1, 'freq-4': 235.1, 'freq-5': 236.1 };
 const board = (efsp) => efsp.boardStoreFor('INCIRLIK');
 const strip = (efsp, s) => board(efsp).getStrip(s.stripId);
@@ -50,257 +49,220 @@ function refused(ack, reason, detail, label = '') {
   if (detail) assert.match(ack.detail || '', detail, label);
 }
 
-/** An inbound ARRIVAL with AP, then handed to SFA on a frequency Rack. */
-function sfaArrival(efsp, c, rackId = 'freq-2') {
-  let s = mustAct(efsp, c.AP, 'AP', null, {
+/** An inbound ARRIVAL with AP; on an SFA frequency when `rackId` is given (AP files it on that Rack of ap-sfa). */
+function arrival(efsp, c, rackId = 'freq-2') {
+  const s = mustAct(efsp, c.AP, 'AP', null, {
     kind: 'CreateStrip', bayId: 'ap-inbound', rackId: 'main', stripType: 'ARRIVAL',
     flightData: { callsign: `ARR${++n}`, aircraftType: 'F16', wakeCategory: 'M', originAirport: 'LTAG' },
   });
-  return mustAct(efsp, c.AP, 'AP', s, { kind: 'TransferStrip', toPositionId: 'SFA', bayId: 'sfa-frequencies', rackId });
+  return rackId ? mustAct(efsp, c.AP, 'AP', s, { kind: 'MoveStrip', bayId: 'ap-sfa', rackId }) : s;
 }
+
+/** AP's handoff to the final controller: an ordinary strip transfer into PAR's final Bay. */
+const toPar = { kind: 'TransferStrip', toPositionId: 'PAR', bayId: 'par-final', rackId: 'main' };
+const landed = { kind: 'FinalCall', call: 'LANDED' };
 
 const flightDataOf = (efsp, s) => efsp.flightDataStore.getFlightData(s.flightDataId);
 const freqOf = (efsp, s) => flightDataOf(efsp, s).comms.workingFrequencyMhz;
 
-// ── SFA ─────────────────────────────────────────────────────────────────────
+// ── Single frequency approach: AP and PAR ───────────────────────────────────
 
-test('SFA acceptance (guide §4.7, D17): rotating moves the controller and the Strip\'s frequency is unchanged', () => {
+test('T1: AP files the arrival on an SFA frequency and hands it to PAR; the strip type changes in place, the frequency never does (para 5-10-15)', () => {
   const { efsp, c } = fresh();
-  const s = sfaArrival(efsp, c, 'freq-2');
-  assert.equal(s.ownerPositionId, 'SFA');
-  assert.equal(s.bayId, 'sfa-frequencies');
-  assert.equal(s.rackId, 'freq-2');
-  assert.equal(freqOf(efsp, s), MS['freq-2'], 'the Rack the Strip was filed in is its frequency');
+  const s = arrival(efsp, c, 'freq-2');
+  assert.equal(s.ownerPositionId, 'AP');
+  assert.equal(s.bayId, 'ap-sfa');
+  assert.equal(freqOf(efsp, s), MS['freq-2'], 'the Rack AP filed the Strip on is its frequency');
   const commsBefore = JSON.stringify(flightDataOf(efsp, s).comms);
 
-  const rotated = mustAct(efsp, c.SFA, 'SFA', strip(efsp, s), { kind: 'SfaRotation' });
-  assert.equal(rotated.ownerPositionId, 'PAR', 'the controller moved');
-  assert.equal(rotated.stripType, 'FINAL', 'ARRIVAL becomes FINAL in place');
-  assert.equal(rotated.state, 'ON_FINAL');
-  assert.equal(rotated.stripId, s.stripId, 'same Strip');
-  assert.equal(rotated.flightDataId, s.flightDataId, 'same flight');
-  assert.equal(rotated.bayId, 'par-final');
-  assert.equal(JSON.stringify(flightDataOf(efsp, s).comms), commsBefore, 'the flight\'s comms record is byte-identical: no frequency change, no transition');
-  assert.equal(freqOf(efsp, s), MS['freq-2']);
+  const handed = mustAct(efsp, c.AP, 'AP', strip(efsp, s), toPar);
+  assert.equal(handed.ownerPositionId, 'PAR');
+  assert.equal(handed.stripType, 'FINAL', 'ARRIVAL becomes FINAL in place');
+  assert.equal(handed.state, 'ON_FINAL');
+  assert.equal(handed.stripId, s.stripId, 'same Strip');
+  assert.equal(handed.flightDataId, s.flightDataId, 'same flight');
+  assert.equal(handed.bayId, 'par-final');
+  assert.equal(JSON.stringify(flightDataOf(efsp, s).comms), commsBefore, 'no frequency change, no transition');
   assert.deepEqual(
-    { kind: rotated.sfaTransfer.kind, trigger: rotated.sfaTransfer.trigger, from: rotated.sfaTransfer.from, to: rotated.sfaTransfer.to, frequencyRackId: rotated.sfaTransfer.frequencyRackId },
-    { kind: 'SFA_ROTATION', trigger: 'CONTROLLER_INITIATED', from: 'SFA', to: 'PAR', frequencyRackId: 'freq-2' });
-  // the four trigger types stay four
-  const log = mutations().filter(m => m.op === 'SfaRotation');
-  assert.equal(log.length, 1);
-  assert.equal(log[0].sfaTransfer, 'SFA_ROTATION');
-  assert.equal(log[0].sfaTrigger, 'CONTROLLER_INITIATED');
+    { kind: handed.sfaTransfer.kind, trigger: handed.sfaTransfer.trigger, from: handed.sfaTransfer.from, to: handed.sfaTransfer.to, frequencyRackId: handed.sfaTransfer.frequencyRackId },
+    { kind: 'PAR_HANDOFF', trigger: 'CONTROLLER_INITIATED', from: 'AP', to: 'PAR', frequencyRackId: 'freq-2' });
+  const log = mutations().filter(m => m.op === 'TransferStrip' && m.conversion);
+  assert.equal(log.at(-1).conversion, 'PAR_HANDOFF');
 });
 
-test('AP may send the rotation transfer from its own Strip too (AP/SFA to PAR); PAR, RSU and LC may not', () => {
+test('T1: the drop the live test refused works: an arrival AP never put on an SFA frequency is handed to PAR the same way (a frequency change is the pilot\'s, ¶5-9-4 d.3)', () => {
   const { efsp, c } = fresh();
-  let s = mustAct(efsp, c.AP, 'AP', null, {
-    kind: 'CreateStrip', bayId: 'ap-inbound', rackId: 'main', stripType: 'ARRIVAL',
-    flightData: { callsign: `ARR${++n}`, aircraftType: 'F16', wakeCategory: 'M', originAirport: 'LTAG' },
-  });
-  refused(act(efsp, c.RSU, 'RSU', s, { kind: 'SfaRotation' }), 'PERMISSION_DENIED', null, 'RSU');
-  refused(act(efsp, c.LC, 'LC', s, { kind: 'SfaRotation' }), 'PERMISSION_DENIED', null, 'LC');
-  const rotated = mustAct(efsp, c.AP, 'AP', s, { kind: 'SfaRotation' });
-  assert.equal(rotated.ownerPositionId, 'PAR');
-  assert.equal(rotated.sfaTransfer.from, 'AP');
-  refused(act(efsp, c.PAR, 'PAR', strip(efsp, s), { kind: 'SfaRotation' }), 'PERMISSION_DENIED', null, 'PAR cannot rotate its own Strip');
+  const s = arrival(efsp, c, null);
+  const handed = mustAct(efsp, c.AP, 'AP', s, toPar);
+  assert.equal(handed.stripType, 'FINAL');
+  assert.equal(handed.sfaTransfer.frequencyRackId, null, 'no SFA Rack was left');
 });
 
-test('only the jurisdiction Position changes the rotation record; the others get a permission refusal, and the record is one whole delta', () => {
+test('only AP hands an arrival to PAR: LC and RSU may not, and a FINAL already with PAR is not handed again', () => {
   const { efsp, c } = fresh();
-  const before = efsp.sfaStore.view();
-  assert.deepEqual(before.rotation, { 'freq-1': 'AP', 'freq-2': 'SFA', 'freq-3': 'PAR' });
-  for (const id of ['SFA', 'PAR', 'RSU', 'LC', 'OPS']) {
-    const r = sfaAct(efsp, c[id], id, { kind: 'SetSfaRotation', rackId: 'freq-4', positionId: id });
-    refused(r.ack, 'PERMISSION_DENIED', /AP holds jurisdiction/, id);
-    assert.equal(slot(r, 'sfa'), undefined);
-  }
-  assert.deepEqual(efsp.sfaStore.view().rotation, before.rotation);
-
-  const r = mustSfaAct(efsp, c.AP, 'AP', { kind: 'SetSfaRotation', rackId: 'freq-4', positionId: 'PAR' });
-  assert.equal(slot(r, 'sfa').type, 'efsp-sfa-delta');
-  assert.deepEqual(slot(r, 'sfa').sfaRotation.rotation, { 'freq-1': 'AP', 'freq-2': 'SFA', 'freq-4': 'PAR' }, 'PAR moved off freq-3 onto freq-4: one Position, one frequency');
-  assert.equal(slot(r, 'sfa').sfaRotation.pool.length, 5);
-  assert.equal(r.ack.sfaRotation.rev, 1);
-  // audited
-  const line = mutations().filter(m => m.op === 'SetSfaRotation').pop();
-  assert.equal(line.ok, true); assert.equal(line.actingPositionId, 'AP'); assert.equal(line.sfaRackId, 'freq-4');
-  assert.ok(mutations().some(m => m.op === 'SetSfaRotation' && m.ok === false && m.reason === 'PERMISSION_DENIED'), 'refusals are audited too');
+  const s = arrival(efsp, c, 'freq-3');
+  const lcBound = mustAct(efsp, c.AP, 'AP', s, { kind: 'TransferStrip', toPositionId: 'LC', bayId: 'lc-arrivals', rackId: 'main' });
+  assert.equal(lcBound.state, 'HANDED_TO_TOWER');
+  refused(act(efsp, c.LC, 'LC', strip(efsp, s), toPar), null, /only valid next state/, 'LC to PAR');
+  const t = arrival(efsp, c, 'freq-4');
+  mustAct(efsp, c.AP, 'AP', t, toPar);
+  refused(act(efsp, c.AP, 'AP', strip(efsp, t), toPar), 'NOT_OWNER', null, 'a second press by the old owner');
 });
 
-test('the rotation record refuses what cannot be: an unknown frequency, an unknown Position, a Position that does not work the SFA, a stale rev', () => {
+test('a pilot SWITCHES frequency before the handoff: AP drags the Strip to another Rack, the frequency follows; the handoff then leaves it alone', () => {
   const { efsp, c } = fresh();
-  refused(sfaAct(efsp, c.AP, 'AP', { kind: 'SetSfaRotation', rackId: 'freq-9', positionId: 'PAR' }).ack, 'VALIDATION_ERROR', /pool/);
-  refused(sfaAct(efsp, c.AP, 'AP', { kind: 'SetSfaRotation', rackId: 'freq-4', positionId: 'CTR' }).ack, 'VALIDATION_ERROR', /not a Position/);
-  // only a Position that works the SFA can be put on a frequency
-  refused(sfaAct(efsp, c.AP, 'AP', { kind: 'SetSfaRotation', rackId: 'freq-3', positionId: 'LC' }).ack, 'VALIDATION_ERROR', /does not work the SFA/);
-  // a frequency taken out of the rotation, and another put in
-  mustSfaAct(efsp, c.AP, 'AP', { kind: 'SetSfaRotation', rackId: 'freq-3', positionId: null });
-  mustSfaAct(efsp, c.AP, 'AP', { kind: 'SetSfaRotation', rackId: 'freq-5', positionId: 'PAR' });
-  refused(sfaAct(efsp, c.AP, 'AP', { kind: 'SetSfaRotation', rackId: 'freq-1', positionId: 'AP' }, { baseRev: 0 }).ack, 'STALE_REV');
-  // setting what is already true changes nothing and says so
-  const same = sfaAct(efsp, c.AP, 'AP', { kind: 'SetSfaRotation', rackId: 'freq-1', positionId: 'AP' });
-  assert.equal(same.ack.ok, true); assert.equal(slot(same, 'sfa'), undefined);
-});
-
-test('a controller must be Primary at the acting Position to touch the rotation (docs/adr/0029)', () => {
-  const { efsp, c } = fresh();
-  const outsider = { session: { controllerId: 'someone-else', who: 'x' }, facilityId: 'INCIRLIK' };
-  refused(sfaAct(efsp, outsider, 'AP', { kind: 'SetSfaRotation', rackId: 'freq-4', positionId: 'PAR' }).ack, 'NOT_HOLDING_POSITION');
-  void c;
-});
-
-test('the rotation record is in the snapshot and survives a restart', () => {
-  const { efsp, c } = fresh();
-  mustSfaAct(efsp, c.AP, 'AP', { kind: 'SetSfaRotation', rackId: 'freq-5', positionId: 'SFA' });
-  const snap = efsp.snapshotFor(c.AP.session);
-  assert.equal(snap.sfaRotation.rotation['freq-5'], 'SFA');
-  assert.equal(snap.sfaRotation.pool.length, 5);
-  assert.equal(snap.sfaRotation.jurisdiction, 'AP');
-  const restarted = createEfsp(); // same snapshot path: the first life's state
-  assert.equal(restarted.sfaStore.positionOn('freq-5'), 'SFA');
-  assert.equal(restarted.sfaStore.positionOn('freq-2'), null, 'SFA moved off freq-2 and the move came back');
-  assert.equal(restarted.sfaStore.view().rev, 1);
-});
-
-test('a pilot SWITCHES frequency: the controller drags the Strip to another Rack, the frequency follows, nobody else is touched', () => {
-  const { efsp, c } = fresh();
-  const s = sfaArrival(efsp, c, 'freq-1');
+  const s = arrival(efsp, c, 'freq-1');
   assert.equal(freqOf(efsp, s), MS['freq-1']);
-  const moved = mustAct(efsp, c.SFA, 'SFA', strip(efsp, s), { kind: 'MoveStrip', bayId: 'sfa-frequencies', rackId: 'freq-4' });
+  const moved = mustAct(efsp, c.AP, 'AP', strip(efsp, s), { kind: 'MoveStrip', bayId: 'ap-sfa', rackId: 'freq-4' });
   assert.equal(moved.rackId, 'freq-4');
-  assert.equal(moved.ownerPositionId, 'SFA', 'the controller did not move');
   assert.equal(freqOf(efsp, s), MS['freq-4']);
-  assert.equal(flightDataOf(efsp, s).comms.transitions.at(-1).workingFrequencyMhz, MS['freq-4'], 'the transition is on the flight, for the sortie\'s record');
-  // back again, and the rotation afterwards still leaves the frequency alone
-  mustAct(efsp, c.SFA, 'SFA', strip(efsp, s), { kind: 'MoveStrip', bayId: 'sfa-frequencies', rackId: 'freq-2' });
-  mustAct(efsp, c.SFA, 'SFA', strip(efsp, s), { kind: 'SfaRotation' });
-  assert.equal(freqOf(efsp, s), MS['freq-2']);
+  assert.equal(flightDataOf(efsp, s).comms.transitions.at(-1).workingFrequencyMhz, MS['freq-4'], 'the transition is on the flight');
+  mustAct(efsp, c.AP, 'AP', strip(efsp, s), toPar);
+  assert.equal(freqOf(efsp, s), MS['freq-4']);
 });
 
-test('a pilot SWITCHES controller (back to AP, then on to PAR): the frequency is the same each time', () => {
+test('T5: Landed sends the Strip to GC as an ARRIVAL at TAXI_IN, PAR\'s final Bay is free, and a second aircraft is handed to PAR', () => {
   const { efsp, c } = fresh();
-  const s = sfaArrival(efsp, c, 'freq-3');
-  const back = mustAct(efsp, c.SFA, 'SFA', strip(efsp, s), { kind: 'TransferStrip', toPositionId: 'AP', bayId: 'ap-inbound', rackId: 'main' });
-  assert.equal(back.ownerPositionId, 'AP');
-  assert.equal(freqOf(efsp, s), MS['freq-3'], 'leaving the SFA Bay does not touch the frequency');
-  const again = mustAct(efsp, c.AP, 'AP', strip(efsp, s), { kind: 'TransferStrip', toPositionId: 'SFA', bayId: 'sfa-frequencies', rackId: 'freq-3' });
-  assert.equal(again.rackId, 'freq-3');
-  mustAct(efsp, c.SFA, 'SFA', strip(efsp, s), { kind: 'SfaRotation' });
-  assert.equal(freqOf(efsp, s), MS['freq-3']);
-});
-
-test('the pilot CANCELS the approach: a missed approach from PAR, then back on final; a second aircraft cannot take the Bay meanwhile', () => {
-  const { efsp, c } = fresh();
-  const a = sfaArrival(efsp, c, 'freq-1');
-  const b = sfaArrival(efsp, c, 'freq-2');
-  mustAct(efsp, c.SFA, 'SFA', strip(efsp, a), { kind: 'SfaRotation' });
-  // PAR holds one aircraft: the second rotation is refused, and B stays with SFA, role intact
-  refused(act(efsp, c.SFA, 'SFA', strip(efsp, b), { kind: 'SfaRotation' }), 'VALIDATION_ERROR', /par-final holds 1 Strip at a time/);
-  assert.equal(strip(efsp, b).ownerPositionId, 'SFA');
+  const a = arrival(efsp, c, 'freq-2');
+  const b = arrival(efsp, c, 'freq-3');
+  mustAct(efsp, c.AP, 'AP', strip(efsp, a), toPar);
+  // PAR holds one aircraft at a time: B waits with AP
+  refused(act(efsp, c.AP, 'AP', strip(efsp, b), toPar), 'VALIDATION_ERROR', /par-final holds 1 Strip at a time/);
+  assert.equal(strip(efsp, b).ownerPositionId, 'AP');
   assert.equal(strip(efsp, b).stripType, 'ARRIVAL');
-  // A goes around: the missed-approach Bay is FINAL's own BOLTER_WAVEOFF
-  const missed = mustAct(efsp, c.PAR, 'PAR', strip(efsp, a), { kind: 'MoveStrip', bayId: 'par-missed', rackId: 'main' });
-  assert.equal(missed.state, 'BOLTER_WAVEOFF');
-  // the Bay is free again: B rotates in
-  const bIn = mustAct(efsp, c.SFA, 'SFA', strip(efsp, b), { kind: 'SfaRotation' });
+
+  const down = mustAct(efsp, c.PAR, 'PAR', strip(efsp, a), landed);
+  assert.deepEqual([down.stripType, down.state, down.ownerPositionId, down.bayId], ['ARRIVAL', 'TAXI_IN', 'GC', 'gc-taxi-in']);
+  assert.equal(freqOf(efsp, a), MS['freq-2'], 'the frequency is the flight\'s; GC is the pilot\'s next call ("CONTACT ... AFTER LANDING", ¶5-12-9)');
+  assert.equal(board(efsp).getAll().filter(x => x.bayId === 'par-final' && x.state !== 'DROPPED').length, 0, 'PAR\'s final Bay is empty');
+
+  const bIn = mustAct(efsp, c.AP, 'AP', strip(efsp, b), toPar);
   assert.equal(bIn.bayId, 'par-final');
-  // A cannot come back on final while B is on it (the NLA is refused, not doubled)
-  refused(act(efsp, c.PAR, 'PAR', strip(efsp, a), { kind: 'InvokeNla' }), null, /par-final holds 1 Strip/, 'A back on final');
-  assert.equal(strip(efsp, a).state, 'BOLTER_WAVEOFF');
-  // B lands: Landing assured (BALL), then the controller drops it; A returns
-  assert.equal(strip(efsp, b).state, 'ON_FINAL');
-});
-
-test('PAR\'s terminal events: Landing assured is the ordinary BALL state with no carrier handoff; then it is dropped', async () => {
-  const { efsp, c } = fresh();
-  const s = sfaArrival(efsp, c);
-  mustAct(efsp, c.SFA, 'SFA', strip(efsp, s), { kind: 'SfaRotation' });
-  const ball = await advance(efsp, c.PAR, 'PAR', strip(efsp, s));
-  assert.equal(ball.state, 'BALL');
-  assert.equal(ball.carrierHandoff, undefined);
-  const gone = await advance(efsp, c.PAR, 'PAR', strip(efsp, s));
+  assert.equal(bIn.ownerPositionId, 'PAR');
+  // GC ends A's flight the ordinary way
+  const gone = mustAct(efsp, c.GC, 'GC', strip(efsp, a), { kind: 'InvokeNla' });
   assert.equal(gone.state, 'DROPPED');
-  assert.equal(live(efsp).length, 0);
+  const log = mutations().filter(m => m.op === 'FinalCall');
+  assert.equal(log.at(-1).finalCall, 'LANDED');
+  assert.equal(log.at(-1).conversion, 'LANDED');
 });
 
-test('a rotation CANCELLED by the receiver: PAR unstaffed refuses it and the aircraft stays; PAR LATE to its Position, the retry works', () => {
+test('the FINAL NLA at an airfield is Landed (the same transfer), never BALL; a drag to GC\'s taxi-in Bay does the same', async () => {
   const { efsp, c } = fresh();
-  const s = sfaArrival(efsp, c);
+  const a = arrival(efsp, c);
+  mustAct(efsp, c.AP, 'AP', strip(efsp, a), toPar);
+  const byNla = await advance(efsp, c.PAR, 'PAR', strip(efsp, a));
+  assert.deepEqual([byNla.stripType, byNla.state, byNla.ownerPositionId], ['ARRIVAL', 'TAXI_IN', 'GC']);
+  const b = arrival(efsp, c);
+  mustAct(efsp, c.AP, 'AP', strip(efsp, b), toPar);
+  const byDrag = mustAct(efsp, c.PAR, 'PAR', strip(efsp, b), { kind: 'TransferStrip', toPositionId: 'GC', bayId: 'gc-taxi-in', rackId: 'main' });
+  assert.deepEqual([byDrag.stripType, byDrag.state, byDrag.ownerPositionId], ['ARRIVAL', 'TAXI_IN', 'GC']);
+});
+
+test('Begin descent and Cleared to land are recorded once each; Begin descent ends the assigned altitude (¶5-12-3, H134 LT-RQ8 a)', () => {
+  const { efsp, c } = fresh();
+  const s = arrival(efsp, c);
+  mustAct(efsp, c.AP, 'AP', strip(efsp, s), { kind: 'SetBlock', blockId: '7', value: '030' });
+  mustAct(efsp, c.AP, 'AP', strip(efsp, s), { kind: 'SetBlock', blockId: '9A-VECTOR', value: '050' });
+  mustAct(efsp, c.AP, 'AP', strip(efsp, s), toPar);
+  const active = (field) => (flightDataOf(efsp, s).clearance[field].entries.find(e => e.status === 'ACTIVE') || {}).value;
+  assert.equal(active('altitude'), '030');
+  // PAR changes the heading and the altitude on the FINAL Strip (H134: PAR needs to)
+  mustAct(efsp, c.PAR, 'PAR', strip(efsp, s), { kind: 'SetBlock', blockId: '9A-VECTOR', value: '060' });
+  mustAct(efsp, c.PAR, 'PAR', strip(efsp, s), { kind: 'SetBlock', blockId: '7A', value: '025' });
+  assert.equal(active('heading'), '060');
+  assert.equal(active('altitude'), '025');
+  const d = mustAct(efsp, c.PAR, 'PAR', strip(efsp, s), { kind: 'FinalCall', call: 'BEGIN_DESCENT' });
+  assert.ok(d.finalCalls.BEGIN_DESCENT.at > 0);
+  assert.equal(active('altitude'), '', 'no assigned altitude on the glidepath');
+  assert.equal(active('heading'), '060', 'the heading stays recorded');
+  refused(act(efsp, c.PAR, 'PAR', strip(efsp, s), { kind: 'FinalCall', call: 'BEGIN_DESCENT' }), 'VALIDATION_ERROR', /already recorded/);
+  const ctl = mustAct(efsp, c.PAR, 'PAR', strip(efsp, s), { kind: 'FinalCall', call: 'CLEARED_TO_LAND' });
+  assert.ok(ctl.finalCalls.CLEARED_TO_LAND);
+  refused(act(efsp, c.AP, 'AP', strip(efsp, s), { kind: 'FinalCall', call: 'CLEARED_TO_LAND' }), 'PERMISSION_DENIED', null, 'AP records no final call');
+  refused(act(efsp, c.PAR, 'PAR', strip(efsp, s), { kind: 'FinalCall', call: 'BALL' }), 'VALIDATION_ERROR', /unknown final call/);
+});
+
+test('the pilot CANCELS the approach: a missed approach from PAR, then back on final; a second aircraft is handed in meanwhile and lands first', () => {
+  const { efsp, c } = fresh();
+  const a = arrival(efsp, c, 'freq-2');
+  const b = arrival(efsp, c, 'freq-3');
+  mustAct(efsp, c.AP, 'AP', strip(efsp, a), toPar);
+  const missed = mustAct(efsp, c.PAR, 'PAR', strip(efsp, a), { kind: 'SetState', toState: 'BOLTER_WAVEOFF' });
+  assert.equal(missed.bayId, 'par-missed');
+  const bIn = mustAct(efsp, c.AP, 'AP', strip(efsp, b), toPar);
+  assert.equal(bIn.bayId, 'par-final');
+  refused(act(efsp, c.PAR, 'PAR', strip(efsp, a), { kind: 'InvokeNla' }), null, /par-final holds 1 Strip/, 'A back on final');
+  refused(act(efsp, c.PAR, 'PAR', strip(efsp, a), landed), 'VALIDATION_ERROR', /on final/, 'Landed from the missed approach Bay');
+  mustAct(efsp, c.PAR, 'PAR', strip(efsp, b), landed);
+  const aBack = mustAct(efsp, c.PAR, 'PAR', strip(efsp, a), { kind: 'InvokeNla' });
+  assert.equal(aBack.state, 'ON_FINAL');
+  mustAct(efsp, c.PAR, 'PAR', strip(efsp, a), landed);
+  assert.deepEqual(live(efsp).map(x => x.ownerPositionId), ['GC', 'GC']);
+});
+
+test('a handoff CANCELLED by the receiver: PAR unstaffed is offered to AP (docs/adr/0110) and the Strip waits at PAR; PAR LATE to its Position finds it there', () => {
+  const { efsp, c } = fresh();
+  const s = arrival(efsp, c);
   hold(efsp, c.PAR.session, 'INCIRLIK', []); // PAR leaves
-  refused(act(efsp, c.SFA, 'SFA', strip(efsp, s), { kind: 'SfaRotation' }), 'NO_RECEIVING_POSITION', /PAR is not staffed/);
-  assert.equal(strip(efsp, s).ownerPositionId, 'SFA');
-  assert.equal(strip(efsp, s).stripType, 'ARRIVAL');
+  const r = act(efsp, c.AP, 'AP', strip(efsp, s), toPar);
+  assert.equal(r.ok, true, JSON.stringify(r));
+  assert.equal(strip(efsp, s).ownerPositionId, 'PAR');
+  assert.equal(strip(efsp, s).bayId, 'par-final');
   hold(efsp, c.PAR.session, 'INCIRLIK', ['PAR']); // PAR arrives late
-  const ok = mustAct(efsp, c.SFA, 'SFA', strip(efsp, s), { kind: 'SfaRotation' });
-  assert.equal(ok.ownerPositionId, 'PAR');
+  mustAct(efsp, c.PAR, 'PAR', strip(efsp, s), landed);
 });
 
-test('U5: a rotation is undoable by the Position that rotated it: back on its frequency Rack after its predecessor, PAR\'s Bay empty (docs/adr/0100, H95)', () => {
+test('Landed with GC unstaffed and nobody offered GC is refused and the aircraft stays with PAR', () => {
   const { efsp, c } = fresh();
-  const first = sfaArrival(efsp, c);
-  const s = sfaArrival(efsp, c);
-  const last = sfaArrival(efsp, c);
+  const s = arrival(efsp, c);
+  mustAct(efsp, c.AP, 'AP', strip(efsp, s), toPar);
+  hold(efsp, c.GC.session, 'INCIRLIK', []);
+  hold(efsp, c.LC.session, 'INCIRLIK', []);
+  hold(efsp, c.AP.session, 'INCIRLIK', []);
+  refused(act(efsp, c.PAR, 'PAR', strip(efsp, s), landed), 'NO_RECEIVING_POSITION');
+  assert.equal(strip(efsp, s).ownerPositionId, 'PAR');
+  assert.equal(strip(efsp, s).stripType, 'FINAL');
+});
+
+test('U5: the handoff to PAR is undoable by AP: back on its frequency Rack after its predecessor, PAR\'s Bay empty (docs/adr/0100, H95)', () => {
+  const { efsp, c } = fresh();
+  const first = arrival(efsp, c);
+  const s = arrival(efsp, c);
+  const last = arrival(efsp, c);
   const before = strip(efsp, s);
   const rackBefore = board(efsp).getRack(before.bayId, before.rackId).map(x => x.stripId);
   assert.deepEqual(rackBefore.slice().sort(), [first.stripId, s.stripId, last.stripId].sort());
-  const ack = act(efsp, c.SFA, 'SFA', before, { kind: 'SfaRotation' });
+  const ack = act(efsp, c.AP, 'AP', before, toPar);
   assert.equal(ack.ok, true, JSON.stringify(ack));
   const undo = { kind: 'Undo', actionId: ack.undoable.actionId };
-  refused(act(efsp, c.PAR, 'PAR', strip(efsp, s), undo), 'PERMISSION_DENIED', null, 'PAR undoing SFA\'s rotation');
-  const back = act(efsp, c.SFA, 'SFA', strip(efsp, s), undo);
+  refused(act(efsp, c.PAR, 'PAR', strip(efsp, s), undo), 'PERMISSION_DENIED', null, 'PAR undoing AP\'s handoff');
+  const back = act(efsp, c.AP, 'AP', strip(efsp, s), undo);
   assert.equal(back.ok, true, JSON.stringify(back));
   const now = strip(efsp, s);
   assert.deepEqual([now.stripType, now.state, now.ownerPositionId, now.bayId, now.rackId],
     [before.stripType, before.state, before.ownerPositionId, before.bayId, before.rackId]);
   assert.equal(now.sfaTransfer, before.sfaTransfer);
-  const rack = efsp.boardStoreFor('INCIRLIK').getRack(before.bayId, before.rackId).map(x => x.stripId);
-  assert.deepEqual(rack, rackBefore, 'after its predecessor');
-  const parFinal = efsp.boardStoreFor('INCIRLIK').getAll().filter(x => x.ownerPositionId === 'PAR' && x.state !== 'DROPPED');
-  assert.deepEqual(parFinal, [], 'PAR\'s Bay is empty');
+  assert.deepEqual(board(efsp).getRack(before.bayId, before.rackId).map(x => x.stripId), rackBefore, 'after its predecessor');
+  assert.deepEqual(board(efsp).getAll().filter(x => x.ownerPositionId === 'PAR' && x.state !== 'DROPPED'), [], 'PAR\'s Bay is empty');
 });
 
-test('a rotation applies to an ARRIVAL at INBOUND only: a Strip already on final, or not an arrival, is refused', () => {
+test('U5: Landed is undoable by PAR: back on final, with PAR, as a FINAL', () => {
   const { efsp, c } = fresh();
-  const s = sfaArrival(efsp, c);
-  mustAct(efsp, c.SFA, 'SFA', strip(efsp, s), { kind: 'SfaRotation' });
-  refused(act(efsp, c.SFA, 'SFA', strip(efsp, s), { kind: 'SfaRotation' }), 'NOT_OWNER', null, 'a second press by the old owner');
-  const dep = mustAct(efsp, c.OPS, 'OPS', null, {
-    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE',
-    flightData: { callsign: `DEP${++n}`, aircraftType: 'F16', wakeCategory: 'M', departureAirport: 'LTAG', destinationAirport: 'LTAG', route: 'DCT', requestedAltitude: '250' },
-  });
-  refused(act(efsp, c.OPS, 'OPS', dep, { kind: 'SfaRotation' }), 'PERMISSION_DENIED', null, 'OPS holds no rotation right');
-});
-
-test('LATE ARRIVAL: SFA vacates with aircraft on its frequencies; the Strips stay SFA\'s, AP is offered the hat, every frequency is unchanged (docs/adr/0110)', () => {
-  const { efsp, c } = fresh();
-  const a = sfaArrival(efsp, c, 'freq-1');
-  const b = sfaArrival(efsp, c, 'freq-5');
-  const result = hold(efsp, c.SFA.session, 'INCIRLIK', []);
-  assert.deepEqual(result.ack.warnings, [{ positionId: 'SFA', count: 2, offeredTo: 'AP' }]);
-  for (const [s, mhz, rack] of [[a, MS['freq-1'], 'freq-1'], [b, MS['freq-5'], 'freq-5']]) {
-    const now = strip(efsp, s);
-    assert.equal(now.ownerPositionId, 'SFA', 'nothing moved');
-    assert.equal(now.bayId, 'sfa-frequencies');
-    assert.equal(now.rackId, rack);
-    assert.equal(freqOf(efsp, s), mhz, 'the frequency did not change when the controller did');
-  }
-  const ap = result.broadcasts[0].positions.updated.find(p => p.positionId === 'AP');
-  assert.deepEqual(ap.hatOffers, [{ positionId: 'SFA', count: 2, onRunway: 0, observersFirst: false }]);
-  // SFA returns late: nothing to give back, the offer lapses
-  hold(efsp, c.SFA.session, 'INCIRLIK', ['SFA']);
-  for (const [s, rack] of [[a, 'freq-1'], [b, 'freq-5']]) {
-    const now = strip(efsp, s);
-    assert.equal(now.ownerPositionId, 'SFA');
-    assert.equal(now.rackId, rack);
-    assert.equal(freqOf(efsp, s), MS[rack]);
-  }
+  const s = arrival(efsp, c);
+  mustAct(efsp, c.AP, 'AP', strip(efsp, s), toPar);
+  const ack = act(efsp, c.PAR, 'PAR', strip(efsp, s), landed);
+  assert.equal(ack.ok, true, JSON.stringify(ack));
+  const back = act(efsp, c.PAR, 'PAR', strip(efsp, s), { kind: 'Undo', actionId: ack.undoable.actionId });
+  assert.equal(back.ok, true, JSON.stringify(back));
+  const now = strip(efsp, s);
+  assert.deepEqual([now.stripType, now.state, now.ownerPositionId, now.bayId], ['FINAL', 'ON_FINAL', 'PAR', 'par-final']);
 });
 
 test('LATE ARRIVAL: PAR vacates with an aircraft on final; the Strip is not lost and not parked at AP (which cannot advance it): it stays PAR\'s and AP is offered PAR', () => {
   const { efsp, c } = fresh();
-  const s = sfaArrival(efsp, c);
-  mustAct(efsp, c.SFA, 'SFA', strip(efsp, s), { kind: 'SfaRotation' });
+  const s = arrival(efsp, c);
+  mustAct(efsp, c.AP, 'AP', strip(efsp, s), toPar);
   const r = hold(efsp, c.PAR.session, 'INCIRLIK', []);
   assert.deepEqual(r.ack.warnings, [{ positionId: 'PAR', count: 1, offeredTo: 'AP' }]);
   const now = strip(efsp, s);
@@ -308,11 +270,19 @@ test('LATE ARRIVAL: PAR vacates with an aircraft on final; the Strip is not lost
   assert.equal(now.state, 'ON_FINAL');
   assert.equal(now.bayId, 'par-final');
   assert.equal(freqOf(efsp, s), MS['freq-2']);
-  refused(act(efsp, c.AP, 'AP', now, { kind: 'SetState', toState: 'BALL' }), 'NOT_OWNER', null, 'AP does not own it until it takes the hat and the Strip is not its');
+  refused(act(efsp, c.AP, 'AP', now, landed), 'PERMISSION_DENIED', null, 'AP does not work the final');
   hold(efsp, c.PAR.session, 'INCIRLIK', ['PAR']);
   const back = strip(efsp, s);
   assert.equal(back.ownerPositionId, 'PAR');
   assert.equal(back.bayId, 'par-final');
+});
+
+test('there is no SFA Position and no SFA rotation message (docs/adr/0117)', () => {
+  const { efsp, c } = fresh();
+  assert.equal(efsp.facilityConfig.getPositionSet('INCIRLIK').includes('SFA'), false);
+  const r = efsp.handleMessage(c.AP.session, { version: 1, type: 'efsp-sfa-mutation', clientMutationId: crypto.randomUUID(), actingPositionId: 'AP', op: { kind: 'SetSfaRotation', rackId: 'freq-2', positionId: 'PAR' } });
+  assert.ok(!r || !r.ack || r.ack.ok !== true, 'nothing applies it');
+  assert.equal(efsp.snapshotFor(c.AP.session).sfaRotation, undefined);
 });
 
 // ── RSU ─────────────────────────────────────────────────────────────────────
@@ -398,11 +368,12 @@ test('RSU asks for a runway change and may not make one (H18): a request reaches
   assert.equal(rej.ok, true, JSON.stringify(rej));
 });
 
-test('a Position of the new three cannot do what only the ATC boundary Positions do: no HANDOFF, TOFI, ConvertToArrival', () => {
+test('PAR cannot do what only the ATC boundary Positions do: no HANDOFF, TOFI, ConvertToArrival', () => {
   const { efsp, c } = fresh();
-  const s = sfaArrival(efsp, c);
+  const s = arrival(efsp, c);
+  mustAct(efsp, c.AP, 'AP', strip(efsp, s), toPar);
   for (const kind of ['HANDOFF', 'POINT_OUT', 'TOFI', 'ConvertToArrival', 'ApproveAirspaceEntry']) {
-    const ack = act(efsp, c.SFA, 'SFA', strip(efsp, s), { kind, action: 'PROPOSE', toFacilityId: 'CENTER', toPositionId: 'CTR' });
+    const ack = act(efsp, c.PAR, 'PAR', strip(efsp, s), { kind, action: 'PROPOSE', toFacilityId: 'CENTER', toPositionId: 'CTR' });
     refused(ack, 'PERMISSION_DENIED', null, kind);
   }
 });

@@ -478,14 +478,14 @@ const MARSHAL_BLOCK_MAP = {
   ..._CARRIER_CHROME,
 };
 
-// FINAL has NOTHING writable on the talk-down (§7.10, WP7A bullet 6): the
-// controller is talking, not typing. Deck, final bearing and distance are
-// derived, drawn by the client from the ship state and the track. Shared with
-// PAR (L18).
-// Structural, not conventional: every Block of this map is either `system`,
-// `flag` or `carrier-derived`, none of which resolveBlockTarget lets SetBlock
-// write, so there is nothing a Final controller could type even by hand-crafting
-// a Mutation. (Block 5, the squawk, is the one chrome Block left off.)
+// FINAL has nothing to type but the two assignments of the talk-down (docs/adr/0117, H134 LT-RQ8 a): the final
+// controller's course guidance is by headings ("HEADING (heading)", JO 7110.65BB para 5-12-4), and it may assign an
+// altitude until "BEGIN DESCENT" (para 5-12-3) or after a missed approach. Both are the flight's clearance (docs/adr/0058),
+// so PAR amends what AP assigned rather than keeping a copy, and the Block ids are OVERFLIGHT's (7A, 9A-VECTOR), the
+// non-required pair. Everything else stays read-only (§7.10, WP7A bullet 6): deck, final bearing and distance are
+// derived, drawn by the client from the ship state and the track. Shared with PAR (L18).
+// Every other Block of this map is `system`, `flag` or `carrier-derived`, none of which resolveBlockTarget lets SetBlock
+// write. (Block 5, the squawk, is the one chrome Block left off.)
 const FINAL_BLOCK_MAP = {
   'C1':  { required: true,  target: { kind: 'carrier-derived', field: 'callsign' } },
   'C2':  { required: true,  target: { kind: 'carrier-derived', field: 'aircraftType' } },
@@ -494,6 +494,8 @@ const FINAL_BLOCK_MAP = {
   'C19': { required: false, target: { kind: 'carrier-derived', field: 'approachTurnNm' } },
   'C16': { required: false, target: { kind: 'carrier-derived', field: 'deck' } },
   'C17': { required: false, target: { kind: 'carrier-derived', field: 'finalDistance' } },
+  '7A': { required: false, target: { kind: 'clearance', field: 'altitude' }, interlock: 'ALTITUDE' },
+  '9A-VECTOR': { required: false, target: { kind: 'clearance', field: 'heading' }, interlock: 'COURSE' },
   '2':  _CARRIER_CHROME['2'], '4': _CARRIER_CHROME['4'], '4A': _CARRIER_CHROME['4A'],
   '25': _CARRIER_CHROME['25'], '26': _CARRIER_CHROME['26'],
 };
