@@ -210,7 +210,9 @@
    "addTrackLayers"
   ],
   "map-setup.js": [
-   "initMap"
+   "initMap",
+   "refreshMaptilerSources",
+   "retryErroredTiles"
   ],
   "map-style.js": [
    "applyAtcBackground",

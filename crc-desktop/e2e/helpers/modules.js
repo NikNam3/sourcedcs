@@ -47,6 +47,8 @@ const MODULES = {
   par: '/js/panels/efsp/par-panel.js', // crc.par.parPanelView, parShownStripId, showParFlight
   parSamples: '/js/panels/efsp/par-samples.js', // crc.parSamples.applyParSamples (a spec injects a PAR sample)
   changeBus: '/js/panels/efsp/efsp-change-bus.js', // crc.changeBus.markEfspChanged
+  correlation: '/js/panels/efsp/correlation-highlight.js', // crc.correlation.getCorrelatedHighlightTrackId (LT-UI T10)
+  maptilerKey: '/js/maptiler-key.js', // crc.maptilerKey.loadMaptilerKey (LT-UI T3)
 };
 
 /** Runs after page.goto('/'). Resolves once every module is imported and `window.crc` exists. */
