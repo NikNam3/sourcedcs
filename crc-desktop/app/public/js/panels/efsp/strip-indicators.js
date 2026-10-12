@@ -1,12 +1,11 @@
 'use strict';
-import { getEfspAirspace, getEfspFlightData, getEfspStrip, otherLiveStripsForFlightData, surveillanceHintsForStrip } from './efsp-state.js';
+import { getEfspAirspace, getEfspStrip, otherLiveStripsForFlightData, surveillanceHintsForStrip } from './efsp-state.js';
 import { formatZuluHhmm } from '../../format.js';
 import { getActingPositions, sendEfspMutation } from './efsp-ws.js';
 import { correlationBadgeFor } from './correlation-highlight.js';
 import { marsaBadgeFor } from './marsa-badge.js';
 import { _resolveActingPositionId, _swallowRepeatAdvance } from './bay/dispatch.js';
 import { OBLIGATION_LABELS } from './control-release-rules.js';
-import { splitChipFor } from './formation-rules.js';
 import { arJoinFor } from './ato-strip.js';
 import { _stripEl } from './strip-dom.js';
 import { ALERT_SLOT_KEYS, INDICATOR_ORDER } from './strip-alerts.js';
@@ -105,11 +104,6 @@ function _litIndicator(strip, key, el, obligation, siblings) {
     // The AR join (docs/adr/0071): not MARSA, never a warning — tone 'on'.
     const join = arJoinFor(strip);
     return join ? _indicator(key, join.text, 'on', 'efsp-ar-badge', join.title) : null;
-  }
-  if (key === 'split') {
-    // The part that left a formation (crc-sync docs/adr/0099): a quiet lineage chip, never a warning.
-    const chip = splitChipFor(strip, getEfspStrip, getEfspFlightData, formatZuluHhmm);
-    return chip ? _indicator(key, chip.text, 'on', 'efsp-split-chip', chip.title) : null;
   }
   if (key === 'siblings') {
     if (siblings.length === 0) return null;

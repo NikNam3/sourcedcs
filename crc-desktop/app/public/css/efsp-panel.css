@@ -1808,7 +1808,6 @@
 .efsp-strip .efsp-ind.efsp-surveillance-chip[role="button"]:focus-visible { outline: 2px solid var(--efsp-attn); outline-offset: 1px; }
 
 /* crc-sync docs/adr/0099 — formation Split / Join. */
-.efsp-split-chip { border-color: #4f8fb8; color: #b9dcf2; }
 .efsp-formation-popover { display: flex; flex-direction: column; gap: 6px; min-width: 220px; }
 .efsp-formation-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .efsp-formation-label, .efsp-formation-heading { font-weight: 600; }

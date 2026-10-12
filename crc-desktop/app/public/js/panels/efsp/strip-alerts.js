@@ -13,7 +13,7 @@ import { settings } from '../../settings.js';
 // applies (MARSA, TOFI, an airspace, other Strips on the flight). A quiet Strip
 // has no indicator row at all. Warnings first, so they are always in the same
 // place: the left end of the row.
-export const INDICATOR_ORDER = ['conflictAlert', 'conf', 'rwy', 'gear', 'ord', 'scram', 'tofiRegime', 'trk', 'marsa', 'tofi', 'airspace', 'timer', 'siblings', 'split'];
+export const INDICATOR_ORDER = ['conflictAlert', 'conf', 'rwy', 'gear', 'ord', 'scram', 'tofiRegime', 'trk', 'marsa', 'tofi', 'airspace', 'timer', 'siblings'];
 
 // Keys whose chips come from _stripAlerts (warnings first, left end of the row). rwy/gear:
 // Runway status (docs/adr/0068); ord: hung ordnance (0069); scram: alert/scramble (0070).

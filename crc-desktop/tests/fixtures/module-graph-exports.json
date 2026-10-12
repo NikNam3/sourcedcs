@@ -989,7 +989,6 @@
    "parseAssignmentToken",
    "parseAssignmentValue",
    "parseSplitCommand",
-   "splitChipFor",
    "splitOffer",
    "splitRemainderText"
   ],
