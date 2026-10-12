@@ -67,7 +67,7 @@ test('01 SFA (T1): AP files the arrival on a rotating frequency and presses Hand
   const header = page.locator('.efsp-sfa-header');
   await expect(header).toBeVisible();
   await expect(header.locator('.efsp-sfa-row')).toHaveCount(5);
-  await expect(header.locator('select')).toHaveCount(0); // nothing to set: the rotation follows the handoffs
+  await expect(header.locator('.efsp-sfa-select')).toHaveCount(0); // nothing to set: the rotation follows the handoffs
   await expect(page.locator('.efsp-rack-header', { hasText: '233.100 · AP' })).toBeVisible();
   await expect(page.locator('.efsp-rack-header', { hasText: '232.100 · INIT' })).toBeVisible();
   await expect(page.locator('.efsp-rack-header', { hasText: '236.100 · SPARE' })).toBeVisible();

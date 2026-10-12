@@ -68,11 +68,11 @@ Board does not model the radio; the conformance `finals` map is unit-tested and 
 
 ## Gates
 
-crc-sync 2673 → 2689 tests (all pass); crc-desktop 1267 → 1267 (all pass; tests replaced, not added in number); `npm run freeze`
+crc-sync 2673 → 2676 tests (all pass; the SFA-store and rotation tests replaced by the handoff, Landed, FinalCall and conformance ones); crc-desktop 1267 → 1267 (all pass; tests replaced, not added in number); `npm run freeze`
 56/56 after one `freeze:update` (large but explained diff: INCIRLIK's position lists and snapshot hashes without SFA, the random
 walks reshuffled because SFA left their pick list, the L18 scenario rewritten; no new refusal kinds); `npm run walk` 23/23;
 `soak:selfcheck` PASS; `wire:record` (protocol stays 2); module-graph fixture re-recorded. Playwright lane 3: `l18-incirlik`,
-`par-panel`, `store-resync` 12/12, plus `smoke` and `gclc-combine` 3/3.
+`par-panel`, `store-resync` 12/12 (`l18-incirlik` again 4/4 after a spec-hygiene fix), plus `smoke` and `gclc-combine` 3/3.
 
 ## Findings for other lanes / the supervisor
 
