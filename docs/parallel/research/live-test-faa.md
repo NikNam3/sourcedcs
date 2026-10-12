@@ -695,3 +695,129 @@ our formation record and our MARSA record are the "grouping" the FAA controller 
 else continue, measured from each member (the ¶5-5-8 periphery idea). Whether a controller should also be able to
 suppress one specific alert by hand (the FAA "CO"/suppress) is **silent for our design — the human decides**; it is not
 needed for T16.
+
+---
+
+## Q8 (T27) — controlling agency vs using agency for special use airspace
+
+### What the orders say
+
+**JO 7400.2R ¶21-1-10, CONTROLLING AGENCY:** *"The controlling agency is the FAA ATC facility that exercises control of
+the airspace when a SUA area is not activated. A military ATC facility may be assigned as the controlling agency,
+subject to the concurrence of the Service Center OSG and the concerned ARTCC. A controlling agency must be designated
+for each joint-use SUA area."*
+
+**JO 7400.2R ¶21-1-11, USING AGENCY:**
+> a. The using agency is the organization, or military command/unit whose activity established the requirement for the
+> SUA. The using agency is responsible for ensuring that: 1. The airspace is used only for its designated purpose. 2.
+> **Scheduling procedures are established, utilized, and captured in an LOA/LOP.** 3. **The controlling agency is kept
+> informed of changes in scheduled activity, to include the completion of activities for the day.** 4. A point of
+> contact is made available to enable the controlling agency to verify schedules, and coordinate access for emergencies,
+> weather diversions, etc. …
+> c. An ATC facility may be designated as the using agency for joint-use areas when that facility has been granted
+> priority for use of the airspace in a joint-use LOA/LOP.
+
+**JO 7400.2R ¶21-1-5, SUA APPROVAL AUTHORITY:** *"FAA Headquarters is the final approval authority for all permanent and
+temporary SUA, except CFAs. … The Service Center OSG must forward SUA proposals recommended for approval (except CFA)
+to FAA Headquarters for a final determination."* ¶25-1-3: *"Either the proponent or the Service Center OSG selects MOA
+names."* ¶25-1-7 a: temporary MOAs *"may be established for a period not to exceed 45 days"* (approved, not
+self-created). ¶21-1-6: when no longer needed *"the using agency … must inform the Service Center OSG that action may
+be initiated to remove and return the SUA airspace to the NAS."*
+
+**JO 7400.2R ¶21-1-8, JOINT-USE POLICY:** *"a. SUA must be returned to the controlling agency and become available for
+access by nonparticipating aircraft during periods when the airspace is not needed by the using agency …"* *"d.
+Joint-use procedures must be specified in a joint-use Letter of Agreement (LOA) or Letter of Procedure (LOP) between the
+using agency and the controlling agency. These letters should include provisions for the real-time
+activation/deactivation of the airspace and timely notification to the controlling agency when the scheduled activity
+has changed, been canceled, or was completed for the day."* **¶25-1-6** (MOA): *"a. In effect, MOAs are always joint
+use … IFR aircraft may be routed through the airspace, by agreement between controlling and using agencies, when approved
+separation can be provided from the MOA activity. b. Procedures for access to the airspace by nonparticipating IFR
+traffic must be specified in a letter of agreement between the controlling and using agencies."*
+
+**14 CFR 73.15/73.17** (restricted areas, reprinted in JO 7400.10H App. A): *"c. The using agency shall: (1) Schedule
+activities within the restricted area; (2) Authorize transit through, or flight within, the restricted area as feasible;
+…"*; *"the controlling agency is the FAA facility that may authorize transit through or flight within a restricted area in
+accordance with a joint-use letter issued under § 73.15."* JO 7400.10H lists each area with both, e.g. *"Controlling
+agency. FAA, Atlanta ARTCC. Using agency. Alabama Army National Guard."*
+
+**JO 7110.65BB ¶9-3-1** (ATC around SUA): the SUA separation rules do not apply when *"a. The pilot informs you that
+permission has been obtained from the using agency to operate in the airspace. b. The using agency informs you they
+have given permission for the aircraft to operate in the airspace. … c. The restricted/warning area, MOA, ATCAA, or
+stationary ALTRV has been released to the controlling agency."* ¶9-3-4: in an active area, *"Comply with the
+instruction/clearances issued by the Using Agency"*. ¶2-1-11 c: *"DoD must ensure that military pilots requesting special
+use airspace/ATCAAs have coordinated with the scheduling agency, have obtained approval for entry … ATC is not responsible
+for determining which military aircraft are authorized to enter special use airspace/ATCAAs."* JO 7610.14A ¶5-5-11 i
+mentions SAMS (Special Use Airspace Management System) for activity approval; JO 7110.65BB ¶13-1-17 b NOTE: *"activating or
+scheduling the SAA in the Airspace Status View does NOT constitute coordination for activation of airspace"* unless an
+LOA/facility directive says so.
+
+### Answer in plain words
+
+| Act | Who, per the orders |
+|---|---|
+| **Create** (establish/define) a MOA | **Neither agency on its own**: a proponent (normally the using agency) proposes; the FAA Service Center OSG and FAA HQ approve (7400.2R ¶21-1-5). The controlling and using agencies are named **in** the designation. |
+| **Schedule** it | **Using agency** (¶21-1-11 a.2; 14 CFR 73.15 c(1)), keeping the controlling agency informed (a.3). |
+| **Activate / deactivate** in real time | As the **joint-use LOA** says between the two (¶21-1-8 d); typically the using agency notifies, the controlling agency's automation status is updated (ERAM: the sector team or supervisor updates the Airspace Status View, ¶13-1-17, JO 7210.3EE ¶6-6-2). |
+| **Release** it | The using agency returns it to the **controlling agency** when not needed (¶21-1-8 a; ¶9-3-1 c). |
+| **Authorize entry** into the active area | The **using agency** (¶9-3-1 a–b; 73.15 c(2)); ATC applies ¶9-3-2 separation from the area for everyone else. |
+| **Control the airspace when not active** | The **controlling agency** (¶21-1-10). |
+
+So the using agency (e.g. Incirlik OPS for a training MOA) **books/schedules, activates per LOA, grants entry and
+releases**; the controlling agency (CENTER) controls the airspace when it is not active and must be kept informed. **Who
+may create the airspace record in our app is outside the orders** (they describe a rulemaking/approval process, not a
+live tool): **silent — the human decides.**
+
+### What it means for LT-AIRSPACE-ALERT (T27 rights)
+
+The FAA split suggests: **definition** (create/edit/delete the MOA's shape and limits) belongs to whoever stands in for the
+FAA approval (in our facility model the controlling Facility, or a squadron "airspace manager" role — human decision);
+**schedule/activate/release** are the using agency's (OPS), with the controlling Position informed; **entry approval** is
+the using agency's. Today the server lets "the controlling Position, or OPS of the controlling Facility" create; under
+the FAA split, Incirlik OPS as **using agency** should be able to **book, activate, release and approve entry** for a
+CENTER-controlled MOA but not redefine it. Options in LT-RQ4 below.
+
+---
+
+## Q9 (T29) — FAA automation that alerts on aircraft vs active SUA/SAA
+
+### What the orders say
+
+**P/CG:** *"AIRSPACE CONFLICT- Predicted conflict of an aircraft and active Special Activity Airspace (SAA)."* *"ALERT- A
+notification to a position that there is an aircraft-to-aircraft or aircraft-to-airspace conflict, as detected by
+Automated Problem Detection (APD)."* *"AIRCRAFT CONFLICT- Predicted conflict, within EDST of two aircraft, or between
+aircraft and airspace. … **A Blue alert is used for conflicts between an aircraft and predefined airspace.**"* *"SPECIAL
+ACTIVITY AIRSPACE (SAA)- … includes … ATCAA, ALTRV, MTR, Air Refueling Tracks and Anchors, TFR … Special Use Airspace
+(SUA) is a subset of Special Activity Airspace."*
+
+**JO 7110.65BB ¶13-1-1 (ERAM/EDST):** *"EDST uses current plan data, forecast winds, aircraft performance characteristics,
+and track data to derive expected aircraft trajectories, and to predict conflicts between aircraft and between aircraft
+and special use or designated airspace."* **¶13-1-2:** *"a. Actively scan EDST information for predicted
+aircraft-to-aircraft and aircraft-to-airspace alerts. b. When a conflict probe alert is displayed, evaluate the alert and
+take appropriate action as early as practical … e. When the Stop Probe feature is activated for an aircraft, conflict
+probe for that aircraft must be restarted before transfer of control, unless otherwise coordinated."* **¶13-1-9,
+ACKNOWLEDGEMENT OF AUTOMATED NOTIFICATION** exists for EDST notifications. **¶5-13-10:** controllers keep the
+*"Airspace Status View/SAA Filter View"* accurate (which SAA is on/off). **¶13-1-17 b NOTE:** activating/scheduling the SAA
+in the Airspace Status View does not by itself coordinate activation.
+
+**Terminal (STARS):** JO 7110.65BB ¶5-14 lists CA/MCI, MSAW and ARV alerts; **no aircraft-to-SUA alert** is described.
+
+### Answer in plain words
+
+- **Yes, an FAA equivalent exists, en route only:** ERAM's **EDST conflict probe** raises an **aircraft-to-airspace
+  ("Blue") alert** for a **predicted** conflict between an aircraft's trajectory and **active** SAA (which includes SUA).
+  It is a **strategic, predictive** probe on the flight plan/trajectory (not a "you are inside now" alarm), the
+  controller evaluates it and acts (¶13-1-2), alerts can be acknowledged (¶13-1-9), probing for one aircraft can be
+  stopped ("Stop Probe") but must be restarted before transfer (¶13-1-2 e).
+- **The orders do not say how the probe treats participating aircraft** (those the using agency approved): **silent**.
+  The surrounding rules (¶9-3-1 a–b) make an aircraft with using-agency permission not a nonparticipant, so an alert for
+  it would be noise — **inference**.
+- **No terminal (STARS) equivalent** in the orders.
+
+### What it means for LT-AIRSPACE-ALERT
+
+H132's alert is **not purely ours**: it is the "aircraft-to-airspace" alert of the FAA's en route conflict probe, with
+two differences we should say in the ADR: ours fires on **entry (actual containment)** rather than on a **predicted**
+trajectory conflict, and only for **active** airspace (as the FAA's does). Following the FAA: call it an
+**airspace conflict** (P/CG term), alert the Position working the flight (the FAA alerts the sector with the flight),
+make it acknowledgeable, and **exclude aircraft with using-agency approval** (our `airspaceEntry`/MRU approval = ¶9-3-1
+a–b). A predictive look-ahead (warn before entry) would be closer to EDST — **human decides** (LT-RQ5).
