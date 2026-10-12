@@ -153,7 +153,6 @@ function buildFacilityRules({ facilityId, facilityConfig, permissionRules, posit
     sfaFrequencyFor:         (bayId, rackId) => sfaModel.frequencyForRack(facilityConfig.getBay(bayId, facilityId), facilityConfig.getSingleFrequencyApproach(facilityId), rackId),
     sfaRackFor:              (bayId, mhz) => sfaModel.rackForFrequency(facilityConfig.getBay(bayId, facilityId), facilityConfig.getSingleFrequencyApproach(facilityId), mhz),
     conversionFor:           (strip, targetBayId) => parFinal.conversionFor(strip, facilityConfig.bayImpliesState(targetBayId, facilityId), facilityId),
-    finalReceiver:           () => permission.finalReceiver(),
     canHandOffToFinal:       (actingPositionId) => permission.canHandOffToFinal(actingPositionId),
     canRecordFinalCall:      (actingPositionId) => permission.canRecordFinalCall(actingPositionId),
   };

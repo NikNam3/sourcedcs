@@ -28,7 +28,6 @@ export const DEFAULT_RULES = {
   canHandOffToFinal: () => false,
   canRecordFinalCall: () => false,
   conversionFor: () => null,
-  finalReceiver: () => null,
   carrierAppendFlight: () => null,
   carrierApplyEffect: () => ({ ok: true }),
   carrierCase: () => null,
