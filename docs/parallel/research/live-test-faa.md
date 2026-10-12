@@ -258,3 +258,250 @@ CCA final is the same radar talk-down idea (course/glidepath calls), so the PAR 
   PAR controller's continuous verbal job and the heading changes every few seconds.
 - AP's last vector must not keep alerting after the handoff: on acceptance by PAR, the heading reference becomes PAR's
   (or none).
+
+---
+
+## Q4 (T7) — the wake category indicator in strip Block 3
+
+### What the orders say
+
+**JO 7110.65BB ¶2-3-4 TERMINAL DATA ENTRIES**, TBL 2-3-3 (arrivals), TBL 2-3-4 (departures) and TBL 2-3-5
+(overflights), Block 3, all three identical:
+> 3. Number of aircraft if more than one, wake category indicator, type of aircraft, and aircraft equipment suffix.
+
+This wording is **new in Chg 2 (1-22-26)**. The Chg 2 briefing guide (BG-51) shows the change: OLD *"Number of aircraft if
+more than one, heavy aircraft indicator "H/" if appropriate, type of aircraft, and aircraft equipment suffix."* → NEW
+*"… wake category indicator …"*, with the background: *"the contents of FAA Order JO 7110.126, Consolidated Wake
+Turbulence (CWT), be incorporated into FAA Order JO 7110.65 … a single standard of wake turbulence separation will be
+used by all terminal air traffic facilities. En route facilities are exempt from the CWT standard and will remain with the
+legacy standards …"*. ¶2-2-6 a.2 (IFR flight progress data) got the same new words.
+
+**En route, unchanged — JO 7110.65BB ¶2-3-2, TBL 2-3-1, Block 4:**
+> 4. Number of aircraft if more than one, heavy aircraft indicator "H/" if appropriate, type of aircraft, and aircraft
+> equipment suffix.
+
+**JO 7210.3EE** (NAS flight plan format, Field 03 Aircraft Data): *"1. Super or heavy aircraft indicator (H/): When
+aircraft are designated super or heavy, the heavy indicator is mandatory. 2. Type of Aircraft: … the standard aircraft
+type designator, in accordance with FAA Order JO 7360.1 … 3. Equipment Suffix: … a slash followed by one letter …"*
+
+**P/CG, AIRCRAFT WAKE CATEGORIES** (terminal): *"ATC classifies aircraft as Category A through Category I as follows:
+a. CATEGORY A. The Airbus A-380-800 (A388) is classified as a super aircraft. b. CATEGORY B, C, and D. Aircraft capable
+of takeoff weights of 300,000 pounds or more … heavy aircraft. c. CATEGORY E. All B757 aircraft. d. CATEGORY F, and G.
+Aircraft weighing 41,000 pounds or more maximum certificated takeoff weight, up to but not including 300,000 pounds.
+e. CATEGORY H and I. Aircraft of less than 41,000 pounds …"* **P/CG, AIRCRAFT CLASSES** (legacy, en route): Super,
+Heavy, Large, Small, each mapped to those categories. **JO 7110.65BB ¶5-5-4 g–h** (TBL 5-5-3/5-5-4) separate by the
+A–I categories in the terminal; **¶5-5-4 i** *"When NOWGT is displayed in an aircraft data block, provide 10 miles
+separation …"* (TBL 1-2-1: *"NOWGT — No weight. The weight class or wake category has not been determined"*).
+
+**JO 7360.1K, Aircraft Type Designators** (effective 06/12/2025), ¶2-6, ¶2-10, ¶2-11: three different "wake" values
+per type: the **ICAO WTC** (¶2-6: *"SUPER (J)", "Heavy (H)", "Medium (M)", "Light (L)"*, written after the type in the
+ICAO plan, e.g. *"A345/H"*), the **FAA weight class** (¶2-10 b: *"J – Super, H – Heavy, L – Large, S – Small"*), and
+the **CWT category** (¶2-11). Examples from its Appendix A: `F16  1J/L  Medium  G` (FAA class Large, ICAO WTC Medium,
+CWT **G**); `K35R 4J/H Heavy C`; `B763 2J/H Heavy C`; `C130 4T/L Medium F`; `T38 2J/S Light I`; `A10 2J/L Medium G`.
+
+**¶2-3-6 AIRCRAFT TYPE:** *"Use the approved aircraft type designator, in accordance with FAA Order 7360.1, Aircraft
+Type Designators."* **¶2-3-8 e** (suffix): *"state the aircraft type followed by the word "slant" and the appropriate
+phonetic letter equivalent of the suffix. EXAMPLE- … "F-Sixteen slant Papa." …"*; TBL 2-3-10 lists the suffixes
+(`/H /O /W /Z /L /X /T /U /D /B /A /M /N /P /Y /C /I /V /S /G`).
+
+**Strip examples:** FIG 2-3-4/2-3-5/2-3-6 are block-layout drawings only (rendered and checked); they show the block
+numbers, no filled-in example. **No figure or paragraph in the current order shows how the terminal "wake category
+indicator" is written** (which letter set, where the slant goes). The only written forms are the legacy `H/` (en route
+Block 4, and the NAS flight plan) and the ICAO `type/WTC` (JO 7360.1K ¶2-6).
+
+### Answer in plain words
+
+- Terminal strips (ours are terminal: TBL 2-3-3/4/5) carry **count, wake category indicator, type designator, equipment
+  suffix** in that order. Since Chg 2 the terminal wake reference is the **CWT category A–I**; en route still uses the
+  legacy **`H/`** heavy (and super) indicator.
+- **Format of the terminal indicator: silent — the human decides.** **Inference** from the legacy form (`H/` before the
+  type, `/` before the suffix): `2/H/B763/L` (legacy) or, with a CWT letter in the same slot, `2/C/B763/L`, `G/F16/P`;
+  with no indicator `F16/P`, `2/F16/P` (no leading slant).
+- The type is a JO 7360.1 designator (2–4 characters, letter first, e.g. `F16`, `K35R`, `B763`); the suffix is one letter
+  from TBL 2-3-10.
+- The human's `M/F16` is an **ICAO WTC** written in front (ICAO writes it after: `F16/M`). An F-16 is ICAO "Medium",
+  FAA class "Large", CWT "G" (JO 7360.1K). Our `identity.wakeCategory` today comes from the DD-1801's ICAO WTC
+  (`flight-plan-lookup.js`: `plan.wtc`), i.e. L/M/H/J — not the letter the current terminal Block 3 means.
+
+### What it means for LT-STRIP-FIELDS
+
+Block 3 is one field parsed as `[count/][indicator/]TYPE[/suffix]`: count = digits, type = a 7360.1-shaped designator,
+suffix = one TBL 2-3-10 letter, no leading `/` when there is no indicator. Which indicator set to accept is a human
+question (LT-RQ1 below). Where the value comes from (DD-1801 ICAO WTC vs a CWT lookup by type) follows the choice; a CWT
+letter could be derived from the type designator by a small table from JO 7360.1K (ours to maintain), which also removes
+the need to type it. A designator-shape check is safe to build now (¶2-3-6).
+
+---
+
+## Q5 (T8) — the FAA strip block lists, and our labels mapped to them
+
+### The FAA block lists (JO 7110.65BB, Basic with Chg 3)
+
+**TBL 2-3-3, terminal ARRIVAL** (¶2-3-4 a; *"Facility managers can authorize omissions and/or optional use of spaces 2A,
+8A, 8B, 9A, 9B, 9C, and 10-18"*):
+
+| Block | Information recorded (verbatim) |
+|---|---|
+| 1 | Aircraft identification. |
+| 2 | Revision number (FDIO locations only). |
+| 2A | Strip request originator. (At FDIO locations this indicates the sector or position that requested a strip be printed.) |
+| 3 | Number of aircraft if more than one, wake category indicator, type of aircraft, and aircraft equipment suffix. |
+| 4 | Computer identification number if required. |
+| 5 | Secondary radar (beacon) code assigned. |
+| 6 | (FDIO Locations.) The previous fix will be printed. (Non-FDIO Locations.) Use of the inbound airway. … |
+| 7 | Coordination fix. |
+| 8 | Estimated time of arrival at the coordination fix or destination airport. |
+| 8A | OPTIONAL USE. |
+| 8B | OPTIONAL USE, when voice recorders are operational; REQUIRED USE, when the voice recorders are not operating … record reported RA events … |
+| 9 | Altitude (in hundreds of feet) and remarks. |
+| 9A | Minimum fuel, destination airport/point out/radar vector/speed adjustment information. Air traffic managers may authorize … the omission of any of these items, except minimum fuel … |
+| 9B, 9C | OPTIONAL USE. |
+| 10-18 | Enter data as specified by a facility directive. Radar facility personnel need not enter data in these spaces except when nonradar procedures are used or when radio recording equipment is inoperative. |
+
+**TBL 2-3-4, terminal DEPARTURE** (¶2-3-4 b): Blocks 1, 2, 2A, 3, 4, 5 as above, then:
+
+| Block | Information recorded (verbatim) |
+|---|---|
+| 6 | Proposed departure time. |
+| 7 | Requested altitude. |
+| 8 | Departure airport. |
+| 8A | OPTIONAL USE. |
+| 8B | OPTIONAL USE / REQUIRED USE (RA events), as arrivals. |
+| 9 | Computer-generated: Route, destination, and remarks. Manually enter altitude/altitude restrictions in the order flown, if appropriate, and remarks. / Hand-prepared: Clearance limit, route, altitude/altitude restrictions in the order flown, if appropriate, and remarks. |
+| 9A, 9B, 9C | OPTIONAL USE. |
+| 10-18 | Enter data as specified by a facility directive. Items, such as departure time, runway used for takeoff, check marks to indicate information forwarded or relayed, may be entered in these spaces. |
+
+**TBL 2-3-5, terminal OVERFLIGHT** (¶2-3-4 c): Blocks 1, 2, 2A, 3, 4, 5 as above, then:
+
+| Block | Information recorded (verbatim) |
+|---|---|
+| 6 | Coordination fix. |
+| 7 | Overflight coordination indicator (FDIO locations only). NOTE- … identifies the facility to which flight data has been forwarded. |
+| 8 | Estimated time of arrival at the coordination fix. |
+| 8A / 8B | OPTIONAL USE / RA events, as arrivals. |
+| 9 | Altitude and route of flight through the terminal area. |
+| 9A, 9B, 9C | OPTIONAL USE. |
+| 10-18 | Enter data as specified by a facility directive. NOTE- National standardization of items (10 through 18) is not practical … |
+
+**TBL 2-3-1, EN ROUTE** (¶2-3-2), for the blocks we resemble: 3 Aircraft identification; 4 (count, `H/`, type, suffix);
+5 Filed true airspeed; 14 actual time over previous fix / actual departure time; 19 *"Fix. For departing aircraft, add
+proposed departure time."*; 20 *"Altitude information (in hundreds of feet)"*; 24 *"Requested altitude."*; 25 *"Point
+of origin, route as required for control and data relay, and destination."*; 26 *"Pertinent remarks, minimum fuel,
+point out/radar vector/speed adjustment information …"*; 27 *"Mode 3/A beacon code if applicable."*; 28
+*"Miscellaneous control data (expected further clearance time, time cleared for approach, etc.)"*; 29-30 *"Transfer of
+control data and coordination indicators."* **Our Blocks 19–24 are not the en route ones**: the numbers coincide, the
+meanings do not (e.g. en route 20 = altitude, ours 20 = heading; en route 24 = requested altitude, ours 24 = miles-in-trail).
+
+### FAA abbreviations available (quoted sources)
+
+- **ACID** — aircraft identification (¶2-3-5 b: *"aircraft identifications (ACIDs)"*).
+- **P TIME** — P/CG *"P TIME- (See PROPOSED DEPARTURE TIME.)"*; *"PROPOSED DEPARTURE TIME- The time that the aircraft
+  expects to become airborne."* JO 7210.3EE Field 07: *"the letter "P" followed by a four-digit time group (in UTC)"*.
+- **ETA** (TBL 1-2-1 *"Estimated time of arrival"*), **APREQ** (*"Approval Request"*), **EDCT** (*"Expect Departure
+  Clearance Time"*), **CFR** (*"Call for Release"*; note TBL 1-2-1 also uses CFR for *"Code of Federal Regulations"*),
+  **ATIS**, **MTR**, **MARSA**, **SFA**, **PAR**, **FL**, **CA** (*"Conflict Alert"*), **VCI** (*"Voice Communication
+  Indicator"*, the ERAM indicator of ¶2-1-17 d — not our 2A), all from JO 7110.65BB TBL 1-2-1.
+- **Clearance/strip abbreviations** TBL 2-3-11 (e.g. `L` cleared to land, `CAF` cleared as filed, `PD` pilot's
+  discretion) and TBL 2-3-12 (e.g. `PA` precision approach, `SA` surveillance approach, `MA` missed approach, `RH`
+  runway heading, `TL`/`TR` turn left/right).
+- **Time format:** nothing in Chapter 2 Section 3 prescribes HHMM for a terminal block, but the FAA writes times as
+  four-digit UTC everywhere it specifies one (8B RA events *"the time (hhmm)"*; 7210.3 Field 07). So "HHMM" in a
+  placeholder/tooltip is FAA-consistent (T31 a).
+
+## Q5 table — our Blocks → FAA names (for the human's approval)
+
+Rules applied: label = the FAA block name, abbreviated only by an FAA abbreviation or the obvious shortening the FAA
+itself uses in the block text; **≤ 8 characters and unique per strip type** (our test, ADR 0055); the tooltip is the
+full FAA wording with the block number and table. **ours** = no FAA block carries it (or the FAA space is "optional use" /
+"facility directive"), named plainly and marked "(ours)" in the tooltip. **#≠** = we use the FAA's name but under a
+different block number than the FAA (renumbering is not proposed — ids are wire/state keys — but the tooltip says so).
+
+### DEPARTURE (FAA TBL 2-3-4)
+
+| Our id | Our label | FAA | FAA name | Proposed label | Tooltip (draft) |
+|---|---|---|---|---|---|
+| 1 | CALLSIGN | 1 | Aircraft identification | **ACID** | Block 1, aircraft identification |
+| 2 | REV | 2 | Revision number | REV | Block 2, revision number |
+| 2A | VOICE | (2A = strip request originator) | — | VOICE CLR | Voice clearance issued (ours; FAA 2A is "strip request originator") |
+| 3 | TYPE | 3 | Number, wake category indicator, type, equipment suffix | TYPE | Block 3, number of aircraft, wake category indicator, type of aircraft, equipment suffix |
+| 3A | ACFT | 3 (part) | type of aircraft (¶2-3-6, JO 7360.1 designator) | ACFT TYP | Aircraft type designator (Block 3) |
+| 3B | WAKE | 3 (part) | wake category indicator | WAKE | Wake category indicator (Block 3) |
+| 3C | TAIL | — | — | TAIL | Tail number (ours) |
+| 3D | UNIT | — | — | UNIT | Unit (ours) |
+| 3E | HOME | — | — | HOME STN | Home station / base (ours, military) |
+| 3F | HOOK | — | — | HOOK | Tailhook required (ours, military) |
+| 3G | ORDNANCE | — | — | ORDNANCE | Ordnance state (ours, military) |
+| 4 | CID | 4 | Computer identification number | CID | Block 4, computer identification number |
+| 4A | RMV | — | — | RMV | Remove indicator (ours) |
+| 4B | DATALINK | — | — | DATALINK | Datalink clearance indicator (ours) |
+| 5 | BEACON | 5 | Secondary radar (beacon) code assigned | BEACON | Block 5, beacon code assigned |
+| 5A | DEGR | — | — | TRK DEGR | Track degradation flag (ours) |
+| 6 | PROP DEP | 6 | Proposed departure time | **P TIME** | Block 6, proposed departure time (P time), UTC HHMM |
+| 7 | CRUS ALT | 7 | Requested altitude | **REQ ALT** | Block 7, requested altitude |
+| 8 | DEP | 8 | Departure airport | **DEP APT** | Block 8, departure airport |
+| 8A | RWY | (8A optional use) | — | DEP RWY | Departure runway (ours, in the FAA's optional space 8A) |
+| 8B | DEST | (in Block 9) | destination (part of Block 9) | DEST | Destination (FAA: part of Block 9; ours as its own cell) |
+| 9 | RTE | 9 | Route, destination, and remarks | ROUTE | Block 9, route (computer-generated) and manual altitude restrictions |
+| 9A/9B/9C | FAC A/B/C | 9A/9B/9C | Optional use | FAC A/B/C | Block 9A/9B/9C, optional use (facility) |
+| 9D | FULL RTE | — | — | FULL RTE | Full route clearance (ours) |
+| 9E | RMKS | 9 (part) | remarks | RMKS | Remarks (Block 9) |
+| 9F | STEREO | — | — | STEREO | Stereo route (ours, local tower-en-route canned route) |
+| 9G-*/9H-* | MTR, ENTRY, ENTRY TM, EXIT, EXIT EST, EXIT ALT | — | — | unchanged | MTR fields (ours, military) |
+| 9A-SPEED | SPEED | (9A on arrivals: speed adjustment) | — | SPEED | Speed assignment (ours on a departure) |
+| 10 | ATIS | 10-18 (facility directive) | — | ATIS | ATIS code (ours, facility-directive space 10-18) |
+| 11 | APREQ | 10-18 | — | APREQ | Approval request (APREQ) (ours, space 10-18) |
+| 14 | RLS TIME | 10-18 | — | RLS TIME | Release time, UTC HHMM (P/CG RELEASE TIME; space 10-18) |
+| 14A | RELEASE | 10-18 | — | RELEASE | Departure release state (ours) |
+| 14D | VOID | 10-18 | — | VOID | Clearance void time, UTC HHMM (P/CG CLEARANCE VOID IF NOT OFF BY) |
+| 14B | EDCT | 10-18 | — | EDCT | Expect departure clearance time, UTC HHMM |
+| 14C | CFR | 10-18 | — | CFR | Call for release time, UTC HHMM |
+| 14E | ALERT | — | — | ALERT | Alert status (ours, military) |
+| 16 | MVMT | 10-18 | — | MVMT | Movement-area entry time, UTC HHMM (ours) |
+| 17 | TAXI | 10-18 | — | TAXI | Taxi time, UTC HHMM (ours) |
+| 18 | TAKEOFF | 10-18 ("departure time") | departure time | **DEP TIME** | Departure (takeoff) time, UTC HHMM (space 10-18) |
+| 19 | GATE | — | — | GATE | Gate / parking (ours) |
+| 20 | HDG | — (en route 20 = altitude) | — | HDG | Assigned heading (ours; not en route Block 20) |
+| 21 | ALT | — | — | ALT | Assigned altitude (ours) |
+| 22 | FREQ | — | — | FREQ | Frequency (ours) |
+| 23 | FAC RMKS | — | — | FAC RMKS | Facility remarks (ours) |
+| 24 | MIT RMKS | — (en route 24 = requested alt) | — | MIT | Miles-in-trail (P/CG MILES-IN-TRAIL; ours as a block) |
+| 24A | ARSPC | — | — | ARSPC | Airspace owner (ours) |
+| IFR, RSVC, SREG | KEEP IFR, RADAR, SEP REG | — | — | unchanged | TOFI fields (ours) |
+| 25 | STATE | — | — | STATE | Strip state (ours) |
+| 26 | NLA | — | — | NLA | Next logical action (ours) |
+
+### ARRIVAL (FAA TBL 2-3-3) — rows that differ from DEPARTURE
+
+| Our id | Our label | FAA | FAA name | Proposed label | Tooltip (draft) |
+|---|---|---|---|---|---|
+| 6 | ETA | **8** (#≠) | Estimated time of arrival at the coordination fix or destination airport | ETA | ETA at coordination fix or destination, UTC HHMM (FAA Block 8) |
+| 7 | ALT | **9** (#≠) | Altitude and remarks | ALT | Assigned altitude (FAA Block 9) |
+| 8 | ORIG | — | (en route 25: point of origin) | ORIGIN | Point of origin (ours on a terminal arrival) |
+| 8A | FIX | **7** (#≠) | Coordination fix | COORD FX | Coordination fix (FAA Block 7) |
+| 8B | RWY | (8B = RA events / optional) | — | LDG RWY | Landing runway (ours) |
+| 9 | RTE | — (FAA arrival 9 = altitude and remarks) | — | ROUTE | Route (ours on an arrival) |
+| 9A-FUEL | MIN FUEL | 9A | Minimum fuel | MIN FUEL | Block 9A, minimum fuel |
+| 9A-DEST | DEST | 9A | destination airport | DEST | Block 9A, destination airport |
+| 9A-PTOUT | PT OUT | 9A | point out | PT OUT | Block 9A, point out |
+| 9A-VECTOR | HDG | 9A | radar vector | HDG | Block 9A, radar vector (assigned heading) |
+| 9A-SPEED | SPEED | 9A | speed adjustment | SPEED | Block 9A, speed adjustment |
+| 20, 21 | SCRATCH1/2 | — | — | SCRATCH1/2 | Scratchpad (ours) |
+| — | — | **6** | Previous fix / inbound airway | (missing) | we have no cell |
+
+### OVERFLIGHT (FAA TBL 2-3-5) — rows that differ
+
+| Our id | Our label | FAA | FAA name | Proposed label | Tooltip (draft) |
+|---|---|---|---|---|---|
+| 7 | CRUS ALT | — (FAA 7 = overflight coordination indicator; en route 24 = requested altitude) | requested altitude | REQ ALT | Requested altitude (en route Block 24; FAA terminal Block 7 is the coordination indicator) |
+| 7A | ALT | **9** (#≠) | Altitude and route of flight through the terminal area | ALT | Assigned altitude (FAA Block 9) |
+| 8 | ORIG | — | (en route 25) | ORIGIN | Point of origin (ours) |
+| 8B | DEST | — | (en route 25) | DEST | Destination (ours) |
+| 9 | RTE | 9 | route of flight through the terminal area | ROUTE | Block 9, route through the terminal area |
+| 9A-VECTOR, 9A-SPEED | HDG, SPEED | (9A optional on overflights) | — | HDG, SPEED | ours |
+| — | — | **6**, **8** | Coordination fix; ETA at the coordination fix | (missing) | we have no cells |
+
+### MISSION, MARSHAL, FINAL, PATTERN
+
+No FAA flight progress strip exists for these (MISSION is the MRU/ATO record; MARSHAL/FINAL/PATTERN are the carrier's
+and the Incirlik pattern board's, CV NATOPS/CATCC and AETCI 11-204 territory, not FAA). All **ours**; labels unchanged
+except where Q2/Q3 change what FINAL shows. Tooltips say "(ours)".
