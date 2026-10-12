@@ -11,8 +11,11 @@
 //
 // What had to be replaced is the DEM source. The client decodes MapTiler
 // terrain-RGB WebP tiles through a <canvas>, which Node has not got. This
-// requests the PNG variant of the same tileset and decodes it with Node's own
-// zlib — no new dependency, which matters for a package that runs on six.
+// fetches the same tileset (terrain-rgb-v2, which serves lossless WebP only:
+// a `.png` URL gets WebP bytes too, live-test finding T2) and decodes it with
+// src/webp-lossless.js, a pure-JS lossless decoder — no new dependency. The
+// PNG decoder stays: a tile is decoded by its magic bytes, not its URL, so a
+// PNG source (the older `terrain-rgb` set) still works.
 //
 // Two caches, for two different problems:
 //   - decoded Float32 grids in memory, so the sweep can sample synchronously;
@@ -28,6 +31,7 @@ const path = require('path');
 const zlib = require('zlib');
 
 const { haversineM } = require('./geo');
+const { decodeWebp, isWebp } = require('./webp-lossless');
 const { dirs } = require('./state-paths');
 const log = require('./log').logger('terrain');
 
@@ -42,6 +46,10 @@ const GRID_CACHE_MAX = 600; // decoded tiles held in memory (FIFO)
 const EFFECTIVE_EARTH_RADIUS_M = (4 / 3) * 6371000;
 
 const TILE_SIZE = 512;   // terrain-rgb-v2 tile pixel dimensions
+// The tileset's format (its tiles.json says `format: webp`). It names both the
+// URL and the disk cache file, so a cache written in another format is never
+// read back as this one.
+const TILE_FORMAT = 'webp';
 const GRID_STRIDE = 4;   // sample every 4th pixel -> 128x128 grid per tile
 const GRID_N = TILE_SIZE / GRID_STRIDE;
 
@@ -106,12 +114,12 @@ function projectPos(lat, lon, bearing, distM) {
   return [(phi2 * 180) / Math.PI, (((lambda2 * 180) / Math.PI + 540) % 360) - 180];
 }
 
-// ── PNG decode (no dependency) ─────────────────────────────────────────────
+// ── PNG decode (no dependency; WebP is src/webp-lossless.js) ───────────────
 
 const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
 /**
- * Decodes the one PNG flavour MapTiler's terrain-rgb-v2 actually serves:
+ * Decodes the one PNG flavour MapTiler's terrain-RGB PNG set serves:
  * 8-bit, colour type 2 (RGB) or 6 (RGBA), no interlacing. Anything else
  * throws rather than guessing — a silently mis-decoded DEM is terrain that
  * masks the wrong things, which is far worse than no terrain at all.
@@ -191,9 +199,14 @@ function decodePng(buf) {
  * Mapbox Terrain-RGB v1 encoding, which is what MapTiler's terrain-rgb-v2
  * tileset carries: height = -10000 + ((R*256*256 + G*256 + B) * 0.1).
  * Subsampled by GRID_STRIDE into a GRID_N x GRID_N Float32Array of metres.
+ * WebP (what terrain-rgb-v2 serves) or PNG, told apart by the magic bytes.
  */
+function decodeTerrainImage(buf) {
+  return isWebp(buf) ? decodeWebp(buf) : decodePng(buf);
+}
+
 function decodeTerrainTile(buf) {
-  const { width, height, channels, data } = decodePng(buf);
+  const { width, height, channels, data } = decodeTerrainImage(buf);
   if (width !== TILE_SIZE || height !== TILE_SIZE) {
     throw new Error(`unexpected terrain tile size ${width}x${height}`);
   }
@@ -256,11 +269,11 @@ class TerrainStore {
   }
 
   _tileUrl(z, x, y) {
-    return `https://api.maptiler.com/tiles/terrain-rgb-v2/${z}/${x}/${y}.png?key=${this._key}`;
+    return `https://api.maptiler.com/tiles/terrain-rgb-v2/${z}/${x}/${y}.${TILE_FORMAT}?key=${this._key}`;
   }
 
   _diskPath(z, x, y) {
-    return path.join(this._cacheDir, String(z), String(x), `${y}.png`);
+    return path.join(this._cacheDir, String(z), String(x), `${y}.${TILE_FORMAT}`);
   }
 
   async _httpGet(url) {
@@ -469,7 +482,7 @@ module.exports = {
   TerrainStore,
   // pure, and covered by tests/terrain.test.mjs
   losSightLineHeightM, losProfileBlocked,
-  decodePng, decodeTerrainTile, lonLatToTile, bearingDeg, projectPos, bilinear,
+  decodePng, decodeWebp, decodeTerrainImage, decodeTerrainTile, lonLatToTile, bearingDeg, projectPos, bilinear,
   EFFECTIVE_EARTH_RADIUS_M, LOS_SAMPLE_COUNT, LOS_DEM_ZOOM,
-  TILE_SIZE, GRID_STRIDE, GRID_N, PREWARM_MAX_TILES,
+  TILE_SIZE, TILE_FORMAT, GRID_STRIDE, GRID_N, PREWARM_MAX_TILES,
 };

@@ -14,9 +14,10 @@ import path from 'node:path';
  *
  * The second half is new, and covers what had to be replaced: the client
  * decoded MapTiler's WebP terrain tiles through a <canvas>, which Node has
- * not got, so this decodes the PNG variant with zlib instead. A silently
- * mis-decoded DEM masks the wrong things, which is worse than no DEM at all —
- * hence a synthetic tile with known heights rather than trusting the format.
+ * not got. The server decodes them itself (PNG with zlib, lossless WebP with
+ * src/webp-lossless.js). A silently mis-decoded DEM masks the wrong things,
+ * which is worse than no DEM at all — hence synthetic PNG tiles with known
+ * heights here, and real MapTiler tiles in tests/terrain-tiles.test.mjs.
  */
 
 const {
