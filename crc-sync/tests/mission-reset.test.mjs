@@ -17,7 +17,7 @@ const paths = withPaths('mission-reset-', APP_PATHS, { stateDir: true, shippedCo
 const tmpDir = paths.dir;
 
 const { createApp } = await import('../src/app.js');
-const { crew, mustAct, airborneDeparture, handedToCenter, mustCarrierAct, mustSfaAct, DEPARTURE_FLIGHT_DATA } = await import('./helpers/efsp-scenario.mjs');
+const { crew, mustAct, airborneDeparture, handedToCenter, mustCarrierAct, DEPARTURE_FLIGHT_DATA } = await import('./helpers/efsp-scenario.mjs');
 
 const A = { theatre: 'Syria', waypoints: [{ name: 'INCIRLIK' }], drawings: [{ name: 'MOA 1' }], airports: [] };
 const B = { theatre: 'Syria', waypoints: [{ name: 'INCIRLIK' }], drawings: [{ name: 'MOA 2' }], airports: [] };
@@ -50,7 +50,7 @@ function boot() {
 const live = (efsp) => ['INCIRLIK', 'CENTER', 'TACTICAL', 'CARRIER'].flatMap(f => (efsp.boardStoreFor(f) ? efsp.boardStoreFor(f).getAll() : []).filter(s => s.state !== 'DROPPED'));
 const runwayStatus = (efsp) => efsp.runwayStatusStore.getRunwayStatus('INCIRLIK');
 
-/** A running mission with a busy Board: two flights, one of them handed to CENTER, a closed runway, a carrier Case, an SFA rotation. */
+/** A running mission with a busy Board: two flights, one of them handed to CENTER, a closed runway, a carrier Case. */
 function seed(h) {
   const { app, c } = h;
   const efsp = app.efsp;
@@ -64,7 +64,6 @@ function seed(h) {
   }).ack;
   assert.equal(closed.ok, true, JSON.stringify(closed));
   mustCarrierAct(efsp, c.CV_PRIFLY, 'CV_PRIFLY', { kind: 'SetCarrierState', field: 'case', value: 'II' });
-  mustSfaAct(efsp, c.AP, 'AP', { kind: 'SetSfaRotation', rackId: 'freq-4', positionId: 'PAR' });
   assert.ok(live(efsp).length >= 3, 'the Board has live Strips');
   assert.equal(runwayStatus(efsp).runways[0].status, 'CLOSED');
 }
@@ -89,7 +88,6 @@ function assertCleared(h) {
   assert.equal(live(efsp).length, 0, 'every live Strip is DROPPED');
   assert.equal(runwayStatus(efsp).runways[0].status, 'OPEN', 'the runway works are over');
   assert.equal(efsp.carrierStore.caseValue(), efsp.carrierStore._fresh(efsp.carrierStore.defaultHullId).recoveryCase.value);
-  assert.equal(efsp.sfaStore.positionOn('freq-4') === 'PAR', false);
 }
 
 function boardFrames(h) { return h.frames.filter(f => f.type === 'efsp-board-delta'); }
@@ -158,7 +156,6 @@ test('a different mission (changed fingerprint) clears the Board in one audited 
   assert.equal(marked.reduce((n, f) => n + f.missionReset.strips, 0), summaries.reduce((n, e) => n + e.strips, 0));
   assert.ok(h.frames.some(f => f.type === 'efsp-runway-status-delta'));
   assert.ok(h.frames.some(f => f.type === 'efsp-carrier-delta' && f.carrierSeq > carrierSeq));
-  assert.ok(h.frames.some(f => f.type === 'efsp-sfa-delta'));
   // configuration is untouched
   assert.equal(h.app.efsp.airspaceStore.getAll().length, airspaces);
   // persisted

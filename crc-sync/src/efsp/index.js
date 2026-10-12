@@ -108,7 +108,7 @@ function createEfsp({ env = process.env, facilityConfig = createFacilityConfig({
   const buildDeps = { onFlightDataWrite, clock, transitionAltFt, currentTheater, codeAllocator, mutationLog, facilities, stores, facilityConfig, stereoRoutes };
   for (const entry of REGISTRY) stores[entry.key] = entry.build(buildDeps);
   const { flightData: flightDataStore, airspaces: airspaceStore, correlations: correlationStore, marsa: marsaStore,
-    runwayStatuses: runwayStatusStore, carriers: carrierStore, sfaRotation: sfaStore } = stores;
+    runwayStatuses: runwayStatusStore, carriers: carrierStore } = stores;
   const regimeLocator = createRegimeLocator({ locateTrack, correlationStore, airspaceStore });
   const facilityIds = facilityConfig.getFacilityIds();
   undoHistory.attach(undoEnv({
@@ -166,7 +166,6 @@ function createEfsp({ env = process.env, facilityConfig = createFacilityConfig({
     correlationStore,
     marsaStore,
     carrierStore,
-    sfaStore,
     // key -> instance, for every entry of the persisted-store registry (stores.js)
     stores,
     facilityConfig,
@@ -196,7 +195,7 @@ function createEfsp({ env = process.env, facilityConfig = createFacilityConfig({
     flightDataStore, mutationLog, clock, wallClock, undoHistory, facilityConfig, stereoRoutes,
     /** Tests only (src/test-reset.js): the NLA double-tap guard's length, ms, for every Board. */
     setNlaGuardMs: (ms) => { nlaGuard.ms = ms; },
-    airspaceStore, correlationStore, marsaStore, nlaStatusMonitor, runwayStatusStore, carrierStore, sfaStore,
+    airspaceStore, correlationStore, marsaStore, nlaStatusMonitor, runwayStatusStore, carrierStore,
     boardStoreFor: ctx.boardStoreFor, positionStoreFor: ctx.positionStoreFor,
 
     /**

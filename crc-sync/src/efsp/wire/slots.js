@@ -3,8 +3,8 @@
 // Broadcast slots: the frames one round trip sends, and the one order they leave in.
 
 // The order a round trip's frames leave in: the primary delta, the peer Facility's, the MARSA relation's, the
-// carrier's, the SFA's. A client sees the Strip change before the relation or the Case that rode with it.
-const SLOT_ORDER = ['primary', 'peer', 'marsa', 'carrier', 'sfa'];
+// carrier's. A client sees the Strip change before the relation or the Case that rode with it.
+const SLOT_ORDER = ['primary', 'peer', 'marsa', 'carrier'];
 
 /**
  * The frames of `slots` (an object keyed by slot name, absent or falsy = nothing to send) as an array in

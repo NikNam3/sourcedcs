@@ -30,16 +30,22 @@
 .efsp-final-terminal { min-height: var(--efsp-tap, 44px); padding: 0 12px; font: inherit; color: var(--efsp-text, #d8e0e6);
   background: var(--efsp-strip, #1c2228); border: 1px solid var(--efsp-line-2, #4a5560); border-radius: 3px; cursor: pointer; }
 .efsp-final-terminal:hover { border-color: var(--efsp-muted, #8c9aa6); }
+/* A recorded call (Begin descent, Cleared to land) stays on the line greyed: it is the record (crc-sync docs/adr/0117). */
+.efsp-final-terminal:disabled, .par-term:disabled { color: var(--efsp-muted, #8c9aa6); border-color: var(--efsp-line, #2e3740); cursor: default; }
+/* The assigned HDG and ALT the final controller types (crc-sync docs/adr/0117, H134 LT-RQ8 a). */
+.efsp-final-assign { width: 5ch; min-height: 32px; font: inherit; color: var(--efsp-text, #d8e0e6); text-align: center;
+  font-variant-numeric: tabular-nums; background: var(--efsp-strip, #1c2228); border: 1px solid var(--efsp-line, #2e3740); border-radius: 3px; }
+.efsp-final-assign::placeholder { color: #5d6973; }
+.efsp-final-tools { display: flex; gap: 4px; align-items: center; }
 
-/* Bay descriptor views (docs/adr/0093): the mount point, the SFA rotation header, the empty FINAL line. */
+/* Bay descriptor views (docs/adr/0093): the mount point, AP's SFA frequency header (crc-sync docs/adr/0117: grey, nothing
+   here is a problem), the empty FINAL line. */
 .efsp-bay-view { margin: 0 0 6px; }
 .efsp-final-none { border: 1px dashed #34404a; border-radius: 3px; padding: 14px; color: #8c9aa6; text-align: center; }
 .efsp-sfa-header { border: 1px solid #34404a; border-radius: 3px; padding: 4px 6px; background: #10151a; }
-.efsp-sfa-title { font-size: 10.5px; letter-spacing: .06em; color: #8c9aa6; margin-bottom: 4px; }
 .efsp-sfa-rows { display: flex; flex-wrap: wrap; gap: 6px; }
 .efsp-sfa-row { display: flex; gap: 6px; align-items: center; border: 1px solid #34404a; border-radius: 3px; padding: 2px 6px; background: #1b222a; }
-.efsp-sfa-freq { color: #fff; font-variant-numeric: tabular-nums; }
-.efsp-sfa-on { color: #8ec7ff; min-width: 36px; }
+.efsp-sfa-freq { color: var(--efsp-text, #d8e0e6); font-variant-numeric: tabular-nums; }
+.efsp-sfa-on { color: var(--efsp-muted, #8c9aa6); min-width: 36px; }
 .efsp-sfa-spare { color: #5d6973; }
-.efsp-sfa-select { font: inherit; color: inherit; background: #232c35; border: 1px solid #34404a; border-radius: 3px; min-height: 24px; }
 span.efsp-final-name:hover { border-color: transparent; }

@@ -1,50 +1,32 @@
 'use strict';
 
-// Single Frequency Approach, as data (guide §4.7, docs/adr/0075, docs/adr/0093).
+// Single frequency approach, as data (docs/adr/0117, superseding the SFA parts of 0075 and 0093).
 //
-// SFA exists so a single-piloted jet never changes frequency during an approach:
-// "controllers rotate onto the aircraft's frequency". The model has two parts and
-// neither one writes a frequency.
+// SFA is a procedure between the radar approach controller (AP) and the GCA controller (PAR), not a Position:
 //
-//  1. The ROTATION RECORD (sfa-store.js): `{ rackId: positionId }`, which Position
-//     is on which pool frequency right now. Only the jurisdiction Position (AP)
-//     changes it.
-//  2. The SFA_ROTATION transfer (below): a Strip's controller changes, the Strip's
-//     frequency never does. It is the same shape as a carrier handoff (ADR 0074):
-//     an ARRIVAL Strip becomes a FINAL Strip IN PLACE (same Strip, same flight data, as
-//     ConvertToArrival does, ADR 0023), ownership moves to PAR, and the transfer's
-//     trigger type is recorded.
+//   JO 7610.14A para 7-1-5 b, c: "At least five discrete ultra-high frequency (UHF) frequencies are available for this
+//   use." "The radar approach controller retains jurisdiction over the rotation of three frequencies between himself
+//   and the GCA controller."
+//   JO 7110.65BB para 4-7-3: "do not require a radio frequency change after the aircraft begins approach ... until a
+//   landing or low approach has been completed" (with its five exceptions).
+//   JO 7110.65BB para 5-10-15 c: after the handoff the transferring controller deselects the frequency and the
+//   receiving controller selects it; "Do not require or expect the flight to check on frequency".
 //
-// A frequency is an attribute of the FLIGHT (the flight data's working frequency, Block
-// 22), so nothing here can change one by accident: SFA_ROTATION never touches the
-// flight data. The one place a frequency IS written is a controller dragging a Strip onto
-// an SFA Rack, which is assigning it a frequency on purpose (board/ops/move-strip.js, through `assignSfaFrequency`).
+// So the PILOT never changes frequency: the frequency is the flight's (its working frequency, Block 22), AP assigns
+// it by filing the Strip on a frequency Rack of its `sfa-freqs` Bay, and it travels with the flight when AP hands it
+// to PAR (an ordinary radar handoff, board/ops/transfer-strip.js). Nothing here writes a frequency.
 //
-// Pure: no store, no clock. Who may do what is permission.js's capability table.
+// Who is on a rotating frequency is not a record anyone keeps: it is PAR while PAR holds the Strip of a flight on it,
+// otherwise AP, who holds the rotation. Only the client shows it (crc-desktop sfa-state.js). Pure: no store, no clock.
 
-const { TRIGGER_TYPES } = require('./carrier/handoffs');
+const SFA_USE = Object.freeze({ ROTATION: 'ROTATION', INITIAL_CONTACT: 'INITIAL_CONTACT', SPARE: 'SPARE' });
 
-// The trigger type is one of the FOUR guide §9.12 names (a rotation is the
-// controller's own gesture, like Commence): the four types stay four.
-const SFA_TRANSFERS = Object.freeze({
-  SFA_ROTATION: Object.freeze({
-    trigger: 'CONTROLLER_INITIATED',
-    stripType: 'ARRIVAL', state: 'INBOUND',
-    toStripType: 'FINAL', toState: 'ON_FINAL',
-    label: 'Rotate to PAR',
-    source: '§4.7',
-    guide: '§4.7 — SFA ownership transfer is a controller-side rotation; the Strip\'s frequency does not change',
-  }),
-});
-
-if (!TRIGGER_TYPES.includes(SFA_TRANSFERS.SFA_ROTATION.trigger)) throw new Error('SFA_ROTATION must use one of the four trigger types');
-
-/** The pool entry for a Rack (`{ rackId, mhz }`), or null. */
+/** The pool entry for a Rack (`{ rackId, mhz, use }`), or null. */
 function poolEntryFor(config, rackId) {
   return (config && Array.isArray(config.pool) ? config.pool : []).find(p => p.rackId === rackId) || null;
 }
 
-/** True when `bay` is the SFA frequencies Bay of a Facility that has a Single Frequency Approach `config`. */
+/** True when `bay` is the SFA frequencies Bay of a Facility that has a single frequency approach `config`. */
 function isSfaBay(bay, config) {
   return !!bay && bay.view === 'sfa-freqs' && !!config;
 }
@@ -63,4 +45,4 @@ function rackForFrequency(bay, config, mhz) {
   return entry ? entry.rackId : null;
 }
 
-module.exports = { SFA_TRANSFERS, poolEntryFor, isSfaBay, frequencyForRack, rackForFrequency };
+module.exports = { SFA_USE, poolEntryFor, isSfaBay, frequencyForRack, rackForFrequency };

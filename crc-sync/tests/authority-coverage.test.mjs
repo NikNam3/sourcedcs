@@ -18,7 +18,7 @@ const configured = () => facilityConfig.getFacilityIds().flatMap(f => facilityCo
 
 test('every Position a shipped Facility lists has a registered Position family', () => {
   const rows = configured();
-  assert.ok(rows.length >= 17, `found ${rows.length}`);
+  assert.ok(rows.length >= 16, `found ${rows.length}`);
   for (const { f, p } of rows) assert.ok(authority.positionFamilyOf(p), `${f}/${p} has no Position family in authority/`);
 });
 

@@ -7,7 +7,6 @@ import {
   applyEfspSnapshot, applyEfspStoreSlices, getEfspFacility, getEfspStrip, getPendingMutations
 } from './efsp-state.js';
 import { captureEfspPlacement } from './efsp-arrivals.js';
-import { applyEfspSfaDelta } from './sfa-state.js';
 import { applyParSamples, clearParSamples } from './par-samples.js';
 import {
   efspResyncReplyAsMessage, noteEfspPositionsAck, replayPendingEfspMutations, settleEfspAck
@@ -201,25 +200,11 @@ registerEfspMessage('efsp-alerts', (msg) => {
   markEfspChanged('alerts'); // the Bays, the map, the track panel
 });
 
-// crc-sync's docs/adr/0093 — who is on which SFA frequency, sent whole on every change.
 // The PAR sample (crc-sync docs/adr/0112): a sensor's output, not a store delta (no seq, no resync); sent every half second
 // to a controller working a final, one empty frame when that ends.
 registerEfspMessage('par-sample', (msg) => {
   applyParSamples(msg);
   markEfspChanged('par');
-});
-
-registerEfspMessage('efsp-sfa-delta', (msg) => {
-  applyEfspSfaDelta(msg);
-  markEfspChanged('sfa');
-});
-registerEfspStoreRedraw('sfaRotation', () => markEfspChanged('sfa'));
-
-registerEfspMessage('efsp-sfa-ack', (msg) => {
-  settleEfspAck(msg);
-  if (!msg.ok) _showMutationError(msg.reason || 'Rejected', msg.detail, { subject: 'SFA rotation' });
-  if (msg.sfaRotation) applyEfspSfaDelta({ sfaRotation: msg.sfaRotation });
-  markEfspChanged('sfa');
 });
 
 // WP7 (crc-sync docs/adr/0071) — the ATO import's two answers, sender only.

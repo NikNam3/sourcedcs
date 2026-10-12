@@ -8,12 +8,12 @@
 const REQUIRED_RULES = [
   'activeMarsaFor', 'airspaceFor', 'aitAuthorized', 'bayDescriptor', 'bayExists', 'bayForImpliedState', 'bayHoldsStripType',
   'bayImpliesState', 'baysFor', 'canActOnState', 'canCreateStripType', 'canMutate', 'canMutateAction', 'controlAxisFor', 'canRecordCarrierHandoff',
-  'canSendSfaRotationTransfer', 'carrierAppendFlight', 'carrierApplyEffect', 'carrierCase', 'carrierInStack',
+  'canHandOffToFinal', 'canRecordFinalCall', 'carrierAppendFlight', 'carrierApplyEffect', 'carrierCase', 'carrierInStack',
   'carrierLaneFor', 'carrierRetireFlight', 'carrierHandoffs', 'computeNla', 'coordinationBayFor', 'coordinationEffect',
-  'coordinationEligibleState', 'consolidatedAt', 'divertDestinationFor', 'drainMarsaRegimeWrites', 'facilityId', 'formationEligibility', 'runwayStatusFor',
+  'conversionFor', 'coordinationEligibleState', 'consolidatedAt', 'divertDestinationFor', 'drainMarsaRegimeWrites', 'facilityId', 'formationEligibility', 'runwayStatusFor',
   'handBackTargetsFor', 'handBackTo', 'isBlockVisible', 'isStaffed', 'isSelfCoordinated', 'isValidStripType', 'isValidState',
   'liveStripsForFlightData', 'marsaInterlockFor', 'mayActBesideOwner', 'peerBoard', 'regimeLocation', 'resolveBlockTarget', 'retireMarsaForFlightData',
-  'sfaFrequencyFor', 'sfaRackFor', 'sfaRotationReceiver', 'sfaTransfers', 'standingReleases', 'tofiCounterparts',
+  'sfaFrequencyFor', 'sfaRackFor', 'standingReleases', 'tofiCounterparts',
   'tofiEligibleState', 'validateCarrierHandoff', 'voidMarsaForAssignment',
 ];
 
@@ -21,7 +21,6 @@ const REQUIRED_RULES = [
 const DATA_RULES = {
   aitAuthorized: (v) => typeof v === 'boolean',
   carrierHandoffs: (v) => v !== null && typeof v === 'object',
-  sfaTransfers: (v) => v !== null && typeof v === 'object',
   standingReleases: (v) => Array.isArray(v),
   facilityId: (v) => v === null || typeof v === 'string',
 };

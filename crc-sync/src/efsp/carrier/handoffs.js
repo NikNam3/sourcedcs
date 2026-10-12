@@ -14,7 +14,7 @@
 // what the pilot said. The trigger type is METADATA recorded on the handoff
 // and rendered distinctly (WP7A bullet 4). It is never an automation hook.
 //
-// No handoff kind carries a frequency: frequency is SFA's business (§4.7,
+// No handoff kind carries a frequency: a frequency is the flight's (docs/adr/0117,
 // D17, lane L18).
 //
 // Provenance:

@@ -8,6 +8,7 @@
 
 const carrierModel = require('./carrier');
 const sfaModel = require('./sfa');
+const parFinal = require('./par-final');
 const permission = require('./permission');
 const authority = require('./authority');
 const nla = require('./nla');
@@ -145,16 +146,15 @@ function buildFacilityRules({ facilityId, facilityConfig, permissionRules, posit
     carrierApplyEffect:      (effect, flightDataId, meta) => carrierStore.applyEffect(effect, flightDataId, meta),
     carrierAppendFlight:     (flightDataId, meta) => carrierStore.appendFlight(flightDataId, meta),
     carrierRetireFlight:     (flightDataId, by) => carrierStore.onFlightDataRetired(flightDataId, by),
-    // docs/adr/0075, 0093 — Bay descriptor flags (`capacity`, `view`) and Single
-    // Frequency Approach. All plain reads of the one Facility config, so they
-    // are the same functions for every Facility (a Facility without an SFA Bay
-    // answers null).
+    // docs/adr/0093 — Bay descriptor flags (`capacity`, `view`); docs/adr/0117 — the single frequency approach and the
+    // PAR final. All plain reads of the one Facility config or the capability table, so they are the same functions for
+    // every Facility (a Facility without an SFA Bay or a final controller answers null).
     bayDescriptor:           (bayId) => facilityConfig.getBay(bayId, facilityId),
     sfaFrequencyFor:         (bayId, rackId) => sfaModel.frequencyForRack(facilityConfig.getBay(bayId, facilityId), facilityConfig.getSingleFrequencyApproach(facilityId), rackId),
     sfaRackFor:              (bayId, mhz) => sfaModel.rackForFrequency(facilityConfig.getBay(bayId, facilityId), facilityConfig.getSingleFrequencyApproach(facilityId), mhz),
-    sfaTransfers:            sfaModel.SFA_TRANSFERS,
-    sfaRotationReceiver:     () => permission.sfaRotationReceiver(),
-    canSendSfaRotationTransfer: (actingPositionId) => permission.canSendSfaRotationTransfer(actingPositionId),
+    conversionFor:           (strip, targetBayId) => parFinal.conversionFor(strip, facilityConfig.bayImpliesState(targetBayId, facilityId), facilityId),
+    canHandOffToFinal:       (actingPositionId) => permission.canHandOffToFinal(actingPositionId),
+    canRecordFinalCall:      (actingPositionId) => permission.canRecordFinalCall(actingPositionId),
   };
 }
 

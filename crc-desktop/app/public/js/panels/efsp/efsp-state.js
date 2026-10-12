@@ -1,6 +1,5 @@
 'use strict';
 import { applyEfspCarrierSnapshot } from './carrier-state.js';
-import { applyEfspSfaSnapshot } from './sfa-state.js';
 import { adoptCursor, boardCursorName, clearCursors, epochMoved, getCursor, replaceCursor, resyncPositionOf, storeCursorName, storeFrameGap } from './sync-cursor.js';
 import { efspStrips, getAllEfspStrips } from './board-data.js';
 import { _replaceAirspaces, _resetAirspaceState } from './airspace-state.js';
@@ -87,12 +86,10 @@ export function applyEfspSnapshot(msg) {
   _replaceRunwayStatuses(msg.runwayStatuses);
   // crc-sync's docs/adr/0074 — the carrier's hull record (carrier-state.js).
   applyEfspCarrierSnapshot(msg);
-  // crc-sync's docs/adr/0093 — who is on which SFA frequency (sfa-state.js).
-  applyEfspSfaSnapshot(msg);
   _adoptSnapshotStoreSyncs(msg);
 }
 
-// Store sync (crc-sync docs/adr/0106): the six stores outside the Board each count changes with a seq inside one
+// Store sync (crc-sync docs/adr/0106): the five stores outside the Board each count changes with a seq inside one
 // lifetime (epoch), exactly as a Board does, and are cursors `store:<key>` in sync-cursor.js. `key` is the snapshot
 // key (also the heartbeat's and the resync's); `gapFromDeltas` is the server's declaration that a delta moves seq by
 // exactly one change (stores.js `sync`), so a jump from deltas alone is a lost delta; the others are caught by the
@@ -104,7 +101,6 @@ export const STORE_SYNC = [
   { key: 'marsa', seqKey: 'marsaSeq', epochKey: 'marsaEpoch', gapFromDeltas: false, replace: _replaceMarsa },
   { key: 'runwayStatuses', seqKey: 'runwayStatusSeq', epochKey: 'runwayStatusEpoch', gapFromDeltas: true, replace: _replaceRunwayStatuses },
   { key: 'carriers', seqKey: 'carrierSeq', epochKey: 'carrierEpoch', gapFromDeltas: false, replace: (l) => applyEfspCarrierSnapshot({ carriers: l }) },
-  { key: 'sfaRotation', seqKey: 'sfaSeq', epochKey: 'sfaEpoch', gapFromDeltas: true, replace: (v) => applyEfspSfaSnapshot({ sfaRotation: v }) },
 ];
 
 function _adoptSnapshotStoreSyncs(msg) {

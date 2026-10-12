@@ -968,7 +968,6 @@ function createEfspInstrumentation({
     if (!ok && (msg.type === 'efsp-mutation' || result.unaudited === true)) {
       const subject = {};
       for (const k of ['stripId', 'airspaceId', 'flightDataId', 'marsaId', 'hullId']) if (msg[k] !== undefined) subject[k] = msg[k];
-      if (msg.type === 'efsp-sfa-mutation' && msg.op && msg.op.rackId !== undefined) subject.rackId = msg.op.rackId; // the SFA's subject rides in the op
       efsp.mutationLog.record({
         clientMutationId: id === undefined ? null : id,
         type: msg.type,

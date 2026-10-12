@@ -37,7 +37,7 @@ const {
   CARRIER_CAPABILITIES, canEditCarrierState, canSequenceMarshalStack, canRecordCarrierHandoff,
 } = require('./authority/positions/carrier');
 const {
-  INCIRLIK_CAPABILITIES, canRotateSfa, canSendSfaRotationTransfer, sfaRotationReceiver, sfaControllerPositions, incirlikPositionsWith,
+  INCIRLIK_CAPABILITIES, canHandOffToFinal, canRecordFinalCall, finalReceiver, incirlikPositionsWith,
 } = require('./authority/positions/incirlik-military');
 const { DEPARTURE_STATE_OWNERS } = require('./authority/strip-types/departure');
 const { ARRIVAL_STATE_OWNERS } = require('./authority/strip-types/arrival');
@@ -209,5 +209,5 @@ module.exports = {
   TACTICAL_CAPABILITIES, READ_SCOPES, handBackTargetsFor, tofiAnswererFor, readScopeFor, mayActBesideOwner,
   CARRIER_CAPABILITIES, canEditCarrierState, canSequenceMarshalStack, canRecordCarrierHandoff,
   MARSHAL_STATE_OWNERS, FINAL_STATE_OWNERS, PATTERN_STATE_OWNERS,
-  INCIRLIK_CAPABILITIES, canRotateSfa, canSendSfaRotationTransfer, sfaRotationReceiver, sfaControllerPositions, incirlikPositionsWith,
+  INCIRLIK_CAPABILITIES, canHandOffToFinal, canRecordFinalCall, finalReceiver, incirlikPositionsWith,
 };

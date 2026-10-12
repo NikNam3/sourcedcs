@@ -21,7 +21,7 @@ const MODULES = [
   require('./approve-airspace-entry'),
   require('./clear-airspace-entry'),
   require('./carrier-handoff'),
-  require('./sfa-rotation'),
+  require('./final-call'),
   require('./split-formation'),
   require('./join-formation'),
 ];

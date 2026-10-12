@@ -24,7 +24,6 @@ export const EFSP_TOPICS = Object.freeze({
   correlations: 'a correlation record changed',
   marsa: 'a MARSA relation changed',
   alerts: 'the conformance / conflict / obligation / surveillance picture changed',
-  sfa: 'an SFA frequency rotation changed',
   bays: 'the open Bays must redraw (a popover closed, a Strip moved, a refusal landed)',
   map: 'the scope must redraw',
   atcBackground: 'the black ATC scope background must be re-applied',

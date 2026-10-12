@@ -3,8 +3,8 @@
 /* The PAR panel (docs/wip/PAR-2.md; mockup docs/mockups/par-panel.html, revision 4; decisions H115, H116, H122; the sample is
  * crc-sync docs/adr/0112). The harness has no DCS, so the server's PAR sample carries no plot: the spec replaces the samples of
  * every `par-sample` frame with its own (an EFSP message observer, as carrier-map.spec.js puts in the ship) and applies them at
- * once. Everything else is the real server: the Strips, the rotation to PAR, the carrier handoffs and the terminal ops.
- * Incirlik: one controller signed on to RSU, AP, SFA and PAR. The carrier: one controller on the whole carrier.
+ * once. Everything else is the real server: the Strips, AP's handoff to PAR (crc-sync docs/adr/0117), the carrier handoffs and
+ * the terminal ops. Incirlik: one controller signed on to GC, RSU, AP and PAR. The carrier: one controller on the whole carrier.
  */
 
 const { test, expect } = require('./helpers/test');
@@ -91,25 +91,25 @@ async function cleanUp(page, facility) {
   await expect.poll(() => page.evaluate((f) => crc.state.getAllEfspStrips().filter(s => s.state !== 'DROPPED' && s.facilityId === f).length, facility)).toBe(0);
 }
 
-/** A flight rotated to PAR at Incirlik, on final (the real Board); returns its Strip id. */
+/** A flight AP filed on an SFA frequency and handed to PAR at Incirlik, on final (the real Board); returns its Strip id. */
 async function onParFinal(page, callsign, rack = 'freq-2') {
   await page.evaluate((c) => crc.ws.sendEfspCreateStrip('AP', { kind: 'CreateStrip', bayId: 'ap-inbound', rackId: 'main', stripType: 'ARRIVAL', flightData: { callsign: c, aircraftType: 'F-16C', originAirport: 'LTAG' } }), callsign);
   await waitStrip(page, callsign, s => s.ownerPositionId === 'AP', 'created at AP');
   await page.evaluate(([c, r]) => {
     const s = crc.state.getAllEfspStrips().find(x => x.state !== 'DROPPED' && (crc.state.getEfspFlightData(x.flightDataId) || { identity: {} }).identity.callsign === c);
-    crc.ws.sendEfspMutation('AP', s, { kind: 'TransferStrip', toPositionId: 'SFA', bayId: 'sfa-frequencies', rackId: r });
+    crc.ws.sendEfspMutation('AP', s, { kind: 'MoveStrip', bayId: 'ap-sfa', rackId: r });
   }, [callsign, rack]);
-  await waitStrip(page, callsign, s => s.ownerPositionId === 'SFA', 'with SFA');
+  await waitStrip(page, callsign, s => s.ownerPositionId === 'AP' && s.bayId === 'ap-sfa', 'on an SFA frequency');
   await page.evaluate((c) => {
     const s = crc.state.getAllEfspStrips().find(x => x.state !== 'DROPPED' && (crc.state.getEfspFlightData(x.flightDataId) || { identity: {} }).identity.callsign === c);
-    crc.ws.sendEfspMutation('SFA', s, { kind: 'SfaRotation' });
+    crc.ws.sendEfspMutation('AP', s, { kind: 'TransferStrip', toPositionId: 'PAR', bayId: 'par-final', rackId: 'main' });
   }, callsign);
   await waitStrip(page, callsign, s => s.ownerPositionId === 'PAR' && s.state === 'ON_FINAL' && s.bayId === 'par-final', 'on PAR final');
   return (await stripOf(page, callsign)).stripId;
 }
 
 async function incirlik(page) {
-  await openPanel(page, { signedOn: ['RSU', 'AP', 'SFA', 'PAR'], controller: `e2e-par-${unique()}` });
+  await openPanel(page, { signedOn: ['GC', 'RSU', 'AP', 'PAR'], controller: `e2e-par-${unique()}` });
   await installSampleInjection(page);
 }
 
@@ -149,7 +149,7 @@ test('01 on the glidepath: all grey but the magenta track; the header, the fligh
   await expect(plotMark(page, 'az')).toHaveAttribute('fill', '#e58bff');
   await expect(panel(page).locator('[data-par-trail="el"] circle')).toHaveCount(12);
   await expect(panel(page).locator('[data-par-line="glidepath"]')).toHaveAttribute('stroke', '#5f6b76');
-  await expect(panel(page).locator('.par-term')).toHaveText(['Landing assured', 'Missed approach']);
+  await expect(panel(page).locator('.par-term')).toHaveText(['Begin descent', 'Cleared to land', 'Landed', 'Missed approach']);
   await expect(panel(page).locator('input, select, textarea')).toHaveCount(0); // nothing to type on final
   await panel(page).screenshot({ path: test.info().outputPath('01-on-glidepath.png') });
 
@@ -359,22 +359,23 @@ test('05 walks: a second aircraft joins (the picks), the landing runway changes 
   await expect(panel(page).locator('#par-empty')).toHaveText('No aircraft on your final.');
 });
 
-test('06 Landing assured from the PAR panel; the controller signs off: the sample stops and the panel empties', async ({ page }) => {
+test('06 Landed from the PAR panel: the Strip goes to GC and PAR\'s Bay frees (T5); a second aircraft is handed in; the controller signs off: the sample stops and the panel empties', async ({ page }) => {
   await incirlik(page);
   const a = `PL${unique()}`;
   const id = await onParFinal(page, a);
   await inject(page, [sample(id, { r: 1 })]);
   await openFromBay(page, 'PAR', 'par-final', a);
+  await panel(page).locator('.par-term[data-terminal="CLEARED_TO_LAND"]').click();
+  await expect(panel(page).locator('.par-term[data-terminal="CLEARED_TO_LAND"]')).toBeDisabled(); // recorded, greyed
   await page.evaluate(() => { window.__par.samples = null; });
-  await panel(page).locator('.par-term[data-terminal="ASSURED"]').click();
-  await waitStrip(page, a, s => s.state === 'BALL', 'landing assured');
+  await panel(page).locator('.par-term[data-terminal="LANDED"]').click();
+  await waitStrip(page, a, s => s.stripType === 'ARRIVAL' && s.state === 'TAXI_IN' && s.ownerPositionId === 'GC' && s.bayId === 'gc-taxi-in', 'landed: with GC');
   await expect(panel(page).locator('#par-empty')).toBeVisible({ timeout: 5000 });
 
-  // a second flight on final (the first one's Strip leaves the Bay first: PAR holds one), then PAR signs off: the server's
-  // one empty frame clears the panel
-  await cleanUp(page, 'INCIRLIK');
+  // the first Strip is still live (with GC), and PAR's final Bay is free: a second flight is handed to PAR at once
   const b = `PS${unique()}`;
   const idb = await onParFinal(page, b, 'freq-3');
+  expect((await stripOf(page, a)).ownerPositionId).toBe('GC');
   await inject(page, [sample(idb, { r: 4 })]);
   await expect(field(page, 'name')).toHaveText(b);
   await page.evaluate(() => { window.__par.samples = null; });
@@ -382,7 +383,7 @@ test('06 Landing assured from the PAR panel; the controller signs off: the sampl
   // same sample; so the controller signs off everything)
   await page.evaluate(() => crc.ws.sendEfspSetPositions('INCIRLIK', []));
   await expect(panel(page).locator('#par-empty')).toBeVisible({ timeout: 5000 });
-  await page.evaluate(() => crc.ws.sendEfspSetPositions('INCIRLIK', ['RSU', 'AP', 'SFA', 'PAR']));
+  await page.evaluate(() => crc.ws.sendEfspSetPositions('INCIRLIK', ['GC', 'RSU', 'AP', 'PAR']));
   await page.waitForFunction(() => crc.ws.getAckedPositions('INCIRLIK').includes('PAR'));
 });
 

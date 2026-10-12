@@ -334,6 +334,9 @@ export const FINAL_BLOCK_MAP = {
   'C19': { required: false, label: 'TURN',     target: { kind: 'carrier-derived', field: 'approachTurnNm' } },
   'C16': { required: false, label: 'DECK',     target: { kind: 'carrier-derived', field: 'deck' } },
   'C17': { required: false, label: 'DIST',     target: { kind: 'carrier-derived', field: 'finalDistance' } },
+  // crc-sync docs/adr/0117: the talk-down's two assignments, the flight's clearance (H134 LT-RQ8 a: PAR changes them).
+  '7A': { required: false, label: 'ALT',      target: { kind: 'clearance', field: 'altitude' }, interlock: 'ALTITUDE' },
+  '9A-VECTOR': { required: false, label: 'HDG', target: { kind: 'clearance', field: 'heading' }, interlock: 'COURSE' },
   '2':  _CARRIER_CHROME['2'], '4': _CARRIER_CHROME['4'], '4A': _CARRIER_CHROME['4A'],
   '25': _CARRIER_CHROME['25'], '26': _CARRIER_CHROME['26'],
 };

@@ -5,7 +5,7 @@ export default {
   id: "M5",
   what: "frame order: the skeleton sends the peer delta before the primary delta",
   file: "src/efsp/wire/slots.js",
-  find: "const SLOT_ORDER = ['primary', 'peer', 'marsa', 'carrier', 'sfa'];",
-  replace: "const SLOT_ORDER = ['peer', 'primary', 'marsa', 'carrier', 'sfa'];",
+  find: "const SLOT_ORDER = ['primary', 'peer', 'marsa', 'carrier'];",
+  replace: "const SLOT_ORDER = ['peer', 'primary', 'marsa', 'carrier'];",
   detect: ["freeze-hub"],
 };

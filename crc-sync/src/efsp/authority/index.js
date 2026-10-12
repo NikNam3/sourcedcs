@@ -255,7 +255,7 @@ function permissionsFor(classOf) {
   return out;
 }
 
-// A family's `ownsStates` column (incirlik-military.js: RSU, SFA and PAR),
+// A family's `ownsStates` column (incirlik-military.js: RSU and PAR),
 // merged here with FRESH arrays: FINAL's rows share CV_LANES, so a push would
 // also hand PAR the carrier Marshal's COMMENCED.
 for (const f of positionFamilies) {
@@ -338,10 +338,10 @@ function creatorsOf(stripType) {
   return Object.keys(CREATE_STRIP_TYPE_PERMISSIONS).filter(p => CREATE_STRIP_TYPE_PERMISSIONS[p].has(stripType));
 }
 
-const { runwayInspectionRefusal, selfCoordinationRefusal, sfaJurisdictionRefusal } = require('./narrowing');
+const { runwayInspectionRefusal, selfCoordinationRefusal } = require('./narrowing');
 
 module.exports = {
-  runwayInspectionRefusal, selfCoordinationRefusal, sfaJurisdictionRefusal,
+  runwayInspectionRefusal, selfCoordinationRefusal,
   registerStripTypeFamily, registerPositionFamily,
   positionFamilyOf, positionFamily, positionIds, capabilitiesFor, creatorsOf,
   airspaceRowFor, airspaceAuthority, AIRSPACE_ROWS, permissionsFor,

@@ -66,8 +66,10 @@ export const NLA_LABELS = {
     IN_STACK:  'Commence',
     COMMENCED: 'Radar contact',
   },
+  // ON_FINAL: the carrier's NLA is its Ball handoff (the label comes from CARRIER_HANDOFFS by the server's
+  // `strip.nla.carrierHandoff`); at an airfield it is Landed, the Strip going to GC (crc-sync docs/adr/0117).
   FINAL: {
-    ON_FINAL:       'Ball',
+    ON_FINAL:       'Landed',
     BALL:           'Trapped',
     BOLTER_WAVEOFF: 'Back on final',
   },
@@ -137,7 +139,7 @@ export const DEPARTURE_STATE_OWNERS = {
 // [SOURCE-DEFINED] ARRIVAL lifecycle authority (docs/adr/0008/0010). CTR
 // added to INBOUND (WP4A, docs/adr/0014) — mirrors the authority tables exactly.
 export const ARRIVAL_STATE_OWNERS = {
-  INBOUND:         ['AP', 'CTR', 'SFA'], // SFA (docs/adr/0075) works the inbound aircraft on its frequencies
+  INBOUND:         ['AP', 'CTR'],
   HANDED_TO_TOWER: ['LC'],
   FINAL:           ['LC'],
   LANDED:          ['LC'],
@@ -191,8 +193,8 @@ export const TOFI_ELIGIBLE_STATES = { DEPARTURE: 'HANDED_OFF', ARRIVAL: 'INBOUND
 
 // The carrier's three strip types — mirrors the authority tables exactly (crc-sync docs/adr/0074).
 export const MARSHAL_STATE_OWNERS = { LAUNCH: ['CV_MARSHAL'], IN_STACK: ['CV_MARSHAL'], COMMENCED: ['CV_APP1', 'CV_APP2'] };
-// PAR (docs/adr/0075) shares FINAL, RSU shares PATTERN: the same strip types, more owners.
-export const FINAL_STATE_OWNERS = { ON_FINAL: ['CV_APP1', 'CV_APP2', 'PAR'], BALL: ['CV_APP1', 'CV_APP2', 'PAR'], BOLTER_WAVEOFF: ['CV_APP1', 'CV_APP2', 'PAR'] };
+// PAR (docs/adr/0075) shares FINAL, RSU shares PATTERN: the same strip types, more owners. BALL is the carrier's only (docs/adr/0117).
+export const FINAL_STATE_OWNERS = { ON_FINAL: ['CV_APP1', 'CV_APP2', 'PAR'], BALL: ['CV_APP1', 'CV_APP2'], BOLTER_WAVEOFF: ['CV_APP1', 'CV_APP2', 'PAR'] };
 export const PATTERN_STATE_OWNERS = { IN_PATTERN: ['CV_PRIFLY', 'RSU'], RECOVERED: ['CV_PRIFLY', 'RSU'] };
 
 export const STATE_OWNERS_BY_STRIP_TYPE = {

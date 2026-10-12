@@ -27,7 +27,7 @@
 const fs = require('fs');
 const runwayStatus = require('./runway-status'); // pure, requires nothing back (docs/adr/0061)
 const schema = require('./facility-schema');
-const { validateConfig, validateRadarSelector, validateSfaRotationRecord, BAY_VIEWS } = schema;
+const { validateConfig, validateRadarSelector, BAY_VIEWS } = schema;
 // The RANGES Facility's Position set is derived from the airspace definitions (see _rangesConfig). The definitions
 // live in the registry (airspace-store.js, docs/adr/0098) and this module requires none of it: createEfsp derives the
 // ids from every theater's saved definitions and the standing list, and hands them over with setRangePositionIds()
@@ -322,8 +322,14 @@ function createFacilityConfig({ env = process.env } = {}) {
   // across both Facilities and needs to know which Board a Bay belongs to.
   function getAllBays(facilityId = DEFAULT_FACILITY_ID) {
     const out = [];
-    for (const [positionId, bays] of Object.entries(_configs().get(facilityId).bays)) {
-      for (const bay of bays) out.push({ ...deepClone(bay), positionId, facilityId });
+    const config = _configs().get(facilityId);
+    for (const [positionId, bays] of Object.entries(config.bays)) {
+      for (const bay of bays) {
+        const d = { ...deepClone(bay), positionId, facilityId };
+        // The SFA Bay carries its pool, so a client draws the frequencies from the Bay it shows (docs/adr/0117).
+        if (bay.view === 'sfa-freqs' && config.singleFrequencyApproach) d.sfaPool = deepClone(config.singleFrequencyApproach.pool);
+        out.push(d);
+      }
     }
     return out;
   }
@@ -346,7 +352,7 @@ function createFacilityConfig({ env = process.env } = {}) {
     return getAllBays(facilityId).find(b => b.bayId === bayId) || null;
   }
 
-  /** A Facility's SFA pool config (guide §4.7), or null when it has none (every Facility but INCIRLIK). */
+  /** A Facility's single frequency approach config (docs/adr/0117), or null when it has none (every Facility but INCIRLIK). */
   function getSingleFrequencyApproach(facilityId = DEFAULT_FACILITY_ID) {
     const config = _configs().get(facilityId);
     return config && config.singleFrequencyApproach ? deepClone(config.singleFrequencyApproach) : null;
@@ -414,9 +420,9 @@ function createFacilityConfig({ env = process.env } = {}) {
     getFacilityConfig, getPositionSet, getPositionClass, getPositionLetter, allPositionLetters, getConsolidation, getHandBack, getHatMaps, getPositionFrequencies, getBaysFor, getAllBays, isBlockVisible,
     getPositionRadars, radarBearingPositionIds, validateRadarSelector,
     bayImpliesState, bayHoldsStripType, bayForImpliedState, bayExists, coordinationBayFor, setFacilityConfig, validateConfig,
-    getBay, getSingleFrequencyApproach, validateSfaRotationRecord, BAY_VIEWS,
+    getBay, getSingleFrequencyApproach, BAY_VIEWS,
     getShippedConfig, load,
   };
 }
 
-module.exports = { createFacilityConfig, DEFAULT_FACILITY_ID, validateConfig, validateRadarSelector, validateSfaRotationRecord, BAY_VIEWS };
+module.exports = { createFacilityConfig, DEFAULT_FACILITY_ID, validateConfig, validateRadarSelector, BAY_VIEWS };

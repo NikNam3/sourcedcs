@@ -128,6 +128,64 @@ test('the monitor reads correlation, track and clearance, and reports a flight o
   assert.equal(monitor.tick(43 * S), false);
 });
 
+// ── on a final (docs/adr/0117, H134 LT-RQ8 a, LT-RQ9 a) ──────────────────────
+// No heading check on a final; at an airfield the altitude is checked until "BEGIN DESCENT" ends it (the FinalCall clears
+// the assigned altitude, a Board test covers that); on the carrier no altitude check from the final on (ours).
+
+async function finalMonitor(onFinal) {
+  const { ConformanceMonitor } = await import('../src/efsp/conformance.js');
+  const flightData = { flightDataId: 'f1', clearance: {
+    heading: { entries: [{ value: '050', parsed: 50, status: 'ACTIVE', at: 0 }] },
+    altitude: { entries: [{ value: '030', parsed: 3000, block: null, status: 'ACTIVE', at: 0 }] },
+  } };
+  // flying 090 (40 degrees off AP's last vector) and 1,500 ft below the 3,000 it reached, descending on the glidepath
+  const track = { id: 't1', alt: 3000 / 3.28084, course: 90, groundSpeed: FAST, verticalSpeed: fpm(-700) };
+  const finals = new Map(onFinal ? [['f1', onFinal]] : []);
+  const monitor = new ConformanceMonitor({
+    trackStore: { get: () => track },
+    flightDataStore: { getFlightData: () => flightData },
+    correlationStore: { getAll: () => [{ flightDataId: 'f1', trackId: 't1', state: 'CORRELATED' }] },
+    weather: () => ({ pressurePa: 101325, tempK: 288.15 }),
+    transitionAltFt: () => 18000,
+    indicatedAltFt,
+    gridToMagnetic: (deg) => deg,
+    config: cfg,
+    finals: () => finals,
+  });
+  wallFollows(monitor);
+  monitor.tick(0);
+  track.alt = 1500 / 3.28084;
+  for (let t = 1; t <= 60; t++) monitor.tick(t * S);
+  return { monitor, finals, flightData, track };
+}
+
+test('not on a final: AP\'s vector and altitude alert as ever (the control case)', async () => {
+  const { monitor } = await finalMonitor(null);
+  assert.deepEqual(kinds(monitor.getAll()[0].alerts).sort(), ['HEADING', 'LEVEL_BUST']);
+});
+
+test('on the PAR final: no heading alert; the altitude still alerts until Begin descent ends it', async () => {
+  const { monitor, flightData } = await finalMonitor('AIRFIELD');
+  assert.deepEqual(kinds(monitor.getAll()[0].alerts), ['LEVEL_BUST'], 'before Begin descent the assigned altitude holds (para 5-12-3)');
+  // Begin descent: the assigned altitude is superseded by "none" (board/ops/final-call.js)
+  flightData.clearance.altitude.entries[0].status = 'SUPERSEDED';
+  flightData.clearance.altitude.entries.push({ value: '', parsed: null, block: null, status: 'ACTIVE', at: 61 * S });
+  monitor.tick(62 * S);
+  assert.deepEqual(monitor.getAll(), [], 'on the glidepath nothing is alerted');
+});
+
+test('on the carrier final: neither heading nor altitude alerts (ours: JO 7110.65 is silent on the carrier)', async () => {
+  const { monitor } = await finalMonitor('CARRIER');
+  assert.deepEqual(monitor.getAll(), []);
+});
+
+test('leaving the final (a missed approach) brings the checks back against what is then assigned', async () => {
+  const { monitor, finals } = await finalMonitor('AIRFIELD');
+  finals.delete('f1');
+  for (let t = 61; t <= 120; t++) monitor.tick(t * S);
+  assert.ok(kinds(monitor.getAll()[0].alerts).includes('HEADING'));
+});
+
 // ── frames (docs/adr/0085, S-F2) ─────────────────────────────────────────
 // The HDG is typed magnetic; DCS's course is grid. Over Syria the two differ
 // by about 7°, so comparing them raw alerts on a pilot flying the heading

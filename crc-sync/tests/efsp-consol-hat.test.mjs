@@ -386,13 +386,13 @@ test('LC leaving with an aircraft in LUAW leaves nothing at AP; AP\'s own INBOUN
   assert.deepEqual(res.ack.warnings.map(w => w.code), ['UNSTAFFED_RECEIVER']);
 });
 
-test('combination warnings: LC+AP, LC+OPS, LC+SFA/PAR combine; LC+RSU and CD+GC do not; LUAW_WHILE_COMBINED applies with AP', () => {
+test('combination warnings: LC+AP, LC+OPS, LC+PAR combine; LC+RSU and CD+GC do not; LUAW_WHILE_COMBINED applies with AP', () => {
   const efsp = fresh();
   const a = person('A');
   const ack = (set) => hold(efsp, a, 'INCIRLIK', set).ack;
   assert.deepEqual(ack(['LC', 'AP']).combination.with, ['AP']);
   assert.deepEqual(ack(['LC', 'OPS']).combination.with, ['OPS']);
-  assert.deepEqual(ack(['LC', 'SFA', 'PAR']).combination.with, ['SFA', 'PAR']);
+  assert.deepEqual(ack(['LC', 'PAR']).combination.with, ['PAR']);
   assert.equal(ack(['LC', 'RSU']).combination, null);
   assert.equal(ack(['CD', 'GC']).combination, null);
   hold(efsp, a, 'INCIRLIK', []);

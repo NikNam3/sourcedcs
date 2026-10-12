@@ -2,7 +2,7 @@
 // non-enumerable `slots` array naming each frame's slot; these helpers read it and FAIL LOUDLY when it is missing or
 // does not line up with the frames, never guessing a slot from a frame type (primary and peer are both board-deltas).
 
-export const SLOT_KEYS = { primary: 'broadcast', peer: 'peerBroadcast', marsa: 'marsaBroadcast', carrier: 'carrierBroadcast', sfa: 'sfaBroadcast' };
+export const SLOT_KEYS = { primary: 'broadcast', peer: 'peerBroadcast', marsa: 'marsaBroadcast', carrier: 'carrierBroadcast' };
 
 function slotsOf(result) {
   const b = result && result.broadcasts;
@@ -14,7 +14,7 @@ function slotsOf(result) {
   return b.slots;
 }
 
-/** The frame in slot `name` ('primary' | 'peer' | 'marsa' | 'carrier' | 'sfa'), or undefined. */
+/** The frame in slot `name` ('primary' | 'peer' | 'marsa' | 'carrier'), or undefined. */
 export function slot(result, name) {
   if (!(name in SLOT_KEYS)) throw new Error(`wire-slots: unknown slot ${name}`);
   const i = slotsOf(result).indexOf(name);

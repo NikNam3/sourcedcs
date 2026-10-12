@@ -153,27 +153,34 @@ function validatePositionFrequencies(freqs, positions) {
   return null;
 }
 
-const SFA_MIN_POOL = 5; // guide §4.7: "at least five discrete UHF frequencies"
+const SFA_MIN_POOL = 5; // JO 7610.14A para 7-1-5 b: "at least five discrete ultra-high frequency (UHF) frequencies"
+const SFA_ROTATION_COUNT = 3; // para 7-1-5 c: "the rotation of three frequencies between himself and the GCA controller"
+// What each pool frequency is for (docs/adr/0117, H134 LT-RQ5 a). ROTATION: one of the three that rotate between AP and PAR
+// (para 7-1-5 c). INITIAL_CONTACT and SPARE are ours: the order leaves the other frequencies to the LOA (para 7-1-5 d).
+const SFA_USES = Object.freeze(['ROTATION', 'INITIAL_CONTACT', 'SPARE']);
+const SFA_KEYS = Object.freeze(['jurisdiction', 'pool']);
+const SFA_POOL_KEYS = Object.freeze(['rackId', 'mhz', 'use']);
 
 /**
- * Guide §4.7's pool, checked as a unit: at least five unique frequencies whose
- * Racks are exactly the SFA Bay's, a rotation smaller than the pool, and AP-style
- * jurisdiction held by a Position of this Facility. Returns a problem string or null.
+ * The SFA pool, checked as a unit (docs/adr/0117): at least five unique UHF frequencies, exactly three of them marked
+ * ROTATION, whose Racks are exactly the one `sfa-freqs` Bay's, that Bay being the jurisdiction Position's. Returns a
+ * problem string or null.
  */
 function validateSingleFrequencyApproach(sfa, candidate) {
-  if (!sfa || typeof sfa !== 'object') return 'singleFrequencyApproach must be an object';
+  if (!isPlainObject(sfa)) return 'singleFrequencyApproach must be an object';
+  const strayKey = Object.keys(sfa).find(k => !SFA_KEYS.includes(k));
+  if (strayKey) return `singleFrequencyApproach: unknown key ${JSON.stringify(strayKey)}`;
   const positions = candidate.positions || [];
   if (!positions.includes(sfa.jurisdiction)) return `singleFrequencyApproach.jurisdiction ${JSON.stringify(sfa.jurisdiction)} is not a Position of this Facility`;
   if (!Array.isArray(sfa.pool) || sfa.pool.length < SFA_MIN_POOL) {
-    return `singleFrequencyApproach.pool needs at least ${SFA_MIN_POOL} frequencies (guide §4.7), has ${Array.isArray(sfa.pool) ? sfa.pool.length : 0}`;
-  }
-  if (!Number.isInteger(sfa.rotationSize) || sfa.rotationSize < 1 || sfa.rotationSize >= sfa.pool.length) {
-    return 'singleFrequencyApproach.rotationSize must be a whole number of at least 1 and smaller than the pool';
+    return `singleFrequencyApproach.pool needs at least ${SFA_MIN_POOL} frequencies (JO 7610.14A para 7-1-5 b), has ${Array.isArray(sfa.pool) ? sfa.pool.length : 0}`;
   }
   const ids = new Set();
   const mhzs = new Set();
   for (const entry of sfa.pool) {
-    if (!entry || typeof entry.rackId !== 'string' || !entry.rackId) return 'every singleFrequencyApproach.pool entry needs a rackId';
+    if (!isPlainObject(entry) || typeof entry.rackId !== 'string' || !entry.rackId) return 'every singleFrequencyApproach.pool entry needs a rackId';
+    const stray = Object.keys(entry).find(k => !SFA_POOL_KEYS.includes(k));
+    if (stray) return `singleFrequencyApproach.pool ${entry.rackId}: unknown key ${JSON.stringify(stray)}`;
     if (ids.has(entry.rackId)) return `singleFrequencyApproach.pool repeats rackId ${entry.rackId}`;
     ids.add(entry.rackId);
     if (typeof entry.mhz !== 'number' || !Number.isFinite(entry.mhz) || entry.mhz < SFA_MIN_MHZ || entry.mhz > SFA_MAX_MHZ) {
@@ -181,37 +188,21 @@ function validateSingleFrequencyApproach(sfa, candidate) {
     }
     if (mhzs.has(entry.mhz)) return `singleFrequencyApproach.pool repeats ${entry.mhz} MHz`;
     mhzs.add(entry.mhz);
+    if (!SFA_USES.includes(entry.use)) return `singleFrequencyApproach.pool ${entry.rackId}: use must be one of ${SFA_USES.join(', ')}`;
+  }
+  const rotating = sfa.pool.filter(e => e.use === 'ROTATION').length;
+  if (rotating !== SFA_ROTATION_COUNT) {
+    return `singleFrequencyApproach.pool marks ${rotating} frequencies ROTATION; JO 7610.14A para 7-1-5 c rotates ${SFA_ROTATION_COUNT}`;
   }
   const sfaBays = [];
-  for (const bays of Object.values(candidate.bays || {})) for (const b of bays) if (b.view === 'sfa-freqs') sfaBays.push(b);
+  for (const [positionId, bays] of Object.entries(candidate.bays || {})) for (const b of bays) if (b.view === 'sfa-freqs') sfaBays.push({ positionId, bay: b });
   if (sfaBays.length !== 1) return `exactly one Bay must have view 'sfa-freqs', found ${sfaBays.length}`;
-  const bayRacks = sfaBays[0].rackIds || [];
+  if (sfaBays[0].positionId !== sfa.jurisdiction) {
+    return `the SFA Bay ${sfaBays[0].bay.bayId} must be a Bay of ${sfa.jurisdiction}, which holds the rotation (JO 7610.14A para 7-1-5 c), not of ${sfaBays[0].positionId}`;
+  }
+  const bayRacks = sfaBays[0].bay.rackIds || [];
   if (bayRacks.length !== ids.size || !bayRacks.every(r => ids.has(r))) {
     return `the SFA Bay's Racks (${bayRacks.join(', ')}) must be exactly the pool's rackIds (${[...ids].join(', ')})`;
-  }
-  if (sfa.initialRotation !== undefined) {
-    const problem = validateSfaRotationRecord(sfa.initialRotation, sfa, positions);
-    if (problem) return `singleFrequencyApproach.initialRotation: ${problem}`;
-  }
-  return null;
-}
-
-/**
- * A rotation record `{ rackId: positionId }` against its config: frequencies
- * from the pool, Positions of the Facility, no more entries than the rotation
- * holds, and one Position on one frequency at a time. Pure; sfa-store.js uses it too.
- */
-function validateSfaRotationRecord(record, sfa, positions) {
-  if (!record || typeof record !== 'object' || Array.isArray(record)) return 'must be an object of rackId to Position';
-  const pool = new Set(sfa.pool.map(p => p.rackId));
-  const entries = Object.entries(record);
-  if (entries.length > sfa.rotationSize) return `at most ${sfa.rotationSize} frequencies are in rotation, got ${entries.length}`;
-  const held = new Set();
-  for (const [rackId, positionId] of entries) {
-    if (!pool.has(rackId)) return `${rackId} is not a pool frequency`;
-    if (!positions.includes(positionId)) return `${positionId} is not a Position of this Facility`;
-    if (held.has(positionId)) return `${positionId} cannot be on two frequencies at once`;
-    held.add(positionId);
   }
   return null;
 }
@@ -260,14 +251,15 @@ const isPlainObject = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
 //  facility: the Facility's id (INCIRLIK, CENTER, TACTICAL, CARRIER). It must equal the file's expected id.
 //    RANGES has no file: its Position set is derived from the airspace definitions, every boot (facility-config.js).
 //  positions: the Facility's Position ids. Guide §4.1 names the Facilities and their Positions; the ids follow
-//    JO 7210.3 TBL 10-1-1 (LC, GC, AP; OPS, CD, RSU, SFA, PAR, CTR, and the tactical and carrier ids unchanged).
-//    INCIRLIK's eight, CENTER's CTR and TACTICAL's TAC_C2/AIC/GCI/JTAC are the guide's. [SOURCE-DEFINED]
-//    (docs/adr/0074, 0075): the CARRIER Facility (CV_MARSHAL, CV_PRIFLY, CV_APP1, CV_APP2) and INCIRLIK's RSU, SFA
+//    JO 7210.3 TBL 10-1-1 (LC, GC, AP; OPS, CD, RSU, PAR, CTR, and the tactical and carrier ids unchanged).
+//    INCIRLIK's seven (no SFA Position since docs/adr/0117: a single frequency approach is a procedure between AP and
+//    PAR, JO 7610.14A para 7-1-5), CENTER's CTR and TACTICAL's TAC_C2/AIC/GCI/JTAC are the guide's. [SOURCE-DEFINED]
+//    (docs/adr/0074, 0075): the CARRIER Facility (CV_MARSHAL, CV_PRIFLY, CV_APP1, CV_APP2) and INCIRLIK's RSU
 //    and PAR where the guide is silent on the Facility's own set. JTAC is read-only (guide §4.1: "MISSION
 //    (read-only)"), enforced by authority/ never granting it ownership or Mutation rights, not by anything here.
 //  positionClasses: every Position's doctrinal class (guide §4.1's Class column), which authority/classes.js reads
 //    (through getPositionClass) so the cross-Facility coordination primitives and TOFI are gated by class, not by a hand-kept id list
-//    (docs/adr/0020). Every Position needs one. RSU, SFA and PAR are MILITARY_ATC too: RSU's advisory role with no separation authority (guide §4.1) is a permission matter, never a new class, because a new class would silently drop
+//    (docs/adr/0020). Every Position needs one. RSU and PAR are MILITARY_ATC too: RSU's advisory role with no separation authority (guide §4.1) is a permission matter, never a new class, because a new class would silently drop
 //    Conflict Alert (position-coverage.js's ATC_CLASSES, the inclusion-list trap of docs/adr/0041).
 //    CARRIER's four Positions are all MILITARY_ATC for the same reason ("Military ATC afloat"); PriFly's
 //    "supervisory, not radar control" is a permission matter too. [SOURCE-DEFINED] (docs/adr/0074) where the
@@ -301,7 +293,7 @@ const isPlainObject = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
 //    `airport: '*'` (CENTER's CTR: every airfield's approach radar) needs no editing when the theater changes.
 //    TACTICAL's awacs/fighter/datalink selectors model a Military Radar Unit working the airborne picture, and
 //    `coalition: 'own'` resolves against CRCSYNC_COALITION (docs/adr/0059). RSU watches the field and the visual
-//    pattern (the airport radar), SFA works AP's picture, PAR the precision approach radar alone
+//    pattern (the airport radar), PAR the precision approach radar alone
 //    (docs/adr/0075). The carrier's selectors name the radar and the hull (position-coverage.js).
 //    INCIRLIK's `LTAG` is the airport-selector id of Incirlik. "Squadron data to verify" for any value we have
 //    not checked against the mission.
@@ -319,19 +311,23 @@ const isPlainObject = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
 //    client-local filed-plan queue and a Strip landing there would be invisible. `-coordination` Bays are
 //    present for every Position that can receive a proposed replica (docs/adr/0015), and exist
 //    on the carrier only as the "first Bay implying no state" fallback ("the carrier does not talk to the
-//    centre", guide §9.13). One Rack per runway end in `lc-runway-queue` (guide §4.2); one Rack per assigned
-//    frequency in `sfa-frequencies` (§4.2, §4.7); a pattern leg is a Rack (docs/adr/0064). The strip state a Bay
+//    centre", guide §9.13). One Rack per runway end in `lc-runway-queue` (guide §4.2); one Rack per SFA
+//    frequency in AP's `ap-sfa` (docs/adr/0117); a pattern leg is a Rack (docs/adr/0064). The strip state a Bay
 //    implies is the guide's §3.5 rule 4 / §2 "Bay membership expresses operational state"; the Bay a Strip
 //    sits in for another strip type's state never lands on a `holdsStripType` Bay (docs/adr/0087). The
 //    descriptor flags `view`, `replacesRacks`, `capacity` are docs/adr/0093 (a Bay's component and the
 //    PAR Final Bay's one Strip at a time, guide §7.10). The strip state `FINAL` (LC's Bay) is unrelated to the
 //    strip type `FINAL` (guide §7.10's PAR and carrier type): see nla.js's module comment.
 //    `app-overflight` and `ctr-overflight` hold OVERFLIGHT Strips whatever their state (docs/adr/0023, 0087).
-//  singleFrequencyApproach (optional): guide §4.7, docs/adr/0075. `jurisdiction` holds a rotation of
-//    `rotationSize` frequencies out of `pool` (at least five discrete UHF frequencies, guide §4.7); the pool's
-//    rackIds ARE the SFA Bay's Racks. [SOURCE-DEFINED] (docs/adr/0075): the frequencies are placeholders, and
-//    so is who starts on which one. "Squadron data to verify." Read once at start-up, never written by code (P5);
-//    the live record is sfa-store.js's.
+//  singleFrequencyApproach (optional): docs/adr/0117 (superseding 0075's and 0093's SFA parts). `jurisdiction` is the
+//    radar approach controller (AP), who "retains jurisdiction over the rotation of three frequencies between himself
+//    and the GCA controller" (JO 7610.14A para 7-1-5 c); `pool` is at least five discrete UHF frequencies (para 7-1-5 b),
+//    each `{ rackId, mhz, use }`, `use` one of ROTATION (exactly three), INITIAL_CONTACT, SPARE. The pool's rackIds ARE
+//    the Racks of the one `sfa-freqs` Bay, which is the jurisdiction Position's. Which three rotate and what the others
+//    are for is the letter of agreement's (para 7-1-5 d): ours (H134 LT-RQ5 a) is the first AP's initial-contact
+//    frequency, the last a spare. [SOURCE-DEFINED]: the frequencies are placeholders, "squadron data to verify". Read
+//    once at start-up, never written by code (P5). Who is on a rotating frequency is not stored: it follows the flight
+//    on it (PAR while PAR holds that flight's Strip, else AP; sfa.js).
 //  positionFrequencies (optional): docs/adr/0105, H104 GCLC-4. `{ <Position>: [ { label, mhz } ] }`, the frequencies a
 //    Position works, checked by validatePositionFrequencies (mhz by airspace-schema's isValidFrequency). A controller who
 //    holds two Positions has both. [SOURCE-DEFINED]: the shipped Incirlik values are placeholders, squadron data to
@@ -449,4 +445,4 @@ function validateFacilityConfig(candidate, expectedFacilityId) {
   return { ok: true };
 }
 
-module.exports = { validateConfig, validateFacilityConfig, validateRadarSelector, validateSfaRotationRecord, BAY_VIEWS, REQUIRED_KEYS };
+module.exports = { validateConfig, validateFacilityConfig, validateRadarSelector, BAY_VIEWS, SFA_USES, REQUIRED_KEYS };

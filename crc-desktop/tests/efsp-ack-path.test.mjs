@@ -44,7 +44,6 @@ test('every family sender takes the same trailing { onAck }', async () => {
     () => ws.sendEfspMarsaMutation('CTR', null, null, { kind: 'X' }, on('marsa')),
     () => ws.sendEfspRunwayStatusMutation('TWR', 'INCIRLIK', 1, { kind: 'X' }, on('runway')),
     () => ws.sendEfspCarrierMutation('CV_MARSHAL', 'h1', 1, { kind: 'X' }, on('carrier')),
-    () => ws.sendEfspSfaMutation('APP', 1, { kind: 'X' }, on('sfa')),
   ];
   for (const send of sends) ws.settleEfspAck({ clientMutationId: send(), ok: true });
   assert.equal(ids.length, sends.length);

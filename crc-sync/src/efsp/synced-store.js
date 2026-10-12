@@ -1,10 +1,10 @@
 'use strict';
 
-// The bookkeeping the six sequenced EFSP stores (airspace, carrier, correlation, MARSA, runway status, SFA) share
+// The bookkeeping the five sequenced EFSP stores (airspace, carrier, correlation, MARSA, runway status) share
 // (ARCH-S #6): the clock and the Mutation log they are built with, the SyncLog that owns the store's `seq` and lifetime
 // `epoch` (docs/adr/0106), the rev bump, the catch-all every `apply` has (store-throw.js) and the audit line's common
 // shape. A base class, not a framework: each store keeps its own ops, its own records and its own audit SUBJECT (the id
-// fields its readers key on: airspaceId, carrierHullId, flightDataId, marsaId, runwayStatusFacilityId, sfaRackId).
+// fields its readers key on: airspaceId, carrierHullId, flightDataId, marsaId, runwayStatusFacilityId).
 //
 // The Board (board/board-state.js) and the flight data store keep their own: the Board's SyncLog has a ring and a touched
 // set, and the flight data store has no sequence.

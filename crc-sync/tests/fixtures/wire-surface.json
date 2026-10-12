@@ -16,7 +16,6 @@
       "efsp-resync",
       "efsp-runway-status-mutation",
       "efsp-set-positions",
-      "efsp-sfa-mutation",
       "rename"
     ],
     "serverToClient": [
@@ -45,8 +44,6 @@
       "efsp-resync-reply",
       "efsp-runway-status-ack",
       "efsp-runway-status-delta",
-      "efsp-sfa-ack",
-      "efsp-sfa-delta",
       "efsp-snapshot",
       "efsp-undo-voided",
       "game-time",
@@ -68,6 +65,7 @@
       "CreateStrip",
       "Divert",
       "DropStrip",
+      "FinalCall",
       "HANDOFF",
       "InvokeNla",
       "JoinFormation",
@@ -77,7 +75,6 @@
       "SetBlock",
       "SetFlag",
       "SetState",
-      "SfaRotation",
       "SplitFormation",
       "TOFI",
       "TRAFFIC",
@@ -142,9 +139,6 @@
         "RequestRunwayStatus",
         "SelfCoordinateRunwayChange",
         "WithdrawRunwayChange"
-      ],
-      "efsp-sfa-mutation": [
-        "SetSfaRotation"
       ]
     },
     "carrier": {
@@ -265,9 +259,22 @@
         "unpassed"
       ]
     },
-    "sfaTransfers": [
-      "SFA_ROTATION"
-    ],
+    "parFinal": {
+      "conversions": [
+        "LANDED",
+        "PAR_HANDOFF"
+      ],
+      "finalCalls": [
+        "BEGIN_DESCENT",
+        "CLEARED_TO_LAND",
+        "LANDED"
+      ],
+      "sfaUses": [
+        "INITIAL_CONTACT",
+        "ROTATION",
+        "SPARE"
+      ]
+    },
     "par": {
       "sample": [
         "stripId",
@@ -348,12 +355,6 @@
         "seqKey": "runwayStatusSeq",
         "epochKey": "runwayStatusEpoch",
         "deltaType": "efsp-runway-status-delta"
-      },
-      {
-        "key": "sfaRotation",
-        "seqKey": "sfaSeq",
-        "epochKey": "sfaEpoch",
-        "deltaType": "efsp-sfa-delta"
       }
     ],
     "frameKeys": {
@@ -451,13 +452,6 @@
         "carrierEpoch",
         "carrierSeq",
         "carriers",
-        "type",
-        "version"
-      ],
-      "efsp-sfa-delta": [
-        "sfaEpoch",
-        "sfaRotation",
-        "sfaSeq",
         "type",
         "version"
       ]

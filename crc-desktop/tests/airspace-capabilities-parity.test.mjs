@@ -97,7 +97,7 @@ test('the walks of the briefing: TAC_C2 edits nothing, a signed-off session noth
 test('who may create, and what they may name as controlling', () => {
   assert.deepEqual(caps.createPositionsFor(['TAC_C2', 'RNG1', 'GCI']), []);
   assert.deepEqual(caps.controllingChoicesFor(['AP']), [{ facilityId: 'INCIRLIK', positionId: 'AP' }]);
-  assert.equal(caps.controllingChoicesFor(['OPS']).length, 8);
+  assert.equal(caps.controllingChoicesFor(['OPS']).length, 7, 'INCIRLIK\'s seven Positions (no SFA, crc-sync docs/adr/0117)');
   assert.ok(caps.controllingChoicesFor(['OPS']).every(c => c.facilityId === 'INCIRLIK'));
 });
 

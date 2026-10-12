@@ -117,7 +117,7 @@ class ParMonitor {
     const approaches = cfg.parApproaches || {};
     const view = this._rwy(facilityId);
     const fd = strip.flightDataId ? this._fd(strip.flightDataId) : null;
-    // A FINAL Strip resolves its runway as the ARRIVAL it was (sfa.js turns an ARRIVAL into a FINAL in place); its rack on
+    // A FINAL Strip resolves its runway as the ARRIVAL it was (par-final.js's PAR_HANDOFF turns an ARRIVAL into a FINAL in place); its rack on
     // the final Bay names no runway end.
     const r = view ? resolveRunwayForStrip({ ...strip, stripType: 'ARRIVAL', rackId: null }, fd, view) : null;
     const a = r && r.end && Object.prototype.hasOwnProperty.call(approaches, r.end) && !r.end.startsWith('_') ? approaches[r.end] : null;

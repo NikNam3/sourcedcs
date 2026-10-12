@@ -324,19 +324,6 @@ export function sendEfspCarrierMutation(actingPositionId, hullId, baseRev, op, {
 }
 
 /**
- * An SFA rotation-record op (crc-sync docs/adr/0093): who is on which frequency.
- * Its own message type because it targets the approach's rotation, not a Strip. Not
- * registered as a pending mutation, for the reason the carrier and MARSA sends give.
- */
-export function sendEfspSfaMutation(actingPositionId, baseRev, op, { onAck } = {}) {
-  return sendEfsp({
-    version: 1, type: 'efsp-sfa-mutation',
-    clientMutationId: efspClientMutationId(),
-    baseRev, actingPositionId, op,
-  }, { onAck });
-}
-
-/**
  * Resync one cursor (guide §5.6, docs/adr/0081, 0106): an `efsp-resync` says where this client is (the seq and the
  * epoch it last read) for one Facility's Board (`board:<facilityId>`) or one store (`store:<key>`). The server
  * answers a Board with an efsp-board-delta when that position is inside its window and its own lifetime, and with an
@@ -411,7 +398,6 @@ export function setEfspSender(name, fn) {
     case 'sendEfspCorrelationMutation': sendEfspCorrelationMutation = fn; break;
     case 'sendEfspMarsaMutation': sendEfspMarsaMutation = fn; break;
     case 'sendEfspRunwayStatusMutation': sendEfspRunwayStatusMutation = fn; break;
-    case 'sendEfspSfaMutation': sendEfspSfaMutation = fn; break;
     case 'sendEfspCarrierMutation': sendEfspCarrierMutation = fn; break;
     case '_sendEfsp': _sendEfsp = fn; break;
     default: throw new TypeError(`setEfspSender: ${name} is not a replaceable sender`);

@@ -272,4 +272,4 @@ export function _setRenderBayForTest(fn) { renderBay = fn; }
 // The signature reads strip-view.js's alerts, which imports strip-element.js, so the element builder is handed it here.
 setStripSigner(_stripRenderSignature);
 
-onEfspChanged(['snapshot', 'board', 'ack', 'bays', 'selection', 'correlations', 'marsa', 'alerts', 'sfa'], () => renderAllOpenEfspBays(), { order: ORDER.BAYS });
+onEfspChanged(['snapshot', 'board', 'ack', 'bays', 'selection', 'correlations', 'marsa', 'alerts'], () => renderAllOpenEfspBays(), { order: ORDER.BAYS });

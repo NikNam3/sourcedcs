@@ -687,9 +687,9 @@ class WsHub {
       if (result) {
         if (result.ack) ws.send(JSON.stringify(result.ack));
         // One round trip's frames, in the order efsp-ws.js's skeleton fixed (wire/skeleton.js SLOT_ORDER): the
-        // primary delta, the PEER Facility's, the MARSA relation's, the carrier's, the SFA's. Each is a delta a
+        // primary delta, the PEER Facility's, the MARSA relation's, the carrier's. Each is a delta a
         // different store owns and no Board sequence can carry (docs/adr/0022 peer replica, 0051 MARSA void,
-        // 0074 carrier, 0093 SFA rotation), sent immediately on the same round trip, never left for the next op.
+        // 0074 carrier), sent immediately on the same round trip, never left for the next op.
         // Not every handler goes through the skeleton: the metrics report/request and the resync answers
         // return `{ ack }` alone, which means nothing to broadcast.
         this._deliver(result);

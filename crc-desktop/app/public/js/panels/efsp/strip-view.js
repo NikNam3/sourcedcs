@@ -6,7 +6,7 @@ import { nlaButtonLabel } from './efsp-nla.js';
 import { isMarsaHighlighted, marsaBadgeFor } from './marsa-badge.js';
 import { compactBlocksFor, fieldSpanFor, sideNumberLeads } from './strip-fields.js';
 import { carrierDecorateNlaButton, carrierExtraNlaButtons } from './carrier-panel.js';
-import { sfaExtraNlaButtons } from './bay-views.js';
+import { finalHandoffButtons } from './bay-views.js';
 import { _invokeNla, _resolveActingPositionId } from './bay/dispatch.js';
 import { _buildBlockCell } from './bay/block-edit.js';
 import { _buildCoordinationReasonEl } from './bay/popovers/coordination.js';
@@ -83,8 +83,8 @@ function _buildLifeBlock(strip) {
   }
   // The carrier's second handoff, beside the NLA (crc-sync docs/adr/0074): "See you" in Case II.
   for (const extra of carrierExtraNlaButtons(strip)) life.appendChild(extra);
-  // Single Frequency Approach (crc-sync docs/adr/0075): "Rotate to PAR" beside the NLA on a Strip on an SFA frequency.
-  for (const extra of sfaExtraNlaButtons(strip)) life.appendChild(extra);
+  // The single frequency approach (crc-sync docs/adr/0117): "Hand off to PAR" beside the NLA on AP's arrival on a rotating frequency.
+  for (const extra of finalHandoffButtons(strip)) life.appendChild(extra);
   return { life, inhibited };
 }
 

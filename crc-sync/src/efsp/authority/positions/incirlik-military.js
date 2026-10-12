@@ -1,14 +1,16 @@
 'use strict';
 
-// Incirlik's military ATC Position family (authority registry, S3-2): RSU, SFA
-// and PAR, plus the columns L18 adds to civil-atc.js's AP. Moved from
+// Incirlik's military ATC Position family (authority registry, S3-2): RSU and
+// PAR, plus the columns L18 adds to civil-atc.js's AP. Moved from
 // permission.js. Registered LAST: it extends AP and the strip-type families' owner
-// tables, so everything it extends must already be there.
+// tables, so everything it extends must already be there. No SFA Position
+// (docs/adr/0117): a single frequency approach is a procedure between AP and PAR
+// (JO 7610.14A para 7-1-5), not a third controller.
 
 const { NON_CREATE_OPS, FORMATION_OP_KINDS } = require('../op-kinds');
 
-// Incirlik's radar-approach and visual-pattern Positions (docs/adr/0075, L18):
-// RSU, SFA and PAR, plus AP's two new columns. ONE table, one row per Position,
+// Incirlik's radar-approach and visual-pattern Positions (docs/adr/0075, 0117):
+// RSU and PAR, plus AP's columns. ONE table, one row per Position,
 // one column per capability (the shape docs/adr/0080 gave the tactical Positions
 // and L17 the carrier), and every grant below is DERIVED from it, so no Position
 // name is repeated in a second table. Static (P5): read at load, never written.
@@ -18,47 +20,37 @@ const { NON_CREATE_OPS, FORMATION_OP_KINDS } = require('../op-kinds');
 //                      module's header: the maximally-permissive trap). None of
 //                      them gets a coordination primitive, TOFI, ConvertToArrival
 //                      or an airspace-entry op: they sit inside one Facility.
-//  createsStripTypes        the strip types it may originate via CreateStrip. Nothing
-//                      here is a strip type a handoff would reach it with: only RSU
+//  createsStripTypes   the strip types it may originate via CreateStrip. Only RSU
 //                      originates (a PATTERN Strip for an aircraft it watches join
-//                      the pattern, [SOURCE-DEFINED]); SFA's arrive from AP and
-//                      PAR's by the SFA rotation.
+//                      the pattern, [SOURCE-DEFINED]); PAR's arrive by AP's handoff.
 //  ownsStates          { strip type: [states] } this Position works (the "normally owned
 //                      by" authority, §3.4), merged into STATE_OWNERS_BY_STRIP_TYPE.
 //  requestsRunwayStatus  may SEND RequestRunwayStatus (kinds CLOSE, OPEN,
 //                      WORKS; BARRIER_CHANGE is WORKS since L1b). RSU asks; only LC closes or opens a
 //                      runway (decisions.md H18, S-L1b), so no column here grants
 //                      CloseRunway, OpenRunway or any other RUNWAY_STATUS_OP_OWNERS row.
-//  rotatesSfa          the CEILING on who may change the SFA rotation record (guide
-//                      §4.7: AP "retains jurisdiction over the rotation"). The
-//                      store narrows it to config's `singleFrequencyApproach.
-//                      jurisdiction`, never widens it, as CompleteInspection's
-//                      inspectionAuthorityPositionId does.
-//  sendsSfaRotation    may send the SFA_ROTATION transfer (ARRIVAL at the Position
-//                      -> FINAL at the receiver)
-//  receivesSfaRotation the Position an SFA_ROTATION lands on
+//  handsOffToFinal     may hand an ARRIVAL at INBOUND to the final controller (the
+//                      PAR_HANDOFF conversion, par-final.js): the radar approach
+//                      controller, who also holds the SFA rotation (para 7-1-5 c)
+//  receivesFinal       the Position that handoff lands on (the GCA controller)
+//  recordsFinalCalls   may record Begin descent, Cleared to land and Landed on a
+//                      FINAL Strip (op FinalCall, par-final.js)
 const INCIRLIK_CAPABILITIES = {
   AP: { // AP's own op grant is in positions/civil-atc.js; these are the columns L18 adds to it
     ops: null, createsStripTypes: null, ownsStates: {},
-    requestsRunwayStatus: true, rotatesSfa: true, sendsSfaRotation: true, receivesSfaRotation: false,
+    requestsRunwayStatus: true, handsOffToFinal: true, receivesFinal: false, recordsFinalCalls: false,
   },
   RSU: {
     ops: [...NON_CREATE_OPS, 'CreateStrip', ...FORMATION_OP_KINDS],
     createsStripTypes: ['PATTERN'],
     ownsStates: { PATTERN: ['IN_PATTERN', 'RECOVERED'] },
-    requestsRunwayStatus: true, rotatesSfa: false, sendsSfaRotation: false, receivesSfaRotation: false,
-  },
-  SFA: {
-    ops: [...NON_CREATE_OPS, ...FORMATION_OP_KINDS],
-    createsStripTypes: [],
-    ownsStates: { ARRIVAL: ['INBOUND'] },
-    requestsRunwayStatus: false, rotatesSfa: false, sendsSfaRotation: true, receivesSfaRotation: false,
+    requestsRunwayStatus: true, handsOffToFinal: false, receivesFinal: false, recordsFinalCalls: false,
   },
   PAR: {
     ops: [...NON_CREATE_OPS, ...FORMATION_OP_KINDS],
     createsStripTypes: [],
-    ownsStates: { FINAL: ['ON_FINAL', 'BALL', 'BOLTER_WAVEOFF'] },
-    requestsRunwayStatus: false, rotatesSfa: false, sendsSfaRotation: false, receivesSfaRotation: true,
+    ownsStates: { FINAL: ['ON_FINAL', 'BOLTER_WAVEOFF'] },
+    requestsRunwayStatus: false, handsOffToFinal: false, receivesFinal: true, recordsFinalCalls: true,
   },
 };
 
@@ -69,16 +61,12 @@ function _incirlikCap(positionId, key) {
 function incirlikPositionsWith(key) {
   return Object.keys(INCIRLIK_CAPABILITIES).filter(p => INCIRLIK_CAPABILITIES[p][key] === true);
 }
-/** May this Position change the SFA rotation record? Only a CEILING: sfa-store.js narrows it to config's jurisdiction. */
-function canRotateSfa(actingPositionId) { return _incirlikCap(actingPositionId, 'rotatesSfa'); }
-/** May this Position send the SFA_ROTATION transfer (D21: one acting Position)? */
-function canSendSfaRotationTransfer(actingPositionId) { return _incirlikCap(actingPositionId, 'sendsSfaRotation'); }
-/** The Positions that work the SFA frequencies (the ones the table gives any SFA column): who can be on a frequency in the rotation record. */
-function sfaControllerPositions() {
-  return Object.keys(INCIRLIK_CAPABILITIES).filter(p => ['rotatesSfa', 'sendsSfaRotation', 'receivesSfaRotation'].some(k => INCIRLIK_CAPABILITIES[p][k] === true));
-}
-/** The Position an SFA_ROTATION lands on, or null. */
-function sfaRotationReceiver() { return incirlikPositionsWith('receivesSfaRotation')[0] || null; }
+/** May this Position hand an arrival to the final controller (D21: one acting Position)? */
+function canHandOffToFinal(actingPositionId) { return _incirlikCap(actingPositionId, 'handsOffToFinal'); }
+/** May this Position record the final controller's calls on a FINAL Strip? */
+function canRecordFinalCall(actingPositionId) { return _incirlikCap(actingPositionId, 'recordsFinalCalls'); }
+/** The Position a handoff to the final lands on (PAR), or null. */
+function finalReceiver() { return incirlikPositionsWith('receivesFinal')[0] || null; }
 
 // Every grant DERIVED from the table, so no Position name is repeated below.
 const _rows = Object.entries(INCIRLIK_CAPABILITIES);
@@ -94,5 +82,5 @@ const family = {
 };
 
 module.exports = {
-  family, INCIRLIK_CAPABILITIES, canRotateSfa, canSendSfaRotationTransfer, sfaRotationReceiver, sfaControllerPositions, incirlikPositionsWith,
+  family, INCIRLIK_CAPABILITIES, canHandOffToFinal, canRecordFinalCall, finalReceiver, incirlikPositionsWith,
 };

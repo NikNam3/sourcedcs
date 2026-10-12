@@ -162,7 +162,7 @@ test('the families\' replay cache: kind|cmid keys, unknown kind throws, absent f
   assert.equal(JSON.stringify(rec), '{"ok":true,"id":null}');
   assert.equal(cache.get('marsa', 'x'), null, 'kinds do not share a cmid');
   cache.set('marsa', 'x', { ok: false, reason: 'R', id: 'i' });
-  cache.set('sfa', 'y', { ok: true });
+  cache.set('carrier', 'y', { ok: true });
   assert.equal(cache.size, 2);
   assert.equal(cache.get('airspace', 'x'), null, 'the oldest went');
   assert.equal(cache.get('marsa', 'x').id, 'i');

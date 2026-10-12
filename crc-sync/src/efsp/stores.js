@@ -9,8 +9,7 @@
 //             facilities, stores }. `facilities` (facilityId -> { boardStore, positionStore, rules }) is
 //             filled after the stores are built, so a closure may read it lazily, never at build time.
 //             `stores` fills in registry order as each entry is built.
-//   snapshot  (store, all) -> json. A null store (sfaRotation where no Facility has an SFA) is the entry's own
-//             concern. The ARRAY ORDER is the persisted body's JSON key order.
+//   snapshot  (store, all) -> json. A null store is the entry's own concern. The ARRAY ORDER is the persisted body's JSON key order.
 //   restore   (store, data, all) -> void, `data` being that key's value in the saved body. Skipped for a null store.
 //             all = { facilities, stores, saved } (saved: the whole saved body).
 //
@@ -26,7 +25,6 @@ const { CorrelationStore } = require('./correlation-store');
 const { MarsaStore } = require('./marsa-store');
 const { RunwayStatusStore } = require('./runway-status-store');
 const { CarrierStore } = require('./carrier-store');
-const { SfaStore } = require('./sfa-store');
 const authority = require('./authority');
 const carrierHulls = require('./carrier/hull-config');
 const { loadRecoveryTuning } = require('./carrier/recovery-tuning');
@@ -248,25 +246,6 @@ const REGISTRY = [
       if (gone) log.warn('dropped restored Marshal stack entries whose flight data is gone', { dropped: gone });
     },
   },
-  {
-    key: 'sfaRotation',
-    // The store's sync declaration (docs/adr/0106): `key` is its snapshot key, which is also the key of its heartbeat entry
-    // and of its resync slice; `gapFromDeltas` says a delta moves seq by exactly one change, so a client may ask at once on a jump.
-    sync: { key: 'sfaRotation', seqKey: 'sfaSeq', epochKey: 'sfaEpoch', deltaType: 'efsp-sfa-delta', gapFromDeltas: true },
-    // docs/adr/0075, 0093 — which Position is on which Single
-    // Frequency Approach frequency (guide §4.7). One record, for the Facility whose
-    // config carries a `singleFrequencyApproach` (INCIRLIK); null where none does.
-    build: ({ clock, facilityConfig, mutationLog }) => {
-      const sfaConfig = facilityConfig.getSingleFrequencyApproach();
-      return sfaConfig
-        ? new SfaStore({ config: sfaConfig, positions: facilityConfig.getPositionSet(), facilityId: facilityConfig.DEFAULT_FACILITY_ID, clock, mutationLog })
-        : null;
-    },
-    snapshot: (s) => (s ? s.snapshot() : null),
-    // The SFA rotation comes back INTACT, for the carrier's reason: who is on which
-    // frequency is a controller declaration, and a restart does not change it.
-    restore: (s, data) => s.restore(data),
-  },
 ];
 
 // ── The persisted shape (H88 item 8, decisions.md S-RENA2) ──────────────────────────────────────────────────────
@@ -288,7 +267,10 @@ const STRIP_SHAPE = {
     'initiatedAt', 'initiatedBy', 'acceptedAt', 'acceptedBy', 'commsTransferred', 'commsTransferredAt', 'commsTransferredBy'),
   airspaceEntry: anyOf('airspaceId', 'altitudeBlock', 'approvedAt', 'approvedBy', 'frequencyMhz'),
   carrierHandoff: STRIP_HANDOFF,
+  // The handoff that made an ARRIVAL a FINAL at PAR (docs/adr/0117 PAR_HANDOFF; the name is ADR 0093's, kept so a saved
+  // Strip still reads) and the final controller's recorded calls (docs/adr/0117 FinalCall).
   sfaTransfer: STRIP_HANDOFF,
+  finalCalls: { BEGIN_DESCENT: anyOf('at', 'by'), CLEARED_TO_LAND: anyOf('at', 'by') },
   previousLeg: anyOf('annotations', 'convertedAt', 'convertedBy', 'flags', 'stripType'),
 };
 const FLIGHT_DATA_SECTIONS = {
@@ -357,10 +339,14 @@ const ENTRY_SHAPES = {
     stacks: mapOf({ ...anyOf('deltaMs', 'hullId', 'stackId'),
       entries: arrayOf(anyOf('caseIAngels', 'eatUtc', 'flightDataId', 'pushedAtUtc', 'stackIndex', 'status', 'unpassed')) }),
   }),
-  sfaRotation: anyOf('facilityId', 'rev', 'rotation', 'transitions'),
 };
-// The top level is the registry's keys plus the write stamp _persist adds; nothing else.
-const PERSISTED_SHAPE = { persistedWallAt: true, ...Object.fromEntries(REGISTRY.map(e => [e.key, ENTRY_SHAPES[e.key]])) };
+// The top level is the registry's keys plus the write stamp _persist adds; nothing else, except one key read and dropped:
+// `sfaRotation`, the SFA rotation record docs/adr/0117 removed with its store (who is on a rotating frequency is no longer
+// stored). A snapshot written before it carries the key; refusing it would make an operator delete the whole Board for a
+// record nothing reads. No restore step reads it, and the next persist leaves it out. Remove once deployed (the
+// supervisor's call, docs/wip/LT-SFA-PAR.md).
+const DROPPED_KEYS = { sfaRotation: true };
+const PERSISTED_SHAPE = { persistedWallAt: true, ...DROPPED_KEYS, ...Object.fromEntries(REGISTRY.map(e => [e.key, ENTRY_SHAPES[e.key]])) };
 
 /** Throws naming `file` and the first key path the shape does not know. */
 function checkPersistedShape(data, file, shape = PERSISTED_SHAPE) {
@@ -377,6 +363,6 @@ function checkPersistedShape(data, file, shape = PERSISTED_SHAPE) {
 const STORE_SYNC = REGISTRY.filter(e => e.sync).map(e => ({ registryKey: e.key, ...e.sync }));
 
 // The order the saved body is restored in (it is not the order it is written in, see above).
-const RESTORE_ORDER = ['flightData', 'airspaces', 'boards', 'correlations', 'marsa', 'runwayStatuses', 'carriers', 'sfaRotation'];
+const RESTORE_ORDER = ['flightData', 'airspaces', 'boards', 'correlations', 'marsa', 'runwayStatuses', 'carriers'];
 
-module.exports = { STORE_SYNC, REGISTRY, RESTORE_ORDER, PERSISTED_SHAPE, checkPersistedShape };
+module.exports = { STORE_SYNC, REGISTRY, RESTORE_ORDER, PERSISTED_SHAPE, DROPPED_KEYS, checkPersistedShape };
