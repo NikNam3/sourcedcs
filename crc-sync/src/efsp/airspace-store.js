@@ -317,7 +317,7 @@ class AirspaceStore extends SyncedStore {
 
   // ── authority (the registry's rows, authority/airspace.js) ─────────────
 
-  _deps() { return { rowOf: this._rowOf, facilityOf: (id) => this._lookup.facilityOfPosition(id) }; }
+  _deps() { return { rowOf: this._rowOf, facilityOf: (id) => this._lookup.facilityOfPosition(id), positionsOf: (id) => this._lookup.positionsOf(id) || [] }; }
   _principal(actor) { return actor.service ? { service: actor.service } : { positionId: actor.positionId }; }
   _isControlling(def, positionId) { return airspaceAuthority.isControlling(def, positionId); }
   _isUsing(def, positionId) { return airspaceAuthority.isUsing(def, positionId, this._deps()); }
@@ -376,7 +376,7 @@ class AirspaceStore extends SyncedStore {
     if (typeof id === 'string' && id !== mutation.airspaceId) return verr('the definition\'s airspaceId must match the message\'s');
     // 1. authority, against the definition being created
     if (!airspaceAuthority.definitionAuthority(this._principal(actor), 'create', def, this._deps())) {
-      return this._denied(null, `${this._who(actor)} may not create ${id}: not its controlling Position, nor OPS of ${def.controllingFacilityId}`);
+      return this._denied(null, `${this._who(actor)} may not create ${id}: ${airspaceAuthority.refusalReason('create', def, this._deps())}`);
     }
     // 3-4. schema, references, name
     const checked = this._checkNew(def, theater, this._names(theater), this._source(actor));
@@ -467,7 +467,7 @@ class AirspaceStore extends SyncedStore {
     const fields = Object.keys(patch);
     // 1. authority against the CURRENT definition (a Position reassigned away loses it at once)
     const scope = airspaceAuthority.definitionAuthority(this._principal(actor), 'edit', def, this._deps());
-    if (!scope) return this._denied(record, `${this._who(actor)} may not edit ${def.name}: not its controlling Position, nor OPS of ${def.controllingFacilityId}`);
+    if (!scope) return this._denied(record, `${this._who(actor)} may not edit ${def.name}: ${airspaceAuthority.refusalReason('edit', def, this._deps())}`);
     if (scope === 'FREQUENCY') {
       const denied = fields.filter(f => f !== 'controlFrequencyMhz');
       if (denied.length) return this._denied(record, `${this._who(actor)} may change only the control frequency of ${def.name} (not ${denied.join(', ')})`);
@@ -537,7 +537,7 @@ class AirspaceStore extends SyncedStore {
   _delete(mutation, op, actor, theater, record) {
     const def = record.definition;
     if (!airspaceAuthority.definitionAuthority(this._principal(actor), 'delete', def, this._deps())) {
-      return this._denied(record, `${this._who(actor)} may not delete ${def.name}: not its controlling Position, nor OPS of ${def.controllingFacilityId}`);
+      return this._denied(record, `${this._who(actor)} may not delete ${def.name}: ${airspaceAuthority.refusalReason('delete', def, this._deps())}`);
     }
     // The guard (AIRSP-5): RETURNED, no pending request, and (AREA) nobody working it.
     const blockers = [];

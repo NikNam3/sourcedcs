@@ -407,11 +407,24 @@ test('setAirspaceOwner accepts CONTROLLING_AGENCY and USING_AGENCY, stamping cha
 test('defect D15: setAirspaceOwner rejects every non-direction value, including both booleans — there is NO boolean path', () => {
   const store = new FlightDataStore();
   const { flightData } = store.createFlightData(makeSeed(), { by: 'OPS' });
-  for (const bogus of [true, false, 'released', 'hot', 'cold', 1, 0, null, undefined, '']) {
+  for (const bogus of [true, false, 'released', 'hot', 'cold', 1, 0, undefined]) {
     const result = store.setAirspaceOwner(flightData.flightDataId, bogus, { by: 'CTR' });
     assert.equal(result.ok, false, JSON.stringify(bogus));
     assert.equal(result.reason, 'VALIDATION_ERROR', JSON.stringify(bogus));
   }
+});
+
+test('T13: clearing airspace ownership ("" or null) is an ordinary amendment back to undecided, and the earlier direction stays in transitions', () => {
+  const store = new FlightDataStore();
+  const { flightData } = store.createFlightData(makeSeed(), { by: 'OPS' });
+  store.setAirspaceOwner(flightData.flightDataId, 'USING_AGENCY', { by: 'CTR' });
+  const cleared = store.setAirspaceOwner(flightData.flightDataId, '', { by: 'CTR' });
+  assert.equal(cleared.ok, true, JSON.stringify(cleared));
+  assert.equal(cleared.flightData.airspace.owner, null);
+  assert.deepEqual(cleared.flightData.airspace.transitions.map(t => t.owner), ['USING_AGENCY', null]);
+  const again = store.setAirspaceOwner(flightData.flightDataId, null, { by: 'CTR' });
+  assert.equal(again.ok, true);
+  assert.equal(store.setAirspaceOwner(flightData.flightDataId, 'CONTROLLING_AGENCY', { by: 'CTR' }).flightData.airspace.owner, 'CONTROLLING_AGENCY');
 });
 
 test('setAirspaceOwner on a nonexistent flightDataId returns NOT_FOUND', () => {
@@ -883,15 +896,15 @@ test('setTofi clears radar_service and separation_regime, whether the clear arri
   assert.equal(byNull.flightData.tofi.radarService, null);
 });
 
-// The four enum Blocks whose field has no "unset" value to return to. Their
+// The three enum Blocks whose field has no "unset" value to return to. Their
 // cleared state is a member of the enum itself (NONE / CLEAN), or the field is
 // exhaustive — so the server refuses, and the picker must not offer "—".
+// (24A left this list with LT-AIRSPACE-FIX T13: its ownership clears back to undecided.)
 test('the enum fields with no null state refuse being cleared', () => {
   const store = new FlightDataStore();
   const { flightData } = store.createFlightData(makeSeed(), { by: 'OPS' });
   assert.equal(store.setField(flightData.flightDataId, 'identity.trackDegradationFlag', '', { by: 'CTR' }).ok, false); // Block 5A — NONE is the clear
   assert.equal(store.setField(flightData.flightDataId, 'assigned.departureRelease', '', { by: 'CTR' }).ok, false);         // Block 14A — §3.8's six states are exhaustive
-  assert.equal(store.setAirspaceOwner(flightData.flightDataId, '', { by: 'CTR' }).ok, false);                          // Block 24A — a DIRECTION, never absent (D15)
   assert.equal(store.setMilitary(flightData.flightDataId, { ordnanceState: '' }, { by: 'CTR' }).ok, false);            // Block 3G — CLEAN is the clear
 });
 

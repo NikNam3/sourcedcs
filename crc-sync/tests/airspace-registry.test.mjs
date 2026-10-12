@@ -258,6 +258,31 @@ test('authority: who may create, edit and delete', () => {
   assert.equal(create(store, { ...NEW, airspaceId: 'MOA-N3', name: 'N3' }, panel(null)).reason, 'PERMISSION_DENIED');
 });
 
+test('T27: a refusal names the Positions that may do it, never "OPS of CENTER" (CENTER has no OPS)', () => {
+  const { store } = makeRegistry({ defs: [MOA, RANGE] });
+  const c = create(store, { ...NEW, airspaceId: 'MOA-GAZIPASA', name: 'Gazipasa' }, panel('OPS'));
+  assert.equal(c.reason, 'PERMISSION_DENIED');
+  assert.equal(c.detail, 'OPS may not create MOA-GAZIPASA: only CTR may');
+  assert.doesNotMatch(c.detail, /OPS of/);
+  assert.equal(edit(store, 'MOA-1', { name: 'X' }, panel('AP')).detail, 'AP may not edit Test MOA: only CTR may');
+  assert.equal(del(store, 'MOA-1', panel('OPS')).detail, 'OPS may not delete Test MOA: only CTR may');
+  // an Incirlik airspace: the controlling Position first, then OPS of that Facility; a range keeps its frequency reach
+  assert.equal(edit(store, 'RANGE-1', { name: 'Y' }, panel('LC')).detail,
+    'LC may not edit Test Range: only AP or OPS may (RANGE_1_CONTROL: its control frequency only)');
+  assert.equal(del(store, 'RANGE-1', panel('RANGE_1_CONTROL')).detail, 'RANGE_1_CONTROL may not delete Test Range: only AP or OPS may');
+  assert.equal(create(store, { ...NEW, airspaceId: 'MOA-N4', name: 'N4' }, panel(null)).detail,
+    'a session signed on to nothing may not create MOA-N4: only CTR may');
+});
+
+test('T27: OPS + CTR combined: the create sent as CTR (the draft\'s controlling Position) makes a CENTER MOA', () => {
+  const { store } = makeRegistry({ defs: [] });
+  const def = { ...NEW, airspaceId: 'MOA-GAZIPASA', name: 'Gazipasa' };
+  assert.equal(create(store, def, panel('OPS')).reason, 'PERMISSION_DENIED', 'as OPS (the old client\'s choice) it is refused');
+  const r = create(store, def, panel('CTR'));
+  assert.equal(r.ok, true, JSON.stringify(r));
+  assert.equal(store.getAirspace('MOA-GAZIPASA').definition.controllingFacilityId, 'CENTER');
+});
+
 test('authority: a RANGES Position edits only the control frequency of its own airspaces', () => {
   const { store } = makeRegistry({ defs: [RANGE] });
   assert.equal(edit(store, 'RANGE-1', { controlFrequencyMhz: 284.0 }, panel('RANGE_1_CONTROL')).ok, true);

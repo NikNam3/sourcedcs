@@ -60,6 +60,36 @@ function definitionAuthority(principal, action, def, { rowOf, facilityOf }) {
   return null;
 }
 
+/**
+ * The Positions that may `action` the whole of `def` ('ALL'), the controlling Position first: the candidates are the
+ * controlling Position and every Position of the controlling Facility, each judged by `definitionAuthority` itself, so
+ * the answer follows the rows (LT-AIRSPACE-FIX T27: a refusal names who may actually do it, never a Position that
+ * does not exist, such as "OPS of CENTER").
+ * @param {object} deps `{ rowOf, facilityOf, positionsOf(facilityId) }`
+ * @returns {string[]}
+ */
+function positionsThatMay(action, def, { rowOf, facilityOf, positionsOf }) {
+  const candidates = [def.controllingPositionId, ...((positionsOf && positionsOf(def.controllingFacilityId)) || [])].filter(Boolean);
+  return [...new Set(candidates)].filter(p => definitionAuthority({ positionId: p }, action, def, { rowOf, facilityOf }) === 'ALL');
+}
+
+/** "CTR", "AP or OPS", "AP, LC or OPS". */
+function _orList(ids) { return ids.length < 2 ? ids.join('') : `${ids.slice(0, -1).join(', ')} or ${ids[ids.length - 1]}`; }
+
+/**
+ * Why `who` may not `action` `def`, naming who may (T27): "only CTR may", or "no Position of CENTER may" when the rows
+ * give it to nobody. Edit adds the using Position's control-frequency reach when there is one.
+ */
+function refusalReason(action, def, deps) {
+  const may = positionsThatMay(action, def, deps);
+  let text = may.length ? `only ${_orList(may)} may` : `no Position of ${def.controllingFacilityId} may`;
+  if (action === 'edit' && def.usingPositionId
+    && definitionAuthority({ positionId: def.usingPositionId }, 'edit', def, deps) === 'FREQUENCY') {
+    text += ` (${def.usingPositionId}: its control frequency only)`;
+  }
+  return text;
+}
+
 /** May this principal import a list of definitions (service and seed only in v1)? */
 function mayImport(principal) {
   return !!(principal.service && SERVICE_ROWS[principal.service] && SERVICE_ROWS[principal.service].import);
@@ -78,4 +108,4 @@ function isUsing(def, positionId, { rowOf, facilityOf }) {
   return isControlling(def, positionId);
 }
 
-module.exports = { SERVICE_ROWS, CLASS_ROWS, rowFor, definitionAuthority, mayImport, isControlling, isUsing };
+module.exports = { SERVICE_ROWS, CLASS_ROWS, rowFor, definitionAuthority, positionsThatMay, refusalReason, mayImport, isControlling, isUsing };
