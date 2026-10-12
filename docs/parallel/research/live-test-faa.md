@@ -1,4 +1,4 @@
-# Live test 2026-10-11: what the FAA orders say (LT-RESEARCH, Q1–Q11)
+# Live test 2026-10-11: what the FAA orders say (LT-RESEARCH, Q1–Q12)
 
 Research lane for the live-test fix batch (`docs/parallel/next/LT-RESEARCH.md`, findings in
 `docs/parallel/live-test-2026-10-11.md`). Rule H128, "FAA model, always": every answer quotes the paragraph and
@@ -694,7 +694,8 @@ formation = ¶2-1-13 "single aircraft"), and **none between MARSA participants**
 our formation record and our MARSA record are the "grouping" the FAA controller enters by hand. Alerts against everyone
 else continue, measured from each member (the ¶5-5-8 periphery idea). Whether a controller should also be able to
 suppress one specific alert by hand (the FAA "CO"/suppress) is **silent for our design — the human decides**; it is not
-needed for T16.
+needed for T16. **Which pairs CA processes at all** (tracked vs untracked, MCI) is Q12 below; the formation/MARSA
+exclusions here apply on top of that eligibility.
 
 ---
 
@@ -911,6 +912,75 @@ debug.
 
 ---
 
+## Q12 (added 2026-10-12) — which targets FAA Conflict Alert processes
+
+### What the orders say
+
+**P/CG (Basic with Chg 1–3, 7-9-26), CONFLICT ALERT:** *"A function of certain air traffic control automated systems
+designed to alert radar controllers to existing or pending situations **between tracked targets (known IFR or VFR
+aircraft)** that require his/her immediate attention/action. (See MODE C INTRUDER ALERT.)"*
+
+**P/CG, MODE C INTRUDER ALERT:** *"A function of certain air traffic control automated systems designed to alert radar
+controllers to existing or pending situations **between a tracked target (known IFR or VFR aircraft) and an untracked
+target (unknown IFR or VFR aircraft)** that requires immediate attention/action."*
+
+**P/CG, ASSOCIATED:** *"A radar target displaying a data block with flight identification and altitude information."*
+**UNASSOCIATED:** *"A radar target that does not display a data block with flight identification and altitude
+information."*
+
+**JO 7110.65BB ¶2-1-6, SAFETY ALERT:** *"Issue a safety alert to an aircraft if you are aware the aircraft is in a
+position/altitude that, in your judgment, places it in unsafe proximity to terrain, obstructions, or other aircraft."*
+NOTE b: *"Recognition of situations of unsafe proximity may result from MSAW/E-MSAW, automatic altitude readouts,
+Conflict/Mode C Intruder Alert, observations on a PAR scope, or pilot reports."* b. *"Aircraft Conflict/Mode C Intruder
+Alert. Immediately issue/initiate an alert to an aircraft if you are aware of another aircraft at an altitude that you
+believe places them in unsafe proximity."* P/CG SAFETY ALERT b: *"Aircraft Conflict Alert- A safety alert issued by ATC to
+**aircraft under their control** if ATC is aware of an aircraft that is not under their control …"*
+
+**Where CA/MCI now live:** ERAM ¶5-13-1 (CA and MCI alert; suppress CO / group suppress SG, quoted under Q7); STARS
+¶5-14-6 (CA/MCI; suppress/inhibit, quoted under Q7). There is no ¶5-15 in the current edition (faa.gov returns 404).
+
+**JO 7210.3EE:** ¶8-2-4 (ERAM CA preset values from the Site Adaptation Manual; CA may be inhibited at sectors and in
+Aircraft Alert Volumes); ¶8-2-5 (ERAM MCI: *"b. MCI Alert base altitude must be set at any value between ground level and
+5,000 feet MSL …"*, c. temporary raise *"when excessive MCI alerts derogate the separation of IFR traffic"*, inhibit at
+sectors); ¶12-6-12 (STARS MCI: *"b. MCI Alert base altitude must be set at any value between ground level and 500 feet
+AGL …"*; *"d. Facility air traffic managers are authorized to inhibit the display of MCI Alert at specified
+sectors/position."*); ¶12-6-3 b: *"Display Mode C on untracked (unassociated) targets within each controller's area of
+responsibility …"*; ¶12-6-7 (STARS CA may be inhibited at positions). ¶6-8-6: *"The conflict alert function uses the
+flight plan indication of RVSM capability to determine the appropriate separation standard to apply."* The STARS/ERAM
+algorithm documents (NAS Configuration Management Documents, Site Adaptation Manuals) are not public — not read.
+
+### Answer in plain words
+
+| Pair | FAA function | Alert? |
+|---|---|---|
+| **Two untracked (unassociated) targets** | neither CA (needs two tracked) nor MCI (needs one tracked) | **No automated alert.** (A controller who notices still has ¶2-1-6, but only toward an aircraft *under their control*.) |
+| **Tracked vs untracked** | **MCI** (Mode C Intruder), not CA | **Yes**, above the MCI base altitude, unless inhibited at the position. **Inference** from the name and ¶12-6-3 b: the untracked target must report **Mode C** altitude; a primary-only target with no altitude is not processed (silent in the text). |
+| **Tracked VFR vs tracked IFR** (or VFR vs VFR) | **CA** — "tracked targets (known IFR or VFR aircraft)" | **Yes.** Flight rules do not matter; being tracked/known does. |
+
+"Tracked" in the FAA sense = the automation holds a track with a flight plan/data block (associated). It is not "IFR":
+a known VFR aircraft with a data block is tracked.
+
+### What it means for `findConflicts` (LT-MARSA or whichever lane owns conflict-alert.js)
+
+Our "tracked/associated" equivalent is a **Strip-correlated track** (it has a flight identification on the label). Then:
+- **both uncorrelated → no alert** (today's "Not suppressed: a pair with no Strips. Two unknowns can still collide" is
+  ours and against the FAA definition);
+- **both correlated → CA**, IFR or VFR alike;
+- **correlated vs uncorrelated → an MCI-type alert**, only if the uncorrelated target has an altitude (Mode C/SSR
+  altitude in our presentation model) and is above a base altitude (FAA: ground–500 ft AGL terminal, ground–5,000 ft MSL
+  en route, set per facility). Whether we label it "MCI" separately or fold it into CA is ours (LT-RQ16).
+- Delivery: CA/MCI is for the controller **working the tracked aircraft** (¶2-1-6 issues alerts to aircraft under one's
+  control), which supports sending it to the Position(s) holding the correlated Strip(s) rather than every ATC Position
+  that sees both — **inference**.
+- Q7's exclusions (formation members, MARSA participants) apply on top.
+
+**LT-RQ16 (human):** CA eligibility. A. FAA model: CA only between two correlated tracks; MCI-type alert between a
+correlated track and an uncorrelated target with altitude above a base altitude; nothing between two uncorrelated
+targets. B. CA only between correlated tracks, no MCI at all. C. Keep today (every airborne pair). **R: A** (the P/CG
+definitions, word for word).
+
+---
+
 ## Questions for the human
 
 Each with options and a recommendation (R). Ids `LT-RQ*` so the supervisor can put them on the Decision Desk.
@@ -931,6 +1001,7 @@ Each with options and a recommendation (R). Ids `LT-RQ*` so the supervisor can p
 | LT-RQ12 | Q11/T12 | Drop the former-holder exclusion (ADR 0076 S-L27) for the beacon rung? | A. Yes for the beacon rung (assigned discrete code of an active Strip wins). B. Keep as is. | **A** |
 | LT-RQ13 | Q8/T27 | Using agency rights on a MOA another Facility controls | A. Using agency (OPS) schedules/activates/releases and approves entry; only the controlling Position defines (create/edit shape). B. OPS may also create/define. C. Keep today's rule. | **A** |
 | LT-RQ14 | Q9/T29 | Airspace alert timing | A. On entry only (actual containment; ours, labelled). B. Predictive look-ahead like EDST's aircraft-to-airspace probe. C. Both. | **A** now, B later if wanted |
+| LT-RQ16 | Q12 | Conflict Alert eligibility | A. FAA: CA between two correlated tracks; MCI-type alert correlated vs uncorrelated with altitude above a base altitude; none between two uncorrelated. B. CA between correlated only, no MCI. C. Keep today (every airborne pair). | **A** |
 | LT-RQ15 | Q6/T14 | "MARSA voided" notice lifetime (orders silent) | A. Until acknowledged by a controller holding either Strip. B. Fixed time (e.g. 60 s). C. Until MARSA re-declared or terminated. | **A** |
 
 ## For the supervisor
