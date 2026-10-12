@@ -202,7 +202,8 @@ let _stripMenuHandle = null;
 
 function _closeStripMenu() { if (_stripMenuHandle) _stripMenuHandle.close(); }
 
-function _openStripMenu(strip, anchor) {
+/** Opens (or, pressed again, closes) the Strip's ⋯ menu at `anchor`; the FINAL Bay line uses it, its racks being hidden. */
+export function openStripMenu(strip, anchor) {
   const wasOpenHere = _stripMenuHandle && _stripMenuHandle.el.dataset.stripId === strip.stripId;
   _closeStripMenu();
   if (wasOpenHere) return; // the ⋯ button toggles
@@ -262,7 +263,7 @@ export function _buildStripTools(strip) {
     const more = _stripEl('button', 'efsp-sbtn efsp-sbtn-icon efsp-strip-menu-btn', '⋯');
     more.title = 'More actions';
     more.setAttribute('aria-haspopup', 'menu');
-    more.addEventListener('click', (e) => { e.stopPropagation(); _openStripMenu(strip, more); });
+    more.addEventListener('click', (e) => { e.stopPropagation(); openStripMenu(strip, more); });
     more.addEventListener('pointerdown', (e) => e.stopPropagation());
     tools.appendChild(more);
   }

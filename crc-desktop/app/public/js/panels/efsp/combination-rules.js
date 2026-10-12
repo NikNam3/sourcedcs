@@ -7,8 +7,8 @@
 
 export const LOCAL_POSITION = 'LC';
 // docs/adr/0110: every Incirlik Position but LC and RSU (crc-sync's combination.js NON_LOCAL; a parity test keeps them equal).
-// OPS, CD and GC are the tower's non-local functions (¶2-6-5b); AP, SFA and PAR are radar approach (¶2-6-12).
-export const NON_LOCAL = ['OPS', 'CD', 'GC', 'AP', 'SFA', 'PAR'];
+// OPS, CD and GC are the tower's non-local functions (¶2-6-5b); AP and PAR are radar approach (¶2-6-12).
+export const NON_LOCAL = ['OPS', 'CD', 'GC', 'AP', 'PAR'];
 const LUAW_STATES = ['RUNWAY_QUEUE', 'LUAW'];
 
 /** "GND 275.8" for one entry. */

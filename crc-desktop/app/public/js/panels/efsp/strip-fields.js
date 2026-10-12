@@ -45,10 +45,11 @@ export const COMPACT_BLOCKS_BY_STRIP_TYPE = {
   // EAT/PUSH, RADIAL, FINAL BEARING: read, never typed), then what the Marshal
   // enters for the flight (approach, button, low state, bingo, EEAT). EEAT is on
   // the face because it is "the field most likely to be missed" (§9.12 rule 7).
-  // FINAL has nothing to type: callsign, type, final bearing, deck, distance.
+  // FINAL: callsign, type, final bearing, deck, distance, and the two the final controller types, HDG and ALT
+  // (crc-sync docs/adr/0117).
   // PATTERN's SIDE (C18) is read-only and drawn only once it leads (SIDE_ONLY_WHEN_LEADING).
   MARSHAL:    ['C1', 'C2', 'C18', 'C3', 'C7', 'C6', 'C8', 'C5', 'C9', 'C4', 'C10', 'C12', 'C13', 'C14', 'C15', 'C19'],
-  FINAL:      ['C1', 'C2', 'C18', 'C9', 'C16', 'C17', 'C19'],
+  FINAL:      ['C1', 'C2', 'C18', 'C9', 'C16', 'C17', 'C19', '9A-VECTOR', '7A'],
   PATTERN:    ['C1', 'C2', 'C18', 'C24'],
 };
 
@@ -64,7 +65,7 @@ export const COMPACT_BLOCKS_BY_STRIP_TYPE = {
 //    face only once it is set to something other than CLEAN — see
 //    ORDNANCE_WHEN_SET below (decisions.md H55 and S-L12, crc-sync's
 //    docs/adr/0069).
-//  - A runway field only for the airfield Positions: OPS, CD, GC, LC, AP, and SFA (an approach controller).
+//  - A runway field only for the airfield Positions: OPS, CD, GC, LC, AP.
 //  - FREQ (22) only where a controller works more than one frequency: AP and
 //    CTR. OPS, CD, GC and LC each sit on one.
 //  - The assigned altitude (ALT) wherever a clearance is issued or worked: CD,
@@ -94,9 +95,6 @@ export const COMPACT_BLOCKS_BY_POSITION = {
     GC: ['1', '3', '5', '8B'],
     LC: ['1', '3', '5', '7', '8B', '9A-FUEL', '3F', '3G'],
     AP: ['1', '3', '5', '6', '7', '8A', '8B', '9A-VECTOR', '9A-SPEED', '22', '5A', 'SREG'],
-    // SFA (crc-sync docs/adr/0075): the approach controller's list, FREQ included, because a frequency
-    // is the Strip's attribute and the controller rotates onto it (guide §4.7). No SREG: MARSA is AP's.
-    SFA: ['1', '3', '5', '6', '7', '8A', '8B', '9A-VECTOR', '9A-SPEED', '22', '5A'],
     CTR: ['1', '3', '5', '6', '7', '9A-VECTOR', '9A-SPEED', '22', '24A', 'IFR', 'RSVC', 'SREG', '5A'],
   },
   OVERFLIGHT: {

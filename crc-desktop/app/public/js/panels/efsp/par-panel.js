@@ -7,7 +7,7 @@ import { onEfspChanged } from './efsp-change-bus.js';
 import { parSampleTimes, parSamples, parSampleFor } from './par-samples.js';
 import {
   DEFAULT_VIEW, PAR_DEFAULTS, autoscaleView, createTrailFilter, effectiveGpa, gpHeightFt, headerModel, lateralFt,
-  niceStep, noPlotState, pickFlight, rangeAtDaNm, readoutModel, replot, parTerminalOp, parTerminals, severity, zoomView,
+  niceStep, noPlotState, pickFlight, rangeAtDaNm, readoutModel, replot, parTerminalOp, parTerminalRecorded, parTerminals, severity, zoomView,
 } from './par-model.js';
 
 // The PAR panel (decisions H115, H116, H122; mockup docs/mockups/par-panel.html, revision 4; lane note docs/wip/PAR-2.md). An
@@ -322,7 +322,10 @@ function _renderPicks(samples) {
 }
 
 function _renderTerminals(sample) {
-  const sig = sample.stripId;
+  const live = getEfspStrip(sample.stripId);
+  const recorded = parTerminals().filter(t => parTerminalRecorded(live, t)).map(t => t.id);
+  // rebuilt when the flight or a recorded call changes, never under a click
+  const sig = `${sample.stripId}|${recorded.join(',')}`;
   if (_els.termSig === sig) return;
   _els.termSig = sig;
   _els.terms.textContent = '';
@@ -330,6 +333,8 @@ function _renderTerminals(sample) {
     const b = _el('button', 'par-term', t.label);
     b.type = 'button';
     b.dataset.terminal = t.id;
+    // a recorded call stays on the line, greyed: it is the record (crc-sync docs/adr/0117)
+    if (recorded.includes(t.id)) { b.disabled = true; b.dataset.recorded = '1'; }
     b.addEventListener('click', () => {
       const strip = getEfspStrip(sample.stripId);
       if (!strip) return;
