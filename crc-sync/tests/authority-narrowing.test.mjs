@@ -25,14 +25,6 @@ test('selfCoordinationRefusal: Primary on every required acknowledger, else name
   assert.match(authority.selfCoordinationRefusal(['GC', 'AP'], primaryOf, 'u3').detail, /Primary at GC and AP —/);
 });
 
-test('sfaJurisdictionRefusal: the capability ceiling and the configured jurisdiction must both hold', () => {
-  const config = { jurisdiction: 'AP' };
-  const rotators = ['AP', 'GC', 'LC', 'CD', 'OPS', 'TAC'].filter(p => authority.sfaJurisdictionRefusal(p, { jurisdiction: p }) === null);
-  assert.ok(rotators.length > 0, 'some Position can rotate the SFA');
-  const refusal = authority.sfaJurisdictionRefusal('NOBODY', config);
-  assert.deepEqual(refusal, { ok: false, reason: 'PERMISSION_DENIED', detail: 'AP holds jurisdiction over the SFA rotation (guide §4.7), not NOBODY' });
-  // a capable Position that is not the jurisdiction is refused too
-  const capable = rotators[0];
-  assert.equal(authority.sfaJurisdictionRefusal(capable, { jurisdiction: capable }), null);
-  assert.equal(authority.sfaJurisdictionRefusal(capable, { jurisdiction: 'ELSEWHERE' }).reason, 'PERMISSION_DENIED');
+test('no SFA jurisdiction narrowing: docs/adr/0117 removed the rotation record it guarded', () => {
+  assert.equal(authority.sfaJurisdictionRefusal, undefined);
 });

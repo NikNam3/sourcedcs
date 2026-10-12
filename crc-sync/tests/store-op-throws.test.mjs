@@ -124,12 +124,6 @@ run('carrier', (efsp, c) => ({
   view: (e) => e.carrierStore.getAll(),
 }));
 
-run('SFA', (efsp, c) => ({
-  store: efsp.sfaStore, member: c.AP, slot: 'sfa',
-  msg: msgOf('efsp-sfa-mutation', c.AP, { actingPositionId: 'AP', op: { kind: 'SetSfaRotation', rackId: 'freq-4', positionId: 'PAR' } }),
-  view: (e) => e.sfaStore.view(),
-}));
-
 test('B3 a store throw before any write is a plain INTERNAL_ERROR: no partial audit line, no broadcast', () => {
   const { efsp, c } = fresh();
   const strip = flight(efsp, c, 'THR9');

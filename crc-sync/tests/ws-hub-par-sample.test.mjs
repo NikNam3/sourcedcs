@@ -9,8 +9,8 @@ import CollaborativeStore from '../src/collab-store.js';
 import { fakeWs } from './helpers/ws.mjs';
 
 // docs/adr/0112: the PAR sample goes to the sessions signed on to the Position that owns the Strip on final, and nobody
-// else; a session that loses it gets one empty frame. Then the whole path on a real EFSP: an arrival rotated from SFA to
-// PAR is sampled for PAR's controller, the PAR controller signs off mid-approach, AP takes PAR's hat.
+// else; a session that loses it gets one empty frame. Then the whole path on a real EFSP: an arrival AP hands to
+// PAR (docs/adr/0117) is sampled for PAR's controller, the PAR controller signs off mid-approach, AP takes PAR's hat.
 
 const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'par-hub-'));
 for (const [k, v] of Object.entries({
@@ -67,15 +67,15 @@ test('a session that had a sample and has none now is sent one empty frame, then
 
 // ── the whole path on a real EFSP ───────────────────────────────────────────
 
-test('walk: rotated to PAR, sampled for PAR only; the PAR controller signs off mid-approach; AP takes the hat and gets it', () => {
-  const STAFFED = { AP: 'INCIRLIK', SFA: 'INCIRLIK', PAR: 'INCIRLIK' };
+test('walk: handed to PAR, sampled for PAR only; the PAR controller signs off mid-approach; AP takes the hat and gets it', () => {
+  const STAFFED = { AP: 'INCIRLIK', PAR: 'INCIRLIK' };
   const { efsp, c } = freshEfsp(createEfsp, STAFFED);
   let s = mustAct(efsp, c.AP, 'AP', null, {
     kind: 'CreateStrip', bayId: 'ap-inbound', rackId: 'main', stripType: 'ARRIVAL',
     flightData: { callsign: 'VIPER21', aircraftType: 'F16', wakeCategory: 'M', originAirport: 'LTAG' },
   });
-  s = mustAct(efsp, c.AP, 'AP', s, { kind: 'TransferStrip', toPositionId: 'SFA', bayId: 'sfa-frequencies', rackId: 'freq-2' });
-  s = mustAct(efsp, c.SFA, 'SFA', s, { kind: 'SfaRotation' });
+  s = mustAct(efsp, c.AP, 'AP', s, { kind: 'MoveStrip', bayId: 'ap-sfa', rackId: 'freq-2' });
+  s = mustAct(efsp, c.AP, 'AP', s, { kind: 'TransferStrip', toPositionId: 'PAR', bayId: 'par-final', rackId: 'main' });
   assert.equal(s.bayId, 'par-final');
   assert.equal(s.state, 'ON_FINAL');
 

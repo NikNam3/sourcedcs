@@ -365,4 +365,4 @@ const STORE_SYNC = REGISTRY.filter(e => e.sync).map(e => ({ registryKey: e.key, 
 // The order the saved body is restored in (it is not the order it is written in, see above).
 const RESTORE_ORDER = ['flightData', 'airspaces', 'boards', 'correlations', 'marsa', 'runwayStatuses', 'carriers'];
 
-module.exports = { STORE_SYNC, REGISTRY, RESTORE_ORDER, PERSISTED_SHAPE, checkPersistedShape };
+module.exports = { STORE_SYNC, REGISTRY, RESTORE_ORDER, PERSISTED_SHAPE, DROPPED_KEYS, checkPersistedShape };

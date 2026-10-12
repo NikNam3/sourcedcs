@@ -64,13 +64,14 @@ test('every state of every strip type has an explicit correlation-eligibility de
   }
 });
 
-test('Block Maps: derived Blocks are not writable by SetBlock; carrier Blocks route to the flight; FINAL has nothing writable', () => {
+test('Block Maps: derived Blocks are not writable by SetBlock; carrier Blocks route to the flight; FINAL has only the talk-down\'s HDG and ALT (docs/adr/0117)', () => {
   for (const id of ['C3', 'C5', 'C6', 'C7', 'C8', 'C9']) assert.equal(blockMap.resolveBlockTarget('MARSHAL', id), null, id);
   for (const [id, field] of [['C4', 'approachType'], ['C10', 'approachButton'], ['C12', 'lowStateLb'], ['C13', 'bingoField'], ['C14', 'bingoFuelLb'], ['C15', 'eeatUtc']]) {
     assert.deepEqual(blockMap.resolveBlockTarget('MARSHAL', id), { kind: 'carrier', field });
   }
+  const writable = { '7A': { kind: 'clearance', field: 'altitude' }, '9A-VECTOR': { kind: 'clearance', field: 'heading' } };
   for (const [id, def] of Object.entries(blockMap.FINAL_BLOCK_MAP)) {
-    assert.equal(blockMap.resolveBlockTarget('FINAL', id), null, `FINAL/${id} must not be writable`);
+    assert.deepEqual(blockMap.resolveBlockTarget('FINAL', id), writable[id] || null, `FINAL/${id}`);
     assert.ok(!['flightData', 'annotation'].includes(def.target.kind), id);
   }
   assert.ok(blockMap.resolveBlockTarget('PATTERN', 'C24'));
@@ -153,9 +154,9 @@ test('the NLA tables: Commence is Case- and lane-dependent; one next action per 
   assert.equal(nla.computeNla(strip('MARSHAL', 'IN_STACK'), null, NOW, ctx('I', 'CV_APP1', false)).inhibited, 'no receiving Position present');
   assert.equal(nla.computeNla(strip('MARSHAL', 'COMMENCED'), null, NOW, ctx('III')).stripTypeChange, 'FINAL');
   assert.equal(nla.computeNla(strip('FINAL', 'ON_FINAL'), null, NOW, { facilityId: 'CARRIER' }).carrierHandoff, 'FINAL_TO_LSO');
-  // PAR's "Landing assured" is the same state change with no carrier handoff (ADR 0075).
+  // At an airfield the final's NLA is Landed: the Strip goes to GC at TAXI_IN, no carrier handoff, never BALL (docs/adr/0117).
   assert.equal(nla.computeNla(strip('FINAL', 'ON_FINAL'), null, NOW, { facilityId: 'INCIRLIK' }).carrierHandoff, undefined);
-  assert.equal(nla.computeNla(strip('FINAL', 'ON_FINAL'), null, NOW, { facilityId: 'INCIRLIK' }).toState, 'BALL');
+  assert.deepEqual(nla.computeNla(strip('FINAL', 'ON_FINAL'), null, NOW, { facilityId: 'INCIRLIK' }), { toState: 'TAXI_IN', transferTo: 'GC', alsoLegal: ['BOLTER_WAVEOFF'] });
   assert.deepEqual(nla.computeNla(strip('FINAL', 'BALL'), null, NOW, {}).toState, 'DROPPED');
   assert.equal(nla.computeNla(strip('PATTERN', 'IN_PATTERN'), null, NOW, {}).toState, 'RECOVERED');
   assert.equal(nla.computeNla(strip('MARSHAL', 'LAUNCH'), null, NOW, {}).toState, 'DROPPED');

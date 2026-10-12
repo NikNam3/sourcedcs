@@ -33,7 +33,8 @@ test('accessors answer from the composed tables', () => {
   assert.deepEqual(authority.creatorsOf('PATTERN'), ['RSU']);
   const ap = authority.capabilitiesFor('AP');
   assert.equal(ap.family, 'civil-atc');
-  assert.equal(ap.capabilities.rotatesSfa, true, 'incirlik-military extends AP');
+  assert.equal(ap.capabilities.handsOffToFinal, true, 'incirlik-military extends AP');
+  assert.equal(authority.capabilitiesFor('PAR').capabilities.receivesFinal, true);
   assert.equal(authority.capabilitiesFor('JTAC').capabilities.readScope, 'OWNED');
   assert.equal(authority.capabilitiesFor('NOBODY'), null);
 });

@@ -26,11 +26,11 @@ const { STORE_SYNC } = await import('../src/efsp/stores.js');
 const { crew, mustCarrierAct, mustAct, DEPARTURE_FLIGHT_DATA } = await import('./helpers/efsp-scenario.mjs');
 const families = (await import('../src/efsp/wire/families/index.js')).default;
 
-const storeOf = (efsp, registryKey) => efsp[{ airspaces: 'airspaceStore', correlations: 'correlationStore', marsa: 'marsaStore', runwayStatuses: 'runwayStatusStore', carriers: 'carrierStore', sfaRotation: 'sfaStore' }[registryKey]];
-const KEYS = ['airspaces', 'correlations', 'marsa', 'runwayStatuses', 'carriers', 'sfaRotation'];
+const storeOf = (efsp, registryKey) => efsp[{ airspaces: 'airspaceStore', correlations: 'correlationStore', marsa: 'marsaStore', runwayStatuses: 'runwayStatusStore', carriers: 'carrierStore' }[registryKey]];
+const KEYS = ['airspaces', 'correlations', 'marsa', 'runwayStatuses', 'carriers'];
 const resync = (efsp, session, stores, extra = {}) => efsp.handleMessage(session, { version: 1, type: 'efsp-resync', stores, ...extra }).ack;
 
-test('six stores declare their sync, each on its own snapshot key, with an epoch of its own', () => {
+test('five stores declare their sync, each on its own snapshot key, with an epoch of its own', () => {
   assert.deepEqual(STORE_SYNC.map(d => d.key), KEYS);
   const efsp = createEfsp();
   const epochs = new Set();
@@ -41,7 +41,7 @@ test('six stores declare their sync, each on its own snapshot key, with an epoch
     epochs.add(store.epoch);
     assert.equal(families.bySnapshotKey[d.key].deltaType, d.deltaType, `${d.key}: the family's delta type`);
   }
-  assert.equal(epochs.size, 6, 'one lifetime per store');
+  assert.equal(epochs.size, 5, 'one lifetime per store');
   assert.notEqual(createEfsp().airspaceStore.epoch, efsp.airspaceStore.epoch, 'a new process is a new lifetime');
 });
 
@@ -91,7 +91,7 @@ test('a stores-only resync answers each store whose seq or epoch differs with it
   const e = resync(efsp, c.CD.session, { ...have, marsa: { lastSeq: beat.marsa.seq, epoch: 'an-older-lifetime' } });
   assert.deepEqual(Object.keys(e.stores), ['marsa']);
   // a client ahead of the server (rewound) is answered too
-  assert.deepEqual(Object.keys(resync(efsp, c.CD.session, { ...have, sfaRotation: { lastSeq: 99, epoch: beat.sfaRotation.epoch } }).stores), ['sfaRotation']);
+  assert.deepEqual(Object.keys(resync(efsp, c.CD.session, { ...have, runwayStatuses: { lastSeq: 99, epoch: beat.runwayStatuses.epoch } }).stores), ['runwayStatuses']);
   // unknown keys are ignored, a missing key is not asked about
   assert.deepEqual(resync(efsp, c.CD.session, { nonsense: { lastSeq: 0 } }).stores, {});
 });

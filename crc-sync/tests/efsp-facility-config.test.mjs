@@ -30,15 +30,15 @@ const {
 } = createFacilityConfig();
 const { DEPARTURE_BLOCK_MAP, OVERFLIGHT_BLOCK_MAP, MISSION_BLOCK_MAP, requiredBlocksFor } = await import('../src/efsp/block-map.js');
 
-test('getPositionSet returns exactly INCIRLIK\'s eight Positions (RSU, SFA and PAR since L18, ADR 0075)', () => {
-  assert.deepEqual(getPositionSet(), ['OPS', 'CD', 'GC', 'LC', 'RSU', 'AP', 'SFA', 'PAR']);
+test('getPositionSet returns exactly INCIRLIK\'s seven Positions (RSU and PAR since L18, ADR 0075; no SFA since ADR 0117)', () => {
+  assert.deepEqual(getPositionSet(), ['OPS', 'CD', 'GC', 'LC', 'RSU', 'AP', 'PAR']);
 });
 
 // The ONE place the shipped offer lists are asserted (docs/adr/0110 §1, decisions.md H111): an answer that changes a list is a
 // one-line edit to its config file plus the matching line here. `consolidation` is who is OFFERED the hat, in order.
-test('getConsolidation: the shipped Incirlik offer lists (H111 Q-C1 a: AP is last on every tower list; RSU, SFA and PAR as ADR 0110 recommends)', () => {
+test('getConsolidation: the shipped Incirlik offer lists (H111 Q-C1 a: AP is last on every tower list; RSU and PAR as ADR 0110 recommends)', () => {
   assert.deepEqual(getConsolidation(), {
-    CD: ['GC', 'LC', 'AP'], GC: ['LC', 'AP'], LC: ['AP'], RSU: ['LC'], SFA: ['AP'], PAR: ['AP'],
+    CD: ['GC', 'LC', 'AP'], GC: ['LC', 'AP'], LC: ['AP'], RSU: ['LC'], PAR: ['AP'],
   });
 });
 

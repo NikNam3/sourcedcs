@@ -17,7 +17,7 @@
 // to PAR (an ordinary radar handoff, board/ops/transfer-strip.js). Nothing here writes a frequency.
 //
 // Who is on a rotating frequency is not a record anyone keeps: it is PAR while PAR holds the Strip of a flight on it,
-// otherwise AP, who holds the rotation (`selectionFor`). Pure: no store, no clock.
+// otherwise AP, who holds the rotation. Only the client shows it (crc-desktop sfa-state.js). Pure: no store, no clock.
 
 const SFA_USE = Object.freeze({ ROTATION: 'ROTATION', INITIAL_CONTACT: 'INITIAL_CONTACT', SPARE: 'SPARE' });
 
@@ -45,30 +45,4 @@ function rackForFrequency(bay, config, mhz) {
   return entry ? entry.rackId : null;
 }
 
-/** The three rotating pool entries (JO 7610.14A para 7-1-5 c), in pool order. */
-function rotationEntries(config) {
-  return (config && Array.isArray(config.pool) ? config.pool : []).filter(p => p.use === SFA_USE.ROTATION);
-}
-
-/**
- * Who has each rotating frequency selected now (JO 7110.65BB para 5-10-15 c): `{ rackId: positionId }`, the receiver
- * (PAR) while it holds a live Strip whose flight is on that frequency, else the jurisdiction Position (AP).
- * @param {object} config the Facility's singleFrequencyApproach
- * @param {object[]} strips the Facility's Strips
- * @param {(flightDataId:string) => object|null} flightDataOf
- * @param {string|null} receiver the Position a handoff to the final lands on (PAR)
- */
-function selectionFor(config, strips, flightDataOf, receiver) {
-  const out = {};
-  for (const entry of rotationEntries(config)) {
-    const atReceiver = !!receiver && (strips || []).some(s => {
-      if (s.ownerPositionId !== receiver || s.state === 'DROPPED') return false;
-      const fd = flightDataOf(s.flightDataId);
-      return !!(fd && fd.comms && fd.comms.workingFrequencyMhz === entry.mhz);
-    });
-    out[entry.rackId] = atReceiver ? receiver : config.jurisdiction;
-  }
-  return out;
-}
-
-module.exports = { SFA_USE, poolEntryFor, isSfaBay, frequencyForRack, rackForFrequency, rotationEntries, selectionFor };
+module.exports = { SFA_USE, poolEntryFor, isSfaBay, frequencyForRack, rackForFrequency };

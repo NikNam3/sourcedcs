@@ -109,10 +109,18 @@ test('one unknown key deep in a flight-data record (assigned.releaseState) stops
 
 test('an unknown top-level key stops start-up; the keys the current build writes all restore', async () => {
   const { body } = savedBoard();
-  const { PERSISTED_SHAPE } = await import('../src/efsp/stores.js');
-  assert.deepEqual(Object.keys(body).sort(), Object.keys(PERSISTED_SHAPE).sort(), 'the shape lists exactly what _persist writes');
+  const { PERSISTED_SHAPE, DROPPED_KEYS } = await import('../src/efsp/stores.js');
+  assert.deepEqual(Object.keys(body).sort(), Object.keys(PERSISTED_SHAPE).filter(k => !(k in DROPPED_KEYS)).sort(), 'the shape lists exactly what _persist writes');
   fs.writeFileSync(file, JSON.stringify({ ...body, fieldStates: [] }));
   assertRefusedUntouched(() => createEfsp(), /unknown key "fieldStates"/);
+});
+
+test('docs/adr/0117: a snapshot with the removed SFA rotation record still restores; the record is dropped, the Board kept', () => {
+  const { body } = savedBoard();
+  const strips = Object.values(body.boards).flatMap(b => b.strips).length;
+  fs.writeFileSync(file, JSON.stringify({ ...body, sfaRotation: { facilityId: 'INCIRLIK', rev: 3, rotation: { 'freq-2': 'SFA' }, transitions: [] } }));
+  const efsp = createEfsp();
+  assert.equal(['INCIRLIK', 'CENTER', 'TACTICAL', 'CARRIER'].flatMap(f => efsp.boardStoreFor(f).getAll()).length, strips);
 });
 
 test('a carrier record from before docs/adr/0113 (shipInputs, a stack with a Charlie time) stops start-up, naming the key', () => {
