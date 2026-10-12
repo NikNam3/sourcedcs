@@ -1,9 +1,10 @@
 'use strict';
 
-/* L18 server half (crc-sync docs/adr/0075, 0093) on screen: RSU's pattern board, SFA's frequency racks with the
- * rotation header and "Rotate to PAR", and PAR's FINAL Bay (the flight line, nothing to type; the picture is the PAR panel's,
- * e2e/par-panel.spec.js). One controller holds RSU, AP,
- * SFA and PAR. Run on E2E_LANE=9. The Board lives for the whole run, so every test drops what it made. */
+/* L18 on screen (crc-sync docs/adr/0075, 0093), as docs/adr/0117 left it: RSU's pattern board; AP's SFA frequency racks with
+ * their header and "Hand off to PAR" (no SFA Position: JO 7610.14A para 7-1-5); PAR's FINAL Bay line (HDG and ALT, Begin
+ * descent, Cleared to land, Landed, Missed approach, the ⋯ menu; the picture is the PAR panel's, e2e/par-panel.spec.js).
+ * One controller holds GC, RSU, AP and PAR. Run on E2E_LANE=9. The Board lives for the whole run, so every test drops what
+ * it made. */
 
 const { test, expect } = require('./helpers/test');
 const { openPanel } = require('./helpers/app');
@@ -35,72 +36,102 @@ async function cleanUp(page) {
 }
 
 async function controller(page) {
-  await openPanel(page, { signedOn: ['RSU', 'AP', 'SFA', 'PAR'], controller: 'e2e-l18' });
-  await page.waitForFunction(() => typeof crc.sfa.getEfspSfa === 'function' && !!crc.sfa.getEfspSfa());
+  await openPanel(page, { signedOn: ['GC', 'RSU', 'AP', 'PAR'], controller: 'e2e-l18' });
+  await page.waitForFunction(() => crc.state.getEfspBays().some(b => b.bayId === 'ap-sfa' && Array.isArray(b.sfaPool)));
 }
+
+const send = (page, callsign, positionId, op) => page.evaluate(([c, p, o]) => {
+  const s = crc.state.getAllEfspStrips().find(x => x.state !== 'DROPPED' && (crc.state.getEfspFlightData(x.flightDataId) || { identity: {} }).identity.callsign === c);
+  crc.ws.sendEfspMutation(p, s, o);
+}, [callsign, positionId, op]);
+
+/** An arrival with AP, filed on SFA frequency `rack` when given (the Rack assigns the flight that frequency). */
+async function arrival(page, callsign, rack) {
+  await page.evaluate((c) => crc.ws.sendEfspCreateStrip('AP', { kind: 'CreateStrip', bayId: 'ap-inbound', rackId: 'main', stripType: 'ARRIVAL', flightData: { callsign: c, aircraftType: 'F-16C', originAirport: 'LTAG' } }), callsign);
+  await waitStrip(page, callsign, s => s.ownerPositionId === 'AP', `${callsign} created at AP`);
+  if (!rack) return;
+  await send(page, callsign, 'AP', { kind: 'MoveStrip', bayId: 'ap-sfa', rackId: rack });
+  await waitStrip(page, callsign, s => s.bayId === 'ap-sfa' && s.rackId === rack, `${callsign} on ${rack}`);
+}
+const TO_PAR = { kind: 'TransferStrip', toPositionId: 'PAR', bayId: 'par-final', rackId: 'main' };
 
 test.afterEach(async ({ page }) => { await cleanUp(page).catch(() => {}); });
 
-test('01 SFA: filed on a frequency Rack, rotated to PAR with the frequency unchanged, talk-down has nothing to type, Landing assured', async ({ page }) => {
+test('01 SFA (T1): AP files the arrival on a rotating frequency and presses Hand off to PAR; the frequency is unchanged and the header shows PAR on it', async ({ page }) => {
   await controller(page);
   const call = cs('SFA');
-  await page.evaluate((c) => crc.ws.sendEfspCreateStrip('AP', { kind: 'CreateStrip', bayId: 'ap-inbound', rackId: 'main', stripType: 'ARRIVAL', flightData: { callsign: c, aircraftType: 'F-16C', originAirport: 'LTAG' } }), call);
-  await waitStrip(page, call, s => s.ownerPositionId === 'AP', 'created at AP');
-  await page.evaluate((c) => {
-    const s = crc.state.getAllEfspStrips().find(x => (crc.state.getEfspFlightData(x.flightDataId) || { identity: {} }).identity.callsign === c);
-    crc.ws.sendEfspMutation('AP', s, { kind: 'TransferStrip', toPositionId: 'SFA', bayId: 'sfa-frequencies', rackId: 'freq-2' });
-  }, call);
-  await waitStrip(page, call, s => s.ownerPositionId === 'SFA' && s.rackId === 'freq-2' && s.mhz === 233.1, 'on SFA freq-2, frequency set from the Rack');
+  await arrival(page, call, 'freq-2');
+  expect((await stripOf(page, call)).mhz).toBe(233.1);
 
-  await openBay(page, 'SFA', 'sfa-frequencies');
+  await openBay(page, 'AP', 'ap-sfa');
   const header = page.locator('.efsp-sfa-header');
   await expect(header).toBeVisible();
   await expect(header.locator('.efsp-sfa-row')).toHaveCount(5);
-  await expect(page.locator('.efsp-rack-header', { hasText: 'freq-2 · 233.100' })).toBeVisible();
-  // AP is held too, so the rotation is editable here: put PAR on freq-4
-  await header.locator('select[data-rack-id="freq-4"]').selectOption('PAR');
-  await expect.poll(() => page.evaluate(() => crc.sfa.getEfspSfa().rotation['freq-4'])).toBe('PAR');
+  await expect(header.locator('select')).toHaveCount(0); // nothing to set: the rotation follows the handoffs
+  await expect(page.locator('.efsp-rack-header', { hasText: '233.100 · AP' })).toBeVisible();
+  await expect(page.locator('.efsp-rack-header', { hasText: '232.100 · INIT' })).toBeVisible();
+  await expect(page.locator('.efsp-rack-header', { hasText: '236.100 · SPARE' })).toBeVisible();
 
-  await page.locator('.efsp-sfa-rotate').first().click();
-  await waitStrip(page, call, s => s.ownerPositionId === 'PAR' && s.stripType === 'FINAL' && s.state === 'ON_FINAL' && s.bayId === 'par-final', 'rotated');
+  await page.locator('.efsp-final-handoff').first().click();             // Hand off to PAR
+  await waitStrip(page, call, s => s.ownerPositionId === 'PAR' && s.stripType === 'FINAL' && s.state === 'ON_FINAL' && s.bayId === 'par-final', 'handed to PAR');
   expect((await stripOf(page, call)).mhz).toBe(233.1);
-
-  await openBay(page, 'PAR', 'par-final');
-  const final = page.locator('.efsp-final-list');
-  await expect(final).toBeVisible();
-  await expect(final.locator('input, select, textarea')).toHaveCount(0); // 7.10: nothing to type
-  await expect(page.locator('.efsp-strip:visible')).toHaveCount(0);       // PAR's racks are replaced by the flight line
-  await expect(final.locator('.efsp-final-name')).toHaveText(call);       // a callsign at Incirlik (H122)
-  await expect(final.locator('.efsp-final-terminal')).toHaveText(['Landing assured', 'Missed approach']);
-  await final.locator('.efsp-final-terminal').first().click();            // Landing assured
-  await waitStrip(page, call, s => s.state === 'BALL', 'BALL');
+  await expect(page.locator('.efsp-rack-header', { hasText: '233.100 · PAR' })).toBeVisible();
 });
 
-test('02 PAR holds one aircraft: a second rotation is refused with the reason, and a missed approach frees the Bay', async ({ page }) => {
+test('01b T1, the live test\'s refused drop: an arrival from AP\'s inbound Bay (no SFA frequency) into PAR\'s final Bay is accepted', async ({ page }) => {
+  await controller(page);
+  const call = cs('DRP');
+  await arrival(page, call, null);
+  await send(page, call, 'AP', TO_PAR);
+  await waitStrip(page, call, s => s.ownerPositionId === 'PAR' && s.stripType === 'FINAL' && s.bayId === 'par-final', 'handed to PAR');
+});
+
+test('02 PAR (T5, T11): HDG and ALT on the FINAL line; Begin descent and Cleared to land recorded; Landed sends it to GC and frees the Bay; a second aircraft is handed in', async ({ page }) => {
   await controller(page);
   const a = cs('PA'); const b = cs('PB');
-  for (const [c, rack] of [[a, 'freq-1'], [b, 'freq-3']]) {
-    await page.evaluate(([cc, r]) => crc.ws.sendEfspCreateStrip('AP', { kind: 'CreateStrip', bayId: 'ap-inbound', rackId: 'main', stripType: 'ARRIVAL', flightData: { callsign: cc, aircraftType: 'F-16C' } }), [c, rack]);
-    await waitStrip(page, c, s => s.ownerPositionId === 'AP', `${c} created`);
-    await page.evaluate(([cc, r]) => {
-      const s = crc.state.getAllEfspStrips().find(x => (crc.state.getEfspFlightData(x.flightDataId) || { identity: {} }).identity.callsign === cc);
-      crc.ws.sendEfspMutation('AP', s, { kind: 'TransferStrip', toPositionId: 'SFA', bayId: 'sfa-frequencies', rackId: r });
-    }, [c, rack]);
-    await waitStrip(page, c, s => s.ownerPositionId === 'SFA', `${c} with SFA`);
-  }
-  const rotate = (c) => page.evaluate((cc) => {
-    const s = crc.state.getAllEfspStrips().find(x => (crc.state.getEfspFlightData(x.flightDataId) || { identity: {} }).identity.callsign === cc);
-    crc.ws.sendEfspMutation('SFA', s, { kind: 'SfaRotation' });
-  }, c);
-  await rotate(a);
+  await arrival(page, a, 'freq-2');
+  await arrival(page, b, 'freq-3');
+  await send(page, a, 'AP', TO_PAR);
   await waitStrip(page, a, s => s.ownerPositionId === 'PAR', 'A on final');
-  await rotate(b);
-  await expect.poll(async () => (await stripOf(page, b)).ownerPositionId, { timeout: 5000 }).toBe('SFA');
+  // PAR holds one aircraft: B is refused and waits with AP
+  await send(page, b, 'AP', TO_PAR);
+  await expect(page.locator('#efsp-mutation-error')).toContainText(/par-final holds 1 Strip/, { timeout: 5000 });
+  expect((await stripOf(page, b)).ownerPositionId).toBe('AP');
+
   await openBay(page, 'PAR', 'par-final');
-  await page.locator('.efsp-final-terminal').nth(1).click(); // Missed approach
-  await waitStrip(page, a, s => s.state === 'BOLTER_WAVEOFF' && s.bayId === 'par-missed', 'A went around');
-  await rotate(b);
-  await waitStrip(page, b, s => s.ownerPositionId === 'PAR' && s.bayId === 'par-final', 'B in once the Bay is free');
+  const row = page.locator('.efsp-final-row', { hasText: a });
+  await expect(row).toBeVisible();
+  await expect(page.locator('.efsp-strip:visible')).toHaveCount(0);       // PAR's racks are replaced by the flight line
+  await expect(row.locator('.efsp-final-name')).toHaveText(a);
+  await expect(row.locator('.efsp-final-terminal')).toHaveText(['Begin descent', 'Cleared to land', 'Landed', 'Missed approach']);
+  await expect(row.locator('.efsp-strip-menu-btn')).toBeVisible();        // the Strip's ⋯ menu, its racks being hidden
+  await row.locator('.efsp-final-hdg').fill('065');
+  await row.locator('.efsp-final-hdg').press('Enter');
+  await row.locator('.efsp-final-alt').fill('030');
+  await row.locator('.efsp-final-alt').press('Enter');
+  const assigned = (f) => page.evaluate(([c, field]) => {
+    const s = crc.state.getAllEfspStrips().find(x => x.state !== 'DROPPED' && (crc.state.getEfspFlightData(x.flightDataId) || { identity: {} }).identity.callsign === c);
+    const e = crc.state.getEfspFlightData(s.flightDataId).clearance[field].entries.find(x => x.status === 'ACTIVE');
+    return e ? e.value : null;
+  }, [a, f]);
+  await expect.poll(() => assigned('heading')).toBe('065');
+  await expect.poll(() => assigned('altitude')).toBe('030');
+  await page.locator('.efsp-final-row', { hasText: a }).locator('.efsp-final-terminal[data-terminal="BEGIN_DESCENT"]').click();
+  await expect.poll(() => assigned('altitude')).toBe(''); // the glidepath, no assigned altitude
+  await expect(page.locator('.efsp-final-row', { hasText: a }).locator('.efsp-final-terminal[data-terminal="BEGIN_DESCENT"]')).toBeDisabled();
+  await page.locator('.efsp-final-row', { hasText: a }).locator('.efsp-final-terminal[data-terminal="CLEARED_TO_LAND"]').click();
+  await expect(page.locator('.efsp-final-row', { hasText: a }).locator('.efsp-final-terminal[data-terminal="CLEARED_TO_LAND"]')).toBeDisabled();
+  await page.locator('.efsp-final-row', { hasText: a }).locator('.efsp-final-terminal[data-terminal="LANDED"]').click();
+  await waitStrip(page, a, s => s.stripType === 'ARRIVAL' && s.state === 'TAXI_IN' && s.ownerPositionId === 'GC' && s.bayId === 'gc-taxi-in', 'A landed: with GC');
+  await expect(page.locator('.efsp-final-none')).toHaveText('No aircraft on final.');
+
+  // the Bay is free: B is handed in
+  await send(page, b, 'AP', TO_PAR);
+  await waitStrip(page, b, s => s.ownerPositionId === 'PAR' && s.bayId === 'par-final', 'B on final once A has landed');
+  await expect(page.locator('.efsp-final-row', { hasText: b })).toBeVisible();
+  // and a missed approach takes it to PAR's missed-approach Bay
+  await page.locator('.efsp-final-row', { hasText: b }).locator('.efsp-final-terminal[data-terminal="MISSED"]').click();
+  await waitStrip(page, b, s => s.state === 'BOLTER_WAVEOFF' && s.bayId === 'par-missed', 'B went around');
 });
 
 test('03 RSU: the pattern board replaces the racks; Next leg, Landed and Drop work from the chips', async ({ page }) => {
