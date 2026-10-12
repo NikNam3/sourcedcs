@@ -422,7 +422,7 @@ different block number than the FAA (renumbering is not proposed — ids are wir
 |---|---|---|---|---|---|
 | 1 | CALLSIGN | 1 | Aircraft identification | **ACID** | Block 1, aircraft identification |
 | 2 | REV | 2 | Revision number | REV | Block 2, revision number |
-| 2A | VOICE | (2A = strip request originator) | — | VOICE CLR | Voice clearance issued (ours; FAA 2A is "strip request originator") |
+| 2A | VOICE | (2A = strip request originator) | — | VOICE | Voice clearance issued (ours; FAA 2A is "strip request originator") |
 | 3 | TYPE | 3 | Number, wake category indicator, type, equipment suffix | TYPE | Block 3, number of aircraft, wake category indicator, type of aircraft, equipment suffix |
 | 3A | ACFT | 3 (part) | type of aircraft (¶2-3-6, JO 7360.1 designator) | ACFT TYP | Aircraft type designator (Block 3) |
 | 3B | WAKE | 3 (part) | wake category indicator | WAKE | Wake category indicator (Block 3) |
@@ -505,3 +505,193 @@ different block number than the FAA (renumbering is not proposed — ids are wir
 No FAA flight progress strip exists for these (MISSION is the MRU/ATO record; MARSHAL/FINAL/PATTERN are the carrier's
 and the Incirlik pattern board's, CV NATOPS/CATCC and AETCI 11-204 territory, not FAA). All **ours**; labels unchanged
 except where Q2/Q3 change what FINAL shows. Tooltips say "(ours)".
+
+---
+
+## Q6 (T16, T17, T18) — air refueling and MARSA
+
+### What the orders say
+
+**JO 7110.65BB ¶2-1-11, USE OF MARSA:** *"a. MARSA may only be applied to military operations specified in a letter of
+agreement or other appropriate FAA or military document."* … *"b. ATC facilities do not invoke or deny MARSA. Their sole
+responsibility concerning the use of MARSA is to provide separation between military aircraft engaged in MARSA operations
+and other nonparticipating IFR aircraft."* P/CG MARSA: *"A condition whereby the military services involved assume
+responsibility for separation between participating military aircraft in the ATC system."*
+
+**JO 7110.65BB ¶9-2-13, MILITARY AERIAL REFUELING:**
+> Authorize aircraft to conduct aerial refueling along published or special tracks at their flight plan altitudes, unless
+> otherwise requested. PHRASEOLOGY- CLEARED TO CONDUCT REFUELING ALONG (number) TRACK, or FROM (fix) TO (fix), and
+> **MAINTAIN BLOCK (altitude) THROUGH (altitude)**, or COMMENCING AT (altitude), DESCENDING TO (altitude).
+> NOTE- a. During aerial refueling, tanker aircraft are responsible for receiver aircraft communication with ATC and for
+> their navigation along the track. b. Aerial refueling airspace is not sterilized airspace … c. **MARSA begins between
+> the tanker and receiver when the tanker and receiver(s) have entered the air refueling airspace and the tanker advises
+> ATC that he/she is accepting MARSA.** d. **MARSA ends between the tanker and receiver when the tanker advises ATC that
+> the tanker and receiver aircraft are vertically positioned within the air refueling airspace and ATC advises MARSA is
+> terminated.**
+> a. Provide radar assistance to the rendezvous for participating aircraft: 1. When requested, and 2. **By providing
+> vertical separation prior to MARSA declaration.**
+> b. Do not request receiver aircraft that have been cleared to conduct air refueling and have departed the ARIP to: 1.
+> Make code changes when less than 5 miles from the tanker. 2. Squawk standby when less than 1 mile or more than 3 miles
+> from the tanker.
+> c. … you may request a receiver to squawk standby when the receiver reaches a point 3 miles from the tanker. NOTE- 1.
+> Receiver aircraft will squawk normal when separation from the tanker is greater than 3 miles. 2. **Once rendezvous is
+> completed, heading and altitude assignments may be made with the tanker concurrence with MARSA remaining in effect.**
+> 3. Upon rendezvous completion, the tanker must keep receiver aircraft within 3 miles of the tanker until MARSA is
+> terminated.
+> d. **After MARSA has been declared, you should avoid issuing course or altitude changes prior to rendezvous.** NOTE-
+> **Altitude or course changes issued will automatically void MARSA.**
+> e. Do not use the altitude vacated during the refueling operation until the refueling aircraft has reported reaching the
+> next IFR altitude.
+
+**JO 7610.14A ¶5-5-3, MARSA APPLICABILITY FOR AERIAL REFUELING:**
+> a. MARSA begins between the tanker and receiver(s) when the tanker advises ATC that it is accepting MARSA.
+> b. After MARSA has been declared, controller assigned course or altitude changes prior to rendezvous completion will
+> automatically void MARSA and are to be avoided.
+> c. Once rendezvous is completed: 1. Headings and altitudes assignments may be made with the tanker concurrence with
+> MARSA remaining in effect. 2. **Each tanker must keep receiver(s) aircraft in either standard or nonstandard formation
+> until further ATC clearances are received and approved separation is achieved.** 3. Other nonparticipating aircraft may
+> be cleared through the refueling block airspace with approved separation once the tanker and receiver(s) have proceeded
+> down track.
+> d. MARSA ends between the tanker and receiver(s) when: 1. The tanker and receiver aircraft are vertically separated
+> within the aerial refueling airspace, 2. Approved separation is established, and 3. ATC advises MARSA is terminated.
+
+**JO 7610.14A ¶5-1-6 a (chronology, track):** *"4. Receivers are cleared to requested altitude and approved separation is
+established prior to ARIP and release to tanker communication rendezvous (C/R) frequency. 5. Tanker declares MARSA. 6.
+ATC releases receiver to tanker C/R frequency not later than the ARIP. 7. ATC issues clearance to conduct aerial
+refueling along the track, and issues block altitude clearance, if not previously accomplished. NOTE- MARSA needs to be
+declared prior to ATC issuing a clearance to conduct air refueling. … 9. Tanker and receiver aircraft complete rendezvous
+and proceed down track. During aerial refueling, the tanker is responsible for receiver aircraft navigation along the
+track and for all tanker/receiver communications with ATC. … 12. Prior to exit, tanker vertically positions **the
+aircraft in the formation** within the air refueling airspace to facilitate breakup at the exit point (normally, tanker at
+highest altitude of aerial refueling block and receiver at lowest altitude). 13. MARSA is terminated when approved
+separation is established and ATC advises MARSA is terminated."*
+
+**JO 7610.14A ¶5-5-6 a:** *"All aircraft require 1,000 feet separation between the lowest tanker altitude and the
+applicable receiver altitude from the track ARIP to ARCP or from the ARIP to anchor point. If this altitude separation
+cannot be provided, the participating aircraft are not authorized to proceed with the rendezvous."* ¶5-5-1 d: *"All
+aircraft conducting aerial refueling operations should request and be assigned at least three (3) consecutive
+altitudes/flight levels."* ¶5-5-1 a.2: *"Throughout the aerial refueling operation, controller-initiated heading
+assignments may not be effected without the concurrence of the tanker."*
+
+**¶5-5-7 d–e** (tanker): *"Receiver navigation, regardless of the number of receivers, after rendezvous completion through
+completion of refueling operations …"*; *"All communications during aerial refueling operations, including those
+concerning the receivers, must be between the ATC facility or military radar unit and tanker."* **¶5-5-8 c** (receiver):
+*"Maintaining two-way radio contact with ATC until released by ATC to the tanker."* **¶5-5-10:** *"Radar vector assistance
+for rendezvous may be given … when appropriate altitude separation is provided. Assistance must be terminated when the
+receiver has visual contact with the tanker."* **¶5-5-11 a–b:** *"Approved separation is maintained until MARSA is
+declared by the tanker."* / *"After MARSA is declared, receiver aircraft are released to tanker C/R frequency departing the
+ARIP …"*; f–g: an ATC clearance / *"en route altitude assignment is issued for each aircraft or formation flight exiting"*.
+
+**JO 7610.14A ¶7-3-9, AERIAL REFUELING FORMATION:** *"Aerial refueling formations are always nonstandard and require
+additional airspace over a nonstandard cell formation …"*
+
+**JO 7110.65BB ¶2-1-13, FORMATION FLIGHTS:** *"Control formation flights as a single aircraft. Separation responsibility
+between aircraft within the formation rests with the flight leader and the pilots of the other aircraft in the flight.
+This includes transition periods … during join-up and breakaway."* a. join-up supported when *"1. Requested by any
+participating pilot. 2. All participating pilots concur. 3. Either of the participating pilots reports the other/s in
+sight."* c. *"1. For a standard formation only the aircraft acting as the lead will squawk an ATC assigned beacon code …
+2. For a nonstandard formation, each aircraft should squawk an ATC assigned beacon code."* **P/CG FORMATION FLIGHT:**
+*"More than one aircraft which, by prior arrangement between the pilots, operate as a single aircraft with regard to
+navigation and position reporting."* a. standard: *"no more than 1 mile laterally or longitudinally and within 100 feet
+vertically from the flight leader"*; b. nonstandard: other dimensions approved by ATC, an ALTRV/LOA, or *"airspace
+specifically designed for a special activity"*.
+
+### Answer in plain words
+
+1. **Before MARSA:** ATC separates tanker and receiver **vertically** (¶9-2-13 a.2; 7610.14A ¶5-5-11 a), at least
+   **1,000 ft** between the tanker's lowest altitude and the receiver's altitude from ARIP to ARCP (¶5-5-6 a). ATC may
+   vector the receiver to the rendezvous on request and stops when the receiver sees the tanker (¶5-5-10).
+2. **MARSA begins** when the **tanker tells ATC it accepts MARSA** (¶9-2-13 NOTE c; ¶5-5-3 a), in the AR airspace. From
+   then the military, not ATC, separates tanker and receiver. ATC releases the receiver to the tanker's frequency no later
+   than the ARIP (¶5-1-6 a.6; ¶5-5-11 b) and clears the AR **block** ("MAINTAIN BLOCK … THROUGH …").
+3. **Between MARSA and rendezvous**, ATC course/altitude changes **void MARSA** and are to be avoided (¶9-2-13 d; ¶5-5-3 b).
+   The receiver's closing on the tanker, including the climb to it, is the participants' business under MARSA.
+4. **After rendezvous**, tanker and receivers are **in formation** — the order says so in so many words: the tanker must
+   keep receivers *"in either standard or nonstandard formation"* (¶5-5-3 c.2), the chronology calls them *"the
+   formation"* (¶5-1-6 a.12), and 7610.14A ¶7-3-9 says AR formations *"are always nonstandard"*. The tanker navigates
+   for and talks for the receivers; ATC assigns headings/altitudes only with tanker concurrence, MARSA remaining
+   (¶9-2-13 c NOTE 2).
+5. **MARSA ends** when the tanker reports the aircraft vertically positioned (separated) in the AR airspace **and ATC
+   says MARSA is terminated** (¶9-2-13 NOTE d; ¶5-5-3 d); each aircraft or formation then gets its own exit clearance and
+   altitude (¶5-5-11 f–g).
+6. **Is it a "formation join" in the ¶2-1-13 sense?** The orders treat the post-rendezvous AR cell as a (nonstandard)
+   formation for navigation, comms and the airspace it needs, but they **never merge the aircraft's flight plans**: each
+   aircraft keeps its identity and code (receivers squawk normal beyond 3 mi, ¶9-2-13 c NOTE 1; ¶5-5-8 b), and ATC issues
+   exit clearances *"for each aircraft or formation flight"* (¶5-5-11 f–g). The ¶2-1-13 a join-up procedure (pilots
+   request, ATC supports) is **not** the AR procedure; AR runs on MARSA declared by the tanker. **Inference:** the
+   human's description is right — not an app "Join" that voids the receiver's plan; it is MARSA with the tanker, and for
+   separation purposes the pair is one nonstandard formation until MARSA ends.
+7. **"1 NM behind and 1,000–2,000 ft below":** the FAA orders give the **1,000 ft** (¶5-5-6 a) and the rendezvous
+   geometry is in the figures (7610.14A FIG 5-5-1/5-5-2, en route cell rendezvous, drawings not read as text). The
+   **1 NM** in-trail position is **not** in the FAA text read here — **inference:** it is the military AR manual's
+   rendezvous geometry (ATP-3.3.4.2 / T.O. 1-1C-1; not available, not read).
+
+### What it means for LT-MARSA
+
+- **T17 (LEVEL_BUST on the receiver):** once the tanker has declared MARSA, the receiver's ATC altitude is not a single
+  altitude to hold — ATC either cleared the AR block or avoids altitude changes; the climb to the tanker is under MARSA.
+  So: **no altitude/heading conformance for a receiver (or tanker) between MARSA declared and MARSA terminated**, or,
+  if we model the AR block, conformance against the **block** only. ATC-issued course/altitude changes before rendezvous
+  are what **void** MARSA (we already model that interlock, ADR 0051) — that is the FAA rule, keep it.
+- **T18:** MARSA with the tanker, **not** a formation Join (receiver keeps its flight plan and Strip). For conflict
+  alerting (Q7) and for the airspace/separation picture, treat tanker + receivers as one nonstandard formation while
+  MARSA lasts. MARSA ends only by an explicit ATC "MARSA terminated" after the tanker reports the aircraft vertically
+  separated.
+- **T14 (how long the "MARSA voided" notice stays):** the orders say an ATC course/altitude change voids MARSA
+  automatically (¶9-2-13 d NOTE) but say **nothing about a display or notice — silent, the human decides** (recommended:
+  shown until acknowledged by a controller who holds either Strip, then gone; dark cockpit).
+
+---
+
+## Q7 (T16) — conflict alert between aircraft of one formation
+
+### What the orders say
+
+**JO 7110.65BB ¶2-1-13:** *"Control formation flights as a single aircraft. Separation responsibility between aircraft
+within the formation rests with the flight leader and the pilots of the other aircraft in the flight."* c.1: *"For a
+standard formation only the aircraft acting as the lead will squawk an ATC assigned beacon code. Ensure all other
+aircraft squawk standby."* c.2: nonstandard — *"each aircraft should squawk an ATC assigned beacon code"*. ¶9-2-21 c
+(nonstandard/cell): *"Control nonstandard formation/cell operations on the basis that MARSA is applicable between the
+participating aircraft until they establish approved separation which is acknowledged by ATC."* ¶5-5-8: separation is
+applied to the **periphery** of the formation (standard: +1 mile; nonstandard: from the perimeter/outermost aircraft).
+
+**ERAM — JO 7110.65BB ¶5-13-1 c, Suppressing/Inhibiting CA/MCI alert:**
+> 1. The controller may suppress the display of a CA/MCI alert from a control position with the application of one of
+> the following suppress/inhibit computer functions: (a) The Conflict Suppress (CO) function may be used to suppress the
+> CA/MCI display between specific aircraft for a specific alert. … (b) **The Group Suppression (SG) function must be
+> applied exclusively to inhibit the displaying of alerts among military aircraft engaged in special military operations
+> where standard en route separation criteria does not apply.** NOTE- Special military operations where the SG function
+> would typically apply involve those activities where military aircraft routinely operate in proximities to each other
+> that are less than standard en route separation criteria; i.e., **air refueling operations**, ADC practice intercept
+> operations, etc.
+> 2. The computer entry of a message suppressing a CA/MCI alert constitutes acknowledgment for the alert …
+> 3. The CA/MCI alert may not be suppressed or inhibited at or for another control position without being coordinated.
+
+**STARS (terminal) — JO 7110.65BB ¶5-14-6 c:** *"1. The suppress function may be used to suppress the display of a
+specific CA/MCI alert. 2. The inhibit function must only be used to inhibit the display of CA for aircraft routinely
+engaged in operations where approved separation criteria do not apply. NOTE- Examples … are ADC practice intercept
+operations and air shows. … 4. CA/MCI alert may not be suppressed or inhibited at or for another control position without
+being coordinated."* JO 7210.3EE ¶12-6-7 b (STARS): *"Facility air traffic managers are authorized to inhibit CA at
+specific operating positions if an operational advantage is gained."*; ¶8-2-4 b (ERAM): inhibit CA at specified sectors
+and within ERAM Aircraft Alert Volumes.
+
+### Answer in plain words
+
+- **No FAA rule or documented system behaviour automatically exempts formation members from conflict alert.** What the
+  FAA has is (1) the standard formation's wingmen squawk **standby** (¶2-1-13 c.1), so the automation tracks one beacon
+  target and there is no pair to alert on (**inference** from how CA works on tracked targets with altitude; the orders
+  do not describe CA's logic); (2) for nonstandard formations, AR and similar MARSA operations, the **controller**
+  inhibits the alerts among the participants — ERAM's **Group Suppression (SG)**, STARS's **inhibit** — and these are
+  meant exactly for "aircraft … where approved separation criteria do not apply", with air refueling the named example.
+- So the FAA behaviour is "**the participants are not alerted against each other once the controller has grouped
+  them**", and the controller's act is an acknowledgment (¶5-13-1 c.2). Alerts between a formation (any member) and
+  **non-participants** stay.
+
+### What it means for LT-MARSA
+
+Build the effect of a standing group suppression: **no conflict alert between members of one formation** (our Joined
+formation = ¶2-1-13 "single aircraft"), and **none between MARSA participants** (tanker/receivers) while MARSA lasts —
+our formation record and our MARSA record are the "grouping" the FAA controller enters by hand. Alerts against everyone
+else continue, measured from each member (the ¶5-5-8 periphery idea). Whether a controller should also be able to
+suppress one specific alert by hand (the FAA "CO"/suppress) is **silent for our design — the human decides**; it is not
+needed for T16.
