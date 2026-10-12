@@ -125,11 +125,6 @@ function runwayStatusDelta(store, records) {
   };
 }
 
-/** The whole rotation record, sent whole: small. Its own delta type and seq, like efsp-carrier-delta. */
-function sfaDelta(sfaStore) {
-  return { version: VERSION, type: 'efsp-sfa-delta', sfaSeq: sfaStore.currentSeq, sfaEpoch: sfaStore.epoch, sfaRotation: sfaStore.view() };
-}
-
 /** The whole hull view(s), sent whole: small, and the derived stack comes from the server so the client never reimplements it. */
 function carrierDelta(carrierStore) {
   return { version: VERSION, type: 'efsp-carrier-delta', carrierSeq: carrierStore.currentSeq, carrierEpoch: carrierStore.epoch, carriers: { updated: carrierStore.getAll() } };
@@ -155,4 +150,4 @@ function liveStamped(ctx) {
   return out;
 }
 
-module.exports = { VERSION, stampStrip, mergeFlightDataList, touchedStrips, boardDelta, serverBoardDelta, correlationDelta, runwayStatusDelta, marsaDelta, carrierDelta, sfaDelta, liveStamped };
+module.exports = { VERSION, stampStrip, mergeFlightDataList, touchedStrips, boardDelta, serverBoardDelta, correlationDelta, runwayStatusDelta, marsaDelta, carrierDelta, liveStamped };

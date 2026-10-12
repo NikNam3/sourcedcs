@@ -20,7 +20,7 @@ function compared(s) {
   return o;
 }
 
-// The six sequenced stores outside the Board (docs/adr/0106), as `stores.js` STORE_SYNC declares them. A test
+// The five sequenced stores outside the Board (docs/adr/0106), as `stores.js` STORE_SYNC declares them. A test
 // (tests/soak-store-stale.test.mjs) keeps this table equal to the registry's.
 const STORE_SYNC = [
   { key: 'airspaces', seqKey: 'airspaceSeq', epochKey: 'airspaceEpoch', gapFromDeltas: true },
@@ -28,9 +28,8 @@ const STORE_SYNC = [
   { key: 'marsa', seqKey: 'marsaSeq', epochKey: 'marsaEpoch', gapFromDeltas: false },
   { key: 'runwayStatuses', seqKey: 'runwayStatusSeq', epochKey: 'runwayStatusEpoch', gapFromDeltas: true },
   { key: 'carriers', seqKey: 'carrierSeq', epochKey: 'carrierEpoch', gapFromDeltas: false },
-  { key: 'sfaRotation', seqKey: 'sfaSeq', epochKey: 'sfaEpoch', gapFromDeltas: true },
 ];
-const STORE_DELTA_TYPES = new Set(['efsp-airspace-delta', 'efsp-correlation-delta', 'efsp-marsa-delta', 'efsp-runway-status-delta', 'efsp-carrier-delta', 'efsp-sfa-delta']);
+const STORE_DELTA_TYPES = new Set(['efsp-airspace-delta', 'efsp-correlation-delta', 'efsp-marsa-delta', 'efsp-runway-status-delta', 'efsp-carrier-delta']);
 // The shipped client asks for a slice after this many heartbeats in a row named a seq ahead of its own
 // (crc-desktop sync-cursor.js heartbeatGaps); the soak's `store-stale` detector allows STORE_STALE_BEATS
 // heartbeats behind, which a working resync never needs.

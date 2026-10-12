@@ -32,7 +32,19 @@ function _applyTransferStrip(ctx, strip, op, by) {
   // (e.g. PROPOSED directly into a CLEARED Bay with no flight plan and
   // no beacon code at all). Validated before the owner/staffing checks
   // below too, so a rejected transfer never partially mutates the Strip.
-  const check = ctx.placement.validateBayImpliedTransition(strip, op.bayId, op.rackId);
+  // docs/adr/0117: a transfer that changes the strip type, because the receiving Position works the flight on another
+  // one (AP's handoff to the final controller, PAR's Landed to GC; par-final.js). Checked as the conversion's own
+  // step, in place of the Bay-implied NLA check that would refuse it ("the only valid next state from INBOUND is
+  // HANDED_TO_TOWER", the live test's T1).
+  const conversion = ctx.rules.conversionFor(strip, op.bayId);
+  let check;
+  if (conversion) {
+    const refused = _conversionRefusal(ctx, strip, conversion);
+    if (refused) return { ok: false, reason: refused.reason, detail: refused.detail, strip };
+    check = { ok: true, impliedState: conversion.toState };
+  } else {
+    check = ctx.placement.validateBayImpliedTransition(strip, op.bayId, op.rackId);
+  }
   if (!check.ok) return { ok: false, reason: check.reason, detail: check.detail, strip };
   const full = ctx.placement.bayFullRefusal(op.bayId, strip);
   if (full) return { ok: false, reason: full.reason, detail: full.detail, strip };
@@ -65,9 +77,20 @@ function _applyTransferStrip(ctx, strip, op, by) {
   // event: the audit log never silently collapses it away (defect D20).
   const selfCoordinated = ctx.rules.isSelfCoordinated(by, destPositionId);
 
+  const from = { ownerPositionId: strip.ownerPositionId, stripType: strip.stripType, bayId: strip.bayId, rackId: strip.rackId };
   strip.ownerPositionId = destPositionId;
   delete strip.consolidatedFrom; // it has a new owner by decision, not by cover (F10)
+  if (conversion) strip.stripType = conversion.toStripType;
   if (check.impliedState && check.impliedState !== strip.state) strip.state = check.impliedState;
+  if (conversion && conversion.kind === 'PAR_HANDOFF') {
+    // What an after-action review reads on the Strip: who handed it to whom, and which SFA frequency the flight was on
+    // (the Rack it left, when that is an SFA Rack; the frequency itself is the flight's and never changes here).
+    strip.sfaTransfer = {
+      kind: conversion.kind, trigger: conversion.trigger, label: conversion.label, at: ctx.clock.now(), by: by || null,
+      from: from.ownerPositionId, to: destPositionId, fromStripType: from.stripType, toStripType: strip.stripType,
+      frequencyRackId: ctx.rules.sfaFrequencyFor(from.bayId, from.rackId) == null ? null : from.rackId,
+    };
+  }
   const routedBay = routedTo ? ctx.placement.bayForNewOwner(destPositionId, strip.state, strip) : null;
   if (routedBay) {
     // B3: routed to the Position it is consolidated at, so the line lands in ITS Bay, not
@@ -85,12 +108,32 @@ function _applyTransferStrip(ctx, strip, op, by) {
   const sfaFlightData = routedBay ? null : ctx.assignSfaFrequency(strip, by);
 
   ctx.state.bump(strip, by);
-  return { ok: true, strip, routedTo, selfCoordinated, warnings, flightData: sfaFlightData ? sfaFlightData.flightData : undefined };
+  return {
+    ok: true, strip, routedTo, selfCoordinated, warnings, flightData: sfaFlightData ? sfaFlightData.flightData : undefined,
+    conversion: conversion ? conversion.kind : undefined,
+  };
+}
+
+/**
+ * Who may make a conversion (docs/adr/0117): the handoff to the final is the radar approach controller's (the capability
+ * table's `handsOffToFinal`), Landed the final controller's (`recordsFinalCalls`); either way the sender must work the
+ * Strip's state now (nlaPrecheck: the state owner, no open coordination proposal). Null when allowed.
+ */
+function _conversionRefusal(ctx, strip, conversion) {
+  const owner = strip.ownerPositionId;
+  if (conversion.kind === 'PAR_HANDOFF' && !ctx.rules.canHandOffToFinal(owner)) {
+    return { reason: 'PERMISSION_DENIED', detail: `${owner} may not hand an arrival to the final controller` };
+  }
+  if (conversion.kind === 'LANDED' && !ctx.rules.canRecordFinalCall(owner)) {
+    return { reason: 'PERMISSION_DENIED', detail: `${owner} does not work the final` };
+  }
+  const blocked = ctx.nlaPrecheck(strip);
+  return blocked ? { reason: blocked.reason, detail: blocked.detail } : null;
 }
 
 module.exports = {
   kind: 'TransferStrip',
-  // docs/adr/0100: a transfer (drag or menu) and the SFA frequency it may assign.
+  // docs/adr/0100: a transfer (drag or menu), the SFA frequency it may assign and the strip-type conversion it may make.
   undo: {
     label: (op, strip, ctx) => `Hand off ${callsignOf(ctx, strip)} → ${op.toPositionId}`,
     scope: (ctx, strip) => stripScope(ctx, strip),
@@ -100,6 +143,8 @@ module.exports = {
     // one (guide §4.8.3 rule 4) — undefined for every op except a
     // successful TransferStrip, where this op computes it.
     selfCoordinated: result.selfCoordinated,
+    // docs/adr/0117: the strip-type conversion the transfer made (PAR_HANDOFF, LANDED), undefined otherwise.
+    conversion: result.conversion,
   } }),
   apply: (ctx, strip, op, meta) => _applyTransferStrip(ctx, strip, op, meta.by),
 };

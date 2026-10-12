@@ -455,7 +455,7 @@ class HandoffControl {
   }
 
   /**
-   * This Strip changed owner (a TransferStrip, a NLA transfer, a CarrierHandoff, an SfaRotation, a consolidation): if its
+   * This Strip changed owner (a TransferStrip, a NLA transfer, a CarrierHandoff, a consolidation): if its
    * side holds control, `separationResponsibilityRef` follows the owner — control moves with ownership inside a Facility
    * (ADR 0101 decision 7, DR-4). One helper, called from the ownership-change points, not from each op. The caller has
    * already bumped the Strip.

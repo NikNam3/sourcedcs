@@ -8,7 +8,7 @@
 //
 // What it covers: message types; the efsp-mutation op kinds (the Board op table); each store family's op kinds, keyed by
 // its message type; the carrier's named values (handoffs, Case, SetCarrierState fields, stack-entry statuses) and the
-// keys of its stack, stack entry, hull view and derived entry; the SFA transfer names; each synced store's sync keys;
+// keys of its stack, stack entry, hull view and derived entry; the PAR final's conversion and call names and the SFA pool's frequency uses; each synced store's sync keys;
 // the top-level keys of the hub frames and of every store delta. Not covered (docs/wip/WIRE-RECORD.md): the keys inside
 // a Strip, a flight-data record or another store's record, ack payloads, and the snapshot's fixed keys.
 
@@ -97,12 +97,11 @@ function frameKeys() {
     'efsp-marsa-delta': keys(frames.marsaDelta(stubStore(), [])),
     'efsp-runway-status-delta': keys(frames.runwayStatusDelta(stubStore(), [])),
     'efsp-carrier-delta': keys(frames.carrierDelta(carrierStoreWithEntry().store)),
-    'efsp-sfa-delta': keys(frames.sfaDelta(stubStore({ view: () => ({}) }))),
   };
 }
 
 // Every kind a client may send in an efsp-mutation: what the Board dispatches by (its op table, board/ops/: CreateStrip
-// to SplitFormation, CarrierHandoff and SfaRotation included, Undo with its own gate, docs/adr/0100 §5), joined with the
+// to SplitFormation, CarrierHandoff and FinalCall included, Undo with its own gate, docs/adr/0100 §5), joined with the
 // granted OP_KINDS, the coordination step kinds (ControlRelease, docs/adr/0101) and the formation ops (docs/adr/0099 §4).
 function efspOpKinds() {
   const { OP_KINDS, COORDINATION_STEP_OP_KINDS, FORMATION_OP_KINDS } = require(path.join(EFSP, 'authority', 'op-kinds.js'));
@@ -123,7 +122,6 @@ function scannedOpKinds(file) {
 function storeOpKinds() {
   const { AIRSPACE_OP_KINDS } = require(path.join(EFSP, 'airspace-store.js'));
   const { STATE_OP } = require(path.join(EFSP, 'carrier-store.js'));
-  const { SET_OP } = require(path.join(EFSP, 'sfa-store.js'));
   const { STACK_OP_KINDS } = require(path.join(EFSP, 'carrier'));
   const { RUNWAY_STATUS_OP_OWNERS } = require(path.join(EFSP, 'authority'));
   return {
@@ -133,7 +131,6 @@ function storeOpKinds() {
     'efsp-correlation-mutation': scannedOpKinds(path.join(EFSP, 'correlation-store.js')),
     'efsp-marsa-mutation': scannedOpKinds(path.join(EFSP, 'marsa-store.js')),
     'efsp-runway-status-mutation': keys(RUNWAY_STATUS_OP_OWNERS),
-    'efsp-sfa-mutation': [SET_OP],
   };
 }
 
@@ -174,13 +171,15 @@ function parSurface() {
 
 function computeSurface() {
   const { clientToServer, serverToClient } = messageTypes();
-  const { SFA_TRANSFERS } = require(path.join(EFSP, 'sfa.js'));
+  const parFinal = require(path.join(EFSP, 'par-final.js'));
+  const { SFA_USE } = require(path.join(EFSP, 'sfa.js'));
   return {
     clientToServer, serverToClient,
     efspOpKinds: efspOpKinds(),
     storeOpKinds: storeOpKinds(),
     carrier: carrierSurface(),
-    sfaTransfers: keys(SFA_TRANSFERS),
+    // docs/adr/0117: the PAR final's conversions and calls, and the SFA pool's frequency uses (a Bay descriptor's sfaPool).
+    parFinal: { conversions: keys(parFinal.CONVERSIONS), finalCalls: keys(parFinal.FINAL_CALLS), sfaUses: keys(SFA_USE) },
     par: parSurface(),
     storeSync: storeSync(),
     frameKeys: frameKeys(),

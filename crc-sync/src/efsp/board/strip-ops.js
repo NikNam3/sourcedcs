@@ -161,7 +161,7 @@ class StripOps {
         ? entry.apply(this, strip, op, meta)
         : { ok: false, reason: 'VALIDATION_ERROR', strip: deepClone(strip) };
       // docs/adr/0101 decision 7 (DR-4): an owner change inside a Facility carries control with it, whichever op made it
-      // (TransferStrip, a NLA transfer, CarrierHandoff, SfaRotation): the one place, not each op.
+      // (TransferStrip, a NLA transfer, CarrierHandoff, FinalCall): the one place, not each op.
       if (result.ok && strip.ownerPositionId !== before.ownerPositionId) {
         const followed = this.control.followOwner(strip, by);
         if (followed && followed.peerStrip && !result.peerStrip) { result.peerFacilityId = followed.peerFacilityId; result.peerStrip = followed.peerStrip; }

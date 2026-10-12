@@ -15,22 +15,22 @@ const FINAL_STATE_OWNERS = {
 };
 
 /**
- * FINAL's NLA table. Shared with PAR (L18), which either adds a terminal state
- * or reuses BALL under a neutral label. `alsoLegal` lists the states a drag may
- * put the Strip in besides the NLA's (a bolter or waveoff is a drag to the
- * Bolter Bay, ADR 0064 B2): board/placement.js's Bay-implied check reads it, so the
- * drag stays inside the state table.
+ * FINAL's NLA table, shared by the carrier lanes and PAR. `alsoLegal` lists the states a drag may put the Strip in
+ * besides the NLA's (a bolter, waveoff or missed approach is a drag to that Bay, ADR 0064 B2): board/placement.js's
+ * Bay-implied check reads it, so the drag stays inside the state table.
+ *
+ * The carrier records "Ball" as its FINAL_TO_LSO handoff (a trigger type and Case rule of its own, ADR 0074). At an
+ * airfield the final controller's part ends when the aircraft lands (docs/adr/0117; JO 7110.65BB para 5-12-8 d, 5-12-9):
+ * the NLA is "Landed", the Strip going to GC as an ARRIVAL at TAXI_IN (H134 LT-RQ6 b) through transfer-strip.js's LANDED
+ * conversion. BALL is the carrier's only: "Landing assured", which reused it at PAR (ADR 0075), is gone.
  */
 function computeFinalNla(strip, flightData, now, ctx = {}) {
   switch (strip.state) {
     case 'ON_FINAL':
-      // The carrier records "Ball" as its FINAL_TO_LSO handoff (a trigger type
-      // and Case rule of its own, ADR 0074). PAR's "Landing assured" (ADR 0075)
-      // is the same state change with nothing to hand over: PAR is not a carrier
-      // Position, and that transfer would refuse it by its `from` list.
-      return ctx.facilityId === 'CARRIER'
-        ? { toState: 'BALL', carrierHandoff: 'FINAL_TO_LSO', alsoLegal: ['BOLTER_WAVEOFF'] }
-        : { toState: 'BALL', alsoLegal: ['BOLTER_WAVEOFF'] };
+      if (ctx.facilityId === 'CARRIER') return { toState: 'BALL', carrierHandoff: 'FINAL_TO_LSO', alsoLegal: ['BOLTER_WAVEOFF'] };
+      // Never inhibited on GC's staffing: that would also refuse the missed approach drag (alsoLegal). An unstaffed GC
+      // nobody is offered refuses the transfer itself (NO_RECEIVING_POSITION).
+      return { toState: 'TAXI_IN', transferTo: 'GC', alsoLegal: ['BOLTER_WAVEOFF'] };
     case 'BALL':           return { toState: 'DROPPED', alsoLegal: ['BOLTER_WAVEOFF'] }; // "Trapped"
     case 'BOLTER_WAVEOFF': return { toState: 'ON_FINAL' };
     case 'DROPPED':

@@ -7,7 +7,6 @@
     "LC",
     "RSU",
     "AP",
-    "SFA",
     "PAR"
   ],
   "positionClasses": {
@@ -17,7 +16,6 @@
     "LC": "MILITARY_ATC",
     "RSU": "MILITARY_ATC",
     "AP": "MILITARY_ATC",
-    "SFA": "MILITARY_ATC",
     "PAR": "MILITARY_ATC"
   },
   "positionLetters": {
@@ -27,7 +25,6 @@
     "LC": "T",
     "RSU": "R",
     "AP": "A",
-    "SFA": "S",
     "PAR": "P"
   },
   "consolidation": {
@@ -35,7 +32,6 @@
     "GC": ["LC", "AP"],
     "LC": ["AP"],
     "RSU": ["LC"],
-    "SFA": ["AP"],
     "PAR": ["AP"]
   },
   "handBack": {},
@@ -70,16 +66,6 @@
       }
     ],
     "AP": [
-      {
-        "kind": "approach",
-        "airport": "LTAG"
-      },
-      {
-        "kind": "airport",
-        "airport": "LTAG"
-      }
-    ],
-    "SFA": [
       {
         "kind": "approach",
         "airport": "LTAG"
@@ -250,6 +236,18 @@
         "impliesState": "INBOUND"
       },
       {
+        "bayId": "ap-sfa",
+        "rackIds": [
+          "freq-1",
+          "freq-2",
+          "freq-3",
+          "freq-4",
+          "freq-5"
+        ],
+        "impliesState": "INBOUND",
+        "view": "sfa-freqs"
+      },
+      {
         "bayId": "ap-departures",
         "rackIds": [
           "main"
@@ -268,20 +266,6 @@
         "rackIds": [
           "main"
         ]
-      }
-    ],
-    "SFA": [
-      {
-        "bayId": "sfa-frequencies",
-        "rackIds": [
-          "freq-1",
-          "freq-2",
-          "freq-3",
-          "freq-4",
-          "freq-5"
-        ],
-        "impliesState": "INBOUND",
-        "view": "sfa-freqs"
       }
     ],
     "PAR": [
@@ -306,34 +290,33 @@
   },
   "singleFrequencyApproach": {
     "jurisdiction": "AP",
-    "rotationSize": 3,
     "pool": [
       {
         "rackId": "freq-1",
-        "mhz": 232.1
+        "mhz": 232.1,
+        "use": "INITIAL_CONTACT"
       },
       {
         "rackId": "freq-2",
-        "mhz": 233.1
+        "mhz": 233.1,
+        "use": "ROTATION"
       },
       {
         "rackId": "freq-3",
-        "mhz": 234.1
+        "mhz": 234.1,
+        "use": "ROTATION"
       },
       {
         "rackId": "freq-4",
-        "mhz": 235.1
+        "mhz": 235.1,
+        "use": "ROTATION"
       },
       {
         "rackId": "freq-5",
-        "mhz": 236.1
+        "mhz": 236.1,
+        "use": "SPARE"
       }
-    ],
-    "initialRotation": {
-      "freq-1": "AP",
-      "freq-2": "SFA",
-      "freq-3": "PAR"
-    }
+    ]
   },
   "dataOnly": false,
   "standingReleases": [],

@@ -6,8 +6,6 @@
 // authority is) stays in the facility JSON; the predicates take plain values, never a store, and return null when
 // the act is allowed, else the refusal `{ ok:false, reason, detail }` the store hands back unchanged.
 
-const { canRotateSfa } = require('./positions/incirlik-military');
-
 /**
  * Only the Facility's named inspection authority may sign off a runway inspection (CompleteInspection).
  * @param {string} actingPositionId
@@ -35,17 +33,4 @@ function selfCoordinationRefusal(required, primaryOf, by) {
   return null;
 }
 
-/**
- * The SFA rotation is the jurisdiction Position's alone: the capability table is the ceiling, the Facility's
- * configured jurisdiction narrows it (guide §4.7).
- * @param {string} actingPositionId
- * @param {{jurisdiction:string}} sfaConfig
- */
-function sfaJurisdictionRefusal(actingPositionId, sfaConfig) {
-  if (!canRotateSfa(actingPositionId) || actingPositionId !== sfaConfig.jurisdiction) {
-    return { ok: false, reason: 'PERMISSION_DENIED', detail: `${sfaConfig.jurisdiction} holds jurisdiction over the SFA rotation (guide §4.7), not ${actingPositionId}` };
-  }
-  return null;
-}
-
-module.exports = { runwayInspectionRefusal, selfCoordinationRefusal, sfaJurisdictionRefusal };
+module.exports = { runwayInspectionRefusal, selfCoordinationRefusal };

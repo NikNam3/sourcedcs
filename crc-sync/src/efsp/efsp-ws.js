@@ -31,7 +31,7 @@
 const permission = require('./permission');
 const readScope = require('./read-scope');
 const frames = require('./wire/frames');
-const { VERSION, stampStrip, mergeFlightDataList, touchedStrips, boardDelta, marsaDelta, carrierDelta, sfaDelta, liveStamped } = frames;
+const { VERSION, stampStrip, mergeFlightDataList, touchedStrips, boardDelta, marsaDelta, carrierDelta, liveStamped } = frames;
 const skeleton = require('./wire/skeleton');
 const { warn } = require('./warnings');
 const families = require('./wire/families');
@@ -646,7 +646,7 @@ function _snapshotMessage(ctx, session = null) {
   return { ...readScope.filterSnapshot(full, readScopeOf(ctx, session)), self: { controllerId: session.controllerId || null } };
 }
 
-/** The snapshot keys the families own, in registry order (airspaces, correlations, marsa, runwayStatuses, carriers, sfaRotation). */
+/** The snapshot keys the families own, in registry order (airspaces, correlations, marsa, runwayStatuses, carriers). */
 function familySnapshots(ctx) {
   const out = {};
   for (const family of families.FAMILIES) if (family.snapshotKey) out[family.snapshotKey] = family.snapshot(ctx);
@@ -706,4 +706,4 @@ function _fullSnapshotMessage(ctx) {
   };
 }
 
-module.exports = { handleMessage, signOffController, directedFor, carrierDelta, sfaDelta, snapshotMessage: _snapshotMessage, filterForSession, supplementFor, readScopeKey, readScopeOf, heartbeatBoardsAll, heartbeatBoardsFor, heartbeatStores, RESYNC_RING_WINDOW };
+module.exports = { handleMessage, signOffController, directedFor, carrierDelta, snapshotMessage: _snapshotMessage, filterForSession, supplementFor, readScopeKey, readScopeOf, heartbeatBoardsAll, heartbeatBoardsFor, heartbeatStores, RESYNC_RING_WINDOW };

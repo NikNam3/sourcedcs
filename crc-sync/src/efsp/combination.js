@@ -11,8 +11,8 @@
 
 const LOCAL = 'LC';
 // Every Incirlik Position but LC and RSU (¶10-3-8a4 allows LC with other local positions; RSU has no separation authority).
-// GC, CD and OPS are the tower's non-local functions (¶2-6-5b); AP, SFA and PAR are radar approach (¶2-6-12).
-const NON_LOCAL = Object.freeze(['OPS', 'CD', 'GC', 'AP', 'SFA', 'PAR']);
+// GC, CD and OPS are the tower's non-local functions (¶2-6-5b); AP and PAR are radar approach (¶2-6-12).
+const NON_LOCAL = Object.freeze(['OPS', 'CD', 'GC', 'AP', 'PAR']);
 const LUAW_STATES = Object.freeze(['RUNWAY_QUEUE', 'LUAW']);
 
 /** True when a DEPARTURE of the Facility is in RUNWAY_QUEUE or LUAW (the EFSP's "LUAW is in use"). */
