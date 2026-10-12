@@ -86,7 +86,7 @@ export function reloadEfspStereoRoutes() { _loadStereoRoutes(); }
 
 /** The stereo name currently picked in the toolbar, or '' for none. */
 function _selectedStereoName() {
-  if (!_createStripStereoEl || _createStripStereoEl.hidden) return '';
+  if (!_createStripStereoEl || _createStripStereoEl.hidden || _createStripStereoEl.disabled) return '';
   return _createStripStereoEl.value || '';
 }
 
@@ -311,12 +311,15 @@ export function _refreshCreateStripAvailability() {
   }
   const origin = _createStripOrigin();
   if (_createStripStereoEl) {
-    // Hidden unless a table is actually installed AND the selected origin
-    // could use one. The shipped table is empty, so for a squadron that has
-    // not written one this control never appears at all — no empty picker
-    // to puzzle over, and the toolbar is byte-identical to before.
-    const usable = _stereoRoutes.length > 0 && _stereoEligibleOrigin(origin);
-    _createStripStereoEl.hidden = !usable;
+    // Shown whenever the selected origin could use a stereo route; hidden for
+    // the ones that cannot. With no routes installed (the shipped state) it
+    // stays in place, disabled and empty, with no explanatory text (H134,
+    // LT-Q2: the toolbar does not change shape, dark cockpit).
+    const eligible = _stereoEligibleOrigin(origin);
+    const usable = eligible && _stereoRoutes.length > 0;
+    _createStripStereoEl.hidden = !eligible;
+    _createStripStereoEl.disabled = !usable;
+    if (!usable) _createStripStereoEl.replaceChildren();
     if (usable) {
       const prevName = _createStripStereoEl.value;
       _createStripStereoEl.innerHTML = '';
