@@ -96,4 +96,6 @@ S-L27 for rung 2); callsign rungs keep it. A `TRACK_LOST` whose code another fli
 
 ## Gates
 
-See the lane report.
+crc-sync unit 2660 → 2673 (all pass); crc-desktop unit 1267 (all pass, unchanged); `npm run freeze` 56/56, no golden
+changed; `npm run walk` 23/23. No Board/wire/sync/hub/soak file moved, so no `soak:selfcheck`; no wire change, so no
+`wire:record` (`wire-protocol.test.mjs` passes).
