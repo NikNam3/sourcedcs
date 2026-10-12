@@ -489,3 +489,69 @@ test('an explicit binding can still take a finished flight\'s contact (S-L27)', 
   reconciler.tick();
   assert.equal(store.getCorrelation('f2').trackId, '1', JSON.stringify(r));
 });
+
+// ── H135 / T12: the beacon rung has no former-holder exclusion ──
+// JO 7110.65BB ¶5-3-3 d, ¶5-3-4 a: automation acquires the target squawking an
+// active flight's assigned discrete code; a finished flight holds no code.
+
+test('the assigned code acquires a contact a finished flight once held (H135, T12)', () => {
+  // The jet flew as f1 (correlated by callsign), f1's Strip was dropped, and
+  // the same jet now squawks the code a NEW flight was assigned.
+  const strips = [strip('f1', 'AIRBORNE')];
+  const flightDataList = [flightData('f1', 'VIPER1', null)];
+  const tracks = [track(1, 'VIPER1', null)];
+  const { reconciler, store } = build({ flightDataList, strips, tracks });
+  reconciler.tick();
+  assert.equal(store.getCorrelation('f1').trackId, '1');
+
+  strips.length = 0; strips.push(strip('f2', 'INBOUND'));
+  flightDataList.length = 0; flightDataList.push(flightData('f2', 'HAWG1', '0003'));
+  tracks[0] = track(1, 'VIPER1', 3);
+  reconciler.tick();
+  const rec = store.getCorrelation('f2');
+  assert.equal(rec.state, 'CORRELATED');
+  assert.equal(rec.matchedBy, 'BEACON');
+  assert.equal(rec.trackId, '1');
+});
+
+test('the callsign rungs keep the former-holder exclusion (H135 changes only the beacon rung)', () => {
+  const strips = [strip('f1', 'AIRBORNE')];
+  const flightDataList = [flightData('f1', 'VIPER1', null)];
+  const tracks = [track(1, 'VIPER1', 41)];
+  const { reconciler, store } = build({ flightDataList, strips, tracks });
+  reconciler.tick();
+  strips.length = 0; strips.push(strip('f2', 'INBOUND'));
+  // Same callsign, a different code from the one the jet squawks.
+  flightDataList.length = 0; flightDataList.push(flightData('f2', 'VIPER1', '0042'));
+  reconciler.tick();
+  const rec = store.getCorrelation('f2');
+  assert.equal(rec.state, 'UNCORRELATED');
+  assert.equal(rec.trackId || null, null);
+});
+
+test('a code whose contact went to another flight says which flight, not "no contact" (T12)', () => {
+  // Two live flights assigned one code (§3.10.2 rule 7 accepts the duplicate
+  // with a warning): the first claims the contact; the second's NO TRK names it.
+  const { reconciler, store } = build({
+    flightDataList: [flightData('f1', 'VIPER1', '0003'), flightData('f2', 'HAWG1', '0003')],
+    strips: [strip('f1'), strip('f2')],
+    tracks: [track(1, 'SOMEONE', 3)],
+  });
+  reconciler.tick();
+  assert.equal(store.getCorrelation('f1').trackId, '1');
+  const rec = store.getCorrelation('f2');
+  assert.equal(rec.state, 'UNCORRELATED');
+  assert.equal(rec.warning.kind, 'TRACK_LOST');
+  assert.equal(rec.warning.detail, 'the contact squawking 0003 is correlated to VIPER1');
+});
+
+test('a code whose contact went to another flight still lets the callsign rung match (T12)', () => {
+  const { reconciler, store } = build({
+    flightDataList: [flightData('f1', 'VIPER1', '0003'), flightData('f2', 'HAWG1', '0003')],
+    strips: [strip('f1'), strip('f2')],
+    tracks: [track(1, 'SOMEONE', 3), track(2, 'HAWG1', null)],
+  });
+  reconciler.tick();
+  assert.equal(store.getCorrelation('f2').trackId, '2');
+  assert.equal(store.getCorrelation('f2').matchedBy, 'CALLSIGN_EXACT');
+});

@@ -110,10 +110,20 @@ class CorrelationReconciler {
 
     // trackId -> the flightDataId of the finished flight that last held that contact
     // (docs/adr/0076, S-L27). Such a contact is not claimable by another
-    // flight's callsign or code: it is an earlier flight's aircraft, still in
-    // the air, and a new flight that reuses the callsign must not inherit it.
-    // Forgotten when the contact leaves the picture; an explicit controller
-    // binding (rung 1) is never blocked by it.
+    // flight's CALLSIGN (rungs 3 and 4, ours, for players who do not squawk): it
+    // is an earlier flight's aircraft, still in the air, and a new flight that
+    // reuses the callsign must not inherit it. Forgotten when the contact leaves
+    // the picture; an explicit controller binding (rung 1) is never blocked by it.
+    //
+    // The beacon rung (2) ignores it (H135, superseding S-L27 for that rung
+    // only): FAA automation acquires a track by matching an ACTIVE flight's
+    // computer-assigned discrete code to the target squawking it (JO 7110.65BB
+    // ¶5-3-3 d; ¶5-3-4 a, auto-acquisition), and a terminated flight's data is
+    // removed (¶5-2-1 b.2 NOTE), so a finished flight holds no code and cannot
+    // keep a contact from the flight now assigned the code it squawks. This was
+    // T12: a jet once held by a dropped or deleted Strip (by any rung, a
+    // provisional callsign match included) stayed NO TRK under a new Strip
+    // whose Block 5 it squawked.
     this._formerHolder = new Map();
   }
 
@@ -199,13 +209,24 @@ class CorrelationReconciler {
       });
     }
 
-    // Rung 2 — the assigned Mode 3/A code, observed on a contact.
+    // Rung 2 — the assigned Mode 3/A code, observed on a contact. No
+    // former-holder exclusion here (H135; see the constructor).
+    const callsignOf = new Map(eligible.map(f => [f.flightDataId, f.identity.callsign]));
+    const beaconTakenBy = new Map(); // flightDataId -> the flight that holds the contact squawking its code
     for (const flightData of eligible) {
       if (resolutions.has(flightData.flightDataId)) continue;
       const assigned = flightData.identity.beaconAssigned;
       if (!assigned) continue;
-      const candidates = (byBeacon.get(assigned) || []).filter(id => !claimed.has(id) && !this._formerHolder.has(id));
-      if (candidates.length === 0) continue;
+      const squawking = byBeacon.get(assigned) || [];
+      const candidates = squawking.filter(id => !claimed.has(id));
+      if (candidates.length === 0) {
+        // The contact squawking this code already went to another flight
+        // (an explicit binding, or a duplicate code assigned earlier, §3.10.2
+        // rule 7). The callsign rungs still get a go; if nothing else
+        // matches, the NO TRK says which flight has it rather than "no contact".
+        if (squawking.length === 1) beaconTakenBy.set(flightData.flightDataId, { code: assigned, holder: claimed.get(squawking[0]) });
+        continue;
+      }
       if (candidates.length > 1) {
         // A duplicate code is structural and explicitly accepted (§3.10.2
         // rule 7), so this is not an error — but guessing between two
@@ -243,8 +264,12 @@ class CorrelationReconciler {
     // Everything eligible and unmatched is uncorrelated, and says why.
     for (const flightData of eligible) {
       if (resolutions.has(flightData.flightDataId)) continue;
+      const taken = beaconTakenBy.get(flightData.flightDataId);
+      const detail = taken
+        ? `the contact squawking ${taken.code} is correlated to ${callsignOf.get(taken.holder) || 'another flight'}`
+        : 'no contact matches this flight';
       resolutions.set(flightData.flightDataId, {
-        warning: { kind: 'TRACK_LOST', detail: 'no contact matches this flight' },
+        warning: { kind: 'TRACK_LOST', detail },
         observedBeacon: null,
       });
     }
