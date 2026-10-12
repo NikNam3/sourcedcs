@@ -273,7 +273,7 @@ test('F-111: the interlock void rides the same board-delta as the clearance that
 
 // ── F-206 — clearing an enum Block ────────────────────────────────────────
 
-test('F-206: SREG and RSVC accept being cleared; the four Blocks with no "unset" value do not', () => {
+test('F-206: SREG, RSVC and 24A accept being cleared; the three Blocks with no "unset" value do not', () => {
   const efsp = createEfsp({ wallClock: wall, onNlaDelta: (p) => nlaSink.fn(p) });
   const c = crew(efsp, { OPS: 'INCIRLIK' });
   let strip = createDeparture(efsp, c, 'CLR206');
@@ -286,11 +286,16 @@ test('F-206: SREG and RSVC accept being cleared; the four Blocks with no "unset"
     assert.equal(efsp.flightDataStore.getFlightData(strip.flightDataId).tofi[field], null, `${blockId} cleared`);
   }
 
-  // The other four have no null state to return to — their "cleared" value is
+  // 24A (LT-AIRSPACE-FIX T13): airspace ownership clears back to undecided.
+  strip = mustAct(efsp, c.OPS, 'OPS', strip, { kind: 'SetBlock', blockId: '24A', value: 'USING_AGENCY' });
+  strip = mustAct(efsp, c.OPS, 'OPS', strip, { kind: 'SetBlock', blockId: '24A', value: '' });
+  assert.equal(efsp.flightDataStore.getFlightData(strip.flightDataId).airspace.owner, null, '24A cleared');
+
+  // The other three have no null state to return to — their "cleared" value is
   // a member of the enum itself (NONE / CLEAN), or the field is exhaustive
-  // (14A's release states, 24A's two ownership directions). The server refuses,
-  // which is the answer the client needs in order not to offer "—" for them.
-  for (const blockId of ['5A', '14A', '24A', '3G']) {
+  // (14A's release states). The server refuses, which is the answer the client
+  // needs in order not to offer "—" for them.
+  for (const blockId of ['5A', '14A', '3G']) {
     const refused = act(efsp, c.OPS, 'OPS', strip, { kind: 'SetBlock', blockId, value: '' });
     assert.equal(refused.ok, false, `${blockId} clear`);
     assert.equal(refused.reason, 'VALIDATION_ERROR', `${blockId} clear`);

@@ -141,8 +141,8 @@ test('a geometry picked from a DCS drawing is accepted by crc-sync and reaches t
 test('T27: OPS + CTR combined creates a CENTER MOA, sent as CTR (the draft\'s controlling Position), and crc-sync accepts it', async ({ page }) => {
   const errors = await open(page, { signedOn: ['OPS'], also: { facilityId: 'CENTER', signedOn: ['CTR'] } });
   const ed = await createAirspace(page, 'MOA-GAZIPASA', 'GAZIPASA');
-  await fld(ed, 'CTRL FACILITY').locator('select').selectOption('CENTER');
-  await expect(fld(ed, 'CTRL POSITION').locator('select')).toHaveValue('CTR');
+  await fld(ed, 'CTRL FACILITY').locator('select.airspace-input').selectOption('CENTER');
+  await expect(fld(ed, 'CTRL POSITION').locator('select.airspace-input')).toHaveValue('CTR');
   await expect(ed.locator('.airspace-editor-as-position')).toHaveText('CTR');
   await page.evaluate(() => {
     window.__sentAirspace = [];
