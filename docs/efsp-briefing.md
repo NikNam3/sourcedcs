@@ -332,9 +332,9 @@ criterion is asserted verbatim in `efsp-scenario-stereo.test.mjs`.
 
 **Three things worth knowing before touching it:**
 
-- **The table ships empty, and that is the decision, not an omission.** Real Pack routes are squadron
-  data; inventing them is D11. The picker hides itself entirely when there is no table, so nothing
-  looks broken — but it also means **nobody has ever used this against real routes**. `0050`'s
+- **The table ships the squadron's Incirlik departures** (KEMER1, MANAZ2, MANAZ3, TARSU4, from the human
+  2026-10-12). Real Pack routes are squadron data; inventing them is D11. With an empty table the picker
+  stays visible, disabled and empty (H134). **They have not yet been used in a live session**. `0050`'s
   Consequences lists what discharges that (the usage guide's §4A schema, the scenario fixture).
 - **`filed.stereoRouteName` is never a bare string write.** Every write resolves against the table
   and re-expands the route from it, so the label and the route cannot disagree — which matters
@@ -1522,7 +1522,7 @@ CARRIER-STATE (the old carrier shape refuses start-up) and any hull `approach` i
   an AIC-held exit and GCI's hand-back (no row) were not walked.
 - `positionRadars`' shipped defaults are SOURCE's model of which scope sits at which console (H61
   keeps them, labelled as such). The real assignment is squadron data.
-- **Stereo routes have never run against real routes** (`0050`). The table ships empty on purpose.
+- **Stereo routes have not run in a live session yet** (`0050`). The table now ships the squadron's four Incirlik departures (2026-10-12).
   Block `9F` is a picker now (L16).
 - Incirlik's shipped field data (true headings 056/236, acknowledgers, pad names) is
   `[SOURCE-DEFINED]` and approximate; L20's list.

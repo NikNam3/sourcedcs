@@ -12,11 +12,10 @@
 // "Routes | Stereo/canned route table" under what MUST be configurable, and
 // §8.1 is blunt about why: "the configurability is the specification."
 //
-// **Ships empty**, exactly as airspace-schema.js does and for the same
-// reason: the real Pack routes are squadron data the project owner supplies,
-// and an invented "PACK 1 out of Incirlik" would be the
-// [SOURCE-DEFINED]-presented-as-doctrine trap defect D11 names — which WP6's
-// own acceptance list makes an audit criterion in its own right. See
+// **Ships the squadron's own table** (the Incirlik departures KEMER1, MANAZ2,
+// MANAZ3, TARSU4, supplied by the project owner 2026-10-12). Never add an
+// invented route: an invented "PACK 1 out of Incirlik" would be the
+// [SOURCE-DEFINED]-presented-as-doctrine trap defect D11 names. See
 // docs/efsp-usage-guide.md §4A for the shape and the three install paths.
 //
 // **Names are normalised for lookup but stored verbatim.** The guide writes
@@ -123,8 +122,8 @@ function validateStereoRoutes(candidate) {
   return { ok: true };
 }
 
-// Ships empty as config/efsp-stereo-routes.json (see this module's header for why an
-// invented default would be defect D11). No code copy of that `[]` exists (DATA-2, H88): an
+// Shipped as config/efsp-stereo-routes.json (see this module's header for why an
+// invented default would be defect D11). No code copy of the table exists (DATA-2, H88): an
 // unreadable or invalid file is a startup error naming it.
 function _load(STEREO_ROUTES_PATH) {
   let onDisk;

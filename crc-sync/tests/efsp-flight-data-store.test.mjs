@@ -8,7 +8,7 @@ import { withPaths, FACILITIES, AIRSPACES } from './helpers/with-paths.mjs';
 // createFlightData() expands §9.10 stereo routes (docs/adr/0050), so this file needs
 // a table to expand against — and its own, pointed at a temp file, so it can
 // never read or write the real committed config/efsp-stereo-routes.json
-// (which ships empty). Set before the first import: stereo-routes.js resolves
+// (which ships the squadron's table). Set before the first import: stereo-routes.js resolves
 // its path and loads once at require time.
 const paths = withPaths('efsp-flight-data-store-stereo-', { CRCSYNC_EFSP_STEREO_ROUTES_PATH: 'efsp-stereo-routes.json' }).apply();
 fs.writeFileSync(process.env.CRCSYNC_EFSP_STEREO_ROUTES_PATH, JSON.stringify([

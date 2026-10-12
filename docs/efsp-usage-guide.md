@@ -15,7 +15,7 @@ Built and tested (`npm test` in `crc-sync` and `crc-desktop`, both green per lan
 - **Radar coverage follows the Positions you are signed on to** — the radar selector is gone. See §8B.
 - **WP5: correlation** — every Strip says which contact on the scope it is, clicking a Strip rings its contact, and clicking a contact selects its Strip. See §8C.
 - **WP6** — the military layer:
-  - **Stereo routes** — file a flight by short name (a picker in Block `9F`) and the server expands the whole route. See §4A. (The table ships empty; nothing works until somebody writes one.)
+  - **Stereo routes** — file a flight by short name (a picker in Block `9F`) and the server expands the whole route. See §4A. (The shipped table holds the squadron's Incirlik departures: KEMER1, MANAZ2, MANAZ3, TARSU4.)
   - **MARSA** — declaring that the military is separating its own aircraft, as a relation between flights rather than a flag on one, with the pre-rendezvous course/altitude interlock. See §8D.
   - **The military Block namespace** — `ORDNANCE` (Block 3G) and `HOOK` (Block 3F) on every ATC Strip. `HUNG` ordnance raises an advisory chip on every Position's Strip for the flight (§6); arresting-gear gating (§9.7) reads a gear inventory Incirlik does not have, so it never fires. See §6.
   - **The mission line exists from tasking** — `TAC_C2` frags a mission line against a filed flight before it moves, and TOFI later lands on the one that is already there. Accepting tactical control now requires stating the separation regime, which takes effect when the flight enters an active airspace or the MRU presses Entered. See §8C1.
@@ -185,10 +185,10 @@ available."*
 Type a callsign, pick `PACK 1`, press **+ New Strip** — the Strip is created with route, altitude,
 departure and destination airports and remarks already filled in from the table.
 
-> **The shipped table is empty.** That is deliberate: the real routes are squadron data, and
-> inventing plausible-looking ones would put invented content on a Strip where it reads as doctrine.
-> **Until you install a table, the stereo picker does not appear at all** and everything works
-> exactly as it did before — that is not a bug, it is "no routes configured".
+> **The shipped table holds the squadron's own Incirlik departures** (KEMER1, MANAZ2, MANAZ3, TARSU4,
+> supplied by the squadron on 2026-10-12): the filed route, FL220, the runway 05/23 departure text as
+> the description and the recovery and formation-block text as remarks. Nothing in it is invented.
+> With an empty table the stereo picker stays beside "+ New Strip", disabled and empty (H134).
 
 ### Installing a table
 
@@ -219,7 +219,7 @@ Three places it can live, highest priority first:
 |---|---|
 | `CRCSYNC_EFSP_STEREO_ROUTES_PATH` | an explicit override; mostly for tests |
 | `crc-sync/state/efsp-stereo-routes.json` | **the live squadron table** — on the `crc-sync-state` volume, survives deploys |
-| `crc-sync/config/efsp-stereo-routes.json` | the shipped default, baked into the image (ships `[]`) |
+| `crc-sync/config/efsp-stereo-routes.json` | the shipped default, baked into the image (the squadron's Incirlik departures) |
 
 **Restart crc-sync after editing.** The table loads once at startup — there is no editing UI in this
 slice, and a running process will not notice the file changed. If the file is malformed, crc-sync
