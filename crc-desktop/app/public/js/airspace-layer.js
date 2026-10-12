@@ -11,6 +11,7 @@ import { map, mapReady } from './map-handle.js';
 import { missionData } from './picture.js';
 import { saveSettings, settings } from './settings.js';
 import { getAllEfspAirspaces } from './panels/efsp/efsp-state.js';
+import { findDrawing, outlineFromDrawing, pointsEqual } from './panels/efsp/airspace-geometry-model.js';
 
 const ROUND = 12; // arc points per join/cap
 
@@ -137,6 +138,40 @@ export function buildAirspaceFeatures(airspaces, menu, theater, { transitionAltF
   return { outlines: fc(outlines), centrelines: fc(centrelines), labels: fc(labels) };
 }
 
+/**
+ * T28 (LT-AIRSPACE-FIX): the mission drawings (indexes into `missionData.drawings`) an airspace outline on the map was
+ * copied from. Such a drawing is not drawn while that outline is, so the airspace's own outline (solid when ACTIVE, dashed
+ * otherwise) is what the controller sees instead of the brighter drawing on the same line. A drawing counts only when it
+ * is still exactly what picking it would copy (same layer and name, same points); one that differs stays on the map. When
+ * the menu hides the airspace, the drawing is drawn again. Ours: no FAA rule covers mission drawings.
+ * @returns {number[]}
+ */
+export function drawingsShownAsAirspace(airspaces, menu, theater, drawings) {
+  const out = new Set();
+  if (!drawings || !drawings.length) return [];
+  for (const rec of airspaces || []) {
+    const g = rec.definition && rec.definition.geometry;
+    if (!g || g.source !== 'DCS_DRAWING' || !g.drawingRef) continue;
+    if (!decide(rec, menu, theater).drawsOutline) continue;
+    const found = findDrawing(drawings, g.drawingRef);
+    if (!found) continue;
+    const o = outlineFromDrawing(found.drawing);
+    if (o.ok && pointsEqual(o.points, g.points)) out.add(found.index);
+  }
+  return [...out].sort((a, b) => a - b);
+}
+
+let _hiddenDrawings = [];
+/** The drawings T28 keeps off the map (the e2e specs read it). */
+export function hiddenDrawingIndices() { return _hiddenDrawings; }
+
+/** The drawing layers' filters: everything except the drawings an airspace outline stands in for. */
+function _applyDrawingFilter(hidden) {
+  const keep = ['!', ['in', ['get', 'idx'], ['literal', hidden]]];
+  if (map.getLayer('drawing-fills')) map.setFilter('drawing-fills', ['all', ['==', ['geometry-type'], 'Polygon'], keep]);
+  if (map.getLayer('drawing-lines')) map.setFilter('drawing-lines', keep);
+}
+
 /** The shape being edited, in the blue accent: the polygon ring, its vertex handles, midpoint handles and crossing edges. */
 export function buildDraftFeatures({ points = [], closed = true, selected = null, crossing = [], rubber = null, route = false, corridor = null } = {}) {
   const f = [];
@@ -171,6 +206,7 @@ export function lastAirspaceFeatures() { return _last; }
 
 /** One registration line in map-setup.js: the sources and layers, below the tracks. */
 export function registerAirspaceLayers() {
+  _hiddenDrawings = []; // the drawing layers were (re)added just before these, with no T28 filter yet
   for (const id of ['airspace-outlines', 'airspace-centrelines', 'airspace-labels', 'airspace-draft']) map.addSource(id, { type: 'geojson', data: EMPTY });
   map.addLayer({ id: 'airspace-outline-solid', type: 'line', source: 'airspace-outlines', filter: ['!', ['get', 'dashed']],
     paint: { 'line-color': ['get', 'colour'], 'line-width': 1.5, 'line-opacity': 0.9 } });
@@ -207,6 +243,8 @@ export function refreshAirspaceLayers() {
   map.getSource('airspace-outlines').setData(f.outlines);
   map.getSource('airspace-centrelines').setData(f.centrelines);
   map.getSource('airspace-labels').setData(f.labels);
+  const hidden = drawingsShownAsAirspace(airspaces, menu, theater, (missionData && missionData.drawings) || []);
+  if (JSON.stringify(hidden) !== JSON.stringify(_hiddenDrawings)) { _hiddenDrawings = hidden; _applyDrawingFilter(hidden); }
   for (const m of _menus) m.refresh();
 }
 

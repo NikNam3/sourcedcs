@@ -61,11 +61,15 @@ export function definitionAuthority(positionId, action, def) {
 
 /**
  * Which of the signed-on Positions acts for `action` on `def`, and with what reach: the one with 'ALL' first, then 'FREQUENCY'.
+ * Among those with 'ALL', the draft's controlling Position goes first when it is held (LT-AIRSPACE-FIX T27: OPS + CTR
+ * combined acts as CTR for a CENTER airspace, and stays right once only the controlling Position may define one).
  * @returns {{positionId:string, scope:'ALL'|'FREQUENCY'}|null}
  */
 export function authorityFor(signedOnPositionIds, action, def) {
   let best = null;
-  for (const positionId of signedOnPositionIds || []) {
+  const held = signedOnPositionIds || [];
+  const order = held.includes(def.controllingPositionId) ? [def.controllingPositionId, ...held.filter(p => p !== def.controllingPositionId)] : held;
+  for (const positionId of order) {
     const scope = definitionAuthority(positionId, action, def);
     if (scope === 'ALL') return { positionId, scope };
     if (scope && !best) best = { positionId, scope };
@@ -104,6 +108,19 @@ export function createPositionsFor(signedOnPositionIds) {
     if (scope) out.push({ positionId, scope });
   }
   return out;
+}
+
+/**
+ * The Position a create of `def` is sent as (T27): the draft's controlling Position when held, else a held Position the rows
+ * let create it (OPS of the controlling Facility today), else the first Position that may create at all (the server
+ * decides, and its refusal names who may).
+ * @returns {string|null}
+ */
+export function createActingPositionFor(signedOnPositionIds, def) {
+  const a = authorityFor(signedOnPositionIds, 'create', def || {});
+  if (a) return a.positionId;
+  const first = createPositionsFor(signedOnPositionIds)[0];
+  return first ? first.positionId : null;
 }
 
 /** The controlling Facility/Position pairs this session may name when creating: OWN = itself, FACILITY = any Position of its Facility. */

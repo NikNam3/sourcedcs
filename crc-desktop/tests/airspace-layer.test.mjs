@@ -102,3 +102,32 @@ test('corridor at a right-angle left turn: the inner side meets at one point (2 
   assert.ok(dists.filter(d => Math.abs(d - 2) < 0.05).length >= 6, 'the outer corner is an arc 2 NM round the fix');
   assert.ok(dists.some(d => Math.abs(d - 2.83) < 0.05), 'the inner corner is the miter point');
 });
+
+// ── T28 (LT-AIRSPACE-FIX): an airspace copied from a DCS drawing stands in for it on the map ──
+
+import { drawingsShownAsAirspace } from '../app/public/js/airspace-layer.js';
+
+const SQ = [[36.2, 35.2], [36.2, 35.8], [36.7, 35.8], [36.7, 35.2]];
+const DRAWINGS = [
+  { primitiveType: 'TextBox', text: 'x', lat: 36, lon: 35 },
+  { primitiveType: 'Polygon', polygonMode: 'free', closed: true, name: 'ADANA SOUTH MOA', layerName: 'Common', points: SQ.map(([lat, lon]) => ({ lat, lon })) },
+  { primitiveType: 'Polygon', polygonMode: 'free', closed: true, name: 'OTHER', layerName: 'Common', points: SQ.map(([lat, lon]) => ({ lat: lat + 1, lon })) },
+];
+const fromDrawing = (id, state, points = SQ) => ({ airspaceId: id, state, definition: { airspaceId: id, name: id, kind: 'AREA', type: 'MOA',
+  geometry: { source: 'DCS_DRAWING', drawingRef: { layerName: 'Common', objectName: 'ADANA SOUTH MOA', missionFingerprint: 'x' }, points } } });
+
+test('T28: the drawing an airspace outline was copied from is hidden while that outline is drawn', () => {
+  assert.deepEqual(drawingsShownAsAirspace([fromDrawing('A', 'ACTIVE')], m.defaultMenu(), T, DRAWINGS), [1]);
+});
+
+test('T28: the drawing comes back when the menu does not draw the airspace (default menu: ACTIVE only)', () => {
+  assert.deepEqual(drawingsShownAsAirspace([fromDrawing('A', 'RETURNED')], m.defaultMenu(), T, DRAWINGS), []);
+});
+
+test('T28: a drawing that no longer matches the copy stays on the map; a drawn (POLYGON) airspace hides nothing', () => {
+  const moved = SQ.map(([lat, lon]) => [lat, lon + 0.1]);
+  assert.deepEqual(drawingsShownAsAirspace([fromDrawing('A', 'ACTIVE', moved)], m.defaultMenu(), T, DRAWINGS), []);
+  const drawn = { ...fromDrawing('B', 'ACTIVE'), definition: { ...fromDrawing('B', 'ACTIVE').definition, geometry: { source: 'POLYGON', points: SQ } } };
+  assert.deepEqual(drawingsShownAsAirspace([drawn], m.defaultMenu(), T, DRAWINGS), []);
+  assert.deepEqual(drawingsShownAsAirspace([fromDrawing('A', 'ACTIVE')], m.defaultMenu(), T, []), []);
+});

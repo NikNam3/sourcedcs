@@ -100,3 +100,32 @@ test('who may create, and what they may name as controlling', () => {
   assert.equal(caps.controllingChoicesFor(['OPS']).length, 8);
   assert.ok(caps.controllingChoicesFor(['OPS']).every(c => c.facilityId === 'INCIRLIK'));
 });
+
+// ── T27 (LT-AIRSPACE-FIX): which held Position a create/edit/delete is sent as ──
+
+const GAZIPASA = { airspaceId: 'MOA-GAZIPASA', controllingFacilityId: 'CENTER', controllingPositionId: 'CTR' };
+const INC_RANGE = { airspaceId: 'R-1', controllingFacilityId: 'INCIRLIK', controllingPositionId: 'AP' };
+
+test('T27: OPS + CTR combined creates a CENTER MOA as CTR, whatever order the Positions were signed on in', () => {
+  assert.equal(caps.createActingPositionFor(['OPS', 'CTR'], GAZIPASA), 'CTR');
+  assert.equal(caps.createActingPositionFor(['CTR', 'OPS'], GAZIPASA), 'CTR');
+  // and the server accepts CTR for it (the client's choice is one the rows allow)
+  const deps = { rowOf: serverConfig.airspaceRowOf, facilityOf: caps.facilityOfPosition };
+  assert.equal(airspace.definitionAuthority({ positionId: 'CTR' }, 'create', GAZIPASA, deps), 'ALL');
+  assert.equal(airspace.definitionAuthority({ positionId: 'OPS' }, 'create', GAZIPASA, deps), null);
+});
+
+test('T27: the controlling Position first, else OPS of the controlling Facility, else the first creator (the server decides)', () => {
+  assert.equal(caps.createActingPositionFor(['OPS', 'AP'], INC_RANGE), 'AP', 'the controlling Position when held');
+  assert.equal(caps.createActingPositionFor(['LC', 'OPS'], INC_RANGE), 'OPS', 'else OPS of the controlling Facility');
+  assert.equal(caps.createActingPositionFor(['OPS'], GAZIPASA), 'OPS', 'else the first creator; the server refuses and names CTR');
+  assert.equal(caps.createActingPositionFor(['TAC_C2'], GAZIPASA), null, 'no creator at all');
+});
+
+test('T27: edit and delete act as the controlling Position when held', () => {
+  for (const action of ['edit', 'delete']) {
+    assert.deepEqual(caps.authorityFor(['OPS', 'AP'], action, INC_RANGE), { positionId: 'AP', scope: 'ALL' }, action);
+    assert.deepEqual(caps.authorityFor(['OPS', 'CTR'], action, GAZIPASA), { positionId: 'CTR', scope: 'ALL' }, action);
+    assert.deepEqual(caps.authorityFor(['LC', 'OPS'], action, INC_RANGE), { positionId: 'OPS', scope: 'ALL' }, action);
+  }
+});

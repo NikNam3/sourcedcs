@@ -638,9 +638,11 @@ export function enumSelectOptionsFor(blockId, flightData) {
 //   3G           -> 'CLEAN' IS this field's cleared value; offer that.
 //   14A          -> §3.8's six release states are exhaustive. There is no
 //                   "no release state".
-//   24A          -> airspace ownership is a DIRECTION, and its record is
-//                   append-only precisely so a handoff cannot be erased.
-//                   "Give it back" is CONTROLLING_AGENCY, not blank.
+//   24A          -> airspace ownership is a DIRECTION; "give it back" is
+//                   CONTROLLING_AGENCY. Clearing it (LT-AIRSPACE-FIX T13) goes
+//                   back to undecided, an ordinary amendment: setAirspaceOwner()
+//                   takes '' as null and appends the clear to its transitions,
+//                   so the earlier direction is still on record.
 //   9F           -> flight-data-store.js's setField('filed.stereoRouteName', '')
 //                   clears the LABEL and keeps the route (docs/adr/0050), so
 //                   "cancel the stereo" is meaningful and the route a flight
@@ -649,7 +651,7 @@ export function enumSelectOptionsFor(blockId, flightData) {
 // flight (crc-sync names the declarer in the refusal). That is correct
 // and deliberately NOT pre-empted here: the refusal is legible and lands
 // attributed to the Strip.
-export const ENUM_CLEARABLE_BLOCKS = new Set(['RSVC', 'SREG', '9F', 'C4']);
+export const ENUM_CLEARABLE_BLOCKS = new Set(['RSVC', 'SREG', '24A', '9F', 'C4']);
 
 /** @returns {boolean} may this enum Block be cleared back to no value at all? */
 export function isEnumBlockClearable(blockId) {

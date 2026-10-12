@@ -1051,13 +1051,19 @@ class FlightDataStore {
    * generic-path route to setting it as a boolean, or as anything else,
    * even by accident. This is the template docs/adr/0018 flags for the
    * deferred `separation_regime` field when TOFI eventually lands.
+   *
+   * LT-AIRSPACE-FIX T13: '' or null clears it back to undecided (null, what a
+   * new flight starts with), an ordinary amendment: the clear is appended to
+   * `transitions` like any other value and lands in the Mutation log, so the
+   * record of the earlier direction is kept. Still never a boolean (D15).
    * @returns {{ok:true, flightData}|{ok:false, reason:'NOT_FOUND'|'VALIDATION_ERROR', detail?}}
    */
-  setAirspaceOwner(flightDataId, owner, { by } = {}) {
+  setAirspaceOwner(flightDataId, value, { by } = {}) {
     const flightData = this._flightDataList.get(flightDataId);
     if (!flightData) return { ok: false, reason: 'NOT_FOUND' };
-    if (!AIRSPACE_OWNERS.has(owner)) {
-      return { ok: false, reason: 'VALIDATION_ERROR', detail: `airspace ownership must be a direction (${[...AIRSPACE_OWNERS].join(' or ')}), not ${JSON.stringify(owner)}` };
+    const owner = value === '' ? null : value;
+    if (owner !== null && !AIRSPACE_OWNERS.has(owner)) {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: `airspace ownership must be a direction (${[...AIRSPACE_OWNERS].join(' or ')}) or cleared, not ${JSON.stringify(value)}` };
     }
     // Append-only transition history alongside the current value. The flat
     // overwrite this replaces lost the record of every prior handoff: a MOA

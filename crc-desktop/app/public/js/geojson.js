@@ -489,12 +489,13 @@ export function buildDrawings() {
 
   const features = [];
 
-  for (const d of missionData.drawings) {
-    if (d.primitiveType === 'TextBox') continue; // rendered by buildTextMarks() instead
+  missionData.drawings.forEach((d, idx) => {
+    if (d.primitiveType === 'TextBox') return; // rendered by buildTextMarks() instead
 
     const color     = settings.lightMode ? 'rgba(40,40,40,0.85)' : 'rgba(255,255,255,0.75)';
     const fillColor = 'rgba(0,0,0,0)';
-    const props     = { color, fillColor };
+    // idx: the drawing's place in missionData.drawings, which airspace-layer.js's filter hides by (T28)
+    const props     = { color, fillColor, idx };
 
     if (d.polygonMode === 'circle' && d.lat != null && d.radius) {
       // Approximate circle as closed polygon
@@ -520,7 +521,7 @@ export function buildDrawings() {
         features.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: coords }, properties: props });
       }
     }
-  }
+  });
 
   return { type: 'FeatureCollection', features };
 }
