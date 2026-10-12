@@ -270,15 +270,26 @@ test('time-to-find: a hide reported by a render (null) abandons too', () => {
   assert.equal(h.client.stats().ttfAbandoned, 1);
 });
 
-test('time-to-find: 10 minutes without a find abandons the entry', () => {
+test('time-to-find: 30 s without a find abandons the entry: a later selection is not a find (T21)', () => {
   const h = harness();
   h.state.visible = 'gc-pending';
   h.enterBay('gc-pending', 'GC');
-  h.tick(L.TTF_CAP_MS + L.VISIBILITY_CHECK_MS);
+  h.tick(L.TTF_WINDOW_MS + L.VISIBILITY_CHECK_MS);
   h.client.noteStripSelected('s1');
   h.client.flush();
   assert.equal(h.sent.length, 0);
   assert.equal(h.client.stats().ttfAbandoned, 1);
+});
+
+test('time-to-find: a selection just inside the 30 s window is a find (T21)', () => {
+  const h = harness();
+  h.state.visible = 'gc-pending';
+  h.enterBay('gc-pending', 'GC');
+  h.tick(L.TTF_WINDOW_MS - L.VISIBILITY_CHECK_MS);
+  h.client.noteStripSelected('s1');
+  h.client.flush();
+  assert.deepEqual(h.events().map(e => e.latencyMs), [L.TTF_WINDOW_MS - L.VISIBILITY_CHECK_MS]);
+  assert.equal(L.TTF_WINDOW_MS, 30_000);
 });
 
 test('time-to-find: the arrivals line (open a Bay and select in one click) is not a find (T6)', () => {

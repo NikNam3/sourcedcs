@@ -4,6 +4,7 @@ import { getEfspBays } from './efsp/efsp-state.js';
 import { getActingPositions } from './efsp/efsp-ws.js';
 import { DEFAULT_FACILITY_ID } from './efsp/facility-topology.js';
 import { registerEfspMessage } from './efsp/efsp-message-registry.js';
+import { EFSP_METRICS_LIMITS } from './efsp/efsp-metrics-client.js';
 
 // The METRICS dock panel — guide §11.5 "instrument from day one", and the
 // §11.4 traffic count (docs/adr/0072; the server half is docs/adr/0065).
@@ -19,7 +20,10 @@ import { registerEfspMessage } from './efsp/efsp-message-registry.js';
 //     (docs/adr/0056: colour means something is wrong; 0058: nothing when
 //     nothing is wrong).
 //   - Two windows side by side (decisions.md H32, S-R2-4): this mission, and a
-//     rolling last hour.
+//     rolling last hour. A mission shorter than an hour IS its last hour, so it
+//     shows one window: each metric printed once (live test T23).
+//   - Every target is ours (the implementation guide's §11.5, not an FAA
+//     figure), and the header says so once. No provenance notes (T24).
 //   - Per-Position numbers are shown, folded behind a toggle (H66). Nothing is
 //     ever broken down per person (H35): the server sends nothing keyed by
 //     controller, and the view-model is built from named fields only, so a
@@ -34,7 +38,7 @@ const METRICS_VISIBILITY_TICK_MS = 5 * 1000;
 // The §11.5 table, in the guide's order.
 export const METRICS_ROWS = Object.freeze([
   { id: 'searchInvocations', name: 'Search invocations per Position per hour' },
-  { id: 'timeToFind', name: 'Time-to-find (selection after Bay entry)' },
+  { id: 'timeToFind', name: `Time-to-find (first Strip selected within ${EFSP_METRICS_LIMITS.TTF_WINDOW_MS / 1000} s of opening a Bay)` },
   { id: 'gestureInputs', name: 'Inputs per paper gesture' },
   { id: 'correlation', name: 'Strip↔track correlation rate' },
   { id: 'rejectedMutations', name: 'Rejected Mutations, by reason' },
@@ -43,12 +47,6 @@ export const METRICS_ROWS = Object.freeze([
 ]);
 
 const METRICS_GESTURES = ['FLIP', 'ATTENTION', 'HIGHLIGHT', 'OFFSET'];
-
-const METRICS_FOOTNOTES = Object.freeze([
-  '[SOURCE-DEFINED] Trend: the last three complete hours — ↓ when none rose and at least one fell, → when flat, otherwise the direction of the last step (ADR 0072).',
-  '[SOURCE-DEFINED] Time-to-find runs from a Bay coming on screen to the first Strip selected in it; a Bay left, hidden or ignored for 10 min is not counted (ADR 0072).',
-  '[SOURCE-DEFINED] Gesture inputs are a declared cost per entry point: double-click 1, Shift+click 1, Alt+click (offset) 1, Ctrl+click (highlight) 1, right-click + swatch 2, ⋯ menu 2 (ADR 0072).',
-]);
 
 // ── formatting ─────────────────────────────────────────────────────────────
 
@@ -99,7 +97,7 @@ function _statusCell(block, notInstrumentedValue = 'not instrumented') {
 }
 
 /**
- * [SOURCE-DEFINED] (Q-L15-8): the last three complete hours with a value.
+ * Ours (Q-L15-8): the last three complete hours with a value.
  * Fewer than two: no trend yet.
  */
 export function metricsTrend(values) {
@@ -271,6 +269,9 @@ export function renderMetricsModel(body) {
   const stalenessSource = body.sources && Number.isFinite(body.sources.staleness) ? body.sources.staleness : null;
   const ctx = { hours, completeHours, stalenessSource };
   const lastHour = body.lastHour && body.lastHour.metrics ? body.lastHour : null;
+  // T23: a current mission that began inside the last hour has the same events in both windows; show it once.
+  const oneWindow = !!(lastHour && session && session.current && Number.isFinite(session.startedAt)
+    && Number.isFinite(lastHour.from) && session.startedAt >= lastHour.from);
 
   const rows = METRICS_ROWS.map(({ id, name }) => {
     const block = body.metrics[id];
@@ -279,7 +280,7 @@ export function renderMetricsModel(body) {
       target: _targetLabel(block && block.target),
       cells: {
         mission: _cleanCell(_cell(id, block, 'mission', ctx)),
-        lastHour: lastHour ? _cleanCell(_cell(id, lastHour.metrics[id], 'lastHour', ctx)) : { value: '—', detail: null, verdict: '—', tone: 'muted', title: 'No rolling hour for a past mission.', spark: null },
+        lastHour: oneWindow ? null : lastHour ? _cleanCell(_cell(id, lastHour.metrics[id], 'lastHour', ctx)) : { value: '—', detail: null, verdict: '—', tone: 'muted', title: 'No rolling hour for a past mission.', spark: null },
       },
     };
   });
@@ -297,7 +298,7 @@ export function renderMetricsModel(body) {
         total: Number.isFinite(r.total) ? r.total : 0,
         perStaffedHour: _num(r.perStaffedHour),
         staffedHours: _num(r.staffedHours),
-        lastHour: lastHour ? String(l && Number.isFinite(l.total) ? l.total : 0) : '—',
+        lastHour: oneWindow ? null : lastHour ? String(l && Number.isFinite(l.total) ? l.total : 0) : '—',
       });
     }
   }
@@ -311,7 +312,7 @@ export function renderMetricsModel(body) {
         positionId,
         samples: Number.isFinite(r.samples) ? r.samples : 0,
         p95: _secs(r.p95Ms), p50: _secs(r.p50Ms),
-        lastHour: lastHour ? (l ? `p95 ${_secs(l.p95Ms)} (n=${l.samples || 0})` : 'no data') : '—',
+        lastHour: oneWindow ? null : lastHour ? (l ? `p95 ${_secs(l.p95Ms)} (n=${l.samples || 0})` : 'no data') : '—',
       });
     }
   }
@@ -328,11 +329,10 @@ export function renderMetricsModel(body) {
     asOf: _hhmmz(body.generatedAt),
     windows: [
       { id: 'mission', label: 'This mission', range: hours.length ? `${_hourLabel(hours[0])}–${_hhmmz(body.generatedAt)}` : '' },
-      { id: 'lastHour', label: 'Last hour', range: lastHour ? `${_hhmmz(lastHour.from)}–${_hhmmz(lastHour.to)}` : '—' },
+      ...(oneWindow ? [] : [{ id: 'lastHour', label: 'Last hour', range: lastHour ? `${_hhmmz(lastHour.from)}–${_hhmmz(lastHour.to)}` : '—' }]),
     ],
     rows,
     perPosition,
-    footnotes: [...METRICS_FOOTNOTES],
   };
 }
 
@@ -379,7 +379,6 @@ export function renderTrafficModel(body, facilityId) {
       .map(([type, v]) => ({ type, flights: n(v && v.flights), aircraft: n(v && v.aircraft) }))
       .sort((a, b) => b.flights - a.flights || (a.type < b.type ? -1 : 1)),
     excluded: Object.entries(t.excludedByReason || {}).map(([reason, count]) => ({ reason, count: n(count) })).sort((a, b) => b.count - a.count),
-    policy: typeof body.policy === 'string' ? body.policy : '',
     reconciliation,
   };
 }
@@ -495,9 +494,9 @@ function renderMetricsPanel() {
     return;
   }
 
-  const grid = _el('div', 'metrics-grid');
+  const grid = _el('div', `metrics-grid${model.windows.length === 1 ? ' metrics-grid-one' : ''}`);
   const hdr = _el('div', 'metrics-row metrics-row-head');
-  hdr.appendChild(_el('div', 'metrics-name', 'Metric · target'));
+  hdr.appendChild(_el('div', 'metrics-name', 'Metric · target (ours)'));
   for (const w of model.windows) {
     const h = _el('div', 'metrics-window', w.label);
     if (w.range) h.title = w.range;
@@ -511,12 +510,12 @@ function renderMetricsPanel() {
     name.appendChild(_el('div', 'metrics-metric', row.name));
     name.appendChild(_el('div', 'metrics-target', `target ${row.target}`));
     r.appendChild(name);
-    r.appendChild(_renderCell(row.cells.mission));
-    r.appendChild(_renderCell(row.cells.lastHour));
+    for (const w of model.windows) r.appendChild(_renderCell(row.cells[w.id]));
     grid.appendChild(r);
   }
   content.appendChild(grid);
 
+  const oneWindow = model.windows.length === 1;
   const toggle = _el('button', 'metrics-toggle', `${_metricsPanel.showPerPosition ? '▾' : '▸'} Per Position`);
   toggle.addEventListener('click', () => { _metricsPanel.showPerPosition = !_metricsPanel.showPerPosition; renderMetricsPanel(); });
   content.appendChild(toggle);
@@ -524,22 +523,19 @@ function renderMetricsPanel() {
     const pp = _el('div', 'metrics-per-position');
     pp.appendChild(_el('div', 'metrics-section-title', 'Search invocations'));
     pp.appendChild(model.perPosition.search.length
-      ? _renderTable(['Position', 'Facility', 'Searches', 'Per staffed hour', 'Staffed hours', 'Last hour'],
-        model.perPosition.search.map(r => [r.positionId, r.facilityId, r.total, r.perStaffedHour, r.staffedHours, r.lastHour]))
+      ? _renderTable(['Position', 'Facility', 'Searches', 'Per staffed hour', 'Staffed hours', ...(oneWindow ? [] : ['Last hour'])],
+        model.perPosition.search.map(r => [r.positionId, r.facilityId, r.total, r.perStaffedHour, r.staffedHours, ...(oneWindow ? [] : [r.lastHour])]))
       : _el('div', 'efsp-empty', 'no data'));
     pp.appendChild(_el('div', 'metrics-section-title', 'Time-to-find'));
     pp.appendChild(model.perPosition.timeToFind.length
-      ? _renderTable(['Position', 'Samples', 'p95', 'p50', 'Last hour'],
-        model.perPosition.timeToFind.map(r => [r.positionId, r.samples, r.p95, r.p50, r.lastHour]))
+      ? _renderTable(['Position', 'Samples', 'p95', 'p50', ...(oneWindow ? [] : ['Last hour'])],
+        model.perPosition.timeToFind.map(r => [r.positionId, r.samples, r.p95, r.p50, ...(oneWindow ? [] : [r.lastHour])]))
       : _el('div', 'efsp-empty', 'no data'));
     content.appendChild(pp);
   }
 
   _renderTrafficSection(content);
 
-  const notes = _el('div', 'metrics-footnotes');
-  for (const f of model.footnotes) notes.appendChild(_el('div', null, f));
-  content.appendChild(notes);
 }
 
 function _defaultTrafficFacility() {
@@ -570,7 +566,6 @@ function _renderTrafficSection(content) {
   if (t.byHour.length) section.appendChild(_renderTable(['Hour', 'Flights', 'Aircraft', 'Excluded'], t.byHour.map(h => [h.hour, h.flights, h.aircraft, h.excluded])));
   if (t.byType.length) section.appendChild(_renderTable(['Aircraft type', 'Flights', 'Aircraft'], t.byType.map(r => [r.type, r.flights, r.aircraft])));
   if (t.excluded.length) section.appendChild(_renderTable(['Not counted, because', 'Strips'], t.excluded.map(r => [r.reason, r.count])));
-  section.appendChild(_el('div', 'metrics-footnote', t.policy));
   content.appendChild(section);
 }
 
