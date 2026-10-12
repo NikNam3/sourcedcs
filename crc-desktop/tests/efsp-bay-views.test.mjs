@@ -1,4 +1,4 @@
-// Bay descriptor views (crc-sync docs/adr/0093): the pattern board, the FINAL panel and the SFA rotation
+// Bay descriptor views (crc-sync docs/adr/0093, 0117): the pattern board, the FINAL line and AP's SFA frequency
 // header mounted by `view`, from the real Bay descriptors the server sends. Wiring tests against the DOM
 // stub: they prove the right op is dispatched and the right racks are hidden, never layout.
 
@@ -13,14 +13,12 @@ import * as serverConfig from "./helpers/server-config.mjs";
 
 import * as V from '../app/public/js/panels/efsp/bay-views.js';
 import { applyEfspSnapshot } from '../app/public/js/panels/efsp/efsp-state.js';
-import { getEfspSfa, applyEfspSfaSnapshot, _resetEfspSfaStateForTest } from '../app/public/js/panels/efsp/sfa-state.js';
 import { setEfspSender, sendEfspSetPositions } from '../app/public/js/panels/efsp/efsp-ws.js';
 
 const require = createRequire(import.meta.url);
 const facilityConfig = serverConfig.facilityConfig;
 const permission = serverConfig.permission;
-const { SfaStore } = require('../../crc-sync/src/efsp/sfa-store.js');
-const { renderBayDescriptorView, sfaExtraNlaButtons } = V;
+const { renderBayDescriptorView, finalHandoffButtons } = V;
 
 const allBays = () => facilityConfig.getFacilityIds().flatMap(f => facilityConfig.getAllBays(f));
 const bay = (id) => allBays().find(b => b.bayId === id);
@@ -34,7 +32,7 @@ let now = Date.UTC(2026, 5, 1, 9, 0);
 // feeds them through applyEfspSnapshot, sendEfspSetPositions and setEfspSender instead of stubbing globals.
 const syncBoard = () => applyEfspSnapshot({
   strips: Object.values(strips), flightDataList: Object.entries(flightDataList).map(([flightDataId, f]) => ({ flightDataId, ...f })),
-  positions: [], bays: allBays(), boardSeq: 1, sfaRotation: getEfspSfa(),
+  positions: [], bays: allBays(), boardSeq: 1,
 });
 const setHeld = (h) => {
   signedOn = h;
@@ -50,7 +48,6 @@ function setGlobals() {
   Date.now = () => now;
   setEfspSender('_sendEfsp', () => {});
   setEfspSender('sendEfspMutation', (position, strip, op) => sent.push({ position, stripId: strip.stripId, op }));
-  setEfspSender('sendEfspSfaMutation', (position, baseRev, op) => sent.push({ position, sfa: true, op }));
 }
 
 const addStrip = (s, flightData) => { flightDataList[s.flightDataId] = flightData; putStrip(s); return s; };
@@ -63,7 +60,8 @@ test.beforeEach(() => { setGlobals(); setHeld({}); clearBoard(); });
 test('the descriptor flags reach a client exactly as the server sends them (the mount reads nothing else)', () => {
   assert.equal(bay('rsu-pattern').view, 'pattern');
   assert.equal(bay('par-final').view, 'final');
-  assert.equal(bay('sfa-frequencies').view, 'sfa-freqs');
+  assert.equal(bay('ap-sfa').view, 'sfa-freqs');
+  assert.equal(bay('ap-sfa').sfaPool.length, 5, 'the SFA Bay carries its pool (crc-sync docs/adr/0117)');
   for (const b of allBays()) if (b.view) assert.ok(facilityConfig.BAY_VIEWS.includes(b.view), b.bayId);
   assert.equal(V.bayDescriptorFor('par-final').capacity, 1);
   assert.equal(V.bayDescriptorFor('nope'), null);
@@ -133,7 +131,12 @@ test('final: one line per flight; at a runway the callsign and the PAR range; on
   putFlightData('f1', { identity: { callsign: 'VIPER 11' }, military: { carrier: { sideNumber: '201' } } });
   putStrip({ ...strip, bayId: 'par-final', rackId: 'main', ownerPositionId: 'PAR', state: 'ON_FINAL', stripType: 'FINAL' });
   const par = { stripId: 's1', approach: { id: 'LTAG-05' }, plot: { rangeNm: 3.04 } };
-  assert.deepEqual(V.finalRowModel(strip, 'RUNWAY', par), { stripId: 's1', name: 'VIPER 11', range: '3.0 NM' });
+  assert.deepEqual(V.finalRowModel(strip, 'RUNWAY', par), { stripId: 's1', name: 'VIPER 11', range: '3.0 NM', hdg: '', alt: '' });
+  putFlightData('f1', { identity: { callsign: 'VIPER 11' }, clearance: {
+    heading: { entries: [{ value: '050', status: 'SUPERSEDED' }, { value: '060', status: 'ACTIVE' }] },
+    altitude: { entries: [{ value: '030', status: 'SUPERSEDED' }, { value: '', status: 'ACTIVE' }] },
+  } });
+  assert.deepEqual([V.finalRowModel(strip, 'RUNWAY', par).hdg, V.finalRowModel(strip, 'RUNWAY', par).alt], ['060', ''], 'the active assignments; none after Begin descent');
   assert.equal(V.finalRowModel(strip, 'RUNWAY', { ...par, plot: null }).range, '', 'no plot, no range');
   assert.equal(V.finalRowModel(strip, 'RUNWAY', null).range, '', 'not this controller\'s final');
   const cv = { stripId: 'c1', flightDataId: 'fc', stripType: 'FINAL', ownerPositionId: 'CV_APP1' };
@@ -143,43 +146,65 @@ test('final: one line per flight; at a runway the callsign and the PAR range; on
   assert.equal(V.finalRowModel(cv, 'CARRIER').name, 'NAVY 1', 'no side number yet: the callsign');
   assert.equal(V.finalKindOf(bay('par-final')), 'RUNWAY');
   assert.equal(V.finalKindOf(bay('cv-app1-final')), 'CARRIER');
-  assert.deepEqual(V.finalTerminalsFor('RUNWAY').map(t => t.label), ['Landing assured', 'Missed approach']);
+  assert.deepEqual(V.finalTerminalsFor('RUNWAY').map(t => t.label), ['Begin descent', 'Cleared to land', 'Landed', 'Missed approach']);
   assert.deepEqual(V.finalTerminalsFor('CARRIER').map(t => t.label), ['Ball', 'Waveoff']);
   const [ball, waveoff] = V.finalTerminalsFor('CARRIER');
   assert.deepEqual(V.finalTerminalOp('CARRIER', ball), { kind: 'CarrierHandoff', transfer: 'FINAL_TO_LSO' });
   assert.deepEqual(V.finalTerminalOp('CARRIER', waveoff), { kind: 'SetState', toState: 'BOLTER_WAVEOFF' });
-  const [assured] = V.finalTerminalsFor('RUNWAY');
-  assert.deepEqual(V.finalTerminalOp('RUNWAY', assured), { kind: 'SetState', toState: 'BALL' });
+  assert.deepEqual(V.finalTerminalsFor('RUNWAY').map(t => V.finalTerminalOp('RUNWAY', t)), [
+    { kind: 'FinalCall', call: 'BEGIN_DESCENT' }, { kind: 'FinalCall', call: 'CLEARED_TO_LAND' }, { kind: 'FinalCall', call: 'LANDED' },
+    { kind: 'SetState', toState: 'BOLTER_WAVEOFF' },
+  ]);
   assert.equal(V.finalTerminalOp('RUNWAY', null), null);
 });
 
-test('final mount: PAR\'s Strip becomes a flight line with no input in it, racks hidden, and a terminal button sends the owner\'s op', () => {
+test('final mount: PAR\'s Strip becomes a flight line, racks hidden: HDG and ALT to type, the calls, the ⋯ menu and Drop (crc-sync docs/adr/0117)', () => {
   const b = bay('par-final');
   setHeld({ INCIRLIK: ['PAR'] });
-  addStrip({ stripId: 'p1', flightDataId: 'f1', bayId: 'par-final', rackId: 'main', ownerPositionId: 'PAR', rev: 2, state: 'ON_FINAL', stripType: 'FINAL' }, { identity: { callsign: 'VIPER 11' } });
+  addStrip({ stripId: 'p1', flightDataId: 'f1', bayId: 'par-final', rackId: 'main', ownerPositionId: 'PAR', rev: 2, state: 'ON_FINAL', stripType: 'FINAL', flags: {} }, {
+    identity: { callsign: 'VIPER 11' }, clearance: { heading: { entries: [{ value: '050', status: 'ACTIVE' }] }, altitude: { entries: [{ value: '030', status: 'ACTIVE' }] } },
+  });
   const c = containerFor(b);
   renderBayDescriptorView(c, b);
   assert.equal([...c.children].filter(x => x.className === 'efsp-rack').every(r => r.style.display === 'none'), true);
   const all = descendants(c);
-  assert.equal(all.some(e => /^(input|select|textarea)$/.test(e.tagName)), false, 'nothing to type on final (§7.10)');
+  const inputs = all.filter(e => e.tagName === 'input');
+  assert.deepEqual(inputs.map(i => [i.dataset.assign, i.value]), [['hdg', '050'], ['alt', '030']]);
   const terms = all.filter(e => e.className === 'efsp-final-terminal');
-  assert.deepEqual(terms.map(t => t.textContent), ['Landing assured', 'Missed approach']);
+  assert.deepEqual(terms.map(t => t.textContent), ['Begin descent', 'Cleared to land', 'Landed', 'Missed approach']);
   assert.ok(all.some(e => e.className === 'efsp-final-name' && e.textContent === 'VIPER 11'));
-  click(terms[1]);
+  assert.ok(all.some(e => e.className && String(e.className).includes('efsp-strip-menu-btn')), 'the Strip\'s ⋯ menu is on the line (T5)');
+  assert.ok(all.some(e => e.className === 'efsp-drop-btn'), 'and Drop');
+  click(terms[3]);
   assert.deepEqual(sent.pop(), { position: 'PAR', stripId: 'p1', op: { kind: 'SetState', toState: 'BOLTER_WAVEOFF' } });
+  click(terms[2]);
+  assert.deepEqual(sent.pop().op, { kind: 'FinalCall', call: 'LANDED' });
   click(terms[0]);
-  assert.deepEqual(sent.pop().op, { kind: 'SetState', toState: 'BALL' });
+  assert.deepEqual(sent.pop().op, { kind: 'FinalCall', call: 'BEGIN_DESCENT' });
+  const change = (el) => (el._listeners.change || []).forEach(fn => fn({}));
+  inputs[0].value = '065'; change(inputs[0]);
+  assert.deepEqual(sent.pop().op, { kind: 'SetBlock', blockId: '9A-VECTOR', value: '065' });
+  inputs[1].value = '025'; change(inputs[1]);
+  assert.deepEqual(sent.pop().op, { kind: 'SetBlock', blockId: '7A', value: '025' });
+  inputs[1].value = '030'; change(inputs[1]);
+  assert.equal(sent.length, 0, 'an unchanged value sends nothing');
+  // a recorded call stays on the line, greyed
+  putStrip({ ...strips.p1, rev: 3, finalCalls: { BEGIN_DESCENT: { at: now, by: 'u' } } });
+  const cR = containerFor(b);
+  renderBayDescriptorView(cR, b);
+  const recorded = descendants(cR).filter(e => e.className === 'efsp-final-terminal');
+  assert.deepEqual(recorded.map(t => !!t.disabled), [true, false, false, false]);
   // not the owner: a tap does nothing
   setHeld({ INCIRLIK: ['LC'] });
   const c2 = containerFor(b);
   renderBayDescriptorView(c2, b);
   descendants(c2).filter(e => e.className === 'efsp-final-terminal').forEach(click);
   assert.equal(sent.length, 0);
-  // an empty Bay says so, rather than drawing nothing
+  // an empty Bay says so, rather than drawing nothing, and tells nobody what to do
   clearBoard();
   const c3 = containerFor(b);
   renderBayDescriptorView(c3, b);
-  assert.ok(descendants(c3).some(e => e.className === 'efsp-final-none'));
+  assert.deepEqual(descendants(c3).filter(e => e.className === 'efsp-final-none').map(e => e.textContent), ['No aircraft on final.']);
 });
 
 test('final mount on a carrier lane: Ball is the recorded FINAL_TO_LSO handoff, Waveoff the state change; the racks stay', () => {
@@ -199,59 +224,42 @@ test('final mount on a carrier lane: Ball is the recorded FINAL_TO_LSO handoff, 
   assert.deepEqual(sent.pop().op, { kind: 'SetState', toState: 'BOLTER_WAVEOFF' });
 });
 
-test('sfa header: every pool frequency is a row; the rack headers say the frequency and the controller; only AP gets selects', () => {
-  const b = bay('sfa-frequencies');
-  const store = new SfaStore({ config: facilityConfig.getSingleFrequencyApproach(), positions: facilityConfig.getPositionSet(), clock: { now: () => now, source: 'T' } });
-  applyEfspSfaSnapshot({ sfaRotation: store.view() });
-  setHeld({ INCIRLIK: ['SFA'] });
+test('sfa header: every pool frequency is a row, grey; a rotating one shows who has it (PAR while it holds the flight), the others what they are for', () => {
+  const b = bay('ap-sfa');
+  setHeld({ INCIRLIK: ['AP'] });
+  addStrip({ stripId: 'p1', flightDataId: 'f1', bayId: 'par-final', rackId: 'main', ownerPositionId: 'PAR', rev: 1, state: 'ON_FINAL', stripType: 'FINAL' }, { comms: { workingFrequencyMhz: 234.1 } });
   const c = containerFor(b);
   renderBayDescriptorView(c, b);
-  let all = descendants(c);
+  const all = descendants(c);
   assert.equal(all.filter(e => e.className === 'efsp-sfa-row').length, 5);
-  assert.equal(all.some(e => e.tagName === 'select'), false, 'SFA only reads the rotation');
+  assert.equal(all.some(e => e.tagName === 'select'), false, 'nothing to set: the rotation follows the handoffs');
   const heads = all.filter(e => e.className === 'efsp-rack-header').map(e => e.textContent);
-  assert.equal(heads[0], 'freq-1 · 232.100 · AP');
-  assert.equal(heads[3], 'freq-4 · 235.100');
+  assert.deepEqual(heads, ['232.100 · INIT', '233.100 · AP', '234.100 · PAR', '235.100 · AP', '236.100 · SPARE']);
   assert.ok([...c.children].filter(x => x.className === 'efsp-rack').every(r => r.style.display === ''), 'the SFA racks ARE the frequencies and stay');
+});
 
+test('Hand off to PAR sends the ordinary transfer as the Strip\'s owner and goes dead on the press; off a rotating frequency there is no button', () => {
   setHeld({ INCIRLIK: ['AP'] });
-  const c2 = containerFor(b);
-  renderBayDescriptorView(c2, b);
-  all = descendants(c2);
-  const selects = all.filter(e => e.tagName === 'select');
-  assert.equal(selects.length, 5);
-  assert.deepEqual(descendants(selects[0]).filter(e => e.tagName === 'option').map(o => o.value), ['', 'AP', 'SFA', 'PAR'], 'spare, then the controllers the server names');
-  selects[3].value = 'PAR';
-  (selects[3]._listeners.change || []).forEach(fn => fn({}));
-  assert.deepEqual(sent.pop(), { position: 'AP', sfa: true, op: { kind: 'SetSfaRotation', rackId: 'freq-4', positionId: 'PAR' } });
-  selects[0].value = '';
-  (selects[0]._listeners.change || []).forEach(fn => fn({}));
-  assert.deepEqual(sent.pop().op, { kind: 'SetSfaRotation', rackId: 'freq-1', positionId: null });
-  _resetEfspSfaStateForTest();
-});
-
-test('the Rotate to PAR button sends the transfer as the Strip\'s owner and goes dead on the press', () => {
-  const store = new SfaStore({ config: facilityConfig.getSingleFrequencyApproach(), positions: facilityConfig.getPositionSet(), clock: { now: () => now, source: 'T' } });
-  applyEfspSfaSnapshot({ sfaRotation: store.view() });
-  setHeld({ INCIRLIK: ['SFA'] });
-  const strip = { stripId: 'a1', flightDataId: 'f1', rev: 4, stripType: 'ARRIVAL', state: 'INBOUND', ownerPositionId: 'SFA', facilityId: 'INCIRLIK' };
+  const strip = { stripId: 'a1', flightDataId: 'f1', rev: 4, stripType: 'ARRIVAL', state: 'INBOUND', ownerPositionId: 'AP', facilityId: 'INCIRLIK' };
   putFlightData('f1', { comms: { workingFrequencyMhz: 234.1 } }); putStrip(strip);
-  const buttons = sfaExtraNlaButtons(strip);
+  const buttons = finalHandoffButtons(strip);
   assert.equal(buttons.length, 1);
-  assert.equal(buttons[0].textContent, 'Rotate to PAR');
+  assert.equal(buttons[0].textContent, 'Hand off to PAR');
   click(buttons[0]);
-  assert.deepEqual(sent.pop(), { position: 'SFA', stripId: 'a1', op: { kind: 'SfaRotation' } });
+  assert.deepEqual(sent.pop(), { position: 'AP', stripId: 'a1', op: { kind: 'TransferStrip', toPositionId: 'PAR', bayId: 'par-final', rackId: 'main' } });
   assert.equal(buttons[0].disabled, true);
+  putFlightData('f1', { comms: { workingFrequencyMhz: 232.1 } });
+  assert.equal(finalHandoffButtons(strip).length, 0, 'AP\'s initial-contact frequency: no button (a drag still hands it off)');
   putFlightData('f1', { comms: { workingFrequencyMhz: 121.5 } });
-  assert.equal(sfaExtraNlaButtons(strip).length, 0, 'off the SFA pool: no button');
-  _resetEfspSfaStateForTest();
+  assert.equal(finalHandoffButtons(strip).length, 0, 'off the SFA pool: no button');
 });
 
-test('every Position of the three can only do through the client what the server grants it (the ops the views send are held)', () => {
-  for (const [position, op] of [['RSU', 'MoveStrip'], ['RSU', 'SetState'], ['RSU', 'DropStrip'], ['PAR', 'SetState']]) {
+test('RSU and PAR can only do through the client what the server grants them (the ops the views send are held)', () => {
+  for (const [position, op] of [['RSU', 'MoveStrip'], ['RSU', 'SetState'], ['RSU', 'DropStrip'], ['PAR', 'SetState'], ['PAR', 'SetBlock'], ['AP', 'TransferStrip']]) {
     assert.equal(permission.canMutate(position, op), true, `${position} ${op}`);
   }
-  assert.equal(permission.canSendSfaRotationTransfer('SFA'), true);
+  assert.equal(permission.canHandOffToFinal('AP'), true);
+  assert.equal(permission.canRecordFinalCall('PAR'), true);
 });
 
 test('no top-level name of the Bay-view scripts is declared by any other script the page loads (a clash is a SyntaxError or a silent override only a browser shows)', () => {

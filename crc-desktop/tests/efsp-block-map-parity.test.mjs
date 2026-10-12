@@ -171,8 +171,11 @@ test('derived carrier Blocks are display-only on both sides, and the writable on
       assert.equal(maps.MARSHAL[id].required, false, `${side} MARSHAL/${id}`);
     }
     for (const id of ['C4', 'C10', 'C12', 'C13', 'C14', 'C15']) assert.equal(maps.MARSHAL[id].target.kind, 'carrier', `${side} MARSHAL/${id}`);
-    // FINAL: nothing a controller could type, structurally (WP7A bullet 6)
-    for (const [id, def] of Object.entries(maps.FINAL)) assert.ok(!['flightData', 'annotation', 'carrier', 'frequency', 'clearance'].includes(def.target.kind), `${side} FINAL/${id}`);
+    // FINAL: nothing a controller could type but the talk-down's HDG and ALT, the flight's clearance (crc-sync docs/adr/0117)
+    for (const [id, def] of Object.entries(maps.FINAL)) {
+      if (id === '7A' || id === '9A-VECTOR') assert.equal(def.target.kind, 'clearance', `${side} FINAL/${id}`);
+      else assert.ok(!['flightData', 'annotation', 'carrier', 'frequency', 'clearance'].includes(def.target.kind), `${side} FINAL/${id}`);
+    }
   }
   assert.equal(client.isBlockEditable('C7', 'MARSHAL'), false);
   assert.equal(client.isBlockEditable('C10', 'MARSHAL'), true);

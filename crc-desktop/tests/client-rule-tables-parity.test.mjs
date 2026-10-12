@@ -28,7 +28,7 @@ test('LINES_WITH_OTHERS: a Position lists exactly the owners whose line it answe
   }
 });
 
-// docs/adr/0110: the server's non-local list (every Incirlik Position but LC and RSU: OPS, CD, GC, AP, SFA, PAR) is the client's.
+// docs/adr/0110: the server's non-local list (every Incirlik Position but LC and RSU: OPS, CD, GC, AP, PAR) is the client's.
 test('combination-rules: LC and the non-local Positions are combination.js\'s', () => {
   assert.equal(LOCAL_POSITION, combination.LOCAL);
   assert.deepEqual([...NON_LOCAL].sort(), [...combination.NON_LOCAL].sort());

@@ -34,8 +34,8 @@ function _applyTransferStrip(ctx, strip, op, by) {
   // below too, so a rejected transfer never partially mutates the Strip.
   // docs/adr/0117: a transfer that changes the strip type, because the receiving Position works the flight on another
   // one (AP's handoff to the final controller, PAR's Landed to GC; par-final.js). Checked as the conversion's own
-  // step, in place of the Bay-implied NLA check that would refuse it ("the only valid next state from INBOUND is
-  // HANDED_TO_TOWER", the live test's T1).
+  // step, in place of the Bay-implied NLA check that would refuse it (the live test's T1: an arrival's only next step
+  // there is the tower).
   const conversion = ctx.rules.conversionFor(strip, op.bayId);
   let check;
   if (conversion) {

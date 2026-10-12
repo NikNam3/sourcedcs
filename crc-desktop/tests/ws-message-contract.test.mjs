@@ -26,7 +26,7 @@ const { FAMILIES } = require(path.join(SERVER_SRC, 'efsp/wire/families'));
 // ── server -> client ────────────────────────────────────────────────────────
 // Every wire envelope the server builds is `{ version: VERSION, type: '...' }`.
 const SERVER_FILES = ['ws-hub.js', 'efsp/efsp-ws.js', 'efsp/metrics.js', 'efsp/wire/frames.js'];
-const FAMILY_FILES = ['airspace', 'correlation', 'marsa', 'runway-status', 'carrier', 'sfa', 'ato'].map(n => `efsp/wire/families/${n}.js`);
+const FAMILY_FILES = ['airspace', 'correlation', 'marsa', 'runway-status', 'carrier', 'ato'].map(n => `efsp/wire/families/${n}.js`);
 const SENT_BY_SERVER = [...new Set([
   ...matchAll([...SERVER_FILES, ...FAMILY_FILES].map(readServer).join('\n'), /version:\s*VERSION,\s*type:\s*'([^']+)'/g),
   ...FAMILIES.flatMap(f => [f.ackType, f.deltaType].filter(Boolean)),

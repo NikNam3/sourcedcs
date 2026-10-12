@@ -148,12 +148,18 @@ test('header: the runway (the PAR is airfield-only, H125)', () => {
   assert.equal(M.headerModel(null, 3).title, 'NO APPROACH');
 });
 
-test('terminals keep the FINAL view\'s ops: PAR\'s states only (no Ball / Waveoff in the PAR, H125)', () => {
-  assert.deepEqual(M.parTerminals().map(t => t.label), ['Landing assured', 'Missed approach']);
-  const [assured, missed] = M.parTerminals();
-  assert.deepEqual(M.parTerminalOp(assured), { kind: 'SetState', toState: 'BALL' });
+test('terminals are the final controller\'s FAA steps (crc-sync docs/adr/0117): Begin descent, Cleared to land, Landed, Missed approach; no Ball / Waveoff in the PAR (H125)', () => {
+  assert.deepEqual(M.parTerminals().map(t => t.label), ['Begin descent', 'Cleared to land', 'Landed', 'Missed approach']);
+  const [descent, cleared, landed, missed] = M.parTerminals();
+  assert.deepEqual(M.parTerminalOp(descent), { kind: 'FinalCall', call: 'BEGIN_DESCENT' });
+  assert.deepEqual(M.parTerminalOp(cleared), { kind: 'FinalCall', call: 'CLEARED_TO_LAND' });
+  assert.deepEqual(M.parTerminalOp(landed), { kind: 'FinalCall', call: 'LANDED' });
   assert.deepEqual(M.parTerminalOp(missed), { kind: 'SetState', toState: 'BOLTER_WAVEOFF' });
   assert.equal(M.parTerminalOp(null), null);
+  // a once-only call is recorded on the Strip; Landed and Missed approach are never "recorded"
+  const strip = { finalCalls: { CLEARED_TO_LAND: { at: 1, by: 'u' } } };
+  assert.deepEqual(M.parTerminals().map(t => M.parTerminalRecorded(strip, t)), [false, true, false, false]);
+  assert.equal(M.parTerminalRecorded(null, descent), false);
 });
 
 test('the panel never tells the controller their job: no call prompts, no cadence (H115)', () => {

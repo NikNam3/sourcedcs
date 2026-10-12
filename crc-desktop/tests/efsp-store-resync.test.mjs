@@ -1,4 +1,4 @@
-/* SYNC-B-C (crc-sync docs/adr/0106): the six stores outside the Board heal like a Board. A lost delta, a restarted
+/* SYNC-B-C (crc-sync docs/adr/0106): the five stores outside the Board (six until docs/adr/0117 removed the SFA's) heal like a Board. A lost delta, a restarted
  * store and a missed heartbeat each end in ONE efsp-resync naming that store and the slice replacing its client state.
  * Unit level: efsp-state.js's position bookkeeping, then the real efsp-ws.js / efsp-messages.js through the registry. */
 
@@ -7,12 +7,12 @@ import assert from 'node:assert/strict';
 import './helpers/client-env.mjs';
 import { freshGraph } from './helpers/fresh-graph.mjs';
 
-const KEYS = ['airspaces', 'correlations', 'marsa', 'runwayStatuses', 'carriers', 'sfaRotation'];
+const KEYS = ['airspaces', 'correlations', 'marsa', 'runwayStatuses', 'carriers'];
 const snap = () => ({
   facilities: ['INCIRLIK'], boardSeqByFacility: { INCIRLIK: 1 }, boardEpochByFacility: { INCIRLIK: 'b' },
   strips: [], flightDataList: [], positions: [], bays: [],
   airspaces: [{ airspaceId: 'A1', defRev: 1, definition: {} }], correlations: [{ flightDataId: 'f1', trackId: 't1' }], marsa: [],
-  runwayStatuses: [{ facilityId: 'INCIRLIK', n: 1 }], carriers: [{ hullId: 'CV', caseValue: 'I' }], sfaRotation: { v: 1 },
+  runwayStatuses: [{ facilityId: 'INCIRLIK', n: 1 }], carriers: [{ hullId: 'CV', caseValue: 'I' }],
   storeSeqs: Object.fromEntries(KEYS.map(k => [k, 3])), storeEpochs: Object.fromEntries(KEYS.map(k => [k, `e-${k}`])),
 });
 
@@ -37,7 +37,7 @@ test('the snapshot names every store position; a store it does not name is held 
 for (const [key, seqKey, epochKey, gapFromDeltas] of [
   ['airspaces', 'airspaceSeq', 'airspaceEpoch', true], ['correlations', 'correlationSeq', 'correlationEpoch', false],
   ['marsa', 'marsaSeq', 'marsaEpoch', false], ['runwayStatuses', 'runwayStatusSeq', 'runwayStatusEpoch', true],
-  ['carriers', 'carrierSeq', 'carrierEpoch', false], ['sfaRotation', 'sfaSeq', 'sfaEpoch', true],
+  ['carriers', 'carrierSeq', 'carrierEpoch', false],
 ]) {
   test(`${key}: the next delta is adopted, a skipped one ${gapFromDeltas ? 'asks at once' : 'is left to the heartbeat'}, another epoch asks at once`, async () => {
     const { S, C } = await load();
@@ -57,7 +57,7 @@ for (const [key, seqKey, epochKey, gapFromDeltas] of [
     assert.deepEqual(C.heartbeatGaps(beat(5)), []);
     assert.deepEqual(C.heartbeatGaps(beat(5, 'restarted')), [`store:${key}`]);
     // the slice replaces the state and adopts the position
-    assert.deepEqual(S.applyEfspStoreSlices({ [key]: { seq: 9, epoch: 'new', slice: key === 'sfaRotation' ? { v: 2 } : [] } }), [key]);
+    assert.deepEqual(S.applyEfspStoreSlices({ [key]: { seq: 9, epoch: 'new', slice: [] } }), [key]);
     assert.deepEqual(S.getEfspStoreSync(key), { seq: 9, epoch: 'new' });
     assert.deepEqual(C.resyncPositionOf(`store:${key}`), { stores: { [key]: { lastSeq: 9, epoch: 'new' } } });
   });
@@ -79,10 +79,8 @@ test('a heartbeat for a store we hold no position for changes nothing', async ()
 });
 
 // ── through the registry: the request, one in flight, the reply ──────────────
-let sfa;
 async function wired() {
   const g = freshGraph();
-  sfa = () => g.import('panels/efsp/sfa-state.js');
   const S = await g.import('panels/efsp/efsp-state.js');
   const ws = await g.import('panels/efsp/efsp-ws.js');
   const reg = await g.import('panels/efsp/efsp-message-registry.js');
@@ -132,18 +130,17 @@ test('a lost reply is retried after ten heartbeats', async () => {
 
 test('a delta answer\'s stores are applied beside the Board delta, and a snapshot answer clears the in-flight stores', async () => {
   const { S, reg, resyncs } = await wired();
-  reg.dispatchEfspMessage({ type: 'efsp-heartbeat', stores: { sfaRotation: { seq: 3, epoch: 'new' } } });
+  reg.dispatchEfspMessage({ type: 'efsp-heartbeat', stores: { carriers: { seq: 3, epoch: 'new' } } });
   assert.equal(resyncs().length, 1);
   reg.dispatchEfspMessage({ type: 'efsp-resync-reply', answer: 'delta', facilityId: 'INCIRLIK', boardSeq: 2, boardEpoch: 'b',
     strips: { updated: [], gone: [] }, flightDataList: { updated: [] }, positions: { updated: [] },
-    stores: { sfaRotation: { seq: 4, epoch: 'new', slice: { v: 2 } } } });
-  assert.deepEqual(S.getEfspStoreSync('sfaRotation'), { seq: 4, epoch: 'new' });
-  assert.deepEqual((await sfa()).getEfspSfa(), { v: 2 });
+    stores: { carriers: { seq: 4, epoch: 'new', slice: [{ hullId: 'CV2', caseValue: 'II' }] } } });
+  assert.deepEqual(S.getEfspStoreSync('carriers'), { seq: 4, epoch: 'new' });
   assert.equal(S.efspResyncPositionFor(S.getEfspFacility()).lastBoardSeq, 2);
-  reg.dispatchEfspMessage({ type: 'efsp-heartbeat', stores: { sfaRotation: { seq: 4, epoch: 'again' } } });
+  reg.dispatchEfspMessage({ type: 'efsp-heartbeat', stores: { carriers: { seq: 4, epoch: 'again' } } });
   assert.equal(resyncs().length, 2);
   reg.dispatchEfspMessage({ type: 'efsp-resync-reply', answer: 'snapshot', ...snap() });
-  reg.dispatchEfspMessage({ type: 'efsp-heartbeat', stores: { sfaRotation: { seq: 3, epoch: 'third' } } });
+  reg.dispatchEfspMessage({ type: 'efsp-heartbeat', stores: { carriers: { seq: 3, epoch: 'third' } } });
   assert.equal(resyncs().length, 3, 'the snapshot cleared the one in flight');
 });
 

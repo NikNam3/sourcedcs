@@ -478,7 +478,10 @@
    "renderBay"
   ],
   "panels/efsp/bay-views.js": [
+   "FINAL_ASSIGNMENT_BLOCKS",
+   "activeAssignment",
    "bayDescriptorFor",
+   "finalHandoffButtons",
    "finalKindOf",
    "finalRowModel",
    "finalTerminalOp",
@@ -487,8 +490,7 @@
    "patternOpFor",
    "patternStripsFor",
    "refreshDistBlocks",
-   "renderBayDescriptorView",
-   "sfaExtraNlaButtons"
+   "renderBayDescriptorView"
   ],
   "panels/efsp/bay/authority-mirror.js": [
    "AIRSPACE_ENTRY_POSITIONS",
@@ -964,7 +966,6 @@
    "sendEfspMutation",
    "sendEfspRunwayStatusMutation",
    "sendEfspSetPositions",
-   "sendEfspSfaMutation",
    "sendEfspUndo",
    "setEfspSender",
    "setSignOnNoticeListener",
@@ -1188,6 +1189,7 @@
    "niceStep",
    "noPlotState",
    "parTerminalOp",
+   "parTerminalRecorded",
    "parTerminals",
    "pickFlight",
    "plotAgeNow",
@@ -1264,18 +1266,16 @@
    "scrambleAlertsFor"
   ],
   "panels/efsp/sfa-state.js": [
-   "SFA_ROTATION_CEILING",
-   "SFA_ROTATION_LABEL",
-   "SFA_ROTATION_SENDERS",
-   "_resetEfspSfaStateForTest",
-   "applyEfspSfaDelta",
-   "applyEfspSfaSnapshot",
-   "getEfspSfa",
+   "FINAL_HANDOFF_LABEL",
+   "FINAL_HANDOFF_SENDERS",
+   "FINAL_RECEIVER",
+   "SFA_USE",
+   "finalHandoffOffered",
+   "finalHandoffOp",
+   "sfaBayOf",
    "sfaFrequencyText",
    "sfaPoolEntryForFrequency",
-   "sfaRotatingPosition",
-   "sfaRotationOffered",
-   "sfaRotationRows"
+   "sfaRows"
   ],
   "panels/efsp/strip-alerts.js": [
    "ALERT_SLOT_KEYS",
@@ -1324,7 +1324,8 @@
    "_buildIndicatorSlots"
   ],
   "panels/efsp/strip-menu.js": [
-   "_buildStripTools"
+   "_buildStripTools",
+   "openStripMenu"
   ],
   "panels/efsp/strip-template.js": [
    "ARRIVAL_BLOCK_MAP",

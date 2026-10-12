@@ -68,7 +68,7 @@ test('the shipped views subscribe to the topics they draw (the table the handler
   const has = (topic, order) => subs.some(s => s.topics.includes(topic) && s.order === order);
   assert.ok(has('snapshot', bus.ORDER.RESOLVE), 'the highlights resolve on a snapshot');
   assert.ok(has('correlations', bus.ORDER.RESOLVE) && has('marsa', bus.ORDER.RESOLVE));
-  for (const t of ['snapshot', 'board', 'ack', 'bays', 'correlations', 'marsa', 'alerts', 'sfa']) assert.ok(has(t, bus.ORDER.BAYS), `the Bays redraw on ${t}`);
+  for (const t of ['snapshot', 'board', 'ack', 'bays', 'correlations', 'marsa', 'alerts']) assert.ok(has(t, bus.ORDER.BAYS), `the Bays redraw on ${t}`);
   for (const t of ['snapshot', 'board', 'panel', 'positions', 'correlations']) assert.ok(has(t, bus.ORDER.PANEL), `the panel redraws on ${t}`);
   for (const t of ['snapshot', 'correlations', 'alerts', 'map']) assert.ok(has(t, bus.ORDER.VIEW), `the map redraws on ${t}`);
 });
