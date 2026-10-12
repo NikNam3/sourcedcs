@@ -1,11 +1,22 @@
 # Supervisor handoff
 
-## START HERE: the carrier and PAR panels are built and merged (2026-10-11)
+## START HERE: the live test's fix batch is planned, research first (2026-10-12)
 
 You are the supervisor ("main") of lanes in this monorepo. You dispatch background agents in git worktrees, merge their
 branches into `efsp-wp5-correlation`, and keep the record. History is in git and in `docs/parallel/decisions.md`
-(S-ARCH-1 to S-ARCH-46, H107 to H127); the EFSP state for any reader is `docs/efsp-briefing.md` (§1, §3K, §4, §5), brought
-up to date by DOCS-PANELS. This file only holds what you need now.
+(S-ARCH-1 to S-ARCH-47, H107 to H132); the EFSP state for any reader is `docs/efsp-briefing.md` (§1, §3K, §4, §5). This
+file only holds what you need now.
+
+**Do this first:**
+1. Read `docs/parallel/live-test-2026-10-11.md` (the human's findings T1–T31 with causes and rulings) and
+   `docs/parallel/next/LIVE-TEST-FIXES.md` (the lanes, order, dependencies, ADR numbers 0117–0121).
+2. Read the Decision Desk answers (https://claude.ai/artifact/A3gizEgbwfqCnnU831G4Y7, `ArtifactData` list the whole
+   `answers` collection, `limit: 1000`; questions **LT-Q1…LT-Q5**, round 8). Settle them into `decisions.md` (H133+),
+   mark them settled.
+3. Dispatch **LT-RESEARCH** (`docs/parallel/next/LT-RESEARCH.md`, Opus, docs only) first. Then the lanes in the order of
+   `LIVE-TEST-FIXES.md`. After the research lands: put its label table (T8) and its questions on the Decision Desk.
+4. The human said they will "send a new batch of agents": H112 (one agent at a time) is still the standing rule. Lanes
+   0–4 of `LIVE-TEST-FIXES.md` are file-disjoint, so ask the human once whether to run them together.
 
 ### Standing rules (the human's, in force)
 
@@ -34,31 +45,30 @@ up to date by DOCS-PANELS. This file only holds what you need now.
 
 ### State
 
-`efsp-wp5-correlation` is local only, about 1,550 commits ahead of `main`. Everything is merged and green; the only
-worktree is the main checkout (branches `lane/QA-sync-cleanup`, `lane/AIRSP-2P-B-geometry` kept on purpose).
+`efsp-wp5-correlation` is local only, about 1,580 commits ahead of `main`. Everything is merged and green; the only
+worktree is the main checkout (branches `lane/QA-sync-cleanup`, `lane/AIRSP-2P-B-geometry` kept on purpose). Last gates
+(tree `07749161`, HULL-STRICT; everything after it is docs): crc-sync 2647, freeze 56/56, walk 23/23, soak:selfcheck PASS,
+wire 2 unchanged, crc-desktop 1254; sharded Playwright 224/228 on the CARRIER-FOLLOWUP tree (the four pass alone).
 
-| Suite | Result (2026-10-11, tree `07749161`) |
-|---|---|
-| crc-sync | 2647/2647 (`grpc-client-connect.test.mjs` fails now and then under load, passes alone: a timing bound) |
-| freeze | 56/56 |
-| crc-desktop | 1254/1254 |
-| walk / soak:selfcheck / wire:record | 23/23 / PASS / protocol 2, surface unchanged |
-| Playwright (full, sharded) | 224/228 on the CARRIER-FOLLOWUP tree; the two failures and `runway-status` (serial, skipped 2) pass alone. HULL-STRICT is server-only and ran no Playwright |
+**The live test (2026-10-11):** the human ran crc-desktop against a local crc-sync on :3000 (their `crc-sync/.env`, the
+shared DCS server's Syria mission, SRS). It is stopped now; `crc-desktop/config.json` is back on
+`wss://asacs.sourcedcs.page` (never commit a local endpoint). `crc-sync/state/` holds the test's Board and Mutation log
+(the human's data: read only; T22/T31 were read from it). To run another local test: `cd crc-sync && node server.js` in the
+background (stop it by PID), point `config.json` at `ws://localhost:3000` without committing, the human starts
+`crc-desktop` and logs in; the MapTiler key is in `crc-sync/.env`.
 
-Built 2026-10-08 to 2026-10-11 (S-ARCH-37 to S-ARCH-46; every agent on Opus 5.5 since H121):
-SETTINGS-TABS, DIVERT (ADR 0111), CARRIER-STATE (0113), MARSHAL-BOARD (0114), MARSHAL-FIX, CARRIER-MAP, MARSHAL-MARKS (0115),
-SIDE-SWAP, WIRE-RECORD, PAR-1 (0112), PAR-2, CARRIER-FOLLOWUP (0116: PAR is airfield-only, H125), DOCS-PANELS, HULL-STRICT.
-The usage-guide wording of every lane is placed; `docs/wip/<LANE>.md` hold the details.
+New rulings since the panels (H128–H132): **FAA model, always** (H128, memory `feedback_faa_model_always`); strip
+selection no longer rings the track, "Show on map" in the ⋯ menu (H129); the RSU answers (H130) and `IN_PATTERN` renamed
+(H131); an alert for entering active airspace without approval (H132).
 
 ### Next (one lane at a time, Opus)
 
-Nothing is queued. Ask the human what next. Candidates (briefing §4/§5):
-- the flaky `grpc-client-connect` timing test;
-- `wire:record` also scanning refusal codes / op argument names (asked, not answered);
-- the older queue: does a mission-reset drop count as traffic; should a carrier recovery remember its launch;
-  `definitionHistory` on the wire; a route from a DCS line drawing; the correlation seq-jump decision; a soak that rolls
-  the mission; the cleanup row; declutter last;
-- a deck-state board (foul deck) if the human wants it; a basemap under the carrier map only to show land (H123, later).
+`docs/parallel/next/LIVE-TEST-FIXES.md`: LT-RESEARCH, LT-TERRAIN, LT-UI, LT-AIRSPACE-FIX, LT-CORRELATION, LT-SFA-PAR (ADR
+0117), LT-STRIP-FIELDS, LT-MARSA (0118), LT-AIRSPACE-ALERT (0119), LT-RSU-DESIGN → LT-RSU (0120), LT-GROUND (0121).
+After that, the older queue (briefing §4/§5): the flaky `grpc-client-connect` timing test; `wire:record` scanning refusal
+codes / op argument names (asked, not answered); mission-reset drop as traffic; a carrier recovery remembering its launch;
+`definitionHistory` on the wire; a route from a DCS line drawing; the correlation seq-jump decision; a soak that rolls the
+mission; the cleanup row; declutter last (now with T30, the conflict-alert drawings switch).
 
 ### Human actions outstanding
 
@@ -81,6 +91,7 @@ Nothing is queued. Ask the human what next. Candidates (briefing §4/§5):
   - a two-controller walk;
   - a manual crc-desktop login.
 - **Squadron data:**
+  - the stereo routes for Incirlik's departures (T6), into `state/efsp-stereo-routes.json`;
   - Incirlik headings;
   - GND/TWR/CD/AP frequencies;
   - SFA frequencies and pads;
