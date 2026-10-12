@@ -457,3 +457,82 @@ A tag does **not** make a contact tracked (a tag is not an association, P/CG ASS
 the automation — our tag is closer to a scratch-pad note). The intruder must report altitude (our SSR/Mode C presentation).
 
 ---
+## Proposed model
+
+The smallest FAA-shaped way, built from what the app already has (flight data, Strips, the code allocator,
+`BindTrack`, `ApproveAirspaceEntry`, Strip drop). **Ours** marks every choice no order makes.
+
+### (a) Start flight following on a contact with no Strip → it becomes tracked
+
+| Step | FAA name and paragraph | In our app |
+|---|---|---|
+| Pilot asks for traffic advisories; controller decides it can give them | "request traffic information" (AIM ¶4-1-18 a.3, a.5(c)); additional services at the controller's discretion (¶2-1-1 c, AIM ¶4-1-15 b.1) | Voice, as today. Nothing recorded |
+| Identify the contact | **Radar identification** (¶5-3-1), beacon method **"IDENT" / "SQUAWK (code)"** (¶5-3-3 a–b) | The controller picks the contact on the scope (as for a tag) |
+| Enter the aircraft in the automation and give it a code | **Initiate a track/tag**, at least the aircraft identification (¶5-14-4 c); **computer-assigned discrete code** for VFR receiving radar advisories (¶5-2-7 a); en route an **"EAS generated VFR flight plan"** (¶2-2-9 b) | **One action on the contact, "Start flight following"** (ours: the name and the single action): creates **flight data** (callsign, type, VFR — LT-VQ2), allocates a **discrete code** from the existing allocator, creates an **OVERFLIGHT Strip** (FAA TBL 2-3-5 form; AP/CTR may create one today) owned by the acting Position directly in **IN_SECTOR**, and **binds** it to the contact (`BindTrack`, rung 1). DEPARTURE/ARRIVAL Strips stay the path for a VFR flight leaving or landing at our field (LT-VQ3) |
+| Tell the pilot | **"RADAR CONTACT (position)"** (¶5-3-7 a, ¶5-3-6); "radar flight following will be provided until radar service is terminated" (P/CG RADAR CONTACT a) | Voice. The data block now shows the Strip's callsign: the contact is **associated** (P/CG) |
+| Keep it | Retain the data block (¶5-3-8/5-3-9); acquisition by the assigned code (Q11, H135) | Correlation holds by the binding, and by the beacon rung once the pilot squawks the code |
+
+**Result:** the contact is **tracked**: it takes part in **CA** with other tracked aircraft and is the tracked side of
+**MCI** (V4, LT-RQ16 a). A **tag stays untracked** (a name only), as today.
+
+### (b) Approve or clear it into active airspace
+
+| Airspace | FAA act | In our app |
+|---|---|---|
+| Restricted/prohibited (our `RESTRICTED`, `PROHIBITED`; **inference**: `RANGE`, `DANGER` are restricted-like) | **Using agency permission** (14 CFR 73.13, 73.15 (c)(2), 91.133; ¶9-3-1 a–b; relayed by ATC, ¶9-3-1 NOTE) | **`ApproveAirspaceEntry`** on the flight-following Strip — the op that already exists, with the same rights (LT-RQ13) |
+| MOA, warning area | **Nothing**: VFR aircraft are not denied access (7400.2R ¶25-1-6 a, ¶24-1-3 d); pilot told to ask for advisories (AIM ¶3-4-5 c) | Same op, recorded as an **approval** that only tells the alert this flight is known and working there — **ours** for a MOA (H132/H134 build the alert anyway; LT-VQ4) |
+| Class B (none in our airspace data) | **ATC clearance**: "CLEARED THROUGH/TO ENTER BRAVO AIRSPACE" (91.131 (a)(1), ¶7-9-2 a) | Not modelled (no Class B airspace) |
+| Class C (none in our data) | **Two-way radio contact**; refusal "REMAIN OUTSIDE CHARLIE AIRSPACE AND STANDBY" (91.130 (c)(1), ¶7-8-4) | Not modelled |
+
+An **uncorrelated** contact can be neither approved nor cleared in FAA terms (there is nobody identified to approve), so
+the H134 alert on it is answered by step (a) then step (b), not by an approval on the bare contact.
+
+### (c) End the service
+
+| Trigger | FAA act | In our app |
+|---|---|---|
+| Controller ends it (leaving the area, workload, pilot request) | **"RADAR SERVICE TERMINATED, SQUAWK VFR / SQUAWK 1200"** (¶5-1-9 a, ¶5-2-7 b, ¶7-6-11); remove the flight plan (¶5-2-1 b.2 NOTE) | **"Radar service terminated"** action (ours: one action) = **drop the Strip** (state DROPPED, which already releases the code and ends the correlation) and clear any `airspaceEntry`. The contact is untracked again (MCI intruder if it has Mode C) |
+| VFR arrival lands, or is switched to tower/advisory frequency | **Automatic termination**, no advisory (¶5-1-9 b.4) | The existing ARRIVAL/handoff lifecycle; for an OVERFLIGHT Strip the controller drops it (ours: no automatic drop) |
+| Passed to the next controller | Radar **handoff** / coordination (¶5-2-7 a.1, ¶2-1-16 b) | The existing HANDOFF/coordination of OVERFLIGHT Strips |
+| Contact disappears | **"RADAR CONTACT LOST"** (¶5-3-7 b) — not termination; loss of radar *and* radio is an ALNOT case (¶10-3-1 b) | Strip stays; correlation goes to whatever the existing lost-track rule does. No new behaviour |
+
+### What is ours, in one list
+
+The single "Start flight following" and "Radar service terminated" actions; creating the Strip directly in IN_SECTOR;
+OVERFLIGHT as the default type; a VFR mark on the record (if LT-VQ2 A); treating an MOA approval as an alert silencer;
+the MCI base-altitude defaults per Facility kind (taken from 7210.3EE, the values are FAA, the per-Facility default is
+ours).
+
+---
+
+## Questions for the human
+
+Ids `LT-VQ*` for the Decision Desk. R = recommendation.
+
+| Id | Question | Options | R |
+|---|---|---|---|
+| LT-VQ1 | How does a controller start flight following on a contact with no Strip (LT-Q6)? | A. One action on the contact, **"Start flight following"**: flight data + discrete code + OVERFLIGHT Strip in IN_SECTOR + `BindTrack`, in one go (FAA: track/tag ¶5-14-4 c, code ¶5-2-7 a, "RADAR CONTACT" ¶5-3-7). B. No new action: the existing CreateStrip then BindTrack, two steps. C. A "tracked tag": a tag counts as tracked for CA (not FAA: a tag is no association). | **A** |
+| LT-VQ2 | Mark the flight as VFR on its record? (The FAA strip has no flight-rules block; VFR shows only in the equipment suffix, ¶2-3-8 c, and the absence of a clearance.) | A. A **flight-rules field** (IFR/VFR) on the flight data, set to VFR by "Start flight following", shown on the Strip as `VFR` in the altitude cell and turning off altitude/heading conformance (no assigned values) — ours. B. No field: VFR = a Strip with no clearance and no assigned altitude. C. A separate `VFR` Strip type. | **A** |
+| LT-VQ3 | Which Strip type does a flight-following aircraft get? | A. **OVERFLIGHT** for a transit (FAA TBL 2-3-5), DEPARTURE/ARRIVAL when it departs/lands at our field (the ordinary forms). B. Always OVERFLIGHT. | **A** |
+| LT-VQ4 | The airspace-entry alert and VFR aircraft in an active **MOA** (FAA: VFR not denied access, 7400.2R ¶25-1-6 a) | A. One rule for every airspace type (H134 as ruled): an uncorrelated contact, or a Strip without `ApproveAirspaceEntry`, inside active airspace alerts; the approval silences it — ours for MOA/warning areas, labelled in the ADR. B. By type, as the FAA: MOA/warning area never alerts for a tracked VFR aircraft; restricted/prohibited/range/danger alert unless approved (makes `type` behavioural for the first time). C. A but with a softer, information-only alert in MOA/warning areas. | **A** (already ruled; B noted for later) |
+| LT-VQ5 | Who may approve a VFR aircraft's entry into active airspace? | A. As for any Strip today: the using agency, or the Position working the Strip relaying the using agency's permission (¶9-3-1 a–b NOTE), under LT-RQ13's rights. B. Only the using agency's Position. | **A** |
+| LT-VQ6 | Ending flight following | A. One action **"Radar service terminated"** = drop the Strip (code released, correlation ended, airspace entry cleared) (¶5-1-9 a, ¶5-2-7 b). B. Keep the Strip until the aircraft leaves the Facility's airspace, then drop it automatically (ours). C. Both: the action, plus an automatic drop when the contact leaves the Facility's airspace. | **A** |
+| LT-VQ7 | MCI base altitude (for LT-MARSA's MCI-type alert, LT-RQ16 a) | A. Facility setting: default **500 ft AGL** for a terminal Facility (STARS, 7210.3EE ¶12-6-12 b) and **5,000 ft MSL** for CENTER (ERAM, ¶8-2-5 b), with a per-Position inhibit (¶12-6-12 d). B. One global value. C. No base altitude. | **A** |
+| LT-VQ8 | Does an uncorrelated **primary-only** target (no altitude) raise MCI? (P/CG silent on altitude; the function is "Mode C" intruder) | A. No: only an uncorrelated target with a reported altitude (inference from the name and 7210.3EE ¶12-6-3 b). B. Yes, against any tracked aircraft nearby laterally. | **A** |
+
+## For the supervisor
+
+- **Flight following needs no new kind of record.** It is a short Strip, correlated: the FAA gives a VFR aircraft on
+  advisories a computer-assigned discrete code and a track with its identification (¶5-2-7 a, ¶5-14-4 c, ¶2-2-9 b), which
+  is our flight data + Strip + correlation. LT-Q6 and the second half of H134 LT-Q5 have the same answer (LT-VQ1).
+- **H134 LT-RQ16 a needs no change**: "correlated to a live Strip" = tracked. LT-MARSA (owner of `conflict-alert.js`)
+  reads tracked from the correlation; nothing reads tags.
+- **The H134 airspace alert on uncorrelated contacts is ours for MOAs** (FAA: VFR may enter); FAA-backed only for
+  restricted/prohibited areas. The ADR for LT-AIRSPACE-ALERT (0119) should say so (LT-VQ4).
+- **Which lane builds V1's actions** is open: the start action touches the Board (CreateStrip in IN_SECTOR), flight data
+  (VFR field), correlation (`BindTrack`) and the client (track panel). It fits LT-CORRELATION or LT-AIRSPACE-ALERT; it
+  should not wait on LT-MARSA, whose MCI uses it.
+- **Wire:** a new op, or new fields on CreateStrip (`trackId`, initial state for OVERFLIGHT, flight rules), changes the
+  wire surface (`npm run wire:record`).
+- No source was blocked; the STARS/ERAM operator manuals and the CA/MCI algorithm documents are not public (noted where
+  it matters).
