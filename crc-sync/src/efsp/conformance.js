@@ -30,6 +30,17 @@
 //
 // All three are skipped below `minGroundSpeedKt`, so nothing alerts on the
 // ground. It never moves or advances a Strip (guide §10.3).
+//
+// On a final (docs/adr/0117, H134 LT-RQ8 a, LT-RQ9 a), a flight whose FINAL Strip is on final (ON_FINAL, or the
+// carrier's BALL; a missed approach is checked again: its climb-out heading and altitude are assignments, para 5-10-12):
+//   - no HEADING check. The final controller's headings are course guidance changed every few seconds ("HEADING
+//     (heading)", JO 7110.65BB para 5-12-4) and course deviation is its own continuous call, so they are recorded on
+//     the flight, never alerted; AP's last vector stops alerting at the handoff.
+//   - at an airfield (PAR), the altitude is checked until "BEGIN DESCENT" (para 5-12-3), which ends the assigned
+//     altitude (board/ops/final-call.js), so there is then nothing to check: the glidepath is the reference.
+//   - on the carrier, no altitude check from the final on. JO 7110.65 is silent on the carrier final (no CATCC
+//     procedures in the order); the same rule applied by analogy, without a descent call, is OURS.
+// Ours too: which Strips count as "on a final".
 
 const { activeClearanceEntry } = require('./flight-data-store');
 const { WALL_CLOCK } = require('../mission-clock');
@@ -138,7 +149,9 @@ class ConformanceMonitor {
   /**
    * @param {object} deps { trackStore, flightDataStore, correlationStore, weather: () => {pressurePa,tempK},
    *                        transitionAltFt: () => number, indicatedAltFt, config, clock?, wallClock?,
-   *                        gridToMagnetic?: (gridDeg, lat, lon) => number|null }
+   *                        gridToMagnetic?: (gridDeg, lat, lon) => number|null,
+   *                        finals?: () => Map<flightDataId, 'AIRFIELD'|'CARRIER'> }
+   * `finals` names the flights on a final (a live FINAL Strip) and where, read once per tick (the header's "On a final").
    * `gridToMagnetic` turns DCS's GRID course into magnetic (server.js passes
    * theater-context.js's, docs/adr/0085). Without it every answer is
    * "unknown", so no heading alert is raised — never a cross-frame compare.
@@ -165,6 +178,7 @@ class ConformanceMonitor {
     const { trackStore, flightDataStore, correlationStore, config } = this._d;
     const seen = new Set();
     let changed = false;
+    const finals = this._d.finals ? this._d.finals() : new Map();
     for (const record of correlationStore.getAll()) {
       if (!record.trackId || (record.state !== 'CORRELATED' && record.state !== 'PROVISIONAL')) continue;
       const track = trackStore.get(record.trackId);
@@ -174,9 +188,10 @@ class ConformanceMonitor {
       const mem = this._mem.get(record.flightDataId) || {};
       this._mem.set(record.flightDataId, mem);
       const altFt = this._d.indicatedAltFt(track.alt, this._d.weather(), this._d.transitionAltFt());
+      const onFinal = finals.get(record.flightDataId) || null;
       const alerts = evaluateConformance({
-        hdg: activeClearanceEntry(flightData, 'heading'),
-        alt: activeClearanceEntry(flightData, 'altitude'),
+        hdg: onFinal ? null : activeClearanceEntry(flightData, 'heading'),
+        alt: onFinal === 'CARRIER' ? null : activeClearanceEntry(flightData, 'altitude'),
         course: Number.isFinite(track.course) ? this._gridToMagnetic(track.course, track.lat, track.lon) : null,
         groundSpeedMs: track.groundSpeed, verticalSpeedMs: track.verticalSpeed, altFt,
       }, mem, now, config, wallNow);

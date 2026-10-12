@@ -104,6 +104,19 @@ function buildMonitors({ env, efsp, facilityConfig, missionClock, missionSession
     // DCS's course is grid; the typed HDG is magnetic (docs/adr/0085).
     gridToMagnetic: trackSeams.gridToMagnetic || ((deg, lat, lon) => theaterContext.gridToMagnetic(deg, lat, lon)),
     config: alertingConfig.conformance,
+    // docs/adr/0117: the flights on a final (a FINAL Strip on final; a missed approach's climb-out heading and altitude,
+    // JO 7110.65BB para 5-10-12, are checked again), and whether it is the carrier's, once per tick.
+    finals: () => {
+      const out = new Map();
+      for (const facilityId of facilityConfig.getFacilityIds()) {
+        const board = efsp.boardStoreFor(facilityId);
+        if (!board) continue;
+        for (const s of board.getAll()) {
+          if (s.stripType === 'FINAL' && (s.state === 'ON_FINAL' || s.state === 'BALL') && s.flightDataId) out.set(s.flightDataId, facilityId === 'CARRIER' ? 'CARRIER' : 'AIRFIELD');
+        }
+      }
+      return out;
+    },
   });
   // docs/adr/0076 — "detected airborne" and staleness. It reads the Boards and the correlation records and writes nothing:
   // surveillance informs, the controller advances (§10.3).
