@@ -2,14 +2,13 @@
 
 // A controller holding LC with GC or CD, and the frequencies of a Position (crc-sync docs/adr/0105, H104). Pure: no DOM,
 // no state. The server sends each Position's `frequencies` and `combinedWith` (the other Positions whose Primary is the same
-// controller); this turns them into the words the panel shows. Warn, never block. The wording is [SOURCE-DEFINED] and cites
-// the FAA's JO 7210.3 by analogy.
+// controller); this turns them into the words the panel shows. Warn, never block. The rules behind it (FAA JO 7210.3
+// ¶2-6-5b/c, ¶2-6-12, by analogy) are in ADR 0105 and the usage guide; the screen shows only frequencies and problems (T26).
 
 export const LOCAL_POSITION = 'LC';
 // docs/adr/0110: every Incirlik Position but LC and RSU (crc-sync's combination.js NON_LOCAL; a parity test keeps them equal).
 // OPS, CD and GC are the tower's non-local functions (¶2-6-5b); AP, SFA and PAR are radar approach (¶2-6-12).
 export const NON_LOCAL = ['OPS', 'CD', 'GC', 'AP', 'SFA', 'PAR'];
-const RADAR_APPROACH = ['AP', 'SFA', 'PAR'];
 const LUAW_STATES = ['RUNWAY_QUEUE', 'LUAW'];
 
 /** "GND 275.8" for one entry. */
@@ -46,23 +45,18 @@ export function combinationOf(positions, acting) {
   return { positions: ids, with: withIds, frequencies };
 }
 
-/** The doctrine sentence for the non-local Positions among `ids` (the wording is [SOURCE-DEFINED], FAA by analogy). */
-export function nonLocalCitation(ids) {
-  const parts = [];
-  if ((ids || []).some(id => !RADAR_APPROACH.includes(id))) parts.push('only at significantly reduced traffic (JO 7210.3 ¶2-6-5b)');
-  if ((ids || []).some(id => RADAR_APPROACH.includes(id))) parts.push('tower and radar approach combined: not normally outside the midwatch (JO 7210.3 ¶2-6-12)');
-  return parts.join('; ');
-}
-
-/** The persistent line: what is combined, which frequencies to monitor, and the stronger wording while LUAW is in use. */
+/**
+ * The line while this controller holds a combination: the frequencies to monitor, and nothing else (live test T26, dark
+ * cockpit: the JO 7210.3 paragraphs stay in the docs, not on the screen). Stronger while LUAW is in use, which ¶2-6-5c does
+ * not allow at a combined LC (a problem, so it is said). `key` names the combination: an acknowledged line comes back when it
+ * changes. Null when there is nothing to monitor and no problem.
+ */
 export function combinationLine(combo, luaw) {
   if (!combo) return null;
-  const names = combo.positions.join(' + ');
-  const freqs = combo.frequencies.length ? ` Monitor ${combo.frequencies.map(f => `${f.positionId} ${formatFrequency(f)}`).join(' and ')}.` : ' Monitor both frequencies.';
-  const text = luaw
-    ? `COMBINED ${names}. LUAW in use: LC must not be combined with a non-local position (JO 7210.3 ¶2-6-5c).${freqs}`
-    : `COMBINED ${names}: ${nonLocalCitation(combo.with)}.${freqs}`;
-  return { text, severe: !!luaw };
+  const freqs = combo.frequencies.length ? `Monitor ${combo.frequencies.map(formatFrequency).join(', ')}` : '';
+  const key = `${combo.positions.join('+')}|${luaw ? 'LUAW' : ''}`;
+  if (luaw) return { text: `LUAW in use while LC is combined.${freqs ? ` ${freqs}` : ''}`, severe: true, key };
+  return freqs ? { text: freqs, severe: false, key } : null;
 }
 
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
@@ -100,7 +94,6 @@ export function hatRows(positions, selfId, strips, acting, { hidden = new Map(),
       const severe = o.onRunway > 0 || (nonLocal.length > 0 && luaw);
       let text = `${o.positionId} is unstaffed with ${plural(o.count, 'Strip')}${o.onRunway ? ` (${o.onRunway} on the runway)` : ''}${names(o.positionId)}. Take ${o.positionId} as well?`;
       if (o.observersFirst) text += ` It has Observers, who are offered Primary first.`;
-      if (nonLocal.length) text += ` Combined with LC: ${nonLocalCitation(nonLocal)}.${severe ? ' LUAW or the runway in use: LC must not be combined with a non-local position (¶2-6-5c).' : ''}`;
       rows.push({ kind: 'take', facilityId: p.facilityId, positionId: o.positionId, count: o.count, onRunway: o.onRunway, severe, text, label: `Take ${o.positionId}` });
     }
   }

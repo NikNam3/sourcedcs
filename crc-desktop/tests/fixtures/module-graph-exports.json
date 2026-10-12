@@ -717,7 +717,6 @@
    "formatFrequency",
    "hatRows",
    "luawInUse",
-   "nonLocalCitation",
    "vacatedBetween"
   ],
   "panels/efsp/control-release-rules.js": [
@@ -1056,6 +1055,7 @@
    "noteEfspBoardArrivals"
   ],
   "panels/efsp/panel/combination.js": [
+   "_resetCombinationAckForTest",
    "renderCombination"
   ],
   "panels/efsp/panel/control-attest.js": [
