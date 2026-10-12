@@ -741,11 +741,14 @@
    "requestSummary"
   ],
   "panels/efsp/correlation-highlight.js": [
+   "RING_SHOW_MS",
+   "clearShownOnMap",
    "correlationBadgeFor",
    "getCorrelatedHighlightTrackId",
-   "highlightCorrelatedTrack",
    "refreshCorrelatedHighlight",
-   "selectStripForTrack"
+   "selectStripForTrack",
+   "showOnMapTrackFor",
+   "showStripOnMap"
   ],
   "panels/efsp/correlation-state.js": [
    "_replaceCorrelations",

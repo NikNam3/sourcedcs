@@ -743,8 +743,8 @@ function buildRefDot() {
 }
 
 /**
- * A ring around the contact the selected Strip is correlated to (guide §6.6
- * rule 4). A near-copy of buildRefDot above, with one deliberate difference:
+ * The ring "Show on map" draws around a Strip's contact (H129; the Strip's ⋯
+ * menu, correlation-highlight.js). A near-copy of buildRefDot above, with one deliberate difference:
  * it falls back to `latestFromServer` when the contact is not in the
  * sweep-gated `tracks` map — the same fix buildRangeRing already carries.
  *

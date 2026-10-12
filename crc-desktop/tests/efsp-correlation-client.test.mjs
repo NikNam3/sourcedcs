@@ -1,4 +1,4 @@
-/* Coupled selection and the correlation badge (guide §6.6 rules 4 and 5).
+/* "Show on map" (H129), contact -> Strip and the correlation badge (guide §6.6 rules 4 and 5).
  *
  * The cases worth pinning are the two judgement calls: clicking a contact
  * with no Strip must NOT clear the Strip selection, and selecting the same
@@ -14,12 +14,14 @@ import assert from 'node:assert/strict';
 import { latestFromServer } from '../app/public/js/picture.js';
 import * as state from '../app/public/js/panels/efsp/efsp-state.js';
 import {
-  highlightCorrelatedTrack, getCorrelatedHighlightTrackId, refreshCorrelatedHighlight,
-  selectStripForTrack, correlationBadgeFor,
+  getCorrelatedHighlightTrackId, refreshCorrelatedHighlight, showStripOnMap, showOnMapTrackFor, clearShownOnMap,
+  RING_SHOW_MS, selectStripForTrack, correlationBadgeFor,
 } from '../app/public/js/panels/efsp/correlation-highlight.js';
 import { _setSelectedStripIdForTest, _setSelectEfspStripByIdForTest } from '../app/public/js/panels/efsp/bay/selection.js';
 import { setOpenEfspBays } from '../app/public/js/panels/efsp/bay/open-bays.js';
 import { _setUpdateMapForTest } from '../app/public/js/geojson.js';
+import { _setMap, _setMapReady } from '../app/public/js/map-handle.js';
+import { markEfspChanged } from '../app/public/js/panels/efsp/efsp-change-bus.js';
 
 // The old test stubbed these as plain globals; the modules now read their imports, so each goes through the
 // module's explicit setter (docs/wip/ESM-1.md, "Setters").
@@ -60,6 +62,7 @@ function load({ strips = [], flightDataList = [], correlations = [], tracks = []
   state.applyEfspSnapshot({ strips, flightDataList, positions: [], bays: [], correlations, boardSeq: 1 });
   liveTracks.clear();
   for (const t of tracks) liveTracks.set(String(t.id), t);
+  clearShownOnMap();
   select(null);
   selectCalls = 0;
   mapUpdates = 0;
@@ -110,47 +113,89 @@ test('a dropped Strip is not offered by the reverse lookup', () => {
   assert.deepEqual(state.stripIdsForTrackId('101'), []);
 });
 
-// ── Strip -> contact ───────────────────────────────────────────────────────
+// ── Strip -> contact: "Show on map" (H129, live test T10) ──────────────────
 
-test('selecting a Strip rings its contact, and redraws the map once', () => {
-  load({ strips: [strip('s1', 'f1')], correlations: [correlation('f1')] });
-  assert.equal(highlightCorrelatedTrack('s1'), '101');
+const T101 = { id: '101', lat: 37.0, lon: 35.4, label: { callsign: 'VIPER1', trackNumber: 'TN00012' } };
+
+test('selecting a Strip no longer rings its contact (H129)', () => {
+  load({ strips: [strip('s1', 'f1')], correlations: [correlation('f1')], tracks: [T101] });
+  select('s1');
+  markEfspChanged('selection');
+  assert.equal(getCorrelatedHighlightTrackId(), null);
+  assert.equal(mapUpdates, 0);
+});
+
+test('Show on map rings the contact, redraws the map once, and the ring goes after RING_SHOW_MS', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  load({ strips: [strip('s1', 'f1')], correlations: [correlation('f1')], tracks: [T101] });
+  assert.equal(showStripOnMap('s1'), '101');
   assert.equal(getCorrelatedHighlightTrackId(), '101');
   assert.equal(mapUpdates, 1);
+  t.mock.timers.tick(RING_SHOW_MS - 1);
+  assert.equal(getCorrelatedHighlightTrackId(), '101', 'still showing just before the time is up');
+  t.mock.timers.tick(1);
+  assert.equal(getCorrelatedHighlightTrackId(), null);
+  assert.equal(mapUpdates, 2);
 });
 
-test('selecting the same Strip again does not redraw', () => {
-  load({ strips: [strip('s1', 'f1')], correlations: [correlation('f1')] });
-  highlightCorrelatedTrack('s1');
-  const after = mapUpdates;
-  highlightCorrelatedTrack('s1');
-  assert.equal(mapUpdates, after);
+test('Show on map again restarts the time; a second Strip moves the ring', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  load({
+    strips: [strip('s1', 'f1'), strip('s2', 'f2')],
+    correlations: [correlation('f1'), correlation('f2', { trackId: '202' })],
+    tracks: [T101, { ...T101, id: '202' }],
+  });
+  showStripOnMap('s1');
+  t.mock.timers.tick(RING_SHOW_MS - 1000);
+  showStripOnMap('s2');
+  assert.equal(getCorrelatedHighlightTrackId(), '202');
+  t.mock.timers.tick(RING_SHOW_MS - 1);
+  assert.equal(getCorrelatedHighlightTrackId(), '202');
+  t.mock.timers.tick(1);
+  assert.equal(getCorrelatedHighlightTrackId(), null);
+  clearShownOnMap();
 });
 
-test('deselecting clears the ring — with no Strip selected it has nothing to say', () => {
-  load({ strips: [strip('s1', 'f1')], correlations: [correlation('f1')] });
-  highlightCorrelatedTrack('s1');
-  highlightCorrelatedTrack(null);
+test('Show on map has nothing to ring for an uncorrelated Strip or a contact outside the picture', () => {
+  load({
+    strips: [strip('s1', 'f1'), strip('s2', 'f2')],
+    correlations: [correlation('f1', { state: 'UNCORRELATED', trackId: null }), correlation('f2', { trackId: '999' })],
+    tracks: [T101],
+  });
+  assert.equal(showStripOnMap('s1'), null);
+  assert.equal(showStripOnMap('s2'), null, '999 is not in this controller\'s picture');
+  assert.equal(showOnMapTrackFor(state.getEfspStrip('s2')), null);
   assert.equal(getCorrelatedHighlightTrackId(), null);
 });
 
-test('selecting an uncorrelated Strip draws no ring', () => {
-  load({
-    strips: [strip('s1', 'f1')],
-    correlations: [correlation('f1', { state: 'UNCORRELATED', trackId: null })],
-  });
-  assert.equal(highlightCorrelatedTrack('s1'), null);
-});
-
-test('a re-bind moves the ring without the selection changing', () => {
-  load({ strips: [strip('s1', 'f1')], correlations: [correlation('f1')] });
-  select('s1');
-  highlightCorrelatedTrack('s1');
-  assert.equal(getCorrelatedHighlightTrackId(), '101');
-
+test('a re-bind moves a showing ring; a lost contact ends it', () => {
+  load({ strips: [strip('s1', 'f1')], correlations: [correlation('f1')], tracks: [T101, { ...T101, id: '500' }] });
+  showStripOnMap('s1');
   state.applyEfspCorrelationDelta({ correlations: { updated: [correlation('f1', { trackId: '500' })] } });
   refreshCorrelatedHighlight();
   assert.equal(getCorrelatedHighlightTrackId(), '500');
+  state.applyEfspCorrelationDelta({ correlations: { updated: [correlation('f1', { state: 'UNCORRELATED', trackId: null })] } });
+  refreshCorrelatedHighlight();
+  assert.equal(getCorrelatedHighlightTrackId(), null);
+});
+
+test('Show on map pans to a contact off the map, and leaves the map alone when it is on it', () => {
+  const eased = [];
+  let inView = false;
+  _setMap({ getBounds: () => ({ contains: () => inView }), easeTo: (o) => eased.push(o.center) });
+  _setMapReady(true);
+  try {
+    load({ strips: [strip('s1', 'f1')], correlations: [correlation('f1')], tracks: [T101] });
+    showStripOnMap('s1');
+    assert.deepEqual(eased, [[35.4, 37.0]]);
+    inView = true;
+    showStripOnMap('s1');
+    assert.equal(eased.length, 1);
+  } finally {
+    clearShownOnMap();
+    _setMapReady(false);
+    _setMap(undefined);
+  }
 });
 
 // ── contact -> Strip ───────────────────────────────────────────────────────

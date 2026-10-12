@@ -3,7 +3,7 @@ import { getEfspCorrelationForStrip, getEfspFlightData, getAllEfspStrips, getEfs
 import { toggleOffset } from './efsp-gestures.js';
 import { getActingPositions, sendEfspMutation } from './efsp-ws.js';
 import { noteEfspGesture } from './efsp-metrics-client.js';
-import { correlationBadgeFor } from './correlation-highlight.js';
+import { correlationBadgeFor, showOnMapTrackFor, showStripOnMap } from './correlation-highlight.js';
 import { _dispatchCorrelation, _dispatchGesture, _dispatchHandBack, _handBackBayFor, _resolveActingPositionId } from './bay/dispatch.js';
 import { AIRSPACE_ENTRY_POSITIONS, COORDINATION_TARGETS, HAND_BACK_TO, TOFI_COUNTERPARTS } from './bay/authority-mirror.js';
 import { openPopover } from './bay/popover-portal.js';
@@ -137,6 +137,14 @@ function _stripMenuItems(strip) {
   }
   const record = getEfspCorrelationForStrip(strip);
   const correlation = correlationBadgeFor(strip);
+  // H129 (live test T10): the ring is asked for here, not drawn on every selection. Listed while the flight has a
+  // contact; disabled when that contact is outside this controller's picture.
+  if (record && record.trackId && !(correlation && correlation.ambiguous)) {
+    const inPicture = !!showOnMapTrackFor(strip);
+    items.push({ group: 'Flight', key: 'show-on-map', label: 'Show on map', cls: 'efsp-show-on-map-btn', enabled: inPicture,
+      reason: inPicture ? '' : 'outside your radar coverage', title: 'ring this flight on the map',
+      run: () => { showStripOnMap(strip.stripId); } });
+  }
   if (record && !(correlation && correlation.ambiguous)) {
     if (record.binding) {
       items.push({ group: 'Flight', key: 'unbind', label: 'Unbind', cls: 'efsp-correlation-btn', enabled: !!acting,
