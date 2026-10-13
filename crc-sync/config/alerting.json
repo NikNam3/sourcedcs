@@ -9,7 +9,9 @@
     "levelBustFt": 500,
     "levelBustPersistSec": 3,
     "wrongWayFpm": 500,
-    "wrongWayPersistSec": 5
+    "wrongWayPersistSec": 5,
+    "refuelingBlockFt": 1000,
+    "refuelingLateralNm": 3
   },
   "conflictAlert": {
     "lateralNm": 3,

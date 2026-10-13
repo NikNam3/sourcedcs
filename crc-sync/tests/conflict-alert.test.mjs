@@ -180,3 +180,33 @@ test("a track correlated to a Strip is named by the Strip's callsign", () => {
   assert.equal(c.aCallsign, 'VIPER11');
   assert.equal(c.bCallsign, 'T2', 'uncorrelated keeps its own');
 });
+
+test('the MCI floor: 500 ft AGL over the ground (sea level when unknown); 5,000 MSL, 1,500 AGL over ground above it', async () => {
+  const { mciFloorFt } = await import('../src/conflict-alert.js');
+  const terminal = { baseAltitudeFt: 500, reference: 'AGL', highTerrainAglFt: null };
+  assert.equal(mciFloorFt(terminal, 240), 740);
+  assert.equal(mciFloorFt(terminal, null), 500);
+  const center = { baseAltitudeFt: 5000, reference: 'MSL', highTerrainAglFt: 1500 };
+  assert.equal(mciFloorFt(center, 1200), 5000);
+  assert.equal(mciFloorFt(center, 6000), 7500);
+  assert.equal(mciFloorFt(center, null), 5000, 'unknown ground: the MSL base');
+});
+
+test('the hub sends an MCI only to a session whose Positions show it, and never sends the filter itself', async () => {
+  const { default: WsHub } = await import('../src/ws-hub.js');
+  const ca = { id: '1|2', kind: 'CA', a: '1', b: '2' };
+  const mci = { id: '1|3', kind: 'MCI', a: '1', b: '3', intruder: '3' };
+  const self = {
+    _efspAlerts: { conflictAlert: [ca, mci], conflictAlertFor: (c, positions) => c.kind !== 'MCI' || positions.some(p => p.positionId === 'AP') },
+    _efspFilter: (s, m) => m,
+  };
+  const session = (positionId) => ({
+    lastSent: new Map([['1', 0], ['2', 0], ['3', 0]]),
+    coverage: { conflictAlert: true, signedOnPositions: [{ facilityId: 'INCIRLIK', positionId }] },
+  });
+  const ap = WsHub.prototype._efspAlertsMsg.call(self, session('AP'));
+  assert.deepEqual(ap.conflictAlert.map(c => c.kind), ['CA', 'MCI']);
+  assert.equal(ap.conflictAlertFor, undefined);
+  const lc = WsHub.prototype._efspAlertsMsg.call(self, session('LC'));
+  assert.deepEqual(lc.conflictAlert.map(c => c.kind), ['CA']);
+});

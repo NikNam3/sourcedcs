@@ -208,6 +208,18 @@ function formationMembers(tracks, leads, cfg) {
   return members;
 }
 
+/**
+ * The altitude an MCI intruder must be above for a Facility's setting (docs/adr/0118; JO 7210.3EE para 12-6-12 b, 8-2-5 b).
+ * AGL: the ground plus the base, the ground taken as sea level where it is not known (ours). MSL: the base, or the ground plus
+ * `highTerrainAglFt` where the ground is known to be above the base (para 8-2-5 b's "1,500 AGL").
+ * @param {{baseAltitudeFt:number, reference:'AGL'|'MSL', highTerrainAglFt:number|null}} mci
+ * @param {number|null} groundFt
+ */
+function mciFloorFt(mci, groundFt) {
+  if (mci.reference === 'AGL') return (groundFt ?? 0) + mci.baseAltitudeFt;
+  return mci.highTerrainAglFt != null && groundFt != null && groundFt > mci.baseAltitudeFt ? groundFt + mci.highTerrainAglFt : mci.baseAltitudeFt;
+}
+
 class ConflictAlertMonitor {
   /**
    * @param {object} deps
@@ -282,4 +294,4 @@ class ConflictAlertMonitor {
   }
 }
 
-module.exports = { findConflicts, formationMembers, pairKind, ConflictAlertMonitor, isEligible };
+module.exports = { findConflicts, formationMembers, pairKind, mciFloorFt, ConflictAlertMonitor, isEligible };

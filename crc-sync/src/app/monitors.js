@@ -10,9 +10,9 @@ const { ForwardingObligationMonitor } = require('../efsp/forwarding-obligations'
 const { CorrelationReconciler } = require('../efsp/correlation-reconciler');
 const { SurveillanceHintMonitor } = require('../efsp/surveillance-hints');
 const { getHintsConfig } = require('../efsp/surveillance-hints-config');
-const { ConformanceMonitor } = require('../efsp/conformance');
+const { ConformanceMonitor, refuelingReceivers } = require('../efsp/conformance');
 const { TofiRegimeMonitor } = require('../efsp/tofi-regime-monitor');
-const { ConflictAlertMonitor } = require('../conflict-alert');
+const { ConflictAlertMonitor, mciFloorFt } = require('../conflict-alert');
 const { ATC_CLASSES } = require('../efsp/position-coverage');
 const { loadAlertingConfig } = require('../alerting-config');
 const { indicatedAltFt } = require('../altimetry');
@@ -119,6 +119,8 @@ function buildMonitors({ env, efsp, facilityConfig, missionClock, missionSession
       }
       return out;
     },
+    // docs/adr/0118: the receivers under MARSA with a tanker, and the tanker each is measured from.
+    refueling: () => refuelingReceivers(efsp.marsaStore.getAll(), (id) => efsp.flightDataStore.getFlightData(id)),
   });
   // docs/adr/0076 — "detected airborne" and staleness. It reads the Boards and the correlation records and writes nothing:
   // surveillance informs, the controller advances (§10.3).
@@ -171,10 +173,7 @@ function buildMonitors({ env, efsp, facilityConfig, missionClock, missionSession
     const altFt = intruder.alt * FT_PER_M;
     const groundM = terrainStore && typeof terrainStore.elevationAt === 'function' ? terrainStore.elevationAt(intruder.lon, intruder.lat) : null;
     const groundFt = Number.isFinite(groundM) ? groundM * FT_PER_M : null;
-    let floorFt;
-    if (mci.reference === 'AGL') floorFt = (groundFt ?? 0) + mci.baseAltitudeFt;
-    else floorFt = mci.highTerrainAglFt != null && groundFt != null && groundFt > mci.baseAltitudeFt ? groundFt + mci.highTerrainAglFt : mci.baseAltitudeFt;
-    return altFt > floorFt;
+    return altFt > mciFloorFt(mci, groundFt);
   }
   // ── The TOFI separation regime (docs/adr/0102) ────────────────────────────
   // Where a correlated flight is, relative to the airspaces ACTIVE for an MRU Facility: one answer for ACCEPT, MARK_ENTERED and
