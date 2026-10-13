@@ -7,7 +7,7 @@ import { correlationBadgeFor, showOnMapTrackFor, showStripOnMap } from './correl
 import { _dispatchCorrelation, _dispatchGesture, _dispatchHandBack, _handBackBayFor, _resolveActingPositionId } from './bay/dispatch.js';
 import { AIRSPACE_ENTRY_POSITIONS, COORDINATION_TARGETS, HAND_BACK_TO, TOFI_COUNTERPARTS } from './bay/authority-mirror.js';
 import { openPopover } from './bay/popover-portal.js';
-import { _canApproveAirspaceEntry, _canConvertToArrival, _openAirspaceEntryPopover, _pendingConvertStripId } from './bay/popovers/airspace-entry.js';
+import { _canApproveAirspaceEntry, _canConvertToArrival, _openAirspaceEntryPopover, _pendingConvertStripId, _usingAgencyEntryChoices } from './bay/popovers/airspace-entry.js';
 import { _openBindPopover } from './bay/popovers/bind.js';
 import { _openDivertPopover } from './bay/popovers/divert.js';
 import { divertOffer } from './divert-rules.js';
@@ -101,7 +101,21 @@ function _stripMenuItems(strip) {
         } });
     }
   }
-  if (AIRSPACE_ENTRY_POSITIONS.includes(strip.ownerPositionId)) {
+  // crc-sync docs/adr/0119: the using agency (Incirlik's OPS) approves or clears entry on a Strip it does not hold.
+  const agency = _usingAgencyEntryChoices(strip);
+  if (agency.length > 0) {
+    const entryId = strip.airspaceEntry && strip.airspaceEntry.airspaceId;
+    const mine = entryId ? agency.find(c => c.airspace.airspaceId === entryId) : null;
+    if (mine) {
+      items.push({ group: 'Start', key: 'leave-airspace', label: 'Leave airspace', cls: 'efsp-coordinate-btn', enabled: !pendingIn,
+        reason: pendingIn ? answerFirst : '', title: `as ${mine.positionId}, the using agency`,
+        run: () => { sendEfspMutation(mine.positionId, strip, { kind: 'ClearAirspaceEntry' }); } });
+    } else if (!entryId) {
+      items.push({ group: 'Start', key: 'airspace', label: 'Airspace…', cls: 'efsp-coordinate-btn', enabled: !pendingIn,
+        reason: pendingIn ? answerFirst : '', title: 'Approve this flight into an airspace you are the using agency for',
+        run: (anchor) => _openAirspaceEntryPopover(strip, anchor, agency) });
+    }
+  } else if (AIRSPACE_ENTRY_POSITIONS.includes(strip.ownerPositionId)) {
     const ok = _canApproveAirspaceEntry(strip) && !pendingIn;
     if (strip.airspaceEntry) {
       items.push({ group: 'Start', key: 'leave-airspace', label: 'Leave airspace', cls: 'efsp-coordinate-btn', enabled: ok,

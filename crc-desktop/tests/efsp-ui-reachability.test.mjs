@@ -656,6 +656,32 @@ test('a controller can put a flight into an airspace, and take it out again', as
   assert.equal(out.sent[0].op.kind, 'ClearAirspaceEntry');
 });
 
+test('the using agency (OPS) approves entry on a Strip AP holds, as OPS, into the airspaces it uses only (crc-sync ADR 0119)', async () => {
+  const airspaces = [
+    { airspaceId: 'MOA-INC', state: 'ACTIVE', rev: 1, transitions: [],
+      definition: { airspaceId: 'MOA-INC', name: 'Incirlik MOA', type: 'MOA', controllingFacilityId: 'CENTER', controllingPositionId: 'CTR', usingFacilityId: 'INCIRLIK', workingFrequencyMhz: 134.25 } },
+    { airspaceId: 'MOA-CTR', state: 'ACTIVE', rev: 1, transitions: [],
+      definition: { airspaceId: 'MOA-CTR', name: 'Center MOA', type: 'MOA', controllingFacilityId: 'CENTER', controllingPositionId: 'CTR', workingFrequencyMhz: 135.5 } },
+  ];
+  const strip = stripAt({ ownerPositionId: 'AP', facilityId: 'INCIRLIK' });
+  const { el, sent } = await renderStrip({ strip, flightData: FDR, signedOn: ['OPS'], airspaces });
+  click(menuItem(el, 'Airspace…'));
+  const picker = visible(el).find(c => c.tagName === 'select');
+  assert.deepEqual(picker.children.map(o => o.value), ['MOA-INC'], 'only what OPS is the using agency for');
+  click(findByText(el, 'Approve entry'));
+  assert.equal(sent[0].actingPositionId, 'OPS');
+  assert.equal(sent[0].op.kind, 'ApproveAirspaceEntry');
+
+  const inside = stripAt({ ownerPositionId: 'AP', facilityId: 'INCIRLIK', airspaceEntry: { airspaceId: 'MOA-INC', frequencyMhz: 134.25, altitudeBlock: null } });
+  const out = await renderStrip({ strip: inside, flightData: FDR, signedOn: ['OPS'], airspaces });
+  click(menuItem(out.el, 'Leave airspace'));
+  assert.deepEqual([out.sent[0].actingPositionId, out.sent[0].op.kind], ['OPS', 'ClearAirspaceEntry']);
+
+  const elsewhere = stripAt({ ownerPositionId: 'AP', facilityId: 'INCIRLIK', airspaceEntry: { airspaceId: 'MOA-CTR', frequencyMhz: 135.5, altitudeBlock: null } });
+  const other = await renderStrip({ strip: elsewhere, flightData: FDR, signedOn: ['OPS'], airspaces });
+  assert.equal(menuItem(other.el, 'Leave airspace'), undefined, 'OPS does not clear an entry it did not grant');
+});
+
 test('a Strip working an airspace nobody activated says so on its face', async () => {
   const airspaces = [{
     airspaceId: 'MOA-COLD', state: 'RETURNED', rev: 1, transitions: [],
