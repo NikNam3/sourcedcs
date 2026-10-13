@@ -25,13 +25,15 @@ the receiver's airspace. So the airspace system must know each controlling facil
 2. **Shipped defaults, theater-wide config** (shipped in `config/`, a `state/` copy overrides it, strict like every
    `state/` file — use or extend `config/efsp-airspaces.json`'s theater keying, your call, ADR says which):
    - Syria: **Incirlik TOWER = the published LTAG CTR** (ICAO control zone, H145; **never label it bare "CTR"**, which is
-     our Center Position: id e.g. `LTAG-CZ`, label "LTAG CTR (control zone)"), verbatim: *"Circle radius 5 NM centered
+     our Center Position: id e.g. `LTAG-CZ`, label "LTAG CTR (control zone)"), verbatim (AIP Türkiye AD 2 LTAG AD 2.17, page dated 14 MAY 26; "3000 FT AMSL/SFC", class "-"): *"Circle radius 5 NM centered
      on 370012N-0352530E except the part of the circle north west of a straight line joining 365906N-0351925E and
      370432N-0352837E. SFC-3000ft"* (3,000 ft MSL). Decimal: centre 37.003333 N 35.425000 E; chord 36.985000 N
      35.323611 E → 37.075556 N 35.476944 E (both end points on the circle; the chord is 2.0 nm NW of the centre; the
      field is on the kept side). Model it as a circle-minus-half-plane or as the equivalent polygon (arc points + chord);
      either way keep the source text in the config entry. Class D, owner Positions **LC, GC**;
-   - Syria: **Incirlik RAPCON** (H142/H143): 50 nm circle on the same point, **SFC – FL280**, owner Positions **AP, PAR**
+   - Syria: **Incirlik RAPCON** (H142/H143) = the published **Adana MTMA** (AIP Türkiye ENR 2.1.3, AIRAC AMDT 08/26:
+     "Centered on 365956N-0352559E, Radius 50 NM, FL280 / 2000FT AMSL", İncirlik Approach), centre **36.998889 N
+     35.433056 E** (not the CTR's centre), **SFC – FL280** (the floor lowered to SFC by H143, ours), owner Positions **AP, PAR**
      (and any SFA/approach Position of INCIRLIK); class: pick a terminal class and label it ours (the class does not change
      ownership here: H143 overrode the "Class E below 2,000 ft is CENTER's" reading);
    - **CARRIER**: 50 nm circle on the hull, **SFC – UNL**, owner the CARRIER Positions (every hull in `efsp-carriers.json`);
