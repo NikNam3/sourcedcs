@@ -186,6 +186,23 @@ test('derived carrier Blocks are display-only on both sides, and the writable on
   assert.equal(client.isBlockEditable('C1', 'FINAL'), false);
 });
 
+test('HDG and ALT are typed on an airfield\'s PAR final only: the carrier FINAL has nothing to type (ADR 0116/H125; LT-PAR-MISSED), on both sides', () => {
+  assert.deepEqual([...client.PAR_FINAL_ONLY_BLOCKS], [...server.PAR_FINAL_ONLY_BLOCKS]);
+  for (const id of server.PAR_FINAL_ONLY_BLOCKS) {
+    assert.equal(client.isBlockEditable(id, 'FINAL', 'INCIRLIK'), true, `${id} on PAR's final`);
+    assert.equal(client.isBlockEditable(id, 'FINAL', 'CARRIER'), false, `${id} on the carrier final`);
+    assert.deepEqual(server.resolveBlockTarget('FINAL', id, 'INCIRLIK'), { kind: 'clearance', field: id === '7A' ? 'altitude' : 'heading' });
+    assert.equal(server.resolveBlockTarget('FINAL', id, 'CARRIER'), null);
+    // the other strip types are not gated by the Facility
+    assert.ok(server.resolveBlockTarget('OVERFLIGHT', id, 'CARRIER'));
+    assert.equal(client.isBlockEditable(id, 'OVERFLIGHT', 'CARRIER'), true);
+  }
+  for (const id of Object.keys(client.BLOCK_MAPS.FINAL)) {
+    assert.equal(client.isBlockEditable(id, 'FINAL', 'CARRIER'), false, `carrier FINAL/${id}`);
+    assert.equal(server.resolveBlockTarget('FINAL', id, 'CARRIER'), null, `server carrier FINAL/${id}`);
+  }
+});
+
 test('the carrier Blocks carry unique labels of at most eight characters within a strip type', () => {
   for (const stripType of ['MARSHAL', 'FINAL', 'PATTERN']) {
     const labels = Object.values(client.BLOCK_MAPS[stripType]).map(d => d.label);

@@ -704,6 +704,9 @@ export function requiredBlocksFor(stripType = 'DEPARTURE') {
   return Object.entries(map).filter(([, def]) => def.required).map(([id]) => id);
 }
 
+/** crc-sync block-map.js's PAR_FINAL_ONLY_BLOCKS: FINAL Blocks typed only on an airfield's PAR final, never the carrier's. */
+export const PAR_FINAL_ONLY_BLOCKS = Object.freeze(['7A', '9A-VECTOR']);
+
 /**
  * A Block is directly editable via click-to-edit (guide §3.7/§7.4 — Enter
  * commits, Esc reverts, no auto-commit on blur) when it's flight-data- or
@@ -711,9 +714,11 @@ export function requiredBlocksFor(stripType = 'DEPARTURE') {
  * are managed by their own dedicated mechanisms (server-derived,
  * gesture toggles, the NLA button) and are never free-text editable here.
  */
-export function isBlockEditable(blockId, stripType = 'DEPARTURE') {
+export function isBlockEditable(blockId, stripType = 'DEPARTURE', facilityId = null) {
   const map = BLOCK_MAPS[stripType];
   const def = map && map[blockId];
+  // HDG and ALT are the PAR final's (an airfield's): the carrier's FINAL has nothing to type (crc-sync block-map.js).
+  if (stripType === 'FINAL' && facilityId === 'CARRIER' && PAR_FINAL_ONLY_BLOCKS.includes(blockId)) return false;
   // 9F is a picker (docs/adr/0073) and editable only while there is a route
   // table to pick from; with none it must not fall through to free text
   // (bay-view.js tries the picker first, then this).

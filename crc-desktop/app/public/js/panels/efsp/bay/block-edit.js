@@ -149,7 +149,7 @@ function _buildBlockCellInner(strip, blockId) {
     span.dataset.editBlock = redirect.blockId;
     span.dataset.editValue = redirect.value;
   }
-  if (!redirect && !isBlockEditable(blockId, strip.stripType)) return span;
+  if (!redirect && !isBlockEditable(blockId, strip.stripType, strip.facilityId)) return span;
 
   span.classList.add('efsp-block-editable');
   span.tabIndex = 0;
