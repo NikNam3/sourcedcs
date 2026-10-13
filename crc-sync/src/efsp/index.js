@@ -113,13 +113,13 @@ function createEfsp({ env = process.env, facilityConfig = createFacilityConfig({
   const facilityIds = facilityConfig.getFacilityIds();
   undoHistory.attach(undoEnv({
     boardFor: (facilityId) => { const f = facilities.get(facilityId); return f ? f.boardStore : null; },
-    flightDataStore, carrierStore, marsaStore,
+    flightDataStore, carrierStore, marsaStore, correlationStore,
   }));
 
   for (const facilityId of facilityIds) {
     const positionStore = new PositionStore(facilityConfig.getPositionSet(facilityId), facilityConfig.getHatMaps(facilityId), { clock, frequencies: facilityConfig.getPositionFrequencies(facilityId), isAbsent });
 
-    const rules = buildFacilityRules({ facilityId, facilityConfig, permissionRules, positionStore, facilities, stores: { airspaceStore, marsaStore, runwayStatusStore, carrierStore }, regimeLocator });
+    const rules = buildFacilityRules({ facilityId, facilityConfig, permissionRules, positionStore, facilities, stores: { airspaceStore, marsaStore, runwayStatusStore, carrierStore, correlationStore }, regimeLocator });
 
     const boardStore = new BoardStore(flightDataStore, rules, { clock, wallClock, undoHistory, nlaGuard, mutationLog, airborneObserver: airborneEvidence, controlInvariantMode: () => (env.CRCSYNC_CONTROL_INVARIANT === 'throw' ? 'throw' : 'repair') });
     facilities.set(facilityId, { boardStore, positionStore, rules });

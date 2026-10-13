@@ -23,6 +23,7 @@
 //     codes?:      [code],                      beacon codes it may release (re-acquired on undo, D23: never stolen)
 //     carrier?:    [{ flightDataId }],          Marshal stack entries it may mark pushed or remove
 //     marsa?:      [relationId | { flightDataId }],  MARSA relations it may end (by id, or every relation of a flight)
+//     correlations?: [flightDataId],            explicit track bindings it may end (put back on undo, never stolen)
 //   }
 //
 // A module without the key fails the op-table test (tests/undo-history.test.mjs, U17), so every new op decides.
@@ -54,7 +55,7 @@ const log = require('../../log').logger('efsp:undo');
 /** The undo window (H95: 10 s, was 30 s). A ruling, not tuning: a named constant, mirrored by the client. */
 const UNDO_WINDOW_MS = 10_000;
 
-const SCOPE_KEYS = ['strips', 'flightData', 'codes', 'carrier', 'marsa'];
+const SCOPE_KEYS = ['strips', 'flightData', 'codes', 'carrier', 'marsa', 'correlations'];
 
 function stripKey(facilityId, stripId) { return `strip:${facilityId}/${stripId}`; }
 function flightDataKey(id) { return `flightData:${id}`; }
@@ -290,13 +291,14 @@ class UndoHistory {
 
   _captureScope(scope) {
     const c = this._capture;
-    if (!c) return { strips: [], flightData: [], codes: [], carrier: [], marsa: [] };
+    if (!c) return { strips: [], flightData: [], codes: [], carrier: [], marsa: [], correlations: [] };
     return {
       strips: scope.strips.map(s => ({ facilityId: s.facilityId, stripId: s.stripId, ...(c.strip(s.facilityId, s.stripId) || { strip: null }) })),
       flightData: scope.flightData.map(id => ({ id, image: c.flightData(id) })),
       codes: scope.codes.map(code => (c.code ? c.code(code) : { code, holder: null })),
       carrier: scope.carrier.map(e => ({ flightDataId: e.flightDataId, image: c.carrier ? c.carrier(e.flightDataId) : null })),
       marsa: scope.marsa.flatMap(ref => (c.marsa ? c.marsa(ref) : [])),
+      correlations: scope.correlations.map(id => ({ flightDataId: id, binding: c.correlation ? c.correlation(id) : null })),
     };
   }
 
@@ -373,14 +375,15 @@ class UndoHistory {
  * The environment an UndoHistory is attached to (createEfsp, or a Board built alone): how a Scope's before-images are
  * taken and the stores the Undo op restores through. `carrierStore`/`marsaStore` may be absent (a Board built alone).
  */
-function undoEnv({ boardFor, flightDataStore, carrierStore = null, marsaStore = null }) {
+function undoEnv({ boardFor, flightDataStore, carrierStore = null, marsaStore = null, correlationStore = null }) {
   return {
-    boardFor, flightDataStore, carrierStore, marsaStore,
+    boardFor, flightDataStore, carrierStore, marsaStore, correlationStore,
     strip: (facilityId, stripId) => { const b = boardFor(facilityId); return b ? b.captureForUndo(stripId) : null; },
     flightData: (id) => { const f = flightDataStore.getFlightData(id); return f ? JSON.parse(JSON.stringify(f)) : null; },
     code: (code) => ({ code, holder: flightDataStore.codeAllocator.holderOf(code) }),
     carrier: (flightDataId) => (carrierStore ? carrierStore.entryImage(flightDataId) : null),
     marsa: (ref) => (marsaStore ? marsaStore.relationImages(ref) : []),
+    correlation: (flightDataId) => (correlationStore ? correlationStore.bindingImage(flightDataId) : null),
   };
 }
 

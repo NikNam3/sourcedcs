@@ -118,6 +118,18 @@
       <button class="tp-rename-btn tp-rename-clr" id="tp-rename-clr">CLR</button>
     </div>
   </div>
+  <!-- crc-sync H136: start flight following on a contact with no Strip (shown only where it applies) -->
+  <div class="tp-section" id="tp-ff-section" hidden>
+    <div class="tp-section-label">Start flight following</div>
+    <div class="tp-rename-row">
+      <input type="text" class="tp-rename-input" id="tp-ff-callsign" maxlength="7" placeholder="callsign"
+             autocomplete="off" spellcheck="false" />
+      <input type="text" class="tp-rename-input" id="tp-ff-type" maxlength="12" placeholder="type"
+             autocomplete="off" spellcheck="false" />
+      <button class="tp-rename-btn" id="tp-ff-start">START</button>
+    </div>
+    <div class="tp-ff-msg" id="tp-ff-msg"></div>
+  </div>
   <div class="tp-section" id="tp-fpl-section">
     <div class="tp-section-label">Flight Plan</div>
     <pre class="tp-fpl-pre" id="tp-fpl-msg"></pre>

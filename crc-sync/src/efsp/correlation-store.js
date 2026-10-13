@@ -302,6 +302,66 @@ class CorrelationStore extends SyncedStore {
     return { ok: true };
   }
 
+  // ── flight following (H136, docs/wip/LT-VFR.md) ─────────────────────────
+  //
+  // "Start flight following" and "Radar service terminated" are Board ops (board/ops/start-flight-following.js,
+  // terminate-radar-service.js) that also bind or end the contact's correlation, in the same Mutation. The Board
+  // audits the whole action (its own entry carries the binding), so these write no correlation audit entry of their
+  // own; each returns the changed record for the efsp-correlation-delta that rides the same round trip, or null.
+
+  /**
+   * The flight a contact is bound or matched to (CORRELATED or PROVISIONAL), or null: `{ flightDataId, state }`. An
+   * explicit binding claims its contact even while the picture does not show it (the reconciler then holds the record
+   * UNCORRELATED with the binding kept, until the contact is seen again).
+   */
+  holderOfTrack(trackId) {
+    const wanted = String(trackId);
+    for (const record of this._records.values()) {
+      if (record.trackId === wanted && record.state !== 'UNCORRELATED') return { flightDataId: record.flightDataId, state: record.state };
+    }
+    for (const record of this._records.values()) {
+      if (record.binding && record.binding.trackId === wanted) return { flightDataId: record.flightDataId, state: record.state };
+    }
+    return null;
+  }
+
+  /** Binds a contact to a flight (rung 1), as BindTrack does. @returns {object} the record */
+  bindOnStart(flightDataId, trackId, { actingPositionId = null, by = null, note = null } = {}) {
+    const record = this._recordFor(flightDataId);
+    this._bind(record, { trackId, note }, actingPositionId, by);
+    return this.getCorrelation(flightDataId);
+  }
+
+  /** Ends an explicit binding (radar service terminated, or the start undone). @returns {object|null} the record, or null when nothing was bound */
+  endBinding(flightDataId, { actingPositionId = null, by = null } = {}) {
+    const record = this._records.get(flightDataId);
+    if (!record || !record.binding) return null;
+    this._unbind(record, {}, actingPositionId, by);
+    return this.getCorrelation(flightDataId);
+  }
+
+  /** What an undo restores (undo/undo-history.js `correlations`): the explicit binding, or null. */
+  bindingImage(flightDataId) {
+    const record = this._records.get(flightDataId);
+    return record && record.binding ? deepClone(record.binding) : null;
+  }
+
+  /**
+   * Puts an explicit binding back (an Undo of "Radar service terminated"). Never steals: a contact another flight now
+   * holds is left with it. @returns {{record:object|null, warning?:string}}
+   */
+  restoreBinding(flightDataId, binding, { by = null } = {}) {
+    if (!binding || !binding.trackId) return { record: null };
+    const holder = this.holderOfTrack(binding.trackId);
+    if (holder && holder.flightDataId !== flightDataId) {
+      return { record: null, warning: `contact ${binding.trackId} is correlated to another flight now; bind it by hand` };
+    }
+    const record = this._recordFor(flightDataId);
+    if (record.binding && record.binding.trackId === binding.trackId) return { record: null };
+    this._bind(record, { trackId: binding.trackId, note: binding.note }, binding.boundPositionId, by);
+    return { record: this.getCorrelation(flightDataId) };
+  }
+
   // ── reconciler ──────────────────────────────────────────────────────────
 
   /**

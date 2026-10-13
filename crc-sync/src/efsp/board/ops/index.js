@@ -24,6 +24,8 @@ const MODULES = [
   require('./final-call'),
   require('./split-formation'),
   require('./join-formation'),
+  require('./start-flight-following'),
+  require('./terminate-radar-service'),
 ];
 
 module.exports = MODULES.flatMap(m => (Array.isArray(m) ? m : [m]));

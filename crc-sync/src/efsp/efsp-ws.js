@@ -214,6 +214,11 @@ function _handleMutation(ctx, session, msg, persist) {
     // A push re-numbers nothing but changes which lane the next flight feeds.
     if (ctx.nlaStatusMonitor) ctx.nlaStatusMonitor.tick();
   }
+  // H136 (docs/wip/LT-VFR.md): "Start flight following" binds the contact, "Radar service terminated" ends the binding,
+  // and their Undo reverses either. The record is not a Strip, so it rides its own delta on the same round trip.
+  if (result.correlationChanged && result.correlationChanged.length && ctx.correlationStore) {
+    slots.correlation = frames.correlationDelta(ctx.correlationStore, result.correlationChanged);
+  }
   return directed.length
     ? { ack, broadcasts: skeleton.orderSlots(slots), directed }
     : { ack, broadcasts: skeleton.orderSlots(slots) };

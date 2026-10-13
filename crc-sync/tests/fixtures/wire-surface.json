@@ -76,8 +76,10 @@
       "SetFlag",
       "SetState",
       "SplitFormation",
+      "StartFlightFollowing",
       "TOFI",
       "TRAFFIC",
+      "TerminateRadarService",
       "TransferStrip",
       "Undo"
     ],

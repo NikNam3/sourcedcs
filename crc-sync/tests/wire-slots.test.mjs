@@ -8,15 +8,15 @@ const { orderSlots, SLOT_ORDER } = require('../src/efsp/wire/slots');
 
 test('orderSlots sends the slots in SLOT_ORDER and names each frame\'s slot without serialising the names', () => {
   const a = { type: 'efsp-board-delta', n: 1 }, b = { type: 'efsp-board-delta', n: 2 }, m = { type: 'efsp-marsa-delta' };
-  const out = orderSlots({ carrier: { type: 'efsp-carrier-delta' }, marsa: m, peer: b, primary: a });
-  assert.deepEqual(out.map(f => f.type), ['efsp-board-delta', 'efsp-board-delta', 'efsp-marsa-delta', 'efsp-carrier-delta']);
-  assert.deepEqual(out.slots, ['primary', 'peer', 'marsa', 'carrier']);
+  const out = orderSlots({ correlation: { type: 'efsp-correlation-delta' }, carrier: { type: 'efsp-carrier-delta' }, marsa: m, peer: b, primary: a });
+  assert.deepEqual(out.map(f => f.type), ['efsp-board-delta', 'efsp-board-delta', 'efsp-marsa-delta', 'efsp-carrier-delta', 'efsp-correlation-delta']);
+  assert.deepEqual(out.slots, ['primary', 'peer', 'marsa', 'carrier', 'correlation']);
   assert.equal(JSON.stringify(out).includes('slots'), false);
-  assert.deepEqual(SLOT_ORDER, ['primary', 'peer', 'marsa', 'carrier']);
+  assert.deepEqual(SLOT_ORDER, ['primary', 'peer', 'marsa', 'carrier', 'correlation']);
   assert.equal(slot({ broadcasts: out }, 'primary'), a);
   assert.equal(slot({ broadcasts: out }, 'peer'), b, 'two board-deltas are told apart by slot, not by type');
   assert.equal(slot({ broadcasts: orderSlots({ primary: a }) }, 'carrier'), undefined);
-  assert.deepEqual(Object.keys(legacyShape({ ack: {}, broadcasts: out })).sort(), ['ack', 'broadcast', 'carrierBroadcast', 'marsaBroadcast', 'peerBroadcast']);
+  assert.deepEqual(Object.keys(legacyShape({ ack: {}, broadcasts: out })).sort(), ['ack', 'broadcast', 'carrierBroadcast', 'correlationBroadcast', 'marsaBroadcast', 'peerBroadcast']);
 });
 
 test('the slot helpers fail loudly on an ambiguous mapping instead of guessing', () => {

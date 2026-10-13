@@ -89,6 +89,9 @@
     }
     .tp-fpl-status { font-size: 9px; color: var(--ui-text-dim); letter-spacing: 0.05em; }
     #tp-fpl-section { display: none; }
+    #tp-ff-section[hidden] { display: none; }
+    .tp-ff-msg { font-size: 9px; color: var(--ui-text-dim); letter-spacing: 0.05em; margin-top: 4px; min-height: 0; }
+    .tp-ff-msg:empty { display: none; }
 
 
     /* ── Ground vehicle label popup ── */

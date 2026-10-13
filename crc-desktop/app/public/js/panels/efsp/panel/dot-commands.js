@@ -10,6 +10,7 @@ import { normalizeStereoNameClient } from '../efsp-stereo-routes.js';
 import { parseDotCommand } from '../dot-command.js';
 import { buildJoinOp, buildSplitOp, joinLeadCandidates, parseSplitCommand } from '../formation-rules.js';
 import { dispatchFormationOp } from '../bay/popovers/formation.js';
+import { canStartFlightFollowing, canTerminateRadarService, contactForToken, startFlightFollowing, terminateRadarService } from '../flight-following.js';
 
 /**
  * `.mission <CALLSIGN>` — frag a mission line bound to a live flight.
@@ -86,6 +87,13 @@ export function _dispatchDotCommand(parsed) {
     return;
   }
 
+  // crc-sync H136: `.ff <track> <CALLSIGN> <TYPE>` starts flight following on a contact (the track panel's keyboard
+  // path, as .bind is the TRK badge's). It makes the Strip, so nothing is selected.
+  if (parsed.verb === 'ff') {
+    _startFlightFollowingByDot(parsed.args);
+    return;
+  }
+
   // docs/adr/0100 §10: .undo undoes the slot's action, not "the selected Strip", so it needs no selection.
   if (parsed.verb === 'undo') {
     requestUndo();
@@ -120,6 +128,10 @@ export function _dispatchDotCommand(parsed) {
       return;
     }
     sendEfspCorrelationMutation(actingPositionId, strip.flightDataId, baseRev, { kind: 'BindTrack', trackId: String(trackId) });
+  } else if (parsed.verb === 'term') {
+    // crc-sync H136: "RADAR SERVICE TERMINATED" on the selected flight-following Strip (the ⋯ menu's keyboard path).
+    if (!canTerminateRadarService(strip)) { _showDotCommandError('.term ends flight following: an overflight with no clearance, at AP or CTR'); return; }
+    terminateRadarService(strip);
   } else if (parsed.verb === 'split') {
     _dispatchSplitDotCommand(parsed, strip);
   } else if (parsed.verb === 'join') {
@@ -127,6 +139,18 @@ export function _dispatchDotCommand(parsed) {
   } else if (MARSA_VERBS[parsed.verb]) {
     _dispatchMarsaDotCommand(parsed, strip, actingPositionId);
   }
+}
+
+function _startFlightFollowingByDot(args) {
+  const [token, callsign, type] = args;
+  if (!token || !callsign || !type) { _showDotCommandError('.ff needs the track, a callsign and a type, e.g. .ff 1234 N123AB C172'); return; }
+  const trackId = contactForToken(token);
+  if (!trackId) { _showDotCommandError(`no contact ${String(token).toUpperCase()} on the scope`); return; }
+  if (!canStartFlightFollowing(trackId)) { _showDotCommandError(`contact ${String(token).toUpperCase()} already has a Strip, or no AP/CTR is held`); return; }
+  const problem = startFlightFollowing(trackId, callsign, type, (ack) => {
+    if (!ack.ok) _showDotCommandError(ack.detail || ack.reason || 'refused');
+  });
+  if (problem) _showDotCommandError(problem);
 }
 
 // crc-sync docs/adr/0099 — `.split <k> <CALLSIGN> <H270|S250|SM.80|A120|FL240> [MARSA]` (the assignment may be left

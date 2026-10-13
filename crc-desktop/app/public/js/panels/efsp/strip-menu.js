@@ -22,6 +22,7 @@ import { _dispatchHandoffStep, _openControlReleasePopover } from './bay/popovers
 import { handoffSteps } from './control-release-rules.js';
 import { holdsFormationGrant, joinOffer, splitOffer } from './formation-rules.js';
 import { convertStripToArrival } from './panel/create-strip.js';
+import { canTerminateRadarService, terminateRadarService } from './flight-following.js';
 import { _stripEl } from './strip-dom.js';
 
 // The Strip's tools column and the ⋯ menu (DESK-SPLIT, split out of strip-view.js): everything a controller starts from a Strip.
@@ -155,6 +156,16 @@ function _stripMenuItems(strip) {
         title: 'pick the contact this flight is',
         run: (anchor) => _openBindPopover(strip, anchor, null) });
     }
+  }
+  // crc-sync H136: "RADAR SERVICE TERMINATED" (JO 7110.65BB para 5-1-9 a): the Strip is dropped, its code released and
+  // the contact untracked. Offered on a flight-following Strip (an OVERFLIGHT with no clearance) its radar Position holds.
+  if (canTerminateRadarService(strip)) {
+    const blockedBy = (strip.coordination && strip.coordination.state === 'INITIATED') ? 'an open coordination proposal'
+      : (strip.tofiCoordination && ['INITIATED', 'ACTIVE'].includes(strip.tofiCoordination.state)) ? 'the TOFI exchange' : null;
+    items.push({ group: 'Flight', key: 'terminate-radar-service', label: 'Radar service terminated', cls: 'efsp-terminate-btn',
+      enabled: !blockedBy, reason: blockedBy ? `resolve ${blockedBy} first` : '',
+      title: 'drop the Strip: code released, contact untracked',
+      run: () => { terminateRadarService(strip); } });
   }
   if (_canConvertToArrival(strip)) {
     const blockedBy = (strip.coordination && strip.coordination.state === 'INITIATED') ? 'an open coordination proposal'

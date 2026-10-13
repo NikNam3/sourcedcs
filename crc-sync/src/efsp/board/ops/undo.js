@@ -194,6 +194,22 @@ function _applyUndo(ctx, meta) {
       (compensators.carrier = compensators.carrier || []).push(c.flightDataId);
     }
   }
+  // H136 (docs/wip/LT-VFR.md): a binding the action made on flight data it created ends with it ("Start flight
+  // following" undone), and a binding it ended comes back ("Radar service terminated" undone), never stolen.
+  const correlationChanged = [];
+  if (env.correlationStore) {
+    for (const id of plan.created.flightData || []) {
+      const r = env.correlationStore.endBinding(id, { actingPositionId, by });
+      if (r) correlationChanged.push(r);
+    }
+    for (const c of plan.images.correlations || []) {
+      if (!c || !c.binding) continue;
+      const r = env.correlationStore.restoreBinding(c.flightDataId, c.binding, { by });
+      if (r.record) correlationChanged.push(r.record);
+      if (r.warning) warnings.push(warn('BINDING_NOT_RESTORED', r.warning));
+    }
+    if (correlationChanged.length) compensators.correlations = correlationChanged.map(r => r.flightDataId);
+  }
   for (const fd of marsaChanged.length ? (env.marsaStore.drainRegimeWrites() || []) : []) {
     if (!flightDataList.some(x => x.flightDataId === fd.flightDataId)) flightDataList.push(fd);
   }
@@ -207,6 +223,14 @@ function _applyUndo(ctx, meta) {
       { clientMutationId, op: { kind: 'Undo' } }, actingPositionId, by, subjectBefore,
       { ok: true, strip: subject },
       { tail: { undoneActionId: plan.actionId, undoneOp: plan.meta.op, records: others, voided: plan.voided, compensators } },
+    );
+  } else if (!subject && subjectBefore && own.gone.includes(plan.meta.stripId)) {
+    // The undone action created its subject ("Start flight following", H136): the Undo removed it, so the entry names
+    // the Strip as it was and `removed: true` (the Mutation log's `after` is never a Strip that is gone).
+    ctx.audit.recordAudit(
+      { clientMutationId, op: { kind: 'Undo' } }, actingPositionId, by, subjectBefore,
+      { ok: true, strip: subjectBefore },
+      { tail: { undoneActionId: plan.actionId, undoneOp: plan.meta.op, removed: true, records: others, voided: plan.voided, compensators } },
     );
   }
 
@@ -244,6 +268,7 @@ function _applyUndo(ctx, meta) {
     peerStrip: peerStrip || undefined,
     marsaChanged: marsaChanged.length ? marsaChanged : undefined,
     carrierChanged,
+    correlationChanged: correlationChanged.length ? correlationChanged : undefined,
     undoVoided: undoVoided.length ? undoVoided : undefined,
   };
 }

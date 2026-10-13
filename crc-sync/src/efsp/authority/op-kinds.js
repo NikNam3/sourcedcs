@@ -37,6 +37,9 @@ const OP_KINDS = [
   // Positions that actually work airborne flights; a range Position gets
   // neither, because it works no Strips at all (§4.1 rule 2).
   'ApproveAirspaceEntry', 'ClearAirspaceEntry',
+  // H136 (docs/wip/LT-VFR.md): flight following on a contact with no Strip, started and ended by the radar Position
+  // working it (JO 7110.65BB para 5-2-7 a, 5-1-9 a). AP and CTR only (AP_CTR_ONLY_OP_KINDS).
+  'StartFlightFollowing', 'TerminateRadarService',
 ];
 
 // The 5 cross-Facility coordination primitives (guide §4.6) — split out so
@@ -54,7 +57,7 @@ const COORDINATION_STEP_OP_KINDS = ['ControlRelease'];
 // (docs/adr/0023). Kept separate from COORDINATION_OP_KINDS since it isn't
 // one (no cross-Facility exchange, no replica — a same-Facility in-place
 // role change), but needs the identical exclusion from OPS/CD/GC/LC.
-const AP_CTR_ONLY_OP_KINDS = ['ConvertToArrival', 'Divert'];
+const AP_CTR_ONLY_OP_KINDS = ['ConvertToArrival', 'Divert', 'StartFlightFollowing', 'TerminateRadarService'];
 
 // Approving a flight into an airspace is something the Position working that
 // airborne flight does — AP and CTR here, since they are the Positions that
