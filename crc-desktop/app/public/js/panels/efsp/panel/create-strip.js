@@ -332,7 +332,7 @@ export function _refreshCreateStripAvailability() {
       for (const r of _stereoRoutes) {
         const opt = document.createElement('option');
         opt.value = r.name;
-        opt.textContent = r.description ? `${r.name} — ${r.description}` : r.name;
+        opt.textContent = r.name; // the name only (decisions.md H138 U4): `description` stays in the file, never shown
         _createStripStereoEl.appendChild(opt);
       }
       // Same "never silently reset a deliberate choice" rule the role

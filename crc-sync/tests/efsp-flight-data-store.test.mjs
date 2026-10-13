@@ -15,7 +15,7 @@ fs.writeFileSync(process.env.CRCSYNC_EFSP_STEREO_ROUTES_PATH, JSON.stringify([
   {
     name: 'PACK 1', description: 'north departure',
     departureAirport: 'LTAG', destinationAirport: 'LTAG',
-    route: 'LTAG DCT ALPHA DCT LTAG', requestedAltitude: '250', remarks: 'squadron standard',
+    route: 'LTAG DCT ALPHA DCT LTAG', requestedAltitude: '250',
   },
   { name: 'PACK 9', route: 'LTAG DCT RETIRED', active: false },
 ]));
@@ -621,7 +621,7 @@ test('ACCEPTANCE (WP6): a stereo route filed by short name produces a complete f
   assert.equal(flightData.filed.requestedAltitude, '250');
   assert.equal(flightData.filed.departureAirport, 'LTAG');
   assert.equal(flightData.filed.destinationAirport, 'LTAG');
-  assert.equal(flightData.filed.remarks, 'squadron standard');
+  assert.equal(flightData.filed.remarks, '', 'a stereo route sets no remarks (H138 U4)');
   assert.equal(flightData.filed.stereoRouteName, 'PACK 1');
 });
 

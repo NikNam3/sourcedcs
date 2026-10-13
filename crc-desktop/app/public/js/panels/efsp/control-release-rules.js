@@ -68,6 +68,8 @@ export function requestSummary(req) {
 /**
  * The standing lines a HANDOFF row carries after ACCEPT, as `{key, text, title, tone, mine}`; `mine` means the Position
  * of this Strip holds it. Empty when this is not an ACTIVE HANDOFF.
+ * COMMS and CTRL are `quiet` (grey text, no background, decisions.md H138 U3): who holds them is no problem, so it
+ * takes no colour (dark cockpit, H115-H119). The problem tones (`attn`, `bad`) stay as they were.
  */
 export function handoffChips(strip) {
   if (!isStepsHandoff(strip)) return [];
@@ -76,9 +78,9 @@ export function handoffChips(strip) {
   const chips = [];
   const comms = commsHolderPosition(strip);
   const control = controlHolderPosition(strip);
-  chips.push({ key: 'comms', text: `COMMS: ${comms}`, mine: comms === me, tone: 'on',
+  chips.push({ key: 'comms', text: `COMMS: ${comms}`, mine: comms === me, tone: 'quiet',
     title: co.comms.transferred ? `communications with ${comms}${co.comms.at ? ` since ${_zulu(co.comms.at)}` : ''}${co.comms.trigger ? ` (${co.comms.trigger})` : ''}` : `${comms} is still on the frequency` });
-  chips.push({ key: 'control', text: `CTRL: ${control}`, mine: control === me, tone: 'on',
+  chips.push({ key: 'control', text: `CTRL: ${control}`, mine: control === me, tone: 'quiet',
     title: controlMoved(co) ? `control with ${control}${co.control.at ? ` since ${_zulu(co.control.at)}` : ''}` : `${control} still has control: instructions outside a release need coordinating` });
   if (!controlMoved(co)) {
     const rel = co.release;

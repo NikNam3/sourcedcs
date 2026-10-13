@@ -40,7 +40,6 @@ fs.writeFileSync(process.env.CRCSYNC_EFSP_STEREO_ROUTES_PATH, JSON.stringify([
     destinationAirport: 'LTAG',
     route: PACK_1_ROUTE,
     requestedAltitude: '250',
-    remarks: 'squadron standard',
   },
   {
     name: 'PACK 2',
@@ -97,7 +96,7 @@ test('SCENARIO a squadron jet files PACK 1 by phone and flies it', async () => {
   assert.equal(flightData.filed.requestedAltitude, '250');
   assert.equal(flightData.filed.departureAirport, 'LTAG');
   assert.equal(flightData.filed.destinationAirport, 'LTAG');
-  assert.equal(flightData.filed.remarks, 'squadron standard');
+  assert.equal(flightData.filed.remarks, '', 'a stereo route sets no remarks (H138 U4)');
   // The canonical spelling, not the `PACK1` that was typed.
   assert.equal(flightData.filed.stereoRouteName, 'PACK 1');
 

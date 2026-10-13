@@ -602,6 +602,11 @@
   "panels/efsp/bay/popovers/marsa.js": [
    "_openMarsaPopover"
   ],
+  "panels/efsp/bay/popovers/remarks.js": [
+   "REMARKS_MAX_LENGTH",
+   "openRemarksPopover",
+   "remarksEditable"
+  ],
   "panels/efsp/bay/popovers/tofi.js": [
    "TOFI_ACCEPT_REGIMES",
    "_canMarkTofiEntered",
@@ -1350,6 +1355,9 @@
    "_buildStripTools",
    "openStripMenu"
   ],
+  "panels/efsp/strip-remarks.js": [
+   "_buildRemarksRow"
+  ],
   "panels/efsp/strip-template.js": [
    "ARRIVAL_BLOCK_MAP",
    "BLOCK_MAPS",
@@ -1372,6 +1380,7 @@
    "blockLabelFor",
    "blockTitleFor",
    "blockValueHintFor",
+   "cutRemarksToFit",
    "editRedirectFor",
    "enumSelectOptionsFor",
    "formatBlock3",
@@ -1380,6 +1389,8 @@
    "isBooleanToggleBlock",
    "isEnumBlockClearable",
    "isParFinalOnlyOnCarrier",
+   "remarksBlockFor",
+   "remarksOf",
    "requiredBlocksFor",
    "resolveBlockValue",
    "supersededAnnotationEntries",

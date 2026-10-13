@@ -21,6 +21,7 @@ import { _coordinationExchange, _marsaExchange, _pairedMissionStrip, _tofiExchan
 import { _stripAlerts } from './strip-alerts.js';
 import { _buildIndicatorSlots } from './strip-indicators.js';
 import { _buildStripTools } from './strip-menu.js';
+import { _buildRemarksRow } from './strip-remarks.js';
 
 // The Strip's face: Layout C (docs/adr/0056).
 //
@@ -220,6 +221,8 @@ export function _buildStripLayout(el, strip, obligation) {
   const slots = _buildIndicatorSlots(strip, el, obligation, alerts);
   if (slots) main.appendChild(slots);
   for (const line of _buildReasonLines(strip, inhibited, alerts)) main.appendChild(line);
+  const remarks = _buildRemarksRow(strip); // H138 U2: the bottom row, only when there are remarks
+  if (remarks) main.appendChild(remarks);
   _appendExpandedView(main, strip);
 
   // The grid is one level down because the Strip itself is the size container

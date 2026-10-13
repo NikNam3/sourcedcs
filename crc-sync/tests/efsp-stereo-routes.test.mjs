@@ -13,7 +13,7 @@ const paths = withPaths('efsp-stereo-routes-test-', { CRCSYNC_EFSP_STEREO_ROUTES
 const tmpDir = paths.dir;
 const tmpFile = paths.file('efsp-stereo-routes.json');
 const FIXTURE = [
-  { name: 'PACK 1', description: 'north departure', departureAirport: 'LTAG', destinationAirport: 'LTAG', route: 'LTAG DCT ALPHA DCT LTAG', requestedAltitude: '250', remarks: 'squadron standard' },
+  { name: 'PACK 1', description: 'north departure', departureAirport: 'LTAG', destinationAirport: 'LTAG', route: 'LTAG DCT ALPHA DCT LTAG', requestedAltitude: '250' },
   { name: 'PACK 2', route: 'LTAG DCT BRAVO', active: false },
 ];
 fs.writeFileSync(tmpFile, JSON.stringify(FIXTURE));
@@ -102,8 +102,16 @@ test('active must be a boolean when present', () => {
   assert.match(check.detail, /active must be a boolean/);
 });
 
-test('an unrecognised key is tolerated, not rejected — same latitude airspace-config gives', () => {
-  assert.deepEqual(validateStereoRoutes([{ name: 'PACK 1', route: 'A', squadronNote: 'whatever' }]), { ok: true });
+test('an unrecognised key is refused by name (state/ is strict, H127; U-STRIP U4)', () => {
+  const check = validateStereoRoutes([{ name: 'PACK 1', route: 'A', squadronNote: 'whatever' }]);
+  assert.equal(check.ok, false);
+  assert.match(check.detail, /PACK 1 has an unknown key "squadronNote"/);
+});
+
+test('a stereo route sets no remarks: an old table still carrying `remarks` is refused, naming the key (H138 U4)', () => {
+  const check = validateStereoRoutes([{ name: 'PACK 1', route: 'A', remarks: 'squadron standard' }]);
+  assert.equal(check.ok, false);
+  assert.match(check.detail, /unknown key "remarks".*sets no remarks/);
 });
 
 test('an empty table is valid — that is what ships', () => {
@@ -163,13 +171,12 @@ test('toFlightDataFiledSeed produces the flat seed createFlightData consumes', (
     requestedAltitude: '250',
     departureAirport: 'LTAG',
     destinationAirport: 'LTAG',
-    remarks: 'squadron standard',
   });
 });
 
 test('toFlightDataFiledSeed leaves absent optional fields as empty strings, and carries no aircraft type', () => {
   const seed = toFlightDataFiledSeed({ name: 'PACK 2', route: 'LTAG DCT BRAVO' });
-  assert.deepEqual(seed, { route: 'LTAG DCT BRAVO', requestedAltitude: '', departureAirport: '', destinationAirport: '', remarks: '' });
+  assert.deepEqual(seed, { route: 'LTAG DCT BRAVO', requestedAltitude: '', departureAirport: '', destinationAirport: '' });
   // A canned ROUTE says nothing about what airframe is flying it — unlike
   // the DD1801 seed, which legitimately carries aircraftType/wtc.
   assert.equal('aircraftType' in seed, false);
@@ -225,6 +232,12 @@ test('a table that is not valid JSON is a startup error naming the file', () => 
 
 test('a table that is valid JSON but fails validation is a startup error naming the file', () => {
   assert.match(loadFails(JSON.stringify([{ name: 'PACK 1' }])), /efsp-stereo-routes\.json/); // no route
+});
+
+test('an old table with `remarks` stops start-up naming the file and the key (H138 U4)', () => {
+  const message = loadFails(JSON.stringify([{ name: 'PACK 1', route: 'A', remarks: 'x' }]));
+  assert.match(message, /efsp-stereo-routes\.json/);
+  assert.match(message, /"remarks"/);
 });
 
 test('a missing table file is a startup error naming the file', () => {

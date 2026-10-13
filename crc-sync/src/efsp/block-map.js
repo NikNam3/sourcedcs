@@ -476,6 +476,8 @@ const MARSHAL_BLOCK_MAP = {
   'C19': { required: false, target: { kind: 'carrier', field: 'approachTurnNm' } }, // H118: where a bolter turns back onto final
   // Free note, annotation-routed like every strip type's remarks cell.
   'C24': { required: false, target: { kind: 'annotation' } },
+  // decisions.md H138 U2: the flight's remarks on every strip type, the same field and Block id as the ATC maps'.
+  '9E':  { required: false, target: { kind: 'flightData', path: 'filed.remarks' } },
   ..._CARRIER_CHROME,
 };
 
@@ -486,7 +488,8 @@ const MARSHAL_BLOCK_MAP = {
 // non-required pair. Everything else stays read-only (§7.10, WP7A bullet 6): deck, final bearing and distance are
 // derived, drawn by the client from the ship state and the track. Shared with PAR (L18).
 // Every other Block of this map is `system`, `flag` or `carrier-derived`, none of which resolveBlockTarget lets SetBlock
-// write. (Block 5, the squawk, is the one chrome Block left off.)
+// write, except the flight's remarks (9E, H138 U2), which every strip type carries. (Block 5, the squawk, is the one
+// chrome Block left off.)
 const FINAL_BLOCK_MAP = {
   'C1':  { required: true,  target: { kind: 'carrier-derived', field: 'callsign' } },
   'C2':  { required: true,  target: { kind: 'carrier-derived', field: 'aircraftType' } },
@@ -497,6 +500,7 @@ const FINAL_BLOCK_MAP = {
   'C17': { required: false, target: { kind: 'carrier-derived', field: 'finalDistance' } },
   '7A': { required: false, target: { kind: 'clearance', field: 'altitude' }, interlock: 'ALTITUDE' },
   '9A-VECTOR': { required: false, target: { kind: 'clearance', field: 'heading' }, interlock: 'COURSE' },
+  '9E':  { required: false, target: { kind: 'flightData', path: 'filed.remarks' } }, // H138 U2
   '2':  _CARRIER_CHROME['2'], '4': _CARRIER_CHROME['4'], '4A': _CARRIER_CHROME['4A'],
   '25': _CARRIER_CHROME['25'], '26': _CARRIER_CHROME['26'],
 };
@@ -509,6 +513,7 @@ const PATTERN_BLOCK_MAP = {
   'C2':  { required: true,  target: { kind: 'flightData', path: 'identity.aircraftType' } },
   'C18': { required: false, target: { kind: 'carrier-derived', field: 'sideNumber' } },
   'C24': { required: false, target: { kind: 'annotation' } },
+  '9E':  { required: false, target: { kind: 'flightData', path: 'filed.remarks' } }, // H138 U2
   ..._CARRIER_CHROME,
 };
 

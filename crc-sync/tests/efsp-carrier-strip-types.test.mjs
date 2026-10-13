@@ -69,12 +69,15 @@ test('Block Maps: derived Blocks are not writable by SetBlock; carrier Blocks ro
   for (const [id, field] of [['C4', 'approachType'], ['C10', 'approachButton'], ['C12', 'lowStateLb'], ['C13', 'bingoField'], ['C14', 'bingoFuelLb'], ['C15', 'eeatUtc']]) {
     assert.deepEqual(blockMap.resolveBlockTarget('MARSHAL', id), { kind: 'carrier', field });
   }
-  const writable = { '7A': { kind: 'clearance', field: 'altitude' }, '9A-VECTOR': { kind: 'clearance', field: 'heading' } };
+  // ...and the flight's remarks, which every strip type carries (H138 U2).
+  const remarks = { kind: 'flightData', path: 'filed.remarks' };
+  const writable = { '7A': { kind: 'clearance', field: 'altitude' }, '9A-VECTOR': { kind: 'clearance', field: 'heading' }, '9E': remarks };
   for (const [id, def] of Object.entries(blockMap.FINAL_BLOCK_MAP)) {
     assert.deepEqual(blockMap.resolveBlockTarget('FINAL', id), writable[id] || null, `FINAL/${id}`);
-    assert.ok(!['flightData', 'annotation'].includes(def.target.kind), id);
+    if (id !== '9E') assert.ok(!['flightData', 'annotation'].includes(def.target.kind), id);
   }
   assert.ok(blockMap.resolveBlockTarget('PATTERN', 'C24'));
+  for (const type of ['MARSHAL', 'FINAL', 'PATTERN']) assert.deepEqual(blockMap.resolveBlockTarget(type, '9E'), remarks, type);
 });
 
 test('permissions: only the Marshal creates, only as MARSHAL; no CV Position proposes a coordination, TOFIs or converts (the Marshal answers a HANDOFF, docs/adr/0101)', () => {

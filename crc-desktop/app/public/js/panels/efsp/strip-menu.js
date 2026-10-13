@@ -10,6 +10,7 @@ import { openPopover } from './bay/popover-portal.js';
 import { _canApproveAirspaceEntry, _canConvertToArrival, _openAirspaceEntryPopover, _pendingConvertStripId, _usingAgencyEntryChoices } from './bay/popovers/airspace-entry.js';
 import { _openBindPopover } from './bay/popovers/bind.js';
 import { _openDivertPopover } from './bay/popovers/divert.js';
+import { openRemarksPopover, remarksEditable } from './bay/popovers/remarks.js';
 import { divertOffer } from './divert-rules.js';
 import { _canProposeCoordination, _dispatchCoordination, _openCoordinatePopover } from './bay/popovers/coordination.js';
 import { _isPendingCoordinationReplica, _isRejectedCoordinationReplica } from './bay/coordination-rules.js';
@@ -216,6 +217,11 @@ function _stripMenuItems(strip) {
   }
 
   // Strip
+  // H139: the remarks text-box window, also where remarks are first written (an empty RMKS has no row to click).
+  if (remarksEditable(strip)) {
+    items.push({ group: 'Strip', key: 'remarks', label: 'Edit remarks…', cls: 'efsp-remarks-btn', enabled: true,
+      title: 'show and edit the whole of this flight\'s remarks', run: (anchor) => { openRemarksPopover(strip, anchor); } });
+  }
   if (acting) {
     items.push({ group: 'Strip', key: 'offset', label: strip.flags.offset ? 'Un-offset ⇤' : 'Offset ⇥', cls: 'efsp-offset-btn',
       enabled: true, title: 'Offset (cock)', run: () => { const acting = _dispatchGesture(strip, toggleOffset); noteEfspGesture('OFFSET', 'menu', acting); } });

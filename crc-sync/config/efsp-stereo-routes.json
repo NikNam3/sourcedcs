@@ -5,8 +5,7 @@
     "departureAirport": "LTAG",
     "destinationAirport": "LTAG",
     "route": "DCT KEMER DCT ERGEP/D1+00 ERGEP DCT KEMER DCT DAN LTAG",
-    "requestedAltitude": "220",
-    "remarks": "Formations expect block FL210-FL230. RECOVERY: contact Ankara Center (CH7). When cleared on the recovery, depart the MOA and descend to cross ERGEP at FL180 or as assigned. After ERGEP proceed direct KEMER, after KEMER proceed direct Incirlik TACAN. Expect further clearance from Incirlik Radar. Nonstandard formation is automatically authorized in the block FL160 to FL180 within 3nm of lead aircraft."
+    "requestedAltitude": "220"
   },
   {
     "name": "MANAZ2",
@@ -14,8 +13,7 @@
     "departureAirport": "LTAG",
     "destinationAirport": "LTAG",
     "route": "DCT MANAZ DCT ERGEP/D1+00 ERGEP DCT MANAZ DCT DAN LTAG",
-    "requestedAltitude": "220",
-    "remarks": "Formations expect block FL210-FL230. RECOVERY: contact Ankara Center (CH7). When cleared on the recovery, depart the MOA and descend to cross ERGEP at FL160 or as assigned. After ERGEP proceed direct MANAZ, after MANAZ proceed direct Incirlik TACAN. Expect further clearance from Incirlik Radar. Nonstandard formation is automatically authorized in the block FL140 to FL160 within 3nm of lead aircraft."
+    "requestedAltitude": "220"
   },
   {
     "name": "MANAZ3",
@@ -23,8 +21,7 @@
     "departureAirport": "LTAG",
     "destinationAirport": "LTAG",
     "route": "DCT MANAZ DCT MUT/D1+00 MUT DCT MANAZ DCT DAN LTAG",
-    "requestedAltitude": "220",
-    "remarks": "Formations expect block FL210-FL230. RECOVERY: contact Ankara Center (CH7). When cleared on the recovery, depart the MOA and descend to cross MANAZ at FL160 or as assigned. After MANAZ proceed direct Incirlik TACAN. Expect further clearance from Incirlik Radar. Nonstandard formation is automatically authorized in the block FL140 to FL160 within 3nm of lead aircraft."
+    "requestedAltitude": "220"
   },
   {
     "name": "TARSU4",
@@ -32,7 +29,6 @@
     "departureAirport": "LTAG",
     "destinationAirport": "LTAG",
     "route": "DCT TARSU DCT MUT/D1+00 MUT DCT TARSU DCT DAN LTAG",
-    "requestedAltitude": "220",
-    "remarks": "Formations expect block FL210-FL230. RECOVERY: contact Ankara Center (CH7). When cleared on the recovery, depart the MOA and descend to cross TARSU at FL180 or as assigned. After TARSU proceed direct Incirlik TACAN. Expect further clearance from Incirlik Radar. Nonstandard formation is automatically authorized in the block FL160 to FL180 within 3nm of lead aircraft."
+    "requestedAltitude": "220"
   }
 ]
