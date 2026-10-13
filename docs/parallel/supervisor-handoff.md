@@ -1,5 +1,28 @@
 # Supervisor handoff
 
+## RELAUNCH HERE (2026-10-13, session interrupted mid-batch)
+
+Done and merged into `efsp-wp5-correlation` (record: `decisions.md` H133–H137, S-ARCH-48–54): LT-RESEARCH,
+LT-TERRAIN, LT-UI, LT-AIRSPACE-FIX, LT-CORRELATION, LT-RESEARCH-VFR (`docs/parallel/research/vfr-flight-following.md`),
+LT-SFA-PAR (ADR 0117), LT-STRIP-FIELDS; the human's Incirlik stereo departures shipped; `DROPPED_KEYS` removed (H137).
+All Decision Desk questions of round 8 are settled (LT-Q*, LT-RQ*, LT-VQ*, LT-PQ*). H133: lanes run **one at a time**.
+
+**In flight:** lane **LT-PAR-MISSED** (worktree `/home/nklx/dev/personal/sourcedcs-LT-PAR-MISSED`, branch
+`lane/LT-PAR-MISSED`): H137 LT-PQ1 a (PAR missed approach → back to AP) **plus** the S-ARCH-54 fix (HDG/ALT editable only
+on an airfield PAR final; carrier FINAL stays untyped; `l17-carrier` 03 fails until then). It was told to commit and write
+"where I stopped" at the top of `docs/wip/LT-PAR-MISSED.md`. Read that, then either resume it with a new agent in the same
+worktree or check and merge it. After merging: all gates + sharded Playwright, and **read the summary line, the runner
+exits 0 even on failures** (S-ARCH-54).
+
+**Then, in order:** LT-VFR (H136; new lane, write its briefing from the VFR research + H136) → LT-MARSA (ADR 0118; H134
+LT-RQ10/15/16, H136 VQ7/VQ8 MCI) → LT-AIRSPACE-ALERT (ADR 0119; H134 RQ13/14, H136 VQ4/VQ5; OPS `airspace` rows → `null`,
+S-ARCH-51) → LT-RSU-DESIGN → LT-RSU (ADR 0120) → the batch's docs pass (every `docs/wip/LT-*.md`, CLAUDE.md "six
+stores" → five) → small items (S-ARCH-49/51/53) → declutter (LT-GROUND per H134 LT-Q1, T30, ¶5-4-6 e code display).
+
+**Human actions:** delete or fix `crc-sync/state/efsp-board.json` (local and server) before running this crc-sync (H137);
+push a backup (`git push -u origin efsp-wp5-correlation`); release together from `main` when ready.
+
+
 ## START HERE: the live test's fix batch is planned, research first (2026-10-12)
 
 You are the supervisor ("main") of lanes in this monorepo. You dispatch background agents in git worktrees, merge their
