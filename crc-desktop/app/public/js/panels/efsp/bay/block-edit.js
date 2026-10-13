@@ -127,6 +127,11 @@ function _buildBlockCellInner(strip, blockId) {
     span.classList.add('efsp-block-refused');
     span.title = refusal.message;
   }
+  // U1 (H138): a value cut to its cell shows the whole of it on hover. Measured when the pointer arrives, since only the
+  // laid-out cell knows whether it was cut; a title the cell already has (a refusal, a time's source) is kept.
+  span.addEventListener('pointerenter', () => {
+    if (!span.title && span.textContent && span.scrollWidth > span.clientWidth) span.title = span.textContent;
+  });
   const hint = blockValueHintFor(blockId, flightData, strip); if (hint) { if (hint.estimated) span.classList.add('efsp-block-estimated'); if (hint.behindPlan) span.classList.add('efsp-block-behind-plan'); if (hint.title && !span.title) span.title = hint.title; } // docs/adr/0073: §10.5's source on hover, an estimate in italics
 
   // WP4A gap-closure (docs/adr/0022) — restricted-enum Blocks (airspace

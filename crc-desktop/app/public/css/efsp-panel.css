@@ -1872,3 +1872,67 @@
 .efsp-divert-label { width: 6em; color: var(--efsp-muted); }
 .efsp-divert-input { flex: 1; }
 .efsp-divert-error:empty { display: none; }
+
+/* ══ U-STRIP (decisions.md H138 U1/U2, H139) ═════════════════════════════════
+ *
+ * U1: a long value never runs under the next field. Every field's value is cut to its own cell with an ellipsis (the
+ * whole text is the cell's hover title, block-edit.js). An editable cell was `display: flex` for its 44px target, and
+ * text-overflow does not apply to a flex container's text, so it is a block with a 44px line instead: the same box,
+ * the text on the same centre line. Its -3px side margins give it 6px more than the cell; the max-width keeps it
+ * there (content box: 100% - 2px + 8px padding). Same in the expanded view's rows. */
+.efsp-strip .efsp-field .efsp-block { max-width: 100%; }
+.efsp-strip .efsp-field .efsp-block-editable,
+.efsp-strip .efsp-expanded-value .efsp-block-editable {
+  display: block;
+  line-height: 44px;
+  max-width: calc(100% - 2px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.efsp-strip .efsp-expanded-row { min-width: 0; }
+.efsp-strip .efsp-expanded-value { flex: 0 1 auto; min-width: 0; max-width: 100%; }
+.efsp-strip .efsp-expanded-value > .efsp-block { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+
+/* U2: the remarks row, the last row of the Strip's main column and only when there are remarks. One line, never taller:
+   strip-remarks.js cuts it at a word boundary, and the ellipsis here is the fallback for one word longer than the row. */
+.efsp-strip .efsp-strip-remarks { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.efsp-strip .efsp-strip-remarks-label { flex: none; }
+.efsp-strip .efsp-strip-remarks-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--efsp-text);
+  cursor: pointer;
+}
+.efsp-strip .efsp-strip-remarks-text:hover, .efsp-strip .efsp-strip-remarks-text:focus { background: var(--efsp-strip-2); outline: none; }
+
+/* H139: the text-box window. Portalled to <body>, so nothing here may lean on .efsp-strip. */
+.efsp-remarks-popover { width: min(440px, calc(100vw - 16px)); box-sizing: border-box; min-width: 0; }
+.efsp-remarks-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; font-size: 11px; color: var(--efsp-text); }
+.efsp-remarks-title { font-weight: bold; letter-spacing: 0.04em; }
+.efsp-remarks-readonly { color: var(--efsp-muted); }
+.efsp-remarks-textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 7.5em;
+  max-height: 40vh;
+  resize: vertical;
+  overflow: auto;
+  white-space: pre-wrap;
+  background: #0e1114;
+  border: 1px solid var(--efsp-line-2);
+  color: var(--efsp-text);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.4;
+  padding: 4px 6px;
+}
+.efsp-remarks-textarea:focus { border-color: #4a7dbf; outline: none; }
+.efsp-remarks-textarea[readonly] { color: var(--efsp-muted); }
+.efsp-remarks-foot { display: flex; gap: 6px; align-items: center; justify-content: flex-end; }
+.efsp-remarks-hint { margin-right: auto; font-size: 10px; color: var(--efsp-muted); }

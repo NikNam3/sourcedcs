@@ -323,6 +323,7 @@ export const MARSHAL_BLOCK_MAP = {
   'C18': { required: false, label: 'SIDE',     target: { kind: 'carrier', field: 'sideNumber' } },
   'C19': { required: false, label: 'TURN',     target: { kind: 'carrier', field: 'approachTurnNm' } },
   'C24': { required: false, label: 'NOTE',     target: { kind: 'annotation' } },
+  '9E':  { required: false, label: 'RMKS',     target: { kind: 'flightData', path: 'filed.remarks' } }, // H138 U2: the flight's remarks, on every strip type
   ..._CARRIER_CHROME,
 };
 
@@ -337,6 +338,7 @@ export const FINAL_BLOCK_MAP = {
   // crc-sync docs/adr/0117: the talk-down's two assignments, the flight's clearance (H134 LT-RQ8 a: PAR changes them).
   '7A': { required: false, label: 'ALT',      target: { kind: 'clearance', field: 'altitude' }, interlock: 'ALTITUDE' },
   '9A-VECTOR': { required: false, label: 'HDG', target: { kind: 'clearance', field: 'heading' }, interlock: 'COURSE' },
+  '9E':  { required: false, label: 'RMKS',     target: { kind: 'flightData', path: 'filed.remarks' } }, // H138 U2
   '2':  _CARRIER_CHROME['2'], '4': _CARRIER_CHROME['4'], '4A': _CARRIER_CHROME['4A'],
   '25': _CARRIER_CHROME['25'], '26': _CARRIER_CHROME['26'],
 };
@@ -346,6 +348,7 @@ export const PATTERN_BLOCK_MAP = {
   'C2':  { required: true,  label: 'TYPE',     target: { kind: 'flightData', path: 'identity.aircraftType' } },
   'C18': { required: false, label: 'SIDE',     target: { kind: 'carrier-derived', field: 'sideNumber' } },
   'C24': { required: false, label: 'NOTE',     target: { kind: 'annotation' } },
+  '9E':  { required: false, label: 'RMKS',     target: { kind: 'flightData', path: 'filed.remarks' } }, // H138 U2
   ..._CARRIER_CHROME,
 };
 
@@ -353,6 +356,52 @@ export const BLOCK_MAPS = {
   DEPARTURE: DEPARTURE_BLOCK_MAP, ARRIVAL: ARRIVAL_BLOCK_MAP, OVERFLIGHT: OVERFLIGHT_BLOCK_MAP, MISSION: MISSION_BLOCK_MAP,
   MARSHAL: MARSHAL_BLOCK_MAP, FINAL: FINAL_BLOCK_MAP, PATTERN: PATTERN_BLOCK_MAP,
 };
+
+// ── Remarks (decisions.md H138 U2, H139) ───────────────────────────────────
+//
+// Every strip type carries the flight's remarks (filed.remarks): 9E on the ATC and carrier maps, M8 on MISSION. The
+// Strip face shows them in one bottom row when present (strip-remarks.js), cut at a word boundary, and the whole text
+// opens in a small text-box window (bay/popovers/remarks.js) that edits it through the ordinary SetBlock.
+
+/** @returns {string|null} the Block id holding this strip type's remarks, or null when its map has none. */
+export function remarksBlockFor(stripType) {
+  const map = BLOCK_MAPS[stripType || 'DEPARTURE'];
+  if (!map) return null;
+  for (const [id, def] of Object.entries(map)) {
+    if (def.target.kind === 'flightData' && def.target.path === 'filed.remarks') return id;
+  }
+  return null;
+}
+
+/** The flight's remarks, or '' when there are none (blank counts as none: an absent row takes no space). */
+export function remarksOf(flightData) {
+  const r = flightData && flightData.filed ? flightData.filed.remarks : null;
+  return typeof r === 'string' && r.trim() ? r : '';
+}
+
+/**
+ * H139's cut: the remarks on one line (whitespace folded), and when that does not fit, the longest prefix ending at a
+ * word boundary that fits with an ellipsis after it. `fits(text)` answers for the row it will be drawn in. A first word
+ * too long for the row comes back whole, for the CSS ellipsis to cut mid-word: there is no boundary to cut at.
+ * @param {string} text
+ * @param {(candidate: string) => boolean} fits
+ * @returns {string}
+ */
+export function cutRemarksToFit(text, fits) {
+  const line = String(text == null ? '' : text).replace(/\s+/g, ' ').trim();
+  if (!line || fits(line)) return line;
+  const ends = [];
+  const word = /\S+/g;
+  let m;
+  while ((m = word.exec(line))) ends.push(m.index + m[0].length);
+  const cut = (i) => `${line.slice(0, ends[i]).replace(/[,;:.\-–—]+$/, '')}…`;
+  let lo = 0, hi = ends.length - 2, best = -1; // the last word ends the whole line, which did not fit
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (fits(cut(mid))) { best = mid; lo = mid + 1; } else hi = mid - 1;
+  }
+  return best >= 0 ? cut(best) : line;
+}
 
 function getPath(obj, path) {
   return path.split('.').reduce((o, k) => (o == null ? o : o[k]), obj);
