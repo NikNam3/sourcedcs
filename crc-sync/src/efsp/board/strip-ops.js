@@ -125,6 +125,10 @@ class StripOps {
       return result;
     }
 
+    // An op that makes its own subject (H136's StartFlightFollowing): no Strip to gate on, and undoable like any other
+    // keyed Mutation. The frame names the Strip it made once it exists, so the Undo's audit entry can name it.
+    if (entry && entry.stripless) return this._dispatchStripless(entry, mutation, actingPositionId, by, keyed, frameMeta);
+
     const strip = this.state.strips.get(mutation.stripId);
     if (!strip) return { ok: false, reason: 'NOT_FOUND' };
     if (strip.rev !== mutation.baseRev) return { ok: false, reason: 'STALE_REV', strip: deepClone(strip) };
@@ -184,6 +188,29 @@ class StripOps {
     const undoable = this.undoHistory.commit(result, { created });
     if (undoable) result.undoable = undoable;
     this._audit.recordAudit(mutation, actingPositionId, by, before, result, this.auditFieldsFor(op.kind, result, op));
+    return result;
+  }
+
+  _dispatchStripless(entry, mutation, actingPositionId, by, keyed, frameMeta) {
+    const { op } = mutation;
+    const undo = entry.undo !== 'none' && keyed ? entry.undo : null;
+    const scope = undo ? undo.scope(this, null, op) : null;
+    const frame = this.undoHistory.begin(keyed ? mutation.clientMutationId : null, frameMeta(null, scope ? undo.label(op, null, this) : undefined), scope);
+    let result;
+    try {
+      result = entry.apply(this, null, op, { by, actingPositionId, clientMutationId: mutation.clientMutationId });
+    } catch (err) {
+      this.undoHistory.abort();
+      throw err;
+    }
+    if (result.ok && result.strip) {
+      frame.meta.stripId = result.strip.stripId;
+      if (undo) frame.meta.label = undo.label(op, result.strip, this);
+    }
+    const created = scope && result.ok && undo.created ? undo.created(result, this) : undefined;
+    const undoable = this.undoHistory.commit(result, { created });
+    if (undoable) result.undoable = undoable;
+    if (result.ok) this._audit.recordAudit(mutation, actingPositionId, by, null, result, this.auditFieldsFor(op.kind, result, op));
     return result;
   }
 

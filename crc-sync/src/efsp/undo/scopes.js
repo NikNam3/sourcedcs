@@ -39,7 +39,7 @@ function retireScope(ctx, strip) {
 
 /** A union of Scopes (the history de-duplicates). */
 function union(...scopes) {
-  const out = { strips: [], flightData: [], codes: [], carrier: [], marsa: [] };
+  const out = { strips: [], flightData: [], codes: [], carrier: [], marsa: [], correlations: [] };
   for (const s of scopes) {
     if (!s) continue;
     for (const k of Object.keys(out)) out[k].push(...(s[k] || []));

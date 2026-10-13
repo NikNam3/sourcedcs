@@ -28,7 +28,7 @@ const icaoByName = require('../../data/icao.json');
  * @param {(flightDataId:string, forFacilityId:string) => object} deps.regimeLocator the TOFI regime locator (regime-locator.js)
  */
 function buildFacilityRules({ facilityId, facilityConfig, permissionRules, positionStore, facilities, stores, regimeLocator }) {
-  const { airspaceStore, marsaStore, runwayStatusStore, carrierStore } = stores;
+  const { airspaceStore, marsaStore, runwayStatusStore, carrierStore, correlationStore = null } = stores;
   // docs/adr/0111 §3: a field we run is one a Facility config names, or a carrier hull.
   const divertDestinationFor = createDivertDestinations({
     airportIcaos: () => facilityConfig.getFacilityIds().map(id => (facilityConfig.getFacilityConfig(id).runwayStatus || {}).airportIcao).filter(Boolean),
@@ -155,6 +155,11 @@ function buildFacilityRules({ facilityId, facilityConfig, permissionRules, posit
     conversionFor:           (strip, targetBayId) => parFinal.conversionFor(strip, facilityConfig.bayImpliesState(targetBayId, facilityId), facilityId),
     canHandOffToFinal:       (actingPositionId) => permission.canHandOffToFinal(actingPositionId),
     canRecordFinalCall:      (actingPositionId) => permission.canRecordFinalCall(actingPositionId),
+    // H136 (docs/wip/LT-VFR.md) — flight following binds the contact in the same Mutation, and its end ends the binding.
+    // The correlation store is shared theater-wide, so these are the same functions for every Facility.
+    correlationHolderOfTrack: (trackId) => (correlationStore ? correlationStore.holderOfTrack(trackId) : null),
+    bindTrackOnStart:        correlationStore ? (flightDataId, trackId, meta) => correlationStore.bindOnStart(flightDataId, trackId, meta) : null,
+    endTrackBinding:         (flightDataId, meta) => (correlationStore ? correlationStore.endBinding(flightDataId, meta) : null),
   };
 }
 
