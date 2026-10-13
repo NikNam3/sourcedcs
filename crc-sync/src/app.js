@@ -155,7 +155,7 @@ function createApp(deps = {}) {
   // ── The monitors, and the one place efsp-alerts is composed ────────────────────────────────────────
   const monitors = buildMonitors({
     env, efsp, facilityConfig: efspFacilityConfig, missionClock, missionSession, trackStore, surveillance, theaterContext, grpcClient, ownCoalition,
-    hubLink, trackSeams, surveillanceHints: deps.surveillanceHints,
+    hubLink, trackSeams, surveillanceHints: deps.surveillanceHints, terrainStore: radarPicture.terrainStore,
   });
   hintsLink.bind(monitors.surveillanceHints);
 

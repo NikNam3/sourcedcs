@@ -117,3 +117,22 @@ test('requiring facility-config.js reads no file: a config dir that does not exi
   assert.equal(out.status, 0, out.stderr);
   assert.match(out.stdout, /required/);
 });
+
+// docs/adr/0118 (H136 VQ7 a): the Mode C Intruder base altitude and per-Position inhibit.
+test('modeCIntruder: shipped terminal 500 ft AGL, CENTER 5,000 ft MSL with 1,500 AGL over high ground; bad values named', () => {
+  assert.deepEqual(shipped('INCIRLIK').modeCIntruder, { baseAltitudeFt: 500, reference: 'AGL', inhibitedPositions: [] });
+  assert.deepEqual(shipped('CENTER').modeCIntruder, { baseAltitudeFt: 5000, reference: 'MSL', highTerrainAglFt: 1500, inhibitedPositions: [] });
+  const over = shipped('INCIRLIK'); over.modeCIntruder.baseAltitudeFt = 800;
+  reject(over, 'from 0 to 500 ft AGL');
+  const ref = shipped('CENTER'); ref.modeCIntruder.reference = 'QNH';
+  reject(ref, 'reference must be one of AGL, MSL');
+  const stray = shipped('CENTER'); stray.modeCIntruder.inhibit = true;
+  reject(stray, 'modeCIntruder: unknown key');
+  const pos = shipped('INCIRLIK'); pos.modeCIntruder.inhibitedPositions = ['CTR'];
+  reject(pos, 'inhibitedPositions names unknown Position CTR');
+  const agl = shipped('INCIRLIK'); agl.modeCIntruder.highTerrainAglFt = 1500;
+  reject(agl, 'only to an MSL base altitude');
+  const none = shipped('INCIRLIK'); delete none.modeCIntruder;
+  assert.deepEqual(schema.validateFacilityConfig(none, 'INCIRLIK'), { ok: true }, 'optional');
+  assert.deepEqual({ ...schema.MCI_DEFAULT }, { baseAltitudeFt: 500, reference: 'AGL', highTerrainAglFt: null, inhibitedPositions: [] });
+});

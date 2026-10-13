@@ -27,6 +27,7 @@
 const fs = require('fs');
 const runwayStatus = require('./runway-status'); // pure, requires nothing back (docs/adr/0061)
 const schema = require('./facility-schema');
+const { MCI_DEFAULT } = schema;
 const { validateConfig, validateRadarSelector, BAY_VIEWS } = schema;
 // The RANGES Facility's Position set is derived from the airspace definitions (see _rangesConfig). The definitions
 // live in the registry (airspace-store.js, docs/adr/0098) and this module requires none of it: createEfsp derives the
@@ -216,6 +217,13 @@ function createFacilityConfig({ env = process.env } = {}) {
 
   /** A Position's frequencies, `{ <Position>: [ { label, mhz } ] }` (docs/adr/0105); `{}` when the Facility ships none. */
   function getPositionFrequencies(facilityId = DEFAULT_FACILITY_ID) { return deepClone(_configs().get(facilityId).positionFrequencies || {}); }
+
+  /** The Facility's Mode C Intruder setting (docs/adr/0118); the terminal default when its file names none. */
+  function getModeCIntruder(facilityId = DEFAULT_FACILITY_ID) {
+    const cfg = _configs().get(facilityId);
+    const mci = (cfg && cfg.modeCIntruder) || MCI_DEFAULT;
+    return { baseAltitudeFt: mci.baseAltitudeFt, reference: mci.reference, highTerrainAglFt: mci.highTerrainAglFt ?? null, inhibitedPositions: [...(mci.inhibitedPositions || [])] };
+  }
 
   /** `{ <Position>: [Position, ...] }`: who is offered a Position's hat, in order (docs/adr/0110). */
   function getConsolidation(facilityId = DEFAULT_FACILITY_ID) { return deepClone(_configs().get(facilityId).consolidation); }
@@ -417,7 +425,7 @@ function createFacilityConfig({ env = process.env } = {}) {
   return {
     setRangePositionIds,
     DEFAULT_FACILITY_ID, getFacilityIds,
-    getFacilityConfig, getPositionSet, getPositionClass, getPositionLetter, allPositionLetters, getConsolidation, getHandBack, getHatMaps, getPositionFrequencies, getBaysFor, getAllBays, isBlockVisible,
+    getFacilityConfig, getPositionSet, getPositionClass, getPositionLetter, allPositionLetters, getConsolidation, getHandBack, getHatMaps, getPositionFrequencies, getModeCIntruder, getBaysFor, getAllBays, isBlockVisible,
     getPositionRadars, radarBearingPositionIds, validateRadarSelector,
     bayImpliesState, bayHoldsStripType, bayForImpliedState, bayExists, coordinationBayFor, setFacilityConfig, validateConfig,
     getBay, getSingleFrequencyApproach, BAY_VIEWS,

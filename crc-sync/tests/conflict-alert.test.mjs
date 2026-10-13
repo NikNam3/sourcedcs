@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 // docs/adr/0058 — short-term conflict alert.
-const { findConflicts, ConflictAlertMonitor } = await import('../src/conflict-alert.js');
+const { findConflicts, formationMembers, ConflictAlertMonitor } = await import('../src/conflict-alert.js');
 const { loadAlertingConfig } = await import('../src/alerting-config.js');
 const DEFAULTS = loadAlertingConfig();
 
@@ -61,8 +61,8 @@ test('a MARSA pair is suppressed; the monitor reports a change while conflicts e
   const store = { getAll: () => tracks };
   const marsa = new ConflictAlertMonitor({
     trackStore: store, config: cfg,
-    flightDataForTrack: (id) => (String(id) === '1' ? 'fA' : 'fB'),
-    activeMarsaFor: (flightDataId) => ({ participants: ['fA', 'fB'] }),
+    trackedFlights: () => new Map([['1', 'fA'], ['2', 'fB']]),
+    activeMarsaFor: () => ({ marsaId: 'm1', participants: ['fA', 'fB'] }),
   });
   assert.equal(marsa.tick(NOW), false);
   assert.deepEqual(marsa.getAll(), []);
@@ -73,6 +73,100 @@ test('a MARSA pair is suppressed; the monitor reports a change while conflicts e
   tracks[1] = { ...tracks[1], alt: 9000 };
   assert.equal(plain.tick(NOW), true, 'clearing is a change');
   assert.equal(plain.tick(NOW), false, 'and quiet after that');
+});
+
+// ── docs/adr/0118: which pairs (H134 LT-RQ16 a, H136 VQ7 a, VQ8 a) and groups (T16, research Q7) ──
+
+const headOn = () => [track(1, { lat: 37, course: 0 }), track(2, { lat: 37 + 10 * NM_LAT, course: 180 })];
+function monitorFor(tracks, tracked, extra = {}) {
+  return new ConflictAlertMonitor({
+    trackStore: { getAll: () => tracks }, config: cfg,
+    trackedFlights: () => new Map(Object.entries(tracked)),
+    activeMarsaFor: () => null, flightSizeOf: () => 1, reportsAltitude: () => true, ...extra,
+  });
+}
+
+test('two correlated tracks: CA', () => {
+  const m = monitorFor(headOn(), { 1: 'fA', 2: 'fB' });
+  m.tick(NOW);
+  assert.equal(m.getAll().length, 1);
+  assert.equal(m.getAll()[0].kind, 'CA');
+  assert.equal(m.getAll()[0].intruder, undefined);
+});
+
+test('two uncorrelated tracks: nothing (P/CG CONFLICT ALERT is between tracked targets)', () => {
+  const m = monitorFor(headOn(), {});
+  m.tick(NOW);
+  assert.deepEqual(m.getAll(), []);
+});
+
+test('correlated vs uncorrelated reporting altitude: MCI naming the intruder; a primary-only target raises nothing', () => {
+  const m = monitorFor(headOn(), { 1: 'fA' });
+  m.tick(NOW);
+  const [c] = m.getAll();
+  assert.equal(c.kind, 'MCI');
+  assert.equal(c.intruder, '2');
+  const primary = monitorFor(headOn(), { 1: 'fA' }, { reportsAltitude: () => false });
+  primary.tick(NOW);
+  assert.deepEqual(primary.getAll(), [], 'H136 VQ8 a: no Mode C, no MCI');
+});
+
+test('an MCI is delivered only to a session holding a Position that shows it; a CA to every ATC session', () => {
+  const shown = [];
+  const m = monitorFor(headOn(), { 1: 'fA' }, { mciShownAt: (intruder, f, p) => { shown.push([String(intruder.id), f, p]); return p === 'AP'; } });
+  m.tick(NOW);
+  const [c] = m.getAll();
+  assert.equal(m.deliverableTo(c, [{ facilityId: 'INCIRLIK', positionId: 'LC' }]), false);
+  assert.equal(m.deliverableTo(c, [{ facilityId: 'INCIRLIK', positionId: 'LC' }, { facilityId: 'INCIRLIK', positionId: 'AP' }]), true);
+  assert.deepEqual(shown[0], ['2', 'INCIRLIK', 'LC'], 'asked with the intruder track');
+  const ca = monitorFor(headOn(), { 1: 'fA', 2: 'fB' }, { mciShownAt: () => false });
+  ca.tick(NOW);
+  assert.equal(ca.deliverableTo(ca.getAll()[0], []), true);
+});
+
+test('T16: an uncorrelated wingman beside its formation lead raises no MCI against it; a third aircraft still alerts against both', () => {
+  const lead = track(1, { lat: 37, lon: 35, course: 0 });
+  const wing = track(2, { lat: 37, lon: 35 + 0.5 / 48, course: 0, alt: 3000 + 200 / 3.28084 }); // ~0.5 NM abeam, 200 ft up
+  const other = track(3, { lat: 37 + 10 * NM_LAT, lon: 35, course: 180, alt: 3000 });
+  // Converging slightly so the pair alone would conflict too.
+  const formation = monitorFor([lead, wing], { 1: 'fA' }, { flightSizeOf: () => 2 });
+  formation.tick(NOW);
+  assert.deepEqual(formation.getAll(), [], 'the member is one of the formation');
+  const single = monitorFor([lead, wing], { 1: 'fA' }, { flightSizeOf: () => 1 });
+  single.tick(NOW);
+  assert.equal(single.getAll().length, 1, 'a single aircraft has no members: the same target is an MCI');
+  assert.equal(single.getAll()[0].kind, 'MCI');
+
+  const withOther = monitorFor([lead, wing, other], { 1: 'fA', 3: 'fC' }, { flightSizeOf: (id) => (id === 'fA' ? 2 : 1) });
+  withOther.tick(NOW);
+  const ids = withOther.getAll().map(c => `${c.id}:${c.kind}`).sort();
+  assert.deepEqual(ids, ['1|3:CA', '2|3:CA'], 'measured from each member; the member is tracked as part of its formation');
+});
+
+test('a formation claims at most size - 1 members, the nearest ones', () => {
+  const lead = track(1, { lat: 37, lon: 35 });
+  const near = track(2, { lat: 37, lon: 35 + 0.2 / 48 });
+  const far = track(3, { lat: 37, lon: 35 + 0.8 / 48 });
+  const tooHigh = track(4, { lat: 37, lon: 35 + 0.1 / 48, alt: 3000 + 3000 / 3.28084 });
+  const leads = new Map([[lead, { flightDataId: 'fA', group: 'F:fA', size: 2 }]]);
+  const members = formationMembers([lead, near, far, tooHigh], leads, cfg);
+  assert.deepEqual([...members.keys()].map(t => t.id), [2]);
+});
+
+test('MARSA groups a receiver formation with the tanker: no MCI between the tanker and the receiver lead\'s wingman', () => {
+  const tanker = track(1, { lat: 37, lon: 35, course: 0 });
+  const receiver = track(2, { lat: 37 - 0.5 * NM_LAT, lon: 35, course: 0, groundSpeed: 420 * KT });
+  const wing = track(3, { lat: 37 - 0.5 * NM_LAT, lon: 35 + 0.3 / 48, course: 0, groundSpeed: 420 * KT });
+  const relation = { marsaId: 'm1', participants: ['fT', 'fR'] };
+  const m = monitorFor([tanker, receiver, wing], { 1: 'fT', 2: 'fR' }, {
+    flightSizeOf: (id) => (id === 'fR' ? 2 : 1),
+    activeMarsaFor: (id) => (relation.participants.includes(id) ? relation : null),
+  });
+  m.tick(NOW);
+  assert.deepEqual(m.getAll(), []);
+  const ended = monitorFor([tanker, receiver, wing], { 1: 'fT', 2: 'fR' }, { flightSizeOf: (id) => (id === 'fR' ? 2 : 1) });
+  ended.tick(NOW);
+  assert.ok(ended.getAll().length >= 1, 'once MARSA ends the tanker alerts against the receivers again');
 });
 
 test("a track correlated to a Strip is named by the Strip's callsign", () => {

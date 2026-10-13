@@ -1,5 +1,5 @@
 {
-  "_comment": "Conformance and Conflict Alert (CA) thresholds (docs/adr/0058). [SOURCE-DEFINED]: our own choices, not doctrine. Override by placing a copy in state/alerting.json; missing keys fall back to these.",
+  "_comment": "Conformance, Conflict Alert (CA) and Mode C Intruder (MCI) thresholds (docs/adr/0058, 0118). [SOURCE-DEFINED]: our own choices, not doctrine. formationLateralNm/formationVerticalFt: how close an uncorrelated target must be to a formation flight to count as one of its members (ADR 0118, ours; P/CG gives 1 mile and 100 ft for a standard formation). refueling*: the air refueling block relative to the tanker (ADR 0118). Override by placing a copy in state/alerting.json; missing keys fall back to these.",
   "conformance": {
     "minGroundSpeedKt": 50,
     "headingToleranceDeg": 5,
@@ -17,7 +17,9 @@
     "lookAheadSec": 120,
     "stepSec": 2,
     "minGroundSpeedKt": 50,
-    "minTrackAgeSec": 10
+    "minTrackAgeSec": 10,
+    "formationLateralNm": 1,
+    "formationVerticalFt": 1000
   },
   "tofiRegime": {
     "regimeExitGraceS": 10

@@ -13,6 +13,7 @@ const { getHintsConfig } = require('../efsp/surveillance-hints-config');
 const { ConformanceMonitor } = require('../efsp/conformance');
 const { TofiRegimeMonitor } = require('../efsp/tofi-regime-monitor');
 const { ConflictAlertMonitor } = require('../conflict-alert');
+const { ATC_CLASSES } = require('../efsp/position-coverage');
 const { loadAlertingConfig } = require('../alerting-config');
 const { indicatedAltFt } = require('../altimetry');
 const { WALL_CLOCK } = require('../mission-clock');
@@ -40,8 +41,9 @@ const FT_PER_M = 3.28084;
  * @param {{get: () => object}} deps.hubLink
  * @param {{beacon?:Function, callsign?:Function, gridToMagnetic?:Function}} [deps.trackSeams]
  * @param {object|null} [deps.surveillanceHints] undefined builds the SurveillanceHintMonitor; null leaves it out (the soak)
+ * @param {{elevationAt:Function}|null} [deps.terrainStore] the ground under an MCI intruder (docs/adr/0118); null: sea level
  */
-function buildMonitors({ env, efsp, facilityConfig, missionClock, missionSession, trackStore, surveillance, theaterContext, grpcClient, ownCoalition, hubLink, trackSeams = {}, surveillanceHints: hintsDep }) {
+function buildMonitors({ env, efsp, facilityConfig, missionClock, missionSession, trackStore, surveillance, theaterContext, grpcClient, ownCoalition, hubLink, trackSeams = {}, surveillanceHints: hintsDep, terrainStore = null }) {
   const { transponders, identity } = surveillance;
   const deliver = (frames) => hubLink.get().deliverEfsp(frames);
 
@@ -132,14 +134,48 @@ function buildMonitors({ env, efsp, facilityConfig, missionClock, missionSession
     onStaleness: (e) => efspInstrumentation.metrics.recordStaleness(e),
   }));
   if (surveillanceHints) efspInstrumentation.metrics.declareSource('staleness');
+  // docs/adr/0118 (H134 LT-RQ16 a, H136 VQ7 a, VQ8 a): CA between tracked (correlated) contacts, MCI between a tracked one
+  // and an untracked one that reports altitude, nothing between two untracked; no alert inside one formation or one MARSA.
   const conflictAlertMonitor = new ConflictAlertMonitor({
     trackStore,
     config: alertingConfig.conflictAlert,
-    flightDataForTrack: (trackId) => efsp.correlationStore.flightDataForTrack(trackId),
+    trackedFlights: () => {
+      const out = new Map();
+      for (const [trackId, { flightDataId, state }] of efsp.correlationStore.trackIndex()) {
+        if (state === 'CORRELATED' || state === 'PROVISIONAL') out.set(String(trackId), flightDataId);
+      }
+      return out;
+    },
     activeMarsaFor: (flightDataId) => efsp.marsaStore.activeFor(flightDataId),
+    flightSizeOf: (flightDataId) => {
+      const fd = efsp.flightDataStore.getFlightData(flightDataId);
+      return (fd && fd.identity && fd.identity.flightSize) || 1;
+    },
+    // A transponder that replies is Mode C here (surveillance/transponder.js); the soak's seam answers with a code.
+    reportsAltitude: trackSeams.beacon ? ((track) => trackSeams.beacon(track) != null) : ((track) => !!transponders.transponderOf(track)),
+    mciShownAt: (intruder, facilityId, positionId) => mciShownAt(intruder, facilityId, positionId),
     // Alert text names each aircraft the way identity does (docs/adr/0059).
     callsignFor: trackSeams.callsign || ((track) => identity.labelFor(track.id)),
   });
+  /**
+   * docs/adr/0118: is an MCI with this intruder shown at this Position? An ATC Position, MCI not inhibited there (JO 7210.3EE
+   * para 12-6-12 d), and the intruder above its Facility's base altitude (para 12-6-12 b, 8-2-5 b). AGL needs the ground:
+   * where terrain is not known (no MapTiler key, or the tile not cached yet) the ground is taken as sea level (ours); the
+   * high-terrain rule of para 8-2-5 b applies only where it is known.
+   */
+  function mciShownAt(intruder, facilityId, positionId) {
+    if (!ATC_CLASSES.has(facilityConfig.getPositionClass(positionId))) return false;
+    const mci = facilityConfig.getModeCIntruder(facilityId);
+    if (mci.inhibitedPositions.includes(positionId)) return false;
+    if (!intruder || !Number.isFinite(intruder.alt)) return false;
+    const altFt = intruder.alt * FT_PER_M;
+    const groundM = terrainStore && typeof terrainStore.elevationAt === 'function' ? terrainStore.elevationAt(intruder.lon, intruder.lat) : null;
+    const groundFt = Number.isFinite(groundM) ? groundM * FT_PER_M : null;
+    let floorFt;
+    if (mci.reference === 'AGL') floorFt = (groundFt ?? 0) + mci.baseAltitudeFt;
+    else floorFt = mci.highTerrainAglFt != null && groundFt != null && groundFt > mci.baseAltitudeFt ? groundFt + mci.highTerrainAglFt : mci.baseAltitudeFt;
+    return altFt > floorFt;
+  }
   // ── The TOFI separation regime (docs/adr/0102) ────────────────────────────
   // Where a correlated flight is, relative to the airspaces ACTIVE for an MRU Facility: one answer for ACCEPT, MARK_ENTERED and
   // the monitor (`efsp.regimeLocator`, built inside createEfsp from the `locateTrack` it was given). No correlated contact is
@@ -199,6 +235,8 @@ function buildMonitors({ env, efsp, facilityConfig, missionClock, missionSession
       conformance: conformanceMonitor.getAll(),
       tofiRegime: tofiRegimeMonitor.getAll(),
       conflictAlert: conflictAlertMonitor.getAll(),
+      // Not sent: which sessions an MCI is for (docs/adr/0118), asked per session by the hub.
+      conflictAlertFor: (conflict, positions) => conflictAlertMonitor.deliverableTo(conflict, positions),
       obligations: obligationMonitor.getAll(),
       surveillance: surveillanceHints ? surveillanceHints.getAll() : undefined, // docs/adr/0076: the suggestion chip and staleness
     });

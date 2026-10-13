@@ -19,6 +19,12 @@
       }
     ]
   },
+  "modeCIntruder": {
+    "baseAltitudeFt": 5000,
+    "reference": "MSL",
+    "highTerrainAglFt": 1500,
+    "inhibitedPositions": []
+  },
   "hiddenBlocks": {},
   "bays": {
     "CTR": [
