@@ -1,27 +1,35 @@
 # Supervisor handoff
 
-## RELAUNCH HERE (2026-10-13, session interrupted mid-batch)
+## RELAUNCH HERE (2026-10-13 evening): the live-test batch is merged; round-2 findings are next
 
-Done and merged into `efsp-wp5-correlation` (record: `decisions.md` H133–H137, S-ARCH-48–54): LT-RESEARCH,
-LT-TERRAIN, LT-UI, LT-AIRSPACE-FIX, LT-CORRELATION, LT-RESEARCH-VFR (`docs/parallel/research/vfr-flight-following.md`),
-LT-SFA-PAR (ADR 0117), LT-STRIP-FIELDS; the human's Incirlik stereo departures shipped; `DROPPED_KEYS` removed (H137).
-All Decision Desk questions of round 8 are settled (LT-Q*, LT-RQ*, LT-VQ*, LT-PQ*). H133: lanes run **one at a time**.
+**State:** everything is merged into `efsp-wp5-correlation` and green (S-ARCH-59: crc-sync 2738, freeze 56/56, walk 23/23,
+soak:selfcheck PASS, wire protocol 2, crc-desktop 1289, sharded Playwright 249/249). No lane is running; the only
+worktree is the main checkout. Record: `decisions.md` H133–H138, S-ARCH-48–59.
 
-**In flight (stopped by the human, not resumed):** lane **LT-VFR** (worktree `/home/nklx/dev/personal/sourcedcs-LT-VFR`,
-branch `lane/LT-VFR`, briefing `docs/parallel/next/LT-VFR.md`). Committed up to `51f5498d`: server ops
-`StartFlightFollowing` / `TerminateRadarService` green, freeze goldens re-recorded, client track-panel and strip-menu
-actions, an e2e spec written but **not yet run**. Left: run that spec on lane 3, both unit suites, freeze, walk,
-soak:selfcheck, wire:record, the wip note, then the report; then merge and a sharded Playwright run **with no lane
-running** (S-ARCH-55: concurrent load gave 5 false failures). LT-PAR-MISSED is merged (S-ARCH-55).
+**Do this first:**
+1. Read **`docs/parallel/live-test-2026-10-13.md`**: the human's round-2 findings U1–U21, organised, with suggested lanes
+   (U-RESEARCH, U-STRIP, U-PANELS, U-RELEASE, U-PAR, U-RSU-DESIGN → U-RSU with ADR 0120, U17, U-CARRIER **last**), and
+   **H138** (the RSU works visually and only VFR; no leg columns; carrier last).
+2. Read the open Decision Desk questions **LT-MQ1, LT-MQ2, LT-AQ1** (https://claude.ai/artifact/A3gizEgbwfqCnnU831G4Y7,
+   `ArtifactData` `answers`), settle them into `decisions.md` (H139+).
+3. Write the briefings in `docs/parallel/next/` and dispatch, **one agent at a time** (H133), Opus. A lane's briefing is
+   a file; the prompt points at it (see `next/LT-VFR.md`, `next/LT-MARSA.md`, `next/LT-AIRSPACE-ALERT.md` for the shape).
 
-**Then, in order:** LT-MARSA (ADR 0118; H134
-LT-RQ10/15/16, H136 VQ7/VQ8 MCI) → LT-AIRSPACE-ALERT (ADR 0119; H134 RQ13/14, H136 VQ4/VQ5; OPS `airspace` rows → `null`,
-S-ARCH-51) → LT-RSU-DESIGN → LT-RSU (ADR 0120) → the batch's docs pass (every `docs/wip/LT-*.md`, CLAUDE.md "six
-stores" → five) → small items (S-ARCH-49/51/53) → declutter (LT-GROUND per H134 LT-Q1, T30, ¶5-4-6 e code display).
+**Also owed:** the live-test batch's **docs pass** (every `docs/wip/LT-*.md` → usage guide, briefing, CLAUDE.md: "six
+stores" → five, `modeCIntruder`, `AcknowledgeVoid`, `TANKER_DISTANCE`, `airspaceEntry`, flight following); small items
+(S-ARCH-49/51/53: ATO type normalisation, wake table vs Doc 8643, TOFI target name, duplicate "Flight" heading, stale
+"Landing assured" comment in `surveillance/par-monitor.js`); declutter (LT-GROUND, T30, ¶5-4-6 e code display, LUAW
+text, `KEEP IFR` on flight-following Strips). Watch `l4-drag` 172 (S-ARCH-57).
 
-**Human actions:** delete or fix `crc-sync/state/efsp-board.json` (local and server) before running this crc-sync (H137);
-push a backup (`git push -u origin efsp-wp5-correlation`); release together from `main` when ready.
+**How this session worked (keep):** after a merge: both unit suites, freeze, walk, soak:selfcheck when Board/wire/hub
+moved, `wire-protocol.test.mjs`, then sharded Playwright **in the background** while the next lane starts (the human:
+don't hold lanes for it); **read the summary line, the runner exits 0 on failures**; failures that "PASSED ALONE" are
+load, not regressions. Lanes get cut off by rate limits: tell them to checkpoint every ~15 min; when the human says
+"continue" after stopping a lane, finish it with a new agent in the same worktree (memory). The scratchpad is cleared
+overnight: re-create it before logging into it.
 
+**Human actions:** delete or fix `crc-sync/state/efsp-board.json` (local and server) before running this crc-sync
+(H137); push a backup (`git push -u origin efsp-wp5-correlation`); release together from `main` when ready.
 
 ## START HERE: the live test's fix batch is planned, research first (2026-10-12)
 
