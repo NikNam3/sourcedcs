@@ -708,6 +708,14 @@ export function requiredBlocksFor(stripType = 'DEPARTURE') {
 export const PAR_FINAL_ONLY_BLOCKS = Object.freeze(['7A', '9A-VECTOR']);
 
 /**
+ * True for a PAR-final-only Block on the carrier's FINAL: neither typed nor shown there (dark cockpit, H115-H119: the
+ * carrier final has nothing to type and no conformance, so an approach controller's old HDG and ALT would be noise).
+ */
+export function isParFinalOnlyOnCarrier(stripType, blockId, facilityId) {
+  return stripType === 'FINAL' && facilityId === 'CARRIER' && PAR_FINAL_ONLY_BLOCKS.includes(blockId);
+}
+
+/**
  * A Block is directly editable via click-to-edit (guide §3.7/§7.4 — Enter
  * commits, Esc reverts, no auto-commit on blur) when it's flight-data- or
  * annotation-routed. System/composite/flag/nla Blocks (2, 3, 4, 4A, 25, 26)
@@ -718,7 +726,7 @@ export function isBlockEditable(blockId, stripType = 'DEPARTURE', facilityId = n
   const map = BLOCK_MAPS[stripType];
   const def = map && map[blockId];
   // HDG and ALT are the PAR final's (an airfield's): the carrier's FINAL has nothing to type (crc-sync block-map.js).
-  if (stripType === 'FINAL' && facilityId === 'CARRIER' && PAR_FINAL_ONLY_BLOCKS.includes(blockId)) return false;
+  if (isParFinalOnlyOnCarrier(stripType, blockId, facilityId)) return false;
   // 9F is a picker (docs/adr/0073) and editable only while there is a route
   // table to pick from; with none it must not fall through to free text
   // (bay-view.js tries the picker first, then this).

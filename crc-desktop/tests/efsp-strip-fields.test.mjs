@@ -229,6 +229,18 @@ test('every carrier strip type has a side number Block, so every carrier Strip c
   }
 });
 
+test('HDG and ALT are on PAR\'s FINAL only: the carrier FINAL hides them, face and expanded view (supervisor ruling, dark cockpit)', async () => {
+  const { isParFinalOnlyOnCarrier } = await import('../app/public/js/panels/efsp/strip-template.js');
+  const par = compactBlocksFor('FINAL', 'PAR', null);
+  const cv = compactBlocksFor('FINAL', 'CV_APP1', null);
+  assert.ok(par.includes('7A') && par.includes('9A-VECTOR'), 'PAR types them');
+  assert.ok(!cv.includes('7A') && !cv.includes('9A-VECTOR'), 'not on the carrier final');
+  assert.deepEqual(cv, par.filter(id => id !== '7A' && id !== '9A-VECTOR'));
+  assert.equal(isParFinalOnlyOnCarrier('FINAL', '7A', 'CARRIER'), true);
+  assert.equal(isParFinalOnlyOnCarrier('FINAL', '7A', 'INCIRLIK'), false);
+  assert.equal(isParFinalOnlyOnCarrier('OVERFLIGHT', '7A', 'CARRIER'), false);
+});
+
 test('a carrier PATTERN Strip: SIDE only on the face once it leads, then first; the callsign after TYPE', () => {
   const withSide = { military: { carrier: { sideNumber: '104' } } };
   assert.deepEqual(compactBlocksFor('PATTERN', 'CV_PRIFLY', null), ['C1', 'C2', 'C24']);
