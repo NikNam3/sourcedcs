@@ -158,7 +158,7 @@ function buildFacilityRules({ facilityId, facilityConfig, permissionRules, posit
     // H136 (docs/wip/LT-VFR.md) — flight following binds the contact in the same Mutation, and its end ends the binding.
     // The correlation store is shared theater-wide, so these are the same functions for every Facility.
     correlationHolderOfTrack: (trackId) => (correlationStore ? correlationStore.holderOfTrack(trackId) : null),
-    bindTrackOnStart:        correlationStore ? (flightDataId, trackId, meta) => correlationStore.bindOnStart(flightDataId, trackId, meta) : null,
+    bindTrackOnStart:        (flightDataId, trackId, meta) => (correlationStore ? correlationStore.bindOnStart(flightDataId, trackId, meta) : null),
     endTrackBinding:         (flightDataId, meta) => (correlationStore ? correlationStore.endBinding(flightDataId, meta) : null),
   };
 }

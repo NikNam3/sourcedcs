@@ -27,7 +27,6 @@ function _applyStart(ctx, op, meta) {
   const { actingPositionId, by } = meta;
   const trackId = op.trackId != null ? String(op.trackId).trim() : '';
   if (!trackId) return _refuse('VALIDATION_ERROR', 'pick the contact to start flight following on');
-  if (!ctx.rules.bindTrackOnStart) return _refuse('VALIDATION_ERROR', 'no correlation store on this server');
 
   const seed = op.flightData || {};
   const callsign = String(seed.callsign || '').trim().toUpperCase();
