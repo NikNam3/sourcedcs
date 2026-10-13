@@ -183,3 +183,18 @@ test('every carrier state has an NLA label (or is terminal), and a Case I handof
   assert.equal(c.nlaButtonLabel({ stripType: 'MARSHAL', state: 'IN_STACK', nla: { toState: 'COMMENCED', carrierHandoff: 'MARSHAL_TO_APPROACH' } }), 'Commence');
   assert.equal(c.nlaButtonLabel({ stripType: 'DEPARTURE', state: 'CLEARED', nla: { toState: 'PUSHBACK' } }), 'Approve Pushback');
 });
+
+test('FINAL BOLTER_WAVEOFF: the carrier goes back on final, an airfield\'s missed approach goes back to AP (H137 LT-PQ1 a); parity with crc-sync final.js', async () => {
+  const c = await import('../app/public/js/panels/efsp/efsp-nla.js');
+  const { computeFinalNla } = require('../../crc-sync/src/efsp/authority/strip-types/final.js');
+  const airfield = computeFinalNla({ state: 'BOLTER_WAVEOFF' }, null, 0, { facilityId: 'INCIRLIK' });
+  const carrier = computeFinalNla({ state: 'BOLTER_WAVEOFF' }, null, 0, { facilityId: 'CARRIER' });
+  assert.deepEqual(airfield, { toState: 'INBOUND', transferTo: 'AP' });
+  assert.equal(carrier.transferTo, undefined);
+  assert.equal(c.nlaButtonLabel({ stripType: 'FINAL', state: 'BOLTER_WAVEOFF', nla: airfield }), 'Back to AP');
+  assert.equal(c.nlaButtonLabel({ stripType: 'FINAL', state: 'BOLTER_WAVEOFF', nla: carrier }), 'Back on final');
+  assert.equal(c.nlaButtonLabel({ stripType: 'FINAL', state: 'ON_FINAL', nla: { toState: 'TAXI_IN', transferTo: 'GC' } }), 'Landed');
+  for (const state of Object.keys(c.FINAL_TRANSFER_LABELS)) {
+    assert.ok(computeFinalNla({ state }, null, 0, { facilityId: 'INCIRLIK' }).transferTo, `${state} is a transfer at an airfield`);
+  }
+});

@@ -512,6 +512,12 @@ const PATTERN_BLOCK_MAP = {
   ..._CARRIER_CHROME,
 };
 
+// The PAR final's two assignments (docs/adr/0117 decision 6) are an AIRFIELD's: the carrier's FINAL shares the map but has
+// nothing to type (docs/adr/0116, H125; the supervisor's ruling on LT-PAR-MISSED) and no conformance on its final
+// (docs/adr/0117 decision 8). resolveBlockTarget() refuses them at the carrier; crc-desktop strip-template.js mirrors it.
+const PAR_FINAL_ONLY_BLOCKS = Object.freeze(['7A', '9A-VECTOR']);
+const CARRIER_FACILITY_ID = 'CARRIER';
+
 const BLOCK_MAPS = {
   DEPARTURE: DEPARTURE_BLOCK_MAP, ARRIVAL: ARRIVAL_BLOCK_MAP, OVERFLIGHT: OVERFLIGHT_BLOCK_MAP, MISSION: MISSION_BLOCK_MAP,
   MARSHAL: MARSHAL_BLOCK_MAP, FINAL: FINAL_BLOCK_MAP, PATTERN: PATTERN_BLOCK_MAP,
@@ -594,12 +600,14 @@ function requiredBlocksFor(stripType) {
  * _applySetBlock: { kind:'flightData', path } for a flight data field, { kind:
  * 'annotation' } for a Strip annotation cell, or null for anything not
  * writable through the generic SetBlock path (system/flag
- * Blocks, or an unknown Block ID / stripType).
+ * Blocks, an unknown Block ID / stripType, or a PAR-final-only Block on the
+ * carrier's FINAL, `facilityId` 'CARRIER').
  */
-function resolveBlockTarget(stripType, blockId) {
+function resolveBlockTarget(stripType, blockId, facilityId) {
   const map = BLOCK_MAPS[stripType];
   const def = map && map[blockId];
   if (!def) return null;
+  if (stripType === 'FINAL' && facilityId === CARRIER_FACILITY_ID && PAR_FINAL_ONLY_BLOCKS.includes(blockId)) return null;
   if (def.target.kind === 'flightData') return { kind: 'flightData', path: def.target.path };
   if (def.target.kind === 'annotation') return { kind: 'annotation' };
   // WP4A (docs/adr/0018) — routed through flight-data-store.js's dedicated
@@ -694,7 +702,7 @@ function validateFacilityConfig(config) {
 
 module.exports = {
   DEPARTURE_BLOCK_MAP, ARRIVAL_BLOCK_MAP, OVERFLIGHT_BLOCK_MAP, MISSION_BLOCK_MAP,
-  MARSHAL_BLOCK_MAP, FINAL_BLOCK_MAP, PATTERN_BLOCK_MAP, BLOCK_MAPS,
+  MARSHAL_BLOCK_MAP, FINAL_BLOCK_MAP, PATTERN_BLOCK_MAP, BLOCK_MAPS, PAR_FINAL_ONLY_BLOCKS,
   isValidStripType, requiredBlocksFor, resolveBlockTarget, validateFacilityConfig,
   interlockFor, interlockBlocks, controlAxisFor, MILITARY_BLOCK_NAMESPACE,
 };

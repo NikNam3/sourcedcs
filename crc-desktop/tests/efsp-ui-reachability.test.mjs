@@ -2702,10 +2702,11 @@ test('the derived carrier Blocks are read-only cells showing the server\'s value
   assert.ok(blockCell(r.el, 'C4'), 'the approach type picker is on the Strip');
 });
 
-test('a FINAL Strip has no editable cell but the talk-down\'s HDG and ALT (crc-sync docs/adr/0117), and no input at all', async () => {
+test('a carrier FINAL Strip has no editable cell and no input at all: HDG and ALT are the PAR final\'s (ADR 0116/H125; LT-PAR-MISSED ruling)', async () => {
   const strip = stripAt({ stripType: 'FINAL', state: 'ON_FINAL', ownerPositionId: 'CV_APP1', bayId: 'cv-app1-final', nla: { toState: 'BALL', carrierHandoff: 'FINAL_TO_LSO' } });
   const r = await carrierRender(strip, { signedOn: ['CV_APP1'] });
-  assert.deepEqual(descendants(r.el).filter(c => c.classList && c.classList.contains('efsp-block-editable')).map(c => c.dataset.block).sort(), ['7A', '9A-VECTOR']);
+  assert.deepEqual(descendants(r.el).filter(c => c.classList && c.classList.contains('efsp-block-editable')).map(c => c.dataset.block), []);
+  assert.equal(descendants(r.el).filter(c => c.dataset && (c.dataset.block === '7A' || c.dataset.block === '9A-VECTOR')).length, 0, 'not shown either');
   assert.equal(descendants(r.el).filter(c => c.tagName === 'INPUT' || c.tagName === 'SELECT').length, 0);
   const ball = descendants(r.el).find(c => c.dataset && c.dataset.carrierHandoff === 'FINAL_TO_LSO');
   assert.equal(ball.textContent, 'Ball');

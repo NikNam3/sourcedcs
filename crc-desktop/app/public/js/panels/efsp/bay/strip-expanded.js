@@ -2,7 +2,7 @@
 import { nlaLabelFor } from '../efsp-nla.js';
 import { sendEfspMutation } from '../efsp-ws.js';
 import { getAllEfspAirspaces, getEfspFlightData, getEfspStrip } from '../efsp-state.js';
-import { BLOCK_MAPS, blockLabelFor, blockTitleFor, supersededAnnotationEntries } from '../strip-template.js';
+import { BLOCK_MAPS, blockLabelFor, isParFinalOnlyOnCarrier, blockTitleFor, supersededAnnotationEntries } from '../strip-template.js';
 import { compactBlocksFor } from '../strip-fields.js';
 import { mtrLostCommsAdvisory } from '../mtr-advisory.js';
 import { mtrRouteNote } from '../mtr-route-note.js';
@@ -241,6 +241,7 @@ export function _appendExpandButton(container, strip) {
 function _expandedBlockIdsFor(strip, map) {
   const onStrip = new Set(compactBlocksFor(strip.stripType, strip.ownerPositionId, getEfspFlightData(strip.flightDataId)));
   return Object.keys(map).filter((blockId) => {
+    if (isParFinalOnlyOnCarrier(strip.stripType, blockId, strip.facilityId)) return false; // the PAR final's HDG/ALT, not the carrier's
     if (!onStrip.has(blockId)) return true;
     return supersededAnnotationEntries(strip, blockId).length > CHIP_HISTORY_LIMIT;
   });

@@ -174,6 +174,23 @@ class Placement {
   }
 
   /**
+   * The receiving Position's Bay and Rack for a transfer-shaped step into `state` (an NLA or a final call): its SFA
+   * frequency Bay when that Bay implies the state and the flight is on one of its frequencies, so a missed approach
+   * goes back to AP on the Rack that IS the flight's frequency (LT-PAR-MISSED; the pilot never changed it, JO 7110.65BB
+   * para 4-7-4 g, 5-10-15 c); otherwise the first Bay implying the state. Null when the Position has none.
+   */
+  transferTargetFor(positionId, state, strip) {
+    const sfaBay = this._rules.baysFor(positionId).find(b => b.view === 'sfa-freqs' && b.impliesState === state);
+    if (sfaBay && strip) {
+      const flightData = this._flightDataStore.getFlightData(strip.flightDataId);
+      const rackId = flightData && flightData.comms ? this._rules.sfaRackFor(sfaBay.bayId, flightData.comms.workingFrequencyMhz) : null;
+      if (rackId) return { bay: sfaBay, rackId };
+    }
+    const bay = this._rules.bayForImpliedState(positionId, state);
+    return bay ? { bay, rackId: this.placementRack(strip, bay) } : null;
+  }
+
+  /**
    * The owner's Bay that holds this Strip's type whatever its state (Bay
    * `holdsStripType`, docs/adr/0087), or null. A strip type with such a Bay keeps its state
    * on the Strip: no Bay implies it, so a drag never changes it, and a state

@@ -262,12 +262,14 @@
     "parFinal": {
       "conversions": [
         "LANDED",
+        "MISSED_APPROACH",
         "PAR_HANDOFF"
       ],
       "finalCalls": [
         "BEGIN_DESCENT",
         "CLEARED_TO_LAND",
-        "LANDED"
+        "LANDED",
+        "MISSED_APPROACH"
       ],
       "sfaUses": [
         "INITIAL_CONTACT",

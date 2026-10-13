@@ -153,7 +153,7 @@ test('final: one line per flight; at a runway the callsign and the PAR range; on
   assert.deepEqual(V.finalTerminalOp('CARRIER', waveoff), { kind: 'SetState', toState: 'BOLTER_WAVEOFF' });
   assert.deepEqual(V.finalTerminalsFor('RUNWAY').map(t => V.finalTerminalOp('RUNWAY', t)), [
     { kind: 'FinalCall', call: 'BEGIN_DESCENT' }, { kind: 'FinalCall', call: 'CLEARED_TO_LAND' }, { kind: 'FinalCall', call: 'LANDED' },
-    { kind: 'SetState', toState: 'BOLTER_WAVEOFF' },
+    { kind: 'FinalCall', call: 'MISSED_APPROACH' },
   ]);
   assert.equal(V.finalTerminalOp('RUNWAY', null), null);
 });
@@ -176,7 +176,7 @@ test('final mount: PAR\'s Strip becomes a flight line, racks hidden: HDG and ALT
   assert.ok(all.some(e => e.className && String(e.className).includes('efsp-strip-menu-btn')), 'the Strip\'s ⋯ menu is on the line (T5)');
   assert.ok(all.some(e => e.className === 'efsp-drop-btn'), 'and Drop');
   click(terms[3]);
-  assert.deepEqual(sent.pop(), { position: 'PAR', stripId: 'p1', op: { kind: 'SetState', toState: 'BOLTER_WAVEOFF' } });
+  assert.deepEqual(sent.pop(), { position: 'PAR', stripId: 'p1', op: { kind: 'FinalCall', call: 'MISSED_APPROACH' } }, 'Missed approach: back to AP (H137)');
   click(terms[2]);
   assert.deepEqual(sent.pop().op, { kind: 'FinalCall', call: 'LANDED' });
   click(terms[0]);

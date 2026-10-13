@@ -154,7 +154,7 @@ test('terminals are the final controller\'s FAA steps (crc-sync docs/adr/0117): 
   assert.deepEqual(M.parTerminalOp(descent), { kind: 'FinalCall', call: 'BEGIN_DESCENT' });
   assert.deepEqual(M.parTerminalOp(cleared), { kind: 'FinalCall', call: 'CLEARED_TO_LAND' });
   assert.deepEqual(M.parTerminalOp(landed), { kind: 'FinalCall', call: 'LANDED' });
-  assert.deepEqual(M.parTerminalOp(missed), { kind: 'SetState', toState: 'BOLTER_WAVEOFF' });
+  assert.deepEqual(M.parTerminalOp(missed), { kind: 'FinalCall', call: 'MISSED_APPROACH' }, 'back to AP (H137 LT-PQ1 a)');
   assert.equal(M.parTerminalOp(null), null);
   // a once-only call is recorded on the Strip; Landed and Missed approach are never "recorded"
   const strip = { finalCalls: { CLEARED_TO_LAND: { at: 1, by: 'u' } } };

@@ -68,6 +68,8 @@ export const NLA_LABELS = {
   },
   // ON_FINAL: the carrier's NLA is its Ball handoff (the label comes from CARRIER_HANDOFFS by the server's
   // `strip.nla.carrierHandoff`); at an airfield it is Landed, the Strip going to GC (crc-sync docs/adr/0117).
+  // BOLTER_WAVEOFF: the carrier's bolter or waveoff goes back on final; at an airfield a missed approach goes back to AP
+  // (decisions H137 LT-PQ1 a), a transfer the server's `strip.nla.transferTo` names (FINAL_TRANSFER_LABELS below).
   FINAL: {
     ON_FINAL:       'Landed',
     BALL:           'Trapped',
@@ -92,10 +94,17 @@ export const CARRIER_HANDOFFS = {
   MARSHAL_TO_PATTERN_CASE_I: { label: 'To pattern',    trigger: 'CONTROLLER_INITIATED', from: ['CV_MARSHAL'], cases: ['I'] },
 };
 
+// A FINAL NLA that is a transfer at an airfield, by state (crc-sync authority/strip-types/final.js): the missed approach
+// back to AP. ON_FINAL's transfer (Landed, to GC) is the state table's own label.
+export const FINAL_TRANSFER_LABELS = { BOLTER_WAVEOFF: 'Back to AP' };
+
 /** The label on a Strip's NLA button: the handoff's own name when the server says the NLA is one, else the strip type's state table. */
 export function nlaButtonLabel(strip) {
   const t = strip && strip.nla && strip.nla.carrierHandoff;
   if (t && CARRIER_HANDOFFS[t]) return CARRIER_HANDOFFS[t].label;
+  if (strip && strip.stripType === 'FINAL' && strip.nla && strip.nla.transferTo && FINAL_TRANSFER_LABELS[strip.state]) {
+    return FINAL_TRANSFER_LABELS[strip.state];
+  }
   return strip ? nlaLabelFor(strip.state, strip.stripType) : null;
 }
 

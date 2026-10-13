@@ -22,7 +22,9 @@ const FINAL_STATE_OWNERS = {
  * The carrier records "Ball" as its FINAL_TO_LSO handoff (a trigger type and Case rule of its own, ADR 0074). At an
  * airfield the final controller's part ends when the aircraft lands (docs/adr/0117; JO 7110.65BB para 5-12-8 d, 5-12-9):
  * the NLA is "Landed", the Strip going to GC as an ARRIVAL at TAXI_IN (H134 LT-RQ6 b) through transfer-strip.js's LANDED
- * conversion. BALL is the carrier's only: "Landing assured", which reused it at PAR (ADR 0075), is gone.
+ * conversion. BALL is the carrier's only: "Landing assured", which reused it at PAR (ADR 0075), is gone. A missed
+ * approach (H137 LT-PQ1 a) is the FINAL line's own transfer to AP; a drag to PAR's missed-approach Bay (`alsoLegal`)
+ * stays possible, for an AP nobody can take it at, and that Bay's NLA is the same transfer.
  */
 function computeFinalNla(strip, flightData, now, ctx = {}) {
   switch (strip.state) {
@@ -32,7 +34,12 @@ function computeFinalNla(strip, flightData, now, ctx = {}) {
       // nobody is offered refuses the transfer itself (NO_RECEIVING_POSITION).
       return { toState: 'TAXI_IN', transferTo: 'GC', alsoLegal: ['BOLTER_WAVEOFF'] };
     case 'BALL':           return { toState: 'DROPPED', alsoLegal: ['BOLTER_WAVEOFF'] }; // "Trapped"
-    case 'BOLTER_WAVEOFF': return { toState: 'ON_FINAL' };
+    case 'BOLTER_WAVEOFF':
+      // The carrier's bolter or waveoff goes round to the final again (its own CV procedure, unchanged). At an airfield a
+      // missed approach goes back to AP for another approach (H137 LT-PQ1 a, ours), the same transfer as the FINAL
+      // line's Missed approach (par-final.js MISSED_APPROACH).
+      if (ctx.facilityId === 'CARRIER') return { toState: 'ON_FINAL' };
+      return { toState: 'INBOUND', transferTo: 'AP' };
     case 'DROPPED':
     default:               return null;
   }

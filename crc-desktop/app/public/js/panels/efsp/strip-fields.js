@@ -22,7 +22,7 @@
 // Filtered by the strip type's own Block Map before use (compactBlocksFor), so a
 // Block listed here that a strip type does not have is dropped rather than drawn
 // as an unlabelled field.
-import { BLOCK_MAPS } from './strip-template.js';
+import { BLOCK_MAPS, isParFinalOnlyOnCarrier } from './strip-template.js';
 import { hasMtrData } from './mtr-advisory.js';
 import { facilityOfPosition } from './facility-topology.js';
 
@@ -46,7 +46,7 @@ export const COMPACT_BLOCKS_BY_STRIP_TYPE = {
   // enters for the flight (approach, button, low state, bingo, EEAT). EEAT is on
   // the face because it is "the field most likely to be missed" (§9.12 rule 7).
   // FINAL: callsign, type, final bearing, deck, distance, and the two the final controller types, HDG and ALT
-  // (crc-sync docs/adr/0117).
+  // (crc-sync docs/adr/0117), on PAR's final only: compactBlocksFor() leaves them off the carrier's.
   // PATTERN's SIDE (C18) is read-only and drawn only once it leads (SIDE_ONLY_WHEN_LEADING).
   MARSHAL:    ['C1', 'C2', 'C18', 'C3', 'C7', 'C6', 'C8', 'C5', 'C9', 'C4', 'C10', 'C12', 'C13', 'C14', 'C15', 'C19'],
   FINAL:      ['C1', 'C2', 'C18', 'C9', 'C16', 'C17', 'C19', '9A-VECTOR', '7A'],
@@ -128,6 +128,9 @@ export function compactBlocksFor(stripType, positionId, flightData) {
   if (mtr) list = [...list, ...mtr];
   const map = _blockMapFor(stripType);
   let out = map ? list.filter(id => Object.prototype.hasOwnProperty.call(map, id)) : list;
+  // HDG and ALT are the PAR final's: hidden on the carrier's FINAL (supervisor ruling, LT-PAR-MISSED).
+  const facilityId = positionId ? facilityOfPosition(positionId) : null;
+  out = out.filter(id => !isParFinalOnlyOnCarrier(stripType, id, facilityId));
   const sideLeads = sideNumberLeads(stripType, positionId, flightData);
   if (!sideLeads && SIDE_ONLY_WHEN_LEADING.includes(stripType)) out = out.filter(id => id !== 'C18');
   return sideLeads ? _swapSideAndCallsign(out) : out;

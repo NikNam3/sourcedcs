@@ -1,7 +1,7 @@
 'use strict';
 
 const { stripScope, callsignOf } = require('../../undo/scopes');
-const { FINAL_CALLS, CARRIER_FACILITY } = require('../../par-final');
+const { FINAL_CALLS, CONVERSIONS, CARRIER_FACILITY } = require('../../par-final');
 const { ARRIVAL_STATE_OWNERS } = require('../../authority/strip-types/arrival');
 const { activeClearanceEntry } = require('../../flight-data-store');
 
@@ -13,6 +13,9 @@ const { activeClearanceEntry } = require('../../flight-data-store');
  *   CLEARED_TO_LAND  recorded: the tower's clearance relayed (para 5-10-13 a). Optional.
  *   LANDED           the Strip leaves PAR for GC as an ARRIVAL at TAXI_IN (H134 LT-RQ6 b, para 5-12-9), through the
  *                    one strip transfer (transfer-strip.js's LANDED conversion), so staffing and Bays are its rules.
+ *   MISSED_APPROACH  the Strip goes back to AP as an ARRIVAL at INBOUND for another approach (H137 LT-PQ1 a, ours: the
+ *                    orders are silent on who works the climb-out), through the same transfer (MISSED_APPROACH
+ *                    conversion); on AP's SFA frequency Rack when the flight is on one. Its recorded calls are cleared.
  *
  * Never on the carrier, whose FINAL has its own terminal steps (Ball, Waveoff). A call is recorded once.
  */
@@ -29,12 +32,14 @@ function _applyFinalCall(ctx, strip, op, by) {
   if (blocked) return { ok: false, reason: blocked.reason, detail: blocked.detail, strip };
 
   if (call.conversion) {
-    const groundPositionId = ARRIVAL_STATE_OWNERS.TAXI_IN[0];
-    const bay = ctx.rules.bayForImpliedState(groundPositionId, 'TAXI_IN');
-    if (!bay || bay.impliesState !== 'TAXI_IN') {
-      return { ok: false, reason: 'VALIDATION_ERROR', detail: `${groundPositionId} has no Bay for TAXI_IN`, strip };
+    // The receiving Position is the one that works the converted state: GC for TAXI_IN, AP for INBOUND.
+    const { toState } = CONVERSIONS[call.conversion];
+    const toPositionId = ARRIVAL_STATE_OWNERS[toState][0];
+    const target = ctx.placement.transferTargetFor(toPositionId, toState, strip);
+    if (!target || target.bay.impliesState !== toState) {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: `${toPositionId} has no Bay for ${toState}`, strip };
     }
-    const r = ctx.run('TransferStrip', strip, { toPositionId: groundPositionId, bayId: bay.bayId, rackId: ctx.placement.placementRack(strip, bay) }, { by });
+    const r = ctx.run('TransferStrip', strip, { toPositionId, bayId: target.bay.bayId, rackId: target.rackId }, { by });
     return r.ok ? { ...r, finalCall: op.call } : r;
   }
 
@@ -58,7 +63,7 @@ function _applyFinalCall(ctx, strip, op, by) {
 
 module.exports = {
   kind: 'FinalCall',
-  // docs/adr/0100: a one-click action, undone like the others; Landed as the transfer it makes.
+  // docs/adr/0100: a one-click action, undone like the others; Landed and Missed approach as the transfer they make.
   undo: {
     label: (op, strip, ctx) => `${(FINAL_CALLS[op.call] || {}).label || op.call} ${callsignOf(ctx, strip)}`,
     scope: (ctx, strip) => stripScope(ctx, strip),

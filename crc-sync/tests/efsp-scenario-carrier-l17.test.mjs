@@ -200,6 +200,9 @@ test('radar contact changes the strip type in place; ball and trap end the appro
   // nothing is typed on the talk-down
   refused(act(efsp, c.CV_APP1, 'CV_APP1', onFinal, { kind: 'SetBlock', blockId: 'C1', value: 'X' }), 'VALIDATION_ERROR');
   refused(act(efsp, c.CV_APP1, 'CV_APP1', onFinal, { kind: 'SetBlock', blockId: '5', value: '1234' }), 'VALIDATION_ERROR');
+  // nor HDG and ALT: those are an airfield's PAR final's (ADR 0116/H125; ADR 0117 decision 6, LT-PAR-MISSED)
+  refused(act(efsp, c.CV_APP1, 'CV_APP1', onFinal, { kind: 'SetBlock', blockId: '9A-VECTOR', value: '060' }), 'VALIDATION_ERROR');
+  refused(act(efsp, c.CV_APP1, 'CV_APP1', onFinal, { kind: 'SetBlock', blockId: '7A', value: '030' }), 'VALIDATION_ERROR');
   const ball = await advance(efsp, c.CV_APP1, 'CV_APP1', strip(efsp, a.stripId));
   assert.equal(ball.state, 'BALL');
   assert.equal(ball.carrierHandoff.trigger, 'PILOT_BALL_CALL');

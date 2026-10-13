@@ -37,7 +37,7 @@ function buildFacilityRules({ facilityId, facilityConfig, permissionRules, posit
   });
   return {
     divertDestinationFor,
-    resolveBlockTarget:  (blockId, stripType) => blockMap.resolveBlockTarget(stripType, blockId),
+    resolveBlockTarget:  (blockId, stripType) => blockMap.resolveBlockTarget(stripType, blockId, facilityId),
     isBlockVisible:      (stripType, blockId) => facilityConfig.isBlockVisible(stripType, blockId, facilityId),
     bayImpliesState:     (bayId) => facilityConfig.bayImpliesState(bayId, facilityId),
     bayHoldsStripType:        (bayId) => facilityConfig.bayHoldsStripType(bayId, facilityId),
