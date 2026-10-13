@@ -68,9 +68,9 @@ From `crc-sync/config/efsp-stereo-routes.json` as it was before this lane:
 
 ## Tests
 
-- crc-sync `npm test`: 2738 → 2742 (stereo-route strictness ×3; carrier map assertion extended). Wire: `wire:record`,
+- crc-sync `npm test`: 2738 → 2740 (stereo-route strictness: the tolerance test replaced, +2 for `remarks` refused and the start-up refusal; carrier map assertion extended). Wire: `wire:record`,
   surface unchanged, protocol 2.
-- crc-desktop `npm test`: 1289 → see the final report (new `efsp-strip-remarks.test.mjs` ×5, parity test +1, the
+- crc-desktop `npm test`: 1289 → 1296 (new `efsp-strip-remarks.test.mjs` ×5, parity test +1, the
   stereo picker and control-release tests updated); module-graph exports re-recorded (new modules `strip-remarks.js`,
   `bay/popovers/remarks.js`, new `strip-template.js` exports).
 - e2e (E2E_LANE=7): new `e2e/u-strip.spec.js` 9/9 (U1/U2 on DEPARTURE, ARRIVAL incl. the expanded view, OVERFLIGHT,
