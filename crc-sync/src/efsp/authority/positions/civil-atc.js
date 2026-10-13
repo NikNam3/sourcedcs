@@ -107,10 +107,12 @@ const family = {
   permissions: PERMISSIONS,
   createsStripTypes: CREATE_STRIP_TYPE_PERMISSIONS,
   runwayStatusOwners: RUNWAY_STATUS_OP_OWNERS,
-  // ADR 0098 §11. OPS of the controlling Facility creates, edits and deletes its Facility's airspaces (R3-11); every
-  // other ATC Position does so for the airspaces it is itself the controlling Position of (AIRSP-2).
+  // ADR 0098 §11, amended by docs/adr/0119 (H134 LT-RQ13 a): only the controlling Position defines an airspace (create,
+  // edit, delete; AIRSP-2): JO 7400.2R ¶21-1-10 names the controlling agency, and definition is the FAA's approval, not
+  // the using agency's. OPS is Incirlik's USING agency (¶21-1-11; 14 CFR 73.15 (c)): it schedules, requests activation,
+  // releases and approves entry for an airspace whose using Facility is INCIRLIK (`use`), and defines none (R3-11 gone).
   airspace: {
-    OPS: { create: 'FACILITY', edit: 'FACILITY', delete: 'FACILITY', use: false },
+    OPS: { create: null, edit: null, delete: null, use: true },
     ...Object.fromEntries(['CD', 'GC', 'LC', 'AP', 'CTR'].map(id => [id, { create: 'OWN', edit: 'OWN', delete: 'OWN', use: false }])),
   },
   nonOwnerBlockWrites: NON_OWNER_BLOCK_WRITES,

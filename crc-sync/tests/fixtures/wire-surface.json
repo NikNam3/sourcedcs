@@ -414,6 +414,16 @@
         "type",
         "version"
       ],
+      "efsp-alerts": [
+        "airspaceEntry",
+        "conflictAlert",
+        "conformance",
+        "obligations",
+        "surveillance",
+        "tofiRegime",
+        "type",
+        "version"
+      ],
       "efsp-board-delta": [
         "boardEpoch",
         "boardSeq",

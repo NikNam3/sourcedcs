@@ -434,6 +434,9 @@
   ],
   "panels/efsp/alerts-state.js": [
    "_resetAlertsState",
+   "airspaceEntryAlertsForFlightData",
+   "airspaceEntryAlertsForTrack",
+   "airspaceEntryText",
    "applyEfspAlerts",
    "conflictAlertsForTrack",
    "conflictName",
@@ -561,7 +564,8 @@
    "_canConvertToArrival",
    "_openAirspaceEntryPopover",
    "_pendingConvertStripId",
-   "_setPendingConvertStripId"
+   "_setPendingConvertStripId",
+   "_usingAgencyEntryChoices"
   ],
   "panels/efsp/bay/popovers/bind.js": [
    "_openBindPopover"
@@ -880,6 +884,9 @@
    "STORE_SYNC",
    "_resetEfspStateForTest",
    "activeMarsaForFlightData",
+   "airspaceEntryAlertsForFlightData",
+   "airspaceEntryAlertsForTrack",
+   "airspaceEntryText",
    "applyEfspAirspaceDelta",
    "applyEfspAlerts",
    "applyEfspCorrelationDelta",
@@ -1404,6 +1411,9 @@
    "TIME_CHAINS",
    "resolveTimeChain",
    "timeChainForBlock"
+  ],
+  "panels/efsp/vfr.js": [
+   "hasNoClearance"
   ],
   "panels/los-panel.js": [
    "_setShowLosProfileForTest",

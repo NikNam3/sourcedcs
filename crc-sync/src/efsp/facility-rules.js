@@ -35,6 +35,17 @@ function buildFacilityRules({ facilityId, facilityConfig, permissionRules, posit
     hullIds: () => carrierStore.hullIds(),
     icaoByName,
   });
+  /** The airspace an entry op names: the op's for an approval, the Strip's current entry for a clear. */
+  function _entryAirspaceOf(strip, op) {
+    if (op.kind === 'ApproveAirspaceEntry') return op.airspaceId || null;
+    if (op.kind === 'ClearAirspaceEntry') return (strip.airspaceEntry && strip.airspaceEntry.airspaceId) || null;
+    return null;
+  }
+  function _usingAgencyEntry(actingPositionId, strip, op) {
+    if (!strip || !op || strip.state === 'DROPPED') return false;
+    const airspaceId = _entryAirspaceOf(strip, op);
+    return !!airspaceId && airspaceStore.isUsingAgency(airspaceId, actingPositionId);
+  }
   return {
     divertDestinationFor,
     resolveBlockTarget:  (blockId, stripType) => blockMap.resolveBlockTarget(stripType, blockId, facilityId),
@@ -61,7 +72,12 @@ function buildFacilityRules({ facilityId, facilityConfig, permissionRules, posit
     // ownership, hand-back and consolidation rules read.
     baysFor:             (positionId) => facilityConfig.getBaysFor(positionId, facilityId),
     handBackTargetsFor:  (positionId) => permission.handBackTargetsFor(positionId),
-    mayActBesideOwner:   (actingPositionId, strip, op) => permission.mayActBesideOwner(actingPositionId, strip, op),
+    // docs/adr/0119 (H136 VQ5 a, 14 CFR 73.15 (c)(2), JO 7110.65BB para 9-3-1 a-b): beside permission.js's table, the using
+    // agency of an airspace approves (or clears) a flight's entry into it on a Strip of its own Facility it does not hold.
+    mayActBesideOwner:   (actingPositionId, strip, op) => permission.mayActBesideOwner(actingPositionId, strip, op)
+      || _usingAgencyEntry(actingPositionId, strip, op),
+    // `airspaceId` null: the using agency of any airspace (ClearAirspaceEntry's authorize, before the Strip is read).
+    isAirspaceUsingAgency: (positionId, airspaceId) => airspaceStore.isUsingAgency(airspaceId == null ? null : airspaceId, positionId),
     // WP4A (docs/adr/0015) — this Facility's own id, and a lazy accessor
     // to the OTHER Facility's BoardStore instance for cross-Facility
     // coordination. Lazy (a closure over `facilities`, resolved at call

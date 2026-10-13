@@ -137,6 +137,8 @@ function filterAlerts(msg, scope, flightDataIds, stripVisible) {
     ...msg,
     conformance: (msg.conformance || []).filter(a => flightDataIds.has(a.flightDataId)),
     tofiRegime: (msg.tofiRegime || []).filter(a => flightDataIds.has(a.flightDataId)),
+    // docs/adr/0119: already per Position (the hub); a flight's alert also only where the flight is visible.
+    airspaceEntry: (msg.airspaceEntry || []).filter(a => !a.flightDataId || flightDataIds.has(a.flightDataId)),
     obligations: (msg.obligations || []).filter(o => stripVisible(o.facilityId, o.stripId)),
     surveillance: (msg.surveillance || []).filter(h => stripVisible(h.facilityId, h.stripId)),
   };

@@ -181,6 +181,15 @@ test('T27: a refusal names who may do it, never "OPS of CENTER"', async ({ page 
   expect(ack).toMatchObject({ ok: false, reason: 'PERMISSION_DENIED', detail: 'OPS may not create MOA-NOPE: only CTR may' });
 });
 
+test('ADR 0119: OPS is the using agency and defines no airspace: no "+ New airspace", and an Incirlik create as OPS is refused, naming AP', async ({ page }) => {
+  await open(page, { signedOn: ['OPS'] });
+  await expect(page.locator('.airspace-new-btn')).toHaveCount(0);
+  await page.evaluate(() => crc.ws.sendEfspAirspaceMutation('OPS', 'MOA-OPSDEF', 0,
+    { kind: 'CreateAirspace', definition: { airspaceId: 'MOA-OPSDEF', name: 'OPSDEF', kind: 'AREA', type: 'MOA', controllingFacilityId: 'INCIRLIK', controllingPositionId: 'AP' } }));
+  await expect.poll(() => lastAck(page).then(a => a && a.airspaceId)).toBe('MOA-OPSDEF');
+  expect(await lastAck(page)).toMatchObject({ ok: false, reason: 'PERMISSION_DENIED', detail: 'OPS may not create MOA-OPSDEF: only AP may' });
+});
+
 test('T28: an airspace made from a DCS drawing is drawn instead of that drawing, and the drawing returns when the airspace is not drawn', async ({ page }) => {
   await open(page, { withMap: true });
   const ed = await createAirspace(page, 'MOA-T28', 'MOA T28');

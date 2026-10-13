@@ -8,10 +8,10 @@
 //
 // A row is { create, edit, delete, use }:
 //   create/edit/delete  'OWN'       the Position that IS the airspace's controllingPositionId
-//                       'FACILITY'  any airspace whose controllingFacilityId is the Position's own Facility (OPS, R3-11)
+//                       'FACILITY'  any airspace whose controllingFacilityId is the Position's own Facility (no row uses it since crc-sync docs/adr/0119)
 //                       'FREQUENCY' the airspace's usingPositionId is this Position: its control frequency only
 //   use                 true        may schedule, request activation and release for an airspace whose usingFacilityId is the
-//                                   Position's Facility (the `airspaceUse` capability, DA-7: TAC_C2) or whose usingPositionId is it
+//                                   Position's Facility (the `airspaceUse` capability, DA-7: TAC_C2; OPS, crc-sync docs/adr/0119) or whose usingPositionId is it
 
 import { FACILITY_POSITIONS, facilityOfPosition, shippedFacilityIds, positionsOf } from './facility-topology.js';
 export { FACILITY_POSITIONS, facilityOfPosition, positionsOf };
@@ -19,7 +19,7 @@ export { FACILITY_POSITIONS, facilityOfPosition, positionsOf };
 const ATC_OWN = { create: 'OWN', edit: 'OWN', delete: 'OWN', use: false };
 /** The `airspace` column of the Position families, by Position. A Position with no entry has no row (it controls no airspace). */
 export const AIRSPACE_ROWS = {
-  OPS: { create: 'FACILITY', edit: 'FACILITY', delete: 'FACILITY', use: false },
+  OPS: { create: null, edit: null, delete: null, use: true }, // crc-sync docs/adr/0119: the using agency, defines nothing
   CD: { ...ATC_OWN }, GC: { ...ATC_OWN }, LC: { ...ATC_OWN }, AP: { ...ATC_OWN }, CTR: { ...ATC_OWN },
   TAC_C2: { create: null, edit: null, delete: null, use: true },
 };

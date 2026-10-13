@@ -5,6 +5,7 @@ import { getAllEfspCorrelations, stripIdsForTrackId } from './correlation-state.
 import { facilityOfPosition } from './facility-topology.js';
 import { FLIGHT_FOLLOWING_POSITIONS } from './bay/authority-mirror.js';
 import { getAllTracks } from '../../picture.js';
+import { hasNoClearance } from './vfr.js';
 
 // Flight following (crc-sync H136, docs/wip/LT-VFR.md). "Start flight following" is one action on a contact with no
 // Strip: crc-sync makes the flight data, a discrete code and an OVERFLIGHT Strip IN_SECTOR at the acting radar Position,
@@ -56,11 +57,9 @@ export function startFlightFollowing(trackId, callsign, aircraftData, onAck) {
   return null;
 }
 
-/** No assigned altitude and no assigned heading: VFR the FAA way (H136 VQ2). */
+/** No assigned altitude and no assigned heading: VFR the FAA way (H136 VQ2; vfr.js, shared with crc-sync). */
 function _noClearance(strip) {
-  const fd = getEfspFlightData(strip.flightDataId);
-  const active = (cell) => !!(cell && (cell.entries || []).some(e => e.status === 'ACTIVE'));
-  return !(fd && fd.clearance && (active(fd.clearance.altitude) || active(fd.clearance.heading)));
+  return hasNoClearance(getEfspFlightData(strip.flightDataId));
 }
 
 /**

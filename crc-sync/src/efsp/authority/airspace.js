@@ -7,11 +7,13 @@
 // below. A row is `{ create, edit, delete, use }`:
 //
 //   create/edit/delete  'OWN'       the Position that IS the airspace's controllingPositionId
-//                       'FACILITY'  any airspace whose controllingFacilityId is the Position's own Facility (OPS, R3-11)
+//                       'FACILITY'  any airspace whose controllingFacilityId is the Position's own Facility (no row
+//                                   uses it since docs/adr/0119: OPS lost it, H134 LT-RQ13 a)
 //                       'FREQUENCY' the airspace's `usingPositionId` is this Position: its control frequency only
 //   use                 true        may schedule, request activation and release for an airspace whose
 //                                   `usingFacilityId` is the Position's Facility (the `airspaceUse` capability,
-//                                   DA-7: TAC_C2 only) or whose `usingPositionId` is this Position (a RANGES Position)
+//                                   DA-7: TAC_C2; Incirlik's OPS since docs/adr/0119) or whose `usingPositionId` is this
+//                                   Position (a RANGES Position). The using agency also approves entry (ADR 0119)
 //
 // A Position with no row, and a session signed on to nothing, may do none of it (it still reads everything:
 // airspaces are not flights). Approve/confirm/deny/return stay with the controlling Position alone, as before.

@@ -8,7 +8,7 @@ import {
 } from '../track-label.js';
 import { _flightDataForTrack, buildFiledRoute, parseFiledRouteWaypoints } from '../geojson.js';
 import { dock, ensureTrackPanel } from '../dock-handle.js';
-import { conformanceAlertsForFlightData, conflictAlertsForTrack, conflictName, refuelingAlertText } from './efsp/efsp-state.js';
+import { conformanceAlertsForFlightData, conflictAlertsForTrack, conflictName, refuelingAlertText, airspaceEntryAlertsForTrack, airspaceEntryText } from './efsp/efsp-state.js';
 import { history, tracks } from '../picture.js';
 import { map, mapReady } from '../map-handle.js';
 import { settings } from '../settings.js';
@@ -273,6 +273,8 @@ function _refreshTrackAlerts(trackId) {
     if (a.kind === 'WRONG_WAY') lines.push({ bad: true, text: `Assigned ${a.assigned.toLocaleString('en-US')} ft, ${a.fpm < 0 ? 'descending' : 'climbing'} at ${Math.abs(a.fpm).toLocaleString('en-US')} ft/min.` });
     if (a.kind === 'LEVEL_BUST') lines.push({ bad: true, text: `Level bust: ${a.deviationFt > 0 ? '+' : '−'}${Math.abs(a.deviationFt)} ft from ${a.assigned.toLocaleString('en-US')} ft.` });
   }
+  // crc-sync's docs/adr/0119: inside an ACTIVE airspace with no approved entry (amber).
+  for (const a of airspaceEntryAlertsForTrack(trackId)) lines.push({ bad: false, text: `${airspaceEntryText(a)}: inside, active, no approved entry.` });
   $alerts.innerHTML = '';
   for (const l of lines) {
     const div = document.createElement('div');

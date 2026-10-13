@@ -179,6 +179,21 @@ class AirspaceStore extends SyncedStore {
 
   // ── the queries other code may call (ADR 0098 §7): pure, synchronous, current theater only ──
 
+  /**
+   * Does `positionId` act for the using side of this airspace of the current theater (authority/airspace.js `isUsing`)?
+   * `airspaceId` null: of any airspace of the current theater.
+   * docs/adr/0119 (H136 VQ5 a): the using agency approves entry into it on a Strip it does not hold.
+   */
+  isUsingAgency(airspaceId, positionId) {
+    if (!positionId) return false;
+    if (airspaceId == null) { // of any airspace of the current theater (ClearAirspaceEntry's early gate)
+      const m = this._theaterMap(this.currentTheater());
+      return [...(m ? m.values() : [])].some(r => this._isUsing(r.definition, positionId));
+    }
+    const record = this._record(this.currentTheater(), airspaceId);
+    return !!record && this._isUsing(record.definition, positionId);
+  }
+
   /** ACTIVE, and the using agency is Facility `usingFacilityId` (as `usingFacilityId`, or as a `usingPositionId` of its own). */
   isActiveFor(airspaceId, usingFacilityId) {
     const record = this._record(this.currentTheater(), airspaceId);
@@ -207,6 +222,27 @@ class AirspaceStore extends SyncedStore {
       else if (where === 'unknown') unknown.push(row);
     }
     return { inside, unknown };
+  }
+
+  /**
+   * Every ACTIVE AREA of the current theater the point is inside, whoever uses it (docs/adr/0119, the airspace-entry alert):
+   * `{ airspaceId, name, type, controllingFacilityId, controllingPositionId, usingFacilityId, usingPositionId }` each. A
+   * ROUTE (an MTR) is left out, and so is an airspace whose geometry cannot be evaluated (never a guess).
+   */
+  activeAreasContaining(point) {
+    const out = [];
+    const m = this._theaterMap(this.currentTheater());
+    for (const record of (m ? m.values() : [])) {
+      const def = record.definition;
+      if (record.state !== 'ACTIVE' || def.kind === 'ROUTE') continue;
+      if (containment.evaluate(def, point) !== 'inside') continue;
+      out.push({
+        airspaceId: record.airspaceId, name: def.name, type: def.type,
+        controllingFacilityId: def.controllingFacilityId || null, controllingPositionId: def.controllingPositionId || null,
+        usingFacilityId: def.usingFacilityId || null, usingPositionId: def.usingPositionId || null,
+      });
+    }
+    return out;
   }
 
   /** Every airspace of the current theater that contains the point, whatever its state (map and QA use). */

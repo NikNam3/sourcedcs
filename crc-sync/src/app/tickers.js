@@ -19,7 +19,7 @@ const COVERAGE_TICK_MS = 250;
  * @returns {{name: string, periodMs: number, tick: Function}[]}
  */
 function buildTickers({ wsHub, efsp, trackStore, collabStore, atisStore, surveillance, theaterContext, missionClock, picture, monitors, airportWeather, airspaceCalendar, archive, missionState }) {
-  const { obligationMonitor, correlationReconciler, efspInstrumentation, conformanceMonitor, surveillanceHints, conflictAlertMonitor, tofiRegimeMonitor, carrierTick, parMonitor, broadcastEfspAlerts } = monitors;
+  const { obligationMonitor, correlationReconciler, efspInstrumentation, conformanceMonitor, surveillanceHints, conflictAlertMonitor, airspaceEntryAlertMonitor, tofiRegimeMonitor, carrierTick, parMonitor, broadcastEfspAlerts } = monitors;
   const { sensorSpecs, coverageEngine, positionCoverage, currentRadars, datalink } = picture;
 
   // The radar list itself changes under everyone — an AWACS takes off or lands, a ship spawns — and until this existed nothing
@@ -84,7 +84,9 @@ function buildTickers({ wsHub, efsp, trackStore, collabStore, atisStore, surveil
       const conformanceChanged = conformanceMonitor.tick();
       const hintsChanged = surveillanceHints ? surveillanceHints.tick() : false;
       const conflictAlertChanged = conflictAlertMonitor.tick(Date.now());
-      if (conformanceChanged || conflictAlertChanged || hintsChanged) {
+      // docs/adr/0119: after CA, whose formation members it reads.
+      const airspaceEntryChanged = airspaceEntryAlertMonitor.tick();
+      if (conformanceChanged || conflictAlertChanged || hintsChanged || airspaceEntryChanged) {
         broadcastEfspAlerts();
       }
     } },

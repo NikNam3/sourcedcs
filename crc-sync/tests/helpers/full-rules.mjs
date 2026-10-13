@@ -59,6 +59,7 @@ export const DEFAULT_RULES = {
   liveStripsForFlightData: () => 0,
   marsaInterlockFor: () => null,
   mayActBesideOwner: () => false,
+  isAirspaceUsingAgency: () => false,
   peerBoard: () => null,
   resolveBlockTarget: () => null,
   retireMarsaForFlightData: () => null,

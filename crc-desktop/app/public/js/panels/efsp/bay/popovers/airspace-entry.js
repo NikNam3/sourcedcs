@@ -5,6 +5,7 @@ import { AIRSPACE_ENTRY_POSITIONS, CONVERT_TO_ARRIVAL_POSITIONS } from '../autho
 import { _isRejectedCoordinationReplica } from '../coordination-rules.js';
 import { _resolveActingPositionId } from '../dispatch.js';
 import { openPopover } from '../popover-portal.js';
+import { isUsing } from '../../airspace-capabilities.js';
 
 
 // Only the Positions that hold an airborne flight approve one into an
@@ -33,13 +34,32 @@ export function _canApproveAirspaceEntry(strip) {
   return !!_resolveActingPositionId(strip);
 }
 
+/**
+ * crc-sync docs/adr/0119 (H136 VQ5 a): the airspaces whose using agency this controller holds at the Strip's Facility, while
+ * not holding the Strip itself (the using agency approves entry on a Strip it does not work, 14 CFR 73.15 (c)(2)), each with
+ * the Position that acts for it. Empty when the controller holds the owner: then the Strip's own path applies.
+ * @returns {{airspace:object, positionId:string}[]}
+ */
+export function _usingAgencyEntryChoices(strip) {
+  if (!strip || strip.state === 'DROPPED' || _isRejectedCoordinationReplica(strip)) return [];
+  const held = getActingPositions(strip.facilityId || undefined);
+  if (held.includes(strip.ownerPositionId)) return [];
+  const out = [];
+  for (const a of getAllEfspAirspaces()) {
+    const positionId = held.find(p => isUsing(a.definition || {}, p));
+    if (positionId) out.push({ airspace: a, positionId });
+  }
+  return out;
+}
+
 let _openPopoverHandle = null;
 
 function _closeAirspacePopover() { if (_openPopoverHandle) _openPopoverHandle.close(); }
 
-export function _openAirspaceEntryPopover(strip, anchorEl) {
+/** @param {{airspace:object, positionId:string}[]} [agencyChoices] the using agency's airspaces (`_usingAgencyEntryChoices`): only those, sent as that Position */
+export function _openAirspaceEntryPopover(strip, anchorEl, agencyChoices) {
   _closeAirspacePopover();
-  const airspaces = getAllEfspAirspaces();
+  const airspaces = agencyChoices ? agencyChoices.map(c => c.airspace) : getAllEfspAirspaces();
 
   const popover = document.createElement('div');
   popover.className = 'efsp-coordinate-popover';
@@ -74,7 +94,8 @@ export function _openAirspaceEntryPopover(strip, anchorEl) {
   sendBtn.textContent = 'Approve entry';
   sendBtn.addEventListener('click', (e) => {
     e.stopPropagation();
-    const actingPositionId = _resolveActingPositionId(strip);
+    const choice = agencyChoices ? agencyChoices.find(c => c.airspace.airspaceId === select.value) : null;
+    const actingPositionId = choice ? choice.positionId : _resolveActingPositionId(strip);
     if (actingPositionId) {
       // F-107 — the Strip as it is NOW, not as it was when the popover opened.
       // See _dispatchCoordination.

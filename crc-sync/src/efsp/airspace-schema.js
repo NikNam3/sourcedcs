@@ -7,8 +7,9 @@
 //
 // [SOURCE-DEFINED]: the guide models no working frequency, no range-control frequency and no airspace *type*
 // taxonomy at all. `type`, `workingFrequencyMhz` and `controlFrequencyMhz` are this squadron's operating practice,
-// not FAA or DoD doctrine, and must never be presented as such (defect D11). `type` is **never read for behaviour**
-// (D14, ADR 0038): the governing agreement picks the separation regime, not the label.
+// not FAA or DoD doctrine, and must never be presented as such (defect D11). `type` picks no separation regime (D14,
+// ADR 0038): the governing agreement does. Since docs/adr/0119 it is read for one behaviour, the airspace-entry alert
+// (efsp/airspace-entry-alert.js): a tracked VFR aircraft in an active MOA or warning area does not alert, as the FAA.
 
 const fs = require('fs');
 const { statePaths } = require('../state-paths');
@@ -16,7 +17,7 @@ const containment = require('./airspace/containment');
 
 
 // What kind of block this is: labels borrowed from FAA and ICAO special-use airspace names (AREA) and from the
-// JO 7610.14 / AIM military training route names (ROUTE). **Purely descriptive** and never read for behaviour.
+// JO 7610.14 / AIM military training route names (ROUTE). Descriptive, except for the airspace-entry alert (ADR 0119).
 const AREA_TYPES = new Set(['MOA', 'RANGE', 'DANGER', 'RESTRICTED', 'PROHIBITED', 'WARNING']);
 const ROUTE_TYPES = new Set(['IR', 'VR', 'SR', 'LLTR']);
 const AIRSPACE_TYPES = new Set([...AREA_TYPES, ...ROUTE_TYPES]);

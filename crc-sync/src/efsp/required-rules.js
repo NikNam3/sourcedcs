@@ -11,7 +11,7 @@ const REQUIRED_RULES = [
   'canHandOffToFinal', 'canRecordFinalCall', 'carrierAppendFlight', 'carrierApplyEffect', 'carrierCase', 'carrierInStack',
   'carrierLaneFor', 'carrierRetireFlight', 'carrierHandoffs', 'computeNla', 'coordinationBayFor', 'coordinationEffect',
   'conversionFor', 'coordinationEligibleState', 'correlationHolderOfTrack', 'bindTrackOnStart', 'endTrackBinding', 'consolidatedAt', 'divertDestinationFor', 'drainMarsaRegimeWrites', 'facilityId', 'formationEligibility', 'runwayStatusFor',
-  'handBackTargetsFor', 'handBackTo', 'isBlockVisible', 'isStaffed', 'isSelfCoordinated', 'isValidStripType', 'isValidState',
+  'handBackTargetsFor', 'handBackTo', 'isAirspaceUsingAgency', 'isBlockVisible', 'isStaffed', 'isSelfCoordinated', 'isValidStripType', 'isValidState',
   'liveStripsForFlightData', 'marsaInterlockFor', 'mayActBesideOwner', 'peerBoard', 'regimeLocation', 'resolveBlockTarget', 'retireMarsaForFlightData',
   'sfaFrequencyFor', 'sfaRackFor', 'standingReleases', 'tofiCounterparts',
   'tofiEligibleState', 'validateCarrierHandoff', 'voidMarsaForAssignment',
