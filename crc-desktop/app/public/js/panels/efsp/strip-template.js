@@ -33,10 +33,10 @@ import { cachedStereoRoutesClient } from './efsp-stereo-routes.js';
 // one; several of those seven were wrong, not just ambiguous.
 // efsp-strip-template.test.mjs holds both rules.
 export const DEPARTURE_BLOCK_MAP = {
-  '1':  { required: true,  label: 'CALLSIGN', target: { kind: 'flightData', path: 'identity.callsign' } },
+  '1':  { required: true,  label: 'ACID',     target: { kind: 'flightData', path: 'identity.callsign' } }, // H134 LT-RQ3 a
   '2':  { required: true,  label: 'REV',      target: { kind: 'system', field: 'rev' } },
   '2A': { required: false, label: 'VOICE',     target: { kind: 'annotation' } },
-  '3':  { required: true,  label: 'TYPE',     target: { kind: 'composite' } },
+  '3':  { required: true,  label: 'TYPE',     target: { kind: 'aircraft-data' } }, // T7: typed as one field, [count/]TYPE[/WAKE]
   // docs/adr/0023 gap-closure — see crc-sync's block-map.js's '3A' comment
   // for the full rationale. Plain 'flightData'-routed, like '5A'.
   '3A': { required: false, label: 'ACFT',     target: { kind: 'flightData', path: 'identity.aircraftType' } },
@@ -158,10 +158,10 @@ export const DEPARTURE_BLOCK_MAP = {
 // 9A-* split, the 20/21 scratchpad simplification). Kept in sync by
 // efsp-block-map-parity.test.mjs, same as DEPARTURE_BLOCK_MAP.
 export const ARRIVAL_BLOCK_MAP = {
-  '1':        { required: true,  label: 'CALLSIGN', target: { kind: 'flightData', path: 'identity.callsign' } },
+  '1':        { required: true,  label: 'ACID',     target: { kind: 'flightData', path: 'identity.callsign' } }, // H134 LT-RQ3 a
   '2':        { required: true,  label: 'REV',      target: { kind: 'system', field: 'rev' } },
   '2A':       { required: false, label: 'VOICE',     target: { kind: 'annotation' } },
-  '3':        { required: true,  label: 'TYPE',     target: { kind: 'composite' } },
+  '3':        { required: true,  label: 'TYPE',     target: { kind: 'aircraft-data' } }, // T7: typed as one field, [count/]TYPE[/WAKE]
   '3A':       { required: false, label: 'ACFT',     target: { kind: 'flightData', path: 'identity.aircraftType' } }, // docs/adr/0023 gap-closure — see DEPARTURE_BLOCK_MAP's '3A' comment
   '3B':       { required: false, label: 'WAKE',     target: { kind: 'flightData', path: 'identity.wakeCategory' } },
   '3C':       { required: false, label: 'TAIL',     target: { kind: 'flightData', path: 'identity.tailNumber' } },
@@ -215,9 +215,9 @@ export const ARRIVAL_BLOCK_MAP = {
 // destination, never Incirlik, and why there are no ground/runway/taxi
 // Blocks). Kept in sync by efsp-block-map-parity.test.mjs.
 export const OVERFLIGHT_BLOCK_MAP = {
-  '1':  { required: true,  label: 'CALLSIGN', target: { kind: 'flightData', path: 'identity.callsign' } },
+  '1':  { required: true,  label: 'ACID',     target: { kind: 'flightData', path: 'identity.callsign' } }, // H134 LT-RQ3 a
   '2':  { required: true,  label: 'REV',      target: { kind: 'system', field: 'rev' } },
-  '3':  { required: true,  label: 'TYPE',     target: { kind: 'composite' } },
+  '3':  { required: true,  label: 'TYPE',     target: { kind: 'aircraft-data' } }, // T7: typed as one field, [count/]TYPE[/WAKE]
   '3A': { required: false, label: 'ACFT',     target: { kind: 'flightData', path: 'identity.aircraftType' } }, // docs/adr/0023 gap-closure — see DEPARTURE_BLOCK_MAP's '3A' comment
   '3B': { required: false, label: 'WAKE',     target: { kind: 'flightData', path: 'identity.wakeCategory' } },
   '3C': { required: false, label: 'TAIL',     target: { kind: 'flightData', path: 'identity.tailNumber' } },
@@ -430,18 +430,30 @@ export function supersededAnnotationEntries(strip, blockId) {
 // missing, so an overflight's altitude had no ⌿ at all.
 export const CONFIRM_VACATED_ELIGIBLE_BLOCKS = { DEPARTURE: ['21'], ARRIVAL: ['7'], OVERFLIGHT: ['7A'] };
 
-// [SOURCE-DEFINED] composite format for Block 3, per the guide's own
-// example template (§6.5): count (if formation), wake category, type,
-// equipment suffix — degradation (§3.3) overrides the rendered suffix
-// independently of the derived equipmentSuffix, never touching it.
+// Block 3 (JO 7110.65BB TBL 2-3-3/4/5: "Number of aircraft if more than one, wake category indicator, type of
+// aircraft, and aircraft equipment suffix"), written in ICAO order (H134 LT-RQ2 b): `[count/]TYPE[/WAKE][/SUFFIX]`,
+// e.g. `F16/M`, `2/F16/M/G`. The wake is the ICAO category L/M/H/J (LT-RQ1 c). No leading slant; a suffix with no
+// wake keeps the wake's place empty (`F16//G`), so a suffix letter is never read as a wake. Degradation (§3.3)
+// overrides the rendered suffix independently of the derived equipmentSuffix, never touching it.
 export function formatBlock3(flightData) {
-  if (!flightData) return '';
-  const id = flightData.identity;
-  const count = id.flightSize > 1 ? String(id.flightSize) : '';
-  const suffix = id.degradation === 'TRANSPONDER_FAILED' ? '/H'
-    : id.degradation === 'MODE_C_FAILED' ? '/O'
-    : id.equipmentSuffix ? '/' + id.equipmentSuffix : '';
-  return `${count}${id.wakeCategory || ''}/${id.aircraftType || ''}${suffix}`;
+  const id = flightData && flightData.identity;
+  if (!id || !id.aircraftType) return '';
+  const suffix = id.degradation === 'TRANSPONDER_FAILED' ? 'H'
+    : id.degradation === 'MODE_C_FAILED' ? 'O'
+    : id.equipmentSuffix || '';
+  const parts = [];
+  if (id.flightSize > 1) parts.push(String(id.flightSize));
+  parts.push(id.aircraftType);
+  if (id.wakeCategory || suffix) parts.push(id.wakeCategory || '');
+  if (suffix) parts.push(suffix);
+  return parts.join('/');
+}
+
+/** What the Block 3 editor opens on: `[count/]TYPE[/WAKE]`, the part a controller types (the suffix is derived). */
+export function aircraftDataEditText(flightData) {
+  const id = flightData && flightData.identity;
+  if (!id || !id.aircraftType) return '';
+  return [id.flightSize > 1 ? String(id.flightSize) : '', id.aircraftType, id.wakeCategory || ''].filter(Boolean).join('/');
 }
 
 /**
@@ -496,7 +508,7 @@ export function resolveBlockValue(blockId, flightData, strip) {
   if (t.kind === 'flag') {
     return { value: strip ? strip.flags[t.flag] : null, provenance: 'SYSTEM_DERIVED' };
   }
-  if (t.kind === 'composite') {
+  if (t.kind === 'aircraft-data') {
     return { value: formatBlock3(flightData), provenance: 'COMPUTER_GENERATED' };
   }
   if (t.kind === 'nla') {
@@ -710,24 +722,32 @@ export function isBlockEditable(blockId, stripType = 'DEPARTURE') {
   // are restricted enums with their own <select>, a frequency is a free
   // numeric entry — the ordinary click-to-edit path is right for it. The
   // server validates the band.
-  return !!def && (def.target.kind === 'flightData' || def.target.kind === 'annotation' || def.target.kind === 'frequency' || def.target.kind === 'clearance' || def.target.kind === 'carrier');
+  return !!def && (def.target.kind === 'flightData' || def.target.kind === 'annotation' || def.target.kind === 'frequency' || def.target.kind === 'clearance' || def.target.kind === 'carrier' || def.target.kind === 'aircraft-data');
 }
 
 /**
- * UI-A U4: the TYPE field (Block 3) is a read-only composite (count, wake, type,
- * suffix), so it cannot be written itself. Editing it edits the one part a
- * controller means by "type", the aircraft type (3A, identity.aircraftType), which
- * is a plain flightData field every airframe strip type already has. The wake category (3B)
- * stays in the expanded view: nothing derives it from the type, and guessing it
- * would put a made-up value on a Strip.
- * @returns {{blockId:string, value:string}|null} null when the Block is not redirected
+ * A Block whose editor opens on something other than what it shows. TYPE (Block 3) shows
+ * `[count/]TYPE[/WAKE][/SUFFIX]` and is typed as `[count/]TYPE[/WAKE]` (T7, H134 LT-RQ2 b): the suffix comes
+ * from the equipment codes, so the editor leaves it out. crc-sync parses what is typed (aircraft-data.js) into
+ * the number, the type and the wake, and derives the wake from the type when none is typed.
+ * @returns {{blockId:string, value:string}|null} null when the Block edits what it shows
  */
 export function editRedirectFor(blockId, stripType, flightData) {
   if (blockId !== '3') return null;
   const map = BLOCK_MAPS[stripType || 'DEPARTURE'];
-  const def = map && map['3A'];
-  if (!def || def.target.kind !== 'flightData') return null;
-  return { blockId: '3A', value: (flightData && flightData.identity && flightData.identity.aircraftType) || '' };
+  const def = map && map['3'];
+  if (!def || def.target.kind !== 'aircraft-data') return null;
+  return { blockId: '3', value: aircraftDataEditText(flightData) };
+}
+
+/**
+ * The editor's placeholder: the format a Block is typed in, shown before anything is typed (T31 a). Every Zulu
+ * time Block and EEAT (C15) are HHMM; TYPE is TYPE/WAKE.
+ */
+export function blockInputPlaceholderFor(blockId) {
+  if (ZULU_HHMM_BLOCKS.has(blockId) || blockId === 'C15') return 'HHMM';
+  if (blockId === '3') return 'TYPE/WAKE';
+  return null;
 }
 
 // ── Zulu time-of-day Blocks (crc-sync's docs/adr/0062) ──────────────────────
@@ -747,19 +767,116 @@ export const ZULU_HHMM_BLOCKS = new Set([
   '6', '9G-TIME', '9H-TIME', '14', '14B', '14C', '14D', '16', '17', '18', 'M6', 'M7',
 ]);
 
-// A hover title for a field's label, where the label alone does not say
-// enough. Only the MTR fields today (docs/adr/0062). EXIT ALT carries §9.4's
-// lost-comms rule (strip-fields.js's mtrLostCommsAdvisory) because it is the
-// field a controller is looking at when the question comes up.
-export const BLOCK_TITLES = {
-  '9G-MTR': 'MTR designator (guide M10)',
-  '9G-ENTRY': 'MTR entry fix',
-  '9G-TIME': 'MTR entry time, UTC HHMM',
-  '9H-EXIT': 'MTR exit fix (guide §9.4)',
-  '9H-TIME': 'MTR exit estimate, UTC HHMM',
-  '9H-ALT': 'requested altitude after exit',
+// ── Label hover titles (live test T8, decisions.md H134 LT-RQ4 c) ──────────
+//
+// The labels stay as they were (only Block 1 became ACID, LT-RQ3 a); each label's hover gives the FAA block name and
+// number from JO 7110.65BB TBL 2-3-4 (departure), 2-3-3 (arrival) and 2-3-5 (overflight), per the research's Q5 table
+// (docs/parallel/research/live-test-faa.md). "(ours)" marks a Block no FAA block carries; "#≠" marks one whose FAA
+// block number differs from ours (the ids are wire and state keys, so they are not renumbered). Every typed time
+// says "UTC HHMM" (T31 a). The MTR fields (docs/adr/0062) and IFR (UI-A U3) keep their own wording, marked ours;
+// EXIT ALT carries §9.4's lost-comms rule (blockTitleFor). MISSION and the carrier/pattern maps have no FAA strip:
+// only their typed times carry a title.
+const DEPARTURE_TITLES = {
+  '1': 'Block 1, aircraft identification',
+  '2': 'Block 2, revision number',
+  '2A': 'Voice clearance issued (ours; FAA Block 2A is "strip request originator")',
+  '3': 'Block 3, number of aircraft, wake category indicator (ICAO L, M, H, J), type of aircraft, equipment suffix',
+  '3A': 'Aircraft type designator (Block 3)',
+  '3B': 'Wake category indicator, ICAO L, M, H or J (Block 3)',
+  '3C': 'Tail number (ours)',
+  '3D': 'Unit (ours)',
+  '3E': 'Home station / base (ours, military)',
+  '3F': 'Tailhook required (ours, military)',
+  '3G': 'Ordnance state (ours, military)',
+  '4': 'Block 4, computer identification number',
+  '4A': 'Remove indicator (ours)',
+  '4B': 'Datalink clearance indicator (ours)',
+  '5': 'Block 5, beacon code assigned',
+  '5A': 'Track degradation flag (ours)',
+  '6': 'Block 6, proposed departure time (P time), UTC HHMM',
+  '7': 'Block 7, requested altitude',
+  '8': 'Block 8, departure airport',
+  '8A': 'Departure runway (ours, in the FAA\'s optional space 8A)',
+  '8B': 'Destination (FAA: part of Block 9; ours as its own cell)',
+  '9': 'Block 9, route (computer-generated) and manual altitude restrictions',
+  '9A': 'Block 9A, optional use (facility)',
+  '9B': 'Block 9B, optional use (facility)',
+  '9C': 'Block 9C, optional use (facility)',
+  '9D': 'Full route clearance (ours)',
+  '9E': 'Remarks (Block 9)',
+  '9F': 'Stereo route (ours, local tower-en-route canned route)',
+  '9G-MTR': 'MTR designator (ours, military; guide M10)',
+  '9G-ENTRY': 'MTR entry fix (ours, military)',
+  '9G-TIME': 'MTR entry time, UTC HHMM (ours, military)',
+  '9H-EXIT': 'MTR exit fix (ours, military; guide §9.4)',
+  '9H-TIME': 'MTR exit estimate, UTC HHMM (ours, military)',
+  '9H-ALT': 'Requested altitude after MTR exit (ours, military)',
+  '9A-SPEED': 'Speed assignment (ours on a departure)',
+  '10': 'ATIS code (ours, facility-directive space 10-18)',
+  '11': 'Approval request (APREQ) (ours, space 10-18)',
+  '14': 'Release time, UTC HHMM (P/CG RELEASE TIME; space 10-18)',
+  '14A': 'Departure release state (ours)',
+  '14B': 'Expect departure clearance time, UTC HHMM',
+  '14C': 'Call for release time, UTC HHMM',
+  '14D': 'Clearance void time, UTC HHMM (P/CG CLEARANCE VOID IF NOT OFF BY)',
+  '14E': 'Alert status (ours, military)',
+  '16': 'Movement-area entry time, UTC HHMM (ours)',
+  '17': 'Taxi time, UTC HHMM (ours)',
+  '18': 'Departure (takeoff) time, UTC HHMM (space 10-18)',
+  '19': 'Gate / parking (ours)',
+  '20': 'Assigned heading (ours; not en route Block 20)',
+  '21': 'Assigned altitude (ours)',
+  '22': 'Frequency (ours)',
+  '23': 'Facility remarks (ours)',
+  '24': 'Miles-in-trail (P/CG MILES-IN-TRAIL; ours as a block)',
+  '24A': 'Airspace owner (ours)',
   // UI-A U3: the field is TOFI's ifrActive (guide §4.6.3), not the filed flight rules.
-  'IFR': 'Keeps IFR under tactical control (TOFI, guide §4.6.3): ✓ means ATC keeps separating this flight while the mission line works it. Click to toggle.',
+  'IFR': 'Keeps IFR under tactical control (TOFI, guide §4.6.3; ours): ✓ means ATC keeps separating this flight while the mission line works it. Click to toggle.',
+  'RSVC': 'Radar service (TOFI, ours)',
+  'SREG': 'Separation regime (TOFI, ours)',
+  '25': 'Strip state (ours)',
+  '26': 'Next logical action (ours)',
+};
+
+const ARRIVAL_TITLES = {
+  ...DEPARTURE_TITLES,
+  '6': 'ETA at coordination fix or destination, UTC HHMM (FAA Block 8, #≠)',
+  '7': 'Assigned altitude (FAA Block 9, #≠)',
+  '8': 'Point of origin (ours on a terminal arrival)',
+  '8A': 'Coordination fix (FAA Block 7, #≠)',
+  '8B': 'Landing runway (ours)',
+  '9': 'Route (ours on an arrival)',
+  '9A-FUEL': 'Block 9A, minimum fuel',
+  '9A-DEST': 'Block 9A, destination airport',
+  '9A-PTOUT': 'Block 9A, point out',
+  '9A-VECTOR': 'Block 9A, radar vector (assigned heading)',
+  '9A-SPEED': 'Block 9A, speed adjustment',
+  '20': 'Scratchpad (ours)',
+  '21': 'Scratchpad (ours)',
+};
+
+const OVERFLIGHT_TITLES = {
+  ...DEPARTURE_TITLES,
+  '7': 'Requested altitude (en route Block 24, #≠; FAA terminal Block 7 is the overflight coordination indicator)',
+  '7A': 'Assigned altitude (FAA Block 9, #≠)',
+  '8': 'Point of origin (ours)',
+  '8B': 'Destination (ours)',
+  '9': 'Block 9, route of flight through the terminal area',
+  '9A-VECTOR': 'Assigned heading (ours)',
+  '9A-SPEED': 'Speed assignment (ours)',
+};
+
+function _titlesFor(map, titles) {
+  return Object.fromEntries(Object.entries(titles).filter(([id]) => Object.prototype.hasOwnProperty.call(map, id)));
+}
+
+/** Label hover titles, by strip type then Block id. Only Blocks the strip type's Block Map has. */
+export const BLOCK_TITLES = {
+  DEPARTURE: _titlesFor(DEPARTURE_BLOCK_MAP, DEPARTURE_TITLES),
+  ARRIVAL: _titlesFor(ARRIVAL_BLOCK_MAP, ARRIVAL_TITLES),
+  OVERFLIGHT: _titlesFor(OVERFLIGHT_BLOCK_MAP, OVERFLIGHT_TITLES),
+  MISSION: { M6: 'Vul window start, UTC HHMM (ours)', M7: 'Vul window end, UTC HHMM (ours)' },
+  MARSHAL: { C15: 'Expected EAT, UTC HHMM (ours)' },
 };
 
 // ── §10.5's source on hover (docs/adr/0073) ─────────────────────────────────
@@ -848,19 +965,21 @@ export function blockValueHintFor(blockId, flightData, strip) {
 }
 
 /**
- * The label's hover title for this Block, or null. `flightData` adds the lost-comms
- * rule to EXIT ALT; with `strip`, Blocks 6/17/18 on a DEPARTURE carry §10.5's
- * source (docs/adr/0073). Without the Strip (the collapsed face's label, which
- * strip-view.js titles with the flight data alone) the chain title is left off: the
- * same id is the ETA on an ARRIVAL, and the value cell carries it anyway.
+ * The label's hover title for this Block, or null: the FAA block name (BLOCK_TITLES, T8) for the Strip's
+ * strip type (`strip.stripType`, else `stripType`, else DEPARTURE). `flightData` adds the lost-comms rule to
+ * EXIT ALT; with `strip`, Blocks 6/17/18 on a DEPARTURE add §10.5's source under the name (docs/adr/0073).
+ * Without the Strip (the collapsed face's label, which strip-view.js titles with its strip type alone) the
+ * source is left off: the value cell carries it.
  */
-export function blockTitleFor(blockId, flightData, strip) {
+export function blockTitleFor(blockId, flightData, strip, stripType) {
+  const type = (strip && strip.stripType) || stripType || 'DEPARTURE';
+  const base = (BLOCK_TITLES[type] && BLOCK_TITLES[type][blockId]) || null;
   if (strip) {
     const chainTitle = timeChainTitleFor(blockId, flightData, strip);
-    if (chainTitle) return chainTitle;
+    // The chain's own first line names the time; the FAA name replaces it.
+    if (chainTitle) return base ? [base, ...chainTitle.split('\n').slice(1)].join('\n') : chainTitle;
   }
-  const base = BLOCK_TITLES[blockId] || null;
-  if (blockId !== '9H-ALT') return base;
+  if (blockId !== '9H-ALT' || !base) return base;
   const advisory = mtrLostCommsAdvisory(flightData);
   return advisory ? `${base}.\n${advisory}` : base;
 }

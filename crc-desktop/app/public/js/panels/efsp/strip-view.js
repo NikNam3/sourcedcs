@@ -114,7 +114,7 @@ function _buildStripFields(strip) {
     const chip = _stripEl('span', `efsp-block-chip efsp-field${span > 1 ? ' efsp-field-w' + span : ''}`);
     const label = blockLabelFor(id, strip.stripType);
     const labelEl = _stripEl('span', 'efsp-block-label', label || '');
-    const title = blockTitleFor(id, getEfspFlightData(strip.flightDataId)); if (title) labelEl.title = title; // docs/adr/0062
+    const title = blockTitleFor(id, getEfspFlightData(strip.flightDataId), null, strip.stripType); if (title) labelEl.title = title; // docs/adr/0062, T8
     // §3.7 rule 2's "in the same Block": the current value keeps the field; the
     // latest superseded value sits small and struck beside the label, with a
     // count of the rest. The whole chain is in the expanded view.

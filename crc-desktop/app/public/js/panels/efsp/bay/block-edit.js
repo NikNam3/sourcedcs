@@ -1,7 +1,7 @@
 'use strict';
 import { getCurrentEfspRefusal } from '../panel/refusal.js';
 import {
-  CONFIRM_VACATED_ELIGIBLE_BLOCKS, blockValueHintFor, editRedirectFor, enumSelectOptionsFor,
+  CONFIRM_VACATED_ELIGIBLE_BLOCKS, blockValueHintFor, editRedirectFor, enumSelectOptionsFor, blockInputPlaceholderFor,
   hasActiveAnnotationEntry, isBlockEditable, isBooleanToggleBlock, isEnumBlockClearable, resolveBlockValue
 } from '../strip-template.js';
 import { getEfspFlightData, getEfspStrip } from '../efsp-state.js';
@@ -144,11 +144,10 @@ function _buildBlockCellInner(strip, blockId) {
   // isBlockEditable()" reasoning as the enum-<select> case above.
   if (isBooleanToggleBlock(blockId)) return _buildBooleanToggleCell(strip, blockId, span);
 
-  // UI-A U4: TYPE (3) is a composite; editing it edits the aircraft type (3A).
+  // TYPE (3) shows the suffix but is typed without it (T7): the editor opens on [count/]TYPE[/WAKE].
   if (redirect) {
     span.dataset.editBlock = redirect.blockId;
     span.dataset.editValue = redirect.value;
-    span.title = span.title || 'Aircraft type (3A). Click to edit.';
   }
   if (!redirect && !isBlockEditable(blockId, strip.stripType)) return span;
 
@@ -407,6 +406,8 @@ function _startBlockEdit(strip, blockId, span, draft) {
   const input = document.createElement('input');
   input.type = 'text';
   input.className = 'efsp-block-input';
+  const placeholder = blockInputPlaceholderFor(blockId); // T31 a: the format before a refusal, not after
+  if (placeholder) input.placeholder = placeholder;
   // Carry the refusal mark onto the input, not just the span it replaces.
   // The reopened editor IS the F-207 path — the controller is looking at the
   // very text the server rejected — and _buildBlockCell had put the mark on a

@@ -30,7 +30,7 @@ const WAKE_BY_TYPE = Object.freeze({
   // QUOTED (JO 7360.1K Appendix A)
   F16: 'M', K35R: 'H', B763: 'H', C130: 'M', T38: 'L', A10: 'M',
   // OURS: fighters and attack (all above 7,000 kg MTOW)
-  F4: 'M', F5: 'M', F14: 'M', F15: 'M', F18: 'M', F18H: 'M', F18S: 'M', F22: 'M', F35: 'M', F86: 'M', F117: 'M',
+  F4: 'M', F5: 'M', F14: 'M', F15: 'M', F15E: 'M', F18: 'M', F18H: 'M', F18S: 'M', F22: 'M', F35: 'M', F86: 'M', F117: 'M',
   A4: 'M', HAR: 'M', MG19: 'M', MG21: 'M', MG23: 'M', MG29: 'M', MG31: 'M', SU24: 'M', SU25: 'M', SU27: 'M',
   SU30: 'M', SU33: 'M', MIR2: 'M', MRF1: 'M', JF17: 'M', E2: 'M', C2: 'M', S3: 'M', AN26: 'M',
   // OURS: heavies (136,000 kg or more)
