@@ -238,9 +238,13 @@ class ConflictAlertMonitor {
     this._d = deps;
     this._conflicts = [];
     this._intruders = new Map(); // conflict id -> the intruder track, for an MCI
+    this._memberFlights = new Map(); // trackId -> flightDataId, the formation members of the last tick
   }
 
   getAll() { return this._conflicts; }
+
+  /** The uncorrelated wingmen recognised at the last tick, trackId -> their flight's flightDataId (docs/adr/0119 reads it). */
+  formationMemberFlights() { return this._memberFlights; }
 
   /**
    * Whether a conflict is for a session holding `positions` ([{facilityId, positionId}]). A CA always is (the hub already
@@ -267,6 +271,7 @@ class ConflictAlertMonitor {
       leads.set(t, { flightDataId, group: relation ? `M:${relation.marsaId}` : `F:${flightDataId}`, size: flightSizeOf ? flightSizeOf(flightDataId) : 1 });
     }
     const members = formationMembers(tracks.filter(t => AIRBORNE_CATEGORIES.has(t.category)), leads, this._d.config);
+    this._memberFlights = new Map([...members].map(([t, m]) => [String(t.id), m.flightDataId]));
     const roles = new Map();
     for (const t of tracks) {
       const lead = leads.get(t);

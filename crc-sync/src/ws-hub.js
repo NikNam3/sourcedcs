@@ -210,7 +210,10 @@ class WsHub {
     // Obligations (docs/adr/0067) and conformance are about flights, so a
     // session that reads only what it owns (docs/adr/0080) gets its own
     // flights' alerts and nobody else's.
-    const msg = { version: VERSION, type: 'efsp-alerts', conformance: a.conformance || [], tofiRegime: a.tofiRegime || [], conflictAlert, obligations: a.obligations || [], surveillance: a.surveillance || [] };
+    // docs/adr/0119: an airspace-entry alert goes only to a session holding the airspace's controlling Position or a
+    // Position working the flight (asked of the monitor, never sent).
+    const airspaceEntry = typeof a.airspaceEntryFor === 'function' ? (a.airspaceEntry || []).filter(x => a.airspaceEntryFor(x, positions)) : [];
+    const msg = { version: VERSION, type: 'efsp-alerts', conformance: a.conformance || [], tofiRegime: a.tofiRegime || [], conflictAlert, airspaceEntry, obligations: a.obligations || [], surveillance: a.surveillance || [] };
     return this._efspFilter(session, msg) || msg;
   }
 

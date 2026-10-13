@@ -1,8 +1,8 @@
 'use strict';
 
 // Every monitor createApp runs, built in one place and handed back by name: forwarding obligations, the Strip<->track
-// correlation reconciler, EFSP instrumentation, surveillance hints, conformance, short-term conflict alert, the TOFI
-// regime monitor and the carrier tick, plus the one function that composes efsp-alerts from them.
+// correlation reconciler, EFSP instrumentation, surveillance hints, conformance, short-term conflict alert, the
+// airspace-entry alert, the TOFI regime monitor and the carrier tick, plus the one function that composes efsp-alerts from them.
 // They produce state and server-originated frames; every frame leaves through `hubLink` (late-binding.js), because the hub
 // is built after them: it takes the alert composer's `recheck` as its `onEfspChange`.
 
@@ -12,6 +12,7 @@ const { SurveillanceHintMonitor } = require('../efsp/surveillance-hints');
 const { getHintsConfig } = require('../efsp/surveillance-hints-config');
 const { ConformanceMonitor, refuelingReceivers } = require('../efsp/conformance');
 const { TofiRegimeMonitor } = require('../efsp/tofi-regime-monitor');
+const { AirspaceEntryAlertMonitor } = require('../efsp/airspace-entry-alert');
 const { ConflictAlertMonitor, mciFloorFt } = require('../conflict-alert');
 const { ATC_CLASSES } = require('../efsp/position-coverage');
 const { loadAlertingConfig } = require('../alerting-config');
@@ -159,6 +160,43 @@ function buildMonitors({ env, efsp, facilityConfig, missionClock, missionSession
     // Alert text names each aircraft the way identity does (docs/adr/0059).
     callsignFor: trackSeams.callsign || ((track) => identity.labelFor(track.id)),
   });
+  // docs/adr/0119 (H132, H134 LT-Q5 a, H136 VQ4 b): an aircraft inside an ACTIVE airspace it may not be in, by airspace
+  // type. Ticks after the CA monitor (same ticker), whose formation members it reads.
+  const airspaceEntryAlertMonitor = new AirspaceEntryAlertMonitor({
+    trackStore,
+    airspaceStore: efsp.airspaceStore,
+    // The registry's limits are indicated feet (I4), as app.js's locateTrack.
+    locate: (track) => (Number.isFinite(track.lat) && Number.isFinite(track.lon)
+      ? { lat: track.lat, lon: track.lon, altFt: indicatedAltFt(track.alt, grpcClient.getWeather(), theaterContext.transitionAltFt()) }
+      : null),
+    trackedFlights: () => {
+      const out = new Map();
+      for (const [trackId, { flightDataId, state }] of efsp.correlationStore.trackIndex()) {
+        if (state === 'CORRELATED' || state === 'PROVISIONAL') out.set(String(trackId), flightDataId);
+      }
+      return out;
+    },
+    formationMembers: () => conflictAlertMonitor.formationMemberFlights(),
+    flightDataOf: (id) => efsp.flightDataStore.getFlightData(id),
+    liveStrips: () => {
+      const out = new Map();
+      for (const facilityId of facilityConfig.getFacilityIds()) {
+        const board = efsp.boardStoreFor(facilityId);
+        if (!board) continue;
+        for (const s of board.getAll()) {
+          if (s.state === 'DROPPED' || !s.flightDataId) continue;
+          if (!out.has(s.flightDataId)) out.set(s.flightDataId, []);
+          out.get(s.flightDataId).push({ facilityId, positionId: s.ownerPositionId, airspaceId: (s.airspaceEntry && s.airspaceEntry.airspaceId) || null });
+        }
+      }
+      return out;
+    },
+    reportsAltitude: trackSeams.beacon ? ((track) => trackSeams.beacon(track) != null) : ((track) => !!transponders.transponderOf(track)),
+    callsignFor: trackSeams.callsign || ((track) => identity.labelFor(track.id)),
+    clock: missionClock,
+    wallClock: WALL_CLOCK, // track ages: tracks.js stamps wall time
+    config: alertingConfig.airspaceEntry,
+  });
   /**
    * docs/adr/0118: is an MCI with this intruder shown at this Position? An ATC Position, MCI not inhibited there (JO 7210.3EE
    * para 12-6-12 d), and the intruder above its Facility's base altitude (para 12-6-12 b, 8-2-5 b). AGL needs the ground:
@@ -236,6 +274,9 @@ function buildMonitors({ env, efsp, facilityConfig, missionClock, missionSession
       conflictAlert: conflictAlertMonitor.getAll(),
       // Not sent: which sessions an MCI is for (docs/adr/0118), asked per session by the hub.
       conflictAlertFor: (conflict, positions) => conflictAlertMonitor.deliverableTo(conflict, positions),
+      airspaceEntry: airspaceEntryAlertMonitor.getAll(),
+      // Not sent either: an airspace-entry alert goes to the controlling Position and the flight's (docs/adr/0119).
+      airspaceEntryFor: (alert, positions) => airspaceEntryAlertMonitor.deliverableTo(alert, positions),
       obligations: obligationMonitor.getAll(),
       surveillance: surveillanceHints ? surveillanceHints.getAll() : undefined, // docs/adr/0076: the suggestion chip and staleness
     });
@@ -245,7 +286,7 @@ function buildMonitors({ env, efsp, facilityConfig, missionClock, missionSession
 
   return {
     obligationMonitor, correlationReconciler, efspInstrumentation, conformanceMonitor, surveillanceHints, conflictAlertMonitor,
-    tofiRegimeMonitor, carrierTick, parMonitor, broadcastEfspAlerts, recheckObligations,
+    airspaceEntryAlertMonitor, tofiRegimeMonitor, carrierTick, parMonitor, broadcastEfspAlerts, recheckObligations,
   };
 }
 

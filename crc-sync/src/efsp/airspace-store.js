@@ -218,6 +218,27 @@ class AirspaceStore extends SyncedStore {
     return { inside, unknown };
   }
 
+  /**
+   * Every ACTIVE AREA of the current theater the point is inside, whoever uses it (docs/adr/0119, the airspace-entry alert):
+   * `{ airspaceId, name, type, controllingFacilityId, controllingPositionId, usingFacilityId, usingPositionId }` each. A
+   * ROUTE (an MTR) is left out, and so is an airspace whose geometry cannot be evaluated (never a guess).
+   */
+  activeAreasContaining(point) {
+    const out = [];
+    const m = this._theaterMap(this.currentTheater());
+    for (const record of (m ? m.values() : [])) {
+      const def = record.definition;
+      if (record.state !== 'ACTIVE' || def.kind === 'ROUTE') continue;
+      if (containment.evaluate(def, point) !== 'inside') continue;
+      out.push({
+        airspaceId: record.airspaceId, name: def.name, type: def.type,
+        controllingFacilityId: def.controllingFacilityId || null, controllingPositionId: def.controllingPositionId || null,
+        usingFacilityId: def.usingFacilityId || null, usingPositionId: def.usingPositionId || null,
+      });
+    }
+    return out;
+  }
+
   /** Every airspace of the current theater that contains the point, whatever its state (map and QA use). */
   containing(point) {
     const out = [];

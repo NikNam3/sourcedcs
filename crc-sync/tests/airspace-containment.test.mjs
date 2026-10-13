@@ -96,6 +96,20 @@ test('activeContaining: only ACTIVE airspaces, only for the asking using Facilit
   assert.deepEqual(store.activeContaining(at, { usingFacilityId: 'CARRIER' }), { inside: [], unknown: [] }, 'another using Facility');
 });
 
+test('activeAreasContaining (docs/adr/0119): every ACTIVE area the point is in, whoever uses it, with its type and controlling Position', () => {
+  const { store } = makeRegistry({ defs: [AREA(), AREA({ airspaceId: 'NO-SHAPE', name: 'No shape', geometry: null }), AREA({ airspaceId: 'COLD', name: 'Cold' })] });
+  const at = { lat: 36.5, lon: 35.5, altFt: 20000 };
+  assert.deepEqual(store.activeAreasContaining(at), [], 'RETURNED is not active');
+  for (const id of ['MRU-AREA', 'NO-SHAPE']) act(store, id, [{ kind: 'ScheduleAirspace', ...WINDOW }, { kind: 'RequestActivation' }, { kind: 'ApproveActivation' }]);
+  const inside = store.activeAreasContaining(at);
+  assert.deepEqual(inside.map(x => x.airspaceId), ['MRU-AREA'], 'unknown geometry is never a guess, COLD is not active');
+  const row = inside.find(x => x.airspaceId === 'MRU-AREA');
+  assert.equal(row.type, 'MOA');
+  assert.equal(row.controllingPositionId, MOA.controllingPositionId);
+  assert.equal(row.usingFacilityId, 'TACTICAL');
+  assert.deepEqual(store.activeAreasContaining({ ...at, altFt: 9999 }), []);
+});
+
 test('isActiveFor: usingFacilityId, or a usingPositionId belonging to the Facility', () => {
   const { store } = makeRegistry({ defs: [AREA(), { ...MOA, airspaceId: 'RANGE-X', name: 'Range X', type: 'RANGE', usingPositionId: 'RANGE_1_CONTROL' }] });
   assert.equal(store.isActiveFor('MRU-AREA', 'TACTICAL'), false, 'RETURNED');
