@@ -411,3 +411,31 @@ test('sortie 12: a controller cannot declare an ordnance state the panel does no
   assert.match(bad.detail, /invalid ordnance state/);
   assert.equal(efsp.flightDataStore.getFlightData(solo.flightDataId).military.ordnanceState, 'CLEAN');
 });
+
+// docs/adr/0118 (T14, H134 LT-RQ15 a): the "MARSA voided" notice stands until a controller holding one of the Strips acknowledges it.
+test('sortie 13: the void notice is acknowledged once, by a controller holding one of the Strips', () => {
+  const tanker = flight('SHELL77');
+  const rx = flight('VIPER77');
+  const relation = declareAr([tanker, rx], 'SHELL77');
+  const early = marsaAct(efsp, c.AP, 'AP', relation.marsaId, { kind: 'AcknowledgeVoid' });
+  assert.equal(early.ok, false, 'nothing to acknowledge while it is ACTIVE');
+  assert.match(early.detail, /not voided/);
+
+  mustAct(efsp, c.AP, 'AP', fresh(rx), { kind: 'SetBlock', blockId: '20', value: '090' });
+  const voided = efsp.marsaStore.getRelation(relation.marsaId);
+  assert.equal(voided.state, 'VOIDED');
+  assert.equal(voided.voidAcknowledgedAt, null, 'the notice stands');
+
+  const stranger = marsaAct(efsp, c.CTR, 'CTR', relation.marsaId, { kind: 'AcknowledgeVoid' });
+  assert.equal(stranger.ok, false);
+  assert.equal(stranger.reason, 'PERMISSION_DENIED');
+  assert.match(stranger.detail, /holds none of these Strips/);
+
+  const acked = mustMarsaAct(efsp, c.AP, 'AP', relation.marsaId, { kind: 'AcknowledgeVoid' });
+  assert.equal(acked.voidAcknowledgedBy, 'AP');
+  assert.ok(Number.isFinite(acked.voidAcknowledgedAt));
+  assert.equal(acked.transitions.at(-1).reason, 'VOID_ACKNOWLEDGED');
+  const again = marsaAct(efsp, c.AP, 'AP', relation.marsaId, { kind: 'AcknowledgeVoid' });
+  assert.equal(again.ok, false);
+  assert.match(again.detail, /already acknowledged/);
+});
