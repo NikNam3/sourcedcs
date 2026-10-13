@@ -19,14 +19,15 @@ export const LIMITS = Object.freeze({ rMin: 0.5, rMax: 40, hMin: 150, yMin: 100 
 
 // The final controller's actions (crc-sync docs/adr/0117, H134 LT-RQ7 a, LT-RQ8 a), on the FINAL Bay line and the PAR panel:
 // "Begin descent" (JO 7110.65BB para 5-12-3; it ends the assigned altitude) and "Cleared to land" (the tower's clearance
-// relayed, para 5-10-13) are recorded once each; "Landed" sends the Strip to GC (para 5-12-9); "Missed approach" is FINAL's
-// own BOLTER_WAVEOFF. "Landing assured" (ADR 0075) is gone: no FAA order uses the phrase. The carrier's Ball / Waveoff are the
+// relayed, para 5-10-13) are recorded once each; "Landed" sends the Strip to GC (para 5-12-9); "Missed approach" sends it back
+// to AP for another approach (decisions H137 LT-PQ1 a, ours: the orders are silent on who works the climb-out), which frees
+// the final and the rotating frequency. "Landing assured" (ADR 0075) is gone: no FAA order uses the phrase. The carrier's Ball / Waveoff are the
 // carrier FINAL Bay line's (bay-views.js; the PAR is an airfield feature, decisions H125, crc-sync docs/adr/0116).
 export const PAR_TERMINALS = Object.freeze([
   Object.freeze({ id: 'BEGIN_DESCENT', label: 'Begin descent', call: 'BEGIN_DESCENT', once: true }),
   Object.freeze({ id: 'CLEARED_TO_LAND', label: 'Cleared to land', call: 'CLEARED_TO_LAND', once: true }),
   Object.freeze({ id: 'LANDED', label: 'Landed', call: 'LANDED' }),
-  Object.freeze({ id: 'MISSED', label: 'Missed approach', toState: 'BOLTER_WAVEOFF' }),
+  Object.freeze({ id: 'MISSED', label: 'Missed approach', call: 'MISSED_APPROACH' }),
 ]);
 
 const _PM_RAD = Math.PI / 180;
@@ -38,7 +39,7 @@ export function parTerminals() {
   return PAR_TERMINALS.map(a => ({ ...a }));
 }
 
-/** The op an action sends: a recorded call (FinalCall) or FINAL's own state. */
+/** The op an action sends: a final call (FinalCall), or FINAL's own state when an action names one. */
 export function parTerminalOp(terminal) {
   if (!terminal) return null;
   return terminal.call ? { kind: 'FinalCall', call: terminal.call } : { kind: 'SetState', toState: terminal.toState };
