@@ -24,7 +24,8 @@ function _applyClearAirspaceEntry(ctx, strip, by, actingPositionId) {
 module.exports = {
   kind: 'ClearAirspaceEntry',
   undo: 'none', // docs/adr/0100 §1: airspace entry approval is not undoable
-  // The op grant, or (checked in apply, against the Strip's airspace) the using agency.
-  authorize: () => null,
+  // The op grant, or the using agency of some airspace here; in apply, of the Strip's own airspace.
+  authorize: (ctx, actingPositionId, op) => (ctx.rules.canMutate(actingPositionId, op.kind)
+    || ctx.rules.isAirspaceUsingAgency(actingPositionId, null) ? null : { ok: false, reason: 'PERMISSION_DENIED' }),
   apply: (ctx, strip, op, meta) => _applyClearAirspaceEntry(ctx, strip, meta.by, meta.actingPositionId),
 };

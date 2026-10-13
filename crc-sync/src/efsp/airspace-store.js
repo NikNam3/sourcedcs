@@ -181,11 +181,17 @@ class AirspaceStore extends SyncedStore {
 
   /**
    * Does `positionId` act for the using side of this airspace of the current theater (authority/airspace.js `isUsing`)?
+   * `airspaceId` null: of any airspace of the current theater.
    * docs/adr/0119 (H136 VQ5 a): the using agency approves entry into it on a Strip it does not hold.
    */
   isUsingAgency(airspaceId, positionId) {
+    if (!positionId) return false;
+    if (airspaceId == null) { // of any airspace of the current theater (ClearAirspaceEntry's early gate)
+      const m = this._theaterMap(this.currentTheater());
+      return [...(m ? m.values() : [])].some(r => this._isUsing(r.definition, positionId));
+    }
     const record = this._record(this.currentTheater(), airspaceId);
-    return !!record && !!positionId && this._isUsing(record.definition, positionId);
+    return !!record && this._isUsing(record.definition, positionId);
   }
 
   /** ACTIVE, and the using agency is Facility `usingFacilityId` (as `usingFacilityId`, or as a `usingPositionId` of its own). */

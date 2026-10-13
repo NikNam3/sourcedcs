@@ -76,7 +76,8 @@ function buildFacilityRules({ facilityId, facilityConfig, permissionRules, posit
     // agency of an airspace approves (or clears) a flight's entry into it on a Strip of its own Facility it does not hold.
     mayActBesideOwner:   (actingPositionId, strip, op) => permission.mayActBesideOwner(actingPositionId, strip, op)
       || _usingAgencyEntry(actingPositionId, strip, op),
-    isAirspaceUsingAgency: (positionId, airspaceId) => !!airspaceId && airspaceStore.isUsingAgency(airspaceId, positionId),
+    // `airspaceId` null: the using agency of any airspace (ClearAirspaceEntry's authorize, before the Strip is read).
+    isAirspaceUsingAgency: (positionId, airspaceId) => airspaceStore.isUsingAgency(airspaceId == null ? null : airspaceId, positionId),
     // WP4A (docs/adr/0015) — this Facility's own id, and a lazy accessor
     // to the OTHER Facility's BoardStore instance for cross-Facility
     // coordination. Lazy (a closure over `facilities`, resolved at call

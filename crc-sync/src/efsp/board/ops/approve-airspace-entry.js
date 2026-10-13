@@ -76,6 +76,6 @@ module.exports = {
   // JO 7110.65BB para 9-3-1 NOTE), or the using agency of this airspace grants it itself (14 CFR 73.15 (c)(2), para 9-3-1
   // b), with no op grant, on a Strip of its own Facility it may not hold (facility-rules.js `mayActBesideOwner`).
   authorize: (ctx, actingPositionId, op) => (ctx.rules.canMutate(actingPositionId, op.kind)
-    || ctx.rules.isAirspaceUsingAgency(actingPositionId, op.airspaceId) ? null : { ok: false, reason: 'PERMISSION_DENIED' }),
+    || (!!op.airspaceId && ctx.rules.isAirspaceUsingAgency(actingPositionId, op.airspaceId)) ? null : { ok: false, reason: 'PERMISSION_DENIED' }),
   apply: (ctx, strip, op, meta) => _applyApproveAirspaceEntry(ctx, strip, op, meta.by),
 };
