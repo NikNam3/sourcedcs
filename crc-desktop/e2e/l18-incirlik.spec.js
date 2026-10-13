@@ -2,7 +2,7 @@
 
 /* L18 on screen (crc-sync docs/adr/0075, 0093), as docs/adr/0117 left it: RSU's pattern board; AP's SFA frequency racks with
  * their header and "Hand off to PAR" (no SFA Position: JO 7610.14A para 7-1-5); PAR's FINAL Bay line (HDG and ALT, Begin
- * descent, Cleared to land, Landed, Missed approach, the ⋯ menu; the picture is the PAR panel's, e2e/par-panel.spec.js).
+ * descent, Cleared to land, Landed, Missed approach (back to AP, H137), the ⋯ menu; the picture is the PAR panel's, e2e/par-panel.spec.js).
  * One controller holds GC, RSU, AP and PAR. Run on E2E_LANE=9. The Board lives for the whole run, so every test drops what
  * it made. */
 
@@ -129,9 +129,66 @@ test('02 PAR (T5, T11): HDG and ALT on the FINAL line; Begin descent and Cleared
   await send(page, b, 'AP', TO_PAR);
   await waitStrip(page, b, s => s.ownerPositionId === 'PAR' && s.bayId === 'par-final', 'B on final once A has landed');
   await expect(page.locator('.efsp-final-row', { hasText: b })).toBeVisible();
-  // and a missed approach takes it to PAR's missed-approach Bay
-  await page.locator('.efsp-final-row', { hasText: b }).locator('.efsp-final-terminal[data-terminal="MISSED"]').click();
-  await waitStrip(page, b, s => s.state === 'BOLTER_WAVEOFF' && s.bayId === 'par-missed', 'B went around');
+});
+
+test('02b missed approach (H137 LT-PQ1 a): back to AP on its frequency Rack with the climb-out kept, PAR\'s final and the frequency free; a second approach records its calls again', async ({ page }) => {
+  await controller(page);
+  const a = cs('MA');
+  await arrival(page, a, 'freq-3');
+  await send(page, a, 'AP', TO_PAR);
+  await waitStrip(page, a, s => s.ownerPositionId === 'PAR' && s.bayId === 'par-final', 'A on final');
+  await openBay(page, 'PAR', 'par-final');
+  const row = () => page.locator('.efsp-final-row', { hasText: a });
+  const term = (id) => row().locator(`.efsp-final-terminal[data-terminal="${id}"]`);
+  const assigned = (f) => page.evaluate(([c, field]) => {
+    const s = crc.state.getAllEfspStrips().find(x => x.state !== 'DROPPED' && (crc.state.getEfspFlightData(x.flightDataId) || { identity: {} }).identity.callsign === c);
+    const e = crc.state.getEfspFlightData(s.flightDataId).clearance[field].entries.find(x => x.status === 'ACTIVE');
+    return e ? e.value : null;
+  }, [a, f]);
+  await term('BEGIN_DESCENT').click();
+  await expect(term('BEGIN_DESCENT')).toBeDisabled();
+  await term('CLEARED_TO_LAND').click();
+  await expect(term('CLEARED_TO_LAND')).toBeDisabled();
+  // the climb-out PAR issues (JO 7110.65BB para 5-10-12: a specific heading and altitude)
+  await row().locator('.efsp-final-hdg').fill('230');
+  await row().locator('.efsp-final-hdg').press('Enter');
+  await row().locator('.efsp-final-alt').fill('040');
+  await row().locator('.efsp-final-alt').press('Enter');
+  await expect.poll(() => assigned('altitude')).toBe('040');
+  await term('MISSED').click();
+  await waitStrip(page, a, s => s.stripType === 'ARRIVAL' && s.state === 'INBOUND' && s.ownerPositionId === 'AP' && s.bayId === 'ap-sfa' && s.rackId === 'freq-3', 'A back with AP on its frequency Rack');
+  expect((await stripOf(page, a)).mhz).toBe(234.1);
+  await expect(page.locator('.efsp-final-none')).toHaveText('No aircraft on final.');
+  expect(await assigned('heading')).toBe('230');
+  expect(await assigned('altitude')).toBe('040');
+
+  // AP re-sequences it: the rotating frequency is AP's again, and Hand off to PAR starts the second approach
+  await openBay(page, 'AP', 'ap-sfa');
+  await expect(page.locator('.efsp-rack-header', { hasText: '234.100 · AP' })).toBeVisible();
+  await page.locator('.efsp-final-handoff').first().click();
+  await waitStrip(page, a, s => s.ownerPositionId === 'PAR' && s.stripType === 'FINAL' && s.state === 'ON_FINAL' && s.bayId === 'par-final', 'second approach');
+  await openBay(page, 'PAR', 'par-final');
+  await expect(term('BEGIN_DESCENT')).toBeEnabled();      // the first approach's calls were cleared
+  await expect(term('CLEARED_TO_LAND')).toBeEnabled();
+  await term('BEGIN_DESCENT').click();
+  await expect(term('BEGIN_DESCENT')).toBeDisabled();
+  await term('LANDED').click();
+  await waitStrip(page, a, s => s.stripType === 'ARRIVAL' && s.state === 'TAXI_IN' && s.ownerPositionId === 'GC', 'landed on the second approach');
+});
+
+test('02c PAR\'s missed-approach Bay: a Strip PAR keeps there offers Back to AP', async ({ page }) => {
+  await controller(page);
+  const a = cs('MB');
+  await arrival(page, a, 'freq-4');
+  await send(page, a, 'AP', TO_PAR);
+  await waitStrip(page, a, s => s.ownerPositionId === 'PAR' && s.bayId === 'par-final', 'on final');
+  await send(page, a, 'PAR', { kind: 'SetState', toState: 'BOLTER_WAVEOFF' });
+  await waitStrip(page, a, s => s.state === 'BOLTER_WAVEOFF' && s.bayId === 'par-missed', 'held by PAR');
+  await openBay(page, 'PAR', 'par-missed');
+  const nla = page.locator('.efsp-strip', { hasText: a }).locator('.efsp-nla-btn');
+  await expect(nla).toHaveText('Back to AP');
+  await nla.click();
+  await waitStrip(page, a, s => s.stripType === 'ARRIVAL' && s.state === 'INBOUND' && s.ownerPositionId === 'AP' && s.rackId === 'freq-4', 'back to AP');
 });
 
 test('03 RSU: the pattern board replaces the racks; Next leg, Landed and Drop work from the chips', async ({ page }) => {

@@ -351,10 +351,11 @@ test('05 walks: a second aircraft joins (the picks), the landing runway changes 
   await expect(panel(page).locator('[data-par-trail="el"] circle')).toHaveCount(0);
   await panel(page).screenshot({ path: test.info().outputPath('05-runway-changed.png') });
 
-  // a missed approach mid-run (the PAR panel's button): the Strip goes to par-missed, the server's next frame is empty
+  // a missed approach mid-run (the PAR panel's button): the Strip goes back to AP for another approach (H137 LT-PQ1 a), the
+  // server's next frame is empty
   await page.evaluate(() => { window.__par.samples = null; });
   await panel(page).locator('.par-term[data-terminal="MISSED"]').click();
-  await waitStrip(page, a, s => s.state === 'BOLTER_WAVEOFF' && s.bayId === 'par-missed', 'missed approach');
+  await waitStrip(page, a, s => s.stripType === 'ARRIVAL' && s.state === 'INBOUND' && s.ownerPositionId === 'AP' && s.bayId === 'ap-sfa', 'missed approach: back to AP');
   await expect(panel(page).locator('#par-empty')).toBeVisible({ timeout: 5000 });
   await expect(panel(page).locator('#par-empty')).toHaveText('No aircraft on your final.');
 });
