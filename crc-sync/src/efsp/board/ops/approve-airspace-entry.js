@@ -2,7 +2,6 @@
 
 const { _validateAltitudeBlock } = require('../strip-util');
 const { warn } = require('../../warnings');
-const { authorize, usingAgencyGate } = require('../airspace-entry-rights');
 
 /**
  * Approves this flight to work inside an airspace, on a frequency.
@@ -26,7 +25,7 @@ const { authorize, usingAgencyGate } = require('../airspace-entry-rights');
  * restriction rather than being refused, because tightening or lifting a
  * block mid-sortie is the normal case, not an error.
  */
-function _applyApproveAirspaceEntry(ctx, strip, op, by, actingPositionId) {
+function _applyApproveAirspaceEntry(ctx, strip, op, by) {
   if (!op.airspaceId) {
     return { ok: false, reason: 'VALIDATION_ERROR', detail: 'an airspace entry needs an airspaceId', strip };
   }
@@ -34,8 +33,6 @@ function _applyApproveAirspaceEntry(ctx, strip, op, by, actingPositionId) {
   if (!airspace) {
     return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown airspace: ${op.airspaceId}`, strip };
   }
-  const denied = usingAgencyGate(ctx, actingPositionId, op.kind, op.airspaceId, airspace, strip);
-  if (denied) return denied;
 
   const definition = airspace.definition || {};
   const frequencyMhz = op.frequencyMhz !== undefined && op.frequencyMhz !== null
@@ -75,6 +72,10 @@ function _applyApproveAirspaceEntry(ctx, strip, op, by, actingPositionId) {
 module.exports = {
   kind: 'ApproveAirspaceEntry',
   undo: 'none', // docs/adr/0100 §1: airspace entry approval is not undoable
-  authorize,
-  apply: (ctx, strip, op, meta) => _applyApproveAirspaceEntry(ctx, strip, op, meta.by, meta.actingPositionId),
+  // docs/adr/0119 (H136 VQ5 a): the Position working the Strip relays the using agency's permission (it holds the op kind,
+  // JO 7110.65BB para 9-3-1 NOTE), or the using agency of this airspace grants it itself (14 CFR 73.15 (c)(2), para 9-3-1
+  // b), with no op grant, on a Strip of its own Facility it may not hold (facility-rules.js `mayActBesideOwner`).
+  authorize: (ctx, actingPositionId, op) => (ctx.rules.canMutate(actingPositionId, op.kind)
+    || ctx.rules.isAirspaceUsingAgency(actingPositionId, op.airspaceId) ? null : { ok: false, reason: 'PERMISSION_DENIED' }),
+  apply: (ctx, strip, op, meta) => _applyApproveAirspaceEntry(ctx, strip, op, meta.by),
 };
