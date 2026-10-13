@@ -8,9 +8,17 @@
 
 const { test, expect } = require('./helpers/test');
 const { openPanel, stripByCallsign, startAction, dropStrips } = require('./helpers/app');
+const { startFakeDcs, fakeDcsPort } = require('./helpers/fake-dcs');
 
 test.describe.configure({ timeout: 60000 });
 test.use({ viewport: { width: 1500, height: 1000 } });
+
+// crc-sync scopes the airspace registry to the loaded mission's theater; the harness has no DCS, so this file starts the
+// fake one (helpers/fake-dcs.js: GetTheatre "Syria", no units) as airspace-server.spec.js does.
+const LANE = Number(process.env.E2E_LANE || 0);
+let fake;
+test.beforeAll(async () => { fake = await startFakeDcs(fakeDcsPort(3010 + LANE)); });
+test.afterAll(async () => { if (fake) await fake.stop(); });
 
 let seq = 0;
 const uniqueCallsign = (prefix) => `${prefix}${(Date.now() + seq++) % 10000}`;
@@ -115,15 +123,26 @@ test('approve entry into active airspace on a flight-following Strip, and Undo o
   await expect.poll(() => bindingOf(page, r.flightDataId)).toBe(null);
   await page.screenshot({ path: test.info().outputPath('03-undone.png') });
 
-  // Start again and approve entry into an airspace (whatever its state: a cold one is a warning, not a refusal).
+  // Start again and approve entry into an airspace CTR controls, from the Strip's ⋯ menu (today's rights, H136 VQ5 a;
+  // the alert by airspace type is LT-AIRSPACE-ALERT's). crc-sync scopes the registry to the loaded theater: the fake DCS.
+  await expect.poll(() => page.evaluate(() => crc.airspaceLayer.currentTheater()), { timeout: 20000 }).toBe('Syria');
+  const airspaceId = `MOA-FF${Date.now() % 1000}`;
+  await page.evaluate((id) => crc.ws.sendEfspAirspaceMutation('CTR', id, 0,
+    { kind: 'CreateAirspace', definition: { airspaceId: id, name: `MOA ${id}`, kind: 'AREA', type: 'MOA', controllingFacilityId: 'CENTER', controllingPositionId: 'CTR' } }), airspaceId);
+  await expect.poll(() => page.evaluate((id) => !!crc.state.getEfspAirspace(id), airspaceId)).toBe(true);
   await start(page, tid, callsign);
-  const airspaceId = await page.evaluate(() => { const all = crc.state.getAllEfspAirspaces(); return all.length ? all[0].airspaceId : null; });
-  expect(airspaceId, 'the harness ships the squadron airspaces').not.toBe(null);
-  const strip = await page.evaluate((cs) => crc.state.getAllEfspStrips().find(x => x.state !== 'DROPPED' && crc.state.getEfspFlightData(x.flightDataId).identity.callsign === cs), callsign);
-  const ack = await page.evaluate(([s, a]) => new Promise((resolve) => {
-    crc.ws.sendEfspMutation('CTR', s, { kind: 'ApproveAirspaceEntry', airspaceId: a }, { onAck: (x) => { resolve(x); return true; } });
-  }), [strip, airspaceId]);
-  expect(ack.ok, JSON.stringify(ack)).toBe(true);
+  await page.locator('#efsp-position-tabs .efsp-position-tab[data-position-id="CTR"]').click();
+  await page.locator('#efsp-bay-tabs .efsp-bay-tab[data-bay-id="ctr-overflight"]').click();
+  await startAction(stripByCallsign(page, callsign), 'Airspace…');
+  await page.locator('[data-testid="airspace-entry-airspace"]').selectOption(airspaceId);
+  await page.locator('.efsp-coordinate-send-btn', { hasText: 'Approve entry' }).click();
   await expect.poll(async () => (await recordFor(page, callsign)).entry).toBe(airspaceId);
+  await page.screenshot({ path: test.info().outputPath('04-entry-approved.png') });
+
+  // Radar service terminated clears the entry with the Strip.
+  await startAction(stripByCallsign(page, callsign), 'Radar service terminated');
+  await expect.poll(() => recordFor(page, callsign)).toBe(null);
+  const after = await page.evaluate((id) => crc.state.getEfspFlightData(id), r.flightDataId);
+  expect(after ? after.comms.airspaceId : null, 'the entry is cleared').toBe(null);
   await dropStrips(page, [callsign]);
 });
