@@ -7,7 +7,7 @@ move control at the boundary.
 
 ## Why
 
-**H142 and H143** (`decisions.md`, read both whole): a not-released handoff moves control automatically once the aircraft is inside
+**H142, H143 and H144** (`decisions.md`, read all three whole): a not-released handoff moves control automatically once the aircraft is inside
 the receiver's airspace. So the airspace system must know each controlling facility's **area of jurisdiction** and answer
 "whose airspace is this aircraft in". FAA background: ¶2-1-15 a 1/c (control at a boundary), and
 `docs/parallel/research/release-and-par.md` R1/R4.
@@ -33,8 +33,12 @@ the receiver's airspace. So the airspace system must know each controlling facil
    - **CARRIER**: 50 nm circle on the hull, **SFC – UNL**, owner the CARRIER Positions (every hull in `efsp-carriers.json`);
    - **CENTER**: everything not inside another jurisdiction area — not drawn as a shape, it is the fallback; Class E.
      **Class G** areas (none shipped) belong to nobody.
-3. **Precedence on overlap**: CARRIER > TOWER > RAPCON > CENTER (H143). Put the order in the same config (an ordered list,
-   the LOA stand-in, labelled ours), not in code.
+3. **No overlap between static areas** (H144): two non-carrier jurisdiction areas never share any volume. The shipped
+   RAPCON is the 50 nm circle **with the tower's volume cut out** (a cut-out/hole in the geometry, or an `excludes` list
+   naming the tower area — your design, the ADR says which); CENTER is the complement of all of them. The validator
+   (config load, `state/` load, and every panel edit) **refuses** an area that overlaps another static area, naming
+   both; a 3D check (lateral overlap and altitude bands overlapping). **The carrier circle is the only area allowed to
+   overlap**, and wherever it is it wins over everything (it moves; static airspace cannot follow it).
 4. **One server function** `jurisdictionAt({ lat, lon, altFt })` → the owning area (Facility + Positions) or `null`
    (Class G), plus `isInsideJurisdictionOf(positionId, track)` (the receiving Position's area, CTR = the fallback); unit-tested at edges (boundary counts as inside, the floor/ceiling, the
    overlap order, a moving hull). U-RELEASE will call it from the control settle tick.
@@ -50,7 +54,7 @@ the receiver's airspace. So the airspace system must know each controlling facil
 
 Both unit suites; `npm run walk`; `npm run freeze` (+ `freeze:update` with a small, explained diff, separate commit);
 `soak:selfcheck` if Board/wire/hub moved; `npm run wire:record` (new airspace kind/keys). e2e: the airspaces panel shows
-the TOWER, RAPCON and carrier areas; AP edits RAPCON's ceiling; a Position without the right is refused. `E2E_LANE=7`, your specs.
+the TOWER, RAPCON and carrier areas; AP edits RAPCON's ceiling; an edit pushing RAPCON into another static area is refused; a Position without the right is refused. `E2E_LANE=7`, your specs.
 
 ## Output
 
