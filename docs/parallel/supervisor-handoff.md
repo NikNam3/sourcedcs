@@ -1,23 +1,38 @@
 # Supervisor handoff
 
-## RELAUNCH HERE (2026-10-13 evening): the live-test batch is merged; round-2 findings are next
+## RELAUNCH HERE (2026-10-13 night): round 2 under way; U-STRIP merged, U-PANELS next
 
-**Progress (2026-10-13, later):** U-RESEARCH merged (S-ARCH-60). Desk rounds 8–9 settled (H140, H141). **Queue** (one
-at a time, briefings in `next/`): **U-STRIP (running)** → U-PANELS → U-JURISDICTION (0125) → U-RELEASE (0122, H142) → U-PAR (0123) → U-MOA (0124)
-→ U-RSU-DESIGN → U-RSU (0120) → docs pass → small items/declutter (LT-GROUND 0121) → U-CARRIER last.
-
-**State:** everything is merged into `efsp-wp5-correlation` and green (S-ARCH-59: crc-sync 2738, freeze 56/56, walk 23/23,
-soak:selfcheck PASS, wire protocol 2, crc-desktop 1289, sharded Playwright 249/249). No lane is running; the only
-worktree is the main checkout. Record: `decisions.md` H133–H138, S-ARCH-48–59.
+**State:** everything is merged into `efsp-wp5-correlation`; no lane is running; the only worktree is the main checkout.
+Last gates (tree `19c0ef1c`): crc-sync 2740, crc-desktop 1296, walk 23/23, freeze 56/56, wire protocol 2 unchanged.
+Record: `decisions.md` H139–H146, S-ARCH-60–61. Decision Desk: every question settled (rounds 8–9).
 
 **Do this first:**
-1. Read **`docs/parallel/live-test-2026-10-13.md`**: the human's round-2 findings U1–U21, organised, with suggested lanes
-   (U-RESEARCH, U-STRIP, U-PANELS, U-RELEASE, U-PAR, U-RSU-DESIGN → U-RSU with ADR 0120, U17, U-CARRIER **last**), and
-   **H138** (the RSU works visually and only VFR; no leg columns; carrier last).
-2. Read the open Decision Desk questions **LT-MQ1, LT-MQ2, LT-AQ1** (https://claude.ai/artifact/A3gizEgbwfqCnnU831G4Y7,
-   `ArtifactData` `answers`), settle them into `decisions.md` (H139+).
-3. Write the briefings in `docs/parallel/next/` and dispatch, **one agent at a time** (H133), Opus. A lane's briefing is
-   a file; the prompt points at it (see `next/LT-VFR.md`, `next/LT-MARSA.md`, `next/LT-AIRSPACE-ALERT.md` for the shape).
+1. **Run the sharded Playwright on this tree** (owed since U-STRIP): `cd crc-desktop && npm run e2e:sharded -- --lanes
+   1,2,4,5 --rerun-failed`, in the background; read the summary line (the runner exits 0 on failures); afterwards
+   `git checkout -- docs/wip crc-desktop/e2e/tools/spec-timings.json`. It may run while the next lane works in its own
+   worktree, but merge no client files while it runs.
+2. Dispatch the queue below, **one agent at a time**, Opus, each from its briefing in `docs/parallel/next/` (the prompt
+   points at the file: see the U-STRIP dispatch shape in git history / earlier lanes). Create the worktree first
+   (`git worktree add -b lane/<L> ../sourcedcs-<L> efsp-wp5-correlation`).
+
+**Queue (round 2, `live-test-2026-10-13.md`; briefings ready unless noted):**
+1. **U-PANELS** (U10, U12, U13) — `next/U-PANELS.md`. U-STRIP touched `strip-menu.js` and appended to `efsp-panel.css`:
+   small, separate hunks.
+2. **U-JURISDICTION** (ADR 0125) — `next/U-JURISDICTION.md`: jurisdiction airspace (LTAG CTR control zone from AIP
+   Türkiye AD 2.17, RAPCON = Adana MTMA SFC–FL280 minus the CTR, CARRIER 50 nm on the hull, CENTER the rest; no overlap
+   except the carrier, H142–H145).
+3. **U-RELEASE** (ADR 0122) — `next/U-RELEASE.md`, after U-JURISDICTION: released-by-default handoffs, "Checked in"
+   before any control move, not-released moves control at the receiver's airspace boundary, Request release only on a
+   not-released handoff, no withdraw (H141 U-RQ2, H142).
+4. **U-PAR** (ADR 0123) — `next/U-PAR.md`: azimuth in degrees only, elevation lower limit −0.5° (safety, H141).
+5. **U-MOA** (ADR 0124) — `next/U-MOA.md`: flight list with Approve on the airspace card; MARSA void-before-rendezvous
+   only for tanker MARSA (H140, H141).
+6. **U-RSU-DESIGN → U-RSU** (ADR 0120, U14/U15, H138) — **no briefing yet**; its list shows remarks (S-ARCH-61).
+7. **Docs pass** (live-test batch + round 2 wip notes, incl. usage guide §4A stereo routes).
+8. **Small items / declutter** (LT-GROUND ADR 0121, S-ARCH-49/51/53, T30, ¶5-4-6 e, LUAW text, `KEEP IFR`).
+9. **U-CARRIER** (U18–U21), **last** (the human's order). Open for the human: RMKS on the carrier FINAL line?
+
+Future: `docs/parallel/v3-backlog.md` (openAIP airspace import, H146).
 
 **Also owed:** the live-test batch's **docs pass** (every `docs/wip/LT-*.md` → usage guide, briefing, CLAUDE.md: "six
 stores" → five, `modeCIntruder`, `AcknowledgeVoid`, `TANKER_DISTANCE`, `airspaceEntry`, flight following); small items
