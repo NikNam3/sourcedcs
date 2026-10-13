@@ -13,6 +13,7 @@ import { history, tracks } from '../picture.js';
 import { map, mapReady } from '../map-handle.js';
 import { settings } from '../settings.js';
 import { markEfspChanged, onEfspChanged } from './efsp/efsp-change-bus.js';
+import { canStartFlightFollowing, startFlightFollowing } from './efsp/flight-following.js';
 
 // ── Track info panel ─────────────────────────────────────────────────────
 // Left-clicking an aircraft track opens this persistent side panel. It
@@ -82,6 +83,30 @@ export function initTrackPanel() {
     if (e.key === 'Escape') { closeTrackPanel(); }
   });
   $renameInput.addEventListener('click', e => e.stopPropagation());
+
+  // Start flight following (crc-sync H136): callsign and Block 3 type, one press. The answer shows on the line below;
+  // on success the contact is the Strip's, so the section goes away with the next refresh.
+  const $ffCallsign = document.getElementById('tp-ff-callsign');
+  const $ffType = document.getElementById('tp-ff-type');
+  const $ffMsg = document.getElementById('tp-ff-msg');
+  const startFf = () => {
+    if (_trackPanelId == null || !$ffCallsign || !$ffType) return;
+    const trackId = _trackPanelId;
+    const problem = startFlightFollowing(trackId, $ffCallsign.value, $ffType.value, (ack) => {
+      if (_trackPanelId !== trackId) return;
+      if ($ffMsg) $ffMsg.textContent = ack.ok ? '' : (ack.detail || ack.reason || 'refused');
+      if (ack.ok) { $ffCallsign.value = ''; $ffType.value = ''; }
+      updateTrackPanel();
+    });
+    if ($ffMsg) $ffMsg.textContent = problem || '';
+  };
+  const $ffStart = document.getElementById('tp-ff-start');
+  if ($ffStart) $ffStart.addEventListener('click', (e) => { e.stopPropagation(); startFf(); });
+  for (const $in of [$ffCallsign, $ffType]) {
+    if (!$in) continue;
+    $in.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); startFf(); } });
+    $in.addEventListener('click', e => e.stopPropagation());
+  }
 
   function _refreshIffButtons() {
     const cols = iffColors();
@@ -306,6 +331,27 @@ export function updateTrackPanel() {
 
   // The correlated flight's plan
   _refreshTrackFpl(_flightDataForTrack(String(_trackPanelId)));
+
+  _refreshFlightFollowing(fresh);
+}
+
+// Shown only on a contact it applies to (a radar Position held, no live Strip on the contact): dark cockpit.
+let _ffShownFor = null;
+function _refreshFlightFollowing(fresh) {
+  const $sec = document.getElementById('tp-ff-section');
+  if (!$sec) return;
+  const show = canStartFlightFollowing(_trackPanelId);
+  $sec.hidden = !show;
+  if (_ffShownFor !== _trackPanelId) {
+    // A new contact: start from its tag, if it has one (a name the controller already gave it), and no old message.
+    _ffShownFor = _trackPanelId;
+    const $cs = document.getElementById('tp-ff-callsign');
+    const $ty = document.getElementById('tp-ff-type');
+    const $msg = document.getElementById('tp-ff-msg');
+    if ($cs) $cs.value = (fresh && fresh.label && fresh.label.tag) || '';
+    if ($ty) $ty.value = '';
+    if ($msg) $msg.textContent = '';
+  }
 }
 
 // ── Ground vehicle tag popup ──────────────────────────────────────────────
@@ -362,4 +408,4 @@ export function showGroundLabelPopup(id, clientX, clientY) {
   setTimeout(() => document.addEventListener('click', onOutside, true), 0);
 }
 
-onEfspChanged(['alerts', 'scope'], () => updateTrackPanel()); // a conflict alert on the open contact (efsp-change-bus.js)
+onEfspChanged(['alerts', 'scope', 'correlations', 'positions', 'board'], () => updateTrackPanel()); // a conflict alert on the open contact (efsp-change-bus.js)

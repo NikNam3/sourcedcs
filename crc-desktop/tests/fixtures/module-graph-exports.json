@@ -498,6 +498,7 @@
    "CARRIER_HANDOFF_TARGET",
    "CONVERT_TO_ARRIVAL_POSITIONS",
    "COORDINATION_TARGETS",
+   "FLIGHT_FOLLOWING_POSITIONS",
    "HAND_BACK_TO",
    "TOFI_ANSWERED_BY",
    "TOFI_COUNTERPARTS",
@@ -980,6 +981,13 @@
    "facilityOfPosition",
    "positionsOf",
    "shippedFacilityIds"
+  ],
+  "panels/efsp/flight-following.js": [
+   "canStartFlightFollowing",
+   "canTerminateRadarService",
+   "flightFollowingPosition",
+   "startFlightFollowing",
+   "terminateRadarService"
   ],
   "panels/efsp/formation-rules.js": [
    "ASSIGNMENT_KINDS",
