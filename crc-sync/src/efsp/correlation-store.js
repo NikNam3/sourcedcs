@@ -309,11 +309,18 @@ class CorrelationStore extends SyncedStore {
   // audits the whole action (its own entry carries the binding), so these write no correlation audit entry of their
   // own; each returns the changed record for the efsp-correlation-delta that rides the same round trip, or null.
 
-  /** The flight a contact is bound or matched to (CORRELATED or PROVISIONAL), or null: `{ flightDataId, state }`. */
+  /**
+   * The flight a contact is bound or matched to (CORRELATED or PROVISIONAL), or null: `{ flightDataId, state }`. An
+   * explicit binding claims its contact even while the picture does not show it (the reconciler then holds the record
+   * UNCORRELATED with the binding kept, until the contact is seen again).
+   */
   holderOfTrack(trackId) {
     const wanted = String(trackId);
     for (const record of this._records.values()) {
       if (record.trackId === wanted && record.state !== 'UNCORRELATED') return { flightDataId: record.flightDataId, state: record.state };
+    }
+    for (const record of this._records.values()) {
+      if (record.binding && record.binding.trackId === wanted) return { flightDataId: record.flightDataId, state: record.state };
     }
     return null;
   }

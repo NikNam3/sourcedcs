@@ -38,6 +38,9 @@ const bindingOf = (page, flightDataId) => page.evaluate((id) => {
   return c && c.binding ? c.binding.trackId : null;
 }, flightDataId);
 
+// The track panel shares the dock group with the Strip panel: bring the Strips back to the front.
+const showStrips = (page) => page.evaluate(() => crc.dock.dock.api.getPanel('efsp').api.setActive());
+
 async function start(page, tid, callsign, type = 'C172') {
   await contact(page, tid);
   const section = page.locator('#tp-ff-section');
@@ -46,6 +49,10 @@ async function start(page, tid, callsign, type = 'C172') {
   await page.locator('#tp-ff-type').fill(type);
   await page.locator('#tp-ff-start').click();
   await expect.poll(() => recordFor(page, callsign)).not.toBe(null);
+  // The harness picture drops the injected contact at its next frame: put it back, then the panel refreshes.
+  await contact(page, tid);
+  await expect(section, 'gone once the contact is the Strip\'s').toBeHidden();
+  await showStrips(page);
 }
 
 test('start flight following on a contact: an OVERFLIGHT Strip IN_SECTOR, a discrete code, bound; then radar service terminated', async ({ page }) => {
@@ -57,9 +64,6 @@ test('start flight following on a contact: an OVERFLIGHT Strip IN_SECTOR, a disc
   expect(r).toMatchObject({ stripType: 'OVERFLIGHT', state: 'IN_SECTOR', bayId: 'ctr-overflight', boundTo: tid });
   expect(r.code).toMatch(/^[0-7]{4}$/);
   await page.screenshot({ path: test.info().outputPath('01-started.png') });
-
-  // The panel says nothing more about it: the offer is gone once the contact is the Strip's.
-  await page.evaluate(() => crc.changeBus.markEfspChanged('correlations'));
 
   // Radar service terminated from the ⋯ menu: dropped, code released, the binding ended.
   await page.locator('#efsp-position-tabs .efsp-position-tab[data-position-id="CTR"]').click();
@@ -74,9 +78,10 @@ test('start flight following on a contact: an OVERFLIGHT Strip IN_SECTOR, a disc
   await contact(page, tid);
   await expect(page.locator('#tp-ff-section')).toBeVisible();
   await page.screenshot({ path: test.info().outputPath('02-terminated.png') });
+  await showStrips(page);
 });
 
-test('a refusal shows on the panel line: the contact is already a Strip\'s', async ({ page, browser }) => {
+test('a second Start on a contact already bound is refused, naming the flight', async ({ page, browser }) => {
   await openPanel(page, { signedOn: ['CTR'], facilityId: 'CENTER', controller: 'lt-vfr-2' });
   const callsign = uniqueCallsign('VF');
   const tid = `lt-vfr-${Date.now() % 100000}`;

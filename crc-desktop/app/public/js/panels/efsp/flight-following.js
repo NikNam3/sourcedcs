@@ -1,7 +1,7 @@
 'use strict';
 import { getActingPositions, sendEfspCreateStrip, sendEfspMutation } from './efsp-ws.js';
-import { getEfspFlightData } from './efsp-state.js';
-import { stripIdsForTrackId } from './correlation-state.js';
+import { getAllEfspStrips, getEfspFlightData } from './efsp-state.js';
+import { getAllEfspCorrelations, stripIdsForTrackId } from './correlation-state.js';
 import { facilityOfPosition } from './facility-topology.js';
 import { FLIGHT_FOLLOWING_POSITIONS } from './bay/authority-mirror.js';
 
@@ -20,7 +20,11 @@ export function flightFollowingPosition() {
 /** Whether "Start flight following" applies to this contact: a radar Position is held and no live Strip is on it. */
 export function canStartFlightFollowing(trackId) {
   if (trackId == null || !flightFollowingPosition()) return false;
-  return stripIdsForTrackId(String(trackId)).length === 0;
+  const wanted = String(trackId);
+  if (stripIdsForTrackId(wanted).length) return false;
+  // An explicit binding claims its contact even while crc-sync's picture misses it (crc-sync refuses the same).
+  const bound = new Set(getAllEfspCorrelations().filter(r => r.binding && r.binding.trackId === wanted).map(r => r.flightDataId));
+  return !bound.size || !getAllEfspStrips().some(s => s.state !== 'DROPPED' && bound.has(s.flightDataId));
 }
 
 /**
