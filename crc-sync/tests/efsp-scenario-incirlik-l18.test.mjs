@@ -183,22 +183,102 @@ test('Begin descent and Cleared to land are recorded once each; Begin descent en
   refused(act(efsp, c.PAR, 'PAR', strip(efsp, s), { kind: 'FinalCall', call: 'BALL' }), 'VALIDATION_ERROR', /unknown final call/);
 });
 
-test('the pilot CANCELS the approach: a missed approach from PAR, then back on final; a second aircraft is handed in meanwhile and lands first', () => {
+const missedApproach = { kind: 'FinalCall', call: 'MISSED_APPROACH' };
+const active = (efsp, s, field) => (flightDataOf(efsp, s).clearance[field].entries.find(e => e.status === 'ACTIVE') || {}).value;
+
+test('the pilot CANCELS the approach (H137 LT-PQ1 a): Missed approach sends the Strip back to AP on its SFA frequency Rack; PAR\'s final and the frequency are free; a second approach follows', () => {
   const { efsp, c } = fresh();
   const a = arrival(efsp, c, 'freq-2');
   const b = arrival(efsp, c, 'freq-3');
   mustAct(efsp, c.AP, 'AP', strip(efsp, a), toPar);
-  const missed = mustAct(efsp, c.PAR, 'PAR', strip(efsp, a), { kind: 'SetState', toState: 'BOLTER_WAVEOFF' });
-  assert.equal(missed.bayId, 'par-missed');
-  const bIn = mustAct(efsp, c.AP, 'AP', strip(efsp, b), toPar);
-  assert.equal(bIn.bayId, 'par-final');
-  refused(act(efsp, c.PAR, 'PAR', strip(efsp, a), { kind: 'InvokeNla' }), null, /par-final holds 1 Strip/, 'A back on final');
-  refused(act(efsp, c.PAR, 'PAR', strip(efsp, a), landed), 'VALIDATION_ERROR', /on final/, 'Landed from the missed approach Bay');
+  const commsBefore = JSON.stringify(flightDataOf(efsp, a).comms);
+  // PAR issued the climb-out (¶5-10-12: a specific heading and altitude) on the FINAL line, then the calls
+  mustAct(efsp, c.PAR, 'PAR', strip(efsp, a), { kind: 'FinalCall', call: 'BEGIN_DESCENT' });
+  mustAct(efsp, c.PAR, 'PAR', strip(efsp, a), { kind: 'FinalCall', call: 'CLEARED_TO_LAND' });
+  mustAct(efsp, c.PAR, 'PAR', strip(efsp, a), { kind: 'SetBlock', blockId: '7A', value: '040' });
+  mustAct(efsp, c.PAR, 'PAR', strip(efsp, a), { kind: 'SetBlock', blockId: '9A-VECTOR', value: '230' });
+
+  const back = mustAct(efsp, c.PAR, 'PAR', strip(efsp, a), missedApproach);
+  assert.deepEqual([back.stripType, back.state, back.ownerPositionId, back.bayId, back.rackId], ['ARRIVAL', 'INBOUND', 'AP', 'ap-sfa', 'freq-2'],
+    'back with AP, on the Rack that is its frequency');
+  assert.equal(back.stripId, a.stripId, 'same Strip');
+  assert.equal(back.finalCalls, undefined, 'the calls of the approach just flown are cleared for the next one');
+  assert.equal(JSON.stringify(flightDataOf(efsp, a).comms), commsBefore, 'no frequency change (¶4-7-4 g, ¶5-10-15 c)');
+  assert.equal(active(efsp, a, 'altitude'), '040', 'the climb-out altitude stays the flight\'s assignment');
+  assert.equal(active(efsp, a, 'heading'), '230', 'the climb-out heading stays the flight\'s assignment');
+  assert.deepEqual(board(efsp).getAll().filter(x => x.ownerPositionId === 'PAR' && x.state !== 'DROPPED'), [], 'PAR holds nothing: its final Bay and freq-2 are free');
+  const log = mutations().filter(m => m.op === 'FinalCall');
+  assert.equal(log.at(-1).finalCall, 'MISSED_APPROACH');
+  assert.equal(log.at(-1).conversion, 'MISSED_APPROACH');
+  assert.ok(log.some(m => m.finalCall === 'BEGIN_DESCENT') && log.some(m => m.finalCall === 'CLEARED_TO_LAND'), 'the first approach\'s calls stay in the Mutation log');
+
+  // B is handed in meanwhile and lands first; A is re-sequenced behind it
+  mustAct(efsp, c.AP, 'AP', strip(efsp, b), toPar);
+  refused(act(efsp, c.AP, 'AP', strip(efsp, a), toPar), 'VALIDATION_ERROR', /par-final holds 1 Strip at a time/, 'A while B is on final');
   mustAct(efsp, c.PAR, 'PAR', strip(efsp, b), landed);
-  const aBack = mustAct(efsp, c.PAR, 'PAR', strip(efsp, a), { kind: 'InvokeNla' });
-  assert.equal(aBack.state, 'ON_FINAL');
+
+  // the second approach: the ordinary handoff again, and every call can be recorded again
+  const again = mustAct(efsp, c.AP, 'AP', strip(efsp, a), toPar);
+  assert.deepEqual([again.stripType, again.state, again.ownerPositionId, again.bayId], ['FINAL', 'ON_FINAL', 'PAR', 'par-final']);
+  assert.equal(again.sfaTransfer.frequencyRackId, 'freq-2');
+  mustAct(efsp, c.PAR, 'PAR', strip(efsp, a), { kind: 'FinalCall', call: 'BEGIN_DESCENT' });
+  mustAct(efsp, c.PAR, 'PAR', strip(efsp, a), { kind: 'FinalCall', call: 'CLEARED_TO_LAND' });
   mustAct(efsp, c.PAR, 'PAR', strip(efsp, a), landed);
   assert.deepEqual(live(efsp).map(x => x.ownerPositionId), ['GC', 'GC']);
+});
+
+test('a missed approach off the SFA frequencies goes to AP\'s inbound Bay; only PAR presses it', () => {
+  const { efsp, c } = fresh();
+  const s = arrival(efsp, c, null);
+  mustAct(efsp, c.AP, 'AP', strip(efsp, s), toPar);
+  refused(act(efsp, c.AP, 'AP', strip(efsp, s), missedApproach), 'PERMISSION_DENIED', null, 'AP on PAR\'s Strip');
+  const back = mustAct(efsp, c.PAR, 'PAR', strip(efsp, s), missedApproach);
+  assert.deepEqual([back.stripType, back.state, back.ownerPositionId, back.bayId], ['ARRIVAL', 'INBOUND', 'AP', 'ap-inbound']);
+  refused(act(efsp, c.AP, 'AP', strip(efsp, s), missedApproach), 'PERMISSION_DENIED', null, 'AP records no final call');
+});
+
+test('PAR\'s missed-approach Bay stays: a drag keeps the aircraft with PAR (conformance checks the climb-out, ADR 0117 §7), and its NLA is the same way back to AP; a drag onto AP does the same', async () => {
+  const { efsp, c } = fresh();
+  const a = arrival(efsp, c, 'freq-2');
+  mustAct(efsp, c.AP, 'AP', strip(efsp, a), toPar);
+  const held = mustAct(efsp, c.PAR, 'PAR', strip(efsp, a), { kind: 'SetState', toState: 'BOLTER_WAVEOFF' });
+  assert.equal(held.bayId, 'par-missed');
+  refused(act(efsp, c.PAR, 'PAR', strip(efsp, a), landed), 'VALIDATION_ERROR', /on final/, 'Landed from the missed approach Bay');
+  refused(act(efsp, c.PAR, 'PAR', strip(efsp, a), { kind: 'MoveStrip', bayId: 'par-final', rackId: 'main' }), null, null, 'back on final without AP');
+  const byNla = await advance(efsp, c.PAR, 'PAR', strip(efsp, a));
+  assert.deepEqual([byNla.stripType, byNla.state, byNla.ownerPositionId, byNla.bayId, byNla.rackId], ['ARRIVAL', 'INBOUND', 'AP', 'ap-sfa', 'freq-2']);
+  const b = arrival(efsp, c, 'freq-3');
+  mustAct(efsp, c.AP, 'AP', strip(efsp, b), toPar);
+  const byDrag = mustAct(efsp, c.PAR, 'PAR', strip(efsp, b), { kind: 'TransferStrip', toPositionId: 'AP', bayId: 'ap-sfa', rackId: 'freq-3' });
+  assert.deepEqual([byDrag.stripType, byDrag.state, byDrag.ownerPositionId], ['ARRIVAL', 'INBOUND', 'AP']);
+  assert.equal(mutations().filter(m => m.op === 'TransferStrip' && m.conversion).at(-1).conversion, 'MISSED_APPROACH');
+});
+
+test('a missed approach with AP unstaffed and nobody offered AP is refused; PAR keeps it in its missed-approach Bay', () => {
+  const { efsp, c } = fresh();
+  const s = arrival(efsp, c);
+  mustAct(efsp, c.AP, 'AP', strip(efsp, s), toPar);
+  hold(efsp, c.AP.session, 'INCIRLIK', []);
+  // nobody stands offered AP's hat (the config's consolidation lists none for AP)
+  refused(act(efsp, c.PAR, 'PAR', strip(efsp, s), missedApproach), 'NO_RECEIVING_POSITION');
+  assert.equal(strip(efsp, s).ownerPositionId, 'PAR');
+  const held = mustAct(efsp, c.PAR, 'PAR', strip(efsp, s), { kind: 'SetState', toState: 'BOLTER_WAVEOFF' });
+  assert.equal(held.bayId, 'par-missed');
+  assert.equal(held.nla.inhibited, undefined, 'the NLA is offered; the transfer itself refuses an unreachable AP');
+});
+
+test('U5: the missed approach is undoable by PAR: back on final, with PAR, its calls restored', () => {
+  const { efsp, c } = fresh();
+  const s = arrival(efsp, c);
+  mustAct(efsp, c.AP, 'AP', strip(efsp, s), toPar);
+  mustAct(efsp, c.PAR, 'PAR', strip(efsp, s), { kind: 'FinalCall', call: 'CLEARED_TO_LAND' });
+  const ack = act(efsp, c.PAR, 'PAR', strip(efsp, s), missedApproach);
+  assert.equal(ack.ok, true, JSON.stringify(ack));
+  const back = act(efsp, c.PAR, 'PAR', strip(efsp, s), { kind: 'Undo', actionId: ack.undoable.actionId });
+  assert.equal(back.ok, true, JSON.stringify(back));
+  const now = strip(efsp, s);
+  assert.deepEqual([now.stripType, now.state, now.ownerPositionId, now.bayId], ['FINAL', 'ON_FINAL', 'PAR', 'par-final']);
+  assert.ok(now.finalCalls && now.finalCalls.CLEARED_TO_LAND, 'Cleared to land restored');
 });
 
 test('a handoff CANCELLED by the receiver: PAR unstaffed is offered to AP (docs/adr/0110) and the Strip waits at PAR; PAR LATE to its Position finds it there', () => {

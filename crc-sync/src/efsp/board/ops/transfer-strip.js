@@ -33,7 +33,7 @@ function _applyTransferStrip(ctx, strip, op, by) {
   // no beacon code at all). Validated before the owner/staffing checks
   // below too, so a rejected transfer never partially mutates the Strip.
   // docs/adr/0117: a transfer that changes the strip type, because the receiving Position works the flight on another
-  // one (AP's handoff to the final controller, PAR's Landed to GC; par-final.js). Checked as the conversion's own
+  // one (AP's handoff to the final controller, PAR's Landed to GC and missed approach back to AP; par-final.js). Checked as the conversion's own
   // step, in place of the Bay-implied NLA check that would refuse it (the live test's T1: an arrival's only next step
   // there is the tower).
   const conversion = ctx.rules.conversionFor(strip, op.bayId);
@@ -91,6 +91,9 @@ function _applyTransferStrip(ctx, strip, op, by) {
       frequencyRackId: ctx.rules.sfaFrequencyFor(from.bayId, from.rackId) == null ? null : from.rackId,
     };
   }
+  // A missed approach starts the next approach clean (LT-PAR-MISSED): the calls recorded on this one (Begin descent,
+  // Cleared to land) are history, kept by the Mutation log's FinalCall lines, so the next final can record them again.
+  if (conversion && conversion.kind === 'MISSED_APPROACH') delete strip.finalCalls;
   const routedBay = routedTo ? ctx.placement.bayForNewOwner(destPositionId, strip.state, strip) : null;
   if (routedBay) {
     // B3: routed to the Position it is consolidated at, so the line lands in ITS Bay, not
@@ -116,7 +119,7 @@ function _applyTransferStrip(ctx, strip, op, by) {
 
 /**
  * Who may make a conversion (docs/adr/0117): the handoff to the final is the radar approach controller's (the capability
- * table's `handsOffToFinal`), Landed the final controller's (`recordsFinalCalls`); either way the sender must work the
+ * table's `handsOffToFinal`), Landed and the missed approach the final controller's (`recordsFinalCalls`); either way the sender must work the
  * Strip's state now (nlaPrecheck: the state owner, no open coordination proposal). Null when allowed.
  */
 function _conversionRefusal(ctx, strip, conversion) {
@@ -124,7 +127,7 @@ function _conversionRefusal(ctx, strip, conversion) {
   if (conversion.kind === 'PAR_HANDOFF' && !ctx.rules.canHandOffToFinal(owner)) {
     return { reason: 'PERMISSION_DENIED', detail: `${owner} may not hand an arrival to the final controller` };
   }
-  if (conversion.kind === 'LANDED' && !ctx.rules.canRecordFinalCall(owner)) {
+  if ((conversion.kind === 'LANDED' || conversion.kind === 'MISSED_APPROACH') && !ctx.rules.canRecordFinalCall(owner)) {
     return { reason: 'PERMISSION_DENIED', detail: `${owner} does not work the final` };
   }
   const blocked = ctx.nlaPrecheck(strip);
@@ -143,7 +146,7 @@ module.exports = {
     // one (guide §4.8.3 rule 4) — undefined for every op except a
     // successful TransferStrip, where this op computes it.
     selfCoordinated: result.selfCoordinated,
-    // docs/adr/0117: the strip-type conversion the transfer made (PAR_HANDOFF, LANDED), undefined otherwise.
+    // docs/adr/0117: the strip-type conversion the transfer made (PAR_HANDOFF, LANDED, MISSED_APPROACH), undefined otherwise.
     conversion: result.conversion,
   } }),
   apply: (ctx, strip, op, meta) => _applyTransferStrip(ctx, strip, op, meta.by),

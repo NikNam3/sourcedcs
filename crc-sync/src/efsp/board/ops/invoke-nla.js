@@ -54,11 +54,11 @@ function _applyInvokeNla(ctx, strip, by) {
     // together, in one Mutation — not a separate, easier-to-drift path
     // (guide §3.5 rule 4: NLA is an accelerator FOR the same operation,
     // not a shortcut around its checks).
-    const targetBay = ctx.rules.bayForImpliedState(result.transferTo, result.toState);
-    if (!targetBay) {
+    const target = ctx.placement.transferTargetFor(result.transferTo, result.toState, strip);
+    if (!target) {
       return { ok: false, reason: 'NLA_INHIBITED', detail: `no Bay configured for ${result.transferTo}/${result.toState}`, strip };
     }
-    applied = ctx.run('TransferStrip', strip, { toPositionId: result.transferTo, bayId: targetBay.bayId, rackId: ctx.placement.placementRack(strip, targetBay) }, { by });
+    applied = ctx.run('TransferStrip', strip, { toPositionId: result.transferTo, bayId: target.bay.bayId, rackId: target.rackId }, { by });
   } else if (result.toState === 'DROPPED') {
     // Every strip type's terminal NLA is a Drop (DEPARTURE at HANDED_OFF,
     // ARRIVAL at TAXI_IN, OVERFLIGHT at HANDED_OFF, MISSION at RTB), and
