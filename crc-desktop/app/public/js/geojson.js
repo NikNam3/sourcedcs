@@ -8,7 +8,7 @@ import {
 import { atcDisplay, atcPalette } from './atc-scope.js';
 import { losVisibleRangeM } from './los.js';
 import {
-  conformanceAlertsForFlightData, getAllEfspConflicts, getEfspFlightData, getEfspStrip, conflictAlertsForTrack, stripIdsForTrackId
+  conformanceAlertsForFlightData, getAllEfspConflicts, getEfspFlightData, getEfspStrip, conflictAlertsForTrack, stripIdsForTrackId, refuelingAlertText
 } from './panels/efsp/efsp-state.js';
 import { getCorrelatedHighlightTrackId } from './panels/efsp/correlation-highlight.js';
 import { buildCarrierFinalLine } from './panels/efsp/carrier-panel.js';
@@ -73,9 +73,12 @@ function buildAssignedLine(flightData) {
 /** The one alert tag a data block leads with: a conflict first, then conformance. */
 function buildAlertTag(trackId, flightData) {
   const conflicts = conflictAlertsForTrack(trackId);
-  if (conflicts.length) return { tag: 'CA', color: ALERT_COLOR_BAD };
+  // crc-sync's docs/adr/0118: an MCI is shown like a CA, named MCI; a CA wins when the track is in both.
+  if (conflicts.length) return { tag: conflicts.every(c => c.kind === 'MCI') ? 'MCI' : 'CA', color: ALERT_COLOR_BAD };
   const alerts = flightData ? conformanceAlertsForFlightData(flightData.flightDataId) : [];
   const bad = alerts.find(a => a.kind !== 'HEADING');
+  const ar = bad && refuelingAlertText(bad);
+  if (ar) return { tag: ar.text.replace(' ', ''), color: ALERT_COLOR_BAD };
   if (bad && bad.kind === 'LEVEL_BUST') return { tag: `BUST${bad.deviationFt > 0 ? '+' : '−'}${Math.abs(bad.deviationFt)}`, color: ALERT_COLOR_BAD };
   if (bad && bad.kind === 'WRONG_WAY') return { tag: `ALT${bad.fpm < 0 ? '↓' : '↑'}`, color: ALERT_COLOR_BAD };
   const hdg = alerts.find(a => a.kind === 'HEADING');

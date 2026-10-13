@@ -4,7 +4,7 @@ import { kinematics, projectPos } from './geo.js';
 import { atcBlockLines, atcEmergencyTag } from './track-label.js';
 
 import {
-  conformanceAlertsForFlightData, getEfspFlightData, getEfspPositionLetter, getEfspStrip, conflictAlertsForTrack,
+  conformanceAlertsForFlightData, getEfspFlightData, getEfspPositionLetter, getEfspStrip, conflictAlertsForTrack, refuelingAlertText,
   stripIdsForTrackId
 } from './panels/efsp/efsp-state.js';
 import { getActingPositions, sendEfspMutation } from './panels/efsp/efsp-ws.js';
@@ -181,7 +181,8 @@ export function atcRelation(t, strips, acting, letterOf) {
  * @param {object} env
  * @param {object} env.palette    ATC_PALETTES entry
  * @param {number} env.now        local ms, for blink windows
- * @param {string[]} env.conflicts  the CA conflict ids this track is in
+ * @param {string[]} env.conflicts  the CA/MCI conflict ids this track is in
+ * @param {string[]} [env.conflictTags]  their tags, 'CA' or 'MCI' (crc-sync's docs/adr/0118); default CA
  * @param {{tag:string,color:string}|null} env.conform  docs/adr/0058's tag, if any
  * @param {boolean} env.coast
  */
@@ -195,7 +196,8 @@ export function atcView(t, rel, env) {
   const line0 = [];
   const em = atcEmergencyTag(t);
   if (em) line0.push({ text: em, color: P.alert, blink: !_atcAcked.has(`EM:${id}:${em}`) });
-  if (conflicts.length) line0.push({ text: 'CA', color: P.alert, blink: conflicts.some(c => !_atcAcked.has(`CA:${c}`)) });
+  // crc-sync's docs/adr/0118: an MCI is shown like a CA, named MCI; a CA wins when the track is in both.
+  if (conflicts.length) line0.push({ text: (env.conflictTags || []).length && env.conflictTags.every(t => t === 'MCI') ? 'MCI' : 'CA', color: P.alert, blink: conflicts.some(c => !_atcAcked.has(`CA:${c}`)) });
   if (t.iffOverride === 'hostile') line0.push({ text: 'SA', color: P.sa, blink: false }); // H47: steady
   if (env.conform && env.conform.tag) line0.push({ text: env.conform.tag, color: env.conform.color, blink: false });
   const forced = !!em || conflicts.length > 0;
@@ -302,6 +304,8 @@ export function atcNoteOwnership(id, rel, now) {
 export function atcConformTag(alerts) {
   const list = alerts || [];
   const bad = list.find(a => a.kind !== 'HEADING');
+  const ar = bad && refuelingAlertText(bad); // crc-sync's docs/adr/0118: the refueling block around the tanker
+  if (ar) return { tag: ar.text.replace(' ', ''), color: ATC_CONFORM_COLOR.bad };
   if (bad && bad.kind === 'LEVEL_BUST') return { tag: `BUST${bad.deviationFt > 0 ? '+' : '−'}${Math.abs(bad.deviationFt)}`, color: ATC_CONFORM_COLOR.bad };
   if (bad && bad.kind === 'WRONG_WAY') return { tag: `ALT${bad.fpm < 0 ? '↓' : '↑'}`, color: ATC_CONFORM_COLOR.bad };
   const hdg = list.find(a => a.kind === 'HEADING');
@@ -380,10 +384,12 @@ export function atcDisplay(id, t, now = Date.now()) {
     if (speedMs > 0) [lat, lon] = projectPos(t.lat, t.lon, heading, speedMs * (sinceReturn / 1000));
   }
 
-  const conflicts = conflictAlertsForTrack(id).map(c => c.id);
+  const conflictList = conflictAlertsForTrack(id);
+  const conflicts = conflictList.map(c => c.id);
+  const conflictTags = conflictList.map(c => c.kind);
   const flightData = strips.length ? getEfspFlightData(strips[0].flightDataId) : null;
   const conform = flightData ? atcConformTag(conformanceAlertsForFlightData(flightData.flightDataId)) : null;
-  const view = atcView(t, rel, { palette, now, conflicts, conform, coast });
+  const view = atcView(t, rel, { palette, now, conflicts, conflictTags, conform, coast });
 
   const speedKt = kinematics(hist).speedKt;
   const lines = atcBlockLines(t, view, { speedKt, assigned: atcAssigned(flightData), typePhase: Math.floor(now / ATC_TIMESHARE_MS) % 2 === 1 });

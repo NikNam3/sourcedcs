@@ -8,7 +8,7 @@ import {
 } from '../track-label.js';
 import { _flightDataForTrack, buildFiledRoute, parseFiledRouteWaypoints } from '../geojson.js';
 import { dock, ensureTrackPanel } from '../dock-handle.js';
-import { conformanceAlertsForFlightData, conflictAlertsForTrack } from './efsp/efsp-state.js';
+import { conformanceAlertsForFlightData, conflictAlertsForTrack, conflictName, refuelingAlertText } from './efsp/efsp-state.js';
 import { history, tracks } from '../picture.js';
 import { map, mapReady } from '../map-handle.js';
 import { settings } from '../settings.js';
@@ -263,10 +263,12 @@ function _refreshTrackAlerts(trackId) {
   const lines = [];
   const clock = (sec) => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
   for (const c of conflictAlertsForTrack(trackId)) {
-    lines.push({ bad: true, text: `Conflict Alert with ${c.otherCallsign} in ${clock(c.timeToCpaSec)}. Closest ${c.minNm} NM / ${c.vertFt} ft.` });
+    lines.push({ bad: true, text: `${conflictName(c)} with ${c.otherCallsign} in ${clock(c.timeToCpaSec)}. Closest ${c.minNm} NM / ${c.vertFt} ft.` });
   }
   for (const a of (flightData ? conformanceAlertsForFlightData(flightData.flightDataId) : [])) {
     const pad = (n) => String(n).padStart(3, '0');
+    const ar = refuelingAlertText(a); // crc-sync's docs/adr/0118
+    if (ar) { lines.push({ bad: true, text: ar.reason }); continue; }
     if (a.kind === 'HEADING') lines.push({ bad: false, text: `Assigned heading ${pad(a.assigned)}, tracking ${pad(a.actual)}.` });
     if (a.kind === 'WRONG_WAY') lines.push({ bad: true, text: `Assigned ${a.assigned.toLocaleString('en-US')} ft, ${a.fpm < 0 ? 'descending' : 'climbing'} at ${Math.abs(a.fpm).toLocaleString('en-US')} ft/min.` });
     if (a.kind === 'LEVEL_BUST') lines.push({ bad: true, text: `Level bust: ${a.deviationFt > 0 ? '+' : '−'}${Math.abs(a.deviationFt)} ft from ${a.assigned.toLocaleString('en-US')} ft.` });

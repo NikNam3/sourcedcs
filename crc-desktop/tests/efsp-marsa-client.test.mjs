@@ -177,6 +177,12 @@ test('an ENDED relation renders NOTHING — a finished AR is not an alert', () =
   assert.equal(marsaBadgeFor(stripOf('s-rx1')), null);
 });
 
+test('an acknowledged void renders nothing (crc-sync docs/adr/0118, T14)', () => {
+  load([relation({ state: 'VOIDED', voidedBy: 'CONTROLLER_COURSE_CHANGE', endedAt: 3000, voidAcknowledgedAt: 4000, voidAcknowledgedBy: 'AP' })]);
+  assert.equal(marsaBadgeFor(stripOf('s-tanker')), null);
+  assert.equal(marsaBadgeFor(stripOf('s-rx1')), null);
+});
+
 test('a flight that landed mid-AR leaves no badge either', () => {
   load([relation({ state: 'ENDED', endedBy: 'PARTICIPANT_RETIRED', endedAt: 4000 })]);
   assert.equal(marsaBadgeFor(stripOf('s-rx1')), null);

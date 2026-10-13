@@ -81,7 +81,7 @@ export function _stripRenderSignature(strip) {
 
   const relation = marsaForStrip(strip);
   parts.push('mrs:' + (relation
-    ? `${relation.marsaId}/${relation.rev}/${relation.state}/${relation.rendezvousAt ? 1 : 0}/${relation.voidedBy || ''}`
+    ? `${relation.marsaId}/${relation.rev}/${relation.state}/${relation.rendezvousAt ? 1 : 0}/${relation.voidedBy || ''}/${relation.voidAcknowledgedAt ? 1 : 0}`
     : ''));
   parts.push('mhl:' + (isMarsaHighlighted(strip.stripId) ? 1 : 0));
   parts.push('car:' + carrierSignatureFor(strip)); // crc-sync docs/adr/0074 — a Case change moves every carrier Strip's derived fields

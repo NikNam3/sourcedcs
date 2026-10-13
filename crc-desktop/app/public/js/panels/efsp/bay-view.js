@@ -219,7 +219,15 @@ function _reconcileRackStrips(rackEl, bayId, rackId) {
 
   let cursor = rackEl.firstElementChild.nextSibling; // first element after the header, or null
   for (const { stripId, rebuild } of order) {
-    if (protectedIds.has(stripId)) continue; // never move OR rebuild — leave it exactly where it is; it reconciles on a later render once unprotected
+    if (protectedIds.has(stripId)) {
+      // Never move OR rebuild — leave it exactly where it is; it reconciles on a later render once unprotected. It still
+      // holds its PLACE: when it is the cursor, the cursor steps past it. Left on it, every Strip after it in the Rack was
+      // inserted before it, so clicking a field on one Strip (its edit protects it) while anything re-rendered made the
+      // Strips below jump above it and back once the edit closed (T15, crc-sync's docs/adr/0118).
+      const held = existingEls.get(stripId);
+      if (held && held === cursor) cursor = held.nextSibling;
+      continue;
+    }
 
     let el = existingEls.get(stripId);
     if (!el) {

@@ -1025,6 +1025,24 @@ test('conformance and conflict alerts appear on the Strip only while they apply'
   assert.equal(quiet.classList.contains('efsp-strip-alert'), false);
 });
 
+// crc-sync's docs/adr/0118: an MCI is shown like a CA, named Mode C Intruder; a receiver's refueling-block alert names its tanker.
+test('a Mode C intruder and a refueling-block alert read as what they are on the Strip', async () => {
+  const strip = stripAt({ ownerPositionId: 'AP' });
+  const r = await renderStrip({ strip, flightData: FDR, signedOn: ['AP'], correlations: [correlationOf()], tracks: [{ id: '101', domain: 'AIR', label: { callsign: 'VIPER1', source: 'FLIGHT_DATA', trackNumber: 'TN00001' }, ssr: { code: '0041' } }] });
+  r.sandbox.applyEfspAlerts({
+    conformance: [{ flightDataId: 'f1', alerts: [{ kind: 'WRONG_WAY', assigned: 21000, block: { lowFt: 21000, highFt: 23000 }, tanker: 'SHELL71', altFt: 19650, fpm: -800 }] }],
+    conflictAlert: [{ id: '101|303', kind: 'MCI', intruder: '303', a: '101', b: '303', aCallsign: 'VIPER1', bCallsign: 'TN00303', timeToCpaSec: 40, minNm: 0.8, vertFt: 300 }],
+  });
+  const el = r.sandbox._buildStripEl(strip);
+  assert.ok(findByText(el, 'Mode C Intruder TN00303 0:40'));
+  assert.ok(findByText(el, 'Mode C intruder with TN00303 in 0:40: closest 0.8 NM / 300 ft.'));
+  assert.ok(findByText(el, 'AR ↓'));
+  assert.ok(findByText(el, '1,350 ft below the refueling block with SHELL71, descending away at 800 ft/min.'));
+  r.sandbox.applyEfspAlerts({ conformance: [{ flightDataId: 'f1', alerts: [{ kind: 'TANKER_DISTANCE', tanker: 'SHELL71', nm: 3.8, limitNm: 3 }] }], conflictAlert: [] });
+  const far = r.sandbox._buildStripEl(strip);
+  assert.ok(findByText(far, '3.8 NM from the tanker SHELL71: outside the 3 NM refueling block.'));
+});
+
 test('an obligation badge shows while efsp-alerts lists it, and is gone after the next one does not (docs/adr/0067)', async () => {
   const strip = stripAt({ ownerPositionId: 'AP' });
   const r = await renderStrip({ strip, flightData: FDR, signedOn: ['AP'], correlations: [correlationOf()], tracks: [{ id: '101', domain: 'AIR', label: { callsign: 'VIPER1', source: 'FLIGHT_DATA', trackNumber: 'TN00001' }, ssr: { code: '0041' } }] });
@@ -2143,6 +2161,31 @@ test('a voided MARSA carries the alert as a sentence on every participant Strip'
   const why = descendants(el).find(c => (c.className || '').includes('efsp-marsa-void-reason'));
   assert.ok(why, 'the void is an ALERT, not a tooltip');
   assert.match(why.textContent, /MARSA VOIDED — an altitude was assigned before rendezvous\. ATC is separating these aircraft again\./);
+});
+
+// crc-sync's docs/adr/0118 (T14, H134 LT-RQ15 a): the void notice stands until a controller holding one of the Strips acknowledges it.
+test('a voided MARSA offers Acknowledge to the controller holding the Strip, and an acknowledged one shows nothing', async () => {
+  const voided = {
+    marsaId: 'm1', rev: 2, state: 'VOIDED', participants: ['f1', 'f2'],
+    declaringCallsign: 'TEXACO1', rendezvousAt: null, endedAt: 5,
+    voidedBy: 'CONTROLLER_COURSE_CHANGE', voidedDetail: null, voidAcknowledgedAt: null,
+  };
+  const held = await renderStrip({ strip: stripAt({ ownerPositionId: 'CTR' }), flightData: FDR, signedOn: ['CTR'], marsa: [voided] });
+  const ack = findByText(held.el, 'Acknowledge');
+  assert.ok(ack, 'the answer is on the Strip');
+  assert.equal(ack.disabled, false);
+  click(ack);
+  assert.equal(held.sent[0].op.kind, 'AcknowledgeVoid');
+  assert.equal(held.sent[0].marsaId, 'm1');
+  assert.equal(held.sent[0].actingPositionId, 'CTR');
+
+  const notHeld = await renderStrip({ strip: stripAt({ ownerPositionId: 'CTR' }), flightData: FDR, signedOn: ['AP'], marsa: [voided] });
+  assert.equal(findByText(notHeld.el, 'Acknowledge').disabled, true, 'only the controller holding it');
+
+  const done = await renderStrip({ strip: stripAt({ ownerPositionId: 'CTR' }), flightData: FDR, signedOn: ['CTR'], marsa: [{ ...voided, rev: 3, voidAcknowledgedAt: 9, voidAcknowledgedBy: 'CTR' }] });
+  assert.equal(findByText(done.el, 'MARSA ✕'), undefined, 'acknowledged: gone from the Strip');
+  assert.equal(findByText(done.el, 'Acknowledge'), undefined);
+  assert.equal(done.el.classList.contains('efsp-strip-marsa-voided'), false);
 });
 
 // ── Arrivals on the Strip (docs/adr/0057) ────────────────────────────────

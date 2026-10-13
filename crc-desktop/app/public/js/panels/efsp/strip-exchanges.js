@@ -2,6 +2,7 @@
 import { getEfspFlightData, getEfspStrip, marsaForStrip } from './efsp-state.js';
 import { tofiExitDueFor } from './efsp-nla.js';
 import { correlationBadgeFor } from './correlation-highlight.js';
+import { getActingPositions } from './efsp-ws.js';
 import { _dispatchMarsa, _resolveActingPositionId } from './bay/dispatch.js';
 import { TOFI_COUNTERPARTS } from './bay/authority-mirror.js';
 import { _openBindPopover } from './bay/popovers/bind.js';
@@ -200,9 +201,13 @@ export function _tofiExchange(strip) {
   return row;
 }
 
-/** A MARSA relation declared but not yet joined: the interlock is armed, and the two answers are on the Strip. */
+/**
+ * A MARSA relation declared but not yet joined: the interlock is armed, and the two answers are on the Strip. A voided one
+ * whose notice nobody has acknowledged: what voided it, and Acknowledge (crc-sync's docs/adr/0118, T14).
+ */
 export function _marsaExchange(strip) {
   const relation = marsaForStrip(strip);
+  if (relation && relation.state === 'VOIDED' && !relation.voidAcknowledgedAt) return _marsaVoidedExchange(strip, relation);
   if (!relation || relation.state !== 'ACTIVE' || relation.rendezvousAt) return null;
   const others = relation.participants.filter(id => id !== strip.flightDataId).map((flightDataId) => {
     const flightData = getEfspFlightData(flightDataId);
@@ -218,6 +223,25 @@ export function _marsaExchange(strip) {
     }),
     _stripButton('Rendezvous', 'efsp-marsa-rendezvous-btn', {
       disabled: !acting, onClick: () => _dispatchMarsa(strip, relation.marsaId, { kind: 'MarkRendezvous' }),
+    }),
+  ]));
+  return row;
+}
+
+function _marsaVoidedExchange(strip, relation) {
+  const others = relation.participants.filter(id => id !== strip.flightDataId).map((flightDataId) => {
+    const flightData = getEfspFlightData(flightDataId);
+    return (flightData && flightData.identity && flightData.identity.callsign) || flightDataId;
+  });
+  // The why is the Strip's red reason line (strip-view.js); this row is the answer to it.
+  const row = _exchangeRow({ incoming: true, kind: 'marsa-voided', title: `declared by ${relation.declaringCallsign}` });
+  row.appendChild(_stripEl('div', 'efsp-x-what', `MARSA VOIDED · ${others.join(', ') || relation.declaringCallsign}`));
+  // Only the controller holding this Strip acknowledges it here (the server checks the same).
+  const holds = getActingPositions().includes(strip.ownerPositionId);
+  row.appendChild(_exchangeButtons([
+    _stripButton('Acknowledge', 'efsp-marsa-ack-void-btn', {
+      disabled: !holds,
+      onClick: () => _dispatchMarsa(strip, relation.marsaId, { kind: 'AcknowledgeVoid' }),
     }),
   ]));
   return row;
