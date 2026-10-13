@@ -248,11 +248,13 @@ test('authority: who may create, edit and delete', () => {
   assert.equal(edit(store, 'MOA-1', { name: 'B' }, panel('AP')).reason, 'PERMISSION_DENIED');
   assert.equal(del(store, 'MOA-1', panel('AP')).reason, 'PERMISSION_DENIED');
   assert.equal(create(store, NEW, panel('AP')).reason, 'PERMISSION_DENIED', 'AP is not the controlling Position of what it creates');
-  // OPS of the controlling Facility: yes, for its Facility's airspaces, any field
-  assert.equal(edit(store, 'RANGE-1', { type: 'DANGER' }, panel('OPS')).ok, true);
-  assert.equal(edit(store, 'MOA-1', { name: 'C' }, panel('OPS')).reason, 'PERMISSION_DENIED', 'MOA-1 belongs to CENTER, not OPS\'s Facility');
-  assert.equal(create(store, { ...NEW, controllingFacilityId: 'INCIRLIK', controllingPositionId: 'AP' }, panel('OPS')).ok, true, 'OPS creates for a Position of its Facility');
-  assert.equal(create(store, { ...NEW, airspaceId: 'MOA-N2', name: 'N2' }, panel('OPS')).reason, 'PERMISSION_DENIED', 'not for another Facility');
+  // OPS (the using agency, ADR 0119, H134 LT-RQ13 a): defines nothing, not even its own Facility's airspaces
+  assert.equal(edit(store, 'RANGE-1', { type: 'DANGER' }, panel('OPS')).reason, 'PERMISSION_DENIED');
+  assert.equal(edit(store, 'MOA-1', { name: 'C' }, panel('OPS')).reason, 'PERMISSION_DENIED');
+  assert.equal(del(store, 'RANGE-1', panel('OPS')).reason, 'PERMISSION_DENIED');
+  assert.equal(create(store, { ...NEW, controllingFacilityId: 'INCIRLIK', controllingPositionId: 'AP' }, panel('OPS')).reason, 'PERMISSION_DENIED', 'only the controlling Position defines');
+  assert.equal(create(store, { ...NEW, airspaceId: 'MOA-N2', name: 'N2' }, panel('OPS')).reason, 'PERMISSION_DENIED');
+  assert.equal(create(store, { ...NEW, airspaceId: 'MOA-N5', name: 'N5', controllingFacilityId: 'INCIRLIK', controllingPositionId: 'AP' }, panel('AP')).ok, true, 'AP defines what it controls');
   // a session signed on to nothing (no Position) may do none of it
   assert.equal(edit(store, 'MOA-1', { name: 'D' }, panel(null)).reason, 'PERMISSION_DENIED');
   assert.equal(create(store, { ...NEW, airspaceId: 'MOA-N3', name: 'N3' }, panel(null)).reason, 'PERMISSION_DENIED');
@@ -266,10 +268,10 @@ test('T27: a refusal names the Positions that may do it, never "OPS of CENTER" (
   assert.doesNotMatch(c.detail, /OPS of/);
   assert.equal(edit(store, 'MOA-1', { name: 'X' }, panel('AP')).detail, 'AP may not edit Test MOA: only CTR may');
   assert.equal(del(store, 'MOA-1', panel('OPS')).detail, 'OPS may not delete Test MOA: only CTR may');
-  // an Incirlik airspace: the controlling Position first, then OPS of that Facility; a range keeps its frequency reach
+  // an Incirlik airspace: only its controlling Position (ADR 0119: OPS defines nothing); a range keeps its frequency reach
   assert.equal(edit(store, 'RANGE-1', { name: 'Y' }, panel('LC')).detail,
-    'LC may not edit Test Range: only AP or OPS may (RANGE_1_CONTROL: its control frequency only)');
-  assert.equal(del(store, 'RANGE-1', panel('RANGE_1_CONTROL')).detail, 'RANGE_1_CONTROL may not delete Test Range: only AP or OPS may');
+    'LC may not edit Test Range: only AP may (RANGE_1_CONTROL: its control frequency only)');
+  assert.equal(del(store, 'RANGE-1', panel('RANGE_1_CONTROL')).detail, 'RANGE_1_CONTROL may not delete Test Range: only AP may');
   assert.equal(create(store, { ...NEW, airspaceId: 'MOA-N4', name: 'N4' }, panel(null)).detail,
     'a session signed on to nothing may not create MOA-N4: only CTR may');
 });
@@ -307,6 +309,20 @@ test('authority: TAC_C2 (airspaceUse at its Facility) schedules, requests and re
   assert.equal(stateOp(store, 'MRU-1', { kind: 'ReleaseAirspace' }, 'TAC_C2').ok, true);
   assert.equal(stateOp(store, 'MRU-1', { kind: 'ReturnAirspace' }, 'TAC_C2').reason, 'PERMISSION_DENIED');
   assert.equal(stateOp(store, 'MRU-1', { kind: 'ReturnAirspace' }, 'CTR').ok, true);
+});
+
+test('ADR 0119 (H134 LT-RQ13 a, T27): OPS as using agency schedules, requests and releases a CENTER MOA it uses, never defines or approves it', () => {
+  const moa = { ...MOA, airspaceId: 'MOA-GAZIPASA', name: 'Gazipasa', usingFacilityId: 'INCIRLIK' };
+  const { store } = makeRegistry({ defs: [moa] });
+  assert.equal(edit(store, 'MOA-GAZIPASA', { name: 'T' }, panel('OPS')).reason, 'PERMISSION_DENIED');
+  assert.equal(del(store, 'MOA-GAZIPASA', panel('OPS')).reason, 'PERMISSION_DENIED');
+  assert.equal(stateOp(store, 'MOA-GAZIPASA', { kind: 'ScheduleAirspace', ...WINDOW }, 'OPS').ok, true);
+  assert.equal(stateOp(store, 'MOA-GAZIPASA', { kind: 'RequestActivation' }, 'AP').reason, 'PERMISSION_DENIED', 'only OPS holds `use` at INCIRLIK');
+  assert.equal(stateOp(store, 'MOA-GAZIPASA', { kind: 'RequestActivation' }, 'OPS').ok, true);
+  assert.equal(stateOp(store, 'MOA-GAZIPASA', { kind: 'ApproveActivation' }, 'OPS').reason, 'PERMISSION_DENIED', 'the controlling agency activates');
+  assert.equal(stateOp(store, 'MOA-GAZIPASA', { kind: 'ApproveActivation' }, 'CTR').ok, true);
+  assert.equal(stateOp(store, 'MOA-GAZIPASA', { kind: 'ReleaseAirspace' }, 'OPS').ok, true);
+  assert.equal(stateOp(store, 'MOA-GAZIPASA', { kind: 'ReturnAirspace' }, 'OPS').reason, 'PERMISSION_DENIED');
 });
 
 test('authority: an airspace with a using Facility needs a request, like one with a using Position', () => {

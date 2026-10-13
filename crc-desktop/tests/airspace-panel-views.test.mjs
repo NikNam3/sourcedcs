@@ -65,7 +65,7 @@ test('the menu reasons: Owned by APP for TAC_C2 and for another Facility, sign-o
   assert.equal(editReason(app, ['CTR']), 'Owned by AP');
   assert.equal(editReason(app, []), 'Sign on to a Position to edit');
   assert.equal(editReason(app, ['AP']), null);
-  assert.equal(editReason(app, ['OPS']), null, 'OPS of the controlling Facility');
+  assert.equal(editReason(app, ['OPS']), 'Owned by AP', 'OPS defines nothing (crc-sync docs/adr/0119)');
   assert.equal(deleteReason(app, ['AP'], []), null);
   assert.equal(deleteReason(rec('ACTIVE'), ['AP'], []), 'State is ACTIVE');
   assert.equal(deleteReason(app, ['TAC_C2'], []), 'Owned by AP');

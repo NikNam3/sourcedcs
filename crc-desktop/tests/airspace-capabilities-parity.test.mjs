@@ -53,6 +53,7 @@ const DEFS = [
   { controllingFacilityId: 'INCIRLIK', controllingPositionId: 'AP', usingPositionId: 'RNG1' },
   { controllingFacilityId: 'CENTER', controllingPositionId: 'CTR', usingFacilityId: 'TACTICAL' },
   { controllingFacilityId: 'INCIRLIK', controllingPositionId: 'LC', usingFacilityId: 'TACTICAL' },
+  { controllingFacilityId: 'CENTER', controllingPositionId: 'CTR', usingFacilityId: 'INCIRLIK' }, // OPS the using agency (ADR 0119)
 ];
 
 test('definitionAuthority agrees with the server for every Position, action and definition', () => {
@@ -80,13 +81,13 @@ test('isUsing and isControlling agree with the server', () => {
   }
 });
 
-test('the walks of the briefing: TAC_C2 edits nothing, a signed-off session nothing, OPS its Facility\'s, a range its control frequency', () => {
+test('the walks of the briefing: TAC_C2 edits nothing, a signed-off session nothing, OPS nothing (crc-sync ADR 0119), a range its control frequency', () => {
   const app = { controllingFacilityId: 'INCIRLIK', controllingPositionId: 'AP', usingFacilityId: 'TACTICAL' };
   assert.equal(caps.authorityFor(['TAC_C2'], 'edit', app), null);
   assert.equal(caps.authorityFor([], 'edit', app), null);
   assert.deepEqual(caps.authorityFor(['AP'], 'edit', app), { positionId: 'AP', scope: 'ALL' });
-  assert.deepEqual(caps.authorityFor(['OPS'], 'edit', app), { positionId: 'OPS', scope: 'ALL' });
-  assert.deepEqual(caps.authorityFor(['LC', 'OPS'], 'delete', app), { positionId: 'OPS', scope: 'ALL' });
+  assert.equal(caps.authorityFor(['OPS'], 'edit', app), null);
+  assert.equal(caps.authorityFor(['LC', 'OPS'], 'delete', app), null);
   const range = { controllingFacilityId: 'INCIRLIK', controllingPositionId: 'AP', usingPositionId: 'RNG1' };
   assert.deepEqual(caps.authorityFor(['RNG1'], 'edit', range), { positionId: 'RNG1', scope: 'FREQUENCY' });
   assert.equal(caps.authorityFor(['RNG1'], 'delete', range), null);
@@ -97,8 +98,9 @@ test('the walks of the briefing: TAC_C2 edits nothing, a signed-off session noth
 test('who may create, and what they may name as controlling', () => {
   assert.deepEqual(caps.createPositionsFor(['TAC_C2', 'RNG1', 'GCI']), []);
   assert.deepEqual(caps.controllingChoicesFor(['AP']), [{ facilityId: 'INCIRLIK', positionId: 'AP' }]);
-  assert.equal(caps.controllingChoicesFor(['OPS']).length, 7, 'INCIRLIK\'s seven Positions (no SFA, crc-sync docs/adr/0117)');
-  assert.ok(caps.controllingChoicesFor(['OPS']).every(c => c.facilityId === 'INCIRLIK'));
+  assert.deepEqual(caps.createPositionsFor(['OPS']), [], 'OPS is a using agency and defines nothing (crc-sync ADR 0119)');
+  assert.deepEqual(caps.controllingChoicesFor(['OPS']), []);
+  assert.deepEqual(caps.controllingChoicesFor(['OPS', 'CTR']), [{ facilityId: 'CENTER', positionId: 'CTR' }]);
 });
 
 // ── T27 (LT-AIRSPACE-FIX): which held Position a create/edit/delete is sent as ──
@@ -115,10 +117,10 @@ test('T27: OPS + CTR combined creates a CENTER MOA as CTR, whatever order the Po
   assert.equal(airspace.definitionAuthority({ positionId: 'OPS' }, 'create', GAZIPASA, deps), null);
 });
 
-test('T27: the controlling Position first, else OPS of the controlling Facility, else the first creator (the server decides)', () => {
+test('T27: the controlling Position first, else the first creator (the server decides); OPS creates nothing (ADR 0119)', () => {
   assert.equal(caps.createActingPositionFor(['OPS', 'AP'], INC_RANGE), 'AP', 'the controlling Position when held');
-  assert.equal(caps.createActingPositionFor(['LC', 'OPS'], INC_RANGE), 'OPS', 'else OPS of the controlling Facility');
-  assert.equal(caps.createActingPositionFor(['OPS'], GAZIPASA), 'OPS', 'else the first creator; the server refuses and names CTR');
+  assert.equal(caps.createActingPositionFor(['LC', 'OPS'], INC_RANGE), 'LC', 'else the first creator; the server refuses and names AP');
+  assert.equal(caps.createActingPositionFor(['OPS'], GAZIPASA), null, 'OPS alone may create nothing');
   assert.equal(caps.createActingPositionFor(['TAC_C2'], GAZIPASA), null, 'no creator at all');
 });
 
@@ -126,6 +128,13 @@ test('T27: edit and delete act as the controlling Position when held', () => {
   for (const action of ['edit', 'delete']) {
     assert.deepEqual(caps.authorityFor(['OPS', 'AP'], action, INC_RANGE), { positionId: 'AP', scope: 'ALL' }, action);
     assert.deepEqual(caps.authorityFor(['OPS', 'CTR'], action, GAZIPASA), { positionId: 'CTR', scope: 'ALL' }, action);
-    assert.deepEqual(caps.authorityFor(['LC', 'OPS'], action, INC_RANGE), { positionId: 'OPS', scope: 'ALL' }, action);
+    assert.equal(caps.authorityFor(['LC', 'OPS'], action, INC_RANGE), null, action);
   }
+});
+
+test('crc-sync ADR 0119: OPS acts for the using side of a CENTER MOA Incirlik uses, and AP does not', () => {
+  const moa = { controllingFacilityId: 'CENTER', controllingPositionId: 'CTR', usingFacilityId: 'INCIRLIK' };
+  assert.equal(caps.usingPositionFor(['AP', 'OPS'], moa), 'OPS');
+  assert.equal(caps.usingPositionFor(['AP'], moa), null);
+  assert.equal(caps.controllingPositionFor(['OPS', 'CTR'], moa), 'CTR');
 });
