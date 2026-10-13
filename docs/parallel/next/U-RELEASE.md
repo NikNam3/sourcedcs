@@ -27,12 +27,15 @@ ADR 0101, 0017, 0039 (never edit them; ADR 0122 says what it replaces, cites ¶2
      AP→LC, counts as already inside). Settled by the server's control tick (`settleDueRelease` or its successor), audited
      as a Mutation like any control move.
 5. **The receiver never takes control by hand**: remove its "Control to me"/take-control action (server refuses it).
-6. **No Request release** (REQUEST/GRANT removed: "a receiver has no reason to request a non-released handoff"), **no
-   withdraw** (U-RQ2 c). This removes U8's bug with the feature.
+6. **Request release, only on a not-released handoff**: the receiver may ask; the handing-off station **grants**
+   (the handoff becomes released: control moves at check-in, or at once if already checked in) or **refuses**. One
+   open request at a time. **Never offered or accepted on a released handoff or after control moved** (U8: client
+   `control-release-rules.js` `handoffSteps` never checks `co.release`; server `applyRelease` REQUEST refuses only an
+   open request — fix both). **No withdraw** of a granted release (U-RQ2 c). Grant is all-or-nothing (no scopes).
 7. **Dark cockpit (U7)**: nothing shown once control has moved (no "release complete"). Attention (amber) only for what
    needs the controller: an offered handoff to answer, an aircraft accepted but **not checked in** after a while
    (threshold ours, a tuning value, say 60 s), a not-released aircraft **inside the receiver's airspace but not checked
-   in** (control cannot move), and control repair. Released/not released shows as one grey word on the receiver's Strip
+   in** (control cannot move), a refused release request, and control repair. Released/not released shows as one grey word on the receiver's Strip
    until control moves. `COMMS:`/`CTRL:` chips stay grey (U-STRIP).
 8. TOFI and tactical handoffs (ADR 0053/0102) unchanged. A position with no geometry to test (no track, uncorrelated):
    a not-released handoff waits; record what the receiver sees.
@@ -49,17 +52,17 @@ settle tick, refuse receiver TRANSFER_CONTROL), `board/ops/control-release.js`, 
 
 - Unit: every rule above (both suites), including: released + checked in → control moves; not released + checked in +
   outside → stays, then moves on entry; not released + inside + not checked in → stays (amber); inside-one-Facility
-  handoff; receiver take-control refused; REQUEST/GRANT/WITHDRAW refused as unknown. `npm run walk` (the I11
+  handoff; receiver take-control refused; REQUEST refused on a released handoff and after control moved (U8); GRANT makes it released; REFUSE leaves it not released (amber for the receiver); WITHDRAW refused as unknown. `npm run walk` (the I11
   control-release walk: rewrite for the new model), `npm run freeze` + `freeze:update` (explain the diff, separate
   commit), `soak:selfcheck` (Board/wire moved; the soak driver's handoff steps must follow the new model).
 - Wire: `npm run wire:record` (op/action kinds change); protocol stays 2 unless the tool says otherwise.
-- e2e: `e2e/control-release.spec.js` and every spec pressing Request release / Grant / Withdraw / "Comms to" /
+- e2e: `e2e/control-release.spec.js` and every spec pressing Request release / Grant / Withdraw / partial scopes / "Comms to" /
   "Control to me" (search `e2e/`), rewritten. New: AP→CTR released, CTR checks in, control moves, nothing amber;
   AP→CTR not released, CTR checks in, control waits until the track crosses the RAPCON boundary (synthetic track),
-  then moves. `E2E_LANE=7`, your specs.
+  then moves; AP→CTR not released, CTR requests release, AP grants, control moves at check-in, Request release is gone. `E2E_LANE=7`, your specs.
 
 ## Output
 
 Commits on `lane/U-RELEASE`; ADR 0122; `docs/wip/U-RELEASE.md` (usage-guide wording, defaults, any `state/` action the
-human must take — an old Board with open REQUEST/GRANT shapes may refuse start-up), findings; final message per lane-rules
+human must take — an old Board with partial-scope or withdrawn releases may refuse start-up), findings; final message per lane-rules
 rule 8.
