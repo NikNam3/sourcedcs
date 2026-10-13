@@ -38,6 +38,7 @@ const ALLOWED = {
   'crc-sync/src/efsp/wire/skeleton.js': 'the word INBOUND in a comment about messages',
   'crc-desktop/app/public/js/panels/efsp/sfa-state.js': 'the Hand off to PAR button is offered only to stripType === ARRIVAL at INBOUND (the guard is on the same line)',
   'crc-sync/src/efsp/par-final.js': 'CONVERSIONS is keyed by Role: PAR_HANDOFF names stripType ARRIVAL with state INBOUND, MISSED_APPROACH toStripType ARRIVAL with toState INBOUND, and conversionFor matches both (docs/adr/0117, H137)',
+  'crc-sync/src/efsp/board/ops/final-call.js': 'the MISSED_APPROACH call reads its receiving Position from ARRIVAL_STATE_OWNERS by the conversion\'s toState, so its INBOUND is ARRIVAL\'s (H137 LT-PQ1 a)',
   'crc-sync/src/efsp/authority/strip-types/final.js': 'FINAL\'s airfield BOLTER_WAVEOFF NLA is a transfer to AP whose MISSED_APPROACH conversion (par-final.js) makes the Strip an ARRIVAL, so its INBOUND is ARRIVAL\'s (H137 LT-PQ1 a)',
   'crc-desktop/app/public/js/panels/efsp/efsp-nla.js': 'per-Role tables',
   'crc-desktop/app/public/js/panels/efsp/runway-status-rules.js': 'keyed by Role / guarded by stripType === ARRIVAL',
