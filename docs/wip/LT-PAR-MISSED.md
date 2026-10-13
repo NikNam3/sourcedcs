@@ -1,5 +1,20 @@
 # LT-PAR-MISSED: a missed approach on the PAR final goes back to AP (H137 LT-PQ1 a)
 
+## Where I stopped / what is left (interrupted 2026-10-13)
+
+- **Done and committed:** missed approach → AP (server, client, scenario walks, e2e `l18-incirlik` 02b/02c, `par-panel`
+  05); the supervisor's extra item: HDG/ALT (`7A`, `9A-VECTOR`) typed only on an airfield's PAR final, refused and not
+  editable on the carrier FINAL (`block-map.js` `PAR_FINAL_ONLY_BLOCKS`, `resolveBlockTarget(stripType, blockId,
+  facilityId)`, client `isBlockEditable(…, facilityId)` from `strip.facilityId`, parity test, L17 scenario asserts the
+  refusal). Gates after it: crc-sync 2691/2691, crc-desktop 1274/1274, freeze 56/56 (second `freeze:update`:
+  `scenario-carrier-l17.json` only, two refused SetBlocks, ids renumbered), walk 23/23. Module-graph fixture re-recorded.
+- **Left:** the last lane-3 run of `l17-carrier` + `par-panel` + `l18-incirlik` was 17/19. `par-panel` 06 failed on a
+  `toBeVisible` (screenshot in `crc-desktop/test-results/lane3/par-panel-06-…`), and one other failed that I did not
+  identify. The earlier run of `par-panel` + `l18-incirlik` alone was 13/13 before the carrier gating, so either the
+  gating broke something or 06 is order-dependent when `l17-carrier` runs first. Next: re-run the three specs on
+  `E2E_LANE=3`, read the two failures, and confirm `l17-carrier` 03 passes. `soak:selfcheck` was not re-run after the
+  carrier gating (it touches no Board or wire file).
+
 Branch `lane/LT-PAR-MISSED`, server and client, a follow-up to LT-SFA-PAR (ADR 0117). No new ADR: the addendum below is for
 the supervisor to record in decisions.md. Wire changed (two new keys, `wire:record`: protocol stays 2).
 
