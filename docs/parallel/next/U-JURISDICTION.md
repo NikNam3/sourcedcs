@@ -7,7 +7,7 @@ move control at the boundary.
 
 ## Why
 
-**H142** (`decisions.md`, read it whole): a not-released handoff moves control automatically once the aircraft is inside
+**H142 and H143** (`decisions.md`, read both whole): a not-released handoff moves control automatically once the aircraft is inside
 the receiver's airspace. So the airspace system must know each controlling facility's **area of jurisdiction** and answer
 "whose airspace is this aircraft in". FAA background: ¶2-1-15 a 1/c (control at a boundary), and
 `docs/parallel/research/release-and-par.md` R1/R4.
@@ -16,26 +16,31 @@ the receiver's airspace. So the airspace system must know each controlling facil
 
 1. **A jurisdiction area** in the airspace system (`crc-sync/src/efsp/airspace-schema.js`, `airspace-store.js`,
    `airspace/containment.js`): a new kind next to `AREA`/`ROUTE` (e.g. `JURISDICTION`), with
-   - the owning **Facility** (INCIRLIK, CARRIER, CENTER — the facility ids in `config/efsp-facility-*.json`),
+   - the owning **Facility** (INCIRLIK, CARRIER, CENTER — the facility ids in `config/efsp-facility-*.json`) and the
+     **Positions** whose airspace it is (TOWER → LC/GC, RAPCON → AP/PAR, H143),
    - an **airspace class** (`A`–`G`; Class G = nobody owns it, so it is never anyone's jurisdiction),
    - vertical limits in ft **MSL** (`altLowerFt`/`altUpperFt`; UNL = no upper),
    - geometry: a polygon (as today) **or a circle** `{ centre, radiusNm }` whose centre is either a fixed point or
      **anchored to a carrier hull** (follows the live ship position the carrier code already has).
 2. **Shipped defaults, theater-wide config** (shipped in `config/`, a `state/` copy overrides it, strict like every
    `state/` file — use or extend `config/efsp-airspaces.json`'s theater keying, your call, ADR says which):
-   - Syria: **Incirlik RAPCON** circle 50 nm on the Incirlik field reference point, **2,000 ft – FL280**, class you pick
-     (D/C-like terminal; record it as ours), owner INCIRLIK;
-   - **CARRIER**: 50 nm circle on the hull, **SFC – UNL**, owner CARRIER (every hull in `efsp-carriers.json`);
-   - **CENTER**: everything not inside another jurisdiction area, **Class E** — not drawn as a shape, it is the
-     fallback (so below 2,000 ft inside the RAPCON circle is CENTER's, H142).
-3. **Precedence on overlap**: CARRIER > RAPCON (INCIRLIK) > CENTER. Put the order in the same config (an ordered list,
+   - Syria: **Incirlik TOWER** (H143): the Class D surface area shape (AIM 3-2-5), **5 nm** circle on the Incirlik
+     field reference point, **SFC – 2,500 ft AGL** (store MSL: field elevation + 2,500, ≈ 2,700 ft), class D, owner
+     Positions **LC, GC** (supervisor default, the size is not the human's: label it in the ADR);
+   - Syria: **Incirlik RAPCON** (H142/H143): 50 nm circle on the same point, **SFC – FL280**, owner Positions **AP, PAR**
+     (and any SFA/approach Position of INCIRLIK); class: pick a terminal class and label it ours (the class does not change
+     ownership here: H143 overrode the "Class E below 2,000 ft is CENTER's" reading);
+   - **CARRIER**: 50 nm circle on the hull, **SFC – UNL**, owner the CARRIER Positions (every hull in `efsp-carriers.json`);
+   - **CENTER**: everything not inside another jurisdiction area — not drawn as a shape, it is the fallback; Class E.
+     **Class G** areas (none shipped) belong to nobody.
+3. **Precedence on overlap**: CARRIER > TOWER > RAPCON > CENTER (H143). Put the order in the same config (an ordered list,
    the LOA stand-in, labelled ours), not in code.
-4. **One server function** `jurisdictionAt({ lat, lon, altFt })` → owning Facility id or `null` (Class G), plus
-   `isInsideJurisdictionOf(facilityId, track)`; unit-tested at edges (boundary counts as inside, the floor/ceiling, the
+4. **One server function** `jurisdictionAt({ lat, lon, altFt })` → the owning area (Facility + Positions) or `null`
+   (Class G), plus `isInsideJurisdictionOf(positionId, track)` (the receiving Position's area, CTR = the fallback); unit-tested at edges (boundary counts as inside, the floor/ceiling, the
    overlap order, a moving hull). U-RELEASE will call it from the control settle tick.
 5. **Editable in the airspaces panel** (client `airspace-panel.js`, `airspace-editor.js`, `airspace-geometry-editor.js`):
    jurisdiction areas listed in their own section, editable (geometry, limits, class), with the carrier anchor shown
-   read-only. Default rights (log it): a facility's area is edited by its controlling Positions — AP for INCIRLIK,
+   read-only. Default rights (log it): a facility's area is edited by its controlling Positions — AP for RAPCON, LC for TOWER,
    CV_PRIFLY/CV_MARSHAL for CARRIER (as the carrier management panel, H119) — refusals through the existing airspace
    permission path. Drawn on the map as a thin grey outline (dark cockpit), off by default in the map layers if the map
    gets busy.
@@ -45,7 +50,7 @@ the receiver's airspace. So the airspace system must know each controlling facil
 
 Both unit suites; `npm run walk`; `npm run freeze` (+ `freeze:update` with a small, explained diff, separate commit);
 `soak:selfcheck` if Board/wire/hub moved; `npm run wire:record` (new airspace kind/keys). e2e: the airspaces panel shows
-the RAPCON and carrier areas; AP edits RAPCON's ceiling; a Position without the right is refused. `E2E_LANE=7`, your specs.
+the TOWER, RAPCON and carrier areas; AP edits RAPCON's ceiling; a Position without the right is refused. `E2E_LANE=7`, your specs.
 
 ## Output
 

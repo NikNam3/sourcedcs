@@ -8,7 +8,7 @@ One agent, Opus 5.5. Follow `docs/parallel/lane-rules.md` (worktree `/home/nklx/
 ## Why
 
 Round-2 findings U5–U8 (`docs/parallel/live-test-2026-10-13.md` §B). Rulings, read them whole in `decisions.md`:
-**H142** (the model) and H141's **U-RQ2 c** (no withdraw). Research background: `docs/parallel/research/release-and-par.md`
+**H142 and H143** (the model and the areas) and H141's **U-RQ2 c** (no withdraw). Research background: `docs/parallel/research/release-and-par.md`
 R1–R5 (its build sketch assumed the earlier answers: use it for code locations, not for the rules). Supersedes parts of
 ADR 0101, 0017, 0039 (never edit them; ADR 0122 says what it replaces, cites ¶2-1-15 **a 1 / a 2 / c** — ADR 0101's
 "¶2-1-15 b" is wrong — and ¶2-1-17).
@@ -23,8 +23,8 @@ ADR 0101, 0017, 0039 (never edit them; ADR 0122 says what it replaces, cites ¶2
 4. **Control never moves before "Checked in"** (takes precedence over everything). Then:
    - **Released**: control moves at check-in.
    - **Not released**: control moves **automatically** once the aircraft is **inside the receiver's airspace**
-     (U-JURISDICTION's query against the receiving Position's Facility; a handoff **inside one Facility**, e.g. AP→PAR,
-     AP→LC, counts as already inside). Settled by the server's control tick (`settleDueRelease` or its successor), audited
+     (U-JURISDICTION's `isInsideJurisdictionOf(receivingPosition, track)`: LC/GC the tower area, AP/PAR RAPCON, H143;
+     so AP→LC not released moves control on entering the tower area, and AP→PAR at once since both share RAPCON). Settled by the server's control tick (`settleDueRelease` or its successor), audited
      as a Mutation like any control move.
 5. **The receiver never takes control by hand**: remove its "Control to me"/take-control action (server refuses it).
 6. **Request release, only on a not-released handoff**: the receiver may ask; the handing-off station **grants**
@@ -51,8 +51,8 @@ settle tick, refuse receiver TRANSFER_CONTROL), `board/ops/control-release.js`, 
 ## Tests and gates
 
 - Unit: every rule above (both suites), including: released + checked in → control moves; not released + checked in +
-  outside → stays, then moves on entry; not released + inside + not checked in → stays (amber); inside-one-Facility
-  handoff; receiver take-control refused; REQUEST refused on a released handoff and after control moved (U8); GRANT makes it released; REFUSE leaves it not released (amber for the receiver); WITHDRAW refused as unknown. `npm run walk` (the I11
+  outside → stays, then moves on entry; not released + inside + not checked in → stays (amber); AP→LC not released
+  waits for the tower area; AP→PAR moves at check-in (shared RAPCON); receiver take-control refused; REQUEST refused on a released handoff and after control moved (U8); GRANT makes it released; REFUSE leaves it not released (amber for the receiver); WITHDRAW refused as unknown. `npm run walk` (the I11
   control-release walk: rewrite for the new model), `npm run freeze` + `freeze:update` (explain the diff, separate
   commit), `soak:selfcheck` (Board/wire moved; the soak driver's handoff steps must follow the new model).
 - Wire: `npm run wire:record` (op/action kinds change); protocol stays 2 unless the tool says otherwise.
