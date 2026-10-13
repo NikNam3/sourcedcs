@@ -179,6 +179,15 @@ class AirspaceStore extends SyncedStore {
 
   // ── the queries other code may call (ADR 0098 §7): pure, synchronous, current theater only ──
 
+  /**
+   * Does `positionId` act for the using side of this airspace of the current theater (authority/airspace.js `isUsing`)?
+   * docs/adr/0119 (H136 VQ5 a): the using agency approves entry into it on a Strip it does not hold.
+   */
+  isUsingAgency(airspaceId, positionId) {
+    const record = this._record(this.currentTheater(), airspaceId);
+    return !!record && !!positionId && this._isUsing(record.definition, positionId);
+  }
+
   /** ACTIVE, and the using agency is Facility `usingFacilityId` (as `usingFacilityId`, or as a `usingPositionId` of its own). */
   isActiveFor(airspaceId, usingFacilityId) {
     const record = this._record(this.currentTheater(), airspaceId);

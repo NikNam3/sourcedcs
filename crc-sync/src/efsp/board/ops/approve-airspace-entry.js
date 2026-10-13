@@ -2,6 +2,7 @@
 
 const { _validateAltitudeBlock } = require('../strip-util');
 const { warn } = require('../../warnings');
+const { authorize, usingAgencyGate } = require('../airspace-entry-rights');
 
 /**
  * Approves this flight to work inside an airspace, on a frequency.
@@ -25,7 +26,7 @@ const { warn } = require('../../warnings');
  * restriction rather than being refused, because tightening or lifting a
  * block mid-sortie is the normal case, not an error.
  */
-function _applyApproveAirspaceEntry(ctx, strip, op, by) {
+function _applyApproveAirspaceEntry(ctx, strip, op, by, actingPositionId) {
   if (!op.airspaceId) {
     return { ok: false, reason: 'VALIDATION_ERROR', detail: 'an airspace entry needs an airspaceId', strip };
   }
@@ -33,6 +34,8 @@ function _applyApproveAirspaceEntry(ctx, strip, op, by) {
   if (!airspace) {
     return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown airspace: ${op.airspaceId}`, strip };
   }
+  const denied = usingAgencyGate(ctx, actingPositionId, op.kind, op.airspaceId, airspace, strip);
+  if (denied) return denied;
 
   const definition = airspace.definition || {};
   const frequencyMhz = op.frequencyMhz !== undefined && op.frequencyMhz !== null
@@ -72,5 +75,6 @@ function _applyApproveAirspaceEntry(ctx, strip, op, by) {
 module.exports = {
   kind: 'ApproveAirspaceEntry',
   undo: 'none', // docs/adr/0100 §1: airspace entry approval is not undoable
-  apply: (ctx, strip, op, meta) => _applyApproveAirspaceEntry(ctx, strip, op, meta.by),
+  authorize,
+  apply: (ctx, strip, op, meta) => _applyApproveAirspaceEntry(ctx, strip, op, meta.by, meta.actingPositionId),
 };
