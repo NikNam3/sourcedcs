@@ -90,6 +90,8 @@ function frameKeys() {
     'init': keys(hub._initMsg()),
     'update-required': keys(new WsHub({ trackStore: new TrackStore(), collabStore: new Collab(), downloadUrl: 'x' })._updateRequiredMsg(1)),
     'par-sample': keys(hub._parSampleMsg([])),
+    // The alert state (docs/adr/0119 added `airspaceEntry`): its slices are its top-level keys.
+    'efsp-alerts': keys(hub._efspAlertsMsg(null)),
     // Every store delta, from the builder the server sends it with (frames.js; the airspace delta is built in its family).
     'efsp-board-delta': keys(frames.boardDelta(null, stubStore(), 'F', [], [], [], ['gone'])),
     'efsp-airspace-delta': keys(airspaceDelta),
