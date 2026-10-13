@@ -36,13 +36,18 @@ async function signOn(page, facilityId, positions) {
 
 test('the using agency (OPS) approves and clears entry on a Strip AP holds, into an airspace Incirlik uses; GC may not', async ({ page }) => {
   await openPanel(page, { signedOn: ['OPS', 'AP', 'GC'] });
+  await signOn(page, 'CENTER', ['CTR']); // CENTER controls the MOA (a using Facility is never the controlling one)
   await expect.poll(() => page.evaluate(() => crc.airspaceLayer.currentTheater()), { timeout: 20000 }).toBe('Syria');
   const n = uid();
   const airspaceId = `MOA-UA${n}`;
   const callsign = `UA${n}`.slice(0, 7);
-  await page.evaluate((id) => crc.ws.sendEfspAirspaceMutation('AP', id, 0, { kind: 'CreateAirspace', definition: {
-    airspaceId: id, name: `Using ${id}`, kind: 'AREA', type: 'MOA', controllingFacilityId: 'INCIRLIK', controllingPositionId: 'AP', usingFacilityId: 'INCIRLIK',
-  } }), airspaceId);
+  const created = await page.evaluate((id) => new Promise((resolve) => {
+    crc.ws.sendEfspAirspaceMutation('CTR', id, 0, { kind: 'CreateAirspace', definition: {
+      airspaceId: id, name: `Using ${id}`, kind: 'AREA', type: 'MOA', controllingFacilityId: 'CENTER', controllingPositionId: 'CTR', usingFacilityId: 'INCIRLIK',
+    } }, {}, { onAck: (ack) => { resolve({ ok: ack.ok, reason: ack.reason || null, detail: ack.detail || null }); return true; } });
+    setTimeout(() => resolve(null), 8000);
+  }), airspaceId);
+  expect(created).toEqual({ ok: true, reason: null, detail: null });
   await expect.poll(() => page.evaluate((id) => !!crc.state.getEfspAirspace(id), airspaceId), { timeout: 10000 }).toBe(true);
 
   await seedStrip(page, { callsign, stripType: 'DEPARTURE' });
@@ -71,7 +76,7 @@ test('the using agency (OPS) approves and clears entry on a Strip AP holds, into
   } finally {
     await signOn(page, 'INCIRLIK', ['OPS', 'AP', 'GC']);
     await dropStrips(page, [callsign]);
-    await page.evaluate((id) => { const a = crc.state.getEfspAirspace(id); if (a) crc.ws.sendEfspAirspaceMutation('AP', id, a.rev, { kind: 'DeleteAirspace' }); }, airspaceId);
+    await page.evaluate((id) => { const a = crc.state.getEfspAirspace(id); if (a) crc.ws.sendEfspAirspaceMutation('CTR', id, a.rev, { kind: 'DeleteAirspace' }); }, airspaceId);
   }
 });
 
