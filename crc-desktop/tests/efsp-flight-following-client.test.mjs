@@ -10,8 +10,9 @@ import { applyEfspSnapshot } from '../app/public/js/panels/efsp/efsp-state.js';
 import { sendEfspSetPositions } from '../app/public/js/panels/efsp/efsp-ws.js';
 import { FLIGHT_FOLLOWING_POSITIONS } from '../app/public/js/panels/efsp/bay/authority-mirror.js';
 import {
-  canStartFlightFollowing, canTerminateRadarService, flightFollowingPosition, startFlightFollowing,
+  canStartFlightFollowing, canTerminateRadarService, contactForToken, flightFollowingPosition, startFlightFollowing,
 } from '../app/public/js/panels/efsp/flight-following.js';
+import { latestFromServer } from '../app/public/js/picture.js';
 
 const server = serverConfig.permission;
 
@@ -36,6 +37,8 @@ function board() {
     correlations: [
       { flightDataId: 'f1', trackId: '11', state: 'CORRELATED' },
       { flightDataId: 'f4', trackId: '44', state: 'CORRELATED' },
+      // bound, but the picture does not show the contact this second: still claimed (crc-sync refuses the same)
+      { flightDataId: 'f2', trackId: null, state: 'UNCORRELATED', binding: { trackId: '22' } },
     ],
   });
 }
@@ -53,6 +56,7 @@ test('Start flight following applies to a contact with no live Strip, and only a
   assert.equal(canStartFlightFollowing('99'), true, 'an untracked contact');
   assert.equal(canStartFlightFollowing('11'), false, 'already a Strip\'s contact');
   assert.equal(canStartFlightFollowing('44'), true, 'its Strip is dropped: untracked again');
+  assert.equal(canStartFlightFollowing('22'), false, 'explicitly bound to a live Strip, though unseen');
   assert.equal(startFlightFollowing('99', '', 'C172'), 'callsign: 1 to 7 letters or digits');
   assert.equal(startFlightFollowing('99', 'N1', ''), 'aircraft type, e.g. C172');
   sendEfspSetPositions('CENTER', []);
@@ -69,4 +73,14 @@ test('Radar service terminated is offered on a flight-following Strip (OVERFLIGH
   assert.equal(canTerminateRadarService(get('s4')), false, 'already dropped');
   sendEfspSetPositions('CENTER', []);
   assert.equal(canTerminateRadarService(get('s1')), false, 'not held');
+});
+
+test('.ff names a contact by the track number its data block shows, or by its id', () => {
+  latestFromServer.clear();
+  latestFromServer.set('7', { id: '7', label: { trackNumber: '0421' } });
+  assert.equal(contactForToken('0421'), '7');
+  assert.equal(contactForToken('7'), '7');
+  assert.equal(contactForToken('9999'), null);
+  assert.equal(contactForToken(''), null);
+  latestFromServer.clear();
 });

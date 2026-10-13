@@ -4,6 +4,7 @@ import { getAllEfspStrips, getEfspFlightData } from './efsp-state.js';
 import { getAllEfspCorrelations, stripIdsForTrackId } from './correlation-state.js';
 import { facilityOfPosition } from './facility-topology.js';
 import { FLIGHT_FOLLOWING_POSITIONS } from './bay/authority-mirror.js';
+import { getAllTracks } from '../../picture.js';
 
 // Flight following (crc-sync H136, docs/wip/LT-VFR.md). "Start flight following" is one action on a contact with no
 // Strip: crc-sync makes the flight data, a discrete code and an OVERFLIGHT Strip IN_SECTOR at the acting radar Position,
@@ -25,6 +26,17 @@ export function canStartFlightFollowing(trackId) {
   // An explicit binding claims its contact even while crc-sync's picture misses it (crc-sync refuses the same).
   const bound = new Set(getAllEfspCorrelations().filter(r => r.binding && r.binding.trackId === wanted).map(r => r.flightDataId));
   return !bound.size || !getAllEfspStrips().some(s => s.state !== 'DROPPED' && bound.has(s.flightDataId));
+}
+
+/** The contact a controller names by its track number (as the data block shows it) or its id, or null. */
+export function contactForToken(token) {
+  const want = String(token || '').trim().toUpperCase();
+  if (!want) return null;
+  for (const t of getAllTracks()) {
+    if (String(t.id).toUpperCase() === want) return String(t.id);
+    if (t.label && t.label.trackNumber != null && String(t.label.trackNumber).toUpperCase() === want) return String(t.id);
+  }
+  return null;
 }
 
 /**

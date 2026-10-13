@@ -985,6 +985,7 @@
   "panels/efsp/flight-following.js": [
    "canStartFlightFollowing",
    "canTerminateRadarService",
+   "contactForToken",
    "flightFollowingPosition",
    "startFlightFollowing",
    "terminateRadarService"

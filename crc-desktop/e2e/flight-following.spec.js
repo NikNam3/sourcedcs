@@ -146,3 +146,26 @@ test('approve entry into active airspace on a flight-following Strip, and Undo o
   expect(after ? after.comms.airspaceId : null, 'the entry is cleared').toBe(null);
   await dropStrips(page, [callsign]);
 });
+
+test('the keyboard path: .ff <track> <CALLSIGN> <TYPE> starts it on the contact, .term ends it on the selected Strip', async ({ page }) => {
+  await openPanel(page, { signedOn: ['CTR'], facilityId: 'CENTER', controller: 'lt-vfr-4' });
+  const callsign = uniqueCallsign('VF');
+  const tid = `lt-vfr-${Date.now() % 100000}`;
+  await contact(page, tid); // its data block shows track number `T<id>`
+  await showStrips(page);
+  const input = page.locator('#efsp-dot-command-input');
+  await input.fill(`.ff T${tid} ${callsign} C172`);
+  // the harness picture drops an injected contact at its next frame: put it back just before the command reads it
+  await page.evaluate((id) => crc.picture.latestFromServer.set(id, { id, domain: 'AIR', lon: 35.6, lat: 37.1,
+    label: { callsign: null, source: null, trackNumber: `T${id}` }, altitude: null, ssr: null, illuminatedAt: Date.now() }), tid);
+  await input.press('Enter');
+  await expect.poll(() => recordFor(page, callsign)).toMatchObject({ stripType: 'OVERFLIGHT', state: 'IN_SECTOR', boundTo: tid });
+
+  await page.evaluate((cs) => {
+    const s = crc.state.getAllEfspStrips().find((x) => x.state !== 'DROPPED' && crc.state.getEfspFlightData(x.flightDataId).identity.callsign === cs);
+    crc.selection.selectEfspStripById(s.stripId);
+  }, callsign);
+  await input.fill('.term');
+  await input.press('Enter');
+  await expect.poll(() => recordFor(page, callsign)).toBe(null);
+});
