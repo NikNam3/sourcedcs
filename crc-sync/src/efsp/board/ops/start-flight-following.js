@@ -38,7 +38,7 @@ function _applyStart(ctx, op, meta) {
   if (holder) {
     const fd = ctx.flightDataStore.getFlightData(holder.flightDataId);
     const name = (fd && fd.identity && fd.identity.callsign) || 'another flight';
-    return _refuse('VALIDATION_ERROR', `this contact is already correlated to ${name}`);
+    return _refuse('VALIDATION_ERROR', `this contact is already tracked as ${name}`);
   }
   if (!ctx.rules.canCreateStripType(actingPositionId, STRIP_TYPE)) {
     return _refuse('PERMISSION_DENIED', `${actingPositionId} does not work ${STRIP_TYPE} Strips`);

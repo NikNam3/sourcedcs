@@ -103,7 +103,7 @@ test('a second Start on a contact already bound is refused, naming the flight', 
       crc.ws.sendEfspCreateStrip('AP', { kind: 'StartFlightFollowing', trackId: id, flightData: { callsign: cs, aircraftData: 'C172' } }, 'INCIRLIK', { onAck: (ack) => { resolve(ack); return true; } });
     }), [tid, uniqueCallsign('VX')]);
     expect(sent.ok).toBe(false);
-    expect(sent.detail).toContain(`already correlated to ${callsign}`);
+    expect(sent.detail).toContain(`already tracked as ${callsign}`);
   } finally { await ctx.close(); }
   await dropStrips(page, [callsign]);
 });

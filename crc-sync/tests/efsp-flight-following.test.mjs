@@ -98,7 +98,7 @@ test('Start flight following is refused, with no side effects, on a correlated c
   const again = send(efsp, c.AP, 'AP', START('700', 'N2')).ack;
   assert.equal(again.ok, false);
   assert.equal(again.reason, 'VALIDATION_ERROR');
-  assert.match(again.detail, /already correlated to N1/);
+  assert.match(again.detail, /already tracked as N1/);
 
   const ops = send(efsp, c.OPS, 'OPS', START('701', 'N3')).ack;
   assert.equal(ops.ok, false);
@@ -238,4 +238,22 @@ test('Conflict Alert treats a flight-following contact as a tracked aircraft wit
   });
   monitor.tick();
   assert.equal(monitor.getAll().length >= 1, true, 'the pair alerts; no clearance is not a crash');
+});
+
+test('a binding claims its contact while the picture misses it: a second Start on it is still refused', () => {
+  const { efsp, c } = freshEfsp(createEfsp, ATC, { currentTheater: () => 'Test' });
+  const strip = send(efsp, c.CTR, 'CTR', START('990', 'N990')).ack.strip;
+  const reconciler = new CorrelationReconciler({
+    beaconOf: (t) => octalCode(t.squawk), trackStore: { getAll: () => [] },
+    flightDataStore: efsp.flightDataStore, correlationStore: efsp.correlationStore,
+    boardStoreFor: efsp.boardStoreFor, facilityConfig, onDelta: () => {},
+  });
+  reconciler.tick();
+  const record = efsp.correlationStore.getCorrelation(strip.flightDataId);
+  assert.equal(record.state, 'UNCORRELATED', 'the contact is not in the picture');
+  assert.equal(record.binding.trackId, '990', 'the binding is kept');
+  assert.deepEqual(efsp.correlationStore.holderOfTrack('990'), { flightDataId: strip.flightDataId, state: 'UNCORRELATED' });
+  const again = send(efsp, c.AP, 'AP', START('990', 'N991')).ack;
+  assert.equal(again.ok, false);
+  assert.match(again.detail, /already tracked as N990/);
 });
