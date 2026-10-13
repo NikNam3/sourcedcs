@@ -66,7 +66,7 @@ in the table gets no wake until a controller types one.
 ## Gates
 
 - crc-sync unit: 2676 → 2687 (+11, `efsp-aircraft-data.test.mjs`; `efsp-block-map.test.mjs` reworded), all pass.
-- crc-desktop unit: 1267 → see the report (new T7/T8/T31 a tests in `efsp-strip-template.test.mjs`), all pass.
+- crc-desktop unit: 1267 → 1272 (new T7/T8/T31 a tests in `efsp-strip-template.test.mjs`), all pass.
 - `npm run freeze`: 33/56 goldens changed, re-recorded once (`freeze:update`), committed separately. Only hashes plus
   the op matrix's `SetBlock 3/3A/3B "77"`, now refused with a detail. 56/56 after.
 - `npm run walk`: 23/23. `wire-protocol.test.mjs`: green, no `wire:record` needed.
