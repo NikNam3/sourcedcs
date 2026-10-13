@@ -22,6 +22,10 @@ const efspTofiRegime = new Map(); // flightDataId -> { kind: 'REGIME_OUTSIDE_AIR
 
 let efspConflicts = [];            // [{ id, kind: 'CA'|'MCI', a, b, aCallsign, bCallsign, intruder?, timeToCpaSec, minNm, vertFt, aAt, bAt }]
 
+// crc-sync docs/adr/0119: an aircraft inside an ACTIVE airspace it may not be in. Only this session's (the airspace's
+// controlling Position, or the Position working the flight); sent whole, so one that retracted is simply not there.
+let efspAirspaceEntry = [];        // [{ id, kind: 'AIRSPACE_ENTRY', trackId, flightDataId|null, callsign, airspaceId, airspaceName, airspaceType, since }]
+
 /**
  * The one obligation a Strip's badge shows: OVERDUE before WARNING, then the
  * earliest dueAt. null when nothing is due. See getEfspObligations for all.
@@ -41,6 +45,7 @@ export function applyEfspAlerts(msg) {
   efspConformance.clear();
   for (const r of (msg && msg.conformance) || []) if (r.alerts && r.alerts.length) efspConformance.set(r.flightDataId, r.alerts);
   efspConflicts = (msg && msg.conflictAlert) || [];
+  efspAirspaceEntry = (msg && msg.airspaceEntry) || [];
   efspTofiRegime.clear();
   for (const r of (msg && msg.tofiRegime) || []) efspTofiRegime.set(r.flightDataId, r);
   efspSurveillanceHints.clear();
@@ -115,10 +120,27 @@ export function conflictAlertsForTrack(trackId) {
   }));
 }
 
+/** The airspace-entry alerts naming this track (crc-sync docs/adr/0119); [] when none. */
+export function airspaceEntryAlertsForTrack(trackId) {
+  if (trackId == null) return [];
+  const id = String(trackId);
+  return efspAirspaceEntry.filter(a => a.trackId === id);
+}
+
+/** The airspace-entry alerts standing on this flight; [] when none. */
+export function airspaceEntryAlertsForFlightData(flightDataId) {
+  if (!flightDataId) return [];
+  return efspAirspaceEntry.filter(a => a.flightDataId === flightDataId);
+}
+
+/** "Airspace conflict R-7203", the P/CG term (AIRSPACE CONFLICT) and the airspace's name. */
+export function airspaceEntryText(a) { return `Airspace conflict ${a.airspaceName || a.airspaceId}`; }
+
 export function _resetAlertsState() {
   efspObligations.clear();
   efspSurveillanceHints.clear();
   efspConformance.clear();
   efspTofiRegime.clear();
   efspConflicts = [];
+  efspAirspaceEntry = [];
 }

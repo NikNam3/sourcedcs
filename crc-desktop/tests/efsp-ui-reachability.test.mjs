@@ -682,6 +682,17 @@ test('the using agency (OPS) approves entry on a Strip AP holds, as OPS, into th
   assert.equal(menuItem(other.el, 'Leave airspace'), undefined, 'OPS does not clear an entry it did not grant');
 });
 
+test('an airspace-entry alert on the flight is an amber chip on its Strip, gone when the alert is (crc-sync ADR 0119)', async () => {
+  const strip = stripAt({ ownerPositionId: 'CTR' });
+  const { sandbox } = await renderStrip({ strip, flightData: FDR, signedOn: ['CTR'] });
+  sandbox.applyEfspAlerts({ airspaceEntry: [{ id: 'F:f1:R-1', kind: 'AIRSPACE_ENTRY', trackId: '7', flightDataId: 'f1', callsign: 'VIPER1', airspaceId: 'R-1', airspaceName: 'Restricted 1', airspaceType: 'RESTRICTED', since: 1 }] });
+  const el = sandbox._buildStripEl(strip);
+  const chip = findByText(el, 'Airspace conflict Restricted 1');
+  assert.ok(chip, 'the chip names the airspace');
+  sandbox.applyEfspAlerts({ airspaceEntry: [] });
+  assert.equal(findByText(sandbox._buildStripEl(strip), 'Airspace conflict Restricted 1'), undefined);
+});
+
 test('a Strip working an airspace nobody activated says so on its face', async () => {
   const airspaces = [{
     airspaceId: 'MOA-COLD', state: 'RETURNED', rev: 1, transitions: [],

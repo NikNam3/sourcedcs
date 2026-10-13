@@ -216,6 +216,22 @@ test('line 0 stacks by severity: EM, CA, SA, then the conformance tag; EM and CA
   assert.deepEqual(v.line0.map(x => x.blink), [false, false, false, false]);
 });
 
+test('the airspace-entry alert (crc-sync ADR 0119): amber SAA after CA, forces an FDB, blinks until clicked, again on a new entry', () => {
+  const t = contact();
+  const rel = A.atcRelation(t, [strip({ ownerPositionId: 'CTR' })], APP, letterOf);
+  let v = A.atcView(t, rel, env({ conflicts: ['c1'], airspace: ['F:f1:R-1@1000'] }));
+  assert.deepEqual(v.line0.map(x => [x.text, x.color, x.blink]), [['CA', P.alert, true], ['SAA', P.caution, true]]);
+  assert.equal(v.kind, 'FDB');
+  assert.equal(A.atcApplyClick(t, rel, 1, { airspace: ['F:f1:R-1@1000'] }), 'ACK_AIRSPACE');
+  v = A.atcView(t, rel, env({ airspace: ['F:f1:R-1@1000'] }));
+  assert.deepEqual(v.line0.map(x => [x.text, x.blink]), [['SAA', false]], 'acknowledged: steady, still shown');
+  v = A.atcView(t, rel, env({ airspace: ['F:f1:R-1@9000'] }));
+  assert.equal(v.line0[0].blink, true, 'a new entry blinks again');
+  const ldb = A.atcView(contact(), A.atcRelation(contact(), [], APP, letterOf), env({ airspace: ['T:7:MOA-1@1'] }));
+  assert.deepEqual(ldb.line0.map(x => x.text), ['SAA'], 'an untracked contact shows it on its limited block');
+  assert.ok(A.ATC_PALETTES.BLACK.caution);
+});
+
 test('conformance tags keep the app colours (ADR 0058, H41 S10)', () => {
   assert.deepEqual(A.atcConformTag([{ kind: 'LEVEL_BUST', deviationFt: 600 }]), { tag: 'BUST+600', color: '#FF8A4C' });
   assert.deepEqual(A.atcConformTag([{ kind: 'WRONG_WAY', fpm: -800 }]), { tag: 'ALT↓', color: '#FF8A4C' });

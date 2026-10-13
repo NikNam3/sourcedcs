@@ -1,5 +1,5 @@
 'use strict';
-import { conformanceAlertsForFlightData, tofiRegimeAlertForFlightData, correlatedTrackIdForStrip, conflictAlertsForTrack, conflictName, conflictTag, refuelingAlertText } from './efsp-state.js';
+import { conformanceAlertsForFlightData, tofiRegimeAlertForFlightData, correlatedTrackIdForStrip, conflictAlertsForTrack, conflictName, conflictTag, refuelingAlertText, airspaceEntryAlertsForFlightData, airspaceEntryText } from './efsp-state.js';
 import { ordnanceAlertsFor } from './ordnance-advisory.js';
 import { scrambleAlertsFor } from './scramble.js';
 import { atoAlertsFor } from './ato-strip.js';
@@ -13,11 +13,11 @@ import { settings } from '../../settings.js';
 // applies (MARSA, TOFI, an airspace, other Strips on the flight). A quiet Strip
 // has no indicator row at all. Warnings first, so they are always in the same
 // place: the left end of the row.
-export const INDICATOR_ORDER = ['conflictAlert', 'conf', 'rwy', 'gear', 'ord', 'scram', 'tofiRegime', 'trk', 'marsa', 'tofi', 'airspace', 'timer', 'siblings'];
+export const INDICATOR_ORDER = ['conflictAlert', 'conf', 'rwy', 'gear', 'ord', 'scram', 'tofiRegime', 'airspaceAlert', 'trk', 'marsa', 'tofi', 'airspace', 'timer', 'siblings'];
 
 // Keys whose chips come from _stripAlerts (warnings first, left end of the row). rwy/gear:
 // Runway status (docs/adr/0068); ord: hung ordnance (0069); scram: alert/scramble (0070).
-export const ALERT_SLOT_KEYS = new Set(['conflictAlert', 'conf', 'rwy', 'gear', 'ord', 'scram', 'tofiRegime']);
+export const ALERT_SLOT_KEYS = new Set(['conflictAlert', 'conf', 'rwy', 'gear', 'ord', 'scram', 'tofiRegime', 'airspaceAlert']);
 
 const _pad3 = (n) => String(Math.round(n)).padStart(3, '0');
 
@@ -73,6 +73,11 @@ export function _stripAlerts(strip) {
       reason: outside
         ? 'The flight has left the airspace its separation regime applies in. The regime is unchanged; the MRU decides.'
         : 'The airspace or the contact cannot be placed, so entry is not detected automatically. Mark the flight entered by hand.' });
+  }
+  // crc-sync docs/adr/0119: inside an ACTIVE airspace with no approved entry. Retracts on leaving or on approval.
+  for (const a of airspaceEntryAlertsForFlightData(strip.flightDataId)) {
+    out.push({ key: 'airspaceAlert', tone: 'attn', legacy: 'efsp-airspace-entry-alert', text: airspaceEntryText(a),
+      reason: `Inside ${a.airspaceName || a.airspaceId} (${a.airspaceType}, active) with no approved entry.` });
   }
   // Wave-2 advisories, each defined in its own file (docs/adr/0068, 0069, 0070).
   out.push(...runwayStatusAlertsFor(strip));

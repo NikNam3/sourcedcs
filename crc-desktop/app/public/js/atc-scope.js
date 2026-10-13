@@ -5,7 +5,7 @@ import { atcBlockLines, atcEmergencyTag } from './track-label.js';
 
 import {
   conformanceAlertsForFlightData, getEfspFlightData, getEfspPositionLetter, getEfspStrip, conflictAlertsForTrack, refuelingAlertText,
-  stripIdsForTrackId
+  stripIdsForTrackId, airspaceEntryAlertsForTrack
 } from './panels/efsp/efsp-state.js';
 import { getActingPositions, sendEfspMutation } from './panels/efsp/efsp-ws.js';
 import { coverageDatalink, coverageRadars, history, lastSweepMs, tracks } from './picture.js';
@@ -46,14 +46,16 @@ import { settings } from './settings.js';
 //        DOT/FAA/TC-08/15 Table 1), no halo. This is the cited palette.
 // [SOURCE-DEFINED] (docs/adr/0088, H41/H71) — the MAP palette is our softened
 // variant of the BLACK one, chosen for the dark map; it is not a STARS value.
+// `caution` (amber, both palettes) is ours too: the airspace-entry alert's tag
+// (crc-sync docs/adr/0119); no TCW value exists for it.
 export const ATC_PALETTES = {
   MAP: {
-    name: 'MAP', own: '#E6E6E6', other: '#3CE63C', pointout: '#FFFF00', alert: '#FF3C3C', sa: '#FFFF00',
+    name: 'MAP', own: '#E6E6E6', other: '#3CE63C', pointout: '#FFFF00', alert: '#FF3C3C', sa: '#FFFF00', caution: '#E0A83C',
     target: '#1E78FF', targetOpacity: 0.8, otherOpacity: 0.8, halo: 1,
     history: ['#1E50C8', '#4646AA', '#323282', '#34347A', '#2A2A6A'], historyOpacity: 0.7,
   },
   BLACK: {
-    name: 'BLACK', own: '#FFFFFF', other: '#00FF00', pointout: '#FFFF00', alert: '#FF0000', sa: '#FFFF00',
+    name: 'BLACK', own: '#FFFFFF', other: '#00FF00', pointout: '#FFFF00', alert: '#FF0000', sa: '#FFFF00', caution: '#FFB000',
     target: '#1E78FF', targetOpacity: 1, otherOpacity: 1, halo: 0,
     history: ['#1E50C8', '#4646AA', '#323282', '#28286E', '#1E1E5A'], historyOpacity: 1,
   },
@@ -74,7 +76,7 @@ const ATC_COAST_FALLBACK_MS = 6000; // when no ATC radar says how often it sweep
 const ATC_HANDOFF_PRIMITIVES = new Set(['HANDOFF', 'AIT']);
 
 // ── Local UI state (per scope, never synced) ──────────────────────────────
-const _atcAcked = new Set();    // 'CA:<conflictId>', 'EM:<trackId>:<tag>', 'UN:<stripId>'
+const _atcAcked = new Set();    // 'CA:<conflictId>', 'AS:<airspace alert id>', 'EM:<trackId>:<tag>', 'UN:<stripId>'
 const _atcSeen = new Map();     // stripId -> { state, from, changedAt } — coordination states as this scope saw them
 const _atcStage = new Map();    // 'HO:<stripId>' / 'PO:<stripId>' -> click-down stage
 const _atcExpanded = new Set(); // trackIds whose PDB this controller opened into an FDB
@@ -183,6 +185,7 @@ export function atcRelation(t, strips, acting, letterOf) {
  * @param {number} env.now        local ms, for blink windows
  * @param {string[]} env.conflicts  the CA/MCI conflict ids this track is in
  * @param {string[]} [env.conflictTags]  their tags, 'CA' or 'MCI' (crc-sync's docs/adr/0118); default CA
+ * @param {string[]} [env.airspace]  the airspace-entry alert ids naming this track (crc-sync's docs/adr/0119)
  * @param {{tag:string,color:string}|null} env.conform  docs/adr/0058's tag, if any
  * @param {boolean} env.coast
  */
@@ -198,9 +201,12 @@ export function atcView(t, rel, env) {
   if (em) line0.push({ text: em, color: P.alert, blink: !_atcAcked.has(`EM:${id}:${em}`) });
   // crc-sync's docs/adr/0118: an MCI is shown like a CA, named MCI; a CA wins when the track is in both.
   if (conflicts.length) line0.push({ text: (env.conflictTags || []).length && env.conflictTags.every(t => t === 'MCI') ? 'MCI' : 'CA', color: P.alert, blink: conflicts.some(c => !_atcAcked.has(`CA:${c}`)) });
+  // crc-sync's docs/adr/0119: inside an active airspace it may not be in. Amber, blinking until acknowledged by a click.
+  const airspace = env.airspace || [];
+  if (airspace.length) line0.push({ text: 'SAA', color: P.caution, blink: airspace.some(a => !_atcAcked.has(`AS:${a}`)) });
   if (t.iffOverride === 'hostile') line0.push({ text: 'SA', color: P.sa, blink: false }); // H47: steady
   if (env.conform && env.conform.tag) line0.push({ text: env.conform.tag, color: env.conform.color, blink: false });
-  const forced = !!em || conflicts.length > 0;
+  const forced = !!em || conflicts.length > 0 || airspace.length > 0;
 
   let kind; let color = P.other; let blinkBlock = false;
   const l1Suffix = [];
@@ -389,7 +395,8 @@ export function atcDisplay(id, t, now = Date.now()) {
   const conflictTags = conflictList.map(c => c.kind);
   const flightData = strips.length ? getEfspFlightData(strips[0].flightDataId) : null;
   const conform = flightData ? atcConformTag(conformanceAlertsForFlightData(flightData.flightDataId)) : null;
-  const view = atcView(t, rel, { palette, now, conflicts, conflictTags, conform, coast });
+  const airspace = _airspaceAckKeys(id);
+  const view = atcView(t, rel, { palette, now, conflicts, conflictTags, airspace, conform, coast });
 
   const speedKt = kinematics(hist).speedKt;
   const lines = atcBlockLines(t, view, { speedKt, assigned: atcAssigned(flightData), typePhase: Math.floor(now / ATC_TIMESHARE_MS) % 2 === 1 });
@@ -409,14 +416,18 @@ export function atcTargetClick(id, now = Date.now()) {
   const rel = atcNoteOwnership(id, atcRelation(t, _stripsFor(id), _actingSet(), _letterOf), now);
   return atcApplyClick(t, rel, now, {
     conflicts: conflictAlertsForTrack(id).map(c => c.id),
+    airspace: _airspaceAckKeys(id),
     accept: (strip) => {
       sendEfspMutation(strip.ownerPositionId, strip, { kind: strip.coordination.primitive, action: 'ACCEPT' });
     },
   });
 }
 
+/** The airspace-entry alerts on this track, keyed by id and `since`: an acknowledged one blinks again on a new entry. */
+function _airspaceAckKeys(id) { return airspaceEntryAlertsForTrack(id).map(a => `${a.id}@${a.since}`); }
+
 /** atcTargetClick's decision, with the effects passed in (testable). */
-export function atcApplyClick(t, rel, now, { conflicts = [], accept = () => {} } = {}) {
+export function atcApplyClick(t, rel, now, { conflicts = [], airspace = [], accept = () => {} } = {}) {
   const id = String(t.id);
   if (rel.handoffIn) { accept(rel.handoffIn.strip); return 'ACCEPT_HANDOFF'; }
   if (rel.poIn && rel.poIn.state === 'INITIATED') { accept(rel.poIn.strip); return 'ACCEPT_POINT_OUT'; }
@@ -425,6 +436,8 @@ export function atcApplyClick(t, rel, now, { conflicts = [], accept = () => {} }
   if (em && !_atcAcked.has(`EM:${id}:${em}`)) { _atcAcked.add(`EM:${id}:${em}`); return 'ACK_EMERGENCY'; }
   const unacked = conflicts.filter(c => !_atcAcked.has(`CA:${c}`));
   if (unacked.length) { for (const c of unacked) _atcAcked.add(`CA:${c}`); return 'ACK_CONFLICT'; }
+  const unackedAirspace = airspace.filter(a => !_atcAcked.has(`AS:${a}`));
+  if (unackedAirspace.length) { for (const a of unackedAirspace) _atcAcked.add(`AS:${a}`); return 'ACK_AIRSPACE'; }
   if (rel.poOut && rel.poOut.state === 'REJECTED' && !_atcAcked.has(`UN:${rel.poOut.strip.stripId}`)) {
     _atcAcked.add(`UN:${rel.poOut.strip.stripId}`); return 'ACK_UNABLE';
   }
