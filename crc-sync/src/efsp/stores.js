@@ -340,13 +340,9 @@ const ENTRY_SHAPES = {
       entries: arrayOf(anyOf('caseIAngels', 'eatUtc', 'flightDataId', 'pushedAtUtc', 'stackIndex', 'status', 'unpassed')) }),
   }),
 };
-// The top level is the registry's keys plus the write stamp _persist adds; nothing else, except one key read and dropped:
-// `sfaRotation`, the SFA rotation record docs/adr/0117 removed with its store (who is on a rotating frequency is no longer
-// stored). A snapshot written before it carries the key; refusing it would make an operator delete the whole Board for a
-// record nothing reads. No restore step reads it, and the next persist leaves it out. Remove once deployed (the
-// supervisor's call, docs/wip/LT-SFA-PAR.md).
-const DROPPED_KEYS = { sfaRotation: true };
-const PERSISTED_SHAPE = { persistedWallAt: true, ...DROPPED_KEYS, ...Object.fromEntries(REGISTRY.map(e => [e.key, ENTRY_SHAPES[e.key]])) };
+// The top level is the registry's keys plus the write stamp _persist adds; nothing else. A snapshot from before
+// docs/adr/0117 still carries `sfaRotation` and stops start-up like any unknown key (LT-PQ2: no exception).
+const PERSISTED_SHAPE = { persistedWallAt: true, ...Object.fromEntries(REGISTRY.map(e => [e.key, ENTRY_SHAPES[e.key]])) };
 
 /** Throws naming `file` and the first key path the shape does not know. */
 function checkPersistedShape(data, file, shape = PERSISTED_SHAPE) {
@@ -365,4 +361,4 @@ const STORE_SYNC = REGISTRY.filter(e => e.sync).map(e => ({ registryKey: e.key, 
 // The order the saved body is restored in (it is not the order it is written in, see above).
 const RESTORE_ORDER = ['flightData', 'airspaces', 'boards', 'correlations', 'marsa', 'runwayStatuses', 'carriers'];
 
-module.exports = { STORE_SYNC, REGISTRY, RESTORE_ORDER, PERSISTED_SHAPE, DROPPED_KEYS, checkPersistedShape };
+module.exports = { STORE_SYNC, REGISTRY, RESTORE_ORDER, PERSISTED_SHAPE, checkPersistedShape };
