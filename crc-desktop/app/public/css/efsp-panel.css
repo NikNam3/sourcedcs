@@ -1853,6 +1853,11 @@
 .efsp-strip .efsp-handoff-tone-attn { border-color: var(--efsp-attn); color: var(--efsp-attn-text); }
 .efsp-strip .efsp-handoff-tone-bad { border-color: #ff5c5c; color: #ff8a8a; }
 .efsp-strip .efsp-handoff-tone-dim { color: var(--efsp-muted); text-decoration: line-through; }
+/* H138 U3: COMMS/CTRL say who holds them, which is no problem: grey text, no background, no frame, whoever holds them
+   (dark cockpit, H115-H119). Only a problem tone may colour them. */
+.efsp-strip .efsp-handoff-tone-quiet, .efsp-strip .efsp-handoff-tone-quiet.efsp-handoff-mine {
+  border-color: transparent; background: transparent; color: var(--efsp-muted); padding: 0 1px;
+}
 .efsp-release-popover input[type=checkbox] { margin-right: 2px; }
 .efsp-release-popover[hidden], .efsp-release-popover input[hidden] { display: none; }
 #efsp-control-attest { order: 1; font-size: 11px; padding: 4px 8px; border-top: 1px solid #2a3038; color: #e0a83c; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
