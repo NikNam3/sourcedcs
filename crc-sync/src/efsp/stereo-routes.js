@@ -51,9 +51,13 @@ const log = require('../log').logger('efsp:stereo-routes');
 // requires this module, not the reverse.
 const MAX_FREE_TEXT = 2000;
 
+// `description` is the squadron's own note on the route, kept in the file and served, but never shown in the picker
+// or filed (decisions.md H138 U4). A stereo route sets no remarks (H138 U4): `remarks` is no longer a key, so a file
+// still carrying one is refused by name below rather than silently ignored (state/ is strict, H127).
 const OPTIONAL_STRING_FIELDS = [
-  'description', 'departureAirport', 'destinationAirport', 'requestedAltitude', 'remarks',
+  'description', 'departureAirport', 'destinationAirport', 'requestedAltitude',
 ];
+const KNOWN_KEYS = new Set(['name', 'route', 'active', ...OPTIONAL_STRING_FIELDS]);
 
 function deepClone(obj) {
   return JSON.parse(JSON.stringify(obj));
@@ -99,6 +103,13 @@ function validateStereoRoutes(candidate) {
       };
     }
     seen.set(key, r.name);
+    const unknown = Object.keys(r).find(k => !KNOWN_KEYS.has(k));
+    if (unknown) {
+      return {
+        ok: false, reason: 'VALIDATION_ERROR',
+        detail: `${r.name} has an unknown key ${JSON.stringify(unknown)}${unknown === 'remarks' ? ' (a stereo route sets no remarks: delete the key)' : ''}`,
+      };
+    }
     // The expansion is the whole point of the record — a stereo with no route
     // resolves to nothing and would produce exactly the incomplete flight data WP6's
     // acceptance criterion exists to rule out.
@@ -144,6 +155,8 @@ function _load(STEREO_ROUTES_PATH) {
  * frames a stereo as "the same shape with a local table instead of an HTTP
  * lookup" and flight-data-store.js's createFlightData() seed is the shared contract.
  *
+ * No remarks (decisions.md H138 U4): a stereo route sets none, so the flight's RMKS stays the controller's own.
+ *
  * aircraftType/wakeCategory are absent, unlike the DD1801 seed: a canned
  * ROUTE says nothing about what airframe is flying it, and guessing would put
  * a wrong type on the Strip for every flight that files the route.
@@ -155,7 +168,6 @@ function toFlightDataFiledSeed(route) {
     requestedAltitude: route.requestedAltitude || '',
     departureAirport: route.departureAirport || '',
     destinationAirport: route.destinationAirport || '',
-    remarks: route.remarks || '',
   };
 }
 

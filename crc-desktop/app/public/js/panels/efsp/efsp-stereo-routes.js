@@ -54,7 +54,7 @@ export function stereoRoutesCacheKey() {
 
 /**
  * @param {{fetchImpl?:typeof fetch, timeoutMs?:number, authHeaders?:()=>object}} [opts] — injectable for tests
- * @returns {Promise<Array<{name:string, description?:string, departureAirport?:string, destinationAirport?:string, route:string, requestedAltitude?:string, remarks?:string}>>} never throws
+ * @returns {Promise<Array<{name:string, description?:string, departureAirport?:string, destinationAirport?:string, route:string, requestedAltitude?:string}>>} never throws
  */
 export async function listStereoRoutesClient(opts = {}) {
   const fetchImpl = opts.fetchImpl || fetch;

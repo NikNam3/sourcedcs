@@ -669,7 +669,7 @@ class FlightDataStore {
     // already COMPUTER_GENERATED (block-map.js), and setField() flips any of
     // these to CONTROLLER_ENTERED the moment one is actually edited.
     if (stereoName) {
-      for (const key of ['route', 'requestedAltitude', 'departureAirport', 'destinationAirport', 'remarks']) {
+      for (const key of ['route', 'requestedAltitude', 'departureAirport', 'destinationAirport']) {
         if (!seed[key] && stereoSeed[key]) provenance[`filed.${key}`] = 'COMPUTER_GENERATED';
       }
       provenance['filed.stereoRouteName'] = 'COMPUTER_GENERATED';
@@ -712,7 +712,7 @@ class FlightDataStore {
         stereoRouteName: stereoName,
         proposedDepartureTimeUtc: seedTimes.proposedDepartureTimeUtc,
         fullRouteClearance: !!seed.fullRouteClearance,
-        remarks: filedFrom('remarks'),
+        remarks: seed.remarks || '', // a stereo route sets no remarks (H138 U4)
         originAirport: seed.originAirport || '',                       // ARRIVAL-type field
         arrivalFix: seed.arrivalFix || null,                            // ARRIVAL-type field
         estimatedArrivalTimeUtc: seedTimes.estimatedArrivalTimeUtc,  // ARRIVAL-type field

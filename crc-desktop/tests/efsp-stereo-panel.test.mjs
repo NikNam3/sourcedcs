@@ -121,9 +121,8 @@ test('with a table installed the picker appears, blank-first, one option per rou
   assert.equal(select.hidden, false);
   assert.equal(select.disabled, false);
   assert.deepEqual(select.children.map(o => o.value), ['', 'PACK 1', 'PACK 2']);
-  // The description rides along where there is one — a bare "PACK 2" in a
-  // list of eight is not a choice anybody can make.
-  assert.equal(select.children[1].textContent, 'PACK 1 — north MOA');
+  // The name only (decisions.md H138 U4): the description stays in the file and is never shown.
+  assert.equal(select.children[1].textContent, 'PACK 1');
   assert.equal(select.children[2].textContent, 'PACK 2');
 });
 
