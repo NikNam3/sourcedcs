@@ -7,7 +7,7 @@ move control at the boundary.
 
 ## Why
 
-**H142, H143 and H144** (`decisions.md`, read all three whole): a not-released handoff moves control automatically once the aircraft is inside
+**H142–H145** (`decisions.md`, read all four whole): a not-released handoff moves control automatically once the aircraft is inside
 the receiver's airspace. So the airspace system must know each controlling facility's **area of jurisdiction** and answer
 "whose airspace is this aircraft in". FAA background: ¶2-1-15 a 1/c (control at a boundary), and
 `docs/parallel/research/release-and-par.md` R1/R4.
@@ -24,9 +24,13 @@ the receiver's airspace. So the airspace system must know each controlling facil
      **anchored to a carrier hull** (follows the live ship position the carrier code already has).
 2. **Shipped defaults, theater-wide config** (shipped in `config/`, a `state/` copy overrides it, strict like every
    `state/` file — use or extend `config/efsp-airspaces.json`'s theater keying, your call, ADR says which):
-   - Syria: **Incirlik TOWER** (H143): the Class D surface area shape (AIM 3-2-5), **5 nm** circle on the Incirlik
-     field reference point, **SFC – 2,500 ft AGL** (store MSL: field elevation + 2,500, ≈ 2,700 ft), class D, owner
-     Positions **LC, GC** (supervisor default, the size is not the human's: label it in the ADR);
+   - Syria: **Incirlik TOWER = the published LTAG CTR** (ICAO control zone, H145; **never label it bare "CTR"**, which is
+     our Center Position: id e.g. `LTAG-CZ`, label "LTAG CTR (control zone)"), verbatim: *"Circle radius 5 NM centered
+     on 370012N-0352530E except the part of the circle north west of a straight line joining 365906N-0351925E and
+     370432N-0352837E. SFC-3000ft"* (3,000 ft MSL). Decimal: centre 37.003333 N 35.425000 E; chord 36.985000 N
+     35.323611 E → 37.075556 N 35.476944 E (both end points on the circle; the chord is 2.0 nm NW of the centre; the
+     field is on the kept side). Model it as a circle-minus-half-plane or as the equivalent polygon (arc points + chord);
+     either way keep the source text in the config entry. Class D, owner Positions **LC, GC**;
    - Syria: **Incirlik RAPCON** (H142/H143): 50 nm circle on the same point, **SFC – FL280**, owner Positions **AP, PAR**
      (and any SFA/approach Position of INCIRLIK); class: pick a terminal class and label it ours (the class does not change
      ownership here: H143 overrode the "Class E below 2,000 ft is CENTER's" reading);
