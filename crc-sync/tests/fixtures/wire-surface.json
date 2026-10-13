@@ -118,6 +118,7 @@
         "UnbindTrack"
       ],
       "efsp-marsa-mutation": [
+        "AcknowledgeVoid",
         "AddParticipant",
         "DeclareMarsa",
         "EndMarsa",

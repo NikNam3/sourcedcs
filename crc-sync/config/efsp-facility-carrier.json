@@ -56,6 +56,11 @@
       }
     ]
   },
+  "modeCIntruder": {
+    "baseAltitudeFt": 500,
+    "reference": "AGL",
+    "inhibitedPositions": []
+  },
   "hiddenBlocks": {},
   "bays": {
     "CV_MARSHAL": [

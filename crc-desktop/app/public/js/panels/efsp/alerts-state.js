@@ -11,7 +11,7 @@ const efspObligations = new Map(); // stripId -> [{ facilityId, stripId, obligat
 // docs/adr/0058 — what crc-sync's conformance and conflict monitors say is
 // WRONG right now. Sent whole on every change (efsp-alerts), so a flight that
 // conforms again simply is not in the next message.
-const efspConformance = new Map(); // flightDataId -> [{ kind, assigned, actual?, altFt?, fpm?, deviationFt?, since }]
+const efspConformance = new Map(); // flightDataId -> [{ kind, assigned, actual?, altFt?, fpm?, deviationFt?, block?, tanker?, nm?, limitNm?, since }]
 
 // docs/adr/0076 (crc-sync) — surveillance informs, the controller advances: the
 // suggestion chip and the staleness indication, stripId -> hints. Full state in
@@ -20,7 +20,7 @@ const efspSurveillanceHints = new Map(); // stripId -> [{ kind: 'AIRBORNE_ADVANC
 
 const efspTofiRegime = new Map(); // flightDataId -> { kind: 'REGIME_OUTSIDE_AIRSPACE'|'AWAITING_ENTRY_UNKNOWN', since } (crc-sync docs/adr/0102)
 
-let efspConflicts = [];            // [{ id, a, b, aCallsign, bCallsign, timeToCpaSec, minNm, vertFt, aAt, bAt }]
+let efspConflicts = [];            // [{ id, kind: 'CA'|'MCI', a, b, aCallsign, bCallsign, intruder?, timeToCpaSec, minNm, vertFt, aAt, bAt }]
 
 /**
  * The one obligation a Strip's badge shows: OVERDUE before WARNING, then the
@@ -71,15 +71,44 @@ export function conformanceAlertsForFlightData(flightDataId) { return efspConfor
 /** The TOFI regime alert standing on this flight ({ kind, since }), or null (crc-sync docs/adr/0102). */
 export function tofiRegimeAlertForFlightData(flightDataId) { return efspTofiRegime.get(flightDataId) || null; }
 
+/**
+ * A refueling-block alert (crc-sync's docs/adr/0118) as a short tag and a sentence: the receiver left the block around the
+ * tanker (±1,000 ft, within 3 NM) or is moving away from it. Null for any other alert.
+ */
+export function refuelingAlertText(a) {
+  if (!a || a.tanker === undefined) return null;
+  if (a.kind === 'TANKER_DISTANCE') {
+    return { text: `AR ${a.nm} NM`, reason: `${a.nm} NM from the tanker ${a.tanker}: outside the ${a.limitNm} NM refueling block.` };
+  }
+  const below = a.block && a.altFt < a.block.lowFt;
+  const off = a.block ? Math.abs(a.altFt - (below ? a.block.lowFt : a.block.highFt)) : Math.abs(a.deviationFt || 0);
+  const where = `${off.toLocaleString('en-US')} ft ${below ? 'below' : 'above'} the refueling block with ${a.tanker}`;
+  if (a.kind === 'WRONG_WAY') {
+    return { text: `AR ${below ? '↓' : '↑'}`, reason: `${where}, ${a.fpm < 0 ? 'descending' : 'climbing'} away at ${Math.abs(a.fpm).toLocaleString('en-US')} ft/min.` };
+  }
+  if (a.kind === 'LEVEL_BUST') return { text: `AR ${below ? '−' : '+'}${off}`, reason: `${where}.` };
+  return null;
+}
+
+/** The tag a conflict is shown with: `CA` or `MCI` (crc-sync's docs/adr/0118). */
+export function conflictTag(c) { return c && c.kind === 'MCI' ? 'MCI' : 'CA'; }
+
+/** The words for it: "Conflict Alert" or "Mode C Intruder". */
+export function conflictName(c) { return c && c.kind === 'MCI' ? 'Mode C Intruder' : 'Conflict Alert'; }
+
 /** Every current short-term conflict. */
 export function getAllEfspConflicts() { return efspConflicts; }
 
-/** The conflicts this track is in, each seen from its side: { other, otherCallsign, timeToCpaSec, minNm, vertFt, id }. */
+/**
+ * The conflicts this track is in, each seen from its side: { id, kind, other, otherCallsign, timeToCpaSec, minNm, vertFt }.
+ * `kind` is 'CA' (two tracked aircraft) or 'MCI' (a Mode C intruder against a tracked one), crc-sync's docs/adr/0118.
+ */
 export function conflictAlertsForTrack(trackId) {
   if (trackId == null) return [];
   const id = String(trackId);
   return efspConflicts.filter(c => c.a === id || c.b === id).map(c => ({
     id: c.id,
+    kind: c.kind === 'MCI' ? 'MCI' : 'CA',
     other: c.a === id ? c.b : c.a,
     otherCallsign: c.a === id ? c.bCallsign : c.aCallsign,
     timeToCpaSec: c.timeToCpaSec, minNm: c.minNm, vertFt: c.vertFt,

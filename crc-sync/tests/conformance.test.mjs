@@ -294,3 +294,94 @@ test('level-bust persistence is wall time: a paused or jumping mission clock doe
   assert.deepEqual(kinds(runWall([...pre, [1, 1 + cfg.levelBustPersistSec + 1, bust]])), ['LEVEL_BUST']);
   assert.deepEqual(runWall([...pre, [3600, 3, bust]]), []);
 });
+
+// ── under MARSA with a tanker (docs/adr/0118, T17, H134 LT-RQ10) ───────────────────────────────
+const { evaluateRefuelingBlock, refuelingReceivers, ConformanceMonitor: CM } = await import('../src/efsp/conformance.js');
+
+function runAr(steps) {
+  const mem = {};
+  let alerts = [];
+  for (const [t, over] of steps) {
+    alerts = evaluateRefuelingBlock({ altFt: 20000, verticalSpeedMs: 0, groundSpeedMs: FAST, tankerAltFt: 22000, distanceNm: 1, tanker: 'SHELL71', ...over }, mem, t * S, cfg);
+  }
+  return alerts;
+}
+
+test('AR block: 2,000 ft below the tanker and climbing toward it is fine', () => {
+  assert.deepEqual(runAr([[0, { verticalSpeedMs: fpm(1500) }], [10, { verticalSpeedMs: fpm(1500) }]]), []);
+});
+
+test('AR block: 1,350 ft below and descending away is WRONG_WAY, named after the tanker', () => {
+  const alerts = runAr([[0, { altFt: 20650, verticalSpeedMs: fpm(-800) }], [6, { altFt: 20600, verticalSpeedMs: fpm(-800) }]]);
+  assert.equal(alerts.length, 1);
+  assert.equal(alerts[0].kind, 'WRONG_WAY');
+  assert.equal(alerts[0].tanker, 'SHELL71');
+  assert.deepEqual(alerts[0].block, { lowFt: 21000, highFt: 23000 });
+});
+
+test('AR block: once in it, drifting out within our buffer is quiet; beyond it is LEVEL_BUST', () => {
+  assert.deepEqual(runAr([[0, { altFt: 21500 }], [5, { altFt: 20600 }], [10, { altFt: 20600 }]]), [], '400 ft out: inside the buffer');
+  const bust = runAr([[0, { altFt: 21500 }], [5, { altFt: 20300 }], [10, { altFt: 20300 }]]);
+  assert.deepEqual(bust.map(a => a.kind), ['LEVEL_BUST']);
+  assert.equal(bust[0].deviationFt, -700);
+});
+
+test('AR block: the block moves with the tanker (no alert while both climb together)', () => {
+  assert.deepEqual(runAr([[0, { altFt: 21500, tankerAltFt: 22000 }], [10, { altFt: 23500, tankerAltFt: 24000 }]]), []);
+});
+
+test('AR block: within 3 NM, then beyond it, is TANKER_DISTANCE; never before the receiver has closed', () => {
+  assert.deepEqual(runAr([[0, { altFt: 21500, distanceNm: 12 }], [10, { altFt: 21500, distanceNm: 8 }]]), [], 'still closing');
+  const far = runAr([[0, { altFt: 21500, distanceNm: 1 }], [5, { altFt: 21500, distanceNm: 3.6 }], [10, { altFt: 21500, distanceNm: 3.8 }]]);
+  assert.deepEqual(far.map(a => [a.kind, a.nm, a.limitNm]), [['TANKER_DISTANCE', 3.8, 3]]);
+});
+
+test('refuelingReceivers: the ATO tanker, else the declaring callsign; only TANKER_ACCEPTED, only ACTIVE', () => {
+  const fds = {
+    fT: { identity: { callsign: 'SHELL71' }, military: { arInfo: null } },
+    fR: { identity: { callsign: 'VIPER11' }, military: {} },
+    fA: { identity: { callsign: 'TEXACO1' }, military: { arInfo: { asTanker: { tacan: '50X' }, asReceiver: [] } } },
+  };
+  const of = (id) => fds[id];
+  const declared = { state: 'ACTIVE', startEvent: 'TANKER_ACCEPTED', declaringCallsign: 'Shell 71', participants: ['fT', 'fR'] };
+  assert.deepEqual([...refuelingReceivers([declared], of)], [['fR', { tankerFlightDataId: 'fT', tanker: 'SHELL71' }]]);
+  const ato = { ...declared, declaringCallsign: 'somebody', participants: ['fR', 'fA'] };
+  assert.deepEqual([...refuelingReceivers([ato], of)], [['fR', { tankerFlightDataId: 'fA', tanker: 'TEXACO1' }]]);
+  const unknown = { ...declared, declaringCallsign: 'ARCO9' };
+  assert.deepEqual([...refuelingReceivers([unknown], of)].map(([id, v]) => [id, v.tankerFlightDataId]), [['fT', null], ['fR', null]]);
+  assert.equal(refuelingReceivers([{ ...declared, state: 'VOIDED' }, { ...declared, startEvent: 'LOCAL_DECLARATION' }], of).size, 0);
+});
+
+test('T17: a receiver climbing from its assigned altitude to the tanker raises nothing under MARSA; its clearance is back once MARSA ends', () => {
+  const FT = 1 / 3.28084;
+  const tracks = {
+    tR: { lat: 37, lon: 35, alt: 20000 * FT, course: 90, groundSpeed: FAST, verticalSpeed: fpm(1500) },
+    tT: { lat: 37, lon: 35.01, alt: 21000 * FT, course: 90, groundSpeed: FAST, verticalSpeed: 0 },
+  };
+  const at = Date.now();
+  const assigned = { status: 'ACTIVE', parsed: 20000, at };
+  const fds = {
+    fR: { identity: { callsign: 'VIPER11' }, military: {}, clearance: { altitude: { entries: [assigned] }, heading: { entries: [] } } },
+    fT: { identity: { callsign: 'SHELL71' }, military: {}, clearance: { altitude: { entries: [] }, heading: { entries: [] } } },
+  };
+  let relations = [{ state: 'ACTIVE', startEvent: 'TANKER_ACCEPTED', declaringCallsign: 'SHELL71', participants: ['fT', 'fR'] }];
+  const monitor = wallFollows(new CM({
+    trackStore: { get: (id) => tracks[id] },
+    flightDataStore: { getFlightData: (id) => fds[id] },
+    correlationStore: { getAll: () => [{ flightDataId: 'fR', trackId: 'tR', state: 'CORRELATED' }, { flightDataId: 'fT', trackId: 'tT', state: 'CORRELATED' }] },
+    weather: () => ({ pressurePa: 101325, tempK: 288.15 }),
+    transitionAltFt: () => 99999,
+    indicatedAltFt: (m) => m * 3.28084,
+    gridToMagnetic: (deg) => deg,
+    config: cfg,
+    refueling: () => refuelingReceivers(relations, (id) => fds[id]),
+  }));
+  // Reached its assigned 20,000 first, then the climb to the tanker.
+  monitor.tick(0);
+  for (let t = 1; t <= 20; t++) { tracks.tR.alt = (20000 + t * 50) * FT; monitor.tick(t * S); }
+  assert.deepEqual(monitor.getAll(), [], 'no LEVEL_BUST against 20,000 while under MARSA');
+  relations = [{ ...relations[0], state: 'ENDED' }];
+  for (let t = 21; t <= 30; t++) monitor.tick(t * S);
+  assert.deepEqual(monitor.getAll().map(r => [r.flightDataId, r.alerts.map(a => a.kind)]), [['fR', ['WRONG_WAY']]],
+    'MARSA terminated: back on its own clearance, 1,000 ft above it and still climbing');
+});

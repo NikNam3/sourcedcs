@@ -201,8 +201,11 @@ class WsHub {
   _efspAlertsMsg(session) {
     const a = this._efspAlerts || {};
     const seen = (session && session.lastSent) || new Map();
+    // docs/adr/0118: an MCI also needs one of the session's Positions to show it (base altitude, inhibit).
+    const positions = (session && session.coverage && session.coverage.signedOnPositions) || [];
+    const forSession = typeof a.conflictAlertFor === 'function' ? (c) => a.conflictAlertFor(c, positions) : () => true;
     const conflictAlert = session && session.coverage && session.coverage.conflictAlert
-      ? (a.conflictAlert || []).filter(c => seen.has(String(c.a)) && seen.has(String(c.b)))
+      ? (a.conflictAlert || []).filter(c => seen.has(String(c.a)) && seen.has(String(c.b)) && forSession(c))
       : [];
     // Obligations (docs/adr/0067) and conformance are about flights, so a
     // session that reads only what it owns (docs/adr/0080) gets its own

@@ -83,7 +83,9 @@ export const MARSA_EXPANSION = 'Military Authority Assumes Responsibility for Se
  *                            what stops a controller issuing a vector and only
  *                            then discovering they broke the join-up.
  *   ACTIVE, post-rendezvous  MARSA    — joined up, interlock spent.
- *   VOIDED                   MARSA ✕  — rule 2's alert. Carries WHY.
+ *   VOIDED                   MARSA ✕  — rule 2's alert. Carries WHY. Stands until a
+ *                            controller holding one of the Strips acknowledges it
+ *                            (crc-sync's docs/adr/0118), then nothing.
  *   ENDED                    nothing  — a finished AR is not news. A flight
  *                            that landed, or an AR that completed normally,
  *                            must not leave a badge sitting on the Strip
@@ -100,6 +102,9 @@ export function marsaBadgeFor(strip) {
   const withText = others.length === 1 ? 'with 1 other flight' : `with ${others.length} other flights`;
 
   if (relation.state === 'VOIDED') {
+    // crc-sync's docs/adr/0118 (T14, H134 LT-RQ15 a): the notice stands until a controller holding one of the Strips
+    // acknowledges it, then goes from every participant Strip (dark cockpit: nothing left to say).
+    if (relation.voidAcknowledgedAt) return null;
     const why = _voidSentence(relation);
     return {
       marsaId: relation.marsaId,

@@ -73,6 +73,10 @@ function validateConfig(candidate) {
     const problem = validatePositionFrequencies(candidate.positionFrequencies, candidate.positions || []);
     if (problem) return { ok: false, reason: 'VALIDATION_ERROR', detail: problem };
   }
+  if (candidate.modeCIntruder !== undefined) {
+    const problem = validateModeCIntruder(candidate.modeCIntruder, candidate.positions || []);
+    if (problem) return { ok: false, reason: 'VALIDATION_ERROR', detail: problem };
+  }
   if (candidate.singleFrequencyApproach !== undefined) {
     const problem = validateSingleFrequencyApproach(candidate.singleFrequencyApproach, candidate);
     if (problem) return { ok: false, reason: 'VALIDATION_ERROR', detail: problem };
@@ -149,6 +153,36 @@ function validatePositionFrequencies(freqs, positions) {
       labels.add(f.label);
       if (!isValidFrequency(f.mhz)) return `positionFrequencies.${positionId}.${f.label}: mhz must be a number between ${MIN_FREQUENCY_MHZ} and ${MAX_FREQUENCY_MHZ}`;
     }
+  }
+  return null;
+}
+
+// The Mode C Intruder setting (docs/adr/0118, H136 VQ7 a). JO 7210.3EE para 12-6-12 b (STARS): "MCI Alert base altitude
+// must be set at any value between ground level and 500 feet AGL"; para 8-2-5 b (ERAM): "between ground level and 5,000
+// feet MSL ... When a facility's or sector's ground level is above 5,000 feet MSL, base altitudes may be set to 1,500 AGL";
+// para 12-6-12 d: "authorized to inhibit the display of MCI Alert at specified sectors/position".
+const MCI_KEYS = Object.freeze(['baseAltitudeFt', 'reference', 'highTerrainAglFt', 'inhibitedPositions']);
+const MCI_REFERENCES = Object.freeze(['AGL', 'MSL']);
+/** The terminal default (STARS, para 12-6-12 b) for a Facility whose file has no `modeCIntruder`. */
+const MCI_DEFAULT = Object.freeze({ baseAltitudeFt: 500, reference: 'AGL', highTerrainAglFt: null, inhibitedPositions: Object.freeze([]) });
+
+/** `modeCIntruder` (docs/adr/0118): `{ baseAltitudeFt, reference: 'AGL'|'MSL', highTerrainAglFt?, inhibitedPositions? }`. A problem string or null. */
+function validateModeCIntruder(mci, positions) {
+  if (!isPlainObject(mci)) return 'modeCIntruder must be an object';
+  const stray = Object.keys(mci).find(k => !MCI_KEYS.includes(k));
+  if (stray) return `modeCIntruder: unknown key ${JSON.stringify(stray)}`;
+  if (!MCI_REFERENCES.includes(mci.reference)) return `modeCIntruder.reference must be one of ${MCI_REFERENCES.join(', ')}`;
+  const max = mci.reference === 'AGL' ? 500 : 5000;
+  if (typeof mci.baseAltitudeFt !== 'number' || !Number.isFinite(mci.baseAltitudeFt) || mci.baseAltitudeFt < 0 || mci.baseAltitudeFt > max) {
+    return `modeCIntruder.baseAltitudeFt must be a number from 0 to ${max} ft ${mci.reference} (JO 7210.3EE para ${mci.reference === 'AGL' ? '12-6-12 b' : '8-2-5 b'})`;
+  }
+  if (mci.highTerrainAglFt !== undefined && mci.highTerrainAglFt !== null) {
+    if (mci.reference !== 'MSL') return 'modeCIntruder.highTerrainAglFt applies only to an MSL base altitude (JO 7210.3EE para 8-2-5 b)';
+    if (typeof mci.highTerrainAglFt !== 'number' || !Number.isFinite(mci.highTerrainAglFt) || mci.highTerrainAglFt < 0) return 'modeCIntruder.highTerrainAglFt must be a number of feet';
+  }
+  if (mci.inhibitedPositions !== undefined) {
+    if (!Array.isArray(mci.inhibitedPositions)) return 'modeCIntruder.inhibitedPositions must be a list of Positions';
+    for (const p of mci.inhibitedPositions) if (!positions.includes(p)) return `modeCIntruder.inhibitedPositions names unknown Position ${p}`;
   }
   return null;
 }
@@ -357,13 +391,19 @@ const isPlainObject = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
 //    is the route §9.6 keeps clear for alert scrambles, marked constrained while a scramble is active
 //    (docs/adr/0070), a [SOURCE-DEFINED] placeholder name.
 
+//  modeCIntruder (optional): docs/adr/0118 (H136 VQ7 a). The Mode C Intruder base altitude and the Positions MCI is
+//    inhibited at. `baseAltitudeFt` with `reference` AGL (a terminal Facility, JO 7210.3EE para 12-6-12 b: ground to 500
+//    ft AGL) or MSL (an en route Facility, para 8-2-5 b: ground to 5,000 ft MSL); `highTerrainAglFt` (MSL only) is para
+//    8-2-5 b's "1,500 AGL" where the ground is above the MSL base, applied only where terrain is known; `inhibitedPositions`
+//    is para 12-6-12 d / 8-2-5 c.3. Absent: 500 ft AGL, nothing inhibited (MCI_DEFAULT). Read once at start-up (P5).
 //  parApproaches (optional): the PAR approach to each runway end (docs/adr/0112): threshold, final approach course
 //    (true), TDZE (null: the DCS airfield elevation), TCH, decision height and the published glidepath angle (null:
 //    none, the controller's default applies, H116). Shape checked by surveillance/par.js's validateParApproaches.
 //    [SOURCE-DEFINED] until someone copies the plate. Read once at start-up, never written by code (P5).
 
 // Keys every facility file must carry (a shipped file is complete: nothing is merged in from the code).
-// `singleFrequencyApproach`, `runwayStatus`, `positionFrequencies` and `parApproaches` are the only optional ones: a Facility without those Bays has none.
+// `singleFrequencyApproach`, `runwayStatus`, `positionFrequencies` and `parApproaches` are optional: a Facility without those Bays has none.
+// `modeCIntruder` is optional too: without it the terminal default applies (MCI_DEFAULT, docs/adr/0118).
 const REQUIRED_KEYS = Object.freeze({
   facility: 'string', positions: 'array', positionClasses: 'object', positionLetters: 'object', consolidation: 'object', handBack: 'object',
   positionRadars: 'object', hiddenBlocks: 'object', bays: 'object', dataOnly: 'boolean', standingReleases: 'array', aitAuthorized: 'boolean',
@@ -445,4 +485,4 @@ function validateFacilityConfig(candidate, expectedFacilityId) {
   return { ok: true };
 }
 
-module.exports = { validateConfig, validateFacilityConfig, validateRadarSelector, BAY_VIEWS, SFA_USES, REQUIRED_KEYS };
+module.exports = { validateConfig, validateFacilityConfig, validateRadarSelector, BAY_VIEWS, SFA_USES, REQUIRED_KEYS, MCI_DEFAULT };

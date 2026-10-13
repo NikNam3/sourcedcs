@@ -77,7 +77,7 @@ const MIN_PARTICIPANTS = 2;
 
 const TRANSITION_REASONS = [
   'DECLARED', 'RENDEZVOUS', 'PARTICIPANT_ADDED', 'PARTICIPANT_REMOVED',
-  'ENDED', 'VOIDED',
+  'ENDED', 'VOIDED', 'VOID_ACKNOWLEDGED',
 ];
 
 function deepClone(obj) { return JSON.parse(JSON.stringify(obj)); }
@@ -275,6 +275,7 @@ class MarsaStore extends SyncedStore {
         case 'RemoveParticipant': return this._removeParticipant(relation, op, by);
         case 'EndMarsa':          return this._end(relation, op, by);
         case 'VoidMarsa':         return this._void(relation, 'MANUAL', capText(op.note), by);
+        case 'AcknowledgeVoid':   return this._acknowledgeVoid(relation, actingPositionId, by);
         default:
           return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown MARSA op: ${op.kind}` };
       }
@@ -354,6 +355,9 @@ class MarsaStore extends SyncedStore {
       rendezvousBy: null,
       voidedBy: null,
       voidedDetail: null,
+      // docs/adr/0118 (T14, H134 LT-RQ15 a): the void notice stands until a controller holding one of the Strips acknowledges it.
+      voidAcknowledgedAt: null,
+      voidAcknowledgedBy: null,
       endedAt: null,
       endedBy: null,
       note: capText(op.note),
@@ -478,6 +482,21 @@ class MarsaStore extends SyncedStore {
     // flight's own separation fields true, rather than only the relation's
     // state.
     this._applyRegime(relation.participants, 'ATC', by);
+    return { ok: true };
+  }
+
+  /**
+   * The "MARSA voided" notice is acknowledged (docs/adr/0118, T14, H134 LT-RQ15 a): the orders say an ATC course or altitude
+   * change voids MARSA (JO 7110.65BB para 9-2-13 d NOTE) and nothing about a notice; ours is that it stands on every
+   * participant Strip until a controller holding one of them acknowledges it, then goes from all of them. The wire gate
+   * checks the Strip is held (wire/families/marsa.js); the relation keeps who and when.
+   */
+  _acknowledgeVoid(relation, actingPositionId, by) {
+    if (relation.state !== 'VOIDED') return { ok: false, reason: 'VALIDATION_ERROR', detail: `this MARSA relation is ${relation.state}, not voided` };
+    if (relation.voidAcknowledgedAt) return { ok: false, reason: 'VALIDATION_ERROR', detail: 'the void is already acknowledged' };
+    relation.voidAcknowledgedAt = this._clock.now();
+    relation.voidAcknowledgedBy = actingPositionId || null;
+    this._touch(relation, by, { reason: 'VOID_ACKNOWLEDGED', detail: actingPositionId || null });
     return { ok: true };
   }
 

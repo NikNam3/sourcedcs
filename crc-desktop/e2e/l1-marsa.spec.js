@@ -177,3 +177,58 @@ test('extends F-305: the participant highlight is drawn on the other Strip', asy
 
   await expect(stripByCallsign(page, b)).toHaveClass(/efsp-strip-marsa-participant/);
 });
+
+// ── T15 (live test 2026-10-11, crc-sync's docs/adr/0118) ─────────────────
+//
+// After a void, clicking a field on one participant made the Strips reorder. Cause: the Rack reconciler skipped a
+// protected Strip (one being edited) without stepping past it, so any render while the edit was open inserted every
+// Strip below it ABOVE it, and the order flipped back once the edit closed. A void makes that render certain: the
+// click selects the Strip and the participants' signatures move with it.
+
+const rackOrder = (page, callsigns) => page.evaluate((list) => {
+  const els = [...document.querySelectorAll('.efsp-strip')];
+  return els.map(el => list.find(cs => el.querySelector('.efsp-block-1') && el.querySelector('.efsp-block-1').textContent.includes(cs))).filter(Boolean);
+}, callsigns);
+
+test('T15: after a MARSA void, clicking a field on one Strip does not reorder the two', async ({ page }) => {
+  await openPanel(page);
+  const { a, b } = await seedPair(page);
+  await declareVia(page, a, b, 'SHELL71');
+  await page.evaluate((cs) => {
+    const strip = [...crc.state.efspStrips.values()].find(s => crc.state.efspFlightDataList.get(s.flightDataId).identity.callsign === cs);
+    crc.ws.sendEfspMutation('OPS', strip, { kind: 'SetBlock', blockId: '21', value: '5000' });
+  }, a);
+  await expect.poll(() => relationFor(page, a).then(r => r && r.state)).toBe('VOIDED');
+  await settle(page);
+
+  const before = await rackOrder(page, [a, b]);
+  expect(before.length, 'both Strips are on the page').toBe(2);
+  const first = stripByCallsign(page, before[0]);
+  // A real click on a field of the upper Strip: its Block edit opens and holds it.
+  await first.locator('.efsp-block-9').click();
+  await expect(first.locator('.efsp-block-input')).toBeFocused();
+  await settle(page);
+  expect(await rackOrder(page, [a, b]), 'the Strip below jumped above the one being edited').toEqual(before);
+  await page.keyboard.press('Escape');
+  await settle(page);
+  expect(await rackOrder(page, [a, b])).toEqual(before);
+});
+
+// ── T14 (crc-sync's docs/adr/0118, H134 LT-RQ15 a) ───────────────────────
+test('T14: the MARSA voided notice stays until the controller holding a Strip acknowledges it, then leaves both', async ({ page }) => {
+  await openPanel(page);
+  const { a, b } = await seedPair(page);
+  await declareVia(page, a, b, 'SHELL71');
+  await page.evaluate((cs) => {
+    const strip = [...crc.state.efspStrips.values()].find(s => crc.state.efspFlightDataList.get(s.flightDataId).identity.callsign === cs);
+    crc.ws.sendEfspMutation('OPS', strip, { kind: 'SetBlock', blockId: '21', value: '5000' });
+  }, a);
+  await expect.poll(() => relationFor(page, a).then(r => r && r.state)).toBe('VOIDED');
+  await settle(page);
+  for (const cs of [a, b]) await expect(stripByCallsign(page, cs).locator('.efsp-marsa-void-reason')).toBeVisible();
+  await stripByCallsign(page, b).getByRole('button', { name: 'Acknowledge' }).click();
+  for (const cs of [a, b]) {
+    await expect(stripByCallsign(page, cs).locator('.efsp-marsa-void-reason')).toHaveCount(0);
+    await expect(stripByCallsign(page, cs).locator('.efsp-marsa-badge')).toHaveCount(0);
+  }
+});

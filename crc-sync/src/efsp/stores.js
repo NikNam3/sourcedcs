@@ -326,7 +326,7 @@ const ENTRY_SHAPES = {
     'trackId', 'transitions', 'updatedAt', 'updatedBy', 'warning')),
   marsa: arrayOf(anyOf('declaredBy', 'declaredPositionId', 'declaringCallsign', 'endCondition', 'endedAt', 'endedBy', 'marsaId', 'note',
     'participants', 'rendezvousAt', 'rendezvousBy', 'rev', 'startEvent', 'startedAt', 'state', 'transitions', 'updatedAt', 'updatedBy',
-    'voidedBy', 'voidedDetail')),
+    'voidAcknowledgedAt', 'voidAcknowledgedBy', 'voidedBy', 'voidedDetail')),
   runwayStatuses: arrayOf({
     ...anyOf('activeRunway', 'activeRunwaySource', 'facilityId', 'rev', 'runwayChange', 'runways', 'transitions', 'updatedAt',
       'updatedBy', 'windDerivedSession'),

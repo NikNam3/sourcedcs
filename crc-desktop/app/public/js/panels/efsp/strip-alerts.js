@@ -1,5 +1,5 @@
 'use strict';
-import { conformanceAlertsForFlightData, tofiRegimeAlertForFlightData, correlatedTrackIdForStrip, conflictAlertsForTrack } from './efsp-state.js';
+import { conformanceAlertsForFlightData, tofiRegimeAlertForFlightData, correlatedTrackIdForStrip, conflictAlertsForTrack, conflictName, conflictTag, refuelingAlertText } from './efsp-state.js';
 import { ordnanceAlertsFor } from './ordnance-advisory.js';
 import { scrambleAlertsFor } from './scramble.js';
 import { atoAlertsFor } from './ato-strip.js';
@@ -37,14 +37,21 @@ export function _stripAlerts(strip) {
     // crc-sync names the other aircraft the way it is labelled: its flight's
     // callsign when correlated, else its tag or track number (docs/adr/0059).
     const other = c.otherCallsign;
+    // crc-sync's docs/adr/0118: CA between two tracked aircraft, MCI against an untracked one reporting altitude.
     out.push({
-      key: 'conflictAlert', tone: 'bad', legacy: 'efsp-conflict-alert-indicator',
-      text: `Conflict Alert ${other} ${_fmtClock(c.timeToCpaSec)}`,
-      reason: `Conflict with ${other} in ${_fmtClock(c.timeToCpaSec)}: closest ${c.minNm} NM / ${c.vertFt} ft.`,
+      key: 'conflictAlert', tone: 'bad', legacy: `efsp-conflict-alert-indicator efsp-conflict-${conflictTag(c).toLowerCase()}`,
+      text: `${conflictName(c)} ${other} ${_fmtClock(c.timeToCpaSec)}`,
+      reason: `${c.kind === 'MCI' ? 'Mode C intruder' : 'Conflict'} with ${other} in ${_fmtClock(c.timeToCpaSec)}: closest ${c.minNm} NM / ${c.vertFt} ft.`,
     });
   }
   out.push(...atoAlertsFor(strip)); // docs/adr/0071, §3.10.3 rule 3
   for (const a of conformanceAlertsForFlightData(strip.flightDataId)) {
+    // crc-sync's docs/adr/0118: a receiver under MARSA is checked against the refueling block around its tanker.
+    if (a.tanker !== undefined) {
+      const ar = refuelingAlertText(a);
+      if (ar) out.push({ key: 'conf', tone: 'bad', legacy: 'efsp-conf-indicator efsp-conf-refueling', text: ar.text, reason: ar.reason });
+      continue;
+    }
     if (a.kind === 'HEADING') {
       out.push({ key: 'conf', tone: 'attn', legacy: 'efsp-conf-indicator', text: `HDG ${_pad3(a.actual)}`,
         reason: `Assigned heading ${_pad3(a.assigned)}, tracking ${_pad3(a.actual)}.` });

@@ -16,6 +16,20 @@ function marsaFlightDataIds(op) {
   return undefined;
 }
 
+/** Whether `positionId` owns a live Strip of one of `flightDataIds`, at any Facility. */
+function holdsParticipantStrip(ctx, positionId, flightDataIds) {
+  const wanted = new Set(flightDataIds || []);
+  for (const facilityId of ctx.facilityConfig.getFacilityIds()) {
+    let board = null;
+    try { board = ctx.boardStoreFor(facilityId); } catch { board = null; }
+    if (!board) continue;
+    for (const s of board.getAll()) {
+      if (s.state !== 'DROPPED' && wanted.has(s.flightDataId) && s.ownerPositionId === positionId) return true;
+    }
+  }
+  return false;
+}
+
 /**
  * MARSA ops (§9.2) — a FOURTH dispatch path, for the same reason the airspace
  * and correlation paths exist: this targets a relation BETWEEN flights. There
@@ -50,8 +64,19 @@ module.exports = {
 
   // Refused by class, not by table — a range Position is the using agency and
   // works no Strips (§4.1 rule 2), so it has no flights to put into a relation.
-  permit: (ctx, msg) => ctx.permission.canDeclareMarsa(msg.actingPositionId) ? null
-    : { reason: 'PERMISSION_DENIED', detail: `${msg.actingPositionId} works no flights, so it declares no MARSA` },
+  permit: (ctx, msg) => {
+    if (!ctx.permission.canDeclareMarsa(msg.actingPositionId)) {
+      return { reason: 'PERMISSION_DENIED', detail: `${msg.actingPositionId} works no flights, so it declares no MARSA` };
+    }
+    // docs/adr/0118 (T14, H134 LT-RQ15 a): a void notice is acknowledged by a controller holding one of the Strips it is on.
+    if (msg.op && msg.op.kind === 'AcknowledgeVoid') {
+      const relation = ctx.marsaStore && ctx.marsaStore.getRelation(msg.marsaId);
+      if (relation && !holdsParticipantStrip(ctx, msg.actingPositionId, relation.participants)) {
+        return { reason: 'PERMISSION_DENIED', detail: `${msg.actingPositionId} holds none of these Strips: the controller holding one acknowledges the void` };
+      }
+    }
+    return null;
+  },
 
   // DeclareMarsa is the case that matters: a retried declaration minted a
   // second relation.
