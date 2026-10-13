@@ -2,6 +2,10 @@
 
 ## RELAUNCH HERE (2026-10-13 evening): the live-test batch is merged; round-2 findings are next
 
+**Progress (2026-10-13, later):** LT-MQ1/MQ2/AQ1 still unanswered on the Desk (non-blocking). Briefings written:
+`next/U-RESEARCH.md` (also folds in the U17 check, as R7), `next/U-STRIP.md`, `next/U-PANELS.md`. **U-RESEARCH running**
+(worktree `sourcedcs-U-RESEARCH`, branch `lane/U-RESEARCH`); then U-STRIP, then U-PANELS, one at a time.
+
 **State:** everything is merged into `efsp-wp5-correlation` and green (S-ARCH-59: crc-sync 2738, freeze 56/56, walk 23/23,
 soak:selfcheck PASS, wire protocol 2, crc-desktop 1289, sharded Playwright 249/249). No lane is running; the only
 worktree is the main checkout. Record: `decisions.md` H133–H138, S-ARCH-48–59.
