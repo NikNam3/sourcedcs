@@ -679,9 +679,9 @@ Client (`crc-desktop/app/public/js/panels/efsp/`):
    scopes; "Release…" form: "Full" relabelled "Control".
 2. `handoffChips` per R5: no `RELEASE` line once control moved; partial release line grey; `RELEASE WITHDRAWN` attention
    with an "Acknowledge" step until acknowledged; `UNABLE` attention until the next request or a grant.
-3. The handoff PROPOSE form (coordination popover, `bay/popovers/`): a "Released" section reusing the release form's scope
+3. The handoff PROPOSE form (`bay/popovers/coordination.js`): a "Released" section reusing the release form's scope
    picker; the receiver's offer shows "released: Turns + Descent ≥ 4000".
-4. Tests: `tests/control-release-rules.test.mjs` rows for each state of R5; Playwright: the existing control-release spec
+4. Tests: `tests/efsp-control-release-client.test.mjs` rows for each state of R5; Playwright: `e2e/control-release.spec.js`
    gains "handoff released, receiver never sees Request release" (U5/U8) and "receiver cannot take control before comms"
    (U6).
 
@@ -696,5 +696,5 @@ Client (`crc-desktop/app/public/js/panels/efsp/`):
    edge. Elevation: the low tolerance line at −`tolElLow`, high at +`tolElHigh`. Settings tab: "Elevation below ±" and
    "Elevation above ±" (or keep one field if U-RQ5 b).
 3. Mockup `docs/mockups/par-panel.html` rev 5 for the human before the build (H115 approved the feet version).
-4. No server change (ADR 0112's `par-sample` already has `azDeg`). Tests: `tests/par-model.test.mjs` for the degree readout,
-   the window and the split elevation limits; the PAR Playwright spec's azimuth assertions (`data-par-line`, readout text).
+4. No server change (ADR 0112's `par-sample` already has `azDeg`). Tests: `tests/par-panel.test.mjs` for the degree readout,
+   the window and the split elevation limits; `e2e/par-panel.spec.js` azimuth assertions (`data-par-line`, readout text).
