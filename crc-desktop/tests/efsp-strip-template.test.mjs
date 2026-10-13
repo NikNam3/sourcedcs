@@ -9,6 +9,7 @@ import { applyEfspSnapshot, _resetEfspStateForTest } from '../app/public/js/pane
 import { listStereoRoutesClient } from '../app/public/js/panels/efsp/efsp-stereo-routes.js';
 import {
   DEPARTURE_BLOCK_MAP, ARRIVAL_BLOCK_MAP, OVERFLIGHT_BLOCK_MAP, MISSION_BLOCK_MAP, BLOCK_MAPS, resolveBlockValue, requiredBlocksFor, formatBlock3,
+  aircraftDataEditText, blockInputPlaceholderFor,
   activeAnnotationValue, hasActiveAnnotationEntry, annotationHistory, supersededAnnotationEntries,
   isBlockEditable, CONFIRM_VACATED_ELIGIBLE_BLOCKS,
   enumSelectOptionsFor, isBooleanToggleBlock, blockLabelFor,
@@ -186,32 +187,39 @@ test('ARRIVAL Block 7 (assigned/cleared altitude) is confirmVacated-eligible', (
   assert.ok(CONFIRM_VACATED_ELIGIBLE_BLOCKS.ARRIVAL.includes('7'));
 });
 
-// ── formatBlock3 (composite) ─────────────────────────────────────────────
+// ── formatBlock3 (T7, H134 LT-RQ2 b: ICAO order) ──────────────────────────
 
-test('formatBlock3 renders count/wake/type/suffix, omitting count for a single-ship', () => {
-  assert.equal(formatBlock3(makeFlightData()), 'D/F16/GR');
+const id3 = (identity) => makeFlightData({ identity: { flightSize: 1, wakeCategory: 'M', aircraftType: 'F16', equipmentSuffix: '', degradation: 'NONE', ...identity } });
+
+test('formatBlock3 writes TYPE/WAKE in ICAO order, with no leading slant', () => {
+  assert.equal(formatBlock3(id3({})), 'F16/M');
+  assert.equal(formatBlock3(id3({ wakeCategory: '' })), 'F16', 'no wake, no slant');
 });
 
-test('formatBlock3 includes the flight count for a formation (flightSize > 1)', () => {
-  const flightData = makeFlightData({ identity: { flightSize: 2, wakeCategory: 'D', aircraftType: 'F16', equipmentSuffix: 'GR', degradation: 'NONE' } });
-  assert.equal(formatBlock3(flightData), '2D/F16/GR');
+test('formatBlock3 puts the number in front for a formation (flightSize > 1)', () => {
+  assert.equal(formatBlock3(id3({ flightSize: 2 })), '2/F16/M');
+  assert.equal(formatBlock3(id3({ flightSize: 4, aircraftType: 'K35R', wakeCategory: 'H' })), '4/K35R/H');
 });
 
-test('formatBlock3 renders /H or /O for a degradation override, ignoring the stored equipmentSuffix entirely', () => {
-  const transponderFailed = makeFlightData({ identity: { flightSize: 1, wakeCategory: 'D', aircraftType: 'F16', equipmentSuffix: 'GR', degradation: 'TRANSPONDER_FAILED' } });
-  assert.equal(formatBlock3(transponderFailed), 'D/F16/H');
-
-  const modeCFailed = makeFlightData({ identity: { flightSize: 1, wakeCategory: 'D', aircraftType: 'F16', equipmentSuffix: 'GR', degradation: 'MODE_C_FAILED' } });
-  assert.equal(formatBlock3(modeCFailed), 'D/F16/O');
+test('formatBlock3 puts the equipment suffix last; a suffix with no wake keeps the wake\'s place empty', () => {
+  assert.equal(formatBlock3(id3({ equipmentSuffix: 'G' })), 'F16/M/G');
+  assert.equal(formatBlock3(id3({ equipmentSuffix: 'G', wakeCategory: '' })), 'F16//G', 'G is never read as a wake');
 });
 
-test('formatBlock3 with no equipmentSuffix and no degradation renders no suffix segment at all', () => {
-  const flightData = makeFlightData({ identity: { flightSize: 1, wakeCategory: 'D', aircraftType: 'F16', equipmentSuffix: '', degradation: 'NONE' } });
-  assert.equal(formatBlock3(flightData), 'D/F16');
+test('formatBlock3 renders H or O for a degradation override, ignoring the stored equipmentSuffix entirely', () => {
+  assert.equal(formatBlock3(id3({ equipmentSuffix: 'G', degradation: 'TRANSPONDER_FAILED' })), 'F16/M/H');
+  assert.equal(formatBlock3(id3({ equipmentSuffix: 'G', degradation: 'MODE_C_FAILED' })), 'F16/M/O');
 });
 
-test('formatBlock3 with a null flightData returns an empty string, not a throw', () => {
+test('formatBlock3 with no type, or a null flightData, is empty, not a throw', () => {
   assert.equal(formatBlock3(null), '');
+  assert.equal(formatBlock3(id3({ aircraftType: '' })), '');
+});
+
+test('the Block 3 editor opens on [count/]TYPE[/WAKE], without the derived suffix', () => {
+  assert.equal(aircraftDataEditText(id3({ flightSize: 2, equipmentSuffix: 'G' })), '2/F16/M');
+  assert.equal(aircraftDataEditText(id3({ wakeCategory: '' })), 'F16');
+  assert.equal(aircraftDataEditText(null), '');
 });
 
 // ── isBlockEditable ──────────────────────────────────────────────────────
@@ -222,8 +230,9 @@ test('isBlockEditable is true for flight-data-routed and annotation-routed Block
   }
 });
 
-test('isBlockEditable is false for system/composite/flag/nla Blocks', () => {
-  for (const id of ['2', '3', '4', '4A', '25', '26']) {
+test('isBlockEditable is false for system/flag/nla Blocks, true for Block 3 (T7: typed as one field)', () => {
+  assert.equal(isBlockEditable('3'), true);
+  for (const id of ['2', '4', '4A', '25', '26']) {
     assert.equal(isBlockEditable(id), false, id);
   }
 });
@@ -659,11 +668,12 @@ test('§10.5: the chains are DEPARTURE-only — an ARRIVAL Block 6 is the ETA, s
   flightData.ato = { departure: { timeUtc: Z(13, 10) } };
   const arrival = makeStrip({ stripType: 'ARRIVAL' });
   assert.deepEqual(resolveBlockValue('6', flightData, arrival), { value: '0905', provenance: 'CONTROLLER_ENTERED' });
-  assert.equal(blockTitleFor('6', flightData, arrival), null);
+  assert.equal(blockTitleFor('6', flightData, arrival), 'ETA at coordination fix or destination, UTC HHMM (FAA Block 8, #≠)');
   assert.equal(blockValueHintFor('6', flightData, arrival), null);
-  // And the collapsed face's label, which strip-view.js titles with the flight-data record
-  // alone, gets no chain title — it cannot tell a P-time from an ETA.
-  assert.equal(blockTitleFor('6', flightData), null);
+  // And the collapsed face's label, which strip-view.js titles with its strip type alone,
+  // gets the FAA name and no chain source.
+  assert.equal(blockTitleFor('6', flightData, null, 'ARRIVAL'), 'ETA at coordination fix or destination, UTC HHMM (FAA Block 8, #≠)');
+  assert.equal(blockTitleFor('6', flightData), 'Block 6, proposed departure time (P time), UTC HHMM');
 });
 
 test('§10.5: with no source at all a time Block is blank, and says so on hover', () => {
@@ -672,7 +682,52 @@ test('§10.5: with no source at all a time Block is blank, and says so on hover'
   assert.match(blockValueHintFor('17', flightData, makeStrip()).title, /no time from any source/);
 });
 
-test('every MTR Block has a label title; others have none', () => {
-  for (const id of Object.keys(MTR_LABELS)) assert.ok(blockTitleFor(id, null), id);
-  assert.equal(blockTitleFor('9', null), null);
+test('every MTR Block has a label title, marked ours', () => {
+  for (const id of Object.keys(MTR_LABELS)) assert.match(blockTitleFor(id, null), /\(ours, military/, id);
+});
+
+// ── T8 / T31 a (H134 LT-RQ3 a, LT-RQ4 c): ACID, FAA tooltips, time formats ─────
+
+test('Block 1 is labelled ACID on the three FAA strip types; every other label is unchanged', () => {
+  for (const stripType of ['DEPARTURE', 'ARRIVAL', 'OVERFLIGHT']) {
+    assert.equal(blockLabelFor('1', stripType), 'ACID', stripType);
+    assert.equal(blockTitleFor('1', null, null, stripType), 'Block 1, aircraft identification', stripType);
+  }
+  assert.equal(blockLabelFor('6', 'DEPARTURE'), 'PROP DEP');
+  assert.equal(blockLabelFor('7', 'DEPARTURE'), 'CRUS ALT');
+  assert.equal(blockLabelFor('M3', 'MISSION'), 'CALLSIGN', 'not an FAA strip');
+});
+
+test('every Block on the three FAA strip types has a hover title; ours say so, renumbered ones say #≠', () => {
+  for (const stripType of ['DEPARTURE', 'ARRIVAL', 'OVERFLIGHT']) {
+    for (const id of Object.keys(BLOCK_MAPS[stripType])) {
+      const title = blockTitleFor(id, null, null, stripType);
+      assert.ok(title, `${stripType}/${id} has no title`);
+      assert.ok(/Block \d|\(ours|ours[;,)]|ours as|P\/CG|UTC HHMM/.test(title), `${stripType}/${id}: "${title}" names neither an FAA block nor ours`);
+    }
+  }
+  assert.match(blockTitleFor('8A', null, null, 'ARRIVAL'), /FAA Block 7, #≠/);
+  assert.match(blockTitleFor('7A', null, null, 'OVERFLIGHT'), /FAA Block 9, #≠/);
+  assert.match(blockTitleFor('3C', null, null, 'DEPARTURE'), /\(ours\)/);
+});
+
+test('T31 a: every typed time says HHMM in its title and its editor placeholder', () => {
+  for (const stripType of Object.keys(BLOCK_MAPS)) {
+    for (const id of Object.keys(BLOCK_MAPS[stripType])) {
+      if (!ZULU_HHMM_BLOCKS.has(id)) continue;
+      assert.match(blockTitleFor(id, null, null, stripType) || '', /UTC HHMM/, `${stripType}/${id}`);
+      assert.equal(blockInputPlaceholderFor(id), 'HHMM', id);
+    }
+  }
+  assert.match(blockTitleFor('C15', null, null, 'MARSHAL'), /UTC HHMM/);
+  assert.equal(blockInputPlaceholderFor('C15'), 'HHMM');
+  assert.equal(blockInputPlaceholderFor('3'), 'TYPE/WAKE');
+  assert.equal(blockInputPlaceholderFor('9'), null);
+});
+
+test('a DEPARTURE time\'s title is the FAA name with §10.5\'s source under it', () => {
+  const flightData = makeFlightData();
+  flightData.ato = { departure: { timeUtc: Z(13, 10) } };
+  const title = blockTitleFor('6', flightData, makeStrip());
+  assert.match(title, /^Block 6, proposed departure time \(P time\), UTC HHMM\n1310Z from the ATO/);
 });

@@ -33,15 +33,38 @@ test('U1 + U4: OPS has ORDNANCE on its face and can set HUNG; TYPE is editable',
     await strip.locator('select.efsp-block-enum-select').selectOption('HUNG');
     await expect(stripByCallsign(page, callsign).locator('.efsp-strip-fields .efsp-block-3G')).toHaveText('HUNG');
 
-    // U4: TYPE shows count/wake/type; clicking edits the aircraft type.
-    const type = stripByCallsign(page, callsign).locator('.efsp-strip-fields .efsp-block-3').first();
-    await expect(type).toContainText('F16');
-    await type.click();
+    // U4 / T7 (H134): TYPE shows TYPE/WAKE in ICAO order, the wake from the type; it is edited as one field.
+    const type = () => stripByCallsign(page, callsign).locator('.efsp-strip-fields .efsp-block-3').first();
+    await expect(type()).toHaveText('F16/M');
+    await type().click();
     const input = stripByCallsign(page, callsign).locator('input.efsp-block-input');
-    await expect(input, 'the editor opens on the bare aircraft type').toHaveValue('F16');
-    await input.fill('F15E');
+    await expect(input, 'the editor opens on TYPE/WAKE').toHaveValue('F16/M');
+    await expect(input).toHaveAttribute('placeholder', 'TYPE/WAKE');
+    await input.fill('m/f15e'); // the wake typed first is read the same way
     await input.press('Enter');
-    await expect(stripByCallsign(page, callsign).locator('.efsp-strip-fields .efsp-block-3').first()).toContainText('F15E');
+    await expect(type()).toHaveText('F15E/M');
+    await type().click();
+    await stripByCallsign(page, callsign).locator('input.efsp-block-input').fill('2/K35R');
+    await stripByCallsign(page, callsign).locator('input.efsp-block-input').press('Enter');
+    await expect(type(), 'the wake comes from the type when none is typed').toHaveText('2/K35R/H');
+    await type().click();
+    await stripByCallsign(page, callsign).locator('input.efsp-block-input').fill('F-16');
+    await stripByCallsign(page, callsign).locator('input.efsp-block-input').press('Enter');
+    await expect(page.locator('#efsp-mutation-error')).toContainText('not an aircraft type designator');
+    // F-207: the refused text comes back in the editor; Esc leaves the Block as it was.
+    await expect(stripByCallsign(page, callsign).locator('input.efsp-block-input')).toHaveValue('F-16');
+    await stripByCallsign(page, callsign).locator('input.efsp-block-input').press('Escape');
+    await expect(type()).toHaveText('2/K35R/H');
+
+    // T8: Block 1 is ACID, and a label names its FAA block on hover; T31 a: a time says HHMM before it is typed.
+    const label = (id) => stripByCallsign(page, callsign).locator('.efsp-strip-fields .efsp-field', { has: page.locator(`.efsp-block-${id}`) })
+      .locator('.efsp-block-label');
+    await expect(label('1')).toHaveText('ACID');
+    await expect(label('1')).toHaveAttribute('title', 'Block 1, aircraft identification');
+    await expect(label('6')).toHaveAttribute('title', /^Block 6, proposed departure time \(P time\), UTC HHMM/);
+    await stripByCallsign(page, callsign).locator('.efsp-strip-fields .efsp-block-6').first().click();
+    await expect(stripByCallsign(page, callsign).locator('input.efsp-block-input')).toHaveAttribute('placeholder', 'HHMM');
+    await stripByCallsign(page, callsign).locator('input.efsp-block-input').press('Escape');
   } finally {
     await dropStrips(page, [callsign]);
   }

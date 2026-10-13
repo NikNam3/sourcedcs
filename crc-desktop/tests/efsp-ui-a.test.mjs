@@ -9,13 +9,13 @@ import * as fields from '../app/public/js/panels/efsp/strip-fields.js';
 import { tofiExitDueFor } from '../app/public/js/panels/efsp/efsp-nla.js';
 import * as st from '../app/public/js/panels/efsp/efsp-state.js';
 
-test('U4: TYPE (3) is redirected to the aircraft type (3A) and carries its current value', () => {
-  const flightData = { identity: { aircraftType: 'F16C', flightSize: 2 } };
-  assert.deepEqual(tpl.editRedirectFor('3', 'DEPARTURE', flightData), { blockId: '3A', value: 'F16C' });
-  assert.deepEqual(tpl.editRedirectFor('3', 'ARRIVAL', null), { blockId: '3A', value: '' });
-  assert.equal(tpl.editRedirectFor('3', 'MISSION', flightData), null, 'a mission line has no 3A');
+test('U4 / T7: TYPE (3) is edited as one field, opening on [count/]TYPE[/WAKE] without the suffix', () => {
+  const flightData = { identity: { aircraftType: 'F16', wakeCategory: 'M', equipmentSuffix: 'G', flightSize: 2 } };
+  assert.deepEqual(tpl.editRedirectFor('3', 'DEPARTURE', flightData), { blockId: '3', value: '2/F16/M' });
+  assert.deepEqual(tpl.editRedirectFor('3', 'ARRIVAL', null), { blockId: '3', value: '' });
+  assert.equal(tpl.editRedirectFor('3', 'MISSION', flightData), null, 'a mission line has no Block 3');
   assert.equal(tpl.editRedirectFor('5', 'DEPARTURE', flightData), null);
-  assert.equal(tpl.isBlockEditable('3'), false, 'the composite itself is still not a write target');
+  assert.equal(tpl.isBlockEditable('3'), true, 'Block 3 is a write target (crc-sync parses it)');
 });
 
 test('U5: RELEASE (14A) is on a departure at AP and CTR, labelled RELEASE', () => {

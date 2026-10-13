@@ -125,7 +125,7 @@ async function seedStrip(page, { callsign, actingPositionId = 'OPS', bayId = 'op
     actingPositionId,
     {
       kind: 'CreateStrip', bayId, rackId: 'main', stripType,
-      flightData: { callsign, aircraftType: 'F16', wakeCategory: 'D', ...flightData },
+      flightData: { callsign, aircraftType: 'F16', wakeCategory: 'M', ...flightData },
     },
     facilityId,
   ]);

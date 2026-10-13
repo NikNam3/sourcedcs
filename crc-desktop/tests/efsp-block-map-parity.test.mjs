@@ -71,6 +71,10 @@ function assertBlockMapParity(stripType, serverMap, clientMap) {
     const cWritable = isWritableKind(c.target.kind);
     assert.equal(sWritable, cWritable, `[${stripType}] Block ${id}: one side treats this as directly SetBlock-writable (flightData/annotation) and the other doesn't (server.kind=${s.target.kind}, client.kind=${c.target.kind})`);
 
+    // T7 (H134): Block 3 is the aircraft data, typed as one field on both sides (crc-sync's setAircraftData).
+    if (s.target.kind === 'aircraft-data' || c.target.kind === 'aircraft-data') {
+      assert.equal(s.target.kind, c.target.kind, `[${stripType}] Block ${id}: aircraft-data kind differs`);
+    }
     if (sWritable) {
       assert.equal(s.target.kind, c.target.kind, `[${stripType}] Block ${id}: writable-kind mismatch`);
       if (s.target.kind === 'flightData') {
