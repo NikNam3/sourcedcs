@@ -18,7 +18,8 @@
 // Blocks 2 (revision), 4 (cid), 25 (state) and 26 (NLA) are system-derived
 // — not writable through the generic SetBlock path at all (the Board
 // (board/) manages rev/cid/state directly; NLA is computed, never stored). Block 3
-// is a read-only composite render of several identity fields at once, and
+// is the aircraft data (count, type, wake; T7, H134), typed as one field and
+// routed through flight-data-store.js's setAircraftData(), and
 // Block 4A is a flag (strip.flags.removeIndicator), not a SetBlock target
 // (DropStrip sets it directly). resolveBlockTarget() returns
 // null for all of these, matching board/ops/set-block.js's "unknown blockId is a
@@ -28,7 +29,7 @@ const DEPARTURE_BLOCK_MAP = {
   '1':  { required: true,  target: { kind: 'flightData', path: 'identity.callsign' } },
   '2':  { required: true,  target: { kind: 'system' } },
   '2A': { required: false, target: { kind: 'annotation' } },
-  '3':  { required: true,  target: { kind: 'composite' } },
+  '3':  { required: true,  target: { kind: 'aircraft-data' } },
   // docs/adr/0023 gap-closure — Block 3 only ever DISPLAYED these as a
   // read-only composite (formatBlock3, client-side); identity.aircraftType/
   // wakeCategory/tailNumber/unit/homeStation were already validated and
@@ -248,7 +249,7 @@ const ARRIVAL_BLOCK_MAP = {
   '1':        { required: true,  target: { kind: 'flightData', path: 'identity.callsign' } },
   '2':        { required: true,  target: { kind: 'system' } },
   '2A':       { required: false, target: { kind: 'annotation' } },
-  '3':        { required: true,  target: { kind: 'composite' } },
+  '3':        { required: true,  target: { kind: 'aircraft-data' } },
   '3A':       { required: false, target: { kind: 'flightData', path: 'identity.aircraftType' } }, // docs/adr/0023 gap-closure — see DEPARTURE_BLOCK_MAP's '3A' comment
   '3B':       { required: false, target: { kind: 'flightData', path: 'identity.wakeCategory' } },
   '3C':       { required: false, target: { kind: 'flightData', path: 'identity.tailNumber' } },
@@ -318,7 +319,7 @@ const ARRIVAL_BLOCK_MAP = {
 const OVERFLIGHT_BLOCK_MAP = {
   '1':  { required: true,  target: { kind: 'flightData', path: 'identity.callsign' } },
   '2':  { required: true,  target: { kind: 'system' } },
-  '3':  { required: true,  target: { kind: 'composite' } },
+  '3':  { required: true,  target: { kind: 'aircraft-data' } },
   '3A': { required: false, target: { kind: 'flightData', path: 'identity.aircraftType' } }, // docs/adr/0023 gap-closure — see DEPARTURE_BLOCK_MAP's '3A' comment
   '3B': { required: false, target: { kind: 'flightData', path: 'identity.wakeCategory' } },
   '3C': { required: false, target: { kind: 'flightData', path: 'identity.tailNumber' } },
@@ -592,7 +593,7 @@ function requiredBlocksFor(stripType) {
  * Resolves a Block ID to a SetBlock routing target for board/ops/set-block.js's
  * _applySetBlock: { kind:'flightData', path } for a flight data field, { kind:
  * 'annotation' } for a Strip annotation cell, or null for anything not
- * writable through the generic SetBlock path (system/composite/flag
+ * writable through the generic SetBlock path (system/flag
  * Blocks, or an unknown Block ID / stripType).
  */
 function resolveBlockTarget(stripType, blockId) {
@@ -626,6 +627,9 @@ function resolveBlockTarget(stripType, blockId) {
   // `carrier-derived` falls through to null on purpose: derived values cannot
   // be written by any Block (§9.12 rule 1).
   if (def.target.kind === 'carrier') return { kind: 'carrier', field: def.target.field };
+  // T7 (H134 LT-RQ2 b): Block 3 typed as one field, `[count/]TYPE[/WAKE]`, parsed by
+  // flight-data-store.js's setAircraftData() into the number, the type and the wake.
+  if (def.target.kind === 'aircraft-data') return { kind: 'aircraft-data' };
   return null;
 }
 

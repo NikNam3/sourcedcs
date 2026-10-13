@@ -32,6 +32,7 @@ const { WALL_CLOCK } = require('../mission-clock');
 const { defaultTransitionAltFt } = require('../theaters');
 
 const { voidAppendedEntries } = require('./undo/append-only');
+const { normalizeAircraftType, normalizeWakeCategory, parseAircraftData, wakeCategoryForType, isWakeCategory } = require('./aircraft-data');
 
 const VOID_DEADLINE_MINUTES = 30; // §3.8 — derived, not stored input
 const EDCT_WINDOW_MINUTES = 5;              // §4.6.2 — EDCT ± 5 min
@@ -658,6 +659,11 @@ class FlightDataStore {
       'identity.beaconAssigned': 'COMPUTER_GENERATED',
       'identity.equipmentSuffix': 'SYSTEM_DERIVED',
     };
+    // H134 LT-RQ1 c: the wake is the ICAO category (L/M/H/J). A plan's own (the DD-1801's WTC) is kept; anything else
+    // is replaced by the one the type's table row gives (aircraft-data.js), or none.
+    const plannedWake = String(seed.wakeCategory || '').trim().toUpperCase();
+    const seedWake = isWakeCategory(plannedWake) ? plannedWake : wakeCategoryForType(seed.aircraftType);
+    if (seedWake && seedWake !== plannedWake) provenance['identity.wakeCategory'] = 'COMPUTER_GENERATED';
     // Guide §10.5's provenance fallback chains — a field the table filled was
     // not typed by the controller. Block 9's declared pre-edit default is
     // already COMPUTER_GENERATED (block-map.js), and setField() flips any of
@@ -676,7 +682,7 @@ class FlightDataStore {
         callsign,
         flightSize: Number.isInteger(seed.flightSize) && seed.flightSize > 0 ? seed.flightSize : 1,
         aircraftType: seed.aircraftType || '',
-        wakeCategory: seed.wakeCategory || '',
+        wakeCategory: seedWake,
         equipmentCodes,
         equipmentSuffix: deriveEquipmentSuffix(equipmentCodes),
         degradation: 'NONE',
@@ -844,6 +850,12 @@ class FlightDataStore {
     if (path === 'identity.trackDegradationFlag' && !TRACK_DEGRADATION_FLAGS.has(value)) {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: 'invalid track degradation flag' };
     }
+    // T7 (H134): a typed type is a designator shape and a typed wake an ICAO category, both stored upper case.
+    if (path === 'identity.aircraftType' || path === 'identity.wakeCategory') {
+      const r = path === 'identity.aircraftType' ? normalizeAircraftType(value) : normalizeWakeCategory(value);
+      if (!r.ok) return { ok: false, reason: 'VALIDATION_ERROR', detail: r.detail };
+      value = r.value;
+    }
 
     if (TYPED_TIME_LABELS[path] && !path.startsWith('military.mtr.')) { // F4: typed HHMM → epoch ms
       const time = normalizeTypedTime(path, value, this._clock.now(), WINDOW_END_OF[path] ? getPath(flightData, WINDOW_END_OF[path]) : null);
@@ -926,6 +938,9 @@ class FlightDataStore {
       flightData.provenance['identity.equipmentSuffix'] = 'SYSTEM_DERIVED';
     }
 
+    // T7 (H134): a new type brings its own wake (the table's, or none); the old one belonged to the old type.
+    if (path === 'identity.aircraftType') this._deriveWake(flightData);
+
     // §9.10 (docs/adr/0050) — an amended route is no longer the canned one,
     // so the stereo label goes with it. Same derive-on-write shape as
     // equipmentSuffix above and voidDeadlineUtc below, and it is what stops
@@ -963,7 +978,42 @@ class FlightDataStore {
     flightData.updatedBy = by || null;
     // The derived fields ride with the path they derive from (docs/adr/0100: an undo restores both).
     this._wrote(flightDataId, path.startsWith('assigned.') ? [path, 'assigned']
-      : path === 'identity.equipmentCodes' ? [path, 'identity.equipmentSuffix'] : [path]);
+      : path === 'identity.equipmentCodes' ? [path, 'identity.equipmentSuffix']
+        : path === 'identity.aircraftType' ? [path, 'identity.wakeCategory'] : [path]);
+    return { ok: true, flightData };
+  }
+
+  /** The wake the type's table row gives (aircraft-data.js), or none; marked derived. */
+  _deriveWake(flightData) {
+    flightData.identity.wakeCategory = wakeCategoryForType(flightData.identity.aircraftType);
+    flightData.provenance['identity.wakeCategory'] = 'COMPUTER_GENERATED';
+  }
+
+  /**
+   * Block 3 typed as one field (T7, H134 LT-RQ2 b): `[count/]TYPE[/WAKE]`, ICAO order, the wake also accepted first.
+   * Writes the number of aircraft, the type and the wake together; with no wake typed the type's table row gives it
+   * (aircraft-data.js), and a typed one is the controller's override. The equipment suffix is never typed here.
+   */
+  setAircraftData(flightDataId, text, { by } = {}) {
+    const flightData = this._flightDataList.get(flightDataId);
+    if (!flightData) return { ok: false, reason: 'NOT_FOUND' };
+    const parsed = parseAircraftData(text);
+    if (!parsed.ok) return { ok: false, reason: 'VALIDATION_ERROR', detail: parsed.detail };
+    const id = flightData.identity;
+    id.flightSize = parsed.count;
+    id.aircraftType = parsed.type;
+    flightData.provenance['identity.flightSize'] = 'CONTROLLER_ENTERED';
+    flightData.provenance['identity.aircraftType'] = 'CONTROLLER_ENTERED';
+    if (parsed.wake) {
+      id.wakeCategory = parsed.wake;
+      flightData.provenance['identity.wakeCategory'] = 'CONTROLLER_ENTERED';
+    } else {
+      this._deriveWake(flightData);
+    }
+    flightData.rev += 1;
+    flightData.updatedAt = this._clock.now();
+    flightData.updatedBy = by || null;
+    this._wrote(flightDataId, ['identity.flightSize', 'identity.aircraftType', 'identity.wakeCategory']);
     return { ok: true, flightData };
   }
 
@@ -1320,6 +1370,11 @@ class FlightDataStore {
       flightData.provenance[path] = 'ATO';
     }
     if (mode === 'CREATE') flightData.provenance['identity.callsign'] = 'ATO';
+    // T7 (H134): an ATO type brings the table's wake when the wake is empty or was the table's already.
+    if (flightData.provenance['identity.aircraftType'] === 'ATO' && seed['identity.aircraftType'] !== undefined
+      && (!flightData.identity.wakeCategory || flightData.provenance['identity.wakeCategory'] === 'COMPUTER_GENERATED')) {
+      this._deriveWake(flightData);
+    }
 
     flightData.identity.modeOne = identity.modeOne == null ? null : identity.modeOne;
     flightData.identity.modeTwo = identity.modeTwo == null ? null : identity.modeTwo;
@@ -1354,7 +1409,7 @@ class FlightDataStore {
     flightData.updatedAt = this._clock.now();
     flightData.updatedBy = by || null;
     this._wrote(flightDataId, ['identity.modeOne', 'identity.modeTwo', 'identity.beaconAssigned', 'identity.flightSize',
-      'identity.aircraftType', 'identity.unit', 'identity.homeStation', 'military', 'ato', 'mission', 'filed', 'assigned']);
+      'identity.aircraftType', 'identity.wakeCategory', 'identity.unit', 'identity.homeStation', 'military', 'ato', 'mission', 'filed', 'assigned']);
     return { ok: true, flightData, kept, beacon };
   }
 

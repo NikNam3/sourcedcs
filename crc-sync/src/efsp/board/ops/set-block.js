@@ -73,8 +73,10 @@ function _applySetBlockWrite(ctx, strip, op, by, actingPositionId, clientMutatio
     return { ok: false, reason: 'VALIDATION_ERROR', detail: `Block ${op.blockId} is not visible for ${strip.stripType} at this Facility`, strip };
   }
 
-  if (target.kind === 'flightData' || target.kind === 'airspace-owner' || target.kind === 'tofi' || target.kind === 'frequency' || target.kind === 'military') {
-    const flightDataResult = target.kind === 'airspace-owner'
+  if (target.kind === 'flightData' || target.kind === 'airspace-owner' || target.kind === 'tofi' || target.kind === 'frequency' || target.kind === 'military' || target.kind === 'aircraft-data') {
+    const flightDataResult = target.kind === 'aircraft-data'
+      ? ctx.flightDataStore.setAircraftData(strip.flightDataId, op.value, { by }) // T7: Block 3 as one field
+      : target.kind === 'airspace-owner'
       ? ctx.flightDataStore.setAirspaceOwner(strip.flightDataId, op.value, { by })
       : target.kind === 'frequency'
         ? ctx.flightDataStore.setWorkingFrequency(strip.flightDataId, _frequencyFromBlockValue(op.value), { by })

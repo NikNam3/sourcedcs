@@ -61,8 +61,10 @@ test('resolveBlockTarget returns null for system-derived Blocks (2, 4, 25, 26) â
   }
 });
 
-test('resolveBlockTarget returns null for the composite Block 3 and flag Block 4A', () => {
-  assert.equal(resolveBlockTarget('DEPARTURE', '3'), null);
+test('resolveBlockTarget routes Block 3 to the aircraft data (T7) and returns null for flag Block 4A', () => {
+  for (const stripType of ['DEPARTURE', 'ARRIVAL', 'OVERFLIGHT']) {
+    assert.deepEqual(resolveBlockTarget(stripType, '3'), { kind: 'aircraft-data' }, stripType);
+  }
   assert.equal(resolveBlockTarget('DEPARTURE', '4A'), null);
 });
 
@@ -121,8 +123,8 @@ test('ARRIVAL resolveBlockTarget routes flight-data-bound Blocks to their exact 
   assert.deepEqual(resolveBlockTarget('ARRIVAL', '6'), { kind: 'flightData', path: 'filed.estimatedArrivalTimeUtc' });
 });
 
-test('ARRIVAL resolveBlockTarget returns null for system/composite/flag Blocks (2, 3, 4, 4A, 25, 26)', () => {
-  for (const id of ['2', '3', '4', '4A', '25', '26']) {
+test('ARRIVAL resolveBlockTarget returns null for system/flag Blocks (2, 4, 4A, 25, 26)', () => {
+  for (const id of ['2', '4', '4A', '25', '26']) {
     assert.equal(resolveBlockTarget('ARRIVAL', id), null, id);
   }
 });
@@ -167,8 +169,8 @@ test('OVERFLIGHT resolveBlockTarget reuses DEPARTURE/ARRIVAL Airport paths for t
   assert.deepEqual(resolveBlockTarget('OVERFLIGHT', '8B'), { kind: 'flightData', path: 'filed.destinationAirport' });
 });
 
-test('OVERFLIGHT resolveBlockTarget returns null for system/composite/flag Blocks (2, 3, 4, 4A, 25, 26)', () => {
-  for (const id of ['2', '3', '4', '4A', '25', '26']) {
+test('OVERFLIGHT resolveBlockTarget returns null for system/flag Blocks (2, 4, 4A, 25, 26)', () => {
+  for (const id of ['2', '4', '4A', '25', '26']) {
     assert.equal(resolveBlockTarget('OVERFLIGHT', id), null, id);
   }
 });
