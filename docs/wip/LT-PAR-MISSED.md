@@ -1,20 +1,5 @@
 # LT-PAR-MISSED: a missed approach on the PAR final goes back to AP (H137 LT-PQ1 a)
 
-## Where I stopped / what is left (interrupted 2026-10-13)
-
-- **Done and committed:** missed approach → AP (server, client, scenario walks, e2e `l18-incirlik` 02b/02c, `par-panel`
-  05); the supervisor's extra item: HDG/ALT (`7A`, `9A-VECTOR`) typed only on an airfield's PAR final, refused and not
-  editable on the carrier FINAL (`block-map.js` `PAR_FINAL_ONLY_BLOCKS`, `resolveBlockTarget(stripType, blockId,
-  facilityId)`, client `isBlockEditable(…, facilityId)` from `strip.facilityId`, parity test, L17 scenario asserts the
-  refusal). Gates after it: crc-sync 2691/2691, crc-desktop 1274/1274, freeze 56/56 (second `freeze:update`:
-  `scenario-carrier-l17.json` only, two refused SetBlocks, ids renumbered), walk 23/23. Module-graph fixture re-recorded.
-- **Left:** the last lane-3 run of `l17-carrier` + `par-panel` + `l18-incirlik` was 17/19. `par-panel` 06 failed on a
-  `toBeVisible` (screenshot in `crc-desktop/test-results/lane3/par-panel-06-…`), and one other failed that I did not
-  identify. The earlier run of `par-panel` + `l18-incirlik` alone was 13/13 before the carrier gating, so either the
-  gating broke something or 06 is order-dependent when `l17-carrier` runs first. Next: re-run the three specs on
-  `E2E_LANE=3`, read the two failures, and confirm `l17-carrier` 03 passes. `soak:selfcheck` was not re-run after the
-  carrier gating (it touches no Board or wire file).
-
 Branch `lane/LT-PAR-MISSED`, server and client, a follow-up to LT-SFA-PAR (ADR 0117). No new ADR: the addendum below is for
 the supervisor to record in decisions.md. Wire changed (two new keys, `wire:record`: protocol stays 2).
 
@@ -55,6 +40,23 @@ airfield the Strip goes **back to AP** as an ARRIVAL at **INBOUND**, for re-sequ
 7. **The carrier is unchanged.** A bolter or waveoff is CV procedure, not FAA. `conversionFor` never converts at the
    carrier, `FinalCall` is refused there, and its BOLTER_WAVEOFF NLA is still "Back on final" to ON_FINAL.
 
+## Carrier FINAL: HDG and ALT are the PAR final's (supervisor ruling, for decisions.md)
+
+The sharded run failed `e2e/l17-carrier.spec.js` 03: the carrier FINAL Strip had two editable cells, because LT-SFA-PAR's
+default 9 gave the shared FINAL Block Map HDG (`9A-VECTOR`) and ALT (`7A`). Ruling: they belong to an **airfield's PAR
+final** only. The carrier FINAL has nothing to type (ADR 0116, H125), and no conformance (ADR 0117 decision 8), so they
+are also **hidden** there (dark cockpit, H115 to H119), not shown read-only.
+
+- crc-sync `block-map.js`: `PAR_FINAL_ONLY_BLOCKS` (`7A`, `9A-VECTOR`); `resolveBlockTarget(stripType, blockId, facilityId)`
+  returns null for them on FINAL at `CARRIER`, so SetBlock is refused `VALIDATION_ERROR` (`facility-rules.js` passes its
+  facility id). The L17 scenario asserts both refusals.
+- crc-desktop `strip-template.js`: the same list and `isParFinalOnlyOnCarrier()`. `isBlockEditable(…, facilityId)` uses
+  it (`bay/block-edit.js` passes `strip.facilityId`). `strip-fields.js` `compactBlocksFor()` leaves them off the
+  carrier FINAL's face (by `facilityOfPosition(owner)`), and `bay/strip-expanded.js` leaves them out of the expanded
+  view. Parity test: `efsp-block-map-parity`. Unit tests: `efsp-strip-fields` and `efsp-ui-reachability` (the carrier
+  FINAL has no editable cell, no input, and neither Block).
+- The FINAL line's HDG/ALT inputs (`bay-views.js`) were already on the airfield kind only.
+
 ## Defaults taken (P2)
 
 1. **The Missed approach button goes straight to AP**; it does not stop in `par-missed` first. That is one press, as
@@ -90,11 +92,15 @@ Not done: the climb-out alerts live. Conformance is unchanged and the flight is 
 
 ## Gates
 
-crc-sync 2687 → 2691 (all pass); crc-desktop 1272 → 1273 (all pass); `npm run freeze` 56/56 after one `freeze:update`
-(only `scenario-incirlik-l18.json`, the rewritten walks, committed separately); `npm run walk` 23/23; `soak:selfcheck`
-PASS (`invoke-nla.js` and `placement.js` changed); `wire:record` (adds `parFinal.conversions` and `finalCalls`
-`MISSED_APPROACH`; protocol stays 2); module-graph fixture re-recorded (`efsp-nla.js` exports `FINAL_TRANSFER_LABELS`).
-Playwright lane 3: `l18-incirlik` and `par-panel` 13/13.
+crc-sync 2687 → 2691 (all pass). crc-desktop 1272 → 1275 (all pass). `npm run freeze` 56/56 after two `freeze:update`
+runs, each committed separately: `scenario-incirlik-l18.json` (the missed-approach walks, rewritten and added) and
+`scenario-carrier-l17.json` (two refused carrier HDG/ALT SetBlocks; the ids after them renumber). `npm run walk` 23/23.
+`soak:selfcheck` PASS, run again after every change. `wire:record` adds `parFinal.conversions` and `finalCalls`
+`MISSED_APPROACH`; the protocol stays 2. Module-graph fixture re-recorded (`efsp-nla.js` `FINAL_TRANSFER_LABELS`;
+`strip-template.js` `PAR_FINAL_ONLY_BLOCKS`, `isParFinalOnlyOnCarrier`). Playwright on lane 3, the three specs together:
+`l17-carrier` 6/6 (03 included), `l18-incirlik` 6/6, `par-panel` 7/7, which is 19/19 on two runs in a row. An earlier
+interrupted run reported 17/19 (`par-panel` 06 `toBeVisible`, plus one more). It did not come back on either re-run,
+one before and one after the hiding change, so I count it as a timing flake on the shared Board, not a defect.
 
 ## Findings for other lanes / the supervisor
 
@@ -104,3 +110,5 @@ Playwright lane 3: `l18-incirlik` and `par-panel` 13/13.
   changed here (the file was not otherwise touched).
 - **`overflight-shared-state-names` ALLOWED** gains `final.js` and `final-call.js`: their INBOUND is ARRIVAL's, through
   the conversion.
+- **Docs pass:** ADR 0117 decision 6 says the carrier's FINAL Strip "gets them too". The ruling above supersedes that
+  half; record it with the addendum.
