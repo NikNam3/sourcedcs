@@ -3,7 +3,7 @@
 ## RELAUNCH HERE (2026-10-13 evening): the live-test batch is merged; round-2 findings are next
 
 **Progress (2026-10-13, later):** U-RESEARCH merged (S-ARCH-60). Desk rounds 8–9 settled (H140, H141). **Queue** (one
-at a time, briefings in `next/`): **U-STRIP (running)** → U-PANELS → U-RELEASE (ADR 0122) → U-PAR (0123) → U-MOA (0124)
+at a time, briefings in `next/`): **U-STRIP (running)** → U-PANELS → U-JURISDICTION (0125) → U-RELEASE (0122, H142) → U-PAR (0123) → U-MOA (0124)
 → U-RSU-DESIGN → U-RSU (0120) → docs pass → small items/declutter (LT-GROUND 0121) → U-CARRIER last.
 
 **State:** everything is merged into `efsp-wp5-correlation` and green (S-ARCH-59: crc-sync 2738, freeze 56/56, walk 23/23,
