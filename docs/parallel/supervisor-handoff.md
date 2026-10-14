@@ -1,6 +1,14 @@
 # Supervisor handoff
 
-## UPDATE 2026-10-14 late: U-RELEASE (e2e 7) and U-PAR (e2e 8) running from `319db075`; sharded Playwright on `319db075` running (item 1 below). Queue items 1-2 are dispatched.
+## STOPPED 2026-10-14 late (usage): U-RELEASE and U-PAR stopped mid-work; sharded Playwright stopped unfinished
+
+- **U-PAR** (`lane/U-PAR`, worktree `../sourcedcs-U-PAR`, e2e 8): 4 commits, clean tree; it was about to write
+  `docs/wip/U-PAR.md`. Finish with a new agent in the same worktree (look at git log/diff, keep what is sound, run both
+  unit suites + its specs, wip note, report), then merge.
+- **U-RELEASE** (`lane/U-RELEASE`, worktree `../sourcedcs-U-RELEASE`, e2e 7): 1 commit + 1 uncommitted file; it was
+  starting the tests (`control-release.test.mjs`). Finish the same way; prompt as in this session (jurisdiction contract
+  in feet, null never moves control, the RSU guard seam).
+- **Sharded Playwright** on `319db075` still owed (item 1 below); run it before merging either lane.
 
 ## RELAUNCH HERE (2026-10-14 evening): round 2, four lanes merged, queue below
 
