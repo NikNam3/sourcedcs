@@ -23,6 +23,8 @@ fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, JSON.stringify({ Test:
   { airspaceId: 'MOA-INC', name: 'Incirlik MOA', type: 'MOA', controllingFacilityId: 'CENTER', controllingPositionId: 'CTR', usingFacilityId: 'INCIRLIK', workingFrequencyMhz: 134.25 },
   // No using agency: the controlling Position acts for both sides.
   { airspaceId: 'MOA-CTR', name: 'Center MOA', type: 'MOA', controllingFacilityId: 'CENTER', controllingPositionId: 'CTR', workingFrequencyMhz: 135.5 },
+  // docs/adr/0125: whose airspace it is, never a block a flight is cleared into.
+  { airspaceId: 'J-INC', name: 'Incirlik jurisdiction', kind: 'JURISDICTION', controllingFacilityId: 'INCIRLIK', controllingPositionId: 'AP', ownerPositionIds: ['AP'], airspaceClass: 'C', altUpperFt: 28000, geometry: { source: 'CIRCLE', centre: { lat: 37, lon: 35.4 }, radiusNm: 50 } },
 ] }));
 
 const { createEfsp } = await import('../src/efsp/index.js');
@@ -52,6 +54,14 @@ test('the Position working the Strip relays the permission (para 9-3-1 NOTE)', (
   const approved = mustAct(efsp, c.AP, 'AP', strip, { kind: 'ApproveAirspaceEntry', airspaceId: 'MOA-INC' });
   assert.equal(approved.airspaceEntry.airspaceId, 'MOA-INC');
   mustAct(efsp, c.AP, 'AP', approved, { kind: 'ClearAirspaceEntry' });
+});
+
+test('a jurisdiction area is refused as an airspace entry (ADR 0125)', () => {
+  const { efsp, c, strip } = fresh();
+  const ack = act(efsp, c.AP, 'AP', strip, { kind: 'ApproveAirspaceEntry', airspaceId: 'J-INC' });
+  assert.equal(ack.ok, false);
+  assert.equal(ack.reason, 'VALIDATION_ERROR');
+  assert.match(ack.detail, /jurisdiction area/);
 });
 
 test('OPS is no using agency for an airspace Incirlik does not use', () => {

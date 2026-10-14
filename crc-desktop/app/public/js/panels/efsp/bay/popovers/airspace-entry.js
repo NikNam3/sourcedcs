@@ -59,7 +59,8 @@ function _closeAirspacePopover() { if (_openPopoverHandle) _openPopoverHandle.cl
 /** @param {{airspace:object, positionId:string}[]} [agencyChoices] the using agency's airspaces (`_usingAgencyEntryChoices`): only those, sent as that Position */
 export function _openAirspaceEntryPopover(strip, anchorEl, agencyChoices) {
   _closeAirspacePopover();
-  const airspaces = agencyChoices ? agencyChoices.map(c => c.airspace) : getAllEfspAirspaces();
+  // A jurisdiction area (crc-sync ADR 0125) is whose airspace it is, never a block a flight is cleared into.
+  const airspaces = (agencyChoices ? agencyChoices.map(c => c.airspace) : getAllEfspAirspaces()).filter(a => !a.definition || a.definition.kind !== 'JURISDICTION');
 
   const popover = document.createElement('div');
   popover.className = 'efsp-coordinate-popover';

@@ -131,3 +131,36 @@ test('T28: a drawing that no longer matches the copy stays on the map; a drawn (
   assert.deepEqual(drawingsShownAsAirspace([drawn], m.defaultMenu(), T, DRAWINGS), []);
   assert.deepEqual(drawingsShownAsAirspace([fromDrawing('A', 'ACTIVE')], m.defaultMenu(), T, []), []);
 });
+
+// crc-sync docs/adr/0125: jurisdiction areas, a thin grey outline, off by default, the carrier circle on the live hull.
+import { hullPositionFromCarriers, jurisdictionLabelText } from '../app/public/js/airspace-layer.js';
+
+const jur = (id, geometry, extra = {}) => ({ airspaceId: id, state: 'RETURNED', definition: { airspaceId: id, name: `${id} NAME`, kind: 'JURISDICTION', type: null, controllingFacilityId: 'INCIRLIK', airspaceClass: 'D', altLowerFt: null, altUpperFt: 3000, geometry, ...extra } });
+const cz = jur('LTAG-CZ', { source: 'CIRCLE', centre: { lat: 37.003333, lon: 35.425 }, radiusNm: 5, cut: { from: [36.985, 35.323611], to: [37.075556, 35.476944] } });
+const cca = jur('CVN-72-CCA', { source: 'CIRCLE', centre: { hullId: 'CVN-72' }, radiusNm: 50, cut: null }, { controllingFacilityId: 'CARRIER', airspaceClass: 'E', altUpperFt: null });
+
+test('jurisdiction areas are off by default and drawn thin, solid and grey once their kind is on', () => {
+  assert.equal(buildAirspaceFeatures([cz], m.defaultMenu(), T).outlines.features.length, 0);
+  const on = m.setKind(m.defaultMenu(), 'JURISDICTION', true);
+  const f = buildAirspaceFeatures([cz], on, T, { transitionAltFt: 10000 });
+  assert.equal(f.outlines.features.length, 1);
+  const p = f.outlines.features[0].properties;
+  assert.equal(p.thin, true); assert.equal(p.dashed, false); assert.equal(p.colour, OUTLINE_COLOUR.dark.other);
+  assert.equal(f.labels.features[0].properties.text, 'LTAG-CZ NAME\nClass D · GND–3000');
+  // The cut removed the north-west part: fewer points than the full ring, all within 5 nm of the centre.
+  const pts = f.outlines.features[0].geometry.coordinates;
+  assert.ok(pts.length < 128);
+  for (const [lon, lat] of pts) assert.ok(distanceNm([37.003333, 35.425], [lat, lon]) <= 5.01);
+});
+
+test('the carrier circle follows the hull and is not drawn while the ship is not found', () => {
+  const on = m.setKind(m.defaultMenu(), 'JURISDICTION', true);
+  assert.equal(buildAirspaceFeatures([cca], on, T).outlines.features.length, 0);
+  const at = (lat, lon) => hullPositionFromCarriers((id) => (id === 'CVN-72' ? { hullId: id, shipState: { found: true, lat, lon } } : null));
+  const a = buildAirspaceFeatures([cca], on, T, { hullPosition: at(36.0, 35.0) }).outlines.features[0].geometry.coordinates;
+  const b = buildAirspaceFeatures([cca], on, T, { hullPosition: at(36.2, 35.0) }).outlines.features[0].geometry.coordinates;
+  assert.ok(Math.abs((b[0][1] - a[0][1]) - 0.2) < 1e-9, 'the ring moved with the ship');
+  const lost = hullPositionFromCarriers(() => ({ shipState: { found: false, lat: 36, lon: 35 } }));
+  assert.equal(lost('CVN-72'), null);
+  assert.equal(jurisdictionLabelText(cca.definition, 18000).line2, 'Class E · GND–UNL');
+});
