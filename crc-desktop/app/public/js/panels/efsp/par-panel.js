@@ -300,7 +300,7 @@ function _drawScope(scope, kind, c) {
 
 function _windowText(kind, autoscale) {
   const v = _view;
-  const span = kind === 'el' ? `0–${Math.round(v.hMax)} ft` : `±${+v.azMaxDeg.toFixed(2)}°`;
+  const span = kind === 'el' ? `0–${Math.round(v.hMax)} ft` : `±${+v.azMaxDeg.toPrecision(2)}°`;
   const auto = autoscale ? (_paused ? ' · AUTO paused (double-click)' : ' · AUTO') : '';
   return `0–${v.rMax.toFixed(1)} NM · ${span}${auto}`;
 }

@@ -1,6 +1,7 @@
 'use strict';
 
-/* The PAR panel (docs/wip/PAR-2.md; mockup docs/mockups/par-panel.html, revision 4; decisions H115, H116, H122; the sample is
+/* The PAR panel (docs/wip/PAR-2.md, docs/wip/U-PAR.md; mockup docs/mockups/par-panel.html, revision 5; decisions H115, H116, H122,
+ * H141 (ADR 0123: azimuth in degrees, elevation lower limit 0.5°); the sample is
  * crc-sync docs/adr/0112). The harness has no DCS, so the server's PAR sample carries no plot: the spec replaces the samples of
  * every `par-sample` frame with its own (an EFSP message observer, as carrier-map.spec.js puts in the ship) and applies them at
  * once. Everything else is the real server: the Strips, AP's handoff to PAR (crc-sync docs/adr/0117), the carrier handoffs and
@@ -66,7 +67,7 @@ async function installSampleInjection(page) {
       if (msg && msg.type === 'par-sample' && window.__par.samples) msg.samples = JSON.parse(JSON.stringify(window.__par.samples));
     });
     // the panel's settings start at their defaults in every test
-    for (const [k, v] of [['parAutoscale', true], ['parGpa', 3.06], ['parTolEl', 1], ['parTolAz', 1]]) crc.settingsRegistry.setSetting(k, v);
+    for (const [k, v] of [['parAutoscale', true], ['parGpa', 3.06], ['parTolElHigh', 1], ['parTolElLow', 0.5], ['parTolAz', 1]]) crc.settingsRegistry.setSetting(k, v);
   });
 }
 const inject = (page, samples) => page.evaluate((s) => {
@@ -166,20 +167,54 @@ test('01 on the glidepath: all grey but the magenta track; the header, the fligh
   await inject(page, [sample(id, { r: 2.4, elDev: -1.2 })]);
   await expect(devItem(page, 'el')).toHaveClass(/par-danger/);
   await expect(devItem(page, 'el')).toContainText('−');
-  // slightly off is grey (inside ±1°)
+  // safety (ADR 0123): 0.7° below is past the lower safe limit (0.5°) and red, where ±1° showed it grey
+  await inject(page, [sample(id, { r: 4.2, elDev: -0.7 })]);
+  await expect(plotMark(page, 'el')).toHaveAttribute('data-level', 'danger');
+  await expect(devItem(page, 'el')).toHaveClass(/par-danger/);
+  await expect(devItem(page, 'el')).toContainText('OUTSIDE TOLERANCE');
+  await panel(page).screenshot({ path: test.info().outputPath('01-below-lower-safe-limit.png') });
+  // 0.4° below is inside it
+  await inject(page, [sample(id, { r: 4.2, elDev: -0.4 })]);
+  await expect(plotMark(page, 'el')).toHaveAttribute('data-level', '');
+  await expect(devItem(page, 'el')).not.toHaveClass(/par-danger/);
+  // the elevation lines: the lower one 0.5° below the glidepath, the upper 1° above (drawn heights at the window's far edge)
+  const lineEndFt = (tag) => page.evaluate((t) => {
+    const p = document.querySelector(`#par-panel [data-par-line="${t}"]`);
+    const m = /([\d.-]+) ([\d.-]+)$/.exec(p.getAttribute('d'));
+    return Number(m[2]);
+  }, tag);
+  const [gpY, lowY, highY] = [await lineEndFt('glidepath'), await lineEndFt('tol-low'), await lineEndFt('tol-high')];
+  expect(lowY).toBeGreaterThan(gpY);
+  expect(highY).toBeLessThan(gpY);
+  expect((lowY - gpY) / (gpY - highY)).toBeGreaterThan(0.4); // tan(2.56)…tan(3.06)…tan(4.06): about half the upper gap
+  expect((lowY - gpY) / (gpY - highY)).toBeLessThan(0.6);
+  // slightly off is grey (inside the limits)
   await inject(page, [sample(id, { r: 3.6, elDev: 0.35, azDeg: -0.9 })]);
   await expect(panel(page).locator('.par-danger')).toHaveCount(0);
   await expect(plotMark(page, 'el')).toHaveAttribute('data-level', '');
+  await expect(devItem(page, 'az')).toContainText('0.9° L');
+  // the azimuth scope is in degrees only (H141 U-RQ4 b): its axis, its window, its readout; the tolerance lines are straight
+  const azLabels = await panel(page).locator('[data-par-axis="az"]').allTextContents();
+  expect(azLabels).toContain('0°');
+  expect(azLabels.some(t => /°L$/.test(t)) && azLabels.some(t => /°R$/.test(t))).toBe(true);
+  expect(azLabels.join(' ')).not.toMatch(/ft/);
+  await expect(panel(page).locator('[data-par-scope="az"] .par-win')).toContainText('±2°');
+  await expect(panel(page).locator('[data-par-scope="az"] .par-win')).not.toContainText('ft');
+  for (const tag of ['tol-left', 'tol-right', 'course']) {
+    const ys = await page.evaluate((t) => [...document.querySelector(`#par-panel [data-par-line="${t}"]`).getAttribute('d').matchAll(/[ML][\d.-]+ ([\d.-]+)/g)].map(m => m[1]), tag);
+    expect(new Set(ys).size, `${tag} is a straight line`).toBe(1);
+  }
   // right of course, outside tolerance
   await inject(page, [sample(id, { r: 5.1, azDeg: 1.3 })]);
   await expect(plotMark(page, 'az')).toHaveAttribute('data-level', 'danger');
   await expect(devItem(page, 'az')).toHaveClass(/par-danger/);
-  await expect(devItem(page, 'az')).toContainText(/ft R/);
+  await expect(devItem(page, 'az')).toContainText('1.3° R');
+  await expect(devItem(page, 'az')).not.toContainText('ft');
   await expect(devItem(page, 'el')).not.toHaveClass(/par-danger/);
   // left
   await inject(page, [sample(id, { r: 5.1, azDeg: -1.3 })]);
   await expect(devItem(page, 'az')).toHaveClass(/par-danger/);
-  await expect(devItem(page, 'az')).toContainText(/ft L/);
+  await expect(devItem(page, 'az')).toContainText('1.3° L');
   await panel(page).screenshot({ path: test.info().outputPath('01-left.png') });
 
   // the azimuth tolerance is the controller's setting: ±1.5° makes 1.3° grey
@@ -272,7 +307,7 @@ test('03 autoscale: the track at the golden-ratio point down to 10 NM; a manual 
   await expect.poll(async () => (await view(page)).hMax).toBeLessThan(zoomed.hMax);
   const v2 = await view(page);
   expect(v2.rMax).toBeCloseTo(zoomed.rMax, 6);
-  expect(v2.yMax).toBeCloseTo(zoomed.yMax, 6);
+  expect(v2.azMaxDeg).toBeCloseTo(zoomed.azMaxDeg, 6);
   // double-click resumes
   await el.dblclick();
   await expect.poll(async () => (await view(page)).paused).toBe(false);
@@ -286,7 +321,7 @@ test('03 autoscale: the track at the golden-ratio point down to 10 NM; a manual 
   expect((await view(page)).rMax).toBeCloseTo(fixed.rMax, 6);
 });
 
-test('04 the controller\'s default glideslope when none is published; a published angle wins; the Settings tab has the four PAR settings', async ({ page }) => {
+test('04 the controller\'s default glideslope when none is published; a published angle wins; the Settings tab has the five PAR settings', async ({ page }) => {
   await incirlik(page);
   const call = `PAR${unique()}`;
   const id = await onParFinal(page, call);
@@ -308,7 +343,8 @@ test('04 the controller\'s default glideslope when none is published; a publishe
   const pane = page.locator('#stab-par');
   await expect(pane.locator('#set-parAutoscale')).toBeChecked();
   await expect(pane.locator('#set-parGpa')).toHaveValue('3');
-  await expect(pane.locator('#set-parTolEl')).toHaveValue('1');
+  await expect(pane.locator('#set-parTolElHigh')).toHaveValue('1');
+  await expect(pane.locator('#set-parTolElLow')).toHaveValue('0.5');
   await expect(pane.locator('#set-parTolAz')).toHaveValue('1');
 });
 
