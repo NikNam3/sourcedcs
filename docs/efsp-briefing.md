@@ -1473,6 +1473,101 @@ both CV lanes; the DCS wind direction at the ship against a real DCS.
 13. **`wire:record` does not see** record contents, ack payloads, the heartbeat, the snapshot's fixed keys, op argument names or `REFUSAL_CODES`:
     a change there needs `npm run wire:record -- --bump`.
 
+## 3L. The live test (2026-10-11), its fix batch, and round 2
+
+The human ran crc-desktop against a local crc-sync on the shared DCS server (findings **T1-T31**,
+`docs/parallel/live-test-2026-10-11.md`), then a second look (**U1-U21**, `docs/parallel/live-test-2026-10-13.md`). The rule since:
+**the FAA model, always** (H128): follow the order itself, and label anything ours. Research came first (`docs/parallel/research/live-test-faa.md`
+Q1-Q12, `vfr-flight-following.md` V1-V4, `release-and-par.md` R1-R7; editions JO 7110.65BB Chg 3, JO 7610.14A Chg 2, P/CG, JO 7210.3EE,
+JO 7400.2R). Merged one lane at a time, S-ARCH-48 to S-ARCH-61; lane notes `docs/wip/LT-*.md` and `docs/wip/U-STRIP.md`. `WIRE_PROTOCOL`
+stays **2** throughout (ahead of the last release, 1: everything ships together). Controller-facing half: the usage guide.
+
+**Server and wire facts, by lane:**
+
+- **LT-TERRAIN (T2).** Terrain masking had never worked against `terrain-rgb-v2`: WebP decoder, §3B.
+- **LT-UI (T3, T6, T10, T19-T26, client only).** `map-setup.js` `retryErroredTiles` on `onMaptilerKey` (maplibre 3.6.2 never re-requests an
+  errored tile; a glyph 403 errors every label tile). Strip selection no longer rings its contact; the Strip menu's **Show on map**
+  (`correlation-highlight.js` `showStripOnMap`, `RING_SHOW_MS` 8 s, ours) does, and map -> Strip selection stays (H129, H134 LT-Q3 a). The
+  `SPLIT` chip is gone (`splitFrom` stays on the record and in the log). `coordinationSendLabel` names the target ("Hand off to CTR").
+  Time-to-find counts a first selection within **30 s** (`TTF_WINDOW_MS`, ours; supersedes `0072`'s 10-minute cap, S-ARCH-49). A mission under
+  an hour shows one metrics window; the `[SOURCE-DEFINED]` footnotes left the panel. `combinationLine` is frequencies only, grey, acknowledged by a
+  click (window-local), coloured only for LUAW while combined; `0105`'s wording is superseded (S-ARCH-49). The stereo picker shows greyed and empty
+  with no routes.
+- **LT-AIRSPACE-FIX (T13, T27, T28).** ARSPC (Block 24A) clears to `null` (`setAirspaceOwner('')`, the clear appended to `airspace.transitions`;
+  `ENUM_CLEARABLE_BLOCKS` client-side; supersedes `0018`'s "never absent" for 24A, S-ARCH-51). `authority/airspace.js` `positionsThatMay` /
+  `refusalReason` word a refusal from the rows ("only CTR may"); the client's `createActingPositionFor` sends a create as the controlling
+  Position when held. A mission drawing is hidden while an airspace outline copied from it is drawn and still matches
+  (`airspace-layer.js` `drawingsShownAsAirspace`, ours).
+- **LT-CORRELATION (T12, H135).** §3C.
+- **LT-SFA-PAR (T1, T5, T11; `0117`) and LT-PAR-MISSED (H137).** **No `SFA` Position**: Incirlik has seven Positions; the SFA frequencies are
+  AP's Bay `ap-sfa` (`view: 'sfa-freqs'`, its descriptor carries `sfaPool`); facility `singleFrequencyApproach: { jurisdiction: 'AP', pool: [{ rackId, mhz,
+  use }] }`, `use` `ROTATION` x3 / `INITIAL_CONTACT` / `SPARE`, validated (>= 5 UHF, exactly 3 rotating, the Bay is AP's). **No rotation record**:
+  `sfa-store.js`, the `efsp-sfa-*` family, `SetSfaRotation`/`SfaRotation` and the SFA heartbeat/resync entry are gone; who has a rotating frequency
+  is derived on the client (`sfa-state.js` `sfaRows`: PAR while it holds a Strip of a flight on it, else AP). **Five synced stores** now
+  (`STORE_SYNC`: airspaces, correlations, marsa, runwayStatuses, carriers). An old Board snapshot with `sfaRotation` **refuses start-up** (H137
+  LT-PQ2 b: no `DROPPED_KEYS` exception). `par-final.js` holds three in-place conversions run inside one `TransferStrip`: `PAR_HANDOFF` (ARRIVAL at
+  INBOUND -> FINAL at ON_FINAL with PAR; any AP -> PAR transfer, incl. the client's **Hand off to PAR**, `finalHandoffButtons`), `LANDED` (FINAL ->
+  ARRIVAL at TAXI_IN with GC in `gc-taxi-in`, H134 LT-RQ6 b) and `MISSED_APPROACH` (FINAL at ON_FINAL or BOLTER_WAVEOFF -> ARRIVAL at INBOUND with AP,
+  placed on the flight's frequency Rack via `Placement#transferTargetFor`, else `ap-inbound`; `finalCalls` deleted, kept in the log, restored by Undo;
+  `sfaTransfer` kept). Board op **`FinalCall`** (`call`: `BEGIN_DESCENT`, `CLEARED_TO_LAND`, `LANDED`, `MISSED_APPROACH`), capability column
+  `recordsFinalCalls` (PAR), refused at the carrier; the FINAL NLA at an airfield is Landed, at BOLTER_WAVEOFF "Back to AP"
+  (client `FINAL_TRANSFER_LABELS`). `finalCalls` is on the persisted Strip. Wire surface: `parFinal.conversions`, `parFinal.finalCalls`,
+  `parFinal.sfaUses`. FINAL's Block Map gains `7A` (ALT) and `9A-VECTOR` (HDG) for an **airfield** PAR final only (`block-map.js`
+  `PAR_FINAL_ONLY_BLOCKS`: refused `VALIDATION_ERROR` on a carrier FINAL and hidden there, `isParFinalOnlyOnCarrier`; S-ARCH-54/55 replace `0117`
+  decision 6's carrier half). Conformance (`conformance.js` `finals` dep): no heading check on a final (ON_FINAL, the carrier's BALL), altitude until
+  Begin descent at an airfield, none on the carrier final (ours); a missed approach is an ordinary arrival again. An unstaffed PAR receives the handoff
+  with `UNSTAFFED_RECEIVER`; Landed or Missed approach with nobody to take GC/AP is `NO_RECEIVING_POSITION`. `0117` supersedes the SFA parts of
+  `0075` and `0093`; LT-PAR-MISSED is an addendum recorded in S-ARCH-55, no ADR.
+- **LT-STRIP-FIELDS (T7, T8, T31 a).** `src/efsp/aircraft-data.js`: ICAO wake **L/M/H/J** (H134 LT-RQ1 c) from `WAKE_BY_TYPE` (six rows quoted
+  from JO 7360.1K App. A, the rest ours by ICAO mass limits; a type with no row gets no wake), `parseAircraftData`. Block 3's Block Map kind is
+  `aircraft-data`: one field `[count/]TYPE[/WAKE]` in ICAO order, written in one SetBlock through `setAircraftData` (count = `identity.flightSize`;
+  `M/F16` accepted; designator shape checked; empty refused; a typed third part refused: the suffix is derived). A type write re-derives the wake;
+  an old `D` seed is replaced. Seeds (CreateStrip, DD-1801, ATO) are not shape-checked. Client: Block 1 label **ACID** on DEP/ARR/OVF,
+  `blockTitleFor` FAA tooltips per strip type ("(ours)", "#≠"), `blockInputPlaceholderFor` (`HHMM`, `TYPE/WAKE`). No wire change.
+- **LT-VFR (H136).** Board ops **`StartFlightFollowing`** (stripless, `{ trackId, flightData: { callsign, aircraftData } }`: flight data, a discrete
+  code, an OVERFLIGHT Strip IN_SECTOR in the acting AP/CTR's Overflight Bay and a rung-1 binding via `correlationStore.bindOnStart`, one audited
+  Mutation, every gate before the first write; `AP_CTR_ONLY_OP_KINDS`) and **`TerminateRadarService`** (DropStrip reason
+  `RADAR_SERVICE_TERMINATED`, clears `airspaceEntry`, working frequency and airspace, ends the binding; Undo restores but never steals a contact
+  since taken, warning `BINDING_NOT_RESTORED`). Undo's Scope gained `correlations`. The correlation delta rides the Board Mutation's round trip.
+  Bug fixed: `holderOfTrack` counts explicit bindings, so a bound contact the picture misses cannot be bound twice. **No flight-rules field**: VFR is
+  a flight data with no ACTIVE assigned altitude or heading (`vfr.js` `hasNoClearance`, parity-tested with the client). Client: the track panel's
+  "Start flight following" and `.ff`, the Strip menu's "Radar service terminated" and `.term` (not on the NLA, which stays "Leaves Sector").
+- **LT-MARSA (`0118`).** `src/conflict-alert.js`: CA only between two **tracked** (CORRELATED or PROVISIONAL) tracks; **MCI** (`kind: 'MCI'` on the
+  `conflictAlert` entry, `intruder` the untracked track) only for a target whose transponder replies, above the Facility's **`modeCIntruder`**
+  (`{ baseAltitudeFt, reference: 'AGL'|'MSL', highTerrainAglFt?, inhibitedPositions }`: INCIRLIK and CARRIER 500 AGL, CENTER 5,000 MSL or 1,500 AGL
+  where the ground is higher; `facilityConfig.getModeCIntruder`, `mciFloorFt`; unknown ground = sea level); per-session delivery through the hub's
+  `conflictAlertFor` (never sent). No CA/MCI within one flight data or one ACTIVE MARSA; an uncorrelated target within 1 NM / 1,000 ft of a tracked
+  flight with `flightSize > 1` is a member (`alerting.json` `formationLateralNm`/`formationVerticalFt`, ours). Receivers under `TANKER_ACCEPTED` are
+  checked against the tanker block (`refuelingBlockFt` 1,000 ours, `refuelingLateralNm` 3): `WRONG_WAY`/`LEVEL_BUST` with `tanker` and `block`, new
+  kind **`TANKER_DISTANCE`**; the tanker is the ATO's `arInfo.asTanker`, else the declaring callsign. MARSA op **`AcknowledgeVoid`** (holder of a
+  participant Strip). T15: `bay-view.js`'s Rack reconciler skipped a protected Strip without advancing its cursor. H140: no manual single-alert
+  suppress (revisit after the next live test); the MCI inhibit stays facility config.
+- **LT-AIRSPACE-ALERT (`0119`).** OPS's `airspace` row: create/edit/delete `null`, `use: true` (`authority/positions/civil-atc.js`, client
+  `AIRSPACE_ROWS.OPS`). `ApproveAirspaceEntry`/`ClearAirspaceEntry`: the op grant (AP, CTR relay) or the airspace's using agency on a Strip of its
+  own Facility it does not hold (`mayActBesideOwner`), new Board rule **`isAirspaceUsingAgency`** (60 required rules); Clear has an early gate (the
+  using agency of any airspace) before `apply` checks the Strip's own airspace, which `0119` does not mention. `efsp/airspace-entry-alert.js`
+  `AirspaceEntryAlertMonitor`, ticked after CA: by airspace type (`0119`'s table; `type` is behavioural now, amending `0038`/D14), ACTIVE areas
+  only, containment not prediction, `alerting.json` `airspaceEntry` (`minGroundSpeedKt` 50, `minTrackAgeSec` 10). Wire: **`efsp-alerts.airspaceEntry`**
+  (`{ id, kind: 'AIRSPACE_ENTRY', trackId, flightDataId|null, callsign, airspaceId, airspaceName, airspaceType, since }`), per session through
+  the hub's `airspaceEntryFor` (controlling Position plus the Positions holding a live Strip of the flight); `tools/wire-surface.js` now scans
+  `efsp-alerts`' top-level keys. Client: `SAA` amber (`caution`) on line 0, `AS:` acknowledgement keys, chip "Airspace conflict <name>".
+- **U-STRIP (round 2, U1-U4, H139).** Editable cells are blocks capped to their cell, cut with "…" (whole value as the hover). RMKS one bottom row on
+  every Strip face (`strip-remarks.js`, `strip-template.js` `remarksBlockFor`/`remarksOf`/`cutRemarksToFit`), the remarks popover
+  (`bay/popovers/remarks.js`, ordinary `SetBlock` on `9E`/`M8`, read-only unless holding the owner Position), Strip menu "Edit remarks…".
+  Server: MARSHAL, FINAL and PATTERN gain `9E` (`flightData filed.remarks`). `COMMS:`/`CTRL:` chips are tone `quiet` (`control-release-rules.js`).
+  Stereo routes: §3E. The lane skipped freeze; the supervisor re-recorded `scenario-stereo` and `tables-nla-coordination-config` (`19c0ef1c`).
+
+**Traps from this batch:**
+
+1. **Strict `state/` bites twice in this batch:** an old `state/efsp-board.json` with `sfaRotation` (H137), and a `state/efsp-stereo-routes.json`
+   with `remarks` (U-STRIP), both stop start-up naming the file. Delete or fix the file.
+2. **The sharded Playwright runner exits 0 even when a spec fails**: read its summary line (S-ARCH-54).
+3. **A shared Block Map serves two Facilities.** `0117`'s HDG/ALT on FINAL reached the carrier's FINAL Strip and failed `l17-carrier` 03; a Block that
+   is one Facility's needs a facility-aware `resolveBlockTarget` and `isBlockEditable` (both take the facility id now).
+4. **The FINAL Bays draw a line, not Strip faces** (`bay-views.js` `efsp-final-row`), so a Strip-face feature (RMKS) does not reach them; RSU's
+   `pattern-board.js` draws cards, same.
+5. **`wire-surface.js` did not scan `efsp-alerts`** until LT-AIRSPACE-ALERT; a new slice of an existing frame can go unnoticed by `wire:record`.
+
 ## 4. What's left, and the known bugs
 
 **Not built, in the guide's order.** WP7A: Incirlik's RSU/SFA/PAR is built (§3J), with the PAR panel (§3K); the carrier Positions (L17) and their panels (§3K) have never met a real DCS ship. WP8's §10.3 suggestion chip
