@@ -238,6 +238,26 @@ test('AFTER rendezvous the interlock is spent — an established AR stays up', (
   assert.equal(store.getRelation(marsaId).state, 'ACTIVE');
 });
 
+test('ADR 0124 §2: a local declaration (MARSA in a MOA) survives course and altitude assignments', () => {
+  const { store } = makeStore();
+  const { marsaId } = declare(store, {
+    startEvent: 'LOCAL_DECLARATION', endCondition: 'ATC_SEPARATION_ESTABLISHED', declaringCallsign: 'VIPER11',
+  }).relation;
+  assert.equal(store.voidForAssignment(RX1, { cause: 'CONTROLLER_COURSE_CHANGE', blockId: '22' }), null);
+  assert.equal(store.voidForAssignment(TANKER, { cause: 'CONTROLLER_ALTITUDE_CHANGE', blockId: '21' }), null);
+  const relation = store.getRelation(marsaId);
+  assert.equal(relation.state, 'ACTIVE');
+  assert.equal(relation.rendezvousAt, null);
+  assert.equal(relation.voidedBy, null);
+});
+
+test('ADR 0124 §2: an MTR_ENTRY relation survives an assignment too', () => {
+  const { store } = makeStore();
+  const { marsaId } = declare(store, { startEvent: 'MTR_ENTRY', endCondition: 'MTR_COMPLETE' }).relation;
+  assert.equal(store.voidForAssignment(RX1, { cause: 'CONTROLLER_ALTITUDE_CHANGE', blockId: '21' }), null);
+  assert.equal(store.getRelation(marsaId).state, 'ACTIVE');
+});
+
 test('an assignment to a flight in no relation voids nothing', () => {
   const { store } = makeStore();
   declare(store);

@@ -2,6 +2,7 @@
 import { getEfspFlightData, getEfspStrip, marsaForStrip } from './efsp-state.js';
 import { tofiExitDueFor } from './efsp-nla.js';
 import { correlationBadgeFor } from './correlation-highlight.js';
+import { marsaInterlockArmed } from './marsa-badge.js';
 import { getActingPositions } from './efsp-ws.js';
 import { _dispatchMarsa, _resolveActingPositionId } from './bay/dispatch.js';
 import { TOFI_COUNTERPARTS } from './bay/authority-mirror.js';
@@ -208,7 +209,7 @@ export function _tofiExchange(strip) {
 export function _marsaExchange(strip) {
   const relation = marsaForStrip(strip);
   if (relation && relation.state === 'VOIDED' && !relation.voidAcknowledgedAt) return _marsaVoidedExchange(strip, relation);
-  if (!relation || relation.state !== 'ACTIVE' || relation.rendezvousAt) return null;
+  if (!marsaInterlockArmed(relation)) return null;
   const others = relation.participants.filter(id => id !== strip.flightDataId).map((flightDataId) => {
     const flightData = getEfspFlightData(flightDataId);
     return (flightData && flightData.identity && flightData.identity.callsign) || flightDataId;

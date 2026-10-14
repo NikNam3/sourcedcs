@@ -27,6 +27,15 @@
 // (`deliverableTo`, asked per session by the hub like conflict-alert.js's MCI; never sent). Amber in the label,
 // acknowledged by a click on the target (client-side, like CA), retracted when the aircraft leaves or is approved.
 // Not alerted: a track slower than `minGroundSpeedKt` (on the ground, or hovering; ours) or younger than `minTrackAgeSec`.
+//
+// THE AIRSPACE CARD'S FLIGHT LIST (docs/adr/0124 §1, H140 LT-AQ1 b): the same tick also lists, per airspace an entry
+// approval means something for (restricted-like, MOA, warning), every tracked flight INSIDE it (what the alert sees,
+// approved or VFR or not) and every live flight FILED through it. "Filed through" has no route geometry to test (a filed
+// route is text, nothing resolves it to points): a live Strip already approved in it, the flight data's working airspace,
+// or the filed route naming the airspace by its id or name (ours, logged as a default). Each row says whether the flight
+// is inside, filed, approved and alerting, and names its live Strips, so the client can send ApproveAirspaceEntry on one
+// (same rights and refusals). Sent only to a session holding the airspace's using agency or controlling Position
+// (`trafficFor`); an untracked contact has no Strip and is not listed (ADR 0119 stands).
 
 const { hasNoClearance } = require('./vfr');
 const { MS_PER_KT } = require('../units');
@@ -34,6 +43,17 @@ const { MS_PER_KT } = require('../units');
 const AIRBORNE_CATEGORIES = new Set([1, 2]); // airplane, helicopter
 const RESTRICTED_LIKE = new Set(['RESTRICTED', 'PROHIBITED', 'RANGE', 'DANGER']);
 const JOINT_USE = new Set(['MOA', 'WARNING']);
+// docs/adr/0124 §1: the airspace types whose card lists the flights an entry approval is for.
+const ENTRY_TYPES = new Set([...RESTRICTED_LIKE, ...JOINT_USE]);
+
+function _escapeRe(text) { return String(text).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+
+/** Does the filed route text name this airspace (its id or name, as whole words, any case)? docs/adr/0124 §1. */
+function routeNames(route, airspace) {
+  if (!route || typeof route !== 'string') return false;
+  return [airspace.airspaceId, airspace.name].filter(n => typeof n === 'string' && n.trim().length >= 2)
+    .some(n => new RegExp(`(^|[\\s,/])${_escapeRe(n.trim())}($|[\\s,/])`, 'i').test(route));
+}
 
 /**
  * Does this aircraft alert in this airspace? `tracked` false: an untracked contact (reporting altitude, checked by the
@@ -70,9 +90,28 @@ class AirspaceEntryAlertMonitor {
     this._alerts = [];
     this._to = new Map();    // alert id -> Set of 'facilityId:positionId'
     this._since = new Map(); // alert id -> since
+    this._traffic = [];      // docs/adr/0124 §1: [{airspaceId, flights:[...]}], the airspace card's list
+    this._trafficOf = new Map(); // airspaceId -> {controllingFacilityId, controllingPositionId}, for `trafficFor`
   }
 
   getAll() { return this._alerts; }
+
+  /** Every airspace's card list, whoever may see it (tests, QA); the hub sends `trafficFor`. */
+  getTraffic() { return this._traffic; }
+
+  /**
+   * docs/adr/0124 §1: the card lists of the airspaces a session holding `positions` ([{facilityId, positionId}]) may
+   * approve entry into: as the using agency (`airspaceStore.isUsingAgency`) or as the controlling Position. [] otherwise.
+   */
+  trafficFor(positions) {
+    const held = positions || [];
+    if (held.length === 0) return [];
+    return this._traffic.filter((t) => {
+      const c = this._trafficOf.get(t.airspaceId) || {};
+      return held.some(p => (p.facilityId === c.controllingFacilityId && p.positionId === c.controllingPositionId)
+        || this._d.airspaceStore.isUsingAgency(t.airspaceId, p.positionId));
+    });
+  }
 
   /** Whether an alert is for a session holding `positions` ([{facilityId, positionId}]). */
   deliverableTo(alert, positions) {
@@ -107,6 +146,26 @@ class AirspaceEntryAlertMonitor {
     const liveStrips = this._d.liveStrips();
     const byId = new Map(); // alert id -> alert
     const to = new Map();
+    const traffic = new Map(); // airspaceId -> Map(flightDataId -> row), docs/adr/0124 §1
+    const trafficOf = new Map();
+    const rowFor = (airspace, flightDataId, callsign) => {
+      if (!traffic.has(airspace.airspaceId)) traffic.set(airspace.airspaceId, new Map());
+      trafficOf.set(airspace.airspaceId, { controllingFacilityId: airspace.controllingFacilityId || null, controllingPositionId: airspace.controllingPositionId || null });
+      const rows = traffic.get(airspace.airspaceId);
+      if (!rows.has(flightDataId)) {
+        const fd = this._d.flightDataOf(flightDataId);
+        const strips = liveStrips.get(flightDataId) || [];
+        rows.set(flightDataId, {
+          flightDataId,
+          callsign: (fd && fd.identity && fd.identity.callsign) || callsign || null,
+          inside: false, filed: false,
+          approved: this._approved(flightDataId, airspace, strips),
+          alerting: false,
+          strips: strips.filter(s => s.stripId).map(s => ({ facilityId: s.facilityId, stripId: s.stripId, positionId: s.positionId })),
+        });
+      }
+      return rows.get(flightDataId);
+    };
     for (const track of trackStore.getAll()) {
       if (!this._eligible(track, wallNow)) continue;
       const trackId = String(track.id);
@@ -119,6 +178,11 @@ class AirspaceEntryAlertMonitor {
       const strips = flightDataId ? (liveStrips.get(flightDataId) || []) : [];
       const vfr = flightDataId ? hasNoClearance(this._d.flightDataOf(flightDataId)) : false;
       for (const airspace of inside) {
+        // The card list: a tracked flight inside, whatever the alert decides (the lead's track names it).
+        if (flightDataId && ENTRY_TYPES.has(airspace.type)) {
+          const row = rowFor(airspace, flightDataId, callsignFor ? callsignFor(track) : null);
+          row.inside = true;
+        }
         if (!alertsIn(airspace, { tracked: !!flightDataId, approved: flightDataId && this._approved(flightDataId, airspace, strips), vfr })) continue;
         // One alert per flight and airspace (a formation's wingmen are the flight), one per untracked contact.
         const id = flightDataId ? `F:${flightDataId}:${airspace.airspaceId}` : `T:${trackId}:${airspace.airspaceId}`;
@@ -136,13 +200,42 @@ class AirspaceEntryAlertMonitor {
       }
     }
     const next = [...byId.values()].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+    // docs/adr/0124 §1: the flights filed through each airspace (see the module comment for what "filed" can mean).
+    const all = typeof airspaceStore.getAll === 'function' ? airspaceStore.getAll() : [];
+    for (const record of all) {
+      const def = record.definition || {};
+      if (def.kind === 'ROUTE' || !ENTRY_TYPES.has(def.type)) continue;
+      const airspace = {
+        airspaceId: record.airspaceId, name: def.name, type: def.type,
+        controllingFacilityId: def.controllingFacilityId || null, controllingPositionId: def.controllingPositionId || null,
+      };
+      for (const [flightDataId, strips] of liveStrips) {
+        const fd = this._d.flightDataOf(flightDataId);
+        const filed = strips.some(s => s.airspaceId === airspace.airspaceId)
+          || !!(fd && fd.comms && fd.comms.airspaceId === airspace.airspaceId)
+          || !!(fd && fd.filed && routeNames(fd.filed.route, airspace));
+        if (filed) rowFor(airspace, flightDataId, null).filed = true;
+      }
+    }
+    for (const [airspaceId, rows] of traffic) {
+      for (const row of rows.values()) row.alerting = byId.has(`F:${row.flightDataId}:${airspaceId}`);
+    }
+    const nextTraffic = [...traffic.entries()]
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+      .map(([airspaceId, rows]) => ({
+        airspaceId,
+        flights: [...rows.values()].sort((a, b) => String(a.callsign || a.flightDataId).localeCompare(String(b.callsign || b.flightDataId))),
+      }));
     const changed = JSON.stringify(next) !== JSON.stringify(this._alerts)
+      || JSON.stringify(nextTraffic) !== JSON.stringify(this._traffic)
       || [...to].some(([id, keys]) => { const was = this._to.get(id); return !was || was.size !== keys.size || [...keys].some(k => !was.has(k)); });
     this._alerts = next;
+    this._traffic = nextTraffic;
+    this._trafficOf = trafficOf;
     this._to = to;
     this._since = new Map(next.map(a => [a.id, a.since]));
     return changed;
   }
 }
 
-module.exports = { AirspaceEntryAlertMonitor, alertsIn, RESTRICTED_LIKE, JOINT_USE };
+module.exports = { AirspaceEntryAlertMonitor, alertsIn, routeNames, RESTRICTED_LIKE, JOINT_USE, ENTRY_TYPES };

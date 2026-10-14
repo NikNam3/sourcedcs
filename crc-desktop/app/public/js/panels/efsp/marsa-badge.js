@@ -126,18 +126,29 @@ export function marsaBadgeFor(strip) {
 
   if (relation.state === 'ENDED') return null;
 
-  const armed = !relation.rendezvousAt;
+  // crc-sync's docs/adr/0124 §2 (H141 U-RQ6 a): only a tanker MARSA has a rendezvous and an armed interlock; a local
+  // declaration (MARSA in a MOA) or an MTR entry survives heading and altitude assignments.
+  const armed = marsaInterlockArmed(relation);
+  const tanker = relation.startEvent === 'TANKER_ACCEPTED';
   return {
     marsaId: relation.marsaId,
     text: armed ? 'MARSA ⚠' : 'MARSA',
     className: `efsp-marsa-badge ${armed ? 'efsp-marsa-armed' : 'efsp-marsa-active'}`,
     title: armed
       ? `${MARSA_EXPANSION} — declared by ${relation.declaringCallsign}, ${withText}. Before rendezvous: assigning a heading or altitude VOIDS this.`
-      : `${MARSA_EXPANSION} — declared by ${relation.declaringCallsign}, ${withText}. Rendezvous marked.`,
+      : `${MARSA_EXPANSION} — declared by ${relation.declaringCallsign}, ${withText}.${tanker ? ' Rendezvous marked.' : ''}`,
     armed,
     active: true,
     participantFlightDataIds: relation.participants,
   };
+}
+
+/**
+ * The void-before-rendezvous interlock is armed: an ACTIVE tanker MARSA (`TANKER_ACCEPTED`) with no rendezvous marked.
+ * crc-sync's `marsa-store.js` `voidForAssignment` applies the same test (docs/adr/0124 §2).
+ */
+export function marsaInterlockArmed(relation) {
+  return !!relation && relation.state === 'ACTIVE' && relation.startEvent === 'TANKER_ACCEPTED' && !relation.rendezvousAt;
 }
 
 function _voidSentence(relation) {
@@ -162,7 +173,7 @@ export function marsaActionsFor(strip) {
     return [{ kind: 'DeclareMarsa', label: 'Declare MARSA…' }];
   }
   const actions = [];
-  if (!active.rendezvousAt) actions.push({ kind: 'MarkRendezvous', label: 'Mark rendezvous', marsaId: active.marsaId });
+  if (marsaInterlockArmed(active)) actions.push({ kind: 'MarkRendezvous', label: 'Mark rendezvous', marsaId: active.marsaId });
   actions.push({ kind: 'AddParticipant', label: 'Add a flight…', marsaId: active.marsaId });
   actions.push({ kind: 'RemoveParticipant', label: 'Remove this flight', marsaId: active.marsaId });
   actions.push({ kind: 'EndMarsa', label: 'End MARSA', marsaId: active.marsaId });
