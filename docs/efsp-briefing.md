@@ -1599,7 +1599,7 @@ and all 15 architecture-check bugs B1-B15 (§3K). ARCH-S/W/C's findings that pha
 | **T22, "1 of 10" transfers:** unexplained without the human's log (the counting rule looks right: `TransferStrip` and an owner's transferring `InvokeNla`; `FinalCall` Landed and Missed approach are not counted, a drag onto AP or the `par-missed` NLA is). Someone allowed to read `state/efsp-mutations.jsonl` should check the window | low | supervisor | LT-UI, LT-SFA-PAR, LT-PAR-MISSED |
 | **Small items from the batch** (S-ARCH-49/51/53/56): TOFI… with one counterpart sends at once and does not name the target; the Strip menu can print the "Flight" heading twice; `LUAW_WHILE_COMBINED_TEXT` still carries citations and "consider splitting the positions"; show the received code on the data block only on a mismatch (JO 7110.65BB ¶5-4-6 e NOTE, `track-label.js`); the reconciler's `tick()` docstring on same-rung ties is wrong (§3C); `surveillance/par-monitor.js` l.10 still says "Landing assured"; `tools/soak/shadow.js` l.49 still says "six stores"; `KEEP IFR` on a flight-following Strip; normalise ATO/DD-1801 types to designators (`F-16C` -> `F16`); check the "ours" wake rows against ICAO Doc 8643; the `wakeCategory: 'D'` test seeds | low | small items / declutter lanes | LT-UI, LT-CORRELATION, LT-STRIP-FIELDS, LT-VFR, LT-PAR-MISSED |
 | **An AI flight is never acquired by code** (its synthetic 6xxx code cannot be Block 5): by callsign or a binding only. A design question if the squadron wants it | decision | human | LT-CORRELATION |
-| **RMKS where there is no Strip face:** the carrier FINAL line (stays a line, H125/H126; the human's call) and RSU's pattern board (U-RSU's list should show remarks); the airfield PAR Bay gets Strip faces with U-PANELS U10 | decision / U-RSU | human, U-RSU | U-STRIP, S-ARCH-61 |
+| **RMKS where there is no Strip face:** the carrier FINAL line (stays a line, H125/H126; the human's call) and RSU's pattern board (U-RSU's list should show remarks); the airfield PAR Bay is to get Strip faces in U-PANELS U10 (running) | decision / U-RSU | human, U-RSU | U-STRIP, S-ARCH-61 |
 | **Squadron data owed for the panels:** the LTAG PAR plate (RWY 05/23 thresholds, now worked out from the ARP assuming a 10,000 ft runway; TDZE, `null` = DCS elevation; TCH 50; DH 200; published GPA) into `config/efsp-facility-incirlik.json` `parApproaches`; `fixToRampSec` 360 measured (approach speed under it assumed); CVN-72 data (angled deck, side numbers in use; the carrier glideslope and touchdown point are **no longer needed**: no carrier PAR since `0116`); the tanker defaults | data | human / squadron | PAR-1, CARRIER-STATE, `0116` |
 | **`state/` notes for the next deploy:** a Board snapshot with `sfaRotation` (any from before `0117`) **refuses start-up** (H137: delete or fix `state/efsp-board.json`, local and on the `crc-sync-state` volume; the Strips are lost); a `state/efsp-stereo-routes.json` with `remarks` (or any unknown key) refuses start-up (U-STRIP: delete the keys or the file). A Board snapshot from before CARRIER-STATE (`carriers[].shipInputs`, a stack with `charlieTimeUtc`/`marshalRadialDeg`) **refuses start-up**; the fix is deleting `state/efsp-board.json` and `state/efsp-mutations.jsonl` (the local :3000 was cleared, H122; the production volume is the human's call). A `state/efsp-carriers.json` copy that still has a hull `approach` (or any key this build does not know) **refuses start-up**, naming the file and the key (`0116`, H127); delete the key. A test host copying `config/` must copy `efsp-carrier-recovery.json` too | release check | human / supervisor | CARRIER-STATE, `0116`, H122, H127 |
 | **`wire:record` still does not scan** record contents (Strip, flight data outside the carrier flight fields, airspace/correlation/MARSA/runway/SFA records, the hull view's `hull` contents), ack payloads, `efsp-heartbeat`, the snapshot's fixed keys, op argument names and `REFUSAL_CODES`. A change there needs `--bump` by hand. Adding refusal codes or argument names to the surface is the human's open question (S-ARCH-43) | tooling | next wire lane | WIRE-RECORD, S-ARCH-43 |
@@ -1666,32 +1666,40 @@ CARRIER-STATE (the old carrier shape refuses start-up) and any hull `approach` i
   `surveillance/presentation.js`, client `track-label.js`. The wire carries no DCS truth.
   `presentation.test.mjs` plus `ws-hub-wire-strictness.test.mjs` hold the line.
 
-## 5. Where to start: phase 3 is done, what is queued
+## 5. Where to start: the live-test batch is merged, round 2 is running
 
-The plan was `docs/efsp-parallel-plan.md` (history) and then `docs/parallel/arch-check-plan.md`; `docs/parallel/decisions.md` is what is actually dispatched. Each lane works in its own worktree
-`/home/nklx/dev/personal/sourcedcs-<lane>` on `lane/<lane>-…`, reads `docs/parallel/lane-rules.md`, and leaves `docs/wip/<lane>.md` for the next fold. **Everything that was dispatched is merged
-into `efsp-wp5-correlation`**: waves 1-3, the refactor W1-W7 and the rename, L20, the post-refactor features (ADRs `0098`-`0106`), and the architecture check's three phases (bugs, tests and tooling,
-structure: §3K) with ARCHIVE-12H, MISSION-CLEAR, CARRIER-ATO, NX-1, THEATERS, CONSOL-DESIGN/S/C, SERVER-TIDY, DESK-SPLIT (its 12 committed commits, S-ARCH-31) and DESK-NOTICES,
-then the panels: SETTINGS-TABS, DIVERT, CARRIER-STATE, MARSHAL-BOARD, CARRIER-MAP, MARSHAL-FIX, MARSHAL-MARKS, SIDE-SWAP, WIRE-RECORD, PAR-1, PAR-2 and
-CARRIER-FOLLOWUP (§3K), and this docs pass (DOCS-PANELS).
+The plan was `docs/efsp-parallel-plan.md` (history) and then `docs/parallel/arch-check-plan.md`; `docs/parallel/decisions.md` is what is actually dispatched, and
+`docs/parallel/supervisor-handoff.md` the supervisor's queue. Each lane works in its own worktree `/home/nklx/dev/personal/sourcedcs-<lane>` on `lane/<lane>-…`,
+reads `docs/parallel/lane-rules.md`, and leaves `docs/wip/<lane>.md` for the next fold. **Merged into `efsp-wp5-correlation`**: waves 1-3, the refactor W1-W7 and the
+rename, L20, the post-refactor features (ADRs `0098`-`0106`), the architecture check's three phases with everything after it, the panels (§3K), the live-test fix
+batch (LT-RESEARCH, LT-TERRAIN, LT-UI, LT-AIRSPACE-FIX, LT-CORRELATION, LT-SFA-PAR, LT-STRIP-FIELDS, LT-PAR-MISSED, LT-VFR, LT-MARSA, LT-AIRSPACE-ALERT), and
+round 2's U-RESEARCH and U-STRIP (§3L).
 
-**The one-agent rule (H112).** Since 2026-10-05 **one agent works at a time** (it replaces H105's three); a stopped agent is not resumed, a fresh one is launched. Every briefing requires both unit
-suites (S-ARCH-16). The supervisor runs the sharded Playwright after a merge that touched the client (`lane-rules.md` 7).
+**Up to four lanes in parallel** (the human, 2026-10-14, S-ARCH-62; it replaces H112's one agent at a time). Every briefing requires both unit suites
+(S-ARCH-16). The supervisor runs the sharded Playwright after a merge that touched the client (`lane-rules.md` 7).
 
-**Queued, in no fixed order** (none is dispatched; check decisions.md first):
+**Running** (from `543c1c1f`): **U-PANELS** (U10, U12, U13), **U-JURISDICTION** (`0125`: jurisdiction airspace, H142-H145), **U-MOA** (`0124`: the
+airspace card's flight list with Approve, MARSA void-before-rendezvous only under `TANKER_ACCEPTED`, H140, H141), and this docs pass (DOCS-R2).
+
+**Queued, in this order** (`supervisor-handoff.md`): **U-PAR** (`0123`: azimuth in degrees only, elevation lower limit −0.5°, after U-PANELS);
+**U-RELEASE** (`0122`: released-by-default handoffs, "Checked in" before any control move, not-released control at the receiver's airspace
+boundary, no withdraw; H141, H142; after U-JURISDICTION; it replaces the handoff and release model §8 of the guide describes); **U-RSU-DESIGN -> U-RSU**
+(`0120`, U14/U15, H138: the RSU works visually and VFR only, a list of its aircraft; needs a briefing); **small items and declutter** (LT-GROUND `0121`,
+§4's small-items row, T30); **U-CARRIER** (U18-U21) **last**, the human's order. Older items, in no fixed order:
 
 | What | Why it waits | Source |
 |---|---|---|
 | `definitionHistory` on the wire | the airspace History view is partial without it; a later crc-sync lane | S-WAVEB-2 |
 | A route from a DCS line drawing | AP2B-Q3: "later" | H102 |
 | The correlation seq-jump decision (`gapFromDeltas: false`, §4) | a client/server decision; costs slice resyncs, not correctness | NX-1 |
-| **Declutter last** (formation, navpoint, ground clutter) | stays off until the very end of the EFSP work (H6, H70); the navpoint declutter is reworked once AIRAC data lands | §4 deferred |
+| **Declutter last** (formation, navpoint, ground clutter; air-surveillance radars never present ground vehicles, H134 LT-Q1 c) | stays off until the very end of the EFSP work (H6, H70); the navpoint declutter is reworked once AIRAC data lands | §4 deferred |
 | The cleanup list at the end of §4 (`facilityView`, underscore exports, CSP, CSS split, bare `Date.now()` sites) | each rewrites import lines or shared contracts; do them one at a time | DESK-TIDY-2, SERVER-SEAMS-1/2 |
 | A soak that rolls the mission, and the human's 240-minute workflow run | tools lane / human action | NX-1 |
 | The live checks in §4 | need a real DCS server and a real ship | human |
-| The squadron data in §4 (LTAG PAR plate, `fixToRampSec`, CVN-72) | data, not code: config files only | human / squadron |
+| The squadron data in §4 (LTAG PAR plate, `fixToRampSec`, CVN-72, SFA frequencies) | data, not code: config files only | human / squadron |
 | Refusal codes and op argument names on the wire surface | waits for the human's answer (S-ARCH-43) | next wire lane |
 | The deck-state board (`0064` B8) | not designed | later carrier lane |
+| openAIP airspace import | major v3 (`docs/parallel/v3-backlog.md`) | H146 |
 
 **What to keep true while working** (§3K's traps): both unit suites in every lane; client modules are leaves plus the change bus with no cycle; no `window.*`; `deliverEfsp` is the one server delivery
 path; `SyncedStore` for a new sequenced store; config factories and `createApp({env})`; `withPaths` for private test paths; e2e specs reach modules through `crc.<module>` and follow a moved function;
