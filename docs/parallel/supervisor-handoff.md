@@ -1,6 +1,13 @@
 # Supervisor handoff
 
-## UPDATE 2026-10-14: four lanes running (S-ARCH-62)
+## STOPPED 2026-10-14 (usage): DOCS-R2 finished, three lanes stopped mid-work
+
+DOCS-R2 done (12 commits on `lane/DOCS-R2`, not merged yet; report summary: shared docs folded, 10 contradictions
+resolved in `docs/wip/DOCS-R2.md`). Stopped by the human for usage: U-PANELS (1 commit + uncommitted edits in its
+worktree), U-JURISDICTION (3 commits + uncommitted), U-MOA (4 commits, writing its e2e spec). On "continue": finish
+each with a new agent in its worktree (memory). Sharded Playwright was stopped unfinished: still owed.
+
+### Earlier: four lanes running (S-ARCH-62)
 
 The human raised the cap to **up to 4 lanes in parallel**. Running from `543c1c1f`: U-PANELS (e2e 7), U-JURISDICTION
 (e2e 8), U-MOA (e2e 9), DOCS-R2 (docs). Sharded Playwright started on `543c1c1f`. Next when a slot frees: U-PAR (after
