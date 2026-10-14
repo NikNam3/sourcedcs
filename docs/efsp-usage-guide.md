@@ -782,9 +782,10 @@ board until it is filled in. One entry per MOA or range:
 - `usingPositionId` is **only** for a range with a control tower of its own. Including it creates a
   Position under a `RANGES` Facility that somebody can act as; leaving it out (the ordinary MOA
   case) creates no Position at all, and the controlling Position runs the airspace by itself.
-- `type` is one of `MOA`, `RANGE`, `DANGER`, `RESTRICTED`, `PROHIBITED`, `WARNING` — a label set of our own that
-  borrows FAA and ICAO special-use-airspace names. It is a **label only**: nothing in the system behaves differently because
-  of it, and nothing may — separation regime in particular is never derived from airspace type.
+- `type` is one of `MOA`, `RANGE`, `DANGER`, `RESTRICTED`, `PROHIBITED`, `WARNING` (an area), or a route type (an
+  MTR) — a label set of our own that borrows FAA and ICAO special-use-airspace names. It decides **one** thing: which
+  aircraft inside an active airspace raise the airspace-conflict alert (below). The separation regime is never derived
+  from it.
 - Frequencies are **MHz as a number**, 30–400. A range's `controlFrequencyMhz` is its tower; a
   MOA's `workingFrequencyMhz` is what flights working inside it go to.
 - `altLowerFt` / `altUpperFt` are optional published vertical limits, in whole feet. When set, any
@@ -799,10 +800,25 @@ range control skips the request — its controlling Position schedules and activ
 If you are signed on to both sides, you still press both buttons: the state changes are real, only the
 conversation with another controller collapses.
 
+**Who defines, who uses.** Only the airspace's **controlling Position** creates, edits and deletes its definition
+(and the web admin). The **using agency** uses it: at Incirlik that is `OPS`, which schedules, requests activation,
+releases and approves entry for the airspace Incirlik uses, but defines none (JO 7400.2R ¶21-1-10, ¶21-1-11). The
+airspace editor acts as the airspace's controlling Position when you hold it, and its header says which (*Creating as
+CTR*): signed on to `OPS` and `CTR`, a CENTER airspace is created as `CTR`. A refusal names who may do it ("OPS may not
+create MOA-GAZIPASA: only CTR may").
+
+**On the map**, an airspace whose outline was copied from a mission drawing replaces that drawing while the airspace is
+shown and the drawing still has the copied shape. Hide the airspace in the Airspaces menu and the drawing comes back
+(ours).
+
 **Putting a flight in.** Working and range-control frequencies, and approving a flight onto one, are this squadron's operating practice, not an FAA or DoD procedure (`[SOURCE-DEFINED]`, `adr/0037`); the approval round trip itself is guide §9.11. On the Strip, **Airspace…** → pick the airspace → *Approve entry*. The
 flight's frequency (Block 22, `FREQ`) is filled from the airspace, and a badge on the Strip names
 where it is working. **Leave airspace** clears both. You keep the Strip throughout — approving a
-frequency change hands over nothing.
+frequency change hands over nothing. Entry is approved by the Position working the Strip (it relays the
+using agency's permission, JO 7110.65 ¶9-3-1 NOTE) or by the airspace's **using agency** itself on a Strip of
+its own Facility that it does not hold: `⋯` → **Airspace…** lists only the airspaces that Position uses. The
+using agency's Bays do not show other Positions' Strips, so in practice the Position working the Strip
+approves.
 
 Approving a flight into an airspace nobody has activated is allowed, not blocked — the block may
 well be hot with the board simply not caught up — but the badge turns amber and an alert is raised.
@@ -815,6 +831,34 @@ restriction rather than being refused, so tightening it and later lifting it (pa
 one action. No restriction at all is not the same as a restriction covering the whole area — the
 first says nobody has deconflicted this flight yet, the second says somebody has. The board shows
 each flight's block next to its callsign.
+
+### The airspace-conflict alert (`adr/0119`)
+
+An aircraft inside an **ACTIVE** airspace that it may not be in raises an alert. Who may be in it follows the FAA, by
+airspace type:
+
+| Type | A flight with a Strip and no approved entry | A VFR flight with a Strip | A contact with no Strip |
+|---|---|---|---|
+| `RESTRICTED`, `PROHIBITED` | alerts | alerts | alerts |
+| `RANGE`, `DANGER` | alerts (treated as restricted, our reading) | alerts | alerts |
+| `MOA`, `WARNING` | alerts (ours: an IFR flight goes through only by agreement) | **never** (VFR is not denied a MOA) | alerts |
+| a route (MTR) | never | never | never |
+
+- **VFR** here means the flight has no assigned altitude and no assigned heading: there is no flight-rules field (§8C2).
+- **Approved** means the flight is working that airspace (`Airspace…` → Approve entry, above), or the military unit it
+  was handed to by TOFI has the airspace active. Approving entry, or the aircraft leaving, ends the alert.
+- A contact with no Strip alerts only when its transponder reports altitude; a formation's wingmen are the flight (one
+  alert per flight and airspace). Nothing alerts below 50 kt or in a track's first 10 s (`alerting.json`
+  `airspaceEntry`, ours, as Conflict Alert). It looks at where the aircraft is now; there is no look-ahead.
+- **Who sees it:** the airspace's controlling Position and every Position holding a Strip of the flight (a contact
+  with no Strip: the controlling Position only).
+- **How it looks:** amber. On the ATC scope, line 0 of the data block reads `SAA`, blinking until you click the target
+  to acknowledge it (on your scope only; a new entry blinks again); the classic label shows `SAA` too. The Strip gets the
+  chip `Airspace conflict <name>`, and the track panel a line. An untracked contact is answered by starting flight
+  following on it (§8C2) and then approving its entry.
+
+The FAA's nearest equivalent is the en-route probe's aircraft-to-airspace alert (P/CG AIRSPACE CONFLICT); ours fires on
+containment, at every ATC Position, and the `SAA` tag is ours.
 
 ## 8B. Radar coverage — it follows what you're acting as
 
@@ -855,7 +899,7 @@ A Strip whose flight is correlated normally shows no badge at all. Anything else
 |---|---|---|
 | *(nothing)* | **correlated**, by beacon code, callsign or a controller's binding. The contact on the scope now carries this Strip's callsign | nothing |
 | `TRK?` | **provisional.** Hover it: usually the contact is squawking a different code from the one you assigned, or the callsign only nearly matches | check the squawk; bind it if you are sure |
-| `NO TRK` | **uncorrelated.** Nothing on your scope matches this flight | `Bind…` it if you can see which one it is |
+| `NO TRK` | **uncorrelated.** Nothing on your scope matches this flight. Hover it: if the contact squawking this flight's code is already another flight's, it says which one | `Bind…` it if you can see which one it is |
 | `TRK ×2` | **ambiguous.** Two contacts match equally well, and the system will not guess | click it and pick the right one |
 | `TRK ··` | **correlated, but the contact is outside your coverage.** Somebody else's radar has it; yours does not | nothing — it is not yours to see |
 
@@ -873,9 +917,19 @@ callsign DCS spells differently from the flight plan, will not match automatical
 see it, you can say so, and the binding sticks until you `Unbind` it. It is also how you settle a
 `TRK ×2`. From the keyboard: `.bind <track id>` and `.unbind` on the selected Strip.
 
-**Clicking works both ways.** Click a Strip and its contact gets a ring on the map. Click a contact
-and its Strip is selected and scrolled into view. Clicking a contact that has no Strip leaves your
-Strip selection alone — the absence of a ring is the answer.
+**The assigned code finds the jet, whatever it flew as before.** A contact squawking a Strip's Block 5 code is
+correlated to that Strip even if an earlier, finished flight had that same jet: that is how the FAA's automation
+acquires a flight (JO 7110.65BB ¶5-3-3 d, ¶5-3-4; a finished flight holds no code). A callsign match is stricter: a jet
+an earlier flight finished with is not handed to a new flight just because the callsign is reused (ours, for players
+who do not squawk); give the new flight a code, or bind it. Two flights assigned the same code cannot both have the one
+contact squawking it: the second says `NO TRK` and names the first. An AI aircraft squawks a code from crc-sync's
+synthetic block, which no Strip can be assigned, so it is found by callsign or a binding only.
+
+**Finding the contact.** Selecting a Strip does not mark its aircraft on the map. To find it, open the Strip's `⋯` menu
+and choose **Show on map**: the contact is ringed for 8 seconds (ours) and the map pans to it if it is off screen (the
+zoom stays). The item is greyed out when the flight's contact is outside your radar coverage, and missing when the
+flight has no contact (use `Bind…`). Clicking a contact on the map still selects its Strip and scrolls it into view;
+clicking a contact that has no Strip leaves your selection alone.
 
 **After a DCS mission reload, every Strip briefly says `NO TRK` and then re-binds itself on the
 squawk, usually within a second.** That is correct and expected: a reload gives every aircraft a new
@@ -1002,6 +1056,34 @@ AIC's to change`).
 - **OPS alert status** is set by `OPS` at every state until the Strip is dropped (§8H).
 - A `SetState` to `DROPPED` is a Drop, and is refused under an open proposal or active TOFI like one.
 
+## 8C2. Flight following — radar service for a contact with no Strip
+
+**Flight following** (VFR radar traffic advisories) starts on the contact itself. Signed on to `AP` or `CTR` as Primary,
+click a contact that has no Strip: the track panel has a **Start flight following** section. Type the callsign (filled
+from the contact's tag, if it has one) and the aircraft type (Block 3, e.g. `C172`) and press **START** (or Enter), or
+type `.ff <track number> <CALLSIGN> <TYPE>`, where the track number is the one the data block shows.
+
+In one step the flight gets flight data, a **discrete code** to issue, and an **OVERFLIGHT** Strip in your Overflight
+Bay (`ap-overflight` / `ctr-overflight`), already **in sector**, and the contact is tracked under its callsign (bound to
+the Strip, as `Bind…` would). The FAA's three acts, track and tag (JO 7110.65BB ¶5-14-4 c), a code (¶5-2-7 a) and radar
+contact (¶5-3-7), are one action here (ours). A refusal (the contact is already tracked as another flight, no
+Overflight Bay or room in it, a bad callsign or type, no free code) shows on the panel's own line and spends no code.
+A flight that leaves or lands at our field is filed the ordinary way, as a DEPARTURE or ARRIVAL.
+
+**VFR is shown the FAA way**: there is no flight-rules field. A flight-following Strip is a Strip with no clearance, no
+assigned `ALT` or `HDG`, so conformance has nothing to check on it (§8E). Its equipment suffix comes from its equipment
+codes as for any flight; nothing is asked at the start. Approve its entry into active airspace from `⋯` → **Airspace…**
+as for any flight (§8A).
+
+**Ending it** ("radar service terminated, squawk VFR", ¶5-1-9 a): `⋯` → **Radar service terminated** (or `.term` on the
+selected Strip), offered on an overflight Strip with no clearance that your `AP` or `CTR` owns, and greyed while a
+coordination or TOFI exchange is open on it. The Strip is dropped, the code released, any airspace entry cleared and
+the contact untracked at once. It is not the Strip's next step: that stays **Leaves Sector**, the handoff path.
+
+**Undo** takes either back within 10 s: Undo of the start removes the Strip, the flight data and the binding; Undo of
+the termination puts back the Strip, code, entry and binding, but never takes a contact another flight has picked up
+since (the Strip then stays unbound, with a warning).
+
 ## 8D. MARSA — when the military separates its own
 
 **MARSA** is *Military Authority Assumes Responsibility for Separation of Aircraft*. It is a
@@ -1033,6 +1115,20 @@ A flight is in **at most one** relation at a time. Once one is running, `.marsa 
 | `MARSA ✕` | **voided.** Hover it — it says why. ATC is separating them again from that moment | resume separating them |
 
 Selecting any participant outlines the others, so you can see at a glance who is in it.
+
+**A void stays until acknowledged.** A voided relation shows a row on every participant's Strip, `MARSA VOIDED ·
+<the others>`, with the reason in the red line under it, until a controller holding one of the participants' Strips
+presses **Acknowledge**; then nothing is shown.
+
+**Air refuelling: the receiver is watched against the tanker.** Once the tanker has accepted MARSA, a receiver is not
+checked against its own assigned altitude or heading but against the tanker: within 1,000 ft above or below it (ours)
+and within 3 NM (JO 7110.65 ¶9-2-13 c NOTE 3, JO 7610.14A ¶5-5-3 c). Outside that it raises `AR ↓`/`AR ↑` (outside the
+block and moving away from it: 2,000 ft below and climbing toward it is fine, 1,350 ft below and descending is not), `AR −700`/`AR +700` (left the
+block after being in it) or `AR 3.8 NM` (more than 3 NM away, once it has first closed inside 3 NM). The tanker is
+checked as usual. The tanker is the ATO's AR tanker, else the flight whose callsign declared the MARSA; with no tanker
+found, no participant is checked. When MARSA ends the receiver is back on its own clearance, and a level aircraft
+away from its old altitude does not alert until it has reached it again. A MARSA at an MTR entry or declared locally
+keeps ordinary conformance.
 
 ### The interlock — the thing to know before you touch anything
 
@@ -1087,8 +1183,9 @@ DEPARTURE, ARRIVAL or OVERFLIGHT Strip can break it up or fold another flight in
   departing part's `Callsign` (always typed), and an `Assignment`: heading, speed or altitude. The assignment is
   required unless the Strip is on the ground (DEPARTURE up to LUAW, ARRIVAL LANDED and TAXI_IN), where the row is
   hidden. `Back from MARSA` records that the split is being noted on return from MARSA; the assignment is still
-  required. The part appears directly after the lead with its own new beacon code, a copy of the plan, and a `SPLIT`
-  chip ("split from VIPER1 at 1432Z"). A split is binary: for 1+1+2, split twice.
+  required. The part appears directly after the lead with its own new beacon code and a copy of the plan. It is an
+  ordinary flight on the Board: nothing on its Strip says it was split. The split is in the Mutation log, and Undo still
+  reverses it. A split is binary: for 1+1+2, split twice.
 - **Join.** Menu **Join formation...** on the joining Strip lists your other live Strips; one click sends it. The joiner
   ends as joined (it leaves the Board like a drop), its beacon code is released and the lead's size grows. A joiner that
   still has a Strip at another Facility is not offered: resolve that first. There is no confirm; Undo covers a mistake.
@@ -1109,17 +1206,40 @@ the scope gets a coloured tag, and the track panel lists it.
 | `HDG 072` | more than 5° off the assigned heading for 10 s (after 30 s to make the turn). The number is where it is actually going, **magnetic**; where the variation is unknown the heading is not checked at all |
 | `ALT ↓` / `ALT ↑` | going the wrong way: told to climb and descending, or the reverse, faster than 500 ft/min |
 | `BUST +600` | it reached its `ALT` and has since left it by more than 500 ft |
-| `CA SNAKE21 0:55` | on present course and rate it will be within 3 NM and 1,000 ft of SNAKE21 in 55 s. Only at an ATC Position (LC, AP, CTR…), and only when both aircraft are on your scope |
+| `Conflict Alert SNAKE21 0:55` | on present course and rate it will be within 3 NM and 1,000 ft of SNAKE21 in 55 s. Both aircraft are tracked (they have Strips). Only at an ATC Position (LC, AP, CTR…), and only when both aircraft are on your scope |
+| `Mode C Intruder TN00042 0:40` | the same prediction against an aircraft with **no** Strip (named by its tag or track number) whose transponder reports altitude, above the Facility's base altitude (below) |
+| `AR ↓`, `AR −700`, `AR 3.8 NM` | a receiver under tanker MARSA has left the refuelling block around the tanker (§8D) |
 
 The "for 10 s" and "for 3 s" in this table (heading, wrong-way and level-bust persistence, and the 30 s turn grace) are real elapsed seconds on the server's own clock, not mission seconds (`adr/0096`). If the mission is paused or its clock jumps, they keep counting, so an alert appears the same number of real seconds after the deviation is first seen; the `since` time shown with an alert is still mission Zulu.
 
 Not a warning: a flight that has not started its climb or descent yet ("descend when ready"). Only
-a flight going the opposite way alerts. Route conformance and terrain are not checked yet.
+a flight going the opposite way alerts. Route conformance and terrain are not checked yet. A flight with no
+assigned altitude or heading (a flight-following Strip, §8C2) has nothing to check.
+
+**On a final.** Heading is not checked on a final (PAR's `ON_FINAL` or the carrier's BALL): course guidance is the final
+controller's own. At an airfield the altitude is checked until PAR presses **Begin descent**, which ends the assigned
+altitude; on the carrier final it is not checked at all (ours). A missed approach is checked again against what is then
+assigned (§8L).
 
 On the scope, a Conflict Alert (CA) draws each aircraft's predicted path to the closest point and a line
-between them there. Aircraft in the same active MARSA relation never raise CA against each
-other. Traffic without Strips still does. The tactical Positions get no CA — a squadron
-decision (`adr/0059`, `[SOURCE-DEFINED]`), not a statement of real-world doctrine.
+between them there. **Who alerts against whom** (`adr/0118`, the FAA model, P/CG CONFLICT ALERT and MODE C
+INTRUDER ALERT):
+
+- **CA** is only between two **tracked** aircraft: each correlated to a Strip (a provisional `TRK?` match counts).
+- **MCI** (Mode C Intruder) is a tracked aircraft against one with no Strip that **reports altitude**, above the
+  Facility's base altitude: 500 ft above the ground at Incirlik and the carrier, 5,000 ft MSL at CENTER (1,500 ft above
+  the ground where the ground is higher). Where the ground is not known (no terrain data) it counts as sea level. The
+  data block tag is `MCI` (a CA wins when a pair is both); an MCI you acknowledged stays acknowledged if the pair
+  becomes a CA. A Facility can inhibit MCI for chosen Positions in its facility file (`modeCIntruder`); there is no
+  switch for the controller.
+- **Nothing** between two aircraft without Strips.
+- **Never inside one group:** two aircraft of one flight (one flight data), or in one active MARSA relation, never alert
+  against each other. An uncorrelated wingman within 1 NM and 1,000 ft of a tracked formation (size above 1) is one of
+  its members (ours, `alerting.json` `formationLateralNm`/`formationVerticalFt`), and counts as tracked against
+  everyone else.
+
+The tactical Positions get no CA — a squadron decision (`adr/0059`, `[SOURCE-DEFINED]`), not a statement of real-world
+doctrine. There is no manual suppress of a single alert.
 
 Against a **block altitude** the deviation is zero anywhere inside the block and the distance to the
 nearest edge outside it (same 400 ft reached / 500 ft bust tolerances, wrong-way means climbing away from
@@ -1243,9 +1363,10 @@ disagree. **It never moves a Strip by itself**; the controller does (`adr/0076`)
   Each episode is logged once for the METRICS panel (§10).
 - Neither indicator adds the Strip's attention styling or a reason line, and nothing in the sweep can move a
   Strip. Pressing Airborne yourself stamps the takeoff time (§4B).
-- **A finished flight's aircraft is not claimed by the next flight.** A contact held by a flight that has
-  since finished is not matched to another flight's callsign or code by itself; an explicit **Bind** still
-  works. (A DCS re-mint of a lingering aircraft under a new track id is a new contact and is not covered.)
+- **A finished flight's aircraft is not claimed by the next flight's callsign.** A contact held by a flight that
+  has since finished is not matched to another flight's callsign by itself; the assigned **code** still finds it
+  (§8C), and an explicit **Bind** always works. (A DCS re-mint of a lingering aircraft under a new track id is a new
+  contact and is not covered.)
 
 ### Declutter is off
 
