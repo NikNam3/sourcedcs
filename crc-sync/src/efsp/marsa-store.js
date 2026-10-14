@@ -559,6 +559,11 @@ class MarsaStore extends SyncedStore {
     this._regimeWrites = [];
     const active = this.activeFor(flightDataId);
     if (!active) return null;
+    // docs/adr/0124 §2 (H141 U-RQ6 a): the void-before-rendezvous rule is the
+    // refueling one (JO 7110.65BB ¶9-2-13 d NOTE). A LOCAL_DECLARATION (MARSA
+    // in a MOA) or MTR_ENTRY relation has no rendezvous, so an assignment
+    // leaves it standing.
+    if (active.startEvent !== 'TANKER_ACCEPTED') return null;
     // Rendezvous has happened: the aircraft are joined up and the interlock is
     // spent. §9.2 rule 2 arms it "prior to rendezvous" specifically, and
     // voiding an established AR every time the tanker is given a new altitude
