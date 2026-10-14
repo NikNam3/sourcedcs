@@ -12,6 +12,8 @@ import { NEW_KEY, _draftInputs, _filter, _saveFilter, _views } from './airspace-
 import { groupByFacility, visibleAirspaces } from './airspace-rules.js';
 import { _closeView, _el, _openCreate } from './airspace-views.js';
 import { _buildAirspaceCard } from './airspace-card.js';
+import { buildJurisdictionSection } from './jurisdiction-section.js';
+import { _transitionAlt } from './airspace-rules.js';
 
 // The airspace board — guide §4.2: "Airspace board (not a strip rack)", and
 // §4.1 rule 2: the `RANGE` Position "works no Strips. It owns airspace state
@@ -59,7 +61,9 @@ function _buildToolbar(signedOn) {
 export function renderAirspacePanel() {
   refreshAirspaceLayers(); // the map's outlines follow the registry, whether or not this panel is built
   if (!_airspaceListEl) return; // not initialized yet
-  const airspaces = getAllEfspAirspaces();
+  const everything = getAllEfspAirspaces();
+  // Jurisdiction areas (crc-sync ADR 0125) are not cards: they have their own section (_appendJurisdiction).
+  const airspaces = everything.filter(a => !a.definition || a.definition.kind !== 'JURISDICTION');
   const signedOn = getActingPositions();
 
   // The render rebuilds the list, which would drop the focus of a field being typed in: remember it and put it back.
@@ -89,11 +93,13 @@ export function renderAirspacePanel() {
     for (const airspace of group.airspaces) _airspaceListEl.appendChild(_buildAirspaceCard(airspace, signedOn));
   }
 
+  const jurisdiction = _appendJurisdiction(everything, signedOn);
+
   if (_airspaceEmptyEl) {
     // Shipping with no airspaces configured is the expected state until the
     // squadron's real MOAs and ranges are filled in — say so plainly rather
     // than rendering a blank panel that looks broken.
-    _airspaceEmptyEl.hidden = shown.length > 0 || !!newView;
+    _airspaceEmptyEl.hidden = shown.length > 0 || !!newView || (jurisdiction && airspaces.length === 0);
     _airspaceEmptyEl.textContent = airspaces.length > 0 && shown.length === 0
       ? 'None of the airspaces here is yours. Switch to ALL to see them.' : 'No airspaces configured.';
   }
@@ -106,6 +112,13 @@ export function renderAirspacePanel() {
   if (focused && focused.el.isConnected !== false) {
     try { focused.el.focus(); if (focused.start != null) focused.el.setSelectionRange(focused.start, focused.end); } catch (_) { /* a select has no selection range */ }
   }
+}
+
+/** The JURISDICTION section (crc-sync ADR 0125, jurisdiction-section.js), under the cards. True when it was drawn. */
+function _appendJurisdiction(everything, signedOn) {
+  const section = buildJurisdictionSection(everything, signedOn, { transitionAltFt: _transitionAlt() });
+  if (section) _airspaceListEl.appendChild(section);
+  return !!section;
 }
 
 export function initAirspacePanel() {

@@ -1041,6 +1041,15 @@
    "isHullAnchored",
    "ringOf"
   ],
+  "panels/efsp/jurisdiction-section.js": [
+   "buildJurisdictionSection",
+   "draftOf",
+   "geometryText",
+   "jurisdictionAreas",
+   "limitsLine",
+   "openJurisdictionForms",
+   "patchFrom"
+  ],
   "panels/efsp/marsa-badge.js": [
    "MARSA_EXPANSION",
    "getMarsaHighlightStripIds",
