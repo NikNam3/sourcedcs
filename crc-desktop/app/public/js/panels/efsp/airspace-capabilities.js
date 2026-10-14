@@ -47,12 +47,27 @@ function _scopeAllows(scope, def, positionId) {
   return false;
 }
 
+/** The Positions that edit the carrier's state (crc-sync authority/positions/carrier.js `editsCarrierState`, H119). */
+export const CARRIER_STATE_EDITORS = ['CV_MARSHAL', 'CV_PRIFLY'];
+
+/**
+ * A JURISDICTION area (crc-sync docs/adr/0125, authority/airspace.js `_jurisdictionAuthority`): no Position creates or
+ * deletes one; its controlling Position edits it, and a carrier circle also CV_PRIFLY and CV_MARSHAL.
+ */
+function _jurisdictionAuthority(positionId, action, def) {
+  if (action !== 'edit' || !positionId) return null;
+  if (def.controllingPositionId === positionId) return 'ALL';
+  const onHull = !!(def.geometry && def.geometry.centre && typeof def.geometry.centre.hullId === 'string');
+  return onHull && CARRIER_STATE_EDITORS.includes(positionId) && facilityOfPosition(positionId) === def.controllingFacilityId ? 'ALL' : null;
+}
+
 /**
  * 'ALL' (any field), 'FREQUENCY' (control frequency only) or null, for one Position creating/editing/deleting `def`.
  * @param {string} positionId
  * @param {'create'|'edit'|'delete'} action
  */
 export function definitionAuthority(positionId, action, def) {
+  if (def && def.kind === 'JURISDICTION') return _jurisdictionAuthority(positionId, action, def);
   const scope = airspaceRowOf(positionId)[action];
   if (_scopeAllows(scope, def, positionId)) return 'ALL';
   if (action === 'edit' && scope === 'FREQUENCY' && def.usingPositionId === positionId) return 'FREQUENCY';

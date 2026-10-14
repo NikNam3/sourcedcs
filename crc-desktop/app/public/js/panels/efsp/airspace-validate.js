@@ -11,7 +11,9 @@
 
 export const AREA_TYPES = ['MOA', 'RANGE', 'DANGER', 'RESTRICTED', 'PROHIBITED', 'WARNING'];
 export const ROUTE_TYPES = ['IR', 'VR', 'SR', 'LLTR'];
-export const KINDS = ['AREA', 'ROUTE'];
+export const KINDS = ['AREA', 'ROUTE', 'JURISDICTION'];
+/** ICAO classes (crc-sync docs/adr/0125): Class G is nobody's, so never anyone's jurisdiction. */
+export const AIRSPACE_CLASSES = ['A', 'B', 'C', 'D', 'E', 'F', 'G'];
 export const SOURCES = ['PANEL', 'WEB', 'STANDING', 'ACO'];
 
 export const MIN_ALTITUDE_FT = 0;
@@ -24,19 +26,24 @@ export const MAX_FIX_NAME_LENGTH = 40;
 export const MAX_ROUTE_SEGMENTS = 100;
 export const MAX_WIDTH_NM = 100;
 export const MAX_POLYGON_VERTICES = 200;
+export const MAX_OWNER_POSITIONS = 16;
+export const MAX_EXCLUDES = 16;
+export const MAX_SOURCE_TEXT_LENGTH = 600;
+export const MAX_RADIUS_NM = 250;
 
 export const DEFINITION_FIELDS = ['airspaceId', 'name', 'kind', 'type', 'controllingFacilityId', 'controllingPositionId',
   'usingPositionId', 'usingFacilityId', 'workingFrequencyMhz', 'controlFrequencyMhz', 'altLowerFt', 'altUpperFt',
-  'geometry', 'segments', 'defaultWidthNm', 'source'];
+  'geometry', 'segments', 'defaultWidthNm', 'source', 'ownerPositionIds', 'airspaceClass', 'excludes', 'sourceText'];
+export const JURISDICTION_ONLY_FIELDS = ['ownerPositionIds', 'airspaceClass', 'excludes', 'sourceText'];
 export const IMMUTABLE_FIELDS = ['airspaceId', 'kind'];
 export const DERIVED_ROUTE_FIELDS = ['altLowerFt', 'altUpperFt'];
 /** R3-23: while SCHEDULED, ACTIVE or RELEASED, or with a pending request, only these may change. */
 export const LIVE_EDITABLE_FIELDS = ['name', 'workingFrequencyMhz', 'controlFrequencyMhz'];
 export const OPTIONAL_FIELDS = ['usingPositionId', 'usingFacilityId', 'workingFrequencyMhz', 'controlFrequencyMhz',
-  'altLowerFt', 'altUpperFt', 'geometry', 'source'];
+  'altLowerFt', 'altUpperFt', 'geometry', 'source', 'excludes', 'sourceText'];
 
 /** ACTIVATION is a rule keyed by `kind`: an AREA is approved, a ROUTE is confirmed (never denied, only delayed). */
-export const ACTIVATION_BY_KIND = { AREA: 'APPROVE', ROUTE: 'CONFIRM' };
+export const ACTIVATION_BY_KIND = { AREA: 'APPROVE', ROUTE: 'CONFIRM', JURISDICTION: null };
 
 export function isValidAltitude(v) { return typeof v === 'number' && Number.isInteger(v) && v >= MIN_ALTITUDE_FT && v <= MAX_ALTITUDE_FT; }
 export function isValidFrequency(v) { return typeof v === 'number' && Number.isFinite(v) && v >= MIN_FREQUENCY_MHZ && v <= MAX_FREQUENCY_MHZ; }
@@ -161,6 +168,78 @@ function _validateSegments(id, def) {
   return null;
 }
 
+function _validateCircle(id, g) {
+  const extra = Object.keys(g).filter(k => !['source', 'centre', 'radiusNm', 'cut'].includes(k));
+  if (extra.length) return fail(`${id}: a CIRCLE geometry has no ${extra[0]}`);
+  const c = g.centre;
+  if (!c || typeof c !== 'object' || Array.isArray(c)) return fail(`${id}: a CIRCLE needs a centre { lat, lon } or { hullId }`);
+  const keys = Object.keys(c).sort().join(',');
+  if (keys === 'hullId') {
+    if (!isStr(c.hullId)) return fail(`${id}: a CIRCLE's centre hullId must be a hull id`);
+    if (g.cut !== undefined && g.cut !== null) return fail(`${id}: a circle on a carrier hull has no cut`);
+  } else if (keys === 'lat,lon') {
+    if (!isLat(c.lat) || !isLon(c.lon)) return fail(`${id}: a CIRCLE's centre must be { lat, lon } in decimal degrees`);
+  } else {
+    return fail(`${id}: a CIRCLE needs a centre { lat, lon } or { hullId }`);
+  }
+  if (!(typeof g.radiusNm === 'number' && Number.isFinite(g.radiusNm) && g.radiusNm > 0 && g.radiusNm <= MAX_RADIUS_NM)) {
+    return fail(`${id}: a CIRCLE's radiusNm must be a number above 0 and at most ${MAX_RADIUS_NM}`);
+  }
+  if (g.cut !== undefined && g.cut !== null) {
+    const cut = g.cut;
+    const pt = (p) => Array.isArray(p) && p.length === 2 && isLat(p[0]) && isLon(p[1]);
+    if (typeof cut !== 'object' || Array.isArray(cut) || Object.keys(cut).sort().join(',') !== 'from,to' || !pt(cut.from) || !pt(cut.to)) {
+      return fail(`${id}: a CIRCLE's cut must be { from: [lat, lon], to: [lat, lon] }`);
+    }
+    if (cut.from[0] === cut.to[0] && cut.from[1] === cut.to[1]) return fail(`${id}: a CIRCLE's cut needs two different points`);
+  }
+  return null;
+}
+
+/** The JURISDICTION half of the validator (docs/adr/0125); fills `out`'s jurisdiction fields. */
+function _validateJurisdiction(id, def, out) {
+  if (def.segments !== undefined || def.defaultWidthNm !== undefined) return fail(`${id}: a JURISDICTION area has a geometry, not segments`);
+  if (!AIRSPACE_CLASSES.includes(def.airspaceClass)) return fail(`${id}: airspaceClass must be one of ${AIRSPACE_CLASSES.join(', ')}`);
+  const owners = def.ownerPositionIds;
+  if (!Array.isArray(owners) || owners.length > MAX_OWNER_POSITIONS || !owners.every(isStr) || new Set(owners).size !== owners.length) {
+    return fail(`${id}: ownerPositionIds must be a list of at most ${MAX_OWNER_POSITIONS} different Position ids`);
+  }
+  if (def.airspaceClass === 'G' && owners.length) return fail(`${id}: Class G airspace belongs to nobody: ownerPositionIds must be empty`);
+  if (def.airspaceClass !== 'G' && !owners.length) return fail(`${id}: a Class ${def.airspaceClass} area needs at least one owner Position`);
+  const ex = def.excludes === undefined || def.excludes === null ? [] : def.excludes;
+  if (!Array.isArray(ex) || ex.length > MAX_EXCLUDES || !ex.every(e => typeof e === 'string' && ID_PATTERN.test(e)) || new Set(ex).size !== ex.length) {
+    return fail(`${id}: excludes must be a list of at most ${MAX_EXCLUDES} different airspace ids`);
+  }
+  if (ex.includes(id)) return fail(`${id} cannot exclude itself`);
+  if (def.sourceText !== undefined && def.sourceText !== null && !(isStr(def.sourceText) && def.sourceText.length <= MAX_SOURCE_TEXT_LENGTH)) {
+    return fail(`${id}: sourceText must be text of at most ${MAX_SOURCE_TEXT_LENGTH} characters`);
+  }
+  const band = _bandOk(id, '', def.altLowerFt, def.altUpperFt);
+  if (band) return band;
+  const g = def.geometry;
+  if (!g || typeof g !== 'object' || Array.isArray(g)) return fail(`${id}: a JURISDICTION area needs a geometry`);
+  if (g.source === 'CIRCLE') {
+    const bad = _validateCircle(id, g);
+    if (bad) return bad;
+    if (g.centre.hullId !== undefined && ex.length) return fail(`${id}: a circle on a carrier hull excludes nothing (it wins everywhere it is)`);
+  } else if (g.source === 'POLYGON') {
+    const bad = _validateGeometry(id, g);
+    if (bad) return bad;
+  } else {
+    return fail(`${id}: a JURISDICTION geometry.source must be POLYGON or CIRCLE`);
+  }
+  out.altLowerFt = def.altLowerFt ?? null;
+  out.altUpperFt = def.altUpperFt ?? null;
+  out.geometry = g.source === 'CIRCLE'
+    ? { source: 'CIRCLE', centre: deepClone(g.centre), radiusNm: g.radiusNm, cut: g.cut ? deepClone(g.cut) : null }
+    : deepClone(g);
+  out.ownerPositionIds = [...owners];
+  out.airspaceClass = def.airspaceClass;
+  out.excludes = [...ex];
+  out.sourceText = def.sourceText ?? null;
+  return null;
+}
+
 /** The envelope of a route's legs: min of the lows, max of the highs. A null low is the surface, a null high is unbounded. */
 export function deriveRouteEnvelope(segments) {
   const legs = segments.slice(0, -1);
@@ -188,10 +267,20 @@ export function validateAirspaceDefinition(def, { derived = 'refuse' } = {}) {
   if (!isStr(def.name) || def.name.trim() !== def.name || def.name.length > MAX_NAME_LENGTH) return fail(`${id} needs a name of 1-${MAX_NAME_LENGTH} characters`);
   const kind = def.kind === undefined ? 'AREA' : def.kind;
   if (!KINDS.includes(kind)) return fail(`${id} has unknown kind ${JSON.stringify(def.kind)}`);
-  const types = kind === 'ROUTE' ? ROUTE_TYPES : AREA_TYPES;
-  if (!types.includes(def.type)) return fail(`${id} has unknown ${kind} type ${JSON.stringify(def.type)}`);
+  if (kind === 'JURISDICTION') {
+    if (def.type !== undefined && def.type !== null) return fail(`${id}: a JURISDICTION area has no type`);
+  } else {
+    const types = kind === 'ROUTE' ? ROUTE_TYPES : AREA_TYPES;
+    if (!types.includes(def.type)) return fail(`${id} has unknown ${kind} type ${JSON.stringify(def.type)}`);
+    const only = JURISDICTION_ONLY_FIELDS.find(f => def[f] !== undefined);
+    if (only) return fail(`${id}: ${only} belongs to a JURISDICTION area`);
+  }
   if (!isStr(def.controllingFacilityId)) return fail(`${id} needs a controllingFacilityId`);
   if (!isStr(def.controllingPositionId)) return fail(`${id} needs a controllingPositionId`);
+  if (kind === 'JURISDICTION') {
+    const none = ['usingPositionId', 'usingFacilityId', 'workingFrequencyMhz', 'controlFrequencyMhz'].find(k => def[k] !== undefined && def[k] !== null);
+    if (none) return fail(`${id}: a JURISDICTION area has no ${none}`);
+  }
   if (!isOptStr(def.usingPositionId)) return fail(`${id}'s usingPositionId must be a string when present`);
   if (!isOptStr(def.usingFacilityId)) return fail(`${id}'s usingFacilityId must be a string when present`);
   if (def.usingPositionId && def.usingFacilityId) return fail(`${id} cannot have both a usingPositionId and a usingFacilityId: at most one using agency`);
@@ -203,7 +292,7 @@ export function validateAirspaceDefinition(def, { derived = 'refuse' } = {}) {
   if (def.source !== undefined && def.source !== null && !SOURCES.includes(def.source)) return fail(`${id}'s source must be one of ${SOURCES.join(', ')}`);
 
   const out = {
-    airspaceId: id, name: def.name, kind, type: def.type,
+    airspaceId: id, name: def.name, kind, type: kind === 'JURISDICTION' ? null : def.type,
     controllingFacilityId: def.controllingFacilityId, controllingPositionId: def.controllingPositionId,
     usingPositionId: def.usingPositionId || null, usingFacilityId: def.usingFacilityId || null,
     workingFrequencyMhz: def.workingFrequencyMhz ?? null, controlFrequencyMhz: def.controlFrequencyMhz ?? null,
@@ -221,6 +310,9 @@ export function validateAirspaceDefinition(def, { derived = 'refuse' } = {}) {
     }));
     out.defaultWidthNm = def.defaultWidthNm;
     Object.assign(out, deriveRouteEnvelope(out.segments));
+  } else if (kind === 'JURISDICTION') {
+    const bad = _validateJurisdiction(id, def, out);
+    if (bad) return bad;
   } else {
     if (def.segments !== undefined || def.defaultWidthNm !== undefined) return fail(`${id}: an AREA has a geometry, not segments`);
     const band = _bandOk(id, '', def.altLowerFt, def.altUpperFt);
@@ -256,6 +348,13 @@ export function checkAirspaceReferences(def, lookup) {
   if (def.usingPositionId) {
     const home = lookup.facilityOfPosition(def.usingPositionId);
     if (home && home !== 'RANGES') return fail(`${id}: ${def.usingPositionId} is already a Position of ${home}; a range-control Position needs an id of its own`);
+  }
+  if (def.kind === 'JURISDICTION') {
+    const own = lookup.positionsOf(def.controllingFacilityId);
+    const stranger = (def.ownerPositionIds || []).find(p => !own.includes(p));
+    if (stranger) return fail(`${id}: owner ${stranger} is not a Position of ${def.controllingFacilityId}`);
+    const hullId = def.geometry && def.geometry.centre && def.geometry.centre.hullId;
+    if (hullId && lookup.hasHull && !lookup.hasHull(hullId)) return fail(`${id}: hull ${hullId} is not a configured carrier hull`);
   }
   return null;
 }
