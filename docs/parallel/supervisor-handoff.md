@@ -1,5 +1,7 @@
 # Supervisor handoff
 
+## UPDATE 2026-10-14 late: U-RELEASE (e2e 7) and U-PAR (e2e 8) running from `319db075`; sharded Playwright on `319db075` running (item 1 below). Queue items 1-2 are dispatched.
+
 ## RELAUNCH HERE (2026-10-14 evening): round 2, four lanes merged, queue below
 
 **State:** everything is merged into `efsp-wp5-correlation` (`3528d3c9`); no lane is running; the only worktree is the
