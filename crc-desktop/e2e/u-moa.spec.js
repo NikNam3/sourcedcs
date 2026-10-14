@@ -121,13 +121,14 @@ test('MARSA in a MOA: a local declaration survives an altitude assignment (H141 
       });
     }, [a, b]);
     await expect.poll(relationState).toBe('ACTIVE');
-    const ack = await page.evaluate((cs) => new Promise((resolve) => {
+    const assign = (value) => page.evaluate(([cs, v]) => new Promise((resolve) => {
       const s = crc.state.getAllEfspStrips().find(x => x.state !== 'DROPPED' && crc.state.getEfspFlightData(x.flightDataId).identity.callsign === cs);
-      crc.ws.sendEfspMutation('OPS', s, { kind: 'SetBlock', blockId: '21', value: '5000' }, { onAck: (m) => { resolve({ ok: m.ok, reason: m.reason || null }); return true; } });
+      crc.ws.sendEfspMutation('OPS', s, { kind: 'SetBlock', blockId: '21', value: v }, { onAck: (m) => { resolve({ ok: m.ok, reason: m.reason || null }); return true; } });
       setTimeout(() => resolve(null), 8000);
-    }), a);
-    expect(ack).toEqual({ ok: true, reason: null });
-    await page.waitForTimeout(1500); // a void would arrive as a marsa delta right behind the ack
+    }), [a, value]);
+    expect(await assign('5000')).toEqual({ ok: true, reason: null });
+    // A second acked assignment on the same socket: any marsa void from the first has been delivered by its ack.
+    expect(await assign('6000')).toEqual({ ok: true, reason: null });
     expect(await relationState(), 'no rendezvous to wait for: the MARSA stands').toBe('ACTIVE');
   } finally {
     await dropStrips(page, [a, b]);
