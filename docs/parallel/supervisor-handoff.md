@@ -1,6 +1,8 @@
 # Supervisor handoff
 
-## STOPPED 2026-10-14 (usage): DOCS-R2 finished, three lanes stopped mid-work
+## RESUMED 2026-10-14: DOCS-R2 merged (`f2b73775`); U-PANELS, U-JURISDICTION, U-MOA resumed by new agents in their worktrees; U-RSU-DESIGN dispatched (from `f2b73775`); sharded Playwright rerunning
+
+### Before that: stopped for usage
 
 DOCS-R2 done (12 commits on `lane/DOCS-R2`, not merged yet; report summary: shared docs folded, 10 contradictions
 resolved in `docs/wip/DOCS-R2.md`). Stopped by the human for usage: U-PANELS (1 commit + uncommitted edits in its
