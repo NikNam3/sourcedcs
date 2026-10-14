@@ -11,10 +11,10 @@ const area = (id, state, type = 'MOA', geometry = sq, fac = 'CENTER') => ({ airs
 const route = (id, state) => ({ airspaceId: id, state, definition: { airspaceId: id, name: id, kind: 'ROUTE', type: 'VR', controllingFacilityId: 'CENTER', defaultWidthNm: 4, segments: [{ fix: { name: 'A', lat: 1, lon: 1 }, altLowerFt: 1, altUpperFt: 2, widthNm: null }, { fix: { name: 'B', lat: 2, lon: 2 }, altLowerFt: null, altUpperFt: null, widthNm: null }] } });
 const T = 'Syria';
 
-test('default: outlines, labels and corridors on, centrelines off, every kind on, ACTIVE only, no overrides', () => {
+test('default: outlines, labels and corridors on, centrelines off, every kind on but JURISDICTION, ACTIVE only, no overrides', () => {
   const d = m.defaultMenu();
   assert.deepEqual(d.layers, { outlines: true, labels: true, corridors: true, centrelines: false });
-  assert.ok(m.MENU_KINDS.every(k => d.kinds[k] === true));
+  assert.ok(m.MENU_KINDS.every(k => d.kinds[k] === (k !== 'JURISDICTION')));
   assert.deepEqual(d.states, { SCHEDULED: false, ACTIVE: true, RELEASED: false, RETURNED: false });
   assert.deepEqual(d.overrides, {});
   assert.equal(m.isDefaultMenu(d), true);
@@ -25,6 +25,15 @@ test('default shows ACTIVE airspaces only, of any kind', () => {
   assert.equal(m.decide(area('A', 'ACTIVE'), d, T).shown, true);
   assert.equal(m.decide(route('R', 'ACTIVE'), d, T).shown, true);
   for (const s of ['SCHEDULED', 'RELEASED', 'RETURNED']) assert.equal(m.decide(area('A', s), d, T).shown, false, s);
+});
+
+test('a jurisdiction area (crc-sync ADR 0125): off by default, its kind alone decides (it has no state)', () => {
+  const j = (state) => ({ airspaceId: 'LTAG-CZ', state, definition: { airspaceId: 'LTAG-CZ', name: 'LTAG CTR (control zone)', kind: 'JURISDICTION', type: null, controllingFacilityId: 'INCIRLIK', geometry: { source: 'CIRCLE', centre: { lat: 37, lon: 35.4 }, radiusNm: 5, cut: null } } });
+  assert.equal(m.kindOf(j('RETURNED').definition), 'JURISDICTION');
+  assert.equal(m.hasOutline(j('RETURNED').definition), true);
+  assert.equal(m.decide(j('RETURNED'), m.defaultMenu(), T).shown, false);
+  const on = m.setKind(m.defaultMenu(), 'JURISDICTION', true);
+  for (const s of ['SCHEDULED', 'ACTIVE', 'RELEASED', 'RETURNED']) assert.equal(m.decide(j(s), on, T).shown, true, s);
 });
 
 test('each kind toggle and each state toggle', () => {
