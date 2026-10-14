@@ -1,5 +1,11 @@
 # Supervisor handoff
 
+## UPDATE 2026-10-14: four lanes running (S-ARCH-62)
+
+The human raised the cap to **up to 4 lanes in parallel**. Running from `543c1c1f`: U-PANELS (e2e 7), U-JURISDICTION
+(e2e 8), U-MOA (e2e 9), DOCS-R2 (docs). Sharded Playwright started on `543c1c1f`. Next when a slot frees: U-PAR (after
+U-PANELS merges), U-RELEASE (after U-JURISDICTION), U-RSU-DESIGN (needs a briefing), small items; U-CARRIER last.
+
 ## RELAUNCH HERE (2026-10-13 night): round 2 under way; U-STRIP merged, U-PANELS next
 
 **State:** everything is merged into `efsp-wp5-correlation`; no lane is running; the only worktree is the main checkout.
