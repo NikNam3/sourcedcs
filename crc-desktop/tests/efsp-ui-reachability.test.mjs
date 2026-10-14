@@ -2793,6 +2793,33 @@ test('a carrier FINAL Strip has no editable cell and no input at all: HDG and AL
   assert.equal(ball.dataset.carrierTrigger, 'PILOT_BALL_CALL');
 });
 
+test('an airfield FINAL Strip is the PAR controller\'s interface (H138 U10): HDG and ALT cells, Landed the NLA, the next call beside it, the rest in ⋯', async () => {
+  const strip = stripAt({ stripType: 'FINAL', state: 'ON_FINAL', ownerPositionId: 'PAR', bayId: 'par-final', facilityId: 'INCIRLIK',
+    nla: { toState: 'TAXI_IN', transferTo: 'GC', alsoLegal: ['BOLTER_WAVEOFF'] } });
+  const r = await renderStrip({ strip, flightData: FDR, signedOn: ['PAR'] });
+  const editable = descendants(r.el).filter(c => c.classList && c.classList.contains('efsp-block-editable')).map(c => c.dataset.block);
+  assert.ok(editable.includes('7A') && editable.includes('9A-VECTOR'), `HDG and ALT are typed on the Strip (${editable})`);
+  const nla = descendants(r.el).find(c => (c.className || '').includes('efsp-nla-btn') && !(c.dataset && c.dataset.parCall));
+  assert.equal(nla.textContent, 'Landed');
+  const next = descendants(r.el).find(c => c.dataset && c.dataset.parCall);
+  assert.equal(next.textContent, 'Begin descent');
+  click(next);
+  assert.deepEqual(JSON.parse(JSON.stringify(r.sent.pop().op)), { kind: 'FinalCall', call: 'BEGIN_DESCENT' });
+  click(menuItem(r.el, 'Missed approach'));
+  assert.deepEqual(JSON.parse(JSON.stringify(r.sent.pop().op)), { kind: 'FinalCall', call: 'MISSED_APPROACH' });
+  assert.ok(menuItem(r.el, 'Cleared to land'), 'Cleared to land is in the menu too');
+  assert.ok(menuItem(r.el, 'Show in PAR panel'));
+  assert.equal(menuItem(r.el, 'Landed'), undefined, 'Landed is the NLA, not repeated');
+
+  const recorded = await renderStrip({ strip: { ...strip, finalCalls: { BEGIN_DESCENT: { at: 1, by: 'u' } } }, flightData: FDR, signedOn: ['PAR'] });
+  assert.equal(descendants(recorded.el).find(c => c.dataset && c.dataset.parCall).textContent, 'Cleared to land');
+  assert.equal(menuItem(recorded.el, 'Begin descent').disabled, true, 'a recorded call stays listed, greyed');
+
+  const cv = await carrierRender(stripAt({ stripType: 'FINAL', state: 'ON_FINAL', ownerPositionId: 'CV_APP1', bayId: 'cv-app1-final', facilityId: 'CARRIER', nla: { toState: 'BALL', carrierHandoff: 'FINAL_TO_LSO' } }), { signedOn: ['CV_APP1'] });
+  assert.equal(descendants(cv.el).filter(c => c.dataset && c.dataset.parCall).length, 0, 'the carrier final has Ball / Waveoff, not these calls');
+  assert.equal(menuItem(cv.el, 'Missed approach'), undefined);
+});
+
 // ── docs/adr/0076: surveillance informs, the controller advances (§10.3, §10.4) ──
 
 const SURV_HINT = { stripId: 's1', flightDataId: 'f1', facilityId: 'INCIRLIK', stripState: 'LUAW', contactPhase: 'AIRBORNE', since: 1000 };

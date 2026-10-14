@@ -218,6 +218,9 @@
   flex: 1 1 auto;
   overflow-y: auto;
   padding: 8px;
+  /* H138 U12: below this the Bay stops shrinking and the panel scrolls (layout.css .dock-panel), so the toolbar, the tabs
+     and the dot-command row are never cut off. */
+  min-height: 120px;
 }
 
 .efsp-rack {
@@ -1685,8 +1688,8 @@
 }
 .efsp-strip-from { font-size: 10px; color: var(--efsp-attn-text); }
 
-/* Native controls (a <select>'s open list, scrollbars) follow the panel's dark
-   palette rather than the browser's light default. */
+/* Native controls (a <select>'s open list) follow the panel's dark palette rather than the browser's light default. The
+   scrollbars are base.css's one app-wide rule (H138 U13). */
 #efsp-panel,
 .efsp-coordinate-popover,
 .efsp-highlight-popover,

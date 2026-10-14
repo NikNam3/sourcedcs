@@ -39,6 +39,29 @@
       --ui-sep:         #9a9690;
     }
 
+    /* Scrollbars (H138 U13): one app-wide look, thin, a dark track and a grey thumb that brightens on hover, never the
+       browser's white default. The colours are the EFSP grey ramp (efsp-panel.css :root; the fallbacks are its values), the
+       light theme's are its own --ui-* ramp. Chromium 121+ (Electron) and Firefox draw the standard scrollbar-width /
+       scrollbar-color, and once those are set Chromium ignores ::-webkit-scrollbar, so the thumb brightens while the pointer
+       is over the scrolling element (the standard properties have no thumb :hover); the ::-webkit-scrollbar rules below are
+       the same look for an engine without the standard properties. */
+    :root {
+      --ui-scroll-track:       var(--efsp-strip, #1c2228);
+      --ui-scroll-thumb:       var(--efsp-line-2, #4a5560);
+      --ui-scroll-thumb-hover: var(--efsp-muted, #8c9aa6);
+    }
+    body.light {
+      --ui-scroll-track:       var(--ui-bg-input);
+      --ui-scroll-thumb:       var(--ui-border-2);
+      --ui-scroll-thumb-hover: var(--ui-text);
+    }
+    * { scrollbar-width: thin; scrollbar-color: var(--ui-scroll-thumb) var(--ui-scroll-track); }
+    *:hover { scrollbar-color: var(--ui-scroll-thumb-hover) var(--ui-scroll-track); }
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: var(--ui-scroll-track); }
+    ::-webkit-scrollbar-thumb { background: var(--ui-scroll-thumb); border-radius: 4px; border: 2px solid var(--ui-scroll-track); }
+    ::-webkit-scrollbar-thumb:hover { background: var(--ui-scroll-thumb-hover); }
+
     body {
       background: #0d0d0d;
       font-family: 'Courier New', monospace;

@@ -25,6 +25,9 @@ import { holdsFormationGrant, joinOffer, splitOffer } from './formation-rules.js
 import { convertStripToArrival } from './panel/create-strip.js';
 import { canTerminateRadarService, terminateRadarService } from './flight-following.js';
 import { _stripEl } from './strip-dom.js';
+import { isParFinalStrip } from './bay-views.js';
+import { parTerminalOp, parTerminalRecorded, parTerminals } from './par-model.js';
+import { showParFlight } from './par-panel.js';
 
 // The Strip's tools column and the ⋯ menu (DESK-SPLIT, split out of strip-view.js): everything a controller starts from a Strip.
 
@@ -214,6 +217,20 @@ function _stripMenuItems(strip) {
       reason: !divert.enabled ? divert.reason : (!canAct ? `you do not hold ${strip.ownerPositionId}` : ''),
       title: 'a new destination and a new clearance for this flight',
       run: (anchor) => _openDivertPopover(strip, anchor) });
+  }
+
+  // Final (H138 U10, crc-sync docs/adr/0117): an airfield final controller's calls on the ordinary Strip. Landed is the NLA,
+  // so it is not repeated here; a once-only call already recorded stays listed, greyed, as the record.
+  if (isParFinalStrip(strip)) {
+    const holdsOwner = acting === strip.ownerPositionId;
+    for (const t of parTerminals().filter(x => x.id !== 'LANDED')) {
+      const recorded = parTerminalRecorded(strip, t);
+      items.push({ group: 'Final', key: `par-${t.id.toLowerCase().replace(/_/g, '-')}`, label: t.label, cls: 'efsp-par-call-btn',
+        enabled: holdsOwner && !recorded, reason: recorded ? 'recorded' : (!holdsOwner ? `you do not hold ${strip.ownerPositionId}` : ''),
+        run: () => { sendEfspMutation(strip.ownerPositionId, strip, parTerminalOp(t)); } });
+    }
+    items.push({ group: 'Final', key: 'show-in-par', label: 'Show in PAR panel', cls: 'efsp-par-show-btn', enabled: true,
+      title: 'draw this flight in the PAR panel', run: () => { showParFlight(strip.stripId); } });
   }
 
   // Strip

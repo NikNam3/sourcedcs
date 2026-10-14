@@ -113,10 +113,11 @@ async function incirlik(page) {
   await installSampleInjection(page);
 }
 
-/** Opens the PAR panel the controller's way: the flight's name in the FINAL Bay. */
+/** Opens the PAR panel the controller's way: the FINAL Strip's ⋯ menu, "Show in PAR panel" (H138 U10: ordinary Strips). */
 async function openFromBay(page, positionId, bayId, name) {
   await openBay(page, positionId, bayId);
-  await page.locator('.efsp-final-row .efsp-final-name', { hasText: name }).click();
+  await page.locator('.efsp-strip', { hasText: name }).locator('.efsp-strip-menu-btn').click();
+  await page.locator('.efsp-strip-menu [data-strip-action="show-in-par"]').click();
   await expect(panel(page).locator('#par-body')).toBeVisible();
 }
 
