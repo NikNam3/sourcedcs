@@ -26,6 +26,10 @@ let efspConflicts = [];            // [{ id, kind: 'CA'|'MCI', a, b, aCallsign, 
 // controlling Position, or the Position working the flight); sent whole, so one that retracted is simply not there.
 let efspAirspaceEntry = [];        // [{ id, kind: 'AIRSPACE_ENTRY', trackId, flightDataId|null, callsign, airspaceId, airspaceName, airspaceType, since }]
 
+// crc-sync docs/adr/0124 §1 (H140 LT-AQ1 b): the airspace card's flight list, only for the airspaces this session may
+// approve entry into (the using agency, the controlling Position). Sent whole, like the rest.
+let efspAirspaceTraffic = [];      // [{ airspaceId, flights: [{ flightDataId, callsign, inside, filed, approved, alerting, strips: [{ facilityId, stripId, positionId }] }] }]
+
 /**
  * The one obligation a Strip's badge shows: OVERDUE before WARNING, then the
  * earliest dueAt. null when nothing is due. See getEfspObligations for all.
@@ -46,6 +50,7 @@ export function applyEfspAlerts(msg) {
   for (const r of (msg && msg.conformance) || []) if (r.alerts && r.alerts.length) efspConformance.set(r.flightDataId, r.alerts);
   efspConflicts = (msg && msg.conflictAlert) || [];
   efspAirspaceEntry = (msg && msg.airspaceEntry) || [];
+  efspAirspaceTraffic = (msg && msg.airspaceTraffic) || [];
   efspTofiRegime.clear();
   for (const r of (msg && msg.tofiRegime) || []) efspTofiRegime.set(r.flightDataId, r);
   efspSurveillanceHints.clear();
@@ -136,6 +141,14 @@ export function airspaceEntryAlertsForFlightData(flightDataId) {
 /** "Airspace conflict R-7203", the P/CG term (AIRSPACE CONFLICT) and the airspace's name. */
 export function airspaceEntryText(a) { return `Airspace conflict ${a.airspaceName || a.airspaceId}`; }
 
+/** The airspace card's flight list for this airspace (crc-sync docs/adr/0124 §1), or null when this session is sent none. */
+export function airspaceTrafficFor(airspaceId) {
+  return efspAirspaceTraffic.find(t => t.airspaceId === airspaceId) || null;
+}
+
+/** Every card list this session holds, as one string: what changed since the last efsp-alerts. */
+export function airspaceTrafficSignature() { return JSON.stringify(efspAirspaceTraffic); }
+
 export function _resetAlertsState() {
   efspObligations.clear();
   efspSurveillanceHints.clear();
@@ -143,4 +156,5 @@ export function _resetAlertsState() {
   efspTofiRegime.clear();
   efspConflicts = [];
   efspAirspaceEntry = [];
+  efspAirspaceTraffic = [];
 }

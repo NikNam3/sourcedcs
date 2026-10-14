@@ -267,6 +267,18 @@ test('an ARMED relation offers the rendezvous; an established one does not', () 
   assert.deepEqual(joined, ['AddParticipant', 'RemoveParticipant', 'EndMarsa', 'VoidMarsa']);
 });
 
+test('crc-sync ADR 0124 §2: a local declaration (MARSA in a MOA) has no rendezvous: no Mark rendezvous, no armed badge, no exchange', async () => {
+  load([relation({ startEvent: 'LOCAL_DECLARATION', endCondition: 'ATC_SEPARATION_ESTABLISHED', declaringCallsign: 'VIPER11' })]);
+  const kinds = marsaActionsFor(stripOf('s-tanker')).map(a => a.kind);
+  assert.deepEqual(kinds, ['AddParticipant', 'RemoveParticipant', 'EndMarsa', 'VoidMarsa']);
+  const badge = marsaBadgeFor(stripOf('s-tanker'));
+  assert.equal(badge.armed, false);
+  assert.equal(badge.text, 'MARSA');
+  assert.doesNotMatch(badge.title, /rendezvous/i, 'never tells a non-tanker MARSA to mark a rendezvous');
+  const { _marsaExchange } = await import('../app/public/js/panels/efsp/strip-exchanges.js');
+  assert.equal(_marsaExchange(stripOf('s-tanker')), null);
+});
+
 test('every action on a live relation carries its marsaId', () => {
   load([relation()]);
   for (const action of marsaActionsFor(stripOf('s-tanker'))) {

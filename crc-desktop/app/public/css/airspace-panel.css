@@ -159,3 +159,27 @@
 .airspace-history-time, .airspace-history-kind, .airspace-history-who { color: var(--efsp-muted, #8c9aa6); }
 .airspace-history-head { color: var(--efsp-text, #d8e0e6); }
 .airspace-history-change { color: var(--efsp-text, #d8e0e6); }
+
+/* crc-sync docs/adr/0124 §1: the flights inside or filed through, for who may approve entry. Grey; an approved one
+   dimmer; amber (--efsp-attn) only while inside unapproved and alerting. */
+.airspace-entry-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 4px;
+  font-size: 11px;
+}
+.airspace-entry-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #c8d0d6;
+}
+.airspace-entry-callsign { font-weight: 600; min-width: 64px; }
+.airspace-entry-why { color: #8a949c; flex: 1; }
+.airspace-entry-approved { color: #7c868e; }
+.airspace-entry-approved .airspace-entry-callsign { font-weight: normal; }
+.airspace-entry-state { color: #7c868e; }
+.airspace-entry-alerting .airspace-entry-callsign,
+.airspace-entry-alerting .airspace-entry-why { color: var(--efsp-attn, #e0a83c); }
+.airspace-entry-approve-btn { min-height: 22px; padding: 1px 8px; }

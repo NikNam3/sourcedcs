@@ -5,6 +5,7 @@ import { markEfspChanged } from './efsp-change-bus.js';
 import { _delayFor, _draftInputs, _drafts, _menuFor, _setDelayFor, _setMenuFor, _views } from './airspace-view-state.js';
 import { _altText, _flightsOf, _formatFrequency, _formatWindow, airspaceActionsFor, deleteReason, editReason, routeFlightCount } from './airspace-rules.js';
 import { _dispatchAirspace, _el, _openDelete, _openEditor, _openHistory } from './airspace-views.js';
+import { buildAirspaceEntryList } from './airspace-entry-list.js';
 
 // One airspace card: its facts, actions, menu, Delay form and inline view (DESK-SPLIT, split out of airspace-panel.js).
 
@@ -95,10 +96,14 @@ export function _buildAirspaceCard(airspace, signedOnPositionIds) {
     card.appendChild(pending);
   }
 
+  // crc-sync docs/adr/0124 §1: who may approve entry sees the flights inside or filed through, each with Approve.
+  const entryList = definition.kind === 'ROUTE' ? null : buildAirspaceEntryList(airspace);
   if (definition.kind === 'ROUTE') {
     // A route's occupancy is a count: nobody is "in" it the way a flight is in an area, so no list and never a warning.
     const n = routeFlightCount(airspace.airspaceId);
     card.appendChild(_el('div', 'airspace-meta airspace-route-count', `${n} flight${n === 1 ? '' : 's'} filed on this route`));
+  } else if (entryList) {
+    card.appendChild(entryList);
   } else {
     // The flights in this block. A range controller needs to know who is in
     // their airspace, but works no Strips — guide §4.1 — so this is a list,

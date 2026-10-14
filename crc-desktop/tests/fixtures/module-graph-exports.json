@@ -309,6 +309,11 @@
   "panels/efsp/airspace-editor.js": [
    "openAirspaceEditor"
   ],
+  "panels/efsp/airspace-entry-list.js": [
+   "approvePathFor",
+   "buildAirspaceEntryList",
+   "entryRowWhy"
+  ],
   "panels/efsp/airspace-geometry-editor.js": [
    "mountGeometryEditor"
   ],
@@ -437,6 +442,8 @@
    "airspaceEntryAlertsForFlightData",
    "airspaceEntryAlertsForTrack",
    "airspaceEntryText",
+   "airspaceTrafficFor",
+   "airspaceTrafficSignature",
    "applyEfspAlerts",
    "conflictAlertsForTrack",
    "conflictName",
@@ -1033,6 +1040,7 @@
    "isMarsaHighlighted",
    "marsaActionsFor",
    "marsaBadgeFor",
+   "marsaInterlockArmed",
    "refreshMarsaHighlight"
   ],
   "panels/efsp/marsa-state.js": [
