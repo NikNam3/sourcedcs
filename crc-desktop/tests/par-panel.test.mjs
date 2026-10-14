@@ -25,7 +25,8 @@ test('the glidepath in use: a published angle wins, else the controller\'s defau
   assert.equal(M.effectiveGpa(approach(), undefined), 3.06);
   assert.equal(M.effectiveGpa(null, undefined), M.PAR_DEFAULTS.gpaDeg);
   assert.equal(M.PAR_DEFAULTS.gpaDeg, 3.06);
-  assert.equal(M.PAR_DEFAULTS.tolElDeg, 1);
+  assert.equal(M.PAR_DEFAULTS.tolElHighDeg, 1);
+  assert.equal(M.PAR_DEFAULTS.tolElLowDeg, 0.5, 'the FAA lower safe limit (8200.1D B cursor, ADR 0123)');
   assert.equal(M.PAR_DEFAULTS.tolAzDeg, 1);
   assert.equal(M.PAR_DEFAULTS.autoscale, true);
 });
@@ -52,13 +53,39 @@ test('red outside a tolerance above DA; nothing coloured below DA (H116)', () =>
   const rDaNm = M.rangeAtDaNm(approach(), 3.06);
   assert.deepEqual(M.severity(plot(), { rDaNm }), { el: '', az: '' }, 'on the glidepath');
   assert.deepEqual(M.severity(plot({ elevDevDeg: 1.2 }), { rDaNm }), { el: 'danger', az: '' }, 'above');
-  assert.deepEqual(M.severity(plot({ elevDevDeg: -1.01 }), { rDaNm }), { el: 'danger', az: '' }, 'below');
+  assert.deepEqual(M.severity(plot({ elevDevDeg: -0.51 }), { rDaNm }), { el: 'danger', az: '' }, 'below the lower safe limit');
   assert.deepEqual(M.severity(plot({ azDeg: 1.3 }), { rDaNm }), { el: '', az: 'danger' }, 'right');
   assert.deepEqual(M.severity(plot({ azDeg: -1.3 }), { rDaNm }), { el: '', az: 'danger' }, 'left');
   assert.deepEqual(M.severity(plot({ elevDevDeg: 1 }), { rDaNm }), { el: '', az: '' }, 'on the line is inside');
   assert.deepEqual(M.severity(plot({ rangeNm: rDaNm * 0.9, elevDevDeg: -2, azDeg: 3 }), { rDaNm }), { el: '', az: '' }, 'below DA');
-  assert.deepEqual(M.severity(plot({ elevDevDeg: 0.6 }), { rDaNm, tolElDeg: 0.5 }), { el: 'danger', az: '' }, 'the setting');
+  assert.deepEqual(M.severity(plot({ elevDevDeg: 0.6 }), { rDaNm, tolElHighDeg: 0.5 }), { el: 'danger', az: '' }, 'the upper setting');
+  assert.deepEqual(M.severity(plot({ elevDevDeg: -0.6 }), { rDaNm, tolElLowDeg: 1 }), { el: '', az: '' }, 'the lower setting');
   assert.deepEqual(M.severity(plot({ elevDevDeg: null, azDeg: null }), { rDaNm }), { el: '', az: '' }, 'an INOP axis is never red');
+});
+
+test('safety (ADR 0123): 0.5-1° below the glidepath is red; 0.4° below is not; above, 1° still holds; below DA nothing', () => {
+  const rDaNm = M.rangeAtDaNm(approach(), 3.06);
+  assert.equal(M.severity(plot({ elevDevDeg: -0.7 }), { rDaNm }).el, 'danger', '0.7° low was grey under ±1°');
+  assert.equal(M.severity(plot({ elevDevDeg: -0.9 }), { rDaNm }).el, 'danger');
+  assert.equal(M.severity(plot({ elevDevDeg: -0.4 }), { rDaNm }).el, '');
+  assert.equal(M.severity(plot({ elevDevDeg: -0.5 }), { rDaNm }).el, '', 'on the lower line is inside');
+  assert.equal(M.severity(plot({ elevDevDeg: 0.7 }), { rDaNm }).el, '', '0.7° high stays inside +1°');
+  assert.equal(M.severity(plot({ rangeNm: rDaNm * 0.5, elevDevDeg: -0.7 }), { rDaNm }).el, '', 'below DA the pilot decides (H116)');
+  // the panel passes the controller's settings: a controller who widened only the upper limit keeps the lower one
+  assert.equal(M.severity(plot({ elevDevDeg: -0.7 }), { rDaNm, tolElHighDeg: 2 }).el, 'danger');
+});
+
+test('a saved single elevation tolerance becomes the upper limit; the lower takes its default (ADR 0123)', async () => {
+  const { migratePar } = await import('../app/public/js/settings.js');
+  const old = { parTolEl: 1.5, parTolAz: 1 };
+  migratePar(old);
+  assert.deepEqual(old, { parTolElHigh: 1.5, parTolAz: 1 });
+  const both = { parTolEl: 2, parTolElHigh: 0.8 };
+  migratePar(both);
+  assert.deepEqual(both, { parTolElHigh: 0.8 }, 'a value already set wins');
+  const none = {};
+  migratePar(none);
+  assert.deepEqual(none, {});
 });
 
 test('no plot: amber at 3 s of plot age (frame age + time since it came), or 3 s with none at all; never under a double INOP', () => {
@@ -84,13 +111,17 @@ test('several flights: the controller\'s pick holds while it is sent; otherwise 
 });
 
 test('autoscale: the track at the golden-ratio point of the range until the window is 10 NM, then 10 NM', () => {
-  const far = M.autoscaleView(plot({ rangeNm: 12.36, heightFt: 4000, azDevFt: 300 }), { gpaDeg: 3.06, tchFt: 50 });
+  const far = M.autoscaleView(plot({ rangeNm: 12.36, heightFt: 4000, azDeg: 0.2 }), { gpaDeg: 3.06, tchFt: 50 });
   near(far.rMax, 12.36 / M.PHI);
   assert.ok(far.hMax >= 4000 / M.PHI - 1e-6);
   const near10 = M.autoscaleView(plot({ rangeNm: 3 }), { gpaDeg: 3.06, tchFt: 50 });
   assert.equal(near10.rMax, 10);
-  const wide = M.autoscaleView(plot({ rangeNm: 3, azDevFt: 3000 }), { gpaDeg: 3.06, tchFt: 50 });
-  near(wide.yMax, 3000 / M.PHI);
+  assert.equal(far.azMaxDeg, 2, 'twice the azimuth tolerance, in degrees');
+  assert.equal(M.autoscaleView(plot({ azDeg: 0.2 }), { gpaDeg: 3.06, tolAzDeg: 1.5 }).azMaxDeg, 3);
+  const wide = M.autoscaleView(plot({ rangeNm: 3, azDeg: -1.8 }), { gpaDeg: 3.06, tchFt: 50 });
+  near(wide.azMaxDeg, 1.8 / M.PHI);
+  assert.equal(M.autoscaleView(plot({ azDeg: 9 }), {}).azMaxDeg, M.LIMITS.azMaxDeg, 'never past the ±10° the PAR covers');
+  assert.equal('yMax' in wide, false, 'no feet window any more');
 });
 
 test('zoom: the wheel zooms the range, Shift this scope\'s vertical, anchored at touchdown and clamped', () => {
@@ -100,9 +131,14 @@ test('zoom: the wheel zooms the range, Shift this scope\'s vertical, anchored at
   assert.equal(out.hMax, v.hMax);
   const tall = M.zoomView(v, 'el', true, -100);
   near(tall.hMax, 3500 / M.ZOOM_STEP);
-  assert.equal(tall.yMax, v.yMax);
+  assert.equal(tall.azMaxDeg, v.azMaxDeg);
   const wide = M.zoomView(v, 'az', true, 100);
-  near(wide.yMax, 1200 * M.ZOOM_STEP);
+  near(wide.azMaxDeg, 2 * M.ZOOM_STEP);
+  let n = v;
+  for (let i = 0; i < 60; i++) n = M.zoomView(n, 'az', true, -100);
+  assert.equal(n.azMaxDeg, M.LIMITS.azMinDeg);
+  for (let i = 0; i < 60; i++) n = M.zoomView(n, 'az', true, 100);
+  assert.equal(n.azMaxDeg, M.LIMITS.azMaxDeg);
   let z = v;
   for (let i = 0; i < 60; i++) z = M.zoomView(z, 'el', false, -100);
   assert.equal(z.rMax, M.LIMITS.rMin);
@@ -130,7 +166,11 @@ test('readout: the flight row and deviations as the mockup writes them; INOP bla
   assert.equal(ro.gs, '142 kt');
   assert.equal(ro.vs, '−770');
   assert.equal(ro.el, '−6 ft');
-  assert.equal(ro.az, '55 ft L');
+  assert.equal(ro.az, '0.2° L', 'degrees only (H141 U-RQ4 b)');
+  assert.ok(!/ft/.test(ro.az));
+  assert.equal(M.readoutModel({ sample: s, plot: plot({ azDeg: 0.42 }) }).az, '0.4° R');
+  assert.equal(M.readoutModel({ sample: s, plot: plot({ azDeg: 0.02 }) }).az, '0.0°');
+  assert.equal(M.readoutModel({ sample: s, plot: plot({ azDeg: null }) }).az, '—');
   assert.equal(ro.alt, '1,373 ft');
   assert.equal(ro.noPlot, '');
   const inop = M.readoutModel({ sample: { ...s, sensor: { elevation: 'INOP', azimuth: 'OK', reason: 'NO_TDZE' } }, plot: plot({ heightFt: null, elevDevFt: null }), sev: { el: 'danger', az: '' } });
@@ -141,6 +181,24 @@ test('readout: the flight row and deviations as the mockup writes them; INOP bla
   assert.equal(inop.inopReason, 'no touchdown zone elevation');
   assert.equal(M.readoutModel({ sample: s, plot: plot(), noPlot: { amber: true, seconds: 4 } }).noPlot, 'NO PLOT 4 s');
   assert.equal(M.readoutModel({ sample: s, plot: plot({ rangeNm: -0.12 }) }).range, '−0.1');
+});
+
+test('azimuth axis labels are degrees, the course 0°; a plot past the edge is drawn at it', () => {
+  assert.equal(M.azAxisLabel(0), '0°');
+  assert.equal(M.azAxisLabel(-0.5), '0.5°L');
+  assert.equal(M.azAxisLabel(1), '1°R');
+  assert.equal(M.azAxisLabel(-1e-12), '0°');
+  for (const d of [-2, -1.5, -0.25, 0.25, 2]) assert.ok(!/ft/.test(M.azAxisLabel(d)));
+  assert.equal(M.clampTo(3.1, -2, 2), 2);
+  assert.equal(M.clampTo(-7, -2, 2), -2);
+  assert.equal(M.clampTo(0.4, -2, 2), 0.4);
+  assert.deepEqual(M.DEFAULT_VIEW, { rMax: 10, hMax: 3500, azMaxDeg: 2 });
+});
+
+test('par-panel draws the azimuth scope in degrees: no feet conversion left in it (ADR 0123)', () => {
+  const src = fs.readFileSync(path.join(JS, 'panels/efsp/par-panel.js'), 'utf8').replace(/\/\/.*$/gm, '');
+  assert.ok(!/azDevFt|lateralFt|yMax/.test(src));
+  assert.ok(/'tol-low'/.test(src) && /c\.tolElLow/.test(src) && /c\.tolElHigh/.test(src));
 });
 
 test('header: the runway (the PAR is airfield-only, H125)', () => {
@@ -169,10 +227,10 @@ test('the panel never tells the controller their job: no call prompts, no cadenc
   }
 });
 
-test('the PAR settings tab registers its four settings with the H116 defaults', async () => {
+test('the PAR settings tab registers its settings with the H116 / H141 defaults', async () => {
   const reg = await import('../app/public/js/settings-registry.js');
   await import('../app/public/js/panels/efsp/par-panel.js');
   const tab = reg.settingsTabs().find(t => t.id === 'par');
   assert.ok(tab);
-  assert.deepEqual(tab.fields.map(f => [f.key, f.default]), [['parAutoscale', true], ['parGpa', 3.06], ['parTolEl', 1], ['parTolAz', 1]]);
+  assert.deepEqual(tab.fields.map(f => [f.key, f.default]), [['parAutoscale', true], ['parGpa', 3.06], ['parTolElHigh', 1], ['parTolElLow', 0.5], ['parTolAz', 1]]);
 });

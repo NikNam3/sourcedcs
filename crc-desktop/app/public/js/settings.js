@@ -64,6 +64,13 @@ export function loadSettings() {
   if (!settings.navDeclutterOffH70) { settings.navDeclutter = false; settings.navDeclutter5 = false; settings.navDeclutterOffH70 = true; }
   // H15: headings are magnetic from crc-sync's model; the manual correction is gone.
   delete settings.hdgCorrection;
+  migratePar(settings);
+}
+
+/** ADR 0123: the single PAR elevation tolerance `parTolEl` becomes the upper limit; the lower one takes its own default. */
+export function migratePar(s) {
+  if (typeof s.parTolEl === 'number' && Number.isFinite(s.parTolEl) && s.parTolElHigh === undefined) s.parTolElHigh = s.parTolEl;
+  delete s.parTolEl;
 }
 
 export function saveSettings() {
