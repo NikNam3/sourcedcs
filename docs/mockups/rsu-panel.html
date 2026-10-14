@@ -1,0 +1,313 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RSU List Mockup</title>
+<style>
+/* The RSU's list (docs/adr/0120) on crc-desktop's dark-cockpit rules: grey when in order; amber = look at this;
+   blue = the one action due. Same tokens and font as the other panel mockups. */
+:root{
+  --bg:#0d0d0d;--panel:#14181c;--well:#0b0e11;--strip:#1c2228;--strip2:#232a32;--tab:#20272e;--line:#2e3740;--line2:#4a5560;
+  --text:#d8e0e6;--muted:#8c9aa6;--faint:#56616c;--attn:#e0a83c;--attn-t:#ffe0a8;--danger:#ff5c5c;--go:#4a7dbf;--cyan:#8ec7ff;
+  --mono:'Consolas','DejaVu Sans Mono',ui-monospace,monospace;
+  color-scheme:dark}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font:13px/1.45 var(--mono);padding-block:24px 60px;padding-inline:16px}
+main{max-width:1240px;margin:0 auto;display:grid;grid-template-columns:minmax(0,1fr);gap:22px}
+h1{font-size:19px;font-weight:600}
+h2{font-size:14px;color:#fff;border-bottom:1px solid var(--line);padding-bottom:4px;font-weight:600}
+h3{font-size:12px;color:#fff;font-weight:600;margin-bottom:2px}
+p{color:var(--muted);max-width:900px}
+a{color:var(--cyan)}
+button{font:inherit}
+button:focus-visible{outline:2px solid var(--cyan);outline-offset:1px}
+
+/* ---- panel chrome ---- */
+.pn{background:var(--panel);border:1px solid var(--line);font-size:12px;font-variant-numeric:tabular-nums;min-width:0}
+.ptab{display:flex;gap:2px;background:#0e1114;border-bottom:1px solid var(--line);padding:3px 4px 0}
+.ptab span{padding:3px 10px;background:var(--tab);color:var(--muted);border:1px solid var(--line);border-bottom:none;font-size:10.5px}
+.ptab span.on{color:#fff;background:var(--panel)}
+.hdr{display:flex;flex-wrap:wrap;align-items:center;gap:4px 18px;padding:6px 10px;border-bottom:1px solid var(--line2);background:#101418}
+.hdr .k{color:var(--muted);font-size:10.5px;letter-spacing:.06em;margin-right:4px}
+.hdr b{color:#fff;font-weight:700}
+.hdr .right{margin-left:auto;color:var(--muted)}
+.rwy.attn b,.rwy.attn .k{color:var(--attn)}
+
+/* ---- the list ---- */
+.tw{overflow-x:auto}
+table.ls{border-collapse:collapse;width:100%}
+.ls th{font-weight:400;color:var(--muted);font-size:10.5px;letter-spacing:.08em;text-align:left;padding:5px 8px;border-bottom:1px solid var(--line2);white-space:nowrap}
+.ls td{padding:0 8px;height:34px;border-bottom:1px solid var(--line);white-space:nowrap}
+.ls td.cs{color:#fff;font-weight:700;font-size:13.5px}
+.ls td.cs small{color:var(--muted);font-weight:400;font-size:11px;margin-left:4px}
+.ls td.ty{color:var(--muted)}
+.ls td.rm{color:var(--muted);max-width:0;width:100%;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
+.ls td.rm:hover{color:var(--text)}
+.ls td.act{text-align:right;width:1%}
+.ls tr.off td{color:var(--muted)}
+.ls tr.off td.cs{color:var(--muted);font-weight:400}
+.cell{background:none;border:1px solid transparent;border-radius:2px;color:var(--text);padding:1px 6px;cursor:pointer;min-width:38px;text-align:center}
+.cell:hover{border-color:var(--line2);background:var(--strip)}
+.cell.empty{color:var(--faint)}
+.ls tr.off .cell{cursor:default;color:var(--muted)}
+.ls tr.off .cell:hover{border-color:transparent;background:none}
+.due{color:#fff;background:var(--go);border:1px solid #6b9be0;border-radius:3px;padding:2px 10px;cursor:pointer;font-size:11.5px}
+.wait{color:var(--attn);font-size:11px;margin-right:8px}
+.more{background:none;border:none;color:var(--muted);cursor:pointer;padding:2px 6px;font-size:14px;line-height:1}
+.more:hover{color:#fff}
+.menu{position:absolute;z-index:5;background:var(--strip);border:1px solid var(--line2);box-shadow:0 4px 14px #000a;min-width:170px;padding:3px 0}
+.menu button{display:block;width:100%;text-align:left;background:none;border:none;color:var(--text);padding:4px 12px;cursor:pointer;font-size:12px}
+.menu button:hover{background:var(--strip2)}
+.menu hr{border:none;border-top:1px solid var(--line);margin:3px 0}
+.empty-list{padding:14px 10px;color:var(--faint);text-align:center}
+.foot{padding:5px 10px;color:var(--faint);font-size:11px;border-top:1px solid var(--line)}
+.foot:empty{display:none}
+.pop{position:absolute;z-index:6;background:var(--strip);border:1px solid var(--line2);box-shadow:0 4px 14px #000a;width:300px;padding:8px}
+.pop textarea{width:100%;height:64px;background:var(--well);color:var(--text);border:1px solid var(--line2);font:inherit;font-size:12px;padding:4px;resize:none}
+.pop .row{display:flex;gap:6px;justify-content:flex-end;margin-top:6px}
+.btn{color:var(--text);background:var(--strip);border:1px solid var(--line2);border-radius:3px;padding:2px 10px;cursor:pointer;font-size:11.5px}
+.btn:hover{border-color:var(--muted)}
+.btn[disabled]{color:var(--faint);border-color:var(--line);cursor:not-allowed}
+
+/* ---- AP strip + handoff popover (simplified Strip face) ---- */
+.strip{display:grid;grid-template-columns:minmax(0,110px) minmax(0,70px) minmax(0,1fr) minmax(0,64px);border:1px solid var(--line2);background:var(--strip);font-size:12px;max-width:560px}
+.strip>div{padding:3px 6px;border-right:1px solid var(--line);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.strip>div:last-child{border-right:none}
+.strip .k{display:block;color:var(--faint);font-size:9.5px;letter-spacing:.06em}
+.strip .cs{color:#fff;font-weight:700;font-size:14px}
+.strip .v{color:var(--text)}
+.strip .v.none{color:var(--faint)}
+.strip .rmks{grid-column:1/-1;border-top:1px solid var(--line);color:var(--muted);font-size:11px;border-right:none}
+.ho{background:var(--panel);border:1px solid var(--line2);max-width:560px;margin-top:6px}
+.ho .t{padding:5px 10px;color:var(--muted);font-size:10.5px;letter-spacing:.06em;border-bottom:1px solid var(--line)}
+.tgt{display:grid;grid-template-columns:minmax(0,120px) minmax(0,1fr);gap:6px 12px;padding:8px 10px;align-items:center;border-bottom:1px solid var(--line)}
+.tgt:last-child{border-bottom:none}
+.tgt .n{color:#fff;font-weight:700}
+.tgt .n small{display:block;color:var(--muted);font-weight:400;font-size:11px}
+.steps{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center}
+.step{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:11.5px}
+.step i{font-style:normal;display:inline-flex;width:16px;height:16px;border-radius:50%;border:1px solid var(--line2);align-items:center;justify-content:center;font-size:10px;color:var(--muted)}
+.step.done{color:var(--faint)} .step.done i{color:var(--faint);border-color:var(--line)}
+.sw{display:inline-flex;align-items:center;gap:6px;color:var(--muted);font-size:11.5px;cursor:pointer}
+.why{color:var(--muted);font-size:11px}
+
+/* ---- page chrome ---- */
+.bar{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.bar .lbl{color:var(--faint);font-size:11px;margin-right:4px;min-width:84px}
+.bar button{font-size:11.5px;color:var(--muted);background:var(--panel);border:1px solid var(--line);padding:4px 10px;border-radius:3px;cursor:pointer}
+.bar button[aria-pressed="true"]{color:#fff;border-color:var(--line2);background:var(--strip)}
+.two{display:grid;grid-template-columns:minmax(0,620px) minmax(0,1fr);gap:20px;align-items:start}
+.notes{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;font-size:12px}
+.notes p{font-size:12px}
+.seq{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
+.seq .pn{position:relative}
+.seq .cap{color:var(--muted);font-size:11.5px;margin-top:4px}
+.num{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:#ffd23f;color:#000;font-size:11px;font-weight:700;margin-right:6px}
+table.t{border-collapse:collapse;font-size:12px;width:100%}
+table.t td,table.t th{border:1px solid var(--line);padding:4px 7px;text-align:left;vertical-align:top}
+table.t th{color:var(--muted);font-weight:400;background:var(--panel)}
+.swc{display:inline-block;width:10px;height:10px;border-radius:2px;vertical-align:-1px;margin-right:6px}
+.relative{position:relative}
+@media (max-width:980px){.two{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:480px){.ls .ty{display:none}.ls td,.ls th{padding-inline:5px}}
+</style></head><body><main>
+<p><a href="index.html">← mockups</a></p>
+<header>
+<h1>RSU list <span style="color:var(--muted);font-size:12px;font-weight:400">mockup, revision 1, 2026-10-14 (ADR 0120, for approval)</span></h1>
+<p>The Runway Supervisory Unit works VFR training traffic in Incirlik's pattern by eye, on its own frequency (H130, H138). Its only
+Bay is this list: one row per aircraft it has, with <b>pattern or straight-in</b> and <b>touch-and-go, full stop or low approach</b>,
+and the remarks. No legs. AP hands an aircraft over only after the pilot has cancelled IFR. Callsigns, remarks and the RSU frequency
+are invented.</p>
+</header>
+
+<div class="bar" role="group" aria-label="Situation"><span class="lbl">Situation</span>
+  <button type="button" data-s="normal" aria-pressed="true">Pattern in order</button>
+  <button type="button" data-s="late" aria-pressed="false">Not checked in after 60 s</button>
+  <button type="button" data-s="rwy" aria-pressed="false">Runway suspended</button>
+  <button type="button" data-s="empty" aria-pressed="false">Empty</button>
+</div>
+
+<div class="two">
+<section aria-label="RSU list panel">
+  <div class="pn relative" id="rsu">
+    <div class="ptab"><span class="on">RSU</span><span>Radar</span></div>
+    <div class="hdr">
+      <span class="rwy" id="rwy"><span class="k">RWY</span><b>05</b> <span class="k" id="rwyst" style="margin-left:6px"></span></span>
+      <span><span class="k">FREQ</span><b>287.0</b></span>
+      <span class="right" id="clock">1412:37Z</span>
+    </div>
+    <div class="tw"><table class="ls" id="list"></table></div>
+    <div class="foot" id="foot"></div>
+  </div>
+  <p class="cap" style="font-size:11.5px;margin-top:6px">Click PAT/STR to toggle, the option to cycle T&amp;G → FS → LA, the remarks to open them. ⋯ holds Landed, Breakout and Leaves pattern.</p>
+</section>
+
+<section aria-label="AP side">
+  <h2 style="margin-bottom:8px">AP side: the handoff to the RSU</h2>
+  <div class="strip" id="apstrip">
+    <div><span class="k">CALLSIGN</span><span class="cs">BOLT51</span></div>
+    <div><span class="k">TYPE</span><span class="v">T-38C</span></div>
+    <div><span class="k">ALT · HDG</span><span class="v" id="clr">040 · 230</span></div>
+    <div><span class="k">BEACON</span><span class="v">4612</span></div>
+    <div class="rmks">RMKS student, 2 T&amp;G then full stop</div>
+  </div>
+  <div class="ho" id="ho">
+    <div class="t">HANDOFF BOLT51</div>
+    <div class="tgt">
+      <div class="n">LC<small>Tower 251.0</small></div>
+      <div class="steps"><button class="btn" type="button">Handoff</button><label class="sw"><input type="checkbox" checked> Released</label></div>
+    </div>
+    <div class="tgt">
+      <div class="n">RSU<small>RSU 287.0</small></div>
+      <div class="steps" id="rsusteps"></div>
+    </div>
+  </div>
+  <p class="cap" style="font-size:11.5px;margin-top:6px" id="apcap"></p>
+  <div class="bar" style="margin-top:8px"><button type="button" id="apreset">Reset AP side</button></div>
+</section>
+</div>
+
+<section style="display:grid;gap:10px">
+<h2>Pattern breakout (U15)</h2>
+<div class="seq">
+  <div>
+    <div class="pn relative">
+      <div class="hdr"><span><span class="k">RWY</span><b>05</b></span><span><span class="k">FREQ</span><b>287.0</b></span></div>
+      <table class="ls"><tr><td class="cs">VIPER11<small>2×</small></td><td><span class="cell">PAT</span></td><td><span class="cell">T&amp;G</span></td><td class="act"><button class="more" type="button" tabindex="-1">⋯</button></td></tr></table>
+      <div class="menu" style="right:6px;top:66px;position:absolute"><button type="button" tabindex="-1">Landed</button><hr><button type="button" tabindex="-1" style="color:#fff">Breakout</button><button type="button" tabindex="-1">Leaves pattern</button><hr><button type="button" tabindex="-1">Edit remarks…</button></div>
+      <div style="height:150px"></div>
+    </div>
+    <p class="cap"><span class="num">1</span>The RSU calls the breakout and picks ⋯ Breakout. One click, no reason picker.</p>
+  </div>
+  <div>
+    <div class="pn">
+      <div class="hdr"><span><span class="k">RWY</span><b>05</b></span><span><span class="k">FREQ</span><b>287.0</b></span></div>
+      <table class="ls"><tr><td class="cs">HAWK21</td><td><span class="cell">STR</span></td><td><span class="cell">FS</span></td><td class="act"><button class="due" type="button" tabindex="-1">Landed</button></td></tr></table>
+      <div class="foot">VIPER11 breakout · Undo</div>
+    </div>
+    <p class="cap"><span class="num">2</span>The row ends: the Strip is retired (code released, correlation ended), Undo restores it. Nothing is handed to AP.</p>
+  </div>
+  <div>
+    <div class="strip">
+      <div><span class="k">CALLSIGN</span><span class="cs">VIPER11</span></div>
+      <div><span class="k">TYPE</span><span class="v">2/F-16C</span></div>
+      <div><span class="k">ALT · HDG</span><span class="v none">— · —</span></div>
+      <div><span class="k">BEACON</span><span class="v">0431</span></div>
+      <div class="rmks" style="color:var(--faint)">OVF · IN_SECTOR · flight following</div>
+    </div>
+    <p class="cap"><span class="num">3</span>The pilot calls APP as a VFR aircraft. AP right-clicks the contact, <b>Start flight following</b> (LT-VFR): a new OVERFLIGHT Strip, new code, the normal way.</p>
+  </div>
+</div>
+</section>
+
+<div class="notes">
+  <div><h3>The columns</h3>
+  <p>Callsign (and 2× for a formation until it splits), type, PAT/STR (pattern or straight-in), T&amp;G/FS/LA (touch-and-go, full stop,
+  low approach), remarks (cut at a word, click to read or edit), and the one action due. Empty choices show as –; AP may set them
+  before the handoff when the pilot asks for them.</p></div>
+  <div><h3>How a row comes and goes</h3>
+  <p>Comes: AP's handoff (offered → Accept; then Checked in when the pilot calls; control moves then, ADR 0122). Goes: Landed on a full stop
+  (the Strip goes to GC, Taxi in), Breakout or Leaves pattern (the Strip ends; the pilot calls APP). A touch-and-go or low approach that stays
+  keeps its row: set the next option.</p></div>
+  <div><h3>Left out on purpose</h3>
+  <p>Legs (closed, initial, break, base, final), time in the pattern, beacon code, approach count, "long in pattern" and "crowded final"
+  advisories. The RSU sees the aircraft; the list only holds what it cannot see: who it has and what each one asked for.</p></div>
+</div>
+
+<section style="display:grid;gap:8px">
+<h2>When colour appears</h2>
+<div style="overflow-x:auto"><table class="t">
+<tr><th>Colour</th><th>Means</th><th>Where</th></tr>
+<tr><td><span class="swc" style="background:var(--muted)"></span>grey</td><td>Normal.</td><td>Every row with the RSU holding control; an offered row before the threshold.</td></tr>
+<tr><td><span class="swc" style="background:var(--attn)"></span>amber</td><td>Look at this.</td><td>A row offered and not accepted, or accepted and not checked in, past ADR 0122's threshold (60 s, ours); the runway in use not open (header).</td></tr>
+<tr><td><span class="swc" style="background:var(--go)"></span>blue</td><td>The one action due.</td><td>Accept, Checked in, or Landed on a full-stop row.</td></tr>
+</table></div>
+</section>
+</main>
+
+<script>
+const OPTS=['TOUCH_AND_GO','FULL_STOP','LOW_APPROACH'];
+const OPT_L={TOUCH_AND_GO:'T&G',FULL_STOP:'FS',LOW_APPROACH:'LA'};
+const ENT_L={PATTERN:'PAT',STRAIGHT_IN:'STR'};
+const BASE=[
+  {cs:'VIPER11',n:2,ty:'F-16C',ent:'PATTERN',opt:'TOUCH_AND_GO',rm:'2-ship, will split for individual full stops',st:'ctl'},
+  {cs:'HAWK21',ty:'T-38C',ent:'STRAIGHT_IN',opt:'FULL_STOP',rm:'',st:'ctl'},
+  {cs:'TALON31',ty:'T-38C',ent:'PATTERN',opt:'LOW_APPROACH',rm:'solo student, Z suffix, watch spacing on the downwind behind HAWK21',st:'acc',age:20},
+  {cs:'ROCKY41',ty:'T-6A',ent:null,opt:null,rm:'',st:'off',age:8},
+];
+let rows=[],sit='normal',undo=null;
+const $=s=>document.querySelector(s);
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+function reset(){rows=BASE.map(r=>({...r}));if(sit==='late'){rows[2].age=74;rows[3].age=66}if(sit==='empty')rows=[];undo=null;$('#foot').textContent='';}
+function render(){
+  const rw=$('#rwy'),st=$('#rwyst');
+  if(sit==='rwy'){rw.classList.add('attn');st.textContent='SUSPENDED · works'}else{rw.classList.remove('attn');st.textContent=''}
+  const t=$('#list');
+  if(!rows.length){t.innerHTML='<tr><td class="empty-list" colspan="7">No aircraft</td></tr>';return}
+  let h='<tr><th>CALLSIGN</th><th class="ty">TYPE</th><th>PAT/STR</th><th>OPTION</th><th>RMKS</th><th></th><th></th></tr>';
+  rows.forEach((r,i)=>{
+    const late=(r.st!=='ctl')&&r.age>=60;
+    let act='';
+    if(r.st==='off')act=(late?'<span class="wait">offered 1 min</span>':'')+`<button class="due" data-a="accept" data-i="${i}" type="button">Accept</button>`;
+    else if(r.st==='acc')act=(late?'<span class="wait">not checked in 1 min</span>':'')+`<button class="due" data-a="checkin" data-i="${i}" type="button">Checked in</button>`;
+    else if(r.opt==='FULL_STOP')act=`<button class="due" data-a="landed" data-i="${i}" type="button">Landed</button>`;
+    const off=r.st!=='ctl';
+    h+=`<tr class="${off?'off':''}"><td class="cs">${esc(r.cs)}${r.n?`<small>${r.n}×</small>`:''}</td><td class="ty">${esc(r.ty)}</td>`+
+      `<td><button class="cell ${r.ent?'':'empty'}" data-a="ent" data-i="${i}" type="button" ${off?'tabindex="-1"':''}>${r.ent?ENT_L[r.ent]:'–'}</button></td>`+
+      `<td><button class="cell ${r.opt?'':'empty'}" data-a="opt" data-i="${i}" type="button" ${off?'tabindex="-1"':''}>${r.opt?OPT_L[r.opt]:'–'}</button></td>`+
+      `<td class="rm" data-a="rm" data-i="${i}" title="${esc(r.rm)}">${esc(r.rm)}</td>`+
+      `<td class="act">${act}</td><td class="act"><button class="more" data-a="more" data-i="${i}" type="button" aria-label="More">⋯</button></td></tr>`;
+  });
+  t.innerHTML=h;
+}
+function closePop(){document.querySelectorAll('#rsu .menu,#rsu .pop').forEach(e=>e.remove())}
+function retire(i,word){const r=rows[i];undo={r,i};rows.splice(i,1);$('#foot').innerHTML=`${esc(r.cs)} ${word} · <a href="#" id="undo">Undo</a>`;}
+$('#list').addEventListener('click',e=>{
+  const b=e.target.closest('[data-a]');if(!b)return;const i=+b.dataset.i,r=rows[i],a=b.dataset.a;
+  if(a!=='more'&&a!=='rm')closePop();
+  if((a==='ent'||a==='opt')&&r.st!=='ctl')return;
+  if(a==='ent')r.ent=r.ent==='PATTERN'?'STRAIGHT_IN':'PATTERN';
+  else if(a==='opt')r.opt=OPTS[(OPTS.indexOf(r.opt)+1)%3];
+  else if(a==='accept'){r.st='acc';r.age=0}
+  else if(a==='checkin'){r.st='ctl'}
+  else if(a==='landed')retire(i,'landed, to GC');
+  else if(a==='more'){closePop();const m=document.createElement('div');m.className='menu';
+    const box=$('#rsu').getBoundingClientRect(),bb=b.getBoundingClientRect();
+    m.style.right='6px';m.style.top=(bb.bottom-box.top+2)+'px';
+    m.innerHTML=r.st==='ctl'?`<button data-m="landed">Landed</button><hr><button data-m="breakout">Breakout</button><button data-m="leaves">Leaves pattern</button><hr><button data-m="rm">Edit remarks…</button>`:`<button data-m="rm">Edit remarks…</button>`;
+    m.addEventListener('click',ev=>{const x=ev.target.dataset.m;if(!x)return;closePop();
+      if(x==='landed')retire(i,'landed, to GC');else if(x==='breakout')retire(i,'breakout');else if(x==='leaves')retire(i,'left the pattern');else{openRm(i,b);return}render()});
+    $('#rsu').appendChild(m);return}
+  else if(a==='rm'){closePop();openRm(i,b);return}
+  render();
+});
+function openRm(i,anchor){const r=rows[i],p=document.createElement('div');p.className='pop';
+  const box=$('#rsu').getBoundingClientRect(),bb=anchor.getBoundingClientRect();
+  p.style.left=Math.max(6,Math.min(bb.left-box.left,box.width-306))+'px';p.style.top=(bb.bottom-box.top+2)+'px';
+  p.innerHTML=`<div style="color:var(--muted);font-size:10.5px;letter-spacing:.06em;margin-bottom:4px">RMKS ${esc(r.cs)}</div><textarea>${esc(r.rm)}</textarea><div class="row"><button class="btn" data-p="c" type="button">Cancel</button><button class="btn" data-p="s" type="button">Save</button></div>`;
+  p.addEventListener('click',ev=>{const k=ev.target.dataset.p;if(!k)return;if(k==='s')r.rm=p.querySelector('textarea').value;closePop();render()});
+  $('#rsu').appendChild(p);p.querySelector('textarea').focus()}
+$('#foot').addEventListener('click',e=>{if(e.target.id==='undo'){e.preventDefault();if(undo){rows.splice(undo.i,0,undo.r);undo=null;$('#foot').textContent='';render()}}});
+document.addEventListener('click',e=>{if(!e.target.closest('#rsu'))closePop()});
+document.querySelectorAll('.bar[aria-label=Situation] button').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('.bar[aria-label=Situation] button').forEach(x=>x.setAttribute('aria-pressed',x===b?'true':'false'));
+  sit=b.dataset.s;closePop();reset();render()}));
+
+/* AP side */
+let cancelled=false,handed=false;
+function renderAp(){
+  $('#clr').textContent=cancelled?'— · —':'040 · 230';$('#clr').className='v'+(cancelled?' none':'');
+  const s=$('#rsusteps');
+  if(handed){s.innerHTML='<span class="why">Handed off, released. Waiting for the RSU to accept.</span>';$('#apcap').textContent='BOLT51 now shows on the RSU list as offered; control moves when the RSU marks it Checked in (ADR 0122).';return}
+  s.innerHTML=
+    `<span class="step ${cancelled?'done':''}"><i>${cancelled?'✓':'1'}</i>${cancelled?'IFR cancellation received':''}</span>`+
+    (cancelled?'':'<button class="due" type="button" id="cxl">IFR cancellation received</button>')+
+    `<span class="step"><i>2</i></span><button class="btn" type="button" id="hoRsu" ${cancelled?'':'disabled title="BOLT51 still has an IFR clearance (ALT 040, HDG 230)"'}>Handoff</button>`+
+    `<label class="sw"><input type="checkbox" checked ${cancelled?'':'disabled'}> Released</label>`;
+  $('#apcap').textContent=cancelled
+    ?'ALT and HDG are ended in one audited Mutation (Undo restores them). BOLT51 now reads as VFR (H136). Handoff is open.'
+    :'The pilot says "cancel my IFR". AP answers "BOLT51, IFR cancellation received" (JO 7110.65BB ¶4-2-10 b) and presses step 1. The server refuses a handoff to the RSU while ALT or HDG is active (IFR_NOT_CANCELLED).';
+  const c=$('#cxl');if(c)c.onclick=()=>{cancelled=true;renderAp()};
+  const h=$('#hoRsu');if(h&&cancelled)h.onclick=()=>{handed=true;renderAp()};
+}
+$('#apreset').onclick=()=>{cancelled=false;handed=false;renderAp()};
+reset();render();renderAp();
+</script>
+</body></html>
