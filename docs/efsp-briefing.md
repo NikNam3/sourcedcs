@@ -26,7 +26,11 @@ MISSION-CLEAR (`0108`), CARRIER-ATO (`0109`), consolidation as hat offers (`0110
 and the traps. After phase 3 came the **panels** (§3K, "Panels and Divert"): the tabbed Settings panel, Divert (`0111`), the carrier's one
 state and the NATOPS EAT (`0113`), the MARSHAL recovery board (`0114`) and its server-side marks (`0115`), the CARRIER MAP, the side number
 leading on carrier Strips and views, the wire-surface scan of the carrier half, the PAR sample and panel (`0112`) and, reversing the carrier
-half of `0112`, **the PAR as an airfield feature** (`0116`). **Phase 3 is done**; §4 lists what is open, §5 what is queued, and **one agent works at a time (H112)**.
+half of `0112`, **the PAR as an airfield feature** (`0116`). **Phase 3 is done.** The human then ran a **live test** (2026-10-11, findings T1-T31):
+its **fix batch is merged** (§3L: terrain WebP, client fixes, airspace fixes, correlation, the single frequency approach without an SFA Position (`0117`),
+Strip fields, the PAR missed approach, flight following, Mode C intruder and MARSA groups (`0118`), the airspace-conflict alert (`0119`)), except the
+RSU. **Round 2** (the human's findings U1-U21 of 2026-10-13) has started: U-STRIP is merged (§3L); §5 lists what runs and what is queued. Up to
+**four lanes run in parallel** since 2026-10-14 (S-ARCH-62); §4 lists what is open.
 
 If you are a lane agent, your own briefing in `docs/parallel/wave2/` and
 `docs/parallel/lane-rules.md` come first, and **`docs/parallel/decisions.md` overrides both**. If you
@@ -36,20 +40,22 @@ are the supervising session, start at `docs/parallel/supervisor-handoff.md`.
 
 Integration branch `efsp-wp5-correlation`. It carries waves 1-3 (including UI-B, QAS, E2E-harden), the
 architecture refactor W1-W7 (FREEZE, then BOARD, WIRE, SYNC, AUTH, APP, DATA, TIME, LOG, the ES-module client, BACKCOMPAT
-and the W7 RENAME), L20, the post-refactor features, and the whole architecture check (phases 1-3) plus everything after it (§3K), up to
-CARRIER-FOLLOWUP (`3b68795f`). Not pushed.
+and the W7 RENAME), L20, the post-refactor features, the whole architecture check (phases 1-3) and the panels (§3K), the live-test fix batch
+and round 2's U-STRIP (§3L), up to `543c1c1f`. Not pushed.
 
-Green, as recorded on the CARRIER-FOLLOWUP tree (`docs/wip/CARRIER-FOLLOWUP.md`; DOCS-PANELS re-ran both unit suites on its docs-only branch, see its
-report): **crc-sync** `npm test` **2640**, **freeze** (`npm run freeze`, opt-in) **56/56**, **walk** (`npm run walk`, depth 4) **23/23**, `soak:selfcheck` PASS,
-**crc-desktop** `npm test` **1254**; `wire:record` says protocol stays **2**. sourcedcs-web, atobrief, infra and the Python `tools/tests` were last counted earlier (web 151 and infra 27 at S-ARCH-11, pytest 363 at S-ARCH-28; not re-measured).
-**Playwright:** the last full sharded run (S-ARCH-45, on the PAR-2 tree `0fe5bfe3`) was **226/227**, the one failure (`mtr-pilot-walk`) load-only.
-CARRIER-FOLLOWUP ran its specs each alone on `E2E_LANE=3` (`par-panel` 7/7, `l17-carrier` 6/6, `carrier-map` 7/7, `marshal-board` 7/7, `side-swap` 2/2,
-`l18-incirlik` 3/3); a sharded run on its tree is the supervisor's. Under load many specs fail that pass alone: re-run a failure alone before counting it (S-ARCH-14's rule). Every spec must
+Green, as recorded on the U-STRIP tree (`19c0ef1c`, S-ARCH-61): **crc-sync** `npm test` **2740**, **freeze** (`npm run freeze`, opt-in) **56/56**,
+**walk** (`npm run walk`, depth 4) **23/23**, `wire-protocol.test.mjs` 9/9 (protocol stays **2**), **crc-desktop** `npm test` **1296**; `soak:selfcheck`
+last PASS on the LT-AIRSPACE-ALERT tree (S-ARCH-58; U-STRIP moved no Board, wire or hub file). sourcedcs-web, atobrief, infra and the Python `tools/tests` were last counted earlier (web 151 and infra 27 at S-ARCH-11, pytest 363 at S-ARCH-28; not re-measured).
+**Playwright:** the last full sharded run (S-ARCH-58, on the LT-AIRSPACE-ALERT tree) was **249/249**. U-STRIP ran its own `u-strip` 9/9 and 112
+regression specs on `E2E_LANE=7`; the sharded run on its tree was started at S-ARCH-62 (read its summary line: **the sharded runner exits 0 even
+when a spec fails**, S-ARCH-54). Watch `l4-drag` 172 (Rack-to-Rack drag, S-ARCH-57). Under load many specs fail that pass alone: re-run a failure alone before counting it (S-ARCH-14's rule). Every spec must
 `require('./helpers/test')` and leave no Strips on the Board (E2E-fix, §3J). `ordnance-hung`'s "pilot walks" test needs `runway-status.spec.js` to have run first (it
 relies on the active runway), as on the baseline. A fresh worktree needs `npm ci` in `crc-sync`, `crc-desktop` and `crc-desktop/app` (a missing `app/node_modules` fails the packaging test).
 Restart the local crc-sync on :3000 after any `crc-sync/src` change.
 
-ADRs: `0001`-`0116` except `0090` and `0092` (0095 structure, 0096 clocks, 0097 logging, 0098-0106 the post-refactor features, 0107 12 h archive, 0108 mission reset, 0109 carrier ATO lines, 0111 Divert, 0112 the PAR sample (its carrier half replaced by 0116), 0113 carrier state and EAT, 0114 recovery board, 0115 the marks on the stack entry, 0116 the PAR is an airfield feature; 0110 consolidation, which stays "Proposed" as committed: its acceptance is decisions.md S-ARCH-25 plus H111/H113, P4). `0077` is the L20 house style; `0090` and `0092` were not used (TA took none: it applies `0085`/H62), `0060` is the errata ADR.
+ADRs: `0001`-`0119` except `0090` and `0092` (0117 the single frequency approach and the PAR final, 0118 CA/MCI and MARSA grouping, 0119 the
+airspace-conflict alert and the using agency; `0120` (U-RSU), `0121` (LT-GROUND) and `0122`-`0125` (U-RELEASE, U-PAR, U-MOA, U-JURISDICTION)
+are reserved for queued or running lanes; 0095 structure, 0096 clocks, 0097 logging, 0098-0106 the post-refactor features, 0107 12 h archive, 0108 mission reset, 0109 carrier ATO lines, 0111 Divert, 0112 the PAR sample (its carrier half replaced by 0116), 0113 carrier state and EAT, 0114 recovery board, 0115 the marks on the stack entry, 0116 the PAR is an airfield feature; 0110 consolidation, which stays "Proposed" as committed: its acceptance is decisions.md S-ARCH-25 plus H111/H113, P4). `0077` is the L20 house style; `0090` and `0092` were not used (TA took none: it applies `0085`/H62), `0060` is the errata ADR.
 **An ADR is never edited once committed (P4)**: a correction is a new ADR.
 
 **Layout (ADR `0095`).** `board-store.js` is the `BoardStore` facade; the work is in `board/` (collaborators) and
@@ -64,7 +70,7 @@ The CRC client is native ES modules (`crc-desktop/README.md` "Client modules").
 
 ```
 crc-sync/src/app.js, src/app/             createApp({env}): composition root, named tickers (0095); its pieces in src/app/, two named links in late-binding.js; server.js only listens
-crc-sync/src/efsp/synced-store.js         SyncedStore: the base of the six sequenced stores (SERVER-SEAMS-2)
+crc-sync/src/efsp/synced-store.js         SyncedStore: the base of the five sequenced stores outside the Board (SERVER-SEAMS-2; the SFA store went in 0117)
 crc-sync/src/efsp/                        the subsystem — stores, rules, the wire handler
 crc-sync/src/efsp/board/, board/ops/      BoardStore's collaborators and one file per Board op (0095)
 crc-sync/src/efsp/wire/, wire/families/   the /feed handler's skeleton and one file per wire family
@@ -77,14 +83,19 @@ crc-sync/src/theater-context.js           the one conversion point: variationAt,
 crc-sync/config/theaters.json             per-theater table: local offset, transitionAltFt, tmCentralMeridianDeg, magneticVariation override
 crc-sync/src/radars.js                    the radar list, derived from mission data + tracks
 crc-sync/src/coverage.js                  what each radar is illuminating, one phase for everybody
-crc-sync/src/terrain.js                   DEM fetch/decode and radar line of sight
+crc-sync/src/terrain.js, webp-lossless.js  DEM fetch/decode (MapTiler terrain-rgb-v2 is lossless WebP, decoded in pure JS) and radar line of sight
 crc-sync/src/grpc-client.js               DCS-gRPC client: poll_rate ≥ 1, unit keep-alive, backoff (LG)
 crc-sync/src/surveillance/                what a controller is told about a contact (0059)
 crc-sync/src/surveillance/iff.js          classifyIff(): the one place a contact's colour is chosen (0066, 0084)
 crc-sync/src/efsp/position-coverage.js     which Positions grant which radars
 crc-sync/src/efsp/correlation-*.js        Strip<->contact records (flightDataId-keyed), the ladder, the 1 Hz sweep
-crc-sync/src/efsp/marsa-store.js          the MARSA relation, and the void interlock
-crc-sync/src/efsp/runway-status*.js         runway status: pure rules + RunwayStatusStore, the sixth store (0061)
+crc-sync/src/efsp/marsa-store.js          the MARSA relation, the void interlock, AcknowledgeVoid (0118)
+crc-sync/src/conflict-alert.js            CA between tracked targets, MCI against an untracked one (facility `modeCIntruder`), formation/MARSA groups (0118)
+crc-sync/src/efsp/conformance.js          ALT/HDG conformance; the tanker block (TANKER_DISTANCE); no heading check on a final (0117, 0118)
+crc-sync/src/efsp/airspace-entry-alert.js the airspace-conflict alert by airspace type (0119); vfr.js `hasNoClearance` (parity with the client)
+crc-sync/src/efsp/par-final.js            PAR_HANDOFF / LANDED / MISSED_APPROACH conversions and the FinalCall calls (0117); sfa.js the pool
+crc-sync/src/efsp/aircraft-data.js        Block 3 parser and the ICAO wake table (LT-STRIP-FIELDS)
+crc-sync/src/efsp/runway-status*.js         runway status: pure rules + RunwayStatusStore (0061)
 crc-sync/src/efsp/zulu-time.js            typed HHMM -> epoch ms against the mission clock (L2)
 crc-sync/src/efsp/forwarding-obligations.js  obligations as state, retracting (0067)
 crc-sync/src/efsp/metrics.js, traffic-count.js  WP8 metrics, §11.4 traffic count, log retention (0065)
@@ -222,9 +233,12 @@ Strip is that contact" record impossible to mean anything. So:
 - Illumination is **computed, not sampled** (`0043`). The old sweep tested a ±4° window on a 50 ms
   tick against a ~22 ms beam dwell, so it silently missed contacts; the server computes the instant
   the beam crosses a bearing, which makes the tick rate a delivery choice rather than a fidelity one.
-- Terrain LOS moved with it (`0044`), decoding MapTiler PNG tiles with Node's own `zlib` — no new
-  dependency — cached in memory and on disk, pre-warmed on mission load, **failing open** while warm.
-  Needs `CRCSYNC_MAPTILER_KEY`; without it the picture works and masks nothing, logged once.
+- Terrain LOS moved with it (`0044`), cached in memory and on disk, pre-warmed on mission load, **failing open** while warm.
+  Needs `CRCSYNC_MAPTILER_KEY`; without it the picture works and masks nothing, logged once. **`0044`'s "PNG instead of
+  WebP" is out of date** (LT-TERRAIN, S-ARCH-48, no superseding ADR): `terrain-rgb-v2` serves lossless WebP only, so every
+  tile failed and nothing was masked until the fix. `src/webp-lossless.js` is a pure-JS lossless (VP8L) decoder (RFC 9649,
+  byte-identical to libwebp 1.6.0 on 11 real tiles, refuses lossy and animated WebP); tiles are fetched and cached as
+  `{z}/{x}/{y}.webp`, and the PNG decoder stays, picked by magic bytes. Still no dependency.
 
 What went away client-side: `enabledRadarIds` and its localStorage key, the radar selector and its
 search box, `getAllRadars`/`_buildAllRadars`/`getActiveRadars`'s old body, the 50 ms sweep, and the
@@ -241,8 +255,15 @@ it is, and two answers to an identity question *is* the defect class §6.6 exist
 record is keyed by `flightDataId` in a fourth store, peer to the other three.
 
 - The ladder is §6.6 rule 1's four rungs, run as **one ordered claim sweep** so a higher rung always
-  claims a contact first. That makes a same-rung collision decidable: nobody gets it, and both
-  flights are told it was ambiguous, with the candidates (`0046`).
+  claims a contact first. Two **contacts** matching one flight equally is ambiguous: nobody gets them, and the
+  flight is told so, with the candidates (`0046`). Two **flights** claiming one contact at the same rung (a duplicate
+  code) is not: the first in sweep order takes it, and since LT-CORRELATION the other's `TRACK_LOST` detail names the
+  flight that has it (`tick()`'s docstring still says "neither gets it": wrong, queued for cleanup).
+- **The beacon rung has no former-holder exclusion (H135, LT-CORRELATION).** An active Strip's assigned discrete code
+  acquires the contact squawking it even if a finished flight once held that contact (JO 7110.65BB ¶5-3-3 d, ¶5-3-4),
+  which supersedes `0076`'s S-L27 for rung 2 only; the callsign rungs (3, 4) keep `_formerHolder`. No ADR. An AI
+  contact squawks the synthetic 6xxx block, which Block 5 refuses, so it is never acquired by code. The code source was
+  checked both ways (`efsp-correlation-code-source.test.mjs`): the label and the beacon rung read one `Transponders`.
 - **Ambiguity is an answer, not a tiebreak.** Duplicate codes are structural (§3.10.2 rule 7) and
   guessing between two aircraft is worse than saying so. The badge becomes a button that lists them.
 - The **uncorrelated warning retracts**, because it is a field on a record that arrives whole rather
