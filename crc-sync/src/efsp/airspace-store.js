@@ -25,6 +25,7 @@ const { WALL_CLOCK } = require('../mission-clock');
 const { SyncedStore } = require('./synced-store');
 const schema = require('./airspace-schema');
 const containment = require('./airspace/containment');
+const jurisdiction = require('./airspace/jurisdiction');
 const log = require('../log').logger('efsp:airspace-store');
 const airspaceAuthority = require('./authority/airspace');
 
@@ -47,6 +48,9 @@ const STATE_OP_KINDS = ['ScheduleAirspace', 'RequestActivation', 'ApproveActivat
 const AIRSPACE_OP_KINDS = [...DEFINITION_OP_KINDS, ...STATE_OP_KINDS];
 
 const VIAS = ['PANEL', 'WEB', 'SEED'];
+// ADR 0125: the fields of a JURISDICTION area a panel edit may not change (who owns it is the theater config's, and the
+// carrier anchor is read-only in the panel). A service principal (the web admin) still may.
+const JURISDICTION_PANEL_FIXED_FIELDS = ['controllingFacilityId', 'controllingPositionId', 'ownerPositionIds'];
 
 function deepClone(obj) { return JSON.parse(JSON.stringify(obj)); }
 function same(a, b) { return JSON.stringify(a ?? null) === JSON.stringify(b ?? null); }
@@ -82,6 +86,14 @@ function checkReferences(def, lookup) {
     const home = lookup.facilityOfPosition(def.usingPositionId);
     if (home && home !== 'RANGES') return verr(`${id}: ${def.usingPositionId} is already a Position of ${home}; a range-control Position needs an id of its own`);
   }
+  if (def.kind === 'JURISDICTION') {
+    // ADR 0125: the owners are Positions of the owning Facility; a carrier circle names a configured hull.
+    const own = lookup.positionsOf(def.controllingFacilityId);
+    const stranger = (def.ownerPositionIds || []).find(p => !own.includes(p));
+    if (stranger) return verr(`${id}: owner ${stranger} is not a Position of ${def.controllingFacilityId}`);
+    const hullId = def.geometry && def.geometry.centre && def.geometry.centre.hullId;
+    if (hullId && lookup.hasHull && !lookup.hasHull(hullId)) return verr(`${id}: hull ${hullId} is not a configured carrier hull`);
+  }
   return null;
 }
 
@@ -116,9 +128,11 @@ class AirspaceStore extends SyncedStore {
    *   `military.mtr.designator` names the route (ADR 0098 §8). A count, never a warning.
    * @param {object} [deps.facilityLookup] `{hasFacility, positionsOf, facilityOfPosition}`, the hard reference check's eyes
    * @param {{rowOf:(positionId:string)=>object}} [deps.authority] the airspace rows (authority/index.js's airspaceRowOf)
+   * @param {(hullId:string)=>({lat:number, lon:number, found?:boolean}|null)} [deps.hullPosition] the live ship position
+   *   (CarrierStore#getShipState), read lazily by the JURISDICTION query (ADR 0125); null while the hull is not found
    */
   constructor({ clock = WALL_CLOCK, currentTheater = () => null, occupantsFor = () => [], routeOccupancyFor = () => 0,
-    facilityLookup = null, authority = null, mutationLog = null } = {}) {
+    facilityLookup = null, authority = null, mutationLog = null, hullPosition = () => null } = {}) {
     super({ clock, mutationLog });
     this._currentTheater = currentTheater;
     this._occupantsFor = occupantsFor;
@@ -127,6 +141,10 @@ class AirspaceStore extends SyncedStore {
     this._rowOf = authority ? authority.rowOf : () => ({ create: null, edit: null, delete: null, use: false });
     this._byTheater = new Map(); // theater -> Map(airspaceId -> record)
     this._seeded = new Map();    // theater -> Set(airspaceId) imported from the standing list at least once
+    this._hullPosition = (hullId) => {
+      const at = hullPosition(hullId);
+      return at && at.found !== false && Number.isFinite(at.lat) && Number.isFinite(at.lon) ? { lat: at.lat, lon: at.lon } : null;
+    };
   }
 
 
@@ -245,16 +263,69 @@ class AirspaceStore extends SyncedStore {
     return out;
   }
 
-  /** Every airspace of the current theater that contains the point, whatever its state (map and QA use). */
+  /** Every AREA and ROUTE of the current theater that contains the point, whatever its state (map and QA use). JURISDICTION areas answer `jurisdictionAt`. */
   containing(point) {
     const out = [];
     const m = this._theaterMap(this.currentTheater());
     for (const record of (m ? m.values() : [])) {
+      if (record.definition.kind === 'JURISDICTION') continue;
       if (containment.evaluate(record.definition, point) === 'inside') {
         out.push({ airspaceId: record.airspaceId, kind: record.definition.kind, name: record.definition.name, state: record.state });
       }
     }
     return out;
+  }
+
+  // ── jurisdiction (docs/adr/0125): whose airspace a point is in ─────────────
+
+  /** The current theater's JURISDICTION definitions (or `theater`'s). */
+  jurisdictionAreas(theater = this.currentTheater()) {
+    const m = theater ? this._theaterMap(theater) : null;
+    return m ? [...m.values()].filter(r => r.definition.kind === 'JURISDICTION').map(r => deepClone(r.definition)) : [];
+  }
+
+  /**
+   * Whose airspace is `{lat, lon, altFt}` in (altFt in feet MSL), in the current theater? The area a carrier circle on a
+   * found hull holds wins; else the static area holding it; else the fallback, CENTER (Class E, `fallback: true`,
+   * `airspaceId: null`). Null when nobody owns it: a Class G area, or a point that cannot be judged (lat, lon or altFt not
+   * a number: never a guess). Boundaries count as inside. Pure and synchronous: U-RELEASE's control settle tick calls it.
+   * @param {{lat:number, lon:number, altFt:number}} point
+   * @returns {{airspaceId:string|null, name:string, facilityId:string, positionIds:string[], airspaceClass:string, fallback:boolean}|null}
+   */
+  jurisdictionAt({ lat, lon, altFt } = {}) {
+    if (![lat, lon, altFt].every(v => typeof v === 'number' && Number.isFinite(v))) return null;
+    const area = jurisdiction.areaAt(this.jurisdictionAreas(), { lat, lon, altFt }, { hullPosition: this._hullPosition });
+    if (!area) {
+      const facilityId = jurisdiction.FALLBACK_FACILITY_ID;
+      if (!this._lookup.hasFacility(facilityId)) return null;
+      return { airspaceId: null, name: facilityId, facilityId, positionIds: [...(this._lookup.positionsOf(facilityId) || [])], airspaceClass: jurisdiction.FALLBACK_AIRSPACE_CLASS, fallback: true };
+    }
+    if (area.airspaceClass === 'G') return null;
+    return { airspaceId: area.airspaceId, name: area.name, facilityId: area.controllingFacilityId, positionIds: [...area.ownerPositionIds], airspaceClass: area.airspaceClass, fallback: false };
+  }
+
+  /**
+   * Is `track` (`{lat, lon, altFt}`, feet MSL) inside `positionId`'s airspace: does `jurisdictionAt` name that Position
+   * among the owners (CTR: the fallback)? False when nobody's (Class G) or the point cannot be judged.
+   */
+  isInsideJurisdictionOf(positionId, track) {
+    if (!positionId) return false;
+    const j = this.jurisdictionAt(track || {});
+    return !!j && j.positionIds.includes(positionId);
+  }
+
+  /** ADR 0125 (H144): would `defs` (a theater's whole list after a write) break the jurisdiction rules? A refusal, or null. */
+  _jurisdictionRefusal(defs) {
+    if (!defs.some(d => d.kind === 'JURISDICTION')) return null;
+    const bad = jurisdiction.checkTheater(defs);
+    return bad ? verr(bad) : null;
+  }
+
+  _defsWith(theater, replace) {
+    const m = this._theaterMap(theater);
+    const out = new Map([...(m ? m.values() : [])].map(r => [r.airspaceId, r.definition]));
+    for (const d of replace) out.set(d.airspaceId, d);
+    return [...out.values()];
   }
 
   // ── audit ──────────────────────────────────────────────────────────────
@@ -338,6 +409,7 @@ class AirspaceStore extends SyncedStore {
     }
     if (actor.service) return this._denied(record, `${actor.service} may not act on airspace state`);
     const def = record.definition;
+    if (def.kind === 'JURISDICTION') return verr(`${def.name} is a jurisdiction area: it is never scheduled or activated, it always applies`, { airspace: viewOf(record) });
     const by = actor.controllerId; const pos = actor.positionId;
     switch (op.kind) {
       case 'ScheduleAirspace':  return this._schedule(record, def, op, pos, by);
@@ -419,6 +491,8 @@ class AirspaceStore extends SyncedStore {
     if (!checked.ok) return checked;
     const m = this._theaterMap(theater, true);
     if (m.has(checked.definition.airspaceId)) return verr(`${checked.definition.airspaceId} already exists in ${theater}`);
+    const overlap = this._jurisdictionRefusal(this._defsWith(theater, [checked.definition]));
+    if (overlap) return overlap;
     const record = this._newRecord(checked.definition, theater, actor.controllerId);
     m.set(record.airspaceId, record);
     this._sync.advance();
@@ -442,6 +516,8 @@ class AirspaceStore extends SyncedStore {
       taken.add(checked.definition.name.toLowerCase());
       accepted.push(checked.definition);
     }
+    const overlap = this._jurisdictionRefusal(this._defsWith(theater, accepted));
+    if (overlap) return verr(`import refused, nothing created: ${overlap.detail}`);
     const created = [];
     for (const def of accepted) {
       m.set(def.airspaceId, this._newRecord(def, theater, actor.controllerId));
@@ -516,6 +592,14 @@ class AirspaceStore extends SyncedStore {
       if (def.kind === 'ROUTE' && schema.DERIVED_ROUTE_FIELDS.includes(f)) return verr(`${f} of a ROUTE is derived from its segments and cannot be edited`, keep);
       if (def.kind === 'AREA' && (f === 'segments' || f === 'defaultWidthNm')) return verr(`an AREA has a geometry, not ${f}`, keep);
       if (def.kind === 'ROUTE' && f === 'geometry') return verr('a ROUTE has segments, not a geometry', keep);
+      if (def.kind === 'JURISDICTION' && !actor.service && JURISDICTION_PANEL_FIXED_FIELDS.includes(f)) {
+        return verr(`${f} of a jurisdiction area is set by the theater configuration, not in the panel`, keep);
+      }
+    }
+    if (def.kind === 'JURISDICTION' && !actor.service && fields.includes('geometry')) {
+      // The carrier anchor is shown read-only (ADR 0125): a panel edit keeps a hull circle on its hull and a fixed area fixed.
+      const hullOf = (g) => (g && g.source === 'CIRCLE' && g.centre && typeof g.centre.hullId === 'string' ? g.centre.hullId : null);
+      if (hullOf(def.geometry) !== hullOf(patch.geometry)) return verr(`the carrier anchor of ${def.name} cannot be changed in the panel`, keep);
     }
     // 2. R3-23: while SCHEDULED, ACTIVE or RELEASED, or with a pending request, only the name and the frequencies
     if (record.state !== 'RETURNED' || record.pendingRequest) {
@@ -539,6 +623,8 @@ class AirspaceStore extends SyncedStore {
     if (fields.includes('name') && this._names(theater, record.airspaceId).has(next.name.toLowerCase())) {
       return verr(`the name "${next.name}" is already used in ${theater}`, keep);
     }
+    const overlap = this._jurisdictionRefusal(this._defsWith(theater, [next]));
+    if (overlap) return { ...overlap, ...keep };
     // 5. defRev
     const stale = this._checkBase(op, mutation, record, fields);
     if (stale) return stale;
@@ -582,6 +668,10 @@ class AirspaceStore extends SyncedStore {
     if (def.kind === 'AREA') {
       const flights = this._occupantsFor(record.airspaceId);
       if (flights.length) blockers.push(`${flights.length} flight${flights.length === 1 ? ' is' : 's are'} working it (${flights.map(f => f.callsign || f.stripId).join(', ')})`);
+    }
+    if (def.kind === 'JURISDICTION') {
+      const by = this.jurisdictionAreas(theater).filter(d => (d.excludes || []).includes(record.airspaceId)).map(d => d.airspaceId);
+      if (by.length) blockers.push(`${by.join(', ')} ${by.length === 1 ? 'excludes' : 'exclude'} it`);
     }
     if (blockers.length) return verr(`${def.name} cannot be deleted: ${blockers.join('; ')}`, { blockers, airspace: viewOf(record) });
     // A delete conflicts with any edit since its base (the editor has not seen what it is deleting).
@@ -756,6 +846,10 @@ class AirspaceStore extends SyncedStore {
       }
     }
     for (const [theater, ids] of Object.entries(data.seeded || {})) this._seeded.set(theater, new Set(ids));
+    for (const [theater, m] of this._byTheater) {
+      const bad = jurisdiction.checkTheater([...m.values()].map(r => r.definition));
+      if (bad) throw new Error(`[efsp] the Board snapshot's jurisdiction areas (theater ${theater}) break ADR 0125: ${bad}: correct or delete state/efsp-board.json`);
+    }
   }
 
   /**

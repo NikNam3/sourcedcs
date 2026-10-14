@@ -4,20 +4,21 @@
 // The model is a set of pure functions (tests/airspace-layer-menu.test.mjs); the DOM half is `mountAirspaceLayerMenu`.
 //
 // THE WHOLE RULE: an airspace is shown when its layer is on and, if it has an individual setting, that wins (On or Off);
-// otherwise when both its kind and its state are enabled. Nothing is forced on. Default (first run and Reset): Outlines,
-// Labels and Route corridors on, centrelines off, every kind on, state ACTIVE only, no individual settings.
+// otherwise when both its kind and its state are enabled (a JURISDICTION area, crc-sync ADR 0125: its kind alone). Nothing is forced on. Default (first run and Reset): Outlines,
+// Labels and Route corridors on, centrelines off, every kind on except JURISDICTION, state ACTIVE only, no individual settings.
 // A per-user display preference kept in the client's settings store (`settings.airspaceMenu`); the individual settings are
 // keyed by theater (ids belong to a theater). Never on the wire, never part of any Board or audit.
 
 export const MENU_LAYERS = ['outlines', 'labels', 'corridors', 'centrelines'];
 export const LAYER_LABELS = { outlines: 'Outlines', labels: 'Labels', corridors: 'Route corridors', centrelines: 'Route centrelines' };
-export const MENU_KINDS = ['MOA', 'RANGE', 'DANGER', 'RESTRICTED', 'PROHIBITED', 'WARNING', 'ROUTE'];
+export const MENU_KINDS = ['MOA', 'RANGE', 'DANGER', 'RESTRICTED', 'PROHIBITED', 'WARNING', 'ROUTE', 'JURISDICTION'];
 export const MENU_STATES = ['SCHEDULED', 'ACTIVE', 'RELEASED', 'RETURNED'];
 
 export function defaultMenu() {
   return {
     layers: { outlines: true, labels: true, corridors: true, centrelines: false },
-    kinds: Object.fromEntries(MENU_KINDS.map(k => [k, true])),
+    // Jurisdiction areas (crc-sync docs/adr/0125) are off by default: reference outlines that would crowd the scope.
+    kinds: Object.fromEntries(MENU_KINDS.map(k => [k, k !== 'JURISDICTION'])),
     states: Object.fromEntries(MENU_STATES.map(s => [s, s === 'ACTIVE'])),
     overrides: {}, // theater -> { airspaceId: 'on' | 'off' }
   };
@@ -67,8 +68,9 @@ export function pruneOverrides(menu, theater, existingIds) {
   return m;
 }
 
-export function kindOf(definition) { return definition.kind === 'ROUTE' ? 'ROUTE' : definition.type; }
+export function kindOf(definition) { return definition.kind === 'ROUTE' || definition.kind === 'JURISDICTION' ? definition.kind : definition.type; }
 export function hasOutline(definition) {
+  if (definition.kind === 'JURISDICTION') return !!(definition.geometry && (definition.geometry.source === 'CIRCLE' || (definition.geometry.points && definition.geometry.points.length >= 3)));
   return definition.kind === 'ROUTE' ? Array.isArray(definition.segments) && definition.segments.length >= 2 : !!(definition.geometry && definition.geometry.points && definition.geometry.points.length >= 3);
 }
 
@@ -80,7 +82,8 @@ export function hasOutline(definition) {
 export function decide(record, menu, theater) {
   const def = record.definition;
   const o = overrideOf(menu, theater, record.airspaceId);
-  const filterShown = !!menu.kinds[kindOf(def)] && !!menu.states[record.state];
+  // A jurisdiction area has no state (it always applies): its kind alone decides.
+  const filterShown = !!menu.kinds[kindOf(def)] && (def.kind === 'JURISDICTION' || !!menu.states[record.state]);
   const wanted = o === 'on' ? true : o === 'off' ? false : filterShown;
   const route = def.kind === 'ROUTE';
   const layerOn = route ? (menu.layers.corridors || menu.layers.centrelines) : menu.layers.outlines;

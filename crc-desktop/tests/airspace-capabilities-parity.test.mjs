@@ -43,6 +43,11 @@ test('the family rows and the class row tables are the server\'s', () => {
   assert.deepEqual(caps.CLASS_ROWS, airspace.CLASS_ROWS);
 });
 
+test('the carrier-state editors are the server\'s editsCarrierState Positions', () => {
+  const { CARRIER_CAPABILITIES } = require('../../crc-sync/src/efsp/authority/positions/carrier.js');
+  assert.deepEqual([...caps.CARRIER_STATE_EDITORS].sort(), Object.keys(CARRIER_CAPABILITIES).filter(p => CARRIER_CAPABILITIES[p].editsCarrierState).sort());
+});
+
 test('a session signed on to nothing has no row', () => {
   assert.deepEqual(caps.airspaceRowOf(null), airspace.rowFor(null, { familyRows: authority.AIRSPACE_ROWS, classOf: () => null }));
 });
@@ -54,6 +59,10 @@ const DEFS = [
   { controllingFacilityId: 'CENTER', controllingPositionId: 'CTR', usingFacilityId: 'TACTICAL' },
   { controllingFacilityId: 'INCIRLIK', controllingPositionId: 'LC', usingFacilityId: 'TACTICAL' },
   { controllingFacilityId: 'CENTER', controllingPositionId: 'CTR', usingFacilityId: 'INCIRLIK' }, // OPS the using agency (ADR 0119)
+  // crc-sync ADR 0125: jurisdiction areas, a fixed one and a carrier circle
+  { kind: 'JURISDICTION', controllingFacilityId: 'INCIRLIK', controllingPositionId: 'AP', geometry: { source: 'CIRCLE', centre: { lat: 37, lon: 35 }, radiusNm: 50 } },
+  { kind: 'JURISDICTION', controllingFacilityId: 'INCIRLIK', controllingPositionId: 'LC', geometry: { source: 'POLYGON', points: [] } },
+  { kind: 'JURISDICTION', controllingFacilityId: 'CARRIER', controllingPositionId: 'CV_PRIFLY', geometry: { source: 'CIRCLE', centre: { hullId: 'CVN-72' }, radiusNm: 50 } },
 ];
 
 test('definitionAuthority agrees with the server for every Position, action and definition', () => {

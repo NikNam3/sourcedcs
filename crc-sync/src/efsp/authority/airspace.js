@@ -19,6 +19,8 @@
 // airspaces are not flights). Approve/confirm/deny/return stay with the controlling Position alone, as before.
 // Static (P5): read at load, never written.
 
+const { canEditCarrierState } = require('./positions/carrier');
+
 const SERVICE_ROWS = {
   // The web service principal (ADR 0098 §9): create, edit and delete any airspace in any theater, and import. Still
   // subject to R3-23, the delete guard, defRev and validation, which are not authority.
@@ -51,12 +53,26 @@ function _scopeAllows(scope, def, positionId, facilityOf) {
   return false;
 }
 
+/**
+ * A JURISDICTION area (docs/adr/0125) is not defined in the panel: it comes from the theater configuration, so no
+ * Position creates or deletes one. Its controlling Position edits it (AP the RAPCON area, LC the tower's control zone),
+ * and a carrier circle also the Positions that edit the carrier's state (H119: CV_PRIFLY and CV_MARSHAL, the carrier
+ * management panel's right). The rows play no part. Ours (U-JURISDICTION default).
+ */
+function _jurisdictionAuthority(positionId, action, def, facilityOf) {
+  if (action !== 'edit' || !positionId) return null;
+  if (def.controllingPositionId === positionId) return 'ALL';
+  const onHull = !!(def.geometry && def.geometry.centre && typeof def.geometry.centre.hullId === 'string');
+  return onHull && canEditCarrierState(positionId) && facilityOf(positionId) === def.controllingFacilityId ? 'ALL' : null;
+}
+
 /** 'ALL' (any field), 'FREQUENCY' (control frequency only) or null, for creating/editing/deleting `def`. */
 function definitionAuthority(principal, action, def, { rowOf, facilityOf }) {
   const row = principal.service ? SERVICE_ROWS[principal.service] : rowOf(principal.positionId);
   if (!row) return null;
   const scope = row[action];
   if (principal.service) return scope === 'ANY' ? 'ALL' : null;
+  if (def && def.kind === 'JURISDICTION') return _jurisdictionAuthority(principal.positionId, action, def, facilityOf);
   if (_scopeAllows(scope, def, principal.positionId, facilityOf)) return 'ALL';
   if (action === 'edit' && scope === 'FREQUENCY' && def.usingPositionId === principal.positionId) return 'FREQUENCY';
   return null;

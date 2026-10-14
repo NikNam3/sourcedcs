@@ -12,6 +12,9 @@ import { missionData } from './picture.js';
 import { saveSettings, settings } from './settings.js';
 import { getAllEfspAirspaces } from './panels/efsp/efsp-state.js';
 import { findDrawing, outlineFromDrawing, pointsEqual } from './panels/efsp/airspace-geometry-model.js';
+import { isHullAnchored, ringOf } from './panels/efsp/jurisdiction-geometry.js';
+import { getEfspCarrier } from './panels/efsp/carrier-state.js';
+import { onEfspChanged } from './panels/efsp/efsp-change-bus.js';
 
 const ROUND = 12; // arc points per join/cap
 
@@ -96,6 +99,24 @@ export function corridorRing(rows, defaultWidthNm) {
   return [...left, ...endCap, ...right, ...startCap].map(from);
 }
 
+// ── a jurisdiction area (crc-sync docs/adr/0125) ────────────────────────────────────────────────
+
+/** "D · GND–3000": the class, then the limits. */
+export function jurisdictionLabelText(definition, transitionAltFt) {
+  const lim = limitsText(definition.altLowerFt ?? null, definition.altUpperFt ?? null, transitionAltFt);
+  const line2 = `${definition.airspaceClass ? `Class ${definition.airspaceClass} · ` : ''}${lim}`;
+  return { line1: definition.name, line2, text: `${definition.name}\n${line2}` };
+}
+
+/** Where a carrier circle is: the hull view's ship position while the ship is found, else null (the circle is not drawn). */
+export function hullPositionFromCarriers(getCarrier = getEfspCarrier) {
+  return (hullId) => {
+    const v = getCarrier(hullId);
+    const ship = v && v.shipState;
+    return ship && ship.found !== false && Number.isFinite(ship.lat) && Number.isFinite(ship.lon) ? { lat: ship.lat, lon: ship.lon } : null;
+  };
+}
+
 // ── features ────────────────────────────────────────────────────────────────────────────────────
 
 function _centroid(points) { return [points.reduce((s, p) => s + p[0], 0) / points.length, points.reduce((s, p) => s + p[1], 0) / points.length]; }
@@ -105,7 +126,7 @@ const ll = (p) => [p[1], p[0]];
  * GeoJSON for the airspaces the menu shows: `outlines` (area polygons and route corridors, line features), `centrelines`,
  * `labels` (one point each) and the style flags the paint reads (`dashed`, `colour`).
  */
-export function buildAirspaceFeatures(airspaces, menu, theater, { transitionAltFt = 18000, lightMode = false } = {}) {
+export function buildAirspaceFeatures(airspaces, menu, theater, { transitionAltFt = 18000, lightMode = false, hullPosition = () => null } = {}) {
   const outlines = []; const centrelines = []; const labels = [];
   const pal = lightMode ? OUTLINE_COLOUR.light : OUTLINE_COLOUR.dark;
   for (const rec of airspaces || []) {
@@ -115,6 +136,20 @@ export function buildAirspaceFeatures(airspaces, menu, theater, { transitionAltF
     const active = rec.state === 'ACTIVE';
     const props = { id: rec.airspaceId, state: rec.state, dashed: !active, colour: active ? pal.active : pal.other };
     let anchor = null;
+    if (d.kind === 'JURISDICTION') {
+      // Reference airspace, not a state: a thin solid grey outline whatever the record's state (dark cockpit). A carrier
+      // circle follows the live hull and is not drawn while the ship is not found. The label sits on its northern edge.
+      if (!dec.drawsOutline) continue;
+      const ring = ringOf(d.geometry, hullPosition);
+      if (!ring) continue;
+      const jp = { id: rec.airspaceId, state: null, dashed: false, thin: true, colour: pal.other, jurisdiction: true, onHull: isHullAnchored(d) };
+      outlines.push({ type: 'Feature', properties: jp, geometry: { type: 'LineString', coordinates: [...ring, ring[0]].map(ll) } });
+      if (dec.drawsLabel) {
+        const top = ring.reduce((a, b) => (b[0] > a[0] ? b : a));
+        labels.push({ type: 'Feature', properties: { ...jp, text: jurisdictionLabelText(d, transitionAltFt).text }, geometry: { type: 'Point', coordinates: ll(top) } });
+      }
+      continue;
+    }
     if (d.kind === 'ROUTE') {
       const rows = d.segments.map(s => ({ lat: s.fix.lat, lon: s.fix.lon, widthNm: s.widthNm }));
       if (dec.drawsCorridor) {
@@ -209,7 +244,7 @@ export function registerAirspaceLayers() {
   _hiddenDrawings = []; // the drawing layers were (re)added just before these, with no T28 filter yet
   for (const id of ['airspace-outlines', 'airspace-centrelines', 'airspace-labels', 'airspace-draft']) map.addSource(id, { type: 'geojson', data: EMPTY });
   map.addLayer({ id: 'airspace-outline-solid', type: 'line', source: 'airspace-outlines', filter: ['!', ['get', 'dashed']],
-    paint: { 'line-color': ['get', 'colour'], 'line-width': 1.5, 'line-opacity': 0.9 } });
+    paint: { 'line-color': ['get', 'colour'], 'line-width': ['case', ['==', ['get', 'thin'], true], 1, 1.5], 'line-opacity': ['case', ['==', ['get', 'thin'], true], 0.7, 0.9] } });
   map.addLayer({ id: 'airspace-outline-dashed', type: 'line', source: 'airspace-outlines', filter: ['get', 'dashed'],
     paint: { 'line-color': ['get', 'colour'], 'line-width': 1.3, 'line-opacity': 0.85, 'line-dasharray': [4, 3] } });
   map.addLayer({ id: 'airspace-centrelines', type: 'line', source: 'airspace-centrelines',
@@ -238,7 +273,9 @@ export function refreshAirspaceLayers() {
     const pruned = pruneOverrides(menu, theater, airspaces.map(a => a.airspaceId));
     if (pruned !== menu) { menu = pruned; settings.airspaceMenu = menu; saveSettings(); }
   }
-  const f = buildAirspaceFeatures(airspaces, menu, theater, { transitionAltFt: settings.transitionAltFt, lightMode: !!settings.lightMode });
+  const hullPosition = hullPositionFromCarriers();
+  _lastHullKey = _hullKey(airspaces, hullPosition);
+  const f = buildAirspaceFeatures(airspaces, menu, theater, { transitionAltFt: settings.transitionAltFt, lightMode: !!settings.lightMode, hullPosition });
   _last = f;
   map.getSource('airspace-outlines').setData(f.outlines);
   map.getSource('airspace-centrelines').setData(f.centrelines);
@@ -247,6 +284,18 @@ export function refreshAirspaceLayers() {
   if (JSON.stringify(hidden) !== JSON.stringify(_hiddenDrawings)) { _hiddenDrawings = hidden; _applyDrawingFilter(hidden); }
   for (const m of _menus) m.refresh();
 }
+
+// A carrier circle (ADR 0125) follows the ship: a carrier change marks 'bays' (carrier-panel.js), so redraw then, but only
+// when a hull an area is anchored to has moved (the Bays redraw far more often than the ship moves).
+let _lastHullKey = '';
+function _hullKey(airspaces, hullPosition) {
+  const ids = [...new Set(airspaces.filter(a => a.definition && a.definition.kind === 'JURISDICTION' && isHullAnchored(a.definition)).map(a => a.definition.geometry.centre.hullId))];
+  return ids.map(id => { const p = hullPosition(id); return p ? `${id}:${p.lat.toFixed(4)},${p.lon.toFixed(4)}` : `${id}:-`; }).join('|');
+}
+onEfspChanged(['bays'], () => {
+  if (!mapReady) return;
+  if (_hullKey(getAllEfspAirspaces(), hullPositionFromCarriers()) !== _lastHullKey) refreshAirspaceLayers();
+});
 
 /** The shape being edited (airspace-draw.js). */
 export function setDraftFeatures(fc) { if (mapReady && map.getSource('airspace-draft')) map.getSource('airspace-draft').setData(fc || EMPTY); }

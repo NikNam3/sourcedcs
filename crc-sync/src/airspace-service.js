@@ -42,7 +42,8 @@ function createAirspaceService({ efsp, token = '', getToken = () => token, broad
   router.get('/', (req, res) => {
     const theater = req.query.theater;
     if (!isStr(theater, MAX_THEATER_LEN)) return res.status(400).json({ error: 'theater is required' });
-    res.json({ theater, airspaces: efsp.airspaceStore.getAllFor(theater) });
+    // JURISDICTION areas (docs/adr/0125) are the theater configuration's and the panel's, not the web form's: left out.
+    res.json({ theater, airspaces: efsp.airspaceStore.getAllFor(theater).filter(a => a.definition.kind !== 'JURISDICTION') });
   });
 
   router.post('/mutation', (req, res) => {

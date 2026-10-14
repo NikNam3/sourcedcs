@@ -124,8 +124,12 @@ const REGISTRY = [
           hasFacility: (id) => facilityConfig.getFacilityIds().includes(id),
           positionsOf: (id) => (facilityConfig.getFacilityIds().includes(id) ? facilityConfig.getPositionSet(id) : []),
           facilityOfPosition: (positionId) => facilityConfig.getFacilityIds().find(f => facilityConfig.getPositionSet(f).includes(positionId)) || null,
+          // A carrier circle names a configured hull (docs/adr/0125).
+          hasHull: (hullId) => carrierHulls.getHulls().some(h => h.hullId === hullId),
         },
         authority: { rowOf: (positionId) => authority.airspaceRowFor(positionId, facilityConfig.getPositionClass) },
+        // The live ship a carrier circle follows (docs/adr/0125), read lazily: the carrier store is built after this one.
+        hullPosition: (hullId) => (stores.carriers ? stores.carriers.getShipState(hullId) : null),
       });
     },
     snapshot: (s) => s.snapshot(),

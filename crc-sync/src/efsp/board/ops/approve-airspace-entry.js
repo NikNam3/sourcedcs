@@ -35,6 +35,10 @@ function _applyApproveAirspaceEntry(ctx, strip, op, by) {
   }
 
   const definition = airspace.definition || {};
+  // A jurisdiction area (docs/adr/0125) says whose airspace it is; it is not a block a flight is cleared into.
+  if (definition.kind === 'JURISDICTION') {
+    return { ok: false, reason: 'VALIDATION_ERROR', detail: `${definition.name || op.airspaceId} is a jurisdiction area, not an airspace a flight is cleared into`, strip };
+  }
   const frequencyMhz = op.frequencyMhz !== undefined && op.frequencyMhz !== null
     ? op.frequencyMhz
     : (definition.controlFrequencyMhz || definition.workingFrequencyMhz || null);
