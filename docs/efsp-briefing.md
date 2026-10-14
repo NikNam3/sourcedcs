@@ -1685,7 +1685,7 @@ airspace card's flight list with Approve, MARSA void-before-rendezvous only unde
 **Queued, in this order** (`supervisor-handoff.md`): **U-PAR** (`0123`: azimuth in degrees only, elevation lower limit −0.5°, after U-PANELS);
 **U-RELEASE** (`0122`: released-by-default handoffs, "Checked in" before any control move, not-released control at the receiver's airspace
 boundary, no withdraw; H141, H142; after U-JURISDICTION; it replaces the handoff and release model §8 of the guide describes); **U-RSU-DESIGN -> U-RSU**
-(`0120`, U14/U15, H138: the RSU works visually and VFR only, a list of its aircraft; needs a briefing); **small items and declutter** (LT-GROUND `0121`,
+(`0120`, U14/U15, H138: the RSU works visually and VFR only, a list of its aircraft; U-RSU-DESIGN, docs and a mockup, takes the first free slot); **small items and declutter** (LT-GROUND `0121`,
 §4's small-items row, T30); **U-CARRIER** (U18-U21) **last**, the human's order. Older items, in no fixed order:
 
 | What | Why it waits | Source |
