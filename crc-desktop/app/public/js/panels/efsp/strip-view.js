@@ -6,7 +6,7 @@ import { nlaButtonLabel } from './efsp-nla.js';
 import { isMarsaHighlighted, marsaBadgeFor } from './marsa-badge.js';
 import { compactBlocksFor, fieldSpanFor, sideNumberLeads } from './strip-fields.js';
 import { carrierDecorateNlaButton, carrierExtraNlaButtons } from './carrier-panel.js';
-import { finalHandoffButtons } from './bay-views.js';
+import { finalHandoffButtons, parCallButtons } from './bay-views.js';
 import { _invokeNla, _resolveActingPositionId } from './bay/dispatch.js';
 import { _buildBlockCell } from './bay/block-edit.js';
 import { _buildCoordinationReasonEl } from './bay/popovers/coordination.js';
@@ -86,6 +86,8 @@ function _buildLifeBlock(strip) {
   for (const extra of carrierExtraNlaButtons(strip)) life.appendChild(extra);
   // The single frequency approach (crc-sync docs/adr/0117): "Hand off to PAR" beside the NLA on AP's arrival on a rotating frequency.
   for (const extra of finalHandoffButtons(strip)) life.appendChild(extra);
+  // The airfield final controller's next call (H138 U10, crc-sync docs/adr/0117): Begin descent, then Cleared to land.
+  for (const extra of parCallButtons(strip)) life.appendChild(extra);
   return { life, inhibited };
 }
 

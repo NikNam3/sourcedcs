@@ -3,43 +3,39 @@ import { missionNow } from '../../mission-clock.js';
 import {
   getEfspBays, getEfspFlightData, getEfspRunwayStatus, getEfspRack, getEfspStrip
 } from './efsp-state.js';
-import { parSampleFor } from './par-samples.js';
 import { parTerminalOp, parTerminalRecorded, parTerminals } from './par-model.js';
 import { leadingFlightName } from './strip-fields.js';
 import { carrierFinalDistanceText } from './carrier-final-distance.js';
-import { parFlightOf, parShownStripId, showParFlight } from './par-panel.js';
 import { onEfspChanged } from './efsp-change-bus.js';
 import { FINAL_HANDOFF_LABEL, FINAL_RECEIVER, finalHandoffOffered, finalHandoffOp, sfaBayOf, sfaRows } from './sfa-state.js';
 import { getActingPositions, sendEfspMutation } from './efsp-ws.js';
-import { openStripMenu } from './strip-menu.js';
-import { _appendDropButton } from './bay/strip-expanded.js';
 import { patternBoardModel, renderPatternBoard } from './pattern-board.js';
 
 // Bay descriptor views (crc-sync docs/adr/0075, 0093): a Bay whose descriptor says
 // `view: 'pattern' | 'final' | 'sfa-freqs'` mounts a component, instead of (or
 // above) its Strip racks. One mechanism for every Bay that has one: RSU's pattern
-// board, PAR's FINAL panel, the carrier's PriFly pattern and FINAL lanes, and the
-// SFA frequency header. bay-view.js calls `renderBayDescriptorView()` once per
-// render and knows nothing else about them.
+// board, the carrier's PriFly pattern and FINAL lanes, and the SFA frequency header.
+// bay-view.js calls `renderBayDescriptorView()` once per render and knows nothing
+// else about them.
 //
 // What each view does:
 //   pattern    pattern-board.js over the Bay's racks (a leg is a Rack): Move between
 //              legs, Landed, Drop. Advisories only; the board never refuses.
-//   final      one line per aircraft on the final. At an airfield its name picks it for the
-//              PAR panel (par-panel.js, which draws the picture from the server's PAR sample,
-//              crc-sync docs/adr/0112), its range to touchdown, the assigned HDG and ALT the
-//              final controller may change, Begin descent / Cleared to land / Landed / Missed
-//              approach, and the Strip's ⋯ menu and Drop, since the racks are hidden (crc-sync
-//              docs/adr/0117, T5, T11). On the carrier (no PAR, H125, crc-sync docs/adr/0116)
-//              the side number leads (H124), no range (the Strip's DIST Block carries it,
-//              H126), and Ball / Waveoff.
+//   final      on the carrier only (no PAR there, H125, crc-sync docs/adr/0116): one line per
+//              aircraft on the final, the side number leading (H124), no range (the Strip's DIST
+//              Block carries it, H126), and Ball / Waveoff. An airfield's PAR final (Incirlik's
+//              `par-final`) is an ordinary Bay of ordinary Strips (H138 U10): the descriptor's
+//              `view: 'final'` there only tells crc-sync which Strips get a PAR sample, and its
+//              `replacesRacks` is not honoured. The final controller's calls ride on the Strip
+//              (parCallButtons below, the ⋯ menu's Final group, the NLA = Landed) and HDG / ALT
+//              are the Strip's own 9A-VECTOR and 7A Blocks.
 //   sfa-freqs  a header over AP's frequency racks: each frequency, what it is for, and on the
 //              three that rotate who has it selected now (crc-sync docs/adr/0117).
 //
-// `replacesRacks` says the component IS the Bay's interface (RSU, PAR) and the
-// racks are hidden; without it (the carrier's Bays, SFA) the racks stay and the
-// component sits above them. The racks are always still built and reconciled, so a
-// hidden rack costs nothing and the Strips keep the one render path.
+// `replacesRacks` says the component IS the Bay's interface (RSU) and the racks are
+// hidden; without it (the carrier's Bays, SFA) the racks stay and the component sits
+// above them. The racks are always still built and reconciled, so a hidden rack costs
+// nothing and the Strips keep the one render path.
 //
 // Pure model builders first (unit-tested), DOM second.
 
@@ -94,60 +90,55 @@ export function patternOpFor(desc) {
 
 // ── final ───────────────────────────────────────────────────────────────────
 
-/** The approach kind of a FINAL Bay: the carrier's lanes or a runway's PAR (the terminal labels and ops differ). */
+/** The approach kind of a FINAL Bay: the carrier's lanes or a runway's PAR. */
 export function finalKindOf(bay) {
   return bay && bay.facilityId === 'CARRIER' ? 'CARRIER' : 'RUNWAY';
 }
 
+/** True when a Bay mounts a component: an airfield's PAR final does not (H138 U10, the ordinary Strips are its interface). */
+export function bayHasComponentView(bay) {
+  return !!(bay && bay.view && !(bay.view === 'final' && finalKindOf(bay) === 'RUNWAY'));
+}
+
 // The carrier final's terminal ops (ADR 0064, 0075): "Ball" is the recorded FINAL_TO_LSO handoff, "Waveoff" the state change.
-// At an airfield they are the final controller's (par-model.js PAR_TERMINALS).
+// At an airfield they are the final controller's (par-model.js PAR_TERMINALS), on the Strip (parCallButtons, strip-menu.js).
 const CARRIER_FINAL_TERMINALS = Object.freeze([
   Object.freeze({ id: 'BALL', label: 'Ball', toState: 'BALL' }),
   Object.freeze({ id: 'WAVEOFF', label: 'Waveoff', toState: 'BOLTER_WAVEOFF' }),
 ]);
 
-/** The terminal actions of a final kind ('RUNWAY' | 'CARRIER'), as plain data. */
-export function finalTerminalsFor(kind) {
-  return kind === 'CARRIER' ? CARRIER_FINAL_TERMINALS.map(a => ({ ...a })) : parTerminals();
+/** The carrier final line's terminal actions, as plain data. */
+export function carrierFinalTerminals() {
+  return CARRIER_FINAL_TERMINALS.map(a => ({ ...a }));
 }
 
-/** The op a terminal button sends: FINAL's own state, a final call, or the carrier's recorded Ball handoff. */
-export function finalTerminalOp(kind, terminal) {
+/** The op a carrier final terminal sends: the recorded Ball handoff, or the Waveoff state change. */
+export function carrierFinalTerminalOp(terminal) {
   if (!terminal) return null;
-  if (kind === 'CARRIER' && terminal.toState === 'BALL') return { kind: 'CarrierHandoff', transfer: 'FINAL_TO_LSO' };
-  return parTerminalOp(terminal);
+  if (terminal.toState === 'BALL') return { kind: 'CarrierHandoff', transfer: 'FINAL_TO_LSO' };
+  return terminal.toState ? { kind: 'SetState', toState: terminal.toState } : null;
 }
 
-/** The value of the flight's active assignment (`heading` | `altitude`), '' when none (docs/adr/0058). */
-export function activeAssignment(flightData, field) {
-  const cell = flightData && flightData.clearance && flightData.clearance[field];
-  const e = cell && Array.isArray(cell.entries) ? cell.entries.find(x => x.status === 'ACTIVE') : null;
-  return e && e.value ? String(e.value) : '';
+/** One carrier final line's model: the side number leading (H124), else the callsign; no range (H126). */
+export function carrierFinalRowModel(strip, flightDataOf = getEfspFlightData) {
+  return { stripId: strip.stripId, name: leadingFlightName(strip, flightDataOf(strip.flightDataId)) || '—' };
+}
+
+/** True for a FINAL Strip on an airfield's final: the final controller's calls (crc-sync docs/adr/0117) apply to it. */
+export function isParFinalStrip(strip) {
+  return !!(strip && strip.stripType === 'FINAL' && strip.state === 'ON_FINAL' && strip.facilityId && strip.facilityId !== 'CARRIER');
 }
 
 /**
- * One flight line's model. At an airfield: the callsign, the range to touchdown from this controller's PAR sample ('' without
- * one), and the assigned HDG and ALT (crc-sync docs/adr/0117: the final controller changes them). On the carrier: the side
- * number leading (H124) and no range (H126: the Strip's DIST Block carries it).
+ * The final controller's next once-only call (Begin descent, then Cleared to land), as the button beside the NLA shows it, or
+ * null once both are recorded. Landed is the NLA itself; Missed approach is in the ⋯ menu (strip-menu.js).
  */
-export function finalRowModel(strip, kind, par = kind === 'CARRIER' ? null : parSampleFor(strip.stripId), flightDataOf = getEfspFlightData) {
-  if (kind === 'CARRIER') {
-    return { stripId: strip.stripId, name: leadingFlightName(strip, flightDataOf(strip.flightDataId)) || '—', range: '' };
-  }
-  const nm = par && par.plot && Number.isFinite(par.plot.rangeNm) ? par.plot.rangeNm : null;
-  const fd = flightDataOf(strip.flightDataId);
-  return {
-    stripId: strip.stripId, name: parFlightOf(strip.stripId).name || '—', range: nm == null ? '' : `${nm.toFixed(1)} NM`,
-    hdg: activeAssignment(fd, 'heading'), alt: activeAssignment(fd, 'altitude'),
-  };
+export function nextParCall(strip) {
+  if (!isParFinalStrip(strip)) return null;
+  return parTerminals().find(t => t.once && !parTerminalRecorded(strip, t)) || null;
 }
 
-// The FINAL Blocks the line's two fields write (crc-sync block-map.js FINAL_BLOCK_MAP: the flight's clearance).
-export const FINAL_ASSIGNMENT_BLOCKS = Object.freeze({ hdg: '9A-VECTOR', alt: '7A' });
-
 // ── DOM ─────────────────────────────────────────────────────────────────────
-
-const _finalMounts = new Set();   // containers showing a final view, redrawn on every PAR sample
 
 function _signedOnAt(bay) {
   return getActingPositions(bay.facilityId);
@@ -187,12 +178,6 @@ function _replace(el, child) {
   if (child) el.appendChild(child);
 }
 
-/** Never rebuild under a control the controller is using. */
-function _busy(el) {
-  const a = typeof document !== 'undefined' ? document.activeElement : null;
-  return !!(a && el.contains(a) && /^(select|input|textarea)$/i.test(a.tagName || ''));
-}
-
 function _renderPattern(container, bay) {
   const mount = _mountPoint(container, bay.bayId);
   const legs = patternLegsFor(bay);
@@ -218,31 +203,19 @@ function _renderPattern(container, bay) {
 
 function _renderFinal(container, bay) {
   const mount = _mountPoint(container, bay.bayId);
-  const kind = finalKindOf(bay);
   const live = [];
   for (const rackId of bay.rackIds || []) live.push(...getEfspRack(bay.bayId, rackId));
-  _finalMounts.add(container);
-  const shown = parShownStripId();
-  // The list is rebuilt only when its flights, their recorded calls or their assignments change; a PAR sample (twice a
-  // second) rewrites the text in place, so a button is never replaced under the controller's click, and nothing is rebuilt
-  // while the controller is typing in the line.
-  const rowSig = (strip) => {
-    if (kind === 'CARRIER') return strip.stripId;
-    const m = finalRowModel(strip, kind);
-    const recorded = parTerminals().filter(t => parTerminalRecorded(strip, t)).map(t => t.id).join('+');
-    return `${strip.stripId}:${m.hdg}:${m.alt}:${recorded}:${strip.rev}`;
-  };
-  const sig = `${kind}|${live.map(rowSig).join(',')}`;
+  // Rebuilt only when its flights change; otherwise the names are rewritten in place, so a button is never replaced under
+  // the controller's click.
+  const sig = live.map(s => s.stripId).join(',');
   const existing = [...mount.children].find(el => el.dataset && el.dataset.bayView === 'final');
-  if (existing && (existing.dataset.sig === sig || _busy(existing))) {
+  if (existing && existing.dataset.sig === sig) {
     for (const strip of live) {
       const row = [...existing.children].find(el => el.dataset.stripId === strip.stripId);
       if (!row) continue;
-      const m = finalRowModel(strip, kind);
-      row.dataset.shown = strip.stripId === shown ? '1' : '';
-      const [name, range] = row.children;
+      const m = carrierFinalRowModel(strip);
+      const [name] = row.children;
       if (name.textContent !== m.name) name.textContent = m.name;
-      if (kind !== 'CARRIER' && range.textContent !== m.range) range.textContent = m.range;
     }
     return;
   }
@@ -262,96 +235,32 @@ function _renderFinal(container, bay) {
     return _signedOnAt(bay).includes(s.ownerPositionId) ? s : null;
   };
   for (const strip of live) {
-    const m = finalRowModel(strip, kind);
+    const m = carrierFinalRowModel(strip);
     const row = document.createElement('div');
     row.className = 'efsp-final-row';
     row.dataset.stripId = strip.stripId;
-    row.dataset.shown = strip.stripId === shown ? '1' : '';
-    const cells = [];
-    if (kind === 'CARRIER') {
-      // No PAR on the carrier (H125): the name is a label, not a link to a panel.
-      cells.push(Object.assign(document.createElement('span'), { className: 'efsp-final-name', textContent: m.name }));
-    } else {
-      const name = document.createElement('button');
-      name.type = 'button';
-      name.className = 'efsp-final-name';
-      name.textContent = m.name;
-      name.title = 'Show in the PAR panel';
-      name.addEventListener('click', () => showParFlight(strip.stripId));
-      const range = document.createElement('span');
-      range.className = 'efsp-final-range';
-      range.textContent = m.range;
-      cells.push(name, range);
-      // HDG and ALT, the flight's assignments (crc-sync docs/adr/0117, H134 LT-RQ8 a): typed, sent on Enter or leaving the field.
-      for (const [key, label] of [['hdg', 'HDG'], ['alt', 'ALT']]) {
-        const input = document.createElement('input');
-        input.type = 'text';
-        input.className = `efsp-final-assign efsp-final-${key}`;
-        input.dataset.assign = key;
-        input.value = m[key];
-        input.placeholder = label;
-        input.size = 4;
-        input.title = label === 'HDG' ? 'Assigned heading' : 'Assigned altitude';
-        input.setAttribute('aria-label', input.title);
-        input.addEventListener('pointerdown', (e) => e.stopPropagation());
-        input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && typeof input.blur === 'function') input.blur(); });
-        input.addEventListener('change', () => {
-          const s = ownerHere(strip);
-          if (!s || String(input.value).trim() === m[key]) return;
-          _send(s, { kind: 'SetBlock', blockId: FINAL_ASSIGNMENT_BLOCKS[key], value: String(input.value).trim() });
-        });
-        cells.push(input);
-      }
-    }
+    const name = Object.assign(document.createElement('span'), { className: 'efsp-final-name', textContent: m.name });
     const term = document.createElement('div');
     term.className = 'efsp-final-terminals';
-    for (const t of finalTerminalsFor(kind)) {
+    for (const t of carrierFinalTerminals()) {
       const b = document.createElement('button');
       b.type = 'button';
       b.className = 'efsp-final-terminal';
       b.dataset.terminal = t.id;
       b.textContent = t.label;
-      // a recorded call stays on the line, greyed: it is the record (crc-sync docs/adr/0117)
-      if (kind !== 'CARRIER' && parTerminalRecorded(strip, t)) { b.disabled = true; b.dataset.recorded = '1'; }
       b.addEventListener('click', () => {
         const s = ownerHere(strip);
         if (!s) return;
-        const op = finalTerminalOp(kind, t);
+        const op = carrierFinalTerminalOp(t);
         if (op) _send(s, op);
       });
       term.appendChild(b);
     }
-    row.append(...cells, term);
-    if (kind !== 'CARRIER') {
-      // The racks are hidden here (`replacesRacks`), so the Strip's own ⋯ menu and Drop ride on its line (T5): a Strip the
-      // buttons above cannot move is never out of reach.
-      const tools = document.createElement('div');
-      tools.className = 'efsp-final-tools';
-      const more = document.createElement('button');
-      more.type = 'button';
-      more.className = 'efsp-sbtn efsp-sbtn-icon efsp-strip-menu-btn';
-      more.textContent = '⋯';
-      more.title = 'More actions';
-      more.setAttribute('aria-haspopup', 'menu');
-      more.addEventListener('pointerdown', (e) => e.stopPropagation());
-      more.addEventListener('click', (e) => { e.stopPropagation(); openStripMenu(getEfspStrip(strip.stripId) || strip, more); });
-      tools.appendChild(more);
-      _appendDropButton(tools, strip);
-      row.appendChild(tools);
-    }
+    row.append(name, term);
     wrap.appendChild(row);
   }
   _replace(mount, wrap);
 }
-
-// A PAR sample moves the ranges (twice a second while a final is worked): redraw the final lists on screen.
-onEfspChanged('par', () => {
-  for (const c of [..._finalMounts]) {
-    if (c.isConnected === false) { _finalMounts.delete(c); continue; }
-    const bay = bayDescriptorFor(c.dataset.efspBayView);
-    if (bay && bay.view === 'final' && !_busy(c)) _renderFinal(c, bay);
-  }
-});
 
 // What a pool frequency is for, as the header shows it (crc-sync sfa.js SFA_USE); a rotating one shows who has it instead.
 const SFA_USE_TEXT = Object.freeze({ INITIAL_CONTACT: 'INIT', SPARE: 'SPARE' });
@@ -403,7 +312,7 @@ function _renderSfaHeader(container, bay) {
 export function renderBayDescriptorView(container, bay) {
   if (!container || !bay || typeof document === 'undefined') return;
   const stale = [...container.children].find(_isViewEl);
-  if (!bay.view) { if (stale) stale.remove(); _setRacksHidden(container, false); _finalMounts.delete(container); return; }
+  if (!bayHasComponentView(bay)) { if (stale) stale.remove(); _setRacksHidden(container, false); return; }
   container.dataset.efspBayView = bay.bayId;
   _setRacksHidden(container, !!bay.replacesRacks);
   if (bay.view === 'pattern') _renderPattern(container, bay);
@@ -429,6 +338,27 @@ export function finalHandoffButtons(strip) {
   btn.addEventListener('click', (e) => {
     e.stopPropagation();
     _send(strip, op);
+    btn.disabled = true;
+  });
+  return [btn];
+}
+
+/**
+ * The final controller's next call beside the NLA on an airfield's FINAL Strip (H138 U10, crc-sync docs/adr/0117): Begin
+ * descent, then Cleared to land, each recorded once (the Strip's tab then shows the next; the record stays in the ⋯ menu,
+ * greyed). Only for the Position that holds the Strip: the server refuses anyone else (`recordsFinalCalls`).
+ */
+export function parCallButtons(strip) {
+  const t = nextParCall(strip);
+  if (!t || !getActingPositions(strip.facilityId || undefined).includes(strip.ownerPositionId)) return [];
+  const btn = document.createElement('button');
+  btn.className = 'efsp-sbtn efsp-nla-btn efsp-par-call';
+  btn.textContent = t.label;
+  btn.dataset.parCall = t.id;
+  btn.addEventListener('pointerdown', (e) => e.stopPropagation());
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    _send(strip, parTerminalOp(t));
     btn.disabled = true;
   });
   return [btn];

@@ -23,7 +23,8 @@ import {
 // Dark cockpit: grey unless a problem. Red outside a tolerance (default ±1°, Settings) above DA only; nothing is coloured below DA
 // and the dashed tolerance lines start there (H116). Amber only for no plot for 3 s. An INOP scope is blanked in orange-red with
 // the reason. Several flights on finals sent to this controller: a row of their names picks the one the scopes show
-// (par-model.js `pickFlight`); a click on a flight in the FINAL Bay picks it too.
+// (par-model.js `pickFlight`); the Strip's ⋯ menu item "Show in PAR panel" picks it too (the FINAL Bay is ordinary
+// Strips, H138 U10).
 
 const NS = 'http://www.w3.org/2000/svg';
 const COL = Object.freeze({
@@ -83,7 +84,7 @@ export function parFlightOf(stripId) {
   };
 }
 
-/** Shows a flight in the scopes (the FINAL Bay's flight row calls this) and opens the panel. */
+/** Shows a flight in the scopes (the FINAL Strip's ⋯ menu calls this) and opens the panel. */
 export function showParFlight(stripId) {
   _selected = stripId || null;
   try { if (!isDockPanelOpen('par')) toggleDockPanel('par', true); } catch (_) { /* no dock (tests) */ }

@@ -16,27 +16,18 @@
 .efsp-pattern-advisories { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 .efsp-pattern-advisory { border: 1px solid #ffb86b; color: #ffb86b; border-radius: 10px; padding: 0 7px; font-size: 10.5px; }
 
-/* The FINAL Bay's flight list (docs/wip/PAR-2.md): one line per aircraft on the final, its name picks it for the PAR panel,
-   which draws the picture; the two terminal buttons keep their ops. Grey: nothing here is coloured. */
+/* The carrier FINAL Bay's line (H124-H126): one per aircraft on the final, the side number leading, Ball / Waveoff. An airfield's
+   PAR final is ordinary Strips (H138 U10). Grey: nothing here is coloured. */
 .efsp-final-list { display: grid; gap: 4px; }
 .efsp-final-row { display: flex; align-items: center; gap: 8px; border: 1px solid var(--efsp-line, #2e3740); border-radius: 3px;
   padding: 3px 6px; background: #10151a; }
-.efsp-final-name { font: inherit; color: var(--efsp-text, #d8e0e6); background: none; border: 1px solid transparent; border-radius: 3px;
-  padding: 2px 6px; min-height: 32px; cursor: pointer; text-align: left; }
-.efsp-final-name:hover { border-color: var(--efsp-line-2, #4a5560); }
-.efsp-final-row[data-shown="1"] .efsp-final-name { border-color: var(--efsp-line-2, #4a5560); }
-.efsp-final-range { color: var(--efsp-muted, #8c9aa6); font-variant-numeric: tabular-nums; min-width: 60px; }
+.efsp-final-name { color: var(--efsp-text, #d8e0e6); padding: 2px 6px; }
 .efsp-final-terminals { display: flex; gap: 6px; margin-left: auto; }
 .efsp-final-terminal { min-height: var(--efsp-tap, 44px); padding: 0 12px; font: inherit; color: var(--efsp-text, #d8e0e6);
   background: var(--efsp-strip, #1c2228); border: 1px solid var(--efsp-line-2, #4a5560); border-radius: 3px; cursor: pointer; }
 .efsp-final-terminal:hover { border-color: var(--efsp-muted, #8c9aa6); }
-/* A recorded call (Begin descent, Cleared to land) stays on the line greyed: it is the record (crc-sync docs/adr/0117). */
-.efsp-final-terminal:disabled, .par-term:disabled { color: var(--efsp-muted, #8c9aa6); border-color: var(--efsp-line, #2e3740); cursor: default; }
-/* The assigned HDG and ALT the final controller types (crc-sync docs/adr/0117, H134 LT-RQ8 a). */
-.efsp-final-assign { width: 5ch; min-height: 32px; font: inherit; color: var(--efsp-text, #d8e0e6); text-align: center;
-  font-variant-numeric: tabular-nums; background: var(--efsp-strip, #1c2228); border: 1px solid var(--efsp-line, #2e3740); border-radius: 3px; }
-.efsp-final-assign::placeholder { color: #5d6973; }
-.efsp-final-tools { display: flex; gap: 4px; align-items: center; }
+/* A recorded call (Begin descent, Cleared to land) on the PAR panel stays greyed: it is the record (crc-sync docs/adr/0117). */
+.par-term:disabled { color: var(--efsp-muted, #8c9aa6); border-color: var(--efsp-line, #2e3740); cursor: default; }
 
 /* Bay descriptor views (docs/adr/0093): the mount point, AP's SFA frequency header (crc-sync docs/adr/0117: grey, nothing
    here is a problem), the empty FINAL line. */
@@ -48,4 +39,3 @@
 .efsp-sfa-freq { color: var(--efsp-text, #d8e0e6); font-variant-numeric: tabular-nums; }
 .efsp-sfa-on { color: var(--efsp-muted, #8c9aa6); min-width: 36px; }
 .efsp-sfa-spare { color: #5d6973; }
-span.efsp-final-name:hover { border-color: transparent; }
