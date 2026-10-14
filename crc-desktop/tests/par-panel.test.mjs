@@ -120,7 +120,8 @@ test('autoscale: the track at the golden-ratio point of the range until the wind
   assert.equal(M.autoscaleView(plot({ azDeg: 0.2 }), { gpaDeg: 3.06, tolAzDeg: 1.5 }).azMaxDeg, 3);
   const wide = M.autoscaleView(plot({ rangeNm: 3, azDeg: -1.8 }), { gpaDeg: 3.06, tchFt: 50 });
   near(wide.azMaxDeg, 1.8 / M.PHI);
-  assert.equal(M.autoscaleView(plot({ azDeg: 9 }), {}).azMaxDeg, M.LIMITS.azMaxDeg, 'never past the ±10° the PAR covers');
+  assert.equal(M.autoscaleView(plot({ azDeg: 14 }), {}).azMaxDeg, M.LIMITS.azMaxDeg, 'never past the ±15° the PAR covers');
+  assert.equal(M.LIMITS.azMaxDeg, 15);
   assert.equal('yMax' in wide, false, 'no feet window any more');
 });
 

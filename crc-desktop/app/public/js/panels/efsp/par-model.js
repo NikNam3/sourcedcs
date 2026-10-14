@@ -20,8 +20,9 @@ export const NO_PLOT_MS = 3000;            // amber at 3 s without a plot (H115)
 export const PAR_DEFAULTS = Object.freeze({ gpaDeg: 3.06, tolElHighDeg: 1, tolElLowDeg: 0.5, tolAzDeg: 1, autoscale: true }); // H116, H141
 export const DEFAULT_VIEW = Object.freeze({ rMax: 10, hMax: 3500, azMaxDeg: 2 });
 export const ZOOM_STEP = 1.15;
-// azMaxDeg: the PAR covers ±10° of the course (Order 8200.1D ch 14 ¶19, lateral coverage), so the azimuth window never opens wider
-export const LIMITS = Object.freeze({ rMin: 0.5, rMax: 40, hMin: 150, azMinDeg: 0.25, azMaxDeg: 10 });
+// azMaxDeg: our PAR covers ±15° of the course (crc-sync config/par.json `coverage.azimuthHalfDeg`, the AN/FPN-68A), so the
+// azimuth window never opens wider
+export const LIMITS = Object.freeze({ rMin: 0.5, rMax: 40, hMin: 150, azMinDeg: 0.25, azMaxDeg: 15 });
 
 // The final controller's actions (crc-sync docs/adr/0117, H134 LT-RQ7 a, LT-RQ8 a), on the FINAL Bay line and the PAR panel:
 // "Begin descent" (JO 7110.65BB para 5-12-3; it ends the assigned altitude) and "Cleared to land" (the tower's clearance
@@ -143,7 +144,7 @@ export function pickFlight(samples, selectedStripId) {
 
 /**
  * The window that keeps the track at the golden-ratio point, never smaller than 10 NM (H115). Azimuth in degrees: twice the
- * tolerance, or wider to keep the track at the golden-ratio point of the half-window, never past the ±10° the PAR covers.
+ * tolerance, or wider to keep the track at the golden-ratio point of the half-window, never past the ±15° the PAR covers.
  */
 export function autoscaleView(plot, { gpaDeg, tchFt, tolAzDeg = PAR_DEFAULTS.tolAzDeg } = {}) {
   const gpa = _pmFin(gpaDeg) ? gpaDeg : PAR_DEFAULTS.gpaDeg;

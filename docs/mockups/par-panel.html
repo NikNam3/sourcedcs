@@ -144,7 +144,7 @@ safe limit (Order 8200.1D, the "B" cursor). An aircraft 0.5–1° low is now red
   <div><h3>Zoom</h3>
   <p>Touchdown stays in the bottom-left corner of the elevation scope and on the left edge of the azimuth scope, always. Wheel: zoom range (both scopes). Shift + wheel: zoom height or the azimuth angle (this scope). No panning.</p></div>
   <div><h3>Autoscale</h3>
-  <p>With the setting on, the window follows the aircraft so the track sits at the golden-ratio point (61.8 % of the range width, likewise in height; the azimuth window is twice the tolerance, ±2°, or wider for a track far off the course, never past the ±10° the PAR covers) until the window is down to 10 NM; from there it stays at 10 NM. A manual zoom pauses autoscale (the window label says so); double-click resumes it. With the setting off the window stays where the controller put it.</p></div>
+  <p>With the setting on, the window follows the aircraft so the track sits at the golden-ratio point (61.8 % of the range width, likewise in height; the azimuth window is twice the tolerance, ±2°, or wider for a track far off the course, never past the ±15° the PAR covers) until the window is down to 10 NM; from there it stays at 10 NM. A manual zoom pauses autoscale (the window label says so); double-click resumes it. With the setting off the window stays where the controller put it.</p></div>
   <div><h3>Azimuth in degrees</h3>
   <p>The azimuth scope plots range against the angle off the course seen from touchdown (a B-display), so the tolerance lines are straight. Close in, a few feet are many degrees: a plot past the window's edge is drawn at the edge.</p></div>
   <div><h3>Track styles</h3>
@@ -213,7 +213,7 @@ safe limit (Order 8200.1D, the "B" cursor). An aircraft 0.5–1° low is now red
     view.rMax = Math.max(10, s.r / PHI);
     var hTrack = s.el === null ? gpHeight(s.r, 0) : gpHeight(s.r, s.el);
     view.hMax = Math.max(gpHeight(view.rMax, 0) * 1.08, hTrack / PHI);
-    view.azMax = Math.min(10, Math.max(2 * TOL.az, Math.abs(s.az) / PHI));
+    view.azMax = Math.min(15, Math.max(2 * TOL.az, Math.abs(s.az) / PHI));
   }
   function svgEl(name, attrs) {
     var e = document.createElementNS('http://www.w3.org/2000/svg', name);
@@ -331,7 +331,7 @@ safe limit (Order 8200.1D, the "B" cursor). An aircraft 0.5–1° low is now red
     box.addEventListener('wheel', function (e) {
       e.preventDefault();
       var z = e.deltaY > 0 ? 1.15 : 1 / 1.15;
-      if (e.shiftKey) { if (kind === 'el') view.hMax = Math.max(150, view.hMax * z); else view.azMax = Math.min(10, Math.max(0.25, view.azMax * z)); }
+      if (e.shiftKey) { if (kind === 'el') view.hMax = Math.max(150, view.hMax * z); else view.azMax = Math.min(15, Math.max(0.25, view.azMax * z)); }
       else view.rMax = Math.min(40, Math.max(0.5, view.rMax * z));
       if (auto) paused = true;
       render();
