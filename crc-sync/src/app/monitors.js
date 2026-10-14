@@ -186,7 +186,7 @@ function buildMonitors({ env, efsp, facilityConfig, missionClock, missionSession
         for (const s of board.getAll()) {
           if (s.state === 'DROPPED' || !s.flightDataId) continue;
           if (!out.has(s.flightDataId)) out.set(s.flightDataId, []);
-          out.get(s.flightDataId).push({ facilityId, positionId: s.ownerPositionId, airspaceId: (s.airspaceEntry && s.airspaceEntry.airspaceId) || null });
+          out.get(s.flightDataId).push({ facilityId, stripId: s.stripId, positionId: s.ownerPositionId, airspaceId: (s.airspaceEntry && s.airspaceEntry.airspaceId) || null });
         }
       }
       return out;
@@ -277,6 +277,8 @@ function buildMonitors({ env, efsp, facilityConfig, missionClock, missionSession
       airspaceEntry: airspaceEntryAlertMonitor.getAll(),
       // Not sent either: an airspace-entry alert goes to the controlling Position and the flight's (docs/adr/0119).
       airspaceEntryFor: (alert, positions) => airspaceEntryAlertMonitor.deliverableTo(alert, positions),
+      // docs/adr/0124 §1: the airspace card's flight list, only for the airspaces the session may approve entry into.
+      airspaceTrafficFor: (positions) => airspaceEntryAlertMonitor.trafficFor(positions),
       obligations: obligationMonitor.getAll(),
       surveillance: surveillanceHints ? surveillanceHints.getAll() : undefined, // docs/adr/0076: the suggestion chip and staleness
     });

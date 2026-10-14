@@ -22,7 +22,7 @@ test('app/monitors.js calls broadcastEfspAlerts on the hub in exactly one place,
   const fn = SERVER.match(/\n *function broadcastEfspAlerts\(\) \{[\s\S]*?\n  \}\n/);
   assert.ok(fn, 'the compose function exists');
   assert.match(fn[0], /hubLink\.get\(\)\.broadcastEfspAlerts\(/);
-  for (const key of ['conformance', 'tofiRegime', 'conflictAlert', 'airspaceEntry', 'obligations', 'surveillance']) assert.match(fn[0], new RegExp(`${key}:`));
+  for (const key of ['conformance', 'tofiRegime', 'conflictAlert', 'airspaceEntry', 'airspaceTrafficFor', 'obligations', 'surveillance']) assert.match(fn[0], new RegExp(`${key}:`));
 });
 
 test('a conformance-only tick does not clear obligations', () => {
@@ -43,7 +43,7 @@ test('a conformance-only tick does not clear obligations', () => {
     { getAll: () => [obligation] },
     { getAll: () => [hint] },
     { getAll: () => [] },
-    { getAll: () => [], deliverableTo: () => true });
+    { getAll: () => [], deliverableTo: () => true, trafficFor: () => [] });
 
   broadcast(); // the 15 s sweep raised the obligation
   conformance = [{ flightDataId: 'f1', alerts: [] }];

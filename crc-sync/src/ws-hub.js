@@ -213,7 +213,9 @@ class WsHub {
     // docs/adr/0119: an airspace-entry alert goes only to a session holding the airspace's controlling Position or a
     // Position working the flight (asked of the monitor, never sent).
     const airspaceEntry = typeof a.airspaceEntryFor === 'function' ? (a.airspaceEntry || []).filter(x => a.airspaceEntryFor(x, positions)) : [];
-    const msg = { version: VERSION, type: 'efsp-alerts', conformance: a.conformance || [], tofiRegime: a.tofiRegime || [], conflictAlert, airspaceEntry, obligations: a.obligations || [], surveillance: a.surveillance || [] };
+    // docs/adr/0124 §1: the airspace card's flight list, for the airspaces this session's Positions may approve entry into.
+    const airspaceTraffic = typeof a.airspaceTrafficFor === 'function' ? a.airspaceTrafficFor(positions) : [];
+    const msg = { version: VERSION, type: 'efsp-alerts', conformance: a.conformance || [], tofiRegime: a.tofiRegime || [], conflictAlert, airspaceEntry, airspaceTraffic, obligations: a.obligations || [], surveillance: a.surveillance || [] };
     return this._efspFilter(session, msg) || msg;
   }
 
