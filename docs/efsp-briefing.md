@@ -1623,7 +1623,8 @@ and all 15 architecture-check bugs B1-B15 (§3K). ARCH-S/W/C's findings that pha
 
 **Human actions outstanding.** The LG 10-minute live check; one run of the four-hour soak workflow (above); the live wind check (S-F2b) and the live `mission_start` check (S-F3); a live walk of
 a real DCS ship against the carrier banner, CARRIER panel, MARSHAL board and CARRIER MAP, and of a real PAR track at Incirlik; L19's taxi/line-up/take-off-without-Airborne walk; the `.env` and MariaDB `init.sh` items from HYG (CLAUDE.md); the squadron
-data above. **Release checks:** crc-sync and crc-desktop ship together (`0110`'s offer frame is gone); look for any `state/efsp-facility-*.json` on the server volume before the first deploy of `0110`
+data above; before running this crc-sync, delete or fix `crc-sync/state/efsp-board.json` (local and the server's, H137: an `sfaRotation` key refuses
+start-up). **Release checks:** crc-sync and crc-desktop ship together (`0110`'s offer frame is gone); look for any `state/efsp-facility-*.json` on the server volume before the first deploy of `0110`
 (strict state refuses the old `consolidation` shape; RUNBOOK); delete `state/efsp-board.json` and `state/efsp-mutations.jsonl` before the first deploy of
 CARRIER-STATE (the old carrier shape refuses start-up) and any hull `approach` in `state/efsp-carriers.json`; clear `efsp-metrics.json` and `efsp-traffic-count.jsonl` on a machine with state when F3 reaches it (its session counter restarts at 1).
 **Integrator actions outstanding:** the L3↔L11 cross-test above; the unloaded crc-sync run; then remove the remaining `docs/wip/*.md`.

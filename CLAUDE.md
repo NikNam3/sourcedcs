@@ -57,7 +57,7 @@ DROPPED Strips, so a shorter run (including `soak:smoke`) reports them as **not 
 nor a pass. `--warmup-min <m>` overrides the warm-up and `--judge-memory` forces the gate (the selfcheck `leak` case
 uses it). The not-judged rule is `memoryPolicy()` in `tools/soak/report.js` (`docs/wip/SOAKW.md`).
 The soak host runs the surveillance hint monitor and the Boards' airborne observer as `createApp` builds them
-(`surveillanceHints` is left unset), and the shadow clients track the six stores' seq/epoch like the shipped client
+(`surveillanceHints` is left unset), and the shadow clients track the five synced stores' seq/epoch (`stores.js` `STORE_SYNC`) like the shipped client
 (`tools/soak/shadow.js`; heartbeat `stores`, store frames, a slice resync after two beats behind): a store still behind
 after 6 heartbeats is the **`store-stale`** failure (`mutations.storeSync.stale`; selfcheck case `drop-store-delta`).
 The soak never rolls the mission, so the mission reset (ADR 0108) is not exercised (`docs/wip/folded-phase3/NX-1.md`).
@@ -186,7 +186,7 @@ squadron defaults (facility, airspace, sensor specs, alerting thresholds) and `d
 reference tables (the airfield name-to-ICAO map) — both baked into the image. `state/` holds
 everything the service writes, and is the `crc-sync-state:/app/state` volume. A read prefers `state/`
 and falls back to the shipped default, so a new default added by an image update lands with no
-migration (`crc-sync/src/state-paths.js`, `docs/adr/0048`). **`state/` is strict, not forgiving:** an old or unknown-key Board snapshot, invalid JSON in the Board snapshot, a missing/invalid facility file, an unknown key in a tuning layer, or an unknown key in the carrier hull config (`efsp-carriers.json`, shipped or `state/`) stops start-up with the file and the reason (`checkPersistedShape` in `src/efsp/stores.js`, `docs/adr/0095`; `checkLayerKeys` in `src/tuning-file.js`; `checkShape` in `src/persisted-shape.js` for the hull config, H127); an unparseable tuning layer is instead ignored with a warning (the shipped file applies), and so is an unreadable `apt-config.json` (starts empty); there is no migration or merge, so the fix is to correct or delete the named file.
+migration (`crc-sync/src/state-paths.js`, `docs/adr/0048`). **`state/` is strict, not forgiving:** an old or unknown-key Board snapshot, invalid JSON in the Board snapshot, a missing/invalid facility file, an unknown key in a tuning layer, or an unknown key in the carrier hull config (`efsp-carriers.json`, shipped or `state/`), or an invalid stereo-route table (`efsp-stereo-routes.json`; an unknown key such as the old `remarks` included) stops start-up with the file and the reason (`checkPersistedShape` in `src/efsp/stores.js`, `docs/adr/0095`; `checkLayerKeys` in `src/tuning-file.js`; `checkShape` in `src/persisted-shape.js` for the hull config, H127; `validateStereoRoutes` in `src/efsp/stereo-routes.js`); an unparseable tuning layer is instead ignored with a warning (the shipped file applies), and so is an unreadable `apt-config.json` (starts empty); there is no migration or merge, so the fix is to correct or delete the named file.
 
 `config/theaters.json` holds the fixed per-theater facts keyed by the name DCS-gRPC's `GetTheatre` returns: UTC
 offset, **transition altitude** (Syria 10,000 ft, the rest 18,000 until someone checks the AIP), the Transverse
