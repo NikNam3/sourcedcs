@@ -325,8 +325,29 @@ class BoardStore {
   /** The receiver ACCEPTed, REJECTed or stood by (board/coordination.js). */
   receiveCoordinationResponse(args) { return this._coordination.receiveCoordinationResponse(args); }
 
-  /** The other half of a HANDOFF's record changed: comms, control, release, request (board/handoff-control.js). */
+  /** The other half of a HANDOFF's record changed: check-in, control, released, request (board/handoff-control.js). */
   receiveHandoffRecord(args) { return this._control.receiveHandoffRecord(args); }
+
+  /**
+   * The control tick's question (docs/adr/0122): the transferring Strips here whose not-released HANDOFF is checked in and
+   * waits for the aircraft to be inside the receiver's airspace, each with the receiving Facility and Position.
+   * @returns {{strip:object, receivingFacilityId:string, receivingPositionId:string}[]}
+   */
+  boundaryCandidates() {
+    const out = [];
+    for (const strip of this._state.all()) {
+      const c = this._control.boundaryCandidate(strip);
+      if (c) out.push({ strip, ...c });
+    }
+    return out;
+  }
+
+  /** The control tick's write: control moves to the receiver, the aircraft is inside its airspace (board/handoff-control.js). */
+  settleAtBoundary(stripId, opts) {
+    const strip = this.getStrip(stripId);
+    if (!strip) return { ok: false, reason: 'NOT_FOUND' };
+    return this._control.settleAtBoundary(strip, opts);
+  }
 
   /** Is this Strip's owner staffed, or consolidated into a staffed Position? A peer Board asks (the control invariant). */
   stripOwnerCovered(stripId) { return this._control.ownerCovered(this.getStrip(stripId)); }

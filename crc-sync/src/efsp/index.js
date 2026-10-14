@@ -110,6 +110,13 @@ function createEfsp({ env = process.env, facilityConfig = createFacilityConfig({
   const { flightData: flightDataStore, airspaces: airspaceStore, correlations: correlationStore, marsa: marsaStore,
     runwayStatuses: runwayStatusStore, carriers: carrierStore } = stores;
   const regimeLocator = createRegimeLocator({ locateTrack, correlationStore, airspaceStore });
+  // Where a flight's correlated contact is (docs/adr/0122's control tick and its obligations): null without a track source,
+  // a correlated track, or a position.
+  const locateFlight = (flightDataId) => {
+    if (!locateTrack || !flightDataId) return null;
+    const trackId = correlationStore.correlatedTrackId(flightDataId);
+    return trackId ? locateTrack(trackId) : null;
+  };
   const facilityIds = facilityConfig.getFacilityIds();
   undoHistory.attach(undoEnv({
     boardFor: (facilityId) => { const f = facilities.get(facilityId); return f ? f.boardStore : null; },
@@ -228,6 +235,43 @@ function createEfsp({ env = process.env, facilityConfig = createFacilityConfig({
       const touched = boardStore.drainTouched();
       return { ok: true, message: boardDelta(ctx, boardStore, facilityId, touchedStrips(ctx, boardStore, facilityId, touched, stamped), [result.flightData]) };
     },
+
+    /**
+     * The control tick (docs/adr/0122, H142): every not-released HANDOFF the receiver has marked checked in, whose aircraft
+     * is now inside the receiving Position's airspace (ADR 0125 `isInsideJurisdictionOf`, the correlated track's indicated
+     * feet, as the airspace-entry alert), moves control to the receiver: a system write on the transferring Board, mirrored
+     * on the receiving one, persisted, with a board-delta for each Facility touched. An aircraft with no correlated track,
+     * or a point nobody owns (Class G) or that cannot be judged, waits: control never moves on a null answer.
+     * @returns {{moved:number, messages:object[]}}
+     */
+    settleHandoffControl: () => {
+      const touchedFacilities = new Set();
+      let moved = 0;
+      for (const [facilityId, f] of facilities) {
+        for (const c of f.boardStore.boundaryCandidates()) {
+          const where = locateFlight(c.strip.flightDataId);
+          if (!where || !airspaceStore.isInsideJurisdictionOf(c.receivingPositionId, where)) continue;
+          const area = airspaceStore.jurisdictionAt(where);
+          const r = f.boardStore.settleAtBoundary(c.strip.stripId, { airspaceId: area ? area.airspaceId : null });
+          if (!r.ok) continue;
+          moved += 1;
+          touchedFacilities.add(facilityId);
+          if (r.peerFacilityId) touchedFacilities.add(r.peerFacilityId);
+        }
+      }
+      if (!moved) return { moved, messages: [] };
+      _persist({ wallClock, facilities, stores, persistState, paths });
+      const messages = [];
+      for (const facilityId of touchedFacilities) {
+        const boardStore = ctx.boardStoreFor(facilityId);
+        const touched = boardStore.drainTouched();
+        messages.push(boardDelta(ctx, boardStore, facilityId, touchedStrips(ctx, boardStore, facilityId, touched, null), []));
+      }
+      return { moved, messages };
+    },
+
+    /** Where a flight's correlated contact is, `{lat, lon, altFt}` (indicated feet), or null (docs/adr/0122). */
+    locateFlight: (flightDataId) => locateFlight(flightDataId),
 
     /**
      * The HTTP service path into the airspace registry (docs/adr/0098 §9): the same skeleton pass a panel Mutation takes

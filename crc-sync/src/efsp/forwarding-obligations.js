@@ -138,6 +138,22 @@ function computeDueObligations(strip, flightData, now, ctx = {}) {
     obligations.push({ obligationType: 'CONTROL_REPAIRED', dueAt: strip.coordination.repair.at, severity: 'WARNING' });
   }
 
+  // NOT_CHECKED_IN / CONTROL_WAITS_FOR_CHECK_IN — docs/adr/0122 (H142 dark cockpit): control never moves before the
+  // receiver marks the aircraft checked in. An accepted HANDOFF still not checked in after `notCheckedInMs` (alerting.json
+  // `handoff.notCheckedInSec`) asks the receiver for attention; a not-released one whose aircraft is already inside the
+  // receiver's airspace (control could move but cannot) asks both sides at once.
+  const co = strip.coordination;
+  if (co && co.primitive === 'HANDOFF' && co.state === 'ACTIVE' && co.comms && !co.comms.transferred
+      && co.control && co.control.holder === 'TRANSFERRING') {
+    const notCheckedInMs = ctx.notCheckedInMs;
+    if (co.mintedForCoordination && Number.isFinite(notCheckedInMs) && co.acceptedAt != null && now - co.acceptedAt >= notCheckedInMs) {
+      obligations.push({ obligationType: 'NOT_CHECKED_IN', dueAt: co.acceptedAt + notCheckedInMs, severity: 'WARNING' });
+    }
+    if (!co.released && ctx.insideReceiverAirspace && ctx.insideReceiverAirspace(strip)) {
+      obligations.push({ obligationType: 'CONTROL_WAITS_FOR_CHECK_IN', dueAt: now, severity: 'WARNING' });
+    }
+  }
+
   return obligations;
 }
 
@@ -193,8 +209,12 @@ class ForwardingObligationMonitor {
   /**
    * @param {{boardStoreFor:(facilityId:string)=>object, flightDataStore:object, facilityConfig:object, airspaceStore?:object, clock?:object}} deps
    *   A stray `onAlert` is ignored — obligations are state now, not events.
+   * @param {{notCheckedInSec?:number}} [deps.handoffConfig] alerting.json `handoff` (docs/adr/0122); without it NOT_CHECKED_IN never fires
+   * @param {(strip:object) => boolean} [deps.insideReceiverAirspace] is this HANDOFF's aircraft inside the receiving Position's airspace?
    */
-  constructor({ boardStoreFor, flightDataStore, facilityConfig, airspaceStore, clock = WALL_CLOCK }) {
+  constructor({ boardStoreFor, flightDataStore, facilityConfig, airspaceStore, clock = WALL_CLOCK, handoffConfig = null, insideReceiverAirspace = null }) {
+    this._notCheckedInMs = handoffConfig && Number.isFinite(handoffConfig.notCheckedInSec) ? handoffConfig.notCheckedInSec * 1000 : null;
+    this._insideReceiverAirspace = insideReceiverAirspace;
     // The mission clock (docs/adr/0079) — every obligation here is due at an
     // ETA, a proposed departure or a void deadline, all in mission time.
     this._clock = clock;
@@ -234,7 +254,10 @@ class ForwardingObligationMonitor {
         if (!flightData) continue;
         live.set(`${facilityId}:${strip.stripId}`, strip);
 
-        for (const o of computeDueObligations(strip, flightData, now, { dataOnly, isAirspaceActive, controlProblems: typeof boardStore.exchangeProblems === 'function' ? (s) => boardStore.exchangeProblems(s.stripId) : null })) {
+        for (const o of computeDueObligations(strip, flightData, now, {
+          dataOnly, isAirspaceActive, controlProblems: typeof boardStore.exchangeProblems === 'function' ? (s) => boardStore.exchangeProblems(s.stripId) : null,
+          notCheckedInMs: this._notCheckedInMs, insideReceiverAirspace: this._insideReceiverAirspace,
+        })) {
           const key = `${facilityId}:${strip.stripId}:${o.obligationType}`;
           const prev = this._current.get(key);
           if (!prev) this._recordMissed(o.obligationType);

@@ -70,6 +70,12 @@ function buildTickers({ wsHub, efsp, trackStore, collabStore, atisStore, surveil
       efsp.nlaStatusMonitor.tick();
     } },
     { name: 'correlation', periodMs: CORRELATION_TICK_MS, tick: () => correlationReconciler.tick() },
+    // docs/adr/0122 (H142): a not-released handoff the receiver has checked in moves control once the aircraft is inside the
+    // receiver's airspace. Its board-deltas go through the one delivery path, whose post-change hook re-runs the obligations.
+    { name: 'handoff-control', periodMs: 1000, tick: () => {
+      const { messages } = efsp.settleHandoffControl();
+      if (messages.length) wsHub.deliverEfsp(messages);
+    } },
     { name: 'carrier', periodMs: 1000, tick: () => carrierTick.tick() },
     // docs/adr/0112: the PAR sample, to the Position working each final only (config/par.json sampleMs, under 1 s, H115).
     { name: 'par', periodMs: parMonitor.sampleMs, tick: () => wsHub.sendParSamples(parMonitor.tick()) },

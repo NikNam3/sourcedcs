@@ -265,7 +265,7 @@ const STRIP_SHAPE = {
     'annotations', 'flags', 'createdAt', 'updatedAt', 'updatedBy', 'consolidatedFrom', 'diverts', 'endReason', 'joinedInto', 'splitFrom'),
   coordination: anyOf('primitive', 'state', 'note', 'peerFacilityId', 'peerPositionId', 'peerStripId', 'mintedForCoordination',
     'dataOwnerPositionRef', 'separationResponsibilityRef', 'radarIdTransferred', 'lastForwardedEtaUtc',
-    'comms', 'control', 'release', 'releaseRequest', 'repair',
+    'comms', 'control', 'released', 'releaseRequest', 'repair',
     'initiatedAt', 'initiatedBy', 'acceptedAt', 'acceptedBy', 'lastStandByAt'),
   tofiCoordination: anyOf('direction', 'state', 'note', 'peerFacilityId', 'peerPositionId', 'peerStripId', 'mintedForTofi',
     'initiatedAt', 'initiatedBy', 'acceptedAt', 'acceptedBy', 'commsTransferred', 'commsTransferredAt', 'commsTransferredBy'),

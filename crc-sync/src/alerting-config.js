@@ -26,6 +26,7 @@ function loadAlertingConfig(override) {
     conflictAlert: { ...shipped.conflictAlert, ...(layer.conflictAlert || {}) },
     tofiRegime: { ...shipped.tofiRegime, ...(layer.tofiRegime || {}) }, // docs/adr/0102
     airspaceEntry: { ...shipped.airspaceEntry, ...(layer.airspaceEntry || {}) }, // docs/adr/0119
+    handoff: { ...shipped.handoff, ...(layer.handoff || {}) }, // docs/adr/0122
   };
 }
 

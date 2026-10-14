@@ -6,6 +6,7 @@
 
 const { deepClone, trackDegradationRefusal, mintReplica } = require('./strip-util');
 const { warn } = require('../warnings');
+const { handoffGuardRefusal } = require('../handoff-guards');
 
 class Coordination {
   /**
@@ -77,9 +78,8 @@ class Coordination {
       case 'STAND_BY': return this._applyCoordinationStandBy(strip, op, by);
       // The proposer's own way out of its own exchange (U7, docs/adr/0080).
       case 'CANCEL':   return this._applyCoordinationCancel(strip, op, by);
-      // docs/adr/0101: communications and control are steps of their own after a HANDOFF's ACCEPT.
-      case 'TRANSFER_COMMS':
-      case 'TRANSFER_CONTROL':
+      // docs/adr/0122: the receiver's one step after a HANDOFF's ACCEPT (control follows by itself, H142).
+      case 'CHECKED_IN':
         if (op.kind !== 'HANDOFF') return { ok: false, reason: 'VALIDATION_ERROR', detail: `${op.action} only applies to a HANDOFF`, strip };
         return this._control.applyMark(strip, op, by, actingPositionId);
       default:         return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown coordination action: ${op.action}`, strip };
@@ -124,6 +124,11 @@ class Coordination {
     if (ownCoordinationBay && strip.bayId === ownCoordinationBay.bayId) {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: 'this Strip is a coordination replica, not a flight record you can propose coordination from', strip };
     }
+    // docs/adr/0122 (H142): a HANDOFF is released unless the handing-off station says not; the switch is the HANDOFF's alone.
+    if (op.released !== undefined) {
+      if (typeof op.released !== 'boolean') return { ok: false, reason: 'VALIDATION_ERROR', detail: 'released must be true or false', strip };
+      if (this._control.modelOfPrimitive(primitive) !== 'STEPS') return { ok: false, reason: 'VALIDATION_ERROR', detail: `released only applies to a HANDOFF, not a ${primitive}`, strip };
+    }
     if (!op.toFacilityId || !op.toPositionId) {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: 'toFacilityId and toPositionId are required', strip };
     }
@@ -144,13 +149,19 @@ class Coordination {
     const flightData = this._flightDataStore.getFlightData(strip.flightDataId);
     const degradation = trackDegradationRefusal(flightData, op.note, strip);
     if (degradation) return degradation;
+    // docs/adr/0122 §6: the handoff guards at the offer (ADR 0120's seam), keyed on the receiving Position.
+    if (this._control.modelOfPrimitive(primitive) === 'STEPS') {
+      const guard = handoffGuardRefusal({ phase: 'OFFER', strip, flightData, receivingFacilityId: op.toFacilityId, receivingPositionId: op.toPositionId });
+      if (guard) return { ok: false, reason: guard.reason, detail: guard.detail, strip };
+    }
+    const released = op.released !== false;
 
     const now = this._clock.now();
     const proposal = peer.receiveCoordinationProposal({
       causedBy: this._activeCmid, primitive, fromFacilityId: this._rules.facilityId, fromPositionId: actingPositionId,
       fromStripId: strip.stripId, toPositionId: op.toPositionId, flightDataId: strip.flightDataId,
       fromStripType: strip.stripType, fromState: strip.state,
-      note: op.note || null, by,
+      note: op.note || null, released, by,
     });
     if (!proposal.ok) return { ok: false, reason: proposal.reason || 'VALIDATION_ERROR', detail: proposal.detail, strip };
 
@@ -166,7 +177,7 @@ class Coordination {
       dataOwnerPositionRef: { facilityId: this._rules.facilityId, positionId: actingPositionId },
       separationResponsibilityRef: { facilityId: this._rules.facilityId, positionId: actingPositionId },
       radarIdTransferred: false,
-      ...this._control.initialFields(primitive),
+      ...this._control.initialFields(primitive, { released }),
       lastForwardedEtaUtc: flightData ? flightData.filed.estimatedArrivalTimeUtc : null,
       note: op.note || null,
       initiatedAt: now, initiatedBy: by || null,
@@ -281,9 +292,9 @@ class Coordination {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: 'only the proposer can cancel; answer the proposal with ACCEPT or REJECT', strip };
     }
     const link = strip.coordination;
-    // docs/adr/0101: once communications or control have moved, the exchange is how the flight is held; cancelling it
-    // would leave two Strips and no record of who has the aircraft. The correction is the receiver's own Drop (control and
-    // comms come back to this side) or, before control moved, ControlRelease WITHDRAW.
+    // docs/adr/0101, 0122: once the aircraft has checked in with the receiver or control has moved, the exchange is how the
+    // flight is held; cancelling it would leave two Strips and no record of who has the aircraft. The correction is the
+    // receiver's own Drop (control and comms come back to this side).
     if (this._control.isSteps(strip) && link.state === 'ACTIVE'
         && ((link.comms && link.comms.transferred) || (link.control && link.control.holder !== 'TRANSFERRING'))) {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: 'communications or control have already moved to the receiving side; the exchange cannot be cancelled', strip };
@@ -393,7 +404,7 @@ class Coordination {
    * combos, so nothing further to check here.
    * @returns {{ok:true, strip}|{ok:false, reason, detail}}
    */
-  receiveCoordinationProposal({ primitive, fromFacilityId, fromPositionId, fromStripId, toPositionId, flightDataId, fromStripType, fromState, note, by, causedBy }) {
+  receiveCoordinationProposal({ primitive, fromFacilityId, fromPositionId, fromStripId, toPositionId, flightDataId, fromStripType, fromState, note, released = true, by, causedBy }) {
     const flightData = this._flightDataStore.getFlightData(flightDataId);
     if (!flightData) return { ok: false, reason: 'NOT_FOUND', detail: 'referenced flight data not found' };
     // What the replica is minted as here: the sender's own strip type and state, or the receiving Position's own row
@@ -436,7 +447,7 @@ class Coordination {
           dataOwnerPositionRef: { facilityId: fromFacilityId, positionId: fromPositionId },
           separationResponsibilityRef: { facilityId: fromFacilityId, positionId: fromPositionId },
           radarIdTransferred: false,
-          ...this._control.initialFields(primitive),
+          ...this._control.initialFields(primitive, { released }),
           lastForwardedEtaUtc: flightData.filed.estimatedArrivalTimeUtc || null,
           note: note || null,
           initiatedAt: now, initiatedBy: by || null,
