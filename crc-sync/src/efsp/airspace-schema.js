@@ -14,6 +14,7 @@
 const fs = require('fs');
 const { statePaths } = require('../state-paths');
 const containment = require('./airspace/containment');
+const jurisdiction = require('./airspace/jurisdiction');
 
 
 // What kind of block this is: labels borrowed from FAA and ICAO special-use airspace names (AREA) and from the
@@ -21,7 +22,12 @@ const containment = require('./airspace/containment');
 const AREA_TYPES = new Set(['MOA', 'RANGE', 'DANGER', 'RESTRICTED', 'PROHIBITED', 'WARNING']);
 const ROUTE_TYPES = new Set(['IR', 'VR', 'SR', 'LLTR']);
 const AIRSPACE_TYPES = new Set([...AREA_TYPES, ...ROUTE_TYPES]);
-const KINDS = ['AREA', 'ROUTE'];
+// JURISDICTION (docs/adr/0125): whose airspace it is, for control at the boundary (JO 7110.65 ¶2-1-15 c). It has no
+// schedule and no activation: it always applies. It carries the owning Positions and an airspace class, and its geometry
+// may be a circle (fixed, or anchored to a carrier hull) as well as a polygon.
+const KINDS = ['AREA', 'ROUTE', 'JURISDICTION'];
+// ICAO airspace classes. Class G is airspace nobody controls, so a Class G area is never anyone's jurisdiction.
+const AIRSPACE_CLASSES = ['A', 'B', 'C', 'D', 'E', 'F', 'G'];
 const SOURCES = ['PANEL', 'WEB', 'STANDING', 'ACO'];
 
 // Vertical limits, in feet. Both optional: an airspace with neither is
@@ -58,11 +64,17 @@ const MAX_FIX_NAME_LENGTH = 40;
 const MAX_ROUTE_SEGMENTS = 100;
 const MAX_WIDTH_NM = 100;
 const DEFINITION_HISTORY_CAP = 50;
+const MAX_RADIUS_NM = jurisdiction.MAX_RADIUS_NM;
+const MAX_OWNER_POSITIONS = 16;
+const MAX_EXCLUDES = 16;
+const MAX_SOURCE_TEXT_LENGTH = 600;
 
 // Fields a definition may carry, and the ones a patch may never touch.
 const DEFINITION_FIELDS = ['airspaceId', 'name', 'kind', 'type', 'controllingFacilityId', 'controllingPositionId',
   'usingPositionId', 'usingFacilityId', 'workingFrequencyMhz', 'controlFrequencyMhz', 'altLowerFt', 'altUpperFt',
-  'geometry', 'segments', 'defaultWidthNm', 'source'];
+  'geometry', 'segments', 'defaultWidthNm', 'source', 'ownerPositionIds', 'airspaceClass', 'excludes', 'sourceText'];
+// The fields only a JURISDICTION area carries (ADR 0125); an AREA or a ROUTE carrying one is refused.
+const JURISDICTION_ONLY_FIELDS = ['ownerPositionIds', 'airspaceClass', 'excludes', 'sourceText'];
 const IMMUTABLE_FIELDS = ['airspaceId', 'kind'];
 // ROUTE: derived from the segments on every write, never accepted from a client.
 const DERIVED_ROUTE_FIELDS = ['altLowerFt', 'altUpperFt'];
@@ -70,10 +82,10 @@ const DERIVED_ROUTE_FIELDS = ['altLowerFt', 'altUpperFt'];
 const LIVE_EDITABLE_FIELDS = ['name', 'workingFrequencyMhz', 'controlFrequencyMhz'];
 // Clearable (`null`) fields. The rest are required.
 const OPTIONAL_FIELDS = ['usingPositionId', 'usingFacilityId', 'workingFrequencyMhz', 'controlFrequencyMhz',
-  'altLowerFt', 'altUpperFt', 'geometry', 'source'];
+  'altLowerFt', 'altUpperFt', 'geometry', 'source', 'excludes', 'sourceText'];
 
 /** ACTIVATION is a rule keyed by `kind`, not a stored field (ADR 0098 §3): AREA needs an approval, ROUTE a confirmation. */
-const ACTIVATION_BY_KIND = { AREA: 'APPROVE', ROUTE: 'CONFIRM' };
+const ACTIVATION_BY_KIND = { AREA: 'APPROVE', ROUTE: 'CONFIRM', JURISDICTION: null };
 
 function deepClone(obj) { return JSON.parse(JSON.stringify(obj)); }
 
@@ -157,6 +169,78 @@ function _validateSegments(id, def) {
   return null;
 }
 
+function _validateCircle(id, g) {
+  const extra = Object.keys(g).filter(k => !['source', 'centre', 'radiusNm', 'cut'].includes(k));
+  if (extra.length) return fail(`${id}: a CIRCLE geometry has no ${extra[0]}`);
+  const c = g.centre;
+  if (!c || typeof c !== 'object' || Array.isArray(c)) return fail(`${id}: a CIRCLE needs a centre { lat, lon } or { hullId }`);
+  const keys = Object.keys(c).sort().join(',');
+  if (keys === 'hullId') {
+    if (!isStr(c.hullId)) return fail(`${id}: a CIRCLE's centre hullId must be a hull id`);
+    if (g.cut !== undefined && g.cut !== null) return fail(`${id}: a circle on a carrier hull has no cut`);
+  } else if (keys === 'lat,lon') {
+    if (!isLat(c.lat) || !isLon(c.lon)) return fail(`${id}: a CIRCLE's centre must be { lat, lon } in decimal degrees`);
+  } else {
+    return fail(`${id}: a CIRCLE needs a centre { lat, lon } or { hullId }`);
+  }
+  if (!(typeof g.radiusNm === 'number' && Number.isFinite(g.radiusNm) && g.radiusNm > 0 && g.radiusNm <= MAX_RADIUS_NM)) {
+    return fail(`${id}: a CIRCLE's radiusNm must be a number above 0 and at most ${MAX_RADIUS_NM}`);
+  }
+  if (g.cut !== undefined && g.cut !== null) {
+    const cut = g.cut;
+    const pt = (p) => Array.isArray(p) && p.length === 2 && isLat(p[0]) && isLon(p[1]);
+    if (typeof cut !== 'object' || Array.isArray(cut) || Object.keys(cut).sort().join(',') !== 'from,to' || !pt(cut.from) || !pt(cut.to)) {
+      return fail(`${id}: a CIRCLE's cut must be { from: [lat, lon], to: [lat, lon] }`);
+    }
+    if (cut.from[0] === cut.to[0] && cut.from[1] === cut.to[1]) return fail(`${id}: a CIRCLE's cut needs two different points`);
+  }
+  return null;
+}
+
+/** The JURISDICTION half of the validator (docs/adr/0125); fills `out`'s jurisdiction fields. */
+function _validateJurisdiction(id, def, out) {
+  if (def.segments !== undefined || def.defaultWidthNm !== undefined) return fail(`${id}: a JURISDICTION area has a geometry, not segments`);
+  if (!AIRSPACE_CLASSES.includes(def.airspaceClass)) return fail(`${id}: airspaceClass must be one of ${AIRSPACE_CLASSES.join(', ')}`);
+  const owners = def.ownerPositionIds;
+  if (!Array.isArray(owners) || owners.length > MAX_OWNER_POSITIONS || !owners.every(isStr) || new Set(owners).size !== owners.length) {
+    return fail(`${id}: ownerPositionIds must be a list of at most ${MAX_OWNER_POSITIONS} different Position ids`);
+  }
+  if (def.airspaceClass === 'G' && owners.length) return fail(`${id}: Class G airspace belongs to nobody: ownerPositionIds must be empty`);
+  if (def.airspaceClass !== 'G' && !owners.length) return fail(`${id}: a Class ${def.airspaceClass} area needs at least one owner Position`);
+  const ex = def.excludes === undefined || def.excludes === null ? [] : def.excludes;
+  if (!Array.isArray(ex) || ex.length > MAX_EXCLUDES || !ex.every(e => typeof e === 'string' && ID_PATTERN.test(e)) || new Set(ex).size !== ex.length) {
+    return fail(`${id}: excludes must be a list of at most ${MAX_EXCLUDES} different airspace ids`);
+  }
+  if (ex.includes(id)) return fail(`${id} cannot exclude itself`);
+  if (def.sourceText !== undefined && def.sourceText !== null && !(isStr(def.sourceText) && def.sourceText.length <= MAX_SOURCE_TEXT_LENGTH)) {
+    return fail(`${id}: sourceText must be text of at most ${MAX_SOURCE_TEXT_LENGTH} characters`);
+  }
+  const band = _bandOk(id, '', def.altLowerFt, def.altUpperFt);
+  if (band) return band;
+  const g = def.geometry;
+  if (!g || typeof g !== 'object' || Array.isArray(g)) return fail(`${id}: a JURISDICTION area needs a geometry`);
+  if (g.source === 'CIRCLE') {
+    const bad = _validateCircle(id, g);
+    if (bad) return bad;
+    if (g.centre.hullId !== undefined && ex.length) return fail(`${id}: a circle on a carrier hull excludes nothing (it wins everywhere it is)`);
+  } else if (g.source === 'POLYGON') {
+    const bad = _validateGeometry(id, g);
+    if (bad) return bad;
+  } else {
+    return fail(`${id}: a JURISDICTION geometry.source must be POLYGON or CIRCLE`);
+  }
+  out.altLowerFt = def.altLowerFt ?? null;
+  out.altUpperFt = def.altUpperFt ?? null;
+  out.geometry = g.source === 'CIRCLE'
+    ? { source: 'CIRCLE', centre: deepClone(g.centre), radiusNm: g.radiusNm, cut: g.cut ? deepClone(g.cut) : null }
+    : deepClone(g);
+  out.ownerPositionIds = [...owners];
+  out.airspaceClass = def.airspaceClass;
+  out.excludes = [...ex];
+  out.sourceText = def.sourceText ?? null;
+  return null;
+}
+
 /** The envelope of a route's legs: min of the lows, max of the highs. A null low is the surface, a null high is unbounded. */
 function deriveRouteEnvelope(segments) {
   const legs = segments.slice(0, -1);
@@ -188,12 +272,22 @@ function validateAirspaceDefinition(def, { derived = 'refuse' } = {}) {
   if (!isStr(def.name) || def.name.trim() !== def.name || def.name.length > MAX_NAME_LENGTH) return fail(`${id} needs a name of 1-${MAX_NAME_LENGTH} characters`);
   const kind = def.kind === undefined ? 'AREA' : def.kind;
   if (!KINDS.includes(kind)) return fail(`${id} has unknown kind ${JSON.stringify(def.kind)}`);
-  const types = kind === 'ROUTE' ? ROUTE_TYPES : AREA_TYPES;
-  if (!types.has(def.type)) return fail(`${id} has unknown ${kind} type ${JSON.stringify(def.type)}`);
+  if (kind === 'JURISDICTION') {
+    if (def.type !== undefined && def.type !== null) return fail(`${id}: a JURISDICTION area has no type`);
+  } else {
+    const types = kind === 'ROUTE' ? ROUTE_TYPES : AREA_TYPES;
+    if (!types.has(def.type)) return fail(`${id} has unknown ${kind} type ${JSON.stringify(def.type)}`);
+    const only = JURISDICTION_ONLY_FIELDS.find(f => def[f] !== undefined);
+    if (only) return fail(`${id}: ${only} belongs to a JURISDICTION area`);
+  }
   // Who approves activation (§9.11; docs/adr/0036): per airspace, so a MOA inside Ankara Center's airspace is
   // approved by CTR rather than by an Approach that does not own it.
   if (!isStr(def.controllingFacilityId)) return fail(`${id} needs a controllingFacilityId`);
   if (!isStr(def.controllingPositionId)) return fail(`${id} needs a controllingPositionId`);
+  if (kind === 'JURISDICTION') {
+    const none = ['usingPositionId', 'usingFacilityId', 'workingFrequencyMhz', 'controlFrequencyMhz'].find(k => def[k] !== undefined && def[k] !== null);
+    if (none) return fail(`${id}: a JURISDICTION area has no ${none}`);
+  }
   if (!isOptStr(def.usingPositionId)) return fail(`${id}'s usingPositionId must be a string when present`);
   if (!isOptStr(def.usingFacilityId)) return fail(`${id}'s usingFacilityId must be a string when present`);
   if (def.usingPositionId && def.usingFacilityId) return fail(`${id} cannot have both a usingPositionId and a usingFacilityId: at most one using agency`);
@@ -205,7 +299,7 @@ function validateAirspaceDefinition(def, { derived = 'refuse' } = {}) {
   if (def.source !== undefined && def.source !== null && !SOURCES.includes(def.source)) return fail(`${id}'s source must be one of ${SOURCES.join(', ')}`);
 
   const out = {
-    airspaceId: id, name: def.name, kind, type: def.type,
+    airspaceId: id, name: def.name, kind, type: kind === 'JURISDICTION' ? null : def.type,
     controllingFacilityId: def.controllingFacilityId, controllingPositionId: def.controllingPositionId,
     usingPositionId: def.usingPositionId || null, usingFacilityId: def.usingFacilityId || null,
     workingFrequencyMhz: def.workingFrequencyMhz ?? null, controlFrequencyMhz: def.controlFrequencyMhz ?? null,
@@ -223,6 +317,9 @@ function validateAirspaceDefinition(def, { derived = 'refuse' } = {}) {
     }));
     out.defaultWidthNm = def.defaultWidthNm;
     Object.assign(out, deriveRouteEnvelope(out.segments));
+  } else if (kind === 'JURISDICTION') {
+    const bad = _validateJurisdiction(id, def, out);
+    if (bad) return bad;
   } else {
     if (def.segments !== undefined || def.defaultWidthNm !== undefined) return fail(`${id}: an AREA has a geometry, not segments`);
     const band = _bandOk(id, '', def.altLowerFt, def.altUpperFt);
@@ -254,6 +351,7 @@ function loadStandingList({ paths = statePaths('efsp-airspaces.json', process.en
   }
   const out = {};
   for (const [theater, list] of Object.entries(onDisk)) {
+    if (theater === '_comment') continue; // the file's note to the human (ADR 0125), not a theater
     if (!Array.isArray(list)) throw new Error(`[efsp-airspace-schema] ${paths.read}: theater ${theater} must hold an array of airspace definitions`);
     const seen = new Set();
     out[theater] = list.map((def) => {
@@ -263,6 +361,9 @@ function loadStandingList({ paths = statePaths('efsp-airspaces.json', process.en
       seen.add(def.airspaceId);
       return check.definition;
     });
+    // ADR 0125 (H144): the theater's JURISDICTION areas name only areas of this list in `excludes` and share no volume.
+    const bad = jurisdiction.checkTheater(out[theater]);
+    if (bad) throw new Error(`[efsp-airspace-schema] ${paths.read}: theater ${theater}: ${bad}`);
   }
   return out;
 }
@@ -270,8 +371,8 @@ function loadStandingList({ paths = statePaths('efsp-airspaces.json', process.en
 module.exports = {
   validateAirspaceDefinition, loadStandingList, deriveRouteEnvelope,
   isValidFrequency, isValidAltitude,
-  AIRSPACE_TYPES, AREA_TYPES, ROUTE_TYPES, KINDS, SOURCES, ACTIVATION_BY_KIND,
-  DEFINITION_FIELDS, IMMUTABLE_FIELDS, DERIVED_ROUTE_FIELDS, LIVE_EDITABLE_FIELDS, OPTIONAL_FIELDS,
+  AIRSPACE_TYPES, AREA_TYPES, ROUTE_TYPES, KINDS, SOURCES, ACTIVATION_BY_KIND, AIRSPACE_CLASSES,
+  DEFINITION_FIELDS, JURISDICTION_ONLY_FIELDS, MAX_OWNER_POSITIONS, MAX_EXCLUDES, MAX_SOURCE_TEXT_LENGTH, MAX_RADIUS_NM, IMMUTABLE_FIELDS, DERIVED_ROUTE_FIELDS, LIVE_EDITABLE_FIELDS, OPTIONAL_FIELDS,
   MIN_FREQUENCY_MHZ, MAX_FREQUENCY_MHZ, MIN_ALTITUDE_FT, MAX_ALTITUDE_FT,
   MAX_NAME_LENGTH, DEFINITION_HISTORY_CAP, MAX_ROUTE_SEGMENTS, MAX_WIDTH_NM,
 };
