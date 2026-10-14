@@ -13,7 +13,7 @@ test.setTimeout(90000);
 
 const ALL_CARRIER = ['CV_MARSHAL', 'CV_APP1', 'CV_APP2', 'CV_PRIFLY'];
 
-// The panels dock.js always restores (Panels, Radio): never removed, only brought to the front.
+// Map and Track Info, Panels and Radio: never removed, only brought to the front.
 const REQUIRED = ['map', 'track', 'radars', 'radio'];
 
 /** Docks `id` with no other optional panel open, and makes it the active tab of its group. */
@@ -22,6 +22,7 @@ async function dockAlone(page, id) {
     const api = crc.dock.dock.api;
     for (const p of [...api.panels]) if (!required.includes(p.id) && p.id !== pid) api.removePanel(p);
     if (pid === 'track') crc.dock.ensureTrackPanel(); // Track Info opens from a track, not from the Panels list
+    else if (pid === 'radars') { if (!api.getPanel('radars')) document.getElementById('btn-radars').click(); } // its topbar button
     else crc.dock.toggleDockPanel(pid, true);
   }, [id, REQUIRED]);
   await page.waitForFunction((pid) => !!crc.dock.dock.api.getPanel(pid), id);
@@ -88,6 +89,9 @@ test('every panel sized small keeps its bottom control reachable (U12)', async (
   for (const [id, sel] of panels) {
     await page.setViewportSize({ width: 1100, height: 900 });
     await dockAlone(page, id);
+    // The Radio panel hides its content until SRS is connected (srs-radio.js), and the e2e stack has no SRS: show it as a
+    // connected client would (a style rule, since every failed SRS reconnect hides it again; Radio is the last panel checked).
+    if (id === 'radio') await page.addStyleTag({ content: '#srs-radio-panel { display: block !important; }' });
     if (!(await page.locator(sel).isVisible())) { problems.push(`${id}: not visible`); continue; }
     await page.setViewportSize({ width: 700, height: 260 });
     await expect.poll(async () => (await reach(page, sel)).tabH, { message: `${id}: the dock tab shrank` }).toBeLessThan(240);
