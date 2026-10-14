@@ -727,6 +727,9 @@ function mountExistingPanel(domId, initFn) {
     // been asked to create yet this session has nowhere to go and would
     // otherwise render inline wherever it happens to sit in the HTML source.
     if (element) element.classList.remove('dock-unmounted');
+    // Every docked panel fills its tab and scrolls rather than cut its UI off when sized smaller (H138 U12, layout.css
+    // .dock-panel); a panel that must not scroll as a whole says so on its own id rule.
+    if (element) element.classList.add('dock-panel');
     state = { element, initialized: false, hooks: null };
     _legacyPanelState.set(domId, state);
   }
