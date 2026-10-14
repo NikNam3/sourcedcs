@@ -1,21 +1,66 @@
 # Supervisor handoff
 
-## RESUMED 2026-10-14: DOCS-R2 merged (`f2b73775`); U-PANELS, U-JURISDICTION, U-MOA resumed by new agents in their worktrees; U-RSU-DESIGN dispatched (from `f2b73775`); sharded Playwright rerunning
+## RELAUNCH HERE (2026-10-14 evening): round 2, four lanes merged, queue below
 
-### Before that: stopped for usage
+**State:** everything is merged into `efsp-wp5-correlation` (`3528d3c9`); no lane is running; the only worktree is the
+main checkout. Record: `decisions.md` H147–H148, S-ARCH-62–65. Decision Desk: every question settled (round 10 = RSU).
+**Cap: up to 4 lanes in parallel** (human, 2026-10-14, S-ARCH-62), every agent on Opus 5.5.
 
-DOCS-R2 done (12 commits on `lane/DOCS-R2`, not merged yet; report summary: shared docs folded, 10 contradictions
-resolved in `docs/wip/DOCS-R2.md`). Stopped by the human for usage: U-PANELS (1 commit + uncommitted edits in its
-worktree), U-JURISDICTION (3 commits + uncommitted), U-MOA (4 commits, writing its e2e spec). On "continue": finish
-each with a new agent in its worktree (memory). Sharded Playwright was stopped unfinished: still owed.
+Merged today: DOCS-R2 (shared docs), U-RSU-DESIGN (ADR 0120 + `docs/mockups/rsu-panel.html`), U-JURISDICTION (ADR
+0125), U-MOA (ADR 0124), U-PANELS (U10/U12/U13).
+Gates on `d2437f10`: crc-sync 2775, crc-desktop 1352; on `75d88a58`: walk 23/23, freeze 56/56, soak:selfcheck PASS,
+wire protocol 2 (surface unchanged). Sharded Playwright on `f2b73775`: 254/258, the 4 passed alone.
 
-### Earlier: four lanes running (S-ARCH-62)
+**Do this first:**
+1. **Sharded Playwright on this tree** (owed since U-PANELS rewrote `par-panel`/`l18-incirlik`): `cd crc-desktop && npm
+   run e2e:sharded -- --lanes 1,2,4,5 --rerun-failed` in the background; summary line in the log (`N/M passed`); the
+   runner exits 0 on failures; "PASSED ALONE" = load. It took 129 min next to three lanes (~26 min alone) and loads the
+   CPU hard: the human noticed. Then `git checkout -- docs/wip crc-desktop/e2e/tools/spec-timings.json`. Merge no client
+   files while it runs.
+2. Dispatch from the queue, up to 4 at once where file-disjoint. Worktree first: `git worktree add -b lane/<L>
+   ../sourcedcs-<L> efsp-wp5-correlation`. Prompt shape: "You are lane agent <L> … briefing <abs path> … lane-rules …
+   decisions <ids> … worktree … E2E_LANE=<n> (lanes 1,2,4,5 belong to the sharded run) … who runs beside you and which
+   files to stay out of … commit every ~15 min … report per rule 8". Give each parallel lane its own E2E_LANE (7, 8, 9, 3).
 
-The human raised the cap to **up to 4 lanes in parallel**. Running from `543c1c1f`: U-PANELS (e2e 7), U-JURISDICTION
-(e2e 8), U-MOA (e2e 9), DOCS-R2 (docs). Sharded Playwright started on `543c1c1f`. Next when a slot frees: U-PAR (after
-U-PANELS merges), U-RELEASE (after U-JURISDICTION), U-RSU-DESIGN (briefing `next/U-RSU-DESIGN.md`, docs + mockup, file-disjoint: first free slot), small items; U-CARRIER last.
+**Queue:**
+1. **U-RELEASE** (ADR 0122) — `next/U-RELEASE.md`. Now unblocked (U-JURISDICTION merged). Tell it: call
+   `airspaceStore.jurisdictionAt` / `isInsideJurisdictionOf(positionId, {lat, lon, altFt})` in **feet** (the DCS track's
+   `alt` is metres; the entry alert uses `indicatedAltFt`), never move control on a `null` answer, a carrier area does
+   not exist while its hull is not found (ADR 0125). Also from U-RSU-DESIGN: a guard hook at offer and at control move
+   keyed on the receiving Position (RSU uses it for `IFR_NOT_CANCELLED`).
+2. **U-PAR** (ADR 0123) — `next/U-PAR.md`. Unblocked (U-PANELS merged; scopes untouched, `showParFlight` now called from
+   `strip-menu.js`). File-disjoint from U-RELEASE except `strip-menu.js` maybe: run together.
+3. **U-RSU** (ADR 0120) — after U-RELEASE. Build briefing draft in `docs/wip/U-RSU-DESIGN.md`; **write
+   `next/U-RSU.md` from it with H147 applied**: no `NOT_HOME_BASED` refusal (RQ3 b); RSU frequency **255.100** and **no
+   station frequency hardcoded anywhere, all editable in JSON** (RQ5: audit server + client); **GC → RSU** path for local
+   departures into closed traffic, the RSU takes tower's role for local VFR pattern traffic (RQ10 b: the ADR addendum
+   must say what of LC's role the RSU holds); the other answers = the ADR's defaults. Check the ADR's FAA cites (JO
+   7110.65 ¶4-2-10 b, ¶3-10-12 d) before building.
+4. **U-MOA-TRANSIT** (H148) — no briefing yet: research (JO 7110.65 Ch. 9 SUA, JO 7610.4) then design + mockup for the
+   human, then build. Includes route-crossing geometry for the card list (replaces U-MOA's name match).
+5. **Docs pass** after U-RELEASE (it replaces the guide's §8 handoff table); fold `docs/wip/U-PANELS.md` (PAR paragraph
+   ~l.1639 is stale, "Landing assured"), `U-JURISDICTION.md`, `U-MOA.md`, `U-RSU-DESIGN.md`. Owner: one DOCS lane, like
+   `next/DOCS-R2.md`.
+6. **Small items / declutter** (LT-GROUND ADR 0121, S-ARCH-49/51/53, T30, ¶5-4-6 e, LUAW text, `KEEP IFR`; stale
+   comments: `tools/soak/shadow.js` l.49 "six stores", `surveillance/par-monitor.js` l.10 "Landing assured", the
+   reconciler's `tick()` docstring; check an airspace approval rewriting a frequency leaves no Strip on `ap-sfa`).
+7. **U-CARRIER** (U18–U21), **last** (the human's order); includes carrier `PATTERN`/`IN_PATTERN` (H147 RQ6). Open for
+   the human: RMKS on the carrier FINAL line?
 
-## RELAUNCH HERE (2026-10-13 night): round 2 under way; U-STRIP merged, U-PANELS next
+Open for a live test: Missed approach in the ⋯ menu on the PAR final (U-PANELS); U-MOA's amber row only checked with an
+injected frame (no DCS units in the rig).
+
+**Human actions (add to the list further down):** a server `state/efsp-airspaces.json` replaces the shipped file whole
+and lacks the jurisdiction areas: delete or extend it (S-ARCH-64); an old `state/efsp-board.json` with the RSU's PATTERN
+Strips must go before U-RSU ships.
+
+**How this session worked (keep):** merge order by overlap (U-JURISDICTION before U-MOA, both touched the airspace
+card); after a merge both unit suites, freeze, walk, soak:selfcheck when Board/wire/hub moved, `wire:record`; sharded
+Playwright in the background; lanes stopped by usage limits are finished by a new agent in the same worktree with
+"look at git log/status/diff first, keep what is sound" (worked well for all three today). Desk answers: `ArtifactData`
+list `answers` with `out_dir` (287 docs), then read the ids you need.
+
+## Earlier: RELAUNCH 2026-10-13 night (superseded)
 
 **State:** everything is merged into `efsp-wp5-correlation`; no lane is running; the only worktree is the main checkout.
 Last gates (tree `19c0ef1c`): crc-sync 2740, crc-desktop 1296, walk 23/23, freeze 56/56, wire protocol 2 unchanged.
