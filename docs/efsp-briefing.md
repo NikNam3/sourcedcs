@@ -357,6 +357,12 @@ criterion is asserted verbatim in `efsp-scenario-stereo.test.mjs`.
   2026-10-12). Real Pack routes are squadron data; inventing them is D11. With an empty table the picker
   stays visible, disabled and empty (H134). **They have not yet been used in a live session**. `0050`'s
   Consequences lists what discharges that (the usage guide's §4A schema, the scenario fixture).
+- **A stereo route sets no remarks, and the loader is strict (U-STRIP, H138 U4, S-ARCH-61).** `remarks` left the shipped
+  table, `toFlightDataFiledSeed` and the validator; the picker shows the name only (`description` stays in the file and
+  the API answer, never shown or filed). `validateStereoRoutes` refuses any key outside `name`, `route`, `active`,
+  `description`, `departureAirport`, `destinationAirport`, `requestedAltitude`, so a `state/efsp-stereo-routes.json`
+  that still has `remarks` **stops start-up** naming the file and key. The four removed remark texts are quoted
+  verbatim in `docs/wip/U-STRIP.md`.
 - **`filed.stereoRouteName` is never a bare string write.** Every write resolves against the table
   and re-expands the route from it, so the label and the route cannot disagree — which matters
   because `nla.js`'s standing-release gate matches on that label. Amending Block 9 clears it, for the
@@ -995,7 +1001,9 @@ in the ADR for later); a block on a datalink/atobrief import path is not walked 
 no clearance altitude). Pre-existing `crc-sync npm test` failures at U6's base are listed in
 `docs/wip/U6.md`.
 
-**Incirlik RSU / SFA / PAR (L18, `0075`).** The client half was built standalone and
+**Incirlik RSU / SFA / PAR (L18, `0075`).** [**Superseded in part by `0117` (§3L):** there is no SFA Position, no
+rotation record, no `sfa-store.js`, no `SfaRotation` op and no `efsp-sfa-*` family any more; "Landing assured" is gone
+(`FinalCall`); the paragraphs below are the history.] The client half was built standalone and
 unit-tested; the server half and the mounting came with `lane/L18-server`, now merged
 (below). L18's FINAL talk-down component (cadence bar, call prompts, 0.3 deg tolerance) is **gone**: PAR-2 replaced it with
 the PAR panel and a one-line FINAL Bay view, and `0116` took the carrier out of the PAR (§3K, "Panels and Divert").
@@ -1268,7 +1276,7 @@ the human chose to leave (AC-2).
   EFSP frame (`wire/frames.js` has `serverBoardDelta`, `correlationDelta`, `runwayStatusDelta`). **Any new EFSP frame is built in
   `wire/frames.js` and sent through `deliverEfsp`.** `broadcastEfspAlerts` stays a per-session state send. Server-originated deltas now also run
   the obligation re-check.
-- **`efsp/synced-store.js` (`SyncedStore`)** is the base of the six sequenced stores (clock, mutationLog, SyncLog, `currentSeq`/`epoch`,
+- **`efsp/synced-store.js` (`SyncedStore`)** is the base of the sequenced stores outside the Board (six then, five since `0117` removed the SFA store) (clock, mutationLog, SyncLog, `currentSeq`/`epoch`,
   `_bump(record)`, `_guarded(what, log, fn)`, `_writeAudit`); Board and flight-data store keep their own. `BoardState.bump(strip, by, at)` is
   the one rev/updatedAt/updatedBy/touch at all 12 Board sites (the `placement` rebalance and undo restore keep their own semantics).
 - **Refusals and attestation.** `src/efsp/refusal-codes.js` `REFUSAL_CODES` (16) is the list a new refusal code must join (a source scan in
@@ -1301,7 +1309,7 @@ the human chose to leave (AC-2).
 - **Carrier flights have ATO lines (H109, `0109`)** is described under §3J's ATO section.
 - **Consolidation is "the next controller takes the hat" (H104, H111, H113, `0110`; CONSOL-DESIGN, CONSOL-S, CONSOL-C).** No Strip moves when an ATC Position is
   left; `consolidation` in each `config/efsp-facility-*.json` is `{ Position: Position[] }`, an ordered offer list, plus a required `handBack` map (`{}` where
-  empty; a string value is refused with the fix named). Shipped: Incirlik `CD:[GC,LC,AP] GC:[LC,AP] LC:[AP] RSU:[LC] SFA:[AP] PAR:[AP]`; carrier
+  empty; a string value is refused with the fix named). Shipped: Incirlik `CD:[GC,LC,AP] GC:[LC,AP] LC:[AP] RSU:[LC] PAR:[AP]` (`SFA:[AP]` went with the SFA Position, `0117`); carrier
   `APP1:[MARSHAL,APP2,PRIFLY] APP2:[MARSHAL,APP1,PRIFLY] PRIFLY:[MARSHAL,APP1,APP2] MARSHAL:[APP1,APP2,PRIFLY]`; TACTICAL `consolidation {}` and
   `handBack {AIC,GCI,JTAC -> TAC_C2}` (the only sign-off that still moves a Strip). One test pins the lists (`efsp-facility-config.test.mjs`). H113 keeps GC
   on the list: an NLA or transfer into an empty GC is delivered there with `UNSTAFFED_RECEIVER` and LC/AP are offered GC; a "no" edit is deleting the
@@ -1313,7 +1321,7 @@ the human chose to leave (AC-2).
   `{positionId, count, offeredTo, onRunway?}` (`offeredTo: null` = nobody); `transfers.toUnstaffed` replaced `routedToConsolidated`; `efsp-position-offer` and
   `legacyOfferAfterSignOff` are gone. **F4:** a HANDOFF replica is minted only at a staffed Position or one a staffed Position is offered; otherwise
   `NO_RECEIVING_POSITION` (stricter than before: a proposal to an empty AP/CTR with nobody offered used to leave a replica nobody could ACCEPT).
-  `onRunway` is DEPARTURE in LUAW plus ARRIVAL in FINAL. `combination.js` `NON_LOCAL = OPS, CD, GC, AP, SFA, PAR` (client `combination-rules.js` is
+  `onRunway` is DEPARTURE in LUAW plus ARRIVAL in FINAL. `combination.js` `NON_LOCAL = OPS, CD, GC, AP, PAR` (SFA left in `0117`) (client `combination-rules.js` is
   parity-tested against it). Walks W1-W19 are in `tests/efsp-consol-hat.test.mjs`. **Release note: crc-sync and crc-desktop must ship together**
   (the offer frame is gone; the protocol number is unchanged). **Release checklist (S2):** check the server volume for any `state/efsp-facility-*.json`
   (strict state refuses the old `consolidation` shape; `infra/RUNBOOK.md`). RSU->LC and SFA/PAR->AP are the ADR's own, not asked of the human.
@@ -1324,7 +1332,7 @@ the human chose to leave (AC-2).
   keeps them equal both ways. MarianaIslandsWWII, Afghanistan and Iraq are unsourced (pydcs has no terrain for them) and left out; `projection.py` still
   defaults an unknown theater to Syria.
 - **NX-1, the soak (tools only).** `run.js` sets `CRCSYNC_SOAK_HINTS=1` so `createApp` builds the hint monitor and the Boards' `airborneEvidence` as in
-  production; shadow clients keep the six store cursors (parity-tested against `STORE_SYNC`), resync like the client and fail on a store more than 6
+  production; shadow clients keep one cursor per `STORE_SYNC` store (six then, five since `0117`; parity-tested against `STORE_SYNC`), resync like the client and fail on a store more than 6
   beats behind (`mutations.storeSync.stale`, selfcheck case `drop-store-delta`). Limits: `hints.airborneEver` stays 0 (the synthetic flights never leave
   a DEPARTURE Strip on the ground while the contact is airborne), and the soak never rolls the mission, so `0108` is unexercised. The shadow asks for 23-31 correlation
   slices per 20 min (§4). Local 240-minute soaks (S-ARCH-23, soak retention 2 h, memory judged): seed 1 PASS (slope 0.45 MB/h), seed 2 PASS (slope **0.92 MB/h**, R^2 0.6,
@@ -1421,7 +1429,7 @@ CARRIER-MAP,SIDE-SWAP,WIRE-RECORD,PAR-1,PAR-2,CARRIER-FOLLOWUP}.md`; where a lat
   and C18, owned by a CARRIER Position, side number typed) swaps C1/C18 and their spans; PATTERN gained a read-only C18 shown only while it leads.
   `leadingFlightName()` names the flight in the PriFly chip (callsign to `aka`), the carrier FINAL line, the refusal banner and the arrivals
   line. Bay search matches the side number.
-- **WIRE-RECORD.** `tools/wire-surface.js` now reads the server's own lists: the Board op table (adds `CarrierHandoff`, `SfaRotation`), every store
+- **WIRE-RECORD.** `tools/wire-surface.js` now reads the server's own lists: the Board op table (adds `CarrierHandoff`, `SfaRotation` [gone in `0117`]), every store
   family's op kinds, carrier handoff/Case/field names, stack/entry/view keys, `STORE_SYNC`, every delta's frame keys; a probe test and a
   completeness test. The CLAUDE.md line is in.
 - **PAR-1 (`0112`) and PAR-2.** `surveillance/par.js` + `par-monitor.js`: a `par-sample` frame every 500 ms to sessions signed on to the FINAL
@@ -1431,7 +1439,7 @@ CARRIER-MAP,SIDE-SWAP,WIRE-RECORD,PAR-1,PAR-2,CARRIER-FOLLOWUP}.md`; where a lat
   **`final-panel.js` is deleted**: the FINAL Bay (`bay-views.js`, `view: 'final'`) is one line per flight with the terminal ops, updated in place.
 - **CARRIER-FOLLOWUP (`0116`, H125/H126): the PAR is an airfield feature.** This reverses PAR-1/PAR-2's carrier half and voids H124 (1). `ParMonitor`
   samples only final Bays of a Facility with `runwayStatus`; `par.js` lost `carrierTouchdown`, `validateHullApproach`, `kind`, `hullId`,
-  `NO_SHIP`, `NO_COURSE`; the hull config has no `approach`. The PAR panel is callsign/runway/Landing assured + Missed approach only. The carrier
+  `NO_SHIP`, `NO_COURSE`; the hull config has no `approach`. The PAR panel is callsign/runway/Landing assured + Missed approach only [`0117`: the four `FinalCall` calls now, §3L]. The carrier
   FINAL Bay line: side number, **no range**, Ball (`CarrierHandoff FINAL_TO_LSO`) and Waveoff (`SetState BOLTER_WAVEOFF`), a label not a link.
   **DIST (`C17`)** on a carrier Strip: `carrier-final-distance.js` `carrierDistanceNm`, ship (banner) to correlated contact, the same for every
   carrier Position; at Incirlik the PAR range to the threshold. `bay-views.js refreshDistBlocks()` rewrites `.efsp-block-C17` in place at most
