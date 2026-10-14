@@ -1,8 +1,9 @@
 'use strict';
 
 /* L18 on screen (crc-sync docs/adr/0075, 0093), as docs/adr/0117 left it: RSU's pattern board; AP's SFA frequency racks with
- * their header and "Hand off to PAR" (no SFA Position: JO 7610.14A para 7-1-5); PAR's FINAL Bay line (HDG and ALT, Begin
- * descent, Cleared to land, Landed, Missed approach (back to AP, H137), the ⋯ menu; the picture is the PAR panel's, e2e/par-panel.spec.js).
+ * their header and "Hand off to PAR" (no SFA Position: JO 7610.14A para 7-1-5); PAR's FINAL Bay of ordinary Strips (H138 U10:
+ * HDG and ALT are the 9A-VECTOR and 7A Blocks, the next of Begin descent / Cleared to land beside the NLA Landed, the ⋯ menu's
+ * Final group with Missed approach (back to AP, H137); the picture is the PAR panel's, e2e/par-panel.spec.js).
  * One controller holds GC, RSU, AP and PAR. Run on E2E_LANE=9. The Board lives for the whole run, so every test drops what
  * it made. */
 
@@ -55,6 +56,22 @@ async function arrival(page, callsign, rack) {
 }
 const TO_PAR = { kind: 'TransferStrip', toPositionId: 'PAR', bayId: 'par-final', rackId: 'main' };
 
+// PAR's FINAL Strip (H138 U10): an ordinary Strip in the par-final Bay.
+const finalStrip = (page, callsign) => page.locator('.efsp-strip', { hasText: callsign });
+/** Types `value` into one of the Strip's Blocks (9A-VECTOR = HDG, 7A = ALT) and sends it with Enter. */
+async function typeBlock(page, callsign, blockId, value) {
+  await finalStrip(page, callsign).locator(`.efsp-block-${blockId}`).click();
+  const input = finalStrip(page, callsign).locator('input.efsp-block-input');
+  await input.fill(value);
+  await input.press('Enter');
+}
+/** The ⋯ menu's item `key` (opens the menu; the caller clicks or checks it). */
+async function menuItem(page, callsign, key) {
+  await finalStrip(page, callsign).locator('.efsp-strip-menu-btn').click();
+  return page.locator(`.efsp-strip-menu [data-strip-action="${key}"]`);
+}
+const closeMenu = (page) => page.keyboard.press('Escape');
+
 test.afterEach(async ({ page }) => { await cleanUp(page).catch(() => {}); });
 
 test('01 SFA (T1): AP files the arrival on a rotating frequency and presses Hand off to PAR; the frequency is unchanged and the header shows PAR on it', async ({ page }) => {
@@ -86,7 +103,7 @@ test('01b T1, the live test\'s refused drop: an arrival from AP\'s inbound Bay (
   await waitStrip(page, call, s => s.ownerPositionId === 'PAR' && s.stripType === 'FINAL' && s.bayId === 'par-final', 'handed to PAR');
 });
 
-test('02 PAR (T5, T11): HDG and ALT on the FINAL line; Begin descent and Cleared to land recorded; Landed sends it to GC and frees the Bay; a second aircraft is handed in', async ({ page }) => {
+test('02 PAR (T5, T11, H138 U10): HDG and ALT on the FINAL Strip; Begin descent and Cleared to land recorded; Landed (the NLA) sends it to GC and frees the Bay; a second aircraft is handed in', async ({ page }) => {
   await controller(page);
   const a = cs('PA'); const b = cs('PB');
   await arrival(page, a, 'freq-2');
@@ -99,16 +116,16 @@ test('02 PAR (T5, T11): HDG and ALT on the FINAL line; Begin descent and Cleared
   expect((await stripOf(page, b)).ownerPositionId).toBe('AP');
 
   await openBay(page, 'PAR', 'par-final');
-  const row = page.locator('.efsp-final-row', { hasText: a });
-  await expect(row).toBeVisible();
-  await expect(page.locator('.efsp-strip:visible')).toHaveCount(0);       // PAR's racks are replaced by the flight line
-  await expect(row.locator('.efsp-final-name')).toHaveText(a);
-  await expect(row.locator('.efsp-final-terminal')).toHaveText(['Begin descent', 'Cleared to land', 'Landed', 'Missed approach']);
-  await expect(row.locator('.efsp-strip-menu-btn')).toBeVisible();        // the Strip's ⋯ menu, its racks being hidden
-  await row.locator('.efsp-final-hdg').fill('065');
-  await row.locator('.efsp-final-hdg').press('Enter');
-  await row.locator('.efsp-final-alt').fill('030');
-  await row.locator('.efsp-final-alt').press('Enter');
+  const strip = finalStrip(page, a);
+  await expect(strip).toBeVisible();                                     // the ordinary Strip, no flight line
+  await expect(page.locator('.efsp-final-row')).toHaveCount(0);
+  await expect(strip.locator('.efsp-strip-menu-btn')).toBeVisible();
+  const call = strip.locator('[data-par-call]');
+  const landed = strip.locator('.efsp-nla-btn:not([data-par-call])');
+  await expect(call).toHaveText('Begin descent');
+  await expect(landed).toHaveText('Landed');
+  await typeBlock(page, a, '9A-VECTOR', '065');
+  await typeBlock(page, a, '7A', '030');
   const assigned = (f) => page.evaluate(([c, field]) => {
     const s = crc.state.getAllEfspStrips().find(x => x.state !== 'DROPPED' && (crc.state.getEfspFlightData(x.flightDataId) || { identity: {} }).identity.callsign === c);
     const e = crc.state.getEfspFlightData(s.flightDataId).clearance[field].entries.find(x => x.status === 'ACTIVE');
@@ -116,19 +133,25 @@ test('02 PAR (T5, T11): HDG and ALT on the FINAL line; Begin descent and Cleared
   }, [a, f]);
   await expect.poll(() => assigned('heading')).toBe('065');
   await expect.poll(() => assigned('altitude')).toBe('030');
-  await page.locator('.efsp-final-row', { hasText: a }).locator('.efsp-final-terminal[data-terminal="BEGIN_DESCENT"]').click();
+  await call.click();
   await expect.poll(() => assigned('altitude')).toBe(''); // the glidepath, no assigned altitude
-  await expect(page.locator('.efsp-final-row', { hasText: a }).locator('.efsp-final-terminal[data-terminal="BEGIN_DESCENT"]')).toBeDisabled();
-  await page.locator('.efsp-final-row', { hasText: a }).locator('.efsp-final-terminal[data-terminal="CLEARED_TO_LAND"]').click();
-  await expect(page.locator('.efsp-final-row', { hasText: a }).locator('.efsp-final-terminal[data-terminal="CLEARED_TO_LAND"]')).toBeDisabled();
-  await page.locator('.efsp-final-row', { hasText: a }).locator('.efsp-final-terminal[data-terminal="LANDED"]').click();
+  await expect(call).toHaveText('Cleared to land');      // the next call takes its place
+  const begin = await menuItem(page, a, 'par-begin-descent');
+  await expect(begin).toBeDisabled();                    // the recorded call stays in the menu, greyed
+  await closeMenu(page);
+  await call.click();
+  await expect(call).toHaveCount(0);                     // both once-only calls recorded
+  const ctl = await menuItem(page, a, 'par-cleared-to-land');
+  await expect(ctl).toBeDisabled();
+  await closeMenu(page);
+  await landed.click();
   await waitStrip(page, a, s => s.stripType === 'ARRIVAL' && s.state === 'TAXI_IN' && s.ownerPositionId === 'GC' && s.bayId === 'gc-taxi-in', 'A landed: with GC');
-  await expect(page.locator('.efsp-final-none')).toHaveText('No aircraft on final.');
+  await expect(finalStrip(page, a)).toHaveCount(0);
 
   // the Bay is free: B is handed in
   await send(page, b, 'AP', TO_PAR);
   await waitStrip(page, b, s => s.ownerPositionId === 'PAR' && s.bayId === 'par-final', 'B on final once A has landed');
-  await expect(page.locator('.efsp-final-row', { hasText: b })).toBeVisible();
+  await expect(finalStrip(page, b)).toBeVisible();
 });
 
 test('02b missed approach (H137 LT-PQ1 a): back to AP on its frequency Rack with the climb-out kept, PAR\'s final and the frequency free; a second approach records its calls again', async ({ page }) => {
@@ -138,27 +161,24 @@ test('02b missed approach (H137 LT-PQ1 a): back to AP on its frequency Rack with
   await send(page, a, 'AP', TO_PAR);
   await waitStrip(page, a, s => s.ownerPositionId === 'PAR' && s.bayId === 'par-final', 'A on final');
   await openBay(page, 'PAR', 'par-final');
-  const row = () => page.locator('.efsp-final-row', { hasText: a });
-  const term = (id) => row().locator(`.efsp-final-terminal[data-terminal="${id}"]`);
+  const call = () => finalStrip(page, a).locator('[data-par-call]');
   const assigned = (f) => page.evaluate(([c, field]) => {
     const s = crc.state.getAllEfspStrips().find(x => x.state !== 'DROPPED' && (crc.state.getEfspFlightData(x.flightDataId) || { identity: {} }).identity.callsign === c);
     const e = crc.state.getEfspFlightData(s.flightDataId).clearance[field].entries.find(x => x.status === 'ACTIVE');
     return e ? e.value : null;
   }, [a, f]);
-  await term('BEGIN_DESCENT').click();
-  await expect(term('BEGIN_DESCENT')).toBeDisabled();
-  await term('CLEARED_TO_LAND').click();
-  await expect(term('CLEARED_TO_LAND')).toBeDisabled();
+  await expect(call()).toHaveText('Begin descent');
+  await call().click();
+  await expect(call()).toHaveText('Cleared to land');
+  await call().click();
+  await expect(call()).toHaveCount(0);
   // the climb-out PAR issues (JO 7110.65BB para 5-10-12: a specific heading and altitude)
-  await row().locator('.efsp-final-hdg').fill('230');
-  await row().locator('.efsp-final-hdg').press('Enter');
-  await row().locator('.efsp-final-alt').fill('040');
-  await row().locator('.efsp-final-alt').press('Enter');
+  await typeBlock(page, a, '9A-VECTOR', '230');
+  await typeBlock(page, a, '7A', '040');
   await expect.poll(() => assigned('altitude')).toBe('040');
-  await term('MISSED').click();
+  await (await menuItem(page, a, 'par-missed')).click();
   await waitStrip(page, a, s => s.stripType === 'ARRIVAL' && s.state === 'INBOUND' && s.ownerPositionId === 'AP' && s.bayId === 'ap-sfa' && s.rackId === 'freq-3', 'A back with AP on its frequency Rack');
   expect((await stripOf(page, a)).mhz).toBe(234.1);
-  await expect(page.locator('.efsp-final-none')).toHaveText('No aircraft on final.');
   expect(await assigned('heading')).toBe('230');
   expect(await assigned('altitude')).toBe('040');
 
@@ -168,11 +188,13 @@ test('02b missed approach (H137 LT-PQ1 a): back to AP on its frequency Rack with
   await page.locator('.efsp-final-handoff').first().click();
   await waitStrip(page, a, s => s.ownerPositionId === 'PAR' && s.stripType === 'FINAL' && s.state === 'ON_FINAL' && s.bayId === 'par-final', 'second approach');
   await openBay(page, 'PAR', 'par-final');
-  await expect(term('BEGIN_DESCENT')).toBeEnabled();      // the first approach's calls were cleared
-  await expect(term('CLEARED_TO_LAND')).toBeEnabled();
-  await term('BEGIN_DESCENT').click();
-  await expect(term('BEGIN_DESCENT')).toBeDisabled();
-  await term('LANDED').click();
+  await expect(call()).toHaveText('Begin descent');     // the first approach's calls were cleared
+  const ctl = await menuItem(page, a, 'par-cleared-to-land');
+  await expect(ctl).toBeEnabled();
+  await closeMenu(page);
+  await call().click();
+  await expect(call()).toHaveText('Cleared to land');
+  await finalStrip(page, a).locator('.efsp-nla-btn:not([data-par-call])').click();
   await waitStrip(page, a, s => s.stripType === 'ARRIVAL' && s.state === 'TAXI_IN' && s.ownerPositionId === 'GC', 'landed on the second approach');
 });
 
