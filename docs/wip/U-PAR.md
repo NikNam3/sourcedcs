@@ -58,7 +58,11 @@ Briefing (PAR panel lines): "azimuth in degrees (ADR 0123); elevation limits +1�
   the Settings tab's five fields.
 - `e2e/par-panel.spec.js` (E2E_LANE=8): 01 gains 0.7° below red / 0.4° below grey, the lower line about half the upper
   gap, azimuth axis labels in ° with no ft, window `±2°`, straight `tol-left` / `tol-right` / `course`, readouts
-  `0.9° L`, `1.3° R`, `1.3° L`; 03 checks `azMaxDeg`; 04 the two elevation fields (`1`, `0.5`). 7/7 green.
+  `0.9° L`, `1.3° R`, `1.3° L`; 03 checks `azMaxDeg`; 04 the two elevation fields (`1`, `0.5`). 7/7 green (re-run
+  2026-10-15 under load, 2.5 min).
+- `tests/fixtures/module-graph-exports.json` re-recorded: `par-model.js` + `azAxisLabel`, `clampTo`, − `lateralFt`;
+  `settings.js` + `migratePar`.
+- Unit suites on the lane head: crc-desktop 1356/1356 (was 1352), crc-sync 2775/2775 (unchanged; no server file moved).
 
 ## Findings for other lanes
 
