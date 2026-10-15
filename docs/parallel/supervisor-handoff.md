@@ -11,6 +11,10 @@ research first, no briefing yet), docs pass (fold `docs/wip/U-PANELS.md`, `U-JUR
 small items (add: `lxsrs_v2` `client.py:530` hardcoded 251.000 MHz → config; soak REFUSE memory check, S-ARCH-67; quote
 FAA ¶3-10-5, AIM 4-3-3/4-3-22 in a note for ADR 0126), U-CARRIER last.
 
+**Read the section below for how to work** (dispatch shape, gates, E2E lanes, human actions), but its "Do this
+first" step 1 is DONE (no Playwright run is owed) and its queue items 1-3 are DONE. Start by asking the human which of
+the next items to dispatch (docs pass + small items are file-disjoint and can run together).
+
 ## RELAUNCH HERE (2026-10-14 evening): round 2, four lanes merged, queue below
 
 **State:** everything is merged into `efsp-wp5-correlation` (`3528d3c9`); no lane is running; the only worktree is the
