@@ -10,7 +10,7 @@
 
 const path = require('path');
 const { test, expect } = require('./helpers/test');
-const { openPanel, seedStrip, startAction, settle } = require('./helpers/app');
+const { openPanel, seedStrip, startAction, settle, serverTicks } = require('./helpers/app');
 const { startFakeDcs, fakeDcsPort } = require('./helpers/fake-dcs');
 
 test.describe.configure({ timeout: 90000 });
@@ -239,7 +239,7 @@ test.describe('the boundary', () => {
     await expect(chip(a, cs, 'released')).toHaveText('NOT RELEASED');
     await step(a, cs, 'Checked in').click();
     await expect(chip(b, cs, 'comms')).toHaveText('COMMS: CTR');
-    await b.waitForTimeout(3000); // three control ticks
+    await serverTicks(a, 2); // two heartbeats: several 1 s control ticks have run
     await expect(chip(b, cs, 'control')).toHaveText('CTRL: AP');
     await expect(chip(a, cs, 'control')).toHaveText('CTRL: AP');
     await shot(a, '07-checked-in-inside-rapcon-control-waits.png');
