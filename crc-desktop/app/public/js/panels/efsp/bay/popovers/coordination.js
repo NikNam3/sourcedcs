@@ -57,7 +57,7 @@ export function _canProposeCoordination(strip) {
  * _dispatchMarsa/_dispatchCorrelation: those two send their own relation's or
  * correlation record's current rev, not the Strip's.
  */
-export function _dispatchCoordination(strip, primitive, action, note, targetOverride, { onAck } = {}) {
+export function _dispatchCoordination(strip, primitive, action, note, targetOverride, { onAck, released } = {}) {
   strip = getEfspStrip(strip.stripId) || strip;
   const actingPositionId = _resolveActingPositionId(strip);
   if (!actingPositionId) return false;
@@ -70,7 +70,9 @@ export function _dispatchCoordination(strip, primitive, action, note, targetOver
   if (action === 'PROPOSE') {
     const target = targetOverride || COORDINATION_TARGETS[strip.ownerPositionId];
     if (!target) return false;
-    sendEfspMutation(actingPositionId, strip, { kind: primitive, action: 'PROPOSE', toFacilityId: target.facilityId, toPositionId: target.positionId, note: note || undefined }, { onAck });
+    // docs/adr/0122: a HANDOFF carries the handing-off station's one switch (released unless it says not).
+    const releasedField = primitive === 'HANDOFF' && typeof released === 'boolean' ? { released } : {};
+    sendEfspMutation(actingPositionId, strip, { kind: primitive, action: 'PROPOSE', toFacilityId: target.facilityId, toPositionId: target.positionId, note: note || undefined, ...releasedField }, { onAck });
   } else {
     sendEfspMutation(actingPositionId, strip, { kind: primitive, action }, { onAck });
   }
@@ -192,6 +194,24 @@ export function _openCoordinatePopover(strip, anchorEl) {
     popover.appendChild(toSelect);
   }
 
+  // docs/adr/0122 (H142): the HANDOFF's one switch. Released (the default): control moves when the aircraft checks in with
+  // the receiver. Not released: control moves once it is also inside the receiver's airspace. Only a HANDOFF has it.
+  const releasedLabel = document.createElement('label');
+  releasedLabel.className = 'efsp-coordinate-released';
+  const releasedBox = document.createElement('input');
+  releasedBox.type = 'checkbox';
+  releasedBox.checked = true;
+  releasedBox.className = 'efsp-coordinate-released-box';
+  releasedBox.setAttribute('aria-label', 'released');
+  releasedLabel.title = 'Released: control moves when the aircraft checks in with the receiver. Not released: it moves once the aircraft is also inside the receiver\'s airspace.';
+  const releasedText = document.createElement('span');
+  releasedText.textContent = 'Released';
+  releasedLabel.append(releasedBox, releasedText);
+  const syncReleased = () => { releasedLabel.hidden = select.value !== 'HANDOFF'; };
+  select.addEventListener('change', syncReleased);
+  syncReleased();
+  popover.appendChild(releasedLabel);
+
   const note = document.createElement('textarea');
   note.className = 'efsp-coordinate-note';
   note.placeholder = degraded ? 'Verbal coordination note (required)' : 'Note (optional)';
@@ -215,7 +235,8 @@ export function _openCoordinatePopover(strip, anchorEl) {
       return;
     }
     const toCarrier = toSelect && select.value === 'HANDOFF' && toSelect.value === CARRIER_HANDOFF_TARGET.positionId;
-    _sendFromPopover(popover, sendBtn, (onAck) => _dispatchCoordination(strip, select.value, 'PROPOSE', note.value.trim(), toCarrier ? CARRIER_HANDOFF_TARGET : undefined, { onAck }));
+    const released = select.value === 'HANDOFF' ? releasedBox.checked : undefined;
+    _sendFromPopover(popover, sendBtn, (onAck) => _dispatchCoordination(strip, select.value, 'PROPOSE', note.value.trim(), toCarrier ? CARRIER_HANDOFF_TARGET : undefined, { onAck, released }));
   });
   popover.appendChild(sendBtn);
 

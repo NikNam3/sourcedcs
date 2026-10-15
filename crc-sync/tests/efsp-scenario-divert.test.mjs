@@ -186,7 +186,7 @@ test('a divert on a handed-off flight: the sender cannot, the receiver only once
   const early = act(efsp, c.AP, 'AP', replica, { kind: 'Divert', destination: 'LTAG' });
   assert.equal(early.ok, false);
   assert.match(early.detail, /control of this flight has not transferred/);
-  mustAct(efsp, c.AP, 'AP', replica, { kind: 'HANDOFF', action: 'TRANSFER_CONTROL' });
+  mustAct(efsp, c.AP, 'AP', replica, { kind: 'HANDOFF', action: 'CHECKED_IN' });
   const late = act(efsp, c.AP, 'AP', apBoard(efsp).getStrip(replica.stripId), { kind: 'Divert', destination: 'LTAG' });
   assert.equal(late.ok, true, JSON.stringify(late));
   assert.equal(late.strip.stripType, 'ARRIVAL');

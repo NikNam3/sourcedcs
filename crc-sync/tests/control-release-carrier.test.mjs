@@ -15,7 +15,6 @@ const { crew, act, mustAct, mustCarrierAct } = helpers;
 const STAFFED = { OPS: 'INCIRLIK', AP: 'INCIRLIK', CTR: 'CENTER', CV_MARSHAL: 'CARRIER', CV_PRIFLY: 'CARRIER', CV_APP1: 'CARRIER', CV_APP2: 'CARRIER' };
 const cv = (efsp) => efsp.boardStoreFor('CARRIER');
 const stack = (efsp) => efsp.carrierStore.getRecord().stacks.MAIN.entries;
-const grantFull = { kind: 'ControlRelease', action: 'GRANT', scopes: ['FULL'] };
 
 function world() {
   fs.rmSync(process.env.CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH, { force: true });
@@ -24,13 +23,13 @@ function world() {
 }
 
 /** An ARRIVAL at INBOUND at `from` ('CTR' or 'AP'), proposed to the Marshal. */
-function toMarshal({ efsp, c }, callsign, from = 'CTR') {
+function toMarshal({ efsp, c }, callsign, from = 'CTR', { released } = {}) {
   const [facilityId, bayId] = from === 'CTR' ? ['CENTER', 'ctr-enroute'] : ['INCIRLIK', 'ap-inbound'];
   const strip = mustAct(efsp, c[from], from, null, {
     kind: 'CreateStrip', bayId, rackId: 'main', stripType: 'ARRIVAL',
     flightData: { callsign, aircraftType: 'F-18C', wakeCategory: 'M', originAirport: 'LTAC' },
   });
-  const proposed = mustAct(efsp, c[from], from, strip, { kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'CARRIER', toPositionId: 'CV_MARSHAL' });
+  const proposed = mustAct(efsp, c[from], from, strip, { kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'CARRIER', toPositionId: 'CV_MARSHAL', ...(released === undefined ? {} : { released }) });
   return {
     T: () => efsp.boardStoreFor(facilityId).getStrip(strip.stripId),
     R: () => cv(efsp).getStrip(proposed.coordination.peerStripId),
@@ -77,7 +76,7 @@ test('the Marshal receives and never proposes: PROPOSE and CANCEL are refused, a
     { kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'CENTER', toPositionId: 'CTR' },
     { kind: 'HANDOFF', action: 'CANCEL' },
     { kind: 'POINT_OUT', action: 'PROPOSE', toFacilityId: 'CENTER', toPositionId: 'CTR' },
-    { kind: 'ControlRelease', action: 'GRANT', scopes: ['FULL'] },
+    { kind: 'ControlRelease', action: 'GRANT' },
   ]) {
     const ack = act(w.efsp, w.c.CV_MARSHAL, 'CV_MARSHAL', own, op);
     assert.equal(ack.ok, false, JSON.stringify(op));
@@ -92,23 +91,33 @@ test('the Marshal receives and never proposes: PROPOSE and CANCEL are refused, a
   assert.equal(other.ok, false, 'a lane Position takes no HANDOFF');
 });
 
-test('ControlRelease applies to the Marshal like any HANDOFF: REQUEST from the Marshal, GRANT FULL plus comms moves control', () => {
+test('ControlRelease applies to the Marshal like any HANDOFF: on a not-released handoff the Marshal requests, CTR grants, check-in moves control', () => {
   const w = world();
-  const ex = toMarshal(w, 'CVREL1');
+  const ex = toMarshal(w, 'CVREL1', 'CTR', { released: false });
   mustAct(w.efsp, w.c.CV_MARSHAL, 'CV_MARSHAL', ex.R(), { kind: 'HANDOFF', action: 'ACCEPT' });
-  mustAct(w.efsp, w.c.CV_MARSHAL, 'CV_MARSHAL', ex.R(), { kind: 'ControlRelease', action: 'REQUEST', scopes: ['TURNS'] });
-  mustAct(w.efsp, w.c.CTR, 'CTR', ex.T(), grantFull);
-  mustAct(w.efsp, w.c.CV_MARSHAL, 'CV_MARSHAL', ex.R(), { kind: 'HANDOFF', action: 'TRANSFER_COMMS' });
+  mustAct(w.efsp, w.c.CV_MARSHAL, 'CV_MARSHAL', ex.R(), { kind: 'ControlRelease', action: 'REQUEST' });
+  mustAct(w.efsp, w.c.CTR, 'CTR', ex.T(), { kind: 'ControlRelease', action: 'GRANT' });
+  assert.equal(ex.R().coordination.control.holder, 'TRANSFERRING', 'released, not checked in yet');
+  mustAct(w.efsp, w.c.CV_MARSHAL, 'CV_MARSHAL', ex.R(), { kind: 'HANDOFF', action: 'CHECKED_IN' });
   assert.equal(ex.R().coordination.control.holder, 'RECEIVING');
   assert.deepEqual(ex.T().coordination.separationResponsibilityRef, { facilityId: 'CARRIER', positionId: 'CV_MARSHAL' });
+});
+
+test('the Marshal\'s HANDOFF actions are ACCEPT, REJECT and CHECKED_IN: the old marks are refused', () => {
+  const w = world();
+  const ex = toMarshal(w, 'CVREL2');
+  mustAct(w.efsp, w.c.CV_MARSHAL, 'CV_MARSHAL', ex.R(), { kind: 'HANDOFF', action: 'ACCEPT' });
+  for (const action of ['TRANSFER_COMMS', 'TRANSFER_CONTROL']) {
+    assert.equal(act(w.efsp, w.c.CV_MARSHAL, 'CV_MARSHAL', ex.R(), { kind: 'HANDOFF', action }).ok, false, action);
+  }
+  assert.equal(ex.R().coordination.control.holder, 'TRANSFERRING');
 });
 
 test('I9 the Marshal Strip retired (drop) after control moved: the exchange ends, the stack entry leaves, the sender holds the flight', () => {
   const w = world();
   const ex = toMarshal(w, 'CVI9A');
   mustAct(w.efsp, w.c.CV_MARSHAL, 'CV_MARSHAL', ex.R(), { kind: 'HANDOFF', action: 'ACCEPT' });
-  mustAct(w.efsp, w.c.CV_MARSHAL, 'CV_MARSHAL', ex.R(), { kind: 'HANDOFF', action: 'TRANSFER_COMMS' });
-  mustAct(w.efsp, w.c.CV_MARSHAL, 'CV_MARSHAL', ex.R(), { kind: 'HANDOFF', action: 'TRANSFER_CONTROL' });
+  mustAct(w.efsp, w.c.CV_MARSHAL, 'CV_MARSHAL', ex.R(), { kind: 'HANDOFF', action: 'CHECKED_IN' });
   assert.equal(stack(w.efsp).length, 1);
   mustAct(w.efsp, w.c.CV_MARSHAL, 'CV_MARSHAL', ex.R(), { kind: 'DropStrip' });
   assert.equal(stack(w.efsp).length, 0, 'carrierRetireFlight took it out of the stack');
@@ -122,7 +131,7 @@ test('I9 the Marshal Strip retired by carrierRetireFlight / recovery path: same 
   const w = world();
   const ex = toMarshal(w, 'CVI9B');
   mustAct(w.efsp, w.c.CV_MARSHAL, 'CV_MARSHAL', ex.R(), { kind: 'HANDOFF', action: 'ACCEPT' });
-  mustAct(w.efsp, w.c.CV_MARSHAL, 'CV_MARSHAL', ex.R(), { kind: 'HANDOFF', action: 'TRANSFER_CONTROL' });
+  mustAct(w.efsp, w.c.CV_MARSHAL, 'CV_MARSHAL', ex.R(), { kind: 'HANDOFF', action: 'CHECKED_IN' });
   const result = cv(w.efsp)._stripOps.retire(ex.R(), 'recovery');
   assert.equal(result.ok, true);
   assert.equal(ex.T().coordination, null);
@@ -133,7 +142,7 @@ test('I9 CarrierHandoff after control moved: control follows the owner (Marshal 
   const ex = toMarshal(w, 'CVI9C');
   mustCarrierAct(w.efsp, w.c.CV_PRIFLY, 'CV_PRIFLY', { kind: 'SetCarrierState', field: 'case', value: 'II' });
   mustAct(w.efsp, w.c.CV_MARSHAL, 'CV_MARSHAL', ex.R(), { kind: 'HANDOFF', action: 'ACCEPT' });
-  mustAct(w.efsp, w.c.CV_MARSHAL, 'CV_MARSHAL', ex.R(), { kind: 'HANDOFF', action: 'TRANSFER_CONTROL' });
+  mustAct(w.efsp, w.c.CV_MARSHAL, 'CV_MARSHAL', ex.R(), { kind: 'HANDOFF', action: 'CHECKED_IN' });
   assert.equal(ex.T().coordination.separationResponsibilityRef.positionId, 'CV_MARSHAL');
   const handed = mustAct(w.efsp, w.c.CV_MARSHAL, 'CV_MARSHAL', ex.R(), { kind: 'CarrierHandoff', transfer: 'MARSHAL_TO_APPROACH', toPositionId: 'CV_APP1' });
   assert.equal(handed.ownerPositionId, 'CV_APP1');

@@ -52,12 +52,17 @@ function buildMonitors({ env, efsp, facilityConfig, missionClock, missionSession
   // efsp-alerts (broadcastEfspAlerts below). Re-evaluated on a 15s sweep for the clock (comfortably fine-grained for
   // minute-scale obligations) and right after any EFSP delivery (the hub's onEfspChange), so a controller's fix clears its
   // badge at once. ────────────────────────────────────────────────────────
+  const alertingConfig = loadAlertingConfig();
   const obligationMonitor = new ForwardingObligationMonitor({
     clock: missionClock,
     boardStoreFor: efsp.boardStoreFor,
     flightDataStore: efsp.flightDataStore,
     facilityConfig,
     airspaceStore: efsp.airspaceStore,
+    // docs/adr/0122: an accepted HANDOFF not checked in, and a not-released one whose aircraft is inside the receiver's
+    // airspace already (ADR 0125), ask for attention.
+    handoffConfig: alertingConfig.handoff,
+    insideReceiverAirspace: efsp.insideReceiverAirspace,
   });
 
   // ── WP5 Strip<->track correlation (guide §6.6, docs/adr/0045/0046) ───────
@@ -94,7 +99,6 @@ function buildMonitors({ env, efsp, facilityConfig, missionClock, missionSession
   // Server-side, because only this process sees every track: a client only receives the ones inside its own coverage. Once
   // a second, the same rhythm as correlation (whose records conformance reads). Only what is WRONG is ever sent; the whole
   // alert state goes out when it changes.
-  const alertingConfig = loadAlertingConfig();
   const conformanceMonitor = new ConformanceMonitor({
     clock: missionClock,
     wallClock: WALL_CLOCK,

@@ -26,16 +26,13 @@ function _applySetBlock(ctx, strip, op, by, actingPositionId, clientMutationId) 
   const target = ctx.rules.resolveBlockTarget(op.blockId, strip.stripType);
   if (!target) return { ok: false, reason: 'VALIDATION_ERROR', strip };
 
-  // docs/adr/0101 (H94, H100 DR-1 b): until control transfers on a HANDOFF, a heading or an altitude outside the release
-  // in effect (and any from the transferring side after ACCEPT) needs a "coordinated with" attestation. Speed is not an
-  // axis. The attestation is audited with the write; nothing below changes.
-  const control = ctx.control.checkControlAxis(strip, op, by);
+  // docs/adr/0101 (H94, H100 DR-1 b), docs/adr/0122: until control transfers on a HANDOFF, a heading or an altitude from
+  // either side needs a "coordinated with" attestation. Speed is not an axis. The attestation is audited with the write;
+  // nothing below changes.
+  const control = ctx.control.checkControlAxis(strip, op);
   if (!control.ok) return { ok: false, reason: control.reason, detail: control.detail, strip, ...(control.attestation ? { attestation: control.attestation } : {}) };
   const result = _applySetBlockWrite(ctx, strip, op, by, actingPositionId, clientMutationId, target);
-  if (result.ok) {
-    if (control.audit || control.settled) result.controlAudit = { ...(control.audit || {}), ...(control.settled ? { control: control.settled } : {}) };
-    if (control.peerStrip && !result.peerStrip) { result.peerFacilityId = control.peerFacilityId; result.peerStrip = control.peerStrip; }
-  }
+  if (result.ok && control.audit) result.controlAudit = { ...control.audit };
   return result;
 }
 

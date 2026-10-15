@@ -1,5 +1,5 @@
-// ControlRelease on a HANDOFF, client rules (crc-sync docs/adr/0101): the chips, the offered steps, the form ops, the
-// attestation request, the obligation labels and the carrier target. Pure: no DOM.
+// The HANDOFF's check-in and release, client rules (crc-sync docs/adr/0122; H142): the chips, the offered steps, the form
+// ops, the attestation request, the obligation labels and the carrier target. Pure: no DOM.
 import './helpers/client-env.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -16,83 +16,86 @@ function strip(side, over = {}) {
     coordination: {
       primitive: 'HANDOFF', state: 'ACTIVE', peerPositionId: receiving ? 'CTR' : 'AP', mintedForCoordination: receiving,
       comms: { transferred: false, at: null }, control: { holder: 'TRANSFERRING', at: null },
-      separationResponsibilityRef: { facilityId: 'CENTER', positionId: 'CTR' }, release: null, releaseRequest: null, repair: null,
+      separationResponsibilityRef: { facilityId: 'CENTER', positionId: 'CTR' }, released: true, releaseRequest: null, repair: null,
       ...over,
     },
   };
 }
 const keys = (steps) => steps.map(s => s.key);
+const OPEN = { note: null, requestedAt: NOW, requestedByPositionId: 'AP', answer: null };
+const MOVED = { comms: { transferred: true, at: NOW }, control: { holder: 'RECEIVING', at: NOW }, separationResponsibilityRef: { facilityId: 'INCIRLIK', positionId: 'AP' } };
 
-test('steps: the transferring side offers comms, control and release; the receiving side comms, control and a request', () => {
-  assert.deepEqual(keys(R.handoffSteps(strip('TRANSFERRING'), 'CTR')), ['TRANSFER_COMMS', 'TRANSFER_CONTROL', 'GRANT']);
-  assert.deepEqual(keys(R.handoffSteps(strip('RECEIVING'), 'AP')), ['TRANSFER_COMMS', 'TRANSFER_CONTROL', 'REQUEST']);
+test('steps: the receiver has only Checked in on a released handoff; the handing-off station has nothing to press (H142)', () => {
+  assert.deepEqual(keys(R.handoffSteps(strip('RECEIVING'), 'AP')), ['CHECKED_IN']);
+  assert.equal(R.handoffSteps(strip('RECEIVING'), 'AP')[0].label, 'Checked in');
+  assert.deepEqual(keys(R.handoffSteps(strip('TRANSFERRING'), 'CTR')), [], 'no Comms to …, no Control to …');
   assert.deepEqual(R.handoffSteps(strip('RECEIVING'), null), [], 'no acting Position, no steps');
 });
 
-test('steps: Comms to the receiving Position from both sides; no comms step once moved', () => {
-  assert.equal(R.handoffSteps(strip('TRANSFERRING'), 'CTR')[0].label, 'Comms to AP');
-  assert.equal(R.handoffSteps(strip('RECEIVING'), 'AP')[0].label, 'Comms to AP');
-  const moved = strip('TRANSFERRING', { comms: { transferred: true, at: NOW } });
-  assert.ok(!keys(R.handoffSteps(moved, 'CTR')).includes('TRANSFER_COMMS'));
+test('steps: no "Control to me" and no "Comms to" anywhere, at any stage', () => {
+  const stages = [{}, { released: false }, { comms: { transferred: true, at: NOW } }, { released: false, comms: { transferred: true, at: NOW } }, MOVED, { released: false, releaseRequest: OPEN }];
+  for (const over of stages) {
+    for (const [side, acting] of [['RECEIVING', 'AP'], ['TRANSFERRING', 'CTR']]) {
+      for (const st of R.handoffSteps(strip(side, over), acting)) {
+        assert.ok(!['TRANSFER_COMMS', 'TRANSFER_CONTROL', 'WITHDRAW'].includes(st.key), `${side} ${JSON.stringify(over)}: ${st.key}`);
+        assert.ok(!/^(Comms|Control) to /.test(st.label), st.label);
+      }
+    }
+  }
 });
 
-test('steps: an open request offers Unable, an open request disables Request, a release offers Withdraw', () => {
-  const open = { scopes: ['CLIMB'], note: null, requestedAt: NOW, answer: null };
-  assert.deepEqual(keys(R.handoffSteps(strip('TRANSFERRING', { releaseRequest: open }), 'CTR')), ['TRANSFER_COMMS', 'TRANSFER_CONTROL', 'GRANT', 'REFUSE']);
-  const req = R.handoffSteps(strip('RECEIVING', { releaseRequest: open }), 'AP').find(s => s.key === 'REQUEST');
-  assert.equal(req.enabled, false);
-  const rel = { scopes: ['TURNS'], condition: null, effectiveAt: null, grantedAt: NOW };
-  assert.ok(keys(R.handoffSteps(strip('TRANSFERRING', { release: rel }), 'CTR')).includes('WITHDRAW'));
-  assert.ok(!keys(R.handoffSteps(strip('TRANSFERRING', { release: { ...rel, withdrawnAt: NOW } }), 'CTR')).includes('WITHDRAW'));
+test('steps: Request release only on a not-released handoff, before control moves; never on a released one (U8)', () => {
+  assert.deepEqual(keys(R.handoffSteps(strip('RECEIVING', { released: false }), 'AP')), ['CHECKED_IN', 'REQUEST']);
+  assert.deepEqual(keys(R.handoffSteps(strip('RECEIVING', { released: false, comms: { transferred: true, at: NOW } }), 'AP')), ['REQUEST'], 'checked in, waiting for the airspace');
+  const open = R.handoffSteps(strip('RECEIVING', { released: false, releaseRequest: OPEN }), 'AP').find(s => s.key === 'REQUEST');
+  assert.equal(open.enabled, false, 'one open request');
+  assert.ok(!keys(R.handoffSteps(strip('RECEIVING', { released: true }), 'AP')).includes('REQUEST'), 'released');
+  assert.ok(!keys(R.handoffSteps(strip('RECEIVING', { released: false, ...MOVED }), 'AP')).includes('REQUEST'), 'control moved');
+  assert.ok(!keys(R.handoffSteps(strip('RECEIVING', { released: true, releaseRequest: { ...OPEN, answer: 'GRANTED' } }), 'AP')).includes('REQUEST'), 'granted: gone');
 });
 
-test('steps: after control moved only the comms step can remain; nothing before ACCEPT or on another primitive', () => {
-  const moved = strip('RECEIVING', { control: { holder: 'RECEIVING', at: NOW }, separationResponsibilityRef: { facilityId: 'INCIRLIK', positionId: 'AP' } });
-  assert.deepEqual(keys(R.handoffSteps(moved, 'AP')), ['TRANSFER_COMMS']);
+test('steps: an open request gives the handing-off station Release and Unable; nothing otherwise', () => {
+  assert.deepEqual(keys(R.handoffSteps(strip('TRANSFERRING', { released: false, releaseRequest: OPEN }), 'CTR')), ['GRANT', 'REFUSE']);
+  assert.equal(R.handoffSteps(strip('TRANSFERRING', { released: false, releaseRequest: OPEN }), 'CTR')[0].form, undefined, 'Release is one click');
+  assert.deepEqual(keys(R.handoffSteps(strip('TRANSFERRING', { released: false }), 'CTR')), []);
+  assert.deepEqual(keys(R.handoffSteps(strip('TRANSFERRING', { released: false, releaseRequest: { ...OPEN, answer: 'REFUSED' } }), 'CTR')), []);
+});
+
+test('steps: after control moved nothing; nothing before ACCEPT or on another primitive', () => {
+  assert.deepEqual(keys(R.handoffSteps(strip('RECEIVING', MOVED), 'AP')), []);
   assert.deepEqual(R.handoffSteps(strip('RECEIVING', { state: 'INITIATED' }), 'AP'), []);
   assert.deepEqual(R.handoffSteps(strip('RECEIVING', { primitive: 'POINT_OUT' }), 'AP'), []);
   assert.deepEqual(R.handoffChips(strip('RECEIVING', { primitive: 'AIT' })), []);
 });
 
-test('chips: who holds comms and control, the release in effect, withdrawn, requested, refused, repaired', () => {
+test('chips (dark cockpit): grey holders, one grey word on the receiver, amber only for what needs the controller', () => {
   const t = strip('TRANSFERRING');
-  assert.deepEqual(R.handoffChips(t).map(c => c.text), ['COMMS: CTR', 'CTRL: CTR']);
+  assert.deepEqual(R.handoffChips(t).map(c => c.text), ['COMMS: CTR', 'CTRL: CTR'], 'the handing-off station sees no released word');
   assert.ok(R.handoffChips(t).every(c => c.mine), 'CTR holds both');
   assert.deepEqual(R.handoffChips(t).map(c => c.tone), ['quiet', 'quiet'], 'H138 U3: who holds comms and control is no problem');
-  const r = strip('RECEIVING', { comms: { transferred: true, at: NOW }, release: { scopes: ['TURNS', 'CLIMB'], climbLimitFt: 24000, condition: 'after DME', effectiveAt: null, grantedAt: NOW } });
-  assert.deepEqual(R.handoffChips(r).map(c => c.text), ['COMMS: AP', 'CTRL: CTR', 'RELEASE: Turns + Climb ≤ 24000 ft · after DME']);
-  const w = strip('RECEIVING', { release: { scopes: ['FULL'], condition: null, effectiveAt: null, withdrawnAt: NOW } });
-  assert.equal(R.handoffChips(w)[2].text, 'RELEASE WITHDRAWN');
-  const q = strip('TRANSFERRING', { releaseRequest: { scopes: ['DESCENT'], note: 'for traffic', requestedAt: NOW, answer: null } });
-  assert.equal(R.handoffChips(q)[2].text, 'RELEASE REQUESTED: Descent · for traffic');
-  const f = strip('RECEIVING', { releaseRequest: { scopes: ['DESCENT'], requestedAt: NOW, answer: 'REFUSED', reason: 'traffic' } });
-  assert.equal(R.handoffChips(f)[2].text, 'RELEASE REFUSED: traffic');
+  assert.deepEqual(R.handoffChips(strip('RECEIVING')).map(c => [c.text, c.tone]), [['COMMS: CTR', 'quiet'], ['CTRL: CTR', 'quiet'], ['RELEASED', 'quiet']]);
+  assert.equal(R.handoffChips(strip('RECEIVING', { released: false, comms: { transferred: true, at: NOW } }))[2].text, 'NOT RELEASED');
+  const q = R.handoffChips(strip('TRANSFERRING', { released: false, releaseRequest: { ...OPEN, note: 'for traffic' } }));
+  assert.deepEqual([q[2].text, q[2].tone], ['RELEASE REQUESTED', 'attn'], 'the handing-off station must answer');
+  assert.match(q[2].title, /for traffic/);
+  const qr = R.handoffChips(strip('RECEIVING', { released: false, releaseRequest: OPEN }));
+  assert.equal(qr.find(c => c.key === 'request').tone, 'quiet', 'the receiver waits: no colour');
+  const f = R.handoffChips(strip('RECEIVING', { released: false, releaseRequest: { ...OPEN, answer: 'REFUSED', reason: 'traffic', answeredAt: NOW } }));
+  assert.deepEqual([f.at(-1).text, f.at(-1).tone], ['RELEASE REFUSED: traffic', 'attn']);
+  assert.equal(R.handoffChips(strip('TRANSFERRING', { released: false, releaseRequest: { ...OPEN, answer: 'REFUSED' } })).length, 2, 'its own refusal needs nothing from the handing-off station');
   const p = strip('RECEIVING', { repair: { at: NOW, axis: 'control', why: 'CTR was dropped' } });
   assert.equal(R.handoffChips(p).at(-1).text, 'CONTROL MOVED BY THE SYSTEM');
-  const done = strip('RECEIVING', { control: { holder: 'RECEIVING' }, separationResponsibilityRef: { positionId: 'AP' }, release: { scopes: ['FULL'] } });
-  assert.deepEqual(R.handoffChips(done).map(c => c.key), ['comms', 'control'], 'a release is moot once control moved');
+  assert.deepEqual(R.handoffChips(strip('RECEIVING', { ...MOVED, released: false, releaseRequest: { ...OPEN, answer: 'GRANTED' } })).map(c => c.key), ['comms', 'control'], 'nothing once control moved: no "release complete"');
 });
 
-test('form ops: GRANT scopes, limits only with their scope, FULL replaces the rest, effective time', () => {
-  assert.match(R.buildGrantOp({ scopes: [] }, NOW).error, /pick what/);
-  const g = R.buildGrantOp({ scopes: ['TURNS', 'CLIMB'], climbLimit: '24000', descentLimit: '5000', condition: ' after DME ', effectiveAt: '1230' }, NOW);
-  assert.deepEqual(g.op, { kind: 'ControlRelease', action: 'GRANT', scopes: ['TURNS', 'CLIMB'], climbLimitFt: 24000, condition: 'after DME', effectiveAt: Date.UTC(2026, 5, 1, 12, 30) });
-  assert.deepEqual(R.buildGrantOp({ scopes: ['FULL', 'TURNS'], climbLimit: '3' }, NOW).op, { kind: 'ControlRelease', action: 'GRANT', scopes: ['FULL'] });
-  assert.match(R.buildGrantOp({ scopes: ['CLIMB'], climbLimit: 'high' }, NOW).error, /not a number/);
-  assert.match(R.buildGrantOp({ scopes: ['TURNS'], effectiveAt: '9999' }, NOW).error, /HHMM/);
-  assert.deepEqual(R.buildRequestOp({ scopes: ['DESCENT'], note: 'x' }).op, { kind: 'ControlRelease', action: 'REQUEST', scopes: ['DESCENT'], note: 'x' });
+test('form ops: Checked in and Release are HANDOFF / ControlRelease ops; a request has no scopes, only a note', () => {
+  assert.deepEqual(R.buildStepOp('CHECKED_IN'), { kind: 'HANDOFF', action: 'CHECKED_IN' });
+  assert.deepEqual(R.buildStepOp('GRANT'), { kind: 'ControlRelease', action: 'GRANT' });
+  assert.deepEqual(R.buildRequestOp({ note: ' x ' }).op, { kind: 'ControlRelease', action: 'REQUEST', note: 'x' });
+  assert.deepEqual(R.buildRequestOp({ note: '' }).op, { kind: 'ControlRelease', action: 'REQUEST' });
   assert.deepEqual(R.buildRefuseOp(' no '), { kind: 'ControlRelease', action: 'REFUSE', reason: 'no' });
   assert.deepEqual(R.buildRefuseOp(''), { kind: 'ControlRelease', action: 'REFUSE' });
-  assert.deepEqual(R.buildStepOp('TRANSFER_COMMS'), { kind: 'HANDOFF', action: 'TRANSFER_COMMS' });
-  assert.deepEqual(R.buildStepOp('WITHDRAW'), { kind: 'ControlRelease', action: 'WITHDRAW' });
-});
-
-test('effective time: HHMM on the mission day, a time over 12 h past rolls to tomorrow', () => {
-  assert.equal(R.parseEffectiveAt('12:45z', NOW), Date.UTC(2026, 5, 1, 12, 45));
-  assert.equal(R.parseEffectiveAt('1130', NOW), Date.UTC(2026, 5, 1, 11, 30));
-  assert.equal(R.parseEffectiveAt('0030', NOW), Date.UTC(2026, 5, 1, 0, 30), 'less than 12 h ago: already effective');
-  assert.equal(R.parseEffectiveAt('0030', Date.UTC(2026, 5, 1, 23, 0)), Date.UTC(2026, 5, 2, 0, 30), 'past midnight');
-  assert.equal(R.parseEffectiveAt('2460', NOW), null);
+  for (const gone of ['RELEASE_SCOPES', 'buildGrantOp', 'parseEffectiveAt', 'releaseSummary']) assert.equal(R[gone], undefined, gone);
 });
 
 test('attestation request: read from the ack\'s structured field, never from the server\'s sentence', () => {
@@ -109,7 +112,7 @@ test('attestation request: read from the ack\'s structured field, never from the
   assert.ok(!/is a control instruction/.test(rules), 'the server sentence is not matched on the client');
 });
 
-test('obligation labels cover exactly the control-invariant obligations the server raises', () => {
+test('obligation labels cover exactly the HANDOFF obligations the server raises', () => {
   const source = fs.readFileSync(new URL('../../crc-sync/src/efsp/forwarding-obligations.js', import.meta.url), 'utf8');
   for (const type of Object.keys(R.OBLIGATION_LABELS)) assert.ok(source.includes(`obligationType: '${type}'`), type);
 });

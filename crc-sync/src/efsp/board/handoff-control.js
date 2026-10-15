@@ -1,14 +1,17 @@
 'use strict';
 
-// Communications, ControlRelease and transfer of control inside a HANDOFF (docs/adr/0101; H94, H100).
+// Check-in, release and transfer of control inside a HANDOFF (docs/adr/0122, which replaces ADR 0101's release model;
+// H142, H143, H141 U-RQ2 c). ACCEPT of a HANDOFF moves radar identification and the Strip only. The rest is four fields on
+// the `coordination` object of BOTH Strips of the exchange, kept in step by `receiveHandoffRecord`:
 //
-// ACCEPT of a HANDOFF moves radar identification and the Strip only. What was fused with it is three records on the
-// `coordination` object of BOTH Strips of the exchange, kept in step by `receiveHandoffRecord`:
+//   released: boolean                                               the handing-off station's one switch at PROPOSE
+//   comms:    { transferred, at, by, byPositionId, trigger? }       transferred = the receiver marked the aircraft CHECKED IN
+//   control:  { holder: 'TRANSFERRING'|'RECEIVING', at, by, trigger, airspaceId? }  who has separation responsibility
+//   releaseRequest: null | { note, requestedAt, ..., answer }       the receiver asked a not-released handoff to be released
 //
-//   comms:   { transferred, at, by, byPositionId, trigger? }          who is on the frequency
-//   control: { holder: 'TRANSFERRING'|'RECEIVING', at, by, trigger }   who has separation responsibility
-//   release: null | { scopes, climbLimitFt?, descentLimitFt?, condition, effectiveAt, grantedAt, ..., withdrawnAt? }
-//   releaseRequest: null | { scopes, note, requestedAt, ..., answer }
+// The rule (H142): control never moves before CHECKED IN. Then a released handoff moves control at once; a not-released one
+// moves it when the aircraft is inside the receiver's airspace (the control tick: efsp/index.js `settleHandoffControl` asks
+// ADR 0125's `isInsideJurisdictionOf`, then `settleAtBoundary` below writes). The receiver never takes control by hand.
 //
 // `coordination.separationResponsibilityRef` stays the authoritative "who has control" (a Facility and a Position);
 // `control.holder` is the readable mirror. "Transferring" is the proposer's Strip, "receiving" the minted replica
@@ -16,16 +19,17 @@
 //
 // THE CONTROL INVARIANT (H100 DR-6, ADR 0101): for every flight with an ACTIVE HANDOFF the communications holder and the
 // control holder are each one side whose Strip is live and whose owner is staffed or consolidated into a staffed Position.
-// `transferControl` below is the one place control moves; `assertControlInvariant` is the net under every path.
+// `controlPatch` below is the one place control moves; `assertControlInvariant` is the net under every path. The safety
+// nets (a retired transferring Strip, a repair) may move control before check-in: they exist because nobody else holds it.
 
 const { MAX_FREE_TEXT, parseAltitude, activeClearanceEntry } = require('../flight-data-store');
 const { deepClone } = require('./strip-util');
+const { handoffGuardRefusal } = require('../handoff-guards');
 const log = require('../../log').logger('efsp:handoff-control');
 const { warn } = require('../warnings');
 
-const SCOPES = ['TURNS', 'CLIMB', 'DESCENT', 'FULL'];
-const MARKS = ['TRANSFER_COMMS', 'TRANSFER_CONTROL'];
-const RELEASE_ACTIONS = ['GRANT', 'REQUEST', 'REFUSE', 'WITHDRAW'];
+const MARKS = ['CHECKED_IN'];
+const RELEASE_ACTIONS = ['REQUEST', 'GRANT', 'REFUSE'];
 
 const refuse = (strip, detail, reason = 'VALIDATION_ERROR') => ({ ok: false, reason, detail, strip });
 
@@ -35,7 +39,7 @@ class HandoffControl {
    * @param {object} deps.rules the Board's rules (coordinationEffect, peerBoard, isStaffed, consolidatedAt, facilityId, ...)
    * @param {object} deps.state BoardState
    * @param {object} deps.audit BoardAudit
-   * @param {{now: () => number}} deps.clock the mission clock (every `at`, `effectiveAt` and gate here, H11)
+   * @param {{now: () => number}} deps.clock the mission clock (every `at` and gate here, H11)
    * @param {object} deps.flightDataStore
    * @param {() => string|null} deps.activeCmid the clientMutationId being applied, read late
    * @param {object|null} deps.mutationLog the Mutation log, or null (a Board built alone)
@@ -62,21 +66,29 @@ class HandoffControl {
     return (effect && effect.controlModel) || null;
   }
 
+  /** The model of a primitive by name (PROPOSE checks `released` against it). */
+  modelOfPrimitive(primitive) {
+    const effect = this._rules.coordinationEffect(primitive);
+    return (effect && effect.controlModel) || null;
+  }
+
   /** True for a Strip carrying a HANDOFF-family exchange whose control moves in steps. */
   isSteps(strip) {
     return !!strip && !!strip.coordination && this._modelOf(strip.coordination) === 'STEPS';
   }
 
-  /** The fields a primitive's `coordination` object starts with, on both Strips, at PROPOSE (docs/adr/0101 "The record"). */
-  initialFields(primitive) {
-    const effect = this._rules.coordinationEffect(primitive);
-    const model = effect && effect.controlModel;
+  /**
+   * The fields a primitive's `coordination` object starts with, on both Strips, at PROPOSE (docs/adr/0122 "The record").
+   * `released` is the handing-off station's switch (H142: released unless it says not).
+   */
+  initialFields(primitive, { released = true } = {}) {
+    const model = this.modelOfPrimitive(primitive);
     if (!model) return {};
     const fields = {
       comms: { transferred: false, at: null, by: null, byPositionId: null },
       control: { holder: 'TRANSFERRING', at: null, by: null, trigger: null },
     };
-    if (model === 'STEPS') { fields.release = null; fields.releaseRequest = null; fields.repair = null; }
+    if (model === 'STEPS') { fields.released = released !== false; fields.releaseRequest = null; fields.repair = null; }
     return fields;
   }
 
@@ -160,43 +172,70 @@ class HandoffControl {
 
   /**
    * The patch that moves control (and so `separationResponsibilityRef`) to `toSide`. The one place the pair of them
-   * changes together: every path that moves control — the two marks, a FULL release with comms, either retirement trigger,
-   * a repair — builds its patch here.
+   * changes together: every path that moves control — check-in of a released handoff, a granted release, the aircraft
+   * inside the receiver's airspace, either retirement trigger, a repair — builds its patch here.
    */
-  controlPatch(strip, toSide, trigger, by) {
+  controlPatch(strip, toSide, trigger, by, extra = {}) {
     const { transferring, receiving } = this._sides(strip);
     const target = toSide === 'RECEIVING' ? receiving : transferring;
     return {
       repair: null, // a holder that moves by a controller's act or a retirement ends any standing repair notice
-      control: { holder: toSide, at: this._clock.now(), by: by || null, trigger },
+      control: { holder: toSide, at: this._clock.now(), by: by || null, trigger, ...extra },
       separationResponsibilityRef: { facilityId: target.facilityId, positionId: target.strip ? target.strip.ownerPositionId : null },
     };
   }
 
-  /** A FULL release that is in effect (not withdrawn) and due on the mission clock. */
-  _fullReleaseDue(link) {
-    const r = link.release;
-    return !!r && !r.withdrawnAt && r.scopes.includes('FULL') && (r.effectiveAt == null || r.effectiveAt <= this._clock.now());
+  /**
+   * The seam ADR 0120 asked for (board/handoff-guards.js): may control move to the receiving Position now? Null when
+   * it may; a refusal `{reason, detail}` otherwise. `phase` is 'CONTROL'.
+   */
+  _controlGuard(strip) {
+    const { receiving } = this._sides(strip);
+    return handoffGuardRefusal({
+      phase: 'CONTROL', strip,
+      flightData: this._flightDataStore.getFlightData(strip.flightDataId),
+      receivingFacilityId: receiving.facilityId,
+      receivingPositionId: receiving.strip ? receiving.strip.ownerPositionId : strip.coordination.peerPositionId,
+    });
   }
 
   /**
-   * A FULL release with a future `effectiveAt` schedules nothing (ADR 0101 decision 4); the first later op that checks
-   * it settles it. Called by the control-axis check and the marks. @returns {{peerFacilityId, peerStrip, control}|null}
+   * The exchange this (transferring) Strip is half of waits for the aircraft to be inside the receiver's airspace: a
+   * not-released HANDOFF, ACTIVE, checked in, control still with the transferring side. The control tick asks it.
+   * @returns {{receivingFacilityId:string, receivingPositionId:string}|null}
    */
-  settleDueRelease(strip, by) {
+  boundaryCandidate(strip) {
+    if (!this.isSteps(strip) || strip.state === 'DROPPED' || this.sideOf(strip) !== 'TRANSFERRING') return null;
     const link = strip.coordination;
-    if (!this.isSteps(strip) || link.state !== 'ACTIVE' || this.controlHolder(link) !== 'TRANSFERRING') return null;
-    if (!link.comms.transferred || !this._fullReleaseDue(link)) return null;
+    if (link.state !== 'ACTIVE' || link.released || !link.comms.transferred || this.controlHolder(link) !== 'TRANSFERRING') return null;
     const { receiving } = this._sides(strip);
-    if (!this._live(receiving) || !receiving.covered) return null;
-    const patch = this.controlPatch(strip, 'RECEIVING', 'COMMS_AND_FULL_RELEASE', by);
-    // Bumped: the op that checked may still refuse its own write (a bad altitude), and the settle stands regardless.
-    const peer = this._commit(strip, patch, by, { auditOp: 'InterfacilityCoordinationResponse', action: 'TRANSFER_CONTROL' });
-    this.assertControlInvariant(strip, by);
-    return { ...peer, control: { trigger: 'COMMS_AND_FULL_RELEASE' } };
+    if (!this._live(receiving)) return null;
+    return { receivingFacilityId: receiving.facilityId, receivingPositionId: receiving.strip.ownerPositionId };
   }
 
-  // ── the two marks ───────────────────────────────────────────────────────
+  /**
+   * The control tick found the aircraft inside the receiver's airspace (`airspaceId` null for CENTER's fallback): control
+   * moves (trigger `IN_AIRSPACE`), one system entry here and the peer mirror there. Nothing moves when the receiver is
+   * not live and staffed, or a guard refuses (the tick asks again next time).
+   * @returns {{ok:true, strip, peerFacilityId, peerStrip}|{ok:false, reason, detail?}}
+   */
+  settleAtBoundary(strip, { airspaceId = null } = {}) {
+    if (!this.boundaryCandidate(strip)) return { ok: false }; // nothing waits for the boundary here
+    const { receiving } = this._sides(strip);
+    if (!receiving.covered) return { ok: false, reason: 'NOT_STAFFED' };
+    const guard = this._controlGuard(strip);
+    if (guard) return { ok: false, reason: guard.reason, detail: guard.detail };
+    const before = deepClone(strip);
+    const patch = this.controlPatch(strip, 'RECEIVING', 'IN_AIRSPACE', 'system', { airspaceId });
+    const peer = this._commit(strip, patch, 'system', { auditOp: 'InterfacilityCoordinationResponse', action: 'TRANSFER_CONTROL' });
+    this._audit.recordSystem('HandoffControlInAirspace', strip, {
+      before, after: deepClone(strip), control: { trigger: 'IN_AIRSPACE', airspaceId, to: receiving.strip.ownerPositionId },
+    });
+    this.assertControlInvariant(strip, 'system');
+    return { ok: true, strip, ...peer };
+  }
+
+  // ── the receiver's one mark ─────────────────────────────────────────────
 
   _requireActiveSteps(strip) {
     if (!this.isSteps(strip)) return refuse(strip, 'no HANDOFF exchange on this Strip');
@@ -204,120 +243,93 @@ class HandoffControl {
     return null;
   }
 
-  /** HANDOFF TRANSFER_COMMS / TRANSFER_CONTROL (docs/adr/0101, "Who may do what"): the owner of either Strip records it. */
+  /**
+   * HANDOFF CHECKED_IN (docs/adr/0122): the receiver records the pilot's call. A released handoff moves control with it
+   * (trigger `CHECKED_IN`); a not-released one waits for the aircraft to be inside the receiver's airspace (the tick).
+   * Any other action — TRANSFER_COMMS, TRANSFER_CONTROL ("Control to me") — is refused as unknown.
+   */
   applyMark(strip, op, by, actingPositionId) {
     if (!MARKS.includes(op.action)) return refuse(strip, `unknown HANDOFF action: ${op.action}`);
     const bad = this._requireActiveSteps(strip);
     if (bad) return bad;
     const link = strip.coordination;
+    if (this.sideOf(strip) !== 'RECEIVING') return refuse(strip, `only ${link.peerPositionId}, the receiving Position, marks the aircraft checked in`);
+    if (link.comms.transferred) return refuse(strip, 'the aircraft is already checked in');
     const { receiving } = this._sides(strip);
-    if (op.action === 'TRANSFER_COMMS' && link.comms.transferred) return refuse(strip, 'communications were already transferred');
-    if (op.action === 'TRANSFER_CONTROL' && this.controlHolder(link) !== 'TRANSFERRING') return refuse(strip, 'control was already transferred');
-    // The move is refused unless its target is live and staffed (the control invariant).
-    if (!this._live(receiving) || !receiving.covered) {
-      return refuse(strip, `${receiving.strip ? receiving.strip.ownerPositionId : link.peerPositionId} is not staffed`, 'NOT_STAFFED');
-    }
+    if (!this._live(receiving) || !receiving.covered) return refuse(strip, `${strip.ownerPositionId} is not staffed`, 'NOT_STAFFED');
     const now = this._clock.now();
-    const patch = {};
-    const controlAudit = {};
-    if (op.action === 'TRANSFER_COMMS') {
-      patch.comms = { transferred: true, at: now, by: by || null, byPositionId: actingPositionId || null };
-      patch.repair = null;
-      controlAudit.comms = { transferred: true };
-      if (this.controlHolder(link) === 'TRANSFERRING' && this._fullReleaseDue({ ...link, comms: patch.comms })) {
-        Object.assign(patch, this.controlPatch(strip, 'RECEIVING', 'COMMS_AND_FULL_RELEASE', by));
-        controlAudit.control = { trigger: 'COMMS_AND_FULL_RELEASE' };
-      }
-    } else {
-      Object.assign(patch, this.controlPatch(strip, 'RECEIVING', 'BOUNDARY', by));
-      controlAudit.control = { trigger: 'BOUNDARY' };
+    const patch = {
+      comms: { transferred: true, at: now, by: by || null, byPositionId: actingPositionId || null, trigger: 'CHECKED_IN' },
+      repair: null,
+    };
+    const controlAudit = { comms: { transferred: true } };
+    if (link.released && this.controlHolder(link) === 'TRANSFERRING') {
+      const guard = this._controlGuard(strip);
+      if (guard) return refuse(strip, guard.detail, guard.reason);
+      Object.assign(patch, this.controlPatch(strip, 'RECEIVING', 'CHECKED_IN', by));
+      controlAudit.control = { trigger: 'CHECKED_IN' };
     }
     const peer = this._commit(strip, patch, by, { auditOp: 'InterfacilityCoordinationResponse', action: op.action });
     this.assertControlInvariant(strip, by);
     return { ok: true, strip, ...peer, controlAudit };
   }
 
-  // ── ControlRelease ──────────────────────────────────────────────────────
+  // ── Request release (a not-released handoff only) ───────────────────────
 
-  _scopesProblem(scopes) {
-    if (!Array.isArray(scopes) || scopes.length === 0) return 'scopes must list at least one of TURNS, CLIMB, DESCENT, FULL';
-    for (const s of scopes) if (!SCOPES.includes(s)) return `unknown release scope: ${s}`;
-    return null;
-  }
-
-  /** ControlRelease GRANT / REQUEST / REFUSE / WITHDRAW. Never undoable (docs/adr/0101 "Undo"). */
+  /**
+   * ControlRelease REQUEST / GRANT / REFUSE (docs/adr/0122): the receiver asks for a not-released handoff to be released;
+   * the handing-off station grants (the handoff becomes released: control moves now when the aircraft is checked in) or
+   * refuses. One open request at a time. Never on a released handoff or after control moved (U8). No WITHDRAW (U-RQ2 c).
+   * Never undoable (H100 DR-5).
+   */
   applyRelease(strip, op, by, actingPositionId) {
     if (!RELEASE_ACTIONS.includes(op.action)) return refuse(strip, `unknown ControlRelease action: ${op.action}`);
     const bad = this._requireActiveSteps(strip);
     if (bad) return bad;
     const link = strip.coordination;
     if (this.controlHolder(link) !== 'TRANSFERRING') return refuse(strip, 'control was already transferred');
+    if (link.released) return refuse(strip, 'the handoff is released: control moves at check-in');
     const side = this.sideOf(strip);
     const now = this._clock.now();
+    const open = !!link.releaseRequest && link.releaseRequest.answer == null;
     const patch = {};
     const auditFields = { action: op.action };
+    let controlAudit;
 
     if (op.action === 'REQUEST') {
-      if (side !== 'RECEIVING') return refuse(strip, 'only the receiving side requests a release');
-      const problem = this._scopesProblem(op.scopes);
-      if (problem) return refuse(strip, problem);
-      if (link.releaseRequest && link.releaseRequest.answer == null) return refuse(strip, 'a release request is already open');
+      if (side !== 'RECEIVING') return refuse(strip, 'only the receiving Position requests a release');
+      if (open) return refuse(strip, 'a release request is already open');
       patch.releaseRequest = {
-        scopes: [...op.scopes], note: typeof op.note === 'string' ? op.note.slice(0, MAX_FREE_TEXT) : null,
+        note: typeof op.note === 'string' && op.note.trim() ? op.note.trim().slice(0, MAX_FREE_TEXT) : null,
         requestedAt: now, requestedBy: by || null, requestedByPositionId: actingPositionId || null,
         answer: null, answeredAt: null, answeredBy: null, reason: null,
       };
-      auditFields.scopes = patch.releaseRequest.scopes;
     } else {
-      if (side !== 'TRANSFERRING') return refuse(strip, `only ${link.peerPositionId}, the transferring side, may ${op.action.toLowerCase()} a release`);
+      if (side !== 'TRANSFERRING') return refuse(strip, `only ${link.peerPositionId}, the handing-off Position, may ${op.action.toLowerCase()} a release`);
+      if (!open) return refuse(strip, `no open release request to ${op.action.toLowerCase()}`);
       if (op.action === 'GRANT') {
-        const problem = this._scopesProblem(op.scopes);
-        if (problem) return refuse(strip, problem);
-        const full = op.scopes.includes('FULL');
-        for (const [key, scope] of [['climbLimitFt', 'CLIMB'], ['descentLimitFt', 'DESCENT']]) {
-          if (op[key] == null) continue;
-          if (!Number.isFinite(op[key])) return refuse(strip, `${key} must be a number of feet`);
-          if (full || !op.scopes.includes(scope)) return refuse(strip, `${key} only goes with the ${scope} scope`);
+        patch.released = true;
+        patch.releaseRequest = { ...link.releaseRequest, answer: 'GRANTED', answeredAt: now, answeredBy: by || null, reason: null };
+        // Released and already checked in: control moves now, inside this op's entry (never a second one).
+        if (link.comms.transferred) {
+          const { receiving } = this._sides(strip);
+          if (!this._live(receiving) || !receiving.covered) {
+            return refuse(strip, `${receiving.strip ? receiving.strip.ownerPositionId : link.peerPositionId} is not staffed`, 'NOT_STAFFED');
+          }
+          const guard = this._controlGuard(strip);
+          if (guard) return refuse(strip, guard.detail, guard.reason);
+          Object.assign(patch, this.controlPatch(strip, 'RECEIVING', 'RELEASED', by));
+          controlAudit = { control: { trigger: 'RELEASED' } };
         }
-        if (op.effectiveAt != null && !Number.isFinite(op.effectiveAt)) return refuse(strip, 'effectiveAt must be a mission time');
-        patch.release = {
-          scopes: [...op.scopes],
-          ...(op.climbLimitFt != null ? { climbLimitFt: op.climbLimitFt } : {}),
-          ...(op.descentLimitFt != null ? { descentLimitFt: op.descentLimitFt } : {}),
-          condition: typeof op.condition === 'string' && op.condition.trim() ? op.condition.trim().slice(0, MAX_FREE_TEXT) : null,
-          effectiveAt: op.effectiveAt == null ? null : op.effectiveAt,
-          grantedAt: now, grantedBy: by || null, grantedByPositionId: actingPositionId || null,
-        };
-        // A grant while a request is open answers it.
-        if (link.releaseRequest && link.releaseRequest.answer == null) {
-          patch.releaseRequest = { ...link.releaseRequest, answer: 'GRANTED', answeredAt: now, answeredBy: by || null, reason: null };
-        }
-        auditFields.scopes = patch.release.scopes;
-        auditFields.condition = patch.release.condition;
-        auditFields.effectiveAt = patch.release.effectiveAt;
-      } else if (op.action === 'REFUSE') {
-        if (!link.releaseRequest || link.releaseRequest.answer != null) return refuse(strip, 'no open release request to refuse');
+      } else { // REFUSE
         patch.releaseRequest = {
           ...link.releaseRequest, answer: 'REFUSED', answeredAt: now, answeredBy: by || null,
           reason: typeof op.reason === 'string' && op.reason.trim() ? op.reason.trim().slice(0, MAX_FREE_TEXT) : null,
         };
-      } else { // WITHDRAW
-        if (!link.release || link.release.withdrawnAt) return refuse(strip, 'no release in effect to withdraw');
-        patch.release = { ...link.release, withdrawnAt: now, withdrawnBy: by || null };
+        auditFields.reason = patch.releaseRequest.reason;
       }
     }
 
-    let controlAudit;
-    // A FULL grant with comms already moved (and due) moves control (ADR 0101 decision 4 a): the control record is
-    // written inside this op's entry, never as a second one.
-    if (op.action === 'GRANT' && patch.release.scopes.includes('FULL') && link.comms.transferred) {
-      const due = patch.release.effectiveAt == null || patch.release.effectiveAt <= now;
-      const { receiving } = this._sides(strip);
-      if (due && this._live(receiving) && receiving.covered) {
-        Object.assign(patch, this.controlPatch(strip, 'RECEIVING', 'COMMS_AND_FULL_RELEASE', by));
-        controlAudit = { control: { trigger: 'COMMS_AND_FULL_RELEASE' } };
-      }
-    }
     const peer = this._commit(strip, patch, by, { auditOp: 'InterfacilityControlRelease', action: op.action });
     this.assertControlInvariant(strip, by);
     return { ok: true, strip, ...peer, controlAudit: { controlRelease: auditFields, ...(controlAudit || {}) } };
@@ -325,25 +337,10 @@ class HandoffControl {
 
   // ── the control-axis check (SetBlock) ───────────────────────────────────
 
-  /** Does a release cover every scope in `needed`, for a write whose new altitude band is `next`? */
-  _releaseCovers(release, needed, next) {
-    if (!release || release.withdrawnAt) return false;
-    if (release.effectiveAt != null && release.effectiveAt > this._clock.now()) return false;
-    const full = release.scopes.includes('FULL');
-    for (const scope of needed) {
-      if (!full && !release.scopes.includes(scope)) return false;
-    }
-    if (!full) {
-      if (needed.includes('CLIMB') && release.climbLimitFt != null && !(next && next.highFt <= release.climbLimitFt)) return false;
-      if (needed.includes('DESCENT') && release.descentLimitFt != null && !(next && next.lowFt >= release.descentLimitFt)) return false;
-    }
-    return true;
-  }
-
   /**
-   * The scopes a control-axis Block write needs. TURNS for a heading; for an altitude CLIMB or DESCENT by comparing the
-   * new value with the flight's assigned altitude, both when there is none (or the write clears it). `[]` means the
-   * write changes nothing vertically (the same altitude again), which needs nothing.
+   * The axes a control-axis Block write touches, for the attestation's words: TURNS for a heading; for an altitude CLIMB
+   * or DESCENT by comparing the new value with the flight's assigned altitude, both when there is none (or the write
+   * clears it). `[]` means the write changes nothing vertically (the same altitude again), which needs nothing.
    */
   _neededScopes(axis, strip, op) {
     if (axis === 'TURNS') return { needed: ['TURNS'], next: null };
@@ -362,32 +359,28 @@ class HandoffControl {
   }
 
   /**
-   * Before a control Block is written: until control transfers, an instruction outside the release in effect needs a
-   * "coordinated with" attestation (JO 7110.65 5-4-5; ADR 0101 "The control-axis check"). An attestation, audited, not a
-   * refusal of the instruction (H100 DR-1 b, DR-10 a). Speed is never checked (DR-11 b: the Block Map says no axis).
-   * @returns {{ok:false}|{ok:true, audit?:object, peerFacilityId?:string, peerStrip?:object}}
+   * Before a control Block is written: until control transfers, a heading or altitude instruction from either side needs
+   * a "coordinated with" attestation (JO 7110.65BB ¶2-1-14 b, ¶5-4-5 b, ¶5-4-6 c; ADR 0101 "The control-axis check"). An
+   * attestation, audited, not a refusal of the instruction (H100 DR-1 b, DR-10 a). Speed is never checked (DR-11 b).
+   * ADR 0122: there is no partial release any more, so nothing short of control waives it.
+   * @returns {{ok:false}|{ok:true, audit?:object}}
    */
-  checkControlAxis(strip, op, by) {
+  checkControlAxis(strip, op) {
     if (op.confirmVacated) return { ok: true };
     const axis = this._rules.controlAxisFor(strip.stripType, op.blockId);
     if (!axis) return { ok: true };
     if (!this.isSteps(strip) || strip.coordination.state !== 'ACTIVE') return { ok: true };
-    const settled = this.settleDueRelease(strip, by);
-    const extra = settled ? { peerFacilityId: settled.peerFacilityId, peerStrip: settled.peerStrip, settled: settled.control } : {};
     const link = strip.coordination;
-    if (this.controlHolder(link) !== 'TRANSFERRING') return { ok: true, ...extra };
+    if (this.controlHolder(link) !== 'TRANSFERRING') return { ok: true };
     const scopes = this._neededScopes(axis, strip, op);
-    if (!scopes || scopes.needed.length === 0) return { ok: true, ...extra };
+    if (!scopes || scopes.needed.length === 0) return { ok: true };
 
     const side = this.sideOf(strip);
     const { theirs } = this._sides(strip);
-    if (side === 'RECEIVING' && this._releaseCovers(link.release, scopes.needed, scopes.next)) {
-      return { ok: true, audit: { controlAxis: scopes.needed.join('+'), release: 'WITHIN' }, ...extra };
-    }
     const other = theirs.strip ? theirs.strip.ownerPositionId : link.peerPositionId;
     const accepted = new Set([other, link.peerPositionId]);
     if (typeof op.coordinatedWith !== 'string' || op.coordinatedWith === '') {
-      const why = side === 'TRANSFERRING' ? 'control has not transferred' : 'outside the release in effect';
+      const why = side === 'TRANSFERRING' ? 'the handoff is accepted' : 'control has not transferred';
       return {
         ok: false, reason: 'VALIDATION_ERROR', strip,
         detail: `${scopes.needed.join(' and ')} is a control instruction and ${why}: coordinate with ${other} and say so (coordinatedWith)`,
@@ -401,7 +394,7 @@ class HandoffControl {
         detail: `coordinatedWith must be ${other}, the other party of this HANDOFF (got ${op.coordinatedWith})`,
       };
     }
-    return { ok: true, audit: { controlAxis: scopes.needed.join('+'), coordinatedWith: op.coordinatedWith }, ...extra };
+    return { ok: true, audit: { controlAxis: scopes.needed.join('+'), coordinatedWith: op.coordinatedWith } };
   }
 
   // ── retirement, owner changes, restore ──────────────────────────────────
@@ -554,4 +547,4 @@ class HandoffControl {
   }
 }
 
-module.exports = { HandoffControl, SCOPES, MARKS, RELEASE_ACTIONS };
+module.exports = { HandoffControl, MARKS, RELEASE_ACTIONS };

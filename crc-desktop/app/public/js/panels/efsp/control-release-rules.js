@@ -1,16 +1,18 @@
 'use strict';
-// Communications, ControlRelease and transfer of control on an interfacility HANDOFF (crc-sync docs/adr/0101).
-// Pure: what the Strip says and which steps it offers. The server decides (and refuses); this keeps no authority table
-// and no copy of the Block Map's control axis — the attestation prompt is driven by the server's own refusal.
+// Check-in, release and transfer of control on an interfacility HANDOFF (crc-sync docs/adr/0122, replacing ADR 0101's
+// release model; H142). Pure: what the Strip says and which steps it offers. The server decides (and refuses); this keeps
+// no authority table and no copy of the Block Map's control axis — the attestation prompt is driven by the server's own
+// refusal.
 import { formatZuluHhmm } from '../../format.js';
 
-export const RELEASE_SCOPES = ['TURNS', 'CLIMB', 'DESCENT', 'FULL'];
-export const RELEASE_SCOPE_LABELS = { TURNS: 'Turns', CLIMB: 'Climb', DESCENT: 'Descent', FULL: 'Full' };
-
-// The two obligations the control invariant raises (forwarding-obligations.js); the Strip's badge uses the label.
+// The obligations a HANDOFF raises (forwarding-obligations.js); the Strip's badge uses the label. Dark cockpit (H142 §7):
+// only what needs the controller — nobody holding the exchange, a system move, a receiver that has not marked the
+// aircraft checked in after a while, and a not-released aircraft already in the receiver's airspace but not checked in.
 export const OBLIGATION_LABELS = {
   CONTROL_UNCOVERED: { label: 'NO CONTROL HOLDER', title: 'Nobody staffed holds control or communications of this HANDOFF: sign on at the Position that should' },
   CONTROL_REPAIRED: { label: 'CONTROL MOVED', title: 'The system moved communications or control back to a live Position (see the Strip)' },
+  NOT_CHECKED_IN: { label: 'NOT CHECKED IN', title: 'Accepted a while ago and not marked checked in: has the pilot called you?' },
+  IN_AIRSPACE_NOT_CHECKED_IN: { label: 'IN AIRSPACE · NOT CHECKED IN', title: 'The aircraft is inside the receiver\'s airspace but has not checked in, so control cannot move' },
 };
 
 /** A HANDOFF whose communications and control move in steps: live and past ACCEPT. */
@@ -48,52 +50,40 @@ export function controlHolderPosition(strip) {
 
 const _zulu = (ms) => (ms == null ? '' : `${formatZuluHhmm(ms)}Z`);
 
-/** "Turns + Climb ≤ 24000 ft · from 1230Z · until the boundary" */
-export function releaseSummary(release) {
-  if (!release) return '';
-  const parts = [release.scopes.map(s => RELEASE_SCOPE_LABELS[s] || s).join(' + ')];
-  if (release.climbLimitFt != null) parts[0] += ` ≤ ${release.climbLimitFt} ft`;
-  if (release.descentLimitFt != null) parts[0] += ` ≥ ${release.descentLimitFt} ft`;
-  if (release.effectiveAt != null) parts.push(`from ${_zulu(release.effectiveAt)}`);
-  if (release.condition) parts.push(release.condition);
-  return parts.join(' · ');
-}
-
-export function requestSummary(req) {
-  if (!req) return '';
-  const base = req.scopes.map(s => RELEASE_SCOPE_LABELS[s] || s).join(' + ');
-  return req.note ? `${base} · ${req.note}` : base;
-}
-
 /**
  * The standing lines a HANDOFF row carries after ACCEPT, as `{key, text, title, tone, mine}`; `mine` means the Position
  * of this Strip holds it. Empty when this is not an ACTIVE HANDOFF.
  * COMMS and CTRL are `quiet` (grey text, no background, decisions.md H138 U3): who holds them is no problem, so it
- * takes no colour (dark cockpit, H115-H119). The problem tones (`attn`, `bad`) stay as they were.
+ * takes no colour (dark cockpit, H115-H119). Until control moves the receiver's Strip says RELEASED or NOT RELEASED in
+ * the same grey (ADR 0122); a release request open asks the handing-off station (`attn`), a refused one the receiver.
+ * Once control has moved nothing is added: there is no "release complete" (H142 §7).
  */
 export function handoffChips(strip) {
   if (!isStepsHandoff(strip)) return [];
   const co = strip.coordination;
   const me = strip.ownerPositionId;
+  const side = handoffSideOf(strip);
+  const p = handoffPositions(strip);
   const chips = [];
   const comms = commsHolderPosition(strip);
   const control = controlHolderPosition(strip);
   chips.push({ key: 'comms', text: `COMMS: ${comms}`, mine: comms === me, tone: 'quiet',
-    title: co.comms.transferred ? `communications with ${comms}${co.comms.at ? ` since ${_zulu(co.comms.at)}` : ''}${co.comms.trigger ? ` (${co.comms.trigger})` : ''}` : `${comms} is still on the frequency` });
+    title: co.comms.transferred ? `checked in with ${comms}${co.comms.at ? ` at ${_zulu(co.comms.at)}` : ''}` : `not checked in with ${p.receiving} yet: ${comms} is still on the frequency` });
   chips.push({ key: 'control', text: `CTRL: ${control}`, mine: control === me, tone: 'quiet',
-    title: controlMoved(co) ? `control with ${control}${co.control.at ? ` since ${_zulu(co.control.at)}` : ''}` : `${control} still has control: instructions outside a release need coordinating` });
+    title: controlMoved(co) ? `control with ${control}${co.control.at ? ` since ${_zulu(co.control.at)}` : ''}` : `${control} still has control: a heading or altitude needs coordinating with it` });
   if (!controlMoved(co)) {
-    const rel = co.release;
-    if (rel && rel.withdrawnAt) {
-      chips.push({ key: 'release', text: 'RELEASE WITHDRAWN', tone: 'dim', title: `${releaseSummary(rel)} — withdrawn ${_zulu(rel.withdrawnAt)}` });
-    } else if (rel) {
-      chips.push({ key: 'release', text: `RELEASE: ${releaseSummary(rel)}`, tone: 'on', title: `${rel.grantedByPositionId || 'the transferring Position'} released ${releaseSummary(rel)}` });
+    if (side === 'RECEIVING') {
+      chips.push({ key: 'released', text: co.released ? 'RELEASED' : 'NOT RELEASED', tone: 'quiet',
+        title: co.released ? 'control moves to you when you mark the aircraft checked in'
+          : 'control moves to you once the aircraft has checked in and is inside your airspace' });
     }
     const req = co.releaseRequest;
     if (req && req.answer == null) {
-      chips.push({ key: 'request', text: `RELEASE REQUESTED: ${requestSummary(req)}`, tone: 'attn', title: `${req.requestedByPositionId || 'the receiver'} asked for a ControlRelease at ${_zulu(req.requestedAt)}` });
-    } else if (req && req.answer === 'REFUSED') {
-      chips.push({ key: 'request', text: `RELEASE REFUSED${req.reason ? `: ${req.reason}` : ''}`, tone: 'attn', title: `request for ${requestSummary(req)} refused` });
+      chips.push({ key: 'request', text: 'RELEASE REQUESTED', tone: side === 'TRANSFERRING' ? 'attn' : 'quiet',
+        title: `${req.requestedByPositionId || p.receiving} asked for a release at ${_zulu(req.requestedAt)}${req.note ? `: ${req.note}` : ''}` });
+    } else if (req && req.answer === 'REFUSED' && !co.released && side === 'RECEIVING') {
+      chips.push({ key: 'request', text: `RELEASE REFUSED${req.reason ? `: ${req.reason}` : ''}`, tone: 'attn',
+        title: `${p.transferring} refused the release at ${_zulu(req.answeredAt)}: control waits for your airspace` });
     }
   }
   if (co.repair) {
@@ -106,7 +96,10 @@ export function handoffChips(strip) {
 
 /**
  * The steps this Strip offers right now. `acting` is the Position the controller acts as on it (or null).
- * Each: `{key, label, title, enabled, reason, form?}` — `form` names the dialog (release / request / refuse), none is one click.
+ * Each: `{key, label, title, enabled, reason, form?}` — `form` names the dialog (request / refuse), none is one click.
+ * The receiver: "Checked in" until the pilot has called, and on a not-released handoff "Request release…" until control
+ * moves. The handing-off station: "Release" / "Unable" while a request is open. Nobody takes control by hand (H142 §5);
+ * nothing is offered on a released handoff or after control moved (U8).
  */
 export function handoffSteps(strip, acting) {
   if (!isStepsHandoff(strip) || !acting) return [];
@@ -114,83 +107,37 @@ export function handoffSteps(strip, acting) {
   const side = handoffSideOf(strip);
   const p = handoffPositions(strip);
   const steps = [];
-  if (!co.comms.transferred) {
-    steps.push({ key: 'TRANSFER_COMMS', label: `Comms to ${p.receiving}`, enabled: true,
-      title: side === 'TRANSFERRING' ? `${p.receiving} has the frequency (the aircraft was told to call them)` : `the aircraft has checked in with you: you have the frequency` });
-  }
-  if (!controlMoved(co)) {
-    steps.push({ key: 'TRANSFER_CONTROL', label: `Control to ${p.receiving}`, enabled: true,
-      title: 'mark transfer of control (the boundary or an agreed point)' });
-    const req = co.releaseRequest;
-    const open = !!req && req.answer == null;
-    if (side === 'TRANSFERRING') {
-      steps.push({ key: 'GRANT', label: 'Release…', enabled: true, form: 'release',
-        title: `ControlRelease: let ${p.receiving} turn, climb or descend the aircraft before control transfers` });
-      if (open) steps.push({ key: 'REFUSE', label: 'Unable', enabled: true, form: 'refuse', title: `refuse ${p.receiving}'s release request` });
-      if (co.release && !co.release.withdrawnAt) steps.push({ key: 'WITHDRAW', label: 'Withdraw release', enabled: true, title: 'take the ControlRelease back (only before control transfers)' });
-    } else {
+  const moved = controlMoved(co);
+  const req = co.releaseRequest;
+  const open = !!req && req.answer == null;
+  if (side === 'RECEIVING') {
+    if (!co.comms.transferred) {
+      steps.push({ key: 'CHECKED_IN', label: 'Checked in', enabled: true,
+        title: co.released ? 'the pilot has called you: control moves to you now'
+          : 'the pilot has called you: control moves to you once the aircraft is inside your airspace' });
+    }
+    if (!moved && !co.released) {
       steps.push({ key: 'REQUEST', label: 'Request release…', enabled: !open, form: 'request',
         reason: open ? 'a request is already open' : '',
-        title: `ask ${p.transferring} for a ControlRelease` });
+        title: `ask ${p.transferring} to release the handoff` });
     }
+  } else if (!moved && !co.released && open) {
+    steps.push({ key: 'GRANT', label: 'Release', enabled: true,
+      title: `release the handoff to ${p.receiving}: control moves ${co.comms.transferred ? 'now' : 'when the aircraft checks in'}` });
+    steps.push({ key: 'REFUSE', label: 'Unable', enabled: true, form: 'refuse', title: `refuse ${p.receiving}'s release request` });
   }
   return steps;
 }
 
 /** The op for a one-click step. */
 export function buildStepOp(key) {
-  if (key === 'TRANSFER_COMMS' || key === 'TRANSFER_CONTROL') return { kind: 'HANDOFF', action: key };
+  if (key === 'CHECKED_IN') return { kind: 'HANDOFF', action: key };
   return { kind: 'ControlRelease', action: key };
 }
 
-/** "1230" (or "12:30") as a mission-clock time on the day of `nowMs`; null on a malformed string. A time well in the past means tomorrow's. */
-export function parseEffectiveAt(text, nowMs) {
-  const m = /^\s*(\d{1,2}):?(\d{2})\s*z?\s*$/i.exec(String(text || ''));
-  if (!m) return null;
-  const h = Number(m[1]); const min = Number(m[2]);
-  if (h > 23 || min > 59) return null;
-  const day = Math.floor(nowMs / 86400000) * 86400000;
-  let at = day + (h * 60 + min) * 60000;
-  if (at < nowMs - 12 * 3600000) at += 86400000;
-  return at;
-}
-
-function _feet(text) {
-  if (text == null || String(text).trim() === '') return { value: null };
-  const n = Number(String(text).trim());
-  return Number.isFinite(n) && n >= 0 ? { value: Math.round(n) } : { error: `"${text}" is not a number of feet` };
-}
-
-/**
- * The GRANT op from the form: `{scopes, climbLimit, descentLimit, condition, effectiveAt}` (strings).
- * @returns {{op?:object, error?:string}}
- */
-export function buildGrantOp(form, nowMs) {
-  const scopes = RELEASE_SCOPES.filter(s => (form.scopes || []).includes(s));
-  if (scopes.length === 0) return { error: 'pick what is released' };
-  const op = { kind: 'ControlRelease', action: 'GRANT', scopes: scopes.includes('FULL') ? ['FULL'] : scopes };
-  if (!op.scopes.includes('FULL')) {
-    for (const [field, scope, key] of [['climbLimit', 'CLIMB', 'climbLimitFt'], ['descentLimit', 'DESCENT', 'descentLimitFt']]) {
-      if (!op.scopes.includes(scope)) continue;
-      const f = _feet(form[field]);
-      if (f.error) return { error: f.error };
-      if (f.value != null) op[key] = f.value;
-    }
-  }
-  if (form.condition && form.condition.trim()) op.condition = form.condition.trim();
-  if (form.effectiveAt && form.effectiveAt.trim()) {
-    const at = parseEffectiveAt(form.effectiveAt, nowMs);
-    if (at == null) return { error: 'effective time is HHMM Zulu' };
-    op.effectiveAt = at;
-  }
-  return { op };
-}
-
 export function buildRequestOp(form) {
-  const scopes = RELEASE_SCOPES.filter(s => (form.scopes || []).includes(s));
-  if (scopes.length === 0) return { error: 'pick what you are asking for' };
-  const op = { kind: 'ControlRelease', action: 'REQUEST', scopes: scopes.includes('FULL') ? ['FULL'] : scopes };
-  if (form.note && form.note.trim()) op.note = form.note.trim();
+  const op = { kind: 'ControlRelease', action: 'REQUEST' };
+  if (form && form.note && form.note.trim()) op.note = form.note.trim();
   return { op };
 }
 
@@ -201,7 +148,7 @@ export function buildRefuseOp(reason) {
 }
 
 /**
- * Is this refusal the server asking for "coordinated with"? The ack carries `attestation: {with, needs:[scope…]}` (crc-sync
+ * Is this refusal the server asking for "coordinated with"? The ack carries `attestation: {with, needs:[axis…]}` (crc-sync
  * handoff-control.js `checkControlAxis`); only a SetBlock that has not already attested can be answered by one.
  * -> `{with, needs}` (needs as the words a controller reads, "CLIMB and DESCENT") or null.
  */

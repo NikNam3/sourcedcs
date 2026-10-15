@@ -19,8 +19,7 @@ function repairMode(fn) {
 function signOffWorld() {
   const w = makeWorld(createEfsp, helpers);
   const ex = exchange(w, helpers, 'B2SIGN');
-  mustAct(w.efsp, w.c.AP, 'AP', ex.R(), { kind: 'HANDOFF', action: 'TRANSFER_COMMS' });
-  mustAct(w.efsp, w.c.AP, 'AP', ex.R(), { kind: 'HANDOFF', action: 'TRANSFER_CONTROL' });
+  mustAct(w.efsp, w.c.AP, 'AP', ex.R(), { kind: 'HANDOFF', action: 'CHECKED_IN' });
   return { w, ex };
 }
 

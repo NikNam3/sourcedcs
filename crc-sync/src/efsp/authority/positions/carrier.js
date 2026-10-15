@@ -26,12 +26,12 @@ const PERMISSIONS = {
 
 /**
  * The actions of a coordination op kind a Position may use, where its grant is narrower than the kind (docs/adr/0101).
- * A Position absent here has every action of every kind it holds. CV_MARSHAL answers a HANDOFF and records the two
- * marks; it never PROPOSEs or CANCELs ("the carrier does not talk to the centre" stays true outbound).
+ * A Position absent here has every action of every kind it holds. CV_MARSHAL answers a HANDOFF and marks it checked
+ * in (docs/adr/0122); it never PROPOSEs or CANCELs ("the carrier does not talk to the centre" stays true outbound).
  */
 const COORDINATION_ACTIONS = {
   CV_MARSHAL: {
-    HANDOFF: ['ACCEPT', 'REJECT', 'TRANSFER_COMMS', 'TRANSFER_CONTROL'],
+    HANDOFF: ['ACCEPT', 'REJECT', 'CHECKED_IN'],
     ControlRelease: ['REQUEST'],
   },
 };

@@ -2,25 +2,23 @@
 
 // Cross-Facility coordination primitives (guide §4.6,
 // docs/adr/0015) — all 5 share one handler; op.kind IS the primitive,
-// op.action selects PROPOSE/ACCEPT/REJECT/STAND_BY/CANCEL, and for a HANDOFF TRANSFER_COMMS and TRANSFER_CONTROL
-// (docs/adr/0101). See board/coordination.js applyOp.
+// op.action selects PROPOSE/ACCEPT/REJECT/STAND_BY/CANCEL, and for a HANDOFF the receiver's CHECKED_IN
+// (docs/adr/0122). See board/coordination.js applyOp.
 const KINDS = ['HANDOFF', 'POINT_OUT', 'TRAFFIC', 'OPERATIONAL_REQUEST', 'AIT'];
 
-/** The two one-click marks of a HANDOFF (docs/adr/0101 "Undo", H100 DR-5): undoable inside the window; nothing else here is. */
-const UNDOABLE_MARKS = ['TRANSFER_COMMS', 'TRANSFER_CONTROL'];
+/** The one-click mark of a HANDOFF (docs/adr/0101 "Undo", H100 DR-5; ADR 0122): undoable inside the window; nothing else here is. */
+const UNDOABLE_MARKS = ['CHECKED_IN'];
 
 /**
- * docs/adr/0100: the scope of a mark is both Strips of the exchange (the mark writes this one and mirrors onto the peer
- * Board's, and a FULL release may move control inside it). `null` for every other action: a PROPOSE, ACCEPT, REJECT or
- * CANCEL is not undone (a PROPOSE has CANCEL, an ACCEPT is the receiver's answer).
+ * docs/adr/0100: the scope of the mark is both Strips of the exchange (the mark writes this one and mirrors onto the peer
+ * Board's, and on a released handoff moves control inside it). `null` for every other action: a PROPOSE, ACCEPT, REJECT
+ * or CANCEL is not undone (a PROPOSE has CANCEL, an ACCEPT is the receiver's answer).
  */
 const HANDOFF_UNDO = {
   label: (op, strip) => {
-    // Always the RECEIVING Position, whichever side records the mark: on the receiver's replica that is its own owner,
-    // on the transferring Strip it is the peer (so a receiver's mark never reads "to" the Position that held it).
     const co = strip && strip.coordination;
     const receiving = (co && (co.mintedForCoordination ? strip.ownerPositionId : co.peerPositionId)) || 'the receiving Position';
-    return op.action === 'TRANSFER_COMMS' ? `Communications to ${receiving}` : `Control to ${receiving}`;
+    return `Checked in with ${receiving}`;
   },
   scope: (ctx, strip, op) => {
     if (!UNDOABLE_MARKS.includes(op.action) || !strip || !strip.coordination) return null;
