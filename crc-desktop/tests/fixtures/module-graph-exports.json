@@ -866,6 +866,7 @@
    "onEfspMetricsReportAck"
   ],
   "panels/efsp/efsp-nla.js": [
+   "ARRIVAL_PATTERN_NLA_LABELS",
    "ARRIVAL_STATE_OWNERS",
    "CARRIER_HANDOFFS",
    "COORDINATION_ELIGIBLE_STATES",
@@ -1284,6 +1285,15 @@
    "patternBoardModel",
    "renderPatternBoard"
   ],
+  "panels/efsp/pattern-rules.js": [
+   "PATTERN_CONVERSIONS",
+   "PATTERN_POSITION",
+   "PATTERN_STATE",
+   "STATE_DISPLAY_LABELS",
+   "patternConversionBlockedBy",
+   "patternConversionsFor",
+   "stateDisplayLabel"
+  ],
   "panels/efsp/runway-status-panel.js": [
    "initRunwayStatusPanel",
    "renderRunwayStatusPanel"
@@ -1391,6 +1401,7 @@
    "BLOCK_MAPS",
    "BLOCK_TITLES",
    "CONFIRM_VACATED_ELIGIBLE_BLOCKS",
+   "CYCLE_BLOCKS",
    "DEPARTURE_BLOCK_MAP",
    "ENUM_CLEARABLE_BLOCKS",
    "FINAL_BLOCK_MAP",
@@ -1409,14 +1420,17 @@
    "blockTitleFor",
    "blockValueHintFor",
    "cutRemarksToFit",
+   "cycleBlockLabel",
    "editRedirectFor",
    "enumSelectOptionsFor",
    "formatBlock3",
    "hasActiveAnnotationEntry",
    "isBlockEditable",
    "isBooleanToggleBlock",
+   "isCycleBlock",
    "isEnumBlockClearable",
    "isParFinalOnlyOnCarrier",
+   "nextCycleValue",
    "remarksBlockFor",
    "remarksOf",
    "requiredBlocksFor",

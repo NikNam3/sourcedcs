@@ -48,11 +48,11 @@ export const RUNWAY_STATUS_ACTION_OWNERS = {
 // the NLA does. FINAL is listed although its NLA (-> LANDED) is never held.
 export const RUNWAY_STATUS_RUNWAY_STRIP_STATES = {
   DEPARTURE: ['CLEARED', 'HELD', 'PUSHBACK', 'TAXI', 'RUNWAY_QUEUE', 'LUAW'],
-  ARRIVAL: ['INBOUND', 'HANDED_TO_TOWER', 'FINAL'],
+  ARRIVAL: ['INBOUND', 'HANDED_TO_TOWER', 'TRAFFIC_PATTERN', 'FINAL'], // TRAFFIC_PATTERN: crc-sync docs/adr/0126
 };
 
 // Where rule 4 (the hook check) applies: an arrival on its way to the runway.
-export const RUNWAY_STATUS_GEAR_CHECK_STATES = ['INBOUND', 'HANDED_TO_TOWER', 'FINAL'];
+export const RUNWAY_STATUS_GEAR_CHECK_STATES = ['INBOUND', 'HANDED_TO_TOWER', 'TRAFFIC_PATTERN', 'FINAL'];
 
 // [SOURCE-DEFINED] (decisions.md Q40) — the wording of these suspension labels is
 // ours. The mirror of runway-status.js's SUSPENSION_LABELS (decisions.md H52: the

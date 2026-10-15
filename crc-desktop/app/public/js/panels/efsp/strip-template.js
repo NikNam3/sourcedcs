@@ -720,6 +720,33 @@ export function enumSelectOptionsFor(blockId, flightData) {
 // flight (crc-sync names the declarer in the refusal). That is correct
 // and deliberately NOT pre-empted here: the refusal is legible and lands
 // attributed to the Strip.
+// crc-sync docs/adr/0126 (H150 TWR-Q1 a): LC's two pattern cells, a click cycling through the values the server accepts
+// (flight-data-store.js PATTERN_ENTRIES / PATTERN_OPTIONS) and back to empty. Each shows its short form: PAT / STR, and
+// T&G / FS / LA (no stop-and-go, H147 RQ7). Checked before the enum <select> (block-edit.js).
+export const CYCLE_BLOCKS = {
+  '9J-ENTRY': [['PATTERN', 'PAT'], ['STRAIGHT_IN', 'STR']],
+  '9J-OPTION': [['TOUCH_AND_GO', 'T&G'], ['FULL_STOP', 'FS'], ['LOW_APPROACH', 'LA']],
+};
+
+/** @returns {boolean} is this Block a click-to-cycle cell? */
+export function isCycleBlock(blockId) {
+  return Object.prototype.hasOwnProperty.call(CYCLE_BLOCKS, blockId);
+}
+
+/** The short form a cycle cell shows for `value` ('' when unset or unknown). */
+export function cycleBlockLabel(blockId, value) {
+  const row = (CYCLE_BLOCKS[blockId] || []).find(([v]) => v === value);
+  return row ? row[1] : '';
+}
+
+/** The value one click sets: the next in the list, '' (clear) after the last, the first from empty. */
+export function nextCycleValue(blockId, value) {
+  const values = (CYCLE_BLOCKS[blockId] || []).map(([v]) => v);
+  const i = values.indexOf(value);
+  if (i < 0) return values[0] || '';
+  return i + 1 < values.length ? values[i + 1] : '';
+}
+
 export const ENUM_CLEARABLE_BLOCKS = new Set(['RSVC', 'SREG', '24A', '9F', 'C4']);
 
 /** @returns {boolean} may this enum Block be cleared back to no value at all? */
