@@ -1243,11 +1243,12 @@
    "PHI",
    "ZOOM_STEP",
    "autoscaleView",
+   "azAxisLabel",
+   "clampTo",
    "createTrailFilter",
    "effectiveGpa",
    "gpHeightFt",
    "headerModel",
-   "lateralFt",
    "niceStep",
    "noPlotState",
    "parTerminalOp",
@@ -1572,6 +1573,7 @@
   ],
   "settings.js": [
    "loadSettings",
+   "migratePar",
    "saveSettings",
    "settings"
   ],

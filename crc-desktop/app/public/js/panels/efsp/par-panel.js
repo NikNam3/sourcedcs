@@ -6,11 +6,11 @@ import { getActingPositions, sendEfspMutation } from './efsp-ws.js';
 import { onEfspChanged } from './efsp-change-bus.js';
 import { parSampleTimes, parSamples, parSampleFor } from './par-samples.js';
 import {
-  DEFAULT_VIEW, PAR_DEFAULTS, autoscaleView, createTrailFilter, effectiveGpa, gpHeightFt, headerModel, lateralFt,
+  DEFAULT_VIEW, PAR_DEFAULTS, autoscaleView, azAxisLabel, clampTo, createTrailFilter, effectiveGpa, gpHeightFt, headerModel,
   niceStep, noPlotState, pickFlight, rangeAtDaNm, readoutModel, replot, parTerminalOp, parTerminalRecorded, parTerminals, severity, zoomView,
 } from './par-model.js';
 
-// The PAR panel (decisions H115, H116, H122; mockup docs/mockups/par-panel.html, revision 4; lane note docs/wip/PAR-2.md). An
+// The PAR panel (decisions H115, H116, H122, H141; mockup docs/mockups/par-panel.html, revision 5; ADR 0123; lane note docs/wip/PAR-2.md). An
 // ordinary dockable panel: the approach, the flight, its range to touchdown, and two scopes (elevation and azimuth against range
 // from touchdown) drawn from the server's PAR sample (crc-sync docs/adr/0112), plus FINAL's two terminal buttons. It replaced the
 // FINAL Bay view's talk-down component (its cadence bar and call prompts are gone: H115, no required calls, no cadence).
@@ -20,8 +20,11 @@ import {
 // window is 10 NM; a manual zoom pauses it and a double-click resumes it. Track style E: a magenta diamond with a dark halo and a
 // magenta trail over dimmed reference lines.
 //
-// Dark cockpit: grey unless a problem. Red outside a tolerance (default ±1°, Settings) above DA only; nothing is coloured below DA
-// and the dashed tolerance lines start there (H116). Amber only for no plot for 3 s. An INOP scope is blanked in orange-red with
+// The azimuth scope is in degrees only (ADR 0123): the course is the 0° line, the ±tolerance lines are straight, and a plot past
+// the window's edge is drawn at the edge. The elevation scope keeps feet (height above TDZE; DA is in feet on the plate).
+//
+// Dark cockpit: grey unless a problem. Red outside a tolerance above DA only (Settings: elevation +1° above and 0.5° below the
+// glidepath, the FAA lower safe limit; azimuth ±1°); nothing is coloured below DA and the dashed tolerance lines start there (H116). Amber only for no plot for 3 s. An INOP scope is blanked in orange-red with
 // the reason. Several flights on finals sent to this controller: a row of their names picks the one the scopes show
 // (par-model.js `pickFlight`); the Strip's ⋯ menu item "Show in PAR panel" picks it too (the FINAL Bay is ordinary
 // Strips, H138 U10).
@@ -37,7 +40,9 @@ const TICK_MS = 500; // the no-plot age is read off the clock between frames
 registerSettingsTab('par', [
   { key: 'parAutoscale', type: 'toggle', label: 'Autoscale', default: PAR_DEFAULTS.autoscale, onChange: () => { _paused = false; renderParPanel(); } },
   { key: 'parGpa', type: 'number', label: 'Default glideslope', unit: '°', default: PAR_DEFAULTS.gpaDeg, min: 2, max: 4, step: 0.01, onChange: () => renderParPanel() },
-  { key: 'parTolEl', type: 'number', label: 'Elevation tolerance ±', unit: '°', default: PAR_DEFAULTS.tolElDeg, min: 0.1, max: 3, step: 0.1, onChange: () => renderParPanel() },
+  // two elevation limits (ADR 0123): a saved single `parTolEl` became the upper one (settings.js loadSettings)
+  { key: 'parTolElHigh', type: 'number', label: 'Elevation tolerance above', unit: '°', default: PAR_DEFAULTS.tolElHighDeg, min: 0.1, max: 3, step: 0.1, onChange: () => renderParPanel() },
+  { key: 'parTolElLow', type: 'number', label: 'Elevation tolerance below', unit: '°', default: PAR_DEFAULTS.tolElLowDeg, min: 0.1, max: 3, step: 0.1, onChange: () => renderParPanel() },
   { key: 'parTolAz', type: 'number', label: 'Azimuth tolerance ±', unit: '°', default: PAR_DEFAULTS.tolAzDeg, min: 0.1, max: 5, step: 0.1, onChange: () => renderParPanel() },
 ], { label: 'PAR' });
 
@@ -203,8 +208,8 @@ function _drawScope(scope, kind, c) {
   const R = w - padR;
   const B = h - padB;
   const v = c.view;
-  const lo = kind === 'el' ? 0 : -v.yMax;
-  const hi = kind === 'el' ? v.hMax : v.yMax;
+  const lo = kind === 'el' ? 0 : -v.azMaxDeg;
+  const hi = kind === 'el' ? v.hMax : v.azMaxDeg;
   const X = (r) => L + (r / v.rMax) * (R - L);
   const Y = (y) => B - ((y - lo) / (hi - lo)) * (B - T);
   const clipId = `par-clip-${kind}`;
@@ -225,8 +230,8 @@ function _drawScope(scope, kind, c) {
   const vs = niceStep(hi - lo, 4);
   for (let y = Math.ceil(lo / vs) * vs; y <= hi + 1e-9; y += vs) {
     g.appendChild(sv('line', { x1: L, x2: R, y1: Y(y), y2: Y(y), stroke: COL.grid }));
-    const t = kind === 'el' ? String(Math.round(y)) : (Math.abs(y) < 1e-9 ? '0' : `${Math.abs(Math.round(y))}${y < 0 ? 'L' : 'R'}`);
-    g.appendChild(sv('text', { x: L - 4, y: Y(y) + 3, 'text-anchor': 'end', fill: COL.faint }, t));
+    const t = kind === 'el' ? String(Math.round(y)) : azAxisLabel(y);
+    g.appendChild(sv('text', { x: L - 4, y: Y(y) + 3, 'text-anchor': 'end', fill: COL.faint, 'data-par-axis': kind }, t));
   }
 
   const inop = kind === 'el' ? c.elInop : c.azInop;
@@ -253,8 +258,8 @@ function _drawScope(scope, kind, c) {
   const tch = c.approach ? c.approach.tchFt : 0;
   if (kind === 'el') {
     path((rr) => gpHeightFt(rr, c.gpa, tch), false, 'glidepath');
-    path((rr) => gpHeightFt(rr, c.gpa, tch, -c.tolEl), true, 'tol-low');
-    path((rr) => gpHeightFt(rr, c.gpa, tch, c.tolEl), true, 'tol-high');
+    path((rr) => gpHeightFt(rr, c.gpa, tch, -c.tolElLow), true, 'tol-low');
+    path((rr) => gpHeightFt(rr, c.gpa, tch, c.tolElHigh), true, 'tol-high');
     if (c.approach && Number.isFinite(c.approach.dhFt)) {
       const xd = X(c.rDa);
       const yd = Y(c.approach.dhFt);
@@ -263,11 +268,13 @@ function _drawScope(scope, kind, c) {
     }
   } else {
     path(() => 0, false, 'course');
-    path((rr) => lateralFt(rr, c.tolAz), true, 'tol-right');
-    path((rr) => lateralFt(rr, -c.tolAz), true, 'tol-left');
+    // degrees: the ±tolerance lines are straight (a B-display, ADR 0123)
+    path(() => c.tolAz, true, 'tol-right');
+    path(() => -c.tolAz, true, 'tol-left');
   }
 
-  const yOf = (p) => (kind === 'el' ? p.heightFt : p.azDevFt);
+  // azimuth: a plot past the window's edge (close in, a few feet are degrees) is drawn at the edge, never lost
+  const yOf = (p) => (kind === 'el' ? p.heightFt : (Number.isFinite(p.azDeg) ? clampTo(p.azDeg, lo, hi) : NaN));
   const ok = (p) => p && Number.isFinite(p.rangeNm) && Number.isFinite(yOf(p));
   const sev = kind === 'el' ? c.sev.el : c.sev.az;
   const colour = sev === 'danger' ? COL.danger : COL.plot;
@@ -286,13 +293,14 @@ function _drawScope(scope, kind, c) {
       d: `M${x} ${y - 6}L${x + 6} ${y}L${x} ${y + 6}L${x - 6} ${y}Z`,
       fill: lost ? 'none' : fill, stroke: lost ? fill : COL.halo, 'stroke-width': lost ? 1.6 : 2.5, 'paint-order': 'stroke',
       'data-par-plot': kind, 'data-level': lost ? 'attn' : (sev || ''),
+      ...(kind === 'az' && Math.abs(c.plot.azDeg) > hi ? { 'data-clamped': '1' } : {}),
     }));
   }
 }
 
 function _windowText(kind, autoscale) {
   const v = _view;
-  const span = kind === 'el' ? `0–${Math.round(v.hMax)} ft` : `±${Math.round(v.yMax)} ft`;
+  const span = kind === 'el' ? `0–${Math.round(v.hMax)} ft` : `±${+v.azMaxDeg.toPrecision(2)}°`;
   const auto = autoscale ? (_paused ? ' · AUTO paused (double-click)' : ' · AUTO') : '';
   return `0–${v.rMax.toFixed(1)} NM · ${span}${auto}`;
 }
@@ -367,11 +375,12 @@ export function renderParPanel() {
 
   const approach = sample.approach || null;
   const gpa = effectiveGpa(approach, _num('parGpa', PAR_DEFAULTS.gpaDeg));
-  const tolEl = _num('parTolEl', PAR_DEFAULTS.tolElDeg);
+  const tolElHigh = _num('parTolElHigh', PAR_DEFAULTS.tolElHighDeg);
+  const tolElLow = _num('parTolElLow', PAR_DEFAULTS.tolElLowDeg);
   const tolAz = _num('parTolAz', PAR_DEFAULTS.tolAzDeg);
   const rDa = rangeAtDaNm(approach, gpa);
   const plot = replot(sample.plot, approach, gpa);
-  const sev = severity(plot, { rDaNm: rDa, tolElDeg: tolEl, tolAzDeg: tolAz });
+  const sev = severity(plot, { rDaNm: rDa, tolElHighDeg: tolElHigh, tolElLowDeg: tolElLow, tolAzDeg: tolAz });
   const times = parSampleTimes();
   const np = noPlotState(sample, { receivedAtMs: times.receivedAt, nowMs: now, firstSeenMs: _firstSeen.get(id) });
   if (!_trails.has(id)) _trails.set(id, createTrailFilter());
@@ -420,7 +429,7 @@ export function renderParPanel() {
   const autoscale = !!getSetting('parAutoscale');
   if (autoscale && !_paused && plot) _view = autoscaleView(plot, { gpaDeg: gpa, tchFt: approach ? approach.tchFt : 0, tolAzDeg: tolAz });
   const ctx = {
-    view: _view, gpa, approach, tolEl, tolAz, rDa, plot, trail, sev, noPlot: np.amber,
+    view: _view, gpa, approach, tolElHigh, tolElLow, tolAz, rDa, plot, trail, sev, noPlot: np.amber,
     elInop: ro.elInop, azInop: ro.azInop, reason: ro.inopReason,
   };
   _els.el.win.textContent = _windowText('el', autoscale);

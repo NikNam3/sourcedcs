@@ -72,9 +72,13 @@ table.t th{color:var(--muted);font-weight:400;background:var(--panel)}
 </style></head><body><main>
 <p><a href="index.html">← mockups</a></p>
 <header>
-<h1>PAR panel <span style="color:var(--muted);font-size:12px;font-weight:400">mockup, revision 4, 2026-10-06</span></h1>
+<h1>PAR panel <span style="color:var(--muted);font-size:12px;font-weight:400">mockup, revision 5, 2026-10-14</span></h1>
 <p>A normal crc-desktop panel. It shows the precision approach radar picture for the aircraft on final and nothing the controller
 already knows. When the approach is normal the panel is all grey except the track. Colour elsewhere appears only when something needs attention.</p>
+<p>Revision 5 (decisions H141, ADR 0123): the azimuth scope is in <b>degrees only</b> (axis, window and readout; the tolerance
+lines are straight), and the elevation tolerance is split: <b>1° above</b> the glidepath and <b>0.5° below</b> it, the FAA lower
+safe limit (Order 8200.1D, the "B" cursor). An aircraft 0.5–1° low is now red. The buttons are the final controller's steps
+(Begin descent, Cleared to land, Landed, Missed approach).</p>
 </header>
 
 <div class="bar" role="group" aria-label="Sample situation"><span class="lbl">Situation</span>
@@ -82,7 +86,9 @@ already knows. When the approach is normal the panel is all grey except the trac
   <button type="button" data-state="normal" aria-pressed="true">On glidepath</button>
   <button type="button" data-state="slight" aria-pressed="false">Slightly above, left</button>
   <button type="button" data-state="wellright" aria-pressed="false">Right, outside tolerance</button>
-  <button type="button" data-state="belowsafety" aria-pressed="false">Below, outside tolerance</button>
+  <button type="button" data-state="low04" aria-pressed="false">0.4° below (inside)</button>
+  <button type="button" data-state="low07" aria-pressed="false">0.7° below (past the lower safe limit)</button>
+  <button type="button" data-state="belowsafety" aria-pressed="false">Well below</button>
   <button type="button" data-state="belowda" aria-pressed="false">Below DA, off centre</button>
   <button type="button" data-state="lost" aria-pressed="false">Contact lost</button>
   <button type="button" data-state="elfail" aria-pressed="false">Elevation failed</button>
@@ -100,9 +106,10 @@ already knows. When the approach is normal the panel is all grey except the trac
   <div class="sbody">
     <label><input type="checkbox" id="autoset" checked> Autoscale</label>
     <label>Default glideslope <input type="number" id="setgpa" value="3.06" step="0.01" min="2" max="4"> °</label>
-    <label>Elevation tolerance ± <input type="number" id="setel" value="1.0" step="0.1" min="0.1" max="3"> °</label>
+    <label>Elevation tolerance above <input type="number" id="setel" value="1.0" step="0.1" min="0.1" max="3"> °</label>
+    <label>Elevation tolerance below <input type="number" id="setellow" value="0.5" step="0.1" min="0.1" max="3"> °</label>
     <label>Azimuth tolerance ± <input type="number" id="setaz" value="1.0" step="0.1" min="0.1" max="5"> °</label>
-    <span class="shint">An approach with its own published glideslope uses that; this is the default. Tolerances do not apply below DA.</span>
+    <span class="shint">An approach with its own published glideslope uses that; this is the default. Below the glidepath the default is the FAA lower safe limit (0.5°). Tolerances do not apply below DA.</span>
   </div>
 </section>
 
@@ -130,14 +137,16 @@ already knows. When the approach is normal the panel is all grey except the trac
   </div>
   <div class="dev" id="dev"></div>
   <div id="msg"></div>
-  <div class="terms"><button type="button">Landing assured</button><button type="button">Missed approach</button></div>
+  <div class="terms"><button type="button">Begin descent</button><button type="button">Cleared to land</button><button type="button">Landed</button><button type="button">Missed approach</button></div>
 </section>
 
 <aside class="notes">
   <div><h3>Zoom</h3>
-  <p>Touchdown stays in the bottom-left corner of the elevation scope and on the left edge of the azimuth scope, always. Wheel: zoom range (both scopes). Shift + wheel: zoom height or lateral offset (this scope). No panning.</p></div>
+  <p>Touchdown stays in the bottom-left corner of the elevation scope and on the left edge of the azimuth scope, always. Wheel: zoom range (both scopes). Shift + wheel: zoom height or the azimuth angle (this scope). No panning.</p></div>
   <div><h3>Autoscale</h3>
-  <p>With the setting on, the window follows the aircraft so the track sits at the golden-ratio point (61.8 % of the range width, likewise in height) until the window is down to 10 NM; from there it stays at 10 NM. A manual zoom pauses autoscale (the window label says so); double-click resumes it. With the setting off the window stays where the controller put it.</p></div>
+  <p>With the setting on, the window follows the aircraft so the track sits at the golden-ratio point (61.8 % of the range width, likewise in height; the azimuth window is twice the tolerance, ±2°, or wider for a track far off the course, never past the ±15° the PAR covers) until the window is down to 10 NM; from there it stays at 10 NM. A manual zoom pauses autoscale (the window label says so); double-click resumes it. With the setting off the window stays where the controller put it.</p></div>
+  <div><h3>Azimuth in degrees</h3>
+  <p>The azimuth scope plots range against the angle off the course seen from touchdown (a B-display), so the tolerance lines are straight. Close in, a few feet are many degrees: a plot past the window's edge is drawn at the edge.</p></div>
   <div><h3>Track styles</h3>
   <p>B to E give the track its own colour and dim the reference lines so the plot stands out. Amber and red stay reserved for problems, so a coloured track turns amber or red only when it is one.</p></div>
 </aside>
@@ -151,9 +160,9 @@ already knows. When the approach is normal the panel is all grey except the trac
 <tr><td><span class="sw" style="background:#e58bff"></span>magenta</td><td>The aircraft (style E, approved).</td><td>The current plot and its trail.</td></tr>
 <tr><td><span class="sw" style="background:var(--attn)"></span>amber</td><td>Look at this now.</td><td>No radar plot for 3 s.</td></tr>
 <tr><td><span class="sw" style="background:var(--bad)"></span>orange-red</td><td>Something failed.</td><td>Elevation or azimuth data unavailable; that scope is blanked with the reason.</td></tr>
-<tr><td><span class="sw" style="background:var(--danger)"></span>red</td><td>Outside tolerance.</td><td>Elevation or azimuth outside its tolerance (default ±1°), above DA only. Below DA the pilot decides and nothing is coloured.</td></tr>
+<tr><td><span class="sw" style="background:var(--danger)"></span>red</td><td>Outside tolerance.</td><td>Elevation more than 1° above or 0.5° below the glidepath, or azimuth more than 1° off the course, above DA only. Below DA the pilot decides and nothing is coloured.</td></tr>
 </table></div>
-<p>Defaults: glideslope 3.06°, tolerance ±1° in elevation and azimuth, set per controller in the PAR tab of the Settings panel. The dashed tolerance lines start at DA, because they do not apply below it.</p>
+<p>Defaults: glideslope 3.06°; elevation tolerance 1° above and 0.5° below the glidepath; azimuth ±1°; set per controller in the PAR tab of the Settings panel. The dashed tolerance lines start at DA, because they do not apply below it.</p>
 </section>
 </main>
 
@@ -161,7 +170,7 @@ already knows. When the approach is normal the panel is all grey except the trac
 (function () {
   'use strict';
   var FT_PER_NM = 6076.12, TCH = 50, GPA = 3.06, DA_HAT = 202, TDZE = 238, rad = Math.PI / 180, PHI = 0.618;
-  var TOL = { el: 1.0, az: 1.0 };
+  var TOL = { el: 1.0, elLow: 0.5, az: 1.0 };
   var STYLES = {
     grey:    { plot: '#e6edf3', trail: '#8c9aa6', ref: '#8c9aa6', refDash: '#8c9aa6', shape: 'square', halo: false },
     cyan:    { plot: '#6fd3ff', trail: '#6fd3ff', ref: '#5f6b76', refDash: '#46505a', shape: 'circle', halo: true },
@@ -173,17 +182,18 @@ already knows. When the approach is normal the panel is all grey except the trac
     normal:      { r: 3.2, el: 0.05, az: -0.1, elTrend: 0,     azTrend: 0,    gs: 142, vs: -750 },
     slight:      { r: 3.6, el: 0.35, az: -0.9, elTrend: -0.03, azTrend: 0.05, gs: 140, vs: -820 },
     wellright:   { r: 5.1, el: 0.10, az: 1.3,  elTrend: 0,     azTrend: 0.02, gs: 148, vs: -780 },
+    low04:       { r: 4.2, el: -0.4, az: 0.1,  elTrend: -0.02, azTrend: 0,    gs: 142, vs: -830 },
+    low07:       { r: 4.2, el: -0.7, az: 0.1,  elTrend: -0.03, azTrend: 0,    gs: 142, vs: -870 },
     belowsafety: { r: 2.4, el: -1.2, az: 0.3,  elTrend: -0.06, azTrend: 0,    gs: 145, vs: -1150 },
     belowda:     { r: 0.35, el: -0.6, az: 1.4,  elTrend: 0,     azTrend: 0,    gs: 138, vs: -760 },
     lost:        { r: 1.9, el: 0.08, az: -0.2, elTrend: 0,     azTrend: 0,    gs: 140, vs: -740, lost: 4 },
     elfail:      { r: 3.6, el: null, az: -0.3, elTrend: 0,     azTrend: 0,    gs: 142, vs: null, elFail: true }
   };
-  // The view is anchored at touchdown: range 0..rMax, height 0..hMax, lateral -yMax..+yMax.
-  var view = { rMax: 10, hMax: 3500, yMax: 1200 }, auto = true, paused = false, state = 'normal', style = 'magenta';
+  // The view is anchored at touchdown: range 0..rMax, height 0..hMax, azimuth -azMax..+azMax degrees.
+  var view = { rMax: 10, hMax: 3500, azMax: 2 }, auto = true, paused = false, state = 'normal', style = 'magenta';
   var fly = null; // { t0, simT } while flying
 
   function gpHeight(r, offDeg) { return TCH + r * FT_PER_NM * Math.tan((GPA + (offDeg || 0)) * rad); }
-  function lateral(r, deg) { return r * FT_PER_NM * Math.tan(deg * rad); }
   function flyAt(t) { // a sample approach from 14 NM, sim seconds since start
     var r = Math.max(0.2, 14 - 145 * t / 3600);
     return { r: r, el: 0.25 * Math.sin(t / 40) - 0.05, az: 0.8 * Math.sin(t / 55 + 1) * Math.min(1, r / 4), gs: 145, vs: -770 };
@@ -203,7 +213,7 @@ already knows. When the approach is normal the panel is all grey except the trac
     view.rMax = Math.max(10, s.r / PHI);
     var hTrack = s.el === null ? gpHeight(s.r, 0) : gpHeight(s.r, s.el);
     view.hMax = Math.max(gpHeight(view.rMax, 0) * 1.08, hTrack / PHI);
-    view.yMax = Math.max(lateral(view.rMax, Math.max(TOL.az, 1.5)) * 1.15, Math.abs(lateral(s.r, s.az)) / PHI);
+    view.azMax = Math.min(15, Math.max(2 * TOL.az, Math.abs(s.az) / PHI));
   }
   function svgEl(name, attrs) {
     var e = document.createElementNS('http://www.w3.org/2000/svg', name);
@@ -214,11 +224,11 @@ already knows. When the approach is normal the panel is all grey except the trac
     var raw = span / target, p = Math.pow(10, Math.floor(Math.log10(raw))), m = raw / p;
     return p * (m < 1.5 ? 1 : m < 3.5 ? 2 : m < 7.5 ? 5 : 10);
   }
-  // One tolerance per axis, red outside it. Below DA the pilot decides: no tolerance applies, nothing is coloured.
+  // Elevation: red more than TOL.el above or TOL.elLow below the glidepath; azimuth: more than TOL.az off the course. Below DA the pilot decides: no tolerance applies, nothing is coloured.
   function rDA() { return (DA_HAT - TCH) / (FT_PER_NM * Math.tan(GPA * rad)); }
   function severity(kind, s) {
     if (s.r <= rDA()) return '';
-    if (kind === 'el') return s.el !== null && Math.abs(s.el) > TOL.el ? 'danger' : '';
+    if (kind === 'el') return s.el !== null && (s.el > TOL.el || s.el < -TOL.elLow) ? 'danger' : '';
     return Math.abs(s.az) > TOL.az ? 'danger' : '';
   }
   function mark(g, x, y, st, fill, hollow) {
@@ -235,7 +245,8 @@ already knows. When the approach is normal the panel is all grey except the trac
     svg.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
     while (svg.firstChild) svg.removeChild(svg.firstChild);
     var L = 40, R = w - 8, T = 18, B = h - 16;
-    var lo = kind === 'el' ? 0 : -view.yMax, hi = kind === 'el' ? view.hMax : view.yMax;
+    var lo = kind === 'el' ? 0 : -view.azMax, hi = kind === 'el' ? view.hMax : view.azMax;
+    var clampAz = function (a) { return Math.min(hi, Math.max(lo, a)); };
     var X = function (r) { return L + r / view.rMax * (R - L); };
     var Y = function (v) { return B - (v - lo) / (hi - lo) * (B - T); };
     var defs = svgEl('defs', {}), clip = svgEl('clipPath', { id: 'c' + kind });
@@ -252,7 +263,7 @@ already knows. When the approach is normal the panel is all grey except the trac
     for (var v = Math.ceil(lo / vs) * vs; v <= hi + 1e-9; v += vs) {
       g.appendChild(svgEl('line', { x1: L, x2: R, y1: Y(v), y2: Y(v), stroke: getVar('--grid') }));
       var tv = svgEl('text', { x: L - 4, y: Y(v) + 3, 'text-anchor': 'end', fill: getVar('--faint'), 'font-size': 10 });
-      tv.textContent = kind === 'el' ? String(Math.round(v)) : (Math.abs(v) < 1e-9 ? '0' : Math.abs(Math.round(v)) + (v < 0 ? 'L' : 'R'));
+      tv.textContent = kind === 'el' ? String(Math.round(v)) : (Math.abs(v) < 1e-9 ? '0°' : +Math.abs(v).toFixed(2) + '°' + (v < 0 ? 'L' : 'R'));
       g.appendChild(tv);
     }
     function path(fn, dash) {
@@ -266,26 +277,26 @@ already knows. When the approach is normal the panel is all grey except the trac
     } else {
       if (kind === 'el') {
         path(function (rr) { return gpHeight(rr, 0); });
-        path(function (rr) { return gpHeight(rr, -TOL.el); }, true);
+        path(function (rr) { return gpHeight(rr, -TOL.elLow); }, true);
         path(function (rr) { return gpHeight(rr, TOL.el); }, true);
         var rD = rDA();
         pg.appendChild(svgEl('line', { x1: X(rD), x2: X(rD), y1: Y(DA_HAT) - 7, y2: Y(DA_HAT) + 7, stroke: st.ref }));
         var dt = svgEl('text', { x: X(rD) + 4, y: Y(DA_HAT) + 15, fill: getVar('--faint'), 'font-size': 10 }); dt.textContent = 'DA'; pg.appendChild(dt);
       } else {
         path(function () { return 0; });
-        path(function (rr) { return lateral(rr, TOL.az); }, true);
-        path(function (rr) { return lateral(rr, -TOL.az); }, true);
+        path(function () { return TOL.az; }, true);
+        path(function () { return -TOL.az; }, true);
       }
       var pts = s.pts, cur = pts[pts.length - 1];
       var sev = severity(kind, s), col = sev === 'danger' ? getVar('--danger') : sev === 'attn' ? getVar('--attn') : st.plot;
       pts.slice(0, -1).forEach(function (p, i) {
-        var yy = kind === 'el' ? gpHeight(p.r, p.el) : lateral(p.r, p.az);
+        var yy = kind === 'el' ? gpHeight(p.r, p.el) : clampAz(p.az);
         pg.appendChild(svgEl('circle', { cx: X(p.r), cy: Y(yy), r: 1.9, fill: sev ? col : st.trail, opacity: (0.18 + i * 0.06).toFixed(2) }));
       });
-      var yc = kind === 'el' ? gpHeight(cur.r, cur.el) : lateral(cur.r, cur.az);
+      var yc = kind === 'el' ? gpHeight(cur.r, cur.el) : clampAz(cur.az);
       mark(pg, X(cur.r), Y(yc), st, s.lost ? getVar('--attn') : col, !!s.lost);
     }
-    var label = '0–' + view.rMax.toFixed(1) + ' NM · ' + (kind === 'el' ? '0–' + Math.round(view.hMax) + ' ft' : '±' + Math.round(view.yMax) + ' ft');
+    var label = '0–' + view.rMax.toFixed(1) + ' NM · ' + (kind === 'el' ? '0–' + Math.round(view.hMax) + ' ft' : '±' + (+view.azMax.toPrecision(2)) + '°');
     document.getElementById(kind + 'win').textContent = label + (auto ? (paused ? ' · AUTO paused (double-click)' : ' · AUTO') : '');
   }
   var cssCache = getComputedStyle(document.documentElement);
@@ -298,7 +309,7 @@ already knows. When the approach is normal the panel is all grey except the trac
     var sensor = document.getElementById('sensor'); sensor.textContent = '';
     if (s.elFail) { var f = document.createElement('span'); f.className = 'flag bad'; f.textContent = 'EL INOP'; sensor.appendChild(f); }
     var elFt = s.el === null ? null : Math.round(gpHeight(s.r, s.el) - gpHeight(s.r, 0));
-    var azFt = Math.round(lateral(s.r, s.az)), elSev = severity('el', s), azSev = severity('az', s);
+    var azD = Math.round(Math.abs(s.az) * 10) / 10, elSev = severity('el', s), azSev = severity('az', s);
     var dev = document.getElementById('dev'); dev.textContent = '';
     function item(cls, label, value, extra) {
       var sp = document.createElement('span'); sp.className = cls; sp.appendChild(document.createTextNode(label + ' '));
@@ -307,7 +318,7 @@ already knows. When the approach is normal the panel is all grey except the trac
       dev.appendChild(sp);
     }
     item(elSev, 'EL', elFt === null ? '—' : (elFt > 0 ? '+' : elFt < 0 ? '−' : '') + Math.abs(elFt) + ' ft', elSev === 'danger' ? 'OUTSIDE TOLERANCE' : '');
-    item(azSev, 'AZ', Math.abs(azFt) + ' ft ' + (azFt < 0 ? 'L' : 'R'), azSev === 'danger' ? 'OUTSIDE TOLERANCE' : '');
+    item(azSev, 'AZ', azD.toFixed(1) + '°' + (azD === 0 ? '' : s.az < 0 ? ' L' : ' R'), azSev === 'danger' ? 'OUTSIDE TOLERANCE' : '');
     item('', 'ALT', s.el === null ? '—' : Math.round(TDZE + gpHeight(s.r, s.el)).toLocaleString('en') + ' ft');
     var msg = document.getElementById('msg'); msg.textContent = '';
     if (s.lost) { var m = document.createElement('div'); m.className = 'msg attn'; m.textContent = 'NO PLOT ' + s.lost + ' s'; msg.appendChild(m); }
@@ -320,22 +331,22 @@ already knows. When the approach is normal the panel is all grey except the trac
     box.addEventListener('wheel', function (e) {
       e.preventDefault();
       var z = e.deltaY > 0 ? 1.15 : 1 / 1.15;
-      if (e.shiftKey) { if (kind === 'el') view.hMax = Math.max(150, view.hMax * z); else view.yMax = Math.max(100, view.yMax * z); }
+      if (e.shiftKey) { if (kind === 'el') view.hMax = Math.max(150, view.hMax * z); else view.azMax = Math.min(15, Math.max(0.25, view.azMax * z)); }
       else view.rMax = Math.min(40, Math.max(0.5, view.rMax * z));
       if (auto) paused = true;
       render();
     }, { passive: false });
     box.addEventListener('dblclick', function () {
       paused = false;
-      if (!auto) view = { rMax: 10, hMax: 3500, yMax: 1200 };
+      if (!auto) view = { rMax: 10, hMax: 3500, azMax: 2 };
       render();
     });
   });
   document.getElementById('autoset').addEventListener('change', function (e) { auto = e.target.checked; paused = false; render(); });
   function num(id, lo, hi, fallback) { var v = parseFloat(document.getElementById(id).value); return isFinite(v) ? Math.min(hi, Math.max(lo, v)) : fallback; }
-  ['setgpa', 'setel', 'setaz'].forEach(function (id) {
+  ['setgpa', 'setel', 'setellow', 'setaz'].forEach(function (id) {
     document.getElementById(id).addEventListener('input', function () {
-      GPA = num('setgpa', 2, 4, 3.06); TOL.el = num('setel', 0.1, 3, 1); TOL.az = num('setaz', 0.1, 5, 1);
+      GPA = num('setgpa', 2, 4, 3.06); TOL.el = num('setel', 0.1, 3, 1); TOL.elLow = num('setellow', 0.1, 3, 0.5); TOL.az = num('setaz', 0.1, 5, 1);
       document.getElementById('hgpa').textContent = GPA.toFixed(2) + '°';
       render();
     });

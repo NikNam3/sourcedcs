@@ -1,21 +1,28 @@
 'use strict';
 
-// The PAR panel's model (decisions H115, H116; mockup docs/mockups/par-panel.html, revision 4; the sample is crc-sync
+// The PAR panel's model (decisions H115, H116, H141; mockup docs/mockups/par-panel.html, revision 5; ADR 0123; the sample is crc-sync
 // docs/adr/0112, docs/wip/PAR-1.md "The sample"). Pure: it imports nothing and touches no DOM, so par-panel.js draws what this
 // works out and the unit tests read it with no browser.
 //
 // What the panel shows is a picture, never an instruction (H115): no required or suggested calls, no cadence. Colour is the
 // dark-cockpit rule: grey unless a problem; red outside a tolerance above DA; amber only for no plot for 3 s; orange-red for a
 // scope that is INOP. Below DA the pilot decides, so nothing is coloured there (H116).
+//
+// ADR 0123 (H141 U-RQ4 b, U-RQ5 a): the azimuth scope is in degrees only (a B-display: range against the angle off the course
+// seen from touchdown, the sample's `azDeg`), no feet on it or in its readout. The elevation limits are split: the upper is the
+// controller's setting (+1°), the lower defaults to 0.5° below the glidepath, the FAA lower safe limit (Order 8200.1D, the
+// "B" cursor), because obstacle clearance is verified only down to it.
 
 export const FT_PER_NM = 6076.12;
 export const PHI = 0.618;                  // the golden-ratio point the autoscale keeps the track at (H115)
 export const AUTOSCALE_FLOOR_NM = 10;      // autoscale shrinks the window down to 10 NM and stops there
 export const NO_PLOT_MS = 3000;            // amber at 3 s without a plot (H115)
-export const PAR_DEFAULTS = Object.freeze({ gpaDeg: 3.06, tolElDeg: 1, tolAzDeg: 1, autoscale: true }); // H116
-export const DEFAULT_VIEW = Object.freeze({ rMax: 10, hMax: 3500, yMax: 1200 });
+export const PAR_DEFAULTS = Object.freeze({ gpaDeg: 3.06, tolElHighDeg: 1, tolElLowDeg: 0.5, tolAzDeg: 1, autoscale: true }); // H116, H141
+export const DEFAULT_VIEW = Object.freeze({ rMax: 10, hMax: 3500, azMaxDeg: 2 });
 export const ZOOM_STEP = 1.15;
-export const LIMITS = Object.freeze({ rMin: 0.5, rMax: 40, hMin: 150, yMin: 100 });
+// azMaxDeg: our PAR covers ±15° of the course (crc-sync config/par.json `coverage.azimuthHalfDeg`, the AN/FPN-68A), so the
+// azimuth window never opens wider
+export const LIMITS = Object.freeze({ rMin: 0.5, rMax: 40, hMin: 150, azMinDeg: 0.25, azMaxDeg: 15 });
 
 // The final controller's actions (crc-sync docs/adr/0117, H134 LT-RQ7 a, LT-RQ8 a), on the FINAL Bay line and the PAR panel:
 // "Begin descent" (JO 7110.65BB para 5-12-3; it ends the assigned altitude) and "Cleared to land" (the tower's clearance
@@ -62,11 +69,6 @@ export function gpHeightFt(rangeNm, gpaDeg, tchFt, offDeg = 0) {
   return (_pmFin(tchFt) ? tchFt : 0) + rangeNm * FT_PER_NM * Math.tan((gpaDeg + offDeg) * _PM_RAD);
 }
 
-/** Lateral offset (ft) of a line `deg` off the course at a range. */
-export function lateralFt(rangeNm, deg) {
-  return rangeNm * FT_PER_NM * Math.tan(deg * _PM_RAD);
-}
-
 /** Range (NM) at which the glidepath reaches DA; inside it no tolerance applies (H116). 0 when the approach has no DH. */
 export function rangeAtDaNm(approach, gpaDeg) {
   if (!approach || !_pmFin(approach.dhFt) || !_pmFin(gpaDeg) || gpaDeg <= 0) return 0;
@@ -88,13 +90,16 @@ export function replot(plot, approach, gpaDeg) {
 }
 
 /**
- * Outside tolerance, per axis, above DA only: 'danger' or ''. Elevation against the glidepath in degrees, azimuth as the angle
- * off the course seen from touchdown (the sample's `azDeg`). An INOP axis or a missing figure is never red.
+ * Outside tolerance, per axis, above DA only: 'danger' or ''. Elevation against the glidepath in degrees, more than
+ * `tolElHighDeg` above or `tolElLowDeg` below it (ADR 0123: the lower safe limit, 0.5°); azimuth as the angle off the course seen
+ * from touchdown (the sample's `azDeg`), ± `tolAzDeg`. On a line is inside. An INOP axis or a missing figure is never red.
  */
-export function severity(plot, { rDaNm = 0, tolElDeg = PAR_DEFAULTS.tolElDeg, tolAzDeg = PAR_DEFAULTS.tolAzDeg } = {}) {
+export function severity(plot, {
+  rDaNm = 0, tolElHighDeg = PAR_DEFAULTS.tolElHighDeg, tolElLowDeg = PAR_DEFAULTS.tolElLowDeg, tolAzDeg = PAR_DEFAULTS.tolAzDeg,
+} = {}) {
   const out = { el: '', az: '' };
   if (!plot || !_pmFin(plot.rangeNm) || plot.rangeNm <= rDaNm) return out;
-  if (_pmFin(plot.elevDevDeg) && Math.abs(plot.elevDevDeg) > tolElDeg + 1e-9) out.el = 'danger';
+  if (_pmFin(plot.elevDevDeg) && (plot.elevDevDeg > tolElHighDeg + 1e-9 || plot.elevDevDeg < -tolElLowDeg - 1e-9)) out.el = 'danger';
   if (_pmFin(plot.azDeg) && Math.abs(plot.azDeg) > tolAzDeg + 1e-9) out.az = 'danger';
   return out;
 }
@@ -137,16 +142,20 @@ export function pickFlight(samples, selectedStripId) {
   return [...list].sort((a, b) => r(a) - r(b) || (a.stripId < b.stripId ? -1 : 1))[0].stripId;
 }
 
-/** The window that keeps the track at the golden-ratio point, never smaller than 10 NM (H115). */
+/**
+ * The window that keeps the track at the golden-ratio point, never smaller than 10 NM (H115). Azimuth in degrees: twice the
+ * tolerance, or wider to keep the track at the golden-ratio point of the half-window, never past the ±15° the PAR covers.
+ */
 export function autoscaleView(plot, { gpaDeg, tchFt, tolAzDeg = PAR_DEFAULTS.tolAzDeg } = {}) {
   const gpa = _pmFin(gpaDeg) ? gpaDeg : PAR_DEFAULTS.gpaDeg;
   const r = plot && _pmFin(plot.rangeNm) ? Math.max(0, plot.rangeNm) : 0;
   const rMax = Math.max(AUTOSCALE_FLOOR_NM, r / PHI);
   const hTrack = plot && _pmFin(plot.heightFt) ? plot.heightFt : gpHeightFt(r, gpa, tchFt);
   const hMax = Math.max(gpHeightFt(rMax, gpa, tchFt) * 1.08, hTrack / PHI);
-  const yTrack = plot && _pmFin(plot.azDevFt) ? Math.abs(plot.azDevFt) : 0;
-  const yMax = Math.max(lateralFt(rMax, Math.max(tolAzDeg, 1.5)) * 1.15, yTrack / PHI);
-  return { rMax, hMax, yMax };
+  const azTrack = plot && _pmFin(plot.azDeg) ? Math.abs(plot.azDeg) : 0;
+  const tolAz = _pmFin(tolAzDeg) && tolAzDeg > 0 ? tolAzDeg : PAR_DEFAULTS.tolAzDeg;
+  const azMaxDeg = Math.min(LIMITS.azMaxDeg, Math.max(2 * tolAz, azTrack / PHI));
+  return { rMax, hMax, azMaxDeg };
 }
 
 /**
@@ -158,11 +167,22 @@ export function zoomView(view, scope, vertical, deltaY) {
   const v = { ...view };
   if (vertical) {
     if (scope === 'el') v.hMax = Math.max(LIMITS.hMin, v.hMax * z);
-    else v.yMax = Math.max(LIMITS.yMin, v.yMax * z);
+    else v.azMaxDeg = Math.min(LIMITS.azMaxDeg, Math.max(LIMITS.azMinDeg, v.azMaxDeg * z));
   } else {
     v.rMax = Math.min(LIMITS.rMax, Math.max(LIMITS.rMin, v.rMax * z));
   }
   return v;
+}
+
+/** An azimuth axis label: the course is `0°`, otherwise the angle and the side (`0.5°L`, `1°R`). */
+export function azAxisLabel(deg) {
+  if (!_pmFin(deg) || Math.abs(deg) < 1e-9) return '0°';
+  return `${+Math.abs(deg).toFixed(2)}°${deg < 0 ? 'L' : 'R'}`;
+}
+
+/** Where a value is drawn on a scope: clamped to the window's edge (a plot past it stays at the edge, never vanishes). */
+export function clampTo(v, lo, hi) {
+  return Math.min(hi, Math.max(lo, v));
 }
 
 /** A tick spacing that gives about `target` ticks across `span`. */
@@ -252,7 +272,8 @@ export function readoutModel({ sample, plot, flight = {}, sev = { el: '', az: ''
   const approach = s.approach || null;
   const range = p && _pmFin(p.rangeNm) ? (p.rangeNm < 0 ? `${_PM_MINUS}${Math.abs(p.rangeNm).toFixed(1)}` : p.rangeNm.toFixed(1)) : '—';
   const elFt = p && _pmFin(p.elevDevFt) && !elInop ? Math.round(p.elevDevFt) : null;
-  const azFt = p && _pmFin(p.azDevFt) && !azInop ? Math.round(p.azDevFt) : null;
+  // rounded by magnitude, so left and right read the same
+  const azDeg = p && _pmFin(p.azDeg) && !azInop ? Math.sign(p.azDeg) * Math.round(Math.abs(p.azDeg) * 10) / 10 : null;
   const alt = p && _pmFin(p.heightFt) && approach && _pmFin(approach.tdzeFt) && !elInop ? Math.round(approach.tdzeFt + p.heightFt) : null;
   return {
     name: flight.name || '',
@@ -262,7 +283,8 @@ export function readoutModel({ sample, plot, flight = {}, sev = { el: '', az: ''
     vs: p && _pmFin(p.vsFpm) ? _pmSigned(Math.round(p.vsFpm)) : '—',
     range,
     el: elFt == null ? '—' : `${_pmSigned(elFt)} ft`,
-    az: azFt == null ? '—' : `${Math.abs(azFt)} ft ${azFt < 0 ? 'L' : azFt > 0 ? 'R' : ''}`.trim(),
+    // degrees only (ADR 0123): `0.4° L`, `0.0°` on the course
+    az: azDeg == null ? '—' : `${Math.abs(azDeg).toFixed(1)}°${azDeg < 0 ? ' L' : azDeg > 0 ? ' R' : ''}`,
     alt: alt == null ? '—' : `${alt.toLocaleString('en-US')} ft`,
     elSev: elInop ? '' : sev.el,
     azSev: azInop ? '' : sev.az,
