@@ -109,8 +109,8 @@ test('pilot walk: "VIPER11 request a different exit fix", CTR and AP at once', a
   await mine.screenshot({ path: test.info().outputPath('walk-2-amended.png') });
 
   // ── 3. "…approved FL210": the controller writes ALT. The advisory follows. ──
-  // ADR 0101: Accept moved radar ID only, so CTR hands over control first (an altitude is a control instruction).
-  await c.locator('.efsp-x-buttons').getByRole('button', { name: 'Control to AP' }).click();
+  // ADR 0101/0122: Accept moved radar ID only; the pilot checks in with AP, and the released handoff moves control.
+  await mine.locator('.efsp-x-buttons').getByRole('button', { name: 'Checked in' }).click();
   await expect(mine.locator('[data-chip="control"]')).toHaveText('CTRL: AP', { timeout: 5000 });
   await edit(mine, '7', 'FL210');
   await mine.locator('.efsp-expand-btn').click();
