@@ -51,8 +51,7 @@ function snapshotHolder(strip) {
 
 function liveExchange(r) {
   const ex = exchange(r.w, helpers, 'SOE1');
-  helpers.mustAct(r.w.efsp, r.w.c.AP, 'AP', ex.R(), { kind: 'HANDOFF', action: 'TRANSFER_COMMS' });
-  helpers.mustAct(r.w.efsp, r.w.c.AP, 'AP', ex.R(), { kind: 'HANDOFF', action: 'TRANSFER_CONTROL' });
+  helpers.mustAct(r.w.efsp, r.w.c.AP, 'AP', ex.R(), { kind: 'HANDOFF', action: 'CHECKED_IN' });
   assert.equal(holders(ex).control, 'RECEIVING');
   return ex;
 }

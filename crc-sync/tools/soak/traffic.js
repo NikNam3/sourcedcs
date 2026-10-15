@@ -110,27 +110,46 @@ function* outboundToCenter(f, x) {
   const r1 = yield walk('INCIRLIK', dep, s => s.state === 'HANDED_OFF' && s.ownerPositionId === 'AP', 14);
   if (!r1.ok) return null;
   yield think();
-  const r2 = yield act('INCIRLIK', dep, { kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'CENTER', toPositionId: 'CTR' });
+  const released = x.rng.chance(0.7); // docs/adr/0122: released by default, sometimes not
+  const r2 = yield act('INCIRLIK', dep, { kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'CENTER', toPositionId: 'CTR', released });
   if (!r2.ok || !r2.strip.coordination) return null;
   const ctr = r2.strip.coordination.peerStripId;
   f.own(ctr, 'CENTER');
   yield think();
   const r3 = yield act('CENTER', ctr, { kind: 'HANDOFF', action: 'ACCEPT' });
   if (!r3.ok) return null;
+  yield* checkIn(x, 'CENTER', ctr, 'INCIRLIK', dep, released);
   return { dep, ctr };
+}
+
+/**
+ * The pilot calls the receiver (docs/adr/0122): CHECKED_IN, and on a not-released handoff the receiver asks for a release
+ * and the handing-off station grants it (control moves then; the soak has no airspace geometry for the control tick).
+ */
+function* checkIn(x, rFacility, rStrip, tFacility, tStrip, released) {
+  yield think();
+  yield act(rFacility, rStrip, { kind: 'HANDOFF', action: 'CHECKED_IN' });
+  if (released) return;
+  yield think();
+  const rq = yield act(rFacility, rStrip, { kind: 'ControlRelease', action: 'REQUEST' });
+  if (!rq.ok) return;
+  yield think();
+  yield act(tFacility, tStrip, { kind: 'ControlRelease', action: x.rng.chance(0.8) ? 'GRANT' : 'REFUSE' });
 }
 
 function* homeFromCenter(f, x, ctr) {
   let r = yield act('CENTER', ctr, { kind: 'ConvertToArrival' });
   if (!r.ok) return false;
   yield think();
-  r = yield act('CENTER', ctr, { kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'INCIRLIK', toPositionId: 'AP' });
+  const released = x.rng.chance(0.7);
+  r = yield act('CENTER', ctr, { kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'INCIRLIK', toPositionId: 'AP', released });
   if (!r.ok || !r.strip.coordination) return false;
   const arr = r.strip.coordination.peerStripId;
   f.own(arr, 'INCIRLIK');
   yield think();
   r = yield act('INCIRLIK', arr, { kind: 'HANDOFF', action: 'ACCEPT' });
   if (!r.ok) return false;
+  yield* checkIn(x, 'INCIRLIK', arr, 'CENTER', ctr, released);
   r = yield walk('INCIRLIK', arr, s => s.state === 'DROPPED', 10);
   return r.ok;
 }
@@ -212,6 +231,7 @@ const SCRIPTS = {
     yield think();
     const a = yield act('INCIRLIK', arr, { kind: 'HANDOFF', action: 'ACCEPT' });
     if (!a.ok) return;
+    yield* checkIn(x, 'INCIRLIK', arr, 'CENTER', enroute, true);
     yield walk('INCIRLIK', arr, s => s.state === 'DROPPED', 10);
     yield act('CENTER', enroute, { kind: 'DropStrip', reason: 'handed to AP' });
   },
@@ -238,6 +258,7 @@ const SCRIPTS = {
         yield think();
         const a = yield act('INCIRLIK', replica, { kind: 'HANDOFF', action: 'ACCEPT' });
         if (a.ok) {
+          yield* checkIn(x, 'INCIRLIK', replica, 'CENTER', ctr, true);
           yield think();
           yield walk('INCIRLIK', replica, s => s.state === 'DROPPED', 4);
         }

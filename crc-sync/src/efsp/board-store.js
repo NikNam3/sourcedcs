@@ -109,7 +109,7 @@ class BoardStore {
     // Cross-Facility coordination and TOFI (board/coordination.js, board/tofi.js). touch is the kernel's
     // recordTouch; retire is late-bound to StripOps' `retire`, activeCmid and mutationLog are read late,
     // and the per-strip-type tables are the authority registry's accessors (authority/index.js), passed in.
-    // Communications, ControlRelease and transfer of control inside a HANDOFF, and the control invariant (docs/adr/0101).
+    // Check-in, ControlRelease and transfer of control inside a HANDOFF, and the control invariant (docs/adr/0101, 0122).
     // CRCSYNC_CONTROL_INVARIANT=throw makes a violation throw (the tests); otherwise it repairs and alerts.
     this._control = new HandoffControl({
       rules, state: this._state, audit: this._audit, clock, flightDataStore,
