@@ -79,7 +79,7 @@ Every station frequency lives in JSON: `config/comm-card.json`, `config/efsp-fac
 
 - crc-sync unit: 2790 → **2800** (new `tests/efsp-scenario-twr-pattern.test.mjs`, 13 walks: cells, PAT+T&G loop, STR
   and drag switch, go-round, authority, closed runway, JoinPattern, LeavePattern to AP and drop, refusals, Undo).
-- crc-desktop unit: 1357 → **1364** (new `tests/efsp-twr-pattern.test.mjs`, 7, mirrors held to the server).
+- crc-desktop unit: 1357 → **1365** (new `tests/efsp-twr-pattern.test.mjs`, 7, mirrors held to the server; plus the module-graph check of the new leaf `pattern-rules.js`).
 - walk 24/24; freeze 57/57 after `freeze:update` (separate commit, explained); soak:selfcheck PASS; wire surface
   recorded, protocol stays 2.
 - e2e lane 7: new `e2e/u-twr-pattern.spec.js` 3/3; `l18-incirlik` all pass; `par-panel` **06 and 07 fail, identically on
