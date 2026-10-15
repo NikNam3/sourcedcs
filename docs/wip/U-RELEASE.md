@@ -61,8 +61,8 @@ Lane U-RELEASE, branch `lane/U-RELEASE` from `319db075`. Resumed after a usage s
 ## Human action (state/)
 
 - **A Board snapshot from before this lane stops start-up** if any Strip in it carries a HANDOFF record: the key
-  `coordination.release` is unknown now (`checkPersistedShape`, no migration). Delete `state/efsp-board.json` (and its
-  backup) on the server before deploying, or wait until it holds no HANDOFF Strips (finished Strips are archived after
+  `coordination.release` is unknown now (`checkPersistedShape`, no migration). Delete `state/efsp-board.json` on the server
+  before deploying, or wait until it holds no HANDOFF Strips (finished Strips are archived after
   12 h, ADR 0107). The supervisor's S-ARCH-64 note about `state/efsp-airspaces.json` lacking the Syria jurisdiction areas
   matters here too: without them every point is CENTER's (the tick then moves a not-released handoff to AP/LC never).
 
