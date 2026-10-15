@@ -1,16 +1,14 @@
 # Supervisor handoff
 
-## RESUMED 2026-10-15: U-PAR and U-RELEASE being finished by new agents in their worktrees; sharded Playwright running on `ad2b69f2`
+## UPDATE 2026-10-15: round 2 lanes all merged; RSU dropped (H149)
 
-### Before that: stopped 2026-10-14 late (usage)
-
-- **U-PAR** (`lane/U-PAR`, worktree `../sourcedcs-U-PAR`, e2e 8): 4 commits, clean tree; it was about to write
-  `docs/wip/U-PAR.md`. Finish with a new agent in the same worktree (look at git log/diff, keep what is sound, run both
-  unit suites + its specs, wip note, report), then merge.
-- **U-RELEASE** (`lane/U-RELEASE`, worktree `../sourcedcs-U-RELEASE`, e2e 7): 1 commit + 1 uncommitted file; it was
-  starting the tests (`control-release.test.mjs`). Finish the same way; prompt as in this session (jurisdiction contract
-  in feet, null never moves control, the RSU guard seam).
-- **Sharded Playwright** on `319db075` still owed (item 1 below); run it before merging either lane.
+U-PAR (`76dadb38`, S-ARCH-66) and U-RELEASE (`de5b4a0d`, S-ARCH-67) merged; no lane running; sharded Playwright after
+U-RELEASE running/owed (`scratchpad/e2e-sharded-4.log`). Open on the Decision Desk: **REL-Q1** (release model inside a
+Facility) and **TWR-Q1** (how LC sees pattern traffic). **H149: no RSU**: queue item 3 (U-RSU) is replaced by
+**U-TWR-PATTERN** (new ADR 0126, supersedes 0120's RSU model): remove the RSU Position and everything it owns (code
+touchpoints: `command grep -rln RSU crc-sync/src crc-sync/config crc-desktop/app/public/js`, ~20 files), give LC the
+pattern features per TWR-Q1, audit that no station frequency is hardcoded (H147 RQ5 stands); write its briefing after
+TWR-Q1 (and REL-Q1, if AP→LC check-in changes the flow). Also queued: soak REFUSE memory check (S-ARCH-67).
 
 ## RELAUNCH HERE (2026-10-14 evening): round 2, four lanes merged, queue below
 
