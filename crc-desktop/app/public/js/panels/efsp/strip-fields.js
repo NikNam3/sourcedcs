@@ -143,9 +143,9 @@ export function compactBlocksFor(stripType, positionId, flightData) {
 // callsign takes the side number's. Only once a side number is typed: until then
 // the callsign keeps the big slot, so a Strip is never led by an empty field.
 // A carrier Strip is one owned by a CARRIER Position (MARSHAL, FINAL, PATTERN):
-// FINAL and PATTERN are also Incirlik's strip types (PAR, RSU), which never swap.
-// PATTERN's SIDE is read-only, so it is on the face only while it leads: an RSU
-// Strip, or a carrier one with no side number, looks as it always did.
+// FINAL is also Incirlik's strip type (PAR), which never swaps.
+// PATTERN's SIDE is read-only, so it is on the face only while it leads: a carrier
+// Strip with no side number looks as it always did.
 export const SIDE_ONLY_WHEN_LEADING = ['PATTERN'];
 
 export function sideNumberLeads(stripType, positionId, flightData) {

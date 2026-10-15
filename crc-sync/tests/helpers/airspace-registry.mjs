@@ -6,7 +6,7 @@ const { AirspaceStore } = require('../../src/efsp/airspace-store.js');
 const authority = require('../../src/efsp/authority');
 
 export const FACILITIES = {
-  INCIRLIK: ['OPS', 'CD', 'GC', 'LC', 'RSU', 'AP', 'SFA', 'PAR'],
+  INCIRLIK: ['OPS', 'CD', 'GC', 'LC', 'AP', 'SFA', 'PAR'],
   CENTER: ['CTR'],
   TACTICAL: ['TAC_C2', 'AIC', 'GCI', 'JTAC'],
   CARRIER: ['CV_MARSHAL'],

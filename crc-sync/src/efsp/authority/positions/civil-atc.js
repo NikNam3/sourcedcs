@@ -1,8 +1,8 @@
 'use strict';
 
 // The ATC Position family (authority registry, S3-2): Incirlik's OPS, CD, GC,
-// LC and AP, and CENTER's CTR (guide §4.1). Moved from permission.js. RSU,
-// SFA and PAR are incirlik-military.js, which also adds AP's L18 columns.
+// LC and AP, and CENTER's CTR (guide §4.1). Moved from permission.js. PAR
+// is incirlik-military.js, which also adds AP's L18 columns.
 
 const { OP_KINDS, COORDINATION_OP_KINDS, COORDINATION_STEP_OP_KINDS, AP_CTR_ONLY_OP_KINDS, AIRSPACE_ENTRY_OP_KINDS, TOFI_OP_KINDS, FORMATION_OP_KINDS, NON_CREATE_OPS } = require('../op-kinds');
 
@@ -79,7 +79,7 @@ const RUNWAY_STATUS_OP_OWNERS = {
   BeginRunwayWorks:           ['LC'],
   CompleteRunwayWorks:        ['OPS'],
   CompleteInspection:         ['OPS'],
-  RequestRunwayStatus:        ['OPS', 'CD', 'GC'], // plus every Position with INCIRLIK_CAPABILITIES' requestsRunwayStatus (positions/incirlik-military.js): AP, RSU
+  RequestRunwayStatus:        ['OPS', 'CD', 'GC'], // plus every Position with INCIRLIK_CAPABILITIES' requestsRunwayStatus (positions/incirlik-military.js): AP
   AcceptRunwayRequest:        ['LC'],
   RejectRunwayRequest:        ['LC'],
   ProposeRunwayChange:        ['LC'],

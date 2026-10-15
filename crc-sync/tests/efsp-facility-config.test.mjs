@@ -30,15 +30,15 @@ const {
 } = createFacilityConfig();
 const { DEPARTURE_BLOCK_MAP, OVERFLIGHT_BLOCK_MAP, MISSION_BLOCK_MAP, requiredBlocksFor } = await import('../src/efsp/block-map.js');
 
-test('getPositionSet returns exactly INCIRLIK\'s seven Positions (RSU and PAR since L18, ADR 0075; no SFA since ADR 0117)', () => {
-  assert.deepEqual(getPositionSet(), ['OPS', 'CD', 'GC', 'LC', 'RSU', 'AP', 'PAR']);
+test('getPositionSet returns exactly INCIRLIK\'s six Positions (PAR since L18, ADR 0075; no SFA since ADR 0117; no RSU since ADR 0126)', () => {
+  assert.deepEqual(getPositionSet(), ['OPS', 'CD', 'GC', 'LC', 'AP', 'PAR']);
 });
 
 // The ONE place the shipped offer lists are asserted (docs/adr/0110 §1, decisions.md H111): an answer that changes a list is a
 // one-line edit to its config file plus the matching line here. `consolidation` is who is OFFERED the hat, in order.
-test('getConsolidation: the shipped Incirlik offer lists (H111 Q-C1 a: AP is last on every tower list; RSU and PAR as ADR 0110 recommends)', () => {
+test('getConsolidation: the shipped Incirlik offer lists (H111 Q-C1 a: AP is last on every tower list; PAR as ADR 0110 recommends)', () => {
   assert.deepEqual(getConsolidation(), {
-    CD: ['GC', 'LC', 'AP'], GC: ['LC', 'AP'], LC: ['AP'], RSU: ['LC'], PAR: ['AP'],
+    CD: ['GC', 'LC', 'AP'], GC: ['LC', 'AP'], LC: ['AP'], PAR: ['AP'],
   });
 });
 
@@ -58,11 +58,11 @@ test('the shipped carrier offer lists (H111 Q-C2: a Position is offered to the m
   assert.deepEqual(getHandBack('CARRIER'), {});
 });
 
-test('every Position in the Position set has at least one Bay, including a Coordination Bay (WP4A seam, present but inert) — except RSU, SFA and PAR, which sit on no Facility boundary (ADR 0075)', () => {
+test('every Position in the Position set has at least one Bay, including a Coordination Bay (WP4A seam, present but inert) — except PAR, which sits on no Facility boundary (ADR 0075)', () => {
   for (const id of getPositionSet()) {
     const bays = getBaysFor(id);
     assert.ok(bays.length > 0, id);
-    if (['RSU', 'SFA', 'PAR'].includes(id)) continue;
+    if (id === 'PAR') continue;
     assert.ok(bays.some(b => b.bayId.endsWith('-coordination')), `${id} has no Coordination Bay`);
   }
 });

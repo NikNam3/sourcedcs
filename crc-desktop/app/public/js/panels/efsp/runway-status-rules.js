@@ -29,7 +29,7 @@ export const RUNWAY_STATUS_ACTION_OWNERS = {
   BeginRunwayWorks:           ['LC'],
   CompleteRunwayWorks:        ['OPS'],
   CompleteInspection:         ['OPS'],
-  RequestRunwayStatus:        ['OPS', 'CD', 'GC', 'AP', 'RSU'], // RSU asks, never closes (H18, docs/adr/0075)
+  RequestRunwayStatus:        ['OPS', 'CD', 'GC', 'AP'], // AP asks, never closes (H18, docs/adr/0075)
   AcceptRunwayRequest:        ['LC'],
   RejectRunwayRequest:        ['LC'],
   ProposeRunwayChange:        ['LC'],

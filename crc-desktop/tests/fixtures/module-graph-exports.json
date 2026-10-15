@@ -1278,7 +1278,6 @@
    "PATTERN_FINAL_MAX",
    "PATTERN_LONG_MIN",
    "PRIFLY_LEGS",
-   "RSU_LEGS",
    "UNPLACED_LEG",
    "moveToLeg",
    "nextLeg",

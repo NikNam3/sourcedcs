@@ -202,9 +202,9 @@ export const TOFI_ELIGIBLE_STATES = { DEPARTURE: 'HANDED_OFF', ARRIVAL: 'INBOUND
 
 // The carrier's three strip types — mirrors the authority tables exactly (crc-sync docs/adr/0074).
 export const MARSHAL_STATE_OWNERS = { LAUNCH: ['CV_MARSHAL'], IN_STACK: ['CV_MARSHAL'], COMMENCED: ['CV_APP1', 'CV_APP2'] };
-// PAR (docs/adr/0075) shares FINAL, RSU shares PATTERN: the same strip types, more owners. BALL is the carrier's only (docs/adr/0117).
+// PAR (docs/adr/0075) shares FINAL: the same strip type, more owners. PATTERN is the carrier's only (docs/adr/0126: no RSU). BALL is the carrier's only (docs/adr/0117).
 export const FINAL_STATE_OWNERS = { ON_FINAL: ['CV_APP1', 'CV_APP2', 'PAR'], BALL: ['CV_APP1', 'CV_APP2'], BOLTER_WAVEOFF: ['CV_APP1', 'CV_APP2', 'PAR'] };
-export const PATTERN_STATE_OWNERS = { IN_PATTERN: ['CV_PRIFLY', 'RSU'], RECOVERED: ['CV_PRIFLY', 'RSU'] };
+export const PATTERN_STATE_OWNERS = { IN_PATTERN: ['CV_PRIFLY'], RECOVERED: ['CV_PRIFLY'] };
 
 export const STATE_OWNERS_BY_STRIP_TYPE = {
   DEPARTURE: DEPARTURE_STATE_OWNERS, ARRIVAL: ARRIVAL_STATE_OWNERS, OVERFLIGHT: OVERFLIGHT_STATE_OWNERS, MISSION: MISSION_STATE_OWNERS,

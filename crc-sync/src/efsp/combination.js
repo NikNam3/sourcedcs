@@ -10,7 +10,7 @@
 // (every allocated frequency stays monitored). The wording and the triggers are [SOURCE-DEFINED].
 
 const LOCAL = 'LC';
-// Every Incirlik Position but LC and RSU (¶10-3-8a4 allows LC with other local positions; RSU has no separation authority).
+// Every Incirlik Position but LC (¶10-3-8a4 allows LC with other local positions).
 // GC, CD and OPS are the tower's non-local functions (¶2-6-5b); AP and PAR are radar approach (¶2-6-12).
 const NON_LOCAL = Object.freeze(['OPS', 'CD', 'GC', 'AP', 'PAR']);
 const LUAW_STATES = Object.freeze(['RUNWAY_QUEUE', 'LUAW']);

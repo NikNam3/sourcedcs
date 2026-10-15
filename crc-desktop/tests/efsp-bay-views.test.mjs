@@ -58,7 +58,8 @@ const click = (el) => (el._listeners.click || []).forEach(fn => fn({ stopPropaga
 test.beforeEach(() => { setGlobals(); setHeld({}); clearBoard(); });
 
 test('the descriptor flags reach a client exactly as the server sends them (the mount reads nothing else)', () => {
-  assert.equal(bay('rsu-pattern').view, 'pattern');
+  assert.equal(bay('cv-prifly-pattern').view, 'pattern');
+  assert.equal(bay('rsu-pattern'), undefined, 'no RSU (crc-sync docs/adr/0126)');
   assert.equal(bay('par-final').view, 'final');
   assert.equal(bay('ap-sfa').view, 'sfa-freqs');
   assert.equal(bay('ap-sfa').sfaPool.length, 5, 'the SFA Bay carries its pool (crc-sync docs/adr/0117)');
@@ -68,26 +69,27 @@ test('the descriptor flags reach a client exactly as the server sends them (the 
 });
 
 test('pattern: legs are the Bay\'s racks, a Strip\'s leg is its rack, and time in the pattern runs from joining, not from the last Move', () => {
-  const b = bay('rsu-pattern');
-  assert.deepEqual(V.patternLegsFor(b).map(l => l.id), ['closed', 'initial', 'base', 'final']);
-  const s = { stripId: 's1', flightDataId: 'f1', bayId: 'rsu-pattern', rackId: 'base', createdAt: 60000, updatedAt: 999000 };
-  const list = V.patternStripsFor(b, (bayId, rackId) => (bayId === 'rsu-pattern' && rackId === 'base' ? [s] : []), () => ({ identity: { callsign: 'VIPER 11', aircraftType: 'F-16C' } }));
-  assert.deepEqual(list, [{ stripId: 's1', name: 'VIPER 11', aka: '', type: 'F-16C', legId: 'base', enteredPatternS: 60, order: 0 }]);
+  const b = bay('cv-prifly-pattern');
+  assert.deepEqual(V.patternLegsFor(b).map(l => l.id), ['initial', 'break', 'downwind', 'groove']);
+  const s = { stripId: 's1', flightDataId: 'f1', bayId: 'cv-prifly-pattern', rackId: 'break', createdAt: 60000, updatedAt: 999000 };
+  const list = V.patternStripsFor(b, (bayId, rackId) => (bayId === 'cv-prifly-pattern' && rackId === 'break' ? [s] : []), () => ({ identity: { callsign: 'VIPER 11', aircraftType: 'F-16C' } }));
+  assert.deepEqual(list, [{ stripId: 's1', name: 'VIPER 11', aka: '', type: 'F-16C', legId: 'break', enteredPatternS: 60, order: 0 }]);
 });
 
-test('pattern mount: hides the racks (RSU replaces them), draws the board, and its three gestures send the right ops as the owner', () => {
-  const b = bay('rsu-pattern');
-  setHeld({ INCIRLIK: ['RSU'] });
-  addStrip({ stripId: 's1', flightDataId: 'f1', bayId: 'rsu-pattern', rackId: 'initial', ownerPositionId: 'RSU', rev: 3, createdAt: now - 120000, state: 'IN_PATTERN' }, { identity: { callsign: 'VIPER 11' } });
+test('pattern mount: a `replacesRacks` Bay hides its racks, draws the board, and its three gestures send the right ops as the owner', () => {
+  // No shipped pattern Bay replaces its racks since the RSU went (crc-sync docs/adr/0126); the flag still works.
+  const b = { ...bay('cv-prifly-pattern'), replacesRacks: true };
+  setHeld({ CARRIER: ['CV_PRIFLY'] });
+  addStrip({ stripId: 's1', flightDataId: 'f1', bayId: 'cv-prifly-pattern', rackId: 'initial', ownerPositionId: 'CV_PRIFLY', rev: 3, createdAt: now - 120000, state: 'IN_PATTERN', stripType: 'PATTERN' }, { identity: { callsign: 'VIPER 11' } });
   const c = containerFor(b);
   renderBayDescriptorView(c, b);
   const racks_ = [...c.children].filter(x => x.className === 'efsp-rack');
-  assert.ok(racks_.length === 4 && racks_.every(r => r.style.display === 'none'), 'RSU replaces its racks');
+  assert.ok(racks_.length === 4 && racks_.every(r => r.style.display === 'none'), 'the board replaces its racks');
   const all = descendants(c);
   const chip = all.find(e => e.dataset && e.dataset.stripId === 's1');
   assert.ok(chip, 'the Strip is a chip on the board');
   click(all.find(e => e.className === 'efsp-pattern-next'));
-  assert.deepEqual(sent.pop(), { position: 'RSU', stripId: 's1', op: { kind: 'MoveStrip', rackId: 'base', bayId: 'rsu-pattern' } });
+  assert.deepEqual(sent.pop(), { position: 'CV_PRIFLY', stripId: 's1', op: { kind: 'MoveStrip', rackId: 'break', bayId: 'cv-prifly-pattern' } });
   click(all.find(e => e.dataset && e.dataset.action === 'LANDED'));
   assert.deepEqual(sent.pop().op, { kind: 'SetState', toState: 'RECOVERED' });
   click(all.find(e => e.dataset && e.dataset.action === 'DROP'));
@@ -95,9 +97,9 @@ test('pattern mount: hides the racks (RSU replaces them), draws the board, and i
 });
 
 test('pattern mount is read-only for a controller who does not hold the Position', () => {
-  const b = bay('rsu-pattern');
-  setHeld({ INCIRLIK: ['LC'] });
-  addStrip({ stripId: 's1', flightDataId: 'f1', bayId: 'rsu-pattern', rackId: 'initial', ownerPositionId: 'RSU', rev: 1, createdAt: now, state: 'IN_PATTERN' }, { identity: { callsign: 'X' } });
+  const b = bay('cv-prifly-pattern');
+  setHeld({ CARRIER: ['CV_MARSHAL'] });
+  addStrip({ stripId: 's1', flightDataId: 'f1', bayId: 'cv-prifly-pattern', rackId: 'initial', ownerPositionId: 'CV_PRIFLY', rev: 1, createdAt: now, state: 'IN_PATTERN', stripType: 'PATTERN' }, { identity: { callsign: 'X' } });
   const c = containerFor(b);
   renderBayDescriptorView(c, b);
   click(descendants(c).find(e => e.className === 'efsp-pattern-next'));
@@ -118,7 +120,7 @@ test('a Bay with no view is left alone, and a stale view is removed when a Bay s
   const c = containerFor(b);
   renderBayDescriptorView(c, b);
   assert.equal([...c.children].some(x => x.className === 'efsp-bay-view'), false);
-  const pb = bay('rsu-pattern');
+  const pb = bay('cv-prifly-pattern');
   const c2 = containerFor(pb);
   renderBayDescriptorView(c2, pb);
   assert.ok([...c2.children].some(x => x.className === 'efsp-bay-view'));
@@ -146,7 +148,7 @@ test('an airfield PAR final is an ordinary Bay (H138 U10): no line list, the rac
   assert.equal(b.view, 'final', 'the descriptor still names the final: crc-sync samples its Strips for the PAR');
   assert.equal(V.bayHasComponentView(b), false);
   assert.equal(V.bayHasComponentView(bay('cv-app1-final')), true);
-  assert.equal(V.bayHasComponentView(bay('rsu-pattern')), true);
+  assert.equal(V.bayHasComponentView(bay('cv-prifly-pattern')), true);
   setHeld({ INCIRLIK: ['PAR'] });
   addStrip({ stripId: 'p1', flightDataId: 'f1', bayId: 'par-final', rackId: 'main', ownerPositionId: 'PAR', rev: 2, state: 'ON_FINAL', stripType: 'FINAL', facilityId: 'INCIRLIK', flags: {} }, { identity: { callsign: 'VIPER 11' } });
   const c = containerFor(b);
@@ -245,8 +247,8 @@ test('Hand off to PAR sends the ordinary transfer as the Strip\'s owner and goes
   assert.equal(finalHandoffButtons(strip).length, 0, 'off the SFA pool: no button');
 });
 
-test('RSU and PAR can only do through the client what the server grants them (the ops the views send are held)', () => {
-  for (const [position, op] of [['RSU', 'MoveStrip'], ['RSU', 'SetState'], ['RSU', 'DropStrip'], ['PAR', 'SetState'], ['PAR', 'SetBlock'], ['AP', 'TransferStrip']]) {
+test('PriFly and PAR can only do through the client what the server grants them (the ops the views send are held)', () => {
+  for (const [position, op] of [['CV_PRIFLY', 'MoveStrip'], ['CV_PRIFLY', 'SetState'], ['CV_PRIFLY', 'DropStrip'], ['PAR', 'SetState'], ['PAR', 'SetBlock'], ['AP', 'TransferStrip']]) {
     assert.equal(permission.canMutate(position, op), true, `${position} ${op}`);
   }
   assert.equal(permission.canHandOffToFinal('AP'), true);

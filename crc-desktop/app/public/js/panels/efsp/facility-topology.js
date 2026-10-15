@@ -10,7 +10,7 @@
 
 /** Facility -> its Position ids, in display order (crc-sync config/efsp-facility-*.json). */
 export const FACILITY_POSITIONS = {
-  INCIRLIK: ['OPS', 'CD', 'GC', 'LC', 'RSU', 'AP', 'PAR'],
+  INCIRLIK: ['OPS', 'CD', 'GC', 'LC', 'AP', 'PAR'],
   CENTER: ['CTR'],
   TACTICAL: ['TAC_C2', 'AIC', 'GCI', 'JTAC'],
   CARRIER: ['CV_MARSHAL', 'CV_PRIFLY', 'CV_APP1', 'CV_APP2'],
