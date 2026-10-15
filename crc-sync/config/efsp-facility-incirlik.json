@@ -188,6 +188,13 @@
         "impliesState": "HANDED_TO_TOWER"
       },
       {
+        "bayId": "lc-pattern",
+        "rackIds": [
+          "main"
+        ],
+        "impliesState": "TRAFFIC_PATTERN"
+      },
+      {
         "bayId": "lc-final",
         "rackIds": [
           "main"

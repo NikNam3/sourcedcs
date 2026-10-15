@@ -47,6 +47,11 @@ const CALL_FOR_RELEASE_AFTER_MINUTES = 1;   //           / + 1 min
 const DEPARTURE_RELEASE_STATES = new Set(['RELEASED', 'HOLD_FOR_RELEASE', 'RELEASE_TIME', 'CLEARANCE_VOID_TIME', 'EDCT', 'CALL_FOR_RELEASE']);
 const DEGRADATION_STATES = new Set(['NONE', 'TRANSPONDER_FAILED', 'MODE_C_FAILED']);
 const DATALINK_INDICATOR_STATES = new Set(['NONE', 'ISSUED']);
+// docs/adr/0126 (H149, H150 TWR-Q1 a): LC's pattern cells, Blocks 9J-ENTRY (pattern or straight-in) and 9J-OPTION
+// (touch-and-go, full stop, low approach; no stop-and-go, H147 RQ7). On the flight data, so they survive the in-place
+// strip-type changes of JoinPattern / LeavePattern. null is "not set"; an empty string clears.
+const PATTERN_ENTRIES = new Set(['PATTERN', 'STRAIGHT_IN']);
+const PATTERN_OPTIONS = new Set(['TOUCH_AND_GO', 'FULL_STOP', 'LOW_APPROACH']);
 // WP4A (docs/adr/0019) — guide §4.6 rule 5's track-degradation flags, which
 // force verbal coordination and disable silent cross-Facility transfer
 // while present (board/coordination.js's _applyCoordinationPropose). Genuinely
@@ -134,6 +139,8 @@ const WRITABLE_PATHS = new Set([
   'assigned.voidTimeUtc', 'assigned.delayInfo', 'assigned.atisCode', 'assigned.datalinkClearanceIndicator',
   'assigned.movementAreaEntryTimeUtc', 'assigned.taxiTimeUtc', 'assigned.takeoffTimeUtc',
   'assigned.landingRunway',
+  // docs/adr/0126: LC's pattern cells (validated against PATTERN_ENTRIES / PATTERN_OPTIONS in setField)
+  'assigned.patternEntry', 'assigned.patternOption',
   // WP4A (docs/adr/0017) — §4.6.2's release-across-the-boundary additions.
   // edctWindowStartUtc/EndUtc and callForReleaseWindowStartUtc/EndUtc are
   // DERIVED (like voidDeadlineUtc above), not independently writable.
@@ -738,6 +745,8 @@ class FlightDataStore {
         taxiTimeUtc: null,              // Block 17 — present, unpopulated
         takeoffTimeUtc: null,
         landingRunway: null,            // ARRIVAL-type field
+        patternEntry: null,             // docs/adr/0126 Block 9J-ENTRY
+        patternOption: null,            // docs/adr/0126 Block 9J-OPTION
       },
       // WP6 (docs/adr/0052), guide §6.4 — the military extension namespace.
       // `ordnanceState`/`hookRequired` are written via setMilitary() only,
@@ -846,6 +855,13 @@ class FlightDataStore {
     }
     if (path === 'assigned.datalinkClearanceIndicator' && !DATALINK_INDICATOR_STATES.has(value)) {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: 'invalid datalink clearance indicator' };
+    }
+    if (path === 'assigned.patternEntry' || path === 'assigned.patternOption') {
+      if (value === '' || value === undefined) value = null;
+      const allowed = path === 'assigned.patternEntry' ? PATTERN_ENTRIES : PATTERN_OPTIONS;
+      if (value !== null && !allowed.has(value)) {
+        return { ok: false, reason: 'VALIDATION_ERROR', detail: `${path === 'assigned.patternEntry' ? 'PAT/STR' : 'T&G/FS/LA'} must be one of ${[...allowed].join(', ')}` };
+      }
     }
     if (path === 'identity.trackDegradationFlag' && !TRACK_DEGRADATION_FLAGS.has(value)) {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: 'invalid track degradation flag' };

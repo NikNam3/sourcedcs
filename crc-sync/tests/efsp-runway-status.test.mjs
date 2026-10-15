@@ -670,7 +670,7 @@ test('HANDED_TO_TOWER -> FINAL is inhibited on a suspended runway', () => {
 test('FINAL -> LANDED is never inhibited — touchdown is an observation, not a clearance', () => {
   for (const status of ['SUSPENDED_WORKS', 'SUSPENDED_INSPECTION', 'CLOSED']) {
     const r = nla.computeNla({ stripType: 'ARRIVAL', state: 'FINAL', rackId: 'main' }, readyFlightData(), NOW, ctxWith(viewWith(status)));
-    assert.deepEqual(r, { toState: 'LANDED' }, status);
+    assert.deepEqual(r, { toState: 'LANDED', alsoLegal: ['TRAFFIC_PATTERN'] }, status);
   }
 });
 
@@ -691,7 +691,7 @@ test('an unresolvable runway, a runway not in the inventory, and a Facility with
 test('a ctx with no runwayStatusFor at all behaves exactly as before (every pre-L1 caller)', () => {
   assert.deepEqual(nla.computeNla({ stripType: 'DEPARTURE', state: 'TAXI', rackId: 'main' }, readyFlightData(), NOW, everyoneHome), { toState: 'RUNWAY_QUEUE', transferTo: 'LC' });
   assert.deepEqual(nla.computeNla({ stripType: 'DEPARTURE', state: 'LUAW', rackId: 'rwy-05' }, readyFlightData(), NOW, everyoneHome), { toState: 'DEPARTED' });
-  assert.deepEqual(nla.computeNla({ stripType: 'ARRIVAL', state: 'HANDED_TO_TOWER', rackId: 'main' }, readyFlightData(), NOW, everyoneHome), { toState: 'FINAL' });
+  assert.deepEqual(nla.computeNla({ stripType: 'ARRIVAL', state: 'HANDED_TO_TOWER', rackId: 'main' }, readyFlightData(), NOW, everyoneHome), { toState: 'FINAL', alsoLegal: ['TRAFFIC_PATTERN'] });
 });
 
 test('OVERFLIGHT and MISSION are never inhibited by runway status', () => {

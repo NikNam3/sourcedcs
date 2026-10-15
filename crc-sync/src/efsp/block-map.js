@@ -87,6 +87,11 @@ const DEPARTURE_BLOCK_MAP = {
   '9C': { required: false, target: { kind: 'annotation' } },
   '9D': { required: true,  target: { kind: 'flightData', path: 'filed.fullRouteClearance' } },
   '9E': { required: true,  target: { kind: 'flightData', path: 'filed.remarks' } },
+  // docs/adr/0126 (H150 TWR-Q1 a): LC's pattern cells on its ordinary Strips, set by whoever holds the Strip.
+  // 9J-ENTRY: PATTERN | STRAIGHT_IN; 9J-OPTION: TOUCH_AND_GO | FULL_STOP | LOW_APPROACH (no stop-and-go, H147 RQ7).
+  // On the flight data, so a local departure keeps them into closed traffic (JoinPattern) and back out (LeavePattern).
+  '9J-ENTRY':  { required: false, target: { kind: 'flightData', path: 'assigned.patternEntry' } },
+  '9J-OPTION': { required: false, target: { kind: 'flightData', path: 'assigned.patternOption' } },
   // §9.10 stereo route name (docs/adr/0050). The guide numbers this Block
   // M18 in its §6.4 military-extension table (whose "Basis" column cites
   // §9.9, ATO ingest — that is a mis-citation in the guide; §9.10 is the
@@ -288,6 +293,9 @@ const ARRIVAL_BLOCK_MAP = {
   '9H-TIME':  { required: false, target: { kind: 'flightData', path: 'military.mtr.exitEstimateUtc' } },
   '9H-ALT':   { required: false, target: { kind: 'flightData', path: 'military.mtr.requestedAltitudeAfterExit' } },
   '9E':       { required: true,  target: { kind: 'flightData', path: 'filed.remarks' } },
+  // docs/adr/0126: LC's pattern cells (see DEPARTURE_BLOCK_MAP's 9J comment). They steer ARRIVAL's NLA.
+  '9J-ENTRY':  { required: false, target: { kind: 'flightData', path: 'assigned.patternEntry' } },
+  '9J-OPTION': { required: false, target: { kind: 'flightData', path: 'assigned.patternOption' } },
   '20':       { required: false, target: { kind: 'annotation' } }, // radar scratchpad — Strip-local until WP5, see module comment
   '21':       { required: false, target: { kind: 'annotation' } }, // radar scratchpad — Strip-local until WP5, see module comment
   '24':       { required: true,  target: { kind: 'annotation' } },

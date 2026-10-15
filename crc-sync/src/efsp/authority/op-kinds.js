@@ -77,8 +77,12 @@ const TOFI_OP_KINDS = ['TOFI'];
 // tactical and carrier Positions through NON_CREATE_OPS silently. Ownership of the Strip is checked by the Board as always.
 const FORMATION_OP_KINDS = ['SplitFormation', 'JoinFormation'];
 
+// docs/adr/0126 (H149, H150): the tower's pattern conversions (board/ops/pattern.js). A literal capability held by LC
+// alone, on FORMATION_OP_KINDS' pattern: never in OP_KINDS, where AP's and CTR's grants and NON_CREATE_OPS would pick it up.
+const PATTERN_OP_KINDS = ['JoinPattern', 'LeavePattern'];
+
 const NON_CREATE_OPS = OP_KINDS.filter(k => k !== 'CreateStrip' && !COORDINATION_OP_KINDS.includes(k) && !COORDINATION_STEP_OP_KINDS.includes(k) && !AP_CTR_ONLY_OP_KINDS.includes(k) && !TOFI_OP_KINDS.includes(k) && !AIRSPACE_ENTRY_OP_KINDS.includes(k));
 
 module.exports = {
-  OP_KINDS, COORDINATION_OP_KINDS, COORDINATION_STEP_OP_KINDS, AP_CTR_ONLY_OP_KINDS, AIRSPACE_ENTRY_OP_KINDS, TOFI_OP_KINDS, FORMATION_OP_KINDS, NON_CREATE_OPS,
+  OP_KINDS, COORDINATION_OP_KINDS, COORDINATION_STEP_OP_KINDS, AP_CTR_ONLY_OP_KINDS, AIRSPACE_ENTRY_OP_KINDS, TOFI_OP_KINDS, FORMATION_OP_KINDS, PATTERN_OP_KINDS, NON_CREATE_OPS,
 };

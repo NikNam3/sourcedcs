@@ -69,6 +69,8 @@
       "HANDOFF",
       "InvokeNla",
       "JoinFormation",
+      "JoinPattern",
+      "LeavePattern",
       "MoveStrip",
       "OPERATIONAL_REQUEST",
       "POINT_OUT",

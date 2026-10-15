@@ -50,6 +50,7 @@ export const DEFAULT_RULES = {
   facilityId: null,
   formationEligibility: (stripType) => require('../../src/efsp/authority').formationEligibility(stripType),
   runwayStatusFor: () => null,
+  fieldAirport: () => null, // docs/adr/0126
   handBackTargetsFor: () => null,
   isBlockVisible: () => true,
   isStaffed: () => false,

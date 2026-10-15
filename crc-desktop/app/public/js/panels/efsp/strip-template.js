@@ -74,6 +74,9 @@ export const DEPARTURE_BLOCK_MAP = {
   '9C': { required: false, label: 'FAC C',    target: { kind: 'annotation' } },
   '9D': { required: true,  label: 'FULL RTE', target: { kind: 'flightData', path: 'filed.fullRouteClearance' } },
   '9E': { required: true,  label: 'RMKS',     target: { kind: 'flightData', path: 'filed.remarks' } },
+  // crc-sync docs/adr/0126: LC's pattern cells (mirrors block-map.js's 9J comment).
+  '9J-ENTRY':  { required: false, label: 'P/S',      target: { kind: 'flightData', path: 'assigned.patternEntry' } },
+  '9J-OPTION': { required: false, label: 'OPT',      target: { kind: 'flightData', path: 'assigned.patternOption' } },
   // §9.10 stereo route name (docs/adr/0050) — mirrors crc-sync's
   // block-map.js '9F' exactly; see that module's comment for why it is not
   // numbered M18 and why writing it re-files the flight rather than just
@@ -193,6 +196,8 @@ export const ARRIVAL_BLOCK_MAP = {
   '9H-TIME':  { required: false, label: 'EXIT EST', target: { kind: 'flightData', path: 'military.mtr.exitEstimateUtc' } },
   '9H-ALT':   { required: false, label: 'EXIT ALT', target: { kind: 'flightData', path: 'military.mtr.requestedAltitudeAfterExit' } },
   '9E':       { required: true,  label: 'RMKS',     target: { kind: 'flightData', path: 'filed.remarks' } },
+  '9J-ENTRY':  { required: false, label: 'P/S',      target: { kind: 'flightData', path: 'assigned.patternEntry' } },   // crc-sync docs/adr/0126
+  '9J-OPTION': { required: false, label: 'OPT',      target: { kind: 'flightData', path: 'assigned.patternOption' } },
   '20':       { required: false, label: 'SCRATCH1',  target: { kind: 'annotation' } },
   '21':       { required: false, label: 'SCRATCH2',  target: { kind: 'annotation' } },
   '24':       { required: true,  label: 'MIT RMKS',     target: { kind: 'annotation' } },
@@ -866,6 +871,8 @@ const DEPARTURE_TITLES = {
   '9C': 'Block 9C, optional use (facility)',
   '9D': 'Full route clearance (ours)',
   '9E': 'Remarks (Block 9)',
+  '9J-ENTRY': 'Pattern or straight-in (ours: the tower\'s pattern work, AIM 4-3-3)',
+  '9J-OPTION': 'Touch-and-go, full stop or low approach (JO 7110.65 ¶3-8-2; ours as a cell)',
   '9F': 'Stereo route (ours, local tower-en-route canned route)',
   '9G-MTR': 'MTR designator (ours, military; guide M10)',
   '9G-ENTRY': 'MTR entry fix (ours, military)',
