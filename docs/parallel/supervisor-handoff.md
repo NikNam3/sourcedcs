@@ -3,7 +3,7 @@
 ## UPDATE 2026-10-15: round 2 lanes all merged; RSU dropped (H149)
 
 U-PAR (`76dadb38`, S-ARCH-66) and U-RELEASE (`de5b4a0d`, S-ARCH-67) merged; no lane running; sharded Playwright after
-U-RELEASE running/owed (`scratchpad/e2e-sharded-4.log`). Open on the Decision Desk: **REL-Q1** (release model inside a
+U-RELEASE: **270/270** on `d28dd76e` (14m38s). Open on the Decision Desk: **REL-Q1** (release model inside a
 Facility) and **TWR-Q1** (how LC sees pattern traffic). **H149: no RSU**: queue item 3 (U-RSU) is replaced by
 **U-TWR-PATTERN** (new ADR 0126, supersedes 0120's RSU model): remove the RSU Position and everything it owns (code
 touchpoints: `command grep -rln RSU crc-sync/src crc-sync/config crc-desktop/app/public/js`, ~20 files), give LC the
