@@ -433,8 +433,8 @@ test('RUNWAY_STATUS_OP_OWNERS: LC alone closes, opens and suspends; OPS complete
   assert.deepEqual(RUNWAY_STATUS_OP_OWNERS.AckRunwayChange, ['OPS', 'AP']);
   assert.deepEqual(RUNWAY_STATUS_OP_OWNERS.RejectRunwayChange, ['OPS', 'AP']);
   // Everyone at the field but tower ASKS (decisions.md H18).
-  // RSU asks too (L18, ADR 0075) but, like everyone, never closes or opens.
-  assert.deepEqual(RUNWAY_STATUS_OP_OWNERS.RequestRunwayStatus, ['OPS', 'CD', 'GC', 'AP', 'RSU']);
+  // AP asks too (L18, ADR 0075) but, like everyone, never closes or opens. No RSU (docs/adr/0126).
+  assert.deepEqual(RUNWAY_STATUS_OP_OWNERS.RequestRunwayStatus, ['OPS', 'CD', 'GC', 'AP']);
 });
 
 test('a range Position, an MRU, CTR and an unknown Position are refused every runway-status op', () => {

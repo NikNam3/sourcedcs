@@ -21,6 +21,9 @@ const click = (el) => (el._listeners.click || []).forEach(fn => fn({}));
 
 // ---- pattern board --------------------------------------------------------------------------
 
+// Any four legs: the board takes the Bay's racks (PriFly's on the carrier; the RSU's went with crc-sync docs/adr/0126).
+const LEGS = [{ id: 'closed', label: 'CLOSED' }, { id: 'initial', label: 'INITIAL' }, { id: 'base', label: 'BASE' }, { id: 'final', label: 'FINAL' }];
+
 const strips = [
   { stripId: 'a', name: 'VIPR 11', type: 'F-16', intent: 'FULL_STOP', legId: 'initial', enteredPatternS: 800, order: 1 },
   { stripId: 'b', name: 'HAWG 41', type: 'A-10', intent: 'LOW_APPROACH', legId: 'initial', enteredPatternS: 700, order: 2 },
@@ -29,7 +32,7 @@ const strips = [
 ];
 
 test('the board has one column per leg, chips in rack order, minutes from the mission clock', () => {
-  const m = P.patternBoardModel({ legs: P.RSU_LEGS, strips, nowS: 1000 });
+  const m = P.patternBoardModel({ legs: LEGS, strips, nowS: 1000 });
   assert.deepEqual(m.columns.map(c => [c.legId, c.count]), [['closed', 0], ['initial', 2], ['base', 0], ['final', 2]]);
   assert.deepEqual(m.columns[1].chips.map(c => c.name), ['VIPR 11', 'HAWG 41']);
   assert.equal(m.columns[1].chips[0].minutes, 3);
@@ -38,7 +41,7 @@ test('the board has one column per leg, chips in rack order, minutes from the mi
 });
 
 test('advisories: crowded final and long in pattern; never anything that refuses', () => {
-  const m = P.patternBoardModel({ legs: P.RSU_LEGS, strips, nowS: 1000 });
+  const m = P.patternBoardModel({ legs: LEGS, strips, nowS: 1000 });
   assert.deepEqual(m.advisories.map(a => a.kind), ['CROWDED_FINAL', 'LONG_IN_PATTERN']);
   assert.match(m.advisories[0].text, /^2 on final: advisory/);
   assert.match(m.advisories[1].text, /^PACK 61 15 min in pattern/);
@@ -46,13 +49,13 @@ test('advisories: crowded final and long in pattern; never anything that refuses
 });
 
 test('a closed or suspended runway with aircraft in the pattern is advised, an empty pattern is not', () => {
-  assert.ok(P.patternBoardModel({ legs: P.RSU_LEGS, strips, nowS: 1000, runwayOpenStatus: 'SUSPENDED' })
+  assert.ok(P.patternBoardModel({ legs: LEGS, strips, nowS: 1000, runwayOpenStatus: 'SUSPENDED' })
     .advisories.some(a => a.kind === 'RUNWAY_NOT_OPEN'));
-  assert.deepEqual(P.patternBoardModel({ legs: P.RSU_LEGS, strips: [], nowS: 1000, runwayOpenStatus: 'CLOSED' }).advisories, []);
+  assert.deepEqual(P.patternBoardModel({ legs: LEGS, strips: [], nowS: 1000, runwayOpenStatus: 'CLOSED' }).advisories, []);
 });
 
 test('a Strip whose rack is not a leg is shown as UNPLACED, never hidden', () => {
-  const m = P.patternBoardModel({ legs: P.RSU_LEGS, strips: [{ stripId: 'x', name: 'LOST 1', legId: 'main' }], nowS: 0 });
+  const m = P.patternBoardModel({ legs: LEGS, strips: [{ stripId: 'x', name: 'LOST 1', legId: 'main' }], nowS: 0 });
   const un = m.columns.find(c => c.legId === P.UNPLACED_LEG);
   assert.deepEqual(un.chips.map(c => c.name), ['LOST 1']);
   assert.equal(m.total, 1);
@@ -66,15 +69,15 @@ test('PriFly uses the same component with its own legs, and a missing clock give
 });
 
 test('moves are descriptions: next-leg, and the last leg has none', () => {
-  assert.equal(P.nextLeg(P.RSU_LEGS, 'initial'), 'base');
-  assert.equal(P.nextLeg(P.RSU_LEGS, 'final'), null);
+  assert.equal(P.nextLeg(LEGS, 'initial'), 'base');
+  assert.equal(P.nextLeg(LEGS, 'final'), null);
   assert.deepEqual(P.moveToLeg('a', 'base'), { kind: 'MoveToLeg', stripId: 'a', rackId: 'base' });
 });
 
 test('rendered board: next-leg, drop and the two chip actions send the right descriptions', () => {
   const moves = []; const acts = [];
-  const m = P.patternBoardModel({ legs: P.RSU_LEGS, strips: [strips[0]], nowS: 1000 });
-  const root = P.renderPatternBoard(m, { doc, legs: P.RSU_LEGS, onMove: x => moves.push(x), onAction: x => acts.push(x) });
+  const m = P.patternBoardModel({ legs: LEGS, strips: [strips[0]], nowS: 1000 });
+  const root = P.renderPatternBoard(m, { doc, legs: LEGS, onMove: x => moves.push(x), onAction: x => acts.push(x) });
   const all = descendants(root);
   const next = all.find(n => n.className === 'efsp-pattern-next');
   click(next);

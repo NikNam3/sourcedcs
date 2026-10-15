@@ -2,7 +2,8 @@
 import { getCurrentEfspRefusal } from '../panel/refusal.js';
 import {
   CONFIRM_VACATED_ELIGIBLE_BLOCKS, blockValueHintFor, editRedirectFor, enumSelectOptionsFor, blockInputPlaceholderFor,
-  hasActiveAnnotationEntry, isBlockEditable, isBooleanToggleBlock, isEnumBlockClearable, resolveBlockValue
+  hasActiveAnnotationEntry, isBlockEditable, isBooleanToggleBlock, isEnumBlockClearable, resolveBlockValue,
+  isCycleBlock, cycleBlockLabel, nextCycleValue
 } from '../strip-template.js';
 import { getEfspFlightData, getEfspStrip } from '../efsp-state.js';
 import { sendEfspMutation } from '../efsp-ws.js';
@@ -141,6 +142,9 @@ function _buildBlockCellInner(strip, blockId) {
   // reach it). Checked before isBlockEditable() since these Blocks are
   // deliberately excluded from that generic path (see strip-template.js's
   // isBlockEditable comment).
+  // crc-sync docs/adr/0126: LC's pattern cells, one click per step (PAT -> STR -> empty; T&G -> FS -> LA -> empty).
+  if (isCycleBlock(blockId)) return _buildCycleCell(strip, blockId, span, flightData);
+
   const enumOptions = enumSelectOptionsFor(blockId, flightData); // the FLIGHT_DATA: 9F offers a retired route its flight still flies (docs/adr/0073)
   if (enumOptions) return _buildEnumSelectCell(strip, blockId, span, enumOptions);
 
@@ -360,6 +364,28 @@ function _buildBooleanToggleCell(strip, blockId, span) {
   span.addEventListener('click', toggle);
   span.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(e); } });
   // No pointerdown guard — see _buildBlockCell and _capturePointer.
+  return span;
+}
+
+/**
+ * crc-sync docs/adr/0126: a click-to-cycle cell (CYCLE_BLOCKS). The span shows the short form; a click (or Enter / Space)
+ * sends the next value as an ordinary SetBlock as the Position holding the Strip. Read-only for anyone else.
+ */
+function _buildCycleCell(strip, blockId, span, flightData) {
+  const { value } = resolveBlockValue(blockId, flightData, strip);
+  span.textContent = cycleBlockLabel(blockId, value);
+  span.dataset.value = value || '';
+  const actingPositionId = _resolveActingPositionId(strip);
+  if (!actingPositionId || actingPositionId !== strip.ownerPositionId) return span;
+  span.classList.add('efsp-block-editable', 'efsp-block-cycle');
+  span.tabIndex = 0;
+  const step = (e) => {
+    e.stopPropagation();
+    const currentStrip = getEfspStrip(strip.stripId) || strip;
+    sendEfspMutation(actingPositionId, currentStrip, { kind: 'SetBlock', blockId, value: nextCycleValue(blockId, value || null) });
+  };
+  span.addEventListener('click', step);
+  span.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); step(e); } });
   return span;
 }
 

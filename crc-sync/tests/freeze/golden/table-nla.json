@@ -26,6 +26,8 @@
     {"cell":"ARRIVAL/INBOUND/owner=STATE_OWNER","nla":null,"nlaStatus":{"toState":"HANDED_TO_TOWER","transferTo":"LC"}},
     {"cell":"ARRIVAL/HANDED_TO_TOWER/owner=CREATOR","nla":null,"nlaStatus":{"inhibited":"HANDED_TO_TOWER is not AP's to advance","reason":"PERMISSION_DENIED"}},
     {"cell":"ARRIVAL/HANDED_TO_TOWER/owner=STATE_OWNER","nla":null,"nlaStatus":{"toState":"FINAL"}},
+    {"cell":"ARRIVAL/TRAFFIC_PATTERN/owner=CREATOR","nla":null,"nlaStatus":{"toState":"FINAL"}},
+    {"cell":"ARRIVAL/TRAFFIC_PATTERN/owner=STATE_OWNER","nla":null,"nlaStatus":{"toState":"FINAL"}},
     {"cell":"ARRIVAL/FINAL/owner=CREATOR","nla":null,"nlaStatus":{"toState":"LANDED"}},
     {"cell":"ARRIVAL/FINAL/owner=STATE_OWNER","nla":null,"nlaStatus":{"toState":"LANDED"}},
     {"cell":"ARRIVAL/LANDED/owner=CREATOR","nla":null,"nlaStatus":{"toState":"TAXI_IN","transferTo":"GC"}},

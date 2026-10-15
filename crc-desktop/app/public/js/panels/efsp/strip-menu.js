@@ -28,6 +28,7 @@ import { _stripEl } from './strip-dom.js';
 import { isParFinalStrip } from './bay-views.js';
 import { parTerminalOp, parTerminalRecorded, parTerminals } from './par-model.js';
 import { showParFlight } from './par-panel.js';
+import { patternConversionBlockedBy, patternConversionsFor } from './pattern-rules.js';
 
 // The Strip's tools column and the ⋯ menu (DESK-SPLIT, split out of strip-view.js): everything a controller starts from a Strip.
 
@@ -208,6 +209,14 @@ function _stripMenuItems(strip) {
         _setPendingConvertStripId(null);
         convertStripToArrival(strip);
       } });
+  }
+
+  // crc-sync docs/adr/0126: the tower's pattern, a local departure into closed traffic and a pattern aircraft departing it.
+  for (const p of patternConversionsFor(strip, acting)) {
+    const blockedBy = patternConversionBlockedBy(strip);
+    items.push({ group: 'Flight', key: p.kind === 'JoinPattern' ? 'join-pattern' : 'leave-pattern', label: p.label, cls: 'efsp-pattern-btn',
+      enabled: !blockedBy && !pendingIn, reason: blockedBy ? `resolve ${blockedBy} first` : (pendingIn ? answerFirst : ''),
+      title: p.title, run: () => { sendEfspMutation(strip.ownerPositionId, strip, { kind: p.kind }); } });
   }
 
   const divert = divertOffer(strip);

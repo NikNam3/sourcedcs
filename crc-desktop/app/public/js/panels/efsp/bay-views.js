@@ -13,8 +13,7 @@ import { patternBoardModel, renderPatternBoard } from './pattern-board.js';
 
 // Bay descriptor views (crc-sync docs/adr/0075, 0093): a Bay whose descriptor says
 // `view: 'pattern' | 'final' | 'sfa-freqs'` mounts a component, instead of (or
-// above) its Strip racks. One mechanism for every Bay that has one: RSU's pattern
-// board, the carrier's PriFly pattern and FINAL lanes, and the SFA frequency header.
+// above) its Strip racks. One mechanism for every Bay that has one: the carrier's PriFly pattern and FINAL lanes, and the SFA frequency header.
 // bay-view.js calls `renderBayDescriptorView()` once per render and knows nothing
 // else about them.
 //
@@ -32,8 +31,8 @@ import { patternBoardModel, renderPatternBoard } from './pattern-board.js';
 //   sfa-freqs  a header over AP's frequency racks: each frequency, what it is for, and on the
 //              three that rotate who has it selected now (crc-sync docs/adr/0117).
 //
-// `replacesRacks` says the component IS the Bay's interface (RSU) and the racks are
-// hidden; without it (the carrier's Bays, SFA) the racks stay and the component sits
+// `replacesRacks` says the component IS the Bay's interface and the racks are
+// hidden (no shipped Bay honours it since docs/adr/0126 removed the RSU); without it (the carrier's Bays, SFA) the racks stay and the component sits
 // above them. The racks are always still built and reconciled, so a hidden rack costs
 // nothing and the Strips keep the one render path.
 //

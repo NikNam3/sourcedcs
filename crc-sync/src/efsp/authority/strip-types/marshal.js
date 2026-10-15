@@ -13,7 +13,7 @@
 // MARSHAL is the carrier's holding/launch strip type (a launch is a MARSHAL Strip in
 // LAUNCH; the recovery is a NEW MARSHAL Strip on the same flightDataId, so EEAT,
 // which lives on the flight data, survives to it). FINAL is the talk-down strip type, shared
-// with PAR (L18); PATTERN is the visual-pattern strip type, shared with RSU (L18).
+// with PAR (L18); PATTERN is the carrier's visual-pattern strip type (PriFly).
 const MARSHAL_STATES = ['LAUNCH', 'IN_STACK', 'COMMENCED', 'DROPPED'];
 
 // The carrier's three strip types (docs/adr/0064 B2, docs/adr/0074), [SOURCE-DEFINED]

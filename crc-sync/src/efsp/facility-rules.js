@@ -151,6 +151,8 @@ function buildFacilityRules({ facilityId, facilityConfig, permissionRules, posit
     // (null where there are no runways, which never inhibits). Cached in the
     // store, so every NLA stamp can afford to ask.
     runwayStatusFor:           () => runwayStatusStore.statusView(facilityId),
+    // docs/adr/0126 — the airfield this Facility's runways belong to (LeavePattern's departure airport), or null.
+    fieldAirport:              () => { const rs = facilityConfig.getFacilityConfig(facilityId).runwayStatus; return (rs && rs.airportIcao) || null; },
     // docs/adr/0074 — the carrier hooks the Board reads (board/strip-ops.js). The NLA out of
     // IN_STACK depends on the Case and on the staffed lane the stack feeds.
     carrierCase:             () => carrierStore.caseValue(),

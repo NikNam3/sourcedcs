@@ -4,8 +4,8 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
-/* L18's server half, the static part (docs/adr/0075, 0093), as docs/adr/0117 left it: Incirlik's RSU and PAR in
- * facility-config (no SFA Position), the SFA pool's validation (AP's Bay, three of at least five frequencies rotating),
+/* L18's server half, the static part (docs/adr/0075, 0093), as docs/adr/0117 left it: Incirlik's PAR in
+ * facility-config (no SFA Position; no RSU since docs/adr/0126), the SFA pool's validation (AP's Bay, three of at least five frequencies rotating),
  * the Bay descriptor flags, and the capability table that every grant is derived from. The walks through the wire are
  * efsp-scenario-incirlik-l18.test.mjs. */
 
@@ -26,24 +26,25 @@ const { CorrelationReconciler, INELIGIBLE_STATES } = await import('../src/efsp/c
 const clone = (o) => JSON.parse(JSON.stringify(o));
 const valid = (cfg) => fc.validateConfig(cfg);
 
-test('INCIRLIK has RSU and PAR, MILITARY_ATC (so CA keeps them), unique letters; no SFA Position (docs/adr/0117)', () => {
+test('INCIRLIK has PAR, MILITARY_ATC (so CA keeps it), unique letters; no SFA Position (docs/adr/0117), no RSU (docs/adr/0126)', () => {
   const cfg = fc.getFacilityConfig();
-  assert.deepEqual(cfg.positions, ['OPS', 'CD', 'GC', 'LC', 'RSU', 'AP', 'PAR']);
-  for (const id of ['RSU', 'PAR']) assert.equal(fc.getPositionClass(id), 'MILITARY_ATC', id);
-  assert.deepEqual([cfg.positionLetters.RSU, cfg.positionLetters.PAR], ['R', 'P']);
-  for (const key of ['positionClasses', 'positionLetters', 'consolidation', 'positionRadars', 'bays']) assert.equal('SFA' in cfg[key], false, key);
+  assert.deepEqual(cfg.positions, ['OPS', 'CD', 'GC', 'LC', 'AP', 'PAR']);
+  assert.equal(fc.getPositionClass('PAR'), 'MILITARY_ATC');
+  assert.equal(cfg.positionLetters.PAR, 'P');
+  for (const id of ['SFA', 'RSU']) {
+    for (const key of ['positionClasses', 'positionLetters', 'consolidation', 'positionRadars', 'bays']) assert.equal(id in cfg[key], false, `${id} ${key}`);
+  }
   const letters = Object.values(cfg.positionLetters);
   assert.equal(new Set(letters).size, letters.length, 'a letter is unique inside the Facility');
 });
 
-test('radars: RSU the airport radar, PAR the precision approach radar alone', () => {
-  assert.deepEqual(fc.getPositionRadars('RSU'), [{ kind: 'airport', airport: 'LTAG' }]);
+test('radars: PAR the precision approach radar alone', () => {
   assert.deepEqual(fc.getPositionRadars('PAR'), [{ kind: 'approach', airport: 'LTAG' }]);
   assert.ok(fc.radarBearingPositionIds().includes('PAR'));
 });
 
 test('Bays: each Position\'s Bay implies a state its Role really has, and the new states are not in INELIGIBLE_STATES (every PATTERN/FINAL state is decided)', () => {
-  const stripTypeOfBay = { 'rsu-pattern': 'PATTERN', 'ap-sfa': 'ARRIVAL', 'par-final': 'FINAL', 'par-missed': 'FINAL' };
+  const stripTypeOfBay = { 'ap-sfa': 'ARRIVAL', 'par-final': 'FINAL', 'par-missed': 'FINAL' };
   for (const [bayId, stripType] of Object.entries(stripTypeOfBay)) {
     const bay = fc.getBay(bayId);
     assert.ok(bay, bayId);
@@ -60,18 +61,16 @@ test('Bays: each Position\'s Bay implies a state its Role really has, and the ne
   }
 });
 
-test('Bay descriptor flags: the RSU, PAR and SFA Bays and the carrier\'s final/pattern Bays carry `view`; only PAR\'s final Bay has `capacity`; the SFA Bay carries its pool', () => {
-  assert.equal(fc.getBay('rsu-pattern').view, 'pattern');
+test('Bay descriptor flags: the PAR and SFA Bays and the carrier\'s final/pattern Bays carry `view`; only PAR\'s final Bay has `capacity`; the SFA Bay carries its pool', () => {
   assert.equal(fc.getBay('par-final').view, 'final');
   assert.equal(fc.getBay('ap-sfa').view, 'sfa-freqs');
   assert.deepEqual(fc.getBay('ap-sfa').sfaPool, fc.getSingleFrequencyApproach().pool);
   assert.equal(fc.getBay('ap-inbound').sfaPool, undefined);
   assert.equal(fc.getBay('par-final').capacity, 1);
-  assert.equal(fc.getBay('rsu-pattern').replacesRacks, true);
   assert.equal(fc.getBay('par-final').replacesRacks, true);
   assert.equal(fc.getBay('ap-sfa').replacesRacks, undefined, 'the SFA racks ARE the frequencies');
   assert.equal(fc.getBay('cv-app1-final', 'CARRIER').replacesRacks, undefined, 'the carrier keeps its racks and their buttons');
-  assert.deepEqual(fc.getBay('rsu-pattern').rackIds, ['closed', 'initial', 'base', 'final']);
+  assert.equal(fc.getBay('rsu-pattern'), null, 'no RSU (docs/adr/0126)');
   assert.equal(fc.getBay('cv-prifly-pattern', 'CARRIER').view, 'pattern');
   assert.equal(fc.getBay('cv-app1-final', 'CARRIER').view, 'final');
   assert.equal(fc.getBay('cv-app2-final', 'CARRIER').view, 'final');
@@ -81,7 +80,7 @@ test('Bay descriptor flags: the RSU, PAR and SFA Bays and the carrier\'s final/p
 
 test('Bay descriptor flags are validated: an unknown view and a bad capacity are rejected', () => {
   const bad = clone(fc.getShippedConfig('INCIRLIK'));
-  bad.bays.RSU[0].view = 'carousel';
+  bad.bays.PAR[0].view = 'carousel';
   assert.equal(valid(bad).ok, false);
   assert.match(valid(bad).detail, /unknown view/);
   const zero = clone(fc.getShippedConfig('INCIRLIK'));
@@ -142,23 +141,20 @@ test('singleFrequencyApproach is rejected when malformed (¶7-1-5: at least five
 });
 
 test('permission rows: one capability table; PAR gets ordinary Strip ops and no coordination, TOFI, conversion or airspace op', () => {
-  for (const id of ['RSU', 'PAR']) {
+  for (const id of ['PAR']) {
     const ops = classPermission.PERMISSIONS[id];
     for (const k of [...permission.COORDINATION_OP_KINDS, ...permission.TOFI_OP_KINDS, ...permission.AP_CTR_ONLY_OP_KINDS, ...permission.AIRSPACE_ENTRY_OP_KINDS]) {
       assert.equal(ops.has(k), false, `${id} must not hold ${k}`);
     }
     assert.equal(ops.has('MoveStrip') && ops.has('TransferStrip') && ops.has('SetState'), true, id);
   }
-  assert.equal(classPermission.canMutate('RSU', 'CreateStrip'), true);
   assert.equal(classPermission.canMutate('PAR', 'CreateStrip'), false, 'PAR\'s arrive by AP\'s handoff');
-  assert.equal(permission.canCreateStripType('RSU', 'PATTERN'), true);
-  assert.equal(permission.canCreateStripType('RSU', 'ARRIVAL'), false);
+  assert.equal(classPermission.PERMISSIONS.RSU, undefined, 'no RSU (docs/adr/0126)');
   assert.equal(permission.canCreateStripType('PAR', 'FINAL'), false);
 });
 
-test('state authority: RSU works PATTERN, PAR works FINAL on final and after a missed approach (never BALL, the carrier\'s); no other row moved', () => {
-  assert.equal(permission.canActOnState('RSU', 'PATTERN', 'IN_PATTERN'), true);
-  assert.equal(permission.canActOnState('RSU', 'PATTERN', 'RECOVERED'), true);
+test('state authority: PAR works FINAL on final and after a missed approach (never BALL, the carrier\'s); no other row moved', () => {
+  assert.equal(permission.canActOnState('RSU', 'PATTERN', 'IN_PATTERN'), false, 'no RSU (docs/adr/0126)');
   assert.equal(permission.canActOnState('CV_PRIFLY', 'PATTERN', 'IN_PATTERN'), true, 'the carrier row survives');
   assert.deepEqual(permission.STATE_OWNERS_BY_STRIP_TYPE.ARRIVAL.INBOUND, ['AP', 'CTR']);
   for (const s of ['ON_FINAL', 'BOLTER_WAVEOFF']) assert.equal(permission.canActOnState('PAR', 'FINAL', s), true, s);
@@ -168,25 +164,24 @@ test('state authority: RSU works PATTERN, PAR works FINAL on final and after a m
   assert.equal(permission.canActOnState('PAR', 'ARRIVAL', 'INBOUND'), false);
 });
 
-test('RSU may ask about a runway and never close or open one (H18)', () => {
-  assert.equal(permission.canActOnRunwayStatus('RSU', 'RequestRunwayStatus'), true);
+test('PAR never asks about, closes or opens a runway (H18)', () => {
   for (const kind of Object.keys(permission.RUNWAY_STATUS_OP_OWNERS)) {
     if (kind === 'RequestRunwayStatus') continue;
-    for (const id of ['RSU', 'PAR']) assert.equal(permission.canActOnRunwayStatus(id, kind), false, `${id} / ${kind}`);
+    for (const id of ['PAR']) assert.equal(permission.canActOnRunwayStatus(id, kind), false, `${id} / ${kind}`);
   }
   assert.equal(permission.canActOnRunwayStatus('PAR', 'RequestRunwayStatus'), false);
 });
 
 test('the final\'s predicates read the one table: AP hands off to the final, PAR receives it and records the calls (one acting Position, D21)', () => {
   assert.equal(permission.canHandOffToFinal('AP'), true);
-  for (const id of ['PAR', 'RSU', 'LC', 'CV_MARSHAL', 'NOBODY', undefined, 'toString']) assert.equal(permission.canHandOffToFinal(id), false, String(id));
+  for (const id of ['PAR', 'LC', 'CV_MARSHAL', 'NOBODY', undefined, 'toString']) assert.equal(permission.canHandOffToFinal(id), false, String(id));
   assert.equal(permission.canRecordFinalCall('PAR'), true);
-  for (const id of ['AP', 'RSU', 'LC', 'CV_APP1', 'toString']) assert.equal(permission.canRecordFinalCall(id), false, String(id));
+  for (const id of ['AP', 'LC', 'CV_APP1', 'toString']) assert.equal(permission.canRecordFinalCall(id), false, String(id));
   assert.equal(permission.finalReceiver(), 'PAR');
   assert.equal(permission.canRotateSfa, undefined, 'no rotation record to change (docs/adr/0117)');
 });
 
-test('no Position name of RSU and PAR is written in a second table: every RSU/PAR literal in the authority registry is inside INCIRLIK_CAPABILITIES or a comment', () => {
+test('no Position name of PAR is written in a second table: every PAR literal in the authority registry is inside INCIRLIK_CAPABILITIES or a comment', () => {
   // AUTH: the table moved to authority/positions/incirlik-military.js; the
   // other registry files and the permission.js facade must not repeat the names.
   const src = fs.readFileSync(new URL('../src/efsp/authority/positions/incirlik-military.js', import.meta.url), 'utf8');

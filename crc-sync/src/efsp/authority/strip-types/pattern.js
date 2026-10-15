@@ -1,7 +1,7 @@
 'use strict';
 
-// The PATTERN strip-type family (authority registry, S3-2): the visual-pattern strip type,
-// shared by PriFly and RSU (L18). States and NLA moved from nla.js, state
+// The PATTERN strip-type family (authority registry, S3-2): the carrier's visual-pattern
+// strip type (PriFly). The airfield's pattern is LC's, on ordinary Strips (docs/adr/0126). States and NLA moved from nla.js, state
 // owners from permission.js. See marshal.js for the carrier strip types' naming rule.
 
 const PATTERN_STATES = ['IN_PATTERN', 'RECOVERED', 'DROPPED'];
@@ -11,7 +11,7 @@ const PATTERN_STATE_OWNERS = {
   RECOVERED:  ['CV_PRIFLY'],
 };
 
-/** PATTERN's NLA table: pattern legs are Racks, not states (ADR 0064 B2). Shared with RSU (L18). */
+/** PATTERN's NLA table: pattern legs are Racks, not states (ADR 0064 B2). */
 function computePatternNla(strip) {
   switch (strip.state) {
     case 'IN_PATTERN': return { toState: 'RECOVERED' };

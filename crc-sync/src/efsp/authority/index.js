@@ -255,7 +255,7 @@ function permissionsFor(classOf) {
   return out;
 }
 
-// A family's `ownsStates` column (incirlik-military.js: RSU and PAR),
+// A family's `ownsStates` column (incirlik-military.js: PAR),
 // merged here with FRESH arrays: FINAL's rows share CV_LANES, so a push would
 // also hand PAR the carrier Marshal's COMMENCED.
 for (const f of positionFamilies) {

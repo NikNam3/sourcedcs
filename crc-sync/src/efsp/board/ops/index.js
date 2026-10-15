@@ -17,6 +17,7 @@ const MODULES = [
   require('./control-release'),
   require('./tofi'),
   require('./convert-to-arrival'),
+  require('./pattern'),
   require('./divert'),
   require('./approve-airspace-entry'),
   require('./clear-airspace-entry'),

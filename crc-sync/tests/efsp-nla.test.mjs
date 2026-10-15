@@ -321,8 +321,9 @@ test('every pre-WP4A caller (ctx.facilityId omitted entirely) is completely unaf
 });
 
 test('HANDED_TO_TOWER -> FINAL -> LANDED, unconditionally (no WP6/WP7A machinery gates these in Phase 2)', () => {
-  assert.deepEqual(computeNla(makeArrivalStrip('HANDED_TO_TOWER'), makeFlightData(), NOW), { toState: 'FINAL' });
-  assert.deepEqual(computeNla(makeArrivalStrip('FINAL'), makeFlightData(), NOW), { toState: 'LANDED' });
+  // docs/adr/0126: with no pattern cell set the NLA is the straight-in and the full stop; the pattern is legal by drag.
+  assert.deepEqual(computeNla(makeArrivalStrip('HANDED_TO_TOWER'), makeFlightData(), NOW), { toState: 'FINAL', alsoLegal: ['TRAFFIC_PATTERN'] });
+  assert.deepEqual(computeNla(makeArrivalStrip('FINAL'), makeFlightData(), NOW), { toState: 'LANDED', alsoLegal: ['TRAFFIC_PATTERN'] });
 });
 
 test('LANDED is inhibited when GC is neither staffed nor consolidated at another Position', () => {

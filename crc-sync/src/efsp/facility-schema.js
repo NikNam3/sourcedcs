@@ -285,15 +285,15 @@ const isPlainObject = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
 //  facility: the Facility's id (INCIRLIK, CENTER, TACTICAL, CARRIER). It must equal the file's expected id.
 //    RANGES has no file: its Position set is derived from the airspace definitions, every boot (facility-config.js).
 //  positions: the Facility's Position ids. Guide §4.1 names the Facilities and their Positions; the ids follow
-//    JO 7210.3 TBL 10-1-1 (LC, GC, AP; OPS, CD, RSU, PAR, CTR, and the tactical and carrier ids unchanged).
-//    INCIRLIK's seven (no SFA Position since docs/adr/0117: a single frequency approach is a procedure between AP and
+//    JO 7210.3 TBL 10-1-1 (LC, GC, AP; OPS, CD, PAR, CTR, and the tactical and carrier ids unchanged).
+//    INCIRLIK's six (no RSU since docs/adr/0126: the tower works the pattern; no SFA Position since docs/adr/0117: a single frequency approach is a procedure between AP and
 //    PAR, JO 7610.14A para 7-1-5), CENTER's CTR and TACTICAL's TAC_C2/AIC/GCI/JTAC are the guide's. [SOURCE-DEFINED]
-//    (docs/adr/0074, 0075): the CARRIER Facility (CV_MARSHAL, CV_PRIFLY, CV_APP1, CV_APP2) and INCIRLIK's RSU
-//    and PAR where the guide is silent on the Facility's own set. JTAC is read-only (guide §4.1: "MISSION
+//    (docs/adr/0074, 0075): the CARRIER Facility (CV_MARSHAL, CV_PRIFLY, CV_APP1, CV_APP2) and INCIRLIK's PAR
+//    where the guide is silent on the Facility's own set. JTAC is read-only (guide §4.1: "MISSION
 //    (read-only)"), enforced by authority/ never granting it ownership or Mutation rights, not by anything here.
 //  positionClasses: every Position's doctrinal class (guide §4.1's Class column), which authority/classes.js reads
 //    (through getPositionClass) so the cross-Facility coordination primitives and TOFI are gated by class, not by a hand-kept id list
-//    (docs/adr/0020). Every Position needs one. RSU and PAR are MILITARY_ATC too: RSU's advisory role with no separation authority (guide §4.1) is a permission matter, never a new class, because a new class would silently drop
+//    (docs/adr/0020). Every Position needs one. PAR is MILITARY_ATC too: a narrower role is a permission matter, never a new class, because a new class would silently drop
 //    Conflict Alert (position-coverage.js's ATC_CLASSES, the inclusion-list trap of docs/adr/0041).
 //    CARRIER's four Positions are all MILITARY_ATC for the same reason ("Military ATC afloat"); PriFly's
 //    "supervisory, not radar control" is a permission matter too. [SOURCE-DEFINED] (docs/adr/0074) where the
@@ -326,8 +326,7 @@ const isPlainObject = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
 //    OPS, CD and GC have no scope (docs/adr/0033 leans on it), JTAC none (guide §4.1: read-only and non-ATC).
 //    `airport: '*'` (CENTER's CTR: every airfield's approach radar) needs no editing when the theater changes.
 //    TACTICAL's awacs/fighter/datalink selectors model a Military Radar Unit working the airborne picture, and
-//    `coalition: 'own'` resolves against CRCSYNC_COALITION (docs/adr/0059). RSU watches the field and the visual
-//    pattern (the airport radar), PAR the precision approach radar alone
+//    `coalition: 'own'` resolves against CRCSYNC_COALITION (docs/adr/0059). PAR works the precision approach radar alone
 //    (docs/adr/0075). The carrier's selectors name the radar and the hull (position-coverage.js).
 //    INCIRLIK's `LTAG` is the airport-selector id of Incirlik. "Squadron data to verify" for any value we have
 //    not checked against the mission.

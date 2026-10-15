@@ -258,11 +258,9 @@ test('no side number yet: the callsign keeps the big slot; non-carrier Strips an
   for (const stripType of ['DEPARTURE', 'ARRIVAL', 'OVERFLIGHT', 'MISSION']) {
     assert.equal(sideNumberLeads(stripType, 'AP', withSide), false, stripType);
   }
-  // PAR (FINAL) and RSU (PATTERN) are Incirlik's: the same strip types, not carrier Strips.
+  // PAR (FINAL) is Incirlik's: the same strip type, not a carrier Strip. (No RSU since crc-sync docs/adr/0126.)
   assert.equal(sideNumberLeads('FINAL', 'PAR', withSide), false);
   assert.deepEqual(compactBlocksFor('FINAL', 'PAR', withSide), compactBlocksFor('FINAL', 'PAR', null));
-  assert.equal(sideNumberLeads('PATTERN', 'RSU', withSide), false);
-  assert.deepEqual(compactBlocksFor('PATTERN', 'RSU', withSide), ['C1', 'C2', 'C24']);
 });
 
 test('leadingFlightName (H124): a carrier Strip is named by its side number once typed, else the callsign; Incirlik by the callsign', () => {
@@ -272,7 +270,6 @@ test('leadingFlightName (H124): a carrier Strip is named by its side number once
   assert.equal(leadingFlightName({ stripType: 'FINAL', ownerPositionId: 'CV_APP1' }, fd('205')), '205');
   assert.equal(leadingFlightName({ stripType: 'FINAL', ownerPositionId: 'CV_APP1' }, fd('  ')), 'NAVY 1', 'no side number yet');
   assert.equal(leadingFlightName({ stripType: 'FINAL', ownerPositionId: 'PAR' }, fd('205')), 'NAVY 1', 'Incirlik PAR: callsign');
-  assert.equal(leadingFlightName({ stripType: 'PATTERN', ownerPositionId: 'RSU' }, fd('205')), 'NAVY 1', 'Incirlik RSU: callsign');
   assert.equal(leadingFlightName(null, fd('205')), 'NAVY 1');
   assert.equal(leadingFlightName({ stripType: 'FINAL', ownerPositionId: 'CV_APP1' }, null), '');
 });

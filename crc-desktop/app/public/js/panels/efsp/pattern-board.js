@@ -1,10 +1,9 @@
 'use strict';
 
-// The pattern board: RSU's Bay (§4.2: "Pattern board (not a strip rack): closed, initial, base,
-// final") and PriFly's (initial, break, downwind, groove), docs/adr/0075 on docs/adr/0064.
+// The pattern board: PriFly's Bay (initial, break, downwind, groove), docs/adr/0075 on docs/adr/0064.
+// The carrier's only since docs/adr/0126 (no RSU; the airfield's pattern is LC's, on ordinary Strips).
 //
-// RSU and CV_PRIFLY are supervisory over a VISUAL pattern, not radar control (§4.1 rule 4), and RSU
-// has no separation authority. So the board only ever ADVISES: every advisory is a tag under the
+// CV_PRIFLY is supervisory over a VISUAL pattern, not radar control (§4.1 rule 4). So the board only ever ADVISES: every advisory is a tag under the
 // board, none refuses a move, and none is a Mutation error. A leg is a Rack (ADR 0064: "racks are
 // pattern legs, not states"), so moving an aircraft between legs is the ordinary Move gesture; this
 // file builds the description of that move and leaves dispatching to the caller.
@@ -12,12 +11,6 @@
 // Pure model first, renderer second. Times come from the injected mission clock (`nowS`), never
 // Date.now() (H11).
 
-export const RSU_LEGS = [
-  { id: 'closed', label: 'CLOSED' },
-  { id: 'initial', label: 'INITIAL' },
-  { id: 'base', label: 'BASE' },
-  { id: 'final', label: 'FINAL' },
-];
 export const PRIFLY_LEGS = [
   { id: 'initial', label: 'INITIAL' },
   { id: 'break', label: 'BREAK' },
@@ -51,7 +44,7 @@ const _pbFinite = (v) => typeof v === 'number' && Number.isFinite(v);
  * @param {number} [p.finalMax]
  */
 export function patternBoardModel({ legs, strips, nowS, runwayOpenStatus, longMin, finalMax } = {}) {
-  const legList = Array.isArray(legs) && legs.length ? legs : RSU_LEGS;
+  const legList = Array.isArray(legs) && legs.length ? legs : PRIFLY_LEGS;
   const long = _pbFinite(longMin) ? longMin : PATTERN_LONG_MIN;
   const finalCap = _pbFinite(finalMax) ? finalMax : PATTERN_FINAL_MAX;
   const known = new Set(legList.map(l => l.id));

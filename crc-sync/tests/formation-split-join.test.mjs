@@ -370,7 +370,7 @@ test('S16 a ground split needs no assignment; the same on an airborne state is r
 });
 
 test('S17 grants: every ATC Position may; tactical and carrier Positions may not', () => {
-  for (const p of ['OPS', 'CD', 'GC', 'LC', 'AP', 'CTR', 'RSU', 'PAR']) {
+  for (const p of ['OPS', 'CD', 'GC', 'LC', 'AP', 'CTR', 'PAR']) {
     for (const k of permission.FORMATION_OP_KINDS) assert.equal(classPermission.canMutate(p, k), true, `${p} ${k}`);
   }
   for (const p of ['TAC_C2', 'GCI', 'AIC', 'JTAC', 'CV_MARSHAL', 'CV_PRIFLY', 'CV_APP1', 'CV_APP2']) {

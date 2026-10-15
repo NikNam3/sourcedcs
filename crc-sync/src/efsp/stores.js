@@ -284,7 +284,7 @@ const FLIGHT_DATA_SECTIONS = {
     'fullRouteClearance', 'originAirport', 'proposedDepartureTimeUtc', 'remarks', 'requestedAltitude', 'route', 'stereoRouteName'),
   assigned: anyOf('atisCode', 'callForReleaseTimeUtc', 'callForReleaseWindowEndUtc', 'callForReleaseWindowStartUtc',
     'clearedAltitude', 'clearedRoute', 'datalinkClearanceIndicator', 'delayInfo', 'departureRelease', 'edctTimeUtc',
-    'edctWindowEndUtc', 'edctWindowStartUtc', 'landingRunway', 'movementAreaEntryTimeUtc', 'releaseTimeUtc', 'takeoffTimeUtc',
+    'edctWindowEndUtc', 'edctWindowStartUtc', 'landingRunway', 'movementAreaEntryTimeUtc', 'patternEntry', 'patternOption', 'releaseTimeUtc', 'takeoffTimeUtc',
     'taxiTimeUtc', 'voidDeadlineUtc', 'voidTimeUtc'),
   military: {
     ...anyOf('alertStatus', 'altrvRef', 'carrier', 'fuelState', 'hookRequired', 'mtr', 'ordnanceState', 'releaseAuthority', 'scl'),

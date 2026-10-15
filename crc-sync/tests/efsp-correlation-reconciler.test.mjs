@@ -85,7 +85,7 @@ test('an empty board reports null, never 1.0 — otherwise the 95% gate passes v
 // ineligible side; this is the eligible side. A state added to the authority registry's
 // STATES_BY_STRIP_TYPE fails here until it is put on one side (docs/adr/0041's lesson).
 const ELIGIBLE = new Set([
-  'PUSHBACK', 'TAXI', 'RUNWAY_QUEUE', 'LUAW', 'DEPARTED', 'HANDED_OFF', 'INBOUND', 'HANDED_TO_TOWER', 'FINAL', 'LANDED',
+  'PUSHBACK', 'TAXI', 'RUNWAY_QUEUE', 'LUAW', 'DEPARTED', 'HANDED_OFF', 'INBOUND', 'HANDED_TO_TOWER', 'TRAFFIC_PATTERN', 'FINAL', 'LANDED',
   'TAXI_IN', 'IN_SECTOR', 'AIRBORNE', 'ON_STATION', 'OFF_STATION', 'RTB',
   'LAUNCH', 'IN_STACK', 'COMMENCED', 'ON_FINAL', 'BALL', 'BOLTER_WAVEOFF', 'IN_PATTERN', 'RECOVERED',
 ]);

@@ -19,7 +19,7 @@ const byId = (id) => SYRIA.find(d => d.airspaceId === id);
 const CZ = byId('LTAG-CZ'); const RAPCON = byId('LTAG-RAPCON'); const CCA = byId('CVN-72-CCA');
 
 const FACILITIES = {
-  INCIRLIK: ['OPS', 'CD', 'GC', 'LC', 'RSU', 'AP', 'PAR'],
+  INCIRLIK: ['OPS', 'CD', 'GC', 'LC', 'AP', 'PAR'],
   CENTER: ['CTR'],
   TACTICAL: ['TAC_C2', 'AIC', 'GCI', 'JTAC'],
   CARRIER: ['CV_MARSHAL', 'CV_PRIFLY', 'CV_APP1', 'CV_APP2'],

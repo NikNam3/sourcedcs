@@ -1,10 +1,10 @@
 'use strict';
 
-/* L18 on screen (crc-sync docs/adr/0075, 0093), as docs/adr/0117 left it: RSU's pattern board; AP's SFA frequency racks with
+/* L18 on screen (crc-sync docs/adr/0075, 0093), as docs/adr/0117 left it (no RSU since docs/adr/0126; LC's pattern work is e2e/u-twr-pattern.spec.js): AP's SFA frequency racks with
  * their header and "Hand off to PAR" (no SFA Position: JO 7610.14A para 7-1-5); PAR's FINAL Bay of ordinary Strips (H138 U10:
  * HDG and ALT are the 9A-VECTOR and 7A Blocks, the next of Begin descent / Cleared to land beside the NLA Landed, the ⋯ menu's
  * Final group with Missed approach (back to AP, H137); the picture is the PAR panel's, e2e/par-panel.spec.js).
- * One controller holds GC, RSU, AP and PAR. Run on E2E_LANE=9. The Board lives for the whole run, so every test drops what
+ * One controller holds GC, AP and PAR. Run on E2E_LANE=9. The Board lives for the whole run, so every test drops what
  * it made. */
 
 const { test, expect } = require('./helpers/test');
@@ -37,7 +37,7 @@ async function cleanUp(page) {
 }
 
 async function controller(page) {
-  await openPanel(page, { signedOn: ['GC', 'RSU', 'AP', 'PAR'], controller: 'e2e-l18' });
+  await openPanel(page, { signedOn: ['GC', 'AP', 'PAR'], controller: 'e2e-l18' });
   await page.waitForFunction(() => crc.state.getEfspBays().some(b => b.bayId === 'ap-sfa' && Array.isArray(b.sfaPool)));
 }
 
@@ -211,21 +211,4 @@ test('02c PAR\'s missed-approach Bay: a Strip PAR keeps there offers Back to AP'
   await expect(nla).toHaveText('Back to AP');
   await nla.click();
   await waitStrip(page, a, s => s.stripType === 'ARRIVAL' && s.state === 'INBOUND' && s.ownerPositionId === 'AP' && s.rackId === 'freq-4', 'back to AP');
-});
-
-test('03 RSU: the pattern board replaces the racks; Next leg, Landed and Drop work from the chips', async ({ page }) => {
-  await controller(page);
-  const call = cs('PAT');
-  await page.evaluate((c) => crc.ws.sendEfspCreateStrip('RSU', { kind: 'CreateStrip', bayId: 'rsu-pattern', rackId: 'initial', stripType: 'PATTERN', flightData: { callsign: c, aircraftType: 'F-16C' } }), call);
-  await waitStrip(page, call, s => s.ownerPositionId === 'RSU' && s.rackId === 'initial', 'in the pattern');
-  await openBay(page, 'RSU', 'rsu-pattern');
-  const chip = page.locator('.efsp-pattern-chip', { hasText: call });
-  await expect(chip).toBeVisible();
-  await expect(page.locator('.efsp-pattern-leg')).toHaveCount(4);
-  await chip.locator('.efsp-pattern-next').click();
-  await waitStrip(page, call, s => s.rackId === 'base', 'base leg');
-  await page.locator('.efsp-pattern-chip', { hasText: call }).locator('[data-action="LANDED"]').click();
-  await waitStrip(page, call, s => s.state === 'RECOVERED', 'landed');
-  await page.locator('.efsp-pattern-chip', { hasText: call }).locator('[data-action="DROP"]').click();
-  await expect.poll(() => stripOf(page, call)).toBeNull();
 });

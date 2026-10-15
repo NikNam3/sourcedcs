@@ -32,7 +32,7 @@ test('S1 "no": with no GC entry in consolidation an empty GC has nobody to offer
   const c = crew(efsp, { OPS: 'INCIRLIK', CD: 'INCIRLIK', LC: 'INCIRLIK' });
   const positions = efsp.positionStoreFor('INCIRLIK');
   assert.equal(positions.consolidatedAt('GC'), null, 'GC has no list');
-  assert.equal(positions.consolidatedAt('RSU'), 'LC');
+  assert.equal(positions.consolidatedAt('PAR'), null, 'AP is not signed on');
   // CD -> GC (CLEARED -> PUSHBACK) into the empty GC is inhibited / refused
   let s = mustAct(efsp, c.OPS, 'OPS', null, { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE', flightData: { ...DEPARTURE_FLIGHT_DATA, callsign: 'S1NO' } });
   const refused = act(efsp, c.OPS, 'OPS', s, { kind: 'TransferStrip', toPositionId: 'GC', bayId: 'gc-coordination', rackId: 'main' });

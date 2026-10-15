@@ -74,6 +74,9 @@ export const DEPARTURE_BLOCK_MAP = {
   '9C': { required: false, label: 'FAC C',    target: { kind: 'annotation' } },
   '9D': { required: true,  label: 'FULL RTE', target: { kind: 'flightData', path: 'filed.fullRouteClearance' } },
   '9E': { required: true,  label: 'RMKS',     target: { kind: 'flightData', path: 'filed.remarks' } },
+  // crc-sync docs/adr/0126: LC's pattern cells (mirrors block-map.js's 9J comment).
+  '9J-ENTRY':  { required: false, label: 'P/S',      target: { kind: 'flightData', path: 'assigned.patternEntry' } },
+  '9J-OPTION': { required: false, label: 'OPT',      target: { kind: 'flightData', path: 'assigned.patternOption' } },
   // §9.10 stereo route name (docs/adr/0050) — mirrors crc-sync's
   // block-map.js '9F' exactly; see that module's comment for why it is not
   // numbered M18 and why writing it re-files the flight rather than just
@@ -193,6 +196,8 @@ export const ARRIVAL_BLOCK_MAP = {
   '9H-TIME':  { required: false, label: 'EXIT EST', target: { kind: 'flightData', path: 'military.mtr.exitEstimateUtc' } },
   '9H-ALT':   { required: false, label: 'EXIT ALT', target: { kind: 'flightData', path: 'military.mtr.requestedAltitudeAfterExit' } },
   '9E':       { required: true,  label: 'RMKS',     target: { kind: 'flightData', path: 'filed.remarks' } },
+  '9J-ENTRY':  { required: false, label: 'P/S',      target: { kind: 'flightData', path: 'assigned.patternEntry' } },   // crc-sync docs/adr/0126
+  '9J-OPTION': { required: false, label: 'OPT',      target: { kind: 'flightData', path: 'assigned.patternOption' } },
   '20':       { required: false, label: 'SCRATCH1',  target: { kind: 'annotation' } },
   '21':       { required: false, label: 'SCRATCH2',  target: { kind: 'annotation' } },
   '24':       { required: true,  label: 'MIT RMKS',     target: { kind: 'annotation' } },
@@ -715,6 +720,33 @@ export function enumSelectOptionsFor(blockId, flightData) {
 // flight (crc-sync names the declarer in the refusal). That is correct
 // and deliberately NOT pre-empted here: the refusal is legible and lands
 // attributed to the Strip.
+// crc-sync docs/adr/0126 (H150 TWR-Q1 a): LC's two pattern cells, a click cycling through the values the server accepts
+// (flight-data-store.js PATTERN_ENTRIES / PATTERN_OPTIONS) and back to empty. Each shows its short form: PAT / STR, and
+// T&G / FS / LA (no stop-and-go, H147 RQ7). Checked before the enum <select> (block-edit.js).
+export const CYCLE_BLOCKS = {
+  '9J-ENTRY': [['PATTERN', 'PAT'], ['STRAIGHT_IN', 'STR']],
+  '9J-OPTION': [['TOUCH_AND_GO', 'T&G'], ['FULL_STOP', 'FS'], ['LOW_APPROACH', 'LA']],
+};
+
+/** @returns {boolean} is this Block a click-to-cycle cell? */
+export function isCycleBlock(blockId) {
+  return Object.prototype.hasOwnProperty.call(CYCLE_BLOCKS, blockId);
+}
+
+/** The short form a cycle cell shows for `value` ('' when unset or unknown). */
+export function cycleBlockLabel(blockId, value) {
+  const row = (CYCLE_BLOCKS[blockId] || []).find(([v]) => v === value);
+  return row ? row[1] : '';
+}
+
+/** The value one click sets: the next in the list, '' (clear) after the last, the first from empty. */
+export function nextCycleValue(blockId, value) {
+  const values = (CYCLE_BLOCKS[blockId] || []).map(([v]) => v);
+  const i = values.indexOf(value);
+  if (i < 0) return values[0] || '';
+  return i + 1 < values.length ? values[i + 1] : '';
+}
+
 export const ENUM_CLEARABLE_BLOCKS = new Set(['RSVC', 'SREG', '24A', '9F', 'C4']);
 
 /** @returns {boolean} may this enum Block be cleared back to no value at all? */
@@ -866,6 +898,8 @@ const DEPARTURE_TITLES = {
   '9C': 'Block 9C, optional use (facility)',
   '9D': 'Full route clearance (ours)',
   '9E': 'Remarks (Block 9)',
+  '9J-ENTRY': 'Pattern or straight-in (ours: the tower\'s pattern work, AIM 4-3-3)',
+  '9J-OPTION': 'Touch-and-go, full stop or low approach (JO 7110.65 ¶3-8-2; ours as a cell)',
   '9F': 'Stereo route (ours, local tower-en-route canned route)',
   '9G-MTR': 'MTR designator (ours, military; guide M10)',
   '9G-ENTRY': 'MTR entry fix (ours, military)',

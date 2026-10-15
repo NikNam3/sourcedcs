@@ -5,7 +5,7 @@
  * crc-sync docs/adr/0112). The harness has no DCS, so the server's PAR sample carries no plot: the spec replaces the samples of
  * every `par-sample` frame with its own (an EFSP message observer, as carrier-map.spec.js puts in the ship) and applies them at
  * once. Everything else is the real server: the Strips, AP's handoff to PAR (crc-sync docs/adr/0117), the carrier handoffs and
- * the terminal ops. Incirlik: one controller signed on to GC, RSU, AP and PAR. The carrier: one controller on the whole carrier.
+ * the terminal ops. Incirlik: one controller signed on to GC, AP and PAR. The carrier: one controller on the whole carrier.
  */
 
 const { test, expect } = require('./helpers/test');
@@ -110,7 +110,7 @@ async function onParFinal(page, callsign, rack = 'freq-2') {
 }
 
 async function incirlik(page) {
-  await openPanel(page, { signedOn: ['GC', 'RSU', 'AP', 'PAR'], controller: `e2e-par-${unique()}` });
+  await openPanel(page, { signedOn: ['GC', 'AP', 'PAR'], controller: `e2e-par-${unique()}` });
   await installSampleInjection(page);
 }
 
@@ -421,7 +421,7 @@ test('06 Landed from the PAR panel: the Strip goes to GC and PAR\'s Bay frees (T
   // same sample; so the controller signs off everything)
   await page.evaluate(() => crc.ws.sendEfspSetPositions('INCIRLIK', []));
   await expect(panel(page).locator('#par-empty')).toBeVisible({ timeout: 5000 });
-  await page.evaluate(() => crc.ws.sendEfspSetPositions('INCIRLIK', ['GC', 'RSU', 'AP', 'PAR']));
+  await page.evaluate(() => crc.ws.sendEfspSetPositions('INCIRLIK', ['GC', 'AP', 'PAR']));
   await page.waitForFunction(() => crc.ws.getAckedPositions('INCIRLIK').includes('PAR'));
 });
 

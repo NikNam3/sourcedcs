@@ -79,6 +79,8 @@ export const COMPACT_BLOCKS_BY_STRIP_TYPE = {
 //    what those two Positions receive and type (S-L16 W2, ADR 0073), and neither was on any face.
 //  - RELEASE (14A, the release state) on a DEPARTURE at AP and CTR, because the release
 //    travels CTR -> AP -> LC (guide §4.6.2) and each of them reads and passes it (UI-A U5).
+//  - The pattern cells P/S (9J-ENTRY) and OPT (9J-OPTION) where pattern traffic is worked: LC's arrivals and departures,
+//    and AP's arrivals, so the pilot's intentions can be set before the transfer (crc-sync docs/adr/0126, H150).
 //  - ALERT (14E) where an alert aircraft is ordered and moved: OPS sets it
 //    (decisions.md H56), and every ground Position shows it: CD, GC, LC
 //    (crc-sync docs/adr/0070).
@@ -87,14 +89,14 @@ export const COMPACT_BLOCKS_BY_POSITION = {
     OPS: ['1', '3', '5', '6', '7', '8', '8A', '8B', '9', '9F', '3D', '3E', '3G', '14E'],
     CD:  ['1', '3', '5', '7', '8', '8A', '8B', '9', '9F', '10', '14A', '14D', '21', '14E'],
     GC: ['1', '3', '5', '8', '8A', '14A', '14D', '17', '14E'],
-    LC: ['1', '3', '5', '8A', '21', '14D', '18', '3F', '3G', '14E'],
+    LC: ['1', '3', '5', '8A', '21', '14D', '18', '3F', '3G', '14E', '9J-ENTRY', '9J-OPTION'],
     AP: ['1', '3', '5', '7', '8A', '9', '20', '21', '9A-SPEED', '14A', '22', '5A', 'SREG'],
     CTR: ['1', '3', '5', '7', '21', '20', '9A-SPEED', '8B', '9', '14A', '22', '24A', 'IFR', 'RSVC', 'SREG', '5A'],
   },
   ARRIVAL: {
     GC: ['1', '3', '5', '8B'],
-    LC: ['1', '3', '5', '7', '8B', '9A-FUEL', '3F', '3G'],
-    AP: ['1', '3', '5', '6', '7', '8A', '8B', '9A-VECTOR', '9A-SPEED', '22', '5A', 'SREG'],
+    LC: ['1', '3', '5', '7', '8B', '9A-FUEL', '3F', '3G', '9J-ENTRY', '9J-OPTION'],
+    AP: ['1', '3', '5', '6', '7', '8A', '8B', '9A-VECTOR', '9A-SPEED', '22', '5A', 'SREG', '9J-ENTRY', '9J-OPTION'],
     CTR: ['1', '3', '5', '6', '7', '9A-VECTOR', '9A-SPEED', '22', '24A', 'IFR', 'RSVC', 'SREG', '5A'],
   },
   OVERFLIGHT: {
@@ -143,9 +145,9 @@ export function compactBlocksFor(stripType, positionId, flightData) {
 // callsign takes the side number's. Only once a side number is typed: until then
 // the callsign keeps the big slot, so a Strip is never led by an empty field.
 // A carrier Strip is one owned by a CARRIER Position (MARSHAL, FINAL, PATTERN):
-// FINAL and PATTERN are also Incirlik's strip types (PAR, RSU), which never swap.
-// PATTERN's SIDE is read-only, so it is on the face only while it leads: an RSU
-// Strip, or a carrier one with no side number, looks as it always did.
+// FINAL is also Incirlik's strip type (PAR), which never swaps.
+// PATTERN's SIDE is read-only, so it is on the face only while it leads: a carrier
+// Strip with no side number looks as it always did.
 export const SIDE_ONLY_WHEN_LEADING = ['PATTERN'];
 
 export function sideNumberLeads(stripType, positionId, flightData) {

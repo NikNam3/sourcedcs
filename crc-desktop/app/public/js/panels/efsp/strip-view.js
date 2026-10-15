@@ -20,6 +20,7 @@ import { STRIP_TYPE_ABBR, _addClass, _stripButton, _stripEl } from './strip-dom.
 import { _coordinationExchange, _marsaExchange, _pairedMissionStrip, _tofiExchange, _tofiExitIsPrimary, _trackExchange } from './strip-exchanges.js';
 import { _stripAlerts } from './strip-alerts.js';
 import { _buildIndicatorSlots } from './strip-indicators.js';
+import { PATTERN_STATE, stateDisplayLabel } from './pattern-rules.js';
 import { _buildStripTools } from './strip-menu.js';
 import { _buildRemarksRow } from './strip-remarks.js';
 
@@ -94,7 +95,7 @@ function _buildLifeBlock(strip) {
 function _buildStripTab(strip, arrival) {
   const tab = _stripEl('div', 'efsp-strip-tab');
   tab.appendChild(_stripEl('div', 'efsp-strip-tab-type',
-    `${STRIP_TYPE_ABBR[strip.stripType] || strip.stripType} · ${String(strip.state).replace(/_/g, ' ')}`));
+    `${STRIP_TYPE_ABBR[strip.stripType] || strip.stripType} · ${stateDisplayLabel(strip.state)}`)); // IN PATTERN: crc-sync docs/adr/0126
   // Just arrived from another controller (docs/adr/0057): who from, in amber,
   // until the controller touches the Strip or 30 s after they first saw it.
   if (arrival) tab.appendChild(_stripEl('div', 'efsp-strip-from', `from ${arrival.from}`));
@@ -166,6 +167,7 @@ function _buildReasonLines(strip, inhibited, alerts = []) {
 
 export function _buildStripLayout(el, strip, obligation) {
   el.classList.add('efsp-strip-c');
+  if (strip.state === PATTERN_STATE) el.classList.add('efsp-strip-in-pattern'); // crc-sync docs/adr/0126: grey, no colour
   if (_isRejectedCoordinationReplica(strip)) el.classList.add('efsp-strip-inert');
   if (isMarsaHighlighted(strip.stripId)) {
     el.classList.add('efsp-strip-marsa-participant');

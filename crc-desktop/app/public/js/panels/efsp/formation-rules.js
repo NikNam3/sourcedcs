@@ -19,7 +19,7 @@ export const FORMATION_GROUND_STATES = {
 };
 
 /** Every ATC Position of the civil-ATC and Incirlik-military families (H100 Q-SJ3 c). Not tactical, not carrier. */
-export const FORMATION_POSITIONS = ['OPS', 'CD', 'GC', 'LC', 'AP', 'CTR', 'RSU', 'PAR'];
+export const FORMATION_POSITIONS = ['OPS', 'CD', 'GC', 'LC', 'AP', 'CTR', 'PAR'];
 
 const CALLSIGN_RE = /^[A-Z0-9]{1,7}$/;
 

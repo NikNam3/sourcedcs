@@ -18,7 +18,7 @@ const configured = () => facilityConfig.getFacilityIds().flatMap(f => facilityCo
 
 test('every Position a shipped Facility lists has a registered Position family', () => {
   const rows = configured();
-  assert.ok(rows.length >= 16, `found ${rows.length}`);
+  assert.ok(rows.length >= 15, `found ${rows.length}`); // 15 since the RSU went (docs/adr/0126)
   for (const { f, p } of rows) assert.ok(authority.positionFamilyOf(p), `${f}/${p} has no Position family in authority/`);
 });
 

@@ -425,7 +425,7 @@ import { createPttController, clampMaxTxSeconds, PTT_MAX_TX_DEFAULT_S } from './
     if (freqEl) {
       const slot = parseInt(freqEl.dataset.slot, 10);
       const radio = (_state.radios || []).find(r => r.slot === slot);
-      const cur   = radio?.freq_mhz?.toFixed(3) ?? '251.000';
+      const cur   = radio?.freq_mhz?.toFixed(3) ?? ''; // no station frequency in code (H147 RQ5): an unset radio prompts empty
       const raw   = await _promptFreq(slot, cur);
       if (raw == null) return;
       const f = parseFloat(raw);

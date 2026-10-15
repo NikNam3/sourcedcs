@@ -255,7 +255,7 @@ test('setting signed-on positions acks with the actually-signed-on set and broad
   assert.deepEqual(result.ack.signedOn.sort(), ['GC', 'LC']);
   assert.equal(result.ack.warnings.length, 0);
   assert.equal(slot(result, 'primary').type, 'efsp-board-delta');
-  assert.equal(slot(result, 'primary').positions.updated.length, 7); // all of INCIRLIK's Positions reported (RSU and PAR since L18, no SFA since ADR 0117)
+  assert.equal(slot(result, 'primary').positions.updated.length, 6); // all of INCIRLIK's Positions reported (PAR since L18, no SFA since ADR 0117, no RSU since ADR 0126)
 });
 
 test('GC vacated with Strips while LC is staffed: the Strips stay GC\'s, the warning is offeredTo:LC, LC\'s Positions entry carries the standing hatOffer, and no frame is sent (ADR 0105, 0110)', () => {

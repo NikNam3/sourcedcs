@@ -1,7 +1,8 @@
 'use strict';
 
-// Incirlik's military ATC Position family (authority registry, S3-2): RSU and
-// PAR, plus the columns L18 adds to civil-atc.js's AP. Moved from
+// Incirlik's military ATC Position family (authority registry, S3-2): PAR,
+// plus the columns L18 adds to civil-atc.js's AP. No RSU (docs/adr/0126: the
+// tower works the pattern). Moved from
 // permission.js. Registered LAST: it extends AP and the strip-type families' owner
 // tables, so everything it extends must already be there. No SFA Position
 // (docs/adr/0117): a single frequency approach is a procedure between AP and PAR
@@ -9,8 +10,8 @@
 
 const { NON_CREATE_OPS, FORMATION_OP_KINDS } = require('../op-kinds');
 
-// Incirlik's radar-approach and visual-pattern Positions (docs/adr/0075, 0117):
-// RSU and PAR, plus AP's columns. ONE table, one row per Position,
+// Incirlik's radar-approach Positions (docs/adr/0075, 0117, 0126):
+// PAR, plus AP's columns. ONE table, one row per Position,
 // one column per capability (the shape docs/adr/0080 gave the tactical Positions
 // and L17 the carrier), and every grant below is DERIVED from it, so no Position
 // name is repeated in a second table. Static (P5): read at load, never written.
@@ -20,13 +21,12 @@ const { NON_CREATE_OPS, FORMATION_OP_KINDS } = require('../op-kinds');
 //                      module's header: the maximally-permissive trap). None of
 //                      them gets a coordination primitive, TOFI, ConvertToArrival
 //                      or an airspace-entry op: they sit inside one Facility.
-//  createsStripTypes   the strip types it may originate via CreateStrip. Only RSU
-//                      originates (a PATTERN Strip for an aircraft it watches join
-//                      the pattern, [SOURCE-DEFINED]); PAR's arrive by AP's handoff.
+//  createsStripTypes   the strip types it may originate via CreateStrip. None:
+//                      PAR's arrive by AP's handoff.
 //  ownsStates          { strip type: [states] } this Position works (the "normally owned
 //                      by" authority, §3.4), merged into STATE_OWNERS_BY_STRIP_TYPE.
 //  requestsRunwayStatus  may SEND RequestRunwayStatus (kinds CLOSE, OPEN,
-//                      WORKS; BARRIER_CHANGE is WORKS since L1b). RSU asks; only LC closes or opens a
+//                      WORKS; BARRIER_CHANGE is WORKS since L1b). AP asks; only LC closes or opens a
 //                      runway (decisions.md H18, S-L1b), so no column here grants
 //                      CloseRunway, OpenRunway or any other RUNWAY_STATUS_OP_OWNERS row.
 //  handsOffToFinal     may hand an ARRIVAL at INBOUND to the final controller (the
@@ -39,12 +39,6 @@ const INCIRLIK_CAPABILITIES = {
   AP: { // AP's own op grant is in positions/civil-atc.js; these are the columns L18 adds to it
     ops: null, createsStripTypes: null, ownsStates: {},
     requestsRunwayStatus: true, handsOffToFinal: true, receivesFinal: false, recordsFinalCalls: false,
-  },
-  RSU: {
-    ops: [...NON_CREATE_OPS, 'CreateStrip', ...FORMATION_OP_KINDS],
-    createsStripTypes: ['PATTERN'],
-    ownsStates: { PATTERN: ['IN_PATTERN', 'RECOVERED'] },
-    requestsRunwayStatus: true, handsOffToFinal: false, receivesFinal: false, recordsFinalCalls: false,
   },
   PAR: {
     ops: [...NON_CREATE_OPS, ...FORMATION_OP_KINDS],

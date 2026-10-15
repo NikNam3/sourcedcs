@@ -5,7 +5,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
-/* L18's walks (docs/adr/0075, 0093), as docs/adr/0117 left them: Incirlik's RSU and PAR on the wire, and the single
+/* L18's walks (docs/adr/0075, 0093), as docs/adr/0117 left them: Incirlik's PAR on the wire (no RSU since docs/adr/0126), and the single
  * frequency approach between AP and PAR (no SFA Position; JO 7610.14A para 7-1-5, JO 7110.65BB para 4-7-3, 5-10-15).
  *
  * Not just the lifecycle. Each flow is walked the way pilots disturb it
@@ -33,7 +33,7 @@ const {
   crew, hold, freshEfsp, act, mustAct, advance,
 } = await import('./helpers/efsp-scenario.mjs');
 
-const STAFFED = { OPS: 'INCIRLIK', GC: 'INCIRLIK', LC: 'INCIRLIK', RSU: 'INCIRLIK', AP: 'INCIRLIK', PAR: 'INCIRLIK' };
+const STAFFED = { OPS: 'INCIRLIK', GC: 'INCIRLIK', LC: 'INCIRLIK', AP: 'INCIRLIK', PAR: 'INCIRLIK' };
 const MS = { 'freq-1': 232.1, 'freq-2': 233.1, 'freq-3': 234.1, 'freq-4': 235.1, 'freq-5': 236.1 };
 const board = (efsp) => efsp.boardStoreFor('INCIRLIK');
 const strip = (efsp, s) => board(efsp).getStrip(s.stripId);
@@ -98,7 +98,7 @@ test('T1: the drop the live test refused works: an arrival AP never put on an SF
   assert.equal(handed.sfaTransfer.frequencyRackId, null, 'no SFA Rack was left');
 });
 
-test('only AP hands an arrival to PAR: LC and RSU may not, and a FINAL already with PAR is not handed again', () => {
+test('only AP hands an arrival to PAR: LC may not, and a FINAL already with PAR is not handed again', () => {
   const { efsp, c } = fresh();
   const s = arrival(efsp, c, 'freq-3');
   const lcBound = mustAct(efsp, c.AP, 'AP', s, { kind: 'TransferStrip', toPositionId: 'LC', bayId: 'lc-arrivals', rackId: 'main' });
@@ -365,74 +365,15 @@ test('there is no SFA Position and no SFA rotation message (docs/adr/0117)', () 
   assert.equal(efsp.snapshotFor(c.AP.session).sfaRotation, undefined);
 });
 
-// ── RSU ─────────────────────────────────────────────────────────────────────
+// ── No RSU (docs/adr/0126) ──────────────────────────────────────────────────
 
-function patternStrip(efsp, c, rackId = 'initial') {
-  return mustAct(efsp, c.RSU, 'RSU', null, {
-    kind: 'CreateStrip', bayId: 'rsu-pattern', rackId, stripType: 'PATTERN',
-    flightData: { callsign: `PAT${++n}`, aircraftType: 'F16', wakeCategory: 'M' },
-  });
-}
-
-test('RSU pattern walk: initial, base, final by ordinary Moves (a leg is a Rack), Landed, Drop', async () => {
+test('AP asks for a runway change and may not make one (H18): a request reaches LC, a close is refused', () => {
   const { efsp, c } = fresh();
-  const s = patternStrip(efsp, c);
-  assert.equal(s.stripType, 'PATTERN'); assert.equal(s.state, 'IN_PATTERN'); assert.equal(s.ownerPositionId, 'RSU');
-  for (const leg of ['base', 'final']) {
-    const m = mustAct(efsp, c.RSU, 'RSU', strip(efsp, s), { kind: 'MoveStrip', bayId: 'rsu-pattern', rackId: leg });
-    assert.equal(m.rackId, leg); assert.equal(m.state, 'IN_PATTERN');
-  }
-  const landed = await advance(efsp, c.RSU, 'RSU', strip(efsp, s));
-  assert.equal(landed.state, 'RECOVERED');
-  const gone = await advance(efsp, c.RSU, 'RSU', strip(efsp, s));
-  assert.equal(gone.state, 'DROPPED');
-  assert.equal(live(efsp).length, 0);
-});
-
-test('a pilot SWITCHES in the pattern: goes back round to CLOSED from FINAL, and the board never refuses (RSU advises, it does not control)', () => {
-  const { efsp, c } = fresh();
-  const s = patternStrip(efsp, c, 'final');
-  const m = mustAct(efsp, c.RSU, 'RSU', strip(efsp, s), { kind: 'MoveStrip', bayId: 'rsu-pattern', rackId: 'closed' });
-  assert.equal(m.rackId, 'closed');
-  // two aircraft on the last leg is legal: the pattern board advises, the server does not refuse
-  const t = patternStrip(efsp, c, 'final');
-  const u = patternStrip(efsp, c, 'final');
-  assert.equal(strip(efsp, t).rackId, 'final'); assert.equal(strip(efsp, u).rackId, 'final');
-  for (const x of [s, t, u]) mustAct(efsp, c.RSU, 'RSU', strip(efsp, x), { kind: 'DropStrip' });
-});
-
-test('the pilot CANCELS: an RSU Drop takes the Strip off the Board and a dropped Strip cannot be moved', () => {
-  const { efsp, c } = fresh();
-  const s = patternStrip(efsp, c);
-  mustAct(efsp, c.RSU, 'RSU', strip(efsp, s), { kind: 'DropStrip' });
-  assert.equal(strip(efsp, s).state, 'DROPPED');
-  assert.equal(live(efsp).length, 0);
-  assert.equal(strip(efsp, s).state, 'DROPPED', 'a late Move of a dropped Strip does not revive it');
-  act(efsp, c.RSU, 'RSU', strip(efsp, s), { kind: 'MoveStrip', bayId: 'rsu-pattern', rackId: 'base' });
-  assert.equal(strip(efsp, s).state, 'DROPPED');
-  assert.equal(live(efsp).length, 0);
-});
-
-test('LATE ARRIVAL: an aircraft is already in the pattern when RSU leaves; the Strip stays RSU\'s and LC is offered RSU (docs/adr/0110: RSU is back on a list)', () => {
-  const { efsp, c } = fresh();
-  const s = patternStrip(efsp, c, 'base');
-  const r = hold(efsp, c.RSU.session, 'INCIRLIK', []);
-  const now = strip(efsp, s);
-  // Nothing is re-routed and nothing is lost: the Strip stays owned by RSU in its Bay, and the ack names who is offered it.
-  assert.equal(now.ownerPositionId, 'RSU');
-  assert.equal(now.bayId, 'rsu-pattern');
-  assert.deepEqual(r.ack.warnings, [{ positionId: 'RSU', count: 1, offeredTo: 'LC' }]);
-  hold(efsp, c.RSU.session, 'INCIRLIK', ['RSU']); // RSU back, late
-  mustAct(efsp, c.RSU, 'RSU', strip(efsp, s), { kind: 'MoveStrip', bayId: 'rsu-pattern', rackId: 'final' });
-});
-
-test('RSU asks for a runway change and may not make one (H18): a request reaches LC, a close is refused', () => {
-  const { efsp, c } = fresh();
-  const rsu = c.RSU;
+  const ap = c.AP;
   const current = () => efsp.runwayStatusStore.getRunwayStatus('INCIRLIK');
-  const send = (op) => efsp.handleMessage(rsu.session, {
+  const send = (op) => efsp.handleMessage(ap.session, {
     version: 1, type: 'efsp-runway-status-mutation', clientMutationId: crypto.randomUUID(),
-    facilityId: 'INCIRLIK', baseRev: current().rev, actingPositionId: 'RSU', op,
+    facilityId: 'INCIRLIK', baseRev: current().rev, actingPositionId: 'AP', op,
   }).ack;
   const req = send({ kind: 'RequestRunwayStatus', runwayId: '05/23', action: 'WORKS', note: 'barrier re-rig' });
   assert.equal(req.ok, true, JSON.stringify(req));
@@ -461,4 +402,10 @@ test('PAR cannot do what only the ATC boundary Positions do: no HANDOFF, TOFI, C
 test('the whole walk leaves the Board empty (no Strip left behind)', () => {
   const { efsp } = fresh();
   assert.equal(live(efsp).length, 0);
+});
+
+test('there is no RSU Position and no RSU Bay (docs/adr/0126)', () => {
+  const { efsp } = fresh();
+  assert.equal(efsp.facilityConfig.getPositionSet('INCIRLIK').includes('RSU'), false);
+  assert.equal(efsp.facilityConfig.getBay('rsu-pattern'), null);
 });

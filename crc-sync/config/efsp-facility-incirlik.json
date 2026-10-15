@@ -5,7 +5,6 @@
     "CD",
     "GC",
     "LC",
-    "RSU",
     "AP",
     "PAR"
   ],
@@ -14,7 +13,6 @@
     "CD": "MILITARY_ATC",
     "GC": "MILITARY_ATC",
     "LC": "MILITARY_ATC",
-    "RSU": "MILITARY_ATC",
     "AP": "MILITARY_ATC",
     "PAR": "MILITARY_ATC"
   },
@@ -23,7 +21,6 @@
     "CD": "D",
     "GC": "G",
     "LC": "T",
-    "RSU": "R",
     "AP": "A",
     "PAR": "P"
   },
@@ -31,7 +28,6 @@
     "CD": ["GC", "LC", "AP"],
     "GC": ["LC", "AP"],
     "LC": ["AP"],
-    "RSU": ["LC"],
     "PAR": ["AP"]
   },
   "handBack": {},
@@ -54,12 +50,6 @@
     "CD": [],
     "GC": [],
     "LC": [
-      {
-        "kind": "airport",
-        "airport": "LTAG"
-      }
-    ],
-    "RSU": [
       {
         "kind": "airport",
         "airport": "LTAG"
@@ -198,6 +188,13 @@
         "impliesState": "HANDED_TO_TOWER"
       },
       {
+        "bayId": "lc-pattern",
+        "rackIds": [
+          "main"
+        ],
+        "impliesState": "TRAFFIC_PATTERN"
+      },
+      {
         "bayId": "lc-final",
         "rackIds": [
           "main"
@@ -216,20 +213,6 @@
         "rackIds": [
           "main"
         ]
-      }
-    ],
-    "RSU": [
-      {
-        "bayId": "rsu-pattern",
-        "rackIds": [
-          "closed",
-          "initial",
-          "base",
-          "final"
-        ],
-        "impliesState": "IN_PATTERN",
-        "view": "pattern",
-        "replacesRacks": true
       }
     ],
     "AP": [

@@ -32,6 +32,7 @@ export const NLA_LABELS = {
   ARRIVAL: {
     INBOUND:         'Hand to Tower',
     HANDED_TO_TOWER: 'On Final',
+    TRAFFIC_PATTERN: 'On Final', // crc-sync docs/adr/0126: LC's pattern
     FINAL:           'Landed',
     LANDED:          'Taxi In',
     TAXI_IN:         'Drop',
@@ -94,6 +95,11 @@ export const CARRIER_HANDOFFS = {
   MARSHAL_TO_PATTERN_CASE_I: { label: 'To pattern',    trigger: 'CONTROLLER_INITIATED', from: ['CV_MARSHAL'], cases: ['I'] },
 };
 
+// crc-sync docs/adr/0126: an ARRIVAL NLA that LC's pattern cells (9J-ENTRY, 9J-OPTION) turned towards the pattern, keyed
+// `from>to` on the server's own `strip.nla.toState`: PAT sends the arrival into the pattern, a touch-and-go or low approach
+// puts it back into closed traffic (JO 7110.65 ¶3-10-11 "closed traffic").
+export const ARRIVAL_PATTERN_NLA_LABELS = { 'HANDED_TO_TOWER>TRAFFIC_PATTERN': 'In pattern', 'FINAL>TRAFFIC_PATTERN': 'Closed traffic' };
+
 // A FINAL NLA that is a transfer at an airfield, by state (crc-sync authority/strip-types/final.js): the missed approach
 // back to AP. ON_FINAL's transfer (Landed, to GC) is the state table's own label.
 export const FINAL_TRANSFER_LABELS = { BOLTER_WAVEOFF: 'Back to AP' };
@@ -104,6 +110,10 @@ export function nlaButtonLabel(strip) {
   if (t && CARRIER_HANDOFFS[t]) return CARRIER_HANDOFFS[t].label;
   if (strip && strip.stripType === 'FINAL' && strip.nla && strip.nla.transferTo && FINAL_TRANSFER_LABELS[strip.state]) {
     return FINAL_TRANSFER_LABELS[strip.state];
+  }
+  if (strip && strip.stripType === 'ARRIVAL' && strip.nla && strip.nla.toState) {
+    const pattern = ARRIVAL_PATTERN_NLA_LABELS[`${strip.state}>${strip.nla.toState}`];
+    if (pattern) return pattern;
   }
   return strip ? nlaLabelFor(strip.state, strip.stripType) : null;
 }
@@ -150,6 +160,7 @@ export const DEPARTURE_STATE_OWNERS = {
 export const ARRIVAL_STATE_OWNERS = {
   INBOUND:         ['AP', 'CTR'],
   HANDED_TO_TOWER: ['LC'],
+  TRAFFIC_PATTERN: ['LC'], // crc-sync docs/adr/0126
   FINAL:           ['LC'],
   LANDED:          ['LC'],
   TAXI_IN:         ['GC'],
@@ -202,9 +213,9 @@ export const TOFI_ELIGIBLE_STATES = { DEPARTURE: 'HANDED_OFF', ARRIVAL: 'INBOUND
 
 // The carrier's three strip types — mirrors the authority tables exactly (crc-sync docs/adr/0074).
 export const MARSHAL_STATE_OWNERS = { LAUNCH: ['CV_MARSHAL'], IN_STACK: ['CV_MARSHAL'], COMMENCED: ['CV_APP1', 'CV_APP2'] };
-// PAR (docs/adr/0075) shares FINAL, RSU shares PATTERN: the same strip types, more owners. BALL is the carrier's only (docs/adr/0117).
+// PAR (docs/adr/0075) shares FINAL: the same strip type, more owners. PATTERN is the carrier's only (docs/adr/0126: no RSU). BALL is the carrier's only (docs/adr/0117).
 export const FINAL_STATE_OWNERS = { ON_FINAL: ['CV_APP1', 'CV_APP2', 'PAR'], BALL: ['CV_APP1', 'CV_APP2'], BOLTER_WAVEOFF: ['CV_APP1', 'CV_APP2', 'PAR'] };
-export const PATTERN_STATE_OWNERS = { IN_PATTERN: ['CV_PRIFLY', 'RSU'], RECOVERED: ['CV_PRIFLY', 'RSU'] };
+export const PATTERN_STATE_OWNERS = { IN_PATTERN: ['CV_PRIFLY'], RECOVERED: ['CV_PRIFLY'] };
 
 export const STATE_OWNERS_BY_STRIP_TYPE = {
   DEPARTURE: DEPARTURE_STATE_OWNERS, ARRIVAL: ARRIVAL_STATE_OWNERS, OVERFLIGHT: OVERFLIGHT_STATE_OWNERS, MISSION: MISSION_STATE_OWNERS,
