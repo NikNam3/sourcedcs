@@ -28,7 +28,7 @@ function _exchangeButtons(buttons) {
   return wrap;
 }
 
-/** The buttons of a HANDOFF's steps (docs/adr/0101): a one-click mark sends at once (Undo covers it), a form opens a popover. */
+/** The buttons of a HANDOFF's steps (docs/adr/0122): a one-click mark sends at once (Undo covers it), a form opens a popover. */
 function _handoffStepButtons(strip, acting) {
   return handoffSteps(strip, acting).map(step => _stripButton(step.label, `efsp-handoff-step efsp-handoff-step-${step.key.toLowerCase().replace(/_/g, '-')}`, {
     title: step.reason || step.title, disabled: !step.enabled, action: `handoff-${step.key.toLowerCase()}`,
@@ -80,7 +80,7 @@ export function _coordinationExchange(strip) {
 
   if (co.note) row.appendChild(_buildCoordinationNoteEl(co.note, proposer));
 
-  // docs/adr/0101: after ACCEPT a HANDOFF carries who has communications and control, the ControlRelease in effect, and
+  // docs/adr/0101, 0122: after ACCEPT a HANDOFF carries who has communications and control, whether it is released, and
   // the steps still to take. The row is the place for them: they are the next thing the controller does.
   const chips = handoffChips(strip);
   if (chips.length) {

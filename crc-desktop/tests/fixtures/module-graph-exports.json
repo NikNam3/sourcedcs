@@ -759,10 +759,7 @@
   ],
   "panels/efsp/control-release-rules.js": [
    "OBLIGATION_LABELS",
-   "RELEASE_SCOPES",
-   "RELEASE_SCOPE_LABELS",
    "attestationRequest",
-   "buildGrantOp",
    "buildRefuseOp",
    "buildRequestOp",
    "buildStepOp",
@@ -773,10 +770,7 @@
    "handoffPositions",
    "handoffSideOf",
    "handoffSteps",
-   "isStepsHandoff",
-   "parseEffectiveAt",
-   "releaseSummary",
-   "requestSummary"
+   "isStepsHandoff"
   ],
   "panels/efsp/correlation-highlight.js": [
    "RING_SHOW_MS",

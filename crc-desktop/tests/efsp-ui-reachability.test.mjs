@@ -511,6 +511,29 @@ test('a controller can hand a flight to Center — the Coordinate button offers 
   assert.equal(sent[0].op.toPositionId, 'CTR');
 });
 
+test('a HANDOFF carries the one switch: Released by default, unticked sends not released; other primitives never carry it (ADR 0122)', async () => {
+  for (const tick of [true, false]) {
+    const { el, sent } = await renderStrip({ strip: stripAt(), flightData: FDR, signedOn: ['AP'] });
+    click(menuItem(el, 'Coordinate…'));
+    const box = visible(el).find(c => c.tagName === 'input' && c.type === 'checkbox' && c.className.includes('efsp-coordinate-released-box'));
+    assert.ok(box, 'the Released switch is in the popover');
+    assert.equal(box.checked, true, 'released by default (H142)');
+    box.checked = tick;
+    click(findByText(el, 'Hand off to CTR'));
+    assert.equal(sent[0].op.kind, 'HANDOFF');
+    assert.equal(sent[0].op.released, tick);
+  }
+  const { el, sent } = await renderStrip({ strip: stripAt(), flightData: FDR, signedOn: ['AP'] });
+  click(menuItem(el, 'Coordinate…'));
+  const select = visible(el).find(c => c.tagName === 'select');
+  select.value = 'POINT_OUT';
+  for (const fn of select._listeners.change || []) fn({});
+  const label = visible(el).find(c => c.tagName === 'label' && c.className.includes('efsp-coordinate-released'));
+  assert.ok(!label || label.hidden, 'hidden for a Point Out');
+  click(findByText(el, 'Point out to CTR'));
+  assert.equal(sent[0].op.released, undefined);
+});
+
 test('the receiving controller can accept, reject or say stand by', async () => {
   const replica = stripAt({
     bayId: 'ctr-ap-coordination', ownerPositionId: 'CTR',

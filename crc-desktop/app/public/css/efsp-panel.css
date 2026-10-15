@@ -1847,22 +1847,22 @@
 .efsp-position-tab-combined { box-shadow: inset 0 -2px 0 #e0a83c; }
 .panel-ctrl-freq { margin-left: 8px; font-size: 10px; opacity: 0.7; }
 
-/* docs/adr/0101: an accepted HANDOFF's chips (who has communications and control, the ControlRelease in effect). */
+/* docs/adr/0101, 0122: an accepted HANDOFF's chips (who has communications and control, released or not, a release request). */
 .efsp-strip .efsp-handoff-chips { flex-wrap: wrap; row-gap: 2px; }
 .efsp-handoff-chip { font-size: 10px; letter-spacing: 0.03em; padding: 0 4px; border: 1px solid #4a5560; color: #a8b4bd; }
 .efsp-strip .efsp-handoff-chip { all: unset; font-size: 10px; padding: 0 4px; border: 1px solid #4a5560; color: #a8b4bd; overflow-wrap: anywhere; }
 .efsp-strip .efsp-handoff-mine { border-color: #4a7dbf; color: #bfe0ff; }
-.efsp-strip .efsp-handoff-chip-release.efsp-handoff-tone-on { border-color: #4a9a63; color: #b6f0c8; }
 .efsp-strip .efsp-handoff-tone-attn { border-color: var(--efsp-attn); color: var(--efsp-attn-text); }
 .efsp-strip .efsp-handoff-tone-bad { border-color: #ff5c5c; color: #ff8a8a; }
-.efsp-strip .efsp-handoff-tone-dim { color: var(--efsp-muted); text-decoration: line-through; }
 /* H138 U3: COMMS/CTRL say who holds them, which is no problem: grey text, no background, no frame, whoever holds them
    (dark cockpit, H115-H119). Only a problem tone may colour them. */
 .efsp-strip .efsp-handoff-tone-quiet, .efsp-strip .efsp-handoff-tone-quiet.efsp-handoff-mine {
   border-color: transparent; background: transparent; color: var(--efsp-muted); padding: 0 1px;
 }
-.efsp-release-popover input[type=checkbox] { margin-right: 2px; }
-.efsp-release-popover[hidden], .efsp-release-popover input[hidden] { display: none; }
+.efsp-release-popover[hidden] { display: none; }
+/* docs/adr/0122: the HANDOFF's one switch in the Coordinate popover. */
+.efsp-coordinate-released { display: flex; align-items: center; gap: 4px; font-size: 11px; color: #c9d1d9; }
+.efsp-coordinate-released[hidden] { display: none; }
 #efsp-control-attest { order: 1; font-size: 11px; padding: 4px 8px; border-top: 1px solid #2a3038; color: #e0a83c; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 #efsp-control-attest[hidden] { display: none; }
 #efsp-control-attest button { font: inherit; color: #e6edf3; background: #2a3441; border: 1px solid #44566b; border-radius: 3px; padding: 2px 8px; cursor: pointer; }
