@@ -1,14 +1,15 @@
 # Supervisor handoff
 
-## UPDATE 2026-10-15: round 2 lanes all merged; RSU dropped (H149)
+## UPDATE 2026-10-15 evening: U-TWR-PATTERN merged; queue is now items 4-7 below
 
-U-PAR (`76dadb38`, S-ARCH-66) and U-RELEASE (`de5b4a0d`, S-ARCH-67) merged; no lane running; sharded Playwright after
-U-RELEASE: **270/270** on `d28dd76e` (14m38s). Open on the Decision Desk: **REL-Q1** (release model inside a
-Facility) and **TWR-Q1** (how LC sees pattern traffic). **H149: no RSU**: queue item 3 (U-RSU) is replaced by
-**U-TWR-PATTERN** (new ADR 0126, supersedes 0120's RSU model): remove the RSU Position and everything it owns (code
-touchpoints: `command grep -rln RSU crc-sync/src crc-sync/config crc-desktop/app/public/js`, ~20 files), give LC the
-pattern features per TWR-Q1, audit that no station frequency is hardcoded (H147 RQ5 stands); write its briefing after
-TWR-Q1 (and REL-Q1, if AP→LC check-in changes the flow). Also queued: soak REFUSE memory check (S-ARCH-67).
+Merged today: U-PAR (S-ARCH-66), U-RELEASE (S-ARCH-67), U-TWR-PATTERN (S-ARCH-68, ADR 0126: no RSU, H149/H150).
+Gates on `9c9acb9e`: crc-sync 2800, crc-desktop 1365, walk 24/24, freeze 57/57, soak:selfcheck PASS, wire protocol 2,
+**sharded Playwright 272/272** (17m55s). No lane running; the only worktree is the main checkout. Decision Desk: all
+settled (round 11). Queue items 1-3 below are DONE (U-RSU replaced by U-TWR-PATTERN). Next: U-MOA-TRANSIT (H148,
+research first, no briefing yet), docs pass (fold `docs/wip/U-PANELS.md`, `U-JURISDICTION.md`, `U-MOA.md`, `U-PAR.md`,
+`U-RELEASE.md`, `U-TWR-PATTERN.md`; RSU sections out of guide/briefing/glossary; §8 handoff table replaced by ADR 0122),
+small items (add: `lxsrs_v2` `client.py:530` hardcoded 251.000 MHz → config; soak REFUSE memory check, S-ARCH-67; quote
+FAA ¶3-10-5, AIM 4-3-3/4-3-22 in a note for ADR 0126), U-CARRIER last.
 
 ## RELAUNCH HERE (2026-10-14 evening): round 2, four lanes merged, queue below
 
