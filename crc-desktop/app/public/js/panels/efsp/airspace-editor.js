@@ -150,8 +150,8 @@ export function openAirspaceEditor(o) {
   fillPositions();
   addRow('usingFacilityId', select('usingFacilityId', caps.facilityIds().filter(f => f !== 'RANGES'), 'none'));
   addRow('usingPositionId', input('usingPositionId', { placeholder: 'none' }), `config: ${RESTART_NOTE}`);
-  addRow('workingFrequencyMhz', input('workingFrequencyMhz', { inputmode: 'decimal', placeholder: '139.250' }));
-  addRow('controlFrequencyMhz', input('controlFrequencyMhz', { inputmode: 'decimal', placeholder: '251.500' }));
+  addRow('workingFrequencyMhz', input('workingFrequencyMhz', { inputmode: 'decimal', placeholder: 'MHz' }));
+  addRow('controlFrequencyMhz', input('controlFrequencyMhz', { inputmode: 'decimal', placeholder: 'MHz' }));
   if (base.kind !== 'ROUTE') {
     addRow('altLowerFt', input('altLowerFt', { placeholder: 'none = surface' }));
     addRow('altUpperFt', input('altUpperFt', { placeholder: 'none = unbounded' }));
