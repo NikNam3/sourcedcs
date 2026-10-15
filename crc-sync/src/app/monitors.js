@@ -62,12 +62,7 @@ function buildMonitors({ env, efsp, facilityConfig, missionClock, missionSession
     // docs/adr/0122: an accepted HANDOFF not checked in, and a not-released one whose aircraft is inside the receiver's
     // airspace already (ADR 0125), ask for attention.
     handoffConfig: alertingConfig.handoff,
-    insideReceiverAirspace: (strip) => {
-      const co = strip.coordination;
-      const receivingPositionId = co.mintedForCoordination ? strip.ownerPositionId : co.peerPositionId;
-      const where = efsp.locateFlight(strip.flightDataId);
-      return !!where && efsp.airspaceStore.isInsideJurisdictionOf(receivingPositionId, where);
-    },
+    insideReceiverAirspace: efsp.insideReceiverAirspace,
   });
 
   // ── WP5 Strip<->track correlation (guide §6.6, docs/adr/0045/0046) ───────

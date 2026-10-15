@@ -138,7 +138,7 @@ function computeDueObligations(strip, flightData, now, ctx = {}) {
     obligations.push({ obligationType: 'CONTROL_REPAIRED', dueAt: strip.coordination.repair.at, severity: 'WARNING' });
   }
 
-  // NOT_CHECKED_IN / CONTROL_WAITS_FOR_CHECK_IN — docs/adr/0122 (H142 dark cockpit): control never moves before the
+  // NOT_CHECKED_IN / IN_AIRSPACE_NOT_CHECKED_IN — docs/adr/0122 (H142 dark cockpit): control never moves before the
   // receiver marks the aircraft checked in. An accepted HANDOFF still not checked in after `notCheckedInMs` (alerting.json
   // `handoff.notCheckedInSec`) asks the receiver for attention; a not-released one whose aircraft is already inside the
   // receiver's airspace (control could move but cannot) asks both sides at once.
@@ -150,7 +150,7 @@ function computeDueObligations(strip, flightData, now, ctx = {}) {
       obligations.push({ obligationType: 'NOT_CHECKED_IN', dueAt: co.acceptedAt + notCheckedInMs, severity: 'WARNING' });
     }
     if (!co.released && ctx.insideReceiverAirspace && ctx.insideReceiverAirspace(strip)) {
-      obligations.push({ obligationType: 'CONTROL_WAITS_FOR_CHECK_IN', dueAt: now, severity: 'WARNING' });
+      obligations.push({ obligationType: 'IN_AIRSPACE_NOT_CHECKED_IN', dueAt: now, severity: 'WARNING' });
     }
   }
 

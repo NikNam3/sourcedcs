@@ -274,6 +274,18 @@ function createEfsp({ env = process.env, facilityConfig = createFacilityConfig({
     locateFlight: (flightDataId) => locateFlight(flightDataId),
 
     /**
+     * Is this HANDOFF Strip's aircraft inside the receiving Position's airspace now (docs/adr/0122, ADR 0125)? Either side's
+     * Strip; false with no correlated position or a point nobody owns. The obligation monitor's IN_AIRSPACE_NOT_CHECKED_IN.
+     */
+    insideReceiverAirspace: (strip) => {
+      const co = strip && strip.coordination;
+      if (!co) return false;
+      const receivingPositionId = co.mintedForCoordination ? strip.ownerPositionId : co.peerPositionId;
+      const where = locateFlight(strip.flightDataId);
+      return !!where && airspaceStore.isInsideJurisdictionOf(receivingPositionId, where);
+    },
+
+    /**
      * The HTTP service path into the airspace registry (docs/adr/0098 §9): the same skeleton pass a panel Mutation takes
      * (persistence, replay cache, delta), with a service principal in place of a signed-on session. `principal` is
      * `{ service: 'SQUADRON_ADMIN', sub, name }`: the web has already checked the user's role. `msg` is
