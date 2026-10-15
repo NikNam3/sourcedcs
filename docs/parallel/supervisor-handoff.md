@@ -1,6 +1,8 @@
 # Supervisor handoff
 
-## STOPPED 2026-10-14 late (usage): U-RELEASE and U-PAR stopped mid-work; sharded Playwright stopped unfinished
+## RESUMED 2026-10-15: U-PAR and U-RELEASE being finished by new agents in their worktrees; sharded Playwright running on `ad2b69f2`
+
+### Before that: stopped 2026-10-14 late (usage)
 
 - **U-PAR** (`lane/U-PAR`, worktree `../sourcedcs-U-PAR`, e2e 8): 4 commits, clean tree; it was about to write
   `docs/wip/U-PAR.md`. Finish with a new agent in the same worktree (look at git log/diff, keep what is sound, run both
