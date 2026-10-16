@@ -15,7 +15,7 @@ import { divertOffer } from './divert-rules.js';
 import { _canProposeCoordination, _dispatchCoordination, _openCoordinatePopover } from './bay/popovers/coordination.js';
 import { _isPendingCoordinationReplica, _isRejectedCoordinationReplica } from './bay/coordination-rules.js';
 import { _openMarsaPopover } from './bay/popovers/marsa.js';
-import { _canProposeTofiEntry, _canProposeTofiExit, _dispatchTofi, _openTofiEntryPopover } from './bay/popovers/tofi.js';
+import { _canProposeTofiEntry, _canProposeTofiExit, _dispatchTofi, _openTofiEntryPopover, tofiSendLabel } from './bay/popovers/tofi.js';
 import { _appendDropButton, _appendExpandButton } from './bay/strip-expanded.js';
 import { _setPendingConvertStripId } from './bay/popovers/airspace-entry.js';
 import { _openJoinPopover, _openSplitPopover } from './bay/popovers/formation.js';
@@ -98,10 +98,12 @@ function _stripMenuItems(strip) {
         : tofi && tofi.state === 'INITIATED' ? 'a TOFI proposal is already open'
           : `not from ${String(strip.state).replace(/_/g, ' ')}`;
       const counterparts = TOFI_COUNTERPARTS[strip.ownerPositionId];
-      items.push({ group: 'Start', key: 'tofi', label: 'TOFI…', cls: 'efsp-coordinate-btn', enabled: ok, reason,
-        title: 'Propose a Transfer of Flight Information to a Military Radar Unit',
+      // One counterpart sends at once, so the item names it ("TOFI to CTR", T20's rule); a choice opens the picker.
+      const only = counterparts.length === 1 ? counterparts[0] : null;
+      items.push({ group: 'Start', key: 'tofi', label: only ? tofiSendLabel(only.positionId) : 'TOFI…', cls: 'efsp-coordinate-btn', enabled: ok, reason,
+        title: only ? `Propose a Transfer of Flight Information to ${only.positionId}` : 'Propose a Transfer of Flight Information to a Military Radar Unit',
         run: (anchor) => {
-          if (counterparts.length === 1) _dispatchTofi(strip, 'PROPOSE', 'ENTRY', { target: counterparts[0] });
+          if (only) _dispatchTofi(strip, 'PROPOSE', 'ENTRY', { target: only });
           else _openTofiEntryPopover(strip, anchor, counterparts);
         } });
     }

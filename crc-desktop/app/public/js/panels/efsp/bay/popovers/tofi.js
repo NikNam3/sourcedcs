@@ -110,6 +110,9 @@ export function _dispatchTofi(strip, action, direction, overrides = {}) {
   return true;
 }
 
+/** "TOFI to TAC_C2" (live test T20's rule, S-ARCH-49): the control that sends a TOFI ENTRY names its target. */
+export function tofiSendLabel(toPositionId) { return `TOFI to ${toPositionId}`; }
+
 let _openPopoverHandle = null;
 
 function _closeTofiPopover() { if (_openPopoverHandle) _openPopoverHandle.close(); }
@@ -156,7 +159,9 @@ export function _openTofiEntryPopover(strip, anchorEl, counterparts) {
 
   const sendBtn = document.createElement('button');
   sendBtn.className = 'efsp-coordinate-send-btn';
-  sendBtn.textContent = 'Send TOFI';
+  const relabel = () => { sendBtn.textContent = tofiSendLabel(JSON.parse(select.value).positionId); };
+  select.addEventListener('change', relabel);
+  relabel();
   sendBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     if (degraded && !note.value.trim()) {

@@ -91,7 +91,7 @@ async function proposeTofiEntry(page, stripEl, note) {
   const popover = page.locator('.efsp-tofi-popover');
   await popover.getByTestId('tofi-counterpart').selectOption({ label: 'TAC_C2 (TACTICAL)' });
   if (note) await popover.locator('textarea').fill(note);
-  await popover.getByRole('button', { name: 'Send TOFI' }).dispatchEvent('click');
+  await popover.getByRole('button', { name: 'TOFI to TAC_C2' }).dispatchEvent('click');
 }
 
 /** ADR 0102: the regime picked at accept waits for the airspace; Entered (MRU side) makes it effective. */
@@ -194,8 +194,8 @@ test('the TOFI popover can be reached on a lone Strip', async ({ browser }) => {
   const popover = a.locator('.efsp-tofi-popover');
   await expect(popover).toBeVisible();
   await a.locator('#efsp-bay-content').evaluate((el) => { el.scrollTop = el.scrollHeight; });
-  const verdict = await hitTest(popover.getByRole('button', { name: 'Send TOFI' }));
-  expect(verdict.onTop, `Send TOFI is at ${verdict.rect}, the Bay is ${verdict.bay}, and ${verdict.hit} is what is there`).toBe(true);
+  const verdict = await hitTest(popover.getByRole('button', { name: 'TOFI to TAC_C2' }));
+  expect(verdict.onTop, `TOFI to TAC_C2 is at ${verdict.rect}, the Bay is ${verdict.bay}, and ${verdict.hit} is what is there`).toBe(true);
 });
 
 // ── F-302 ─────────────────────────────────────────────────────────────────

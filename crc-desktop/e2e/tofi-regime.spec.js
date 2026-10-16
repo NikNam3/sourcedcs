@@ -38,7 +38,7 @@ test('a regime picked at accept waits; Entered makes it effective and warns outs
   await startAction(s, 'TOFI…');
   const popover = a.locator('.efsp-tofi-popover');
   await popover.getByTestId('tofi-counterpart').selectOption({ label: 'TAC_C2 (TACTICAL)' });
-  await popover.getByRole('button', { name: 'Send TOFI' }).dispatchEvent('click');
+  await popover.getByRole('button', { name: 'TOFI to TAC_C2' }).dispatchEvent('click');
 
   await goBay(b, 'TAC_C2', 'tac-c2-coordination');
   const mission = strip(b, 'TOFIC1');

@@ -636,7 +636,8 @@
    "_openTofiEntryPopover",
    "_tofiExitPrecondition",
    "_tofiProposerOf",
-   "_tofiRegimeChoice"
+   "_tofiRegimeChoice",
+   "tofiSendLabel"
   ],
   "panels/efsp/bay/selection.js": [
    "_clearSelectedStrip",

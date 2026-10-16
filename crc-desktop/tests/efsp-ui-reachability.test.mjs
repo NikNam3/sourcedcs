@@ -564,13 +564,22 @@ test('the receiving controller can accept, reject or say stand by', async () => 
   assert.equal(standBy.sent[0].op.action, 'STAND_BY');
 });
 
+test('TOFI with one counterpart names it and sends at once (T20, S-ARCH-49)', async () => {
+  const gci = await renderStrip({ strip: stripAt({ ownerPositionId: 'GCI', bayId: 'gci-main' }), flightData: FDR, signedOn: ['GCI'] });
+  assert.equal(menuItem(gci.el, 'TOFI…'), undefined, 'no picker to open, so no ellipsis');
+  click(menuItem(gci.el, 'TOFI to CTR'));
+  assert.equal(gci.sent.length, 1);
+  assert.equal(gci.sent[0].op.kind, 'TOFI');
+  assert.equal(gci.sent[0].op.toPositionId, 'CTR');
+});
+
 test('a controller can open tactical control, and the MRU side can accept it', async () => {
   const ctr = await renderStrip({ strip: stripAt({ ownerPositionId: 'CTR' }), flightData: FDR, signedOn: ['CTR'] });
   click(menuItem(ctr.el, 'TOFI…'));
   const picker = visible(ctr.el).find(c => c.tagName === 'select');
   assert.ok(picker, 'CTR has two counterparts, so it must offer a choice');
   assert.deepEqual(picker.children.map(o => JSON.parse(o.value).positionId), ['TAC_C2', 'GCI']);
-  click(findByText(ctr.el, 'Send TOFI'));
+  click(findByText(ctr.el, 'TOFI to TAC_C2'));
   assert.equal(ctr.sent[0].op.kind, 'TOFI');
   assert.equal(ctr.sent[0].op.direction, 'ENTRY');
 
@@ -1621,7 +1630,7 @@ test('acting from a popover uses the Strip as it is NOW, not as it was when the 
   // relation's and correlation record's current rev, never the Strip's.
   const cases = [
     { ...POPOVER_CASES[0], act: (r) => click(findByText(r.el, 'Hand off to CTR')) },
-    { ...POPOVER_CASES[1], act: (r) => click(findByText(r.el, 'Send TOFI')) },
+    { ...POPOVER_CASES[1], act: (r) => click(findByText(r.el, 'TOFI to TAC_C2')) },
     { ...POPOVER_CASES[3], act: (r) => click(findByText(r.el, 'Approve entry')) },
     { ...POPOVER_CASES[5], act: (r) => click(descendants(openPopoverIn(r))[0]) },
   ];
