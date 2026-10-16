@@ -37,6 +37,8 @@ const LOS_CACHE_MS = 1000;
 
 const LOS_CACHE_MAX = 20000;
 
+const GROUND_UNIT = 3; // DCS unit category (grpc-client.js)
+
 function normaliseDeg(d) {
   return ((d % 360) + 360) % 360;
 }
@@ -247,7 +249,9 @@ class CoverageEngine {
         // Gate order is the original's, and the order matters for cost: the
         // cheap category tests first, then range, then the beam arithmetic,
         // and terrain last because it is the only expensive one.
-        if (track.category === 3 && !radar.seesGround) continue;
+        // No radar we model returns a ground vehicle (docs/adr/0121): an
+        // air-surveillance radar's MTI drops it, and no ASDE is modelled.
+        if (track.category === GROUND_UNIT) continue;
         if (track.category === 4 && !radar.seesShips) continue;
         if (radar.noGroundAircraft && onGround.get(id)) continue;
 
@@ -258,11 +262,7 @@ class CoverageEngine {
         const at = lastIllumination(radar, bearing, since, now, sweepStart);
         if (at == null) continue;
 
-        // Ground contacts skip terrain masking. DCS's airfields are not
-        // flattened the way the DEM has them, so a vehicle on the ramp reads
-        // as buried inside a hill and would never be seen — the original made
-        // the same exception for the same reason.
-        if (track.category !== 3 && !this._lineOfSight(radar, track, now)) continue;
+        if (!this._lineOfSight(radar, track, now)) continue;
 
         let hit = hits.get(id);
         if (!hit) { hit = { at, byRadar: new Map() }; hits.set(id, hit); }

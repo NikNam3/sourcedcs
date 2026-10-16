@@ -110,11 +110,9 @@ test('each real airfield yields exactly one surveillance and one approach radar'
   assert.deepEqual(ids, ['apt:Adana', 'apt:Incirlik', 'app:Adana', 'app:Incirlik'].sort());
 });
 
-test('the airport radar is the only one that sees ground vehicles', () => {
+test('the airport radar is the only one that sees aircraft on the ground', () => {
   const radars = byId(buildRadars({ missionData: MISSION, tracks: [], radarSpecs: SPECS }));
-  assert.equal(radars.get('apt:Incirlik').seesGround, true);
   assert.equal(radars.get('apt:Incirlik').noGroundAircraft, false);
-  assert.equal(radars.get('app:Incirlik').seesGround, false);
   assert.equal(radars.get('app:Incirlik').noGroundAircraft, true);
 });
 

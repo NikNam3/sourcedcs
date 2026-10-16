@@ -176,8 +176,7 @@ function buildRadars({ missionData, tracks, radarSpecs }) {
       airport: apt.name, airportIcao: apt.icao || null,
       lat: apt.lat, lon: apt.lon, elevM,
       rangeM: specs.fieldRadar.airport.rangeNm * M_PER_NM, sweepMs: specs.fieldRadar.airport.sweepMs,
-      // The only radar that sees ground vehicles at all.
-      seesGround: true, seesShips: false, noGroundAircraft: false,
+      seesShips: false, noGroundAircraft: false,
       angleFromNose: 360, heading: 0,
       caps: capsFor('airport', null, specs), presentation: presentationFor('airport', specs),
     });
@@ -187,7 +186,7 @@ function buildRadars({ missionData, tracks, radarSpecs }) {
       airport: apt.name, airportIcao: apt.icao || null,
       lat: apt.lat, lon: apt.lon, elevM: appElevM,
       rangeM: specs.fieldRadar.approach.rangeNm * M_PER_NM, sweepMs: specs.fieldRadar.approach.sweepMs,
-      seesGround: false, seesShips: false, noGroundAircraft: true,
+      seesShips: false, noGroundAircraft: true,
       angleFromNose: 360, heading: 0,
       caps: capsFor('approach', null, specs), presentation: presentationFor('approach', specs),
     });
@@ -208,7 +207,7 @@ function buildRadars({ missionData, tracks, radarSpecs }) {
       label: label(t), sublabel: t.type,
       lat: t.lat, lon: t.lon, elevM: t.alt,
       rangeM: spec.rangeNm * M_PER_NM, sweepMs: spec.sweepMs,
-      seesGround: false, seesShips: true, noGroundAircraft: true,
+      seesShips: true, noGroundAircraft: true,
       angleFromNose: spec.angleFromNose, heading: t.heading || 0,
       // A radar on the ramp is not a radar. Callers filter on this rather than
       // it being absent from the list, so the coverage panel can still say
@@ -228,7 +227,7 @@ function buildRadars({ missionData, tracks, radarSpecs }) {
       label: label(t) || t.type, sublabel: t.type,
       lat: t.lat, lon: t.lon, elevM: t.alt + specs.shipRadarHeightM,
       rangeM: spec.rangeNm * M_PER_NM, sweepMs: spec.sweepMs,
-      seesGround: false, seesShips: true, noGroundAircraft: true,
+      seesShips: true, noGroundAircraft: true,
       angleFromNose: 360, heading: 0, onGround: false,
       coalition: t.coalition,
     });
@@ -242,7 +241,7 @@ function buildRadars({ missionData, tracks, radarSpecs }) {
         label: `${label(t) || t.type} APP RDR`, sublabel: t.type,
         lat: t.lat, lon: t.lon, elevM: t.alt + specs.fieldRadar.carrierApproach.heightM,
         rangeM: specs.fieldRadar.carrierApproach.rangeNm * M_PER_NM, sweepMs: specs.fieldRadar.carrierApproach.sweepMs,
-        seesGround: false, seesShips: false, noGroundAircraft: true,
+        seesShips: false, noGroundAircraft: true,
         angleFromNose: 360, heading: 0, onGround: false,
         coalition: t.coalition,
       });
