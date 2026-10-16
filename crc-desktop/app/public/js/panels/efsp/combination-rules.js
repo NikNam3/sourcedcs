@@ -116,5 +116,8 @@ export function vacatedBetween(before, after) {
   return out;
 }
 
-/** The mutation-ack warning that goes with a Strip put into LUAW by a controller who is also GC or CD. */
-export const LUAW_WHILE_COMBINED_TEXT = 'LUAW while LC is combined with a non-local Position: not permitted at a LUAW tower (JO 7210.3 ¶2-6-5c, ¶10-3-8a4). Allowed here; consider splitting the positions.';
+/**
+ * The mutation-ack warning that goes with a Strip put into LUAW by a controller who is also GC or CD. The condition only:
+ * no citation, no advice (dark cockpit, S-ARCH-49). The rule it stands for is JO 7210.3 ¶2-6-5c, ¶10-3-8a4 (ADR 0105).
+ */
+export const LUAW_WHILE_COMBINED_TEXT = 'LUAW while LC is combined with a non-local Position';

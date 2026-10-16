@@ -302,4 +302,6 @@ test('an accepted op with several warnings shows each of them', async () => {
   const text = els['efsp-mutation-warning'].textContent;
   assert.match(text, /no LC Bay for LUAW/);
   assert.match(text, /LUAW while LC is combined/);
+  // dark cockpit (S-ARCH-49): the condition, never a citation or what to do about it
+  assert.doesNotMatch(text, /JO 7210|¶|consider|split/i);
 });
