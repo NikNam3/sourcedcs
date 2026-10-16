@@ -90,18 +90,21 @@ function buildAlertTag(trackId, flightData) {
 
 /**
  * Each short-term conflict drawn on the scope: both predicted paths, the line
- * between their closest points, and a marker there with the countdown.
+ * between their closest points, and a marker there with the countdown. The
+ * paths and the line are a per-controller switch (Settings → RADAR, T30); the
+ * marker and the data block's CA are the alert and always drawn.
  */
-function buildConflictAlertOverlay() {
+export function buildConflictAlertOverlay() {
   const features = [];
   const conflicts = getAllEfspConflicts();
   const now = (id) => tracks.get(String(id)) || latestFromServer.get(String(id));
+  const paths = settings.conflictAlertPaths !== false;
   for (const c of conflicts) {
-    const a = now(c.a);
-    const b = now(c.b);
+    const a = paths && now(c.a);
+    const b = paths && now(c.b);
     if (a) features.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: [[a.lon, a.lat], [c.aAt.lon, c.aAt.lat]] }, properties: { kind: 'path' } });
     if (b) features.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: [[b.lon, b.lat], [c.bAt.lon, c.bAt.lat]] }, properties: { kind: 'path' } });
-    features.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: [[c.aAt.lon, c.aAt.lat], [c.bAt.lon, c.bAt.lat]] }, properties: { kind: 'cpa-line' } });
+    if (paths) features.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: [[c.aAt.lon, c.aAt.lat], [c.bAt.lon, c.bAt.lat]] }, properties: { kind: 'cpa-line' } });
     const clock = `${Math.floor(c.timeToCpaSec / 60)}:${String(c.timeToCpaSec % 60).padStart(2, '0')}`;
     features.push({
       type: 'Feature',

@@ -146,6 +146,7 @@
    "applyScale",
    "buildAirports",
    "buildBullseye",
+   "buildConflictAlertOverlay",
    "buildDots",
    "buildDrawings",
    "buildExtendedCenterline",
