@@ -40,9 +40,9 @@ test('U1 + U4: OPS has ORDNANCE on its face and can set HUNG; TYPE is editable',
     const input = stripByCallsign(page, callsign).locator('input.efsp-block-input');
     await expect(input, 'the editor opens on TYPE/WAKE').toHaveValue('F16/M');
     await expect(input).toHaveAttribute('placeholder', 'TYPE/WAKE');
-    await input.fill('m/f15e'); // the wake typed first is read the same way
+    await input.fill('m/f15'); // the wake typed first is read the same way
     await input.press('Enter');
-    await expect(type()).toHaveText('F15E/M');
+    await expect(type()).toHaveText('F15/M');
     await type().click();
     await stripByCallsign(page, callsign).locator('input.efsp-block-input').fill('2/K35R');
     await stripByCallsign(page, callsign).locator('input.efsp-block-input').press('Enter');
