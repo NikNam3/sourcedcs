@@ -32,7 +32,7 @@ function makeSeed(overrides = {}) {
     callsign: 'VIPER1',
     flightSize: 1,
     aircraftType: 'F16',
-    wakeCategory: 'D',
+    wakeCategory: 'M',
     equipmentCodes: ['G', 'R'],
     route: 'DCT',
     requestedAltitude: '250',

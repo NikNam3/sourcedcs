@@ -48,7 +48,7 @@ test('a block is written back in one canonical form', () => {
   assert.equal(formatAltitudeBlock(blk(16000, 20000), 18000), '16000-FL200');
 });
 
-const FILED = { aircraftType: 'F16', wakeCategory: 'D', departureAirport: 'LTAG', destinationAirport: 'LTAC', route: 'DCT', requestedAltitude: 'FL250' };
+const FILED = { aircraftType: 'F16', wakeCategory: 'M', departureAirport: 'LTAG', destinationAirport: 'LTAC', route: 'DCT', requestedAltitude: 'FL250' };
 
 test('setClearance stores a block structurally and canonicalises its text', () => {
   const store = new FlightDataStore();

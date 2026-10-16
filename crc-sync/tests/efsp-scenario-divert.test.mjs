@@ -94,7 +94,7 @@ test('an ARRIVAL diverts to another field we run, and to an untowered one (becom
   const { efsp, c } = world();
   const a = mustAct(efsp, c.CTR, 'CTR', null, {
     kind: 'CreateStrip', bayId: 'ctr-enroute', rackId: 'main', stripType: 'ARRIVAL',
-    flightData: { callsign: 'ARR9', aircraftType: 'F-16C', wakeCategory: 'D', originAirport: 'LLRD' },
+    flightData: { callsign: 'ARR9', aircraftType: 'F-16C', wakeCategory: 'M', originAirport: 'LLRD' },
   });
   const toShip = mustAct(efsp, c.CTR, 'CTR', a, { kind: 'Divert', destination: 'CVN-72', altitude: 'FL100' });
   assert.equal(toShip.stripType, 'ARRIVAL');

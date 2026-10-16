@@ -49,7 +49,7 @@ function createMutation(overrides = {}) {
     op: {
       kind: 'CreateStrip',
       bayId: 'proposed', rackId: 'main',
-      flightData: { callsign: 'VIPER1', aircraftType: 'F16', wakeCategory: 'D', departureAirport: 'LTAG', destinationAirport: 'LTAC', route: 'DCT', requestedAltitude: '250' },
+      flightData: { callsign: 'VIPER1', aircraftType: 'F16', wakeCategory: 'M', departureAirport: 'LTAG', destinationAirport: 'LTAC', route: 'DCT', requestedAltitude: '250' },
     },
     ...overrides,
   };

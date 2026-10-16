@@ -10,7 +10,7 @@ const { TheaterContext } = await import('../src/theater-context.js');
 const blk = (lowFt, highFt) => ({ lowFt, highFt });
 const SYRIA = 10000;
 const CAUCASUS = 18000;
-const FILED = { aircraftType: 'F16', wakeCategory: 'D', departureAirport: 'LTAG', destinationAirport: 'LTAC', route: 'DCT', requestedAltitude: 'FL250' };
+const FILED = { aircraftType: 'F16', wakeCategory: 'M', departureAirport: 'LTAG', destinationAirport: 'LTAC', route: 'DCT', requestedAltitude: 'FL250' };
 
 test('Syria (TA 10,000): 10,000 ft and up is a flight level, below is feet', () => {
   assert.equal(formatAltitudeBlock(blk(10000, 12000), SYRIA), 'FL100-FL120');

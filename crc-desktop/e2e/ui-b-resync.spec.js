@@ -60,7 +60,7 @@ test('a websocket killed mid-session reconnects, sends no resync, and converges 
   const callsign = `UIB${Date.now() % 10000}`;
   try {
     await other.evaluate((cs) => crc.ws.sendEfspCreateStrip('OPS', { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE',
-      flightData: { callsign: cs, aircraftType: 'F16', wakeCategory: 'D' } }, 'INCIRLIK'), callsign);
+      flightData: { callsign: cs, aircraftType: 'F16', wakeCategory: 'M' } }, 'INCIRLIK'), callsign);
     await expect.poll(() => has(other, callsign), { timeout: 10000 }).toBe(true);
     expect(await has(page, callsign), 'the watcher is offline and has not seen it').toBe(false);
 
