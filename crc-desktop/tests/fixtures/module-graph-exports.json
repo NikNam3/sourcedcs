@@ -1384,6 +1384,7 @@
    "compactBlocksFor",
    "fieldSpanFor",
    "isOrdnanceSet",
+   "keepIfrHidden",
    "leadingFlightName",
    "sideNumberLeads"
   ],
