@@ -84,3 +84,45 @@ temporary stderr line, removed). Freeze: the three `hub-random-seed*` goldens mo
 traffic), `freeze:update` in its own commit, 57/57.
 
 **Docs pass.** `CLAUDE.md` soak paragraph needs nothing. `docs/wip/U-RELEASE.md` finding is answered here.
+
+## 3. FAA quotes for ADR 0126
+
+`docs/research/twr-pattern-quotes.md`: ¶3-8-2, ¶3-10-5, ¶3-10-11 (JO 7110.65BB Change 3, effective 9 Jul 2026) and
+AIM 4-3-3, 4-3-22, 4-3-23 (Change 3, same date), verbatim, from faa.gov's own ATPUBS HTML. faa.gov answered a plain
+`curl` with a browser User-Agent (HTTP 200); no third-party copy needed. Disagreements with ADR 0126 (no ADR edit, P4):
+
+1. **ADR 0126 cites "AIM 4-3-22 (option approach)": 4-3-22 is Practice Instrument Approaches; the option is AIM 4-3-23.**
+2. The option has five outcomes (4-3-23: T&G, low approach, missed approach, stop-and-go, full stop); the OPT cell has
+   three. Stop-and-go is out by H147 RQ7; **missed approach has no value** (nothing lost on the Board, noted only).
+3. AIM 4-3-3 supports PAT; STR only through NOTE 1 to d. A weaker citation than the ADR suggests.
+4. ¶3-10-5 is phraseology; g (USA/USN/USAF) has the tower give runway and wind with every land/T&G/LA/option clearance.
+5. ¶3-8-2 and ¶3-10-11 match the ADR's quotations.
+
+**Supervisor:** a successor ADR or the briefing should read 4-3-23 for 4-3-22.
+
+## 4. The briefing's small-items row
+
+| Item | What changed | Commit |
+|---|---|---|
+| TOFI with one counterpart | ⋯ item reads **"TOFI to CTR"** and sends at once; with a choice it stays **"TOFI…"** and the picker's Send button reads **"TOFI to TAC_C2"** / "TOFI to GCI", following the selection (was "Send TOFI"). `tofiSendLabel()` in `bay/popovers/tofi.js`. Specs/unit tests follow | `fix(efsp-client): TOFI names its target` |
+| ⋯ menu "Flight" twice | `groupStripMenuItems()` (strip-menu.js) gathers items by group in first-appearance order before drawing: Start, Flight (MARSA, Show on map, Bind, …), Formation, Final, Strip. Cause: MARSA (Flight) was pushed before Formation, Show on map after | `fix(efsp-client): the Strip ⋯ menu prints each heading once` |
+| `LUAW_WHILE_COMBINED_TEXT` | now `LUAW while LC is combined with a non-local Position` (no citation, no advice); the rule's source is in the code comment | `fix(efsp-client): LUAW_WHILE_COMBINED states the condition only` |
+| Stale comments | reconciler `tick()` docstring (same-rung: first in sweep order takes it, the other's TRACK_LOST names the holder; two contacts for one flight is the ambiguous case); `par-monitor.js` l.10 names Landed / Missed approach; `shadow.js` "five synced stores (STORE_SYNC)" | `docs(crc-sync): three stale comments` |
+| ATO / DD-1801 types | `aircraft-data.js` `designatorFor()` + `DESIGNATOR_BY_NAME`: "F-16C" → F16, "F/A-18C" → F18H, "KC-135R" → K35R, "E-3"/"E-3A" → E3TF, … Applied where types enter: ATO mapping (`ato-mapping.js` flightDataSeed) and the DD-1801 seed (`flight-plan-lookup.js` `toFlightDataFiledSeed`). An unknown name is kept as given (upper-cased), never guessed. A typed Block 3 / a CreateStrip's own type is not rewritten (a controller types a designator; the shape check stays) | `feat(efsp): ATO and DD-1801 types enter as ICAO designators…` |
+| Wake rows vs Doc 8643 | Read against ICAO's own Doc 8643 data (`doc8643.icao.int/external/aircrafttypes`, POST, 2026-10-16). **Wrong rows removed** (not designators): F15E (→ F15), F18 (→ F18H), SU30/SU33 (→ SU27), JF17 (→ FC1), C5 (only C5M is listed), IL78 (→ IL76), T95 (→ TU95), T45 (→ HAWK, which Doc 8643 gives "L/M", so no row). **Added**: FC1 M, TU95 H. Every remaining row's WTC equals Doc 8643's. The rows are now labelled "DOC 8643" instead of "OURS" | same commit |
+| `wakeCategory: 'D'` seeds | 41 seed lines in 30 test/spec files → `'M'` (their F16/F15/F-16C/F-15E), `'H'` for the C17. `efsp-aircraft-data.test.mjs` keeps its 'D' (the replaced-invalid case). Freeze goldens: own commit (274 lines of `"D"`→`"M"` in recorded inputs plus those flights' hashes) | `test: the wakeCategory 'D' seeds…` + `test(freeze): …` |
+| Airspace approval and `ap-sfa` | **It did leave the Strip on the old Rack.** Path: `ApproveAirspaceEntry` → `flightDataStore.setWorkingFrequency` and nothing re-filed the Strip; same for `ClearAirspaceEntry` and SetBlock 22. Fix: `Placement.followSfaFrequency(strip)`, called by those three ops after the write: onto the new frequency's Rack when the pool has one, else the owner's ordinary Bay for its state (`ap-inbound`). Test `tests/efsp-sfa-frequency-follow.test.mjs` (4). `TerminateRadarService` also writes null but drops the Strip, so it does not need it | `fix(efsp): a frequency rewrite takes the Strip off the SFA Rack…` |
+
+**Freeze for the designator change:** `hub-op-matrix/ato-*`, the five `resync-*` and `scenario-ato`/`scenario-carrier-ato`
+goldens move (ATO-imported flights' type and derived wake); own commit.
+
+**Usage guide / briefing wording for the docs pass:**
+- Guide, TOFI: "With one counterpart the ⋯ menu offers **TOFI to CTR**, which sends at once; CTR's **TOFI…** opens a
+  picker whose button names the choice (**TOFI to TAC_C2**)."
+- Guide, LUAW warning text as above.
+- Guide/briefing, Block 3: an ATO or a filed DD-1801 seeds the ICAO designator ("F-16C" arrives as F16, with its wake);
+  a name the map does not know arrives as written for the controller to correct.
+- Briefing §4 small-items row: done except the two U-DECLUTTER items (received code on mismatch, KEEP IFR).
+- Briefing l.1596 (SFA row): "an airspace approval that rewrites a flight's frequency leaves its Strip on the old
+  frequency's `ap-sfa` Rack" is fixed: the Strip follows its frequency (or goes to `ap-inbound`).
+- Briefing §3C: drop "(`tick()`'s docstring still says "neither gets it": wrong, queued for cleanup)".
