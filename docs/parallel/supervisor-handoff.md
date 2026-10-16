@@ -8,11 +8,14 @@ small-items row, SFA Rack follows the frequency). Gates on `13d258e7`: crc-sync 
 freeze 57/57, soak:selfcheck PASS, wire protocol 2 unchanged, **sharded Playwright 272/272** (17m27s). No lane running;
 the only worktree is the main checkout.
 
-**Waiting on the human:** Decision Desk round 12, **MT-Q1…Q8** (U-MOA-TRANSIT design); read the answers, settle them
-(H151+), mark them settled, rewrite ADR 0127 as a new ADR if answers change it (0127 is committed: P4) or accept it, then
-brief the build from `docs/wip/U-MOA-TRANSIT.md` "Build plan" (server lane, then client; `wire:record`). Also asked: a
-published fix table for the stereo-route fixes (KEMER, ERGEP, MANAZ, MUT, TARSU, DAN), which crc-sync has no coordinates
-for.
+**Desk round 12 answered and settled as H151** (read it whole): much smaller than ADR 0127 proposed: no release
+record, no Resume ops button, no pass marks, no lateral feature, VFR unchanged; restrictions are ordinary Strip
+assignments (`altitudeBlock` / assigned altitude); filed-through by **geometry only** (name match dropped); scope is
+**MOA, WARNING and RESTRICTED**. Next: write a new ADR superseding 0127 (P4: never edit 0127) and `next/U-MOA-TRANSIT-BUILD.md`
+from `docs/wip/U-MOA-TRANSIT.md`'s build plan with H151 applied (what is left: transit request → decide on the deciding
+side per MT-Q1 a, route-crossing geometry, maybe a bust alert against the Strip's own assigned altitude only if
+conformance does not already cover it: check first). Still unanswered: a published fix table for the stereo-route fixes
+(KEMER, ERGEP, MANAZ, MUT, TARSU, DAN); with geometry only, route-crossing needs it: ask again.
 
 **Queue now:** (1) U-MOA-TRANSIT build after the Desk; (2) **docs pass** (one DOCS lane like `next/DOCS-R2.md`): fold
 `docs/wip/U-PANELS.md`, `U-JURISDICTION.md`, `U-MOA.md`, `U-PAR.md`, `U-RELEASE.md`, `U-TWR-PATTERN.md`, `U-SMALL.md`,
