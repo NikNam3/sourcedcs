@@ -47,7 +47,9 @@ const cases = [
   { name: 'clean', extra: [], expect: (rep) => { const b = quiet(rep); return b.length ? `clean run not quiet: ${b.join(', ')}` : null; } },
   { name: 'drop-ack', extra: ['--inject', 'drop-ack'], expect: (rep) => (rep.mutations.lost >= 1 ? null : `lost=${rep.mutations.lost}, expected >= 1`) },
   { name: 'drop-broadcast', extra: ['--inject', 'drop-broadcast'], expect: (rep) => (injectedStale(rep) >= 1 ? null : `silentStaleness (not H1) = ${injectedStale(rep)}, expected >= 1`) },
-  { name: 'leak', extra: ['--inject', 'leak', '--judge-memory'], expect: (rep) => (rep.memory.r2 > 0.9 && rep.verdict.failures.some(f => f.startsWith('memory.slope')) ? null : `heap slope ${rep.memory.slopeMBPerHour} MB/h R²=${rep.memory.r2}; expected a memory FAIL with R² > 0.9`) },
+  // No restart in the leak case: a restart starts a new heap, so the fit keeps only the part after it (about 7 heavy
+  // samples in 20 minutes), and a fit that short read R² < 0.9 on some traffic mixes (docs/wip/U-SMALL.md item 2).
+  { name: 'leak', extra: ['--inject', 'leak', '--judge-memory', '--restarts', '0'], expect: (rep) => (rep.memory.r2 > 0.9 && rep.verdict.failures.some(f => f.startsWith('memory.slope')) ? null : `heap slope ${rep.memory.slopeMBPerHour} MB/h R²=${rep.memory.r2}; expected a memory FAIL with R² > 0.9`) },
   { name: 'skip-shadow-client', extra: ['--inject', 'skip-shadow-client'], expect: (rep) => (rep.mutations.injectedShadowDrops >= 1 && injectedStale(rep) >= 1 ? null : `dropped ${rep.mutations.injectedShadowDrops}, silentStaleness (not H1) = ${injectedStale(rep)}, expected >= 1`) },
   { name: 'drop-store-delta', extra: ['--inject', 'drop-store-delta'], expect: (rep) => (rep.mutations.storeSync.injectedDrops >= 1 && rep.mutations.storeSync.stale >= 1 && rep.verdict.failures.some(f => f.startsWith('mutations.storeSync.stale')) ? null : `dropped ${rep.mutations.storeSync.injectedDrops}, store-stale ${rep.mutations.storeSync.stale}, expected both >= 1 and a verdict failure`) },
 ];
