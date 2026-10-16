@@ -113,6 +113,9 @@ AIM 4-3-3, 4-3-22, 4-3-23 (Change 3, same date), verbatim, from faa.gov's own AT
 | `wakeCategory: 'D'` seeds | 41 seed lines in 30 test/spec files → `'M'` (their F16/F15/F-16C/F-15E), `'H'` for the C17. `efsp-aircraft-data.test.mjs` keeps its 'D' (the replaced-invalid case). Freeze goldens: own commit (274 lines of `"D"`→`"M"` in recorded inputs plus those flights' hashes) | `test: the wakeCategory 'D' seeds…` + `test(freeze): …` |
 | Airspace approval and `ap-sfa` | **It did leave the Strip on the old Rack.** Path: `ApproveAirspaceEntry` → `flightDataStore.setWorkingFrequency` and nothing re-filed the Strip; same for `ClearAirspaceEntry` and SetBlock 22. Fix: `Placement.followSfaFrequency(strip)`, called by those three ops after the write: onto the new frequency's Rack when the pool has one, else the owner's ordinary Bay for its state (`ap-inbound`). Test `tests/efsp-sfa-frequency-follow.test.mjs` (4). `TerminateRadarService` also writes null but drops the Strip, so it does not need it | `fix(efsp): a frequency rewrite takes the Strip off the SFA Rack…` |
 
+**e2e (E2E_LANE=7):** l1-popovers, l3-coordination, tofi-regime, ui-a, l14-ato-import, l5-arrivals, runway-status,
+signon-reconnect, ui-b-resync: 58/58. `ui-a` now types `m/f15` (F15E is no designator).
+
 **Freeze for the designator change:** `hub-op-matrix/ato-*`, the five `resync-*` and `scenario-ato`/`scenario-carrier-ato`
 goldens move (ATO-imported flights' type and derived wake); own commit.
 
