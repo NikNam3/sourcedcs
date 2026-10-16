@@ -158,9 +158,13 @@ class CorrelationReconciler {
    * Rung order, claiming as it goes (§6.6 rule 1): an explicit binding, then
    * the assigned beacon code, then an exact callsign, then a fuzzy one. A
    * higher rung always claims a contact before a lower one can, which gives
-   * the priority order for free and makes a collision decidable: if two flight data
-   * would claim one contact at the SAME rung, neither gets it and both are
-   * told it was ambiguous. One contact never correlates to two flight data.
+   * the priority order for free and makes a collision decidable. Two CONTACTS
+   * matching one flight equally (two squawking its code, two answering to its
+   * callsign as well) is ambiguous: the flight gets neither and is told so,
+   * with the candidates (docs/adr/0046). Two FLIGHT DATA claiming one contact
+   * at the SAME rung (a duplicate code) is not: the first in sweep order takes
+   * it, and the other's TRACK_LOST detail names the flight that has it
+   * (LT-CORRELATION). One contact never correlates to two flight data.
    */
   tick(now = this._clock.now()) {
     this._ticks += 1;

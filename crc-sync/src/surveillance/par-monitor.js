@@ -7,8 +7,8 @@
 // "On a final" is one Board fact: a FINAL Strip in state ON_FINAL in a Bay whose descriptor says `view: 'final'`
 // (Incirlik's `par-final`; docs/adr/0075, 0093) at an AIRFIELD Facility (one with `runwayStatus`). The PAR is an airfield
 // feature only (decisions H125, docs/adr/0116): the carrier's final Bays (`cv-app1-final` / `cv-app2-final`) get no sample.
-// Missed approach and Landing assured move the Strip out of that state, so its sample ends with the op that ended the
-// talk-down, and a Strip that comes back starts a fresh trail.
+// Landed and Missed approach (par-final.js's LANDED and MISSED_APPROACH conversions) move the Strip out of that state, so
+// its sample ends with the op that ended the talk-down, and a Strip that comes back starts a fresh trail.
 //
 // The approach: the Facility's `parApproaches` (Facility config) for the runway end the Strip lands on, resolved the way
 // every other runway question is (runway-status.js resolveRunwayForStrip: the flight's assigned landing runway, else the
