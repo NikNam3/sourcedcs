@@ -40,7 +40,7 @@ const acks = (page) => { const n = []; page.on('websocket', (ws) => ws.on('frame
 
 async function createsAStrip(page, callsign) {
   await page.evaluate((cs) => crc.ws.sendEfspCreateStrip('OPS', { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE',
-    flightData: { callsign: cs, aircraftType: 'F16', wakeCategory: 'D' } }, 'INCIRLIK'), callsign);
+    flightData: { callsign: cs, aircraftType: 'F16', wakeCategory: 'M' } }, 'INCIRLIK'), callsign);
   await expect.poll(() => page.evaluate((cs) => crc.state.getAllEfspStrips().some(s => {
     const f = crc.state.getEfspFlightData(s.flightDataId); return f && f.identity.callsign === cs && s.state !== 'DROPPED';
   }), callsign), { timeout: 10000 }).toBe(true);

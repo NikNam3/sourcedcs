@@ -87,6 +87,7 @@ function _applySetBlockWrite(ctx, strip, op, by, actingPositionId, clientMutatio
               ? ctx.flightDataStore.setBeaconAssigned(strip.flightDataId, op.value, { by })
               : ctx.flightDataStore.setField(strip.flightDataId, target.path, op.value, { by });
     if (!flightDataResult.ok) return { ok: false, reason: flightDataResult.reason, detail: flightDataResult.detail, strip };
+    if (target.kind === 'frequency') ctx.placement.followSfaFrequency(strip); // Block 22 on an SFA Rack moves the Strip with it
 
     // flight data keeps its own independent rev (guide §3.1); the Strip's rev is
     // also bumped here as a deliberate Phase-1 simplification so the

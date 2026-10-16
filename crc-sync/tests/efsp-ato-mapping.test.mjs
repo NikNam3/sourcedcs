@@ -28,12 +28,12 @@ test('ato mapping: the research fixture matches the research note\'s oracle', ()
   assert.equal(r.ok, true);
   const L = lines(r);
   const rows = [
-    // lineId, callsign, size, type, pkg, vul start, vul end, vulSource, agency, M1, M2, M3, L16, TACAN, JU, RIP
-    ['1101A#0', 'VIPER11', 2, 'F16C', null, Z(14, 13, 0), Z(14, 15, 0), 'AMSNLOC', 'MAGIC11', '12', '0011', '4521', 'VP11', null, '00011', 'ALPHA'],
-    ['1202S#0', 'DUDE21', 2, 'F15E', 'AB', Z(14, 14, 58), Z(14, 15, 2), 'GTGTLOC', 'MAGIC11', '21', '0021', '4531', 'DU21', null, '00021', 'BRAVO'],
-    ['1203S#0', 'SNAKE41', 2, 'F16C', 'AB', Z(14, 14, 50), Z(14, 15, 10), 'AMSNLOC', 'MAGIC11', '41', '0041', '4541', 'SN41', null, '00041', 'BRAVO'],
-    ['1901T#0', 'SHELL71', 1, 'KC135', null, Z(14, 12, 30), Z(14, 16, 30), 'AMSNLOC', null, null, null, '4571', null, '38Y', null, null],
-    ['1801W#0', 'MAGIC11', 1, 'E3', null, Z(14, 12, 0), Z(14, 17, 30), 'AMSNLOC', null, null, null, '4501', 'MG11', null, '00001', null],
+    // lineId, callsign, size, type (the ICAO designator the ATO's name maps to, S-ARCH-53), pkg, vul start, vul end, vulSource, agency, M1, M2, M3, L16, TACAN, JU, RIP
+    ['1101A#0', 'VIPER11', 2, 'F16', null, Z(14, 13, 0), Z(14, 15, 0), 'AMSNLOC', 'MAGIC11', '12', '0011', '4521', 'VP11', null, '00011', 'ALPHA'],
+    ['1202S#0', 'DUDE21', 2, 'F15', 'AB', Z(14, 14, 58), Z(14, 15, 2), 'GTGTLOC', 'MAGIC11', '21', '0021', '4531', 'DU21', null, '00021', 'BRAVO'],
+    ['1203S#0', 'SNAKE41', 2, 'F16', 'AB', Z(14, 14, 50), Z(14, 15, 10), 'AMSNLOC', 'MAGIC11', '41', '0041', '4541', 'SN41', null, '00041', 'BRAVO'],
+    ['1901T#0', 'SHELL71', 1, 'K35R', null, Z(14, 12, 30), Z(14, 16, 30), 'AMSNLOC', null, null, null, '4571', null, '38Y', null, null],
+    ['1801W#0', 'MAGIC11', 1, 'E3TF', null, Z(14, 12, 0), Z(14, 17, 30), 'AMSNLOC', null, null, null, '4501', 'MG11', null, '00001', null],
   ];
   assert.deepEqual(Object.keys(L), rows.map((x) => x[0]));
   for (const [id, cs, size, type, pkg, vs, ve, vsrc, agency, m1, m2, m3, l16, tacan, ju, rip] of rows) {
@@ -85,12 +85,12 @@ test('ato mapping: the Incirlik fixture matches the briefing\'s expected lines',
   const r = ingest('incirlik-day1.txt');
   const L = lines(r);
   const rows = [
-    ['0101A#0', 'VIPER11', 4, 'F16C', '0101A', 'AA', A(4, 30), A(5, 30), 'MAGIC', '12', '0101', '4101', '11', 'NONE'],
-    ['0103A#0', 'SNAKE31', 2, 'F16C', '0103A', 'AA', A(4, 25), A(5, 35), 'MAGIC', '13', '0103', '4103', '13', 'NONE'],
-    ['0102A#0', 'EAGLE21', 2, 'F15C', '0102A', 'AA', A(4, 20), A(5, 40), 'MAGIC', null, '0102', '4102', '12', 'NONE'],
-    ['0201C#0', 'COLT41', 2, 'F15C', '0201C', null, A(5, 30), A(7, 30), 'SCREWTOP', '14', '0201', '4201', '14', 'ALERT'],
-    ['0501T#0', 'SHELL51', 1, 'KC135', '0501T', null, A(3, 30), A(6, 30), 'MAGIC', null, '0501', '4501', null, 'NONE'],
-    ['0601W#0', 'MAGIC11', 1, 'E3A', '0601W', null, A(3, 0), A(9, 0), null, null, '0601', '4601', null, 'NONE'],
+    ['0101A#0', 'VIPER11', 4, 'F16', '0101A', 'AA', A(4, 30), A(5, 30), 'MAGIC', '12', '0101', '4101', '11', 'NONE'],
+    ['0103A#0', 'SNAKE31', 2, 'F16', '0103A', 'AA', A(4, 25), A(5, 35), 'MAGIC', '13', '0103', '4103', '13', 'NONE'],
+    ['0102A#0', 'EAGLE21', 2, 'F15', '0102A', 'AA', A(4, 20), A(5, 40), 'MAGIC', null, '0102', '4102', '12', 'NONE'],
+    ['0201C#0', 'COLT41', 2, 'F15', '0201C', null, A(5, 30), A(7, 30), 'SCREWTOP', '14', '0201', '4201', '14', 'ALERT'],
+    ['0501T#0', 'SHELL51', 1, 'K35R', '0501T', null, A(3, 30), A(6, 30), 'MAGIC', null, '0501', '4501', null, 'NONE'],
+    ['0601W#0', 'MAGIC11', 1, 'E3TF', '0601W', null, A(3, 0), A(9, 0), null, null, '0601', '4601', null, 'NONE'],
   ];
   assert.deepEqual(Object.keys(L), rows.map((x) => x[0]));
   for (const [id, cs, size, type, msn, pkg, vs, ve, agency, m1, m2, m3, dl, alert] of rows) {

@@ -8,7 +8,7 @@ const path = require('path');
 const fs   = require('fs');
 
 const config = require('./config.json');
-const { computePythonPkgDir, computeRuntimeCwd, ensureLxsrsVenv } = require('./lxsrs-setup');
+const { computePythonPkgDir, computeRuntimeCwd, ensureLxsrsVenv, lxsrsArgs } = require('./lxsrs-setup');
 const { createExternalLinkGate, isCasdoorLoginUrl, isLocalAppUrl, CASDOOR_POPUP_WEB_PREFERENCES } = require('./external-link');
 const { writePendingPatchNotes, readAndClearPendingPatchNotes, readLastPatchNotes } = require('./patch-notes');
 
@@ -34,19 +34,10 @@ async function spawnLxsrs() {
     const venvPython = await ensureLxsrsVenv(venvDir, line => console.log('[lxsrs-setup]', line));
     if (!venvPython) return null;
 
-    const freqArgs = config.freqs.flatMap(f => ['--freq', f]);
     const pythonPkgDir = computePythonPkgDir(app.isPackaged, process.resourcesPath, __dirname);
     const runtimeCwd   = computeRuntimeCwd(app.isPackaged, app.getPath('userData'), __dirname);
 
-    const proc = spawn(venvPython, [
-        '-m', 'lxsrs_v2',
-        ...freqArgs,
-        '--tx-freq',  config.txFreq,
-        '--host',     config.srsHost,
-        '--port',     String(config.srsPort),
-        '--play-audio',
-        '--api-port', String(config.srsApiPort),
-    ], {
+    const proc = spawn(venvPython, lxsrsArgs(config), {
         cwd: runtimeCwd,
         env: {
             ...process.env,

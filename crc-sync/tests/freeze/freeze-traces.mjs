@@ -78,7 +78,7 @@ function crewWorld(seed) {
   return w;
 }
 
-const FDR = (callsign, extra = {}) => ({ callsign, aircraftType: 'F16', wakeCategory: 'D', departureAirport: 'LTAG', destinationAirport: 'LTAG', route: 'DCT', requestedAltitude: '250', ...extra });
+const FDR = (callsign, extra = {}) => ({ callsign, aircraftType: 'F16', wakeCategory: 'M', departureAirport: 'LTAG', destinationAirport: 'LTAG', route: 'DCT', requestedAltitude: '250', ...extra });
 const CLIENT_OF = Object.fromEntries(Object.entries(POS_OF).map(([id, [, pos]]) => [pos, id]));
 /** Act as whoever owns `strip` right now. */
 const byOwner = (w, fid, strip, op, o) => w.mut(CLIENT_OF[strip.ownerPositionId] || 'ghost', fid, strip.ownerPositionId, strip, op, o);

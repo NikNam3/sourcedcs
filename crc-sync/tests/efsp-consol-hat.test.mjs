@@ -148,7 +148,7 @@ test('W4 sign-off mid-hand-off: GC hands a departure to LC and LC signs off, in 
 test('W5 sign-off mid-hand-off, cross-Facility: AP has no list, the replica stays at AP and the ack says offeredTo null (invariant I holds through the transferring side)', () => {
   const efsp = fresh();
   const c = crew(efsp, { OPS: 'INCIRLIK', AP: 'INCIRLIK', CTR: 'CENTER' });
-  const ctrStrip = mustAct(efsp, c.CTR, 'CTR', null, { kind: 'CreateStrip', bayId: 'ctr-enroute', rackId: 'main', stripType: 'ARRIVAL', flightData: { callsign: 'W5', aircraftType: 'F16', wakeCategory: 'D', originAirport: 'LTAC' } });
+  const ctrStrip = mustAct(efsp, c.CTR, 'CTR', null, { kind: 'CreateStrip', bayId: 'ctr-enroute', rackId: 'main', stripType: 'ARRIVAL', flightData: { callsign: 'W5', aircraftType: 'F16', wakeCategory: 'M', originAirport: 'LTAC' } });
   const proposed = mustAct(efsp, c.CTR, 'CTR', ctrStrip, { kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'INCIRLIK', toPositionId: 'AP' });
   const replicaId = proposed.coordination.peerStripId;
   const left = hold(efsp, c.AP.session, 'INCIRLIK', []);
@@ -363,7 +363,7 @@ test('F4 a HANDOFF into an unstaffed Position nobody is offered is refused; into
   const efsp = fresh();
   const c = crew(efsp, { OPS: 'INCIRLIK', AP: 'INCIRLIK', CTR: 'CENTER' });
   hold(efsp, c.AP.session, 'INCIRLIK', []);
-  const s = mustAct(efsp, c.CTR, 'CTR', null, { kind: 'CreateStrip', bayId: 'ctr-enroute', rackId: 'main', stripType: 'ARRIVAL', flightData: { callsign: 'F4', aircraftType: 'F16', wakeCategory: 'D', originAirport: 'LTAC' } });
+  const s = mustAct(efsp, c.CTR, 'CTR', null, { kind: 'CreateStrip', bayId: 'ctr-enroute', rackId: 'main', stripType: 'ARRIVAL', flightData: { callsign: 'F4', aircraftType: 'F16', wakeCategory: 'M', originAirport: 'LTAC' } });
   const nobody = act(efsp, c.CTR, 'CTR', s, { kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'INCIRLIK', toPositionId: 'AP' });
   assert.equal(nobody.ok, false);
   assert.equal(nobody.reason, 'NO_RECEIVING_POSITION');
@@ -378,7 +378,7 @@ test('LC leaving with an aircraft in LUAW leaves nothing at AP; AP\'s own INBOUN
   assert.equal(strip(efsp, dep).ownerPositionId, 'LC');
   assert.equal(efsp.boardStoreFor('INCIRLIK').getAll().filter(s => s.ownerPositionId === 'AP').length, 0, 'nothing parked at AP');
 
-  const inbound = mustAct(efsp, c.AP, 'AP', null, { kind: 'CreateStrip', bayId: 'ap-inbound', rackId: 'main', stripType: 'ARRIVAL', flightData: { callsign: 'INB1', aircraftType: 'F16', wakeCategory: 'D', originAirport: 'LTAC', destinationAirport: 'LTAG' } });
+  const inbound = mustAct(efsp, c.AP, 'AP', null, { kind: 'CreateStrip', bayId: 'ap-inbound', rackId: 'main', stripType: 'ARRIVAL', flightData: { callsign: 'INB1', aircraftType: 'F16', wakeCategory: 'M', originAirport: 'LTAC', destinationAirport: 'LTAG' } });
   const res = efsp.handleMessage(c.AP.session, { version: 1, type: 'efsp-mutation', clientMutationId: crypto.randomUUID(), facilityId: 'INCIRLIK', actingPositionId: 'AP', stripId: inbound.stripId, baseRev: inbound.rev, op: { kind: 'InvokeNla' } });
   assert.equal(res.ack.ok, true, JSON.stringify(res.ack));
   assert.equal(res.ack.strip.ownerPositionId, 'LC', 'delivered to LC, not routed back to AP');

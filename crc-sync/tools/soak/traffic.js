@@ -124,8 +124,9 @@ function* outboundToCenter(f, x) {
 
 /**
  * The pilot calls the receiver (docs/adr/0122): CHECKED_IN, and on a not-released handoff the receiver asks for a release
- * and the handing-off station grants it (control moves then; the soak has no airspace geometry for the control tick). Never
- * REFUSE here: with refusals in the mix the selfcheck's injected leak read R² 0.86 (docs/wip/U-RELEASE.md).
+ * and the handing-off station grants it (control moves then; the soak has no airspace geometry for the control tick) or,
+ * one time in five, refuses it. A refused request holds nothing beyond its Strip's `coordination.releaseRequest`, which
+ * goes with the Strip (docs/wip/U-SMALL.md item 2).
  */
 function* checkIn(x, rFacility, rStrip, tFacility, tStrip, released) {
   yield think();
@@ -135,7 +136,7 @@ function* checkIn(x, rFacility, rStrip, tFacility, tStrip, released) {
   const rq = yield act(rFacility, rStrip, { kind: 'ControlRelease', action: 'REQUEST' });
   if (!rq.ok) return;
   yield think();
-  yield act(tFacility, tStrip, { kind: 'ControlRelease', action: 'GRANT' });
+  yield act(tFacility, tStrip, { kind: 'ControlRelease', action: x.rng.chance(0.8) ? 'GRANT' : 'REFUSE' });
 }
 
 function* homeFromCenter(f, x, ctr) {

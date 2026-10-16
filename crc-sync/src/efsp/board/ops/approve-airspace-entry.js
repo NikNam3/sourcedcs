@@ -61,6 +61,7 @@ function _applyApproveAirspaceEntry(ctx, strip, op, by) {
     approvedAt: ctx.clock.now(),
     approvedBy: by || null,
   };
+  ctx.placement.followSfaFrequency(strip); // a Strip on an SFA Rack is on that frequency: it follows the new one
   ctx.state.bump(strip, by);
 
   const warnings = airspace.state !== 'ACTIVE' ? [warn('AIRSPACE_NOT_ACTIVE')] : undefined;

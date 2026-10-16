@@ -76,7 +76,7 @@ const POPOVERS = {
   TOFI: {
     facilityId: 'CENTER', positionId: 'CTR', bayId: 'ctr-enroute', selector: '.efsp-coordinate-popover',
     open: (strip) => startAction(strip, 'TOFI…', { timeout: 5000 }),
-    act: (pop) => pop.getByRole('button', { name: 'Send TOFI' }),
+    act: (pop) => pop.getByRole('button', { name: 'TOFI to TAC_C2' }),
   },
   bind: {
     facilityId: 'INCIRLIK', positionId: 'AP', bayId: 'ap-inbound', selector: '.efsp-coordinate-popover',

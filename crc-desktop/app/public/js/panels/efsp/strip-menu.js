@@ -15,7 +15,7 @@ import { divertOffer } from './divert-rules.js';
 import { _canProposeCoordination, _dispatchCoordination, _openCoordinatePopover } from './bay/popovers/coordination.js';
 import { _isPendingCoordinationReplica, _isRejectedCoordinationReplica } from './bay/coordination-rules.js';
 import { _openMarsaPopover } from './bay/popovers/marsa.js';
-import { _canProposeTofiEntry, _canProposeTofiExit, _dispatchTofi, _openTofiEntryPopover } from './bay/popovers/tofi.js';
+import { _canProposeTofiEntry, _canProposeTofiExit, _dispatchTofi, _openTofiEntryPopover, tofiSendLabel } from './bay/popovers/tofi.js';
 import { _appendDropButton, _appendExpandButton } from './bay/strip-expanded.js';
 import { _setPendingConvertStripId } from './bay/popovers/airspace-entry.js';
 import { _openJoinPopover, _openSplitPopover } from './bay/popovers/formation.js';
@@ -98,10 +98,12 @@ function _stripMenuItems(strip) {
         : tofi && tofi.state === 'INITIATED' ? 'a TOFI proposal is already open'
           : `not from ${String(strip.state).replace(/_/g, ' ')}`;
       const counterparts = TOFI_COUNTERPARTS[strip.ownerPositionId];
-      items.push({ group: 'Start', key: 'tofi', label: 'TOFI…', cls: 'efsp-coordinate-btn', enabled: ok, reason,
-        title: 'Propose a Transfer of Flight Information to a Military Radar Unit',
+      // One counterpart sends at once, so the item names it ("TOFI to CTR", T20's rule); a choice opens the picker.
+      const only = counterparts.length === 1 ? counterparts[0] : null;
+      items.push({ group: 'Start', key: 'tofi', label: only ? tofiSendLabel(only.positionId) : 'TOFI…', cls: 'efsp-coordinate-btn', enabled: ok, reason,
+        title: only ? `Propose a Transfer of Flight Information to ${only.positionId}` : 'Propose a Transfer of Flight Information to a Military Radar Unit',
         run: (anchor) => {
-          if (counterparts.length === 1) _dispatchTofi(strip, 'PROPOSE', 'ENTRY', { target: counterparts[0] });
+          if (only) _dispatchTofi(strip, 'PROPOSE', 'ENTRY', { target: only });
           else _openTofiEntryPopover(strip, anchor, counterparts);
         } });
     }
@@ -255,6 +257,21 @@ function _stripMenuItems(strip) {
   return items;
 }
 
+/**
+ * The menu's items with each group's items together, groups in the order they first appear (LT-UI finding, S-ARCH-49):
+ * the builder adds by topic, so a group can recur after another (Flight's MARSA, then Formation, then Flight's Show on
+ * map), and a heading per change printed "Flight" twice. Stable within a group.
+ */
+export function groupStripMenuItems(items) {
+  const order = [];
+  const byGroup = new Map();
+  for (const item of items) {
+    if (!byGroup.has(item.group)) { byGroup.set(item.group, []); order.push(item.group); }
+    byGroup.get(item.group).push(item);
+  }
+  return order.flatMap(g => byGroup.get(g));
+}
+
 let _stripMenuHandle = null;
 
 function _closeStripMenu() { if (_stripMenuHandle) _stripMenuHandle.close(); }
@@ -265,7 +282,7 @@ export function openStripMenu(strip, anchor) {
   _closeStripMenu();
   if (wasOpenHere) return; // the ⋯ button toggles
   strip = getEfspStrip(strip.stripId) || strip; // F-107: act on the live record
-  const items = _stripMenuItems(strip);
+  const items = groupStripMenuItems(_stripMenuItems(strip));
   if (items.length === 0) return;
 
   const menu = _stripEl('div', 'efsp-strip-menu efsp-strip-menu-popover');

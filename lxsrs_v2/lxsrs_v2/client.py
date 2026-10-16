@@ -28,6 +28,9 @@ MIC_FRAME_MS = 20
 # The web UI re-sends /api/ptt/start every 400 ms while the key is held. If none arrives for this long (renderer crashed,
 # window lost, network between them cut) the radio is un-keyed here, so a stuck client can never hold the frequency open.
 PTT_KEEPALIVE_TIMEOUT_S = 1.5
+# An enabled radio with no frequency yet: the same 1 Hz placeholder a DISABLED slot
+# carries (models.Radio), which matches no station.
+UNTUNED_HZ = 1.0
 
 
 def make_srs_guid() -> str:
@@ -45,6 +48,11 @@ class SRSClient:
     version: str = DEFAULT_VERSION
     guid: str = field(default_factory=make_srs_guid)
     tx_frequency_mhz: float | None = None
+    # Frequency a newly added radio (and a radio that has none yet) tunes to.
+    # No station frequency lives in code (H147 RQ5): the launcher passes it
+    # from config (crc-desktop config.json `defaultFreq`); None leaves the
+    # slot untuned (UNTUNED_HZ) for the controller to set.
+    default_frequency_mhz: float | None = None
     mic_source: str | None = None   # PulseAudio source name; None = default
     speaker_sink: str | None = None
     input_volume: float = 1.0
@@ -412,6 +420,11 @@ class SRSClient:
                 time.sleep(0.1)
             listener.stop()
 
+    def _default_freq_hz(self) -> float:
+        if self.default_frequency_mhz is None:
+            return UNTUNED_HZ
+        return self.default_frequency_mhz * 1_000_000
+
     def _get_tx_modulation(self) -> int:
         with self._state_lock:
             return int(self._radio_info.radios[self._tx_slot].modulation)
@@ -444,7 +457,7 @@ class SRSClient:
                 return -1
             for idx, radio in enumerate(self._radio_info.radios):
                 if radio.modulation == Modulation.DISABLED:
-                    self._radio_info.radios[idx] = make_radio(251_000_000.0, name=f"linux{idx + 1}")
+                    self._radio_info.radios[idx] = make_radio(self._default_freq_hz(), name=f"linux{idx + 1}")
                     self._schedule_radio_update()
                     self.save_state()
                     return idx
@@ -527,7 +540,7 @@ class SRSClient:
                     index = -1
                 radio.modulation = order[(index + 1) % len(order)]
                 if radio.freq <= 10000:
-                    radio.freq = 251_000_000.0
+                    radio.freq = self._default_freq_hz()
         self._schedule_radio_update()
         self.save_state()
         self._update_noise()
@@ -548,7 +561,8 @@ class SRSClient:
             for i, r in enumerate(radios):
                 if i >= len(self._radio_info.radios):
                     break
-                freq = float(r.get("freq_mhz", 251.0)) * 1_000_000
+                saved = r.get("freq_mhz")
+                freq = float(saved) * 1_000_000 if saved is not None else self._default_freq_hz()
                 mod_name = r.get("modulation", "AM")
                 try:
                     mod = Modulation[mod_name]

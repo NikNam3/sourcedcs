@@ -117,7 +117,7 @@ test('SCENARIO a flying session: the traffic count reconciles against the Mutati
   // 10. A TOFI the MRU refuses: the MISSION Strip it minted is retired.
   const tofiFlight = mustAct(efsp, c.CTR, 'CTR', null, {
     kind: 'CreateStrip', bayId: 'ctr-enroute', rackId: 'main', stripType: 'ARRIVAL',
-    flightData: { callsign: 'TOFI1', aircraftType: 'F-15E', wakeCategory: 'D', originAirport: 'LTAC' },
+    flightData: { callsign: 'TOFI1', aircraftType: 'F-15E', wakeCategory: 'M', originAirport: 'LTAC' },
   });
   const offered = mustAct(efsp, c.CTR, 'CTR', tofiFlight, {
     kind: 'TOFI', action: 'PROPOSE', direction: 'ENTRY', toFacilityId: 'TACTICAL', toPositionId: 'TAC_C2',

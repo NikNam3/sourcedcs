@@ -93,7 +93,7 @@ function createCtrStrip(facilities) {
   const result = boardStore.applyMutation(mutation({
     op: {
       kind: 'CreateStrip', bayId: 'ctr-enroute', rackId: 'main',
-      flightData: { callsign: 'EAGLE1', aircraftType: 'F15', wakeCategory: 'D', originAirport: 'LTAC', estimatedArrivalTimeUtc: Date.now() + 20 * 60 * 1000 },
+      flightData: { callsign: 'EAGLE1', aircraftType: 'F15', wakeCategory: 'M', originAirport: 'LTAC', estimatedArrivalTimeUtc: Date.now() + 20 * 60 * 1000 },
       stripType: 'ARRIVAL',
     },
   }), 'CTR', 'ctr-controller');

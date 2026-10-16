@@ -16,7 +16,7 @@ test('S-L16: a vul window cannot be left ending before it starts', async () => {
   const { FlightDataStore } = await import('../src/efsp/flight-data-store.js');
   const store = new FlightDataStore();
   const created = store.createFlightData({
-    callsign: 'WEASEL1', flightSize: 2, aircraftType: 'F16', wakeCategory: 'D', equipmentCodes: ['G'],
+    callsign: 'WEASEL1', flightSize: 2, aircraftType: 'F16', wakeCategory: 'M', equipmentCodes: ['G'],
     route: 'DCT', requestedAltitude: '250', departureAirport: 'LTAG', destinationAirport: 'LTAG',
     vulWindowStartUtc: Date.UTC(2026, 3, 14, 6, 0), vulWindowEndUtc: Date.UTC(2026, 3, 14, 8, 0),
   }, { by: 'TAC_C2', stripType: 'MISSION' });

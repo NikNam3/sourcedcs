@@ -112,8 +112,26 @@ async function ensureLxsrsVenv(venvDir, log = () => {}) {
     }
 }
 
+// The bridge's command line from config.json. Every frequency comes from
+// config (H147 RQ5: no station frequency in code): `freqs`/`txFreq` are the
+// radios it starts with, `defaultFreq` the one a radio added later tunes to.
+// Without `defaultFreq` the bridge leaves an added radio untuned.
+function lxsrsArgs(config) {
+    const args = ['-m', 'lxsrs_v2', ...config.freqs.flatMap(f => ['--freq', String(f)])];
+    if (config.txFreq != null && config.txFreq !== '') args.push('--tx-freq', String(config.txFreq));
+    if (config.defaultFreq != null && config.defaultFreq !== '') args.push('--default-freq', String(config.defaultFreq));
+    args.push(
+        '--host',     config.srsHost,
+        '--port',     String(config.srsPort),
+        '--play-audio',
+        '--api-port', String(config.srsApiPort),
+    );
+    return args;
+}
+
 module.exports = {
     LXSRS_VENV_DEPS,
+    lxsrsArgs,
     computePythonPkgDir,
     computeRuntimeCwd,
     venvPaths,

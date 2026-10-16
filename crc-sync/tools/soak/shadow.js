@@ -46,7 +46,7 @@ class Shadow {
     for (const f of facilityIds) { this.strips.set(f, new Map()); this.boardSeq.set(f, -1); }
     // Every stripId -> rev regression a delta tried to apply (a delta carrying an OLDER rev than the replica holds).
     this.regressions = 0;
-    // The six stores' cursors, the way sync-cursor.js keeps them: key -> { seq, epoch, behind }, plus the keys the
+    // The five synced stores' cursors (stores.js STORE_SYNC), the way sync-cursor.js keeps them: key -> { seq, epoch, behind }, plus the keys the
     // client would ask a slice for (`wantResync`) and those that have stayed behind past the bound (`stale`).
     this.stores = new Map();
     this.wantResync = new Set();

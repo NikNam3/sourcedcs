@@ -130,7 +130,7 @@ export async function advance(efsp, crewMember, positionId, strip) {
 }
 
 export const DEPARTURE_FLIGHT_DATA = {
-  callsign: 'VIPER1', aircraftType: 'F16', wakeCategory: 'D',
+  callsign: 'VIPER1', aircraftType: 'F16', wakeCategory: 'M',
   departureAirport: 'LTAG', destinationAirport: 'LTAG', route: 'DCT', requestedAltitude: '250',
 };
 

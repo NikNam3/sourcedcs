@@ -67,7 +67,7 @@ async function advance(efsp, crewMember, positionId, strip) {
 }
 
 const FILED = {
-  aircraftType: 'F16', wakeCategory: 'D',
+  aircraftType: 'F16', wakeCategory: 'M',
   departureAirport: 'LTAG', destinationAirport: 'LTAC', route: 'DCT', requestedAltitude: '250',
 };
 
@@ -311,7 +311,7 @@ test('F-303: the facility that rejected a coordination cannot then work the repl
   // A CENTER-held INBOUND ARRIVAL, point-outed to INCIRLIK's AP.
   const ctrStrip = mustAct(efsp, c.CTR, 'CTR', null, {
     kind: 'CreateStrip', bayId: 'ctr-enroute', rackId: 'main', stripType: 'ARRIVAL',
-    flightData: { callsign: 'DED303', aircraftType: 'F16', wakeCategory: 'D', originAirport: 'LTAC', destinationAirport: 'LTAG', route: 'DCT', requestedAltitude: '250' },
+    flightData: { callsign: 'DED303', aircraftType: 'F16', wakeCategory: 'M', originAirport: 'LTAC', destinationAirport: 'LTAG', route: 'DCT', requestedAltitude: '250' },
   });
   const proposed = mustAct(efsp, c.CTR, 'CTR', ctrStrip, {
     kind: 'POINT_OUT', action: 'PROPOSE', toFacilityId: 'INCIRLIK', toPositionId: 'AP',
@@ -347,7 +347,7 @@ test('F-303: the SENDER\'s own Strip reads REJECTED too, and stays fully workabl
   const c = crew(efsp, { AP: 'INCIRLIK', LC: 'INCIRLIK', CTR: 'CENTER' });
   const ctrStrip = mustAct(efsp, c.CTR, 'CTR', null, {
     kind: 'CreateStrip', bayId: 'ctr-enroute', rackId: 'main', stripType: 'ARRIVAL',
-    flightData: { callsign: 'SND303', aircraftType: 'F16', wakeCategory: 'D', originAirport: 'LTAC', destinationAirport: 'LTAG', route: 'DCT', requestedAltitude: '250' },
+    flightData: { callsign: 'SND303', aircraftType: 'F16', wakeCategory: 'M', originAirport: 'LTAC', destinationAirport: 'LTAG', route: 'DCT', requestedAltitude: '250' },
   });
   const proposed = mustAct(efsp, c.CTR, 'CTR', ctrStrip, {
     kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'INCIRLIK', toPositionId: 'AP',
@@ -480,7 +480,7 @@ test('F-306: accepting a TOFI ENTRY carries the regime it wrote in the ack AND t
   // TOFI ENTRY (coordination.js's TOFI_ELIGIBLE_STATES).
   const ctrStrip = mustAct(efsp, c.CTR, 'CTR', null, {
     kind: 'CreateStrip', bayId: 'ctr-enroute', rackId: 'main', stripType: 'ARRIVAL',
-    flightData: { callsign: 'SRG306', aircraftType: 'F16', wakeCategory: 'D', originAirport: 'LTAC', destinationAirport: 'LTAG', route: 'DCT', requestedAltitude: '250' },
+    flightData: { callsign: 'SRG306', aircraftType: 'F16', wakeCategory: 'M', originAirport: 'LTAC', destinationAirport: 'LTAG', route: 'DCT', requestedAltitude: '250' },
   });
   const proposed = mustAct(efsp, c.CTR, 'CTR', ctrStrip, {
     kind: 'TOFI', action: 'PROPOSE', direction: 'ENTRY', toFacilityId: 'TACTICAL', toPositionId: 'TAC_C2',

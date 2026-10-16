@@ -20,7 +20,7 @@ function createStripMsg() {
     version: 1, type: 'efsp-mutation', clientMutationId: crypto.randomUUID(), actingPositionId: 'OPS',
     op: {
       kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main',
-      flightData: { callsign: 'VIPER1', aircraftType: 'F16', wakeCategory: 'D', departureAirport: 'LTAG', destinationAirport: 'LTAC', route: 'DCT', requestedAltitude: '250' },
+      flightData: { callsign: 'VIPER1', aircraftType: 'F16', wakeCategory: 'M', departureAirport: 'LTAG', destinationAirport: 'LTAC', route: 'DCT', requestedAltitude: '250' },
     },
   };
 }
@@ -169,7 +169,7 @@ function createCtrStripMsg() {
     facilityId: 'CENTER', actingPositionId: 'CTR',
     op: {
       kind: 'CreateStrip', bayId: 'ctr-enroute', rackId: 'main', stripType: 'ARRIVAL',
-      flightData: { callsign: 'EAGLE1', aircraftType: 'F15', wakeCategory: 'D', originAirport: 'LTAC' },
+      flightData: { callsign: 'EAGLE1', aircraftType: 'F15', wakeCategory: 'M', originAirport: 'LTAC' },
     },
   };
 }

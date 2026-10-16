@@ -40,7 +40,7 @@ let cmidN = 0;
 // Not uuid-shaped: a second 00000000-0000-4000-8000-<n> counter would collide with the freeze uuid counter's ids once the golden is renumbered by appearance.
 const cmid = () => `freeze-cmid-${String(++cmidN).padStart(5, '0')}`;
 
-const FDR = { callsign: 'FREEZE1', aircraftType: 'F16', wakeCategory: 'D', departureAirport: 'LTAG', destinationAirport: 'LTAG', route: 'DCT', requestedAltitude: '250' };
+const FDR = { callsign: 'FREEZE1', aircraftType: 'F16', wakeCategory: 'M', departureAirport: 'LTAG', destinationAirport: 'LTAG', route: 'DCT', requestedAltitude: '250' };
 const ROLES = [
   { stripType: 'DEPARTURE', facilityId: 'INCIRLIK', creator: 'OPS', bayId: 'ops-proposed' },
   { stripType: 'ARRIVAL', facilityId: 'INCIRLIK', creator: 'AP', bayId: 'ap-inbound' },

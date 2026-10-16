@@ -38,7 +38,7 @@ const REQUIRED_ARRIVAL_BLOCKS = [
 
 function makeFlightData(overrides = {}) {
   return {
-    identity: { callsign: 'VIPER1', flightSize: 1, wakeCategory: 'D', aircraftType: 'F16', equipmentSuffix: 'GR', degradation: 'NONE', beaconAssigned: '1234', ...overrides.identity },
+    identity: { callsign: 'VIPER1', flightSize: 1, wakeCategory: 'M', aircraftType: 'F16', equipmentSuffix: 'GR', degradation: 'NONE', beaconAssigned: '1234', ...overrides.identity },
     filed: { route: 'DCT', requestedAltitude: '250', departureAirport: 'LTAG', destinationAirport: 'LTAC', proposedDepartureTimeUtc: null, fullRouteClearance: false, remarks: '' , ...overrides.filed },
     assigned: { datalinkClearanceIndicator: 'NONE', atisCode: null, releaseTimeUtc: null, takeoffTimeUtc: null, ...overrides.assigned },
     provenance: { ...overrides.provenance },
@@ -245,7 +245,7 @@ test('isBlockEditable is false for an unknown Block ID', () => {
 
 function makeArrivalFlightData(overrides = {}) {
   return {
-    identity: { callsign: 'REACH1', flightSize: 1, wakeCategory: 'D', aircraftType: 'C17', equipmentSuffix: 'GR', degradation: 'NONE', beaconAssigned: '5678', ...overrides.identity },
+    identity: { callsign: 'REACH1', flightSize: 1, wakeCategory: 'H', aircraftType: 'C17', equipmentSuffix: 'GR', degradation: 'NONE', beaconAssigned: '5678', ...overrides.identity },
     filed: { route: 'DCT', originAirport: 'LTAG', arrivalFix: 'KADOX', estimatedArrivalTimeUtc: '1200', remarks: '', ...overrides.filed },
     assigned: { datalinkClearanceIndicator: 'NONE', landingRunway: null, ...overrides.assigned },
     provenance: { ...overrides.provenance },

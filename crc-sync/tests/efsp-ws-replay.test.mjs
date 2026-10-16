@@ -168,7 +168,7 @@ test('every efsp-board-delta carries boardEpoch', () => {
   const cases = [];
 
   // _handleMutation's broadcast, and peerBroadcast (a coordination proposal).
-  const arr = mustAct(efsp, c.CTR, 'CTR', null, { kind: 'CreateStrip', bayId: 'ctr-enroute', rackId: 'main', stripType: 'ARRIVAL', flightData: { callsign: 'EPOCH1', aircraftType: 'F15', wakeCategory: 'D', originAirport: 'LTAC' } });
+  const arr = mustAct(efsp, c.CTR, 'CTR', null, { kind: 'CreateStrip', bayId: 'ctr-enroute', rackId: 'main', stripType: 'ARRIVAL', flightData: { callsign: 'EPOCH1', aircraftType: 'F15', wakeCategory: 'M', originAirport: 'LTAC' } });
   const proposed = send(efsp, c.CTR, { type: 'efsp-mutation', facilityId: 'CENTER', actingPositionId: 'CTR', stripId: arr.stripId, baseRev: arr.rev, op: { kind: 'HANDOFF', action: 'PROPOSE', toFacilityId: 'INCIRLIK', toPositionId: 'AP' } });
   assert.equal(proposed.ack.ok, true, JSON.stringify(proposed.ack));
   assert.equal(proposed.ack.boardEpoch, epochOf('CENTER'), 'the ack too');

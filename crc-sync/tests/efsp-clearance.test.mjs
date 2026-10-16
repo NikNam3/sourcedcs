@@ -37,7 +37,7 @@ function mustAct(efsp, member, positionId, strip, op) {
   assert.equal(ack.ok, true, `${op.kind} as ${positionId}: ${JSON.stringify(ack)}`);
   return ack.strip;
 }
-const FILED = { aircraftType: 'F16', wakeCategory: 'D', departureAirport: 'LTAG', destinationAirport: 'LTAC', route: 'DCT', requestedAltitude: 'FL250' };
+const FILED = { aircraftType: 'F16', wakeCategory: 'M', departureAirport: 'LTAG', destinationAirport: 'LTAC', route: 'DCT', requestedAltitude: 'FL250' };
 const active = (cell) => cell.entries.find(e => e.status === 'ACTIVE');
 
 test('altitudes and headings parse the way a strip writes them', () => {

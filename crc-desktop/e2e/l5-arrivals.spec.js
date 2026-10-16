@@ -150,7 +150,7 @@ test('creating a Strip yourself into a Bay you are not looking at is announced (
   // Not seedStrip: it waits for the Strip on screen, and this one lands in a Bay out of view.
   await page.evaluate((fd) => crc.ws.sendEfspCreateStrip('OPS', {
     kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE',
-    flightData: { callsign: 'ARV802', aircraftType: 'F16', wakeCategory: 'D', ...fd },
+    flightData: { callsign: 'ARV802', aircraftType: 'F16', wakeCategory: 'M', ...fd },
   }, 'INCIRLIK'), FLIGHT_DATA);
   await expect(page.locator('#efsp-bay-tabs .efsp-tab-new')).toHaveText('+1');
   await expect(page.locator('#efsp-arrivals-line')).toContainText('ARV802');

@@ -97,7 +97,7 @@ test('grace expiry leaving GC unstaffed with Strips: LC\'s Primary is offered GC
   const r = rig({ OPS: 'INCIRLIK', GC: 'INCIRLIK', LC: 'INCIRLIK' });
   const created = helpers.mustAct(r.w.efsp, r.w.c.OPS, 'OPS', null, {
     kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main',
-    flightData: { callsign: 'VIPER1', aircraftType: 'F16', wakeCategory: 'D', departureAirport: 'LTAG', destinationAirport: 'LTAC', route: 'DCT', requestedAltitude: '250' },
+    flightData: { callsign: 'VIPER1', aircraftType: 'F16', wakeCategory: 'M', departureAirport: 'LTAG', destinationAirport: 'LTAC', route: 'DCT', requestedAltitude: '250' },
   });
   helpers.mustAct(r.w.efsp, r.w.c.OPS, 'OPS', created, { kind: 'TransferStrip', toPositionId: 'GC', bayId: 'gc-coordination', rackId: 'main' });
   const gc = r.connect('c-GC'); const lc = r.connect('c-LC'); const ops = r.connect('c-OPS');
@@ -114,7 +114,7 @@ test('a takeover during the grace: the taker\'s sign-on runs the shared effects 
   const r = rig({ OPS: 'INCIRLIK', GC: 'INCIRLIK', LC: 'INCIRLIK' });
   const created = helpers.mustAct(r.w.efsp, r.w.c.OPS, 'OPS', null, {
     kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main',
-    flightData: { callsign: 'VIPER2', aircraftType: 'F16', wakeCategory: 'D', departureAirport: 'LTAG', destinationAirport: 'LTAC', route: 'DCT', requestedAltitude: '250' },
+    flightData: { callsign: 'VIPER2', aircraftType: 'F16', wakeCategory: 'M', departureAirport: 'LTAG', destinationAirport: 'LTAC', route: 'DCT', requestedAltitude: '250' },
   });
   helpers.mustAct(r.w.efsp, r.w.c.OPS, 'OPS', created, { kind: 'TransferStrip', toPositionId: 'GC', bayId: 'gc-coordination', rackId: 'main' });
   const gc = r.connect('c-GC'); const lc = r.connect('c-LC'); const watcher = r.connect('c-OPS');

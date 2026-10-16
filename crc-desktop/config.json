@@ -7,5 +7,6 @@
   "srsApiPort": 5003,
   "wsPort": 3100,
   "freqs": ["251.000", "305.500"],
-  "txFreq": "251.000"
+  "txFreq": "251.000",
+  "defaultFreq": "251.000"
 }

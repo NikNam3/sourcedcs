@@ -39,7 +39,7 @@ test('TAC_C2 imports an ATO; the AR group highlights together; Mode 1/2 read in 
   // Sent directly: the visible Bay is TAC_C2's, so the helper's on-screen count would not move.
   await page.evaluate(() => crc.ws.sendEfspCreateStrip('OPS', {
     kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main',
-    flightData: { callsign: 'VIPER11', aircraftType: 'F16', wakeCategory: 'D' },
+    flightData: { callsign: 'VIPER11', aircraftType: 'F16', wakeCategory: 'M' },
   }, 'INCIRLIK'));
   await page.waitForFunction(() => crc.state.getAllEfspStrips().some(s => s.stripType === 'DEPARTURE' && crc.state.getEfspFlightData(s.flightDataId).identity.callsign === 'VIPER11'));
 

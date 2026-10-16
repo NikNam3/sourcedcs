@@ -70,7 +70,7 @@ function createCtrStripMsg(overrides = {}) {
     facilityId: 'CENTER', actingPositionId: 'CTR',
     op: {
       kind: 'CreateStrip', bayId: 'ctr-enroute', rackId: 'main', stripType: 'ARRIVAL',
-      flightData: { callsign: 'EAGLE1', aircraftType: 'F15', wakeCategory: 'D', originAirport: 'LTAC' },
+      flightData: { callsign: 'EAGLE1', aircraftType: 'F15', wakeCategory: 'M', originAirport: 'LTAC' },
     },
     ...overrides,
   };

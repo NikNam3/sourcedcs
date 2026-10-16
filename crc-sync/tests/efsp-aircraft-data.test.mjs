@@ -153,3 +153,31 @@ test('3A re-derives the wake for the new type; 3B is the override and takes only
   const badType = act(efsp, c.OPS, 'OPS', s, { kind: 'SetBlock', blockId: '3A', value: 'F-16' });
   assert.equal(badType.ok, false);
 });
+
+// S-ARCH-53: an ATO's or a DD-1801's type name becomes the ICAO Doc 8643 designator where it enters.
+test('designatorFor: military names map to their Doc 8643 designator, designators stay, the unknown is kept as given', async () => {
+  const { designatorFor, wakeCategoryForType } = await import('../src/efsp/aircraft-data.js');
+  const cases = {
+    'F-16C': 'F16', 'F-16CM': 'F16', 'F/A-18C': 'F18H', 'FA-18C': 'F18H', 'F/A-18E': 'F18S', 'F-15E': 'F15', 'F-15C': 'F15',
+    'KC-135R': 'K35R', KC135: 'K35R', 'C-130J': 'C130', 'E-3A': 'E3TF', E3: 'E3TF', 'A-10C': 'A10', 'AV-8B': 'HAR',
+    'Su-33': 'SU27', 'JF-17': 'FC1', 'MiG-29S': 'MG29', 'Tu-95': 'TU95', 'Il-78': 'IL76', 'AH-64D': 'H64',
+    F16: 'F16', B738: 'B738', ' f16 ': 'F16', '': '', 'F-16C BLOCK 99': 'F-16C BLOCK 99',
+  };
+  for (const [from, to] of Object.entries(cases)) assert.equal(designatorFor(from), to, from);
+  assert.equal(designatorFor(null), '');
+  assert.equal(wakeCategoryForType(designatorFor('F-16C')), 'M');
+});
+
+test('the wake table and the name map hold only designator shapes, and every mapped designator has a wake', async () => {
+  const { WAKE_BY_TYPE, DESIGNATOR_BY_NAME, isDesignatorShape, isWakeCategory } = await import('../src/efsp/aircraft-data.js');
+  for (const [d, w] of Object.entries(WAKE_BY_TYPE)) {
+    assert.ok(isDesignatorShape(d), d);
+    assert.ok(isWakeCategory(w), `${d}: ${w}`);
+  }
+  // Checked against ICAO Doc 8643 on 2026-10-16: F15E, F18, SU30, SU33, JF17, C5, IL78, T95 and T45 are not designators.
+  for (const gone of ['F15E', 'F18', 'SU30', 'SU33', 'JF17', 'C5', 'IL78', 'T95', 'T45']) assert.equal(WAKE_BY_TYPE[gone], undefined, gone);
+  for (const [name, d] of Object.entries(DESIGNATOR_BY_NAME)) {
+    assert.ok(WAKE_BY_TYPE[d], `${name} -> ${d} has no wake row`);
+    assert.equal(WAKE_BY_TYPE[name], undefined, `${name} is a designator itself`);
+  }
+});

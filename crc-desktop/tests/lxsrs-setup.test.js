@@ -15,6 +15,7 @@ const path = require('path');
 
 const {
   computePythonPkgDir, computeRuntimeCwd, venvPaths, isVenvReady, ensureLxsrsVenv,
+  lxsrsArgs,
 } = require('../lxsrs-setup');
 
 function tmpDir() {
@@ -186,4 +187,25 @@ test('ensureLxsrsVenv: an already-complete venv is reused without re-running set
   // bare `spawn('python3', ...)` call would fail with ENOENT/reject.
   const result = await ensureLxsrsVenv(venvDir);
   assert.equal(result, venvPython);
+});
+
+// H147 RQ5: every frequency the bridge uses comes from config.json; an unset
+// defaultFreq passes nothing, so the bridge leaves an added radio untuned.
+test('lxsrsArgs: frequencies come from config, defaultFreq only when set', () => {
+  const base = { freqs: ['262.500', '305.500'], txFreq: '262.500', srsHost: 'h', srsPort: 5002, srsApiPort: 5003 };
+  const args = lxsrsArgs({ ...base, defaultFreq: '243.000' });
+  assert.deepEqual(args, [
+    '-m', 'lxsrs_v2', '--freq', '262.500', '--freq', '305.500', '--tx-freq', '262.500',
+    '--default-freq', '243.000', '--host', 'h', '--port', '5002', '--play-audio', '--api-port', '5003',
+  ]);
+  assert.equal(lxsrsArgs(base).includes('--default-freq'), false);
+});
+
+test('config.json names the bridge frequencies, main.js has none of its own', () => {
+  const config = require('../config.json');
+  assert.ok(Array.isArray(config.freqs) && config.freqs.length > 0);
+  assert.ok(config.defaultFreq, 'config.json defaultFreq: the frequency an added radio tunes to');
+  const main = fs.readFileSync(path.join(__dirname, '..', 'main.js'), 'utf8');
+  assert.doesNotMatch(main, /\b2[0-9]{2}\.[0-9]{1,3}\b|[0-9]{3}_?000_?000/);
+  assert.match(main, /lxsrsArgs\(config\)/);
 });

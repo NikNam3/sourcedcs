@@ -109,7 +109,7 @@ async function advance(efsp, crewMember, positionId, strip) {
 }
 
 const DEPARTURE_FLIGHT_DATA = {
-  callsign: 'VIPER1', aircraftType: 'F16', wakeCategory: 'D',
+  callsign: 'VIPER1', aircraftType: 'F16', wakeCategory: 'M',
   departureAirport: 'LTAG', destinationAirport: 'LTAG', route: 'DCT MOA DCT', requestedAltitude: '250',
 };
 
@@ -442,7 +442,7 @@ test('TOFI cannot be opened on a Strip that is not yet airborne, nor on a MISSIO
   // state that is not, and the exchange must be refused.
   let ctrStrip = mustAct(efsp, c.CTR, 'CTR', null, {
     kind: 'CreateStrip', bayId: 'ctr-enroute', rackId: 'main', stripType: 'ARRIVAL',
-    flightData: { callsign: 'EAGLE1', aircraftType: 'F15', wakeCategory: 'D', originAirport: 'LTAC' },
+    flightData: { callsign: 'EAGLE1', aircraftType: 'F15', wakeCategory: 'M', originAirport: 'LTAC' },
   });
   assert.equal(act(efsp, c.CTR, 'CTR', ctrStrip, {
     kind: 'TOFI', action: 'PROPOSE', direction: 'ENTRY', toFacilityId: 'TACTICAL', toPositionId: 'TAC_C2',
@@ -450,7 +450,7 @@ test('TOFI cannot be opened on a Strip that is not yet airborne, nor on a MISSIO
 
   const other = mustAct(efsp, c.CTR, 'CTR', null, {
     kind: 'CreateStrip', bayId: 'ctr-enroute', rackId: 'main', stripType: 'ARRIVAL',
-    flightData: { callsign: 'EAGLE2', aircraftType: 'F15', wakeCategory: 'D', originAirport: 'LTAC' },
+    flightData: { callsign: 'EAGLE2', aircraftType: 'F15', wakeCategory: 'M', originAirport: 'LTAC' },
   });
   const advanced = jumpTo(efsp, c.CTR, 'CTR', other, 'HANDED_TO_TOWER');
   const ack = act(efsp, c.CTR, 'CTR', advanced, {
@@ -466,7 +466,7 @@ test('a Block a Facility hides cannot be written', () => {
 
   const ctrStrip = mustAct(efsp, c.CTR, 'CTR', null, {
     kind: 'CreateStrip', bayId: 'ctr-enroute', rackId: 'main', stripType: 'ARRIVAL',
-    flightData: { callsign: 'EAGLE3', aircraftType: 'F15', wakeCategory: 'D', originAirport: 'LTAC' },
+    flightData: { callsign: 'EAGLE3', aircraftType: 'F15', wakeCategory: 'M', originAirport: 'LTAC' },
   });
 
   const before = facilityConfig.getFacilityConfig('CENTER');

@@ -174,7 +174,7 @@ async function stripOp(page, cs, op, positionId) {
 /** Creates a Strip over the real wire and waits for it in client state (not in whatever Bay is on screen). */
 async function seed(page, { callsign, stripType, actingPositionId = 'OPS', bayId = 'ops-proposed', flightData = {} }) {
   await page.evaluate(([acting, op]) => crc.ws.sendEfspCreateStrip(acting, op, 'INCIRLIK'), [
-    actingPositionId, { kind: 'CreateStrip', bayId, rackId: 'main', stripType, flightData: { callsign, aircraftType: 'F16', wakeCategory: 'D', ...FLIGHT_DATA, ...flightData } },
+    actingPositionId, { kind: 'CreateStrip', bayId, rackId: 'main', stripType, flightData: { callsign, aircraftType: 'F16', wakeCategory: 'M', ...FLIGHT_DATA, ...flightData } },
   ]);
   await expect.poll(() => stripOf(page, callsign), { message: `${callsign} created` }).not.toBeNull();
 }

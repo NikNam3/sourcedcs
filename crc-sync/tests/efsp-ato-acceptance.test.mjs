@@ -107,7 +107,7 @@ test('ato purity: the parser loads nothing that reads config at require time', (
     `require(${JSON.stringify(entry)}); console.log(JSON.stringify(Object.keys(require.cache)))`], { encoding: 'utf8' });
   const loaded = JSON.parse(out).map((p) => p.replace(/\\/g, '/'));
   const efsp = loaded.filter((p) => p.includes('/src/') && !p.includes('/src/efsp/ato/'));
-  assert.deepEqual(efsp.map((p) => p.slice(p.indexOf('/src/'))), ['/src/efsp/code-allocator.js']);
+  assert.deepEqual(efsp.map((p) => p.slice(p.indexOf('/src/'))), ['/src/efsp/code-allocator.js', '/src/efsp/aircraft-data.js']);
 });
 
 test('ato: the fixtures never hit INTERNAL_ERROR, and garbage is ok:false without throwing', () => {

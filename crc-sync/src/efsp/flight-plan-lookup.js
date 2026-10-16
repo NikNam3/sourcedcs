@@ -24,6 +24,7 @@
 // decision about token forwarding, not just a second URL here.
 
 const { webCall, LOOKUP_TIMEOUT_MS } = require('./web-call');
+const { designatorFor } = require('./aircraft-data');
 
 // Read per call (an injected `opts` wins), never at require time.
 const webUrl = (opts) => String(opts.baseUrl || process.env.CRCSYNC_SOURCEDCS_WEB_URL || 'http://localhost:7000').replace(/\/+$/, '');
@@ -71,7 +72,7 @@ function toFlightDataFiledSeed(plan) {
     departureAirport: plan.depAerodrome || '',
     destinationAirport: plan.destAerodrome || '',
     remarks: plan.otherInfo || '',
-    aircraftType: plan.aircraftType || '',
+    aircraftType: designatorFor(plan.aircraftType), // S-ARCH-53: "F-16C" -> F16 (aircraft-data.js)
     wakeCategory: plan.wtc || '',
     // Item 13's departure time, HHMM Zulu as the pilot typed it. createFlightData()
     // dates it by the mission clock into flightData.timeInputs, one source of the
