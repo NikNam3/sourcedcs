@@ -155,7 +155,8 @@ test('GC, LC and MISSION get no MTR group', () => {
 });
 
 test('compactBlocksFor without flight data, or with one that has no MTR, is exactly what it was', () => {
-  const noMtr = flightDataWithMtr({ designator: null, exitFix: '' });
+  // Cleared (IFR), so only the MTR rule is at work here, not keepIfrHidden's.
+  const noMtr = { ...flightDataWithMtr({ designator: null, exitFix: '' }), clearance: { altitude: { entries: [{ status: 'ACTIVE', value: 24000 }] } } };
   for (const { stripType, positionId } of everyList()) {
     assert.deepEqual(Array.from(compactBlocksFor(stripType, positionId, noMtr)), Array.from(compactBlocksFor(stripType, positionId)), `${stripType} at ${positionId}`);
     assert.equal(compactBlocksFor(stripType, positionId).some(id => /^9[GH]-/.test(id)), false);
@@ -272,4 +273,19 @@ test('leadingFlightName (H124): a carrier Strip is named by its side number once
   assert.equal(leadingFlightName({ stripType: 'FINAL', ownerPositionId: 'PAR' }, fd('205')), 'NAVY 1', 'Incirlik PAR: callsign');
   assert.equal(leadingFlightName(null, fd('205')), 'NAVY 1');
   assert.equal(leadingFlightName({ stripType: 'FINAL', ownerPositionId: 'CV_APP1' }, null), '');
+});
+
+// Briefing §4 small items (S-ARCH-56): KEEP IFR on a flight-following Strip. VFR the FAA way is no clearance
+// (vfr.js, H136 VQ2); such an OVERFLIGHT has no IFR to keep, so the cell is off its face unless it is set.
+test('KEEP IFR is off a flight-following (no-clearance OVERFLIGHT) Strip, unless it is set', () => {
+  const ACTIVE = { entries: [{ status: 'ACTIVE', value: 24000 }] };
+  const vfr = { identity: { callsign: 'N123' }, clearance: { altitude: null, heading: null }, tofi: { ifrActive: false } };
+  assert.ok(!compactBlocksFor('OVERFLIGHT', 'CTR', vfr).includes('IFR'), 'flight following at CTR');
+  assert.ok(compactBlocksFor('OVERFLIGHT', 'CTR', vfr).includes('RSVC'), 'only KEEP IFR goes');
+  assert.ok(compactBlocksFor('OVERFLIGHT', 'CTR', null).includes('IFR'), 'no flight data known: the list as it stands');
+  const cleared = { ...vfr, clearance: { altitude: ACTIVE, heading: null } };
+  assert.ok(compactBlocksFor('OVERFLIGHT', 'CTR', cleared).includes('IFR'), 'an IFR overflight with an assigned altitude keeps it');
+  const kept = { ...vfr, tofi: { ifrActive: true } };
+  assert.ok(compactBlocksFor('OVERFLIGHT', 'CTR', kept).includes('IFR'), 'a set KEEP IFR is never hidden');
+  assert.ok(compactBlocksFor('DEPARTURE', 'CTR', vfr).includes('IFR'), 'other strip types are untouched');
 });

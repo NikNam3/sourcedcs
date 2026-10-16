@@ -31,6 +31,11 @@
 // controller signed on to no ATC Position sees only the tactical scheme; one
 // signed on to ATC Positions sees a contact TACTICAL while any of its current
 // tactical radars (or the datalink) sees it, and ATC (STARS) otherwise.
+//
+// Ground vehicles are never presented (docs/adr/0121, amending 0066): every
+// radar we model is an air-surveillance radar, and a real one drops surface
+// vehicle returns in its clutter/MTI processing; surface movement is the
+// ASDE's job, which we do not model. Aircraft on the ground are unaffected.
 
 const { checkOnGround } = require('../geo');
 const { indicatedAltFt } = require('../altimetry');
@@ -54,6 +59,15 @@ function domainOf(track) {
   if (track.category === 1 || track.category === 2) return 'AIR';
   if (track.category === 4) return 'SEA';
   return 'GROUND';
+}
+
+/**
+ * Whether any controller can be told about this track at all (docs/adr/0121):
+ * not a ground vehicle. ws-hub.js asks it before letting a datalink lock name
+ * a contact, so a lock on a vehicle does not leak the vehicle's track id.
+ */
+function presentable(track) {
+  return !!track && domainOf(track) !== 'GROUND';
 }
 
 /**
@@ -101,6 +115,7 @@ function schemeOf(radars, at, datalink, atcSession) {
  * @returns {object|null} the wire track, or null when the controller must not be told about it
  */
 function presentTrack(track, ctx) {
+  if (!presentable(track)) return null;
   const radars = currentRadars(ctx.radars, ctx.at);
   if (radars.length === 0 && !ctx.dl) return null;
 
@@ -161,4 +176,4 @@ function labelPart(wire) {
   return { id: wire.id, iffState: wire.iffState, iffOverride: wire.iffOverride, label: wire.label, type: wire.type };
 }
 
-module.exports = { presentTrack, labelPart, schemeOf, WIRE_KEYS, SCHEME_HOLD_SWEEPS };
+module.exports = { presentTrack, presentable, labelPart, schemeOf, WIRE_KEYS, SCHEME_HOLD_SWEEPS };

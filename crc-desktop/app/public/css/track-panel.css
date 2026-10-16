@@ -94,30 +94,6 @@
     .tp-ff-msg:empty { display: none; }
 
 
-    /* ── Ground vehicle label popup ── */
-    #gnd-label-popup {
-      display: none;
-      position: fixed;
-      z-index: 100;
-      background: var(--ui-bg-solid);
-      border: 1px solid var(--ui-border-3);
-      padding: 4px 6px;
-      border-radius: 2px;
-    }
-    #gnd-label-input {
-      background: var(--ui-bg-input);
-      border: 1px solid var(--ui-border-2);
-      color: var(--ui-text-input);
-      font-family: 'Courier New', monospace;
-      font-size: 11px;
-      letter-spacing: 0.06em;
-      padding: 3px 6px;
-      outline: none;
-      width: 140px;
-      text-transform: uppercase;
-    }
-    #gnd-label-input:focus { border-color: var(--ui-text-bright); }
-    #gnd-label-input::placeholder { color: var(--ui-text-dim); text-transform: none; }
 
 
     /* docs/adr/0058 — conflict and conformance alerts; nothing while conforming */

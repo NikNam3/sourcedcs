@@ -399,7 +399,7 @@ export function atcDisplay(id, t, now = Date.now()) {
   const view = atcView(t, rel, { palette, now, conflicts, conflictTags, airspace, conform, coast });
 
   const speedKt = kinematics(hist).speedKt;
-  const lines = atcBlockLines(t, view, { speedKt, assigned: atcAssigned(flightData), typePhase: Math.floor(now / ATC_TIMESHARE_MS) % 2 === 1 });
+  const lines = atcBlockLines(t, view, { speedKt, assigned: atcAssigned(flightData), assignedCode: flightData && flightData.identity ? flightData.identity.beaconAssigned : null, typePhase: Math.floor(now / ATC_TIMESHARE_MS) % 2 === 1 });
   return { id, lat, lon, rel, view, palette, lines };
 }
 

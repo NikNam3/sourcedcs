@@ -146,6 +146,7 @@
    "applyScale",
    "buildAirports",
    "buildBullseye",
+   "buildConflictAlertOverlay",
    "buildDots",
    "buildDrawings",
    "buildExtendedCenterline",
@@ -1383,6 +1384,7 @@
    "compactBlocksFor",
    "fieldSpanFor",
    "isOrdnanceSet",
+   "keepIfrHidden",
    "leadingFlightName",
    "sideNumberLeads"
   ],
@@ -1516,7 +1518,6 @@
   "panels/track-panel.js": [
    "closeTrackPanel",
    "initTrackPanel",
-   "showGroundLabelPopup",
    "showTrackPanel",
    "updateTrackPanel"
   ],
@@ -1558,7 +1559,6 @@
    "COALITION_COLOR",
    "CRC_RANGE_M",
    "FADE_DURATION_MS",
-   "GROUND_COLOR",
    "HISTORY_MAX",
    "LABEL_EDGE_MARGIN",
    "LIGHT_COALITION_COLOR",
@@ -1612,6 +1612,7 @@
    "infoLine",
    "isAir",
    "pickerText",
+   "receivedCodeText",
    "shouldLabel",
    "sideAltText",
    "tagEditable",

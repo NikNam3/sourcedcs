@@ -4,7 +4,7 @@ import { updateMap } from './geojson.js';
 import { updateBullseyeCursor, updateMeasureLine } from './panels/topbar.js';
 import { applyBullseyePick } from './panels/settings-panel.js';
 import { closeAptWeatherPanel, showAptWeatherPanel } from './panels/airport-selector.js';
-import { closeTrackPanel, showGroundLabelPopup, showTrackPanel } from './panels/track-panel.js';
+import { closeTrackPanel, showTrackPanel } from './panels/track-panel.js';
 import { selectStripForTrack } from './panels/efsp/correlation-highlight.js';
 import { getTextSizePx, TEXT_OFFSET_EM } from './scope-constants.js';
 import { _drag, _measure, _setDrag, _setMeasure, map } from './map-handle.js';
@@ -115,19 +115,14 @@ export function wireMapInteractions() {
 
   // ── Left-click on track icon ─────────────────────────────────────────
   // Aircraft and ships → track info panel
-  // Ground vehicles → the tag popup
   map.on('click', 'unit-squares', (e) => {
     if (bullseyePickTarget) return;
     const feat = e.features && e.features[0];
     if (!feat) return;
     e.preventDefault();
     const id  = String(feat.properties.id);
-    if (feat.properties.domain === 'GROUND') {
-      showGroundLabelPopup(id, e.originalEvent.clientX, e.originalEvent.clientY);
-    } else {
-      showTrackPanel(id);
-      _selectStripForTrackIfAny(id);
-    }
+    showTrackPanel(id);
+    _selectStripForTrackIfAny(id);
   });
 
   // Refreshes the extended centerline's zoom-dependent tick spacing as soon

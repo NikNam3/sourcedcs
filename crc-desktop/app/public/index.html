@@ -419,11 +419,6 @@
 
 </div>
 
-<!-- Ground vehicle label popup -->
-<div id="gnd-label-popup">
-  <input type="text" id="gnd-label-input" placeholder="Label…" maxlength="20" autocomplete="off" spellcheck="false" />
-</div>
-
 <!-- Settings panel -->
 <div id="settings-panel" class="dock-unmounted">
 
@@ -762,13 +757,22 @@
           <span class="toggle-slider"></span>
         </label>
       </div>
+    </div>
+
+    <div class="hr"></div>
+    <div class="setting-label">Conflict Alert</div>
+    <div class="setting-group">
       <div class="setting-row">
-        <span>Hide ground units</span>
+        <span>Show predicted paths</span>
         <label class="toggle">
-          <input type="checkbox" id="set-hide-ground-units" />
+          <input type="checkbox" id="set-ca-paths" />
           <span class="toggle-slider"></span>
         </label>
       </div>
+    </div>
+    <div style="font-size:10px; color:var(--ui-text-dim); line-height:1.6; margin-top:4px;">
+      The dashed paths to the closest point and the line between them. The CA in the
+      data block and the closest-point marker always show.
     </div>
 
     <div class="hr"></div>

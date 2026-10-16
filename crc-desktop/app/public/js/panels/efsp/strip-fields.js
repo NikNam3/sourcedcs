@@ -25,6 +25,7 @@
 import { BLOCK_MAPS, isParFinalOnlyOnCarrier } from './strip-template.js';
 import { hasMtrData } from './mtr-advisory.js';
 import { facilityOfPosition } from './facility-topology.js';
+import { hasNoClearance } from './vfr.js';
 
 export const COMPACT_BLOCKS_SHARED = [
   '1', '3', '5', '5A', '7', '8', '8A', '8B', '9', '22', '24A', 'IFR', 'RSVC', 'SREG',
@@ -133,9 +134,21 @@ export function compactBlocksFor(stripType, positionId, flightData) {
   // HDG and ALT are the PAR final's: hidden on the carrier's FINAL (supervisor ruling, LT-PAR-MISSED).
   const facilityId = positionId ? facilityOfPosition(positionId) : null;
   out = out.filter(id => !isParFinalOnlyOnCarrier(stripType, id, facilityId));
+  if (keepIfrHidden(stripType, flightData)) out = out.filter(id => id !== 'IFR');
   const sideLeads = sideNumberLeads(stripType, positionId, flightData);
   if (!sideLeads && SIDE_ONLY_WHEN_LEADING.includes(stripType)) out = out.filter(id => id !== 'C18');
   return sideLeads ? _swapSideAndCallsign(out) : out;
+}
+
+/**
+ * KEEP IFR (TOFI's `ifrActive`) is off the face of a flight-following Strip: an OVERFLIGHT with no clearance, VFR the
+ * FAA way (crc-sync H136 VQ2, `vfr.js`; the same test `flight-following.js` offers "Radar service terminated" on). A VFR
+ * flight has no IFR to keep. Only while the cell is off: a set KEEP IFR stays on the face (a live state is never
+ * decluttered), and the expanded view still has the cell.
+ */
+export function keepIfrHidden(stripType, flightData) {
+  if (stripType !== 'OVERFLIGHT' || !flightData || !hasNoClearance(flightData)) return false;
+  return !(flightData.tofi && flightData.tofi.ifrActive);
 }
 
 // ── The carrier's side number (decisions.md H122, H117; crc-sync's docs/adr/0114) ──

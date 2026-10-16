@@ -404,7 +404,7 @@ function initColorSettings() {
   const $navDecl    = document.getElementById('set-nav-declutter');
   const $navDecl5   = document.getElementById('set-nav-declutter-5');
   const $shipsEn         = document.getElementById('set-ships-enabled');
-  const $hideGroundUnits = document.getElementById('set-hide-ground-units');
+  const $caPaths         = document.getElementById('set-ca-paths');
 
   if ($declutter) {
     $declutter.checked = settings.declutter ?? false; // H6: off by default
@@ -438,9 +438,9 @@ function initColorSettings() {
     $shipsEn.addEventListener('change', () => { settings.shipsEnabled = $shipsEn.checked; saveSettings(); markEfspChanged('map'); });
   }
 
-  if ($hideGroundUnits) {
-    $hideGroundUnits.checked = settings.hideGroundUnits ?? false;
-    $hideGroundUnits.addEventListener('change', () => { settings.hideGroundUnits = $hideGroundUnits.checked; saveSettings(); markEfspChanged('map'); });
+  if ($caPaths) { // T30: the conflict alert's paths only; the alert itself is never decluttered (H115-H119)
+    $caPaths.checked = settings.conflictAlertPaths !== false;
+    $caPaths.addEventListener('change', () => { settings.conflictAlertPaths = $caPaths.checked; saveSettings(); markEfspChanged('map'); });
   }
 
   const $extCenterlineNm = document.getElementById('set-ext-centerline-nm');

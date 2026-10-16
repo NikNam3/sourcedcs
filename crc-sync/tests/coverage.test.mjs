@@ -139,10 +139,10 @@ test('bearingDeg: due east and due north come out as 090 and 000', () => {
 const AIRFIELD = {
   id: 'apt:X', type: 'airport', lat: 37, lon: 35, elevM: 60,
   rangeM: 40 * 1852, sweepMs: 2000,
-  seesGround: true, seesShips: false, noGroundAircraft: false,
+  seesShips: false, noGroundAircraft: false,
   angleFromNose: 360, heading: 0,
 };
-const APPROACH = { ...AIRFIELD, id: 'app:X', type: 'approach', rangeM: 80 * 1852, sweepMs: 3000, seesGround: false, noGroundAircraft: true };
+const APPROACH = { ...AIRFIELD, id: 'app:X', type: 'approach', rangeM: 80 * 1852, sweepMs: 3000, noGroundAircraft: true };
 
 function aircraft(id, lat, lon, alt = 6000, category = 1) {
   return { id, callsign: `T${id}`, type: 'F-16C_50', category, lat, lon, alt, heading: 0 };
@@ -171,10 +171,9 @@ test('a track beyond the radar range is never illuminated', () => {
   assert.equal(seen.size, 0);
 });
 
-test('a ground vehicle is seen only by the radar that sees ground', () => {
-  const engine = new CoverageEngine();
+test('no radar returns a ground vehicle, not even the airport radar (docs/adr/0121)', () => {
   const vehicle = aircraft(5, 37.05, 35.05, 60, 3);
-  assert.deepEqual([...sweepOnce(engine, [AIRFIELD], [vehicle], null, 2000)], ['5']);
+  assert.equal(sweepOnce(new CoverageEngine(), [AIRFIELD], [vehicle], null, 2000).size, 0);
   assert.equal(sweepOnce(new CoverageEngine(), [APPROACH], [vehicle]).size, 0);
 });
 
@@ -215,13 +214,6 @@ test("terrain that is still loading fails open — going blind is worse than see
   const engine = new CoverageEngine({ terrain: warming });
   assert.deepEqual([...sweepOnce(engine, [APPROACH], [aircraft(1, 37.2, 35.2)])], ['1']);
   assert.ok(engine.stats.losUnknown > 0);
-});
-
-test('a ground contact skips terrain masking, because DCS airfields are not flattened in the DEM', () => {
-  const blocking = { hasLineOfSight: () => false };
-  const engine = new CoverageEngine({ terrain: blocking });
-  const vehicle = aircraft(5, 37.05, 35.05, 60, 3);
-  assert.deepEqual([...sweepOnce(engine, [AIRFIELD], [vehicle], null, 2000)], ['5']);
 });
 
 test('a line-of-sight answer is reused inside its window instead of re-walking the terrain', () => {

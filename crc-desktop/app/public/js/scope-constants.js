@@ -7,7 +7,6 @@ import { settings } from './settings.js';
 
 export const COALITION_COLOR       = { 1: '#888888', 2: '#cc4444', 3: '#4488cc' };
 export const LIGHT_COALITION_COLOR = { 1: '#505050', 2: '#cc0000', 3: '#004499' }; // higher contrast on light map
-export const GROUND_COLOR          = { 1: '#7a7a68', 2: '#aa6644', 3: '#557799' };
 export const HISTORY_MAX      = 10;
 export const FADE_DURATION_MS = 10000;
 export const STALE_MS         = 10000;

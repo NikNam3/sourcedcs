@@ -119,6 +119,29 @@ test('datalink: a participant is seen with no radar, and a lock never reveals a 
   assert.equal(JSON.stringify(snap).includes('Bandit'), false);
 });
 
+test('a ground vehicle is never sent, and a datalink lock on one is dropped (docs/adr/0121)', () => {
+  const trackStore = new TrackStore();
+  trackStore.update({ id: 1, callsign: 'Enfield11', name: 'U1', coalition: 3, type: 'F-16C_50', category: 1, lat: 37, lon: 35, alt: 6000 });
+  trackStore.update({ id: 5, callsign: 'Ural', name: 'U5', coalition: 2, type: 'Ural-375', category: 3, lat: 37, lon: 35.01, alt: 100 });
+  const datalink = { reports: () => new Map([['1', { at: 4000, callsign: 'Enfield11', type: 'F-16C_50', lock: '5' }]]), clear() {} };
+  const collabStore = new CollaborativeStore();
+  const surveillance = createSurveillance({ collab: collabStore, datalink });
+  const AIRPORT = { id: 'apt:X', sweepMs: 1000, caps: { height: false, ssr: true, mode4: false } };
+  const lit = { 5: new Map([['apt:X', 5000]]) };
+  const picture = {
+    coverageFor: () => ({ radars: [AIRPORT], radarIds: new Set(['apt:X']), signedOnPositions: [], radarBearingPositions: [], datalink: true }),
+    illuminated: () => new Map(Object.entries(lit)),
+    radars: () => [AIRPORT],
+  };
+  const hub = new WsHub({ trackStore, collabStore, picture, surveillance });
+  const session = { controllerId: 'c1', lastSent: new Map(), labelRevs: new Map() };
+  hub._setCoverage(session, picture.coverageFor());
+
+  const snap = hub._pictureSnapshot(session);
+  assert.deepEqual(snap.tracks.map(t => t.id), ['1'], 'the airport radar returned the vehicle; it is still not presented');
+  assert.deepEqual(snap.tracks[0].dl, { lock: null }, 'the lock does not name the vehicle');
+});
+
 test('CA reaches only an ATC Position, and only when both aircraft are in its picture', () => {
   const { hub, session } = setup();
   const sent = [];

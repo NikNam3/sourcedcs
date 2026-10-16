@@ -24,9 +24,6 @@ export function addTrackLayers() {
         // BANDIT / HOSTILE → filled triangle regardless of category
         ['==', ['get', 'iff'], 'bandit'],  'tri-iff-bandit',
         ['==', ['get', 'iff'], 'hostile'], 'tri-iff-hostile',
-        // Ground vehicles
-        ['==', ['get', 'domain'], 'GROUND'],
-        ['match', ['get', 'iff'], 'friendly','gnd-iff-friendly', 'bogey','gnd-iff-bogey', 'gnd-iff-neutral'],
         // Ships
         ['==', ['get', 'domain'], 'SEA'],
         ['match', ['get', 'iff'], 'friendly','ship-iff-friendly', 'bogey','ship-iff-bogey', 'ship-iff-neutral'],

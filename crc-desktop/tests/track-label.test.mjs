@@ -39,6 +39,26 @@ test('the code line: emergencies always, the code only when a callsign already n
   assert.ok(em.color);
 });
 
+test('¶5-4-6 e NOTE: the received code shows beside a name only while it is not the assigned code', () => {
+  const named = contact({ ssr: { code: '4521' }, label: { callsign: 'VIPER11', source: 'FLIGHT_DATA', trackNumber: 'TN1' } });
+  assert.equal(L.trackCodeTag(named, '4521').text, '', 'squawking the assigned code: removed');
+  assert.equal(L.trackCodeTag(named, '4522').text, '4521', 'a mismatch shows what it squawks');
+  assert.equal(L.trackCodeTag(named, null).text, '4521', 'no assigned code: nothing matches');
+  assert.equal(L.trackCodeTag({ ...named, ssr: { code: '4521', emergency: 'GENERAL' } }, '4521').text, 'EMR', 'an emergency always');
+  assert.equal(L.receivedCodeText(contact(), '4521'), '', 'squawking nothing');
+});
+
+test('¶5-4-6 e NOTE in the ATC full data block: line 3 carries the received code on a mismatch, before the assigned values', () => {
+  const t = contact({ ssr: { code: '4521' }, altitude: MODE_C, label: { callsign: 'VIPER11', source: 'FLIGHT_DATA', trackNumber: 'TN1' } });
+  const v = { kind: 'FDB', line0: [], l1Suffix: [] };
+  const line3 = (info) => L.atcBlockLines(t, v, { speedKt: 280, ...info }).slice(2).map(l => l.map(s => s.text).join('')).join('\n');
+  assert.equal(line3({ assignedCode: '4521', assigned: { altFt: 6000, hdg: 250 } }), 'A060↓ H250');
+  assert.equal(line3({ assignedCode: '0041', assigned: { altFt: 6000, hdg: 250 } }), '4521 A060↓ H250');
+  assert.equal(line3({ assignedCode: '0041' }), '4521');
+  assert.equal(line3({ assignedCode: '4521' }), '');
+  assert.equal(line3({}), '', 'no assigned code known: nothing to compare');
+});
+
 test('an altitude is shown only when a sensor gave one, and marked when it is not Mode C', () => {
   assert.equal(L.altitudeShort(contact()), '');
   assert.equal(L.altitudeShort(contact({ altitude: MODE_C })), '120');

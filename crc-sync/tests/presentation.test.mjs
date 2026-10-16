@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 // docs/adr/0059 — what a controller is told about a contact depends on the
 // sensors that saw it. One case per combination.
-const { presentTrack, WIRE_KEYS } = await import('../src/surveillance/presentation.js');
+const { presentTrack, presentable, WIRE_KEYS } = await import('../src/surveillance/presentation.js');
 
 const TRACK = {
   id: 7, callsign: 'Enfield11', name: 'Aerial-1-1', coalition: 3, type: 'F-16C_50', player: 'Maverick',
@@ -106,12 +106,24 @@ test('the flight plan beats the datalink name', () => {
   assert.equal(wire.type, 'F16');
 });
 
-test('ships and ground vehicles: a position, never a code or an altitude', () => {
+test('ships: a position, never a code or an altitude', () => {
   const ship = present({ track: { ...TRACK, category: 4 } });
   assert.equal(ship.domain, 'SEA');
   assert.equal(ship.ssr, null);
   assert.equal(ship.altitude, null);
-  assert.equal(present({ track: { ...TRACK, category: 3 } }).domain, 'GROUND');
+});
+
+test('ground vehicles are never presented, whatever saw them or answered for them (docs/adr/0121)', () => {
+  const vehicle = { ...TRACK, category: 3 };
+  for (const radars of [[APP], [PSR_ONLY], [AWACS]]) {
+    assert.equal(present({ track: vehicle, radars }), null);
+    assert.equal(present({ track: vehicle, radars, mode4: true, iffOverride: 'friendly' }), null);
+  }
+  assert.equal(present({ track: vehicle, radars: [], dl: { callsign: 'X', type: 'Y', lock: null } }), null);
+  assert.equal(presentable(vehicle), false);
+  assert.equal(presentable(TRACK), true);
+  assert.equal(presentable({ ...TRACK, category: 4 }), true);
+  assert.equal(presentable(null), false);
 });
 
 
@@ -153,11 +165,10 @@ test('IFF: a declaration beats a Mode 4 reply, and is echoed', () => {
   assert.equal(wire.iffOverride, 'hostile');
 });
 
-test('IFF: a ship answers Mode 4 but not Mode 3; a ground vehicle answers nothing', () => {
+test('IFF: a ship answers Mode 4 but not Mode 3', () => {
   assert.equal(present({ track: { ...TRACK, category: 4 }, radars: [AWACS], mode4: true }).iffState, 'friendly');
   assert.equal(present({ track: { ...TRACK, category: 4 }, radars: [AWACS], mode4: false }).iffState, 'bogey',
     'a ship never answers Mode 3, even with a transponder object passed');
-  assert.equal(present({ track: { ...TRACK, category: 3 }, radars: [AWACS], mode4: true }).iffState, 'bogey');
 });
 
 test('an aircraft on the ground is presented like any other contact (no ground hiding, decision H6)', () => {

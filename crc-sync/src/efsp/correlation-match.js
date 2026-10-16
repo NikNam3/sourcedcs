@@ -89,6 +89,8 @@ function callsignAffinity(flightDataCallsign, trackCallsign) {
   return AFFINITY_SUFFIXED;
 }
 
+const GROUND_UNIT = 3; // DCS unit category (grpc-client.js)
+
 /**
  * Per-tick lookup tables over the live tracks, built once rather than
  * re-scanned per flight data — this is what keeps the reconciler O(tracks + flightDataList).
@@ -107,6 +109,9 @@ function buildTrackIndices(tracks, beaconOf) {
   for (const track of tracks || []) {
     const id = String(track.id);
     byId.set(id, track);
+    // A ground vehicle is never a flight's contact (docs/adr/0121: nobody is
+    // shown one), so neither the beacon nor the callsign rungs may match it.
+    if (track.category === GROUND_UNIT) continue;
 
     const beacon = beaconOf(track);
     if (beacon) {

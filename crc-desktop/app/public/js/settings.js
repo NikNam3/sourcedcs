@@ -8,7 +8,6 @@ const DEFAULTS = {
   trailEnabled:  true,
   trailLength:   10,
   shipsEnabled:      false,
-  hideGroundUnits:   false,
   braColor:      '#4488cc',
   radarDebug:    false,
   textMarksEnabled: false, // DCS mission-editor Text objects, shown as a map layer
@@ -28,6 +27,7 @@ const DEFAULTS = {
   airspaceMenu:    null,   // the airspace layer menu's choices (airspace-layer-menu.js); null = its default (ACTIVE only). Per user, never synced
   coordFormat:     'DM',   // how coordinates are shown and prefilled: 'DMS' | 'DM' | 'MGRS' (coords.js, H102 AP2B-Q2); input accepts all
   showDatalinkLocks: true, // draw the datalink's radar-lock lines (geojson.js's buildDatalinkLines)
+  conflictAlertPaths: true, // T30: draw a conflict alert's predicted paths and closest-point line (geojson.js's buildConflictAlertOverlay); the CA in the data block and the CPA marker stay either way
   transitionAltFt: 18000, // ft — how an ASSIGNED altitude is written. The theater's, from crc-sync's `theater` message (its docs/adr/0085); not a setting. [SOURCE-DEFINED] (docs/adr/0085): 18,000 ft is only the fallback until the first `theater` message (sent on connect); the other client files read it with no fallback of their own
   aprtManualWx:    {},    // per-airport manually-entered vis/cloud data, keyed by ICAO — squadron-wide, see crc-sync's apt-config.js
   aprtAtisFreq:    {},    // per-airport saved ATIS frequency, keyed by ICAO — squadron-wide, see crc-sync's apt-config.js

@@ -9,7 +9,7 @@
 // here, so a change to how a contact is named is one change.
 //
 // Wire shape (crc-sync/src/surveillance/presentation.js):
-//   { id, lat, lon, domain: 'AIR'|'SEA'|'GROUND', onGround, illuminatedAt, sources,
+//   { id, lat, lon, domain: 'AIR'|'SEA' (ground vehicles are never sent, crc-sync docs/adr/0121), onGround, illuminatedAt, sources,
 //     iffState, iffOverride,
 //     label: { callsign, source: 'FLIGHT_DATA'|'FLIGHT_DATA_PROVISIONAL'|'DATALINK'|'TAG'|null, tag, trackNumber },
 //     type, ssr: { code, ident, emergency } | null,
@@ -58,16 +58,35 @@ export function trackEmergency(t) { return (t && t.ssr && t.ssr.emergency) || nu
 export function trackIsIdent(t)   { return !!(t && t.ssr && t.ssr.ident); }
 
 /**
- * The code line of the data block: an emergency always; otherwise the code,
- * but only when a callsign already names the contact (else the code IS the
- * name, on the first line).
+ * The received beacon code as a data block shows it beside a name: only when it
+ * is not the code the flight was assigned. JO 7110.65BB ¶5-4-6 e NOTE: "When the
+ * beacon code received from the aircraft does not match the computer assigned
+ * beacon code, the code received (ERAM, MEARTS) or the site-adapted code …
+ * (STARS) will be displayed in the data block. When the aircraft changes to the
+ * computer assigned code, the code is automatically removed from the data block."
+ * A contact with no assigned code (no flight, or a flight with none) shows what
+ * it squawks: nothing matches it. '' when it squawks nothing.
+ * @param {string|null} [assignedCode]  the correlated flight's `identity.beaconAssigned`
+ */
+export function receivedCodeText(t, assignedCode) {
+  const code = t && t.ssr && t.ssr.code;
+  if (!code) return '';
+  return assignedCode && String(assignedCode) === String(code) ? '' : code;
+}
+
+/**
+ * The code line of the data block: an emergency always; otherwise the received
+ * code, but only when a callsign already names the contact (else the code IS
+ * the name, on the first line) and only when it is not the assigned code
+ * (receivedCodeText).
+ * @param {string|null} [assignedCode]  the correlated flight's assigned code
  * @returns {{text:string, color:string|null}}
  */
-export function trackCodeTag(t) {
+export function trackCodeTag(t, assignedCode = null) {
   const em = trackEmergency(t);
   if (em) return { text: EMERGENCY_TAG[em], color: emergencyColor(em) };
-  if (t && t.ssr && t.ssr.code && t.label && t.label.callsign) return { text: t.ssr.code, color: null };
-  return { text: '', color: null };
+  const code = t && t.label && t.label.callsign ? receivedCodeText(t, assignedCode) : '';
+  return { text: code, color: null };
 }
 
 // An altitude a transponder did not report is marked, so a controller can
@@ -156,7 +175,7 @@ export function pickerText(t) {
     .filter(Boolean).join(' · ');
 }
 
-/** Whether the contact gets a data block at all: aircraft always; ships and vehicles once named. */
+/** Whether the contact gets a data block at all: aircraft always; ships once named. */
 export function shouldLabel(t) {
   if (!t) return false;
   if (isAir(t)) return true;
@@ -244,8 +263,9 @@ export function atcType(t) {
  * @param {object} t  the wire track
  * @param {object} v  atc-scope.js's view: { kind: 'FDB'|'PDB'|'LDB'|'NONE',
  *   line0: [{text,color,blink}], l1Suffix: [{text,color,blink}], recipient: string, coast: boolean }
- * @param {{speedKt:number, assigned?:object, typePhase?:boolean}} info
- *   typePhase: the half of the time-share that shows the type instead of the speed
+ * @param {{speedKt:number, assigned?:object, assignedCode?:string|null, typePhase?:boolean}} info
+ *   typePhase: the half of the time-share that shows the type instead of the speed;
+ *   assignedCode: the flight's assigned beacon code, for the received code on line 3 (receivedCodeText)
  * @returns {Array<Array<{text:string,color:string|null,blink:boolean}>>}
  */
 export function atcBlockLines(t, v, info = {}) {
@@ -292,6 +312,10 @@ export function atcBlockLines(t, v, info = {}) {
   lines.push(l2);
   const currentFt = t.altitude && t.altitude.source === 'MODE_C' ? t.altitude.ft : null;
   const asg = atcAssignedText(info.assigned, currentFt);
-  if (asg) lines.push([seg(asg)]);
+  // STARS line 3 (¶5-4-6 e NOTE): the received code while it is not the assigned one, before the assigned values.
+  // A full data block is a flight's, which always has an assigned code (the Strip's BEACON); without one, no pair.
+  const received = info.assignedCode && t.label && t.label.callsign ? receivedCodeText(t, info.assignedCode) : '';
+  const l3 = [received, asg].filter(Boolean).join(' ');
+  if (l3) lines.push([seg(l3)]);
   return lines;
 }
