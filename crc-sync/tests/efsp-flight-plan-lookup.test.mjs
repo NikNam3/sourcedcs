@@ -111,6 +111,12 @@ test('toFlightDataFiledSeed maps exactly the fields EFSP models, dropping everyt
   assert.equal('worldTour' in seed, false);
 });
 
+test('toFlightDataFiledSeed: a DD-1801 type name becomes its ICAO designator (S-ARCH-53)', () => {
+  assert.equal(toFlightDataFiledSeed(makePlan({ aircraftType: 'F-16C' })).aircraftType, 'F16');
+  assert.equal(toFlightDataFiledSeed(makePlan({ aircraftType: 'kc-135r' })).aircraftType, 'K35R');
+  assert.equal(toFlightDataFiledSeed(makePlan({ aircraftType: 'B738' })).aircraftType, 'B738');
+});
+
 test('toFlightDataFiledSeed never throws on a missing field — falls back to empty string, same as a blank CreateStrip', () => {
   const seed = toFlightDataFiledSeed({});
   assert.deepEqual(seed, {

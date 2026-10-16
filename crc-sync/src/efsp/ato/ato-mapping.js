@@ -38,6 +38,8 @@
 //
 // Pure: requires nothing with load-time I/O.
 
+const { designatorFor } = require('../aircraft-data');
+
 // createFlightData's flat seed keys this mapping fills (a subset of
 // flight-data-store.js createFlightData's whole list; the test pins it).
 const SEED_KEYS = Object.freeze(['callsign', 'flightSize', 'aircraftType', 'unit', 'homeStation',
@@ -267,7 +269,7 @@ function mapAtoDocument(doc) {
       const flightDataSeed = {
         callsign: a.callsignValid ? a.callsign : null,
         flightSize: a.count,
-        aircraftType: a.aircraftType,
+        aircraftType: designatorFor(a.aircraftType), // S-ARCH-53: an ATO's "F-16C" is Block 3's F16
         unit: m.taskUnit ? m.taskUnit.unit : null,
         homeStation: m.taskUnit ? m.taskUnit.location : null,
         missionNumber: m.missionNumber,
