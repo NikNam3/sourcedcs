@@ -1,5 +1,27 @@
 # Supervisor handoff
 
+## UPDATE 2026-10-16: U-SMALL, U-DECLUTTER, U-MOA-TRANSIT phase 1 merged; waiting on the Desk
+
+Merged today (S-ARCH-69–71): U-MOA-TRANSIT phase 1 (docs: research, ADR 0127 **Proposed**, mockup), U-DECLUTTER (ADR
+0121: no ground vehicles; T30; ¶5-4-6 e; KEEP IFR), U-SMALL (bridge `defaultFreq`, soak REFUSE back, FAA pattern quotes,
+small-items row, SFA Rack follows the frequency). Gates on `13d258e7`: crc-sync 2809, crc-desktop 1376, walk 24/24,
+freeze 57/57, soak:selfcheck PASS, wire protocol 2 unchanged, **sharded Playwright 272/272** (17m27s). No lane running;
+the only worktree is the main checkout.
+
+**Waiting on the human:** Decision Desk round 12, **MT-Q1…Q8** (U-MOA-TRANSIT design); read the answers, settle them
+(H151+), mark them settled, rewrite ADR 0127 as a new ADR if answers change it (0127 is committed: P4) or accept it, then
+brief the build from `docs/wip/U-MOA-TRANSIT.md` "Build plan" (server lane, then client; `wire:record`). Also asked: a
+published fix table for the stereo-route fixes (KEMER, ERGEP, MANAZ, MUT, TARSU, DAN), which crc-sync has no coordinates
+for.
+
+**Queue now:** (1) U-MOA-TRANSIT build after the Desk; (2) **docs pass** (one DOCS lane like `next/DOCS-R2.md`): fold
+`docs/wip/U-PANELS.md`, `U-JURISDICTION.md`, `U-MOA.md`, `U-PAR.md`, `U-RELEASE.md`, `U-TWR-PATTERN.md`, `U-SMALL.md`,
+`U-DECLUTTER.md`, `U-MOA-TRANSIT.md`; RSU sections out of guide/briefing/glossary; §8 handoff table → ADR 0122; cite AIM
+**4-3-23** where ADR 0126 says 4-3-22; guide l.~873/l.~1271 ground-vehicle text is now wrong; README `defaultFreq` row;
+(3) small: a Node test diffing the two `lxsrs_v2` copies (today only manual `check-lxsrs-sync.sh`); a longer soak leak
+case (seeds other than 7 can read R² < 0.9); a UI that sends `ApproveAirspaceEntry`'s `altitudeBlock` (none does);
+(4) U-CARRIER last. Open for a live test: a busy field shows no vehicles, parked aircraft still show.
+
 ## UPDATE 2026-10-15 evening: U-TWR-PATTERN merged; queue is now items 4-7 below
 
 Merged today: U-PAR (S-ARCH-66), U-RELEASE (S-ARCH-67), U-TWR-PATTERN (S-ARCH-68, ADR 0126: no RSU, H149/H150).
