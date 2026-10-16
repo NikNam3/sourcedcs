@@ -1611,6 +1611,7 @@
    "infoLine",
    "isAir",
    "pickerText",
+   "receivedCodeText",
    "shouldLabel",
    "sideAltText",
    "tagEditable",

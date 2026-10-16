@@ -429,10 +429,10 @@ export function buildLabels() {
     const hist     = history.get(id) || [];
     const csOnly   = !air || t.onGround;
     const infoLine = csOnly ? '' : infoLine_(t, hist);
-    const code     = trackCodeTag(t);
 
     // docs/adr/0058: what the flight was told, and anything it is doing wrong.
     const flightData = air ? _flightDataForTrack(id) : null;
+    const code     = trackCodeTag(t, flightData && flightData.identity ? flightData.identity.beaconAssigned : null);
     const { tag: alertTag, color: alertColor } = buildAlertTag(id, flightData);
     const asgnLine = csOnly ? '' : buildAssignedLine(flightData);
 
