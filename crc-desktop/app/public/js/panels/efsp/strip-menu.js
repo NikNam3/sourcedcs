@@ -257,6 +257,21 @@ function _stripMenuItems(strip) {
   return items;
 }
 
+/**
+ * The menu's items with each group's items together, groups in the order they first appear (LT-UI finding, S-ARCH-49):
+ * the builder adds by topic, so a group can recur after another (Flight's MARSA, then Formation, then Flight's Show on
+ * map), and a heading per change printed "Flight" twice. Stable within a group.
+ */
+export function groupStripMenuItems(items) {
+  const order = [];
+  const byGroup = new Map();
+  for (const item of items) {
+    if (!byGroup.has(item.group)) { byGroup.set(item.group, []); order.push(item.group); }
+    byGroup.get(item.group).push(item);
+  }
+  return order.flatMap(g => byGroup.get(g));
+}
+
 let _stripMenuHandle = null;
 
 function _closeStripMenu() { if (_stripMenuHandle) _stripMenuHandle.close(); }
@@ -267,7 +282,7 @@ export function openStripMenu(strip, anchor) {
   _closeStripMenu();
   if (wasOpenHere) return; // the ⋯ button toggles
   strip = getEfspStrip(strip.stripId) || strip; // F-107: act on the live record
-  const items = _stripMenuItems(strip);
+  const items = groupStripMenuItems(_stripMenuItems(strip));
   if (items.length === 0) return;
 
   const menu = _stripEl('div', 'efsp-strip-menu efsp-strip-menu-popover');
