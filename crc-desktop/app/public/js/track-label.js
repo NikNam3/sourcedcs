@@ -9,7 +9,7 @@
 // here, so a change to how a contact is named is one change.
 //
 // Wire shape (crc-sync/src/surveillance/presentation.js):
-//   { id, lat, lon, domain: 'AIR'|'SEA'|'GROUND', onGround, illuminatedAt, sources,
+//   { id, lat, lon, domain: 'AIR'|'SEA' (ground vehicles are never sent, crc-sync docs/adr/0121), onGround, illuminatedAt, sources,
 //     iffState, iffOverride,
 //     label: { callsign, source: 'FLIGHT_DATA'|'FLIGHT_DATA_PROVISIONAL'|'DATALINK'|'TAG'|null, tag, trackNumber },
 //     type, ssr: { code, ident, emergency } | null,
@@ -156,7 +156,7 @@ export function pickerText(t) {
     .filter(Boolean).join(' · ');
 }
 
-/** Whether the contact gets a data block at all: aircraft always; ships and vehicles once named. */
+/** Whether the contact gets a data block at all: aircraft always; ships once named. */
 export function shouldLabel(t) {
   if (!t) return false;
   if (isAir(t)) return true;

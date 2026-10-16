@@ -171,7 +171,6 @@ export function buildDots() {
 
   for (const [id, t] of tracks) {
     if (!settings.shipsEnabled && t.domain === 'SEA') continue;
-    if (settings.hideGroundUnits && t.domain === 'GROUND') continue;
     const iffState = getIff(t);
     const hist       = history.get(id) || [];
     const { heading } = kinematics(hist);
@@ -235,7 +234,6 @@ function buildTrails() {
 
   for (const [id, t] of tracks) {
     if (!settings.shipsEnabled && t.domain === 'SEA') continue;
-    if (t.domain === 'GROUND') continue; // ground units have no trail
     if (t.onGround) continue; // aircraft on ground have no trail
     const hist = history.get(id);
     if (!hist || hist.length < 2) continue;
@@ -269,7 +267,6 @@ function buildPPL() {
 
   for (const [id, t] of tracks) {
     if (!settings.shipsEnabled && t.domain === 'SEA') continue;
-    if (t.domain === 'GROUND') continue; // ground units have no PPL
     if (t.onGround) continue; // aircraft on ground have no PPL
     if (_isAtc(t)) continue; // a STARS scope draws no projected line (docs/adr/0088)
     const hist = history.get(id) || [];
@@ -300,7 +297,6 @@ function buildLeaders() {
 
   for (const [id, t] of tracks) {
     if (!settings.shipsEnabled && t.domain === 'SEA') continue;
-    if (settings.hideGroundUnits && t.domain === 'GROUND') continue;
     if (decluttered.has(id)) continue;
     if (!shouldLabel(t)) continue;
 
@@ -389,10 +385,9 @@ export function buildLabels() {
 
   for (const [id, t] of tracks) {
     if (!settings.shipsEnabled && t.domain === 'SEA') continue;
-    if (settings.hideGroundUnits && t.domain === 'GROUND') continue;
     if (decluttered.has(id)) continue; // formation follower — suppress label
     const atc = _isAtc(t) ? _atcDisplayFor(id, t) : null;
-    if (atc ? atc.lines.length === 0 : !shouldLabel(t)) continue; // ships and vehicles only once named; ATC: no block
+    if (atc ? atc.lines.length === 0 : !shouldLabel(t)) continue; // ships only once named; ATC: no block
 
     // Ensure every track has a stored geo offset (compute from em-offset if not yet set)
     if (!labelOffsets.has(id)) {

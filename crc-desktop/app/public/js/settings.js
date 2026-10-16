@@ -8,7 +8,6 @@ const DEFAULTS = {
   trailEnabled:  true,
   trailLength:   10,
   shipsEnabled:      false,
-  hideGroundUnits:   false,
   braColor:      '#4488cc',
   radarDebug:    false,
   textMarksEnabled: false, // DCS mission-editor Text objects, shown as a map layer
