@@ -48,3 +48,39 @@ No station frequency in code on the server, the client or the bridge. The values
 
 **Docs pass.** `crc-desktop/README.md` "config.json fields" (a shared README, not edited here): add a row
 ``| `defaultFreq` | Frequency a radio added in the SRS panel tunes to; unset, it starts untuned |``.
+
+## 2. Soak REFUSE memory (S-ARCH-67)
+
+**Finding: a refused release request holds no memory of its own, and the R² drop was not caused by refusals.**
+
+- Code: ControlRelease REFUSE (`board/handoff-control.js` `applyRelease`) only writes `coordination.releaseRequest`
+  (`answer: 'REFUSED'`, `answeredAt`, `answeredBy`, `reason`) on the Strip. Nothing is keyed by the exchange elsewhere:
+  the Board's applied-mutation cache and the hub replay cache (`sync/replay-cache.js`) are capped and hold every op the
+  same; the ledger (`tools/soak/ledger.js`) tracks cmids, not exchanges. The record leaves with its Strip (archiver).
+- Measured (smoke 20 min, `--inject leak --judge-memory`, three driver variants: **A** always GRANT as shipped,
+  **B** always GRANT but with the `rng.chance(0.8)` draw the refusal needs, **C** REFUSE 20 %):
+
+  | seed | A R² | B R² | C R² |
+  |---|---|---|---|
+  | 7 | 0.959 | **0.858** | **0.857** |
+  | 8 | 0.991 | 0.996 | 0.996 |
+  | 9 | 0.968 | 0.976 | 0.976 |
+  | 11 | **0.786** | 0.972 | 0.971 |
+  | 13 | 0.997 | 0.989 | 0.989 |
+
+  B and C agree to the third decimal, with the same `strips.total` and slope: the extra RNG draw changes seed 7's whole
+  traffic, refusing changes nothing measurable. A itself reads 0.786 on seed 11. Live Strips stay bounded in every
+  variant (INCIRLIK end 3, CENTER end 2 on C-7): refused exchanges do not leave Strips live.
+- Cause of the fragility: the smoke profile restarts the host, the fit keeps only the post-restart lifetime, which is
+  about 7 heavy samples (min 11–20). Seven points of a 15 MB/h leak over DROPPED-Strip heap noise is marginal.
+
+**What changed.** `tools/soak/traffic.js` `checkIn()` answers a release request GRANT 80 % / REFUSE 20 % again;
+`tools/soak/selfcheck.mjs` runs the leak case with `--restarts 0` (11 heavy samples from min 5; seed 7 with REFUSE:
+R² 0.985; across seeds 7–17 0.907–0.996, A on seed 13 0.779 is the one sub-0.9 read and that is the shipped
+always-GRANT driver, so seeds other than 7 are still marginal: a longer leak case would make the proof robust, not
+done since only seed 7 runs).
+`soak:selfcheck` PASS (leak R² 0.985). `soak:smoke` (seed 1) PASS, 3 REFUSE and 23 GRANT applied (counted with a
+temporary stderr line, removed). Freeze: the three `hub-random-seed*` goldens move (they replay the soak driver's seeded
+traffic), `freeze:update` in its own commit, 57/57.
+
+**Docs pass.** `CLAUDE.md` soak paragraph needs nothing. `docs/wip/U-RELEASE.md` finding is answered here.
