@@ -17,6 +17,7 @@ function _applyClearAirspaceEntry(ctx, strip, by, actingPositionId) {
   const flightDataResult = ctx.flightDataStore.setWorkingFrequency(strip.flightDataId, null, { airspaceId: null, by });
   if (!flightDataResult.ok) return { ok: false, reason: flightDataResult.reason, detail: flightDataResult.detail, strip };
   strip.airspaceEntry = null;
+  ctx.placement.followSfaFrequency(strip); // no working frequency: off any SFA Rack
   ctx.state.bump(strip, by);
   return { ok: true, strip, flightData: flightDataResult.flightData };
 }

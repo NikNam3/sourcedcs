@@ -174,6 +174,32 @@ class Placement {
   }
 
   /**
+   * After the flight's working frequency was rewritten (an airspace approval or its clearing, Block 22): a Strip on an
+   * SFA frequency Rack, which IS its frequency (sfa.js), follows it, onto the Rack of the new frequency when the pool
+   * has one, else to its owner's ordinary Bay for its state (Incirlik: `ap-sfa` -> `ap-inbound`). Never a state, owner
+   * or Bay-to-another-Position change. Returns true when the Strip moved (the caller's op already bumps it).
+   */
+  followSfaFrequency(strip) {
+    const bays = this._rules.baysFor(strip.ownerPositionId) || [];
+    const bay = bays.find(b => b.bayId === strip.bayId);
+    if (!bay || bay.view !== 'sfa-freqs') return false;
+    const flightData = this._flightDataStore.getFlightData(strip.flightDataId);
+    const mhz = flightData && flightData.comms ? flightData.comms.workingFrequencyMhz : null;
+    const rackId = mhz == null ? null : this._rules.sfaRackFor(bay.bayId, mhz);
+    if (rackId === strip.rackId) return false;
+    let target = rackId ? { bay, rackId } : null;
+    if (!target) {
+      const other = bays.find(b => b.view !== 'sfa-freqs' && b.impliesState === strip.state);
+      if (!other) return false;
+      target = { bay: other, rackId: this.placementRack(strip, other) };
+    }
+    strip.bayId = target.bay.bayId;
+    strip.rackId = target.rackId;
+    strip.orderKey = this.resolveOrderKey(strip.bayId, strip.rackId, null, null, strip.stripId);
+    return true;
+  }
+
+  /**
    * The receiving Position's Bay and Rack for a transfer-shaped step into `state` (an NLA or a final call): its SFA
    * frequency Bay when that Bay implies the state and the flight is on one of its frequencies, so a missed approach
    * goes back to AP on the Rack that IS the flight's frequency (LT-PAR-MISSED; the pilot never changed it, JO 7110.65BB
