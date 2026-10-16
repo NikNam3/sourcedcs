@@ -1,7 +1,7 @@
 'use strict';
 
 const { WebSocketServer, WebSocket } = require('ws');
-const { presentTrack, labelPart } = require('./surveillance/presentation');
+const { presentTrack, presentable, labelPart } = require('./surveillance/presentation');
 const { createSurveillance } = require('./surveillance');
 const { createAptConfig } = require('./apt-config');
 const { consumeTicket } = require('./auth');
@@ -423,7 +423,8 @@ class WsHub {
     let dl = hit.dl;
     // A lock line only ever points at a contact this controller already has:
     // the datalink must not leak a position their own picture does not.
-    if (dl && dl.lock && !visible.has(String(dl.lock))) dl = { ...dl, lock: null };
+    // Nor at a ground vehicle, which nobody is shown (docs/adr/0121).
+    if (dl && dl.lock && (!visible.has(String(dl.lock)) || !presentable(this._trackStore.get(dl.lock)))) dl = { ...dl, lock: null };
     return presentTrack(track, {
       at: hit.at, radars: hit.radars, dl,
       who: d.who, mode4: d.mode4, iffOverride: d.iffOverride, transponder: d.transponder,

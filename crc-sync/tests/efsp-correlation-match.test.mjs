@@ -145,6 +145,13 @@ test('a duplicate beacon code lands both tracks under it rather than one winning
   assert.deepEqual(byBeacon.get('0041').sort(), ['1', '3']);
 });
 
+test('a ground vehicle is in neither the beacon nor the callsign index, only by id (docs/adr/0121)', () => {
+  const vehicle = { id: 9, callsign: 'VIPER11', squawk: 33, category: 3 };
+  const { byBeacon, byStem, byId } = buildTrackIndices([...TRACKS, vehicle], beaconFromTrack);
+  for (const ids of [...byBeacon.values(), ...byStem.values()]) assert.ok(!ids.includes('9'));
+  assert.equal(byId.get('9'), vehicle);
+});
+
 test('two tracks sharing a stem both land under it', () => {
   const { byStem } = buildTrackIndices(TRACKS, beaconFromTrack);
   assert.deepEqual(byStem.get('VIPER').sort(), ['1', '2']);
