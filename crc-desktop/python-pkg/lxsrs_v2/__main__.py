@@ -28,6 +28,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--play-audio", action="store_true")
     parser.add_argument("--tx-freq", type=float, help="Transmit frequency in MHz.")
     parser.add_argument(
+        "--default-freq",
+        type=float,
+        help="Frequency in MHz a newly added radio tunes to. Unset: a new radio starts untuned.",
+    )
+    parser.add_argument(
         "--ptt-mode",
         choices=["stdin", "pynput"],
         default="stdin",
@@ -82,6 +87,7 @@ async def _main() -> None:
         coalition=args.coalition,
         unit_id=args.unit_id,
         tx_frequency_mhz=args.tx_freq,
+        default_frequency_mhz=args.default_freq,
         mic_source=args.mic_source,
         speaker_sink=args.speaker_sink,
         input_volume=args.input_volume,
