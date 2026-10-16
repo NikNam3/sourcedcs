@@ -67,8 +67,8 @@ function importAto(efsp, c, text = IRON, choices = [], clientMutationId = crypto
 const missionStrips = (efsp) => efsp.boardStoreFor('TACTICAL').getAll().filter((s) => s.stripType === 'MISSION' && s.state !== 'DROPPED');
 const flightDataOf = (efsp, callsign) => efsp.flightDataStore.getAll().find((f) => f.identity.callsign === callsign);
 
-function fileDeparture(efsp, c, callsign) {
-  return mustAct(efsp, c.OPS, 'OPS', null, { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE', flightData: { ...DEPARTURE_FLIGHT_DATA, callsign } });
+function fileDeparture(efsp, c, callsign, flightData = {}) {
+  return mustAct(efsp, c.OPS, 'OPS', null, { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE', flightData: { ...DEPARTURE_FLIGHT_DATA, callsign, ...flightData } });
 }
 
 // ── WP7, verbatim ────────────────────────────────────────────────────────────
@@ -138,7 +138,8 @@ test('WP7: The community-source caveat (§9.9) appears in the parser\'s module d
 
 test('import binds a pre-filed flight on its Mode 3/A', () => {
   const { efsp, c } = fresh();
-  let dep = fileDeparture(efsp, c, 'VIPER11');
+  // Filed as an F15, so the ATO's F-16C (F16 once it is a designator, S-ARCH-53) still differs from it.
+  let dep = fileDeparture(efsp, c, 'VIPER11', { aircraftType: 'F15' });
   dep = mustAct(efsp, c.OPS, 'OPS', dep, { kind: 'SetBlock', blockId: '5', value: '4521' });
   const codesBefore = efsp.flightDataStore.codeAllocator.snapshot().length;
   const { preview: p, ack } = importAto(efsp, c);
