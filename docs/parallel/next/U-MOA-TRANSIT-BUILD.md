@@ -5,9 +5,10 @@ Written 2026-10-17 by the supervisor. One agent, Opus 5.5. Follow `docs/parallel
 every green step, at least every ~15 minutes.** ADR number **0128** (yours). ADR 0127 stays as it is (P4); 0128 says
 "Supersedes 0127" and why.
 
-Running beside you: **U-CLOCK** (owns `crc-sync/src/mission-clock.js`, `mission-session.js`, `grpc-client.js`,
-`app/feed-handlers.js`, the topbar clock in the client). Stay out of those files; if you need one, write it in your wip
-note.
+Running beside you: **U-FREQ-EDITOR** (a runtime frequency table store + "Frequencies" panel; it leaves airspace
+working/control frequencies to the airspace editor) and **U-SMALL2** (tests/soak only). U-CLOCK (ADR 0129) and
+U-PAR-VALUES (ADR 0130) are merged into your base. If you touch `stores.js`, `app.js` or `ws-hub.js`, keep the hunk
+small; the supervisor merges and re-runs `wire:record`.
 
 ## Read first
 
