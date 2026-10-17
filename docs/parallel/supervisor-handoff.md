@@ -1,5 +1,16 @@
 # Supervisor handoff
 
+## UPDATE 2026-10-17: four lanes running (U-CLOCK, U-PAR-VALUES, U-FREQ-EDITOR, U-SMALL2)
+
+Read S-ARCH-72 and H152–H154 in `decisions.md`. Running (worktrees `../sourcedcs-<L>`, briefings `next/<L>.md`):
+**U-CLOCK** (ADR 0129, E2E 8), **U-PAR-VALUES** (ADR 0130, E2E 7), **U-FREQ-EDITOR** (ADR 0131, E2E 9), **U-SMALL2**
+(E2E 3). PAR-VALUES and FREQ-EDITOR may both add a synced store: expect conflicts in `stores.js`/`app.js`/`ws-hub.js`
+and the wire record; merge one, re-run `wire:record`, then the other. **Queue after them:** (1) **U-MOA-TRANSIT-BUILD**
+(`next/U-MOA-TRANSIT-BUILD.md`, ADR 0128, written; it names U-CLOCK as its neighbour: update that line when you
+dispatch it); (2) U-CARRIER; (3) **docs pass, the very end** (human 2026-10-17; also fold the four lanes above).
+Backlog: AIRAC cycles, then fix coordinates (H152). Human: MapTiler key answers 403; CVN-72 angled deck 9° and
+`fixToRampSec` 6 min still to confirm; frequency editor panel vs Settings (default panel).
+
 ## UPDATE 2026-10-16: U-SMALL, U-DECLUTTER, U-MOA-TRANSIT phase 1 merged; waiting on the Desk
 
 Merged today (S-ARCH-69–71): U-MOA-TRANSIT phase 1 (docs: research, ADR 0127 **Proposed**, mockup), U-DECLUTTER (ADR
