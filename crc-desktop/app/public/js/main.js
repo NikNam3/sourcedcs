@@ -59,6 +59,7 @@ import './panels/efsp/carrier-management-panel.js';
 import './panels/efsp/marshal-panel.js';
 import './panels/efsp/carrier-map-panel.js';
 import './panels/efsp/par-panel.js';
+import './panels/efsp/frequency-panel.js';
 import './panels/metrics-panel.js';
 import './app.js';
 import { atcTick } from './atc-scope.js';

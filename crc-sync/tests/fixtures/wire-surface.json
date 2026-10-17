@@ -11,6 +11,7 @@
       "efsp-ato-preview",
       "efsp-carrier-mutation",
       "efsp-correlation-mutation",
+      "efsp-frequency-mutation",
       "efsp-marsa-mutation",
       "efsp-mutation",
       "efsp-resync",
@@ -34,6 +35,8 @@
       "efsp-carrier-delta",
       "efsp-correlation-ack",
       "efsp-correlation-delta",
+      "efsp-frequency-ack",
+      "efsp-frequency-delta",
       "efsp-heartbeat",
       "efsp-marsa-ack",
       "efsp-marsa-delta",
@@ -118,6 +121,10 @@
       "efsp-correlation-mutation": [
         "BindTrack",
         "UnbindTrack"
+      ],
+      "efsp-frequency-mutation": [
+        "ResetFrequency",
+        "SetFrequency"
       ],
       "efsp-marsa-mutation": [
         "AcknowledgeVoid",

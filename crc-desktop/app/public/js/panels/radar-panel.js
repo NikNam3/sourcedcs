@@ -119,6 +119,7 @@ function panelControlRows() {
     { id: 'carrierMap', label: PANEL_TITLES.carrierMap },
     { id: 'par',      label: PANEL_TITLES.par },
     { id: 'metrics',  label: PANEL_TITLES.metrics },
+    { id: 'frequencies', label: PANEL_TITLES.frequencies },
   ];
 }
 

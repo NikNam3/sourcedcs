@@ -30,6 +30,7 @@ class PositionStore {
    */
   constructor(positionIds, { consolidation = {}, handBack = {} } = {}, { clock = WALL_CLOCK, frequencies = {}, isAbsent = () => false } = {}) {
     // docs/adr/0105: `{ <Position>: [ { label, mhz } ] }` from the facility config. Data only; nothing here acts on it.
+    // A function is read at every use, so the runtime frequency table's changes show at once (docs/adr/0131).
     this._frequencies = frequencies || {};
     // The mission clock (docs/adr/0079) — `since` is who has been signed on at a Position
     // from when, which a controller reads as a time of day.
@@ -112,7 +113,8 @@ class PositionStore {
 
   /** A Position's frequencies, `[{label, mhz}]` (a copy). */
   frequenciesOf(positionId) {
-    return (this._frequencies[positionId] || []).map(f => ({ ...f }));
+    const all = typeof this._frequencies === 'function' ? this._frequencies() : this._frequencies;
+    return ((all && all[positionId]) || []).map(f => ({ ...f }));
   }
 
   /**

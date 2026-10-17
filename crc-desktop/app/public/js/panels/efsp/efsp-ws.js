@@ -308,6 +308,19 @@ export function sendEfspRunwayStatusMutation(actingPositionId, facilityId, baseR
 }
 
 /**
+ * A frequency table op (crc-sync docs/adr/0131): SetFrequency / ResetFrequency on one Position or SFA frequency of
+ * `facilityId`. `actingPositionId` is any Position this controller is Primary at (the server's gate). No baseRev (last
+ * write wins, every change audited); not a pending mutation, for the reason the airspace and carrier sends give.
+ */
+export function sendEfspFrequencyMutation(actingPositionId, facilityId, op, { onAck } = {}) {
+  return sendEfsp({
+    version: 1, type: 'efsp-frequency-mutation',
+    clientMutationId: efspClientMutationId(),
+    facilityId, actingPositionId, op,
+  }, { onAck });
+}
+
+/**
  * A carrier op (crc-sync's docs/adr/0074): the recovery Case, a Marshal stack
  * op or the altimeter. Its own message type because it targets the ship's
  * record, not a Strip: no stripId, no Strip baseRev. `baseRev` may be omitted

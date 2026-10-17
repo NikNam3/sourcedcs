@@ -215,8 +215,28 @@ function createFacilityConfig({ env = process.env } = {}) {
 
   function getPositionSet(facilityId = DEFAULT_FACILITY_ID) { return [...(_configs().get(facilityId).positions)]; }
 
-  /** A Position's frequencies, `{ <Position>: [ { label, mhz } ] }` (docs/adr/0105); `{}` when the Facility ships none. */
-  function getPositionFrequencies(facilityId = DEFAULT_FACILITY_ID) { return deepClone(_configs().get(facilityId).positionFrequencies || {}); }
+  // The runtime frequency table's values over the shipped ones (docs/adr/0131): facilityId -> { positions: { <Position>:
+  // { <label>: mhz } }, sfa: { <rackId>: mhz } }. Set only by frequency-table.js; the files are never written for it (P5).
+  const frequencyOverlay = new Map();
+
+  /** Replaces one Facility's frequency overlay (frequency-table.js, docs/adr/0131). */
+  function setFrequencyOverlay(facilityId, overlay) {
+    frequencyOverlay.set(facilityId, deepClone(overlay || { positions: {}, sfa: {} }));
+  }
+
+  /** The shipped Position frequencies, `{ <Position>: [ { label, mhz } ] }` (docs/adr/0105), without the runtime table. */
+  function getShippedPositionFrequencies(facilityId = DEFAULT_FACILITY_ID) { return deepClone(_configs().get(facilityId).positionFrequencies || {}); }
+
+  /** A Position's frequencies, `{ <Position>: [ { label, mhz } ] }` (docs/adr/0105), the runtime table's value where it sets one (docs/adr/0131); `{}` when the Facility ships none. */
+  function getPositionFrequencies(facilityId = DEFAULT_FACILITY_ID) {
+    const out = getShippedPositionFrequencies(facilityId);
+    const over = (frequencyOverlay.get(facilityId) || {}).positions || {};
+    for (const [positionId, list] of Object.entries(out)) for (const f of list) {
+      const mhz = (over[positionId] || {})[f.label];
+      if (mhz !== undefined) f.mhz = mhz;
+    }
+    return out;
+  }
 
   /** The Facility's Mode C Intruder setting (docs/adr/0118); the terminal default when its file names none. */
   function getModeCIntruder(facilityId = DEFAULT_FACILITY_ID) {
@@ -335,7 +355,7 @@ function createFacilityConfig({ env = process.env } = {}) {
       for (const bay of bays) {
         const d = { ...deepClone(bay), positionId, facilityId };
         // The SFA Bay carries its pool, so a client draws the frequencies from the Bay it shows (docs/adr/0117).
-        if (bay.view === 'sfa-freqs' && config.singleFrequencyApproach) d.sfaPool = deepClone(config.singleFrequencyApproach.pool);
+        if (bay.view === 'sfa-freqs' && config.singleFrequencyApproach) d.sfaPool = getSingleFrequencyApproach(facilityId).pool;
         out.push(d);
       }
     }
@@ -360,10 +380,22 @@ function createFacilityConfig({ env = process.env } = {}) {
     return getAllBays(facilityId).find(b => b.bayId === bayId) || null;
   }
 
-  /** A Facility's single frequency approach config (docs/adr/0117), or null when it has none (every Facility but INCIRLIK). */
-  function getSingleFrequencyApproach(facilityId = DEFAULT_FACILITY_ID) {
+  /** A Facility's shipped single frequency approach config (docs/adr/0117), without the runtime table; null when it has none. */
+  function getShippedSingleFrequencyApproach(facilityId = DEFAULT_FACILITY_ID) {
     const config = _configs().get(facilityId);
     return config && config.singleFrequencyApproach ? deepClone(config.singleFrequencyApproach) : null;
+  }
+
+  /**
+   * A Facility's single frequency approach config (docs/adr/0117), each pool frequency the runtime table's value where it
+   * sets one (docs/adr/0131), or null when it has none (every Facility but INCIRLIK).
+   */
+  function getSingleFrequencyApproach(facilityId = DEFAULT_FACILITY_ID) {
+    const sfa = getShippedSingleFrequencyApproach(facilityId);
+    if (!sfa) return null;
+    const over = (frequencyOverlay.get(facilityId) || {}).sfa || {};
+    for (const entry of sfa.pool) if (over[entry.rackId] !== undefined) entry.mhz = over[entry.rackId];
+    return sfa;
   }
 
   /** A Bay's configured implied EfspState (guide §3.5 rule 4), or null if the Bay doesn't imply one. */
@@ -429,6 +461,7 @@ function createFacilityConfig({ env = process.env } = {}) {
     getPositionRadars, radarBearingPositionIds, validateRadarSelector,
     bayImpliesState, bayHoldsStripType, bayForImpliedState, bayExists, coordinationBayFor, setFacilityConfig, validateConfig,
     getBay, getSingleFrequencyApproach, BAY_VIEWS,
+    getShippedPositionFrequencies, getShippedSingleFrequencyApproach, setFrequencyOverlay,
     getShippedConfig, load,
   };
 }

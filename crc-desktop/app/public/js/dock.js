@@ -12,6 +12,7 @@ import { initMarshalPanel } from './panels/efsp/marshal-panel.js';
 import { initCarrierMapPanel } from './panels/efsp/carrier-map-panel.js';
 import { initParPanel } from './panels/efsp/par-panel.js';
 import { initMetricsPanel } from './panels/metrics-panel.js';
+import { initFrequencyPanel } from './panels/efsp/frequency-panel.js';
 import { getActiveRadars } from './picture.js';
 import { map } from './map-handle.js';
 import { PANEL_TITLES, registerDockActions, setDock } from './dock-handle.js';
@@ -64,6 +65,7 @@ export function initDock() {
         case 'carrierMap': return mountExistingPanel('carrier-map-panel', initCarrierMapPanel);
         case 'par':      return mountExistingPanel('par-panel', initParPanel);
         case 'metrics':  return mountExistingPanel('metrics-panel', initMetricsPanel);
+        case 'frequencies': return mountExistingPanel('frequency-panel', initFrequencyPanel);
         default: throw new Error(`[dock] unknown panel component: ${options.name}`);
       }
     },
@@ -190,7 +192,7 @@ function addMissingRequiredPanels() {
 // (it lands wherever the active group happens to be, sometimes merging
 // into completely the wrong group — both reproduced firsthand while
 // building this). `excludeId` leaves out the panel currently being placed.
-const LEFT_CLUSTER = ['track', 'radars', 'airport', 'efsp', 'airspace', 'runwayStatus', 'carrier', 'marshal', 'carrierMap', 'par', 'metrics'];
+const LEFT_CLUSTER = ['track', 'radars', 'airport', 'efsp', 'airspace', 'runwayStatus', 'carrier', 'marshal', 'carrierMap', 'par', 'metrics', 'frequencies'];
 
 function leftGroupAnchor(excludeId) {
   return LEFT_CLUSTER.filter(id => id !== excludeId).find(id => dock.api.getPanel(id));
@@ -202,7 +204,7 @@ function leftGroupAnchor(excludeId) {
 // remembered size to come back to.
 const PANEL_SIDE = {
   track: 'left', radars: 'left', airport: 'left', efsp: 'left', airspace: 'left',
-  runwayStatus: 'left', carrier: 'left', marshal: 'left', carrierMap: 'left', par: 'left', metrics: 'left',
+  runwayStatus: 'left', carrier: 'left', marshal: 'left', carrierMap: 'left', par: 'left', metrics: 'left', frequencies: 'left',
   settings: 'right',
   radio: 'bottom',
 };
@@ -349,6 +351,14 @@ const DOCKABLE_PANELS = {
     const anchor = leftGroupAnchor('metrics');
     return withRememberedPlacement('metrics', {
       id: 'metrics', component: 'metrics', title: PANEL_TITLES.metrics,
+      position: anchor ? { referencePanel: anchor } : { referencePanel: 'map', direction: 'left' },
+    }, !anchor);
+  },
+  // The station frequencies the controllers set (crc-sync docs/adr/0131). Everyone reads; any Primary edits.
+  frequencies: () => {
+    const anchor = leftGroupAnchor('frequencies');
+    return withRememberedPlacement('frequencies', {
+      id: 'frequencies', component: 'frequencies', title: PANEL_TITLES.frequencies,
       position: anchor ? { referencePanel: anchor } : { referencePanel: 'map', direction: 'left' },
     }, !anchor);
   },

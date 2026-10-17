@@ -31,6 +31,7 @@ function envFor(stateDir) {
     CRCSYNC_EFSP_MUTATION_LOG_PATH: p('mutations.jsonl'),
     CRCSYNC_EFSP_AIRSPACES_PATH: p('airspaces.json'),
     CRCSYNC_EFSP_STEREO_ROUTES_PATH: p('stereo-routes.json'),
+    CRCSYNC_EFSP_FREQUENCIES_PATH: p('frequencies.json'), // docs/adr/0131
     CRCSYNC_APT_CONFIG_PATH: p('apt-config.json'),
     CRCSYNC_TERRAIN_CACHE_DIR: p('terrain'),
     CRCSYNC_SENSOR_SPECS_PATH: p('sensor-specs.json'),

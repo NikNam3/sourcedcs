@@ -139,6 +139,14 @@ function marsaDelta(marsaStore, relations) {
   };
 }
 
+/**
+ * One Facility's frequency rows, sent whole (docs/adr/0131): no seq, the table is small and every delta states it all, so a
+ * lost one is mended by the next or by the snapshot.
+ */
+function frequencyDelta(frequencyTable, facilityId) {
+  return { version: VERSION, type: 'efsp-frequency-delta', facilityId, frequencies: frequencyTable.rowsFor(facilityId) };
+}
+
 /** Every live Strip on every Board, stamped with its Facility (what the visibility sets are computed from). */
 function liveStamped(ctx) {
   const out = [];
@@ -150,4 +158,4 @@ function liveStamped(ctx) {
   return out;
 }
 
-module.exports = { VERSION, stampStrip, mergeFlightDataList, touchedStrips, boardDelta, serverBoardDelta, correlationDelta, runwayStatusDelta, marsaDelta, carrierDelta, liveStamped };
+module.exports = { VERSION, stampStrip, mergeFlightDataList, touchedStrips, boardDelta, serverBoardDelta, correlationDelta, runwayStatusDelta, marsaDelta, carrierDelta, frequencyDelta, liveStamped };

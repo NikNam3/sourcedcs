@@ -11,14 +11,14 @@ const families = require('../src/efsp/wire/families');
 const { ReplayCache } = require('../src/efsp/sync/replay-cache.js');
 
 test('the replay cache accepts exactly the kinds the registry declares', () => {
-  assert.deepEqual([...families.REPLAY_KINDS].sort(), ['airspace', 'carrier', 'correlation', 'marsa', 'runwayStatus']);
+  assert.deepEqual([...families.REPLAY_KINDS].sort(), ['airspace', 'carrier', 'correlation', 'frequency', 'marsa', 'runwayStatus']);
   const cache = new ReplayCache();
   for (const kind of families.REPLAY_KINDS) cache.set(kind, 'c1', { ok: true });
   assert.throws(() => cache.set('nope', 'c1', { ok: true }), /unknown kind/);
 });
 
 test('the registry is in snapshot key order and every family has a unique request type', () => {
-  assert.deepEqual(families.FAMILIES.filter(f => f.snapshotKey).map(f => f.snapshotKey), ['airspaces', 'correlations', 'marsa', 'runwayStatuses', 'carriers']);
+  assert.deepEqual(families.FAMILIES.filter(f => f.snapshotKey).map(f => f.snapshotKey), ['airspaces', 'correlations', 'marsa', 'runwayStatuses', 'carriers', 'frequencies']);
   assert.equal(new Set(families.FAMILIES.map(f => f.type)).size, families.FAMILIES.length);
 });
 
@@ -36,7 +36,7 @@ test('WsHub.stop() clears the tick attach() started, and is safe twice', () => {
 // Finding F1 (docs/wip/WIRE.md), fixed: a gate refusal made before the store is marked `unaudited`, in every one of the six
 // mutation families, so the metrics tap writes it to the Mutation log (docs/adr/0083). The log entry carries what the
 // refusal concerned (the family's subject key).
-test('each of the five mutation families\' gate refusal is logged once, with its subject', async () => {
+test('each of the six mutation families\' gate refusal is logged once, with its subject', async () => {
   const fs = await import('fs');
   const os = await import('os');
   const path = await import('path');
@@ -64,6 +64,7 @@ test('each of the five mutation families\' gate refusal is logged once, with its
     ['efsp-marsa-mutation', { marsaId: 'm1', op: { kind: 'Create' } }, 'marsaId', 'm1'],
     ['efsp-runway-status-mutation', { op: { kind: 'Suspend', runwayId: '05' } }, 'facilityId', 'INCIRLIK'],
     ['efsp-carrier-mutation', { hullId: 'CVN-1', op: { kind: 'SetRecoveryCase' } }, 'hullId', 'CVN-1'],
+    ['efsp-frequency-mutation', { op: { kind: 'SetFrequency', positionId: 'GC', label: 'GND', mhz: 276 } }, 'facilityId', 'INCIRLIK'], // docs/adr/0131
   ];
   assert.equal(cases.length, families.FAMILIES.filter(f => f.replayKind).length, 'every mutation family is covered');
   for (const [type, extra, key, value] of cases) {
