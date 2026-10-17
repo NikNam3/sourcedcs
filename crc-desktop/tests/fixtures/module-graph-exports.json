@@ -911,6 +911,7 @@
    "applyEfspAlerts",
    "applyEfspCorrelationDelta",
    "applyEfspDelta",
+   "applyEfspFrequencyDelta",
    "applyEfspMarsaDelta",
    "applyEfspMutationAck",
    "applyEfspRunwayStatusDelta",
@@ -997,6 +998,7 @@
    "sendEfspCarrierMutation",
    "sendEfspCorrelationMutation",
    "sendEfspCreateStrip",
+   "sendEfspFrequencyMutation",
    "sendEfspMarsaMutation",
    "sendEfspMutation",
    "sendEfspRunwayStatusMutation",
@@ -1040,6 +1042,29 @@
    "parseSplitCommand",
    "splitOffer",
    "splitRemainderText"
+  ],
+  "panels/efsp/frequency-panel.js": [
+   "initFrequencyPanel",
+   "renderFrequencyPanel"
+  ],
+  "panels/efsp/frequency-state.js": [
+   "FREQUENCY_LIMITS",
+   "_resetFrequencyStateForTest",
+   "applyFrequencyDelta",
+   "frequencyChannelProblem",
+   "frequencyRowKey",
+   "frequencyRowName",
+   "frequencySections",
+   "frequencySetNote",
+   "frequencyText",
+   "getFrequencyRows",
+   "isFrequencySet",
+   "parseFrequencyInput",
+   "positionFrequenciesOf",
+   "replaceFrequencyRows",
+   "resetFrequencyOp",
+   "setFrequencyOp",
+   "sfaPoolOf"
   ],
   "panels/efsp/jurisdiction-geometry.js": [
    "RING_POINTS",

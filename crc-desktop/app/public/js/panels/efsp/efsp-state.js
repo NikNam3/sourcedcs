@@ -7,6 +7,7 @@ import { _replaceCorrelations, _resetCorrelationState } from './correlation-stat
 import { _replaceMarsa, _resetMarsaState } from './marsa-state.js';
 import { _replaceRunwayStatuses, _resetRunwayStatusState } from './runway-status-state.js';
 import { _resetAlertsState } from './alerts-state.js';
+import { applyFrequencyDelta, getFrequencyRows, positionFrequenciesOf, replaceFrequencyRows, sfaPoolOf } from './frequency-state.js';
 
 // The stores split out of this file (DESK-SPLIT) keep their public names here, so importers read them from one place.
 export { efspStrips, getEfspStrip, getAllEfspStrips } from './board-data.js';
@@ -84,6 +85,7 @@ export function applyEfspSnapshot(msg) {
   _replaceCorrelations(msg.correlations);
   _replaceMarsa(msg.marsa);
   _replaceRunwayStatuses(msg.runwayStatuses);
+  replaceFrequencyRows(msg.frequencies); // crc-sync docs/adr/0131
   // crc-sync's docs/adr/0074 — the carrier's hull record (carrier-state.js).
   applyEfspCarrierSnapshot(msg);
   _adoptSnapshotStoreSyncs(msg);
@@ -171,6 +173,23 @@ export function applyEfspDelta(msg) {
   for (const id of (msg.flightDataList && msg.flightDataList.gone) || []) efspFlightDataList.delete(id); // archived (docs/adr/0082)
   for (const p of (msg.positions && msg.positions.updated) || []) efspPositions.set(p.positionId, p);
   _adoptBoardSeq(msg);
+}
+
+/**
+ * An efsp-frequency-delta (crc-sync docs/adr/0131): the Facility's frequency rows, and the two places the snapshot
+ * carried those values, its Positions' `frequencies` and its SFA Bay's `sfaPool`, so every reader sees the new ones now.
+ */
+export function applyEfspFrequencyDelta(msg) {
+  applyFrequencyDelta(msg);
+  const facilityId = msg && msg.facilityId;
+  if (!facilityId) return;
+  const rows = getFrequencyRows(facilityId);
+  const byPosition = positionFrequenciesOf(rows, facilityId);
+  for (const [id, p] of efspPositions) {
+    if (p.facilityId === facilityId && byPosition[id]) efspPositions.set(id, { ...p, frequencies: byPosition[id] });
+  }
+  const pool = sfaPoolOf(rows, facilityId);
+  if (pool) efspBays = efspBays.map(b => (b.view === 'sfa-freqs' && (!b.facilityId || b.facilityId === facilityId) ? { ...b, sfaPool: pool } : b));
 }
 
 /**
@@ -351,6 +370,7 @@ export function _resetEfspStateForTest() {
   _resetMarsaState();
   _resetAirspaceState();
   _resetRunwayStatusState();
+  replaceFrequencyRows([]);
   efspFacility = null;
   clearCursors();
   efspBays = [];

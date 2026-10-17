@@ -29,6 +29,7 @@ export const PANEL_TITLES = {
   carrierMap: 'CARRIER MAP',
   par:      'PAR',
   metrics:  'METRICS',
+  frequencies: 'FREQUENCIES',
 };
 
 export let dock = null;
