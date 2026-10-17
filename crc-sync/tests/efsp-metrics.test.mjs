@@ -210,6 +210,31 @@ test('metrics sessions (H32): a mission load that is the same mission carrying o
   assert.equal(m.buildMetricsBody().missionSession.theatre, 'Syria');
 });
 
+test('metrics sessions (ADR 0129): a session opened on the wall clock takes its startedAt from the first mission reading', () => {
+  const c = clocks();
+  const { session, m } = withSession(c);
+  session.noteMissionLoad(SYRIA);
+  m.recordMutation({ type: 'efsp-mutation', ok: true });
+  c.advance(HOUR);
+  session.observeClock();
+  // A .miz restart: the clock forgot the old mission's sample, so the roll happens on the wall clock.
+  c.source = 'WALL'; const wallMission = c.m; c.m = c.w;
+  session.noteMissionStart();
+  session.noteMissionLoad(SYRIA);
+  m.recordMutation({ type: 'efsp-mutation', ok: true });
+  assert.equal(m.currentMissionSession(), 2);
+  assert.equal(typeof m.buildMetricsBody().missionSession.startedAt, 'number', 'the contract keeps a number meanwhile');
+  c.source = 'MISSION'; c.m = T0 + 1000; // the new mission's first sample
+  session.observeClock();
+  m.recordMutation({ type: 'efsp-mutation', ok: true });
+  const body = m.buildMetricsBody();
+  assert.equal(body.missionSession.startedAt, T0 + 1000, 'not the wall time, not the old mission\'s ' + wallMission);
+  assert.equal(session.current().startedAt, T0 + 1000);
+  c.advance(60000);
+  m.recordMutation({ type: 'efsp-mutation', ok: true });
+  assert.equal(m.buildMetricsBody().missionSession.startedAt, T0 + 1000, 'replaced once');
+});
+
 test('metrics sessions (H32) follow the mission session: mission_start, another mission, the clock stepping back', () => {
   const c = clocks();
   const { session, m } = withSession(c);

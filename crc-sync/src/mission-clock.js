@@ -16,23 +16,37 @@
 // setting a controller edits.
 //
 // grpc-client.js polls every 5 s. Between polls this advances at real rate from
-// the last sample; every poll simply resyncs. That covers a paused mission and
-// time acceleration without modelling either: a pause shows as time running
-// on for up to one poll and then stepping back, acceleration as a step forward.
+// the last sample; every poll simply resyncs, so time acceleration shows as a
+// step forward.
+//
+// A PAUSE (docs/adr/0129) silences DCS-gRPC: the channel stays up and crc-sync
+// stays connected, but no time answer comes back until the unpause. While the
+// link is up and the last sample is older than holdAfterMs (two missed polls),
+// the clock HOLDS at the sample plus holdAfterMs: a paused game clock does not
+// move, and the held value never steps back from what was already read. The
+// wall clock is the fallback only when DCS is really gone (the link down past
+// staleMs) or there is no sample. A mission_start or a reconnect forgets the
+// sample (`forget()`): it belonged to the mission before, and until the first
+// new one the answer is WALL (a few seconds) rather than the old mission's time.
 //
 // `source` says which answer `now()` is giving:
 //   MISSION            a fresh sample, converted with the theater's offset
 //   MISSION_NO_OFFSET  a fresh sample on a theater the table does not list —
 //                      mission time, but read as Zulu with offset 0, so it is
 //                      right to the minute and may be hours out
-//   WALL               no usable sample (none yet, the last one too old — DCS
-//                      gone — or the theater not known yet): the wall clock
+//   MISSION_HELD       DCS connected but silent (paused): the last sample's
+//                      time, not advancing (offset or not)
+//   WALL               no usable sample (none yet, forgotten on a restart or
+//                      reconnect, the last one too old with the link down —
+//                      DCS gone — or the theater not known yet): the wall clock
 // Callers never branch on it; it exists so a fallback is visible, on the
 // topbar clock and in every Mutation-log record.
 
 const log = require('./log').logger('mission-clock');
 
 const DEFAULT_STALE_MS = 30000; // six missed polls — rides out a gRPC reconnect, not a lost server
+// [OURS] (docs/adr/0129): two missed 5 s polls and some slack — with the link up, the game is paused.
+const DEFAULT_HOLD_AFTER_MS = 12000;
 
 // "2016-06-21T02:40:07Z", "...+00:00", "...T02:40:07.5" — only the calendar
 // fields are read. The suffix is not trusted: the value is theater local time.
@@ -55,12 +69,15 @@ class MissionClock {
    * @param {object} [deps]
    * @param {(theatre:string) => number|null} [deps.offsetHoursFor] local = Z + offset; null when the theater is not listed
    * @param {() => number} [deps.wallNow]   injectable for tests
-   * @param {number} [deps.staleMs]         a sample older than this no longer counts
+   * @param {number} [deps.staleMs]         with the link down, a sample older than this no longer counts
+   * @param {number} [deps.holdAfterMs]     with the link up, a sample older than this means paused: hold
    */
-  constructor({ offsetHoursFor = () => null, wallNow = () => Date.now(), staleMs = DEFAULT_STALE_MS } = {}) {
+  constructor({ offsetHoursFor = () => null, wallNow = () => Date.now(), staleMs = DEFAULT_STALE_MS, holdAfterMs = DEFAULT_HOLD_AFTER_MS } = {}) {
     this._offsetHoursFor = offsetHoursFor;
     this._wallNow = wallNow;
     this._staleMs = staleMs;
+    this._holdAfterMs = Math.min(holdAfterMs, staleMs);
+    this._linkUp = false; // the DCS-gRPC client's state is 'connected' (setLink, from app/feed-handlers.js)
     this._theatre = null;
     this._offsetHours = 0;
     this._offsetKnown = false;
@@ -88,19 +105,42 @@ class MissionClock {
     return true;
   }
 
-  /** 'MISSION', 'MISSION_NO_OFFSET' or 'WALL' — see the module comment. */
+  /**
+   * The DCS-gRPC client's link state (grpc-client.js 'link': 'connected', 'reconnecting', 'disconnected'). Coming up
+   * again forgets the sample: whatever DCS did while the link was down (a restart, a different mission), the old
+   * sample no longer says what time it is there.
+   */
+  setLink(state) {
+    const up = state === 'connected';
+    if (up && !this._linkUp) this.forget();
+    this._linkUp = up;
+  }
+
+  /** Drops the sample (a mission_start, a reconnect): WALL until the next one. */
+  forget() {
+    this._sample = null;
+  }
+
+  /** 'MISSION', 'MISSION_NO_OFFSET', 'MISSION_HELD' or 'WALL' — see the module comment. */
   get source() {
     if (!this._sample || !this._theatre) return 'WALL';
-    if (this._wallNow() - this._sample.wallAt > this._staleMs) return 'WALL';
+    const age = this._wallNow() - this._sample.wallAt;
+    if (this._linkUp) {
+      if (age > this._holdAfterMs) return 'MISSION_HELD';
+    } else if (age > this._staleMs) {
+      return 'WALL';
+    }
     return this._offsetKnown ? 'MISSION' : 'MISSION_NO_OFFSET';
   }
 
   /** In-game Zulu, epoch ms. */
   now() {
     const wall = this._wallNow();
-    if (this.source === 'WALL') return wall;
-    return this._sample.localMs - this._offsetHours * 3600000 + (wall - this._sample.wallAt);
+    const source = this.source;
+    if (source === 'WALL') return wall;
+    const age = wall - this._sample.wallAt;
+    return this._sample.localMs - this._offsetHours * 3600000 + (source === 'MISSION_HELD' ? this._holdAfterMs : age);
   }
 }
 
-module.exports = { MissionClock, WALL_CLOCK, parseScenarioLocalMs, DEFAULT_STALE_MS };
+module.exports = { MissionClock, WALL_CLOCK, parseScenarioLocalMs, DEFAULT_STALE_MS, DEFAULT_HOLD_AFTER_MS };

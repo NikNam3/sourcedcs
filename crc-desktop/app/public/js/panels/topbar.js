@@ -199,12 +199,15 @@ export function initZuluClock() {
     }
     // WALL: DCS is not answering, so this is real time, not mission time.
     // MISSION_NO_OFFSET: mission time on a theater crc-sync has no offset for.
+    // MISSION_HELD: DCS is connected but paused; the held mission time (ADR 0129).
     // Either way the controller has to be able to tell.
-    const flag = missionClockSource() === 'WALL' ? ' WALL' : missionClockSource() === 'MISSION_NO_OFFSET' ? ' ?' : '';
+    const source = missionClockSource();
+    const flag = source === 'WALL' ? ' WALL' : source === 'MISSION_NO_OFFSET' ? ' ?' : source === 'MISSION_HELD' ? ' PAUSED' : '';
     $el.textContent = `${new Date(missionNow()).toISOString().slice(11, 19)}Z${flag}`;
-    $el.title = missionClockSource() === 'MISSION' ? 'DCS mission time (Zulu)'
-      : missionClockSource() === 'WALL' ? 'DCS is not reporting mission time — showing real UTC'
-        : 'DCS mission time — no UTC offset is configured for this theater, so this may be hours out';
+    $el.title = source === 'MISSION' ? 'DCS mission time (Zulu)'
+      : source === 'WALL' ? 'DCS is not reporting mission time — showing real UTC'
+        : source === 'MISSION_HELD' ? 'DCS mission is paused — mission time is held'
+          : 'DCS mission time — no UTC offset is configured for this theater, so this may be hours out';
   }, 1000);
 }
 

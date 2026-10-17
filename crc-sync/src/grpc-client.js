@@ -122,6 +122,7 @@ class GrpcClient extends EventEmitter {
     this._eventTimer     = null;
     this._weatherTimer   = null;
     this._gameTimeTimer  = null;
+    this._gameTimeEpoch  = 0; // bumped on a mission_start and on (re)connect: an answer to an older request is dropped (ADR 0129)
     this._unitSvc        = null;
     this._evalErrorLoggedAt = 0;
     this._statusTimer        = null; // debounce for 'reconnecting' broadcasts
@@ -438,10 +439,15 @@ class GrpcClient extends EventEmitter {
     this._gameTimeTimer = setInterval(() => this._fetchGameTime(), GAMETIME_POLL_MS);
   }
 
+  // An answer to a request asked before the last mission_start or reconnect is dropped: it can carry the old
+  // mission's time after the clock has forgotten it (ADR 0129). During a pause the requests queue and all answer
+  // on the unpause, with the same epoch, which is right.
   _fetchGameTime() {
     if (!this._missionSvc) return;
+    const epoch = this._gameTimeEpoch;
     this._missionSvc.GetScenarioCurrentTime({}, (err, res) => {
       if (err || !res || !res.datetime) return;
+      if (epoch !== this._gameTimeEpoch) return;
       this.emit('game-time', res.datetime);
     });
   }
@@ -540,8 +546,11 @@ class GrpcClient extends EventEmitter {
         log.info('mission_start event');
         // Before the fetch: a mission_start is a new mission even when the
         // mission-load that follows looks the same (mission-session.js, ADR 0086).
+        // A time answer still in flight belongs to the mission before (ADR 0129).
+        this._gameTimeEpoch++;
         this.emit('mission-start');
         this._fetchMissionWithRetry();
+        this._fetchGameTime(); // the clock forgot its sample: do not wait out a poll for the new mission's time
       }
     });
 
@@ -808,9 +817,16 @@ return net.lua2json(result)
     return map[cat] ?? 0;
   }
 
+  /** 'connected', 'reconnecting' or 'disconnected', undebounced (the 'status' event debounces a brief reconnect). */
+  get linkState() { return this._state; }
+
   _setState(state) {
     if (this._state === state) return;
     this._state = state;
+    if (state === 'connected') this._gameTimeEpoch++; // whatever was asked before the reconnect is the old link's
+    // Every change, at once: the mission clock holds through a pause only while the link is up (ADR 0129).
+    this.emit('link', state);
+    if (state === 'connected') this._fetchGameTime(); // the clock forgot its sample on 'link'
 
     if (state === 'reconnecting') {
       // Brief reconnects (stream ended + restarted within 4 s) are invisible to

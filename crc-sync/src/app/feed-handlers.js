@@ -25,7 +25,15 @@ function createFeedHandlers({ grpcClient, srsClient, trackStore, surveillance, m
     });
     on(grpcClient, 'gone', (id) => { trackStore.remove(id); transponders.release(id); });
 
+    // The pre-restart sample is the old mission's time: forget it before the session rolls, so the new session's
+    // startedAt comes from the new mission's first sample (ADR 0129).
+    on(grpcClient, 'mission-start', () => { if (missionClock.forget) missionClock.forget(); });
     on(grpcClient, 'mission-start', () => missionSession.noteMissionStart());
+    // Hold through a pause only while the link is up (ADR 0129); a reconnect forgets the sample.
+    if (missionClock.setLink) {
+      missionClock.setLink(grpcClient.linkState);
+      on(grpcClient, 'link', (state) => missionClock.setLink(state));
+    }
     on(grpcClient, 'mission-load', (missionData) => {
       missionState.lastMissionData = missionData;
       missionSession.noteMissionLoad(missionData);
