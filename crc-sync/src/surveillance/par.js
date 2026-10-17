@@ -151,9 +151,9 @@ const GPA_MIN = 2, GPA_MAX = 4.5;
 const _num = (v, lo, hi) => _fin(v) && v >= lo && v <= hi;
 
 /**
- * A Facility's `parApproaches` (optional): runway end -> the PAR approach to it. Every value is [SOURCE-DEFINED] until
- * someone copies the plate. `tdzeFt` null means "the DCS airfield's elevation" (what the aircraft actually fly over);
- * `glideslopeDeg` null means "no published angle": the controller's default applies (H116). Returns a problem string or null.
+ * A Facility's `parApproaches` (optional): runway end -> the PAR approach to it. Every value is [SOURCE-DEFINED], a default
+ * the PAR controller may replace at run time (docs/adr/0130, H153). `tdzeFt` null means "the DCS airfield's elevation" (what the aircraft actually fly over);
+ * `glideslopeDeg` null means "no published angle": par.json's default applies (H116), and the PAR controller may set its own (docs/adr/0130). Returns a problem string or null.
  * @param {object} cfg the `parApproaches` value
  * @param {string[]} ends every runway end the Facility's `runwayStatus` names
  */
