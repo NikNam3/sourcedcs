@@ -70,3 +70,10 @@ files (ADR 0131); `CRCSYNC_EFSP_FREQUENCIES_PATH` overrides it.
   the supervisor re-runs `npm run wire:record` after the merge.
 - The e2e harness (`e2e/helpers/harness-env.js`) must redirect every new state file; any new store file in another lane
   needs the same line, or an e2e run writes into the worktree's `crc-sync/state/`.
+- **Any new `SyncedStore`** (U-PAR-VALUES may add one) mints an epoch with `crypto.randomUUID()` at construction. The
+  soak and freeze hosts seed that call, so one extra store shifts every later seeded id and the random freeze traces
+  diverge far from the change (here: `hub-random-seed1` from step 599, a MoveStrip neighbour pick). This lane's table
+  first extended `SyncedStore` and hit exactly that; it is now a plain class (no seq, no epoch). A store that does need
+  an epoch should expect the random-seed goldens to move, and say so when it re-records them.
+- Freeze goldens here moved only for the snapshot's new `frequencies` key (snapshot / resync-reply hashes) and the
+  three new message types in `tables-wire-message-types`; re-recorded with `npm run freeze:update` in their own commit.
