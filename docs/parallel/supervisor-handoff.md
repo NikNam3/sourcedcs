@@ -1,6 +1,31 @@
 # Supervisor handoff
 
-## UPDATE 2026-10-17: four lanes running (U-CLOCK, U-PAR-VALUES, U-FREQ-EDITOR, U-SMALL2)
+## RELAUNCH HERE (2026-10-17, usage limit): three lanes merged, two lanes stopped
+
+Read S-ARCH-72–74 and H152–H154 in `decisions.md`. Merged into `efsp-wp5-correlation`: **U-CLOCK** (ADR 0129),
+**U-PAR-VALUES** (ADR 0130), **U-FREQ-EDITOR** (ADR 0131). Gates on the tip: crc-sync 2842, crc-desktop 1387, walk
+24/24, freeze 57/57, soak:selfcheck PASS, wire protocol 2 unchanged.
+
+**Do this first:**
+1. **Sharded Playwright is owed** (all three touched the client; `par-panel` 06 failed on lane 7, seen before):
+   `cd crc-desktop && npm run e2e:sharded -- --lanes 1,2,4,5 --rerun-failed` in the background, read the summary line,
+   then `git checkout -- docs/wip crc-desktop/e2e/tools/spec-timings.json`.
+2. **U-SMALL2** (stopped): worktree `../sourcedcs-U-SMALL2`; item 1 done (`dc10c201`), item 2 (soak leak case) is an
+   unverified wip checkpoint `692512ad`: finish with a new agent ("look at git log/status/diff first, keep what is sound").
+3. **U-MOA-TRANSIT-BUILD** (stopped before any commit): worktree `../sourcedcs-U-MOA-TRANSIT-BUILD` is clean but cut
+   before U-FREQ-EDITOR merged: recreate it from the tip (`git worktree remove`, `git branch -D lane/U-MOA-TRANSIT-BUILD`,
+   `git worktree add -b ...`), then dispatch from `next/U-MOA-TRANSIT-BUILD.md` (ADR 0128, E2E 7); its "Running beside
+   you" line names U-FREQ-EDITOR/U-SMALL2: update it.
+4. Then U-CARRIER; **docs pass last** (human, 2026-10-17): fold every wip note since DOCS-R2, incl. U-CLOCK,
+   U-PAR-VALUES, U-FREQ-EDITOR (CLAUDE.md strict-`state/` list gains `efsp-frequencies.json`).
+
+**Questions for the human** (put them on the Decision Desk, round 13): PAR (S-ARCH-73): values on an empty final? the
+lower safe limit follows a changed angle or the default? threshold/course settable? AP/OPS when PAR unstaffed? H116's
+glideslope setting removed: OK? Frequencies (S-ARCH-74): force an SFA change in use? who may edit? add rows at run
+time? Also open: MapTiler key answers 403; CVN-72 angled deck 9° and `fixToRampSec` 6 min; live re-test of pause and
+restart (S-ARCH-72) with U-CLOCK.
+
+## Earlier: UPDATE 2026-10-17: four lanes running (U-CLOCK, U-PAR-VALUES, U-FREQ-EDITOR, U-SMALL2)
 
 Read S-ARCH-72 and H152–H154 in `decisions.md`. Running (worktrees `../sourcedcs-<L>`, briefings `next/<L>.md`):
 **U-CLOCK** (ADR 0129, E2E 8), **U-PAR-VALUES** (ADR 0130, E2E 7), **U-FREQ-EDITOR** (ADR 0131, E2E 9), **U-SMALL2**
