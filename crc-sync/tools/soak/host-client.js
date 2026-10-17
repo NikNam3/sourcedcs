@@ -65,7 +65,10 @@ class ForkedHost {
     this.lifetime++;
     return new Promise((resolve, reject) => {
       const child = fork(path.join(__dirname, 'host.js'), [...this._args, String(this.lifetime)], {
-        execArgv: ['--expose-gc'],
+        // --no-flush-bytecode: V8 otherwise drops the bytecode of functions idle for a few GCs, and when that
+        // happens depends on wall time, so two runs of the same seed read heaps up to ~2 MB apart (a ±10 MB/h
+        // slope swing in a 20-minute run). Kept, bytecode is a bounded one-off, not a slope (docs/wip/U-SMALL2.md).
+        execArgv: ['--expose-gc', '--no-flush-bytecode'],
         serialization: 'advanced',
         stdio: ['ignore', 'inherit', 'inherit', 'ipc'],
         cwd: path.join(SRC, '..'),
