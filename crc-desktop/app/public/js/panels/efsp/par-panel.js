@@ -2,12 +2,14 @@
 import { getSetting, registerSettingsTab } from '../../settings-registry.js';
 import { toggleDockPanel, isDockPanelOpen } from '../../dock-handle.js';
 import { getEfspFlightData, getEfspStrip } from './efsp-state.js';
-import { getActingPositions, sendEfspMutation } from './efsp-ws.js';
+import { getActingPositions, sendEfspMutation, sendEfspRunwayStatusMutation } from './efsp-ws.js';
+import { RUNWAY_STATUS_ACTION_OWNERS } from './runway-status-rules.js';
 import { onEfspChanged } from './efsp-change-bus.js';
 import { parSampleTimes, parSamples, parSampleFor } from './par-samples.js';
 import {
-  DEFAULT_VIEW, PAR_DEFAULTS, autoscaleView, azAxisLabel, clampTo, createTrailFilter, effectiveGpa, gpHeightFt, headerModel,
-  niceStep, noPlotState, pickFlight, rangeAtDaNm, readoutModel, replot, parTerminalOp, parTerminalRecorded, parTerminals, severity, zoomView,
+  DEFAULT_VIEW, PAR_DEFAULTS, PAR_VALUE_CELLS, autoscaleView, azAxisLabel, clampTo, createTrailFilter, gpHeightFt, headerModel,
+  niceStep, noPlotState, pickFlight, rangeAtDaNm, readoutModel, parseParValue, parTerminalOp, parTerminalRecorded, parTerminals, parValueCells,
+  severity, zoomView,
 } from './par-model.js';
 
 // The PAR panel (decisions H115, H116, H122, H141; mockup docs/mockups/par-panel.html, revision 5; ADR 0123; lane note docs/wip/PAR-2.md). An
@@ -28,6 +30,11 @@ import {
 // the reason. Several flights on finals sent to this controller: a row of their names picks the one the scopes show
 // (par-model.js `pickFlight`); the Strip's ⋯ menu item "Show in PAR panel" picks it too (the FINAL Bay is ordinary
 // Strips, H138 U10).
+//
+// The approach values (crc-sync docs/adr/0130, decisions H153): TDZE, TCH, DH and GPA on the approach header are the PAR
+// controller's to set, in place (click, type, Enter; an empty field or "Default" goes back to the default; Escape abandons). They
+// are held on the server per runway end, so every PAR scope and the monitor measure against the same numbers; DA = TDZE + DH. A
+// value the controller set is marked grey (a dotted underline and a small mark), never amber: a set value is not a problem.
 
 const NS = 'http://www.w3.org/2000/svg';
 const COL = Object.freeze({
@@ -39,7 +46,6 @@ const TICK_MS = 500; // the no-plot age is read off the clock between frames
 
 registerSettingsTab('par', [
   { key: 'parAutoscale', type: 'toggle', label: 'Autoscale', default: PAR_DEFAULTS.autoscale, onChange: () => { _paused = false; renderParPanel(); } },
-  { key: 'parGpa', type: 'number', label: 'Default glideslope', unit: '°', default: PAR_DEFAULTS.gpaDeg, min: 2, max: 4, step: 0.01, onChange: () => renderParPanel() },
   // two elevation limits (ADR 0123): a saved single `parTolEl` became the upper one (settings.js loadSettings)
   { key: 'parTolElHigh', type: 'number', label: 'Elevation tolerance above', unit: '°', default: PAR_DEFAULTS.tolElHighDeg, min: 0.1, max: 3, step: 0.1, onChange: () => renderParPanel() },
   { key: 'parTolElLow', type: 'number', label: 'Elevation tolerance below', unit: '°', default: PAR_DEFAULTS.tolElLowDeg, min: 0.1, max: 3, step: 0.1, onChange: () => renderParPanel() },
@@ -57,6 +63,7 @@ let _view = { ...DEFAULT_VIEW };
 let _paused = false;           // a manual zoom paused autoscale
 const _trails = new Map();     // stripId -> trail filter (a changed landing runway drops the old plots)
 const _firstSeen = new Map();  // stripId -> when its sample first came (no plot for 3 s since then is amber)
+let _editing = null;           // { approachId, field, input, error } while an approach value is being typed
 
 function _el(tag, className, text) {
   const node = document.createElement(tag);
@@ -115,8 +122,14 @@ function _build() {
     return v;
   };
   const title = cell(head, '', 'title');
-  const gpa = cell(head, 'GPA', 'gpa');
-  const tch = cell(head, 'TCH', 'tch');
+  // the approach values the PAR controller sets (docs/adr/0130), then DA, which follows from TDZE + DH
+  const values = {};
+  for (const { field, label } of PAR_VALUE_CELLS) {
+    const v = cell(head, label, field, 'par-v par-value');
+    v.dataset.parValue = field;
+    v.addEventListener('click', () => _beginEdit(field));
+    values[field] = v;
+  }
   const da = cell(head, 'DA', 'da');
   const facK = _el('span', 'par-k', 'FAC');
   head.appendChild(facK);
@@ -188,7 +201,7 @@ function _build() {
   msg.dataset.par = 'msg';
   const terms = _el('div', 'par-terms');
   _bodyEl.append(picks, head, flight, scopes, dev, msg, terms);
-  _els = { picks, title, gpa, tch, da, facK, fac, flags, name, type, bcnK, bcn, gs, vs, range, el, az, elDev, azDev, alt, msg, terms, termSig: '' };
+  _els = { picks, title, values, da, facK, fac, flags, name, type, bcnK, bcn, gs, vs, range, el, az, elDev, azDev, alt, msg, terms, termSig: '' };
 
   if (typeof ResizeObserver === 'function') {
     if (_resize) _resize.disconnect();
@@ -356,6 +369,97 @@ function _renderTerminals(sample) {
   }
 }
 
+/** The Position this session acts as that may set the approach values at the sample's Facility, or null (the mirror of SetParApproach's owners). */
+function _valueSetter(sample) {
+  if (!sample) return null;
+  const owners = RUNWAY_STATUS_ACTION_OWNERS.SetParApproach || [];
+  return getActingPositions(sample.facilityId).find(p => owners.includes(p)) || null;
+}
+
+function _renderValues(sample, approach) {
+  const cells = parValueCells(approach);
+  const editable = !!(approach && approach.runwayEnd && _valueSetter(sample));
+  if (_editing && (!approach || _editing.approachId !== approach.id || !editable)) _editing = null;
+  for (const c of cells) {
+    const span = _els.values[c.field];
+    span.dataset.set = c.set ? '1' : '';
+    span.dataset.editable = editable ? '1' : '';
+    span.classList.toggle('par-set', c.set);
+    if (_editing && _editing.field === c.field) continue; // never redrawn under the controller's typing
+    if (span.firstChild && span.firstChild.nodeType !== 3) span.textContent = '';
+    const text = c.text || '—';
+    if (span.textContent !== text) span.textContent = text;
+    span.title = editable ? `${c.title} — click to set` : c.title;
+  }
+}
+
+/** Opens an approach value for typing, in place. */
+function _beginEdit(field) {
+  const sample = _shown ? parSampleFor(_shown) : null;
+  const approach = sample && sample.approach;
+  if (!approach || !approach.runwayEnd || !_valueSetter(sample)) return;
+  if (_editing && _editing.field === field) return;
+  _editing = null;
+  renderParPanel(); // puts the cell that was open back
+  const cell = parValueCells(approach).find(c => c.field === field);
+  const span = _els.values[field];
+  span.textContent = '';
+  const input = _el('input', 'par-input');
+  input.type = 'text';
+  input.inputMode = 'decimal';
+  input.size = field === 'gpaDeg' ? 5 : 6;
+  input.value = cell && cell.value != null ? String(field === 'gpaDeg' ? cell.value.toFixed(2) : Math.round(cell.value)) : '';
+  input.dataset.parInput = field;
+  input.setAttribute('aria-label', `${cell ? cell.label : field}, default ${cell ? cell.defaultText : ''}`);
+  input.title = `${cell ? cell.label : field}: Enter to set, empty for the default (${cell ? cell.defaultText : ''}), Escape to cancel`;
+  const reset = _el('button', 'par-default', 'Default');
+  reset.type = 'button';
+  reset.dataset.parDefault = field;
+  reset.title = `back to the default, ${cell ? cell.defaultText : ''}`;
+  reset.hidden = !(cell && cell.set);
+  // mousedown would blur the input first, which cancels the edit
+  reset.addEventListener('mousedown', (e) => e.preventDefault());
+  reset.addEventListener('click', () => _commitEdit(null));
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); _commitEdit(input.value); }
+    else if (e.key === 'Escape') { e.preventDefault(); _cancelEdit(); }
+    e.stopPropagation(); // the app's shortcuts must not see the typing
+  });
+  input.addEventListener('blur', () => { if (_editing && _editing.input === input) _cancelEdit(); });
+  span.append(input, reset);
+  _editing = { approachId: approach.id, field, input };
+  input.focus();
+  input.select();
+}
+
+function _cancelEdit() {
+  _editing = null;
+  if (_els) _els.msg.dataset.valueError = '';
+  renderParPanel();
+}
+
+/** Sends a typed value (`text` null: back to the default). An invalid one keeps the field open with the range. */
+function _commitEdit(text) {
+  if (!_editing) return;
+  const sample = _shown ? parSampleFor(_shown) : null;
+  const approach = sample && sample.approach;
+  const positionId = _valueSetter(sample);
+  if (!approach || !positionId) { _cancelEdit(); return; }
+  const { field, input } = _editing;
+  const r = text === null ? { ok: true, value: null } : parseParValue(field, text);
+  if (!r.ok) {
+    input.setAttribute('aria-invalid', 'true');
+    input.dataset.invalid = '1';
+    input.title = r.error;
+    _els.msg.textContent = `${PAR_VALUE_CELLS.find(c => c.field === field).label}: ${r.error}`;
+    _els.msg.dataset.valueError = '1';
+    _els.msg.className = 'par-msg';
+    return;
+  }
+  sendEfspRunwayStatusMutation(positionId, sample.facilityId, undefined, { kind: 'SetParApproach', runwayEnd: approach.runwayEnd, field, value: r.value });
+  _cancelEdit();
+}
+
 /** Draws the panel from the PAR samples this session holds. Called on every `par` frame, Board change, setting, zoom and tick. */
 export function renderParPanel() {
   if (!_bodyEl) return;
@@ -374,12 +478,13 @@ export function renderParPanel() {
   _renderPicks(samples);
 
   const approach = sample.approach || null;
-  const gpa = effectiveGpa(approach, _num('parGpa', PAR_DEFAULTS.gpaDeg));
+  // the angle in use is the approach's, one value per approach on the server (docs/adr/0130)
+  const gpa = approach && Number.isFinite(approach.gpaDeg) ? approach.gpaDeg : PAR_DEFAULTS.gpaDeg;
   const tolElHigh = _num('parTolElHigh', PAR_DEFAULTS.tolElHighDeg);
   const tolElLow = _num('parTolElLow', PAR_DEFAULTS.tolElLowDeg);
   const tolAz = _num('parTolAz', PAR_DEFAULTS.tolAzDeg);
   const rDa = rangeAtDaNm(approach, gpa);
-  const plot = replot(sample.plot, approach, gpa);
+  const plot = sample.plot || null;
   const sev = severity(plot, { rDaNm: rDa, tolElHighDeg: tolElHigh, tolElLowDeg: tolElLow, tolAzDeg: tolAz });
   const times = parSampleTimes();
   const np = noPlotState(sample, { receivedAtMs: times.receivedAt, nowMs: now, firstSeenMs: _firstSeen.get(id) });
@@ -390,8 +495,7 @@ export function renderParPanel() {
   const hd = headerModel(approach, gpa);
 
   _els.title.textContent = hd.title;
-  _els.gpa.textContent = hd.gpa || '—';
-  _els.tch.textContent = hd.tch || '—';
+  _renderValues(sample, approach);
   _els.da.textContent = hd.da || '—';
   _els.fac.textContent = hd.fac;
   _els.facK.hidden = !hd.fac;
@@ -422,8 +526,11 @@ export function renderParPanel() {
   setDev(_els.elDev, ro.el, ro.elSev);
   setDev(_els.azDev, ro.az, ro.azSev);
   setDev(_els.alt, ro.alt, '');
-  _els.msg.textContent = ro.noPlot;
-  _els.msg.className = ro.noPlot ? 'par-msg par-attn' : 'par-msg';
+  if (!(_editing && _els.msg.dataset.valueError === '1')) {
+    _els.msg.dataset.valueError = '';
+    _els.msg.textContent = ro.noPlot;
+    _els.msg.className = ro.noPlot ? 'par-msg par-attn' : 'par-msg';
+  }
   _renderTerminals(sample);
 
   const autoscale = !!getSetting('parAutoscale');

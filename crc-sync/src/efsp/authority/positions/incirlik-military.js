@@ -71,6 +71,8 @@ const family = {
   permissions: Object.fromEntries(_rows.filter(([, row]) => row.ops).map(([id, row]) => [id, new Set(row.ops)])),
   createsStripTypes: Object.fromEntries(_rows.filter(([, row]) => row.createsStripTypes && row.createsStripTypes.length).map(([id, row]) => [id, new Set(row.createsStripTypes)])),
   ownsStates: Object.fromEntries(_rows.map(([id, row]) => [id, row.ownsStates || {}])),
+  // The PAR approach values (docs/adr/0130, decisions H153) are the final controller's: the Position the final is handed to.
+  runwayStatusOwners: { SetParApproach: incirlikPositionsWith('receivesFinal') },
   runwayStatusGrants: { RequestRunwayStatus: incirlikPositionsWith('requestsRunwayStatus') },
   capabilities: INCIRLIK_CAPABILITIES,
 };

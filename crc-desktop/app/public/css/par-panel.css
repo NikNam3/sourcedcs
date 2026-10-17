@@ -26,6 +26,18 @@
 .par-k { color: var(--efsp-muted, #8c9aa6); font-size: 10px; letter-spacing: .05em; margin: 0 4px 0 12px; }
 .par-v { color: var(--efsp-text, #d8e0e6); }
 .par-row [hidden] { display: none; }
+/* The approach values the PAR controller sets (crc-sync docs/adr/0130): grey always; a set value has a dotted underline and a small
+   grey mark, never amber (a set value is not a problem, dark cockpit H115). */
+.par-value[data-editable="1"] { cursor: text; }
+.par-value[data-editable="1"]:hover { outline: 1px solid var(--efsp-line-2, #4a5560); outline-offset: 1px; }
+.par-value.par-set { text-decoration: underline dotted var(--efsp-muted, #8c9aa6); text-underline-offset: 3px; }
+.par-value.par-set::after { content: '•'; color: var(--efsp-muted, #8c9aa6); font-size: 9px; margin-left: 2px; vertical-align: super; }
+.par-input { font: inherit; width: auto; color: var(--efsp-text, #d8e0e6); background: #0b0e11; border: 1px solid var(--efsp-line-2, #4a5560);
+  border-radius: 2px; padding: 0 3px; }
+.par-input[data-invalid="1"] { border-color: var(--efsp-muted, #8c9aa6); }
+.par-default { font: inherit; font-size: 10px; color: var(--efsp-muted, #8c9aa6); background: none; border: 1px solid var(--efsp-line, #2e3740);
+  border-radius: 2px; margin-left: 4px; padding: 0 5px; cursor: pointer; }
+.par-default[hidden] { display: none; }
 .par-cs { color: #fff; font-size: 15px; margin-right: 10px; }
 .par-right { margin-left: auto; }
 .par-range span { font-size: 24px; color: #fff; line-height: 1; }

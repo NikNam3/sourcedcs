@@ -257,6 +257,7 @@ function buildMonitors({ env, efsp, facilityConfig, missionClock, missionSession
     flightDataOf: (id) => efsp.flightDataStore.getFlightData(id),
     correlatedTrackId: (id) => efsp.correlationStore.correlatedTrackId(id),
     runwayViewOf: (facilityId) => efsp.runwayStatusStore.statusView(facilityId),
+    parValuesOf: (facilityId) => efsp.runwayStatusStore.parValues(facilityId),
     trackOf: (id) => trackStore.get(id),
     variationAt: (lat, lon) => theaterContext.variationAt(lat, lon),
     airportElevationFt: (icao) => {

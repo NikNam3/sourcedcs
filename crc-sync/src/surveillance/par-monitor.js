@@ -12,7 +12,8 @@
 //
 // The approach: the Facility's `parApproaches` (Facility config) for the runway end the Strip lands on, resolved the way
 // every other runway question is (runway-status.js resolveRunwayForStrip: the flight's assigned landing runway, else the
-// active runway).
+// active runway). Its TDZE, TCH, decision height and glidepath angle are the PAR controller's where they set one
+// (runway-status-store.js `SetParApproach`, docs/adr/0130), else the Facility file's.
 //
 // A plot is taken when DCS has moved the aircraft since the last one and it is inside the PAR's volume. Otherwise the
 // sample keeps its last plot and `plotAgeMs` grows: the client's "NO PLOT" after 3 s (H115) reads it. The age is a pure
@@ -36,13 +37,15 @@ class ParMonitor {
    * @param {(trackId:string)=>object|null} d.trackOf
    * @param {(lat:number, lon:number)=>number|null} [d.variationAt]
    * @param {(icao:string)=>number|null} [d.airportElevationFt] the DCS airfield elevation, for an approach with `tdzeFt: null`
+   * @param {(facilityId:string)=>object|null} [d.parValuesOf] runwayStatusStore.parValues: runway end -> the values the PAR
+   *   controller set (docs/adr/0130)
    * @param {{now:()=>number}} [d.wallClock]
    * @param {object} d.tuning                par-tuning.js
    */
   constructor({ facilityConfig, boardStoreFor, flightDataOf, correlatedTrackId, runwayViewOf, trackOf,
-    variationAt = () => null, airportElevationFt = () => null, wallClock = WALL_CLOCK, tuning }) {
+    variationAt = () => null, airportElevationFt = () => null, parValuesOf = () => null, wallClock = WALL_CLOCK, tuning }) {
     Object.assign(this, { _fc: facilityConfig, _board: boardStoreFor, _fd: flightDataOf, _corr: correlatedTrackId, _rwy: runwayViewOf,
-      _track: trackOf, _var: variationAt, _aptElev: airportElevationFt, _wall: wallClock, _tuning: tuning });
+      _track: trackOf, _var: variationAt, _aptElev: airportElevationFt, _parValues: parValuesOf, _wall: wallClock, _tuning: tuning });
     this._state = new Map(); // `${facilityId}:${stripId}` -> { fix, plot, plotAt, trail }
   }
 
@@ -123,19 +126,34 @@ class ParMonitor {
     const a = r && r.end && Object.prototype.hasOwnProperty.call(approaches, r.end) && !r.end.startsWith('_') ? approaches[r.end] : null;
     if (!a) return { approach: null, ref: null, sensor: { elevation: 'INOP', azimuth: 'INOP', reason: 'NO_APPROACH' } };
     const icao = (cfg.runwayStatus && cfg.runwayStatus.airportIcao) || null;
-    const tdze = _fin(a.tdzeFt) ? a.tdzeFt : (icao ? this._aptElev(icao) : null);
-    const tdzeFt = _fin(tdze) ? Math.round(tdze) : null;
-    const published = _fin(a.glideslopeDeg);
-    const gpaDeg = published ? a.glideslopeDeg : this._tuning.defaultGlideslopeDeg;
+    // The defaults: the Facility file's values, a null TDZE being the DCS airfield's elevation and a null angle par.json's
+    // default (H116's 3.06). Over them, what the PAR controller set for this runway end (docs/adr/0130, H153): one value per
+    // approach, so every PAR scope and this monitor agree.
+    const tdzeDefault = _fin(a.tdzeFt) ? a.tdzeFt : (icao ? this._aptElev(icao) : null);
+    const defaults = {
+      tdzeFt: _fin(tdzeDefault) ? Math.round(tdzeDefault) : null,
+      tchFt: a.tchFt,
+      dhFt: a.decisionHeightFt,
+      gpaDeg: _fin(a.glideslopeDeg) ? a.glideslopeDeg : this._tuning.defaultGlideslopeDeg,
+    };
+    const setValues = (this._parValues(facilityId) || {})[r.end] || {};
+    const set = par.PAR_VALUE_FIELDS.filter(k => _fin(setValues[k]));
+    const val = (k) => (set.includes(k) ? setValues[k] : defaults[k]);
+    const tdzeFt = val('tdzeFt');
+    const tchFt = val('tchFt');
+    const dhFt = val('dhFt');
+    const gpaDeg = val('gpaDeg');
     const v = this._var(a.thresholdLat, a.thresholdLon);
     const approach = {
       id: `${icao || facilityId}-${r.end}`, label: a.label, runwayEnd: r.end, airportIcao: icao,
-      gpaDeg, gpaPublished: published, tchFt: a.tchFt, tdzeFt, dhFt: a.decisionHeightFt,
-      daFt: tdzeFt === null ? null : tdzeFt + a.decisionHeightFt,
+      gpaDeg, tchFt, tdzeFt, dhFt,
+      daFt: tdzeFt === null ? null : tdzeFt + dhFt,
       courseTrueDeg: a.courseTrueDeg,
       courseDisplay: displayBearing(a.courseTrueDeg, { ref: 'TRUE', magneticVariationDeg: _fin(v) ? v : null }),
+      defaults,
+      set,
     };
-    const ref = { refLat: a.thresholdLat, refLon: a.thresholdLon, courseTrueDeg: a.courseTrueDeg, tdzeFt, tchFt: a.tchFt, gpaDeg };
+    const ref = { refLat: a.thresholdLat, refLon: a.thresholdLon, courseTrueDeg: a.courseTrueDeg, tdzeFt, tchFt, gpaDeg };
     const sensor = tdzeFt === null ? { elevation: 'INOP', azimuth: 'OK', reason: 'NO_TDZE' } : { elevation: 'OK', azimuth: 'OK', reason: null };
     return { approach, ref, sensor };
   }

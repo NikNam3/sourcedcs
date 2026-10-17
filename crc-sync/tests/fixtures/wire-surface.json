@@ -143,6 +143,7 @@
         "RejectRunwayRequest",
         "RequestRunwayStatus",
         "SelfCoordinateRunwayChange",
+        "SetParApproach",
         "WithdrawRunwayChange"
       ]
     },
@@ -299,13 +300,14 @@
         "runwayEnd",
         "airportIcao",
         "gpaDeg",
-        "gpaPublished",
         "tchFt",
         "tdzeFt",
         "dhFt",
         "daFt",
         "courseTrueDeg",
-        "courseDisplay"
+        "courseDisplay",
+        "defaults",
+        "set"
       ],
       "plot": [
         "rangeNm",

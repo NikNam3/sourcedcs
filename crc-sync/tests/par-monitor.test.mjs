@@ -16,7 +16,7 @@ const TUNING = { defaultGlideslopeDeg: 3.06, sampleMs: 500, trailPlots: 12, cove
 const OWN = 2;
 const DCS_LTAG_ELEV_FT = 160; // what DCS says the airfield is at (the config leaves TDZE to DCS)
 
-function world({ activeRunway = '05', aptElevFt = DCS_LTAG_ELEV_FT } = {}) {
+function world({ activeRunway = '05', aptElevFt = DCS_LTAG_ELEV_FT, parValues = {} } = {}) {
   let t = 1_000_000;
   const wall = { now: () => t, step: (ms) => { t += ms; } };
   const strips = { INCIRLIK: [], CARRIER: [] };
@@ -41,6 +41,7 @@ function world({ activeRunway = '05', aptElevFt = DCS_LTAG_ELEV_FT } = {}) {
     trackOf: (id) => tracks.get(id),
     variationAt: () => 5,
     airportElevationFt: (icao) => (icao === 'LTAG' ? aptElevFt : null),
+    parValuesOf: (fid) => (fid === 'INCIRLIK' ? parValues : null),
     wallClock: wall,
     tuning: TUNING,
   });
@@ -82,7 +83,8 @@ test('PAR at Incirlik: the threshold of the runway the flight lands on, TDZE fro
   assert.deepEqual(Object.keys(e.approach), [...par.APPROACH_KEYS]);
   assert.equal(e.approach.id, 'LTAG-05');
   assert.equal(e.approach.gpaDeg, 3.06);
-  assert.equal(e.approach.gpaPublished, false, 'no published angle: the controller\'s default may replace it (H116)');
+  assert.deepEqual(e.approach.defaults, { tdzeFt: DCS_LTAG_ELEV_FT, tchFt: 50, dhFt: 200, gpaDeg: 3.06 }, 'no published angle: par.json\'s default (H116)');
+  assert.deepEqual(e.approach.set, [], 'nothing set by a controller');
   assert.equal(e.approach.tdzeFt, DCS_LTAG_ELEV_FT);
   assert.equal(e.approach.daFt, DCS_LTAG_ELEV_FT + 200);
   assert.deepEqual(e.approach.courseDisplay, { value: 51, ref: 'M' }, '056 true less 5 east');
@@ -221,4 +223,51 @@ test('a Strip with no correlated contact is sampled with no plot (the panel says
   const out = w.monitor.tick();
   assert.equal(out.length, 1);
   assert.equal(out[0].plot, null);
+});
+
+// docs/adr/0130 (decisions H153): the PAR controller's values replace the defaults for the runway end they were set on, and the
+// sample is measured against them, so every scope agrees with the monitor.
+test('controller-set values: TDZE, TCH, DH and the angle replace the defaults on that runway end, and the plot is measured against them', () => {
+  const w = world({ parValues: { '05': { tdzeFt: 238, tchFt: 54, dhFt: 300, gpaDeg: 2.75 } } });
+  w.onFinal('INCIRLIK', 'par-final', 'PAR', { trackId: 21 });
+  w.fly(21, on(RWY05, 5, gp(5, 2.75, 54), 238));
+  const [e] = w.monitor.tick();
+  assert.equal(e.approach.tdzeFt, 238);
+  assert.equal(e.approach.tchFt, 54);
+  assert.equal(e.approach.dhFt, 300);
+  assert.equal(e.approach.daFt, 538, 'DA = the set TDZE + the set DH');
+  assert.equal(e.approach.gpaDeg, 2.75);
+  assert.deepEqual(e.approach.set, ['tdzeFt', 'tchFt', 'dhFt', 'gpaDeg']);
+  assert.deepEqual(e.approach.defaults, { tdzeFt: DCS_LTAG_ELEV_FT, tchFt: 50, dhFt: 200, gpaDeg: 3.06 }, 'the defaults ride along for "reset"');
+  assert.equal(e.plot.elevDevFt, 0, 'on the set glidepath from the set TCH above the set TDZE');
+  assert.equal(e.plot.elevDevDeg, 0);
+  assert.equal(e.plot.heightFt, Math.round(gp(5, 2.75, 54)));
+});
+
+test('controller-set values: one set value leaves the others at their defaults; another runway end is untouched', () => {
+  const w = world({ activeRunway: '23', parValues: { '05': { gpaDeg: 3.2 } } });
+  w.onFinal('INCIRLIK', 'par-final', 'PAR', { trackId: 22 });
+  const g23 = { refLat: INCIRLIK_CFG.parApproaches['23'].thresholdLat, refLon: INCIRLIK_CFG.parApproaches['23'].thresholdLon, courseTrueDeg: 236 };
+  w.fly(22, on(g23, 4, gp(4), DCS_LTAG_ELEV_FT));
+  let [e] = w.monitor.tick();
+  assert.equal(e.approach.gpaDeg, 3.06, 'runway 23 has nothing set');
+  assert.deepEqual(e.approach.set, []);
+  const v = world({ parValues: { '05': { gpaDeg: 3.2 } } });
+  v.onFinal('INCIRLIK', 'par-final', 'PAR', { trackId: 23 });
+  v.fly(23, on(RWY05, 4, gp(4, 3.2), DCS_LTAG_ELEV_FT));
+  [e] = v.monitor.tick();
+  assert.equal(e.approach.gpaDeg, 3.2);
+  assert.equal(e.approach.tdzeFt, DCS_LTAG_ELEV_FT, 'TDZE still DCS\'s');
+  assert.deepEqual(e.approach.set, ['gpaDeg']);
+  assert.equal(e.plot.elevDevFt, 0);
+});
+
+test('a controller-set TDZE gives elevation where DCS has no field elevation (NO_TDZE clears)', () => {
+  const w = world({ aptElevFt: null, parValues: { '05': { tdzeFt: 238 } } });
+  w.onFinal('INCIRLIK', 'par-final', 'PAR', { trackId: 24 });
+  w.fly(24, on(RWY05, 3, gp(3), 238));
+  const [e] = w.monitor.tick();
+  assert.deepEqual(e.sensor, { elevation: 'OK', azimuth: 'OK', reason: null });
+  assert.equal(e.approach.defaults.tdzeFt, null);
+  assert.equal(e.plot.elevDevFt, 0);
 });

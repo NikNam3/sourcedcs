@@ -21,7 +21,8 @@ const RAD = Math.PI / 180;
 
 const APPROACH_05 = {
   id: 'LTAG-05', label: 'PAR RWY 05', runwayEnd: '05', airportIcao: 'LTAG',
-  gpaDeg: 3.06, gpaPublished: false, tchFt: 50, tdzeFt: 238, dhFt: 200, daFt: 438, courseTrueDeg: 56, courseDisplay: { value: 51, ref: 'M' },
+  gpaDeg: 3.06, tchFt: 50, tdzeFt: 238, dhFt: 200, daFt: 438, courseTrueDeg: 56, courseDisplay: { value: 51, ref: 'M' },
+  defaults: { tdzeFt: 238, tchFt: 50, dhFt: 200, gpaDeg: 3.06 }, set: [],
 };
 const R_DA = (200 - 50) / (FT_PER_NM * Math.tan(3.06 * RAD)); // where the glidepath reaches DA
 
@@ -67,7 +68,7 @@ async function installSampleInjection(page) {
       if (msg && msg.type === 'par-sample' && window.__par.samples) msg.samples = JSON.parse(JSON.stringify(window.__par.samples));
     });
     // the panel's settings start at their defaults in every test
-    for (const [k, v] of [['parAutoscale', true], ['parGpa', 3.06], ['parTolElHigh', 1], ['parTolElLow', 0.5], ['parTolAz', 1]]) crc.settingsRegistry.setSetting(k, v);
+    for (const [k, v] of [['parAutoscale', true], ['parTolElHigh', 1], ['parTolElLow', 0.5], ['parTolAz', 1]]) crc.settingsRegistry.setSetting(k, v);
   });
 }
 const inject = (page, samples) => page.evaluate((s) => {
@@ -132,8 +133,10 @@ test('01 on the glidepath: all grey but the magenta track; the header, the fligh
   await openFromBay(page, 'PAR', 'par-final', call);
 
   await expect(field(page, 'title')).toHaveText('RWY 05 · LTAG');
-  await expect(field(page, 'gpa')).toHaveText('3.06°');
-  await expect(field(page, 'tch')).toHaveText('50');
+  await expect(field(page, 'tdzeFt')).toHaveText('238');
+  await expect(field(page, 'tchFt')).toHaveText('50');
+  await expect(field(page, 'dhFt')).toHaveText('200');
+  await expect(field(page, 'gpaDeg')).toHaveText('3.06°');
   await expect(field(page, 'da')).toHaveText('438');
   await expect(field(page, 'fac')).toHaveText('051M');
   await expect(field(page, 'name')).toHaveText(call); // a callsign at Incirlik (H122)
@@ -152,7 +155,7 @@ test('01 on the glidepath: all grey but the magenta track; the header, the fligh
   await expect(panel(page).locator('[data-par-trail="el"] circle')).toHaveCount(12);
   await expect(panel(page).locator('[data-par-line="glidepath"]')).toHaveAttribute('stroke', '#5f6b76');
   await expect(panel(page).locator('.par-term')).toHaveText(['Begin descent', 'Cleared to land', 'Landed', 'Missed approach']);
-  await expect(panel(page).locator('input, select, textarea')).toHaveCount(0); // nothing to type on final
+  await expect(panel(page).locator('input, select, textarea')).toHaveCount(0); // nothing to type on final until a value is opened
   await panel(page).screenshot({ path: test.info().outputPath('01-on-glidepath.png') });
 
   // above the glidepath, outside tolerance: red; the readout says so
@@ -321,28 +324,69 @@ test('03 autoscale: the track at the golden-ratio point down to 10 NM; a manual 
   expect((await view(page)).rMax).toBeCloseTo(fixed.rMax, 6);
 });
 
-test('04 the controller\'s default glideslope when none is published; a published angle wins; the Settings tab has the five PAR settings', async ({ page }) => {
+// crc-sync docs/adr/0130 (decisions H153): the approach values are the PAR controller's, held on the server per runway end.
+const parValues = (page) => page.evaluate(() => {
+  const r = crc.state.getEfspRunwayStatus('INCIRLIK');
+  return r ? (r.parValues || {}) : null;
+});
+
+test('04 the approach values: PAR sets the angle in place, the server holds it, a set value is marked grey, Default and Escape; the Settings tab has four PAR settings', async ({ page }) => {
   await incirlik(page);
   const call = `PAR${unique()}`;
   const id = await onParFinal(page, call);
-  // the server measured +0.95° against 3.06° (inside); the controller's 3.00° makes it +1.01° (outside)
-  await inject(page, [sample(id, { r: 4, elDev: 0.95 })]);
+  await inject(page, [sample(id, { r: 4 })]);
   await openFromBay(page, 'PAR', 'par-final', call);
-  await expect(devItem(page, 'el')).not.toHaveClass(/par-danger/);
-  await page.evaluate(() => crc.settingsRegistry.setSetting('parGpa', 3.0));
-  await expect(field(page, 'gpa')).toHaveText('3.00°');
-  await expect(devItem(page, 'el')).toHaveClass(/par-danger/);
-  // a published angle wins over the controller's default
-  await inject(page, [sample(id, { r: 4, elDev: 0.95, approach: { ...APPROACH_05, gpaPublished: true } })]);
-  await expect(field(page, 'gpa')).toHaveText('3.06°');
-  await expect(devItem(page, 'el')).not.toHaveClass(/par-danger/);
+  await expect.poll(() => parValues(page)).toEqual({});
+  const gpaCell = field(page, 'gpaDeg');
+  await expect(gpaCell).toHaveAttribute('data-editable', '1');
+  await expect(gpaCell).toHaveAttribute('data-set', '');
 
-  // the Settings panel's PAR tab
+  // out of range: the field stays open and says the range, nothing coloured, nothing sent
+  await gpaCell.click();
+  const input = panel(page).locator('[data-par-input="gpaDeg"]');
+  await expect(input).toHaveValue('3.06');
+  await input.fill('4');
+  await input.press('Enter');
+  await expect(input).toHaveAttribute('data-invalid', '1');
+  await expect(field(page, 'msg')).toContainText('2.5 to 3.5');
+  await expect(panel(page).locator('.par-danger, .par-attn, .par-bad')).toHaveCount(0);
+  await panel(page).screenshot({ path: test.info().outputPath('04-invalid.png') });
+  // a valid angle: sent as SetParApproach, held on the runway-status record
+  await input.fill('3.00');
+  await input.press('Enter');
+  await expect(input).toHaveCount(0);
+  await expect.poll(() => parValues(page)).toEqual({ '05': { gpaDeg: 3 } });
+  await expect(field(page, 'msg')).toHaveText('');
+
+  // the server's next sample carries it (the harness has no DCS, so the spec's sample says what the monitor would)
+  const setApproach = { ...APPROACH_05, gpaDeg: 3, set: ['gpaDeg'] };
+  await inject(page, [sample(id, { r: 4, approach: setApproach })]);
+  await expect(gpaCell).toHaveText('3.00°');
+  await expect(gpaCell).toHaveAttribute('data-set', '1');
+  await expect(gpaCell).toHaveClass(/par-set/);
+  await expect(gpaCell).toHaveAttribute('title', /default 3\.06°/);
+  await expect(field(page, 'tchFt')).toHaveAttribute('data-set', '');
+  await expect(panel(page).locator('.par-danger, .par-attn, .par-bad')).toHaveCount(0); // a set value is grey (dark cockpit)
+  await panel(page).screenshot({ path: test.info().outputPath('04-set.png') });
+
+  // Escape abandons: nothing sent
+  await field(page, 'tchFt').click();
+  const tch = panel(page).locator('[data-par-input="tchFt"]');
+  await tch.fill('60');
+  await tch.press('Escape');
+  await expect(tch).toHaveCount(0);
+  await expect(field(page, 'tchFt')).toHaveText('50');
+  // Default puts the angle back
+  await gpaCell.click();
+  await panel(page).locator('[data-par-default="gpaDeg"]').click();
+  await expect.poll(() => parValues(page)).toEqual({});
+
+  // the Settings panel's PAR tab: no per-controller glideslope any more
   await page.evaluate(() => crc.dock.toggleDockPanel('settings', true));
   await page.locator('.stab[data-pane="par"]').click();
   const pane = page.locator('#stab-par');
   await expect(pane.locator('#set-parAutoscale')).toBeChecked();
-  await expect(pane.locator('#set-parGpa')).toHaveValue('3');
+  await expect(pane.locator('#set-parGpa')).toHaveCount(0);
   await expect(pane.locator('#set-parTolElHigh')).toHaveValue('1');
   await expect(pane.locator('#set-parTolElLow')).toHaveValue('0.5');
   await expect(pane.locator('#set-parTolAz')).toHaveValue('1');
