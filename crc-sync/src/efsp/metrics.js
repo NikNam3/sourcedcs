@@ -262,13 +262,18 @@ class EfspMetrics {
     const nowM = this._clock.now();
     let cur = this._missions[this._missions.length - 1];
     if (!cur || cur.seq !== session.seq) {
+      // Opened on the wall clock (just after a restart the mission clock has forgotten the old mission's time, ADR 0129):
+      // startedAt is replaced by the first mission reading rather than keep a time from another clock (the contract
+      // keeps it a number, so the wall time stands in until then, flagged by startedOnWall).
       cur = { seq: session.seq, theatre: session.theatre, startedAt: nowM, lastAt: missionTime ? nowM : null, lastWallAt: missionTime ? wall : null };
+      if (!missionTime) cur.startedOnWall = true;
       this._missions.push(cur);
       this._dirty = true;
     } else if (cur.theatre !== session.theatre) {
       cur.theatre = session.theatre;
       this._dirty = true;
     }
+    if (missionTime && cur.startedOnWall) { cur.startedAt = nowM; delete cur.startedOnWall; this._dirty = true; }
     if (missionTime) {
       if (cur.lastAt === null || nowM > cur.lastAt) cur.lastAt = nowM;
       cur.lastWallAt = wall;

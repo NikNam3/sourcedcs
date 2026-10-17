@@ -9,7 +9,8 @@
 // missionNow() is the client's one answer to "what time is it" for anything a
 // controller reads as a time of day (a booking window, how long an exchange
 // has waited). Before the first message it is the wall clock, which is also
-// what the server answers before DCS does.
+// what the server answers before DCS does. MISSION_HELD (DCS paused, ADR 0129)
+// is not advanced: a paused game clock does not move.
 
 let _missionAnchorWallMs = null; // Date.now() when the last game-time arrived
 let _missionAnchorZuluMs = null; // what it said
@@ -24,6 +25,7 @@ export function updateGameTime(msg) {
 
 export function missionNow() {
   if (_missionAnchorZuluMs === null) return Date.now();
+  if (_missionClockSource === 'MISSION_HELD') return _missionAnchorZuluMs;
   return _missionAnchorZuluMs + (Date.now() - _missionAnchorWallMs);
 }
 
