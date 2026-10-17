@@ -51,6 +51,7 @@ const { REGISTRY, RESTORE_ORDER, checkPersistedShape } = require('./stores');
 const { SERVICE_ROWS } = require('./authority/airspace');
 const { stampStrip, touchedStrips, boardDelta } = require('./wire/frames');
 const { resetForMission } = require('./mission-reset');
+const { FrequencyTable } = require('./frequency-table');
 const log = require('../log').logger('efsp');
 
 /**
@@ -117,6 +118,19 @@ function createEfsp({ env = process.env, facilityConfig = createFacilityConfig({
     const trackId = correlationStore.correlatedTrackId(flightDataId);
     return trackId ? locateTrack(trackId) : null;
   };
+  // The runtime frequency table (docs/adr/0131), its own state file; built before the Facilities so its values are the
+  // facility config's from the first read. An SFA frequency is in use while a live Strip's flight is on it.
+  const frequencyTable = new FrequencyTable({
+    facilityConfig, env, clock, wallClock, mutationLog,
+    inUse: (facilityId, mhz) => {
+      const f = facilities.get(facilityId);
+      return !!f && f.boardStore.getAll().some((s) => {
+        if (s.state === 'DROPPED') return false;
+        const fd = flightDataStore.getFlightData(s.flightDataId);
+        return !!(fd && fd.comms && fd.comms.workingFrequencyMhz === mhz);
+      });
+    },
+  });
   const facilityIds = facilityConfig.getFacilityIds();
   undoHistory.attach(undoEnv({
     boardFor: (facilityId) => { const f = facilities.get(facilityId); return f ? f.boardStore : null; },
@@ -124,7 +138,7 @@ function createEfsp({ env = process.env, facilityConfig = createFacilityConfig({
   }));
 
   for (const facilityId of facilityIds) {
-    const positionStore = new PositionStore(facilityConfig.getPositionSet(facilityId), facilityConfig.getHatMaps(facilityId), { clock, frequencies: facilityConfig.getPositionFrequencies(facilityId), isAbsent });
+    const positionStore = new PositionStore(facilityConfig.getPositionSet(facilityId), facilityConfig.getHatMaps(facilityId), { clock, frequencies: () => facilityConfig.getPositionFrequencies(facilityId), isAbsent });
 
     const rules = buildFacilityRules({ facilityId, facilityConfig, permissionRules, positionStore, facilities, stores: { airspaceStore, marsaStore, runwayStatusStore, carrierStore, correlationStore }, regimeLocator });
 
@@ -179,6 +193,7 @@ function createEfsp({ env = process.env, facilityConfig = createFacilityConfig({
     permission: permissionRules, // the class-dependent predicates (permission.js's createPermission), for the wire families
     nlaStatusMonitor,
     runwayStatusStore,
+    frequencyTable,
     // The real, Facility-aware accessors WP4A's wire protocol uses.
     boardStoreFor: (facilityId) => {
       const f = _facilityOrThrow(facilities, facilityId);
@@ -202,7 +217,7 @@ function createEfsp({ env = process.env, facilityConfig = createFacilityConfig({
     flightDataStore, mutationLog, clock, wallClock, undoHistory, facilityConfig, stereoRoutes,
     /** Tests only (src/test-reset.js): the NLA double-tap guard's length, ms, for every Board. */
     setNlaGuardMs: (ms) => { nlaGuard.ms = ms; },
-    airspaceStore, correlationStore, marsaStore, nlaStatusMonitor, runwayStatusStore, carrierStore,
+    airspaceStore, correlationStore, marsaStore, nlaStatusMonitor, runwayStatusStore, carrierStore, frequencyTable,
     boardStoreFor: ctx.boardStoreFor, positionStoreFor: ctx.positionStoreFor,
 
     /**

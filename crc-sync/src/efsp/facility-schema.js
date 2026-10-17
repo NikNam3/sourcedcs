@@ -484,4 +484,4 @@ function validateFacilityConfig(candidate, expectedFacilityId) {
   return { ok: true };
 }
 
-module.exports = { validateConfig, validateFacilityConfig, validateRadarSelector, BAY_VIEWS, SFA_USES, REQUIRED_KEYS, MCI_DEFAULT };
+module.exports = { validateConfig, validateFacilityConfig, validateRadarSelector, BAY_VIEWS, SFA_USES, REQUIRED_KEYS, MCI_DEFAULT, SFA_MIN_MHZ, SFA_MAX_MHZ };

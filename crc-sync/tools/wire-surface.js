@@ -131,6 +131,7 @@ function storeOpKinds() {
     'efsp-ato-mutation': scannedOpKinds(path.join(EFSP, 'wire', 'families', 'ato.js')),
     'efsp-carrier-mutation': uniq([STATE_OP, ...STACK_OP_KINDS]),
     'efsp-correlation-mutation': scannedOpKinds(path.join(EFSP, 'correlation-store.js')),
+    'efsp-frequency-mutation': uniq(require(path.join(EFSP, 'frequency-table.js')).OP_KINDS), // docs/adr/0131
     'efsp-marsa-mutation': scannedOpKinds(path.join(EFSP, 'marsa-store.js')),
     'efsp-runway-status-mutation': keys(RUNWAY_STATUS_OP_OWNERS),
   };
