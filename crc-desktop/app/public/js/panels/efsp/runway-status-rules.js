@@ -39,6 +39,7 @@ export const RUNWAY_STATUS_ACTION_OWNERS = {
   CompleteRunwayChange:       ['LC'],
   AckRunwayChange:            ['OPS', 'AP'],
   RejectRunwayChange:         ['OPS', 'AP'],
+  SetParApproach:             ['PAR'], // the PAR approach values, the final controller's (positions/incirlik-military.js, crc-sync docs/adr/0130)
 };
 
 // [SOURCE-DEFINED] (docs/adr/0068) — which Strips show a RWY chip

@@ -15,33 +15,62 @@ const near = (a, b, eps = 1e-6) => assert.ok(Math.abs(a - b) < eps, `${a} != ${b
 
 const approach = (over) => ({
   id: 'LTAG-05', kind: 'RUNWAY', label: 'PAR RWY 05', runwayEnd: '05', airportIcao: 'LTAG', hullId: null,
-  gpaDeg: 3.06, gpaPublished: false, tchFt: 50, tdzeFt: 238, dhFt: 200, daFt: 438, courseTrueDeg: 56, courseDisplay: { value: 51, ref: 'M' }, ...over,
+  gpaDeg: 3.06, tchFt: 50, tdzeFt: 238, dhFt: 200, daFt: 438, courseTrueDeg: 56, courseDisplay: { value: 51, ref: 'M' },
+  defaults: { tdzeFt: 238, tchFt: 50, dhFt: 200, gpaDeg: 3.06 }, set: [], ...over,
 });
 const plot = (over) => ({ rangeNm: 3.36, heightFt: 1135, elevDeg: 3.04, elevDevDeg: -0.02, elevDevFt: -6, azDeg: -0.15, azDevFt: -55, gsKt: 142, vsFpm: -770, ...over });
 
-test('the glidepath in use: a published angle wins, else the controller\'s default (H116)', () => {
-  assert.equal(M.effectiveGpa(approach({ gpaPublished: true, gpaDeg: 3.5 }), 3.0), 3.5);
-  assert.equal(M.effectiveGpa(approach(), 2.9), 2.9);
-  assert.equal(M.effectiveGpa(approach(), undefined), 3.06);
-  assert.equal(M.effectiveGpa(null, undefined), M.PAR_DEFAULTS.gpaDeg);
+test('the defaults: 3.06° only as a drawing fallback, tolerances H116 / H141', () => {
   assert.equal(M.PAR_DEFAULTS.gpaDeg, 3.06);
   assert.equal(M.PAR_DEFAULTS.tolElHighDeg, 1);
   assert.equal(M.PAR_DEFAULTS.tolElLowDeg, 0.5, 'the FAA lower safe limit (8200.1D B cursor, ADR 0123)');
   assert.equal(M.PAR_DEFAULTS.tolAzDeg, 1);
   assert.equal(M.PAR_DEFAULTS.autoscale, true);
+  assert.equal('effectiveGpa' in M, false, 'no per-controller angle any more (crc-sync docs/adr/0130): the approach carries the one in use');
+  assert.equal('replot' in M, false);
 });
 
-test('replot: the elevation deviation against the controller\'s angle, as docs/wip/PAR-1.md gives it; the same angle changes nothing', () => {
-  const a = approach();
-  const p = plot();
-  assert.deepEqual(M.replot(p, a, 3.06), p);
-  const r = M.replot(p, a, 3.0);
-  near(r.elevDevDeg, 0.04);
-  near(r.elevDevFt, 1135 - (50 + 3.36 * 6076.12 * Math.tan(3 * Math.PI / 180)));
-  assert.equal(r.azDevFt, -55, 'azimuth untouched');
-  assert.equal(M.replot(null, a, 3), null);
-  const atTd = M.replot(plot({ rangeNm: 0, elevDeg: null, elevDevDeg: null }), a, 3.0);
-  assert.equal(atTd.elevDevDeg, null, 'angles stay null at range 0');
+// crc-sync docs/adr/0130 (decisions H153): the approach values the PAR controller sets.
+test('parseParValue: as the server checks it (ranges, rounding, units, empty = the default)', () => {
+  assert.deepEqual(M.parseParValue('gpaDeg', '2.75'), { ok: true, value: 2.75 });
+  assert.deepEqual(M.parseParValue('gpaDeg', ' 3,1° '), { ok: true, value: 3.1 });
+  assert.deepEqual(M.parseParValue('gpaDeg', '2.754'), { ok: true, value: 2.75 });
+  assert.equal(M.parseParValue('gpaDeg', '3.6').ok, false);
+  assert.match(M.parseParValue('gpaDeg', '2.4').error, /2\.5 to 3\.5/);
+  assert.deepEqual(M.parseParValue('tdzeFt', '238 ft'), { ok: true, value: 238 });
+  assert.deepEqual(M.parseParValue('tdzeFt', '-12'), { ok: true, value: -12 });
+  assert.deepEqual(M.parseParValue('tchFt', ''), { ok: true, value: null }, 'empty: back to the default');
+  assert.equal(M.parseParValue('dhFt', '99').ok, false);
+  assert.equal(M.parseParValue('dhFt', 'abc').ok, false);
+  assert.equal(M.parseParValue('dhFt', '1e3').ok, false);
+  assert.equal(M.parseParValue('courseTrueDeg', '56').ok, false);
+});
+
+test('PAR_VALUE_LIMITS mirror crc-sync surveillance/par.js verbatim', async () => {
+  const { createRequire } = await import('node:module');
+  const require = createRequire(import.meta.url);
+  const server = require('../../crc-sync/src/surveillance/par.js');
+  assert.deepEqual(JSON.parse(JSON.stringify(M.PAR_VALUE_LIMITS)), JSON.parse(JSON.stringify(server.PAR_VALUE_LIMITS)));
+  assert.deepEqual(M.PAR_VALUE_CELLS.map(c => c.field), [...server.PAR_VALUE_FIELDS]);
+});
+
+test('parValueCells: the values in force, which the controller set (marked), and the default each replaces', () => {
+  const cells = M.parValueCells(approach({ tdzeFt: 240, gpaDeg: 2.8, daFt: 440, set: ['tdzeFt', 'gpaDeg'] }));
+  assert.deepEqual(cells.map(c => [c.label, c.text, c.set, c.defaultText]), [
+    ['TDZE', '240', true, '238'], ['TCH', '50', false, '50'], ['DH', '200', false, '200'], ['GPA', '2.80°', true, '3.06°'],
+  ]);
+  assert.match(cells[0].title, /set by the PAR controller; default 238/);
+  const none = M.parValueCells(approach({ tdzeFt: null, defaults: { tdzeFt: null, tchFt: 50, dhFt: 200, gpaDeg: 3.06 } }));
+  assert.equal(none[0].text, '');
+  assert.equal(none[0].defaultText, 'none');
+  assert.equal(M.parValueCells(null).length, 4);
+});
+
+test('the PAR panel draws the approach\'s own angle: no client replot, the setter is the SetParApproach owner', () => {
+  const src = fs.readFileSync(path.join(JS, 'panels/efsp/par-panel.js'), 'utf8');
+  assert.ok(!/parGpa/.test(src.replace(/\/\/.*$/gm, '')), 'no per-controller default glideslope setting');
+  assert.ok(/RUNWAY_STATUS_ACTION_OWNERS\.SetParApproach/.test(src));
+  assert.ok(/kind: 'SetParApproach'/.test(src));
 });
 
 test('DA: the glidepath reaches it at (DH - TCH) / tan(GPA)', () => {
@@ -233,5 +262,5 @@ test('the PAR settings tab registers its settings with the H116 / H141 defaults'
   await import('../app/public/js/panels/efsp/par-panel.js');
   const tab = reg.settingsTabs().find(t => t.id === 'par');
   assert.ok(tab);
-  assert.deepEqual(tab.fields.map(f => [f.key, f.default]), [['parAutoscale', true], ['parGpa', 3.06], ['parTolElHigh', 1], ['parTolElLow', 0.5], ['parTolAz', 1]]);
+  assert.deepEqual(tab.fields.map(f => [f.key, f.default]), [['parAutoscale', true], ['parTolElHigh', 1], ['parTolElLow', 0.5], ['parTolAz', 1]]);
 });

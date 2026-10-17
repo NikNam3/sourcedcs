@@ -17,6 +17,8 @@ export const FT_PER_NM = 6076.12;
 export const PHI = 0.618;                  // the golden-ratio point the autoscale keeps the track at (H115)
 export const AUTOSCALE_FLOOR_NM = 10;      // autoscale shrinks the window down to 10 NM and stops there
 export const NO_PLOT_MS = 3000;            // amber at 3 s without a plot (H115)
+// gpaDeg: only a fallback for drawing before a sample says the approach's angle; the angle in use is the server's (crc-sync
+// docs/adr/0130: one value per approach, set by the PAR controller, else the Facility default)
 export const PAR_DEFAULTS = Object.freeze({ gpaDeg: 3.06, tolElHighDeg: 1, tolElLowDeg: 0.5, tolAzDeg: 1, autoscale: true }); // H116, H141
 export const DEFAULT_VIEW = Object.freeze({ rMax: 10, hMax: 3500, azMaxDeg: 2 });
 export const ZOOM_STEP = 1.15;
@@ -57,13 +59,6 @@ export function parTerminalRecorded(strip, terminal) {
   return !!(terminal && terminal.once && strip && strip.finalCalls && strip.finalCalls[terminal.call]);
 }
 
-/** The glidepath angle in use: the approach's published angle wins; otherwise the controller's default (H116). */
-export function effectiveGpa(approach, ownGpaDeg) {
-  if (approach && approach.gpaPublished && _pmFin(approach.gpaDeg)) return approach.gpaDeg;
-  if (_pmFin(ownGpaDeg)) return ownGpaDeg;
-  return approach && _pmFin(approach.gpaDeg) ? approach.gpaDeg : PAR_DEFAULTS.gpaDeg;
-}
-
 /** Glidepath height (ft above TDZE) at a range, offset by `offDeg` (a tolerance line). */
 export function gpHeightFt(rangeNm, gpaDeg, tchFt, offDeg = 0) {
   return (_pmFin(tchFt) ? tchFt : 0) + rangeNm * FT_PER_NM * Math.tan((gpaDeg + offDeg) * _PM_RAD);
@@ -74,19 +69,6 @@ export function rangeAtDaNm(approach, gpaDeg) {
   if (!approach || !_pmFin(approach.dhFt) || !_pmFin(gpaDeg) || gpaDeg <= 0) return 0;
   const tch = _pmFin(approach.tchFt) ? approach.tchFt : 0;
   return Math.max(0, (approach.dhFt - tch) / (FT_PER_NM * Math.tan(gpaDeg * _PM_RAD)));
-}
-
-/**
- * A plot measured against `gpaDeg` instead of the server's angle (docs/wip/PAR-1.md: when `gpaPublished` is false and the
- * controller's default differs). Angles stay null at range <= 0, as the server sends them.
- */
-export function replot(plot, approach, gpaDeg) {
-  if (!plot) return null;
-  if (!approach || !_pmFin(gpaDeg) || (_pmFin(approach.gpaDeg) && Math.abs(approach.gpaDeg - gpaDeg) < 1e-9)) return { ...plot };
-  const out = { ...plot };
-  if (_pmFin(plot.elevDeg)) out.elevDevDeg = plot.elevDeg - gpaDeg;
-  if (_pmFin(plot.heightFt) && _pmFin(plot.rangeNm)) out.elevDevFt = plot.heightFt - gpHeightFt(plot.rangeNm, gpaDeg, approach.tchFt);
-  return out;
 }
 
 /**
@@ -246,7 +228,7 @@ function _pmCourse(approach) {
   return `${String(Math.round(d.value) % 360 || 360).padStart(3, '0')}${d.ref === 'M' ? 'M' : 'T'}`;
 }
 
-/** The approach header's text pieces. */
+/** The approach header's text pieces (the editable values are parValueCells'). */
 export function headerModel(approach, gpaDeg) {
   if (!approach) return { title: 'NO APPROACH', gpa: '', tch: '', da: '', fac: '' };
   const title = [approach.runwayEnd ? `RWY ${approach.runwayEnd}` : (approach.label || ''), approach.airportIcao || ''].filter(Boolean).join(' · ');
@@ -259,8 +241,71 @@ export function headerModel(approach, gpaDeg) {
   };
 }
 
+// ── The approach values the PAR controller sets (crc-sync docs/adr/0130, decisions H153) ──────────────────────────────────
+//
+// TDZE, TCH, decision height and glidepath angle, editable in place on the approach header; DA = TDZE + DH is shown, never typed.
+// crc-sync surveillance/par.js PAR_VALUE_LIMITS, verbatim (a parity test compares them): the ranges are ours.
+export const PAR_VALUE_LIMITS = Object.freeze({
+  tdzeFt: Object.freeze({ min: -1500, max: 15000, step: 1, unit: 'ft' }),
+  tchFt: Object.freeze({ min: 0, max: 200, step: 1, unit: 'ft' }),
+  dhFt: Object.freeze({ min: 100, max: 1000, step: 1, unit: 'ft' }),
+  gpaDeg: Object.freeze({ min: 2.5, max: 3.5, step: 0.01, unit: 'deg' }),
+});
+/** The header's editable cells, in order: the field, its label. */
+export const PAR_VALUE_CELLS = Object.freeze([
+  Object.freeze({ field: 'tdzeFt', label: 'TDZE' }),
+  Object.freeze({ field: 'tchFt', label: 'TCH' }),
+  Object.freeze({ field: 'dhFt', label: 'DH' }),
+  Object.freeze({ field: 'gpaDeg', label: 'GPA' }),
+]);
+
+/** A value as the header writes it: feet whole, the angle to two places with a degree sign. '' for none. */
+export function parValueText(field, v) {
+  if (!_pmFin(v)) return '';
+  return field === 'gpaDeg' ? `${v.toFixed(2)}°` : String(Math.round(v));
+}
+
 /**
- * Everything par-panel.js writes as text, for one flight. `plot` is already measured against the angle in use (replot).
+ * What the controller typed, checked as the server will check it: `{ ok, value }` (value null = back to the default, an
+ * empty field) or `{ ok: false, error }`. A trailing ° or "ft" is allowed.
+ */
+export function parseParValue(field, text) {
+  const lim = Object.prototype.hasOwnProperty.call(PAR_VALUE_LIMITS, field) ? PAR_VALUE_LIMITS[field] : null;
+  if (!lim) return { ok: false, error: `unknown value ${field}` };
+  const t = String(text == null ? '' : text).trim().replace(/\s*(°|deg|ft)$/i, '').replace(',', '.');
+  if (!t) return { ok: true, value: null };
+  if (!/^[-+]?\d+(\.\d+)?$/.test(t)) return { ok: false, error: `${lim.unit === 'deg' ? 'degrees' : 'feet'}, a number` };
+  const n = Number(t);
+  const v = lim.step === 1 ? Math.round(n) : Math.round(n * 100) / 100;
+  if (v < lim.min || v > lim.max) return { ok: false, error: `${lim.min} to ${lim.max} ${lim.unit === 'deg' ? '°' : 'ft'}` };
+  return { ok: true, value: v };
+}
+
+/**
+ * The header's value cells for an approach (the sample's `approach`): each value in force, whether the PAR controller set it
+ * (marked, grey: dark cockpit) and the default it replaces, for the tooltip and "reset to default".
+ * @returns {{ field, label, text, set:boolean, value:number|null, defaultValue:number|null, defaultText:string, title:string }[]}
+ */
+export function parValueCells(approach) {
+  const a = approach || {};
+  const set = Array.isArray(a.set) ? a.set : [];
+  const defaults = a.defaults || {};
+  return PAR_VALUE_CELLS.map(({ field, label }) => {
+    const value = _pmFin(a[field]) ? a[field] : null;
+    const defaultValue = _pmFin(defaults[field]) ? defaults[field] : null;
+    const isSet = set.includes(field);
+    const defaultText = parValueText(field, defaultValue) || 'none';
+    return {
+      field, label, value, defaultValue, set: isSet,
+      text: parValueText(field, value),
+      defaultText,
+      title: isSet ? `${label} set by the PAR controller; default ${defaultText}` : `${label}: the default`,
+    };
+  });
+}
+
+/**
+ * Everything par-panel.js writes as text, for one flight. `plot` is the sample's, measured against the approach's values.
  * @param {object} i { sample, plot, flight: { name, type, beacon }, sev, noPlot }
  */
 export function readoutModel({ sample, plot, flight = {}, sev = { el: '', az: '' }, noPlot = { amber: false, seconds: null } } = {}) {
