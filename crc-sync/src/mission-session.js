@@ -22,7 +22,7 @@
 //   CLOCK_STEP_BACK  the mission clock stepped back by more than 5 min: the
 //                    same .miz reloaded while crc-sync did not see the
 //                    mission_start. A paused mission steps back by at most
-//                    one 5 s poll, far inside the margin.
+//                    the clock's 12 s hold (ADR 0129), far inside the margin.
 //
 // A plain gRPC reconnect, or a crc-sync restart onto the same running mission,
 // keeps the session: same fingerprint, and the clock carried on.
@@ -61,7 +61,7 @@ const LAST_AT_PERSIST_MS = 60 * 1000;
 const CLOCK_ROLL_ADOPT_MS = 2 * 60 * 1000;
 
 // [SOURCE-DEFINED] (docs/adr/0108): the same-fingerprint mission_start clears only once the clock is seen this far behind
-// the old session's highest reading (a paused mission steps back at most one 5 s poll), within this much wall time.
+// the old session's highest reading (an unpause steps back at most the clock's 12 s hold, ADR 0129), within this much wall time.
 const CONFIRM_STEP_BACK_MS = 60 * 1000;
 const CONFIRM_WINDOW_MS = 10 * 60 * 1000;
 
