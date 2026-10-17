@@ -332,7 +332,7 @@ const ENTRY_SHAPES = {
     'participants', 'rendezvousAt', 'rendezvousBy', 'rev', 'startEvent', 'startedAt', 'state', 'transitions', 'updatedAt', 'updatedBy',
     'voidAcknowledgedAt', 'voidAcknowledgedBy', 'voidedBy', 'voidedDetail')),
   runwayStatuses: arrayOf({
-    ...anyOf('activeRunway', 'activeRunwaySource', 'facilityId', 'rev', 'runwayChange', 'runways', 'transitions', 'updatedAt',
+    ...anyOf('activeRunway', 'activeRunwaySource', 'facilityId', 'parValues', 'rev', 'runwayChange', 'runways', 'transitions', 'updatedAt',
       'updatedBy', 'windDerivedSession'),
     alertPad: PAD_SHAPE, hotCargoPad: PAD_SHAPE,
   }),

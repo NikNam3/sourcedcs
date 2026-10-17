@@ -164,9 +164,10 @@ test('state authority: PAR works FINAL on final and after a missed approach (nev
   assert.equal(permission.canActOnState('PAR', 'ARRIVAL', 'INBOUND'), false);
 });
 
-test('PAR never asks about, closes or opens a runway (H18)', () => {
+test('PAR never asks about, closes or opens a runway (H18); it sets only its own approach values (docs/adr/0130)', () => {
+  assert.equal(permission.canActOnRunwayStatus('PAR', 'SetParApproach'), true);
   for (const kind of Object.keys(permission.RUNWAY_STATUS_OP_OWNERS)) {
-    if (kind === 'RequestRunwayStatus') continue;
+    if (kind === 'RequestRunwayStatus' || kind === 'SetParApproach') continue;
     for (const id of ['PAR']) assert.equal(permission.canActOnRunwayStatus(id, kind), false, `${id} / ${kind}`);
   }
   assert.equal(permission.canActOnRunwayStatus('PAR', 'RequestRunwayStatus'), false);

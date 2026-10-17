@@ -27,7 +27,10 @@ const RAD = Math.PI / 180;
 /** The keys of one sample entry, in wire order (tools/wire-surface.js records them). */
 const SAMPLE_KEYS = Object.freeze(['stripId', 'facilityId', 'positionId', 'approach', 'sensor', 'plot', 'plotAgeMs', 'trail']);
 /** The keys of `approach`. */
-const APPROACH_KEYS = Object.freeze(['id', 'label', 'runwayEnd', 'airportIcao', 'gpaDeg', 'gpaPublished', 'tchFt', 'tdzeFt', 'dhFt', 'daFt', 'courseTrueDeg', 'courseDisplay']);
+// The four values in force are the controller's where the PAR controller set one (docs/adr/0130, decisions H153), else the
+// default; `defaults` holds the four defaults and `set` names the ones a controller set, so the panel can mark them and offer
+// "reset to default".
+const APPROACH_KEYS = Object.freeze(['id', 'label', 'runwayEnd', 'airportIcao', 'gpaDeg', 'tchFt', 'tdzeFt', 'dhFt', 'daFt', 'courseTrueDeg', 'courseDisplay', 'defaults', 'set']);
 /** The keys of `plot` (and of each `trail` entry, which has no gsKt / vsFpm). */
 const PLOT_KEYS = Object.freeze(['rangeNm', 'heightFt', 'elevDeg', 'elevDevDeg', 'elevDevFt', 'azDeg', 'azDevFt', 'gsKt', 'vsFpm']);
 const TRAIL_KEYS = Object.freeze(['rangeNm', 'heightFt', 'elevDeg', 'elevDevDeg', 'elevDevFt', 'azDeg', 'azDevFt']);
@@ -174,7 +177,36 @@ function validateParApproaches(cfg, ends) {
   return null;
 }
 
+// ── Controller-set approach values (docs/adr/0130, decisions H153) ─────────
+//
+// The PAR controller sets the threshold-relative values of an approach at run time: TDZE, TCH, decision height (DA = TDZE + DH)
+// and the glidepath angle. The ranges are OURS (no order gives a range a controller may type): TDZE and TCH as the Facility file
+// allows them; DH 100 to 1,000 ft above TDZE (a Category I 200 ft and a lower military PAR minimum both fit); the glidepath angle
+// 2.5 to 3.5 degrees, around the usual 3.00 (not quoted from TERPS: ours). Whole feet, hundredths of a degree.
+const PAR_VALUE_FIELDS = Object.freeze(['tdzeFt', 'tchFt', 'dhFt', 'gpaDeg']);
+const PAR_VALUE_LIMITS = Object.freeze({
+  tdzeFt: Object.freeze({ min: -1500, max: 15000, step: 1, unit: 'ft' }),
+  tchFt: Object.freeze({ min: 0, max: 200, step: 1, unit: 'ft' }),
+  dhFt: Object.freeze({ min: 100, max: 1000, step: 1, unit: 'ft' }),
+  gpaDeg: Object.freeze({ min: 2.5, max: 3.5, step: 0.01, unit: 'deg' }),
+});
+
+/**
+ * One typed value, checked and rounded. `null` (or undefined) clears it: the default applies again.
+ * @returns {{ok:true, value:number|null}|{ok:false, reason:'VALIDATION_ERROR', detail:string}}
+ */
+function validateParValue(field, value) {
+  const lim = Object.prototype.hasOwnProperty.call(PAR_VALUE_LIMITS, field) ? PAR_VALUE_LIMITS[field] : null;
+  if (!lim) return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown PAR approach value ${field} (${PAR_VALUE_FIELDS.join(', ')})` };
+  if (value === null || value === undefined) return { ok: true, value: null };
+  if (!_fin(value)) return { ok: false, reason: 'VALIDATION_ERROR', detail: `${field} must be a number or null (the default)` };
+  const v = lim.step === 1 ? Math.round(value) + 0 : Math.round(value * 100) / 100 + 0;
+  if (v < lim.min || v > lim.max) return { ok: false, reason: 'VALIDATION_ERROR', detail: `${field} must be from ${lim.min} to ${lim.max} ${lim.unit}` };
+  return { ok: true, value: v };
+}
+
 module.exports = {
+  PAR_VALUE_FIELDS, PAR_VALUE_LIMITS, validateParValue,
   SAMPLE_KEYS, APPROACH_KEYS, PLOT_KEYS, TRAIL_KEYS, INOP_REASONS, RUNWAY_APPROACH_KEYS,
   FT_PER_M, FT_PER_NM,
   offsetPoint, measure, inCoverage, trailEntry,

@@ -36,6 +36,7 @@ const {
   canGo, buildStatusView, activeEndIntoWind, isRunwayChangeInProgress, isRunwayChangeOpen,
   REQUEST_ACTIONS,
 } = require('./runway-status');
+const { PAR_VALUE_FIELDS, validateParValue } = require('../surveillance/par');
 const log = require('../log').logger('efsp:runway-status-store');
 
 function deepClone(obj) { return obj === undefined ? undefined : JSON.parse(JSON.stringify(obj)); }
@@ -76,11 +77,13 @@ class RunwayStatusStore extends SyncedStore {
     this._positions = new Map();   // facilityId -> its Position set, for resolving acknowledgers
     this._records = new Map();     // facilityId -> record
     this._views = new Map();       // facilityId -> cached status view for rule 1
+    this._parEnds = new Map();     // facilityId -> the runway ends with a PAR approach (config `parApproaches`, read once)
     for (const facilityId of facilityConfig.getFacilityIds()) {
       const config = facilityConfig.getFacilityConfig(facilityId);
       if (!config || !config.runwayStatus) continue; // no inventory, no record
       this._inventories.set(facilityId, deepClone(config.runwayStatus));
       this._positions.set(facilityId, [...(config.positions || [])]);
+      this._parEnds.set(facilityId, Object.keys(config.parApproaches || {}).filter(k => !k.startsWith('_')));
       this._records.set(facilityId, this._seed(facilityId));
     }
   }
@@ -104,6 +107,10 @@ class RunwayStatusStore extends SyncedStore {
       // (alert pad) give these meaning; no op here touches them.
       hotCargoPad: { occupied: false, occupantFlightDataId: null },
       alertPad: { occupied: false, occupantFlightDataId: null },
+      // The PAR approach values the PAR controller set (docs/adr/0130, decisions H153): runway end -> { tdzeFt?, tchFt?, dhFt?,
+      // gpaDeg? }, only the values set; a missing one is the Facility file's default. Field data, not traffic: the mission reset
+      // keeps them, and they stay until changed or reset to the default.
+      parValues: {},
       transitions: [],
       updatedAt: null,
       updatedBy: null,
@@ -182,6 +189,15 @@ class RunwayStatusStore extends SyncedStore {
       this._views.set(facilityId, view);
     }
     return view;
+  }
+
+  /**
+   * The PAR approach values set at a Facility (par-monitor.js reads them every sample): runway end -> { field: value }. A copy;
+   * {} when none is set, null for a Facility with no runway inventory.
+   */
+  parValues(facilityId) {
+    const record = this._records.get(facilityId);
+    return record ? deepClone(record.parValues || {}) : null;
   }
 
   // ── the audit trail ────────────────────────────────────────────────────
@@ -268,9 +284,39 @@ class RunwayStatusStore extends SyncedStore {
       case 'WithdrawRunwayChange':       return this._endChange(ctx, 'WITHDRAWN');
       case 'BeginRunwayChange':          return this._beginChange(ctx);
       case 'CompleteRunwayChange':       return this._completeChange(ctx);
+      case 'SetParApproach':             return this._setParApproach(ctx);
       default:
         return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown runway-status op: ${op.kind}` };
     }
+  }
+
+  // ── PAR approach values (docs/adr/0130) ─────────────────────────────────
+
+  /**
+   * `{ kind: 'SetParApproach', runwayEnd, field, value }`: the PAR controller sets one of an approach's TDZE, TCH, decision height or
+   * glidepath angle (`value: null` resets it to the default). Who: the Position the final is handed to (RUNWAY_STATUS_OP_OWNERS,
+   * positions/incirlik-military.js); the ground controller aligns the glidepath and decision height cursors (Order 8200.1D ch 14
+   * ¶17 h), and the final controller is the one who tells the pilot of the decision altitude (JO 7110.65 ¶5-12-6). One value per
+   * op, so the audit says exactly what changed. A value equal to the one held is an unchanged success (no rev, no seq).
+   */
+  _setParApproach(ctx) {
+    const { record, op } = ctx;
+    const ends = this._parEnds.get(record.facilityId) || [];
+    if (!ends.includes(op.runwayEnd)) {
+      return { ok: false, reason: 'NOT_FOUND', detail: `no PAR approach to runway ${op.runwayEnd} at ${record.facilityId}${ends.length ? ` (${ends.join(', ')})` : ''}` };
+    }
+    const v = validateParValue(op.field, op.value);
+    if (!v.ok) return v;
+    const held = record.parValues[op.runwayEnd] || {};
+    const from = Object.prototype.hasOwnProperty.call(held, op.field) ? held[op.field] : null;
+    if (from === v.value) return { ok: true, unchanged: true };
+    const next = { ...held };
+    if (v.value === null) delete next[op.field];
+    else next[op.field] = v.value;
+    if (Object.keys(next).length) record.parValues[op.runwayEnd] = next;
+    else delete record.parValues[op.runwayEnd];
+    this._touch(record, ctx.by, { op: 'SetParApproach', runwayEnd: op.runwayEnd, field: op.field, from, to: v.value, positionId: ctx.actingPositionId });
+    return { ok: true };
   }
 
   // ── helpers ────────────────────────────────────────────────────────────
@@ -736,9 +782,37 @@ class RunwayStatusStore extends SyncedStore {
         record.runwayChange = null;
       }
       if (!Array.isArray(record.transitions)) record.transitions = [];
+      record.parValues = this._restoreParValues(saved.facilityId, saved.parValues);
       this._records.set(saved.facilityId, record);
       this._views.delete(saved.facilityId);
     }
+  }
+
+  /**
+   * The PAR values of a saved record, against today's config: a runway end with no PAR approach any more, or a value outside
+   * today's range, is dropped with a warning (the default applies again), as a runway no longer configured is; an unknown field is
+   * an unknown persisted shape and stops start-up (H88). A value that is still valid comes back as it was.
+   */
+  _restoreParValues(facilityId, saved) {
+    const out = {};
+    const ends = this._parEnds.get(facilityId) || [];
+    for (const [end, values] of Object.entries(saved && typeof saved === 'object' ? saved : {})) {
+      if (!ends.includes(end) || !values || typeof values !== 'object') {
+        log.warn('restored PAR values for a runway end with no PAR approach any more — dropped', { facilityId, runwayEnd: end });
+        continue;
+      }
+      const kept = {};
+      for (const [field, value] of Object.entries(values)) {
+        if (!PAR_VALUE_FIELDS.includes(field)) {
+          throw new Error(`[efsp] the Board snapshot holds an unknown PAR approach value "${field}" for ${facilityId} runway ${end} (${PAR_VALUE_FIELDS.join(', ')}): delete state/efsp-board.json to start clean`);
+        }
+        const v = validateParValue(field, value);
+        if (v.ok && v.value !== null) kept[field] = v.value;
+        else log.warn('restored PAR value is out of range — dropped, the default applies', { facilityId, runwayEnd: end, field, value });
+      }
+      if (Object.keys(kept).length) out[end] = kept;
+    }
+    return out;
   }
 }
 
