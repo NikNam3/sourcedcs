@@ -26,7 +26,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { SyncedStore } = require('./synced-store');
+const { internalError, partialAuditTail } = require('./store-throw');
 const { statePaths, ensureDirFor } = require('../state-paths');
 const { isValidFrequency, MIN_FREQUENCY_MHZ, MAX_FREQUENCY_MHZ } = require('./airspace-schema');
 const { SFA_MIN_MHZ, SFA_MAX_MHZ } = require('./facility-schema');
@@ -71,7 +71,9 @@ function sfaFrequencyProblem(mhz) {
   return channelProblem(mhz);
 }
 
-class FrequencyTable extends SyncedStore {
+// Not a SyncedStore: it has no seq and no epoch (the delta is whole, ADR 0131 §6), and an epoch nobody reads would still
+// draw a crypto.randomUUID() and move every later id in the seeded soak and freeze hosts (sync/sync-log.js).
+class FrequencyTable {
   /**
    * @param {object} deps
    * @param {object} deps.facilityConfig facility-config.js's instance: the shipped defaults, and the overlay this table sets
@@ -82,7 +84,8 @@ class FrequencyTable extends SyncedStore {
    * @param {object|null} [deps.mutationLog]
    */
   constructor({ facilityConfig, paths, env = process.env, inUse = () => false, clock = WALL_CLOCK, wallClock = WALL_CLOCK, mutationLog = null } = {}) {
-    super({ clock, mutationLog });
+    this._clock = clock;
+    this._mutationLog = mutationLog;
     this._facilityConfig = facilityConfig;
     this._paths = paths || statePaths(FILE_NAME, env.CRCSYNC_EFSP_FREQUENCIES_PATH, env);
     this._inUse = inUse;
@@ -213,35 +216,64 @@ class FrequencyTable extends SyncedStore {
     const facilityId = mutation.facilityId;
     const subject = { facilityId, positionId: op.positionId, label: op.label, rackId: op.rackId };
     let before;
-    const result = this._guarded('frequency op', log, () => {
-      if (!OP_KINDS.includes(op.kind)) return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown frequency op ${JSON.stringify(op.kind)} (one of ${OP_KINDS.join(', ')})` };
-      if (!this._facilityConfig.getFacilityIds().includes(facilityId)) return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown facilityId ${facilityId}` };
-      const isSfa = op.rackId !== undefined;
-      const shipped = isSfa ? this._shippedSfa(facilityId, op.rackId) : this._shippedPosition(facilityId, op.positionId, op.label);
-      if (!shipped) {
-        return { ok: false, reason: 'NOT_FOUND', detail: isSfa ? `${facilityId} has no SFA Rack ${op.rackId}` : `${facilityId} ${op.positionId} has no frequency labelled ${op.label}` };
-      }
-      const current = this._current(facilityId, op);
-      before = current;
-      const mhz = op.kind === 'ResetFrequency' ? shipped.mhz : op.mhz;
-      const problem = isSfa ? sfaFrequencyProblem(mhz) : positionFrequencyProblem(mhz);
-      if (problem) return { ok: false, reason: 'VALIDATION_ERROR', detail: problem };
-      if (isSfa && mhz !== current) {
-        const other = this._facilityConfig.getSingleFrequencyApproach(facilityId).pool.find(p => p.rackId !== op.rackId && p.mhz === mhz);
-        if (other) return { ok: false, reason: 'VALIDATION_ERROR', detail: `${mhz.toFixed(3)} is already the SFA pool's ${other.rackId}` };
-        if (this._inUse(facilityId, current)) {
-          return { ok: false, reason: 'FREQUENCY_IN_USE', detail: `a flight is on ${current.toFixed(3)}: hand it off or move it before changing this SFA frequency` };
-        }
-      }
-      if (mhz === current) return { ok: true, changed: false, row: this._row(facilityId, op) };
-      this._write(facilityId, op, mhz === shipped.mhz ? null : { mhz, setAt: this._clock.now(), setBy: by || null });
-      this._sync.advance();
-      this._apply(facilityId);
-      this._persist();
-      return { ok: true, changed: true, row: this._row(facilityId, op) };
-    });
-    this._writeAudit({ ...mutation, op }, { subject, actingPositionId, by, result, before, after: () => this._current(facilityId, op) });
+    let wrote = false;
+    let result;
+    try {
+      result = this._applyOp(op, facilityId, by, (b) => { before = b; }, () => { wrote = true; });
+    } catch (err) {
+      log.error('unexpected error applying frequency op — rejecting it instead of crashing', { err });
+      result = internalError('frequency op', err, wrote);
+    }
+    this._audit({ ...mutation, op }, { subject, actingPositionId, by, result, before, after: () => this._current(facilityId, op) });
     return result;
+  }
+
+  /** The op itself; `setBefore` takes the value it found, `markWrote` is called before the first write. */
+  _applyOp(op, facilityId, by, setBefore, markWrote) {
+    if (!OP_KINDS.includes(op.kind)) return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown frequency op ${JSON.stringify(op.kind)} (one of ${OP_KINDS.join(', ')})` };
+    if (!this._facilityConfig.getFacilityIds().includes(facilityId)) return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown facilityId ${facilityId}` };
+    const isSfa = op.rackId !== undefined;
+    const shipped = isSfa ? this._shippedSfa(facilityId, op.rackId) : this._shippedPosition(facilityId, op.positionId, op.label);
+    if (!shipped) {
+      return { ok: false, reason: 'NOT_FOUND', detail: isSfa ? `${facilityId} has no SFA Rack ${op.rackId}` : `${facilityId} ${op.positionId} has no frequency labelled ${op.label}` };
+    }
+    const current = this._current(facilityId, op);
+    setBefore(current);
+    const mhz = op.kind === 'ResetFrequency' ? shipped.mhz : op.mhz;
+    const problem = isSfa ? sfaFrequencyProblem(mhz) : positionFrequencyProblem(mhz);
+    if (problem) return { ok: false, reason: 'VALIDATION_ERROR', detail: problem };
+    if (isSfa && mhz !== current) {
+      const other = this._facilityConfig.getSingleFrequencyApproach(facilityId).pool.find(p => p.rackId !== op.rackId && p.mhz === mhz);
+      if (other) return { ok: false, reason: 'VALIDATION_ERROR', detail: `${mhz.toFixed(3)} is already the SFA pool's ${other.rackId}` };
+      if (this._inUse(facilityId, current)) {
+        return { ok: false, reason: 'FREQUENCY_IN_USE', detail: `a flight is on ${current.toFixed(3)}: hand it off or move it before changing this SFA frequency` };
+      }
+    }
+    if (mhz === current) return { ok: true, changed: false, row: this._row(facilityId, op) };
+    markWrote();
+    this._write(facilityId, op, mhz === shipped.mhz ? null : { mhz, setAt: this._clock.now(), setBy: by || null });
+    this._apply(facilityId);
+    this._persist();
+    return { ok: true, changed: true, row: this._row(facilityId, op) };
+  }
+
+  /** One Mutation-log line, refusals included, in the shape the synced stores write (synced-store.js `_writeAudit`). */
+  _audit(mutation, { subject, actingPositionId, by, result, before, after }) {
+    if (!this._mutationLog) return;
+    this._mutationLog.record({
+      clientMutationId: mutation.clientMutationId,
+      op: mutation.op.kind,
+      ...subject,
+      actingPositionId,
+      actorId: by || null,
+      at: this._clock.now(),
+      ok: result.ok,
+      reason: result.ok ? undefined : result.reason,
+      detail: result.ok ? undefined : result.detail,
+      before,
+      after: (result.ok || result.partial) ? after() : undefined,
+      ...partialAuditTail(result),
+    });
   }
 
   _current(facilityId, op) {
