@@ -144,6 +144,19 @@ test('the mission clock stepping back more than 5 min starts a new session; a pa
   assert.equal(s.currentSeq(), 2, 'the new session measures from its own start');
 });
 
+test('a session opened on the wall clock (ADR 0129) fills its startedAt from the first mission reading, once', () => {
+  const c = clocks({ source: 'WALL' });
+  const { s } = build(c);
+  assert.equal(s.current().startedAt, null);
+  quiet(() => s.noteMissionLoad(SYRIA));
+  c.source = 'MISSION';
+  c.advance(5000);
+  quiet(() => s.observeClock());
+  assert.equal(s.current().startedAt, T0 + 5000);
+  run(c, s, MIN);
+  assert.equal(s.current().startedAt, T0 + 5000);
+});
+
 test('the wall-clock fallback (DCS gone) is never read as the clock stepping', () => {
   const c = clocks();
   const { s, rolls } = build(c);
