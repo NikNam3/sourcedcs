@@ -22,12 +22,12 @@ import {
 //
 // Element references are cached in initFrequencyPanel(), never looked up per render: dockview detaches an inactive panel.
 
-let _listEl = null;
-let _emptyEl = null;
-let _edit = null;    // { key, text, error, fresh }: the one row being typed in, kept across the re-renders a delta causes
-let _pending = new Set(); // row keys with a request in flight
+let _freqListEl = null;
+let _freqEmptyEl = null;
+let _freqEdit = null;    // { key, text, error, fresh }: the one row being typed in, kept across the re-renders a delta causes
+let _freqPending = new Set(); // row keys with a request in flight
 
-function _el(tag, className, text) {
+function _freqEl(tag, className, text) {
   const node = document.createElement(tag);
   if (className) node.className = className;
   if (text != null) node.textContent = text;
@@ -35,24 +35,24 @@ function _el(tag, className, text) {
 }
 
 /** The Position this controller acts as for a frequency edit: any Position it is Primary at, or null. */
-function _actingPosition() {
+function _freqActingPosition() {
   return getActingPositions()[0] || null;
 }
 
-function _send(row, op) {
-  const acting = _actingPosition();
+function _freqSend(row, op) {
+  const acting = _freqActingPosition();
   if (!acting) return;
   const key = frequencyRowKey(row);
-  _pending.add(key);
+  _freqPending.add(key);
   sendEfspFrequencyMutation(acting, row.facilityId, op, {
     onAck: (ack) => {
-      _pending.delete(key);
+      _freqPending.delete(key);
       if (!ack.ok) {
         // Keep what was typed, and say why it was refused, in the row (the only amber in the panel).
-        if (_edit && _edit.key === key) _edit.error = ack.detail || ack.reason;
+        if (_freqEdit && _freqEdit.key === key) _freqEdit.error = ack.detail || ack.reason;
         else _showMutationError(ack.reason || 'Rejected', ack.detail, { subject: `frequency ${frequencyRowName(row)}` });
-      } else if (_edit && _edit.key === key) {
-        _edit = null;
+      } else if (_freqEdit && _freqEdit.key === key) {
+        _freqEdit = null;
       }
       renderFrequencyPanel();
       return true;
@@ -61,112 +61,112 @@ function _send(row, op) {
   renderFrequencyPanel();
 }
 
-function _startEdit(row) {
-  _edit = { key: frequencyRowKey(row), text: frequencyText(row.mhz), error: null, fresh: true };
+function _freqStartEdit(row) {
+  _freqEdit = { key: frequencyRowKey(row), text: frequencyText(row.mhz), error: null, fresh: true };
   renderFrequencyPanel();
 }
 
-function _commit(row, pool) {
-  if (!_edit) return;
-  const parsed = parseFrequencyInput(_edit.text, row, pool);
-  if (parsed.error) { _edit.error = parsed.error; renderFrequencyPanel(); return; }
-  if (parsed.mhz === row.mhz) { _edit = null; renderFrequencyPanel(); return; }
-  _send(row, setFrequencyOp(row, parsed.mhz));
+function _freqCommit(row, pool) {
+  if (!_freqEdit) return;
+  const parsed = parseFrequencyInput(_freqEdit.text, row, pool);
+  if (parsed.error) { _freqEdit.error = parsed.error; renderFrequencyPanel(); return; }
+  if (parsed.mhz === row.mhz) { _freqEdit = null; renderFrequencyPanel(); return; }
+  _freqSend(row, setFrequencyOp(row, parsed.mhz));
 }
 
-function _valueCell(row, pool, canEdit) {
+function _freqValueCell(row, pool, canEdit) {
   const key = frequencyRowKey(row);
-  const cell = _el('div', 'freq-value-cell');
-  if (_edit && _edit.key === key) {
-    const input = _el('input', 'freq-input');
+  const cell = _freqEl('div', 'freq-value-cell');
+  if (_freqEdit && _freqEdit.key === key) {
+    const input = _freqEl('input', 'freq-input');
     input.type = 'text';
     input.inputMode = 'decimal';
-    input.value = _edit.text;
+    input.value = _freqEdit.text;
     input.setAttribute('aria-label', `${row.facilityId} ${row.positionId || 'SFA'} ${frequencyRowName(row)} frequency`);
-    input.addEventListener('input', () => { if (_edit) { _edit.text = input.value; _edit.error = null; } });
-    input.addEventListener('focus', () => { if (_edit) _edit.focused = true; });
-    input.addEventListener('blur', () => { if (_edit) _edit.focused = false; });
+    input.addEventListener('input', () => { if (_freqEdit) { _freqEdit.text = input.value; _freqEdit.error = null; } });
+    input.addEventListener('focus', () => { if (_freqEdit) _freqEdit.focused = true; });
+    input.addEventListener('blur', () => { if (_freqEdit) _freqEdit.focused = false; });
     input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') { e.preventDefault(); _commit(row, pool); }
-      else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); _edit = null; renderFrequencyPanel(); }
+      if (e.key === 'Enter') { e.preventDefault(); _freqCommit(row, pool); }
+      else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); _freqEdit = null; renderFrequencyPanel(); }
     });
     cell.append(input);
     // after the row is attached (the panel builds detached, then appends). A re-render while typing (another
     // controller's change arrived) keeps the focus where it was.
-    if (_edit.fresh || _edit.focused) {
-      const select = _edit.fresh;
-      _edit.fresh = false;
+    if (_freqEdit.fresh || _freqEdit.focused) {
+      const select = _freqEdit.fresh;
+      _freqEdit.fresh = false;
       Promise.resolve().then(() => { if (typeof input.focus === 'function') { input.focus(); if (select) input.select(); } });
     }
     return cell;
   }
-  const value = _el(canEdit ? 'button' : 'span', 'freq-value', frequencyText(row.mhz));
+  const value = _freqEl(canEdit ? 'button' : 'span', 'freq-value', frequencyText(row.mhz));
   if (canEdit) {
     value.type = 'button';
     value.title = 'Click to set';
-    value.disabled = _pending.has(key);
-    value.addEventListener('click', () => _startEdit(row));
+    value.disabled = _freqPending.has(key);
+    value.addEventListener('click', () => _freqStartEdit(row));
   }
   cell.append(value);
   return cell;
 }
 
-function _row(row, pool, canEdit) {
+function _freqRow(row, pool, canEdit) {
   const set = isFrequencySet(row);
-  const line = _el('div', `freq-row${set ? ' freq-row-set' : ''}`);
+  const line = _freqEl('div', `freq-row${set ? ' freq-row-set' : ''}`);
   line.dataset.key = frequencyRowKey(row);
-  line.append(_el('span', 'freq-name', frequencyRowName(row)));
-  line.append(_valueCell(row, pool, canEdit));
-  const tail = _el('div', 'freq-tail');
+  line.append(_freqEl('span', 'freq-name', frequencyRowName(row)));
+  line.append(_freqValueCell(row, pool, canEdit));
+  const tail = _freqEl('div', 'freq-tail');
   if (set) {
-    tail.append(_el('span', 'freq-set-mark', 'SET'));
-    tail.append(_el('span', 'freq-note', frequencySetNote(row)));
+    tail.append(_freqEl('span', 'freq-set-mark', 'SET'));
+    tail.append(_freqEl('span', 'freq-note', frequencySetNote(row)));
     if (canEdit) {
-      const reset = _el('button', 'freq-reset', 'RESET');
+      const reset = _freqEl('button', 'freq-reset', 'RESET');
       reset.type = 'button';
       reset.title = `Back to ${frequencyText(row.defaultMhz)}`;
-      reset.disabled = _pending.has(frequencyRowKey(row));
-      reset.addEventListener('click', () => { if (_edit && _edit.key === frequencyRowKey(row)) _edit = null; _send(row, resetFrequencyOp(row)); });
+      reset.disabled = _freqPending.has(frequencyRowKey(row));
+      reset.addEventListener('click', () => { if (_freqEdit && _freqEdit.key === frequencyRowKey(row)) _freqEdit = null; _freqSend(row, resetFrequencyOp(row)); });
       tail.append(reset);
     }
   }
   line.append(tail);
   // A refused value's reason, under the value, across the row (the panel's only amber).
-  if (_edit && _edit.key === frequencyRowKey(row) && _edit.error) line.append(_el('div', 'freq-error', _edit.error));
+  if (_freqEdit && _freqEdit.key === frequencyRowKey(row) && _freqEdit.error) line.append(_freqEl('div', 'freq-error', _freqEdit.error));
   return line;
 }
 
 export function renderFrequencyPanel() {
-  if (!_listEl) return;
+  if (!_freqListEl) return;
   const sections = frequencySections(getFrequencyRows());
-  _emptyEl.hidden = sections.length > 0;
-  const canEdit = !!_actingPosition();
+  _freqEmptyEl.hidden = sections.length > 0;
+  const canEdit = !!_freqActingPosition();
   const frag = document.createDocumentFragment();
-  if (sections.length && !canEdit) frag.append(_el('div', 'freq-readonly', 'Sign on to a Position to set frequencies.'));
+  if (sections.length && !canEdit) frag.append(_freqEl('div', 'freq-readonly', 'Sign on to a Position to set frequencies.'));
   for (const s of sections) {
-    const box = _el('div', 'freq-facility');
+    const box = _freqEl('div', 'freq-facility');
     box.dataset.facilityId = s.facilityId;
-    box.append(_el('div', 'freq-facility-id', s.facilityId));
+    box.append(_freqEl('div', 'freq-facility-id', s.facilityId));
     for (const p of s.positions) {
-      const group = _el('div', 'freq-group');
-      group.append(_el('div', 'freq-group-id', p.positionId));
-      for (const r of p.rows) group.append(_row(r, [], canEdit));
+      const group = _freqEl('div', 'freq-group');
+      group.append(_freqEl('div', 'freq-group-id', p.positionId));
+      for (const r of p.rows) group.append(_freqRow(r, [], canEdit));
       box.append(group);
     }
     if (s.sfa.length) {
-      const group = _el('div', 'freq-group');
-      group.append(_el('div', 'freq-group-id', 'SFA'));
-      for (const r of s.sfa) group.append(_row(r, s.sfa, canEdit));
+      const group = _freqEl('div', 'freq-group');
+      group.append(_freqEl('div', 'freq-group-id', 'SFA'));
+      for (const r of s.sfa) group.append(_freqRow(r, s.sfa, canEdit));
       box.append(group);
     }
     frag.append(box);
   }
-  _listEl.replaceChildren(frag);
+  _freqListEl.replaceChildren(frag);
 }
 
 export function initFrequencyPanel() {
-  _listEl = document.getElementById('frequency-list');
-  _emptyEl = document.getElementById('frequency-empty');
+  _freqListEl = document.getElementById('frequency-list');
+  _freqEmptyEl = document.getElementById('frequency-empty');
   renderFrequencyPanel();
   return { onShow: () => renderFrequencyPanel() };
 }
