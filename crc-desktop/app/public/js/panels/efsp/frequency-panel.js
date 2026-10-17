@@ -91,7 +91,6 @@ function _valueCell(row, pool, canEdit) {
       else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); _edit = null; renderFrequencyPanel(); }
     });
     cell.append(input);
-    if (_edit.error) cell.append(_el('div', 'freq-error', _edit.error));
     // after the row is attached (the panel builds detached, then appends). A re-render while typing (another
     // controller's change arrived) keeps the focus where it was.
     if (_edit.fresh || _edit.focused) {
@@ -132,6 +131,8 @@ function _row(row, pool, canEdit) {
     }
   }
   line.append(tail);
+  // A refused value's reason, under the value, across the row (the panel's only amber).
+  if (_edit && _edit.key === frequencyRowKey(row) && _edit.error) line.append(_el('div', 'freq-error', _edit.error));
   return line;
 }
 

@@ -23,12 +23,12 @@
 
 .freq-row {
   display: grid;
-  grid-template-columns: minmax(70px, max-content) 90px 1fr;
+  grid-template-columns: 15em 6.5em 1fr; /* one column set for every row, so the values line up */
   align-items: baseline;
   gap: 8px;
   padding: 2px 0;
 }
-.freq-name { color: var(--efsp-muted, #8c9aa6); }
+.freq-name { color: var(--efsp-muted, #8c9aa6); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 .freq-value {
   font-family: inherit;
@@ -54,7 +54,7 @@ button.freq-value:disabled { color: var(--efsp-faint, #56616c); }
   border: 1px solid var(--efsp-line, #2e3740);
   padding: 1px 4px;
 }
-.freq-error { color: var(--efsp-attn, #e0a83c); font-size: 11px; margin-top: 2px; }
+.freq-error { grid-column: 2 / -1; color: var(--efsp-attn, #e0a83c); font-size: 11px; }
 
 .freq-tail { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
 .freq-set-mark {

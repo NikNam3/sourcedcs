@@ -30,6 +30,8 @@ function syncEnv(stateDir, port) {
     CRCSYNC_EFSP_MUTATION_LOG_PATH: stateFile('efsp-mutations.jsonl'),
     CRCSYNC_EFSP_AIRSPACES_PATH: stateFile('efsp-airspaces.json'),
     CRCSYNC_EFSP_STEREO_ROUTES_PATH: stateFile('efsp-stereo-routes.json'),
+    // The runtime frequency table (crc-sync docs/adr/0131): a reset starts from the facility files' frequencies.
+    CRCSYNC_EFSP_FREQUENCIES_PATH: stateFile('efsp-frequencies.json'),
     CRCSYNC_TERRAIN_CACHE_DIR: stateFile('terrain'),
     // WP8's durable files (crc-sync docs/adr/0065). Without these a run writes metrics into the worktree's crc-sync/state/ and
     // reads old buckets back on the next run (L15, T11). The instrumentation config is read-only, so it points at a copy of

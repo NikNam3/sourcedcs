@@ -56,7 +56,7 @@ export function frequencySections(rows = _rows) {
 
 /** What the row's name cell says: `GND` for a Position frequency, `freq-2 ROTATION` for an SFA one. */
 export function frequencyRowName(row) {
-  return row.kind === 'SFA' ? `${row.rackId} ${row.use}` : row.label;
+  return row.kind === 'SFA' ? `${row.rackId} ${String(row.use).replace(/_/g, ' ')}` : row.label;
 }
 
 /** The grey note on a set row: `default 275.800 · c-GC 1432Z`. Empty on a default row. */

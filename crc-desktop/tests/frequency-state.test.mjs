@@ -66,7 +66,7 @@ test('sections group by Facility and Position, the SFA pool last; a set row carr
   const sections = fs.frequencySections(ROWS);
   assert.equal(sections.length, 1);
   assert.deepEqual(sections[0].positions.map(p => [p.positionId, p.rows.map(r => r.label)]), [['GC', ['GND']], ['LC', ['TWR']]]);
-  assert.deepEqual(sections[0].sfa.map(r => fs.frequencyRowName(r)), ['freq-1 INITIAL_CONTACT', 'freq-2 ROTATION']);
+  assert.deepEqual(sections[0].sfa.map(r => fs.frequencyRowName(r)), ['freq-1 INITIAL CONTACT', 'freq-2 ROTATION']);
   assert.equal(fs.isFrequencySet(ROWS[0]), true);
   assert.equal(fs.isFrequencySet(ROWS[1]), false);
   assert.equal(fs.frequencySetNote(ROWS[0]), 'default 275.800 · Viper 1432Z');
