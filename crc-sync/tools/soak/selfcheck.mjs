@@ -3,12 +3,14 @@
 // detectors are unproven is not evidence. Runs `--profile smoke --minutes 20
 // --seed 7` (or `--seed <n>`) clean, with each injected fault (drop-ack, drop-broadcast, leak, skip-shadow-client,
 // drop-store-delta), and once more as the leak case's clean twin, and exits non-zero if any detector stays silent.
+// The seven runs are independent (own --out, own state dir, virtual clock), so they run at once: about 20 s on a
+// multi-core machine instead of about 75 s one after another (seed 7, 22 cores).
 //
 // NOT named *.test.* on purpose: crc-sync's `npm test` must not collect it (T1).
 //
 //   node tools/soak/selfcheck.mjs [--seed n]
 
-import { spawnSync } from 'child_process';
+import { spawn } from 'child_process';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -23,11 +25,16 @@ const common = ['--profile', 'smoke', '--minutes', '20', '--seed', seed, '--quie
 
 function run(name, extra) {
   const out = path.join(base, name);
-  const r = spawnSync(process.execPath, [path.join(here, 'run.js'), ...common, '--out', out, ...extra], { encoding: 'utf8', cwd: path.join(here, '../..') });
-  if (r.status === 2 || !fs.existsSync(path.join(out, 'report.json'))) {
-    return { name, error: `harness error (exit ${r.status}): ${r.stderr.slice(-2000)}` };
-  }
-  return { name, exit: r.status, report: JSON.parse(fs.readFileSync(path.join(out, 'report.json'), 'utf8')), out };
+  return new Promise((resolve) => {
+    const child = spawn(process.execPath, [path.join(here, 'run.js'), ...common, '--out', out, ...extra], { cwd: path.join(here, '../..'), stdio: ['ignore', 'ignore', 'pipe'] });
+    let stderr = '';
+    child.stderr.setEncoding('utf8');
+    child.stderr.on('data', (d) => { stderr = (stderr + d).slice(-2000); });
+    child.on('close', (status) => {
+      if (status === 2 || !fs.existsSync(path.join(out, 'report.json'))) resolve({ name, error: `harness error (exit ${status}): ${stderr}` });
+      else resolve({ name, exit: status, report: JSON.parse(fs.readFileSync(path.join(out, 'report.json'), 'utf8')), out });
+    });
+  });
 }
 
 // Detectors that are NOT tied to a hypothesis H1-H8: these must be quiet on a clean run.
@@ -48,7 +55,7 @@ const injectedStale = (rep) => Object.entries(rep.mutations.silentStaleness.byCa
 
 // The injected leak: 32768 doubles (256 KB) per virtual minute (host-core.js tickLeak), 15 MB/h.
 const LEAK_MB_PER_HOUR = 256 * 60 / 1024;
-// Seeds 1-30 read 14.76-15.14 MB/h added (docs/wip/U-SMALL2.md); 20% leaves room without letting a silent detector by.
+// Seeds 1-30 read 14.89-15.23 MB/h added (docs/wip/U-SMALL2.md); 20% leaves room without letting a silent detector by.
 const LEAK_TOLERANCE = 0.2;
 const leakAdded = (rep, twin) => Math.round((rep.memory.slopeMBPerHour - twin.memory.slopeMBPerHour) * 100) / 100;
 
@@ -58,7 +65,7 @@ const cases = [
   { name: 'drop-broadcast', extra: ['--inject', 'drop-broadcast'], expect: (rep) => (injectedStale(rep) >= 1 ? null : `silentStaleness (not H1) = ${injectedStale(rep)}, expected >= 1`) },
   // The leak case is judged against a clean twin: the same seed and flags without the leak. At 20 minutes the
   // heap is still filling to the Strip retention, so the clean twin fails memory.slope on its own on most seeds
-  // (29 of seeds 1-30), and R² reads the traffic's fill, not the leak (0.82-0.996 across seeds). What proves the
+  // (29 of seeds 1-30), and R² reads the traffic's fill, not the leak (0.82-0.997 across seeds 1-30). What proves the
   // detector is that the leak moves the judged slope by the injected rate. No restart in either run: a restart
   // starts a new heap and the fit keeps only the part after it (docs/wip/U-SMALL.md item 2, docs/wip/U-SMALL2.md).
   { name: 'leak', extra: ['--inject', 'leak', '--judge-memory', '--restarts', '0'], twin: ['--judge-memory', '--restarts', '0'], expect: (rep, twin) => {
@@ -71,10 +78,10 @@ const cases = [
   { name: 'drop-store-delta', extra: ['--inject', 'drop-store-delta'], expect: (rep) => (rep.mutations.storeSync.injectedDrops >= 1 && rep.mutations.storeSync.stale >= 1 && rep.verdict.failures.some(f => f.startsWith('mutations.storeSync.stale')) ? null : `dropped ${rep.mutations.storeSync.injectedDrops}, store-stale ${rep.mutations.storeSync.stale}, expected both >= 1 and a verdict failure`) },
 ];
 
+const results = await Promise.all(cases.map(c => Promise.all([run(c.name, c.extra), c.twin ? run(`${c.name}-twin`, c.twin) : null])));
 let failed = 0;
-for (const c of cases) {
-  const r = run(c.name, c.extra);
-  const t = c.twin && !r.error ? run(`${c.name}-twin`, c.twin) : null;
+for (const [i, c] of cases.entries()) {
+  const [r, t] = results[i];
   const problem = r.error || (t && t.error) || c.expect(r.report, t && t.report);
   if (problem) failed++;
   process.stdout.write(`${problem ? 'FAIL' : 'ok  '} ${c.name.padEnd(20)} ${problem || describe(c.name, r.report, t && t.report)}\n`);

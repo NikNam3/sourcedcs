@@ -311,7 +311,7 @@ function createHost(env, { stateDir }) {
   }
 
   function tickLeak(now) {
-    if (inject.leakFrom === null || true) return;
+    if (inject.leakFrom === null) return;
     const minutes = Math.floor((now - inject.leakFrom) / 60000);
     while (inject.leak.length < minutes) inject.leak.push(new Array(32768).fill(inject.leak.length + 0.5)); // 32768 doubles = 256 KB of heap
   }
