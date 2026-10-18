@@ -1,7 +1,9 @@
 'use strict';
 import { airspaceTrafficFor, airspaceTrafficSignature } from './alerts-state.js';
-import { getEfspStrip } from './efsp-state.js';
+import { getEfspFlightData, getEfspStrip } from './efsp-state.js';
 import { getActingPositions, sendEfspMutation } from './efsp-ws.js';
+import { transitRowOffer } from './transit-rules.js';
+import { sendTransitOp } from './transit-actions.js';
 import { AIRSPACE_ENTRY_POSITIONS } from './bay/authority-mirror.js';
 import { _isRejectedCoordinationReplica } from './bay/coordination-rules.js';
 import { isUsing } from './airspace-capabilities.js';
@@ -33,6 +35,68 @@ export function approvePathFor(flight, definition) {
     if (agency) return { strip, positionId: agency };
   }
   return null;
+}
+
+// crc-sync docs/adr/0128: a transit's grey state and the decider's Approve / Decline (with an optional reason, typed inline:
+// the card is rebuilt on every list change, so the half-typed reason lives here), and the holder's Request / Cancel.
+let _declineDraft = null; // { key, text }
+const _declineKey = (airspaceId, flightDataId) => `${airspaceId}|${flightDataId}`;
+
+function _transitButton(label, cls, title, run) {
+  const btn = document.createElement('button');
+  btn.className = `airspace-action-btn ${cls}`;
+  btn.textContent = label;
+  btn.title = title;
+  btn.addEventListener('click', run);
+  return btn;
+}
+
+function _appendTransit(row, list, airspace, flight, deciders) {
+  const offer = transitRowOffer(flight, airspace, getActingPositions(), deciders, getEfspFlightData(flight.flightDataId));
+  const name = (airspace.definition && airspace.definition.name) || airspace.airspaceId;
+  if (offer.text) {
+    const state = document.createElement('span');
+    state.className = 'airspace-entry-transit';
+    state.textContent = offer.text;
+    row.appendChild(state);
+  }
+  const send = (positionId, kind, extra) => sendTransitOp(positionId, airspace, kind, flight.flightDataId, extra);
+  if (offer.approveAs) row.appendChild(_transitButton('Approve transit', 'airspace-transit-approve-btn', `Approve the transit of ${name} as ${offer.approveAs}`, () => send(offer.approveAs, 'ApproveTransit')));
+  if (offer.declineAs) {
+    const key = _declineKey(airspace.airspaceId, flight.flightDataId);
+    row.appendChild(_transitButton('Decline transit', 'airspace-transit-decline-btn', `Decline the transit of ${name} as ${offer.declineAs}`, () => {
+      _declineDraft = _declineDraft && _declineDraft.key === key ? null : { key, text: '' }; // the button toggles
+      markEfspChanged('airspace');
+    }));
+    if (_declineDraft && _declineDraft.key === key) list.appendChild(_declineForm(airspace, flight, offer.declineAs, send));
+  }
+  if (offer.requestAs) row.appendChild(_transitButton('Request transit', 'airspace-transit-request-btn', `Ask ${(deciders || []).join(' or ') || 'the decider'} for a transit of ${name}, as ${offer.requestAs}`, () => send(offer.requestAs, 'RequestTransit')));
+  if (offer.cancelAs) row.appendChild(_transitButton('Cancel request', 'airspace-transit-cancel-btn', `Withdraw the transit request, as ${offer.cancelAs}`, () => send(offer.cancelAs, 'CancelTransit')));
+}
+
+/** The inline reason form under a row: Enter or Send declines (an empty reason is allowed), Escape or Cancel abandons. */
+function _declineForm(airspace, flight, positionId, send) {
+  const form = document.createElement('div');
+  form.className = 'airspace-entry-decline';
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'airspace-input airspace-entry-decline-input';
+  input.placeholder = 'Reason (optional)';
+  input.value = _declineDraft.text;
+  input.addEventListener('input', () => { if (_declineDraft) _declineDraft.text = input.value; });
+  const go = () => { const reason = input.value.trim(); _declineDraft = null; send(positionId, 'DeclineTransit', reason ? { reason } : {}); markEfspChanged('airspace'); };
+  const stop = () => { _declineDraft = null; markEfspChanged('airspace'); };
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); if (e.key === 'Escape') stop(); });
+  const ok = document.createElement('button');
+  ok.className = 'airspace-save-btn airspace-entry-decline-send';
+  ok.textContent = 'Send decline';
+  ok.addEventListener('click', go);
+  const cancel = document.createElement('button');
+  cancel.className = 'airspace-action-btn';
+  cancel.textContent = 'Cancel';
+  cancel.addEventListener('click', stop);
+  form.append(input, ok, cancel);
+  return form;
 }
 
 /** "inside", "filed" or "inside · filed": why the flight is on this card. */
@@ -83,6 +147,7 @@ export function buildAirspaceEntryList(airspace) {
       }
     }
     list.appendChild(row);
+    _appendTransit(row, list, airspace, flight, traffic.transitDeciders);
   }
   return list;
 }

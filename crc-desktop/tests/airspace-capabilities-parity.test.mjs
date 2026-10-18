@@ -147,3 +147,21 @@ test('crc-sync ADR 0119: OPS acts for the using side of a CENTER MOA Incirlik us
   assert.equal(caps.usingPositionFor(['AP'], moa), null);
   assert.equal(caps.controllingPositionFor(['OPS', 'CTR'], moa), 'CTR');
 });
+
+// ── crc-sync docs/adr/0128: the transit decider (H151 MT-Q1 a) ──
+
+test('the transit types and the MRU Positions are the server\'s', () => {
+  assert.deepEqual(caps.TRANSIT_TYPES, airspace.TRANSIT_TYPES);
+  const mru = shipped.flatMap(c => Object.entries(c.positionClasses || {}).filter(([, cls]) => cls === airspace.MRU_CLASS).map(([p]) => p));
+  assert.deepEqual([...caps.MRU_POSITIONS].sort(), mru.sort());
+});
+
+test('transitDeciders agrees with the server for every definition', () => {
+  const rowOf = serverConfig.airspaceRowOf;
+  const deps = { rowOf, positionsOf: caps.positionsOf, classOf: serverConfig.classOf };
+  for (const def of DEFS.filter(d => d.kind !== 'JURISDICTION')) {
+    assert.deepEqual(caps.transitDeciders(def), airspace.transitDeciders(def, deps), JSON.stringify(def));
+  }
+  assert.deepEqual(caps.transitDeciders({ controllingFacilityId: 'CENTER', controllingPositionId: 'CTR', usingFacilityId: 'TACTICAL' }), ['TAC_C2']);
+  assert.deepEqual(caps.transitDeciders({ controllingFacilityId: 'CENTER', controllingPositionId: 'CTR', usingFacilityId: 'INCIRLIK' }), ['CTR'], 'OPS reads only');
+});

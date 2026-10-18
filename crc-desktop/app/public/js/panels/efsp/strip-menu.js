@@ -1,5 +1,8 @@
 'use strict';
-import { getEfspCorrelationForStrip, getEfspFlightData, getAllEfspStrips, getEfspStrip, otherLiveStripsForFlightData } from './efsp-state.js';
+import { getAllEfspAirspaces, getEfspCorrelationForStrip, getEfspFlightData, getAllEfspStrips, getEfspStrip, otherLiveStripsForFlightData } from './efsp-state.js';
+import { cancelableTransits, requestTransitChoices } from './transit-rules.js';
+import { requestTransit, sendTransitOp } from './transit-actions.js';
+import { openTransitPopover } from './bay/popovers/transit.js';
 import { toggleOffset } from './efsp-gestures.js';
 import { getActingPositions, sendEfspMutation } from './efsp-ws.js';
 import { noteEfspGesture } from './efsp-metrics-client.js';
@@ -7,7 +10,7 @@ import { correlationBadgeFor, showOnMapTrackFor, showStripOnMap } from './correl
 import { _dispatchCorrelation, _dispatchGesture, _dispatchHandBack, _handBackBayFor, _resolveActingPositionId } from './bay/dispatch.js';
 import { AIRSPACE_ENTRY_POSITIONS, COORDINATION_TARGETS, HAND_BACK_TO, TOFI_COUNTERPARTS } from './bay/authority-mirror.js';
 import { openPopover } from './bay/popover-portal.js';
-import { _canApproveAirspaceEntry, _canConvertToArrival, _openAirspaceEntryPopover, _pendingConvertStripId, _usingAgencyEntryChoices } from './bay/popovers/airspace-entry.js';
+import { _canApproveAirspaceEntry, _canConvertToArrival, _openAirspaceEntryPopover, _openEntryBlockPopover, _pendingConvertStripId, _usingAgencyEntryChoices } from './bay/popovers/airspace-entry.js';
 import { _openBindPopover } from './bay/popovers/bind.js';
 import { _openDivertPopover } from './bay/popovers/divert.js';
 import { openRemarksPopover, remarksEditable } from './bay/popovers/remarks.js';
@@ -114,6 +117,10 @@ function _stripMenuItems(strip) {
     const entryId = strip.airspaceEntry && strip.airspaceEntry.airspaceId;
     const mine = entryId ? agency.find(c => c.airspace.airspaceId === entryId) : null;
     if (mine) {
+      // crc-sync docs/adr/0128 §3: the altitude block the flight works in (set, amend, lift).
+      items.push({ group: 'Start', key: 'entry-block', label: 'Entry block…', cls: 'efsp-coordinate-btn', enabled: !pendingIn,
+        reason: pendingIn ? answerFirst : '', title: `the altitude block in the airspace, as ${mine.positionId}`,
+        run: (anchor) => _openEntryBlockPopover(strip, anchor, mine.positionId) });
       items.push({ group: 'Start', key: 'leave-airspace', label: 'Leave airspace', cls: 'efsp-coordinate-btn', enabled: !pendingIn,
         reason: pendingIn ? answerFirst : '', title: `as ${mine.positionId}, the using agency`,
         run: () => { sendEfspMutation(mine.positionId, strip, { kind: 'ClearAirspaceEntry' }); } });
@@ -125,6 +132,9 @@ function _stripMenuItems(strip) {
   } else if (AIRSPACE_ENTRY_POSITIONS.includes(strip.ownerPositionId)) {
     const ok = _canApproveAirspaceEntry(strip) && !pendingIn;
     if (strip.airspaceEntry) {
+      items.push({ group: 'Start', key: 'entry-block', label: 'Entry block…', cls: 'efsp-coordinate-btn', enabled: ok && !!acting,
+        reason: ok ? '' : answerFirst, title: 'the altitude block this flight works in the airspace',
+        run: (anchor) => { if (acting) _openEntryBlockPopover(strip, anchor, acting); } });
       items.push({ group: 'Start', key: 'leave-airspace', label: 'Leave airspace', cls: 'efsp-coordinate-btn', enabled: ok,
         reason: ok ? '' : answerFirst,
         run: () => { if (acting) sendEfspMutation(acting, strip, { kind: 'ClearAirspaceEntry' }); } });
@@ -133,6 +143,26 @@ function _stripMenuItems(strip) {
         reason: ok ? '' : answerFirst, title: 'Approve this flight into an airspace, on its frequency',
         run: (anchor) => _openAirspaceEntryPopover(strip, anchor) });
     }
+  }
+
+  // crc-sync docs/adr/0128 (H151): ask the side that separates an active MOA's, warning or restricted area's users for a
+  // transit (approved at once when this controller also decides it); withdraw a request not yet answered.
+  const heldHere = getActingPositions(strip.facilityId || undefined);
+  const transitChoices = requestTransitChoices(strip, getEfspFlightData(strip.flightDataId), getAllEfspAirspaces(), heldHere);
+  const nameOf = (a) => (a.definition && a.definition.name) || a.airspaceId;
+  if (transitChoices.length === 1) {
+    const only = transitChoices[0];
+    items.push({ group: 'Start', key: 'transit-request', label: only.deciderPositionId ? `Transit ${nameOf(only.airspace)} (approve)` : `Request transit ${nameOf(only.airspace)}`,
+      cls: 'efsp-coordinate-btn', enabled: true,
+      title: only.deciderPositionId ? `as ${only.positionId}, approved as ${only.deciderPositionId}` : `Ask for a transit of ${nameOf(only.airspace)}, as ${only.positionId}`,
+      run: () => { requestTransit(only, strip.flightDataId); } });
+  } else if (transitChoices.length > 1) {
+    items.push({ group: 'Start', key: 'transit-request', label: 'Transit…', cls: 'efsp-coordinate-btn', enabled: true,
+      title: 'Ask for a transit of an active MOA, warning or restricted area', run: (anchor) => openTransitPopover(strip, anchor, transitChoices) });
+  }
+  for (const c of cancelableTransits(strip, getAllEfspAirspaces(), heldHere)) {
+    items.push({ group: 'Start', key: `transit-cancel-${c.airspace.airspaceId}`, label: `Cancel transit request ${nameOf(c.airspace)}`, cls: 'efsp-coordinate-btn',
+      enabled: true, title: `as ${c.positionId}`, run: () => { sendTransitOp(c.positionId, c.airspace, 'CancelTransit', strip.flightDataId); } });
   }
 
   // Flight

@@ -149,3 +149,29 @@ export function controllingChoicesFor(signedOnPositionIds) {
   }
   return out;
 }
+
+// ── transit through active SUA (crc-sync docs/adr/0128, H151): a hand copy of authority/airspace.js's decider rule ──
+
+/** The airspace types a transit is requested and decided for (crc-sync TRANSIT_TYPES). */
+export const TRANSIT_TYPES = ['MOA', 'WARNING', 'RESTRICTED', 'RANGE', 'DANGER'];
+
+/** The Positions of class MRU (crc-sync's Facility configs `positionClasses`; the parity test reads them). */
+export const MRU_POSITIONS = ['TAC_C2', 'GCI'];
+
+/**
+ * Who decides a transit of `def` (H151 MT-Q1 a): the using Facility's MRU Positions with the airspace-use row (TAC_C2),
+ * else the controlling Position. The server decides; the card also carries the server's own list (`transitDeciders`).
+ */
+export function transitDeciders(def) {
+  if (def && def.usingFacilityId) {
+    const mru = positionsOf(def.usingFacilityId).filter(p => MRU_POSITIONS.includes(p) && airspaceRowOf(p).use);
+    if (mru.length) return mru;
+  }
+  return def && def.controllingPositionId ? [def.controllingPositionId] : [];
+}
+
+/** Is `airspace` (a record) one a transit is decided for: an AREA of a transit type? */
+export function isTransitAirspace(airspace) {
+  const def = (airspace && airspace.definition) || {};
+  return (def.kind || 'AREA') === 'AREA' && TRANSIT_TYPES.includes(def.type);
+}
