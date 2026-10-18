@@ -5,6 +5,7 @@ const https = require('https');
 const fs    = require('fs');
 const path  = require('path');
 const { resolveProxyPath } = require('./proxy-routes');
+const { resolveGlyphs } = require('./glyph-route');
 
 const PUBLIC_DIR       = path.join(__dirname, 'public');
 const DATA_DIR         = path.join(__dirname, 'data');
@@ -156,25 +157,12 @@ const httpServer = http.createServer((req, res) => {
     });
   }
 
-  // Map glyphs, bundled so labels and tracks never depend on MapTiler (a failed glyph range errors the whole tile of a
-  // GeoJSON source, tracks included). maplibre asks for the whole stack, "Roboto Regular,Noto Sans Regular": the first
-  // font we ship wins, Roboto Regular stands in for a font we don't ship (Roboto Mono, the style's default Open Sans),
-  // and a range we don't ship answers an empty 200, which draws nothing instead of erroring the tile.
-  const glyphs = /^\/fonts\/([^/]+)\/(\d+-\d+)\.pbf$/.exec(req.url.split('?')[0]);
+  // Map glyphs (glyph-route.js): the shipped fonts of the requested stack, merged; an unshipped range is an empty 200.
+  const glyphs = resolveGlyphs(req.url, FONTS_DIR);
   if (glyphs) {
-    let stack;
-    try { stack = decodeURIComponent(glyphs[1]).split(',').map((f) => f.trim()); } catch (_) { res.writeHead(400); return res.end(); }
-    const shipped = stack.filter((f) => /^[A-Za-z0-9 ]+$/.test(f) && fs.existsSync(path.join(FONTS_DIR, f)));
-    const fonts = shipped.length ? shipped : ['Roboto Regular'];
-    for (const f of fonts) {
-      try {
-        const data = fs.readFileSync(path.join(FONTS_DIR, f, `${glyphs[2]}.pbf`));
-        res.writeHead(200, { 'Content-Type': 'application/x-protobuf' });
-        return res.end(data);
-      } catch (_) { /* next font in the stack */ }
-    }
+    if (glyphs.status !== 200) { res.writeHead(glyphs.status); return res.end(); }
     res.writeHead(200, { 'Content-Type': 'application/x-protobuf' });
-    return res.end();
+    return res.end(glyphs.body);
   }
 
   const urlPath = req.url === '/' ? '/index.html' : req.url.split('?')[0];

@@ -3,7 +3,8 @@
 /* U-GLYPHS: nothing the controller needs depends on MapTiler. The harness answers every api.maptiler.com URL with 403
  * (no key, as an exhausted or refused key looks) and every tiles.openfreemap.org URL with 503 (e2e/helpers/test.js),
  * so nothing leaves the machine.
- *  - a track's symbol and data block render with no key: the glyphs come from the bundled local server;
+ *  - a track's symbol and data block render with no key: the glyphs come from the bundled local server (app/glyph-route.js);
+ *  - a glyph range nobody ships answers an empty 200 and the label's tile still loads;
  *  - the basemap falls back to OpenFreeMap when MapTiler refuses it, stays there, and goes back when a key arrives. */
 
 const { test, expect } = require('./helpers/test');
@@ -55,6 +56,32 @@ test('with no MapTiler key a track draws its symbol and its data block', async (
   expect((await rendered()).errored).toBe(0);
   expect(maptilerFonts, 'no glyph request goes to MapTiler').toBe(0);
   await page.evaluate(() => clearInterval(window.__ngTimer));
+});
+
+test('a glyph range the client does not ship answers empty and does not error the tile', async ({ page }) => {
+  const glyphAnswers = [];
+  page.on('response', (r) => { if (/\/fonts\/.+\/1280-1535\.pbf$/.test(r.url())) glyphAnswers.push(r.status()); });
+  await openPanel(page, { signedOn: ['OPS'] });
+  await page.waitForFunction(() => crc.mapHandle.mapReady);
+  // Hebrew (U+05D0..) is in no shipped range; Latin is. The label still draws, and its tile loads.
+  await page.evaluate(() => {
+    const map = crc.mapHandle.map;
+    const c = map.getCenter();
+    map.addSource('ng-unshipped', { type: 'geojson', data: { type: 'FeatureCollection', features: [
+      { type: 'Feature', geometry: { type: 'Point', coordinates: [c.lng, c.lat] }, properties: { name: 'TAG \u05D0\u05D1' } }] } });
+    map.addLayer({ id: 'ng-unshipped', type: 'symbol', source: 'ng-unshipped',
+      layout: { 'text-field': ['get', 'name'], 'text-font': ['Roboto Regular', 'Noto Sans Regular'] } });
+  });
+  const state = () => page.evaluate(() => {
+    const map = crc.mapHandle.map;
+    const cache = map.style.sourceCaches['ng-unshipped'];
+    return { tiles: cache ? cache.getIds().map((id) => cache.getTileByID(id).state) : [],
+      drawn: map.queryRenderedFeatures({ layers: ['ng-unshipped'] }).length };
+  });
+  await expect.poll(async () => (await state()).drawn, { message: 'the label draws' }).toBeGreaterThan(0);
+  expect((await state()).tiles).not.toContain('errored');
+  expect(glyphAnswers.length, 'the unshipped range was asked for').toBeGreaterThan(0);
+  expect(glyphAnswers.every((s) => s === 200)).toBe(true);
 });
 
 test('the basemap falls back to OpenFreeMap without a key and returns to MapTiler when one arrives', async ({ page }) => {
