@@ -49,7 +49,7 @@ const { UndoHistory, undoEnv } = require('./undo/undo-history');
 const { ReplayCache } = require('./sync/replay-cache');
 const { REGISTRY, RESTORE_ORDER, checkPersistedShape } = require('./stores');
 const { SERVICE_ROWS } = require('./authority/airspace');
-const { stampStrip, touchedStrips, boardDelta } = require('./wire/frames');
+const { stampStrip, touchedStrips, boardDelta, airspaceDelta } = require('./wire/frames');
 const { resetForMission } = require('./mission-reset');
 const { FrequencyTable } = require('./frequency-table');
 const log = require('../log').logger('efsp');
@@ -283,6 +283,17 @@ function createEfsp({ env = process.env, facilityConfig = createFacilityConfig({
         messages.push(boardDelta(ctx, boardStore, facilityId, touchedStrips(ctx, boardStore, facilityId, touched, null), []));
       }
       return { moved, messages };
+    },
+
+    /**
+     * docs/adr/0128: ends the transits whose flight has no live Strip left and the declines shown long enough; persisted,
+     * with one efsp-airspace-delta per record changed. @returns {{ended:number, messages:object[]}}
+     */
+    sweepTransits: () => {
+      const messages = [];
+      const changed = airspaceStore.sweepTransits((view) => { messages.push(airspaceDelta(airspaceStore, [view])); });
+      if (changed.length) _persist({ wallClock, facilities, stores, persistState, paths });
+      return { ended: changed.length, messages };
     },
 
     /** Where a flight's correlated contact is, `{lat, lon, altFt}` (indicated feet), or null (docs/adr/0122). */

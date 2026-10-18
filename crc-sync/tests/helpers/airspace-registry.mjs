@@ -24,23 +24,31 @@ const rowOf = (id) => authority.airspaceAuthority.rowFor(id, {
   classOf: (p) => ((p || '').startsWith('RANGE_') ? 'USING_AGENCY' : null),
 });
 
+// The Position classes the transit decider reads (docs/adr/0128): an MRU using agency decides, a BASOPS one does not.
+export const CLASSES = { TAC_C2: 'MRU', GCI: 'MRU', AIC: 'MRU_POSITION', OPS: 'BASOPS', CTR: 'CIVIL_ATC', AP: 'MILITARY_ATC' };
+
 export const THEATER = 'Test';
 
 export const MOA = { airspaceId: 'MOA-1', name: 'Test MOA', type: 'MOA', controllingFacilityId: 'CENTER', controllingPositionId: 'CTR', workingFrequencyMhz: 134.25 };
 export const RANGE = { airspaceId: 'RANGE-1', name: 'Test Range', type: 'RANGE', controllingFacilityId: 'INCIRLIK', controllingPositionId: 'AP', usingPositionId: 'RANGE_1_CONTROL', controlFrequencyMhz: 283.5 };
 export const SQUARE = { source: 'POLYGON', points: [[36.0, 35.0], [36.0, 36.0], [37.0, 36.0], [37.0, 35.0]] };
 
-/** @param {{defs?:object[], theater?:string|null, occupants?:object, routeCount?:number, clock?:object}} [o] */
-export function makeRegistry({ defs = [MOA, RANGE], theater = THEATER, occupants = {}, routeCount = 0, clock, mutationLog = null } = {}) {
-  const state = { theater, occupants, routeCount };
+/**
+ * @param {{defs?:object[], theater?:string|null, occupants?:object, routeCount?:number, clock?:object,
+ *   flights?:Object<string, {callsign:string|null, ifr:boolean, holders:{facilityId:string, positionId:string}[]}>}} [o]
+ *   `flights` is what a transit op sees of each flight (docs/adr/0128 `transitFlight`); `state.flights` may change later.
+ */
+export function makeRegistry({ defs = [MOA, RANGE], theater = THEATER, occupants = {}, routeCount = 0, clock, mutationLog = null, flights = {} } = {}) {
+  const state = { theater, occupants, routeCount, flights };
   const store = new AirspaceStore({
     ...(clock ? { clock } : {}),
     currentTheater: () => state.theater,
     occupantsFor: (id) => state.occupants[id] || [],
     routeOccupancyFor: () => state.routeCount,
     facilityLookup: lookup,
-    authority: { rowOf },
+    authority: { rowOf, classOf: (p) => CLASSES[p] || null },
     mutationLog,
+    transitFlight: (id) => state.flights[id] || null,
   });
   if (defs.length) {
     const r = store.apply({ op: { kind: 'ImportAirspaces', theater: THEATER, source: 'STANDING', definitions: defs } },

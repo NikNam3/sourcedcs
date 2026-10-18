@@ -12,7 +12,7 @@
 // This function only changes the stores and builds the frames; the caller persists, delivers and then runs the archiver's
 // roll-over sweep, which files the dropped Strips and their flight data (app.js).
 
-const { boardDelta, touchedStrips, runwayStatusDelta, carrierDelta, marsaDelta, correlationDelta } = require('./wire/frames');
+const { boardDelta, touchedStrips, runwayStatusDelta, carrierDelta, marsaDelta, correlationDelta, airspaceDelta } = require('./wire/frames');
 
 /**
  * @param {object} ctx the facade's context (efsp/index.js): the stores and boardStoreFor
@@ -52,6 +52,13 @@ function resetForMission(ctx, facilityIds, session = null) {
   if (stores.carrier) summary.carrierHulls = stores.carrier.resetForMission();
   if (stores.runway) summary.runwayStatusFacilities = stores.runway.resetForMission();
   if (stores.correlation) summary.correlations = stores.correlation.forgetAll();
+  // docs/adr/0128: every transit ends with the mission; one delta per record changed (the airspace delta moves seq by one).
+  // Another theater's record is not on this mission's board: changed and persisted, not sent.
+  const airspaceStore = ctx.airspaceStore;
+  const theater = airspaceStore ? airspaceStore.currentTheater() : null;
+  summary.transitsEnded = airspaceStore ? airspaceStore.resetForMission((view) => {
+    if (view.theater === theater) frames.push(airspaceDelta(airspaceStore, [view]));
+  }).length : 0;
 
   // One frame per store whose sequence moved, whoever moved it (the retirements above move MARSA and the carrier too).
   if (moved('marsa')) frames.push(marsaDelta(stores.marsa, stores.marsa.getAll()));

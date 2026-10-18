@@ -126,4 +126,39 @@ function isUsing(def, positionId, { rowOf, facilityOf }) {
   return isControlling(def, positionId);
 }
 
-module.exports = { SERVICE_ROWS, CLASS_ROWS, rowFor, definitionAuthority, positionsThatMay, refusalReason, mayImport, isControlling, isUsing };
+// ── transit through active SUA (docs/adr/0128, H151) ─────────────────────────────────────────────────────────────
+
+/**
+ * The airspace types a transit is requested and decided for (H151 MT-Q8: MOA, warning and restricted; our RANGE and
+ * DANGER are restricted-like, as ADR 0119 reads them, so they follow RESTRICTED, ours). PROHIBITED has no transit.
+ */
+const TRANSIT_TYPES = ['MOA', 'WARNING', 'RESTRICTED', 'RANGE', 'DANGER'];
+
+/** The Position class of a Military Radar Unit that separates its own participants (ADR 0102; JO 7610.14A para 8-1-10). */
+const MRU_CLASS = 'MRU';
+
+/**
+ * Who decides a transit of `def` (H151 MT-Q1 a): the side that separates the airspace's users. The using Facility's
+ * `use` Positions of class MRU when the using agency is an MRU (TAC_C2 for a TACTICAL airspace: JO 7610.14A para 8-1-9
+ * b.1); otherwise the controlling Position (ATC works the airspace's users itself, para 3-3-4 a). A scheduling using
+ * agency (Incirlik's OPS, class BASOPS) and a range-control Position are not deciders: they see the transit, read-only.
+ * @param {object} deps `{ rowOf, positionsOf(facilityId), classOf(positionId) }`
+ * @returns {string[]}
+ */
+function transitDeciders(def, { rowOf, positionsOf, classOf }) {
+  if (def.usingFacilityId && positionsOf && classOf) {
+    const mru = (positionsOf(def.usingFacilityId) || []).filter(p => classOf(p) === MRU_CLASS && !!rowOf(p).use);
+    if (mru.length) return mru;
+  }
+  return def.controllingPositionId ? [def.controllingPositionId] : [];
+}
+
+/** Does `positionId` decide transits of `def`? */
+function isTransitDecider(def, positionId, deps) {
+  return !!positionId && transitDeciders(def, deps).includes(positionId);
+}
+
+module.exports = {
+  SERVICE_ROWS, CLASS_ROWS, rowFor, definitionAuthority, positionsThatMay, refusalReason, mayImport, isControlling, isUsing,
+  TRANSIT_TYPES, MRU_CLASS, transitDeciders, isTransitDecider,
+};

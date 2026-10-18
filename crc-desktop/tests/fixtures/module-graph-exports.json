@@ -265,6 +265,8 @@
    "CARRIER_STATE_EDITORS",
    "CLASS_ROWS",
    "FACILITY_POSITIONS",
+   "MRU_POSITIONS",
+   "TRANSIT_TYPES",
    "airspaceRowOf",
    "authorityFor",
    "controllingChoicesFor",
@@ -275,8 +277,10 @@
    "facilityIds",
    "facilityOfPosition",
    "isControlling",
+   "isTransitAirspace",
    "isUsing",
    "positionsOf",
+   "transitDeciders",
    "usingPositionFor"
   ],
   "panels/efsp/airspace-card.js": [
@@ -582,6 +586,7 @@
    "_canApproveAirspaceEntry",
    "_canConvertToArrival",
    "_openAirspaceEntryPopover",
+   "_openEntryBlockPopover",
    "_pendingConvertStripId",
    "_setPendingConvertStripId",
    "_usingAgencyEntryChoices"
@@ -639,6 +644,9 @@
    "_tofiProposerOf",
    "_tofiRegimeChoice",
    "tofiSendLabel"
+  ],
+  "panels/efsp/bay/popovers/transit.js": [
+   "openTransitPopover"
   ],
   "panels/efsp/bay/selection.js": [
    "_clearSelectedStrip",
@@ -1007,6 +1015,10 @@
    "setEfspSender",
    "setSignOnNoticeListener",
    "settleEfspAck"
+  ],
+  "panels/efsp/entry-block.js": [
+   "entryBlockTexts",
+   "parseEntryBlock"
   ],
   "panels/efsp/facility-topology.js": [
    "DEFAULT_FACILITY_ID",
@@ -1496,6 +1508,18 @@
    "TIME_CHAINS",
    "resolveTimeChain",
    "timeChainForBlock"
+  ],
+  "panels/efsp/transit-actions.js": [
+   "requestTransit",
+   "sendTransitOp"
+  ],
+  "panels/efsp/transit-rules.js": [
+   "cancelableTransits",
+   "requestTransitChoices",
+   "transitMark",
+   "transitOn",
+   "transitRowOffer",
+   "transitsOfFlight"
   ],
   "panels/efsp/vfr.js": [
    "hasNoClearance"

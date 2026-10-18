@@ -1,7 +1,7 @@
 'use strict';
 import { _resolveActingPositionId } from './dispatch.js';
 import { getLatestTrack } from '../../../picture.js';
-import { getEfspAirspace, getEfspCorrelationForStrip, getEfspFlightData, getEfspObligation, marsaForStrip, otherLiveStripsForFlightData, surveillanceHintsForStrip } from '../efsp-state.js';
+import { getAllEfspAirspaces, getEfspAirspace, getEfspCorrelationForStrip, getEfspFlightData, getEfspObligation, marsaForStrip, otherLiveStripsForFlightData, surveillanceHintsForStrip } from '../efsp-state.js';
 import { getActingPositions } from '../efsp-ws.js';
 import { isMarsaHighlighted } from '../marsa-badge.js';
 import { arSignatureFor } from '../ato-strip.js';
@@ -13,6 +13,7 @@ import { efspArrivalFor } from '../efsp-arrivals.js';
 import { runwayStatusSignatureFor } from '../runway-status-rules.js';
 import { trackRef } from '../../../track-label.js';
 import { _refusalForStrip } from './block-edit.js';
+import { transitsOfFlight } from '../transit-rules.js';
 
 // The render signature (DESK-SPLIT, split out of bay-view.js): what the reconciler compares to decide a Strip element is stale.
 // It reads strip-view.js's alerts, so it lives apart from strip-element.js (which strip-view.js imports): the Bay renderer
@@ -110,6 +111,8 @@ export function _stripRenderSignature(strip) {
   const entry = strip.airspaceEntry;
   const airspace = entry ? getEfspAirspace(entry.airspaceId) : null;
   parts.push('asp:' + (airspace ? `${airspace.rev}/${airspace.state}` : ''));
+  // crc-sync docs/adr/0128: the grey transit marks live on the airspace records, not on the Strip.
+  parts.push('trn:' + transitsOfFlight(strip.flightDataId, getAllEfspAirspaces()).map(({ airspace: a, transit: t }) => `${a.airspaceId}/${t.state}/${t.reason || ''}/${(a.definition && a.definition.name) || ''}`).join(','));
 
   const refusal = _refusalForStrip(strip);
   parts.push('ref:' + (refusal ? `${refusal.at}/${refusal.blockId || ''}` : ''));

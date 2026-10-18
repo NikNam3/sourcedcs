@@ -94,6 +94,22 @@ function polygonSelfIntersects(points) {
 }
 
 /**
+ * Does the leg `from`-`to` (both `[lat, lon]`) touch the polygon `points`: an end inside it, or the leg crossing an edge?
+ * Laterally only (docs/adr/0128's "filed through"). Projected about the polygon's own centroid, as `pointInPolygon`.
+ */
+function legCrossesPolygon(from, to, points) {
+  if (pointInPolygon(from, points) || pointInPolygon(to, points)) return true;
+  const [lat0, lon0] = centroidOf(points);
+  const proj = projector(lat0, lon0);
+  const a = proj(from); const b = proj(to);
+  const ring = points.map(proj);
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    if (_segmentsIntersect(a, b, ring[j], ring[i])) return true;
+  }
+  return false;
+}
+
+/**
  * Where is `point` ({lat, lon, altFt}) relative to one definition?
  * @returns {'inside'|'outside'|'unknown'} unknown = the geometry cannot be evaluated (an AREA with no outline, or a
  *   definition with no usable shape). Never a guess (ADR 0098's consequences).
@@ -120,5 +136,5 @@ function evaluate(definition, { lat, lon, altFt }) {
 
 module.exports = {
   MAX_POLYGON_VERTICES, CIRCLE_POLYGON_POINTS, NM_PER_DEGREE,
-  pointInPolygon, pointToLegNm, bandContains, polygonSelfIntersects, evaluate,
+  pointInPolygon, pointToLegNm, bandContains, polygonSelfIntersects, legCrossesPolygon, evaluate,
 };

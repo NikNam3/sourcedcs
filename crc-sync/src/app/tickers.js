@@ -76,6 +76,11 @@ function buildTickers({ wsHub, efsp, trackStore, collabStore, atisStore, surveil
       const { messages } = efsp.settleHandoffControl();
       if (messages.length) wsHub.deliverEfsp(messages);
     } },
+    // docs/adr/0128: a transit ends when its flight's last live Strip goes, and a decline is forgotten after a while.
+    { name: 'airspace-transits', periodMs: 5000, tick: () => {
+      const { messages } = efsp.sweepTransits();
+      if (messages.length) wsHub.deliverEfsp(messages);
+    } },
     { name: 'carrier', periodMs: 1000, tick: () => carrierTick.tick() },
     // docs/adr/0112: the PAR sample, to the Position working each final only (config/par.json sampleMs, under 1 s, H115).
     { name: 'par', periodMs: parMonitor.sampleMs, tick: () => wsHub.sendParSamples(parMonitor.tick()) },

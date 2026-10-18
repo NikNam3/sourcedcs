@@ -1,5 +1,6 @@
 'use strict';
-import { getEfspAirspace, getEfspStrip, otherLiveStripsForFlightData, surveillanceHintsForStrip } from './efsp-state.js';
+import { getAllEfspAirspaces, getEfspAirspace, getEfspStrip, otherLiveStripsForFlightData, surveillanceHintsForStrip } from './efsp-state.js';
+import { transitMark, transitsOfFlight } from './transit-rules.js';
 import { formatZuluHhmm } from '../../format.js';
 import { getActingPositions, sendEfspMutation } from './efsp-ws.js';
 import { correlationBadgeFor } from './correlation-highlight.js';
@@ -122,6 +123,16 @@ export function _buildIndicatorSlots(strip, el, obligation, alerts) {
   for (const key of INDICATOR_ORDER) {
     if (ALERT_SLOT_KEYS.has(key)) {
       for (const a of alerts.filter(x => x.key === key)) slots.appendChild(_indicator(key, a.text, a.tone, a.legacy, a.reason));
+      continue;
+    }
+    if (key === 'transit') {
+      // crc-sync docs/adr/0128 (H151 MT-Q7 b): grey only, one per airspace this flight has a transit of.
+      for (const { airspace, transit } of transitsOfFlight(strip.flightDataId, getAllEfspAirspaces())) {
+        const mark = transitMark(airspace, transit);
+        const node = _indicator(key, mark.text, 'on', `efsp-transit-mark efsp-transit-${mark.state.toLowerCase()}`, mark.title);
+        node.dataset.airspaceId = airspace.airspaceId;
+        slots.appendChild(node);
+      }
       continue;
     }
     const node = _litIndicator(strip, key, el, obligation, siblings);

@@ -30,6 +30,7 @@ const carrierHulls = require('./carrier/hull-config');
 const { loadRecoveryTuning } = require('./carrier/recovery-tuning');
 const log = require('../log').logger('efsp:stores');
 const { anyOf, arrayOf, mapOf, checkShape } = require('../persisted-shape');
+const { hasNoClearance } = require('./vfr');
 
 // The Blocks that held the assigned altitude and heading as Strip annotations before docs/adr/0058 moved them onto
 // the flight record. A Strip that still has history in one is the old shape: the migration that moved it is gone
@@ -127,7 +128,17 @@ const REGISTRY = [
           // A carrier circle names a configured hull (docs/adr/0125).
           hasHull: (hullId) => carrierHulls.getHulls().some(h => h.hullId === hullId),
         },
-        authority: { rowOf: (positionId) => authority.airspaceRowFor(positionId, facilityConfig.getPositionClass) },
+        authority: { rowOf: (positionId) => authority.airspaceRowFor(positionId, facilityConfig.getPositionClass), classOf: facilityConfig.getPositionClass },
+        // docs/adr/0128: a transit's flight, its IFR-ness (vfr.js) and the owners of its live Strips, read lazily.
+        transitFlight: (flightDataId) => {
+          const fd = stores.flightData && stores.flightData.getFlightData(flightDataId);
+          if (!fd) return null;
+          const holders = [];
+          for (const [facilityId, { boardStore }] of facilities.entries()) {
+            for (const s of boardStore.getAll()) if (s.state !== 'DROPPED' && s.flightDataId === flightDataId) holders.push({ facilityId, positionId: s.ownerPositionId });
+          }
+          return { callsign: (fd.identity && fd.identity.callsign) || null, ifr: !hasNoClearance(fd), holders };
+        },
         // The live ship a carrier circle follows (docs/adr/0125), read lazily: the carrier store is built after this one.
         hullPosition: (hullId) => (stores.carriers ? stores.carriers.getShipState(hullId) : null),
       });
@@ -322,8 +333,13 @@ const ENTRY_SHAPES = {
   }),
   flightData: { flightDataList: arrayOf(FLIGHT_DATA_SHAPE), codes: true, codeCursor: true },
   airspaces: {
-    byTheater: mapOf(arrayOf(anyOf('airspaceId', 'theater', 'definition', 'defRev', 'definitionHistory', 'lastDenial', 'pendingRequest',
-      'rev', 'state', 'transitions', 'updatedAt', 'updatedBy', 'window'))),
+    byTheater: mapOf(arrayOf({
+      ...anyOf('airspaceId', 'theater', 'definition', 'defRev', 'definitionHistory', 'lastDenial', 'pendingRequest',
+        'rev', 'state', 'transitions', 'updatedAt', 'updatedBy', 'window'),
+      // docs/adr/0128
+      transits: arrayOf(anyOf('callsign', 'decidedAt', 'decidedBy', 'decidedPositionId', 'flightDataId', 'note', 'reason',
+        'requestedAt', 'requestedBy', 'requestedPositionId', 'selfCoordinated', 'state')),
+    })),
     seeded: mapOf(true),
   },
   correlations: arrayOf(anyOf('binding', 'confidence', 'flightDataId', 'lastMatchedAt', 'matchedBy', 'observedBeacon', 'rev', 'state',

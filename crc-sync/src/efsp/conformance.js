@@ -245,6 +245,19 @@ function distanceNm(a, b) {
 }
 
 /**
+ * The altitude conformance checks (docs/adr/0128 §4): the assigned altitude (a single altitude or a block, ADR 0091), and
+ * only when the flight has none, the altitude block it was approved to work in an airspace (`airspaceEntry.altitudeBlock`,
+ * ApproveAirspaceEntry), as a block. The assigned altitude is the clearance and wins (ours). `entryBlock` is
+ * `{lowerFt, upperFt, at}`; its `at` (the approval time) re-arms the check when the block is amended.
+ */
+function altitudeToCheck(flightData, entryBlock) {
+  const assigned = activeClearanceEntry(flightData, 'altitude');
+  if (assigned && (assigned.block || Number.isFinite(assigned.parsed))) return assigned;
+  if (!entryBlock || !Number.isFinite(entryBlock.lowerFt) || !Number.isFinite(entryBlock.upperFt)) return assigned;
+  return { block: { lowFt: entryBlock.lowerFt, highFt: entryBlock.upperFt }, at: `entry:${entryBlock.at}:${entryBlock.lowerFt}-${entryBlock.upperFt}` };
+}
+
+/**
  * Runs evaluateConformance for every correlated flight, once per tick, and
  * reports the flights whose alerts changed.
  */
@@ -254,7 +267,10 @@ class ConformanceMonitor {
    *                        transitionAltFt: () => number, indicatedAltFt, config, clock?, wallClock?,
    *                        gridToMagnetic?: (gridDeg, lat, lon) => number|null,
    *                        finals?: () => Map<flightDataId, 'AIRFIELD'|'CARRIER'>,
-   *                        refueling?: () => Map<receiverFlightDataId, {tankerFlightDataId:string|null, tanker:string}> }
+   *                        refueling?: () => Map<receiverFlightDataId, {tankerFlightDataId:string|null, tanker:string}>,
+   *                        entryBlocks?: () => Map<flightDataId, {lowerFt:number, upperFt:number, at:number}> }
+   * `entryBlocks` names the flights approved into an airspace with an altitude block (a live Strip's `airspaceEntry`), checked
+   * as a block when the flight has no assigned altitude (`altitudeToCheck`, docs/adr/0128 §4).
    * `refueling` names the receivers under MARSA with a tanker (the header's "Under MARSA with a tanker"), read once per tick.
    * `finals` names the flights on a final (a live FINAL Strip) and where, read once per tick (the header's "On a final").
    * `gridToMagnetic` turns DCS's GRID course into magnetic (server.js passes
@@ -285,6 +301,7 @@ class ConformanceMonitor {
     let changed = false;
     const finals = this._d.finals ? this._d.finals() : new Map();
     const refueling = this._d.refueling ? this._d.refueling() : new Map();
+    const entryBlocks = this._d.entryBlocks ? this._d.entryBlocks() : new Map();
     const live = new Map(); // flightDataId -> track, for the tanker lookup
     for (const record of correlationStore.getAll()) {
       if (!record.trackId || (record.state !== 'CORRELATED' && record.state !== 'PROVISIONAL')) continue;
@@ -315,7 +332,7 @@ class ConformanceMonitor {
       const onFinal = finals.get(flightDataId) || null;
       const alerts = evaluateConformance({
         hdg: onFinal ? null : activeClearanceEntry(flightData, 'heading'),
-        alt: onFinal === 'CARRIER' ? null : activeClearanceEntry(flightData, 'altitude'),
+        alt: onFinal === 'CARRIER' ? null : altitudeToCheck(flightData, entryBlocks.get(flightDataId)),
         course: Number.isFinite(track.course) ? this._gridToMagnetic(track.course, track.lat, track.lon) : null,
         groundSpeedMs: track.groundSpeed, verticalSpeedMs: track.verticalSpeed, altFt,
       }, mem, now, config, wallNow);
@@ -345,4 +362,4 @@ class ConformanceMonitor {
   }
 }
 
-module.exports = { evaluateConformance, evaluateRefuelingBlock, refuelingReceivers, headingDiff, ConformanceMonitor, FPM_PER_MS, MS_PER_KT };
+module.exports = { evaluateConformance, evaluateRefuelingBlock, refuelingReceivers, altitudeToCheck, headingDiff, ConformanceMonitor, FPM_PER_MS, MS_PER_KT };
