@@ -49,6 +49,7 @@ const MODULES = {
   changeBus: '/js/panels/efsp/efsp-change-bus.js', // crc.changeBus.markEfspChanged
   correlation: '/js/panels/efsp/correlation-highlight.js', // crc.correlation.getCorrelatedHighlightTrackId (LT-UI T10)
   maptilerKey: '/js/maptiler-key.js', // crc.maptilerKey.loadMaptilerKey (LT-UI T3)
+  mapSetup: '/js/map-setup.js', // crc.mapSetup.basemapState (U-GLYPHS basemap fallback)
   trackPanel: '/js/panels/track-panel.js', // crc.trackPanel.showTrackPanel (LT-VFR: start flight following on a contact)
 };
 

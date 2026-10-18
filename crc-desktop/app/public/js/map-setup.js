@@ -7,7 +7,8 @@ import { wireMapInteractions } from './map-interactions.js';
 import { initElevationContours } from './elevation.js';
 import { applyMapTheme } from './map-style.js';
 import { mountAirspaceMenuButton, refreshAirspaceLayers } from './airspace-layer.js';
-import { onMaptilerKey, transformMaptilerRequest } from './maptiler-key.js';
+import { maptilerKey, onMaptilerKey, transformMaptilerRequest } from './maptiler-key.js';
+import { createBasemapFallback } from './basemap-fallback.js';
 import { _setMap, _setMapReady, map, mapReady } from './map-handle.js';
 import { applyScale } from './geojson.js';
 import { missionData } from './picture.js';
@@ -15,63 +16,36 @@ import { missionData } from './picture.js';
 // ── Map initialisation ────────────────────────────────────────────────────
 // Sets up all MapLibre sources, layers, and event handlers.
 
-// The key arrives after the map exists (it is fetched at login). The basemap's tile source reloads then.
-// maplibre 3.6.2's VectorTileSource has setTiles(), so the source is not re-added and the style is never
-// replaced (setStyle would destroy the GeoJSON layers below).
-//
-// Live test T3: that was not enough. A tile whose glyph range or tile request failed without the key is
-// left 'errored', and maplibre 3.6.2 never asks for an errored tile again: SourceCache.reload() (what
-// setTiles and every GeoJSON setData run) skips it, and _addTile() hands it back as it is. The glyphs are
-// asked for by every symbol layer, the GeoJSON ones too (airport, navpoint, drawing and track labels,
-// airspace names), and one failed range fails the whole tile. A failed range is not cached (GlyphManager
-// deletes the request), so dropping the errored tiles of every source makes the next frame request them
-// again, now with the key.
-export function refreshMaptilerSources() {
-  if (!map) return;
-  let sources;
-  try { sources = map.getStyle().sources; } catch (_) { return; } // style not loaded yet: its first tile requests already carry the key
-  for (const [id, src] of Object.entries(sources)) {
-    if (src.type !== 'vector' || !Array.isArray(src.tiles) || !src.tiles.some((u) => u.startsWith('https://api.maptiler.com/'))) continue;
-    map.getSource(id).setTiles(src.tiles);
-  }
-  if (retryErroredTiles(map.style && map.style.sourceCaches, map.transform, map.terrain) > 0) map.triggerRepaint();
-}
+// The key arrives after the map exists (it is fetched at login). The basemap source is then pointed at MapTiler again
+// (basemap-fallback.js), in place: the style is never replaced (setStyle would destroy the GeoJSON layers below), and the
+// reload drops the tiles that errored without the key. Glyphs are local (app/glyph-route.js), so no GeoJSON tile ever
+// errors for want of the key (live test T3's retry of every source's errored tiles is gone with that).
 
-/**
- * Drops the tiles of each source that has an errored one and asks for the ones in view again (T3). Only those
- * sources: a healthy one keeps its tiles and does not flicker. Returns how many sources it cleared.
- * (`update` is what the map's own render loop calls when its sources are dirty; clearing alone does not make them so.)
- * @param {Object<string, {getIds:()=>string[], getTileByID:(id:string)=>{state:string}, clearTiles:()=>void, update:Function}>} sourceCaches
- */
-export function retryErroredTiles(sourceCaches, transform, terrain) {
-  let cleared = 0;
-  for (const cache of Object.values(sourceCaches || {})) {
-    if (!cache || typeof cache.getIds !== 'function') continue;
-    if (!cache.getIds().some((tileId) => { const t = cache.getTileByID(tileId); return t && t.state === 'errored'; })) continue;
-    cache.clearTiles();
-    if (transform) cache.update(transform, terrain);
-    cleared += 1;
-  }
-  return cleared;
-}
-
-// No key, or MapTiler refuses it: the basemap tiles answer 403. The map stays usable on the style's Background layer
-// (the scope, strips and every panel do not depend on tiles); the controller gets one notice and the log one warning.
+// The basemap note (U-GLYPHS 1b). No key, a refused or exhausted one, or MapTiler down: the basemap source switches to
+// the keyless fallback (basemap-fallback.js) and a quiet grey note says so; with the fallback down too the map stays usable
+// on the style's Background layer (the scope, strips and every panel do not depend on tiles). Dark cockpit: grey, no colour.
 let basemapNotice = null;
-function showBasemapNotice(container) {
-  if (basemapNotice) return;
-  console.warn('[map] map key unavailable: no basemap or terrain contours until crc-sync supplies a valid MapTiler key');
-  basemapNotice = document.createElement('div');
-  basemapNotice.id = 'basemap-notice';
-  basemapNotice.textContent = 'NO BASEMAP: map key unavailable';
-  basemapNotice.style.cssText = 'position:absolute;left:8px;bottom:8px;z-index:5;padding:3px 8px;font:11px monospace;letter-spacing:.06em;'
-    + 'color:#c9a24a;background:rgba(0,0,0,.65);border:1px solid #6b5a2a;pointer-events:none';
-  container.appendChild(basemapNotice);
+const NOTICE_TEXT = { fallback: 'FALLBACK BASEMAP', none: 'NO BASEMAP' };
+function showBasemapNotice(container, state) {
+  const text = NOTICE_TEXT[state];
+  if (!text) { clearBasemapNotice(); return; }
+  if (!basemapNotice) {
+    basemapNotice = document.createElement('div');
+    basemapNotice.id = 'basemap-notice';
+    basemapNotice.style.cssText = 'position:absolute;left:8px;bottom:8px;z-index:5;padding:2px 6px;font:10px monospace;letter-spacing:.06em;'
+      + 'color:#8a8a8a;background:rgba(0,0,0,.55);border:1px solid #333;pointer-events:none';
+    container.appendChild(basemapNotice);
+  }
+  basemapNotice.textContent = text;
 }
 function clearBasemapNotice() {
   if (basemapNotice) basemapNotice.remove();
   basemapNotice = null;
 }
+
+let basemap = null;
+/** 'maptiler', 'fallback' or 'none' (for the specs and the log). */
+export function basemapState() { return basemap ? basemap.state : 'maptiler'; }
 
 export function initMap(container) {
   _setMap(new maplibregl.Map({
@@ -84,11 +58,17 @@ export function initMap(container) {
     zoom: 7,
   }));
 
-  onMaptilerKey(() => { clearBasemapNotice(); refreshMaptilerSources(); });
-  map.on('error', (e) => {
-    const err = e && e.error;
-    if (err && err.status === 403 && /^https:\/\/api\.maptiler\.com\//.test(err.url || '')) showBasemapNotice(container);
+  basemap = createBasemapFallback({
+    getMap: () => map,
+    getKey: maptilerKey,
+    onChange: (state) => {
+      if (state === 'fallback') console.warn('[map] MapTiler unavailable: fallback basemap until crc-sync supplies a working key');
+      if (state === 'none') console.warn('[map] fallback basemap unavailable too: no basemap');
+      showBasemapNotice(container, state);
+    },
   });
+  onMaptilerKey(() => { basemap.onKey(); });
+  map.on('error', (e) => { basemap.onMapError(e); });
   // maplibre fires 'load' from a render frame, and a map whose only tiles errored draws nothing more, so the frame
   // that would announce it never comes: nudge it until the map is ready (mapReady gates every overlay).
   const nudge = setInterval(() => { if (mapReady) clearInterval(nudge); else map.triggerRepaint(); }, 400);

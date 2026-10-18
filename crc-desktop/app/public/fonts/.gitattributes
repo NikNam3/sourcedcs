@@ -1,0 +1,2 @@
+# Glyph ranges are binary protobuf: a small one can look like text, and an LF->CRLF checkout (Windows CI) would corrupt it.
+*.pbf binary

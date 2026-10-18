@@ -28,9 +28,12 @@ async function serveCdnFromNodeModules(context) {
     await context.route(re, (route) => route.fulfill({ status: 200, contentType: type, body: fs.readFileSync(path.join(NM, rel)) }));
   }
   // MAPKEY: the e2e crc-sync has no MapTiler key, so the client has none. Nothing may leave the machine for MapTiler:
-  // answer it as MapTiler does a key-less request (403), which is the no-key path the app really takes. Sprite and
-  // tiles both land here; the Background layer is the basemap.
+  // answer it as MapTiler does a key-less request (403), which is the no-key path the app really takes. Basemap
+  // tiles and contours land here (glyphs are local and the style names no sprite); the basemap then falls back.
   await context.route(/^https:\/\/api\.maptiler\.com\//, (route) => route.fulfill({ status: 403, contentType: 'application/json', body: '{"message":"Invalid key"}' }));
+  // U-GLYPHS: the keyless fallback basemap (basemap-fallback.js) must not leave the machine either: answer it as an outage,
+  // so a run without a key ends on the Background layer, as a session with neither source does.
+  await context.route(/^https:\/\/tiles\.openfreemap\.org\//, (route) => route.fulfill({ status: 503, contentType: 'text/plain', body: 'e2e: no network' }));
 }
 
 const PATCHED = Symbol('cdn-patched');
