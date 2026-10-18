@@ -23,15 +23,18 @@ const area = (id) => ({ ...DEFS[id] });
 const CLEARED = { identity: { callsign: 'VIPER11' }, clearance: { altitude: { entries: [{ status: 'ACTIVE', parsed: 15000 }] }, heading: { entries: [] } } };
 const VFR = { identity: { callsign: 'CESSNA1' }, clearance: { altitude: { entries: [] }, heading: { entries: [] } } };
 
-function world({ tracks = [], inside = {}, flights = {}, flightData = {}, strips = {}, using = { OPS: ['MOA-1', 'R-1'] } }) {
-  const state = { tracks, inside, flights, flightData, strips };
+function world({ tracks = [], inside = {}, flights = {}, flightData = {}, strips = {}, using = { OPS: ['MOA-1', 'R-1'] }, transits = {}, deciders = {} }) {
+  const state = { tracks, inside, flights, flightData, strips, transits };
   const monitor = new AirspaceEntryAlertMonitor({
     trackStore: { getAll: () => state.tracks },
     airspaceStore: {
       activeAreasContaining: (p) => (state.inside[p.id] || []).map(area),
       isActiveFor: () => false,
-      getAll: () => Object.values(DEFS).map(d => ({ airspaceId: d.airspaceId, state: 'ACTIVE', definition: d })),
+      getAll: () => Object.values(DEFS).map(d => ({ airspaceId: d.airspaceId, state: 'ACTIVE', definition: d, transits: state.transits[d.airspaceId] || [] })),
       isUsingAgency: (airspaceId, positionId) => (using[positionId] || []).includes(airspaceId),
+      // docs/adr/0128: the store's answers, from the same transits
+      approvedTransit: (airspaceId, fdId) => (state.transits[airspaceId] || []).find(t => t.flightDataId === fdId && t.state === 'APPROVED') || null,
+      transitDecidersFor: (airspaceId) => deciders[airspaceId] || [],
     },
     locate: (t) => ({ id: t.id, lat: 37, lon: 35, altFt: 10000 }),
     trackedFlights: () => new Map(Object.entries(state.flights)),
@@ -137,4 +140,44 @@ test('a change in the list alone is a change (the hub resends)', () => {
   state.flightData.fd2 = { ...CLEARED, filed: { route: 'WEST1 EAST1' } };
   assert.equal(monitor.tick(), true);
   assert.equal(monitor.tick(), false);
+});
+
+// ── docs/adr/0128: transits on the card ──────────────────────────────────────────────────────────────────────────
+
+const T = (state, extra = {}) => ({ flightDataId: 'fd1', callsign: 'VIPER11', state, requestedPositionId: 'AP', decidedPositionId: null, reason: null, selfCoordinated: false, ...extra });
+
+test('a requested transit lists the flight (whatever its route), names the deciders, and is not approved', () => {
+  const { monitor } = world({
+    flightData: { fd1: { ...CLEARED, filed: { route: 'NOWHERE' } } }, strips: { fd1: [AP_STRIP] },
+    transits: { 'MOA-1': [T('REQUESTED')] }, deciders: { 'MOA-1': ['CTR'], 'R-1': ['CTR'] },
+  });
+  monitor.tick();
+  const [card] = monitor.trafficFor(CTR);
+  assert.equal(card.airspaceId, 'MOA-1');
+  assert.deepEqual(card.transitDeciders, ['CTR']);
+  const [row] = card.flights;
+  assert.deepEqual([row.inside, row.filed, row.approved], [false, false, false]);
+  assert.deepEqual(row.transit, { state: 'REQUESTED', requestedPositionId: 'AP', decidedPositionId: null, reason: null, selfCoordinated: false });
+});
+
+test('an APPROVED transit is an approved entry (ADR 0119 `_approved`): inside, listed approved, no alert', () => {
+  const base = { tracks: [track(1)], inside: { 1: ['MOA-1'] }, flights: { 1: 'fd1' }, flightData: { fd1: CLEARED }, strips: { fd1: [AP_STRIP] } };
+  let w = world({ ...base, transits: { 'MOA-1': [T('APPROVED', { decidedPositionId: 'CTR' })] } });
+  w.monitor.tick();
+  assert.deepEqual(w.monitor.getAll(), [], 'no airspace-entry alert');
+  let [row] = w.monitor.trafficFor(CTR)[0].flights;
+  assert.deepEqual([row.inside, row.approved, row.alerting, row.transit.state], [true, true, false, 'APPROVED']);
+  for (const state of ['REQUESTED', 'DECLINED']) {
+    w = world({ ...base, transits: { 'MOA-1': [T(state)] } });
+    w.monitor.tick();
+    assert.equal(w.monitor.getAll().length, 1, `${state}: it alerts as today`);
+    [row] = w.monitor.trafficFor(CTR)[0].flights;
+    assert.deepEqual([row.approved, row.alerting, row.transit.state], [false, true, state]);
+  }
+});
+
+test('a transit whose flight has no live Strip is not listed (the sweep ends it)', () => {
+  const { monitor } = world({ transits: { 'MOA-1': [T('APPROVED')] } });
+  monitor.tick();
+  assert.deepEqual(monitor.getTraffic(), []);
 });

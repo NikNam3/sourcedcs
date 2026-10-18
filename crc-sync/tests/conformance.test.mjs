@@ -385,3 +385,48 @@ test('T17: a receiver climbing from its assigned altitude to the tanker raises n
   assert.deepEqual(monitor.getAll().map(r => [r.flightDataId, r.alerts.map(a => a.kind)]), [['fR', ['WRONG_WAY']]],
     'MARSA terminated: back on its own clearance, 1,000 ft above it and still climbing');
 });
+
+// ── an airspace entry's altitude block (docs/adr/0128 §4, H151) ──────────────────────────────────────────────────
+// Checked like an assigned block (ADR 0091) when the flight has no assigned altitude; the assigned altitude wins. No new kind.
+
+test('altitudeToCheck: the assigned altitude wins; otherwise the entry block, re-armed when amended', async () => {
+  const { altitudeToCheck } = await import('../src/efsp/conformance.js');
+  const assigned = { clearance: { altitude: { entries: [{ value: '150', parsed: 15000, block: null, status: 'ACTIVE', at: 5 }] } } };
+  const none = { clearance: { altitude: { entries: [] } } };
+  const entry = { lowerFt: 20000, upperFt: 24000, at: 7 };
+  assert.equal(altitudeToCheck(assigned, entry).parsed, 15000);
+  const a = altitudeToCheck(none, entry);
+  assert.deepEqual(a.block, { lowFt: 20000, highFt: 24000 });
+  assert.notEqual(altitudeToCheck(none, { ...entry, upperFt: 23000 }).at, a.at, 'an amended block is a new clearance');
+  assert.equal(altitudeToCheck(none, null), null);
+  assert.equal(altitudeToCheck(none, { lowerFt: null, upperFt: 2, at: 1 }), null);
+});
+
+test('a flight working an airspace on an entry block busts it like an assigned block (LEVEL_BUST with the block)', async () => {
+  const { ConformanceMonitor } = await import('../src/efsp/conformance.js');
+  const flightData = { flightDataId: 'f1', clearance: { altitude: { entries: [] }, heading: { entries: [] } } };
+  const track = { id: 't1', alt: 22000 / 3.28084, course: 90, groundSpeed: FAST, verticalSpeed: 0 };
+  const blocks = new Map([['f1', { lowerFt: 20000, upperFt: 24000, at: 0 }]]);
+  const monitor = wallFollows(new ConformanceMonitor({
+    trackStore: { get: () => track },
+    flightDataStore: { getFlightData: () => flightData },
+    correlationStore: { getAll: () => [{ flightDataId: 'f1', trackId: 't1', state: 'CORRELATED' }] },
+    weather: () => ({ pressurePa: 101325, tempK: 288.15 }),
+    transitionAltFt: () => 18000,
+    indicatedAltFt,
+    gridToMagnetic: (deg) => deg,
+    config: cfg,
+    entryBlocks: () => blocks,
+  }));
+  for (let t = 0; t <= 5; t++) monitor.tick(t * S);
+  assert.deepEqual(monitor.getAll(), [], 'inside the block');
+  track.alt = 26000 / 3.28084;
+  for (let t = 6; t <= 60; t++) monitor.tick(t * S);
+  const [row] = monitor.getAll();
+  assert.equal(row.alerts[0].kind, 'LEVEL_BUST');
+  assert.deepEqual(row.alerts[0].block, { lowFt: 20000, highFt: 24000 });
+  // an assigned altitude is the clearance: the entry block is not checked beside it
+  flightData.clearance.altitude.entries.push({ value: '260', parsed: 26000, block: null, status: 'ACTIVE', at: 99 });
+  for (let t = 61; t <= 120; t++) monitor.tick(t * S);
+  assert.deepEqual(monitor.getAll(), []);
+});
