@@ -177,7 +177,7 @@ test('the entry block: Airspace… with a block, then Entry block… amends it',
     await goApDepartures(page);
     await startAction(stripByCallsign(page, callsign), 'Airspace…');
     const popover = page.locator('.efsp-coordinate-popover');
-    await popover.locator('select').selectOption(airspaceId);
+    await popover.getByTestId('airspace-entry-airspace').selectOption(airspaceId);
     await popover.locator('.efsp-entry-block-lower').fill('FL200');
     await popover.locator('.efsp-entry-block-upper').fill('FL400');
     await popover.locator('.efsp-coordinate-send-btn').click();

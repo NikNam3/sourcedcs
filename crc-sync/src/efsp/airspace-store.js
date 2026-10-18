@@ -816,11 +816,12 @@ class AirspaceStore extends SyncedStore {
   _transitPreconditions(record, def, op) {
     const keep = { airspace: viewOf(record) };
     if (def.kind !== 'AREA' || !airspaceAuthority.TRANSIT_TYPES.includes(def.type)) {
-      return { refusal: verr(`${def.name} is ${def.kind === 'AREA' ? `a ${def.type}` : `a ${def.kind}`}: transits are decided for an active MOA, warning or restricted area only`, keep) };
+      const what = def.kind === 'AREA' ? def.type : def.kind;
+      return { bad: verr(`${def.name} is a ${what}: transits are decided for an active MOA, warning or restricted area only`, keep) };
     }
-    if (typeof op.flightDataId !== 'string' || !op.flightDataId) return { refusal: verr(`${op.kind} needs a flightDataId`, keep) };
+    if (typeof op.flightDataId !== 'string' || !op.flightDataId) return { bad: verr(`${op.kind} needs a flightDataId`, keep) };
     const flight = this._transitFlight(op.flightDataId);
-    if (!flight) return { refusal: refuse('NOT_FOUND', `no flight data ${op.flightDataId}`, keep) };
+    if (!flight) return { bad: refuse('NOT_FOUND', `no flight data ${op.flightDataId}`, keep) };
     return { flight };
   }
 
@@ -843,7 +844,7 @@ class AirspaceStore extends SyncedStore {
 
   _requestTransit(record, def, op, pos, by) {
     const pre = this._transitPreconditions(record, def, op);
-    if (pre.refusal) return pre.refusal;
+    if (pre.bad) return pre.bad;
     const { flight } = pre;
     const bad = this._liveIfr(record, def, flight, op);
     if (bad) return bad;
@@ -867,7 +868,7 @@ class AirspaceStore extends SyncedStore {
 
   _approveTransit(record, def, op, pos, by) {
     const pre = this._transitPreconditions(record, def, op);
-    if (pre.refusal) return pre.refusal;
+    if (pre.bad) return pre.bad;
     const { flight } = pre;
     if (!this._isDecider(def, pos)) return this._denied(record, `only ${this._decidersText(def)} may approve a transit of ${def.name}`);
     const bad = this._liveIfr(record, def, flight, op);
@@ -891,7 +892,7 @@ class AirspaceStore extends SyncedStore {
 
   _declineTransit(record, def, op, pos, by) {
     const pre = this._transitPreconditions(record, def, op);
-    if (pre.refusal) return pre.refusal;
+    if (pre.bad) return pre.bad;
     if (!this._isDecider(def, pos)) return this._denied(record, `only ${this._decidersText(def)} may decline a transit of ${def.name}`);
     const existing = this._transitOf(record, op.flightDataId);
     // A decline answers a request, or withdraws an approval (the users need the airspace back: ours).
@@ -906,7 +907,7 @@ class AirspaceStore extends SyncedStore {
 
   _cancelTransit(record, def, op, pos, by) {
     const pre = this._transitPreconditions(record, def, op);
-    if (pre.refusal) return pre.refusal;
+    if (pre.bad) return pre.bad;
     const { flight } = pre;
     const existing = this._transitOf(record, op.flightDataId);
     if (!existing || existing.state !== 'REQUESTED') return verr(`no transit of ${def.name} by ${flight.callsign || op.flightDataId} is waiting for an answer`, { airspace: viewOf(record) });
