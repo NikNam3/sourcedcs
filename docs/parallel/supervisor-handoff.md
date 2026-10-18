@@ -2,8 +2,8 @@
 
 ## UPDATE 2026-10-18: Playwright done, U-SMALL2 merged, U-MOA-TRANSIT-BUILD running (S-ARCH-75)
 
-Live test unblocked. Running: **U-MOA-TRANSIT-BUILD** (worktree fast-forwarded to `0107bf48`, E2E 7). Queue: (1) small
-fix, soak `skip-shadow-client` on seeds 15/16/23/26 (`tools/soak/driver.js` ~201); (2) U-CARRIER (U18–U22, U22 = EAT and
+Live test unblocked. **U-MOA-TRANSIT-BUILD merged** too (S-ARCH-76); 2-lane Playwright owed/running on it. Queue: (1) small
+fixes: `vfr.js` empty ACTIVE altitude counts as IFR; `airspace-entry-alert.spec.js` cleanup `baseDefRev`; soak `skip-shadow-client` on seeds 15/16/23/26 (`tools/soak/driver.js` ~201); (2) U-CARRIER (U18–U22, U22 = EAT and
 fuel editable in MARSHAL, research first); (3) docs pass last (+ U-SMALL2, README ~111). Playwright: 2 lanes only (human).
 Everything this session starts runs `nice -n 19` (human: CPU).
 
