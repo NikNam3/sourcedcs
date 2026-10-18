@@ -1939,3 +1939,10 @@
 .efsp-remarks-textarea[readonly] { color: var(--efsp-muted); }
 .efsp-remarks-foot { display: flex; gap: 6px; align-items: center; justify-content: flex-end; }
 .efsp-remarks-hint { margin-right: auto; font-size: 10px; color: var(--efsp-muted); }
+
+/* crc-sync docs/adr/0128 §3: the altitude block fields in the airspace-entry popover. */
+.efsp-entry-block { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin: 4px 0; }
+.efsp-entry-block-input { width: 72px; }
+.efsp-entry-block-why { flex-basis: 100%; color: var(--efsp-attn, #e0a83c); font-size: 11px; }
+.efsp-entry-block-why:empty { display: none; }
+.efsp-entry-block-title { color: #8a949c; margin-bottom: 2px; }

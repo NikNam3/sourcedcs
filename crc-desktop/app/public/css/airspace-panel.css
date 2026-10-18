@@ -183,3 +183,8 @@
 .airspace-entry-alerting .airspace-entry-callsign,
 .airspace-entry-alerting .airspace-entry-why { color: var(--efsp-attn, #e0a83c); }
 .airspace-entry-approve-btn { min-height: 22px; padding: 1px 8px; }
+/* crc-sync docs/adr/0128: a transit's state, grey (H151 MT-Q7 b), and its buttons; the inline decline reason. */
+.airspace-entry-transit { color: #7c868e; }
+.airspace-transit-approve-btn, .airspace-transit-decline-btn, .airspace-transit-request-btn, .airspace-transit-cancel-btn { min-height: 22px; padding: 1px 8px; }
+.airspace-entry-decline { display: flex; gap: 6px; align-items: center; margin: 2px 0 4px 70px; }
+.airspace-entry-decline-input { flex: 1; min-width: 0; }
