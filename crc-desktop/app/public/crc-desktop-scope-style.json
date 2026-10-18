@@ -14,7 +14,7 @@
       "type": "vector"
     }
   },
-  "glyphs": "https://api.maptiler.com/fonts/{fontstack}/{range}.pbf",
+  "glyphs": "/fonts/{fontstack}/{range}.pbf",
   "sprite": "https://api.maptiler.com/maps/streets-v2-dark/sprite",
   "bearing": 0,
   "pitch": 0,

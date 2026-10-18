@@ -8,6 +8,7 @@ const { resolveProxyPath } = require('./proxy-routes');
 
 const PUBLIC_DIR       = path.join(__dirname, 'public');
 const DATA_DIR         = path.join(__dirname, 'data');
+const FONTS_DIR        = path.join(PUBLIC_DIR, 'fonts');
 const SRS_RADIO_API    = parseInt(process.env.SRS_RADIO_API_PORT) || 5003;
 
 // This is the renderer's local server, built on Node's own `http`/`https`
@@ -153,6 +154,27 @@ const httpServer = http.createServer((req, res) => {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(data);
     });
+  }
+
+  // Map glyphs, bundled so labels and tracks never depend on MapTiler (a failed glyph range errors the whole tile of a
+  // GeoJSON source, tracks included). maplibre asks for the whole stack, "Roboto Regular,Noto Sans Regular": the first
+  // font we ship wins, Roboto Regular stands in for a font we don't ship (Roboto Mono, the style's default Open Sans),
+  // and a range we don't ship answers an empty 200, which draws nothing instead of erroring the tile.
+  const glyphs = /^\/fonts\/([^/]+)\/(\d+-\d+)\.pbf$/.exec(req.url.split('?')[0]);
+  if (glyphs) {
+    let stack;
+    try { stack = decodeURIComponent(glyphs[1]).split(',').map((f) => f.trim()); } catch (_) { res.writeHead(400); return res.end(); }
+    const shipped = stack.filter((f) => /^[A-Za-z0-9 ]+$/.test(f) && fs.existsSync(path.join(FONTS_DIR, f)));
+    const fonts = shipped.length ? shipped : ['Roboto Regular'];
+    for (const f of fonts) {
+      try {
+        const data = fs.readFileSync(path.join(FONTS_DIR, f, `${glyphs[2]}.pbf`));
+        res.writeHead(200, { 'Content-Type': 'application/x-protobuf' });
+        return res.end(data);
+      } catch (_) { /* next font in the stack */ }
+    }
+    res.writeHead(200, { 'Content-Type': 'application/x-protobuf' });
+    return res.end();
   }
 
   const urlPath = req.url === '/' ? '/index.html' : req.url.split('?')[0];

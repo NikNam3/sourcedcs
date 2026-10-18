@@ -105,16 +105,12 @@ test('T6: with no stereo routes the picker stays beside "+ New Strip", disabled 
   await expect(picker.locator('option')).toHaveCount(0);
 });
 
-test('T3: labels whose glyphs failed before the MapTiler key are drawn once it arrives', async ({ page }) => {
-  // Glyphs answer 403 without a key (as MapTiler does, and as the harness answers every MapTiler URL) and an empty,
-  // valid glyph range with one.
-  let keyed = 0;
-  let giveKey = false;
-  await page.route(/^https:\/\/api\.maptiler\.com\/fonts\//, (route) => {
-    if (/[?&]key=/.test(route.request().url())) { keyed += 1; return route.fulfill({ status: 200, contentType: 'application/x-protobuf', body: Buffer.alloc(0) }); }
-    return route.fulfill({ status: 403, contentType: 'application/json', body: '{"message":"Invalid key"}' });
-  });
-  await page.route('**/api/client-config', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ maptilerKey: giveKey ? 'lt-ui-key' : null }) }));
+test('T3: labels draw with no MapTiler key, their glyphs come from the local server', async ({ page }) => {
+  // The harness answers every MapTiler URL 403, as MapTiler does without a key (or over its quota). A failed glyph range
+  // errors the whole tile of a GeoJSON source, which once hid every track; the glyphs are bundled now (app/server.js /fonts/).
+  const glyphUrls = [];
+  page.on('request', (r) => { if (/\/fonts\/[^/]+\/\d+-\d+\.pbf/.test(r.url())) glyphUrls.push(r.url()); });
+  await page.route('**/api/client-config', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ maptilerKey: null }) }));
   await openPanel(page, { signedOn: ['OPS'] });
   await page.waitForFunction(() => crc.mapHandle.mapReady);
 
@@ -128,13 +124,11 @@ test('T3: labels whose glyphs failed before the MapTiler key are drawn once it a
     const c = map.getCenter();
     map.addSource('lt-ui-labels', { type: 'geojson', data: { type: 'FeatureCollection', features: [
       { type: 'Feature', geometry: { type: 'Point', coordinates: [c.lng, c.lat] }, properties: { name: 'LTAG' } }] } });
-    map.addLayer({ id: 'lt-ui-labels', type: 'symbol', source: 'lt-ui-labels', layout: { 'text-field': ['get', 'name'] } });
+    map.addLayer({ id: 'lt-ui-labels', type: 'symbol', source: 'lt-ui-labels', layout: { 'text-field': ['get', 'name'], 'text-font': ['Roboto Mono Medium', 'Noto Sans Regular'] } });
   });
-  await expect.poll(tileStates, { message: 'the label tile fails on its glyphs without a key' }).toContain('errored');
-
-  giveKey = true;
-  expect(await page.evaluate(() => crc.maptilerKey.loadMaptilerKey('lt-ui-token'))).toBe('lt-ui-key');
-  await expect.poll(tileStates, { message: 'asked again with the key' }).toEqual(expect.arrayContaining(['loaded']));
+  await expect.poll(tileStates, { message: 'the label tile loads with no key' }).toEqual(expect.arrayContaining(['loaded']));
   expect(await tileStates()).not.toContain('errored');
-  expect(keyed).toBeGreaterThan(0);
+  await expect.poll(() => page.evaluate(() => crc.mapHandle.map.queryRenderedFeatures({ layers: ['lt-ui-labels'] }).length)).toBeGreaterThan(0);
+  expect(glyphUrls.length).toBeGreaterThan(0);
+  expect(glyphUrls.every((u) => !u.includes('maptiler.com'))).toBe(true);
 });

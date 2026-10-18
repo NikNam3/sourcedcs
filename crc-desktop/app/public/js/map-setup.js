@@ -78,7 +78,8 @@ export function initMap(container) {
     container,
     style: '/crc-desktop-scope-style.json',
     // The style carries no key: MapTiler requests get it here once crc-sync has handed it over (maptiler-key.js).
-    transformRequest: (url) => transformMaptilerRequest(url),
+    // Glyphs come from the local server (app/server.js /fonts/), never MapTiler: a failed glyph range hides every track.
+    transformRequest: (url) => (url.startsWith('/fonts/') ? { url: location.origin + url } : transformMaptilerRequest(url)),
     center: [35.4258, 37.0021],
     zoom: 7,
   }));
