@@ -33,6 +33,11 @@ function syncEnv(stateDir, port) {
     // The runtime frequency table (crc-sync docs/adr/0131): a reset starts from the facility files' frequencies.
     CRCSYNC_EFSP_FREQUENCIES_PATH: stateFile('efsp-frequencies.json'),
     CRCSYNC_TERRAIN_CACHE_DIR: stateFile('terrain'),
+    // No MapTiler key. server.js runs dotenv, and dotenv never overrides a key already set, so an empty value here keeps
+    // the developer's key in crc-sync/.env out of every run: with it, each run pre-warmed the DEM into an empty cache and
+    // re-asked for every failed tile on each coverage tick, against the real account's quota.
+    CRCSYNC_MAPTILER_KEY: '',
+    CRCSYNC_MAPTILER_CLIENT_KEY: '',
     // WP8's durable files (crc-sync docs/adr/0065). Without these a run writes metrics into the worktree's crc-sync/state/ and
     // reads old buckets back on the next run (L15, T11). The instrumentation config is read-only, so it points at a copy of
     // the shipped default, never at a stale state/ override.
