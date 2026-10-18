@@ -31,6 +31,9 @@ async function serveCdnFromNodeModules(context) {
   // answer it as MapTiler does a key-less request (403), which is the no-key path the app really takes. Sprite and
   // tiles both land here; the Background layer is the basemap.
   await context.route(/^https:\/\/api\.maptiler\.com\//, (route) => route.fulfill({ status: 403, contentType: 'application/json', body: '{"message":"Invalid key"}' }));
+  // U-GLYPHS: the keyless fallback basemap (basemap-fallback.js) must not leave the machine either: answer it as an outage,
+  // so a run without a key ends on the Background layer, as a session with neither source does.
+  await context.route(/^https:\/\/tiles\.openfreemap\.org\//, (route) => route.fulfill({ status: 503, contentType: 'text/plain', body: 'e2e: no network' }));
 }
 
 const PATCHED = Symbol('cdn-patched');

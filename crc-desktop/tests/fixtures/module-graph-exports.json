@@ -87,6 +87,16 @@
    "atcTick",
    "atcView"
   ],
+  "basemap-fallback.js": [
+   "BASEMAP_SOURCE",
+   "FALLBACK_ATTRIBUTION",
+   "FALLBACK_TILEJSON",
+   "MAPTILER_ATTRIBUTION",
+   "MAPTILER_TILES",
+   "createBasemapFallback",
+   "pointBasemap",
+   "shouldFallBack"
+  ],
   "coords.js": [
    "COORD_FORMATS",
    "DEFAULT_COORD_FORMAT",
@@ -215,6 +225,7 @@
    "addTrackLayers"
   ],
   "map-setup.js": [
+   "basemapState",
    "initMap",
    "refreshMaptilerSources",
    "retryErroredTiles"
