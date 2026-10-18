@@ -115,9 +115,9 @@ test('the basemap falls back to OpenFreeMap without a key and returns to MapTile
   expect(await notice(page).evaluate((el) => getComputedStyle(el).color)).toBe('rgb(138, 138, 138)');
   await expect.poll(() => fallbackTiles, { message: 'fallback tiles are asked for' }).toBeGreaterThan(0);
 
-  // No flapping: still on the fallback a moment later.
-  await page.waitForTimeout(1000);
+  // No flapping: the MapTiler 403s still in flight when it switched did not switch it again.
   expect((await sourceUrl(page)).url).toBe('https://tiles.openfreemap.org/planet');
+  expect(await page.evaluate(() => crc.mapSetup.basemapState())).toBe('fallback');
 
   giveKey = true;
   expect(await page.evaluate(() => crc.maptilerKey.loadMaptilerKey('e2e-token'))).toBe('e2e-key');
@@ -125,6 +125,6 @@ test('the basemap falls back to OpenFreeMap without a key and returns to MapTile
   expect((await sourceUrl(page)).url).toBe(null);
   await expect(notice(page)).toHaveCount(0);
   await expect.poll(() => keyedTiles, { message: 'keyed MapTiler tiles are asked for' }).toBeGreaterThan(0);
-  await page.waitForTimeout(1000);
   expect((await sourceUrl(page)).url, 'stale keyless 403s do not send it back').toBe(null);
+  expect(await page.evaluate(() => crc.mapSetup.basemapState())).toBe('maptiler');
 });

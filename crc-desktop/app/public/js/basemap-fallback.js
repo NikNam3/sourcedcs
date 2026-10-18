@@ -85,12 +85,16 @@ export function createBasemapFallback({ getMap, getKey, onChange = () => {} }) {
       set('fallback');
       return true;
     },
-    /** A new key arrived: back to MapTiler, whatever state the session is in. */
+    /**
+     * A new key arrived: back to MapTiler, whatever state the session is in. The source reloads even when it never left
+     * MapTiler: a keyless tile that errored is never asked for again by maplibre 3.6.2 (SourceCache.reload skips an
+     * errored tile), and the reload clears it. Returns true when the state changed.
+     */
     onKey() {
-      if (state === 'maptiler') return false;
       pointBasemap(getMap(), 'maptiler');
+      const changed = state !== 'maptiler';
       set('maptiler');
-      return true;
+      return changed;
     },
   };
 }

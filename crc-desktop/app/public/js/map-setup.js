@@ -16,45 +16,10 @@ import { missionData } from './picture.js';
 // ── Map initialisation ────────────────────────────────────────────────────
 // Sets up all MapLibre sources, layers, and event handlers.
 
-// The key arrives after the map exists (it is fetched at login). The basemap's tile source reloads then.
-// maplibre 3.6.2's VectorTileSource has setTiles(), so the source is not re-added and the style is never
-// replaced (setStyle would destroy the GeoJSON layers below).
-//
-// Live test T3: that was not enough. A tile whose glyph range or tile request failed without the key is
-// left 'errored', and maplibre 3.6.2 never asks for an errored tile again: SourceCache.reload() (what
-// setTiles and every GeoJSON setData run) skips it, and _addTile() hands it back as it is. The glyphs are
-// asked for by every symbol layer, the GeoJSON ones too (airport, navpoint, drawing and track labels,
-// airspace names), and one failed range fails the whole tile. A failed range is not cached (GlyphManager
-// deletes the request), so dropping the errored tiles of every source makes the next frame request them
-// again, now with the key.
-export function refreshMaptilerSources() {
-  if (!map) return;
-  let sources;
-  try { sources = map.getStyle().sources; } catch (_) { return; } // style not loaded yet: its first tile requests already carry the key
-  for (const [id, src] of Object.entries(sources)) {
-    if (src.type !== 'vector' || !Array.isArray(src.tiles) || !src.tiles.some((u) => u.startsWith('https://api.maptiler.com/'))) continue;
-    map.getSource(id).setTiles(src.tiles);
-  }
-  if (retryErroredTiles(map.style && map.style.sourceCaches, map.transform, map.terrain) > 0) map.triggerRepaint();
-}
-
-/**
- * Drops the tiles of each source that has an errored one and asks for the ones in view again (T3). Only those
- * sources: a healthy one keeps its tiles and does not flicker. Returns how many sources it cleared.
- * (`update` is what the map's own render loop calls when its sources are dirty; clearing alone does not make them so.)
- * @param {Object<string, {getIds:()=>string[], getTileByID:(id:string)=>{state:string}, clearTiles:()=>void, update:Function}>} sourceCaches
- */
-export function retryErroredTiles(sourceCaches, transform, terrain) {
-  let cleared = 0;
-  for (const cache of Object.values(sourceCaches || {})) {
-    if (!cache || typeof cache.getIds !== 'function') continue;
-    if (!cache.getIds().some((tileId) => { const t = cache.getTileByID(tileId); return t && t.state === 'errored'; })) continue;
-    cache.clearTiles();
-    if (transform) cache.update(transform, terrain);
-    cleared += 1;
-  }
-  return cleared;
-}
+// The key arrives after the map exists (it is fetched at login). The basemap source is then pointed at MapTiler again
+// (basemap-fallback.js), in place: the style is never replaced (setStyle would destroy the GeoJSON layers below), and the
+// reload drops the tiles that errored without the key. Glyphs are local (app/glyph-route.js), so no GeoJSON tile ever
+// errors for want of the key (live test T3's retry of every source's errored tiles is gone with that).
 
 // The basemap note (U-GLYPHS 1b). No key, a refused or exhausted one, or MapTiler down: the basemap source switches to
 // the keyless fallback (basemap-fallback.js) and a quiet grey note says so; with the fallback down too the map stays usable
@@ -102,7 +67,7 @@ export function initMap(container) {
       showBasemapNotice(container, state);
     },
   });
-  onMaptilerKey(() => { basemap.onKey(); refreshMaptilerSources(); });
+  onMaptilerKey(() => { basemap.onKey(); });
   map.on('error', (e) => { basemap.onMapError(e); });
   // maplibre fires 'load' from a render frame, and a map whose only tiles errored draws nothing more, so the frame
   // that would announce it never comes: nudge it until the map is ready (mapReady gates every overlay).

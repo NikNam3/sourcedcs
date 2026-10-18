@@ -81,5 +81,7 @@ test('a session falls back once, stays there, and returns only when a new key ar
   assert.equal(fb.state, 'none');
   assert.equal(fb.onKey(), true, 'a new key tries MapTiler again from none');
   assert.deepEqual(seen, ['fallback', 'maptiler', 'fallback', 'none', 'maptiler']);
-  assert.equal(fb.onKey(), false, 'already on MapTiler');
+  const loads = map.src.loads;
+  assert.equal(fb.onKey(), false, 'already on MapTiler: no state change');
+  assert.equal(map.src.loads, loads + 1, 'but the source reloads, dropping tiles that errored without the key');
 });
