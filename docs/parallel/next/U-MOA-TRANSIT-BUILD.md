@@ -5,10 +5,11 @@ Written 2026-10-17 by the supervisor. One agent, Opus 5.5. Follow `docs/parallel
 every green step, at least every ~15 minutes.** ADR number **0128** (yours). ADR 0127 stays as it is (P4); 0128 says
 "Supersedes 0127" and why.
 
-Running beside you: **U-FREQ-EDITOR** (a runtime frequency table store + "Frequencies" panel; it leaves airspace
-working/control frequencies to the airspace editor) and **U-SMALL2** (tests/soak only). U-CLOCK (ADR 0129) and
-U-PAR-VALUES (ADR 0130) are merged into your base. If you touch `stores.js`, `app.js` or `ws-hub.js`, keep the hunk
-small; the supervisor merges and re-runs `wire:record`.
+Running beside you: **U-SMALL2** (tests/soak only, `crc-desktop/tests/`, `crc-sync/tools/soak/`). U-CLOCK (ADR
+0129), U-PAR-VALUES (ADR 0130) and U-FREQ-EDITOR (ADR 0131: runtime frequency table `frequency-table.js`, wire family
+`efsp-frequency-*`, FREQUENCIES panel; it leaves airspace working/control frequencies to the airspace editor) are merged
+into your base. If you touch `stores.js`, `app.js` or `ws-hub.js`, keep the hunk small; the supervisor merges and
+re-runs `wire:record`. A sharded Playwright run (lanes 1,2,4,5) runs beside you: use only lane 7.
 
 ## Read first
 
