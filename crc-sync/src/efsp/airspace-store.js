@@ -45,7 +45,13 @@ const INITIAL_STATE = 'RETURNED'; // available, nothing booked
 
 const DEFINITION_OP_KINDS = ['CreateAirspace', 'EditAirspace', 'DeleteAirspace', 'ImportAirspaces'];
 const STATE_OP_KINDS = ['ScheduleAirspace', 'RequestActivation', 'ApproveActivation', 'DenyActivation', 'DelayActivation', 'ReleaseAirspace', 'ReturnAirspace'];
-const AIRSPACE_OP_KINDS = [...DEFINITION_OP_KINDS, ...STATE_OP_KINDS];
+// docs/adr/0128 (H151): a transit through an ACTIVE MOA, warning or restricted area, requested by a Position holding the
+// flight and decided by the side that separates the airspace's users. On the record's `transits`, never a state transition.
+const TRANSIT_OP_KINDS = ['RequestTransit', 'ApproveTransit', 'DeclineTransit', 'CancelTransit'];
+const AIRSPACE_OP_KINDS = [...DEFINITION_OP_KINDS, ...STATE_OP_KINDS, ...TRANSIT_OP_KINDS];
+const TRANSIT_STATES = ['REQUESTED', 'APPROVED', 'DECLINED'];
+// How long a declined transit stays on the record (and its grey mark on the Strip) before it is forgotten, mission time. Ours.
+const DECLINED_TRANSIT_SHOWN_MS = 5 * 60 * 1000;
 
 const VIAS = ['PANEL', 'WEB', 'SEED'];
 // ADR 0125: the fields of a JURISDICTION area a panel edit may not change (who owns it is the theater config's, and the
@@ -53,6 +59,8 @@ const VIAS = ['PANEL', 'WEB', 'SEED'];
 const JURISDICTION_PANEL_FIXED_FIELDS = ['controllingFacilityId', 'controllingPositionId', 'ownerPositionIds'];
 
 function deepClone(obj) { return JSON.parse(JSON.stringify(obj)); }
+/** "TAC_C2", "TAC_C2 or GCI". */
+function _orIds(ids) { return ids.length < 2 ? ids.join('') : `${ids.slice(0, -1).join(', ')} or ${ids[ids.length - 1]}`; }
 function same(a, b) { return JSON.stringify(a ?? null) === JSON.stringify(b ?? null); }
 const refuse = (reason, detail, extra) => ({ ok: false, reason, detail, ...extra });
 const verr = (detail, extra) => refuse('VALIDATION_ERROR', detail, extra);
@@ -130,15 +138,20 @@ class AirspaceStore extends SyncedStore {
    * @param {{rowOf:(positionId:string)=>object}} [deps.authority] the airspace rows (authority/index.js's airspaceRowOf)
    * @param {(hullId:string)=>({lat:number, lon:number, found?:boolean}|null)} [deps.hullPosition] the live ship position
    *   (CarrierStore#getShipState), read lazily by the JURISDICTION query (ADR 0125); null while the hull is not found
+   * @param {(flightDataId:string)=>({callsign:string|null, ifr:boolean, holders:{facilityId:string, positionId:string}[]}|null)} [deps.transitFlight]
+   *   docs/adr/0128: what a transit op needs to know of the flight: its callsign, whether it is IFR (it has a clearance,
+   *   vfr.js), and the owners of its live Strips (empty: no live Strip). Null when the flight data does not exist.
    */
   constructor({ clock = WALL_CLOCK, currentTheater = () => null, occupantsFor = () => [], routeOccupancyFor = () => 0,
-    facilityLookup = null, authority = null, mutationLog = null, hullPosition = () => null } = {}) {
+    facilityLookup = null, authority = null, mutationLog = null, hullPosition = () => null, transitFlight = () => null } = {}) {
     super({ clock, mutationLog });
     this._currentTheater = currentTheater;
     this._occupantsFor = occupantsFor;
     this._routeOccupancyFor = routeOccupancyFor;
     this._lookup = facilityLookup || { hasFacility: () => true, positionsOf: () => [], facilityOfPosition: () => null };
     this._rowOf = authority ? authority.rowOf : () => ({ create: null, edit: null, delete: null, use: false });
+    this._classOf = (authority && authority.classOf) || (() => null); // docs/adr/0128: an MRU using agency decides transits
+    this._transitFlight = transitFlight;
     this._byTheater = new Map(); // theater -> Map(airspaceId -> record)
     this._seeded = new Map();    // theater -> Set(airspaceId) imported from the standing list at least once
     this._hullPosition = (hullId) => {
@@ -419,13 +432,17 @@ class AirspaceStore extends SyncedStore {
       case 'DelayActivation':   return this._delayActivation(record, def, op, pos, by);
       case 'ReleaseAirspace':   return this._signOff(record, def, op, pos, by);
       case 'ReturnAirspace':    return this._return(record, def, op, pos, by);
+      case 'RequestTransit':    return this._requestTransit(record, def, op, pos, by);
+      case 'ApproveTransit':    return this._approveTransit(record, def, op, pos, by);
+      case 'DeclineTransit':    return this._declineTransit(record, def, op, pos, by);
+      case 'CancelTransit':     return this._cancelTransit(record, def, op, pos, by);
       default: return verr(`unknown airspace op: ${op.kind}`);
     }
   }
 
   // ── authority (the registry's rows, authority/airspace.js) ─────────────
 
-  _deps() { return { rowOf: this._rowOf, facilityOf: (id) => this._lookup.facilityOfPosition(id), positionsOf: (id) => this._lookup.positionsOf(id) || [] }; }
+  _deps() { return { rowOf: this._rowOf, facilityOf: (id) => this._lookup.facilityOfPosition(id), positionsOf: (id) => this._lookup.positionsOf(id) || [], classOf: this._classOf }; }
   _principal(actor) { return actor.service ? { service: actor.service } : { positionId: actor.positionId }; }
   _isControlling(def, positionId) { return airspaceAuthority.isControlling(def, positionId); }
   _isUsing(def, positionId) { return airspaceAuthority.isUsing(def, positionId, this._deps()); }
@@ -472,6 +489,8 @@ class AirspaceStore extends SyncedStore {
       // Append-only, same shape docs/adr/0032 gave flightData.airspace.transitions and for the same reason: JO 7110.65
       // para 2-3-1's "do not erase or overwrite any item".
       transitions: [],
+      // docs/adr/0128: the transits requested or decided while ACTIVE, one per flight; emptied when it leaves ACTIVE.
+      transits: [],
       updatedAt: this._clock.now(), updatedBy: by || null,
     };
   }
@@ -762,7 +781,10 @@ class AirspaceStore extends SyncedStore {
     // what UNACTIVATED_AIRSPACE_ENTRY alerts on. A ROUTE is never "occupied" (a count only, S-R3-80).
     const occupied = def.kind === 'AREA' ? this._occupantsFor(record.airspaceId).length : 0;
     record.state = 'RELEASED';
-    this._touch(record, by, { state: 'RELEASED', actingPositionId: pos, occupiedAtRelease: occupied });
+    // docs/adr/0128: released to the controlling agency (JO 7110.65BB para 9-3-1 c), so no transit is left to decide or hold.
+    const transitsEnded = (record.transits || []).length;
+    record.transits = [];
+    this._touch(record, by, { state: 'RELEASED', actingPositionId: pos, occupiedAtRelease: occupied, ...(transitsEnded ? { transitsEnded } : {}) });
     return occupied > 0 ? { ok: true, warning: 'AIRSPACE_STILL_OCCUPIED', occupied } : { ok: true };
   }
 
@@ -774,6 +796,196 @@ class AirspaceStore extends SyncedStore {
     record.pendingRequest = null;
     this._touch(record, by, { state: 'RETURNED', actingPositionId: pos });
     return { ok: true };
+  }
+
+  // ── transit through active SUA (docs/adr/0128, H151) ──────────────────────────
+  //
+  // A transit is a request and a decision, nothing more: no block, no restriction data (H151 MT-Q2 b, MT-Q3 c). The
+  // restrictions are the ordinary assigned altitudes on each side's Strips. One entry per flight on `record.transits`.
+
+  _transitDeps() { return this._deps(); }
+
+  _isDecider(def, pos) { return airspaceAuthority.isTransitDecider(def, pos, this._transitDeps()); }
+
+  _decidersText(def) {
+    const ids = airspaceAuthority.transitDeciders(def, this._transitDeps());
+    return ids.length ? _orIds(ids) : 'nobody';
+  }
+
+  /** The checks every transit op shares: an ACTIVE AREA of a transit type, a known IFR flight with a live Strip. */
+  _transitPreconditions(record, def, op) {
+    const keep = { airspace: viewOf(record) };
+    if (def.kind !== 'AREA' || !airspaceAuthority.TRANSIT_TYPES.includes(def.type)) {
+      return { refusal: verr(`${def.name} is ${def.kind === 'AREA' ? `a ${def.type}` : `a ${def.kind}`}: transits are decided for an active MOA, warning or restricted area only`, keep) };
+    }
+    if (typeof op.flightDataId !== 'string' || !op.flightDataId) return { refusal: verr(`${op.kind} needs a flightDataId`, keep) };
+    const flight = this._transitFlight(op.flightDataId);
+    if (!flight) return { refusal: refuse('NOT_FOUND', `no flight data ${op.flightDataId}`, keep) };
+    return { flight };
+  }
+
+  _liveIfr(record, def, flight, op) {
+    const keep = { airspace: viewOf(record) };
+    // JO 7110.65BB para 9-3-1 c: an airspace not ACTIVE is the controlling agency's; there is nothing to transit.
+    if (record.state !== 'ACTIVE') return verr(`${def.name} is ${record.state}: a transit is decided only while it is ACTIVE`, keep);
+    if (!flight.holders.length) return verr(`${flight.callsign || op.flightDataId} has no live Strip`, keep);
+    // H151 MT-Q5 b: a VFR flight (no clearance, vfr.js) gets nothing new.
+    if (!flight.ifr) return verr(`${flight.callsign || op.flightDataId} is VFR (no assigned altitude or heading): a transit is for an IFR flight`, keep);
+    return null;
+  }
+
+  _transitOf(record, flightDataId) { return (record.transits || []).find(t => t.flightDataId === flightDataId) || null; }
+
+  _setTransit(record, transit) {
+    record.transits = (record.transits || []).filter(t => t.flightDataId !== transit.flightDataId);
+    record.transits.push(transit);
+  }
+
+  _requestTransit(record, def, op, pos, by) {
+    const pre = this._transitPreconditions(record, def, op);
+    if (pre.refusal) return pre.refusal;
+    const { flight } = pre;
+    const bad = this._liveIfr(record, def, flight, op);
+    if (bad) return bad;
+    if (!flight.holders.some(h => h.positionId === pos)) {
+      return this._denied(record, `${pos} holds no live Strip of ${flight.callsign || op.flightDataId}: the Position working the flight requests its transit`);
+    }
+    const existing = this._transitOf(record, op.flightDataId);
+    if (existing && existing.state !== 'DECLINED') return verr(`a transit of ${def.name} by ${flight.callsign || op.flightDataId} is already ${existing.state.toLowerCase()}`, { airspace: viewOf(record) });
+    const now = this._clock.now();
+    const transit = {
+      flightDataId: op.flightDataId, callsign: flight.callsign || null, state: 'REQUESTED',
+      requestedBy: by || null, requestedPositionId: pos, requestedAt: now, note: typeof op.note === 'string' && op.note.trim() ? op.note.trim() : null,
+      decidedBy: null, decidedPositionId: null, decidedAt: null, reason: null, selfCoordinated: false,
+    };
+    // The requester also decides (CTR holding the Strip of a MOA it controls): approved at once, as activation self-coordinates.
+    if (this._isDecider(def, pos)) Object.assign(transit, { state: 'APPROVED', decidedBy: by || null, decidedPositionId: pos, decidedAt: now, selfCoordinated: true });
+    this._setTransit(record, transit);
+    this._touch(record, by, null);
+    return { ok: true };
+  }
+
+  _approveTransit(record, def, op, pos, by) {
+    const pre = this._transitPreconditions(record, def, op);
+    if (pre.refusal) return pre.refusal;
+    const { flight } = pre;
+    if (!this._isDecider(def, pos)) return this._denied(record, `only ${this._decidersText(def)} may approve a transit of ${def.name}`);
+    const bad = this._liveIfr(record, def, flight, op);
+    if (bad) return bad;
+    const existing = this._transitOf(record, op.flightDataId);
+    if (existing && existing.state === 'APPROVED') return verr(`the transit of ${def.name} by ${flight.callsign || op.flightDataId} is already approved`, { airspace: viewOf(record) });
+    const now = this._clock.now();
+    // Without a request: the decider approves a flight it was told about by phone (H151). Self-coordinated when the same
+    // controller asked (it holds both sides), as `_approveActivation` records it.
+    const asked = existing && existing.state === 'REQUESTED' ? existing : null;
+    this._setTransit(record, {
+      flightDataId: op.flightDataId, callsign: flight.callsign || (existing && existing.callsign) || null, state: 'APPROVED',
+      requestedBy: asked ? asked.requestedBy : null, requestedPositionId: asked ? asked.requestedPositionId : null,
+      requestedAt: asked ? asked.requestedAt : null, note: asked ? asked.note : null,
+      decidedBy: by || null, decidedPositionId: pos, decidedAt: now, reason: null,
+      selfCoordinated: !!(asked && asked.requestedBy && asked.requestedBy === (by || null)),
+    });
+    this._touch(record, by, null);
+    return { ok: true };
+  }
+
+  _declineTransit(record, def, op, pos, by) {
+    const pre = this._transitPreconditions(record, def, op);
+    if (pre.refusal) return pre.refusal;
+    if (!this._isDecider(def, pos)) return this._denied(record, `only ${this._decidersText(def)} may decline a transit of ${def.name}`);
+    const existing = this._transitOf(record, op.flightDataId);
+    // A decline answers a request, or withdraws an approval (the users need the airspace back: ours).
+    if (!existing || existing.state === 'DECLINED') return verr(`no transit of ${def.name} by ${pre.flight.callsign || op.flightDataId} is requested or approved`, { airspace: viewOf(record) });
+    this._setTransit(record, {
+      ...existing, state: 'DECLINED', decidedBy: by || null, decidedPositionId: pos, decidedAt: this._clock.now(),
+      reason: typeof op.reason === 'string' && op.reason.trim() ? op.reason.trim() : null, selfCoordinated: false,
+    });
+    this._touch(record, by, null);
+    return { ok: true };
+  }
+
+  _cancelTransit(record, def, op, pos, by) {
+    const pre = this._transitPreconditions(record, def, op);
+    if (pre.refusal) return pre.refusal;
+    const { flight } = pre;
+    const existing = this._transitOf(record, op.flightDataId);
+    if (!existing || existing.state !== 'REQUESTED') return verr(`no transit of ${def.name} by ${flight.callsign || op.flightDataId} is waiting for an answer`, { airspace: viewOf(record) });
+    if (!flight.holders.some(h => h.positionId === pos)) {
+      return this._denied(record, `${pos} holds no live Strip of ${flight.callsign || op.flightDataId}: the Position working the flight cancels its request`);
+    }
+    record.transits = record.transits.filter(t => t.flightDataId !== op.flightDataId);
+    this._touch(record, by, null);
+    return { ok: true };
+  }
+
+  /** Who decides transits of this airspace of the current theater ([] when it is not a transit type, docs/adr/0128). */
+  transitDecidersFor(airspaceId) {
+    const record = this._record(this.currentTheater(), airspaceId);
+    const def = record && record.definition;
+    if (!def || def.kind !== 'AREA' || !airspaceAuthority.TRANSIT_TYPES.includes(def.type)) return [];
+    return airspaceAuthority.transitDeciders(def, this._transitDeps());
+  }
+
+  /** The APPROVED transit of this flight through this airspace of the current theater, or null (docs/adr/0119's `_approved`). */
+  approvedTransit(airspaceId, flightDataId) {
+    const record = this._record(this.currentTheater(), airspaceId);
+    const t = record && record.state === 'ACTIVE' ? this._transitOf(record, flightDataId) : null;
+    return t && t.state === 'APPROVED' ? deepClone(t) : null;
+  }
+
+  /**
+   * The system's end of a transit (docs/adr/0128): the flight's last live Strip has gone, or a decline has been shown for
+   * DECLINED_TRANSIT_SHOWN_MS. One audit line per ended transit (`EndTransit`, actor `system`). Current theater only: the
+   * other theaters' airspaces are not ACTIVE for this mission. `onChanged(view)` runs after each record's change, while
+   * the store's seq is that change's (an airspace delta moves seq by exactly one, stores.js `gapFromDeltas`).
+   * @returns {object[]} the records it changed (views)
+   */
+  sweepTransits(onChanged = () => {}) {
+    const m = this._theaterMap(this.currentTheater());
+    const now = this._clock.now();
+    const changed = [];
+    for (const record of (m ? m.values() : [])) {
+      if (!record.transits || !record.transits.length) continue;
+      const ended = [];
+      for (const t of record.transits) {
+        if (t.state === 'DECLINED' && t.decidedAt != null && now - t.decidedAt >= DECLINED_TRANSIT_SHOWN_MS) { ended.push({ t, trigger: 'DECLINE_SHOWN' }); continue; }
+        const flight = this._transitFlight(t.flightDataId);
+        if (!flight || !flight.holders.length) ended.push({ t, trigger: 'NO_LIVE_STRIP' });
+      }
+      if (ended.length) { const view = this._endTransits(record, ended); changed.push(view); onChanged(view); }
+    }
+    return changed;
+  }
+
+  /** The mission reset (docs/adr/0108): every transit of every theater ends; `onChanged` as `sweepTransits`. @returns {object[]} the records it changed (views) */
+  resetForMission(onChanged = () => {}) {
+    const changed = [];
+    for (const m of this._byTheater.values()) {
+      for (const record of m.values()) {
+        if (!record.transits || !record.transits.length) continue;
+        const view = this._endTransits(record, record.transits.map(t => ({ t, trigger: 'MISSION_RESET' })));
+        changed.push(view);
+        onChanged(view);
+      }
+    }
+    return changed;
+  }
+
+  _endTransits(record, ended) {
+    const before = viewOf(record);
+    const gone = new Set(ended.map(e => e.t.flightDataId));
+    record.transits = record.transits.filter(t => !gone.has(t.flightDataId));
+    this._touch(record, 'system', null);
+    if (this._mutationLog) {
+      for (const { t, trigger } of ended) {
+        this._mutationLog.record({
+          clientMutationId: null, op: 'EndTransit', airspaceId: record.airspaceId, theater: record.theater || null,
+          facilityId: record.definition.controllingFacilityId || null, flightDataId: t.flightDataId, trigger,
+          actingPositionId: null, actorId: 'system', at: this._clock.now(), ok: true, before, after: viewOf(record),
+        });
+      }
+    }
+    return viewOf(record);
   }
 
   /** A ROUTE's occupancy: a count of the Strips whose MTR designator names it. Shown, never warned on. */
@@ -840,6 +1052,7 @@ class AirspaceStore extends SyncedStore {
         record.theater = theater;
         record.definition = check.definition;
         record.definitionHistory = Array.isArray(saved.definitionHistory) ? saved.definitionHistory : [];
+        record.transits = Array.isArray(saved.transits) ? saved.transits : []; // docs/adr/0128; a snapshot from before it has none
         m.set(record.airspaceId, record);
         const bad = checkReferences(record.definition, this._lookup);
         if (bad) log.warn('a restored airspace names a Facility or Position this build does not have: nobody can act on it until it is edited', { theater, airspaceId: record.airspaceId, detail: bad.detail });
@@ -870,5 +1083,6 @@ class AirspaceStore extends SyncedStore {
 
 module.exports = {
   AirspaceStore, AIRSPACE_STATES, LEGAL_TRANSITIONS, INITIAL_STATE, AIRSPACE_OP_KINDS, DEFINITION_OP_KINDS, STATE_OP_KINDS,
+  TRANSIT_OP_KINDS, TRANSIT_STATES, DECLINED_TRANSIT_SHOWN_MS,
   checkReferences, deriveRangePositionIds,
 };

@@ -124,6 +124,19 @@ function buildMonitors({ env, efsp, facilityConfig, missionClock, missionSession
       }
       return out;
     },
+    // docs/adr/0128 §4: the altitude block a live Strip was approved to work in an airspace, checked when nothing is assigned.
+    entryBlocks: () => {
+      const out = new Map();
+      for (const facilityId of facilityConfig.getFacilityIds()) {
+        const board = efsp.boardStoreFor(facilityId);
+        if (!board) continue;
+        for (const s of board.getAll()) {
+          const block = s.state !== 'DROPPED' && s.flightDataId && s.airspaceEntry && s.airspaceEntry.altitudeBlock;
+          if (block && !out.has(s.flightDataId)) out.set(s.flightDataId, { ...block, at: s.airspaceEntry.approvedAt });
+        }
+      }
+      return out;
+    },
     // docs/adr/0118: the receivers under MARSA with a tanker, and the tanker each is measured from.
     refueling: () => refuelingReceivers(efsp.marsaStore.getAll(), (id) => efsp.flightDataStore.getFlightData(id)),
   });
@@ -200,6 +213,8 @@ function buildMonitors({ env, efsp, facilityConfig, missionClock, missionSession
     clock: missionClock,
     wallClock: WALL_CLOCK, // track ages: tracks.js stamps wall time
     config: alertingConfig.airspaceEntry,
+    // docs/adr/0128: "filed through" resolves the filed route against the mission's nav points and airports.
+    missionData: () => hubLink.get().getMissionData(),
   });
   /**
    * docs/adr/0118: is an MCI with this intruder shown at this Position? An ATC Position, MCI not inhibited there (JO 7210.3EE

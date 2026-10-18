@@ -125,6 +125,15 @@ function runwayStatusDelta(store, records) {
   };
 }
 
+/** Airspace records changed outside a Mutation (docs/adr/0128: a transit ended by the system), current theater only. */
+function airspaceDelta(airspaceStore, records) {
+  return {
+    version: VERSION, type: 'efsp-airspace-delta',
+    airspaceSeq: airspaceStore.currentSeq, airspaceEpoch: airspaceStore.epoch,
+    airspaces: { updated: records.filter(Boolean) },
+  };
+}
+
 /** The whole hull view(s), sent whole: small, and the derived stack comes from the server so the client never reimplements it. */
 function carrierDelta(carrierStore) {
   return { version: VERSION, type: 'efsp-carrier-delta', carrierSeq: carrierStore.currentSeq, carrierEpoch: carrierStore.epoch, carriers: { updated: carrierStore.getAll() } };
@@ -158,4 +167,4 @@ function liveStamped(ctx) {
   return out;
 }
 
-module.exports = { VERSION, stampStrip, mergeFlightDataList, touchedStrips, boardDelta, serverBoardDelta, correlationDelta, runwayStatusDelta, marsaDelta, carrierDelta, frequencyDelta, liveStamped };
+module.exports = { VERSION, stampStrip, mergeFlightDataList, touchedStrips, boardDelta, serverBoardDelta, correlationDelta, runwayStatusDelta, marsaDelta, carrierDelta, airspaceDelta, frequencyDelta, liveStamped };

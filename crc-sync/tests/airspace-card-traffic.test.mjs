@@ -7,12 +7,16 @@ import { createRequire } from 'node:module';
 // agency or the controlling Position) and nobody else.
 
 const require = createRequire(import.meta.url);
-const { AirspaceEntryAlertMonitor, routeNames } = require('../src/efsp/airspace-entry-alert.js');
+const { AirspaceEntryAlertMonitor } = require('../src/efsp/airspace-entry-alert.js');
 const { MS_PER_KT } = require('../src/units.js');
 
+// docs/adr/0128 §5: "filed through" is route geometry. MOA-1 is the square 36-37N 35-36E; R-1 lies far to the west.
+const SQUARE = { source: 'POLYGON', points: [[36.0, 35.0], [36.0, 36.0], [37.0, 36.0], [37.0, 35.0]] };
+const WEST = { source: 'POLYGON', points: [[36.0, 30.0], [36.0, 31.0], [37.0, 31.0], [37.0, 30.0]] };
+const MISSION = { waypoints: [{ name: 'WEST1', lat: 36.5, lon: 34.0 }, { name: 'EAST1', lat: 36.5, lon: 37.0 }], airports: [{ icao: 'LTAG', lat: 37.0, lon: 35.4 }] };
 const DEFS = {
-  'MOA-1': { airspaceId: 'MOA-1', name: 'Bravo MOA', type: 'MOA', kind: 'AREA', controllingFacilityId: 'CENTER', controllingPositionId: 'CTR', usingFacilityId: 'INCIRLIK' },
-  'R-1': { airspaceId: 'R-1', name: 'Restricted 1', type: 'RESTRICTED', kind: 'AREA', controllingFacilityId: 'CENTER', controllingPositionId: 'CTR', usingFacilityId: 'INCIRLIK' },
+  'MOA-1': { airspaceId: 'MOA-1', name: 'Bravo MOA', type: 'MOA', kind: 'AREA', controllingFacilityId: 'CENTER', controllingPositionId: 'CTR', usingFacilityId: 'INCIRLIK', geometry: SQUARE },
+  'R-1': { airspaceId: 'R-1', name: 'Restricted 1', type: 'RESTRICTED', kind: 'AREA', controllingFacilityId: 'CENTER', controllingPositionId: 'CTR', usingFacilityId: 'INCIRLIK', geometry: WEST },
   'VR-1': { airspaceId: 'VR-1', name: 'VR 1', type: 'MTR', kind: 'ROUTE', controllingFacilityId: 'CENTER', controllingPositionId: 'CTR' },
 };
 const area = (id) => ({ ...DEFS[id] });
@@ -38,6 +42,7 @@ function world({ tracks = [], inside = {}, flights = {}, flightData = {}, strips
     clock: { now: () => 1000 },
     wallClock: { now: () => 100000 },
     config: { minGroundSpeedKt: 50, minTrackAgeSec: 10 },
+    missionData: () => MISSION,
   });
   return { monitor, state };
 }
@@ -53,7 +58,7 @@ test('a tracked IFR flight inside a MOA unapproved: listed inside, alerting, wit
   const [card] = monitor.trafficFor(OPS);
   assert.equal(card.airspaceId, 'MOA-1');
   assert.deepEqual(card.flights, [{
-    flightDataId: 'fd1', callsign: 'VIPER11', inside: true, filed: false, approved: false, alerting: true,
+    flightDataId: 'fd1', callsign: 'VIPER11', inside: true, filed: false, approved: false, alerting: true, transit: null,
     strips: [{ facilityId: 'INCIRLIK', stripId: 's-ap', positionId: 'AP' }],
   }]);
 });
@@ -78,9 +83,9 @@ test('a VFR flight inside a MOA is listed but does not alert (the alert rule dec
   assert.deepEqual([row.inside, row.approved, row.alerting], [true, false, false]);
 });
 
-test('filed through: the filed route names the airspace by id or name; a route airspace never lists', () => {
+test('filed through (docs/adr/0128 §5): a filed leg crossing the airspace; a route airspace never lists', () => {
   const { monitor } = world({
-    flightData: { fd2: { ...CLEARED, identity: { callsign: 'HAWG21' }, filed: { route: 'LTAG DCT BRAVO MOA DCT LTAG' } } },
+    flightData: { fd2: { ...CLEARED, identity: { callsign: 'HAWG21' }, filed: { route: 'WEST1 DCT EAST1' } } },
     strips: { fd2: [{ facilityId: 'CENTER', stripId: 's-ctr', positionId: 'CTR', airspaceId: null }] },
   });
   monitor.tick();
@@ -117,18 +122,19 @@ test('an untracked contact is not listed: it has no Strip to approve on (ADR 011
   assert.deepEqual(monitor.getTraffic(), []);
 });
 
+test('filed through: the name of the airspace in the route is no longer enough (H151 MT-Q6 c)', () => {
+  const { monitor } = world({
+    flightData: { fd2: { ...CLEARED, filed: { route: 'LTAG DCT BRAVO MOA DCT MOA-1' } } },
+    strips: { fd2: [{ facilityId: 'CENTER', stripId: 's-ctr', positionId: 'CTR', airspaceId: null }] },
+  });
+  monitor.tick();
+  assert.deepEqual(monitor.trafficFor(CTR), [], 'one resolved point (LTAG) makes no leg');
+});
+
 test('a change in the list alone is a change (the hub resends)', () => {
   const { monitor, state } = world({ flightData: { fd2: { ...CLEARED, filed: { route: 'DCT' } } }, strips: { fd2: [AP_STRIP] } });
   assert.equal(monitor.tick(), false);
-  state.flightData.fd2 = { ...CLEARED, filed: { route: 'DCT R-1 DCT' } };
+  state.flightData.fd2 = { ...CLEARED, filed: { route: 'WEST1 EAST1' } };
   assert.equal(monitor.tick(), true);
   assert.equal(monitor.tick(), false);
-});
-
-test('routeNames: whole words, any case, never a substring', () => {
-  assert.equal(routeNames('LTAG DCT bravo moa DCT', { airspaceId: 'MOA-1', name: 'Bravo MOA' }), true);
-  assert.equal(routeNames('LTAG DCT BRAVOX', { airspaceId: 'BRAVO' }), false);
-  assert.equal(routeNames('R-7203/LTAG', { airspaceId: 'R-7203' }), true);
-  assert.equal(routeNames('', { airspaceId: 'R-1' }), false);
-  assert.equal(routeNames('A B', { airspaceId: 'A' }), false, 'a one-letter id never matches');
 });
