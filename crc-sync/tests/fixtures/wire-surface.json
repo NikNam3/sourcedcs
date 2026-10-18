@@ -91,7 +91,10 @@
     "storeOpKinds": {
       "efsp-airspace-mutation": [
         "ApproveActivation",
+        "ApproveTransit",
+        "CancelTransit",
         "CreateAirspace",
+        "DeclineTransit",
         "DelayActivation",
         "DeleteAirspace",
         "DenyActivation",
@@ -99,6 +102,7 @@
         "ImportAirspaces",
         "ReleaseAirspace",
         "RequestActivation",
+        "RequestTransit",
         "ReturnAirspace",
         "ScheduleAirspace"
       ],
