@@ -21,6 +21,7 @@ import {
 } from './picture.js';
 import { map, mapReady, updateZoomLimits } from './map-handle.js';
 import { settings } from './settings.js';
+import { drawingGeometry } from './drawing-highlight.js';
 import { markEfspChanged, onEfspChanged } from './panels/efsp/efsp-change-bus.js';
 
 // ── GeoJSON builders ───────────────────────────────────────────────────────
@@ -486,46 +487,20 @@ function dcsColorToCss(colorStr) {
   return `rgba(${r},${g},${b},${a.toFixed(2)})`;
 }
 
+/** The DCS shape drawings (not the text boxes). Empty when the controller has switched "DCS drawings" off (Settings →
+ *  Declutter, on by default); the airspace editor's picker highlight does not depend on it (drawing-highlight.js). */
 export function buildDrawings() {
-  if (!missionData || !missionData.drawings || !missionData.drawings.length)
+  if (settings.drawingsEnabled === false || !missionData || !missionData.drawings || !missionData.drawings.length)
     return { type: 'FeatureCollection', features: [] };
 
+  const color     = settings.lightMode ? 'rgba(40,40,40,0.85)' : 'rgba(255,255,255,0.75)';
+  const fillColor = 'rgba(0,0,0,0)';
   const features = [];
-
   missionData.drawings.forEach((d, idx) => {
-    if (d.primitiveType === 'TextBox') return; // rendered by buildTextMarks() instead
-
-    const color     = settings.lightMode ? 'rgba(40,40,40,0.85)' : 'rgba(255,255,255,0.75)';
-    const fillColor = 'rgba(0,0,0,0)';
+    const geometry = drawingGeometry(d); // a text box has none: buildTextMarks() renders it
     // idx: the drawing's place in missionData.drawings, which airspace-layer.js's filter hides by (T28)
-    const props     = { color, fillColor, idx };
-
-    if (d.polygonMode === 'circle' && d.lat != null && d.radius) {
-      // Approximate circle as closed polygon
-      const coords = [];
-      for (let i = 0; i <= 64; i++) {
-        const [lat, lon] = projectPos(d.lat, d.lon, (i / 64) * 360, d.radius);
-        coords.push([lon, lat]);
-      }
-      features.push({ type: 'Feature', geometry: { type: 'Polygon', coordinates: [coords] }, properties: props });
-
-    } else if (d.points && d.points.length >= 2) {
-      const coords = d.points.map(p => [p.lon, p.lat]);
-      // Closed if explicitly flagged or it's a polygon primitive (not a plain line)
-      const closed = d.closed || d.primitiveType === 'Polygon';
-
-      if (closed && coords.length >= 3) {
-        const ring = [...coords];
-        if (ring[0][0] !== ring[ring.length - 1][0] || ring[0][1] !== ring[ring.length - 1][1]) {
-          ring.push(ring[0]);
-        }
-        features.push({ type: 'Feature', geometry: { type: 'Polygon', coordinates: [ring] }, properties: props });
-      } else {
-        features.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: coords }, properties: props });
-      }
-    }
+    if (geometry) features.push({ type: 'Feature', geometry, properties: { color, fillColor, idx } });
   });
-
   return { type: 'FeatureCollection', features };
 }
 
