@@ -123,6 +123,32 @@ textarea {
 details.settled-group > summary { cursor: pointer; color: var(--muted); font-size: 14px; padding: 6px 0; }
 details.settled-group > div { display: grid; gap: 14px; margin-top: 8px; }
 :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+details.queue {
+  margin-top: 16px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: var(--shadow); padding: 4px 16px 10px;
+}
+details.queue > summary {
+  cursor: pointer; padding: 8px 0; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap;
+  font: 600 13px "IBM Plex Sans Condensed", sans-serif; letter-spacing: .12em; text-transform: uppercase; color: var(--muted);
+}
+details.queue > summary .qsum { font: 500 12px "IBM Plex Mono", monospace; letter-spacing: 0; text-transform: none; }
+.qlist { list-style: none; margin: 0; padding: 0; display: grid; }
+.qrow {
+  display: grid; grid-template-columns: 2.2em minmax(0, 1fr) auto; gap: 4px 12px; align-items: start;
+  padding: 10px 0; border-top: 1px solid var(--line);
+}
+.qnum { font: 500 13px "IBM Plex Mono", monospace; color: var(--muted); font-variant-numeric: tabular-nums; padding-top: 1px; }
+.qbody { min-width: 0; display: grid; gap: 2px; }
+.qtitle { font-weight: 600; }
+.qtitle code { font: 500 13px "IBM Plex Mono", monospace; color: var(--muted); margin-right: 6px; }
+.qsummary { color: var(--muted); font-size: 13.5px; }
+.qlink { font-size: 13px; color: var(--accent); background: none; border: 0; padding: 0; cursor: pointer; text-align: left; font-family: inherit; }
+.qstate { font: 500 12px "IBM Plex Mono", monospace; padding: 1px 7px; border-radius: 4px; border: 1px solid var(--line); background: var(--panel-2); color: var(--muted); white-space: nowrap; }
+.qstate.running { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 45%, var(--line)); background: var(--ok-soft); }
+.qstate.next { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 50%, var(--line)); background: var(--accent-soft); }
+.qstate.blocked { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 40%, var(--line)); }
+.qrow.done .qtitle { color: var(--muted); font-weight: 500; }
+.qempty { color: var(--muted); font-size: 14px; padding: 6px 0; }
 @media (max-width: 480px) { .save { margin-left: 0; width: 100%; } }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
@@ -142,14 +168,21 @@ details.settled-group > div { display: grid; gap: 14px; margin-top: 8px; }
       <select id="lane" aria-label="Lane"><option value="">All lanes</option></select>
     </div>
   </header>
-  <p class="intro">Questions from the lane agents that only you can answer. Pick an option and add a note if you like, then press Submit on that question (Ctrl+Enter in the note works too). Nothing is sent until you submit. Claude reads your answers, settles them into the decision log, and adds new questions here as the agents raise them. Anything you skip takes the recommended option.</p>
+  <p class="intro">The lane queue shows what the agents will build, in order. Below it are the questions only you can answer. Pick an option and add a note if you like, then press Submit on that question (Ctrl+Enter in the note works too). Nothing is sent until you submit. Claude reads your answers, settles them into the decision log, and adds new questions here as the agents raise them. Anything you skip takes the recommended option.</p>
+  <details class="queue" id="queue" open>
+    <summary>Lane queue <span class="qsum" id="queue-sum"></span></summary>
+    <ol class="qlist" id="queue-list"></ol>
+  </details>
   <div id="notice" class="notice" hidden></div>
   <main id="list" aria-live="polite"></main>
 </div>
 
 <script>
 (() => {
-  const state = { questions: [], answers: {}, drafts: {}, filter: "open", lane: "", saving: {} };
+  const state = { questions: [], answers: {}, drafts: {}, filter: "open", lane: "", saving: {}, queue: null };
+  const $queue = document.getElementById("queue");
+  const $queueList = document.getElementById("queue-list");
+  const $queueSum = document.getElementById("queue-sum");
   const $list = document.getElementById("list");
   const $tally = document.getElementById("tally");
   const $notice = document.getElementById("notice");
@@ -361,6 +394,43 @@ details.settled-group > div { display: grid; gap: 14px; margin-top: 8px; }
     }
   }
 
+  // The lane queue: rows written by Claude (collection "queue"), in the order the lanes will run.
+  const QSTATE = { running: "running", next: "next", queued: "queued", blocked: "waiting on you", done: "done" };
+  function renderQueue() {
+    if (state.queue === null) { $queueSum.textContent = "loading…"; $queueList.replaceChildren(); return; }
+    const rows = [...state.queue].sort((a, b) => (a.order || 0) - (b.order || 0));
+    const live = rows.filter(r => r.status !== "done");
+    const done = rows.filter(r => r.status === "done");
+    const running = live.filter(r => r.status === "running").length;
+    $queueSum.textContent = `${running} running · ${live.length - running} queued` + (done.length ? ` · ${done.length} done` : "");
+    const openQs = (lane) => state.questions.filter(q => q.lane === lane && statusOf(q) === "open").length;
+    const frag = document.createDocumentFragment();
+    if (!rows.length) frag.append(el("li", "qempty", "No lanes queued. Claude adds them here as they are planned."));
+    let n = 0;
+    for (const r of [...live, ...done]) {
+      const li = el("li", "qrow" + (r.status === "done" ? " done" : ""));
+      li.append(el("span", "qnum", r.status === "done" ? "✓" : String(++n)));
+      const body = el("div", "qbody");
+      const t = el("div", "qtitle");
+      if (r.lane) t.append(el("code", null, r.lane));
+      t.append(document.createTextNode(r.title || ""));
+      body.append(t);
+      if (r.summary) body.append(el("div", "qsummary", r.summary));
+      const k = r.lane ? openQs(r.lane) : 0;
+      if (k) {
+        const b = el("button", "qlink", `${k} question${k > 1 ? "s" : ""} for you`);
+        b.type = "button";
+        b.addEventListener("click", () => { state.lane = r.lane; store("dd.lane", r.lane); $lane.value = r.lane; setFilter("open"); });
+        body.append(b);
+      }
+      li.append(body, el("span", "qstate " + (r.status || "queued"), QSTATE[r.status] || r.status || "queued"));
+      frag.append(li);
+    }
+    $queueList.replaceChildren(frag);
+  }
+  if (load("dd.queueOpen") === "0") $queue.open = false;
+  $queue.addEventListener("toggle", () => store("dd.queueOpen", $queue.open ? "1" : "0"));
+
   function typingNow() {
     const a = document.activeElement;
     return a && a.tagName === "TEXTAREA";
@@ -370,12 +440,14 @@ details.settled-group > div { display: grid; gap: 14px; margin-top: 8px; }
   });
   let pending = false;
   function scheduleRender() {
+    renderQueue();
     if (typingNow()) { pending = true; return; }
     render();
   }
   document.addEventListener("focusout", () => { if (pending) { pending = false; setTimeout(render, 0); } });
 
   async function start() {
+    renderQueue();
     render();
     if (!window.claude || !window.claude.use) { showNotice("Open this page on claude.ai to answer the questions."); return; }
     db = await window.claude.use("db");
@@ -391,6 +463,10 @@ details.settled-group > div { display: grid; gap: 14px; margin-top: 8px; }
       state.questions = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       scheduleRender();
     }, () => showNotice("The question list stopped updating. Reload the page."));
+    db.collection("queue").limit(200).onSnapshot(snap => {
+      state.queue = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      renderQueue();
+    }, () => showNotice("The lane queue stopped updating. Reload the page."));
     db.collection("answers").limit(1000).onSnapshot(snap => {
       const next = {};
       for (const d of snap.docs) next[d.id] = d.data();
