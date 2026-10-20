@@ -1,22 +1,62 @@
 # Supervisor handoff
 
-## UPDATE 2026-10-20: live test passed; U-SCOPE-SMALL running; queue
+## RELAUNCH HERE (2026-10-20): nothing running, queue on the Decision Desk
 
-Live test "very successful, no bugs found" (H155). Running: **U-SCOPE-SMALL** (H155 items 1-3, E2E 3). Queue: (1)
-**U-AIRSPACE-BADGE** (H155 item 4: amber only while inside a non-ACTIVE approved airspace); (2) **U-TERRAIN-DCS** (H157): whole-map
-height cache from DCS `land.getHeight` via Eval, spacing chosen against `land.isVisible`, MapTiler terrain removed; (2b)
-**U-ROLE-POSITIONS** (ADR 0132, written; briefing to write from it); (3) small
-fixes (+ H156: own-Facility frequency edits, decline until acknowledged, grey coordinate mark): `vfr.js` empty ACTIVE altitude counts as IFR, `airspace-entry-alert.spec.js` cleanup `baseDefRev`, soak
-`skip-shadow-client` seeds 15/16/23/26; (3b) U-FREQ-ROWS (H156 FQ-Q3); (4) U-CARRIER (U18-U22); (5) docs pass last. The Decision Desk now carries the queue (collection `queue`): keep it current.
+Read S-ARCH-75–80 and H155–H157 in `decisions.md`, and **ADR 0132** (binding now: lane-rules rule 9, CLAUDE.md). Tip of
+`efsp-wp5-correlation`: everything merged, no lane running, the only worktree is the main checkout (lane branches kept).
+Last gates: crc-sync 2873, crc-desktop 1415, walk 24/24, freeze 58/58, soak:selfcheck PASS (seed 7), wire protocol 2.
+Since 2026-10-18: bundled map glyphs + OpenFreeMap basemap fallback (U-GLYPHS), e2e harness never gets the MapTiler
+key, Deny activation inline (no `window.prompt` in Electron), U-SCOPE-SMALL (drawings switch, picker highlight, airport
+surface). The human's live test on 2026-10-20 passed ("very successful, no bugs found").
 
-## UPDATE 2026-10-18: Playwright done, U-SMALL2 merged, U-MOA-TRANSIT-BUILD running (S-ARCH-75)
+**Standing rules from the human (this period):** every command runs under `nice -n 19`; sharded Playwright with **at
+most 2 lanes** (`--lanes 1,2`); up to 4 agents, Opus; questions and the **lane queue** live on the Decision Desk
+(https://claude.ai/artifact/A3gizEgbwfqCnnU831G4Y7, collections `questions`, `answers`, `queue`; source
+`docs/parallel/decision-desk.html`): update the `queue` rows (status running/next/queued/done) whenever a lane starts or
+merges.
+
+**Do this first:**
+1. **Sharded Playwright is owed** on the tip (U-SCOPE-SMALL and the Deny fix touched the client; only the affected specs
+   ran, 24/24): `cd crc-desktop && nice -n 19 npm run e2e:sharded -- --lanes 1,2 --rerun-failed` in the background,
+   then `git checkout -- docs/wip crc-desktop/e2e/tools/spec-timings.json`.
+2. Then the queue, in this order (each needs a briefing in `docs/parallel/next/`, written from the decisions named):
+   1. **U-AIRSPACE-BADGE** (H155 item 4): the Strip's airspace badge is amber only while the flight is inside its
+      approved airspace and that airspace is not ACTIVE; grey otherwise (`strip-indicators.js`; reuse the entry-alert
+      geometry, `airspace-entry-alert.js`).
+   2. **U-TERRAIN-DCS** (H157): a whole-map terrain height cache per theater from DCS `land.getHeight` via
+      `CustomService.Eval`, **built only by a command the human runs** (no automatic or background build on
+      the shared server: e.g. `cd crc-sync && npm run terrain:build -- --theater Syria [--spacing 500]`, chunked,
+      resumable, rate-limited, progress printed); spacing chosen by comparing grid LOS against `land.isVisible`
+      (`npm run terrain:validate`); theater extents in `config/theaters.json`; radar masking (`terrain.js`) and the
+      client's contour lines read the cache; MapTiler terrain removed; MapTiler keeps the basemap only (one key, H156
+      MT-K1). Fold in S-ARCH-77: no per-tick retry of a failed fetch anywhere, request counter.
+   3. **U-ROLE-POSITIONS** (ADR 0132 + H156): roles per Position, rules by role, no default Facility, topology in the
+      facility file, facility files discovered; tests as **properties over generated holdings**, scaled to 50+
+      facility files; first consumer: the airport surface follows the Positions held (SC-Q1: shown with LC/GC held,
+      also with CTR/AP; not with only non-airport Facilities). Konya itself is V3; the proof is the TESTFIELD fixture.
+   4. **U-SMALL-FIXES**: `vfr.js` (a cleared assigned altitude leaves an empty ACTIVE entry, still IFR);
+      `airspace-entry-alert.spec.js` cleanup without `baseDefRev`; soak `skip-shadow-client` fails on seeds 15/16/23/26
+      (`tools/soak/driver.js` ~201: drop a frame a later one cannot repair); H156: frequencies editable only for your
+      own Facility (FQ-Q2), a transit decline stays until the requester acknowledges it (MTB-Q2), a grey "coordinate"
+      mark on a flight filed through an active SUA without a transit (MTB-Q3, no 5-minute feature).
+   5. **U-FREQ-ROWS** (H156 FQ-Q3): add and remove frequency rows at run time.
+   6. **U-CARRIER** (U18–U22 in `live-test-2026-10-13.md`; U22 = EAT and fuel editable in MARSHAL, research first).
+   7. **Docs pass, last**: every wip note since DOCS-R2 (incl. U-CLOCK, U-PAR-VALUES, U-FREQ-EDITOR, U-SMALL2,
+      U-MOA-TRANSIT-BUILD, U-GLYPHS, U-SCOPE-SMALL); CLAUDE.md strict-`state/` list gains `efsp-frequencies.json`;
+      CLAUDE.md/README mention the basemap fallback and bundled glyphs; `crc-desktop/README.md` ~111 (npm test checks the
+      lxsrs copies); the briefing's LT-UI T3 entry names `retryErroredTiles`, which is gone.
+
+**Open, nothing to ask now:** the Desk has no open question. Human actions still outstanding: push a backup of
+`efsp-wp5-correlation`; the MapTiler quota resets on its own (one key); the release checklist further down.
+
+## Earlier: UPDATE 2026-10-18: Playwright done, U-SMALL2 merged, U-MOA-TRANSIT-BUILD running (S-ARCH-75)
 
 Live test unblocked. **U-MOA-TRANSIT-BUILD merged** too (S-ARCH-76); 2-lane Playwright owed/running on it. Queue: (1) small
 fixes: `vfr.js` empty ACTIVE altitude counts as IFR; `airspace-entry-alert.spec.js` cleanup `baseDefRev`; soak `skip-shadow-client` on seeds 15/16/23/26 (`tools/soak/driver.js` ~201); (2) U-CARRIER (U18–U22, U22 = EAT and
 fuel editable in MARSHAL, research first); (3) docs pass last (+ U-SMALL2, README ~111). Playwright: 2 lanes only (human).
 Everything this session starts runs `nice -n 19` (human: CPU).
 
-## RELAUNCH HERE (2026-10-17, usage limit): three lanes merged, two lanes stopped
+## Earlier: RELAUNCH (2026-10-17, usage limit): three lanes merged, two lanes stopped
 
 Read S-ARCH-72–74 and H152–H154 in `decisions.md`. Merged into `efsp-wp5-correlation`: **U-CLOCK** (ADR 0129),
 **U-PAR-VALUES** (ADR 0130), **U-FREQ-EDITOR** (ADR 0131). Gates on the tip: crc-sync 2842, crc-desktop 1387, walk
