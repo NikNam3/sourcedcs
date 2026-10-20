@@ -32,3 +32,8 @@
    `(cd crc-sync && npm ci) && (cd crc-desktop && npm ci) && (cd crc-desktop/app && npm ci)` as needed.
 8. Final message = your report: branch + commit range, test counts before/after, ADR, wip summary,
    defaults taken, findings for other lanes, anything the supervisor must decide.
+9. **Positions and Facilities (ADR 0132, binding now):** never write a literal Position id (`'LC'`, `'AP'`, `'CV_APP1'` …)
+   into a rule, state table or client mirror, never use or add `DEFAULT_FACILITY_ID` or a default `facilityId`, and
+   never ask whether a controller holds "any" Position with a role without naming the Facility. A rule is about the one
+   acting Position and the Strip's Facility. Ids belong in facility files and tests. If existing code forces you to break
+   this, say so in your report instead of copying the pattern.

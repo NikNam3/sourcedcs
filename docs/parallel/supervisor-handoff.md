@@ -4,7 +4,8 @@
 
 Live test "very successful, no bugs found" (H155). Running: **U-SCOPE-SMALL** (H155 items 1-3, E2E 3). Queue: (1)
 **U-AIRSPACE-BADGE** (H155 item 4: amber only while inside a non-ACTIVE approved airspace); (2) **MapTiler lane**: terrain
-fallback (keyless DEM) + no per-tick retry of failed tiles + persistent terrain cache for live tests (S-ARCH-77); (3) small
+fallback (keyless DEM) + no per-tick retry of failed tiles + persistent terrain cache for live tests (S-ARCH-77); (2b)
+**U-ROLE-POSITIONS** (ADR 0132, written; briefing to write from it); (3) small
 fixes: `vfr.js` empty ACTIVE altitude counts as IFR, `airspace-entry-alert.spec.js` cleanup `baseDefRev`, soak
 `skip-shadow-client` seeds 15/16/23/26; (4) U-CARRIER (U18-U22); (5) docs pass last.
 
