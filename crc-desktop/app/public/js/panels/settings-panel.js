@@ -1,7 +1,7 @@
 'use strict';
 import { markEfspChanged } from './efsp/efsp-change-bus.js';
-import { buildBullseye, buildNavpoints, buildTextMarks } from '../geojson.js';
-import { applyColors, applyMapTheme } from '../map-style.js';
+import { buildBullseye, buildDrawings, buildNavpoints, buildTextMarks } from '../geojson.js';
+import { applyAirportSurface, applyColors, applyMapTheme } from '../map-style.js';
 import { clearElevationContours, updateElevationContours } from '../elevation.js';
 import { hideLosProfile } from './los-panel.js';
 import { initToolsTab } from './tools-panel.js';
@@ -405,6 +405,28 @@ function initColorSettings() {
   const $navDecl5   = document.getElementById('set-nav-declutter-5');
   const $shipsEn         = document.getElementById('set-ships-enabled');
   const $caPaths         = document.getElementById('set-ca-paths');
+  const $drawings        = document.getElementById('set-drawings');
+  const $airportSurface  = document.getElementById('set-airport-surface');
+
+  // U-SCOPE-SMALL: the mission's shape drawings, and the basemap's airport surface at high zoom. Both on by default.
+  // T28 keeps hiding a drawing an airspace outline stands in for whatever this says; the airspace editor's picker
+  // highlights a drawing with this off too (drawing-highlight.js).
+  if ($drawings) {
+    $drawings.checked = settings.drawingsEnabled !== false;
+    $drawings.addEventListener('change', () => {
+      settings.drawingsEnabled = $drawings.checked;
+      saveSettings();
+      if (mapReady && missionData) map.getSource('drawings').setData(buildDrawings());
+    });
+  }
+  if ($airportSurface) {
+    $airportSurface.checked = settings.airportSurface !== false;
+    $airportSurface.addEventListener('change', () => {
+      settings.airportSurface = $airportSurface.checked;
+      saveSettings();
+      applyAirportSurface();
+    });
+  }
 
   if ($declutter) {
     $declutter.checked = settings.declutter ?? false; // H6: off by default

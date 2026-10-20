@@ -1,5 +1,9 @@
 {
  "exports": {
+  "airport-surface.js": [
+   "AIRPORT_SURFACE_LAYERS",
+   "airportSurfaceVisibility"
+  ],
   "airspace-draw.js": [
    "snapToNavpoint",
    "startDraw",
@@ -129,6 +133,17 @@
    "initDock",
    "notifyCoverageChanged"
   ],
+  "drawing-highlight.js": [
+   "HIGHLIGHT_SOURCE",
+   "bringDrawingIntoView",
+   "buildDrawingHighlight",
+   "clearDrawingHighlight",
+   "drawingGeometry",
+   "highlightBounds",
+   "highlightedDrawing",
+   "registerDrawingHighlightLayer",
+   "showDrawingHighlight"
+  ],
   "elevation.js": [
    "clearElevationContours",
    "elevDecodeTileMeters",
@@ -229,6 +244,7 @@
    "initMap"
   ],
   "map-style.js": [
+   "applyAirportSurface",
    "applyAtcBackground",
    "applyColors",
    "applyMapTheme"

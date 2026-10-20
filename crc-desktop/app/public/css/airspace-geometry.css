@@ -28,6 +28,11 @@
 .asg-layer { font-size: 9px; letter-spacing: .1em; color: var(--efsp-faint, #56616c); padding: 4px 6px 2px; }
 .asg-drawing { display: flex; justify-content: space-between; gap: 8px; padding: 5px 6px; cursor: pointer; font-size: 11px; border-top: 1px solid var(--efsp-line, #343c45); border-left: 2px solid transparent; }
 .asg-drawing:hover:not(.asg-drawing-off) { background: rgba(128,128,128,.12); border-left-color: var(--efsp-go, #4a7dbf); }
+.asg-drawing:focus-visible { outline: none; background: rgba(128,128,128,.12); border-left-color: var(--efsp-go, #4a7dbf); }
+.asg-drawing-right { display: flex; gap: 6px; align-items: center; }
+.asg-drawing-show { background: transparent; border: 1px solid var(--efsp-line-2, #4a5560); color: var(--efsp-muted, #8c9aa6); font: inherit; font-size: 9px; letter-spacing: .06em; padding: 0 4px; cursor: pointer; visibility: hidden; }
+.asg-drawing:hover .asg-drawing-show, .asg-drawing:focus-within .asg-drawing-show { visibility: visible; }
+.asg-drawing-show:hover { color: inherit; }
 .asg-drawing-off { border-style: dashed; color: var(--efsp-faint, #56616c); cursor: default; }
 .asg-drawing-meta { color: var(--efsp-muted, #8c9aa6); font-size: 10px; white-space: nowrap; }
 .asg-picker-note { padding: 6px; font-size: 10px; color: var(--efsp-muted, #8c9aa6); }

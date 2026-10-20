@@ -11,6 +11,8 @@ const DEFAULTS = {
   braColor:      '#4488cc',
   radarDebug:    false,
   textMarksEnabled: false, // DCS mission-editor Text objects, shown as a map layer
+  drawingsEnabled: true,   // DCS mission-editor shape drawings (geojson.js buildDrawings); Settings → Declutter
+  airportSurface:  true,   // the basemap's airport surface at high zoom: pavement, taxiways, designators, names (airport-surface.js)
   extCenterlineNm: 25, // extended AP-radar centerline length
   scale:         1.0,
   lightMode:     false,

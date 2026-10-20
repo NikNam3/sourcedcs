@@ -1,4 +1,5 @@
 'use strict';
+import { AIRPORT_SURFACE_LAYERS, airportSurfaceVisibility } from './airport-surface.js';
 import { ATC_DIM_GRAY, atcBackgroundDirty, atcBlackScope } from './atc-scope.js';
 import { buildDrawings, buildTextMarks, updateMap } from './geojson.js';
 import { createNavpointIcon, updateIcons, updateIffIcons } from './icons.js';
@@ -57,13 +58,16 @@ export function applyMapTheme() {
   // Country borders
   map.setPaintProperty('Country border', 'line-color', light ? '#9a9690' : '#2a2a2a');
 
-  // Airport zone fill
+  // Airport zone fill, and the airport surface (U-SCOPE-SMALL): pavement a shade off the land, taxiways a shade above it,
+  // runways brightest; names in the label grey. The dark values are the style file's.
   map.setPaintProperty('Airport zone', 'fill-color', light ? '#e8e6e2' : '#111111');
-
-  // Aeroway lines (runway / taxiway)
-  map.setPaintProperty('Aeroway', 'line-color', light
-    ? ['match', ['get', 'class'], 'runway', '#8a9a8a', 'taxiway', '#aabaa8', '#9aaa98']
-    : ['match', ['get', 'class'], 'runway', '#4a5a4a', 'taxiway', '#2a3a2a', '#1a2a1a']);
+  map.setPaintProperty('Airport pavement', 'fill-color', light
+    ? ['match', ['get', 'class'], 'runway', '#b4b8b2', 'taxiway', '#c8cbc6', '#dcdbd6']
+    : ['match', ['get', 'class'], 'runway', '#2e362e', 'taxiway', '#262c26', '#1e231e']);
+  map.setPaintProperty('Airport pavement', 'fill-outline-color', light ? '#b4b8b2' : '#2e362e');
+  map.setPaintProperty('Taxiway', 'line-color', light ? '#aabaa8' : '#323c32');
+  // Runways (the video map's runways: always drawn, surface switch or not)
+  map.setPaintProperty('Aeroway', 'line-color', light ? '#8a9a8a' : '#4a5a4a');
 
   // Elevation contour lines + height labels
   const contourColor = light ? '#8a6a3a' : '#a08050';
@@ -76,10 +80,13 @@ export function applyMapTheme() {
     ? { color: '#3a3a3a', halo: '#ffffff' }
     : { color: '#5a6a5a', halo: '#000000' };
 
-  map.setPaintProperty('Taxiway labels', 'text-color',      labelPaint.color);
-  map.setPaintProperty('Taxiway labels', 'text-halo-color', labelPaint.halo);
-  map.setPaintProperty('Airport gate',  'text-color',      labelPaint.color);
-  map.setPaintProperty('Airport gate',  'text-halo-color', labelPaint.halo);
+  const surfaceLabel = light
+    ? { strong: '#2a2a2a', mid: '#3a3a3a', weak: '#4a4a4a', halo: '#ffffff' }
+    : { strong: '#8a9a8a', mid: '#788878', weak: '#627062', halo: '#000000' };
+  for (const [id, c] of [['Runway designators', 'strong'], ['Taxiway labels', 'mid'], ['Apron labels', 'weak'], ['Airport gate', 'weak']]) {
+    map.setPaintProperty(id, 'text-color', surfaceLabel[c]);
+    map.setPaintProperty(id, 'text-halo-color', surfaceLabel.halo);
+  }
 
   const placePaint = light
     ? { color: '#2a2a2a', halo: '#ffffff' }
@@ -106,6 +113,7 @@ export function applyMapTheme() {
   refreshAirspaceLayers();
   // Re-register coalition icons with theme-correct colors
   updateIcons(light);
+  applyAirportSurface();
   // The black ATC scope, if it is on, sits over whatever theme this painted.
   atcBackgroundDirty();
 }
@@ -119,11 +127,12 @@ export function applyMapTheme() {
 export function applyAtcBackground(black) {
   if (!mapReady) return;
   if (!black) {
-    for (const id of ['River', 'Country labels', 'Taxiway labels', 'Airport gate', 'elevation-contours-lines', 'elevation-contours-labels']) {
+    for (const id of ['River', 'Country labels', 'elevation-contours-lines', 'elevation-contours-labels']) {
       if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', 'visible');
     }
     map.setPaintProperty('Water', 'fill-outline-color', undefined);
     applyMapTheme();
+    applyAirportSurface(false);
     return;
   }
   const gray = ATC_DIM_GRAY;
@@ -132,11 +141,22 @@ export function applyAtcBackground(black) {
   map.setPaintProperty('Water', 'fill-outline-color', gray);
   map.setPaintProperty('Airport zone', 'fill-color', '#000000');
   map.setPaintProperty('Country border', 'line-color', '#3a3a3a');
-  map.setPaintProperty('Aeroway', 'line-color', ['match', ['get', 'class'], 'runway', gray, '#000000']);
-  for (const id of ['River', 'Country labels', 'Taxiway labels', 'Airport gate', 'elevation-contours-lines', 'elevation-contours-labels']) {
+  map.setPaintProperty('Aeroway', 'line-color', gray);
+  for (const id of ['River', 'Country labels', 'elevation-contours-lines', 'elevation-contours-labels']) {
     if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', 'none');
   }
+  applyAirportSurface(true);
   updateMap();
+}
+
+/**
+ * Shows or hides the airport surface layers (airport-surface.js) by the controller's "Airport surface" switch. `black`: the
+ * black ATC scope is on (it keeps the runways only); by default, whether it is on now.
+ */
+export function applyAirportSurface(black = atcBlackScope()) {
+  if (!mapReady) return;
+  const v = airportSurfaceVisibility({ enabled: settings.airportSurface, black });
+  for (const id of AIRPORT_SURFACE_LAYERS) if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', v);
 }
 
 // atc-scope.js's beat marks 'atcBackground' when the black-scope decision changed (efsp-change-bus.js), so it need not import this file.

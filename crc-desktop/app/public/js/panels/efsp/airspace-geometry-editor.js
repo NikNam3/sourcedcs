@@ -14,6 +14,7 @@
 import { missionData } from '../../picture.js';
 import { settings } from '../../settings.js';
 import { startDraw, stopDraw } from '../../airspace-draw.js';
+import { bringDrawingIntoView, clearDrawingHighlight, showDrawingHighlight } from '../../drawing-highlight.js';
 import { coordFormatOf, formatComponent, formatPair, parseCoord, parsePair, parsePoints } from '../../coords.js';
 import { MAX_POLYGON_VERTICES, MAX_ROUTE_SEGMENTS, MAX_WIDTH_NM } from './airspace-validate.js';
 import {
@@ -39,7 +40,7 @@ export function mountGeometryEditor(container, definition, onChange) {
   container.appendChild(ctx.root);
   const view = route ? mountRoute(ctx, definition) : mountArea(ctx, definition);
   return {
-    destroy() { ctx.destroyed = true; stopDraw(); ctx.root.remove(); },
+    destroy() { ctx.destroyed = true; stopDraw(); clearDrawingHighlight(); ctx.root.remove(); },
     setReadOnly(reason) { ctx.readOnly = reason || null; if (reason) stopDraw(); view.render(); },
   };
 }
@@ -121,6 +122,7 @@ function mountArea(ctx, definition) {
     if (st.geometry) { const pr = polygonProblem(st.geometry.points); if (pr) root.appendChild(_el('div', 'asg-why asg-why-bad', pr)); }
 
     if (st.pickerOpen) root.appendChild(buildPicker());
+    else clearDrawingHighlight(); // the picker closed, or an entry was picked
     if (st.textOpen) root.appendChild(buildTyped());
   }
 
@@ -142,14 +144,41 @@ function mountArea(ctx, definition) {
       for (const it of items) {
         const r = _el('div', 'asg-drawing' + (it.eligible ? '' : ' asg-drawing-off'));
         r.dataset.drawing = String(it.index);
+        r.tabIndex = 0;
         r.appendChild(_el('span', '', it.name));
         const meta = it.eligible
           ? `${it.shape} · ${it.simplifiedFrom ? `${it.simplifiedFrom} → ${it.pointCount}` : it.pointCount} pts`
           : it.reason;
-        r.appendChild(_el('span', 'asg-drawing-meta', meta));
-        if (it.eligible) r.addEventListener('click', () => {
+        const right = _el('span', 'asg-drawing-right');
+        right.appendChild(_el('span', 'asg-drawing-meta', meta));
+        // "show": the one action that moves the map, and only when the drawing is not wholly in view already.
+        const show = _el('button', 'asg-drawing-show', 'show'); show.type = 'button'; show.tabIndex = -1;
+        show.title = 'Bring this drawing into view';
+        show.addEventListener('click', (e) => { e.stopPropagation(); showDrawingHighlight(drawings(), it.index, r); bringDrawingIntoView(drawings(), it.index); });
+        right.appendChild(show);
+        r.appendChild(right);
+        // Hover or keyboard focus highlights the drawing on the map (drawing-highlight.js); it never moves the map.
+        r.addEventListener('mouseenter', () => showDrawingHighlight(drawings(), it.index, r));
+        r.addEventListener('focus', () => showDrawingHighlight(drawings(), it.index, r));
+        r.addEventListener('mouseleave', () => {
+          const f = document.activeElement && document.activeElement.closest && document.activeElement.closest('.asg-drawing');
+          if (f && box.contains(f)) showDrawingHighlight(drawings(), Number(f.dataset.drawing), f);
+          else clearDrawingHighlight();
+        });
+        r.addEventListener('blur', () => { if (!r.matches(':hover')) clearDrawingHighlight(); });
+        const pickIt = () => {
           const pick = geometryFromDrawing(drawings(), it.index, missionData);
           if (pick) set(pick.geometry, pick.simplifiedFrom ? `Simplified from ${pick.simplifiedFrom} to ${pick.geometry.points.length} points, within 0.1 NM.` : null);
+        };
+        if (it.eligible) r.addEventListener('click', pickIt);
+        r.addEventListener('keydown', (e) => {
+          if ((e.key === 'Enter' || e.key === ' ') && it.eligible) { e.preventDefault(); pickIt(); }
+          else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+            e.preventDefault();
+            const rows = [...box.querySelectorAll('.asg-drawing')];
+            const next = rows[rows.indexOf(r) + (e.key === 'ArrowDown' ? 1 : -1)];
+            if (next) next.focus();
+          }
         });
         box.appendChild(r);
       }

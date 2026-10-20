@@ -1,5 +1,6 @@
 'use strict';
 import { registerAirspaceLayers } from './airspace-layer.js';
+import { registerDrawingHighlightLayer } from './drawing-highlight.js';
 import { TEXT_SIZE_PX } from './scope-constants.js';
 import { map } from './map-handle.js';
 
@@ -115,6 +116,8 @@ export function addOverlayLayers() {
 
   // ── Airspace outlines (AIRSP-2P-B): below the tracks, above the drawings ──
   registerAirspaceLayers();
+  // The airspace editor's picker highlight (drawing-highlight.js): above the drawings and the outlines, below the tracks.
+  registerDrawingHighlightLayer();
 
   // ── Filed route overlay (from the track panel's FPL section) ───────────
   map.addSource('filed-route', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
