@@ -12,9 +12,13 @@ export let _menuFor = null;      // the airspace whose ⋯ menu is open
 
 export let _delayFor = null;     // the airspace whose Delay note form is open
 
+export let _denyFor = null;      // the airspace whose Deny reason form is open (Electron has no window.prompt)
+
 export function _setMenuFor(id) { _menuFor = id; }
 
 export function _setDelayFor(id) { _delayFor = id; }
+
+export function _setDenyFor(id) { _denyFor = id; }
 
 // In-progress text of the card forms. Every update of any airspace rebuilds every card, so what a controller has
 // typed lives here, keyed by a stable name, and is put back into the new input (B9, docs/wip/ARCH-C.md §3.1).

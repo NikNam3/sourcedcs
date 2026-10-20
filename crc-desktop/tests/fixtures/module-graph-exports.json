@@ -442,12 +442,14 @@
   "panels/efsp/airspace-view-state.js": [
    "NEW_KEY",
    "_delayFor",
+   "_denyFor",
    "_draftInputs",
    "_drafts",
    "_filter",
    "_menuFor",
    "_saveFilter",
    "_setDelayFor",
+   "_setDenyFor",
    "_setMenuFor",
    "_views"
   ],

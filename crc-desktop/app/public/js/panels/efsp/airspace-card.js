@@ -2,7 +2,7 @@
 import { getEfspFlightData, stripsInAirspace } from './efsp-state.js';
 import { nextBooking, formatBooking, bookingUrl } from './airspace-calendar.js';
 import { markEfspChanged } from './efsp-change-bus.js';
-import { _delayFor, _draftInputs, _drafts, _menuFor, _setDelayFor, _setMenuFor, _views } from './airspace-view-state.js';
+import { _delayFor, _denyFor, _draftInputs, _drafts, _menuFor, _setDelayFor, _setDenyFor, _setMenuFor, _views } from './airspace-view-state.js';
 import { _altText, _flightsOf, _formatFrequency, _formatWindow, airspaceActionsFor, deleteReason, editReason, routeFlightCount } from './airspace-rules.js';
 import { _dispatchAirspace, _el, _openDelete, _openEditor, _openHistory } from './airspace-views.js';
 import { buildAirspaceEntryList } from './airspace-entry-list.js';
@@ -141,7 +141,8 @@ export function _buildAirspaceCard(airspace, signedOnPositionIds) {
       btn.textContent = action.label;
       btn.title = `as ${action.positionId}`;
       btn.addEventListener('click', () => {
-        if (action.kind === 'DelayActivation') { _setDelayFor(airspace.airspaceId); markEfspChanged('airspace'); return; }
+        if (action.kind === 'DelayActivation') { _setDenyFor(null); _setDelayFor(airspace.airspaceId); markEfspChanged('airspace'); return; }
+        if (action.kind === 'DenyActivation') { _setDelayFor(null); _setDenyFor(airspace.airspaceId); markEfspChanged('airspace'); return; }
         _dispatchAirspace(airspace, action);
       });
       row.appendChild(btn);
@@ -149,17 +150,12 @@ export function _buildAirspaceCard(airspace, signedOnPositionIds) {
     card.appendChild(row);
   }
   if (_delayFor === airspace.airspaceId) {
-    const form = _el('div', 'airspace-delay');
-    const input = document.createElement('input');
-    input.type = 'text'; input.className = 'airspace-input'; input.placeholder = 'Delay note (for example: after 1500Z)';
-    _keepDraft(`delay:${airspace.airspaceId}`, input);
-    const send = _el('button', 'airspace-save-btn', 'Send delay');
-    const cancel = _el('button', 'airspace-action-btn', 'Cancel');
-    const act = actions.find(a => a.kind === 'DelayActivation');
-    send.addEventListener('click', () => { _setDelayFor(null); _drafts.delete(`delay:${airspace.airspaceId}`); if (act) _dispatchAirspace(airspace, act, { note: input.value.trim() }); markEfspChanged('airspace'); });
-    cancel.addEventListener('click', () => { _setDelayFor(null); _drafts.delete(`delay:${airspace.airspaceId}`); markEfspChanged('airspace'); });
-    form.append(input, send, cancel);
-    card.appendChild(form);
+    card.appendChild(_noteForm(airspace, actions, 'DelayActivation', 'delay', 'Delay note (for example: after 1500Z)', 'Send delay',
+      _setDelayFor, (note) => ({ note })));
+  }
+  if (_denyFor === airspace.airspaceId) {
+    card.appendChild(_noteForm(airspace, actions, 'DenyActivation', 'deny', 'Reason (optional)', 'Send denial',
+      _setDenyFor, (reason) => ({ reason })));
   }
 
   if (_menuFor === airspace.airspaceId) card.appendChild(_buildMenu(airspace, signedOnPositionIds));
@@ -174,4 +170,20 @@ function _keepDraft(key, input) {
   if (_drafts.has(key)) input.value = _drafts.get(key);
   input.addEventListener('input', () => { _drafts.set(key, input.value); });
   _draftInputs.set(key, input);
+}
+
+// The inline one-line form under the action row that Delay (a note) and Deny (a reason) open; both are optional text.
+function _noteForm(airspace, actions, kind, draftKey, placeholder, sendLabel, setOpenFor, extraOf) {
+  const form = _el('div', 'airspace-delay');
+  const input = document.createElement('input');
+  input.type = 'text'; input.className = 'airspace-input'; input.placeholder = placeholder;
+  _keepDraft(`${draftKey}:${airspace.airspaceId}`, input);
+  const send = _el('button', 'airspace-save-btn', sendLabel);
+  const cancel = _el('button', 'airspace-action-btn', 'Cancel');
+  const act = actions.find(a => a.kind === kind);
+  const close = () => { setOpenFor(null); _drafts.delete(`${draftKey}:${airspace.airspaceId}`); };
+  send.addEventListener('click', () => { close(); if (act) _dispatchAirspace(airspace, act, extraOf(input.value.trim())); markEfspChanged('airspace'); });
+  cancel.addEventListener('click', () => { close(); markEfspChanged('airspace'); });
+  form.append(input, send, cancel);
+  return form;
 }

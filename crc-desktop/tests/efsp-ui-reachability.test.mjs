@@ -963,7 +963,6 @@ async function renderAirspaceBoard({ airspaces, signedOn, strips = [], flightDat
   const sent = [];
   const nodes = { 'airspace-list': makeElement('div'), 'airspace-empty': makeElement('div') };
   globalThis.document = { getElementById: (id) => nodes[id] || null, createElement: makeElement, body: makeElement('body'), addEventListener() {}, removeEventListener() {} };
-  globalThis.prompt = () => 'inbound traffic';
   const sandbox = await loadSandbox();
   sandbox.setEfspSender('_sendEfsp', () => {});
   for (const f of new Set(['INCIRLIK', ...strips.map(s => s.facilityId)].filter(Boolean))) sandbox.sendEfspSetPositions(f, signedOn);
@@ -1024,6 +1023,11 @@ test('a range asks and the controlling Position answers, each seeing only their 
   const answering = await renderAirspaceBoard({ airspaces: [pending], signedOn: ['AP'] });
   assert.ok(findByText(answering.list, 'activation requested by SOUTH_RANGE'), 'the asking is visible');
   click(findByText(answering.list, 'Deny'));
+  assert.equal(answering.sent.length, 0, 'Deny opens the inline reason form (Electron has no window.prompt)');
+  const reasonInput = visible(answering.list).find(c => c.tagName === 'input' && c.className === 'airspace-input');
+  assert.ok(reasonInput, 'the reason form is shown');
+  reasonInput.value = 'inbound traffic';
+  click(findByText(answering.list, 'Send denial'));
   assert.equal(answering.sent[0].op.kind, 'DenyActivation');
   assert.equal(answering.sent[0].op.reason, 'inbound traffic', 'a refusal carries a reason');
 });

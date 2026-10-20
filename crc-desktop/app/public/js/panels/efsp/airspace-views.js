@@ -30,11 +30,7 @@ export function _dispatchAirspace(airspace, action, extra) {
     op.fromUtc = now;
     op.toUtc = now + 2 * 60 * 60 * 1000;
   }
-  if (action.kind === 'DenyActivation') {
-    const reason = window.prompt(`Deny activation of ${airspace.definition.name} — reason?`);
-    if (reason === null) return;
-    op.reason = reason || null;
-  }
+  if (action.kind === 'DenyActivation') op.reason = (extra && extra.reason) || null;
   if (action.kind === 'DelayActivation') op.note = (extra && extra.note) || null;
   sendEfspAirspaceMutation(action.positionId, airspace.airspaceId, airspace.rev, op);
 }

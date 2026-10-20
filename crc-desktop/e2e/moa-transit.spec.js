@@ -199,3 +199,34 @@ test('the entry block: Airspace… with a block, then Entry block… amends it',
     await cleanupAirspace(page, airspaceId);
   }
 });
+
+test('Deny activation takes its reason inline on the card (Electron has no window.prompt)', async ({ page }) => {
+  await openPanel(page, { signedOn: ['OPS'] });
+  await signOn(page, 'CENTER', ['CTR']);
+  await expect.poll(() => page.evaluate(() => crc.airspaceLayer.currentTheater()), { timeout: 20000 }).toBe('Syria');
+  const airspaceId = `MOA-DN${uid()}`;
+  const ok = { ok: true, reason: null, detail: null };
+  expect(await airspaceOp(page, 'CTR', airspaceId, { kind: 'CreateAirspace', definition: {
+    airspaceId, name: `Moa ${airspaceId}`, kind: 'AREA', type: 'MOA', controllingFacilityId: 'CENTER', controllingPositionId: 'CTR', usingFacilityId: 'INCIRLIK',
+  } })).toEqual(ok);
+  expect(await airspaceOp(page, 'OPS', airspaceId, { kind: 'ScheduleAirspace', fromUtc: Date.now() - 60000, toUtc: Date.now() + 7200000 })).toEqual(ok);
+  expect(await airspaceOp(page, 'OPS', airspaceId, { kind: 'RequestActivation' })).toEqual(ok);
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  try {
+    await openAirspacePanel(page);
+    const card = page.locator(`.airspace-card[data-airspace-id="${airspaceId}"]`);
+    await card.locator('.airspace-action-btn', { hasText: /^Deny$/ }).click({ timeout: 15000 });
+    await card.locator('.airspace-delay input').fill('range fouled');
+    await card.locator('.airspace-delay .airspace-save-btn').click();
+    await expect.poll(() => page.evaluate((id) => {
+      const a = crc.state.getEfspAirspace(id);
+      return a ? { pending: !!a.pendingRequest, reason: a.lastDenial && a.lastDenial.reason } : null;
+    }, airspaceId), { timeout: 10000 }).toEqual({ pending: false, reason: 'range fouled' });
+    expect(errors).toEqual([]);
+  } finally {
+    // A denied request leaves the booking: Return cancels a schedule that never went active (LEGAL_TRANSITIONS).
+    await page.evaluate((id) => { const a = crc.state.getEfspAirspace(id); if (a && a.state === 'SCHEDULED') crc.ws.sendEfspAirspaceMutation('CTR', id, a.rev, { kind: 'ReturnAirspace' }); }, airspaceId);
+    await cleanupAirspace(page, airspaceId);
+  }
+});
