@@ -42,6 +42,7 @@ const MODULES = {
   atc: '/js/atc-scope.js',
   airspace: '/js/panels/efsp/airspace-panel.js',
   airspaceLayer: '/js/airspace-layer.js',
+  drawingHighlight: '/js/drawing-highlight.js', // crc.drawingHighlight.highlightedDrawing (U-SCOPE-SMALL picker highlight)
   msgRegistry: '/js/panels/efsp/efsp-message-registry.js',
   carrierMap: '/js/panels/efsp/carrier-map-panel.js', // crc.carrierMap.renderCarrierMap, carrierMapGeometry
   par: '/js/panels/efsp/par-panel.js', // crc.par.parPanelView, parShownStripId, showParFlight
