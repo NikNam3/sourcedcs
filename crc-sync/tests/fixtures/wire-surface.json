@@ -90,6 +90,7 @@
     ],
     "storeOpKinds": {
       "efsp-airspace-mutation": [
+        "AcknowledgeTransit",
         "ApproveActivation",
         "ApproveTransit",
         "CancelTransit",

@@ -1548,6 +1548,7 @@
    "sendTransitOp"
   ],
   "panels/efsp/transit-rules.js": [
+   "acknowledgeableTransits",
    "cancelableTransits",
    "requestTransitChoices",
    "transitMark",

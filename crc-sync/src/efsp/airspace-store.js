@@ -47,11 +47,10 @@ const DEFINITION_OP_KINDS = ['CreateAirspace', 'EditAirspace', 'DeleteAirspace',
 const STATE_OP_KINDS = ['ScheduleAirspace', 'RequestActivation', 'ApproveActivation', 'DenyActivation', 'DelayActivation', 'ReleaseAirspace', 'ReturnAirspace'];
 // docs/adr/0128 (H151): a transit through an ACTIVE MOA, warning or restricted area, requested by a Position holding the
 // flight and decided by the side that separates the airspace's users. On the record's `transits`, never a state transition.
-const TRANSIT_OP_KINDS = ['RequestTransit', 'ApproveTransit', 'DeclineTransit', 'CancelTransit'];
+// ADR 0136 (H156 MTB-Q2 b): a decline stays until the requesting side acknowledges it (AcknowledgeTransit).
+const TRANSIT_OP_KINDS = ['RequestTransit', 'ApproveTransit', 'DeclineTransit', 'CancelTransit', 'AcknowledgeTransit'];
 const AIRSPACE_OP_KINDS = [...DEFINITION_OP_KINDS, ...STATE_OP_KINDS, ...TRANSIT_OP_KINDS];
 const TRANSIT_STATES = ['REQUESTED', 'APPROVED', 'DECLINED'];
-// How long a declined transit stays on the record (and its grey mark on the Strip) before it is forgotten, mission time. Ours.
-const DECLINED_TRANSIT_SHOWN_MS = 5 * 60 * 1000;
 
 const VIAS = ['PANEL', 'WEB', 'SEED'];
 // ADR 0125: the fields of a JURISDICTION area a panel edit may not change (who owns it is the theater config's, and the
@@ -436,6 +435,7 @@ class AirspaceStore extends SyncedStore {
       case 'ApproveTransit':    return this._approveTransit(record, def, op, pos, by);
       case 'DeclineTransit':    return this._declineTransit(record, def, op, pos, by);
       case 'CancelTransit':     return this._cancelTransit(record, def, op, pos, by);
+      case 'AcknowledgeTransit': return this._acknowledgeTransit(record, def, op, pos, by);
       default: return verr(`unknown airspace op: ${op.kind}`);
     }
   }
@@ -919,6 +919,25 @@ class AirspaceStore extends SyncedStore {
     return { ok: true };
   }
 
+  /**
+   * ADR 0136 (H156 MTB-Q2 b): the requesting side has read the decline, which then goes. Whoever holds a live Strip of
+   * the flight now acknowledges (the Position working it, which may not be the one that asked: a handoff in between).
+   * Not gated on ACTIVE or IFR: a decline is read whatever happened to the airspace or the clearance since.
+   */
+  _acknowledgeTransit(record, def, op, pos, by) {
+    const pre = this._transitPreconditions(record, def, op);
+    if (pre.bad) return pre.bad;
+    const { flight } = pre;
+    const existing = this._transitOf(record, op.flightDataId);
+    if (!existing || existing.state !== 'DECLINED') return verr(`no declined transit of ${def.name} by ${flight.callsign || op.flightDataId} to acknowledge`, { airspace: viewOf(record) });
+    if (!flight.holders.some(h => h.positionId === pos)) {
+      return this._denied(record, `${pos} holds no live Strip of ${flight.callsign || op.flightDataId}: the Position working the flight acknowledges the decline`);
+    }
+    record.transits = record.transits.filter(t => t.flightDataId !== op.flightDataId);
+    this._touch(record, by, null);
+    return { ok: true };
+  }
+
   /** Who decides transits of this airspace of the current theater ([] when it is not a transit type, docs/adr/0128). */
   transitDecidersFor(airspaceId) {
     const record = this._record(this.currentTheater(), airspaceId);
@@ -935,21 +954,19 @@ class AirspaceStore extends SyncedStore {
   }
 
   /**
-   * The system's end of a transit (docs/adr/0128): the flight's last live Strip has gone, or a decline has been shown for
-   * DECLINED_TRANSIT_SHOWN_MS. One audit line per ended transit (`EndTransit`, actor `system`). Current theater only: the
+   * The system's end of a transit (docs/adr/0128): the flight's last live Strip has gone. A decline is not forgotten on a
+   * timer: it stays until the requesting side acknowledges it (ADR 0136, H156 MTB-Q2 b). One audit line per ended transit (`EndTransit`, actor `system`). Current theater only: the
    * other theaters' airspaces are not ACTIVE for this mission. `onChanged(view)` runs after each record's change, while
    * the store's seq is that change's (an airspace delta moves seq by exactly one, stores.js `gapFromDeltas`).
    * @returns {object[]} the records it changed (views)
    */
   sweepTransits(onChanged = () => {}) {
     const m = this._theaterMap(this.currentTheater());
-    const now = this._clock.now();
     const changed = [];
     for (const record of (m ? m.values() : [])) {
       if (!record.transits || !record.transits.length) continue;
       const ended = [];
       for (const t of record.transits) {
-        if (t.state === 'DECLINED' && t.decidedAt != null && now - t.decidedAt >= DECLINED_TRANSIT_SHOWN_MS) { ended.push({ t, trigger: 'DECLINE_SHOWN' }); continue; }
         const flight = this._transitFlight(t.flightDataId);
         if (!flight || !flight.holders.length) ended.push({ t, trigger: 'NO_LIVE_STRIP' });
       }
@@ -1084,6 +1101,6 @@ class AirspaceStore extends SyncedStore {
 
 module.exports = {
   AirspaceStore, AIRSPACE_STATES, LEGAL_TRANSITIONS, INITIAL_STATE, AIRSPACE_OP_KINDS, DEFINITION_OP_KINDS, STATE_OP_KINDS,
-  TRANSIT_OP_KINDS, TRANSIT_STATES, DECLINED_TRANSIT_SHOWN_MS,
+  TRANSIT_OP_KINDS, TRANSIT_STATES,
   checkReferences, deriveRangePositionIds,
 };

@@ -76,7 +76,7 @@ function buildTickers({ wsHub, efsp, trackStore, collabStore, atisStore, surveil
       const { messages } = efsp.settleHandoffControl();
       if (messages.length) wsHub.deliverEfsp(messages);
     } },
-    // docs/adr/0128: a transit ends when its flight's last live Strip goes, and a decline is forgotten after a while.
+    // docs/adr/0128: a transit ends when its flight's last live Strip goes (a decline stays until acknowledged, ADR 0136).
     { name: 'airspace-transits', periodMs: 5000, tick: () => {
       const { messages } = efsp.sweepTransits();
       if (messages.length) wsHub.deliverEfsp(messages);

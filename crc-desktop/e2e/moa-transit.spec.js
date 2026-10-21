@@ -5,7 +5,7 @@
  * 1. The card flow: CTR controls an active MOA Incirlik uses (OPS schedules, so CTR decides, H151 MT-Q1 a). AP holds an
  *    IFR flight and asks for a transit from the Strip's ⋯ menu; the Strip shows the grey REQ mark. CTR opens the card,
  *    sees "transit requested by AP" and approves; the mark reads TRANSIT <name>. CTR then declines with a reason typed
- *    inline; the mark reads DECLINED and AP may ask again.
+ *    inline; the mark reads DECLINED and stays until AP acknowledges it from the Strip's menu (ADR 0136).
  * 2. The entry block (docs/adr/0128 §3): Airspace… with a block, then Entry block… amends it; the server's ack is checked.
  * Run on E2E_LANE=7.
  */
@@ -155,6 +155,11 @@ test('AP asks from the Strip, CTR approves and then declines on the card; the St
       .toEqual({ state: 'DECLINED', requestedPositionId: 'AP', decidedPositionId: 'CTR', reason: 'users at all levels' });
     await expect(mark).toHaveText(`TRANSIT ${name} DECLINED`);
     await expect(row.locator('.airspace-entry-transit')).toHaveText('transit declined: users at all levels', { timeout: 15000 });
+
+    // crc-sync ADR 0136 (H156 MTB-Q2 b): the decline stays until AP, holding the flight, acknowledges it from the Strip.
+    await startAction(stripByCallsign(ap, callsign), `Acknowledge transit decline ${name}`);
+    await expect.poll(() => transitOf(ap, airspaceId, s.flightDataId), { timeout: 10000 }).toBe(null);
+    await expect(mark).toHaveCount(0);
   } finally {
     await dropStrips(ap, [callsign]);
     await ap.evaluate((id) => { const a = crc.state.getEfspAirspace(id); if (a && a.state === 'ACTIVE') crc.ws.sendEfspAirspaceMutation('OPS', id, a.rev, { kind: 'ReleaseAirspace' }); }, airspaceId);

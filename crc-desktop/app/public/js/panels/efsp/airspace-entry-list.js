@@ -72,6 +72,7 @@ function _appendTransit(row, list, airspace, flight, deciders) {
   }
   if (offer.requestAs) row.appendChild(_transitButton('Request transit', 'airspace-transit-request-btn', `Ask ${(deciders || []).join(' or ') || 'the decider'} for a transit of ${name}, as ${offer.requestAs}`, () => send(offer.requestAs, 'RequestTransit')));
   if (offer.cancelAs) row.appendChild(_transitButton('Cancel request', 'airspace-transit-cancel-btn', `Withdraw the transit request, as ${offer.cancelAs}`, () => send(offer.cancelAs, 'CancelTransit')));
+  if (offer.acknowledgeAs) row.appendChild(_transitButton('Acknowledge', 'airspace-transit-ack-btn', `Acknowledge the decline of the transit of ${name}, as ${offer.acknowledgeAs}`, () => send(offer.acknowledgeAs, 'AcknowledgeTransit')));
 }
 
 /** The inline reason form under a row: Enter or Send declines (an empty reason is allowed), Escape or Cancel abandons. */
