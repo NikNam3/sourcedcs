@@ -18,10 +18,19 @@ const CASES = [
   { clearance: { altitude: cell('SUPERSEDED'), heading: cell('CANCELLED') } },
   { clearance: { altitude: cell('SUPERSEDED', 'ACTIVE') } },
   { clearance: { altitude: { entries: null } } },
+  // S-ARCH-76: a cleared assignment (setClearance's empty value) is no clearance.
+  { clearance: { altitude: { entries: [{ status: 'ACTIVE', value: '', parsed: null, block: null }] } } },
+  { clearance: { heading: { entries: [{ status: 'SUPERSEDED', value: '090', parsed: 90 }, { status: 'ACTIVE', value: ' ', parsed: null }] } } },
+  { clearance: { altitude: { entries: [{ status: 'ACTIVE', value: 'FL220-FL240', parsed: null, block: { lowFt: 22000, highFt: 24000 } }] } } },
+  { clearance: { altitude: { entries: [{ status: 'ACTIVE' }] } } },
 ];
 
 test('hasNoClearance: the client answers as crc-sync for every shape', () => {
   for (const fd of CASES) assert.equal(hasNoClearance(fd), server.hasNoClearance(fd), JSON.stringify(fd));
   assert.equal(hasNoClearance(CASES[5]), true);
   assert.equal(hasNoClearance(CASES[6]), false);
+  assert.equal(hasNoClearance(CASES[11]), true);
+  assert.equal(hasNoClearance(CASES[12]), true);
+  assert.equal(hasNoClearance(CASES[13]), false);
+  assert.equal(hasNoClearance(CASES[14]), true);
 });

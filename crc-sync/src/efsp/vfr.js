@@ -5,9 +5,14 @@
 // (JO 7110.65BB para 2-3-8 c: VFR is in the equipment suffix and the absence of a clearance, not in a block). The
 // client's hand copy is crc-desktop/app/public/js/panels/efsp/vfr.js; a parity test keeps them equal.
 
-const _active = (cell) => !!(cell && (cell.entries || []).some(e => e.status === 'ACTIVE'));
+// An ACTIVE entry whose value is empty is the controller clearing the assignment (setClearance records the clearing
+// as an amendment, ADR 0058's append-only history): no clearance (S-ARCH-76). An entry without a string value (an older
+// or hand-built shape) counts when it carries a parsed value or a block.
+const _assigned = (e) => !!e && e.status === 'ACTIVE'
+  && (typeof e.value === 'string' ? e.value.trim() !== '' : (e.parsed != null || e.block != null));
+const _active = (cell) => !!(cell && (cell.entries || []).some(_assigned));
 
-/** No ACTIVE assigned altitude and no ACTIVE assigned heading on this flight data (null counts as none). */
+/** No ACTIVE assigned altitude and no ACTIVE assigned heading on this flight data (null, and a cleared one, count as none). */
 function hasNoClearance(flightData) {
   return !(flightData && flightData.clearance && (_active(flightData.clearance.altitude) || _active(flightData.clearance.heading)));
 }
