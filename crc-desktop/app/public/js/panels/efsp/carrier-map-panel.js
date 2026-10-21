@@ -9,8 +9,8 @@ import { correlatedTrackIdForStrip, getAllEfspStrips, getEfspFlightData, getEfsp
 import { onEfspChanged } from './efsp-change-bus.js';
 import { buildBoard, fuelLevel } from './marshal-board-model.js';
 import {
-  RANGE_DEFAULT_NM, RANGE_MAX_NM, RANGE_MIN_NM, bolterRacetrack, extendedCentreline, clampRange, declutter, distanceNm, landingPattern,
-  marshalStack, occupancy, portHolding, ringSpacingFor, ringsFor, scaleFor, spinCircle, tankerRacetrack, toFrame, wheelRange,
+  RANGE_DEFAULT_NM, RANGE_MAX_NM, RANGE_MIN_NM, approachPath, bolterRacetrack, extendedCentreline, clampRange, declutter, distanceNm,
+  landingPattern, marshalHolding, marshalStack, occupancy, portHolding, ringSpacingFor, ringsFor, scaleFor, spinCircle, tankerRacetrack, toFrame, wheelRange,
 } from './carrier-map-model.js';
 
 // The CARRIER MAP panel (mockup docs/mockups/carrier-map-panel.html, revision 5; decisions H117-H119, S-ARCH-36, H121; lane note
@@ -179,7 +179,7 @@ function _model(view, st) {
   const fixDmes = rows.filter((r) => r.kind === 'hold' && Number.isFinite(r.marshalDme)).map((r) => r.marshalDme);
   return {
     range, spacing: getSetting('carrierMapRingSpacing'), caseValue, brc, fb,
-    stack: sequenced && radial != null && firstFix != null ? { ...marshalStack(radial, firstFix, fixDmes), text: carrierBearingText(st.radial.display), firstFix } : null,
+    stack: sequenced && radial != null && firstFix != null ? { ...marshalStack(radial, firstFix, fixDmes), text: carrierBearingText(st.radial.display), firstFix, radial } : null,
     occ, tankerSide: tanker.patternSide ? tanker.patternSide.value : 'port', aircraft,
     stale: !!ship.stale,
   };
@@ -225,15 +225,27 @@ function _draw(svg, m, w, h) {
     svg.appendChild(g);
   }
 
-  // the marshal radial and the stack (Case II/III)
+  // the planned path after marshal (Case II/III, while anyone is recovering; crc-sync docs/adr/0137, U21): the radial in to the
+  // platform, the 10 and 6 nm fixes on the final bearing, the ship
+  if (m.stack && m.fb != null && m.occ.approach) {
+    const ap = approachPath(m.stack.radial, m.fb, m.stack.firstFix);
+    const g = sv('g', { 'data-cm': 'approach-path', fill: 'none', stroke: COL.ref });
+    g.appendChild(sv('path', { d: _pathOf(ap.points, P), 'stroke-width': 1.2, 'stroke-dasharray': '6 4' }));
+    for (const mk of ap.marks) {
+      const p = P(mk.at);
+      g.appendChild(sv('circle', { cx: p.x, cy: p.y, r: 2.5, fill: COL.ref, 'data-fix': mk.id }));
+      g.appendChild(sv('text', textAttrs({ x: p.x + 5, y: p.y + font + 2, fill: COL.faint, stroke: 'none' }), mk.text));
+    }
+    svg.appendChild(g);
+  }
+
+  // the marshal holding pattern and the stack (Case II/III): a left-hand racetrack over the fixes (6.4.1.1; docs/adr/0137, U21)
   if (m.stack) {
     const s = m.stack;
-    const g = sv('g', { 'data-cm': 'stack', stroke: COL.ref });
-    const a = P(s.from);
-    const b = P(s.to);
-    g.appendChild(sv('line', { x1: a.x, y1: a.y, x2: b.x, y2: b.y, 'stroke-width': 3, opacity: 0.6 }));
-    const ux = s.across.e * 5;
-    const uy = -s.across.n * 5;
+    const g = sv('g', { 'data-cm': 'stack', stroke: COL.muted });
+    g.appendChild(sv('path', { d: `${_pathOf(marshalHolding(s.radial, s.firstFix, s.top), P)} Z`, fill: 'none', 'stroke-width': 2.5, opacity: 0.8, 'data-cm': 'marshal-orbit' }));
+    const ux = s.across.e * 6;
+    const uy = -s.across.n * 6;
     for (const f of s.fixes) { const p = P(f.at); g.appendChild(sv('line', { x1: p.x - ux, y1: p.y - uy, x2: p.x + ux, y2: p.y + uy, 'data-fix-dme': String(f.dme) })); }
     svg.appendChild(g);
     const l = P(s.labelAt);

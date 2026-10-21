@@ -32,6 +32,14 @@ export const GEOMETRY = Object.freeze({
   // The recovery tanker (6.10.3, p. 6-39): racetrack near the ship, not more than 10 nm ahead, downwind 3 to 5 nm abeam, tanking
   // done before 6 nm astern. Drawn 10 ahead to 6 astern, 4 nm abeam (ours, within NATOPS' 3 to 5).
   tankerAheadNm: 10, tankerAsternNm: 6, tankerAbeamNm: 4,
+  // The marshal holding pattern (6.4.1.1, p. 6-6): "a left-hand, 6-minute racetrack pattern. The inbound leg shall pass over the
+  // holding fix." Two 1-minute standard-rate turns and two 2-minute legs at the 250 KIAS of 6.4.7.2: legs of 8 nm and a width of
+  // 2.6 nm (both ours, worked from those numbers; NATOPS draws no size). Docs/adr/0137, live test U21.
+  marshalLegNm: 8, marshalWidthNm: 2.6,
+  // After marshal (6.4.7.2 and the glossary): 250 KIAS and 4,000 fpm to the platform (5,000 ft), then 2,000 fpm to the 10 nm DME fix;
+  // the 6 nm DME fix at 1,200 ft on the final bearing. The platform's range is worked from the base altitude (6,000 ft at the first
+  // fix): 1,000 ft at 4,000 fpm is 15 s, about 1 nm at 250 kt (ours).
+  tenMileNm: 10, sixMileNm: 6, platformBeforeFixNm: 1,
 });
 
 // The fallback that tells a spin from the landing pattern when the Strip cannot (both are PATTERN IN_PATTERN): a contact within
@@ -148,11 +156,43 @@ export function marshalStack(radialDeg, firstFix, fixDmes) {
     from: polar(radialDeg, firstFix), to: polar(radialDeg, top), top,
     fixes: dmes.map((d) => ({ dme: d, at: polar(radialDeg, d) })),
     across: polar((radialDeg + 90) % 360, 1),
-    labelAt: polar(radialDeg, top + 1),
+    labelAt: polar(radialDeg, top + GEOMETRY.marshalLegNm + 2), // beyond the holding pattern's far turn (docs/adr/0137)
   };
 }
 
 // ── patterns ──────────────────────────────────────────────────────────────
+
+/**
+ * The marshal holding pattern (6.4.1.1): a left-hand racetrack whose inbound leg runs down the radial towards the ship and passes
+ * over the fixes, the near turn at the first fix. Left-hand: inbound (heading to the ship) the turns are to the left, so the
+ * outbound leg lies clockwise of the radial as seen from the ship. The far end is a leg beyond the highest fix in use.
+ */
+export function marshalHolding(radialDeg, firstFix, topFix, g = GEOMETRY) {
+  const r = g.marshalWidthNm / 2;
+  const near = firstFix;
+  const far = Math.max(topFix, firstFix) + g.marshalLegNm;
+  return [onAxis(radialDeg, far, 0), onAxis(radialDeg, near, 0)]
+    .concat(arcOnAxis(radialDeg, near, r, r, 180 + 90, 90))
+    .concat([onAxis(radialDeg, far, g.marshalWidthNm)])
+    .concat(arcOnAxis(radialDeg, far, r, r, 90, -90));
+}
+
+/**
+ * The Case III path after marshal (6.4.7.2): from the first fix in along the marshal radial to the platform, on to the 10 nm and
+ * 6 nm DME fixes on the final bearing, and to the ship. When the radial is the final bearing's reciprocal (the default) this is
+ * one straight line down the extended centreline; a radial typed elsewhere turns at the 10 nm fix.
+ */
+export function approachPath(radialDeg, finalBearingDeg, firstFix, g = GEOMETRY) {
+  const astern = (finalBearingDeg + 180) % 360;
+  const platformNm = Math.max(g.tenMileNm, firstFix - g.platformBeforeFixNm);
+  const fix = polar(radialDeg, firstFix);
+  const platform = polar(radialDeg, platformNm);
+  const ten = polar(astern, g.tenMileNm);
+  const six = polar(astern, g.sixMileNm);
+  return { points: [fix, platform, ten, six, { e: 0, n: 0 }], marks: [
+    { id: 'platform', at: platform, text: 'PLATFORM' }, { id: 'ten', at: ten, text: '10' }, { id: 'six', at: six, text: '6' },
+  ] };
+}
 
 /** Case III bolter/waveoff racetrack: upwind to 4 nm on the final bearing, left to the downwind (port), left in at `turnNm`. */
 export function bolterRacetrack(finalBearingDeg, turnNm, g = GEOMETRY) {
@@ -215,9 +255,14 @@ export function tankerRacetrack(brcDeg, side = 'port', g = GEOMETRY) {
  * @param {(row:object)=>({at:{e:number,n:number}, altFt:number|null}|null)} [a.contactOf]
  */
 export function occupancy({ caseValue, rows, tankerOnStation, contactOf }) {
-  const out = { bolterTurns: [], portHolding: false, landing: false, spin: false, tanker: !!tankerOnStation };
+  const out = { bolterTurns: [], portHolding: false, landing: false, spin: false, tanker: !!tankerOnStation, approach: false };
   const turns = new Set();
+  const sequenced = caseValue === 'II' || caseValue === 'III';
   for (const r of rows || []) {
+    // docs/adr/0137 (U21): the planned path after marshal while anyone is recovering in Case II/III, and in Case I/II the landing
+    // pattern a holding flight will fly next (the pattern is where every recovery ends)
+    if (sequenced && (r.kind === 'hold' || r.kind === 'comm' || r.kind === 'approach')) out.approach = true;
+    if (r.kind === 'hold' && (caseValue === 'I' || caseValue === 'II')) out.landing = true;
     if (r.kind === 'bolter') turns.add([4, 6, 8].includes(r.turnNm) ? r.turnNm : DEFAULT_TURN_NM);
     else if (r.kind === 'hold' && (caseValue === 'I' || caseValue === 'II')) out.portHolding = true;
     else if (r.kind === 'pattern') {

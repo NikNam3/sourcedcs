@@ -105,13 +105,16 @@ test('the tanker racetrack: 10 nm ahead to 6 nm astern, 4 nm abeam on its patter
 
 test('occupied: from the Strip state; geometry only tells a spin from the landing pattern', () => {
   const none = m.occupancy({ caseValue: 'III', rows: [], tankerOnStation: false });
-  assert.deepEqual(none, { bolterTurns: [], portHolding: false, landing: false, spin: false, tanker: false });
+  assert.deepEqual(none, { bolterTurns: [], portHolding: false, landing: false, spin: false, tanker: false, approach: false });
   const c3 = m.occupancy({ caseValue: 'III', rows: [{ kind: 'hold' }, { kind: 'comm' }, { kind: 'approach' }, { kind: 'bolter', turnNm: 8 }, { kind: 'bolter', turnNm: 4 }, { kind: 'bolter', turnNm: null }], tankerOnStation: true });
   assert.deepEqual(c3.bolterTurns, [4, 6, 8], 'one racetrack per assigned approach turn; none assigned is drawn at 6');
   assert.equal(c3.portHolding, false, 'Case III holds in marshal, not port holding');
   assert.equal(c3.tanker, true);
+  assert.equal(c3.approach, true, 'the path after marshal while anyone recovers in Case III (crc-sync docs/adr/0137)');
+  assert.equal(c3.landing, false, 'Case III flies no landing pattern from marshal');
   const c1 = m.occupancy({ caseValue: 'I', rows: [{ kind: 'hold' }], tankerOnStation: false });
   assert.equal(c1.portHolding, true);
+  assert.deepEqual([c1.landing, c1.approach], [true, false], 'Case I: the pattern a holding flight flies next, no marshal path');
   const at = (e, n, altFt) => () => ({ at: { e, n }, altFt });
   assert.equal(m.occupancy({ caseValue: 'I', rows: [{ kind: 'pattern' }], contactOf: () => null }).landing, true, 'no contact: the landing pattern');
   const spin = m.occupancy({ caseValue: 'I', rows: [{ kind: 'pattern' }], contactOf: at(1, 2, 1200) });
@@ -160,4 +163,25 @@ test('declutter: a label keeps clear of the obstacles (the ship, the symbols, th
   const b = out.get('a');
   assert.equal(b.moved, true);
   assert.ok(!(b.x < 135 && 105 < b.x + 60 && b.y < 105 && 85 < b.y + 13));
+});
+
+test('the marshal holding pattern (6.4.1.1, crc-sync docs/adr/0137): a left-hand racetrack, inbound down the radial over the fixes', () => {
+  // radial 180 (south of the ship): inbound heads north, so a left-hand pattern's outbound leg lies to the west
+  const pts = m.marshalHolding(180, 21, 24);
+  const north = pts.map((p) => p.n);
+  const east = pts.map((p) => p.e);
+  assert.ok(near(Math.max(...north), -21 + m.GEOMETRY.marshalWidthNm / 2, 1e-6), 'the near turn bulges a half-width past the first fix');
+  assert.ok(near(Math.min(...north), -(24 + m.GEOMETRY.marshalLegNm) - m.GEOMETRY.marshalWidthNm / 2, 1e-6), 'a leg beyond the top fix');
+  assert.ok(near(Math.max(...east), 0, 1e-6), 'the inbound leg is the radial itself');
+  assert.ok(near(Math.min(...east), -m.GEOMETRY.marshalWidthNm, 1e-6), 'the outbound leg to the west: left-hand');
+});
+
+test('the path after marshal: the radial in to the platform, the 10 and 6 nm fixes on the final bearing, the ship', () => {
+  const ap = m.approachPath(171, 351, 21);
+  assert.deepEqual(ap.marks.map((x) => x.id), ['platform', 'ten', 'six']);
+  assert.ok(near(m.distanceNm(ap.points[0]), 21, 1e-9));
+  assert.ok(near(m.distanceNm(ap.points[1]), 20, 1e-9));
+  assert.ok(near(m.distanceNm(ap.points[2]), 10, 1e-9));
+  assert.ok(near(m.distanceNm(ap.points[3]), 6, 1e-9));
+  assert.deepEqual(ap.points[4], { e: 0, n: 0 });
 });

@@ -262,12 +262,16 @@ test('04 Case change mid-recovery: the stack gives way to port holding; the land
   const ca = await flight(page, { side: a, fuel: 7000, bingo: 4000 });
   await setRange(page, 8);
   await expect(map(page).locator('[data-cm="stack"]')).toHaveCount(1);
+  await expect(map(page).locator('[data-cm="marshal-orbit"]')).toHaveCount(1);
+  await expect(map(page).locator('[data-cm="approach-path"] [data-fix]')).toHaveCount(3);
   await expect(pattern(page, 'port-holding')).toHaveCount(0);
   await typeState(page, 'case', 'I');
   await expect(map(page).locator('[data-cm="case"]')).toHaveText('I');
   await expect(pattern(page, 'port-holding')).toHaveCount(1);
   await expect(map(page).locator('[data-cm="stack"]')).toHaveCount(0);
-  await expect(pattern(page, 'landing')).toHaveCount(0);
+  // the pattern the holding flight flies next is drawn while it holds (crc-sync docs/adr/0137, U21); no marshal path in Case I
+  await expect(pattern(page, 'landing')).toHaveCount(1);
+  await expect(map(page).locator('[data-cm="approach-path"]')).toHaveCount(0);
   await page.screenshot({ path: test.info().outputPath('04-port-holding.png') });
   // Commence in Case I hands the flight to PriFly as a PATTERN Strip
   await act(page, ca, { kind: 'InvokeNla' });
