@@ -21,6 +21,8 @@ const MODULES = {
   dock: '/js/dock-handle.js', // crc.dock.dock is the dockview instance (null until initDock runs); toggleDockPanel etc. delegate to dock.js
   app: '/js/app.js', // crc.app._ws, applySnapshot, applyCoverage
   mapHandle: '/js/map-handle.js', // crc.mapHandle.map, .mapReady
+  terrainGrid: '/js/terrain-grid.js', // crc.terrainGrid.terrainGrid(), .terrainGridState() (crc-sync docs/adr/0133)
+  elevation: '/js/elevation.js', // crc.elevation.updateElevationContours
   settings: '/js/settings.js', // crc.settings.settings
   settingsRegistry: '/js/settings-registry.js', // crc.settingsRegistry.registerSettingsTab
   picture: '/js/picture.js', // crc.picture.history, .labelOffsets, .latestFromServer

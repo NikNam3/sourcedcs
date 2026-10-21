@@ -16,8 +16,10 @@ const { fakeDcsPort } = require('./fake-dcs');
 const SYNC_DIR = path.join(__dirname, '..', '..', '..', 'crc-sync');
 const STEREO_FIXTURE = path.join(__dirname, '..', 'fixtures', 'l16-stereo-routes.json');
 
-// Written once at the first boot and kept across resets: read-only inputs, not state the service writes.
-const KEEP = ['efsp-instrumentation.json', 'efsp-stereo-routes.json'];
+// Written once at the first boot and kept across resets: read-only inputs, not state the service writes. `terrain` is the
+// DCS terrain cache directory (crc-sync docs/adr/0133), also read-only to crc-sync; empty unless a spec writes a synthetic
+// grid there before its fake DCS loads the mission (terrain-contours.spec.js, which removes it again).
+const KEEP = ['efsp-instrumentation.json', 'efsp-stereo-routes.json', 'terrain'];
 
 /** crc-sync's environment for the harness: every durable file redirected into `stateDir`, no DCS, no SRS. */
 function syncEnv(stateDir, port) {
