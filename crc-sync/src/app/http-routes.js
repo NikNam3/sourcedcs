@@ -110,8 +110,8 @@ function mountAuthRoutes(app, { env }) {
   // ── Client config: the MapTiler key crc-desktop draws its basemap with ────
   // The client holds no key (MAPKEY, H82 R3-39): it asks here after login, so
   // rotating the key is an env change on this server, not a client release.
-  // CRCSYNC_MAPTILER_CLIENT_KEY (a browser-restricted key) wins; the terrain
-  // key CRCSYNC_MAPTILER_KEY is the fallback, so one key works today.
+  // CRCSYNC_MAPTILER_CLIENT_KEY (a browser-restricted key) wins; CRCSYNC_MAPTILER_KEY is the fallback, so one key
+  // works (H156 MT-K1). Neither is a terrain key any more (docs/adr/0133).
   const maptilerClientKey = (env.CRCSYNC_MAPTILER_CLIENT_KEY || '').trim() || (env.CRCSYNC_MAPTILER_KEY || '').trim() || null;
   app.get('/api/client-config', auth.requireAuth, (req, res) => {
     res.set('Cache-Control', 'no-store');
