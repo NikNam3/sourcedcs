@@ -1,5 +1,15 @@
 # Supervisor handoff
 
+## RELAUNCH HERE (2026-10-21, usage limit): two lanes merged, one stopped
+
+Read S-ARCH-81 and H158–H159 (v2 scope: EFSP, carrier prototype, PAR, SFA; v3 in `v3-backlog.md`) in `decisions.md`.
+Merged: U-AIRSPACE-BADGE (ADR 0134), U-TERRAIN-DCS (ADR 0133). **Do this first:** (1) sharded Playwright on the tip,
+2 lanes, `nice -n 19`, then `git checkout -- docs/wip crc-desktop/e2e/tools/spec-timings.json`; (2) finish
+**U-ROLE-POSITIONS** (lean, H158) with a new agent in `../sourcedcs-U-ROLE-POSITIONS` ("look at git log/status/diff
+first, keep what is sound"; its wip note says where it stopped); (3) dispatch **U-SMALL-FIXES** (`next/U-SMALL-FIXES.md`,
+worktree from the tip); then U-CARRIER (prototype, v2), U-FREQ-ROWS (+ FQ-Q2), docs pass (+ U-TERRAIN-DCS's
+CLAUDE.md/RUNBOOK wording). Human: run `terrain:build`/`terrain:validate` (wip note `U-TERRAIN-DCS.md`).
+
 ## RELAUNCH HERE (2026-10-20): nothing running, queue on the Decision Desk
 
 Read S-ARCH-75–80 and H155–H157 in `decisions.md`, and **ADR 0132** (binding now: lane-rules rule 9, CLAUDE.md). Tip of
