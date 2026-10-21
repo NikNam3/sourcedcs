@@ -431,6 +431,7 @@
       ],
       "efsp-alerts": [
         "airspaceEntry",
+        "airspaceInside",
         "airspaceTraffic",
         "conflictAlert",
         "conformance",

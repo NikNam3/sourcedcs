@@ -140,6 +140,8 @@ function filterAlerts(msg, scope, flightDataIds, stripVisible) {
     // docs/adr/0119: already per Position (the hub); a flight's alert also only where the flight is visible.
     airspaceEntry: (msg.airspaceEntry || []).filter(a => !a.flightDataId || flightDataIds.has(a.flightDataId)),
     obligations: (msg.obligations || []).filter(o => stripVisible(o.facilityId, o.stripId)),
+    // docs/adr/0134: already the session's own Strips (the hub); kept to visible ones like the hints.
+    airspaceInside: (msg.airspaceInside || []).filter(x => stripVisible(x.facilityId, x.stripId)),
     surveillance: (msg.surveillance || []).filter(h => stripVisible(h.facilityId, h.stripId)),
   };
 }

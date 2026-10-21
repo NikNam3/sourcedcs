@@ -725,17 +725,37 @@ test('an airspace-entry alert on the flight is an amber chip on its Strip, gone 
   assert.equal(findByText(sandbox._buildStripEl(strip), 'Airspace conflict Restricted 1'), undefined);
 });
 
-test('a Strip working an airspace nobody activated says so on its face', async () => {
+test('a Strip working an airspace nobody activated says so on its face only while the flight is inside it (crc-sync ADR 0134)', async () => {
   const airspaces = [{
     airspaceId: 'MOA-COLD', state: 'RETURNED', rev: 1, transitions: [],
     definition: { airspaceId: 'MOA-COLD', name: 'Cold MOA', type: 'MOA', controllingPositionId: 'CTR' },
   }];
-  const inside = stripAt({ ownerPositionId: 'CTR', airspaceEntry: { airspaceId: 'MOA-COLD', frequencyMhz: null, altitudeBlock: null } });
-  const { el } = await renderStrip({ strip: inside, flightData: FDR, signedOn: ['CTR'], airspaces });
+  const approved = stripAt({ ownerPositionId: 'CTR', facilityId: 'CENTER', airspaceEntry: { airspaceId: 'MOA-COLD', frequencyMhz: null, altitudeBlock: null } });
+  const { el, sandbox } = await renderStrip({ strip: approved, flightData: FDR, signedOn: ['CTR'], airspaces });
 
-  const badge = findByText(el, 'Cold MOA');
+  // Approved early (on the ground, en route): grey, no title.
+  let badge = findByText(el, 'Cold MOA');
+  assert.equal(badge.classList.contains('efsp-airspace-badge-unactivated'), false);
+  assert.ok(badge.className.includes('efsp-ind-on'));
+  assert.equal(badge.title || '', '');
+  const outside = sandbox._stripRenderSignature(approved);
+
+  // Airborne inside the cold block: amber, and the Strip re-renders.
+  sandbox.applyEfspAlerts({ airspaceInside: [{ facilityId: 'CENTER', stripId: 's1', airspaceId: 'MOA-COLD' }] });
+  assert.notEqual(sandbox._stripRenderSignature(approved), outside, 'the inside fact is part of the render signature');
+  badge = findByText(sandbox._buildStripEl(approved), 'Cold MOA');
   assert.ok(badge.classList.contains('efsp-airspace-badge-unactivated'));
-  assert.match(badge.title, /RETURNED, not active/);
+  assert.ok(badge.className.includes('efsp-ind-attn'));
+  assert.match(badge.title, /Cold MOA is RETURNED, not active/);
+
+  // A fact for another Strip, or for another airspace, says nothing about this one.
+  sandbox.applyEfspAlerts({ airspaceInside: [{ facilityId: 'CENTER', stripId: 's2', airspaceId: 'MOA-COLD' }, { facilityId: 'CENTER', stripId: 's1', airspaceId: 'MOA-X' }] });
+  assert.equal(findByText(sandbox._buildStripEl(approved), 'Cold MOA').classList.contains('efsp-airspace-badge-unactivated'), false);
+
+  // Left the block (the fact is gone): grey again.
+  sandbox.applyEfspAlerts({ airspaceInside: [] });
+  assert.equal(findByText(sandbox._buildStripEl(approved), 'Cold MOA').classList.contains('efsp-airspace-badge-unactivated'), false);
+  assert.equal(sandbox._stripRenderSignature(approved), outside);
 });
 
 test('the Drop button refuses while a flight is under tactical control', async () => {

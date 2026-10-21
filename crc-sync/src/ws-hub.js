@@ -215,7 +215,9 @@ class WsHub {
     const airspaceEntry = typeof a.airspaceEntryFor === 'function' ? (a.airspaceEntry || []).filter(x => a.airspaceEntryFor(x, positions)) : [];
     // docs/adr/0124 §1: the airspace card's flight list, for the airspaces this session's Positions may approve entry into.
     const airspaceTraffic = typeof a.airspaceTrafficFor === 'function' ? a.airspaceTrafficFor(positions) : [];
-    const msg = { version: VERSION, type: 'efsp-alerts', conformance: a.conformance || [], tofiRegime: a.tofiRegime || [], conflictAlert, airspaceEntry, airspaceTraffic, obligations: a.obligations || [], surveillance: a.surveillance || [] };
+    // docs/adr/0134: the Strips this session holds whose flight is airborne inside the Strip's approved airspace.
+    const airspaceInside = typeof a.airspaceInsideFor === 'function' ? a.airspaceInsideFor(positions) : [];
+    const msg = { version: VERSION, type: 'efsp-alerts', conformance: a.conformance || [], tofiRegime: a.tofiRegime || [], conflictAlert, airspaceEntry, airspaceTraffic, airspaceInside, obligations: a.obligations || [], surveillance: a.surveillance || [] };
     return this._efspFilter(session, msg) || msg;
   }
 
