@@ -149,9 +149,15 @@ const CREATE_STRIP_ORIGINS = [
   // the one Bay it actually has to land in.
   { actingPositionId: 'TAC_C2', bayId: 'tac-c2-tasked', stripType: 'MISSION', label: 'TAC_C2 · Mission' },
   { actingPositionId: 'GCI', bayId: 'gci-on-station', stripType: 'MISSION', label: 'GCI · Mission', initialState: 'ON_STATION' },
+  // The carrier (live test U18, docs/adr/0137): the Marshal originates both of the carrier's Strips, as the server's
+  // createsStripTypes already allowed (a MARSHAL Strip, docs/adr/0064): a recovery check-in joins the stack (IN_STACK,
+  // the strip type's initial state) and a launch is a MARSHAL Strip in LAUNCH (docs/adr/0109 binds it to an ATO
+  // mission line by callsign). PriFly and the lanes receive their Strips by a carrier handoff and create none.
+  { actingPositionId: 'CV_MARSHAL', bayId: 'cv-marshal-stack', stripType: 'MARSHAL', label: 'Marshal · Recovery' },
+  { actingPositionId: 'CV_MARSHAL', bayId: 'cv-marshal-departures', stripType: 'MARSHAL', label: 'Marshal · Launch', initialState: 'LAUNCH' },
 ];
 
-function _createStripOriginKey(o) { return `${o.actingPositionId}:${o.stripType || 'DEPARTURE'}`; }
+function _createStripOriginKey(o) { return `${o.actingPositionId}:${o.stripType || 'DEPARTURE'}${o.initialState ? `:${o.initialState}` : ''}`; }
 
 /** Every origin CURRENTLY reachable, given the Positions actually signed on right now — not a fixed list, since signed-on Positions change live during a session (guide §4.1: "the set changes live during a session"). */
 export function _availableCreateStripOrigins() {
@@ -346,7 +352,7 @@ export function _refreshCreateStripAvailability() {
   _createStripInputEl.disabled = !origin;
   _createStripBtnEl.disabled = !origin;
   if (!origin) {
-    _setCreateStripMsg('OPS, AP or CTR only — select one in Panels to create Strips', true);
+    _setCreateStripMsg('OPS, AP, CTR or Marshal only — select one in Panels to create Strips', true);
   } else if (!_pendingCreateStripMutationId) {
     // Clear a stale "OPS/AP/CTR only"/validation message once one is
     // selected — but never stomp "Creating…" while an attempt is still in
@@ -384,7 +390,7 @@ async function _submitCreateStrip() {
 
   const origin = _createStripOrigin();
   if (!origin) {
-    _setCreateStripMsg('OPS, AP or CTR only — select one in Panels to create Strips', true);
+    _setCreateStripMsg('OPS, AP, CTR or Marshal only — select one in Panels to create Strips', true);
     return;
   }
   // docs/ui-findings F-308 — the picker is read BEFORE the typed callsign is
@@ -465,7 +471,7 @@ async function _submitCreateStrip() {
   const stereoRouteName = _stereoEligibleOrigin(origin) ? _selectedStereoName() : '';
 
   let seed = {};
-  if (!stereoRouteName && origin.stripType !== 'ARRIVAL' && origin.stripType !== 'OVERFLIGHT' && origin.stripType !== 'MISSION') {
+  if (!stereoRouteName && origin.stripType !== 'ARRIVAL' && origin.stripType !== 'OVERFLIGHT' && origin.stripType !== 'MISSION' && origin.stripType !== 'MARSHAL') {
     _createStripLookupInFlight = true;
     if (_createStripInputEl) _createStripInputEl.disabled = true;
     if (_createStripBtnEl) _createStripBtnEl.disabled = true;
@@ -487,6 +493,9 @@ async function _submitCreateStrip() {
     ? { callsign, aircraftType: '', wakeCategory: '', originAirport: '', estimatedArrivalTimeUtc: null }
     : origin.stripType === 'MISSION'
       ? { callsign, missionNumber: '', packageId: '', controllingAgency: '', vulWindowStartUtc: null, vulWindowEndUtc: null }
+      // A carrier Strip: the Marshal types the side number, fuel and the rest on the Strip and in the MARSHAL panel.
+      : origin.stripType === 'MARSHAL'
+        ? { callsign, aircraftType: '' }
       : stereoRouteName
         // Only the callsign and the short name go over the wire — route,
         // altitude and airports are left ABSENT rather than blank so the
