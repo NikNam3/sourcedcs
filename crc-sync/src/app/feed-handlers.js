@@ -4,7 +4,7 @@
 // telemetry into the TrackStore, the mission session, the mission-load fan-out (clearing the picture, re-deriving everything
 // that belonged to the old theater), status, weather and the game clock.
 
-const { reportUnresolvedSelectors, assignableRadars } = require('../efsp/position-coverage');
+const { reportUnresolvedSelectors } = require('../efsp/position-coverage');
 const { wireCollabSession } = require('../collab-wiring');
 const log = require('../log').logger('app');
 
@@ -72,21 +72,9 @@ function createFeedHandlers({ grpcClient, srsClient, trackStore, surveillance, m
       const radars = currentRadars();
       reportUnresolvedSelectors(facilityConfig, radars);
 
-      // Fetch the DEM covering this theater's airfield radars up front. Without it
-      // the first minutes of a session fail open on every sight line and terrain
-      // masks nothing — correct behaviour, but not the behaviour anyone wants.
-      //
-      // Scoped to radars some Position is actually ASSIGNED, not every airfield in
-      // the theater: a 225-airfield map produces 450 airfield radars and would
-      // pre-fetch about nine hundred tiles for scopes nobody will ever look
-      // through. Not scoped to STAFFED Positions, though — a controller taking
-      // Approach mid-session must not then wait for a DEM. Airborne radars are
-      // excluded because they move, so there is no fixed circle to fetch, and
-      // they warm as they fly.
-      terrainStore.prewarmForRadars(
-        assignableRadars(facilityConfig, radars)
-          .filter(r => r.type === 'airport' || r.type === 'approach'),
-      );
+      // The theater's terrain cache (docs/adr/0133): a local file the build command wrote, read here and nowhere else.
+      // No file means one log line and no masking; nothing asks DCS or the web for terrain.
+      terrainStore.loadTheater(missionData.theatre || null);
 
       airportWeather.reset();
       airportWeather.refresh(missionData);

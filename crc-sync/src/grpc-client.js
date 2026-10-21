@@ -928,3 +928,6 @@ return net.lua2json(result)
 GrpcClient.dcsHostOf = dcsHostOf;
 GrpcClient.streamOptions = streamOptions;
 module.exports = GrpcClient;
+// The DCS-gRPC host rule and the proto root, shared with the human-run terrain commands (tools/terrain/eval-client.js).
+module.exports.dcsHostOf = dcsHostOf;
+module.exports.PROTO_ROOT = PROTO_ROOT;
