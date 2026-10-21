@@ -219,7 +219,7 @@ function buildMonitors({ env, efsp, facilityConfig, missionClock, missionSession
   /**
    * docs/adr/0118: is an MCI with this intruder shown at this Position? An ATC Position, MCI not inhibited there (JO 7210.3EE
    * para 12-6-12 d), and the intruder above its Facility's base altitude (para 12-6-12 b, 8-2-5 b). AGL needs the ground:
-   * where terrain is not known (no MapTiler key, or the tile not cached yet) the ground is taken as sea level (ours); the
+   * where terrain is not known (no terrain cache for the theater, docs/adr/0133) the ground is taken as sea level (ours); the
    * high-terrain rule of para 8-2-5 b applies only where it is known.
    */
   function mciShownAt(intruder, facilityId, positionId) {

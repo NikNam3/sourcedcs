@@ -193,7 +193,7 @@ function createApp(deps = {}) {
   });
 
   // ── HTTP: the on-demand RPC proxy endpoints (per-action, not shared streams) ─────────────────────────
-  mountApiRoutes(app, { atisStore, grpcClient, wsHub, stereoRoutes, theaterContext, airportWeather, efspInstrumentation: monitors.efspInstrumentation });
+  mountApiRoutes(app, { atisStore, grpcClient, wsHub, stereoRoutes, theaterContext, airportWeather, efspInstrumentation: monitors.efspInstrumentation, terrainStore: radarPicture.terrainStore });
 
   // Test-only (Playwright harness); mounts nothing unless CRCSYNC_TEST_RESET=1, see src/test-reset.js.
   // Required only here: test-reset.js mints its boot id (crypto.randomUUID) when loaded, and the soak's

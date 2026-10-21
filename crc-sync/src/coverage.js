@@ -109,8 +109,8 @@ class CoverageEngine {
    * @param {object} deps
    * @param {{hasLineOfSight:Function}|null} deps.terrain — a TerrainStore, or
    *   null to skip masking entirely (range and beam geometry only). Null is a
-   *   legitimate configuration, not a degraded one: without a MapTiler key
-   *   there is no DEM to mask against.
+   *   legitimate configuration, not a degraded one: without a terrain cache
+   *   for the theater (docs/adr/0133) there is nothing to mask against.
    */
   constructor({ terrain = null } = {}) {
     this._terrain = terrain;
@@ -195,9 +195,10 @@ class CoverageEngine {
     const result = this._terrain.hasLineOfSight(
       radar.lat, radar.lon, radar.elevM, track.lat, track.lon, track.alt,
     );
-    // 'unknown' means the DEM is still warming. Fail open — going spuriously
-    // blind is worse than seeing slightly too much — and do not cache it, so
-    // the next sample asks again once the tile has landed.
+    // 'unknown' means no terrain here (no cache for the theater, or the path
+    // leaves the grid). Fail open — going spuriously blind is worse than seeing
+    // slightly too much. Not cached: asking again is an in-memory check, never
+    // a fetch (docs/adr/0133).
     if (result === 'unknown') {
       this._stats.losUnknown += 1;
       return true;

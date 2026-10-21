@@ -1,21 +1,12 @@
 'use strict';
 import { bearingDeg, haversineM, projectPos } from './geo.js';
-import { elevDecodeTileMeters, elevLonLatToTile } from './elevation.js';
+import { terrainHeightAt } from './terrain-grid.js';
 
-// ── Radar line-of-sight (terrain masking) ───────────────────────────────────
-// Reuses elevation.js's MapTiler terrain-RGB tile machinery (elevDecodeTileMeters,
-// elevLonLatToTile) to answer "can this radar actually see this point" against
-// real terrain, instead of the pure range/beam-angle geometry app.js used to
-// rely on alone.
-//
-// Point elevation lookups are synchronous and cache-only (losElevationAt) so
-// they're safe to call from the 50ms sweep loop — a cache miss kicks off a
-// background tile fetch and returns null for that call, which callers treat
-// as "unknown" and fail open (assume visible) rather than going spuriously
-// blind while tiles are still loading.
+// ── Radar line-of-sight (terrain masking), for the radar-debug overlay and the LOS profile chart only ──────────
+// The heights are the theater's DCS grid (terrain-grid.js, crc-sync docs/adr/0133), the same file crc-sync masks with,
+// so this explains the server's answer from the same terrain. No grid: every lookup is null ("unknown"), and callers
+// fail open (assume visible). Nothing here fetches anything.
 
-const LOS_DEM_ZOOM      = 10;   // fixed zoom for terrain sampling, independent of map viewport zoom
-const LOS_CACHE_MAX     = 300;  // max decoded tiles kept in memory
 export const LOS_SAMPLE_COUNT  = 24;   // terrain samples taken along a radar→target path
 
 // Standard radar-horizon approximation: earth curvature + typical atmospheric
@@ -23,50 +14,9 @@ export const LOS_SAMPLE_COUNT  = 24;   // terrain samples taken along a radar→
 // an effective earth 4/3 the true radius.
 export const EFFECTIVE_EARTH_RADIUS_M = (4 / 3) * 6371000;
 
-const losGridCache      = new Map(); // "z/x/y" → { grid, n, min, max } (meters)
-const losFetchInFlight  = new Set();
-
-function losFetchTile(z, x, y) {
-  const key = `${z}/${x}/${y}`;
-  if (losGridCache.has(key) || losFetchInFlight.has(key)) return;
-  losFetchInFlight.add(key);
-  elevDecodeTileMeters(z, x, y)
-    .then(result => {
-      losGridCache.set(key, result);
-      if (losGridCache.size > LOS_CACHE_MAX) {
-        losGridCache.delete(losGridCache.keys().next().value);
-      }
-    })
-    .catch(() => {}) // ocean/out-of-range tiles or network errors — stays uncached, keeps failing open
-    .finally(() => losFetchInFlight.delete(key));
-}
-
-function losBilinear(grid, n, px, py) {
-  const x0 = Math.min(Math.max(Math.floor(px), 0), n - 1);
-  const y0 = Math.min(Math.max(Math.floor(py), 0), n - 1);
-  const x1 = Math.min(x0 + 1, n - 1);
-  const y1 = Math.min(y0 + 1, n - 1);
-  const fx = px - x0, fy = py - y0;
-  const v00 = grid[y0 * n + x0], v10 = grid[y0 * n + x1];
-  const v01 = grid[y1 * n + x0], v11 = grid[y1 * n + x1];
-  const top = v00 + (v10 - v00) * fx;
-  const bot = v01 + (v11 - v01) * fx;
-  return top + (bot - top) * fy;
-}
-
-// Synchronous, cache-only terrain height lookup in meters — returns null
-// (and starts a background fetch) if the covering tile isn't cached yet.
+// Synchronous terrain height in meters, or null where it is not known.
 function losElevationAt(lon, lat) {
-  const [xf, yf] = elevLonLatToTile(lon, lat, LOS_DEM_ZOOM);
-  const tx = Math.floor(xf), ty = Math.floor(yf);
-  const key = `${LOS_DEM_ZOOM}/${tx}/${ty}`;
-  const cached = losGridCache.get(key);
-  if (!cached) {
-    losFetchTile(LOS_DEM_ZOOM, tx, ty);
-    return null;
-  }
-  const { grid, n } = cached;
-  return losBilinear(grid, n, (xf - tx) * n, (yf - ty) * n);
+  return terrainHeightAt(lat, lon);
 }
 
 // Straight sight-line height at distance d along a path of total length D,

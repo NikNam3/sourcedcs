@@ -1,24 +1,24 @@
 'use strict';
 import { map, mapReady } from './map-handle.js';
 import { settings } from './settings.js';
-import { maptilerKey, onMaptilerKey } from './maptiler-key.js';
+import { terrainGrid, onTerrainGrid } from './terrain-grid.js';
 
 // ── Elevation contour overlay ────────────────────────────────────────────
-// MapTiler's ready-made contour vector tileset only has data at zoom 9+
-// (verified: the tile server itself returns HTTP 400 below that — it's a
-// hard floor in their data product, not a client-side setting). To get
-// contours at every zoom level, this computes them ourselves from MapTiler's
-// terrain-RGB elevation tiles (available zoom 0-14) using a marching-squares
-// isoline trace, run per-tile and cached. Same MapTiler key (maptiler-key.js, from crc-sync after login) as the rest of
-// the map — no new external dependency.
+// Contours at every zoom, traced with marching squares over the theater's DCS height grid (crc-sync docs/adr/0133:
+// the cache crc-sync loaded for the mission, fetched once per theater by terrain-grid.js). Nothing here goes to the
+// network: no grid (no cache on the server for this theater) means no contours.
+//
+// The grid is regular in lat/lon. The view is cut into blocks of ELEV_BLOCK x ELEV_BLOCK cells sampled every `stride`
+// grid cells, a power of two picked so a sample is about ELEV_TARGET_PX screen pixels apart; a block's contours are
+// cached per stride and interval, so a pan re-traces only the blocks that came into view.
 
-const ELEV_TILE_SIZE   = 512;   // terrain-rgb-v2 tile pixel dimensions
-const ELEV_GRID_STRIDE = 4;     // sample every 4th pixel → 128x128 grid/tile
-const ELEV_MAX_TILES   = 64;    // safety cap; skip update if viewport needs more
-const ELEV_CACHE_MAX   = 300;   // max decoded tiles kept in memory
+const ELEV_BLOCK       = 64;    // sampled cells per block side
+const ELEV_TARGET_PX   = 4;     // screen pixels between samples (the old terrain-RGB overlay sampled every 4th pixel)
+const ELEV_MAX_BLOCKS  = 64;    // safety cap; skip update if viewport needs more
+const ELEV_CACHE_MAX   = 300;   // max traced blocks kept in memory
+const FT_PER_M         = 3.28084;
 
-const elevTileCache = new Map(); // "z/x/y/interval" → { lines: Feature[], labels: Feature[] }
-let elevGeneration = 0;          // bumped on every update() call to discard stale async results
+const elevBlockCache = new Map(); // "stride/bi/bj/interval" -> { lines: Feature[], labels: Feature[] }
 
 function elevIntervalForZoom(zoom) {
   if (zoom < 6)  return 3000;
@@ -28,83 +28,23 @@ function elevIntervalForZoom(zoom) {
   return 200;
 }
 
-function elevDemZoomForMapZoom(zoom) {
-  return Math.min(11, Math.max(5, Math.round(zoom)));
+/** Grid cells between samples at a zoom: the smallest power of two putting samples at least ELEV_TARGET_PX apart. */
+export function elevStrideFor(zoom, lat, spacingM) {
+  const metresPerPx = (40075016.686 * Math.cos((lat * Math.PI) / 180)) / (512 * 2 ** zoom);
+  const want = (ELEV_TARGET_PX * metresPerPx) / spacingM;
+  return want <= 1 ? 1 : 2 ** Math.ceil(Math.log2(want));
 }
 
-export function elevLonLatToTile(lon, lat, z) {
-  const n = 2 ** z;
-  const x = (lon + 180) / 360 * n;
-  const latRad = lat * Math.PI / 180;
-  const y = (1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2 * n;
-  return [x, y];
-}
-
-// Inverse of the standard slippy-map tile projection — tx/ty may be fractional
-// (tile index + sub-tile pixel fraction) to locate a point inside a tile.
-function elevTileToLonLat(z, tx, ty) {
-  const n = 2 ** z;
-  const lon = tx / n * 360 - 180;
-  const latRad = Math.atan(Math.sinh(Math.PI * (1 - 2 * ty / n)));
-  return [lon, latRad * 180 / Math.PI];
-}
-
-// Fetches + decodes one terrain-RGB tile into a meters elevation grid. Shared
-// by the contour renderer below (elevFetchGrid, which converts to feet) and
-// los.js's point-elevation queries (which want meters directly).
-export async function elevDecodeTileMeters(z, x, y) {
-  // No key yet (before login, or crc-sync has none): nothing is fetched or cached, so the next request
-  // after the key arrives (onMaptilerKey, initElevationContours) starts clean.
-  const key = maptilerKey();
-  if (!key) throw new Error('no MapTiler key');
-  const url = `https://api.maptiler.com/tiles/terrain-rgb-v2/${z}/${x}/${y}.webp?key=${encodeURIComponent(key)}`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`terrain-rgb ${z}/${x}/${y}: HTTP ${res.status}`);
-  const bitmap = await createImageBitmap(await res.blob());
-  const canvas = document.createElement('canvas');
-  canvas.width = ELEV_TILE_SIZE;
-  canvas.height = ELEV_TILE_SIZE;
-  const ctx = canvas.getContext('2d');
-  ctx.drawImage(bitmap, 0, 0);
-  const data = ctx.getImageData(0, 0, ELEV_TILE_SIZE, ELEV_TILE_SIZE).data;
-
-  const n = Math.floor(ELEV_TILE_SIZE / ELEV_GRID_STRIDE);
-  const grid = new Float32Array(n * n);
-  let min = Infinity, max = -Infinity;
-  for (let row = 0; row < n; row++) {
-    const py = row * ELEV_GRID_STRIDE;
-    for (let col = 0; col < n; col++) {
-      const px = col * ELEV_GRID_STRIDE;
-      const i = (py * ELEV_TILE_SIZE + px) * 4;
-      const r = data[i], g = data[i + 1], b = data[i + 2];
-      // Mapbox Terrain-RGB v1 encoding (MapTiler terrain-rgb-v2 is compatible).
-      const meters = -10000 + (r * 256 * 256 + g * 256 + b) * 0.1;
-      grid[row * n + col] = meters;
-      if (meters < min) min = meters;
-      if (meters > max) max = meters;
-    }
-  }
-  return { grid, n, min, max };
-}
-
-async function elevFetchGrid(z, x, y) {
-  const { grid, n, min, max } = await elevDecodeTileMeters(z, x, y);
-  const feetGrid = new Float32Array(n * n);
-  for (let i = 0; i < grid.length; i++) feetGrid[i] = grid[i] * 3.28084;
-  return { grid: feetGrid, n, min: min * 3.28084, max: max * 3.28084 };
-}
-
-// Marching squares over one grid at one threshold level. Returns disjoint
-// 2-point segments in fractional-pixel [col,row] space (0..n-1) — rendered
-// as a single MultiLineString per level, which reads as a continuous
-// contour line without needing to stitch segments into full polylines.
-function elevMarchSquares(grid, n, level) {
+// Marching squares over one grid (n columns, nRows rows, row-major) at one threshold level. Returns disjoint
+// 2-point segments in fractional [col,row] space, rendered as a single MultiLineString per level, which reads as a
+// continuous contour line without needing to stitch segments into full polylines.
+export function elevMarchSquares(grid, n, level, nRows = n) {
   const segs = [];
   const interp = (va, pa, vb, pb) => {
     const f = va === vb ? 0.5 : (level - va) / (vb - va);
     return [pa[0] + f * (pb[0] - pa[0]), pa[1] + f * (pb[1] - pa[1])];
   };
-  for (let row = 0; row < n - 1; row++) {
+  for (let row = 0; row < nRows - 1; row++) {
     for (let col = 0; col < n - 1; col++) {
       const tl = grid[row * n + col],       tr = grid[row * n + col + 1];
       const bl = grid[(row + 1) * n + col], br = grid[(row + 1) * n + col + 1];
@@ -133,54 +73,60 @@ function elevMarchSquares(grid, n, level) {
   return segs;
 }
 
-async function elevContoursForTile(z, x, y, intervalFt) {
-  const key = `${z}/${x}/${y}/${intervalFt}`;
-  const cached = elevTileCache.get(key);
-  if (cached) return cached;
-
-  const { grid, n, min, max } = await elevFetchGrid(z, x, y);
-  const lines = [];
-  const labels = [];
-  const startLevel = Math.ceil(min / intervalFt) * intervalFt;
+/**
+ * The contours of one block: rows [bi*B*s, (bi+1)*B*s] and the same for columns, every s-th grid cell, in feet.
+ * Exported for the unit test; the overlay calls it through elevContoursForBlock's cache.
+ */
+export function elevTraceBlock(g, stride, bi, bj, intervalFt) {
+  const { latMin, lonMin, latStep, lonStep, rows, cols } = g.header;
+  const r0 = bi * ELEV_BLOCK * stride, c0 = bj * ELEV_BLOCK * stride;
+  const nr = Math.min(ELEV_BLOCK, Math.floor((rows - 1 - r0) / stride)) + 1;
+  const nc = Math.min(ELEV_BLOCK, Math.floor((cols - 1 - c0) / stride)) + 1;
+  const lines = [], labels = [];
+  if (nr < 2 || nc < 2) return { lines, labels };
+  const grid = new Float32Array(nr * nc);
+  let min = Infinity, max = -Infinity;
+  for (let r = 0; r < nr; r++) {
+    for (let c = 0; c < nc; c++) {
+      const v = g.heights[(r0 + r * stride) * cols + c0 + c * stride] * FT_PER_M;
+      grid[r * nc + c] = v;
+      if (v < min) min = v;
+      if (v > max) max = v;
+    }
+  }
+  const toLonLat = ([col, row]) => [lonMin + (c0 + col * stride) * lonStep, latMin + (r0 + row * stride) * latStep];
+  const startLevel = Math.max(intervalFt, Math.ceil(min / intervalFt) * intervalFt); // nothing at or below sea level
   for (let level = startLevel; level <= max; level += intervalFt) {
-    const segs = elevMarchSquares(grid, n, level);
+    const segs = elevMarchSquares(grid, nc, level, nr);
     if (!segs.length) continue;
     const isIndex = Math.round(level / intervalFt) % 5 === 0;
-
-    const coords = segs.map(([p1, p2]) => [
-      elevTileToLonLat(z, x + p1[0] / n, y + p1[1] / n),
-      elevTileToLonLat(z, x + p2[0] / n, y + p2[1] / n),
-    ]);
     lines.push({
       type: 'Feature',
       properties: { isIndex },
-      geometry: { type: 'MultiLineString', coordinates: coords },
+      geometry: { type: 'MultiLineString', coordinates: segs.map(([p1, p2]) => [toLonLat(p1), toLonLat(p2)]) },
     });
-
     if (isIndex) {
-      // Label anchor: the segment nearest the tile center, so labels cluster
-      // toward the middle of tiles rather than crowding tile edges.
-      const center = n / 2;
+      // Label anchor: the segment nearest the block centre, so labels do not crowd block edges.
+      const cx = (nc - 1) / 2, cy = (nr - 1) / 2;
       let best = null, bestDist = Infinity;
       for (const [p1, p2] of segs) {
         const mx = (p1[0] + p2[0]) / 2, my = (p1[1] + p2[1]) / 2;
-        const d = (mx - center) ** 2 + (my - center) ** 2;
+        const d = (mx - cx) ** 2 + (my - cy) ** 2;
         if (d < bestDist) { bestDist = d; best = [mx, my]; }
       }
-      const [lon, lat] = elevTileToLonLat(z, x + best[0] / n, y + best[1] / n);
-      labels.push({
-        type: 'Feature',
-        properties: { text: `${Math.round(level)}'` },
-        geometry: { type: 'Point', coordinates: [lon, lat] },
-      });
+      labels.push({ type: 'Feature', properties: { text: `${Math.round(level)}'` }, geometry: { type: 'Point', coordinates: toLonLat(best) } });
     }
   }
+  return { lines, labels };
+}
 
-  const result = { lines, labels };
-  elevTileCache.set(key, result);
-  if (elevTileCache.size > ELEV_CACHE_MAX) {
-    elevTileCache.delete(elevTileCache.keys().next().value);
-  }
+function elevContoursForBlock(g, stride, bi, bj, intervalFt) {
+  const key = `${stride}/${bi}/${bj}/${intervalFt}`;
+  const cached = elevBlockCache.get(key);
+  if (cached) return cached;
+  const result = elevTraceBlock(g, stride, bi, bj, intervalFt);
+  elevBlockCache.set(key, result);
+  if (elevBlockCache.size > ELEV_CACHE_MAX) elevBlockCache.delete(elevBlockCache.keys().next().value);
   return result;
 }
 
@@ -194,36 +140,36 @@ export function clearElevationContours() {
   map.getSource('elevation-contour-labels').setData(elevEmptyFC());
 }
 
+/** The blocks covering a lon/lat box at a stride, or null when more than ELEV_MAX_BLOCKS (too far out). */
+export function elevBlocksFor(g, stride, west, south, east, north) {
+  const { latMin, lonMin, latStep, lonStep, rows, cols } = g.header;
+  const span = ELEV_BLOCK * stride;
+  const clampB = (v, cells) => Math.max(0, Math.min(Math.floor((cells - 2) / span), v));
+  const bi0 = clampB(Math.floor((south - latMin) / latStep / span), rows), bi1 = clampB(Math.floor((north - latMin) / latStep / span), rows);
+  const bj0 = clampB(Math.floor((west - lonMin) / lonStep / span), cols), bj1 = clampB(Math.floor((east - lonMin) / lonStep / span), cols);
+  // Entirely outside the grid: nothing to draw.
+  if (north < latMin || south > latMin + (rows - 1) * latStep || east < lonMin || west > lonMin + (cols - 1) * lonStep) return [];
+  if ((bi1 - bi0 + 1) * (bj1 - bj0 + 1) > ELEV_MAX_BLOCKS) return null;
+  const out = [];
+  for (let bi = bi0; bi <= bi1; bi++) for (let bj = bj0; bj <= bj1; bj++) out.push([bi, bj]);
+  return out;
+}
+
 export async function updateElevationContours() {
   if (!mapReady || !settings.showElevation) return;
-  const generation = ++elevGeneration;
+  const g = terrainGrid();
+  if (!g) { clearElevationContours(); return; }
 
   const zoom = map.getZoom();
   const intervalFt = elevIntervalForZoom(zoom);
-  const demZoom = elevDemZoomForMapZoom(zoom);
   const bounds = map.getBounds();
-
-  const [x0f, y0f] = elevLonLatToTile(bounds.getWest(), bounds.getNorth(), demZoom);
-  const [x1f, y1f] = elevLonLatToTile(bounds.getEast(), bounds.getSouth(), demZoom);
-  const n = 2 ** demZoom;
-  const x0 = Math.max(0, Math.floor(x0f)), x1 = Math.min(n - 1, Math.ceil(x1f));
-  const y0 = Math.max(0, Math.floor(y0f)), y1 = Math.min(n - 1, Math.ceil(y1f));
-
-  const tileCount = (x1 - x0 + 1) * (y1 - y0 + 1);
-  if (tileCount <= 0 || tileCount > ELEV_MAX_TILES) return; // too zoomed out — leave last good render
-
-  const jobs = [];
-  for (let ty = y0; ty <= y1; ty++) {
-    for (let tx = x0; tx <= x1; tx++) {
-      jobs.push(elevContoursForTile(demZoom, tx, ty, intervalFt).catch(() => null));
-    }
-  }
-  const results = await Promise.all(jobs);
-  if (generation !== elevGeneration || !settings.showElevation) return; // superseded by a newer update
+  const stride = elevStrideFor(zoom, map.getCenter().lat, g.header.spacingM);
+  const blocks = elevBlocksFor(g, stride, bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth());
+  if (blocks === null) return; // too zoomed out: leave the last good render
 
   const lines = [], labels = [];
-  for (const r of results) {
-    if (!r) continue;
+  for (const [bi, bj] of blocks) {
+    const r = elevContoursForBlock(g, stride, bi, bj, intervalFt);
     lines.push(...r.lines);
     labels.push(...r.labels);
   }
@@ -239,6 +185,7 @@ function elevScheduleUpdate() {
 
 export function initElevationContours() {
   map.on('moveend', elevScheduleUpdate);
-  onMaptilerKey(elevScheduleUpdate);
+  // A new grid (another theater, or the first load) invalidates every traced block.
+  onTerrainGrid(() => { elevBlockCache.clear(); elevScheduleUpdate(); });
   if (settings.showElevation) updateElevationContours();
 }

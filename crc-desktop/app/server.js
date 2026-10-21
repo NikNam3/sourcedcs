@@ -55,9 +55,14 @@ function proxyToSync(req, res, syncPath) {
   const mod    = target.protocol === 'https:' ? https : http;
   const headers = { 'Content-Type': 'application/json' };
   if (req.headers.authorization) headers.Authorization = req.headers.authorization;
+  // Compression and conditional requests pass through (the terrain grid, crc-sync docs/adr/0133, is a few MB gzipped
+  // once and answered 304 when the client already has it). Every other route answers JSON without either.
+  for (const h of ['accept-encoding', 'if-none-match']) if (req.headers[h]) headers[h] = req.headers[h];
 
   const preq = mod.request(target, { method: req.method, headers }, (pres) => {
-    res.writeHead(pres.statusCode, { 'Content-Type': pres.headers['content-type'] || 'application/json' });
+    const out = { 'Content-Type': pres.headers['content-type'] || 'application/json' };
+    for (const h of ['content-encoding', 'etag', 'cache-control', 'vary']) if (pres.headers[h]) out[h] = pres.headers[h];
+    res.writeHead(pres.statusCode, out);
     pres.pipe(res);
   });
   preq.on('error', () => {

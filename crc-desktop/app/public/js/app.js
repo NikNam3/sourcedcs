@@ -1,5 +1,6 @@
 'use strict';
-import { _setSyncSocket, getSyncFeedUrl } from './sync.js';
+import { _setSyncSocket, getSyncFeedUrl, _syncAuthHeaders } from './sync.js';
+import { loadTerrainGrid } from './terrain-grid.js';
 import { noteCoveragePositions, redeclareEfspPositions } from './panels/efsp/efsp-ws.js';
 import { UPDATE_REQUIRED_CLOSE, hideUpdateRequired, isUpdateRequiredShown, showUpdateRequired } from './update-required.js';
 import { kinematics } from './geo.js';
@@ -353,6 +354,8 @@ async function connect() {
         // mission day. A typed magnetic value was converted with the old
         // model, so both runway entries are converted again.
         applyTheaterFacts(msg);
+        // The theater's DCS height grid, for the contours and the radar-debug LOS (crc-sync docs/adr/0133).
+        loadTerrainGrid(msg.theatre || null, _syncAuthHeaders());
         settings.transitionAltFt = msg.transitionAltFt;
         resolveApproachCourse();
         _updateAprtRwyHeading();

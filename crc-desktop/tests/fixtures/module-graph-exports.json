@@ -146,8 +146,10 @@
   ],
   "elevation.js": [
    "clearElevationContours",
-   "elevDecodeTileMeters",
-   "elevLonLatToTile",
+   "elevBlocksFor",
+   "elevMarchSquares",
+   "elevStrideFor",
+   "elevTraceBlock",
    "initElevationContours",
    "updateElevationContours"
   ],
@@ -251,8 +253,10 @@
   ],
   "maptiler-key.js": [
    "_resetMaptilerKeyForTest",
+   "countMaptilerRequest",
    "loadMaptilerKey",
    "maptilerKey",
+   "maptilerRequestCount",
    "onMaptilerKey",
    "transformMaptilerRequest"
   ],
@@ -1678,6 +1682,16 @@
    "setIsSyncOpen",
    "setSendToSync",
    "showConnWidget"
+  ],
+  "terrain-grid.js": [
+   "_resetTerrainGridForTest",
+   "decodeTerrainGrid",
+   "heightInGrid",
+   "loadTerrainGrid",
+   "onTerrainGrid",
+   "terrainGrid",
+   "terrainGridState",
+   "terrainHeightAt"
   ],
   "track-label.js": [
    "ATC_EMERGENCY_TAG",

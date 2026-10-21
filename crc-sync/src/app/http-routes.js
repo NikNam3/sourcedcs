@@ -4,9 +4,10 @@
 //   mountAuthRoutes  the Casdoor code exchange (cross-origin from crc-desktop's renderer), the WebSocket connect ticket,
 //                    GET /js/config.js and GET /api/client-config
 //   mountApiRoutes   the on-demand RPC proxy endpoints crc-desktop's local server calls (ATIS, SRS clients, flight plans, stereo
-//                    routes, magnetic conversion, airport weather, EFSP metrics and traffic count)
+//                    routes, magnetic conversion, airport weather, EFSP metrics and traffic count, the terrain grid)
 // Each takes what it reads as a plain dependency; nothing here builds a store.
 
+const zlib = require('zlib');
 const rateLimit = require('express-rate-limit');
 
 const auth = require('../auth');
@@ -109,8 +110,8 @@ function mountAuthRoutes(app, { env }) {
   // ── Client config: the MapTiler key crc-desktop draws its basemap with ────
   // The client holds no key (MAPKEY, H82 R3-39): it asks here after login, so
   // rotating the key is an env change on this server, not a client release.
-  // CRCSYNC_MAPTILER_CLIENT_KEY (a browser-restricted key) wins; the terrain
-  // key CRCSYNC_MAPTILER_KEY is the fallback, so one key works today.
+  // CRCSYNC_MAPTILER_CLIENT_KEY (a browser-restricted key) wins; CRCSYNC_MAPTILER_KEY is the fallback, so one key
+  // works (H156 MT-K1). Neither is a terrain key any more (docs/adr/0133).
   const maptilerClientKey = (env.CRCSYNC_MAPTILER_CLIENT_KEY || '').trim() || (env.CRCSYNC_MAPTILER_KEY || '').trim() || null;
   app.get('/api/client-config', auth.requireAuth, (req, res) => {
     res.set('Cache-Control', 'no-store');
@@ -129,7 +130,7 @@ function mountAuthRoutes(app, { env }) {
  * @param {{get:(airportName:string)=>object|undefined}} deps.airportWeather
  * @param {object} deps.efspInstrumentation `metricsHttp`, `trafficCountHttp`
  */
-function mountApiRoutes(app, { atisStore, grpcClient, wsHub, stereoRoutes, theaterContext, airportWeather, efspInstrumentation }) {
+function mountApiRoutes(app, { atisStore, grpcClient, wsHub, stereoRoutes, theaterContext, airportWeather, efspInstrumentation, terrainStore }) {
   // ── On-demand RPC proxy endpoints (per-action, not shared streams) ─────────
   // ownerId is a client-generated id (one per crc-desktop app session), used to
   // tell "my own next 5s loop tick" apart from "a different controller's
@@ -255,6 +256,35 @@ function mountApiRoutes(app, { atisStore, grpcClient, wsHub, stereoRoutes, theat
   app.get('/api/efsp/traffic-count', auth.requireAuth, (req, res) => {
     const { status, body } = efspInstrumentation.trafficCountHttp(req.query || {});
     res.status(status).json(body);
+  });
+
+  if (terrainStore) mountTerrainRoutes(app, terrainStore);
+}
+
+/**
+ * The loaded theater's terrain cache (docs/adr/0133), for crc-desktop's contours and radar-debug LOS: the file as the
+ * build wrote it (src/terrain-grid.js), gzipped once per file when the caller accepts it, with an ETag so a client that
+ * has it gets a 304. 404 when no cache is loaded for the theater. Never reaches DCS or any web service.
+ */
+function mountTerrainRoutes(app, terrainStore) {
+  let gz = { of: null, bytes: null };
+  app.get('/api/terrain/status', auth.requireAuth, (_req, res) => {
+    res.set('Cache-Control', 'no-store');
+    res.json(terrainStore.status());
+  });
+  app.get('/api/terrain/grid', auth.requireAuth, (req, res) => {
+    const file = terrainStore.fileBytes;
+    if (!file) return res.status(404).json({ error: 'no terrain cache for this theater', ...terrainStore.status() });
+    const { theater, spacingM, builtAt } = terrainStore.grid.header;
+    const etag = `"${theater}-${spacingM}-${builtAt}"`;
+    res.set({ ETag: etag, 'Cache-Control': 'no-cache', 'Content-Type': 'application/octet-stream', Vary: 'Accept-Encoding' });
+    if (req.headers['if-none-match'] === etag) return res.status(304).end();
+    if (/\bgzip\b/.test(req.headers['accept-encoding'] || '')) {
+      if (gz.of !== file) gz = { of: file, bytes: zlib.gzipSync(file) };
+      res.set('Content-Encoding', 'gzip');
+      return res.end(gz.bytes);
+    }
+    res.end(file);
   });
 }
 

@@ -203,14 +203,14 @@ services:
       - FLIGHT_PLAN_SERVICE_TOKEN=${FLIGHT_PLAN_SERVICE_TOKEN}
       - AIRSPACE_SERVICE_TOKEN=${AIRSPACE_SERVICE_TOKEN}
       - CRCSYNC_SOURCEDCS_WEB_PUBLIC_URL=${CRCSYNC_SOURCEDCS_WEB_PUBLIC_URL:-https://sourcedcs.page}
-      # Terrain masking for the radar picture is server-side now (crc-sync's
-      # docs/adr/0044), so the DEM tiles it samples are fetched here. Without a
-      # key the picture still works and terrain simply masks nothing — every
-      # radar sees to its full range — which is logged once at startup.
+      # MapTiler is the client basemap only (crc-sync docs/adr/0133); terrain is the DCS height cache in
+      # CRCSYNC_TERRAIN_CACHE_DIR, built by hand with `npm run terrain:build`. This key is only the fallback for
+      # CRCSYNC_MAPTILER_CLIENT_KEY.
       - CRCSYNC_MAPTILER_KEY=${CRCSYNC_MAPTILER_KEY:-}
       # The key crc-desktop draws its basemap with, handed to it after login (GET /api/client-config). Falls back
       # to CRCSYNC_MAPTILER_KEY; set it to give clients a separate, browser-restricted key.
       - CRCSYNC_MAPTILER_CLIENT_KEY=${CRCSYNC_MAPTILER_CLIENT_KEY:-}
+      # The DCS terrain cache (<Theater>-<spacing>m.terrain), on the state volume; read at mission load, never fetched.
       - CRCSYNC_TERRAIN_CACHE_DIR=/app/state/terrain-cache
       # Where an out-of-date crc-desktop is pointed by the update-required frame (crc-sync docs/adr/0103).
       - CRCSYNC_DOWNLOAD_URL=${CRCSYNC_DOWNLOAD_URL:-https://sourcedcs.page/download.html}

@@ -8,16 +8,13 @@ import { map } from './map-handle.js';
 // range rings, drawings, text marks, filed route, navpoints, the selection and correlation rings, conflict alert, airports, bullseye,
 // trails, PPL, datalink locks, approach vector, centerline, carrier final line and the measure line. Run once, from the map's 'load'.
 export function addOverlayLayers() {
-  // ── Elevation contour overlay (computed from terrain-RGB DEM) ───────────
+  // ── Elevation contour overlay (traced from the theater's DCS height grid) ───
   // Toggleable via Settings → General → Map Overlays. Lines-only overlay —
   // no colored terrain fill — so it reads as reference hachures under the
-  // tracks rather than a full topo basemap. MapTiler's ready-made contour
-  // vector tileset only has data at zoom 9+ (its tile server 400s below
-  // that), so contours are instead traced ourselves from MapTiler's
-  // terrain-RGB elevation tiles (available at every zoom) — see
-  // elevation.js. These two sources start empty; elevation.js populates
-  // them on demand, so visibility is entirely data-driven (no
-  // layout.visibility toggling needed here).
+  // tracks rather than a full topo basemap. elevation.js traces the contours
+  // from the grid crc-sync serves (terrain-grid.js, crc-sync docs/adr/0133).
+  // These two sources start empty; elevation.js populates them on demand,
+  // so visibility is entirely data-driven (no layout.visibility toggling needed here).
   map.addSource('elevation-contours', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
   map.addSource('elevation-contour-labels', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
   map.addLayer({

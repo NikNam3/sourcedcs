@@ -43,6 +43,10 @@ const CASES = [
   ['GET', '/api/efsp/metricsX', null],
   ['GET', '/api/efsp/traffic-count', '/api/efsp/traffic-count'],
   ['GET', '/api/efsp/traffic-count?w=1', '/api/efsp/traffic-count?w=1'],
+  ['GET', '/api/terrain/grid', '/api/terrain/grid'],
+  ['GET', '/api/terrain/status', '/api/terrain/status'],
+  ['POST', '/api/terrain/grid', null],
+  ['GET', '/api/terrain/grid?x=1', null],
   ['GET', '/api/other', null],
 ];
 
@@ -55,8 +59,8 @@ test('server.js proxies each route upstream with the same headers; 502 when crc-
   const upstream = http.createServer((req, res) => {
     let body = ''; req.on('data', (d) => { body += d; });
     req.on('end', () => {
-      seen.push({ method: req.method, url: req.url, auth: req.headers.authorization, ct: req.headers['content-type'], body });
-      res.writeHead(201, { 'Content-Type': 'text/x-up' });
+      seen.push({ method: req.method, url: req.url, auth: req.headers.authorization, ct: req.headers['content-type'], body, ae: req.headers['accept-encoding'], inm: req.headers['if-none-match'] });
+      res.writeHead(201, { 'Content-Type': 'text/x-up', ...(req.url === '/api/terrain/grid' ? { ETag: '"t"', 'Cache-Control': 'no-cache', 'X-Other': 'dropped' } : {}) });
       res.end('up:' + req.url);
     });
   });
@@ -85,6 +89,15 @@ test('server.js proxies each route upstream with the same headers; 502 when crc-
     assert.equal(seen[0].ct, 'application/json');   // forced, not the client's
     assert.equal(seen[0].body, method === 'POST' ? '{"a":1}' : '');
   }
+  // The terrain grid (crc-sync docs/adr/0133): compression and the conditional request pass through, and its ETag back.
+  seen.length = 0;
+  const grid = await request(port, 'GET', '/api/terrain/grid', { headers: { 'Accept-Encoding': 'gzip', 'If-None-Match': '"t"' } });
+  assert.equal(seen[0].ae, 'gzip');
+  assert.equal(seen[0].inm, '"t"');
+  assert.equal(grid.headers.etag, '"t"');
+  assert.equal(grid.headers['cache-control'], 'no-cache');
+  assert.equal(grid.headers['x-other'], undefined, 'only the named headers are relayed');
+
   // No Authorization header in -> none out.
   seen.length = 0;
   await request(port, 'GET', '/api/srs-clients');

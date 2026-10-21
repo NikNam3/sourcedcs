@@ -6,6 +6,26 @@
 let key = null;
 const listeners = [];
 
+// S-ARCH-77: the MapTiler quota is the squadron's. MapTiler is the basemap only now (terrain is the DCS grid, crc-sync
+// docs/adr/0133), and every basemap request passes transformMaptilerRequest, so it is counted there and the count is
+// logged once an hour (on the first request after the hour is up; no timer). maptilerRequestCount() is the running total.
+const HOUR_MS = 3600000;
+let requestCount = 0, countSinceLog = 0, lastLogAt = null;
+
+/** MapTiler requests since start; `now` for the hourly line. */
+export function countMaptilerRequest(now = Date.now()) {
+  requestCount += 1;
+  countSinceLog += 1;
+  if (lastLogAt === null) lastLogAt = now;
+  else if (now - lastLogAt >= HOUR_MS) {
+    console.info(`[maptiler-key] ${countSinceLog} MapTiler requests in the last ${Math.round((now - lastLogAt) / 60000)} min (${requestCount} since start)`);
+    countSinceLog = 0;
+    lastLogAt = now;
+  }
+  return requestCount;
+}
+export function maptilerRequestCount() { return requestCount; }
+
 export function maptilerKey() { return key; }
 
 /** Runs `fn(key)` each time a different, non-empty key arrives (the map and the contours refresh then). */
@@ -30,9 +50,11 @@ export async function loadMaptilerKey(token, fetchFn = fetch) {
 
 /** maplibre `transformRequest`: puts the key on MapTiler URLs (replacing any), leaves every other URL alone. */
 export function transformMaptilerRequest(url) {
-  if (!key || !/^https:\/\/api\.maptiler\.com\//.test(url)) return { url };
+  if (!/^https:\/\/api\.maptiler\.com\//.test(url)) return { url };
+  countMaptilerRequest();
+  if (!key) return { url };
   const bare = url.replace(/([?&])key=[^&]*&?/, '$1').replace(/[?&]$/, '');
   return { url: bare + (bare.includes('?') ? '&' : '?') + 'key=' + encodeURIComponent(key) };
 }
 
-export function _resetMaptilerKeyForTest() { key = null; listeners.length = 0; }
+export function _resetMaptilerKeyForTest() { key = null; listeners.length = 0; requestCount = 0; countSinceLog = 0; lastLogAt = null; }
