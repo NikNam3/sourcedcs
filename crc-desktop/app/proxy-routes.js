@@ -25,6 +25,9 @@ const PROXY_ROUTES = [
   // WP8's metrics and traffic count (crc-sync docs/adr/0065), for curl and scripts.
   { match: exactOrQuery('/api/efsp/metrics'),                     path: null },
   { match: exactOrQuery('/api/efsp/traffic-count'),               path: null },
+  // The theater's DCS height grid and its status (crc-sync docs/adr/0133; public/js/terrain-grid.js).
+  { match: exact('/api/terrain/grid'),             method: 'GET',  path: '/api/terrain/grid' },
+  { match: exact('/api/terrain/status'),           method: 'GET',  path: '/api/terrain/status' },
 ];
 
 // Returns the upstream path for a request, or null when it is not a proxy route.
