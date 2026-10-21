@@ -21,3 +21,9 @@ hand.
   in the UI; how imported areas map to our jurisdiction owners (TOWER/RAPCON/CARRIER/CENTER) and to H144's
   no-overlap rule; refresh per AIRAC cycle.
 - **Today (v2):** U-JURISDICTION ships the areas in theater config, hand-entered from AIP Türkiye (ADR 0125).
+
+## Release scope (H159, 2026-10-21)
+
+v3 brings: openAIP airspace (above), AIRAC data (H152), an **upgraded radio panel**, an **upgraded airport panel**,
+**upgraded carrier panels** (v2 ships only a first working prototype), and a second airfield (Konya, H156 RP-Q2) on the
+role-based Positions of ADR 0132. Nothing of these is briefed yet.
