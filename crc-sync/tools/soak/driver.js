@@ -201,7 +201,8 @@ class Driver {
           if (this.injectShadowDrop && sender && c.id === this._shadowDropTarget(sender) && msg.strips.gone.some(id => { const x = c.shadow._fac(msg.facilityId).get(id); return x && x.state !== 'DROPPED'; }) && this.now > this.t0 + 3 * MIN) {
             this.injectShadowDrop = false; this.stats.injectedShadowDrops++;
             this.event('injectedShadowDrop', { client: c.id, sender, facilityId: msg.facilityId, gone: msg.strips.gone, updated: msg.strips.updated.map(x => x.stripId) });
-            break; // selfcheck: the driver drops one delta on its side (a Drop, which nothing later repairs)
+            facts.shadowDropFor = c.id; // send() judges this client at once: a later frame can still repair the Drop
+            break; // selfcheck: the driver drops one delta on its side (a Drop)
           }
           c.shadow.applyDelta(msg);
           let set = facts.deltas.get(clientId);
@@ -394,6 +395,15 @@ class Driver {
     const kind = msg.type === 'efsp-mutation' ? `mutation:${msg.op.kind}` : msg.type;
     this.latency.add(this.t0, this.now, kind, reply.serverMs);
     const facts = this.deliver(reply.out, { sender: client.id });
+    // selfcheck skip-shadow-client (S-ARCH-75): no dropped frame is beyond repair. A Drop's `gone` comes again in any
+    // later delta that touches the DROPPED Strip (frames.js touchedStrips lists a touched DROPPED id as gone), so on
+    // seeds 15, 16, 23 and 26 the next checkpoint found the shadow already right. Judge the client that missed the frame
+    // now, while the withheld Drop is still the newest truth (drop-broadcast's post-drop judge, the same reason).
+    if (facts.shadowDropFor) {
+      const truth = (await this.call('truth')).truth;
+      const c = this.clients.get(facts.shadowDropFor);
+      if (c && c.connected && c.continuous && !c.discard) this.judgeShadow(c, truth, 'post-skip');
+    }
     if (!msg.clientMutationId) return { reply, facts };
     const acks = (facts.acks.get(msg.clientMutationId) || []).filter(a => a.clientId === client.id);
     this.ledger.settle([msg.clientMutationId], new Map([[msg.clientMutationId, acks]]), { type: msg.type, op: msg.op && msg.op.kind, client: client.id, t: (this.now - this.t0) / 1000 });
