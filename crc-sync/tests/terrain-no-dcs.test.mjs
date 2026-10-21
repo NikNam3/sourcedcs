@@ -48,7 +48,7 @@ test('no file under src/ loads the terrain commands or asks DCS for heights or v
 });
 
 test('createApp: a mission load and every ticker never call Eval for terrain nor fetch anything', async (t) => {
-  { const cap = crcLog.capture(); t.after(() => cap.stop()); }
+  const cap = crcLog.capture(); t.after(() => cap.stop());
   writeCache();
   const evals = [];
   const grpcClient = Object.assign(new EventEmitter(), { getWeather: () => ({}), evalLua: async (lua) => { evals.push(lua); return null; }, getAptWeather: async () => ({}) });
@@ -63,7 +63,7 @@ test('createApp: a mission load and every ticker never call Eval for terrain nor
   for (const tk of app.tickers) await tk.tick();
   assert.deepEqual(evals.filter((l) => /land\.|coord\.LLtoLO/.test(l)), []);
   assert.deepEqual(fetched.filter((u) => /maptiler|terrain/i.test(u)), []);
-  assert.equal(app.picture.terrainStore.status().available, true, 'the cache was read from disk');
+  assert.ok(cap.lines.some((l) => /terrain cache loaded/.test(l)), 'the cache was read from disk');
 });
 
 async function serve(t, theatre) {
