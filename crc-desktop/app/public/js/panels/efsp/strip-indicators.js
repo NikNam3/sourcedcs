@@ -146,7 +146,7 @@ export function _buildIndicatorSlots(strip, el, obligation, alerts) {
       // crc-sync docs/adr/0136 (H156 MTB-Q3): filed through an active SUA with nothing coordinated yet. Grey, the server's fact.
       for (const airspaceId of airspaceCoordinateForStrip(strip)) {
         const mark = coordinateMark(getEfspAirspace(airspaceId), airspaceId);
-        const node = _indicator(key, mark.text, 'on', 'efsp-transit-mark efsp-coordinate-mark', mark.title);
+        const node = _indicator(key, mark.text, 'on', 'efsp-coordinate-mark', mark.title);
         node.dataset.airspaceId = airspaceId;
         slots.appendChild(node);
       }
