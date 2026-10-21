@@ -160,7 +160,8 @@ test('the NLA tables: Commence is Case- and lane-dependent; one next action per 
   // At an airfield the final's NLA is Landed: the Strip goes to GC at TAXI_IN, no carrier handoff, never BALL (docs/adr/0117).
   assert.equal(nla.computeNla(strip('FINAL', 'ON_FINAL'), null, NOW, { facilityId: 'INCIRLIK' }).carrierHandoff, undefined);
   assert.deepEqual(nla.computeNla(strip('FINAL', 'ON_FINAL'), null, NOW, { facilityId: 'INCIRLIK' }), { toState: 'TAXI_IN', transferTo: 'GC', alsoLegal: ['BOLTER_WAVEOFF'] });
-  assert.deepEqual(nla.computeNla(strip('FINAL', 'BALL'), null, NOW, {}).toState, 'DROPPED');
+  // Trapped (docs/adr/0137, live test U20): to PriFly's RECOVERED Bay as a PATTERN Strip, not a drop at the lane.
+  assert.deepEqual(nla.computeNla(strip('FINAL', 'BALL'), null, NOW, {}), { toState: 'RECOVERED', carrierHandoff: 'FINAL_TRAPPED', alsoLegal: ['BOLTER_WAVEOFF'] });
   assert.equal(nla.computeNla(strip('PATTERN', 'IN_PATTERN'), null, NOW, {}).toState, 'RECOVERED');
   assert.equal(nla.computeNla(strip('MARSHAL', 'LAUNCH'), null, NOW, {}).toState, 'DROPPED');
 });

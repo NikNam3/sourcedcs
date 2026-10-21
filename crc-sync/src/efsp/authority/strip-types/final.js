@@ -33,7 +33,8 @@ function computeFinalNla(strip, flightData, now, ctx = {}) {
       // Never inhibited on GC's staffing: that would also refuse the missed approach drag (alsoLegal). An unstaffed GC
       // nobody is offered refuses the transfer itself (NO_RECEIVING_POSITION).
       return { toState: 'TAXI_IN', transferTo: 'GC', alsoLegal: ['BOLTER_WAVEOFF'] };
-    case 'BALL':           return { toState: 'DROPPED', alsoLegal: ['BOLTER_WAVEOFF'] }; // "Trapped"
+    // "Trapped" (docs/adr/0137, live test U20): to PriFly's RECOVERED Bay, where PriFly drops it. BALL is the carrier's only.
+    case 'BALL':           return { toState: 'RECOVERED', carrierHandoff: 'FINAL_TRAPPED', alsoLegal: ['BOLTER_WAVEOFF'] };
     case 'BOLTER_WAVEOFF':
       // The carrier's bolter or waveoff goes round to the final again (its own CV procedure, unchanged). At an airfield a
       // missed approach goes back to AP for another approach (H137 LT-PQ1 a, ours), the same transfer as the FINAL

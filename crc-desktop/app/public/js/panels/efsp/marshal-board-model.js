@@ -63,7 +63,8 @@ export function statusOf(strip, entry) {
       if (strip.state === 'BOLTER_WAVEOFF') return { kind: 'bolter', text: 'BOLTER', lane };
       if (strip.state === 'BALL') return { kind: 'ball', text: 'BALL', lane };
     }
-    if (strip.stripType === 'PATTERN') return { kind: 'pattern', text: 'PATTERN', lane: '' };
+    // A recovered aircraft (trapped, or landed from the pattern) has left the recovery: not on the board (docs/adr/0137).
+    if (strip.stripType === 'PATTERN') return strip.state === 'RECOVERED' ? null : { kind: 'pattern', text: 'PATTERN', lane: '' };
   }
   if (entry) return entry.status === 'PUSHED' ? { kind: 'comm', text: 'COMM', lane: '' } : { kind: 'hold', text: 'HOLD', lane: '' };
   return null;

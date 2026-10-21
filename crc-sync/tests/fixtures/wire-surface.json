@@ -163,6 +163,7 @@
         "APPROACH_TO_FINAL",
         "COMMENCED_TO_MARSHAL",
         "FINAL_TO_LSO",
+        "FINAL_TRAPPED",
         "MARSHAL_TO_APPROACH",
         "MARSHAL_TO_PATTERN_CASE_I",
         "MARSHAL_TO_PRIFLY"

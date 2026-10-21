@@ -185,7 +185,7 @@ test('a lane that is unstaffed feeds the other; with neither staffed the Commenc
   assert.match(status.inhibited, /no receiving Position present/);
 });
 
-test('radar contact changes the strip type in place; ball and trap end the approach; the stack entry leaves with a vacancy', async () => {
+test('radar contact changes the strip type in place; ball and trap end the approach; the trapped Strip goes to PriFly\'s RECOVERED Bay; the stack entry leaves with a vacancy', async () => {
   const { efsp, c } = fresh();
   const a = checkIn(efsp, c, 'AAA11');
   const b = checkIn(efsp, c, 'BBB22');
@@ -207,8 +207,27 @@ test('radar contact changes the strip type in place; ball and trap end the appro
   assert.equal(ball.state, 'BALL');
   assert.equal(ball.carrierHandoff.trigger, 'PILOT_BALL_CALL');
   const trapped = await advance(efsp, c.CV_APP1, 'CV_APP1', strip(efsp, a.stripId));
-  assert.equal(trapped.state, 'DROPPED');
+  // docs/adr/0137 (live test U20): the same Strip, now PriFly's PATTERN Strip at RECOVERED in its RECOVERED Bay.
+  assert.deepEqual([trapped.stripId, trapped.stripType, trapped.state, trapped.ownerPositionId, trapped.bayId],
+    [a.stripId, 'PATTERN', 'RECOVERED', 'CV_PRIFLY', 'cv-prifly-recovered']);
+  assert.equal(trapped.carrierHandoff.kind, 'FINAL_TRAPPED');
+  assert.equal(trapped.carrierHandoff.trigger, 'CONTROLLER_INITIATED');
   assert.deepEqual(stack(efsp).map(e => [e.flightDataId, e.stackIndex]), [[b.flightDataId, 1]], 'a vacancy at index 0, nobody re-cleared');
+  // PriFly drops it from there like any finished Strip.
+  const dropped = await advance(efsp, c.CV_PRIFLY, 'CV_PRIFLY', strip(efsp, a.stripId));
+  assert.equal(dropped.state, 'DROPPED');
+});
+
+test('a Case I flight landed from the pattern ("Recovered") moves to the RECOVERED Bay too', async () => {
+  const { efsp, c } = fresh();
+  const a = checkIn(efsp, c, 'AAA11');
+  mustCarrierAct(efsp, c.CV_PRIFLY, 'CV_PRIFLY', { kind: 'SetCarrierState', field: 'case', value: 'I' });
+  const inPattern = await advance(efsp, c.CV_MARSHAL, 'CV_MARSHAL', strip(efsp, a.stripId)); // To pattern
+  assert.deepEqual([inPattern.stripType, inPattern.state, inPattern.bayId], ['PATTERN', 'IN_PATTERN', 'cv-prifly-pattern']);
+  const recovered = await advance(efsp, c.CV_PRIFLY, 'CV_PRIFLY', strip(efsp, a.stripId));
+  assert.deepEqual([recovered.state, recovered.ownerPositionId, recovered.bayId], ['RECOVERED', 'CV_PRIFLY', 'cv-prifly-recovered']);
+  const dropped = await advance(efsp, c.CV_PRIFLY, 'CV_PRIFLY', strip(efsp, a.stripId));
+  assert.equal(dropped.state, 'DROPPED');
 });
 
 test('a bolter is a drag to the Bolter Bay, and the NLA brings it back on final', async () => {

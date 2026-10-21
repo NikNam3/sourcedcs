@@ -93,6 +93,7 @@ export const CARRIER_HANDOFFS = {
   MARSHAL_TO_PRIFLY:         { label: 'See you',       trigger: 'PILOT_SEE_YOU',        from: ['CV_MARSHAL'], cases: ['II'] },
   COMMENCED_TO_MARSHAL:      { label: 'Back to stack', trigger: 'CONTROLLER_INITIATED', from: ['CV_MARSHAL'], cases: ['II', 'III'] },
   MARSHAL_TO_PATTERN_CASE_I: { label: 'To pattern',    trigger: 'CONTROLLER_INITIATED', from: ['CV_MARSHAL'], cases: ['I'] },
+  FINAL_TRAPPED:             { label: 'Trapped',       trigger: 'CONTROLLER_INITIATED', from: ['CV_APP1', 'CV_APP2'], cases: ['I', 'II', 'III'] }, // crc-sync docs/adr/0137
 };
 
 // crc-sync docs/adr/0126: an ARRIVAL NLA that LC's pattern cells (9J-ENTRY, 9J-OPTION) turned towards the pattern, keyed

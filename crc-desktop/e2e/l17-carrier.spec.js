@@ -209,8 +209,14 @@ test('03 Case II handoffs: Commence feeds a lane, See you hands to PriFly, Radar
   // Ball and Trapped are two advancing presses: the client swallows a second one inside the 400 ms double-tap window (F-101), as it does for a person's double tap.
   await lapseNlaGuard(marshal);
   await strip(marshal, a).locator('.efsp-nla-btn').click();
-  await expect.poll(() => stripOf(marshal, a)).toBeNull();
+  // Trapped (crc-sync docs/adr/0137, live test U20): the Strip goes to PriFly's RECOVERED Bay, and PriFly drops it from there.
+  await waitStrip(pri, a, s => s.stripType === 'PATTERN' && s.state === 'RECOVERED' && s.ownerPositionId === 'CV_PRIFLY' && s.bayId === 'cv-prifly-recovered', 'Trapped');
   await expect.poll(() => marshal.evaluate(() => crc.carrier.carrierDerivedStack().length)).toBe(0);
+  await openBay(pri, 'CV_PRIFLY', 'cv-prifly-recovered');
+  await expect(strip(pri, a).locator('.efsp-nla-btn')).toHaveText('Drop');
+  await pri.screenshot({ path: test.info().outputPath('03-prifly-recovered.png') });
+  await strip(pri, a).locator('.efsp-nla-btn').click();
+  await expect.poll(() => stripOf(pri, a)).toBeNull();
 
   await cleanUp(marshal, pri);
   await setCase(pri, 'III');

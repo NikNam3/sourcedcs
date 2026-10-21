@@ -94,6 +94,13 @@
         "impliesState": "IN_PATTERN"
       },
       {
+        "bayId": "cv-prifly-recovered",
+        "rackIds": [
+          "main"
+        ],
+        "impliesState": "RECOVERED"
+      },
+      {
         "bayId": "cv-prifly-deck",
         "rackIds": [
           "main"

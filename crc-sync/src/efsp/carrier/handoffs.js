@@ -100,6 +100,19 @@ const CARRIER_HANDOFFS = Object.freeze({
     source: '[SOURCE-DEFINED]',
     guide: '[SOURCE-DEFINED] — §9.12 gives Case I no transfer; L4 briefing Q8',
   }),
+  // docs/adr/0137 (live test U20): "Trapped" ends the lane's part. The Strip goes to PriFly's RECOVERED Bay as a PATTERN
+  // Strip at RECOVERED (the same place a Case I flight's "Recovered" puts it), and PriFly drops it like any finished
+  // Strip. The flight leaves the stack here, with a vacancy and no close-up (H28), as the drop did before.
+  FINAL_TRAPPED: _row({
+    trigger: 'CONTROLLER_INITIATED',
+    from: APP_LANES, to: Object.freeze(['CV_PRIFLY']),
+    cases: ['I', 'II', 'III'],
+    ownershipChange: true, stripTypeChange: Object.freeze({ from: 'FINAL', to: 'PATTERN' }),
+    stackEffect: 'REMOVE_NO_CLOSE_UP',
+    label: 'Trapped',
+    source: '[SOURCE-DEFINED]',
+    guide: 'docs/adr/0137 — a trapped aircraft\'s Strip goes to PriFly\'s RECOVERED Bay',
+  }),
 });
 
 /** The four kinds §9.12 names — the ones that MUST stay four distinct affordances. */

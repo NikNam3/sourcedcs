@@ -37,6 +37,11 @@ test('landing order: approach by DME, then the commenced, then the holding by sl
   assert.equal(b.rows.find((r) => r.flightDataId === 'd').next, undefined);
 });
 
+test('a recovered aircraft (PATTERN at RECOVERED, crc-sync docs/adr/0137) has left the recovery: not on the board', () => {
+  const b = build([entry('c', 0)], [strip('a', 'PATTERN', 'RECOVERED', 'CV_PRIFLY'), strip('b', 'PATTERN', 'IN_PATTERN', 'CV_PRIFLY'), strip('c', 'MARSHAL', 'IN_STACK')]);
+  assert.deepEqual(b.rows.map((r) => [r.flightDataId, r.status]).sort(), [['b', 'PATTERN'], ['c', 'HOLD']]);
+});
+
 test('a side number names the row; without one the callsign is listed, marked', () => {
   const b = build([entry('a', 0), entry('d', 1)], [strip('a', 'MARSHAL', 'IN_STACK'), strip('d', 'MARSHAL', 'IN_STACK')]);
   assert.deepEqual(b.rows.map((r) => [r.side, r.sideMissing, r.callsign]), [['201', false, 'AAA'], ['', true, 'DDD']]);
