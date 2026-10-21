@@ -340,3 +340,25 @@ test('06 the carrier panel: typing over a value, where it comes from, "Use defau
   await cleanUp(marshal, pri);
   await setCase(pri, 'III');
 });
+
+test('07 the Marshal creates a recovery and a launch Strip from the toolbar (U18, crc-sync docs/adr/0137); PriFly cannot', async ({ browser, baseURL }) => {
+  const marshal = await controller(browser, baseURL, 'e2e-cv-marshal7', ['CV_MARSHAL']);
+  const pri = await controller(browser, baseURL, 'e2e-cv-prifly7', ['CV_PRIFLY']);
+  await expect(pri.locator('#efsp-create-strip-btn')).toBeDisabled();
+  const [rec, lau] = [cs('REC'), cs('LAU')];
+  const type = marshal.locator('#efsp-create-strip-type');
+  await expect(type).toBeVisible();
+  await type.selectOption({ label: 'Marshal · Recovery' });
+  await marshal.locator('#efsp-new-strip-callsign').fill(rec);
+  await marshal.locator('#efsp-create-strip-btn').click();
+  await waitStrip(marshal, rec, s => s.stripType === 'MARSHAL' && s.state === 'IN_STACK' && s.bayId === 'cv-marshal-stack', 'recovery created');
+  await expect.poll(() => marshal.evaluate(() => crc.carrier.carrierDerivedStack().length)).toBe(1);
+  await type.selectOption({ label: 'Marshal · Launch' });
+  await marshal.locator('#efsp-new-strip-callsign').fill(lau);
+  await marshal.locator('#efsp-create-strip-btn').click();
+  await waitStrip(marshal, lau, s => s.stripType === 'MARSHAL' && s.state === 'LAUNCH' && s.bayId === 'cv-marshal-departures', 'launch created');
+  await openBay(marshal, 'CV_MARSHAL', 'cv-marshal-stack');
+  await expect(strip(marshal, rec)).toBeVisible();
+  await marshal.screenshot({ path: test.info().outputPath('07-marshal-created.png') });
+  await cleanUp(marshal);
+});
