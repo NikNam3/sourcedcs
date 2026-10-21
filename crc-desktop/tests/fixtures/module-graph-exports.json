@@ -483,6 +483,7 @@
    "airspaceEntryAlertsForFlightData",
    "airspaceEntryAlertsForTrack",
    "airspaceEntryText",
+   "airspaceInsideForStrip",
    "airspaceTrafficFor",
    "airspaceTrafficSignature",
    "applyEfspAlerts",
@@ -942,6 +943,7 @@
    "airspaceEntryAlertsForFlightData",
    "airspaceEntryAlertsForTrack",
    "airspaceEntryText",
+   "airspaceInsideForStrip",
    "applyEfspAirspaceDelta",
    "applyEfspAlerts",
    "applyEfspCorrelationDelta",
@@ -1457,7 +1459,8 @@
    "sideNumberLeads"
   ],
   "panels/efsp/strip-indicators.js": [
-   "_buildIndicatorSlots"
+   "_buildIndicatorSlots",
+   "airspaceBadgeTone"
   ],
   "panels/efsp/strip-menu.js": [
    "_buildStripTools",

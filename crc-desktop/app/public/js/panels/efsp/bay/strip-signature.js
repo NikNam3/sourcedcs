@@ -1,7 +1,7 @@
 'use strict';
 import { _resolveActingPositionId } from './dispatch.js';
 import { getLatestTrack } from '../../../picture.js';
-import { getAllEfspAirspaces, getEfspAirspace, getEfspCorrelationForStrip, getEfspFlightData, getEfspObligation, marsaForStrip, otherLiveStripsForFlightData, surveillanceHintsForStrip } from '../efsp-state.js';
+import { airspaceInsideForStrip, getAllEfspAirspaces, getEfspAirspace, getEfspCorrelationForStrip, getEfspFlightData, getEfspObligation, marsaForStrip, otherLiveStripsForFlightData, surveillanceHintsForStrip } from '../efsp-state.js';
 import { getActingPositions } from '../efsp-ws.js';
 import { isMarsaHighlighted } from '../marsa-badge.js';
 import { arSignatureFor } from '../ato-strip.js';
@@ -110,7 +110,8 @@ export function _stripRenderSignature(strip) {
 
   const entry = strip.airspaceEntry;
   const airspace = entry ? getEfspAirspace(entry.airspaceId) : null;
-  parts.push('asp:' + (airspace ? `${airspace.rev}/${airspace.state}` : ''));
+  // crc-sync docs/adr/0134: the badge's amber also needs the server's "inside" fact (efsp-alerts, topic 'alerts').
+  parts.push('asp:' + (airspace ? `${airspace.rev}/${airspace.state}` : '') + (airspaceInsideForStrip(strip) ? '/in' : ''));
   // crc-sync docs/adr/0128: the grey transit marks live on the airspace records, not on the Strip.
   parts.push('trn:' + transitsOfFlight(strip.flightDataId, getAllEfspAirspaces()).map(({ airspace: a, transit: t }) => `${a.airspaceId}/${t.state}/${t.reason || ''}/${(a.definition && a.definition.name) || ''}`).join(','));
 

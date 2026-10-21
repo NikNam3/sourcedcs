@@ -30,6 +30,10 @@ let efspAirspaceEntry = [];        // [{ id, kind: 'AIRSPACE_ENTRY', trackId, fl
 // approve entry into (the using agency, the controlling Position). Sent whole, like the rest.
 let efspAirspaceTraffic = [];      // [{ airspaceId, flights: [{ flightDataId, callsign, inside, filed, approved, alerting, strips: [{ facilityId, stripId, positionId }] }] }]
 
+// crc-sync docs/adr/0134 (H155 item 4): the Strips this session holds whose flight is airborne inside the Strip's approved
+// airspace, whatever its state. The server's geometry; the client has no containment test. Absent = not inside (grey).
+const efspAirspaceInside = new Set(); // 'facilityId:stripId:airspaceId'
+
 /**
  * The one obligation a Strip's badge shows: OVERDUE before WARNING, then the
  * earliest dueAt. null when nothing is due. See getEfspObligations for all.
@@ -51,6 +55,8 @@ export function applyEfspAlerts(msg) {
   efspConflicts = (msg && msg.conflictAlert) || [];
   efspAirspaceEntry = (msg && msg.airspaceEntry) || [];
   efspAirspaceTraffic = (msg && msg.airspaceTraffic) || [];
+  efspAirspaceInside.clear();
+  for (const x of (msg && msg.airspaceInside) || []) efspAirspaceInside.add(`${x.facilityId}:${x.stripId}:${x.airspaceId}`);
   efspTofiRegime.clear();
   for (const r of (msg && msg.tofiRegime) || []) efspTofiRegime.set(r.flightDataId, r);
   efspSurveillanceHints.clear();
@@ -146,6 +152,16 @@ export function airspaceTrafficFor(airspaceId) {
   return efspAirspaceTraffic.find(t => t.airspaceId === airspaceId) || null;
 }
 
+/**
+ * Is this Strip's flight airborne inside the Strip's approved airspace now (crc-sync docs/adr/0134)? False when the Strip
+ * has no entry approval, or the server said nothing (unknown is never inside).
+ */
+export function airspaceInsideForStrip(strip) {
+  const entry = strip && strip.airspaceEntry;
+  if (!entry || !entry.airspaceId) return false;
+  return efspAirspaceInside.has(`${strip.facilityId}:${strip.stripId}:${entry.airspaceId}`);
+}
+
 /** Every card list this session holds, as one string: what changed since the last efsp-alerts. */
 export function airspaceTrafficSignature() { return JSON.stringify(efspAirspaceTraffic); }
 
@@ -157,4 +173,5 @@ export function _resetAlertsState() {
   efspConflicts = [];
   efspAirspaceEntry = [];
   efspAirspaceTraffic = [];
+  efspAirspaceInside.clear();
 }

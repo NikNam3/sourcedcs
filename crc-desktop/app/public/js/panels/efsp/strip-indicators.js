@@ -1,5 +1,5 @@
 'use strict';
-import { getAllEfspAirspaces, getEfspAirspace, getEfspStrip, otherLiveStripsForFlightData, surveillanceHintsForStrip } from './efsp-state.js';
+import { airspaceInsideForStrip, getAllEfspAirspaces, getEfspAirspace, getEfspStrip, otherLiveStripsForFlightData, surveillanceHintsForStrip } from './efsp-state.js';
 import { transitMark, transitsOfFlight } from './transit-rules.js';
 import { formatZuluHhmm } from '../../format.js';
 import { getActingPositions, sendEfspMutation } from './efsp-ws.js';
@@ -19,6 +19,17 @@ function _indicator(key, text, tone, legacy, title) {
   node.dataset.slot = key;
   if (title) node.title = title;
   return node;
+}
+
+/**
+ * The airspace badge's tone (crc-sync docs/adr/0134, H155 item 4; supersedes ADR 0119's colour rule): amber only while the
+ * flight is airborne inside its approved airspace (`inside`, the server's fact) and that airspace is not ACTIVE: activation
+ * decides who owns the block (JO 7110.65 para 9-3-1 c, 9-3-4), so the warning matters only while the block is worked
+ * unprotected. Grey otherwise (on the ground, en route, approved early; unknown airspace record), with no title.
+ */
+export function airspaceBadgeTone(airspace, inside, name) {
+  const amber = !!(inside && airspace && airspace.state !== 'ACTIVE');
+  return { amber, title: amber ? `${name} is ${airspace.state}, not active` : '' };
 }
 
 function _litIndicator(strip, key, el, obligation, siblings) {
@@ -55,10 +66,9 @@ function _litIndicator(strip, key, el, obligation, siblings) {
     // The altitude restriction belongs on the Strip: two aircraft sharing one
     // block are only safe if each controller can see who is held to what.
     const text = [name, mhz ? mhz.toFixed(3) : null, block ? `${block.lowerFt}–${block.upperFt} ft` : null].filter(Boolean).join(' ');
-    const cold = airspace && airspace.state !== 'ACTIVE';
-    return _indicator(key, text, cold ? 'attn' : 'on',
-      `efsp-airspace-badge${cold ? ' efsp-airspace-badge-unactivated' : ''}`,
-      cold ? `${name} is ${airspace.state}, not active` : '');
+    const { amber, title } = airspaceBadgeTone(airspace, airspaceInsideForStrip(strip), name);
+    return _indicator(key, text, amber ? 'attn' : 'on',
+      `efsp-airspace-badge${amber ? ' efsp-airspace-badge-unactivated' : ''}`, title);
   }
   if (key === 'timer') {
     if (!obligation) return null;
