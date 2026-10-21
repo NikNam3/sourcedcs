@@ -34,6 +34,10 @@ let efspAirspaceTraffic = [];      // [{ airspaceId, flights: [{ flightDataId, c
 // airspace, whatever its state. The server's geometry; the client has no containment test. Absent = not inside (grey).
 const efspAirspaceInside = new Set(); // 'facilityId:stripId:airspaceId'
 
+// crc-sync docs/adr/0136 (H156 MTB-Q3): the Strips this session holds whose flight's filed route crosses an ACTIVE MOA,
+// warning or restricted area with no transit and no approved entry for it. The server's geometry; absent = nothing to show.
+const efspAirspaceCoordinate = new Map(); // 'facilityId:stripId' -> [airspaceId]
+
 /**
  * The one obligation a Strip's badge shows: OVERDUE before WARNING, then the
  * earliest dueAt. null when nothing is due. See getEfspObligations for all.
@@ -57,6 +61,12 @@ export function applyEfspAlerts(msg) {
   efspAirspaceTraffic = (msg && msg.airspaceTraffic) || [];
   efspAirspaceInside.clear();
   for (const x of (msg && msg.airspaceInside) || []) efspAirspaceInside.add(`${x.facilityId}:${x.stripId}:${x.airspaceId}`);
+  efspAirspaceCoordinate.clear();
+  for (const x of (msg && msg.airspaceCoordinate) || []) {
+    const k = `${x.facilityId}:${x.stripId}`;
+    if (!efspAirspaceCoordinate.has(k)) efspAirspaceCoordinate.set(k, []);
+    efspAirspaceCoordinate.get(k).push(x.airspaceId);
+  }
   efspTofiRegime.clear();
   for (const r of (msg && msg.tofiRegime) || []) efspTofiRegime.set(r.flightDataId, r);
   efspSurveillanceHints.clear();
@@ -162,6 +172,11 @@ export function airspaceInsideForStrip(strip) {
   return efspAirspaceInside.has(`${strip.facilityId}:${strip.stripId}:${entry.airspaceId}`);
 }
 
+/** The airspaces this Strip's flight is filed through and still has to coordinate (crc-sync docs/adr/0136); [] when none. */
+export function airspaceCoordinateForStrip(strip) {
+  return (strip && efspAirspaceCoordinate.get(`${strip.facilityId}:${strip.stripId}`)) || [];
+}
+
 /** Every card list this session holds, as one string: what changed since the last efsp-alerts. */
 export function airspaceTrafficSignature() { return JSON.stringify(efspAirspaceTraffic); }
 
@@ -174,4 +189,5 @@ export function _resetAlertsState() {
   efspAirspaceEntry = [];
   efspAirspaceTraffic = [];
   efspAirspaceInside.clear();
+  efspAirspaceCoordinate.clear();
 }

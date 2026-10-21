@@ -48,9 +48,18 @@
 // never inside). Any of the flight's tracks counts (its lead or a formation wingman, as the card list). The client
 // colours the Strip's airspace badge amber only while inside and the airspace is not ACTIVE. Delivered per session to
 // the Position holding the Strip (`insideFor`), never to anyone else.
+//
+// THE STRIP'S "COORDINATE" FACT (docs/adr/0136, H156 MTB-Q3): the same pass over the filed routes says, per live Strip,
+// which ACTIVE transit-type areas (MOA, WARNING, RESTRICTED, and RANGE/DANGER as restricted: `TRANSIT_TYPES`) the flight's
+// filed route crosses by geometry (route-geometry.js `filedThrough`) while the flight is IFR (vfr.js) and has no transit of
+// that airspace (in any state: a decline is its own mark) and no approved entry (`_approved`: a Strip working it, the
+// working airspace, an APPROVED transit, an MRU's TOFI). No time to the boundary: "nobody can accurately predict the 5
+// minutes" (H156). The client draws a grey mark; it goes when a transit is requested, an entry approved, the airspace
+// goes cold, or the route no longer crosses it. Delivered to the Strip's holder only (`coordinateFor`), as `insideFor`.
 
 const { hasNoClearance } = require('./vfr');
 const routeGeometry = require('./airspace/route-geometry');
+const { TRANSIT_TYPES } = require('./authority/airspace');
 const { MS_PER_KT } = require('../units');
 
 const AIRBORNE_CATEGORIES = new Set([1, 2]); // airplane, helicopter
@@ -100,6 +109,7 @@ class AirspaceEntryAlertMonitor {
     this._trafficOf = new Map(); // airspaceId -> {controllingFacilityId, controllingPositionId}, for `trafficFor`
     this._inside = [];       // docs/adr/0134: [{facilityId, stripId, airspaceId}], each Strip inside its approved airspace
     this._insideTo = new Map(); // 'facilityId:stripId' -> 'facilityId:positionId' of the Strip's holder
+    this._coordinate = [];   // docs/adr/0136: [{facilityId, stripId, airspaceId, positionId}], a Strip's flight to coordinate
   }
 
   getAll() { return this._alerts; }
@@ -129,6 +139,16 @@ class AirspaceEntryAlertMonitor {
     const held = new Set((positions || []).map(p => `${p.facilityId}:${p.positionId}`));
     if (held.size === 0) return [];
     return this._inside.filter(x => held.has(this._insideTo.get(`${x.facilityId}:${x.stripId}`)));
+  }
+
+  /** Every live Strip whose flight is filed through an ACTIVE transit-type area with nothing coordinated (tests, QA). */
+  getCoordinate() { return this._coordinate.map(({ positionId, ...x }) => x); }
+
+  /** docs/adr/0136: the coordinate facts of the Strips a session holding `positions` ([{facilityId, positionId}]) holds. */
+  coordinateFor(positions) {
+    const held = new Set((positions || []).map(p => `${p.facilityId}:${p.positionId}`));
+    if (held.size === 0) return [];
+    return this._coordinate.filter(x => held.has(`${x.facilityId}:${x.positionId}`)).map(({ positionId, ...x }) => x);
   }
 
   /** Whether an alert is for a session holding `positions` ([{facilityId, positionId}]). */
@@ -241,6 +261,7 @@ class AirspaceEntryAlertMonitor {
     const all = typeof airspaceStore.getAll === 'function' ? airspaceStore.getAll() : [];
     const index = routeGeometry.buildPointIndex(this._d.missionData ? this._d.missionData() : null, all);
     const deciders = new Map(); // airspaceId -> the transit deciders (docs/adr/0128), for a transit type
+    const coordinate = []; // docs/adr/0136: [{facilityId, stripId, airspaceId, positionId}]
     for (const record of all) {
       const def = record.definition || {};
       if (def.kind === 'ROUTE' || !ENTRY_TYPES.has(def.type)) continue;
@@ -252,12 +273,20 @@ class AirspaceEntryAlertMonitor {
         const ids = airspaceStore.transitDecidersFor(record.airspaceId);
         if (ids.length) deciders.set(record.airspaceId, ids);
       }
+      const coordinates = record.state === 'ACTIVE' && def.kind === 'AREA' && TRANSIT_TYPES.includes(def.type);
       for (const [flightDataId, strips] of liveStrips) {
         const fd = this._d.flightDataOf(flightDataId);
+        const crosses = !!(fd && fd.filed && routeGeometry.filedThrough(fd, def, index));
         const filed = strips.some(s => s.airspaceId === airspace.airspaceId)
           || !!(fd && fd.comms && fd.comms.airspaceId === airspace.airspaceId)
-          || !!(fd && fd.filed && routeGeometry.filedThrough(fd, def, index));
+          || crosses;
         if (filed) rowFor(airspace, flightDataId, null).filed = true;
+        if (crosses && coordinates && !hasNoClearance(fd) && !(record.transits || []).some(t => t.flightDataId === flightDataId)
+          && !this._approved(flightDataId, airspace, strips)) {
+          for (const st of strips) {
+            if (st.stripId) coordinate.push({ facilityId: st.facilityId, stripId: st.stripId, airspaceId: airspace.airspaceId, positionId: st.positionId });
+          }
+        }
       }
       // docs/adr/0128: a flight with a transit is listed whatever its route says (the decider must see the request).
       for (const t of record.transits || []) {
@@ -282,16 +311,20 @@ class AirspaceEntryAlertMonitor {
       .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
       .map(([, x]) => ({ facilityId: x.facilityId, stripId: x.stripId, airspaceId: x.airspaceId }));
     const insideTo = new Map([...insideOf.entries()].map(([key, x]) => [key, `${x.facilityId}:${x.positionId}`]));
+    const coordKey = (x) => `${x.facilityId}:${x.stripId}:${x.airspaceId}`;
+    coordinate.sort((a, b) => (coordKey(a) < coordKey(b) ? -1 : coordKey(a) > coordKey(b) ? 1 : 0));
     const changed = JSON.stringify(next) !== JSON.stringify(this._alerts)
       || JSON.stringify(nextTraffic) !== JSON.stringify(this._traffic)
       || JSON.stringify(nextInside) !== JSON.stringify(this._inside)
       || [...insideTo].some(([key, to]) => this._insideTo.get(key) !== to)
+      || JSON.stringify(coordinate) !== JSON.stringify(this._coordinate)
       || [...to].some(([id, keys]) => { const was = this._to.get(id); return !was || was.size !== keys.size || [...keys].some(k => !was.has(k)); });
     this._alerts = next;
     this._traffic = nextTraffic;
     this._trafficOf = trafficOf;
     this._inside = nextInside;
     this._insideTo = insideTo;
+    this._coordinate = coordinate;
     this._to = to;
     this._since = new Map(next.map(a => [a.id, a.since]));
     return changed;

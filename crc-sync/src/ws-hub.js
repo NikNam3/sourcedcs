@@ -217,7 +217,9 @@ class WsHub {
     const airspaceTraffic = typeof a.airspaceTrafficFor === 'function' ? a.airspaceTrafficFor(positions) : [];
     // docs/adr/0134: the Strips this session holds whose flight is airborne inside the Strip's approved airspace.
     const airspaceInside = typeof a.airspaceInsideFor === 'function' ? a.airspaceInsideFor(positions) : [];
-    const msg = { version: VERSION, type: 'efsp-alerts', conformance: a.conformance || [], tofiRegime: a.tofiRegime || [], conflictAlert, airspaceEntry, airspaceTraffic, airspaceInside, obligations: a.obligations || [], surveillance: a.surveillance || [] };
+    // docs/adr/0136: the Strips this session holds whose flight is filed through an ACTIVE SUA with nothing coordinated.
+    const airspaceCoordinate = typeof a.airspaceCoordinateFor === 'function' ? a.airspaceCoordinateFor(positions) : [];
+    const msg = { version: VERSION, type: 'efsp-alerts', conformance: a.conformance || [], tofiRegime: a.tofiRegime || [], conflictAlert, airspaceEntry, airspaceTraffic, airspaceInside, airspaceCoordinate, obligations: a.obligations || [], surveillance: a.surveillance || [] };
     return this._efspFilter(session, msg) || msg;
   }
 

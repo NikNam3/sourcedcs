@@ -758,6 +758,30 @@ test('a Strip working an airspace nobody activated says so on its face only whil
   assert.equal(sandbox._stripRenderSignature(approved), outside);
 });
 
+test('a Strip filed through an active SUA with nothing coordinated shows a grey COORD mark, the server\'s fact (crc-sync ADR 0136)', async () => {
+  const airspaces = [{
+    airspaceId: 'MOA-HOT', state: 'ACTIVE', rev: 1, transitions: [], transits: [],
+    definition: { airspaceId: 'MOA-HOT', name: 'Hot MOA', type: 'MOA', controllingPositionId: 'CTR' },
+  }];
+  const s = stripAt({ ownerPositionId: 'CTR', facilityId: 'CENTER' });
+  const { el, sandbox } = await renderStrip({ strip: s, flightData: FDR, signedOn: ['CTR'], airspaces });
+  assert.equal(findByText(el, 'COORD Hot MOA'), undefined, 'nothing said: no mark');
+  const before = sandbox._stripRenderSignature(s);
+
+  sandbox.applyEfspAlerts({ airspaceCoordinate: [{ facilityId: 'CENTER', stripId: 's1', airspaceId: 'MOA-HOT' }] });
+  assert.notEqual(sandbox._stripRenderSignature(s), before, 'the coordinate fact is part of the render signature');
+  const mark = findByText(sandbox._buildStripEl(s), 'COORD Hot MOA');
+  assert.ok(mark, 'the grey mark');
+  assert.ok(mark.className.includes('efsp-ind-on'), 'grey, never amber (dark cockpit)');
+  assert.ok(mark.className.includes('efsp-coordinate-mark'));
+  assert.match(mark.title, /Filed through Hot MOA \(ACTIVE\): no transit or entry approval/);
+
+  sandbox.applyEfspAlerts({ airspaceCoordinate: [{ facilityId: 'CENTER', stripId: 's2', airspaceId: 'MOA-HOT' }] });
+  assert.equal(findByText(sandbox._buildStripEl(s), 'COORD Hot MOA'), undefined, 'another Strip\'s fact');
+  sandbox.applyEfspAlerts({});
+  assert.equal(sandbox._stripRenderSignature(s), before);
+});
+
 test('the Drop button refuses while a flight is under tactical control', async () => {
   // The inhibit is the SERVER's answer now (F-408's `strip.nla`), not a rule
   // this file keeps a second copy of — `board/strip-ops.js`'s `nlaStatusFor` puts this

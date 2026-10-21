@@ -25,6 +25,11 @@ test('the grey mark: TRANSIT <name>, REQ while asked, DECLINED with the reason i
   assert.deepEqual(rules.transitsOfFlight('fd1', [a, airspace('X', {}, [T('REQUESTED')])]).map(x => x.airspace.airspaceId), ['X']);
 });
 
+test('the coordinate mark (crc-sync ADR 0136): COORD <name>, the state in the title; the id when the record is missing', () => {
+  assert.deepEqual(rules.coordinateMark(airspace('BRAVO'), 'BRAVO'), { text: 'COORD BRAVO', title: 'Filed through BRAVO (ACTIVE): no transit or entry approval' });
+  assert.equal(rules.coordinateMark(null, 'MOA-9').text, 'COORD MOA-9');
+});
+
 test('the Strip offers a request: held owner, IFR, ACTIVE transit type, no open transit; a held decider approves too', () => {
   const list = [
     airspace('MOA-ATC'),

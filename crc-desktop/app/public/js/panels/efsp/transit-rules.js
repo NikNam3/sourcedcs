@@ -42,6 +42,17 @@ export function transitMark(airspace, transit) {
 }
 
 /**
+ * The grey mark on a Strip whose flight is filed through an ACTIVE MOA, warning or restricted area with no transit and no
+ * approved entry for it (crc-sync docs/adr/0136, H156 MTB-Q3): `COORD <name>`. The fact is the server's; this only words it.
+ * @returns {{text:string, title:string}}
+ */
+export function coordinateMark(airspace, airspaceId) {
+  const name = airspace ? _name(airspace) : airspaceId;
+  const state = (airspace && airspace.state) || 'ACTIVE';
+  return { text: `COORD ${name}`, title: `Filed through ${name} (${state}): no transit or entry approval` };
+}
+
+/**
  * The airspaces this controller may ask a transit of for this Strip's flight: it holds the Strip's owner, the flight is
  * IFR (vfr.js), and the airspace is an ACTIVE transit type with no open transit of this flight. Each choice names the
  * Position the request is sent as (the owner) and, when this controller also holds a decider, that decider: the request

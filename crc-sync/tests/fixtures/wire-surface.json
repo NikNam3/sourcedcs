@@ -431,6 +431,7 @@
         "version"
       ],
       "efsp-alerts": [
+        "airspaceCoordinate",
         "airspaceEntry",
         "airspaceInside",
         "airspaceTraffic",
