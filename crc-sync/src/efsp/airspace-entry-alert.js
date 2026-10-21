@@ -38,6 +38,16 @@
 // Strips, so the client can send ApproveAirspaceEntry on one (same rights and refusals); a group of a transit type names
 // its transit deciders. Sent only to a session holding the airspace's using agency or controlling Position (`trafficFor`);
 // an untracked contact has no Strip and is not listed (ADR 0119 stands).
+//
+// THE STRIP'S "INSIDE" FACT (docs/adr/0134, H155 item 4): the same tick says, per live Strip with an `airspaceEntry`,
+// whether its flight is airborne inside that Strip's approved airspace, WHATEVER the airspace's state (the store's
+// `containing`, the same `containment.evaluate` as `activeAreasContaining`: lateral shape and vertical limits, against
+// the same indicated feet). Airborne inside means a track that passes `_eligible` (airplane or helicopter, at least
+// `minGroundSpeedKt`, at least `minTrackAgeSec` old: ours, the alert's own filters) and reports a finite altitude; a
+// flight on the ground under the block, without a correlated track, or without an altitude is not inside (unknown is
+// never inside). Any of the flight's tracks counts (its lead or a formation wingman, as the card list). The client
+// colours the Strip's airspace badge amber only while inside and the airspace is not ACTIVE. Delivered per session to
+// the Position holding the Strip (`insideFor`), never to anyone else.
 
 const { hasNoClearance } = require('./vfr');
 const routeGeometry = require('./airspace/route-geometry');
@@ -88,6 +98,8 @@ class AirspaceEntryAlertMonitor {
     this._since = new Map(); // alert id -> since
     this._traffic = [];      // docs/adr/0124 §1: [{airspaceId, flights:[...]}], the airspace card's list
     this._trafficOf = new Map(); // airspaceId -> {controllingFacilityId, controllingPositionId}, for `trafficFor`
+    this._inside = [];       // docs/adr/0134: [{facilityId, stripId, airspaceId}], each Strip inside its approved airspace
+    this._insideTo = new Map(); // 'facilityId:stripId' -> 'facilityId:positionId' of the Strip's holder
   }
 
   getAll() { return this._alerts; }
@@ -107,6 +119,16 @@ class AirspaceEntryAlertMonitor {
       return held.some(p => (p.facilityId === c.controllingFacilityId && p.positionId === c.controllingPositionId)
         || this._d.airspaceStore.isUsingAgency(t.airspaceId, p.positionId));
     });
+  }
+
+  /** Every live Strip whose flight is airborne inside its approved airspace (tests, QA); the hub sends `insideFor`. */
+  getInside() { return this._inside; }
+
+  /** docs/adr/0134: the inside facts of the Strips a session holding `positions` ([{facilityId, positionId}]) holds. */
+  insideFor(positions) {
+    const held = new Set((positions || []).map(p => `${p.facilityId}:${p.positionId}`));
+    if (held.size === 0) return [];
+    return this._inside.filter(x => held.has(this._insideTo.get(`${x.facilityId}:${x.stripId}`)));
   }
 
   /** Whether an alert is for a session holding `positions` ([{facilityId, positionId}]). */
@@ -134,6 +156,21 @@ class AirspaceEntryAlertMonitor {
     return !!mru && this._d.airspaceStore.isActiveFor(airspace.airspaceId, mru);
   }
 
+  /**
+   * docs/adr/0134: marks each of the flight's live Strips with an approved airspace that contains `point` (any state).
+   * No finite altitude: unknown, never inside.
+   */
+  _markInside(insideOf, point, strips) {
+    const approved = strips.filter(s => s.airspaceId && s.stripId);
+    if (approved.length === 0 || !Number.isFinite(point.altFt)) return;
+    if (typeof this._d.airspaceStore.containing !== 'function') return;
+    const containing = new Set(this._d.airspaceStore.containing(point).map(a => a.airspaceId));
+    for (const s of approved) {
+      if (!containing.has(s.airspaceId)) continue;
+      insideOf.set(`${s.facilityId}:${s.stripId}`, { facilityId: s.facilityId, stripId: s.stripId, airspaceId: s.airspaceId, positionId: s.positionId });
+    }
+  }
+
   /** @returns {boolean} whether the alert set changed */
   tick() {
     const wallNow = this._d.wallClock.now();
@@ -145,6 +182,7 @@ class AirspaceEntryAlertMonitor {
     const to = new Map();
     const traffic = new Map(); // airspaceId -> Map(flightDataId -> row), docs/adr/0124 §1
     const trafficOf = new Map();
+    const insideOf = new Map(); // docs/adr/0134: 'facilityId:stripId' -> {facilityId, stripId, airspaceId, positionId}
     const rowFor = (airspace, flightDataId, callsign) => {
       if (!traffic.has(airspace.airspaceId)) traffic.set(airspace.airspaceId, new Map());
       trafficOf.set(airspace.airspaceId, { controllingFacilityId: airspace.controllingFacilityId || null, controllingPositionId: airspace.controllingPositionId || null });
@@ -171,6 +209,7 @@ class AirspaceEntryAlertMonitor {
       if (!flightDataId && !reportsAltitude(track)) continue;
       const point = locate(track);
       if (!point) continue;
+      if (flightDataId) this._markInside(insideOf, point, liveStrips.get(flightDataId) || []);
       const inside = airspaceStore.activeAreasContaining(point);
       if (inside.length === 0) continue;
       const strips = flightDataId ? (liveStrips.get(flightDataId) || []) : [];
@@ -239,12 +278,20 @@ class AirspaceEntryAlertMonitor {
         ...(deciders.has(airspaceId) ? { transitDeciders: deciders.get(airspaceId) } : {}),
         flights: [...rows.values()].sort((a, b) => String(a.callsign || a.flightDataId).localeCompare(String(b.callsign || b.flightDataId))),
       }));
+    const nextInside = [...insideOf.entries()]
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+      .map(([, x]) => ({ facilityId: x.facilityId, stripId: x.stripId, airspaceId: x.airspaceId }));
+    const insideTo = new Map([...insideOf.entries()].map(([key, x]) => [key, `${x.facilityId}:${x.positionId}`]));
     const changed = JSON.stringify(next) !== JSON.stringify(this._alerts)
       || JSON.stringify(nextTraffic) !== JSON.stringify(this._traffic)
+      || JSON.stringify(nextInside) !== JSON.stringify(this._inside)
+      || [...insideTo].some(([key, to]) => this._insideTo.get(key) !== to)
       || [...to].some(([id, keys]) => { const was = this._to.get(id); return !was || was.size !== keys.size || [...keys].some(k => !was.has(k)); });
     this._alerts = next;
     this._traffic = nextTraffic;
     this._trafficOf = trafficOf;
+    this._inside = nextInside;
+    this._insideTo = insideTo;
     this._to = to;
     this._since = new Map(next.map(a => [a.id, a.since]));
     return changed;

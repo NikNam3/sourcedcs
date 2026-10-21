@@ -299,6 +299,8 @@ function buildMonitors({ env, efsp, facilityConfig, missionClock, missionSession
       airspaceEntryFor: (alert, positions) => airspaceEntryAlertMonitor.deliverableTo(alert, positions),
       // docs/adr/0124 §1: the airspace card's flight list, only for the airspaces the session may approve entry into.
       airspaceTrafficFor: (positions) => airspaceEntryAlertMonitor.trafficFor(positions),
+      // docs/adr/0134: which of the session's own Strips are airborne inside their approved airspace (the badge's amber).
+      airspaceInsideFor: (positions) => airspaceEntryAlertMonitor.insideFor(positions),
       obligations: obligationMonitor.getAll(),
       surveillance: surveillanceHints ? surveillanceHints.getAll() : undefined, // docs/adr/0076: the suggestion chip and staleness
     });
