@@ -399,6 +399,16 @@ class CarrierStore extends SyncedStore {
         if (entry) opts.eatUtc = carrier.deriveEntry(entry, { ...inputs, deltaMs: stack.deltaMs }).pushTimeUtc;
       }
     }
+    if (op.kind === 'SetEat') {
+      // docs/adr/0137: a typed Zulu HHMM (or nothing, to use the slot's EAT), dated on the mission clock here, once.
+      const { inputs } = this._resolve(record);
+      if (!carrier.isSequencedCase(inputs.caseValue)) return { ok: false, reason: 'VALIDATION_ERROR', detail: 'a Case I recovery has no EAT' };
+      const blank = op.eat === null || op.eat === undefined || (typeof op.eat === 'string' && op.eat.trim() === '');
+      const eatUtc = blank ? null : resolveZuluHhmm(op.eat, this._clock.now());
+      if (!blank && eatUtc == null) return { ok: false, reason: 'VALIDATION_ERROR', detail: `the EAT must be a Zulu time, HHMM (not ${JSON.stringify(op.eat)})` };
+      opts.otherEats = derivedBefore[stackId].filter(e => e.status === 'HOLDING' && e.flightDataId !== op.flightDataId).map(e => e.pushTimeUtc);
+      op = { kind: 'SetEat', flightDataId: op.flightDataId, eatUtc };
+    }
     const r = carrier.applyStackOp(stack, op, opts);
     if (!r.ok) return r;
     if (r.unchanged) return { ok: true, record: deepClone(record), changed: [], unchanged: true, passed: [] };

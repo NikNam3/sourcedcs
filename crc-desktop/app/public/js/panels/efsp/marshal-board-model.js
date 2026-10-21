@@ -127,6 +127,8 @@ export function buildBoard({ view, strips, flightDataOf, dmeOf, now, marginKlb: 
       marshalDme: entry && entry.marshalDme != null ? entry.marshalDme : null,
       slot: entry ? entry.stackIndex : null,
       eatUtc: entry && entry.pushTimeUtc != null ? entry.pushTimeUtc : null,
+      // an EAT the Marshal assigned by hand (crc-sync docs/adr/0137): shown set until cleared
+      eatSet: !!(entry && entry.eatSet),
       pushWindowEndUtc: entry && entry.pushWindowUtc ? entry.pushWindowUtc[1] : null,
       pushedAtUtc: entry && entry.pushedAtUtc != null ? entry.pushedAtUtc : null,
       // the angels / EAT changed and not yet passed to the pilot, as the server keeps them (docs/adr/0115)
@@ -188,6 +190,27 @@ export function passClearanceOp(row, { enabled = true } = {}) {
   const m = marksOf(row, { enabled });
   if (!m.angels && !m.eat) return null;
   return { kind: 'PassClearance', flightDataId: row.flightDataId, angels: row.angels, eatUtc: row.eatUtc };
+}
+
+// ── typed in the panel (crc-sync docs/adr/0137, live test U22) ────────────
+
+/**
+ * The fuel typed in the FUEL cell as the Strip's LOW ST Block (C12, `lowStateLb`), or null when it is not a figure. Fuel is spoken
+ * in thousands of pounds ("4.8", CV NATOPS 6.4.13.2), so a figure under 100 is thousands; a larger one is pounds. Empty clears it.
+ */
+export function fuelBlockOp(text) {
+  const t = String(text == null ? '' : text).trim();
+  if (t === '') return { kind: 'SetBlock', blockId: 'C12', value: '' };
+  if (!/^\d+(\.\d+)?$/.test(t)) return null;
+  const v = Number(t);
+  return { kind: 'SetBlock', blockId: 'C12', value: String(Math.round(v < 100 ? v * KLB : v)) };
+}
+
+/** The stack op for an EAT typed in the EAT cell: a Zulu HHMM the server dates on the mission clock, or empty to use the slot's. */
+export function setEatOp(row, text) {
+  const t = String(text == null ? '' : text).trim();
+  if (t !== '' && !/^\d{4}$/.test(t)) return null;
+  return { kind: 'SetEat', flightDataId: row.flightDataId, eat: t === '' ? null : t };
 }
 
 // ── drag to re-sequence ───────────────────────────────────────────────────

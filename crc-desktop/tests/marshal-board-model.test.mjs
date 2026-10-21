@@ -115,3 +115,15 @@ test('the picture: aircraft by DME, the fixes from the server, one bolter racetr
   assert.ok(pic.yOfDme(12, 21) < pic.yOfDme(21, 21) && pic.yOfDme(21, 21) < pic.yOfDme(25, 21));
   assert.match(pic.racetrackPath(4, 21), /^M /);
 });
+
+test('typed in the panel (crc-sync docs/adr/0137): fuel in thousands or pounds as LOW ST, an EAT as HHMM, empty clears', () => {
+  assert.deepEqual(m.fuelBlockOp('4.8'), { kind: 'SetBlock', blockId: 'C12', value: '4800' });
+  assert.deepEqual(m.fuelBlockOp(' 5200 '), { kind: 'SetBlock', blockId: 'C12', value: '5200' });
+  assert.deepEqual(m.fuelBlockOp(''), { kind: 'SetBlock', blockId: 'C12', value: '' });
+  assert.equal(m.fuelBlockOp('lots'), null);
+  assert.deepEqual(m.setEatOp({ flightDataId: 'b' }, '2047'), { kind: 'SetEat', flightDataId: 'b', eat: '2047' });
+  assert.deepEqual(m.setEatOp({ flightDataId: 'b' }, ''), { kind: 'SetEat', flightDataId: 'b', eat: null });
+  assert.equal(m.setEatOp({ flightDataId: 'b' }, '47'), null);
+  const b = build([entry('c', 0, 'HOLDING', { eatSet: true })], [strip('c', 'MARSHAL', 'IN_STACK')]);
+  assert.equal(b.rows[0].eatSet, true);
+});

@@ -50,7 +50,11 @@ const { isSequencedCase, isCase } = require('./recovery-case');
 // `unpassed` is the part of a HOLDING flight's clearance that changed and has not been passed to the pilot yet ('angels',
 // 'eat'; docs/adr/0115): the server sets it (markClearanceChanges, BackToStack) and the Marshal clears it (PassClearance).
 // It is shared by every Marshal controller and kept with the stack; a flight that commences or leaves takes it with it.
-const ENTRY_KEYS = Object.freeze(['flightDataId', 'stackIndex', 'status', 'caseIAngels', 'pushedAtUtc', 'eatUtc', 'unpassed']);
+// `eatOverrideUtc` (docs/adr/0137, live test U22) is an EAT the Marshal assigned one HOLDING flight by hand: CV NATOPS has marshal
+// control ASSIGN each aircraft its EAT (6.4.2 item 6, 6.4.4) and departures are a minute apart only "unless weather or operating
+// circumstances dictate otherwise" (6.4.5). It wins over the slot's EAT until cleared, Delta moves it like every holding EAT, and it
+// goes when the flight commences or returns to the stack. Present only while set (an entry without it is the slot's EAT).
+const ENTRY_KEYS = Object.freeze(['flightDataId', 'stackIndex', 'status', 'caseIAngels', 'pushedAtUtc', 'eatUtc', 'unpassed', 'eatOverrideUtc']);
 const CLEARANCE_FIELDS = Object.freeze(['angels', 'eat']);
 const STACK_KEYS = Object.freeze(['stackId', 'hullId', 'entries', 'deltaMs']);
 const ENTRY_STATUSES = Object.freeze(['HOLDING', 'PUSHED']);
@@ -75,7 +79,7 @@ const DERIVED_KEYS = Object.freeze([
 const DERIVED_DETAIL = 'angels/DME/push time are derived from the stack index (§9.12) and cannot be set';
 
 const STACK_OP_KINDS = Object.freeze([
-  'InsertAt', 'Append', 'Move', 'Remove', 'CloseUp', 'MarkPushed', 'SetCaseIAngels', 'Delta', 'BackToStack', 'PassClearance',
+  'InsertAt', 'Append', 'Move', 'Remove', 'CloseUp', 'MarkPushed', 'SetCaseIAngels', 'Delta', 'BackToStack', 'PassClearance', 'SetEat',
 ]);
 
 // CV NATOPS 6.4.9 (p. 6-17): "the number of minutes of delay (even increments but never less than four)".
@@ -150,6 +154,8 @@ function validateStack(stack, opts = STACK_DEFAULTS) {
     }
     if (e.pushedAtUtc !== undefined && !_validTime(e.pushedAtUtc)) return _fail(`entry ${e.flightDataId}: pushedAtUtc must be epoch ms or null`);
     if (e.eatUtc !== undefined && !_validTime(e.eatUtc)) return _fail(`entry ${e.flightDataId}: eatUtc must be epoch ms or null`);
+    if (e.eatOverrideUtc !== undefined && !_validTime(e.eatOverrideUtc)) return _fail(`entry ${e.flightDataId}: eatOverrideUtc must be epoch ms or null`);
+    if (e.status === 'PUSHED' && e.eatOverrideUtc != null) return _fail(`entry ${e.flightDataId}: a flight that has pushed has no EAT to assign`);
     if (e.status === 'HOLDING' && (e.pushedAtUtc != null || e.eatUtc != null)) {
       return _fail(`entry ${e.flightDataId}: a holding flight has no push time on record`);
     }
@@ -192,7 +198,9 @@ function normalizeStack(raw, { stackId = DEFAULT_STACK_ID, hullId = null, maxInd
       continue;
     }
     const status = ENTRY_STATUSES.includes(e.status) ? e.status : 'HOLDING';
+    const override = status === 'HOLDING' && Number.isFinite(e.eatOverrideUtc) && e.eatOverrideUtc >= 0 ? { eatOverrideUtc: e.eatOverrideUtc } : {};
     cleaned.push({
+      ...override,
       flightDataId: e.flightDataId,
       stackIndex: e.stackIndex,
       status,
@@ -274,7 +282,11 @@ function deriveEntry(entry, inputs = {}) {
   const rampEtaUtc = pushed
     ? (Number.isFinite(e.pushedAtUtc) ? e.pushedAtUtc + fixToRampMs : holdRampEta)
     : holdRampEta;
-  const pushTimeUtc = pushed && Number.isFinite(e.eatUtc) ? e.eatUtc : (rampEtaUtc == null ? null : rampEtaUtc - fixToRampMs);
+  // An EAT the Marshal assigned (docs/adr/0137) wins over the slot's; Delta moves the stored value itself (delta() below).
+  const assigned = !pushed && Number.isFinite(e.eatOverrideUtc) ? e.eatOverrideUtc : null;
+  let pushTimeUtc = pushed && Number.isFinite(e.eatUtc) ? e.eatUtc : (rampEtaUtc == null ? null : rampEtaUtc - fixToRampMs);
+  if (assigned != null) pushTimeUtc = assigned;
+  const rampEta = assigned != null ? assigned + fixToRampMs : rampEtaUtc;
   const pushWindowUtc = pushTimeUtc == null
     ? null
     : Object.freeze([pushTimeUtc - PUSH_TOLERANCE_MS, pushTimeUtc + PUSH_TOLERANCE_MS]);
@@ -285,8 +297,9 @@ function deriveEntry(entry, inputs = {}) {
     marshalDme,
     firstFixDme: Number.isFinite(firstFixDme) ? firstFixDme : DME_PLUS + MIN_ANGELS,
     pushTimeUtc,
-    rampEtaUtc,
+    rampEtaUtc: rampEta,
     pushWindowUtc,
+    ...(assigned != null ? { eatSet: true } : {}),
     marshalRadialDeg: radial,
     marshalRadialSource: radial == null ? null : marshalRadialSource,
     minimumAltitudeOk: angels >= MIN_ANGELS,
@@ -337,6 +350,13 @@ function checkConsistency(derived, { radialToleranceDeg = RADIAL_TOLERANCE_DEG }
 
 function _copyEntries(stack) {
   return stack.entries.map((e) => ({ ...e }));
+}
+
+/** The entry without an assigned EAT (docs/adr/0137): the key is present only while one is set. */
+function _withoutOverride(e) {
+  const { eatOverrideUtc, ...rest } = e;
+  void eatOverrideUtc;
+  return rest;
 }
 
 function _result(stack, entries, changedSet, extra = {}) {
@@ -501,7 +521,7 @@ function markPushed(stack, { flightDataId } = {}, opts = STACK_DEFAULTS) {
   const pushedAtUtc = _isObj(opts) && Number.isFinite(opts.nowMs) ? opts.nowMs : null;
   const eatUtc = _isObj(opts) && Number.isFinite(opts.eatUtc) ? opts.eatUtc : null;
   // It has left its fix: whatever was not passed is moot now (docs/adr/0115).
-  const entries = _copyEntries(stack).map((e) => (e.flightDataId === flightDataId ? { ...e, status: 'PUSHED', pushedAtUtc, eatUtc, unpassed: [] } : e));
+  const entries = _copyEntries(stack).map((e) => (e.flightDataId === flightDataId ? _withoutOverride({ ...e, status: 'PUSHED', pushedAtUtc, eatUtc, unpassed: [] }) : e));
   return _result(stack, entries, new Set([flightDataId]));
 }
 
@@ -520,7 +540,7 @@ function backToStack(stack, { flightDataId } = {}, opts = STACK_DEFAULTS) {
   const index = _highest(rest) + 1;
   if (index > _maxIndex(opts)) return _fail(`the stack is full: there is no slot above ${_highest(rest)}`);
   // Both its angels and its EAT are new to the pilot, whatever they read (decisions H117: "new angels/EAT marked until passed").
-  rest.push({ ...entry, stackIndex: index, status: 'HOLDING', pushedAtUtc: null, eatUtc: null, unpassed: [...CLEARANCE_FIELDS] });
+  rest.push(_withoutOverride({ ...entry, stackIndex: index, status: 'HOLDING', pushedAtUtc: null, eatUtc: null, unpassed: [...CLEARANCE_FIELDS] }));
   return _result(stack, rest, new Set([flightDataId]));
 }
 
@@ -541,7 +561,9 @@ function delta(stack, { minutes } = {}, opts = STACK_DEFAULTS) {
   const holding = stack.entries.filter((e) => e.status === 'HOLDING');
   if (holding.length === 0) return _fail('nobody is holding in the stack, so there is no EAT to move');
   const total = (Number.isFinite(stack.deltaMs) ? stack.deltaMs : 0) + minutes * 60_000;
-  const next = { ...stack, deltaMs: total, entries: _copyEntries(stack) };
+  // An assigned EAT (docs/adr/0137) is moved here, by the same minutes: the derivation does not add deltaMs to it.
+  const next = { ...stack, deltaMs: total, entries: _copyEntries(stack).map((e) => (e.status === 'HOLDING' && Number.isFinite(e.eatOverrideUtc)
+    ? { ...e, eatOverrideUtc: e.eatOverrideUtc + minutes * 60_000 } : e)) };
   const changed = holding.slice().sort((a, b) => b.stackIndex - a.stackIndex).map((e) => e.flightDataId);
   return { ok: true, stack: next, changed };
 }
@@ -615,6 +637,33 @@ function markClearanceChanges(stack, before, after) {
   return touched ? { ...stack, entries } : stack;
 }
 
+/**
+ * SetEat (docs/adr/0137, live test U22): the Marshal assigns one HOLDING flight an EAT by hand, or clears it (`eatUtc: null`) so the
+ * flight takes its slot's EAT again. The store resolves the typed Zulu HHMM on the mission clock; `opts.otherEats` are the other
+ * holding flights' EATs as derived now. Refused when another flight already holds that minute: CV NATOPS 6.4.9 issues EATs so as
+ * "to preclude two aircraft having the same EAT". Setting the value it already has is no change.
+ */
+function setEat(stack, { flightDataId, eatUtc } = {}, opts = STACK_DEFAULTS) {
+  const v = validateStack(stack, opts);
+  if (!v.ok) return v;
+  const entry = stack.entries.find((e) => e.flightDataId === flightDataId);
+  if (!entry) return _fail(`${flightDataId} is not in the stack`, 'NOT_FOUND');
+  if (entry.status !== 'HOLDING') return _fail(`${flightDataId} has commenced: its EAT is on record`);
+  if (eatUtc !== null && !(Number.isFinite(eatUtc) && eatUtc >= 0)) return _fail('SetEat takes a Zulu time, HHMM, or nothing to use the slot\'s EAT');
+  const minute = (ms) => Math.floor(ms / 60_000);
+  const others = _isObj(opts) && Array.isArray(opts.otherEats) ? opts.otherEats : [];
+  if (eatUtc !== null && others.some((t) => Number.isFinite(t) && minute(t) === minute(eatUtc))) {
+    return _fail('another flight in marshal already has that EAT (CV NATOPS 6.4.9: no two aircraft share an EAT)');
+  }
+  const had = Number.isFinite(entry.eatOverrideUtc) ? entry.eatOverrideUtc : null;
+  if (had === eatUtc) return { ok: true, stack, changed: [], unchanged: true };
+  const entries = _copyEntries(stack).map((e) => {
+    if (e.flightDataId !== flightDataId) return e;
+    return eatUtc === null ? _withoutOverride(e) : { ...e, eatOverrideUtc: eatUtc };
+  });
+  return _result(stack, entries, new Set([flightDataId]));
+}
+
 const _DISPATCH = {
   InsertAt: (s, op, o) => insertAt(s, op, o),
   Append: (s, op, o) => append(s, op, o),
@@ -626,6 +675,7 @@ const _DISPATCH = {
   BackToStack: (s, op, o) => backToStack(s, op, o),
   SetCaseIAngels: (s, op, o) => setCaseIAngels(s, op, o),
   PassClearance: (s, op, o) => passClearance(s, op, o),
+  SetEat: (s, op, o) => setEat(s, op, o),
 };
 
 /**
@@ -669,6 +719,7 @@ module.exports = {
   DELTA_MIN_MINUTES,
   setCaseIAngels,
   passClearance,
+  setEat,
   markClearanceChanges,
   CLEARANCE_FIELDS,
   applyStackOp,
