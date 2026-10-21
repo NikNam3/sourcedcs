@@ -1,4 +1,4 @@
-// Bay descriptor views (crc-sync docs/adr/0093, 0117): the pattern board, the FINAL line and AP's SFA frequency
+// Bay descriptor views (crc-sync docs/adr/0093, 0117): the FINAL line and AP's SFA frequency
 // header mounted by `view`, from the real Bay descriptors the server sends. Wiring tests against the DOM
 // stub: they prove the right op is dispatched and the right racks are hidden, never layout.
 
@@ -58,7 +58,7 @@ const click = (el) => (el._listeners.click || []).forEach(fn => fn({ stopPropaga
 test.beforeEach(() => { setGlobals(); setHeld({}); clearBoard(); });
 
 test('the descriptor flags reach a client exactly as the server sends them (the mount reads nothing else)', () => {
-  assert.equal(bay('cv-prifly-pattern').view, 'pattern');
+  assert.equal(bay('cv-prifly-pattern').view, undefined, 'PriFly has no pattern leg board (live test U19, docs/adr/0137)');
   assert.equal(bay('rsu-pattern'), undefined, 'no RSU (crc-sync docs/adr/0126)');
   assert.equal(bay('par-final').view, 'final');
   assert.equal(bay('ap-sfa').view, 'sfa-freqs');
@@ -68,59 +68,12 @@ test('the descriptor flags reach a client exactly as the server sends them (the 
   assert.equal(V.bayDescriptorFor('nope'), null);
 });
 
-test('pattern: legs are the Bay\'s racks, a Strip\'s leg is its rack, and time in the pattern runs from joining, not from the last Move', () => {
-  const b = bay('cv-prifly-pattern');
-  assert.deepEqual(V.patternLegsFor(b).map(l => l.id), ['initial', 'break', 'downwind', 'groove']);
-  const s = { stripId: 's1', flightDataId: 'f1', bayId: 'cv-prifly-pattern', rackId: 'break', createdAt: 60000, updatedAt: 999000 };
-  const list = V.patternStripsFor(b, (bayId, rackId) => (bayId === 'cv-prifly-pattern' && rackId === 'break' ? [s] : []), () => ({ identity: { callsign: 'VIPER 11', aircraftType: 'F-16C' } }));
-  assert.deepEqual(list, [{ stripId: 's1', name: 'VIPER 11', aka: '', type: 'F-16C', legId: 'break', enteredPatternS: 60, order: 0 }]);
-});
-
-test('pattern mount: a `replacesRacks` Bay hides its racks, draws the board, and its three gestures send the right ops as the owner', () => {
-  // No shipped pattern Bay replaces its racks since the RSU went (crc-sync docs/adr/0126); the flag still works.
-  const b = { ...bay('cv-prifly-pattern'), replacesRacks: true };
-  setHeld({ CARRIER: ['CV_PRIFLY'] });
-  addStrip({ stripId: 's1', flightDataId: 'f1', bayId: 'cv-prifly-pattern', rackId: 'initial', ownerPositionId: 'CV_PRIFLY', rev: 3, createdAt: now - 120000, state: 'IN_PATTERN', stripType: 'PATTERN' }, { identity: { callsign: 'VIPER 11' } });
-  const c = containerFor(b);
-  renderBayDescriptorView(c, b);
-  const racks_ = [...c.children].filter(x => x.className === 'efsp-rack');
-  assert.ok(racks_.length === 4 && racks_.every(r => r.style.display === 'none'), 'the board replaces its racks');
-  const all = descendants(c);
-  const chip = all.find(e => e.dataset && e.dataset.stripId === 's1');
-  assert.ok(chip, 'the Strip is a chip on the board');
-  click(all.find(e => e.className === 'efsp-pattern-next'));
-  assert.deepEqual(sent.pop(), { position: 'CV_PRIFLY', stripId: 's1', op: { kind: 'MoveStrip', rackId: 'break', bayId: 'cv-prifly-pattern' } });
-  click(all.find(e => e.dataset && e.dataset.action === 'LANDED'));
-  assert.deepEqual(sent.pop().op, { kind: 'SetState', toState: 'RECOVERED' });
-  click(all.find(e => e.dataset && e.dataset.action === 'DROP'));
-  assert.deepEqual(sent.pop().op, { kind: 'DropStrip' });
-});
-
-test('pattern mount is read-only for a controller who does not hold the Position', () => {
-  const b = bay('cv-prifly-pattern');
-  setHeld({ CARRIER: ['CV_MARSHAL'] });
-  addStrip({ stripId: 's1', flightDataId: 'f1', bayId: 'cv-prifly-pattern', rackId: 'initial', ownerPositionId: 'CV_PRIFLY', rev: 1, createdAt: now, state: 'IN_PATTERN', stripType: 'PATTERN' }, { identity: { callsign: 'X' } });
-  const c = containerFor(b);
-  renderBayDescriptorView(c, b);
-  click(descendants(c).find(e => e.className === 'efsp-pattern-next'));
-  assert.equal(sent.length, 0);
-});
-
-test('the carrier keeps its racks: the pattern board sits above them (no replacesRacks)', () => {
-  const b = bay('cv-prifly-pattern');
-  setHeld({ CARRIER: ['CV_PRIFLY'] });
-  const c = containerFor(b);
-  renderBayDescriptorView(c, b);
-  assert.ok([...c.children].filter(x => x.className === 'efsp-rack').every(r => r.style.display === ''), 'racks stay');
-  assert.ok(descendants(c).some(e => e.className === 'efsp-pattern'), 'the board is mounted');
-});
-
 test('a Bay with no view is left alone, and a stale view is removed when a Bay stops having one', () => {
   const b = bay('ap-inbound');
   const c = containerFor(b);
   renderBayDescriptorView(c, b);
   assert.equal([...c.children].some(x => x.className === 'efsp-bay-view'), false);
-  const pb = bay('cv-prifly-pattern');
+  const pb = bay('cv-app1-final');
   const c2 = containerFor(pb);
   renderBayDescriptorView(c2, pb);
   assert.ok([...c2.children].some(x => x.className === 'efsp-bay-view'));
@@ -148,7 +101,7 @@ test('an airfield PAR final is an ordinary Bay (H138 U10): no line list, the rac
   assert.equal(b.view, 'final', 'the descriptor still names the final: crc-sync samples its Strips for the PAR');
   assert.equal(V.bayHasComponentView(b), false);
   assert.equal(V.bayHasComponentView(bay('cv-app1-final')), true);
-  assert.equal(V.bayHasComponentView(bay('cv-prifly-pattern')), true);
+  assert.equal(V.bayHasComponentView(bay('cv-prifly-pattern')), false);
   setHeld({ INCIRLIK: ['PAR'] });
   addStrip({ stripId: 'p1', flightDataId: 'f1', bayId: 'par-final', rackId: 'main', ownerPositionId: 'PAR', rev: 2, state: 'ON_FINAL', stripType: 'FINAL', facilityId: 'INCIRLIK', flags: {} }, { identity: { callsign: 'VIPER 11' } });
   const c = containerFor(b);
@@ -274,7 +227,7 @@ test('no top-level name of the Bay-view scripts is declared by any other script 
       declared.get(m[1]).add(f);
     }
   }
-  const mine = ['pattern-board.js', 'par-model.js', 'bay-views.js', 'sfa-state.js'];
+  const mine = ['par-model.js', 'bay-views.js', 'sfa-state.js'];
   for (const f of files.filter(x => mine.some(n => x.endsWith(n)))) {
     for (const [name, where] of declared) {
       if (where.has(f) && where.size > 1) assert.fail(`${name} is declared in ${[...where].join(' and ')}`);

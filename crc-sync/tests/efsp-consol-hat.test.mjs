@@ -194,7 +194,7 @@ test('W14 PriFly leaves with PATTERN Strips, Marshal staffed: they stay PriFly\'
   const efsp = fresh();
   const c = crew(efsp, { CV_PRIFLY: 'CARRIER', CV_MARSHAL: 'CARRIER' });
   const made = mustAct(efsp, c.CV_MARSHAL, 'CV_MARSHAL', null, { kind: 'CreateStrip', bayId: 'cv-marshal-stack', rackId: 'main', stripType: 'MARSHAL', flightData: { callsign: 'W14', aircraftType: 'F18', wakeCategory: 'M' } });
-  Object.assign(strip(efsp, made, 'CARRIER'), { ownerPositionId: 'CV_PRIFLY', stripType: 'PATTERN', state: 'IN_PATTERN', bayId: 'cv-prifly-pattern', rackId: 'initial' });
+  Object.assign(strip(efsp, made, 'CARRIER'), { ownerPositionId: 'CV_PRIFLY', stripType: 'PATTERN', state: 'IN_PATTERN', bayId: 'cv-prifly-pattern', rackId: 'main' });
   const left = hold(efsp, c.CV_PRIFLY.session, 'CARRIER', []);
   assert.deepEqual(left.ack.warnings, [{ positionId: 'CV_PRIFLY', count: 1, offeredTo: 'CV_MARSHAL' }]);
   assert.equal(strip(efsp, made, 'CARRIER').ownerPositionId, 'CV_PRIFLY');

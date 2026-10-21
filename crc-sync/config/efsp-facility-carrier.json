@@ -89,13 +89,9 @@
       {
         "bayId": "cv-prifly-pattern",
         "rackIds": [
-          "initial",
-          "break",
-          "downwind",
-          "groove"
+          "main"
         ],
-        "impliesState": "IN_PATTERN",
-        "view": "pattern"
+        "impliesState": "IN_PATTERN"
       },
       {
         "bayId": "cv-prifly-deck",

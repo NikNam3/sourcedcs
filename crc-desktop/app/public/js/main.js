@@ -39,7 +39,6 @@ import './panels/efsp/efsp-ws.js';
 import './panels/efsp/efsp-metrics-client.js';
 import './panels/efsp/correlation-highlight.js';
 import './panels/efsp/marsa-badge.js';
-import './panels/efsp/pattern-board.js';
 import './panels/efsp/ordnance-advisory.js';
 import './panels/efsp/strip-fields.js';
 import './panels/efsp/carrier-panel.js';

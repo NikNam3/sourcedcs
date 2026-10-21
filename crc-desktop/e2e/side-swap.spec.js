@@ -147,13 +147,7 @@ test('02 a PATTERN Strip at PriFly: side number first once one is set, else the 
   await expect(fields(plain).first().locator('.efsp-block-C1')).toHaveCount(1);
   await expect(fields(plain).first()).toContainText(noSide);
   await expect(plain.locator('.efsp-strip-fields .efsp-block-C18')).toHaveCount(0); // no empty SIDE on the face
-  // The PriFly pattern board's chip leads with the side number, the callsign beside it; the other still by its callsign (H124).
-  const idOf = (c) => page.evaluate((cs) => crc.state.getAllEfspStrips().find(x => x.state !== 'DROPPED' && (crc.state.getEfspFlightData(x.flightDataId) || { identity: {} }).identity.callsign === cs).stripId, c);
-  const ledChip = page.locator(`.efsp-pattern-chip[data-strip-id="${await idOf(withSide)}"]`);
-  await expect(ledChip.locator('.efsp-pattern-cs')).toHaveText(side);
-  await expect(ledChip.locator('.efsp-pattern-meta')).toContainText(withSide);
-  const plainChip = page.locator(`.efsp-pattern-chip[data-strip-id="${await idOf(noSide)}"]`);
-  await expect(plainChip.locator('.efsp-pattern-cs')).toHaveText(noSide);
+  // PriFly's pattern leg board is gone (live test U19, crc-sync docs/adr/0137): its Strips above are the whole view.
   await led.scrollIntoViewIfNeeded();
   await page.screenshot({ path: test.info().outputPath('02-pattern-side-big.png') });
 

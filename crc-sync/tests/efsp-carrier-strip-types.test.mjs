@@ -137,7 +137,7 @@ test('the CARRIER Facility: four MILITARY_ATC Positions, Bays that imply carrier
   for (const p of c.positions) assert.ok(Array.isArray(c.consolidation[p]) && c.consolidation[p].length === 3, p);
   assert.equal(facilityConfig.bayImpliesState('cv-marshal-stack', 'CARRIER'), 'IN_STACK');
   assert.equal(facilityConfig.bayImpliesState('cv-app2-bolter', 'CARRIER'), 'BOLTER_WAVEOFF');
-  assert.deepEqual(facilityConfig.getBaysFor('CV_PRIFLY', 'CARRIER')[0].rackIds, ['initial', 'break', 'downwind', 'groove']);
+  assert.deepEqual(facilityConfig.getBaysFor('CV_PRIFLY', 'CARRIER')[0].rackIds, ['main'], 'no pattern legs (live test U19, docs/adr/0137)');
   // every Bay-implied state is a state of some carrier strip type
   const carrierStates = new Set(CARRIER_STRIP_TYPES.flatMap(r => nla.STATES_BY_STRIP_TYPE[r]));
   for (const b of facilityConfig.getAllBays('CARRIER')) if (b.impliesState) assert.ok(carrierStates.has(b.impliesState), b.bayId);
