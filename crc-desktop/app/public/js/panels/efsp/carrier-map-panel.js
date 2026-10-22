@@ -63,6 +63,28 @@ function sv(name, attrs, text) {
   return e;
 }
 
+/**
+ * The rendered glyph box of one line of map text at `font` px: its top above the baseline and its height. The label declutter
+ * places these boxes, so the space it keeps free is the space the text really covers on screen (the font's ascent and descent are
+ * taller than the 1.2 line pitch). Measured once per text size on the drawn SVG; a font-metric fallback while nothing is laid out.
+ */
+const _glyphBoxes = new Map();
+function _glyphBox(svg, font) {
+  const known = _glyphBoxes.get(font);
+  if (known) return known;
+  const probe = sv('text', { x: 0, y: 0, 'font-size': font, class: 'cm-label', visibility: 'hidden' }, '0123456789 TKR');
+  svg.appendChild(probe);
+  let b = null;
+  try { b = probe.getBBox(); } catch { b = null; }
+  probe.remove();
+  if (!b || !(b.height > 0)) return { ascent: Math.ceil(font * 1.1), h: Math.ceil(font * 1.4) };
+  // whole pixels that still contain the glyphs: the top rounded up above the baseline, the bottom rounded down below it
+  const ascent = Math.ceil(-b.y);
+  const box = { ascent, h: Math.ceil(ascent + b.y + b.height) };
+  _glyphBoxes.set(font, box);
+  return box;
+}
+
 function _range() { return clampRange(getSetting('carrierMapRangeNm')); }
 
 function _setRange(nm) {
@@ -198,6 +220,7 @@ function _draw(svg, m, w, h) {
   const P = (q) => ({ x: cx + q.e * k, y: cy - q.n * k });
   const font = getTextSizePx();
   const textAttrs = (extra) => ({ 'font-size': font, ...extra });
+  const glyph = _glyphBox(svg, font);
 
   svg.appendChild(sv('rect', { x: 0, y: 0, width: w, height: h, fill: COL.bg }));
   let stackLabelBox = null;
@@ -252,7 +275,7 @@ function _draw(svg, m, w, h) {
     const text = `MARSHAL ${s.text} ${s.firstFix}`;
     svg.appendChild(sv('text', textAttrs({ x: l.x, y: l.y, 'text-anchor': 'middle', fill: COL.faint, 'data-cm': 'stack-label' }), text));
     const tw = text.length * font * 0.6;
-    stackLabelBox = { x: l.x - tw / 2, y: l.y - font, w: tw, h: font * 1.2 };
+    stackLabelBox = { x: l.x - tw / 2, y: l.y - glyph.ascent, w: tw, h: glyph.h };
   }
 
   // the patterns, only while occupied, no altitude or distance on them
@@ -292,7 +315,7 @@ function _draw(svg, m, w, h) {
   shown.sort((a, b) => rank(a) - rank(b) || distanceNm(a.at) - distanceNm(b.at) || (a.id < b.id ? -1 : 1));
   const lineH = Math.round(font * 1.2);
   const boxes = shown.map((a) => ({
-    id: a.id, x: a.p.x, y: a.p.y, w: Math.ceil(Math.max(a.label.length, a.tanker ? 3 : 0) * font * 0.6) + 2, h: lineH * (a.tanker ? 2 : 1),
+    id: a.id, x: a.p.x, y: a.p.y, w: Math.ceil(Math.max(a.label.length, a.tanker ? 3 : 0) * font * 0.6) + 2, h: glyph.h + (a.tanker ? lineH : 0),
   }));
   // labels keep clear of the ship, of every symbol and of the stack's name
   const obstacles = [{ x: cx - 12, y: cy - 12, w: 24, h: 24 }, ...shown.map((a) => ({ x: a.p.x - 5, y: a.p.y - 5, w: 10, h: 10 }))];
@@ -309,11 +332,11 @@ function _draw(svg, m, w, h) {
     const colour = a.level === 'danger' ? 'var(--efsp-danger, #ff5c5c)' : a.level === 'attn' ? 'var(--efsp-attn, #e0a83c)' : COL.text;
     if (box.moved) {
       const lx = box.x > a.p.x ? box.x : box.x + boxes.find((b) => b.id === a.id).w;
-      labels.appendChild(sv('line', { x1: a.p.x, y1: a.p.y, x2: lx, y2: box.y + lineH / 2, stroke: COL.faint, 'stroke-width': 0.75, 'data-leader': a.id }));
+      labels.appendChild(sv('line', { x1: a.p.x, y1: a.p.y, x2: lx, y2: box.y + glyph.h / 2, stroke: COL.faint, 'stroke-width': 0.75, 'data-leader': a.id }));
     }
-    const t = sv('text', textAttrs({ x: box.x, y: box.y + font, fill: colour, class: 'cm-label', 'data-label': a.id }), a.label);
+    const t = sv('text', textAttrs({ x: box.x, y: box.y + glyph.ascent, fill: colour, class: 'cm-label', 'data-label': a.id }), a.label);
     labels.appendChild(t);
-    if (a.tanker) labels.appendChild(sv('text', textAttrs({ x: box.x, y: box.y + font + lineH, fill: COL.muted, class: 'cm-label' }), 'TKR'));
+    if (a.tanker) labels.appendChild(sv('text', textAttrs({ x: box.x, y: box.y + glyph.ascent + lineH, fill: COL.muted, class: 'cm-label' }), 'TKR'));
   }
   svg.append(tracks, labels);
 }
