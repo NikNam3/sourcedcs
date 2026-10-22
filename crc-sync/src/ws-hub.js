@@ -280,16 +280,20 @@ class WsHub {
 
   /**
    * The PAR sample (docs/adr/0112): one frame per session per PAR tick, carrying only the samples of the finals worked by a
-   * Position this session is signed on to (Primary or Observer), never anyone else's. A session that had samples and now has
-   * none is sent one empty frame, so its panel clears; a session that never had any is sent nothing. Not an EFSP frame: it is
-   * a sensor's output, like the track `delta`, with no sequence, no resync and nothing to audit, so it does not go through
-   * `deliverEfsp` (whose post-change hook would re-run the obligation check twice a second for nothing).
+   * Position this session is signed on to (Primary or Observer), never anyone else's, and the approach each of those finals'
+   * next aircraft flies (`approaches`, ParMonitor#finalApproaches), so the PAR controller can set its values with nobody on
+   * the final (decisions H156 PV-Q1 a, H161 V2-Q1 a). A session that had either and now has neither is sent one empty frame,
+   * so its panel clears; a session that never had any is sent nothing. Not an EFSP frame: it is a sensor's output, like the
+   * track `delta`, with no sequence, no resync and nothing to audit, so it does not go through `deliverEfsp` (whose
+   * post-change hook would re-run the obligation check twice a second for nothing).
    * @param {object[]} samples ParMonitor#tick()'s entries
+   * @param {object[]} [approaches] ParMonitor#finalApproaches()'s entries
    */
-  sendParSamples(samples) {
+  sendParSamples(samples, approaches = []) {
     if (!this._efsp) return;
     const list = samples || [];
-    const facilities = [...new Set(list.map(s => s.facilityId))];
+    const finals = approaches || [];
+    const facilities = [...new Set([...list, ...finals].map(s => s.facilityId))];
     for (const [ws, session] of this._sessions) {
       if (ws.readyState !== WebSocket.OPEN) continue;
       const held = new Set();
@@ -297,14 +301,17 @@ class WsHub {
         const store = this._efsp.positionStoreFor(facilityId);
         for (const positionId of store ? store.signedOnBy(session.controllerId) : []) held.add(`${facilityId}:${positionId}`);
       }
-      const mine = list.filter(s => held.has(`${s.facilityId}:${s.positionId}`));
-      if (mine.length === 0 && !session.parSampled) continue;
-      session.parSampled = mine.length > 0;
-      ws.send(JSON.stringify(this._parSampleMsg(mine)));
+      const isMine = (s) => held.has(`${s.facilityId}:${s.positionId}`);
+      const mine = list.filter(isMine);
+      const mineFinals = finals.filter(isMine);
+      const any = mine.length > 0 || mineFinals.length > 0;
+      if (!any && !session.parSampled) continue;
+      session.parSampled = any;
+      ws.send(JSON.stringify(this._parSampleMsg(mine, mineFinals)));
     }
   }
 
-  _parSampleMsg(samples) { return { version: VERSION, type: 'par-sample', at: this._clock.now(), samples }; }
+  _parSampleMsg(samples, approaches = []) { return { version: VERSION, type: 'par-sample', at: this._clock.now(), samples, approaches }; }
 
   /** The booking calendar (docs/adr/0098 §9): information, the same for everyone; the last one is also sent on connect. */
   broadcastAirspaceCalendar(msg) { this._calendarMsg = msg; this._broadcast(msg); }

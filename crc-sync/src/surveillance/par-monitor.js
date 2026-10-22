@@ -116,14 +116,41 @@ class ParMonitor {
 
   /** The approach and its geometry for a Strip at an airfield Facility. */
   _runwayGeometry(facilityId, strip) {
-    const cfg = this._fc.getFacilityConfig(facilityId) || {};
-    const approaches = cfg.parApproaches || {};
     const view = this._rwy(facilityId);
     const fd = strip.flightDataId ? this._fd(strip.flightDataId) : null;
     // A FINAL Strip resolves its runway as the ARRIVAL it was (par-final.js's PAR_HANDOFF turns an ARRIVAL into a FINAL in place); its rack on
     // the final Bay names no runway end.
     const r = view ? resolveRunwayForStrip({ ...strip, stripType: 'ARRIVAL', rackId: null }, fd, view) : null;
-    const a = r && r.end && Object.prototype.hasOwnProperty.call(approaches, r.end) && !r.end.startsWith('_') ? approaches[r.end] : null;
+    return this._approachGeometry(facilityId, r && r.end);
+  }
+
+  /**
+   * The approach each final Bay's next aircraft would fly, so its controller can set the values with nobody on the final
+   * (decisions H156 PV-Q1 a, H161 V2-Q1 a): the runway end an ARRIVAL with no runway of its own resolves to (the active
+   * runway), one entry per final Bay that has one, whatever is on it. Every airfield Facility, every final Bay: no count.
+   * @returns {{facilityId:string, positionId:string, approach:object}[]} par.FINAL_APPROACH_KEYS
+   */
+  finalApproaches() {
+    const out = [];
+    const seen = new Set();
+    for (const { facilityId, positionId } of this._finalBays()) {
+      const view = this._rwy(facilityId);
+      const r = view ? resolveRunwayForStrip({ stripType: 'ARRIVAL', rackId: null }, null, view) : null;
+      const { approach } = this._approachGeometry(facilityId, r && r.end);
+      const key = approach && `${facilityId}:${positionId}:${approach.id}`;
+      if (!approach || seen.has(key)) continue;
+      seen.add(key);
+      out.push({ facilityId, positionId, approach });
+    }
+    return out;
+  }
+
+  /** The approach to a runway end at an airfield Facility, its geometry and the sensor's state (`end` null: none). */
+  _approachGeometry(facilityId, end) {
+    const cfg = this._fc.getFacilityConfig(facilityId) || {};
+    const approaches = cfg.parApproaches || {};
+    const r = end ? { end } : null;
+    const a = r && Object.prototype.hasOwnProperty.call(approaches, r.end) && !r.end.startsWith('_') ? approaches[r.end] : null;
     if (!a) return { approach: null, ref: null, sensor: { elevation: 'INOP', azimuth: 'INOP', reason: 'NO_APPROACH' } };
     const icao = (cfg.runwayStatus && cfg.runwayStatus.airportIcao) || null;
     // The defaults: the Facility file's values, a null TDZE being the DCS airfield's elevation and a null angle par.json's

@@ -271,3 +271,32 @@ test('a controller-set TDZE gives elevation where DCS has no field elevation (NO
   assert.equal(e.approach.defaults.tdzeFt, null);
   assert.equal(e.plot.elevDevFt, 0);
 });
+
+// decisions H156 PV-Q1 a, H161 V2-Q1 a: the PAR controller sets the approach values with nobody on the final, so the monitor
+// also says which approach each final's next aircraft flies (the active runway end's), whatever is on it.
+test('empty final: the approach of the active runway end, with the set values; none without an active runway; never the carrier', () => {
+  const w = world({ parValues: { '05': { gpaDeg: 3 } } });
+  assert.deepEqual(w.monitor.tick(), [], 'nobody on the final');
+  const list = w.monitor.finalApproaches();
+  assert.equal(list.length, 1, 'one per airfield final Bay; the carrier finals have no PAR (H125)');
+  assert.deepEqual(Object.keys(list[0]), [...par.FINAL_APPROACH_KEYS]);
+  assert.equal(list[0].facilityId, 'INCIRLIK');
+  assert.equal(list[0].positionId, 'PAR');
+  assert.equal(list[0].approach.id, 'LTAG-05');
+  assert.deepEqual(Object.keys(list[0].approach), [...par.APPROACH_KEYS]);
+  assert.equal(list[0].approach.gpaDeg, 3);
+  assert.deepEqual(list[0].approach.set, ['gpaDeg']);
+  assert.equal(list[0].approach.tdzeFt, DCS_LTAG_ELEV_FT);
+  w.setActive('23');
+  assert.equal(w.monitor.finalApproaches()[0].approach.id, 'LTAG-23', 'follows the runway change');
+  w.setActive(null);
+  assert.deepEqual(w.monitor.finalApproaches(), [], 'no active runway: no approach to show');
+});
+
+test('empty final: an aircraft on the final does not change the next approach (its own runway is its sample\'s)', () => {
+  const w = world();
+  w.onFinal('INCIRLIK', 'par-final', 'PAR', { landingRunway: '23' });
+  const [e] = w.monitor.tick();
+  assert.equal(e.approach.id, 'LTAG-23');
+  assert.equal(w.monitor.finalApproaches()[0].approach.id, 'LTAG-05');
+});

@@ -82,8 +82,9 @@ function buildTickers({ wsHub, efsp, trackStore, collabStore, atisStore, surveil
       if (messages.length) wsHub.deliverEfsp(messages);
     } },
     { name: 'carrier', periodMs: 1000, tick: () => carrierTick.tick() },
-    // docs/adr/0112: the PAR sample, to the Position working each final only (config/par.json sampleMs, under 1 s, H115).
-    { name: 'par', periodMs: parMonitor.sampleMs, tick: () => wsHub.sendParSamples(parMonitor.tick()) },
+    // docs/adr/0112: the PAR sample, to the Position working each final only (config/par.json sampleMs, under 1 s, H115),
+    // with the approach each final's next aircraft flies, so its values can be set on an empty final (H161 V2-Q1 a).
+    { name: 'par', periodMs: parMonitor.sampleMs, tick: () => wsHub.sendParSamples(parMonitor.tick(), parMonitor.finalApproaches()) },
     // Conformance and the hints stamp mission time (the `since` they report is shown to
     // controllers); their pure durations (the heading grace, the airborne hold, staleness)
     // run on the injected wall clock (docs/adr/0096). CA stays on the wall clock: it only

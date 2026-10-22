@@ -26,6 +26,8 @@ const RAD = Math.PI / 180;
 
 /** The keys of one sample entry, in wire order (tools/wire-surface.js records them). */
 const SAMPLE_KEYS = Object.freeze(['stripId', 'facilityId', 'positionId', 'approach', 'sensor', 'plot', 'plotAgeMs', 'trail']);
+/** The keys of one `approaches` entry of the frame: the approach a final Bay's next aircraft flies (par-monitor.js finalApproaches). */
+const FINAL_APPROACH_KEYS = Object.freeze(['facilityId', 'positionId', 'approach']);
 /** The keys of `approach`. */
 // The four values in force are the controller's where the PAR controller set one (docs/adr/0130, decisions H153), else the
 // default; `defaults` holds the four defaults and `set` names the ones a controller set, so the panel can mark them and offer
@@ -207,7 +209,7 @@ function validateParValue(field, value) {
 
 module.exports = {
   PAR_VALUE_FIELDS, PAR_VALUE_LIMITS, validateParValue,
-  SAMPLE_KEYS, APPROACH_KEYS, PLOT_KEYS, TRAIL_KEYS, INOP_REASONS, RUNWAY_APPROACH_KEYS,
+  SAMPLE_KEYS, FINAL_APPROACH_KEYS, APPROACH_KEYS, PLOT_KEYS, TRAIL_KEYS, INOP_REASONS, RUNWAY_APPROACH_KEYS,
   FT_PER_M, FT_PER_NM,
   offsetPoint, measure, inCoverage, trailEntry,
   validateParApproaches,

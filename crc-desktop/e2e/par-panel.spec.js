@@ -60,22 +60,24 @@ async function openBay(page, positionId, bayId) {
   await page.locator('.efsp-bay-tab', { hasText: bayId }).first().click();
 }
 
-/** Every `par-sample` frame carries the spec's samples while it has some; `null` lets the server's through. */
+/** Every `par-sample` frame carries the spec's samples (and empty-final approaches) while it has some; `null` lets the server's through. */
 async function installSampleInjection(page) {
   await page.evaluate(() => {
-    window.__par = { samples: null };
+    window.__par = { samples: null, approaches: null };
     crc.msgRegistry.addEfspMessageObserver((msg) => {
       if (msg && msg.type === 'par-sample' && window.__par.samples) msg.samples = JSON.parse(JSON.stringify(window.__par.samples));
+      if (msg && msg.type === 'par-sample' && window.__par.approaches) msg.approaches = JSON.parse(JSON.stringify(window.__par.approaches));
     });
     // the panel's settings start at their defaults in every test
     for (const [k, v] of [['parAutoscale', true], ['parTolElHigh', 1], ['parTolElLow', 0.5], ['parTolAz', 1]]) crc.settingsRegistry.setSetting(k, v);
   });
 }
-const inject = (page, samples) => page.evaluate((s) => {
+const inject = (page, samples, approaches = null) => page.evaluate(([s, a]) => {
   window.__par.samples = s;
-  crc.parSamples.applyParSamples({ type: 'par-sample', at: Date.now(), samples: s ? JSON.parse(JSON.stringify(s)) : [] });
+  window.__par.approaches = a;
+  crc.parSamples.applyParSamples({ type: 'par-sample', at: Date.now(), samples: s ? JSON.parse(JSON.stringify(s)) : [], approaches: a ? JSON.parse(JSON.stringify(a)) : [] });
   crc.changeBus.markEfspChanged('par');
-}, samples);
+}, [samples, approaches]);
 
 const panel = (page) => page.locator('#par-panel');
 const field = (page, key) => panel(page).locator(`[data-par="${key}"]`);
@@ -85,7 +87,7 @@ const view = (page) => page.evaluate(() => crc.par.parPanelView());
 
 async function cleanUp(page, facility) {
   await page.evaluate((f) => {
-    if (window.__par) window.__par.samples = null;
+    if (window.__par) { window.__par.samples = null; window.__par.approaches = null; }
     for (const s of crc.state.getAllEfspStrips()) {
       if (s.state !== 'DROPPED' && s.facilityId === f) crc.ws.sendEfspMutation(s.ownerPositionId, s, { kind: 'DropStrip', reason: 'e2e cleanup' });
     }
@@ -513,4 +515,61 @@ test('07 a carrier lane has no PAR (H125): no sample, the FINAL line by side num
   expect(await page.evaluate(() => crc.parSamples.parSamples().length)).toBe(0);
   await row.locator('.efsp-final-terminal[data-terminal="WAVEOFF"]').click();
   await waitStrip(page, call, s => s.state === 'BOLTER_WAVEOFF', 'waveoff');
+});
+
+test('08 an empty final: the approach values stay on the header and PAR sets one with no aircraft (H161 V2-Q1 a); the note stays', async ({ page }) => {
+  await incirlik(page);
+  // the harness has no wind, so no active runway: the spec's frame names the approach the server would (the active runway end's)
+  await inject(page, [], [{ facilityId: 'INCIRLIK', positionId: 'PAR', approach: APPROACH_05 }]);
+  await page.evaluate(() => crc.dock.toggleDockPanel('par', true));
+  await expect(panel(page).locator('#par-empty')).toBeVisible();
+  await expect(panel(page).locator('#par-empty')).toHaveText('No aircraft on your final.');
+  await expect(panel(page).locator('#par-body')).toBeVisible();
+  await expect(field(page, 'title')).toHaveText('RWY 05 · LTAG');
+  await expect(field(page, 'da')).toHaveText('438');
+  // nothing about a flight: no flight row, no scope, no terminal button, no picks with one final
+  await expect(field(page, 'name')).toBeHidden();
+  await expect(panel(page).locator('[data-par-scope]')).toHaveCount(2);
+  await expect(panel(page).locator('[data-par-scope="el"]')).toBeHidden();
+  await expect(panel(page).locator('.par-term')).toHaveCount(0);
+  await expect(panel(page).locator('[data-par="picks"]')).toBeHidden();
+  await expect(panel(page).locator('.par-danger, .par-attn, .par-bad')).toHaveCount(0);
+  await expect.poll(() => parValues(page)).toEqual({});
+
+  const gpaCell = field(page, 'gpaDeg');
+  await expect(gpaCell).toHaveAttribute('data-editable', '1');
+  await gpaCell.click();
+  const input = panel(page).locator('[data-par-input="gpaDeg"]');
+  await expect(input).toHaveValue('3.06');
+  await input.fill('3.00');
+  await input.press('Enter');
+  await expect(input).toHaveCount(0);
+  await expect.poll(() => parValues(page)).toEqual({ '05': { gpaDeg: 3 } }); // the real server took it with nobody on the final
+  await inject(page, [], [{ facilityId: 'INCIRLIK', positionId: 'PAR', approach: { ...APPROACH_05, gpaDeg: 3, set: ['gpaDeg'] } }]);
+  await expect(gpaCell).toHaveText('3.00°');
+  await expect(gpaCell).toHaveAttribute('data-set', '1');
+  await panel(page).screenshot({ path: test.info().outputPath('08-empty-final-set.png') });
+
+  // the first aircraft arrives: the same header, now with its flight; it leaves: the header stays
+  const call = `PE${unique()}`;
+  const id = await onParFinal(page, call);
+  const setApproach = { ...APPROACH_05, gpaDeg: 3, set: ['gpaDeg'] };
+  await inject(page, [sample(id, { r: 4, approach: setApproach })], [{ facilityId: 'INCIRLIK', positionId: 'PAR', approach: setApproach }]);
+  await expect(panel(page).locator('#par-empty')).toBeHidden();
+  await expect(field(page, 'name')).toHaveText(call);
+  await expect(gpaCell).toHaveText('3.00°');
+  await inject(page, [], [{ facilityId: 'INCIRLIK', positionId: 'PAR', approach: setApproach }]);
+  await expect(panel(page).locator('#par-empty')).toBeVisible();
+  await expect(field(page, 'name')).toBeHidden();
+  await expect(gpaCell).toHaveText('3.00°');
+
+  // back to the default (the record is shared with every other test)
+  await gpaCell.click();
+  await panel(page).locator('[data-par-default="gpaDeg"]').click();
+  await expect.poll(() => parValues(page)).toEqual({});
+
+  // no approach named (no active runway, or not this controller's final): the note alone
+  await inject(page, [], []);
+  await expect(panel(page).locator('#par-body')).toBeHidden();
+  await expect(panel(page).locator('#par-empty')).toBeVisible();
 });

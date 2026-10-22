@@ -5,7 +5,7 @@ import { getEfspFlightData, getEfspStrip } from './efsp-state.js';
 import { getActingPositions, sendEfspMutation, sendEfspRunwayStatusMutation } from './efsp-ws.js';
 import { RUNWAY_STATUS_ACTION_OWNERS } from './runway-status-rules.js';
 import { onEfspChanged } from './efsp-change-bus.js';
-import { parSampleTimes, parSamples, parSampleFor } from './par-samples.js';
+import { parFinalApproaches, parSampleTimes, parSamples, parSampleFor } from './par-samples.js';
 import {
   DEFAULT_VIEW, PAR_DEFAULTS, PAR_VALUE_CELLS, autoscaleView, azAxisLabel, clampTo, createTrailFilter, gpHeightFt, headerModel,
   niceStep, noPlotState, pickFlight, rangeAtDaNm, readoutModel, parseParValue, parTerminalOp, parTerminalRecorded, parTerminals, parValueCells,
@@ -35,6 +35,9 @@ import {
 // controller's to set, in place (click, type, Enter; an empty field or "Default" goes back to the default; Escape abandons). They
 // are held on the server per runway end, so every PAR scope and the monitor measure against the same numbers; DA = TDZE + DH. A
 // value the controller set is marked grey (a dotted underline and a small mark), never amber: a set value is not a problem.
+// With nobody on the final the header stays, with the approach the next aircraft flies (the server's `approaches`, the active
+// runway end's), still settable, under the "No aircraft on your final." note (decisions H156 PV-Q1 a, H161 V2-Q1 a); several
+// such finals (any number of airfields) get a row of picks, as several flights do.
 
 const NS = 'http://www.w3.org/2000/svg';
 const COL = Object.freeze({
@@ -58,6 +61,7 @@ let _els = null;
 let _timer = null;
 let _resize = null;
 let _selected = null;          // the Strip the scopes show
+let _selectedFinal = null;     // with nobody on the final: the `facilityId:approach id` the header shows
 let _shown = null;             // the Strip last drawn (a new one resumes autoscale)
 let _view = { ...DEFAULT_VIEW };
 let _paused = false;           // a manual zoom paused autoscale
@@ -201,7 +205,7 @@ function _build() {
   msg.dataset.par = 'msg';
   const terms = _el('div', 'par-terms');
   _bodyEl.append(picks, head, flight, scopes, dev, msg, terms);
-  _els = { picks, title, values, da, facK, fac, flags, name, type, bcnK, bcn, gs, vs, range, el, az, elDev, azDev, alt, msg, terms, termSig: '' };
+  _els = { picks, head, flight, scopes, dev, title, values, da, facK, fac, flags, name, type, bcnK, bcn, gs, vs, range, el, az, elDev, azDev, alt, msg, terms, termSig: '' };
 
   if (typeof ResizeObserver === 'function') {
     if (_resize) _resize.disconnect();
@@ -318,29 +322,44 @@ function _windowText(kind, autoscale) {
   return `0–${v.rMax.toFixed(1)} NM · ${span}${auto}`;
 }
 
-function _renderPicks(samples) {
+/** The row of picks: one button per item ({ key, name }) when there are two or more; `shown` is pressed, a click calls `onPick(key)`. */
+function _renderPicks(items, shown, onPick) {
   const picks = _els.picks;
-  picks.hidden = samples.length < 2;
-  const sig = samples.length < 2 ? '' : samples.map(s => s.stripId).join(',');
+  picks.hidden = items.length < 2;
+  const sig = items.length < 2 ? '' : items.map(i => i.key).join(',');
   if (picks.dataset.sig !== sig) {
-    // rebuilt only when the flights change, never under a click
+    // rebuilt only when the items change, never under a click
     picks.dataset.sig = sig;
     picks.textContent = '';
     if (!sig) return;
-    for (const s of samples) {
+    for (const item of items) {
       const b = _el('button', 'par-pick', '');
       b.type = 'button';
-      b.dataset.parPick = s.stripId;
-      b.addEventListener('click', () => { _selected = s.stripId; renderParPanel(); });
+      b.dataset.parPick = item.key;
+      b.addEventListener('click', () => { onPick(item.key); renderParPanel(); });
       picks.appendChild(b);
     }
   }
   for (const b of picks.children) {
-    const s = samples.find(x => x.stripId === b.dataset.parPick);
-    const name = (s && parFlightOf(s.stripId).name) || b.dataset.parPick;
+    const item = items.find(x => x.key === b.dataset.parPick);
+    const name = (item && item.name) || b.dataset.parPick;
     if (b.textContent !== name) b.textContent = name;
-    b.setAttribute('aria-pressed', String(b.dataset.parPick === _shown));
+    b.setAttribute('aria-pressed', String(b.dataset.parPick === shown));
   }
+}
+
+const _finalKey = (f) => `${f.facilityId}:${f.approach.id}`;
+
+/**
+ * What the header is about: { facilityId, approach, sample } for the flight the scopes show, else, with nobody on the final,
+ * the approach the next aircraft flies (`sample` null), else null.
+ */
+function _context() {
+  const sample = _shown ? parSampleFor(_shown) : null;
+  if (sample) return { facilityId: sample.facilityId, approach: sample.approach || null, sample };
+  const finals = parFinalApproaches();
+  const f = finals.find(x => _finalKey(x) === _selectedFinal) || finals[0];
+  return f ? { facilityId: f.facilityId, approach: f.approach, sample: null } : null;
 }
 
 function _renderTerminals(sample) {
@@ -369,16 +388,17 @@ function _renderTerminals(sample) {
   }
 }
 
-/** The Position this session acts as that may set the approach values at the sample's Facility, or null (the mirror of SetParApproach's owners). */
-function _valueSetter(sample) {
-  if (!sample) return null;
+/** The Position this session acts as that may set the approach values at the header's Facility, or null (the mirror of SetParApproach's owners). */
+function _valueSetter(ctx) {
+  if (!ctx) return null;
   const owners = RUNWAY_STATUS_ACTION_OWNERS.SetParApproach || [];
-  return getActingPositions(sample.facilityId).find(p => owners.includes(p)) || null;
+  return getActingPositions(ctx.facilityId).find(p => owners.includes(p)) || null;
 }
 
-function _renderValues(sample, approach) {
+function _renderValues(ctx) {
+  const approach = ctx.approach;
   const cells = parValueCells(approach);
-  const editable = !!(approach && approach.runwayEnd && _valueSetter(sample));
+  const editable = !!(approach && approach.runwayEnd && _valueSetter(ctx));
   if (_editing && (!approach || _editing.approachId !== approach.id || !editable)) _editing = null;
   for (const c of cells) {
     const span = _els.values[c.field];
@@ -395,9 +415,9 @@ function _renderValues(sample, approach) {
 
 /** Opens an approach value for typing, in place. */
 function _beginEdit(field) {
-  const sample = _shown ? parSampleFor(_shown) : null;
-  const approach = sample && sample.approach;
-  if (!approach || !approach.runwayEnd || !_valueSetter(sample)) return;
+  const ctx = _context();
+  const approach = ctx && ctx.approach;
+  if (!approach || !approach.runwayEnd || !_valueSetter(ctx)) return;
   if (_editing && _editing.field === field) return;
   _editing = null;
   renderParPanel(); // puts the cell that was open back
@@ -441,9 +461,9 @@ function _cancelEdit() {
 /** Sends a typed value (`text` null: back to the default). An invalid one keeps the field open with the range. */
 function _commitEdit(text) {
   if (!_editing) return;
-  const sample = _shown ? parSampleFor(_shown) : null;
-  const approach = sample && sample.approach;
-  const positionId = _valueSetter(sample);
+  const ctx = _context();
+  const approach = ctx && ctx.approach;
+  const positionId = _valueSetter(ctx);
   if (!approach || !positionId) { _cancelEdit(); return; }
   const { field, input } = _editing;
   const r = text === null ? { ok: true, value: null } : parseParValue(field, text);
@@ -456,7 +476,7 @@ function _commitEdit(text) {
     _els.msg.className = 'par-msg';
     return;
   }
-  sendEfspRunwayStatusMutation(positionId, sample.facilityId, undefined, { kind: 'SetParApproach', runwayEnd: approach.runwayEnd, field, value: r.value });
+  sendEfspRunwayStatusMutation(positionId, ctx.facilityId, undefined, { kind: 'SetParApproach', runwayEnd: approach.runwayEnd, field, value: r.value });
   _cancelEdit();
 }
 
@@ -469,13 +489,14 @@ export function renderParPanel() {
   for (const s of samples) if (!_firstSeen.has(s.stripId)) _firstSeen.set(s.stripId, now);
   const id = pickFlight(samples, _selected);
   const sample = id ? parSampleFor(id) : null;
-  _emptyEl.hidden = !!sample;
-  _bodyEl.hidden = !sample;
-  if (!sample) { _shown = null; return; }
+  if (!sample) { _shown = null; _renderEmptyFinal(); return; }
+  _emptyEl.hidden = true;
+  _bodyEl.hidden = false;
   if (!_els) _build();
+  _showFlightRows(true);
   if (id !== _shown) { _paused = false; _els.termSig = ''; }
   _shown = id;
-  _renderPicks(samples);
+  _renderPicks(samples.map(s => ({ key: s.stripId, name: parFlightOf(s.stripId).name })), _shown, (key) => { _selected = key; });
 
   const approach = sample.approach || null;
   // the angle in use is the approach's, one value per approach on the server (docs/adr/0130)
@@ -495,7 +516,7 @@ export function renderParPanel() {
   const hd = headerModel(approach, gpa);
 
   _els.title.textContent = hd.title;
-  _renderValues(sample, approach);
+  _renderValues({ facilityId: sample.facilityId, approach, sample });
   _els.da.textContent = hd.da || '—';
   _els.fac.textContent = hd.fac;
   _els.facK.hidden = !hd.fac;
@@ -543,6 +564,41 @@ export function renderParPanel() {
   _els.az.win.textContent = _windowText('az', autoscale);
   _drawScope(_els.el, 'el', ctx);
   _drawScope(_els.az, 'az', ctx);
+}
+
+/** The flight's rows (the flight, the scopes, the deviations, the terminal buttons): shown with a flight, hidden on an empty final. */
+function _showFlightRows(on) {
+  _bodyEl.dataset.emptyFinal = on ? '' : '1';
+  for (const node of [_els.flight, _els.scopes, _els.dev, _els.terms]) node.hidden = !on;
+}
+
+/**
+ * Nobody on the final: the note, and, when the server names the approach the next aircraft flies, its header with the values,
+ * settable as with a flight (decisions H156 PV-Q1 a, H161 V2-Q1 a). Nothing else: no flight, no scope, no button.
+ */
+function _renderEmptyFinal() {
+  _emptyEl.hidden = false;
+  const finals = parFinalApproaches();
+  const ctx = _context();
+  if (!ctx) { _bodyEl.hidden = true; _editing = null; return; }
+  if (!_els) _build();
+  _bodyEl.hidden = false;
+  _showFlightRows(false);
+  _selectedFinal = _finalKey(ctx);
+  _renderPicks(finals.map(f => ({ key: _finalKey(f), name: headerModel(f.approach).title })), _selectedFinal, (key) => { _selectedFinal = key; });
+  const hd = headerModel(ctx.approach, Number.isFinite(ctx.approach.gpaDeg) ? ctx.approach.gpaDeg : PAR_DEFAULTS.gpaDeg);
+  _els.title.textContent = hd.title;
+  _renderValues(ctx);
+  _els.da.textContent = hd.da || '—';
+  _els.fac.textContent = hd.fac;
+  _els.facK.hidden = !hd.fac;
+  _els.fac.hidden = !hd.fac;
+  _els.flags.textContent = '';
+  if (!(_editing && _els.msg.dataset.valueError === '1')) {
+    _els.msg.dataset.valueError = '';
+    _els.msg.textContent = '';
+    _els.msg.className = 'par-msg';
+  }
 }
 
 export function initParPanel() {

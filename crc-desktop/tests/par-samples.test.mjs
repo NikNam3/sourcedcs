@@ -1,7 +1,7 @@
 import './helpers/client-env.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { applyParSamples, clearParSamples, parSampleFor, parSamples, parSampleTimes } from '../app/public/js/panels/efsp/par-samples.js';
+import { applyParSamples, clearParSamples, parFinalApproaches, parSampleFor, parSamples, parSampleTimes } from '../app/public/js/panels/efsp/par-samples.js';
 import { carrierDistanceNm, carrierFinalDistanceText } from '../app/public/js/panels/efsp/carrier-final-distance.js';
 import { applyEfspCarrierSnapshot } from '../app/public/js/panels/efsp/carrier-state.js';
 import { applyEfspCorrelationDelta } from '../app/public/js/panels/efsp/efsp-state.js';
@@ -58,4 +58,17 @@ test('the carrier DIST Block is the range from the ship to the contact, for ever
   assert.equal(carrierFinalDistanceText({ stripId: 'cv1', flightDataId: 'fc', ownerPositionId: 'CV_APP1' }), '');
   clearParSamples();
   applyEfspCarrierSnapshot({ carriers: [] });
+});
+
+// decisions H161 V2-Q1 a: the approach of each of this controller's finals rides on the frame, with or without an aircraft
+test('the frame\'s approaches replace the earlier ones; an entry with no approach is dropped; clear forgets them', () => {
+  const fin = (facilityId, id) => ({ facilityId, positionId: 'PAR', approach: id ? { id } : null });
+  applyParSamples({ type: 'par-sample', at: 1, samples: [], approaches: [fin('INCIRLIK', 'LTAG-05'), fin('TESTFIELD', 'TEST-09'), fin('X', null)] });
+  assert.deepEqual(parFinalApproaches().map(a => a.approach.id), ['LTAG-05', 'TEST-09']);
+  assert.deepEqual(parSamples(), []);
+  applyParSamples({ type: 'par-sample', at: 2, samples: [] });
+  assert.deepEqual(parFinalApproaches(), [], 'a frame without approaches: none');
+  applyParSamples({ type: 'par-sample', at: 3, samples: [], approaches: [fin('INCIRLIK', 'LTAG-23')] });
+  clearParSamples();
+  assert.deepEqual(parFinalApproaches(), []);
 });
