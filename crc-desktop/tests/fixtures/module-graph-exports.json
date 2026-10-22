@@ -1095,8 +1095,10 @@
    "renderFrequencyPanel"
   ],
   "panels/efsp/frequency-state.js": [
+   "FREQUENCY_LABEL_MAX",
    "FREQUENCY_LIMITS",
    "_resetFrequencyStateForTest",
+   "addFrequencyOp",
    "applyFrequencyDelta",
    "frequencyChannelProblem",
    "frequencyRowKey",
@@ -1105,9 +1107,12 @@
    "frequencySetNote",
    "frequencyText",
    "getFrequencyRows",
+   "isFrequencyAdded",
    "isFrequencySet",
    "parseFrequencyInput",
+   "parseFrequencyLabel",
    "positionFrequenciesOf",
+   "removeFrequencyOp",
    "replaceFrequencyRows",
    "resetFrequencyOp",
    "setFrequencyOp",

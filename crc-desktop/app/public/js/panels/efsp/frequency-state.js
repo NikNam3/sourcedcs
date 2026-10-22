@@ -4,8 +4,9 @@
 // `frequencies` and in each `efsp-frequency-delta` (a Facility's rows, whole), and the pure model the FREQUENCIES panel
 // draws. A leaf: it imports nothing, so node:test imports it directly.
 //
-// A row: `{ facilityId, kind: 'POSITION', positionId, label, mhz, defaultMhz, setAt, setBy }` or
-// `{ facilityId, kind: 'SFA', rackId, use, mhz, defaultMhz, setAt, setBy }`. The server decides; the input check here
+// A row: `{ facilityId, kind: 'POSITION', positionId, label, mhz, defaultMhz, added, setAt, setBy }` or
+// `{ facilityId, kind: 'SFA', rackId, use, mhz, defaultMhz, added, setAt, setBy }`; an added row (docs/adr/0138, a row a
+// controller added at run time) has `added: true` and `defaultMhz: null`. The server decides; the input check here
 // mirrors crc-sync's frequency-table.js (tests/frequency-state.test.mjs holds the two to each other), so a typo is
 // answered at once, before a round trip.
 
@@ -30,8 +31,11 @@ export function frequencyRowKey(row) {
   return row.kind === 'SFA' ? `${row.facilityId}/SFA/${row.rackId}` : `${row.facilityId}/${row.positionId}/${row.label}`;
 }
 
-/** A controller-set value (differs from the facility file's): the server keeps only those, with who set it. */
-export function isFrequencySet(row) { return !!row && row.mhz !== row.defaultMhz; }
+/** A controller-set value (differs from the facility file's, or a row added at run time): the server keeps only those, with who set it. */
+export function isFrequencySet(row) { return !!row && (row.added === true || row.mhz !== row.defaultMhz); }
+
+/** A row a controller added at run time (crc-sync docs/adr/0138): removed, never reset. */
+export function isFrequencyAdded(row) { return !!row && row.added === true; }
 
 /** `275.800`. */
 export function frequencyText(mhz) { return Number.isFinite(mhz) ? mhz.toFixed(3) : '--'; }
@@ -59,11 +63,12 @@ export function frequencyRowName(row) {
   return row.kind === 'SFA' ? `${row.rackId} ${String(row.use).replace(/_/g, ' ')}` : row.label;
 }
 
-/** The grey note on a set row: `default 275.800 · c-GC 1432Z`. Empty on a default row. */
+/** The grey note on a set row: `default 275.800 · c-GC 1432Z`, on an added row `added · c-GC 1432Z`. Empty on a default row. */
 export function frequencySetNote(row) {
   if (!isFrequencySet(row)) return '';
   const when = Number.isFinite(row.setAt) ? new Date(row.setAt).toISOString().slice(11, 16).replace(':', '') + 'Z' : '';
-  return [`default ${frequencyText(row.defaultMhz)}`, [row.setBy, when].filter(Boolean).join(' ')].filter(Boolean).join(' · ');
+  const what = isFrequencyAdded(row) ? 'added' : `default ${frequencyText(row.defaultMhz)}`;
+  return [what, [row.setBy, when].filter(Boolean).join(' ')].filter(Boolean).join(' · ');
 }
 
 // crc-sync airspace-schema.js MIN/MAX_FREQUENCY_MHZ, facility-schema.js SFA_MIN/MAX_MHZ and frequency-table.js's
@@ -104,6 +109,30 @@ export function parseFrequencyInput(text, row, pool = []) {
 /** The op that sets a row to `mhz` (`efsp-frequency-mutation`'s `op`). */
 export function setFrequencyOp(row, mhz) {
   return row.kind === 'SFA' ? { kind: 'SetFrequency', rackId: row.rackId, mhz } : { kind: 'SetFrequency', positionId: row.positionId, label: row.label, mhz };
+}
+
+/** The op that removes a row a controller added (crc-sync docs/adr/0138). */
+export function removeFrequencyOp(row) {
+  return row.kind === 'SFA' ? { kind: 'RemoveFrequency', rackId: row.rackId } : { kind: 'RemoveFrequency', positionId: row.positionId, label: row.label };
+}
+
+/** The op that adds a frequency: to a Position (`positionId`, `label`), or with `positionId` null to the SFA pool (crc-sync names its Rack). */
+export function addFrequencyOp(positionId, label, mhz) {
+  return positionId ? { kind: 'AddFrequency', positionId, label, mhz } : { kind: 'AddFrequency', sfa: true, mhz };
+}
+
+// crc-sync facility-schema.js validatePositionFrequencies / frequency-table.js labelProblem: 1 to 12 characters.
+export const FREQUENCY_LABEL_MAX = 12;
+
+/**
+ * What the controller typed as a new frequency's label: `{ label }` (upper case, trimmed) or `{ error }`. `taken` are the
+ * labels the Position already has.
+ */
+export function parseFrequencyLabel(text, taken = []) {
+  const label = String(text == null ? '' : text).trim().toUpperCase();
+  if (!label || label.length > FREQUENCY_LABEL_MAX) return { error: `a label of 1 to ${FREQUENCY_LABEL_MAX} characters, e.g. GND` };
+  if (taken.includes(label)) return { error: `${label} is already there` };
+  return { label };
 }
 
 /** The op that returns a row to the facility file's value. */

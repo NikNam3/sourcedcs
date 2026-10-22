@@ -186,10 +186,13 @@ export function applyEfspFrequencyDelta(msg) {
   const rows = getFrequencyRows(facilityId);
   const byPosition = positionFrequenciesOf(rows, facilityId);
   for (const [id, p] of efspPositions) {
-    if (p.facilityId === facilityId && byPosition[id]) efspPositions.set(id, { ...p, frequencies: byPosition[id] });
+    // A Position whose last added frequency was removed has none (crc-sync docs/adr/0138).
+    if (p.facilityId === facilityId) efspPositions.set(id, { ...p, frequencies: byPosition[id] || [] });
   }
   const pool = sfaPoolOf(rows, facilityId);
-  if (pool) efspBays = efspBays.map(b => (b.view === 'sfa-freqs' && (!b.facilityId || b.facilityId === facilityId) ? { ...b, sfaPool: pool } : b));
+  // The SFA Bay's Racks are the pool's, so a Rack added or removed at run time comes and goes with it (docs/adr/0138).
+  const racksOf = (b) => [...(b.rackIds || []).filter(r => pool.some(p => p.rackId === r)), ...pool.map(p => p.rackId).filter(r => !(b.rackIds || []).includes(r))];
+  if (pool) efspBays = efspBays.map(b => (b.view === 'sfa-freqs' && (!b.facilityId || b.facilityId === facilityId) ? { ...b, sfaPool: pool, rackIds: racksOf(b) } : b));
 }
 
 /**
