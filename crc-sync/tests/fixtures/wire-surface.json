@@ -121,7 +121,8 @@
         "PassClearance",
         "Remove",
         "SetCarrierState",
-        "SetCaseIAngels"
+        "SetCaseIAngels",
+        "SetEat"
       ],
       "efsp-correlation-mutation": [
         "BindTrack",
@@ -164,6 +165,7 @@
         "APPROACH_TO_FINAL",
         "COMMENCED_TO_MARSHAL",
         "FINAL_TO_LSO",
+        "FINAL_TRAPPED",
         "MARSHAL_TO_APPROACH",
         "MARSHAL_TO_PATTERN_CASE_I",
         "MARSHAL_TO_PRIFLY"
@@ -212,6 +214,7 @@
       ],
       "entryKeys": [
         "caseIAngels",
+        "eatOverrideUtc",
         "eatUtc",
         "flightDataId",
         "pushedAtUtc",

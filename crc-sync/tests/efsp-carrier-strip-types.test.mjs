@@ -137,7 +137,7 @@ test('the CARRIER Facility: four MILITARY_ATC Positions, Bays that imply carrier
   for (const p of c.positions) assert.ok(Array.isArray(c.consolidation[p]) && c.consolidation[p].length === 3, p);
   assert.equal(facilityConfig.bayImpliesState('cv-marshal-stack', 'CARRIER'), 'IN_STACK');
   assert.equal(facilityConfig.bayImpliesState('cv-app2-bolter', 'CARRIER'), 'BOLTER_WAVEOFF');
-  assert.deepEqual(facilityConfig.getBaysFor('CV_PRIFLY', 'CARRIER')[0].rackIds, ['initial', 'break', 'downwind', 'groove']);
+  assert.deepEqual(facilityConfig.getBaysFor('CV_PRIFLY', 'CARRIER')[0].rackIds, ['main'], 'no pattern legs (live test U19, docs/adr/0137)');
   // every Bay-implied state is a state of some carrier strip type
   const carrierStates = new Set(CARRIER_STRIP_TYPES.flatMap(r => nla.STATES_BY_STRIP_TYPE[r]));
   for (const b of facilityConfig.getAllBays('CARRIER')) if (b.impliesState) assert.ok(carrierStates.has(b.impliesState), b.bayId);
@@ -160,7 +160,8 @@ test('the NLA tables: Commence is Case- and lane-dependent; one next action per 
   // At an airfield the final's NLA is Landed: the Strip goes to GC at TAXI_IN, no carrier handoff, never BALL (docs/adr/0117).
   assert.equal(nla.computeNla(strip('FINAL', 'ON_FINAL'), null, NOW, { facilityId: 'INCIRLIK' }).carrierHandoff, undefined);
   assert.deepEqual(nla.computeNla(strip('FINAL', 'ON_FINAL'), null, NOW, { facilityId: 'INCIRLIK' }), { toState: 'TAXI_IN', transferTo: 'GC', alsoLegal: ['BOLTER_WAVEOFF'] });
-  assert.deepEqual(nla.computeNla(strip('FINAL', 'BALL'), null, NOW, {}).toState, 'DROPPED');
+  // Trapped (docs/adr/0137, live test U20): to PriFly's RECOVERED Bay as a PATTERN Strip, not a drop at the lane.
+  assert.deepEqual(nla.computeNla(strip('FINAL', 'BALL'), null, NOW, {}), { toState: 'RECOVERED', carrierHandoff: 'FINAL_TRAPPED', alsoLegal: ['BOLTER_WAVEOFF'] });
   assert.equal(nla.computeNla(strip('PATTERN', 'IN_PATTERN'), null, NOW, {}).toState, 'RECOVERED');
   assert.equal(nla.computeNla(strip('MARSHAL', 'LAUNCH'), null, NOW, {}).toState, 'DROPPED');
 });

@@ -17,6 +17,7 @@ const CARRIER_HANDOFF_EFFECTS = Object.freeze({
   FINAL_TO_LSO:              Object.freeze({ stripType: 'FINAL',   state: 'ON_FINAL',  toStripType: 'FINAL',   toState: 'BALL',       owner: 'SAME', defaultTo: null }),
   MARSHAL_TO_PRIFLY:         Object.freeze({ stripType: 'MARSHAL', state: 'IN_STACK',  toStripType: 'PATTERN', toState: 'IN_PATTERN', owner: 'TO',   defaultTo: 'CV_PRIFLY' }),
   MARSHAL_TO_PATTERN_CASE_I: Object.freeze({ stripType: 'MARSHAL', state: 'IN_STACK',  toStripType: 'PATTERN', toState: 'IN_PATTERN', owner: 'TO',   defaultTo: 'CV_PRIFLY' }),
+  FINAL_TRAPPED:             Object.freeze({ stripType: 'FINAL',   state: 'BALL',      toStripType: 'PATTERN', toState: 'RECOVERED',  owner: 'TO',   defaultTo: 'CV_PRIFLY' }), // docs/adr/0137
 });
 
 module.exports = { CARRIER_HANDOFF_EFFECTS };

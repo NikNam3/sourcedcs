@@ -51,6 +51,7 @@ const {
   DELTA_MIN_MINUTES,
   setCaseIAngels,
   passClearance,
+  setEat,
   markClearanceChanges,
   applyStackOp,
 } = require('./marshal-stack');
@@ -135,6 +136,7 @@ module.exports = {
   DELTA_MIN_MINUTES,
   setCaseIAngels,
   passClearance,
+  setEat,
   markClearanceChanges,
   applyStackOp,
   SHIP_CATEGORY,

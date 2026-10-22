@@ -50,7 +50,8 @@ test('emptyStack is keyed by stackId (decisions H29) and holds no derived value'
   const s = emptyStack({ hullId: 'CVN-72' });
   assert.equal(s.stackId, DEFAULT_STACK_ID);
   assert.deepEqual(s, { stackId: 'MAIN', hullId: 'CVN-72', entries: [], deltaMs: 0 });
-  assert.deepEqual([...ENTRY_KEYS], ['flightDataId', 'stackIndex', 'status', 'caseIAngels', 'pushedAtUtc', 'eatUtc', 'unpassed']);
+  // eatOverrideUtc (docs/adr/0137) is present on an entry only while the Marshal has assigned an EAT
+  assert.deepEqual([...ENTRY_KEYS], ['flightDataId', 'stackIndex', 'status', 'caseIAngels', 'pushedAtUtc', 'eatUtc', 'unpassed', 'eatOverrideUtc']);
   assert.equal(STACK_DEFAULTS.maxIndex, 19);
 });
 
@@ -63,7 +64,7 @@ test('validateStack refuses derived keys by name; normalizeStack drops them', ()
     assert.match(r.detail, /derived from the stack index/);
     const n = normalizeStack(s);
     assert.equal(n.ok, true);
-    assert.deepEqual(Object.keys(n.stack.entries[0]).sort(), [...ENTRY_KEYS].sort());
+    assert.deepEqual(Object.keys(n.stack.entries[0]).sort(), ENTRY_KEYS.filter((x) => x !== 'eatOverrideUtc').sort());
     assert.equal(validateStack(n.stack).ok, true);
   }
 });
@@ -334,6 +335,7 @@ test('applyStackOp dispatches every STACK_OP_KIND and refuses anything else', ()
     Delta: { minutes: 4 },
     BackToStack: { flightDataId: 'a' },
     PassClearance: { flightDataId: 'a', angels: null, eatUtc: null },
+    SetEat: { flightDataId: 'b', eatUtc: 600_000 }, // docs/adr/0137: the one per-flight EAT the Marshal assigns
   };
   assert.deepEqual(Object.keys(ops).sort(), [...STACK_OP_KINDS].sort());
   for (const [kind, op] of Object.entries(ops)) {

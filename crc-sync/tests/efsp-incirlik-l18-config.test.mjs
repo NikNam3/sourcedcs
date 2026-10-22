@@ -71,7 +71,7 @@ test('Bay descriptor flags: the PAR and SFA Bays and the carrier\'s final/patter
   assert.equal(fc.getBay('ap-sfa').replacesRacks, undefined, 'the SFA racks ARE the frequencies');
   assert.equal(fc.getBay('cv-app1-final', 'CARRIER').replacesRacks, undefined, 'the carrier keeps its racks and their buttons');
   assert.equal(fc.getBay('rsu-pattern'), null, 'no RSU (docs/adr/0126)');
-  assert.equal(fc.getBay('cv-prifly-pattern', 'CARRIER').view, 'pattern');
+  assert.equal(fc.getBay('cv-prifly-pattern', 'CARRIER').view, undefined, 'no pattern leg board (live test U19, docs/adr/0137)');
   assert.equal(fc.getBay('cv-app1-final', 'CARRIER').view, 'final');
   assert.equal(fc.getBay('cv-app2-final', 'CARRIER').view, 'final');
   const flagged = fc.getFacilityIds().flatMap(f => fc.getAllBays(f)).filter(b => b.capacity !== undefined).map(b => b.bayId);

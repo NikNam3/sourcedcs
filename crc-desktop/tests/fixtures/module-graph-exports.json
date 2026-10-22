@@ -548,9 +548,6 @@
    "isParFinalStrip",
    "nextParCall",
    "parCallButtons",
-   "patternLegsFor",
-   "patternOpFor",
-   "patternStripsFor",
    "refreshDistBlocks",
    "renderBayDescriptorView"
   ],
@@ -734,6 +731,7 @@
    "RANGE_MIN_NM",
    "SPIN_MIN_FT",
    "SPIN_WITHIN_NM",
+   "approachPath",
    "arcOnAxis",
    "bolterRacetrack",
    "clampRange",
@@ -741,6 +739,7 @@
    "distanceNm",
    "extendedCentreline",
    "landingPattern",
+   "marshalHolding",
    "marshalStack",
    "occupancy",
    "onAxis",
@@ -1155,11 +1154,13 @@
    "compareLanding",
    "dropSlot",
    "eatMinuteText",
+   "fuelBlockOp",
    "fuelLevel",
    "fuelText",
    "marginKlb",
    "marksOf",
    "passClearanceOp",
+   "setEatOp",
    "statusOf"
   ],
   "panels/efsp/marshal-panel.js": [
@@ -1349,18 +1350,6 @@
    "parSampleFor",
    "parSampleTimes",
    "parSamples"
-  ],
-  "panels/efsp/pattern-board.js": [
-   "INTENT_LABELS",
-   "PATTERN_ACTIONS",
-   "PATTERN_FINAL_MAX",
-   "PATTERN_LONG_MIN",
-   "PRIFLY_LEGS",
-   "UNPLACED_LEG",
-   "moveToLeg",
-   "nextLeg",
-   "patternBoardModel",
-   "renderPatternBoard"
   ],
   "panels/efsp/pattern-rules.js": [
    "PATTERN_CONVERSIONS",

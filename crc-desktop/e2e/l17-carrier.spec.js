@@ -209,8 +209,14 @@ test('03 Case II handoffs: Commence feeds a lane, See you hands to PriFly, Radar
   // Ball and Trapped are two advancing presses: the client swallows a second one inside the 400 ms double-tap window (F-101), as it does for a person's double tap.
   await lapseNlaGuard(marshal);
   await strip(marshal, a).locator('.efsp-nla-btn').click();
-  await expect.poll(() => stripOf(marshal, a)).toBeNull();
+  // Trapped (crc-sync docs/adr/0137, live test U20): the Strip goes to PriFly's RECOVERED Bay, and PriFly drops it from there.
+  await waitStrip(pri, a, s => s.stripType === 'PATTERN' && s.state === 'RECOVERED' && s.ownerPositionId === 'CV_PRIFLY' && s.bayId === 'cv-prifly-recovered', 'Trapped');
   await expect.poll(() => marshal.evaluate(() => crc.carrier.carrierDerivedStack().length)).toBe(0);
+  await openBay(pri, 'CV_PRIFLY', 'cv-prifly-recovered');
+  await expect(strip(pri, a).locator('.efsp-nla-btn')).toHaveText('Drop');
+  await pri.screenshot({ path: test.info().outputPath('03-prifly-recovered.png') });
+  await strip(pri, a).locator('.efsp-nla-btn').click();
+  await expect.poll(() => stripOf(pri, a)).toBeNull();
 
   await cleanUp(marshal, pri);
   await setCase(pri, 'III');
@@ -333,4 +339,26 @@ test('06 the carrier panel: typing over a value, where it comes from, "Use defau
   await expect(lp.locator('[data-carrier-value="tankerOnStation"]')).toHaveText('no');
   await cleanUp(marshal, pri);
   await setCase(pri, 'III');
+});
+
+test('07 the Marshal creates a recovery and a launch Strip from the toolbar (U18, crc-sync docs/adr/0137); PriFly cannot', async ({ browser, baseURL }) => {
+  const marshal = await controller(browser, baseURL, 'e2e-cv-marshal7', ['CV_MARSHAL']);
+  const pri = await controller(browser, baseURL, 'e2e-cv-prifly7', ['CV_PRIFLY']);
+  await expect(pri.locator('#efsp-create-strip-btn')).toBeDisabled();
+  const [rec, lau] = [cs('REC'), cs('LAU')];
+  const type = marshal.locator('#efsp-create-strip-type');
+  await expect(type).toBeVisible();
+  await type.selectOption({ label: 'Marshal · Recovery' });
+  await marshal.locator('#efsp-new-strip-callsign').fill(rec);
+  await marshal.locator('#efsp-create-strip-btn').click();
+  await waitStrip(marshal, rec, s => s.stripType === 'MARSHAL' && s.state === 'IN_STACK' && s.bayId === 'cv-marshal-stack', 'recovery created');
+  await expect.poll(() => marshal.evaluate(() => crc.carrier.carrierDerivedStack().length)).toBe(1);
+  await type.selectOption({ label: 'Marshal · Launch' });
+  await marshal.locator('#efsp-new-strip-callsign').fill(lau);
+  await marshal.locator('#efsp-create-strip-btn').click();
+  await waitStrip(marshal, lau, s => s.stripType === 'MARSHAL' && s.state === 'LAUNCH' && s.bayId === 'cv-marshal-departures', 'launch created');
+  await openBay(marshal, 'CV_MARSHAL', 'cv-marshal-stack');
+  await expect(strip(marshal, rec)).toBeVisible();
+  await marshal.screenshot({ path: test.info().outputPath('07-marshal-created.png') });
+  await cleanUp(marshal);
 });

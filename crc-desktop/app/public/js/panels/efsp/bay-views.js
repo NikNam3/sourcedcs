@@ -1,7 +1,6 @@
 'use strict';
-import { missionNow } from '../../mission-clock.js';
 import {
-  getEfspBays, getEfspFlightData, getEfspRunwayStatus, getEfspRack, getEfspStrip
+  getEfspBays, getEfspFlightData, getEfspRack, getEfspStrip
 } from './efsp-state.js';
 import { parTerminalOp, parTerminalRecorded, parTerminals } from './par-model.js';
 import { leadingFlightName } from './strip-fields.js';
@@ -9,17 +8,15 @@ import { carrierFinalDistanceText } from './carrier-final-distance.js';
 import { onEfspChanged } from './efsp-change-bus.js';
 import { FINAL_HANDOFF_LABEL, FINAL_RECEIVER, finalHandoffOffered, finalHandoffOp, sfaBayOf, sfaRows } from './sfa-state.js';
 import { getActingPositions, sendEfspMutation } from './efsp-ws.js';
-import { patternBoardModel, renderPatternBoard } from './pattern-board.js';
 
 // Bay descriptor views (crc-sync docs/adr/0075, 0093): a Bay whose descriptor says
-// `view: 'pattern' | 'final' | 'sfa-freqs'` mounts a component, instead of (or
-// above) its Strip racks. One mechanism for every Bay that has one: the carrier's PriFly pattern and FINAL lanes, and the SFA frequency header.
+// `view: 'final' | 'sfa-freqs'` mounts a component, instead of (or
+// above) its Strip racks. One mechanism for every Bay that has one: the carrier's FINAL lanes and the SFA frequency header.
+// (PriFly's pattern leg board, `view: 'pattern'`, is gone: live test U19, docs/adr/0137. The pattern is flown zip-lip.)
 // bay-view.js calls `renderBayDescriptorView()` once per render and knows nothing
 // else about them.
 //
 // What each view does:
-//   pattern    pattern-board.js over the Bay's racks (a leg is a Rack): Move between
-//              legs, Landed, Drop. Advisories only; the board never refuses.
 //   final      on the carrier only (no PAR there, H125, crc-sync docs/adr/0116): one line per
 //              aircraft on the final, the side number leading (H124), no range (the Strip's DIST
 //              Block carries it, H126), and Ball / Waveoff. An airfield's PAR final (Incirlik's
@@ -38,53 +35,10 @@ import { patternBoardModel, renderPatternBoard } from './pattern-board.js';
 //
 // Pure model builders first (unit-tested), DOM second.
 
-const _fin = (v) => typeof v === 'number' && Number.isFinite(v);
 
 /** The Bay's descriptor, from the snapshot's Bay list, or null. */
 export function bayDescriptorFor(bayId, bays = getEfspBays()) {
   return (bays || []).find(b => b.bayId === bayId) || null;
-}
-
-// ── pattern ─────────────────────────────────────────────────────────────────
-
-/** The Bay's racks as legs, in rack order. */
-export function patternLegsFor(bay) {
-  return (bay && bay.rackIds ? bay.rackIds : []).map(id => ({ id, label: String(id).toUpperCase() }));
-}
-
-/**
- * Strips on the pattern board: one entry per live Strip in the Bay, its leg the Rack it sits in. Time in
- * the pattern runs from when the Strip joined this Position (a handoff's own stamp, else its creation),
- * not from its last Move, so going round again does not reset it.
- * @param {object} bay
- * @param {(bayId:string, rackId:string)=>object[]} rackOf  getEfspRack
- * @param {(flightDataId:string)=>object|null} flightDataOf               getEfspFlightData
- */
-export function patternStripsFor(bay, rackOf, flightDataOf) {
-  const out = [];
-  let order = 0;
-  for (const rackId of bay.rackIds || []) {
-    for (const s of rackOf(bay.bayId, rackId) || []) {
-      const flightData = flightDataOf ? flightDataOf(s.flightDataId) : null;
-      const identity = (flightData && flightData.identity) || {};
-      const joinedMs = (s.carrierHandoff && s.carrierHandoff.at) || s.createdAt;
-      const name = leadingFlightName(s, flightData);
-      out.push({
-        stripId: s.stripId, name, aka: name !== (identity.callsign || '') ? (identity.callsign || '') : '', type: identity.aircraftType || '',
-        legId: s.rackId, enteredPatternS: _fin(joinedMs) ? joinedMs / 1000 : undefined, order: order++,
-      });
-    }
-  }
-  return out;
-}
-
-/** What a chip action or a Move asks the server for, as a plain op, or null. The Position that acts is the Strip's owner, if held. */
-export function patternOpFor(desc) {
-  if (!desc) return null;
-  if (desc.kind === 'MoveToLeg') return { kind: 'MoveStrip', rackId: desc.rackId };
-  if (desc.toState === 'DROPPED') return { kind: 'DropStrip' };
-  if (desc.toState) return { kind: 'SetState', toState: desc.toState };
-  return null;
 }
 
 // ── final ───────────────────────────────────────────────────────────────────
@@ -175,29 +129,6 @@ function _setRacksHidden(container, hidden) {
 function _replace(el, child) {
   el.innerHTML = '';
   if (child) el.appendChild(child);
-}
-
-function _renderPattern(container, bay) {
-  const mount = _mountPoint(container, bay.bayId);
-  const legs = patternLegsFor(bay);
-  const strips = patternStripsFor(bay, getEfspRack, getEfspFlightData);
-  const fs = getEfspRunwayStatus(bay.facilityId);
-  const runway = fs && fs.runways && fs.runways[0];
-  const model = patternBoardModel({
-    legs, strips, nowS: missionNow() / 1000,
-    runwayOpenStatus: runway ? (runway.status === 'OPEN' ? 'OPEN' : (runway.status === 'CLOSED' ? 'CLOSED' : 'SUSPENDED')) : undefined,
-  });
-  // Only a signed-on Position acts: a read-only board for everyone else.
-  const signedOn = _signedOnAt(bay);
-  const owner = (stripId) => { const s = getEfspStrip(stripId); return s && signedOn.includes(s.ownerPositionId) ? s : null; };
-  const act = (stripId, op) => { const s = owner(stripId); if (s && op) _send(s, { ...op, ...(op.kind === 'MoveStrip' ? { bayId: bay.bayId } : {}) }); };
-  const board = renderPatternBoard(model, {
-    doc: document, legs,
-    onMove: (d) => act(d.stripId, patternOpFor(d)),
-    onAction: (a) => act(a.stripId, patternOpFor(a)),
-  });
-  board.dataset.bayView = 'pattern';
-  _replace(mount, board);
 }
 
 function _renderFinal(container, bay) {
@@ -314,8 +245,7 @@ export function renderBayDescriptorView(container, bay) {
   if (!bayHasComponentView(bay)) { if (stale) stale.remove(); _setRacksHidden(container, false); return; }
   container.dataset.efspBayView = bay.bayId;
   _setRacksHidden(container, !!bay.replacesRacks);
-  if (bay.view === 'pattern') _renderPattern(container, bay);
-  else if (bay.view === 'final') _renderFinal(container, bay);
+  if (bay.view === 'final') _renderFinal(container, bay);
   else if (bay.view === 'sfa-freqs') _renderSfaHeader(container, bay);
 }
 

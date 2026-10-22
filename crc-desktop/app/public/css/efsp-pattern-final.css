@@ -1,21 +1,5 @@
-/* The pattern board and the FINAL Bay's flight list (docs/adr/0075; the picture is the PAR panel's, par-panel.css). Colour is
-   never the only channel: the long-in-pattern chip also says its minutes, an advisory is text. Touch targets are >= 44px on the
-   terminal buttons (guide 7.6.4). */
-.efsp-pattern-legs { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 6px; }
-.efsp-pattern-leg { border: 1px solid #34404a; border-radius: 3px; min-height: 120px; background: #10151a; }
-.efsp-pattern-leg-head { display: flex; justify-content: space-between; padding: 3px 6px; border-bottom: 1px solid #34404a;
-  font-size: 10.5px; letter-spacing: .06em; color: #8c9aa6; }
-.efsp-pattern-chip { margin: 4px; padding: 4px 6px; border: 1px solid #34404a; border-left: 4px solid #8ec7ff; border-radius: 3px;
-  background: #1b222a; min-height: 44px; }
-.efsp-pattern-chip-long { border-left-color: #ffb86b; }
-.efsp-pattern-cs { font-size: 12.5px; color: #fff; }
-.efsp-pattern-meta { color: #8c9aa6; }
-.efsp-pattern-actions { display: flex; gap: 4px; margin-top: 3px; }
-.efsp-pattern-actions button { font: inherit; color: inherit; background: #232c35; border: 1px solid #34404a; border-radius: 3px;
-  min-height: 26px; padding: 0 8px; }
-.efsp-pattern-advisories { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
-.efsp-pattern-advisory { border: 1px solid #ffb86b; color: #ffb86b; border-radius: 10px; padding: 0 7px; font-size: 10.5px; }
-
+/* The FINAL Bay's flight list (docs/adr/0075; the picture is the PAR panel's, par-panel.css). PriFly's pattern board is gone
+   (live test U19, docs/adr/0137). Touch targets are >= 44px on the terminal buttons (guide 7.6.4). */
 /* The carrier FINAL Bay's line (H124-H126): one per aircraft on the final, the side number leading, Ball / Waveoff. An airfield's
    PAR final is ordinary Strips (H138 U10). Grey: nothing here is coloured. */
 .efsp-final-list { display: grid; gap: 4px; }

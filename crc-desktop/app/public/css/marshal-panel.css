@@ -65,6 +65,11 @@
 .mb-vacant td { color: var(--efsp-faint, #56616c); font-size: 12px; }
 .mb-chg { color: var(--efsp-attn, #e0a83c); }
 .mb-late { color: var(--efsp-attn, #e0a83c); }
+/* crc-sync docs/adr/0137: the Marshal types fuel and the EAT here; an assigned EAT stays grey, underlined until cleared. */
+.mb-edit { cursor: text; }
+.mb-edit:hover { text-decoration: underline dotted; }
+.mb-eat-set { text-decoration: underline; text-underline-offset: 2px; }
+.mb-fe-input { width: 4.5em; }
 .mb-fuel-attn { color: var(--efsp-attn, #e0a83c); }
 .mb-fuel-danger { color: var(--efsp-danger, #ff5c5c); }
 

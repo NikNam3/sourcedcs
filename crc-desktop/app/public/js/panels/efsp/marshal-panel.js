@@ -8,7 +8,7 @@ import { getAllEfspStrips, getEfspFlightData, getEfspPosition, getEfspPositionLe
 import { sendEfspMutation } from './efsp-ws.js';
 import { onEfspChanged } from './efsp-change-bus.js';
 import {
-  buildBoard, clockText, dropSlot, eatMinuteText, fuelText, marksOf, passClearanceOp
+  buildBoard, clockText, dropSlot, eatMinuteText, fuelBlockOp, fuelText, marksOf, passClearanceOp, setEatOp
 } from './marshal-board-model.js';
 import { pictureModel, renderMarshalPicture } from './marshal-picture.js';
 
@@ -21,7 +21,9 @@ import { pictureModel, renderMarshalPicture } from './marshal-picture.js';
 // is no countdown, no checklist, no required call; everything is named by the side number, never a callsign.
 //
 // Who can do what: the Marshal (CV_MARSHAL) drags a HOLD row to re-sequence, Commences, sends a commenced flight Back to stack, sends
-// a Delta and closes up a vacancy; every other carrier Position reads. The ramp time, the marshal radial and the first fix are the
+// a Delta and closes up a vacancy; on a holding flight it types the fuel (the Strip's LOW ST) and assigns an EAT by clicking the
+// FUEL or EAT figure (crc-sync docs/adr/0137: an assigned EAT is underlined until cleared with an empty entry); every other carrier
+// Position reads. The ramp time, the marshal radial and the first fix are the
 // ship's and are typed in the carrier panel; here they are shown. No arithmetic of the recovery is done here: angels, DME and the
 // EATs are the server's (hull view), see marshal-board-model.js.
 
@@ -173,7 +175,7 @@ function _collect(view) {
 }
 
 function _rowSignature(r, m, canSequence) {
-  return [r.flightDataId, r.seq, r.kind, r.status, r.side, r.callsign, r.type, r.fuelLb, r.fuelLevel, r.eatUtc, r.angels, r.slot,
+  return [r.flightDataId, r.seq, r.kind, r.status, r.side, r.callsign, r.type, r.fuelLb, r.fuelLevel, r.eatUtc, r.eatSet ? 1 : 0, r.angels, r.slot,
     r.late ? 1 : 0, r.next ? 1 : 0, m.angels ? 1 : 0, m.eat ? 1 : 0, canSequence ? 1 : 0].join('/');
 }
 
@@ -192,8 +194,13 @@ function _drawRow(r, m, { canSequence, caseValue, sequenced }) {
   fe.dataset.cell = 'fuel-eat';
   const fuel = _el('span', r.fuelLevel ? `mb-fuel-${r.fuelLevel}` : '', fuelText(r.fuelLb) || '--');
   fuel.dataset.part = 'fuel';
-  const eat = _el('span', m.eat ? 'mb-chg' : r.late ? 'mb-late' : '', eatMinuteText(r.eatUtc) || '--');
+  const eat = _el('span', [m.eat ? 'mb-chg' : r.late ? 'mb-late' : '', r.eatSet ? 'mb-eat-set' : ''].filter(Boolean).join(' '), eatMinuteText(r.eatUtc) || '--');
   eat.dataset.part = 'eat';
+  if (r.eatSet) eat.title = 'EAT assigned by the Marshal; clear it to use the slot\'s';
+  if (canSequence && r.kind === 'hold') {
+    _editable(fuel, 'fuel', fuelText(r.fuelLb), 'k lb', (text) => _sendFuel(r, text));
+    if (sequenced) _editable(eat, 'eat', r.eatUtc != null ? carrierHhmm(r.eatUtc) : '', 'HHMM', (text) => _sendEat(r, text));
+  }
   fe.append(fuel, document.createTextNode(':'), eat);
   tr.appendChild(fe);
   const ang = _el('td', `mb-ang${m.angels ? ' mb-chg' : ''}`);
@@ -238,13 +245,53 @@ function _drawRow(r, m, { canSequence, caseValue, sequenced }) {
   if (r.kind === 'hold') {
     // A click on a marked row says the new clearance was passed: the server clears the mark for every Marshal (ADR 0115).
     tr.addEventListener('click', (e) => {
-      if (e.target.closest('input, button')) return;
+      if (e.target.closest('input, button, [data-edit]')) return;
       const op = canSequence ? passClearanceOp(r, { enabled: _marksShown() }) : null;
       if (op) _sendStackOp(op);
     });
     if (canSequence) _wireDrag(tr, r);
   }
   return tr;
+}
+
+/**
+ * A FUEL or EAT figure the Marshal may type over (crc-sync docs/adr/0137): a click turns it into an input, Enter sends, Escape or
+ * leaving it puts the figure back. The table is not rebuilt while an input has the focus (renderMarshal's `typing`).
+ */
+function _editable(span, part, value, placeholder, send) {
+  span.classList.add('mb-edit');
+  span.dataset.edit = part;
+  span.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const inp = _el('input', 'mb-input mb-fe-input');
+    inp.type = 'text'; inp.size = 4; inp.placeholder = placeholder; inp.value = value;
+    inp.dataset.marshalInput = part;
+    const done = () => { _tableSig = ''; renderMarshal(); };
+    inp.addEventListener('click', (ev) => ev.stopPropagation());
+    inp.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter') { ev.preventDefault(); if (send(inp.value) !== false) { inp.blur(); } }
+      else if (ev.key === 'Escape') { ev.preventDefault(); inp.blur(); }
+    });
+    inp.addEventListener('blur', done);
+    span.replaceWith(inp);
+    inp.focus();
+    if (typeof inp.select === 'function') inp.select();
+  });
+}
+
+/** The fuel as the holding flight's Strip LOW ST Block, sent as the Strip's owner when this controller holds it. */
+function _sendFuel(row, text) {
+  const op = fuelBlockOp(text);
+  const strip = row.stripId ? getEfspStrip(row.stripId) : null;
+  if (!op || !strip || !signedOnCarrierIds().includes(strip.ownerPositionId)) return false;
+  sendEfspMutation(strip.ownerPositionId, strip, op);
+  return true;
+}
+
+function _sendEat(row, text) {
+  const op = setEatOp(row, text);
+  if (!op) return false;
+  return _sendStackOp(op);
 }
 
 function _wireDrag(tr, r) {

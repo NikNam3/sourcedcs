@@ -103,7 +103,7 @@ function validateConfig(candidate) {
 
 // The Bay descriptor flags (docs/adr/0093). Only these keys beyond bayId/rackIds/
 // impliesState exist, so a typo in a config can never silently mount nothing.
-const BAY_VIEWS = Object.freeze(['pattern', 'final', 'sfa-freqs']);
+const BAY_VIEWS = Object.freeze(['final', 'sfa-freqs']); // 'pattern' (PriFly's leg board) removed: live test U19, docs/adr/0137
 // `holdsStripType` is L28's (docs/adr/0087): a Bay that files its strip type's Strips whatever their state.
 const BAY_DESCRIPTOR_KEYS = Object.freeze(['bayId', 'rackIds', 'impliesState', 'view', 'replacesRacks', 'capacity', 'holdsStripType']);
 

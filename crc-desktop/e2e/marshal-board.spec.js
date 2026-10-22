@@ -277,3 +277,53 @@ test('07 the marks are the server\'s: two pages see the same mark, a reload keep
   await page.screenshot({ path: test.info().outputPath('07-shared-marks.png') });
   await cleanUp(page);
 });
+
+test('08 the Marshal types the fuel and assigns an EAT in the panel (U22, crc-sync docs/adr/0137); clearing gives the slot\'s back', async ({ browser, baseURL }) => {
+  const page = await marshalPage(browser, baseURL, 'e2e-mb8');
+  const [s1, s2] = [`1${unique()}`, `2${unique()}`];
+  await typeState(page, 'rampTime', rampIn(30));
+  await flight(page, { side: s1, fuel: 7200, bingo: 4000 });
+  const cs2 = await flight(page, { side: s2, fuel: 6000, bingo: 4000 });
+  const eatOf = () => page.evaluate((c) => {
+    const s = crc.state.getAllEfspStrips().find(x => x.state !== 'DROPPED' && crc.state.getEfspFlightData(x.flightDataId).identity.callsign === c);
+    const e = crc.carrier.carrierDerivedStack().find(d => d.flightDataId === s.flightDataId);
+    return e ? { t: e.pushTimeUtc, set: !!e.eatSet } : null;
+  }, cs2);
+  const slotEat = (await eatOf()).t;
+
+  // fuel: typed in thousands, as spoken; it is the Strip's LOW ST
+  await row(page, s2).locator('[data-part="fuel"]').click();
+  const fuelIn = panelOf(page).locator('input[data-marshal-input="fuel"]');
+  await expect(fuelIn).toBeFocused();
+  await fuelIn.fill('4.8');
+  await fuelIn.press('Enter');
+  await expect(row(page, s2).locator('[data-part="fuel"]')).toHaveText('4.8');
+  await expect(row(page, s2).locator('[data-part="fuel"]')).toHaveClass(/mb-fuel-attn/);
+
+  // EAT: five minutes after the slot's, typed HHMM; shown set (underlined, not coloured) and amber until passed
+  const hhmm = (t) => { const d = new Date(t); return String(d.getUTCHours()).padStart(2, '0') + String(d.getUTCMinutes()).padStart(2, '0'); };
+  const wanted = slotEat + 5 * 60_000;
+  await row(page, s2).locator('[data-part="eat"]').click();
+  const eatIn = panelOf(page).locator('input[data-marshal-input="eat"]');
+  await eatIn.fill(hhmm(wanted));
+  await eatIn.press('Enter');
+  await expect.poll(eatOf).toEqual({ t: wanted, set: true });
+  const eat = row(page, s2).locator('[data-part="eat"]');
+  await expect(eat).toHaveText(String(new Date(wanted).getUTCMinutes()).padStart(2, '0'));
+  await expect(eat).toHaveClass(/mb-eat-set/);
+  await expect(eat).toHaveClass(/mb-chg/);
+  await page.screenshot({ path: test.info().outputPath('08-eat-assigned.png') });
+  // the other flight's minute is refused (CV NATOPS 6.4.9)
+  await row(page, s1).locator('[data-part="eat"]').click();
+  const otherIn = panelOf(page).locator('input[data-marshal-input="eat"]');
+  await otherIn.fill(hhmm(wanted));
+  await otherIn.press('Enter');
+  await expect(page.locator('#efsp-mutation-error')).toContainText(/6\.4\.9|same EAT|already has that EAT/);
+  // cleared: the slot's EAT again
+  await row(page, s2).locator('[data-part="eat"]').click();
+  const clearIn = panelOf(page).locator('input[data-marshal-input="eat"]');
+  await clearIn.fill('');
+  await clearIn.press('Enter');
+  await expect.poll(eatOf).toEqual({ t: slotEat, set: false });
+  await cleanUp(page);
+});
