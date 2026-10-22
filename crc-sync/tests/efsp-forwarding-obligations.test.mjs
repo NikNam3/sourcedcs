@@ -135,12 +135,13 @@ function makeBoardStore(strips) {
   return { getAll: () => strips };
 }
 
-function makeMonitor({ strips, flightData, facilities = ['INCIRLIK'], boardFor, dataOnly = false, airspaceStore, flightDataFor } = {}) {
+function makeMonitor({ strips, flightData, facilities = ['INCIRLIK'], boardFor, dataOnly = false, airspaceStore, flightDataFor, insideApprovedAirspace } = {}) {
   return new ForwardingObligationMonitor({
     boardStoreFor: boardFor || (() => makeBoardStore(strips)),
     flightDataStore: { getFlightData: flightDataFor || (() => flightData) },
     facilityConfig: { getFacilityIds: () => facilities, getFacilityConfig: () => ({ dataOnly }) },
     airspaceStore,
+    insideApprovedAirspace,
   });
 }
 
@@ -255,12 +256,25 @@ test('raise, clear, raise again counts two missed episodes', () => {
 test('UNACTIVATED_AIRSPACE_ENTRY retracts when the airspace becomes active', () => {
   let active = false;
   const strip = makeArrivalStrip({ coordination: { state: 'ACTIVE' }, airspaceEntry: { airspaceId: 'R-1', approvedAt: NOW - MIN } });
-  const monitor = makeMonitor({ strips: [strip], flightData: makeFlightData(), airspaceStore: { isActive: () => active } });
+  const monitor = makeMonitor({ strips: [strip], flightData: makeFlightData(), airspaceStore: { isActive: () => active }, insideApprovedAirspace: () => true });
   assert.equal(monitor.tick(NOW), true);
   assert.equal(monitor.getAll()[0].obligationType, 'UNACTIVATED_AIRSPACE_ENTRY');
   active = true;
   assert.equal(monitor.tick(NOW + 1000), true);
   assert.deepEqual(monitor.getAll(), []);
+});
+
+// H161 V2-Q2 a (docs/adr/0134's badge rule): only while the flight is inside its approved, non-active airspace
+test('UNACTIVATED_AIRSPACE_ENTRY needs the flight inside: approved early none; no inside fact none; inside raised at now', () => {
+  const strip = makeArrivalStrip({ airspaceEntry: { airspaceId: 'R-1', approvedAt: NOW - 30 * MIN } });
+  const cold = () => false;
+  const has = (o) => o.some(x => x.obligationType === 'UNACTIVATED_AIRSPACE_ENTRY');
+  assert.equal(has(computeDueObligations(strip, makeFlightData(), NOW, { isAirspaceActive: cold })), false, 'no inside fact: never inside');
+  assert.equal(has(computeDueObligations(strip, makeFlightData(), NOW, { isAirspaceActive: cold, insideApprovedAirspace: () => false })), false, 'approved early');
+  assert.deepEqual(computeDueObligations(strip, makeFlightData(), NOW, { isAirspaceActive: cold, insideApprovedAirspace: () => true }),
+    [{ obligationType: 'UNACTIVATED_AIRSPACE_ENTRY', dueAt: NOW, severity: 'OVERDUE' }]);
+  assert.equal(has(computeDueObligations(strip, makeFlightData(), NOW, { isAirspaceActive: () => true, insideApprovedAirspace: () => true })), false, 'inside an ACTIVE block');
+  assert.equal(has(computeDueObligations({ ...strip, airspaceEntry: null }, makeFlightData(), NOW, { isAirspaceActive: cold, insideApprovedAirspace: () => true })), false, 'approval cleared');
 });
 
 test('two Facilities\' replicas of one FDR hold independent entries', () => {

@@ -208,8 +208,8 @@ test('SCENARIO an airspace released while a flight is still working it', async (
     'but it must say so: a flight is still in there on the block frequency');
 
   // And the flight left behind is exactly the §9.11 alert case, because the
-  // airspace it is working is no longer active.
-  const alerts = await obligationAlerts(efsp, facilityConfig);
+  // airspace it is working is no longer active, while it is inside it (ADR 0134, H161 V2-Q2 a).
+  const alerts = await obligationAlerts(efsp, facilityConfig, { inside: (f, s) => s.stripId === inside.stripId });
   assert.equal(alerts.some(a => a.stripId === inside.stripId && a.obligationType === 'UNACTIVATED_AIRSPACE_ENTRY'), true);
 });
 
@@ -290,7 +290,9 @@ test('SCENARIO a flight approved into a block nobody activated: allowed, flagged
   assert.equal(ack.ok, true, '§9.11 says alert, not refuse');
   assert.deepEqual(ack.warnings, [{ code: 'AIRSPACE_NOT_ACTIVE' }]);
 
-  const alerts = await obligationAlerts(efsp, facilityConfig);
+  // Approved but not yet in the block: nothing (ADR 0134, H161 V2-Q2 a); inside it: alerted.
+  assert.equal((await obligationAlerts(efsp, facilityConfig)).some(a => a.obligationType === 'UNACTIVATED_AIRSPACE_ENTRY'), false);
+  const alerts = await obligationAlerts(efsp, facilityConfig, { inside: () => true });
   assert.equal(alerts.some(a => a.obligationType === 'UNACTIVATED_AIRSPACE_ENTRY'), true);
 });
 

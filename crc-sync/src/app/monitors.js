@@ -63,6 +63,10 @@ function buildMonitors({ env, efsp, facilityConfig, missionClock, missionSession
     // airspace already (ADR 0125), ask for attention.
     handoffConfig: alertingConfig.handoff,
     insideReceiverAirspace: efsp.insideReceiverAirspace,
+    // docs/adr/0134, H161 V2-Q2 a: UNACTIVATED_AIRSPACE_ENTRY only while the flight is inside its approved airspace, the
+    // airspace-entry monitor's fact (built below; read only at tick time, after it exists).
+    insideApprovedAirspace: (facilityId, strip) => !!strip.airspaceEntry
+      && airspaceEntryAlertMonitor.isInside(facilityId, strip.stripId, strip.airspaceEntry.airspaceId),
   });
 
   // ── WP5 Strip<->track correlation (guide §6.6, docs/adr/0045/0046) ───────

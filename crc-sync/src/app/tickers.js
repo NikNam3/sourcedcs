@@ -98,7 +98,10 @@ function buildTickers({ wsHub, efsp, trackStore, collabStore, atisStore, surveil
       const conflictAlertChanged = conflictAlertMonitor.tick(Date.now());
       // docs/adr/0119: after CA, whose formation members it reads.
       const airspaceEntryChanged = airspaceEntryAlertMonitor.tick();
-      if (conformanceChanged || conflictAlertChanged || hintsChanged || airspaceEntryChanged) {
+      // H161 V2-Q2 a: UNACTIVATED_AIRSPACE_ENTRY reads the monitor's inside fact, so a change re-runs the obligations at once
+      // rather than on the 15 s sweep.
+      const obligationsChanged = airspaceEntryChanged ? obligationMonitor.tick() : false;
+      if (conformanceChanged || conflictAlertChanged || hintsChanged || airspaceEntryChanged || obligationsChanged) {
         broadcastEfspAlerts();
       }
     } },

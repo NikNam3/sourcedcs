@@ -109,6 +109,7 @@ class AirspaceEntryAlertMonitor {
     this._trafficOf = new Map(); // airspaceId -> {controllingFacilityId, controllingPositionId}, for `trafficFor`
     this._inside = [];       // docs/adr/0134: [{facilityId, stripId, airspaceId}], each Strip inside its approved airspace
     this._insideTo = new Map(); // 'facilityId:stripId' -> 'facilityId:positionId' of the Strip's holder
+    this._insideKeys = new Set(); // 'facilityId:stripId:airspaceId' of `_inside`, for `isInside`
     this._coordinate = [];   // docs/adr/0136: [{facilityId, stripId, airspaceId, positionId}], a Strip's flight to coordinate
   }
 
@@ -133,6 +134,14 @@ class AirspaceEntryAlertMonitor {
 
   /** Every live Strip whose flight is airborne inside its approved airspace (tests, QA); the hub sends `insideFor`. */
   getInside() { return this._inside; }
+
+  /**
+   * docs/adr/0134: is this Strip's flight airborne inside `airspaceId`, its approved airspace, on the last tick? The same fact
+   * as `getInside()` (the badge's), read by the obligation monitor's UNACTIVATED_AIRSPACE_ENTRY (H161 V2-Q2 a).
+   */
+  isInside(facilityId, stripId, airspaceId) {
+    return this._insideKeys.has(`${facilityId}:${stripId}:${airspaceId}`);
+  }
 
   /** docs/adr/0134: the inside facts of the Strips a session holding `positions` ([{facilityId, positionId}]) holds. */
   insideFor(positions) {
@@ -324,6 +333,7 @@ class AirspaceEntryAlertMonitor {
     this._trafficOf = trafficOf;
     this._inside = nextInside;
     this._insideTo = insideTo;
+    this._insideKeys = new Set(nextInside.map(x => `${x.facilityId}:${x.stripId}:${x.airspaceId}`));
     this._coordinate = coordinate;
     this._to = to;
     this._since = new Map(next.map(a => [a.id, a.since]));

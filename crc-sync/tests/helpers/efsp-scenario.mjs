@@ -175,13 +175,16 @@ export function activate(efsp, c, airspaceId, window) {
 }
 
 /** Ticks a fresh obligation monitor once and returns what is due (docs/adr/0067). */
-export async function obligationAlerts(efsp, facilityConfig) {
+// `inside(facilityId, strip)`: is the Strip's flight airborne inside its approved airspace (the airspace-entry monitor's
+// fact, docs/adr/0134; these scenarios fly no track, so the test says)? Default: nobody is inside.
+export async function obligationAlerts(efsp, facilityConfig, { inside = () => false } = {}) {
   const { ForwardingObligationMonitor } = await import('../../src/efsp/forwarding-obligations.js');
   const monitor = new ForwardingObligationMonitor({
     boardStoreFor: efsp.boardStoreFor,
     flightDataStore: efsp.flightDataStore,
     facilityConfig,
     airspaceStore: efsp.airspaceStore,
+    insideApprovedAirspace: inside,
   });
   monitor.tick();
   return monitor.getAll();
