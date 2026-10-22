@@ -3,24 +3,61 @@
 ## Rotating the MapTiler key
 
 crc-desktop ships with no MapTiler key. After login it asks crc-sync (`GET /api/client-config`, bearer token) and draws
-its basemap and elevation contours with the key it gets back. The key is `CRCSYNC_MAPTILER_CLIENT_KEY`, else
-`CRCSYNC_MAPTILER_KEY` (also crc-sync's own terrain-masking key). Nothing is cached on the client: it is fetched again at
-every login.
+its basemap with the key it gets back. The key is `CRCSYNC_MAPTILER_CLIENT_KEY`, else `CRCSYNC_MAPTILER_KEY` (one key is
+enough; neither is a terrain key any more: terrain and contours come from the DCS cache, "Building the terrain cache"
+below). Nothing is cached on the client: it is fetched again at every login. A refused, exhausted or missing key no longer
+blanks the map: the client falls back to keyless OpenFreeMap with a grey FALLBACK BASEMAP note, and labels are drawn with
+bundled glyphs.
 
 The key that older crc-desktop releases shipped is in git history, so it is public. Only revoking it at MapTiler retires it.
 
 1. In the MapTiler account, create a new key. Optionally restrict it, remembering the client loads from `http://localhost:<port>`
-   (an origin allow-list that excludes localhost breaks the basemap). A second key for clients, separate from the server's
-   terrain key, gets its own quota and is what `CRCSYNC_MAPTILER_CLIENT_KEY` is for.
+   (an origin allow-list that excludes localhost sends every client to the fallback basemap).
 2. Set `CRCSYNC_MAPTILER_CLIENT_KEY` (and/or `CRCSYNC_MAPTILER_KEY`) in `infra/.env` on the server. Never commit it.
 3. Deploy crc-sync by re-running the **Deploy** workflow (Actions, "Deploy", Run workflow on `main`; the human approves the
    `production` environment). Do not run `docker compose pull crc-sync && docker compose up -d` by hand: that pulls whatever
    `:latest` is and bypasses the wire protocol gate. Connected clients pick the new key up at their next login (restart or re-login).
-4. Check: log in with a crc-desktop of this release; the basemap and contours draw.
+4. Check: log in with a crc-desktop of this release; the MapTiler basemap draws (no FALLBACK BASEMAP note).
 5. **Delete the old key in MapTiler.** Until then it still works, and it is public.
 
 Every crc-desktop older than this change keeps the old key built in, so it loses its basemap and contours the moment step 5
-is done. VERSION refuses those clients once the protocol is bumped anyway.
+is done. VERSION refuses those clients once the protocol is bumped anyway. A crc-desktop older than the DCS terrain change
+(ADR 0133) still asks MapTiler for contours until it is updated.
+
+## Building the terrain cache (crc-sync ADR 0133)
+
+crc-sync's radar masking, and crc-desktop's contours and debug line of sight, read a height grid of the whole map built
+from DCS itself. **Only a human runs the build**, at a time the DCS server may be loaded: every request is a
+`CustomService.Eval` on the sim thread. A mission on that theater must be running (the command checks it and refuses
+another map; a mission change mid-build stops it).
+
+```bash
+cd <repo>/infra
+docker compose exec crc-sync npm run terrain:build -- --theater Syria
+#   optional: --spacing 500 (metres, default 500)  --chunk 4000 (samples per Eval, at least one row)
+#             --pause 500 (ms between Evals)        --out <dir> (default CRCSYNC_TERRAIN_CACHE_DIR)
+```
+
+- **Where it lands:** `/app/state/terrain-cache/Syria-500m.terrain` on the `crc-sync-state` volume
+  (`CRCSYNC_TERRAIN_CACHE_DIR` is already that in the stack). While it runs, `Syria-500m.terrain.partial` and
+  `.progress.json` sit beside it. Or build locally (`cd crc-sync && npm run terrain:build -- --theater Syria` with
+  `CRCSYNC_DCS_GRPC_HOST` set) and `docker compose cp Syria-500m.terrain crc-sync:/app/state/terrain-cache/` (owned by `node`).
+- **Interrupted?** Run the same command again: it continues from the next row. To start over, delete the `.partial` and
+  `.progress.json` files; to rebuild a finished file, delete it first.
+- **How long:** Syria at 500 m is 1,319 rows × 2,397 columns, 6.3 MB, one row per Eval: roughly 13–20 minutes at
+  `--pause 500`. The command prints the round trip, the time inside DCS and an ETA after every chunk. **Watch the first
+  lines:** if "ms in DCS per Eval" is above ~10 ms with players on, raise `--pause` (e.g. 1500) or build when the server is
+  empty. At 1 km: a few minutes.
+- **Then** restart the mission (or crc-sync). crc-sync reads the file at every mission load and logs `terrain cache
+  loaded`; `GET /api/terrain/status` (bearer token) says what is loaded or why not. Clients pick it up at their next
+  `theater` message. Without a file for the theater: logged once, no masking, no contours.
+- **Pick the spacing:** `docker compose exec crc-sync npm run terrain:validate -- --theater Syria` (optional `--spacings
+  1000,500,250 --pairs 200 --seed 1 --pause 500`) compares grid line of sight with DCS `land.isVisible`. If 500 m is clearly
+  worse than 250 m, build `--spacing 250` (25 MB, ~45–60 min); the server takes the finest file present.
+- Only theaters with a `terrainExtent` in `crc-sync/config/theaters.json` can be built (Syria and Caucasus today).
+- **Cleanup:** the old MapTiler tiles on the volume are never read again:
+  `docker compose exec crc-sync rm -rf /app/state/terrain-cache/10`.
+- No wire protocol change; nothing to set in `infra/.env`.
 
 ## Wire protocol and the deploy gate (crc-sync ADR 0103)
 
