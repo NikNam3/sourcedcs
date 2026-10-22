@@ -29,8 +29,13 @@ leading on carrier Strips and views, the wire-surface scan of the carrier half, 
 half of `0112`, **the PAR as an airfield feature** (`0116`). **Phase 3 is done.** The human then ran a **live test** (2026-10-11, findings T1-T31):
 its **fix batch is merged** (§3L: terrain WebP, client fixes, airspace fixes, correlation, the single frequency approach without an SFA Position (`0117`),
 Strip fields, the PAR missed approach, flight following, Mode C intruder and MARSA groups (`0118`), the airspace-conflict alert (`0119`)), except the
-RSU. **Round 2** (the human's findings U1-U21 of 2026-10-13) has started: U-STRIP is merged (§3L); §5 lists what runs and what is queued. Up to
-**four lanes run in parallel** since 2026-10-14 (S-ARCH-62); §4 lists what is open.
+RSU. **Round 2** (the human's findings U1-U22 of 2026-10-13 and after) is merged too (§3L, §3M): the panels scroll, jurisdiction areas (`0125`),
+released handoffs and check-in (`0122`), the PAR in degrees and its approach values (`0123`, `0130`), the airspace card's flight list (`0124`), **no RSU**:
+the tower works the pattern (`0126`, superseding `0120`), no ground vehicles (`0121`), transits through active SUA (`0128`, `0136`; `0127` superseded),
+the mission clock held while DCS is paused (`0129`), the frequency editor (`0131`, `0138`), the airspace badge (`0134`), terrain from DCS (`0133`), the map
+without MapTiler (bundled glyphs, OpenFreeMap fallback) and the carrier prototype (`0137`). **This is the v2 tip** (H159: a working EFSP panel, a first
+working carrier prototype, PAR and SFA); nothing is running. **Held, not merged:** U-ROLE-POSITIONS (ADR `0132`, S-ARCH-85). v3 is
+`docs/parallel/v3-backlog.md`. §4 lists what is open.
 
 If you are a lane agent, your own briefing in `docs/parallel/wave2/` and
 `docs/parallel/lane-rules.md` come first, and **`docs/parallel/decisions.md` overrides both**. If you
@@ -41,21 +46,28 @@ are the supervising session, start at `docs/parallel/supervisor-handoff.md`.
 Integration branch `efsp-wp5-correlation`. It carries waves 1-3 (including UI-B, QAS, E2E-harden), the
 architecture refactor W1-W7 (FREEZE, then BOARD, WIRE, SYNC, AUTH, APP, DATA, TIME, LOG, the ES-module client, BACKCOMPAT
 and the W7 RENAME), L20, the post-refactor features, the whole architecture check (phases 1-3) and the panels (§3K), the live-test fix batch
-and round 2's U-STRIP (§3L), up to `543c1c1f`. Not pushed.
+and round 2 (§3L, §3M), up to the v2 tip `07c15a3c` (U-CARRIER-MAPFIX merged, S-ARCH-86). Not pushed. U-ROLE-POSITIONS is on branch
+`merge/U-ROLE-POSITIONS` (`43ae06e3`), not merged (S-ARCH-85).
 
-Green, as recorded on the U-STRIP tree (`19c0ef1c`, S-ARCH-61): **crc-sync** `npm test` **2740**, **freeze** (`npm run freeze`, opt-in) **56/56**,
-**walk** (`npm run walk`, depth 4) **23/23**, `wire-protocol.test.mjs` 9/9 (protocol stays **2**), **crc-desktop** `npm test` **1296**; `soak:selfcheck`
-last PASS on the LT-AIRSPACE-ALERT tree (S-ARCH-58; U-STRIP moved no Board, wire or hub file). sourcedcs-web, atobrief, infra and the Python `tools/tests` were last counted earlier (web 151 and infra 27 at S-ARCH-11, pytest 363 at S-ARCH-28; not re-measured).
-**Playwright:** the last full sharded run (S-ARCH-58, on the LT-AIRSPACE-ALERT tree) was **249/249**. U-STRIP ran its own `u-strip` 9/9 and 112
-regression specs on `E2E_LANE=7`; the sharded run on its tree was started at S-ARCH-62 (read its summary line: **the sharded runner exits 0 even
-when a spec fails**, S-ARCH-54). Watch `l4-drag` 172 (Rack-to-Rack drag, S-ARCH-57). Under load many specs fail that pass alone: re-run a failure alone before counting it (S-ARCH-14's rule). Every spec must
-`require('./helpers/test')` and leave no Strips on the Board (E2E-fix, §3J). `ordnance-hung`'s "pilot walks" test needs `runway-status.spec.js` to have run first (it
-relies on the active runway), as on the baseline. A fresh worktree needs `npm ci` in `crc-sync`, `crc-desktop` and `crc-desktop/app` (a missing `app/node_modules` fails the packaging test).
+Green, as recorded on the v2 tip (S-ARCH-84/86, re-run by DOCS-V2, §5): **crc-sync** `npm test` **2895**, **freeze** (`npm run freeze`, opt-in)
+**58/58**, **walk** (`npm run walk`, depth 4) **24/24**, `soak:selfcheck` PASS (seed 7), wire protocol stays **2**, **crc-desktop** `npm test` **1424**.
+sourcedcs-web, atobrief, infra and the Python `tools/tests` were last counted earlier (web 151 and infra 27 at S-ARCH-11, pytest 363 at S-ARCH-28; not re-measured).
+**Playwright:** the last full sharded run (2 lanes, S-ARCH-86, on the v2 tip before U-CARRIER-MAPFIX) was **288/289**, the one failure `carrier-map` 02
+(label overlap), which U-CARRIER-MAPFIX fixed (`carrier-map` + `l17-carrier` + `marshal-board` 21/22, `l17-carrier` 03 passed alone). **The sharded runner
+exits 0 even when a spec fails** (S-ARCH-54): read its summary line. Run it on **at most 2 lanes** (the human, CPU, S-ARCH-75). Under load many specs fail
+that pass alone: re-run a failure alone before counting it (S-ARCH-14's rule); `par-panel` 06/07, `l1-popovers`, `overflight-lifecycle`,
+`ordnance-hung` and `runway-status` have each failed under load and passed alone. Every spec must `require('./helpers/test')` and leave no Strips on the
+Board (E2E-fix, §3J). `ordnance-hung`'s "pilot walks" test needs `runway-status.spec.js` to have run first (it relies on the active runway). A fresh
+worktree needs `npm ci` in `crc-sync`, `crc-desktop` and `crc-desktop/app` (a missing `app/node_modules` fails the packaging test).
 Restart the local crc-sync on :3000 after any `crc-sync/src` change.
 
-ADRs: `0001`-`0119` except `0090` and `0092` (0117 the single frequency approach and the PAR final, 0118 CA/MCI and MARSA grouping, 0119 the
-airspace-conflict alert and the using agency; `0120` (U-RSU), `0121` (LT-GROUND) and `0122`-`0125` (U-RELEASE, U-PAR, U-MOA, U-JURISDICTION)
-are reserved for queued or running lanes; 0095 structure, 0096 clocks, 0097 logging, 0098-0106 the post-refactor features, 0107 12 h archive, 0108 mission reset, 0109 carrier ATO lines, 0111 Divert, 0112 the PAR sample (its carrier half replaced by 0116), 0113 carrier state and EAT, 0114 recovery board, 0115 the marks on the stack entry, 0116 the PAR is an airfield feature; 0110 consolidation, which stays "Proposed" as committed: its acceptance is decisions.md S-ARCH-25 plus H111/H113, P4). `0077` is the L20 house style; `0090` and `0092` were not used (TA took none: it applies `0085`/H62), `0060` is the errata ADR.
+ADRs: `0001`-`0138` except `0090`, `0092` and `0135` (0117 the single frequency approach and the PAR final, 0118 CA/MCI and MARSA grouping, 0119 the
+airspace-conflict alert and the using agency; round 2, §3M: 0120 the RSU list, **superseded by 0126** (no RSU), 0121 no ground vehicles, 0122 released
+handoffs and check-in, 0123 the PAR in degrees and its −0.5° limit, 0124 the airspace card list and tanker-only MARSA voids, 0125 jurisdiction areas,
+0127 the transit release record, **superseded by 0128** (transit as a request), 0129 the held mission clock, 0130 the PAR approach values, 0131 the
+frequency editor (its §3 superseded by 0138), 0132 role-based Positions (accepted as design and binding for new rules, lane-rules rule 9; its build,
+U-ROLE-POSITIONS, is held, S-ARCH-85), 0133 terrain from DCS, 0134 the airspace badge, 0136 transit decline acknowledged and the COORD mark, 0137 the
+carrier prototype, 0138 frequency rows; `0135` was not used; 0095 structure, 0096 clocks, 0097 logging, 0098-0106 the post-refactor features, 0107 12 h archive, 0108 mission reset, 0109 carrier ATO lines, 0111 Divert, 0112 the PAR sample (its carrier half replaced by 0116), 0113 carrier state and EAT, 0114 recovery board, 0115 the marks on the stack entry, 0116 the PAR is an airfield feature; 0110 consolidation, which stays "Proposed" as committed: its acceptance is decisions.md S-ARCH-25 plus H111/H113, P4). `0077` is the L20 house style; `0090` and `0092` were not used (TA took none: it applies `0085`/H62), `0060` is the errata ADR.
 **An ADR is never edited once committed (P4)**: a correction is a new ADR.
 
 **Layout (ADR `0095`).** `board-store.js` is the `BoardStore` facade; the work is in `board/` (collaborators) and
@@ -83,7 +95,8 @@ crc-sync/src/theater-context.js           the one conversion point: variationAt,
 crc-sync/config/theaters.json             per-theater table: local offset, transitionAltFt, tmCentralMeridianDeg, magneticVariation override
 crc-sync/src/radars.js                    the radar list, derived from mission data + tracks
 crc-sync/src/coverage.js                  what each radar is illuminating, one phase for everybody
-crc-sync/src/terrain.js, webp-lossless.js  DEM fetch/decode (MapTiler terrain-rgb-v2 is lossless WebP, decoded in pure JS) and radar line of sight
+crc-sync/src/terrain.js, terrain-grid.js  the DCS height cache per theater (<Theater>-<spacing>m.terrain), read at mission load, radar line of sight; GET /api/terrain/grid|status (0133)
+crc-sync/tools/terrain/                   npm run terrain:build / terrain:validate: the human-run, resumable, rate-limited cache build over CustomService.Eval (0133); src/ never calls DCS for terrain (tests/terrain-no-dcs.test.mjs)
 crc-sync/src/grpc-client.js               DCS-gRPC client: poll_rate ≥ 1, unit keep-alive, backoff (LG)
 crc-sync/src/surveillance/                what a controller is told about a contact (0059)
 crc-sync/src/surveillance/iff.js          classifyIff(): the one place a contact's colour is chosen (0066, 0084)
@@ -92,10 +105,13 @@ crc-sync/src/efsp/correlation-*.js        Strip<->contact records (flightDataId-
 crc-sync/src/efsp/marsa-store.js          the MARSA relation, the void interlock, AcknowledgeVoid (0118)
 crc-sync/src/conflict-alert.js            CA between tracked targets, MCI against an untracked one (facility `modeCIntruder`), formation/MARSA groups (0118)
 crc-sync/src/efsp/conformance.js          ALT/HDG conformance; the tanker block (TANKER_DISTANCE); no heading check on a final (0117, 0118)
-crc-sync/src/efsp/airspace-entry-alert.js the airspace-conflict alert by airspace type (0119); vfr.js `hasNoClearance` (parity with the client)
-crc-sync/src/efsp/par-final.js            PAR_HANDOFF / LANDED / MISSED_APPROACH conversions and the FinalCall calls (0117); sfa.js the pool
-crc-sync/src/efsp/aircraft-data.js        Block 3 parser and the ICAO wake table (LT-STRIP-FIELDS)
-crc-sync/src/efsp/runway-status*.js         runway status: pure rules + RunwayStatusStore (0061)
+crc-sync/src/efsp/airspace-entry-alert.js the airspace-conflict alert by airspace type (0119), the card list (`airspaceTraffic`, 0124), the badge fact (`airspaceInside`, 0134), the COORD fact (`airspaceCoordinate`, 0136); vfr.js `hasNoClearance` (parity with the client; an emptied ALT/HDG is no clearance)
+crc-sync/src/efsp/airspace/               containment.js (incl. `legCrossesPolygon`), jurisdiction.js (0125), route-geometry.js ("filed through" from nav points, ICAOs, ROUTE fixes; 0128)
+crc-sync/src/efsp/handoff-guards.js       HANDOFF_GUARDS (empty), phases OFFER / CONTROL (0122); board/handoff-control.js the release model, `settleHandoffControl` on the `handoff-control` ticker
+crc-sync/src/efsp/frequency-table.js      station frequency overrides and added rows, strict `state/efsp-frequencies.json` (`CRCSYNC_EFSP_FREQUENCIES_PATH`), not a SyncedStore (0131, 0138)
+crc-sync/src/efsp/par-final.js            PAR_HANDOFF / LANDED / MISSED_APPROACH conversions and the FinalCall calls (0117); sfa.js the pool; Placement.followSfaFrequency moves a Strip whose frequency changed
+crc-sync/src/efsp/aircraft-data.js        Block 3 parser, the ICAO wake table (Doc 8643) and `designatorFor` (ATO / DD-1801 names to designators)
+crc-sync/src/efsp/runway-status*.js         runway status: pure rules + RunwayStatusStore (0061); `SetParApproach` and `parValues` per runway end (0130)
 crc-sync/src/efsp/zulu-time.js            typed HHMM -> epoch ms against the mission clock (L2)
 crc-sync/src/efsp/forwarding-obligations.js  obligations as state, retracting (0067)
 crc-sync/src/efsp/metrics.js, traffic-count.js  WP8 metrics, §11.4 traffic count, log retention (0065)
@@ -103,7 +119,7 @@ crc-sync/src/efsp/ato/                    USMTF ATO parser: text -> mission line
 crc-sync/src/efsp/carrier/                pure carrier model: carrier state (carrier-state.js), stack + Delta + marks (marshal-stack.js), ship banner, handoffs, sun, hull config (0064, 0074, 0113-0115)
 crc-sync/src/efsp/carrier-store.js        CarrierStore: SetCarrierState, the stack ops, handoffs; its own wire messages (L17, 0074, 0113)
 crc-sync/config/efsp-carrier-recovery.json  carrier tuning: firstFixDme 21, pushSpacingSec 60, fixToRampSec 360 (ours), tanker defaults (0113)
-crc-sync/src/surveillance/par.js, par-monitor.js  the PAR sample, airfield final Bays only, `par-sample` frame outside deliverEfsp (0112, 0116)
+crc-sync/src/surveillance/par.js, par-monitor.js  the PAR sample, airfield final Bays only, `par-sample` frame outside deliverEfsp (0112, 0116); PAR_VALUE_LIMITS, measured against the values in force (0130)
 crc-sync/src/efsp/carrier-tick.js         the ship-state tick from the hull's track (L17)
 crc-sync/config/efsp-carriers.json        the hulls (`hullId`, `label`, `match` {`unitName`, `type`, `coalition`}, `angledDeckDeg`; an unknown key refuses start-up, H127)
 crc-sync/src/efsp/airborne.js, surveillance-hints.js  "detected airborne" phase and the suggestion/staleness monitor (L19, 0076)
@@ -112,7 +128,9 @@ crc-sync/src/efsp/block-map.js            the Block Maps, the interlock tags, MI
 crc-sync/tools/soak/                      the WP8 soak harness (npm run soak / soak:smoke / soak:selfcheck)
 crc-sync/src/state-paths.js               shipped defaults (config/) vs runtime state (state/)
 crc-desktop/app/public/js/                leaves (settings, map-handle, picture, view-state, ...), no import cycle (bound 0), no window globals (§3K)
-crc-desktop/app/public/js/panels/efsp/    the Strip panel, the change bus, sync-cursor, facility-topology, the airspace board, correlation-highlight, carrier-state/carrier-panel (L17), carrier-management-panel (0113), marshal-panel + marshal-board-model (0114/0115), carrier-map-panel + carrier-map-model, carrier-final-distance (DIST), par-panel + par-model (0112/0116), pattern-board (L18), bay-views (the FINAL Bay line)
+crc-desktop/app/public/js/panels/efsp/    the Strip panel, the change bus, sync-cursor, facility-topology, the airspace board (+ airspace-entry-list 0124, jurisdiction-section 0125, transit-rules/transit-actions 0128), correlation-highlight, control-release-rules (0122), pattern-rules (0126), frequency-panel + frequency-state (0131/0138), carrier-state/carrier-panel (L17), carrier-management-panel (0113), marshal-panel + marshal-board-model (0114/0115), carrier-map-panel + carrier-map-model, carrier-final-distance (DIST), par-panel + par-model (0112/0116/0123/0130), bay-views (the carrier FINAL Bay line; the airfield PAR final is ordinary Strips)
+crc-desktop/app/public/js/basemap-fallback.js  MapTiler -> OpenFreeMap basemap fallback; terrain-grid.js the DCS height grid for contours and debug LOS; drawing-highlight.js, airport-surface.js (U-SCOPE-SMALL)
+crc-desktop/app/glyph-route.js            the bundled glyphs at /fonts/, a font stack answered merged (U-GLYPHS)
 crc-desktop/app/public/js/settings-registry.js  registerSettingsTab: one Settings tab per panel (SETTINGS-TABS)
 atobrief/public/js/usmtf-ato.js           atobrief's USMTF ATO export (0078)
 docs/adr/                                 the reasoning behind every decision below
@@ -181,6 +199,8 @@ Incirlik's pattern board and FINAL component (L18, both halves; the FINAL compon
 **The panels and Divert** (`0111`-`0116`). See §3K: the tabbed Settings panel, Divert, the carrier's state and the NATOPS EAT,
 the MARSHAL recovery board and its marks, the CARRIER MAP, the side number, the PAR sample and panel, and the PAR as an airfield
 feature only.
+
+**The live test and round 2** (`0117`-`0138`). See §3L (the live-test batch and U-STRIP) and §3M (round 2 to the v2 tip).
 
 ## 3A. The RANGE Position
 
@@ -1003,7 +1023,8 @@ no clearance altitude). Pre-existing `crc-sync npm test` failures at U6's base a
 
 **Incirlik RSU / SFA / PAR (L18, `0075`).** [**Superseded in part by `0117` (§3L):** there is no SFA Position, no
 rotation record, no `sfa-store.js`, no `SfaRotation` op and no `efsp-sfa-*` family any more; "Landing assured" is gone
-(`FinalCall`); the paragraphs below are the history.] The client half was built standalone and
+(`FinalCall`); the paragraphs below are the history. **Superseded again by `0126` (§3M):** there is no RSU, no `rsu-pattern`
+Bay and no RSU half of `pattern-board.js`; U-CARRIER (`0137`) then deleted `pattern-board.js` and PriFly's leg Racks altogether.] The client half was built standalone and
 unit-tested; the server half and the mounting came with `lane/L18-server`, now merged
 (below). L18's FINAL talk-down component (cadence bar, call prompts, 0.3 deg tolerance) is **gone**: PAR-2 replaced it with
 the PAR panel and a one-line FINAL Bay view, and `0116` took the carrier out of the PAR (§3K, "Panels and Divert").
@@ -1309,7 +1330,7 @@ the human chose to leave (AC-2).
 - **Carrier flights have ATO lines (H109, `0109`)** is described under §3J's ATO section.
 - **Consolidation is "the next controller takes the hat" (H104, H111, H113, `0110`; CONSOL-DESIGN, CONSOL-S, CONSOL-C).** No Strip moves when an ATC Position is
   left; `consolidation` in each `config/efsp-facility-*.json` is `{ Position: Position[] }`, an ordered offer list, plus a required `handBack` map (`{}` where
-  empty; a string value is refused with the fix named). Shipped: Incirlik `CD:[GC,LC,AP] GC:[LC,AP] LC:[AP] RSU:[LC] PAR:[AP]` (`SFA:[AP]` went with the SFA Position, `0117`); carrier
+  empty; a string value is refused with the fix named). Shipped: Incirlik `CD:[GC,LC,AP] GC:[LC,AP] LC:[AP] PAR:[AP]` (`SFA:[AP]` went with the SFA Position, `0117`; `RSU:[LC]` with the RSU, `0126`); carrier
   `APP1:[MARSHAL,APP2,PRIFLY] APP2:[MARSHAL,APP1,PRIFLY] PRIFLY:[MARSHAL,APP1,APP2] MARSHAL:[APP1,APP2,PRIFLY]`; TACTICAL `consolidation {}` and
   `handBack {AIC,GCI,JTAC -> TAC_C2}` (the only sign-off that still moves a Strip). One test pins the lists (`efsp-facility-config.test.mjs`). H113 keeps GC
   on the list: an NLA or transfer into an empty GC is delivered there with `UNSTAFFED_RECEIVER` and LC/AP are offered GC; a "no" edit is deleting the
@@ -1486,7 +1507,8 @@ stays **2** throughout (ahead of the last release, 1: everything ships together)
 
 - **LT-TERRAIN (T2).** Terrain masking had never worked against `terrain-rgb-v2`: WebP decoder, §3B.
 - **LT-UI (T3, T6, T10, T19-T26, client only).** `map-setup.js` `retryErroredTiles` on `onMaptilerKey` (maplibre 3.6.2 never re-requests an
-  errored tile; a glyph 403 errors every label tile). Strip selection no longer rings its contact; the Strip menu's **Show on map**
+  errored tile; a glyph 403 errors every label tile). **Gone since U-GLYPHS (§3M):** the glyphs are local, and a new key re-points the basemap
+  source, whose reload clears its errored tiles; `refreshMaptilerSources` and `tests/maptiler-refresh.test.mjs` went with it. Strip selection no longer rings its contact; the Strip menu's **Show on map**
   (`correlation-highlight.js` `showStripOnMap`, `RING_SHOW_MS` 8 s, ours) does, and map -> Strip selection stays (H129, H134 LT-Q3 a). The
   `SPLIT` chip is gone (`splitFrom` stays on the record and in the log). `coordinationSendLabel` names the target ("Hand off to CTR").
   Time-to-find counts a first selection within **30 s** (`TTF_WINDOW_MS`, ours; supersedes `0072`'s 10-minute cap, S-ARCH-49). A mission under
@@ -1499,7 +1521,7 @@ stays **2** throughout (ahead of the last release, 1: everything ships together)
   Position when held. A mission drawing is hidden while an airspace outline copied from it is drawn and still matches
   (`airspace-layer.js` `drawingsShownAsAirspace`, ours).
 - **LT-CORRELATION (T12, H135).** §3C.
-- **LT-SFA-PAR (T1, T5, T11; `0117`) and LT-PAR-MISSED (H137).** **No `SFA` Position**: Incirlik has seven Positions; the SFA frequencies are
+- **LT-SFA-PAR (T1, T5, T11; `0117`) and LT-PAR-MISSED (H137).** **No `SFA` Position**: Incirlik has seven Positions [six since `0126`: no RSU, §3M]; the SFA frequencies are
   AP's Bay `ap-sfa` (`view: 'sfa-freqs'`, its descriptor carries `sfaPool`); facility `singleFrequencyApproach: { jurisdiction: 'AP', pool: [{ rackId, mhz,
   use }] }`, `use` `ROTATION` x3 / `INITIAL_CONTACT` / `SPARE`, validated (>= 5 UHF, exactly 3 rotating, the Bay is AP's). **No rotation record**:
   `sfa-store.js`, the `efsp-sfa-*` family, `SetSfaRotation`/`SfaRotation` and the SFA heartbeat/resync entry are gone; who has a rotating frequency
@@ -1564,13 +1586,117 @@ stays **2** throughout (ahead of the last release, 1: everything ships together)
 2. **The sharded Playwright runner exits 0 even when a spec fails**: read its summary line (S-ARCH-54).
 3. **A shared Block Map serves two Facilities.** `0117`'s HDG/ALT on FINAL reached the carrier's FINAL Strip and failed `l17-carrier` 03; a Block that
    is one Facility's needs a facility-aware `resolveBlockTarget` and `isBlockEditable` (both take the facility id now).
-4. **The FINAL Bays draw a line, not Strip faces** (`bay-views.js` `efsp-final-row`), so a Strip-face feature (RMKS) does not reach them; RSU's
-   `pattern-board.js` draws cards, same.
+4. **The FINAL Bays draw a line, not Strip faces** (`bay-views.js` `efsp-final-row`), so a Strip-face feature (RMKS) does not reach them. Since
+   U-PANELS only the carrier's do; the airfield PAR final is ordinary Strips, and `pattern-board.js` is deleted (U-CARRIER, §3M).
 5. **`wire-surface.js` did not scan `efsp-alerts`** until LT-AIRSPACE-ALERT; a new slice of an existing frame can go unnoticed by `wire:record`.
+
+## 3M. Round 2 to the v2 tip (S-ARCH-62 to S-ARCH-86)
+
+The human's round-2 findings (U1-U22, `docs/parallel/live-test-2026-10-13.md` §B, and the 2026-10-20 live test, H155), ruled in H140-H160 and
+merged one lane at a time; lane notes `docs/wip/U-*.md`, folded by DOCS-V2 (`docs/wip/DOCS-V2.md`). `WIRE_PROTOCOL` stays **2** throughout (ahead
+of the last release, 1). Controller-facing half: the usage guide. **H160 binds every lane from now on:** design for N of anything that can multiply
+(airfields, carriers, tactical Facilities, approaches per field), no fixed counts, no first/default instance, no literal ids in rules; a design that
+limits that is asked first.
+
+**Server and wire facts, by lane:**
+
+- **U-PANELS (U10, U12, U13; client only).** The airfield PAR final Bay (`par-final`) mounts no component (`bayHasComponentView`), so its FINAL Strip is
+  an ordinary face: HDG (`9A-VECTOR`) and ALT (`7A`) Blocks, NLA Landed, the next once-only call beside it (`parCallButtons`), ⋯ group **Final**
+  (Begin descent, Cleared to land, Missed approach, Show in PAR panel, `strip-menu.js`). The carrier FINAL line is unchanged; its builders are
+  `carrierFinalRowModel`/`carrierFinalTerminals`/`carrierFinalTerminalOp`. `dock.js` `mountExistingPanel()` adds `.dock-panel` (overflow auto);
+  one app-wide scrollbar rule in `base.css`.
+- **U-JURISDICTION (`0125`).** Airspace kind **`JURISDICTION`** (owning Facility, `ownerPositionIds`, `airspaceClass`, feet MSL, polygon or circle on a
+  point or a carrier hull, `cut`, `excludes`, `sourceText`); a 3D no-overlap check (the carrier area excepted) at config load, `state/` restore and every
+  write. Shipped in the theater-keyed standing list `config/efsp-airspaces.json`: `LTAG-CZ`, `LTAG-RAPCON` (`excludes` the zone), `CVN-72-CCA`.
+  `AirspaceStore#jurisdictionAt({lat, lon, altFt})` (null = Class G or unjudgeable) and `#isInsideJurisdictionOf(positionId, …)` (CENTER the fallback);
+  `ApproveAirspaceEntry` into one is refused. Client `jurisdiction-section.js`, map outline off by default.
+- **U-RELEASE (`0122`, replaces `0101`'s release model).** `HANDOFF PROPOSE` `released` (default true); receiver-only `HANDOFF CHECKED_IN` moves comms
+  (and control when released); `TRANSFER_COMMS`/`TRANSFER_CONTROL` are unknown HANDOFF actions; `ControlRelease` is REQUEST/GRANT/REFUSE only (no
+  WITHDRAW, no scopes). Ticker **`handoff-control`** (1 s, `efsp.settleHandoffControl`) moves a checked-in not-released handoff once the correlated
+  contact is inside the receiver's area, audited `HandoffControlInAirspace`; never on a null answer. Obligations `NOT_CHECKED_IN`
+  (`alerting.json handoff.notCheckedInSec` 60) and `IN_AIRSPACE_NOT_CHECKED_IN`. `src/efsp/handoff-guards.js` `HANDOFF_GUARDS` is empty (the RSU it was
+  for is gone). **HANDOFF is Facility-to-Facility only** (H150 REL-Q1 b): AP→LC and AP→PAR stay plain TransferStrips. `coordination.release` is gone, so
+  an older Board snapshot with a HANDOFF Strip stops start-up.
+- **U-PAR (`0123`, client only).** Azimuth in degrees (`DEFAULT_VIEW.azMaxDeg` 2, cap 15, `azAxisLabel`, readout to 0.1°, plot clamped to the edge,
+  `lateralFt` gone); elevation limits `parTolElHigh` 1° / `parTolElLow` 0.5° (Order 8200.1D lower safe limit), `settings.js` `migratePar` turns an old
+  `parTolEl` into the upper limit once.
+- **U-MOA (`0124`).** `efsp-alerts.airspaceTraffic` per session (`airspace-entry-alert.js` `trafficFor`/`getTraffic`, filtered like `deliverableTo`), for the
+  using agency and the controlling Position; card list `airspace-entry-list.js` with Approve (as owner, else as using agency); types `ENTRY_TYPES`.
+  MARSA `voidForAssignment` voids only `TANKER_ACCEPTED` (client `marsaInterlockArmed`).
+- **U-TWR-PATTERN (`0126`, supersedes `0120` and `0075`'s RSU half).** RSU removed everywhere (INCIRLIK has six Positions); Blocks `9J-ENTRY` (P/S:
+  PATTERN/STRAIGHT_IN) and `9J-OPTION` (OPT: TOUCH_AND_GO/FULL_STOP/LOW_APPROACH) on the flight data (`assigned.patternEntry`/`patternOption`), on LC's
+  DEPARTURE/ARRIVAL and AP's ARRIVAL faces; ARRIVAL state **`TRAFFIC_PATTERN`** (LC, Bay `lc-pattern`, tab `IN PATTERN`, client `pattern-rules.js`;
+  named so because the carrier owns `IN_PATTERN`); the NLA steered by the cells (`ARRIVAL_PATTERN_NLA_LABELS`); LC-only ops **`JoinPattern`**
+  (DEPARTED departure → arrival in the pattern) and **`LeavePattern`** (from TRAFFIC_PATTERN or FINAL → DEPARTED departure); Board rule `fieldAirport`.
+  **ADR 0126 cites AIM 4-3-22 for the option: it is AIM 4-3-23** (`docs/research/twr-pattern-quotes.md`, U-SMALL; 0126 not edited, P4).
+- **U-SMALL (S-ARCH-69).** The SRS bridge has no frequency literal: `lxsrs_v2` `--default-freq` from crc-desktop `config.json` `defaultFreq`
+  (`lxsrs-setup.js` `lxsrsArgs`), unset = untuned. TOFI names its target (`tofiSendLabel`); `groupStripMenuItems` prints each ⋯ heading once;
+  `LUAW_WHILE_COMBINED_TEXT` states the condition only; types enter as designators (`aircraft-data.js` `designatorFor`, at the ATO mapping and
+  `toFlightDataFiledSeed`); the wake table checked against Doc 8643 (rows labelled `DOC 8643`); `Placement.followSfaFrequency` (an airspace approval,
+  clear or Block 22 write takes the Strip off the old `ap-sfa` Rack). The reconciler `tick()` docstring now says what the code does (§3C).
+- **U-DECLUTTER (`0121`).** `presentation.js` `presentable()`: `presentTrack()` returns null for a DCS ground vehicle whatever saw it; the hub drops a
+  datalink lock on one; `coverage.js` skips vehicles (the airport radar's `seesGround` is gone); `correlation-match.js` keeps vehicles out of the beacon
+  and callsign indices. Client vehicle drawing and Settings "Hide ground units" removed. Settings `conflictAlertPaths` (T30); `track-label.js`
+  `receivedCodeText()` (¶5-4-6 e NOTE); `keepIfrHidden()` hides `KEEP IFR` on an OVERFLIGHT with no clearance.
+- **U-MOA-TRANSIT (phase 1, `0127` Proposed, superseded) and U-MOA-TRANSIT-BUILD (`0128`).** `authority/airspace.js` `TRANSIT_TYPES` (MOA, WARNING,
+  RESTRICTED, RANGE, DANGER), `transitDeciders`/`isTransitDecider` (the using Facility's MRU, else the controlling Position); airspace record
+  `transits[]` (in the strict persisted shape) and ops `RequestTransit`/`ApproveTransit`/`DeclineTransit`/`CancelTransit` on the airspace family (no
+  baseRev, no undo); ticker **`airspace-transits`** (5 s, `sweepTransits`); the mission reset and `ReleaseAirspace` end transits; an approved transit
+  counts as approved entry. "Filed through" is `airspace/route-geometry.js` + `containment.legCrossesPolygon` (nav points, ICAOs, ROUTE fixes; no name
+  match, `routeNames` gone, H151/H152). `conformance.js` judges `airspaceEntry.altitudeBlock` when nothing is assigned.
+- **U-CLOCK (`0129`).** `mission-clock.js` `setLink`/`forget`, source **`MISSION_HELD`** (link up, last sample > 12 s old: held at sample + 12 s);
+  WALL only after the link is down > 30 s or with no sample; `grpc-client.js` emits `link`, numbers its game-time requests; session and metrics
+  `startedAt` from the first fresh sample. Topbar `PAUSED`. The Mutation log's `atSource` can be `MISSION_HELD`. The table in `0129` replaces `0079`'s
+  "a paused mission runs on and then steps back".
+- **U-PAR-VALUES (`0130`).** `SetParApproach` on `efsp-runway-status-mutation` (PAR's `receivesFinal` Position only, `null` resets), `parValues: {
+  [runwayEnd]: { tdzeFt, tchFt, dhFt, gpaDeg } }` on the runway-status record, ranges `PAR_VALUE_LIMITS` (ours, parity-tested); `par-monitor.js`
+  measures against the values in force; the sample's `approach` gains `defaults`/`set`; the mission reset keeps them. The per-controller "Default
+  glideslope" setting (`parGpa`) is gone; the facility `parApproaches` are defaults only (no LTAG plate owed, H153).
+- **U-FREQ-EDITOR (`0131`) and U-FREQ-ROWS (`0138`).** `src/efsp/frequency-table.js` (overrides and, per Facility, `added` rows in strict
+  `state/efsp-frequencies.json`), `facility-config.js` effective getters (`getShipped*` the defaults), wire family `efsp-frequency-mutation`/`-ack`/`-delta`
+  (ops `SetFrequency`, `ResetFrequency`, `AddFrequency`, `RemoveFrequency`), snapshot key `frequencies`, refusals `FREQUENCY_IN_USE` (an SFA frequency a
+  live Strip is on) and `FACILITY_MISMATCH` (a Primary edits only the acting Position's Facility; `_facilityOfPosition` until U-ROLE-POSITIONS'
+  `facilityOf`). Not a SyncedStore: no seq, no `STORE_SYNC` entry (a new SyncedStore's seeded `randomUUID` epoch shifts every later seeded id in the
+  freeze goldens). Added SFA rows are SPARE with Rack `freq-<n>`.
+- **U-SMALL2 (S-ARCH-71).** `crc-desktop/tests/lxsrs-copies-identical.test.mjs` diffs the two `lxsrs_v2` trees in `npm test`; the soak selfcheck's leak case
+  is judged against a clean twin (fails `memory.slope` and adds 15 MB/h ±20 %), `--no-flush-bytecode` on the forked soak host, `--seed n`.
+- **U-GLYPHS (S-ARCH-78).** Glyphs bundled at `/fonts/` (openmaptiles v2.0, `app/public/fonts/`), answered merged per stack by `app/glyph-route.js`
+  (fallback first, primary last: maplibre keeps the last glyph); `*.pbf binary`; the MapTiler sprite removed; **`basemap-fallback.js`**: the style's
+  `maptiler_planet` source is re-pointed in place at OpenFreeMap's TileJSON on 401/403/429/5xx/network, sticky until a new key; grey `FALLBACK BASEMAP` /
+  `NO BASEMAP` note. The e2e harness answers `tiles.openfreemap.org` with 503.
+- **U-SCOPE-SMALL (H155 1-3).** Settings `drawingsEnabled` (on), `textMarksEnabled` moved, `airportSurface` (on), in the RADAR tab's **Map** group (the
+  lane note says "Declutter"; the tab button reads RADAR); `drawing-highlight.js` (turquoise, hover/focus, "show"); OpenMapTiles `aeroway` surface
+  layers in `crc-desktop-scope-style.json`, `airport-surface.js` `AIRPORT_SURFACE_LAYERS`; the black ATC scope hides them.
+- **U-AIRSPACE-BADGE (`0134`).** `efsp-alerts.airspaceInside` (`getInside`/`insideFor`, the entry monitor's own containment, the holder only, OWNED scope
+  filtered); client `airspaceInsideForStrip`, `airspaceBadgeTone`: amber only when inside and not ACTIVE. A hovering helicopter (below 50 kt) is not
+  inside (kept for v2).
+- **U-TERRAIN-DCS (`0133`).** Terrain is a per-theater DCS height cache `<Theater>-<spacing>m.terrain` in `CRCSYNC_TERRAIN_CACHE_DIR`, built only by the
+  human-run `npm run terrain:build` (`tools/terrain/`, resumable, rate-limited, `terrainExtent` in `theaters.json` for Syria and Caucasus) and checked
+  by `terrain:validate`; crc-sync reads it at mission load, serves `GET /api/terrain/grid` and `/status`; the grid is regular in lat/lon through
+  `coord.LLtoLO` (accepted). MapTiler terrain is gone; `CRCSYNC_MAPTILER_KEY` is only the client basemap key's fallback. Client contours and debug LOS
+  read `terrain-grid.js`. `assignableRadars` (`position-coverage.js`) is unused now.
+- **U-SMALL-FIXES (`0136`).** `hasNoClearance` treats an ACTIVE entry with an empty value as no clearance; `AcknowledgeTransit` (any live-Strip holder)
+  replaces the 5-minute decline expiry (`DECLINED_TRANSIT_SHOWN_MS` gone); `efsp-alerts.airspaceCoordinate` (`coordinateFor`, holder only) and the grey
+  `COORD <name>` mark; the soak `skip-shadow-client` case judges the skipped client at once (seeds 1-30 pass).
+- **U-CARRIER (`0137`, prototype, U18-U22).** `create-strip.js` origins **Marshal · Recovery** (`cv-marshal-stack`) and **Marshal · Launch**; PriFly's leg
+  Racks, `view: 'pattern'` and `pattern-board.js` removed (`cv-prifly-pattern` keeps one Rack); Bay **`cv-prifly-recovered`** and carrier handoff
+  **`FINAL_TRAPPED`** (NLA "Trapped" at BALL); the carrier map's racetrack stack, approach path and pattern while a flight holds; stack op **`SetEat`**
+  (`eatOverrideUtc`, derived `eatSet`; refused in Case I and on a taken minute), FUEL writes C12. U-CARRIER-MAPFIX: `_glyphBox` measures the rendered
+  label box.
+
+**Traps from this batch:**
+
+1. **Strict `state/` again.** A Board snapshot with a HANDOFF Strip from before `0122` (`coordination.release`), RSU Strips or an RSU facility copy, a
+   `state/efsp-airspaces.json` without the jurisdiction areas (it replaces the shipped file whole: every point is then CENTER's and a not-released
+   handoff never moves control), a bad `state/efsp-frequencies.json`: each stops start-up or silently changes behaviour. Read §4's release-check row.
+2. **A new SyncedStore moves every random-seed freeze golden** (its seeded epoch UUID shifts later ids): say so when you re-record (U-FREQ-EDITOR).
+3. **The e2e harness must redirect every new state file** (`e2e/helpers/harness-env.js`), or a run writes into the worktree's `crc-sync/state/`.
+4. **Cleanups must send `baseDefRev` with `DeleteAirspace`**, or the server refuses and the test airspace stays on the rig.
+5. **R² was the wrong leak test**: judge a leak against a clean twin (U-SMALL2).
 
 ## 4. What's left, and the known bugs
 
-**Not built, in the guide's order.** WP7A: Incirlik's RSU, single frequency approach and PAR are built (§3J, reworked by `0117`, §3L), with the PAR panel (§3K); the RSU is being redesigned (U-RSU, queued); the carrier Positions (L17) and their panels (§3K) have never met a real DCS ship. WP8's §10.3 suggestion chip
+**Not built, in the guide's order.** WP7A: Incirlik's single frequency approach and PAR are built (§3J, reworked by `0117`, §3L, §3M), with the PAR panel (§3K) and its approach values (`0130`); there is **no RSU** (H149, `0126`: the tower works the pattern); the carrier Positions (L17), their panels (§3K) and the v2 prototype fixes (`0137`) have never met a real DCS ship. **Role-based Positions** (`0132`, U-ROLE-POSITIONS) are held until after v2 (S-ARCH-85): the rule tables still name literal Position ids and `DEFAULT_FACILITY_ID` is still the default of many getters; H160 lists what its resumption must fix for N airfields. WP8's §10.3 suggestion chip
 and §10.4 staleness (L19) and OVERFLIGHT's four-state lifecycle (L28, `0087`) are built. Everything else in WP6 to WP8 that the guide names is built: the runway-status
 panel, `HUNG`, alert/scramble, the ATO import and AR join, the metrics dashboard. L20 and UI-B are complete.
 
@@ -1593,17 +1719,17 @@ and all 15 architecture-check bugs B1-B15 (§3K). ARCH-S/W/C's findings that pha
 | **Soak seed 2's heap slope is 0.92 MB/h (R^2 0.6)**, near the 1.0 MB/h gate, with a real trend; seed 1 is 0.45. If the human's workflow run (`crc-sync-soak.yml`, minutes 240, seed 1, realistic, realtime false, selfcheck true; a second run with seed 2) fails on slope, the first suspect is the per-Strip snapshot growth (31 KB to 289 KB over 4 h). It needs the branch pushed | acceptance | human | S-ARCH-23, NX-1 |
 | Three theaters have no `tmCentralMeridianDeg` (MarianaIslandsWWII, Afghanistan, Iraq): pydcs has no terrain for them and nothing citable was found, so their grid headings cannot be converted; needs an export from someone with the maps. `projection.py` still defaults an unknown theater to Syria | theater work | unowned | F2, THEATERS |
 | **Carrier, never seen live:** the banner reads "hull not found" without a real ship, so the CARRIER panel, the MARSHAL board's DME placement and APP order, the CARRIER MAP and DIST have only seen an injected ship; the DCS wind at the ship (`ship-wind.js`) and its direction convention are unchecked; the carrier's final Bays have no `capacity: 1`; two hulls, the deck-state board (`0064` B8) are not walked; the carrier's consolidation (`0110`) has never been exercised against a vacated carrier Position | medium | human live check / L17 owner | L17, S-L17, L18S, CONSOL-S, CARRIER-STATE, CARRIER-MAP |
-| **Incirlik single frequency approach and PAR:** an airspace approval that rewrites a flight's frequency leaves its Strip on the old frequency's `ap-sfa` Rack (not re-checked since `0117`); the PAR sample and panel have never seen a live DCS track (fix timing against the 500 ms frame, the DCS Incirlik elevation); the final's conformance (`finals` map) and a missed approach's climb-out alerts are unit-tested only; the placeholder frequencies and PAR coverage are `[SOURCE-DEFINED]`. Safety finding (U-RESEARCH): the −1° elevation tolerance is outside the FAA lower safe limit (−0.5°, 8200.1D); H141 U-RQ5 a sets −0.5°, lane U-PAR | medium | human live check / U-PAR | L18S, PAR-1, PAR-2, LT-SFA-PAR, LT-PAR-MISSED, S-ARCH-60 |
+| **Incirlik single frequency approach and PAR:** the PAR sample and panel have never seen a live DCS track (fix timing against the 500 ms frame, the DCS Incirlik elevation); the final's conformance (`finals` map) and a missed approach's climb-out alerts are unit-tested only; the placeholder frequencies and PAR coverage are `[SOURCE-DEFINED]`. Fixed since: the SFA Rack follows a changed frequency (U-SMALL), the −0.5° lower limit (U-PAR). **PAR values only while a flight is on the final:** the panel's header (and so the editor) exists only with a PAR sample; H156 PV-Q1 a says "settable with an empty final, as built", but the code (`par-panel.js`, `#par-empty`) hides the body with no sample (DOCS-V2 finding) | medium | human live check / supervisor | L18S, PAR-1, PAR-2, LT-SFA-PAR, U-PAR-VALUES, H156 |
 | **Live walks the batch did not do:** a real air-refuelling cell and a 2-ship (the 1 NM / 1,000 ft wingman rule and the AR block), MCI against terrain AGL with a MapTiler key, an aircraft flying into an ACTIVE restricted area or MOA (the alert spec injects the frame), helicopters at a range | needs a live check | human | LT-MARSA, LT-AIRSPACE-ALERT, S-ARCH-57 |
-| **The using agency cannot reach the flights it may approve:** OPS's Bays show only OPS's Strips, so its "Airspace…" on AP's Strip is reachable nowhere for an OPS-only controller (H140 LT-AQ1 b: the airspace card lists the flights with Approve, lane **U-MOA**, running). A RANGES using Position works no Board and cannot approve at all; the alert offers no "Start flight following" on an untracked contact | medium | U-MOA | LT-AIRSPACE-ALERT, S-ARCH-58, H140 |
+| **The using agency's reach:** fixed by U-MOA (the card list with Approve, `0124`). Still open: a RANGES using Position works no Board and cannot approve; the alert offers no "Start flight following" on an untracked contact; `ApproveAirspaceEntry`'s block is now sent by "Entry block…" (U-MOA-TRANSIT-BUILD) | low | unowned | LT-AIRSPACE-ALERT, U-MOA |
 | **T22, "1 of 10" transfers:** unexplained without the human's log (the counting rule looks right: `TransferStrip` and an owner's transferring `InvokeNla`; `FinalCall` Landed and Missed approach are not counted, a drag onto AP or the `par-missed` NLA is). Someone allowed to read `state/efsp-mutations.jsonl` should check the window | low | supervisor | LT-UI, LT-SFA-PAR, LT-PAR-MISSED |
-| **Small items from the batch** (S-ARCH-49/51/53/56): TOFI… with one counterpart sends at once and does not name the target; the Strip menu can print the "Flight" heading twice; `LUAW_WHILE_COMBINED_TEXT` still carries citations and "consider splitting the positions"; show the received code on the data block only on a mismatch (JO 7110.65BB ¶5-4-6 e NOTE, `track-label.js`); the reconciler's `tick()` docstring on same-rung ties is wrong (§3C); `surveillance/par-monitor.js` l.10 still says "Landing assured"; `tools/soak/shadow.js` l.49 still says "six stores"; `KEEP IFR` on a flight-following Strip; normalise ATO/DD-1801 types to designators (`F-16C` -> `F16`); check the "ours" wake rows against ICAO Doc 8643; the `wakeCategory: 'D'` test seeds | low | small items / declutter lanes | LT-UI, LT-CORRELATION, LT-STRIP-FIELDS, LT-VFR, LT-PAR-MISSED |
+| **Small items from the batch** (S-ARCH-49/51/53/56): all done by U-SMALL and U-DECLUTTER (§3M). | done | — | U-SMALL, U-DECLUTTER |
 | **An AI flight is never acquired by code** (its synthetic 6xxx code cannot be Block 5): by callsign or a binding only. A design question if the squadron wants it | decision | human | LT-CORRELATION |
-| **RMKS where there is no Strip face:** the carrier FINAL line (stays a line, H125/H126; the human's call) and RSU's pattern board (U-RSU's list should show remarks); the airfield PAR Bay is to get Strip faces in U-PANELS U10 (running) | decision / U-RSU | human, U-RSU | U-STRIP, S-ARCH-61 |
-| **Squadron data owed for the panels:** the LTAG PAR plate (RWY 05/23 thresholds, now worked out from the ARP assuming a 10,000 ft runway; TDZE, `null` = DCS elevation; TCH 50; DH 200; published GPA) into `config/efsp-facility-incirlik.json` `parApproaches`; `fixToRampSec` 360 measured (approach speed under it assumed); CVN-72 data (angled deck, side numbers in use; the carrier glideslope and touchdown point are **no longer needed**: no carrier PAR since `0116`); the tanker defaults | data | human / squadron | PAR-1, CARRIER-STATE, `0116` |
-| **`state/` notes for the next deploy:** a Board snapshot with `sfaRotation` (any from before `0117`) **refuses start-up** (H137: delete or fix `state/efsp-board.json`, local and on the `crc-sync-state` volume; the Strips are lost); a `state/efsp-stereo-routes.json` with `remarks` (or any unknown key) refuses start-up (U-STRIP: delete the keys or the file). A Board snapshot from before CARRIER-STATE (`carriers[].shipInputs`, a stack with `charlieTimeUtc`/`marshalRadialDeg`) **refuses start-up**; the fix is deleting `state/efsp-board.json` and `state/efsp-mutations.jsonl` (the local :3000 was cleared, H122; the production volume is the human's call). A `state/efsp-carriers.json` copy that still has a hull `approach` (or any key this build does not know) **refuses start-up**, naming the file and the key (`0116`, H127); delete the key. A test host copying `config/` must copy `efsp-carrier-recovery.json` too | release check | human / supervisor | CARRIER-STATE, `0116`, H122, H127 |
+| **RMKS where there is no Strip face:** the carrier FINAL line only (stays a line, H125/H126; the human's call). The airfield PAR final is Strip faces (U-PANELS) and the RSU is gone | decision | human | U-STRIP, S-ARCH-61 |
+| **Squadron data owed for the panels:** `fixToRampSec` 360 measured (approach speed under it assumed); CVN-72 data (angled deck 9° and 6 min kept for now, H156 CV-Q1 a; side numbers in use); the tanker defaults. No LTAG PAR plate is owed (H153: the PAR controller sets the values) | data | human / squadron | CARRIER-STATE, H153, H156 |
+| **`state/` notes for the next deploy:** a Board snapshot with `sfaRotation` (any from before `0117`) **refuses start-up** (H137: delete or fix `state/efsp-board.json`, local and on the `crc-sync-state` volume; the Strips are lost); a `state/efsp-stereo-routes.json` with `remarks` (or any unknown key) refuses start-up (U-STRIP: delete the keys or the file). A Board snapshot from before CARRIER-STATE (`carriers[].shipInputs`, a stack with `charlieTimeUtc`/`marshalRadialDeg`) **refuses start-up**; the fix is deleting `state/efsp-board.json` and `state/efsp-mutations.jsonl` (the local :3000 was cleared, H122; the production volume is the human's call). A `state/efsp-carriers.json` copy that still has a hull `approach` (or any key this build does not know) **refuses start-up**, naming the file and the key (`0116`, H127); delete the key. A test host copying `config/` must copy `efsp-carrier-recovery.json` too. **Round 2 adds:** a Board snapshot holding any HANDOFF Strip from before `0122` (`coordination.release`) or RSU PATTERN Strips stops start-up (delete `state/efsp-board.json` and `efsp-mutations.jsonl`); a `state/efsp-facility-incirlik.json` naming `RSU` or `rsu-pattern` stops start-up (delete it, or remove RSU and add `lc-pattern`); a `state/efsp-airspaces.json` replaces the shipped list whole and must carry `LTAG-CZ`, `LTAG-RAPCON` and `CVN-72-CCA` (else every point is CENTER's); `state/efsp-frequencies.json` is strict (an unknown key, row or bad value stops start-up); build the terrain cache (`docker compose exec crc-sync npm run terrain:build -- --theater Syria`, RUNBOOK) and optionally delete `state/terrain-cache/10/` | release check | human / supervisor | CARRIER-STATE, `0116`, H122, H127, S-ARCH-64/67/68, U-TERRAIN-DCS |
 | **`wire:record` still does not scan** record contents (Strip, flight data outside the carrier flight fields, airspace/correlation/MARSA/runway/SFA records, the hull view's `hull` contents), ack payloads, `efsp-heartbeat`, the snapshot's fixed keys, op argument names and `REFUSAL_CODES`. A change there needs `--bump` by hand. Adding refusal codes or argument names to the surface is the human's open question (S-ARCH-43) | tooling | next wire lane | WIRE-RECORD, S-ARCH-43 |
-| **Carrier panel defaults to confirm:** the receiver may Divert only after TRANSFER_CONTROL (conservative, kept); a mark stays until passed even when the value moves back; PassClearance has no Undo; a flight with no side number is listed by callsign; the 6 nm turn-in drawn when none is assigned; the spin rule (3.5 nm, 1,000 ft) | decision | human | S-ARCH-37, S-ARCH-41, MARSHAL-BOARD, CARRIER-MAP |
+| **Carrier panel defaults to confirm:** the receiver may Divert only after control has moved (conservative, kept); a mark stays until passed even when the value moves back; PassClearance has no Undo; a flight with no side number is listed by callsign; the 6 nm turn-in drawn when none is assigned; the spin rule (3.5 nm, 1,000 ft); the racetrack's size and the platform 1 nm inside the first fix (U-CARRIER, ours); a recovery typed by callsign is a new flight (binding it to its launch is v3) | decision | human | S-ARCH-37, S-ARCH-41, MARSHAL-BOARD, CARRIER-MAP, U-CARRIER |
 | A Marshal Observer's click on a marked row: whether it is not sent or refused by the Primary gate is not asserted in a spec; the server refusal for a non-Marshal is walked. The divert chip sits after the ordered indicator slots (not in `INDICATOR_ORDER`); a Strip moved by a TransferStrip without `rackId` is in the Board but unrendered | low | unowned | MARSHAL-MARKS, DIVERT |
 | The client still derives runway-change acknowledgers and the inspection authority from the permission table's owners when a record lacks `runwayChangeAcknowledgers` / `inspectionAuthorityPositionId` (L26; `runway-status-rules.js` carries the fallback). Agrees for Incirlik, wrong for any other config | low | unowned | L1b, L26 |
 | `strip-alerts.js`'s conformance reason line reads `a.assigned` (the nearest edge), so a block-altitude bust says "from FL240" without the block; use `a.block` (the line numbers moved in DESK-SPLIT; the note predates it) | low | unowned | U6 |
@@ -1616,12 +1742,21 @@ and all 15 architecture-check bugs B1-B15 (§3K). ARCH-S/W/C's findings that pha
 | Changing only the MTR designator leaves the old exit fix with no warning (H23 keeps MTRs free text) | low | with an MTR route table | L2, L16 |
 | Still bare `Date.now()` outside `src/efsp`: `collab-store.js`, `auth.js`, `atis-store.js`, `tracks.js`, `ws-hub.js`, `srs-client.js`, `grpc-client.js`, `app.js` (weather `updatedAt`, the conflict-alert tick), the `now` defaults of `conflict-alert.js`/`coverage.js`/`datalink.js` | low | unowned | SERVER-SEAMS-1 |
 | Still open from the architecture check: `facilityView`/modules instead of the rules bag's closures (ARCH-S 2b); the 164 underscore exports and `efspFlightDataList` -> `efspFlightData` in the client; a CSP meta for `index.html`; the carrier/runway CSS split; the warning field has no state (a warning raised before its panel opened is dropped; 6 s auto-clear, no dismiss); a store's replayed attestation refusal loses `attestation`; the localhost `POST /api/sync-config` hole (AC-2 left it by decision) | cleanup | unowned | ARCH-S/W/C, DESK-TIDY-2, DESK-ACKS |
-| Squadron data to confirm: Incirlik GND 275.8 / TWR 251.0 placeholder frequencies (GCLC), the real comm card (R3-53), the MapTiler key rotation (RUNBOOK) | data | human | GCLC, MAPKEY |
+| Squadron data to confirm: the real comm card (R3-53). The station and SFA frequencies are placeholders the controllers now set at run time (FREQUENCIES panel, `0131`/`0138`; H154 removed them from the human's list) | data | human | GCLC, H154 |
+| **The unactivated-airspace obligation still fires on approval:** the badge is grey until the aircraft is inside (`0134`), but `forwarding-obligations.js` `UNACTIVATED_AIRSPACE_ENTRY` (OVERDUE, orange-red) stands from the approval until activation, so a parked aircraft approved early still shows a red chip. Whether H155 meant that too is the human's call (DOCS-V2 finding) | decision | human / supervisor | `0134`, H155 |
+| **"Filed through" needs resolvable fixes:** the card list's filed reason and the `COORD` mark need the filed route's fixes as DCS nav points, ICAOs or ROUTE fixes; the stereo-route fixes (KEMER, ERGEP, MANAZ, MUT, TARSU, DAN) have no coordinates until AIRAC (v3, H152), so no stereo route is ever filed through anything. No "approaching" (5-minute) reason (H156 MTB-Q3) | known limit | v3 (AIRAC) | U-MOA-TRANSIT-BUILD, U-SMALL-FIXES |
+| **Intrafacility transfers have no released/check-in model** (AP→LC, AP→PAR stay TransferStrips, H150 REL-Q1 b); the control tick already answers per receiving Position, so it would apply unchanged if that changes | decision | human | U-RELEASE |
+| **Terrain from DCS never run against DCS:** `npm run terrain:build`/`terrain:validate` are human-run only; unknown until then: the per-Eval cost on the sim thread, `os.clock` in the Eval environment, `_APP_VERSION`, `land.getHeight` off the map's edge, validate's agreement numbers. Old `state/terrain-cache/10/` MapTiler tiles are dead weight. An old crc-desktop keeps asking MapTiler for contours until updated | needs a live run | human | U-TERRAIN-DCS, S-ARCH-81 |
+| **OpenFreeMap may disappear without notice** (its terms, U-GLYPHS); it is the fallback only (H156 GL-Q1 a). Roboto Mono is not bundled: data blocks draw in proportional Roboto (H156 GL-Q2 b, accepted) | watch | human | U-GLYPHS |
+| **Live walks round 2 did not do:** the paused and restarted mission against the shared server after U-CLOCK (S-ARCH-72's two scenarios), a busy tower scope with no vehicles, a formation in the tower pattern (split for T&Gs), a moving hull's carrier area on the map, the airspace badge and transit with live units (the rig has no DCS units: specs inject the facts), the carrier prototype with a real ship | needs a live check | human | U-CLOCK, U-DECLUTTER, U-TWR-PATTERN, U-JURISDICTION, U-AIRSPACE-BADGE, U-CARRIER |
+| **The soak does not drive** the pattern ops, transits, `SetParApproach`, `SetEat` or the frequency ops; ControlRelease and CHECKED_IN are not in the freeze hub op matrix (unit tests only) | test debt | later soak lane | U-RELEASE, U-TWR-PATTERN, U-MOA-TRANSIT-BUILD |
+| **A clock that never answers:** a DCS link that is up with moving units but no `GetScenarioCurrentTime` answers holds the mission clock indefinitely (`0129`) | known limit | unowned | U-CLOCK |
+| **Literal ids and one-of assumptions** in the carrier tables (`create-strip.js`, `carrier/handoffs.js`, `efsp-nla.js`), `wire/families/frequency.js`'s `DEFAULT_FACILITY_ID`, the radar-selector log naming `TACTICAL`/`TAC_C2`, and H160's list (literal Facility ids, the first-counterpart coordination target, TOFI counterparts by role, "Hand Off to AP" text, Facility display order) | debt | U-ROLE-POSITIONS when it resumes | S-ARCH-83, S-ARCH-85, H160 |
 | `_cidSeq` passes 999 after ~3 h at stress rate | low | unowned | L6 F9 |
 | Merging L3 and L11: a crc-sync test parsing `ojw1v5-export.txt` and `research-render.txt` against research §3's oracle (S-R2-7) has not been written | test debt | integrator | wave 1 |
 | Two cosmetic behaviours left alone by decision (D-3): a double 6xxx warning, and a `rev` bump on an unchanged ATO re-import | cosmetic | none | L20PREP |
 
-**Human actions outstanding.** The LG 10-minute live check; one run of the four-hour soak workflow (above); the live wind check (S-F2b) and the live `mission_start` check (S-F3); a live walk of
+**Human actions outstanding.** The terrain cache build on the server (RUNBOOK, "Building the terrain cache"); the round-2 live walks above; the LG 10-minute live check; one run of the four-hour soak workflow (above); the live wind check (S-F2b) and the live `mission_start` check (S-F3); a live walk of
 a real DCS ship against the carrier banner, CARRIER panel, MARSHAL board and CARRIER MAP, and of a real PAR track at Incirlik; L19's taxi/line-up/take-off-without-Airborne walk; the `.env` and MariaDB `init.sh` items from HYG (CLAUDE.md); the squadron
 data above; before running this crc-sync, delete or fix `crc-sync/state/efsp-board.json` (local and the server's, H137: an `sfaRotation` key refuses
 start-up). **Release checks:** crc-sync and crc-desktop ship together (`0110`'s offer frame is gone); look for any `state/efsp-facility-*.json` on the server volume before the first deploy of `0110`
@@ -1637,8 +1772,9 @@ CARRIER-STATE (the old carrier shape refuses start-up) and any hull `approach` i
 - **`trackDegradationFlag` automation** is **refused**, not deferred (`0047`): DCS emits no
   track-quality signal, and synthesising one from correlation state is D11 *and* would force verbal
   coordination on every mission reload.
-- **Declutter** (formation, navpoint, ground clutter) stays off until the very end of the EFSP work
-  (H6, H70). The navpoint declutter is reworked once AIRAC data lands.
+- **Declutter** (formation, navpoint) stays off until the very end of the EFSP work
+  (H6, H70). The navpoint declutter is reworked once AIRAC data lands. Ground vehicles are done: no radar presents one
+  (`0121`). The map's drawings, text marks and airport surface are per-controller switches (U-SCOPE-SMALL).
 - **An audited override** for clearing an emergency onto a suspended runway (H19 candidate, not
   built): today the Strip waits.
 
@@ -1667,44 +1803,48 @@ CARRIER-STATE (the old carrier shape refuses start-up) and any hull `approach` i
   `surveillance/presentation.js`, client `track-label.js`. The wire carries no DCS truth.
   `presentation.test.mjs` plus `ws-hub-wire-strictness.test.mjs` hold the line.
 
-## 5. Where to start: the live-test batch is merged, round 2 is running
+## 5. Where to start: the v2 tip, nothing running
 
 The plan was `docs/efsp-parallel-plan.md` (history) and then `docs/parallel/arch-check-plan.md`; `docs/parallel/decisions.md` is what is actually dispatched, and
 `docs/parallel/supervisor-handoff.md` the supervisor's queue. Each lane works in its own worktree `/home/nklx/dev/personal/sourcedcs-<lane>` on `lane/<lane>-…`,
 reads `docs/parallel/lane-rules.md`, and leaves `docs/wip/<lane>.md` for the next fold. **Merged into `efsp-wp5-correlation`**: waves 1-3, the refactor W1-W7 and the
 rename, L20, the post-refactor features (ADRs `0098`-`0106`), the architecture check's three phases with everything after it, the panels (§3K), the live-test fix
-batch (LT-RESEARCH, LT-TERRAIN, LT-UI, LT-AIRSPACE-FIX, LT-CORRELATION, LT-SFA-PAR, LT-STRIP-FIELDS, LT-PAR-MISSED, LT-VFR, LT-MARSA, LT-AIRSPACE-ALERT), and
-round 2's U-RESEARCH and U-STRIP (§3L).
+batch (§3L) and round 2 to the v2 tip (§3M: U-PANELS, U-JURISDICTION, U-MOA, U-PAR, U-RELEASE, U-TWR-PATTERN, U-SMALL, U-DECLUTTER, U-MOA-TRANSIT and its
+build, U-CLOCK, U-PAR-VALUES, U-FREQ-EDITOR, U-SMALL2, U-GLYPHS, U-SCOPE-SMALL, U-AIRSPACE-BADGE, U-TERRAIN-DCS, U-SMALL-FIXES, U-CARRIER, U-FREQ-ROWS,
+U-CARRIER-MAPFIX), and DOCS-V2, this fold.
 
-**Up to four lanes in parallel** (the human, 2026-10-14, S-ARCH-62; it replaces H112's one agent at a time). Every briefing requires both unit suites
-(S-ARCH-16). The supervisor runs the sharded Playwright after a merge that touched the client (`lane-rules.md` 7).
+**Up to four lanes in parallel** (S-ARCH-62), sharded Playwright on **at most 2 lanes** (S-ARCH-75), every command under `nice -n 19`. Every briefing requires
+both unit suites (S-ARCH-16). The supervisor runs the sharded Playwright after a merge that touched the client (`lane-rules.md` 7).
 
-**Running** (from `543c1c1f`): **U-PANELS** (U10, U12, U13), **U-JURISDICTION** (`0125`: jurisdiction airspace, H142-H145), **U-MOA** (`0124`: the
-airspace card's flight list with Approve, MARSA void-before-rendezvous only under `TANKER_ACCEPTED`, H140, H141), and this docs pass (DOCS-R2).
+**v2** (H159) is a working EFSP panel, a first working prototype of the carrier panels, PAR and SFA: that is this tip. **Nothing is running.**
 
-**Queued, in this order** (`supervisor-handoff.md`): **U-PAR** (`0123`: azimuth in degrees only, elevation lower limit −0.5°, after U-PANELS);
-**U-RELEASE** (`0122`: released-by-default handoffs, "Checked in" before any control move, not-released control at the receiver's airspace
-boundary, no withdraw; H141, H142; after U-JURISDICTION; it replaces the handoff and release model §8 of the guide describes); **U-RSU-DESIGN -> U-RSU**
-(`0120`, U14/U15, H138: the RSU works visually and VFR only, a list of its aircraft; U-RSU-DESIGN, docs and a mockup, takes the first free slot); **small items and declutter** (LT-GROUND `0121`,
-§4's small-items row, T30); **U-CARRIER** (U18-U21) **last**, the human's order. Older items, in no fixed order:
+**Held:** **U-ROLE-POSITIONS** (ADR `0132`; the trial merge is branch `merge/U-ROLE-POSITIONS`, `43ae06e3`, with two open failures: the `no-position-ids`
+scan on U-CARRIER's literal ids and crc-desktop test 832, the Marshal create-strip origins). Pick it up after the v2 launch, with Konya, and with H160's list
+(literal Facility ids, coordination and TOFI targets from topology, the "Hand Off to AP" text, Facility order, a test over a generated N ≥ 10 facility files).
+
+**v3** (`docs/parallel/v3-backlog.md`, H159): openAIP airspace (H146), AIRAC data and with it the fix coordinates (H152), an upgraded radio panel, an upgraded
+airport panel, upgraded carrier panels (a recovery bound to its launch flight, a prompt when a Move leaves a hand EAT out of order, per-aircraft orbits, a CV ATC
+check of the panel's columns), and a second airfield (Konya) on the role-based Positions.
+
+Older items, in no fixed order:
 
 | What | Why it waits | Source |
 |---|---|---|
 | `definitionHistory` on the wire | the airspace History view is partial without it; a later crc-sync lane | S-WAVEB-2 |
 | A route from a DCS line drawing | AP2B-Q3: "later" | H102 |
 | The correlation seq-jump decision (`gapFromDeltas: false`, §4) | a client/server decision; costs slice resyncs, not correctness | NX-1 |
-| **Declutter last** (formation, navpoint, ground clutter; air-surveillance radars never present ground vehicles, H134 LT-Q1 c) | stays off until the very end of the EFSP work (H6, H70); the navpoint declutter is reworked once AIRAC data lands | §4 deferred |
+| **Declutter last** (formation, navpoint) | stays off until the very end of the EFSP work (H6, H70); the navpoint declutter is reworked once AIRAC data lands | §4 deferred |
 | The cleanup list at the end of §4 (`facilityView`, underscore exports, CSP, CSS split, bare `Date.now()` sites) | each rewrites import lines or shared contracts; do them one at a time | DESK-TIDY-2, SERVER-SEAMS-1/2 |
 | A soak that rolls the mission, and the human's 240-minute workflow run | tools lane / human action | NX-1 |
 | The live checks in §4 | need a real DCS server and a real ship | human |
-| The squadron data in §4 (LTAG PAR plate, `fixToRampSec`, CVN-72, SFA frequencies) | data, not code: config files only | human / squadron |
+| The squadron data in §4 (`fixToRampSec`, CVN-72, the comm card) | data, not code: config files only | human / squadron |
 | Refusal codes and op argument names on the wire surface | waits for the human's answer (S-ARCH-43) | next wire lane |
 | The deck-state board (`0064` B8) | not designed | later carrier lane |
-| openAIP airspace import | major v3 (`docs/parallel/v3-backlog.md`) | H146 |
+| openAIP airspace import, AIRAC | major v3 (`docs/parallel/v3-backlog.md`) | H146, H152 |
 
 **What to keep true while working** (§3K's traps): both unit suites in every lane; client modules are leaves plus the change bus with no cycle; no `window.*`; `deliverEfsp` is the one server delivery
 path; `SyncedStore` for a new sequenced store; config factories and `createApp({env})`; `withPaths` for private test paths; e2e specs reach modules through `crc.<module>` and follow a moved function;
-`wire:record` after a wire change; never hand-merge a golden.
+`wire:record` after a wire change; never hand-merge a golden; a new state file is redirected by the e2e harness; rules name the acting Position's role, never a literal id (`0132`, rule 9) and assume N of everything (H160).
 
 **The integrator, after every merge:** run both unit suites and, when the client changed, the sharded Playwright (re-run a failing spec alone before counting it); restart the local crc-sync; fold
 `docs/wip/*.md` into the guide and this file; walk the sorties and pilot requests by hand. A standing rule since `S-M-e2efix-l23`: every e2e spec must `require('./helpers/test')` and leave no Strips on the Board.
