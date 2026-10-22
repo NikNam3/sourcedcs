@@ -26,6 +26,12 @@ is done. VERSION refuses those clients once the protocol is bumped anyway. A crc
 
 ## Building the terrain cache (crc-sync ADR 0133)
 
+**Shipped caches:** `crc-sync/data/terrain/<Theater>-<n>m.terrain.gz` is baked into the image (Syria at 500 m, built
+2026-10-22 against DCS 2.9.30.28536, validated: S-ARCH-89). crc-sync reads a cache in the state volume first and the
+shipped one otherwise, so a deploy needs no build for a shipped theater. To ship a new or rebuilt map: build it (below),
+`gzip -9 -c Syria-500m.terrain > crc-sync/data/terrain/Syria-500m.terrain.gz`, commit, deploy; then delete any older
+copy of that theater in the volume's `terrain-cache/`, or it keeps winning.
+
 crc-sync's radar masking, and crc-desktop's contours and debug line of sight, read a height grid of the whole map built
 from DCS itself. **Only a human runs the build**, at a time the DCS server may be loaded: every request is a
 `CustomService.Eval` on the sim thread. A mission on that theater must be running (the command checks it and refuses

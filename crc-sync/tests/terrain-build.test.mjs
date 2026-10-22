@@ -69,7 +69,7 @@ test('build: samples the whole grid in chunks of whole rows, pauses between them
   }
   assert.deepEqual(fs.readdirSync(dir), [cacheFileName('Syria', 2000)], 'no partial or progress file left behind');
   // The server reads what the build wrote.
-  const store = new TerrainStore({ cacheDir: dir });
+  const store = new TerrainStore({ cacheDir: dir, shippedDir: null });
   assert.ok(store.loadTheater('Syria'));
   // A second run has nothing to do and asks DCS nothing.
   const again = fakeDcs({ heightAt: hills });

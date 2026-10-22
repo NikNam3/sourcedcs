@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import zlib from 'node:zlib';
 import os from 'node:os';
 import path from 'node:path';
 import crcLog from '../src/log.js';
@@ -18,7 +19,7 @@ const {
   TerrainStore, bearingDeg, projectPos, LOS_SAMPLE_COUNT,
 } = await import('../src/terrain.js');
 const {
-  planGrid, encodeGrid, decodeGrid, cacheFileName, findCacheFile, UNSAMPLED, FORMAT,
+  planGrid, encodeGrid, decodeGrid, cacheFileName, findCacheFile, shippedTerrainDir, readCacheFile, UNSAMPLED, FORMAT,
 } = await import('../src/terrain-grid.js');
 
 // ── losSightLineHeightM (ported) ───────────────────────────────────────────
@@ -156,7 +157,7 @@ const ridge = (lat, lon) => (Math.abs(lon - RIDGE_LON) < 0.05 ? 2000 : 0);
 function storeWith(files) {
   const dir = tmpDir();
   for (const [name, buf] of Object.entries(files)) fs.writeFileSync(path.join(dir, name), buf);
-  return new TerrainStore({ cacheDir: dir });
+  return new TerrainStore({ cacheDir: dir, shippedDir: null });
 }
 
 test('TerrainStore: with no cache for the theater, every sight line is unknown (fail open) and it is logged once', (t) => {
@@ -203,13 +204,44 @@ test('TerrainStore: a bad file is not used, logged once, and the store fails ope
 test('TerrainStore: another theater drops the old grid; the cache is re-read at each mission load', (t) => {
   const cap = crcLog.capture(); t.after(() => cap.stop());
   const dir = tmpDir();
-  const store = new TerrainStore({ cacheDir: dir });
+  const store = new TerrainStore({ cacheDir: dir, shippedDir: null });
   assert.equal(store.loadTheater('Syria'), null);
   fs.writeFileSync(path.join(dir, cacheFileName('Syria', 2000)), makeGrid({ heightAt: ridge }).buf);
   assert.ok(store.loadTheater('Syria'), 'a file built while crc-sync runs is read at the next mission load');
   assert.equal(store.loadTheater('Caucasus'), null);
   assert.equal(store.elevationAt(RIDGE_LON, 37), null);
   assert.equal(store.loadTheater(null), null);
+});
+
+test('TerrainStore: a gzipped cache shipped in the image is read when the state directory has none; a built one wins', (t) => {
+  const cap = crcLog.capture(); t.after(() => cap.stop());
+  const state = tmpDir(), shipped = tmpDir();
+  fs.writeFileSync(path.join(shipped, `${cacheFileName('Syria', 2000)}.gz`), zlib.gzipSync(makeGrid({ heightAt: ridge }).buf));
+  const store = new TerrainStore({ cacheDir: state, shippedDir: shipped });
+  assert.ok(store.loadTheater('Syria'), 'the shipped .gz is read');
+  assert.equal(store.elevationAt(RIDGE_LON, 37), 2000);
+  assert.equal(store.fileBytes.subarray(0, 8).toString('ascii'), 'CRCTERR1', 'served unzipped, as a built file is');
+  // ADR 0048: the state directory wins, even at a coarser spacing.
+  fs.writeFileSync(path.join(state, cacheFileName('Syria', 4000)), makeGrid({ spacingM: 4000 }).buf);
+  assert.equal(store.loadTheater('Syria').header.spacingM, 4000);
+  assert.equal(new TerrainStore({ cacheDir: tmpDir(), shippedDir: null }).loadTheater('Syria'), null);
+});
+
+test('findCacheFile: a .terrain.gz counts; at one spacing the plain file wins', () => {
+  const dir = tmpDir();
+  fs.writeFileSync(path.join(dir, 'Syria-500m.terrain.gz'), '');
+  assert.deepEqual(findCacheFile(dir, 'Syria'), { file: path.join(dir, 'Syria-500m.terrain.gz'), spacingM: 500 });
+  fs.writeFileSync(path.join(dir, 'Syria-500m.terrain'), '');
+  assert.deepEqual(findCacheFile(dir, 'Syria'), { file: path.join(dir, 'Syria-500m.terrain'), spacingM: 500 });
+});
+
+test('the shipped caches in data/terrain/ are valid for the theater they name', () => {
+  const dir = shippedTerrainDir({});
+  for (const name of fs.readdirSync(dir).filter((n) => n.endsWith('.terrain.gz'))) {
+    const theater = /^(.+)-\d+m\.terrain\.gz$/.exec(name)[1];
+    const g = decodeGrid(readCacheFile(path.join(dir, name)), { theater });
+    assert.ok(g.header.rows > 0 && g.header.cols > 0, name);
+  }
 });
 
 test('projectPos/bearingDeg: a projected point bears back along the bearing', () => {

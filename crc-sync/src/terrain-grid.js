@@ -20,6 +20,7 @@
 // optional, so it is never a crash.
 
 const fs = require('fs');
+const zlib = require('zlib');
 const path = require('path');
 const { dirs } = require('./state-paths');
 
@@ -30,11 +31,28 @@ const UNSAMPLED = -32768;
 const METRES_PER_DEG_LAT = 111320;
 const HEADER_KEYS = ['format', 'theater', 'spacingM', 'latMin', 'lonMin', 'latStep', 'lonStep', 'rows', 'cols', 'builtAt', 'dcsVersion'];
 const EDGE = 1e-6;
-const FILE_RE = /^(.+)-(\d+)m\.terrain$/;
+const FILE_RE = /^(.+)-(\d+)m\.terrain(\.gz)?$/;
 
 /** The directory the cache lives in: CRCSYNC_TERRAIN_CACHE_DIR, else state/terrain-cache (the state volume in the stack). */
 function terrainCacheDir(env = process.env) {
   return env.CRCSYNC_TERRAIN_CACHE_DIR || path.join(dirs(env).stateDir, 'terrain-cache');
+}
+
+/**
+ * The caches shipped in the image, read when the state directory has none for the theater (the ADR 0048 read rule):
+ * `data/terrain/` (read-only reference data, beside icao.json), gzipped in git. CRCSYNC_TERRAIN_SHIPPED_DIR overrides it;
+ * empty means none (the e2e harness and the soak host, which bring their own).
+ * @returns {string|null}
+ */
+function shippedTerrainDir(env = process.env) {
+  if (env.CRCSYNC_TERRAIN_SHIPPED_DIR !== undefined) return env.CRCSYNC_TERRAIN_SHIPPED_DIR || null;
+  return path.join(__dirname, '..', 'data', 'terrain');
+}
+
+/** A cache file's bytes, gunzipped when it ends in `.gz`. */
+function readCacheFile(file) {
+  const buf = fs.readFileSync(file);
+  return file.endsWith('.gz') ? zlib.gunzipSync(buf) : buf;
 }
 
 function cacheFileName(theater, spacingM) {
@@ -42,7 +60,8 @@ function cacheFileName(theater, spacingM) {
 }
 
 /**
- * The finest-spacing cache file for a theater in `dir`, or null.
+ * The finest-spacing cache file for a theater in `dir` (`<Theater>-<n>m.terrain`, or `.terrain.gz`), or null.
+ * At one spacing the plain file wins over its gzipped copy.
  * @returns {{file:string, spacingM:number}|null}
  */
 function findCacheFile(dir, theater) {
@@ -53,9 +72,10 @@ function findCacheFile(dir, theater) {
     const m = FILE_RE.exec(name);
     if (!m || m[1] !== theater) continue;
     const spacingM = Number(m[2]);
-    if (!best || spacingM < best.spacingM) best = { file: path.join(dir, name), spacingM };
+    const gz = !!m[3];
+    if (!best || spacingM < best.spacingM || (spacingM === best.spacingM && best.gz && !gz)) best = { file: path.join(dir, name), spacingM, gz };
   }
-  return best;
+  return best && { file: best.file, spacingM: best.spacingM };
 }
 
 /**
@@ -170,6 +190,6 @@ class TerrainGrid {
 }
 
 module.exports = {
-  TerrainGrid, planGrid, encodeGrid, decodeGrid, dataOffset, terrainCacheDir, cacheFileName, findCacheFile,
+  TerrainGrid, planGrid, encodeGrid, decodeGrid, dataOffset, terrainCacheDir, shippedTerrainDir, readCacheFile, cacheFileName, findCacheFile,
   MAGIC, FORMAT, UNSAMPLED, HEADER_KEYS, METRES_PER_DEG_LAT,
 };

@@ -35,6 +35,7 @@ function syncEnv(stateDir, port) {
     // The runtime frequency table (crc-sync docs/adr/0131): a reset starts from the facility files' frequencies.
     CRCSYNC_EFSP_FREQUENCIES_PATH: stateFile('efsp-frequencies.json'),
     CRCSYNC_TERRAIN_CACHE_DIR: stateFile('terrain'),
+    CRCSYNC_TERRAIN_SHIPPED_DIR: '', // the shipped data/terrain/ caches would mask the harness's radars
     // No MapTiler key. server.js runs dotenv, and dotenv never overrides a key already set, so an empty value here keeps
     // the developer's key in crc-sync/.env out of every run: with it, each run pre-warmed the DEM into an empty cache and
     // re-asked for every failed tile on each coverage tick, against the real account's quota.

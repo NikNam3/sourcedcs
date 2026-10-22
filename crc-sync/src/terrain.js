@@ -15,10 +15,9 @@
 // `hasLineOfSight` answers 'unknown' when no grid is loaded or a sample falls outside it, and every caller treats that
 // as visible. Going spuriously blind is worse than seeing slightly too much.
 
-const fs = require('fs');
 
 const { haversineM } = require('./geo');
-const { decodeGrid, terrainCacheDir, findCacheFile } = require('./terrain-grid');
+const { decodeGrid, terrainCacheDir, shippedTerrainDir, readCacheFile, findCacheFile } = require('./terrain-grid');
 const log = require('./log').logger('terrain');
 
 const LOS_SAMPLE_COUNT = 24;
@@ -107,9 +106,11 @@ class TerrainStore {
    * @param {object} [opts]
    * @param {object} [opts.env] the environment: CRCSYNC_TERRAIN_CACHE_DIR, else state/terrain-cache
    * @param {string} [opts.cacheDir]
+   * @param {string|null} [opts.shippedDir] the image's caches (data/terrain/), read when cacheDir has none; null: none
    */
-  constructor({ env = process.env, cacheDir = terrainCacheDir(env) } = {}) {
+  constructor({ env = process.env, cacheDir = terrainCacheDir(env), shippedDir = shippedTerrainDir(env) } = {}) {
     this._cacheDir = cacheDir;
+    this._shippedDir = shippedDir;
     this._theater = null;
     this._grid = null;
     this._file = null;     // the cache file's bytes, served to clients as they are (GET /api/terrain/grid)
@@ -118,7 +119,8 @@ class TerrainStore {
   }
 
   /**
-   * A mission on `theater` loaded: read its cache file, finest spacing first. Synchronous, a local file only, read
+   * A mission on `theater` loaded: read its cache file, finest spacing first, from the state directory, else the one
+   * shipped in the image (docs/adr/0048's read rule: a cache built on the server wins). Synchronous, a local file only, read
    * again on every mission load, so a file built while crc-sync runs is picked up at the next mission (re)start.
    */
   loadTheater(theater) {
@@ -135,14 +137,15 @@ class TerrainStore {
       this._reason = 'the theater is unknown';
       return null;
     }
-    const found = findCacheFile(this._cacheDir, theater);
+    const found = findCacheFile(this._cacheDir, theater) || (this._shippedDir && findCacheFile(this._shippedDir, theater));
     if (!found) {
-      this._reason = `no terrain cache for ${theater} in ${this._cacheDir}`;
-      once('none', 'warn', 'no terrain cache for this theater: terrain masks nothing and every radar sees to its full range (build one with npm run terrain:build)', { theater, dir: this._cacheDir });
+      const where = this._shippedDir ? `${this._cacheDir} or ${this._shippedDir}` : this._cacheDir;
+      this._reason = `no terrain cache for ${theater} in ${where}`;
+      once('none', 'warn', 'no terrain cache for this theater: terrain masks nothing and every radar sees to its full range (build one with npm run terrain:build)', { theater, dir: where });
       return null;
     }
     try {
-      const buf = fs.readFileSync(found.file);
+      const buf = readCacheFile(found.file);
       this._grid = decodeGrid(buf, { theater });
       this._file = buf;
       this._reason = null;

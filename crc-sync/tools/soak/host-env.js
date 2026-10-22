@@ -34,6 +34,7 @@ function envFor(stateDir) {
     CRCSYNC_EFSP_FREQUENCIES_PATH: p('frequencies.json'), // docs/adr/0131
     CRCSYNC_APT_CONFIG_PATH: p('apt-config.json'),
     CRCSYNC_TERRAIN_CACHE_DIR: p('terrain'),
+    CRCSYNC_TERRAIN_SHIPPED_DIR: '', // keep the soak's radar picture as before the shipped caches
     CRCSYNC_SENSOR_SPECS_PATH: p('sensor-specs.json'),
     CRCSYNC_DCS_GRPC_HOST: '127.0.0.1:1',
     DCS_GRPC_HOST: '127.0.0.1:1',
