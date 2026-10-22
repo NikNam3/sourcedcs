@@ -70,7 +70,8 @@ Briefing §1 (v2 tip gates, Playwright 288/289 then the mapfix, 2-lane cap, ADR 
 ## Gates
 
 Tests that read these docs: none (`ls crc-sync/tests crc-desktop/tests | grep -i -e doc -e gloss -e claude -e readme` finds nothing; a wider
-`grep` finds only comments naming the RUNBOOK and README). Both unit suites run once on the lane head (results in the report).
+`grep` finds only comments naming the RUNBOOK and README). Both unit suites on the lane head under `nice -n 19`: crc-sync `npm test` **2895/2895**, crc-desktop `npm test` **1424/1424** (same as the v2 tip;
+no code changed). No Playwright, freeze, walk or soak (docs only).
 
 ## Left for a later pass
 
