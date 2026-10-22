@@ -36,7 +36,14 @@ cd <repo>/infra
 docker compose exec crc-sync npm run terrain:build -- --theater Syria
 #   optional: --spacing 500 (metres, default 500)  --chunk 4000 (samples per Eval, at least one row)
 #             --pause 500 (ms between Evals)        --out <dir> (default CRCSYNC_TERRAIN_CACHE_DIR)
+#             --dry-run (plan only)                 --max-chunks <n> (stop cleanly after n Evals)
 ```
+
+**Try it first.** `--dry-run` sends one small Eval (the theater check and the four map corners, no heights), prints the
+grid, the number of Evals, the file size and the time the pauses alone take, and writes nothing. Then
+`--max-chunks 3` asks three rows and stops: read the "ms in DCS per Eval" it prints before the full run. It leaves a
+`.partial` and `.progress.json` that the full command resumes; build the probe with `--out /tmp/terrain-probe` if you would
+rather throw it away.
 
 - **Where it lands:** `/app/state/terrain-cache/Syria-500m.terrain` on the `crc-sync-state` volume
   (`CRCSYNC_TERRAIN_CACHE_DIR` is already that in the stack). While it runs, `Syria-500m.terrain.partial` and

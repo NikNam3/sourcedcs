@@ -7,6 +7,9 @@
 //                 the same theater and spacing continues there (a different grid is refused, naming what to delete)
 //   rate-limited  one Eval per chunk of whole rows (`chunkPoints`, default 4,000 samples), then `pauseMs`
 //   measured      each chunk's round trip and, where the mission environment has os.clock, its time inside DCS
+//   --dry-run     one probe Eval (the theater check and the map corners, no heights), then the plan: grid, Evals, file
+//                 size, the time the pauses alone take; no file is written
+//   --max-chunks  a probe run: stops cleanly after n chunks, leaving a partial file the same command resumes
 //
 // Everything that touches the outside world is injected (evalLua, sleep, the clock, print), so the tests drive it with
 // a fake Eval over a synthetic terrain.
@@ -48,8 +51,9 @@ async function probe(evalLua, theater, extent) {
  * @param {number} [o.spacingM] @param {number} [o.chunkPoints] @param {number} [o.pauseMs]
  * @param {(ms:number)=>Promise<void>} [o.sleep] @param {()=>number} [o.now] wall clock, ms
  * @param {(line:string)=>void} [o.print]
- * @param {number} [o.maxChunks] stop after this many chunks (tests: an interrupted run)
- * @returns {Promise<{done:boolean, file:string, chunks:number, rows:number, cols:number}>}
+ * @param {number} [o.maxChunks] stop cleanly after this many chunks (`--max-chunks`; resumable)
+ * @param {boolean} [o.dryRun] probe and print the plan only, no heights asked and no file written (`--dry-run`)
+ * @returns {Promise<{done:boolean, file:string, chunks:number, rows:number, cols:number, dryRun?:boolean}>}
  */
 async function buildTerrain(o) {
   const spacingM = o.spacingM ?? DEFAULTS.spacingM;
@@ -65,6 +69,10 @@ async function buildTerrain(o) {
   if (!extent) throw new Error(`config/theaters.json has no terrainExtent for ${theater}: add the map rectangle first (see its _comment)`);
   if (!(Number.isInteger(spacingM) && spacingM >= 50)) throw new Error('--spacing must be a whole number of metres, at least 50');
   if (!(Number.isInteger(chunkPoints) && chunkPoints >= 1)) throw new Error('--chunk must be a positive whole number of samples');
+
+  if (o.maxChunks != null && !(Number.isInteger(o.maxChunks) && o.maxChunks >= 1)) throw new Error('--max-chunks must be a positive whole number');
+
+  if (o.dryRun) return dryRun(o, { evalLua, theater, extent, outDir, spacingM, chunkPoints, pauseMs, print });
 
   fs.mkdirSync(outDir, { recursive: true });
   const finalFile = path.join(outDir, cacheFileName(theater, spacingM));
@@ -106,7 +114,10 @@ async function buildTerrain(o) {
   const fd = fs.openSync(partialFile, 'r+');
   try {
     while (progress.nextRow < rows) {
-      if (o.maxChunks != null && chunks >= o.maxChunks) return { done: false, file: partialFile, chunks, rows, cols };
+      if (o.maxChunks != null && chunks >= o.maxChunks) {
+        print(`stopped after ${chunks} chunk${chunks === 1 ? '' : 's'} (--max-chunks) at row ${progress.nextRow} of ${rows}: re-run without it to continue, or delete ${partialFile} and ${progressFile}`);
+        return { done: false, file: partialFile, chunks, rows, cols };
+      }
       const row0 = progress.nextRow;
       const n = Math.min(rowsPerChunk, rows - row0);
       const lua = heightsLua(header, row0, n);
@@ -152,6 +163,26 @@ async function buildTerrain(o) {
   const perPoint = luaMsCount ? `; ${((1000 * luaMsSum) / (luaMsCount * rowsPerChunk * cols)).toFixed(2)} us per sample inside DCS` : '; DCS time not measurable (no os.clock in the mission environment)';
   print(`done: ${finalFile} (${fs.statSync(finalFile).size} bytes, heights ${min}..${max} m) in ${fmtDuration(now() - started)}${perPoint}`);
   return { done: true, file: finalFile, chunks, rows, cols };
+}
+
+/** `--dry-run`: the one probe Eval, then what a build would do. Writes nothing. */
+async function dryRun(o, { evalLua, theater, extent, outDir, spacingM, chunkPoints, pauseMs, print }) {
+  const finalFile = path.join(outDir, cacheFileName(theater, spacingM));
+  const progressFile = `${finalFile}.progress.json`;
+  const p = await probe(evalLua, theater, extent);
+  const plan = planGrid(p.bbox, spacingM);
+  const { rows, cols } = plan;
+  const rowsPerChunk = Math.max(1, Math.floor(chunkPoints / cols));
+  const evals = Math.ceil(rows / rowsPerChunk);
+  const header = { format: FORMAT, theater, spacingM, ...plan, builtAt: new Date(0).toISOString(), dcsVersion: p.version };
+  const bytes = dataOffset(header) + rows * cols * 2;
+  print(`dry run, nothing written. DCS is running ${theater} (${p.version || 'version unknown'})`);
+  print(`${theater} at ${spacingM} m: ${rows} x ${cols} = ${rows * cols} samples, ${rowsPerChunk * cols} per Eval, ${evals} Evals`);
+  print(`cache file ${finalFile}, about ${(bytes / 1e6).toFixed(1)} MB`);
+  print(`the ${pauseMs} ms pauses alone take ${fmtDuration((evals - 1) * pauseMs)}; add each Eval's round trip (try --max-chunks 3 to measure it)`);
+  if (fs.existsSync(finalFile)) print(`${finalFile} already exists: a build would do nothing`);
+  else if (fs.existsSync(progressFile)) print(`${progressFile} exists: a build would resume it (if it is for this grid)`);
+  return { done: false, dryRun: true, file: finalFile, chunks: 0, rows, cols, evals, bytes };
 }
 
 module.exports = { buildTerrain, probe, DEFAULTS, fmtDuration };

@@ -137,8 +137,40 @@ test('validate: prints agreement per spacing; on smooth terrain "direct" and the
     makePairs({ latMin: 35, latMax: 37, lonMin: 36, lonMax: 38 }, { seed: 7, pairs: 5, radarAglM: 20, minRangeM: 1e4, maxRangeM: 5e4, maxTargetAglM: 1500 }), 'seeded');
 });
 
+test('build --dry-run: one probe Eval and the plan; no heights asked, no file written', async () => {
+  const dir = path.join(tmp(), 'not-yet');
+  const dcs = fakeDcs({ heightAt: hills });
+  const lines = [];
+  const out = await run({ evalLua: dcs.evalLua, outDir: dir, dryRun: true, print: (l) => lines.push(l) });
+  assert.equal(out.dryRun, true);
+  assert.equal(out.done, false);
+  assert.equal(dcs.calls.probe, 1);
+  assert.deepEqual(dcs.calls.heights, []);
+  assert.equal(fs.existsSync(dir), false, 'nothing created');
+  // The plan is the one a real build then follows.
+  const real = await run({ evalLua: fakeDcs({ heightAt: hills }).evalLua, outDir: tmp() });
+  assert.deepEqual([out.rows, out.cols], [real.rows, real.cols]);
+  assert.equal(out.evals, real.chunks);
+  assert.equal(out.bytes, fs.statSync(real.file).size);
+  assert.ok(lines.some((l) => /dry run, nothing written/.test(l)));
+  assert.ok(lines.some((l) => new RegExp(`${out.evals} Evals`).test(l)));
+});
+
+test('build --max-chunks: stops cleanly after n chunks, says so, and the same command resumes', async () => {
+  const dir = tmp();
+  const dcs = fakeDcs({ heightAt: hills });
+  const lines = [];
+  const part = await run({ evalLua: dcs.evalLua, outDir: dir, maxChunks: 3, print: (l) => lines.push(l) });
+  assert.equal(part.done, false);
+  assert.equal(dcs.calls.heights.length, 3);
+  assert.ok(lines.some((l) => /stopped after 3 chunks \(--max-chunks\)/.test(l)));
+  assert.equal((await run({ evalLua: fakeDcs({ heightAt: hills }).evalLua, outDir: dir })).done, true);
+  await assert.rejects(run({ evalLua: dcs.evalLua, outDir: tmp(), maxChunks: 0 }), /--max-chunks must be a positive/);
+});
+
 test('cli: arguments', () => {
   assert.deepEqual(parseArgs(['--theater', 'Syria', '--spacing=250', '--pause', '0']), { theater: 'Syria', spacing: '250', pause: '0' });
+  assert.deepEqual(parseArgs(['--theater', 'Syria', '--dry-run', '--max-chunks', '3']), { theater: 'Syria', 'dry-run': 'true', 'max-chunks': '3' });
   assert.throws(() => parseArgs(['Syria']), /unexpected/);
 });
 

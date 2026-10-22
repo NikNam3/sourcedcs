@@ -44,7 +44,7 @@ npm run freeze           # opt-in golden-replay suite (tests/freeze/, ADR 0095 ย
 npm run walk             # opt-in I11 control-release walk at depth 4 (npm test runs depth 3; CRCSYNC_WALK_DEPTH=n overrides)
 npm run soak:selfcheck   # proves every soak detector fires (~40 s); not part of npm test
 npm run soak:smoke       # 20 virtual minutes of simulated EFSP traffic; `npm run soak -- --minutes 240` for the ยง13 run
-npm run terrain:build -- --theater Syria      # HUMAN-RUN ONLY: builds the DCS terrain cache, loads the DCS server (ADR 0133)
+npm run terrain:build -- --theater Syria      # HUMAN-RUN ONLY: builds the DCS terrain cache, loads the DCS server (ADR 0133); --dry-run plans only, --max-chunks n probes
 npm run terrain:validate -- --theater Syria   # HUMAN-RUN ONLY: grid LOS vs DCS land.isVisible, to pick the spacing
 ```
 **A lane runs both unit suites (crc-sync and crc-desktop), whichever side it edits**: the client and server parity tests read each other's files. Test processes (all three Node suites) get a private `TMPDIR` that is removed on exit; crc-sync's preload also warns when the checkout's real `state/` changed during a run (fails under `CI`). Freeze goldens number ids per golden by first appearance and hash only `PROJECTION` (`tests/freeze/freeze-lib.mjs`); other fields are unhashed ext, cross-cutting counters go in `VOLATILE_KEYS`, and `table-mutations/` and `hub-op-matrix/` hold one file per op. Never hand-merge a golden: take either side, `npm run freeze:update`, check the diff is small, commit it separately.
