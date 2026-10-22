@@ -129,6 +129,8 @@
         "UnbindTrack"
       ],
       "efsp-frequency-mutation": [
+        "AddFrequency",
+        "RemoveFrequency",
         "ResetFrequency",
         "SetFrequency"
       ],

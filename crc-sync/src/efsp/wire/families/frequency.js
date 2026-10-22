@@ -1,14 +1,16 @@
 'use strict';
 
 const { frequencyDelta } = require('../frames');
+const { rowMatchesOp } = require('../../frequency-table');
 
 const facilityOf = (ctx, msg) => msg.facilityId || ctx.facilityConfig.DEFAULT_FACILITY_ID;
 const opOf = (msg) => (msg.op && typeof msg.op === 'object' ? msg.op : {});
 
 /**
- * The runtime frequency table (docs/adr/0131, H154): SetFrequency / ResetFrequency on one Position frequency or one SFA
- * pool frequency of a Facility. The table is squadron data, not a clearance, so the gate is "Primary somewhere"
- * (correlation's): any controller Primary at a Position may set any Facility's frequencies, audited by the store.
+ * The runtime frequency table (docs/adr/0131, H154): SetFrequency / ResetFrequency / AddFrequency / RemoveFrequency on one
+ * Position frequency or one SFA pool frequency of a Facility (docs/adr/0138). The gate is "Primary somewhere"
+ * (correlation's); the table then refuses a Facility that is not the acting Position's (FACILITY_MISMATCH, docs/adr/0138,
+ * H156 FQ-Q2 b), audited by the store.
  *
  * Skeleton deviations: the table writes its own state file (`persistWhen` never asks for the Board's), and the delta
  * carries the Facility's whole table, so every client redraws from it.
@@ -32,10 +34,7 @@ module.exports = {
     msg.actingPositionId, session.controllerId,
   ),
   rememberId: (result, msg, ctx) => facilityOf(ctx, msg),
-  fromCached: (ctx, cached, msg) => ({ ...cached, row: ctx.frequencyTable.rowsFor(cached.id).find((r) => {
-    const op = opOf(msg);
-    return op.rackId !== undefined ? r.rackId === op.rackId : r.positionId === op.positionId && r.label === op.label;
-  }) || null }),
+  fromCached: (ctx, cached, msg) => ({ ...cached, row: ctx.frequencyTable.rowsFor(cached.id).find(r => rowMatchesOp(r, opOf(msg))) || null }),
   persistWhen: () => false,
   ack: (result) => ({ row: result.row || null, changed: result.ok ? result.changed : undefined, reason: result.reason, detail: result.detail }),
   broadcasts: (result, ctx, msg) => ({ primary: frequencyDelta(ctx.frequencyTable, facilityOf(ctx, msg)) }),

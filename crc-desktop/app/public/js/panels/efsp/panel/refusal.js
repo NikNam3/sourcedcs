@@ -56,6 +56,7 @@ export const MUTATION_ERROR_MESSAGES = {
   ASSIGNMENT_REQUIRED: 'The departing part needs a heading, speed or altitude assignment', // docs/adr/0099 (SplitFormation)
   BAY_FULL: 'That Bay is full — clear a Strip from it or use another Bay',
   FREQUENCY_IN_USE: 'A flight is on that frequency — hand it off or move it first',
+  FACILITY_MISMATCH: 'That Position belongs to another Facility — act as one of this Facility\'s Positions',
   UNDO_BLOCKED: 'Something has changed since that action, so it can no longer be undone',
   UNDO_UNAVAILABLE: 'There is nothing left to undo — the window has passed',
   INTERNAL_ERROR: 'crc-sync hit an internal error handling that — check the Strip before trying again, and report it if it repeats',

@@ -2,7 +2,8 @@
 
 /* The FREQUENCIES panel (crc-sync docs/adr/0131, H154) in a real browser: a controller sets GND in place, another sees it
  * at once with a grey SET mark, a refused value stays in the row with its reason, RESET returns the default, and the SFA
- * pool's new frequency reaches the SFA Bay. Run on E2E_LANE=9. Screenshots go to test-results/.
+ * pool's new frequency reaches the SFA Bay. Rows added and removed at run time, and another Facility's rows read-only
+ * (crc-sync docs/adr/0138). Run on one E2E_LANE. Screenshots go to test-results/.
  */
 
 const { test, expect } = require('./helpers/test');
@@ -19,11 +20,11 @@ test.afterEach(async () => {
   await new Promise((r) => setTimeout(r, 300));
 });
 
-async function controller(browser, signedOn, name) {
+async function controller(browser, signedOn, name, facilityId = 'INCIRLIK') {
   const ctx = await browser.newContext({ baseURL: test.info().project.use.baseURL, viewport: { width: 1600, height: 1000 } });
   _contexts.push(ctx);
   const page = await ctx.newPage();
-  const { consoleErrors } = await openPanel(page, { signedOn, controller: name });
+  const { consoleErrors } = await openPanel(page, { signedOn, controller: name, facilityId });
   return { page, consoleErrors };
 }
 
@@ -100,5 +101,73 @@ test('an SFA pool frequency set in the panel reaches the SFA Bay', async ({ brow
   await shot(ap.page, 'freq-sfa-set');
   await row.locator('.freq-reset').click();
   await expect(row.locator('.freq-value')).toHaveText('236.100');
+  expect(appErrors(ap.consoleErrors)).toEqual([]);
+});
+
+test('a Position frequency is added and removed; another Facility\'s controller sees it read-only', async ({ browser }) => {
+  const gc = await controller(browser, ['GC'], 'freq-add-gc');
+  const ctr = await controller(browser, ['CTR'], 'freq-add-ctr', 'CENTER');
+  await openFrequencies(gc.page);
+  await openFrequencies(ctr.page);
+
+  const box = gc.page.locator('#frequency-panel .freq-facility[data-facility-id="INCIRLIK"]');
+  await box.locator('.freq-add').click();
+  await box.locator('.freq-add-where').selectOption('CD');
+  await expect(box.locator('.freq-add-label')).toBeFocused();
+  await box.locator('.freq-add-label').fill('clr');
+  await box.locator('.freq-add-mhz').fill('251.66');
+  await box.locator('.freq-add-mhz').press('Enter');
+  await expect(box.locator('.freq-add-line .freq-error')).toContainText('25 kHz');
+  await box.locator('.freq-add-mhz').fill('251.650');
+  await box.locator('.freq-add-mhz').press('Enter');
+  await expect(box.locator('.freq-add-line')).toHaveCount(0);
+
+  const clr = rowOf(gc.page, 'INCIRLIK/CD/CLR');
+  await expect(clr.locator('.freq-value')).toHaveText('251.650');
+  await expect(clr.locator('.freq-set-mark')).toHaveText('SET');
+  await expect(clr.locator('.freq-note')).toContainText('added');
+  await expect(clr.locator('.freq-remove')).toHaveText('REMOVE');
+  await expect.poll(() => gc.page.evaluate(() => crc.state.getEfspPosition('CD').frequencies)).toEqual([{ label: 'CLR', mhz: 251.65 }]);
+  await shot(gc.page, 'freq-added');
+
+  // CENTER's controller sees INCIRLIK's new row, with no way to edit, add or remove it, and no text saying why.
+  const seen = rowOf(ctr.page, 'INCIRLIK/CD/CLR');
+  await expect(seen.locator('.freq-value')).toHaveText('251.650');
+  await expect(ctr.page.locator('#frequency-panel .freq-facility[data-facility-id="INCIRLIK"] button')).toHaveCount(0);
+  await expect(ctr.page.locator('#frequency-panel .freq-readonly')).toHaveCount(0);
+  // Its own Facility, with no frequencies yet, can be added to.
+  await expect(ctr.page.locator('#frequency-panel .freq-facility[data-facility-id="CENTER"] .freq-add')).toBeVisible();
+  await shot(ctr.page, 'freq-other-facility');
+
+  // A shipped row offers RESET only once set, never REMOVE.
+  await expect(rowOf(gc.page, 'INCIRLIK/GC/GND').locator('.freq-remove')).toHaveCount(0);
+  await clr.locator('.freq-remove').click();
+  await expect(clr).toHaveCount(0);
+  await expect(seen).toHaveCount(0);
+  await expect.poll(() => gc.page.evaluate(() => crc.state.getEfspPosition('CD').frequencies)).toEqual([]);
+  expect(appErrors(gc.consoleErrors)).toEqual([]);
+  expect(appErrors(ctr.consoleErrors)).toEqual([]);
+});
+
+test('an SFA frequency added in the panel is a new Rack of the SFA Bay, and goes with REMOVE', async ({ browser }) => {
+  const ap = await controller(browser, ['AP'], 'freq-add-ap');
+  await openFrequencies(ap.page);
+  const box = ap.page.locator('#frequency-panel .freq-facility[data-facility-id="INCIRLIK"]');
+  await box.locator('.freq-add').click();
+  await box.locator('.freq-add-where').selectOption('');
+  await expect(box.locator('.freq-add-label')).toBeHidden();
+  await box.locator('.freq-add-mhz').fill('233.100');
+  await box.locator('.freq-add-mhz').press('Enter');
+  await expect(box.locator('.freq-add-line .freq-error')).toContainText('already freq-2');
+  await box.locator('.freq-add-mhz').fill('237.100');
+  await box.locator('.freq-add-mhz').press('Enter');
+  const row = rowOf(ap.page, 'INCIRLIK/SFA/freq-6');
+  await expect(row.locator('.freq-name')).toHaveText('freq-6 SPARE');
+  await expect(row.locator('.freq-value')).toHaveText('237.100');
+  await expect.poll(() => ap.page.evaluate(() => crc.state.getEfspBays().find(b => b.view === 'sfa-freqs').rackIds)).toContain('freq-6');
+  await shot(ap.page, 'freq-sfa-added');
+  await row.locator('.freq-remove').click();
+  await expect(row).toHaveCount(0);
+  await expect.poll(() => ap.page.evaluate(() => crc.state.getEfspBays().find(b => b.view === 'sfa-freqs').rackIds)).not.toContain('freq-6');
   expect(appErrors(ap.consoleErrors)).toEqual([]);
 });

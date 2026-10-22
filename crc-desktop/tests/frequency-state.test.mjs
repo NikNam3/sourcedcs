@@ -93,3 +93,50 @@ test('a delta replaces one Facility\'s rows and moves the Positions\' frequencie
   state._resetEfspStateForTest();
   assert.deepEqual(fs.getFrequencyRows(), []);
 });
+
+// ── run-time rows (crc-sync docs/adr/0138) ──────────────────────────────────────────────────────────────────────────
+
+const ADDED = { facilityId: 'INCIRLIK', kind: 'POSITION', positionId: 'CD', label: 'CLR', mhz: 251.65, defaultMhz: null, added: true, setAt: Date.UTC(2026, 9, 17, 14, 32), setBy: 'Viper' };
+const ADDED_SFA = { facilityId: 'INCIRLIK', kind: 'SFA', rackId: 'freq-6', use: 'SPARE', mhz: 237.1, defaultMhz: null, added: true, setAt: 1, setBy: 'Viper' };
+
+test('an added row is SET, its note says added, and its ops are the ones crc-sync takes', () => {
+  assert.equal(fs.isFrequencySet(ADDED), true);
+  assert.equal(fs.isFrequencyAdded(ADDED), true);
+  assert.equal(fs.isFrequencyAdded(ROWS[0]), false);
+  assert.equal(fs.frequencySetNote(ADDED), 'added · Viper 1432Z');
+  assert.deepEqual(fs.removeFrequencyOp(ADDED), { kind: 'RemoveFrequency', positionId: 'CD', label: 'CLR' });
+  assert.deepEqual(fs.removeFrequencyOp(ADDED_SFA), { kind: 'RemoveFrequency', rackId: 'freq-6' });
+  assert.deepEqual(fs.addFrequencyOp('CD', 'CLR', 251.65), { kind: 'AddFrequency', positionId: 'CD', label: 'CLR', mhz: 251.65 });
+  assert.deepEqual(fs.addFrequencyOp(null, null, 237.1), { kind: 'AddFrequency', sfa: true, mhz: 237.1 });
+  for (const op of [fs.removeFrequencyOp(ADDED), fs.addFrequencyOp(null, null, 1)]) assert.ok(server.OP_KINDS.includes(op.kind));
+  // crc-sync names the row an SFA add made by its frequency.
+  assert.equal(server.rowMatchesOp(ADDED_SFA, fs.addFrequencyOp(null, null, 237.1)), true);
+});
+
+test('parseFrequencyLabel agrees with crc-sync\'s label rule', () => {
+  for (const text of ['GND', 'clr', ' TWR 2 ', '', '   ', 'ABCDEFGHIJKL', 'ABCDEFGHIJKLM']) {
+    const c = fs.parseFrequencyLabel(text);
+    assert.equal(!c.error, server.labelProblem(String(text).trim().toUpperCase()) === null, `${JSON.stringify(text)}: ${c.error}`);
+  }
+  assert.deepEqual(fs.parseFrequencyLabel(' clr '), { label: 'CLR' });
+  assert.match(fs.parseFrequencyLabel('gnd', ['GND']).error, /already/);
+  assert.equal(fs.FREQUENCY_LABEL_MAX, 12);
+});
+
+test('a delta adds and removes the SFA Bay\'s Racks with the pool, and empties a Position whose added row went', () => {
+  state._resetEfspStateForTest();
+  const pool = ROWS.filter(r => r.kind === 'SFA');
+  state.applyEfspSnapshot({
+    facilities: ['INCIRLIK'],
+    positions: [{ positionId: 'CD', facilityId: 'INCIRLIK', frequencies: [] }],
+    bays: [{ bayId: 'ap-sfa', view: 'sfa-freqs', facilityId: 'INCIRLIK', positionId: 'AP', rackIds: ['freq-1', 'freq-2'], sfaPool: pool.map(r => ({ rackId: r.rackId, mhz: r.mhz, use: r.use })) }],
+    frequencies: pool,
+  });
+  state.applyEfspFrequencyDelta({ type: 'efsp-frequency-delta', facilityId: 'INCIRLIK', frequencies: [...pool, ADDED, ADDED_SFA] });
+  assert.deepEqual(state.getEfspBays()[0].rackIds, ['freq-1', 'freq-2', 'freq-6']);
+  assert.deepEqual(state.getEfspPosition('CD').frequencies, [{ label: 'CLR', mhz: 251.65 }]);
+  state.applyEfspFrequencyDelta({ type: 'efsp-frequency-delta', facilityId: 'INCIRLIK', frequencies: pool });
+  assert.deepEqual(state.getEfspBays()[0].rackIds, ['freq-1', 'freq-2']);
+  assert.deepEqual(state.getEfspPosition('CD').frequencies, []);
+  state._resetEfspStateForTest();
+});
