@@ -5,6 +5,7 @@ import {
 } from './efsp-state.js';
 import { ageResyncs, beginResync, boardCursorName, endResync, endResyncs, heartbeatGaps, resyncPositionOf } from './sync-cursor.js';
 import { addEfspMessageObserver } from './efsp-message-registry.js';
+import { markEfspChanged } from './efsp-change-bus.js';
 import { allFacilityIds, DEFAULT_FACILITY_ID } from './facility-topology.js';
 
 // Client-side EFSP WebSocket helpers — constructs efsp-mutation/efsp-
@@ -220,8 +221,14 @@ export function noteEfspPositionsAck(msg) {
  * Position this controller was Primary at that someone else took meanwhile is unticked here, with one line saying so.
  */
 export function noteCoveragePositions(list) {
-  _observerKeys = new Set(list.filter(p => p.isPrimary === false).map(p => `${p.facilityId}/${p.positionId}`));
-  _primaryKeys = new Set(list.filter(p => p.isPrimary).map(p => `${p.facilityId}/${p.positionId}`));
+  const observer = new Set(list.filter(p => p.isPrimary === false).map(p => `${p.facilityId}/${p.positionId}`));
+  const primary = new Set(list.filter(p => p.isPrimary).map(p => `${p.facilityId}/${p.positionId}`));
+  const same = (a, b) => a.size === b.size && [...a].every(k => b.has(k));
+  const changed = !same(observer, _observerKeys) || !same(primary, _primaryKeys);
+  _observerKeys = observer;
+  _primaryKeys = primary;
+  // Primary or Observer decides what a panel offers (getActingPositions): every panel that reads it hears 'positions'.
+  if (changed) markEfspChanged('positions');
   if (!_redeclare || _redeclare.acksPending.size > 0) return;
   const { expectPrimary } = _redeclare;
   _redeclare = null;

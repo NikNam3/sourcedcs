@@ -175,4 +175,4 @@ registerEfspMessage('efsp-airspace-ack', (msg) => {
   renderAirspacePanel();
 });
 
-onEfspChanged(['snapshot', 'airspace'], () => renderAirspacePanel()); // a new Board lifetime, or a form or menu opened or closed (efsp-change-bus.js)
+onEfspChanged(['snapshot', 'airspace', 'positions'], () => renderAirspacePanel()); // a new Board lifetime, a form or menu opened or closed, or a sign-on (efsp-change-bus.js)
