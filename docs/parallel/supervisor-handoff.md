@@ -1,5 +1,17 @@
 # Supervisor handoff
 
+## RELAUNCH HERE (2026-10-22): v2 complete, in final testing
+
+Read S-ARCH-81–89 and H158–H161 in `decisions.md`. Everything for v2 (H159: EFSP, carrier prototype, PAR, SFA) is merged
+into `efsp-wp5-correlation` (`a054ea02`): U-AIRSPACE-BADGE (0134), U-TERRAIN-DCS (0133, + `--dry-run`/`--max-chunks`,
+Syria 500 m cache shipped in `crc-sync/data/terrain/`), U-SMALL-FIXES (0136), U-CARRIER (0137) + MAPFIX, U-FREQ-ROWS
+(0138), U-V2-FIXES, DOCS-V2. Gates on the tip: crc-sync 2906, crc-desktop 1425, walk 24/24, freeze 58/58, selfcheck
+PASS, wire protocol 2 (v1.5.0 speaks 1). The only worktree besides the main checkout is `../sourcedcs-U-ROLE-POSITIONS`.
+**Held:** U-ROLE-POSITIONS (S-ARCH-85; trial merge on `merge/U-ROLE-POSITIONS`; H160's N-airfield list before it lands,
+with Konya, v3). **New standing rule H160:** expandability first, design for N, ask before any architecture that fixes a
+count or a default (memory `feedback_expandability_first`). Next: the human's final test; fix what it finds; then the
+release checklist (RUNBOOK "v2 launch: before the deploy", CLAUDE.md release steps). v3 list: `v3-backlog.md`.
+
 ## RELAUNCH HERE (2026-10-21, usage limit): two lanes merged, one stopped
 
 Read S-ARCH-81 and H158–H159 (v2 scope: EFSP, carrier prototype, PAR, SFA; v3 in `v3-backlog.md`) in `decisions.md`.
