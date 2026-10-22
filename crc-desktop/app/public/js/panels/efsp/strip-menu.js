@@ -1,6 +1,6 @@
 'use strict';
 import { getAllEfspAirspaces, getEfspCorrelationForStrip, getEfspFlightData, getAllEfspStrips, getEfspStrip, otherLiveStripsForFlightData } from './efsp-state.js';
-import { cancelableTransits, requestTransitChoices } from './transit-rules.js';
+import { acknowledgeableTransits, cancelableTransits, requestTransitChoices } from './transit-rules.js';
 import { requestTransit, sendTransitOp } from './transit-actions.js';
 import { openTransitPopover } from './bay/popovers/transit.js';
 import { toggleOffset } from './efsp-gestures.js';
@@ -163,6 +163,11 @@ function _stripMenuItems(strip) {
   for (const c of cancelableTransits(strip, getAllEfspAirspaces(), heldHere)) {
     items.push({ group: 'Start', key: `transit-cancel-${c.airspace.airspaceId}`, label: `Cancel transit request ${nameOf(c.airspace)}`, cls: 'efsp-coordinate-btn',
       enabled: true, title: `as ${c.positionId}`, run: () => { sendTransitOp(c.positionId, c.airspace, 'CancelTransit', strip.flightDataId); } });
+  }
+  // crc-sync ADR 0136 (H156 MTB-Q2 b): a decline stays until the Position working the flight has read it.
+  for (const c of acknowledgeableTransits(strip, getAllEfspAirspaces(), heldHere)) {
+    items.push({ group: 'Start', key: `transit-ack-${c.airspace.airspaceId}`, label: `Acknowledge transit decline ${nameOf(c.airspace)}`, cls: 'efsp-coordinate-btn',
+      enabled: true, title: `as ${c.positionId}`, run: () => { sendTransitOp(c.positionId, c.airspace, 'AcknowledgeTransit', strip.flightDataId); } });
   }
 
   // Flight

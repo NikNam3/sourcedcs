@@ -9,7 +9,6 @@ import { makeRegistry, stateOp, MOA } from './helpers/airspace-registry.mjs';
 // ordinary assignments on each side's Strips.
 
 const require = createRequire(import.meta.url);
-const { DECLINED_TRANSIT_SHOWN_MS } = require('../src/efsp/airspace-store.js');
 const { checkPersistedShape } = require('../src/efsp/stores.js');
 
 const WINDOW = { fromUtc: Date.UTC(2026, 0, 1, 12, 0), toUtc: Date.UTC(2026, 0, 1, 14, 0) };
@@ -188,7 +187,7 @@ test('ends: the airspace is released (para 9-3-1 c), the transits go and the tra
   assert.equal(store.approvedTransit('MOA-1', 'fd1'), null);
 });
 
-test('ends: the last live Strip goes, or a decline has been shown long enough (sweep, audited as the system)', () => {
+test('ends: the last live Strip goes (sweep, audited as the system); a decline is never forgotten on a timer (ADR 0136)', () => {
   const lines = [];
   const { store, state, clock, op, activate } = setup({ flights: { fd1: ifr(AP_HOLDS), fd2: ifr(AP_HOLDS, 'HAWG21') }, mutationLog: { record: (e) => lines.push(e) } });
   activate('MOA-1');
@@ -205,12 +204,34 @@ test('ends: the last live Strip goes, or a decline has been shown long enough (s
   assert.deepEqual(store.getAirspace('MOA-1').transits.map(t => t.flightDataId), ['fd2']);
   const end = lines.find(l => l.op === 'EndTransit');
   assert.deepEqual([end.flightDataId, end.trigger, end.actorId, end.airspaceId], ['fd1', 'NO_LIVE_STRIP', 'system', 'MOA-1']);
-  clock.t += DECLINED_TRANSIT_SHOWN_MS - 1;
-  assert.equal(store.sweepTransits().length, 0);
-  clock.t += 1;
-  assert.equal(store.sweepTransits().length, 1);
+  clock.t += 6 * 60 * 60 * 1000;
+  assert.equal(store.sweepTransits().length, 0, 'the decline stays until acknowledged');
+  assert.equal(transitOf(store, 'MOA-1', 'fd2').state, 'DECLINED');
+  state.flights.fd2 = ifr([], 'HAWG21');
+  assert.equal(store.sweepTransits().length, 1, 'a decline still ends with the last live Strip');
   assert.deepEqual(store.getAirspace('MOA-1').transits, []);
-  assert.equal(lines.filter(l => l.op === 'EndTransit').at(-1).trigger, 'DECLINE_SHOWN');
+  assert.equal(lines.filter(l => l.op === 'EndTransit').at(-1).trigger, 'NO_LIVE_STRIP');
+});
+
+test('acknowledge (ADR 0136, H156 MTB-Q2 b): whoever holds the flight now reads the decline, which then goes', () => {
+  const lines = [];
+  const { store, state, op, activate } = setup({ mutationLog: { record: (e) => lines.push(e) } });
+  activate('MOA-1');
+  assert.equal(op('MOA-1', { kind: 'AcknowledgeTransit', flightDataId: 'fd1' }, 'AP').reason, 'VALIDATION_ERROR', 'nothing declined');
+  op('MOA-1', { kind: 'RequestTransit', flightDataId: 'fd1' }, 'AP');
+  assert.equal(op('MOA-1', { kind: 'AcknowledgeTransit', flightDataId: 'fd1' }, 'AP').reason, 'VALIDATION_ERROR', 'a request is cancelled, not acknowledged');
+  op('MOA-1', { kind: 'DeclineTransit', flightDataId: 'fd1', reason: 'live fire' }, 'CTR');
+  assert.equal(op('MOA-1', { kind: 'AcknowledgeTransit', flightDataId: 'fd1' }, 'CTR').reason, 'PERMISSION_DENIED', 'the decider does not acknowledge its own decline');
+  // The flight was handed off since the request: the Position holding it now acknowledges, not the one that asked.
+  state.flights.fd1 = ifr(CTR_HOLDS);
+  assert.equal(op('MOA-1', { kind: 'AcknowledgeTransit', flightDataId: 'fd1' }, 'AP').reason, 'PERMISSION_DENIED');
+  state.flights.fd1 = ifr(AP_HOLDS);
+  const rev = store.getAirspace('MOA-1').rev;
+  assert.equal(op('MOA-1', { kind: 'AcknowledgeTransit', flightDataId: 'fd1' }, 'AP').ok, true);
+  assert.deepEqual(store.getAirspace('MOA-1').transits, []);
+  assert.equal(store.getAirspace('MOA-1').rev, rev + 1);
+  assert.ok(lines.some(l => JSON.stringify(l).includes('"AcknowledgeTransit"') && l.ok !== false), 'audited');
+  assert.equal(op('MOA-1', { kind: 'RequestTransit', flightDataId: 'fd1' }, 'AP').ok, true, 'asks again after reading the decline');
 });
 
 test('ends: the mission reset (ADR 0108) ends every transit', () => {

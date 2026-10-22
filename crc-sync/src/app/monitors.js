@@ -301,6 +301,8 @@ function buildMonitors({ env, efsp, facilityConfig, missionClock, missionSession
       airspaceTrafficFor: (positions) => airspaceEntryAlertMonitor.trafficFor(positions),
       // docs/adr/0134: which of the session's own Strips are airborne inside their approved airspace (the badge's amber).
       airspaceInsideFor: (positions) => airspaceEntryAlertMonitor.insideFor(positions),
+      // docs/adr/0136: which of the session's own Strips are filed through an ACTIVE SUA with nothing coordinated (grey).
+      airspaceCoordinateFor: (positions) => airspaceEntryAlertMonitor.coordinateFor(positions),
       obligations: obligationMonitor.getAll(),
       surveillance: surveillanceHints ? surveillanceHints.getAll() : undefined, // docs/adr/0076: the suggestion chip and staleness
     });

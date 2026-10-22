@@ -1,6 +1,6 @@
 'use strict';
-import { airspaceInsideForStrip, getAllEfspAirspaces, getEfspAirspace, getEfspStrip, otherLiveStripsForFlightData, surveillanceHintsForStrip } from './efsp-state.js';
-import { transitMark, transitsOfFlight } from './transit-rules.js';
+import { airspaceCoordinateForStrip, airspaceInsideForStrip, getAllEfspAirspaces, getEfspAirspace, getEfspStrip, otherLiveStripsForFlightData, surveillanceHintsForStrip } from './efsp-state.js';
+import { coordinateMark, transitMark, transitsOfFlight } from './transit-rules.js';
 import { formatZuluHhmm } from '../../format.js';
 import { getActingPositions, sendEfspMutation } from './efsp-ws.js';
 import { correlationBadgeFor } from './correlation-highlight.js';
@@ -141,6 +141,13 @@ export function _buildIndicatorSlots(strip, el, obligation, alerts) {
         const mark = transitMark(airspace, transit);
         const node = _indicator(key, mark.text, 'on', `efsp-transit-mark efsp-transit-${mark.state.toLowerCase()}`, mark.title);
         node.dataset.airspaceId = airspace.airspaceId;
+        slots.appendChild(node);
+      }
+      // crc-sync docs/adr/0136 (H156 MTB-Q3): filed through an active SUA with nothing coordinated yet. Grey, the server's fact.
+      for (const airspaceId of airspaceCoordinateForStrip(strip)) {
+        const mark = coordinateMark(getEfspAirspace(airspaceId), airspaceId);
+        const node = _indicator(key, mark.text, 'on', 'efsp-coordinate-mark', mark.title);
+        node.dataset.airspaceId = airspaceId;
         slots.appendChild(node);
       }
       continue;

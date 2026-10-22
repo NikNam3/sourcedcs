@@ -26,8 +26,8 @@ export function transitsOfFlight(flightDataId, airspaces) {
 const _name = (airspace) => (airspace && airspace.definition && airspace.definition.name) || (airspace && airspace.airspaceId) || '?';
 
 /**
- * The grey mark on the transit's Strip: `TRANSIT <name>` once approved, with `REQ` while asked, `DECLINED` for the while a
- * decline is kept. `title` says who asked and who decided.
+ * The grey mark on the transit's Strip: `TRANSIT <name>` once approved, with `REQ` while asked, `DECLINED` until the
+ * Position holding the flight acknowledges the decline (crc-sync ADR 0136). `title` says who asked and who decided.
  * @returns {{text:string, title:string, state:string}}
  */
 export function transitMark(airspace, transit) {
@@ -39,6 +39,17 @@ export function transitMark(airspace, transit) {
   if (transit.state === 'DECLINED') bits.push(`declined by ${transit.decidedPositionId}${transit.reason ? `: ${transit.reason}` : ''}`);
   if (transit.state === 'REQUESTED') bits.push(`waiting for ${transitDeciders(airspace.definition || {}).join(' or ') || 'the decider'}`);
   return { text, title: `Transit of ${name}: ${bits.join(', ')}`, state: transit.state };
+}
+
+/**
+ * The grey mark on a Strip whose flight is filed through an ACTIVE MOA, warning or restricted area with no transit and no
+ * approved entry for it (crc-sync docs/adr/0136, H156 MTB-Q3): `COORD <name>`. The fact is the server's; this only words it.
+ * @returns {{text:string, title:string}}
+ */
+export function coordinateMark(airspace, airspaceId) {
+  const name = airspace ? _name(airspace) : airspaceId;
+  const state = (airspace && airspace.state) || 'ACTIVE';
+  return { text: `COORD ${name}`, title: `Filed through ${name} (${state}): no transit or entry approval` };
 }
 
 /**
@@ -72,15 +83,26 @@ export function cancelableTransits(strip, airspaces, held) {
 }
 
 /**
+ * The DECLINED transits of this Strip's flight this controller may acknowledge (crc-sync ADR 0136, H156 MTB-Q2 b): it holds
+ * the Strip's owner, whoever asked. The decline stays on the Strip and the card until then.
+ */
+export function acknowledgeableTransits(strip, airspaces, held) {
+  if (!strip || strip.state === 'DROPPED' || !(held || []).includes(strip.ownerPositionId)) return [];
+  return transitsOfFlight(strip.flightDataId, airspaces)
+    .filter(({ transit }) => transit.state === 'DECLINED')
+    .map(({ airspace }) => ({ airspace, positionId: strip.ownerPositionId }));
+}
+
+/**
  * What one card row offers (crc-sync docs/adr/0124 §1 list, docs/adr/0128): the decider approves or declines; the Position
- * holding one of the flight's live Strips requests or cancels. `deciders` is the server's list for the card
+ * holding one of the flight's live Strips requests or cancels, and acknowledges a decline (ADR 0136). `deciders` is the server's list for the card
  * (`transitDeciders` on the traffic group), else the mirror's. Null fields: not offered. `flightData`, when this client has it,
  * keeps a VFR flight (vfr.js) from being offered a request or an approval (H151 MT-Q5 b); a decline stays.
  * @param {{transit:object|null, strips:{positionId:string}[]}} row
- * @returns {{text:string|null, approveAs:string|null, declineAs:string|null, requestAs:string|null, cancelAs:string|null}}
+ * @returns {{text:string|null, approveAs:string|null, declineAs:string|null, requestAs:string|null, cancelAs:string|null, acknowledgeAs:string|null}}
  */
 export function transitRowOffer(row, airspace, held, deciders, flightData = null) {
-  const none = { text: null, approveAs: null, declineAs: null, requestAs: null, cancelAs: null };
+  const none = { text: null, approveAs: null, declineAs: null, requestAs: null, cancelAs: null, acknowledgeAs: null };
   if (!airspace || !isTransitAirspace(airspace)) return none;
   const t = row.transit || null;
   const text = t ? (t.state === 'APPROVED' ? 'transit approved' : t.state === 'REQUESTED' ? `transit requested by ${t.requestedPositionId}` : `transit declined${t.reason ? `: ${t.reason}` : ''}`) : null;
@@ -95,5 +117,6 @@ export function transitRowOffer(row, airspace, held, deciders, flightData = null
     declineAs: decider && t && OPEN.has(t.state) ? decider : null,
     requestAs: !decider && holder && !vfr && (!t || t.state === 'DECLINED') ? holder : null,
     cancelAs: !decider && holder && t && t.state === 'REQUESTED' ? holder : null,
+    acknowledgeAs: holder && t && t.state === 'DECLINED' ? holder : null,
   };
 }

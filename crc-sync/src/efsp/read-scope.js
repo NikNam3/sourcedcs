@@ -142,6 +142,8 @@ function filterAlerts(msg, scope, flightDataIds, stripVisible) {
     obligations: (msg.obligations || []).filter(o => stripVisible(o.facilityId, o.stripId)),
     // docs/adr/0134: already the session's own Strips (the hub); kept to visible ones like the hints.
     airspaceInside: (msg.airspaceInside || []).filter(x => stripVisible(x.facilityId, x.stripId)),
+    // docs/adr/0136: the same, for the coordinate mark.
+    airspaceCoordinate: (msg.airspaceCoordinate || []).filter(x => stripVisible(x.facilityId, x.stripId)),
     surveillance: (msg.surveillance || []).filter(h => stripVisible(h.facilityId, h.stripId)),
   };
 }

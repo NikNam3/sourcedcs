@@ -76,7 +76,9 @@ test('the using agency (OPS) approves and clears entry on a Strip AP holds, into
   } finally {
     await signOn(page, 'INCIRLIK', ['OPS', 'AP', 'GC']);
     await dropStrips(page, [callsign]);
-    await page.evaluate((id) => { const a = crc.state.getEfspAirspace(id); if (a) crc.ws.sendEfspAirspaceMutation('CTR', id, a.rev, { kind: 'DeleteAirspace' }); }, airspaceId);
+    // DeleteAirspace needs the definition's baseDefRev (refused without it, which left test airspaces on the rig).
+    await page.evaluate((id) => { const a = crc.state.getEfspAirspace(id); if (a) crc.ws.sendEfspAirspaceMutation('CTR', id, a.rev, { kind: 'DeleteAirspace' }, { baseDefRev: a.defRev }); }, airspaceId);
+    await expect.poll(() => page.evaluate((id) => !!crc.state.getEfspAirspace(id), airspaceId), { timeout: 10000 }).toBe(false);
   }
 });
 

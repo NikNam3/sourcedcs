@@ -484,6 +484,7 @@
   ],
   "panels/efsp/alerts-state.js": [
    "_resetAlertsState",
+   "airspaceCoordinateForStrip",
    "airspaceEntryAlertsForFlightData",
    "airspaceEntryAlertsForTrack",
    "airspaceEntryText",
@@ -944,6 +945,7 @@
    "STORE_SYNC",
    "_resetEfspStateForTest",
    "activeMarsaForFlightData",
+   "airspaceCoordinateForStrip",
    "airspaceEntryAlertsForFlightData",
    "airspaceEntryAlertsForTrack",
    "airspaceEntryText",
@@ -1548,7 +1550,9 @@
    "sendTransitOp"
   ],
   "panels/efsp/transit-rules.js": [
+   "acknowledgeableTransits",
    "cancelableTransits",
+   "coordinateMark",
    "requestTransitChoices",
    "transitMark",
    "transitOn",
