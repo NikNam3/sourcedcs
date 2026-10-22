@@ -16,9 +16,16 @@
 // changed (FREQUENCY_IN_USE): the Rack IS that frequency (sfa.js), and a flight on it would otherwise sit on a Rack that
 // no longer says its frequency.
 //
-// Who may edit: any controller Primary at a Position (the wire family's gate); every change is audited in the Mutation log
-// (who, when on the mission clock, before -> after). Undo is setting it back; ResetFrequency returns a row to its default.
-// Last write wins (no rev): two controllers editing one row see the second value, both in the log.
+// Rows are added and removed at run time too (docs/adr/0138, H156 FQ-Q3 b): AddFrequency gives a Position another
+// frequency or the SFA pool another (SPARE) frequency and Rack; RemoveFrequency takes away only such an added row. A
+// shipped row is never removed, only reset to its default (removing a shipped Position's frequency could leave a Position
+// with none). An added SFA frequency with a flight on it is not removed (FREQUENCY_IN_USE, as for a change).
+//
+// Who may edit: a controller Primary at a Position of the Facility whose frequencies they are (docs/adr/0138, H156 FQ-Q2 b;
+// the wire family's gate checks Primary, this table the Facility of the one acting Position, ADR 0132 §3:
+// FACILITY_MISMATCH). Every change is audited in the Mutation log (who, when on the mission clock, before -> after). Undo
+// is setting it back; ResetFrequency returns a row to its default. Last write wins (no rev): two controllers editing one
+// row see the second value, both in the log.
 //
 // The file is strict, like every state/ file that holds controller data (docs/adr/0095): invalid JSON, an unknown key, a
 // Facility, Position, label or Rack the shipped files do not have, or a frequency these rules would refuse stops start-up
@@ -36,9 +43,32 @@ const log = require('../log').logger('efsp:frequency-table');
 
 const FILE_NAME = 'efsp-frequencies.json';
 const ENTRY = anyOf('mhz', 'setAt', 'setBy');
-const FILE_SHAPE = { facilities: mapOf({ positions: mapOf(mapOf(ENTRY)), sfa: mapOf(ENTRY) }) };
+// `added` holds the run-time rows (docs/adr/0138): a Position's added frequencies by label, the SFA pool's added Racks.
+const FILE_SHAPE = { facilities: mapOf({ positions: mapOf(mapOf(ENTRY)), sfa: mapOf(ENTRY), added: { positions: mapOf(mapOf(ENTRY)), sfa: mapOf(ENTRY) } }) };
 
-const OP_KINDS = Object.freeze(['SetFrequency', 'ResetFrequency']);
+const OP_KINDS = Object.freeze(['SetFrequency', 'ResetFrequency', 'AddFrequency', 'RemoveFrequency']);
+
+// What an added SFA frequency is for: a spare. The pool rotates exactly three (JO 7610.14A para 7-1-5 c) and the
+// initial-contact frequency is the shipped one (docs/adr/0117 decision 2), so an added one is neither (docs/adr/0138).
+const ADDED_SFA_USE = 'SPARE';
+// An added SFA Rack's id: the shipped pool's naming, the next free number (docs/adr/0138).
+const SFA_RACK_PREFIX = 'freq-';
+// facility-schema.js validatePositionFrequencies' label rule.
+const LABEL_MAX = 12;
+
+/** Null when `label` may name a Position frequency (facility-schema.js's rule: 1 to 12 characters, not blank), else why not. */
+function labelProblem(label) {
+  if (typeof label !== 'string' || !label.trim() || label !== label.trim() || label.length > LABEL_MAX) return `a frequency label is 1 to ${LABEL_MAX} characters`;
+  return null;
+}
+
+/** Whether `row` (rowsFor's) is the one `op` names. An AddFrequency of an SFA frequency names it by its frequency. */
+function rowMatchesOp(row, op) {
+  if (!row || !op) return false;
+  if (op.kind === 'AddFrequency' && op.sfa === true) return row.kind === 'SFA' && row.mhz === op.mhz;
+  if (op.rackId !== undefined) return row.kind === 'SFA' && row.rackId === op.rackId;
+  return row.kind === 'POSITION' && row.positionId === op.positionId && row.label === op.label;
+}
 
 // The VHF aeronautical band, where 8.33 kHz channels exist. [OURS] from the 8.33 kHz channel naming: within each 25 kHz
 // block the channel names end .x00, .x05, .x10, .x15 (the fifth, .x20, is not a channel name). Elsewhere (VHF FM, UHF) a
@@ -136,12 +166,31 @@ class FrequencyTable {
         const problem = sfaFrequencyProblem(entry.mhz);
         if (problem) throw fail(`sets SFA Rack ${facilityId} ${rackId}: ${problem}`);
       }
+      this._checkAdded(facilityId, f.added || {}, fail);
     }
     this._overrides = data.facilities || {};
     this._applyAll();
     for (const facilityId of Object.keys(this._overrides)) {
       const dup = this._duplicateSfa(facilityId);
       if (dup) throw fail(`gives the ${facilityId} SFA pool ${dup} MHz twice`);
+    }
+  }
+
+  /** The strict check of one Facility's added rows (docs/adr/0138): a real Position, a new label, a new Rack, valid values. */
+  _checkAdded(facilityId, added, fail) {
+    const positionSet = this._facilityConfig.getPositionSet(facilityId);
+    for (const [positionId, labels] of Object.entries(added.positions || {})) {
+      if (!positionSet.includes(positionId)) throw fail(`adds a frequency to ${facilityId} ${positionId}, which is not a Position of ${facilityId}`);
+      for (const [label, entry] of Object.entries(labels)) {
+        const problem = labelProblem(label) || (this._shippedPosition(facilityId, positionId, label) ? `the facility file already has ${label}` : null) || positionFrequencyProblem(entry.mhz);
+        if (problem) throw fail(`adds ${facilityId} ${positionId} ${label}: ${problem}`);
+      }
+    }
+    const rackIds = Object.keys(added.sfa || {});
+    if (rackIds.length && !this._facilityConfig.getShippedSingleFrequencyApproach(facilityId)) throw fail(`adds SFA frequencies to ${facilityId}, which has no single frequency approach`);
+    for (const rackId of rackIds) {
+      const problem = (this._shippedSfa(facilityId, rackId) ? 'the facility file already has that Rack' : null) || sfaFrequencyProblem(added.sfa[rackId].mhz);
+      if (problem) throw fail(`adds SFA Rack ${facilityId} ${rackId}: ${problem}`);
     }
   }
 
@@ -166,7 +215,12 @@ class FrequencyTable {
       positions[positionId] = Object.fromEntries(Object.entries(labels).map(([label, e]) => [label, e.mhz]));
     }
     const sfa = Object.fromEntries(Object.entries(o.sfa || {}).map(([rackId, e]) => [rackId, e.mhz]));
-    this._facilityConfig.setFrequencyOverlay(facilityId, { positions, sfa });
+    const a = o.added || {};
+    const added = {
+      positions: Object.fromEntries(Object.entries(a.positions || {}).map(([positionId, labels]) => [positionId, Object.entries(labels).map(([label, e]) => ({ label, mhz: e.mhz }))])),
+      sfa: Object.entries(a.sfa || {}).map(([rackId, e]) => ({ rackId, mhz: e.mhz, use: ADDED_SFA_USE })),
+    };
+    this._facilityConfig.setFrequencyOverlay(facilityId, { positions, sfa, added });
   }
 
   _duplicateSfa(facilityId) {
@@ -180,24 +234,36 @@ class FrequencyTable {
   // ── read ──────────────────────────────────────────────────────────────────────────────────────────────────────
 
   /**
-   * One Facility's rows, in file order: `{ facilityId, kind: 'POSITION', positionId, label, mhz, defaultMhz, setAt, setBy }`
-   * and `{ facilityId, kind: 'SFA', rackId, use, mhz, defaultMhz, setAt, setBy }` (`setAt`/`setBy` null on a default).
+   * One Facility's rows, in file order, each Position's added rows after its shipped ones and the pool's added Racks last:
+   * `{ facilityId, kind: 'POSITION', positionId, label, mhz, defaultMhz, added, setAt, setBy }` and
+   * `{ facilityId, kind: 'SFA', rackId, use, mhz, defaultMhz, added, setAt, setBy }` (`setAt`/`setBy` null on a default;
+   * an added row has `added: true` and no default, `defaultMhz: null`, docs/adr/0138).
    */
   rowsFor(facilityId) {
-    const o = this._overrides[facilityId] || {};
     const rows = [];
-    for (const [positionId, list] of Object.entries(this._facilityConfig.getShippedPositionFrequencies(facilityId))) {
+    const shippedPositions = this._facilityConfig.getShippedPositionFrequencies(facilityId);
+    for (const [positionId, list] of Object.entries(this._facilityConfig.getPositionFrequencies(facilityId))) {
       for (const f of list) {
-        const e = ((o.positions || {})[positionId] || {})[f.label] || null;
-        rows.push({ facilityId, kind: 'POSITION', positionId, label: f.label, mhz: e ? e.mhz : f.mhz, defaultMhz: f.mhz, setAt: e ? e.setAt : null, setBy: e ? e.setBy : null });
+        const def = (shippedPositions[positionId] || []).find(x => x.label === f.label) || null;
+        const e = this._entry(facilityId, { positionId, label: f.label }, !def);
+        rows.push({ facilityId, kind: 'POSITION', positionId, label: f.label, mhz: f.mhz, defaultMhz: def ? def.mhz : null, added: !def, setAt: e ? e.setAt : null, setBy: e ? e.setBy : null });
       }
     }
-    const sfa = this._facilityConfig.getShippedSingleFrequencyApproach(facilityId);
+    const sfa = this._facilityConfig.getSingleFrequencyApproach(facilityId);
     for (const p of sfa ? sfa.pool : []) {
-      const e = (o.sfa || {})[p.rackId] || null;
-      rows.push({ facilityId, kind: 'SFA', rackId: p.rackId, use: p.use, mhz: e ? e.mhz : p.mhz, defaultMhz: p.mhz, setAt: e ? e.setAt : null, setBy: e ? e.setBy : null });
+      const def = this._shippedSfa(facilityId, p.rackId);
+      const e = this._entry(facilityId, { rackId: p.rackId }, !def);
+      rows.push({ facilityId, kind: 'SFA', rackId: p.rackId, use: p.use, mhz: p.mhz, defaultMhz: def ? def.mhz : null, added: !def, setAt: e ? e.setAt : null, setBy: e ? e.setBy : null });
     }
     return rows;
+  }
+
+  /** The stored entry of a row (`{ mhz, setAt, setBy }`): an override of a shipped row, or an added row; null when none. */
+  _entry(facilityId, { positionId, label, rackId }, added) {
+    const o = this._overrides[facilityId] || {};
+    const at = added ? (o.added || {}) : o;
+    if (rackId !== undefined) return (at.sfa || {})[rackId] || null;
+    return ((at.positions || {})[positionId] || {})[label] || null;
   }
 
   /** Every Facility's rows (the snapshot's `frequencies`). */
@@ -214,31 +280,58 @@ class FrequencyTable {
   apply(mutation, actingPositionId, by) {
     const op = mutation.op && typeof mutation.op === 'object' ? mutation.op : {};
     const facilityId = mutation.facilityId;
-    const subject = { facilityId, positionId: op.positionId, label: op.label, rackId: op.rackId };
     let before;
     let wrote = false;
     let result;
     try {
-      result = this._applyOp(op, facilityId, by, (b) => { before = b; }, () => { wrote = true; });
+      result = this._applyOp(op, facilityId, actingPositionId, by, (b) => { before = b; }, () => { wrote = true; });
     } catch (err) {
       log.error('unexpected error applying frequency op — rejecting it instead of crashing', { err });
       result = internalError('frequency op', err, wrote);
     }
-    this._audit({ ...mutation, op }, { subject, actingPositionId, by, result, before, after: () => this._current(facilityId, op) });
+    // An added SFA Rack is named by the table, so the audit takes its id from the row.
+    const rackId = op.rackId !== undefined ? op.rackId : (result.row && result.row.kind === 'SFA' ? result.row.rackId : undefined);
+    const subject = { facilityId, positionId: op.positionId, label: op.label, rackId };
+    const after = () => (op.kind === 'RemoveFrequency' ? null : this._current(facilityId, { ...op, rackId }));
+    this._audit({ ...mutation, op }, { subject, actingPositionId, by, result, before, after });
     return result;
   }
 
+  /** The Facility of a Position (its ids are unique across Facilities, docs/adr/0132 §1), or null. */
+  _facilityOfPosition(positionId) {
+    return this._facilityConfig.getFacilityIds().find(f => this._facilityConfig.getPositionSet(f).includes(positionId)) || null;
+  }
+
   /** The op itself; `setBefore` takes the value it found, `markWrote` is called before the first write. */
-  _applyOp(op, facilityId, by, setBefore, markWrote) {
+  _applyOp(op, facilityId, actingPositionId, by, setBefore, markWrote) {
     if (!OP_KINDS.includes(op.kind)) return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown frequency op ${JSON.stringify(op.kind)} (one of ${OP_KINDS.join(', ')})` };
     if (!this._facilityConfig.getFacilityIds().includes(facilityId)) return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown facilityId ${facilityId}` };
+    // Only the acting Position's own Facility (docs/adr/0138, H156 FQ-Q2 b).
+    const home = this._facilityOfPosition(actingPositionId);
+    if (home !== facilityId) {
+      return { ok: false, reason: 'FACILITY_MISMATCH', detail: `${actingPositionId} is ${home ? `a Position of ${home}` : 'no Position'}, not of ${facilityId}: set ${facilityId}'s frequencies from one of its Positions` };
+    }
+    if (op.kind === 'AddFrequency') return this._add(op, facilityId, by, setBefore, markWrote);
     const isSfa = op.rackId !== undefined;
     const shipped = isSfa ? this._shippedSfa(facilityId, op.rackId) : this._shippedPosition(facilityId, op.positionId, op.label);
-    if (!shipped) {
+    const added = shipped ? null : this._entry(facilityId, op, true);
+    if (!shipped && !added) {
       return { ok: false, reason: 'NOT_FOUND', detail: isSfa ? `${facilityId} has no SFA Rack ${op.rackId}` : `${facilityId} ${op.positionId} has no frequency labelled ${op.label}` };
     }
     const current = this._current(facilityId, op);
     setBefore(current);
+    if (op.kind === 'RemoveFrequency') {
+      if (shipped) return { ok: false, reason: 'VALIDATION_ERROR', detail: 'a frequency from the facility file is reset to its default, not removed' };
+      if (isSfa && this._inUse(facilityId, current)) {
+        return { ok: false, reason: 'FREQUENCY_IN_USE', detail: `a flight is on ${current.toFixed(3)}: hand it off or move it before removing this SFA frequency` };
+      }
+      markWrote();
+      this._writeAdded(facilityId, op, null);
+      this._apply(facilityId);
+      this._persist();
+      return { ok: true, changed: true, row: null };
+    }
+    if (op.kind === 'ResetFrequency' && !shipped) return { ok: false, reason: 'VALIDATION_ERROR', detail: 'an added frequency has no default: remove it instead' };
     const mhz = op.kind === 'ResetFrequency' ? shipped.mhz : op.mhz;
     const problem = isSfa ? sfaFrequencyProblem(mhz) : positionFrequencyProblem(mhz);
     if (problem) return { ok: false, reason: 'VALIDATION_ERROR', detail: problem };
@@ -251,7 +344,47 @@ class FrequencyTable {
     }
     if (mhz === current) return { ok: true, changed: false, row: this._row(facilityId, op) };
     markWrote();
-    this._write(facilityId, op, mhz === shipped.mhz ? null : { mhz, setAt: this._clock.now(), setBy: by || null });
+    const entry = { mhz, setAt: this._clock.now(), setBy: by || null };
+    if (shipped) this._write(facilityId, op, mhz === shipped.mhz ? null : entry);
+    else this._writeAdded(facilityId, op, entry);
+    this._apply(facilityId);
+    this._persist();
+    return { ok: true, changed: true, row: this._row(facilityId, op) };
+  }
+
+  /**
+   * AddFrequency (docs/adr/0138): `{ positionId, label, mhz }` gives a Position of the Facility another frequency;
+   * `{ sfa: true, mhz }` gives the Facility's SFA pool another frequency, a SPARE on a new Rack the table names.
+   */
+  _add(op, facilityId, by, setBefore, markWrote) {
+    setBefore(null);
+    const entry = { mhz: op.mhz, setAt: this._clock.now(), setBy: by || null };
+    if (op.sfa === true) {
+      const sfa = this._facilityConfig.getSingleFrequencyApproach(facilityId);
+      if (!sfa) return { ok: false, reason: 'NOT_FOUND', detail: `${facilityId} has no single frequency approach` };
+      const problem = sfaFrequencyProblem(op.mhz);
+      if (problem) return { ok: false, reason: 'VALIDATION_ERROR', detail: problem };
+      const other = sfa.pool.find(p => p.mhz === op.mhz);
+      if (other) return { ok: false, reason: 'VALIDATION_ERROR', detail: `${op.mhz.toFixed(3)} is already the SFA pool's ${other.rackId}` };
+      const taken = new Set(sfa.pool.map(p => p.rackId));
+      let n = sfa.pool.length + 1;
+      while (taken.has(`${SFA_RACK_PREFIX}${n}`)) n++;
+      const rackOp = { rackId: `${SFA_RACK_PREFIX}${n}` };
+      markWrote();
+      this._writeAdded(facilityId, rackOp, entry);
+      this._apply(facilityId);
+      this._persist();
+      return { ok: true, changed: true, row: this._row(facilityId, rackOp) };
+    }
+    if (op.rackId !== undefined) return { ok: false, reason: 'VALIDATION_ERROR', detail: 'an SFA frequency is added with { sfa: true, mhz }: the table names its Rack' };
+    if (!this._facilityConfig.getPositionSet(facilityId).includes(op.positionId)) return { ok: false, reason: 'NOT_FOUND', detail: `${op.positionId} is not a Position of ${facilityId}` };
+    const problem = labelProblem(op.label) || positionFrequencyProblem(op.mhz);
+    if (problem) return { ok: false, reason: 'VALIDATION_ERROR', detail: problem };
+    if ((this._facilityConfig.getPositionFrequencies(facilityId)[op.positionId] || []).some(f => f.label === op.label)) {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: `${op.positionId} already has a frequency labelled ${op.label}` };
+    }
+    markWrote();
+    this._writeAdded(facilityId, op, entry);
     this._apply(facilityId);
     this._persist();
     return { ok: true, changed: true, row: this._row(facilityId, op) };
@@ -287,7 +420,26 @@ class FrequencyTable {
   }
 
   _row(facilityId, op) {
-    return this.rowsFor(facilityId).find(r => (op.rackId !== undefined ? r.rackId === op.rackId : r.positionId === op.positionId && r.label === op.label)) || null;
+    return this.rowsFor(facilityId).find(r => (op.rackId !== undefined ? r.rackId === op.rackId : r.kind === 'POSITION' && r.positionId === op.positionId && r.label === op.label)) || null;
+  }
+
+  /** Writes (or, with null, removes) one added row (docs/adr/0138), pruning what becomes empty. */
+  _writeAdded(facilityId, op, entry) {
+    const f = this._overrides[facilityId] || (this._overrides[facilityId] = {});
+    const a = f.added || (f.added = {});
+    if (op.rackId !== undefined) {
+      a.sfa = a.sfa || {};
+      if (entry) a.sfa[op.rackId] = entry; else delete a.sfa[op.rackId];
+      if (!Object.keys(a.sfa).length) delete a.sfa;
+    } else {
+      a.positions = a.positions || {};
+      const labels = a.positions[op.positionId] || (a.positions[op.positionId] = {});
+      if (entry) labels[op.label] = entry; else delete labels[op.label];
+      if (!Object.keys(labels).length) delete a.positions[op.positionId];
+      if (!Object.keys(a.positions).length) delete a.positions;
+    }
+    if (!Object.keys(a).length) delete f.added;
+    if (!Object.keys(f).length) delete this._overrides[facilityId];
   }
 
   /** Writes (or, with null, removes) one override, pruning what becomes empty. */
@@ -308,4 +460,4 @@ class FrequencyTable {
   }
 }
 
-module.exports = { FrequencyTable, OP_KINDS, channelProblem, positionFrequencyProblem, sfaFrequencyProblem, FILE_NAME };
+module.exports = { FrequencyTable, OP_KINDS, channelProblem, positionFrequencyProblem, sfaFrequencyProblem, labelProblem, rowMatchesOp, FILE_NAME };

@@ -216,7 +216,9 @@ function createFacilityConfig({ env = process.env } = {}) {
   function getPositionSet(facilityId = DEFAULT_FACILITY_ID) { return [...(_configs().get(facilityId).positions)]; }
 
   // The runtime frequency table's values over the shipped ones (docs/adr/0131): facilityId -> { positions: { <Position>:
-  // { <label>: mhz } }, sfa: { <rackId>: mhz } }. Set only by frequency-table.js; the files are never written for it (P5).
+  // { <label>: mhz } }, sfa: { <rackId>: mhz }, added: { positions: { <Position>: [{ label, mhz }] }, sfa: [{ rackId, mhz,
+  // use }] } } (`added`: the rows controllers added at run time, docs/adr/0138). Set only by frequency-table.js; the files
+  // are never written for it (P5).
   const frequencyOverlay = new Map();
 
   /** Replaces one Facility's frequency overlay (frequency-table.js, docs/adr/0131). */
@@ -235,6 +237,8 @@ function createFacilityConfig({ env = process.env } = {}) {
       const mhz = (over[positionId] || {})[f.label];
       if (mhz !== undefined) f.mhz = mhz;
     }
+    const added = ((frequencyOverlay.get(facilityId) || {}).added || {}).positions || {};
+    for (const [positionId, list] of Object.entries(added)) (out[positionId] || (out[positionId] = [])).push(...deepClone(list));
     return out;
   }
 
@@ -355,7 +359,8 @@ function createFacilityConfig({ env = process.env } = {}) {
       for (const bay of bays) {
         const d = { ...deepClone(bay), positionId, facilityId };
         // The SFA Bay carries its pool, so a client draws the frequencies from the Bay it shows (docs/adr/0117).
-        if (bay.view === 'sfa-freqs' && config.singleFrequencyApproach) d.sfaPool = getSingleFrequencyApproach(facilityId).pool;
+        // Its Racks are the pool's, so a Rack added at run time is one of its Racks (docs/adr/0138).
+        if (bay.view === 'sfa-freqs' && config.singleFrequencyApproach) { d.sfaPool = getSingleFrequencyApproach(facilityId).pool; d.rackIds = [...d.rackIds, ...d.sfaPool.map(p => p.rackId).filter(r => !d.rackIds.includes(r))]; }
         out.push(d);
       }
     }
@@ -395,6 +400,7 @@ function createFacilityConfig({ env = process.env } = {}) {
     if (!sfa) return null;
     const over = (frequencyOverlay.get(facilityId) || {}).sfa || {};
     for (const entry of sfa.pool) if (over[entry.rackId] !== undefined) entry.mhz = over[entry.rackId];
+    sfa.pool.push(...deepClone(((frequencyOverlay.get(facilityId) || {}).added || {}).sfa || [])); // docs/adr/0138
     return sfa;
   }
 
