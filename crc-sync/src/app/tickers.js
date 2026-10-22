@@ -82,8 +82,9 @@ function buildTickers({ wsHub, efsp, trackStore, collabStore, atisStore, surveil
       if (messages.length) wsHub.deliverEfsp(messages);
     } },
     { name: 'carrier', periodMs: 1000, tick: () => carrierTick.tick() },
-    // docs/adr/0112: the PAR sample, to the Position working each final only (config/par.json sampleMs, under 1 s, H115).
-    { name: 'par', periodMs: parMonitor.sampleMs, tick: () => wsHub.sendParSamples(parMonitor.tick()) },
+    // docs/adr/0112: the PAR sample, to the Position working each final only (config/par.json sampleMs, under 1 s, H115),
+    // with the approach each final's next aircraft flies, so its values can be set on an empty final (H161 V2-Q1 a).
+    { name: 'par', periodMs: parMonitor.sampleMs, tick: () => wsHub.sendParSamples(parMonitor.tick(), parMonitor.finalApproaches()) },
     // Conformance and the hints stamp mission time (the `since` they report is shown to
     // controllers); their pure durations (the heading grace, the airborne hold, staleness)
     // run on the injected wall clock (docs/adr/0096). CA stays on the wall clock: it only
@@ -97,7 +98,10 @@ function buildTickers({ wsHub, efsp, trackStore, collabStore, atisStore, surveil
       const conflictAlertChanged = conflictAlertMonitor.tick(Date.now());
       // docs/adr/0119: after CA, whose formation members it reads.
       const airspaceEntryChanged = airspaceEntryAlertMonitor.tick();
-      if (conformanceChanged || conflictAlertChanged || hintsChanged || airspaceEntryChanged) {
+      // H161 V2-Q2 a: UNACTIVATED_AIRSPACE_ENTRY reads the monitor's inside fact, so a change re-runs the obligations at once
+      // rather than on the 15 s sweep.
+      const obligationsChanged = airspaceEntryChanged ? obligationMonitor.tick() : false;
+      if (conformanceChanged || conflictAlertChanged || hintsChanged || airspaceEntryChanged || obligationsChanged) {
         broadcastEfspAlerts();
       }
     } },

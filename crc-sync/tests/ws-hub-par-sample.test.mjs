@@ -50,7 +50,7 @@ test('only the sessions signed on to the owning Position get a sample, each only
   assert.deepEqual(ids(ws.lane1), ['c1']);
   assert.deepEqual(ids(ws.both), ['c1', 'c2'], 'a controller combining both lanes sees both');
   const frame = ws.par.of('par-sample')[0];
-  assert.deepEqual(Object.keys(frame), ['version', 'type', 'at', 'samples']);
+  assert.deepEqual(Object.keys(frame), ['version', 'type', 'at', 'samples', 'approaches']);
   assert.equal(frame.at, 1234, 'stamped with the mission clock');
 });
 
@@ -63,6 +63,27 @@ test('a session that had a sample and has none now is sent one empty frame, then
   hub.sendParSamples([sample('s1', 'INCIRLIK', 'PAR')]);
   hub.sendParSamples([sample('s1', 'INCIRLIK', 'PAR')]);
   assert.deepEqual(ws.of('par-sample').map(m => m.samples.length), [1, 0]);
+});
+
+// decisions H161 V2-Q1 a: the approach of an empty final goes to the final's Position, like a sample
+test('an empty final\'s approach goes to the sessions signed on to that final\'s Position only; losing it sends one empty frame', () => {
+  const signedOn = { par: ['INCIRLIK:PAR'], ap: ['INCIRLIK:AP'], other: ['TESTFIELD:PAR2'] };
+  const { hub, socket } = hubWith(signedOn);
+  const ws = { par: socket('par'), ap: socket('ap'), other: socket('other') };
+  const approaches = [
+    { facilityId: 'INCIRLIK', positionId: 'PAR', approach: { id: 'LTAG-05' } },
+    { facilityId: 'TESTFIELD', positionId: 'PAR2', approach: { id: 'TEST-09' } },
+  ];
+  hub.sendParSamples([], approaches);
+  const got = (w) => w.of('par-sample').map(m => m.approaches.map(a => a.approach.id));
+  assert.deepEqual(got(ws.par), [['LTAG-05']]);
+  assert.deepEqual(got(ws.other), [['TEST-09']], 'any number of airfields, each its own');
+  assert.equal(ws.ap.sent.length, 0);
+  assert.deepEqual(ws.par.of('par-sample')[0].samples, []);
+  signedOn.par = [];
+  hub.sendParSamples([], approaches);
+  hub.sendParSamples([], approaches);
+  assert.deepEqual(got(ws.par), [['LTAG-05'], []], 'one empty frame, then nothing');
 });
 
 // ── the whole path on a real EFSP ───────────────────────────────────────────

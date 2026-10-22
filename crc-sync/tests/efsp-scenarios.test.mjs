@@ -606,12 +606,17 @@ test('approving a flight into airspace nobody has activated is allowed, but warn
   assert.deepEqual(ack.warnings, [{ code: 'AIRSPACE_NOT_ACTIVE' }]);
 
   const { ForwardingObligationMonitor } = await import('../src/efsp/forwarding-obligations.js');
+  let inside = false; // the airspace-entry monitor's fact (docs/adr/0134); no track flies here
   const monitor = new ForwardingObligationMonitor({
     boardStoreFor: efsp.boardStoreFor,
     flightDataStore: efsp.flightDataStore,
     facilityConfig,
     airspaceStore: efsp.airspaceStore,
+    insideApprovedAirspace: () => inside,
   });
+  monitor.tick();
+  assert.equal(monitor.getAll().some(a => a.obligationType === 'UNACTIVATED_AIRSPACE_ENTRY'), false, 'approved, not yet inside: nothing (H161 V2-Q2 a)');
+  inside = true;
   monitor.tick();
   const alerts = monitor.getAll();
   assert.equal(alerts.some(a => a.obligationType === 'UNACTIVATED_AIRSPACE_ENTRY'), true);

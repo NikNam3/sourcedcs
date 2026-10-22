@@ -15,6 +15,10 @@
 }
 #par-body { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 #par-body[hidden] { display: none; }
+#par-body > [hidden] { display: none; }
+/* Nobody on the final (decisions H161 V2-Q1 a): the approach header stays, settable, and the note sits under it. */
+#par-body[data-empty-final="1"] { flex: 0 0 auto; }
+#par-empty { order: 1; }
 
 .par-picks { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px 8px; border-bottom: 1px solid var(--efsp-line, #2e3740); }
 .par-picks[hidden] { display: none; }

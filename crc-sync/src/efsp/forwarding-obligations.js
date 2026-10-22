@@ -116,12 +116,22 @@ function computeDueObligations(strip, flightData, now, ctx = {}) {
   // would be wrong far more often than right. This is the alert that makes
   // allowing it safe.
   //
+  // ENTERING, not approved: raised only while the flight is airborne inside the
+  // Strip's approved airspace and that airspace is not ACTIVE, the airspace badge's
+  // rule (docs/adr/0134, decisions H155 item 4, H161 V2-Q2 a). An approval given
+  // early (on the ground, en route) raises nothing; activation, leaving or clearing
+  // the approval retracts it. The inside fact is the airspace-entry monitor's
+  // (`ctx.insideApprovedAirspace`, airspace-entry-alert.js `isInside`): no second
+  // containment test here, and without it nothing is inside (unknown is never inside).
+  //
   // OVERDUE with no WARNING tier: the aircraft is either in airspace nobody
-  // has activated or it is not. There is no "due soon" about it.
-  if (strip.airspaceEntry && ctx.isAirspaceActive && !ctx.isAirspaceActive(strip.airspaceEntry.airspaceId)) {
+  // has activated or it is not. There is no "due soon" about it. Due from the
+  // tick it was first seen inside (the monitor keeps an episode's first dueAt).
+  if (strip.airspaceEntry && ctx.isAirspaceActive && !ctx.isAirspaceActive(strip.airspaceEntry.airspaceId)
+    && ctx.insideApprovedAirspace && ctx.insideApprovedAirspace(strip)) {
     obligations.push({
       obligationType: 'UNACTIVATED_AIRSPACE_ENTRY',
-      dueAt: strip.airspaceEntry.approvedAt,
+      dueAt: now,
       severity: 'OVERDUE',
     });
   }
@@ -211,8 +221,11 @@ class ForwardingObligationMonitor {
    *   A stray `onAlert` is ignored — obligations are state now, not events.
    * @param {{notCheckedInSec?:number}} [deps.handoffConfig] alerting.json `handoff` (docs/adr/0122); without it NOT_CHECKED_IN never fires
    * @param {(strip:object) => boolean} [deps.insideReceiverAirspace] is this HANDOFF's aircraft inside the receiving Position's airspace?
+   * @param {(facilityId:string, strip:object) => boolean} [deps.insideApprovedAirspace] is this Strip's flight airborne inside its
+   *   approved airspace (docs/adr/0134, the airspace-entry monitor's fact)? Without it UNACTIVATED_AIRSPACE_ENTRY never fires
    */
-  constructor({ boardStoreFor, flightDataStore, facilityConfig, airspaceStore, clock = WALL_CLOCK, handoffConfig = null, insideReceiverAirspace = null }) {
+  constructor({ boardStoreFor, flightDataStore, facilityConfig, airspaceStore, clock = WALL_CLOCK, handoffConfig = null, insideReceiverAirspace = null, insideApprovedAirspace = null }) {
+    this._insideApprovedAirspace = insideApprovedAirspace;
     this._notCheckedInMs = handoffConfig && Number.isFinite(handoffConfig.notCheckedInSec) ? handoffConfig.notCheckedInSec * 1000 : null;
     this._insideReceiverAirspace = insideReceiverAirspace;
     // The mission clock (docs/adr/0079) — every obligation here is due at an
@@ -247,6 +260,7 @@ class ForwardingObligationMonitor {
       const boardStore = this._boardStoreFor(facilityId);
       if (!boardStore) continue;
       const dataOnly = !!this._facilityConfig.getFacilityConfig(facilityId).dataOnly;
+      const insideApprovedAirspace = this._insideApprovedAirspace ? (s) => this._insideApprovedAirspace(facilityId, s) : null;
 
       for (const strip of boardStore.getAll()) {
         if (strip.state === 'DROPPED') continue;
@@ -256,7 +270,7 @@ class ForwardingObligationMonitor {
 
         for (const o of computeDueObligations(strip, flightData, now, {
           dataOnly, isAirspaceActive, controlProblems: typeof boardStore.exchangeProblems === 'function' ? (s) => boardStore.exchangeProblems(s.stripId) : null,
-          notCheckedInMs: this._notCheckedInMs, insideReceiverAirspace: this._insideReceiverAirspace,
+          notCheckedInMs: this._notCheckedInMs, insideReceiverAirspace: this._insideReceiverAirspace, insideApprovedAirspace,
         })) {
           const key = `${facilityId}:${strip.stripId}:${o.obligationType}`;
           const prev = this._current.get(key);

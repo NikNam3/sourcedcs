@@ -1352,6 +1352,7 @@
   "panels/efsp/par-samples.js": [
    "applyParSamples",
    "clearParSamples",
+   "parFinalApproaches",
    "parSampleFor",
    "parSampleTimes",
    "parSamples"
