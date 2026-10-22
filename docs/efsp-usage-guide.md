@@ -1801,11 +1801,14 @@ the variation goes in that file's `magneticVariation` (`fixedDeg` or `offsetDeg`
 the ATIS text give the wind **magnetic** (`NNN°M`; the reference card's tooltip shows the true value, and
 the ATIS says "Wind not available." when the variation is unknown, H76).
 
-## 8K. The carrier (`CARRIER` Facility, `adr/0074`, `0113`-`0116`)
+## 8K. The carrier (`CARRIER` Facility, `adr/0074`, `0113`-`0116`, `0137`)
 
 Sign on to `CV_MARSHAL`, `CV_PRIFLY`, `CV_APP1` or `CV_APP2` under **Panels → Acting As** (group `CARRIER`). A carrier
 Strip has one of three strip types: **MARSHAL** (launch, then the stack), **FINAL** (the groove: nothing to type)
-and **PATTERN** (in the visual pattern, then recovered). When a carrier Position is left, its Strips stay with it and
+and **PATTERN** (in the visual pattern, then recovered). **The Marshal creates the carrier's Strips**: in the New Strip
+toolbar pick **Marshal · Recovery** (the flight joins the stack) or **Marshal · Launch**, and type the callsign. There is
+no flight-plan lookup for a carrier Strip, and a recovery typed by callsign is a new flight (it is not joined to the
+launch of the same callsign). PriFly and the approach lanes create nothing. When a carrier Position is left, its Strips stay with it and
 the next controller on its list is **offered** the hat (§8M): `CV_APP1` → `CV_MARSHAL`, `CV_APP2`, `CV_PRIFLY`;
 `CV_APP2` → `CV_MARSHAL`, `CV_APP1`, `CV_PRIFLY`; `CV_PRIFLY` → `CV_MARSHAL`, `CV_APP1`, `CV_APP2`; `CV_MARSHAL` →
 `CV_APP1`, `CV_APP2`, `CV_PRIFLY`. The Marshal comes first (the human's order, H111). Whoever takes a Position holds it
@@ -1826,8 +1829,8 @@ In the carrier regime an aircraft is named by its **side number**. The Marshal t
 - **On a carrier Strip** (MARSHAL, FINAL, PATTERN owned by a carrier Position) the side number moves to the first, wide
   field and the callsign moves to SIDE's place. Until a side number is typed the callsign leads (a PATTERN Strip then shows
   no SIDE at all). Incirlik's FINAL and PATTERN Strips are unchanged.
-- **On the MARSHAL board, the CARRIER MAP labels, the FINAL Bay line, PriFly's pattern board** (the callsign beside it on
-  the chip's second line), **the refusal banner and the "arrived from" line**. A flight with no side number yet is shown
+- **On the MARSHAL board, the CARRIER MAP labels, the FINAL Bay line, the refusal banner and the "arrived from"
+  line**. A flight with no side number yet is shown
   by its callsign; on the MARSHAL board that row is grey.
 - The Bay search finds a Strip by its side number too.
 
@@ -1873,6 +1876,11 @@ In the carrier regime an aircraft is named by its **side number**. The Marshal t
   **PATTERN**). Its header shows the Case, the ramp time and the marshal position (`MARSHAL` radial and first fix),
   read-only: they are set in the CARRIER panel. Beside it is the Case III picture of the stack. Only the Marshal changes
   anything; the other carrier Positions read it.
+- **Fuel and EAT by hand.** Click a holding flight's fuel to type its low state (`4.8` is 4,800 lb: a number under 100
+  is thousands); it is the Strip's Low state Block. Click its EAT to assign one by hand (`HHMM`): it stays underlined
+  until you clear it (an empty entry gives the slot's EAT back), and is marked until passed like any changed clearance.
+  Delta moves it with the others; a new ramp time does not; Commence records it, Back to stack clears it. Two holding
+  flights cannot share a minute (CV NATOPS 6.4.9), and there is no hand EAT in Case I.
 - **Drag** a HOLD row onto another HOLD row to re-sequence. A recovery check-in joins at the next free slot. A flight that
   leaves the stack leaves a gap (a vacancy row); **Close up** on it compresses the stack.
 - **Commence** is on the next flight to push. The flight keeps the EAT it was working to and the time it left: a later
@@ -1905,11 +1913,15 @@ In the carrier regime an aircraft is named by its **side number**. The Marshal t
   amber is fuel within the margin of bingo and red at or below it (Settings → Marshal). The recovery tanker is labelled
   `TKR`. The header carries the hull, Case, BRC, FB and range; it turns amber only for a lost ship track or a bearing it
   cannot draw.
-- **A pattern is drawn only while someone is in it**, from the Strips: the bolter racetrack (turning in at each flight's
+- **The marshal stack is drawn as the holding pattern**: the left-hand racetrack of CV NATOPS 6.4.1.1 (its size,
+  8 nm legs and 2.6 nm wide, is ours). While anyone holds, has commenced or is on the approach in Case II or III, the
+  **path after marshal** is drawn too: the radial to the platform, the 10 and 6 nm fixes on the final bearing, and the
+  ship.
+- **A pattern is drawn only while a recovery needs it**, from the Strips: the bolter racetrack (turning in at each flight's
   approach turn) while a FINAL Strip is BOLTER/WAVEOFF; port holding while a flight holds in Case I or II (Case II with
   holding flights draws both the stack and port holding); the break and landing pattern with the initial while a flight
-  is in the pattern, or the spin circle when its contact is within 3.5 nm of the ship at 1,000 ft or above (that rule
-  is ours); the tanker's racetrack while the tanker is on station. The patterns carry no altitude or distance labels.
+  holds in Case I or II or is in the pattern, or the spin circle when its contact is within 3.5 nm of the ship at
+  1,000 ft or above (that rule is ours); the tanker's racetrack while the tanker is on station. The patterns carry no altitude or distance labels.
   Their shapes follow CV NATOPS 6.2, 6.4.8 and 6.10.3; the figures NATOPS leaves open (the bolter's 2 nm abeam, the break
   point, the 180, the tanker's 4 nm abeam) are ours.
 
@@ -1919,9 +1931,11 @@ In the carrier regime an aircraft is named by its **side number**. The Marshal t
   frequency), bingo and low state. They are on the flight, so they are on the recovery Strip too. The
   squawk the launch Strip held is re-claimed by the recovery Strip if you dropped the launch Strip in
   between.
-- **Four handoffs, four buttons**, each recording its trigger type: **Commence** (Marshal to an approach
-  lane), **Radar contact** (lane, MARSHAL becomes FINAL), **Ball** (FINAL to BALL) and **See you** (Case II
-  only: the pilot has the ship, to PriFly as PATTERN). Case I has its own **To pattern**. **Dragging a Strip
+- **The handoffs, one button each**, each recording its trigger type: **Commence** (Marshal to an approach
+  lane), **Radar contact** (lane, MARSHAL becomes FINAL), **Ball** (FINAL to BALL), **Trapped** (the lane, at BALL:
+  the Strip goes to PriFly's RECOVERED Bay, `cv-prifly-recovered`, and leaves the MARSHAL board) and **See you** (Case II
+  only: the pilot has the ship, to PriFly as PATTERN). Case I has its own **To pattern**; a Case I **Recovered** also
+  puts the Strip in PriFly's RECOVERED Bay. PriFly's next step there is **Drop**. **Dragging a Strip
   into a lane Bay does not do it; the button does** (the drag is refused with the button's name). The one
   allowed drag is a **bolter**: drag it to the Bolter Bay and the next step brings it back on final.
 - **The carrier final.** The approach controller works the final from the **FINAL Bay's flight line** and the
@@ -1932,8 +1946,8 @@ In the carrier regime an aircraft is named by its **side number**. The Marshal t
   contact it is blank. The MARSHAL board's DME is the same measurement.
 - **FINAL has nothing to type** but its remarks (Block 9E). Its identity Blocks are derived, Block 5 is off its map,
   and the HDG and ALT an Incirlik PAR final carries are neither shown nor accepted on the carrier's.
-- **PriFly's pattern board** (initial, break, downwind, groove) names each aircraft by its side number once the
-  Marshal has typed it, with the callsign beside it; until then by its callsign.
+- **PriFly's Bays** list the flights coming to the deck (`cv-prifly-pattern`, one Rack: there are no pattern legs any
+  more) and those recovered (`cv-prifly-recovered`).
 - A launch, a trap and a recovered pattern flight each count once in the traffic count (§10). The ship is the CARRIER
   Facility's home field (`UNION` in `config/efsp-instrumentation.json`): a launch whose ATO line (or plan) recovers on the
   ship is **local**, one that recovers at Incirlik is **transient**, and one with no plan or ATO line is **unknown**
@@ -1941,15 +1955,35 @@ In the carrier regime an aircraft is named by its **side number**. The Marshal t
 - **Not walked against a real DCS ship**: the banner reads "hull not found" until a hull track exists, so no panel has
   shown live contacts around a real ship; the deck-state board (`cv-prifly-deck`) is inert; two hulls were not tried.
 
-## 8L. Incirlik: RSU, the single frequency approach and PAR (`adr/0075`, `0093`, `0112`, `0117`)
+## 8L. Incirlik: the tower's pattern, the single frequency approach and PAR (`adr/0117`, `0123`, `0126`, `0130`)
 
-- **Seven Positions** at `INCIRLIK`: `OPS`, `CD`, `GC`, `LC`, `RSU`, `AP`, `PAR`. There is no `SFA` Position.
-- **RSU** (runway supervisory unit): the **pattern board** (closed, initial, base, final as columns). Each
-  chip has **Next leg** (the touch alternative to drag), **Landed** and **Drop**. A Strip whose Rack is not a
-  leg shows in an UNPLACED column, never hidden. RSU originates PATTERN Strips, asks for a runway to be
-  closed, opened or put out for works, and **never closes a runway itself** (only `LC` does, H18). The board
-  gives advice (a flight long in the pattern, more than one on the last leg); nothing is refused.
-- **The single frequency approach** is worked by `AP` and `PAR` (JO 7610.14A ¶7-1-5). `AP` files the arrival on one
+- **Six Positions** at `INCIRLIK`: `OPS`, `CD`, `GC`, `LC`, `AP`, `PAR`. There is no RSU (a real RSU is manned by
+  pilots, not an ATC unit) and no `SFA` Position.
+
+### The tower's pattern (`adr/0126`)
+
+`LC` works pattern traffic on its ordinary Strips. Two cells sit on `LC`'s arrivals and departures (and on `AP`'s
+arrivals, so `AP` can note what the pilot wants before handing over): **P/S** (`PAT` = enter the pattern, `STR` =
+straight-in) and **OPT** (`T&G` = touch-and-go, `FS` = full stop, `LA` = low approach). Click a cell to step through its
+values (and back to empty); whoever holds the Strip sets them. They are on the flight, so every Strip of it shows them.
+
+The next-step button follows them: an arrival with `PAT` goes **In pattern** into the `lc-pattern` Bay (its tab says
+`ARR · IN PATTERN`, grey); from there **On Final**; on final a `T&G` or `LA` brings it back with **Closed traffic**, a
+full stop (or an empty OPT) is **Landed** and then **Taxi In** to `GC` as always. If the pilot changes his mind, change
+the cell, or drag the Strip to the other Bay.
+
+- **A local departure that wants closed traffic:** on its airborne Strip, `⋯` → **Closed traffic**. It becomes an
+  arrival in the pattern, same Strip and code; it never goes to `AP`.
+- **An aircraft departing the pattern:** `⋯` → **Leave pattern** (from the pattern or from final; it becomes a departure
+  again) and then **Hand Off to AP**, or **Drop** a VFR flight that leaves; the pilot calls Approach like any VFR
+  aircraft.
+- There is no stop-and-go and no missed-approach value in OPT, no circuit count and no time in the pattern.
+
+The boundary is JO 7110.65BB ¶3-8-2; the option is AIM 4-3-23. Only `LC` has Closed traffic and Leave pattern.
+
+### The single frequency approach (`adr/0117`)
+
+- The single frequency approach is worked by `AP` and `PAR` (JO 7610.14A ¶7-1-5). `AP` files the arrival on one
   of the frequency Racks of its **SFA** Bay (`ap-sfa`), which gives the flight that frequency. Of the five frequencies,
   three rotate between `AP` and `PAR`; the first is `AP`'s initial-contact frequency and the last a spare. The grey header
   over the Racks shows each frequency with who has it now on the three that rotate (`PAR` while it works a flight on it,
@@ -1959,15 +1993,23 @@ In the carrier regime an aircraft is named by its **side number**. The Marshal t
   change frequency (JO 7110.65BB ¶5-10-15), and the frequency is never touched. PAR holds **one aircraft on final at a
   time** (`par-final`); a second handoff is refused naming the one on it. A handoff to an unstaffed PAR is delivered and
   `AP` is offered PAR's hat (§8M).
-- **PAR** (precision approach radar) is an airfield feature, Incirlik's only. The **FINAL Bay** shows one line per
-  aircraft: its callsign (click it to show it in the PAR panel and open the panel), its range to touchdown, the
-  assigned **HDG** and **ALT** (type a new value and press Enter, or leave the field), then **Begin descent**,
-  **Cleared to land**, **Landed** and **Missed approach**, and at the end the Strip's `⋯` menu and Drop (`✕`). The line
-  is empty with "No aircraft on final."
+- **A flight follows its frequency.** An airspace approval, a cleared entry or a typed `FREQ` (Block 22) that changes
+  the frequency of a Strip on the SFA Bay moves it to that frequency's Rack, or to `ap-inbound` when the pool has none.
+- The frequencies themselves are set in the FREQUENCIES panel (§8N), where `AP` can also add a spare. An SFA frequency
+  with a flight on it cannot be changed or removed.
+
+### The PAR final (`adr/0117`)
+
+- **PAR** (precision approach radar) is an airfield feature, Incirlik's only. The **FINAL Bay** holds the ordinary FINAL
+  Strip like any other Bay. Type the assigned heading and altitude in its **HDG** and **ALT** fields. Beside **Landed**
+  (the next step, which sends the Strip to `GC` as an arrival at taxi-in) is your next call, **Begin descent** and then
+  **Cleared to land**; each is recorded once and then stays in the Strip's `⋯` menu, greyed, as the record. The `⋯`
+  menu's **Final** group also has **Missed approach** and **Show in PAR panel**, which draws the flight in the PAR panel
+  and opens it.
   - **Begin descent** ends the assigned altitude (¶5-12-3): on the glidepath nothing is checked against an altitude.
-    **Cleared to land** records that you relayed the tower's clearance. Both stay on the line, greyed, once pressed.
-  - **Landed** hands the Strip to `GC` (Taxi In, `gc-taxi-in`) and frees the final for the next aircraft; it is also
-    the FINAL Strip's next step. With `GC` unstaffed it is delivered if somebody is offered `GC`'s hat, else refused.
+    **Cleared to land** records that you relayed the tower's clearance.
+  - **Landed** hands the Strip to `GC` (Taxi In, `gc-taxi-in`) and frees the final for the next aircraft. With `GC`
+    unstaffed it is delivered if somebody is offered `GC`'s hat, else refused.
   - **Missed approach** hands the aircraft back to `AP` for another approach (ours: the orders do not say who works the
     climb-out). Give the climb-out heading and altitude in HDG and ALT first (¶5-10-12); they stay assigned and are
     conformance-checked. The Strip goes to `AP`'s SFA Bay, on its frequency's Rack (else `ap-inbound`), and your final and
@@ -1976,34 +2018,49 @@ In the carrier regime an aircraft is named by its **side number**. The Marshal t
   - To keep the aircraft yourself after a missed approach, drag it to the missed-approach Bay (`par-missed`); its next
     step there is **Back to AP**.
   - Every call is the final controller's alone; `AP` cannot press them.
+
+### The PAR panel (`adr/0112`, `0123`, `0130`)
+
 - **The PAR is your Position's own sensor.** While you are signed on to `PAR` and an aircraft is on your final, crc-sync
   measures it twice a second: range from the runway threshold along the final approach course, its height above the
   touchdown zone to the foot, how far above or below the glidepath and left or right of the course it is (left and right
   as the pilot sees them), its ground speed and vertical speed. Nobody else is sent these numbers. If you sign off, the
   next controller to sign on to your Position sees the same approach, with its trail; if you also hold `AP`, signing off
   `PAR` alone keeps the picture, because `AP` takes PAR's hat (§8M).
-- **The PAR panel** (PANELS → PAR, a tab in the left panel group until you move it) shows the approach (runway, glidepath
-  angle, TCH, DA, final approach course), the aircraft (callsign, type, beacon, ground speed, vertical speed, range to
-  touchdown), and two scopes: elevation and azimuth against range from touchdown. Touchdown is always in the bottom-left
-  corner. The wheel zooms the range of both scopes; Shift+wheel zooms the height (elevation) or the lateral offset
+- **The PAR panel** (PANELS → PAR, a tab in the left panel group until you move it) shows the approach (runway, final
+  approach course and the approach values, below), the aircraft (callsign, type, beacon, ground speed, vertical speed,
+  range to touchdown), and two scopes: elevation and azimuth against range from touchdown. Touchdown is always in the
+  bottom-left corner. The wheel zooms the range of both scopes; Shift+wheel zooms the height (elevation) or the angle
   (azimuth) of the scope under the pointer. There is no panning. With **Autoscale** on (Settings → PAR) the window
-  follows the aircraft until it is 10 NM wide; any zoom pauses it, a double-click resumes it.
+  follows the aircraft until it is 10 NM wide; any zoom pauses it, a double-click resumes it. With no aircraft on your
+  final it reads "No aircraft on your final."
+- **The azimuth scope is in degrees**: the course is the 0° line, left of course is below it, and the dashed tolerance
+  lines are straight. Its readout is the angle off the course, e.g. `AZ 0.4° L` (`0.0°` on the course). The window is at
+  most ±15° (the PAR's coverage). A plot beyond the edge of the window is drawn on the edge.
 - **Colours.** The panel is grey while the approach is normal; the aircraft is the magenta diamond with its trail. Red
-  means outside your tolerance (±1° by default per axis, Settings → PAR) above DA; below DA nothing is coloured and the
-  dashed tolerance lines stop at DA. Amber `NO PLOT` means no new radar plot for 3 seconds (DCS has not moved the
-  aircraft, or it is outside the PAR's coverage: 20 NM, 15° either side, up to 7° up). An orange-red scope with
-  `NO ELEVATION DATA` or `NO AZIMUTH DATA` has failed; the reason is under it.
-- If the approach publishes no glidepath angle, your default glideslope (Settings → PAR, 3.06°) is used. With more than
-  one aircraft on your finals their names appear above the header; click one to watch it, and your choice stays until it
-  leaves the final. **Begin descent**, **Cleared to land**, **Landed** and **Missed approach** are in the panel too,
-  the same calls as on the aircraft's line in the FINAL Bay. PAR's FINAL Strip shows the PAR's range to the threshold
-  in DIST.
-- **A vacated Position's Strips stay with it** (`adr/0110`). `PAR` offers the hat to `AP`, `RSU` to `LC`: the
-  next controller takes it (§8M) or the Strips wait. A PAR vacated with an aircraft on final leaves the Strip with `PAR`
-  until `AP` takes the hat.
-- **Placeholders.** Every approach figure (threshold, TDZE, TCH, DA, glidepath angle) is a placeholder until the squadron
-  copies the real plate (`config/efsp-facility-incirlik.json`, `parApproaches`); the five frequencies (232.1 to 236.1 MHz),
-  the long-in-pattern advisory (10 min) and the PAR coverage figures are ours. The PAR has never seen a live DCS track.
+  means outside your tolerance above DA: by default more than **1° above** or **0.5° below** the glidepath (the FAA
+  lower safe limit, Order 8200.1D) or more than 1° either side of the course; each is a setting in Settings → PAR
+  (**Elevation tolerance above**, **Elevation tolerance below**, **Azimuth tolerance ±**, and **Autoscale**: four in all).
+  Below DA nothing is coloured and the dashed tolerance lines stop at DA. Amber `NO PLOT` means no new radar plot for 3
+  seconds (DCS has not moved the aircraft, or it is outside the PAR's coverage: 20 NM, 15° either side, up to 7° up). An
+  orange-red scope with `NO ELEVATION DATA` or `NO AZIMUTH DATA` has failed; the reason is under it.
+- **Approach values.** The panel's header shows the approach you are working: **TDZE**, **TCH**, **DH** and **GPA**
+  (glidepath angle), then **DA** (TDZE + DH). They start as the field's defaults. To change one, click it, type the value
+  and press Enter; an empty field or **Default** puts the default back, Escape leaves it as it was. The value is held by
+  crc-sync for that runway end, so every PAR scope and the PAR sample use the same numbers, and it stays until someone
+  changes it (a new mission keeps it). A value you set is underlined with a small mark; its tooltip shows the default.
+  Ranges: TDZE −1,500 to 15,000 ft, TCH 0 to 200 ft, DH 100 to 1,000 ft, GPA 2.5° to 3.5° (ours). Only the PAR Position
+  sets them (`AP` holding PAR's hat, too). The 0.5° lower safe limit follows the angle you set; the obstacle clearance it
+  stands for was surveyed for the published angle. The header, and so the values, show only while an aircraft is on your
+  final. A changed value is measured on the next DCS fix, within about a second.
+- With more than one aircraft on your finals their names appear above the header; click one to watch it, and your
+  choice stays until it leaves the final. **Begin descent**, **Cleared to land**, **Landed** and **Missed approach** are
+  in the panel too, the same calls as on the FINAL Strip. PAR's FINAL Strip shows the PAR's range to the threshold in DIST.
+- **A vacated Position's Strips stay with it** (`adr/0110`). `PAR` offers the hat to `AP`: the next controller takes it
+  (§8M) or the Strips wait. A PAR vacated with an aircraft on final leaves the Strip with `PAR` until `AP` takes the hat.
+- **Placeholders.** The facility file's approach figures (`config/efsp-facility-incirlik.json`, `parApproaches`:
+  threshold, TDZE, TCH, DH, glidepath angle) are defaults only, for the PAR controller to change at run time; the five
+  SFA frequencies (232.1 to 236.1 MHz) and the PAR coverage figures are ours. The PAR has never seen a live DCS track.
 
 ## 8M. Taking a hat: consolidation at every Facility (`adr/0105`, `adr/0110`)
 
@@ -2037,18 +2094,60 @@ squadron's (H111). `TACTICAL` alone still hands lines back to `TAC_C2` (§8C1).
   leaves it, or LUAW starts or stops). The acknowledgement is your window's only and comes back after a reload. With a
   departure lined up (LUAW) while combined the line is coloured and says so: *LUAW in use while LC is combined. Monitor
   …* (¶2-6-5c, ¶10-3-8a4); putting a Strip into `LUAW` as `LC` while holding a non-local Position shows a refusal-style
-  line too. `CD` with `GC` and `RSU` with `LC` raise none (¶10-4-6, ¶10-3-8a4). The offer to take a hat ends at "Take
+  line too: *LUAW while LC is combined with a non-local Position*. `CD` with `GC` raises none (¶10-4-6). The offer to take a hat ends at "Take
   GC as well?". All of it **warns and never blocks**: the EFSP's departure lifecycle always passes through LUAW, so a
   block would end the one-controller tower. Background, not on screen: combining local and non-local positions is for
   significantly reduced traffic (JO 7210.3 ¶2-6-5b), tower and radar approach not normally outside the midwatch
   (¶2-6-12); the FAA's doctrine applied to a USAF field by analogy.
-- **Frequencies.** Each Position can carry frequencies (`positionFrequencies` in the facility file, `{ label, mhz }`,
-  checked like the airspace frequencies). They are shown in the Position selector and on the Position tab, and a controller
-  holding two Positions has both. Incirlik ships `GC` GND 275.8 and `LC` TWR 251.0: **placeholders, the squadron must
-  confirm them.** Nothing tunes a radio from them yet.
+- **Frequencies.** Each Position can carry frequencies (§8N). They are shown in the Position selector and on the Position
+  tab, and a controller holding two Positions has both. Incirlik ships `GC` GND 275.8 and `LC` TWR 251.0:
+  **placeholders**, which a controller changes in the FREQUENCIES panel. Nothing tunes a radio from them yet.
 - **Metrics.** The transfers row counts `to an unstaffed Position` (a delivery under `UNSTAFFED_RECEIVER`, and a
   `TACTICAL` hand-back) where it used to count `routed to a consolidated Position`.
 - Sign-on and sign-off are not undoable one-click moves (`adr/0100`).
+
+## 8N. Frequencies: the FREQUENCIES panel (`adr/0131`, `0138`)
+
+Open **FREQUENCIES** from the PANELS list. It lists each Facility's station frequencies: each Position's (GND, TWR, …)
+and the SFA pool. The facility files hold the defaults; what controllers set is kept by crc-sync across restarts and
+new missions.
+
+- **You set your own Facility's frequencies**: each Facility's rows are editable from one of its Positions you are
+  Primary at; another Facility's rows only read. Signed on to no Position, the panel says "Sign on to a Position to set
+  frequencies."
+- **Change one:** click the value, type the new one, Enter. A value you or another controller set shows a grey **SET**
+  with the default and who set it when; **RESET** puts the default back. Everyone sees a change at once; the last write
+  wins.
+- **Add one:** **ADD** beside the Facility's name: pick the Position (or SFA), type a label (up to 12 characters) and the
+  frequency, Enter. An added frequency is marked SET with `added`, and **REMOVE** takes it away. A frequency from the
+  facility file cannot be removed, only reset. An added SFA frequency is a spare and gets its own Rack in `AP`'s SFA Bay.
+- **A frequency already given to a flight is not changed.** An SFA frequency with a flight on it can be neither changed
+  nor removed: move or hand off the flight first. A Position's frequency changes no Strip.
+- Values are MHz in the UHF and VHF bands (30–400 MHz, UHF 225–399.975), on a 25 kHz channel or an 8.33 kHz channel name
+  between 118 and 137 MHz (the grid is ours). SFA frequencies must differ within the pool.
+- The airspace frequencies are edited in the airspace editor (§8A), not here. Your SRS radio's own frequencies are in
+  crc-desktop's `config.json` and the radio panel; nothing here tunes a radio.
+
+## 8O. The map: basemap, labels, terrain and the airport surface
+
+- **The basemap** is MapTiler's, with the key crc-sync gives the client after login. When MapTiler refuses (no key, a
+  refused or exhausted key) or is down, the map switches by itself to a free basemap (**OpenFreeMap**, keyless) and a quiet
+  grey **FALLBACK BASEMAP** note shows; it stays on the fallback for the session and goes back to MapTiler only when a
+  new key arrives. If neither answers, the note reads **NO BASEMAP** and the map draws everything we own on a plain
+  background. Nothing you need (tracks, data blocks, airspaces, Strips) depends on the basemap.
+- **Labels** are drawn with fonts the app ships, so tracks and data blocks show with no MapTiler key at all.
+- **Terrain and contours come from DCS itself**: a height grid of the whole map, built once per map on the server
+  (`infra/RUNBOOK.md`). Radar masking (§8B), the elevation contours (Settings → GENERAL → Map Overlays) and the radar-debug
+  line of sight all read it. Without a grid for the mission's map there are no contours and no masking.
+- **Settings → RADAR → Map** (yours only): **DCS drawings** (on: the mission editor's shapes; off hides them all),
+  **DCS text marks** (off) and **Airport surface** (on: aprons, taxiways, runway numbers and taxiway names when zoomed in
+  on a field, from zoom 12; the runway lines always show). The airport surface is OpenStreetMap's field as it is today,
+  which can differ from the DCS model. The strict black ATC scope (§8F, "ATC Map Background" off) shows runways only.
+- **Picking a DCS drawing** in the airspace editor: hover or arrow through the **Pick DCS drawing** list to see each
+  drawing outlined on the map in turquoise (also when DCS drawings are switched off); the small **show** button on a row
+  brings an off-screen drawing into view. Hovering never moves the map.
+- **Every panel scrolls** when you make it smaller than its contents, except the two maps and the PAR panel's scopes;
+  Settings scrolls under its tabs.
 
 ## 9. General controls — quick reference
 
@@ -2057,10 +2156,13 @@ squadron's (H111). `TACTICAL` alone still hands lines back to `TAC_C2` (§8C1).
 - **Drag** a Strip onto another Position's tab to transfer it (same-Facility only); onto a Bay tab within your own Position to move it there.
 - **Search**: `.find <text>` dot-command, or the search icon — matches callsign/beacon (and a carrier aircraft's side number), opens a temporary search-results Bay.
 - **Dot-commands**: `.drop [reason]`, `.undo` (undoes the action in the Undo slot, no Strip needs selecting), `.find <text>`, `.bind <track id>`, `.unbind`, `.stereo <NAME> <CALLSIGN>`, `.ff <track number> <CALLSIGN> <TYPE>` and `.term` (flight following, §8C2), and for MARSA (§8D) `.marsa <CALLSIGN> [DECLARER]`, `.rendezvous`, `.endmarsa`, `.voidmarsa` — all but `.find`, `.stereo`, `.ff` and `.undo` apply to whichever Strip is currently selected.
-- **Undo** (ADR 0100): every one-click move you made (NLA step, hand-off, carrier handoff, Hand off to PAR, Landed, Missed approach, surveillance chip, TOFI Exit, Split/Join, Divert, Start flight following, Radar service terminated) can be undone for 10 seconds, by the Position that did it. The panel shows one slot, "Undo · Hand off VIPER1 → APP · 7 s"; click it, press Ctrl+Z with the panel in use, or type `.undo`. The newest undoable action replaces the slot. Changes other controllers in your Facility made to the same records in the meantime are voided (a voided clearance stays visible, marked VOIDED); the Position that made them gets a message in its panel ("LC undid Hand off VIPER1; your annotation was voided", click to dismiss; nothing is marked on the Strip). An Undo is refused if another Facility has since answered, or the Strip was dropped and archived; the slot line says why. Undoing a Split removes the part's Strip and its flight data on every client at once.
-- **Settings** has one tab per panel: General, Colours, Radar (declutter, navpoints, track visibility, extended centreline,
-  debug), SRS and Tools, and one for each panel that has settings of its own: **PAR** (§8L), **Marshal** and **Carrier map**
-  (§8K). The values are yours and are kept on this computer; nobody else sees them.
+- **Undo** (ADR 0100): every one-click move you made (NLA step, hand-off, Checked in, carrier handoff, Hand off to PAR, Landed, Missed approach, Closed traffic, Leave pattern, surveillance chip, TOFI Exit, Split/Join, Divert, Start flight following, Radar service terminated) can be undone for 10 seconds, by the Position that did it. The panel shows one slot, "Undo · Hand off VIPER1 → APP · 7 s"; click it, press Ctrl+Z with the panel in use, or type `.undo`. The newest undoable action replaces the slot. Changes other controllers in your Facility made to the same records in the meantime are voided (a voided clearance stays visible, marked VOIDED); the Position that made them gets a message in its panel ("LC undid Hand off VIPER1; your annotation was voided", click to dismiss; nothing is marked on the Strip). An Undo is refused if another Facility has since answered, or the Strip was dropped and archived; the slot line says why. Undoing a Split removes the part's Strip and its flight data on every client at once.
+- **Settings** has one tab per panel: General, Colours, Radar (the Map group, declutter, navpoints, track visibility,
+  Conflict Alert, extended centreline, debug), SRS and Tools, and one for each panel that has settings of its own:
+  **PAR** (§8L), **Marshal** and **Carrier map** (§8K). The values are yours and are kept on this computer; nobody else
+  sees them.
+- **Panels** (PANELS list): the Strip panel, AIRSPACE, RUNWAY STATUS, FREQUENCIES, METRICS, PAR, the carrier's CARRIER,
+  MARSHAL and CARRIER MAP, and the rest; every docked panel scrolls when it is smaller than its contents (§8O).
 
 ## 10. Metrics and the traffic count
 
