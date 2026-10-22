@@ -33,7 +33,7 @@ in the NAS) and the Pilot/Controller Glossary (P/CG). The full machine table is 
 | "EFSP State" (Block 25), bare "state" of a Strip | **strip state** (always qualified: strip state, coordination state, departure-release state, runway status) | none (Block 25 is `[SOURCE-DEFINED]`) | |
 | `assigned.releaseState`, "release state", `RELEASE_STATES` | **departure release**: `assigned.departureRelease`, `DEPARTURE_RELEASE_STATES` | JO 7110.65 para 4-3-4 "Departure Release, Hold for Release, Release Times, ..." | `standingReleases` (a standing departure release, LOA), `HOLD_FOR_RELEASE`, `ReleaseAirspace`/`ReturnAirspace` keep their names |
 | Block 5 / M4 label `SQUAWK` (the assigned code) | **`BEACON`** | JO 7110.65 TBL 2-3-2 "Mode 3/A beacon code" | `track.squawk` and `squawkStatus` (the transponder *reply* from SRS/DCS) and "squawking" keep the word: that is what the aircraft does |
-| Position ids `TWR`, `GND`, `APP` (and Bays `twr-*`, `gnd-*`, `app-*`) | **`LC`, `GC`, `AP`** (and `lc-*`, `gc-*`, `ap-*`) | JO 7210.3 para 10-1-1, TBL 10-1-1 "Operating Position Designators" | See section 2. `CV_APP1`/`CV_APP2` (carrier approach lanes), `APP_LANES` and the map CSS `gnd-red` (ground units) are unrelated |
+| Position ids `TWR`, `GND`, `APP` (and Bays `twr-*`, `gnd-*`, `app-*`) | **`LC`, `GC`, `AP`** (and `lc-*`, `gc-*`, `ap-*`) | JO 7210.3 para 10-1-1, TBL 10-1-1 "Operating Position Designators" | See section 2. `CV_APP1`/`CV_APP2` (carrier approach lanes), `APP_LANES` and the old map CSS `gnd-red` (ground units, removed with ADR 0121) are unrelated |
 
 ### The two words that are never used bare
 
@@ -42,12 +42,12 @@ A **bare "transfer"** or **bare "release"** is never used in a new name or sente
 | Say | Meaning |
 |---|---|
 | strip transfer | ownership of a Strip passes between Positions (`TransferStrip`) |
-| transfer of communications | the frequency move (`TRANSFER_COMMS`) |
+| transfer of communications | the frequency move: on a HANDOFF the receiver's **check-in** (`HANDOFF CHECKED_IN`, ADR 0122); TOFI keeps `TRANSFER_COMMS` |
 | transfer of control | the aircraft's control passes (H94) |
 | departure release | the release of a departure (`RELEASED`, `HOLD_FOR_RELEASE`, `EDCT`, ...) |
 | standing departure release | the LOA envelope (`standingReleases`) |
 | airspace release | an airspace block released to its using agency (`ReleaseAirspace`) |
-| control release | H94's future release of control, named **`ControlRelease`**, never a bare "Release" |
+| control release | the release of a not-released HANDOFF, **`ControlRelease`** REQUEST / GRANT / REFUSE (ADR 0122), never a bare "Release" |
 
 ## 2. Positions
 
@@ -60,7 +60,7 @@ route). "Facilities may use designators other than those listed to accommodate l
 | INCIRLIK | `CD` | `CD` | Clearance Delivery | TBL 10-1-1 #5 |
 | INCIRLIK | `GND` | **`GC`** | Ground Control | TBL 10-1-1 #12 |
 | INCIRLIK | `TWR` | **`LC`** | Local Control | TBL 10-1-1 #13 |
-| INCIRLIK | `RSU` | `RSU` (kept) | Runway Supervisory Unit | USAF; no FAA position |
+| INCIRLIK | `RSU` | **removed** (ADR 0126) | Runway Supervisory Unit | USAF, manned by pilots, not an ATC unit; the tower works the pattern (section 5) |
 | INCIRLIK | `APP` | **`AP`** | Approach Control (departures consolidated: DC, #7) | TBL 10-1-1 #2 (RP-3) |
 | INCIRLIK | `SFA` | `SFA` (kept) | Single-frequency approach | the service is P/CG SINGLE-FREQUENCY APPROACH; no designator |
 | INCIRLIK | `PAR` | `PAR` | Precision Approach Radar | TBL 10-1-1 #16 (already the FAA designator) |
@@ -115,3 +115,22 @@ Older ADRs (0075, 0093, 0112) and notes use these; the living docs use the right
 | wake category `D` and the FAA CWT letters | **ICAO L / M / H / J** | JO 7360.1K App. A (ICAO WTC) | `aircraft-data.js`; Block 3 is `[count/]TYPE[/WAKE]` in ICAO order |
 | "CA" for any pair of aircraft | **CA** between two tracked aircraft; **MCI** (Mode C intruder) a tracked aircraft against an untracked one reporting altitude | P/CG CONFLICT ALERT, MODE C INTRUDER ALERT; JO 7110.65 para 5-13-1 | ADR 0118. "Tracked" = correlated to a Strip (CORRELATED or PROVISIONAL) |
 | airspace `type` "a label only" | `type` decides the **airspace-conflict alert** (`SAA`, "Airspace conflict <name>") | P/CG AIRSPACE CONFLICT; 14 CFR 73.13 | ADR 0119 amends ADR 0038/D14 |
+
+## 5. Round 2 to the v2 launch (ADRs 0121-0138)
+
+Older ADRs (0075, 0101, 0120, 0127) and notes use the left-hand words; the living docs use the right-hand column.
+
+| Old word or name | Now | Source | Note |
+|---|---|---|---|
+| the RSU Position, its pattern board (`pattern-board.js`, `RSU_LEGS`), the `rsu-pattern` Bay, `HANDED_TO_RSU`, the RSU list (`rsu-list`), `CancelIfr`, `IFR_NOT_CANCELLED` | **the tower's pattern**: LC's ordinary Strips, cells **P/S** (`9J-ENTRY`: PAT / STR) and **OPT** (`9J-OPTION`: T&G / FS / LA), ARRIVAL state **`TRAFFIC_PATTERN`** ("IN PATTERN", Bay `lc-pattern`), ops `JoinPattern` ("Closed traffic") and `LeavePattern` | JO 7110.65BB para 3-8-2; AIM 4-3-23 (the option; ADR 0126 says 4-3-22, which is wrong) | ADR 0126 supersedes 0120. `TRAFFIC_PATTERN` is the airfield's; the carrier's PATTERN strip type and `IN_PATTERN` state are PriFly's |
+| PriFly's pattern board (initial, break, downwind, groove), `view: 'pattern'` | PriFly's Bays `cv-prifly-pattern` (one Rack) and **`cv-prifly-recovered`** (the **Recovered Bay**: a trapped or Case I recovered aircraft, carrier handoff `FINAL_TRAPPED`) | CV NATOPS | ADR 0137 |
+| **Comms to X**, **Control to X**, the release form (Turns, Climb, Descent, Full, limits, condition, time), **Withdraw release**, `TRANSFER_COMMS`/`TRANSFER_CONTROL` on a HANDOFF | **Released** (the switch at Hand off, default on), **Checked in** (the receiver), **Request release…** / **Release** / **Unable** | JO 7110.65BB para 2-1-15 a 1, a 2, c; para 2-1-17 a | ADR 0122 replaces 0101's release model. Inside one Facility a move is still a plain strip transfer |
+| the airfield PAR final line (one row per aircraft in the FINAL Bay) | the **FINAL Strip** on an ordinary face (HDG, ALT, Landed, the next call, ⋯ group Final) | — | U-PANELS; the carrier's FINAL Bay keeps its line |
+| the PAR "Default glideslope" setting (`parGpa`), "Elevation tolerance ±" (`parTolEl`), the lateral offset in feet | the **approach values** TDZE, TCH, DH, GPA set by the PAR controller per runway end (`SetParApproach`, `parValues`); **Elevation tolerance above / below** (`parTolElHigh`, `parTolElLow`); the azimuth in degrees | Order 8200.1D (the 0.5° lower safe limit) | ADRs 0123, 0130 |
+| a transit "release" held on the airspace, Resume ops, pass marks | a **transit**: Request transit / Approve transit / Decline transit / Acknowledge, decided by whoever separates the airspace's users; its restrictions are ordinary assignments; grey marks `TRANSIT <name>` (REQ, DECLINED) | JO 7110.65BB para 9-3-1, 9-3-4; JO 7610.14A para 8-1-9 b.1 | ADR 0128 supersedes 0127; ADR 0136 adds Acknowledge |
+| — (new) | **`COORD <name>`**: a grey mark on a flight filed through an active MOA, warning, restricted, range or danger area that nobody has coordinated (no transit, no entry approval) | ours | ADR 0136, `efsp-alerts.airspaceCoordinate` |
+| — (new) | **jurisdiction area** (airspace kind `JURISDICTION`): whose airspace an aircraft is in. **LTAG CTR (control zone)** is the tower's, never bare "CTR" (the Center Position); the **RAPCON** AP's and PAR's; the **carrier area** every carrier Position's | JO 7110.65BB para 2-1-15 c "area of jurisdiction"; AIP Türkiye | ADR 0125 |
+| — (new) | **hand EAT** (`SetEat`, `eatOverrideUtc`): an EAT the Marshal assigned by hand, underlined until cleared | CV NATOPS 6.4.4, 6.4.9 | ADR 0137 |
+| "the map shows ground vehicles", the airport radar's `seesGround`, "Hide ground units" | **no radar presents a ground vehicle** | — (no surface movement radar is modelled) | ADR 0121 |
+| MapTiler terrain-RGB tiles, `webp-lossless.js`, `retryErroredTiles` | the **DCS terrain cache** (`<Theater>-<spacing>m.terrain`, `npm run terrain:build`); bundled glyphs; the **fallback basemap** (OpenFreeMap) | DCS `land.getHeight` | ADR 0133; U-GLYPHS |
+

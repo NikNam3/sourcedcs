@@ -63,6 +63,15 @@ in the asar (`app/**/*`; `tests/packaging-config.test.js` checks it), while `app
 - The Playwright specs reach the client's modules through `e2e/helpers/modules.js` (`window.crc.<module>.<name>`, made with
   dynamic imports of the same module URLs); nothing in the client puts its names on `window`.
 
+## The map
+
+The scope's label glyphs are bundled (`app/public/fonts/`, served at `/fonts/` by `app/glyph-route.js`), so no label and no
+track depends on MapTiler. The basemap is MapTiler's, with the key crc-sync serves after login (`GET /api/client-config`);
+when MapTiler refuses (401/403/429), is down (5xx) or unreachable, `basemap-fallback.js` re-points the style's one vector
+source at OpenFreeMap's keyless TileJSON and shows a grey FALLBACK BASEMAP note (NO BASEMAP if that fails too), until a new
+key arrives. Elevation contours and the radar-debug line of sight read crc-sync's DCS terrain grid (`terrain-grid.js`,
+`GET /api/terrain/grid`), not MapTiler. The e2e harness answers `tiles.openfreemap.org` with 503, so no run leaves the machine.
+
 ## Packaging
 
 ```bash
@@ -108,7 +117,7 @@ There is no build step that keeps this copy in sync automatically — a bugfix t
 crc-desktop/scripts/sync-lxsrs.sh
 ```
 
-and commit whatever it changes under `python-pkg/`, alongside your `lxsrs_v2` change. To just check whether the two have drifted (e.g. someone edited `lxsrs_v2` and forgot to re-vendor) without changing anything, run `crc-desktop/scripts/check-lxsrs-sync.sh`. Neither script is currently wired into CI or `npm test`: `crc-desktop-release.yml`'s build matrix includes `windows-latest`, and this check depends on `bash`/`python3`/`pip3` being present and on `PATH`, which isn't guaranteed there — so for now this is a manual step, not an automated gate.
+and commit whatever it changes under `python-pkg/`, alongside your `lxsrs_v2` change. **`npm test` checks the two copies are identical** (`tests/lxsrs-copies-identical.test.mjs`: a plain Node tree diff of the `*.py` files, ignoring `__pycache__`, so it runs on the Windows release leg too) and fails naming every file that differs or exists in only one copy. `crc-desktop/scripts/check-lxsrs-sync.sh` stays as the deeper manual check: it pip-installs `lxsrs_v2` into a scratch dir and diffs that, so it also catches a packaging change a tree diff cannot see; it needs `bash`/`python3`/`pip3` on `PATH`, which `windows-latest` does not guarantee, so it is not in CI.
 
 ## Release / autoupdate
 
@@ -129,3 +138,4 @@ Installed apps autoupdate via `electron-updater` (`main.js`) against the generic
 | `wsPort` | Port `app/server.js` (the bundled local Node server) listens on |
 | `sourcedcsWebUrl` | Used for flight-plan lookups proxied through the local server |
 | `freqs` / `txFreq` | Default monitored/transmit radio frequencies |
+| `defaultFreq` | Frequency a radio added in the SRS panel tunes to (passed to `lxsrs_v2` as `--default-freq`); unset, it starts untuned. No station frequency is hardcoded in the bridge |
