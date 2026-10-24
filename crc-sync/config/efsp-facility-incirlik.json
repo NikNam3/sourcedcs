@@ -24,6 +24,10 @@
     "AP": "A",
     "PAR": "P"
   },
+  "airportSurfacePositions": [
+    "GC",
+    "LC"
+  ],
   "consolidation": {
     "CD": ["GC", "LC", "AP"],
     "GC": ["LC", "AP"],

@@ -203,6 +203,13 @@ test('docs/adr/0088: the snapshot carries every Facility\'s position letters for
   assert.equal(snapshot.ack.positionLetters.TACTICAL.TAC_C2, 'M');
 });
 
+test('H162: the snapshot carries every Facility\'s airport-surface Positions', () => {
+  const ctx = makeCtx();
+  const snapshot = handleMessage(ctx, CTR_SESSION, { type: 'efsp-resync', facilityId: 'CENTER', lastBoardSeq: -999999 }, noopPersist);
+  assert.deepEqual(snapshot.ack.airportSurfacePositions.INCIRLIK, ['GC', 'LC']);
+  assert.deepEqual(snapshot.ack.airportSurfacePositions.CENTER, []);
+});
+
 test('efsp-set-positions is facility-scoped — holding CTR at CENTER does not touch INCIRLIK\'s PositionStore', () => {
   const ctx = makeCtx();
   const result = handleMessage(ctx, CTR_SESSION, { type: 'efsp-set-positions', facilityId: 'CENTER', signedOn: ['CTR'] }, noopPersist);

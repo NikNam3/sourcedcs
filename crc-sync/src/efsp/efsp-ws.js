@@ -705,6 +705,8 @@ function _fullSnapshotMessage(ctx) {
     // The character each Position's owned contacts carry on an ATC scope
     // (docs/adr/0088). Config, so it rides the snapshot only.
     positionLetters: facilityConfig.allPositionLetters ? facilityConfig.allPositionLetters() : {},
+    // The Positions whose controller sees the airport surface (H162), per Facility. Config, snapshot only.
+    airportSurfacePositions: facilityConfig.allAirportSurfacePositions ? facilityConfig.allAirportSurfacePositions() : {},
     positions, bays, strips,
     flightDataList: flightDataStore.getAll(),
     ...familySnapshots(ctx),
