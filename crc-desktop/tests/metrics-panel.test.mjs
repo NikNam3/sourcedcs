@@ -6,7 +6,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import './helpers/client-env.mjs';
-import { renderMetricsModel, renderTrafficModel, metricsTrend, METRICS_ROWS } from '../app/public/js/panels/metrics-panel.js';
+import { renderMetricsModel, renderTrafficModel, renderServerModel, metricsTrend, METRICS_ROWS } from '../app/public/js/panels/metrics-panel.js';
 import domStub from './helpers/dom-stub.js';
 import { freshGraph } from './helpers/fresh-graph.mjs';
 
@@ -333,7 +333,12 @@ test('the panel renders seven metric rows into the DOM', async () => {
   assert.equal(sent[0].missionSession, null);
   sandbox.onEfspMetrics({ type: 'efsp-metrics', requestId: 'stale', ok: true, metrics: freshBody() });
   assert.equal(descendants(els['metrics-content']).filter(c => c.dataset && c.dataset.metric).length, 0, 'an answer to an older request is ignored');
-  sandbox.onEfspMetrics({ type: 'efsp-metrics', requestId: 'req-1', ok: true, metrics: collectingBody(), trafficCount: trafficBody() });
+  sandbox.onEfspMetrics({ type: 'efsp-metrics', requestId: 'req-1', ok: true, metrics: collectingBody(), trafficCount: trafficBody(), serverResources: serverBody({ warn: { cpu: true, eventLoop: false, memory: false, tickers: [] } }) });
+  const serverRows = descendants(els['metrics-content']).filter(c => c.dataset && c.dataset.server);
+  assert.deepEqual(serverRows.map(r => [r.dataset.server, r.className]), [
+    ['cpu', 'metrics-server-row metrics-tone-warn'], ['memory', 'metrics-server-row metrics-tone-muted'],
+    ['eventLoop', 'metrics-server-row metrics-tone-muted'], ['load', 'metrics-server-row metrics-tone-muted'], ['tickers', 'metrics-server-row metrics-tone-muted'],
+  ], 'the Server section: grey, amber only where the server says so');
   const rows = descendants(els['metrics-content']).filter(c => c.dataset && c.dataset.metric);
   assert.deepEqual(rows.map(r => r.dataset.metric), METRICS_ROWS.map(r => r.id));
   const text = descendants(els['metrics-content']).map(c => c.textContent).join('\n');
@@ -344,4 +349,56 @@ test('the panel renders seven metric rows into the DOM', async () => {
     document.getElementById = savedGetElementById;
     crypto.randomUUID = savedRandomUUID;
   }
+});
+
+// ── the Server section (docs/adr/0141): crc-sync's server-resources.js snapshot ──
+
+function serverBody(over = {}) {
+  return {
+    sampledAt: NOW, windowMs: 60000, samples: 12,
+    cpu: { pct: 12.5, maxPct: 30 },
+    memory: { rssMb: 210.4, heapUsedMb: 80.1, heapTotalMb: 120, externalMb: 4 },
+    eventLoop: { p50Ms: 10.2, p99Ms: 22, maxMs: 40 },
+    tickers: [
+      { name: 'hub-feed', periodMs: 500, runs: 120, meanMs: 1.2, maxMs: 6, busyPct: 0.2 },
+      { name: 'coverage', periodMs: 250, runs: 240, meanMs: 0.3, maxMs: 2, busyPct: 0.1 },
+      { name: 'airport-weather', periodMs: 60000, runs: 1, meanMs: 0.1, maxMs: 0.1, busyPct: 0 },
+    ],
+    sessions: 3, tracks: 20,
+    thresholds: { cpuPct: 80, eventLoopP99Ms: 100, rssMb: 1024, tickMaxMs: 100 },
+    warn: { cpu: false, eventLoop: false, memory: false, tickers: [] },
+    ...over,
+  };
+}
+
+test('server: every number grey when nothing is past its threshold; the window and the busiest ticker said', () => {
+  const m = renderServerModel(serverBody());
+  assert.equal(m.ok, true);
+  assert.equal(m.window, 'last 60 s');
+  assert.deepEqual(m.rows.map(r => [r.id, r.tone, r.value]), [
+    ['cpu', 'muted', '12.5 % · worst sample 30 %'],
+    ['memory', 'muted', '210.4 MB resident · heap 80.1 of 120 MB'],
+    ['eventLoop', 'muted', 'p50 10.2 ms · p99 22 ms · max 40 ms'],
+    ['load', 'muted', '3 sessions · 20 tracks'],
+  ]);
+  assert.deepEqual(m.summary, { tone: 'muted', text: 'busiest hub-feed 0.2 % · worst run 6 ms' });
+  assert.deepEqual(m.tickers.map(t => [t.name, t.every, t.tone]), [['hub-feed', '500 ms', 'muted'], ['coverage', '250 ms', 'muted'], ['airport-weather', '60 s', 'muted']]);
+});
+
+test('server: amber exactly where the server\'s warn names it, never judged on the client', () => {
+  const m = renderServerModel(serverBody({
+    cpu: { pct: 95, maxPct: 99 }, // the client does not compare: warn.cpu is false, so grey
+    warn: { cpu: false, eventLoop: true, memory: true, tickers: ['coverage'] },
+  }));
+  assert.deepEqual(m.rows.map(r => r.tone), ['muted', 'warn', 'warn', 'muted']);
+  assert.deepEqual(m.summary, { tone: 'warn', text: 'over 100 ms in one run: coverage' });
+  assert.deepEqual(m.tickers.map(t => t.tone), ['muted', 'warn', 'muted']);
+  assert.equal(m.rows[2].title, 'amber past p99 100 ms');
+});
+
+test('server: no sample yet reads as words, not zeros; an older crc-sync without the block is said once', () => {
+  const m = renderServerModel(serverBody({ cpu: null, memory: null, eventLoop: null, tickers: [] }));
+  assert.deepEqual(m.rows.slice(0, 3).map(r => r.value), ['no sample yet', 'no sample yet', 'no sample yet']);
+  assert.deepEqual(m.summary, { tone: 'muted', text: 'no ticker has run yet' });
+  assert.deepEqual(renderServerModel(undefined), { ok: false, text: 'not reported by this crc-sync' });
 });

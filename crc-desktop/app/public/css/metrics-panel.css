@@ -90,6 +90,15 @@
 .metrics-tone-muted.metrics-reconciliation { color: var(--efsp-muted); }
 .metrics-reconciliation { margin: 4px 0; }
 
+/* Server (docs/adr/0141): grey numbers, amber (--efsp-attn) only where crc-sync says one is past its threshold. */
+.metrics-server { margin-top: 12px; border-top: 1px solid var(--efsp-line-2); padding-top: 4px; }
+.metrics-server-row { display: flex; flex-wrap: wrap; gap: 2px 10px; padding: 2px 0; color: var(--efsp-muted); }
+.metrics-server-label { min-width: 150px; }
+.metrics-server-value { overflow-wrap: anywhere; }
+.metrics-tone-warn.metrics-server-row,
+.metrics-server-tickers tr.metrics-tone-warn td { color: var(--efsp-attn); }
+.metrics-server-tickers td { color: var(--efsp-muted); }
+
 /* Narrow dock: the two windows sit under the metric's name. */
 @container (max-width: 520px) {
   .metrics-row { grid-template-columns: 1fr 1fr; }

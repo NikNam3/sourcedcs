@@ -31,6 +31,10 @@ import { EFSP_METRICS_LIMITS } from './efsp/efsp-metrics-client.js';
 //   - Times are HHMMZ on the mission clock (H11), from the bucket keys.
 //
 // Polls only while the panel is on screen: on show, then every 30 s.
+//
+// The Server section (docs/adr/0141) is what crc-sync itself costs: CPU, memory, event-loop delay and its tickers, over
+// the server's short rolling window, from the same answer (`serverResources`). Grey numbers; amber only where the server
+// says a number is past its tuning file's threshold. Like the rest, the client judges nothing itself.
 
 export const METRICS_POLL_MS = 30 * 1000;
 const METRICS_VISIBILITY_TICK_MS = 5 * 1000;
@@ -383,12 +387,53 @@ export function renderTrafficModel(body, facilityId) {
   };
 }
 
+/**
+ * The efsp-metrics answer's `serverResources` (crc-sync's server-resources.js) → the Server section. Pure. Tone is
+ * 'muted' (grey, the normal case), or 'warn' (amber) only where the server's `warn` names it.
+ */
+export function renderServerModel(sr) {
+  if (!sr || typeof sr !== 'object') return { ok: false, text: 'not reported by this crc-sync' };
+  const w = sr.warn || {};
+  const th = sr.thresholds || {};
+  const warnTickers = Array.isArray(w.tickers) ? w.tickers.filter(n => typeof n === 'string') : [];
+  const tone = (bad) => (bad === true ? 'warn' : 'muted');
+  const ms = (x) => (Number.isFinite(x) ? `${x} ms` : '—');
+  const cpu = sr.cpu, mem = sr.memory, loop = sr.eventLoop;
+  const rows = [
+    { id: 'cpu', label: 'CPU (one core = 100 %)', tone: tone(w.cpu), title: Number.isFinite(th.cpuPct) ? `amber past ${th.cpuPct} %` : null,
+      value: cpu ? `${cpu.pct} % · worst sample ${cpu.maxPct} %` : 'no sample yet' },
+    { id: 'memory', label: 'Memory', tone: tone(w.memory), title: Number.isFinite(th.rssMb) ? `amber past ${th.rssMb} MB resident` : null,
+      value: mem ? `${mem.rssMb} MB resident · heap ${mem.heapUsedMb} of ${mem.heapTotalMb} MB` : 'no sample yet' },
+    { id: 'eventLoop', label: 'Event-loop delay', tone: tone(w.eventLoop), title: Number.isFinite(th.eventLoopP99Ms) ? `amber past p99 ${th.eventLoopP99Ms} ms` : null,
+      value: loop ? `p50 ${ms(loop.p50Ms)} · p99 ${ms(loop.p99Ms)} · max ${ms(loop.maxMs)}` : 'no sample yet' },
+    { id: 'load', label: 'Carrying', tone: 'muted', title: null,
+      value: `${_plural(Number.isFinite(sr.sessions) ? sr.sessions : 0, 'session')} · ${_plural(Number.isFinite(sr.tracks) ? sr.tracks : 0, 'track')}` },
+  ];
+  const tickers = (Array.isArray(sr.tickers) ? sr.tickers : []).filter(t => t && typeof t.name === 'string').map(t => ({
+    name: t.name,
+    every: Number.isFinite(t.periodMs) ? (t.periodMs >= 1000 ? `${t.periodMs / 1000} s` : `${t.periodMs} ms`) : '—',
+    runs: Number.isFinite(t.runs) ? t.runs : 0,
+    mean: ms(t.meanMs), worst: ms(t.maxMs),
+    busy: Number.isFinite(t.busyPct) ? `${t.busyPct} %` : '—',
+    tone: warnTickers.includes(t.name) ? 'warn' : 'muted',
+  }));
+  const busiest = tickers[0];
+  const summary = !busiest ? { tone: 'muted', text: 'no ticker has run yet' } : {
+    tone: warnTickers.length ? 'warn' : 'muted',
+    text: warnTickers.length
+      ? `over ${ms(th.tickMaxMs)} in one run: ${warnTickers.join(', ')}`
+      : `busiest ${busiest.name} ${busiest.busy} · worst run ${busiest.worst}`,
+  };
+  const secs = Number.isFinite(sr.windowMs) ? Math.round(sr.windowMs / 1000) : null;
+  return { ok: true, window: secs === null ? '' : `last ${secs} s`, rows, tickers, summary };
+}
+
 // ── the panel (DOM) ────────────────────────────────────────────────────────
 
 const _metricsPanel = {
   root: null, content: null,
   latestRequestId: null, missionSession: null, facilityId: null, showPerPosition: false,
-  body: null, traffic: null, error: null, lastRequestAt: null, wasVisible: false, timer: null,
+  body: null, traffic: null, serverResources: null, showTickers: false, error: null, lastRequestAt: null, wasVisible: false, timer: null,
 };
 
 function _el(tag, cls, text) {
@@ -535,7 +580,49 @@ function renderMetricsPanel() {
   }
 
   _renderTrafficSection(content);
+  _renderServerSection(content);
+}
 
+function _renderServerSection(content) {
+  const section = _el('div', 'metrics-server');
+  const m = renderServerModel(_metricsPanel.serverResources);
+  section.appendChild(_el('div', 'metrics-section-title', `Server (crc-sync)${m.ok && m.window ? ` · ${m.window}` : ''}`));
+  if (!m.ok) {
+    section.appendChild(_el('div', 'efsp-empty', m.text));
+    content.appendChild(section);
+    return;
+  }
+  for (const r of m.rows) {
+    const line = _el('div', `metrics-server-row metrics-tone-${r.tone}`);
+    line.dataset.server = r.id;
+    line.appendChild(_el('span', 'metrics-server-label', r.label));
+    line.appendChild(_el('span', 'metrics-server-value', r.value));
+    if (r.title) line.title = r.title;
+    section.appendChild(line);
+  }
+  const sum = _el('div', `metrics-server-row metrics-tone-${m.summary.tone}`);
+  sum.dataset.server = 'tickers';
+  sum.appendChild(_el('span', 'metrics-server-label', 'Tickers'));
+  sum.appendChild(_el('span', 'metrics-server-value', m.summary.text));
+  section.appendChild(sum);
+  if (m.tickers.length) {
+    const toggle = _el('button', 'metrics-toggle', `${_metricsPanel.showTickers ? '▾' : '▸'} Every ticker`);
+    toggle.addEventListener('click', () => { _metricsPanel.showTickers = !_metricsPanel.showTickers; renderMetricsPanel(); });
+    section.appendChild(toggle);
+    if (_metricsPanel.showTickers) {
+      const table = _el('table', 'metrics-subtable metrics-server-tickers');
+      const head = _el('tr');
+      for (const h of ['Ticker', 'Every', 'Runs', 'Mean', 'Worst', 'Busy']) head.appendChild(_el('th', null, h));
+      table.appendChild(head);
+      for (const t of m.tickers) {
+        const tr = _el('tr', `metrics-tone-${t.tone}`);
+        for (const v of [t.name, t.every, t.runs, t.mean, t.worst, t.busy]) tr.appendChild(_el('td', null, String(v)));
+        table.appendChild(tr);
+      }
+      section.appendChild(table);
+    }
+  }
+  content.appendChild(section);
 }
 
 function _defaultTrafficFacility() {
@@ -620,6 +707,7 @@ export function onEfspMetrics(msg) {
     _metricsPanel.error = null;
     _metricsPanel.body = msg.metrics || null;
     _metricsPanel.traffic = msg.trafficCount || null;
+    _metricsPanel.serverResources = msg.serverResources || null;
   }
   renderMetricsPanel();
 }
