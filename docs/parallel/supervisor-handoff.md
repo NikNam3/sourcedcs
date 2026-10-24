@@ -33,7 +33,7 @@ surface). The human's live test on 2026-10-20 passed ("very successful, no bugs 
 
 **Standing rules from the human (this period):** every command runs under `nice -n 19`; sharded Playwright with **at
 most 2 lanes** (`--lanes 1,2`); up to 4 agents, Opus; questions and the **lane queue** live on the Decision Desk
-(https://claude.ai/artifact/A3gizEgbwfqCnnU831G4Y7, collections `questions`, `answers`, `queue`; source
+(https://claude.ai/artifact/FpddWVPwTzbpnmSJhW3vdt (new, private; old A3giz… is the public archive), collections `questions`, `answers`, `queue`; source
 `docs/parallel/decision-desk.html`): update the `queue` rows (status running/next/queued/done) whenever a lane starts or
 merges.
 
@@ -274,7 +274,7 @@ file only holds what you need now.
 **Do this first:**
 1. Read `docs/parallel/live-test-2026-10-11.md` (the human's findings T1–T31 with causes and rulings) and
    `docs/parallel/next/LIVE-TEST-FIXES.md` (the lanes, order, dependencies, ADR numbers 0117–0121).
-2. Read the Decision Desk answers (https://claude.ai/artifact/A3gizEgbwfqCnnU831G4Y7, `ArtifactData` list the whole
+2. Read the Decision Desk answers (https://claude.ai/artifact/FpddWVPwTzbpnmSJhW3vdt (new, private; old A3giz… is the public archive), `ArtifactData` list the whole
    `answers` collection, `limit: 1000`; questions **LT-Q1…LT-Q5**, round 8). Settle them into `decisions.md` (H133+),
    mark them settled.
 3. Dispatch **LT-RESEARCH** (`docs/parallel/next/LT-RESEARCH.md`, Opus, docs only) first. Then the lanes in the order of
