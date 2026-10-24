@@ -1367,6 +1367,7 @@ class Driver {
     await this.checkpoint();
     const r = await this.call('sample', { heavy: true });
     this.recordSample(r.sample);
+    this.finalResources = r.sample.resources || null; // docs/adr/0141, info only
     const consoleStats = (await this.call('console')).console;
     this.logRecon = await this.ledger.reconcileLog(path.join(this.o.stateDir, 'mutations.jsonl'));
     await this.host.shutdown();

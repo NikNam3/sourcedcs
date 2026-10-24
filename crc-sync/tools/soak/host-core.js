@@ -289,6 +289,8 @@ function createHost(env, { stateDir }) {
       const size = (p) => { try { return fs.statSync(p).size; } catch { return 0; } };
       res.boardFileBytes = size(BOARD_SNAPSHOT_PATH);
       res.mutationLogBytes = size(MUTATION_LOG_PATH);
+      // docs/adr/0141: what each ticker cost this host lifetime (the host never samples, so its one window is the whole life).
+      res.resources = app.serverResources.snapshot();
     }
     return res;
   }
@@ -372,7 +374,8 @@ function createHost(env, { stateDir }) {
         }
         if (what.has('metrics')) ticker['efsp-metrics']();
         if (what.has('heartbeat')) {
-          for (const [ws, session] of hub._sessions) hub._tick(ws, session);
+          // Timed as the hub's own 500 ms feed tick is (docs/adr/0141), so the report's serverResources names it.
+          app.serverResources.time('hub-feed', () => { for (const [ws, session] of hub._sessions) hub._tick(ws, session); });
         }
         break;
       }

@@ -189,6 +189,8 @@ function build(d, meta) {
     },
     alerts: { ...s.alerts, alertsMsgs: s.alertsMsgs, obligationAlerts: s.obligationAlerts },
     hostConsole: d.consoleStats,
+    // docs/adr/0141: the last host lifetime's ticker cost and memory, from createApp's serverResources. Info, never a gate.
+    serverResources: d.finalResources || null,
   };
 
   // ── hypotheses H1-H8 (briefing §5.9) ─────────────────────────────────
@@ -274,6 +276,8 @@ function summary(rep, outDir) {
   row('snapshot bytes start->end', `${mem.snapshotBytes.start}->${mem.snapshotBytes.end}`, 'info');
   row('codes allocated (max)', mem.maxAllocatedCodes, '<= 2048');
   row('latency worst p99 / persist', `${rep.latency.worstP99} / ${rep.latency.worstPersistP99} ms`, '<= 200 (warn 50)');
+  const sr = rep.serverResources;
+  if (sr && sr.tickers) row('busiest tickers (last life)', sr.tickers.slice(0, 3).map(x => `${x.name} ${x.busyPct}% max ${x.maxMs} ms`).join(', ') || '-', 'info');
   row('flights started/done/aborted', `${t.flightsStarted}/${t.flightsCompleted}/${t.flightsAborted}`, 'info');
   row('live Strips min/max/end', `${t.liveStrips.min}/${t.liveStrips.max}/${t.liveStrips.end}`, 'stationary');
   row('orphans', t.orphans, 'warn > 0');
