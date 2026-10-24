@@ -1,5 +1,25 @@
 # Supervisor handoff
 
+## RELAUNCH HERE (2026-10-24): final test round 2 built and merged, 295/295
+
+Read H163, H164 and S-ARCH-91–100 in `decisions.md`. Merged into `efsp-wp5-correlation` today: U-SURFACE (H162),
+U-LTAG-COURSE (DCS's ruler is grid-referenced; Incirlik runway/PAR course fixed 056 → 052.7 true), U-LABEL-MENU (ADR 0140),
+U-PERF (ADR 0141), U-PAR-FT (ADR 0139), U-FT-SMALL, U-FT-FIXES. Gates on the tip: crc-sync 2951, crc-desktop 1470,
+walk 24/24, freeze 58/58, selfcheck PASS, wire 2, **sharded Playwright 295/295**. Only other worktree:
+`../sourcedcs-U-ROLE-POSITIONS` (held, S-ARCH-85).
+
+**Decision Desk moved** (S-ARCH-92): https://claude.ai/artifact/FpddWVPwTzbpnmSJhW3vdt (slug
+`780678dd-c784-45fd-af24-56aee794bbaf`, private, db declared). The old Desk went public; the artifact db tools refuse
+writes to public artifacts, so it is the read-only archive of rounds 1–14. **Open there:** FT-Q9 (magnetic reference;
+rec. keep true + WMM; the cockpit HSI check on LTAG RWY 05 decides), FT-Q10 (owner's label click), FT-Q11 (which
+"coverage"; (c) built: revert `0b793660` if not), FT-Q12 (PAR azimuth pan), FT-Q13 (final-heading display). Optional
+human check: `CustomService/Eval` of `Airbase.getByName("Incirlik"):getRunways()` to confirm 052.7 against DCS's own runway.
+
+**Next:** settle the open answers (small lanes if any change something), then the release checklist (RUNBOOK
+"v2 launch (round 2 …): before the deploy", now incl. `alerting.json` `headingGraceSec`, the stale Incirlik facility copy,
+`server-resources.json`). Backlog: rule-9 literals for U-ROLE-POSITIONS (S-ARCH-97/99 findings), perf hotspots in
+`v3-backlog.md`.
+
 ## RELAUNCH HERE (2026-10-22): v2 complete, in final testing
 
 Read S-ARCH-81–89 and H158–H161 in `decisions.md`. Everything for v2 (H159: EFSP, carrier prototype, PAR, SFA) is merged
