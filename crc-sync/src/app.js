@@ -228,7 +228,7 @@ function createApp(deps = {}) {
   // ── Tickers (app/tickers.js) and the feed's event handlers (app/feed-handlers.js) ─────────────────────
   // Every ticker is timed (server-resources.js), the soak's included: it drives these same ticks by name.
   const tickers = buildTickers({
-    wsHub, efsp, trackStore, collabStore, atisStore, surveillance, theaterContext, missionClock, picture: radarPicture, monitors,
+    wsHub, efsp, trackStore, collabStore, atisStore, surveillance, theaterContext, missionClock, wallClock: WALL_CLOCK, picture: radarPicture, monitors,
     airportWeather, airspaceCalendar, archive, missionState,
   }).map(serverResources.timed);
   const feed = createFeedHandlers({
