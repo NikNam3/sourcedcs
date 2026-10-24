@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 const wallFollows = (m) => { const raw = m.tick.bind(m); m.tick = (t, w = t) => raw(t, w); return m; };
 
 // docs/adr/0058 — conformance: only what is wrong is ever reported.
-const { evaluateConformance, headingDiff, FPM_PER_MS, MS_PER_KT } = await import('../src/efsp/conformance.js');
+const { evaluateConformance, headingDiff, headingGraceSec, FPM_PER_MS, MS_PER_KT } = await import('../src/efsp/conformance.js');
 const { loadAlertingConfig } = await import('../src/alerting-config.js');
 const DEFAULTS = loadAlertingConfig();
 const { indicatedAltFt } = await import('../src/altimetry.js');
@@ -39,18 +39,92 @@ test('a flight with no clearance, or on the ground, never alerts', () => {
 
 test('heading: off by more than 5° after the grace and 10 s persistence, and clears when back on', () => {
   const hdg = { parsed: 50, at: 0 };
-  // Still turning inside the 30 s grace: nothing.
-  assert.deepEqual(run([[0, { hdg, course: 120 }], [25, { hdg, course: 90 }]]), []);
-  // Off 22° from 30 s on; alerts once it has been off for 10 s.
-  const steps = [[0, { hdg, course: 120 }], [31, { hdg, course: 72 }], [40, { hdg, course: 72 }]];
+  // A 70° turn at 250 kt: the 25° bank limit (2.03°/s) is slower than standard rate, so 34.4 s + 15 s margin.
+  const graceSec = 70 / (1091 * Math.tan(25 * Math.PI / 180) / 250) + cfg.headingGraceMarginSec;
+  assert.ok(Math.abs(headingGraceSec(70, FAST, cfg) - graceSec) < 1e-9);
+  // Turning inside the grace: nothing.
+  assert.deepEqual(run([[0, { hdg, course: 120 }], [5, { hdg, course: 110 }], [10, { hdg, course: 100 }], [15, { hdg, course: 90 }]]), []);
+  // Turned to 72° (22° off) by 20 s and then still turning slowly enough to keep shrinking until the grace ends;
+  // off from the grace's end, alerts once it has been off for 10 s.
+  const g = Math.ceil(graceSec);
+  const steps = [[0, { hdg, course: 120 }], [10, { hdg, course: 100 }], [20, { hdg, course: 90 }], [30, { hdg, course: 80 }], [40, { hdg, course: 74 }], [g, { hdg, course: 72 }], [g + 9, { hdg, course: 72 }]];
   assert.deepEqual(run(steps), []);
-  const late = run([...steps, [41, { hdg, course: 72 }]]);
+  const late = run([...steps, [g + 10, { hdg, course: 72 }]]);
   assert.deepEqual(kinds(late), ['HEADING']);
   assert.equal(late[0].assigned, 50);
   assert.equal(late[0].actual, 72);
-  assert.deepEqual(run([...steps, [41, { hdg, course: 72 }], [42, { hdg, course: 53 }]]), [], '3° off is conforming');
+  assert.deepEqual(run([...steps, [g + 10, { hdg, course: 72 }], [g + 11, { hdg, course: 53 }]]), [], '3° off is conforming');
   // Captured early ends the grace: back off course at 10 s alerts from 20 s.
   assert.deepEqual(kinds(run([[0, { hdg, course: 51 }], [10, { hdg, course: 80 }], [20, { hdg, course: 80 }]])), ['HEADING']);
+});
+
+// ── the heading grace scales with the turn, and the turn must keep going (H163) ──
+const SLOW = 160 * MS_PER_KT; // slow enough that standard rate needs less than 25° of bank
+
+/**
+ * One flight told to fly `hdg`, starting on `from`, turning at `rate` °/s the short way (or `dir` +1 right / -1 left)
+ * until `stopAfterDeg` of turn (default: until on the heading), one evaluation a second. Returns every alert seen.
+ */
+function turn({ from, hdg, rate = 3, dir, stopAfterDeg, speed = SLOW, seconds = 200 }) {
+  const mem = {};
+  const short = ((hdg - from + 540) % 360) - 180; // signed, + is right
+  const d = dir || Math.sign(short) || 1;
+  const want = stopAfterDeg ?? (d === Math.sign(short) ? Math.abs(short) : 360 - Math.abs(short));
+  const seen = [];
+  for (let t = 0; t <= seconds; t++) {
+    const turned = Math.min(want, rate * t);
+    const course = ((from + d * turned) % 360 + 360) % 360;
+    const alerts = evaluateConformance({ hdg: { parsed: hdg, at: 0 }, alt: null, course, groundSpeedMs: speed, verticalSpeedMs: 0, altFt: 10000 }, mem, t * S, cfg);
+    for (const a of alerts) seen.push({ t, ...a });
+  }
+  return seen;
+}
+
+test('the grace is the turn at standard rate plus the margin; 30°, 90° and 180° standard-rate turns never alert', () => {
+  assert.equal(headingGraceSec(180, SLOW, cfg), 180 / 3 + cfg.headingGraceMarginSec);
+  assert.equal(headingGraceSec(30, SLOW, cfg), 10 + cfg.headingGraceMarginSec);
+  for (const [from, hdg] of [[20, 50], [360, 90], [90, 270], [10, 190]]) {
+    assert.deepEqual(turn({ from, hdg }), [], `${from} → ${hdg}`);
+  }
+  // Left turns too.
+  assert.deepEqual(turn({ from: 90, hdg: 360 }), []);
+});
+
+test('a fast jet turns at 25° of bank, not standard rate, and the grace follows: a 180° at 450 kt never alerts', () => {
+  const fast = 450 * MS_PER_KT;
+  const rate = 1091 * Math.tan(25 * Math.PI / 180) / 450; // ≈ 1.13°/s
+  assert.ok(Math.abs(headingGraceSec(180, fast, cfg) - (180 / rate + cfg.headingGraceMarginSec)) < 1e-9);
+  assert.deepEqual(turn({ from: 90, hdg: 270, rate, speed: fast, seconds: 300 }), []);
+});
+
+test('levelling off at 120° of a 180° turn alerts headingPersistSec after the turn stopped, inside the grace', () => {
+  const seen = turn({ from: 90, hdg: 270, dir: 1, stopAfterDeg: 120 });
+  assert.ok(seen.length > 0, 'it alerts');
+  const first = seen[0];
+  assert.equal(first.kind, 'HEADING');
+  assert.equal(first.t, 40 + cfg.headingPersistSec, 'stopped at 40 s, alerts 10 s later');
+  assert.ok(first.t < headingGraceSec(180, SLOW, cfg), 'well inside the 75 s grace');
+  assert.equal(first.since, 40 * S, '`since` is when the turn last progressed');
+  assert.equal(first.actual, 210);
+});
+
+test('turning the wrong way alerts headingPersistSec after first sight', () => {
+  const seen = turn({ from: 20, hdg: 50, dir: -1 });
+  assert.equal(seen[0].kind, 'HEADING');
+  assert.equal(seen[0].t, cfg.headingPersistSec);
+  // A 170° turn taken the long way round only looks wrong until it passes 180°, then shrinks again: no alert.
+  assert.deepEqual(turn({ from: 90, hdg: 260, dir: -1 }), []);
+});
+
+test('a turn that stalls and then resumes clears the alert while it is still turning in the grace', () => {
+  const mem = {};
+  const hdg = { parsed: 270, at: 0 };
+  const at = (t, course) => evaluateConformance({ hdg, alt: null, course, groundSpeedMs: SLOW, verticalSpeedMs: 0, altFt: 10000 }, mem, t * S, cfg);
+  for (let t = 0; t <= 10; t++) at(t, 90 + 3 * t); // to 120
+  let last = [];
+  for (let t = 11; t <= 21; t++) last = at(t, 120); // stalled 11 s
+  assert.deepEqual(kinds(last), ['HEADING']);
+  assert.deepEqual(at(22, 123), [], 'turning again');
 });
 
 test('descend when ready: told to descend and still level is conforming, however long it takes', () => {
@@ -119,8 +193,9 @@ test('the monitor reads correlation, track and clearance, and reports a flight o
   });
   wallFollows(monitor);
   monitor.tick(0); // first sight of the clearance: the wall-clock grace starts here (docs/adr/0096)
-  assert.equal(monitor.tick(31 * S), false, 'deviating, but not for 10 s yet');
-  assert.equal(monitor.tick(41 * S), true);
+  // The track holds 090 and never turns toward 050: the turn-continuity check (H163) alerts 10 s after first sight.
+  assert.equal(monitor.tick(9 * S), false, 'not turning, but not for 10 s yet');
+  assert.equal(monitor.tick(10 * S), true);
   assert.deepEqual(monitor.getAll().map(r => [r.flightDataId, r.alerts[0].kind]), [['f1', 'HEADING']]);
   track.course = 50;
   assert.equal(monitor.tick(42 * S), true, 'back on heading: the flight drops off the list');

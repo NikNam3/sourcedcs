@@ -13,8 +13,18 @@
 //
 //   HEADING     only while an HDG is assigned. Course over ground more than
 //               `headingToleranceDeg` off it for `headingPersistSec`, after a
-//               grace of `headingGraceSec` for the turn (which ends early once
-//               the aircraft is on the heading). Both sides are MAGNETIC
+//               grace for the turn (which ends early once the aircraft is on the
+//               heading). The grace scales with the turn (H163): the time to turn
+//               the assigned amount, the short way round (the entry carries no
+//               LEFT/RIGHT), at `headingTurnRateDegPerSec` (standard rate, 3°/s)
+//               or at `headingTurnMaxBankDeg` of bank, whichever is slower (as
+//               the AIM's holding turns, 5-3-8: 3°/s, 30° of bank, or 25° with a
+//               flight director, whichever needs least bank; sub-paragraph not
+//               checked; ground speed stands in for TAS), plus
+//               `headingGraceMarginSec`, from the moment the monitor first sees
+//               the assignment. Inside the grace the turn must keep going: when
+//               the remaining turn stops shrinking (levelled off short, or turning
+//               the wrong way) for `headingPersistSec`, it alerts. Both sides are MAGNETIC
 //               (decisions H15, docs/adr/0085): the HDG is typed magnetic, and
 //               DCS's course is GRID, so the monitor converts it with the
 //               injected `gridToMagnetic` before comparing. Where that answer
@@ -70,6 +80,22 @@ function headingDiff(a, b) {
   return d;
 }
 
+/** Rate of turn (°/s) at a bank angle and a true airspeed: 1091 × tan(bank) / TAS(kt). */
+const RATE_AT_BANK_K = 1091;
+/** How much the remaining turn must shrink to count as turning: ground-track noise is about a degree. */
+const TURN_PROGRESS_DEG = 1;
+
+/**
+ * Seconds the grace gives a turn of `turnDeg` at `groundSpeedMs` (H163): the turn at standard rate or at the bank
+ * limit, whichever is slower, plus the margin.
+ */
+function headingGraceSec(turnDeg, groundSpeedMs, cfg) {
+  const kt = groundSpeedMs / MS_PER_KT;
+  const bankRate = kt > 0 ? RATE_AT_BANK_K * Math.tan(cfg.headingTurnMaxBankDeg * Math.PI / 180) / kt : Infinity;
+  const rate = Math.min(cfg.headingTurnRateDegPerSec, bankRate);
+  return turnDeg / rate + cfg.headingGraceMarginSec;
+}
+
 /**
  * One flight, one moment. Pure: all memory lives in `mem`, which the caller
  * keeps per flight and passes back next time.
@@ -99,11 +125,25 @@ function evaluateConformance(input, mem, now, cfg, wallNow = now) {
   // input.course is magnetic here, or null when it could not be converted.
   const hdg = input.hdg && Number.isFinite(input.hdg.parsed) ? input.hdg : null;
   if (hdg && Number.isFinite(input.course)) {
-    if (mem.hdgFor !== hdg.at) { mem.hdgFor = hdg.at; mem.hdgCaptured = false; mem.hdgDevSince = null; mem.hdgDevWall = null; }
     const off = headingDiff(input.course, hdg.parsed);
+    if (mem.hdgFor !== hdg.at) {
+      mem.hdgFor = hdg.at; mem.hdgCaptured = false; mem.hdgDevSince = null; mem.hdgDevWall = null;
+      // The turn this assignment asks for, and the grace it gets, fixed at first sight.
+      mem.hdgGraceMs = headingGraceSec(off, input.groundSpeedMs, cfg) * 1000;
+      mem.hdgBestOff = off; mem.hdgProgressAt = now; mem.hdgProgressWall = wallNow;
+    }
     if (off <= cfg.headingToleranceDeg) mem.hdgCaptured = true;
-    const inGrace = !mem.hdgCaptured && wallNow - mem.hdgSeenWall < cfg.headingGraceSec * 1000;
-    if (off > cfg.headingToleranceDeg && !inGrace) {
+    const inGrace = !mem.hdgCaptured && wallNow - mem.hdgSeenWall < mem.hdgGraceMs;
+    // Continuity: during the grace the remaining turn has to keep shrinking. A tick without progress counts as
+    // deviating since the last progress, so a turn that stopped alerts `headingPersistSec` after it stopped.
+    let deviating = off > cfg.headingToleranceDeg && !inGrace;
+    if (off < mem.hdgBestOff - TURN_PROGRESS_DEG) {
+      mem.hdgBestOff = off; mem.hdgProgressAt = now; mem.hdgProgressWall = wallNow;
+    } else if (inGrace && off > cfg.headingToleranceDeg) {
+      deviating = true;
+      if (mem.hdgDevSince == null) { mem.hdgDevSince = mem.hdgProgressAt; mem.hdgDevWall = mem.hdgProgressWall; }
+    }
+    if (deviating) {
       if (mem.hdgDevSince == null) { mem.hdgDevSince = now; mem.hdgDevWall = wallNow; }
       if (wallNow - mem.hdgDevWall >= cfg.headingPersistSec * 1000) {
         alerts.push({ kind: 'HEADING', assigned: hdg.parsed, actual: Math.round(input.course) % 360 || 360, since: mem.hdgDevSince });
@@ -362,4 +402,4 @@ class ConformanceMonitor {
   }
 }
 
-module.exports = { evaluateConformance, evaluateRefuelingBlock, refuelingReceivers, altitudeToCheck, headingDiff, ConformanceMonitor, FPM_PER_MS, MS_PER_KT };
+module.exports = { evaluateConformance, evaluateRefuelingBlock, refuelingReceivers, altitudeToCheck, headingDiff, headingGraceSec, ConformanceMonitor, FPM_PER_MS, MS_PER_KT };
