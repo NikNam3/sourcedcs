@@ -169,6 +169,9 @@ class RunwayStatusStore extends SyncedStore {
     // wire instead of falling back to the owners table (S-L1b, docs/adr/0083).
     out.runwayChangeAcknowledgers = [...(inventory.runwayChangeAcknowledgers || [])];
     out.inspectionAuthorityPositionId = inventory.inspectionAuthorityPositionId ?? null;
+    // The airfield the inventory describes (docs/adr/0139), so a client can find a field's runway ends by its ICAO: the APRT
+    // extended centreline is drawn on the end's true heading from here, never the runway number read as magnetic.
+    out.airportIcao = inventory.airportIcao ?? null;
     return out;
   }
 

@@ -1,10 +1,12 @@
 'use strict';
-import { markEfspChanged } from './efsp/efsp-change-bus.js';
-import { _setAprtRwyTrueDeg, _setAprtSelectedApt, _aprtSelectedApt } from '../view-state.js';
+import { markEfspChanged, onEfspChanged } from './efsp/efsp-change-bus.js';
+import { _setAprtRwyTrueDeg, _setAprtSelectedApt, _aprtSelectedApt, _aprtRwyTrueDeg } from '../view-state.js';
 import { _syncAuthHeaders, sendToSync } from '../sync.js';
 import { escapeHtml } from '../html-escape.js';
 import { currentTheaterFacts, magneticVariationAt, requestTrueFromMagnetic } from '../magnetic.js';
 import { getUserCoalition } from '../iff.js';
+import { facilityRunwayTrueDeg } from './aprt-runway.js';
+import { getAllEfspRunwayStatuses } from './efsp/runway-status-state.js';
 
 import { atisActive, missionData } from '../picture.js';
 import { saveSettings, settings } from '../settings.js';
@@ -17,13 +19,16 @@ import { saveSettings, settings } from '../settings.js';
 // applies the UTC offset (docs/adr/0079) and owns the transition altitude and
 // magnetic variation (docs/adr/0085), all from its config/theaters.json.
 
-// Numeric heading parsed from the APRT panel's runway field, for the
-// extended AP-radar centerline (geojson.js buildExtendedCenterline()).
-// Cached rather than read from the DOM every map-update tick. The runway
-// number is MAGNETIC; the map draws in true, and crc-sync does the
-// conversion (its docs/adr/0085 — a typed magnetic value is never converted
-// in the client). No centerline is drawn until it answers.
-let _aprtRwyHeading = null;  // magnetic, from the runway number
+// The APRT panel's runway in true, for the extended AP-radar centerline
+// (geojson.js buildExtendedCenterline()). Cached rather than read from the DOM
+// every map-update tick. A runway end a Facility describes is drawn on its
+// TRUE heading from the runway-status record (crc-sync docs/adr/0139,
+// aprt-runway.js): the runway number is only a rounded magnetic name (Incirlik's
+// 05 is 050 magnetic but 052.7 true, 3 degrees off if read as 050). An airfield
+// no Facility describes falls back to the number times ten as magnetic,
+// converted by crc-sync (its docs/adr/0085 — a typed magnetic value is never
+// converted in the client); no centerline is drawn until it answers.
+let _aprtRwyHeading = null;  // magnetic, from the runway number (the fallback)
 let _aprtRwyReq = 0;
 
 /** Test seam: the selected airfield and its runway's true bearing, as a click and crc-sync's answer set them. */
@@ -33,10 +38,11 @@ export function _updateAprtRwyHeading() {
   const raw = ((document.getElementById('aprt-atis-rwy') || {}).value || '').toUpperCase().trim();
   const m = raw.match(/^(\d{1,2})([LRC]?)$/);
   _aprtRwyHeading = m ? parseInt(m[1], 10) * 10 : null;
-  _setAprtRwyTrueDeg(null);
   const req = ++_aprtRwyReq;
   const apt = _aprtSelectedApt;
-  if (_aprtRwyHeading != null && apt) {
+  const facilityTrue = facilityRunwayTrueDeg(apt, raw, getAllEfspRunwayStatuses());
+  _setAprtRwyTrueDeg(facilityTrue);
+  if (facilityTrue == null && _aprtRwyHeading != null && apt) {
     requestTrueFromMagnetic(_aprtRwyHeading, apt.lat, apt.lon).then((t) => {
       if (req !== _aprtRwyReq) return; // a newer entry replaced it
       _setAprtRwyTrueDeg(t);
@@ -642,3 +648,11 @@ export function refreshAprtAptList() {
   if (!$panel || !$panel.classList.contains('open')) return;
   _renderAprtAptList(document.getElementById('aprt-search').value || '');
 }
+
+// A runway-status record arriving (or changing) after the runway was typed: the centreline moves onto the end's true heading
+// (crc-sync docs/adr/0139). Only when it changes what is drawn.
+onEfspChanged(['bays', 'snapshot'], () => {
+  const raw = ((typeof document !== 'undefined' && document.getElementById('aprt-atis-rwy')) || {}).value || '';
+  const t = facilityRunwayTrueDeg(_aprtSelectedApt, raw, getAllEfspRunwayStatuses());
+  if (t != null && t !== _aprtRwyTrueDeg) _updateAprtRwyHeading();
+});

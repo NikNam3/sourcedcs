@@ -145,13 +145,48 @@ test('autoscale: the track at the golden-ratio point of the range until the wind
   assert.ok(far.hMax >= 4000 / M.PHI - 1e-6);
   const near10 = M.autoscaleView(plot({ rangeNm: 3 }), { gpaDeg: 3.06, tchFt: 50 });
   assert.equal(near10.rMax, 10);
-  assert.equal(far.azMaxDeg, 2, 'twice the azimuth tolerance, in degrees');
-  assert.equal(M.autoscaleView(plot({ azDeg: 0.2 }), { gpaDeg: 3.06, tolAzDeg: 1.5 }).azMaxDeg, 3);
-  const wide = M.autoscaleView(plot({ rangeNm: 3, azDeg: -1.8 }), { gpaDeg: 3.06, tchFt: 50 });
-  near(wide.azMaxDeg, 1.8 / M.PHI);
-  assert.equal(M.autoscaleView(plot({ azDeg: 14 }), {}).azMaxDeg, M.LIMITS.azMaxDeg, 'never past the ±15° the PAR covers');
+  // H164 FT-Q7 c (ADR 0139): the azimuth window is never autoscaled; it stays the controller's
+  assert.equal(far.azMaxDeg, 3, 'the fixed default, ±3°');
+  const wide = M.autoscaleView(plot({ rangeNm: 3, azDeg: -1.8 }), { gpaDeg: 3.06, tchFt: 50, azMaxDeg: 0.75 });
+  assert.equal(wide.azMaxDeg, 0.75, 'a track off the course does not widen it: the controller\'s zoom stays');
+  assert.equal(M.autoscaleView(plot({ azDeg: 14 }), {}).azMaxDeg, 3, 'even far off');
   assert.equal(M.LIMITS.azMaxDeg, 15);
   assert.equal('yMax' in wide, false, 'no feet window any more');
+});
+
+test('ADR 0139: a Shift+wheel on the azimuth scope zooms only the azimuth window and does not pause autoscale; anything else does', () => {
+  assert.equal(M.zoomPausesAutoscale('az', true), false);
+  assert.equal(M.zoomPausesAutoscale('az', false), true, 'the plain wheel zooms the range of both');
+  assert.equal(M.zoomPausesAutoscale('el', true), true);
+  assert.equal(M.zoomPausesAutoscale('el', false), true);
+});
+
+test('ADR 0139 (H164 FT-Q5): the needed and current headings, magnetic, and how far the aircraft is off the needed one', () => {
+  const h = M.headingsModel({ headings: { needed: 47, current: 52, windFrom: 137, windKt: 20 } });
+  assert.equal(h.needed, '047');
+  assert.equal(h.current, '052');
+  assert.equal(h.wind, '137/20');
+  assert.equal(h.offDeg, 5, 'right of the needed heading is +');
+  assert.equal(M.headingsModel({ headings: { needed: 358, current: 3, windFrom: null, windKt: null } }).offDeg, 5, 'the short way round north');
+  assert.equal(M.headingsModel({ headings: { needed: 360, current: 355 } }).needed, '360');
+  const none = M.headingsModel({ headings: { needed: null, current: 52, windFrom: null, windKt: null } });
+  assert.equal(none.needed, '');
+  assert.equal(none.offDeg, null);
+  assert.match(none.title, /no field wind/);
+  assert.deepEqual(M.headingsModel(null), { needed: '', current: '', wind: '', offDeg: null, title: M.headingsModel(null).title });
+});
+
+test('ADR 0139: crc-sync\'s GLIDESLOPE alert is said on the EL row; any other alert is not', () => {
+  assert.equal(M.glidepathWarningText([{ kind: 'GLIDESLOPE', side: 'BELOW' }]), 'BELOW GLIDEPATH');
+  assert.equal(M.glidepathWarningText([{ kind: 'HEADING' }, { kind: 'GLIDESLOPE', side: 'ABOVE' }]), 'ABOVE GLIDEPATH');
+  assert.equal(M.glidepathWarningText([{ kind: 'LEVEL_BUST' }]), '');
+  assert.equal(M.glidepathWarningText(undefined), '');
+});
+
+test('parity: the server\'s glidepath alert limits are the panel\'s default tolerance lines (ADR 0139, ADR 0123)', () => {
+  const cfg = JSON.parse(fs.readFileSync(path.join(JS, '..', '..', '..', '..', 'crc-sync', 'config', 'alerting.json'), 'utf8')).conformance;
+  assert.equal(cfg.glidepathAboveDeg, M.PAR_DEFAULTS.tolElHighDeg);
+  assert.equal(cfg.glidepathBelowDeg, M.PAR_DEFAULTS.tolElLowDeg);
 });
 
 test('zoom: the wheel zooms the range, Shift this scope\'s vertical, anchored at touchdown and clamped', () => {
@@ -163,7 +198,7 @@ test('zoom: the wheel zooms the range, Shift this scope\'s vertical, anchored at
   near(tall.hMax, 3500 / M.ZOOM_STEP);
   assert.equal(tall.azMaxDeg, v.azMaxDeg);
   const wide = M.zoomView(v, 'az', true, 100);
-  near(wide.azMaxDeg, 2 * M.ZOOM_STEP);
+  near(wide.azMaxDeg, 3 * M.ZOOM_STEP);
   let n = v;
   for (let i = 0; i < 60; i++) n = M.zoomView(n, 'az', true, -100);
   assert.equal(n.azMaxDeg, M.LIMITS.azMinDeg);
@@ -222,7 +257,7 @@ test('azimuth axis labels are degrees, the course 0°; a plot past the edge is d
   assert.equal(M.clampTo(3.1, -2, 2), 2);
   assert.equal(M.clampTo(-7, -2, 2), -2);
   assert.equal(M.clampTo(0.4, -2, 2), 0.4);
-  assert.deepEqual(M.DEFAULT_VIEW, { rMax: 10, hMax: 3500, azMaxDeg: 2 });
+  assert.deepEqual(M.DEFAULT_VIEW, { rMax: 10, hMax: 3500, azMaxDeg: 3 });
 });
 
 test('par-panel draws the azimuth scope in degrees: no feet conversion left in it (ADR 0123)', () => {

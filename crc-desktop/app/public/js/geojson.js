@@ -626,8 +626,10 @@ export function buildExtendedCenterline() {
   // shared that prefix (its docs/adr/0042 renamed them `cvapp:`).
   if (!coverageApproachFor(_aprtSelectedApt.name)) return { type: 'FeatureCollection', features: [] };
 
-  // The runway number is magnetic; crc-sync has converted it to true for
-  // the map's true-bearing geometry (aprt-panel.js _updateAprtRwyHeading).
+  // True: the runway end's own true heading from the Facility's runway-status
+  // record where one describes the field (crc-sync docs/adr/0139), else the
+  // runway number as magnetic, converted by crc-sync (aprt-panel.js
+  // _updateAprtRwyHeading).
   const reciprocal  = (_aprtRwyTrueDeg + 180) % 360;
 
   const lengthNm = settings.extCenterlineNm || 25;
