@@ -8,7 +8,7 @@ const { OP_KINDS, COORDINATION_OP_KINDS, COORDINATION_STEP_OP_KINDS, AP_CTR_ONLY
 
 const PERMISSIONS = {
   OPS: new Set([...OP_KINDS.filter(k => !COORDINATION_OP_KINDS.includes(k) && !COORDINATION_STEP_OP_KINDS.includes(k) && !AP_CTR_ONLY_OP_KINDS.includes(k) && !TOFI_OP_KINDS.includes(k) && !AIRSPACE_ENTRY_OP_KINDS.includes(k)), ...FORMATION_OP_KINDS]),
-  CD:  new Set([...NON_CREATE_OPS, ...FORMATION_OP_KINDS]),
+  CD:  new Set([...NON_CREATE_OPS, 'CreateStrip', ...FORMATION_OP_KINDS]), // H164 FT-Q2 a: CD originates a DEPARTURE
   GC: new Set([...NON_CREATE_OPS, ...FORMATION_OP_KINDS]),
   LC: new Set([...NON_CREATE_OPS, ...FORMATION_OP_KINDS, ...PATTERN_OP_KINDS]), // docs/adr/0126: the tower works the pattern
   // AP deliberately excludes TOFI even though it otherwise gets the full
@@ -29,6 +29,10 @@ const PERMISSIONS = {
 // Position has a CREATE_STRIP_TYPE_PERMISSIONS entry" test.
 const CREATE_STRIP_TYPE_PERMISSIONS = {
   OPS: new Set(['DEPARTURE']),
+  // H164 FT-Q2 a: Clearance Delivery originates a DEPARTURE too, for a pilot who calls for a clearance with nothing
+  // on file at OPS. It starts in PENDING_CLEARANCE in CD's own Bay (the client's origin passes that state), since
+  // PROPOSED belongs to OPS (DEPARTURE_STATE_OWNERS) and a CD-created Strip parked there could never move.
+  CD: new Set(['DEPARTURE']),
   // docs/adr/0023 reopens this — ADR 0014 had deliberately emptied it,
   // reasoning ARRIVAL Strips at AP should only ever arrive via the real
   // CTR->AP HANDOFF, never local self-creation. Live testing against real
