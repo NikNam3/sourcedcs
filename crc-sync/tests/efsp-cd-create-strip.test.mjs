@@ -47,3 +47,13 @@ test('CD originates no ARRIVAL or OVERFLIGHT; GC and LC still create nothing', (
     assert.equal(ack.ok, false, id);
   }
 });
+
+test('a Strip created in a Bay that implies a state starts in it, when its strip type has that state', () => {
+  const efsp = createEfsp();
+  const cd = as(efsp, 'CD');
+  const ack = cd(null, { kind: 'CreateStrip', bayId: 'cd-pending-clearance', rackId: 'main', stripType: 'DEPARTURE', flightData: { callsign: 'VPR6', ...FILED } });
+  assert.equal(ack.ok, true, JSON.stringify(ack));
+  assert.equal(ack.strip.state, 'PENDING_CLEARANCE', 'no initialState sent: the Bay decides, not the DEPARTURE default PROPOSED');
+  const ops = as(efsp, 'OPS')(null, { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE', flightData: { callsign: 'VPR5', ...FILED } });
+  assert.equal(ops.strip.state, 'PROPOSED');
+});

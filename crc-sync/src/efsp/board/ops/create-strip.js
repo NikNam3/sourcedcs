@@ -90,6 +90,8 @@ function _applyCreateStrip(ctx, op, actingPositionId, by) {
   const orderKey = ctx.placement.resolveOrderKey(op.bayId, op.rackId, afterStripId, op.beforeStripId || null, null);
 
   const now = ctx.clock.now();
+  const bayState = ctx.rules.bayImpliesState(op.bayId);
+  const impliedState = bayState && ctx.rules.isValidState(bayState, stripType) ? bayState : null;
   const strip = {
     stripId,
     cid: ctx.state.nextCid(),
@@ -103,7 +105,9 @@ function _applyCreateStrip(ctx, op, actingPositionId, by) {
     // op.initialState explicitly. A small per-strip-type table, not a wider
     // rules-injection — the Board only ever needs each strip type's own
     // starting state, never the full STATES_BY_STRIP_TYPE list nla.js owns.
-    state: op.initialState || ctx.initialStateFor(stripType) || 'PROPOSED',
+    // A Bay that implies a state (guide §3.5 rule 4) starts the Strip in it when the strip type has that state: a
+    // Strip created in CD's Pending Clearance Bay is PENDING_CLEARANCE, never a PROPOSED only OPS could move (H164).
+    state: op.initialState || impliedState || ctx.initialStateFor(stripType) || 'PROPOSED',
     ownerPositionId: actingPositionId,
     bayId: op.bayId,
     rackId: op.rackId,
