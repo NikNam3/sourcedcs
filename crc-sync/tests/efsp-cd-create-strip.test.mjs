@@ -57,3 +57,27 @@ test('a Strip created in a Bay that implies a state starts in it, when its strip
   const ops = as(efsp, 'OPS')(null, { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE', flightData: { callsign: 'VPR5', ...FILED } });
   assert.equal(ops.strip.state, 'PROPOSED');
 });
+
+test('a client initialState the strip type does not have, or the Bay contradicts, is refused before anything is minted', () => {
+  const efsp = createEfsp();
+  const cd = as(efsp, 'CD');
+  const cases = [
+    [{ bayId: 'cd-pending-clearance', initialState: 'IN_STACK' }, 'a DEPARTURE Strip has no state IN_STACK'],
+    [{ bayId: 'cd-pending-clearance', initialState: 'NOT_A_STATE' }, 'a DEPARTURE Strip has no state NOT_A_STATE'],
+    [{ bayId: 'cd-pending-clearance', initialState: 'CLEARED' }, 'cd-pending-clearance holds PENDING_CLEARANCE Strips, not CLEARED'],
+    [{ bayId: 'cd-pending-clearance', initialState: 42 }, 'a DEPARTURE Strip has no state 42'],
+  ];
+  for (const [over, detail] of cases) {
+    const ack = cd(null, { kind: 'CreateStrip', rackId: 'main', stripType: 'DEPARTURE', flightData: { callsign: 'VPR4', ...FILED }, ...over });
+    assert.equal(ack.ok, false, JSON.stringify(over));
+    assert.equal(ack.reason, 'VALIDATION_ERROR');
+    assert.equal(ack.detail, detail);
+  }
+  const session = { controllerId: 'c-CD', who: 'CD' };
+  const snap = efsp.handleMessage(session, { type: 'efsp-resync', facilityId: 'INCIRLIK', lastBoardSeq: -999999 }).ack;
+  assert.equal(snap.flightDataList.filter(f => f.identity.callsign === 'VPR4').length, 0, 'no flight data (and no beacon code) minted');
+  // The Bay's own state, sent explicitly, is still fine; so is a state the type has in a Bay that implies none.
+  assert.equal(cd(null, { kind: 'CreateStrip', bayId: 'cd-pending-clearance', rackId: 'main', stripType: 'DEPARTURE', initialState: 'PENDING_CLEARANCE', flightData: { callsign: 'VPR3', ...FILED } }).ok, true);
+  const ops = as(efsp, 'OPS');
+  assert.equal(ops(null, { kind: 'CreateStrip', bayId: 'ops-filed', rackId: 'main', stripType: 'DEPARTURE', initialState: 'PROPOSED', flightData: { callsign: 'VPR2', ...FILED } }).ok, true);
+});

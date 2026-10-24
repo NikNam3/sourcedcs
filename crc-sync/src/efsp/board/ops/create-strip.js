@@ -23,6 +23,19 @@ function _applyCreateStrip(ctx, op, actingPositionId, by) {
   if (!ctx.rules.canCreateStripType(actingPositionId, stripType)) {
     return { ok: false, reason: 'PERMISSION_DENIED' };
   }
+  // A Bay that implies a state (guide §3.5 rule 4) starts the Strip in it when the strip type has that state. A client's
+  // `initialState` is checked against both before anything is minted: a state this strip type does not have, or one the
+  // target Bay contradicts, is refused, never stored (a DEPARTURE "IN_STACK", or "CLEARED" in CD's Pending Clearance Bay).
+  const bayState = ctx.rules.bayImpliesState(op.bayId);
+  const impliedState = bayState && ctx.rules.isValidState(bayState, stripType) ? bayState : null;
+  if (op.initialState !== undefined && op.initialState !== null) {
+    if (typeof op.initialState !== 'string' || !ctx.rules.isValidState(op.initialState, stripType)) {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: `a ${stripType} Strip has no state ${String(op.initialState)}` };
+    }
+    if (impliedState && op.initialState !== impliedState) {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: `${op.bayId} holds ${impliedState} Strips, not ${op.initialState}` };
+    }
+  }
 
   // BIND, rather than originate (docs/adr/0054). `op.flightDataId` attaches this
   // new Strip to a flight that already exists instead of minting a fresh
@@ -90,8 +103,6 @@ function _applyCreateStrip(ctx, op, actingPositionId, by) {
   const orderKey = ctx.placement.resolveOrderKey(op.bayId, op.rackId, afterStripId, op.beforeStripId || null, null);
 
   const now = ctx.clock.now();
-  const bayState = ctx.rules.bayImpliesState(op.bayId);
-  const impliedState = bayState && ctx.rules.isValidState(bayState, stripType) ? bayState : null;
   const strip = {
     stripId,
     cid: ctx.state.nextCid(),
