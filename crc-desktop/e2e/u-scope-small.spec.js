@@ -5,7 +5,10 @@
  *
  * As in airspace-geometry.spec.js the rig has no DCS mission: the drawings arrive as the `init` frame through the page's
  * own WebSocket handler. The basemap has no tiles here (the harness blocks both sources), but its style layers exist,
- * so the airport surface switch is checked on their visibility. */
+ * so the airport surface switch is checked on their visibility.
+ *
+ * U-SURFACE (H162): the surface shows only while a Position the controller's Facility lists in `airportSurfacePositions`
+ * (Incirlik: GC, LC) is held, and also on the black ATC scope, there in the video map's dim grey. */
 
 const { test, expect } = require('./helpers/test');
 const { openPanel } = require('./helpers/app');
@@ -29,8 +32,8 @@ const drawingData = (page) => page.evaluate(() => {
 const highlighted = (page) => page.evaluate(() => crc.drawingHighlight.highlightedDrawing());
 const highlightData = (page) => page.evaluate(() => crc.mapHandle.map.getSource('drawing-highlight')._data.features.length);
 
-async function boot(page) {
-  await openPanel(page, { signedOn: ['AP'], facilityId: 'INCIRLIK' });
+async function boot(page, signedOn = ['AP']) {
+  await openPanel(page, { signedOn, facilityId: 'INCIRLIK' });
   await page.waitForFunction(() => crc.mapHandle.mapReady === true, null, { timeout: 20000 });
   await page.evaluate((m) => crc.app._ws.onmessage({ data: JSON.stringify(m) }), MISSION());
 }
@@ -57,7 +60,7 @@ test('DCS drawings: on by default; the switch hides and shows the drawing layers
 });
 
 test('Airport surface: on by default; the switch sets the surface layers\' visibility, the runways stay', async ({ page }) => {
-  await boot(page);
+  await boot(page, ['GC']);
   const vis = () => page.evaluate((ids) => ids.map(id => crc.mapHandle.map.getLayoutProperty(id, 'visibility') || 'visible'), SURFACE);
   await expect.poll(vis).toEqual(SURFACE.map(() => 'visible'));
   const panel = await declutter(page);
@@ -68,6 +71,53 @@ test('Airport surface: on by default; the switch sets the surface layers\' visib
   expect(await page.evaluate(() => crc.mapHandle.map.getLayoutProperty('Aeroway', 'visibility') || 'visible')).toBe('visible');
   await sw.evaluate(el => el.click());
   await expect.poll(vis).toEqual(SURFACE.map(() => 'visible'));
+});
+
+// The black scope needs an ATC-only session (atc-scope.js atcBlackScope): one ATC radar in the coverage, no datalink.
+const APP_RADAR = { id: 'app:Incirlik', type: 'approach', presentation: 'ATC', label: 'LTAG APP', airport: 'Incirlik', lat: 37.002, lon: 35.426, elevM: 60, rangeM: 80 * 1852, sweepMs: 3000, caps: { ssr: true } };
+const atcOnly = (page) => page.evaluate((r) => crc.app.applyCoverage({ radars: [r], signedOnPositions: [], datalink: false }), APP_RADAR);
+const signOn = async (page, facilityId, list) => {
+  await page.evaluate(([f, l]) => crc.ws.sendEfspSetPositions(f, l), [facilityId, list]);
+  await page.waitForFunction(([f, l]) => JSON.stringify(crc.ws.getAckedPositions(f)) === JSON.stringify(l), [facilityId, list]);
+};
+const paintOf = (page, id, prop) => page.evaluate(([i, p]) => crc.mapHandle.map.getPaintProperty(i, p), [id, prop]);
+
+test('Airport surface follows GC/LC held, also on the black scope in grey; only AP and CTR held hide it (H162)', async ({ page }) => {
+  await boot(page, ['GC', 'AP']);
+  await signOn(page, 'CENTER', ['CTR']);
+  const vis = () => page.evaluate((ids) => ids.map(id => crc.mapHandle.map.getLayoutProperty(id, 'visibility') || 'visible'), SURFACE);
+  const black = () => page.evaluate(() => crc.mapHandle.map.getPaintProperty('Background', 'background-color') === '#000000');
+  await page.evaluate(() => { crc.settings.settings.atcMapBackground = false; });
+  await atcOnly(page);
+  await expect.poll(black).toBe(true);
+  await expect.poll(vis).toEqual(SURFACE.map(() => 'visible'));
+  // the video map's dim grey, nothing brighter than the runways
+  expect(await paintOf(page, 'Aeroway', 'line-color')).toBe('#8C8C8C');
+  expect(await paintOf(page, 'Taxiway', 'line-color')).toBe('#5A5A5A');
+  expect(await paintOf(page, 'Taxiway labels', 'text-color')).toBe('#8C8C8C');
+
+  // GC signed off: only AP and CTR held, the surface goes
+  await signOn(page, 'INCIRLIK', ['AP']);
+  await atcOnly(page);
+  await expect.poll(vis).toEqual(SURFACE.map(() => 'none'));
+  expect(await page.evaluate(() => crc.mapHandle.map.getLayoutProperty('Aeroway', 'visibility') || 'visible')).toBe('visible');
+
+  // LC held: back, still black
+  await signOn(page, 'INCIRLIK', ['LC', 'AP']);
+  await atcOnly(page);
+  await expect.poll(vis).toEqual(SURFACE.map(() => 'visible'));
+  expect(await black()).toBe(true);
+
+  // the map background back: the theme's paint returns
+  await page.evaluate(() => { crc.settings.settings.atcMapBackground = true; });
+  await expect.poll(black).toBe(false);
+  await expect.poll(() => paintOf(page, 'Taxiway', 'line-color')).not.toBe('#5A5A5A');
+  await expect.poll(vis).toEqual(SURFACE.map(() => 'visible'));
+
+  // signed off everything: hidden
+  await signOn(page, 'INCIRLIK', []);
+  await signOn(page, 'CENTER', []);
+  await expect.poll(vis).toEqual(SURFACE.map(() => 'none'));
 });
 
 test('picker: hovering or focusing an entry highlights its drawing, with the drawings switched off too; picking or closing clears it', async ({ page }) => {
