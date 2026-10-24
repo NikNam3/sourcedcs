@@ -1574,6 +1574,7 @@
    "metricsTrend",
    "onEfspMetrics",
    "renderMetricsModel",
+   "renderServerModel",
    "renderTrafficModel",
    "requestEfspMetrics"
   ],
