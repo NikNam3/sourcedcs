@@ -96,3 +96,41 @@
       background: rgba(13,13,13,0.9);
     }
 
+
+    /* ── Track-label assignment menu (docs/adr/0140) ──
+       Grey, like the rest of the dark cockpit: it carries no colour of its own.
+       Above the panel chrome (50) with the Strip popovers (150), below the SRS modal (200). */
+    .label-menu {
+      position: fixed;
+      z-index: 150;
+      display: grid;
+      grid-template-columns: auto 5.5em;
+      gap: 2px 6px;
+      padding: 4px 6px;
+      background: var(--ui-bg-solid);
+      border: 1px solid var(--ui-border-2);
+      color: var(--ui-text-bright);
+      font-size: 11px;
+      letter-spacing: 0.05em;
+    }
+    .label-menu-head { grid-column: 1 / -1; color: var(--ui-text-dim); }
+    .label-menu-row { display: contents; }
+    .label-menu-name { align-self: center; }
+    .label-menu-input {
+      background: var(--ui-bg-input);
+      border: 1px solid var(--ui-border);
+      color: var(--ui-text-input);
+      font: inherit;
+      padding: 1px 3px;
+      min-width: 0;
+    }
+    .label-menu-input:focus { outline: 1px solid var(--ui-border-3); }
+    .label-menu-track {
+      grid-column: 1 / -1;
+      background: none;
+      border: 1px solid var(--ui-border);
+      color: var(--ui-text);
+      font: inherit;
+      cursor: pointer;
+      padding: 1px 4px;
+    }

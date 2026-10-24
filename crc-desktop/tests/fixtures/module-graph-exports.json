@@ -1136,6 +1136,18 @@
    "openJurisdictionForms",
    "patchFrom"
   ],
+  "panels/efsp/label-assign-rules.js": [
+   "LABEL_ASSIGN_FIELDS",
+   "assignmentCellsFor",
+   "labelAssignOps",
+   "labelAssignmentFor"
+  ],
+  "panels/efsp/label-menu.js": [
+   "closeLabelMenu",
+   "labelAssignmentForTrack",
+   "labelMenuState",
+   "openLabelMenu"
+  ],
   "panels/efsp/marsa-badge.js": [
    "MARSA_EXPANSION",
    "getMarsaHighlightStripIds",
