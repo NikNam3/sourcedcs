@@ -378,9 +378,9 @@ const isPlainObject = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
 //    end and any runway change are runtime state in runway-status-store.js. Shape checked by runway-status.js's
 //    validateRunwayStatusInventory. [SOURCE-DEFINED], squadron data to verify: every value is squadron data,
 //    not doctrine. `airportIcao` (LTAG) is whose mission wind picks the active end at load (H22). One record per
-//    PHYSICAL runway (S-Q23: runway works close the pavement in both directions). `endHeadingsTrue` (05 = 56,
-//    23 = 236) are TRUE headings, because DCS reports wind in degrees true and an end's number is magnetic;
-//    approximate, the squadron should verify (C-9). `rackIds` are lc-runway-queue's one Rack per end.
+//    PHYSICAL runway (S-Q23: runway works close the pavement in both directions). `endHeadingsTrue` (05 = 52.7,
+//    23 = 232.7, the DCS runway's geodesic bearing, U-LTAG-COURSE) are TRUE headings, because DCS reports wind
+//    in degrees true and an end's number is magnetic, never the number times ten. `rackIds` are lc-runway-queue's one Rack per end.
 //    `arrestingGear` is `[]`: DCS does not simulate arresting wires (H17), so the gear is the §9.7 data shape and
 //    nothing more. `runwayChangeAcknowledgers` (OPS, AP; guide §9.7 rule 3, OPS stands in for the SOF) is
 //    coordination, not permission (H20): an acknowledger nobody has signed on when the change is proposed is

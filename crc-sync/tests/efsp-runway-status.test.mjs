@@ -219,13 +219,13 @@ test("runwayRackFor files a Strip under its filed end, else the active end, else
 });
 
 test('the active end is the one most into the TRUE wind (decisions.md H22)', () => {
-  // Incirlik's ends are 056 and 236 true.
+  // Incirlik's ends are 052.7 and 232.7 true (U-LTAG-COURSE).
   assert.equal(activeEndIntoWind(INVENTORY, 60), '05');
   assert.equal(activeEndIntoWind(INVENTORY, 230), '23');
-  assert.equal(activeEndIntoWind(INVENTORY, 300), '23'); // 64 degrees off 236, 116 off 056
-  assert.equal(activeEndIntoWind(INVENTORY, 140), '05'); // 84 degrees off 056, 96 off 236
+  assert.equal(activeEndIntoWind(INVENTORY, 300), '23'); // 67.3 degrees off 232.7, 112.7 off 052.7
+  assert.equal(activeEndIntoWind(INVENTORY, 140), '05'); // 87.3 degrees off 052.7, 92.7 off 232.7
   // A pure crosswind is a tie, and a tie goes to inventory order.
-  assert.equal(activeEndIntoWind(INVENTORY, 146), '05');
+  assert.equal(activeEndIntoWind(INVENTORY, 142.7), '05');
   assert.equal(activeEndIntoWind(INVENTORY, NaN), null);
   assert.equal(activeEndIntoWind({ runways: [] }, 60), null);
 });

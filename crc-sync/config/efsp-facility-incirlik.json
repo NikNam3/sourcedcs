@@ -319,8 +319,8 @@
           "23"
         ],
         "endHeadingsTrue": {
-          "23": 236,
-          "05": 56
+          "23": 232.7,
+          "05": 52.7
         },
         "rackIds": {
           "23": "rwy-23",
@@ -345,12 +345,12 @@
     }
   },
   "parApproaches": {
-    "_comment": "PAR approaches per runway end (docs/adr/0112), read once at start-up, never written by code (P5). EVERY VALUE IS [SOURCE-DEFINED] and only a DEFAULT: the PAR controller sets TDZE, TCH, decision height and glidepath angle at run time per runway end (docs/adr/0130, decisions H153; no LTAG plate is owed). thresholdLat/Lon: the landing threshold, worked out as the airfield reference point (37.0021 N, 35.4258 E, the DCS map centre crc-desktop uses) moved 1,524 m (half an assumed 10,000 ft runway) along the runway's true heading, so it assumes the reference point is mid-runway. courseTrueDeg: the final approach course, degrees TRUE (the runway's endHeadingsTrue; shown magnetic through the theater's variation). tdzeFt: touchdown zone elevation, feet MSL; null takes the DCS airfield's elevation, which is what the aircraft fly over in DCS (the real LTAG is 238 ft). tchFt: threshold crossing height (50 ft, the usual figure). decisionHeightFt: decision height above TDZE (200 ft, HAT; DA = TDZE + this). glideslopeDeg: the published glidepath angle, or null for none, in which case par.json's defaultGlideslopeDeg applies (H116: 3.06).",
+    "_comment": "PAR approaches per runway end (docs/adr/0112), read once at start-up, never written by code (P5). EVERY VALUE IS [SOURCE-DEFINED] and only a DEFAULT: the PAR controller sets TDZE, TCH, decision height and glidepath angle at run time per runway end (docs/adr/0130, decisions H153; no LTAG plate is owed). thresholdLat/Lon: the landing threshold as DCS places it: the squadron mission's RW05 and RW23 nav points (STT v21, DCS x/z 220339.7/-36479.7 and 222075.4/-34001.1) through the Syria Transverse Mercator projection; they agree to about 35 m with the real thresholds (36.9937 N 35.4122 E, 37.0103 N 35.4395 E). courseTrueDeg: the final approach course, degrees TRUE, the geodesic bearing threshold to threshold (52.7, reciprocal 232.7; the real runway is 52.9 true), equal to the runway's endHeadingsTrue and shown magnetic through the theater's variation (U-LTAG-COURSE: the earlier 56 was the runway number read as magnetic, 3.3 degrees off the pavement). tdzeFt: touchdown zone elevation, feet MSL; null takes the DCS airfield's elevation, which is what the aircraft fly over in DCS (the real LTAG is 238 ft). tchFt: threshold crossing height (50 ft, the usual figure). decisionHeightFt: decision height above TDZE (200 ft, HAT; DA = TDZE + this). glideslopeDeg: the published glidepath angle, or null for none, in which case par.json's defaultGlideslopeDeg applies (H116: 3.06).",
     "05": {
       "label": "PAR RWY 05",
-      "thresholdLat": 36.99444,
-      "thresholdLon": 35.41157,
-      "courseTrueDeg": 56,
+      "thresholdLat": 36.99382,
+      "thresholdLon": 35.41255,
+      "courseTrueDeg": 52.7,
       "tdzeFt": null,
       "tchFt": 50,
       "decisionHeightFt": 200,
@@ -358,9 +358,9 @@
     },
     "23": {
       "label": "PAR RWY 23",
-      "thresholdLat": 37.00976,
-      "thresholdLon": 35.44003,
-      "courseTrueDeg": 236,
+      "thresholdLat": 37.01027,
+      "thresholdLon": 35.43963,
+      "courseTrueDeg": 232.7,
       "tdzeFt": null,
       "tchFt": 50,
       "decisionHeightFt": 200,

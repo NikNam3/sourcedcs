@@ -62,7 +62,7 @@ function world({ activeRunway = '05', aptElevFt = DCS_LTAG_ELEV_FT, parValues = 
   };
 }
 
-const RWY05 = { refLat: INCIRLIK_CFG.parApproaches['05'].thresholdLat, refLon: INCIRLIK_CFG.parApproaches['05'].thresholdLon, courseTrueDeg: 56 };
+const RWY05 = { refLat: INCIRLIK_CFG.parApproaches['05'].thresholdLat, refLon: INCIRLIK_CFG.parApproaches['05'].thresholdLon, courseTrueDeg: INCIRLIK_CFG.parApproaches['05'].courseTrueDeg };
 /** A point `nm` out on a course from a reference, `rightFt` right of it, `heightFt` above `tdzeFt`. */
 function on(g, nm, heightFt, tdzeFt, rightFt = 0) {
   const back = par.offsetPoint(g.refLat, g.refLon, (g.courseTrueDeg + 180) % 360, nm * 1852);
@@ -87,7 +87,7 @@ test('PAR at Incirlik: the threshold of the runway the flight lands on, TDZE fro
   assert.deepEqual(e.approach.set, [], 'nothing set by a controller');
   assert.equal(e.approach.tdzeFt, DCS_LTAG_ELEV_FT);
   assert.equal(e.approach.daFt, DCS_LTAG_ELEV_FT + 200);
-  assert.deepEqual(e.approach.courseDisplay, { value: 51, ref: 'M' }, '056 true less 5 east');
+  assert.deepEqual(e.approach.courseDisplay, { value: 48, ref: 'M' }, '052.7 true less 5 east');
   assert.deepEqual(e.sensor, { elevation: 'OK', azimuth: 'OK', reason: null });
   assert.equal(e.plot.rangeNm, 5);
   assert.equal(e.plot.elevDevFt, 0);
@@ -99,7 +99,7 @@ test('PAR at Incirlik: the threshold of the runway the flight lands on, TDZE fro
 test('the flight\'s assigned landing runway wins over the active one; no runway at all is NO_APPROACH', () => {
   const w = world({ activeRunway: '05' });
   w.onFinal('INCIRLIK', 'par-final', 'PAR', { trackId: 12, landingRunway: '23' });
-  const g23 = { refLat: INCIRLIK_CFG.parApproaches['23'].thresholdLat, refLon: INCIRLIK_CFG.parApproaches['23'].thresholdLon, courseTrueDeg: 236 };
+  const g23 = { refLat: INCIRLIK_CFG.parApproaches['23'].thresholdLat, refLon: INCIRLIK_CFG.parApproaches['23'].thresholdLon, courseTrueDeg: INCIRLIK_CFG.parApproaches['23'].courseTrueDeg };
   w.fly(12, on(g23, 4, gp(4), DCS_LTAG_ELEV_FT));
   let [e] = w.monitor.tick();
   assert.equal(e.approach.runwayEnd, '23');
@@ -247,7 +247,7 @@ test('controller-set values: TDZE, TCH, DH and the angle replace the defaults on
 test('controller-set values: one set value leaves the others at their defaults; another runway end is untouched', () => {
   const w = world({ activeRunway: '23', parValues: { '05': { gpaDeg: 3.2 } } });
   w.onFinal('INCIRLIK', 'par-final', 'PAR', { trackId: 22 });
-  const g23 = { refLat: INCIRLIK_CFG.parApproaches['23'].thresholdLat, refLon: INCIRLIK_CFG.parApproaches['23'].thresholdLon, courseTrueDeg: 236 };
+  const g23 = { refLat: INCIRLIK_CFG.parApproaches['23'].thresholdLat, refLon: INCIRLIK_CFG.parApproaches['23'].thresholdLon, courseTrueDeg: INCIRLIK_CFG.parApproaches['23'].courseTrueDeg };
   w.fly(22, on(g23, 4, gp(4), DCS_LTAG_ELEV_FT));
   let [e] = w.monitor.tick();
   assert.equal(e.approach.gpaDeg, 3.06, 'runway 23 has nothing set');
