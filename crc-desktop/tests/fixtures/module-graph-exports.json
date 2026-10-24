@@ -1593,6 +1593,7 @@
   "panels/topbar.js": [
    "$aptDisplay",
    "checkStale",
+   "hideBullseyeCursor",
    "initUpdateStatus",
    "initZuluClock",
    "updateAptDisplay",
