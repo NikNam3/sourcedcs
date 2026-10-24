@@ -27,10 +27,10 @@ const harness = require('./e2e/helpers/harness-env');
 //
 // E2E_LANE lets several cataloguing agents run at once without fighting over
 // ports or output directories. Lane 0 is the default, so anything that does
-// not set it behaves exactly as before.
+// not set it behaves exactly as before. Lanes 0-19: crc-sync 3010+n, the app 3110+n and the fake DCS 3210+n never meet.
 const LANE = Number(process.env.E2E_LANE || 0);
-if (!Number.isInteger(LANE) || LANE < 0 || LANE > 9) {
-  throw new Error(`E2E_LANE must be an integer 0-9, got ${process.env.E2E_LANE}`);
+if (!Number.isInteger(LANE) || LANE < 0 || LANE > 19) {
+  throw new Error(`E2E_LANE must be an integer 0-19, got ${process.env.E2E_LANE}`);
 }
 // e2e/tools/run-order.js starts the two servers itself and runs one spec file at a time against them,
 // to prove a file does not depend on which ran before it; it sets this so Playwright reuses them.
