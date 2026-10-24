@@ -1,5 +1,5 @@
 'use strict';
-import { AIRPORT_SURFACE_LAYERS, airportSurfaceVisibility } from './airport-surface.js';
+import { AIRPORT_SURFACE_LAYERS, airportSurfaceHeld, airportSurfacePaint, airportSurfaceVisibility, getAirportSurfacePositions } from './airport-surface.js';
 import { ATC_DIM_GRAY, atcBackgroundDirty, atcBlackScope } from './atc-scope.js';
 import { buildDrawings, buildTextMarks, updateMap } from './geojson.js';
 import { createNavpointIcon, updateIcons, updateIffIcons } from './icons.js';
@@ -8,6 +8,7 @@ import { map, mapReady } from './map-handle.js';
 import { settings } from './settings.js';
 import { missionData } from './picture.js';
 import { onEfspChanged } from './panels/efsp/efsp-change-bus.js';
+import { getSignedOnPositions } from './panels/efsp/efsp-ws.js';
 
 // Colours, theme and the black ATC background (DESK-SPLIT, split out of map-setup.js's initMap: these re-paint an existing map,
 // and settings-panel.js and the ATC scope need them without importing the map's construction).
@@ -59,13 +60,9 @@ export function applyMapTheme() {
   map.setPaintProperty('Country border', 'line-color', light ? '#9a9690' : '#2a2a2a');
 
   // Airport zone fill, and the airport surface (U-SCOPE-SMALL): pavement a shade off the land, taxiways a shade above it,
-  // runways brightest; names in the label grey. The dark values are the style file's.
+  // runways brightest; names in the label grey (airport-surface.js airportSurfacePaint).
   map.setPaintProperty('Airport zone', 'fill-color', light ? '#e8e6e2' : '#111111');
-  map.setPaintProperty('Airport pavement', 'fill-color', light
-    ? ['match', ['get', 'class'], 'runway', '#b4b8b2', 'taxiway', '#c8cbc6', '#dcdbd6']
-    : ['match', ['get', 'class'], 'runway', '#2e362e', 'taxiway', '#262c26', '#1e231e']);
-  map.setPaintProperty('Airport pavement', 'fill-outline-color', light ? '#b4b8b2' : '#2e362e');
-  map.setPaintProperty('Taxiway', 'line-color', light ? '#aabaa8' : '#323c32');
+  paintAirportSurface(airportSurfacePaint({ light }));
   // Runways (the video map's runways: always drawn, surface switch or not)
   map.setPaintProperty('Aeroway', 'line-color', light ? '#8a9a8a' : '#4a5a4a');
 
@@ -79,14 +76,6 @@ export function applyMapTheme() {
   const labelPaint = light
     ? { color: '#3a3a3a', halo: '#ffffff' }
     : { color: '#5a6a5a', halo: '#000000' };
-
-  const surfaceLabel = light
-    ? { strong: '#2a2a2a', mid: '#3a3a3a', weak: '#4a4a4a', halo: '#ffffff' }
-    : { strong: '#8a9a8a', mid: '#788878', weak: '#627062', halo: '#000000' };
-  for (const [id, c] of [['Runway designators', 'strong'], ['Taxiway labels', 'mid'], ['Apron labels', 'weak'], ['Airport gate', 'weak']]) {
-    map.setPaintProperty(id, 'text-color', surfaceLabel[c]);
-    map.setPaintProperty(id, 'text-halo-color', surfaceLabel.halo);
-  }
 
   const placePaint = light
     ? { color: '#2a2a2a', halo: '#ffffff' }
@@ -149,15 +138,24 @@ export function applyAtcBackground(black) {
   updateMap();
 }
 
+function paintAirportSurface(list) {
+  for (const [id, prop, value] of list) if (map.getLayer(id)) map.setPaintProperty(id, prop, value);
+}
+
 /**
- * Shows or hides the airport surface layers (airport-surface.js) by the controller's "Airport surface" switch. `black`: the
- * black ATC scope is on (it keeps the runways only); by default, whether it is on now.
+ * Shows or hides the airport surface layers (airport-surface.js): the controller's "Airport surface" switch is on and they
+ * hold a Position their Facility lists in the snapshot's `airportSurfacePositions` (H162). `black`: the black ATC scope is
+ * on, which greys the surface (the theme's paint comes back with applyMapTheme); by default, whether it is on now.
  */
 export function applyAirportSurface(black = atcBlackScope()) {
   if (!mapReady) return;
-  const v = airportSurfaceVisibility({ enabled: settings.airportSurface, black });
+  const held = airportSurfaceHeld(getAirportSurfacePositions(), getSignedOnPositions);
+  const v = airportSurfaceVisibility({ enabled: settings.airportSurface, held });
   for (const id of AIRPORT_SURFACE_LAYERS) if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', v);
+  if (black) paintAirportSurface(airportSurfacePaint({ black: true, gray: ATC_DIM_GRAY }));
 }
 
+// A sign-on or sign-off (Primary or Observer, efsp-ws.js) and a snapshot (the table) decide who sees the surface.
+onEfspChanged(['positions', 'snapshot'], () => applyAirportSurface());
 // atc-scope.js's beat marks 'atcBackground' when the black-scope decision changed (efsp-change-bus.js), so it need not import this file.
 onEfspChanged(['atcBackground'], () => applyAtcBackground(atcBlackScope()));

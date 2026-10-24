@@ -67,12 +67,12 @@ test('the highlight does not follow the drawings switch', async () => {
   assert.equal(buildDrawingHighlight(DRAWINGS, 0).features.length, 1);
 });
 
-test('airport surface: shown when on, hidden when off and always on the black ATC scope', async () => {
+test('airport surface: shown when on and a surface Position is held, on any background (H162); off or not held hides it', async () => {
   const { airportSurfaceVisibility } = await freshGraph().import('airport-surface.js');
-  assert.equal(airportSurfaceVisibility({ enabled: true, black: false }), 'visible');
-  assert.equal(airportSurfaceVisibility({ enabled: undefined, black: false }), 'visible');
-  assert.equal(airportSurfaceVisibility({ enabled: false, black: false }), 'none');
-  assert.equal(airportSurfaceVisibility({ enabled: true, black: true }), 'none');
+  assert.equal(airportSurfaceVisibility({ enabled: true, held: true }), 'visible');
+  assert.equal(airportSurfaceVisibility({ enabled: undefined, held: true }), 'visible');
+  assert.equal(airportSurfaceVisibility({ enabled: false, held: true }), 'none');
+  assert.equal(airportSurfaceVisibility({ enabled: true, held: false }), 'none');
 });
 
 test('the scope style has every surface layer on the aeroway source-layer; the runway lines are not one of them', async () => {
