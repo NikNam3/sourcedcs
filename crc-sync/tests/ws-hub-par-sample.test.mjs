@@ -103,7 +103,7 @@ test('walk: handed to PAR, sampled for PAR only; the PAR controller signs off mi
   const cfg = efsp.facilityConfig.getFacilityConfig('INCIRLIK');
   const thr = cfg.parApproaches['05'];
   const tracks = new TrackStore();
-  const back = par.offsetPoint(thr.thresholdLat, thr.thresholdLon, 236, 4 * 1852);
+  const back = par.offsetPoint(thr.thresholdLat, thr.thresholdLon, (thr.courseTrueDeg + 180) % 360, 4 * 1852);
   tracks.update({ id: 77, callsign: 'VIPER21', coalition: 2, type: 'F-16C_50', category: 0, lat: back.lat, lon: back.lon, alt: (160 + 50 + 4 * 6076.12 * Math.tan(3.06 * Math.PI / 180)) / 3.28084, heading: 0, groundSpeed: 72, verticalSpeed: -3.8 });
   const monitor = new ParMonitor({
     facilityConfig: efsp.facilityConfig,
