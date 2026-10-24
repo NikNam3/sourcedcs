@@ -103,7 +103,9 @@ function _litIndicator(strip, key, el, obligation, siblings) {
         if (e && e.stopPropagation) e.stopPropagation();
         if (_swallowRepeatAdvance()) return;
         const live = getEfspStrip(strip.stripId) || strip;
-        sendEfspMutation(_resolveActingPositionId(live), live, { kind: 'SetState', toState: h.toState, observedAirborne: true });
+        const actingPositionId = _resolveActingPositionId(live);
+        if (!actingPositionId) return; // handed away since the chip was drawn
+        sendEfspMutation(actingPositionId, live, { kind: 'SetState', toState: h.toState, observedAirborne: true });
       };
       node.addEventListener('click', accept);
       node.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') accept(e); });

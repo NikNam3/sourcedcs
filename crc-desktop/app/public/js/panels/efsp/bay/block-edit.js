@@ -144,6 +144,8 @@ function _buildBlockCellInner(strip, blockId) {
   // isBlockEditable comment).
   // crc-sync docs/adr/0126: LC's pattern cells, one click per step (PAT -> STR -> empty; T&G -> FS -> LA -> empty).
   if (isCycleBlock(blockId)) return _buildCycleCell(strip, blockId, span, flightData);
+  // A cell this controller cannot write (it holds neither the Strip nor a Position allowed beside its Owner) stays read-only.
+  if (!_resolveActingPositionId(strip, { kind: 'SetBlock', blockId: redirect ? redirect.blockId : blockId })) return span;
 
   const enumOptions = enumSelectOptionsFor(blockId, flightData); // the FLIGHT_DATA: 9F offers a retired route its flight still flies (docs/adr/0073)
   if (enumOptions) return _buildEnumSelectCell(strip, blockId, span, enumOptions);
@@ -196,7 +198,7 @@ function _buildBlockCellInner(strip, blockId) {
     strikeBtn.textContent = '⌿';
     strikeBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      const actingPositionId = _resolveActingPositionId(strip);
+      const actingPositionId = _resolveActingPositionId(strip, { kind: 'SetBlock', blockId });
       if (!actingPositionId) return;
       // The LIVE Strip for its rev, not the one this cell's DOM was built
       // against — the same stale-baseRev fix _startBlockEdit and
@@ -308,7 +310,7 @@ function _buildEnumSelectCell(strip, blockId, span, options) {
       select.replaceWith(span);
       if (value === currentValue) return; // no-op pick, don't send a Mutation for nothing
       if (!value && !clearable) return;   // "—" on a Block that has no clear; not offered, so not reachable
-      const actingPositionId = _resolveActingPositionId(strip);
+      const actingPositionId = _resolveActingPositionId(strip, { kind: 'SetBlock', blockId });
       if (!actingPositionId) return;
       const currentStrip = getEfspStrip(strip.stripId) || strip;
       // A clear is the '' the <select> itself holds, not a null spelled here:
@@ -355,7 +357,7 @@ function _buildBooleanToggleCell(strip, blockId, span) {
   span.tabIndex = 0;
   const toggle = (e) => {
     e.stopPropagation();
-    const actingPositionId = _resolveActingPositionId(strip);
+    const actingPositionId = _resolveActingPositionId(strip, { kind: 'SetBlock', blockId });
     if (!actingPositionId) return;
     const currentStrip = getEfspStrip(strip.stripId) || strip;
     const currentValue = span.textContent === '✓';
@@ -464,7 +466,7 @@ function _startBlockEdit(strip, blockId, span, draft) {
     revert();
     // S-L16 W5: retyping a SHOWN ESTIMATE is not a no-op, it accepts the estimate as the actual.
     if (value === currentValue && !span.classList.contains('efsp-block-estimated')) return; // no-op edit, don't send a Mutation for nothing
-    const actingPositionId = _resolveActingPositionId(strip);
+    const actingPositionId = _resolveActingPositionId(strip, { kind: 'SetBlock', blockId: sendBlockId });
     if (!actingPositionId) return;
     // Read the CURRENT Strip (for its rev) rather than the `strip` this
     // cell's DOM was built against — editing two different Blocks on the

@@ -206,7 +206,7 @@ module.exports = {
   OP_KINDS, COORDINATION_OP_KINDS, AP_CTR_ONLY_OP_KINDS, TOFI_OP_KINDS, AIRSPACE_ENTRY_OP_KINDS, FORMATION_OP_KINDS, PATTERN_OP_KINDS, TOFI_COUNTERPARTS,
   NO_STRIP_OP_CLASSES,
   canActOnRunwayStatus, RUNWAY_STATUS_OP_OWNERS,
-  TACTICAL_CAPABILITIES, READ_SCOPES, handBackTargetsFor, tofiAnswererFor, readScopeFor, mayActBesideOwner,
+  TACTICAL_CAPABILITIES, READ_SCOPES, handBackTargetsFor, tofiAnswererFor, readScopeFor, mayActBesideOwner, NON_OWNER_BLOCK_WRITES,
   CARRIER_CAPABILITIES, canEditCarrierState, canSequenceMarshalStack, canRecordCarrierHandoff,
   MARSHAL_STATE_OWNERS, FINAL_STATE_OWNERS, PATTERN_STATE_OWNERS,
   INCIRLIK_CAPABILITIES, canHandOffToFinal, canRecordFinalCall, finalReceiver, incirlikPositionsWith,

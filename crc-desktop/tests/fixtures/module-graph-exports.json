@@ -595,7 +595,8 @@
    "_moveStrip",
    "_resolveActingPositionId",
    "_swallowRepeatAdvance",
-   "_transferStrip"
+   "_transferStrip",
+   "besideOwnerActingPosition"
   ],
   "panels/efsp/bay/drag.js": [
    "_efspDrag",
@@ -999,6 +1000,7 @@
    "getEfspFacility",
    "getEfspFlightData",
    "getEfspMarsa",
+   "getEfspNonOwnerBlockWrites",
    "getEfspObligation",
    "getEfspObligations",
    "getEfspPosition",

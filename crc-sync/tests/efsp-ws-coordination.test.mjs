@@ -210,6 +210,15 @@ test('H162: the snapshot carries every Facility\'s airport-surface Positions', (
   assert.deepEqual(snapshot.ack.airportSurfacePositions.CENTER, []);
 });
 
+test('the snapshot carries the non-owner Block writes (permission.js mayActBesideOwner), so the client names that Position and no other', () => {
+  const ctx = makeCtx();
+  const snapshot = handleMessage(ctx, CTR_SESSION, { type: 'efsp-resync', facilityId: 'CENTER', lastBoardSeq: -999999 }, noopPersist);
+  assert.deepEqual(snapshot.ack.nonOwnerBlockWrites, [
+    { blockId: '14E', stripType: 'DEPARTURE', positions: ['OPS'] },
+    { blockId: '3G', stripType: 'DEPARTURE', positions: ['OPS'] },
+  ]);
+});
+
 test('efsp-set-positions is facility-scoped — holding CTR at CENTER does not touch INCIRLIK\'s PositionStore', () => {
   const ctx = makeCtx();
   const result = handleMessage(ctx, CTR_SESSION, { type: 'efsp-set-positions', facilityId: 'CENTER', signedOn: ['CTR'] }, noopPersist);

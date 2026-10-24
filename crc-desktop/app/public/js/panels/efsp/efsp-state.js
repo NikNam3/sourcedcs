@@ -48,6 +48,8 @@ let efspAitAuthorizedByFacility = {};
 // an ATC scope draws on a contact that Position owns }. Config, so it rides
 // the snapshot only.
 let efspPositionLetters = {};
+// The Block writes a Position may make on a Strip it does not hold (crc-sync permission.js mayActBesideOwner), from the snapshot.
+let efspNonOwnerBlockWrites = [];
 let efspSelf = null; // { controllerId } from the snapshot and the resync snapshot (crc-sync docs/adr/0110): who "I" am in a Position's primary/observers
 
 // clientMutationId -> the original efsp-mutation message sent, kept until
@@ -80,6 +82,7 @@ export function applyEfspSnapshot(msg) {
   efspBays = msg.bays || [];
   efspAitAuthorizedByFacility = msg.aitAuthorizedByFacility || {};
   efspPositionLetters = msg.positionLetters || {};
+  efspNonOwnerBlockWrites = Array.isArray(msg.nonOwnerBlockWrites) ? msg.nonOwnerBlockWrites : [];
   setAirportSurfacePositions(msg.airportSurfacePositions); // who sees the airport surface, per Facility (H162)
   if (msg.self) efspSelf = msg.self;
   // A snapshot after a reconnect can carry edits made while this window was away: log them against what it last held.
@@ -275,6 +278,9 @@ export function getEfspBays() { return efspBays; }
 
 export function isAitAuthorizedFor(facilityId) { return !!efspAitAuthorizedByFacility[facilityId]; }
 
+/** The snapshot's non-owner Block writes, `[{ blockId, stripType, positions }]`. */
+export function getEfspNonOwnerBlockWrites() { return efspNonOwnerBlockWrites; }
+
 /** The ATC-scope letter for a Position (docs/adr/0088), searched across Facilities; null when none is configured. */
 export function getEfspPositionLetter(positionId) {
   for (const letters of Object.values(efspPositionLetters)) {
@@ -381,6 +387,7 @@ export function _resetEfspStateForTest() {
   efspBays = [];
   efspAitAuthorizedByFacility = {};
   efspPositionLetters = {};
+  efspNonOwnerBlockWrites = [];
   setAirportSurfacePositions({});
   efspSelf = null;
 }
