@@ -295,6 +295,13 @@ function createFacilityConfig({ env = process.env } = {}) {
     return out;
   }
 
+  /** Every Facility's airport-surface Positions, `{ facilityId: [positionId] }` (H162), [] where none — sent in the EFSP snapshot. */
+  function allAirportSurfacePositions() {
+    const out = {};
+    for (const [facilityId, config] of _configs()) out[facilityId] = [...(config.airportSurfacePositions || [])];
+    return out;
+  }
+
   /**
    * A Position's radar selectors (docs/adr/0043). Empty for a Position with no
    * scope — Ground and Clearance Delivery genuinely have none, and that is the
@@ -463,7 +470,7 @@ function createFacilityConfig({ env = process.env } = {}) {
   return {
     setRangePositionIds,
     DEFAULT_FACILITY_ID, getFacilityIds,
-    getFacilityConfig, getPositionSet, getPositionClass, getPositionLetter, allPositionLetters, getConsolidation, getHandBack, getHatMaps, getPositionFrequencies, getModeCIntruder, getBaysFor, getAllBays, isBlockVisible,
+    getFacilityConfig, getPositionSet, getPositionClass, getPositionLetter, allPositionLetters, allAirportSurfacePositions, getConsolidation, getHandBack, getHatMaps, getPositionFrequencies, getModeCIntruder, getBaysFor, getAllBays, isBlockVisible,
     getPositionRadars, radarBearingPositionIds, validateRadarSelector,
     bayImpliesState, bayHoldsStripType, bayForImpliedState, bayExists, coordinationBayFor, setFacilityConfig, validateConfig,
     getBay, getSingleFrequencyApproach, BAY_VIEWS,

@@ -2,7 +2,11 @@
  "exports": {
   "airport-surface.js": [
    "AIRPORT_SURFACE_LAYERS",
-   "airportSurfaceVisibility"
+   "airportSurfaceHeld",
+   "airportSurfacePaint",
+   "airportSurfaceVisibility",
+   "getAirportSurfacePositions",
+   "setAirportSurfacePositions"
   ],
   "airspace-draw.js": [
    "snapToNavpoint",

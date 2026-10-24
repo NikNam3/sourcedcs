@@ -7,6 +7,7 @@ import { _replaceCorrelations, _resetCorrelationState } from './correlation-stat
 import { _replaceMarsa, _resetMarsaState } from './marsa-state.js';
 import { _replaceRunwayStatuses, _resetRunwayStatusState } from './runway-status-state.js';
 import { _resetAlertsState } from './alerts-state.js';
+import { setAirportSurfacePositions } from '../../airport-surface.js';
 import { applyFrequencyDelta, getFrequencyRows, positionFrequenciesOf, replaceFrequencyRows, sfaPoolOf } from './frequency-state.js';
 
 // The stores split out of this file (DESK-SPLIT) keep their public names here, so importers read them from one place.
@@ -79,6 +80,7 @@ export function applyEfspSnapshot(msg) {
   efspBays = msg.bays || [];
   efspAitAuthorizedByFacility = msg.aitAuthorizedByFacility || {};
   efspPositionLetters = msg.positionLetters || {};
+  setAirportSurfacePositions(msg.airportSurfacePositions); // who sees the airport surface, per Facility (H162)
   if (msg.self) efspSelf = msg.self;
   // A snapshot after a reconnect can carry edits made while this window was away: log them against what it last held.
   _replaceAirspaces(msg.airspaces);
@@ -379,5 +381,6 @@ export function _resetEfspStateForTest() {
   efspBays = [];
   efspAitAuthorizedByFacility = {};
   efspPositionLetters = {};
+  setAirportSurfacePositions({});
   efspSelf = null;
 }

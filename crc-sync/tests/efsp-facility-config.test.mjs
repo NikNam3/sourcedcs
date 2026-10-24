@@ -361,6 +361,17 @@ test('a position letter must be one character, on a known Position', () => {
   assert.equal(validateConfig({ ...base, positionLetters: { AP: 'R' } }).ok, true);
 });
 
+// ── Airport surface Positions (H162) ──────────────────────────────────────
+
+test('airport surface Positions: every Facility present, Incirlik GC and LC, the rest empty, a copy each time', () => {
+  const { allAirportSurfacePositions } = createFacilityConfig();
+  const all = allAirportSurfacePositions();
+  assert.deepEqual(all.INCIRLIK, ['GC', 'LC']);
+  for (const [f, list] of Object.entries(all)) if (f !== 'INCIRLIK') assert.deepEqual(list, [], f);
+  all.INCIRLIK.push('X');
+  assert.deepEqual(allAirportSurfacePositions().INCIRLIK, ['GC', 'LC']);
+});
+
 // ── Loading (docs/wip/DATA-1.md, S-ARCH2 (12)) — each case in a fresh process, since the module loads once ──
 
 const CHILD_CWD = path.join(new URL('.', import.meta.url).pathname, '..');
@@ -450,6 +461,18 @@ test('a state/ copy is not merged with the shipped file: a partial copy fails on
   const r = inChild(d, posOf());
   assert.notEqual(r.status, 0);
   assert.match(r.stderr, /CENTER: .*missing required key/);
+});
+
+test('a state/ copy naming an unknown airport-surface Position stops start-up naming the file (H162)', () => {
+  const d = scratchConfigDir();
+  fs.mkdirSync(d.state);
+  const bad = JSON.parse(fs.readFileSync(path.join(d.config, FILES[1]), 'utf8'));
+  bad.airportSurfacePositions = ['GC'];
+  fs.writeFileSync(path.join(d.state, FILES[1]), JSON.stringify(bad));
+  const r = inChild(d, posOf());
+  assert.notEqual(r.status, 0);
+  assert.match(r.stderr, /CENTER: .*efsp-facility-center\.json is not a valid facility config/);
+  assert.match(r.stderr, /airportSurfacePositions references unknown Position GC/);
 });
 
 test('a file that is not JSON is a startup error', () => {

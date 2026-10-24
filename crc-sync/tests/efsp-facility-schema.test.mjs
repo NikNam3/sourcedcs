@@ -136,3 +136,21 @@ test('modeCIntruder: shipped terminal 500 ft AGL, CENTER 5,000 ft MSL with 1,500
   assert.deepEqual(schema.validateFacilityConfig(none, 'INCIRLIK'), { ok: true }, 'optional');
   assert.deepEqual({ ...schema.MCI_DEFAULT }, { baseAltitudeFt: 500, reference: 'AGL', highTerrainAglFt: null, inhibitedPositions: [] });
 });
+
+// H162 (U-SURFACE): the Positions that see the airport surface. Optional; a list of this Facility's Positions, no repeats.
+test('airportSurfacePositions: Incirlik ships GC and LC, the others none; unknown, repeated or malformed refused', () => {
+  assert.deepEqual(shipped('INCIRLIK').airportSurfacePositions, ['GC', 'LC']);
+  for (const id of IDS.filter(i => i !== 'INCIRLIK')) assert.equal(shipped(id).airportSurfacePositions, undefined, id);
+  const unknown = shipped('INCIRLIK'); unknown.airportSurfacePositions = ['GC', 'CTR'];
+  reject(unknown, 'airportSurfacePositions references unknown Position CTR');
+  const twice = shipped('INCIRLIK'); twice.airportSurfacePositions = ['GC', 'GC'];
+  reject(twice, 'airportSurfacePositions must be a list of unique Position ids');
+  const notList = shipped('INCIRLIK'); notList.airportSurfacePositions = { GC: true };
+  reject(notList, 'airportSurfacePositions must be a list');
+  const blank = shipped('INCIRLIK'); blank.airportSurfacePositions = [''];
+  reject(blank, 'airportSurfacePositions must be a list');
+  const empty = shipped('CENTER'); empty.airportSurfacePositions = [];
+  assert.deepEqual(schema.validateFacilityConfig(empty, 'CENTER'), { ok: true }, 'empty is none');
+  const other = shipped('CENTER'); other.airportSurfacePositions = ['CTR'];
+  assert.deepEqual(schema.validateFacilityConfig(other, 'CENTER'), { ok: true }, 'any Facility may list its own');
+});

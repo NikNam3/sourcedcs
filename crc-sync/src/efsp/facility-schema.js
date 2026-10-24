@@ -42,6 +42,17 @@ function validateConfig(candidate) {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: `positionLetters.${positionId} must be one character A-Z or 0-9` };
     }
   }
+  if (candidate.airportSurfacePositions !== undefined) {
+    const list = candidate.airportSurfacePositions;
+    if (!Array.isArray(list) || list.some(p => typeof p !== 'string' || !p) || new Set(list).size !== list.length) {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: 'airportSurfacePositions must be a list of unique Position ids' };
+    }
+    for (const positionId of list) {
+      if (!(candidate.positions || []).includes(positionId)) {
+        return { ok: false, reason: 'VALIDATION_ERROR', detail: `airportSurfacePositions references unknown Position ${positionId}` };
+      }
+    }
+  }
   for (const positionId of Object.keys(candidate.positionClasses || {})) {
     if (!(candidate.positions || []).includes(positionId)) {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: `positionClasses references unknown Position ${positionId}` };
@@ -301,6 +312,10 @@ const isPlainObject = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
 //  positionLetters: the one character an ATC scope draws on a contact this Position owns (docs/adr/0088, the
 //    STARS "position symbol"). [SOURCE-DEFINED] (docs/adr/0088): the letters are ours; one A-Z or 0-9 each.
 //    The whole tactical side shares `M`, shown on a flight under tactical control after TOFI (H48).
+//  airportSurfacePositions (optional): the Positions whose controller sees the airport surface (taxiways, aprons,
+//    runway designators, names) on the scope, held as Primary or Observer, on any background (docs/parallel/decisions.md
+//    H162, H156 SC-Q1). Positions of this Facility, no repeats; absent or empty: none. Sent in the snapshot per Facility
+//    like positionLetters. [SOURCE-DEFINED] until ADR 0132's roles name the ground and tower Positions.
 //  consolidation: who is OFFERED the hat of an unstaffed Position, in order: `{ CD: ['GC', 'LC', 'AP'] }` reads "when
 //    CD is unstaffed, the first of GC, LC, AP that is staffed is offered CD" (docs/adr/0110; JO 7210.3 para 2-2-3,
 //    2-6-5: one controller signed on and responsible for each open position, consolidated ones included). Nothing moves:
