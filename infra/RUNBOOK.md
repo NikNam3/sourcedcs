@@ -123,7 +123,7 @@ client against the new server (or the reverse) does not work. Decisions S-M-W7, 
 
 `consolidation` in the facility config is now a list of Positions offered the hat (`"CD": ["GC", "LC", "AP"]`), and there is a new required key `handBack` (`{}` where empty). Strict state refuses the old shape. Check the `crc-sync-state` volume (`/app/state`) for any `efsp-facility-*.json`: no code writes these files, so one exists only if someone placed it. If there is one, delete it (the shipped file applies) or convert its `consolidation` values to lists and add `"handBack": {}`; a copy with a string value stops start-up with the file and the reason in the log. The same release changes the wire (protocol 2): release crc-desktop after the merge to `main`, as in "Wire protocol and the deploy gate" above.
 
-## v2 launch (round 2, crc-sync ADRs 0121-0138): before the deploy
+## v2 launch (round 2, crc-sync ADRs 0121-0141): before the deploy
 
 Ship crc-desktop and the crc-sync image together, as always. Strict state again refuses older files, so in the
 `crc-sync-state` volume (`/app/state`):
@@ -131,7 +131,13 @@ Ship crc-desktop and the crc-sync image together, as always. Strict state again 
 1. **`efsp-board.json` and `efsp-mutations*.jsonl`:** a Board holding any HANDOFF Strip from before ADR 0122 (the old
    `coordination.release` key) or RSU PATTERN Strips stops start-up. Delete both for a clean start (open Strips are lost).
 2. **`efsp-facility-incirlik.json`**, if one exists: a copy naming `RSU` or the `rsu-pattern` Bay stops start-up (there is
-   no RSU, ADR 0126). Delete it, or remove every RSU entry and add the `lc-pattern` Bay.
+   no RSU, ADR 0126). Delete it, or remove every RSU entry and add the `lc-pattern` Bay. A kept copy also keeps the old
+   runway headings and PAR courses (056/236 true, 3.3° off the DCS runway; the shipped file has 052.7/232.7, S-ARCH-93) and
+   lacks `airportSurfacePositions` (no airport surface for anyone, H162): deleting it is the simple fix.
+   - **`alerting.json`**, if one exists: `headingGraceSec` is gone (the grace now scales with the turn: `headingTurnRateDegPerSec`,
+     `headingTurnMaxBankDeg`, `headingGraceMarginSec`, H163). A copy that still has it stops start-up (unknown key): delete the key.
+   - **`server-resources.json`** is new (crc-sync ADR 0141, the METRICS panel's Server section); a `state/` copy is optional and
+     strict.
 3. **`efsp-airspaces.json`**, if one exists: it replaces the shipped standing list whole, so it must carry the jurisdiction
    areas `LTAG-CZ`, `LTAG-RAPCON` and `CVN-72-CCA` (copy them from `crc-sync/config/efsp-airspaces.json`) or every point
    is CENTER's and a not-released handoff never moves control. Delete it to take the shipped list.
