@@ -164,7 +164,7 @@ export function headingsModel(sample) {
   const wind = _pmFin(h.windFrom) && _pmFin(h.windKt) ? `${_pmHdg(h.windFrom)}/${Math.round(h.windKt)}` : '';
   const title = needed
     ? `Heading to hold the final course in the field wind${wind ? ` (${wind})` : ''}: ${needed}. The aircraft's heading: ${current || 'unknown'}.`
-    : `No needed heading: ${wind ? 'the aircraft\'s speed is unknown' : 'no field wind'}. The aircraft's heading: ${current || 'unknown'}.`;
+    : `No final heading: ${wind ? 'the aircraft\'s speed is unknown' : 'no field wind'}. The aircraft's heading: ${current || 'unknown'}.`;
   return { needed, current, wind, offDeg, title };
 }
 

@@ -203,7 +203,7 @@ test('01 on the glidepath: all grey but the magenta track; the header, the fligh
   expect(azLabels).toContain('0°');
   expect(azLabels.some(t => /°L$/.test(t)) && azLabels.some(t => /°R$/.test(t))).toBe(true);
   expect(azLabels.join(' ')).not.toMatch(/ft/);
-  await expect(panel(page).locator('[data-par-scope="az"] .par-win')).toContainText('±2°');
+  await expect(panel(page).locator('[data-par-scope="az"] .par-win')).toContainText('±3°'); // the fixed window (ADR 0139, H164 FT-Q7 c)
   await expect(panel(page).locator('[data-par-scope="az"] .par-win')).not.toContainText('ft');
   for (const tag of ['tol-left', 'tol-right', 'course']) {
     const ys = await page.evaluate((t) => [...document.querySelector(`#par-panel [data-par-line="${t}"]`).getAttribute('d').matchAll(/[ML][\d.-]+ ([\d.-]+)/g)].map(m => m[1]), tag);
@@ -572,4 +572,66 @@ test('08 an empty final: the approach values stay on the header and PAR sets one
   await inject(page, [], []);
   await expect(panel(page).locator('#par-body')).toBeHidden();
   await expect(panel(page).locator('#par-empty')).toBeVisible();
+});
+
+// crc-sync docs/adr/0139 (decisions H164): the azimuth window is fixed (FT-Q7 c), the final heading and the aircraft's own are
+// read out and ticked on the azimuth scope (FT-Q5), and the server's GLIDESLOPE alert is said on the EL row and the Strip (FT-Q8).
+test('09 ADR 0139: the azimuth window stays ±3° off course (Shift+wheel zooms it, autoscale runs on); FIN HDG and HDG with the azimuth heading tick; GLIDESLOPE on the EL row and the Strip', async ({ page }) => {
+  await incirlik(page);
+  const call = `PAR${unique()}`;
+  const id = await onParFinal(page, call);
+  const headings = { needed: 49, current: 54, windFrom: 140, windKt: 20 };
+  await inject(page, [{ ...sample(id, { r: 6, azDeg: 2.6 }), headings }]);
+  await openFromBay(page, 'PAR', 'par-final', call);
+
+  // FT-Q7 c: a track 2.6° off does not widen the window; autoscale still runs the range
+  await expect.poll(async () => (await view(page)).rMax).toBeCloseTo(10, 3);
+  expect((await view(page)).azMaxDeg).toBe(3);
+  await inject(page, [{ ...sample(id, { r: 14, azDeg: 5 }), headings }]);
+  await expect.poll(async () => (await view(page)).rMax).toBeCloseTo(14 / 0.618, 3);
+  expect((await view(page)).azMaxDeg).toBe(3);
+  await expect(plotMark(page, 'az')).toHaveAttribute('data-clamped', '1');
+  // Shift+wheel over the azimuth scope zooms it and leaves autoscale running
+  const az = panel(page).locator('[data-par-scope="az"]');
+  const box = await az.boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.keyboard.down('Shift');
+  await page.mouse.wheel(0, 200);
+  await page.keyboard.up('Shift');
+  await expect.poll(async () => (await view(page)).azMaxDeg).toBeGreaterThan(3);
+  expect((await view(page)).paused).toBe(false);
+  // a double-click puts it back
+  await az.dblclick();
+  await expect.poll(async () => (await view(page)).azMaxDeg).toBe(3);
+
+  // FT-Q5: the readouts, grey, and the tick: the aircraft 5° right of the final heading
+  await expect(devItem(page, 'finHdg')).toContainText('FIN HDG 049');
+  await expect(devItem(page, 'hdg')).toContainText('HDG 054');
+  await expect(panel(page).locator('[data-par-hdg="needed"]')).toHaveCount(1);
+  await expect(panel(page).locator('[data-par-hdg="current"]')).toHaveAttribute('data-off-deg', '5');
+  await expect(devItem(page, 'finHdg')).not.toHaveClass(/par-danger|par-attn/);
+  await panel(page).screenshot({ path: test.info().outputPath('09-headings.png') });
+  await inject(page, [{ ...sample(id, { r: 5 }), headings: { needed: null, current: 54, windFrom: null, windKt: null } }]);
+  await expect(devItem(page, 'finHdg')).toContainText('—');
+  await expect(panel(page).locator('[data-par-hdg-scale]')).toHaveCount(0);
+
+  // FT-Q8: the server's GLIDESLOPE (the harness has no DCS: the alert frame is applied as the hub would send it)
+  const fd = await page.evaluate((sid) => crc.state.getEfspStrip(sid).flightDataId, id);
+  const sendAlerts = (alerts) => page.evaluate(([f, a]) => {
+    crc.state.applyEfspAlerts({ conformance: a.length ? [{ flightDataId: f, alerts: a }] : [] });
+    crc.changeBus.markEfspChanged('alerts');
+  }, [fd, alerts]);
+  await sendAlerts([{ kind: 'GLIDESLOPE', side: 'BELOW', devDeg: -0.8, limitDeg: 0.5, since: 0 }]);
+  await expect(devItem(page, 'el')).toContainText('BELOW GLIDEPATH');
+  await expect(devItem(page, 'el')).toHaveAttribute('data-level', 'danger');
+  // the Strip, in the flight strips panel (a tab beside the PAR panel)
+  const activate = (id) => page.evaluate((p) => crc.dock.dock.api.getPanel(p).api.setActive(), id);
+  await activate('efsp');
+  const chip = page.locator('.efsp-strip', { hasText: call }).locator('.efsp-conf-glidepath');
+  await expect(chip).toContainText('GP ↓');
+  await expect(chip).toHaveClass(/efsp-ind-bad/);
+  await sendAlerts([]);
+  await expect(chip).toHaveCount(0);
+  await activate('par');
+  await expect(devItem(page, 'el')).not.toContainText('GLIDEPATH');
 });

@@ -206,8 +206,9 @@ function _build() {
   const elDev = item('EL', 'el');
   const azDev = item('AZ', 'az');
   const alt = item('ALT', 'alt');
-  // ADR 0139: the needed heading, then the aircraft's own beside it (grey: a picture, never an instruction, H115)
-  const need = item('NEED', 'need');
+  // ADR 0139: the final heading (the one that holds the course in the field wind), then the aircraft's own beside it (grey:
+  // a picture, never an instruction, H115)
+  const need = item('FIN HDG', 'finHdg');
   const hdg = item('HDG', 'hdg');
   const msg = _el('div', 'par-msg', '');
   msg.dataset.par = 'msg';
@@ -327,14 +328,14 @@ function _drawScope(scope, kind, c) {
 const HDG_TICK_SPAN_DEG = 10; // the heading tick's scale: ±10° around the needed heading
 
 /**
- * The heading tick on the azimuth scope (decisions H164 FT-Q5, ADR 0139): a short heading scale along the scope's top edge,
+ * The heading tick on the azimuth scope (decisions H164 FT-Q5, ADR 0139): a short heading scale in the middle of the top edge,
  * ±10° around the needed heading. A grey tick at its middle is the needed heading (labelled), a magenta one the aircraft's own,
  * at the edge (hollow) when it is further off. Nothing with no needed heading.
  */
 function _drawHeadingTick(g, h, { L, R, T }) {
   if (!h || !h.needed) return;
   const w = Math.min(160, (R - L) * 0.4);
-  const x0 = R - w - 6;
+  const x0 = (L + R) / 2 - w / 2; // the middle of the top edge: the caption and the window text sit at the corners
   const xMid = x0 + w / 2;
   const y = T + 4;
   const X = (off) => xMid + (clampTo(off, -HDG_TICK_SPAN_DEG, HDG_TICK_SPAN_DEG) / HDG_TICK_SPAN_DEG) * (w / 2);
