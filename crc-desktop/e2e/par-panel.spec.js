@@ -21,7 +21,7 @@ const RAD = Math.PI / 180;
 
 const APPROACH_05 = {
   id: 'LTAG-05', label: 'PAR RWY 05', runwayEnd: '05', airportIcao: 'LTAG',
-  gpaDeg: 3.06, tchFt: 50, tdzeFt: 238, dhFt: 200, daFt: 438, courseTrueDeg: 56, courseDisplay: { value: 51, ref: 'M' },
+  gpaDeg: 3.06, tchFt: 50, tdzeFt: 238, dhFt: 200, daFt: 438, courseTrueDeg: 52.7, courseDisplay: { value: 47, ref: 'M' },
   defaults: { tdzeFt: 238, tchFt: 50, dhFt: 200, gpaDeg: 3.06 }, set: [],
 };
 const R_DA = (200 - 50) / (FT_PER_NM * Math.tan(3.06 * RAD)); // where the glidepath reaches DA
@@ -140,7 +140,7 @@ test('01 on the glidepath: all grey but the magenta track; the header, the fligh
   await expect(field(page, 'dhFt')).toHaveText('200');
   await expect(field(page, 'gpaDeg')).toHaveText('3.06°');
   await expect(field(page, 'da')).toHaveText('438');
-  await expect(field(page, 'fac')).toHaveText('051M');
+  await expect(field(page, 'fac')).toHaveText('047M');
   await expect(field(page, 'name')).toHaveText(call); // a callsign at Incirlik (H122)
   await expect(field(page, 'type')).toHaveText('F-16C');
   await expect(field(page, 'gs')).toHaveText('142 kt');
@@ -427,10 +427,10 @@ test('05 walks: a second aircraft joins (the picks), the landing runway changes 
   // the landing runway changes mid-approach: the trail measured from the old threshold is cleared
   await expect(panel(page).locator('[data-par-trail="el"] circle')).toHaveCount(12);
   const old = sample(ida, { r: 1.9 });
-  const switched = { ...sample(ida, { r: 6, approach: { ...APPROACH_05, id: 'LTAG-23', runwayEnd: '23', courseDisplay: { value: 231, ref: 'M' } } }), trail: old.trail, plot: old.plot };
+  const switched = { ...sample(ida, { r: 6, approach: { ...APPROACH_05, id: 'LTAG-23', runwayEnd: '23', courseDisplay: { value: 227, ref: 'M' } } }), trail: old.trail, plot: old.plot };
   await inject(page, [switched]);
   await expect(field(page, 'title')).toHaveText('RWY 23 · LTAG');
-  await expect(field(page, 'fac')).toHaveText('231M');
+  await expect(field(page, 'fac')).toHaveText('227M');
   await expect(panel(page).locator('[data-par-trail="el"] circle')).toHaveCount(0);
   await panel(page).screenshot({ path: test.info().outputPath('05-runway-changed.png') });
 

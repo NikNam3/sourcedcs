@@ -28,7 +28,7 @@ const { RunwayStatusStore } = require('../../crc-sync/src/efsp/runway-status-sto
 const INVENTORY = {
   airportIcao: 'LTAG',
   runways: [{
-    runwayId: '05/23', ends: ['05', '23'], endHeadingsTrue: { '05': 56, '23': 236 },
+    runwayId: '05/23', ends: ['05', '23'], endHeadingsTrue: { '05': 52.7, '23': 232.7 },
     rackIds: { '05': 'rwy-05', '23': 'rwy-23' }, arrestingGear: [],
   }],
   runwayChangeAcknowledgers: ['OPS', 'AP'],
@@ -41,7 +41,7 @@ function record({ status = 'OPEN', activeRunway = '05', suspension = null, closu
   return {
     facilityId, rev, activeRunway, activeRunwaySource: null,
     runways: [{
-      runwayId: '05/23', ends: ['05', '23'], endHeadingsTrue: { '05': 56, '23': 236 },
+      runwayId: '05/23', ends: ['05', '23'], endHeadingsTrue: { '05': 52.7, '23': 232.7 },
       rackIds: { '05': 'rwy-05', '23': 'rwy-23' }, status, arrestingGear: gear,
       suspension, closure, lastInspection: null, pendingRequest,
     }],

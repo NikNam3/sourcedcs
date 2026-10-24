@@ -7,7 +7,7 @@ import par from '../src/surveillance/par.js';
 
 const FT_PER_NM = 6076.12;
 const M_PER_FT = 0.3048;
-const RWY = { refLat: 36.99444, refLon: 35.41157, courseTrueDeg: 56, tdzeFt: 238, tchFt: 50, gpaDeg: 3.06 };
+const RWY = { refLat: 36.99444, refLon: 35.41157, courseTrueDeg: 52.7, tdzeFt: 238, tchFt: 50, gpaDeg: 3.06 };
 const COV = { rangeNm: 20, azimuthHalfDeg: 15, elevationMinDeg: -1, elevationMaxDeg: 7, apexBeyondNm: 0.5 };
 
 /** An aircraft `nm` before the reference point on the course, `rightFt` right of it (as the pilot sees it), at `heightFt` above TDZE. */
@@ -44,7 +44,7 @@ test('above and right of course: positive elevation and azimuth deviations, in f
 });
 
 test('the reciprocal end measures from its own threshold and course', () => {
-  const g23 = { ...RWY, refLat: 37.00976, refLon: 35.44003, courseTrueDeg: 236 };
+  const g23 = { ...RWY, refLat: 37.00976, refLon: 35.44003, courseTrueDeg: 232.7 };
   const p = par.measure(g23, at(g23, 5, { rightFt: 120 }));
   assert.equal(p.rangeNm, 5);
   assert.ok(Math.abs(p.azDevFt - 120) <= 1);
@@ -87,7 +87,7 @@ test('coverage: 20 NM, 15 degrees either side, -1 to +7 degrees from an antenna 
 });
 
 test('validateParApproaches: every key checked, ends must exist, null TDZE and null GPA allowed', () => {
-  const ok = { label: 'PAR RWY 05', thresholdLat: 37, thresholdLon: 35, courseTrueDeg: 56, tdzeFt: null, tchFt: 50, decisionHeightFt: 200, glideslopeDeg: null };
+  const ok = { label: 'PAR RWY 05', thresholdLat: 37, thresholdLon: 35, courseTrueDeg: 52.7, tdzeFt: null, tchFt: 50, decisionHeightFt: 200, glideslopeDeg: null };
   assert.equal(par.validateParApproaches({ _comment: 'x', '05': ok }, ['05', '23']), null);
   assert.equal(par.validateParApproaches({ '05': { ...ok, tdzeFt: 238, glideslopeDeg: 3 } }, ['05']), null);
   assert.match(par.validateParApproaches({ '09': ok }, ['05', '23']), /no runway end 09/);

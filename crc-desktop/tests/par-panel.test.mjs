@@ -15,7 +15,7 @@ const near = (a, b, eps = 1e-6) => assert.ok(Math.abs(a - b) < eps, `${a} != ${b
 
 const approach = (over) => ({
   id: 'LTAG-05', kind: 'RUNWAY', label: 'PAR RWY 05', runwayEnd: '05', airportIcao: 'LTAG', hullId: null,
-  gpaDeg: 3.06, tchFt: 50, tdzeFt: 238, dhFt: 200, daFt: 438, courseTrueDeg: 56, courseDisplay: { value: 51, ref: 'M' },
+  gpaDeg: 3.06, tchFt: 50, tdzeFt: 238, dhFt: 200, daFt: 438, courseTrueDeg: 52.7, courseDisplay: { value: 47, ref: 'M' },
   defaults: { tdzeFt: 238, tchFt: 50, dhFt: 200, gpaDeg: 3.06 }, set: [], ...over,
 });
 const plot = (over) => ({ rangeNm: 3.36, heightFt: 1135, elevDeg: 3.04, elevDevDeg: -0.02, elevDevFt: -6, azDeg: -0.15, azDevFt: -55, gsKt: 142, vsFpm: -770, ...over });
@@ -43,7 +43,7 @@ test('parseParValue: as the server checks it (ranges, rounding, units, empty = t
   assert.equal(M.parseParValue('dhFt', '99').ok, false);
   assert.equal(M.parseParValue('dhFt', 'abc').ok, false);
   assert.equal(M.parseParValue('dhFt', '1e3').ok, false);
-  assert.equal(M.parseParValue('courseTrueDeg', '56').ok, false);
+  assert.equal(M.parseParValue('courseTrueDeg', '52.7').ok, false);
 });
 
 test('PAR_VALUE_LIMITS mirror crc-sync surveillance/par.js verbatim', async () => {
@@ -267,7 +267,7 @@ test('par-panel draws the azimuth scope in degrees: no feet conversion left in i
 });
 
 test('header: the runway (the PAR is airfield-only, H125)', () => {
-  assert.deepEqual(M.headerModel(approach(), 3.06), { title: 'RWY 05 · LTAG', gpa: '3.06°', tch: '50', da: '438', fac: '051M' });
+  assert.deepEqual(M.headerModel(approach(), 3.06), { title: 'RWY 05 · LTAG', gpa: '3.06°', tch: '50', da: '438', fac: '047M' });
   assert.equal(M.headerModel(null, 3).title, 'NO APPROACH');
 });
 

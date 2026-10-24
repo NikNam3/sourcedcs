@@ -709,7 +709,7 @@ test('the inhibit follows the rack a Strip is in, at a field with two independen
   // rack it is judged against 17 (decisions.md Q27).
   const inv = {
     runways: [
-      { runwayId: '05/23', ends: ['05', '23'], endHeadingsTrue: { '05': 56, '23': 236 }, rackIds: { '05': 'rwy-05', '23': 'rwy-23' }, arrestingGear: [] },
+      { runwayId: '05/23', ends: ['05', '23'], endHeadingsTrue: { '05': 52.7, '23': 232.7 }, rackIds: { '05': 'rwy-05', '23': 'rwy-23' }, arrestingGear: [] },
       { runwayId: '17/35', ends: ['17', '35'], endHeadingsTrue: { '17': 175, '35': 355 }, rackIds: { '17': 'rwy-17', '35': 'rwy-35' }, arrestingGear: [] },
     ],
   };
