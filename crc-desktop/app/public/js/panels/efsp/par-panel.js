@@ -1,15 +1,15 @@
 'use strict';
 import { getSetting, registerSettingsTab } from '../../settings-registry.js';
 import { toggleDockPanel, isDockPanelOpen } from '../../dock-handle.js';
-import { getEfspFlightData, getEfspStrip } from './efsp-state.js';
+import { conformanceAlertsForFlightData, getEfspFlightData, getEfspStrip } from './efsp-state.js';
 import { getActingPositions, sendEfspMutation, sendEfspRunwayStatusMutation } from './efsp-ws.js';
 import { RUNWAY_STATUS_ACTION_OWNERS } from './runway-status-rules.js';
 import { onEfspChanged } from './efsp-change-bus.js';
 import { parFinalApproaches, parSampleTimes, parSamples, parSampleFor } from './par-samples.js';
 import {
-  DEFAULT_VIEW, PAR_DEFAULTS, PAR_VALUE_CELLS, autoscaleView, azAxisLabel, clampTo, createTrailFilter, gpHeightFt, headerModel,
-  niceStep, noPlotState, pickFlight, rangeAtDaNm, readoutModel, parseParValue, parTerminalOp, parTerminalRecorded, parTerminals, parValueCells,
-  severity, zoomView,
+  DEFAULT_VIEW, PAR_DEFAULTS, PAR_VALUE_CELLS, autoscaleView, azAxisLabel, clampTo, createTrailFilter, glidepathWarningText, gpHeightFt,
+  headerModel, headingsModel, niceStep, noPlotState, pickFlight, rangeAtDaNm, readoutModel, parseParValue, parTerminalOp, parTerminalRecorded,
+  parTerminals, parValueCells, severity, zoomPausesAutoscale, zoomView,
 } from './par-model.js';
 
 // The PAR panel (decisions H115, H116, H122, H141; mockup docs/mockups/par-panel.html, revision 5; ADR 0123; lane note docs/wip/PAR-2.md). An
@@ -19,7 +19,9 @@ import {
 //
 // Scopes: touchdown fixed in the bottom-left corner (azimuth: the left edge, on the centreline); the wheel zooms the range of both,
 // Shift+wheel this scope's vertical; no pan. Autoscale (the PAR Settings tab) keeps the track at the golden-ratio point until the
-// window is 10 NM; a manual zoom pauses it and a double-click resumes it. Track style E: a magenta diamond with a dark halo and a
+// window is 10 NM, in range and height only: the azimuth window is fixed at ±3° until the controller zooms it (decisions H164
+// FT-Q7 c, ADR 0139). A manual zoom of what autoscale sets pauses it and a double-click resumes it (and puts the azimuth window
+// back to ±3°). Track style E: a magenta diamond with a dark halo and a
 // magenta trail over dimmed reference lines.
 //
 // The azimuth scope is in degrees only (ADR 0123): the course is the 0° line, the ±tolerance lines are straight, and a plot past
@@ -27,7 +29,10 @@ import {
 //
 // Dark cockpit: grey unless a problem. Red outside a tolerance above DA only (Settings: elevation +1° above and 0.5° below the
 // glidepath, the FAA lower safe limit; azimuth ±1°); nothing is coloured below DA and the dashed tolerance lines start there (H116). Amber only for no plot for 3 s. An INOP scope is blanked in orange-red with
-// the reason. Several flights on finals sent to this controller: a row of their names picks the one the scopes show
+// the reason. The one alert on a PAR final, crc-sync's GLIDESLOPE (ADR 0139: after Begin descent, outside the glidepath for 2 s),
+// is said on the EL row in the same red, ABOVE / BELOW GLIDEPATH. The needed heading (the one that holds the final course in the
+// field wind) and the aircraft's heading are read out grey on the deviation row and drawn as a heading tick on the azimuth scope
+// (decisions H164 FT-Q5, ADR 0139). Several flights on finals sent to this controller: a row of their names picks the one the scopes show
 // (par-model.js `pickFlight`); the Strip's ⋯ menu item "Show in PAR panel" picks it too (the FINAL Bay is ordinary
 // Strips, H138 U10).
 //
@@ -171,13 +176,13 @@ function _build() {
     box.addEventListener('wheel', (e) => {
       e.preventDefault();
       _view = zoomView(_view, kind, e.shiftKey, e.deltaY);
-      if (getSetting('parAutoscale')) _paused = true;
+      if (getSetting('parAutoscale') && zoomPausesAutoscale(kind, e.shiftKey)) _paused = true;
       renderParPanel();
     }, { passive: false });
     box.addEventListener('dblclick', (e) => {
       e.preventDefault();
       _paused = false;
-      if (!getSetting('parAutoscale')) _view = { ...DEFAULT_VIEW };
+      _view = getSetting('parAutoscale') ? { ..._view, azMaxDeg: DEFAULT_VIEW.azMaxDeg } : { ...DEFAULT_VIEW };
       renderParPanel();
     });
     scopes.appendChild(box);
@@ -201,11 +206,15 @@ function _build() {
   const elDev = item('EL', 'el');
   const azDev = item('AZ', 'az');
   const alt = item('ALT', 'alt');
+  // ADR 0139: the final heading (the one that holds the course in the field wind), then the aircraft's own beside it (grey:
+  // a picture, never an instruction, H115)
+  const need = item('FIN HDG', 'finHdg');
+  const hdg = item('HDG', 'hdg');
   const msg = _el('div', 'par-msg', '');
   msg.dataset.par = 'msg';
   const terms = _el('div', 'par-terms');
   _bodyEl.append(picks, head, flight, scopes, dev, msg, terms);
-  _els = { picks, head, flight, scopes, dev, title, values, da, facK, fac, flags, name, type, bcnK, bcn, gs, vs, range, el, az, elDev, azDev, alt, msg, terms, termSig: '' };
+  _els = { picks, head, flight, scopes, dev, title, values, da, facK, fac, flags, name, type, bcnK, bcn, gs, vs, range, el, az, elDev, azDev, alt, need, hdg, msg, terms, termSig: '' };
 
   if (typeof ResizeObserver === 'function') {
     if (_resize) _resize.disconnect();
@@ -288,6 +297,7 @@ function _drawScope(scope, kind, c) {
     // degrees: the ±tolerance lines are straight (a B-display, ADR 0123)
     path(() => c.tolAz, true, 'tol-right');
     path(() => -c.tolAz, true, 'tol-left');
+    _drawHeadingTick(g, c.headings, { L, R, T });
   }
 
   // azimuth: a plot past the window's edge (close in, a few feet are degrees) is drawn at the edge, never lost
@@ -313,6 +323,37 @@ function _drawScope(scope, kind, c) {
       ...(kind === 'az' && Math.abs(c.plot.azDeg) > hi ? { 'data-clamped': '1' } : {}),
     }));
   }
+}
+
+const HDG_TICK_SPAN_DEG = 10; // the heading tick's scale: ±10° around the needed heading
+
+/**
+ * The heading tick on the azimuth scope (decisions H164 FT-Q5, ADR 0139): a short heading scale in the middle of the top edge,
+ * ±10° around the needed heading. A grey tick at its middle is the needed heading (labelled), a magenta one the aircraft's own,
+ * at the edge (hollow) when it is further off. Nothing with no needed heading.
+ */
+function _drawHeadingTick(g, h, { L, R, T }) {
+  if (!h || !h.needed) return;
+  const w = Math.min(160, (R - L) * 0.4);
+  const x0 = (L + R) / 2 - w / 2; // the middle of the top edge: the caption and the window text sit at the corners
+  const xMid = x0 + w / 2;
+  const y = T + 4;
+  const X = (off) => xMid + (clampTo(off, -HDG_TICK_SPAN_DEG, HDG_TICK_SPAN_DEG) / HDG_TICK_SPAN_DEG) * (w / 2);
+  const tick = sv('g', { 'data-par-hdg-scale': '1' });
+  tick.appendChild(sv('line', { x1: x0, x2: x0 + w, y1: y, y2: y, stroke: COL.refDash }));
+  for (let d = -HDG_TICK_SPAN_DEG; d <= HDG_TICK_SPAN_DEG; d += 5) tick.appendChild(sv('line', { x1: X(d), x2: X(d), y1: y, y2: y + 3, stroke: COL.refDash }));
+  tick.appendChild(sv('line', { x1: xMid, x2: xMid, y1: y - 2, y2: y + 8, stroke: COL.ref, 'stroke-width': 1.5, 'data-par-hdg': 'needed' }));
+  tick.appendChild(sv('text', { x: xMid, y: y + 18, 'text-anchor': 'middle', fill: COL.faint }, h.needed));
+  if (h.offDeg !== null) {
+    const off = Math.abs(h.offDeg) > HDG_TICK_SPAN_DEG;
+    const x = X(h.offDeg);
+    tick.appendChild(sv('path', {
+      d: `M${x} ${y + 1}L${x + 4} ${y + 8}L${x - 4} ${y + 8}Z`,
+      fill: off ? 'none' : COL.plot, stroke: COL.plot, 'stroke-width': 1,
+      'data-par-hdg': 'current', 'data-off-deg': String(h.offDeg), ...(off ? { 'data-clamped': '1' } : {}),
+    }));
+  }
+  g.appendChild(tick);
 }
 
 function _windowText(kind, autoscale) {
@@ -538,15 +579,24 @@ export function renderParPanel() {
   _els.vs.textContent = ro.vs;
   _els.range.textContent = ro.range;
 
-  const setDev = (it, value, level) => {
+  const setDev = (it, value, level, warning = '') => {
     it.b.textContent = value;
     it.s.className = `par-dev-item${level ? ` par-${level}` : ''}`;
     it.s.dataset.level = level || '';
-    it.extra.textContent = level === 'danger' ? ' OUTSIDE TOLERANCE' : '';
+    it.extra.textContent = warning ? ` ${warning}` : level === 'danger' ? ' OUTSIDE TOLERANCE' : '';
   };
-  setDev(_els.elDev, ro.el, ro.elSev);
+  // crc-sync's GLIDESLOPE (ADR 0139) on this flight: the EL row says which side, in the same red
+  const liveStrip = getEfspStrip(id);
+  const gpWarning = ro.elInop || !liveStrip ? '' : glidepathWarningText(conformanceAlertsForFlightData(liveStrip.flightDataId));
+  _els.elDev.s.dataset.warning = gpWarning ? '1' : '';
+  setDev(_els.elDev, ro.el, gpWarning ? 'danger' : ro.elSev, gpWarning);
   setDev(_els.azDev, ro.az, ro.azSev);
   setDev(_els.alt, ro.alt, '');
+  const hd2 = headingsModel(sample);
+  setDev(_els.need, hd2.needed || '—', '');
+  setDev(_els.hdg, hd2.current || '—', '');
+  _els.need.s.title = hd2.title;
+  _els.hdg.s.title = hd2.title;
   if (!(_editing && _els.msg.dataset.valueError === '1')) {
     _els.msg.dataset.valueError = '';
     _els.msg.textContent = ro.noPlot;
@@ -555,10 +605,10 @@ export function renderParPanel() {
   _renderTerminals(sample);
 
   const autoscale = !!getSetting('parAutoscale');
-  if (autoscale && !_paused && plot) _view = autoscaleView(plot, { gpaDeg: gpa, tchFt: approach ? approach.tchFt : 0, tolAzDeg: tolAz });
+  if (autoscale && !_paused && plot) _view = autoscaleView(plot, { gpaDeg: gpa, tchFt: approach ? approach.tchFt : 0, azMaxDeg: _view.azMaxDeg });
   const ctx = {
     view: _view, gpa, approach, tolElHigh, tolElLow, tolAz, rDa, plot, trail, sev, noPlot: np.amber,
-    elInop: ro.elInop, azInop: ro.azInop, reason: ro.inopReason,
+    elInop: ro.elInop, azInop: ro.azInop, reason: ro.inopReason, headings: hd2,
   };
   _els.el.win.textContent = _windowText('el', autoscale);
   _els.az.win.textContent = _windowText('az', autoscale);

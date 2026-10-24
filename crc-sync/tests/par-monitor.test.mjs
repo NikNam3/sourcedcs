@@ -16,7 +16,7 @@ const TUNING = { defaultGlideslopeDeg: 3.06, sampleMs: 500, trailPlots: 12, cove
 const OWN = 2;
 const DCS_LTAG_ELEV_FT = 160; // what DCS says the airfield is at (the config leaves TDZE to DCS)
 
-function world({ activeRunway = '05', aptElevFt = DCS_LTAG_ELEV_FT, parValues = {} } = {}) {
+function world({ activeRunway = '05', aptElevFt = DCS_LTAG_ELEV_FT, parValues = {}, wind = null, convergence = 0 } = {}) {
   let t = 1_000_000;
   const wall = { now: () => t, step: (ms) => { t += ms; } };
   const strips = { INCIRLIK: [], CARRIER: [] };
@@ -40,6 +40,8 @@ function world({ activeRunway = '05', aptElevFt = DCS_LTAG_ELEV_FT, parValues = 
     runwayViewOf: (fid) => (fid === 'INCIRLIK' ? runwayStatus.buildStatusView(INCIRLIK_CFG.runwayStatus, runwayRecord) : null),
     trackOf: (id) => tracks.get(id),
     variationAt: () => 5,
+    convergenceAt: () => convergence,
+    fieldWindOf: (icao) => (icao === 'LTAG' ? wind : null),
     airportElevationFt: (icao) => (icao === 'LTAG' ? aptElevFt : null),
     parValuesOf: (fid) => (fid === 'INCIRLIK' ? parValues : null),
     wallClock: wall,
@@ -299,4 +301,79 @@ test('empty final: an aircraft on the final does not change the next approach (i
   const [e] = w.monitor.tick();
   assert.equal(e.approach.id, 'LTAG-23');
   assert.equal(w.monitor.finalApproaches()[0].approach.id, 'LTAG-05');
+});
+
+// ── docs/adr/0139: the glidepath alert's figures and the needed heading ─────────────────────────────────────────────────
+
+test('glidepathOf: the latest fresh plot\'s elevation deviation and whether it is beyond DA; null when stale, INOP or absent', () => {
+  const w = world();
+  const s = w.onFinal('INCIRLIK', 'par-final', 'PAR', { trackId: 11 });
+  assert.equal(w.monitor.glidepathOf('INCIRLIK', s.stripId), null, 'never sampled');
+  w.fly(11, on(RWY05, 5, gp(5) - 300, DCS_LTAG_ELEV_FT));
+  w.monitor.tick();
+  const g = w.monitor.glidepathOf('INCIRLIK', s.stripId);
+  assert.ok(g.elevDevDeg < -0.5, `well below the glidepath (${g.elevDevDeg})`);
+  assert.equal(g.beyondDa, true);
+  w.wall.step(3500);
+  w.monitor.tick(); // DCS has not moved the aircraft: the plot ages
+  assert.equal(w.monitor.glidepathOf('INCIRLIK', s.stripId), null, 'a plot older than NO PLOT is no basis for an alert');
+  w.fly(11, on(RWY05, 0.4, gp(0.4) - 40, DCS_LTAG_ELEV_FT));
+  w.monitor.tick();
+  assert.equal(w.monitor.glidepathOf('INCIRLIK', s.stripId).beyondDa, false, '0.4 NM is inside DA (200 ft DH on 3.06 deg is ~0.5 NM)');
+});
+
+test('glidepathOf: with the elevation INOP (no TDZE anywhere) there is nothing to alert on', () => {
+  const w = world({ aptElevFt: null });
+  const s = w.onFinal('INCIRLIK', 'par-final', 'PAR', { trackId: 11 });
+  w.fly(11, on(RWY05, 5, gp(5), DCS_LTAG_ELEV_FT));
+  w.monitor.tick();
+  assert.equal(w.monitor.glidepathOf('INCIRLIK', s.stripId), null);
+});
+
+test('headings: the needed heading holds the course in the field wind, the current is the aircraft\'s, both magnetic', () => {
+  // the course is 052.7 true; variation 5 E. A 20 kt wind from 142.7 true (straight across from the right) at 140 kt TAS.
+  const w = world({ wind: { windFromTrue: 142.7, windKt: 20 } });
+  w.onFinal('INCIRLIK', 'par-final', 'PAR', { trackId: 11 });
+  const tasKt = 140;
+  const wcaDeg = Math.asin(20 / tasKt) * 180 / Math.PI; // 8.2
+  // ground vector = air vector + wind: flying 052.7 + wca true, drifting back onto the course
+  const hdgT = 52.7 + wcaDeg;
+  const toward = (142.7 + 180) * Math.PI / 180;
+  const gx = tasKt * Math.sin(hdgT * Math.PI / 180) + 20 * Math.sin(toward);
+  const gy = tasKt * Math.cos(hdgT * Math.PI / 180) + 20 * Math.cos(toward);
+  const course = Math.atan2(gx, gy) * 180 / Math.PI;
+  w.fly(11, on(RWY05, 5, gp(5), DCS_LTAG_ELEV_FT), { heading: hdgT + 3, course, groundSpeed: Math.hypot(gx, gy) / 1.943844 });
+  const [e] = w.monitor.tick();
+  assert.deepEqual(Object.keys(e.headings), [...par.HEADINGS_KEYS]);
+  assert.equal(e.headings.needed, Math.round(52.7 + wcaDeg - 5), 'course + wind correction, magnetic');
+  assert.equal(e.headings.current, Math.round(hdgT + 3 - 5), 'DCS heading, magnetic');
+  assert.equal(e.headings.windFromMagnetic, Math.round(142.7 - 5));
+  assert.equal(e.headings.windKt, 20);
+});
+
+test('headings: no field wind (or no variation) leaves the needed heading empty, never the course passed off as one', () => {
+  const w = world();
+  w.onFinal('INCIRLIK', 'par-final', 'PAR', { trackId: 11 });
+  w.fly(11, on(RWY05, 5, gp(5), DCS_LTAG_ELEV_FT), { heading: 50, course: 52 });
+  const [e] = w.monitor.tick();
+  assert.equal(e.headings.needed, null);
+  assert.equal(e.headings.current, 45);
+});
+
+test('neededHeading: calm is the course; a headwind changes nothing; a crosswind stronger than the aircraft is no answer', () => {
+  const calm = par.neededHeading({ courseTrueDeg: 52.7, windFromTrueDeg: 0, windKt: 0, trackTrueDeg: 52.7, gsKt: 140 });
+  assert.ok(Math.abs(calm.headingTrueDeg - 52.7) < 1e-9);
+  const head = par.neededHeading({ courseTrueDeg: 52.7, windFromTrueDeg: 52.7, windKt: 30, trackTrueDeg: 52.7, gsKt: 110 });
+  assert.ok(Math.abs(head.headingTrueDeg - 52.7) < 1e-9);
+  assert.ok(Math.abs(head.tasKt - 140) < 1e-9);
+  const left = par.neededHeading({ courseTrueDeg: 5, windFromTrueDeg: 275, windKt: 20, trackTrueDeg: 5, gsKt: 140 });
+  assert.ok(left.headingTrueDeg > 355, `a wind from the left takes the heading left of the course, through north (${left.headingTrueDeg})`);
+  assert.equal(par.neededHeading({ courseTrueDeg: 0, windFromTrueDeg: 270, windKt: 90, trackTrueDeg: 90, gsKt: 80 }), null, 'a 10 kt aircraft in a 90 kt crosswind');
+  assert.equal(par.neededHeading({ courseTrueDeg: 0, windFromTrueDeg: null, windKt: 10, trackTrueDeg: 0, gsKt: 100 }), null);
+});
+
+test('rangeAtDaNm: where the glidepath reaches DA, the client\'s formula', () => {
+  const r = par.rangeAtDaNm({ dhFt: 200, tchFt: 50, gpaDeg: 3.06 });
+  assert.ok(Math.abs(r - 150 / (FT_PER_NM * Math.tan(3.06 * Math.PI / 180))) < 1e-12);
+  assert.equal(par.rangeAtDaNm({ dhFt: null, tchFt: 50, gpaDeg: 3 }), 0);
 });

@@ -309,7 +309,14 @@
         "sensor",
         "plot",
         "plotAgeMs",
-        "trail"
+        "trail",
+        "headings"
+      ],
+      "headings": [
+        "needed",
+        "current",
+        "windFromMagnetic",
+        "windKt"
       ],
       "approach": [
         "id",

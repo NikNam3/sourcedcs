@@ -1,5 +1,5 @@
 {
-  "_comment": "Conformance, Conflict Alert (CA) and Mode C Intruder (MCI) thresholds (docs/adr/0058, 0118). [SOURCE-DEFINED]: our own choices, not doctrine. formationLateralNm/formationVerticalFt: how close an uncorrelated target must be to a formation flight to count as one of its members (ADR 0118, ours; P/CG gives 1 mile and 100 ft for a standard formation). refueling*: the air refueling block relative to the tanker (ADR 0118). airspaceEntry: the airspace-entry alert ignores a track slower or younger than these (ADR 0119, ours). Override by placing a copy in state/alerting.json; missing keys fall back to these. handoff: notCheckedInSec is how long a receiver may have an accepted HANDOFF without marking the aircraft checked in before its Strip asks for attention (ADR 0122, ours).",
+  "_comment": "Conformance, Conflict Alert (CA) and Mode C Intruder (MCI) thresholds (docs/adr/0058, 0118). [SOURCE-DEFINED]: our own choices, not doctrine. formationLateralNm/formationVerticalFt: how close an uncorrelated target must be to a formation flight to count as one of its members (ADR 0118, ours; P/CG gives 1 mile and 100 ft for a standard formation). refueling*: the air refueling block relative to the tanker (ADR 0118). airspaceEntry: the airspace-entry alert ignores a track slower or younger than these (ADR 0119, ours). Override by placing a copy in state/alerting.json; missing keys fall back to these. glidepath*: the PAR final's one alert (ADR 0139, H164 FT-Q8): after Begin descent and above DA, the PAR plot more than glidepathAboveDeg above or glidepathBelowDeg below the glidepath for glidepathPersistSec (the PAR panel's default tolerance lines, ADR 0123: +1 degree, and 0.5 degree below, the FAA lower safe limit; the persistence is ours). handoff: notCheckedInSec is how long a receiver may have an accepted HANDOFF without marking the aircraft checked in before its Strip asks for attention (ADR 0122, ours).",
   "conformance": {
     "minGroundSpeedKt": 50,
     "headingToleranceDeg": 5,
@@ -11,7 +11,10 @@
     "wrongWayFpm": 500,
     "wrongWayPersistSec": 5,
     "refuelingBlockFt": 1000,
-    "refuelingLateralNm": 3
+    "refuelingLateralNm": 3,
+    "glidepathAboveDeg": 1,
+    "glidepathBelowDeg": 0.5,
+    "glidepathPersistSec": 2
   },
   "conflictAlert": {
     "lateralNm": 3,

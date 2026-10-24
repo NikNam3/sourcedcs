@@ -286,6 +286,10 @@
    "refreshAprtSelectedApt",
    "refreshAprtTheaterFacts"
   ],
+  "panels/aprt-runway.js": [
+   "facilityRunwayTrueDeg",
+   "runwayEndKey"
+  ],
   "panels/efsp/airspace-calendar.js": [
    "_resetAirspaceCalendarForTest",
    "applyAirspaceCalendar",
@@ -1339,8 +1343,10 @@
    "azAxisLabel",
    "clampTo",
    "createTrailFilter",
+   "glidepathWarningText",
    "gpHeightFt",
    "headerModel",
+   "headingsModel",
    "niceStep",
    "noPlotState",
    "parTerminalOp",
@@ -1355,6 +1361,7 @@
    "readoutModel",
    "sensorReasonText",
    "severity",
+   "zoomPausesAutoscale",
    "zoomView"
   ],
   "panels/efsp/par-panel.js": [

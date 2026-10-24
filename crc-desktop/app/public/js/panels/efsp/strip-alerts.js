@@ -62,6 +62,11 @@ export function _stripAlerts(strip) {
     } else if (a.kind === 'LEVEL_BUST') {
       out.push({ key: 'conf', tone: 'bad', legacy: 'efsp-conf-indicator', text: `BUST ${a.deviationFt > 0 ? '+' : '−'}${Math.abs(a.deviationFt)}`,
         reason: `Reached ${_fmtAlt(a.assigned)}, now at ${_fmtAlt(a.altFt)}.` });
+    } else if (a.kind === 'GLIDESLOPE') {
+      // crc-sync docs/adr/0139: the one alert on a PAR final, after Begin descent, above DA.
+      const above = a.side === 'ABOVE';
+      out.push({ key: 'conf', tone: 'bad', legacy: 'efsp-conf-indicator efsp-conf-glidepath', text: `GP ${above ? '↑' : '↓'}`,
+        reason: `${above ? 'Above' : 'Below'} the glidepath by more than ${a.limitDeg}°.` });
     }
   }
   // docs/adr/0102: the regime waits for the airspace; leaving it or an unknown geometry is said here, never acted on.

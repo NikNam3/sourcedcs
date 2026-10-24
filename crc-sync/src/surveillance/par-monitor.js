@@ -25,6 +25,9 @@ const { resolveRunwayForStrip } = require('../efsp/runway-status');
 const { WALL_CLOCK } = require('../mission-clock');
 
 const _fin = (v) => typeof v === 'number' && Number.isFinite(v);
+const NO_PLOT_MS = 3000; // H115: the PAR panel's NO PLOT; a plot this old is no basis for a glidepath alert
+const KT_PER_MS = 1.943844;
+const _whole = (d) => (_fin(d) ? (Math.round(((d % 360) + 360) % 360) % 360) || 360 : null);
 
 class ParMonitor {
   /**
@@ -39,14 +42,32 @@ class ParMonitor {
    * @param {(icao:string)=>number|null} [d.airportElevationFt] the DCS airfield elevation, for an approach with `tdzeFt: null`
    * @param {(facilityId:string)=>object|null} [d.parValuesOf] runwayStatusStore.parValues: runway end -> the values the PAR
    *   controller set (docs/adr/0130)
+   * @param {(lat:number, lon:number)=>number|null} [d.convergenceAt] grid convergence (true = grid + it), for DCS's grid
+   *   heading and course (docs/adr/0085)
+   * @param {(icao:string)=>{windFromTrue:number, windKt:number}|null} [d.fieldWindOf] the airfield's wind as ATIS and the tower
+   *   read it (DCS's, true; app/airport-weather.js), for the needed heading (docs/adr/0139)
    * @param {{now:()=>number}} [d.wallClock]
    * @param {object} d.tuning                par-tuning.js
    */
   constructor({ facilityConfig, boardStoreFor, flightDataOf, correlatedTrackId, runwayViewOf, trackOf,
-    variationAt = () => null, airportElevationFt = () => null, parValuesOf = () => null, wallClock = WALL_CLOCK, tuning }) {
+    variationAt = () => null, convergenceAt = () => null, fieldWindOf = () => null, airportElevationFt = () => null,
+    parValuesOf = () => null, wallClock = WALL_CLOCK, tuning }) {
     Object.assign(this, { _fc: facilityConfig, _board: boardStoreFor, _fd: flightDataOf, _corr: correlatedTrackId, _rwy: runwayViewOf,
-      _track: trackOf, _var: variationAt, _aptElev: airportElevationFt, _parValues: parValuesOf, _wall: wallClock, _tuning: tuning });
-    this._state = new Map(); // `${facilityId}:${stripId}` -> { fix, plot, plotAt, trail }
+      _track: trackOf, _var: variationAt, _conv: convergenceAt, _wind: fieldWindOf, _aptElev: airportElevationFt, _parValues: parValuesOf,
+      _wall: wallClock, _tuning: tuning });
+    this._state = new Map(); // `${facilityId}:${stripId}` -> { fix, plot, plotAt, trail, rDaNm, elevOk }
+  }
+
+  /**
+   * The glidepath figures of a Strip's latest plot, for the glidepath alert (conformance.js evaluateGlidepath, docs/adr/0139):
+   * `{ elevDevDeg, beyondDa }`, or null with no plot, a plot older than the panel's NO PLOT (3 s, H115) or the elevation
+   * INOP. Read from the last tick; nothing is measured here.
+   */
+  glidepathOf(facilityId, stripId) {
+    const st = this._state.get(`${facilityId}:${stripId}`);
+    if (!st || !st.plot || !st.elevOk || st.plotAt === null || this._wall.now() - st.plotAt > NO_PLOT_MS) return null;
+    if (!_fin(st.plot.elevDevDeg) || !_fin(st.plot.rangeNm)) return null;
+    return { elevDevDeg: st.plot.elevDevDeg, beyondDa: st.plot.rangeNm > st.rDaNm };
   }
 
   /** How often the hub should run `tick()` (config/par.json). */
@@ -102,6 +123,8 @@ class ParMonitor {
       }
       st.fix = fix;
     }
+    st.rDaNm = geom.approach ? par.rangeAtDaNm(geom.approach) : 0;
+    st.elevOk = geom.sensor.elevation !== 'INOP';
     return {
       stripId: strip.stripId,
       facilityId,
@@ -111,6 +134,36 @@ class ParMonitor {
       plot: st.plot,
       plotAgeMs: st.plotAt === null ? null : Math.max(0, now - st.plotAt),
       trail: st.trail.slice(),
+      headings: this._headings(facilityId, geom, track),
+    };
+  }
+
+  /**
+   * The needed and current headings, magnetic (docs/adr/0139, decisions H164 FT-Q5): the heading that holds the final
+   * approach course in the field wind, and the aircraft's own. DCS's heading and course are GRID, the course and the wind
+   * TRUE; each is turned magnetic at the threshold (H15, the variation every PAR bearing uses).
+   */
+  _headings(facilityId, geom, track) {
+    const none = { needed: null, current: null, windFromMagnetic: null, windKt: null };
+    const a = geom.approach;
+    if (!a || !track || !geom.ref) return none;
+    const { refLat: lat, refLon: lon } = geom.ref;
+    const v = this._var(lat, lon);
+    const gamma = this._conv(track.lat, track.lon);
+    const toMag = (trueDeg) => (_fin(trueDeg) && _fin(v) ? trueDeg - v : null);
+    const gridToTrue = (g) => (_fin(g) && _fin(gamma) ? g + gamma : null);
+    const w = a.airportIcao ? this._wind(a.airportIcao) : null;
+    const windFrom = w && _fin(w.windFromTrue) ? w.windFromTrue : null;
+    const windKt = w && _fin(w.windKt) ? w.windKt : null;
+    const need = par.neededHeading({
+      courseTrueDeg: a.courseTrueDeg, windFromTrueDeg: windFrom, windKt,
+      trackTrueDeg: gridToTrue(track.course), gsKt: _fin(track.groundSpeed) ? track.groundSpeed * KT_PER_MS : null,
+    });
+    return {
+      needed: need ? _whole(toMag(need.headingTrueDeg)) : null,
+      current: _whole(toMag(gridToTrue(track.heading))),
+      windFromMagnetic: _whole(toMag(windFrom)),
+      windKt: windKt === null ? null : Math.round(windKt),
     };
   }
 

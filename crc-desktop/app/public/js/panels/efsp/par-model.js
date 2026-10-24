@@ -20,7 +20,9 @@ export const NO_PLOT_MS = 3000;            // amber at 3 s without a plot (H115)
 // gpaDeg: only a fallback for drawing before a sample says the approach's angle; the angle in use is the server's (crc-sync
 // docs/adr/0130: one value per approach, set by the PAR controller, else the Facility default)
 export const PAR_DEFAULTS = Object.freeze({ gpaDeg: 3.06, tolElHighDeg: 1, tolElLowDeg: 0.5, tolAzDeg: 1, autoscale: true }); // H116, H141
-export const DEFAULT_VIEW = Object.freeze({ rMax: 10, hMax: 3500, azMaxDeg: 2 });
+// azMaxDeg: the azimuth window is fixed (decisions H164 FT-Q7 c, ADR 0139): ±3°, three times the default ±1° tolerance, so a
+// track a little off the course stays in sight; the controller zooms it with Shift+wheel, autoscale never moves it
+export const DEFAULT_VIEW = Object.freeze({ rMax: 10, hMax: 3500, azMaxDeg: 3 });
 export const ZOOM_STEP = 1.15;
 // azMaxDeg: our PAR covers ±15° of the course (crc-sync config/par.json `coverage.azimuthHalfDeg`, the AN/FPN-68A), so the
 // azimuth window never opens wider
@@ -125,19 +127,52 @@ export function pickFlight(samples, selectedStripId) {
 }
 
 /**
- * The window that keeps the track at the golden-ratio point, never smaller than 10 NM (H115). Azimuth in degrees: twice the
- * tolerance, or wider to keep the track at the golden-ratio point of the half-window, never past the ±15° the PAR covers.
+ * The window that keeps the track at the golden-ratio point, never smaller than 10 NM (H115): the range and the elevation
+ * scope's height. The azimuth window is not autoscaled (decisions H164 FT-Q7 c, ADR 0139): it stays `azMaxDeg`, the
+ * controller's (DEFAULT_VIEW's ±3° until a Shift+wheel on the azimuth scope changes it).
  */
-export function autoscaleView(plot, { gpaDeg, tchFt, tolAzDeg = PAR_DEFAULTS.tolAzDeg } = {}) {
+export function autoscaleView(plot, { gpaDeg, tchFt, azMaxDeg = DEFAULT_VIEW.azMaxDeg } = {}) {
   const gpa = _pmFin(gpaDeg) ? gpaDeg : PAR_DEFAULTS.gpaDeg;
   const r = plot && _pmFin(plot.rangeNm) ? Math.max(0, plot.rangeNm) : 0;
   const rMax = Math.max(AUTOSCALE_FLOOR_NM, r / PHI);
   const hTrack = plot && _pmFin(plot.heightFt) ? plot.heightFt : gpHeightFt(r, gpa, tchFt);
   const hMax = Math.max(gpHeightFt(rMax, gpa, tchFt) * 1.08, hTrack / PHI);
-  const azTrack = plot && _pmFin(plot.azDeg) ? Math.abs(plot.azDeg) : 0;
-  const tolAz = _pmFin(tolAzDeg) && tolAzDeg > 0 ? tolAzDeg : PAR_DEFAULTS.tolAzDeg;
-  const azMaxDeg = Math.min(LIMITS.azMaxDeg, Math.max(2 * tolAz, azTrack / PHI));
-  return { rMax, hMax, azMaxDeg };
+  return { rMax, hMax, azMaxDeg: _pmFin(azMaxDeg) ? azMaxDeg : DEFAULT_VIEW.azMaxDeg };
+}
+
+/** Whether a wheel step changes what autoscale sets (the range, the elevation height), so it pauses autoscale: a Shift+wheel
+ * on the azimuth scope zooms only the azimuth window, which autoscale leaves alone (ADR 0139). */
+export function zoomPausesAutoscale(scope, vertical) {
+  return !(scope === 'az' && vertical);
+}
+
+// ── The headings (crc-sync docs/adr/0139, decisions H164 FT-Q5) ────────────────────────────────────────────────────────────
+
+const _pmHdg = (d) => (_pmFin(d) ? String(Math.round(d) % 360 || 360).padStart(3, '0') : '');
+
+/**
+ * The needed and current headings of the shown flight, as text: the sample's `headings` (magnetic, whole degrees) with `M`
+ * dropped (every heading a controller reads is magnetic, H15). `offDeg` is current − needed, the short way round (+ is right
+ * of the needed heading), null unless both are known; the azimuth scope's heading tick draws it.
+ * @returns {{ needed: string, current: string, wind: string, offDeg: number|null, title: string }}
+ */
+export function headingsModel(sample) {
+  const h = (sample && sample.headings) || {};
+  const needed = _pmHdg(h.needed);
+  const current = _pmHdg(h.current);
+  const offDeg = needed && current ? ((h.current - h.needed + 540) % 360) - 180 : null;
+  const wind = _pmFin(h.windFromMagnetic) && _pmFin(h.windKt) ? `${_pmHdg(h.windFromMagnetic)}/${Math.round(h.windKt)}` : '';
+  const title = needed
+    ? `Heading to hold the final course in the field wind${wind ? ` (${wind})` : ''}: ${needed}. The aircraft's heading: ${current || 'unknown'}.`
+    : `No final heading: ${wind ? 'the aircraft\'s speed is unknown' : 'no field wind'}. The aircraft's heading: ${current || 'unknown'}.`;
+  return { needed, current, wind, offDeg, title };
+}
+
+/** The glidepath warning the server raised on this flight (crc-sync docs/adr/0139 GLIDESLOPE), as the EL row says it, or ''. */
+export function glidepathWarningText(alerts) {
+  const a = (alerts || []).find(x => x && x.kind === 'GLIDESLOPE');
+  if (!a) return '';
+  return a.side === 'ABOVE' ? 'ABOVE GLIDEPATH' : 'BELOW GLIDEPATH';
 }
 
 /**

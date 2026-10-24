@@ -1007,3 +1007,11 @@ test('a runway change survives a restart mid-way (PROPOSED with one ack comes ba
   mustOp(reborn, 'OPS', 'AckRunwayChange');
   assert.equal(change(reborn).state, 'ACKNOWLEDGED');
 });
+
+test('ADR 0139: the wire record names its airfield and each end\'s true heading, so the APRT centreline need not read the runway number', () => {
+  const { store } = freshStore();
+  const r = store.getRunwayStatus('INCIRLIK');
+  assert.equal(r.airportIcao, INCIRLIK.runwayStatus.airportIcao);
+  assert.deepEqual(r.runways[0].endHeadingsTrue, INCIRLIK.runwayStatus.runways[0].endHeadingsTrue);
+  assert.equal(store.getRunwayStatus('CENTER'), null, 'no inventory, no record');
+});
