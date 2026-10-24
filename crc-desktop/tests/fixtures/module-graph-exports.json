@@ -855,12 +855,14 @@
    "parseDotCommand"
   ],
   "panels/efsp/efsp-arrivals.js": [
+   "ARRIVAL_FLASH_MS",
    "ARRIVAL_FRESH_MS",
    "ARRIVAL_LOG_LIMIT",
    "_resetEfspArrivalsForTest",
    "captureEfspPlacement",
    "clearEfspArrival",
    "consumeEfspArrivalFlash",
+   "efspArrivalFlashElapsed",
    "efspArrivalFor",
    "efspArrivalLog",
    "forgetEfspArrivals",

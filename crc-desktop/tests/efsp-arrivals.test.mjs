@@ -6,6 +6,8 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 import * as A from '../app/public/js/panels/efsp/efsp-arrivals.js';
 
 const ME = 'c-me';
@@ -106,6 +108,24 @@ test('the flash is consumed exactly once, and the edge fades 30 s after it was f
   assert.ok(A.efspArrivalFor('s1', 5000 + A.ARRIVAL_FRESH_MS - 1));
   assert.equal(A.efspArrivalFor('s1', 5000 + A.ARRIVAL_FRESH_MS), null);
   assert.equal(A.nextEfspArrivalExpiry(5000), 5000 + A.ARRIVAL_FRESH_MS);
+});
+
+test('a rebuild while the flash plays carries it on from where it was; after it, never again', () => {
+  A.noteEfspArrivals(was('gc-taxi-out', 'GC'), [strip()], ctx());
+  assert.equal(A.efspArrivalFlashElapsed('s1', 5000), null, 'nothing is playing before the first build on screen');
+  assert.equal(A.consumeEfspArrivalFlash('s1', 5000), true);
+  // l5-arrivals flake: the correlation warning lands ~0.5 s after the hand-off and rebuilds the Strip.
+  assert.equal(A.efspArrivalFlashElapsed('s1', 5500), 500);
+  assert.equal(A.efspArrivalFlashElapsed('s1', 5000 + A.ARRIVAL_FLASH_MS - 1), A.ARRIVAL_FLASH_MS - 1);
+  assert.equal(A.efspArrivalFlashElapsed('s1', 5000 + A.ARRIVAL_FLASH_MS), null);
+  assert.equal(A.efspArrivalFlashElapsed('nope', 5000), null);
+});
+
+test('ARRIVAL_FLASH_MS is the CSS flash animation length', () => {
+  const css = fs.readFileSync(path.join(import.meta.dirname, '../app/public/css/efsp-panel.css'), 'utf8');
+  const m = css.match(/animation:\s*efsp-arrived-flash\s+([\d.]+)s/);
+  assert.ok(m, 'the efsp-arrived-flash animation is in efsp-panel.css');
+  assert.equal(Math.round(Number(m[1]) * 1000), A.ARRIVAL_FLASH_MS);
 });
 
 test('touching the Strip clears it; opening the Bay clears the tab and the line but not the Strip', () => {

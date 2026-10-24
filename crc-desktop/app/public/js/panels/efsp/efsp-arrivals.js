@@ -21,6 +21,8 @@
 
 export const ARRIVAL_FRESH_MS = 30000; // how long a seen arrival keeps its amber edge
 export const ARRIVAL_LOG_LIMIT = 3;
+// How long the single flash plays: efsp-panel.css `efsp-arrived-flash` (a parity test keeps the two equal).
+export const ARRIVAL_FLASH_MS = 1600;
 
 // stripId -> { bayId, positionId, from, callsign, at, seenAt, bayUnseen, flashed }
 const _efspArrivals = new Map();
@@ -115,6 +117,18 @@ export function consumeEfspArrivalFlash(stripId, now = Date.now()) {
   entry.seenAt = now;
   entry.bayUnseen = false;
   return true;
+}
+
+/**
+ * How far into its flash this Strip is, while the flash is still playing, or null. A rebuild inside that
+ * window (a correlation warning landing half a second after the hand-off) carries the flash on from where
+ * it was instead of cutting it short: the flash is not replayed, it is just not interrupted.
+ */
+export function efspArrivalFlashElapsed(stripId, now = Date.now()) {
+  const entry = _efspArrivals.get(stripId);
+  if (!entry || !entry.flashed || entry.seenAt == null) return null;
+  const t = now - entry.seenAt;
+  return t >= 0 && t < ARRIVAL_FLASH_MS ? t : null;
 }
 
 /** The controller touched the Strip: it has been noticed. */

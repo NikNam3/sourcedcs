@@ -1678,7 +1678,7 @@
   border-right-color: var(--efsp-attn);
   border-bottom-color: var(--efsp-attn);
 }
-.efsp-strip-arrived-flash .efsp-strip-grid { animation: efsp-arrived-flash 1.6s ease-out 1; }
+.efsp-strip-arrived-flash .efsp-strip-grid { animation: efsp-arrived-flash 1.6s ease-out var(--efsp-arrived-flash-delay, 0s) 1; }
 @keyframes efsp-arrived-flash {
   0% { background-color: rgba(224, 168, 60, 0.28); }
   100% { background-color: transparent; }
