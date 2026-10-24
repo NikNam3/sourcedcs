@@ -87,6 +87,7 @@ test('the owner assigns heading and altitude from the label; the values land on 
   await expect(menu).toBeVisible();
   await expect(menu.locator('.label-menu-name')).toHaveText(['HDG', 'SPEED', 'ALT']);
   await expect(menu.locator('.label-menu-head')).toContainText(`${callsign} CTR`);
+  await page.screenshot({ path: test.info().outputPath('label-menu.png'), clip: { x: pt.x - 120, y: pt.y - 60, width: 320, height: 200 } });
   // Typing starts in HDG; Tab to ALT; Enter sends both.
   await page.keyboard.type('250');
   await page.keyboard.press('Tab');
