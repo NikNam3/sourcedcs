@@ -114,6 +114,12 @@ test('a Strip arriving in the Bay on screen flashes once, and is not listed on t
   await seedStrip(gc, { callsign: 'ARV602', stripType: 'DEPARTURE', flightData: FLIGHT_DATA });
   await taxiToTower(gc, 'ARV602');
   await expect(stripByCallsign(lc, 'ARV602')).toHaveClass(/efsp-strip-arrived-flash/);
+  // A rebuild while the flash still plays carries it on (a correlation warning lands ~0.5 s after the
+  // hand-off); the rule under test is the rebuild AFTER it, so wait for ARV601's flash to have played out.
+  await expect.poll(() => lc.evaluate((cs) => {
+    const s = crc.state.getAllEfspStrips().find((x) => crc.state.getEfspFlightData(x.flightDataId).identity.callsign === cs);
+    return crc.arrivals.efspArrivalFlashElapsed(s.stripId);
+  }, 'ARV601')).toBeNull();
   // Force a rebuild of ARV601 by something unrelated to its arrival.
   await lc.evaluate((cs) => {
     const s = crc.state.getAllEfspStrips().find((x) => crc.state.getEfspFlightData(x.flightDataId).identity.callsign === cs);

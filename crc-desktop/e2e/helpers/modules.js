@@ -27,6 +27,7 @@ const MODULES = {
   settingsRegistry: '/js/settings-registry.js', // crc.settingsRegistry.registerSettingsTab
   picture: '/js/picture.js', // crc.picture.history, .labelOffsets, .latestFromServer
   bayView: '/js/panels/efsp/bay-view.js',
+  arrivals: '/js/panels/efsp/efsp-arrivals.js', // crc.arrivals.efspArrivalFlashElapsed
   dispatch: '/js/panels/efsp/bay/dispatch.js',
   selection: '/js/panels/efsp/bay/selection.js',
   carrier: '/js/panels/efsp/carrier-state.js',

@@ -1,6 +1,6 @@
 'use strict';
 import { getEfspFlightData } from './efsp-state.js';
-import { clearEfspArrival, consumeEfspArrivalFlash, efspArrivalFor } from './efsp-arrivals.js';
+import { clearEfspArrival, consumeEfspArrivalFlash, efspArrivalFlashElapsed, efspArrivalFor } from './efsp-arrivals.js';
 import { blockLabelFor, blockTitleFor } from './strip-template.js';
 import { nlaButtonLabel } from './efsp-nla.js';
 import { isMarsaHighlighted, marsaBadgeFor } from './marsa-badge.js';
@@ -183,6 +183,13 @@ export function _buildStripLayout(el, strip, obligation) {
     if (onScreen && consumeEfspArrivalFlash(strip.stripId)) {
       el.classList.add('efsp-strip-arrived-flash');
       noteEfspArrivalShown();
+    } else if (onScreen) {
+      // Rebuilt while the flash is still playing: carry it on from where it was (a negative delay).
+      const elapsed = efspArrivalFlashElapsed(strip.stripId);
+      if (elapsed !== null) {
+        el.classList.add('efsp-strip-arrived-flash');
+        if (el.style && el.style.setProperty) el.style.setProperty('--efsp-arrived-flash-delay', `-${elapsed}ms`);
+      }
     }
     // Touching the Strip is noticing it. Cleared in place rather than by a
     // re-render: this is also how a drag starts, and rebuilding the element

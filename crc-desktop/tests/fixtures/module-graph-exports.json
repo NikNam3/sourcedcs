@@ -595,7 +595,8 @@
    "_moveStrip",
    "_resolveActingPositionId",
    "_swallowRepeatAdvance",
-   "_transferStrip"
+   "_transferStrip",
+   "besideOwnerActingPosition"
   ],
   "panels/efsp/bay/drag.js": [
    "_efspDrag",
@@ -855,12 +856,14 @@
    "parseDotCommand"
   ],
   "panels/efsp/efsp-arrivals.js": [
+   "ARRIVAL_FLASH_MS",
    "ARRIVAL_FRESH_MS",
    "ARRIVAL_LOG_LIMIT",
    "_resetEfspArrivalsForTest",
    "captureEfspPlacement",
    "clearEfspArrival",
    "consumeEfspArrivalFlash",
+   "efspArrivalFlashElapsed",
    "efspArrivalFor",
    "efspArrivalLog",
    "forgetEfspArrivals",
@@ -997,6 +1000,7 @@
    "getEfspFacility",
    "getEfspFlightData",
    "getEfspMarsa",
+   "getEfspNonOwnerBlockWrites",
    "getEfspObligation",
    "getEfspObligations",
    "getEfspPosition",

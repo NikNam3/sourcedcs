@@ -18,7 +18,8 @@ const COVERAGE_TICK_MS = 250;
  *   airportWeather, airspaceCalendar, archive (archive.js), `missionState` (`{ lastMissionData }`, kept by the gRPC handlers)
  * @returns {{name: string, periodMs: number, tick: Function}[]}
  */
-function buildTickers({ wsHub, efsp, trackStore, collabStore, atisStore, surveillance, theaterContext, missionClock, picture, monitors, airportWeather, airspaceCalendar, archive, missionState }) {
+function buildTickers({ wsHub, efsp, trackStore, collabStore, atisStore, surveillance, theaterContext, missionClock, wallClock, picture, monitors, airportWeather, airspaceCalendar, archive, missionState }) {
+  if (!wallClock || typeof wallClock.now !== 'function') throw new Error('buildTickers needs the injected wallClock (rule 5)');
   const { obligationMonitor, correlationReconciler, efspInstrumentation, conformanceMonitor, surveillanceHints, conflictAlertMonitor, airspaceEntryAlertMonitor, tofiRegimeMonitor, carrierTick, parMonitor, broadcastEfspAlerts } = monitors;
   const { sensorSpecs, coverageEngine, positionCoverage, currentRadars, datalink } = picture;
 
@@ -95,7 +96,7 @@ function buildTickers({ wsHub, efsp, trackStore, collabStore, atisStore, surveil
     { name: 'conformance-conflict-alert', periodMs: 1000, tick: () => {
       const conformanceChanged = conformanceMonitor.tick();
       const hintsChanged = surveillanceHints ? surveillanceHints.tick() : false;
-      const conflictAlertChanged = conflictAlertMonitor.tick(Date.now());
+      const conflictAlertChanged = conflictAlertMonitor.tick(wallClock.now());
       // docs/adr/0119: after CA, whose formation members it reads.
       const airspaceEntryChanged = airspaceEntryAlertMonitor.tick();
       // H161 V2-Q2 a: UNACTIVATED_AIRSPACE_ENTRY reads the monitor's inside fact, so a change re-runs the obligations at once

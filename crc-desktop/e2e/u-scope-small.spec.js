@@ -76,9 +76,15 @@ test('Airport surface: on by default; the switch sets the surface layers\' visib
 // The black scope needs an ATC-only session (atc-scope.js atcBlackScope): one ATC radar in the coverage, no datalink.
 const APP_RADAR = { id: 'app:Incirlik', type: 'approach', presentation: 'ATC', label: 'LTAG APP', airport: 'Incirlik', lat: 37.002, lon: 35.426, elevM: 60, rangeM: 80 * 1852, sweepMs: 3000, caps: { ssr: true } };
 const atcOnly = (page) => page.evaluate((r) => crc.app.applyCoverage({ radars: [r], signedOnPositions: [], datalink: false }), APP_RADAR);
+// The server answers efsp-set-positions with the ack and THEN the session's own `coverage` frame, as two messages: wait
+// for both, or the real coverage (no radars: the rig has no DCS) lands after atcOnly's and takes the black scope away.
 const signOn = async (page, facilityId, list) => {
   await page.evaluate(([f, l]) => crc.ws.sendEfspSetPositions(f, l), [facilityId, list]);
   await page.waitForFunction(([f, l]) => JSON.stringify(crc.ws.getAckedPositions(f)) === JSON.stringify(l), [facilityId, list]);
+  await page.waitForFunction(([f, l]) => {
+    const held = crc.picture.coverageSignedOnPositions.filter(p => p.facilityId === f).map(p => p.positionId).sort();
+    return JSON.stringify(held) === JSON.stringify([...l].sort());
+  }, [facilityId, list]);
 };
 const paintOf = (page, id, prop) => page.evaluate(([i, p]) => crc.mapHandle.map.getPaintProperty(i, p), [id, prop]);
 
@@ -106,7 +112,7 @@ test('Airport surface follows GC/LC held, also on the black scope in grey; only 
   await signOn(page, 'INCIRLIK', ['LC', 'AP']);
   await atcOnly(page);
   await expect.poll(vis).toEqual(SURFACE.map(() => 'visible'));
-  expect(await black()).toBe(true);
+  await expect.poll(black).toBe(true); // the background follows on atc-scope.js's next 500 ms beat, not at once
 
   // the map background back: the theme's paint returns
   await page.evaluate(() => { crc.settings.settings.atcMapBackground = true; });

@@ -356,7 +356,7 @@ class GrpcClient extends EventEmitter {
           lat:       u.position    ? u.position.lat             : 0,
           lon:       u.position    ? u.position.lon             : 0,
           alt:       u.position    ? Math.round(u.position.alt) : 0,
-          heading:   u.orientation ? u.orientation.heading      : 0,
+          heading:   u.orientation && Number.isFinite(u.orientation.heading) ? u.orientation.heading : null,
           // Where the aircraft is actually going, and how fast it climbs —
           // what conformance and conflict alerting need (docs/adr/0058).
           // DCS world axes: x north, y UP, z east; speeds in m/s. Course is

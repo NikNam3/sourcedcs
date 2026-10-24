@@ -707,6 +707,9 @@ function _fullSnapshotMessage(ctx) {
     positionLetters: facilityConfig.allPositionLetters ? facilityConfig.allPositionLetters() : {},
     // The Positions whose controller sees the airport surface (H162), per Facility. Config, snapshot only.
     airportSurfacePositions: facilityConfig.allAirportSurfacePositions ? facilityConfig.allAirportSurfacePositions() : {},
+    // The Block writes a Position may make on a Strip it does not hold (permission.js mayActBesideOwner): the client names
+    // that Position as the acting one, and leaves the cell read-only when it holds none of them. Rules, snapshot only.
+    nonOwnerBlockWrites: permission.NON_OWNER_BLOCK_WRITES.map(r => ({ blockId: r.blockId, stripType: r.stripType, positions: [...r.positions] })),
     positions, bays, strips,
     flightDataList: flightDataStore.getAll(),
     ...familySnapshots(ctx),

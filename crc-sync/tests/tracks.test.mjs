@@ -43,10 +43,12 @@ test('velocity from DCS is carried, null when absent, and firstSeenAt survives u
   assert.equal(store.get(1).firstSeenAt, first);
 });
 
-test('a missing heading defaults to zero rather than undefined', () => {
+test('a missing heading is null ("no heading", shown as nothing), never 0 (HDG 360); a real 0 stays 0', () => {
   const store = new TrackStore();
   store.update(unit(1, { heading: undefined }));
-  assert.equal(store.get(1).heading, 0);
+  assert.equal(store.get(1).heading, null);
+  store.update(unit(2, { heading: 0 }));
+  assert.equal(store.get(2).heading, 0);
 });
 
 test('get tolerates a number or a string id, which is what the ws hub joins on', () => {

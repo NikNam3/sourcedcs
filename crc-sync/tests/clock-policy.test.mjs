@@ -107,3 +107,8 @@ test('clock policy self-test: comments are ignored and a bare new Date() counts'
     assert.deepEqual(sites.map(s => s.function), ['m', 'n']);
   } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
 });
+
+test('clock policy: the named tickers read no wall clock of their own (src/app/tickers.js takes the injected wallClock)', () => {
+  const tickers = path.resolve(SRC, '../app/tickers.js');
+  assert.deepEqual(findWallSites([tickers]), [], 'conflict alert ticks on wallClock.now(), never a bare Date.now()');
+});

@@ -360,6 +360,14 @@ test('headings: no field wind (or no variation) leaves the needed heading empty,
   assert.equal(e.headings.current, 45);
 });
 
+test('headings: a unit DCS sent no heading for has no current heading, never 360 (TrackStore keeps it null)', () => {
+  const w = world();
+  w.onFinal('INCIRLIK', 'par-final', 'PAR', { trackId: 11 });
+  w.fly(11, on(RWY05, 5, gp(5), DCS_LTAG_ELEV_FT), { heading: undefined, course: 52 });
+  const [e] = w.monitor.tick();
+  assert.equal(e.headings.current, null);
+});
+
 test('neededHeading: calm is the course; a headwind changes nothing; a crosswind stronger than the aircraft is no answer', () => {
   const calm = par.neededHeading({ courseTrueDeg: 52.7, windFromTrueDeg: 0, windKt: 0, trackTrueDeg: 52.7, gsKt: 140 });
   assert.ok(Math.abs(calm.headingTrueDeg - 52.7) < 1e-9);

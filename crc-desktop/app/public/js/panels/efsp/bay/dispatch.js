@@ -1,6 +1,6 @@
 'use strict';
 import { isWithinDoubleTapWindow } from '../efsp-nla.js';
-import { getEfspBays, getEfspCorrelationForStrip, getEfspMarsa, getEfspStrip } from '../efsp-state.js';
+import { getEfspBays, getEfspCorrelationForStrip, getEfspMarsa, getEfspNonOwnerBlockWrites, getEfspStrip } from '../efsp-state.js';
 import { getActingPositions, sendEfspCorrelationMutation, sendEfspMarsaMutation, sendEfspMutation } from '../efsp-ws.js';
 import { _isRejectedCoordinationReplica } from './coordination-rules.js';
 
@@ -58,12 +58,32 @@ export function _dispatchCorrelation(strip, op) {
   sendEfspCorrelationMutation(actingPositionId, strip.flightDataId, record ? record.rev : 0, op);
 }
 
-// The Position a controller acts as for a Mutation on this Strip — its
-// current Owner if signed on, else whichever signed-on Position happens to be first.
-// Shared by every dispatch helper below (NLA, move, transfer, gestures).
-export function _resolveActingPositionId(strip) {
+/**
+ * The Position a controller acts as for a Mutation on this Strip: its Owner, when this controller holds it. Otherwise
+ * only a Position the rules let act beside the Owner for this op (crc-sync permission.js mayActBesideOwner; the Block
+ * writes come in the snapshot's `nonOwnerBlockWrites`), when this controller holds one. Anything else is null: nothing
+ * is sent and the control stays read-only. Never a guess at "some Position this controller holds" (rule 9).
+ * Shared by every dispatch helper below (NLA, move, transfer, gestures).
+ * @param {object} strip
+ * @param {{kind:string, blockId?:string}|null} [op] the op about to be sent, when it may be one a non-owner makes
+ * @returns {string|null}
+ */
+export function _resolveActingPositionId(strip, op = null) {
+  if (!strip) return null;
   const positions = getActingPositions();
-  return positions.includes(strip.ownerPositionId) ? strip.ownerPositionId : positions[0];
+  if (positions.includes(strip.ownerPositionId)) return strip.ownerPositionId;
+  return besideOwnerActingPosition(strip, op, positions, getEfspNonOwnerBlockWrites());
+}
+
+/** Pure: the held Position a non-owner rule names for this op on this Strip, or null (exported for the unit test). */
+export function besideOwnerActingPosition(strip, op, held, nonOwnerBlockWrites) {
+  if (!strip || !op || op.kind !== 'SetBlock' || strip.state === 'DROPPED') return null;
+  for (const r of nonOwnerBlockWrites || []) {
+    if (r.blockId !== op.blockId || r.stripType !== strip.stripType) continue;
+    const p = (r.positions || []).find(id => held.includes(id));
+    if (p) return p;
+  }
+  return null;
 }
 
 /**

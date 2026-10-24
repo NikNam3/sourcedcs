@@ -42,7 +42,8 @@ class TrackStore {
       lat:       unitData.lat,
       lon:       unitData.lon,
       alt:       unitData.alt,
-      heading:   unitData.heading || 0,
+      // Null when DCS sent no orientation: "no heading" shows nothing, never HDG 360.
+      heading:   Number.isFinite(unitData.heading) ? unitData.heading : null, // degrees, grid
       // docs/adr/0058 — null when DCS sent no velocity for this unit.
       course:        Number.isFinite(unitData.course) ? unitData.course : null,         // degrees, grid
       groundSpeed:   Number.isFinite(unitData.groundSpeed) ? unitData.groundSpeed : null, // m/s

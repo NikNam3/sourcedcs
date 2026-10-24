@@ -17,7 +17,7 @@ function record({ pad = 'Hot cargo pad', activeRunway = '05', status = 'OPEN', f
     activeRunway,
     activeRunwaySource: 'WIND',
     runways: [{
-      runwayId: '05/23', ends: ['05', '23'], endHeadingsTrue: { '05': 56, '23': 236 },
+      runwayId: '05/23', ends: ['05', '23'], endHeadingsTrue: { '05': 52.7, '23': 232.7 },
       rackIds: { '05': 'rwy-05', '23': 'rwy-23' }, status, arrestingGear: [],
       suspension: null, closure: null, lastInspection: null, pendingRequest: null,
     }],

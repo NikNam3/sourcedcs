@@ -66,7 +66,8 @@ export function _stripRenderSignature(strip) {
   // differently.
   parts.push('nla:' + (strip.nla === undefined ? '?' : JSON.stringify(strip.nla)));
   // Which Position the controller is acting as decides which controls render.
-  parts.push('act:' + (_resolveActingPositionId(strip) || ''));
+  // On a Strip it does not hold, the held set too: a Position allowed beside the Owner (a Block write) unlocks a cell.
+  parts.push('act:' + (_resolveActingPositionId(strip) || ('~' + getActingPositions().join(','))));
 
   const flightData = getEfspFlightData(strip.flightDataId);
   parts.push('flightData:' + (flightData ? flightData.rev : ''));
