@@ -35,7 +35,6 @@ function loadServerResourcesConfig(override) {
 }
 
 const r1 = (x) => (Number.isFinite(x) ? Math.round(x * 10) / 10 : null);
-const nsToMs = (ns) => (Number.isFinite(ns) ? ns / 1e6 : null);
 
 function median(xs) {
   if (!xs.length) return null;
@@ -44,15 +43,20 @@ function median(xs) {
   return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
 }
 
+// The histogram's sampling timer period. Node records the whole interval between two of its ticks, not the lateness
+// (an idle loop reads ~10 ms at resolution 10, ~1 ms at 1), so the period is taken off every reading.
+const LOOP_RESOLUTION_MS = 10;
+const lateMs = (ns) => (Number.isFinite(ns) ? Math.max(0, ns / 1e6 - LOOP_RESOLUTION_MS) : null);
+
 /** The process's own event-loop delay histogram (perf_hooks), read and reset once per sample. */
 function defaultEventLoop() {
-  const h = monitorEventLoopDelay({ resolution: 10 });
+  const h = monitorEventLoopDelay({ resolution: LOOP_RESOLUTION_MS });
   return {
     enable: () => h.enable(),
     disable: () => h.disable(),
     /** This sample's reading in ms, or null when the loop was not observed; resets the histogram. */
     take() {
-      const out = h.count > 0 ? { p50Ms: nsToMs(h.percentile(50)), p99Ms: nsToMs(h.percentile(99)), maxMs: nsToMs(h.max) } : null;
+      const out = h.count > 0 ? { p50Ms: lateMs(h.percentile(50)), p99Ms: lateMs(h.percentile(99)), maxMs: lateMs(h.max) } : null;
       h.reset();
       return out;
     },
