@@ -31,15 +31,21 @@
 // All three are skipped below `minGroundSpeedKt`, so nothing alerts on the
 // ground. It never moves or advances a Strip (guide §10.3).
 //
-// On a final (docs/adr/0117, H134 LT-RQ8 a, LT-RQ9 a), a flight whose FINAL Strip is on final (ON_FINAL, or the
-// carrier's BALL; a missed approach is checked again: its climb-out heading and altitude are assignments, para 5-10-12):
-//   - no HEADING check. The final controller's headings are course guidance changed every few seconds ("HEADING
-//     (heading)", JO 7110.65BB para 5-12-4) and course deviation is its own continuous call, so they are recorded on
-//     the flight, never alerted; AP's last vector stops alerting at the handoff.
-//   - at an airfield (PAR), the altitude is checked until "BEGIN DESCENT" (para 5-12-3), which ends the assigned
-//     altitude (board/ops/final-call.js), so there is then nothing to check: the glidepath is the reference.
-//   - on the carrier, no altitude check from the final on. JO 7110.65 is silent on the carrier final (no CATCC
-//     procedures in the order); the same rule applied by analogy, without a descent call, is OURS.
+// On a final (docs/adr/0139, decisions H164 FT-Q8, superseding H134 LT-RQ8 a for the PAR final; ADR 0117, LT-RQ9 a): from
+// the moment the final Position holds the flight (final-position.js: a FINAL Strip on final, owned by a Position with a
+// final Bay; the carrier's BALL too) NOTHING of the clearance is checked: no HEADING, no LEVEL_BUST, no WRONG_WAY.
+//   - The final controller's headings are course guidance changed every few seconds ("HEADING (heading)", JO 7110.65BB
+//     para 5-12-4), and its intermediate altitudes ("descend and maintain 3,000" before the glidepath) are its own business
+//     with the pilot on its frequency; course and glidepath deviation are its continuous calls, so they are recorded on the
+//     flight, never alerted. AP's last vector and altitude stop alerting at the handoff.
+//   - The one alert on a PAR final is GLIDESLOPE (evaluateGlidepath): after "BEGIN DESCENT" (para 5-12-3, from which the
+//     glidepath is the reference, para 5-12-4), the PAR plot outside the elevation limits above or below the glidepath for
+//     `glidepathPersistSec`, above decision altitude only (decisions H116: below DA the pilot decides). The limits are
+//     `glidepathAboveDeg` / `glidepathBelowDeg`, the PAR panel's default tolerance lines (ADR 0123). Ours: the order has no
+//     automated glidepath alert; the PAR controller's own calls are the procedure.
+//   - On the carrier, no check from the final on and no glidepath alert (there is no PAR at sea, decisions H125).
+//   - A missed approach is checked again: its climb-out heading and altitude are assignments (para 5-10-12), and the Strip
+//     is then no longer on the final (BOLTER_WAVEOFF, or the MISSED_APPROACH conversion back to AP).
 // Ours too: which Strips count as "on a final".
 //
 // Under MARSA with a tanker (docs/adr/0118, T17, H134 LT-RQ10, research Q6): once the tanker has accepted MARSA (JO 7110.65BB
@@ -158,6 +164,25 @@ function evaluateConformance(input, mem, now, cfg, wallNow = now) {
 }
 
 /**
+ * The PAR final's one alert (the header's "On a final", docs/adr/0139): the plot outside the glidepath limits for
+ * `glidepathPersistSec`, above DA. Pure, like evaluateConformance.
+ *
+ * @param {object|null} input { elevDevDeg, beyondDa } from the PAR monitor's latest fresh plot, null with none (no Begin descent,
+ *   no plot, elevation INOP)
+ * @returns {object[]} [] or one { kind: 'GLIDESLOPE', side: 'ABOVE'|'BELOW', devDeg, limitDeg, since }
+ */
+function evaluateGlidepath(input, mem, now, cfg, wallNow = now) {
+  const dev = input && input.beyondDa && Number.isFinite(input.elevDevDeg) ? input.elevDevDeg : null;
+  const above = cfg.glidepathAboveDeg ?? 1;
+  const below = cfg.glidepathBelowDeg ?? 0.5;
+  const side = dev === null ? null : dev > above + 1e-9 ? 'ABOVE' : dev < -below - 1e-9 ? 'BELOW' : null;
+  if (!side) { mem.gpSide = null; mem.gpSince = null; mem.gpWall = null; return []; }
+  if (mem.gpSide !== side) { mem.gpSide = side; mem.gpSince = now; mem.gpWall = wallNow; }
+  if (wallNow - mem.gpWall < (cfg.glidepathPersistSec ?? 2) * 1000) return [];
+  return [{ kind: 'GLIDESLOPE', side, devDeg: Math.round(dev * 10) / 10, limitDeg: side === 'ABOVE' ? above : below, since: mem.gpSince }];
+}
+
+/**
  * A receiver under MARSA with a tanker (the header's "Under MARSA with a tanker"). Pure, like evaluateConformance.
  *
  * @param {object} input  { altFt, verticalSpeedMs, groundSpeedMs, tankerAltFt, distanceNm, tanker: callsign }
@@ -266,13 +291,14 @@ class ConformanceMonitor {
    * @param {object} deps { trackStore, flightDataStore, correlationStore, weather: () => {pressurePa,tempK},
    *                        transitionAltFt: () => number, indicatedAltFt, config, clock?, wallClock?,
    *                        gridToMagnetic?: (gridDeg, lat, lon) => number|null,
-   *                        finals?: () => Map<flightDataId, 'AIRFIELD'|'CARRIER'>,
+   *                        finals?: () => Map<flightDataId, {glidepath: {elevDevDeg:number, beyondDa:boolean}|null}>,
    *                        refueling?: () => Map<receiverFlightDataId, {tankerFlightDataId:string|null, tanker:string}>,
    *                        entryBlocks?: () => Map<flightDataId, {lowerFt:number, upperFt:number, at:number}> }
    * `entryBlocks` names the flights approved into an airspace with an altitude block (a live Strip's `airspaceEntry`), checked
    * as a block when the flight has no assigned altitude (`altitudeToCheck`, docs/adr/0128 §4).
    * `refueling` names the receivers under MARSA with a tanker (the header's "Under MARSA with a tanker"), read once per tick.
-   * `finals` names the flights on a final (a live FINAL Strip) and where, read once per tick (the header's "On a final").
+   * `finals` names the flights the final Position holds (final-position.js), each with its PAR glidepath figures once Begin
+   * descent is recorded (null otherwise, and always at the carrier), read once per tick (the header's "On a final").
    * `gridToMagnetic` turns DCS's GRID course into magnetic (server.js passes
    * theater-context.js's, docs/adr/0085). Without it every answer is
    * "unknown", so no heading alert is raised — never a cross-frame compare.
@@ -329,13 +355,15 @@ class ConformanceMonitor {
         continue;
       }
       if (mem.mode === 'AR') { for (const k of Object.keys(mem)) delete mem[k]; }
+      // docs/adr/0139: held by the final Position, nothing of the clearance is checked; the glidepath is, on a PAR final.
       const onFinal = finals.get(flightDataId) || null;
       const alerts = evaluateConformance({
         hdg: onFinal ? null : activeClearanceEntry(flightData, 'heading'),
-        alt: onFinal === 'CARRIER' ? null : altitudeToCheck(flightData, entryBlocks.get(flightDataId)),
+        alt: onFinal ? null : altitudeToCheck(flightData, entryBlocks.get(flightDataId)),
         course: Number.isFinite(track.course) ? this._gridToMagnetic(track.course, track.lat, track.lon) : null,
         groundSpeedMs: track.groundSpeed, verticalSpeedMs: track.verticalSpeed, altFt,
       }, mem, now, config, wallNow);
+      alerts.push(...evaluateGlidepath(onFinal ? onFinal.glidepath || null : null, mem, now, config, wallNow));
       changed = this._set(flightDataId, alerts) || changed;
     }
     for (const flightDataId of [...this._alerts.keys()]) {
@@ -347,7 +375,10 @@ class ConformanceMonitor {
 
   _set(flightDataId, alerts) {
     // A refueling alert's edge moves with the tanker: the tanker it is measured from is what identifies it (docs/adr/0118).
-    const key = (list) => list.map(a => (a.tanker !== undefined ? `${a.kind}:AR:${a.tanker}` : `${a.kind}:${a.assigned}:${a.actual ?? ''}:${a.deviationFt ?? ''}`)).join('|');
+    // A glidepath alert is identified by its side; its deviation drifts every tick (docs/adr/0139).
+    const key = (list) => list.map(a => (a.tanker !== undefined ? `${a.kind}:AR:${a.tanker}`
+      : a.kind === 'GLIDESLOPE' ? `${a.kind}:${a.side}`
+        : `${a.kind}:${a.assigned}:${a.actual ?? ''}:${a.deviationFt ?? ''}`)).join('|');
     const prev = this._alerts.get(flightDataId) || [];
     if (alerts.length === 0) {
       if (prev.length === 0) return false;
@@ -362,4 +393,4 @@ class ConformanceMonitor {
   }
 }
 
-module.exports = { evaluateConformance, evaluateRefuelingBlock, refuelingReceivers, altitudeToCheck, headingDiff, ConformanceMonitor, FPM_PER_MS, MS_PER_KT };
+module.exports = { evaluateConformance, evaluateGlidepath, evaluateRefuelingBlock, refuelingReceivers, altitudeToCheck, headingDiff, ConformanceMonitor, FPM_PER_MS, MS_PER_KT };

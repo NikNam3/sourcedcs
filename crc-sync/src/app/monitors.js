@@ -23,6 +23,7 @@ const { CarrierTick } = require('../efsp/carrier-tick');
 const { createShipWind } = require('./ship-wind');
 const { carrierDelta, correlationDelta } = require('../efsp/wire/frames');
 const { ParMonitor } = require('../surveillance/par-monitor');
+const { flightsHeldOnFinal } = require('../efsp/final-position');
 const { loadParTuning } = require('../surveillance/par-tuning');
 
 const FT_PER_M = 3.28084;
@@ -43,8 +44,9 @@ const FT_PER_M = 3.28084;
  * @param {{beacon?:Function, callsign?:Function, gridToMagnetic?:Function}} [deps.trackSeams]
  * @param {object|null} [deps.surveillanceHints] undefined builds the SurveillanceHintMonitor; null leaves it out (the soak)
  * @param {{elevationAt:Function}|null} [deps.terrainStore] the ground under an MCI intruder (docs/adr/0118); null: sea level
+ * @param {{get:(airportName:string)=>object|undefined}|null} [deps.airportWeather] per-airport weather (the PAR's field wind, docs/adr/0139)
  */
-function buildMonitors({ env, efsp, facilityConfig, missionClock, missionSession, trackStore, surveillance, theaterContext, grpcClient, ownCoalition, hubLink, trackSeams = {}, surveillanceHints: hintsDep, terrainStore = null }) {
+function buildMonitors({ env, efsp, facilityConfig, missionClock, missionSession, trackStore, surveillance, theaterContext, grpcClient, ownCoalition, hubLink, trackSeams = {}, surveillanceHints: hintsDep, terrainStore = null, airportWeather = null }) {
   const { transponders, identity } = surveillance;
   const deliver = (frames) => hubLink.get().deliverEfsp(frames);
 
@@ -115,16 +117,14 @@ function buildMonitors({ env, efsp, facilityConfig, missionClock, missionSession
     // DCS's course is grid; the typed HDG is magnetic (docs/adr/0085).
     gridToMagnetic: trackSeams.gridToMagnetic || ((deg, lat, lon) => theaterContext.gridToMagnetic(deg, lat, lon)),
     config: alertingConfig.conformance,
-    // docs/adr/0117: the flights on a final (a FINAL Strip on final; a missed approach's climb-out heading and altitude,
-    // JO 7110.65BB para 5-10-12, are checked again), and whether it is the carrier's, once per tick.
+    // docs/adr/0139 (H164 FT-Q8): the flights the final Position holds (final-position.js, by the Facility's final Bays, never
+    // an id): nothing of their clearance is checked; on a PAR final, after Begin descent, their glidepath is. A missed approach
+    // is checked again (JO 7110.65BB para 5-10-12). Read once per tick; the PAR monitor is built below and read only then.
     finals: () => {
       const out = new Map();
-      for (const facilityId of facilityConfig.getFacilityIds()) {
-        const board = efsp.boardStoreFor(facilityId);
-        if (!board) continue;
-        for (const s of board.getAll()) {
-          if (s.stripType === 'FINAL' && (s.state === 'ON_FINAL' || s.state === 'BALL') && s.flightDataId) out.set(s.flightDataId, facilityId === 'CARRIER' ? 'CARRIER' : 'AIRFIELD');
-        }
+      for (const [flightDataId, { facilityId, strip }] of flightsHeldOnFinal({ facilityConfig, boardStoreFor: efsp.boardStoreFor })) {
+        const descending = !!(strip.finalCalls && strip.finalCalls.BEGIN_DESCENT);
+        out.set(flightDataId, { glidepath: descending ? parMonitor.glidepathOf(facilityId, strip.stripId) : null });
       }
       return out;
     },
@@ -279,6 +279,14 @@ function buildMonitors({ env, efsp, facilityConfig, missionClock, missionSession
     parValuesOf: (facilityId) => efsp.runwayStatusStore.parValues(facilityId),
     trackOf: (id) => trackStore.get(id),
     variationAt: (lat, lon) => theaterContext.variationAt(lat, lon),
+    convergenceAt: (lat, lon) => theaterContext.convergenceAt(lat, lon),
+    // docs/adr/0139: the needed heading uses the airfield's wind as ATIS and the tower do (app/airport-weather.js, H76).
+    fieldWindOf: (icao) => {
+      const data = hubLink.get().getMissionData();
+      const apt = airportWeather && data && (data.airports || []).find(a => a.icao === icao);
+      const w = apt ? airportWeather.get(apt.name) : null;
+      return w && Number.isFinite(w.windFrom) && Number.isFinite(w.windKt) ? { windFromTrue: w.windFrom, windKt: w.windKt } : null;
+    },
     airportElevationFt: (icao) => {
       const data = hubLink.get().getMissionData();
       const apt = data && (data.airports || []).find(a => a.icao === icao);

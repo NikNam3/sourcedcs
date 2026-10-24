@@ -128,9 +128,9 @@ test('the monitor reads correlation, track and clearance, and reports a flight o
   assert.equal(monitor.tick(43 * S), false);
 });
 
-// ── on a final (docs/adr/0117, H134 LT-RQ8 a, LT-RQ9 a) ──────────────────────
-// No heading check on a final; at an airfield the altitude is checked until "BEGIN DESCENT" ends it (the FinalCall clears
-// the assigned altitude, a Board test covers that); on the carrier no altitude check from the final on (ours).
+// ── on a final (docs/adr/0139, H164 FT-Q8; ADR 0117) ──────────────────────
+// From the moment the final Position holds the flight nothing of its clearance is checked (no heading, no level bust, no
+// wrong way); the one alert is GLIDESLOPE, after Begin descent, above DA. A missed approach is checked again.
 
 async function finalMonitor(onFinal) {
   const { ConformanceMonitor } = await import('../src/efsp/conformance.js');
@@ -138,7 +138,7 @@ async function finalMonitor(onFinal) {
     heading: { entries: [{ value: '050', parsed: 50, status: 'ACTIVE', at: 0 }] },
     altitude: { entries: [{ value: '030', parsed: 3000, block: null, status: 'ACTIVE', at: 0 }] },
   } };
-  // flying 090 (40 degrees off AP's last vector) and 1,500 ft below the 3,000 it reached, descending on the glidepath
+  // flying 090 (40 degrees off AP's last vector) and 1,500 ft below the 3,000 it reached, descending
   const track = { id: 't1', alt: 3000 / 3.28084, course: 90, groundSpeed: FAST, verticalSpeed: fpm(-700) };
   const finals = new Map(onFinal ? [['f1', onFinal]] : []);
   const monitor = new ConformanceMonitor({
@@ -164,26 +164,55 @@ test('not on a final: AP\'s vector and altitude alert as ever (the control case)
   assert.deepEqual(kinds(monitor.getAll()[0].alerts).sort(), ['HEADING', 'LEVEL_BUST']);
 });
 
-test('on the PAR final: no heading alert; the altitude still alerts until Begin descent ends it', async () => {
-  const { monitor, flightData } = await finalMonitor('AIRFIELD');
-  assert.deepEqual(kinds(monitor.getAll()[0].alerts), ['LEVEL_BUST'], 'before Begin descent the assigned altitude holds (para 5-12-3)');
-  // Begin descent: the assigned altitude is superseded by "none" (board/ops/final-call.js)
-  flightData.clearance.altitude.entries[0].status = 'SUPERSEDED';
-  flightData.clearance.altitude.entries.push({ value: '', parsed: null, block: null, status: 'ACTIVE', at: 61 * S });
-  monitor.tick(62 * S);
-  assert.deepEqual(monitor.getAll(), [], 'on the glidepath nothing is alerted');
-});
-
-test('on the carrier final: neither heading nor altitude alerts (ours: JO 7110.65 is silent on the carrier)', async () => {
-  const { monitor } = await finalMonitor('CARRIER');
-  assert.deepEqual(monitor.getAll(), []);
+test('FT-Q8: held by PAR, its own "descend and maintain" below the altitude it was handed at raises no bust, before Begin descent too', async () => {
+  const { monitor } = await finalMonitor({ glidepath: null });
+  assert.deepEqual(monitor.getAll(), [], 'no HEADING, no LEVEL_BUST, no WRONG_WAY once the final Position has the flight');
 });
 
 test('leaving the final (a missed approach) brings the checks back against what is then assigned', async () => {
-  const { monitor, finals } = await finalMonitor('AIRFIELD');
+  const { monitor, finals } = await finalMonitor({ glidepath: null });
   finals.delete('f1');
   for (let t = 61; t <= 120; t++) monitor.tick(t * S);
   assert.ok(kinds(monitor.getAll()[0].alerts).includes('HEADING'));
+});
+
+test('GLIDESLOPE: after Begin descent, outside the limits for the persistence, above and below; never inside DA', async () => {
+  const entry = { glidepath: { elevDevDeg: 0.3, beyondDa: true } };
+  const { monitor } = await finalMonitor(entry);
+  assert.deepEqual(monitor.getAll(), [], 'on the glidepath: nothing');
+  entry.glidepath = { elevDevDeg: -0.8, beyondDa: true };
+  monitor.tick(61 * S);
+  assert.deepEqual(monitor.getAll(), [], 'below, but not for the persistence yet');
+  assert.equal(monitor.tick(61 * S + cfg.glidepathPersistSec * S), true);
+  const [a] = monitor.getAll()[0].alerts;
+  assert.equal(a.kind, 'GLIDESLOPE');
+  assert.equal(a.side, 'BELOW');
+  assert.equal(a.limitDeg, cfg.glidepathBelowDeg);
+  assert.equal(a.since, 61 * S);
+  entry.glidepath = { elevDevDeg: -0.9, beyondDa: true };
+  assert.equal(monitor.tick(70 * S), false, 'a drifting deviation on the same side is the same alert');
+  entry.glidepath = { elevDevDeg: 1.4, beyondDa: true };
+  monitor.tick(71 * S);
+  assert.deepEqual(monitor.getAll(), [], 'the other side starts its own persistence');
+  monitor.tick(71 * S + cfg.glidepathPersistSec * S);
+  assert.equal(monitor.getAll()[0].alerts[0].side, 'ABOVE');
+  entry.glidepath = { elevDevDeg: 1.4, beyondDa: false };
+  assert.equal(monitor.tick(80 * S), true);
+  assert.deepEqual(monitor.getAll(), [], 'inside DA the pilot decides (H116): nothing');
+  entry.glidepath = null;
+  monitor.tick(81 * S);
+  assert.deepEqual(monitor.getAll(), [], 'no plot (or no Begin descent): nothing');
+});
+
+test('evaluateGlidepath: the limits are the PAR panel defaults, +1 deg above and 0.5 deg below, on the line is inside', async () => {
+  const { evaluateGlidepath } = await import('../src/efsp/conformance.js');
+  assert.equal(cfg.glidepathAboveDeg, 1);
+  assert.equal(cfg.glidepathBelowDeg, 0.5);
+  const at = (dev) => { const mem = {}; evaluateGlidepath({ elevDevDeg: dev, beyondDa: true }, mem, 0, cfg, 0); return evaluateGlidepath({ elevDevDeg: dev, beyondDa: true }, mem, 10 * S, cfg, 10 * S); };
+  assert.deepEqual(at(1), []);
+  assert.deepEqual(at(-0.5), []);
+  assert.equal(at(1.01)[0].side, 'ABOVE');
+  assert.equal(at(-0.51)[0].side, 'BELOW');
 });
 
 // ── frames (docs/adr/0085, S-F2) ─────────────────────────────────────────

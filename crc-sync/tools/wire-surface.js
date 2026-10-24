@@ -169,7 +169,7 @@ function storeSync() {
 // The PAR sample's entry, approach, plot and trail keys and the INOP reasons (docs/adr/0112), from the lists par.js builds them by.
 function parSurface() {
   const par = require(path.join(SRC, 'surveillance', 'par.js'));
-  return { sample: [...par.SAMPLE_KEYS], approach: [...par.APPROACH_KEYS], plot: [...par.PLOT_KEYS], trail: [...par.TRAIL_KEYS], inopReasons: [...par.INOP_REASONS] };
+  return { sample: [...par.SAMPLE_KEYS], headings: [...par.HEADINGS_KEYS], approach: [...par.APPROACH_KEYS], plot: [...par.PLOT_KEYS], trail: [...par.TRAIL_KEYS], inopReasons: [...par.INOP_REASONS] };
 }
 
 function computeSurface() {

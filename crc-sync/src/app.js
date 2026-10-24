@@ -152,10 +152,13 @@ function createApp(deps = {}) {
   const radarPicture = buildRadarPicture({ env, hubLink, trackStore, efsp, facilityConfig: efspFacilityConfig, ownCoalition, collabStore, srsClient, grpcClient, theaterContext });
   const { picture, surveillance } = radarPicture;
 
+  // Per-airport weather (GET /api/apt-weather, and the PAR's field wind, docs/adr/0139).
+  const airportWeather = createAirportWeather({ grpcClient });
+
   // ── The monitors, and the one place efsp-alerts is composed ────────────────────────────────────────
   const monitors = buildMonitors({
     env, efsp, facilityConfig: efspFacilityConfig, missionClock, missionSession, trackStore, surveillance, theaterContext, grpcClient, ownCoalition,
-    hubLink, trackSeams, surveillanceHints: deps.surveillanceHints, terrainStore: radarPicture.terrainStore,
+    hubLink, trackSeams, surveillanceHints: deps.surveillanceHints, terrainStore: radarPicture.terrainStore, airportWeather,
   });
   hintsLink.bind(monitors.surveillanceHints);
 
@@ -183,7 +186,6 @@ function createApp(deps = {}) {
   hubLink.bind(wsHub);
 
   // ── Weather, and the runway the wind picks ────────────────────────────────────
-  const airportWeather = createAirportWeather({ grpcClient });
   const missionState = { lastMissionData: null }; // the last mission loaded (app/feed-handlers.js writes it)
   const deriveActiveRunwaysFromWind = createActiveRunwayFromWind({ missionSession, facilityConfig: efspFacilityConfig, efsp, grpcClient, deliver: (frames) => wsHub.deliverEfsp(frames) });
   // A clock step back opens a session with no mission-load behind it: the wind is re-read then too (a load-driven session is

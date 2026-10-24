@@ -25,7 +25,14 @@ const EARTH_R_M = 6371008.8;
 const RAD = Math.PI / 180;
 
 /** The keys of one sample entry, in wire order (tools/wire-surface.js records them). */
-const SAMPLE_KEYS = Object.freeze(['stripId', 'facilityId', 'positionId', 'approach', 'sensor', 'plot', 'plotAgeMs', 'trail']);
+const SAMPLE_KEYS = Object.freeze(['stripId', 'facilityId', 'positionId', 'approach', 'sensor', 'plot', 'plotAgeMs', 'trail', 'headings']);
+/**
+ * The keys of `headings` (docs/adr/0139, decisions H164 FT-Q5): whole degrees MAGNETIC (H15), each null when it cannot be
+ * worked out. `needed`: the heading that holds the final approach course in the field wind (`neededHeading`); `current`: the
+ * aircraft's heading as DCS gives it; `windFrom` / `windKt`: the field wind it was worked out with (magnetic, as ATIS and
+ * the tower give it, H76).
+ */
+const HEADINGS_KEYS = Object.freeze(['needed', 'current', 'windFrom', 'windKt']);
 /** The keys of one `approaches` entry of the frame: the approach a final Bay's next aircraft flies (par-monitor.js finalApproaches). */
 const FINAL_APPROACH_KEYS = Object.freeze(['facilityId', 'positionId', 'approach']);
 /** The keys of `approach`. */
@@ -138,6 +145,40 @@ function inCoverage(g, p, cov) {
   return true;
 }
 
+/**
+ * The range from touchdown (NM, along the course) at which the glidepath reaches decision altitude: inside it no tolerance
+ * applies (decisions H116, the pilot decides). 0 when the approach has no DH or angle. The client's par-model.js
+ * `rangeAtDaNm` is the same formula.
+ */
+function rangeAtDaNm({ dhFt, tchFt, gpaDeg } = {}) {
+  if (!_fin(dhFt) || !_fin(gpaDeg) || gpaDeg <= 0) return 0;
+  const tch = _fin(tchFt) ? tchFt : 0;
+  return Math.max(0, (dhFt - tch) / (FT_PER_NM * Math.tan(gpaDeg * RAD)));
+}
+
+const _norm = (d) => ((d % 360) + 360) % 360;
+
+/**
+ * The heading that holds a course in a wind (docs/adr/0139, H164 FT-Q5): the course plus the wind correction angle,
+ * asin(wind x sin(wind from - course) / TAS). The TAS is the aircraft's air vector, its ground vector less the wind
+ * (DCS gives the ground vector; a PAR controller has the groundspeed). All TRUE, degrees and knots.
+ * @param {object} i { courseTrueDeg, windFromTrueDeg, windKt, trackTrueDeg, gsKt }
+ * @returns {{headingTrueDeg:number, wcaDeg:number, tasKt:number}|null} null when a figure is missing or the wind is
+ *   stronger across the course than the aircraft is fast
+ */
+function neededHeading({ courseTrueDeg, windFromTrueDeg, windKt, trackTrueDeg, gsKt } = {}) {
+  if (![courseTrueDeg, windFromTrueDeg, windKt, trackTrueDeg, gsKt].every(_fin)) return null;
+  const toward = (windFromTrueDeg + 180) * RAD;
+  const ax = gsKt * Math.sin(trackTrueDeg * RAD) - windKt * Math.sin(toward);
+  const ay = gsKt * Math.cos(trackTrueDeg * RAD) - windKt * Math.cos(toward);
+  const tasKt = Math.hypot(ax, ay);
+  if (!(tasKt > 0)) return null;
+  const s = (windKt * Math.sin((windFromTrueDeg - courseTrueDeg) * RAD)) / tasKt;
+  if (Math.abs(s) > 1) return null;
+  const wcaDeg = Math.asin(s) / RAD;
+  return { headingTrueDeg: _norm(courseTrueDeg + wcaDeg), wcaDeg, tasKt };
+}
+
 /** A trail entry: the plot without the speeds. */
 function trailEntry(plot) {
   const out = {};
@@ -209,8 +250,8 @@ function validateParValue(field, value) {
 
 module.exports = {
   PAR_VALUE_FIELDS, PAR_VALUE_LIMITS, validateParValue,
-  SAMPLE_KEYS, FINAL_APPROACH_KEYS, APPROACH_KEYS, PLOT_KEYS, TRAIL_KEYS, INOP_REASONS, RUNWAY_APPROACH_KEYS,
+  SAMPLE_KEYS, HEADINGS_KEYS, FINAL_APPROACH_KEYS, APPROACH_KEYS, PLOT_KEYS, TRAIL_KEYS, INOP_REASONS, RUNWAY_APPROACH_KEYS,
   FT_PER_M, FT_PER_NM,
-  offsetPoint, measure, inCoverage, trailEntry,
+  offsetPoint, measure, inCoverage, trailEntry, rangeAtDaNm, neededHeading,
   validateParApproaches,
 };
