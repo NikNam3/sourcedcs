@@ -32,7 +32,7 @@ const UUID_G = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g;
 const TMP_RE = /\/(?:tmp|var\/folders)[^"\s']*?(efsp|freeze)[-\w]*/g;
 
 /** Cross-cutting volatile keys: dropped from every normalised value (canonical), so adding one is one line here. */
-export const VOLATILE_KEYS = new Set(['boardSeq', 'boardSeqByFacility', 'storeSeqs', 'undoable']);
+export const VOLATILE_KEYS = new Set(['boardSeq', 'boardSeqByFacility', 'storeSeqs', 'undoable', 'serverResources']);
 /** Every `...Epoch`, `...Epochs`, `...EpochByFacility` key is volatile too (boardEpoch, marsaEpoch, storeEpochs, a future one). */
 export const VOLATILE_RE = /Epoch(s|ByFacility)?$/;
 export const isVolatileKey = (k) => VOLATILE_KEYS.has(k) || VOLATILE_RE.test(k);

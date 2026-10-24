@@ -25,6 +25,7 @@ const CASES = [
   ['PAR', "require('./src/surveillance/par-tuning').loadParTuning()", 'par.json'],
   ['sensor specs', "require('./src/radars').loadSensorSpecs()", 'sensor-specs.json'],
   ['theaters', "require('./src/theaters').defaultTransitionAltFt()", 'theaters.json'],
+  ['server resources', "require('./src/server-resources').loadServerResourcesConfig()", 'server-resources.json'],
 ];
 
 for (const [label, script, file] of CASES) {

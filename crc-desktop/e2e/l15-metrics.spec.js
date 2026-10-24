@@ -109,7 +109,7 @@ test('what a controller does is measured and shown on METRICS', async ({ page })
 
   // Per Position: folded, then shown.
   await expect(page.locator('#metrics-panel .metrics-per-position')).toHaveCount(0);
-  await page.locator('#metrics-panel .metrics-toggle').click();
+  await page.locator('#metrics-panel .metrics-toggle', { hasText: 'Per Position' }).click();
   await expect(page.locator('#metrics-panel .metrics-per-position')).toContainText('OPS');
 
   await page.screenshot({ path: test.info().outputPath('metrics-1600.png'), fullPage: false });
@@ -122,6 +122,13 @@ test('the panel needs no Position and polls only while it is on screen', async (
   await openPanel(page, { signedOn: [] });
   await openMetrics(page);
   await expect(page.locator('#metrics-panel .metrics-row[data-metric]')).toHaveCount(7);
+
+  // docs/adr/0141: the Server section, from the same answer: what crc-sync itself costs, grey on a quiet harness.
+  const server = (id) => page.locator(`#metrics-panel .metrics-server-row[data-server="${id}"]`);
+  for (const id of ['cpu', 'memory', 'eventLoop', 'load', 'tickers']) await expect(server(id)).toHaveClass(/metrics-tone-muted/);
+  await expect(server('load')).toContainText(/[1-9]\d* sessions?/);
+  await page.locator('#metrics-panel .metrics-toggle', { hasText: 'Every ticker' }).click();
+  await expect(page.locator('#metrics-panel .metrics-server-tickers')).toContainText('hub-feed');
 
   // Hidden behind the Strip panel's tab: the next poll tick sends nothing.
   await page.evaluate(() => {
