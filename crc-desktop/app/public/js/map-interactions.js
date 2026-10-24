@@ -6,6 +6,7 @@ import { applyBullseyePick } from './panels/settings-panel.js';
 import { closeAptWeatherPanel, showAptWeatherPanel } from './panels/airport-selector.js';
 import { closeTrackPanel, showTrackPanel } from './panels/track-panel.js';
 import { selectStripForTrack } from './panels/efsp/correlation-highlight.js';
+import { openLabelMenu } from './panels/efsp/label-menu.js';
 import { getTextSizePx, TEXT_OFFSET_EM } from './scope-constants.js';
 import { _drag, _measure, _setDrag, _setMeasure, map } from './map-handle.js';
 import { bullseyePickTarget } from './view-state.js';
@@ -56,15 +57,20 @@ export function wireMapInteractions() {
     map.dragPan.disable();
   };
 
-  // Click on a label — open track panel unless the mouse was dragged.
+  // Click on a label, unless the mouse was dragged. The controller who owns the
+  // contact's correlated Strip gets the assignment menu (HDG / SPEED / ALT,
+  // docs/adr/0140); everyone else, and a Shift+click, gets the track panel as
+  // before (H71 default 7), which is also the menu's TRACK item.
   // e.preventDefault() stops the map-level click from closing the panel.
   const _onLabelClick = (e) => {
     if (bullseyePickTarget) return;
     e.preventDefault();
     if (_labelDragged) { _labelDragged = false; return; }
     const id = String(e.features[0].properties.id);
-    showTrackPanel(id);
     _selectStripForTrackIfAny(id);
+    const ev = e.originalEvent;
+    if (ev && !ev.shiftKey && openLabelMenu(id, ev.clientX, ev.clientY, { onTrackInfo: () => showTrackPanel(id) })) return;
+    showTrackPanel(id);
   };
   // An ATC block drags and opens the track panel exactly like a tactical one.
   for (const layer of ['unit-labels', 'atc-labels']) {
