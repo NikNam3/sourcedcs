@@ -129,8 +129,9 @@ function mountAuthRoutes(app, { env }) {
  * @param {object} deps.theaterContext
  * @param {{get:(airportName:string)=>object|undefined}} deps.airportWeather
  * @param {object} deps.efspInstrumentation `metricsHttp`, `trafficCountHttp`
+ * @param {object} [deps.serverResources] server-resources.js (docs/adr/0141): GET /api/server/resources
  */
-function mountApiRoutes(app, { atisStore, grpcClient, wsHub, stereoRoutes, theaterContext, airportWeather, efspInstrumentation, terrainStore }) {
+function mountApiRoutes(app, { atisStore, grpcClient, wsHub, stereoRoutes, theaterContext, airportWeather, efspInstrumentation, terrainStore, serverResources = null }) {
   // ── On-demand RPC proxy endpoints (per-action, not shared streams) ─────────
   // ownerId is a client-generated id (one per crc-desktop app session), used to
   // tell "my own next 5s loop tick" apart from "a different controller's
@@ -257,6 +258,9 @@ function mountApiRoutes(app, { atisStore, grpcClient, wsHub, stereoRoutes, theat
     const { status, body } = efspInstrumentation.trafficCountHttp(req.query || {});
     res.status(status).json(body);
   });
+
+  // docs/adr/0141: the process's own CPU, memory, event-loop delay and ticker cost, the rolling window.
+  if (serverResources) app.get('/api/server/resources', auth.requireAuth, (req, res) => res.json(serverResources.snapshot()));
 
   if (terrainStore) mountTerrainRoutes(app, terrainStore);
 }

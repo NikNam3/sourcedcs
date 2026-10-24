@@ -44,7 +44,7 @@ const FT_PER_M = 3.28084;
  * @param {object|null} [deps.surveillanceHints] undefined builds the SurveillanceHintMonitor; null leaves it out (the soak)
  * @param {{elevationAt:Function}|null} [deps.terrainStore] the ground under an MCI intruder (docs/adr/0118); null: sea level
  */
-function buildMonitors({ env, efsp, facilityConfig, missionClock, missionSession, trackStore, surveillance, theaterContext, grpcClient, ownCoalition, hubLink, trackSeams = {}, surveillanceHints: hintsDep, terrainStore = null }) {
+function buildMonitors({ env, efsp, facilityConfig, missionClock, missionSession, trackStore, surveillance, theaterContext, grpcClient, ownCoalition, hubLink, trackSeams = {}, surveillanceHints: hintsDep, terrainStore = null, serverResources = null }) {
   const { transponders, identity } = surveillance;
   const deliver = (frames) => hubLink.get().deliverEfsp(frames);
 
@@ -97,6 +97,8 @@ function buildMonitors({ env, efsp, facilityConfig, missionClock, missionSession
     obligationStats: () => obligationMonitor.getComplianceStats(),
     // A metrics session is one mission to the next (H32): F3's mission session.
     missionSession,
+    // The process's own CPU and memory (docs/adr/0141), the answer's `serverResources` block.
+    serverResources,
   });
 
   // ── Conformance and short-term conflict alerting (docs/adr/0058) ─────────

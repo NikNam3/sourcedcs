@@ -52,8 +52,9 @@ class WsHub {
    * @param {() => void} [deps.onEfspChange] after any delivery of EFSP frames (`_deliver`), so the obligation re-check follows a controller's
    *   op, a monitor's delta, the carrier tick and the archiver alike and a re-cleared Strip's badge clears with the Mutation that cleared it
    *   (docs/adr/0067). It closes the hub <-> alert-monitor cycle, which is why it is a dependency and not something the hub builds.
+   * @param {(name:string, fn:Function, periodMs:number) => *} [deps.timeTick] times the 500 ms feed tick as `hub-feed` (server-resources.js, docs/adr/0141).
    */
-  constructor({ trackStore, collabStore, efsp = null, picture = null, surveillance = null, clock = WALL_CLOCK, theater = null, wireProtocol = WIRE_PROTOCOL, downloadUrl = null, wallClock = WALL_CLOCK, signOnGraceMs = 0, aptConfig = createAptConfig(), pendingSignOffs = new Map(), onEfspChange = null }) {
+  constructor({ trackStore, collabStore, efsp = null, picture = null, surveillance = null, clock = WALL_CLOCK, theater = null, wireProtocol = WIRE_PROTOCOL, downloadUrl = null, wallClock = WALL_CLOCK, signOnGraceMs = 0, aptConfig = createAptConfig(), pendingSignOffs = new Map(), onEfspChange = null, timeTick = (name, fn) => fn() }) {
     this._aptConfig = aptConfig; // per-airport ATIS config, built by the composition root
     this._wall = wallClock;
     this._signOnGraceMs = signOnGraceMs;
@@ -88,6 +89,7 @@ class WsHub {
     // is told "nothing is wrong" rather than keeping what it had.
     this._efspAlerts = { conformance: [], conflictAlert: [], obligations: [], surveillance: [], tofiRegime: [] };
     this._onEfspChange = onEfspChange;
+    this._timeTick = timeTick;
     this._inEfspChange = false;
   }
 
@@ -105,9 +107,12 @@ class WsHub {
       },
     });
     this._wss.on('connection', (ws, req) => { if (this._admit(ws, req)) this._onConnect(ws, req); });
-    this._timer = setInterval(() => this._tickAll(), TICK_MS);
+    this._timer = setInterval(() => this._timeTick('hub-feed', () => this._tickAll(), TICK_MS), TICK_MS);
     log.info('/feed attached');
   }
+
+  /** How many /feed sessions are open (docs/adr/0141). */
+  sessionCount() { return this._sessions.size; }
 
   /** Tests only (the Playwright hook, src/test-reset.js): make this hub speak another protocol until the process ends. */
   setWireProtocolForTest(n) { this._wireProtocol = n; }

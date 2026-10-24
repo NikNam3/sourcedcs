@@ -804,6 +804,7 @@ function createEfspInstrumentation({
   clock = efsp.clock || WALL_CLOCK, wallNow = WALL_CLOCK.now,
   config = getInstrumentationConfig(), metricsPath, trafficCountPath, env = process.env,
   missionSession = new MissionSession({ path: null, clock, wallNow }),
+  serverResources = null,
 }) {
   const facilityIds = facilityConfig.getFacilityIds();
   const dup = duplicatePositionIds(facilityConfig);
@@ -888,6 +889,8 @@ function createEfspInstrumentation({
     const m = metricsHttp({ hours: msg.hours, missionSession: msg.missionSession });
     if (m.status !== 200) return { ...base, ...m.body };
     const out = { ...base, ok: true, metrics: m.body };
+    // docs/adr/0141: what crc-sync itself costs right now, beside the metrics (null where the process is not sampled).
+    out.serverResources = serverResources ? serverResources() : null;
     if (msg.trafficCount && typeof msg.trafficCount === 'object') {
       const t = trafficCountHttp(msg.trafficCount);
       if (t.status !== 200) return { ...base, ...t.body };

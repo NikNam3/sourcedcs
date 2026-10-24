@@ -43,6 +43,7 @@ const { mountAuthRoutes, mountApiRoutes } = require('./app/http-routes');
 const { buildRadarPicture } = require('./app/radar-picture');
 const { buildMonitors } = require('./app/monitors');
 const { buildTickers } = require('./app/tickers');
+const { createServerResources } = require('./server-resources');
 const { createFeedHandlers } = require('./app/feed-handlers');
 const { createArchiveSweep } = require('./app/archive');
 const { createAirportWeather } = require('./app/airport-weather');
@@ -76,7 +77,7 @@ function nlaGuardFromEnv(env) {
  *   read: `beacon(track)` the code it squawks (default the transponder model), `callsign(track)` its label in an alert
  *   (default the identity model), `gridToMagnetic(deg, lat, lon)` (default the theater's)
  *
- * @returns {{ http, server, wsHub, efsp, monitors, tickers, start: Function, stop: Function }}
+ * @returns {{ http, server, wsHub, efsp, monitors, tickers, serverResources, start: Function, stop: Function }}
  *   `http` is the express app, `server` the http.Server (never listening: server.js calls listen); `tickers` is
  *   [{ name, periodMs, tick }], installed by start() and cleared by stop().
  */
@@ -152,10 +153,16 @@ function createApp(deps = {}) {
   const radarPicture = buildRadarPicture({ env, hubLink, trackStore, efsp, facilityConfig: efspFacilityConfig, ownCoalition, collabStore, srsClient, grpcClient, theaterContext });
   const { picture, surveillance } = radarPicture;
 
+  // ── What the process itself costs (docs/adr/0141): CPU, memory, event-loop delay, each ticker's run time ─────────────
+  const serverResources = createServerResources({
+    counts: () => ({ sessions: hubLink.get().sessionCount(), tracks: trackStore.getAll().length }),
+  });
+
   // ── The monitors, and the one place efsp-alerts is composed ────────────────────────────────────────
   const monitors = buildMonitors({
     env, efsp, facilityConfig: efspFacilityConfig, missionClock, missionSession, trackStore, surveillance, theaterContext, grpcClient, ownCoalition,
     hubLink, trackSeams, surveillanceHints: deps.surveillanceHints, terrainStore: radarPicture.terrainStore,
+    serverResources: () => serverResources.snapshot(),
   });
   hintsLink.bind(monitors.surveillanceHints);
 
@@ -179,6 +186,7 @@ function createApp(deps = {}) {
     wallClock: WALL_CLOCK, signOnGraceMs: sessionConfig.signOnGraceMs, aptConfig, pendingSignOffs,
     // After any EFSP delivery: obligations re-evaluated at once rather than on the next 15 s sweep (docs/adr/0067).
     onEfspChange: monitors.recheckObligations,
+    timeTick: serverResources.time,
   });
   hubLink.bind(wsHub);
 
@@ -193,7 +201,7 @@ function createApp(deps = {}) {
   });
 
   // ── HTTP: the on-demand RPC proxy endpoints (per-action, not shared streams) ─────────────────────────
-  mountApiRoutes(app, { atisStore, grpcClient, wsHub, stereoRoutes, theaterContext, airportWeather, efspInstrumentation: monitors.efspInstrumentation, terrainStore: radarPicture.terrainStore });
+  mountApiRoutes(app, { atisStore, grpcClient, wsHub, stereoRoutes, theaterContext, airportWeather, efspInstrumentation: monitors.efspInstrumentation, terrainStore: radarPicture.terrainStore, serverResources });
 
   // Test-only (Playwright harness); mounts nothing unless CRCSYNC_TEST_RESET=1, see src/test-reset.js.
   // Required only here: test-reset.js mints its boot id (crypto.randomUUID) when loaded, and the soak's
@@ -217,10 +225,11 @@ function createApp(deps = {}) {
   });
 
   // ── Tickers (app/tickers.js) and the feed's event handlers (app/feed-handlers.js) ─────────────────────
+  // Every ticker is timed (server-resources.js), the soak's included: it drives these same ticks by name.
   const tickers = buildTickers({
     wsHub, efsp, trackStore, collabStore, atisStore, surveillance, theaterContext, missionClock, picture: radarPicture, monitors,
     airportWeather, airspaceCalendar, archive, missionState,
-  });
+  }).map(serverResources.timed);
   const feed = createFeedHandlers({
     grpcClient, srsClient, trackStore, surveillance, missionSession, missionClock, theaterContext, wsHub,
     correlationReconciler: monitors.correlationReconciler, coverageEngine: radarPicture.coverageEngine, terrainStore: radarPicture.terrainStore,
@@ -236,6 +245,7 @@ function createApp(deps = {}) {
     wsHub.attach(server);
     feed.attach();
     for (const t of tickers) timers.push(setInterval(() => t.tick(), t.periodMs));
+    serverResources.start();
     airspaceCalendar.refresh().catch(() => {}); // the first pull does not wait a minute
   }
 
@@ -243,12 +253,13 @@ function createApp(deps = {}) {
     if (!started) return;
     started = false;
     for (const h of timers.splice(0)) clearInterval(h);
+    serverResources.stop();
     feed.detach();
     wsHub.stop();
   }
 
   return {
-    http: app, server, wsHub, efsp, tickers, start, stop,
+    http: app, server, wsHub, efsp, tickers, serverResources, start, stop,
     monitors: {
       obligation: monitors.obligationMonitor,
       correlation: monitors.correlationReconciler,

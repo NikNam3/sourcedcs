@@ -1,0 +1,11 @@
+{
+  "_comment": "How much CPU and memory crc-sync itself uses (docs/adr/0141): the METRICS panel's Server section and GET /api/server/resources. sampleMs: how often the process is sampled; windowMs: the rolling window every number covers (nothing is persisted). warn: past these the number turns amber (cpuPct is one core = 100; eventLoopP99Ms the 99th percentile event-loop delay; rssMb resident memory; tickMaxMs the slowest single run of any named ticker). Read once at startup.",
+  "sampleMs": 5000,
+  "windowMs": 60000,
+  "warn": {
+    "cpuPct": 80,
+    "eventLoopP99Ms": 100,
+    "rssMb": 1024,
+    "tickMaxMs": 100
+  }
+}
