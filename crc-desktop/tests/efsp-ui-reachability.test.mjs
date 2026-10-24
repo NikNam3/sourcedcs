@@ -2329,8 +2329,19 @@ test('a Strip that just arrived flashes on its first build only, and keeps its a
   assert.ok(first.classList.contains('efsp-strip-arrived-flash'), 'the arrival flashes when first seen');
   assert.ok(descendants(first).some(c => c.textContent === 'from GC'), 'and says who it came from');
 
-  // Something else changes and the Strip is rebuilt: no replay.
-  const second = r.sandbox._buildStripEl(strip);
+  // Rebuilt while the flash still plays (l5-arrivals: a correlation warning lands ~0.5 s later): it carries on from
+  // where it was, a negative delay, not cut short and not restarted.
+  const during = r.sandbox._buildStripEl(strip);
+  assert.ok(during.classList.contains('efsp-strip-arrived-flash'), 'a rebuild inside the flash cut it short');
+
+  // Something else changes and the Strip is rebuilt after the flash: no replay.
+  const realNow = Date.now;
+  let second;
+  try {
+    const later = realNow() + r.sandbox.ARRIVAL_FLASH_MS + 1;
+    Date.now = () => later;
+    second = r.sandbox._buildStripEl(strip);
+  } finally { Date.now = realNow; }
   assert.ok(second.classList.contains('efsp-strip-arrived'), 'still marked new');
   assert.equal(second.classList.contains('efsp-strip-arrived-flash'), false, 'the flash played again on an unrelated rebuild');
 
