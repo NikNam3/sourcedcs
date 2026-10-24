@@ -27,3 +27,9 @@ hand.
 v3 brings: openAIP airspace (above), AIRAC data (H152), an **upgraded radio panel**, an **upgraded airport panel**,
 **upgraded carrier panels** (v2 ships only a first working prototype), and a second airfield (Konya, H156 RP-Q2) on the
 role-based Positions of ADR 0132. Nothing of these is briefed yet.
+
+## Performance (U-PERF, S-ARCH-95; none matters at squadron load)
+- Board `_persist` after every Mutation is ~50 % of crc-sync's busy time in the soak and grows with the Board (whole-snapshot JSON); a fix (debounced/incremental save) needs an ADR beside ADR 0081 (save before ack).
+- `getFacilityConfig` deep-clones the whole facility on every call; `forwarding-obligations.js` and `par-monitor.js` read one flag.
+- Obligations rerun after every delivery; CA is O(n²) in tracks; the `par` ticker rebuilds approach geometry with PAR unheld.
+- Client frame time never measured (no Electron trace).
