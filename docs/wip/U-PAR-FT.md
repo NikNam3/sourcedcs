@@ -14,7 +14,9 @@ ADR 0139. Branch `lane/U-PAR-FT`, cut from 931d5687.
    `efsp-conf-glidepath`).
 3. **Azimuth autoscale removed** (FT-Q7 c): fixed ±3° (`DEFAULT_VIEW.azMaxDeg`); Shift+wheel on azimuth zooms without
    pausing autoscale (`zoomPausesAutoscale`); double-click resets it to ±3°.
-4. **Final heading + current heading** (FT-Q5): PAR sample `headings { needed, current, windFrom, windKt }` (magnetic);
+4. **Final heading + current heading** (FT-Q5): PAR sample `headings { needed, current, windFromMagnetic, windKt }` (magnetic;
+   **ADR 0139 §3 calls the wind key `windFrom`: it is `windFromMagnetic` on the wire**, renamed after the ADR was committed
+   because H76's client guard, `magnetic-display.test.mjs`, refuses a frame-less `windFrom`; the ADR is not edited, P4);
    `par.neededHeading` (course + WCA, TAS from ground vector − wind); field wind from `airport-weather.js` (moved before
    `buildMonitors` in `app.js`). Panel: `FIN HDG 049  HDG 054` on the deviation row, a heading tick scale at the top
    middle of the azimuth scope.

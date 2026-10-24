@@ -580,7 +580,7 @@ test('09 ADR 0139: the azimuth window stays ±3° off course (Shift+wheel zooms 
   await incirlik(page);
   const call = `PAR${unique()}`;
   const id = await onParFinal(page, call);
-  const headings = { needed: 49, current: 54, windFrom: 140, windKt: 20 };
+  const headings = { needed: 49, current: 54, windFromMagnetic: 140, windKt: 20 };
   await inject(page, [{ ...sample(id, { r: 6, azDeg: 2.6 }), headings }]);
   await openFromBay(page, 'PAR', 'par-final', call);
 
@@ -611,7 +611,7 @@ test('09 ADR 0139: the azimuth window stays ±3° off course (Shift+wheel zooms 
   await expect(panel(page).locator('[data-par-hdg="current"]')).toHaveAttribute('data-off-deg', '5');
   await expect(devItem(page, 'finHdg')).not.toHaveClass(/par-danger|par-attn/);
   await panel(page).screenshot({ path: test.info().outputPath('09-headings.png') });
-  await inject(page, [{ ...sample(id, { r: 5 }), headings: { needed: null, current: 54, windFrom: null, windKt: null } }]);
+  await inject(page, [{ ...sample(id, { r: 5 }), headings: { needed: null, current: 54, windFromMagnetic: null, windKt: null } }]);
   await expect(devItem(page, 'finHdg')).toContainText('—');
   await expect(panel(page).locator('[data-par-hdg-scale]')).toHaveCount(0);
 

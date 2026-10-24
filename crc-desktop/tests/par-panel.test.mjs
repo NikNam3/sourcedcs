@@ -162,14 +162,14 @@ test('ADR 0139: a Shift+wheel on the azimuth scope zooms only the azimuth window
 });
 
 test('ADR 0139 (H164 FT-Q5): the needed and current headings, magnetic, and how far the aircraft is off the needed one', () => {
-  const h = M.headingsModel({ headings: { needed: 47, current: 52, windFrom: 137, windKt: 20 } });
+  const h = M.headingsModel({ headings: { needed: 47, current: 52, windFromMagnetic: 137, windKt: 20 } });
   assert.equal(h.needed, '047');
   assert.equal(h.current, '052');
   assert.equal(h.wind, '137/20');
   assert.equal(h.offDeg, 5, 'right of the needed heading is +');
-  assert.equal(M.headingsModel({ headings: { needed: 358, current: 3, windFrom: null, windKt: null } }).offDeg, 5, 'the short way round north');
+  assert.equal(M.headingsModel({ headings: { needed: 358, current: 3, windFromMagnetic: null, windKt: null } }).offDeg, 5, 'the short way round north');
   assert.equal(M.headingsModel({ headings: { needed: 360, current: 355 } }).needed, '360');
-  const none = M.headingsModel({ headings: { needed: null, current: 52, windFrom: null, windKt: null } });
+  const none = M.headingsModel({ headings: { needed: null, current: 52, windFromMagnetic: null, windKt: null } });
   assert.equal(none.needed, '');
   assert.equal(none.offDeg, null);
   assert.match(none.title, /no field wind/);

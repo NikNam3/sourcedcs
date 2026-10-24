@@ -347,7 +347,7 @@ test('headings: the needed heading holds the course in the field wind, the curre
   assert.deepEqual(Object.keys(e.headings), [...par.HEADINGS_KEYS]);
   assert.equal(e.headings.needed, Math.round(52.7 + wcaDeg - 5), 'course + wind correction, magnetic');
   assert.equal(e.headings.current, Math.round(hdgT + 3 - 5), 'DCS heading, magnetic');
-  assert.equal(e.headings.windFrom, Math.round(142.7 - 5));
+  assert.equal(e.headings.windFromMagnetic, Math.round(142.7 - 5));
   assert.equal(e.headings.windKt, 20);
 });
 

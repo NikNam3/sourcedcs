@@ -28,11 +28,11 @@ const RAD = Math.PI / 180;
 const SAMPLE_KEYS = Object.freeze(['stripId', 'facilityId', 'positionId', 'approach', 'sensor', 'plot', 'plotAgeMs', 'trail', 'headings']);
 /**
  * The keys of `headings` (docs/adr/0139, decisions H164 FT-Q5): whole degrees MAGNETIC (H15), each null when it cannot be
- * worked out. `needed`: the heading that holds the final approach course in the field wind (`neededHeading`); `current`: the
- * aircraft's heading as DCS gives it; `windFrom` / `windKt`: the field wind it was worked out with (magnetic, as ATIS and
+ * worked out (the wind named by its frame, H76). `needed`: the heading that holds the final approach course in the field wind (`neededHeading`); `current`: the
+ * aircraft's heading as DCS gives it; `windFromMagnetic` / `windKt`: the field wind it was worked out with (magnetic, as ATIS and
  * the tower give it, H76).
  */
-const HEADINGS_KEYS = Object.freeze(['needed', 'current', 'windFrom', 'windKt']);
+const HEADINGS_KEYS = Object.freeze(['needed', 'current', 'windFromMagnetic', 'windKt']);
 /** The keys of one `approaches` entry of the frame: the approach a final Bay's next aircraft flies (par-monitor.js finalApproaches). */
 const FINAL_APPROACH_KEYS = Object.freeze(['facilityId', 'positionId', 'approach']);
 /** The keys of `approach`. */

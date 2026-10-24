@@ -315,7 +315,7 @@
       "headings": [
         "needed",
         "current",
-        "windFrom",
+        "windFromMagnetic",
         "windKt"
       ],
       "approach": [

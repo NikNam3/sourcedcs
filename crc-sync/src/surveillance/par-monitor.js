@@ -144,7 +144,7 @@ class ParMonitor {
    * TRUE; each is turned magnetic at the threshold (H15, the variation every PAR bearing uses).
    */
   _headings(facilityId, geom, track) {
-    const none = { needed: null, current: null, windFrom: null, windKt: null };
+    const none = { needed: null, current: null, windFromMagnetic: null, windKt: null };
     const a = geom.approach;
     if (!a || !track || !geom.ref) return none;
     const { refLat: lat, refLon: lon } = geom.ref;
@@ -162,7 +162,7 @@ class ParMonitor {
     return {
       needed: need ? _whole(toMag(need.headingTrueDeg)) : null,
       current: _whole(toMag(gridToTrue(track.heading))),
-      windFrom: _whole(toMag(windFrom)),
+      windFromMagnetic: _whole(toMag(windFrom)),
       windKt: windKt === null ? null : Math.round(windKt),
     };
   }
