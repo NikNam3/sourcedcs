@@ -1403,7 +1403,8 @@ test('ordnance state is a picker on the Strip, and sends the Block the server ro
 });
 
 test('the hook requirement toggles, and a blank cell sends true rather than clearing', async () => {
-  const { el, sent } = await renderStrip({ strip: stripAt({ ownerPositionId: 'LC', state: 'RUNWAY_QUEUE' }), flightData: FDR, signedOn: ['LC'] });
+  // HOOK is on LC's ARRIVAL face (a departure's is in the expanded view, H164 FT-Q3 a).
+  const { el, sent } = await renderStrip({ strip: stripAt({ stripType: 'ARRIVAL', ownerPositionId: 'LC', state: 'HANDED_TO_TOWER', bayId: 'lc-arrivals' }), flightData: FDR, signedOn: ['LC'] });
 
   const cell = blockCell(el, '3F');
   assert.ok(cell, 'Block 3F (hook requirement) is not rendered on the Strip at all');
@@ -1421,9 +1422,19 @@ test('flight data from before the military namespace existed still renders its S
   // field held until docs/adr/0052. Rendering must degrade to a blank cell,
   // not throw and take the whole Bay down with it.
   const legacy = { ...FDR, military: null };
-  const { el } = await renderStrip({ strip: stripAt({ ownerPositionId: 'LC', state: 'RUNWAY_QUEUE' }), flightData: legacy, signedOn: ['LC'] });
+  const { el } = await renderStrip({ strip: stripAt({ stripType: 'ARRIVAL', ownerPositionId: 'LC', state: 'HANDED_TO_TOWER', bayId: 'lc-arrivals' }), flightData: legacy, signedOn: ['LC'] });
   assert.equal(blockCell(el, '3G').textContent, '');
   assert.equal(blockCell(el, '3F').textContent, '');
+});
+
+test('LC\'s departure face has no P/S, OPT or HOOK; the expanded view has all three (H164 FT-Q3 a)', async () => {
+  const face = compactBlocksFor('DEPARTURE', 'LC');
+  for (const id of ['9J-ENTRY', '9J-OPTION', '3F']) assert.equal(face.includes(id), false, `${id} on the face`);
+  const expanded = await expandedBlocksFor('DEPARTURE', 'LC');
+  for (const id of ['9J-ENTRY', '9J-OPTION', '3F']) assert.ok(expanded.includes(id), `${id} not in the expanded view`);
+  // Arrivals unchanged.
+  const arrival = compactBlocksFor('ARRIVAL', 'LC');
+  for (const id of ['9J-ENTRY', '9J-OPTION', '3F']) assert.ok(arrival.includes(id), `${id} left LC's arrival face`);
 });
 
 // ── popovers must not dismiss on their own controls ──────────────────────

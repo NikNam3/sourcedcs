@@ -39,12 +39,12 @@ test('a click steps through the values and back to empty; the cell shows the sho
   assert.deepEqual(['TOUCH_AND_GO', 'FULL_STOP', 'LOW_APPROACH'].map(v => cycleBlockLabel('9J-OPTION', v)), ['T&G', 'FS', 'LA']);
 });
 
-test('the cells are on LC\'s arrivals and departures and AP\'s arrivals, nowhere else', () => {
-  for (const [t, p] of [['ARRIVAL', 'LC'], ['DEPARTURE', 'LC'], ['ARRIVAL', 'AP']]) {
+test('the cells are on LC\'s and AP\'s arrival faces, nowhere else (an LC departure has them in ▼, H164 FT-Q3 a)', () => {
+  for (const [t, p] of [['ARRIVAL', 'LC'], ['ARRIVAL', 'AP']]) {
     const list = compactBlocksFor(t, p, null);
     assert.ok(list.includes('9J-ENTRY') && list.includes('9J-OPTION'), `${t} ${p}`);
   }
-  for (const [t, p] of [['ARRIVAL', 'GC'], ['DEPARTURE', 'GC'], ['DEPARTURE', 'AP'], ['ARRIVAL', 'CTR'], ['OVERFLIGHT', 'AP']]) {
+  for (const [t, p] of [['ARRIVAL', 'GC'], ['DEPARTURE', 'LC'], ['DEPARTURE', 'GC'], ['DEPARTURE', 'AP'], ['ARRIVAL', 'CTR'], ['OVERFLIGHT', 'AP']]) {
     assert.equal(compactBlocksFor(t, p, null).includes('9J-ENTRY'), false, `${t} ${p}`);
   }
 });

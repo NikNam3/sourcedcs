@@ -61,7 +61,8 @@ export const COMPACT_BLOCKS_BY_STRIP_TYPE = {
 //  - TYPE (3) already reads count/type/wake, so ACFT (3A) and WAKE (3B) never
 //    get a field of their own.
 //  - CID (4) and TAIL (3C) are on no Strip: nothing reads either at a glance.
-//  - HOOK (3F) is Tower's alone (carrier control later). ORDNANCE (3G) is on
+//  - HOOK (3F) is Tower's alone (carrier control later), on an arrival's face only: a departure's hook is set in the
+//    expanded view if it stays in the pattern (H164 FT-Q3 a). ORDNANCE (3G) is on
 //    Tower's and OPS's face always (OPS records the load state, UI-A U1); on AP, CTR and every tactical Position it is on the
 //    face only once it is set to something other than CLEAN — see
 //    ORDNANCE_WHEN_SET below (decisions.md H55 and S-L12, crc-sync's
@@ -80,8 +81,9 @@ export const COMPACT_BLOCKS_BY_STRIP_TYPE = {
 //    what those two Positions receive and type (S-L16 W2, ADR 0073), and neither was on any face.
 //  - RELEASE (14A, the release state) on a DEPARTURE at AP and CTR, because the release
 //    travels CTR -> AP -> LC (guide §4.6.2) and each of them reads and passes it (UI-A U5).
-//  - The pattern cells P/S (9J-ENTRY) and OPT (9J-OPTION) where pattern traffic is worked: LC's arrivals and departures,
-//    and AP's arrivals, so the pilot's intentions can be set before the transfer (crc-sync docs/adr/0126, H150).
+//  - The pattern cells P/S (9J-ENTRY) and OPT (9J-OPTION) where pattern traffic is worked: LC's arrivals and AP's
+//    arrivals, so the pilot's intentions can be set before the transfer (crc-sync docs/adr/0126, H150). Not on LC's
+//    departure face (H164 FT-Q3 a): a departure that stays in the pattern sets them in the expanded ▼ view.
 //  - ALERT (14E) where an alert aircraft is ordered and moved: OPS sets it
 //    (decisions.md H56), and every ground Position shows it: CD, GC, LC
 //    (crc-sync docs/adr/0070).
@@ -90,7 +92,7 @@ export const COMPACT_BLOCKS_BY_POSITION = {
     OPS: ['1', '3', '5', '6', '7', '8', '8A', '8B', '9', '9F', '3D', '3E', '3G', '14E'],
     CD:  ['1', '3', '5', '7', '8', '8A', '8B', '9', '9F', '10', '14A', '14D', '21', '14E'],
     GC: ['1', '3', '5', '8', '8A', '14A', '14D', '17', '14E'],
-    LC: ['1', '3', '5', '8A', '21', '14D', '18', '3F', '3G', '14E', '9J-ENTRY', '9J-OPTION'],
+    LC: ['1', '3', '5', '8A', '21', '14D', '18', '3G', '14E'],
     AP: ['1', '3', '5', '7', '8A', '9', '20', '21', '9A-SPEED', '14A', '22', '5A', 'SREG'],
     CTR: ['1', '3', '5', '7', '21', '20', '9A-SPEED', '8B', '9', '14A', '22', '24A', 'IFR', 'RSVC', 'SREG', '5A'],
   },
