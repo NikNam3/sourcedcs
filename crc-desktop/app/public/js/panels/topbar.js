@@ -10,6 +10,7 @@ import { getBullseye } from '../picture.js';
 import { grpcStatus, lastUpdateMs, noRadarsActive, selectedApt, srsStatus } from '../view-state.js';
 import { map, mapReady } from '../map-handle.js';
 import { settings } from '../settings.js';
+import { atcOnlySession } from '../atc-scope.js';
 
 // ── Topbar chrome: status dots, update banner, patch notes, Zulu clock,
 // bullseye cursor readout and measure-line labels. Split out of the former
@@ -152,10 +153,20 @@ export function checkStale() {
 
 const $cursorBra = document.getElementById('cursor-bra');
 
+/** Blank the readout: the cursor left the map (off the canvas, or onto a panel over it), or the session is ATC-only. */
+export function hideBullseyeCursor() {
+  if ($cursorBra) $cursorBra.classList.remove('visible');
+}
+
+/**
+ * The bullseye BRA beside the cursor. A tactical aid: hidden while the session
+ * is ATC-only (atc-scope.js atcOnlySession(), H163), and only while the cursor
+ * is over the map (map-interactions.js hides it on the canvas's mouseleave).
+ */
 export function updateBullseyeCursor(e) {
   const bulls = getBullseye();
   const be = bulls.blue || bulls.red;
-  if (!be) { $cursorBra.classList.remove('visible'); return; }
+  if (!be || atcOnlySession()) { hideBullseyeCursor(); return; }
 
   const rect   = map.getCanvas().getBoundingClientRect();
   const cursor = map.unproject([e.clientX - rect.left, e.clientY - rect.top]);
@@ -212,3 +223,5 @@ export function initZuluClock() {
 }
 
 onEfspChanged(['scope'], () => updateTopbarUI()); // the scope was redrawn (efsp-change-bus.js)
+// A sign-on or a new coverage can make the session ATC-only with the cursor at rest: blank the readout then too.
+onEfspChanged(['positions', 'scope'], () => { if (atcOnlySession()) hideBullseyeCursor(); });

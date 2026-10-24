@@ -47,6 +47,7 @@ export function initSettings() {
     scaleVal:       document.getElementById('set-scale-val'),
     lightMode:      document.getElementById('set-light-mode'),
     elevation:      document.getElementById('set-elevation'),
+    airportRangeRing: document.getElementById('set-airport-range-ring'),
     atcMapBackground: document.getElementById('set-atc-map-background'),
   };
 
@@ -64,6 +65,7 @@ export function initSettings() {
   els.scaleVal.textContent = parseFloat(settings.scale).toFixed(1) + '×';
   els.lightMode.checked  = settings.lightMode;
   els.elevation.checked  = settings.showElevation;
+  if (els.airportRangeRing) els.airportRangeRing.checked = !!settings.airportRangeRing; // H164 FT-Q1: off by default
   // crc-sync's docs/adr/0088: on unless turned off (an older install has no key).
   if (els.atcMapBackground) els.atcMapBackground.checked = settings.atcMapBackground !== false;
   els.radarDebug.checked   = settings.radarDebug;
@@ -129,6 +131,7 @@ export function initSettings() {
     if (!els.radarDebug.checked) hideLosProfile();
   });
   els.datalink.addEventListener('change', () => persist('showDatalinkLocks', els.datalink.checked));
+  if (els.airportRangeRing) els.airportRangeRing.addEventListener('change', () => persist('airportRangeRing', els.airportRangeRing.checked));
   els.textMarks.addEventListener('change', () => {
     settings.textMarksEnabled = els.textMarks.checked;
     saveSettings();

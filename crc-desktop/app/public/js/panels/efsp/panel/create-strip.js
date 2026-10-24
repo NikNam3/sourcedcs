@@ -132,6 +132,9 @@ export function _setCreateStripMsg(text, isError) {
 // the three, not just whichever this list happened to check first.
 const CREATE_STRIP_ORIGINS = [
   { actingPositionId: 'OPS', bayId: 'ops-proposed',    stripType: undefined,     label: 'OPS · Departure' },
+  // H164 FT-Q2 a: Clearance Delivery originates a departure for a pilot who calls with nothing filed at OPS. It starts
+  // in PENDING_CLEARANCE in CD's own Bay: PROPOSED is OPS's state, and a CD Strip there could never move.
+  { actingPositionId: 'CD', bayId: 'cd-pending-clearance', stripType: undefined, label: 'CD · Departure', initialState: 'PENDING_CLEARANCE' },
   { actingPositionId: 'AP', bayId: 'ap-inbound',     stripType: 'ARRIVAL',     label: 'AP · Arrival' },
   { actingPositionId: 'AP', bayId: 'ap-overflight',  stripType: 'OVERFLIGHT',  label: 'AP · Overflight' },
   { actingPositionId: 'CTR', bayId: 'ctr-enroute',     stripType: 'ARRIVAL',     label: 'CTR · Arrival' },
@@ -352,7 +355,7 @@ export function _refreshCreateStripAvailability() {
   _createStripInputEl.disabled = !origin;
   _createStripBtnEl.disabled = !origin;
   if (!origin) {
-    _setCreateStripMsg('OPS, AP, CTR or Marshal only — select one in Panels to create Strips', true);
+    _setCreateStripMsg('OPS, CD, AP, CTR or Marshal only — select one in Panels to create Strips', true);
   } else if (!_pendingCreateStripMutationId) {
     // Clear a stale "OPS/AP/CTR only"/validation message once one is
     // selected — but never stomp "Creating…" while an attempt is still in
@@ -390,7 +393,7 @@ async function _submitCreateStrip() {
 
   const origin = _createStripOrigin();
   if (!origin) {
-    _setCreateStripMsg('OPS, AP, CTR or Marshal only — select one in Panels to create Strips', true);
+    _setCreateStripMsg('OPS, CD, AP, CTR or Marshal only — select one in Panels to create Strips', true);
     return;
   }
   // docs/ui-findings F-308 — the picker is read BEFORE the typed callsign is

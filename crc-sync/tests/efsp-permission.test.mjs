@@ -26,10 +26,11 @@ test('every INCIRLIK Position (OPS, CD, GC, LC, AP) is defined in the permission
   }
 });
 
-test('OPS and AP both pass the coarse CreateStrip gate (both originate Strips, just for different roles); CD/GC/LC do not', () => {
+test('OPS, CD and AP pass the coarse CreateStrip gate (they originate Strips, for different roles; CD since H164 FT-Q2); GC/LC do not', () => {
   assert.equal(canMutate('OPS', 'CreateStrip'), true);
+  assert.equal(canMutate('CD', 'CreateStrip'), true);
   assert.equal(canMutate('AP', 'CreateStrip'), true);
-  for (const id of ['CD', 'GC', 'LC']) {
+  for (const id of ['GC', 'LC']) {
     assert.equal(canMutate(id, 'CreateStrip'), false, id);
   }
 });
@@ -174,8 +175,14 @@ test('CTR may originate ARRIVAL (docs/adr/0014) and OVERFLIGHT (docs/adr/0023), 
   assert.equal(canCreateStripType('CTR', 'DEPARTURE'), false);
 });
 
-test('CD/GC/LC may originate no strip type at all', () => {
-  for (const id of ['CD', 'GC', 'LC']) {
+test('CD may originate a DEPARTURE only (H164 FT-Q2 a)', () => {
+  assert.equal(canCreateStripType('CD', 'DEPARTURE'), true);
+  assert.equal(canCreateStripType('CD', 'ARRIVAL'), false);
+  assert.equal(canCreateStripType('CD', 'OVERFLIGHT'), false);
+});
+
+test('GC/LC may originate no strip type at all', () => {
+  for (const id of ['GC', 'LC']) {
     assert.equal(canCreateStripType(id, 'DEPARTURE'), false, id);
     assert.equal(canCreateStripType(id, 'ARRIVAL'), false, id);
     assert.equal(canCreateStripType(id, 'OVERFLIGHT'), false, id);

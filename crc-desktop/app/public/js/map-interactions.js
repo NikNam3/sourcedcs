@@ -1,7 +1,7 @@
 'use strict';
 import { atcTargetClick } from './atc-scope.js';
 import { updateMap } from './geojson.js';
-import { updateBullseyeCursor, updateMeasureLine } from './panels/topbar.js';
+import { hideBullseyeCursor, updateBullseyeCursor, updateMeasureLine } from './panels/topbar.js';
 import { applyBullseyePick } from './panels/settings-panel.js';
 import { closeAptWeatherPanel, showAptWeatherPanel } from './panels/airport-selector.js';
 import { closeTrackPanel, showTrackPanel } from './panels/track-panel.js';
@@ -174,6 +174,9 @@ export function wireMapInteractions() {
       updateMeasureLine(_measure.startLng, _measure.startLat, point.lng, point.lat);
     }
   });
+
+  // Off the map, the readout is blank: leaving the canvas, including onto a panel over it (H163).
+  map.getCanvas().addEventListener('mouseleave', () => hideBullseyeCursor());
 
   map.getCanvas().addEventListener('mouseup', () => {
     if (!_drag) return;

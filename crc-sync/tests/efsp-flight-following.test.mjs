@@ -217,7 +217,7 @@ test('the reconciler keeps the binding, and conformance finds nothing to check o
     trackStore: { get: (id) => (id === '970' ? { ...track, verticalSpeed: 20 } : null) },
     flightDataStore: efsp.flightDataStore, correlationStore: efsp.correlationStore,
     weather: () => ({ pressurePa: 101325, tempK: 288 }), transitionAltFt: () => 18000, indicatedAltFt: (alt) => alt * 3.28084,
-    config: { headingToleranceDeg: 15, headingPersistSec: 0, headingGraceSec: 0, wrongWayFpm: 100, wrongWayPersistSec: 0, levelBustFt: 200, levelBustPersistSec: 0, atAltitudeBandFt: 100, minGroundSpeedKt: 0 },
+    config: { headingToleranceDeg: 15, headingPersistSec: 0, headingTurnRateDegPerSec: 3, headingTurnMaxBankDeg: 25, headingGraceMarginSec: 0, wrongWayFpm: 100, wrongWayPersistSec: 0, levelBustFt: 200, levelBustPersistSec: 0, atAltitudeBandFt: 100, minGroundSpeedKt: 0 },
     gridToMagnetic: (deg) => deg,
   });
   for (let i = 0; i < 3; i++) monitor.tick(Date.now() + i * 1000, Date.now() + i * 1000);

@@ -65,7 +65,7 @@ test('the NLA status every Strip carries is computed at mission time', () => {
   assert.equal(seen, MISSION_0240Z);
 });
 
-test('conformance measures the heading grace on the wall clock from first sight; `since` stays mission time (docs/adr/0096)', () => {
+test('conformance measures the heading grace and the turn continuity on the wall clock from first sight; `since` stays mission time (docs/adr/0096)', () => {
   const clock = fakeClock();
   let wall = 1000;
   const cleared = MISSION_0240Z; // mission time: a stamp seven years from the wall clock's
@@ -77,16 +77,16 @@ test('conformance measures the heading grace on the wall clock from first sight;
     correlationStore: { getAll: () => [{ flightDataId: 'f1', trackId: 't1', state: 'CORRELATED' }] },
     weather: () => ({}), transitionAltFt: () => 18000, indicatedAltFt: () => 10000,
     gridToMagnetic: (deg) => deg, // frames are conformance.test.mjs's concern
-    config: { minGroundSpeedKt: 50, headingToleranceDeg: 5, headingGraceSec: 30, headingPersistSec: 10, atAltitudeBandFt: 400, levelBustFt: 500, levelBustPersistSec: 3, wrongWayFpm: 500, wrongWayPersistSec: 5 },
+    config: { minGroundSpeedKt: 50, headingToleranceDeg: 5, headingTurnRateDegPerSec: 3, headingTurnMaxBankDeg: 25, headingGraceMarginSec: 15, headingPersistSec: 10, atAltitudeBandFt: 400, levelBustFt: 500, levelBustPersistSec: 3, wrongWayFpm: 500, wrongWayPersistSec: 5 },
   });
+  // The track never turns toward 090, so the turn-continuity check (H163) counts from first sight, on the wall clock.
   clock.set(cleared); monitor.tick();
-  assert.deepEqual(monitor.getAll(), [], 'inside the 30 s grace period');
-  // The mission clock jumps (DCS pause, mission reload): the grace does not care.
+  assert.deepEqual(monitor.getAll(), [], 'first sight of the assignment');
+  // The mission clock jumps (DCS pause, mission reload): the grace and the persistence do not care.
   clock.set(cleared + 3600000); wall += 5000; monitor.tick();
-  assert.deepEqual(monitor.getAll(), [], 'still inside the grace: 5 s of wall time passed');
-  wall += 26000; clock.set(cleared + 3601000); monitor.tick(); // grace over (31 s wall), persistence starts
-  wall += 11000; clock.set(cleared + 3612000); monitor.tick();
+  assert.deepEqual(monitor.getAll(), [], 'not turning for 5 s of wall time: not yet the 10 s');
+  wall += 5000; clock.set(cleared + 3601000); monitor.tick();
   const [{ alerts: [alert] }] = monitor.getAll();
   assert.equal(alert.kind, 'HEADING');
-  assert.equal(alert.since, cleared + 3601000, '`since` is mission time');
+  assert.equal(alert.since, cleared, '`since` is mission time: when the turn last progressed');
 });

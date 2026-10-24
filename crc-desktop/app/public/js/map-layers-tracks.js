@@ -80,7 +80,10 @@ export function addTrackLayers() {
     layout: {
       'text-field': ['get', 'posChar'],
       'text-font': ['Roboto Mono Medium', 'Noto Sans Regular'],
-      'text-size': TEXT_SIZE_PX, 'text-anchor': 'center',
+      // MapLibre centres the line box, not the ink: a capital's ink sits 0.15 em above the
+      // anchor (measured on the bundled Roboto, l22-stars-scope.spec.js), so push it down
+      // onto the disc's centre (H163). In ems, so it holds at any text size.
+      'text-size': TEXT_SIZE_PX, 'text-anchor': 'center', 'text-offset': [0, 0.15],
       'text-allow-overlap': true, 'text-ignore-placement': true,
     },
     paint: { 'text-color': ['get', 'posColor'], 'text-opacity': ['get', 'posOpacity'] },

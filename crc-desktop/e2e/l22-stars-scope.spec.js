@@ -236,3 +236,95 @@ test('scene 3: a mixed TAC_C2 + AP session — the tactical scheme wins where th
   expect(schemes.colt).toBe('ATC');
   await snap(page, 'scene3-mixed-tac-app.png');
 });
+
+// ── The letter sits centred on its disc (H163) ───────────────────────────
+
+/**
+ * Each disc's centre and its character's ink centre, in screen pixels: two screenshots of the black scope, one with
+ * only the discs drawn and one with only the characters, decoded in the page and split into blobs near each target.
+ */
+async function letterOffsets(page, { scale = 1 } = {}) {
+  const shot = async (only) => {
+    await page.evaluate(([keep, s]) => {
+      const m = crc.mapHandle.map;
+      for (const l of m.getStyle().layers) if (l.id !== 'Background') m.setLayoutProperty(l.id, 'visibility', l.id === keep ? 'visible' : 'none');
+      m.setPaintProperty('atc-targets', 'circle-radius', 6 * s);
+      m.setLayoutProperty('atc-symbols', 'text-size', 11 * s);
+      // Full opacity: a contact fades as its returns age, and only the geometry is measured here.
+      m.setPaintProperty('atc-targets', 'circle-opacity', 1);
+      m.setPaintProperty('atc-symbols', 'text-opacity', 1);
+      // Until the style change is drawn and its glyphs are in (maplibre's 'idle').
+      return new Promise((resolve) => { m.once('idle', resolve); m.triggerRepaint(); });
+    }, [only, scale]);
+    await frames(page, 3);
+    return (await page.locator('#map').screenshot({ animations: 'disabled' })).toString('base64');
+  };
+  const discs = await shot('atc-targets');
+  const chars = await shot('atc-symbols');
+  return page.evaluate(async ([d, c, s]) => {
+    const load = async (b64) => {
+      const img = new Image();
+      img.src = `data:image/png;base64,${b64}`;
+      await img.decode();
+      const cv = document.createElement('canvas');
+      cv.width = img.width; cv.height = img.height;
+      const ctx = cv.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      return ctx.getImageData(0, 0, img.width, img.height);
+    };
+    const [D, C] = [await load(d), await load(c)];
+    const m = crc.mapHandle.map;
+    const r = Math.ceil(9 * s);
+    const box = (im, cx, cy) => {
+      let x0 = Infinity; let x1 = -Infinity; let y0 = Infinity; let y1 = -Infinity;
+      for (let y = Math.max(0, cy - r); y <= Math.min(im.height - 1, cy + r); y++) {
+        for (let x = Math.max(0, cx - r); x <= Math.min(im.width - 1, cx + r); x++) {
+          const i = (y * im.width + x) * 4;
+          if (im.data[i] + im.data[i + 1] + im.data[i + 2] > 120) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+        }
+      }
+      return x1 < 0 ? null : { x: (x0 + x1) / 2, y: (y0 + y1) / 2 };
+    };
+    const out = [];
+    for (const f of crc.geojson.buildDots().features) {
+      const p = f.properties;
+      if (p.scheme !== 'ATC' || !p.disc || !/^[A-Z]$/.test(p.posChar)) continue;
+      const px = m.project(f.geometry.coordinates);
+      const cx = Math.round(px.x); const cy = Math.round(px.y);
+      if (cx - r < 0 || cy - r < 0 || cx + r >= D.width || cy + r >= D.height) continue; // cut by the map's edge
+      const a = box(D, cx, cy); const b = box(C, cx, cy);
+      if (a && b) out.push({ id: p.id, ch: p.posChar, dx: b.x - a.x, dy: b.y - a.y });
+    }
+    return out;
+  }, [discs, chars, scale]);
+}
+
+test('the position letter is centred on its disc, at the scope size and enlarged (H163)', async ({ page }) => {
+  await openScope(page, { INCIRLIK: ['AP'] });
+  await page.evaluate(() => { crc.settings.settings.atcMapBackground = false; });
+  await inject(page, appScene());
+  await page.waitForFunction(() => crc.mapHandle.map.getPaintProperty('Background', 'background-color') === '#000000');
+  await page.waitForFunction(() => crc.mapHandle.map.loaded());
+  const all = {};
+  for (const scale of [1, 4]) {
+    // A screenshot can land before the restyled layer is drawn: measure again until every target is found.
+    // Fresh returns first: a contact whose returns are older than three sweeps coasts and loses its disc.
+    for (let i = 0; i < 5 && !(all[scale] && all[scale].length > 3); i++) {
+      await page.evaluate((tracks) => {
+        const now = Date.now();
+        crc.app.applySnapshot(tracks.map((t) => { const w = { ...t, illuminatedAt: now }; delete w._h; delete w._kt; delete w._stale; return w; }));
+        crc.geojson.updateMap();
+      }, appScene().tracks);
+      all[scale] = await letterOffsets(page, { scale });
+    }
+  }
+  console.log('letter offsets (px, ink centre minus disc centre):', JSON.stringify(all));
+  for (const scale of [1, 4]) {
+    const offs = all[scale];
+    expect(offs.length).toBeGreaterThan(3);
+    for (const o of offs) {
+      expect(Math.abs(o.dx), `${o.ch} dx at scale ${scale}`).toBeLessThanOrEqual(scale === 1 ? 1 : 2);
+      expect(Math.abs(o.dy), `${o.ch} dy at scale ${scale}`).toBeLessThanOrEqual(scale === 1 ? 1 : 2);
+    }
+  }
+});
