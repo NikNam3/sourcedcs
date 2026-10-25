@@ -323,6 +323,17 @@
    (Giving .efsp-rack `contain: layout` would also move the containing block
    here, but it creates a stacking context and changes how the ghost behaves
    when the Bay scrolls mid-drag — both squarely in F-001's and F-404's way.) */
+/* H168 — the hit area for the left edge's tooltip (bay/strip-element.js
+   _appendEdgeTip): over the 4px border and 6px of the padding, transparent,
+   never a control. Nothing is drawn. */
+.efsp-strip-edge-tip {
+  position: absolute;
+  left: -4px;
+  top: 0;
+  bottom: 0;
+  width: 10px;
+}
+
 .efsp-strip-dragging {
   opacity: 0.55; /* §7.2 rule 3 */
   position: fixed;
