@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 
 import {
   computeInsertionIndex, computeRackReconciliation, DRAG_THRESHOLD_PX, hasExceededDragThreshold,
-  scrollCompensatedY, cachedTopToViewportY,
+  scrollCompensatedY, cachedTopToViewportY, isUnchangedPlacement,
 } from '../app/public/js/panels/efsp/strip-drag.js';
 
 function rect(stripId, top, height = 40) { return { stripId, top, height }; }
@@ -185,4 +185,93 @@ test('F-402: dragging UPWARD past Strips above the dragged one is unaffected by 
   const pointerY = 430; // the midpoint of the A1|A2 gap, unmoved by A4 leaving the flow
   const above = [{ stripId: 'A1', top: 288, height: 140 }, { stripId: 'A2', top: 430, height: 140 }, { stripId: 'A3', top: 572, height: 140 }];
   assert.deepEqual(computeInsertionIndex(above, pointerY), { index: 1, afterStripId: 'A1', beforeStripId: 'A2' });
+});
+
+// ── H167: the drop follows the ghost, not the cursor ─────────────────────
+// A Rack of 140px Strips with collapsed 2px margins: slot tops 0, 142, 284, …
+// The dragged Strip B was second (top 142). Once it is `position: fixed` the
+// Rack closes up and is measured as A@0, C@142, D@284 (F-402). The ghost's top
+// is the pointer minus where B was grabbed (grabOffsetY), and moves by dy.
+
+const GAP = 2;
+function closedRack(ids, heights) {
+  let top = 0;
+  return ids.map((id, i) => { const r = { stripId: id, top, height: heights[i] }; top += heights[i] + GAP; return r; });
+}
+const T0 = 142; // B's own top before the drag
+function dropAt(rects, grabOffsetY, dy) {
+  const pointerY = T0 + grabOffsetY + dy;
+  return computeInsertionIndex(rects, pointerY - grabOffsetY);
+}
+
+test('H167: a lower-half grab + 6px of jitter (a click or a double-click) lands on the Strip\'s own slot', () => {
+  const rects = closedRack(['A', 'C', 'D'], [140, 140, 140]);
+  for (const dy of [6, -6, 7, -7, 12, -12]) {
+    assert.deepEqual(dropAt(rects, 120, dy), { index: 1, afterStripId: 'A', beforeStripId: 'C' }, `dy=${dy}`);
+  }
+  // The measured bug: the cursor itself (T0+120+6 = 268) is below C's midpoint (212).
+  assert.equal(computeInsertionIndex(rects, T0 + 120 + 6).afterStripId, 'C');
+});
+
+test('H167: the upper-half grab answers the same, whatever half was grabbed', () => {
+  const rects = closedRack(['A', 'C', 'D'], [140, 140, 140]);
+  for (const grab of [2, 20, 70, 120, 138]) {
+    for (const dy of [0, 6, -6]) {
+      assert.deepEqual(dropAt(rects, grab, dy), { index: 1, afterStripId: 'A', beforeStripId: 'C' }, `grab=${grab} dy=${dy}`);
+    }
+  }
+});
+
+test('H167: mixed heights (a flipped Strip is shorter) still leave a jittered click in place', () => {
+  // B tall (140), C below it flipped (40), A above it flipped (40).
+  const rects = closedRack(['A', 'C', 'D'], [40, 40, 140]);
+  const t0 = 42; // B's top: under A (40 + 2)
+  for (const grab of [5, 70, 135]) {
+    for (const dy of [6, -6, 15, -15]) {
+      const r = computeInsertionIndex(rects, t0 + dy); // ghost top = t0 + dy whatever the grab
+      assert.deepEqual(r, { index: 1, afterStripId: 'A', beforeStripId: 'C' }, `grab=${grab} dy=${dy}`);
+    }
+  }
+  // And the short Strip B dragged past a tall neighbour: no move until it has
+  // travelled half of that neighbour.
+  const tall = closedRack(['A', 'C', 'D'], [140, 140, 140]);
+  assert.equal(computeInsertionIndex(tall, T0 + 60).index, 1);
+  assert.equal(computeInsertionIndex(tall, T0 + 80).index, 2);
+});
+
+test('H167: real drags one and two places down land right', () => {
+  const rects = closedRack(['A', 'C', 'D'], [140, 140, 140]);
+  // One place down: B's top over C's old slot top + 142 → between C and D.
+  assert.deepEqual(dropAt(rects, 100, 142), { index: 2, afterStripId: 'C', beforeStripId: 'D' });
+  // Two places down: past D, to the end.
+  assert.deepEqual(dropAt(rects, 100, 284), { index: 3, afterStripId: 'D', beforeStripId: null });
+  // Just short of half a Strip stays, just past moves.
+  assert.equal(dropAt(rects, 30, 70).index, 1);
+  assert.equal(dropAt(rects, 30, 72).index, 2);
+});
+
+test('H167: real drags one and two places up land right', () => {
+  // E dragged from the bottom of A, B, C, D, E (top 568), closed-up rects A..D.
+  const rects = closedRack(['A', 'B', 'C', 'D'], [140, 140, 140, 140]);
+  const t0 = 568;
+  assert.deepEqual(computeInsertionIndex(rects, t0 + 3), { index: 4, afterStripId: 'D', beforeStripId: null });
+  assert.deepEqual(computeInsertionIndex(rects, t0 - 142), { index: 3, afterStripId: 'C', beforeStripId: 'D' });
+  assert.deepEqual(computeInsertionIndex(rects, t0 - 284), { index: 2, afterStripId: 'B', beforeStripId: 'C' });
+  assert.deepEqual(computeInsertionIndex(rects, -30), { index: 0, afterStripId: null, beforeStripId: 'A' });
+});
+
+test('H167: the last Strip of a Rack, jittered, stays last (the slot after the last Strip is one gap below it)', () => {
+  const rects = closedRack(['A', 'B'], [140, 40]);
+  const t0 = 142 + 40 + GAP; // under B
+  for (const dy of [-6, 6]) assert.equal(computeInsertionIndex(rects, t0 + dy).index, 2, `dy=${dy}`);
+});
+
+test('isUnchangedPlacement: same Rack and neighbours is no move; any difference is one', () => {
+  const o = { bayId: 'b', rackId: 'r', afterStripId: 'A', beforeStripId: 'C' };
+  assert.equal(isUnchangedPlacement(o, { ...o }), true);
+  assert.equal(isUnchangedPlacement(o, { ...o, afterStripId: 'C', beforeStripId: 'D' }), false);
+  assert.equal(isUnchangedPlacement(o, { ...o, rackId: 'r2' }), false);
+  assert.equal(isUnchangedPlacement(o, { ...o, bayId: 'b2' }), false);
+  const alone = { bayId: 'b', rackId: 'r', afterStripId: null, beforeStripId: null };
+  assert.equal(isUnchangedPlacement(alone, { ...alone, afterStripId: undefined }), true);
 });

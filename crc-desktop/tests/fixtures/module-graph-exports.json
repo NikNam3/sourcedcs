@@ -1460,6 +1460,7 @@
    "computeInsertionIndex",
    "computeRackReconciliation",
    "hasExceededDragThreshold",
+   "isUnchangedPlacement",
    "scrollCompensatedY"
   ],
   "panels/efsp/strip-exchanges.js": [
