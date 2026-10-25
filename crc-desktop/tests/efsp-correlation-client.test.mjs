@@ -52,7 +52,7 @@ function flightData(flightDataId, callsign, beaconAssigned = '0041') {
 function correlation(flightDataId, over = {}) {
   return {
     flightDataId, rev: 1, state: 'CORRELATED', trackId: '101', matchedBy: 'BEACON',
-    confidence: null, binding: null, warning: null, observedBeacon: '0041',
+    binding: null, warning: null, observedBeacon: '0041',
     transitions: [], ...over,
   };
 }
@@ -257,26 +257,29 @@ test('a controller binding says who bound it', () => {
   assert.match(correlationBadgeFor(state.getEfspStrip('s1')).title, /bound by AP/);
 });
 
-test('a provisional match shows the observed-versus-assigned mismatch in words', () => {
-  // §3.10.2 rule 1's three-case render, with real data behind it.
+test('there is no TRK? badge: a record the server never sends PROVISIONAL is either correlated or NO TRK (docs/adr/0142)', () => {
   load({
     strips: [strip('s1', 'f1')], flightDataList: [flightData('f1', 'VIPER1', '0041')],
-    correlations: [correlation('f1', { state: 'PROVISIONAL', matchedBy: 'CALLSIGN_EXACT', observedBeacon: '0056' })],
+    correlations: [correlation('f1', { matchedBy: 'BEACON', observedBeacon: '0041' })],
     tracks: [{ id: '101', callsign: 'VIPER1' }],
   });
   const badge = correlationBadgeFor(state.getEfspStrip('s1'));
-  assert.equal(badge.text, 'TRK?');
-  assert.match(badge.title, /observed 0056/);
-  assert.match(badge.title, /assigned 0041/);
+  assert.notEqual(badge.text, 'TRK?');
+  assert.match(badge.title, /correlated on beacon 0041/);
 });
 
-test('a fuzzy match reports its confidence rather than a mismatch', () => {
+test('an AI aircraft\'s code re-minted to another aircraft reads NO TRK, warned, saying what to do', () => {
   load({
-    strips: [strip('s1', 'f1')], flightDataList: [flightData('f1', 'VIPER1')],
-    correlations: [correlation('f1', { state: 'PROVISIONAL', matchedBy: 'CALLSIGN_FUZZY', confidence: 0.9, observedBeacon: null })],
-    tracks: [{ id: '101', callsign: 'VIPER11' }],
+    strips: [strip('s1', 'f1')], flightDataList: [flightData('f1', 'COLT1', '6012')],
+    correlations: [correlation('f1', {
+      state: 'UNCORRELATED', trackId: null, matchedBy: null,
+      warning: { kind: 'CODE_REISSUED', candidateTrackIds: ['8'], detail: '6012 is now squawked by a different AI aircraft — bind it, or enter its code' },
+    })],
   });
-  assert.match(correlationBadgeFor(state.getEfspStrip('s1')).title, /provisional, 0\.9/);
+  const badge = correlationBadgeFor(state.getEfspStrip('s1'));
+  assert.equal(badge.text, 'NO TRK');
+  assert.equal(badge.warned, true);
+  assert.match(badge.title, /different AI aircraft/);
 });
 
 test('correlated to a contact outside your coverage says so, rather than showing a bare id', () => {
@@ -311,17 +314,6 @@ test('the same record reads as a normal correlation once the contact enters cove
   assert.equal(badge.text, 'TRK TN00012', 'no transponder: its track number');
 });
 
-test('a provisional match outside coverage also reads as outside, not as a mismatch', () => {
-  // Otherwise the tooltip would explain a squawk disagreement for a contact
-  // the controller cannot look at.
-  load({
-    strips: [strip('s1', 'f1')], flightDataList: [flightData('f1', 'VIPER1', '0041')],
-    correlations: [correlation('f1', { state: 'PROVISIONAL', matchedBy: 'CALLSIGN_EXACT', observedBeacon: '0056' })],
-    tracks: [],
-  });
-  assert.equal(correlationBadgeFor(state.getEfspStrip('s1')).outsideCoverage, true);
-});
-
 test('an uncorrelated Strip reads NO TRK, and a broken binding reads louder', () => {
   load({
     strips: [strip('s1', 'f1')], flightDataList: [flightData('f1', 'VIPER1')],
@@ -350,7 +342,7 @@ test('an ambiguous correlation is a button carrying its candidates', () => {
     strips: [strip('s1', 'f1')], flightDataList: [flightData('f1', 'VIPER1')],
     correlations: [correlation('f1', {
       state: 'UNCORRELATED', trackId: null, matchedBy: null,
-      warning: { kind: 'AMBIGUOUS_CALLSIGN', candidateTrackIds: ['101', '102'], detail: '2 contacts answer to VIPER1 equally well — bind one' },
+      warning: { kind: 'AMBIGUOUS_BEACON', candidateTrackIds: ['101', '102'], detail: '2 contacts are squawking 0041 — bind one' },
     })],
   });
   const badge = correlationBadgeFor(state.getEfspStrip('s1'));

@@ -3,7 +3,7 @@ import { trackRef } from '../../track-label.js';
 import { getLatestTrack } from '../../picture.js';
 import { ORDER, markEfspChanged, onEfspChanged } from './efsp-change-bus.js';
 import {
-  correlatedTrackIdForStrip, getEfspCorrelationForStrip, getEfspFlightData, getEfspStrip, stripIdsForTrackId
+  correlatedTrackIdForStrip, getEfspCorrelationForStrip, getEfspStrip, stripIdsForTrackId
 } from './efsp-state.js';
 import { selectEfspStripById } from './bay/selection.js';
 import { map, mapReady } from '../../map-handle.js';
@@ -47,7 +47,7 @@ export function clearShownOnMap() {
   _setRing(null);
 }
 
-/** The contact "Show on map" would ring for this Strip, or null: correlated (or provisional) and in this controller's picture. */
+/** The contact "Show on map" would ring for this Strip, or null: correlated and in this controller's picture. */
 export function showOnMapTrackFor(strip) {
   const trackId = strip ? correlatedTrackIdForStrip(strip) : null;
   return trackId && getLatestTrack(trackId) ? trackId : null;
@@ -141,7 +141,7 @@ export function correlationBadgeFor(strip) {
   if (!record) return null;
 
   const warning = record.warning;
-  if (warning && (warning.kind === 'AMBIGUOUS_BEACON' || warning.kind === 'AMBIGUOUS_CALLSIGN')) {
+  if (warning && warning.kind === 'AMBIGUOUS_BEACON') {
     const n = (warning.candidateTrackIds || []).length;
     return {
       text: `TRK ×${n}`,
@@ -187,14 +187,6 @@ export function correlationBadgeFor(strip) {
     };
   }
 
-  if (record.state === 'PROVISIONAL') {
-    return {
-      text: 'TRK?',
-      className: 'efsp-correlation-badge efsp-correlation-provisional',
-      title: _provisionalSentence(record, strip),
-    };
-  }
-
   return {
     text: `TRK ${trackRef(track)}`,
     className: 'efsp-correlation-badge efsp-correlation-correlated',
@@ -205,6 +197,7 @@ export function correlationBadgeFor(strip) {
 function _warningSentence(kind) {
   if (kind === 'TRACK_IDENTITY_LOST') return 'the contact this flight was on no longer exists';
   if (kind === 'TRACK_LOST') return 'no surveillance contact matches this flight';
+  if (kind === 'CODE_REISSUED') return 'this code now belongs to a different AI aircraft — bind it, or enter its code';
   return 'uncorrelated';
 }
 
@@ -213,20 +206,7 @@ function _correlatedSentence(record) {
     const by = record.binding && record.binding.boundPositionId;
     return by ? `bound by ${by}` : 'bound by a controller';
   }
-  if (record.matchedBy === 'BEACON') return `correlated on beacon ${record.observedBeacon}`;
-  return 'correlated on callsign';
-}
-
-function _provisionalSentence(record, strip) {
-  const flightData = strip ? getEfspFlightData(strip.flightDataId) : null;
-  const assigned = flightData && flightData.identity ? flightData.identity.beaconAssigned : null;
-  if (record.observedBeacon && assigned && record.observedBeacon !== assigned) {
-    return `observed ${record.observedBeacon} ≠ assigned ${assigned}`;
-  }
-  if (record.matchedBy === 'CALLSIGN_FUZZY') {
-    return `callsign match (provisional${record.confidence != null ? `, ${record.confidence}` : ''})`;
-  }
-  return 'provisional match';
+  return `correlated on beacon ${record.observedBeacon}`;
 }
 
 // A ring that is showing is re-resolved before the map reads it (efsp-change-bus.js). Selection no longer moves it (H129).

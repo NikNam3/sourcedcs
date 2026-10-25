@@ -18,7 +18,9 @@ import crypto from 'crypto';
  * So the first four sorties are the four ways a DCS identity moves under a
  * flight: a mission reload re-IDs everything, a contact goes stale and comes
  * back as somebody else, a pilot changes squawk, and two flights share a
- * callsign. Sortie 5 is the regression test for a defect this pass found in
+ * callsign (which, since docs/adr/0142, correlates neither: there is no callsign
+ * rung). Sortie 4b walks an AI flight correlated on the synthetic code a
+ * controller typed in (H165). Sortie 5 is the regression test for a defect this pass found in
  * ConvertToArrival, and 7 for the one the flightDataId key exists to prevent.
  */
 
@@ -38,7 +40,7 @@ const facilityConfig = (await import('../src/efsp/facility-config.js')).createFa
 const { CorrelationReconciler } = await import('../src/efsp/correlation-reconciler.js');
 const { octalCode } = await import('../src/surveillance/transponder.js');
 const {
-  crew, mustAct, advance, airborneDeparture, handedToCenter, DEPARTURE_FLIGHT_DATA,
+  crew, act, mustAct, advance, airborneDeparture, handedToCenter, DEPARTURE_FLIGHT_DATA,
 } = await import('./helpers/efsp-scenario.mjs');
 
 const ATC = { OPS: 'INCIRLIK', CD: 'INCIRLIK', GC: 'INCIRLIK', LC: 'INCIRLIK', AP: 'INCIRLIK', CTR: 'CENTER' };
@@ -147,7 +149,7 @@ test('SCENARIO a DCS mission reload re-IDs every contact; the flight warns, then
   assert.equal(last.fromTrackId, '101', 'and the identity change is legible in one line');
 });
 
-test('a flight whose transponder is off keeps the warning after a reload rather than guessing', async () => {
+test('a flight whose transponder is off is NO TRK until bound, and after a reload warns rather than guessing', async () => {
   const efsp = createEfsp();
   const c = crew(efsp, ATC);
   const sky = picture();
@@ -156,10 +158,14 @@ test('a flight whose transponder is off keeps the warning after a reload rather 
   const strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'DARK1' });
   sky.spawn(101, 'DARK1', null); // no squawk at all
   reconciler.tick();
-  assert.equal(correlationOf(efsp, strip.flightDataId).matchedBy, 'CALLSIGN_EXACT');
+  assert.equal(correlationOf(efsp, strip.flightDataId).state, 'UNCORRELATED', 'the callsign alone correlates nothing (H165)');
+  bind(efsp, c.AP.session, 'AP', strip.flightDataId, 101);
+  reconciler.tick();
+  assert.equal(correlationOf(efsp, strip.flightDataId).matchedBy, 'BINDING');
 
   sky.reload();
   reconciler.resetPicture('MISSION_RELOAD');
+  sky.spawn(201, 'DARK1', null);
   reconciler.tick();
 
   const record = correlationOf(efsp, strip.flightDataId);
@@ -215,10 +221,9 @@ test('a contact that goes and does not come back leaves a warning, not a stale b
 
 // ── 3. the pilot changes squawk ──────────────────────────────────────────
 
-test('SCENARIO a pilot squawking the wrong code stays on the flight, degraded, with both codes visible', async () => {
+test('SCENARIO a pilot squawking the wrong code loses the correlation, visibly, and a binding keeps both codes in view', async () => {
   // The correlation must NOT follow the new code to some other flight, and
-  // §3.10.2 rule 1's assigned-vs-observed pair gets real data behind it for
-  // the first time.
+  // §3.10.2 rule 1's assigned-vs-observed pair stays renderable.
   const efsp = createEfsp();
   const c = crew(efsp, ATC);
   const sky = picture();
@@ -229,32 +234,28 @@ test('SCENARIO a pilot squawking the wrong code stays on the flight, degraded, w
   reconciler.tick();
   assert.equal(correlationOf(efsp, strip.flightDataId).matchedBy, 'BEACON');
 
-  // Fingers. A different, valid Mode 3/A code.
+  // Fingers. A different, valid Mode 3/A code: nothing else is evidence (H165).
   sky.squawk(101, 1234);
   reconciler.tick();
-
-  const record = correlationOf(efsp, strip.flightDataId);
-  assert.equal(record.trackId, '101', 'it survives on the callsign rung');
-  assert.equal(record.matchedBy, 'CALLSIGN_EXACT');
-  assert.equal(record.state, 'PROVISIONAL', 'the transponder disagrees, so the match is only provisional');
-  assert.equal(record.observedBeacon, '1234');
-
-  const after = efsp.flightDataStore.getFlightData(strip.flightDataId);
-  assert.equal(after.identity.beaconAssigned, assigned, 'the assignment is untouched');
-  assert.equal(after.identity.beaconObserved, '1234');
-  assert.notEqual(after.identity.beaconAssigned, after.identity.beaconObserved,
-    'two fields, never one — the mismatch is renderable (defect D22)');
+  let record = correlationOf(efsp, strip.flightDataId);
+  assert.equal(record.state, 'UNCORRELATED');
+  assert.equal(record.warning.kind, 'TRACK_LOST');
+  assert.equal(record.warning.lostTrackId, '101');
 
   // The controller settles it by binding, and the mismatch stays visible.
   const bound = bind(efsp, c.AP.session, 'AP', strip.flightDataId, 101);
   assert.equal(bound.matchedBy, 'BINDING');
   assert.equal(bound.state, 'CORRELATED');
   reconciler.tick();
-  assert.equal(efsp.flightDataStore.getFlightData(strip.flightDataId).identity.beaconObserved, '1234',
-    'binding settles the identity, it does not paper over the squawk');
+  record = correlationOf(efsp, strip.flightDataId);
+  assert.equal(record.observedBeacon, '1234');
+  const after = efsp.flightDataStore.getFlightData(strip.flightDataId);
+  assert.equal(after.identity.beaconAssigned, assigned, 'the assignment is untouched');
+  assert.equal(after.identity.beaconObserved, '1234',
+    'binding settles the identity, it does not paper over the squawk (defect D22)');
 });
 
-test('a pilot who corrects their squawk is promoted back to a beacon match', async () => {
+test('a pilot who corrects their squawk is correlated on the beacon again', async () => {
   const efsp = createEfsp();
   const c = crew(efsp, ATC);
   const sky = picture();
@@ -263,7 +264,7 @@ test('a pilot who corrects their squawk is promoted back to a beacon match', asy
   const { strip, flightData } = airborneAndCorrelated(efsp, c, sky, { callsign: 'FIXED1', trackId: 101 });
   sky.squawk(101, 1234);
   reconciler.tick();
-  assert.equal(correlationOf(efsp, strip.flightDataId).state, 'PROVISIONAL');
+  assert.equal(correlationOf(efsp, strip.flightDataId).state, 'UNCORRELATED');
 
   sky.squawk(101, parseInt(flightData.identity.beaconAssigned, 10));
   reconciler.tick();
@@ -271,12 +272,12 @@ test('a pilot who corrects their squawk is promoted back to a beacon match', asy
   const record = correlationOf(efsp, strip.flightDataId);
   assert.equal(record.state, 'CORRELATED');
   assert.equal(record.matchedBy, 'BEACON');
-  assert.equal(record.transitions.at(-1).reason, 'PROMOTED');
+  assert.equal(record.transitions.at(-1).reason, 'WARNING_RETRACTED');
 });
 
 // ── 4. two flights, one callsign ─────────────────────────────────────────
 
-test('SCENARIO two flights sharing a callsign with transponders off: both ambiguous, neither guessed', async () => {
+test('SCENARIO two flights sharing a callsign with transponders off: neither correlates, each on its own code', async () => {
   const efsp = createEfsp();
   const c = crew(efsp, ATC);
   const sky = picture();
@@ -286,29 +287,58 @@ test('SCENARIO two flights sharing a callsign with transponders off: both ambigu
   const second = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'TWIN1' });
   sky.spawn(101, 'TWIN1', null).spawn(102, 'TWIN1', null);
   reconciler.tick();
-
   for (const strip of [first, second]) {
     const record = correlationOf(efsp, strip.flightDataId);
-    assert.equal(record.state, 'UNCORRELATED', 'guessing between two aircraft is worse than saying so');
-    assert.equal(record.warning.kind, 'AMBIGUOUS_CALLSIGN');
-    assert.deepEqual(record.warning.candidateTrackIds.sort(), ['101', '102']);
+    assert.equal(record.state, 'UNCORRELATED');
+    assert.equal(record.warning.kind, 'TRACK_LOST');
   }
 
-  // One of them squawks its assigned code. The beacon rung claims first, so
-  // the other resolves on the callsign rung against the single contact left —
-  // this is the assertion that pays for sweeping in rung order.
   const firstFlightData = efsp.flightDataStore.getFlightData(first.flightDataId);
   sky.squawk(101, parseInt(firstFlightData.identity.beaconAssigned, 10));
   reconciler.tick();
-
   const one = correlationOf(efsp, first.flightDataId);
   assert.equal(one.matchedBy, 'BEACON');
   assert.equal(one.trackId, '101');
+  assert.equal(correlationOf(efsp, second.flightDataId).state, 'UNCORRELATED', 'the other TWIN1 is not guessed');
+});
 
-  const other = correlationOf(efsp, second.flightDataId);
-  assert.equal(other.matchedBy, 'CALLSIGN_EXACT');
-  assert.equal(other.trackId, '102');
-  assert.equal(other.warning, null, 'and its ambiguity warning retracts');
+// ── 4b. an AI flight, correlated on the code the controller typed in (H165) ──
+
+test('SCENARIO an AI flight: NO TRK on a near callsign, the controller enters its synthetic code, it correlates', async () => {
+  const efsp = createEfsp();
+  const c = crew(efsp, ATC);
+  const sky = picture();
+  const reconciler = reconcilerFor(efsp, sky);
+
+  let strip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'COLT1' });
+  sky.spawn(701, 'COLT11', 6012); // crc-sync's synthetic code for an AI aircraft
+  reconciler.tick();
+  assert.equal(correlationOf(efsp, strip.flightDataId).state, 'UNCORRELATED', 'COLT1 filed, COLT11 flying: no auto-bind');
+
+  strip = mustAct(efsp, c.AP, 'AP', strip, { kind: 'SetBlock', blockId: '5', value: '6012' });
+  assert.equal(efsp.flightDataStore.getFlightData(strip.flightDataId).identity.beaconAssigned, '6012');
+  reconciler.tick();
+  const record = correlationOf(efsp, strip.flightDataId);
+  assert.equal(record.state, 'CORRELATED');
+  assert.equal(record.matchedBy, 'BEACON');
+  assert.equal(record.trackId, '701');
+
+  // A second Strip given the same code: accepted with the DUPLICATE warning, and it does not steal the contact.
+  const other = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'COLT2' });
+  const dup = act(efsp, c.AP, 'AP', other, { kind: 'SetBlock', blockId: '5', value: '6012' });
+  assert.equal(dup.ok, true);
+  assert.ok((dup.warnings || []).some(w => /DUPLICATE/.test(JSON.stringify(w))), JSON.stringify(dup.warnings));
+  reconciler.tick();
+  assert.equal(correlationOf(efsp, strip.flightDataId).trackId, '701');
+  assert.equal(correlationOf(efsp, other.flightDataId).state, 'UNCORRELATED');
+  assert.match(correlationOf(efsp, other.flightDataId).warning.detail, /6012 is correlated to COLT1/);
+
+  // COLT11 leaves; crc-sync re-mints 6012 to another AI aircraft. The Strip does not follow it.
+  sky.despawn(701).spawn(702, 'HAWG21', 6012);
+  reconciler.tick();
+  const after = correlationOf(efsp, strip.flightDataId);
+  assert.equal(after.state, 'UNCORRELATED');
+  assert.equal(after.warning.kind, 'CODE_REISSUED');
 });
 
 test('SCENARIO two contacts squawking one code is ambiguous, and one binding resolves it', async () => {

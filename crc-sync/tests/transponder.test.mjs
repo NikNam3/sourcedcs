@@ -72,7 +72,7 @@ test('ships and ground vehicles have no transponder', () => {
   assert.equal(t.transponderOf(air(21, { category: 3 })), null);
 });
 
-test('the allocator never hands out, and refuses, a code from the synthetic block', () => {
+test('the allocator never hands out, and refuses from anyone but a controller, a code from the synthetic block', () => {
   const alloc = new CodeAllocator();
   for (let i = 0; i < 0o7000; i++) {
     const r = alloc.allocate(`f${i}`);
@@ -82,6 +82,9 @@ test('the allocator never hands out, and refuses, a code from the synthetic bloc
   const refused = new CodeAllocator().validateAssignment('6123', 'f1');
   assert.equal(refused.ok, false);
   assert.match(refused.detail, /reserved for AI aircraft/);
+  // docs/adr/0142: a controller types an AI aircraft's code off the scope to correlate it.
+  const typed = new CodeAllocator().validateAssignment('6123', 'f1', { controllerEntered: true });
+  assert.deepEqual(typed, { ok: true });
 });
 
 // docs/adr/0066 — a valid Mode 4/5 reply needs our crypto.

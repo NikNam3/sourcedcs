@@ -12,7 +12,7 @@ import assert from 'node:assert/strict';
  *     the retraction both (FAA JO 7110.65 para 2-3-1).
  */
 
-const { CorrelationStore, MATCH_KEYS } = await import('../src/efsp/correlation-store.js');
+const { CorrelationStore, MATCH_KEYS, TRANSITION_REASONS } = await import('../src/efsp/correlation-store.js');
 const { MAX_FREE_TEXT } = await import('../src/efsp/flight-data-store.js');
 
 const FDR = 'flight-data-1';
@@ -200,12 +200,14 @@ test('a track identity change re-binds and records both ids — the named defect
   assert.equal(last.fromTrackId, '101', 'the identity change is legible in one line');
 });
 
-test('a re-bind on the callsign rung is recorded as such', () => {
+test('a binding\'s contact changing is not a beacon re-bind (no callsign reason any more, docs/adr/0142)', () => {
   const s = store();
-  s.reconcile(new Map([[FDR, resolvedTo('101', 'CALLSIGN_EXACT', 'CORRELATED')]]));
-  s.reconcile(new Map([[FDR, resolvedTo('500', 'CALLSIGN_EXACT', 'CORRELATED')]]));
-  const record = s.getCorrelation(FDR);
-  assert.equal(record.transitions[record.transitions.length - 1].reason, 'REBOUND_ON_CALLSIGN');
+  s.reconcile(new Map([[FDR, resolvedTo('101', 'BINDING', 'CORRELATED')]]));
+  s.reconcile(new Map([[FDR, resolvedTo('500', 'BINDING', 'CORRELATED')]]));
+  const reason = s.getCorrelation(FDR).transitions.at(-1).reason;
+  assert.notEqual(reason, 'REBOUND_ON_BEACON');
+  assert.ok(TRANSITION_REASONS.includes(reason));
+  assert.ok(!TRANSITION_REASONS.includes('REBOUND_ON_CALLSIGN'));
 });
 
 test('losing the match drops the state and raises a warning — never silent', () => {
@@ -222,29 +224,28 @@ test('losing the match drops the state and raises a warning — never silent', (
   assert.equal(record.transitions[record.transitions.length - 1].reason, 'TRACK_GONE');
 });
 
-test('a provisional match is carried as such, with its confidence', () => {
+test('the ladder is the binding then the beacon code, and nothing else (H165)', () => {
+  assert.deepEqual(MATCH_KEYS, ['BINDING', 'BEACON']);
   const s = store();
-  s.reconcile(new Map([[FDR, resolvedTo('101', 'CALLSIGN_FUZZY', 'PROVISIONAL', { confidence: 0.9 })]]));
-  const record = s.getCorrelation(FDR);
-  assert.equal(record.state, 'PROVISIONAL');
-  assert.equal(record.confidence, 0.9);
+  s.reconcile(new Map([[FDR, resolvedTo('101', 'BEACON', 'CORRELATED')]]));
+  assert.equal('confidence' in s.getCorrelation(FDR), false, 'no fuzzy score on a record');
+  assert.equal('confidence' in s.getCorrelation(FDR).transitions[0], false);
 });
 
-test('the same contact moving to a weaker rung is a degradation, and to a stronger one a promotion', () => {
+test('the same contact moving from the beacon to a binding is a promotion, and back a degradation', () => {
   const s = store();
   s.reconcile(new Map([[FDR, resolvedTo('101', 'BEACON', 'CORRELATED')]]));
-  s.reconcile(new Map([[FDR, resolvedTo('101', 'CALLSIGN_EXACT', 'PROVISIONAL')]]));
-  assert.equal(s.getCorrelation(FDR).transitions.at(-1).reason, 'DEGRADED');
-  s.reconcile(new Map([[FDR, resolvedTo('101', 'BEACON', 'CORRELATED')]]));
+  s.reconcile(new Map([[FDR, resolvedTo('101', 'BINDING', 'CORRELATED')]]));
   assert.equal(s.getCorrelation(FDR).transitions.at(-1).reason, 'PROMOTED');
-  assert.ok(MATCH_KEYS.indexOf('BEACON') < MATCH_KEYS.indexOf('CALLSIGN_EXACT'));
+  s.reconcile(new Map([[FDR, resolvedTo('101', 'BEACON', 'CORRELATED')]]));
+  assert.equal(s.getCorrelation(FDR).transitions.at(-1).reason, 'DEGRADED');
 });
 
 test('an observed code change alone is broadcast, because a controller can see it', () => {
   // §3.10.2 rule 1's assigned-vs-observed comparison is rendered from this.
   const s = store();
-  s.reconcile(new Map([[FDR, resolvedTo('101', 'CALLSIGN_EXACT', 'CORRELATED', { observedBeacon: '0041' })]]));
-  const { changed } = s.reconcile(new Map([[FDR, resolvedTo('101', 'CALLSIGN_EXACT', 'CORRELATED', { observedBeacon: '0056' })]]));
+  s.reconcile(new Map([[FDR, resolvedTo('101', 'BINDING', 'CORRELATED', { observedBeacon: '0041' })]]));
+  const { changed } = s.reconcile(new Map([[FDR, resolvedTo('101', 'BINDING', 'CORRELATED', { observedBeacon: '0056' })]]));
   assert.equal(changed.length, 1);
   assert.equal(s.getCorrelation(FDR).observedBeacon, '0056');
 });
@@ -280,7 +281,7 @@ test('a warning retracted without the contact changing is still broadcast', () =
 test('an ambiguous resolution is recorded as ambiguity, with the candidates', () => {
   const s = store();
   const { changed } = s.reconcile(new Map([[FDR, {
-    warning: { kind: 'AMBIGUOUS_CALLSIGN', candidateTrackIds: ['101', '102'] },
+    warning: { kind: 'AMBIGUOUS_BEACON', candidateTrackIds: ['101', '102'] },
   }]]));
   assert.equal(changed.length, 1);
   const record = s.getCorrelation(FDR);

@@ -4,7 +4,7 @@ import { getLatestTrack } from '../picture.js';
 import { magneticText } from '../magnetic.js';
 import { clearIffOverride, getIff, iffColor, setIffOverride } from '../iff.js';
 import {
-  altitudeLong, assignedAltText, assignedBlockText, tagEditable, trackName, trackNameSuffix, typeText
+  altitudeLong, assignedAltText, assignedBlockText, tagEditable, trackName, typeText
 } from '../track-label.js';
 import { _flightDataForTrack, buildFiledRoute, parseFiledRouteWaypoints } from '../geojson.js';
 import { dock, ensureTrackPanel } from '../dock-handle.js';
@@ -127,7 +127,7 @@ export function initTrackPanel() {
   function _refreshCallsign() {
     if (_trackPanelId == null) return;
     const t = getLatestTrack(_trackPanelId);
-    if (t) document.getElementById('tp-callsign').textContent = trackName(t) + trackNameSuffix(t);
+    if (t) document.getElementById('tp-callsign').textContent = trackName(t);
   }
 
   // Expose so updateTrackPanel can call them
@@ -299,7 +299,7 @@ export function updateTrackPanel() {
   const fpm      = verticalFpm(hist);
 
   // Header
-  document.getElementById('tp-callsign').textContent = trackName(fresh) + trackNameSuffix(fresh);
+  document.getElementById('tp-callsign').textContent = trackName(fresh);
   document.getElementById('tp-type').textContent     = typeText(fresh);
 
   // Properties — only what a sensor gives; '—' for the rest.

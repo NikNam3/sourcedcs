@@ -1054,10 +1054,6 @@
       color: #8aaa6a;
       border-color: #8aaa6a55;
     }
-    .efsp-correlation-provisional {
-      color: #c8b46a;
-      border-color: #c8b46a55;
-    }
     .efsp-correlation-uncorrelated {
       color: var(--ui-text-dim);
       border-color: var(--ui-border-3);

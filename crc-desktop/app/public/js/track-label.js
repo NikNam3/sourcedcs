@@ -11,7 +11,7 @@
 // Wire shape (crc-sync/src/surveillance/presentation.js):
 //   { id, lat, lon, domain: 'AIR'|'SEA' (ground vehicles are never sent, crc-sync docs/adr/0121), onGround, illuminatedAt, sources,
 //     iffState, iffOverride,
-//     label: { callsign, source: 'FLIGHT_DATA'|'FLIGHT_DATA_PROVISIONAL'|'DATALINK'|'TAG'|null, tag, trackNumber },
+//     label: { callsign, source: 'FLIGHT_DATA'|'DATALINK'|'TAG'|null, tag, trackNumber },
 //     type, ssr: { code, ident, emergency } | null,
 //     altitude: { ft, ref: 'QNH'|'STD', source: 'MODE_C'|'RADAR'|'DATALINK' } | null,
 //     dl: { lock } | null }
@@ -41,11 +41,6 @@ export function trackName(t) {
   if (!t) return '';
   const label = t.label || {};
   return label.callsign || (t.ssr && t.ssr.code) || label.trackNumber || '';
-}
-
-/** `?` after a name that came from a provisional correlation, so doubt still looks like doubt. */
-export function trackNameSuffix(t) {
-  return t && t.label && t.label.source === 'FLIGHT_DATA_PROVISIONAL' ? '?' : '';
 }
 
 /** The contact's own reference, never its flight's callsign: its code, else its track number. */
@@ -106,7 +101,7 @@ export function altitudeShort(t) {
  * flight's Strip and the altitude in hundreds of feet. A contact with no side number is named as everywhere else.
  */
 export function sideAltText(t, sideNumber) {
-  const name = sideNumber || (trackName(t) + trackNameSuffix(t));
+  const name = sideNumber || trackName(t);
   return [name, altitudeShort(t)].filter(Boolean).join(' ');
 }
 
@@ -171,7 +166,7 @@ export function pickerText(t) {
   const name = trackName(t);
   const code = t.ssr && t.ssr.code;
   const tn = t.label && t.label.trackNumber;
-  return [name + trackNameSuffix(t), code !== name && code, altitudeShort(t), tn !== name && tn]
+  return [name, code !== name && code, altitudeShort(t), tn !== name && tn]
     .filter(Boolean).join(' · ');
 }
 
@@ -301,7 +296,7 @@ export function atcBlockLines(t, v, info = {}) {
   }
 
   // FDB
-  const l1 = [seg(trackName(t) + trackNameSuffix(t))];
+  const l1 = [seg(trackName(t))];
   for (const item of v.l1Suffix || []) l1.push(seg(' '), seg(item.text, item.color || null, !!item.blink));
   lines.push(l1);
   const l2 = [seg(`${alt || '   '} `)];
