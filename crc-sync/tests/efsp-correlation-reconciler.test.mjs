@@ -4,8 +4,9 @@ import assert from 'node:assert/strict';
 /* The correlation sweep (guide §6.6 rules 1 and 6).
  *
  * Three things here are worth more than the rest:
- *   - the ordered claim sweep, so a higher rung always claims a contact
- *     before a lower one and one contact never correlates to two flights;
+ *   - the ordered claim sweep, so a binding always claims a contact before
+ *     the beacon rung and one contact never correlates to two flights, and
+ *     there is no callsign rung at all (H165, docs/adr/0142);
  *   - the eligibility EXCLUSION list, with a test that forces a decision
  *     whenever a new EfspState is added (docs/adr/0041's lesson);
  *   - the §10.3 ring fence: nothing in here may move a Strip.
@@ -64,14 +65,15 @@ function build({ flightDataList = [], strips = [], tracks = [] } = {}) {
 
 // ── the rate ───────────────────────────────────────────────────────────────
 
-test('computeCorrelationRate counts a provisional match as matched — §6.6 measured "matched at all"', () => {
+test('computeCorrelationRate is correlated over eligible', () => {
   const rate = computeCorrelationRate([
-    { state: 'CORRELATED' }, { state: 'PROVISIONAL' }, { state: 'UNCORRELATED' }, { state: 'CORRELATED' },
+    { state: 'CORRELATED' }, { state: 'UNCORRELATED' }, { state: 'UNCORRELATED' }, { state: 'CORRELATED' },
   ]);
   assert.equal(rate.eligible, 4);
   assert.equal(rate.correlated, 2);
-  assert.equal(rate.provisional, 1);
-  assert.equal(rate.rate, 0.75);
+  assert.equal(rate.uncorrelated, 2);
+  assert.equal(rate.provisional, undefined, 'there is no provisional state any more (docs/adr/0142)');
+  assert.equal(rate.rate, 0.5);
 });
 
 test('an empty board reports null, never 1.0 — otherwise the 95% gate passes vacuously', () => {
@@ -133,8 +135,8 @@ test('an explicit binding outranks everything the sweep could work out', () => {
   const { reconciler, store } = build({
     flightDataList: [flightData('f1', 'VIPER1', '0041')],
     strips: [strip('f1')],
-    // Contact 1 squawks the assigned code and answers to the callsign; the
-    // controller has bound contact 2 anyway, because they can see it.
+    // Contact 1 squawks the assigned code; the controller has bound contact 2
+    // anyway, because they can see it.
     tracks: [track(1, 'VIPER1', 41), track(2, 'UNKNOWN', null)],
   });
   store.apply({ flightDataId: 'f1', baseRev: 0, op: { kind: 'BindTrack', trackId: '2' } }, 'AP', 'c');
@@ -144,7 +146,7 @@ test('an explicit binding outranks everything the sweep could work out', () => {
   assert.equal(record.trackId, '2');
 });
 
-test('a binding to a contact that no longer exists lets the lower rungs have a go', () => {
+test('a binding to a contact that no longer exists lets the beacon rung have a go', () => {
   const { reconciler, store } = build({
     flightDataList: [flightData('f1', 'VIPER1', '0041')], strips: [strip('f1')], tracks: [track(1, 'VIPER1', 41)],
   });
@@ -167,38 +169,38 @@ test('the assigned beacon code correlates, and the observed code is pushed onto 
   assert.equal(flightDataStore.observed.get('f1'), '0041', '§3.10.2 rule 1 has real data behind it');
 });
 
-test('an exact callsign match correlates when no beacon evidence contradicts it', () => {
+test('no callsign correlation: an exact callsign match with no code is NO TRK (H165)', () => {
   const { reconciler, store } = build({
     flightDataList: [flightData('f1', 'VIPER1', '0041')], strips: [strip('f1')], tracks: [track(1, 'VIPER1', null)],
   });
   reconciler.tick();
   const record = store.getCorrelation('f1');
-  assert.equal(record.matchedBy, 'CALLSIGN_EXACT');
-  assert.equal(record.state, 'CORRELATED');
+  assert.equal(record.state, 'UNCORRELATED');
+  assert.equal(record.trackId, null);
+  assert.equal(record.warning.kind, 'TRACK_LOST');
 });
 
-test('an exact callsign match is only provisional when the contact squawks a different code', () => {
-  // The name agrees and the transponder does not. That is real evidence
-  // against the identity, and §3.10.2 rule 1 exists so a controller can see it.
+test('no callsign correlation: an exact callsign squawking another code is NO TRK, not provisional', () => {
   const { reconciler, store } = build({
     flightDataList: [flightData('f1', 'VIPER1', '0041')], strips: [strip('f1')], tracks: [track(1, 'VIPER1', 56)],
   });
   reconciler.tick();
   const record = store.getCorrelation('f1');
-  assert.equal(record.matchedBy, 'CALLSIGN_EXACT');
-  assert.equal(record.state, 'PROVISIONAL');
-  assert.equal(record.observedBeacon, '0056');
+  assert.equal(record.state, 'UNCORRELATED');
+  assert.equal(record.trackId, null);
 });
 
-test('a formation match is fuzzy and always provisional, with its confidence', () => {
+test('no callsign correlation: a near callsign (COLT11 flying, COLT1 filed) is NO TRK — the H165 case', () => {
   const { reconciler, store } = build({
-    flightDataList: [flightData('f1', 'VIPER1', '0041')], strips: [strip('f1')], tracks: [track(1, 'VIPER11', null)],
+    flightDataList: [flightData('f1', 'COLT1', '0041')], strips: [strip('f1')],
+    tracks: [track(1, 'COLT11', null), track(2, 'COLT12', 6012)],
   });
   reconciler.tick();
   const record = store.getCorrelation('f1');
-  assert.equal(record.matchedBy, 'CALLSIGN_FUZZY');
-  assert.equal(record.state, 'PROVISIONAL');
-  assert.equal(record.confidence, 0.9);
+  assert.equal(record.state, 'UNCORRELATED');
+  assert.equal(record.trackId, null);
+  assert.equal(record.warning.kind, 'TRACK_LOST');
+  assert.equal(record.matchedBy, null);
 });
 
 test('nothing matching raises TRACK_LOST rather than leaving the record silent', () => {
@@ -213,21 +215,18 @@ test('nothing matching raises TRACK_LOST rather than leaving the record silent',
 
 // ── the ordered claim sweep ────────────────────────────────────────────────
 
-test('the beacon rung claims first, so the callsign rung gets the contact that is left', () => {
-  // This assertion is what pays for sweeping in rung order rather than
-  // resolving each flight data independently.
+test('a binding claims first, so the beacon rung cannot take the bound contact', () => {
   const { reconciler, store } = build({
-    flightDataList: [flightData('f1', 'VIPER1', '0041'), flightData('f2', 'VIPER1', '0042')],
+    flightDataList: [flightData('f1', 'VIPER1', '0041'), flightData('f2', 'HAWG1', '0042')],
     strips: [strip('f1'), strip('f2')],
-    tracks: [track(1, 'VIPER1', null), track(2, 'VIPER1', 42)],
+    tracks: [track(1, 'X', 42)],
   });
+  store.apply({ flightDataId: 'f1', baseRev: 0, op: { kind: 'BindTrack', trackId: '1' } }, 'AP', 'c');
   reconciler.tick();
-  // f2's code is observed on contact 2, so f2 claims it on the beacon rung;
-  // f1 then has exactly one VIPER1 left and takes it on the callsign rung.
-  assert.equal(store.getCorrelation('f2').trackId, '2');
-  assert.equal(store.getCorrelation('f2').matchedBy, 'BEACON');
   assert.equal(store.getCorrelation('f1').trackId, '1');
-  assert.equal(store.getCorrelation('f1').matchedBy, 'CALLSIGN_EXACT');
+  assert.equal(store.getCorrelation('f1').matchedBy, 'BINDING');
+  assert.equal(store.getCorrelation('f2').state, 'UNCORRELATED');
+  assert.equal(store.getCorrelation('f2').warning.detail, 'the contact squawking 0042 is correlated to VIPER1');
 });
 
 test('one contact never correlates to two flights', () => {
@@ -253,28 +252,6 @@ test('two contacts squawking one assigned code is ambiguous, and neither is gues
   assert.equal(record.warning.kind, 'AMBIGUOUS_BEACON');
   assert.deepEqual(record.warning.candidateTrackIds.sort(), ['1', '2']);
   assert.match(record.warning.detail, /bind one/, 'and the way out is rung 1');
-});
-
-test('two contacts answering a callsign equally well is ambiguous too', () => {
-  const { reconciler, store } = build({
-    flightDataList: [flightData('f1', 'VIPER1', '0041')], strips: [strip('f1')],
-    tracks: [track(1, 'VIPER1', null), track(2, 'VIPER1', null)],
-  });
-  reconciler.tick();
-  const record = store.getCorrelation('f1');
-  assert.equal(record.warning.kind, 'AMBIGUOUS_CALLSIGN');
-  assert.deepEqual(record.warning.candidateTrackIds.sort(), ['1', '2']);
-});
-
-test('a better fuzzy match wins outright rather than being called ambiguous', () => {
-  const { reconciler, store } = build({
-    flightDataList: [flightData('f1', 'VIPER1', '0041')], strips: [strip('f1')],
-    // VIPER11 is formation numbering (0.9); VIPER2 is same-stem (0.7).
-    tracks: [track(1, 'VIPER11', null), track(2, 'VIPER2', null)],
-  });
-  reconciler.tick();
-  assert.equal(store.getCorrelation('f1').trackId, '1');
-  assert.equal(store.getCorrelation('f1').confidence, 0.9);
 });
 
 // ── broadcasting ───────────────────────────────────────────────────────────
@@ -451,36 +428,33 @@ test('a live-but-ineligible Strip is NOT retired — it has no contact yet, whic
   assert.ok(store.getCorrelation('f1'), 'the record survives a flight going quiet');
 });
 
-// ── S-L27 / docs/adr/0076: a finished flight's aircraft is not the next flight's ──
+// ── S-L27 is gone with the callsign rungs (docs/adr/0142) ──
 
-test('a callsign match does not claim the aircraft of a flight that has finished (S-L27)', () => {
-  // VIPER1 flew, its Strip was dropped, its aircraft is still in the air. The
-  // callsign is reused by a NEW flight that has not left the apron.
+test('a finished flight\'s lingering aircraft is not the next flight\'s, by construction (S-L27)', () => {
+  // VIPER1 flew (bound), its Strip was dropped, its aircraft is still in the
+  // air. A NEW flight files VIPER1 with another code: nothing matches.
   const strips = [strip('f1', 'AIRBORNE')];
   const flightDataList = [flightData('f1', 'VIPER1', null)];
   const tracks = [track(1, 'VIPER1')];
   const { reconciler, store } = build({ flightDataList, strips, tracks });
+  store.apply({ flightDataId: 'f1', baseRev: 0, op: { kind: 'BindTrack', trackId: '1' } }, 'AP', 'c');
   reconciler.tick();
   assert.equal(store.getCorrelation('f1').trackId, '1');
 
-  strips.length = 0; // f1 over
+  strips.length = 0;
   strips.push(strip('f2', 'PUSHBACK'));
-  flightDataList.length = 0; flightDataList.push(flightData('f2', 'VIPER1', null));
+  flightDataList.length = 0; flightDataList.push(flightData('f2', 'VIPER1', '0042'));
   reconciler.tick();
   const rec = store.getCorrelation('f2');
-  assert.notEqual(rec.state, 'CORRELATED', 'the lingering aircraft is not f2');
-  assert.equal(rec.trackId || null, null);
-
-  // Its own aircraft appears (a new contact): it correlates to that one.
-  tracks.push(track(2, 'VIPER1'));
-  reconciler.tick();
-  assert.equal(store.getCorrelation('f2').trackId, '2');
+  assert.equal(rec.state, 'UNCORRELATED');
+  assert.equal(rec.trackId, null);
 });
 
-test('an explicit binding can still take a finished flight\'s contact (S-L27)', () => {
+test('an explicit binding can take a finished flight\'s contact (S-L27)', () => {
   const strips = [strip('f1', 'AIRBORNE')];
   const flightDataList = [flightData('f1', 'VIPER1', null)];
   const { reconciler, store } = build({ flightDataList, strips, tracks: [track(1, 'VIPER1')] });
+  store.apply({ flightDataId: 'f1', baseRev: 0, op: { kind: 'BindTrack', trackId: '1' } }, 'AP', 'c');
   reconciler.tick();
   strips.length = 0; strips.push(strip('f2', 'PUSHBACK'));
   flightDataList.length = 0; flightDataList.push(flightData('f2', 'VIPER1', null));
@@ -495,12 +469,13 @@ test('an explicit binding can still take a finished flight\'s contact (S-L27)', 
 // active flight's assigned discrete code; a finished flight holds no code.
 
 test('the assigned code acquires a contact a finished flight once held (H135, T12)', () => {
-  // The jet flew as f1 (correlated by callsign), f1's Strip was dropped, and
-  // the same jet now squawks the code a NEW flight was assigned.
+  // The jet flew as f1 (bound), f1's Strip was dropped, and the same jet now
+  // squawks the code a NEW flight was assigned.
   const strips = [strip('f1', 'AIRBORNE')];
   const flightDataList = [flightData('f1', 'VIPER1', null)];
   const tracks = [track(1, 'VIPER1', null)];
   const { reconciler, store } = build({ flightDataList, strips, tracks });
+  store.apply({ flightDataId: 'f1', baseRev: 0, op: { kind: 'BindTrack', trackId: '1' } }, 'AP', 'c');
   reconciler.tick();
   assert.equal(store.getCorrelation('f1').trackId, '1');
 
@@ -512,21 +487,6 @@ test('the assigned code acquires a contact a finished flight once held (H135, T1
   assert.equal(rec.state, 'CORRELATED');
   assert.equal(rec.matchedBy, 'BEACON');
   assert.equal(rec.trackId, '1');
-});
-
-test('the callsign rungs keep the former-holder exclusion (H135 changes only the beacon rung)', () => {
-  const strips = [strip('f1', 'AIRBORNE')];
-  const flightDataList = [flightData('f1', 'VIPER1', null)];
-  const tracks = [track(1, 'VIPER1', 41)];
-  const { reconciler, store } = build({ flightDataList, strips, tracks });
-  reconciler.tick();
-  strips.length = 0; strips.push(strip('f2', 'INBOUND'));
-  // Same callsign, a different code from the one the jet squawks.
-  flightDataList.length = 0; flightDataList.push(flightData('f2', 'VIPER1', '0042'));
-  reconciler.tick();
-  const rec = store.getCorrelation('f2');
-  assert.equal(rec.state, 'UNCORRELATED');
-  assert.equal(rec.trackId || null, null);
 });
 
 test('a code whose contact went to another flight says which flight, not "no contact" (T12)', () => {
@@ -545,13 +505,141 @@ test('a code whose contact went to another flight says which flight, not "no con
   assert.equal(rec.warning.detail, 'the contact squawking 0003 is correlated to VIPER1');
 });
 
-test('a code whose contact went to another flight still lets the callsign rung match (T12)', () => {
+// ── docs/adr/0142: an AI flight correlates on the synthetic code a controller enters ──
+
+test('an AI aircraft\'s synthetic code typed into the Strip correlates it on the beacon rung', () => {
+  const flightDataList = [flightData('f1', 'COLT1', '0041')];
+  const tracks = [track(7, 'COLT11', 6012)];
+  const { reconciler, store } = build({ flightDataList, strips: [strip('f1')], tracks });
+  reconciler.tick();
+  assert.equal(store.getCorrelation('f1').state, 'UNCORRELATED', 'COLT1 filed, COLT11 flying: no callsign match');
+
+  flightDataList[0] = flightData('f1', 'COLT1', '6012'); // the controller reads 6012 off the scope
+  reconciler.tick();
+  const rec = store.getCorrelation('f1');
+  assert.equal(rec.state, 'CORRELATED');
+  assert.equal(rec.matchedBy, 'BEACON');
+  assert.equal(rec.trackId, '7');
+  assert.equal(rec.observedBeacon, '6012');
+});
+
+test('a synthetic code re-minted to a different AI aircraft is not followed (CODE_REISSUED)', () => {
+  const flightDataList = [flightData('f1', 'COLT1', '6012')];
+  const tracks = [track(7, 'COLT11', 6012)];
+  const { reconciler, store, deltas } = build({ flightDataList, strips: [strip('f1')], tracks });
+  reconciler.tick();
+  assert.equal(store.getCorrelation('f1').trackId, '7');
+
+  // COLT11 lands and despawns: its code goes back to the block. The Strip is NO TRK.
+  tracks.length = 0;
+  reconciler.tick();
+  assert.equal(store.getCorrelation('f1').warning.kind, 'TRACK_LOST');
+
+  // A new AI unit spawns and crc-sync happens to mint it 6012.
+  tracks.push(track(8, 'HAWG21', 6012));
+  deltas.length = 0;
+  reconciler.tick();
+  const rec = store.getCorrelation('f1');
+  assert.equal(rec.state, 'UNCORRELATED', 'the Strip did not jump to the new holder');
+  assert.equal(rec.trackId, null);
+  assert.equal(rec.warning.kind, 'CODE_REISSUED');
+  assert.deepEqual(rec.warning.candidateTrackIds, ['8']);
+  assert.match(rec.warning.detail, /6012 is now squawked by a different AI aircraft/);
+  assert.equal(deltas.length, 1, 'and the controller is told: the warning change is broadcast');
+});
+
+test('the re-mint in the same tick as the old aircraft leaves is not followed either', () => {
+  const tracks = [track(7, 'COLT11', 6012)];
+  const { reconciler, store } = build({ flightDataList: [flightData('f1', 'COLT1', '6012')], strips: [strip('f1')], tracks });
+  reconciler.tick();
+  tracks[0] = track(8, 'HAWG21', 6012);
+  reconciler.tick();
+  const rec = store.getCorrelation('f1');
+  assert.equal(rec.state, 'UNCORRELATED');
+  assert.equal(rec.warning.kind, 'CODE_REISSUED');
+});
+
+test('the original AI aircraft coming back with its code correlates again', () => {
+  const tracks = [track(7, 'COLT11', 6012)];
+  const { reconciler, store } = build({ flightDataList: [flightData('f1', 'COLT1', '6012')], strips: [strip('f1')], tracks });
+  reconciler.tick();
+  tracks.length = 0;
+  reconciler.tick(); // out of everyone's picture for a moment (the track store dropped it)
+  tracks.push(track(7, 'COLT11', 6012));
+  reconciler.tick();
+  assert.equal(store.getCorrelation('f1').trackId, '7');
+  assert.equal(store.getCorrelation('f1').state, 'CORRELATED');
+});
+
+test('after a re-mint, binding the new aircraft settles it, and an unbind leaves the beacon match on it', () => {
+  const tracks = [track(7, 'COLT11', 6012)];
+  const { reconciler, store } = build({ flightDataList: [flightData('f1', 'COLT1', '6012')], strips: [strip('f1')], tracks });
+  reconciler.tick();
+  tracks[0] = track(8, 'HAWG21', 6012);
+  reconciler.tick();
+  assert.equal(store.getCorrelation('f1').warning.kind, 'CODE_REISSUED');
+
+  store.apply({ flightDataId: 'f1', baseRev: store.getCorrelation('f1').rev, op: { kind: 'BindTrack', trackId: '8' } }, 'AP', 'c');
+  reconciler.tick();
+  assert.equal(store.getCorrelation('f1').matchedBy, 'BINDING');
+  assert.equal(store.getCorrelation('f1').trackId, '8');
+
+  store.apply({ flightDataId: 'f1', baseRev: store.getCorrelation('f1').rev, op: { kind: 'UnbindTrack' } }, 'AP', 'c');
+  reconciler.tick();
+  const rec = store.getCorrelation('f1');
+  assert.equal(rec.matchedBy, 'BEACON', 'the controller chose aircraft 8, so its code is now this Strip\'s');
+  assert.equal(rec.trackId, '8');
+});
+
+test('after a re-mint, entering another code (the aircraft the controller means) correlates on it', () => {
+  const flightDataList = [flightData('f1', 'COLT1', '6012')];
+  const tracks = [track(7, 'COLT11', 6012)];
+  const { reconciler, store } = build({ flightDataList, strips: [strip('f1')], tracks });
+  reconciler.tick();
+  tracks[0] = track(8, 'HAWG21', 6012);
+  tracks.push(track(9, 'COLT11', 6030)); // COLT11 respawned with a new code
+  reconciler.tick();
+  assert.equal(store.getCorrelation('f1').warning.kind, 'CODE_REISSUED');
+
+  flightDataList[0] = flightData('f1', 'COLT1', '6030');
+  reconciler.tick();
+  assert.equal(store.getCorrelation('f1').trackId, '9');
+  assert.equal(store.getCorrelation('f1').matchedBy, 'BEACON');
+
+  // And changing it back to 6012 is a fresh choice: the controller is pointing at aircraft 8 now.
+  flightDataList[0] = flightData('f1', 'COLT1', '6012');
+  reconciler.tick();
+  assert.equal(store.getCorrelation('f1').trackId, '8');
+});
+
+test('a discrete (non-synthetic) code is acquired by whichever aircraft squawks it (H135, unchanged)', () => {
+  const tracks = [track(1, 'VIPER11', 41)];
+  const { reconciler, store } = build({ flightDataList: [flightData('f1', 'VIPER1', '0041')], strips: [strip('f1')], tracks });
+  reconciler.tick();
+  tracks[0] = track(2, 'VIPER11', 41);
+  reconciler.tick();
+  assert.equal(store.getCorrelation('f1').trackId, '2');
+  assert.equal(store.getCorrelation('f1').matchedBy, 'BEACON');
+});
+
+test('two contacts on one synthetic code are ambiguous (TRK ×2), never guessed', () => {
+  // A player can dial an AI's code by hand: the reserved block is ours, not the cockpit's.
   const { reconciler, store } = build({
-    flightDataList: [flightData('f1', 'VIPER1', '0003'), flightData('f2', 'HAWG1', '0003')],
-    strips: [strip('f1'), strip('f2')],
-    tracks: [track(1, 'SOMEONE', 3), track(2, 'HAWG1', null)],
+    flightDataList: [flightData('f1', 'COLT1', '6012')], strips: [strip('f1')],
+    tracks: [track(7, 'COLT11', 6012), track(8, 'PLAYER', 6012)],
   });
   reconciler.tick();
-  assert.equal(store.getCorrelation('f2').trackId, '2');
-  assert.equal(store.getCorrelation('f2').matchedBy, 'CALLSIGN_EXACT');
+  const rec = store.getCorrelation('f1');
+  assert.equal(rec.warning.kind, 'AMBIGUOUS_BEACON');
+  assert.deepEqual(rec.warning.candidateTrackIds.sort(), ['7', '8']);
+});
+
+test('a mission reload forgets which AI aircraft held a synthetic code', () => {
+  const tracks = [track(7, 'COLT11', 6012)];
+  const { reconciler, store } = build({ flightDataList: [flightData('f1', 'COLT1', '6012')], strips: [strip('f1')], tracks });
+  reconciler.tick();
+  reconciler.resetPicture('MISSION_RELOAD');
+  tracks[0] = track(80, 'COLT11', 6012); // every id re-minted
+  reconciler.tick();
+  assert.equal(store.getCorrelation('f1').trackId, '80');
 });

@@ -1045,7 +1045,8 @@ class FlightDataStore {
     const flightData = this._flightDataList.get(flightDataId);
     if (!flightData) return { ok: false, reason: 'NOT_FOUND' };
 
-    const check = this._codeAllocator.validateAssignment(code, flightDataId);
+    // A controller's entry: an AI aircraft's synthetic code is accepted (docs/adr/0142).
+    const check = this._codeAllocator.validateAssignment(code, flightDataId, { controllerEntered: true });
     if (!check.ok) return { ok: false, reason: check.reason, detail: check.detail };
 
     const previous = flightData.identity.beaconAssigned;

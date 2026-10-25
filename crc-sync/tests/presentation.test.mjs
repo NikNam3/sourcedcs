@@ -79,12 +79,12 @@ test('a radar whose last return is stale does not lend its capabilities', () => 
   assert.equal(wire.altitude, null);
 });
 
-test('correlated: the flight callsign and type; provisional is flagged; the tag loses', () => {
+test('correlated: the flight callsign and type; the tag loses', () => {
   const who = { ...NOBODY, flightDataId: 'f1', correlation: 'CORRELATED', flightDataCallsign: 'VIPER11', flightDataType: 'F16', tag: 'BANDIT' };
   const wire = present({ who });
   assert.deepEqual(wire.label, { callsign: 'VIPER11', source: 'FLIGHT_DATA', tag: 'BANDIT', trackNumber: 'TN00007' });
   assert.equal(wire.type, 'F16');
-  assert.equal(present({ who: { ...who, correlation: 'PROVISIONAL' } }).label.source, 'FLIGHT_DATA_PROVISIONAL');
+  assert.equal(present({ who: { ...who, correlation: null } }).label.source, 'TAG', 'uncorrelated: no flight callsign (and no FLIGHT_DATA_PROVISIONAL, docs/adr/0142)');
   assert.deepEqual(present({ who: { ...NOBODY, tag: 'BANDIT' } }).label.source, 'TAG');
 });
 

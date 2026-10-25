@@ -25,9 +25,8 @@
 // `trackId` is — one second, against a benchmark of one second, for the single
 // case of a contact that has only just appeared.
 
-const {
-  callsignAffinity, buildTrackIndices, AFFINITY_EXACT,
-} = require('./correlation-match');
+const { buildTrackIndices } = require('./correlation-match');
+const { isSynthetic } = require('./code-allocator');
 const { WALL_CLOCK } = require('../mission-clock');
 const log = require('../log').logger('efsp:correlation-reconciler');
 
@@ -59,7 +58,7 @@ const INELIGIBLE_STATES = new Set([
   // The carrier strip types (docs/adr/0074) are pinned one by one in
   // tests/efsp-carrier-strip-types.test.mjs. Every MARSHAL/FINAL/PATTERN state is
   // ELIGIBLE, LAUNCH included: correlation matches the flight data against the track
-  // store (binding, beacon, callsign), not against what a ship radar has
+  // store (binding, beacon), not against what a ship radar has
   // illuminated, so `noGroundAircraft` on the ship radars does not hide a jet
   // on deck, and a launch Strip is the carrier's PUSHBACK ("an aircraft on the
   // ramp is a DCS unit").
@@ -75,10 +74,12 @@ class CorrelationReconciler {
    * @param {object} deps.facilityConfig
    * @param {(track:object)=>string|null} deps.beaconOf — the Mode 3/A code the
    *   aircraft's transponder is sending, or null (Transponders#transponderOf).
+   * @param {(code:string)=>boolean} [deps.isSyntheticCode] — is this code in the
+   *   block crc-sync mints for AI transponders (code-allocator.js isSynthetic)?
    * @param {(payload:object)=>void} [deps.onDelta] — called ONCE per tick with
    *   the records that changed plus the stats, or not at all on a quiet tick.
    */
-  constructor({ trackStore, flightDataStore, correlationStore, boardStoreFor, facilityConfig, beaconOf, onDelta, clock = WALL_CLOCK, wallClock = WALL_CLOCK }) {
+  constructor({ trackStore, flightDataStore, correlationStore, boardStoreFor, facilityConfig, beaconOf, isSyntheticCode = isSynthetic, onDelta, clock = WALL_CLOCK, wallClock = WALL_CLOCK }) {
     // The mission clock (docs/adr/0079) — what the correlation records are
     // stamped with. The below-target warning's rate limit is a log throttle
     // and stays on the wall clock (_warnIfBelowTarget).
@@ -86,6 +87,7 @@ class CorrelationReconciler {
     this._wallClock = wallClock;
     if (typeof beaconOf !== 'function') throw new Error('CorrelationReconciler needs beaconOf');
     this._beaconOf = beaconOf;
+    this._isSynthetic = isSyntheticCode;
     this._trackStore = trackStore;
     this._flightDataStore = flightDataStore;
     this._store = correlationStore;
@@ -103,28 +105,26 @@ class CorrelationReconciler {
     this._rebinds = 0;
     this._warningsRaised = 0;
     this._warningsRetracted = 0;
-    this._matchKeyCounts = { BINDING: 0, BEACON: 0, CALLSIGN_EXACT: 0, CALLSIGN_FUZZY: 0 };
+    this._matchKeyCounts = { BINDING: 0, BEACON: 0 };
     this._lastRate = null;
     this._lastEligible = 0;
     this._lastWarnAt = 0;
 
-    // trackId -> the flightDataId of the finished flight that last held that contact
-    // (docs/adr/0076, S-L27). Such a contact is not claimable by another
-    // flight's CALLSIGN (rungs 3 and 4, ours, for players who do not squawk): it
-    // is an earlier flight's aircraft, still in the air, and a new flight that
-    // reuses the callsign must not inherit it. Forgotten when the contact leaves
-    // the picture; an explicit controller binding (rung 1) is never blocked by it.
+    // flightDataId -> { code, trackId }: the AI aircraft a flight's SYNTHETIC
+    // code was last seen on (docs/adr/0142). crc-sync mints a synthetic code
+    // for the life of one AI unit and gives it back to the block when the unit
+    // leaves (surveillance/transponder.js), so the same code can later be
+    // minted to a DIFFERENT AI aircraft. A Strip that carries the code must not
+    // follow it there by itself: that aircraft is not the one the controller
+    // read the code off. The beacon rung refuses a synthetic-code contact other
+    // than the remembered one and says so (warning CODE_REISSUED); the
+    // controller binds it, or enters the new aircraft's code. A discrete code a
+    // player squawks has no such rule: FAA automation acquires whichever target
+    // squawks an active flight's code (H135, JO 7110.65BB ¶5-3-4 a).
     //
-    // The beacon rung (2) ignores it (H135, superseding S-L27 for that rung
-    // only): FAA automation acquires a track by matching an ACTIVE flight's
-    // computer-assigned discrete code to the target squawking it (JO 7110.65BB
-    // ¶5-3-3 d; ¶5-3-4 a, auto-acquisition), and a terminated flight's data is
-    // removed (¶5-2-1 b.2 NOTE), so a finished flight holds no code and cannot
-    // keep a contact from the flight now assigned the code it squawks. This was
-    // T12: a jet once held by a dropped or deleted Strip (by any rung, a
-    // provisional callsign match included) stayed NO TRK under a new Strip
-    // whose Block 5 it squawked.
-    this._formerHolder = new Map();
+    // In memory only. A restart or a mission reload forgets it, and the next
+    // match is a first match.
+    this._syntheticSeenOn = new Map();
   }
 
   /** Every live Strip across every Facility, so eligibility can be judged per flight data. */
@@ -155,13 +155,12 @@ class CorrelationReconciler {
   /**
    * One ordered claim sweep over every eligible flight data.
    *
-   * Rung order, claiming as it goes (§6.6 rule 1): an explicit binding, then
-   * the assigned beacon code, then an exact callsign, then a fuzzy one. A
-   * higher rung always claims a contact before a lower one can, which gives
-   * the priority order for free and makes a collision decidable. Two CONTACTS
-   * matching one flight equally (two squawking its code, two answering to its
-   * callsign as well) is ambiguous: the flight gets neither and is told so,
-   * with the candidates (docs/adr/0046). Two FLIGHT DATA claiming one contact
+   * Rung order, claiming as it goes (§6.6 rule 1 as docs/adr/0142 cut it): an
+   * explicit binding, then the assigned beacon code. Nothing else: no callsign
+   * rung (H165). A binding always claims a contact before the beacon rung can,
+   * which gives the priority order for free and makes a collision decidable.
+   * Two CONTACTS squawking one flight's code is ambiguous: the flight gets
+   * neither and is told so, with the candidates (docs/adr/0046). Two FLIGHT DATA claiming one contact
    * at the SAME rung (a duplicate code) is not: the first in sweep order takes
    * it, and the other's TRACK_LOST detail names the flight that has it
    * (LT-CORRELATION). One contact never correlates to two flight data.
@@ -170,21 +169,16 @@ class CorrelationReconciler {
     this._ticks += 1;
 
     const tracks = this._trackStore.getAll();
-    const { byBeacon, byStem, byId } = buildTrackIndices(tracks, this._beaconOf);
+    const { byBeacon, byId } = buildTrackIndices(tracks, this._beaconOf);
     const stripsByFlightData = this._liveStripsByFlightData();
 
     // A flight with no live Strip anywhere is over, and its record goes with
     // it. Note the distinction from eligibility: a Strip sitting at PROPOSED is
     // live but ineligible — it has no contact YET — and must not be retired.
-    // Its contact is remembered first (docs/adr/0076): it may well still be in
-    // the air, and must not be handed to the next flight with that callsign.
-    for (const [trackId, held] of this._store.trackIndex()) {
-      if (!stripsByFlightData.has(held.flightDataId)) this._formerHolder.set(String(trackId), held.flightDataId);
-    }
-    for (const trackId of [...this._formerHolder.keys()]) {
-      if (!byId.has(trackId)) this._formerHolder.delete(trackId);
-    }
     this._store.retireFinished(new Set(stripsByFlightData.keys()));
+    for (const flightDataId of [...this._syntheticSeenOn.keys()]) {
+      if (!stripsByFlightData.has(flightDataId)) this._syntheticSeenOn.delete(flightDataId);
+    }
 
     const eligible = [];
     for (const flightData of this._flightDataStore.getAll()) {
@@ -198,8 +192,7 @@ class CorrelationReconciler {
 
     // Rung 1 — an explicit controller binding. It outranks everything the
     // sweep can work out, which is the point of having it: an aircraft with
-    // its transponder off and a callsign nothing matches is still a contact
-    // the controller can see.
+    // its transponder off is still a contact the controller can see.
     for (const flightData of eligible) {
       const record = this._store.getCorrelation(flightData.flightDataId);
       const bound = record && record.binding && record.binding.trackId;
@@ -213,8 +206,10 @@ class CorrelationReconciler {
       });
     }
 
-    // Rung 2 — the assigned Mode 3/A code, observed on a contact. No
-    // former-holder exclusion here (H135; see the constructor).
+    // Rung 2 — the assigned Mode 3/A code, observed on a contact. A finished
+    // flight holds no code and keeps no contact from the flight now assigned
+    // the code it squawks (H135). A synthetic code does not follow a re-mint
+    // to another AI aircraft (docs/adr/0142; see the constructor).
     const callsignOf = new Map(eligible.map(f => [f.flightDataId, f.identity.callsign]));
     const beaconTakenBy = new Map(); // flightDataId -> the flight that holds the contact squawking its code
     for (const flightData of eligible) {
@@ -226,8 +221,7 @@ class CorrelationReconciler {
       if (candidates.length === 0) {
         // The contact squawking this code already went to another flight
         // (an explicit binding, or a duplicate code assigned earlier, §3.10.2
-        // rule 7). The callsign rungs still get a go; if nothing else
-        // matches, the NO TRK says which flight has it rather than "no contact".
+        // rule 7). The NO TRK says which flight has it rather than "no contact".
         if (squawking.length === 1) beaconTakenBy.set(flightData.flightDataId, { code: assigned, holder: claimed.get(squawking[0]) });
         continue;
       }
@@ -246,23 +240,25 @@ class CorrelationReconciler {
         continue;
       }
       const trackId = candidates[0];
+      const seen = this._syntheticSeenOn.get(flightData.flightDataId);
+      if (seen && seen.code === assigned && seen.trackId !== trackId) {
+        // The code went back to the block with the aircraft it was read off,
+        // and crc-sync has minted it to another AI aircraft. Not this flight's
+        // contact until a controller says so.
+        resolutions.set(flightData.flightDataId, {
+          warning: {
+            kind: 'CODE_REISSUED', candidateTrackIds: [trackId],
+            detail: `${assigned} is now squawked by a different AI aircraft — bind it, or enter its code`,
+          },
+          observedBeacon: null,
+        });
+        continue;
+      }
       claimed.set(trackId, flightData.flightDataId);
       resolutions.set(flightData.flightDataId, {
         trackId, matchedBy: 'BEACON', state: 'CORRELATED',
         observedBeacon: this._beaconOf(byId.get(trackId)),
       });
-    }
-
-    // Rungs 3 and 4 — the callsign, exact then fuzzy. Both walk the same
-    // candidate set; the rung is decided by the affinity that comes back.
-    for (const pass of ['exact', 'fuzzy']) {
-      for (const flightData of eligible) {
-        if (resolutions.has(flightData.flightDataId)) continue;
-        const resolution = this._matchByCallsign(flightData, { byStem, byId, claimed, exactOnly: pass === 'exact' });
-        if (!resolution) continue;
-        if (resolution.trackId) claimed.set(resolution.trackId, flightData.flightDataId);
-        resolutions.set(flightData.flightDataId, resolution);
-      }
     }
 
     // Everything eligible and unmatched is uncorrelated, and says why.
@@ -278,6 +274,8 @@ class CorrelationReconciler {
       });
     }
 
+    this._rememberSyntheticContacts(eligible, resolutions);
+
     const { changed } = this._store.reconcile(resolutions, now);
     this._writeObservedBeacons(resolutions);
     const stats = this._accumulate(resolutions);
@@ -286,52 +284,23 @@ class CorrelationReconciler {
     return { changed, stats };
   }
 
-  _matchByCallsign(flightData, { byStem, byId, claimed, exactOnly }) {
-    const callsign = flightData.identity.callsign;
-    if (!callsign) return null;
-    const stem = callsign.toUpperCase().replace(/[^A-Z]/g, '').replace(/[0-9]/g, '');
-    const candidateIds = (byStem.get(stem) || []).filter(id => !claimed.has(id) && !this._formerHolder.has(id));
-    if (candidateIds.length === 0) return null;
-
-    const scored = [];
-    for (const id of candidateIds) {
-      const affinity = callsignAffinity(callsign, byId.get(id).callsign);
-      if (affinity == null) continue;
-      if (exactOnly && affinity !== AFFINITY_EXACT) continue;
-      if (!exactOnly && affinity === AFFINITY_EXACT) continue; // rung 3 already had its chance
-      scored.push({ id, affinity });
+  /**
+   * Remembers which contact each flight's synthetic code is on, from this
+   * tick's matches: a beacon match, or a binding to the contact squawking the
+   * code (so a controller who binds the new holder moves the memory with it).
+   * A flight whose code is not synthetic, or no longer the remembered one,
+   * forgets.
+   */
+  _rememberSyntheticContacts(eligible, resolutions) {
+    for (const flightData of eligible) {
+      const assigned = flightData.identity.beaconAssigned;
+      const id = flightData.flightDataId;
+      if (!assigned || !this._isSynthetic(assigned)) { this._syntheticSeenOn.delete(id); continue; }
+      const seen = this._syntheticSeenOn.get(id);
+      if (seen && seen.code !== assigned) this._syntheticSeenOn.delete(id);
+      const r = resolutions.get(id);
+      if (r && r.trackId && r.observedBeacon === assigned) this._syntheticSeenOn.set(id, { code: assigned, trackId: r.trackId });
     }
-    if (scored.length === 0) return null;
-
-    const best = Math.max(...scored.map(s => s.affinity));
-    const top = scored.filter(s => s.affinity === best);
-    if (top.length > 1) {
-      return {
-        warning: {
-          kind: 'AMBIGUOUS_CALLSIGN', candidateTrackIds: top.map(s => s.id),
-          detail: `${top.length} contacts answer to ${callsign} equally well — bind one`,
-        },
-        observedBeacon: null,
-      };
-    }
-
-    const trackId = top[0].id;
-    const track = byId.get(trackId);
-    const observedBeacon = this._beaconOf(track);
-    const assigned = flightData.identity.beaconAssigned;
-    // An exact callsign match is CORRELATED — unless the contact is squawking
-    // something other than the code we assigned it, which is real evidence
-    // against the identity even when the name agrees. A fuzzy match is
-    // PROVISIONAL regardless: §6.6 rule 1 says "flagged as provisional".
-    const contradicted = !!(observedBeacon && assigned && observedBeacon !== assigned);
-    const isExact = best === AFFINITY_EXACT;
-    return {
-      trackId,
-      matchedBy: isExact ? 'CALLSIGN_EXACT' : 'CALLSIGN_FUZZY',
-      state: isExact && !contradicted ? 'CORRELATED' : 'PROVISIONAL',
-      confidence: isExact ? null : best,
-      observedBeacon,
-    };
   }
 
   /**
@@ -356,13 +325,13 @@ class CorrelationReconciler {
       }
       const last = record.transitions[record.transitions.length - 1];
       if (!last || last.at !== record.updatedAt) continue;
-      if (last.reason === 'REBOUND_ON_BEACON' || last.reason === 'REBOUND_ON_CALLSIGN') this._rebinds += 1;
+      if (last.reason === 'REBOUND_ON_BEACON') this._rebinds += 1;
       if (last.reason === 'TRACK_GONE' || last.reason === 'MISSION_RELOAD' || last.reason === 'AMBIGUOUS') this._warningsRaised += 1;
       if (last.reason === 'WARNING_RETRACTED') this._warningsRetracted += 1;
     }
 
     if (rate.rate != null) {
-      this._matchedTickSum += rate.correlated + rate.provisional;
+      this._matchedTickSum += rate.correlated;
       this._eligibleTickSum += rate.eligible;
       if (this._minRateSeen == null || rate.rate < this._minRateSeen) this._minRateSeen = rate.rate;
       this._warnIfBelowTarget(rate, this._wallClock.now());
@@ -378,12 +347,12 @@ class CorrelationReconciler {
     if (rate.eligible < RATE_WARN_MIN_ELIGIBLE) return;
     if (now - this._lastWarnAt < RATE_WARN_INTERVAL_MS) return;
     this._lastWarnAt = now;
-    log.warn('correlation rate below the target (§6.6 rule 6)', { rate: Number(rate.rate.toFixed(2)), correlated: rate.correlated + rate.provisional, eligible: rate.eligible, targetPct: CORRELATION_RATE_TARGET * 100 });
+    log.warn('correlation rate below the target (§6.6 rule 6)', { rate: Number(rate.rate.toFixed(2)), correlated: rate.correlated, eligible: rate.eligible, targetPct: CORRELATION_RATE_TARGET * 100 });
   }
 
   /** Mission reload — every contact in the theater was re-minted. */
   resetPicture(reason = 'MISSION_RELOAD', now = this._clock.now()) {
-    this._formerHolder.clear(); // every contact was re-minted; no remembered id means anything
+    this._syntheticSeenOn.clear(); // every contact was re-minted; no remembered id means anything
     const { changed } = this._store.resetPicture(reason, now);
     this._warningsRaised += changed.length;
     if (changed.length) this._onDelta({ correlations: changed, stats: this.getStats() });
@@ -414,11 +383,9 @@ class CorrelationReconciler {
 }
 
 /**
- * The correlation rate, over a set of records.
- *
- * `(correlated + provisional) / eligible` — matching §6.6's own measured
- * quantity, "85-90% of Strips matched a surveillance target", i.e. matched at
- * all rather than matched with certainty.
+ * The correlation rate, over a set of records: `correlated / eligible`,
+ * matching §6.6's own measured quantity, "85-90% of Strips matched a
+ * surveillance target".
  *
  * Null when there is nothing eligible, NEVER 1.0. An empty board is not 100%
  * correlated, and reporting it as such would let the >= 95% acceptance gate
@@ -428,16 +395,15 @@ class CorrelationReconciler {
  * against a fixture with no clock — the computeDueObligations shape.
  */
 function computeCorrelationRate(records) {
-  let correlated = 0, provisional = 0, uncorrelated = 0;
+  let correlated = 0, uncorrelated = 0;
   for (const record of records || []) {
     if (record.state === 'CORRELATED') correlated += 1;
-    else if (record.state === 'PROVISIONAL') provisional += 1;
     else uncorrelated += 1;
   }
-  const eligible = correlated + provisional + uncorrelated;
+  const eligible = correlated + uncorrelated;
   return {
-    eligible, correlated, provisional, uncorrelated,
-    rate: eligible > 0 ? (correlated + provisional) / eligible : null,
+    eligible, correlated, uncorrelated,
+    rate: eligible > 0 ? correlated / eligible : null,
   };
 }
 

@@ -2,8 +2,7 @@
 import { NM_M, haversineM, kinematics, projectPos, verticalFpm } from './geo.js';
 import { getIff, iffColor } from './iff.js';
 import {
-  emergencyColor, infoLine, isAir, shouldLabel, trackCodeTag, trackEmergency, trackIsIdent, trackName,
-  trackNameSuffix
+  emergencyColor, infoLine, isAir, shouldLabel, trackCodeTag, trackEmergency, trackIsIdent, trackName
 } from './track-label.js';
 import { atcDisplay, atcPalette } from './atc-scope.js';
 import { losVisibleRangeM } from './los.js';
@@ -441,7 +440,7 @@ export function buildLabels() {
       type: 'Feature',
       geometry: { type: 'Point', coordinates: coords },
       properties: {
-        id, scheme: 'TACTICAL', callsign: trackName(t) + trackNameSuffix(t), infoLine,
+        id, scheme: 'TACTICAL', callsign: trackName(t), infoLine,
         sqTag: code.text, sqColor: code.color || color,
         color, opacity, textOffset, alertTag, alertColor, asgnLine,
       },

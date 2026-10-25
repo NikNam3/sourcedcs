@@ -168,7 +168,7 @@ function buildMonitors({ env, efsp, facilityConfig, missionClock, missionSession
     trackedFlights: () => {
       const out = new Map();
       for (const [trackId, { flightDataId, state }] of efsp.correlationStore.trackIndex()) {
-        if (state === 'CORRELATED' || state === 'PROVISIONAL') out.set(String(trackId), flightDataId);
+        if (state === 'CORRELATED') out.set(String(trackId), flightDataId);
       }
       return out;
     },
@@ -195,7 +195,7 @@ function buildMonitors({ env, efsp, facilityConfig, missionClock, missionSession
     trackedFlights: () => {
       const out = new Map();
       for (const [trackId, { flightDataId, state }] of efsp.correlationStore.trackIndex()) {
-        if (state === 'CORRELATED' || state === 'PROVISIONAL') out.set(String(trackId), flightDataId);
+        if (state === 'CORRELATED') out.set(String(trackId), flightDataId);
       }
       return out;
     },

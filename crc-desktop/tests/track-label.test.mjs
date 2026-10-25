@@ -26,8 +26,7 @@ test('a contact is named by its flight, else its code, else its track number', (
   assert.equal(L.trackName(contact({ ssr: { code: '4521' } })), '4521', 'squawking, uncorrelated');
   const flight = contact({ ssr: { code: '4521' }, label: { callsign: 'VIPER11', source: 'FLIGHT_DATA', trackNumber: 'TN00007' } });
   assert.equal(L.trackName(flight), 'VIPER11');
-  assert.equal(L.trackNameSuffix(flight), '');
-  assert.equal(L.trackNameSuffix({ ...flight, label: { ...flight.label, source: 'FLIGHT_DATA_PROVISIONAL' } }), '?', 'doubt looks like doubt');
+  assert.equal('trackNameSuffix' in L, false, 'no `?` suffix: there is no provisional correlation (docs/adr/0142)');
 });
 
 test('the code line: emergencies always, the code only when a callsign already names it', () => {
@@ -130,5 +129,4 @@ test('the carrier map label: side number and altitude in hundreds; no side numbe
   assert.equal(L.sideAltText(t, '201'), '201 012');
   assert.equal(L.sideAltText(t, ''), 'VIPER11 012');
   assert.equal(L.sideAltText({ ...t, altitude: null }, '201'), '201');
-  assert.equal(L.sideAltText({ ...t, label: { ...t.label, source: 'FLIGHT_DATA_PROVISIONAL' } }, ''), 'VIPER11? 012');
 });

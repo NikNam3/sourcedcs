@@ -221,6 +221,22 @@ test('setBeaconAssigned surfaces a duplicate as a warning, never a hard block (d
   assert.equal(store.getFlightData(b.flightDataId).identity.beaconAssigned, a.identity.beaconAssigned);
 });
 
+test('setBeaconAssigned accepts an AI aircraft\'s synthetic code a controller typed (docs/adr/0142), and a second Strip on it is a duplicate', () => {
+  const store = new FlightDataStore();
+  const { flightData: a } = store.createFlightData(makeSeed({ callsign: 'COLT1' }), { by: 'OPS' });
+  const { flightData: b } = store.createFlightData(makeSeed({ callsign: 'COLT2' }), { by: 'OPS' });
+  const first = store.setBeaconAssigned(a.flightDataId, '6012', { by: 'AP' });
+  assert.equal(first.ok, true, JSON.stringify(first));
+  assert.equal(first.warning, undefined);
+  assert.equal(store.getFlightData(a.flightDataId).identity.beaconAssigned, '6012');
+  const second = store.setBeaconAssigned(b.flightDataId, '6012', { by: 'AP' });
+  assert.equal(second.ok, true);
+  assert.equal(second.warning, 'DUPLICATE_IGNORED_WARNING');
+  // and the allocator still never hands one out: a new flight gets a discrete code
+  const { flightData: c } = store.createFlightData(makeSeed({ callsign: 'COLT3' }), { by: 'OPS' });
+  assert.ok(!/^6[0-7]{3}$/.test(c.identity.beaconAssigned), c.identity.beaconAssigned);
+});
+
 test('setField on assigned.departureRelease computes voidDeadlineUtc = voidTimeUtc + 30min only for CLEARANCE_VOID_TIME', () => {
   const store = new FlightDataStore();
   const { flightData } = store.createFlightData(makeSeed(), { by: 'OPS' });

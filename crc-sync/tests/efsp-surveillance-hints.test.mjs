@@ -139,13 +139,13 @@ test('the other direction: a Strip that says airborne while its contact sits on 
   assert.equal(logged.length, 1);
 });
 
-test('an agreeing Strip, a pre-movement Strip, and a provisional match say nothing', () => {
+test('an agreeing Strip, a pre-movement Strip, and an uncorrelated one say nothing', () => {
   const strips = [dep('DEPARTED'), dep('CLEARED', { stripId: 's2' })];
   const { mon, state } = build({ strips, track: trk({ agl: 800, kt: 160 }) });
   for (let t = 0; t <= 300000; t += 1000) mon.tick(t);
   assert.deepEqual(mon.getAll(), []);
   strips.push(dep('TAXI', { stripId: 's3' }));
-  state.correlated = false; // PROVISIONAL / UNCORRELATED: not a basis for a hint
+  state.correlated = false; // UNCORRELATED: not a basis for a hint
   for (let t = 301000; t <= 600000; t += 1000) mon.tick(t);
   assert.deepEqual(mon.getAll(), []);
 });

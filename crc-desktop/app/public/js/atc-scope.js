@@ -131,7 +131,7 @@ export function atcRelation(t, strips, acting, letterOf) {
   const source = t && t.label && t.label.source;
   const live = (strips || []).filter(s => s && s.state !== 'DROPPED');
   const rel = {
-    associated: (source === 'FLIGHT_DATA' || source === 'FLIGHT_DATA_PROVISIONAL') && live.length > 0,
+    associated: source === 'FLIGHT_DATA' && live.length > 0,
     owner: null, ownerLetter: null, mine: false, tofi: false,
     handoffIn: null, handoffOut: null, handoffDone: null, poIn: null, poOut: null,
   };

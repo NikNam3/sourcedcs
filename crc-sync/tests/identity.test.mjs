@@ -27,10 +27,10 @@ test('a correlated contact is its flight', () => {
   assert.equal(identity.labelFor(1), 'VIPER11');
 });
 
-test('a provisional match is still the flight, flagged', () => {
-  const { identity } = setup({ correlations: [{ trackId: '1', flightDataId: 'f1', state: 'PROVISIONAL' }], flightDataList: FDR });
-  assert.equal(identity.identify('1').correlation, 'PROVISIONAL');
-  assert.equal(identity.labelFor('1'), 'VIPER11');
+test('only a CORRELATED record names a contact (there is no provisional state, docs/adr/0142)', () => {
+  const { identity } = setup({ correlations: [{ trackId: '1', flightDataId: 'f1', state: 'UNCORRELATED' }], flightDataList: FDR });
+  assert.equal(identity.identify('1').correlation, null);
+  assert.equal(identity.identify('1').flightDataCallsign, null);
 });
 
 test("the flight's callsign beats a controller's tag; the tag names what nothing else does", () => {

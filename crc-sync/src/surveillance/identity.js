@@ -8,7 +8,6 @@
 //
 //   1. correlated to a flight: the flight's callsign, from its flight data — the
 //      flight plan is where a callsign comes from in the first place.
-//      PROVISIONAL is flagged, so a doubtful match still looks doubtful.
 //   2. a controller's tag (collab-store rename), for traffic nothing else
 //      identifies. A correlated flight's callsign beats it.
 //   3. its track number.
@@ -40,12 +39,12 @@ class Identity {
   _correlationOf(id) {
     if (!this._index) this.indexTick();
     const hit = this._index.get(id);
-    if (!hit || (hit.state !== 'CORRELATED' && hit.state !== 'PROVISIONAL')) return null;
+    if (!hit || hit.state !== 'CORRELATED') return null;
     return hit;
   }
 
   /**
-   * @returns {{flightDataId:string|null, correlation:'CORRELATED'|'PROVISIONAL'|null,
+   * @returns {{flightDataId:string|null, correlation:'CORRELATED'|null,
    *            flightDataCallsign:string|null, flightDataType:string|null, tag:string|null, trackNumber:string}}
    */
   identify(trackId) {

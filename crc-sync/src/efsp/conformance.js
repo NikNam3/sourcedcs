@@ -370,7 +370,7 @@ class ConformanceMonitor {
     const entryBlocks = this._d.entryBlocks ? this._d.entryBlocks() : new Map();
     const live = new Map(); // flightDataId -> track, for the tanker lookup
     for (const record of correlationStore.getAll()) {
-      if (!record.trackId || (record.state !== 'CORRELATED' && record.state !== 'PROVISIONAL')) continue;
+      if (!record.trackId || record.state !== 'CORRELATED') continue;
       const track = trackStore.get(record.trackId);
       if (track) live.set(record.flightDataId, track);
     }

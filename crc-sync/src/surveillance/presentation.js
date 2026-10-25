@@ -148,7 +148,6 @@ function presentTrack(track, ctx) {
   let callsign = null;
   let source = null;
   if (who.flightDataCallsign && who.correlation === 'CORRELATED') { callsign = who.flightDataCallsign; source = 'FLIGHT_DATA'; }
-  else if (who.flightDataCallsign && who.correlation === 'PROVISIONAL') { callsign = who.flightDataCallsign; source = 'FLIGHT_DATA_PROVISIONAL'; }
   else if (dl && dl.callsign) { callsign = dl.callsign; source = 'DATALINK'; }
   else if (who.tag) { callsign = who.tag; source = 'TAG'; }
 
