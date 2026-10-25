@@ -33,3 +33,8 @@ role-based Positions of ADR 0132. Nothing of these is briefed yet.
 - `getFacilityConfig` deep-clones the whole facility on every call; `forwarding-obligations.js` and `par-monitor.js` read one flag.
 - Obligations rerun after every delivery; CA is O(n²) in tracks; the `par` ticker rebuilds approach geometry with PAR unheld.
 - Client frame time never measured (no Electron trace).
+
+## Correlation leftovers (U-BEACON-ONLY, S-ARCH-102)
+
+- Drop `confidence` from the persisted correlation shape allow list (`crc-sync/src/efsp/stores.js`) at the next Board reset (D1: kept so the deployed Board survives the H165 deploy).
+- `correlation-store.js` `reconcile()` rewrites `record.warning` on every unmatched tick without broadcasting (`raisedAt` moves, `lostTrackId` goes null from the second tick): server copy drifts from clients. Small fix.
