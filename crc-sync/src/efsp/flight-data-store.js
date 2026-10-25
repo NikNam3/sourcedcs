@@ -52,6 +52,19 @@ const DATALINK_INDICATOR_STATES = new Set(['NONE', 'ISSUED']);
 // strip-type changes of JoinPattern / LeavePattern. null is "not set"; an empty string clears.
 const PATTERN_ENTRIES = new Set(['PATTERN', 'STRAIGHT_IN']);
 const PATTERN_OPTIONS = new Set(['TOUCH_AND_GO', 'FULL_STOP', 'LOW_APPROACH']);
+// docs/adr/0143 (H166): a VFR departure's proposed direction of flight (AIM para 4-1-18 a.5(b): the pilot requests
+// advisories from ground or clearance delivery "with proposed direction of flight"), Block 9K. The eight compass points
+// (magnetic, as every direction here, H15); null is "not given"; an empty string clears.
+const DIRECTIONS_OF_FLIGHT = new Set(['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']);
+
+/** A typed direction of flight, upper-cased: `{ok, value}` (null for empty) or `{ok:false, detail}`. */
+function normalizeDirectionOfFlight(value) {
+  if (value === undefined || value === null || value === '') return { ok: true, value: null };
+  const v = String(value).trim().toUpperCase();
+  if (v === '') return { ok: true, value: null };
+  if (!DIRECTIONS_OF_FLIGHT.has(v)) return { ok: false, detail: `direction of flight must be one of ${[...DIRECTIONS_OF_FLIGHT].join(', ')}` };
+  return { ok: true, value: v };
+}
 // WP4A (docs/adr/0019) — guide §4.6 rule 5's track-degradation flags, which
 // force verbal coordination and disable silent cross-Facility transfer
 // while present (board/coordination.js's _applyCoordinationPropose). Genuinely
@@ -128,6 +141,8 @@ const WRITABLE_PATHS = new Set([
   'filed.route', 'filed.requestedAltitude', 'filed.departureAirport', 'filed.departureRunway',
   'filed.destinationAirport', 'filed.proposedDepartureTimeUtc', 'filed.fullRouteClearance', 'filed.remarks',
   'filed.stereoRouteName',
+  // docs/adr/0143: Block 9K, validated against DIRECTIONS_OF_FLIGHT in setField
+  'filed.directionOfFlight',
   // ARRIVAL-type fields — present on every flight data regardless of the
   // strip type that ends up referencing it, same "present but unpopulated
   // until relevant" precedent as the DEPARTURE-only fields above (guide
@@ -630,6 +645,9 @@ class FlightDataStore {
     // P-time chain. Best-effort like the lookup that supplies it: a value that
     // is not a time is dropped, never a refusal.
     const flightPlanDepartureUtc = resolveZuluHhmm(seed.flightPlanDepartureTimeHhmm, this._clock.now());
+    // docs/adr/0143: checked before allocate() like the times above.
+    const direction = normalizeDirectionOfFlight(seed.directionOfFlight);
+    if (!direction.ok) return { ok: false, reason: 'VALIDATION_ERROR', detail: direction.detail };
 
     let stereoSeed = {};
     let stereoName = '';
@@ -711,6 +729,7 @@ class FlightDataStore {
         requestedAltitude: filedFrom('requestedAltitude'),
         departureAirport: filedFrom('departureAirport'),
         departureRunway: seed.departureRunway || null,
+        directionOfFlight: direction.value, // docs/adr/0143 Block 9K
         destinationAirport: filedFrom('destinationAirport'),
         // §9.10 (docs/adr/0050) — the short name this flight was filed under.
         // Its expansion is filed.route beside it; this is the label, and what
@@ -862,6 +881,11 @@ class FlightDataStore {
       if (value !== null && !allowed.has(value)) {
         return { ok: false, reason: 'VALIDATION_ERROR', detail: `${path === 'assigned.patternEntry' ? 'PAT/STR' : 'T&G/FS/LA'} must be one of ${[...allowed].join(', ')}` };
       }
+    }
+    if (path === 'filed.directionOfFlight') {
+      const r = normalizeDirectionOfFlight(value);
+      if (!r.ok) return { ok: false, reason: 'VALIDATION_ERROR', detail: r.detail };
+      value = r.value;
     }
     if (path === 'identity.trackDegradationFlag' && !TRACK_DEGRADATION_FLAGS.has(value)) {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: 'invalid track degradation flag' };
@@ -1754,5 +1778,5 @@ module.exports = {
   TRACK_DEGRADATION_FLAGS, AIRSPACE_OWNERS, RADAR_SERVICE_STATES, SEPARATION_REGIMES, MAX_FREE_TEXT,
   ORDNANCE_STATES, ALERT_STATUSES, MILITARY_WRITABLE_FIELDS, defaultMilitary,
   ensureClearance, parseAltitudeFt, parseAltitude, parseSpeed, formatAltitudeBlock, parseHeadingDeg, activeClearanceEntry,
-  normalizeMtrValue, OBSERVED_PATHS, TOFI_MONITOR_PATHS,
+  normalizeMtrValue, OBSERVED_PATHS, TOFI_MONITOR_PATHS, DIRECTIONS_OF_FLIGHT, normalizeDirectionOfFlight,
 };

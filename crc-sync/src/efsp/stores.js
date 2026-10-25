@@ -292,7 +292,7 @@ const FLIGHT_DATA_SECTIONS = {
   identity: anyOf('aircraftType', 'beaconAssigned', 'beaconObserved', 'callsign', 'degradation', 'equipmentCodes',
     'equipmentSuffix', 'flightSize', 'homeStation', 'modeOne', 'modeTwo', 'splitFrom', 'tailNumber', 'trackDegradationFlag', 'unit', 'wakeCategory'),
   filed: anyOf('arrivalFix', 'departureAirport', 'departureRunway', 'destinationAirport', 'estimatedArrivalTimeUtc',
-    'fullRouteClearance', 'originAirport', 'proposedDepartureTimeUtc', 'remarks', 'requestedAltitude', 'route', 'stereoRouteName'),
+    'directionOfFlight', 'fullRouteClearance', 'originAirport', 'proposedDepartureTimeUtc', 'remarks', 'requestedAltitude', 'route', 'stereoRouteName'),
   assigned: anyOf('atisCode', 'callForReleaseTimeUtc', 'callForReleaseWindowEndUtc', 'callForReleaseWindowStartUtc',
     'clearedAltitude', 'clearedRoute', 'datalinkClearanceIndicator', 'delayInfo', 'departureRelease', 'edctTimeUtc',
     'edctWindowEndUtc', 'edctWindowStartUtc', 'landingRunway', 'movementAreaEntryTimeUtc', 'patternEntry', 'patternOption', 'releaseTimeUtc', 'takeoffTimeUtc',

@@ -92,6 +92,10 @@ const DEPARTURE_BLOCK_MAP = {
   // On the flight data, so a local departure keeps them into closed traffic (JoinPattern) and back out (LeavePattern).
   '9J-ENTRY':  { required: false, target: { kind: 'flightData', path: 'assigned.patternEntry' } },
   '9J-OPTION': { required: false, target: { kind: 'flightData', path: 'assigned.patternOption' } },
+  // docs/adr/0143 (H166): a VFR departure's proposed direction of flight (AIM para 4-1-18 a.5(b)), N, NE, ... NW. Sub-
+  // lettered onto Block 9 like 9F (the route family: for a VFR departure the direction is all the route there is). Set by
+  // CD's VFR departure action and editable by the Strip's holder; DEPARTURE only (an overflight's route is its own).
+  '9K': { required: false, target: { kind: 'flightData', path: 'filed.directionOfFlight' } },
   // §9.10 stereo route name (docs/adr/0050). The guide numbers this Block
   // M18 in its §6.4 military-extension table (whose "Basis" column cites
   // §9.9, ATO ingest — that is a mis-citation in the guide; §9.10 is the
