@@ -14,6 +14,10 @@
  * L4D1..L4D6 in another Bay, which the cleanup would have retired out from
  * under it had the two files ever run the other way round.
  *
+ * H167: the drop follows the dragged Strip's top edge (the ghost), not the
+ * cursor, so a test that aims at a gap aims the GHOST's top there: the cursor
+ * goes to the gap plus where on the Strip it was grabbed (`grab().offsetY`).
+ *
  * Helpers below (openBay, grab, orderOf, dropAll) might belong in
  * e2e/helpers/app.js; kept here under the parallel-lane rule.
  */
@@ -29,7 +33,7 @@ async function openBay(page, bayId, positionId = 'OPS') {
   await frames(page);
 }
 
-/** Pointer down on the Strip's own left padding — not a chip, which would swallow it. */
+/** Pointer down on the Strip's own left padding — not a chip, which would swallow it. `offsetY` is where on the Strip it was grabbed: the ghost's top is the cursor minus it. */
 async function grab(page, callsign) {
   const r = await stripByCallsign(page, callsign).boundingBox();
   const x = r.x + 8; const y = r.y + r.height / 2;
@@ -37,7 +41,7 @@ async function grab(page, callsign) {
   await page.mouse.down();
   // Past DRAG_THRESHOLD_PX (5px) so the drag is real.
   await page.mouse.move(x, y + 12, { steps: 3 });
-  return { x, y };
+  return { x, y, offsetY: y - r.y };
 }
 
 /** DOM order of just these callsigns, as the controller sees them top to bottom. */
@@ -78,12 +82,47 @@ test.describe('in one Rack', () => {
     await openBay(page, BAY);
     for (const c of cs) await seedStrip(page, { callsign: c, stripType: 'DEPARTURE', bayId: BAY });
     try {
-      const { x } = await grab(page, 'L4A1');
+      const { x, offsetY } = await grab(page, 'L4A1');
       // The Rack closes up the moment the drag starts (the Strip goes
       // position:fixed), so this is measured after, not before.
-      await page.mouse.move(x, await visibleGap(page, 'L4A3', 'L4A4'), { steps: 5 });
+      await page.mouse.move(x, await visibleGap(page, 'L4A3', 'L4A4') + offsetY, { steps: 5 });
       await page.mouse.up();
       await expect.poll(() => orderOf(page, cs), { timeout: 5000 }).toEqual(['L4A2', 'L4A3', 'L4A1', 'L4A4']);
+    } finally { await dropAll(page, cs); }
+  });
+
+  // H167 — a click or double-click must never move a Strip. Grabbed in its
+  // lower half with 7px of jitter (past the 5px threshold, so the drag is
+  // real) the cursor used to sit below the midpoint of the Strip that closed
+  // up under it, and the release dropped it one place down.
+  test('a jittered double-click in the lower half of a Strip moves nothing', async ({ page }) => {
+    const cs = ['L4J1', 'L4J2', 'L4J3'];
+    await openPanel(page, { signedOn: ['OPS'] });
+    await openBay(page, BAY);
+    for (const c of cs) await seedStrip(page, { callsign: c, stripType: 'DEPARTURE', bayId: BAY });
+    const orderKeys = () => page.evaluate((cs) => crc.state.getAllEfspStrips()
+      .filter((s) => cs.includes(crc.state.getEfspFlightData(s.flightDataId).identity.callsign))
+      .map((s) => `${crc.state.getEfspFlightData(s.flightDataId).identity.callsign}:${s.rackId}:${s.orderKey}`).sort(), cs);
+    try {
+      const before = await orderOf(page, cs);
+      expect(before).toEqual(cs);
+      const keysBefore = await orderKeys();
+      for (const jitter of [7, -7]) {
+        // Re-read the box each round: the double-click flips the Strip (shorter).
+        const r = await stripByCallsign(page, 'L4J2').boundingBox();
+        const x = r.x + 8; const y = r.y + r.height * 0.85;
+        await page.mouse.move(x, y);
+        for (let click = 0; click < 2; click++) {
+          await page.mouse.down();
+          await page.mouse.move(x, y + jitter, { steps: 2 });
+          await page.mouse.up();
+          await page.mouse.move(x, y);
+          await settle(page);
+          expect(await orderOf(page, cs), `jitter ${jitter}px, click ${click + 1}`).toEqual(cs);
+        }
+      }
+      // And nothing was sent: a same-place MoveStrip would have re-keyed it.
+      expect(await orderKeys()).toEqual(keysBefore);
     } finally { await dropAll(page, cs); }
   });
 
@@ -116,7 +155,7 @@ test.describe('in one Rack', () => {
     await openBay(page, BAY);
     for (const c of cs) await seedStrip(page, { callsign: c, stripType: 'DEPARTURE', bayId: BAY });
     try {
-      const { x } = await grab(page, 'L4C0');
+      const { x, offsetY } = await grab(page, 'L4C0');
       await page.mouse.wheel(0, 600);
       await frames(page);
       // Whichever two of ours are now fully in view, aim between them.
@@ -127,7 +166,7 @@ test.describe('in one Rack', () => {
           .map((e) => e.querySelector('.efsp-block-1').textContent.trim()).filter((t) => cs.includes(t)).slice(0, 2);
       }, cs);
       expect(pair.length, 'need two Strips in view to aim between').toBe(2);
-      await page.mouse.move(x, await visibleGap(page, pair[0], pair[1]), { steps: 3 });
+      await page.mouse.move(x, await visibleGap(page, pair[0], pair[1]) + offsetY, { steps: 3 });
       await page.mouse.up();
       await settle(page);
       const order = await orderOf(page, cs);
@@ -148,7 +187,7 @@ test.describe('in one Rack', () => {
       const content = page.locator('#efsp-bay-content');
       await content.evaluate((e) => { e.scrollTop = 0; });
       const box = await content.boundingBox();
-      const { x } = await grab(page, 'L4S0');
+      const { x, offsetY } = await grab(page, 'L4S0');
       await page.mouse.move(x, box.y + box.height - 4, { steps: 8 });
       await expect.poll(() => content.evaluate((e) => e.scrollTop), { message: 'precondition: the Bay autoscrolled' }).toBeGreaterThan(0);
       const pair = await page.evaluate((cs) => {
@@ -158,7 +197,7 @@ test.describe('in one Rack', () => {
           .map((e) => e.querySelector('.efsp-block-1').textContent.trim()).filter((t) => cs.includes(t)).slice(-2);
       }, cs);
       expect(pair.length, 'need two Strips in view to aim between').toBe(2);
-      await page.mouse.move(x, await visibleGap(page, pair[0], pair[1]), { steps: 3 });
+      await page.mouse.move(x, await visibleGap(page, pair[0], pair[1]) + offsetY, { steps: 3 });
       await page.mouse.up();
       await settle(page);
       const order = await orderOf(page, cs);
