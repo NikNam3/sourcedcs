@@ -1,6 +1,6 @@
 'use strict';
 import {
-  cachedTopToViewportY, computeInsertionIndex, hasExceededDragThreshold, isUnchangedPlacement, scrollCompensatedY
+  cachedTopToViewportY, computeInsertionIndex, hasExceededDragThreshold, isTabDropTravel, isUnchangedPlacement, scrollCompensatedY
 } from '../strip-drag.js';
 import { _isPseudoBayId } from './open-bays.js';
 import { _defaultBayFor, _defaultRackFor, _moveStrip, _transferStrip } from './dispatch.js';
@@ -261,7 +261,10 @@ function _onStripPointerMove(e) {
   _efspDrag.dragEl.style.transform = `translate3d(0, ${dy}px, 0)`;
   _requestDragAutoscroll();
 
-  const dropTargetEl = _findDropTargetAt(e.clientX, e.clientY);
+  // A tab counts only past TAB_DROP_MIN_TRAVEL_PX (H167): short of it the
+  // cursor may be over a Bay tab only because a click near the Bay's top edge
+  // slipped, and the drop stays in the Rack (where the ghost says no move).
+  const dropTargetEl = isTabDropTravel(e.clientX - _efspDrag.startX, dy) ? _findDropTargetAt(e.clientX, e.clientY) : null;
   if (dropTargetEl !== _efspDrag.dropTargetEl) {
     if (_efspDrag.dropTargetEl) _efspDrag.dropTargetEl.classList.remove('efsp-drop-target');
     if (dropTargetEl) dropTargetEl.classList.add('efsp-drop-target');

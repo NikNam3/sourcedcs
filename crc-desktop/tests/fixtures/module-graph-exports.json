@@ -1456,10 +1456,12 @@
   ],
   "panels/efsp/strip-drag.js": [
    "DRAG_THRESHOLD_PX",
+   "TAB_DROP_MIN_TRAVEL_PX",
    "cachedTopToViewportY",
    "computeInsertionIndex",
    "computeRackReconciliation",
    "hasExceededDragThreshold",
+   "isTabDropTravel",
    "isUnchangedPlacement",
    "scrollCompensatedY"
   ],

@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 
 import {
   computeInsertionIndex, computeRackReconciliation, DRAG_THRESHOLD_PX, hasExceededDragThreshold,
-  scrollCompensatedY, cachedTopToViewportY, isUnchangedPlacement,
+  scrollCompensatedY, cachedTopToViewportY, isUnchangedPlacement, isTabDropTravel, TAB_DROP_MIN_TRAVEL_PX,
 } from '../app/public/js/panels/efsp/strip-drag.js';
 
 function rect(stripId, top, height = 40) { return { stripId, top, height }; }
@@ -274,4 +274,12 @@ test('isUnchangedPlacement: same Rack and neighbours is no move; any difference 
   assert.equal(isUnchangedPlacement(o, { ...o, bayId: 'b2' }), false);
   const alone = { bayId: 'b', rackId: 'r', afterStripId: null, beforeStripId: null };
   assert.equal(isUnchangedPlacement(alone, { ...alone, afterStripId: undefined }), true);
+});
+
+test('H167: a Position/Bay tab is a drop target only past more travel than a click slips', () => {
+  assert.ok(TAB_DROP_MIN_TRAVEL_PX > DRAG_THRESHOLD_PX * 2);
+  assert.equal(isTabDropTravel(0, -11), false); // the measured slip onto a Bay tab
+  assert.equal(isTabDropTravel(0, -TAB_DROP_MIN_TRAVEL_PX), false);
+  assert.equal(isTabDropTravel(0, -(TAB_DROP_MIN_TRAVEL_PX + 1)), true);
+  assert.equal(isTabDropTravel(12, -12), true); // diagonal, total distance
 });

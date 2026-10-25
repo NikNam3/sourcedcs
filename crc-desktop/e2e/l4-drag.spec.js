@@ -126,6 +126,69 @@ test.describe('in one Rack', () => {
     } finally { await dropAll(page, cs); }
   });
 
+  // H167, the tab path: the Bay tabs sit directly on top of the Bay content, so
+  // in a scrolled Bay a Strip can be cut by the top edge, and a click pressed
+  // just under that edge with a few px of upward jitter released over a Bay tab.
+  test('a jittered click at the top edge of a scrolled Bay does not drop the Strip on a tab', async ({ page }) => {
+    const cs = Array.from({ length: 8 }, (_, i) => `L4T${i}`);
+    await openPanel(page, { signedOn: ['OPS'] });
+    await openBay(page, BAY);
+    for (const c of cs) await seedStrip(page, { callsign: c, stripType: 'DEPARTURE', bayId: BAY });
+    const bayOf = () => page.evaluate((cs) => crc.state.getAllEfspStrips()
+      .filter((s) => cs.includes(crc.state.getEfspFlightData(s.flightDataId).identity.callsign) && s.state !== 'DROPPED')
+      .map((s) => `${crc.state.getEfspFlightData(s.flightDataId).identity.callsign}:${s.bayId}:${s.rackId}`).sort(), cs);
+    try {
+      const before = await bayOf();
+      const content = page.locator('#efsp-bay-content');
+      // Scroll so one of ours straddles the top edge, then find a point on it
+      // just under that edge with a drop tab straight above.
+      const probe = await content.evaluate((el, cs) => {
+        const strips = [...el.querySelectorAll('.efsp-strip')].filter((e) => cs.includes(e.querySelector('.efsp-block-1').textContent.trim()));
+        el.scrollTop = 0;
+        const target = strips[3];
+        el.scrollTop = target.getBoundingClientRect().top - el.getBoundingClientRect().top + 20;
+        const cr = el.getBoundingClientRect();
+        const sr = target.getBoundingClientRect();
+        for (const tab of document.querySelectorAll('[data-efsp-drop-position]')) {
+          const tr = tab.getBoundingClientRect();
+          const x = Math.round(tr.left + tr.width / 2);
+          if (x < sr.left + 4 || x > sr.right - 4) continue;
+          const pressY = cr.top + 2;
+          const under = document.elementFromPoint(x, pressY);
+          if (!under || under.closest('.efsp-strip') !== target || under.closest('button, input, textarea, select, [contenteditable]')) continue;
+          const upY = Math.round(tr.bottom - 2);
+          if (pressY - upY > 12 || !document.elementFromPoint(x, upY)?.closest('[data-efsp-drop-position]')) continue;
+          return { x, pressY, upY, gap: pressY - upY };
+        }
+        return null;
+      }, cs);
+      expect(probe, 'a press point under the top edge with a drop tab within 12px above').not.toBeNull();
+      await page.mouse.move(probe.x, probe.pressY);
+      await page.mouse.down();
+      await page.mouse.move(probe.x, probe.upY, { steps: 2 });
+      await page.mouse.up();
+      await settle(page);
+      expect(await bayOf(), `jitter ${probe.gap}px up onto a tab`).toEqual(before);
+    } finally { await dropAll(page, cs); }
+  });
+
+  // The tab path still works for a real drag (and needs more than a slip).
+  test('a Strip dragged onto another Bay tab moves to that Bay', async ({ page }) => {
+    const cs = ['L4V1', 'L4V2'];
+    await openPanel(page, { signedOn: ['OPS'] });
+    await openBay(page, BAY);
+    for (const c of cs) await seedStrip(page, { callsign: c, stripType: 'DEPARTURE', bayId: BAY });
+    const bayOf = (c) => page.evaluate((c) => crc.state.getAllEfspStrips().find((s) => crc.state.getEfspFlightData(s.flightDataId).identity.callsign === c && s.state !== 'DROPPED').bayId, c);
+    try {
+      const { x } = await grab(page, 'L4V2');
+      const tab = await page.locator('#efsp-bay-tabs .efsp-bay-tab[data-bay-id="ops-proposed"]').boundingBox();
+      await page.mouse.move(tab.x + tab.width / 2, tab.y + tab.height / 2, { steps: 8 });
+      await page.mouse.up();
+      await expect.poll(() => bayOf('L4V2'), { timeout: 5000 }).toBe('ops-proposed');
+      expect(await bayOf('L4V1')).toBe(BAY);
+    } finally { await dropAll(page, cs); }
+  });
+
   // F-403 — was a catalogued finding, now fixed.
   test('the dragged Strip stays inside the Strip panel', async ({ page }) => {
     const cs = ['L4B1', 'L4B2'];

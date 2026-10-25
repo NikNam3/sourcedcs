@@ -134,6 +134,18 @@ export function isUnchangedPlacement(origin, target) {
 // moves nothing: computeInsertionIndex follows the ghost, not the cursor.
 export const DRAG_THRESHOLD_PX = 5;
 
+// The Position/Bay tabs are a drop target only after more travel than a click
+// can slip (H167). The Bay tabs sit directly on top of the Bay content: in a
+// scrolled Bay a Strip is cut by that edge, and a press just under it with
+// ~10 px of upward slip released over a Bay tab and moved the Strip to that
+// Bay (measured in l4-drag). A deliberate drag to a tab goes further than this.
+export const TAB_DROP_MIN_TRAVEL_PX = 16;
+
+/** @returns {boolean} true once the pointer has travelled far enough from pointerdown for a Position/Bay tab under it to count as a drop target. */
+export function isTabDropTravel(dx, dy) {
+  return Math.hypot(dx, dy) > TAB_DROP_MIN_TRAVEL_PX;
+}
+
 /** @returns {boolean} true once total pointer travel from pointerdown exceeds DRAG_THRESHOLD_PX — the point at which a gesture stops being "just a click." */
 export function hasExceededDragThreshold(dx, dy) {
   return Math.hypot(dx, dy) > DRAG_THRESHOLD_PX;
