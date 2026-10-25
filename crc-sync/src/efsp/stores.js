@@ -342,6 +342,9 @@ const ENTRY_SHAPES = {
     })),
     seeded: mapOf(true),
   },
+  // `confidence` is no longer written (docs/adr/0142 removed the fuzzy callsign rung that scored it). Every snapshot
+  // written before it carries the key on every correlation record, so refusing it would stop the deployed server
+  // until its whole Board was deleted; restore() drops it instead. Remove it from this list once that is accepted.
   correlations: arrayOf(anyOf('binding', 'confidence', 'flightDataId', 'lastMatchedAt', 'matchedBy', 'observedBeacon', 'rev', 'state',
     'trackId', 'transitions', 'updatedAt', 'updatedBy', 'warning')),
   marsa: arrayOf(anyOf('declaredBy', 'declaredPositionId', 'declaringCallsign', 'endCondition', 'endedAt', 'endedBy', 'marsaId', 'note',

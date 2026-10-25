@@ -22,8 +22,7 @@
 // correlation-reconciler.js (docs/adr/0047). The output is a slice of
 // `efsp-alerts`, which is state a client renders, never a Mutation.
 //
-// Only a CORRELATED record counts. A provisional match is a guess, and a hint
-// built on a guess is how auto-advance confusion comes back.
+// Only a CORRELATED record counts: an UNCORRELATED one has no contact.
 
 const { instantPhase, debouncedPhase, PHASES } = require('./airborne');
 const { WALL_CLOCK } = require('../mission-clock');

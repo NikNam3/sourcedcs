@@ -23,9 +23,10 @@
 //
 // [SOURCE-DEFINED] (docs/adr/0059) — the synthetic block (config/sensor-specs.json, 6000–6777 as shipped) is crc-sync's, not
 // doctrine: the codes crc-sync gives AI aircraft, which have no SRS transponder.
-// Never allocated and never assignable, so no flight data can hold one and an AI
-// aircraft can never correlate on its beacon — it correlates on its callsign or
-// not at all. The guide has no such block.
+// Never allocated, and never taken from an ATO. A CONTROLLER may enter one
+// (docs/adr/0142): there is no callsign correlation (H165), so reading an AI
+// aircraft's code off the scope and typing it into the Strip is how an AI flight
+// correlates. The guide has no such block.
 
 const RESERVED_CODES = new Set(['0000', '7500', '7600', '7700', '7400', '7777']);
 const MONITOR_SET     = new Set(['1200', '1202', '1203', '1255', '1277']);
@@ -120,14 +121,17 @@ class CodeAllocator {
   /**
    * Validates a controller-entered override for Block 5 (§3.10.2):
    *   - malformed or reserved → hard VALIDATION_ERROR, never assignable
+   *   - in the synthetic block → accepted only when a controller typed it
+   *     (`controllerEntered`, docs/adr/0142): an AI aircraft's code read off
+   *     the scope. Any other source (an ATO's Mode 3) is refused.
    *   - already allocated to a *different* flight data → accepted, but flagged as
    *     DUPLICATE_IGNORED_WARNING (defect D23 — duplicates are structural
    *     in the real system, never blocked)
    */
-  validateAssignment(code, flightDataId) {
+  validateAssignment(code, flightDataId, { controllerEntered = false } = {}) {
     if (!isValidCodeFormat(code)) return { ok: false, reason: 'VALIDATION_ERROR' };
     if (isReserved(code))         return { ok: false, reason: 'VALIDATION_ERROR' };
-    if (isSynthetic(code))        return { ok: false, reason: 'VALIDATION_ERROR', detail: `reserved for AI aircraft (crc-sync's synthetic block ${syntheticBlock().SYNTHETIC_BLOCK_LABEL})` };
+    if (isSynthetic(code) && !controllerEntered) return { ok: false, reason: 'VALIDATION_ERROR', detail: `reserved for AI aircraft (crc-sync's synthetic block ${syntheticBlock().SYNTHETIC_BLOCK_LABEL})` };
     const holder = this._allocated.get(code);
     if (holder && holder !== flightDataId) return { ok: true, warning: 'DUPLICATE_IGNORED_WARNING' };
     return { ok: true };

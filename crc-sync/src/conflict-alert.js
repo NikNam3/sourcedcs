@@ -20,8 +20,8 @@
 //
 // WHICH PAIRS (docs/adr/0118, H134 LT-RQ16 a, the FAA model). P/CG CONFLICT ALERT: "between tracked targets (known IFR
 // or VFR aircraft)"; MODE C INTRUDER ALERT: "between a tracked target (known IFR or VFR aircraft) and an untracked target
-// (unknown IFR or VFR aircraft)". Our "tracked" is a track correlated to a Strip (CORRELATED or PROVISIONAL: it carries
-// the flight's identification, P/CG ASSOCIATED), S-ARCH-56. So:
+// (unknown IFR or VFR aircraft)". Our "tracked" is a track correlated to a Strip (CORRELATED: it carries the flight's
+// identification, P/CG ASSOCIATED), S-ARCH-56. So:
 //   - two tracked:                    CA (`kind: 'CA'`), IFR or VFR alike;
 //   - tracked vs untracked:           MCI (`kind: 'MCI'`), only when the untracked one reports altitude (its transponder
 //                                     replies, so Mode C; H136 VQ8 a). The base altitude and the per-Position inhibit

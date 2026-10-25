@@ -42,20 +42,20 @@ const { WALL_CLOCK } = require('../mission-clock');
 const { SyncedStore } = require('./synced-store');
 const log = require('../log').logger('efsp:correlation-store');
 
-const CORRELATION_STATES = ['CORRELATED', 'PROVISIONAL', 'UNCORRELATED'];
+const CORRELATION_STATES = ['CORRELATED', 'UNCORRELATED'];
 
-// The ladder, in priority order (§6.6 rule 1).
-const MATCH_KEYS = ['BINDING', 'BEACON', 'CALLSIGN_EXACT', 'CALLSIGN_FUZZY'];
+// The ladder, in priority order (§6.6 rule 1; no callsign rung, docs/adr/0142).
+const MATCH_KEYS = ['BINDING', 'BEACON'];
 
 const WARNING_KINDS = [
   'TRACK_IDENTITY_LOST',  // the bound contact's id no longer exists
   'TRACK_LOST',           // nothing on any rung matches any more
   'AMBIGUOUS_BEACON',     // several contacts squawk the assigned code
-  'AMBIGUOUS_CALLSIGN',   // several contacts answer to the callsign
+  'CODE_REISSUED',        // the synthetic code now sits on a different AI aircraft (docs/adr/0142)
 ];
 
 const TRANSITION_REASONS = [
-  'FIRST_MATCH', 'REBOUND_ON_BEACON', 'REBOUND_ON_CALLSIGN',
+  'FIRST_MATCH', 'REBOUND_ON_BEACON',
   'EXPLICIT_BIND', 'EXPLICIT_UNBIND',
   'TRACK_GONE', 'MISSION_RELOAD', 'AMBIGUOUS',
   'WARNING_RETRACTED', 'DEGRADED', 'PROMOTED',
@@ -111,7 +111,6 @@ class CorrelationStore extends SyncedStore {
       // lie the instant the process restarts, because DCS re-mints ids.
       trackId: null,
       matchedBy: null,
-      confidence: null,
       binding: null,
       warning: null,
       observedBeacon: null,
@@ -144,7 +143,7 @@ class CorrelationStore extends SyncedStore {
     return [...this._records.values()].map(deepClone);
   }
 
-  /** The contact a flight is CORRELATED to (not PROVISIONAL, not lost), or null. A read with no copy: docs/adr/0076's monitor asks per Strip per tick. */
+  /** The contact a flight is CORRELATED to (not lost), or null. A read with no copy: docs/adr/0076's monitor asks per Strip per tick. */
   correlatedTrackId(flightDataId) {
     const record = this._records.get(flightDataId);
     return record && record.state === 'CORRELATED' && record.trackId ? String(record.trackId) : null;
@@ -184,7 +183,6 @@ class CorrelationStore extends SyncedStore {
         matchedBy: record.matchedBy,
         trackId: record.trackId,
         fromTrackId: transition.fromTrackId != null ? String(transition.fromTrackId) : null,
-        confidence: record.confidence,
         reason: transition.reason,
         detail: capText(transition.detail),
       });
@@ -275,7 +273,6 @@ class CorrelationStore extends SyncedStore {
     };
     record.trackId = trackId;
     record.matchedBy = 'BINDING';
-    record.confidence = null;
     record.state = 'CORRELATED';
     record.warning = null;
     record.lastMatchedAt = this._clock.now();
@@ -295,7 +292,6 @@ class CorrelationStore extends SyncedStore {
     // silent break §6.6 rule 3 forbids.
     record.trackId = null;
     record.matchedBy = null;
-    record.confidence = null;
     record.state = 'UNCORRELATED';
     record.warning = null;
     this._touch(record, by, { reason: 'EXPLICIT_UNBIND', fromTrackId });
@@ -310,7 +306,7 @@ class CorrelationStore extends SyncedStore {
   // own; each returns the changed record for the efsp-correlation-delta that rides the same round trip, or null.
 
   /**
-   * The flight a contact is bound or matched to (CORRELATED or PROVISIONAL), or null: `{ flightDataId, state }`. An
+   * The flight a contact is bound or matched to (CORRELATED), or null: `{ flightDataId, state }`. An
    * explicit binding claims its contact even while the picture does not show it (the reconciler then holds the record
    * UNCORRELATED with the binding kept, until the contact is seen again).
    */
@@ -369,7 +365,7 @@ class CorrelationStore extends SyncedStore {
    * baseRev, no MutationLog entry — surveillance is not a controller.
    *
    * @param {Map<string, object|null>} resolutions — flightDataId -> a resolution
-   *   ({trackId, matchedBy, confidence, observedBeacon, warning}) or null for
+   *   ({trackId, matchedBy, observedBeacon, warning}) or null for
    *   "nothing matched". A resolution may also be `{warning}` alone.
    * @returns {{changed: object[]}} only the records that actually changed —
    *   what gets broadcast.
@@ -401,7 +397,6 @@ class CorrelationStore extends SyncedStore {
         const hadWarning = !!record.warning;
         record.trackId = String(resolution.trackId);
         record.matchedBy = resolution.matchedBy;
-        record.confidence = resolution.confidence != null ? resolution.confidence : null;
         record.state = resolution.state;
         record.warning = null;
         record.lastMatchedAt = now;
@@ -439,7 +434,6 @@ class CorrelationStore extends SyncedStore {
       const wasCorrelated = record.state !== 'UNCORRELATED';
       record.trackId = null;
       record.matchedBy = null;
-      record.confidence = null;
       record.state = 'UNCORRELATED';
       record.warning = warning
         ? { ...warning, raisedAt: now, lostTrackId: lostTrackId || null, detail: capText(warning.detail) }
@@ -471,9 +465,7 @@ class CorrelationStore extends SyncedStore {
    * sighting even though the intervening tick cleared the field.
    */
   _matchReason(before, record, identityChanged, hadWarning) {
-    if (identityChanged) {
-      return record.matchedBy === 'BEACON' ? 'REBOUND_ON_BEACON' : 'REBOUND_ON_CALLSIGN';
-    }
+    if (identityChanged && record.matchedBy === 'BEACON') return 'REBOUND_ON_BEACON';
     if (hadWarning) return 'WARNING_RETRACTED';
     if (!before.trackId) return 'FIRST_MATCH';
     // Same contact, different rung: either the evidence improved or it decayed.
@@ -503,7 +495,6 @@ class CorrelationStore extends SyncedStore {
       if (!hadSomething) continue;
       record.trackId = null;
       record.matchedBy = null;
-      record.confidence = null;
       record.binding = null;
       record.state = 'UNCORRELATED';
       record.observedBeacon = null;
@@ -598,7 +589,7 @@ class CorrelationStore extends SyncedStore {
       const record = deepClone(saved);
       record.trackId = null;
       record.matchedBy = null;
-      record.confidence = null;
+      delete record.confidence; // a pre-docs/adr/0142 snapshot's key (the fuzzy callsign rung's score)
       record.binding = null;
       record.observedBeacon = null;
       record.state = 'UNCORRELATED';
