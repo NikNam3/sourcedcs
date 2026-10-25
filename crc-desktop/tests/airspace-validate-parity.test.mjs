@@ -97,7 +97,17 @@ const CASES = {
   'a JURISDICTION with a type': [jur({ type: 'MOA' })],
   'a JURISDICTION with a frequency': [jur({ workingFrequencyMhz: 121.5 })],
   'a JURISDICTION with a using Facility': [jur({ usingFacilityId: 'TACTICAL' })],
-  'a JURISDICTION with no class': [jur({ airspaceClass: undefined })],
+  'a JURISDICTION with no class and no VFR service': [jur({ airspaceClass: undefined })],
+  // crc-sync docs/adr/0143 (H166): the class is optional; an unclassified area names its VFR service.
+  'an unclassified JURISDICTION with a VFR service': [jur({ airspaceClass: undefined, vfrService: 'IFR_SEPARATED' })],
+  'an unclassified JURISDICTION with a null class': [jur({ airspaceClass: null, vfrService: 'ADVISORY' })],
+  'a JURISDICTION with an unknown class': [jur({ airspaceClass: 'MTMA' })],
+  'a JURISDICTION with an unknown VFR service': [jur({ vfrService: 'SEPARATED' })],
+  'a Class D JURISDICTION naming its VFR service': [jur({ vfrService: 'ALL_SEPARATED' })],
+  'a Class A JURISDICTION with a VFR service': [jur({ airspaceClass: 'A', vfrService: 'ADVISORY' })],
+  'a Class G JURISDICTION with a VFR service': [jur({ airspaceClass: 'G', ownerPositionIds: [], vfrService: 'ADVISORY' })],
+  'an unclassified JURISDICTION with no owners': [jur({ airspaceClass: undefined, vfrService: 'ADVISORY', ownerPositionIds: [] })],
+  'an AREA with a VFR service': [area({ vfrService: 'ADVISORY' })],
   'a JURISDICTION of class G with owners': [jur({ airspaceClass: 'G' })],
   'a JURISDICTION of class G with no owners': [jur({ airspaceClass: 'G', ownerPositionIds: [] })],
   'a JURISDICTION with no owners': [jur({ ownerPositionIds: [] })],
@@ -132,6 +142,8 @@ test('the constants the client copies are the server\'s', () => {
   assert.deepEqual(client.ROUTE_TYPES, [...server.ROUTE_TYPES]);
   assert.deepEqual(client.KINDS, server.KINDS);
   assert.deepEqual(client.AIRSPACE_CLASSES, server.AIRSPACE_CLASSES);
+  assert.deepEqual(client.VFR_SERVICES, server.VFR_SERVICES);
+  assert.deepEqual(client.CLASS_VFR_SERVICE, server.CLASS_VFR_SERVICE);
   assert.deepEqual(client.JURISDICTION_ONLY_FIELDS, server.JURISDICTION_ONLY_FIELDS);
   assert.deepEqual(client.SOURCES, server.SOURCES);
   assert.deepEqual(client.DEFINITION_FIELDS, server.DEFINITION_FIELDS);
@@ -144,6 +156,14 @@ test('the constants the client copies are the server\'s', () => {
     assert.equal(client[k], server[k], k);
   }
   assert.equal(client.MAX_POLYGON_VERTICES, containment.MAX_POLYGON_VERTICES);
+});
+
+test('vfrServiceOf agrees (crc-sync docs/adr/0143)', () => {
+  const defs = [null, {}, ...['A', 'B', 'C', 'D', 'E', 'F', 'G', null].map(c => ({ airspaceClass: c })),
+    { airspaceClass: null, vfrService: 'IFR_SEPARATED' }, { airspaceClass: 'D', vfrService: 'ALL_SEPARATED' }];
+  for (const d of defs) assert.equal(client.vfrServiceOf(d), server.vfrServiceOf(d), JSON.stringify(d));
+  assert.equal(server.vfrServiceOf({ airspaceClass: 'C' }), 'IFR_SEPARATED');
+  assert.equal(server.vfrServiceOf({ airspaceClass: 'D' }), 'ADVISORY');
 });
 
 test('polygonSelfIntersects agrees on a spread of shapes', () => {

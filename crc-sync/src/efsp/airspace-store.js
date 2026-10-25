@@ -301,8 +301,10 @@ class AirspaceStore extends SyncedStore {
    * found hull holds wins; else the static area holding it; else the fallback, CENTER (Class E, `fallback: true`,
    * `airspaceId: null`). Null when nobody owns it: a Class G area, or a point that cannot be judged (lat, lon or altFt not
    * a number: never a guess). Boundaries count as inside. Pure and synchronous: U-RELEASE's control settle tick calls it.
+   * `airspaceClass` is null for unclassified airspace (docs/adr/0143); `vfrService` is the area's own or its class's
+   * (airspace-schema.js `vfrServiceOf`), null only in Class A.
    * @param {{lat:number, lon:number, altFt:number}} point
-   * @returns {{airspaceId:string|null, name:string, facilityId:string, positionIds:string[], airspaceClass:string, fallback:boolean}|null}
+   * @returns {{airspaceId:string|null, name:string, facilityId:string, positionIds:string[], airspaceClass:string|null, vfrService:string|null, fallback:boolean}|null}
    */
   jurisdictionAt({ lat, lon, altFt } = {}) {
     if (![lat, lon, altFt].every(v => typeof v === 'number' && Number.isFinite(v))) return null;
@@ -310,10 +312,10 @@ class AirspaceStore extends SyncedStore {
     if (!area) {
       const facilityId = jurisdiction.FALLBACK_FACILITY_ID;
       if (!this._lookup.hasFacility(facilityId)) return null;
-      return { airspaceId: null, name: facilityId, facilityId, positionIds: [...(this._lookup.positionsOf(facilityId) || [])], airspaceClass: jurisdiction.FALLBACK_AIRSPACE_CLASS, fallback: true };
+      return { airspaceId: null, name: facilityId, facilityId, positionIds: [...(this._lookup.positionsOf(facilityId) || [])], airspaceClass: jurisdiction.FALLBACK_AIRSPACE_CLASS, vfrService: schema.vfrServiceOf({ airspaceClass: jurisdiction.FALLBACK_AIRSPACE_CLASS }), fallback: true };
     }
     if (area.airspaceClass === 'G') return null;
-    return { airspaceId: area.airspaceId, name: area.name, facilityId: area.controllingFacilityId, positionIds: [...area.ownerPositionIds], airspaceClass: area.airspaceClass, fallback: false };
+    return { airspaceId: area.airspaceId, name: area.name, facilityId: area.controllingFacilityId, positionIds: [...area.ownerPositionIds], airspaceClass: area.airspaceClass ?? null, vfrService: schema.vfrServiceOf(area), fallback: false };
   }
 
   /**

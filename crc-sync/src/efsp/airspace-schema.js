@@ -26,8 +26,26 @@ const AIRSPACE_TYPES = new Set([...AREA_TYPES, ...ROUTE_TYPES]);
 // schedule and no activation: it always applies. It carries the owning Positions and an airspace class, and its geometry
 // may be a circle (fixed, or anchored to a carrier hull) as well as a polygon.
 const KINDS = ['AREA', 'ROUTE', 'JURISDICTION'];
-// ICAO airspace classes. Class G is airspace nobody controls, so a Class G area is never anyone's jurisdiction.
+// ICAO airspace classes. Class G is airspace nobody controls, so a Class G area is never anyone's jurisdiction. The
+// class is optional (docs/adr/0143, H166): a State that does not classify its airspace (Türkiye: the Adana MTMA) has
+// an unclassified area, which must then say its VFR service.
 const AIRSPACE_CLASSES = ['A', 'B', 'C', 'D', 'E', 'F', 'G'];
+// What a VFR aircraft is given in the area (docs/adr/0143, H166), JO 7110.65BB: ALL_SEPARATED, VFR separated from IFR
+// and from other VFR (Class B, para 7-9-4); IFR_SEPARATED, IFR separated from VFR, VFR from VFR by traffic advisories
+// only (Class C, para 7-8-2 a.3-4; the Adana MTMA, H166 "option 2"); ADVISORY, no separation of VFR, traffic advisories,
+// safety alerts and vectors on request (basic radar service, para 7-6-1 a, 2-1-21). Read by nothing yet but the panel
+// and `jurisdictionAt`: Conflict Alert does not use it (docs/wip/U-VFR-MTMA.md).
+const VFR_SERVICES = ['ALL_SEPARATED', 'IFR_SEPARATED', 'ADVISORY'];
+// The service a class gives when the area does not name one (the FAA table above). Class A has no VFR (14 CFR 91.135)
+// and Class G is nobody's, so neither has a VFR service and neither may name one.
+const CLASS_VFR_SERVICE = { B: 'ALL_SEPARATED', C: 'IFR_SEPARATED', D: 'ADVISORY', E: 'ADVISORY', F: 'ADVISORY' };
+
+/** An area's VFR service: its own `vfrService`, else its class's (CLASS_VFR_SERVICE), else null (Class A or G). */
+function vfrServiceOf(def) {
+  if (!def) return null;
+  if (def.vfrService) return def.vfrService;
+  return (def.airspaceClass && CLASS_VFR_SERVICE[def.airspaceClass]) || null;
+}
 const SOURCES = ['PANEL', 'WEB', 'STANDING', 'ACO'];
 
 // Vertical limits, in feet. Both optional: an airspace with neither is
@@ -72,9 +90,9 @@ const MAX_SOURCE_TEXT_LENGTH = 600;
 // Fields a definition may carry, and the ones a patch may never touch.
 const DEFINITION_FIELDS = ['airspaceId', 'name', 'kind', 'type', 'controllingFacilityId', 'controllingPositionId',
   'usingPositionId', 'usingFacilityId', 'workingFrequencyMhz', 'controlFrequencyMhz', 'altLowerFt', 'altUpperFt',
-  'geometry', 'segments', 'defaultWidthNm', 'source', 'ownerPositionIds', 'airspaceClass', 'excludes', 'sourceText'];
+  'geometry', 'segments', 'defaultWidthNm', 'source', 'ownerPositionIds', 'airspaceClass', 'vfrService', 'excludes', 'sourceText'];
 // The fields only a JURISDICTION area carries (ADR 0125); an AREA or a ROUTE carrying one is refused.
-const JURISDICTION_ONLY_FIELDS = ['ownerPositionIds', 'airspaceClass', 'excludes', 'sourceText'];
+const JURISDICTION_ONLY_FIELDS = ['ownerPositionIds', 'airspaceClass', 'vfrService', 'excludes', 'sourceText'];
 const IMMUTABLE_FIELDS = ['airspaceId', 'kind'];
 // ROUTE: derived from the segments on every write, never accepted from a client.
 const DERIVED_ROUTE_FIELDS = ['altLowerFt', 'altUpperFt'];
@@ -82,7 +100,7 @@ const DERIVED_ROUTE_FIELDS = ['altLowerFt', 'altUpperFt'];
 const LIVE_EDITABLE_FIELDS = ['name', 'workingFrequencyMhz', 'controlFrequencyMhz'];
 // Clearable (`null`) fields. The rest are required.
 const OPTIONAL_FIELDS = ['usingPositionId', 'usingFacilityId', 'workingFrequencyMhz', 'controlFrequencyMhz',
-  'altLowerFt', 'altUpperFt', 'geometry', 'source', 'excludes', 'sourceText'];
+  'altLowerFt', 'altUpperFt', 'geometry', 'source', 'airspaceClass', 'vfrService', 'excludes', 'sourceText'];
 
 /** ACTIVATION is a rule keyed by `kind`, not a stored field (ADR 0098 §3): AREA needs an approval, ROUTE a confirmation. */
 const ACTIVATION_BY_KIND = { AREA: 'APPROVE', ROUTE: 'CONFIRM', JURISDICTION: null };
@@ -200,13 +218,18 @@ function _validateCircle(id, g) {
 /** The JURISDICTION half of the validator (docs/adr/0125); fills `out`'s jurisdiction fields. */
 function _validateJurisdiction(id, def, out) {
   if (def.segments !== undefined || def.defaultWidthNm !== undefined) return fail(`${id}: a JURISDICTION area has a geometry, not segments`);
-  if (!AIRSPACE_CLASSES.includes(def.airspaceClass)) return fail(`${id}: airspaceClass must be one of ${AIRSPACE_CLASSES.join(', ')}`);
+  const cls = def.airspaceClass ?? null;
+  if (cls !== null && !AIRSPACE_CLASSES.includes(cls)) return fail(`${id}: airspaceClass must be one of ${AIRSPACE_CLASSES.join(', ')}, or absent for unclassified airspace`);
+  const vfr = def.vfrService ?? null;
+  if (vfr !== null && !VFR_SERVICES.includes(vfr)) return fail(`${id}: vfrService must be one of ${VFR_SERVICES.join(', ')}`);
+  if (vfr !== null && (cls === 'A' || cls === 'G')) return fail(`${id}: Class ${cls} airspace has no VFR service: vfrService must be absent`);
+  if (vfr === null && cls === null) return fail(`${id}: an unclassified area must name its vfrService (${VFR_SERVICES.join(', ')})`);
   const owners = def.ownerPositionIds;
   if (!Array.isArray(owners) || owners.length > MAX_OWNER_POSITIONS || !owners.every(isStr) || new Set(owners).size !== owners.length) {
     return fail(`${id}: ownerPositionIds must be a list of at most ${MAX_OWNER_POSITIONS} different Position ids`);
   }
-  if (def.airspaceClass === 'G' && owners.length) return fail(`${id}: Class G airspace belongs to nobody: ownerPositionIds must be empty`);
-  if (def.airspaceClass !== 'G' && !owners.length) return fail(`${id}: a Class ${def.airspaceClass} area needs at least one owner Position`);
+  if (cls === 'G' && owners.length) return fail(`${id}: Class G airspace belongs to nobody: ownerPositionIds must be empty`);
+  if (cls !== 'G' && !owners.length) return fail(`${id}: ${cls ? `a Class ${cls}` : 'an unclassified'} area needs at least one owner Position`);
   const ex = def.excludes === undefined || def.excludes === null ? [] : def.excludes;
   if (!Array.isArray(ex) || ex.length > MAX_EXCLUDES || !ex.every(e => typeof e === 'string' && ID_PATTERN.test(e)) || new Set(ex).size !== ex.length) {
     return fail(`${id}: excludes must be a list of at most ${MAX_EXCLUDES} different airspace ids`);
@@ -235,7 +258,8 @@ function _validateJurisdiction(id, def, out) {
     ? { source: 'CIRCLE', centre: deepClone(g.centre), radiusNm: g.radiusNm, cut: g.cut ? deepClone(g.cut) : null }
     : deepClone(g);
   out.ownerPositionIds = [...owners];
-  out.airspaceClass = def.airspaceClass;
+  out.airspaceClass = cls;
+  out.vfrService = vfr;
   out.excludes = [...ex];
   out.sourceText = def.sourceText ?? null;
   return null;
@@ -371,7 +395,7 @@ function loadStandingList({ paths = statePaths('efsp-airspaces.json', process.en
 module.exports = {
   validateAirspaceDefinition, loadStandingList, deriveRouteEnvelope,
   isValidFrequency, isValidAltitude,
-  AIRSPACE_TYPES, AREA_TYPES, ROUTE_TYPES, KINDS, SOURCES, ACTIVATION_BY_KIND, AIRSPACE_CLASSES,
+  AIRSPACE_TYPES, AREA_TYPES, ROUTE_TYPES, KINDS, SOURCES, ACTIVATION_BY_KIND, AIRSPACE_CLASSES, VFR_SERVICES, CLASS_VFR_SERVICE, vfrServiceOf,
   DEFINITION_FIELDS, JURISDICTION_ONLY_FIELDS, MAX_OWNER_POSITIONS, MAX_EXCLUDES, MAX_SOURCE_TEXT_LENGTH, MAX_RADIUS_NM, IMMUTABLE_FIELDS, DERIVED_ROUTE_FIELDS, LIVE_EDITABLE_FIELDS, OPTIONAL_FIELDS,
   MIN_FREQUENCY_MHZ, MAX_FREQUENCY_MHZ, MIN_ALTITUDE_FT, MAX_ALTITUDE_FT,
   MAX_NAME_LENGTH, DEFINITION_HISTORY_CAP, MAX_ROUTE_SEGMENTS, MAX_WIDTH_NM,
