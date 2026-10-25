@@ -65,6 +65,36 @@
   color: #d8e0e6;
   font: inherit;
 }
+/* crc-sync docs/adr/0143: the VFR departure toggle and its form under the toolbar. Grey (dark cockpit). */
+#efsp-vfr-departure-btn, .efsp-vfr-create-btn, .efsp-vfr-cancel-btn {
+  min-height: 32px;
+  padding: 4px 10px;
+  background: #2a3038;
+  border: 1px solid #3a424c;
+  color: #d8e0e6;
+  cursor: pointer;
+  font: inherit;
+}
+.efsp-vfr-departure-form {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-bottom: 1px solid #2a3038;
+  flex-wrap: wrap;
+}
+.efsp-vfr-departure-form[hidden] { display: none; }
+.efsp-vfr-input {
+  min-height: 32px;
+  padding: 4px 8px;
+  background: #0e1114;
+  border: 1px solid #2a3038;
+  color: #d8e0e6;
+  font: inherit;
+  text-transform: uppercase;
+}
+.efsp-vfr-msg { color: #d8e0e6; }
+.efsp-vfr-msg.efsp-msg-error { color: #ff5c5c; }
 #efsp-new-strip-callsign:disabled, #efsp-create-strip-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
