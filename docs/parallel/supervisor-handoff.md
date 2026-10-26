@@ -9,8 +9,8 @@ IFR_SEPARATED, LTAG-CZ Class D, CD `CreateVfrDeparture` + Block 9K DIR), U-DRAG-
 16 px tab threshold, left-edge marker tooltips), R-SUA (research `docs/parallel/research/sua-types-and-transit-end.md`),
 U-PANELS-RADARS (H171 FT-Q11: radar list collapsed, `0b793660` range-ring switch reverted), U-SUA (ADR 0144:
 `EndTransit` / Transit complete, RANGE and DANGER removed, PROHIBITED always in force). Gates on the tip `50b19c89`:
-crc-sync 2968, crc-desktop 1513, sourcedcs-web 151, walk 24/24, freeze 58/58, selfcheck PASS, wire protocol 2; sharded
-Playwright: see S-ARCH-109 (run after U-SUA). Only other worktrees: `../sourcedcs-U-ROLE-POSITIONS` (held, S-ARCH-85),
+crc-sync 2968, crc-desktop 1513, sourcedcs-web 151, walk 24/24, freeze 58/58, selfcheck PASS, wire protocol 2; **sharded
+Playwright 302/302** (S-ARCH-109). Only other worktrees: `../sourcedcs-U-ROLE-POSITIONS` (held, S-ARCH-85),
 `../sourcedcs-hotfix`.
 
 **Desk** https://claude.ai/artifact/FpddWVPwTzbpnmSJhW3vdt (slug `780678dd-c784-45fd-af24-56aee794bbaf`; write with
