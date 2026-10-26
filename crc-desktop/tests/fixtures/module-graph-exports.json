@@ -435,6 +435,7 @@
   "panels/efsp/airspace-validate.js": [
    "ACTIVATION_BY_KIND",
    "AIRSPACE_CLASSES",
+   "ALWAYS_IN_FORCE_TYPES",
    "AREA_TYPES",
    "CLASS_VFR_SERVICE",
    "DEFINITION_FIELDS",
@@ -464,6 +465,9 @@
    "checkAirspaceReferences",
    "deriveRouteEnvelope",
    "diffDefinitions",
+   "displayState",
+   "inForce",
+   "isAlwaysInForce",
    "isValidAltitude",
    "isValidFrequency",
    "polygonSelfIntersects",

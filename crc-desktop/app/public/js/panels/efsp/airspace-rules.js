@@ -5,6 +5,7 @@ import { formatZuluHhmm } from '../../format.js';
 import * as caps from './airspace-capabilities.js';
 import { altitudeText } from './airspace-draft.js';
 import { deleteBlockers } from './airspace-detail-views.js';
+import { isAlwaysInForce } from './airspace-validate.js';
 
 // What a controller may do to an airspace, and how its facts read (DESK-SPLIT, split out of airspace-panel.js): rules and text, no DOM state.
 
@@ -34,6 +35,7 @@ export function airspaceActionsFor(airspace, signedOnPositionIds) {
 
   const actions = [];
   const as = (positionId, kind, label) => actions.push({ positionId, kind, label });
+  if (isAlwaysInForce(definition)) return actions; // crc-sync docs/adr/0144: a prohibited area has no lifecycle
 
   if (airspace.state === 'RETURNED' && (using || controlling)) {
     as(using || controlling, 'ScheduleAirspace', 'Schedule');

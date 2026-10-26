@@ -108,6 +108,20 @@ const OPTIONAL_FIELDS = ['usingPositionId', 'usingFacilityId', 'workingFrequency
 /** ACTIVATION is a rule keyed by `kind`, not a stored field (ADR 0098 §3): AREA needs an approval, ROUTE a confirmation. */
 const ACTIVATION_BY_KIND = { AREA: 'APPROVE', ROUTE: 'CONFIRM', JURISDICTION: null };
 
+/**
+ * docs/adr/0144 (H171 SUA-Q5 a): the AREA types that are always in force, with no schedule and no activation lifecycle.
+ * A prohibited area is "normally [...] 'continuous'" (JO 7400.2R para 22-1-4) and flight in it needs the using agency's
+ * authorization (14 CFR 73.83). Its record never leaves RETURNED (every state op is refused) and every reader of "is it
+ * in force" asks `inForce`, never `state === 'ACTIVE'` alone.
+ */
+const ALWAYS_IN_FORCE_TYPES = ['PROHIBITED'];
+
+/** Is this definition always in force (docs/adr/0144)? */
+function isAlwaysInForce(def) { return !!def && (def.kind || 'AREA') === 'AREA' && ALWAYS_IN_FORCE_TYPES.includes(def.type); }
+
+/** Is this record in force: ACTIVE, or of a type always in force (docs/adr/0144)? */
+function inForce(record) { return !!record && (record.state === 'ACTIVE' || isAlwaysInForce(record.definition)); }
+
 function deepClone(obj) { return JSON.parse(JSON.stringify(obj)); }
 
 const fail = (detail) => ({ ok: false, reason: 'VALIDATION_ERROR', detail });
@@ -398,7 +412,7 @@ function loadStandingList({ paths = statePaths('efsp-airspaces.json', process.en
 module.exports = {
   validateAirspaceDefinition, loadStandingList, deriveRouteEnvelope,
   isValidFrequency, isValidAltitude,
-  AIRSPACE_TYPES, AREA_TYPES, ROUTE_TYPES, KINDS, SOURCES, ACTIVATION_BY_KIND, AIRSPACE_CLASSES, VFR_SERVICES, CLASS_VFR_SERVICE, vfrServiceOf,
+  AIRSPACE_TYPES, AREA_TYPES, ROUTE_TYPES, KINDS, SOURCES, ACTIVATION_BY_KIND, ALWAYS_IN_FORCE_TYPES, isAlwaysInForce, inForce, AIRSPACE_CLASSES, VFR_SERVICES, CLASS_VFR_SERVICE, vfrServiceOf,
   DEFINITION_FIELDS, JURISDICTION_ONLY_FIELDS, MAX_OWNER_POSITIONS, MAX_EXCLUDES, MAX_SOURCE_TEXT_LENGTH, MAX_RADIUS_NM, IMMUTABLE_FIELDS, DERIVED_ROUTE_FIELDS, LIVE_EDITABLE_FIELDS, OPTIONAL_FIELDS,
   MIN_FREQUENCY_MHZ, MAX_FREQUENCY_MHZ, MIN_ALTITUDE_FT, MAX_ALTITUDE_FT,
   MAX_NAME_LENGTH, DEFINITION_HISTORY_CAP, MAX_ROUTE_SEGMENTS, MAX_WIDTH_NM,

@@ -121,7 +121,7 @@ test('who decides (H151 MT-Q1 a): an MRU using agency (TAC_C2), else the control
 
 test('a restricted area has transits; a prohibited area is refused', () => {
   const { store, op, activate } = setup();
-  for (const id of ['R-1', 'R-2', 'P-1']) activate(id);
+  for (const id of ['R-1', 'R-2']) activate(id);
   assert.equal(op('R-1', { kind: 'RequestTransit', flightDataId: 'fd1' }, 'AP').ok, true, 'AP holds the Strip and controls R-1: self-coordinated');
   assert.equal(transitOf(store, 'R-1').state, 'APPROVED');
   assert.equal(op('R-2', { kind: 'RequestTransit', flightDataId: 'fd1' }, 'AP').ok, true);

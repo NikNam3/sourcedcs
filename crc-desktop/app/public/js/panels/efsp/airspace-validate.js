@@ -56,6 +56,15 @@ export const OPTIONAL_FIELDS = ['usingPositionId', 'usingFacilityId', 'workingFr
 /** ACTIVATION is a rule keyed by `kind`: an AREA is approved, a ROUTE is confirmed (never denied, only delayed). */
 export const ACTIVATION_BY_KIND = { AREA: 'APPROVE', ROUTE: 'CONFIRM', JURISDICTION: null };
 
+/** crc-sync docs/adr/0144 (H171 SUA-Q5 a): the AREA types always in force, with no schedule or activation (server copy). */
+export const ALWAYS_IN_FORCE_TYPES = ['PROHIBITED'];
+/** Is this definition always in force? */
+export function isAlwaysInForce(def) { return !!def && (def.kind || 'AREA') === 'AREA' && ALWAYS_IN_FORCE_TYPES.includes(def.type); }
+/** Is this record in force: ACTIVE, or of a type always in force? */
+export function inForce(record) { return !!record && (record.state === 'ACTIVE' || isAlwaysInForce(record.definition)); }
+/** The state word a controller reads: `IN FORCE` for an area always in force (its record stays RETURNED), else the state. */
+export function displayState(record) { return isAlwaysInForce(record && record.definition) ? 'IN FORCE' : record.state; }
+
 export function isValidAltitude(v) { return typeof v === 'number' && Number.isInteger(v) && v >= MIN_ALTITUDE_FT && v <= MAX_ALTITUDE_FT; }
 export function isValidFrequency(v) { return typeof v === 'number' && Number.isFinite(v) && v >= MIN_FREQUENCY_MHZ && v <= MAX_FREQUENCY_MHZ; }
 

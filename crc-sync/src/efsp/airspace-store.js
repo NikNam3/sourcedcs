@@ -204,10 +204,9 @@ class AirspaceStore extends SyncedStore {
     return record ? deepClone(record.definitionHistory) : [];
   }
 
-  /** Is this airspace of the current theater ACTIVE? Read by the unactivated-entry alert. */
+  /** Is this airspace of the current theater in force (ACTIVE, or a prohibited area: docs/adr/0144)? Read by the unactivated-entry alert. */
   isActive(airspaceId) {
-    const record = this._record(this.currentTheater(), airspaceId);
-    return !!(record && record.state === 'ACTIVE');
+    return schema.inForce(this._record(this.currentTheater(), airspaceId));
   }
 
   // ── the queries other code may call (ADR 0098 §7): pure, synchronous, current theater only ──
@@ -230,7 +229,7 @@ class AirspaceStore extends SyncedStore {
   /** ACTIVE, and the using agency is Facility `usingFacilityId` (as `usingFacilityId`, or as a `usingPositionId` of its own). */
   isActiveFor(airspaceId, usingFacilityId) {
     const record = this._record(this.currentTheater(), airspaceId);
-    return !!record && record.state === 'ACTIVE' && this._usedBy(record.definition, usingFacilityId);
+    return schema.inForce(record) && this._usedBy(record.definition, usingFacilityId);
   }
 
   _usedBy(def, facilityId) {
@@ -248,7 +247,7 @@ class AirspaceStore extends SyncedStore {
     const inside = []; const unknown = [];
     const m = this._theaterMap(this.currentTheater());
     for (const record of (m ? m.values() : [])) {
-      if (record.state !== 'ACTIVE' || !this._usedBy(record.definition, usingFacilityId)) continue;
+      if (!schema.inForce(record) || !this._usedBy(record.definition, usingFacilityId)) continue;
       const where = containment.evaluate(record.definition, point);
       const row = { airspaceId: record.airspaceId, kind: record.definition.kind, name: record.definition.name };
       if (where === 'inside') inside.push(row);
@@ -258,7 +257,7 @@ class AirspaceStore extends SyncedStore {
   }
 
   /**
-   * Every ACTIVE AREA of the current theater the point is inside, whoever uses it (docs/adr/0119, the airspace-entry alert):
+   * Every AREA in force (ACTIVE, or prohibited: docs/adr/0144) of the current theater the point is inside, whoever uses it (docs/adr/0119, the airspace-entry alert):
    * `{ airspaceId, name, type, controllingFacilityId, controllingPositionId, usingFacilityId, usingPositionId }` each. A
    * ROUTE (an MTR) is left out, and so is an airspace whose geometry cannot be evaluated (never a guess).
    */
@@ -267,7 +266,7 @@ class AirspaceStore extends SyncedStore {
     const m = this._theaterMap(this.currentTheater());
     for (const record of (m ? m.values() : [])) {
       const def = record.definition;
-      if (record.state !== 'ACTIVE' || def.kind === 'ROUTE') continue;
+      if (!schema.inForce(record) || def.kind === 'ROUTE') continue; // docs/adr/0144: a prohibited area is always in force
       if (containment.evaluate(def, point) !== 'inside') continue;
       out.push({
         airspaceId: record.airspaceId, name: def.name, type: def.type,
@@ -429,6 +428,10 @@ class AirspaceStore extends SyncedStore {
     if (actor.service) return this._denied(record, `${actor.service} may not act on airspace state`);
     const def = record.definition;
     if (def.kind === 'JURISDICTION') return verr(`${def.name} is a jurisdiction area: it is never scheduled or activated, it always applies`, { airspace: viewOf(record) });
+    // docs/adr/0144 (H171 SUA-Q5 a): a prohibited area has no lifecycle; entry is approved on the Strip (ADR 0119 §2).
+    if (schema.isAlwaysInForce(def) && STATE_OP_KINDS.includes(op.kind)) {
+      return verr(`${def.name} is a ${def.type.toLowerCase()} area: it is always in force, never scheduled, activated or released`, { airspace: viewOf(record) });
+    }
     const by = actor.controllerId; const pos = actor.positionId;
     switch (op.kind) {
       case 'ScheduleAirspace':  return this._schedule(record, def, op, pos, by);
@@ -1104,6 +1107,9 @@ class AirspaceStore extends SyncedStore {
       const m = this._theaterMap(theater, true);
       for (const saved of records) {
         const check = schema.validateAirspaceDefinition(saved.definition, { derived: 'recompute' });
+        // docs/adr/0144: a prohibited area is always in force, so its record never leaves RETURNED.
+        const lifecycle = check.ok && schema.isAlwaysInForce(check.definition) && (saved.state !== 'RETURNED' || saved.window || saved.pendingRequest);
+        if (lifecycle) throw new Error(`[efsp] the Board snapshot holds prohibited airspace ${saved.airspaceId} (theater ${theater}) at ${saved.state}: a prohibited area is always in force and has no schedule or activation (docs/adr/0144): correct or delete state/efsp-board.json`);
         if (!check.ok || saved.airspaceId !== saved.definition.airspaceId || !AIRSPACE_STATES.includes(saved.state)) {
           throw new Error(`[efsp] the Board snapshot holds airspace ${saved.airspaceId} (theater ${theater}) in a shape this build does not read${check.ok ? '' : `: ${check.detail}`}: delete state/efsp-board.json to start clean`);
         }

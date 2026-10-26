@@ -15,6 +15,7 @@ import { findDrawing, outlineFromDrawing, pointsEqual } from './panels/efsp/airs
 import { isHullAnchored, ringOf } from './panels/efsp/jurisdiction-geometry.js';
 import { getEfspCarrier } from './panels/efsp/carrier-state.js';
 import { onEfspChanged } from './panels/efsp/efsp-change-bus.js';
+import { inForce } from './panels/efsp/airspace-validate.js';
 
 const ROUND = 12; // arc points per join/cap
 
@@ -28,11 +29,12 @@ export function limitsText(lowerFt, upperFt, transitionAltFt = 18000) {
   return `${t(lowerFt, 'GND')}–${t(upperFt, 'UNL')}`;
 }
 
-/** The label: the name, then (for a non-ACTIVE airspace) the state and the limits. An ACTIVE one shows the limits only. */
+/** The label: the name, then (for an airspace not in force) the state and the limits. One in force (ACTIVE, or prohibited: crc-sync ADR 0144) shows the limits only. */
 export function labelText(record, transitionAltFt) {
   const d = record.definition;
   const lim = limitsText(d.altLowerFt ?? null, d.altUpperFt ?? null, transitionAltFt);
-  return { line1: d.name, line2: record.state === 'ACTIVE' ? lim : `${record.state} · ${lim}`, text: `${d.name}\n${record.state === 'ACTIVE' ? lim : `${record.state} · ${lim}`}` };
+  const line2 = inForce(record) ? lim : `${record.state} · ${lim}`;
+  return { line1: d.name, line2, text: `${d.name}\n${line2}` };
 }
 
 // ── the route corridor (buffered by leg width) ──────────────────────────────────────────────────
@@ -133,7 +135,7 @@ export function buildAirspaceFeatures(airspaces, menu, theater, { transitionAltF
     const dec = decide(rec, menu, theater);
     if (!dec.shown) continue;
     const d = rec.definition;
-    const active = rec.state === 'ACTIVE';
+    const active = inForce(rec); // crc-sync docs/adr/0144: a prohibited area is always in force
     const props = { id: rec.airspaceId, state: rec.state, dashed: !active, colour: active ? pal.active : pal.other };
     let anchor = null;
     if (d.kind === 'JURISDICTION') {

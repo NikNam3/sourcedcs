@@ -6,6 +6,7 @@ import { _delayFor, _denyFor, _draftInputs, _drafts, _menuFor, _setDelayFor, _se
 import { _altText, _flightsOf, _formatFrequency, _formatWindow, airspaceActionsFor, deleteReason, editReason, routeFlightCount } from './airspace-rules.js';
 import { _dispatchAirspace, _el, _openDelete, _openEditor, _openHistory } from './airspace-views.js';
 import { buildAirspaceEntryList } from './airspace-entry-list.js';
+import { displayState, inForce } from './airspace-validate.js';
 
 // One airspace card: its facts, actions, menu, Delay form and inline view (DESK-SPLIT, split out of airspace-panel.js).
 
@@ -47,7 +48,8 @@ function _buildCalendarChip(airspace) {
 export function _buildAirspaceCard(airspace, signedOnPositionIds) {
   const definition = airspace.definition || {};
   const card = document.createElement('div');
-  card.className = `airspace-card airspace-state-${airspace.state.toLowerCase()}`;
+  // crc-sync docs/adr/0144: a prohibited area reads IN FORCE and is drawn as an active one.
+  card.className = `airspace-card airspace-state-${inForce(airspace) ? 'active' : airspace.state.toLowerCase()}`;
   card.dataset.airspaceId = airspace.airspaceId;
 
   const header = document.createElement('div');
@@ -62,7 +64,7 @@ export function _buildAirspaceCard(airspace, signedOnPositionIds) {
   state.className = 'airspace-state';
   // The guide's own four names (§4.6.4) — never "hot"/"cold", which it says
   // are display sugar with no doctrinal meaning.
-  state.textContent = airspace.state;
+  state.textContent = displayState(airspace);
   header.appendChild(state);
   const more = _el('button', 'airspace-more-btn', '⋯');
   more.title = 'Edit, history, delete';

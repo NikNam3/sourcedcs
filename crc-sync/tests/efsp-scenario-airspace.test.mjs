@@ -32,6 +32,8 @@ fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, JSON.stringify({ Test:
   { airspaceId: 'MOA-LATER', name: 'Later MOA', type: 'MOA', controllingFacilityId: 'CENTER', controllingPositionId: 'CTR', workingFrequencyMhz: 137.5 },
   { airspaceId: 'RANGE-SOUTH', name: 'South A/G Range', type: 'RESTRICTED', controllingFacilityId: 'INCIRLIK', controllingPositionId: 'AP', usingPositionId: 'SOUTH_RANGE', controlFrequencyMhz: 283.5 },
   { airspaceId: 'RANGE-DENY', name: 'Deny Range', type: 'RESTRICTED', controllingFacilityId: 'INCIRLIK', controllingPositionId: 'AP', usingPositionId: 'DENY_RANGE', controlFrequencyMhz: 284.0 },
+  // docs/adr/0144: a prohibited area, always in force.
+  { airspaceId: 'P-NORTH', name: 'North Prohibited', type: 'PROHIBITED', controllingFacilityId: 'CENTER', controllingPositionId: 'CTR', workingFrequencyMhz: 138.0 },
 ] }));
 
 const { createEfsp } = await import('../src/efsp/index.js');
@@ -391,4 +393,18 @@ test('SCENARIO a route is requested by TAC_C2, delayed by CTR, then confirmed; a
   const released = airspaceAct(efsp, c.TAC_C2, 'TAC_C2', 'IR107', { kind: 'ReleaseAirspace' });
   assert.equal(released.ok, true);
   assert.equal(released.warning, undefined, 'a route with a flight on it never raises the occupied warning');
+});
+
+// ── docs/adr/0144: a prohibited area is always in force ─────────────────────
+
+test('SCENARIO a flight approved into a prohibited area: never cold, so no warning and no unactivated-entry alert', async () => {
+  const efsp = createEfsp({ currentTheater: () => 'Test' });
+  const c = crew(efsp, ATC);
+  assert.equal(efsp.airspaceStore.getAirspace('P-NORTH').state, 'RETURNED');
+  assert.equal(airspaceAct(efsp, c.CTR, 'CTR', 'P-NORTH', { kind: 'ApproveActivation' }).ok, false, 'nothing to activate');
+  const ack = act(efsp, c.CTR, 'CTR', handedToCenter(efsp, c, flight(efsp, c, 'VIPER9')), { kind: 'ApproveAirspaceEntry', airspaceId: 'P-NORTH' });
+  assert.equal(ack.ok, true, ack.detail);
+  assert.equal(ack.warnings, undefined);
+  const alerts = await obligationAlerts(efsp, facilityConfig, { inside: (st) => st.stripId === ack.strip.stripId });
+  assert.equal(alerts.some(a => a.obligationType === 'UNACTIVATED_AIRSPACE_ENTRY' && a.stripId === ack.strip.stripId), false);
 });
