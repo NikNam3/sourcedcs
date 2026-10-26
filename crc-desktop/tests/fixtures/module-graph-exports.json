@@ -1603,11 +1603,14 @@
   ],
   "panels/radar-panel.js": [
    "initRadarPanel",
+   "isRadarListExpanded",
+   "radarListSummary",
    "refreshRadarPanelData",
    "renderCoverageList",
    "renderPanelControls",
    "renderPositionControls",
    "renderPositionWarnings",
+   "setRadarListExpanded",
    "updateRadarBadge"
   ],
   "panels/settings-panel.js": [
