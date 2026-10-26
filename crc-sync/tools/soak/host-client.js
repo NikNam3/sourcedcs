@@ -23,7 +23,7 @@ const AIRSPACES = [
     workingFrequencyMhz: 134.25,
   },
   {
-    airspaceId: 'RANGE-SOUTH', name: 'South A/G Range', type: 'RANGE',
+    airspaceId: 'RANGE-SOUTH', name: 'South A/G Range', type: 'RESTRICTED',
     controllingFacilityId: 'INCIRLIK', controllingPositionId: 'AP',
     usingPositionId: 'SOUTH_RANGE', controlFrequencyMhz: 283.5,
   },

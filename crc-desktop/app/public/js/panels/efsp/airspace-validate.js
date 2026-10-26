@@ -9,7 +9,7 @@
 //
 // Pure: no DOM, no state. Change a rule on the server and the parity test names the case that now disagrees.
 
-export const AREA_TYPES = ['MOA', 'RANGE', 'DANGER', 'RESTRICTED', 'PROHIBITED', 'WARNING'];
+export const AREA_TYPES = ['MOA', 'RESTRICTED', 'PROHIBITED', 'WARNING'];
 export const ROUTE_TYPES = ['IR', 'VR', 'SR', 'LLTR'];
 export const KINDS = ['AREA', 'ROUTE', 'JURISDICTION'];
 /** ICAO classes (crc-sync docs/adr/0125): Class G is nobody's, so never anyone's jurisdiction. Optional (docs/adr/0143). */

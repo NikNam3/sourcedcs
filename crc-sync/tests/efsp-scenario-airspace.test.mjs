@@ -24,14 +24,14 @@ for (const [k, v] of Object.entries({
 // that owns the airspace it sits in) and a range with its own tower.
 fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, JSON.stringify({ Test: [
   { airspaceId: 'MOA-EAST', name: 'East MOA', type: 'MOA', controllingFacilityId: 'CENTER', controllingPositionId: 'CTR', workingFrequencyMhz: 134.25 },
-  // A danger area with published vertical limits — the altitude-block case.
-  { airspaceId: 'D-12', name: 'Danger 12', type: 'DANGER', controllingFacilityId: 'CENTER', controllingPositionId: 'CTR', workingFrequencyMhz: 135.5, altLowerFt: 5000, altUpperFt: 28000 },
+  // A restricted area with published vertical limits — the altitude-block case.
+  { airspaceId: 'D-12', name: 'Danger 12', type: 'RESTRICTED', controllingFacilityId: 'CENTER', controllingPositionId: 'CTR', workingFrequencyMhz: 135.5, altLowerFt: 5000, altUpperFt: 28000 },
   { airspaceId: 'MOA-SHARED', name: 'Shared MOA', type: 'MOA', controllingFacilityId: 'CENTER', controllingPositionId: 'CTR', workingFrequencyMhz: 136.0 },
   { airspaceId: 'MOA-OCCUPIED', name: 'Occupied MOA', type: 'MOA', controllingFacilityId: 'CENTER', controllingPositionId: 'CTR', workingFrequencyMhz: 136.5 },
   { airspaceId: 'MOA-COLD', name: 'Cold MOA', type: 'MOA', controllingFacilityId: 'CENTER', controllingPositionId: 'CTR', workingFrequencyMhz: 137.0 },
   { airspaceId: 'MOA-LATER', name: 'Later MOA', type: 'MOA', controllingFacilityId: 'CENTER', controllingPositionId: 'CTR', workingFrequencyMhz: 137.5 },
-  { airspaceId: 'RANGE-SOUTH', name: 'South A/G Range', type: 'RANGE', controllingFacilityId: 'INCIRLIK', controllingPositionId: 'AP', usingPositionId: 'SOUTH_RANGE', controlFrequencyMhz: 283.5 },
-  { airspaceId: 'RANGE-DENY', name: 'Deny Range', type: 'RANGE', controllingFacilityId: 'INCIRLIK', controllingPositionId: 'AP', usingPositionId: 'DENY_RANGE', controlFrequencyMhz: 284.0 },
+  { airspaceId: 'RANGE-SOUTH', name: 'South A/G Range', type: 'RESTRICTED', controllingFacilityId: 'INCIRLIK', controllingPositionId: 'AP', usingPositionId: 'SOUTH_RANGE', controlFrequencyMhz: 283.5 },
+  { airspaceId: 'RANGE-DENY', name: 'Deny Range', type: 'RESTRICTED', controllingFacilityId: 'INCIRLIK', controllingPositionId: 'AP', usingPositionId: 'DENY_RANGE', controlFrequencyMhz: 284.0 },
 ] }));
 
 const { createEfsp } = await import('../src/efsp/index.js');
@@ -95,7 +95,7 @@ test('SCENARIO before takeoff, out to a MOA, and home again', async () => {
 
 // ── the altitude-block case ──────────────────────────────────────────────
 
-test('SCENARIO a flight working a danger area is restricted to an altitude block while another crosses it', () => {
+test('SCENARIO a flight working a restricted area is restricted to an altitude block while another crosses it', () => {
   const efsp = createEfsp({ currentTheater: () => 'Test' });
   const c = crew(efsp, ATC);
   activate(efsp, c, 'D-12');

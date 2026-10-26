@@ -124,3 +124,13 @@ test('the standing list is theater-keyed; the pre-0098 array and a bad entry are
   assert.throws(() => load({ Syria: 'x' }), /Syria must hold an array/);
   assert.throws(() => s.loadStandingList({ paths: { read: path.join(dir, 'missing.json') } }), /cannot read/);
 });
+
+test('docs/adr/0144 (H169, H170, H171 SUA-Q3 a): RANGE and DANGER are no airspace types; the FAA four remain', () => {
+  assert.deepEqual([...s.AREA_TYPES].sort(), ['MOA', 'PROHIBITED', 'RESTRICTED', 'WARNING']);
+  bad({ ...MOA, type: 'RANGE' }, /unknown AREA type "RANGE"/);
+  bad({ ...MOA, type: 'DANGER' }, /unknown AREA type "DANGER"/);
+  bad({ ...MOA, type: 'DANGER' }, /unknown AREA type "DANGER"/, { derived: 'recompute' });
+  // The range as a using agency stays: a restricted area over the range, its control Position and frequency.
+  assert.equal(ok(RANGE).ok, true);
+  assert.equal(ok(RANGE).definition.usingPositionId, 'RANGE_1_CONTROL');
+});

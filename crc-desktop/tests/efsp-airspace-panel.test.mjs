@@ -15,7 +15,7 @@ function range(state, extra = {}) {
   return {
     airspaceId: 'RANGE-1', state, pendingRequest: null, window: null, rev: 1,
     definition: {
-      airspaceId: 'RANGE-1', name: 'Test Range', type: 'RANGE',
+      airspaceId: 'RANGE-1', name: 'Test Range', type: 'RESTRICTED',
       controllingPositionId: 'AP', usingPositionId: 'RANGE_CTL', controlFrequencyMhz: 283.5,
     },
     ...extra,

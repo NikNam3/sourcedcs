@@ -111,7 +111,7 @@ test('activeAreasContaining (docs/adr/0119): every ACTIVE area the point is in, 
 });
 
 test('isActiveFor: usingFacilityId, or a usingPositionId belonging to the Facility', () => {
-  const { store } = makeRegistry({ defs: [AREA(), { ...MOA, airspaceId: 'RANGE-X', name: 'Range X', type: 'RANGE', usingPositionId: 'RANGE_1_CONTROL' }] });
+  const { store } = makeRegistry({ defs: [AREA(), { ...MOA, airspaceId: 'RANGE-X', name: 'Range X', type: 'RESTRICTED', usingPositionId: 'RANGE_1_CONTROL' }] });
   assert.equal(store.isActiveFor('MRU-AREA', 'TACTICAL'), false, 'RETURNED');
   act(store, 'MRU-AREA', [{ kind: 'ScheduleAirspace', ...WINDOW }, { kind: 'RequestActivation' }, { kind: 'ApproveActivation' }]);
   assert.equal(store.isActiveFor('MRU-AREA', 'TACTICAL'), true);

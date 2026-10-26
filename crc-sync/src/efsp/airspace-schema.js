@@ -17,9 +17,12 @@ const containment = require('./airspace/containment');
 const jurisdiction = require('./airspace/jurisdiction');
 
 
-// What kind of block this is: labels borrowed from FAA and ICAO special-use airspace names (AREA) and from the
-// JO 7610.14 / AIM military training route names (ROUTE). Descriptive, except for the airspace-entry alert (ADR 0119).
-const AREA_TYPES = new Set(['MOA', 'RANGE', 'DANGER', 'RESTRICTED', 'PROHIBITED', 'WARNING']);
+// What kind of block this is: the FAA special use airspace types ATC works (14 CFR 73, JO 7400.2R para 21-1-3 b; SUA is
+// US-only, H170) for an AREA, and the JO 7610.14 / AIM military training route names (ROUTE). Behavioural for the
+// airspace-entry alert (ADR 0119) and transits (ADR 0128); a PROHIBITED area is always in force (docs/adr/0144). RANGE (a
+// range is a using agency, `usingPositionId`, not an airspace) and DANGER (ICAO, "not used [...] within the United States")
+// were removed by ADR 0144 with no migration: a snapshot holding one stops start-up and names the airspace.
+const AREA_TYPES = new Set(['MOA', 'RESTRICTED', 'PROHIBITED', 'WARNING']);
 const ROUTE_TYPES = new Set(['IR', 'VR', 'SR', 'LLTR']);
 const AIRSPACE_TYPES = new Set([...AREA_TYPES, ...ROUTE_TYPES]);
 // JURISDICTION (docs/adr/0125): whose airspace it is, for control at the boundary (JO 7110.65 ¶2-1-15 c). It has no

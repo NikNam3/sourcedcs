@@ -13,7 +13,7 @@ const { MS_PER_KT } = require('../src/units.js');
 const AREAS = {
   'R-1': { airspaceId: 'R-1', name: 'Restricted 1', type: 'RESTRICTED', controllingFacilityId: 'CENTER', controllingPositionId: 'CTR', usingFacilityId: 'INCIRLIK' },
   'MOA-1': { airspaceId: 'MOA-1', name: 'MOA 1', type: 'MOA', controllingFacilityId: 'CENTER', controllingPositionId: 'CTR', usingFacilityId: 'INCIRLIK' },
-  'RNG-1': { airspaceId: 'RNG-1', name: 'Range 1', type: 'RANGE', controllingFacilityId: 'INCIRLIK', controllingPositionId: 'AP', usingPositionId: 'SOUTH_RANGE' },
+  'RNG-1': { airspaceId: 'RNG-1', name: 'Range 1', type: 'RESTRICTED', controllingFacilityId: 'INCIRLIK', controllingPositionId: 'AP', usingPositionId: 'SOUTH_RANGE' },
 };
 const CLEARED = { clearance: { altitude: { entries: [{ status: 'ACTIVE', parsed: 15000 }] }, heading: { entries: [] } } };
 const VFR = { clearance: { altitude: { entries: [] }, heading: { entries: [] } } };
@@ -43,7 +43,7 @@ const track = (id, extra = {}) => ({ id, category: 1, lat: 37, lon: 35, alt: 300
 const at = (facilityId, positionId) => [{ facilityId, positionId }];
 
 test('the rule by type: restricted-like alerts any unapproved tracked aircraft; a MOA spares a tracked VFR one; an untracked one alerts everywhere', () => {
-  for (const type of ['RESTRICTED', 'PROHIBITED', 'RANGE', 'DANGER']) {
+  for (const type of ['RESTRICTED', 'PROHIBITED']) {
     assert.equal(alertsIn({ type }, { tracked: true, vfr: true }), true, `${type}: VFR needs permission too (14 CFR 73.13)`);
     assert.equal(alertsIn({ type }, { tracked: true, approved: true }), false);
   }

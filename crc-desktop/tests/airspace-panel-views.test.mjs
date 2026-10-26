@@ -12,7 +12,7 @@ import {
 import { airspaceActionsFor, editReason, deleteReason, visibleAirspaces, groupByFacility } from '../app/public/js/panels/efsp/airspace-rules.js';
 
 const def = (extra = {}) => ({
-  airspaceId: 'R-TOROS', name: 'TOROS RANGE', kind: 'AREA', type: 'RANGE', controllingFacilityId: 'INCIRLIK', controllingPositionId: 'AP',
+  airspaceId: 'R-TOROS', name: 'TOROS RANGE', kind: 'AREA', type: 'RESTRICTED', controllingFacilityId: 'INCIRLIK', controllingPositionId: 'AP',
   usingPositionId: 'RNG1', usingFacilityId: null, workingFrequencyMhz: 138, controlFrequencyMhz: 251.5, altLowerFt: null, altUpperFt: 18000, geometry: null, ...extra,
 });
 const rec = (state = 'RETURNED', extra = {}, d = {}) => ({

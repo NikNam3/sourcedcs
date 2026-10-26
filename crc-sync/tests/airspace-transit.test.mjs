@@ -15,14 +15,14 @@ const WINDOW = { fromUtc: Date.UTC(2026, 0, 1, 12, 0), toUtc: Date.UTC(2026, 0, 
 const MRU_MOA = { airspaceId: 'MOA-T', name: 'Tactical MOA', type: 'MOA', controllingFacilityId: 'CENTER', controllingPositionId: 'CTR', usingFacilityId: 'TACTICAL' };
 const OPS_WARNING = { airspaceId: 'W-1', name: 'Warning 1', type: 'WARNING', controllingFacilityId: 'CENTER', controllingPositionId: 'CTR', usingFacilityId: 'INCIRLIK' };
 const RESTRICTED = { airspaceId: 'R-1', name: 'Restricted 1', type: 'RESTRICTED', controllingFacilityId: 'INCIRLIK', controllingPositionId: 'AP' };
-const DANGER = { airspaceId: 'D-1', name: 'Danger 1', type: 'DANGER', controllingFacilityId: 'INCIRLIK', controllingPositionId: 'AP' };
+const RESTRICTED_2 = { airspaceId: 'R-2', name: 'Restricted 2', type: 'RESTRICTED', controllingFacilityId: 'INCIRLIK', controllingPositionId: 'AP' };
 const PROHIBITED = { airspaceId: 'P-1', name: 'Prohibited 1', type: 'PROHIBITED', controllingFacilityId: 'INCIRLIK', controllingPositionId: 'AP' };
 
 const ifr = (holders, callsign = 'VIPER11') => ({ callsign, ifr: true, holders });
 const AP_HOLDS = [{ facilityId: 'INCIRLIK', positionId: 'AP' }];
 const CTR_HOLDS = [{ facilityId: 'CENTER', positionId: 'CTR' }];
 
-function setup({ defs = [MOA, MRU_MOA, OPS_WARNING, RESTRICTED, DANGER, PROHIBITED], flights = { fd1: ifr(AP_HOLDS) }, mutationLog = null } = {}) {
+function setup({ defs = [MOA, MRU_MOA, OPS_WARNING, RESTRICTED, RESTRICTED_2, PROHIBITED], flights = { fd1: ifr(AP_HOLDS) }, mutationLog = null } = {}) {
   const clock = { t: WINDOW.fromUtc, now() { return this.t; } };
   const { store, state } = makeRegistry({ defs, flights, clock, mutationLog });
   const op = (airspaceId, o, positionId, by = 'c1') => stateOp(store, airspaceId, o, positionId, by);
@@ -119,12 +119,12 @@ test('who decides (H151 MT-Q1 a): an MRU using agency (TAC_C2), else the control
   assert.equal(op('W-1', { kind: 'ApproveTransit', flightDataId: 'fd1' }, 'CTR').ok, true);
 });
 
-test('restricted-like types follow RESTRICTED; a prohibited area, a route and a jurisdiction-free type are refused', () => {
+test('a restricted area has transits; a prohibited area is refused', () => {
   const { store, op, activate } = setup();
-  for (const id of ['R-1', 'D-1', 'P-1']) activate(id);
+  for (const id of ['R-1', 'R-2', 'P-1']) activate(id);
   assert.equal(op('R-1', { kind: 'RequestTransit', flightDataId: 'fd1' }, 'AP').ok, true, 'AP holds the Strip and controls R-1: self-coordinated');
   assert.equal(transitOf(store, 'R-1').state, 'APPROVED');
-  assert.equal(op('D-1', { kind: 'RequestTransit', flightDataId: 'fd1' }, 'AP').ok, true);
+  assert.equal(op('R-2', { kind: 'RequestTransit', flightDataId: 'fd1' }, 'AP').ok, true);
   const p = op('P-1', { kind: 'RequestTransit', flightDataId: 'fd1' }, 'AP');
   assert.equal(p.reason, 'VALIDATION_ERROR');
   assert.match(p.detail, /MOA, warning or restricted/);

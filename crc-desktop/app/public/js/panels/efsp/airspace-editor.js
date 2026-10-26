@@ -136,7 +136,7 @@ export function openAirspaceEditor(o) {
     for (const m of [inputs, rowEls, dots, wasEls, errEls]) for (const k of Object.keys(m)) delete m[k];
   if (creating) {
     const kindSel = document.createElement('select'); kindSel.className = 'airspace-input'; kindSel.id = 'airspace-kind';
-    for (const k of ['AREA', 'ROUTE']) kindSel.appendChild(new Option(k === 'AREA' ? 'AREA (an outline: MOA, range, danger area...)' : 'ROUTE (a corridor: an MTR)', k));
+    for (const k of ['AREA', 'ROUTE']) kindSel.appendChild(new Option(k === 'AREA' ? 'AREA (an outline: MOA, restricted, prohibited or warning area)' : 'ROUTE (a corridor: an MTR)', k));
     kindSel.value = base.kind;
     kindSel.addEventListener('change', () => switchKind(kindSel.value));
     inputs.kind = kindSel; addRow('kind', kindSel);

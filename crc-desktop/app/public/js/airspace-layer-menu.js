@@ -11,7 +11,7 @@
 
 export const MENU_LAYERS = ['outlines', 'labels', 'corridors', 'centrelines'];
 export const LAYER_LABELS = { outlines: 'Outlines', labels: 'Labels', corridors: 'Route corridors', centrelines: 'Route centrelines' };
-export const MENU_KINDS = ['MOA', 'RANGE', 'DANGER', 'RESTRICTED', 'PROHIBITED', 'WARNING', 'ROUTE', 'JURISDICTION'];
+export const MENU_KINDS = ['MOA', 'RESTRICTED', 'PROHIBITED', 'WARNING', 'ROUTE', 'JURISDICTION'];
 export const MENU_STATES = ['SCHEDULED', 'ACTIVE', 'RELEASED', 'RETURNED'];
 
 export function defaultMenu() {

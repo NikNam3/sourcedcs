@@ -29,7 +29,7 @@ const { crew } = await import('./helpers/efsp-scenario.mjs');
 
 const THEATER = 'Test';
 const MOA = { airspaceId: 'MOA-1', name: 'Test MOA', type: 'MOA', controllingFacilityId: 'CENTER', controllingPositionId: 'CTR', workingFrequencyMhz: 134.25 };
-const RANGE = { airspaceId: 'RANGE-1', name: 'Test Range', type: 'RANGE', controllingFacilityId: 'INCIRLIK', controllingPositionId: 'AP', usingPositionId: 'RANGE_ONE', controlFrequencyMhz: 283.5 };
+const RANGE = { airspaceId: 'RANGE-1', name: 'Test Range', type: 'RESTRICTED', controllingFacilityId: 'INCIRLIK', controllingPositionId: 'AP', usingPositionId: 'RANGE_ONE', controlFrequencyMhz: 283.5 };
 const ADMIN = { service: 'SQUADRON_ADMIN', sub: 'sub-1', name: 'Web Admin' };
 
 let theater = THEATER;
