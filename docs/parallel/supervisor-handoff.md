@@ -1,5 +1,38 @@
 # Supervisor handoff
 
+## RELAUNCH HERE (2026-10-26): seven lanes merged since 10-24, nothing running
+
+Read H165–H171 and S-ARCH-101–108 in `decisions.md` (grep them; the file is 350 KB, never read it whole). Merged into
+`efsp-wp5-correlation`: U-BEACON-ONLY (H165, ADR 0142: no callsign correlation; a typed AI synthetic code correlates;
+`CODE_REISSUED`), U-VFR-MTMA (H166, ADR 0143: optional airspace class, per-area `vfrService`, MTMA unclassified
+IFR_SEPARATED, LTAG-CZ Class D, CD `CreateVfrDeparture` + Block 9K DIR), U-DRAG-CLICK (H167/H168: drop follows the ghost,
+16 px tab threshold, left-edge marker tooltips), R-SUA (research `docs/parallel/research/sua-types-and-transit-end.md`),
+U-PANELS-RADARS (H171 FT-Q11: radar list collapsed, `0b793660` range-ring switch reverted), U-SUA (ADR 0144:
+`EndTransit` / Transit complete, RANGE and DANGER removed, PROHIBITED always in force). Gates on the tip `50b19c89`:
+crc-sync 2968, crc-desktop 1513, sourcedcs-web 151, walk 24/24, freeze 58/58, selfcheck PASS, wire protocol 2; sharded
+Playwright: see S-ARCH-109 (run after U-SUA). Only other worktrees: `../sourcedcs-U-ROLE-POSITIONS` (held, S-ARCH-85),
+`../sourcedcs-hotfix`.
+
+**Desk** https://claude.ai/artifact/FpddWVPwTzbpnmSJhW3vdt (slug `780678dd-c784-45fd-af24-56aee794bbaf`; write with
+`mcp__claude-artifacts__db_write`, read answers with `db_list`/`db_query` on `answers`). **Open:** round 17 VQ-A (CA by
+VFR service, rec. a keep FAA), VQ-B (CENTER/carrier "Class E", rec. b unclassified), VQ-C (departure frequency in the
+VFR read-out, rec. a). Rounds 15–16 settled (H171). **Human checks pending:** FT-Q9 cockpit HSI on LTAG RWY 05
+(047 = ours; ~050 = cockpits grid-referenced, then switch reference); the parked airspace-editor report ("locked
+although not active", stale-form bug found: the editor computes its locks once at open; the human will report the card's
+state word next time); offered (not asked yet): Start flight following in the label menu so ATC needs no track panel.
+
+**Deploy actions added (RUNBOOK before the next deploy):** the deployed Board keeps LTAG-RAPCON "Class C" (standing
+areas import once): AP edits it (CLASS none, VFR SERVICE IFR separated) or Board reset; any live RANGE/DANGER airspace
+stops start-up (none known); correlation `confidence` still accepted on restore (S-ARCH-102 D1, remove at next reset).
+
+**Token economy (human asked 2026-10-26):** lanes cost 200–370k context, ~95k of it reasoning and 60–110k exploring;
+this supervisor session reached ~275k after 486 steps. So: relaunch the supervisor every phase, give lanes file:line
+pointers, tell them to batch reads and grep (not read) `decisions.md`.
+
+**Backlog:** `v3-backlog.md` (correlation leftovers, airspace leftovers, perf); rule-9 literals for U-ROLE-POSITIONS
+(`VFR_DEPARTURE_POSITIONS`, `FLIGHT_FOLLOWING_POSITIONS`, `COMPACT_BLOCKS_BY_POSITION`, S-ARCH-97/99); docs pass for the
+`docs/wip/U-*.md` usage-guide texts (§8C table loses `TRK?`, VFR departure, Transit complete, area types).
+
 ## RELAUNCH HERE (2026-10-24): final test round 2 built and merged, 295/295
 
 Read H163, H164 and S-ARCH-91–100 in `decisions.md`. Merged into `efsp-wp5-correlation` today: U-SURFACE (H162),

@@ -38,3 +38,8 @@ role-based Positions of ADR 0132. Nothing of these is briefed yet.
 
 - Drop `confidence` from the persisted correlation shape allow list (`crc-sync/src/efsp/stores.js`) at the next Board reset (D1: kept so the deployed Board survives the H165 deploy).
 - `correlation-store.js` `reconcile()` rewrites `record.warning` on every unmatched tick without broadcasting (`raisedAt` moves, `lostTrackId` goes null from the second tick): server copy drifts from clients. Small fix.
+
+## Airspace leftovers (U-SUA, S-ARCH-108)
+
+- sourcedcs-web booking still offers PROHIBITED areas (always in force, ADR 0144): drop them from the booking list.
+- After a decider acknowledges a completed transit, `COORD <name>` returns if the filed route still crosses the area (`filedThrough` checks the whole route, not the remaining part): needs a remaining-route check.
