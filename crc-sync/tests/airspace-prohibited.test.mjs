@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 
-import { makeRegistry, stateOp, MOA, SQUARE } from './helpers/airspace-registry.mjs';
+import { makeRegistry, stateOp, panel, MOA, SQUARE } from './helpers/airspace-registry.mjs';
 
 // docs/adr/0144 (H171 SUA-Q5 a): a prohibited area is always in force. No schedule, no activation, no release; it alerts
 // whenever an aircraft is inside without an approved entry, and its controlling Position stays only so the alert reaches
@@ -39,6 +39,10 @@ test('every state op on a prohibited area is refused, before any write; definiti
   assert.deepEqual(store.getAirspace('P-1').transitions, []);
   const t = stateOp(store, 'P-1', { kind: 'RequestTransit', flightDataId: 'fd1' }, 'AP');
   assert.match(t.detail, /MOA, warning or restricted area only/, 'no transit (para 21-1-8 c)');
+  const e = store.apply({ airspaceId: 'P-1', baseDefRev: store.getAirspace('P-1').defRev, op: { kind: 'EditAirspace', patch: { altUpperFt: 9000, type: 'RESTRICTED' } } }, panel('AP'));
+  assert.equal(e.ok, true, e.detail);
+  assert.equal(store.isActive('P-1'), false, 'retyped RESTRICTED, it is a cold block with a lifecycle again');
+  assert.equal(stateOp(store, 'P-1', { kind: 'ScheduleAirspace', ...WINDOW }, 'RANGE_1_CONTROL').ok, true);
 });
 
 test('restore refuses a prohibited area carrying a lifecycle (no migration), naming it', () => {
