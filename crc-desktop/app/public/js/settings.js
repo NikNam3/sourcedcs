@@ -14,7 +14,6 @@ const DEFAULTS = {
   drawingsEnabled: true,   // DCS mission-editor shape drawings (geojson.js buildDrawings); Settings → Declutter
   airportSurface:  true,   // the basemap's airport surface at high zoom: pavement, taxiways, designators, names (airport-surface.js)
   extCenterlineNm: 25, // extended AP-radar centerline length
-  airportRangeRing: false, // the radar-sized range ring around the selected airport (geojson.js buildRangeRing); off by default (H164 FT-Q1)
   scale:         1.0,
   lightMode:     false,
   showElevation: false, // computed contour lines + height labels (elevation.js), zoom-independent
