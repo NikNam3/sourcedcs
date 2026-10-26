@@ -17,9 +17,12 @@ const containment = require('./airspace/containment');
 const jurisdiction = require('./airspace/jurisdiction');
 
 
-// What kind of block this is: labels borrowed from FAA and ICAO special-use airspace names (AREA) and from the
-// JO 7610.14 / AIM military training route names (ROUTE). Descriptive, except for the airspace-entry alert (ADR 0119).
-const AREA_TYPES = new Set(['MOA', 'RANGE', 'DANGER', 'RESTRICTED', 'PROHIBITED', 'WARNING']);
+// What kind of block this is: the FAA special use airspace types ATC works (14 CFR 73, JO 7400.2R para 21-1-3 b; SUA is
+// US-only, H170) for an AREA, and the JO 7610.14 / AIM military training route names (ROUTE). Behavioural for the
+// airspace-entry alert (ADR 0119) and transits (ADR 0128); a PROHIBITED area is always in force (docs/adr/0144). RANGE (a
+// range is a using agency, `usingPositionId`, not an airspace) and DANGER (ICAO, "not used [...] within the United States")
+// were removed by ADR 0144 with no migration: a snapshot holding one stops start-up and names the airspace.
+const AREA_TYPES = new Set(['MOA', 'RESTRICTED', 'PROHIBITED', 'WARNING']);
 const ROUTE_TYPES = new Set(['IR', 'VR', 'SR', 'LLTR']);
 const AIRSPACE_TYPES = new Set([...AREA_TYPES, ...ROUTE_TYPES]);
 // JURISDICTION (docs/adr/0125): whose airspace it is, for control at the boundary (JO 7110.65 ¶2-1-15 c). It has no
@@ -104,6 +107,20 @@ const OPTIONAL_FIELDS = ['usingPositionId', 'usingFacilityId', 'workingFrequency
 
 /** ACTIVATION is a rule keyed by `kind`, not a stored field (ADR 0098 §3): AREA needs an approval, ROUTE a confirmation. */
 const ACTIVATION_BY_KIND = { AREA: 'APPROVE', ROUTE: 'CONFIRM', JURISDICTION: null };
+
+/**
+ * docs/adr/0144 (H171 SUA-Q5 a): the AREA types that are always in force, with no schedule and no activation lifecycle.
+ * A prohibited area is "normally [...] 'continuous'" (JO 7400.2R para 22-1-4) and flight in it needs the using agency's
+ * authorization (14 CFR 73.83). Its record never leaves RETURNED (every state op is refused) and every reader of "is it
+ * in force" asks `inForce`, never `state === 'ACTIVE'` alone.
+ */
+const ALWAYS_IN_FORCE_TYPES = ['PROHIBITED'];
+
+/** Is this definition always in force (docs/adr/0144)? */
+function isAlwaysInForce(def) { return !!def && (def.kind || 'AREA') === 'AREA' && ALWAYS_IN_FORCE_TYPES.includes(def.type); }
+
+/** Is this record in force: ACTIVE, or of a type always in force (docs/adr/0144)? */
+function inForce(record) { return !!record && (record.state === 'ACTIVE' || isAlwaysInForce(record.definition)); }
 
 function deepClone(obj) { return JSON.parse(JSON.stringify(obj)); }
 
@@ -395,7 +412,7 @@ function loadStandingList({ paths = statePaths('efsp-airspaces.json', process.en
 module.exports = {
   validateAirspaceDefinition, loadStandingList, deriveRouteEnvelope,
   isValidFrequency, isValidAltitude,
-  AIRSPACE_TYPES, AREA_TYPES, ROUTE_TYPES, KINDS, SOURCES, ACTIVATION_BY_KIND, AIRSPACE_CLASSES, VFR_SERVICES, CLASS_VFR_SERVICE, vfrServiceOf,
+  AIRSPACE_TYPES, AREA_TYPES, ROUTE_TYPES, KINDS, SOURCES, ACTIVATION_BY_KIND, ALWAYS_IN_FORCE_TYPES, isAlwaysInForce, inForce, AIRSPACE_CLASSES, VFR_SERVICES, CLASS_VFR_SERVICE, vfrServiceOf,
   DEFINITION_FIELDS, JURISDICTION_ONLY_FIELDS, MAX_OWNER_POSITIONS, MAX_EXCLUDES, MAX_SOURCE_TEXT_LENGTH, MAX_RADIUS_NM, IMMUTABLE_FIELDS, DERIVED_ROUTE_FIELDS, LIVE_EDITABLE_FIELDS, OPTIONAL_FIELDS,
   MIN_FREQUENCY_MHZ, MAX_FREQUENCY_MHZ, MIN_ALTITUDE_FT, MAX_ALTITUDE_FT,
   MAX_NAME_LENGTH, DEFINITION_HISTORY_CAP, MAX_ROUTE_SEGMENTS, MAX_WIDTH_NM,

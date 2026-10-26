@@ -153,7 +153,7 @@ export function controllingChoicesFor(signedOnPositionIds) {
 // ── transit through active SUA (crc-sync docs/adr/0128, H151): a hand copy of authority/airspace.js's decider rule ──
 
 /** The airspace types a transit is requested and decided for (crc-sync TRANSIT_TYPES). */
-export const TRANSIT_TYPES = ['MOA', 'WARNING', 'RESTRICTED', 'RANGE', 'DANGER'];
+export const TRANSIT_TYPES = ['MOA', 'WARNING', 'RESTRICTED'];
 
 /** The Positions of class MRU (crc-sync's Facility configs `positionClasses`; the parity test reads them). */
 export const MRU_POSITIONS = ['TAC_C2', 'GCI'];

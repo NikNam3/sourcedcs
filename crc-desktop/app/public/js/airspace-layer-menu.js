@@ -9,9 +9,11 @@
 // A per-user display preference kept in the client's settings store (`settings.airspaceMenu`); the individual settings are
 // keyed by theater (ids belong to a theater). Never on the wire, never part of any Board or audit.
 
+import { displayState, inForce } from './panels/efsp/airspace-validate.js';
+
 export const MENU_LAYERS = ['outlines', 'labels', 'corridors', 'centrelines'];
 export const LAYER_LABELS = { outlines: 'Outlines', labels: 'Labels', corridors: 'Route corridors', centrelines: 'Route centrelines' };
-export const MENU_KINDS = ['MOA', 'RANGE', 'DANGER', 'RESTRICTED', 'PROHIBITED', 'WARNING', 'ROUTE', 'JURISDICTION'];
+export const MENU_KINDS = ['MOA', 'RESTRICTED', 'PROHIBITED', 'WARNING', 'ROUTE', 'JURISDICTION'];
 export const MENU_STATES = ['SCHEDULED', 'ACTIVE', 'RELEASED', 'RETURNED'];
 
 export function defaultMenu() {
@@ -83,7 +85,8 @@ export function decide(record, menu, theater) {
   const def = record.definition;
   const o = overrideOf(menu, theater, record.airspaceId);
   // A jurisdiction area has no state (it always applies): its kind alone decides.
-  const filterShown = !!menu.kinds[kindOf(def)] && (def.kind === 'JURISDICTION' || !!menu.states[record.state]);
+  // crc-sync docs/adr/0144: a prohibited area is always in force, so it files under ACTIVE.
+  const filterShown = !!menu.kinds[kindOf(def)] && (def.kind === 'JURISDICTION' || !!menu.states[inForce(record) ? 'ACTIVE' : record.state]);
   const wanted = o === 'on' ? true : o === 'off' ? false : filterShown;
   const route = def.kind === 'ROUTE';
   const layerOn = route ? (menu.layers.corridors || menu.layers.centrelines) : menu.layers.outlines;
@@ -176,7 +179,7 @@ export function mountAirspaceLayerMenu(host, { getMenu, setMenu, getAirspaces, g
         const row = _el('div', 'aslm-row');
         const name = _el('div', 'aslm-name');
         name.appendChild(_el('div', '', a.definition.name));
-        name.appendChild(_el('div', 'aslm-sub', hasOutline(a.definition) ? a.state : `${a.state} · no outline`));
+        name.appendChild(_el('div', 'aslm-sub', hasOutline(a.definition) ? displayState(a) : `${displayState(a)} · no outline`));
         row.appendChild(name);
         const seg = _el('span', 'aslm-seg');
         for (const [v, label] of [['filter', 'Filter'], ['on', 'On'], ['off', 'Off']]) {

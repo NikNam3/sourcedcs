@@ -38,7 +38,7 @@ fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, JSON.stringify({ Test:
     workingFrequencyMhz: 134.25,
   },
   {
-    airspaceId: 'RANGE-SOUTH', name: 'South A/G Range', type: 'RANGE',
+    airspaceId: 'RANGE-SOUTH', name: 'South A/G Range', type: 'RESTRICTED',
     controllingFacilityId: 'INCIRLIK', controllingPositionId: 'AP',
     usingPositionId: 'SOUTH_RANGE', controlFrequencyMhz: 283.5,
   },
@@ -46,7 +46,7 @@ fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, JSON.stringify({ Test:
   // one snapshot path, so a test that needs a specific starting state gets
   // its own airspace rather than depending on what ran before it.
   {
-    airspaceId: 'RANGE-WEST', name: 'West Range', type: 'RANGE',
+    airspaceId: 'RANGE-WEST', name: 'West Range', type: 'RESTRICTED',
     controllingFacilityId: 'INCIRLIK', controllingPositionId: 'AP',
     usingPositionId: 'WEST_RANGE', controlFrequencyMhz: 291.0,
   },

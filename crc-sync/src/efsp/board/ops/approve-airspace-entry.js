@@ -2,6 +2,7 @@
 
 const { _validateAltitudeBlock } = require('../strip-util');
 const { warn } = require('../../warnings');
+const { inForce } = require('../../airspace-schema');
 
 /**
  * Approves this flight to work inside an airspace, on a frequency.
@@ -64,7 +65,7 @@ function _applyApproveAirspaceEntry(ctx, strip, op, by) {
   ctx.placement.followSfaFrequency(strip); // a Strip on an SFA Rack is on that frequency: it follows the new one
   ctx.state.bump(strip, by);
 
-  const warnings = airspace.state !== 'ACTIVE' ? [warn('AIRSPACE_NOT_ACTIVE')] : undefined;
+  const warnings = !inForce(airspace) ? [warn('AIRSPACE_NOT_ACTIVE')] : undefined; // docs/adr/0144: a prohibited area is always in force
   return { ok: true, strip, flightData: flightDataResult.flightData, warnings };
 }
 

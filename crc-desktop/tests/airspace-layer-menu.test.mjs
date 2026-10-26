@@ -39,7 +39,7 @@ test('a jurisdiction area (crc-sync ADR 0125): off by default, its kind alone de
 test('each kind toggle and each state toggle', () => {
   let d = m.setKind(m.defaultMenu(), 'MOA', false);
   assert.equal(m.decide(area('A', 'ACTIVE', 'MOA'), d, T).shown, false);
-  assert.equal(m.decide(area('A', 'ACTIVE', 'RANGE'), d, T).shown, true);
+  assert.equal(m.decide(area('A', 'ACTIVE', 'RESTRICTED'), d, T).shown, true);
   d = m.setKind(m.defaultMenu(), 'ROUTE', false);
   assert.equal(m.decide(route('R', 'ACTIVE'), d, T).shown, false);
   d = m.setState(m.defaultMenu(), 'RETURNED', true);

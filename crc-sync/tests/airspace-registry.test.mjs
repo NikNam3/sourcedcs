@@ -153,11 +153,11 @@ test('R3-23: while not RETURNED only name and frequencies may change, and the de
 test('R3-23 also holds with a pending request (SCHEDULED) and RELEASED', () => {
   const { store } = makeRegistry({ defs: [RANGE] });
   stateOp(store, 'RANGE-1', { kind: 'ScheduleAirspace', ...WINDOW }, 'RANGE_1_CONTROL');
-  assert.match(edit(store, 'RANGE-1', { type: 'DANGER' }, panel('AP')).detail, /SCHEDULED/);
+  assert.match(edit(store, 'RANGE-1', { type: 'WARNING' }, panel('AP')).detail, /SCHEDULED/);
   stateOp(store, 'RANGE-1', { kind: 'RequestActivation' }, 'RANGE_1_CONTROL');
   stateOp(store, 'RANGE-1', { kind: 'ApproveActivation' }, 'AP');
   stateOp(store, 'RANGE-1', { kind: 'ReleaseAirspace' }, 'RANGE_1_CONTROL');
-  assert.match(edit(store, 'RANGE-1', { type: 'DANGER' }, panel('AP')).detail, /RELEASED/);
+  assert.match(edit(store, 'RANGE-1', { type: 'WARNING' }, panel('AP')).detail, /RELEASED/);
 });
 
 test('AIRSP-4: editing an occupied AREA warns, lists the flights and names the stale entries', () => {
@@ -249,7 +249,7 @@ test('authority: who may create, edit and delete', () => {
   assert.equal(del(store, 'MOA-1', panel('AP')).reason, 'PERMISSION_DENIED');
   assert.equal(create(store, NEW, panel('AP')).reason, 'PERMISSION_DENIED', 'AP is not the controlling Position of what it creates');
   // OPS (the using agency, ADR 0119, H134 LT-RQ13 a): defines nothing, not even its own Facility's airspaces
-  assert.equal(edit(store, 'RANGE-1', { type: 'DANGER' }, panel('OPS')).reason, 'PERMISSION_DENIED');
+  assert.equal(edit(store, 'RANGE-1', { type: 'WARNING' }, panel('OPS')).reason, 'PERMISSION_DENIED');
   assert.equal(edit(store, 'MOA-1', { name: 'C' }, panel('OPS')).reason, 'PERMISSION_DENIED');
   assert.equal(del(store, 'RANGE-1', panel('OPS')).reason, 'PERMISSION_DENIED');
   assert.equal(create(store, { ...NEW, controllingFacilityId: 'INCIRLIK', controllingPositionId: 'AP' }, panel('OPS')).reason, 'PERMISSION_DENIED', 'only the controlling Position defines');
@@ -554,4 +554,13 @@ test('restore refuses a definition that does not validate, naming the theater an
   const snap = JSON.parse(JSON.stringify(store.snapshot()));
   snap.byTheater.Test[0].definition.type = 'GONE';
   assert.throws(() => makeRegistry({ defs: [] }).store.restore(snap), /airspace MOA-1 \(theater Test\).*type/);
+});
+
+test('docs/adr/0144: a snapshot holding a RANGE or DANGER airspace stops start-up and names it (no migration)', () => {
+  const { store } = makeRegistry({ defs: [MOA] });
+  const snap = JSON.parse(JSON.stringify(store.snapshot()));
+  const [theater] = Object.keys(snap.byTheater);
+  snap.byTheater[theater][0].definition.type = 'RANGE';
+  const { store: again } = makeRegistry({ defs: [] });
+  assert.throws(() => again.restore(snap), new RegExp(`airspace ${MOA.airspaceId} \\(theater ${theater}\\).*unknown AREA type "RANGE"`));
 });

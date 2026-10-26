@@ -129,10 +129,10 @@ function isUsing(def, positionId, { rowOf, facilityOf }) {
 // ── transit through active SUA (docs/adr/0128, H151) ─────────────────────────────────────────────────────────────
 
 /**
- * The airspace types a transit is requested and decided for (H151 MT-Q8: MOA, warning and restricted; our RANGE and
- * DANGER are restricted-like, as ADR 0119 reads them, so they follow RESTRICTED, ours). PROHIBITED has no transit.
+ * The airspace types a transit is requested and decided for (H151 MT-Q8: MOA, warning and restricted). PROHIBITED has no
+ * transit (7400.2R para 21-1-8 c: joint use does not apply). RANGE and DANGER are no airspace types (docs/adr/0144).
  */
-const TRANSIT_TYPES = ['MOA', 'WARNING', 'RESTRICTED', 'RANGE', 'DANGER'];
+const TRANSIT_TYPES = ['MOA', 'WARNING', 'RESTRICTED'];
 
 /** The Position class of a Military Radar Unit that separates its own participants (ADR 0102; JO 7610.14A para 8-1-10). */
 const MRU_CLASS = 'MRU';

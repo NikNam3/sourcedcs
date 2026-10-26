@@ -3,7 +3,7 @@
    isBookingAdminRole, authHeaders, esc, logout, loginWithCasdoor come from /js/auth.js. */
 'use strict';
 
-var AA_TYPES = { AREA: ['MOA', 'RANGE', 'DANGER', 'RESTRICTED', 'PROHIBITED', 'WARNING'], ROUTE: ['IR', 'VR', 'SR', 'LLTR'] };
+var AA_TYPES = { AREA: ['MOA', 'RESTRICTED', 'PROHIBITED', 'WARNING'], ROUTE: ['IR', 'VR', 'SR', 'LLTR'] };
 /* R3-23: while an airspace is not RETURNED, only these fields may change (crc-sync enforces it again) */
 var AA_LOCK_OK = ['name', 'workingFrequencyMhz', 'controlFrequencyMhz'];
 var AA_PATCHABLE = ['name', 'type', 'controllingFacilityId', 'controllingPositionId', 'usingPositionId', 'usingFacilityId',

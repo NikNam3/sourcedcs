@@ -53,8 +53,8 @@ test('filed through an ACTIVE MOA, IFR, nothing coordinated: each live Strip is 
   assert.equal(monitor.tick(), false, 'unchanged');
 });
 
-test('every transit type counts (RANGE and DANGER as restricted); PROHIBITED, a ROUTE and a cold area do not', () => {
-  for (const type of ['MOA', 'WARNING', 'RESTRICTED', 'RANGE', 'DANGER']) {
+test('every transit type counts; PROHIBITED, a ROUTE and a cold area do not', () => {
+  for (const type of ['MOA', 'WARNING', 'RESTRICTED']) {
     const { monitor } = world({ records: [area('A', type)], fds: { fd1: IFR() }, strips: { fd1: [strip('s1', 'AP')] } });
     monitor.tick();
     assert.equal(monitor.getCoordinate().length, 1, type);

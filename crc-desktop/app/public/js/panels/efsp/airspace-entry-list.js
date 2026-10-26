@@ -72,7 +72,14 @@ function _appendTransit(row, list, airspace, flight, deciders) {
   }
   if (offer.requestAs) row.appendChild(_transitButton('Request transit', 'airspace-transit-request-btn', `Ask ${(deciders || []).join(' or ') || 'the decider'} for a transit of ${name}, as ${offer.requestAs}`, () => send(offer.requestAs, 'RequestTransit')));
   if (offer.cancelAs) row.appendChild(_transitButton('Cancel request', 'airspace-transit-cancel-btn', `Withdraw the transit request, as ${offer.cancelAs}`, () => send(offer.cancelAs, 'CancelTransit')));
-  if (offer.acknowledgeAs) row.appendChild(_transitButton('Acknowledge', 'airspace-transit-ack-btn', `Acknowledge the decline of the transit of ${name}, as ${offer.acknowledgeAs}`, () => send(offer.acknowledgeAs, 'AcknowledgeTransit')));
+  // crc-sync ADR 0144 (H171 SUA-Q1 b, Q2 b): the flight has passed; the decider acknowledges a completion (it lifts nothing).
+  if (offer.completeAs) row.appendChild(_transitButton('Transit complete', 'airspace-transit-complete-btn', `The flight has left ${name}: end the transit (a re-entry needs a new one), as ${offer.completeAs}`, () => send(offer.completeAs, 'EndTransit')));
+  if (offer.acknowledgeAs) {
+    const what = flight.transit && flight.transit.state === 'COMPLETED'
+      ? `Acknowledge that the transit of ${name} is complete${flight.transit.completedPositionId ? ` (${flight.transit.completedPositionId})` : ''}`
+      : `Acknowledge the decline of the transit of ${name}`;
+    row.appendChild(_transitButton('Acknowledge', 'airspace-transit-ack-btn', `${what}, as ${offer.acknowledgeAs}`, () => send(offer.acknowledgeAs, 'AcknowledgeTransit')));
+  }
 }
 
 /** The inline reason form under a row: Enter or Send declines (an empty reason is allowed), Escape or Cancel abandons. */

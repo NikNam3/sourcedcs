@@ -13,7 +13,7 @@ const { test, expect } = require('./helpers/test');
 const { openPanel } = require('./helpers/app');
 
 const def = (extra = {}) => ({
-  airspaceId: 'R-TOROS', name: 'TOROS RANGE', kind: 'AREA', type: 'RANGE', controllingFacilityId: 'INCIRLIK', controllingPositionId: 'AP',
+  airspaceId: 'R-TOROS', name: 'TOROS RANGE', kind: 'AREA', type: 'RESTRICTED', controllingFacilityId: 'INCIRLIK', controllingPositionId: 'AP',
   usingPositionId: null, usingFacilityId: null, workingFrequencyMhz: 138.0, controlFrequencyMhz: null, altLowerFt: null, altUpperFt: 18000,
   geometry: null, source: 'PANEL', ...extra,
 });

@@ -12,7 +12,7 @@ import {
 import { airspaceActionsFor, editReason, deleteReason, visibleAirspaces, groupByFacility } from '../app/public/js/panels/efsp/airspace-rules.js';
 
 const def = (extra = {}) => ({
-  airspaceId: 'R-TOROS', name: 'TOROS RANGE', kind: 'AREA', type: 'RANGE', controllingFacilityId: 'INCIRLIK', controllingPositionId: 'AP',
+  airspaceId: 'R-TOROS', name: 'TOROS RANGE', kind: 'AREA', type: 'RESTRICTED', controllingFacilityId: 'INCIRLIK', controllingPositionId: 'AP',
   usingPositionId: 'RNG1', usingFacilityId: null, workingFrequencyMhz: 138, controlFrequencyMhz: 251.5, altLowerFt: null, altUpperFt: 18000, geometry: null, ...extra,
 });
 const rec = (state = 'RETURNED', extra = {}, d = {}) => ({
@@ -153,4 +153,13 @@ test('calendar: the next booking not yet ended, real UTC with its date, who and 
   assert.equal(formatBooking({ startUtc: '2026-10-04T23:00:00Z', endUtc: '2026-10-05T01:00:00Z', by: '', altitudeFt: null }), '2026-10-04 2300Z–2026-10-05 0100Z');
   assert.deepEqual(applyAirspaceCalendar({ byAirspace: 'bad' }).byAirspace, {}, 'a malformed frame leaves an empty calendar');
   _resetAirspaceCalendarForTest();
+});
+
+test('crc-sync ADR 0144: a prohibited area offers no Schedule, Activate or Release, and its card reads IN FORCE', async () => {
+  const p = rec('RETURNED', {}, { type: 'PROHIBITED' });
+  assert.deepEqual(airspaceActionsFor(p, ['AP', 'RNG1']), []);
+  assert.ok(airspaceActionsFor(rec('RETURNED'), ['AP']).length > 0, 'a restricted area still schedules');
+  const { displayState } = await import('../app/public/js/panels/efsp/airspace-validate.js');
+  assert.equal(displayState(p), 'IN FORCE');
+  assert.equal(displayState(rec('SCHEDULED')), 'SCHEDULED');
 });

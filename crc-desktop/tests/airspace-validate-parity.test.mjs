@@ -152,6 +152,12 @@ test('the constants the client copies are the server\'s', () => {
   assert.deepEqual(client.LIVE_EDITABLE_FIELDS, server.LIVE_EDITABLE_FIELDS);
   assert.deepEqual(client.OPTIONAL_FIELDS, server.OPTIONAL_FIELDS);
   assert.deepEqual(client.ACTIVATION_BY_KIND, server.ACTIVATION_BY_KIND);
+  assert.deepEqual(client.ALWAYS_IN_FORCE_TYPES, server.ALWAYS_IN_FORCE_TYPES); // crc-sync docs/adr/0144
+  for (const rec of [{ state: 'RETURNED', definition: { type: 'PROHIBITED' } }, { state: 'RETURNED', definition: { type: 'RESTRICTED' } },
+    { state: 'ACTIVE', definition: { type: 'MOA' } }, { state: 'RETURNED', definition: { kind: 'ROUTE', type: 'IR' } }]) {
+    assert.equal(client.inForce(rec), server.inForce(rec), JSON.stringify(rec));
+    assert.equal(client.isAlwaysInForce(rec.definition), server.isAlwaysInForce(rec.definition));
+  }
   for (const k of ['MIN_ALTITUDE_FT', 'MAX_ALTITUDE_FT', 'MIN_FREQUENCY_MHZ', 'MAX_FREQUENCY_MHZ', 'MAX_NAME_LENGTH', 'MAX_ROUTE_SEGMENTS', 'MAX_WIDTH_NM', 'MAX_OWNER_POSITIONS', 'MAX_EXCLUDES', 'MAX_SOURCE_TEXT_LENGTH', 'MAX_RADIUS_NM']) {
     assert.equal(client[k], server[k], k);
   }

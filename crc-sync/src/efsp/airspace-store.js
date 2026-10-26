@@ -48,9 +48,12 @@ const STATE_OP_KINDS = ['ScheduleAirspace', 'RequestActivation', 'ApproveActivat
 // docs/adr/0128 (H151): a transit through an ACTIVE MOA, warning or restricted area, requested by a Position holding the
 // flight and decided by the side that separates the airspace's users. On the record's `transits`, never a state transition.
 // ADR 0136 (H156 MTB-Q2 b): a decline stays until the requesting side acknowledges it (AcknowledgeTransit).
-const TRANSIT_OP_KINDS = ['RequestTransit', 'ApproveTransit', 'DeclineTransit', 'CancelTransit', 'AcknowledgeTransit'];
+// ADR 0144 (H171 SUA-Q1 b, Q2 b): EndTransit is "Transit complete", by hand; ended by the holder, it stays COMPLETED on the
+// decider's card until the decider acknowledges it.
+const TRANSIT_OP_KINDS = ['RequestTransit', 'ApproveTransit', 'DeclineTransit', 'CancelTransit', 'AcknowledgeTransit', 'EndTransit'];
 const AIRSPACE_OP_KINDS = [...DEFINITION_OP_KINDS, ...STATE_OP_KINDS, ...TRANSIT_OP_KINDS];
-const TRANSIT_STATES = ['REQUESTED', 'APPROVED', 'DECLINED'];
+const TRANSIT_STATES = ['REQUESTED', 'APPROVED', 'DECLINED', 'COMPLETED'];
+const OPEN_TRANSIT_STATES = ['REQUESTED', 'APPROVED'];
 
 const VIAS = ['PANEL', 'WEB', 'SEED'];
 // ADR 0125: the fields of a JURISDICTION area a panel edit may not change (who owns it is the theater config's, and the
@@ -201,10 +204,9 @@ class AirspaceStore extends SyncedStore {
     return record ? deepClone(record.definitionHistory) : [];
   }
 
-  /** Is this airspace of the current theater ACTIVE? Read by the unactivated-entry alert. */
+  /** Is this airspace of the current theater in force (ACTIVE, or a prohibited area: docs/adr/0144)? Read by the unactivated-entry alert. */
   isActive(airspaceId) {
-    const record = this._record(this.currentTheater(), airspaceId);
-    return !!(record && record.state === 'ACTIVE');
+    return schema.inForce(this._record(this.currentTheater(), airspaceId));
   }
 
   // ── the queries other code may call (ADR 0098 §7): pure, synchronous, current theater only ──
@@ -227,7 +229,7 @@ class AirspaceStore extends SyncedStore {
   /** ACTIVE, and the using agency is Facility `usingFacilityId` (as `usingFacilityId`, or as a `usingPositionId` of its own). */
   isActiveFor(airspaceId, usingFacilityId) {
     const record = this._record(this.currentTheater(), airspaceId);
-    return !!record && record.state === 'ACTIVE' && this._usedBy(record.definition, usingFacilityId);
+    return schema.inForce(record) && this._usedBy(record.definition, usingFacilityId);
   }
 
   _usedBy(def, facilityId) {
@@ -245,7 +247,7 @@ class AirspaceStore extends SyncedStore {
     const inside = []; const unknown = [];
     const m = this._theaterMap(this.currentTheater());
     for (const record of (m ? m.values() : [])) {
-      if (record.state !== 'ACTIVE' || !this._usedBy(record.definition, usingFacilityId)) continue;
+      if (!schema.inForce(record) || !this._usedBy(record.definition, usingFacilityId)) continue;
       const where = containment.evaluate(record.definition, point);
       const row = { airspaceId: record.airspaceId, kind: record.definition.kind, name: record.definition.name };
       if (where === 'inside') inside.push(row);
@@ -255,7 +257,7 @@ class AirspaceStore extends SyncedStore {
   }
 
   /**
-   * Every ACTIVE AREA of the current theater the point is inside, whoever uses it (docs/adr/0119, the airspace-entry alert):
+   * Every AREA in force (ACTIVE, or prohibited: docs/adr/0144) of the current theater the point is inside, whoever uses it (docs/adr/0119, the airspace-entry alert):
    * `{ airspaceId, name, type, controllingFacilityId, controllingPositionId, usingFacilityId, usingPositionId }` each. A
    * ROUTE (an MTR) is left out, and so is an airspace whose geometry cannot be evaluated (never a guess).
    */
@@ -264,7 +266,7 @@ class AirspaceStore extends SyncedStore {
     const m = this._theaterMap(this.currentTheater());
     for (const record of (m ? m.values() : [])) {
       const def = record.definition;
-      if (record.state !== 'ACTIVE' || def.kind === 'ROUTE') continue;
+      if (!schema.inForce(record) || def.kind === 'ROUTE') continue; // docs/adr/0144: a prohibited area is always in force
       if (containment.evaluate(def, point) !== 'inside') continue;
       out.push({
         airspaceId: record.airspaceId, name: def.name, type: def.type,
@@ -366,6 +368,8 @@ class AirspaceStore extends SyncedStore {
         ...(result.created ? { created: result.created } : {}),
         ...(result.skipped ? { skipped: result.skipped } : {}),
         ...(result.warning ? { warning: result.warning } : {}),
+        // ADR 0144: a controller's "Transit complete" is one EndTransit line, as the system's ends are, with its own trigger.
+        ...(op.kind === 'EndTransit' ? { flightDataId: op.flightDataId ?? null, ...(result.ok ? { trigger: 'COMPLETED' } : {}) } : {}),
       },
       before,
       after: afterRecord ? viewOf(afterRecord) : undefined,
@@ -424,6 +428,10 @@ class AirspaceStore extends SyncedStore {
     if (actor.service) return this._denied(record, `${actor.service} may not act on airspace state`);
     const def = record.definition;
     if (def.kind === 'JURISDICTION') return verr(`${def.name} is a jurisdiction area: it is never scheduled or activated, it always applies`, { airspace: viewOf(record) });
+    // docs/adr/0144 (H171 SUA-Q5 a): a prohibited area has no lifecycle; entry is approved on the Strip (ADR 0119 §2).
+    if (schema.isAlwaysInForce(def) && STATE_OP_KINDS.includes(op.kind)) {
+      return verr(`${def.name} is a ${def.type.toLowerCase()} area: it is always in force, never scheduled, activated or released`, { airspace: viewOf(record) });
+    }
     const by = actor.controllerId; const pos = actor.positionId;
     switch (op.kind) {
       case 'ScheduleAirspace':  return this._schedule(record, def, op, pos, by);
@@ -438,6 +446,7 @@ class AirspaceStore extends SyncedStore {
       case 'DeclineTransit':    return this._declineTransit(record, def, op, pos, by);
       case 'CancelTransit':     return this._cancelTransit(record, def, op, pos, by);
       case 'AcknowledgeTransit': return this._acknowledgeTransit(record, def, op, pos, by);
+      case 'EndTransit':        return this._completeTransit(record, def, op, pos, by);
       default: return verr(`unknown airspace op: ${op.kind}`);
     }
   }
@@ -854,7 +863,8 @@ class AirspaceStore extends SyncedStore {
       return this._denied(record, `${pos} holds no live Strip of ${flight.callsign || op.flightDataId}: the Position working the flight requests its transit`);
     }
     const existing = this._transitOf(record, op.flightDataId);
-    if (existing && existing.state !== 'DECLINED') return verr(`a transit of ${def.name} by ${flight.callsign || op.flightDataId} is already ${existing.state.toLowerCase()}`, { airspace: viewOf(record) });
+    // A decline, and a completed transit (ADR 0144: a re-entry is a new transit), give way to a new request.
+    if (existing && OPEN_TRANSIT_STATES.includes(existing.state)) return verr(`a transit of ${def.name} by ${flight.callsign || op.flightDataId} is already ${existing.state.toLowerCase()}`, { airspace: viewOf(record) });
     const now = this._clock.now();
     const transit = {
       flightDataId: op.flightDataId, callsign: flight.callsign || null, state: 'REQUESTED',
@@ -898,7 +908,7 @@ class AirspaceStore extends SyncedStore {
     if (!this._isDecider(def, pos)) return this._denied(record, `only ${this._decidersText(def)} may decline a transit of ${def.name}`);
     const existing = this._transitOf(record, op.flightDataId);
     // A decline answers a request, or withdraws an approval (the users need the airspace back: ours).
-    if (!existing || existing.state === 'DECLINED') return verr(`no transit of ${def.name} by ${pre.flight.callsign || op.flightDataId} is requested or approved`, { airspace: viewOf(record) });
+    if (!existing || !OPEN_TRANSIT_STATES.includes(existing.state)) return verr(`no transit of ${def.name} by ${pre.flight.callsign || op.flightDataId} is requested or approved`, { airspace: viewOf(record) });
     this._setTransit(record, {
       ...existing, state: 'DECLINED', decidedBy: by || null, decidedPositionId: pos, decidedAt: this._clock.now(),
       reason: typeof op.reason === 'string' && op.reason.trim() ? op.reason.trim() : null, selfCoordinated: false,
@@ -925,17 +935,49 @@ class AirspaceStore extends SyncedStore {
    * ADR 0136 (H156 MTB-Q2 b): the requesting side has read the decline, which then goes. Whoever holds a live Strip of
    * the flight now acknowledges (the Position working it, which may not be the one that asked: a handoff in between).
    * Not gated on ACTIVE or IFR: a decline is read whatever happened to the airspace or the clearance since.
+   * ADR 0144 (H171 SUA-Q2 b): a COMPLETED transit is acknowledged by a decider instead (the side that restricted the users
+   * has seen that the reason has gone); it lifts nothing (H151 MT-Q3 c).
    */
   _acknowledgeTransit(record, def, op, pos, by) {
     const pre = this._transitPreconditions(record, def, op);
     if (pre.bad) return pre.bad;
     const { flight } = pre;
     const existing = this._transitOf(record, op.flightDataId);
-    if (!existing || existing.state !== 'DECLINED') return verr(`no declined transit of ${def.name} by ${flight.callsign || op.flightDataId} to acknowledge`, { airspace: viewOf(record) });
+    if (existing && existing.state === 'COMPLETED') {
+      if (!this._isDecider(def, pos)) return this._denied(record, `only ${this._decidersText(def)} may acknowledge the completed transit of ${def.name}`);
+      record.transits = record.transits.filter(t => t.flightDataId !== op.flightDataId);
+      this._touch(record, by, null);
+      return { ok: true };
+    }
+    if (!existing || existing.state !== 'DECLINED') return verr(`no declined or completed transit of ${def.name} by ${flight.callsign || op.flightDataId} to acknowledge`, { airspace: viewOf(record) });
     if (!flight.holders.some(h => h.positionId === pos)) {
       return this._denied(record, `${pos} holds no live Strip of ${flight.callsign || op.flightDataId}: the Position working the flight acknowledges the decline`);
     }
     record.transits = record.transits.filter(t => t.flightDataId !== op.flightDataId);
+    this._touch(record, by, null);
+    return { ok: true };
+  }
+
+  /**
+   * ADR 0144 (H171 SUA-Q1 b): "Transit complete", by hand: the flight has passed, so the APPROVED transit ends and a
+   * re-entry is unapproved again (it alerts and needs a new transit). The Position holding a live Strip of the flight or a
+   * decider may end it (the rights of the transit ops). Ended by a decider, it goes at once (the decider knows); ended by
+   * the holder, it stays COMPLETED until a decider acknowledges it (SUA-Q2 b). Not gated on IFR: a flight that cancelled
+   * IFR inside still completes its passage. Every check before the first write.
+   */
+  _completeTransit(record, def, op, pos, by) {
+    const pre = this._transitPreconditions(record, def, op);
+    if (pre.bad) return pre.bad;
+    const { flight } = pre;
+    const name = flight.callsign || op.flightDataId;
+    const existing = this._transitOf(record, op.flightDataId);
+    if (!existing || existing.state !== 'APPROVED') return verr(`no approved transit of ${def.name} by ${name} to complete`, { airspace: viewOf(record) });
+    const decider = this._isDecider(def, pos);
+    if (!decider && !flight.holders.some(h => h.positionId === pos)) {
+      return this._denied(record, `${pos} neither holds a live Strip of ${name} nor decides transits of ${def.name} (${this._decidersText(def)})`);
+    }
+    if (decider) record.transits = record.transits.filter(t => t.flightDataId !== op.flightDataId);
+    else this._setTransit(record, { ...existing, state: 'COMPLETED', completedBy: by || null, completedPositionId: pos, completedAt: this._clock.now() });
     this._touch(record, by, null);
     return { ok: true };
   }
@@ -1065,6 +1107,9 @@ class AirspaceStore extends SyncedStore {
       const m = this._theaterMap(theater, true);
       for (const saved of records) {
         const check = schema.validateAirspaceDefinition(saved.definition, { derived: 'recompute' });
+        // docs/adr/0144: a prohibited area is always in force, so its record never leaves RETURNED.
+        const lifecycle = check.ok && schema.isAlwaysInForce(check.definition) && (saved.state !== 'RETURNED' || saved.window || saved.pendingRequest);
+        if (lifecycle) throw new Error(`[efsp] the Board snapshot holds prohibited airspace ${saved.airspaceId} (theater ${theater}) at ${saved.state}: a prohibited area is always in force and has no schedule or activation (docs/adr/0144): correct or delete state/efsp-board.json`);
         if (!check.ok || saved.airspaceId !== saved.definition.airspaceId || !AIRSPACE_STATES.includes(saved.state)) {
           throw new Error(`[efsp] the Board snapshot holds airspace ${saved.airspaceId} (theater ${theater}) in a shape this build does not read${check.ok ? '' : `: ${check.detail}`}: delete state/efsp-board.json to start clean`);
         }
@@ -1103,6 +1148,6 @@ class AirspaceStore extends SyncedStore {
 
 module.exports = {
   AirspaceStore, AIRSPACE_STATES, LEGAL_TRANSITIONS, INITIAL_STATE, AIRSPACE_OP_KINDS, DEFINITION_OP_KINDS, STATE_OP_KINDS,
-  TRANSIT_OP_KINDS, TRANSIT_STATES,
+  TRANSIT_OP_KINDS, TRANSIT_STATES, OPEN_TRANSIT_STATES,
   checkReferences, deriveRangePositionIds,
 };

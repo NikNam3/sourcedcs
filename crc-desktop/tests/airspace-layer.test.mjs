@@ -166,3 +166,12 @@ test('the carrier circle follows the hull and is not drawn while the ship is not
   // crc-sync docs/adr/0143 (H166): an unclassified area (the Adana MTMA) says no class at all.
   assert.equal(jurisdictionLabelText({ ...cca.definition, airspaceClass: null, vfrService: 'IFR_SEPARATED' }, 18000).line2, 'GND–UNL');
 });
+
+test('crc-sync ADR 0144: a prohibited area is in force while RETURNED: solid, limits only, filed under ACTIVE, reads IN FORCE', () => {
+  const p = (state = 'RETURNED') => ({ ...area('P', state), definition: { ...area('P', state).definition, type: 'PROHIBITED' } });
+  assert.equal(labelText(p(), 18000).line2, 'GND–FL180');
+  assert.equal(m.decide(p(), m.defaultMenu(), T).shown, true, 'the default menu shows ACTIVE only');
+  const f = buildAirspaceFeatures([p()], m.defaultMenu(), T);
+  assert.equal(f.outlines.features[0].properties.dashed, false);
+  assert.equal(m.decide(area('B', 'RETURNED'), m.defaultMenu(), T).shown, false, 'a RETURNED MOA is still filtered');
+});

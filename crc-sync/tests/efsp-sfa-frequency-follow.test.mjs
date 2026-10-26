@@ -21,7 +21,7 @@ for (const [k, v] of Object.entries({
 })) process.env[k] = path.join(tmpDir, v);
 fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, JSON.stringify({ Test: [
   // A range AP controls, on its own frequency (not in the SFA pool).
-  { airspaceId: 'RANGE-SOUTH', name: 'South A/G Range', type: 'RANGE', controllingFacilityId: 'INCIRLIK', controllingPositionId: 'AP', usingPositionId: 'SOUTH_RANGE', controlFrequencyMhz: 283.5 },
+  { airspaceId: 'RANGE-SOUTH', name: 'South A/G Range', type: 'RESTRICTED', controllingFacilityId: 'INCIRLIK', controllingPositionId: 'AP', usingPositionId: 'SOUTH_RANGE', controlFrequencyMhz: 283.5 },
   // One whose working frequency happens to be an SFA pool frequency (freq-4, 235.1).
   { airspaceId: 'MOA-POOL', name: 'Pool MOA', type: 'MOA', controllingFacilityId: 'INCIRLIK', controllingPositionId: 'AP', workingFrequencyMhz: 235.1 },
 ] }));

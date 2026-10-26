@@ -6,8 +6,8 @@
 // actual containment only, and is not limited to en route. Both alert only for ACTIVE airspace.
 //
 // BY TYPE, as the FAA (this makes the airspace `type` behavioural for the first time):
-//   - RESTRICTED, PROHIBITED, and our RANGE and DANGER (restricted-like, an inference from the research): any aircraft
-//     inside without an approved entry alerts. Entry needs the using agency's permission (14 CFR 73.13, 73.15 (c)(2),
+//   - RESTRICTED and PROHIBITED: any aircraft inside without an approved entry alerts (a PROHIBITED area is always in
+//     force, docs/adr/0144). Entry needs the using agency's permission (14 CFR 73.13, 73.15 (c)(2),
 //     91.133 (a); JO 7110.65BB para 9-3-1 a-b).
 //   - MOA and WARNING: a tracked VFR aircraft (a correlated flight with no assigned altitude or heading, vfr.js) never
 //     alerts: VFR aircraft are not denied access (JO 7400.2R para 25-1-6 a, 24-1-3 d). A tracked IFR aircraft without an
@@ -50,7 +50,7 @@
 // the Position holding the Strip (`insideFor`), never to anyone else.
 //
 // THE STRIP'S "COORDINATE" FACT (docs/adr/0136, H156 MTB-Q3): the same pass over the filed routes says, per live Strip,
-// which ACTIVE transit-type areas (MOA, WARNING, RESTRICTED, and RANGE/DANGER as restricted: `TRANSIT_TYPES`) the flight's
+// which ACTIVE transit-type areas (MOA, WARNING, RESTRICTED: `TRANSIT_TYPES`) the flight's
 // filed route crosses by geometry (route-geometry.js `filedThrough`) while the flight is IFR (vfr.js) and has no transit of
 // that airspace (in any state: a decline is its own mark) and no approved entry (`_approved`: a Strip working it, the
 // working airspace, an APPROVED transit, an MRU's TOFI). No time to the boundary: "nobody can accurately predict the 5
@@ -63,7 +63,7 @@ const { TRANSIT_TYPES } = require('./authority/airspace');
 const { MS_PER_KT } = require('../units');
 
 const AIRBORNE_CATEGORIES = new Set([1, 2]); // airplane, helicopter
-const RESTRICTED_LIKE = new Set(['RESTRICTED', 'PROHIBITED', 'RANGE', 'DANGER']);
+const RESTRICTED_LIKE = new Set(['RESTRICTED', 'PROHIBITED']);
 const JOINT_USE = new Set(['MOA', 'WARNING']);
 // docs/adr/0124 §1: the airspace types whose card lists the flights an entry approval is for.
 const ENTRY_TYPES = new Set([...RESTRICTED_LIKE, ...JOINT_USE]);
@@ -303,6 +303,7 @@ class AirspaceEntryAlertMonitor {
         rowFor(airspace, t.flightDataId, t.callsign || null).transit = {
           state: t.state, requestedPositionId: t.requestedPositionId || null, decidedPositionId: t.decidedPositionId || null,
           reason: t.reason || null, selfCoordinated: !!t.selfCoordinated,
+          ...(t.state === 'COMPLETED' ? { completedPositionId: t.completedPositionId || null } : {}), // docs/adr/0144
         };
       }
     }

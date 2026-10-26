@@ -28,9 +28,11 @@ const _name = (airspace) => (airspace && airspace.definition && airspace.definit
 /**
  * The grey mark on the transit's Strip: `TRANSIT <name>` once approved, with `REQ` while asked, `DECLINED` until the
  * Position holding the flight acknowledges the decline (crc-sync ADR 0136). `title` says who asked and who decided.
- * @returns {{text:string, title:string, state:string}}
+ * None (null) once COMPLETED (crc-sync ADR 0144): the flight has passed.
+ * @returns {{text:string, title:string, state:string}|null}
  */
 export function transitMark(airspace, transit) {
+  if (transit.state === 'COMPLETED') return null; // crc-sync ADR 0144: the holder's side is done; only the decider's card says so
   const name = _name(airspace);
   const text = transit.state === 'APPROVED' ? `TRANSIT ${name}` : transit.state === 'REQUESTED' ? `TRANSIT ${name} REQ` : `TRANSIT ${name} DECLINED`;
   const bits = [];
@@ -94,29 +96,49 @@ export function acknowledgeableTransits(strip, airspaces, held) {
 }
 
 /**
+ * The APPROVED transits of this Strip's flight this controller may mark complete (crc-sync ADR 0144, H171 SUA-Q1 b): it
+ * holds the Strip's owner. Sent as a decider this controller also holds (the transit then goes at once, nothing for the
+ * decider to acknowledge), else as the owner (it stays on the decider's card as `transit complete` until acknowledged).
+ */
+export function completableTransits(strip, airspaces, held) {
+  if (!strip || strip.state === 'DROPPED' || !(held || []).includes(strip.ownerPositionId)) return [];
+  return transitsOfFlight(strip.flightDataId, airspaces)
+    .filter(({ transit }) => transit.state === 'APPROVED')
+    .map(({ airspace }) => {
+      const deciders = transitDeciders(airspace.definition || {});
+      return { airspace, positionId: (held || []).find(p => deciders.includes(p)) || strip.ownerPositionId };
+    });
+}
+
+/**
  * What one card row offers (crc-sync docs/adr/0124 §1 list, docs/adr/0128): the decider approves or declines; the Position
  * holding one of the flight's live Strips requests or cancels, and acknowledges a decline (ADR 0136). `deciders` is the server's list for the card
  * (`transitDeciders` on the traffic group), else the mirror's. Null fields: not offered. `flightData`, when this client has it,
  * keeps a VFR flight (vfr.js) from being offered a request or an approval (H151 MT-Q5 b); a decline stays.
  * @param {{transit:object|null, strips:{positionId:string}[]}} row
- * @returns {{text:string|null, approveAs:string|null, declineAs:string|null, requestAs:string|null, cancelAs:string|null, acknowledgeAs:string|null}}
+ * crc-sync ADR 0144: the decider or the holder marks an approved transit complete (`completeAs`, the decider first); a
+ * completed one is the grey `transit complete` until the decider acknowledges it, and the holder may ask again (a re-entry).
+ * @returns {{text:string|null, approveAs:string|null, declineAs:string|null, requestAs:string|null, cancelAs:string|null, acknowledgeAs:string|null, completeAs:string|null}}
  */
 export function transitRowOffer(row, airspace, held, deciders, flightData = null) {
-  const none = { text: null, approveAs: null, declineAs: null, requestAs: null, cancelAs: null, acknowledgeAs: null };
+  const none = { text: null, approveAs: null, declineAs: null, requestAs: null, cancelAs: null, acknowledgeAs: null, completeAs: null };
   if (!airspace || !isTransitAirspace(airspace)) return none;
   const t = row.transit || null;
-  const text = t ? (t.state === 'APPROVED' ? 'transit approved' : t.state === 'REQUESTED' ? `transit requested by ${t.requestedPositionId}` : `transit declined${t.reason ? `: ${t.reason}` : ''}`) : null;
+  const text = t ? (t.state === 'APPROVED' ? 'transit approved' : t.state === 'REQUESTED' ? `transit requested by ${t.requestedPositionId}`
+    : t.state === 'COMPLETED' ? 'transit complete' : `transit declined${t.reason ? `: ${t.reason}` : ''}`) : null;
   if (airspace.state !== 'ACTIVE') return { ...none, text };
   const decide = deciders && deciders.length ? deciders : transitDeciders(airspace.definition || {});
   const decider = (held || []).find(p => decide.includes(p)) || null;
   const holder = (row.strips || []).map(s => s.positionId).find(p => (held || []).includes(p)) || null;
   const vfr = !!flightData && hasNoClearance(flightData);
+  const state = t ? t.state : null;
   return {
     text,
-    approveAs: decider && !vfr && (!t || t.state !== 'APPROVED') ? decider : null,
-    declineAs: decider && t && OPEN.has(t.state) ? decider : null,
-    requestAs: !decider && holder && !vfr && (!t || t.state === 'DECLINED') ? holder : null,
-    cancelAs: !decider && holder && t && t.state === 'REQUESTED' ? holder : null,
-    acknowledgeAs: holder && t && t.state === 'DECLINED' ? holder : null,
+    approveAs: decider && !vfr && (!t || (state !== 'APPROVED' && state !== 'COMPLETED')) ? decider : null,
+    declineAs: decider && t && OPEN.has(state) ? decider : null,
+    requestAs: !decider && holder && !vfr && (!t || state === 'DECLINED' || state === 'COMPLETED') ? holder : null,
+    cancelAs: !decider && holder && t && state === 'REQUESTED' ? holder : null,
+    acknowledgeAs: state === 'DECLINED' ? holder : state === 'COMPLETED' ? decider : null,
+    completeAs: state === 'APPROVED' ? (decider || holder) : null,
   };
 }

@@ -988,7 +988,7 @@ test('a return leg shows that it has a departure leg behind it', async () => {
 test('a flight sharing a block by altitude shows its restriction, not just the airspace', async () => {
   const airspaces = [{
     airspaceId: 'D-12', state: 'ACTIVE', rev: 1, transitions: [],
-    definition: { airspaceId: 'D-12', name: 'Danger 12', type: 'DANGER', controllingPositionId: 'CTR', workingFrequencyMhz: 135.5 },
+    definition: { airspaceId: 'D-12', name: 'Danger 12', type: 'RESTRICTED', controllingPositionId: 'CTR', workingFrequencyMhz: 135.5 },
   }];
   const restricted = stripAt({
     ownerPositionId: 'CTR',
@@ -1051,7 +1051,7 @@ test('a range asks and the controlling Position answers, each seeing only their 
   const range = (state, extra = {}) => ({
     airspaceId: 'RANGE-SOUTH', state, rev: 2, window: null, pendingRequest: null, transitions: [],
     definition: {
-      airspaceId: 'RANGE-SOUTH', name: 'South Range', type: 'RANGE',
+      airspaceId: 'RANGE-SOUTH', name: 'South Range', type: 'RESTRICTED',
       controllingPositionId: 'AP', usingPositionId: 'SOUTH_RANGE', controlFrequencyMhz: 283.5,
     },
     ...extra,
