@@ -678,9 +678,7 @@ function _makeRing(lat, lon, radiusM, ringType) {
 }
 
 // Range ring — shown for the selected reference track or airport.
-// Ring size for an airport is determined by the largest active radar for that airport. The airport's ring reads as a
-// radar coverage overlay, so it is hidden unless Settings → Map Overlays "Airport range ring" is on (H164 FT-Q1);
-// the reference track's ring is an explicit selection and always draws.
+// Ring size for an airport is determined by the largest active radar for that airport.
 export function buildRangeRing() {
   const features = [];
 
@@ -691,7 +689,7 @@ export function buildRangeRing() {
   }
 
   // Airport range ring — pick size from largest active radar for this airport
-  if (selectedApt && settings.airportRangeRing) {
+  if (selectedApt) {
     const active = getActiveRadars();
     const hasApp = active.some(r => r.id === `app:${selectedApt.name}`);
     const hasApt = active.some(r => r.id === `apt:${selectedApt.name}`);

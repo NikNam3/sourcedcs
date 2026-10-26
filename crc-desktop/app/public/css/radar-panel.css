@@ -17,6 +17,18 @@
       text-transform: uppercase;
       margin-bottom: 12px;
     }
+    /* The radar list's one summary line (H171 FT-Q11): grey like a section title, a click target that opens and
+       closes the list below it. */
+    .radar-list-header {
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      color: var(--ui-text-dim);
+      text-transform: uppercase;
+      margin-bottom: 8px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .radar-list-header:hover { color: var(--ui-text-bright); }
     .radar-row {
       display: flex;
       align-items: center;

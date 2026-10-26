@@ -43,24 +43,78 @@ export function refreshRadarPanelData() {
   renderCoverageList();
 }
 
+// ── The radar list: collapsed by default (H171 FT-Q11) ──────────────────
+//
+// A CTR controller sees a couple of hundred radars; the list used to sit
+// above everything else in this panel, so every sign-on meant scrolling past
+// it. It now sits last, behind one grey summary line with its count, and
+// stays collapsed until the controller opens it. The choice is remembered per
+// viewer (localStorage, best effort: without storage it simply starts
+// collapsed). What a controller must notice survives the collapse: radars
+// on the ground (no sweep) are counted in the summary line.
+
+const RADAR_LIST_EXPANDED_KEY = 'crc-desktop-radar-list-expanded';
+
+/** Whether the viewer last left the radar list open. Collapsed when storage is missing or unreadable. */
+export function isRadarListExpanded() {
+  try { return localStorage.getItem(RADAR_LIST_EXPANDED_KEY) === '1'; } catch (_) { return false; }
+}
+
+/** Remembers the open/closed choice; a storage failure only loses the memory, never the click. */
+export function setRadarListExpanded(expanded) {
+  _radarListExpanded = !!expanded;
+  try { localStorage.setItem(RADAR_LIST_EXPANDED_KEY, _radarListExpanded ? '1' : '0'); } catch (_) { /* no storage */ }
+  renderCoverageList();
+}
+
+let _radarListExpanded = isRadarListExpanded();
+
+/**
+ * The summary line's text, e.g. `RADARS · 214 · 2 GND ▸`. Ground radars are
+ * named because they are in the list but give no picture; the caret is
+ * left out when there is nothing to open.
+ */
+export function radarListSummary(radars, expanded) {
+  const n = radars.length;
+  const ground = radars.filter(r => r.onGround).length;
+  const parts = ['RADARS', String(n)];
+  if (ground > 0) parts.push(`${ground} GND`);
+  const text = parts.join(' · ');
+  return n === 0 ? text : `${text} ${expanded ? '▾' : '▸'}`;
+}
+
+function renderRadarListHeader(radars) {
+  const $header = document.getElementById('radar-list-header');
+  if (!$header) return;
+  $header.textContent = radarListSummary(radars, _radarListExpanded);
+  $header.title = radars.length === 0 ? '' : (_radarListExpanded ? 'Hide the radar list' : 'Show the radar list');
+}
+
+function toggleRadarList() {
+  if (getActiveRadars().length === 0) return; // nothing to open; the empty-state line is always shown
+  setRadarListExpanded(!_radarListExpanded);
+}
+
 /**
  * The radars the Positions we are signed on to grant us, and why. An empty list is a real
  * answer, not a failure: a Ground or Clearance Delivery controller has no
  * scope, and saying which Position would give them one is more use than an
- * empty box.
+ * empty box. That answer is one line and is shown even while the list is
+ * collapsed; the rows themselves are drawn either way and only hidden.
  */
 export function renderCoverageList() {
   const $list = document.getElementById('radar-active-list');
+  const radars = getActiveRadars();
+  renderRadarListHeader(radars);
   if (!$list) return;
   $list.innerHTML = '';
-
-  const radars = getActiveRadars();
+  $list.style.display = (radars.length === 0 || _radarListExpanded) ? '' : 'none';
 
   if (radars.length === 0) {
     const $empty = document.createElement('div');
     $empty.className = 'radar-empty';
     $empty.textContent = coverageSignedOnPositions.length === 0
-      ? 'No radar coverage — select a Position under ACTING AS below.'
+      ? 'No radar coverage — select a Position under ACTING AS above.'
       : `No radar coverage. ${coverageSignedOnPositions.map(p => p.positionId).join(', ')} ${coverageSignedOnPositions.length === 1 ? 'works' : 'work'} no scope.`;
     $list.appendChild($empty);
     return;
@@ -305,6 +359,7 @@ export function updateRadarBadge() {
 export function initRadarPanel() {
   _positionControlsEl = document.getElementById('efsp-position-controls');
   _positionWarningsEl = document.getElementById('efsp-position-warnings');
+  document.getElementById('radar-list-header')?.addEventListener('click', toggleRadarList);
 
   renderCoverageList();
   renderPanelControls();
