@@ -332,6 +332,10 @@
   top: 0;
   bottom: 0;
   width: 10px;
+  /* An empty box: a double-click on it otherwise selects the whole Strip's
+     text, and the next press inside that selection starts the browser's own
+     text drag (pointercancel) instead of a Strip drag. */
+  user-select: none;
 }
 
 .efsp-strip-dragging {
