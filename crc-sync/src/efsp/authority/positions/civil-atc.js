@@ -4,11 +4,11 @@
 // LC and AP, and CENTER's CTR (guide §4.1). Moved from permission.js. PAR
 // is incirlik-military.js, which also adds AP's L18 columns.
 
-const { OP_KINDS, COORDINATION_OP_KINDS, COORDINATION_STEP_OP_KINDS, AP_CTR_ONLY_OP_KINDS, AIRSPACE_ENTRY_OP_KINDS, TOFI_OP_KINDS, FORMATION_OP_KINDS, PATTERN_OP_KINDS, NON_CREATE_OPS } = require('../op-kinds');
+const { OP_KINDS, COORDINATION_OP_KINDS, COORDINATION_STEP_OP_KINDS, AP_CTR_ONLY_OP_KINDS, AIRSPACE_ENTRY_OP_KINDS, TOFI_OP_KINDS, FORMATION_OP_KINDS, PATTERN_OP_KINDS, VFR_DEPARTURE_OP_KINDS, NON_CREATE_OPS } = require('../op-kinds');
 
 const PERMISSIONS = {
   OPS: new Set([...OP_KINDS.filter(k => !COORDINATION_OP_KINDS.includes(k) && !COORDINATION_STEP_OP_KINDS.includes(k) && !AP_CTR_ONLY_OP_KINDS.includes(k) && !TOFI_OP_KINDS.includes(k) && !AIRSPACE_ENTRY_OP_KINDS.includes(k)), ...FORMATION_OP_KINDS]),
-  CD:  new Set([...NON_CREATE_OPS, 'CreateStrip', ...FORMATION_OP_KINDS]), // H164 FT-Q2 a: CD originates a DEPARTURE
+  CD:  new Set([...NON_CREATE_OPS, 'CreateStrip', ...FORMATION_OP_KINDS, ...VFR_DEPARTURE_OP_KINDS]), // H164 FT-Q2 a: CD originates a DEPARTURE; docs/adr/0143 a VFR one
   GC: new Set([...NON_CREATE_OPS, ...FORMATION_OP_KINDS]),
   LC: new Set([...NON_CREATE_OPS, ...FORMATION_OP_KINDS, ...PATTERN_OP_KINDS]), // docs/adr/0126: the tower works the pattern
   // AP deliberately excludes TOFI even though it otherwise gets the full

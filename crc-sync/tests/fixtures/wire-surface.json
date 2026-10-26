@@ -66,6 +66,7 @@
       "ControlRelease",
       "ConvertToArrival",
       "CreateStrip",
+      "CreateVfrDeparture",
       "Divert",
       "DropStrip",
       "FinalCall",

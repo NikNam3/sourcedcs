@@ -57,18 +57,23 @@ export function startFlightFollowing(trackId, callsign, aircraftData, onAck) {
   return null;
 }
 
+// The strip types a flight-following service rides on: a transit (H136) and a VFR departure (docs/adr/0143). An arrival's
+// service ends by landing (JO 7110.65BB para 5-1-9 b.4).
+const TERMINABLE_STRIP_TYPES = ['OVERFLIGHT', 'DEPARTURE'];
+
 /** No assigned altitude and no assigned heading: VFR the FAA way (H136 VQ2; vfr.js, shared with crc-sync). */
 function _noClearance(strip) {
   return hasNoClearance(getEfspFlightData(strip.flightDataId));
 }
 
 /**
- * Whether "Radar service terminated" is offered on this Strip: a live OVERFLIGHT Strip with no clearance, owned by a
- * radar Position this controller holds. (crc-sync accepts it on any live Strip AP or CTR owns; the menu offers it where
- * flight following is what the Strip is.)
+ * Whether "Radar service terminated" is offered on this Strip: a live OVERFLIGHT Strip with no clearance, or a VFR
+ * departure (a DEPARTURE with no clearance, crc-sync docs/adr/0143) once handed off, owned by a radar Position this
+ * controller holds. (crc-sync accepts it on any live Strip AP or CTR owns; the menu offers it where flight following is
+ * what the Strip is.)
  */
 export function canTerminateRadarService(strip) {
-  if (!strip || strip.state === 'DROPPED' || strip.stripType !== 'OVERFLIGHT') return false;
+  if (!strip || strip.state === 'DROPPED' || !TERMINABLE_STRIP_TYPES.includes(strip.stripType)) return false;
   if (!FLIGHT_FOLLOWING_POSITIONS.includes(strip.ownerPositionId)) return false;
   if (!getActingPositions().includes(strip.ownerPositionId)) return false;
   return _noClearance(strip);

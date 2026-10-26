@@ -84,16 +84,18 @@ export const COMPACT_BLOCKS_BY_STRIP_TYPE = {
 //  - The pattern cells P/S (9J-ENTRY) and OPT (9J-OPTION) where pattern traffic is worked: LC's arrivals and AP's
 //    arrivals, so the pilot's intentions can be set before the transfer (crc-sync docs/adr/0126, H150). Not on LC's
 //    departure face (H164 FT-Q3 a): a departure that stays in the pattern sets them in the expanded ▼ view.
+//  - DIR (9K, crc-sync docs/adr/0143), the VFR departure's direction of flight, on CD's, GC's, LC's and AP's departure
+//    face, drawn only once it is set (DIR_WHEN_SET): an IFR departure has none and the field would cost every Strip.
 //  - ALERT (14E) where an alert aircraft is ordered and moved: OPS sets it
 //    (decisions.md H56), and every ground Position shows it: CD, GC, LC
 //    (crc-sync docs/adr/0070).
 export const COMPACT_BLOCKS_BY_POSITION = {
   DEPARTURE: {
     OPS: ['1', '3', '5', '6', '7', '8', '8A', '8B', '9', '9F', '3D', '3E', '3G', '14E'],
-    CD:  ['1', '3', '5', '7', '8', '8A', '8B', '9', '9F', '10', '14A', '14D', '21', '14E'],
-    GC: ['1', '3', '5', '8', '8A', '14A', '14D', '17', '14E'],
-    LC: ['1', '3', '5', '8A', '21', '14D', '18', '3G', '14E'],
-    AP: ['1', '3', '5', '7', '8A', '9', '20', '21', '9A-SPEED', '14A', '22', '5A', 'SREG'],
+    CD:  ['1', '3', '5', '7', '8', '8A', '8B', '9', '9K', '9F', '10', '14A', '14D', '21', '14E'],
+    GC: ['1', '3', '5', '8', '8A', '9K', '14A', '14D', '17', '14E'],
+    LC: ['1', '3', '5', '8A', '9K', '21', '14D', '18', '3G', '14E'],
+    AP: ['1', '3', '5', '7', '8A', '9', '9K', '20', '21', '9A-SPEED', '14A', '22', '5A', 'SREG'],
     CTR: ['1', '3', '5', '7', '21', '20', '9A-SPEED', '8B', '9', '14A', '22', '24A', 'IFR', 'RSVC', 'SREG', '5A'],
   },
   ARRIVAL: {
@@ -107,6 +109,14 @@ export const COMPACT_BLOCKS_BY_POSITION = {
     CTR: ['1', '3', '5', '7A', '8B', '9', '9A-VECTOR', '9A-SPEED', '22', '24A', 'IFR', 'RSVC', 'SREG', '5A'],
   },
 };
+
+// crc-sync docs/adr/0143: the direction of flight is on the face only once it says something.
+export const DIR_WHEN_SET = '9K';
+
+/** Has this flight a direction of flight (a VFR departure, Block 9K)? */
+export function hasDirectionOfFlight(flightData) {
+  return !!(flightData && flightData.filed && flightData.filed.directionOfFlight);
+}
 
 // Grid columns a field spans. Everything else takes one.
 export const FIELD_SPANS = { '1': 2, '3': 2, '9': 3, '24A': 2, M1: 2, M3: 2, M5: 2, C1: 2, C2: 1, C24: 2 };
@@ -137,6 +147,7 @@ export function compactBlocksFor(stripType, positionId, flightData) {
   const facilityId = positionId ? facilityOfPosition(positionId) : null;
   out = out.filter(id => !isParFinalOnlyOnCarrier(stripType, id, facilityId));
   if (keepIfrHidden(stripType, flightData)) out = out.filter(id => id !== 'IFR');
+  if (!hasDirectionOfFlight(flightData)) out = out.filter(id => id !== DIR_WHEN_SET);
   const sideLeads = sideNumberLeads(stripType, positionId, flightData);
   if (!sideLeads && SIDE_ONLY_WHEN_LEADING.includes(stripType)) out = out.filter(id => id !== 'C18');
   return sideLeads ? _swapSideAndCallsign(out) : out;

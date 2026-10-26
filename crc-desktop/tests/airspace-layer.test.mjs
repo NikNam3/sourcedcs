@@ -163,4 +163,6 @@ test('the carrier circle follows the hull and is not drawn while the ship is not
   const lost = hullPositionFromCarriers(() => ({ shipState: { found: false, lat: 36, lon: 35 } }));
   assert.equal(lost('CVN-72'), null);
   assert.equal(jurisdictionLabelText(cca.definition, 18000).line2, 'Class E · GND–UNL');
+  // crc-sync docs/adr/0143 (H166): an unclassified area (the Adana MTMA) says no class at all.
+  assert.equal(jurisdictionLabelText({ ...cca.definition, airspaceClass: null, vfrService: 'IFR_SEPARATED' }, 18000).line2, 'GND–UNL');
 });

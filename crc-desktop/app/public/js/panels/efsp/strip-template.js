@@ -77,6 +77,8 @@ export const DEPARTURE_BLOCK_MAP = {
   // crc-sync docs/adr/0126: LC's pattern cells (mirrors block-map.js's 9J comment).
   '9J-ENTRY':  { required: false, label: 'P/S',      target: { kind: 'flightData', path: 'assigned.patternEntry' } },
   '9J-OPTION': { required: false, label: 'OPT',      target: { kind: 'flightData', path: 'assigned.patternOption' } },
+  // crc-sync docs/adr/0143: a VFR departure's direction of flight (mirrors block-map.js's 9K comment).
+  '9K':  { required: false, label: 'DIR',      target: { kind: 'flightData', path: 'filed.directionOfFlight' } },
   // §9.10 stereo route name (docs/adr/0050) — mirrors crc-sync's
   // block-map.js '9F' exactly; see that module's comment for why it is not
   // numbered M18 and why writing it re-files the flight rather than just
@@ -655,6 +657,8 @@ const ENUM_SELECT_BLOCKS = {
   // Block 9F's route table, because these four values are the guide's own and
   // are not runtime config.
   '3G': ['CLEAN', 'LOADED', 'HUNG', 'EXPENDED'],
+  // crc-sync docs/adr/0143: the direction of flight, flight-data-store.js's DIRECTIONS_OF_FLIGHT (clearable).
+  '9K': ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'],
   // WP6 §9.6 (guide M16) — alert status, the guide's own three values;
   // flight-data-store.js's ALERT_STATUSES is the authority. 'NONE' is its cleared
   // value and is in the list, as 3G's 'CLEAN' is (crc-sync docs/adr/0070).
@@ -747,7 +751,7 @@ export function nextCycleValue(blockId, value) {
   return i + 1 < values.length ? values[i + 1] : '';
 }
 
-export const ENUM_CLEARABLE_BLOCKS = new Set(['RSVC', 'SREG', '24A', '9F', 'C4']);
+export const ENUM_CLEARABLE_BLOCKS = new Set(['RSVC', 'SREG', '24A', '9F', 'C4', '9K']);
 
 /** @returns {boolean} may this enum Block be cleared back to no value at all? */
 export function isEnumBlockClearable(blockId) {
@@ -901,6 +905,7 @@ const DEPARTURE_TITLES = {
   '9J-ENTRY': 'Pattern or straight-in (ours: the tower\'s pattern work, AIM 4-3-3)',
   '9J-OPTION': 'Touch-and-go, full stop or low approach (JO 7110.65 ¶3-8-2; ours as a cell)',
   '9F': 'Stereo route (ours, local tower-en-route canned route)',
+  '9K': 'VFR direction of flight (AIM 4-1-18 a.5(b); ours as a cell)',
   '9G-MTR': 'MTR designator (ours, military; guide M10)',
   '9G-ENTRY': 'MTR entry fix (ours, military)',
   '9G-TIME': 'MTR entry time, UTC HHMM (ours, military)',

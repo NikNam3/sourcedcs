@@ -7,6 +7,7 @@ import { facilityOfPosition } from '../facility-topology.js';
 import { getAllEfspStrips, getEfspFlightData, liveStripsForCallsign } from '../efsp-state.js';
 import { listStereoRoutesClient } from '../efsp-stereo-routes.js';
 import { lookupFlightPlanClient } from '../efsp-flight-plan-lookup.js';
+import { buildVfrDepartureForm, vfrDeparturePosition } from '../vfr-departure.js';
 import { refreshAtoImportButton } from '../ato-import.js';
 
 // Deliberately NOT window.prompt() — it's the only blocking native dialog
@@ -350,6 +351,7 @@ export function _refreshCreateStripAvailability() {
     }
   }
   _refreshMissionBindPicker(origin);
+  _refreshVfrDepartureButton();
   refreshAtoImportButton(); // docs/adr/0071
   _refreshAtoFirstPicker(origin); // docs/adr/0071 — OPS files against an ATO mission
   _createStripInputEl.disabled = !origin;
@@ -560,8 +562,25 @@ export function createStripFromFiledPlan(plan) {
   _setCreateStripMsg('Creating ' + plan.callsign + ' (flight plan found)…', false);
 }
 
+// crc-sync docs/adr/0143: the VFR departure form under the toolbar, toggled by its button where a VFR departure can be made.
+let _vfrForm = null;
+let _vfrBtnEl = null;
+function _refreshVfrDepartureButton() {
+  if (!_vfrBtnEl) return;
+  const can = !!vfrDeparturePosition();
+  _vfrBtnEl.hidden = !can;
+  if (!can && _vfrForm) _vfrForm.close();
+}
+
 export function _wireCreateStrip() {
   if (!_createStripBtnEl || !_createStripInputEl) return;
+  _vfrBtnEl = document.getElementById('efsp-vfr-departure-btn');
+  const toolbar = _createStripBtnEl.closest('.efsp-toolbar');
+  if (_vfrBtnEl && toolbar && !_vfrForm) {
+    _vfrForm = buildVfrDepartureForm({ prefill: () => _createStripInputEl.value });
+    toolbar.after(_vfrForm.el);
+    _vfrBtnEl.addEventListener('click', () => { if (_vfrForm.el.hidden) _vfrForm.open(); else _vfrForm.close(); });
+  }
   _createStripBtnEl.addEventListener('click', _submitCreateStrip);
   _createStripInputEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') _submitCreateStrip(); });
   _createStripInputEl.addEventListener('input', () => _refreshAtoFirstPicker(_createStripOrigin())); // docs/adr/0071

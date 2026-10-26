@@ -11,6 +11,7 @@ import { parseDotCommand } from '../dot-command.js';
 import { buildJoinOp, buildSplitOp, joinLeadCandidates, parseSplitCommand } from '../formation-rules.js';
 import { dispatchFormationOp } from '../bay/popovers/formation.js';
 import { canStartFlightFollowing, canTerminateRadarService, contactForToken, startFlightFollowing, terminateRadarService } from '../flight-following.js';
+import { readOutText, sendVfrDeparture } from '../vfr-departure.js';
 
 /**
  * `.mission <CALLSIGN>` — frag a mission line bound to a live flight.
@@ -94,6 +95,13 @@ export function _dispatchDotCommand(parsed) {
     return;
   }
 
+  // crc-sync docs/adr/0143: `.vfr <CALLSIGN> <TYPE> <DIR> [RWY]`, the VFR departure (the toolbar form's keyboard path).
+  // It makes the Strip, so nothing is selected.
+  if (parsed.verb === 'vfr') {
+    _vfrDepartureByDot(parsed.args);
+    return;
+  }
+
   // docs/adr/0100 §10: .undo undoes the slot's action, not "the selected Strip", so it needs no selection.
   if (parsed.verb === 'undo') {
     requestUndo();
@@ -130,7 +138,7 @@ export function _dispatchDotCommand(parsed) {
     sendEfspCorrelationMutation(actingPositionId, strip.flightDataId, baseRev, { kind: 'BindTrack', trackId: String(trackId) });
   } else if (parsed.verb === 'term') {
     // crc-sync H136: "RADAR SERVICE TERMINATED" on the selected flight-following Strip (the ⋯ menu's keyboard path).
-    if (!canTerminateRadarService(strip)) { _showDotCommandError('.term ends flight following: an overflight with no clearance, at AP or CTR'); return; }
+    if (!canTerminateRadarService(strip)) { _showDotCommandError('.term ends flight following: an overflight or a VFR departure with no clearance, at AP or CTR'); return; }
     terminateRadarService(strip);
   } else if (parsed.verb === 'split') {
     _dispatchSplitDotCommand(parsed, strip);
@@ -149,6 +157,16 @@ function _startFlightFollowingByDot(args) {
   if (!canStartFlightFollowing(trackId)) { _showDotCommandError(`contact ${String(token).toUpperCase()} already has a Strip, or no AP/CTR is held`); return; }
   const problem = startFlightFollowing(trackId, callsign, type, (ack) => {
     if (!ack.ok) _showDotCommandError(ack.detail || ack.reason || 'refused');
+  });
+  if (problem) _showDotCommandError(problem);
+}
+
+function _vfrDepartureByDot(args) {
+  const [callsign, aircraftData, direction, runway] = args;
+  if (!callsign || !aircraftData || !direction) { _showDotCommandError('.vfr needs a callsign, a type and a direction, e.g. .vfr VIPER11 F16 NW [23]'); return; }
+  const problem = sendVfrDeparture({ callsign, aircraftData, direction, runway }, (ack) => {
+    if (!ack.ok) _showDotCommandError(ack.detail || ack.reason || 'refused');
+    else _setCreateStripMsg(readOutText(ack), false);
   });
   if (problem) _showDotCommandError(problem);
 }

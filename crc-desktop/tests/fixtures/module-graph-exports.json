@@ -436,6 +436,7 @@
    "ACTIVATION_BY_KIND",
    "AIRSPACE_CLASSES",
    "AREA_TYPES",
+   "CLASS_VFR_SERVICE",
    "DEFINITION_FIELDS",
    "DERIVED_ROUTE_FIELDS",
    "ID_PATTERN",
@@ -459,13 +460,15 @@
    "OPTIONAL_FIELDS",
    "ROUTE_TYPES",
    "SOURCES",
+   "VFR_SERVICES",
    "checkAirspaceReferences",
    "deriveRouteEnvelope",
    "diffDefinitions",
    "isValidAltitude",
    "isValidFrequency",
    "polygonSelfIntersects",
-   "validateAirspaceDefinition"
+   "validateAirspaceDefinition",
+   "vfrServiceOf"
   ],
   "panels/efsp/airspace-view-state.js": [
    "NEW_KEY",
@@ -569,6 +572,7 @@
    "HAND_BACK_TO",
    "TOFI_ANSWERED_BY",
    "TOFI_COUNTERPARTS",
+   "VFR_DEPARTURE_POSITIONS",
    "canHandOffToCarrier"
   ],
   "panels/efsp/bay/block-edit.js": [
@@ -1136,13 +1140,15 @@
    "ringOf"
   ],
   "panels/efsp/jurisdiction-section.js": [
+   "VFR_SERVICE_TEXT",
    "buildJurisdictionSection",
    "draftOf",
    "geometryText",
    "jurisdictionAreas",
    "limitsLine",
    "openJurisdictionForms",
-   "patchFrom"
+   "patchFrom",
+   "vfrServiceLine"
   ],
   "panels/efsp/label-assign-rules.js": [
    "LABEL_ASSIGN_FIELDS",
@@ -1475,12 +1481,14 @@
    "COMPACT_BLOCKS_BY_POSITION",
    "COMPACT_BLOCKS_BY_STRIP_TYPE",
    "COMPACT_BLOCKS_SHARED",
+   "DIR_WHEN_SET",
    "FIELD_SPANS",
    "MTR_BLOCKS_BY_POSITION",
    "ORDNANCE_WHEN_SET",
    "SIDE_ONLY_WHEN_LEADING",
    "compactBlocksFor",
    "fieldSpanFor",
+   "hasDirectionOfFlight",
    "isOrdnanceSet",
    "keepIfrHidden",
    "leadingFlightName",
@@ -1580,6 +1588,15 @@
    "transitOn",
    "transitRowOffer",
    "transitsOfFlight"
+  ],
+  "panels/efsp/vfr-departure.js": [
+   "DIRECTIONS_OF_FLIGHT",
+   "buildVfrDepartureForm",
+   "buildVfrDepartureOp",
+   "readOutText",
+   "sendVfrDeparture",
+   "vfrDeparturePosition",
+   "vfrDepartureProblem"
   ],
   "panels/efsp/vfr.js": [
    "hasNoClearance"

@@ -1,7 +1,8 @@
 'use strict';
 
 // The airspaces panel's JURISDICTION section (crc-sync docs/adr/0125): whose airspace it is, listed in its own block under
-// the airspace cards, and edited inline (class, vertical limits, geometry). A jurisdiction area comes from the theater
+// the airspace cards, and edited inline (class, VFR service, vertical limits, geometry). The class is optional and an
+// unclassified area names its VFR service (crc-sync docs/adr/0143, H166: the Adana MTMA). A jurisdiction area comes from the theater
 // configuration: nobody creates or deletes one here, its owners and owning Facility are not edited here, and a carrier
 // circle's anchor (the hull it follows) is shown read-only. Its controlling Position edits it (AP the RAPCON area, LC the
 // tower's control zone), a carrier circle also CV_PRIFLY and CV_MARSHAL (airspace-capabilities.js, crc-sync's
@@ -12,7 +13,7 @@
 // `buildJurisdictionSection` is the DOM half. Grey throughout (dark cockpit); orange-red only on an error.
 
 import * as caps from './airspace-capabilities.js';
-import { AIRSPACE_CLASSES, MAX_RADIUS_NM } from './airspace-validate.js';
+import { AIRSPACE_CLASSES, CLASS_VFR_SERVICE, MAX_RADIUS_NM, VFR_SERVICES, vfrServiceOf } from './airspace-validate.js';
 import { altitudeText, parseAltitudeText } from './airspace-draft.js';
 import { getEfspAirspace } from './efsp-state.js';
 import { sendEfspAirspaceMutation } from './efsp-ws.js';
@@ -45,6 +46,20 @@ export function geometryText(geometry) {
   return 'No shape';
 }
 
+/** What a VFR service means, in the controller's words (crc-sync docs/adr/0143; JO 7110.65BB para 7-9-4, 7-8-2, 7-6-1). */
+export const VFR_SERVICE_TEXT = {
+  ALL_SEPARATED: 'VFR separated from IFR and VFR',
+  IFR_SEPARATED: 'IFR separated from VFR; VFR to VFR traffic advisories',
+  ADVISORY: 'VFR: traffic advisories, no separation',
+};
+
+/** The card's VFR line: the area's service, and "(Class D)" when the class gives it; null when there is none (A, G). */
+export function vfrServiceLine(def) {
+  const svc = vfrServiceOf(def);
+  if (!svc) return null;
+  return `${VFR_SERVICE_TEXT[svc]}${def.vfrService ? '' : ` (Class ${def.airspaceClass})`}`;
+}
+
 /** "SFC–3000", "SFC–FL280", "SFC–UNL". */
 export function limitsLine(def, transitionAltFt = 18000) {
   return `${def.altLowerFt == null ? 'SFC' : altitudeText(def.altLowerFt, transitionAltFt)}–${def.altUpperFt == null ? 'UNL' : altitudeText(def.altUpperFt, transitionAltFt)}`;
@@ -65,6 +80,7 @@ export function draftOf(def, transitionAltFt = 18000) {
   const g = def.geometry || {};
   const d = {
     airspaceClass: def.airspaceClass || '',
+    vfrService: def.vfrService || '',
     altLowerFt: altitudeText(def.altLowerFt ?? null, transitionAltFt),
     altUpperFt: altitudeText(def.altUpperFt ?? null, transitionAltFt),
   };
@@ -90,9 +106,15 @@ const same = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
  */
 export function patchFrom(def, draft) {
   const errors = {}; const patch = {};
-  if (!AIRSPACE_CLASSES.includes(draft.airspaceClass)) errors.airspaceClass = `One of ${AIRSPACE_CLASSES.join(', ')}`;
-  else if (draft.airspaceClass === 'G' && (def.ownerPositionIds || []).length) errors.airspaceClass = 'Class G belongs to nobody: an owned area cannot be Class G';
-  else if (draft.airspaceClass !== def.airspaceClass) patch.airspaceClass = draft.airspaceClass;
+  // crc-sync docs/adr/0143: '' is unclassified (null on the wire), and an unclassified area names its VFR service.
+  const cls = draft.airspaceClass || null; const svc = draft.vfrService || null;
+  if (cls !== null && !AIRSPACE_CLASSES.includes(cls)) errors.airspaceClass = `One of ${AIRSPACE_CLASSES.join(', ')}, or unclassified`;
+  else if (cls === 'G' && (def.ownerPositionIds || []).length) errors.airspaceClass = 'Class G belongs to nobody: an owned area cannot be Class G';
+  else if (!same(cls, def.airspaceClass)) patch.airspaceClass = cls;
+  if (svc !== null && !VFR_SERVICES.includes(svc)) errors.vfrService = `One of ${VFR_SERVICES.join(', ')}`;
+  else if (svc !== null && (cls === 'A' || cls === 'G')) errors.vfrService = `Class ${cls} has no VFR service`;
+  else if (svc === null && cls === null) errors.vfrService = 'An unclassified area needs its VFR service';
+  else if (!same(svc, def.vfrService)) patch.vfrService = svc;
   const lo = parseAltitudeText(draft.altLowerFt); const hi = parseAltitudeText(draft.altUpperFt);
   if (Number.isNaN(lo)) errors.altLowerFt = 'Feet (3000) or a flight level (FL280); empty is the surface';
   if (Number.isNaN(hi)) errors.altUpperFt = 'Feet (3000) or a flight level (FL280); empty is unlimited';
@@ -144,7 +166,7 @@ const _open = new Map(); // airspaceId -> the open form view { el, close }
 export function openJurisdictionForms() { return [..._open.keys()]; }
 
 const FIELD_LABELS = {
-  airspaceClass: 'CLASS', altLowerFt: 'LOWER', altUpperFt: 'UPPER', radiusNm: 'RADIUS NM',
+  airspaceClass: 'CLASS', vfrService: 'VFR SERVICE', altLowerFt: 'LOWER', altUpperFt: 'UPPER', radiusNm: 'RADIUS NM',
   centre: 'CENTRE', cutFrom: 'CUT FROM', cutTo: 'CUT TO', points: 'POINTS',
 };
 
@@ -173,10 +195,24 @@ function _openForm(record, authority, transitionAltFt) {
     return i;
   };
   const cls = document.createElement('select'); cls.className = 'airspace-input';
+  cls.appendChild(new Option('none (unclassified)', ''));
   for (const c of AIRSPACE_CLASSES) cls.appendChild(new Option(c, c));
   cls.value = draft.airspaceClass;
-  cls.addEventListener('change', () => { draft.airspaceClass = cls.value; refresh(); });
+  // The VFR service: '' follows the class (its name says which), else the area's own (crc-sync docs/adr/0143).
+  const svc = document.createElement('select'); svc.className = 'airspace-input';
+  const byClass = new Option('', '');
+  svc.appendChild(byClass);
+  for (const v of VFR_SERVICES) svc.appendChild(new Option(VFR_SERVICE_TEXT[v], v));
+  svc.value = draft.vfrService;
+  const syncByClass = () => {
+    const given = CLASS_VFR_SERVICE[draft.airspaceClass];
+    byClass.textContent = given ? `by the class: ${VFR_SERVICE_TEXT[given]}` : draft.airspaceClass ? 'none' : 'pick one';
+  };
+  syncByClass();
+  cls.addEventListener('change', () => { draft.airspaceClass = cls.value; syncByClass(); refresh(); });
+  svc.addEventListener('change', () => { draft.vfrService = svc.value; refresh(); });
   row('airspaceClass', cls);
+  row('vfrService', svc);
   row('altLowerFt', text('altLowerFt', 'empty = surface'));
   row('altUpperFt', text('altUpperFt', 'empty = unlimited'));
   if ('radiusNm' in draft) row('radiusNm', text('radiusNm', 'nm'));
@@ -246,18 +282,19 @@ export function buildJurisdictionSection(airspaces, signedOn, { transitionAltFt 
   const section = _el('div', 'jurisdiction-section');
   section.dataset.testid = 'jurisdiction-section';
   section.appendChild(_el('div', 'airspace-group', `JURISDICTION · ${areas.length}`));
-  section.appendChild(_el('div', 'airspace-field-why', 'Whose airspace an aircraft is in. Outside every area it is CENTER\'s (Class E); a carrier area wins wherever it is.'));
+  section.appendChild(_el('div', 'airspace-field-why', 'Whose airspace an aircraft is in, and what VFR gets there. Outside every area it is CENTER\'s (Class E); a carrier area wins wherever it is.'));
   for (const rec of areas) {
     const d = rec.definition;
     const card = _el('div', 'airspace-card jurisdiction-card');
     card.dataset.jurisdictionId = rec.airspaceId;
     const head = _el('div', 'airspace-card-header');
     head.appendChild(_el('span', 'airspace-name', d.name || rec.airspaceId));
-    head.appendChild(_el('span', 'airspace-state', `Class ${d.airspaceClass}`));
+    if (d.airspaceClass) head.appendChild(_el('span', 'airspace-state', `Class ${d.airspaceClass}`));
     card.appendChild(head);
     const facts = [
       `${d.controllingFacilityId} · ${(d.ownerPositionIds || []).join(', ') || 'nobody'}`,
       limitsLine(d, transitionAltFt),
+      ...(vfrServiceLine(d) ? [vfrServiceLine(d)] : []),
       geometryText(d.geometry),
       ...(d.excludes && d.excludes.length ? [`Excludes ${d.excludes.join(', ')}`] : []),
     ];
