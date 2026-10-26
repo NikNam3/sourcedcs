@@ -1462,11 +1462,19 @@
   ],
   "panels/efsp/strip-drag.js": [
    "DRAG_THRESHOLD_PX",
+   "TAB_DROP_MIN_TRAVEL_PX",
    "cachedTopToViewportY",
    "computeInsertionIndex",
    "computeRackReconciliation",
    "hasExceededDragThreshold",
+   "isTabDropTravel",
+   "isUnchangedPlacement",
    "scrollCompensatedY"
+  ],
+  "panels/efsp/strip-edge.js": [
+   "EDGE_PRECEDENCE",
+   "stripEdgeMarkers",
+   "stripEdgeTitle"
   ],
   "panels/efsp/strip-exchanges.js": [
    "_coordinationExchange",

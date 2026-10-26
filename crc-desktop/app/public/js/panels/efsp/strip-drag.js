@@ -52,10 +52,33 @@ export function cachedTopToViewportY(cachedY, scrollTopAtCache, scrollTopNow) {
   return cachedY - (scrollTopNow - scrollTopAtCache);
 }
 
+// What the drop follows: the dragged Strip, not the cursor (H167).
+//
+// The Rack is measured closed up (F-402): the dragged Strip is out of the flow
+// and the Strip that was below it now sits where it was. The question used to
+// be "which neighbour midpoint is the CURSOR above", and the cursor is
+// wherever on the Strip the controller grabbed it. Grab a Strip in its lower
+// half, jitter 6 px past DRAG_THRESHOLD_PX on a click or a double-click, and
+// the cursor was already below the midpoint of the Strip that had closed up
+// under it: the drop landed one place down, with the ghost still over its own
+// slot. A grab in the upper half moved nothing, hence "sometimes".
+//
+// Now the question is "which slot is the GHOST's top edge nearest". A slot is
+// a place the dragged Strip's top can land: the top of each Strip in the
+// closed-up Rack, or one gap below the last. At zero travel the ghost's top is
+// exactly the top of its own slot, so a release there is no move, whatever
+// half was grabbed and whatever the neighbours' heights (a flipped Strip is
+// shorter). To move one place the ghost has to travel past the midpoint
+// between two slot tops, i.e. about half the neighbour it passes, in either
+// direction.
+
 /**
- * @param {{stripId:string, top:number, height:number}[]} rects — Strip
- *   rects in the target Rack, top-to-bottom order, cached at pointerdown.
- * @param {number} pointerY
+ * @param {{stripId:string, top:number, height:number}[]} rects — the other
+ *   Strips of the target Rack, top-to-bottom, measured once per drag (in the
+ *   closed-up layout, see the module comment).
+ * @param {number} ghostTopY — the dragged Strip's top edge, in the rects'
+ *   coordinate space: the pointer Y minus where on the Strip it was grabbed
+ *   (`grabOffsetY`), scroll-compensated like any other Y.
  * @returns {{index:number, afterStripId:string|null, beforeStripId:string|null}}
  *   afterStripId/beforeStripId feed directly into a MoveStrip/TransferStrip
  *   Mutation's neighbor references (crc-sync resolves the actual
@@ -63,10 +86,16 @@ export function cachedTopToViewportY(cachedY, scrollTopAtCache, scrollTopNow) {
  *   board-store.js module comment on why the client never computes a raw
  *   orderKey itself).
  */
-export function computeInsertionIndex(rects, pointerY) {
-  for (let i = 0; i < rects.length; i++) {
-    const mid = rects[i].top + rects[i].height / 2;
-    if (pointerY < mid) {
+export function computeInsertionIndex(rects, ghostTopY) {
+  const n = rects.length;
+  // The slot after the last Strip starts one inter-Strip gap below it; the gap
+  // is read off the last pair (vertical margins collapse, so every pair has
+  // the same one), 0 when there is no pair to read.
+  const lastGap = n >= 2 ? Math.max(0, rects[n - 1].top - (rects[n - 2].top + rects[n - 2].height)) : 0;
+  for (let i = 0; i < n; i++) {
+    const nextSlotTop = i + 1 < n ? rects[i + 1].top : rects[i].top + rects[i].height + lastGap;
+    const boundary = (rects[i].top + nextSlotTop) / 2;
+    if (ghostTopY < boundary) {
       return {
         index: i,
         afterStripId: i > 0 ? rects[i - 1].stripId : null,
@@ -75,21 +104,47 @@ export function computeInsertionIndex(rects, pointerY) {
     }
   }
   return {
-    index: rects.length,
-    afterStripId: rects.length > 0 ? rects[rects.length - 1].stripId : null,
+    index: n,
+    afterStripId: n > 0 ? rects[n - 1].stripId : null,
     beforeStripId: null,
   };
 }
 
+/**
+ * True when a drop would leave the Strip exactly where it already is: same
+ * Rack, same two neighbours. No MoveStrip is sent for it (a same-place drop
+ * used to send one whenever the Strip had a neighbour).
+ *
+ * @param {{bayId:string, rackId:string, afterStripId:string|null, beforeStripId:string|null}} origin
+ *   where the Strip was at pointerdown (its neighbours in the DOM order then)
+ * @param {{bayId:string, rackId:string, afterStripId:string|null, beforeStripId:string|null}} target
+ */
+export function isUnchangedPlacement(origin, target) {
+  return origin.bayId === target.bayId && origin.rackId === target.rackId
+    && (origin.afterStripId ?? null) === (target.afterStripId ?? null)
+    && (origin.beforeStripId ?? null) === (target.beforeStripId ?? null);
+}
+
 // A pointerdown+pointerup with negligible movement is a click, not a drag
-// — bay-view.js's _finishDrag gates BOTH its commit branches on this,
-// because computeInsertionIndex() above always resolves to SOME neighbor
-// position whenever a Rack has other Strips in it (it has no "no change"
-// case), so without this threshold a plain click could silently reorder
-// or relocate a Strip via drop-target detection under the cursor at that
-// instant. Matches the drag-threshold convention virtually every
-// production drag-and-drop implementation uses for the same reason.
+// — bay/drag.js's _finishDrag gates BOTH its commit branches on this: below
+// it nothing is captured, measured or sent, and the drop-target detection
+// under the cursor (the Position/Bay tabs) is never consulted. Matches the
+// drag-threshold convention virtually every production drag-and-drop
+// implementation uses for the same reason. Past it, a jittered click still
+// moves nothing: computeInsertionIndex follows the ghost, not the cursor.
 export const DRAG_THRESHOLD_PX = 5;
+
+// The Position/Bay tabs are a drop target only after more travel than a click
+// can slip (H167). The Bay tabs sit directly on top of the Bay content: in a
+// scrolled Bay a Strip is cut by that edge, and a press just under it with
+// ~10 px of upward slip released over a Bay tab and moved the Strip to that
+// Bay (measured in l4-drag). A deliberate drag to a tab goes further than this.
+export const TAB_DROP_MIN_TRAVEL_PX = 16;
+
+/** @returns {boolean} true once the pointer has travelled far enough from pointerdown for a Position/Bay tab under it to count as a drop target. */
+export function isTabDropTravel(dx, dy) {
+  return Math.hypot(dx, dy) > TAB_DROP_MIN_TRAVEL_PX;
+}
 
 /** @returns {boolean} true once total pointer travel from pointerdown exceeds DRAG_THRESHOLD_PX — the point at which a gesture stops being "just a click." */
 export function hasExceededDragThreshold(dx, dy) {

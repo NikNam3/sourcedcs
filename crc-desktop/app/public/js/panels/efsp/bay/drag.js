@@ -1,6 +1,6 @@
 'use strict';
 import {
-  cachedTopToViewportY, computeInsertionIndex, hasExceededDragThreshold, scrollCompensatedY
+  cachedTopToViewportY, computeInsertionIndex, hasExceededDragThreshold, isTabDropTravel, isUnchangedPlacement, scrollCompensatedY
 } from '../strip-drag.js';
 import { _isPseudoBayId } from './open-bays.js';
 import { _defaultBayFor, _defaultRackFor, _moveStrip, _transferStrip } from './dispatch.js';
@@ -15,7 +15,7 @@ import { markEfspChanged } from '../efsp-change-bus.js';
 // never ran). Modules have their own scope now; the distinct name stays so a
 // grep for either finds one thing.
 
-export let _efspDrag = null; // { strip, bayId, rackEl, rects, scrollEl, cacheScrollTop, insertionEl, dragEl, dragWidth, lastClientY, dropTargetEl, hasMoved }
+export let _efspDrag = null; // { strip, bayId, rackEl, rects, scrollEl, cacheScrollTop, insertionEl, dragEl, dragWidth, grabOffsetY, origin, lastClientY, dropTargetEl, hasMoved }
 
 /** The element the Rack scrolls inside — renderBay() appends every Rack straight into the Bay's own `#efsp-bay-content`, which is the `overflow-y: auto` box. Guarded because the unit-test DOM stub has neither `parentElement` nor `scrollTop`. */
 function _scrollParentOfRack(rackEl) {
@@ -79,8 +79,12 @@ export function _onStripPointerDown(e, strip) {
   // reason turned into a defect: measuring them before that class is applied
   // measures a layout the drag is about to invalidate (F-402). _cacheRackRects
   // runs from _onStripPointerMove instead, immediately after the class. The
-  // one thing that MUST be read now is the dragged Strip's own width, which is
-  // only available while it is still in the flow.
+  // one thing that MUST be read now is the dragged Strip's own box (its width,
+  // and where on it the pointer went down), which is only available while it
+  // is still in the flow.
+  const ownRect = e.currentTarget.getBoundingClientRect();
+  const rackStripEls = [...rackEl.querySelectorAll('.efsp-strip')];
+  const ownIndex = rackStripEls.indexOf(e.currentTarget);
 
   _efspDrag = {
     strip, insertionEl, dragEl: e.currentTarget,
@@ -91,7 +95,18 @@ export function _onStripPointerDown(e, strip) {
     // panel. Nothing in CSS can name this number (see .efsp-strip-dragging's
     // comment in efsp-panel.css, which records the two rules that were tried),
     // so it is pinned here and cleared in _finishDrag.
-    dragWidth: e.currentTarget.getBoundingClientRect().width,
+    dragWidth: ownRect.width,
+    // H167 — the drop follows the GHOST, whose top edge is the pointer minus
+    // this (see strip-drag.js's computeInsertionIndex). The ghost moves by the
+    // pointer's dy (translate3d below), so this offset holds for the whole drag.
+    grabOffsetY: e.clientY - ownRect.top,
+    // Where the Strip is now, so a drop that changes nothing sends nothing
+    // (isUnchangedPlacement).
+    origin: {
+      bayId: rackEl.dataset.bayId, rackId: rackEl.dataset.rackId,
+      afterStripId: ownIndex > 0 ? rackStripEls[ownIndex - 1].dataset.stripId : null,
+      beforeStripId: ownIndex >= 0 && ownIndex + 1 < rackStripEls.length ? rackStripEls[ownIndex + 1].dataset.stripId : null,
+    },
     // The Bay a cross-Rack drag may not leave: a move to another BAY is what
     // the Position/Bay tabs are for (_findDropTargetAt), and they carry
     // ownership semantics a bare Rack element does not.
@@ -246,7 +261,10 @@ function _onStripPointerMove(e) {
   _efspDrag.dragEl.style.transform = `translate3d(0, ${dy}px, 0)`;
   _requestDragAutoscroll();
 
-  const dropTargetEl = _findDropTargetAt(e.clientX, e.clientY);
+  // A tab counts only past TAB_DROP_MIN_TRAVEL_PX (H167): short of it the
+  // cursor may be over a Bay tab only because a click near the Bay's top edge
+  // slipped, and the drop stays in the Rack (where the ghost says no move).
+  const dropTargetEl = isTabDropTravel(e.clientX - _efspDrag.startX, dy) ? _findDropTargetAt(e.clientX, e.clientY) : null;
   if (dropTargetEl !== _efspDrag.dropTargetEl) {
     if (_efspDrag.dropTargetEl) _efspDrag.dropTargetEl.classList.remove('efsp-drop-target');
     if (dropTargetEl) dropTargetEl.classList.add('efsp-drop-target');
@@ -270,9 +288,9 @@ function _onStripPointerMove(e) {
 
   _efspDrag.insertionEl.style.display = '';
 
-  const { rects, rackEl, cacheScrollTop, scrollEl } = _efspDrag;
+  const { rects, rackEl, cacheScrollTop, scrollEl, grabOffsetY } = _efspDrag;
   const scrollNow = _scrollTopOf(scrollEl);
-  const { index } = computeInsertionIndex(rects, scrollCompensatedY(e.clientY, cacheScrollTop, scrollNow));
+  const { index } = computeInsertionIndex(rects, scrollCompensatedY(e.clientY - grabOffsetY, cacheScrollTop, scrollNow));
   const rackTop = rackEl.getBoundingClientRect().top;
   let lineY;
   if (rects.length === 0) {
@@ -291,7 +309,7 @@ function _onStripPointerMove(e) {
 
 function _finishDrag(commit) {
   if (!_efspDrag) return;
-  const { strip, rackEl, rects, dragEl, insertionEl, lastClientY, dropTargetEl, hasMoved, scrollEl, cacheScrollTop } = _efspDrag;
+  const { strip, rackEl, rects, dragEl, insertionEl, lastClientY, dropTargetEl, hasMoved, scrollEl, cacheScrollTop, grabOffsetY, origin } = _efspDrag;
   if (_dragAutoscrollFrame && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(_dragAutoscrollFrame);
   _dragAutoscrollFrame = null;
   document.removeEventListener('pointermove', _onStripPointerMove);
@@ -307,8 +325,9 @@ function _finishDrag(commit) {
   // (DRAG_THRESHOLD_PX) commits nothing at all; the Strip's own separate
   // 'click' listener handles selection instead. Without this gate,
   // computeInsertionIndex() always resolves to SOME neighbor position
-  // whenever the Rack has other Strips in it (it never itself reports "no
-  // change"), so a plain click could silently reorder or relocate a Strip.
+  // whenever the Rack has other Strips in it, so a plain click could silently
+  // reorder or relocate a Strip. A tab drop additionally needs the cursor to
+  // be over a tab at release (_findDropTargetAt), i.e. outside the Bay.
   if (commit && hasMoved && dropTargetEl) {
     const toPositionId = dropTargetEl.dataset.efspDropPosition;
     const explicitBayId = dropTargetEl.dataset.efspDropBay || null;
@@ -331,13 +350,16 @@ function _finishDrag(commit) {
     // second route), and the release then lands in a Rack that has moved since
     // the app last heard about it. `rackEl` is whichever Rack the pointer was
     // last over, which is the one the insertion line was drawn in (F-406).
+    //
+    // The Y is the ghost's top, not the cursor (H167): a jittered click or
+    // double-click that crossed DRAG_THRESHOLD_PX leaves the ghost over its own
+    // slot, which resolves to the Strip's own neighbours and sends nothing.
     const { afterStripId, beforeStripId } = computeInsertionIndex(
-      rects, scrollCompensatedY(lastClientY, cacheScrollTop, _scrollTopOf(scrollEl)),
+      rects, scrollCompensatedY(lastClientY - grabOffsetY, cacheScrollTop, _scrollTopOf(scrollEl)),
     );
-    const bayId = rackEl.dataset.bayId;
-    const rackId = rackEl.dataset.rackId;
-    if (bayId !== strip.bayId || rackId !== strip.rackId || afterStripId !== null || beforeStripId !== null) {
-      _moveStrip(strip, bayId, rackId, afterStripId, beforeStripId);
+    const target = { bayId: rackEl.dataset.bayId, rackId: rackEl.dataset.rackId, afterStripId, beforeStripId };
+    if (!isUnchangedPlacement(origin, target)) {
+      _moveStrip(strip, target.bayId, target.rackId, afterStripId, beforeStripId);
     }
   }
   // A drop back inside the search pseudo-Bay itself (no dropTargetEl, and

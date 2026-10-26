@@ -11,6 +11,10 @@ import { _onStripPointerDown } from './drag.js';
 import { markEfspChanged } from '../efsp-change-bus.js';
 import { stripSigner } from './strip-signer.js';
 import { _appendExpandedView, _expandedStripId, _setExpandedStripId } from './strip-expanded.js';
+import { EDGE_PRECEDENCE, stripEdgeMarkers, stripEdgeTitle } from '../strip-edge.js';
+import { marsaBadgeFor } from '../marsa-badge.js';
+import { correlationBadgeFor } from '../correlation-highlight.js';
+import { _stripAlerts } from '../strip-alerts.js';
 
 export function _buildStripEl(strip) {
   _setRestoredEditInThisStrip(false); // an open Block edit is restored into exactly one cell of this Strip
@@ -71,6 +75,7 @@ export function _buildStripEl(strip) {
     // Layout C (docs/adr/0056): tab | fields | tools. strip-view.js.
     _buildStripLayout(el, strip, obligation);
   }
+  _appendEdgeTip(el, strip, obligation); // after the layout: it adds the MARSA, contact-lost and alert edge classes
 
   // Flip: dblclick. Highlight: right-click (contextmenu) opens a 3-swatch
   // popover, or Ctrl+click steps the colour. Offset: Alt+click. Attention: Shift+click. All three guarded the same way the
@@ -103,6 +108,31 @@ export function _buildStripEl(strip) {
   return el;
 }
 
+
+/**
+ * H168 — a tooltip naming what the left edge shows (strip-edge.js). The edge is
+ * a border, so the title sits on a transparent child over it and the first few
+ * px of padding (`.efsp-strip-edge-tip`); nothing is drawn, and nothing is added
+ * when the edge shows nothing. It is not a control: a press on it is a press on
+ * the Strip (drag, click, double-click, right-click all reach the Strip).
+ */
+function _appendEdgeTip(el, strip, obligation) {
+  const classes = EDGE_PRECEDENCE.filter(c => el.classList.contains(c));
+  const has = (c) => classes.includes(c);
+  const details = { classes, highlight: strip.flags.highlight || null, obligation };
+  if (has('efsp-strip-marsa-voided') || has('efsp-strip-marsa-armed')) {
+    details.marsaTitle = (marsaBadgeFor(strip) || {}).title || '';
+  }
+  if (has('efsp-strip-correlation-warned')) details.correlationTitle = (correlationBadgeFor(strip) || {}).title || '';
+  if (has('efsp-strip-alert')) details.alertReasons = _stripAlerts(strip).filter(a => a.tone === 'bad').map(a => a.reason || a.text);
+  const title = stripEdgeTitle(stripEdgeMarkers(details));
+  if (!title) return;
+  const tip = document.createElement('div');
+  tip.className = 'efsp-strip-edge-tip';
+  tip.setAttribute('aria-hidden', 'true');
+  tip.title = title;
+  el.appendChild(tip);
+}
 
 /**
  * Space and Enter on a Strip toggle its selection — the keyboard half of the
