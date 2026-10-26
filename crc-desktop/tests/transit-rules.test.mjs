@@ -58,17 +58,17 @@ test('the Strip offers a request: held owner, IFR, ACTIVE transit type, no open 
 test('a card row: the decider approves or declines, the holder requests or cancels, OPS only reads', () => {
   const row = (transit, positionId = 'AP') => ({ flightDataId: 'fd1', transit, strips: [{ facilityId: 'INCIRLIK', stripId: 's1', positionId }] });
   const a = airspace('W-1', { type: 'WARNING', usingFacilityId: 'INCIRLIK' });
-  assert.deepEqual(rules.transitRowOffer(row(null), a, ['CTR'], ['CTR']), { text: null, approveAs: 'CTR', declineAs: null, requestAs: null, cancelAs: null, acknowledgeAs: null });
-  assert.deepEqual(rules.transitRowOffer(row(T('REQUESTED')), a, ['CTR'], ['CTR']), { text: 'transit requested by AP', approveAs: 'CTR', declineAs: 'CTR', requestAs: null, cancelAs: null, acknowledgeAs: null });
-  assert.deepEqual(rules.transitRowOffer(row(T('APPROVED')), a, ['CTR'], ['CTR']), { text: 'transit approved', approveAs: null, declineAs: 'CTR', requestAs: null, cancelAs: null, acknowledgeAs: null });
-  assert.deepEqual(rules.transitRowOffer(row(null), a, ['AP'], ['CTR']), { text: null, approveAs: null, declineAs: null, requestAs: 'AP', cancelAs: null, acknowledgeAs: null });
+  assert.deepEqual(rules.transitRowOffer(row(null), a, ['CTR'], ['CTR']), { text: null, approveAs: 'CTR', declineAs: null, requestAs: null, cancelAs: null, acknowledgeAs: null, completeAs: null });
+  assert.deepEqual(rules.transitRowOffer(row(T('REQUESTED')), a, ['CTR'], ['CTR']), { text: 'transit requested by AP', approveAs: 'CTR', declineAs: 'CTR', requestAs: null, cancelAs: null, acknowledgeAs: null, completeAs: null });
+  assert.deepEqual(rules.transitRowOffer(row(T('APPROVED')), a, ['CTR'], ['CTR']), { text: 'transit approved', approveAs: null, declineAs: 'CTR', requestAs: null, cancelAs: null, acknowledgeAs: null, completeAs: 'CTR' });
+  assert.deepEqual(rules.transitRowOffer(row(null), a, ['AP'], ['CTR']), { text: null, approveAs: null, declineAs: null, requestAs: 'AP', cancelAs: null, acknowledgeAs: null, completeAs: null });
   assert.deepEqual(rules.transitRowOffer(row(T('REQUESTED')), a, ['AP'], ['CTR']).cancelAs, 'AP');
   assert.equal(rules.transitRowOffer(row(T('DECLINED', { reason: 'no' })), a, ['AP'], ['CTR']).requestAs, 'AP', 'asks again');
   assert.equal(rules.transitRowOffer(row(T('DECLINED', { reason: 'no' })), a, ['AP'], ['CTR']).text, 'transit declined: no');
   assert.equal(rules.transitRowOffer(row(T('DECLINED')), a, ['AP'], ['CTR']).acknowledgeAs, 'AP', 'the holder acknowledges (ADR 0136)');
   assert.equal(rules.transitRowOffer(row(T('DECLINED')), a, ['CTR'], ['CTR']).acknowledgeAs, null, 'the decider holds no Strip of it');
   assert.equal(rules.transitRowOffer(row(T('REQUESTED')), a, ['AP'], ['CTR']).acknowledgeAs, null);
-  assert.deepEqual(rules.transitRowOffer(row(T('REQUESTED')), a, ['OPS'], ['CTR']), { text: 'transit requested by AP', approveAs: null, declineAs: null, requestAs: null, cancelAs: null, acknowledgeAs: null });
+  assert.deepEqual(rules.transitRowOffer(row(T('REQUESTED')), a, ['OPS'], ['CTR']), { text: 'transit requested by AP', approveAs: null, declineAs: null, requestAs: null, cancelAs: null, acknowledgeAs: null, completeAs: null });
   assert.equal(rules.transitRowOffer(row(null), a, ['CTR'], ['CTR'], VFR).approveAs, null, 'a VFR flight');
   assert.equal(rules.transitRowOffer(row(null), airspace('P-1', { type: 'PROHIBITED' }), ['CTR'], ['CTR']).approveAs, null);
   assert.equal(rules.transitRowOffer(row(null), { ...a, state: 'RELEASED' }, ['CTR'], ['CTR']).approveAs, null);
@@ -146,4 +146,46 @@ test('the card row: AP, holding the Strip, acknowledges a decline (crc-sync ADR 
   assert.ok(r.children.some(c => c.textContent === 'transit declined: live fire'));
   press(r.children.find(c => /airspace-transit-ack-btn/.test(c.className)));
   assert.deepEqual(m.sent.pop(), ['AP', 'MOA-1', null, { kind: 'AcknowledgeTransit', flightDataId: 'fd1' }]);
+});
+
+// ── crc-sync docs/adr/0144 (H171 SUA-Q1 b, Q2 b): Transit complete, and the decider's acknowledgement ──
+
+test('transit complete: no Strip mark once COMPLETED; the Strip offers it to the held owner, as a held decider first', () => {
+  const a = airspace('BRAVO');
+  assert.equal(rules.transitMark(a, T('COMPLETED')), null);
+  const list = [airspace('MOA-A', {}, [T('APPROVED')]), airspace('MOA-R', {}, [T('REQUESTED')]), airspace('MOA-C', {}, [T('COMPLETED')]),
+    airspace('MOA-T', { usingFacilityId: 'TACTICAL' }, [T('APPROVED', { decidedPositionId: 'TAC_C2' })])];
+  assert.deepEqual(rules.completableTransits(STRIP, list, ['AP']).map(c => [c.airspace.airspaceId, c.positionId]), [['MOA-A', 'AP'], ['MOA-T', 'AP']]);
+  assert.deepEqual(rules.completableTransits(STRIP, list, ['AP', 'TAC_C2']).map(c => [c.airspace.airspaceId, c.positionId]), [['MOA-A', 'AP'], ['MOA-T', 'TAC_C2']]);
+  assert.deepEqual(rules.completableTransits(STRIP, list, ['LC']), []);
+  assert.deepEqual(rules.completableTransits({ ...STRIP, state: 'DROPPED' }, list, ['AP']), []);
+  assert.deepEqual(rules.requestTransitChoices(STRIP, IFR, [list[2]], ['AP']).map(c => c.airspace.airspaceId), ['MOA-C'], 'a re-entry asks again');
+});
+
+test('a card row: the holder or the decider completes an approved transit; the decider acknowledges a completed one', () => {
+  const row = (transit, positionId = 'AP') => ({ flightDataId: 'fd1', transit, strips: [{ facilityId: 'INCIRLIK', stripId: 's1', positionId }] });
+  const a = airspace('W-1', { type: 'WARNING', usingFacilityId: 'INCIRLIK' });
+  assert.equal(rules.transitRowOffer(row(T('APPROVED')), a, ['AP'], ['CTR']).completeAs, 'AP');
+  assert.equal(rules.transitRowOffer(row(T('APPROVED')), a, ['AP', 'CTR'], ['CTR']).completeAs, 'CTR', 'the decider first: nothing to acknowledge');
+  assert.equal(rules.transitRowOffer(row(T('APPROVED')), a, ['OPS'], ['CTR']).completeAs, null);
+  assert.deepEqual(rules.transitRowOffer(row(T('COMPLETED')), a, ['CTR'], ['CTR']),
+    { text: 'transit complete', approveAs: null, declineAs: null, requestAs: null, cancelAs: null, acknowledgeAs: 'CTR', completeAs: null });
+  assert.deepEqual(rules.transitRowOffer(row(T('COMPLETED')), a, ['AP'], ['CTR']),
+    { text: 'transit complete', approveAs: null, declineAs: null, requestAs: 'AP', cancelAs: null, acknowledgeAs: null, completeAs: null });
+});
+
+test('the card row: AP marks the transit complete; CTR acknowledges the grey transit complete', async () => {
+  const moa = airspace('MOA-1', { usingFacilityId: 'INCIRLIK' }, [T('APPROVED')]);
+  let m = await mount({ facilityId: 'INCIRLIK', signedOn: ['AP'], airspaces: [moa], traffic: [{ airspaceId: 'MOA-1', transitDeciders: ['CTR'], flights: [ROW({ state: 'APPROVED', decidedPositionId: 'CTR' })] }] });
+  press(m.list.buildAirspaceEntryList(moa).children[0].children.find(c => /airspace-transit-complete-btn/.test(c.className)));
+  assert.deepEqual(m.sent.pop(), ['AP', 'MOA-1', null, { kind: 'EndTransit', flightDataId: 'fd1' }]);
+  const done = airspace('MOA-1', { usingFacilityId: 'INCIRLIK' }, [T('COMPLETED', { completedPositionId: 'AP' })]);
+  m = await mount({ facilityId: 'CENTER', signedOn: ['CTR'], airspaces: [done], traffic: [{ airspaceId: 'MOA-1', transitDeciders: ['CTR'], flights: [ROW({ state: 'COMPLETED', decidedPositionId: 'CTR', completedPositionId: 'AP' })] }] });
+  const [r] = m.list.buildAirspaceEntryList(done).children;
+  assert.ok(r.children.some(c => c.className === 'airspace-entry-transit' && c.textContent === 'transit complete'));
+  const ack = r.children.find(c => /airspace-transit-ack-btn/.test(c.className));
+  assert.match(ack.title, /transit of MOA-1 is complete \(AP\), as CTR/);
+  assert.equal(r.children.some(c => /airspace-transit-(approve|decline|complete)-btn/.test(c.className)), false);
+  press(ack);
+  assert.deepEqual(m.sent.pop(), ['CTR', 'MOA-1', null, { kind: 'AcknowledgeTransit', flightDataId: 'fd1' }]);
 });

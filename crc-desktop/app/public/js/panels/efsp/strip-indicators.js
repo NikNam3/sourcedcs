@@ -141,6 +141,7 @@ export function _buildIndicatorSlots(strip, el, obligation, alerts) {
       // crc-sync docs/adr/0128 (H151 MT-Q7 b): grey only, one per airspace this flight has a transit of.
       for (const { airspace, transit } of transitsOfFlight(strip.flightDataId, getAllEfspAirspaces())) {
         const mark = transitMark(airspace, transit);
+        if (!mark) continue; // crc-sync ADR 0144: a completed transit marks nothing on the Strip
         const node = _indicator(key, mark.text, 'on', `efsp-transit-mark efsp-transit-${mark.state.toLowerCase()}`, mark.title);
         node.dataset.airspaceId = airspace.airspaceId;
         slots.appendChild(node);

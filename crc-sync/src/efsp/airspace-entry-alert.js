@@ -303,6 +303,7 @@ class AirspaceEntryAlertMonitor {
         rowFor(airspace, t.flightDataId, t.callsign || null).transit = {
           state: t.state, requestedPositionId: t.requestedPositionId || null, decidedPositionId: t.decidedPositionId || null,
           reason: t.reason || null, selfCoordinated: !!t.selfCoordinated,
+          ...(t.state === 'COMPLETED' ? { completedPositionId: t.completedPositionId || null } : {}), // docs/adr/0144
         };
       }
     }

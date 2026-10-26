@@ -337,8 +337,8 @@ const ENTRY_SHAPES = {
       ...anyOf('airspaceId', 'theater', 'definition', 'defRev', 'definitionHistory', 'lastDenial', 'pendingRequest',
         'rev', 'state', 'transitions', 'updatedAt', 'updatedBy', 'window'),
       // docs/adr/0128
-      transits: arrayOf(anyOf('callsign', 'decidedAt', 'decidedBy', 'decidedPositionId', 'flightDataId', 'note', 'reason',
-        'requestedAt', 'requestedBy', 'requestedPositionId', 'selfCoordinated', 'state')),
+      transits: arrayOf(anyOf('callsign', 'completedAt', 'completedBy', 'completedPositionId', 'decidedAt', 'decidedBy',
+        'decidedPositionId', 'flightDataId', 'note', 'reason', 'requestedAt', 'requestedBy', 'requestedPositionId', 'selfCoordinated', 'state')),
     })),
     seeded: mapOf(true),
   },

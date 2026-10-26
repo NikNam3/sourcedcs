@@ -1,6 +1,6 @@
 'use strict';
 import { getAllEfspAirspaces, getEfspCorrelationForStrip, getEfspFlightData, getAllEfspStrips, getEfspStrip, otherLiveStripsForFlightData } from './efsp-state.js';
-import { acknowledgeableTransits, cancelableTransits, requestTransitChoices } from './transit-rules.js';
+import { acknowledgeableTransits, cancelableTransits, completableTransits, requestTransitChoices } from './transit-rules.js';
 import { requestTransit, sendTransitOp } from './transit-actions.js';
 import { openTransitPopover } from './bay/popovers/transit.js';
 import { toggleOffset } from './efsp-gestures.js';
@@ -163,6 +163,12 @@ function _stripMenuItems(strip) {
   for (const c of cancelableTransits(strip, getAllEfspAirspaces(), heldHere)) {
     items.push({ group: 'Start', key: `transit-cancel-${c.airspace.airspaceId}`, label: `Cancel transit request ${nameOf(c.airspace)}`, cls: 'efsp-coordinate-btn',
       enabled: true, title: `as ${c.positionId}`, run: () => { sendTransitOp(c.positionId, c.airspace, 'CancelTransit', strip.flightDataId); } });
+  }
+  // crc-sync ADR 0144 (H171 SUA-Q1 b): the flight has passed; a re-entry is unapproved again.
+  for (const c of completableTransits(strip, getAllEfspAirspaces(), heldHere)) {
+    items.push({ group: 'Start', key: `transit-complete-${c.airspace.airspaceId}`, label: `Transit complete ${nameOf(c.airspace)}`, cls: 'efsp-coordinate-btn',
+      enabled: true, title: `the flight has left ${nameOf(c.airspace)}: a re-entry needs a new transit (as ${c.positionId})`,
+      run: () => { sendTransitOp(c.positionId, c.airspace, 'EndTransit', strip.flightDataId); } });
   }
   // crc-sync ADR 0136 (H156 MTB-Q2 b): a decline stays until the Position working the flight has read it.
   for (const c of acknowledgeableTransits(strip, getAllEfspAirspaces(), heldHere)) {

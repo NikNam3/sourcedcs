@@ -259,3 +259,78 @@ test('a snapshot keeps the transits and its shape is the persisted shape', () =>
   bad.byTheater.Test.find(r => r.airspaceId === 'MOA-1').transits[0].block = { lowFt: 1 };
   assert.throws(() => checkPersistedShape({ airspaces: bad }, 'x.json'), /unknown key "airspaces.byTheater.Test.\d+.transits.0.block"|unknown key/);
 });
+
+// ── docs/adr/0144 (H171 SUA-Q1 b, Q2 b): "Transit complete" by hand, and the decider's acknowledgement ─────────────────
+
+test('transit complete by the holder (ADR 0144): COMPLETED, no longer approved, one EndTransit line; refusals write nothing', () => {
+  const lines = [];
+  const { store, clock, op, activate } = setup({ mutationLog: { record: (e) => lines.push(e) } });
+  activate('MOA-1');
+  assert.equal(op('MOA-1', { kind: 'EndTransit', flightDataId: 'fd1' }, 'AP').reason, 'VALIDATION_ERROR', 'no transit');
+  op('MOA-1', { kind: 'RequestTransit', flightDataId: 'fd1' }, 'AP');
+  assert.match(op('MOA-1', { kind: 'EndTransit', flightDataId: 'fd1' }, 'AP').detail, /no approved transit/, 'a request is cancelled, not completed');
+  op('MOA-1', { kind: 'ApproveTransit', flightDataId: 'fd1' }, 'CTR');
+  const lc = op('MOA-1', { kind: 'EndTransit', flightDataId: 'fd1' }, 'LC');
+  assert.equal(lc.reason, 'PERMISSION_DENIED');
+  assert.match(lc.detail, /LC neither holds a live Strip of VIPER11 nor decides transits of Test MOA|LC neither holds a live Strip of VIPER11/);
+  assert.equal(transitOf(store, 'MOA-1').state, 'APPROVED', 'a refusal wrote nothing');
+  assert.equal(lines.filter(l => l.op === 'EndTransit' && l.ok !== false).length, 0);
+  clock.t += 120000;
+  const r = op('MOA-1', { kind: 'EndTransit', flightDataId: 'fd1' }, 'AP', 'c-ap');
+  assert.equal(r.ok, true, r.detail);
+  const t = transitOf(store, 'MOA-1');
+  assert.deepEqual([t.state, t.completedPositionId, t.completedBy, t.completedAt, t.decidedPositionId], ['COMPLETED', 'AP', 'c-ap', clock.t, 'CTR']);
+  assert.equal(store.approvedTransit('MOA-1', 'fd1'), null, 'a re-entry is unapproved again (ADR 0119 alerts)');
+  const ends = lines.filter(l => l.op === 'EndTransit' && l.ok);
+  assert.equal(ends.length, 1);
+  assert.deepEqual([ends[0].trigger, ends[0].flightDataId, ends[0].actingPositionId, ends[0].airspaceId], ['COMPLETED', 'fd1', 'AP', 'MOA-1']);
+  assert.equal(op('MOA-1', { kind: 'EndTransit', flightDataId: 'fd1' }, 'AP').reason, 'VALIDATION_ERROR', 'already complete');
+  assert.equal(op('MOA-1', { kind: 'DeclineTransit', flightDataId: 'fd1' }, 'CTR').reason, 'VALIDATION_ERROR', 'nothing left to decline');
+  assert.deepEqual(store.getAirspace('MOA-1').transitions.map(x => x.state), ['SCHEDULED', 'ACTIVE'], 'no state transition');
+});
+
+test('the decider acknowledges a completed transit (ADR 0144, SUA-Q2 b); the holder may not; a new request replaces it', () => {
+  const { store, op, activate } = setup();
+  activate('MOA-1');
+  activate('MOA-T');
+  for (const id of ['MOA-1', 'MOA-T']) {
+    op(id, { kind: 'RequestTransit', flightDataId: 'fd1' }, 'AP');
+    op(id, { kind: 'ApproveTransit', flightDataId: 'fd1' }, id === 'MOA-T' ? 'TAC_C2' : 'CTR');
+    assert.equal(op(id, { kind: 'EndTransit', flightDataId: 'fd1' }, 'AP').ok, true);
+  }
+  assert.equal(op('MOA-1', { kind: 'AcknowledgeTransit', flightDataId: 'fd1' }, 'AP').reason, 'PERMISSION_DENIED', 'the holder already knows');
+  assert.match(op('MOA-T', { kind: 'AcknowledgeTransit', flightDataId: 'fd1' }, 'CTR').detail, /only TAC_C2 may acknowledge/, 'the MRU decides, so the MRU acknowledges');
+  const rev = store.getAirspace('MOA-1').rev;
+  assert.equal(op('MOA-1', { kind: 'AcknowledgeTransit', flightDataId: 'fd1' }, 'CTR').ok, true);
+  assert.deepEqual(store.getAirspace('MOA-1').transits, []);
+  assert.equal(store.getAirspace('MOA-1').rev, rev + 1);
+  assert.equal(op('MOA-T', { kind: 'RequestTransit', flightDataId: 'fd1' }, 'AP').ok, true, 'a re-entry is a new transit');
+  assert.equal(transitOf(store, 'MOA-T').state, 'REQUESTED');
+});
+
+test('transit complete by the decider (ADR 0144): the transit goes at once, nothing to acknowledge', () => {
+  const lines = [];
+  const { store, op, activate } = setup({ flights: { fd1: ifr(AP_HOLDS), fd2: ifr(CTR_HOLDS, 'HAWG21') }, mutationLog: { record: (e) => lines.push(e) } });
+  activate('MOA-1');
+  op('MOA-1', { kind: 'ApproveTransit', flightDataId: 'fd1' }, 'CTR');
+  op('MOA-1', { kind: 'RequestTransit', flightDataId: 'fd2' }, 'CTR'); // self-coordinated
+  assert.equal(op('MOA-1', { kind: 'EndTransit', flightDataId: 'fd1' }, 'CTR').ok, true, 'the decider, holding no Strip of it');
+  assert.equal(op('MOA-1', { kind: 'EndTransit', flightDataId: 'fd2' }, 'CTR').ok, true, 'holder and decider at once');
+  assert.deepEqual(store.getAirspace('MOA-1').transits, []);
+  assert.deepEqual(lines.filter(l => l.op === 'EndTransit' && l.ok).map(l => [l.flightDataId, l.trigger]), [['fd1', 'COMPLETED'], ['fd2', 'COMPLETED']]);
+});
+
+test('a completed transit is in the persisted shape, and still ends with the last live Strip, the release or the reset', () => {
+  const { store, state, op, activate } = setup();
+  activate('MOA-1');
+  op('MOA-1', { kind: 'ApproveTransit', flightDataId: 'fd1' }, 'CTR');
+  op('MOA-1', { kind: 'EndTransit', flightDataId: 'fd1' }, 'AP');
+  const snap = store.snapshot();
+  checkPersistedShape({ airspaces: snap }, 'x.json');
+  const { store: again } = setup();
+  again.restore(JSON.parse(JSON.stringify(snap)));
+  assert.equal(again.getAirspace('MOA-1').transits[0].state, 'COMPLETED');
+  state.flights.fd1 = ifr([]);
+  assert.equal(store.sweepTransits().length, 1);
+  assert.deepEqual(store.getAirspace('MOA-1').transits, []);
+});

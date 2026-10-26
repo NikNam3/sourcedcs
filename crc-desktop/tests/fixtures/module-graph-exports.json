@@ -1590,6 +1590,7 @@
   "panels/efsp/transit-rules.js": [
    "acknowledgeableTransits",
    "cancelableTransits",
+   "completableTransits",
    "coordinateMark",
    "requestTransitChoices",
    "transitMark",

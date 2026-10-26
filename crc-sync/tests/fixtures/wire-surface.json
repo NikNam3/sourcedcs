@@ -101,6 +101,7 @@
         "DeleteAirspace",
         "DenyActivation",
         "EditAirspace",
+        "EndTransit",
         "ImportAirspaces",
         "ReleaseAirspace",
         "RequestActivation",
