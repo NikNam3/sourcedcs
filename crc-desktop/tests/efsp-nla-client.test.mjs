@@ -154,6 +154,14 @@ test('this client mirror stays in lockstep with the real, authoritative server t
   assert.deepEqual(MISSION_STATE_OWNERS, server.MISSION_STATE_OWNERS);
 });
 
+test('a VFR strip has no state owners: its holder works it, on both sides (crc-sync docs/adr/0146)', () => {
+  assert.deepEqual(STATE_OWNERS_BY_STRIP_TYPE.VFR, {});
+  for (const id of ['LC', 'AP', 'OPS']) {
+    assert.equal(canActOnState(id, 'VFR', 'TRACKED'), serverConfig.permission.canActOnState(id, 'VFR', 'TRACKED'), id);
+  }
+  assert.equal(canActOnState('AP', 'VFR', 'DROPPED'), false);
+});
+
 // crc-sync's docs/adr/0074: the carrier's strip types. The server tables are authoritative; these are the mirrors.
 test('the carrier state owners and handoff table mirror the server exactly', () => {
   const server = serverConfig.permission;

@@ -4,23 +4,24 @@
 // LC and AP, and CENTER's CTR (guide §4.1). Moved from permission.js. PAR
 // is incirlik-military.js, which also adds AP's L18 columns.
 
-const { OP_KINDS, COORDINATION_OP_KINDS, COORDINATION_STEP_OP_KINDS, AP_CTR_ONLY_OP_KINDS, AIRSPACE_ENTRY_OP_KINDS, TOFI_OP_KINDS, FORMATION_OP_KINDS, PATTERN_OP_KINDS, VFR_DEPARTURE_OP_KINDS, NON_CREATE_OPS } = require('../op-kinds');
+const { OP_KINDS, COORDINATION_OP_KINDS, COORDINATION_STEP_OP_KINDS, AP_CTR_ONLY_OP_KINDS, AIRSPACE_ENTRY_OP_KINDS, TOFI_OP_KINDS, FORMATION_OP_KINDS, PATTERN_OP_KINDS, VFR_OP_KINDS, NON_CREATE_OPS } = require('../op-kinds');
 
 const PERMISSIONS = {
   OPS: new Set([...OP_KINDS.filter(k => !COORDINATION_OP_KINDS.includes(k) && !COORDINATION_STEP_OP_KINDS.includes(k) && !AP_CTR_ONLY_OP_KINDS.includes(k) && !TOFI_OP_KINDS.includes(k) && !AIRSPACE_ENTRY_OP_KINDS.includes(k)), ...FORMATION_OP_KINDS]),
-  CD:  new Set([...NON_CREATE_OPS, 'CreateStrip', ...FORMATION_OP_KINDS, ...VFR_DEPARTURE_OP_KINDS]), // H164 FT-Q2 a: CD originates a DEPARTURE; docs/adr/0143 a VFR one
-  GC: new Set([...NON_CREATE_OPS, ...FORMATION_OP_KINDS]),
-  LC: new Set([...NON_CREATE_OPS, ...FORMATION_OP_KINDS, ...PATTERN_OP_KINDS]), // docs/adr/0126: the tower works the pattern
+  // docs/adr/0146: every Position that works traffic holds the VFR strip's actions (VFR_OP_KINDS); OPS works none.
+  CD:  new Set([...NON_CREATE_OPS, 'CreateStrip', ...FORMATION_OP_KINDS, ...VFR_OP_KINDS]), // H164 FT-Q2 a: CD originates a DEPARTURE
+  GC: new Set([...NON_CREATE_OPS, ...FORMATION_OP_KINDS, ...VFR_OP_KINDS]),
+  LC: new Set([...NON_CREATE_OPS, ...FORMATION_OP_KINDS, ...PATTERN_OP_KINDS, ...VFR_OP_KINDS]), // docs/adr/0126: the tower works the pattern
   // AP deliberately excludes TOFI even though it otherwise gets the full
   // OP_KINDS set — guide §4.1's own Position table lists TOFI only for CTR
   // among the ATC Positions built so far; AP is not on TOFI's ATC side.
-  AP: new Set([...OP_KINDS.filter(k => !TOFI_OP_KINDS.includes(k)), ...FORMATION_OP_KINDS]),
+  AP: new Set([...OP_KINDS.filter(k => !TOFI_OP_KINDS.includes(k)), ...FORMATION_OP_KINDS, ...VFR_OP_KINDS]),
   // CTR gets CreateStrip too — it self-originates ARRIVAL Strips as the new
   // terminus stub (docs/adr/0014, mirroring the same "nothing further
   // upstream is built yet" shape as docs/adr/0008's original AP stub),
   // since no third Facility exists upstream of CENTER this slice. CTR also
   // gets TOFI (WP4A second slice) — the full OP_KINDS set already includes it.
-  CTR: new Set([...OP_KINDS, ...FORMATION_OP_KINDS]),
+  CTR: new Set([...OP_KINDS, ...FORMATION_OP_KINDS, ...VFR_OP_KINDS]),
 };
 
 // Which strip type(s) a Position may originate via CreateStrip. Every

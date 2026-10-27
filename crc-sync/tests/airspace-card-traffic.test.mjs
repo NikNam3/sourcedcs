@@ -80,7 +80,7 @@ test('approved: still listed (grey on the card), no longer alerting', () => {
 });
 
 test('a VFR flight inside a MOA is listed but does not alert (the alert rule decides amber, not the list)', () => {
-  const { monitor } = world({ tracks: [track(1)], inside: { 1: ['MOA-1'] }, flights: { 1: 'fd1' }, flightData: { fd1: VFR }, strips: { fd1: [AP_STRIP] } });
+  const { monitor } = world({ tracks: [track(1)], inside: { 1: ['MOA-1'] }, flights: { 1: 'fd1' }, flightData: { fd1: VFR }, strips: { fd1: [{ ...AP_STRIP, stripType: 'VFR', state: 'TRACKED' }] } });
   monitor.tick();
   const [row] = monitor.trafficFor(OPS)[0].flights;
   assert.deepEqual([row.inside, row.approved, row.alerting], [true, false, false]);

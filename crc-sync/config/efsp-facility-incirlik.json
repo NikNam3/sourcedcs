@@ -123,7 +123,8 @@
         "rackIds": [
           "main"
         ],
-        "impliesState": "CLEARED"
+        "impliesState": "CLEARED",
+        "vfr": true
       },
       {
         "bayId": "cd-held",
@@ -152,7 +153,8 @@
         "rackIds": [
           "main"
         ],
-        "impliesState": "TAXI"
+        "impliesState": "TAXI",
+        "vfr": true
       },
       {
         "bayId": "gc-taxi-in",
@@ -175,7 +177,8 @@
           "rwy-05",
           "rwy-23"
         ],
-        "impliesState": "RUNWAY_QUEUE"
+        "impliesState": "RUNWAY_QUEUE",
+        "vfr": true
       },
       {
         "bayId": "lc-airborne",
@@ -251,7 +254,8 @@
         "rackIds": [
           "main"
         ],
-        "holdsStripType": "OVERFLIGHT"
+        "holdsStripType": "OVERFLIGHT",
+        "vfr": true
       },
       {
         "bayId": "ap-coordination",

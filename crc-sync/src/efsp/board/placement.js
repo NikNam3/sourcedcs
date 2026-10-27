@@ -11,6 +11,13 @@
 
 const { keyBetween, rebalance, needsRebalance } = require('../order-key');
 const { runwayRackFor } = require('../runway-status');
+const authority = require('../authority');
+
+/** docs/adr/0146: a strip type that sits in any Bay of its owner (VFR), whose Bays imply nothing for it. */
+function sitsAnywhere(strip) {
+  const family = strip ? authority.stripTypeFamily(strip.stripType) : null;
+  return !!(family && family.anyBay);
+}
 
 class Placement {
   /**
@@ -246,6 +253,13 @@ class Placement {
    * @returns {{ok:true, impliedState:string|null}|{ok:false, reason:string, detail:string}}
    */
   validateBayImpliedTransition(strip, targetBayId, targetRackId) {
+    // docs/adr/0146: a VFR strip has no lifecycle, so a Bay's implied state or strip type never applies to it. Only a Bay
+    // with a view of its own (an SFA frequency board, a final) is not somewhere it goes.
+    if (sitsAnywhere(strip)) {
+      const bay = this._rules.bayDescriptor(targetBayId);
+      if (bay && bay.view) return { ok: false, reason: 'VALIDATION_ERROR', detail: `a ${strip.stripType} strip does not go in ${targetBayId}` };
+      return { ok: true, impliedState: null };
+    }
     // A strip-type Bay (`holdsStripType`, docs/adr/0087) takes only its own strip type's Strips.
     const holds = this._rules.bayHoldsStripType(targetBayId);
     if (holds && holds !== strip.stripType) {
@@ -341,6 +355,10 @@ class Placement {
    * @returns {{bayId:string, rackId:string}|null}
    */
   bayForNewOwner(positionId, state, strip = null) {
+    if (sitsAnywhere(strip)) {
+      const bay = this.vfrBayFor(positionId);
+      return bay ? { bayId: bay.bayId, rackId: this.placementRack(strip, bay) } : null;
+    }
     const bays = this._rules.baysFor(positionId);
     const stripTypeBay = strip ? bays.find(b => b.holdsStripType === strip.stripType) : null;
     if (stripTypeBay) return { bayId: stripTypeBay.bayId, rackId: this.placementRack(strip, stripTypeBay) };
@@ -373,7 +391,17 @@ class Placement {
    * `lc-runway-queue`'s own implied RUNWAY_QUEUE. Hence the explicit
    * `impliesState` re-check rather than trusting the lookup.
    */
+  /**
+   * docs/adr/0146: the Bay a VFR strip lands in at `positionId` when nobody chose one (a tag, an accepted handoff): the
+   * Bay the facility file marks `vfr`, or null. A Position works VFR strips when it has one (data, never an id; the op
+   * grant is the ceiling), and the client reads the same flag off the snapshot's Bays.
+   */
+  vfrBayFor(positionId) {
+    return (this._rules.baysFor(positionId) || []).find(b => b.vfr === true) || null;
+  }
+
   relocateForImpliedState(strip, toState) {
+    if (sitsAnywhere(strip)) return; // no Bay implies a VFR state (docs/adr/0146)
     if (this.stripTypeBayFor(strip)) return; // its Bay holds it in every state (docs/adr/0087)
     const bay = this._rules.bayForImpliedState(strip.ownerPositionId, toState);
     if (!bay || bay.impliesState !== toState || bay.bayId === strip.bayId) return;

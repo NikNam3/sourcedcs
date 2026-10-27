@@ -37,9 +37,6 @@ const OP_KINDS = [
   // Positions that actually work airborne flights; a range Position gets
   // neither, because it works no Strips at all (§4.1 rule 2).
   'ApproveAirspaceEntry', 'ClearAirspaceEntry',
-  // H136 (docs/wip/LT-VFR.md): flight following on a contact with no Strip, started and ended by the radar Position
-  // working it (JO 7110.65BB para 5-2-7 a, 5-1-9 a). AP and CTR only (AP_CTR_ONLY_OP_KINDS).
-  'StartFlightFollowing', 'TerminateRadarService',
 ];
 
 // The 5 cross-Facility coordination primitives (guide §4.6) — split out so
@@ -57,7 +54,7 @@ const COORDINATION_STEP_OP_KINDS = ['ControlRelease'];
 // (docs/adr/0023). Kept separate from COORDINATION_OP_KINDS since it isn't
 // one (no cross-Facility exchange, no replica — a same-Facility in-place
 // role change), but needs the identical exclusion from OPS/CD/GC/LC.
-const AP_CTR_ONLY_OP_KINDS = ['ConvertToArrival', 'Divert', 'StartFlightFollowing', 'TerminateRadarService'];
+const AP_CTR_ONLY_OP_KINDS = ['ConvertToArrival', 'Divert'];
 
 // Approving a flight into an airspace is something the Position working that
 // airborne flight does — AP and CTR here, since they are the Positions that
@@ -81,13 +78,14 @@ const FORMATION_OP_KINDS = ['SplitFormation', 'JoinFormation'];
 // alone, on FORMATION_OP_KINDS' pattern: never in OP_KINDS, where AP's and CTR's grants and NON_CREATE_OPS would pick it up.
 const PATTERN_OP_KINDS = ['JoinPattern', 'LeavePattern'];
 
-// docs/adr/0143 (H166): the VFR departure (board/ops/create-vfr-departure.js), flight data + discrete code + a DEPARTURE
-// Strip in one Mutation. A literal capability on the same pattern, held where VFR departures are given their code (CD);
-// the op itself also requires the right to create a DEPARTURE and to own its CLEARED state, so the grant is a ceiling.
-const VFR_DEPARTURE_OP_KINDS = ['CreateVfrDeparture'];
+// docs/adr/0146 (H174, H175): the VFR strip's actions. Tag a track (StartFlightFollowing), the STARS handoff (VfrHandoff),
+// the optional code (AssignCode), IFR <-> VFR in place (ChangeFlightRules) and "Radar service terminated". A literal
+// capability on FORMATION_OP_KINDS' pattern (never in OP_KINDS, where NON_CREATE_OPS would hand it to the tactical and
+// carrier Positions silently), held by every ATC Position that works traffic on a scope or the field.
+const VFR_OP_KINDS = ['StartFlightFollowing', 'TerminateRadarService', 'VfrHandoff', 'AssignCode', 'ChangeFlightRules'];
 
 const NON_CREATE_OPS = OP_KINDS.filter(k => k !== 'CreateStrip' && !COORDINATION_OP_KINDS.includes(k) && !COORDINATION_STEP_OP_KINDS.includes(k) && !AP_CTR_ONLY_OP_KINDS.includes(k) && !TOFI_OP_KINDS.includes(k) && !AIRSPACE_ENTRY_OP_KINDS.includes(k));
 
 module.exports = {
-  OP_KINDS, COORDINATION_OP_KINDS, COORDINATION_STEP_OP_KINDS, AP_CTR_ONLY_OP_KINDS, AIRSPACE_ENTRY_OP_KINDS, TOFI_OP_KINDS, FORMATION_OP_KINDS, PATTERN_OP_KINDS, VFR_DEPARTURE_OP_KINDS, NON_CREATE_OPS,
+  OP_KINDS, COORDINATION_OP_KINDS, COORDINATION_STEP_OP_KINDS, AP_CTR_ONLY_OP_KINDS, AIRSPACE_ENTRY_OP_KINDS, TOFI_OP_KINDS, FORMATION_OP_KINDS, PATTERN_OP_KINDS, VFR_OP_KINDS, NON_CREATE_OPS,
 };

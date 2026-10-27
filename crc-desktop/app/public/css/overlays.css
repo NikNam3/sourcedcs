@@ -125,8 +125,9 @@
       min-width: 0;
     }
     .label-menu-input:focus { outline: 1px solid var(--ui-border-3); }
-    /* crc-sync's docs/adr/0145: SUPPRESS one conflict alert; grey like every other item (dark cockpit) */
-    .label-menu-suppress {
+    /* crc-sync's docs/adr/0145: SUPPRESS one conflict alert; crc-sync docs/adr/0146: the VFR strip's actions (ACCEPT,
+       HO, RECALL, CODE, RADAR SVC TERM). Grey like every other item (dark cockpit) */
+    .label-menu-suppress, .label-menu-action {
       grid-column: 1 / -1;
       background: none;
       border: 1px solid var(--ui-border);

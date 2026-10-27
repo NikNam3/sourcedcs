@@ -213,11 +213,6 @@ const DEPARTURE_BLOCK_MAP = {
   'SREG': { required: false, target: { kind: 'tofi', field: 'separationRegime' } },
   '25': { required: true,  target: { kind: 'system' } },
   '26': { required: true,  target: { kind: 'system' } },
-  // docs/adr/0143 (H166): a VFR departure's proposed direction of flight (AIM para 4-1-18 a.5(b)), N, NE, ... NW. Sub-
-  // lettered onto Block 9 like 9F (the route family: for a VFR departure the direction is all the route there is). Set by
-  // CD's VFR departure action and editable by the Strip's holder; DEPARTURE only (an overflight's route is its own).
-  // Last in the map, so the freeze corpus that walks every Block in order gains one step at its end (ADR 0095 §1).
-  '9K': { required: false, target: { kind: 'flightData', path: 'filed.directionOfFlight' } },
 };
 
 // [SOURCE-DEFINED] Arrival Block Map (Phase 2, docs/adr/0008) — the real
@@ -536,9 +531,33 @@ const PATTERN_BLOCK_MAP = {
 const PAR_FINAL_ONLY_BLOCKS = Object.freeze(['7A', '9A-VECTOR']);
 const CARRIER_FACILITY_ID = 'CARRIER';
 
+// docs/adr/0146 (H174, H175 VR-Q1): the minimal VFR strip. Only what applies to a VFR aircraft a controller tagged:
+// callsign and Block 3, the code if one was given (not required: a primary target needs none, VR-Q4), the heading, speed
+// and altitude it was assigned (the flight's clearance cells, docs/adr/0058, OVERFLIGHT's ids, so conformance and the
+// label menu read them as on every strip type), the runway the tower gives it (Block 8A, DEPARTURE's own), the remarks
+// every strip type carries (H138 U2) and the working frequency an airspace approval writes (22). No route, no
+// destination, no release or void time, no clearance steps. The client draws "VFR" in the altitude cell (ERAM's
+// `VFR/055`, STARS's `V`), so nothing stored says it twice.
+const VFR_BLOCK_MAP = {
+  '1':  { required: true,  target: { kind: 'flightData', path: 'identity.callsign' } },
+  '2':  { required: true,  target: { kind: 'system' } },
+  '3':  { required: true,  target: { kind: 'aircraft-data' } },
+  '4':  { required: true,  target: { kind: 'system' } },
+  '4A': { required: false, target: { kind: 'flag' } },
+  '5':  { required: false, target: { kind: 'flightData', path: 'identity.beaconAssigned' } },
+  '7A': { required: false, target: { kind: 'clearance', field: 'altitude' }, interlock: 'ALTITUDE' },
+  '9A-VECTOR': { required: false, target: { kind: 'clearance', field: 'heading' }, interlock: 'COURSE' },
+  '9A-SPEED': { required: false, target: { kind: 'clearance', field: 'speed' } },
+  '8A': { required: false, target: { kind: 'flightData', path: 'filed.departureRunway' } },
+  '9E': { required: false, target: { kind: 'flightData', path: 'filed.remarks' } },
+  '22': { required: false, target: { kind: 'frequency' } },
+  '25': { required: true,  target: { kind: 'system' } },
+  '26': { required: true,  target: { kind: 'system' } },
+};
+
 const BLOCK_MAPS = {
   DEPARTURE: DEPARTURE_BLOCK_MAP, ARRIVAL: ARRIVAL_BLOCK_MAP, OVERFLIGHT: OVERFLIGHT_BLOCK_MAP, MISSION: MISSION_BLOCK_MAP,
-  MARSHAL: MARSHAL_BLOCK_MAP, FINAL: FINAL_BLOCK_MAP, PATTERN: PATTERN_BLOCK_MAP,
+  MARSHAL: MARSHAL_BLOCK_MAP, FINAL: FINAL_BLOCK_MAP, PATTERN: PATTERN_BLOCK_MAP, VFR: VFR_BLOCK_MAP,
 };
 
 /**

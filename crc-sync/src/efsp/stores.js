@@ -30,7 +30,7 @@ const carrierHulls = require('./carrier/hull-config');
 const { loadRecoveryTuning } = require('./carrier/recovery-tuning');
 const log = require('../log').logger('efsp:stores');
 const { anyOf, arrayOf, mapOf, checkShape } = require('../persisted-shape');
-const { hasNoClearance } = require('./vfr');
+const { isVfrFlight } = require('./vfr');
 
 // The Blocks that held the assigned altitude and heading as Strip annotations before docs/adr/0058 moved them onto
 // the flight record. A Strip that still has history in one is the old shape: the migration that moved it is gone
@@ -134,10 +134,13 @@ const REGISTRY = [
           const fd = stores.flightData && stores.flightData.getFlightData(flightDataId);
           if (!fd) return null;
           const holders = [];
+          const live = [];
           for (const [facilityId, { boardStore }] of facilities.entries()) {
-            for (const s of boardStore.getAll()) if (s.state !== 'DROPPED' && s.flightDataId === flightDataId) holders.push({ facilityId, positionId: s.ownerPositionId });
+            for (const s of boardStore.getAll()) {
+              if (s.state !== 'DROPPED' && s.flightDataId === flightDataId) { holders.push({ facilityId, positionId: s.ownerPositionId }); live.push(s); }
+            }
           }
-          return { callsign: (fd.identity && fd.identity.callsign) || null, ifr: !hasNoClearance(fd), holders };
+          return { callsign: (fd.identity && fd.identity.callsign) || null, ifr: !isVfrFlight(live), holders };
         },
         // The live ship a carrier circle follows (docs/adr/0125), read lazily: the carrier store is built after this one.
         hullPosition: (hullId) => (stores.carriers ? stores.carriers.getShipState(hullId) : null),
@@ -287,12 +290,14 @@ const STRIP_SHAPE = {
   sfaTransfer: STRIP_HANDOFF,
   finalCalls: { BEGIN_DESCENT: anyOf('at', 'by'), CLEARED_TO_LAND: anyOf('at', 'by') },
   previousLeg: anyOf('annotations', 'convertedAt', 'convertedBy', 'flags', 'stripType'),
+  // docs/adr/0146: a VFR handoff initiated and not yet accepted (board/ops/vfr-handoff.js).
+  vfrHandoff: anyOf('toPositionId', 'initiatedAt', 'initiatedBy'),
 };
 const FLIGHT_DATA_SECTIONS = {
   identity: anyOf('aircraftType', 'beaconAssigned', 'beaconObserved', 'callsign', 'degradation', 'equipmentCodes',
     'equipmentSuffix', 'flightSize', 'homeStation', 'modeOne', 'modeTwo', 'splitFrom', 'tailNumber', 'trackDegradationFlag', 'unit', 'wakeCategory'),
   filed: anyOf('arrivalFix', 'departureAirport', 'departureRunway', 'destinationAirport', 'estimatedArrivalTimeUtc',
-    'directionOfFlight', 'fullRouteClearance', 'originAirport', 'proposedDepartureTimeUtc', 'remarks', 'requestedAltitude', 'route', 'stereoRouteName'),
+    'fullRouteClearance', 'originAirport', 'proposedDepartureTimeUtc', 'remarks', 'requestedAltitude', 'route', 'stereoRouteName'),
   assigned: anyOf('atisCode', 'callForReleaseTimeUtc', 'callForReleaseWindowEndUtc', 'callForReleaseWindowStartUtc',
     'clearedAltitude', 'clearedRoute', 'datalinkClearanceIndicator', 'delayInfo', 'departureRelease', 'edctTimeUtc',
     'edctWindowEndUtc', 'edctWindowStartUtc', 'landingRunway', 'movementAreaEntryTimeUtc', 'patternEntry', 'patternOption', 'releaseTimeUtc', 'takeoffTimeUtc',

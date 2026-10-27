@@ -61,10 +61,12 @@ test('AP asks TAC_C2 for a transit of the MRU-worked MOA; CTR may not decide it;
   assert.equal(efsp.flightDataStore.getFlightData(fd).comms.workingFrequencyMhz ?? null, null);
 });
 
-test('a VFR flight (nothing assigned) and a Position not holding the flight are refused', () => {
+test('a VFR flight (worked on a VFR strip, even with an assigned altitude) and a Position not holding the flight are refused', () => {
   const { efsp, c, strip } = world();
   assert.equal(airspaceAct(efsp, c.LC, 'LC', 'MOA-ATC', { kind: 'RequestTransit', flightDataId: strip.flightDataId }).reason, 'PERMISSION_DENIED');
-  const vfrStrip = airborneDeparture(efsp, c, { ...DEPARTURE_FLIGHT_DATA, callsign: 'CESSNA1' }); // nothing assigned: VFR (vfr.js)
+  // docs/adr/0146: VFR is the strip type, not the absence of a clearance.
+  const vfrStrip = mustAct(efsp, c.AP, 'AP', null, { kind: 'StartFlightFollowing', trackId: '777', flightData: { callsign: 'CESSNA1', aircraftData: 'C172' } });
+  assert.equal(efsp.flightDataStore.setClearance(vfrStrip.flightDataId, 'altitude', { value: '045' }, { by: 'c-AP' }).ok, true);
   const vfr = airspaceAct(efsp, c.AP, 'AP', 'MOA-ATC', { kind: 'RequestTransit', flightDataId: vfrStrip.flightDataId });
   assert.equal(vfr.reason, 'VALIDATION_ERROR');
   assert.match(vfr.detail, /VFR/);

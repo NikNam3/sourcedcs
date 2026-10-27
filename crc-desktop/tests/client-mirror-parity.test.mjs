@@ -25,6 +25,7 @@ const require = createRequire(import.meta.url);
 
 const serverIff = require('../../crc-sync/src/surveillance/iff.js');
 const serverNla = require('../../crc-sync/src/efsp/nla.js');
+const serverAuthority = require('../../crc-sync/src/efsp/authority');
 const serverRunwayStatus = require('../../crc-sync/src/efsp/runway-status.js');
 const serverPermission = serverConfig.permission;
 const serverFacilities = serverConfig.facilityConfig;
@@ -64,9 +65,15 @@ test('D-9: NLA_LABELS has a label for every non-terminal state of every strip ty
 });
 
 test('D-9: the client owner tables name exactly the states nla.js has for each strip type (no state without an owner, no owner for a missing state)', () => {
-  const { STATE_OWNERS_BY_STRIP_TYPE } = clientNla;
+  const { STATE_OWNERS_BY_STRIP_TYPE, HOLDER_WORKS_EVERY_STATE } = clientNla;
   for (const [stripType, states] of Object.entries(serverNla.STATES_BY_STRIP_TYPE)) {
     const live = states.filter(s => s !== 'DROPPED');
+    // crc-sync docs/adr/0146: a strip type its holder works in every state has no owner table, on either side.
+    if (serverAuthority.stripTypeFamily(stripType).ownerWorksEveryState) {
+      assert.deepEqual(STATE_OWNERS_BY_STRIP_TYPE[stripType], {}, stripType);
+      assert.deepEqual([...HOLDER_WORKS_EVERY_STATE[stripType]].sort(), [...live].sort(), stripType);
+      continue;
+    }
     assert.deepEqual(Object.keys(STATE_OWNERS_BY_STRIP_TYPE[stripType]).sort(), [...live].sort(), stripType);
   }
 });

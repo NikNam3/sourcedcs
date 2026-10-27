@@ -1,27 +1,33 @@
 'use strict';
 import { getActingPositions, sendEfspCreateStrip, sendEfspMutation } from './efsp-ws.js';
-import { getAllEfspStrips, getEfspFlightData } from './efsp-state.js';
+import { getAllEfspStrips, getEfspBays } from './efsp-state.js';
 import { getAllEfspCorrelations, stripIdsForTrackId } from './correlation-state.js';
 import { facilityOfPosition } from './facility-topology.js';
-import { FLIGHT_FOLLOWING_POSITIONS } from './bay/authority-mirror.js';
 import { getAllTracks } from '../../picture.js';
-import { hasNoClearance } from './vfr.js';
+import { isVfrStrip } from './vfr.js';
 
-// Flight following (crc-sync H136, docs/wip/LT-VFR.md). "Start flight following" is one action on a contact with no
-// Strip: crc-sync makes the flight data, a discrete code and an OVERFLIGHT Strip IN_SECTOR at the acting radar Position,
-// and binds the contact, in one Mutation (JO 7110.65BB para 5-14-4 c, 5-2-7 a). "Radar service terminated" is one
-// action on the Strip: dropped, code released, airspace entry cleared, the contact untracked (para 5-1-9 a, 5-2-7 b).
-// VFR is no field: a Strip with no assigned altitude or heading (H136 VQ2).
+// The minimal VFR strip (crc-sync docs/adr/0146, H174, H175). A controller tags a track (its data block's menu, or the
+// track panel of an untracked target): callsign, type optional, a code only if asked, and crc-sync makes the flight data,
+// a VFR strip in the Position's VFR Bay and the binding in one Mutation (StartFlightFollowing). It moves between
+// Positions by the STARS handoff (VfrHandoff: initiate, the receiver accepts; recall), and "Radar service terminated"
+// ends it. Who may: a Position with a VFR Bay (the snapshot's Bays carry `vfr`, crc-sync's facility files): data, never
+// a Position id (ADR 0132). crc-sync's op grant is the ceiling and the authority.
 
-/** The radar Position this controller would start flight following at (AP or CTR, Primary), or null. */
-export function flightFollowingPosition() {
-  const acting = getActingPositions();
-  return FLIGHT_FOLLOWING_POSITIONS.find(p => acting.includes(p)) || null;
+/** The VFR Bay of a Position, from the snapshot's Bays, or null: the Position works no VFR strips. */
+export function vfrBayOf(positionId, bays = getEfspBays()) {
+  if (!positionId) return null;
+  const facilityId = facilityOfPosition(positionId);
+  return (bays || []).find(b => b.vfr === true && b.positionId === positionId && (!b.facilityId || b.facilityId === facilityId)) || null;
 }
 
-/** Whether "Start flight following" applies to this contact: a radar Position is held and no live Strip is on it. */
-export function canStartFlightFollowing(trackId) {
-  if (trackId == null || !flightFollowingPosition()) return false;
+/** The Position this controller tags a track at: the first Position it acts at that has a VFR Bay, or null. */
+export function vfrTagPosition() {
+  return getActingPositions().find(p => vfrBayOf(p)) || null;
+}
+
+/** Whether a tag applies to this contact: a Position that tags is held, and no live strip is on it. */
+export function canTagTrack(trackId) {
+  if (trackId == null || !vfrTagPosition()) return false;
   const wanted = String(trackId);
   if (stripIdsForTrackId(wanted).length) return false;
   // An explicit binding claims its contact even while crc-sync's picture misses it (crc-sync refuses the same).
@@ -40,45 +46,97 @@ export function contactForToken(token) {
   return null;
 }
 
-/**
- * Sends StartFlightFollowing. `onAck(ack)` gets the server's answer; a refusal is the caller's to show (it returns true
- * so the generic banner stays quiet). @returns {string|null} what is wrong before sending, or null when sent
- */
-export function startFlightFollowing(trackId, callsign, aircraftData, onAck) {
-  const positionId = flightFollowingPosition();
-  if (!positionId) return 'sign on to AP or CTR first';
+/** What is wrong with a tag before sending it, or null. The type is optional (H175). */
+export function tagProblem(callsign) {
   const cs = String(callsign || '').trim().toUpperCase();
-  if (!/^[A-Z0-9]{1,7}$/.test(cs)) return 'callsign: 1 to 7 letters or digits';
-  const type = String(aircraftData || '').trim().toUpperCase();
-  if (!type) return 'aircraft type, e.g. C172';
-  sendEfspCreateStrip(positionId, {
-    kind: 'StartFlightFollowing', trackId: String(trackId), flightData: { callsign: cs, aircraftData: type },
-  }, facilityOfPosition(positionId), { onAck: (ack) => { if (onAck) onAck(ack); return !ack.ok; } });
+  return /^[A-Z0-9]{1,7}$/.test(cs) ? null : 'callsign: 1 to 7 letters or digits';
+}
+
+/**
+ * Sends StartFlightFollowing (the tag). `onAck(ack)` gets the server's answer; a refusal is the caller's to show (it
+ * returns true so the generic banner stays quiet). @returns {string|null} what is wrong before sending, or null when sent
+ */
+export function tagTrack(trackId, callsign, aircraftData, onAck, { code = false, banner = false } = {}) {
+  const positionId = vfrTagPosition();
+  if (!positionId) return 'sign on to a Position that works VFR traffic first';
+  const problem = tagProblem(callsign);
+  if (problem) return problem;
+  const op = {
+    kind: 'StartFlightFollowing', trackId: String(trackId),
+    flightData: { callsign: String(callsign).trim().toUpperCase(), aircraftData: String(aircraftData || '').trim().toUpperCase() },
+  };
+  if (code) op.code = true;
+  // `banner`: a refusal shows on the Board's refusal banner (the label menu has closed); else the caller shows it.
+  sendEfspCreateStrip(positionId, op, facilityOfPosition(positionId), { onAck: (ack) => { if (onAck) onAck(ack); return banner ? false : !ack.ok; } });
   return null;
 }
 
-// The strip types a flight-following service rides on: a transit (H136) and a VFR departure (docs/adr/0143). An arrival's
-// service ends by landing (JO 7110.65BB para 5-1-9 b.4).
-const TERMINABLE_STRIP_TYPES = ['OVERFLIGHT', 'DEPARTURE'];
-
-/** No assigned altitude and no assigned heading: VFR the FAA way (H136 VQ2; vfr.js, shared with crc-sync). */
-function _noClearance(strip) {
-  return hasNoClearance(getEfspFlightData(strip.flightDataId));
+/** Is this live VFR strip held at a Position this controller acts at? */
+function _held(strip) {
+  return isVfrStrip(strip) && getActingPositions().includes(strip.ownerPositionId);
 }
 
-/**
- * Whether "Radar service terminated" is offered on this Strip: a live OVERFLIGHT Strip with no clearance, or a VFR
- * departure (a DEPARTURE with no clearance, crc-sync docs/adr/0143) once handed off, owned by a radar Position this
- * controller holds. (crc-sync accepts it on any live Strip AP or CTR owns; the menu offers it where flight following is
- * what the Strip is.)
- */
+/** "Radar service terminated" is the holder's, on a live VFR strip. */
 export function canTerminateRadarService(strip) {
-  if (!strip || strip.state === 'DROPPED' || !TERMINABLE_STRIP_TYPES.includes(strip.stripType)) return false;
-  if (!FLIGHT_FOLLOWING_POSITIONS.includes(strip.ownerPositionId)) return false;
-  if (!getActingPositions().includes(strip.ownerPositionId)) return false;
-  return _noClearance(strip);
+  return _held(strip);
 }
 
 export function terminateRadarService(strip) {
   return sendEfspMutation(strip.ownerPositionId, strip, { kind: 'TerminateRadarService' });
+}
+
+/**
+ * Where the holder may hand a VFR strip (the STARS handoff): every other Position of its Facility with a VFR Bay. None
+ * while a handoff is open (recall it first). Pure over `bays` (the snapshot's).
+ * @returns {string[]}
+ */
+export function vfrHandoffTargets(strip, bays = getEfspBays()) {
+  if (!isVfrStrip(strip) || strip.vfrHandoff) return [];
+  return (bays || [])
+    .filter(b => b.vfr === true && b.positionId !== strip.ownerPositionId && (!strip.facilityId || !b.facilityId || b.facilityId === strip.facilityId))
+    .map(b => b.positionId);
+}
+
+/** The Position this controller accepts an open VFR handoff as, or null (STARS: the receiver accepts). */
+export function vfrHandoffAcceptAs(strip) {
+  if (!isVfrStrip(strip) || !strip.vfrHandoff) return null;
+  return getActingPositions().includes(strip.vfrHandoff.toPositionId) ? strip.vfrHandoff.toPositionId : null;
+}
+
+/** May this controller recall the open handoff (the holder)? */
+export function canRecallVfrHandoff(strip) {
+  return _held(strip) && !!strip.vfrHandoff;
+}
+
+export function initiateVfrHandoff(strip, toPositionId) {
+  return sendEfspMutation(strip.ownerPositionId, strip, { kind: 'VfrHandoff', action: 'INITIATE', toPositionId });
+}
+export function recallVfrHandoff(strip) {
+  return sendEfspMutation(strip.ownerPositionId, strip, { kind: 'VfrHandoff', action: 'RECALL' });
+}
+export function acceptVfrHandoff(strip) {
+  const as = vfrHandoffAcceptAs(strip);
+  return as ? sendEfspMutation(as, strip, { kind: 'VfrHandoff', action: 'ACCEPT' }) : false;
+}
+
+/** A discrete code for a VFR strip whose flight has none (H175 VR-Q4), at the holder. */
+export function canAssignCode(strip, flightData) {
+  return _held(strip) && !(flightData && flightData.identity && flightData.identity.beaconAssigned);
+}
+export function assignCode(strip) {
+  return sendEfspMutation(strip.ownerPositionId, strip, { kind: 'AssignCode' });
+}
+
+/** IFR -> VFR in place ("IFR cancelled"), on a live IFR strip the controller holds. */
+const IFR_STRIP_TYPES = ['DEPARTURE', 'ARRIVAL', 'OVERFLIGHT'];
+export function canCancelIfr(strip) {
+  return !!strip && strip.state !== 'DROPPED' && IFR_STRIP_TYPES.includes(strip.stripType)
+    && getActingPositions().includes(strip.ownerPositionId) && !!vfrBayOf(strip.ownerPositionId);
+}
+export function cancelIfr(strip) {
+  return sendEfspMutation(strip.ownerPositionId, strip, { kind: 'ChangeFlightRules', to: 'VFR' });
+}
+/** VFR -> IFR in place, as one of the IFR strip types the holder originates (the caller names it). */
+export function changeToIfr(strip, stripType) {
+  return sendEfspMutation(strip.ownerPositionId, strip, { kind: 'ChangeFlightRules', to: 'IFR', stripType });
 }

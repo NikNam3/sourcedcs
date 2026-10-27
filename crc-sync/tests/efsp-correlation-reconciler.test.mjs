@@ -90,6 +90,7 @@ const ELIGIBLE = new Set([
   'PUSHBACK', 'TAXI', 'RUNWAY_QUEUE', 'LUAW', 'DEPARTED', 'HANDED_OFF', 'INBOUND', 'HANDED_TO_TOWER', 'TRAFFIC_PATTERN', 'FINAL', 'LANDED',
   'TAXI_IN', 'IN_SECTOR', 'AIRBORNE', 'ON_STATION', 'OFF_STATION', 'RTB',
   'LAUNCH', 'IN_STACK', 'COMMENCED', 'ON_FINAL', 'BALL', 'BOLTER_WAVEOFF', 'IN_PATTERN', 'RECOVERED',
+  'TRACKED', // docs/adr/0146: a tagged VFR has a track by definition
 ]);
 
 test('every state of every strip type is classified: ELIGIBLE here plus INELIGIBLE_STATES equals the registry\'s states', () => {

@@ -3,7 +3,7 @@ import { missionNow } from '../../mission-clock.js';
 
 // The Strip face's small DOM helpers (DESK-SPLIT, split out of strip-view.js): element and button builders, the waiting-time text.
 
-export const STRIP_TYPE_ABBR = { DEPARTURE: 'DEP', ARRIVAL: 'ARR', OVERFLIGHT: 'OVF', MISSION: 'MSN', MARSHAL: 'MAR', FINAL: 'FNL', PATTERN: 'PAT' };
+export const STRIP_TYPE_ABBR = { DEPARTURE: 'DEP', ARRIVAL: 'ARR', OVERFLIGHT: 'OVF', MISSION: 'MSN', MARSHAL: 'MAR', FINAL: 'FNL', PATTERN: 'PAT', VFR: 'VFR' }; // VFR: crc-sync docs/adr/0146, the tab reads VFR · TRACKED
 
 export function _stripEl(tag, className, text) {
   const node = document.createElement(tag);

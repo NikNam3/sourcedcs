@@ -63,12 +63,13 @@
     "efspOpKinds": [
       "AIT",
       "ApproveAirspaceEntry",
+      "AssignCode",
       "CarrierHandoff",
+      "ChangeFlightRules",
       "ClearAirspaceEntry",
       "ControlRelease",
       "ConvertToArrival",
       "CreateStrip",
-      "CreateVfrDeparture",
       "Divert",
       "DropStrip",
       "FinalCall",
@@ -89,7 +90,8 @@
       "TRAFFIC",
       "TerminateRadarService",
       "TransferStrip",
-      "Undo"
+      "Undo",
+      "VfrHandoff"
     ],
     "storeOpKinds": {
       "efsp-airspace-mutation": [

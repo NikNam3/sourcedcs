@@ -4,6 +4,11 @@ const { stripScope, retireScope, union, callsignOf } = require('../../undo/scope
 const { warn } = require('../../warnings');
 
 function _applyTransferStrip(ctx, strip, op, by) {
+  // docs/adr/0146 (H175 VR-Q2): a VFR strip moves only by the STARS handoff, which the receiver accepts (VfrHandoff), so
+  // who holds it is never changed by the sender alone.
+  if (strip.stripType === 'VFR') {
+    return { ok: false, reason: 'VALIDATION_ERROR', detail: 'hand a VFR strip off (the receiver accepts it)', strip };
+  }
   const bayCheck = ctx.placement.requireKnownBay(op.bayId, strip);
   if (bayCheck) return bayCheck;
   // H2 / H40 (docs/adr/0080): a working Position with a hand-back row may

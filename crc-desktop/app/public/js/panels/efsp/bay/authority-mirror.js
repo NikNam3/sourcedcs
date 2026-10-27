@@ -70,12 +70,3 @@ export const AIRSPACE_ENTRY_POSITIONS = ['AP', 'CTR'];
 // holds this to the server's tables.
 export const CONVERT_TO_ARRIVAL_POSITIONS = ['AP', 'CTR'];
 
-// crc-sync H136 (docs/wip/LT-VFR.md): the radar Positions that start and terminate flight following (StartFlightFollowing,
-// TerminateRadarService, AP_CTR_ONLY_OP_KINDS, and the right to create an OVERFLIGHT Strip). Held to the server by
-// efsp-flight-following-client.test.mjs.
-export const FLIGHT_FOLLOWING_POSITIONS = ['AP', 'CTR'];
-
-// crc-sync docs/adr/0143 (H166): the Positions that make a VFR departure (CreateVfrDeparture: the grant, the right to
-// create a DEPARTURE and to own its CLEARED state). Held to the server by efsp-vfr-departure-client.test.mjs. A mirror
-// by id until the server sends roles (U-ROLE-POSITIONS, ADR 0132).
-export const VFR_DEPARTURE_POSITIONS = ['CD'];

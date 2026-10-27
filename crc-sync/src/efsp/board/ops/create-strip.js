@@ -4,8 +4,9 @@ const crypto = require('crypto');
 const { newFlags } = require('../strip-util');
 const { warn } = require('../../warnings');
 const { atoFlightForLaunch } = require('../../carrier/ato-bind');
+const authority = require('../../authority');
 
-function _applyCreateStrip(ctx, op, actingPositionId, by) {
+function _applyCreateStrip(ctx, op, actingPositionId, by, { fromTrack = false } = {}) {
   // A Strip in a Bay this Facility does not have is invisible on every
   // Board — every read path goes through a Bay — while still holding a
   // beacon code. Cheaper to refuse than to hunt for later.
@@ -20,7 +21,12 @@ function _applyCreateStrip(ctx, op, actingPositionId, by) {
   // gate already applied in `StripOps#dispatch`: OPS may only originate DEPARTURE,
   // AP may only originate ARRIVAL. Checked before touching flightDataStore so
   // a denied CreateStrip has no side effects.
-  if (!ctx.rules.canCreateStripType(actingPositionId, stripType)) {
+  // docs/adr/0146: a VFR strip is made only by tagging its track (StartFlightFollowing, which checks who may), never typed
+  // up from nothing; that op runs this one with `fromTrack`.
+  const family = authority.stripTypeFamily(stripType);
+  if (family && family.anyBay) {
+    if (!fromTrack) return { ok: false, reason: 'VALIDATION_ERROR', detail: `a ${stripType} strip is started from its track` };
+  } else if (!ctx.rules.canCreateStripType(actingPositionId, stripType)) {
     return { ok: false, reason: 'PERMISSION_DENIED' };
   }
   // A Bay that implies a state (guide §3.5 rule 4) starts the Strip in it when the strip type has that state. A client's
@@ -161,5 +167,5 @@ function _applyCreateStrip(ctx, op, actingPositionId, by) {
 module.exports = {
   kind: 'CreateStrip',
   undo: 'none', // docs/adr/0100 §1: creating a Strip is not undone (drop it)
-  apply: (ctx, strip, op, meta) => _applyCreateStrip(ctx, op, meta.actingPositionId, meta.by),
+  apply: (ctx, strip, op, meta) => _applyCreateStrip(ctx, op, meta.actingPositionId, meta.by, { fromTrack: meta.fromTrack === true }),
 };

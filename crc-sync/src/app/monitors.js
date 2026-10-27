@@ -212,7 +212,7 @@ function buildMonitors({ env, efsp, facilityConfig, missionClock, missionSession
         for (const s of board.getAll()) {
           if (s.state === 'DROPPED' || !s.flightDataId) continue;
           if (!out.has(s.flightDataId)) out.set(s.flightDataId, []);
-          out.get(s.flightDataId).push({ facilityId, stripId: s.stripId, positionId: s.ownerPositionId, airspaceId: (s.airspaceEntry && s.airspaceEntry.airspaceId) || null });
+          out.get(s.flightDataId).push({ facilityId, stripId: s.stripId, stripType: s.stripType, state: s.state, positionId: s.ownerPositionId, airspaceId: (s.airspaceEntry && s.airspaceEntry.airspaceId) || null });
         }
       }
       return out;

@@ -11,6 +11,7 @@ import assert from 'node:assert/strict';
 import { BLOCK_MAPS } from '../app/public/js/panels/efsp/strip-template.js';
 import { COMPACT_BLOCKS_BY_POSITION, compactBlocksFor, fieldSpanFor, MTR_BLOCKS_BY_POSITION, leadingFlightName, sideNumberLeads } from '../app/public/js/panels/efsp/strip-fields.js';
 import { hasMtrData, mtrLostCommsAdvisory } from '../app/public/js/panels/efsp/mtr-advisory.js';
+import { setAirportSurfacePositions } from '../app/public/js/airport-surface.js';
 
 const everyList = () => Object.entries(COMPACT_BLOCKS_BY_POSITION)
   .flatMap(([stripType, byPos]) => Object.entries(byPos).map(([positionId, list]) => ({ stripType, positionId, list })));
@@ -155,7 +156,6 @@ test('GC, LC and MISSION get no MTR group', () => {
 });
 
 test('compactBlocksFor without flight data, or with one that has no MTR, is exactly what it was', () => {
-  // Cleared (IFR), so only the MTR rule is at work here, not keepIfrHidden's.
   const noMtr = { ...flightDataWithMtr({ designator: null, exitFix: '' }), clearance: { altitude: { entries: [{ status: 'ACTIVE', value: 24000 }] } } };
   for (const { stripType, positionId } of everyList()) {
     assert.deepEqual(Array.from(compactBlocksFor(stripType, positionId, noMtr)), Array.from(compactBlocksFor(stripType, positionId)), `${stripType} at ${positionId}`);
@@ -275,17 +275,15 @@ test('leadingFlightName (H124): a carrier Strip is named by its side number once
   assert.equal(leadingFlightName({ stripType: 'FINAL', ownerPositionId: 'CV_APP1' }, null), '');
 });
 
-// Briefing §4 small items (S-ARCH-56): KEEP IFR on a flight-following Strip. VFR the FAA way is no clearance
-// (vfr.js, H136 VQ2); such an OVERFLIGHT has no IFR to keep, so the cell is off its face unless it is set.
-test('KEEP IFR is off a flight-following (no-clearance OVERFLIGHT) Strip, unless it is set', () => {
-  const ACTIVE = { entries: [{ status: 'ACTIVE', value: 24000 }] };
-  const vfr = { identity: { callsign: 'N123' }, clearance: { altitude: null, heading: null }, tofi: { ifrActive: false } };
-  assert.ok(!compactBlocksFor('OVERFLIGHT', 'CTR', vfr).includes('IFR'), 'flight following at CTR');
-  assert.ok(compactBlocksFor('OVERFLIGHT', 'CTR', vfr).includes('RSVC'), 'only KEEP IFR goes');
-  assert.ok(compactBlocksFor('OVERFLIGHT', 'CTR', null).includes('IFR'), 'no flight data known: the list as it stands');
-  const cleared = { ...vfr, clearance: { altitude: ACTIVE, heading: null } };
-  assert.ok(compactBlocksFor('OVERFLIGHT', 'CTR', cleared).includes('IFR'), 'an IFR overflight with an assigned altitude keeps it');
-  const kept = { ...vfr, tofi: { ifrActive: true } };
-  assert.ok(compactBlocksFor('OVERFLIGHT', 'CTR', kept).includes('IFR'), 'a set KEEP IFR is never hidden');
-  assert.ok(compactBlocksFor('DEPARTURE', 'CTR', vfr).includes('IFR'), 'other strip types are untouched');
+// crc-sync docs/adr/0146: the minimal VFR strip's face, and its runway only where the tower works it.
+test('a VFR strip shows callsign, type, code, VFR/ALT, HDG, SPEED, and RWY at an airport-surface Position or once set', () => {
+  setAirportSurfacePositions({ INCIRLIK: ['GC', 'LC'] });
+  try {
+    assert.deepEqual(Array.from(compactBlocksFor('VFR', 'LC', null)), ['1', '3', '5', '7A', '9A-VECTOR', '9A-SPEED', '8A']);
+    assert.deepEqual(Array.from(compactBlocksFor('VFR', 'AP', null)), ['1', '3', '5', '7A', '9A-VECTOR', '9A-SPEED']);
+    assert.ok(compactBlocksFor('VFR', 'AP', { filed: { departureRunway: '23' } }).includes('8A'), 'a set runway is shown');
+    for (const id of compactBlocksFor('VFR', 'LC', null)) assert.ok(BLOCK_MAPS.VFR[id], id);
+    // Nothing that does not apply to a VFR: no route, destination, release, void, clearance steps.
+    for (const id of ['9', '8B', '14A', '14D', '21', '10']) assert.equal(BLOCK_MAPS.VFR[id], undefined, id);
+  } finally { setAirportSurfacePositions({}); }
 });

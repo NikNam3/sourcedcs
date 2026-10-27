@@ -60,6 +60,9 @@ const UNEXPECTING = Object.freeze({
   MARSHAL: Object.freeze(['LAUNCH', 'IN_STACK', 'COMMENCED', 'DROPPED']),
   FINAL: Object.freeze(['ON_FINAL', 'BALL', 'BOLTER_WAVEOFF', 'DROPPED']),
   PATTERN: Object.freeze(['IN_PATTERN', 'RECOVERED', 'DROPPED']),
+  // docs/adr/0146: a VFR strip is tagged on the ground or in the air and stays TRACKED through both, so its state says
+  // nothing about where the aircraft is.
+  VFR: Object.freeze(['TRACKED', 'DROPPED']),
 });
 
 // The state an observed-airborne DEPARTURE Strip is offered.

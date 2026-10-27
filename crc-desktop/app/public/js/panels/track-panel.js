@@ -14,7 +14,7 @@ import { history, tracks } from '../picture.js';
 import { map, mapReady } from '../map-handle.js';
 import { settings } from '../settings.js';
 import { markEfspChanged, onEfspChanged } from './efsp/efsp-change-bus.js';
-import { canStartFlightFollowing, startFlightFollowing } from './efsp/flight-following.js';
+import { canTagTrack, tagTrack } from './efsp/flight-following.js';
 
 // ── Track info panel ─────────────────────────────────────────────────────
 // Left-clicking an aircraft track opens this persistent side panel. It
@@ -85,15 +85,15 @@ export function initTrackPanel() {
   });
   $renameInput.addEventListener('click', e => e.stopPropagation());
 
-  // Start flight following (crc-sync H136): callsign and Block 3 type, one press. The answer shows on the line below;
-  // on success the contact is the Strip's, so the section goes away with the next refresh.
+  // Tag a VFR (crc-sync docs/adr/0146): callsign and, optionally, the Block 3 type, one press. The answer shows on the line
+  // below; on success the contact is the strip's, so the section goes away with the next refresh.
   const $ffCallsign = document.getElementById('tp-ff-callsign');
   const $ffType = document.getElementById('tp-ff-type');
   const $ffMsg = document.getElementById('tp-ff-msg');
   const startFf = () => {
     if (_trackPanelId == null || !$ffCallsign || !$ffType) return;
     const trackId = _trackPanelId;
-    const problem = startFlightFollowing(trackId, $ffCallsign.value, $ffType.value, (ack) => {
+    const problem = tagTrack(trackId, $ffCallsign.value, $ffType.value, (ack) => {
       if (_trackPanelId !== trackId) return;
       if ($ffMsg) $ffMsg.textContent = ack.ok ? '' : (ack.detail || ack.reason || 'refused');
       if (ack.ok) { $ffCallsign.value = ''; $ffType.value = ''; }
@@ -356,12 +356,12 @@ export function updateTrackPanel() {
   _refreshFlightFollowing(fresh);
 }
 
-// Shown only on a contact it applies to (a radar Position held, no live Strip on the contact): dark cockpit.
+// Shown only on a contact it applies to (a Position with a VFR Bay held, no live strip on the contact): dark cockpit.
 let _ffShownFor = null;
 function _refreshFlightFollowing(fresh) {
   const $sec = document.getElementById('tp-ff-section');
   if (!$sec) return;
-  const show = canStartFlightFollowing(_trackPanelId);
+  const show = canTagTrack(_trackPanelId);
   $sec.hidden = !show;
   if (_ffShownFor !== _trackPanelId) {
     // A new contact: start from its tag, if it has one (a name the controller already gave it), and no old message.

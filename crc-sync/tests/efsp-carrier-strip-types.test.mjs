@@ -53,6 +53,8 @@ const ELIGIBILITY = {
   IN_SECTOR: true, AIRBORNE: true, ON_STATION: true, OFF_STATION: true, RTB: true,
   // carrier (docs/adr/0074): all eligible, LAUNCH included (correlation reads the track store, not illumination)
   LAUNCH: true, IN_STACK: true, COMMENCED: true, ON_FINAL: true, BALL: true, BOLTER_WAVEOFF: true, IN_PATTERN: true, RECOVERED: true,
+  // docs/adr/0146: a tagged VFR has a track by definition
+  TRACKED: true,
 };
 test('every state of every strip type has an explicit correlation-eligibility decision, and the list agrees', () => {
   for (const [stripType, states] of Object.entries(nla.STATES_BY_STRIP_TYPE)) {

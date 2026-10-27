@@ -52,19 +52,6 @@ const DATALINK_INDICATOR_STATES = new Set(['NONE', 'ISSUED']);
 // strip-type changes of JoinPattern / LeavePattern. null is "not set"; an empty string clears.
 const PATTERN_ENTRIES = new Set(['PATTERN', 'STRAIGHT_IN']);
 const PATTERN_OPTIONS = new Set(['TOUCH_AND_GO', 'FULL_STOP', 'LOW_APPROACH']);
-// docs/adr/0143 (H166): a VFR departure's proposed direction of flight (AIM para 4-1-18 a.5(b): the pilot requests
-// advisories from ground or clearance delivery "with proposed direction of flight"), Block 9K. The eight compass points
-// (magnetic, as every direction here, H15); null is "not given"; an empty string clears.
-const DIRECTIONS_OF_FLIGHT = new Set(['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']);
-
-/** A typed direction of flight, upper-cased: `{ok, value}` (null for empty) or `{ok:false, detail}`. */
-function normalizeDirectionOfFlight(value) {
-  if (value === undefined || value === null || value === '') return { ok: true, value: null };
-  const v = String(value).trim().toUpperCase();
-  if (v === '') return { ok: true, value: null };
-  if (!DIRECTIONS_OF_FLIGHT.has(v)) return { ok: false, detail: `direction of flight must be one of ${[...DIRECTIONS_OF_FLIGHT].join(', ')}` };
-  return { ok: true, value: v };
-}
 // WP4A (docs/adr/0019) — guide §4.6 rule 5's track-degradation flags, which
 // force verbal coordination and disable silent cross-Facility transfer
 // while present (board/coordination.js's _applyCoordinationPropose). Genuinely
@@ -141,8 +128,6 @@ const WRITABLE_PATHS = new Set([
   'filed.route', 'filed.requestedAltitude', 'filed.departureAirport', 'filed.departureRunway',
   'filed.destinationAirport', 'filed.proposedDepartureTimeUtc', 'filed.fullRouteClearance', 'filed.remarks',
   'filed.stereoRouteName',
-  // docs/adr/0143: Block 9K, validated against DIRECTIONS_OF_FLIGHT in setField
-  'filed.directionOfFlight',
   // ARRIVAL-type fields — present on every flight data regardless of the
   // strip type that ends up referencing it, same "present but unpopulated
   // until relevant" precedent as the DEPARTURE-only fields above (guide
@@ -645,9 +630,6 @@ class FlightDataStore {
     // P-time chain. Best-effort like the lookup that supplies it: a value that
     // is not a time is dropped, never a refusal.
     const flightPlanDepartureUtc = resolveZuluHhmm(seed.flightPlanDepartureTimeHhmm, this._clock.now());
-    // docs/adr/0143: checked before allocate() like the times above.
-    const direction = normalizeDirectionOfFlight(seed.directionOfFlight);
-    if (!direction.ok) return { ok: false, reason: 'VALIDATION_ERROR', detail: direction.detail };
 
     let stereoSeed = {};
     let stereoName = '';
@@ -677,7 +659,9 @@ class FlightDataStore {
     const now = this._clock.now();
     const equipmentCodes = Array.isArray(seed.equipmentCodes) ? [...seed.equipmentCodes] : [];
 
-    const minted = this._codeAllocator.allocate(flightDataId);
+    // docs/adr/0146 (H175 VR-Q4): a VFR tagged on its track gets no code unless the controller asks for one (`noCode`):
+    // a primary target needs none, and the binding follows the track (docs/adr/0142).
+    const minted = seed.noCode ? { code: null } : this._codeAllocator.allocate(flightDataId);
     if (minted.error) return { ok: false, reason: 'VALIDATION_ERROR', detail: 'beacon code pool exhausted' };
 
     const provenance = {
@@ -729,7 +713,6 @@ class FlightDataStore {
         requestedAltitude: filedFrom('requestedAltitude'),
         departureAirport: filedFrom('departureAirport'),
         departureRunway: seed.departureRunway || null,
-        directionOfFlight: direction.value, // docs/adr/0143 Block 9K
         destinationAirport: filedFrom('destinationAirport'),
         // §9.10 (docs/adr/0050) — the short name this flight was filed under.
         // Its expansion is filed.route beside it; this is the label, and what
@@ -881,11 +864,6 @@ class FlightDataStore {
       if (value !== null && !allowed.has(value)) {
         return { ok: false, reason: 'VALIDATION_ERROR', detail: `${path === 'assigned.patternEntry' ? 'PAT/STR' : 'T&G/FS/LA'} must be one of ${[...allowed].join(', ')}` };
       }
-    }
-    if (path === 'filed.directionOfFlight') {
-      const r = normalizeDirectionOfFlight(value);
-      if (!r.ok) return { ok: false, reason: 'VALIDATION_ERROR', detail: r.detail };
-      value = r.value;
     }
     if (path === 'identity.trackDegradationFlag' && !TRACK_DEGRADATION_FLAGS.has(value)) {
       return { ok: false, reason: 'VALIDATION_ERROR', detail: 'invalid track degradation flag' };
@@ -1082,6 +1060,27 @@ class FlightDataStore {
     flightData.updatedBy = by || null;
     this._wrote(flightDataId, ['identity.beaconAssigned']);
     return { ok: true, flightData, warning: check.warning };
+  }
+
+  /**
+   * docs/adr/0146 (H175 VR-Q4): gives a flight that has no code a computer-assigned discrete one (JO 7110.65BB para
+   * 5-2-7 a), from the allocator, as createFlightData would have. Refused when it already has one (type a new code into
+   * Block 5 to change it) or the pool is empty.
+   * @returns {{ok:true, flightData, code:string}|{ok:false, reason:string, detail?:string}}
+   */
+  assignDiscreteCode(flightDataId, { by } = {}) {
+    const flightData = this._flightDataList.get(flightDataId);
+    if (!flightData) return { ok: false, reason: 'NOT_FOUND' };
+    if (flightData.identity.beaconAssigned) return { ok: false, reason: 'VALIDATION_ERROR', detail: `it already has code ${flightData.identity.beaconAssigned}` };
+    const minted = this._codeAllocator.allocate(flightDataId);
+    if (minted.error) return { ok: false, reason: 'VALIDATION_ERROR', detail: 'no discrete beacon code is free' };
+    flightData.identity.beaconAssigned = minted.code;
+    flightData.provenance['identity.beaconAssigned'] = 'COMPUTER_GENERATED';
+    flightData.rev += 1;
+    flightData.updatedAt = this._clock.now();
+    flightData.updatedBy = by || null;
+    this._wrote(flightDataId, ['identity.beaconAssigned']);
+    return { ok: true, flightData, code: minted.code };
   }
 
   /**
@@ -1778,5 +1777,5 @@ module.exports = {
   TRACK_DEGRADATION_FLAGS, AIRSPACE_OWNERS, RADAR_SERVICE_STATES, SEPARATION_REGIMES, MAX_FREE_TEXT,
   ORDNANCE_STATES, ALERT_STATUSES, MILITARY_WRITABLE_FIELDS, defaultMilitary,
   ensureClearance, parseAltitudeFt, parseAltitude, parseSpeed, formatAltitudeBlock, parseHeadingDeg, activeClearanceEntry,
-  normalizeMtrValue, OBSERVED_PATHS, TOFI_MONITOR_PATHS, DIRECTIONS_OF_FLIGHT, normalizeDirectionOfFlight,
+  normalizeMtrValue, OBSERVED_PATHS, TOFI_MONITOR_PATHS, 
 };

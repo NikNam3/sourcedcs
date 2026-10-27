@@ -69,7 +69,7 @@ test('every transit type counts; PROHIBITED, a ROUTE and a cold area do not', ()
 test('not marked: VFR, the route misses it, too few resolved points, a transit in any state, an approved entry', () => {
   const none = (opts, why) => { const { monitor } = world(opts); monitor.tick(); assert.deepEqual(monitor.getCoordinate(), [], why); };
   const base = { records: [area('MOA-1', 'MOA')], strips: { fd1: [strip('s1', 'AP')] } };
-  none({ ...base, fds: { fd1: VFR } }, 'VFR (H151 MT-Q5 b)');
+  none({ ...base, fds: { fd1: VFR }, strips: { fd1: [{ ...strip('s1', 'AP'), stripType: 'VFR', state: 'TRACKED' }] } }, 'VFR (H151 MT-Q5 b; a VFR strip, docs/adr/0146)');
   none({ ...base, fds: { fd1: IFR('NORTH WEST1') } }, 'the leg stays outside');
   none({ ...base, fds: { fd1: IFR('WEST1 MANAZ') } }, 'one resolved point: not filed through');
   for (const state of ['REQUESTED', 'APPROVED', 'DECLINED']) {

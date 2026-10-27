@@ -26,9 +26,20 @@ export const PATTERN_CONVERSIONS = {
     title: 'the aircraft departs the pattern: this Strip becomes a departure, then Hand Off to AP or Drop as usual' },
 };
 
+// crc-sync docs/adr/0146: on a VFR strip the pattern is a place: the same two ops move it into the Pattern Bay or the
+// airborne Bay, and it stays a VFR strip (board/ops/pattern.js VFR_PATTERN_BAYS).
+export const VFR_PATTERN_MOVES = {
+  JoinPattern: { label: 'Closed traffic', title: 'into the Pattern Bay (the strip stays VFR)' },
+  LeavePattern: { label: 'Leave pattern', title: 'into the airborne Bay (the strip stays VFR)' },
+};
+
 /** The pattern conversion ops offered on `strip` to `acting` (the Position the controller acts as on it), in order. */
 export function patternConversionsFor(strip, acting) {
   if (!strip || !acting || acting !== strip.ownerPositionId || acting !== PATTERN_POSITION) return [];
+  if (strip.stripType === 'VFR') {
+    if (strip.state === 'DROPPED') return [];
+    return Object.entries(VFR_PATTERN_MOVES).map(([kind, c]) => ({ kind, label: c.label, title: c.title }));
+  }
   return Object.entries(PATTERN_CONVERSIONS)
     .filter(([, c]) => c.from === strip.stripType && c.fromStates.includes(strip.state))
     .map(([kind, c]) => ({ kind, label: c.label, title: c.title }));
@@ -39,5 +50,6 @@ export function patternConversionBlockedBy(strip) {
   if (strip.coordination && strip.coordination.state === 'INITIATED') return 'an open coordination proposal';
   if (strip.tofiCoordination && strip.tofiCoordination.state === 'INITIATED') return 'an open TOFI proposal';
   if (strip.tofiCoordination && strip.tofiCoordination.state === 'ACTIVE') return 'active tactical control';
+  if (strip.vfrHandoff) return `the handoff to ${strip.vfrHandoff.toPositionId}`;
   return '';
 }

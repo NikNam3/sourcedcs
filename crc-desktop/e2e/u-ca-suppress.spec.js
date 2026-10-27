@@ -81,7 +81,8 @@ test('SUPPRESS on the label menu of a contact with no Strip sends the suppress f
   const menu = page.locator('.label-menu');
   await expect(menu).toBeVisible();
   await expect(menu.locator('.label-menu-suppress')).toHaveText(['SUPPRESS CA BIRD2']);
-  await expect(menu.locator('.label-menu-input')).toHaveCount(0); // no Strip: nothing to assign
+  // No Strip: nothing to assign (crc-sync ADR 0146: the only inputs are the TAG's, callsign and type).
+  await expect(menu.locator('.label-menu-input[data-field="altitude"], .label-menu-input[data-field="heading"], .label-menu-input[data-field="speed"]')).toHaveCount(0);
   await page.screenshot({ path: test.info().outputPath('ca-suppress-menu.png'), clip: { x: pt.x - 120, y: pt.y - 60, width: 320, height: 160 } });
   await menu.locator('.label-menu-suppress').click();
   await expect(menu).toHaveCount(0);
@@ -91,7 +92,9 @@ test('SUPPRESS on the label menu of a contact with no Strip sends the suppress f
   // The server's answer (here injected): suppressed at CTR. No SUPPRESS left on the label; the track panel's row is grey.
   await scene(page, true);
   await page.mouse.click(pt.x, pt.y);
-  await expect(menu).toHaveCount(0); // nothing left to offer: the click is the track panel
+  // No SUPPRESS left; the untagged contact still offers TAG (crc-sync ADR 0146), and TRACK is the track panel.
+  await expect(menu.locator('.label-menu-suppress')).toHaveCount(0);
+  await menu.locator('.label-menu-track').click();
   const row = page.locator('#tp-alerts .tp-alert[data-conflict-id="vqa|vqb"]');
   await expect(row).toHaveClass(/tp-alert-off/);
   await expect(row).toContainText('Suppressed.');
