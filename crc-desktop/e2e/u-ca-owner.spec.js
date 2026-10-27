@@ -76,14 +76,6 @@ const block = (page, trackId) => page.evaluate((t) => {
   return { posChar: d.view.posChar, ca: ca ? { blink: !!ca.blink } : null };
 }, trackId);
 
-const suppressFrames = (page) => {
-  const sent = [];
-  page.on('websocket', ws => ws.on('framesent', f => {
-    try { const m = JSON.parse(f.payload); if (m.type === 'efsp-conflict-suppress') sent.push(m); } catch { /* not JSON */ }
-  }));
-  return sent;
-};
-
 test('A works one aircraft, B the other: both are shown the CA with the other\'s letter, C is not; each suppress is their own', async ({ browser }) => {
   const a = await controller(browser, { signedOn: ['AP'], controller: 'ca-owner-a' });
   const b = await controller(browser, { signedOn: ['LC'], controller: 'ca-owner-b' });
@@ -109,11 +101,8 @@ test('A works one aircraft, B the other: both are shown the CA with the other\'s
     await a.screenshot({ path: test.info().outputPath('a-sees-ca-with-lc.png') });
 
     // A suppresses from its own data block's menu: A stops flashing, B does not.
-    const sentA = suppressFrames(a);
     await a.evaluate((t) => crc.labelMenu.openLabelMenu(t, 400, 300), one);
     await a.locator('.label-menu .label-menu-suppress').click();
-    await expect.poll(() => sentA.length).toBe(1);
-    expect(sentA[0]).toMatchObject({ conflictId, actingPositionId: 'AP', suppress: true });
     await expect.poll(() => alertAt(a, one, conflictId)).toMatchObject({ suppressedAt: ['AP'], suppressed: true });
     await expect.poll(() => block(a, two)).toMatchObject({ ca: { blink: false } });
     expect(await alertAt(b, two, conflictId)).toMatchObject({ suppressedAt: [], suppressed: false });
@@ -152,11 +141,10 @@ test('one controller works both aircraft (AP and LC): one SUPPRESS is one frame 
     await tag(page, 'LC', two, csB);
     await expect.poll(() => alertAt(page, one, conflictId), { timeout: 40000 }).toEqual({ shownAt: ['AP', 'LC'], suppressedAt: [], suppressed: false });
 
-    const sent = suppressFrames(page);
     await page.evaluate((t) => crc.labelMenu.openLabelMenu(t, 400, 300), one);
     await page.locator('.label-menu .label-menu-suppress').click();
     await expect.poll(() => alertAt(page, one, conflictId)).toEqual({ shownAt: ['AP', 'LC'], suppressedAt: ['AP', 'LC'], suppressed: true });
-    expect(sent.length, 'one frame: the server applies it at both Positions').toBe(1);
+    // One frame per click is the unit test's (label-menu.test.mjs); here: the server applied it at both Positions.
     await expect.poll(() => block(page, one)).toMatchObject({ ca: { blink: false } });
     await expect.poll(() => block(page, two)).toMatchObject({ ca: { blink: false } });
     await page.screenshot({ path: test.info().outputPath('consolidated-suppressed.png') });
