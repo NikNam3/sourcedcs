@@ -1369,23 +1369,31 @@ the scope gets a coloured tag, and the track panel lists it.
 
 | Indicator | Means |
 |---|---|
-| `HDG 072` | more than 5° off the assigned heading for 10 s (after 30 s to make the turn). The number is where it is actually going, **magnetic**; where the variation is unknown the heading is not checked at all |
+| `HDG 072` | more than 5° off the assigned heading for 10 s, once it has had time to make the turn (below). The number is where it is actually going, **magnetic**; where the variation is unknown the heading is not checked at all |
 | `ALT ↓` / `ALT ↑` | going the wrong way: told to climb and descending, or the reverse, faster than 500 ft/min |
 | `BUST +600` | it reached its `ALT` and has since left it by more than 500 ft |
 | `Conflict Alert SNAKE21 0:55` | on present course and rate it will be within 3 NM and 1,000 ft of SNAKE21 in 55 s. Both aircraft are tracked (they have Strips). Only at an ATC Position (LC, AP, CTR…), and only when both aircraft are on your scope |
 | `Mode C Intruder TN00042 0:40` | the same prediction against an aircraft with **no** Strip (named by its tag or track number) whose transponder reports altitude, above the Facility's base altitude (below) |
 | `AR ↓`, `AR −700`, `AR 3.8 NM` | a receiver under tanker MARSA has left the refuelling block around the tanker (§8D) |
+| `GP ↓` / `GP ↑` | on a PAR final after **Begin descent**, more than 0.5° below or 1° above the glidepath for 2 s, above DA (§8L) |
 
-The "for 10 s" and "for 3 s" in this table (heading, wrong-way and level-bust persistence, and the 30 s turn grace) are real elapsed seconds on the server's own clock, not mission seconds (`adr/0096`). If the mission is paused or its clock jumps, they keep counting, so an alert appears the same number of real seconds after the deviation is first seen; the `since` time shown with an alert is still mission Zulu.
+**Time to make the turn.** A new heading gets as long as the turn takes plus 15 s: the turn is measured the short way
+round, at 3° a second, or slower where 25° of bank gives less at the aircraft's ground speed (a 180° turn at 450 kt
+gets well over a minute). While it turns, the turn left to go has to keep shrinking: if it stops (levelled off short of
+the heading, or turning the wrong way) `HDG` appears 10 s after the last progress. The figures are in `alerting.json`
+(`headingTurnRateDegPerSec`, `headingTurnMaxBankDeg`, `headingGraceMarginSec`, `headingPersistSec`).
+
+The "for 10 s", "for 3 s" and "for 2 s" in this table (heading, wrong-way, level-bust and glidepath persistence, and the turn time) are real elapsed seconds on the server's own clock, not mission seconds (`adr/0096`). If the mission is paused or its clock jumps, they keep counting, so an alert appears the same number of real seconds after the deviation is first seen; the `since` time shown with an alert is still mission Zulu.
 
 Not a warning: a flight that has not started its climb or descent yet ("descend when ready"). Only
 a flight going the opposite way alerts. Route conformance and terrain are not checked yet. A flight with no
 assigned altitude or heading (a flight-following Strip, §8C2) has nothing to check.
 
-**On a final.** Heading is not checked on a final (PAR's `ON_FINAL` or the carrier's BALL): course guidance is the final
-controller's own. At an airfield the altitude is checked until PAR presses **Begin descent**, which ends the assigned
-altitude; on the carrier final it is not checked at all (ours). A missed approach is checked again against what is then
-assigned (§8L).
+**On a final.** Once the final controller holds the flight (PAR's `ON_FINAL`, or the carrier's BALL), nothing of its
+clearance alerts: no `HDG`, no `ALT ↓`/`↑`, no `BUST`, also before Begin descent (a descent PAR gives on the way down is
+not checked against the earlier altitude). Course and height guidance are the final controller's own. At an airfield
+the one alert is the glidepath, `GP ↓`/`GP ↑`, after **Begin descent** and above DA (§8L); the carrier has none. A
+missed approach is checked again against what is then assigned (§8L).
 
 On the scope, a Conflict Alert (CA) draws each aircraft's predicted path to the closest point and a line
 between them there. **Settings → RADAR → Conflict Alert → Show predicted paths** (on by default, yours only) hides the
@@ -2042,7 +2050,11 @@ The boundary is JO 7110.65BB ¶3-8-2; the option is AIM 4-3-23. Only `LC` has Cl
   **Cleared to land**; each is recorded once and then stays in the Strip's `⋯` menu, greyed, as the record. The `⋯`
   menu's **Final** group also has **Missed approach** and **Show in PAR panel**, which draws the flight in the PAR panel
   and opens it.
-  - **Begin descent** ends the assigned altitude (¶5-12-3): on the glidepath nothing is checked against an altitude.
+  - **Begin descent** ends the assigned altitude (¶5-12-3). From the handoff to PAR nothing of the clearance alerts;
+    after Begin descent the only alert is the glidepath (`GP ↓`/`GP ↑` on the Strip, `BELOW GLIDEPATH` or
+    `ABOVE GLIDEPATH` in red on the panel's EL row): outside +1°/−0.5° of the glidepath for 2 s, above DA. These limits
+    are the same for everyone (`alerting.json` `glidepathAboveDeg`, `glidepathBelowDeg`, `glidepathPersistSec`); your
+    own tolerance settings move only the panel's lines and its red.
     **Cleared to land** records that you relayed the tower's clearance.
   - **Landed** hands the Strip to `GC` (Taxi In, `gc-taxi-in`) and frees the final for the next aircraft. With `GC`
     unstaffed it is delivered if somebody is offered `GC`'s hat, else refused.
@@ -2067,9 +2079,16 @@ The boundary is JO 7110.65BB ¶3-8-2; the option is AIM 4-3-23. Only `LC` has Cl
   approach course and the approach values, below), the aircraft (callsign, type, beacon, ground speed, vertical speed,
   range to touchdown), and two scopes: elevation and azimuth against range from touchdown. Touchdown is always in the
   bottom-left corner. The wheel zooms the range of both scopes; Shift+wheel zooms the height (elevation) or the angle
-  (azimuth) of the scope under the pointer. There is no panning. With **Autoscale** on (Settings → PAR) the window
-  follows the aircraft until it is 10 NM wide; any zoom pauses it, a double-click resumes it. With no aircraft on your
-  final it reads "No aircraft on your final."
+  (azimuth) of the scope under the pointer. There is no panning. With **Autoscale** on (Settings → PAR) the range and the
+  height follow the aircraft until the window is 10 NM wide; any zoom pauses it, a double-click resumes it. The azimuth
+  window is not autoscaled: it is fixed at **±3°** of the course, Shift+wheel on the azimuth scope zooms it (without
+  pausing the autoscale) and a double-click puts it back to ±3°. With no aircraft on your final it reads "No aircraft on
+  your final."
+- **The final heading.** On the deviation row, `FIN HDG 049  HDG 054`: **FIN HDG** is the heading that holds the final
+  approach course in the field's wind at the aircraft's speed, **HDG** the heading the aircraft is flying, both magnetic.
+  At the top middle of the azimuth scope a small heading scale (±10°) marks the final heading in grey and the
+  aircraft's heading in magenta (hollow at the edge when it is off the scale). With no field wind there is no final
+  heading (`—`), never the bare course; an aircraft that reports no heading shows none.
 - **The azimuth scope is in degrees**: the course is the 0° line, left of course is below it, and the dashed tolerance
   lines are straight. Its readout is the angle off the course, e.g. `AZ 0.4° L` (`0.0°` on the course). The window is at
   most ±15° (the PAR's coverage). A plot beyond the edge of the window is drawn on the edge.
@@ -2087,8 +2106,11 @@ The boundary is JO 7110.65BB ¶3-8-2; the option is AIM 4-3-23. Only `LC` has Cl
   changes it (a new mission keeps it). A value you set is underlined with a small mark; its tooltip shows the default.
   Ranges: TDZE −1,500 to 15,000 ft, TCH 0 to 200 ft, DH 100 to 1,000 ft, GPA 2.5° to 3.5° (ours). Only the PAR Position
   sets them (`AP` holding PAR's hat, too). The 0.5° lower safe limit follows the angle you set; the obstacle clearance it
-  stands for was surveyed for the published angle. The header, and so the values, show only while an aircraft is on your
-  final. A changed value is measured on the next DCS fix, within about a second.
+  stands for was surveyed for the published angle. A changed value is measured on the next DCS fix, within about a second.
+- **With an empty final** the header still shows the approach the next aircraft will fly (the active runway's), under
+  *No aircraft on your final.*; you set TDZE, TCH, DH and the angle there exactly as with a flight. With no active runway
+  there is no approach to show. Working more than one airfield's final, pick the approach from the row above the header
+  (`RWY 05 · LTAG`). The first aircraft brings the whole panel back with the same header.
 - With more than one aircraft on your finals their names appear above the header; click one to watch it, and your
   choice stays until it leaves the final. **Begin descent**, **Cleared to land**, **Landed** and **Missed approach** are
   in the panel too, the same calls as on the FINAL Strip. PAR's FINAL Strip shows the PAR's range to the threshold in DIST.
