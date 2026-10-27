@@ -10,7 +10,7 @@ import { applyEfspSnapshot } from '../app/public/js/panels/efsp/efsp-state.js';
 import { sendEfspSetPositions } from '../app/public/js/panels/efsp/efsp-ws.js';
 import { VFR_DEPARTURE_POSITIONS } from '../app/public/js/panels/efsp/bay/authority-mirror.js';
 import {
-  DIRECTIONS_OF_FLIGHT, buildVfrDepartureOp, readOutText, sendVfrDeparture, vfrDepartureProblem, vfrDeparturePosition,
+  DIRECTIONS_OF_FLIGHT, buildVfrDepartureOp, createdText, sendVfrDeparture, vfrDepartureProblem, vfrDeparturePosition,
 } from '../app/public/js/panels/efsp/vfr-departure.js';
 import { canTerminateRadarService } from '../app/public/js/panels/efsp/flight-following.js';
 import { compactBlocksFor } from '../app/public/js/panels/efsp/strip-fields.js';
@@ -45,7 +45,7 @@ test('the fields: what is wrong before sending, and the op (no lookup fields, an
   assert.equal(vfrDepartureProblem({ ...ok, runway: 'RWY 23' }), null);
   assert.deepEqual(buildVfrDepartureOp(ok), { kind: 'CreateVfrDeparture', flightData: { callsign: 'VIPER11', aircraftData: '2/F16', directionOfFlight: 'NW' } });
   assert.equal(buildVfrDepartureOp({ ...ok, runway: '23' }).flightData.departureRunway, '23');
-  assert.equal(readOutText({ ok: true, flightData: { identity: { callsign: 'VIPER11', beaconAssigned: '4321' } } }), 'VIPER11, squawk 4321, maintain VFR');
+  assert.equal(createdText({ ok: true, flightData: { identity: { callsign: 'VIPER11', beaconAssigned: '4321' } } }), 'VIPER11 4321');
 });
 
 test('only at a Position that makes VFR departures', () => {

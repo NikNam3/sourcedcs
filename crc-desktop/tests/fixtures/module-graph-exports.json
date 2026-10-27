@@ -1606,7 +1606,7 @@
    "DIRECTIONS_OF_FLIGHT",
    "buildVfrDepartureForm",
    "buildVfrDepartureOp",
-   "readOutText",
+   "createdText",
    "sendVfrDeparture",
    "vfrDeparturePosition",
    "vfrDepartureProblem"

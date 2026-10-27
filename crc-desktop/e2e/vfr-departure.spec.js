@@ -42,7 +42,7 @@ test('CD makes a VFR departure from the toolbar: a code to read out, a DEPARTURE
   await expect.poll(() => recordFor(page, callsign)).not.toBe(null);
   const r = await recordFor(page, callsign);
   expect(r).toMatchObject({ stripType: 'DEPARTURE', state: 'CLEARED', bayId: 'cd-cleared', owner: 'CD', dir: 'NW', route: '', alt: '' });
-  await expect(form.locator('.efsp-vfr-msg')).toHaveText(`${callsign}, squawk ${r.code}, maintain VFR`);
+  await expect(form.locator('.efsp-vfr-msg')).toHaveText(`${callsign} ${r.code}`);
   await goBay(page, 'CD', 'cd-cleared');
   const strip = stripByCallsign(page, callsign);
   const dirChip = strip.locator('.efsp-block-chip', { has: page.locator('.efsp-block-label', { hasText: /^DIR$/ }) });

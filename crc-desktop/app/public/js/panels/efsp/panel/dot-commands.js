@@ -11,7 +11,7 @@ import { parseDotCommand } from '../dot-command.js';
 import { buildJoinOp, buildSplitOp, joinLeadCandidates, parseSplitCommand } from '../formation-rules.js';
 import { dispatchFormationOp } from '../bay/popovers/formation.js';
 import { canStartFlightFollowing, canTerminateRadarService, contactForToken, startFlightFollowing, terminateRadarService } from '../flight-following.js';
-import { readOutText, sendVfrDeparture } from '../vfr-departure.js';
+import { createdText, sendVfrDeparture } from '../vfr-departure.js';
 
 /**
  * `.mission <CALLSIGN>` — frag a mission line bound to a live flight.
@@ -166,7 +166,7 @@ function _vfrDepartureByDot(args) {
   if (!callsign || !aircraftData || !direction) { _showDotCommandError('.vfr needs a callsign, a type and a direction, e.g. .vfr VIPER11 F16 NW [23]'); return; }
   const problem = sendVfrDeparture({ callsign, aircraftData, direction, runway }, (ack) => {
     if (!ack.ok) _showDotCommandError(ack.detail || ack.reason || 'refused');
-    else _setCreateStripMsg(readOutText(ack), false);
+    else _setCreateStripMsg(createdText(ack), false);
   });
   if (problem) _showDotCommandError(problem);
 }

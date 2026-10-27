@@ -139,8 +139,7 @@ plan to look up (a VFR flight plan is a search-and-rescue record with Flight Ser
 **VFR…** in the toolbar (shown only at `CD`), type the callsign and the type (`F16`, `2/F16`), pick **DIR** (N…NW) and,
 if the pilot asked for one, the runway (empty = the active runway), then **Create VFR** (or Enter). Keyboard:
 `.vfr VIPER11 F16 NW [23]`. In one step the flight gets flight data, a **discrete code** and a DEPARTURE Strip in
-`cd-cleared`; the form shows the line to read: "VIPER11, squawk 4321, maintain VFR" (add the departure frequency,
-JO 7110.65BB ¶7-6-10: "VIPER11, squawk 4321, departure frequency 251.0, maintain VFR"). It skips Pending Clearance:
+`cd-cleared`; the form shows the callsign and the code it got (`VIPER11 4321`). It skips Pending Clearance:
 there is no clearance to review, no altitude or destination needed, no release or void time. From there it is an
 ordinary departure: **Approve Pushback** to `GC`, taxi, `LC`'s runway queue, departed, **Hand Off to AP**. A refusal
 (bad callsign, type or direction, a runway this airfield does not have, no free code) shows in the form in red and

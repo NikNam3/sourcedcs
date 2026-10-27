@@ -6,10 +6,10 @@ import { VFR_DEPARTURE_POSITIONS } from './bay/authority-mirror.js';
 // The VFR departure (crc-sync docs/adr/0143, H166). One action at the Position that gives departures their code (CD):
 // crc-sync makes the flight data (callsign, type, direction of flight, the runway), a discrete code and a DEPARTURE Strip
 // in that Position's cleared Bay, in one Mutation. No flight-plan lookup (a VFR flight plan is a search-and-rescue record
-// with Flight Service, never the controller's) and no clearance steps. The controller reads the code out: "VIPER11,
-// squawk 4321, departure frequency ..., maintain VFR" (JO 7110.65BB para 5-2-7 a, 7-6-10).
+// with Flight Service, never the controller's) and no clearance steps. The form shows the callsign and the code it got;
+// what to say on the frequency is the controller's (H172: no phraseology in the tool).
 //
-// The model (`vfrDepartureProblem`, `buildVfrDepartureOp`, `readOutText`) is pure (tests/efsp-vfr-departure-client.test.mjs);
+// The model (`vfrDepartureProblem`, `buildVfrDepartureOp`, `createdText`) is pure (tests/efsp-vfr-departure-client.test.mjs);
 // `buildVfrDepartureForm` is the DOM half, the toolbar's VFR form. `.vfr` is the keyboard path (panel/dot-commands.js).
 
 /** The eight compass points (crc-sync flight-data-store.js DIRECTIONS_OF_FLIGHT; Block 9K). */
@@ -42,12 +42,12 @@ export function buildVfrDepartureOp({ callsign, aircraftData, direction, runway 
   return { kind: 'CreateVfrDeparture', flightData };
 }
 
-/** What the controller reads out once the Strip is made: the code to squawk. */
-export function readOutText(ack) {
+/** What the form shows once the Strip is made: the callsign and its code (H172: the facts, never the words to say). */
+export function createdText(ack) {
   const fd = ack && ack.flightData;
   const callsign = fd && fd.identity ? fd.identity.callsign : '';
   const code = fd && fd.identity ? fd.identity.beaconAssigned : '';
-  return `${callsign}, squawk ${code}, maintain VFR`;
+  return `${callsign} ${code}`;
 }
 
 /**
@@ -74,7 +74,7 @@ function _el(tag, cls, text) {
 }
 
 /**
- * The toolbar's VFR form: callsign, type, direction, runway (empty = active), Create. Grey; the read-out line after the
+ * The toolbar's VFR form: callsign, type, direction, runway (empty = active), Create. Grey; the callsign and code after the
  * ack, orange-red only on a refusal. `prefill()` gives the callsign the toolbar holds.
  * @param {{prefill?:()=>string}} [o]
  * @returns {{el:HTMLElement, open:()=>void, close:()=>void}}
@@ -109,7 +109,7 @@ export function buildVfrDepartureForm({ prefill = () => '' } = {}) {
     const problem = sendVfrDeparture(fields(), (ack) => {
       pending = false;
       if (!ack.ok) { show(ack.detail || ack.reason || 'Refused.', true); return; }
-      show(readOutText(ack), false);
+      show(createdText(ack), false);
       callsign.value = ''; type.value = ''; dir.value = ''; runway.value = '';
     });
     if (problem) { show(problem, true); return; }
