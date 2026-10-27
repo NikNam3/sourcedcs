@@ -1914,7 +1914,7 @@ CARRIER-STATE (the old carrier shape refuses start-up) and any hull `approach` i
   `surveillance/presentation.js`, client `track-label.js`. The wire carries no DCS truth.
   `presentation.test.mjs` plus `ws-hub-wire-strictness.test.mjs` hold the line.
 
-## 5. Where to start: the v2 tip, nothing running
+## 5. Where to start: the tip after the final tests, nothing running
 
 The plan was `docs/efsp-parallel-plan.md` (history) and then `docs/parallel/arch-check-plan.md`; `docs/parallel/decisions.md` is what is actually dispatched, and
 `docs/parallel/supervisor-handoff.md` the supervisor's queue. Each lane works in its own worktree `/home/nklx/dev/personal/sourcedcs-<lane>` on `lane/<lane>-…`,
@@ -1922,12 +1922,14 @@ reads `docs/parallel/lane-rules.md`, and leaves `docs/wip/<lane>.md` for the nex
 rename, L20, the post-refactor features (ADRs `0098`-`0106`), the architecture check's three phases with everything after it, the panels (§3K), the live-test fix
 batch (§3L) and round 2 to the v2 tip (§3M: U-PANELS, U-JURISDICTION, U-MOA, U-PAR, U-RELEASE, U-TWR-PATTERN, U-SMALL, U-DECLUTTER, U-MOA-TRANSIT and its
 build, U-CLOCK, U-PAR-VALUES, U-FREQ-EDITOR, U-SMALL2, U-GLYPHS, U-SCOPE-SMALL, U-AIRSPACE-BADGE, U-TERRAIN-DCS, U-SMALL-FIXES, U-CARRIER, U-FREQ-ROWS,
-U-CARRIER-MAPFIX), and DOCS-V2, this fold.
+U-CARRIER-MAPFIX), DOCS-V2, and the final tests and after (§3N: U-V2-FIXES, U-SURFACE, U-LTAG-COURSE, U-LABEL-MENU, U-PERF, U-PAR-FT,
+U-FT-SMALL, U-FT-FIXES, U-BEACON-ONLY, U-VFR-MTMA, U-DRAG-CLICK, U-PANELS-RADARS, U-SUA; research R-SUA), and DOCS-V2B, this fold.
 
 **Up to four lanes in parallel** (S-ARCH-62), sharded Playwright on **at most 2 lanes** (S-ARCH-75), every command under `nice -n 19`. Every briefing requires
 both unit suites (S-ARCH-16). The supervisor runs the sharded Playwright after a merge that touched the client (`lane-rules.md` 7).
 
-**v2** (H159) is a working EFSP panel, a first working prototype of the carrier panels, PAR and SFA: that is this tip. **Nothing is running.**
+**v2** (H159) is a working EFSP panel, a first working prototype of the carrier panels, PAR and SFA: that is this tip, with the final tests' fixes
+(`e7b46423`, Playwright 302/302). **Nothing is running.** Before the deploy: `infra/RUNBOOK.md`, "v2 launch (round 2 …): before the deploy".
 
 **Held:** **U-ROLE-POSITIONS** (ADR `0132`; the trial merge is branch `merge/U-ROLE-POSITIONS`, `43ae06e3`, with two open failures: the `no-position-ids`
 scan on U-CARRIER's literal ids and crc-desktop test 832, the Marshal create-strip origins). Pick it up after the v2 launch, with Konya, and with H160's list
@@ -1935,7 +1937,9 @@ scan on U-CARRIER's literal ids and crc-desktop test 832, the Marshal create-str
 
 **v3** (`docs/parallel/v3-backlog.md`, H159): openAIP airspace (H146), AIRAC data and with it the fix coordinates (H152), an upgraded radio panel, an upgraded
 airport panel, upgraded carrier panels (a recovery bound to its launch flight, a prompt when a Move leaves a hand EAT out of order, per-aircraft orbits, a CV ATC
-check of the panel's columns), and a second airfield (Konya) on the role-based Positions.
+check of the panel's columns), a second airfield (Konya) on the role-based Positions, and since the final tests: the Board `_persist` and the other U-PERF
+hotspots, dropping `confidence` from the correlation shape at the next Board reset, `reconcile()`'s silent warning rewrite, prohibited areas off the
+sourcedcs-web booking list, and `COORD` returning after an acknowledged Transit complete (a remaining-route check).
 
 Older items, in no fixed order:
 
