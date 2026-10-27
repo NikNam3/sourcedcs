@@ -52,8 +52,9 @@ test('the shipped areas: the control zone is Class D (H166 addendum), the RAPCON
   assert.equal(rapcon.airspaceClass, null, 'an MTMA is not classified (H166)');
   assert.equal(rapcon.vfrService, 'IFR_SEPARATED', 'H166 option 2');
   assert.doesNotMatch(rapcon.sourceText, /class C/i);
-  assert.equal(cca.airspaceClass, 'E', 'the carrier circle stays as it was');
-  assert.equal(schema.vfrServiceOf(cca), 'ADVISORY');
+  assert.equal(cca.airspaceClass, null, 'the carrier control area is unclassified (H173 VQ-B)');
+  assert.equal(cca.vfrService, 'ADVISORY');
+  assert.doesNotMatch(cca.sourceText, /class [A-G]\b/i);
 });
 
 test('the class gives the VFR service unless the area names one (FAA: B all separated, C IFR separated, D/E advisory)', () => {
@@ -87,7 +88,7 @@ test('jurisdictionAt names the class (null when unclassified) and the VFR servic
   assert.deepEqual([at(1000).airspaceId, at(1000).airspaceClass, at(1000).vfrService], ['LTAG-CZ', 'D', 'ADVISORY']);
   assert.deepEqual([at(5000).airspaceId, at(5000).airspaceClass, at(5000).vfrService], ['LTAG-RAPCON', null, 'IFR_SEPARATED']);
   const above = at(30000);
-  assert.deepEqual([above.fallback, above.airspaceClass, above.vfrService], [true, 'E', 'ADVISORY']);
+  assert.deepEqual([above.fallback, above.airspaceClass, above.vfrService], [true, null, 'ADVISORY'], 'CENTER\'s fallback: unclassified, VFR advisories (H173 VQ-B)');
 });
 
 test('a panel edit takes a class away only together with a VFR service, and sets the service alone', () => {

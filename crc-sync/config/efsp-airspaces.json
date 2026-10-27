@@ -1,5 +1,5 @@
 {
-  "_comment": "The standing airspace list (docs/adr/0098 §10), keyed by the theater name DCS-gRPC's GetTheatre returns. Each id is imported into the registry once (a later delete is not resurrected; a later addition lands); after that the panel's edits live in the Board snapshot. A copy in state/efsp-airspaces.json replaces this file whole, and is as strict: a definition that does not validate, or two JURISDICTION areas sharing volume, stops start-up. JURISDICTION areas (docs/adr/0125, decisions H142-H146): whose airspace an aircraft is in. Altitudes are feet MSL; a null altLowerFt is the surface and a null altUpperFt unlimited. Outside every area the airspace is CENTER's (Class E); a Class G area is nobody's; airspaceClass is optional (docs/adr/0143, H166: Türkiye does not classify its airspace), and an unclassified area names its vfrService (ALL_SEPARATED, IFR_SEPARATED or ADVISORY), which otherwise follows the class (B all separated, C IFR separated, D/E/F advisory); a carrier circle wins wherever it is; no two other areas may overlap, so RAPCON excludes the tower's control zone. Sources: LTAG-CZ is AIP Türkiye AD 2 LTAG AD 2.17 (page dated 14 MAY 26) verbatim; LTAG-RAPCON's lateral limits are the Adana MTMA of AIP Türkiye ENR 2.1.3 (AIRAC AMDT 08/26), its SFC floor is the squadron's (H143); it is unclassified (an MTMA, H166) with IFR separated from VFR and VFR from VFR by traffic advisories (H166 option 2); LTAG-CZ's class D is the human's (H166); the carrier control area (50 nm, SFC-UNL) is the squadron's (H142), its class E ours.",
+  "_comment": "The standing airspace list (docs/adr/0098 §10), keyed by the theater name DCS-gRPC's GetTheatre returns. Each id is imported into the registry once (a later delete is not resurrected; a later addition lands); after that the panel's edits live in the Board snapshot. A copy in state/efsp-airspaces.json replaces this file whole, and is as strict: a definition that does not validate, or two JURISDICTION areas sharing volume, stops start-up. JURISDICTION areas (docs/adr/0125, decisions H142-H146): whose airspace an aircraft is in. Altitudes are feet MSL; a null altLowerFt is the surface and a null altUpperFt unlimited. Outside every area the airspace is CENTER's, unclassified with VFR advisories (H173 VQ-B); a Class G area is nobody's; airspaceClass is optional (docs/adr/0143, H166: Türkiye does not classify its airspace), and an unclassified area names its vfrService (ALL_SEPARATED, IFR_SEPARATED or ADVISORY), which otherwise follows the class (B all separated, C IFR separated, D/E/F advisory); a carrier circle wins wherever it is; no two other areas may overlap, so RAPCON excludes the tower's control zone. Sources: LTAG-CZ is AIP Türkiye AD 2 LTAG AD 2.17 (page dated 14 MAY 26) verbatim; LTAG-RAPCON's lateral limits are the Adana MTMA of AIP Türkiye ENR 2.1.3 (AIRAC AMDT 08/26), its SFC floor is the squadron's (H143); it is unclassified (an MTMA, H166) with IFR separated from VFR and VFR from VFR by traffic advisories (H166 option 2); LTAG-CZ's class D is the human's (H166); the carrier control area (50 nm, SFC-UNL) is the squadron's (H142), unclassified with VFR advisories (H173 VQ-B: a CCA is special use under letters of agreement and Navy rules, not modelled for v2).",
   "Syria": [
     {
       "airspaceId": "LTAG-CZ",
@@ -44,7 +44,7 @@
       "controllingFacilityId": "CARRIER",
       "controllingPositionId": "CV_PRIFLY",
       "ownerPositionIds": ["CV_MARSHAL", "CV_PRIFLY", "CV_APP1", "CV_APP2"],
-      "airspaceClass": "E",
+      "vfrService": "ADVISORY",
       "altLowerFt": null,
       "altUpperFt": null,
       "geometry": {
@@ -52,7 +52,7 @@
         "centre": { "hullId": "CVN-72" },
         "radiusNm": 50
       },
-      "sourceText": "The carrier's area (H142): a 50 nm circle on the live hull, surface to unlimited, owned by the CARRIER Positions; it wins over every other area. Class E is ours."
+      "sourceText": "The carrier's area (H142): a 50 nm circle on the live hull, surface to unlimited, owned by the CARRIER Positions; it wins over every other area. Not classified (H173 VQ-B): VFR gets traffic advisories."
     }
   ]
 }

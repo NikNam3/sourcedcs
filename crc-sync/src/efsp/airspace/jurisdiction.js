@@ -14,7 +14,8 @@
 // carrier-anchored area wins over everything (it moves, so static airspace cannot follow it); two static areas never
 // share volume (the store refuses it, `findStaticOverlap`), so a point is in at most one of them except on a shared
 // boundary, where the first by airspaceId answers (deterministic, no precedence list: H144 removed it); an excluded
-// volume keeps its own boundary. Outside every area the fallback is CENTER, Class E. A Class G area belongs to nobody.
+// volume keeps its own boundary. Outside every area the fallback is CENTER, unclassified with
+// VFR advisories (H173 VQ-B: no invented class letter). A Class G area belongs to nobody.
 //
 // Distances are NM on a local equirectangular projection (containment.js's reasoning: far below anything a controller
 // can read at 50 nm). A circle is exact for the point query; the overlap check (a validator) uses its 128-gon.
@@ -28,9 +29,11 @@ const BOUNDARY_EPSILON_NM = 1e-6;     // as containment.js: this close to an edg
 const PROBE_NM = 1e-3;                // how far from a vertex the overlap check probes into each face
 const UNBOUNDED_PAD_FT = 1000;        // a probe altitude beyond the last finite limit
 
-/** The Facility whose airspace is everything no area covers (H142), and its class. */
+/** The Facility whose airspace is everything no area covers (H142), and what VFR gets there: unclassified (null), VFR
+ *  advisories (H173 VQ-B b; docs/adr/0143's unclassified area with its own vfrService). */
 const FALLBACK_FACILITY_ID = 'CENTER';
-const FALLBACK_AIRSPACE_CLASS = 'E';
+const FALLBACK_AIRSPACE_CLASS = null;
+const FALLBACK_VFR_SERVICE = 'ADVISORY';
 
 const isFiniteNum = (v) => typeof v === 'number' && Number.isFinite(v);
 
@@ -301,7 +304,7 @@ function checkTheater(defs) {
 }
 
 module.exports = {
-  RING_POINTS, MAX_RADIUS_NM, FALLBACK_FACILITY_ID, FALLBACK_AIRSPACE_CLASS,
+  RING_POINTS, MAX_RADIUS_NM, FALLBACK_FACILITY_ID, FALLBACK_AIRSPACE_CLASS, FALLBACK_VFR_SERVICE,
   isHullAnchored, centreOf, insideShape, contains, areaAt, ringOf,
   regionsOverlap, staticOverlap, findStaticOverlap, checkExcludes, checkTheater,
 };

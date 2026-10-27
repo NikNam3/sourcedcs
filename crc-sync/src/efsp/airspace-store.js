@@ -300,7 +300,7 @@ class AirspaceStore extends SyncedStore {
 
   /**
    * Whose airspace is `{lat, lon, altFt}` in (altFt in feet MSL), in the current theater? The area a carrier circle on a
-   * found hull holds wins; else the static area holding it; else the fallback, CENTER (Class E, `fallback: true`,
+   * found hull holds wins; else the static area holding it; else the fallback, CENTER (unclassified, VFR advisories, H173 VQ-B; `fallback: true`,
    * `airspaceId: null`). Null when nobody owns it: a Class G area, or a point that cannot be judged (lat, lon or altFt not
    * a number: never a guess). Boundaries count as inside. Pure and synchronous: U-RELEASE's control settle tick calls it.
    * `airspaceClass` is null for unclassified airspace (docs/adr/0143); `vfrService` is the area's own or its class's
@@ -314,7 +314,7 @@ class AirspaceStore extends SyncedStore {
     if (!area) {
       const facilityId = jurisdiction.FALLBACK_FACILITY_ID;
       if (!this._lookup.hasFacility(facilityId)) return null;
-      return { airspaceId: null, name: facilityId, facilityId, positionIds: [...(this._lookup.positionsOf(facilityId) || [])], airspaceClass: jurisdiction.FALLBACK_AIRSPACE_CLASS, vfrService: schema.vfrServiceOf({ airspaceClass: jurisdiction.FALLBACK_AIRSPACE_CLASS }), fallback: true };
+      return { airspaceId: null, name: facilityId, facilityId, positionIds: [...(this._lookup.positionsOf(facilityId) || [])], airspaceClass: jurisdiction.FALLBACK_AIRSPACE_CLASS, vfrService: jurisdiction.FALLBACK_VFR_SERVICE, fallback: true };
     }
     if (area.airspaceClass === 'G') return null;
     return { airspaceId: area.airspaceId, name: area.name, facilityId: area.controllingFacilityId, positionIds: [...area.ownerPositionIds], airspaceClass: area.airspaceClass ?? null, vfrService: schema.vfrServiceOf(area), fallback: false };
