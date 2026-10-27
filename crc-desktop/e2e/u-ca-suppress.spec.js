@@ -1,9 +1,11 @@
 'use strict';
 
-/* U-VQ-AB (H173 VQ-A, crc-sync's docs/adr/0145): a controller suppresses one conflict alert from the alert itself. The
- * track label's menu offers SUPPRESS for a contact in a CA shown at one of the controller's Positions, Strip or not; one
- * click sends efsp-conflict-suppress for that pair at the acting Position. A suppressed alert stays, grey: the track
- * panel's row offers RESTORE.
+/* U-VQ-AB (H173 VQ-A, crc-sync's docs/adr/0145): a controller suppresses one conflict alert from the alert itself. A
+ * suppressed alert stays, grey: the track panel's row offers RESTORE.
+ * U-CA-OWNER (H176, crc-sync's docs/adr/0147): the data block's menu offers SUPPRESS only on a contact whose Strip this
+ * controller holds; a contact with no Strip of theirs gets no SUPPRESS there (the track panel's row still offers it, the
+ * alert reaching them only because they work the other aircraft). The owner's menu, against the real server, is
+ * u-ca-owner.spec.js.
  *
  * The rig has no DCS, so the two contacts and the alert are injected client-side (as l22-stars-scope.spec.js does) and the
  * sent frame is read off the socket; the server half is crc-sync's tests/conflict-alert-suppress.test.mjs.
@@ -66,7 +68,7 @@ async function labelPoint(page, trackId) {
   return pt;
 }
 
-test('SUPPRESS on the label menu of a contact with no Strip sends the suppress for that pair; RESTORE on the track panel', async ({ page }) => {
+test('no SUPPRESS on the label menu of a contact with no Strip; SUPPRESS and RESTORE on the track panel', async ({ page }) => {
   const sent = [];
   page.on('websocket', ws => ws.on('framesent', f => {
     try { const m = JSON.parse(f.payload); if (m.type === 'efsp-conflict-suppress') sent.push(m); } catch { /* not JSON */ }
@@ -78,24 +80,22 @@ test('SUPPRESS on the label menu of a contact with no Strip sends the suppress f
 
   const pt = await labelPoint(page, 'vqa');
   await page.mouse.click(pt.x, pt.y);
+  // No Strip of this controller's: the alert opens no menu of its own and offers no SUPPRESS there (ADR 0147). The
+  // untagged contact may still offer TAG (crc-sync ADR 0146); either way the track panel is one input away.
   const menu = page.locator('.label-menu');
-  await expect(menu).toBeVisible();
-  await expect(menu.locator('.label-menu-suppress')).toHaveText(['SUPPRESS CA BIRD2']);
-  // No Strip: nothing to assign (crc-sync ADR 0146: the only inputs are the TAG's, callsign and type).
-  await expect(menu.locator('.label-menu-input[data-field="altitude"], .label-menu-input[data-field="heading"], .label-menu-input[data-field="speed"]')).toHaveCount(0);
-  await page.screenshot({ path: test.info().outputPath('ca-suppress-menu.png'), clip: { x: pt.x - 120, y: pt.y - 60, width: 320, height: 160 } });
-  await menu.locator('.label-menu-suppress').click();
-  await expect(menu).toHaveCount(0);
+  await expect(menu.locator('.label-menu-suppress')).toHaveCount(0);
+  if (await menu.count()) await menu.locator('.label-menu-track').click();
+  const row = page.locator('#tp-alerts .tp-alert[data-conflict-id="vqa|vqb"]');
+  await expect(row).toBeVisible();
+  await row.locator('.tp-alert-suppress').click();
   await expect.poll(() => sent.length).toBe(1);
   expect(sent[0]).toMatchObject({ conflictId: 'vqa|vqb', actingPositionId: 'CTR', suppress: true });
 
-  // The server's answer (here injected): suppressed at CTR. No SUPPRESS left on the label; the track panel's row is grey.
+  // The server's answer (here injected): suppressed at CTR. The track panel's row is grey and offers RESTORE.
   await scene(page, true);
   await page.mouse.click(pt.x, pt.y);
-  // No SUPPRESS left; the untagged contact still offers TAG (crc-sync ADR 0146), and TRACK is the track panel.
   await expect(menu.locator('.label-menu-suppress')).toHaveCount(0);
-  await menu.locator('.label-menu-track').click();
-  const row = page.locator('#tp-alerts .tp-alert[data-conflict-id="vqa|vqb"]');
+  if (await menu.count()) await menu.locator('.label-menu-track').click();
   await expect(row).toHaveClass(/tp-alert-off/);
   await expect(row).toContainText('Suppressed.');
   await row.locator('.tp-alert-suppress').click();
