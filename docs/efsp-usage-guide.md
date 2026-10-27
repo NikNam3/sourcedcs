@@ -41,7 +41,7 @@ Built and tested (`npm test` in `crc-sync` and `crc-desktop`, both green per lan
 - **Incirlik's tower pattern, the single frequency approach and the PAR** (LC, AP, PAR): the tower works pattern traffic on its ordinary Strips (P/S and OPT cells, an IN PATTERN Bay, Closed traffic and Leave pattern); AP's SFA frequency Bay and **Hand off to PAR**; PAR's FINAL Strip (HDG, ALT, Begin descent, Cleared to land, Landed, Missed approach) and the PAR panel, whose elevation and azimuth scopes crc-sync measures against approach values the PAR controller sets. There is no RSU and no SFA Position. See §8L.
 - **Mode C intruder alerts and MARSA groups** — Conflict Alert is between two aircraft with Strips; an aircraft with no Strip that squawks is a Mode C intruder (`MCI`); one formation and one MARSA never alert against each other; a receiver under tanker MARSA is watched against the tanker. See §8E and §8D.
 - **The airspace-conflict alert** — an aircraft inside an active airspace it may not be in raises an amber `SAA`, by airspace type; the using agency (OPS at Incirlik) approves entry, and only the controlling Position defines an airspace. See §8A.
-- **The airspace card lists its flights** (inside and filed through) with **Approve** for whoever approves entry; **transits** through an active MOA, warning, restricted, range or danger area are requested on the Strip and decided by whoever separates its users; a grey `COORD` mark shows a flight filed through one that nobody has coordinated yet. The Strip's airspace badge is amber only while the aircraft is inside an approved airspace that is not active. See §8A.
+- **The airspace card lists its flights** (inside and filed through) with **Approve** for whoever approves entry; **transits** through an active MOA, warning or restricted area are requested on the Strip, decided by whoever separates its users and ended by hand with **Transit complete**; a grey `COORD` mark shows a flight filed through one that nobody has coordinated yet. The Strip's airspace badge is amber only while the aircraft is inside an approved airspace that is not active. See §8A.
 - **Jurisdiction areas** — the airspaces panel shows whose airspace an aircraft is in: the LTAG control zone (the tower's), the Incirlik RAPCON (AP's and PAR's), the carrier area, and CENTER's everywhere else. See §8A.
 - **Handoffs are released or not** — the receiver marks the aircraft **Checked in** when the pilot calls, and control moves then (released) or once the aircraft is inside the receiver's airspace (not released); **Request release…** asks for it sooner. See §8.
 - **Frequencies are set at run time** — the FREQUENCIES panel lists each Facility's station frequencies and the SFA pool; a controller edits, adds and removes their own Facility's. See §8N.
@@ -811,7 +811,7 @@ not validate stops start-up. One entry per MOA or range looks like this:
     {
       "airspaceId": "RANGE-SOUTH",
       "name": "South A/G Range",
-      "type": "RANGE",
+      "type": "RESTRICTED",
       "controllingFacilityId": "INCIRLIK",
       "controllingPositionId": "AP",
       "usingPositionId": "SOUTH_RANGE",
@@ -826,10 +826,15 @@ not validate stops start-up. One entry per MOA or range looks like this:
 - `usingPositionId` is **only** for a range with a control tower of its own. Including it creates a
   Position under a `RANGES` Facility that somebody can act as; leaving it out (the ordinary MOA
   case) creates no Position at all, and the controlling Position runs the airspace by itself.
-- `type` is one of `MOA`, `RANGE`, `DANGER`, `RESTRICTED`, `PROHIBITED`, `WARNING` (an area), or a route type (an
-  MTR) — a label set of our own that borrows FAA and ICAO special-use-airspace names. It decides **one** thing: which
-  aircraft inside an active airspace raise the airspace-conflict alert (below). The separation regime is never derived
+- `type` is one of `MOA`, `RESTRICTED`, `PROHIBITED`, `WARNING` (an area: the FAA's special use airspace types), or a
+  route type (an MTR). It decides which aircraft inside an active airspace raise the airspace-conflict alert (below),
+  which areas take a transit, and that a prohibited area is always in force. The separation regime is never derived
   from it.
+- **A range is not an airspace type.** A range is a place on the ground and its controller is the airspace's using
+  agency. Make the airspace over the range **restricted** (over land, hazardous activity), **warning** (offshore, beyond
+  3 NM) or a **MOA** (non-hazardous), and name the range control Position in `usingPositionId`, as in the example above.
+  There is no `RANGE` or `DANGER` type: a Board or a `state/efsp-airspaces.json` that still holds one does not start, and
+  crc-sync names the airspace (delete it or retype it).
 - Frequencies are **MHz as a number**, 30–400. A range's `controlFrequencyMhz` is its tower; a
   MOA's `workingFrequencyMhz` is what flights working inside it go to.
 - `altLowerFt` / `altUpperFt` are optional published vertical limits, in whole feet. When set, any
@@ -840,6 +845,11 @@ not validate stops start-up. One entry per MOA or range looks like this:
 (the using agency is finished) → `RETURNED` again. A range schedules its own airspace and requests
 activation; the controlling ATC Position approves it, and takes it back at the end. A MOA with no
 range control skips the request — its controlling Position schedules and activates directly.
+
+**Prohibited areas are always in force.** They have no schedule, no activation and no release; the card reads
+`IN FORCE`, has no state buttons, and the map draws the area as an active one (it shows under the ACTIVE filter too).
+Any aircraft inside one without an approved entry alerts, VFR included. Approve an entry only on the using agency's
+word (**Airspace…** on the Strip, or the card's **Approve**). A prohibited area has no transit.
 
 If you are signed on to both sides, you still press both buttons: the state changes are real, only the
 conversation with another controller collapses.
@@ -886,8 +896,8 @@ conformance check (§8E) watches it against its entry block; an assigned altitud
 
 ### The airspace card's flight list (`adr/0124`)
 
-If you hold the airspace's using agency (OPS at Incirlik) or its controlling Position, the card of a restricted area,
-MOA, warning area, range or danger area lists the flights **inside** it and those **filed** through it (the filed route
+If you hold the airspace's using agency (OPS at Incirlik) or its controlling Position, the card of a restricted,
+prohibited or warning area or a MOA lists the flights **inside** it and those **filed** through it (the filed route
 crosses it, it is the flight's working airspace, or the flight is already approved into it). Each row shows the
 callsign, why it is listed, and **Approve**, or a grey "approved" once entry is approved. A row turns **amber** only
 while the flight is inside without approval and raising the airspace-conflict alert. **Approve** approves entry on the
@@ -898,9 +908,9 @@ flight without a Strip (an uncorrelated contact) is not listed: correlate it fir
 ROUTE airspaces' fixes. A route whose fixes are none of these (the stereo routes' fixes, until AIRAC data, §4A) is not
 filed through anything.
 
-### Transit through an active MOA, warning, restricted, range or danger area (`adr/0128`, `0136`)
+### Transit through an active MOA, warning or restricted area (`adr/0128`, `0136`, `0144`)
 
-If an IFR flight you work needs to go through an active MOA, warning, restricted, range or danger area, open its Strip's
+If an IFR flight you work needs to go through an active MOA, warning or restricted area, open its Strip's
 `⋯` menu and choose **Request transit <area>** (with several, **Transit…** opens a picker). The request goes to whoever
 separates that airspace's users: `TAC_C2` when the using agency is TACTICAL, otherwise the airspace's controlling
 Position (OPS only sees it). They answer on the airspace card with **Approve transit** or **Decline transit** (an
@@ -914,13 +924,24 @@ without a request, and may decline one already approved. If you hold both sides,
 (approve)** and the request is approved at once.
 
 A **decline stays** on the Strip (`TRANSIT <area> DECLINED`) and on the card until a controller holding the flight's
-Strip picks **Acknowledge transit decline <area>** from the Strip's menu, or **Acknowledge** on the card row. A transit
-ends when the flight's last Strip goes, when the airspace is released, or on a new mission. A VFR flight needs no
-transit (VFR is not denied a MOA, below).
+Strip picks **Acknowledge transit decline <area>** from the Strip's menu, or **Acknowledge** on the card row.
 
-**The `COORD` mark.** A grey `COORD <area>` on a Strip means the flight's filed route crosses that active MOA, warning,
-restricted, range or danger area and nothing is coordinated yet (no transit, no entry approval). It goes when you request
-a transit, approve its entry, or the airspace goes cold. Only the controller holding the Strip sees it. A cleared
+**Transit complete.** When a flight with an approved transit has left the area, choose **Transit complete <area>** on
+its Strip's `⋯`, or **Transit complete** on its row of the airspace card. The `TRANSIT <area>` mark leaves the Strip. If
+the flight comes back in, it is an unapproved entry again: it alerts and needs a new transit. If you are not the side
+that decided the transit, the decider's card row shows a grey `transit complete` until they press **Acknowledge**.
+Nothing on anyone's Strip changes: if you restricted the area's users for the transit, change their altitudes
+yourself. If you decide the transit yourself, Transit complete ends it with nothing to acknowledge. There is no Undo:
+if you ended it by mistake, request the transit again.
+
+A transit also ends when the flight's last Strip goes, when the airspace is released, or on a new mission. A VFR flight
+needs no transit (VFR is not denied a MOA, below).
+
+**The `COORD` mark.** A grey `COORD <area>` on a Strip means the flight's filed route crosses that active MOA, warning
+or restricted area and nothing is coordinated yet (no transit, no entry approval). It goes when you request
+a transit, approve its entry, or the airspace goes cold. It stays away while a completed transit waits for the
+decider's Acknowledge; after that it comes back if the filed route still crosses the active area, even when the flight
+has passed it (the route check looks at the whole filed route). Only the controller holding the Strip sees it. A cleared
 `ALT`/`HDG` (an emptied field) is no clearance: the flight reads as VFR again for the transit and entry rules.
 
 ### Jurisdiction areas: whose airspace an aircraft is in (`adr/0125`)
@@ -928,15 +949,26 @@ a transit, approve its entry, or the airspace goes cold. Only the controller hol
 The airspaces panel lists, under the airspace cards, the **JURISDICTION** areas that say whose airspace an aircraft is
 in: the **LTAG CTR (control zone)**, the tower's (`LC` and `GC`); the **Incirlik RAPCON** (`AP` and `PAR`; the control
 zone is cut out of it); and the **carrier area** (50 nm round the ship, every carrier Position; it wins wherever the
-ship is, and is nowhere while the hull is not found). Everywhere else is CENTER's. Each shows its class, its limits
-(feet MSL) and its shape, with the published text it came from. The Position that controls an area edits its class,
-limits and shape with **Edit…** (`AP` the RAPCON, `LC` the control zone, `CV_PRIFLY` or `CV_MARSHAL` the carrier area,
+ship is, and is nowhere while the hull is not found). Everywhere else is CENTER's. Each card shows its class (if it
+has one), its limits (feet MSL), **its VFR service** and its shape, with the published text it came from.
+
+Türkiye does not classify its airspace: the **Incirlik RAPCON is the Adana MTMA** and has no class. Its VFR service is
+**IFR separated from VFR; VFR to VFR traffic advisories**: Approach separates IFR traffic from VFR, and gives VFR
+traffic advisories about other VFR. The **LTAG CTR (control zone)** is **Class D**, so VFR gets traffic advisories and
+no separation from IFR in the air (its line ends "(Class D)"). The carrier area and everything outside the areas
+(CENTER's) are Class E (VFR: traffic advisories, no separation). The three VFR services are *VFR separated from IFR and
+VFR* (Class B's), *IFR separated from VFR; VFR to VFR traffic advisories* (Class C's) and *VFR: traffic advisories, no
+separation* (Classes D to F); a class gives its service, Class A and G have none, and an unclassified area must name
+one.
+
+The Position that controls an area edits its **CLASS** (with *none (unclassified)*), its **VFR SERVICE** (*by the
+class: …*, or one of the three), its limits and its shape with **Edit…** (`AP` the RAPCON, `LC` the control zone, `CV_PRIFLY` or `CV_MARSHAL` the carrier area,
 whose ship cannot be changed). crc-sync refuses an edit that would make two areas other than the carrier's overlap, and
 says which. Nobody creates or deletes one in the panel, and no flight is approved into one. On the map they are off by
 default: **Airspaces ▾ → KIND → JURISDICTION** draws them as thin grey outlines.
 
 They decide where control of a not-released handoff moves (§8). The limits of the control zone and the RAPCON are AIP
-Türkiye's; the classes (D, C, E) and the carrier area are ours.
+Türkiye's; the control zone's Class D is the squadron's choice; the Class E areas and the carrier area are ours.
 
 ### The airspace-conflict alert (`adr/0119`)
 
@@ -945,8 +977,7 @@ airspace type:
 
 | Type | A flight with a Strip and no approved entry | A VFR flight with a Strip | A contact with no Strip |
 |---|---|---|---|
-| `RESTRICTED`, `PROHIBITED` | alerts | alerts | alerts |
-| `RANGE`, `DANGER` | alerts (treated as restricted, our reading) | alerts | alerts |
+| `RESTRICTED`, `PROHIBITED` (always in force) | alerts | alerts | alerts |
 | `MOA`, `WARNING` | alerts (ours: an IFR flight goes through only by agreement) | **never** (VFR is not denied a MOA) | alerts |
 | a route (MTR) | never | never | never |
 
