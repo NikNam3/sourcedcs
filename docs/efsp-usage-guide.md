@@ -34,7 +34,7 @@ Built and tested (`npm test` in `crc-sync` and `crc-desktop`, both green per lan
 - **A new mission clears the Board** — once, by the system, with a notice. See §8J.
 - **Finished flights are archived** after 12 hours or at the next mission, and a mission session decides which mission is current. See §8J. Every Mutation and refusal has exactly one audit entry (§10).
 - **The tactical Positions are fenced**: a JTAC is sent only the lines it was handed, `AIC` hands back and cannot advance a line, and `TAC_C2` answers the TOFI exit on an AIC-held line. See §8C1.
-- **Metrics and a traffic count**: the METRICS panel (PANELS → METRICS) and, behind it, two read endpoints on crc-sync. See §10.
+- **Metrics and a traffic count**: the METRICS panel (PANELS → METRICS), with what crc-sync itself costs in CPU and memory, and, behind it, read endpoints on crc-sync. See §10.
 - **ATO import** — `TAC_C2` pastes or drops a USMTF ATO (atobrief exports one) and it becomes mission lines on the Board, with the air-refuelling tanker/receiver join shown on the Strips. See §8I.
 - **The carrier (a first working prototype)** — a `CARRIER` Facility with four Positions (`CV_MARSHAL`, `CV_PRIFLY`, `CV_APP1`, `CV_APP2`): the Marshal creates the carrier's Strips (Recovery or Launch), a read-only ship banner, the **CARRIER** panel (BRC, final bearing, Case, ramp time, marshal position, weather at the ship, recovery tanker; PriFly and the Marshal set them), the **MARSHAL** panel (the recovery board: re-sequence, Commence, Back to stack, Delta, an EAT and the fuel typed by hand, changed clearances marked until passed), the **CARRIER MAP** panel (a radar picture fixed on the ship, with the stack, the approach path and the pattern), PriFly's Bay of recovered aircraft, and the handoff buttons from launch to recovery. Every carrier view names an aircraft by its **side number**. There is no PAR on the carrier. See §8K. Not yet seen against a real DCS ship.
 - **Suggestions from surveillance** — a quiet `AIRBORNE? ▸` chip when a departure Strip still says it is on the ground but the aircraft is flying, a `STALE` badge when it was ignored, and a takeoff time stamped when a Strip enters Airborne. Surveillance informs; nothing moves by itself. See §8F.
@@ -49,6 +49,18 @@ Built and tested (`npm test` in `crc-sync` and `crc-desktop`, both green per lan
 - **The map needs no MapTiler key to work** — labels are drawn with fonts the app ships, the basemap falls back to a free one when MapTiler refuses, and terrain heights come from DCS itself. See §8O.
 - **Remarks on every Strip** — a one-line RMKS row, the whole remark in a small window on a click; a long value is cut with "…" in its cell. See §4B.
 - **Divert** — `AP` and `CTR` give a flight a new destination and a new clearance on the same Strip. See §8.
+- **Correlation is by beacon code or a binding, never by callsign** — an AI flight correlates once you type the code
+  it squawks into its Strip. See §8C.
+- **VFR at Incirlik** — the RAPCON is the unclassified Adana MTMA (IFR separated from VFR), the control zone is Class D;
+  every area has a VFR service. `CD` creates departures itself and makes a **VFR departure** in one step (code and
+  Strip, no plan). See §3 and §8A.
+- **Special use airspace is the FAA's** — MOA, restricted, prohibited and warning areas only (a range is a using
+  agency, not a type); a prohibited area is always in force; an approved transit is ended by hand with **Transit
+  complete**. See §8A.
+- **Click a data block to assign** heading, speed or altitude on a flight whose Strip you own. See §8F.
+- **On a PAR final only the glidepath alerts**, the PAR panel shows the heading that holds the final course, and the
+  heading grace scales with the turn. See §8E and §8L.
+- **A click never moves a Strip**, and every coloured left edge says what it is on hover. See §9.
 - **Settings has one tab per panel** (General, Colours, Radar, SRS, Tools, and PAR, Marshal and Carrier map for the panels that have settings of their own). See §9.
 
 Not built: WP6's arresting-gear data (DCS has no wires) and the carrier's deck-state board (`adr/0064` B8). `docs/efsp-briefing.md` is the current handoff note.
@@ -2248,7 +2260,7 @@ new missions.
   Position, the scope shows the runways without the surface. The switch above turns it off for you. A facility file
   names its surface Positions in `airportSurfacePositions`. The surface is OpenStreetMap's field as it is today, which
   can differ from the DCS model.
-- **The cursor's bullseye readout** (the bearing and range from the bullseye in the topbar) is blank while every radar
+- **The bullseye readout beside the cursor** (bearing and range from the bullseye) is blank while every radar
   you have is an ATC one, and whenever the pointer is off the map (also over a panel on the map).
 - **The selected airport's range ring** (the APRT panel's airport) always draws, at the radar's range. The APRT
   panel's **extended centreline** follows the runway's true course where a Facility describes the field (Incirlik);
@@ -2279,7 +2291,7 @@ new missions.
 ## 10. Metrics and the traffic count
 
 crc-sync counts what the Board does, and crc-desktop measures what a controller does with it (searches,
-time to find a Strip, inputs per gesture). The METRICS panel shows both; behind it are two read endpoints
+time to find a Strip, inputs per gesture). The METRICS panel shows both, and what the server costs; behind it are three read endpoints
 on crc-sync, open to any signed-in user. Nothing in either names a controller.
 
 ### The METRICS panel
