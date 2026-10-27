@@ -139,6 +139,8 @@ Ship crc-desktop and the crc-sync image together, as always. Strict state again 
      class (ADR 0143 makes the MTMA unclassified). It still behaves right (Class C gives "IFR separated"), but its card
      says Class C. After the deploy `AP` opens it in the AIRSPACE panel, **Edit…**, CLASS *none (unclassified)*, VFR
      SERVICE *IFR separated*; or reset the Board. `LTAG-CZ` needs nothing (it stays Class D).
+   - **`CVN-72-CCA` stays "Class E"** the same way (ADR 0145 lane, H173 VQ-B: unclassified, ADVISORY). A carrier Position
+     edits it: CLASS *none (unclassified)*, VFR SERVICE *advisory*; or reset the Board. CENTER's fallback is code: nothing to do.
    - **Correlation `confidence`** (ADR 0142 removed it) is still accepted on restore and dropped, so the deployed Board
      survives. That allowance goes at the next Board reset (v3 backlog); nothing to do now.
 2. **`efsp-facility-incirlik.json`**, if one exists: a copy naming `RSU` or the `rsu-pattern` Bay stops start-up (there is
