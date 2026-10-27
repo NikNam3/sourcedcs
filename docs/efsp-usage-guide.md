@@ -118,6 +118,23 @@ Every Position's Bay set is fixed by the facility files (`facility-config.js` lo
 | `cd-held` | `HELD` | Strips on an active hold — `HOLD_FOR_RELEASE`/`RELEASE_TIME`/`CLEARANCE_VOID_TIME`/`EDCT`/`CALL_FOR_RELEASE`. Shared ownership with `GC` (either can hold a Strip here) — release it once the hold condition clears, which transfers it on to `GC`. |
 | `cd-coordination` | — | Inert this slice (see `ops-coordination`). |
 
+**A departure with nothing at OPS.** `CD` creates a DEPARTURE Strip itself: the create box's **CD · Departure**
+origin (callsign, Enter) puts it in `cd-pending-clearance`, in Pending Clearance, with the same flight-plan lookup as
+OPS's (§4). From there it is cleared like any other.
+
+**VFR departure.** A VFR pilot calls for traffic advisories with the proposed direction of flight; there is no flight
+plan to look up (a VFR flight plan is a search-and-rescue record with Flight Service, which ATC never gets). Press
+**VFR…** in the toolbar (shown only at `CD`), type the callsign and the type (`F16`, `2/F16`), pick **DIR** (N…NW) and,
+if the pilot asked for one, the runway (empty = the active runway), then **Create VFR** (or Enter). Keyboard:
+`.vfr VIPER11 F16 NW [23]`. In one step the flight gets flight data, a **discrete code** and a DEPARTURE Strip in
+`cd-cleared`; the form shows the line to read: "VIPER11, squawk 4321, maintain VFR" (add the departure frequency,
+JO 7110.65BB ¶7-6-10: "VIPER11, squawk 4321, departure frequency 251.0, maintain VFR"). It skips Pending Clearance:
+there is no clearance to review, no altitude or destination needed, no release or void time. From there it is an
+ordinary departure: **Approve Pushback** to `GC`, taxi, `LC`'s runway queue, departed, **Hand Off to AP**. A refusal
+(bad callsign, type or direction, a runway this airfield does not have, no free code) shows in the form in red and
+spends no code. **Undo** within 10 s removes the Strip and frees the code. Why a code before takeoff: a few minutes
+after it leaves the Class D control zone it is in the Adana MTMA, where Approach separates IFR traffic from it (§8A).
+
 ### `GC` — Ground
 
 | Bay | Implies state | Intended usage |
@@ -138,6 +155,9 @@ Every Position's Bay set is fixed by the facility files (`facility-config.js` lo
 | `lc-final` | `FINAL` | Arrivals on final approach. |
 | `lc-landed` | `LANDED` | Just-landed arrivals, waiting on hand-off to `GC` for taxi-in. |
 | `lc-coordination` | — | Inert this slice. |
+
+On `LC`'s departure face P/S, OPT and HOOK are not shown (they are arrival matters); a departure that needs one sets it
+in the expanded `▼` view. `LC`'s and `AP`'s arrivals keep P/S and OPT on the face (§8L).
 
 ### `AP` — Approach/Departure (RAPCON)
 
@@ -397,8 +417,11 @@ joins the face only once it is not CLEAN, and is always one `▼` away: a pilot 
 whoever they are talking to, H55), AP and CTR see FREQ, and on a departure also RELEASE (Block `14A`, the
 departure release state, where the release travels, §7), CTR sees the TOFI fields (`KEEP IFR` is TOFI's `ifrActive`:
 the flight stays IFR under tactical control and ATC keeps separating it; hover it), the airfield Positions
-see the runway, GC sees TAXI (`17`) and LC TAKEOFF (`18`). CID and TAIL are on no Strip. The full table
-is in `docs/adr/0056`.
+see the runway, GC sees TAXI (`17`) and LC TAKEOFF (`18`). CID and TAIL are on no Strip. **DIR** (Block `9K`) is
+a VFR departure's direction of flight (§3 `CD`): on CD's, GC's, LC's and AP's departure face once set, never empty on
+an IFR departure. On a Strip you do not hold, a cell you may not write is read-only; the one exception is `OPS`, which
+sets ALERT/SCRAMBLE (`14E`) and ORDNANCE (`3G`) on a departure whoever holds it. The full table is in
+`docs/adr/0056`.
 
 **Labels.** Block 1 is labelled **ACID** (aircraft identification) on DEPARTURE, ARRIVAL and OVERFLIGHT
 Strips (CALLSIGN on the mission line and the carrier's). Hover any label on those three strip types to see
@@ -1231,9 +1254,13 @@ as for any flight (§8A).
 the face once set. A cleared `ALT` or `HDG` (the field emptied) is no clearance: the flight reads as VFR again.
 
 **Ending it** ("radar service terminated, squawk VFR", ¶5-1-9 a): `⋯` → **Radar service terminated** (or `.term` on the
-selected Strip), offered on an overflight Strip with no clearance that your `AP` or `CTR` owns, and greyed while a
+selected Strip), offered on an overflight Strip or a VFR departure with no clearance that your `AP` or `CTR` owns, and greyed while a
 coordination or TOFI exchange is open on it. The Strip is dropped, the code released, any airspace entry cleared and
 the contact untracked at once. It is not the Strip's next step: that stays **Leaves Sector**, the handoff path.
+
+**A VFR departure** (CD's **VFR…**, §3) reaches `AP` as an ordinary handed-off DEPARTURE with no clearance. `AP`
+keeps flight following on it, or, when it leaves the MTMA or the pilot cancels, `⋯` → **Radar service terminated**. Its
+**DIR** cell shows where it is heading.
 
 **Undo** takes either back within 10 s: Undo of the start removes the Strip, the flight data and the binding; Undo of
 the termination puts back the Strip, code, entry and binding, but never takes a contact another flight has picked up
@@ -2213,7 +2240,7 @@ new missions.
 - Each signed-on Position gets its own tab; each Position's Bays (§3) are its own tabs underneath.
 - **Drag** a Strip onto another Position's tab to transfer it (same-Facility only); onto a Bay tab within your own Position to move it there.
 - **Search**: `.find <text>` dot-command, or the search icon — matches callsign/beacon (and a carrier aircraft's side number), opens a temporary search-results Bay.
-- **Dot-commands**: `.drop [reason]`, `.undo` (undoes the action in the Undo slot, no Strip needs selecting), `.find <text>`, `.bind <track id>`, `.unbind`, `.stereo <NAME> <CALLSIGN>`, `.ff <track number> <CALLSIGN> <TYPE>` and `.term` (flight following, §8C2), and for MARSA (§8D) `.marsa <CALLSIGN> [DECLARER]`, `.rendezvous`, `.endmarsa`, `.voidmarsa` — all but `.find`, `.stereo`, `.ff` and `.undo` apply to whichever Strip is currently selected.
+- **Dot-commands**: `.drop [reason]`, `.undo` (undoes the action in the Undo slot, no Strip needs selecting), `.find <text>`, `.bind <track id>`, `.unbind`, `.stereo <NAME> <CALLSIGN>`, `.ff <track number> <CALLSIGN> <TYPE>` and `.term` (flight following, §8C2), `.vfr <CALLSIGN> <TYPE> <DIR> [runway]` (a VFR departure at `CD`, §3), and for MARSA (§8D) `.marsa <CALLSIGN> [DECLARER]`, `.rendezvous`, `.endmarsa`, `.voidmarsa` — all but `.find`, `.stereo`, `.ff`, `.vfr` and `.undo` apply to whichever Strip is currently selected.
 - **Undo** (ADR 0100): every one-click move you made (NLA step, hand-off, Checked in, carrier handoff, Hand off to PAR, Landed, Missed approach, Closed traffic, Leave pattern, surveillance chip, TOFI Exit, Split/Join, Divert, Start flight following, Radar service terminated) can be undone for 10 seconds, by the Position that did it. The panel shows one slot, "Undo · Hand off VIPER1 → APP · 7 s"; click it, press Ctrl+Z with the panel in use, or type `.undo`. The newest undoable action replaces the slot. Changes other controllers in your Facility made to the same records in the meantime are voided (a voided clearance stays visible, marked VOIDED); the Position that made them gets a message in its panel ("LC undid Hand off VIPER1; your annotation was voided", click to dismiss; nothing is marked on the Strip). An Undo is refused if another Facility has since answered, or the Strip was dropped and archived; the slot line says why. Undoing a Split removes the part's Strip and its flight data on every client at once.
 - **Settings** has one tab per panel: General, Colours, Radar (the Map group, declutter, navpoints, track visibility,
   Conflict Alert, extended centreline, debug), SRS and Tools, and one for each panel that has settings of its own:
