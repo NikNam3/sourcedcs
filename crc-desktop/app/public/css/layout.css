@@ -10,8 +10,10 @@
        this session (never opened) has nowhere else to go and renders inline
        wherever it sits in the HTML source instead. This class is the
        replacement "hidden until dockview actually places it" state —
-       mountExistingPanel() (dock.js) removes it the one time each panel is
-       first created. */
+       mountExistingPanel() (dock.js) removes it each time dockview creates the
+       panel and puts it back on dispose; hideStrayLegacyPanels() puts it back
+       on any panel element left outside #dock-root (a failed layout restore,
+       U-PANELS-GHOST). */
     .dock-unmounted { display: none !important; }
     /* H138 U12: every docked panel fills its tab and scrolls instead of cutting its UI off when sized smaller (the AIRPORT
        panel's container, made the rule). dock.js's mountExistingPanel() gives every panel the class. A panel that must not

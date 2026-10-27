@@ -79,6 +79,7 @@ export function initDock() {
   setDock(dock);
 
   loadDockLayout();
+  hideStrayLegacyPanels();
   // The radars-panel's own init() (panels/radar-panel.js's initRadarPanel, invoked by
   // mountExistingPanel while fromJSON()/buildDefaultDockLayout() above is
   // still running) renders the Panels checkboxes against whatever sibling
@@ -116,6 +117,7 @@ export function initDock() {
     // bursts of change events into a single check — sidesteps this
     // entirely: by the time it runs, dockview's internal state has settled.
     scheduleEnsureRequiredPanels();
+    hideStrayLegacyPanels();
     // The radars-panel's Panels section (panels/radar-panel.js) mirrors dock state in its
     // own checkboxes/status text, but only re-renders on its own tab
     // becoming active or a click inside it — closing a panel by its own tab
@@ -732,17 +734,16 @@ function mountExistingPanel(domId, initFn) {
   if (!state) {
     const element = document.getElementById(domId);
     if (!element) console.error(`[dock] no #${domId} element found in index.html — this panel will not render`);
-    // See the .dock-unmounted rule (index.html): every legacy-adapter div
-    // starts hidden in the static markup, since a panel dockview hasn't
-    // been asked to create yet this session has nowhere to go and would
-    // otherwise render inline wherever it happens to sit in the HTML source.
-    if (element) element.classList.remove('dock-unmounted');
     // Every docked panel fills its tab and scrolls rather than cut its UI off when sized smaller (H138 U12, layout.css
     // .dock-panel); a panel that must not scroll as a whole says so on its own id rule.
     if (element) element.classList.add('dock-panel');
     state = { element, initialized: false, hooks: null };
     _legacyPanelState.set(domId, state);
   }
+  // See the .dock-unmounted rule (layout.css): every legacy-adapter div starts hidden in the static markup, since a panel
+  // dockview hasn't placed has nowhere to go and would otherwise render inline wherever it sits in the HTML source. Shown
+  // on every (re)creation, hidden again on dispose and by hideStrayLegacyPanels() (U-PANELS-GHOST).
+  if (state.element) state.element.classList.remove('dock-unmounted');
   return {
     element: state.element,
     init() {
@@ -757,12 +758,26 @@ function mountExistingPanel(domId, initFn) {
     // need to clear that state here, or the next tick after close tries to
     // write into DOM that's no longer attached to the document and throws.
     dispose() {
+      if (state.element) state.element.classList.add('dock-unmounted');
       if (state.hooks && state.hooks.onClose) state.hooks.onClose();
     },
     onShow() {
       if (state.hooks && state.hooks.onShow) state.hooks.onShow();
     },
   };
+}
+
+// U-PANELS-GHOST: a legacy panel's element that dockview created but does not hold must not paint. The case that showed
+// it: a saved layout dockview cannot restore (it names a panel that no longer exists, such as the old Squawk C/S `calls`)
+// throws partway through fromJSON(), after createComponent() has already un-hidden a sibling such as PANELS. dockview
+// reverts, but a panel it created and never opened is never disposed, so its element stayed where index.html put it, a
+// static block in <body> under the fixed #dock-root: its background hidden by the dock, its positioned toggles painted
+// over the map and clickable. Any element outside #dock-root is not held by dockview, so it is hidden again here.
+function hideStrayLegacyPanels() {
+  const root = document.getElementById('dock-root');
+  for (const { element } of _legacyPanelState.values()) {
+    if (element && element.isConnected && !(root && root.contains(element))) element.classList.add('dock-unmounted');
+  }
 }
 
 // ── Layout persistence ─────────────────────────────────────────────────────

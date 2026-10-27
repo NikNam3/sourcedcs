@@ -69,6 +69,17 @@ async function ghostToggles(page) {
   });
 }
 
+/** Every legacy panel element (index.html's dock-adapted divs) that paints somewhere dockview does not hold it. */
+async function strayPanels(page) {
+  return page.evaluate(() => {
+    const root = document.getElementById('dock-root');
+    return [...document.body.children]
+      .filter((el) => el.id && el.id.endsWith('-panel') && !root.contains(el))
+      .filter((el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(el).display !== 'none'; })
+      .map((el) => el.id);
+  });
+}
+
 for (const [name, seed] of CASES) {
   test(`no PANELS toggle shows without its panel: ${name}`, async ({ page }) => {
     await page.setViewportSize({ width: 1400, height: 900 });
@@ -84,6 +95,7 @@ for (const [name, seed] of CASES) {
     // After boot, and again after PANELS is opened and closed from its topbar button, the way a controller does.
     await expect.poll(() => ghostToggles(page), { message: 'after boot', timeout: 3000 }).toEqual([]).catch(() => {});
     expect(await ghostToggles(page), 'after boot').toEqual([]);
+    expect(await strayPanels(page), 'no panel paints outside the dock after boot').toEqual([]);
     for (let i = 0; i < 2; i++) {
       await page.locator('#btn-radars').click();
       await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
@@ -95,3 +107,24 @@ for (const [name, seed] of CASES) {
     expect(await ghostToggles(page), 'after PANELS closed').toEqual([]);
   });
 }
+
+// Every legacy panel, not just PANELS: a removed panel saved beside the Strip panel, Settings and Airport.
+test('no legacy panel paints outside the dock after a failed layout restore', async ({ page }) => {
+  await page.setViewportSize({ width: 1400, height: 900 });
+  const left = { type: 'leaf', data: { views: ['track', 'efsp', 'airport', 'radars', 'calls'], activeView: 'efsp', id: '2' }, size: 500 };
+  const map = { type: 'leaf', data: { views: ['map', 'settings'], activeView: 'map', id: '1' }, size: 900 };
+  const seed = layout(left, map);
+  seed.panels = { ...seed.panels,
+    efsp: { id: 'efsp', contentComponent: 'efsp', title: 'STRIPS' },
+    airport: { id: 'airport', contentComponent: 'airport', title: 'AIRPORT' },
+    settings: { id: 'settings', contentComponent: 'settings', title: 'SETTINGS' } };
+  await page.addInitScript(([s, token]) => {
+    localStorage.setItem('crc-desktop-sync-token', token);
+    localStorage.setItem('crc-desktop-dock-layout-v2', JSON.stringify(s));
+  }, [seed, fakeToken('u-panels-ghost-all')]);
+  await page.goto('/');
+  await installAppModules(page);
+  await page.waitForFunction(() => crc.dock.dock !== null);
+  expect(await strayPanels(page)).toEqual([]);
+  expect(await ghostToggles(page)).toEqual([]);
+});
