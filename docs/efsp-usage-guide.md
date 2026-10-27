@@ -400,7 +400,8 @@ Positions at once.
   Position tab gets an amber dot, and a line appears under the Bay tabs:
   `VIPER11 → lc-runway-queue from GC`. Click it to open the Bay with the Strip
   selected. Opening the Bay clears the tab and the line.
-- In the Bay you **are** looking at: the Strip flashes once and keeps an amber edge
+- In the Bay you **are** looking at: the Strip flashes once (a Strip rebuilt while it flashes keeps flashing to the
+  end; it is never replayed) and keeps an amber edge
   and a **from GC** line in its tab until you touch it, or for 30 seconds. A press clears
   them when it ends, not when it starts, so a button you press on that Strip does not
   move under your pointer.
@@ -1025,8 +1026,11 @@ containment, at every ATC Position, and the `SAA` tag is ours.
 ## 8B. Radar coverage — it follows what you're acting as
 
 **There is no radar selector any more.** What you can see on the scope is decided by the Positions you
-are signed on to under **ACTING AS**, not by anything you tick. The Coverage list in the same panel is read-only:
-it tells you which radars your Positions give you, and which Position gave you each one.
+are signed on to under **ACTING AS**, not by anything you tick. The PANELS panel reads ACTING AS (at the top), then
+PANELS, then the radars your Positions see, behind one grey line, `RADARS · n ▸` (plus `· k GND` when some are on the
+ground and sweeping nothing). Click the line to show or hide the list; the client remembers whether you left it open.
+The list is read-only: it tells you which radars your Positions give you, and which Position gave you each one. With no
+radar it reads `RADARS · 0` and says why ("No radar coverage — select a Position under ACTING AS above.").
 
 These are the shipped `positionRadars` defaults and radar figures: SOURCE's guess at which scope sits at which console, not any real facility's equipment (`adr/0042`, `0043`; §8F1).
 
@@ -1526,8 +1530,12 @@ starts with the code it is squawking (`4521 A060↓ H250`), as STARS does (¶5-4
 6 s if none says how often).
 
 - **Click the disc** to accept a handoff or point-out (it sends the same `ACCEPT` the Strip's button
-  does), to acknowledge `EM`, `CA`/`MCI` or `SAA`, or to step a block down or expand it. **Click the block** for the
-  track panel. Acknowledgements and click-downs are local to your scope and are not synced, as on STARS.
+  does), to acknowledge `EM`, `CA`/`MCI` or `SAA`, or to step a block down or expand it.
+- **Click the block** of a flight whose Strip you own to assign it a heading, speed or altitude: a small menu opens
+  on **HDG**; type the value and Enter. Tab to **SPEED** and **ALT**; Enter sends every changed value, as if typed in
+  the Strip's cells (same refusals, same "Coordinated with …" line). Esc closes. **TRACK**, or Shift+click on the
+  block, opens the track panel. If you don't own the Strip, or the contact has none, the click opens the track panel.
+  A tactical label answers the same click. Acknowledgements and click-downs are local to your scope and are not synced, as on STARS.
 - A handoff you sent blinks for 5 s once accepted, then stays white until you click it green, then
   partial. It blinks only for something *this scope saw happen*: a reconnect shows the settled picture.
   A same-Facility transfer (LC drags a Strip to AP) blinks at the sender too. `UN` blinks when a
@@ -1861,6 +1869,13 @@ the aircraft's position and the mission's date. There is no manual "HDG correcti
 heading you type is converted by crc-sync; where the variation is unknown (no mission loaded) a bearing
 shows `---` rather than a true value dressed up as magnetic. Mission dates outside 2025–2030 are
 extrapolated and flagged. The topbar approach course and the APRT centreline are magnetic too.
+
+**The DCS ruler reads differently, and that is DCS.** DCS's F10 map and Mission Editor ruler measure from **grid
+north** of DCS's flat map, not true north. At Incirlik the runway 05 final lies on 052.7° true, which is **047**
+magnetic on the mission's date; the DCS ruler reads about 049.6 for the same two points (grid 055.0 less DCS's own
+variation). The aircraft's heading indicator is the reference a controller vectors by, so the scope stays on true
+north and the World Magnetic Model. Incirlik's runway headings and PAR final course are DCS's own runway (052.7/232.7
+true), so the PAR panel reads the final as 047.
 
 The **transition altitude** is per theater (Syria 10,000 ft; every other theater 18,000 ft, a
 `[SOURCE-DEFINED]` placeholder) and lives in crc-sync's `config/theaters.json`. Everything that shows or
@@ -2225,9 +2240,20 @@ new missions.
   (`infra/RUNBOOK.md`). Radar masking (§8B), the elevation contours (Settings → GENERAL → Map Overlays) and the radar-debug
   line of sight all read it. Without a grid for the mission's map there are no contours and no masking.
 - **Settings → RADAR → Map** (yours only): **DCS drawings** (on: the mission editor's shapes; off hides them all),
-  **DCS text marks** (off) and **Airport surface** (on: aprons, taxiways, runway numbers and taxiway names when zoomed in
-  on a field, from zoom 12; the runway lines always show). The airport surface is OpenStreetMap's field as it is today,
-  which can differ from the DCS model. The strict black ATC scope (§8F, "ATC Map Background" off) shows runways only.
+  **DCS text marks** (off) and **Airport surface** (on). The runway lines always show.
+- **The airport surface** (aprons, taxiways, runway numbers and taxiway, apron and gate names, when zoomed in on a field,
+  from zoom 12) shows while you are signed on (Primary or Observer) at a Position your Facility lists for it (Incirlik:
+  `GC` and `LC`), together with any other Positions you hold, and on both backgrounds: on the black ATC scope it is
+  drawn in the video map's dim grey, nothing brighter than the runways. Signed on only at `AP`, `CTR` or another radar
+  Position, the scope shows the runways without the surface. The switch above turns it off for you. A facility file
+  names its surface Positions in `airportSurfacePositions`. The surface is OpenStreetMap's field as it is today, which
+  can differ from the DCS model.
+- **The cursor's bullseye readout** (the bearing and range from the bullseye in the topbar) is blank while every radar
+  you have is an ATC one, and whenever the pointer is off the map (also over a panel on the map).
+- **The selected airport's range ring** (the APRT panel's airport) always draws, at the radar's range. The APRT
+  panel's **extended centreline** follows the runway's true course where a Facility describes the field (Incirlik);
+  elsewhere it is drawn from the runway number × 10 as magnetic, which is only approximate. It starts at the airfield's
+  reference point, not the threshold.
 - **Picking a DCS drawing** in the airspace editor: hover or arrow through the **Pick DCS drawing** list to see each
   drawing outlined on the map in turquoise (also when DCS drawings are switched off); the small **show** button on a row
   brings an off-screen drawing into view. Hovering never moves the map.
@@ -2238,7 +2264,8 @@ new missions.
 
 - Set which Position(s) you're acting as under **Panels → Acting As** (grouped by Facility — `INCIRLIK`, `CENTER`, `TACTICAL`, `CARRIER` and, once any range is configured, `RANGES` are independent checkbox groups).
 - Each signed-on Position gets its own tab; each Position's Bays (§3) are its own tabs underneath.
-- **Drag** a Strip onto another Position's tab to transfer it (same-Facility only); onto a Bay tab within your own Position to move it there.
+- **Drag** a Strip onto another Position's tab to transfer it (same-Facility only); onto a Bay tab within your own Position to move it there. The drop follows the dragged Strip, not the cursor: it lands in the slot nearest the ghost's top edge. A release with the ghost over its own slot is no move and sends nothing, so a click or double-click never moves a Strip. A Position or Bay tab takes a drop only after more than 16 px of travel.
+- **The left edge of a Strip** (Highlight, an obligation due or overdue, MARSA armed or voided, contact lost, an alert) names itself and what to do in a hover tooltip: the colour drawn first, then "Also:" and any others underneath. Hover the edge itself.
 - **Search**: `.find <text>` dot-command, or the search icon — matches callsign/beacon (and a carrier aircraft's side number), opens a temporary search-results Bay.
 - **Dot-commands**: `.drop [reason]`, `.undo` (undoes the action in the Undo slot, no Strip needs selecting), `.find <text>`, `.bind <track id>`, `.unbind`, `.stereo <NAME> <CALLSIGN>`, `.ff <track number> <CALLSIGN> <TYPE>` and `.term` (flight following, §8C2), `.vfr <CALLSIGN> <TYPE> <DIR> [runway]` (a VFR departure at `CD`, §3), and for MARSA (§8D) `.marsa <CALLSIGN> [DECLARER]`, `.rendezvous`, `.endmarsa`, `.voidmarsa` — all but `.find`, `.stereo`, `.ff`, `.vfr` and `.undo` apply to whichever Strip is currently selected.
 - **Undo** (ADR 0100): every one-click move you made (NLA step, hand-off, Checked in, carrier handoff, Hand off to PAR, Landed, Missed approach, Closed traffic, Leave pattern, surveillance chip, TOFI Exit, Split/Join, Divert, Start flight following, Radar service terminated) can be undone for 10 seconds, by the Position that did it. The panel shows one slot, "Undo · Hand off VIPER1 → APP · 7 s"; click it, press Ctrl+Z with the panel in use, or type `.undo`. The newest undoable action replaces the slot. Changes other controllers in your Facility made to the same records in the meantime are voided (a voided clearance stays visible, marked VOIDED); the Position that made them gets a message in its panel ("LC undid Hand off VIPER1; your annotation was voided", click to dismiss; nothing is marked on the Strip). An Undo is refused if another Facility has since answered, or the Strip was dropped and archived; the slot line says why. Undoing a Split removes the part's Strip and its flight data on every client at once.
@@ -2290,12 +2317,18 @@ nothing while hidden.
   Mutation log" means the count agrees with a recount from the audit log; a mismatch is coloured. The
   request is scoped to the selected mission.
 - Search per staffed hour reads `—` until crc-sync's 60 s manning tick has recorded staffed minutes.
+- **Server (crc-sync) · last 60 s**, at the bottom: what the server process costs over the last minute: CPU (one core
+  = 100 %), memory, event-loop delay, what it carries (sessions, tracks) and the busiest ticker (or the ones over their
+  limit), with every ticker in a folded table. Grey is normal; an amber row is past its threshold in crc-sync's
+  `config/server-resources.json` (CPU 80 %, event-loop p99 100 ms, memory 1,024 MB, one ticker run 100 ms). At squadron
+  load (20 aircraft, a dozen controllers) crc-sync uses a few percent of one core and about 110 MB.
 
 ### The endpoints
 
 - **`GET /api/efsp/metrics`** — the metric set, per mission session (one DCS mission load to the
   next), with a rolling last hour beside it. `?hours=1..720` narrows it to the last N hours of the
   session, and `?missionSession=N` picks an earlier session (404 if there is none).
+- **`GET /api/server/resources`** — the Server section's numbers (signed in), for a look from outside the client.
 - **`GET /api/efsp/traffic-count`** — flights counted from dropped Strips. Optional `facilityId`,
   `from` and `to` (mission-time epoch ms, `to` exclusive; the default is the last 24 h of mission
   time), `missionSession`, and `detail=1` for the records.
