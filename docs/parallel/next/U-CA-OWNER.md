@@ -18,6 +18,17 @@ found it does today and proposed restricting it; human: "jup que that after the 
 - The suppress (ADR 0145) then only ever exists where the alert is shown: remove S-ARCH-112's extension that opens the
   label menu for a non-owner in a suppressible CA.
 
+## Cases to prove (human 2026-10-27: "is the case where one aircaft participating in the CA belons to controller A and the other to Controller B handled correctly?")
+
+- **A owns one aircraft, B the other (two sessions):** both are shown the alert, nobody else; each sees the other's
+  Position letter on the other data block (`atc-scope.js` ~161, the coordination cue of ¶5-14-6); A's suppress leaves B's
+  alert flashing and the reverse. A spec with two sessions.
+- **One session holds A and B (consolidated):** today ADR 0145 suppresses only at the acting Position and the client shows
+  "suppressed" only when every Position it is shown at suppressed it, so one click leaves it flashing. Fix: a suppress
+  from a session applies at every Position that session holds where the alert is shown (one person, one acknowledgement).
+  A spec for it.
+- Not built, keep it so: suppressing at another controller's Position after coordination (¶5-14-6 c.4).
+
 ## Where
 
 `crc-sync/src/ws-hub.js` ~l.215–219 (today: every ATC session that sees both tracks), `crc-sync/src/conflict-alert.js`
