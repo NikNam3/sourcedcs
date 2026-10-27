@@ -34,8 +34,13 @@ released handoffs and check-in (`0122`), the PAR in degrees and its approach val
 the tower works the pattern (`0126`, superseding `0120`), no ground vehicles (`0121`), transits through active SUA (`0128`, `0136`; `0127` superseded),
 the mission clock held while DCS is paused (`0129`), the frequency editor (`0131`, `0138`), the airspace badge (`0134`), terrain from DCS (`0133`), the map
 without MapTiler (bundled glyphs, OpenFreeMap fallback) and the carrier prototype (`0137`). **This is the v2 tip** (H159: a working EFSP panel, a first
-working carrier prototype, PAR and SFA); nothing is running. **Held, not merged:** U-ROLE-POSITIONS (ADR `0132`, S-ARCH-85). v3 is
-`docs/parallel/v3-backlog.md`. §4 lists what is open.
+working carrier prototype, PAR and SFA). The human's **final tests** (2026-10-22 and 2026-10-24) and the rulings after them are merged too
+(§3N, ADRs `0139`-`0144`): PAR values on an empty final and the unactivated-entry obligation by the badge rule, the airport surface by Position, the LTAG
+runway course, the track-label menu (`0140`), server resource metrics (`0141`), the PAR final without clearance alerts and with the final heading (`0139`),
+turn-scaled heading grace, CD creating departures, **correlation by code only** (`0142`), **VFR service per area and the VFR departure** (`0143`),
+drag/click and edge tooltips, the PANELS radar list, and **Transit complete, FAA SUA types only, prohibited always in force** (`0144`). This is the tip
+`e7b46423`; nothing is running. **Held, not merged:** U-ROLE-POSITIONS (ADR `0132`, S-ARCH-85). v3 is `docs/parallel/v3-backlog.md`. §4 lists what is
+open.
 
 If you are a lane agent, your own briefing in `docs/parallel/wave2/` and
 `docs/parallel/lane-rules.md` come first, and **`docs/parallel/decisions.md` overrides both**. If you
@@ -46,28 +51,32 @@ are the supervising session, start at `docs/parallel/supervisor-handoff.md`.
 Integration branch `efsp-wp5-correlation`. It carries waves 1-3 (including UI-B, QAS, E2E-harden), the
 architecture refactor W1-W7 (FREEZE, then BOARD, WIRE, SYNC, AUTH, APP, DATA, TIME, LOG, the ES-module client, BACKCOMPAT
 and the W7 RENAME), L20, the post-refactor features, the whole architecture check (phases 1-3) and the panels (§3K), the live-test fix batch
-and round 2 (§3L, §3M), up to the v2 tip `07c15a3c` (U-CARRIER-MAPFIX merged, S-ARCH-86). Not pushed. U-ROLE-POSITIONS is on branch
+and round 2 (§3L, §3M), the v2 tip `07c15a3c` (S-ARCH-86) and the final-test rounds after it (§3N), up to `e7b46423` (U-SUA merged, S-ARCH-108/109). Not pushed. U-ROLE-POSITIONS is on branch
 `merge/U-ROLE-POSITIONS` (`43ae06e3`), not merged (S-ARCH-85).
 
-Green, as recorded on the v2 tip (S-ARCH-84/86, re-run by DOCS-V2, §5): **crc-sync** `npm test` **2895**, **freeze** (`npm run freeze`, opt-in)
-**58/58**, **walk** (`npm run walk`, depth 4) **24/24**, `soak:selfcheck` PASS (seed 7), wire protocol stays **2**, **crc-desktop** `npm test` **1424**.
-sourcedcs-web, atobrief, infra and the Python `tools/tests` were last counted earlier (web 151 and infra 27 at S-ARCH-11, pytest 363 at S-ARCH-28; not re-measured).
-**Playwright:** the last full sharded run (2 lanes, S-ARCH-86, on the v2 tip before U-CARRIER-MAPFIX) was **288/289**, the one failure `carrier-map` 02
-(label overlap), which U-CARRIER-MAPFIX fixed (`carrier-map` + `l17-carrier` + `marshal-board` 21/22, `l17-carrier` 03 passed alone). **The sharded runner
+Green, as recorded on the tip (S-ARCH-108/109, re-run by DOCS-V2B, §5): **crc-sync** `npm test` **2968**, **freeze** (`npm run freeze`, opt-in)
+**58/58**, **walk** (`npm run walk`, depth 4) **24/24**, `soak:selfcheck` PASS, wire protocol stays **2**, **crc-desktop** `npm test` **1513**, sourcedcs-web **151**
+(S-ARCH-108). atobrief, infra and the Python `tools/tests` were last counted earlier (infra 27 at S-ARCH-11, pytest 363 at S-ARCH-28; not re-measured).
+**Playwright:** the last full sharded run (2 lanes, S-ARCH-109, on this tip) was **302/302**, 0 flaky (29 min). **The sharded runner
 exits 0 even when a spec fails** (S-ARCH-54): read its summary line. Run it on **at most 2 lanes** (the human, CPU, S-ARCH-75). Under load many specs fail
 that pass alone: re-run a failure alone before counting it (S-ARCH-14's rule); `par-panel` 06/07, `l1-popovers`, `overflight-lifecycle`,
-`ordnance-hung` and `runway-status` have each failed under load and passed alone. Every spec must `require('./helpers/test')` and leave no Strips on the
+`ordnance-hung`, `runway-status` and `airspace-badge` have each failed under load and passed alone. A spec that injects coverage after a sign-on must wait
+for the session's own `coverage` frame, which `ws-hub.js` sends after the sign-on ack (U-FT-FIXES). Every spec must `require('./helpers/test')` and leave no Strips on the
 Board (E2E-fix, §3J). `ordnance-hung`'s "pilot walks" test needs `runway-status.spec.js` to have run first (it relies on the active runway). A fresh
 worktree needs `npm ci` in `crc-sync`, `crc-desktop` and `crc-desktop/app` (a missing `app/node_modules` fails the packaging test).
 Restart the local crc-sync on :3000 after any `crc-sync/src` change.
 
-ADRs: `0001`-`0138` except `0090`, `0092` and `0135` (0117 the single frequency approach and the PAR final, 0118 CA/MCI and MARSA grouping, 0119 the
+ADRs: `0001`-`0144` except `0090`, `0092` and `0135` (0117 the single frequency approach and the PAR final, 0118 CA/MCI and MARSA grouping, 0119 the
 airspace-conflict alert and the using agency; round 2, §3M: 0120 the RSU list, **superseded by 0126** (no RSU), 0121 no ground vehicles, 0122 released
 handoffs and check-in, 0123 the PAR in degrees and its −0.5° limit, 0124 the airspace card list and tanker-only MARSA voids, 0125 jurisdiction areas,
 0127 the transit release record, **superseded by 0128** (transit as a request), 0129 the held mission clock, 0130 the PAR approach values, 0131 the
 frequency editor (its §3 superseded by 0138), 0132 role-based Positions (accepted as design and binding for new rules, lane-rules rule 9; its build,
 U-ROLE-POSITIONS, is held, S-ARCH-85), 0133 terrain from DCS, 0134 the airspace badge, 0136 transit decline acknowledged and the COORD mark, 0137 the
-carrier prototype, 0138 frequency rows; `0135` was not used; 0095 structure, 0096 clocks, 0097 logging, 0098-0106 the post-refactor features, 0107 12 h archive, 0108 mission reset, 0109 carrier ATO lines, 0111 Divert, 0112 the PAR sample (its carrier half replaced by 0116), 0113 carrier state and EAT, 0114 recovery board, 0115 the marks on the stack entry, 0116 the PAR is an airfield feature; 0110 consolidation, which stays "Proposed" as committed: its acceptance is decisions.md S-ARCH-25 plus H111/H113, P4). `0077` is the L20 house style; `0090` and `0092` were not used (TA took none: it applies `0085`/H62), `0060` is the errata ADR.
+carrier prototype, 0138 frequency rows; the final tests, §3N: 0139 the PAR final (no clearance alerts once the final Position holds the flight,
+the glidepath alert, the final heading; supersedes H134 LT-RQ8 for the PAR final), 0140 the track-label menu (amends `0088`'s block click), 0141 server
+resource metrics, 0142 correlation by code or binding only (supersedes `0046`'s callsign rungs and `0045`'s PROVISIONAL), 0143 optional airspace class,
+VFR service per area and the VFR departure (amends `0125`), 0144 Transit complete, FAA SUA types only, prohibited always in force (amends `0038`, `0119`,
+`0128`, `0136`); `0135` was not used; 0095 structure, 0096 clocks, 0097 logging, 0098-0106 the post-refactor features, 0107 12 h archive, 0108 mission reset, 0109 carrier ATO lines, 0111 Divert, 0112 the PAR sample (its carrier half replaced by 0116), 0113 carrier state and EAT, 0114 recovery board, 0115 the marks on the stack entry, 0116 the PAR is an airfield feature; 0110 consolidation, which stays "Proposed" as committed: its acceptance is decisions.md S-ARCH-25 plus H111/H113, P4). `0077` is the L20 house style; `0090` and `0092` were not used (TA took none: it applies `0085`/H62), `0060` is the errata ADR.
 **An ADR is never edited once committed (P4)**: a correction is a new ADR.
 
 **Layout (ADR `0095`).** `board-store.js` is the `BoardStore` facade; the work is in `board/` (collaborators) and
@@ -274,15 +283,22 @@ in place — so a per-Strip correlation lets two replicas of one airframe disagr
 it is, and two answers to an identity question *is* the defect class §6.6 exists to prevent. The
 record is keyed by `flightDataId` in a fourth store, peer to the other three.
 
-- The ladder is §6.6 rule 1's four rungs, run as **one ordered claim sweep** so a higher rung always
+- **Since `0142` (H165) the ladder is two rungs: a controller's binding, then the beacon code.** The callsign rungs (3 exact,
+  4 fuzzy), `PROVISIONAL`, `TRK?`, the label `?`, `AMBIGUOUS_CALLSIGN`, `REBOUND_ON_CALLSIGN`, the record's `confidence` and
+  S-L27's `_formerHolder` are gone (`correlation-match.js` is only `buildTrackIndices`). A controller may type a synthetic
+  (6xxx) code into Block 5 (`code-allocator.js` `validateAssignment(…, { controllerEntered })`, only from `setBeaconAssigned`);
+  the allocator and the ATO path still refuse the block. A synthetic code re-minted to a different AI contact is not followed:
+  `UNCORRELATED`, warning `CODE_REISSUED` (candidate = the new holder). The bullets below are the history; where they
+  name the callsign rungs, read them as removed.
+- The ladder was §6.6 rule 1's four rungs, run as **one ordered claim sweep** so a higher rung always
   claims a contact first. Two **contacts** matching one flight equally is ambiguous: nobody gets them, and the
   flight is told so, with the candidates (`0046`). Two **flights** claiming one contact at the same rung (a duplicate
   code) is not: the first in sweep order takes it, and since LT-CORRELATION the other's `TRACK_LOST` detail names the
   flight that has it (`tick()`'s docstring still says "neither gets it": wrong, queued for cleanup).
 - **The beacon rung has no former-holder exclusion (H135, LT-CORRELATION).** An active Strip's assigned discrete code
   acquires the contact squawking it even if a finished flight once held that contact (JO 7110.65BB ¶5-3-3 d, ¶5-3-4),
-  which supersedes `0076`'s S-L27 for rung 2 only; the callsign rungs (3, 4) keep `_formerHolder`. No ADR. An AI
-  contact squawks the synthetic 6xxx block, which Block 5 refuses, so it is never acquired by code. The code source was
+  which supersedes `0076`'s S-L27 for rung 2 only. No ADR. (Until `0142` an AI contact's synthetic 6xxx code could not
+  be Block 5, so it was found by callsign only; now the controller types it.) The code source was
   checked both ways (`efsp-correlation-code-source.test.mjs`): the label and the beacon rung read one `Transponders`.
 - **Ambiguity is an answer, not a tiebreak.** Duplicate codes are structural (§3.10.2 rule 7) and
   guessing between two aircraft is worse than saying so. The badge becomes a button that lists them.
@@ -1112,7 +1128,7 @@ than one on the last leg advised; chip actions Landed (`RECOVERED`) and Drop (`D
 **Surveillance informs, the controller advances (L19, `0076`).** `airborne.js` (pure phase: AIRBORNE /
 ON_GROUND / UNKNOWN with a debounce) and `surveillance-hints.js` (`SurveillanceHintMonitor`, the Strip-state
 table), tuned by `config/efsp-surveillance-hints.json` (read once, P5). "Detected airborne" is a CORRELATED
-contact (never PROVISIONAL), aircraft category, ground speed >= 60 kt, >= 200 ft above the nearest airfield
+contact (PROVISIONAL no longer exists, `0142`), aircraft category, ground speed >= 60 kt, >= 200 ft above the nearest airfield
 inside its 5 km footprint (speed alone beyond it), held 5 s; the four numbers are `[SOURCE-DEFINED]` (L20).
 - **The chip** exists only for a DEPARTURE on the ground side (PUSHBACK, TAXI, RUNWAY_QUEUE, LUAW) and offers
   `SetState` to `DEPARTED`, not `InvokeNla` (from TAXI the NLA would say "to runway queue"). The arrival-side
@@ -1554,7 +1570,7 @@ stays **2** throughout (ahead of the last release, 1: everything ships together)
   Bug fixed: `holderOfTrack` counts explicit bindings, so a bound contact the picture misses cannot be bound twice. **No flight-rules field**: VFR is
   a flight data with no ACTIVE assigned altitude or heading (`vfr.js` `hasNoClearance`, parity-tested with the client). Client: the track panel's
   "Start flight following" and `.ff`, the Strip menu's "Radar service terminated" and `.term` (not on the NLA, which stays "Leaves Sector").
-- **LT-MARSA (`0118`).** `src/conflict-alert.js`: CA only between two **tracked** (CORRELATED or PROVISIONAL) tracks; **MCI** (`kind: 'MCI'` on the
+- **LT-MARSA (`0118`).** `src/conflict-alert.js`: CA only between two **tracked** (CORRELATED; PROVISIONAL counted too until `0142` removed it) tracks; **MCI** (`kind: 'MCI'` on the
   `conflictAlert` entry, `intruder` the untracked track) only for a target whose transponder replies, above the Facility's **`modeCIntruder`**
   (`{ baseAltitudeFt, reference: 'AGL'|'MSL', highTerrainAglFt?, inhibitedPositions }`: INCIRLIK and CARRIER 500 AGL, CENTER 5,000 MSL or 1,500 AGL
   where the ground is higher; `facilityConfig.getModeCIntruder`, `mciFloorFt`; unknown ground = sea level); per-session delivery through the hub's
