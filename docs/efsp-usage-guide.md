@@ -1063,7 +1063,7 @@ Two consequences worth knowing:
 - **Everyone signed on to the same Position sees the same thing**, down to when each contact's beam passed
   over it. Observers included — you get the picture for a Position somebody else is Primary at.
 - **The picture can change without you touching anything**, when a colleague takes or hands back a
-  Position, or when an AWACS takes off. The Coverage list is the place to look.
+  Position, or when an AWACS takes off. The radar list (`RADARS · n`, open it) is the place to look.
 
 A radar whose aircraft is on the ground is listed with `GC` beside it and shows nothing — that is a
 parked AWACS, not a fault. Which scope sits at which console is squadron configuration
