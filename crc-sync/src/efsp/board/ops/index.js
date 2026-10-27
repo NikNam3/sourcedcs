@@ -27,7 +27,9 @@ const MODULES = [
   require('./join-formation'),
   require('./start-flight-following'),
   require('./terminate-radar-service'),
-  require('./create-vfr-departure'),
+  require('./vfr-handoff'),
+  require('./assign-code'),
+  require('./change-flight-rules'),
 ];
 
 module.exports = MODULES.flatMap(m => (Array.isArray(m) ? m : [m]));

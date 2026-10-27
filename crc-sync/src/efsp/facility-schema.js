@@ -116,7 +116,9 @@ function validateConfig(candidate) {
 // impliesState exist, so a typo in a config can never silently mount nothing.
 const BAY_VIEWS = Object.freeze(['final', 'sfa-freqs']); // 'pattern' (PriFly's leg board) removed: live test U19, docs/adr/0137
 // `holdsStripType` is L28's (docs/adr/0087): a Bay that files its strip type's Strips whatever their state.
-const BAY_DESCRIPTOR_KEYS = Object.freeze(['bayId', 'rackIds', 'impliesState', 'view', 'replacesRacks', 'capacity', 'holdsStripType']);
+// `vfr` is docs/adr/0146's: the Bay a VFR strip lands in when this Position tags a track or accepts a VFR handoff (one per
+// Position at most; without one, the Position's first working Bay).
+const BAY_DESCRIPTOR_KEYS = Object.freeze(['bayId', 'rackIds', 'impliesState', 'view', 'replacesRacks', 'capacity', 'holdsStripType', 'vfr']);
 
 /** A human problem string for a malformed Bay descriptor flag (`view`, `capacity`), or null. */
 function validateBayDescriptors(candidate) {
@@ -134,9 +136,13 @@ function validateBayDescriptors(candidate) {
       if (bay.holdsStripType !== undefined && (typeof bay.holdsStripType !== 'string' || !bay.holdsStripType)) {
         return `bays.${positionId}.${bay.bayId}: holdsStripType is a strip type name`;
       }
+      if (bay.vfr !== undefined && (bay.vfr !== true || bay.view)) {
+        return `bays.${positionId}.${bay.bayId}: vfr is true or absent, and not on a Bay with a view`;
+      }
       const stray = Object.keys(bay).find(k => !BAY_DESCRIPTOR_KEYS.includes(k));
       if (stray) return `bays.${positionId}.${bay.bayId}: unknown Bay descriptor key ${JSON.stringify(stray)}`;
     }
+    if (bays.filter(b => b.vfr === true).length > 1) return `bays.${positionId}: at most one Bay is the vfr Bay`;
   }
   return null;
 }

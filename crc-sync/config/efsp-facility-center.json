@@ -47,7 +47,8 @@
         "rackIds": [
           "main"
         ],
-        "holdsStripType": "OVERFLIGHT"
+        "holdsStripType": "OVERFLIGHT",
+        "vfr": true
       },
       {
         "bayId": "ctr-ap-coordination",

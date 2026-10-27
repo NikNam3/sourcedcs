@@ -143,7 +143,8 @@ function _runwayOfEnd(view, end) {
 
 function _flightDataRunwayText(strip, flightData) {
   if (!flightData) return null;
-  if (strip.stripType === 'DEPARTURE') return flightData.filed ? flightData.filed.departureRunway : null;
+  // docs/adr/0146: a VFR strip's runway is its Block 8A, the departure runway cell it shares with DEPARTURE.
+  if (strip.stripType === 'DEPARTURE' || strip.stripType === 'VFR') return flightData.filed ? flightData.filed.departureRunway : null;
   if (strip.stripType === 'ARRIVAL') return flightData.assigned ? flightData.assigned.landingRunway : null;
   return null;
 }

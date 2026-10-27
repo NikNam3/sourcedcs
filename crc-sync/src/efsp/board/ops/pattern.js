@@ -27,6 +27,7 @@ function _openExchangeRefusal(strip) {
   if (strip.coordination && strip.coordination.state === 'INITIATED') return 'an open coordination proposal';
   if (strip.tofiCoordination && strip.tofiCoordination.state === 'INITIATED') return 'an open TOFI proposal';
   if (strip.tofiCoordination && strip.tofiCoordination.state === 'ACTIVE') return 'active tactical control';
+  if (strip.vfrHandoff) return `the handoff to ${strip.vfrHandoff.toPositionId}`;
   return null;
 }
 
@@ -42,7 +43,29 @@ function _airportPatch(ctx, kind, flightData) {
   return field && flightData.filed.departureAirport !== field ? ['filed.departureAirport', field] : null;
 }
 
+// docs/adr/0146: on a VFR strip the pattern is a place, not a strip type: Closed traffic puts it in the holder's Bay for the
+// pattern (the one implying TRAFFIC_PATTERN), Leave pattern in the Bay for airborne departures (the one implying
+// DEPARTED). The strip stays VFR; no takeoff stamp or lifecycle step applies to it.
+const VFR_PATTERN_BAYS = { JoinPattern: 'TRAFFIC_PATTERN', LeavePattern: 'DEPARTED' };
+
+function _applyVfrPatternMove(kind, ctx, strip, by) {
+  const wanted = VFR_PATTERN_BAYS[kind];
+  const bay = (ctx.rules.baysFor(strip.ownerPositionId) || []).find(b => b.impliesState === wanted && !b.view);
+  if (!bay) return { ok: false, reason: 'VALIDATION_ERROR', detail: `${strip.ownerPositionId} has no Bay for ${wanted === 'DEPARTED' ? 'airborne departures' : 'the pattern'}`, strip };
+  if (bay.bayId === strip.bayId) return { ok: false, reason: 'VALIDATION_ERROR', detail: `it is already in ${bay.bayId}`, strip };
+  const open = _openExchangeRefusal(strip);
+  if (open) return { ok: false, reason: 'VALIDATION_ERROR', detail: `resolve ${open} first`, strip };
+  const full = ctx.placement.bayFullRefusal(bay.bayId, strip);
+  if (full) return { ok: false, reason: full.reason, detail: full.detail, strip };
+  strip.bayId = bay.bayId;
+  strip.rackId = ctx.placement.placementRack(strip, bay);
+  strip.orderKey = ctx.placement.appendOrderKey(bay.bayId, strip.rackId, strip.stripId);
+  ctx.state.bump(strip, by);
+  return { ok: true, strip };
+}
+
 function _applyPatternConversion(kind, ctx, strip, by, actingPositionId) {
+  if (strip.stripType === 'VFR') return _applyVfrPatternMove(kind, ctx, strip, by);
   const c = CONVERSIONS[kind];
   if (strip.stripType !== c.from || !c.fromStates.includes(strip.state)) {
     return { ok: false, reason: 'VALIDATION_ERROR', detail: `${kind} needs ${c.from === 'DEPARTURE' ? 'a DEPARTURE' : 'an ARRIVAL'} Strip at ${c.fromStates.join(' or ')}`, strip };

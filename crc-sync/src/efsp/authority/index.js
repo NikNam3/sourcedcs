@@ -62,6 +62,7 @@ registerStripTypeFamily(require('./strip-types/mission').family);
 registerStripTypeFamily(require('./strip-types/marshal').family);
 registerStripTypeFamily(require('./strip-types/final').family);
 registerStripTypeFamily(require('./strip-types/pattern').family);
+registerStripTypeFamily(require('./strip-types/vfr').family); // docs/adr/0146
 
 const positionFamilies = [];
 const positionOwner = new Map(); // positionId -> family name

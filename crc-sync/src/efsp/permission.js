@@ -28,7 +28,7 @@
 // would prove nothing about per-acting-Position evaluation.
 
 const authority = require('./authority');
-const { OP_KINDS, COORDINATION_OP_KINDS, AP_CTR_ONLY_OP_KINDS, TOFI_OP_KINDS, AIRSPACE_ENTRY_OP_KINDS, FORMATION_OP_KINDS, PATTERN_OP_KINDS, VFR_DEPARTURE_OP_KINDS } = require('./authority/op-kinds');
+const { OP_KINDS, COORDINATION_OP_KINDS, AP_CTR_ONLY_OP_KINDS, TOFI_OP_KINDS, AIRSPACE_ENTRY_OP_KINDS, FORMATION_OP_KINDS, PATTERN_OP_KINDS, VFR_OP_KINDS } = require('./authority/op-kinds');
 const { NO_STRIP_OP_CLASSES, _worksNoStrips, _hasNoScope } = require('./authority/classes');
 const {
   TACTICAL_CAPABILITIES, READ_SCOPES, TOFI_ANSWER_ACTIONS, handBackTargetsFor, tofiAnswererFor, readScopeFor,
@@ -84,6 +84,10 @@ function mayActBesideOwner(actingPositionId, strip, op) {
   if (op.kind === 'CarrierHandoff' && op.transfer === 'COMMENCED_TO_MARSHAL') {
     return actingPositionId === 'CV_MARSHAL' && strip.stripType === 'MARSHAL' && strip.state === 'COMMENCED';
   }
+  // docs/adr/0146 (H175 VR-Q2): the receiver of a VFR handoff accepts it (the STARS accept): the one Position it names.
+  if (op.kind === 'VfrHandoff' && op.action === 'ACCEPT') {
+    return strip.stripType === 'VFR' && !!strip.vfrHandoff && strip.vfrHandoff.toPositionId === actingPositionId;
+  }
   if (op.kind === 'SetBlock' && strip.state !== 'DROPPED') {
     return NON_OWNER_BLOCK_WRITES.some(r => r.blockId === op.blockId && r.stripType === strip.stripType && r.positions.includes(actingPositionId));
   }
@@ -115,6 +119,9 @@ function tofiCounterparts(actingPositionId) {
  * @returns {boolean}
  */
 function canActOnState(actingPositionId, stripType, state) {
+  // docs/adr/0146: a VFR strip has no per-state owners; whoever holds it works it (the Board's owner gate decides who).
+  const family = authority.stripTypeFamily(stripType);
+  if (family && family.ownerWorksEveryState) return state !== 'DROPPED' && family.states.includes(state);
   const owners = (STATE_OWNERS_BY_STRIP_TYPE[stripType] || {})[state];
   return !!owners && owners.includes(actingPositionId);
 }
@@ -203,7 +210,7 @@ module.exports = {
   createPermission, canCreateStripType, canActOnState, tofiCounterparts,
   CREATE_STRIP_TYPE_PERMISSIONS, STATE_OWNERS_BY_STRIP_TYPE,
   DEPARTURE_STATE_OWNERS, ARRIVAL_STATE_OWNERS, OVERFLIGHT_STATE_OWNERS, MISSION_STATE_OWNERS,
-  OP_KINDS, COORDINATION_OP_KINDS, AP_CTR_ONLY_OP_KINDS, TOFI_OP_KINDS, AIRSPACE_ENTRY_OP_KINDS, FORMATION_OP_KINDS, PATTERN_OP_KINDS, VFR_DEPARTURE_OP_KINDS, TOFI_COUNTERPARTS,
+  OP_KINDS, COORDINATION_OP_KINDS, AP_CTR_ONLY_OP_KINDS, TOFI_OP_KINDS, AIRSPACE_ENTRY_OP_KINDS, FORMATION_OP_KINDS, PATTERN_OP_KINDS, VFR_OP_KINDS, TOFI_COUNTERPARTS,
   NO_STRIP_OP_CLASSES,
   canActOnRunwayStatus, RUNWAY_STATUS_OP_OWNERS,
   TACTICAL_CAPABILITIES, READ_SCOPES, handBackTargetsFor, tofiAnswererFor, readScopeFor, mayActBesideOwner, NON_OWNER_BLOCK_WRITES,

@@ -1,6 +1,7 @@
 'use strict';
 
-// TerminateRadarService (H136 VQ6 a, docs/wip/LT-VFR.md): "RADAR SERVICE TERMINATED, SQUAWK VFR" (JO 7110.65BB
+// TerminateRadarService (H136 VQ6 a, docs/wip/LT-VFR.md; docs/adr/0146: the end of a VFR strip, at whoever holds it):
+// "RADAR SERVICE TERMINATED, SQUAWK VFR" (JO 7110.65BB
 // para 5-1-9 a, 5-2-7 b, 7-6-11) as one action on the Strip: it is dropped (the one retirement path, which releases
 // the code once no other live Strip holds the flight), any airspace entry is cleared, and the explicit binding to the
 // contact ends at once rather than at the reconciler's next sweep. The contact is untracked again. The single action is

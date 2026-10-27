@@ -9,7 +9,7 @@
 //   - RESTRICTED and PROHIBITED: any aircraft inside without an approved entry alerts (a PROHIBITED area is always in
 //     force, docs/adr/0144). Entry needs the using agency's permission (14 CFR 73.13, 73.15 (c)(2),
 //     91.133 (a); JO 7110.65BB para 9-3-1 a-b).
-//   - MOA and WARNING: a tracked VFR aircraft (a correlated flight with no assigned altitude or heading, vfr.js) never
+//   - MOA and WARNING: a tracked VFR aircraft (a correlated flight worked on a VFR strip, vfr.js, docs/adr/0146) never
 //     alerts: VFR aircraft are not denied access (JO 7400.2R para 25-1-6 a, 24-1-3 d). A tracked IFR aircraft without an
 //     approved entry alerts (ours: the FAA routes IFR through by LOA, para 25-1-6 a-b, and an unapproved one is a
 //     nonparticipant ATC separates from the area, para 9-3-2).
@@ -57,7 +57,7 @@
 // minutes" (H156). The client draws a grey mark; it goes when a transit is requested, an entry approved, the airspace
 // goes cold, or the route no longer crosses it. Delivered to the Strip's holder only (`coordinateFor`), as `insideFor`.
 
-const { hasNoClearance } = require('./vfr');
+const { isVfrFlight } = require('./vfr');
 const routeGeometry = require('./airspace/route-geometry');
 const { TRANSIT_TYPES } = require('./authority/airspace');
 const { MS_PER_KT } = require('../units');
@@ -242,7 +242,7 @@ class AirspaceEntryAlertMonitor {
       const inside = airspaceStore.activeAreasContaining(point);
       if (inside.length === 0) continue;
       const strips = flightDataId ? (liveStrips.get(flightDataId) || []) : [];
-      const vfr = flightDataId ? hasNoClearance(this._d.flightDataOf(flightDataId)) : false;
+      const vfr = isVfrFlight(strips); // docs/adr/0146: a flight worked on a VFR strip
       for (const airspace of inside) {
         // The card list: a tracked flight inside, whatever the alert decides (the lead's track names it).
         if (flightDataId && ENTRY_TYPES.has(airspace.type)) {
@@ -290,7 +290,7 @@ class AirspaceEntryAlertMonitor {
           || !!(fd && fd.comms && fd.comms.airspaceId === airspace.airspaceId)
           || crosses;
         if (filed) rowFor(airspace, flightDataId, null).filed = true;
-        if (crosses && coordinates && !hasNoClearance(fd) && !(record.transits || []).some(t => t.flightDataId === flightDataId)
+        if (crosses && coordinates && !isVfrFlight(strips) && !(record.transits || []).some(t => t.flightDataId === flightDataId)
           && !this._approved(flightDataId, airspace, strips)) {
           for (const st of strips) {
             if (st.stripId) coordinate.push({ facilityId: st.facilityId, stripId: st.stripId, airspaceId: airspace.airspaceId, positionId: st.positionId });

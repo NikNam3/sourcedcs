@@ -1,20 +1,21 @@
 'use strict';
 
-// VFR the FAA way (H136 VQ2, S-ARCH-56): there is no flight-rules field. A flight with no assigned altitude and no
-// assigned heading has no clearance for conformance to check, which is how a VFR aircraft on flight following shows
-// (JO 7110.65BB para 2-3-8 c: VFR is in the equipment suffix and the absence of a clearance, not in a block). The
-// client's hand copy is crc-desktop/app/public/js/panels/efsp/vfr.js; a parity test keeps them equal.
+// Which flights are VFR (docs/adr/0146, superseding H136 VQ2's "VFR is no field, it is the absence of a clearance"). A
+// VFR aircraft is the one a controller works on a VFR strip: the strip type says it, so a VFR aircraft that was assigned
+// a heading or an altitude is still VFR (H174: VFR is assigned and cancelled HDG/SPD/ALT with conformance), and an IFR
+// flight not yet cleared is still IFR. A flight's rules change only by ChangeFlightRules, which changes the strip type.
+// The client's hand copy is crc-desktop/app/public/js/panels/efsp/vfr.js; a parity test keeps them equal.
 
-// An ACTIVE entry whose value is empty is the controller clearing the assignment (setClearance records the clearing
-// as an amendment, ADR 0058's append-only history): no clearance (S-ARCH-76). An entry with no value at all (a hand-built
-// shape) counts when it carries a parsed value or a block.
-const _assigned = (e) => !!e && e.status === 'ACTIVE'
-  && (typeof e.value === 'string' ? e.value.trim() !== '' : (e.value != null || e.parsed != null || e.block != null));
-const _active = (cell) => !!(cell && (cell.entries || []).some(_assigned));
+const VFR_STRIP_TYPE = 'VFR';
 
-/** No ACTIVE assigned altitude and no ACTIVE assigned heading on this flight data (null, and a cleared one, count as none). */
-function hasNoClearance(flightData) {
-  return !(flightData && flightData.clearance && (_active(flightData.clearance.altitude) || _active(flightData.clearance.heading)));
+/** Is this a live VFR strip? */
+function isVfrStrip(strip) {
+  return !!strip && strip.stripType === VFR_STRIP_TYPE && strip.state !== 'DROPPED';
 }
 
-module.exports = { hasNoClearance };
+/** Is the flight these live strips (any Facility) are worked on VFR? A flight with no strip is nobody's: false. */
+function isVfrFlight(strips) {
+  return (strips || []).some(isVfrStrip);
+}
+
+module.exports = { VFR_STRIP_TYPE, isVfrStrip, isVfrFlight };
