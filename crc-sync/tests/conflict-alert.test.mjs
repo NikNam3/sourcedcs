@@ -111,7 +111,7 @@ test('correlated vs uncorrelated reporting altitude: MCI naming the intruder; a 
   assert.deepEqual(primary.getAll(), [], 'H136 VQ8 a: no Mode C, no MCI');
 });
 
-test('an MCI is delivered only to a session holding a Position that shows it; a CA to every ATC session', () => {
+test('an MCI is delivered only to a session holding a Position that shows it; a CA to a session holding a Position (ADR 0147 narrows it to track control)', () => {
   const shown = [];
   const m = monitorFor(headOn(), { 1: 'fA' }, { mciShownAt: (intruder, f, p) => { shown.push([String(intruder.id), f, p]); return p === 'AP'; } });
   m.tick(NOW);
@@ -121,7 +121,8 @@ test('an MCI is delivered only to a session holding a Position that shows it; a 
   assert.deepEqual(shown[0], ['2', 'INCIRLIK', 'LC'], 'asked with the intruder track');
   const ca = monitorFor(headOn(), { 1: 'fA', 2: 'fB' }, { mciShownAt: () => false });
   ca.tick(NOW);
-  assert.equal(ca.deliverableTo(ca.getAll()[0], []), true);
+  assert.equal(ca.deliverableTo(ca.getAll()[0], [{ facilityId: 'INCIRLIK', positionId: 'LC' }]), true, 'no track-control table: any Position');
+  assert.equal(ca.deliverableTo(ca.getAll()[0], []), false, 'ADR 0147: a session holding no Position is shown nothing');
 });
 
 test('T16: an uncorrelated wingman beside its formation lead raises no MCI against it; a third aircraft still alerts against both', () => {

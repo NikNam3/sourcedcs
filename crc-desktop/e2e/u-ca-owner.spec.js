@@ -98,12 +98,10 @@ test('A works one aircraft, B the other: both are shown the CA with the other\'s
 
     await expect.poll(() => alertAt(a, one, conflictId), { timeout: 40000 }).toEqual({ shownAt: ['AP'], suppressedAt: [], suppressed: false });
     await expect.poll(() => alertAt(b, two, conflictId), { timeout: 10000 }).toEqual({ shownAt: ['LC'], suppressedAt: [], suppressed: false });
-    // C sees both aircraft and works neither: nothing, over several alert ticks.
+    // C sees both aircraft and works neither: nothing. The hub sends one efsp-alerts broadcast per change to every session,
+    // so once A and B hold the alert, C's copy of that same broadcast has arrived without it.
     await inPicture(c, [one, two]);
-    for (let i = 0; i < 3; i++) {
-      expect(await alertAt(c, one, conflictId), 'C is not shown the alert').toBe(null);
-      await c.waitForTimeout(1000);
-    }
+    expect(await alertAt(c, one, conflictId), 'C is not shown the alert').toBe(null);
 
     // The coordination cue: each sees the other's Position letter on the other aircraft (LC is T, AP is A).
     await expect.poll(() => block(a, two)).toMatchObject({ posChar: 'T', ca: { blink: true } });
