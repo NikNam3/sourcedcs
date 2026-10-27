@@ -773,7 +773,7 @@ no Divert: the Marshal drops its Strip.
 
 Some things have to happen by a time: forward an arrival at least 15 minutes before it reaches
 the next Facility, forward again when its estimate moves by more than 3 minutes, get a void-time
-flight airborne before its deadline, get an airspace activated before a flight works in it. When
+flight airborne before its deadline, get an airspace activated once a flight approved into it is working inside it. When
 one comes due, the Strip shows it by name in the indicator row (`ADVANCE FORWARDING`,
 `VOID TIME EXPIRED`, …), amber while it is due and orange-red once it is overdue.
 `ADVANCE FORWARDING` turns from amber to red when the ETA passes.
@@ -883,8 +883,10 @@ block. It is grey while the aircraft is on the ground, en route, or inside an ac
 while the aircraft is airborne inside its approved airspace and that airspace has not been activated (hover: "East MOA
 is SCHEDULED, not active"): the block still belongs to the controlling agency, so the aircraft is working it
 unprotected. Activate the airspace, or move the aircraft out. Only the controller holding the Strip sees the amber.
-(Separately, the forwarding-obligation chip `UNACTIVATED AIRSPACE ENTRY`, §8, stands from the approval until the
-airspace is activated.)
+The orange-red forwarding-obligation chip `UNACTIVATED AIRSPACE ENTRY` (§8) follows the same rule: it appears only while
+the flight is airborne inside the airspace you approved it into and that airspace is not active, the moment the badge
+turns amber. Approving early, on the ground or en route, raises nothing; it goes when the airspace is activated, the
+flight leaves, or the approval is cleared.
 
 **Sharing a block by altitude.** Approving entry takes an optional altitude block, which is how, in this model,
 two aircraft share one area: hold the working flight down to 5,000–15,000 while a transit crosses at
