@@ -25,12 +25,9 @@
 6. P2: on an unanswered question take your briefing's recommended default, log it under "Defaults
    taken" in `docs/wip/<LANE>.md`, and carry on. Stop only if the default could destroy work or cross
    another lane's files; then SendMessage "main" briefly and continue with other work.
-7. Only your assigned `E2E_LANE` number (if any). **Tests only when necessary (S-TEST):** run the test files for
-   what you touched while working, the full unit suites once before your report (a docs-only lane: only the tests that
-   read the docs it changed), and **never the full Playwright
-   suite** (the supervisor runs it, sharded, after a merge that touched the client); a client lane may run a boot
-   smoke and the specs for the panels it changed. Details: `docs/parallel/refactor/README.md` "Test policy". Install first:
-   `(cd crc-sync && npm ci) && (cd crc-desktop && npm ci) && (cd crc-desktop/app && npm ci)` as needed.
+7. **No test runs in lanes (human 2026-10-27).** Run at most the one test file you are writing or changing, to see it
+   execute. No unit suites, no freeze, walk or soak, no Playwright, no `E2E_LANE` use. The supervisor runs the gates and
+   fixes failures. Install as needed: `(cd crc-sync && npm ci) && (cd crc-desktop && npm ci) && (cd crc-desktop/app && npm ci)`.
 8. Final message = your report: branch + commit range, test counts before/after, ADR, wip summary,
    defaults taken, findings for other lanes, anything the supervisor must decide.
 9. **Positions and Facilities (ADR 0132, binding now):** never write a literal Position id (`'LC'`, `'AP'`, `'CV_APP1'` …)

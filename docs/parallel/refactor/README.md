@@ -23,6 +23,13 @@ Peak load is 9 agents in W3 (8 lanes and the questioner). The cap is 10.
 
 ## Test policy (S-TEST, human 2026-10-01: "only run tests when absolutely necessary") — wins over every briefing's gate lines
 
+**Supervisor runs the gates (human 2026-10-27, wins over everything below): "i dont want the lanes all to run tests before
+their reports i want you to run the tests whenever you think it would be good to run them and then fix them yourself."**
+A lane runs no unit suite, no freeze/walk/soak, no Playwright: at most the one test file it is writing or changing, to
+see it execute. It reports untested-as-a-whole. The supervisor runs whatever gates the change needs (on the lane branch
+before the merge or on the tip after it, its judgement) and fixes failures itself; only a failure that needs the lane's
+design goes back to a lane. The rules below now describe what the supervisor runs, not the lanes.
+
 Measured unloaded on the dev machine: crc-sync `npm test` 18 s, freeze goldens alone 14 s, crc-desktop `npm test` 8 s,
 `soak:selfcheck` ~40 s, `freeze:selfcheck` ~5 min, **full Playwright ~18 min and load-sensitive** (9 agents running it at
 once is what produced the "load lottery" failures).
