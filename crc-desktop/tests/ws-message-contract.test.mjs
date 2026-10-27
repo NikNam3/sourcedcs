@@ -107,7 +107,7 @@ const ACCEPTED_BY_SERVER = (() => {
   return [...new Set([
     ...efsp, ...metrics,
     ...matchAll(hubSwitch.slice(0, hubSwitch.indexOf('default:')), /case '([^']+)':/g),
-    ...matchAll(hub, /msg\.type === '(aptConfigSet)'/g),
+    ...matchAll(hub, /msg\.type === '(aptConfigSet|efsp-conflict-suppress)'/g), // the hub's own types outside the switch (ADR 0145's suppress)
   ])].sort();
 })();
 

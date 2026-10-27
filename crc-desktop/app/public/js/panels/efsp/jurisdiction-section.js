@@ -282,7 +282,7 @@ export function buildJurisdictionSection(airspaces, signedOn, { transitionAltFt 
   const section = _el('div', 'jurisdiction-section');
   section.dataset.testid = 'jurisdiction-section';
   section.appendChild(_el('div', 'airspace-group', `JURISDICTION · ${areas.length}`));
-  section.appendChild(_el('div', 'airspace-field-why', 'Whose airspace an aircraft is in, and what VFR gets there. Outside every area it is CENTER\'s (Class E); a carrier area wins wherever it is.'));
+  section.appendChild(_el('div', 'airspace-field-why', 'Whose airspace an aircraft is in, and what VFR gets there. Outside every area it is CENTER\'s, unclassified, VFR advisories; a carrier area wins wherever it is.'));
   for (const rec of areas) {
     const d = rec.definition;
     const card = _el('div', 'airspace-card jurisdiction-card');

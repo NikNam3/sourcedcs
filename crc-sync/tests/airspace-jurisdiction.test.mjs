@@ -97,7 +97,8 @@ test('the field below 3,000 ft is the tower\'s (LC, GC); above it RAPCON\'s; abo
   assert.equal(above.airspaceId, null);
   assert.equal(above.facilityId, 'CENTER');
   assert.deepEqual(above.positionIds, ['CTR']);
-  assert.equal(above.airspaceClass, 'E');
+  assert.equal(above.airspaceClass, null, 'unclassified, no invented letter (H173 VQ-B)');
+  assert.equal(above.vfrService, 'ADVISORY');
 });
 
 test('the boundary counts as inside: exactly 5 nm and exactly 50 nm', () => {

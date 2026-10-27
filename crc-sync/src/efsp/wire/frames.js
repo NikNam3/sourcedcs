@@ -156,6 +156,18 @@ function frequencyDelta(frequencyTable, facilityId) {
   return { version: VERSION, type: 'efsp-frequency-delta', facilityId, frequencies: frequencyTable.rowsFor(facilityId) };
 }
 
+/**
+ * The answer to a controller's suppress or restore of one conflict alert (docs/adr/0145). The alert itself is not here: it
+ * goes out in the next efsp-alerts, with `suppressedAt` the Positions of the receiving session where it is suppressed.
+ */
+function conflictSuppressAck(msg, result) {
+  return {
+    version: VERSION, type: 'efsp-conflict-suppress-ack', clientMutationId: msg.clientMutationId,
+    conflictId: msg.conflictId, suppress: msg.suppress, ok: result.ok,
+    ...(result.ok ? {} : { reason: result.reason, detail: result.detail }),
+  };
+}
+
 /** Every live Strip on every Board, stamped with its Facility (what the visibility sets are computed from). */
 function liveStamped(ctx) {
   const out = [];
@@ -167,4 +179,4 @@ function liveStamped(ctx) {
   return out;
 }
 
-module.exports = { VERSION, stampStrip, mergeFlightDataList, touchedStrips, boardDelta, serverBoardDelta, correlationDelta, runwayStatusDelta, marsaDelta, carrierDelta, airspaceDelta, frequencyDelta, liveStamped };
+module.exports = { VERSION, stampStrip, mergeFlightDataList, touchedStrips, boardDelta, serverBoardDelta, correlationDelta, runwayStatusDelta, marsaDelta, carrierDelta, airspaceDelta, frequencyDelta, conflictSuppressAck, liveStamped };

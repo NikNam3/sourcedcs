@@ -1,5 +1,6 @@
 'use strict';
-import { getEfspFlightData, getEfspStrip, stripIdsForTrackId } from './efsp-state.js';
+import { conflictAlertsForTrack, conflictTag, getEfspFlightData, getEfspStrip, stripIdsForTrackId } from './efsp-state.js';
+import { conflictSuppressTargets, suppressConflict } from './conflict-suppress.js';
 import { getActingPositions, sendEfspMutation } from './efsp-ws.js';
 import { resolveBlockValue } from './strip-template.js';
 import { getOpenEfspBayIds } from './bay/open-bays.js';
@@ -13,6 +14,10 @@ import { labelAssignOps, labelAssignmentFor } from './label-assign-rules.js';
 //
 // Enter sends every changed cell, one Mutation after the other (each needs the Strip's rev the previous one left).
 // A refusal stops the rest: what was refused is on the banner, and what was not sent is simply not sent.
+//
+// crc-sync's docs/adr/0145 (H173 VQ-A): a contact in a conflict alert this controller can suppress gets one SUPPRESS item
+// per alert, for whoever clicks (owner or not): one click, the menu closes. A suppressed alert offers nothing here; the
+// track panel's alert row restores it.
 
 let _open = null; // { el, stripId, trackId, onOutside, onKey }
 
@@ -36,27 +41,46 @@ export function closeLabelMenu() {
   open.el.remove();
 }
 
+/** The conflict alerts on this contact the controller can suppress at one of their Positions (crc-sync's docs/adr/0145). */
+export function labelSuppressibleConflicts(trackId) {
+  return conflictAlertsForTrack(trackId).filter(c => conflictSuppressTargets(c).length > 0);
+}
+
 /**
  * Opens the menu at the click for this contact. False when there is nothing to offer (no Strip, not the owner, no
- * cells): the caller keeps today's click (the track panel, H71 default 7).
+ * cells, and no conflict alert to suppress): the caller keeps today's click (the track panel, H71 default 7).
  * @param {{onTrackInfo?:() => void}} [opts] the menu's TRACK item: today's click, still one input away
  */
 export function openLabelMenu(trackId, clientX, clientY, { onTrackInfo } = {}) {
   closeLabelMenu();
   const offer = labelAssignmentForTrack(trackId);
-  if (!offer) return false;
-  const { strip, actingPositionId, cells } = offer;
-  const flightData = getEfspFlightData(strip.flightDataId);
+  const conflicts = labelSuppressibleConflicts(trackId);
+  if (!offer && !conflicts.length) return false;
+  const { strip = null, actingPositionId = null, cells = [] } = offer || {};
+  const flightData = strip ? getEfspFlightData(strip.flightDataId) : null;
 
   const el = document.createElement('div');
   el.className = 'label-menu';
-  el.dataset.stripId = strip.stripId;
+  if (strip) el.dataset.stripId = strip.stripId;
   el.setAttribute('role', 'dialog');
-  const callsign = (flightData && flightData.identity && flightData.identity.callsign) || '';
-  const head = document.createElement('div');
-  head.className = 'label-menu-head';
-  head.textContent = `${callsign} ${actingPositionId}`.trim();
-  el.append(head);
+  if (strip) {
+    const callsign = (flightData && flightData.identity && flightData.identity.callsign) || '';
+    const head = document.createElement('div');
+    head.className = 'label-menu-head';
+    head.textContent = `${callsign} ${actingPositionId}`.trim();
+    el.append(head);
+  }
+
+  for (const c of conflicts) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'label-menu-suppress';
+    btn.dataset.conflictId = c.id;
+    btn.textContent = `SUPPRESS ${conflictTag(c)} ${c.otherCallsign}`;
+    btn.title = `Stop this alert flashing at your Position, for this pair only`;
+    btn.addEventListener('click', () => { closeLabelMenu(); suppressConflict(c); });
+    el.append(btn);
+  }
 
   const rows = cells.map(cell => {
     const { value } = resolveBlockValue(cell.blockId, flightData, strip);
@@ -87,6 +111,7 @@ export function openLabelMenu(trackId, clientX, clientY, { onTrackInfo } = {}) {
   el.append(track);
 
   const commit = () => {
+    if (!strip) { closeLabelMenu(); return; }
     const ops = labelAssignOps(rows.map(r => ({ blockId: r.blockId, before: r.before, typed: r.input.value })));
     closeLabelMenu();
     _sendInTurn(strip.stripId, actingPositionId, ops);
@@ -103,7 +128,7 @@ export function openLabelMenu(trackId, clientX, clientY, { onTrackInfo } = {}) {
   el.style.top = `${Math.round(clientY)}px`;
   document.body.append(el);
   _clampIntoViewport(el);
-  _open = { el, stripId: strip.stripId, trackId: String(trackId), onOutside };
+  _open = { el, stripId: strip ? strip.stripId : null, trackId: String(trackId), onOutside };
   if (rows.length) { rows[0].input.focus(); rows[0].input.select(); }
   return true;
 }

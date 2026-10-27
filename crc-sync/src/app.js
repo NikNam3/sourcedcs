@@ -189,6 +189,7 @@ function createApp(deps = {}) {
     // After any EFSP delivery: obligations re-evaluated at once rather than on the next 15 s sweep (docs/adr/0067).
     onEfspChange: monitors.recheckObligations,
     timeTick: serverResources.time,
+    conflictAlert: monitors.conflictAlertMonitor, // docs/adr/0145: a controller's suppress of one alert
   });
   hubLink.bind(wsHub);
 

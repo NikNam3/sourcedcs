@@ -7,7 +7,7 @@ import {
 import { atcDisplay, atcPalette } from './atc-scope.js';
 import { losVisibleRangeM } from './los.js';
 import {
-  conformanceAlertsForFlightData, getAllEfspConflicts, getEfspFlightData, getEfspStrip, conflictAlertsForTrack, stripIdsForTrackId, refuelingAlertText, airspaceEntryAlertsForTrack
+  conformanceAlertsForFlightData, getAllEfspConflicts, getEfspFlightData, getEfspStrip, conflictAlertsForTrack, isConflictSuppressed, stripIdsForTrackId, refuelingAlertText, airspaceEntryAlertsForTrack
 } from './panels/efsp/efsp-state.js';
 import { getCorrelatedHighlightTrackId } from './panels/efsp/correlation-highlight.js';
 import { buildCarrierFinalLine } from './panels/efsp/carrier-panel.js';
@@ -45,6 +45,7 @@ function infoLine_(t, hist) {
 // ── Assigned values and alerts in the data block (docs/adr/0058) ───────────
 const ALERT_COLOR_BAD = '#ff8a4c';
 const ALERT_COLOR_ATTN = '#e0a83c';
+const ALERT_COLOR_SUPPRESSED = '#8c8c8c'; // crc-sync's docs/adr/0145: a suppressed CA, grey (atc-scope.js's ATC_DIM_GRAY)
 
 /** The Strip-side flight record for a track, if it is correlated to one. */
 export function _flightDataForTrack(trackId) {
@@ -72,7 +73,9 @@ function buildAssignedLine(flightData) {
 
 /** The one alert tag a data block leads with: a conflict first, then conformance. */
 function buildAlertTag(trackId, flightData) {
-  const conflicts = conflictAlertsForTrack(trackId);
+  const all = conflictAlertsForTrack(trackId);
+  // crc-sync's docs/adr/0145: a suppressed alert keeps a grey tag, after every live alert.
+  const conflicts = all.filter(c => !c.suppressed);
   // crc-sync's docs/adr/0118: an MCI is shown like a CA, named MCI; a CA wins when the track is in both.
   if (conflicts.length) return { tag: conflicts.every(c => c.kind === 'MCI') ? 'MCI' : 'CA', color: ALERT_COLOR_BAD };
   const alerts = flightData ? conformanceAlertsForFlightData(flightData.flightDataId) : [];
@@ -85,6 +88,7 @@ function buildAlertTag(trackId, flightData) {
   if (airspaceEntryAlertsForTrack(trackId).length) return { tag: 'SAA', color: ALERT_COLOR_ATTN };
   const hdg = alerts.find(a => a.kind === 'HEADING');
   if (hdg) return { tag: `HDG${String(hdg.actual).padStart(3, '0')}`, color: ALERT_COLOR_ATTN };
+  if (all.length) return { tag: all.every(c => c.kind === 'MCI') ? 'MCI' : 'CA', color: ALERT_COLOR_SUPPRESSED };
   return { tag: '', color: ALERT_COLOR_ATTN };
 }
 
@@ -100,6 +104,8 @@ export function buildConflictAlertOverlay() {
   const now = (id) => tracks.get(String(id)) || latestFromServer.get(String(id));
   const paths = settings.conflictAlertPaths !== false;
   for (const c of conflicts) {
+    // crc-sync's docs/adr/0145: a suppressed alert draws nothing on the scope; its grey tag is on the labels.
+    if (isConflictSuppressed(c)) continue;
     const a = paths && now(c.a);
     const b = paths && now(c.b);
     if (a) features.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: [[a.lon, a.lat], [c.aAt.lon, c.aAt.lat]] }, properties: { kind: 'path' } });

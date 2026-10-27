@@ -7,6 +7,7 @@ const { createAptConfig } = require('./apt-config');
 const { consumeTicket } = require('./auth');
 const { WALL_CLOCK } = require('./mission-clock');
 const { WIRE_PROTOCOL } = require('./wire-protocol');
+const { conflictSuppressAck } = require('./efsp/wire/frames');
 const log = require('./log').logger('ws-hub');
 
 // The ENVELOPE version on every frame. It is not the wire protocol (src/wire-protocol.js, docs/adr/0103) and must stay 1:
@@ -53,8 +54,11 @@ class WsHub {
    *   op, a monitor's delta, the carrier tick and the archiver alike and a re-cleared Strip's badge clears with the Mutation that cleared it
    *   (docs/adr/0067). It closes the hub <-> alert-monitor cycle, which is why it is a dependency and not something the hub builds.
    * @param {(name:string, fn:Function, periodMs:number) => *} [deps.timeTick] times the 500 ms feed tick as `hub-feed` (server-resources.js, docs/adr/0141).
+   * @param {{setSuppressed: Function}} [deps.conflictAlert] the CA/MCI monitor (conflict-alert.js), for a controller's suppress
+   *   (docs/adr/0145). Absent: every suppress is refused.
    */
-  constructor({ trackStore, collabStore, efsp = null, picture = null, surveillance = null, clock = WALL_CLOCK, theater = null, wireProtocol = WIRE_PROTOCOL, downloadUrl = null, wallClock = WALL_CLOCK, signOnGraceMs = 0, aptConfig = createAptConfig(), pendingSignOffs = new Map(), onEfspChange = null, timeTick = (name, fn) => fn() }) {
+  constructor({ trackStore, collabStore, efsp = null, picture = null, surveillance = null, clock = WALL_CLOCK, theater = null, wireProtocol = WIRE_PROTOCOL, downloadUrl = null, wallClock = WALL_CLOCK, signOnGraceMs = 0, aptConfig = createAptConfig(), pendingSignOffs = new Map(), onEfspChange = null, timeTick = (name, fn) => fn(), conflictAlert = null }) {
+    this._conflictAlert = conflictAlert;
     this._aptConfig = aptConfig; // per-airport ATIS config, built by the composition root
     this._wall = wallClock;
     this._signOnGraceMs = signOnGraceMs;
@@ -209,8 +213,10 @@ class WsHub {
     // docs/adr/0118: an MCI also needs one of the session's Positions to show it (base altitude, inhibit).
     const positions = (session && session.coverage && session.coverage.signedOnPositions) || [];
     const forSession = typeof a.conflictAlertFor === 'function' ? (c) => a.conflictAlertFor(c, positions) : () => true;
+    // docs/adr/0145: shown as suppressed where one of the session's own Positions suppressed it.
+    const asForSession = typeof a.conflictAlertAs === 'function' ? (c) => a.conflictAlertAs(c, positions) : (c) => c;
     const conflictAlert = session && session.coverage && session.coverage.conflictAlert
-      ? (a.conflictAlert || []).filter(c => seen.has(String(c.a)) && seen.has(String(c.b)) && forSession(c))
+      ? (a.conflictAlert || []).filter(c => seen.has(String(c.a)) && seen.has(String(c.b)) && forSession(c)).map(asForSession)
       : [];
     // Obligations (docs/adr/0067) and conformance are about flights, so a
     // session that reads only what it owns (docs/adr/0080) gets its own
@@ -740,6 +746,12 @@ class WsHub {
       }
     }
 
+    // docs/adr/0145 (H173 VQ-A): a controller suppresses one conflict alert at the Position they act as, or restores it.
+    if (msg.type === 'efsp-conflict-suppress') {
+      ws.send(JSON.stringify(this._conflictSuppress(session, msg)));
+      return;
+    }
+
     // Per-airport ATIS config (freq / runway / info letter / manual wx) —
     // same squadron-wide-config deal, keyed by airport (msg.key) instead of
     // a single flat object.
@@ -773,6 +785,27 @@ class WsHub {
     }
     // Mutation lands on the next 500ms tick for every connected client
     // (including the sender) — no need to special-case an immediate echo.
+  }
+
+  /**
+   * A controller's suppress or restore of one conflict alert (docs/adr/0145): the session must be Primary at the acting
+   * Position (the session binding of docs/adr/0029), and the alert current, in its picture and shown at that Position. On
+   * success every session is sent its alerts again, so the alert stops flashing at once rather than on the next tick.
+   */
+  _conflictSuppress(session, msg) {
+    const refuse = (reason, detail) => conflictSuppressAck(msg, { ok: false, reason, detail });
+    if (typeof msg.conflictId !== 'string' || typeof msg.suppress !== 'boolean' || typeof msg.actingPositionId !== 'string') {
+      return refuse('VALIDATION_ERROR', 'a conflict suppress names the conflict, the acting Position and suppress true or false');
+    }
+    if (!this._conflictAlert) return refuse('VALIDATION_ERROR', 'this server raises no conflict alerts');
+    const positions = (session && session.coverage && session.coverage.signedOnPositions) || [];
+    const position = positions.find(p => p.positionId === msg.actingPositionId && p.isPrimary);
+    if (!position) return refuse('NOT_HOLDING_POSITION', `you are not Primary at ${msg.actingPositionId}, select it before suppressing an alert`);
+    const seen = (session && session.lastSent) || new Map();
+    if (!msg.conflictId.split('|').every(id => seen.has(id))) return refuse('NOT_FOUND', 'that conflict alert is not in your picture');
+    const result = this._conflictAlert.setSuppressed(msg.conflictId, { facilityId: position.facilityId, positionId: position.positionId }, msg.suppress, session.who || session.controllerId || null);
+    if (result.ok) this.broadcastEfspAlerts(this._efspAlerts);
+    return conflictSuppressAck(msg, result);
   }
 
   _broadcast(msg) {

@@ -125,6 +125,17 @@
       min-width: 0;
     }
     .label-menu-input:focus { outline: 1px solid var(--ui-border-3); }
+    /* crc-sync's docs/adr/0145: SUPPRESS one conflict alert; grey like every other item (dark cockpit) */
+    .label-menu-suppress {
+      grid-column: 1 / -1;
+      background: none;
+      border: 1px solid var(--ui-border);
+      color: var(--ui-text);
+      font: inherit;
+      cursor: pointer;
+      padding: 1px 4px;
+      text-align: left;
+    }
     .label-menu-track {
       grid-column: 1 / -1;
       background: none;
