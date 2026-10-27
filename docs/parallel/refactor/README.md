@@ -40,6 +40,12 @@ once is what produced the "load lottery" failures).
   merged together and run once), (b) after any approved `behaviour(...)` commit a controller could see, and (c) once at
   the window close. Never more than one full run machine-wide. A failure is re-run alone before it counts.
 - Re-running a suite that already passed on the same tree is never needed; cite the earlier run instead.
+- **No test runs twice for the same inputs (human 2026-10-27).** A docs-only lane runs only the tests that read the
+  files it changed (`ls crc-sync/tests crc-desktop/tests | command grep -i -e doc -e gloss -e claude -e readme -e patch`),
+  never the full suites. After a clean merge the supervisor reruns only the tests whose inputs differ from the tree the
+  lane tested (`git diff --stat <lane-head> <merge>`): nothing if the tip only gained files no test reads (docs,
+  `docs/parallel/**`), the doc-reading tests if it gained docs, the affected suites if it gained code. A conflict
+  resolution counts as new input. The full sharded Playwright after a client merge stays (lanes never run it).
 
 ## Slot plan (cap 10 agents; fill idle slots, critical path first)
 

@@ -26,7 +26,8 @@
    taken" in `docs/wip/<LANE>.md`, and carry on. Stop only if the default could destroy work or cross
    another lane's files; then SendMessage "main" briefly and continue with other work.
 7. Only your assigned `E2E_LANE` number (if any). **Tests only when necessary (S-TEST):** run the test files for
-   what you touched while working, the full unit suites once before your report, and **never the full Playwright
+   what you touched while working, the full unit suites once before your report (a docs-only lane: only the tests that
+   read the docs it changed), and **never the full Playwright
    suite** (the supervisor runs it, sharded, after a merge that touched the client); a client lane may run a boot
    smoke and the specs for the panels it changed. Details: `docs/parallel/refactor/README.md` "Test policy". Install first:
    `(cd crc-sync && npm ci) && (cd crc-desktop && npm ci) && (cd crc-desktop/app && npm ci)` as needed.
