@@ -93,7 +93,8 @@ for (const [name, seed] of CASES) {
     await installAppModules(page);
     await page.waitForFunction(() => crc.dock.dock !== null);
     // After boot, and again after PANELS is opened and closed from its topbar button, the way a controller does.
-    await expect.poll(() => ghostToggles(page), { message: 'after boot', timeout: 3000 }).toEqual([]).catch(() => {});
+    // The layout restore runs inside initDock(); two frames later what it left is painted.
+    await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
     expect(await ghostToggles(page), 'after boot').toEqual([]);
     expect(await strayPanels(page), 'no panel paints outside the dock after boot').toEqual([]);
     for (let i = 0; i < 2; i++) {
