@@ -178,3 +178,25 @@ test('the TRACK item is today\'s click: it closes the menu and opens the track p
   assert.equal(opened, 1);
   assert.equal(menuEl(), null);
 });
+
+// crc-sync docs/adr/0147 (H176): SUPPRESS is on the owner's menu only. A conflict alert never opens the menu by itself
+// (S-ARCH-112's non-owner menu is gone): the controller working the other aircraft clicks this one and gets the track panel.
+test('a conflict alert: SUPPRESS on the owner\'s menu, one frame; no menu for a controller who does not hold the Strip', async () => {
+  const { ws, state, menu, sent } = await load();
+  const alert = (shownAt) => state.applyEfspAlerts({ conformance: [], obligations: [], airspaceEntry: [], conflictAlert: [{
+    id: 't1|t2', kind: 'CA', a: 't1', b: 't2', aCallsign: 'VIPER11', bCallsign: 'COLT21', timeToCpaSec: 40, minNm: 1, vertFt: 200, shownAt,
+  }] });
+  ws.noteEfspPositionsAck({ facilityId: 'FAC_A', signedOn: ['TWR_Y'] });
+  alert(['TWR_Y']); // TWR_Y works t2, so it is shown the alert
+  assert.equal(menu.openLabelMenu('t1', 0, 0), false, 'not the owner of t1: no menu, the alert alone does not open one');
+
+  ws.noteEfspPositionsAck({ facilityId: 'FAC_A', signedOn: ['APP_X', 'TWR_Y'] });
+  alert(['APP_X', 'TWR_Y']);
+  assert.equal(menu.openLabelMenu('t1', 0, 0), true);
+  const items = descendants(menuEl()).filter(c => c.className === 'label-menu-suppress');
+  assert.deepEqual(items.map(b => b.textContent), ['SUPPRESS CA COLT21']);
+  items[0]._listeners.click[0]();
+  const frames = sent.filter(m => m.type === 'efsp-conflict-suppress');
+  assert.equal(frames.length, 1, 'one frame: the server applies it at every Position of this controller it is shown at');
+  assert.deepEqual([frames[0].conflictId, frames[0].suppress], ['t1|t2', true]);
+});
