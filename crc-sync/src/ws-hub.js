@@ -196,9 +196,9 @@ class WsHub {
    *
    * Scoped per session (docs/adr/0059). Conformance is about a flight and
    * goes to everybody, like the correlation it rides on. A short-term
-   * conflict goes only to a controller at an ATC Position, and only when both
-   * aircraft are in their own picture: it names positions, and it is ATC's
-   * job, not the tactical side's.
+   * conflict goes only to a controller at an ATC Position with track control
+   * of one of the aircraft (docs/adr/0147, asked of the monitor), and only when
+   * both aircraft are in their own picture.
    */
   broadcastEfspAlerts(alerts) {
     this._efspAlerts = alerts;
@@ -210,7 +210,8 @@ class WsHub {
   _efspAlertsMsg(session) {
     const a = this._efspAlerts || {};
     const seen = (session && session.lastSent) || new Map();
-    // docs/adr/0118: an MCI also needs one of the session's Positions to show it (base altitude, inhibit).
+    // docs/adr/0147: one of the session's Positions works one of the aircraft; docs/adr/0118: an MCI also needs that
+    // Position's Facility to let the intruder through (base altitude, inhibit).
     const positions = (session && session.coverage && session.coverage.signedOnPositions) || [];
     const forSession = typeof a.conflictAlertFor === 'function' ? (c) => a.conflictAlertFor(c, positions) : () => true;
     // docs/adr/0145: shown as suppressed where one of the session's own Positions suppressed it.
@@ -789,8 +790,10 @@ class WsHub {
 
   /**
    * A controller's suppress or restore of one conflict alert (docs/adr/0145): the session must be Primary at the acting
-   * Position (the session binding of docs/adr/0029), and the alert current, in its picture and shown at that Position. On
-   * success every session is sent its alerts again, so the alert stops flashing at once rather than on the next tick.
+   * Position (the session binding of docs/adr/0029), and the alert current, in its picture and shown at that Position. It
+   * applies at every Position the session is Primary at where the alert is shown (docs/adr/0147: one person, one
+   * acknowledgement), never at another session's. On success every session is sent its alerts again, so the alert stops
+   * flashing at once rather than on the next tick.
    */
   _conflictSuppress(session, msg) {
     const refuse = (reason, detail) => conflictSuppressAck(msg, { ok: false, reason, detail });
@@ -803,7 +806,8 @@ class WsHub {
     if (!position) return refuse('NOT_HOLDING_POSITION', `you are not Primary at ${msg.actingPositionId}, select it before suppressing an alert`);
     const seen = (session && session.lastSent) || new Map();
     if (!msg.conflictId.split('|').every(id => seen.has(id))) return refuse('NOT_FOUND', 'that conflict alert is not in your picture');
-    const result = this._conflictAlert.setSuppressed(msg.conflictId, { facilityId: position.facilityId, positionId: position.positionId }, msg.suppress, session.who || session.controllerId || null);
+    const alsoAt = positions.filter(p => p.isPrimary && p !== position).map(p => ({ facilityId: p.facilityId, positionId: p.positionId }));
+    const result = this._conflictAlert.setSuppressed(msg.conflictId, { facilityId: position.facilityId, positionId: position.positionId }, msg.suppress, session.who || session.controllerId || null, { alsoAt });
     if (result.ok) this.broadcastEfspAlerts(this._efspAlerts);
     return conflictSuppressAck(msg, result);
   }

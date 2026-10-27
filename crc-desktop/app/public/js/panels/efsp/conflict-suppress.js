@@ -6,6 +6,10 @@ import { getActingPositions, sendEfspConflictSuppress } from './efsp-ws.js';
 // keeps it until the pair stops alerting or a track drops; suppressed is not hidden, a grey CA stays on both labels.
 // Restore is the same click on a suppressed alert.
 //
+// crc-sync's docs/adr/0147 (H176): the alert reaches this controller only where they work one of the aircraft, and one
+// suppress applies at every Position they are Primary at where it is shown (one person, one acknowledgement), so one
+// frame goes out, named for the first of them.
+//
 // `conflict` is one of conflictAlertsForTrack()'s entries (or a raw efsp-alerts record): its `shownAt` and `suppressedAt`
 // name Positions, which the server filled in for this session. Nothing here names a Position of its own.
 
@@ -20,16 +24,18 @@ export function conflictRestoreTargets(conflict, acting = getActingPositions()) 
   return ((conflict && conflict.suppressedAt) || []).filter(p => acting.includes(p));
 }
 
-/** Suppresses the alert at each target Position. Returns how many were sent. */
+/** Suppresses the alert at this controller's Positions (the server applies it at each). Returns how many were sent. */
 export function suppressConflict(conflict) {
-  const targets = conflictSuppressTargets(conflict);
-  for (const p of targets) sendEfspConflictSuppress(p, conflict.id, true);
-  return targets.length;
+  const [first] = conflictSuppressTargets(conflict);
+  if (!first) return 0;
+  sendEfspConflictSuppress(first, conflict.id, true);
+  return 1;
 }
 
-/** Restores the alert at each Position it is suppressed at. Returns how many were sent. */
+/** Restores the alert at this controller's Positions it is suppressed at. Returns how many were sent. */
 export function restoreConflict(conflict) {
-  const targets = conflictRestoreTargets(conflict);
-  for (const p of targets) sendEfspConflictSuppress(p, conflict.id, false);
-  return targets.length;
+  const [first] = conflictRestoreTargets(conflict);
+  if (!first) return 0;
+  sendEfspConflictSuppress(first, conflict.id, false);
+  return 1;
 }
