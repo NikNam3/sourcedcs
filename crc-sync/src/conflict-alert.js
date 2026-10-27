@@ -297,14 +297,18 @@ class ConflictAlertMonitor {
   }
 
   /**
-   * How a conflict is shown to a session holding `positions`: as computed, or with `suppressedAt`, the session's own
-   * Positions where it is suppressed (docs/adr/0145). A suppression at a Position the session does not hold is never shown.
+   * How a conflict is shown to a session holding `positions` (docs/adr/0145): with `shownAt`, the session's own ATC
+   * Positions it is shown at (where a suppress can be made), and, when any of them suppressed it, `suppressedAt`. A
+   * suppression at a Position the session does not hold is never shown.
    */
   presentFor(conflict, positions) {
+    const { isAtcPosition } = this._d;
+    const shownAt = (positions || [])
+      .filter(p => (!isAtcPosition || isAtcPosition(p.positionId)) && this.deliverableTo(conflict, [p]))
+      .map(p => p.positionId);
     const at = this._suppressed.get(conflict.id);
-    if (!at) return conflict;
-    const mine = (positions || []).map(p => p.positionId).filter(id => at.has(id));
-    return mine.length ? { ...conflict, suppressedAt: mine } : conflict;
+    const suppressedAt = at ? shownAt.filter(id => at.has(id)) : [];
+    return { ...conflict, shownAt, ...(suppressedAt.length ? { suppressedAt } : {}) };
   }
 
   /** The role of every track this tick (the header's "Which pairs" and "Groups"). */

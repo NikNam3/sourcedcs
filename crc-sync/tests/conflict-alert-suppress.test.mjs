@@ -38,6 +38,8 @@ test('a suppress holds for that pair at that Position only, never for a third ai
   const ids = m.getAll().map(c => c.id).sort();
   assert.ok(ids.includes('1|2') && ids.includes('1|3'), `alerts: ${ids}`);
 
+  assert.deepEqual(m.presentFor(m.getAll()[0], [AP, GND, DEP]).shownAt, [AP.positionId, DEP.positionId], 'shown at the ATC Positions only');
+
   const r = m.setSuppressed('1|2', AP, true, 'alice');
   assert.equal(r.ok, true);
   const byId = (id) => m.getAll().find(c => c.id === id);
