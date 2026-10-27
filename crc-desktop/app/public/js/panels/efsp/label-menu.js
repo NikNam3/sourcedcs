@@ -25,8 +25,10 @@ import {
 // CODE when it has none and RADAR SERVICE TERMINATED. Grey like the rest.
 //
 // crc-sync's docs/adr/0145 (H173 VQ-A): a contact in a conflict alert this controller can suppress gets one SUPPRESS item
-// per alert, for whoever clicks (owner or not): one click, the menu closes. A suppressed alert offers nothing here; the
-// track panel's alert row restores it.
+// per alert: one click, the menu closes. A suppressed alert offers nothing here; the track panel's alert row restores it.
+// crc-sync's docs/adr/0147 (H176): only on a contact whose Strip this controller holds. An alert never opens the menu on
+// its own (the other aircraft's block, someone else's, opens the track panel as before); the alert is shown only where
+// one of its aircraft is worked anyway.
 
 let _open = null; // { el, stripId, trackId, onOutside, onKey }
 
@@ -57,7 +59,7 @@ export function labelSuppressibleConflicts(trackId) {
 
 /**
  * Opens the menu at the click for this contact. False when there is nothing to offer (no Strip, not the owner, no
- * cells, and no conflict alert to suppress): the caller keeps today's click (the track panel, H71 default 7).
+ * cells, no VFR handoff to accept, nothing to tag): the caller keeps today's click (the track panel, H71 default 7).
  * @param {{onTrackInfo?:() => void}} [opts] the menu's TRACK item: today's click, still one input away
  */
 /** The VFR handoff on this contact this controller accepts (crc-sync docs/adr/0146), or null. */
@@ -68,10 +70,10 @@ export function labelVfrAcceptFor(trackId) {
 export function openLabelMenu(trackId, clientX, clientY, { onTrackInfo } = {}) {
   closeLabelMenu();
   const offer = labelAssignmentForTrack(trackId);
-  const conflicts = labelSuppressibleConflicts(trackId);
+  const conflicts = offer ? labelSuppressibleConflicts(trackId) : [];
   const acceptStrip = labelVfrAcceptFor(trackId);
   const tag = !offer && !acceptStrip && canTagTrack(trackId);
-  if (!offer && !conflicts.length && !acceptStrip && !tag) return false;
+  if (!offer && !acceptStrip && !tag) return false;
   const { strip = null, actingPositionId = null, cells = [] } = offer || {};
   const flightData = strip ? getEfspFlightData(strip.flightDataId) : null;
 

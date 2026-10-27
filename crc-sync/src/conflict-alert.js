@@ -51,6 +51,15 @@
 // So a suppression is for one pair (the conflict id), at one Position (the one acting), and lasts as long as that alert:
 // the tick that no longer finds the pair (it stopped alerting, or a track dropped) forgets it. It changes only how the
 // alert is shown at that Position (`presentFor`: `suppressedAt`); the alert itself is still computed and delivered.
+// One person, one acknowledgement (docs/adr/0147, H176): a suppress from a session applies at every Position that session
+// is Primary at where the alert is shown (a consolidated controller clicks once), never at anyone else's.
+//
+// SHOWN ONLY WHERE THE AIRCRAFT IS WORKED (docs/adr/0147, H176). A CA is shown only at the Positions with track control of
+// either aircraft (efsp/track-control.js: the Position holding its Strip, VFR strips included, both ends of a handoff
+// until it is accepted); an MCI only at the tracked aircraft's, and there only where its Facility's base altitude and
+// inhibit let it through (`mciShownAt`). Everyone else is shown nothing. JO 7110.65BB para 5-14-6 is written from the
+// working controller's side ("If another controller is involved in the alert, initiate coordination"); where A works one
+// aircraft and B the other, both are shown it and each suppresses it at their own Position only (c.4).
 
 const { MS_PER_KT } = require('./units');
 const M_PER_NM = 1852;
@@ -243,6 +252,8 @@ class ConflictAlertMonitor {
    * @param {(positionId:string) => boolean} [deps.isAtcPosition] whether a Position is an ATC one (only ATC is shown CA, so
    *   only ATC suppresses one). Absent: every Position is (tests)
    * @param {{now: () => number}} [deps.clock] the mission clock, stamping a suppression (docs/adr/0079)
+   * @param {(flightDataId:string) => {facilityId:string, positionId:string}[]} [deps.trackControlOf] the Positions with
+   *   track control of a flight (docs/adr/0147). Absent: every ATC Position is shown every CA (tests of the geometry)
    */
   constructor(deps) {
     this._d = deps;
@@ -250,6 +261,7 @@ class ConflictAlertMonitor {
     this._suppressed = new Map(); // conflict id -> Map(positionId -> { facilityId, positionId, by, at })
     this._intruders = new Map(); // conflict id -> the intruder track, for an MCI
     this._memberFlights = new Map(); // trackId -> flightDataId, the formation members of the last tick
+    this._flights = new Map(); // conflict id -> the flightDataIds of its tracked side(s), for track control
   }
 
   getAll() { return this._conflicts; }
@@ -258,42 +270,60 @@ class ConflictAlertMonitor {
   formationMemberFlights() { return this._memberFlights; }
 
   /**
-   * Whether a conflict is for a session holding `positions` ([{facilityId, positionId}]). A CA always is (the hub already
-   * checks an ATC Position and both contacts in the picture); an MCI only when one of those Positions shows it.
+   * Whether a conflict is for a session holding `positions` ([{facilityId, positionId}]): one of them shows it.
    */
   deliverableTo(conflict, positions) {
-    if (!conflict || conflict.kind !== 'MCI') return true;
+    return (positions || []).some(p => this._shownAt(conflict, p));
+  }
+
+  /**
+   * Whether a conflict is shown at one Position (docs/adr/0147): an ATC Position with track control of either aircraft of a
+   * CA, or of the tracked aircraft of an MCI where that Position's Facility lets the intruder through (docs/adr/0118).
+   */
+  _shownAt(conflict, p) {
+    if (!conflict || !p) return false;
+    const { isAtcPosition, trackControlOf, mciShownAt } = this._d;
+    if (isAtcPosition && !isAtcPosition(p.positionId)) return false;
+    if (trackControlOf) {
+      const flights = this._flights.get(conflict.id) || [];
+      const controls = flights.some(f => (trackControlOf(f) || []).some(c => c.positionId === p.positionId && c.facilityId === p.facilityId));
+      if (!controls) return false;
+    }
+    if (conflict.kind !== 'MCI') return true;
     const intruder = this._intruders.get(conflict.id);
-    const shownAt = this._d.mciShownAt;
-    if (!intruder || !shownAt) return true;
-    return (positions || []).some(p => shownAt(intruder, p.facilityId, p.positionId));
+    if (!intruder || !mciShownAt) return true;
+    return mciShownAt(intruder, p.facilityId, p.positionId);
   }
 
   /**
    * Suppress (or restore) one alert at the acting Position (docs/adr/0145). `position` is the session's own
    * `{facilityId, positionId}`; the caller has checked the session holds it. The alert must be current and shown there.
-   * @returns {{ok:true, conflict:object}|{ok:false, reason:string, detail:string}}
+   * `alsoAt`: the session's other Positions it is Primary at (docs/adr/0147, one person, one acknowledgement); the
+   * suppress or restore applies at each of them where the alert is shown, and is skipped where it is not.
+   * @returns {{ok:true, conflict:object, positionIds:string[]}|{ok:false, reason:string, detail:string}}
    */
-  setSuppressed(conflictId, position, suppress, by = null) {
+  setSuppressed(conflictId, position, suppress, by = null, { alsoAt = [] } = {}) {
     const { isAtcPosition, clock } = this._d;
     if (isAtcPosition && !isAtcPosition(position.positionId)) {
       return { ok: false, reason: 'PERMISSION_DENIED', detail: `${position.positionId} is not an ATC Position, so it is shown no conflict alert` };
     }
     const conflict = this._conflicts.find(c => c.id === conflictId);
-    if (!conflict || !this.deliverableTo(conflict, [position])) {
-      return { ok: false, reason: 'NOT_FOUND', detail: 'that conflict alert has ended' };
+    if (!conflict) return { ok: false, reason: 'NOT_FOUND', detail: 'that conflict alert has ended' };
+    if (!this._shownAt(conflict, position)) {
+      return { ok: false, reason: 'NOT_FOUND', detail: `that conflict alert is not shown at ${position.positionId}: neither aircraft is worked there` };
     }
+    const targets = [position, ...(alsoAt || []).filter(p => p && p.positionId !== position.positionId && this._shownAt(conflict, p))];
     let at = this._suppressed.get(conflictId);
-    if (suppress) {
-      if (!at) { at = new Map(); this._suppressed.set(conflictId, at); }
-      if (!at.has(position.positionId)) {
-        at.set(position.positionId, { facilityId: position.facilityId, positionId: position.positionId, by, at: clock ? clock.now() : null });
+    for (const p of targets) {
+      if (suppress) {
+        if (!at) { at = new Map(); this._suppressed.set(conflictId, at); }
+        if (!at.has(p.positionId)) at.set(p.positionId, { facilityId: p.facilityId, positionId: p.positionId, by, at: clock ? clock.now() : null });
+      } else if (at) {
+        at.delete(p.positionId);
       }
-    } else if (at) {
-      at.delete(position.positionId);
-      if (!at.size) this._suppressed.delete(conflictId);
     }
-    return { ok: true, conflict };
+    if (at && !at.size) this._suppressed.delete(conflictId);
+    return { ok: true, conflict, positionIds: targets.map(p => p.positionId) };
   }
 
   /**
@@ -302,10 +332,7 @@ class ConflictAlertMonitor {
    * suppression at a Position the session does not hold is never shown.
    */
   presentFor(conflict, positions) {
-    const { isAtcPosition } = this._d;
-    const shownAt = (positions || [])
-      .filter(p => (!isAtcPosition || isAtcPosition(p.positionId)) && this.deliverableTo(conflict, [p]))
-      .map(p => p.positionId);
+    const shownAt = (positions || []).filter(p => this._shownAt(conflict, p)).map(p => p.positionId);
     const at = this._suppressed.get(conflict.id);
     const suppressedAt = at ? shownAt.filter(id => at.has(id)) : [];
     return { ...conflict, shownAt, ...(suppressedAt.length ? { suppressedAt } : {}) };
@@ -329,7 +356,8 @@ class ConflictAlertMonitor {
     for (const t of tracks) {
       const lead = leads.get(t);
       const member = members.get(t);
-      roles.set(t, lead ? { role: TRACKED, group: lead.group } : member ? { role: MEMBER, group: member.group } : { role: UNTRACKED, group: null });
+      roles.set(t, lead ? { role: TRACKED, group: lead.group, flightDataId: lead.flightDataId }
+        : member ? { role: MEMBER, group: member.group, flightDataId: member.flightDataId } : { role: UNTRACKED, group: null });
     }
     return roles;
   }
@@ -346,6 +374,11 @@ class ConflictAlertMonitor {
     });
     const byId = new Map(tracks.map(t => [String(t.id), t]));
     this._intruders = new Map(next.filter(c => c.intruder).map(c => [c.id, byId.get(c.intruder)]));
+    // docs/adr/0147: the flight each tracked side belongs to (a formation member: its lead's), whose holders are shown it.
+    this._flights = new Map(next.map(c => [c.id, [c.a, c.b]
+      .filter(id => id !== c.intruder)
+      .map(id => { const r = roles && roles.get(byId.get(id)); return (r && r.flightDataId) || null; })
+      .filter(Boolean)]));
     const changed = next.length > 0 || this._conflicts.length > 0;
     this._conflicts = next;
     // docs/adr/0145: a suppression lasts as long as its alert. A pair this tick does not find (it stopped alerting, or one

@@ -59,8 +59,8 @@ export function wireMapInteractions() {
 
   // Click on a label, unless the mouse was dragged. The controller who owns the
   // contact's correlated Strip gets the assignment menu (HDG / SPEED / ALT,
-  // docs/adr/0140), and a contact in a conflict alert shown at one of the
-  // controller's Positions offers SUPPRESS (crc-sync's docs/adr/0145); everyone
+  // docs/adr/0140), with SUPPRESS for its conflict alerts (crc-sync's
+  // docs/adr/0145, 0147: only the owner's block offers it); everyone
   // else, and a Shift+click, gets the track panel as before (H71 default 7),
   // which is also the menu's TRACK item.
   // e.preventDefault() stops the map-level click from closing the panel.

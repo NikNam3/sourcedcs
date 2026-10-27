@@ -14,6 +14,7 @@ const { ConformanceMonitor, refuelingReceivers } = require('../efsp/conformance'
 const { TofiRegimeMonitor } = require('../efsp/tofi-regime-monitor');
 const { AirspaceEntryAlertMonitor } = require('../efsp/airspace-entry-alert');
 const { ConflictAlertMonitor, mciFloorFt } = require('../conflict-alert');
+const { trackControlPositions } = require('../efsp/track-control');
 const { ATC_CLASSES } = require('../efsp/position-coverage');
 const { loadAlertingConfig } = require('../alerting-config');
 const { indicatedAltFt } = require('../altimetry');
@@ -183,9 +184,21 @@ function buildMonitors({ env, efsp, facilityConfig, missionClock, missionSession
     // docs/adr/0145: only an ATC Position is shown CA, so only one suppresses it; the suppression is stamped in mission time.
     isAtcPosition: (positionId) => ATC_CLASSES.has(facilityConfig.getPositionClass(positionId)),
     clock: missionClock,
+    // docs/adr/0147 (H176): shown only at the Positions with track control of the aircraft (the Strip holders).
+    trackControlOf: (flightDataId) => trackControlPositions(stripsOfFlight(flightDataId)),
     // Alert text names each aircraft the way identity does (docs/adr/0059).
     callsignFor: trackSeams.callsign || ((track) => identity.labelFor(track.id)),
   });
+  /** Every Strip of one flight on every Facility's Board, with its Facility (docs/adr/0147's track control reads them). */
+  function stripsOfFlight(flightDataId) {
+    const out = [];
+    for (const facilityId of facilityConfig.getFacilityIds()) {
+      const board = efsp.boardStoreFor(facilityId);
+      if (!board) continue;
+      for (const strip of board.getAll()) if (strip.flightDataId === flightDataId) out.push({ facilityId, strip });
+    }
+    return out;
+  }
   // docs/adr/0119 (H132, H134 LT-Q5 a, H136 VQ4 b): an aircraft inside an ACTIVE airspace it may not be in, by airspace
   // type. Ticks after the CA monitor (same ticker), whose formation members it reads.
   const airspaceEntryAlertMonitor = new AirspaceEntryAlertMonitor({
