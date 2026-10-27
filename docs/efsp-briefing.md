@@ -1710,6 +1710,95 @@ limits that is asked first.
 4. **Cleanups must send `baseDefRev` with `DeleteAirspace`**, or the server refuses and the test airspace stays on the rig.
 5. **R² was the wrong leak test**: judge a leak against a clean twin (U-SMALL2).
 
+## 3N. The final tests and after (S-ARCH-87 to S-ARCH-109, ADRs `0139`-`0144`)
+
+The human's final test of the v2 tip (2026-10-22, H162), the second round (2026-10-24, H163's twelve items, ruled in H164 and H171) and the
+rulings that followed (H165-H171), merged one lane at a time; lane notes `docs/wip/U-*.md`, folded by DOCS-V2B (`docs/wip/DOCS-V2B.md`).
+`WIRE_PROTOCOL` stays **2** throughout. Controller-facing half: the usage guide. H160 (design for N, no literal ids) still binds.
+
+**Server and wire facts, by lane:**
+
+- **U-V2-FIXES (H161).** `par-monitor.js` `finalApproaches()`: per airfield final Bay (every Facility with `runwayStatus`, every `view: 'final'`
+  Bay), the approach the next ARRIVAL would fly on the active runway end, by the same `_approachGeometry` as a sample's. The `par-sample` frame gains
+  top-level `approaches: [{ facilityId, positionId, approach }]` (`par.FINAL_APPROACH_KEYS`), filtered per session like the samples, so a PAR holder gets a
+  frame every tick even with an empty final. Client `parFinalApproaches()`; the header is editable with no sample. `UNACTIVATED_AIRSPACE_ENTRY`
+  (`forwarding-obligations.js`) is raised only while `ctx.insideApprovedAirspace(strip)` holds: the entry monitor's
+  `AirspaceEntryAlertMonitor#isInside()` (one containment test); `dueAt` is the first tick inside; `app/tickers.js` re-runs obligations right after an
+  entry-monitor change. Closes DOCS-V2's two findings (§4).
+- **U-SURFACE (H162).** Optional facility-file key **`airportSurfacePositions`** (`facility-schema.js`, validated like `positionLetters`; Incirlik
+  `["GC", "LC"]`), sent in the snapshot per Facility (`facility-config.js` `allAirportSurfacePositions()`). Client `airport-surface.js` (a leaf):
+  `airportSurfaceHeld(table, signedOnOf)` (Primary or Observer at a Position its own Facility lists), `airportSurfaceVisibility`, and
+  `airportSurfacePaint({ black, … })` (dim grey on the black scope). When roles land (`0132`) the table can become the GC/LC roles.
+- **U-LTAG-COURSE (H163).** Cause of "046/047 here, 049.6 in DCS": **DCS's F10/ME ruler measures from grid north** (grid 055.0, convergence −2.15° at
+  LTAG, WMM2025 5.74° E: 052.7 true is 046.9 M). Real bug fixed: Incirlik's `endHeadingsTrue` and PAR `courseTrueDeg` were 056/236 (the runway number
+  read as magnetic, 3.3° off the pavement); now **52.7/232.7** with DCS's `RW05`/`RW23` points as thresholds (`ltag-runway-course.test.mjs`).
+  DCS-gRPC's `GetMagneticDeclination` is IGRF, negated, not DCS's value. Model unchanged: true + WMM stays (H171 FT-Q9, the cockpit HSI is the
+  reference; the LTAG RWY 05 HSI check, prediction 047, is open, §4).
+- **U-LABEL-MENU (`0140`, client only).** `label-assign-rules.js` (`assignmentCellsFor`, `labelAssignmentFor`, `labelAssignOps`) and `label-menu.js`
+  (`openLabelMenu`); `map-interactions.js` `_onLabelClick` on `unit-labels` and `atc-labels`: the owner of the correlated Strip gets HDG/SPEED/ALT, sent
+  as the cells' own `SetBlock`s one after another on ack (a refusal or attestation stops the rest); Shift+click or TRACK opens the track panel. H171
+  FT-Q10 a: a menu only.
+- **U-PERF (`0141`).** `src/server-resources.js`: CPU (`process.cpuUsage` deltas), RSS/heap, event-loop delay p50/p99/max, every named ticker and
+  `hub-feed` (runs, mean, worst, busy share), sessions, tracks; 5 s samples, 60 s window, memory only. Thresholds `config/server-resources.json`
+  (strict `state/` override). Read in the `efsp-metrics` answer (`serverResources`, an ack payload: `wire:record -- --bump`, protocol stays 2) and
+  `GET /api/server/resources` (auth). Measured: 2-3 % of a core and ~110 MB at 20 aircraft and 4-12 sessions. The hotspots (Board `_persist` per
+  Mutation ~50 % of busy time, `getFacilityConfig` deep clones, obligations per delivery, O(n²) CA, the `par` ticker) are in the v3 backlog. The
+  Playwright config's lane guard allows `E2E_LANE` 0-19.
+- **U-PAR-FT (`0139`).** `efsp/final-position.js` `flightsHeldOnFinal`: a FINAL Strip in `ON_FINAL`/`BALL` owned by a Position owning a `view: 'final'`
+  Bay; `conformance.js` checks nothing on it (the `'CARRIER'` literal in `monitors.js` is gone). **`GLIDESLOPE`** (`evaluateGlidepath`, from
+  `ParMonitor#glidepathOf`): after Begin descent, above DA, outside `alerting.json` `glidepathAboveDeg`/`glidepathBelowDeg` for
+  `glidepathPersistSec` (1/0.5/2; server-wide, not the controller's panel tolerance, supervisor ruling); client EL row and Strip chip `GP ↓/↑`
+  (`efsp-conf-glidepath`). PAR sample `headings { needed, current, windFromMagnetic, windKt }` (**ADR 0139 §3 says `windFrom`; the wire is
+  `windFromMagnetic`**, H76's guard), `par.neededHeading`; `airport-weather.js` is built before the monitors in `app.js`. Azimuth fixed ±3°
+  (`DEFAULT_VIEW.azMaxDeg`, no autoscale). APRT centreline: the runway-status record carries **`airportIcao`**; `panels/aprt-runway.js`
+  `facilityRunwayTrueDeg`.
+- **U-FT-SMALL (H163, H164).** Bullseye readout hidden while `atcOnlySession()` (radar-based: a GC/CD-only session still shows it) and off the map.
+  STARS letters `text-offset [0, 0.15]` em. Heading grace = turn ÷ min(`headingTurnRateDegPerSec` 3, the `headingTurnMaxBankDeg` 25° rate at ground
+  speed) + `headingGraceMarginSec` 15, with a continuity check; **`headingGraceSec` is gone** (a `state/alerting.json` with it stops start-up). CD gets
+  `CreateStrip` DEPARTURE (`CD · Departure`, `cd-pending-clearance`); a Strip created into a state-implying Bay starts in that state when its type has it
+  (a GCI on-station Mission is ON_STATION). LC's departure face loses P/S, OPT, HOOK (▼ keeps them). Its "Airport range ring" switch was reverted by
+  U-PANELS-RADARS (H171 FT-Q11).
+- **U-FT-FIXES (S-ARCH-98).** `l5-arrivals` flash: a correlation warning ~0.5 s after a handoff rebuilt the Strip and lost the flash; now
+  `efsp-arrivals.js` `efspArrivalFlashElapsed()` + `ARRIVAL_FLASH_MS` (1600, parity with the CSS) carry it across a rebuild. `u-scope-small`:
+  `signOn` waits for the coverage frame. A missing track heading is `null` (`tracks.js`, `grpc-client.js`). `bay/dispatch.js`
+  `_resolveActingPositionId`: the owner if held, else a held Position a non-owner rule names, else null (cell read-only); the rule table rides the
+  snapshot as **`nonOwnerBlockWrites`** (from `NON_OWNER_BLOCK_WRITES`, OPS's `14E`/`3G`; no wire bump, S-ARCH-99). `buildTickers({ wallClock })`.
+  `CreateStrip` refuses an `initialState` the type lacks or the Bay contradicts (`VALIDATION_ERROR`).
+- **U-BEACON-ONLY (`0142`, H165).** See §3C. Readers moved to CORRELATED only (`app/monitors.js`, `conformance.js`, `surveillance/identity.js`,
+  client `atc-scope.js` `atcRelation`); `computeCorrelationRate` is correlated / eligible, `matchKeyCounts` `{BINDING, BEACON}`. The persisted
+  correlation shape still **accepts `confidence`** (`stores.js` `ENTRY_SHAPES.correlations`; `CorrelationStore.restore` drops it) so the deployed Board
+  survives (S-ARCH-102 D1); remove it at the next Board reset (v3 backlog).
+- **U-VFR-MTMA (`0143`, H166).** `airspaceClass` optional on a JURISDICTION area; **`vfrService`** (`ALL_SEPARATED`, `IFR_SEPARATED`, `ADVISORY`):
+  implied by the class (`CLASS_VFR_SERVICE`: B, C, D-F), refused in A and G, required when unclassified (`airspace-schema.js` `vfrServiceOf`).
+  `LTAG-RAPCON` unclassified, `IFR_SEPARATED`; `LTAG-CZ` Class D. `jurisdictionAt` returns `airspaceClass` (null when unclassified) and the
+  effective `vfrService`; the CENTER fallback and `CVN-72-CCA` stay Class E (VQ-B open). Board op **`CreateVfrDeparture`** (CD's row grant
+  `VFR_DEPARTURE_OP_KINDS`; flight data, discrete code, DEPARTURE Strip in the Bay implying CLEARED, runway validated against the inventory or the
+  active end, Undo), Block **`9K` DIR** (`filed.directionOfFlight`). Client `vfr-departure.js`, toolbar `VFR…`, `.vfr`; Terminate offered on an AP/CTR
+  owned DEPARTURE with no clearance. Rule-9 debt: `VFR_DEPARTURE_POSITIONS = ['CD']` (authority mirror). One op kind recorded, protocol 2.
+- **U-DRAG-CLICK (H167, H168, client only).** `strip-drag.js` `computeInsertionIndex(rects, ghostTopY)` (nearest slot to the ghost's top edge),
+  `isUnchangedPlacement` (a same-place drop sends no MoveStrip), `TAB_DROP_MIN_TRAVEL_PX = 16` / `isTabDropTravel`. `strip-edge.js`: `EDGE_PRECEDENCE`
+  (the CSS cascade, a unit test reads the stylesheet), `stripEdgeMarkers`, `stripEdgeTitle`; `bay/strip-element.js` `_appendEdgeTip` (10 px child,
+  `user-select: none`).
+- **U-PANELS-RADARS (H171 FT-Q11, client only).** PANELS panel order ACTING AS, PANELS, then the radar list collapsed behind `RADARS · n · k GND ▸`
+  (localStorage `crc-desktop-radar-list-expanded`); `0b793660` (the range-ring switch) reverted.
+- **U-SUA (`0144`, H169-H171).** AREA types **MOA, RESTRICTED, PROHIBITED, WARNING** (`RANGE`, `DANGER` removed everywhere, no migration: strict restore
+  names a leftover); the RANGES Facility and range control frequencies stay. **`inForce(record)`** (`airspace-schema.js`, client copy
+  `airspace-validate.js` with `displayState`) is the one "in force" question, never `state === 'ACTIVE'` alone for an AREA; PROHIBITED is always in
+  force (`ALWAYS_IN_FORCE_TYPES`, state ops refused, record stays RETURNED, card `IN FORCE`). A transit has four states (`REQUESTED`, `APPROVED`,
+  `DECLINED`, **`COMPLETED`**); **`EndTransit`** is the controller's op and the audit op for every end (triggers `NO_LIVE_STRIP`, `MISSION_RESET`,
+  `COMPLETED`): by a decider the transit goes, by the Strip's holder it stays COMPLETED until the decider's `AcknowledgeTransit`. `TRANSIT_TYPES`
+  stays MOA, WARNING, RESTRICTED.
+
+**Traps from this batch:**
+
+1. **Strict `state/` again**, and two things that are not strict but stale: a `RANGE`/`DANGER` airspace or `headingGraceSec` stops start-up; the
+   deployed registry keeps `LTAG-RAPCON` as Class C (standing areas import once) and an old `state/efsp-facility-incirlik.json` keeps 056/236 and no
+   `airportSurfacePositions`. RUNBOOK "v2 launch (round 2 …): before the deploy".
+2. **An additive snapshot key needs no wire bump** while protocol 2 is ahead of the release (S-ARCH-99), but `wire:record` does not see it: say so.
+3. **`ws-hub.js` sends the sign-on ack before the session's `coverage` frame.** A spec that injects coverage must wait for the real one first.
+4. **ADR text vs wire:** `0139` §3's `windFrom` is `windFromMagnetic` on the wire.
+5. **`CreateVfrDeparture`, `EndTransit` and `ControlRelease` are not in the freeze hub op matrix**, and the soak drives none of them (unit and e2e only).
+
 ## 4. What's left, and the known bugs
 
 **Not built, in the guide's order.** WP7A: Incirlik's single frequency approach and PAR are built (§3J, reworked by `0117`, §3L, §3M), with the PAR panel (§3K) and its approach values (`0130`); there is **no RSU** (H149, `0126`: the tower works the pattern); the carrier Positions (L17), their panels (§3K) and the v2 prototype fixes (`0137`) have never met a real DCS ship. **Role-based Positions** (`0132`, U-ROLE-POSITIONS) are held until after v2 (S-ARCH-85): the rule tables still name literal Position ids and `DEFAULT_FACILITY_ID` is still the default of many getters; H160 lists what its resumption must fix for N airfields. WP8's §10.3 suggestion chip
