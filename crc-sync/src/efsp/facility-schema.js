@@ -117,7 +117,7 @@ function validateConfig(candidate) {
 const BAY_VIEWS = Object.freeze(['final', 'sfa-freqs']); // 'pattern' (PriFly's leg board) removed: live test U19, docs/adr/0137
 // `holdsStripType` is L28's (docs/adr/0087): a Bay that files its strip type's Strips whatever their state.
 // `vfr` is docs/adr/0146's: the Bay a VFR strip lands in when this Position tags a track or accepts a VFR handoff (one per
-// Position at most; without one, the Position's first working Bay).
+// Position at most; a Position without one works no VFR strips).
 const BAY_DESCRIPTOR_KEYS = Object.freeze(['bayId', 'rackIds', 'impliesState', 'view', 'replacesRacks', 'capacity', 'holdsStripType', 'vfr']);
 
 /** A human problem string for a malformed Bay descriptor flag (`view`, `capacity`), or null. */

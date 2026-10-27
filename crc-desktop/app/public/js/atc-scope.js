@@ -139,6 +139,14 @@ export function atcRelation(t, strips, acting, letterOf) {
   const atcStrips = live.filter(s => s.stripType !== 'MISSION');
 
   for (const s of atcStrips) {
+    // crc-sync docs/adr/0146: a VFR strip's STARS handoff inside a Facility (VfrHandoff): offered to the Position it
+    // names, shown at the holder with the receiver's letter, exactly as a coordination HANDOFF is.
+    const h = s.vfrHandoff;
+    if (h) {
+      if (acting.has(h.toPositionId)) rel.handoffIn = { strip: s };
+      else if (acting.has(s.ownerPositionId)) rel.handoffOut = { strip: s, recipientLetter: letterOf(h.toPositionId) || '' };
+      continue;
+    }
     const c = s.coordination;
     if (!c || !acting.has(s.ownerPositionId)) continue;
     const replica = !!c.mintedForCoordination;
@@ -427,6 +435,8 @@ export function atcTargetClick(id, now = Date.now()) {
     conflicts: conflictAlertsForTrack(id).filter(c => !c.suppressed).map(c => c.id),
     airspace: _airspaceAckKeys(id),
     accept: (strip) => {
+      // crc-sync docs/adr/0146: the receiver of a VFR handoff accepts as the Position it names.
+      if (strip.vfrHandoff) { sendEfspMutation(strip.vfrHandoff.toPositionId, strip, { kind: 'VfrHandoff', action: 'ACCEPT' }); return; }
       sendEfspMutation(strip.ownerPositionId, strip, { kind: strip.coordination.primitive, action: 'ACCEPT' });
     },
   });

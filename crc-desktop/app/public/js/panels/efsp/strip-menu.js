@@ -25,8 +25,12 @@ import { _openJoinPopover, _openSplitPopover } from './bay/popovers/formation.js
 import { _dispatchHandoffStep, _openControlReleasePopover } from './bay/popovers/control-release.js';
 import { handoffSteps } from './control-release-rules.js';
 import { holdsFormationGrant, joinOffer, splitOffer } from './formation-rules.js';
-import { convertStripToArrival } from './panel/create-strip.js';
-import { canTerminateRadarService, terminateRadarService } from './flight-following.js';
+import { convertStripToArrival, ifrStripTypesAt } from './panel/create-strip.js';
+import {
+  assignCode, canAssignCode, canCancelIfr, canRecallVfrHandoff, canTerminateRadarService, cancelIfr, changeToIfr, initiateVfrHandoff,
+  recallVfrHandoff, terminateRadarService, vfrHandoffTargets,
+} from './flight-following.js';
+import { isVfrStrip } from './vfr.js';
 import { _stripEl } from './strip-dom.js';
 import { isParFinalStrip } from './bay-views.js';
 import { parTerminalOp, parTerminalRecorded, parTerminals } from './par-model.js';
@@ -219,8 +223,38 @@ function _stripMenuItems(strip) {
         run: (anchor) => _openBindPopover(strip, anchor, null) });
     }
   }
-  // crc-sync H136: "RADAR SERVICE TERMINATED" (JO 7110.65BB para 5-1-9 a): the Strip is dropped, its code released and
-  // the contact untracked. Offered on a flight-following Strip (an OVERFLIGHT with no clearance) its radar Position holds.
+  // crc-sync docs/adr/0146: the VFR strip's own actions, for its holder. The STARS handoff (initiate to a Position of the
+  // Facility that works VFR strips; the receiver accepts from the track's menu), recall, a discrete code, and IFR in place.
+  if (isVfrStrip(strip) && getActingPositions().includes(strip.ownerPositionId)) {
+    for (const to of vfrHandoffTargets(strip)) {
+      items.push({ group: 'Flight', key: `vfr-handoff-${to}`, label: `Hand off → ${to}`, cls: 'efsp-vfr-handoff-btn', enabled: true,
+        title: `${to} accepts it; then change the pilot's frequency`, run: () => { initiateVfrHandoff(strip, to); } });
+    }
+    if (canRecallVfrHandoff(strip)) {
+      items.push({ group: 'Flight', key: 'vfr-recall', label: `Recall handoff (${strip.vfrHandoff.toPositionId})`, cls: 'efsp-vfr-recall-btn',
+        enabled: true, title: 'take the unanswered handoff back', run: () => { recallVfrHandoff(strip); } });
+    }
+    if (canAssignCode(strip, getEfspFlightData(strip.flightDataId))) {
+      items.push({ group: 'Flight', key: 'vfr-code', label: 'Assign code', cls: 'efsp-vfr-code-btn', enabled: true,
+        title: 'a discrete beacon code for this flight', run: () => { assignCode(strip); } });
+    }
+    for (const t of ifrStripTypesAt(strip.ownerPositionId)) {
+      items.push({ group: 'Flight', key: `vfr-to-ifr-${t.stripType}`, label: `IFR → ${t.label}`, cls: 'efsp-vfr-ifr-btn',
+        enabled: !strip.vfrHandoff, reason: strip.vfrHandoff ? 'recall the handoff first' : '',
+        title: 'the flight is IFR now: the same strip becomes an IFR strip (code, track and history kept)',
+        run: () => { changeToIfr(strip, t.stripType); } });
+    }
+  }
+  if (canCancelIfr(strip)) {
+    const blockedBy = (strip.coordination && ['INITIATED', 'ACTIVE'].includes(strip.coordination.state)) ? 'the coordination exchange'
+      : (strip.tofiCoordination && ['INITIATED', 'ACTIVE'].includes(strip.tofiCoordination.state)) ? 'the TOFI exchange' : null;
+    items.push({ group: 'Flight', key: 'cancel-ifr', label: 'IFR cancelled → VFR', cls: 'efsp-cancel-ifr-btn', enabled: !blockedBy,
+      reason: blockedBy ? `resolve ${blockedBy} first` : '',
+      title: 'the pilot cancelled IFR: the same strip becomes a VFR strip, the IFR assignments end (code and track kept)',
+      run: () => { cancelIfr(strip); } });
+  }
+  // crc-sync H136, docs/adr/0146: "RADAR SERVICE TERMINATED" (JO 7110.65BB para 5-1-9 a): the strip is dropped, its code
+  // released and the contact untracked. Offered on a VFR strip its holder works.
   if (canTerminateRadarService(strip)) {
     const blockedBy = (strip.coordination && strip.coordination.state === 'INITIATED') ? 'an open coordination proposal'
       : (strip.tofiCoordination && ['INITIATED', 'ACTIVE'].includes(strip.tofiCoordination.state)) ? 'the TOFI exchange' : null;

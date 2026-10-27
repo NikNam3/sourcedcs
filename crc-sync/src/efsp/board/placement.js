@@ -393,12 +393,11 @@ class Placement {
    */
   /**
    * docs/adr/0146: the Bay a VFR strip lands in at `positionId` when nobody chose one (a tag, an accepted handoff): the
-   * Bay the facility file marks `vfr`, else the Position's first working Bay (one with an implied state or a strip type
-   * and no view), else null (the Position has nowhere to keep one).
+   * Bay the facility file marks `vfr`, or null. A Position works VFR strips when it has one (data, never an id; the op
+   * grant is the ceiling), and the client reads the same flag off the snapshot's Bays.
    */
   vfrBayFor(positionId) {
-    const bays = this._rules.baysFor(positionId) || [];
-    return bays.find(b => b.vfr === true) || bays.find(b => !b.view && (b.impliesState || b.holdsStripType)) || null;
+    return (this._rules.baysFor(positionId) || []).find(b => b.vfr === true) || null;
   }
 
   relocateForImpliedState(strip, toState) {

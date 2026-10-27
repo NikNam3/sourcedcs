@@ -3,6 +3,7 @@ import { airspaceTrafficFor, airspaceTrafficSignature } from './alerts-state.js'
 import { getEfspFlightData, getEfspStrip } from './efsp-state.js';
 import { getActingPositions, sendEfspMutation } from './efsp-ws.js';
 import { transitRowOffer } from './transit-rules.js';
+import { isVfrFlight } from './vfr.js';
 import { sendTransitOp } from './transit-actions.js';
 import { AIRSPACE_ENTRY_POSITIONS } from './bay/authority-mirror.js';
 import { _isRejectedCoordinationReplica } from './bay/coordination-rules.js';
@@ -52,7 +53,7 @@ function _transitButton(label, cls, title, run) {
 }
 
 function _appendTransit(row, list, airspace, flight, deciders) {
-  const offer = transitRowOffer(flight, airspace, getActingPositions(), deciders, getEfspFlightData(flight.flightDataId));
+  const offer = transitRowOffer(flight, airspace, getActingPositions(), deciders, isVfrFlight((flight.strips || []).map(s => getEfspStrip(s.stripId))));
   const name = (airspace.definition && airspace.definition.name) || airspace.airspaceId;
   if (offer.text) {
     const state = document.createElement('span');

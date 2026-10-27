@@ -25,7 +25,7 @@
 import { BLOCK_MAPS, isParFinalOnlyOnCarrier } from './strip-template.js';
 import { hasMtrData } from './mtr-advisory.js';
 import { facilityOfPosition } from './facility-topology.js';
-import { hasNoClearance } from './vfr.js';
+import { getAirportSurfacePositions } from '../../airport-surface.js';
 
 export const COMPACT_BLOCKS_SHARED = [
   '1', '3', '5', '5A', '7', '8', '8A', '8B', '9', '22', '24A', 'IFR', 'RSVC', 'SREG',
@@ -52,6 +52,9 @@ export const COMPACT_BLOCKS_BY_STRIP_TYPE = {
   MARSHAL:    ['C1', 'C2', 'C18', 'C3', 'C7', 'C6', 'C8', 'C5', 'C9', 'C4', 'C10', 'C12', 'C13', 'C14', 'C15', 'C19'],
   FINAL:      ['C1', 'C2', 'C18', 'C9', 'C16', 'C17', 'C19', '9A-VECTOR', '7A'],
   PATTERN:    ['C1', 'C2', 'C18', 'C24'],
+  // crc-sync docs/adr/0146: the minimal VFR strip, everything it has on its face: callsign, type, code (if any), "VFR" and
+  // the assigned altitude, heading, speed, and the runway (RUNWAY_WHERE_FIELD).
+  VFR:        ['1', '3', '5', '7A', '9A-VECTOR', '9A-SPEED', '8A'],
 };
 
 // ── Per-Position lists ─────────────────────────────────────────────────────
@@ -84,18 +87,16 @@ export const COMPACT_BLOCKS_BY_STRIP_TYPE = {
 //  - The pattern cells P/S (9J-ENTRY) and OPT (9J-OPTION) where pattern traffic is worked: LC's arrivals and AP's
 //    arrivals, so the pilot's intentions can be set before the transfer (crc-sync docs/adr/0126, H150). Not on LC's
 //    departure face (H164 FT-Q3 a): a departure that stays in the pattern sets them in the expanded ▼ view.
-//  - DIR (9K, crc-sync docs/adr/0143), the VFR departure's direction of flight, on CD's, GC's, LC's and AP's departure
-//    face, drawn only once it is set (DIR_WHEN_SET): an IFR departure has none and the field would cost every Strip.
 //  - ALERT (14E) where an alert aircraft is ordered and moved: OPS sets it
 //    (decisions.md H56), and every ground Position shows it: CD, GC, LC
 //    (crc-sync docs/adr/0070).
 export const COMPACT_BLOCKS_BY_POSITION = {
   DEPARTURE: {
     OPS: ['1', '3', '5', '6', '7', '8', '8A', '8B', '9', '9F', '3D', '3E', '3G', '14E'],
-    CD:  ['1', '3', '5', '7', '8', '8A', '8B', '9', '9K', '9F', '10', '14A', '14D', '21', '14E'],
-    GC: ['1', '3', '5', '8', '8A', '9K', '14A', '14D', '17', '14E'],
-    LC: ['1', '3', '5', '8A', '9K', '21', '14D', '18', '3G', '14E'],
-    AP: ['1', '3', '5', '7', '8A', '9', '9K', '20', '21', '9A-SPEED', '14A', '22', '5A', 'SREG'],
+    CD:  ['1', '3', '5', '7', '8', '8A', '8B', '9', '9F', '10', '14A', '14D', '21', '14E'],
+    GC: ['1', '3', '5', '8', '8A', '14A', '14D', '17', '14E'],
+    LC: ['1', '3', '5', '8A', '21', '14D', '18', '3G', '14E'],
+    AP: ['1', '3', '5', '7', '8A', '9', '20', '21', '9A-SPEED', '14A', '22', '5A', 'SREG'],
     CTR: ['1', '3', '5', '7', '21', '20', '9A-SPEED', '8B', '9', '14A', '22', '24A', 'IFR', 'RSVC', 'SREG', '5A'],
   },
   ARRIVAL: {
@@ -110,13 +111,9 @@ export const COMPACT_BLOCKS_BY_POSITION = {
   },
 };
 
-// crc-sync docs/adr/0143: the direction of flight is on the face only once it says something.
-export const DIR_WHEN_SET = '9K';
-
-/** Has this flight a direction of flight (a VFR departure, Block 9K)? */
-export function hasDirectionOfFlight(flightData) {
-  return !!(flightData && flightData.filed && flightData.filed.directionOfFlight);
-}
+// crc-sync docs/adr/0146: a VFR strip's runway (8A) is the tower's: on the face at an airport-surface Position (the
+// snapshot's `airportSurfacePositions`, data, never an id), elsewhere only once it is set.
+export const VFR_RUNWAY_BLOCK = '8A';
 
 // Grid columns a field spans. Everything else takes one.
 export const FIELD_SPANS = { '1': 2, '3': 2, '9': 3, '24A': 2, M1: 2, M3: 2, M5: 2, C1: 2, C2: 1, C24: 2 };
@@ -146,22 +143,11 @@ export function compactBlocksFor(stripType, positionId, flightData) {
   // HDG and ALT are the PAR final's: hidden on the carrier's FINAL (supervisor ruling, LT-PAR-MISSED).
   const facilityId = positionId ? facilityOfPosition(positionId) : null;
   out = out.filter(id => !isParFinalOnlyOnCarrier(stripType, id, facilityId));
-  if (keepIfrHidden(stripType, flightData)) out = out.filter(id => id !== 'IFR');
-  if (!hasDirectionOfFlight(flightData)) out = out.filter(id => id !== DIR_WHEN_SET);
+  if (stripType === 'VFR' && !(facilityId && (getAirportSurfacePositions()[facilityId] || []).includes(positionId))
+    && !(flightData && flightData.filed && flightData.filed.departureRunway)) out = out.filter(id => id !== VFR_RUNWAY_BLOCK);
   const sideLeads = sideNumberLeads(stripType, positionId, flightData);
   if (!sideLeads && SIDE_ONLY_WHEN_LEADING.includes(stripType)) out = out.filter(id => id !== 'C18');
   return sideLeads ? _swapSideAndCallsign(out) : out;
-}
-
-/**
- * KEEP IFR (TOFI's `ifrActive`) is off the face of a flight-following Strip: an OVERFLIGHT with no clearance, VFR the
- * FAA way (crc-sync H136 VQ2, `vfr.js`; the same test `flight-following.js` offers "Radar service terminated" on). A VFR
- * flight has no IFR to keep. Only while the cell is off: a set KEEP IFR stays on the face (a live state is never
- * decluttered), and the expanded view still has the cell.
- */
-export function keepIfrHidden(stripType, flightData) {
-  if (stripType !== 'OVERFLIGHT' || !flightData || !hasNoClearance(flightData)) return false;
-  return !(flightData.tofi && flightData.tofi.ifrActive);
 }
 
 // ── The carrier's side number (decisions.md H122, H117; crc-sync's docs/adr/0114) ──

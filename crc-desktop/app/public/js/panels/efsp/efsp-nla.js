@@ -80,6 +80,11 @@ export const NLA_LABELS = {
     IN_PATTERN: 'Recovered',
     RECOVERED:  'Drop',
   },
+  // crc-sync docs/adr/0146: a VFR strip has no next lifecycle step (its computeNla is null, so no NLA button): it is left
+  // by "Radar service terminated", the menu's action. The label names that verb for completeness.
+  VFR: {
+    TRACKED: 'Radar service terminated',
+  },
 };
 
 // The carrier's handoffs (guide §9.12: four different buttons, four trigger
@@ -218,9 +223,14 @@ export const MARSHAL_STATE_OWNERS = { LAUNCH: ['CV_MARSHAL'], IN_STACK: ['CV_MAR
 export const FINAL_STATE_OWNERS = { ON_FINAL: ['CV_APP1', 'CV_APP2', 'PAR'], BALL: ['CV_APP1', 'CV_APP2'], BOLTER_WAVEOFF: ['CV_APP1', 'CV_APP2', 'PAR'] };
 export const PATTERN_STATE_OWNERS = { IN_PATTERN: ['CV_PRIFLY'], RECOVERED: ['CV_PRIFLY'] };
 
+// crc-sync docs/adr/0146: a VFR strip has no state owners; its holder works it (authority family `ownerWorksEveryState`).
+export const VFR_STATE_OWNERS = {};
+/** The strip types whose holder works every live state (crc-sync authority/strip-types/vfr.js `ownerWorksEveryState`). */
+export const HOLDER_WORKS_EVERY_STATE = Object.freeze({ VFR: ['TRACKED'] });
+
 export const STATE_OWNERS_BY_STRIP_TYPE = {
   DEPARTURE: DEPARTURE_STATE_OWNERS, ARRIVAL: ARRIVAL_STATE_OWNERS, OVERFLIGHT: OVERFLIGHT_STATE_OWNERS, MISSION: MISSION_STATE_OWNERS,
-  MARSHAL: MARSHAL_STATE_OWNERS, FINAL: FINAL_STATE_OWNERS, PATTERN: PATTERN_STATE_OWNERS,
+  MARSHAL: MARSHAL_STATE_OWNERS, FINAL: FINAL_STATE_OWNERS, PATTERN: PATTERN_STATE_OWNERS, VFR: VFR_STATE_OWNERS,
 };
 
 /**
@@ -230,6 +240,7 @@ export const STATE_OWNERS_BY_STRIP_TYPE = {
  * @returns {boolean}
  */
 export function canActOnState(actingPositionId, stripType, state) {
+  if (HOLDER_WORKS_EVERY_STATE[stripType]) return HOLDER_WORKS_EVERY_STATE[stripType].includes(state);
   const owners = (STATE_OWNERS_BY_STRIP_TYPE[stripType] || {})[state];
   return !!owners && owners.includes(actingPositionId);
 }

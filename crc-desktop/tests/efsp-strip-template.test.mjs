@@ -168,7 +168,7 @@ test('the assigned altitude and heading read their history from the FLIGHT, not 
 });
 
 test('ALT is confirm-vacated on every strip type that has one, and the filed altitude reads CRUS ALT', () => {
-  assert.deepEqual(CONFIRM_VACATED_ELIGIBLE_BLOCKS, { DEPARTURE: ['21'], ARRIVAL: ['7'], OVERFLIGHT: ['7A'] });
+  assert.deepEqual(CONFIRM_VACATED_ELIGIBLE_BLOCKS, { DEPARTURE: ['21'], ARRIVAL: ['7'], OVERFLIGHT: ['7A'], VFR: ['7A'] });
   assert.equal(blockLabelFor('7', 'DEPARTURE'), 'CRUS ALT');
   assert.equal(blockLabelFor('7', 'OVERFLIGHT'), 'CRUS ALT');
   assert.equal(blockLabelFor('21', 'DEPARTURE'), 'ALT');

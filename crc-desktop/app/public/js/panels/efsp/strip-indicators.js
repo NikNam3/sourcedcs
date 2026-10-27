@@ -165,6 +165,11 @@ export function _buildIndicatorSlots(strip, el, obligation, alerts) {
       Object.entries(strip.previousLeg.annotations)
         .map(([blockId, cell]) => `${blockId}: ${(cell.entries || []).map(e => e.value).join(' / ')}`).join('\n')));
   }
+  // crc-sync docs/adr/0146: a VFR handoff initiated and not yet accepted: grey, the receiver's id, until it answers.
+  if (strip.vfrHandoff && strip.state !== 'DROPPED') {
+    slots.appendChild(_indicator('vfrHandoff', `HO ${strip.vfrHandoff.toPositionId}`, 'on', 'efsp-vfr-handoff-mark',
+      `handed off to ${strip.vfrHandoff.toPositionId}, not yet accepted (recall it from the menu)`));
+  }
   // The latest divert: the destination it replaced struck through, the new one beside it (crc-sync docs/adr/0111 §4).
   const divert = divertChipFor(strip, formatZuluHhmm);
   if (divert) {

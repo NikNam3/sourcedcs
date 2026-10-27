@@ -573,11 +573,9 @@
    "CARRIER_HANDOFF_TARGET",
    "CONVERT_TO_ARRIVAL_POSITIONS",
    "COORDINATION_TARGETS",
-   "FLIGHT_FOLLOWING_POSITIONS",
    "HAND_BACK_TO",
    "TOFI_ANSWERED_BY",
    "TOFI_COUNTERPARTS",
-   "VFR_DEPARTURE_POSITIONS",
    "canHandOffToCarrier"
   ],
   "panels/efsp/bay/block-edit.js": [
@@ -944,6 +942,7 @@
    "DOUBLE_TAP_MS",
    "FINAL_STATE_OWNERS",
    "FINAL_TRANSFER_LABELS",
+   "HOLDER_WORKS_EVERY_STATE",
    "MARSHAL_STATE_OWNERS",
    "MISSION_STATE_OWNERS",
    "NLA_LABELS",
@@ -953,6 +952,7 @@
    "TOFI_ELIGIBLE_STATES",
    "TOFI_EXIT_DUE_MISSION_STATES",
    "TOFI_OP_KINDS",
+   "VFR_STATE_OWNERS",
    "canActOnState",
    "isEfspBoardStale",
    "isWithinDoubleTapWindow",
@@ -1093,12 +1093,25 @@
    "shippedFacilityIds"
   ],
   "panels/efsp/flight-following.js": [
-   "canStartFlightFollowing",
+   "acceptVfrHandoff",
+   "assignCode",
+   "canAssignCode",
+   "canCancelIfr",
+   "canRecallVfrHandoff",
+   "canTagTrack",
    "canTerminateRadarService",
+   "cancelIfr",
+   "changeToIfr",
    "contactForToken",
-   "flightFollowingPosition",
-   "startFlightFollowing",
-   "terminateRadarService"
+   "initiateVfrHandoff",
+   "recallVfrHandoff",
+   "tagProblem",
+   "tagTrack",
+   "terminateRadarService",
+   "vfrBayOf",
+   "vfrHandoffAcceptAs",
+   "vfrHandoffTargets",
+   "vfrTagPosition"
   ],
   "panels/efsp/formation-rules.js": [
    "ASSIGNMENT_KINDS",
@@ -1174,6 +1187,7 @@
    "labelAssignmentForTrack",
    "labelMenuState",
    "labelSuppressibleConflicts",
+   "labelVfrAcceptFor",
    "openLabelMenu"
   ],
   "panels/efsp/marsa-badge.js": [
@@ -1269,6 +1283,7 @@
    "_wireCreateStrip",
    "convertStripToArrival",
    "createStripFromFiledPlan",
+   "ifrStripTypesAt",
    "reloadEfspStereoRoutes"
   ],
   "panels/efsp/panel/dot-commands.js": [
@@ -1409,6 +1424,7 @@
    "PATTERN_POSITION",
    "PATTERN_STATE",
    "STATE_DISPLAY_LABELS",
+   "VFR_PATTERN_MOVES",
    "patternConversionBlockedBy",
    "patternConversionsFor",
    "stateDisplayLabel"
@@ -1503,16 +1519,14 @@
    "COMPACT_BLOCKS_BY_POSITION",
    "COMPACT_BLOCKS_BY_STRIP_TYPE",
    "COMPACT_BLOCKS_SHARED",
-   "DIR_WHEN_SET",
    "FIELD_SPANS",
    "MTR_BLOCKS_BY_POSITION",
    "ORDNANCE_WHEN_SET",
    "SIDE_ONLY_WHEN_LEADING",
+   "VFR_RUNWAY_BLOCK",
    "compactBlocksFor",
    "fieldSpanFor",
-   "hasDirectionOfFlight",
    "isOrdnanceSet",
-   "keepIfrHidden",
    "leadingFlightName",
    "sideNumberLeads"
   ],
@@ -1543,6 +1557,7 @@
    "PAR_FINAL_ONLY_BLOCKS",
    "PATTERN_BLOCK_MAP",
    "TIME_SOURCE_TEXT",
+   "VFR_BLOCK_MAP",
    "ZULU_HHMM_BLOCKS",
    "activeAnnotationValue",
    "aircraftDataEditText",
@@ -1556,6 +1571,7 @@
    "editRedirectFor",
    "enumSelectOptionsFor",
    "formatBlock3",
+   "formatVfrAltitude",
    "hasActiveAnnotationEntry",
    "isBlockEditable",
    "isBooleanToggleBlock",
@@ -1612,17 +1628,10 @@
    "transitRowOffer",
    "transitsOfFlight"
   ],
-  "panels/efsp/vfr-departure.js": [
-   "DIRECTIONS_OF_FLIGHT",
-   "buildVfrDepartureForm",
-   "buildVfrDepartureOp",
-   "createdText",
-   "sendVfrDeparture",
-   "vfrDeparturePosition",
-   "vfrDepartureProblem"
-  ],
   "panels/efsp/vfr.js": [
-   "hasNoClearance"
+   "VFR_STRIP_TYPE",
+   "isVfrFlight",
+   "isVfrStrip"
   ],
   "panels/los-panel.js": [
    "_setShowLosProfileForTest",

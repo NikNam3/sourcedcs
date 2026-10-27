@@ -3,7 +3,7 @@ import { getCurrentEfspRefusal } from '../panel/refusal.js';
 import {
   CONFIRM_VACATED_ELIGIBLE_BLOCKS, blockValueHintFor, editRedirectFor, enumSelectOptionsFor, blockInputPlaceholderFor,
   hasActiveAnnotationEntry, isBlockEditable, isBooleanToggleBlock, isEnumBlockClearable, resolveBlockValue,
-  isCycleBlock, cycleBlockLabel, nextCycleValue
+  isCycleBlock, cycleBlockLabel, nextCycleValue, formatVfrAltitude
 } from '../strip-template.js';
 import { getEfspFlightData, getEfspStrip } from '../efsp-state.js';
 import { sendEfspMutation } from '../efsp-ws.js';
@@ -67,6 +67,8 @@ function _maybeSeedRefusedBlockEdit(strip, refusedBlockId, blockId = refusedBloc
 
 export function _blockLabel(flightData, strip, blockId) {
   const { value } = resolveBlockValue(blockId, flightData, strip);
+  // crc-sync docs/adr/0146: the VFR strip says VFR in its altitude cell (ERAM's VFR/055); the edit still shows the value.
+  if (strip && strip.stripType === 'VFR' && blockId === '7A') return formatVfrAltitude(value);
   if (value == null || value === '') return '';
   if (typeof value === 'boolean') return value ? '✓' : '';
   return String(value);

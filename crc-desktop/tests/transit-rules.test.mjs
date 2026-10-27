@@ -12,7 +12,6 @@ const def = (over) => ({ kind: 'AREA', type: 'MOA', controllingFacilityId: 'CENT
 const airspace = (airspaceId, over = {}, transits = []) => ({ airspaceId, state: 'ACTIVE', rev: 1, transits, definition: { airspaceId, name: airspaceId, ...def(over) } });
 const T = (state, over = {}) => ({ flightDataId: 'fd1', callsign: 'VIPER11', state, requestedPositionId: 'AP', decidedPositionId: state === 'REQUESTED' ? null : 'CTR', reason: null, selfCoordinated: false, ...over });
 const IFR = { clearance: { altitude: { entries: [{ status: 'ACTIVE', parsed: 19000 }] }, heading: { entries: [] } } };
-const VFR = { clearance: { altitude: { entries: [] }, heading: { entries: [] } } };
 const STRIP = { stripId: 's1', flightDataId: 'fd1', ownerPositionId: 'AP', state: 'HANDED_OFF' };
 
 test('the grey mark: TRANSIT <name>, REQ while asked, DECLINED with the reason in the title', () => {
@@ -45,7 +44,8 @@ test('the Strip offers a request: held owner, IFR, ACTIVE transit type, no open 
     [['MOA-ATC', 'AP', null], ['MOA-TAC', 'AP', null], ['MOA-DECL', 'AP', null]]);
   const both = rules.requestTransitChoices(STRIP, IFR, [airspace('MOA-TAC', { usingFacilityId: 'TACTICAL' })], ['AP', 'TAC_C2']);
   assert.equal(both[0].deciderPositionId, 'TAC_C2', 'one controller holds both sides');
-  assert.deepEqual(rules.requestTransitChoices(STRIP, VFR, list, ['AP']), [], 'VFR: nothing new (H151 MT-Q5 b)');
+  assert.deepEqual(rules.requestTransitChoices({ ...STRIP, stripType: 'VFR', state: 'TRACKED' }, IFR, list, ['AP']), [],
+    'a VFR strip, even with an assigned altitude: nothing new (H151 MT-Q5 b; crc-sync docs/adr/0146)');
   assert.deepEqual(rules.requestTransitChoices(STRIP, IFR, list, ['LC']), [], 'not the holder');
   assert.deepEqual(rules.cancelableTransits(STRIP, list, ['AP']).map(c => c.airspace.airspaceId), ['MOA-OPEN']);
   assert.deepEqual(rules.cancelableTransits(STRIP, list, ['LC']), []);
@@ -69,7 +69,7 @@ test('a card row: the decider approves or declines, the holder requests or cance
   assert.equal(rules.transitRowOffer(row(T('DECLINED')), a, ['CTR'], ['CTR']).acknowledgeAs, null, 'the decider holds no Strip of it');
   assert.equal(rules.transitRowOffer(row(T('REQUESTED')), a, ['AP'], ['CTR']).acknowledgeAs, null);
   assert.deepEqual(rules.transitRowOffer(row(T('REQUESTED')), a, ['OPS'], ['CTR']), { text: 'transit requested by AP', approveAs: null, declineAs: null, requestAs: null, cancelAs: null, acknowledgeAs: null, completeAs: null });
-  assert.equal(rules.transitRowOffer(row(null), a, ['CTR'], ['CTR'], VFR).approveAs, null, 'a VFR flight');
+  assert.equal(rules.transitRowOffer(row(null), a, ['CTR'], ['CTR'], true).approveAs, null, 'a VFR flight');
   assert.equal(rules.transitRowOffer(row(null), airspace('P-1', { type: 'PROHIBITED' }), ['CTR'], ['CTR']).approveAs, null);
   assert.equal(rules.transitRowOffer(row(null), { ...a, state: 'RELEASED' }, ['CTR'], ['CTR']).approveAs, null);
 });

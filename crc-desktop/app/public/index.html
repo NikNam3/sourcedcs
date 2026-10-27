@@ -123,15 +123,15 @@
       <button class="tp-rename-btn tp-rename-clr" id="tp-rename-clr">CLR</button>
     </div>
   </div>
-  <!-- crc-sync H136: start flight following on a contact with no Strip (shown only where it applies) -->
+  <!-- crc-sync docs/adr/0146: tag a VFR on a contact with no strip (shown only where it applies) -->
   <div class="tp-section" id="tp-ff-section" hidden>
-    <div class="tp-section-label">Start flight following</div>
+    <div class="tp-section-label">Tag VFR</div>
     <div class="tp-rename-row">
       <input type="text" class="tp-rename-input" id="tp-ff-callsign" maxlength="7" placeholder="callsign"
              autocomplete="off" spellcheck="false" />
-      <input type="text" class="tp-rename-input" id="tp-ff-type" maxlength="12" placeholder="type"
+      <input type="text" class="tp-rename-input" id="tp-ff-type" maxlength="12" placeholder="type (optional)"
              autocomplete="off" spellcheck="false" />
-      <button class="tp-rename-btn" id="tp-ff-start">START</button>
+      <button class="tp-rename-btn" id="tp-ff-start">TAG</button>
     </div>
     <div class="tp-ff-msg" id="tp-ff-msg"></div>
   </div>
@@ -222,7 +222,6 @@
     <select id="efsp-create-strip-bind" hidden></select>
     <button id="efsp-create-strip-btn">+ New Strip</button>
     <!-- crc-sync docs/adr/0143: the VFR departure form's toggle, shown only at a Position that makes one (CD). -->
-    <button id="efsp-vfr-departure-btn" hidden>VFR…</button>
     <span id="efsp-create-strip-msg"></span>
   </div>
   <div id="efsp-scramble-line" hidden></div>
