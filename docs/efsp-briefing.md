@@ -1655,7 +1655,7 @@ limits that is asked first.
   and callsign indices. Client vehicle drawing and Settings "Hide ground units" removed. Settings `conflictAlertPaths` (T30); `track-label.js`
   `receivedCodeText()` (¶5-4-6 e NOTE); `keepIfrHidden()` hides `KEEP IFR` on an OVERFLIGHT with no clearance.
 - **U-MOA-TRANSIT (phase 1, `0127` Proposed, superseded) and U-MOA-TRANSIT-BUILD (`0128`).** `authority/airspace.js` `TRANSIT_TYPES` (MOA, WARNING,
-  RESTRICTED, RANGE, DANGER), `transitDeciders`/`isTransitDecider` (the using Facility's MRU, else the controlling Position); airspace record
+  RESTRICTED, RANGE, DANGER; RANGE and DANGER gone since `0144`), `transitDeciders`/`isTransitDecider` (the using Facility's MRU, else the controlling Position); airspace record
   `transits[]` (in the strict persisted shape) and ops `RequestTransit`/`ApproveTransit`/`DeclineTransit`/`CancelTransit` on the airspace family (no
   baseRev, no undo); ticker **`airspace-transits`** (5 s, `sweepTransits`); the mission reset and `ReleaseAirspace` end transits; an approved transit
   counts as approved entry. "Filed through" is `airspace/route-geometry.js` + `containment.legCrossesPolygon` (nav points, ICAOs, ROUTE fixes; no name
