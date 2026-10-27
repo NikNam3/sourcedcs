@@ -54,7 +54,8 @@ const MODULES = {
   correlation: '/js/panels/efsp/correlation-highlight.js', // crc.correlation.getCorrelatedHighlightTrackId (LT-UI T10)
   maptilerKey: '/js/maptiler-key.js', // crc.maptilerKey.loadMaptilerKey (LT-UI T3)
   mapSetup: '/js/map-setup.js', // crc.mapSetup.basemapState (U-GLYPHS basemap fallback)
-  trackPanel: '/js/panels/track-panel.js', // crc.trackPanel.showTrackPanel (LT-VFR: start flight following on a contact)
+  trackPanel: '/js/panels/track-panel.js', // crc.trackPanel.showTrackPanel (crc-sync ADR 0146: tag a VFR on a contact)
+  labelMenu: '/js/panels/efsp/label-menu.js', // crc.labelMenu.openLabelMenu (crc-sync ADR 0146: the VFR strip's menu)
 };
 
 /** Runs after page.goto('/'). Resolves once every module is imported and `window.crc` exists. */
