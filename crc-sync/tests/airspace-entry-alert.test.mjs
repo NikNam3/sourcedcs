@@ -99,8 +99,9 @@ test('approval then retracts a standing alert', () => {
   assert.deepEqual(monitor.getAll(), []);
 });
 
-test('a tracked VFR flight (no assigned altitude or heading) in an active MOA: nothing; in a range: an alert', () => {
-  const { monitor, state } = world({ tracks: [track(1)], inside: { 1: ['MOA-1'] }, flights: { 1: 'fd1' }, flightData: { fd1: VFR } });
+test('a tracked VFR flight (worked on a VFR strip, docs/adr/0146) in an active MOA: nothing; in a range: an alert', () => {
+  const { monitor, state } = world({ tracks: [track(1)], inside: { 1: ['MOA-1'] }, flights: { 1: 'fd1' }, flightData: { fd1: CLEARED },
+    strips: { fd1: [{ facilityId: 'INCIRLIK', stripId: 's1', positionId: 'AP', stripType: 'VFR', state: 'TRACKED' }] } });
   monitor.tick();
   assert.deepEqual(monitor.getAll(), []);
   state.inside = { 1: ['RNG-1'] };
