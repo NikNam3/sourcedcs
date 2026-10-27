@@ -16,7 +16,7 @@ export { applyEfspMarsaDelta, getEfspMarsa, getAllEfspMarsa, activeMarsaForFligh
 export { applyEfspRunwayStatusDelta, getEfspRunwayStatus, getAllEfspRunwayStatuses } from './runway-status-state.js';
 export { applyEfspCorrelationDelta, getEfspCorrelation, getAllEfspCorrelations, getEfspCorrelationStats, getEfspCorrelationForStrip, correlatedTrackIdForStrip, stripIdsForTrackId } from './correlation-state.js';
 export { efspAirspaces, efspAirspaceEdits, applyEfspAirspaceDelta, getEfspAirspaceEdits, getEfspAirspace, getAllEfspAirspaces, stripsInAirspace } from './airspace-state.js';
-export { getEfspObligation, getEfspObligations, applyEfspAlerts, surveillanceHintsForStrip, conformanceAlertsForFlightData, tofiRegimeAlertForFlightData, getAllEfspConflicts, conflictAlertsForTrack, conflictTag, conflictName, refuelingAlertText, airspaceEntryAlertsForTrack, airspaceEntryAlertsForFlightData, airspaceEntryText, airspaceInsideForStrip, airspaceCoordinateForStrip } from './alerts-state.js';
+export { getEfspObligation, getEfspObligations, applyEfspAlerts, surveillanceHintsForStrip, conformanceAlertsForFlightData, tofiRegimeAlertForFlightData, getAllEfspConflicts, conflictAlertsForTrack, isConflictSuppressed, conflictTag, conflictName, refuelingAlertText, airspaceEntryAlertsForTrack, airspaceEntryAlertsForFlightData, airspaceEntryText, airspaceInsideForStrip, airspaceCoordinateForStrip } from './alerts-state.js';
 
 // Client-side mirror of the EFSP Board — plain module-level Maps, matching
 // app.js's existing style (tracks/history/settings are also plain globals,

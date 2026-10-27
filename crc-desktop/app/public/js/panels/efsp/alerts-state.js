@@ -126,8 +126,11 @@ export function conflictName(c) { return c && c.kind === 'MCI' ? 'Mode C Intrude
 export function getAllEfspConflicts() { return efspConflicts; }
 
 /**
- * The conflicts this track is in, each seen from its side: { id, kind, other, otherCallsign, timeToCpaSec, minNm, vertFt }.
+ * The conflicts this track is in, each seen from its side: { id, kind, other, otherCallsign, timeToCpaSec, minNm, vertFt,
+ * shownAt, suppressedAt, suppressed }.
  * `kind` is 'CA' (two tracked aircraft) or 'MCI' (a Mode C intruder against a tracked one), crc-sync's docs/adr/0118.
+ * crc-sync's docs/adr/0145: `shownAt` is this controller's ATC Positions it is shown at, `suppressedAt` those of them where it
+ * was suppressed; `suppressed` when every one of them suppressed it (it stops flashing, a grey CA stays).
  */
 export function conflictAlertsForTrack(trackId) {
   if (trackId == null) return [];
@@ -138,7 +141,15 @@ export function conflictAlertsForTrack(trackId) {
     other: c.a === id ? c.b : c.a,
     otherCallsign: c.a === id ? c.bCallsign : c.aCallsign,
     timeToCpaSec: c.timeToCpaSec, minNm: c.minNm, vertFt: c.vertFt,
+    shownAt: c.shownAt || [], suppressedAt: c.suppressedAt || [], suppressed: isConflictSuppressed(c),
   }));
+}
+
+/** crc-sync's docs/adr/0145: suppressed at every Position of this controller's that it is shown at. */
+export function isConflictSuppressed(c) {
+  const at = (c && c.suppressedAt) || [];
+  const shown = (c && c.shownAt) || [];
+  return at.length > 0 && shown.every(p => at.includes(p));
 }
 
 /** The airspace-entry alerts naming this track (crc-sync docs/adr/0119); [] when none. */

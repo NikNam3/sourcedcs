@@ -104,3 +104,10 @@
       color: #ffd2bd; background: rgba(255, 138, 76, 0.1); font-size: 11px; letter-spacing: 0.02em;
     }
     .tp-alert.tp-alert-attn { border-color: #e0a83c; color: #ffe0a8; background: rgba(224, 168, 60, 0.1); }
+    /* crc-sync's docs/adr/0145: a suppressed conflict alert stays listed, grey; SUPPRESS / RESTORE on the row */
+    .tp-alert.tp-alert-off { border-color: var(--ui-border-3); color: var(--ui-text-dim); background: transparent; }
+    .tp-alert { display: flex; align-items: center; gap: 6px; }
+    .tp-alert-suppress {
+      margin-left: auto; flex: none; background: none; border: 1px solid var(--ui-border); color: var(--ui-text);
+      font: inherit; font-size: 10px; cursor: pointer; padding: 0 4px;
+    }

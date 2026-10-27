@@ -279,6 +279,18 @@ export function sendEfspCorrelationMutation(actingPositionId, flightDataId, base
 }
 
 /**
+ * Suppress (or restore) one conflict alert at one of this controller's Positions (crc-sync's docs/adr/0145). Not a store
+ * op: nothing is replayed after a reconnect, and the suppression ends by itself with the alert.
+ */
+export function sendEfspConflictSuppress(actingPositionId, conflictId, suppress, { onAck } = {}) {
+  return sendEfsp({
+    version: 1, type: 'efsp-conflict-suppress',
+    clientMutationId: efspClientMutationId(),
+    conflictId, actingPositionId, suppress,
+  }, { onAck });
+}
+
+/**
  * A MARSA op (WP6, §9.2 — crc-sync's docs/adr/0051). Its own message type
  * because it targets a relation BETWEEN flights: no stripId, no Strip baseRev,
  * no Facility routing, and no single flightDataId either, since a relation's

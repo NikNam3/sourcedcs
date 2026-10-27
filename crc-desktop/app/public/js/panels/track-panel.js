@@ -8,6 +8,7 @@ import {
 } from '../track-label.js';
 import { _flightDataForTrack, buildFiledRoute, parseFiledRouteWaypoints } from '../geojson.js';
 import { dock, ensureTrackPanel } from '../dock-handle.js';
+import { conflictRestoreTargets, conflictSuppressTargets, restoreConflict, suppressConflict } from './efsp/conflict-suppress.js';
 import { conformanceAlertsForFlightData, conflictAlertsForTrack, conflictName, refuelingAlertText, airspaceEntryAlertsForTrack, airspaceEntryText } from './efsp/efsp-state.js';
 import { history, tracks } from '../picture.js';
 import { map, mapReady } from '../map-handle.js';
@@ -263,7 +264,8 @@ function _refreshTrackAlerts(trackId) {
   const lines = [];
   const clock = (sec) => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
   for (const c of conflictAlertsForTrack(trackId)) {
-    lines.push({ bad: true, text: `${conflictName(c)} with ${c.otherCallsign} in ${clock(c.timeToCpaSec)}. Closest ${c.minNm} NM / ${c.vertFt} ft.` });
+    // crc-sync's docs/adr/0145: SUPPRESS on the alert itself, one click; a suppressed one stays, grey, with RESTORE.
+    lines.push({ bad: !c.suppressed, off: c.suppressed, conflict: c, text: `${conflictName(c)} with ${c.otherCallsign} in ${clock(c.timeToCpaSec)}. Closest ${c.minNm} NM / ${c.vertFt} ft.${c.suppressed ? ' Suppressed.' : ''}` });
   }
   for (const a of (flightData ? conformanceAlertsForFlightData(flightData.flightDataId) : [])) {
     const pad = (n) => String(n).padStart(3, '0');
@@ -278,8 +280,23 @@ function _refreshTrackAlerts(trackId) {
   $alerts.innerHTML = '';
   for (const l of lines) {
     const div = document.createElement('div');
-    div.className = 'tp-alert' + (l.bad ? '' : ' tp-alert-attn');
+    div.className = 'tp-alert' + (l.off ? ' tp-alert-off' : l.bad ? '' : ' tp-alert-attn');
     div.textContent = l.text;
+    if (l.conflict) {
+      div.dataset.conflictId = l.conflict.id;
+      const c = l.conflict;
+      const suppress = conflictSuppressTargets(c).length > 0;
+      const restore = !suppress && conflictRestoreTargets(c).length > 0;
+      if (suppress || restore) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'tp-alert-suppress';
+        btn.textContent = suppress ? 'SUPPRESS' : 'RESTORE';
+        btn.title = suppress ? `Stop this ${conflictName(c)} flashing at your Position, for this pair only` : `Show this ${conflictName(c)} in full again`;
+        btn.addEventListener('click', () => { if (suppress) suppressConflict(c); else restoreConflict(c); });
+        div.appendChild(btn);
+      }
+    }
     $alerts.appendChild(div);
   }
 }

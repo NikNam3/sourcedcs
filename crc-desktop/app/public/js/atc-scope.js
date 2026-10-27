@@ -185,6 +185,7 @@ export function atcRelation(t, strips, acting, letterOf) {
  * @param {number} env.now        local ms, for blink windows
  * @param {string[]} env.conflicts  the CA/MCI conflict ids this track is in
  * @param {string[]} [env.conflictTags]  their tags, 'CA' or 'MCI' (crc-sync's docs/adr/0118); default CA
+ * @param {string[]} [env.conflictsSuppressed]  those of `conflicts` this controller suppressed (crc-sync's docs/adr/0145)
  * @param {string[]} [env.airspace]  the airspace-entry alert ids naming this track (crc-sync's docs/adr/0119)
  * @param {{tag:string,color:string}|null} env.conform  docs/adr/0058's tag, if any
  * @param {boolean} env.coast
@@ -195,18 +196,25 @@ export function atcView(t, rel, env) {
   const id = String(t.id);
   const hasSsr = (t.sources || []).includes('SSR');
   const conflicts = env.conflicts || [];
+  // crc-sync's docs/adr/0145: a suppressed alert stops flashing and forcing the block; a grey, steady tag stays.
+  const suppressed = new Set(env.conflictsSuppressed || []);
+  const tags = env.conflictTags || [];
+  const activeIdx = conflicts.map((c, i) => i).filter(i => !suppressed.has(conflicts[i]));
+  const active = activeIdx.map(i => conflicts[i]);
+  const tagOf = (idx) => idx.length && idx.every(i => tags[i] === 'MCI') ? 'MCI' : 'CA';
 
   const line0 = [];
   const em = atcEmergencyTag(t);
   if (em) line0.push({ text: em, color: P.alert, blink: !_atcAcked.has(`EM:${id}:${em}`) });
   // crc-sync's docs/adr/0118: an MCI is shown like a CA, named MCI; a CA wins when the track is in both.
-  if (conflicts.length) line0.push({ text: (env.conflictTags || []).length && env.conflictTags.every(t => t === 'MCI') ? 'MCI' : 'CA', color: P.alert, blink: conflicts.some(c => !_atcAcked.has(`CA:${c}`)) });
+  if (active.length) line0.push({ text: tagOf(activeIdx), color: P.alert, blink: active.some(c => !_atcAcked.has(`CA:${c}`)) });
+  else if (conflicts.length) line0.push({ text: tagOf(conflicts.map((c, i) => i)), color: ATC_DIM_GRAY, blink: false });
   // crc-sync's docs/adr/0119: inside an active airspace it may not be in. Amber, blinking until acknowledged by a click.
   const airspace = env.airspace || [];
   if (airspace.length) line0.push({ text: 'SAA', color: P.caution, blink: airspace.some(a => !_atcAcked.has(`AS:${a}`)) });
   if (t.iffOverride === 'hostile') line0.push({ text: 'SA', color: P.sa, blink: false }); // H47: steady
   if (env.conform && env.conform.tag) line0.push({ text: env.conform.tag, color: env.conform.color, blink: false });
-  const forced = !!em || conflicts.length > 0 || airspace.length > 0;
+  const forced = !!em || active.length > 0 || airspace.length > 0;
 
   let kind; let color = P.other; let blinkBlock = false;
   const l1Suffix = [];
@@ -393,10 +401,11 @@ export function atcDisplay(id, t, now = Date.now()) {
   const conflictList = conflictAlertsForTrack(id);
   const conflicts = conflictList.map(c => c.id);
   const conflictTags = conflictList.map(c => c.kind);
+  const conflictsSuppressed = conflictList.filter(c => c.suppressed).map(c => c.id);
   const flightData = strips.length ? getEfspFlightData(strips[0].flightDataId) : null;
   const conform = flightData ? atcConformTag(conformanceAlertsForFlightData(flightData.flightDataId)) : null;
   const airspace = _airspaceAckKeys(id);
-  const view = atcView(t, rel, { palette, now, conflicts, conflictTags, airspace, conform, coast });
+  const view = atcView(t, rel, { palette, now, conflicts, conflictTags, conflictsSuppressed, airspace, conform, coast });
 
   const speedKt = kinematics(hist).speedKt;
   const lines = atcBlockLines(t, view, { speedKt, assigned: atcAssigned(flightData), assignedCode: flightData && flightData.identity ? flightData.identity.beaconAssigned : null, typePhase: Math.floor(now / ATC_TIMESHARE_MS) % 2 === 1 });
@@ -415,7 +424,7 @@ export function atcTargetClick(id, now = Date.now()) {
   if (!t) return 'NONE';
   const rel = atcNoteOwnership(id, atcRelation(t, _stripsFor(id), _actingSet(), _letterOf), now);
   return atcApplyClick(t, rel, now, {
-    conflicts: conflictAlertsForTrack(id).map(c => c.id),
+    conflicts: conflictAlertsForTrack(id).filter(c => !c.suppressed).map(c => c.id),
     airspace: _airspaceAckKeys(id),
     accept: (strip) => {
       sendEfspMutation(strip.ownerPositionId, strip, { kind: strip.coordination.primitive, action: 'ACCEPT' });

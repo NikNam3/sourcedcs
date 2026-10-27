@@ -514,6 +514,7 @@
    "getAllEfspConflicts",
    "getEfspObligation",
    "getEfspObligations",
+   "isConflictSuppressed",
    "refuelingAlertText",
    "surveillanceHintsForStrip",
    "tofiRegimeAlertForFlightData"
@@ -816,6 +817,12 @@
    "luawInUse",
    "vacatedBetween"
   ],
+  "panels/efsp/conflict-suppress.js": [
+   "conflictRestoreTargets",
+   "conflictSuppressTargets",
+   "restoreConflict",
+   "suppressConflict"
+  ],
   "panels/efsp/control-release-rules.js": [
    "OBLIGATION_LABELS",
    "attestationRequest",
@@ -1020,6 +1027,7 @@
    "getEfspStrip",
    "getPendingMutations",
    "isAitAuthorizedFor",
+   "isConflictSuppressed",
    "isWithOthersBayId",
    "liveStripsForCallsign",
    "marsaForStrip",
@@ -1058,6 +1066,7 @@
    "sendEfsp",
    "sendEfspAirspaceMutation",
    "sendEfspCarrierMutation",
+   "sendEfspConflictSuppress",
    "sendEfspCorrelationMutation",
    "sendEfspCreateStrip",
    "sendEfspFrequencyMutation",
@@ -1164,6 +1173,7 @@
    "closeLabelMenu",
    "labelAssignmentForTrack",
    "labelMenuState",
+   "labelSuppressibleConflicts",
    "openLabelMenu"
   ],
   "panels/efsp/marsa-badge.js": [

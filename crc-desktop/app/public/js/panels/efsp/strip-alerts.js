@@ -38,10 +38,12 @@ export function _stripAlerts(strip) {
     // callsign when correlated, else its tag or track number (docs/adr/0059).
     const other = c.otherCallsign;
     // crc-sync's docs/adr/0118: CA between two tracked aircraft, MCI against an untracked one reporting altitude.
+    // crc-sync's docs/adr/0145: a suppressed one stays, grey, and no longer makes the Strip an alert.
     out.push({
-      key: 'conflictAlert', tone: 'bad', legacy: `efsp-conflict-alert-indicator efsp-conflict-${conflictTag(c).toLowerCase()}`,
+      key: 'conflictAlert', tone: c.suppressed ? 'off' : 'bad',
+      legacy: `efsp-conflict-alert-indicator efsp-conflict-${conflictTag(c).toLowerCase()}${c.suppressed ? ' efsp-conflict-suppressed' : ''}`,
       text: `${conflictName(c)} ${other} ${_fmtClock(c.timeToCpaSec)}`,
-      reason: `${c.kind === 'MCI' ? 'Mode C intruder' : 'Conflict'} with ${other} in ${_fmtClock(c.timeToCpaSec)}: closest ${c.minNm} NM / ${c.vertFt} ft.`,
+      reason: `${c.kind === 'MCI' ? 'Mode C intruder' : 'Conflict'} with ${other} in ${_fmtClock(c.timeToCpaSec)}: closest ${c.minNm} NM / ${c.vertFt} ft.${c.suppressed ? ' Suppressed.' : ''}`,
     });
   }
   out.push(...atoAlertsFor(strip)); // docs/adr/0071, §3.10.3 rule 3

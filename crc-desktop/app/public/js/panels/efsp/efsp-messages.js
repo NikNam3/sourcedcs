@@ -192,6 +192,13 @@ registerEfspMessage('efsp-marsa-ack', (msg) => {
   markEfspChanged('marsa');
 });
 
+// crc-sync's docs/adr/0145: the answer to a suppress or restore of one conflict alert. The alert itself comes back in the
+// efsp-alerts that follows; only a refusal has something to show.
+registerEfspMessage('efsp-conflict-suppress-ack', (msg) => {
+  if (settleEfspAck(msg)) return;
+  if (!msg.ok) _showMutationError(msg.reason || 'Rejected', msg.detail, null);
+});
+
 // docs/adr/0058 — the whole conformance + short-term conflict picture,
 // and (docs/adr/0067) every forwarding obligation due right now, sent
 // when it changes and once on connect; one no longer listed is cleared.
