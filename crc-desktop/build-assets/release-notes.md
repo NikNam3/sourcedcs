@@ -8,7 +8,7 @@
 
 ### Changed: after the live test
 - Incirlik has no SFA Position any more: AP files a single frequency approach on its SFA Bay's frequency Racks and presses **Hand off to PAR**; the pilot keeps the frequency
-- PAR's final line has HDG and ALT, **Begin descent**, **Cleared to land**, **Landed** (hands the Strip to GC) and **Missed approach** (back to AP for another approach); "Landing assured" is gone. Heading is not checked on a final, and altitude only until Begin descent
+- PAR's final line has HDG and ALT, **Begin descent**, **Cleared to land**, **Landed** (hands the Strip to GC) and **Missed approach** (back to AP for another approach); "Landing assured" is gone
 - Conflict Alert is only between two aircraft with Strips; an aircraft with no Strip that squawks altitude is a **Mode C Intruder** (MCI). One formation, and one MARSA, never alert against each other
 - Selecting a Strip no longer rings its aircraft: use **Show on map** in the Strip's ⋯ menu. Clicking a contact still selects its Strip
 - A contact squawking a Strip's assigned code is that flight, even if an earlier flight had the same jet; `NO TRK` names the flight that has a duplicate code
@@ -32,6 +32,21 @@
 - The carrier: the Marshal creates Strips (**Marshal · Recovery** / **Marshal · Launch**); PriFly has no pattern legs; **Trapped** sends the Strip to PriFly's RECOVERED Bay
 - For the server operator: before deploying, read `infra/RUNBOOK.md` "v2 launch": delete `efsp-board.json` and `efsp-mutations*.jsonl` (an old handoff or RSU Strip stops start-up), check any `state/efsp-facility-incirlik.json` (no RSU) and `state/efsp-airspaces.json` (it must carry the jurisdiction areas), then build the terrain cache
 
+### Changed: after the final tests
+- Correlation is by beacon code or a binding only, never by callsign: `TRK?` and the `?` on a label are gone. To correlate an AI flight, type the code it squawks (6000–6777) into its Strip's beacon code; if that code later goes to a different AI aircraft the Strip says `NO TRK` instead of following it
+- Airspace types are the FAA's: MOA, restricted, prohibited and warning. A range is no airspace type (make the airspace over it restricted, warning or a MOA, with the range controller as its user). A prohibited area is always in force (`IN FORCE`, no activation)
+- The Incirlik RAPCON is the unclassified Adana MTMA (IFR separated from VFR, VFR to VFR traffic advisories); the control zone is Class D. Each jurisdiction area shows its VFR service, and Edit… sets CLASS and VFR SERVICE
+- Once PAR has the flight nothing of its clearance alerts; after Begin descent only leaving the glidepath does (`GP ↓`/`GP ↑` on the Strip, `BELOW`/`ABOVE GLIDEPATH` on the PAR panel). The PAR azimuth window is fixed at ±3° (Shift+wheel zooms, double-click resets)
+- The heading alert waits as long as the turn takes (3° a second, slower for a fast aircraft at 25° of bank) plus 15 s, and fires early if the turn stops or goes the wrong way
+- Incirlik's runway and PAR final course are DCS's own runway (052.7°/232.7° true, 047° magnetic): they were 3° off. The DCS F10 ruler reads about 049.6 for the same line because it measures from grid north
+- The PAR approach values can be set with nobody on the final; the `UNACTIVATED AIRSPACE ENTRY` chip appears only while the aircraft is inside the non-active airspace, like the amber badge
+- The airport surface shows while you hold GC or LC (Incirlik), also on the black ATC scope, in dim grey
+- LC's departure face no longer shows P/S, OPT and HOOK (they are in ▼); a cell you may not write on someone else's Strip is read-only
+- The PANELS panel starts with ACTING AS; the radar list is folded behind one grey `RADARS · n` line
+- The bullseye readout beside the cursor is hidden on an ATC-only scope and off the map
+- A click or double-click never moves a Strip: the drop follows the dragged Strip, and a tab takes a drop only after 16 px of travel. A Strip that flashes on arrival keeps flashing when it is redrawn
+- For the server operator: before deploying, read `infra/RUNBOOK.md` "v2 launch": a `RANGE` or `DANGER` airspace or `headingGraceSec` in `state/alerting.json` stops start-up; after the deploy AP edits LTAG-RAPCON to unclassified (or reset the Board)
+
 ### New
 - Radar line-of-sight: radars now respect terrain — a target can be masked by mountains/terrain between it and the radar, instead of every radar seeing straight through the ground within its range ring
 - Ground/ship radars use a realistic assumed antenna height (airborne radars still use live altitude) so LOS masking isn't unrealistically easy to trigger
@@ -46,7 +61,7 @@
 - ARSPC can be cleared back to undecided; an airspace copied from a mission drawing replaces the drawing on the map
 - Map labels appear after login without a reload
 - Jurisdiction areas: the airspaces panel shows whose airspace an aircraft is in (the LTAG control zone, the Incirlik RAPCON, the carrier area); off-by-default outlines on the map
-- The airspace card lists the flights inside and filed through a restricted area, MOA, warning area, range or danger area, with **Approve**
+- The airspace card lists the flights inside and filed through a restricted, prohibited or warning area or a MOA, with **Approve**
 - Transits: **Request transit** through an active MOA, warning or restricted area from the Strip's ⋯ menu; the side that separates its users approves or declines on the airspace card. A grey `COORD` mark shows a flight filed through one that nobody has coordinated
 - **Entry block…** in the ⋯ menu sets or lifts an approved entry's altitude block
 - The FREQUENCIES panel: set, add and remove your own Facility's station frequencies at run time, including SFA spares
@@ -56,3 +71,9 @@
 - The airspace editor's Pick DCS drawing list outlines the drawing on the map as you hover it
 - The MARSHAL panel: click a holding flight's fuel or EAT to type it; the carrier map draws the marshal stack as its holding pattern, and the approach path and pattern while a recovery is under way
 - Every panel scrolls when made small, with thin dark scrollbars
+- Click a contact's data block to assign heading, speed or altitude when you own its Strip (Enter sends, Tab moves, Esc closes; TRACK or Shift+click opens the track panel)
+- CD can create a departure Strip itself, and **VFR…** (or `.vfr`) makes a VFR departure in one step: a discrete code, a Strip in Cleared with its direction of flight (DIR), and the line to read
+- **Transit complete** ends an approved transit by hand; the deciding side sees a grey `transit complete` line until it presses **Acknowledge**
+- The PAR panel shows **FIN HDG** (the heading that holds the final course in the wind) beside the aircraft's heading, with a small heading scale on the azimuth scope
+- The METRICS panel's Server section shows what crc-sync costs in CPU, memory and event-loop delay over the last minute
+- Hover a Strip's coloured left edge to see what it means and what to do
