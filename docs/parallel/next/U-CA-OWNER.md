@@ -41,7 +41,7 @@ FAA: JO 7110.65BB ¶5-14-6 ("If another controller is involved in the alert, ini
 "at or for another control position without being coordinated"). The exact STARS display routing is in the STARS
 manuals, not the order: search for it, quote what you find, else say so in the ADR.
 
-## Gates
+## Gates (superseded 2026-10-27: lanes run no gates, the supervisor tests)
 
 Per the test policy: touched files while working; once before the report both unit suites, freeze, `soak:selfcheck`
 (`ws-hub.js`), the CA specs (`command grep -l -i -e conflict -e suppress crc-desktop/e2e/*.spec.js`) on your E2E lane.
