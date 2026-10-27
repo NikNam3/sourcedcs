@@ -624,7 +624,7 @@ flight data {
 
 **Subbucket usage, in plain terms:**
 - **`identity`** — "who/what is this aircraft" (callsign, type, beacon code, equipment). Mostly filled at creation; `beaconAssigned` is minted automatically unless overridden.
-- **`beaconAssigned` and `beaconObserved` are two fields on purpose**, and comparing them is the point: they match (all well), they differ (the pilot is squawking the wrong code — the Strip shows `TRK?`), or observed is null (assigned, nothing received — either the transponder is off or nothing has correlated yet). Collapsing them into one would hide a mismatch entirely, which is a defect the guide names by number. `beaconObserved` is written by the correlation subsystem, never by a controller.
+- **`beaconAssigned` and `beaconObserved` are two fields on purpose**, and comparing them is the point: they match (all well), they differ (the pilot is squawking the wrong code — the Strip shows `NO TRK` until you bind it; once bound, both codes stay visible), or observed is null (assigned, nothing received — either the transponder is off or nothing has correlated yet). Collapsing them into one would hide a mismatch entirely, which is a defect the guide names by number. `beaconObserved` is written by the correlation subsystem, never by a controller.
 - **`filed`** — "what the pilot/flight plan asked for" (route, altitude, airports, times). This is what `isFlightPlanValid` checks before `CLEARED` is reachable, and what §4's pre-fill populates.
 - **`assigned`** — "what ATC has actually granted" (clearance, departure release state/timing, ATIS code, movement times). This is the bucket that changes as a flight progresses through the departure sequence.
 - **`airspace`** — WP4A only, a delegated-airspace direction, orthogonal to everything else.
@@ -1009,10 +1009,9 @@ A Strip whose flight is correlated normally shows no badge at all. Anything else
 
 | Badge | Means | What to do |
 |---|---|---|
-| *(nothing)* | **correlated**, by beacon code, callsign or a controller's binding. The contact on the scope now carries this Strip's callsign | nothing |
-| `TRK?` | **provisional.** Hover it: usually the contact is squawking a different code from the one you assigned, or the callsign only nearly matches | check the squawk; bind it if you are sure |
-| `NO TRK` | **uncorrelated.** Nothing on your scope matches this flight. Hover it: if the contact squawking this flight's code is already another flight's, it says which one | `Bind…` it if you can see which one it is |
-| `TRK ×2` | **ambiguous.** Two contacts match equally well, and the system will not guess | click it and pick the right one |
+| *(nothing)* | **correlated**, by its beacon code or a controller's binding. The contact on the scope now carries this Strip's callsign | nothing |
+| `NO TRK` | **uncorrelated.** No contact is squawking this flight's code and nobody has bound one. Hover it: if the contact squawking this flight's code is already another flight's, it says which one; if the AI aircraft's code went to a different aircraft, it says *this code now belongs to a different AI aircraft* | `Bind…` it if you can see which one it is, or give the Strip the code it is squawking |
+| `TRK ×2` | **ambiguous.** Two contacts are squawking this flight's code, and the system will not guess | click it and pick the right one |
 | `TRK ··` | **correlated, but the contact is outside your coverage.** Somebody else's radar has it; yours does not | nothing — it is not yours to see |
 
 `NO TRK` in a warmer colour, with a coloured edge on the Strip, means something stronger: the contact
@@ -1024,18 +1023,24 @@ flight. Coverage is per-Position and is about *you*. So a flight can be correctl
 that simply is not on your scope, which is the normal case for an en-route flight when you are working
 Tower. Nothing is wrong, and there is nothing to click.
 
-**`Bind…` is the override, and it wins over everything.** A jet with its transponder off, under a
-callsign DCS spells differently from the flight plan, will not match automatically — but if you can
-see it, you can say so, and the binding sticks until you `Unbind` it. It is also how you settle a
+**A flight is never matched by its callsign.** A jet with its transponder off, or squawking a different code,
+stays `NO TRK` until you bind it or give the Strip the code it is squawking.
+
+**`Bind…` is the override, and it wins over everything.** If you can see the contact, you can say so, and
+the binding sticks until you `Unbind` it. It is also how you settle a
 `TRK ×2`. From the keyboard: `.bind <track id>` and `.unbind` on the selected Strip.
 
 **The assigned code finds the jet, whatever it flew as before.** A contact squawking a Strip's Block 5 code is
 correlated to that Strip even if an earlier, finished flight had that same jet: that is how the FAA's automation
-acquires a flight (JO 7110.65BB ¶5-3-3 d, ¶5-3-4; a finished flight holds no code). A callsign match is stricter: a jet
-an earlier flight finished with is not handed to a new flight just because the callsign is reused (ours, for players
-who do not squawk); give the new flight a code, or bind it. Two flights assigned the same code cannot both have the one
-contact squawking it: the second says `NO TRK` and names the first. An AI aircraft squawks a code from crc-sync's
-synthetic block, which no Strip can be assigned, so it is found by callsign or a binding only.
+acquires a flight (JO 7110.65BB ¶5-3-3 d, ¶5-3-4; a finished flight holds no code). Two flights assigned the same code cannot both
+have the one contact squawking it: the second says `NO TRK` and names the first.
+
+**Correlating an AI flight.** An AI aircraft squawks a code from crc-sync's synthetic block (6000–6777 as shipped).
+Read it off the contact's data block and type it into the Strip's beacon code (Block 5): the Strip correlates on the
+next second. crc-sync never assigns such a code itself, and an ATO's Mode 3 in that block is still refused. When that
+AI aircraft leaves, crc-sync may give its code to another AI aircraft; the Strip does not follow it, it says `NO TRK`
+(*this code now belongs to a different AI aircraft*). Bind the new aircraft if it is yours, or enter the code of the
+one you mean. A discrete code is different: whichever aircraft squawks it is the flight, as above.
 
 **Finding the contact.** Selecting a Strip does not mark its aircraft on the map. To find it, open the Strip's `⋯` menu
 and choose **Show on map**: the contact is ringed for 8 seconds (ours) and the map pans to it if it is off screen (the
@@ -1354,7 +1359,7 @@ between them there. **Settings → RADAR → Conflict Alert → Show predicted p
 dashed paths and the line; the CA in the data block and the closest-point marker with its countdown always show. **Who alerts against whom** (`adr/0118`, the FAA model, P/CG CONFLICT ALERT and MODE C
 INTRUDER ALERT):
 
-- **CA** is only between two **tracked** aircraft: each correlated to a Strip (a provisional `TRK?` match counts).
+- **CA** is only between two **tracked** aircraft: each correlated to a Strip.
 - **MCI** (Mode C Intruder) is a tracked aircraft against one with no Strip that **reports altitude**, above the
   Facility's base altitude: 500 ft above the ground at Incirlik and the carrier, 5,000 ft MSL at CENTER (1,500 ft above
   the ground where the ground is higher). Where the ground is not known (no terrain data) it counts as sea level. The
@@ -1389,7 +1394,6 @@ know (`adr/0059`). The same aircraft can read differently at two consoles.
 | `TN00042`, no altitude | a primary return only: your radar has it, but either it does not interrogate or the aircraft is not squawking |
 | `6123` / `080 G250` | it is squawking (code, Mode C altitude) and nothing identifies it yet. 6000–6777 is the block crc-sync gives AI aircraft (our convention, `adr/0059`; not a real code allocation) |
 | `VIPER11` / `180 G450` | correlated to a Strip: its callsign is the Strip's. Its code (`4521`) shows only while the aircraft is not squawking the code it was assigned (JO 7110.65BB ¶5-4-6 e NOTE); an emergency code always shows. A contact named by the datalink or a tag still shows its code |
-| `COLT31?` | correlated **provisionally** — check it |
 | `230*` | an altitude from a radar crc-sync models as height-finding (AWACS, fighter, carrier), not from the aircraft |
 | `Enfield11` / `210L` | a datalink report from one of your own aircraft (tactical Positions) |
 | `EMR` / `RDF` / `HIJ` in colour | squawking 7700 / 7600 / 7500 |
@@ -1450,8 +1454,7 @@ type every 2 s; an assigned altitude shows with a trend arrow (`A060↓ H250`, o
 an assigned heading (magnetic, as you typed it). While the aircraft squawks a code other than its assigned one, line 3
 starts with the code it is squawking (`4521 A060↓ H250`), as STARS does (¶5-4-6 e NOTE). Line 0, above the block, stacks by severity: `EM`/`RF`/
 `HJ` (emergency), `CA` or `MCI` (a conflict alert or Mode C intruder, §8E), `SAA` in amber (an airspace conflict,
-§8A), `SA` (a contact someone has declared **hostile**), then the conformance tag (§8E, drawn in the app's own orange, not STARS's). A provisional correlation keeps its
-`?`. `CST` means your correlated flight has stopped returning (after two sweeps of the slowest ATC radar,
+§8A), `SA` (a contact someone has declared **hostile**), then the conformance tag (§8E, drawn in the app's own orange, not STARS's). `CST` means your correlated flight has stopped returning (after two sweeps of the slowest ATC radar,
 6 s if none says how often).
 
 - **Click the disc** to accept a handoff or point-out (it sends the same `ACCEPT` the Strip's button
@@ -1474,7 +1477,7 @@ the colours (the approved mockup's) and the coast timing.
 crc-sync watches the contact a Strip is correlated to and tells you when the Strip and the aircraft
 disagree. **It never moves a Strip by itself**; the controller does (`adr/0076`).
 
-- **"Detected airborne"** means a *correlated* contact (never a provisional one) that is an aircraft, at
+- **"Detected airborne"** means a *correlated* contact that is an aircraft, at
   60 kt or more, at least 200 ft above the nearest airfield while within its 5 km footprint (speed alone
   beyond it), for 5 seconds. The numbers are in `config/efsp-surveillance-hints.json`, read once at
   startup, and `[SOURCE-DEFINED]`: this guide says "a configured threshold" only.
