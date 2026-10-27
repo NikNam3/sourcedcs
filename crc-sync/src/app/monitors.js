@@ -180,6 +180,9 @@ function buildMonitors({ env, efsp, facilityConfig, missionClock, missionSession
     // A transponder that replies is Mode C here (surveillance/transponder.js); the soak's seam answers with a code.
     reportsAltitude: trackSeams.beacon ? ((track) => trackSeams.beacon(track) != null) : ((track) => !!transponders.transponderOf(track)),
     mciShownAt: (intruder, facilityId, positionId) => mciShownAt(intruder, facilityId, positionId),
+    // docs/adr/0145: only an ATC Position is shown CA, so only one suppresses it; the suppression is stamped in mission time.
+    isAtcPosition: (positionId) => ATC_CLASSES.has(facilityConfig.getPositionClass(positionId)),
+    clock: missionClock,
     // Alert text names each aircraft the way identity does (docs/adr/0059).
     callsignFor: trackSeams.callsign || ((track) => identity.labelFor(track.id)),
   });
@@ -308,6 +311,8 @@ function buildMonitors({ env, efsp, facilityConfig, missionClock, missionSession
       conflictAlert: conflictAlertMonitor.getAll(),
       // Not sent: which sessions an MCI is for (docs/adr/0118), asked per session by the hub.
       conflictAlertFor: (conflict, positions) => conflictAlertMonitor.deliverableTo(conflict, positions),
+      // docs/adr/0145: how it is shown to the session, `suppressedAt` its own Positions where a controller suppressed it.
+      conflictAlertAs: (conflict, positions) => conflictAlertMonitor.presentFor(conflict, positions),
       airspaceEntry: airspaceEntryAlertMonitor.getAll(),
       // Not sent either: an airspace-entry alert goes to the controlling Position and the flight's (docs/adr/0119).
       airspaceEntryFor: (alert, positions) => airspaceEntryAlertMonitor.deliverableTo(alert, positions),
