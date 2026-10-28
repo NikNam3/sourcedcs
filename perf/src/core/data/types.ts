@@ -136,6 +136,13 @@ export interface ScalePair {
   a: number;
   b: number;
   /**
+   * The drawn to scale's first and last point, in to units, measured from the scale line; ascending. scalePair reads only inside it.
+   *
+   * @minItems 2
+   * @maxItems 2
+   */
+  range: [number, number];
+  /**
    * Page transforms keyed by quantity name.
    */
   axes: {

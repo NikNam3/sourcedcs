@@ -133,6 +133,46 @@ describe('checkDataset beyond the schema', () => {
     assert.match(problems[0] ?? '', /"distance"/);
   });
 
+  const scalePanel = (range?: [number, number]): Record<string, unknown> => ({
+    id: 'ab',
+    type: 'scale_pair',
+    from: { name: 'tof_mil', unit: '' },
+    to: { name: 'tof_ab', unit: '' },
+    a: 0.5563,
+    b: 0.088,
+    ...(range === undefined ? {} : { range }),
+    axes: { tof_mil: { page: 'x', a: 56.7, b: 46.2 }, tof_ab: { page: 'x', a: 101.97, b: 102.267 } },
+  });
+
+  test('a scale pair with an ascending range is clean', () => {
+    const problems = checkDataset(
+      editedDataset('scale-ok', (figure) => {
+        figure['panels'] = [scalePanel([0.5, 3.79])];
+      }),
+    );
+    assert.deepEqual(problems, []);
+  });
+
+  test('a scale pair with no range is a problem (R2)', () => {
+    const problems = checkDataset(
+      editedDataset('scale-no-range', (figure) => {
+        figure['panels'] = [scalePanel()];
+      }),
+    );
+    assert.equal(problems.length, 1, problems.join('\n'));
+    assert.match(problems[0] ?? '', /range/);
+  });
+
+  test('a scale pair whose range is not ascending is a problem naming the panel', () => {
+    const problems = checkDataset(
+      editedDataset('scale-reversed', (figure) => {
+        figure['panels'] = [scalePanel([3.79, 0.5])];
+      }),
+    );
+    assert.equal(problems.length, 1, problems.join('\n'));
+    assert.match(problems[0] ?? '', /panel "ab" range \[3\.79, 0\.5\] is not ascending/);
+  });
+
   test('a table row wider than its columns is a problem', () => {
     const problems = checkDataset(
       editedDataset('table', (figure) => {

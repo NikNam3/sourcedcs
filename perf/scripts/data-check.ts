@@ -105,6 +105,9 @@ function panelProblems(panel: Panel): string[] {
       break;
     case 'scale_pair':
       needAxes(panel.axes, [panel.from.name, panel.to.name]);
+      if (!(panel.range[0] < panel.range[1])) {
+        problems.push(`${name} range [${panel.range.join(', ')}] is not ascending`);
+      }
       break;
     case 'table':
       panel.rows.forEach((row, i) => {

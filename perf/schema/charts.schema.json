@@ -196,13 +196,21 @@
         "to": { "$ref": "#/definitions/Quantity" },
         "a": { "type": "number" },
         "b": { "type": "number" },
+        "range": {
+          "description": "The drawn to scale's first and last point, in to units, measured from the scale line; ascending. scalePair reads only inside it.",
+          "type": "array",
+          "items": [{ "type": "number" }, { "type": "number" }],
+          "minItems": 2,
+          "maxItems": 2,
+          "additionalItems": false
+        },
         "axes": {
           "description": "Page transforms keyed by quantity name.",
           "type": "object",
           "additionalProperties": { "$ref": "#/definitions/Transform" }
         }
       },
-      "required": ["id", "type", "from", "to", "a", "b", "axes"],
+      "required": ["id", "type", "from", "to", "a", "b", "range", "axes"],
       "additionalProperties": false
     },
     "Table": {
