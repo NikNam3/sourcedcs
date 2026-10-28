@@ -16,6 +16,7 @@ import geom
 PX_PER_PT = 2
 RED = (230, 0, 0)
 BLUE = (0, 120, 255)
+GREEN = (0, 170, 0)
 
 
 def dumps(obj):
@@ -72,9 +73,14 @@ def _polyline(draw, pts, col):
         draw.line(pts, fill=col, width=2)
 
 
+DIRECTION_COLOUR = {'rises': RED, 'falls': BLUE, 'any': GREEN}
+
+
 def overlay_png(page, spec, axes, panels):
-    """The whole page with every extracted line in red (a guideline panel's second family in
-    blue) and every fitted tick position as a short red mark across its label band."""
+    """The whole page with every extracted line drawn over it: curves in red, guide lines by their
+    family's declared direction (rises red, falls blue, any green), a scale pair's measured range
+    as a green bar along its scale line, and every fitted tick position as a short red mark across
+    its label band."""
     pm = page.get_pixmap(matrix=pymupdf.Matrix(PX_PER_PT, PX_PER_PT), alpha=False)
     im = Image.frombytes('RGB', (pm.width, pm.height), pm.samples)
     draw = ImageDraw.Draw(im)
@@ -87,6 +93,7 @@ def overlay_png(page, spec, axes, panels):
                 draw.line([(pos, band[0] * PX_PER_PT - 6), (pos, band[0] * PX_PER_PT - 1)], fill=RED, width=2)
             else:
                 draw.line([(band[1] * PX_PER_PT + 1, pos), (band[1] * PX_PER_PT + 6, pos)], fill=RED, width=2)
+    specs = {p['id']: p for p in spec['panels']}
     for panel in panels:
         kind = panel['type']
         if kind == 'curve_family':
@@ -98,11 +105,23 @@ def overlay_png(page, spec, axes, panels):
             _polyline(draw, [_xy(panel, inp, out, a, b) for a, b in panel['points']], RED)
         elif kind == 'guideline_panel':
             inp, out = panel['input']['name'], panel['output']['name']
-            for i, fam in enumerate(sorted(panel['families'])):
-                col = RED if i == 0 else BLUE
+            declared = specs[panel['id']]['families']
+            for fam in sorted(panel['families']):
+                col = DIRECTION_COLOUR[declared[fam]]
                 for ln in panel['families'][fam]:
                     _polyline(draw, [_xy(panel, inp, out, a, b) for a, b in ln], col)
-        # scale_pair and table panels have no lines; a scale pair's two scales show as tick marks.
+        elif kind == 'scale_pair':
+            to = panel['to']['name']
+            tr = panel['axes'][to]
+            clip = specs[panel['id']]['scale_line']
+            lo, hi = (geom.to_page(tr, v) * PX_PER_PT for v in panel['range'])
+            if tr['page'] == 'x':
+                y = (clip[1] + clip[3]) / 2 * PX_PER_PT
+                draw.line([(lo, y), (hi, y)], fill=GREEN, width=3)
+            else:
+                x = (clip[0] + clip[2]) / 2 * PX_PER_PT
+                draw.line([(x, lo), (x, hi)], fill=GREEN, width=3)
+        # table panels have no lines.
     buf = io.BytesIO()
     im.save(buf, format='PNG')
     return buf.getvalue()

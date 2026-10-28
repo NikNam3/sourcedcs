@@ -152,7 +152,9 @@ def summary(res):
         elif p['type'] == 'single_curve':
             info = f"1 curve, {len(p['points'])} points"
         elif p['type'] == 'scale_pair':
-            info = f"{p['to']['name']} = {p['a']} * {p['from']['name']} + {p['b']}"
+            info = f"{p['to']['name']} = {p['a']} * {p['from']['name']} + {p['b']}, drawn {p['to']['name']} {p['range']}"
+        elif p['type'] == 'guideline_panel':
+            info = ', '.join(f"{f} {len(ls)} lines" for f, ls in sorted(p['families'].items()))
         else:
             info = ''
         print(f"  panel {p['id']} ({p['type']}): {info}")
