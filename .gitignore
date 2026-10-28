@@ -214,3 +214,8 @@ infra/*.sql
 
 # crc-desktop SRS bridge runtime state (written to cwd by lxsrs_v2)
 lxsrs_v2_state.json
+
+# perf (docs/wip/TOLD.md): extraction overlays, tsc output, dependencies
+perf/extraction/out/
+perf/web/js/
+perf/node_modules/
