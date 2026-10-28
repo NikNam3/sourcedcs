@@ -1,0 +1,253 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://sourcedcs.page/perf/charts.schema.json",
+  "title": "ChartData",
+  "oneOf": [{ "$ref": "#/definitions/FigureFile" }, { "$ref": "#/definitions/Manifest" }],
+  "description": "The chart data the extractor writes and the TOLD core reads: one FigureFile per figure sheet and one Manifest per dataset. data:check validates each file against FigureFile or Manifest; types:gen turns the definitions into src/core/data/types.ts.",
+  "definitions": {
+    "Pt": {
+      "title": "Pt",
+      "description": "[input, output], both in chart units.",
+      "type": "array",
+      "items": [{ "type": "number" }, { "type": "number" }],
+      "minItems": 2,
+      "maxItems": 2,
+      "additionalItems": false
+    },
+    "Quantity": {
+      "title": "Quantity",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "unit": { "type": "string", "description": "\"\" when dimensionless." }
+      },
+      "required": ["name", "unit"],
+      "additionalProperties": false
+    },
+    "Transform": {
+      "title": "Transform",
+      "description": "Places a chart value on the page: pagePt = a * value + b, along the page's x or y.",
+      "type": "object",
+      "properties": {
+        "page": { "enum": ["x", "y"] },
+        "a": { "type": "number" },
+        "b": { "type": "number" }
+      },
+      "required": ["page", "a", "b"],
+      "additionalProperties": false
+    },
+    "FigureFile": {
+      "title": "FigureFile",
+      "description": "One figure sheet: perf/data/<dataset>/<id>.json.",
+      "type": "object",
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "id": {
+          "type": "string",
+          "description": "The figure (B2-3) or figure and sheet (B1-1.sh1); the file name without .json."
+        },
+        "figure": { "type": "string" },
+        "sheet": { "type": ["integer", "null"], "minimum": 1 },
+        "title": { "type": "string" },
+        "engine": { "type": "string" },
+        "pageIndex": { "type": "integer", "minimum": 0, "description": "0-based page in the manual PDF." },
+        "printedPage": { "type": "string" },
+        "image": {
+          "type": "object",
+          "properties": {
+            "file": { "type": "string", "pattern": "^pages/[^/]+\\.png$", "description": "pages/<id>.png" },
+            "clipPt": {
+              "type": "array",
+              "items": [{ "type": "number" }, { "type": "number" }, { "type": "number" }, { "type": "number" }],
+              "minItems": 4,
+              "maxItems": 4,
+              "additionalItems": false
+            },
+            "pxPerPt": { "type": "number", "exclusiveMinimum": 0 }
+          },
+          "required": ["file", "clipPt", "pxPerPt"],
+          "additionalProperties": false
+        },
+        "corrections": {
+          "description": "Printed corrections, verbatim from the spec, for the figure view.",
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "panels": {
+          "description": "Reading order.",
+          "type": "array",
+          "items": { "$ref": "#/definitions/Panel" }
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "id",
+        "figure",
+        "sheet",
+        "title",
+        "engine",
+        "pageIndex",
+        "printedPage",
+        "image",
+        "corrections",
+        "panels"
+      ],
+      "additionalProperties": false
+    },
+    "Panel": {
+      "title": "Panel",
+      "type": "object",
+      "discriminator": { "propertyName": "type" },
+      "oneOf": [
+        { "$ref": "#/definitions/CurveFamily" },
+        { "$ref": "#/definitions/SingleCurve" },
+        { "$ref": "#/definitions/GuidelinePanel" },
+        { "$ref": "#/definitions/ScalePair" },
+        { "$ref": "#/definitions/Table" }
+      ]
+    },
+    "CurveFamily": {
+      "title": "CurveFamily",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "const": "curve_family" },
+        "input": { "$ref": "#/definitions/Quantity" },
+        "output": { "$ref": "#/definitions/Quantity" },
+        "param": { "$ref": "#/definitions/Quantity" },
+        "curves": {
+          "description": "Sorted by param; each curve's points sorted by input, ascending.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "param": { "type": "number" },
+              "points": { "type": "array", "items": { "$ref": "#/definitions/Pt" } }
+            },
+            "required": ["param", "points"],
+            "additionalProperties": false
+          }
+        },
+        "axes": {
+          "description": "Page transforms keyed by quantity name.",
+          "type": "object",
+          "additionalProperties": { "$ref": "#/definitions/Transform" }
+        }
+      },
+      "required": ["id", "type", "input", "output", "param", "curves", "axes"],
+      "additionalProperties": false
+    },
+    "SingleCurve": {
+      "title": "SingleCurve",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "const": "single_curve" },
+        "input": { "$ref": "#/definitions/Quantity" },
+        "output": { "$ref": "#/definitions/Quantity" },
+        "points": {
+          "description": "Sorted by input, ascending.",
+          "type": "array",
+          "items": { "$ref": "#/definitions/Pt" }
+        },
+        "axes": {
+          "description": "Page transforms keyed by quantity name.",
+          "type": "object",
+          "additionalProperties": { "$ref": "#/definitions/Transform" }
+        }
+      },
+      "required": ["id", "type", "input", "output", "points", "axes"],
+      "additionalProperties": false
+    },
+    "GuidelinePanel": {
+      "title": "GuidelinePanel",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "const": "guideline_panel" },
+        "input": { "$ref": "#/definitions/Quantity" },
+        "output": { "$ref": "#/definitions/Quantity" },
+        "baseline": { "type": "number" },
+        "families": {
+          "description": "Guide lines by family, e.g. {all}, {uphill, downhill}, {headwind, tailwind}; each line is [param, output] points sorted by param.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": { "type": "array", "items": { "$ref": "#/definitions/Pt" } }
+          }
+        },
+        "axes": {
+          "description": "Page transforms keyed by quantity name.",
+          "type": "object",
+          "additionalProperties": { "$ref": "#/definitions/Transform" }
+        }
+      },
+      "required": ["id", "type", "input", "output", "baseline", "families", "axes"],
+      "additionalProperties": false
+    },
+    "ScalePair": {
+      "title": "ScalePair",
+      "description": "Two scales printed side by side: to = a * from + b.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "const": "scale_pair" },
+        "from": { "$ref": "#/definitions/Quantity" },
+        "to": { "$ref": "#/definitions/Quantity" },
+        "a": { "type": "number" },
+        "b": { "type": "number" },
+        "axes": {
+          "description": "Page transforms keyed by quantity name.",
+          "type": "object",
+          "additionalProperties": { "$ref": "#/definitions/Transform" }
+        }
+      },
+      "required": ["id", "type", "from", "to", "a", "b", "axes"],
+      "additionalProperties": false
+    },
+    "Table": {
+      "title": "Table",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "const": "table" },
+        "columns": { "type": "array", "items": { "$ref": "#/definitions/Quantity" } },
+        "rows": {
+          "description": "One cell per column.",
+          "type": "array",
+          "items": { "type": "array", "items": { "type": ["number", "string", "null"] } }
+        }
+      },
+      "required": ["id", "type", "columns", "rows"],
+      "additionalProperties": false
+    },
+    "Manifest": {
+      "title": "Manifest",
+      "description": "perf/data/<dataset>/manifest.json.",
+      "type": "object",
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "dataset": { "type": "string", "description": "The dataset directory's name." },
+        "dataVersion": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Starts at 1; the extractor increments it only when a file hash differs from the previous manifest."
+        },
+        "pdfSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "extractorCommit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{7,40}(-dirty)?$",
+          "description": "git rev-parse --short HEAD, suffix -dirty if perf/extraction/ has uncommitted changes."
+        },
+        "files": {
+          "description": "Path relative to the dataset dir -> sha256 hex, for every .json except the manifest and every pages/*.png.",
+          "type": "object",
+          "propertyNames": { "pattern": "^(?!manifest\\.json$)([^/]+\\.json|pages/[^/]+\\.png)$" },
+          "additionalProperties": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+        }
+      },
+      "required": ["schemaVersion", "dataset", "dataVersion", "pdfSha256", "extractorCommit", "files"],
+      "additionalProperties": false
+    }
+  }
+}
