@@ -179,6 +179,63 @@ test('the TRACK item is today\'s click: it closes the menu and opens the track p
   assert.equal(menuEl(), null);
 });
 
+test('an untagged contact: TRACK with an ACID typed starts the track (the tag) and opens no track panel; empty, the track panel', async () => {
+  const { ws, state, menu, sent } = await load();
+  state.applyEfspSnapshot({ facilities: ['FAC_A'], positions: [], flightDataList: [], strips: [], bays: [{ bayId: 'v', positionId: 'APP_X', vfr: true }] });
+  ws.noteEfspPositionsAck({ facilityId: 'FAC_A', signedOn: ['APP_X'] });
+  let opened = 0;
+  const open = () => menu.openLabelMenu('t9', 0, 0, { onTrackInfo: () => { opened++; } });
+  const track = () => descendants(menuEl()).find(c => c.className === 'label-menu-track');
+
+  assert.equal(open(), true);
+  const [acid, type] = inputs();
+  assert.deepEqual([acid.dataset.field, type.dataset.field], ['tag-callsign', 'tag-type']);
+  acid.value = 'n123ab';
+  type.value = 'c172';
+  track()._listeners.click[0]();
+  assert.equal(menuEl(), null);
+  assert.equal(opened, 0, 'the track panel stays shut');
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].actingPositionId, 'APP_X');
+  assert.deepEqual(sent[0].op, { kind: 'StartFlightFollowing', trackId: 't9', flightData: { callsign: 'N123AB', aircraftData: 'C172' } });
+
+  open();
+  inputs()[0].value = 'BAD-ID';
+  track()._listeners.click[0]();
+  assert.notEqual(menuEl(), null, 'a bad ACID keeps the menu open');
+  assert.ok(inputs()[0].classList.contains('label-menu-input-bad'));
+  assert.equal(sent.length, 1);
+
+  open();
+  track()._listeners.click[0]();
+  assert.equal(opened, 1, 'nothing typed: today\'s click');
+  assert.equal(sent.length, 1);
+});
+
+test('an untagged contact: AT lists every Position worked with a VFR Bay; the strip goes to the one picked, which stays picked', async () => {
+  const { ws, state, menu, sent } = await load();
+  state.applyEfspSnapshot({ facilities: ['FAC_A'], positions: [], flightDataList: [], strips: [], bays: [
+    { bayId: 'v1', positionId: 'CD_X', vfr: true }, { bayId: 'v2', positionId: 'APP_X', vfr: true }, { bayId: 'n', positionId: 'OPS_X' },
+  ] });
+  ws.noteEfspPositionsAck({ facilityId: 'FAC_A', signedOn: ['CD_X', 'OPS_X', 'APP_X'] });
+  const at = () => descendants(menuEl()).filter(c => c.className === 'label-menu-at-pos');
+  const picked = () => at().filter(b => b.classList.contains('label-menu-at-on')).map(b => b.dataset.positionId);
+
+  menu.openLabelMenu('t9', 0, 0);
+  assert.deepEqual(at().map(b => b.dataset.positionId), ['CD_X', 'APP_X'], 'OPS_X has no VFR Bay');
+  assert.deepEqual(picked(), ['CD_X']);
+  at()[1]._listeners.click[0]();
+  assert.deepEqual(picked(), ['APP_X']);
+  inputs()[0].value = 'N1';
+  menuEl()._listeners.keydown[0](key('Enter'));
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].actingPositionId, 'APP_X');
+
+  menu.openLabelMenu('t8', 0, 0);
+  assert.deepEqual(picked(), ['APP_X'], 'the last pick stays');
+  menu.closeLabelMenu();
+});
+
 // crc-sync docs/adr/0147 (H176): SUPPRESS is on the owner's menu only. A conflict alert never opens the menu by itself
 // (S-ARCH-112's non-owner menu is gone): the controller working the other aircraft clicks this one and gets the track panel.
 test('a conflict alert: SUPPRESS on the owner\'s menu, one frame; no menu for a controller who does not hold the Strip', async () => {

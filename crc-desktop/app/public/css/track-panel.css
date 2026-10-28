@@ -92,6 +92,10 @@
     #tp-ff-section[hidden] { display: none; }
     .tp-ff-msg { font-size: 9px; color: var(--ui-text-dim); letter-spacing: 0.05em; margin-top: 4px; min-height: 0; }
     .tp-ff-msg:empty { display: none; }
+    /* AT: the Position the strip goes to (crc-sync docs/adr/0146); the picked one is bright, still no colour */
+    .tp-ff-at { display: flex; gap: 3px; align-items: center; margin-bottom: 4px; font-size: 9px; color: var(--ui-text-dim); letter-spacing: 0.05em; }
+    .tp-ff-at-pos { background: none; border: 1px solid var(--ui-border); color: var(--ui-text-dim); font: inherit; cursor: pointer; padding: 0 4px; }
+    .tp-ff-at-pos.tp-ff-at-on { border-color: var(--ui-border-3); color: var(--ui-text-bright); }
 
 
 

@@ -11,7 +11,7 @@ import { applyEfspSnapshot } from '../app/public/js/panels/efsp/efsp-state.js';
 import { sendEfspSetPositions } from '../app/public/js/panels/efsp/efsp-ws.js';
 import {
   canAssignCode, canCancelIfr, canRecallVfrHandoff, canTagTrack, canTerminateRadarService, contactForToken, tagProblem, tagTrack,
-  vfrBayOf, vfrHandoffAcceptAs, vfrHandoffTargets, vfrTagPosition,
+  pickVfrTagPosition, vfrBayOf, vfrHandoffAcceptAs, vfrHandoffTargets, vfrTagPosition, vfrTagPositions,
 } from '../app/public/js/panels/efsp/flight-following.js';
 import { atcRelation } from '../app/public/js/atc-scope.js';
 import { latestFromServer } from '../app/public/js/picture.js';
@@ -64,6 +64,23 @@ test('a tag applies to a contact with no live strip, at a Position with a VFR Ba
   assert.equal(canTagTrack('22'), true, 'its strip is dropped: untagged again');
   assert.equal(tagProblem(''), 'callsign: 1 to 7 letters or digits');
   assert.equal(tagProblem('N123AB'), null, 'the type is optional');
+  sendEfspSetPositions('INCIRLIK', []);
+});
+
+test('AT: the tag goes to the Position picked, any worked with a VFR Bay; the pick lapses when that Position is left', () => {
+  board();
+  sendEfspSetPositions('CENTER', []);
+  sendEfspSetPositions('INCIRLIK', ['OPS', 'CD', 'AP']);
+  assert.deepEqual(vfrTagPositions(), ['CD', 'AP'], 'OPS has no VFR Bay');
+  pickVfrTagPosition(null);
+  assert.equal(vfrTagPosition(), 'CD', 'nothing picked: the first');
+  pickVfrTagPosition('AP');
+  assert.equal(vfrTagPosition(), 'AP');
+  assert.equal(tagTrack('99', 'N1', '', null, { positionId: 'OPS' }), 'you do not work VFR traffic at OPS');
+  assert.equal(tagTrack('99', 'N1', '', null, { positionId: 'GC' }), 'you do not work VFR traffic at GC', 'not signed on there');
+  sendEfspSetPositions('INCIRLIK', ['CD']);
+  assert.equal(vfrTagPosition(), 'CD', 'AP left: the pick lapses');
+  pickVfrTagPosition(null);
   sendEfspSetPositions('INCIRLIK', []);
 });
 

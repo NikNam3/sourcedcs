@@ -125,6 +125,19 @@
       min-width: 0;
     }
     .label-menu-input:focus { outline: 1px solid var(--ui-border-3); }
+    .label-menu-input.label-menu-input-bad { outline: 1px solid var(--efsp-bad); }
+    /* crc-sync docs/adr/0146: AT, the Position a tag puts the strip at; the picked one is bright, still no colour */
+    .label-menu-row.label-menu-at { display: flex; grid-column: 1 / -1; gap: 3px; align-items: center; }
+    .label-menu-at .label-menu-name { margin-right: auto; }
+    .label-menu-at-pos {
+      background: none;
+      border: 1px solid var(--ui-border);
+      color: var(--ui-text-dim);
+      font: inherit;
+      cursor: pointer;
+      padding: 0 3px;
+    }
+    .label-menu-at-pos.label-menu-at-on { border-color: var(--ui-border-3); color: var(--ui-text-bright); }
     /* crc-sync's docs/adr/0145: SUPPRESS one conflict alert; crc-sync docs/adr/0146: the VFR strip's actions (ACCEPT,
        HO, RECALL, CODE, RADAR SVC TERM). Grey like every other item (dark cockpit) */
     .label-menu-suppress, .label-menu-action {

@@ -1248,10 +1248,16 @@ AIC's to change`).
 
 ## 8C2. Flight following — radar service for a contact with no Strip
 
-**Flight following** (VFR radar traffic advisories) starts on the contact itself. Signed on to `AP` or `CTR` as Primary,
-click a contact that has no Strip: the track panel has a **Start flight following** section. Type the callsign (filled
-from the contact's tag, if it has one) and the aircraft type (Block 3, e.g. `C172`) and press **START** (or Enter), or
-type `.ff <track number> <CALLSIGN> <TYPE>`, where the track number is the one the data block shows.
+**Flight following** (VFR radar traffic advisories) starts on the contact itself. Signed on as Primary to a Position
+with a VFR Bay, click a contact that has no Strip: its menu offers **AT**, **ACID** and **TYPE**. Type the callsign and,
+optionally, the aircraft type and press **TRACK** (or Enter); TRACK with no ACID opens the track panel, whose **Tag VFR**
+section does the same. Or type `.ff <track number> <CALLSIGN> [TYPE] [@POSITION]`, where the track number is the one the
+data block shows.
+
+**AT is where the strip goes**: one button per Position you work that has a VFR Bay, the lit one taking it. The menu and
+the track panel share the pick, and it stays until you pick another or stop working that Position. `.ff` shows nothing on
+screen, so when more than one of your Positions could take the strip it asks for `@AP` (or whichever); with one, it needs
+none. "IFR cancelled" makes no new strip: the Strip turns VFR where it is, at its holder.
 
 In one step the flight gets flight data, a **discrete code** to issue, and an **OVERFLIGHT** Strip in your Overflight
 Bay (`ap-overflight` / `ctr-overflight`), already **in sector**, and the contact is tracked under its callsign (bound to
@@ -2280,7 +2286,7 @@ new missions.
 - **Drag** a Strip onto another Position's tab to transfer it (same-Facility only); onto a Bay tab within your own Position to move it there. The drop follows the dragged Strip, not the cursor: it lands in the slot nearest the ghost's top edge. A release with the ghost over its own slot is no move and sends nothing, so a click or double-click never moves a Strip. A Position or Bay tab takes a drop only after more than 16 px of travel.
 - **The left edge of a Strip** (Highlight, an obligation due or overdue, MARSA armed or voided, contact lost, an alert) names itself and what to do in a hover tooltip: the colour drawn first, then "Also:" and any others underneath. Hover the edge itself.
 - **Search**: `.find <text>` dot-command, or the search icon — matches callsign/beacon (and a carrier aircraft's side number), opens a temporary search-results Bay.
-- **Dot-commands**: `.drop [reason]`, `.undo` (undoes the action in the Undo slot, no Strip needs selecting), `.find <text>`, `.bind <track id>`, `.unbind`, `.stereo <NAME> <CALLSIGN>`, `.ff <track number> <CALLSIGN> <TYPE>` and `.term` (flight following, §8C2), `.vfr <CALLSIGN> <TYPE> <DIR> [runway]` (a VFR departure at `CD`, §3), and for MARSA (§8D) `.marsa <CALLSIGN> [DECLARER]`, `.rendezvous`, `.endmarsa`, `.voidmarsa` — all but `.find`, `.stereo`, `.ff`, `.vfr` and `.undo` apply to whichever Strip is currently selected.
+- **Dot-commands**: `.drop [reason]`, `.undo` (undoes the action in the Undo slot, no Strip needs selecting), `.find <text>`, `.bind <track id>`, `.unbind`, `.stereo <NAME> <CALLSIGN>`, `.ff <track number> <CALLSIGN> [TYPE] [@POSITION]` and `.term` (flight following, §8C2), `.vfr <CALLSIGN> <TYPE> <DIR> [runway]` (a VFR departure at `CD`, §3), and for MARSA (§8D) `.marsa <CALLSIGN> [DECLARER]`, `.rendezvous`, `.endmarsa`, `.voidmarsa` — all but `.find`, `.stereo`, `.ff`, `.vfr` and `.undo` apply to whichever Strip is currently selected.
 - **Undo** (ADR 0100): every one-click move you made (NLA step, hand-off, Checked in, carrier handoff, Hand off to PAR, Landed, Missed approach, Closed traffic, Leave pattern, surveillance chip, TOFI Exit, Split/Join, Divert, Start flight following, Radar service terminated) can be undone for 10 seconds, by the Position that did it. The panel shows one slot, "Undo · Hand off VIPER1 → APP · 7 s"; click it, press Ctrl+Z with the panel in use, or type `.undo`. The newest undoable action replaces the slot. Changes other controllers in your Facility made to the same records in the meantime are voided (a voided clearance stays visible, marked VOIDED); the Position that made them gets a message in its panel ("LC undid Hand off VIPER1; your annotation was voided", click to dismiss; nothing is marked on the Strip). An Undo is refused if another Facility has since answered, or the Strip was dropped and archived; the slot line says why. Undoing a Split removes the part's Strip and its flight data on every client at once.
 - **Settings** has one tab per panel: General, Colours, Radar (the Map group, declutter, navpoints, track visibility,
   Conflict Alert, extended centreline, debug), SRS and Tools, and one for each panel that has settings of its own:

@@ -129,3 +129,30 @@ test('no legacy panel paints outside the dock after a failed layout restore', as
   expect(await strayPanels(page)).toEqual([]);
   expect(await ghostToggles(page)).toEqual([]);
 });
+
+// The other side of the same sweep (human 2026-10-27: "previously open panels are empty until closed and reopened after
+// app launch"): a restored layout's background tabs stay in <body> until first shown, so the sweep hides them; selecting
+// one must show it, not an empty tab.
+test('a restored background tab shows its panel when selected', async ({ page }) => {
+  await page.setViewportSize({ width: 1400, height: 900 });
+  const left = { type: 'leaf', data: { views: ['track', 'efsp', 'metrics', 'radars'], activeView: 'track', id: '2' }, size: 500 };
+  const map = { type: 'leaf', data: { views: ['map', 'settings'], activeView: 'map', id: '1' }, size: 900 };
+  const seed = layout(left, map);
+  seed.panels = { map: PANELS.map, track: PANELS.track, radars: PANELS.radars, radio: PANELS.radio,
+    efsp: { id: 'efsp', contentComponent: 'efsp', title: 'STRIPS' },
+    metrics: { id: 'metrics', contentComponent: 'metrics', title: 'METRICS' },
+    settings: { id: 'settings', contentComponent: 'settings', title: 'SETTINGS' } };
+  await page.addInitScript(([s, token]) => {
+    localStorage.setItem('crc-desktop-sync-token', token);
+    localStorage.setItem('crc-desktop-dock-layout-v2', JSON.stringify(s));
+  }, [seed, fakeToken('u-panels-restore')]);
+  await page.goto('/');
+  await installAppModules(page);
+  await page.waitForFunction(() => crc.dock.dock !== null);
+  for (const [id, domId] of [['efsp', 'efsp-panel'], ['metrics', 'metrics-panel'], ['radars', 'radars-panel'], ['settings', 'settings-panel']]) {
+    expect(await page.evaluate((p) => !!crc.dock.dock.api.getPanel(p), id), `${id} restored`).toBe(true);
+    await page.evaluate((p) => crc.dock.dock.api.getPanel(p).api.setActive(), id);
+    await expect(page.locator(`#${domId}`), `${id} shows when its tab is selected`).toBeVisible();
+  }
+  expect(await strayPanels(page)).toEqual([]);
+});

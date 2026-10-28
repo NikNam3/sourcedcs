@@ -10,7 +10,7 @@ import { normalizeStereoNameClient } from '../efsp-stereo-routes.js';
 import { parseDotCommand } from '../dot-command.js';
 import { buildJoinOp, buildSplitOp, joinLeadCandidates, parseSplitCommand } from '../formation-rules.js';
 import { dispatchFormationOp } from '../bay/popovers/formation.js';
-import { canTagTrack, canTerminateRadarService, contactForToken, tagTrack, terminateRadarService } from '../flight-following.js';
+import { canTagTrack, canTerminateRadarService, contactForToken, tagTrack, terminateRadarService, vfrTagPositions } from '../flight-following.js';
 
 /**
  * `.mission <CALLSIGN>` — frag a mission line bound to a live flight.
@@ -87,8 +87,9 @@ export function _dispatchDotCommand(parsed) {
     return;
   }
 
-  // crc-sync docs/adr/0146: `.ff <track> <CALLSIGN> [TYPE]` tags a VFR on a contact (the track panel's keyboard path, as
-  // .bind is the TRK badge's). It makes the strip, so nothing is selected.
+  // crc-sync docs/adr/0146: `.ff <track> <CALLSIGN> [TYPE] [@POSITION]` tags a VFR on a contact (the track panel's
+  // keyboard path, as .bind is the TRK badge's). It makes the strip, so nothing is selected. `@POSITION` names where the
+  // strip goes; it is needed when more than one Position the controller works could take it (nothing on screen says which).
   if (parsed.verb === 'ff') {
     _startFlightFollowingByDot(parsed.args);
     return;
@@ -141,15 +142,21 @@ export function _dispatchDotCommand(parsed) {
   }
 }
 
-function _startFlightFollowingByDot(args) {
-  const [token, callsign, type] = args;
-  if (!token || !callsign) { _showDotCommandError('.ff needs the track and a callsign, e.g. .ff 1234 N123AB [C172]'); return; }
+function _startFlightFollowingByDot(rawArgs) {
+  const atArgs = rawArgs.filter(a => String(a).startsWith('@'));
+  const [token, callsign, type] = rawArgs.filter(a => !String(a).startsWith('@'));
+  if (!token || !callsign) { _showDotCommandError('.ff needs the track and a callsign, e.g. .ff 1234 N123AB [C172] [@AP]'); return; }
+  const candidates = vfrTagPositions();
+  let positionId = atArgs.length ? String(atArgs[0]).slice(1).toUpperCase() : null;
+  if (positionId && !candidates.includes(positionId)) { _showDotCommandError(`you do not work VFR traffic at ${positionId}${candidates.length ? ` (you can: ${candidates.join(', ')})` : ''}`); return; }
+  if (!positionId && candidates.length > 1) { _showDotCommandError(`which Position gets the strip? add ${candidates.map(p => `@${p}`).join(' or ')}`); return; }
+  if (!positionId) positionId = candidates[0] || null;
   const trackId = contactForToken(token);
   if (!trackId) { _showDotCommandError(`no contact ${String(token).toUpperCase()} on the scope`); return; }
   if (!canTagTrack(trackId)) { _showDotCommandError(`contact ${String(token).toUpperCase()} already has a strip, or no Position that works VFR traffic is held`); return; }
   const problem = tagTrack(trackId, callsign, type || '', (ack) => {
     if (!ack.ok) _showDotCommandError(ack.detail || ack.reason || 'refused');
-  });
+  }, { positionId });
   if (problem) _showDotCommandError(problem);
 }
 

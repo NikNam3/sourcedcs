@@ -14,7 +14,7 @@ import { history, tracks } from '../picture.js';
 import { map, mapReady } from '../map-handle.js';
 import { settings } from '../settings.js';
 import { markEfspChanged, onEfspChanged } from './efsp/efsp-change-bus.js';
-import { canTagTrack, tagTrack } from './efsp/flight-following.js';
+import { canTagTrack, pickVfrTagPosition, tagTrack, vfrTagPosition, vfrTagPositions } from './efsp/flight-following.js';
 
 // ── Track info panel ─────────────────────────────────────────────────────
 // Left-clicking an aircraft track opens this persistent side panel. It
@@ -93,12 +93,13 @@ export function initTrackPanel() {
   const startFf = () => {
     if (_trackPanelId == null || !$ffCallsign || !$ffType) return;
     const trackId = _trackPanelId;
+    const at = vfrTagPosition();
     const problem = tagTrack(trackId, $ffCallsign.value, $ffType.value, (ack) => {
       if (_trackPanelId !== trackId) return;
       if ($ffMsg) $ffMsg.textContent = ack.ok ? '' : (ack.detail || ack.reason || 'refused');
       if (ack.ok) { $ffCallsign.value = ''; $ffType.value = ''; }
       updateTrackPanel();
-    });
+    }, { positionId: at });
     if ($ffMsg) $ffMsg.textContent = problem || '';
   };
   const $ffStart = document.getElementById('tp-ff-start');
@@ -363,6 +364,7 @@ function _refreshFlightFollowing(fresh) {
   if (!$sec) return;
   const show = canTagTrack(_trackPanelId);
   $sec.hidden = !show;
+  if (show) _refreshTagAt();
   if (_ffShownFor !== _trackPanelId) {
     // A new contact: start from its tag, if it has one (a name the controller already gave it), and no old message.
     _ffShownFor = _trackPanelId;
@@ -373,6 +375,29 @@ function _refreshFlightFollowing(fresh) {
     if ($ty) $ty.value = '';
     if ($msg) $msg.textContent = '';
   }
+}
+
+// AT: one button per Position the controller works with a VFR Bay; the picked one (shared with the label menu) is lit.
+function _refreshTagAt() {
+  const $at = document.getElementById('tp-ff-at');
+  if (!$at) return;
+  const list = vfrTagPositions();
+  const picked = vfrTagPosition();
+  const key = `${list.join(',')}|${picked}`;
+  if ($at.dataset.key === key) return;
+  $at.dataset.key = key;
+  const label = document.createElement('span');
+  label.textContent = 'AT';
+  $at.replaceChildren(label, ...list.map(p => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = p === picked ? 'tp-ff-at-pos tp-ff-at-on' : 'tp-ff-at-pos';
+    btn.dataset.positionId = p;
+    btn.textContent = p;
+    btn.title = `the strip goes to ${p}`;
+    btn.addEventListener('click', (e) => { e.stopPropagation(); pickVfrTagPosition(p); _refreshTagAt(); });
+    return btn;
+  }));
 }
 
 onEfspChanged(['alerts', 'scope', 'correlations', 'positions', 'board'], () => updateTrackPanel()); // a conflict alert on the open contact (efsp-change-bus.js)

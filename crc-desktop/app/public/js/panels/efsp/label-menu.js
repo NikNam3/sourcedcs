@@ -7,7 +7,8 @@ import { getOpenEfspBayIds } from './bay/open-bays.js';
 import { labelAssignOps, labelAssignmentFor } from './label-assign-rules.js';
 import {
   acceptVfrHandoff, assignCode, canAssignCode, canRecallVfrHandoff, canTagTrack, canTerminateRadarService, recallVfrHandoff,
-  tagTrack, terminateRadarService, initiateVfrHandoff, vfrHandoffAcceptAs, vfrHandoffTargets,
+  tagProblem, tagTrack, terminateRadarService, initiateVfrHandoff, vfrTagPositions, vfrTagPosition, pickVfrTagPosition,
+  vfrHandoffAcceptAs, vfrHandoffTargets,
 } from './flight-following.js';
 
 // The track-label menu (H164 FT-Q4 a, docs/adr/0140): a click on a contact's data block, by the controller who owns
@@ -147,9 +148,35 @@ export function openLabelMenu(trackId, clientX, clientY, { onTrackInfo } = {}) {
     if (canTerminateRadarService(strip)) _action('label-menu-terminate', 'RADAR SVC TERM', 'drop the strip: code released, track untagged', () => terminateRadarService(strip));
   }
 
-  // TAG: the contact has no strip (crc-sync docs/adr/0146). Enter sends; the type may stay empty.
+  // TAG: the contact has no strip (crc-sync docs/adr/0146). Enter sends; the type may stay empty. AT: the Position the
+  // strip goes to, any the controller works with a VFR Bay; the pick is shared (flight-following.js).
   const tagInputs = [];
+  let tagAt = null;
   if (tag) {
+    const atList = vfrTagPositions();
+    tagAt = vfrTagPosition();
+    const row = document.createElement('div');
+    row.className = 'label-menu-row label-menu-at';
+    const name = document.createElement('span');
+    name.className = 'label-menu-name';
+    name.textContent = 'AT';
+    row.append(name);
+    const buttons = atList.map(p => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'label-menu-at-pos';
+      btn.dataset.positionId = p;
+      btn.textContent = p;
+      btn.title = `the strip goes to ${p}`;
+      btn.addEventListener('click', () => { tagAt = p; pickVfrTagPosition(p); mark(); });
+      row.append(btn);
+      return btn;
+    });
+    const mark = () => buttons.forEach(b => {
+      if (b.dataset.positionId === tagAt) b.classList.add('label-menu-at-on'); else b.classList.remove('label-menu-at-on');
+    });
+    mark();
+    el.append(row);
     for (const [field, label, max] of [['tag-callsign', 'ACID', 7], ['tag-type', 'TYPE', 12]]) {
       const row = document.createElement('label');
       row.className = 'label-menu-row';
@@ -169,18 +196,28 @@ export function openLabelMenu(trackId, clientX, clientY, { onTrackInfo } = {}) {
     }
   }
 
+  // TRACK: on an untagged contact with an ACID typed it starts the track (the tag, as Enter does); otherwise today's
+  // click, the track panel.
   const track = document.createElement('button');
   track.type = 'button';
   track.className = 'label-menu-track';
   track.textContent = 'TRACK';
-  track.addEventListener('click', () => { closeLabelMenu(); if (onTrackInfo) onTrackInfo(); });
+  track.addEventListener('click', () => {
+    if (tag && String(tagInputs[0].value || '').trim()) { commit(); return; }
+    closeLabelMenu();
+    if (onTrackInfo) onTrackInfo();
+  });
   el.append(track);
 
   const commit = () => {
     if (tag) {
       const [cs, ty] = tagInputs.map(i => i.value);
+      if (!String(cs || '').trim()) { closeLabelMenu(); return; }
+      // A bad ACID keeps the menu open, the field marked (crc-sync would refuse it anyway).
+      const problem = tagProblem(cs);
+      if (problem) { tagInputs[0].classList.add('label-menu-input-bad'); tagInputs[0].title = problem; tagInputs[0].focus(); return; }
       closeLabelMenu();
-      if (String(cs || '').trim()) tagTrack(trackId, cs, ty, null, { banner: true });
+      tagTrack(trackId, cs, ty, null, { banner: true, positionId: tagAt });
       return;
     }
     if (!strip) { closeLabelMenu(); return; }

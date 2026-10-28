@@ -744,9 +744,18 @@ function mountExistingPanel(domId, initFn) {
   // dockview hasn't placed has nowhere to go and would otherwise render inline wherever it sits in the HTML source. Shown
   // on every (re)creation, hidden again on dispose and by hideStrayLegacyPanels() (U-PANELS-GHOST).
   if (state.element) state.element.classList.remove('dock-unmounted');
+  let visibilityDisposable = null;
   return {
     element: state.element,
-    init() {
+    init(params) {
+      // A restored layout's background tabs keep their element in <body> until first shown (dockview's default
+      // 'onlyWhenVisible' renderer attaches only the active tab), so hideStrayLegacyPanels() hides them; dockview then
+      // attaches them on tab select with the class still on and the panel painted empty. Un-hide on every show.
+      if (params && params.api && params.api.onDidVisibilityChange) {
+        visibilityDisposable = params.api.onDidVisibilityChange((event) => {
+          if (event.isVisible && state.element) state.element.classList.remove('dock-unmounted');
+        });
+      }
       if (state.initialized) return;
       state.initialized = true;
       state.hooks = (initFn && initFn()) || null;
@@ -758,6 +767,7 @@ function mountExistingPanel(domId, initFn) {
     // need to clear that state here, or the next tick after close tries to
     // write into DOM that's no longer attached to the document and throws.
     dispose() {
+      if (visibilityDisposable) visibilityDisposable.dispose();
       if (state.element) state.element.classList.add('dock-unmounted');
       if (state.hooks && state.hooks.onClose) state.hooks.onClose();
     },

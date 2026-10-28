@@ -20,9 +20,23 @@ export function vfrBayOf(positionId, bays = getEfspBays()) {
   return (bays || []).find(b => b.vfr === true && b.positionId === positionId && (!b.facilityId || b.facilityId === facilityId)) || null;
 }
 
-/** The Position this controller tags a track at: the first Position it acts at that has a VFR Bay, or null. */
+/** Every Position this controller acts at that has a VFR Bay: where a tag may put the strip (the controller picks). */
+export function vfrTagPositions() {
+  return getActingPositions().filter(p => vfrBayOf(p));
+}
+
+// The Position the controller last picked for a tag (the label menu's and the track panel's AT row share it).
+let _pickedTagAt = null;
+
+/** The Position a tag goes to when the controller names none: the one last picked while still worked, else the first. */
 export function vfrTagPosition() {
-  return getActingPositions().find(p => vfrBayOf(p)) || null;
+  const at = vfrTagPositions();
+  return at.includes(_pickedTagAt) ? _pickedTagAt : (at[0] || null);
+}
+
+/** The controller picks the Position a tag puts the strip at (AT); later tags start on it while it is still worked. */
+export function pickVfrTagPosition(positionId) {
+  _pickedTagAt = positionId || null;
 }
 
 /** Whether a tag applies to this contact: a Position that tags is held, and no live strip is on it. */
@@ -53,12 +67,13 @@ export function tagProblem(callsign) {
 }
 
 /**
- * Sends StartFlightFollowing (the tag). `onAck(ack)` gets the server's answer; a refusal is the caller's to show (it
+ * Sends StartFlightFollowing (the tag) at the Position named, else the first that may. `onAck(ack)` gets the server's answer; a refusal is the caller's to show (it
  * returns true so the generic banner stays quiet). @returns {string|null} what is wrong before sending, or null when sent
  */
-export function tagTrack(trackId, callsign, aircraftData, onAck, { code = false, banner = false } = {}) {
-  const positionId = vfrTagPosition();
-  if (!positionId) return 'sign on to a Position that works VFR traffic first';
+export function tagTrack(trackId, callsign, aircraftData, onAck, { code = false, banner = false, positionId: at = null } = {}) {
+  // `positionId`: the Position the controller picked; it must be one they act at with a VFR Bay.
+  const positionId = at ? (vfrTagPositions().includes(at) ? at : null) : vfrTagPosition();
+  if (!positionId) return at ? `you do not work VFR traffic at ${at}` : 'sign on to a Position that works VFR traffic first';
   const problem = tagProblem(callsign);
   if (problem) return problem;
   const op = {

@@ -1104,6 +1104,7 @@
    "changeToIfr",
    "contactForToken",
    "initiateVfrHandoff",
+   "pickVfrTagPosition",
    "recallVfrHandoff",
    "tagProblem",
    "tagTrack",
@@ -1111,7 +1112,8 @@
    "vfrBayOf",
    "vfrHandoffAcceptAs",
    "vfrHandoffTargets",
-   "vfrTagPosition"
+   "vfrTagPosition",
+   "vfrTagPositions"
   ],
   "panels/efsp/formation-rules.js": [
    "ASSIGNMENT_KINDS",
