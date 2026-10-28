@@ -231,7 +231,7 @@ sample_problems:
 ### Task 4: Read context, exact and conservative passes
 
 **Files:**
-- Create: `perf/src/core/ctx.ts`
+- Create: `perf/src/core/ctx.ts`, `perf/tests/helpers/exhaustive.ts` (the exhaustive search, a test oracle only, never imported by `src/`)
 - Test: `perf/tests/ctx.test.ts`
 
 **Interfaces:**
@@ -249,40 +249,46 @@ sample_problems:
     readonly cells: Readonly<Record<K, Cell>>;
     readonly trace: readonly { readonly id: string; readonly value: number }[];   // exact pass, in read order
     readonly roundingPoints: readonly string[];                                  // ids of the exact pass, in order
-    readonly runs: number;                                                       // conservative runs made
+    readonly runs: number;                                                       // conservative runs made (the exact pass not counted)
   }
   export function roundTo(value: number, step: number, dir: 'down' | 'up'): number;
   export function runExact<K extends string>(chain: Chain<K>): { outputs: Readonly<Record<K, Read<number>>>; trace: Evaluation<K>['trace'] };
   export function evaluate<K extends string>(chain: Chain<K>, kinds: Readonly<Record<K, OutputKind>>): Evaluation<K>;
+  // tests/helpers/exhaustive.ts — same signature and result shape, every combination
+  export function evaluateExhaustive<K extends string>(chain: Chain<K>, kinds: Readonly<Record<K, OutputKind>>): Evaluation<K>;
   ```
 - **roundTo:** `q = value / step`; snap `q` to `Math.round(q)` when within 1e-9 of it; floor or ceil; multiply back; strip float noise with `Number(x.toFixed(10))`.
-- **Conservative search** (backtracking; the algorithm the signature does not fix):
+- **evaluate**, the single-point test (spec 5.2, decided 28 Oct 2026; linear in the number of rounding points, never 2^n). A ctx in a run is told, per id, `exact`, `down` or `up`; an id it was told nothing about is read exact.
   ```
-  stack = [[]]                                   // prefixes of choices, one per read in call order
-  while stack not empty:
-    prefix = stack.pop(); choices = []
-    run chain with a ctx whose i-th read uses prefix[i] if i < prefix.length, else 'down';
-      it appends the choice used to choices and records, per read, whether down == up
-    runs++
-    for j from prefix.length to choices.length - 1, where read j had down != up:
-      stack.push(choices[0..j-1] + ['up'])
-    for each output k: an error from this run → keep the first error for k;
-      else keep the worse value per WORSE[kinds[k]]
+  exact = run(all exact)                       // trace, roundingPoints, exact outputs
+  for each id p read in the exact pass whose value is not on its step:
+    lo = run({p: down}); hi = run({p: up}); runs += 2
+    for each output k: dir[k][p] = the worse of lo, hi for k per WORSE[kinds[k]] ('down' on a tie)
+  for each output k:
+    loop:
+      f = run({every p with dir[k][p]: dir[k][p]}); runs++
+      new = ids f read that have no dir[k] and are not on their step
+      if new is empty: break
+      for each q in new: test q down and up with the others as in f; runs += 2; set dir[k][q]
+    conservative[k] = the worst of f and every single-point run, for k
   ```
-  This runs every leaf once, follows branches whose set of reads depends on earlier choices, and skips the `up` branch of a value already on its step.
-- **Cells:** exact error → the cell's conservative is that same error (the whole cell is rejected). Exact ok but some run errored for `k` → conservative is that run's first error. Otherwise conservative is the worst value.
+  An id's value is "on its step" when `roundTo(v, step, 'down') === roundTo(v, step, 'up')`.
+- **evaluateExhaustive** (test oracle): backtracking over every combination. Keep a stack of choice prefixes, starting with `[[]]`. Run the chain with read i using `prefix[i]` when there is one, else `down`; record the choices made. Push `choices[0..j-1] + ['up']` for every j ≥ prefix length whose read was not on its step. Keep the worst value per output over all runs.
+- **Cells**, both functions: exact error → the cell's conservative is that same error (the whole cell is rejected). Exact ok but some run errored for `k` → conservative is the first such error. Otherwise conservative is the worst value.
 
 - [ ] **Step 1:** Write `tests/ctx.test.ts`:
   - `roundTo(3.16, 0.01, 'down') === 3.16` and `'up'` → 3.16 (Review Focus 2); `roundTo(3.161, 0.01, 'up') === 3.17`; `roundTo(-1050, 100, 'down') === -1100`;
   - `runExact` returns unrounded values and the trace in read order;
   - one synthetic chain `d = 2 * read('a', 1.23, 0.1)` with kind `distance` → conservative 2.6; as `refusalSpeed` → 2.4;
-  - a branch chain: `r = read('roll', x, 10); if (r < 2500) use read('check1000', …) else read('check2000', …)` with x = 2495, so the down branch reads `check1000` and the up branch `check2000`; assert the worst value comes from the right branch and `runs` is the leaf count;
+  - a branch chain: `r = read('roll', x, 10); if (r < 2500) use read('check1000', …) else read('check2000', …)`, x = 2495 and `check2000` the worse branch: the final run reads `check2000`, which the exact pass never read; it gets its own test, and the conservative value is `evaluateExhaustive`'s;
   - two outputs sharing one read, one `distance` and one `refusalSpeed`: each takes its own worst direction (spec 5.2);
-  - an output that is `OutOfChart` only when rounded up → exact ok, conservative the error; an exact error → both the error;
-  - 10 reads, none on its step → `runs === 1024`.
+  - an output that is `OutOfChart` only when one point is rounded up → exact ok, conservative the error; an exact error → both the error;
+  - 10 reads, none on its step, one output → `runs === 21`; 45 reads, three outputs → `runs === 93` and `evaluate` completes in under 20 ms;
+  - all 10 reads already on their step → `runs === 1`;
+  - **oracle agreement:** 200 seeded random chains (`mulberry32` or similar, seed fixed in the test) of 3 to 8 reads, each a smooth monotone function of the earlier reads (sums, products, `Math.sqrt`, one `if` on a read): for every output, `evaluate`'s conservative equals `evaluateExhaustive`'s within 1e-9.
 - [ ] **Step 2:** Run `cd perf && nice -n 19 node --test tests/ctx.test.ts`: FAIL.
-- [ ] **Step 3:** Implement `src/core/ctx.ts`.
-- [ ] **Step 4:** Run: PASS. Commit `feat(perf): read context with backtracking conservative search`.
+- [ ] **Step 3:** Implement `src/core/ctx.ts` and `tests/helpers/exhaustive.ts`.
+- [ ] **Step 4:** Run: PASS. Commit `feat(perf): read context with the single-point conservative test`.
 
 ### Task 5: Errata file and loader
 
@@ -380,7 +386,7 @@ Behaviour:
 - Test: `perf/tests/sample-problems.test.ts`, `perf/tests/figures.test.ts`
 
 **Interfaces:**
-- Consumes: `panel`, `curveFamily`, `singleCurve`, `guidelinePanel`, `scalePair` (Task 3); `Ctx`, `STEPS`, `runExact` (Task 4); `loadSpecs`, `loadErrata`, `applyErrata` (Task 5); data from Tasks 6 and 7.
+- Consumes: `panel`, `curveFamily`, `singleCurve`, `guidelinePanel`, `scalePair` (Task 3); `Ctx`, `STEPS`, `runExact`, `evaluate`, `evaluateExhaustive` (Task 4); `loadSpecs`, `loadErrata`, `applyErrata` (Task 5); data from Tasks 6 and 7.
 - Produces:
   ```ts
   // b2-1.ts
@@ -409,6 +415,7 @@ Behaviour:
   - a 5 kt tailwind gives a longer distance than calm, a 5 kt headwind a shorter one; 1 % downhill shorter than level (Review Focus 3);
   - `runExact` on B2-3's MIL sample yields the trace ids `['b2-3.gw', 'b2-3.cg', 'b2-3.di', 'b2-3.slope', 'b2-3.wind']`;
   - GW 52,000 lb → `distanceFt` is `OutOfChart` with input `gross_weight`.
+  - **oracle agreement on real data:** a test chain that reads B2-3's six inputs through `ctx.read` (steps from `STEPS`) and calls `takeoffDistance`; for 50 seeded input sets inside the drawn ranges (both wind and slope signs), `evaluate`'s conservative distance equals `evaluateExhaustive`'s within 0.5 ft.
 - [ ] **Step 3:** Run `cd perf && nice -n 19 node --test tests/sample-problems.test.ts tests/figures.test.ts`: FAIL. Implement. Run: PASS. If a sample misses 2 % by a figure the prototype passed, the defect is in the port, not the data: compare with `perf/prototype/engine/engine.js`.
 - [ ] **Step 4:** Commit `feat(perf): figures B2-1 to B2-3 and golden sample problems`.
 

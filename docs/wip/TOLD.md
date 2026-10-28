@@ -253,13 +253,15 @@ The building blocks in `read/` return typed results: a value, or `OutOfChart {fi
 Every chart read in a figure file goes through one call, `ctx.read(id, value, step)`, where `id` names the rounding point (for example `b2-3.distance`). The chain is run in two kinds of pass:
 
 - **Exact pass:** `ctx.read` returns the value unchanged and records the path points for the figure view.
-- **Conservative pass:** every input and every intermediate value read off a chart is a rounding point. At each point the search tries both directions (down to the step, up to the step) **by backtracking**: it re-runs the chain from the start with the choices made so far fixed, so a branch inside a procedure is followed correctly (for example the acceleration check at 1,000 ft or 2,000 ft depending on the rounded takeoff roll). Inputs are rounding points like any other. With about ten rounding points per chain that is at most 1,024 runs, which takes milliseconds in a browser.
+- **Conservative pass:** every input and every intermediate value read off a chart is a rounding point; inputs are rounding points like any other. Each rounding point is tested on its own: the chain is run with that point rounded down to its step and again rounded up, every other point exact, and for each output the direction that makes it worse is that point's direction for that output. Then one final run per output rounds every point in its own direction for that output. If the final run reads a point the single-point runs never saw (a branch inside a procedure switched, for example the acceleration check at 1,000 ft or 2,000 ft depending on the rounded takeoff roll), that point is tested the same way, with the other points in their chosen directions, and the final run is repeated. A value already on its step needs no test. The conservative value is the worst of the final run and every single-point run.
 
-One search covers all outputs of a chain and keeps, **per output**, the worst value found (`WORSE[outputKind]`, the table below). A test pins the list of rounding point ids per chain, so adding or losing a read is a visible change.
+This takes about two runs per rounding point plus one per output: step 1's takeoff chain, about 45 rounding points, needs about 100 runs, well under a millisecond. Trying every combination instead (2^n runs) would need about 3·10^13 runs there. The single-point test misses only a point whose worse direction flips because another point moved by one step (10 ft, 1 kt, 0.01 TOF); over one step the charts are smooth enough that this does not happen in practice. The exhaustive search is kept as a test oracle, not in the app: tests show both give the same conservative values on synthetic chains with a branch and on B2-3 over many inputs (decided 28 Oct 2026, after the exponential cost was raised).
+
+One evaluation covers all outputs of a chain and keeps, **per output**, the worst value found (`WORSE[outputKind]`, the table below). A test pins the list of rounding point ids per chain, so adding or losing a read is a visible change.
 
 **Out of chart in the conservative pass:** if a rounding step leaves the drawn data (the exact value is inside, the step up or down is not), the conservative cell shows "—" with the figure and input named, and the exact cell is still shown. If the exact value itself is out of chart, the whole cell (exact and conservative) is rejected.
 
-Why automatic and not a hand-set direction per quantity: the right direction is not always obvious, and the manual itself warns that refusal speed can rise with gross weight at low RCR. Trying both directions is never wrong.
+Why automatic and not a hand-set direction per quantity: the right direction is not always obvious, and the manual itself warns that refusal speed can rise with gross weight at low RCR. Trying both directions at every point is never wrong.
 
 "Worse" per output:
 
@@ -491,7 +493,7 @@ Layers of checks, each catching a different kind of error: automatic checks catc
 Code tests (CI, all MVP):
 
 - Building blocks: edges of the drawn range, exactly on a curve, between curves, `OutOfChart` on both sides.
-- `ctx`: exact and conservative passes on small synthetic chains, including one with a branch, so backtracking and per-output worst values are tested without chart data; the pinned rounding-point list per real chain.
+- `ctx`: exact and conservative passes on small synthetic chains, including one with a branch, so the single-point test, the branch re-test and per-output worst values are tested without chart data, and compared with the exhaustive oracle; the pinned rounding-point list per real chain.
 - Inputs: pressure altitude, slope, wind components, drag index builder; the PA parity test against `crc-sync/src/altimetry.js`.
 - Rules: every threshold just below, at and above.
 - State: URL hash round trip; a hash with another `v` refused.
@@ -534,7 +536,7 @@ The step 0 design review, all approved by the human. The sections above already 
 - **Conservative step leaving the drawn data:** conservative cell "—" with figure and input named, exact still shown; exact out of chart rejects the whole cell.
 - **Gross weight:** entered by hand, now and in every future version; never imported.
 - **TypeScript** for `src/`, `tsc` the only build tool, native ESM, no bundler or framework, `node --test` on `.ts` directly, ESLint `strictTypeChecked` plus Prettier (ADR 0153).
-- **Core structure:** typed results with `OutOfChart` from `read/`, one file per figure, chains in `told/`, every read through `ctx.read(id, value, step)`, conservative search by backtracking with the worst value per output, rounding points pinned per chain.
+- **Core structure:** typed results with `OutOfChart` from `read/`, one file per figure, chains in `told/`, every read through `ctx.read(id, value, step)`, conservative value by a single-point down/up test per rounding point (linear, not 2^n) with the worst value per output and the exhaustive search as a test oracle, rounding points pinned per chain.
 - **Rules per cell:** exact and conservative each checked and marked on their own.
 - **UI and state:** `/f16/`, `/f16/figure.html#…`, Limitations; one `Inputs` object; URL hash `#v=1&…` > localStorage > defaults; grey dotted underline for unparseable input; "—" plus one grey reason line per reason under its table; dark mode via `prefers-color-scheme`; print to exactly one A4 or Letter page.
 - **Tests and CI:** golden samples at 2 %, building-block edges, `ctx` on synthetic chains with a branch, inputs, PA parity, rule thresholds, URL round trip, 90 % line coverage on `src/core/`, one Playwright smoke spec with the one-page print check; `perf-docker.yml` tests on `perf/**` and `altimetry.js` pushes, builds only on `main`/`dev`/`v*`.
