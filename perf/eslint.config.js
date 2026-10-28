@@ -4,7 +4,7 @@ import { defineConfig } from 'eslint/config';
 import tseslint from 'typescript-eslint';
 
 export default defineConfig(
-  { ignores: ['node_modules/', 'web/js/', 'data/', 'extraction/', 'prototype/'] },
+  { ignores: ['node_modules/', 'web/js/', 'data/', 'extraction/'] },
   js.configs.recommended,
   tseslint.configs.strictTypeChecked,
   {
