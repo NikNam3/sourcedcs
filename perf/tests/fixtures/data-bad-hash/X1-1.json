@@ -1,0 +1,29 @@
+{
+  "corrections": [],
+  "engine": "F110-GE-129",
+  "figure": "X1-1",
+  "id": "X1-1",
+  "image": { "clipPt": [0, 0, 100, 100], "file": "pages/X1-1.png", "pxPerPt": 2 },
+  "pageIndex": 0,
+  "panels": [
+    {
+      "axes": {
+        "distance": { "a": -20, "b": 95, "page": "y" },
+        "pressure_altitude": { "a": 10, "b": 5, "page": "x" }
+      },
+      "id": "main",
+      "input": { "name": "pressure_altitude", "unit": "1000 ft" },
+      "output": { "name": "distance", "unit": "1000 ft" },
+      "points": [
+        [0, 1],
+        [5, 1.5],
+        [10, 2.2]
+      ],
+      "type": "single_curve"
+    }
+  ],
+  "printedPage": "X1-1",
+  "schemaVersion": 1,
+  "sheet": null,
+  "title": "Fixture Single Curve, edited"
+}
