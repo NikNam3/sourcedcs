@@ -7,6 +7,52 @@ import re
 import pymupdf
 
 _GRID_CACHE = {}
+_TEXT_CACHE = {}
+
+# The manual encodes hyphens as \x06, spaces as \x05 and en-spaces as \x03 (questioner ruling R4).
+CHAR_MAP = {'\x06': '-', '\x05': ' ', '\x03': ' ', '\t': ' '}
+
+
+def _page_lines(page):
+    """Text lines of the page from get_text("rawdict") spans (the "dict" spans plus each
+    character's box), characters mapped by CHAR_MAP: a list of (block, line, [(char, bbox)])."""
+    key = (id(page.parent), page.number)
+    if key not in _TEXT_CACHE:
+        lines = []
+        for block in page.get_text("rawdict")['blocks']:
+            for ln, line in enumerate(block.get('lines', [])):
+                chars = []
+                for span in line['spans']:
+                    for ch in span['chars']:
+                        chars.append((CHAR_MAP.get(ch['c'], ch['c']), tuple(ch['bbox'])))
+                lines.append((block['number'], ln, chars))
+        _TEXT_CACHE[key] = lines
+    return _TEXT_CACHE[key]
+
+
+def page_text(page):
+    """The page's text, one line per text line, with the manual's hyphen and space codes mapped."""
+    return '\n'.join(''.join(c for c, _ in chars) for _, _, chars in _page_lines(page)) + '\n'
+
+
+def page_words(page):
+    """Words as get_text("words") gives them, (x0, y0, x1, y1, text, block, line, word), but built
+    from the mapped characters, so a hyphen stays inside its word."""
+    out = []
+    for bno, lno, chars in _page_lines(page):
+        words, cur = [], []
+        for c, bbox in chars + [(' ', None)]:
+            if c.isspace():
+                if cur:
+                    words.append(cur)
+                cur = []
+            else:
+                cur.append((c, bbox))
+        for wno, w in enumerate(words):
+            out.append((min(b[0] for _, b in w), min(b[1] for _, b in w),
+                        max(b[2] for _, b in w), max(b[3] for _, b in w),
+                        ''.join(c for c, _ in w), bno, lno, wno))
+    return out
 
 
 def rect(r):
@@ -102,7 +148,7 @@ def chains(segs, tol=0.15):
 def numbers(page):
     """Every word on the page that is a number: (value, centre x, centre y)."""
     out = []
-    for w in page.get_text("words"):
+    for w in page_words(page):
         t = w[4].replace('–', '-').replace('−', '-')
         if re.fullmatch(r'-?\d+(\.\d+)?', t):
             out.append((float(t), (w[0] + w[2]) / 2, (w[1] + w[3]) / 2))
@@ -186,7 +232,7 @@ def find_title(page, title):
     want = [w for w in (_norm(t) for t in title.split()) if w]
     assert want, f"empty title {title!r}"
     lines = {}
-    for w in page.get_text("words"):
+    for w in page_words(page):
         nw = _norm(w[4])
         if nw:
             lines.setdefault((w[5], w[6]), []).append((w[7], nw, w[:4]))
@@ -213,3 +259,16 @@ def interp1(c, x):
         if x0 <= x <= x1:
             return y0 if x1 == x0 else y0 + (y1 - y0) * (x - x0) / (x1 - x0)
     return c[-1][1] + (c[-1][1] - c[-2][1]) / (c[-1][0] - c[-2][0]) * (x - c[-1][0])
+
+
+def dist_to_polyline(p, pts):
+    """Shortest distance in page points from p to the polyline through pts."""
+    px, py = p
+    best = float('inf')
+    for (x0, y0), (x1, y1) in zip(pts, pts[1:]):
+        dx, dy = x1 - x0, y1 - y0
+        L2 = dx * dx + dy * dy
+        t = 0.0 if L2 == 0 else max(0.0, min(1.0, ((px - x0) * dx + (py - y0) * dy) / L2))
+        qx, qy = x0 + t * dx, y0 + t * dy
+        best = min(best, ((px - qx) ** 2 + (py - qy) ** 2) ** 0.5)
+    return best

@@ -8,7 +8,7 @@ title: Takeoff Factor
 engine: F110-GE-129
 page_index: 283                 # 0-based
 printed_page: B2-7
-must_contain: ["Takeoff Factor", "F110"]
+must_contain: ["Takeoff Factor", "F110-GE-129", "Figure B2-1"]
 image_clip: [60, 108, 560, 702]
 axes:
   tof_mil:     {unit: "", page: x, label_band: [645, 652], range: [160, 520], ticks: [1, 2, 3, 4, 5, 6, 7], title: TAKEOFF FACTOR, edge: bottom}
@@ -22,7 +22,11 @@ panels:
     input: temperature
     output: tof_mil
     param: {name: pressure_altitude, unit: ft, values: [-2000, 0, 2000, 4000, 6000, 8000, 10000]}
+    # labels: a point on each curve beside its printed altitude label (-2000, SEA LEVEL, 2000, ... 10,000),
+    # read off a 4x render of the label row, in values order
+    labels: [[237.9, 211.3], [258.1, 213.8], [281.5, 217.0], [308.7, 223.8], [341.1, 231.3], [378.1, 243.8], [422.3, 257.5]]
     order: {output: rises, check_at: [-40, -30, -20, -10, 0, 10, 20, 30, 40, 50]}
+    monotonic: rises            # takeoff factor rises with temperature along every curve
     filter: {min_span_pt: 300}
   - id: ab
     type: scale_pair

@@ -8,7 +8,7 @@ title: Takeoff Speed
 engine: F110-GE-129
 page_index: 284                 # 0-based
 printed_page: B2-8
-must_contain: ["Takeoff Speed", "CG = 35% MAC", "10 DEGREES PITCH ATTITUDE"]
+must_contain: ["Takeoff Speed", "Figure B2-2", "CG = 35% MAC", "10 DEGREES PITCH ATTITUDE"]
 image_clip: [58, 262, 560, 595]
 axes:
   gross_weight:  {unit: 1000 lb, page: x, label_band: [561, 568], range: [140, 520], ticks: [20, 25, 30, 35, 40, 45], title: GW 1000 POUNDS, edge: bottom}
@@ -30,4 +30,4 @@ sample_problems:
   - inputs: {gross_weight_lb: 33000, cg_pct: 37}
     expected: {vto_35_kias: 170, vto_kias: 168, vr_mil_kias: 158, vr_ab_kias: 153}
   - inputs: {gross_weight_lb: 33000, cg_pct: 37, pitch_8deg: true}
-    expected: {vto_kias: 181}
+    expected: {vto_kias: 181, vr_mil_kias: 171, vr_ab_kias: 166}

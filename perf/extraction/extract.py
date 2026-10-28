@@ -13,6 +13,7 @@ sys.dont_write_bytecode = True
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
+import pymupdf  # noqa: E402
 import yaml  # noqa: E402
 
 import geom  # noqa: E402
@@ -23,8 +24,12 @@ PDF_SHA256 = '7954f2391a66bffc79d77027cdb5063a332ba31a693dba1e42f0a67b276c791b'
 SPECS = os.path.join(HERE, 'specs')
 DATA = os.path.normpath(os.path.join(HERE, '..', 'data'))
 OUT = os.path.join(HERE, 'out')
-REQUIRED = ('id', 'figure', 'sheet', 'dataset', 'title', 'engine', 'page_index', 'printed_page',
-            'must_contain', 'image_clip', 'axes', 'panels')
+REQUIRED = {'id', 'figure', 'sheet', 'dataset', 'title', 'engine', 'page_index', 'printed_page',
+            'must_contain', 'image_clip', 'axes', 'panels'}
+OPTIONAL = {'corrections', 'sample_problems'}
+AXIS_REQUIRED = {'unit', 'page', 'label_band', 'range', 'ticks', 'title', 'edge'}
+AXIS_OPTIONAL = {'snap'}
+SAMPLE_KEYS = {'inputs', 'expected'}
 EDGES = ('left', 'right', 'top', 'bottom')
 
 
@@ -42,12 +47,26 @@ def load_spec(fid):
         fail(f'{fid} spec: no file {path}')
     with open(path) as f:
         spec = yaml.safe_load(f)
-    missing = [k for k in REQUIRED if k not in spec]
-    if missing:
-        fail(f'{fid} spec: missing keys {missing}')
+    keys(f'{fid} spec', panels.check_keys, spec, REQUIRED, OPTIONAL)
     if spec['id'] != fid:
         fail(f"{fid} spec: id is {spec['id']!r}, file is {fid}.yaml")
+    if not isinstance(spec['axes'], dict) or not isinstance(spec['panels'], list):
+        fail(f'{fid} spec: axes must be a mapping and panels a list')
+    for name in sorted(spec['axes']):
+        keys(f'{fid} axis {name}', panels.check_keys, spec['axes'][name], AXIS_REQUIRED, AXIS_OPTIONAL)
+    for n, p in enumerate(spec['panels']):
+        pid = p.get('id', f'#{n}') if isinstance(p, dict) else f'#{n}'
+        keys(f'{fid} panel {pid}', panels.check_panel_keys, p)
+    for n, s in enumerate(spec.get('sample_problems', [])):
+        keys(f'{fid} spec', panels.check_keys, s, SAMPLE_KEYS, set(), f'sample_problems[{n}].')
     return spec
+
+
+def keys(where, check, *args):
+    try:
+        check(*args)
+    except AssertionError as e:
+        fail(f'{where}: {e}')
 
 
 def title_beyond(frame, edge, cx, cy):
@@ -69,8 +88,8 @@ def check_titles(page, spec, fid):
     is the axis's title."""
     for name in sorted(spec['axes']):
         ax = spec['axes'][name]
-        if 'title' not in ax or ax.get('edge') not in EDGES:
-            fail(f'{fid} axis {name}: needs a title and an edge (one of {EDGES})')
+        if ax['edge'] not in EDGES:
+            fail(f"{fid} axis {name}: edge {ax['edge']!r} is not one of {EDGES}")
         found = geom.find_title(page, ax['title'])
         if not found:
             fail(f"{fid} axis {name}: title {ax['title']!r} not on the page")
@@ -89,7 +108,7 @@ def check_titles(page, spec, fid):
 def extract_figure(doc, spec):
     fid = spec['id']
     page = doc[spec['page_index']]
-    text = page.get_text()
+    text = geom.page_text(page)
     for s in spec['must_contain']:
         if s not in text:
             fail(f'{fid} spec: {s!r} is not on page index {spec["page_index"]}')
@@ -150,7 +169,6 @@ def main(argv):
     if sha != PDF_SHA256:
         print(f'refused: PDF SHA-256 mismatch: {pdf} is {sha}, pinned {PDF_SHA256}', file=sys.stderr)
         return 2
-    import pymupdf
     doc = pymupdf.open(pdf)
     try:
         results = [extract_figure(doc, load_spec(fid)) for fid in ids]
