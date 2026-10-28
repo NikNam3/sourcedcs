@@ -12,7 +12,7 @@ SOURCE DCS is an open-source monorepo for a virtual aviation squadron. It contai
 - **crc-desktop** — Electron desktop GCI/datalink client ("CRC") that connects to crc-sync. Bundles a local Node server and a Python SRS radio bridge (`lxsrs_v2`).
 - **lxsrs_v2** — Python SRS Standalone client library used by crc-desktop's bundled radio bridge (not a standalone service — see crc-desktop's architecture below).
 - **tools/miztoyaml** — Python CLI that converts DCS `.miz` mission files to ATO brief YAML
-- **perf** — F-16 performance calculator, TOLD first (takeoff and landing data from the flight manual's charts, exact and conservative). Static TypeScript app, all calculation in the browser, public without login. Plan `docs/wip/TOLD.md`, ADRs 0148–0153; step 0, no UI yet.
+- **perf** — F-16 performance calculator, TOLD first (takeoff and landing data from the flight manual's charts, exact and conservative). Static TypeScript app, all calculation in the browser, public without login. Plan `docs/wip/TOLD.md`, ADRs 0148–0153; step 0 done, no UI yet.
 
 Infrastructure (Nginx, MariaDB, Casdoor OAuth, MediaWiki) lives in `infra/` as a Docker Compose stack.
 

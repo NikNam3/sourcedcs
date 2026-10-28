@@ -1,5 +1,6 @@
 # Figure B2-2, Takeoff Speed (CG 35 % MAC, 10 deg pitch attitude). Coordinates are PDF points,
-# from perf/prototype/extraction/extract.py and imgs.py, checked by overlay.
+# from the planning prototype (removed in b3fb1202; `git show b3fb1202^:perf/prototype/extraction/extract.py`
+# and `imgs.py`), checked by overlay.
 id: B2-2
 figure: B2-2
 sheet: null

@@ -1,6 +1,7 @@
 """Page geometry: line segments, chaining, grid lines, tick-label axis fits, title words.
 
-Generalised from the prototype (perf/prototype/extraction/vec.py and extract.py).
+Generalised from the planning prototype (removed in b3fb1202; `git show b3fb1202^:perf/prototype/extraction/vec.py`
+and `extract.py`).
 Only geometry lives here; meaning comes from the chart spec."""
 import re
 

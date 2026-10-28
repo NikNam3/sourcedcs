@@ -1,5 +1,6 @@
-# Figure B2-3, Takeoff Distance (10 deg pitch attitude). Coordinates are PDF points, from
-# perf/prototype/extraction/extract.py and imgs.py, checked by overlay.
+# Figure B2-3, Takeoff Distance (10 deg pitch attitude). Coordinates are PDF points, from the
+# planning prototype (removed in b3fb1202; `git show b3fb1202^:perf/prototype/extraction/extract.py` and
+# `imgs.py`), checked by overlay.
 id: B2-3
 figure: B2-3
 sheet: null
