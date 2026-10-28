@@ -164,7 +164,7 @@ function buildSheetNode(node, depth) {
     var body = document.createElement('div');
     body.className = 'sheet-section-body';
     if (node.gradingItems && node.gradingItems.length) {
-      body.appendChild(buildSheetLeaf(node, depth + 1));
+      body.appendChild(buildSheetLeaf(node, depth + 1, true));
     }
     node.subModules.forEach(function (child) {
       body.appendChild(buildSheetNode(child, depth + 1));
@@ -179,8 +179,10 @@ function buildSheetNode(node, depth) {
    grade directly). A multi-item module renders its title as a plain
    sub-line, then one dotted-leader row per item underneath (e.g. "Wing
    Work Exercise" / "Level 1 ... G" / "Level 2 ... G" / "Level 3 ... U") —
-   only the title line is clickable to reveal the shared detail strip. */
-function buildSheetLeaf(node, depth) {
+   only the title line is clickable to reveal the shared detail strip.
+   `underOwnHeader`: the module also has sub-modules, so buildSheetNode has
+   already drawn its title as the section header. */
+function buildSheetLeaf(node, depth, underOwnHeader) {
   var state = skillsCore.moduleState(_treeIndex, node.id, _grades);
   var items = node.gradingItems || [];
   var wrap  = document.createElement('div');
@@ -197,7 +199,10 @@ function buildSheetLeaf(node, depth) {
       wrap.appendChild(buildSheetGradeRow(item.label || item.id, depth + 1, state, _grades[item.id], null));
     });
   } else {
-    wrap.appendChild(buildSheetGradeRow(node.title, depth, state, items[0] ? _grades[items[0].id] : null, node.id));
+    /* Under a module that also has sub-modules, the section header already
+       shows the title — repeating it here read as a duplicate module. */
+    var rowLabel = underOwnHeader ? ((items[0] && items[0].label) || 'Overall grade') : node.title;
+    wrap.appendChild(buildSheetGradeRow(rowLabel, depth, state, items[0] ? _grades[items[0].id] : null, node.id));
   }
 
   if (_sheetOpenRows[node.id]) {

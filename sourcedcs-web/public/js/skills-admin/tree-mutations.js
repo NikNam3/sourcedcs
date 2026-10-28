@@ -14,7 +14,7 @@
 //   addRootModule() / addSubModule(parentNode) / removeChildNode(parentNode, index)
 //   moveSiblingUp(parentNode, index) / moveSiblingDown(parentNode, index)
 //   addFirstGradingItem(node) / splitIntoMultipleItems(node)
-//   addGradingItem(node) / removeGradingItem(node, ii)
+//   addGradingItem(node) / removeGradingItem(node, ii) / removeOnlyGradingItem(node)
 //   addRequirement(node) / removeRequirement(node, ri)
 //   forceSquadronScope(nodes, squadronId)   — used by import-export.js
 // ═══════════════════════════════════════════════════════════
@@ -38,8 +38,23 @@ function addRootModule() {
   renderTreeDetail();
 }
 
+/* True when the module's only grading item is the one newModuleStub gave it
+   (shares the module's id) and no pilot has a grade under it — i.e. nobody
+   chose it, it just came with the module. */
+function hasUntouchedDefaultItem(node) {
+  var items = node.gradingItems || [];
+  if (items.length !== 1 || items[0].id !== node.id) return false;
+  /* Grades didn't load (an error body instead of the map): can't prove the
+     item is unused, so keep it. */
+  if (!_allGrades || typeof _allGrades !== 'object' || _allGrades.error) return false;
+  return !Object.keys(_allGrades).some(function (sub) { return _allGrades[sub] && _allGrades[sub][node.id]; });
+}
+
 function addSubModule(parentNode) {
   var id = 'mod-' + Date.now();
+  /* A leaf turning into a group keeps the default item otherwise, which the
+     sheets then draw as a second row under the module's own title. */
+  if (!(parentNode.subModules || []).length && hasUntouchedDefaultItem(parentNode)) parentNode.gradingItems = [];
   (parentNode.subModules = parentNode.subModules || []).push(newModuleStub(id));
   _outlineExpanded[parentNode.id] = true;
   rebuildTreeEditorIndex();
@@ -89,6 +104,13 @@ function splitIntoMultipleItems(node) {
     { id: id1, label: 'Level 1', min_pass_grade: old.min_pass_grade || 'G' },
     { id: id2, label: 'Level 2', min_pass_grade: 'G' },
   ];
+  rebuildTreeEditorIndex();
+  renderTreeOutline();
+  renderTreeDetail();
+}
+
+function removeOnlyGradingItem(node) {
+  node.gradingItems = [];
   rebuildTreeEditorIndex();
   renderTreeOutline();
   renderTreeDetail();

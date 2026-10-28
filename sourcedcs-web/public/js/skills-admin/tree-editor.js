@@ -467,6 +467,21 @@ function buildGradingItemsSection(node) {
     splitBtn.textContent = '+ SPLIT INTO MULTIPLE ITEMS';
     (function (n) { splitBtn.addEventListener('click', function () { splitIntoMultipleItems(n); }); })(node);
     section.appendChild(splitBtn);
+
+    /* Only a module with sub-modules may have no grading item of its own
+       (validateTree needs one or the other). */
+    if (node.subModules && node.subModules.length) {
+      var removeBtn = document.createElement('button');
+      removeBtn.className = 'btn-sm btn-sm-danger';
+      removeBtn.style.cssText = 'margin-top:6px;margin-left:6px';
+      removeBtn.textContent = '× REMOVE GRADING ITEM';
+      (function (n) {
+        removeBtn.addEventListener('click', function () {
+          if (confirm('Remove this module\'s own grading item? It will be graded through its sub-modules only. Any recorded pilot grades under it will be orphaned.')) removeOnlyGradingItem(n);
+        });
+      })(node);
+      section.appendChild(removeBtn);
+    }
     return section;
   }
 

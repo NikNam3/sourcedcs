@@ -209,7 +209,7 @@ function buildGradeOutlineNode(node, depth, grades) {
     var body = document.createElement('div');
     body.className = 'grade-outline-body';
     if (node.gradingItems && node.gradingItems.length) {
-      body.appendChild(buildGradeLeafBlock(node, depth + 1, grades));
+      body.appendChild(buildGradeLeafBlock(node, depth + 1, grades, true));
     }
     node.subModules.forEach(function (child) {
       body.appendChild(buildGradeOutlineNode(child, depth + 1, grades));
@@ -264,7 +264,7 @@ function buildGradeHeaderRow(node, depth, grades, hasToggle, expanded) {
    not needed on the grading sheet), then one grade line per grading item —
    select + comment + clear, reachable directly instead of behind a
    detail-panel selection. */
-function buildGradeLeafBlock(node, depth, grades) {
+function buildGradeLeafBlock(node, depth, grades, underOwnHeader) {
   var block = document.createElement('div');
   block.className = 'grade-leaf-block';
   block.style.paddingLeft = (10 + depth * 16 + 16) + 'px';
@@ -284,7 +284,10 @@ function buildGradeLeafBlock(node, depth, grades) {
 
   var items = node.gradingItems || [];
   items.forEach(function (item) {
-    block.appendChild(buildGradeItemControls(item, grades, _activeSub, items.length > 1));
+    /* A lone item under a module that also has sub-modules gets a label, so
+       its grade line isn't mistaken for one of the sub-modules. */
+    var label = (items.length > 1) ? (item.label || item.id) : (underOwnHeader ? (item.label || 'Overall grade') : null);
+    block.appendChild(buildGradeItemControls(item, grades, _activeSub, label));
   });
 
   return block;
@@ -296,7 +299,7 @@ function buildGradeLeafBlock(node, depth, grades) {
    marks one that already has a comment), and a small × to clear. No
    bordered "card" — the functionality (grade + comment) doesn't need a box
    around every single item to exist. */
-function buildGradeItemControls(item, grades, sub, showLabel) {
+function buildGradeItemControls(item, grades, sub, labelText) {
   var gradeRec = grades[item.id] || null;
 
   var wrap = document.createElement('div');
@@ -305,10 +308,10 @@ function buildGradeItemControls(item, grades, sub, showLabel) {
   var line = document.createElement('div');
   line.className = 'grade-item-line';
 
-  if (showLabel) {
+  if (labelText) {
     var lbl = document.createElement('span');
     lbl.className   = 'grade-item-label';
-    lbl.textContent = item.label || item.id;
+    lbl.textContent = labelText;
     line.appendChild(lbl);
   }
 
