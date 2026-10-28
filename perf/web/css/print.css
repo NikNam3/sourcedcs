@@ -23,8 +23,6 @@
     padding: 0;
     gap: 24px;
     zoom: 0.6;
-    transform: none;
-    break-inside: avoid;
   }
 
   /* Inputs as plain values: no underline, no focus ring. An input that does not parse keeps its dotted underline. */
@@ -36,8 +34,10 @@
     outline: none;
   }
 
+  /* A default shown as a placeholder (CG 35.0) is a value on paper: print it in ink. */
   .field input::placeholder {
-    color: transparent;
+    color: var(--ink);
+    font-weight: bold;
   }
 
   select {

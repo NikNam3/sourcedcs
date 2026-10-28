@@ -3,7 +3,7 @@
  * components.html shows every class below.
  *
  * Page         .page (the fixed 1280 px paper), .page-header, .page-title, .page-footer, .columns (two columns),
- *              .section
+ *              .section, .told-section (the full-width TOLD section, wider gap)
  * Text         .section-heading (small caps, Roman numeral), .derived (grey values worked out from the inputs),
  *              .notes (numbered notes, Limitations page)
  * Inputs       .fields (grid of inputs), .field (label and underlined input), .unparsed (an input that does not
@@ -39,7 +39,9 @@ a:hover {
   opacity: 0.7;
 }
 
-/* Page. The width is fixed; scaling the page to the window is the page script's job. */
+/* Page. The width is fixed; scaling the page to the window is the page script's job (step 1). It must scale through
+   a class or a custom property that print.css can reset, never an inline style: an inline transform or zoom would
+   override the print scale. */
 
 .page {
   box-sizing: border-box;
@@ -91,6 +93,10 @@ a:hover {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+.told-section {
+  gap: 14px;
 }
 
 /* Text */
@@ -190,6 +196,7 @@ a:hover {
 }
 
 .data-table.drag-index {
+  margin-top: 6px;
   font-size: 16px;
 }
 
@@ -241,7 +248,7 @@ a:hover {
   color: var(--grey);
 }
 
-/* After .reason, so a reason line that cites a broken rule (.reason.alert) is red. */
+/* A problem value: a cell that breaks a cited rule. */
 .alert {
   color: var(--alert);
 }
@@ -313,7 +320,12 @@ a:hover {
   align-items: center;
 }
 
+.figure-legend line {
+  stroke-width: 2;
+}
+
 .figure-key {
+  width: 440px;
   border-collapse: collapse;
   font-size: 15px;
   font-variant-numeric: tabular-nums;
@@ -324,7 +336,6 @@ a:hover {
 }
 
 .figure-key .num {
-  padding-left: 12px;
   text-align: right;
 }
 

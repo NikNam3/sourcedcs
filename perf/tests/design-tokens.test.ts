@@ -5,15 +5,18 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { test } from 'node:test';
 
 const webDir = new URL('../web/', import.meta.url);
-const cssDir = new URL('css/', webDir);
 
-const read = (url: URL): string => readFileSync(url, 'utf8');
-const tokensCss = read(new URL('tokens.css', cssDir));
-const otherCssFiles = readdirSync(cssDir)
-  .filter((name) => name.endsWith('.css') && name !== 'tokens.css')
+const read = (path: string): string => readFileSync(new URL(path, webDir), 'utf8');
+// Every file under web/, as a path relative to it ('css/perf.css'). web/js/ is tsc output and holds neither kind.
+const webFiles = readdirSync(webDir, { recursive: true, encoding: 'utf8' })
+  .map((path) => path.split('\\').join('/'))
   .sort();
-const otherCss = otherCssFiles.map((name) => ({ name, text: read(new URL(name, cssDir)) }));
-const specimen = read(new URL('components.html', webDir));
+const tokensCss = read('css/tokens.css');
+const otherCss = webFiles
+  .filter((path) => path.endsWith('.css') && path !== 'css/tokens.css')
+  .map((name) => ({ name, text: read(name) }));
+const pages = webFiles.filter((path) => path.endsWith('.html')).map((name) => ({ name, text: read(name) }));
+const specimen = read('components.html');
 
 const LIGHT = {
   '--paper': '#ffffff',
@@ -149,16 +152,24 @@ test('tokens.css: the dark values apply on screen only, so print always gets the
   assert.match(dark?.prelude ?? '', /^@media\s+screen\s+and\s+\(prefers-color-scheme: dark\)$/);
 });
 
-test('tokens.css: no rule other than the two :root rules, no other custom property', () => {
+test('tokens.css: no rule other than the two :root rules, nothing in them but the tokens and color-scheme', () => {
   const top = blocks(stripComments(tokensCss)).map((b) => b.prelude);
   assert.equal(top.length, 2);
-  const all = declarations(tokensCss).filter((d) => d.property.startsWith('--'));
-  assert.equal(all.length, 10);
+  const all = declarations(tokensCss);
+  assert.equal(all.filter((d) => d.property.startsWith('--')).length, 10);
+  assert.deepEqual(
+    all.filter((d) => !d.property.startsWith('--')),
+    [
+      { property: 'color-scheme', value: 'light' },
+      { property: 'color-scheme', value: 'dark' },
+    ],
+  );
 });
 
 test('there is a component stylesheet and a print stylesheet besides the tokens', () => {
-  assert.ok(otherCssFiles.includes('perf.css'));
-  assert.ok(otherCssFiles.includes('print.css'));
+  const names = otherCss.map((f) => f.name);
+  assert.ok(names.includes('css/perf.css'));
+  assert.ok(names.includes('css/print.css'));
 });
 
 test('no colour literal in any other stylesheet', () => {
@@ -170,16 +181,19 @@ test('no colour literal in any other stylesheet', () => {
   }
 });
 
-test('no colour literal in components.html', () => {
-  assert.doesNotMatch(specimen, HEX, 'hex colour');
-  assert.doesNotMatch(specimen, COLOUR_FUNCTION, 'colour function');
-  for (const css of inlineCss(specimen)) assert.deepEqual(namedColoursIn(css), [], 'named colour in inline CSS');
-  const attributes = specimen.matchAll(/\s(fill|stroke|color|bgcolor|stop-color|flood-color|lighting-color)\s*=/gi);
-  assert.deepEqual(
-    [...attributes].map((m) => m[1]),
-    [],
-    'colour presentation attribute',
-  );
+test('no colour literal in any page under web/', () => {
+  assert.ok(pages.some((p) => p.name === 'components.html'));
+  for (const { name, text } of pages) {
+    assert.doesNotMatch(text, HEX, `${name}: hex colour`);
+    assert.doesNotMatch(text, COLOUR_FUNCTION, `${name}: colour function`);
+    for (const css of inlineCss(text)) assert.deepEqual(namedColoursIn(css), [], `${name}: named colour in inline CSS`);
+    const attributes = text.matchAll(/\s(fill|stroke|color|bgcolor|stop-color|flood-color|lighting-color)\s*=/gi);
+    assert.deepEqual(
+      [...attributes].map((m) => m[1]),
+      [],
+      `${name}: colour presentation attribute`,
+    );
+  }
 });
 
 test('components.html is styled only by the stylesheets: no <style> element, no style attribute', () => {
@@ -199,8 +213,8 @@ test('components.html carries no script', () => {
 test('every font-family is the one font stack', () => {
   const sources = [
     ...otherCss.map(({ name, text }) => ({ name, css: text })),
-    { name: 'tokens.css', css: tokensCss },
-    ...inlineCss(specimen).map((css) => ({ name: 'components.html', css })),
+    { name: 'css/tokens.css', css: tokensCss },
+    ...pages.flatMap(({ name, text }) => inlineCss(text).map((css) => ({ name, css }))),
   ];
   let families = 0;
   for (const { name, css } of sources) {
@@ -214,5 +228,5 @@ test('every font-family is the one font stack', () => {
     }
   }
   assert.ok(families > 0, 'the font stack is set somewhere');
-  assert.doesNotMatch(specimen, /\sfont-family\s*=/i, 'no font-family attribute in components.html');
+  for (const { name, text } of pages) assert.doesNotMatch(text, /\sfont-family\s*=/i, `${name}: font-family attribute`);
 });
