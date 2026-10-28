@@ -3,3 +3,4 @@ web/js/
 extraction/
 package-lock.json
 prototype/
+tests/fixtures/
