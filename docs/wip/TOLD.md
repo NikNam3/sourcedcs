@@ -225,8 +225,8 @@ From the Appendix B text. Prototype values show the accuracy reached so far. Tol
 | Figure | Inputs | Manual | Prototype |
 | --- | --- | --- | --- |
 | B2-1 | 40 °C, 2,000 ft | MIL 3.16, AB 1.85 | 3.162, 1.847 |
-| B2-2 | 33,000 lb, CG 37 % | 170 KIAS at 35 %, 168 at 37 %; rotation 158 non-AB, 153 AB; 181 at 8° pitch | 170.4, 168.8; 158.8, 153.8; 182.3 |
-| B2-3 | TOF 3.16, 33,000 lb, CG 37 %, DI 150, 1 % uphill, 10 kt headwind | 4,243 ft; 2,384 ft with AB TOF 1.85; 5,007 ft at 8° | 4,224; 2,382; 4,985 |
+| B2-2 | 33,000 lb, CG 37 % | 170 KIAS at 35 %, 168 at 37 %; rotation 158 non-AB, 153 AB; 181 at 8° pitch, rotation 171 non-AB, 166 AB | 170.4, 168.8; 158.8, 153.8; 182.3 |
+| B2-3 | TOF 3.16, 33,000 lb, CG 37 %, DI 150, 1 % uphill, 10 kt headwind | 4,243 ft; 2,384 ft with AB TOF 1.85; 5,007 ft at 8°; 2,813 ft AB at 8° | 4,224; 2,382; 4,985 |
 | B7-1 | 20,000 lb | Touchdown 125 KIAS, final approach 136 KIAS | not yet extracted |
 | B7-2 sh. 1 | 2,000 ft, 40 °C, 28,000 lb | 3,902 ft PRI; SEC 4,058 ft (×1.04) | not yet extracted |
 | B7-2 sh. 2 | from 3,902 ft, RCR 16, 10 kt headwind, 1 % uphill | 3,375 ft | not yet extracted |
@@ -332,6 +332,12 @@ Deferred to later steps: B2-7/B2-8 and B7-2 sh. 4 to 6 (drag chute), B7-2 SEC sh
 5. **State:** the inputs live in the URL **hash** (`#v=1&…`), so a computed TOLD can be shared and the inputs never reach a server's access log; `v` is the format version, and a hash with any other `v` (older or unknown) is refused with a grey note, and loading continues as if there were no hash. The last inputs are kept in localStorage. Precedence on load: URL hash, then storage, then defaults (CG 35 % MAC, RCR dry 23, RCR wet 18).
 6. **Deployment:** static Docker image behind the nginx reverse proxy (see Deployment and operations).
 7. **Validation:** the MVP layers in Validation and testing. The pilot hand-check is a later layer, not part of step 1's definition of done.
+
+Notes carried from step 0 (questioner, 28 Oct 2026):
+
+- Every B2-3 guideline panel's lowest line starts at 1,000 ft, so a takeoff roll under 1,000 ft out of the GW panel (a light, low-fuel AB takeoff) is out of chart at the next panel that moves it. Stated on the Limitations page ("AB takeoffs under 1,000 ft are not computed"). Counting the left frame as a zero guideline would be a separate decision.
+- The drag index builder's golden test: the Part 1 worked example (p254–255: 4 AIM-9L on LAU-129/A, 2 MK 84, 2 × 370 gal; store DI 142, total DI 146). The B1-1 data keeps slash values (`13/8`, subsonic/supersonic) and footnote markers (`4*`, `2**`) as strings; the builder interprets them, with tests.
+- Chains that call one figure twice (MIL and AB through B2-3) give its reads an id prefix, because `ctx.read` refuses a repeated id in one run.
 
 ### 1.3 Inputs
 
