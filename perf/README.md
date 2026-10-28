@@ -45,7 +45,7 @@ cd perf && nix develop .. -c python3 -I extraction/extract.py "$PERF_PDF" [id ..
 
 With no ids it extracts every spec in `extraction/specs/`. It stops at the first failed assert, naming the figure, panel and reason. `nix develop` provides PyMuPDF, PyYAML and Pillow (`flake.nix`).
 
-- Specs: `extraction/specs/<id>.yaml`, one per data file, hand-written. The spec declares meaning (axes, panels, parameters, expected order, corrections, sample problems); the extractor only measures. The format is in `docs/wip/TOLD.md` 0.5.
+- Specs: `extraction/specs/<id>.yaml`, one per data file, hand-written. The spec declares meaning (axes, panels, parameters, expected order, corrections, sample problems); the extractor only measures. The format is in `docs/wip/TOLD.md` 0.2; 0.5 is a worked example.
 - Data: `data/f16c-f110-129/` (`<id>.json`, `pages/<id>.png`, `manifest.json`). `dataVersion` goes up only when a file hash changes; a re-run with nothing changed is byte-identical.
 - Overlays: `extraction/out/overlay-<id>.png`, the extracted curves in red over the page, gitignored. For a person to look at when something seems off; no sign-off.
 - Errata: `extraction/manual-errata.yaml` lists known misprints in the manual (figure, where, printed, correct, reason). The sample-problem tests read it. Misprints are never patched silently.

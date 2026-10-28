@@ -29,11 +29,6 @@ refusal speed can rise with gross weight at low RCR.
 3. **The worst value per output.** One evaluation covers all outputs of a chain and keeps, per output, the worst value
    found. Two outputs sharing an intermediate (the takeoff factor feeds distance, acceleration check and refusal speed)
    may use different rounded values of it.
-4. **Why not every combination.** Trying both directions at every point in every combination doubles the runs per
-   rounding point (2^n). Step 1's takeoff chain has about 45 rounding points: about 3·10^13 runs. The single-point
-   test takes about two runs per rounding point plus one per output, about 100 runs there, well under a millisecond.
-   The exhaustive search is kept as a **test oracle only**, never in the app (human decision, 2026-10-28, after the
-   exponential cost was raised).
 
    | Output | Worse means |
    | --- | --- |
@@ -41,6 +36,12 @@ refusal speed can rise with gross weight at low RCR.
    | Refusal speed | lower |
    | Rotation, takeoff, final approach, touchdown speed | higher |
    | Acceleration check speed | higher (a check computed too low hides a real problem) |
+
+4. **Why not every combination.** Trying both directions at every point in every combination doubles the runs per
+   rounding point (2^n). Step 1's takeoff chain has about 45 rounding points: about 3·10^13 runs. The single-point
+   test takes about two runs per rounding point plus one per output, about 100 runs there, well under a millisecond.
+   The exhaustive search is kept as a **test oracle only**, never in the app (human decision, 2026-10-28, after the
+   exponential cost was raised).
 
 5. **Steps.**
 

@@ -83,7 +83,7 @@ npm run lint && npm run format:check && npm run typecheck   # typecheck covers s
 npm test               # node --test on the .ts tests, 90 % line-coverage floor on src/core/
 npm run data:check     # perf/data against the schema and the manifest hashes
 npm run types:gen      # src/core/data/types.ts from perf/schema/charts.schema.json (json-schema-to-typescript); types:check fails on drift
-cd perf && nix develop .. -c python3 -I extraction/extract.py "$PERF_PDF" [id ...]   # from the repo root; HUMAN-RUN ONLY (the PDF is on the maintainer's machine), no ids = every spec
+nix develop .. -c python3 -I extraction/extract.py "$PERF_PDF" [id ...]   # in perf/; HUMAN-RUN ONLY (the PDF is on the maintainer's machine), no ids = every spec
 ```
 Extraction: specs in `perf/extraction/specs/<id>.yaml`, data in `perf/data/f16c-f110-129/` (`<id>.json`, `pages/<id>.png`, `manifest.json`), overlays in `perf/extraction/out/` (gitignored), errata in `perf/extraction/manual-errata.yaml`. Commit order: extractor change, then re-run, then data (the manifest records the extractor commit, `-dirty` if `perf/extraction/` has uncommitted changes). CI never extracts, and the PDF is never committed. See `perf/README.md`.
 
@@ -170,7 +170,7 @@ F-16 TOLD calculator (`perf/README.md`). Data flows one way: manual PDF → `ext
 
 - `schema/charts.schema.json` is the one contract between extraction and core; `src/core/data/types.ts` is generated from it and `data:check` (Ajv, plus the manifest's SHA-256 per file) is the only gate on the data. Python does not validate on write.
 - `src/core/` has no DOM, no `fetch`, no `node:` imports, no I/O; chart data is passed in. `read/` building blocks never extrapolate or throw outside a chart: they return `OutOfChart`. Every chart read goes through `ctx.read(id, value, step)`, which gives the exact and the conservative value (ADR 0149). Units in names (`lengthFt`, `windKt`); never test a number for truthiness (0 kt, 0 %, DI 0 are values).
-- The manual's procedure is the spec (ADR 0148); misprints go into `extraction/manual-errata.yaml`, never patched silently. The chart spec format (one YAML per figure: axes, panels, parameters, corrections, sample problems) is `docs/wip/TOLD.md` 0.5.
+- The manual's procedure is the spec (ADR 0148); misprints go into `extraction/manual-errata.yaml`, never patched silently. The chart spec format (one YAML per data file, a figure or a sheet: axes, panels, parameters, corrections, sample problems) is `docs/wip/TOLD.md` 0.2, with 0.5 as the worked example.
 - The manual PDF is never committed (`perf/**/*.pdf` is gitignored). Its path is `PERF_PDF`; the extractor refuses any file whose SHA-256 is not `7954f2391a66bffc79d77027cdb5063a332ba31a693dba1e42f0a67b276c791b`.
 - CI is `.github/workflows/perf-docker.yml` ("Build and Push perf Docker Image"), the test job only in step 0; step 1 adds the image build and the deploy.
 

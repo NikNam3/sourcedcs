@@ -13,4 +13,4 @@ Step 0: foundations (`docs/wip/TOLD.md`).
 - Data for Figures B1-1 (tables), B2-1, B2-2 and B2-3 of the F110-GE-129.
 - Figures B2-1 to B2-3 in `src/core/figures/` and the manual's sample problems as golden tests (2 %).
 - Design tokens, component stylesheet and print stylesheet in `web/css/`.
-- ADRs 0148 to 0153, this README, and the CI test workflow `perf-docker.yml`.
+- ADRs 0148 to 0153, `README.md`, and the CI test workflow `perf-docker.yml`.
