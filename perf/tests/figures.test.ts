@@ -349,6 +349,8 @@ test('B2-3 conservative distance: never shorter than exact, within the single-po
     if (!conservative.ok || !exhaustive.ok) {
       assert.ok(!conservative.ok && !exhaustive.ok, `one search errored and the other did not: ${where}`);
       assert.equal(conservative.error.kind, exhaustive.error.kind);
+      assert.equal(conservative.error.figure, exhaustive.error.figure, where);
+      assert.equal(conservative.error.input, exhaustive.error.input, where);
       errored++;
       continue;
     }
@@ -390,4 +392,9 @@ test('B2-3 conservative distance: never shorter than exact, within the single-po
     `bound (ft): min ${(bounds[0] ?? NaN).toFixed(1)}, median ${(bounds[bounds.length >> 1] ?? NaN).toFixed(1)}, ` +
       `max ${(bounds[bounds.length - 1] ?? NaN).toFixed(1)}`,
   );
+  // The B2-3 regression check for the direction choice: evaluate must equal evaluateExhaustive on every set. The
+  // bound check alone would pass a wrong final-run direction, since cellOf also takes the worst single-point run.
+  // B2-3 qualifies because each of its readings is monotone in entry and target, so the per-point directions combined
+  // are the maximum over all combinations. A legitimate future gap needs a spec 5.2 decision, not a looser test.
+  assert.equal(positiveGaps, 0, 'evaluate and evaluateExhaustive differ on B2-3');
 });

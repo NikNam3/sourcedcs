@@ -14,6 +14,7 @@ const TOLERANCE = 0.02;
 const specs = loadSpecs().filter((spec) => (spec.sample_problems?.length ?? 0) > 0);
 const errata = loadErrata();
 
+// Update this pinned list when a spec gains sample_problems (step 1: B7-1, B7-2).
 test('the specs with sample problems are B2-1, B2-2 and B2-3', () => {
   assert.deepEqual(
     specs.map((spec) => spec.id),
