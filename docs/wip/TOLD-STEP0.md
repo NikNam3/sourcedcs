@@ -77,11 +77,13 @@ interface Table { id: string; type: 'table'; columns: Quantity[]; rows: (number 
 
 ```ts
 interface Manifest { schemaVersion: 1; dataset: string; dataVersion: number; pdfSha256: string;
-  extractorCommit: string;              // `git rev-parse --short HEAD`, suffix "-dirty" if perf/extraction/ has uncommitted changes
+  extractorCommit: string;              // the commit that last produced the data: `git rev-parse --short HEAD`, suffix "-dirty" if perf/extraction/ has uncommitted changes; kept unchanged by a re-run that changes no file hash
   files: Record<string, string> }       // path relative to the dataset dir -> sha256 hex, every .json (not the manifest) and pages/*.png
 ```
 
 `dataVersion` starts at 1 and the extractor increments it only when any file hash differs from the previous manifest.
+
+**Curve labels (curve_family):** the printed parameter labels are vector glyphs, not text, so a spec declares each value's position instead (`labels`). The extractor assigns values to curves by these anchors: each anchor's nearest curve (distance to its polyline) must be within 3 pt and unique, every curve must get exactly one anchor, and only then is `order` checked, now against geometry it did not produce. An anchor matching no curve or two curves fails as a leftover label; a curve with no anchor fails as unlabelled (spec 0.3). Spec keys are checked: an unknown key at any level stops the run.
 
 Numbers are rounded by the extractor: page transforms to 6 decimals, chart values to 4. JSON is written with sorted keys and `separators=(',', ':')` plus a trailing newline, so a re-run with nothing changed is byte-identical. `perf/data/` is in `.prettierignore`.
 
@@ -112,7 +114,9 @@ panels:
     input: takeoff_factor
     output: distance
     param: {name: gross_weight, unit: 1000 lb, values: [20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40, 42, 44, 46, 48]}
+    labels: [[x, y], ...]      # one page point per value, in values order: a point on that curve beside its printed label, read off the render
     order: {output: rises, check_at: [1.2, 1.5, 2, 2.5]}   # output rises with param at each input
+    monotonic: rises           # optional: each curve's output along its input
     filter: {min_points: 5}                                # prototype filters as keys: min_points, min_span_pt, stroke_width
   - id: slope
     type: guideline_panel
