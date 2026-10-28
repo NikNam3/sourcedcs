@@ -27,6 +27,10 @@ share/python-wheels/
 .installed.cfg
 *.egg
 *.yaml
+# perf chart specs and the manual errata list are hand-written source, not miztoyaml output (docs/wip/TOLD.md 0.2)
+!perf/extraction/**/*.yaml
+# the F-16 manual PDF is distribution-restricted and never committed (TOLD.md section 3)
+perf/**/*.pdf
 *.miz
 .env
 infra/mediawiki/LocalSettings.php
