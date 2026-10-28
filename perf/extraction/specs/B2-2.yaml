@@ -1,0 +1,33 @@
+# Figure B2-2, Takeoff Speed (CG 35 % MAC, 10 deg pitch attitude). Coordinates are PDF points,
+# from perf/prototype/extraction/extract.py and imgs.py, checked by overlay.
+id: B2-2
+figure: B2-2
+sheet: null
+dataset: f16c-f110-129
+title: Takeoff Speed
+engine: F110-GE-129
+page_index: 284                 # 0-based
+printed_page: B2-8
+must_contain: ["Takeoff Speed", "CG = 35% MAC", "10 DEGREES PITCH ATTITUDE"]
+image_clip: [58, 262, 560, 595]
+axes:
+  gross_weight:  {unit: 1000 lb, page: x, label_band: [561, 568], range: [140, 520], ticks: [20, 25, 30, 35, 40, 45], title: GW 1000 POUNDS, edge: bottom}
+  takeoff_speed: {unit: KIAS, page: y, label_band: [70, 90], range: [260, 560], ticks: [120, 140, 160, 180, 200, 220], title: TAKEOFF SPEED KIAS, edge: left}
+panels:
+  - id: speed
+    type: single_curve
+    clip: [95, 270, 549, 557]
+    frame: {x: [94.3, 548.1], y: [272.2, 555.8]}    # frame lines dropped
+    input: gross_weight
+    output: takeoff_speed
+    monotonic: rises
+    filter: {min_points: 21}
+corrections:
+  - 0.8 kt per 1 % CG from 35 %
+  - "rotation: takeoff speed - 10 kt non-AB, - 15 kt AB"
+  - "8 deg pitch attitude: speed x 1.08"
+sample_problems:
+  - inputs: {gross_weight_lb: 33000, cg_pct: 37}
+    expected: {vto_35_kias: 170, vto_kias: 168, vr_mil_kias: 158, vr_ab_kias: 153}
+  - inputs: {gross_weight_lb: 33000, cg_pct: 37, pitch_8deg: true}
+    expected: {vto_kias: 181}

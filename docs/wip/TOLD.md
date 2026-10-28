@@ -164,59 +164,85 @@ It refuses a PDF whose SHA-256 is not the pinned one, and stops at the first fai
 
 ### 0.5 Worked example: spec for Figure B2-3
 
-The prototype's extraction of B2-3 written as a spec. Page coordinates are PDF points; they come from the prototype and were checked by overlay. Every spec follows this shape.
+The prototype's extraction of B2-3 written as a spec, `perf/extraction/specs/B2-3.yaml`. Page coordinates are PDF points; they come from the prototype and were checked by overlay. Every spec follows this shape: axes are named and calibrated once, and each panel names its input and output axis (a scale pair its `from` and `to`). Every axis has a `title` and the `edge` of the panel frame it must sit beyond; the axis-title check uses the frame of every panel that uses the axis. Specs B2-1 and B2-2 are in the same directory.
 
 ```yaml
+id: B2-3                        # data file name: the figure, or figure and sheet (B1-1.sh1)
 figure: B2-3
+sheet: null
+dataset: f16c-f110-129
 title: Takeoff Distance
 engine: F110-GE-129
-page_index: 285            # 0-based index in the PDF; printed page B2-9
+page_index: 285                 # 0-based index in the PDF
+printed_page: B2-9
 must_contain: ["Takeoff Distance", "F110"]
-x_axis:                     # shared by all panels
-  name: takeoff_distance
-  unit: 1000 ft
-  label_band_y: [690, 697]
-  ticks: [0, 2, 4, 6, 8, 10, 12]
-  frame_x: [104.0, 536.2]
-panels:
+image_clip: [62, 120, 560, 712] # the figure view's page image, rendered at 2 px/pt
+axes:                           # each calibrated once from its tick labels (page: the page coordinate it maps to)
+  distance:       {unit: 1000 ft, page: x, label_band: [690, 697], range: [95, 545], ticks: [0, 2, 4, 6, 8, 10, 12], title: TAKEOFF DISTANCE, edge: bottom}
+  takeoff_factor: {unit: "", page: y, label_band: [90, 100], range: [130, 360], ticks: [1, 2, 3, 4, 5, 6, 7], title: TAKEOFF FACTOR, edge: left}
+  cg:             {unit: "% MAC", page: y, label_band: [88, 100], range: [360.3, 438.4], ticks: [30, 35, 40], title: CG, edge: left}
+  drag_index:     {unit: "", page: y, label_band: [88, 100], range: [443.4, 521.5], ticks: [0, 200, 400], title: DRAG INDEX, edge: left}
+  slope:          {unit: "%", page: y, label_band: [88, 100], range: [526.4, 604.5], ticks: [0, 1, 2], title: SLOPE, edge: left}
+  wind:           {unit: kt, page: y, label_band: [88, 100], range: [609.4, 687.5], ticks: [0, 20, 40], title: WIND, edge: left}
+  # snap: false where tick labels do not sit on grid lines (B2-1's MAX AB scale)
+panels:                         # reading order
   - id: gw
     type: curve_family
-    y: {name: takeoff_factor, title: TAKEOFF FACTOR, edge: left, label_band_x: [90, 100], ticks: [1, 2, 3, 4, 5, 6, 7]}
-    frame_y: [136.3, 352.4]
+    clip: [104.5, 135, 536.7, 353]
+    frame: {x: [104.0, 536.2], y: [136.3, 352.4]}    # frame lines dropped
+    input: takeoff_factor
+    output: distance
     param: {name: gross_weight, unit: 1000 lb, values: [20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40, 42, 44, 46, 48]}
-    order: distance at a given takeoff factor rises with gross_weight
+    order: {output: rises, check_at: [1.2, 1.5, 2, 2.5]}   # output rises with param at each input
+    filter: {min_points: 5}     # keys: min_points, min_span_pt (extent along the input axis), stroke_width
   - id: cg
     type: guideline_panel
-    y: {name: cg, unit: "% MAC", title: CG, edge: left, ticks: [30, 35, 40]}
-    frame_y: [363.3, 435.4]
+    clip: [104.3, 362.8, 536.7, 435.9]
+    frame: {x: [104.0, 536.2], y: [363.3, 435.4]}
+    input: cg
+    output: distance
     baseline: 35
+    families: {all: any}        # rises | falls | any; a line matching no family fails
     min_lines: 12
   - id: di
     type: guideline_panel
-    y: {name: drag_index, title: DRAG INDEX, edge: left, ticks: [0, 200, 400]}
-    frame_y: [446.4, 518.5]
+    clip: [104.3, 445.9, 536.7, 519.0]
+    frame: {x: [104.0, 536.2], y: [446.4, 518.5]}
+    input: drag_index
+    output: distance
     baseline: 0
-    physics: distance never falls as drag_index rises
+    families: {all: rises}      # distance never falls as drag_index rises
+    min_lines: 11
   - id: slope
     type: guideline_panel
-    y: {name: slope, unit: "%", title: SLOPE, edge: left, ticks: [0, 1, 2]}
-    frame_y: [529.4, 601.5]
+    clip: [104.3, 528.9, 536.7, 602.0]
+    frame: {x: [104.0, 536.2], y: [529.4, 601.5]}
+    input: slope
+    output: distance
     baseline: 0
-    families: {uphill: distance rises, downhill: distance falls}   # split by direction, not line style
+    families: {uphill: rises, downhill: falls}      # split by direction, not line style
+    min_lines: 20
   - id: wind
     type: guideline_panel
-    y: {name: wind, unit: kt, title: WIND, edge: left, ticks: [0, 20, 40]}
-    frame_y: [612.4, 684.5]
+    clip: [104.3, 611.9, 536.7, 685.0]
+    frame: {x: [104.0, 536.2], y: [612.4, 684.5]}
+    input: wind
+    output: distance
     baseline: 0
-    families: {tailwind: distance rises (drawn to 20 kt), headwind: distance falls}
-corrections:
-  - 8 deg pitch attitude: distance x 1.18
+    families: {tailwind: rises, headwind: falls}    # tailwind drawn to 20 kt
+    min_lines: 20
+  # single_curve: input, output, monotonic: rises | falls, filter (B2-2)
+  # scale_pair: from: <axis>, to: <axis>, frame (for the title check only); to = a * from + b (B2-1)
+  # table: column boundaries, row and column counts (B1-1)
+corrections: ["8 deg pitch attitude: distance x 1.18"]
 sample_problems:
   - inputs: {takeoff_factor: 3.16, gross_weight_lb: 33000, cg_pct: 37, drag_index: 150, slope_pct: 1, headwind_kt: 10}
     expected: {distance_ft: 4243}
   - inputs: {takeoff_factor: 1.85, gross_weight_lb: 33000, cg_pct: 37, drag_index: 150, slope_pct: 1, headwind_kt: 10}
     expected: {distance_ft: 2384}
 ```
+
+The guideline panels' clips, label ranges and families are the prototype's. Once `perf/extraction/specs/B2-3.yaml` exists, it is the authority, checked by its overlay.
 
 ### 0.6 Sample problems as golden tests
 
