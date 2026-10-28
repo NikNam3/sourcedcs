@@ -204,8 +204,8 @@ panels:                         # reading order
     input: cg
     output: distance
     baseline: 35
-    families: {all: any}        # rises | falls | any; a line matching no family fails
-    min_lines: 12
+    families: {all: falls}      # rises | falls | any (any: the sole family); a line matching no family fails
+    count: {all: 12}            # exact lines per family
   - id: di
     type: guideline_panel
     clip: [104.3, 445.9, 536.7, 519.0]
@@ -214,7 +214,7 @@ panels:                         # reading order
     output: distance
     baseline: 0
     families: {all: rises}      # distance never falls as drag_index rises
-    min_lines: 11
+    count: {all: 11}
   - id: slope
     type: guideline_panel
     clip: [104.3, 528.9, 536.7, 602.0]
@@ -222,8 +222,8 @@ panels:                         # reading order
     input: slope
     output: distance
     baseline: 0
-    families: {uphill: rises, downhill: falls}      # split by direction, not line style
-    min_lines: 20
+    families: {uphill: rises, downhill: falls}      # split by direction, not line style; params are magnitudes
+    count: {uphill: 11, downhill: 12}
   - id: wind
     type: guideline_panel
     clip: [104.3, 611.9, 536.7, 685.0]
@@ -231,10 +231,11 @@ panels:                         # reading order
     input: wind
     output: distance
     baseline: 0
-    families: {tailwind: rises, headwind: falls}    # tailwind drawn to 20 kt
-    min_lines: 20
+    families: {tailwind: rises, headwind: falls}    # tailwind drawn to 20 kt; params are magnitudes
+    count: {tailwind: 11, headwind: 12}
   # single_curve: input, output, monotonic: rises | falls, filter (B2-2)
-  # scale_pair: from: <axis>, to: <axis>, frame (for the title check only); to = a * from + b (B2-1)
+  # scale_pair: from: <axis>, to: <axis>, scale_line (a clip holding the drawn to scale line: its ends are the range),
+  #   frame (for the title check only); to = a * from + b (B2-1)
   # table: column boundaries, row and column counts (B1-1)
 corrections: ["8 deg pitch attitude: distance x 1.18"]
 sample_problems:
@@ -242,6 +243,10 @@ sample_problems:
     expected: {distance_ft: 4243}
   - inputs: {takeoff_factor: 1.85, gross_weight_lb: 33000, cg_pct: 37, drag_index: 150, slope_pct: 1, headwind_kt: 10}
     expected: {distance_ft: 2384}
+  - inputs: {takeoff_factor: 3.16, gross_weight_lb: 33000, cg_pct: 37, drag_index: 150, slope_pct: 1, headwind_kt: 10, pitch_8deg: true}
+    expected: {distance_ft: 5007}
+  - inputs: {takeoff_factor: 1.85, gross_weight_lb: 33000, cg_pct: 37, drag_index: 150, slope_pct: 1, headwind_kt: 10, pitch_8deg: true}
+    expected: {distance_ft: 2813}
 ```
 
 The guideline panels' clips, label ranges and families are the prototype's. Once `perf/extraction/specs/B2-3.yaml` exists, it is the authority, checked by its overlay.

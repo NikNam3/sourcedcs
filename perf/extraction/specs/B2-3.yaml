@@ -1,0 +1,81 @@
+# Figure B2-3, Takeoff Distance (10 deg pitch attitude). Coordinates are PDF points, from
+# perf/prototype/extraction/extract.py and imgs.py, checked by overlay.
+id: B2-3
+figure: B2-3
+sheet: null
+dataset: f16c-f110-129
+title: Takeoff Distance
+engine: F110-GE-129
+page_index: 285                 # 0-based
+printed_page: B2-9
+must_contain: ["Takeoff Distance", "F110-GE-129", "Figure B2-3", "10 DEGREES PITCH ATTITUDE"]
+image_clip: [62, 120, 560, 712]
+axes:
+  distance:       {unit: 1000 ft, page: x, label_band: [690, 697], range: [95, 545], ticks: [0, 2, 4, 6, 8, 10, 12], title: TAKEOFF DISTANCE, edge: bottom}
+  takeoff_factor: {unit: "", page: y, label_band: [90, 100], range: [130, 360], ticks: [1, 2, 3, 4, 5, 6, 7], title: TAKEOFF FACTOR, edge: left}
+  cg:             {unit: "% MAC", page: y, label_band: [88, 100], range: [360.3, 438.4], ticks: [30, 35, 40], title: CG, edge: left}
+  drag_index:     {unit: "", page: y, label_band: [88, 100], range: [443.4, 521.5], ticks: [0, 200, 400], title: DRAG INDEX, edge: left}
+  slope:          {unit: "%", page: y, label_band: [88, 100], range: [526.4, 604.5], ticks: [0, 1, 2], title: SLOPE, edge: left}
+  wind:           {unit: kt, page: y, label_band: [88, 100], range: [609.4, 687.5], ticks: [0, 20, 40], title: WIND, edge: left}
+panels:
+  - id: gw
+    type: curve_family
+    clip: [104.5, 135, 536.7, 353]
+    frame: {x: [104.0, 536.2], y: [136.3, 352.4]}    # frame lines dropped
+    input: takeoff_factor
+    output: distance
+    param: {name: gross_weight, unit: 1000 lb, values: [20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40, 42, 44, 46, 48]}
+    # labels: the point on each curve nearest its printed GW label (the label sits above-left of
+    # its curve), read off 6x renders of the label row, in values order
+    labels: [[205.6, 169.4], [229.5, 170.0], [255.5, 172.3], [285.3, 172.9], [317.7, 174.7], [351.3, 177.6], [385.5, 181.8], [420.1, 186.9], [454.2, 192.9], [480.2, 202.8], [499.1, 214.9], [509.1, 228.5], [513.4, 241.9], [516.2, 254.1], [516.4, 265.1]]
+    order: {output: rises, check_at: [1.2, 1.5, 2, 2.5]}   # distance rises with gross weight
+    monotonic: rises            # distance rises with takeoff factor along every curve
+    filter: {min_points: 5}
+  # Guide lines: [param, distance], params stored as drawn magnitudes (slope 0-2 %, wind 0-40 kt);
+  # the sign of a slope or wind input only picks the family (ruling R8).
+  - id: cg
+    type: guideline_panel
+    clip: [104.3, 362.8, 536.7, 435.9]
+    frame: {x: [104.0, 536.2], y: [363.3, 435.4]}    # frame lines dropped; the BASELINE line at 35 too
+    input: cg
+    output: distance
+    baseline: 35
+    families: {all: falls}      # distance shrinks as the CG moves aft
+    count: {all: 12}            # the 12,000 ft line is drawn only from 35 to 40
+  - id: di
+    type: guideline_panel
+    clip: [104.3, 445.9, 536.7, 519.0]
+    frame: {x: [104.0, 536.2], y: [446.4, 518.5]}
+    input: drag_index
+    output: distance
+    baseline: 0
+    families: {all: rises}      # distance never falls as drag index rises
+    count: {all: 11}            # the 11,000 ft line leaves the frame at DI 350; no 12,000 ft line
+  - id: slope
+    type: guideline_panel
+    clip: [104.3, 528.9, 536.7, 602.0]
+    frame: {x: [104.0, 536.2], y: [529.4, 601.5]}
+    input: slope
+    output: distance
+    baseline: 0
+    families: {uphill: rises, downhill: falls}      # split by direction, not line style (uphill solid, downhill dashed)
+    count: {uphill: 11, downhill: 12}               # no uphill line from 12,000 ft
+  - id: wind
+    type: guideline_panel
+    clip: [104.3, 611.9, 536.7, 685.0]
+    frame: {x: [104.0, 536.2], y: [612.4, 684.5]}
+    input: wind
+    output: distance
+    baseline: 0
+    families: {tailwind: rises, headwind: falls}    # tailwind dashed, drawn only to 20 kt; headwind solid to 40 kt
+    count: {tailwind: 11, headwind: 12}
+corrections: ["8 deg pitch attitude: distance x 1.18"]
+sample_problems:
+  - inputs: {takeoff_factor: 3.16, gross_weight_lb: 33000, cg_pct: 37, drag_index: 150, slope_pct: 1, headwind_kt: 10}
+    expected: {distance_ft: 4243}
+  - inputs: {takeoff_factor: 1.85, gross_weight_lb: 33000, cg_pct: 37, drag_index: 150, slope_pct: 1, headwind_kt: 10}
+    expected: {distance_ft: 2384}
+  - inputs: {takeoff_factor: 3.16, gross_weight_lb: 33000, cg_pct: 37, drag_index: 150, slope_pct: 1, headwind_kt: 10, pitch_8deg: true}
+    expected: {distance_ft: 5007}
+  - inputs: {takeoff_factor: 1.85, gross_weight_lb: 33000, cg_pct: 37, drag_index: 150, slope_pct: 1, headwind_kt: 10, pitch_8deg: true}
+    expected: {distance_ft: 2813}
