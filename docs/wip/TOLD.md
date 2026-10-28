@@ -1,7 +1,7 @@
 <!-- Exported from the planning doc on 2026-10-27. Source of truth from here on: this file. -->
 # F-16 Performance Calculator — Implementation Plan
 
-Oct 27, 2026 · @NikNam3
+Oct 27, 2026 · @NikNam3 · revised Oct 28, 2026 after the step 0 design review (see "Decisions of 28 Oct 2026" at the end)
 
 ## Goal and principles
 
@@ -9,9 +9,9 @@ The calculator outputs, as exactly as possible, what a pilot working the charts 
 
 1. **The manual's procedure is the spec.** Where the calculator could be smarter than the manual, it does what the manual says: slope as end-to-end elevation difference, RCR interpolation as written, fixed corrections as printed, no extrapolation outside a chart.
 2. **Two values for every result.** *Exact* = interpolated from the chart curves without rounding. *Conservative* = every input and intermediate value rounded to its step in the worse direction (section 5).
-3. **Only manual data.** Stores not in Fig. B1-1 are not estimated; the pilot enters their drag index as an additional value. Gross weight is read from DCS.
-4. **Geometry is automatic, meaning is declared.** Curves are extracted from the PDF's vector data; which axis is which, and what each curve stands for, comes from a hand-checked chart spec.
-5. **Nothing passes unchecked.** Every chart passes geometric self-checks, the manual's sample problems and an overlay review before it is used.
+3. **Only manual data.** Stores not in Fig. B1-1 are not estimated; the pilot enters their drag index as an additional value. Gross weight is entered by hand, read off DCS by the pilot, in this and every later version; it is never imported.
+4. **Geometry is automatic, meaning is declared.** Curves are extracted from the PDF's vector data; which axis is which, and what each curve stands for, comes from a hand-written chart spec.
+5. **Automatic checks, not manual sign-off.** Every chart passes the extractor's geometric asserts, and every figure with a sample problem passes it as a test. Overlay images are generated for a person to look at when something seems off; no per-chart review is required.
 6. **Problems are marked, everything else is quiet.** Red appears only for a cited rule (AFMAN 11-2F-16V3 runway criteria, chart limits).
 7. **Clean wiring.** Each concern lives in one module with a documented interface, so an agent can understand and change it quickly (for example during the later data consolidation).
 
@@ -22,7 +22,7 @@ Five steps, each usable on its own. Step 1 is the first thing pilots use: a full
 | Step | Delivers | Manual parts | Gate to next step |
 | --- | --- | --- | --- |
 | 0. Foundations | Repo, extraction pipeline, chart spec format, test harness, CI, design tokens | Appendix B Part 1 (B1-1 tables) | Pipeline extracts B2-1 to B2-3 and passes their sample problems |
-| 1. TOLD | Takeoff and landing data per AFMAN 11-2F-16V3 para. 2.5.1, exact and conservative, figure view, Limitations page, deployed | Parts 1, 2, 7 | Definition of done (section 6) met |
+| 1. TOLD | Takeoff and landing data per AFMAN 11-2F-16V3 para. 2.5.1, exact and conservative, figure view, Limitations page, deployed | Parts 1, 2, 7 | Definition of done (1.5) met |
 | 2. Performance | Single calculations: ceilings, optimum altitude, climb, cruise, descent, diversion | Parts 3, 4, 6 | Sample problems pass; design check passed |
 | 3. Flight plan and fuel | Leg chain with weight updates, store drops, joker/bingo; recovery and alternate fields; airfield profiles; landing GW from the plan | Parts 3 to 7 combined | Hand-check of one complete mission |
 | 4. Combat | Turn performance, accelerations, combat ceilings, fuel flow, E-M style plots | Part 8 | Sample problems pass |
@@ -47,20 +47,36 @@ Manual PDF  ->  extraction/  ->  perf/data  ->  perf/src/core  ->  perf/web
 
 Only the extraction step touches the PDF; the browser never does anything but read versioned JSON and compute.
 
-The calculator is a new top-level app `perf/` in the SOURCE repo, next to `atobrief/`, `sourcedcs-web/` and `crc-sync/`. **The repo's root CLAUDE.md and the existing apps set the conventions** (language, module style, test runner, Python tooling via `flake.nix`); where they differ from a technical choice in this plan, they win. Layout:
+The calculator is a new top-level app `perf/` in the SOURCE repo, next to `atobrief/`, `sourcedcs-web/` and `crc-sync/`. It is a separate project: it touches nothing of crc-sync or crc-desktop and only reads `crc-sync/src/altimetry.js` in one parity test. It is developed in its own worktree (`../sourcedcs-perf`, branch `perf-told`) so it never changes the branch under a crc session. Where the repo has a convention (CLAUDE.md, the Docker deploy, `flake.nix` for tooling), perf follows it; the absence of a tool elsewhere in the repo is not a reason against it here.
+
+**Language and toolchain:** TypeScript for `src/` (strict, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `erasableSyntaxOnly`); `tsc` is the only build tool and emits native ES modules, no bundler, no framework. `node --test` runs the `.ts` tests directly (type stripping, Node ≥ 22.18). ESLint with typescript-eslint `strictTypeChecked` (for `strict-boolean-expressions`: 0 kt, 0 % and DI 0 are valid values) and Prettier. `extraction/` is plain Python run by hand: no type checker, no lint, no test suite, only its built-in asserts. One JSON Schema (`perf/schema/charts.schema.json`) is the contract between extraction and core; the TypeScript data types are generated from it.
+
+Layout:
 
 ```
 perf/                      new app, own package.json and Dockerfile like the others
-  README.md                what it is, how to run it, how the data is made
-  extraction/              Python, offline: PDF -> chart JSON (tested like tools/)
-    specs/                 one hand-checked YAML spec per figure
-    tests/
-  data/                    generated chart JSON + store tables, committed, versioned
-  src/core/                pure functions: interpolation, chart chains, rounding
+  package.json             type: module; build, test, lint, typecheck, format:check, data:check
+  tsconfig.json  eslint.config.js
+  README.md  CHANGELOG.md
+  extraction/              Python, run by hand: PDF -> chart JSON + page images
+    specs/                 one hand-written YAML spec per figure
+    manual-errata.yaml     known misprints, read by the tests
+    out/                   overlay PNGs, gitignored
+  schema/charts.schema.json
+  data/f16c-f110-129/      per aircraft and engine: one JSON per figure, pages/<figure>.png, manifest.json
+  src/core/                no DOM, no fetch, no I/O; chart data is passed in
+    read/                  building blocks: interp, curveFamily, guidelinePanel, scalePair, table
+    ctx.ts                 rounding points, exact and conservative passes
+    figures/               one file per figure (b2-1.ts ...)
+    told/                  takeoff.ts, landing.ts: the manual's chains
+    inputs/                pressure altitude, slope, wind components, drag index builder
+    rules/                 AFMAN 11-2F-16V3 checks, each with its paragraph
+    data/types.ts          generated from the schema
   src/airfields/           airfield schema + loader (step 3); only place that reads airfield data
-  web/                     static page (no build step unless the repo convention has one)
-  tests/                   core tests, sample problems as golden tests
-  Dockerfile               nginx:alpine serving web/ + data/
+  src/web/                 UI code; tsc emits it to web/js/ (gitignored)
+  web/                     index.html, figure.html, limitations.html, CSS with the design tokens, print stylesheet
+  tests/                   core tests, sample problems as golden tests, one Playwright smoke spec
+  Dockerfile               node:22-alpine stage (tsc) -> nginx:alpine serving web/ + data/
 docs/wip/TOLD.md           this plan
 docs/mockups/perf-*.html   approved mockup boards
 docs/adr/                  one ADR per decision listed below
@@ -69,36 +85,43 @@ infra/                     compose service + nginx template for the perf. subdom
 
 Rules:
 
-- **Data flows one way:** PDF → `extraction/` → `data/` → `src/core/` → `web/`. No module reads a source it does not own.
+- **Data flows one way:** PDF → `extraction/` → `data/` → `src/core/` → `src/web/`. No module reads a source it does not own; only `src/web/` fetches the data files.
 - **`src/core/` has no UI and no I/O.** Other SOURCE tools can import it later.
+- **Data per aircraft and engine** from step 0 (`data/f16c-f110-129/`), so Appendix A/C and other aircraft are new folders, not a rewrite.
 - **`src/airfields/` hides where airfield data comes from.** Version 1 reads a JSON file; the later consolidation swaps only this folder.
 - **Units in names** (`lengthFt`, `thresholdElevFt`, `windKt`).
-- **State in the URL** for sharing a computed TOLD; last inputs kept in browser storage as a convenience only.
+- **State in the URL hash** (`#v=1&…`) for sharing a computed TOLD, so inputs never reach an access log; last inputs kept in localStorage as a convenience only (step 1.2 item 5).
 - **Data version shown in the app** (Limitations page).
 - **The manual PDF is not committed** (12.6 MB, distribution restriction). Extraction takes its path as an argument and refuses any file whose SHA-256 is not `7954f2391a66bffc79d77027cdb5063a332ba31a693dba1e42f0a67b276c791b` (HAF supplement, Change 8, 722 pages).
-- **Pressure altitude** must agree with `crc-sync/src/altimetry.js`; a parity test like the repo's other `*-parity` tests guards it.
-- **Reuse later:** `tools/miztoyaml` (.miz parsing) and `data/weaponsdata.json` for a future loadout import.
+- **Pressure altitude** is the pilot's hand calculation (section 5.3), not a model of the DCS altimeter. A parity test pins the ISA constants it shares with `crc-sync/src/altimetry.js` (P0, the exponent); the two compute different things otherwise.
+- **The manual PDF lives only on the maintainer's machine.** CI never extracts; it checks the committed data (schema, manifest hashes) and runs the tests.
+- **Reuse later:** `tools/miztoyaml` (.miz parsing) and `data/weaponsdata.json` for a possible future store import (never gross weight).
 
-Decisions to record as ADRs (next free numbers in `docs/adr/`):
+Decisions to record as ADRs (next free numbers in `docs/adr/`, 0148 onward):
 
-1. perf replicates the manual's procedure; the manual's text is the spec.
+1. perf replicates the manual's procedure; the manual's text is the spec. Example recorded in it: pressure altitude is field elevation plus the altimeter-setting correction, as a pilot works it, not what the DCS altimeter at 29.92 shows on a non-standard day.
 2. Every result has an exact and a conservative value; conservative rounds toward the worse result at every step.
 3. Only Figure B1-1 stores are selectable; any other store enters as an additional drag index.
 4. perf is public, without login.
 5. Normal landing is the manual's short-field landing (aerodynamic braking to 100 KIAS, then maximum braking); speeds at 13° AOA as the manual states.
+6. TypeScript, the toolchain above, and the JSON Schema as the contract between extraction and core.
 
 The work key `TOLD` is used for `docs/wip/` because `U-PERF.md` already exists there.
 
 ## Step 0: Foundations
 
-Step 0 turns the prototype's throwaway scripts into a repeatable pipeline: one command extracts every specified figure, checks it, and writes versioned JSON plus overlay images for review.
+Step 0 turns the prototype's throwaway scripts into a repeatable pipeline: one command extracts every specified figure, checks it, and writes versioned JSON, the figure-view page images and overlay images for a person to look at.
 
 ### 0.1 Repository and tooling
 
-- [ ] Create perf/ (section 3) following the repo's conventions; add it to the root CLAUDE.md.
-- [ ] Python dependencies for `extraction/` (PyMuPDF, PyYAML, Pillow) added to `flake.nix`.
-- [ ] perf/README.md and the ADRs from section 3 written before the first feature.
-- [ ] CI: lint, type check, core tests, extraction checks, schema check of data files.
+- [ ] Create perf/ (layout above) following the repo's conventions; add it to the root CLAUDE.md.
+- [ ] TypeScript toolchain as in "Language and toolchain": `tsconfig.json` (strict, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `erasableSyntaxOnly`), `eslint.config.js` (typescript-eslint `strictTypeChecked` with `strict-boolean-expressions`, `switch-exhaustiveness-check`, `no-unnecessary-condition`), Prettier. npm scripts: `build`, `test`, `lint`, `typecheck`, `format:check`, `data:check`.
+- [ ] `perf/schema/charts.schema.json`, and `src/core/data/types.ts` generated from it with `json-schema-to-typescript` (a script, committed output; CI fails if regenerating changes it).
+- [ ] `data:check`: validates every file in `data/<aircraft-engine>/` against the schema and its SHA-256 against `manifest.json`. The manifest holds the data version, the PDF's SHA-256, the extractor's git commit and one hash per data file and page image. The Python side does not validate on write; `data:check` is the only gate.
+- [ ] Python dependencies for `extraction/` (PyMuPDF, PyYAML, Pillow) added to `flake.nix`. No mypy, pytest or lint for `extraction/`.
+- [ ] perf/README.md and the ADRs 0148–0153 written before the first feature.
+- [ ] CI (`.github/workflows/perf-docker.yml`, see Deployment): lint, format check, type check, `data:check`, core tests with the coverage floor, the Playwright smoke spec. CI never runs the extractor.
+- [ ] `.gitignore`: `perf/extraction/out/` and `perf/web/js/`.
 
 ### 0.2 Chart spec format
 
@@ -109,20 +132,31 @@ One YAML file per figure, written by hand from the rendered page. It declares me
 - Curve families: parameter name, expected values in order, physics direction (for example distance rises with GW).
 - Guideline panels: baseline value, families split by direction (uphill/downhill, headwind/tailwind) and their physical meaning.
 - Fixed corrections printed on the chart (for example 0.8 kt per 1 % CG, ×1.18 at 8° pitch).
-- Sample problem from the text: inputs, documented answers, and the drawn example path to extract.
+- Sample problems from the text: inputs and documented answers. The tests read them from the spec.
+
+The spec has no sign-off field and no drawn-path entry: the drawn example paths are not extracted in the MVP (see Validation).
 
 ### 0.3 Extractor and checks
 
-Generalised from the prototype, which already passes B2-1 to B2-3:
+Generalised from the prototype, which already passes B2-1 to B2-3. One command, run by hand on the maintainer's machine:
+
+```
+python3 -I extraction/extract.py <pdf> [figure ...]     # no figures given: every spec in extraction/specs/
+```
+
+It refuses a PDF whose SHA-256 is not the pinned one, and stops at the first failed assert with the figure, panel and reason.
 
 - [ ] Tick calibration snapped to grid lines; fails if any label is more than 0.6 pt off the fitted line.
 - [ ] Curve chaining, y-monotonic splitting, dash joining; fails on unlabelled curves or leftover labels.
 - [ ] Order check (curve parameters monotonic in space) and physics direction check per family.
 - [ ] Axis-title check: the declared title must sit on the declared edge, otherwise stop.
-- [ ] Drawn example path extracted and compared panel by panel with the engine.
-- [ ] Overlay PNG per figure (extracted curves in red over the page) for human review; review is recorded in the spec (`reviewed: <name, date>`).
-- [ ] Tables (Fig. B1-1) read by word position with declared column boundaries, cross-checked against a second reading of the rendered page; every disagreement goes to a person.
-- [ ] Known errors in the manual (for example the SEC value in the B7-2 sample) listed in a `manual-errata.yaml`, never patched silently.
+- [ ] Outputs per figure:
+  - `data/f16c-f110-129/<figure>.json`: curves in chart units, plus each panel's axis transform (chart units ↔ page points) for the figure view;
+  - `data/f16c-f110-129/pages/<figure>.png`: the chart page as a greyscale image, committed, the figure view's background;
+  - `extraction/out/overlay-<figure>.png`: extracted curves in red over the page, gitignored, for a person to look at when something seems off. No sign-off.
+  - `manifest.json` rewritten: data version, PDF SHA-256, extractor commit, per-file hashes.
+- [ ] Tables (Fig. B1-1) read by word position with the column boundaries declared in the spec; the row and column counts are asserted, and the table is printed back as text for one comparison by a person against the page. No second automatic reading.
+- [ ] Known errors in the manual listed in `extraction/manual-errata.yaml` (figure, field, printed value, correct value, reason), never patched silently. The sample-problem tests read it. First entry: B7-2 sh. 2 labels its 3,902 ft entry "SEC" (section 0.6).
 
 ### 0.4 Design foundation
 
@@ -182,13 +216,11 @@ sample_problems:
     expected: {distance_ft: 4243}
   - inputs: {takeoff_factor: 1.85, gross_weight_lb: 33000, cg_pct: 37, drag_index: 150, slope_pct: 1, headwind_kt: 10}
     expected: {distance_ft: 2384}
-drawn_path: extract          # dashed A to G path on the page, checked panel by panel
-reviewed: null               # name and date after overlay review
 ```
 
 ### 0.6 Sample problems as golden tests
 
-From the Appendix B text. Prototype values show the accuracy reached so far; tolerance 2 %.
+From the Appendix B text. Prototype values show the accuracy reached so far. Tolerance 2 % of the manual's value, for every sample problem (speeds included); a documented erratum replaces the printed value it corrects.
 
 | Figure | Inputs | Manual | Prototype |
 | --- | --- | --- | --- |
@@ -203,19 +235,29 @@ B7-2 sh. 2's text labels its 3,902 ft entry "SEC" although 3,902 ft is the PRI v
 
 ## Calculation core and conservative rounding
 
-The core is a set of pure functions, one per figure, chained in the order the manual's text prescribes. Each returns its value, the warnings it raised, and the path points for the figure view.
+The core is a set of pure functions, one small TypeScript file per figure (`figures/`), chained in the order the manual's text prescribes (`told/`). Chart data is passed in; the core never fetches.
 
 ### 5.1 Building blocks
+
+The building blocks in `read/` return typed results: a value, or `OutOfChart {figure, input, value, drawnRange}`. They never throw for an input outside a chart and never extrapolate.
 
 - **Curve family:** evaluate every curve at the input, then interpolate linearly between the two neighbouring parameter values. This is what a pilot does by eye.
 - **Guideline panel:** find the two guidelines bracketing the entry point on the baseline, follow both to the target value, interpolate with the same fraction.
 - **Linear scale pair:** a second scale on the same axis (MIL and MAX AB takeoff factor) is a linear map.
+- **Table:** lookup in an extracted table (Fig. B1-1), exact key match; no interpolation unless the manual says so.
 - **Fixed corrections:** applied exactly as printed (CG 0.8 kt per 1 %, 8° pitch ×1.08 speed and ×1.18 distance, RCR decrements, roll trim 2 kt per dot).
-- **Out of range:** an input outside the chart's drawn range is rejected with the figure and input named. Never extrapolated.
+- **Out of chart:** an input outside the chart's drawn range gives `OutOfChart` with the figure and input named. Never extrapolated.
 
-### 5.2 Conservative value
+### 5.2 Conservative value and the read context
 
-Every input and every intermediate value read off a chart is a rounding point. At each point the core evaluates both directions (down to the step, up to the step) and keeps the one that makes the final output worse. With about ten rounding points per chain that is at most 1,024 evaluations, which takes milliseconds in a browser.
+Every chart read in a figure file goes through one call, `ctx.read(id, value, step)`, where `id` names the rounding point (for example `b2-3.distance`). The chain is run in two kinds of pass:
+
+- **Exact pass:** `ctx.read` returns the value unchanged and records the path points for the figure view.
+- **Conservative pass:** every input and every intermediate value read off a chart is a rounding point. At each point the search tries both directions (down to the step, up to the step) **by backtracking**: it re-runs the chain from the start with the choices made so far fixed, so a branch inside a procedure is followed correctly (for example the acceleration check at 1,000 ft or 2,000 ft depending on the rounded takeoff roll). Inputs are rounding points like any other. With about ten rounding points per chain that is at most 1,024 runs, which takes milliseconds in a browser.
+
+One search covers all outputs of a chain and keeps, **per output**, the worst value found (`WORSE[outputKind]`, the table below). A test pins the list of rounding point ids per chain, so adding or losing a read is a visible change.
+
+**Out of chart in the conservative pass:** if a rounding step leaves the drawn data (the exact value is inside, the step up or down is not), the conservative cell shows "—" with the figure and input named, and the exact cell is still shown. If the exact value itself is out of chart, the whole cell (exact and conservative) is rejected.
 
 Why automatic and not a hand-set direction per quantity: the right direction is not always obvious, and the manual itself warns that refusal speed can rise with gross weight at low RCR. Trying both directions is never wrong.
 
@@ -248,7 +290,7 @@ Each output is computed with its own worst chain; two outputs sharing an interme
 
 ### 5.3 Inputs derived before the charts
 
-- **Pressure altitude** from field elevation and altimeter setting (inHg) with the standard-atmosphere relation, matching what the altimeter shows at 29.92:
+- **Pressure altitude** is the pilot's hand calculation: field elevation plus the altimeter-setting correction from the standard-atmosphere relation (inHg). It is not a model of the DCS altimeter: DCS (`crc-sync/src/altimetry.js`, reference temperature 288.97 K, temperature error) reads about 150 ft different on a 40 °C day at 2,000 ft. A parity test pins only the ISA constants the two share: P0 (`ISA_P0` 101,325 Pa = 29.921 inHg) and the exponent (`ISA_INV` = 0.190263); the hot-day difference is stated on the Limitations page.
 
 ```latex
 PA = h_{\text{field}} + 145442\,\text{ft} \cdot \left[1 - \left(\frac{QNH}{29.921}\right)^{0.190263}\right]
@@ -281,13 +323,13 @@ Deferred to later steps: B2-7/B2-8 and B7-2 sh. 4 to 6 (drag chute), B7-2 SEC sh
 
 ### 1.2 Work packages, in order
 
-1. **Data:** specs and extraction for every figure in 1.1; overlay review; sample problems as tests; B1-1 tables extracted and cross-checked.
+1. **Data:** specs and extraction for every figure in 1.1, passing the extractor's asserts; sample problems as tests; B1-1 tables extracted, counts asserted and compared once by a person against the printed-back text. No overlay sign-off.
 2. **Core:** chains for takeoff (factor → speed → distance, acceleration check, refusal speed dry/wet for MIL and MAX AB) and landing (speeds, uncorrected distance → corrected for RCR, wind, slope), each for normal landing weight and heavyweight (takeoff GW), dry and wet. Conservative chains per section 5.
-3. **Rules:** runway criteria as checks with their paragraph: MIL roll over 50 % (afterburner required, 3.6.6), any takeoff roll over 80 % (3.6.3), landing roll over 80 % (3.18), RCR below 10 at the landing field (3.18).
-4. **UI:** the TOLD page as in the approved mockup (inputs I and II, TOLD tables in MDC order with exact and conservative columns), figure view with drawn path for every value, Limitations page, dark mode, fit-to-width scaling, and a print stylesheet for a paper copy through the browser's print dialog: one A4 or Letter page, always black on white, inputs as plain values, no controls, data version, app version and date in the footer. No PDF library.
-5. **State:** shareable URL, last inputs restored from browser storage.
-6. **Deployment:** static Docker image behind the nginx reverse proxy (section 12).
-7. **Validation:** pilot hand-check scenarios (section 11).
+3. **Rules:** runway criteria as checks with their paragraph: MIL roll over 50 % (afterburner required, 3.6.6), any takeoff roll over 80 % (3.6.3), landing roll over 80 % (3.18), RCR below 10 at the landing field (3.18). The exact and the conservative cell are each checked against the rule and marked red on their own, so a conservative value can be red while the exact one is not.
+4. **UI:** three pages, no framework: `/f16/` (the TOLD page as in the approved mockup: inputs I and II, TOLD tables in MDC order with exact and conservative columns), `/f16/figure.html#…` (figure view with the computed path for every value, over the committed page image) and the Limitations page (notes, data version, app version, the hot-day pressure altitude note). One `Inputs` object; every change recomputes everything. An input that does not parse gets a grey dotted underline and its dependent cells show "—". A rejected cell shows "—", and one grey reason line under its table per distinct reason names the figure and input (for example "B2-3: gross weight 52,000 lb outside the drawn range 20,000–48,000 lb"). Red only for cited rules. Page 1280 px wide, scaled to the window; dark mode via `prefers-color-scheme`; a print stylesheet for a paper copy through the browser's print dialog: exactly one A4 or Letter page, always black on white, inputs as plain values, no controls, data version, app version and date in the footer. No PDF library.
+5. **State:** the inputs live in the URL **hash** (`#v=1&…`), so a computed TOLD can be shared and the inputs never reach a server's access log; `v` is the format version, and a hash with any other `v` (older or unknown) is refused with a grey note, and loading continues as if there were no hash. The last inputs are kept in localStorage. Precedence on load: URL hash, then storage, then defaults (CG 35 % MAC, RCR dry 23, RCR wet 18).
+6. **Deployment:** static Docker image behind the nginx reverse proxy (see Deployment and operations).
+7. **Validation:** the MVP layers in Validation and testing. The pilot hand-check is a later layer, not part of step 1's definition of done.
 
 ### 1.3 Inputs
 
@@ -301,11 +343,11 @@ Deferred to later steps: B2-7/B2-8 and B7-2 sh. 4 to 6 (drag chute), B7-2 SEC sh
 
 ### 1.5 Definition of done
 
-- [ ] All figures in 1.1 extracted, overlay-reviewed and signed off in their spec.
-- [ ] Every sample problem in Appendix B Parts 2 and 7 for these figures passes within 2 % (documented errata excepted).
-- [ ] Drawn example paths match the engine panel by panel.
-- [ ] Pilot hand-check passed within ±2 kt and ±3 % (format decided later).
-- [ ] Mockup approved; page matches it in light and dark, and prints on one A4 or Letter page.
+- [ ] All figures in 1.1 extracted and passing the extractor's asserts; their JSON passes `data:check` (schema and manifest hashes).
+- [ ] Every sample problem in Appendix B Parts 2 and 7 for these figures passes within 2 % (documented errata applied).
+- [ ] Core tests green, with the coverage floor of 90 % lines on `src/core/` (Node's built-in coverage).
+- [ ] Mockup approved; page matches it in light and dark.
+- [ ] Playwright smoke spec green, including print to PDF giving exactly one page on A4 and on Letter.
 - [ ] Deployed; data version visible; perf/README.md current.
 
 ## Step 2: Performance
@@ -326,7 +368,7 @@ Step 2 adds stand-alone calculations from Parts 3 to 6, each answering one plann
 
 Notes:
 
-- The subsonic cruise data is printed as tables, not nomograms: table extraction (0.3) with a second-reading cross-check is the main data work.
+- The subsonic cruise data is printed as tables, not nomograms: table extraction (0.3: declared columns, counts asserted, printed back for one comparison by a person) is the main data work.
 - **New component:** a compact "question → answer" block (inputs on top, result table below, figure link), in the same table style as the TOLD page.
 - **Navigation:** with section IV added the content no longer fits one page; a tech-order style table of contents appears, and TOLD stays its own page.
 - **Conservative values:** fuel used and distance worse = higher, ceilings worse = lower. Optimum altitude and Mach are shown exact only (no meaningful worse direction).
@@ -433,29 +475,39 @@ Tokens, taken from the approved mockup:
 
 ## Validation and testing
 
-Seven layers of checks, each catching a different kind of error: automatic checks catch extraction mistakes, the manual's own examples catch chain mistakes, and pilots catch everything a machine would read differently from a person.
+Layers of checks, each catching a different kind of error: automatic checks catch extraction mistakes, the manual's own examples catch chain mistakes, and (later) pilots catch everything a machine would read differently from a person. The MVP (step 1) runs the first three and the code tests; the rest are added later, each by its own decision.
 
-| Layer | What | Catches | When |
-| --- | --- | --- | --- |
-| Extraction checks | Tick fit, curve count, order, physics direction, axis titles (0.3) | Swapped axes, wrong labels, merged curves | Every extraction run, CI |
-| Overlay review | Extracted curves in red over the page, signed off in the spec | Anything the checks miss | Once per figure, and after every re-extraction |
-| Sample problems | Manual's worked examples as unit tests, tolerance 2 % | Wrong chain order, wrong corrections | CI |
-| Drawn example path | Each panel's intermediate point vs. the engine | Which panel is wrong | CI |
-| Analytic charts | Standard atmosphere, airspeed conversion, turn conversion, crosswind components vs. formula | Extractor accuracy itself | Once, step 0 |
-| Pilot hand-check | Fighter pilots work prepared scenarios from the paper charts | Differences between machine reading and a human | Before each step's release |
-| DCS comparison | A few reference takeoffs and landings in the sim | Sim vs. manual difference (documented, not corrected) | Step 1 release |
+| Layer | What | Catches | When | MVP |
+| --- | --- | --- | --- | --- |
+| Extraction checks | Tick fit, curve count, order, physics direction, axis titles, table counts (0.3) | Swapped axes, wrong labels, merged curves | Every extraction run (by hand; CI never extracts) | yes |
+| Data check | `data:check`: schema and manifest hashes of every committed data file | Hand-edited or stale data, schema drift | CI | yes |
+| Sample problems | Manual's worked examples as golden tests, tolerance 2 %, errata applied | Wrong chain order, wrong corrections | CI | yes |
+| Overlay images | Extracted curves in red over the page, gitignored | Anything the checks miss, when someone looks | On demand, no sign-off | images only |
+| Drawn example path | Each panel's intermediate point vs. the engine | Which panel is wrong | CI | later |
+| Analytic charts | Standard atmosphere, airspeed conversion, turn conversion, crosswind components vs. formula | Extractor accuracy itself | Once | later |
+| Pilot hand-check | Fighter pilots work prepared scenarios from the paper charts, ±2 kt and ±3 % | Differences between machine reading and a human | Before a release, format decided later | later |
+| DCS comparison | A few reference takeoffs and landings in the sim | Sim vs. manual difference (documented, not corrected) | Once | later |
 
-Pilot hand-check: format and scheduling are decided later. Agreed tolerance: ±2 kt for speeds, ±3 % for distances.
+Code tests (CI, all MVP):
 
-- A failed sample problem is not automatically an extraction error: the manual has misprints, which go into `manual-errata.yaml`.
+- Building blocks: edges of the drawn range, exactly on a curve, between curves, `OutOfChart` on both sides.
+- `ctx`: exact and conservative passes on small synthetic chains, including one with a branch, so backtracking and per-output worst values are tested without chart data; the pinned rounding-point list per real chain.
+- Inputs: pressure altitude, slope, wind components, drag index builder; the PA parity test against `crc-sync/src/altimetry.js`.
+- Rules: every threshold just below, at and above.
+- State: URL hash round trip; a hash with another `v` refused.
+- Coverage floor: 90 % of lines in `src/core/`, Node's built-in coverage.
+- One Playwright smoke spec: load, enter a sample problem, check a cell, open a figure, print to PDF on A4 and on Letter and assert exactly one page each.
+
+A failed sample problem is not automatically an extraction error: the manual has misprints, which go into `manual-errata.yaml`.
 
 ## Deployment and operations
 
 The app is a static build in its own Docker container (nginx serving the files), placed behind the existing nginx reverse proxy on the perf. subdomain, one path per aircraft (/f16, later /fa18), and public, with no login. No database and no API in step 1.
 
-- **Repository and CI:** GitHub; GitHub Actions runs lint, type check, core tests, extraction checks and the schema check, then builds the image.
-- **Image:** `nginx:alpine` serving `perf/web` and `perf/data`; a build stage only if the repo convention uses one.
-- **Infra:** a `perf` service in `infra/docker-compose.yml`, an nginx template for the `perf.` subdomain in `infra/nginx/templates/`, and the nginx render tests in `infra/tests/` extended to cover it.
+- **CI:** `.github/workflows/perf-docker.yml`. The test job (lint, format check, type check, `data:check`, core tests with the coverage floor, the Playwright smoke spec) runs on every push touching `perf/**` or `crc-sync/src/altimetry.js` (the parity test). Building and pushing `ghcr.io/niknam3/sourcedcs/perf` happens only on `main`, `dev` and `v*` tags, like the other docker-image services.
+- **Image:** two stages. `node:22-alpine` runs `tsc`; `nginx:alpine` serves `web/` and `data/` under `/f16/`, redirects `/` to `/f16/`, and sends `Cache-Control: no-cache` with ETags, so a new data version is picked up on the next load without stale mixes of code and data.
+- **Infra:** a `perf` service in `infra/docker-compose.yml` on the `web` network; a `PERF_DOMAIN` server block in `infra/nginx/templates/default.conf.template` (added to the substituted-variables list in the template's header comment, to the nginx service's `environment` in compose, which is what envsubst actually substitutes, and to `.env.example`), sending `X-Forwarded-For` like the other upstreams; `infra/tests/nginx-render.test.js` extended to cover it. `deploy.yml` listens to the perf workflow too and adds `perf` to both `docker compose pull` lines.
+- **Rollout order (trap):** nginx refuses its whole config when a certificate it names is missing, which takes every site down. So, written into `infra/RUNBOOK.md`: DNS record for `PERF_DOMAIN` → `certbot certonly --webroot` on the server (as `infra/setup.sh` does it) → only then merge the infra commit. The infra changes are their own final commit, kept out of the perf-told merge until the domain and certificate exist (not set up yet).
 - **Access:** public, no login (decided 27 Oct 2026). The manual's cover carries a distribution restriction; the app ships data extracted from it and shows its pages in the figure view.
 - **Versions:** app version and data version shown on the Limitations page; a changelog in the repo.
 - **Airfield data (step 3):** a JSON file in the repo, no new API; the later consolidation replaces `perf/src/airfields/`.
@@ -468,3 +520,24 @@ None for now: every question was answered on 27 Oct 2026. Validation details are
 ### My own follow-up (no answer needed)
 
 - Done 27 Oct 2026: AFMAN 11-2F-16V3 para. 2.5.1, 3.6.3, 3.6.6 and 3.18 checked word for word; the field list and runway rules match, and 3.18's RCR-below-10 rule was added.
+
+## Decisions of 28 Oct 2026
+
+The step 0 design review, all approved by the human. The sections above already carry them; this is the summary.
+
+- **MVP = step 1**, the full TOLD from about 20 figures.
+- **MVP validation:** the extractor's geometric asserts plus the sample problems as golden tests. Overlay PNGs are generated (gitignored) without per-chart sign-off. Dropped for now: drawn-path extraction, analytic-chart calibration, pilot hand-check, DCS comparison. The spec format has no `drawn_path` and no `reviewed`.
+- **Extraction is throwaway-grade tooling:** plain Python run by hand, only its asserts. The PDF lives only on the maintainer's machine; CI never extracts.
+- **Production data is checked:** one JSON Schema, TS types generated from it, CI `data:check` against the schema and `manifest.json` (data version, PDF SHA-256, extractor commit, per-file hashes). Python does not validate on write.
+- **Extractor outputs per figure:** chart JSON with axis transforms, a committed greyscale page image, a gitignored overlay. One command, refuses a wrong SHA-256. B1-1 tables by word position and declared columns, counts asserted, printed back for one comparison by a person. `manual-errata.yaml` read by the tests.
+- **Pressure altitude:** the pilot's hand calculation, not the DCS altimeter; the parity test pins only P0 and the exponent; the hot-day note is on the Limitations page; recorded as the example in ADR 0148.
+- **Conservative step leaving the drawn data:** conservative cell "—" with figure and input named, exact still shown; exact out of chart rejects the whole cell.
+- **Gross weight:** entered by hand, now and in every future version; never imported.
+- **TypeScript** for `src/`, `tsc` the only build tool, native ESM, no bundler or framework, `node --test` on `.ts` directly, ESLint `strictTypeChecked` plus Prettier (ADR 0153).
+- **Core structure:** typed results with `OutOfChart` from `read/`, one file per figure, chains in `told/`, every read through `ctx.read(id, value, step)`, conservative search by backtracking with the worst value per output, rounding points pinned per chain.
+- **Rules per cell:** exact and conservative each checked and marked on their own.
+- **UI and state:** `/f16/`, `/f16/figure.html#…`, Limitations; one `Inputs` object; URL hash `#v=1&…` > localStorage > defaults; grey dotted underline for unparseable input; "—" plus one grey reason line per reason under its table; dark mode via `prefers-color-scheme`; print to exactly one A4 or Letter page.
+- **Tests and CI:** golden samples at 2 %, building-block edges, `ctx` on synthetic chains with a branch, inputs, PA parity, rule thresholds, URL round trip, 90 % line coverage on `src/core/`, one Playwright smoke spec with the one-page print check; `perf-docker.yml` tests on `perf/**` and `altimetry.js` pushes, builds only on `main`/`dev`/`v*`.
+- **Deployment:** node → nginx image, `/f16/`, `no-cache` with ETags, `perf` compose service, `PERF_DOMAIN` vhost, `deploy.yml` extended; DNS → certificate → infra merge, the infra commit kept separate until the domain exists.
+- **ADRs 0148–0153:** the six listed under Architecture.
+- **Worktree:** perf lives in `../sourcedcs-perf`, branch `perf-told`.
