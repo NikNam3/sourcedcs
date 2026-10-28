@@ -1,0 +1,7 @@
+- figure: X1-1
+  sheet: null
+  where: sample problem text
+  printed: ""
+  correct: 1,100 ft
+  reason: fixture
+  affects: null

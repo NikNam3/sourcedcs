@@ -1,0 +1,6 @@
+- figure: X1-1
+  sheet: null
+  where: sample problem text
+  printed: 1,000 ft
+  correct: 1,100 ft
+  affects: null

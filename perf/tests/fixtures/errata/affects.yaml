@@ -1,0 +1,37 @@
+# Against tests/fixtures/specs: entry 0 is right, entry 1 has a typo'd affects.spec,
+# entry 2 names another figure's spec, entry 3 changes nothing, entry 4's spec is not extracted.
+- figure: X1-2
+  sheet: 2
+  where: sample problem 1 answer
+  printed: 4,000 ft
+  correct: 4,100 ft
+  reason: fixture
+  affects: {spec: X1-2, sample: 0, key: distance_ft, value: 4100}
+- figure: X1-2
+  sheet: 2
+  where: sample problem 1 answer
+  printed: 4,000 ft
+  correct: 4,100 ft
+  reason: fixture
+  affects: {spec: X1-2sh2, sample: 0, key: distance_ft, value: 4100}
+- figure: X1-2
+  sheet: 2
+  where: sample problem 1 answer
+  printed: 4,000 ft
+  correct: 4,100 ft
+  reason: fixture
+  affects: {spec: X1-1, sample: 0, key: distance_ft, value: 4100}
+- figure: X1-2
+  sheet: 2
+  where: sample problem 1 answer
+  printed: 4,000 ft
+  correct: 4,000 ft
+  reason: fixture
+  affects: {spec: X1-2, sample: 0, key: distance_ft, value: 4000}
+- figure: X7-7
+  sheet: 1
+  where: sample problem text
+  printed: 1 ft
+  correct: 2 ft
+  reason: fixture
+  affects: {spec: X7-7.sh1, sample: 0, key: distance_ft, value: 2}

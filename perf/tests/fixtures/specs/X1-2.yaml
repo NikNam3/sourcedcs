@@ -1,0 +1,10 @@
+id: X1-2
+figure: X1-2
+sheet: 2
+title: Fixture chart, sheet 2
+panels: []
+sample_problems:
+  - inputs: {gross_weight_lb: 30000, pitch_8deg: true}
+    expected: {distance_ft: 4000, speed_kt: 150}
+  - inputs: {gross_weight_lb: 0}
+    expected: {distance_ft: 0}
