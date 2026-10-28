@@ -1,0 +1,34 @@
+# Figure B1-1 sheet 3, Drag Indexes and Weights - Individual Stores. Coordinates are PDF points:
+# column x ranges are the printed table's vertical rules, the row band lies between the header
+# rule and the bottom rule (read from the page drawings, .superpowers/sdd/TOLD-STEP0/t8-scratch/).
+# Groups A/A 37U-36: and AN/ASQ:. AGM-65A, B / D / G and TOW REEL ONLY run over two lines with
+# their values on the second (row_end). Each AN/ASQ item's second line (station 2,3,7, OR 8) has
+# a blank store cell, filled from the line above (fill_down). TARGET DEPLOYED's weight `-` is null.
+id: B1-1.sh3
+figure: B1-1
+sheet: 3
+dataset: f16c-f110-129
+title: Drag Indexes and Weights — Individual Stores
+engine: F110-GE-129
+page_index: 260                 # 0-based
+printed_page: B1-8
+must_contain: ["Figure B1-1. (Sheet 3)", "Drag Indexes and Weights", "Individual Stores", "WEIGHT AND DRAG INDEXES DO NOT", "**USED FOR REPLACING WINGTIP AIM-9 MISSILE."]
+image_clip: [40, 50, 575, 640]
+axes: {}
+panels:
+  - id: stores
+    type: table
+    clip: [53.8, 154.3, 559.2, 579.0]
+    row_band: [204.4, 578.3]
+    rows: 21
+    key: [group, store, station]
+    row_end: drag_index
+    group: {column: group, header: store}
+    fill_down: [store]          # AN/ASQ: each item's second line has a blank store cell
+    columns:
+      - {name: group, unit: ""}
+      - {name: store, unit: "", x: [54.5, 232.6]}
+      - {name: station, unit: "", x: [233.2, 310.3], pattern: '^\d[LR]?(,\d)*(,? (OR|AND) \d)?$'}
+      - {name: rack, unit: "", x: [311.0, 438.9]}
+      - {name: weight, unit: lb, x: [439.5, 498.7], pattern: '^\d+$'}
+      - {name: drag_index, unit: "", x: [499.4, 558.5], pattern: '^\d+(/\d+)?\*{0,2}$'}

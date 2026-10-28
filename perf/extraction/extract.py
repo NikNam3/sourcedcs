@@ -5,7 +5,11 @@ No ids: every spec in extraction/specs/. Paths resolve from this script's own di
 
 The spec (extraction/specs/<id>.yaml) declares meaning; the extractor only measures. Every
 step asserts a check; the first failed assert stops the run with "<id> panel <panel>: <reason>"
-(or "<id> axis <axis>: ..." / "<id> spec: ...") and nothing is written."""
+(or "<id> axis <axis>: ..." / "<id> spec: ...") and nothing is written.
+
+Outputs: perf/data/<dataset>/<id>.json, pages/<id>.png and manifest.json; extraction/out/
+overlay-<id>.png; and, for a figure with table panels, extraction/out/<figure>-tables.txt, every
+table of this run as aligned text for the human comparison with the pages."""
 import os
 import sys
 
@@ -145,7 +149,7 @@ def extract_figure(doc, spec):
 def summary(res):
     spec = res['spec']
     parts = [f"{n} resid {res['axes'][n]['resid']:.3f}" for n in sorted(res['axes'])]
-    print(f"{spec['id']}: axes " + ', '.join(parts))
+    print(f"{spec['id']}: axes " + (', '.join(parts) or 'none'))
     for p in res['panels']:
         if p['type'] == 'curve_family':
             info = f"{len(p['curves'])} curves, {sum(len(c['points']) for c in p['curves'])} points"
@@ -153,9 +157,43 @@ def summary(res):
             info = f"1 curve, {len(p['points'])} points"
         elif p['type'] == 'scale_pair':
             info = f"{p['to']['name']} = {p['a']} * {p['from']['name']} + {p['b']}"
+        elif p['type'] == 'table':
+            info = f"{len(p['rows'])} rows x {len(p['columns'])} columns"
         else:
             info = ''
         print(f"  panel {p['id']} ({p['type']}): {info}")
+
+
+def cell_text(v):
+    return '-' if v is None else str(v)
+
+
+def table_text(res, p):
+    """One table as aligned text under a heading naming the sheet and its page, for the human
+    comparison with the printed page (null cells print as '-')."""
+    spec = res['spec']
+    sheet = '' if spec['sheet'] is None else f" sheet {spec['sheet']}"
+    head = [f"{c['name']}" + (f" ({c['unit']})" if c['unit'] else '') for c in p['columns']]
+    body = [[cell_text(v) for v in r] for r in p['rows']]
+    widths = [max(len(x) for x in col) for col in zip(head, *body)]
+    fmt = lambda cells: '  '.join(c.ljust(w) for c, w in zip(cells, widths)).rstrip()  # noqa: E731
+    out = [f"## {spec['figure']}{sheet}, page index {spec['page_index']} (printed {spec['printed_page']}): "
+           f"{spec['id']} table {p['id']}, {len(p['rows'])} rows x {len(p['columns'])} columns", '',
+           fmt(head), fmt(['-' * w for w in widths])]
+    out += [fmt(r) for r in body]
+    return '\n'.join(out) + '\n'
+
+
+def tables_text(results):
+    """Every table of the run, per figure: {figure: text}."""
+    by_fig = {}
+    for res in results:
+        for p in res['panels']:
+            if p['type'] == 'table':
+                by_fig.setdefault(res['spec']['figure'], []).append(table_text(res, p))
+    head = (f"# Figure {{}} tables, one section per table, from extraction/extract.py. Null cells print as '-'.\n"
+            "# Compare each section with the page index named in its heading.\n\n")
+    return {f: head.format(f) + '\n'.join(ts) for f, ts in by_fig.items()}
 
 
 def main(argv):
@@ -185,6 +223,12 @@ def main(argv):
         output.write_bytes(os.path.join(OUT, f"overlay-{spec['id']}.png"), res['overlay'])
         datasets.add(spec['dataset'])
         summary(res)
+    for fig, text in sorted(tables_text(results).items()):
+        print()
+        print(text, end='')
+        path = os.path.join(OUT, f'{fig}-tables.txt')
+        output.write_bytes(path, text.encode())
+        print(f'tables written to {os.path.relpath(path)}')
     for ds in sorted(datasets):
         m, rewritten = output.write_manifest(os.path.join(DATA, ds), ds, sha, HERE)
         state = 'rewritten' if rewritten else 'unchanged'
