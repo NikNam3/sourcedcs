@@ -1,0 +1,54 @@
+name: Build and Push perf Docker Image
+
+# Step 0: the test job only. Step 1 adds build-and-push (main, dev, v* tags) and the Playwright smoke spec;
+# deploy.yml will listen to this workflow's name. CI never runs the extractor: the manual PDF is not in the repo.
+# crc-sync/src/altimetry.js is in the path filter for the pressure-altitude parity test (ADR 0148).
+on:
+  push:
+    paths:
+      - 'perf/**'
+      - 'crc-sync/src/altimetry.js'
+      - '.github/workflows/perf-docker.yml'
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        working-directory: perf
+        run: npm ci
+
+      - name: Lint
+        working-directory: perf
+        run: npm run lint
+
+      - name: Format check
+        working-directory: perf
+        run: npm run format:check
+
+      - name: Type check
+        working-directory: perf
+        run: npm run typecheck
+
+      - name: Generated types up to date
+        working-directory: perf
+        run: npm run types:check
+
+      - name: Data check (schema and manifest hashes)
+        working-directory: perf
+        run: npm run data:check
+
+      - name: Tests (90 % line coverage on src/core)
+        working-directory: perf
+        run: npm test
