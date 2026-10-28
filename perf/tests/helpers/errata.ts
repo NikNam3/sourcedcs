@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 
 import { parse } from 'yaml';
 
-import { isRecord, type ChartSpec, type SampleProblem } from './specs.ts';
+import { isFiniteNumber, isRecord, isSheet, type ChartSpec, type SampleProblem } from './specs.ts';
 
 export interface Erratum {
   figure: string;
@@ -45,7 +45,7 @@ function affectsOf(value: unknown, where: string): Erratum['affects'] {
   if (typeof sample !== 'number' || !Number.isInteger(sample) || sample < 0) {
     throw new Error(`${where}: affects.sample is not a 0-based index`);
   }
-  if (typeof replacement !== 'number') throw new Error(`${where}: affects.value is not a number`);
+  if (!isFiniteNumber(replacement)) throw new Error(`${where}: affects.value is not a finite number`);
   return {
     spec: nonEmpty(value, 'spec', `${where}: affects`),
     sample,
@@ -65,7 +65,7 @@ function erratumOf(value: unknown, where: string): Erratum {
     string,
   ];
   const { sheet } = value;
-  if (sheet !== null && typeof sheet !== 'number') throw new Error(`${where}: sheet is not a number or null`);
+  if (!isSheet(sheet)) throw new Error(`${where}: sheet is not null or a positive integer`);
   return { figure, sheet, where: whereText, printed, correct, reason, affects: affectsOf(value.affects, where) };
 }
 
@@ -89,10 +89,55 @@ export function applyErrata(spec: ChartSpec, errata: readonly Erratum[]): Sample
     if (problem === undefined) {
       throw new Error(`erratum for ${spec.id}: sample ${String(affects.sample)} does not exist`);
     }
-    if (!(affects.key in problem.expected)) {
+    if (!Object.hasOwn(problem.expected, affects.key)) {
       throw new Error(`erratum for ${spec.id}: sample ${String(affects.sample)} has no expected ${affects.key}`);
     }
     problem.expected[affects.key] = affects.value;
   }
   return problems;
+}
+
+/**
+ * Checks every erratum with `affects` against the specs it is about: the spec whose figure and sheet are
+ * the erratum's. When that spec exists, `affects.spec` must be its id (so a typo cannot leave the erratum
+ * unapplied for ever) and `applyErrata` must change the named value. An erratum whose spec is not
+ * extracted yet is `pending`, not a problem (R14).
+ */
+export function checkErrataAgainstSpecs(
+  errata: readonly Erratum[],
+  specs: readonly ChartSpec[],
+): { problems: string[]; pending: string[] } {
+  const problems: string[] = [];
+  const pending: string[] = [];
+  for (const erratum of errata) {
+    const { affects } = erratum;
+    if (affects === null) continue;
+    const name = `erratum ${erratum.figure} sheet ${String(erratum.sheet)}`;
+    const candidates = specs.filter((s) => s.figure === erratum.figure && s.sheet === erratum.sheet);
+    const spec = candidates.find((s) => s.id === affects.spec);
+    if (spec === undefined) {
+      if (specs.some((s) => s.id === affects.spec)) {
+        problems.push(`${name}: affects.spec ${affects.spec} is a spec of another figure or sheet`);
+      } else if (candidates.length === 0) {
+        pending.push(`${name}: spec ${affects.spec} not extracted yet`);
+      } else {
+        const ids = candidates.map((s) => s.id).join(', ');
+        problems.push(`${name}: affects.spec ${affects.spec} is not the spec for that figure and sheet (${ids})`);
+      }
+      continue;
+    }
+    let applied: SampleProblem[];
+    try {
+      applied = applyErrata(spec, [erratum]);
+    } catch (error) {
+      problems.push(`${name}: ${error instanceof Error ? error.message : String(error)}`);
+      continue;
+    }
+    const before = spec.sample_problems?.[affects.sample]?.expected[affects.key];
+    const after = applied[affects.sample]?.expected[affects.key];
+    if (after !== affects.value || before === affects.value) {
+      problems.push(`${name}: applying it does not change ${spec.id} sample ${String(affects.sample)} ${affects.key}`);
+    }
+  }
+  return { problems, pending };
 }

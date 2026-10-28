@@ -1,0 +1,7 @@
+- figure: X1-1
+  sheet: null
+  where: sample problem text
+  printed: 1,000 ft
+  correct: 1,100 ft
+  reason: fixture
+  affects: {spec: X1-1, sample: 0, key: distance_ft, value: .nan}

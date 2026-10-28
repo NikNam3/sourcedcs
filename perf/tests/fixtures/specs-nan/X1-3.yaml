@@ -1,0 +1,6 @@
+id: X1-3
+figure: X1-3
+sheet: null
+sample_problems:
+  - inputs: {gross_weight_lb: .inf}
+    expected: {distance_ft: 1}

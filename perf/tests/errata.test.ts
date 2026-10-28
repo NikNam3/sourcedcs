@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 
 import { parse } from 'yaml';
 
-import { applyErrata, loadErrata, type Erratum } from './helpers/errata.ts';
+import { applyErrata, checkErrataAgainstSpecs, loadErrata, type Erratum } from './helpers/errata.ts';
 import { loadSpecs, type ChartSpec } from './helpers/specs.ts';
 
 const perfDir = fileURLToPath(new URL('..', import.meta.url));
@@ -52,18 +52,51 @@ describe('manual-errata.yaml', () => {
     }
   });
 
-  test('an erratum that names a spec loadSpecs() found applies to it cleanly', (t) => {
-    const specs = loadSpecs();
-    for (const erratum of loadErrata()) {
-      if (erratum.affects === null) continue;
-      const spec = specs.find((s) => s.id === erratum.affects?.spec);
-      if (spec === undefined) {
-        // The spec is not extracted yet (R14): checked once it exists.
-        t.diagnostic(`spec ${erratum.affects.spec} not found yet; skipped`);
-        continue;
-      }
-      assert.doesNotThrow(() => applyErrata(spec, [erratum]));
-    }
+  test('every erratum with affects names the spec of its figure and sheet and changes its value', (t) => {
+    const { problems, pending } = checkErrataAgainstSpecs(loadErrata(), loadSpecs());
+    // An erratum whose spec is not extracted yet is skipped until it is (R14).
+    for (const line of pending) t.diagnostic(`skipped: ${line}`);
+    assert.deepEqual(problems, []);
+  });
+});
+
+describe('checkErrataAgainstSpecs on the fixture specs', () => {
+  const errata = loadErrata(fixture('errata', 'affects.yaml'));
+  const specs = loadSpecs(fixture('specs'));
+  const check = (i: number): { problems: string[]; pending: string[] } => {
+    const erratum = errata[i];
+    assert.ok(erratum !== undefined);
+    return checkErrataAgainstSpecs([erratum], specs);
+  };
+
+  test('a right affects.spec that changes the value passes', () => {
+    assert.deepEqual(check(0), { problems: [], pending: [] });
+  });
+
+  test('a typo in affects.spec fails once the spec for that figure and sheet exists', () => {
+    const { problems, pending } = check(1);
+    assert.deepEqual(pending, []);
+    assert.equal(problems.length, 1);
+    assert.match(problems[0] ?? '', /X1-2sh2.*X1-2/);
+  });
+
+  test('an affects.spec naming another figure’s spec fails', () => {
+    const { problems } = check(2);
+    assert.equal(problems.length, 1);
+    assert.match(problems[0] ?? '', /X1-1.*another figure or sheet/);
+  });
+
+  test('an erratum whose value is already the printed one fails', () => {
+    const { problems } = check(3);
+    assert.equal(problems.length, 1);
+    assert.match(problems[0] ?? '', /does not change X1-2 sample 0 distance_ft/);
+  });
+
+  test('an erratum whose figure and sheet have no spec yet is pending, not a problem', () => {
+    const { problems, pending } = check(4);
+    assert.deepEqual(problems, []);
+    assert.equal(pending.length, 1);
+    assert.match(pending[0] ?? '', /X7-7\.sh1 not extracted yet/);
   });
 });
 
@@ -74,6 +107,14 @@ describe('loadErrata', () => {
 
   test('an empty string throws naming the entry and the key', () => {
     assert.throws(() => loadErrata(fixture('errata', 'empty-string.yaml')), /entry 0.*printed/);
+  });
+
+  test('sheet 0 throws: a sheet is null or a positive integer', () => {
+    assert.throws(() => loadErrata(fixture('errata', 'sheet-zero.yaml')), /entry 0.*sheet/);
+  });
+
+  test('a .nan affects.value throws', () => {
+    assert.throws(() => loadErrata(fixture('errata', 'value-nan.yaml')), /entry 0.*affects\.value/);
   });
 });
 
@@ -101,6 +142,18 @@ describe('loadSpecs', () => {
 
   test('an empty directory gives no specs', () => {
     assert.deepEqual(loadSpecs(scratch), []);
+  });
+
+  test('an id that is not the file name throws naming the file', () => {
+    assert.throws(() => loadSpecs(fixture('specs-bad-id')), /X1-3\.yaml.*id/);
+  });
+
+  test('a sheet that is not a positive integer throws naming the file', () => {
+    assert.throws(() => loadSpecs(fixture('specs-bad-sheet')), /X1-3\.yaml.*sheet/);
+  });
+
+  test('an .inf input throws naming the file and the key', () => {
+    assert.throws(() => loadSpecs(fixture('specs-nan')), /X1-3\.yaml.*inputs\.gross_weight_lb/);
   });
 
   test('a missing directory gives no specs', () => {
@@ -167,6 +220,13 @@ describe('applyErrata', () => {
     assert.throws(
       () => applyErrata(spec(), [erratum({ spec: 'X9-1', sample: 1, key: 'distnace_ft', value: 5200 })]),
       /X9-1.*sample 1.*distnace_ft/,
+    );
+  });
+
+  test('an affects key inherited from Object.prototype is not an expected key', () => {
+    assert.throws(
+      () => applyErrata(spec(), [erratum({ spec: 'X9-1', sample: 1, key: 'toString', value: 5200 })]),
+      /X9-1.*sample 1.*toString/,
     );
   });
 });
