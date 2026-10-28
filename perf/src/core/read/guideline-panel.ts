@@ -13,7 +13,7 @@ import { drawnRange, edgeTolerance, interpWithin, unionRange } from './interp.ts
  *   least two lines that draw the baseline also draw the target (null when there is none).
  * - An entry outside the outermost usable lines at the baseline: OutOfChart on the output.
  *
- * An unknown family is a data defect and throws.
+ * An unknown family is a data defect and throws, even when the target is the baseline.
  */
 export function guidelinePanel(
   p: GuidelinePanel,
@@ -22,9 +22,9 @@ export function guidelinePanel(
   entry: number,
   target: number,
 ): Read<number> {
-  if (target === p.baseline) return ok(entry);
   const lines = Object.hasOwn(p.families, family) ? p.families[family] : undefined;
   if (lines === undefined) throw new Error(`guideline panel "${p.id}" has no family "${family}"`);
+  if (target === p.baseline) return ok(entry);
 
   const tolerance = edgeTolerance(
     unionRange(

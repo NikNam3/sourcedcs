@@ -3,6 +3,8 @@
 Each function takes (page, spec, panel_spec, axes), where `axes` maps an axis name to its fit
 {'a', 'b', 'resid'}, runs the panel's asserts and returns the panel as the Data contract has it
 (numbers already rounded). Add a type by writing its function and registering it in TYPES."""
+import re
+
 import geom
 
 DEFAULT_WIDTH = (0.5, 1.0)
@@ -349,11 +351,218 @@ def guideline_panel(page, spec, panel_spec, axes):
     }
 
 
+# Tables (Task 8, questioner rulings R5 to R7). Words go to the column whose x range holds their
+# centre and to lines by clustering their centre y; rows are built from lines by the spec's rules.
+LINE_TOL_PT = 3.0       # a word more than this below the previous word's centre starts a new line
+GROUP_X_TOL_PT = 2.0    # a row whose key starts this close to its group header's x ends the group
+NUMBER_RE = re.compile(r'-?\d+(\.\d+)?')
+THOUSANDS_RE = re.compile(r'\d{1,3}(,\d{3})+')
+NULL_CELLS = ('-', '–')
+COLUMN_KEYS = ({'name', 'unit'}, {'x', 'pattern'})
+GROUP_KEYS = ({'column', 'header'}, set())
+
+
+def cell_value(text, is_key):
+    """A cell's text -> number, verbatim string or null (R6). Key cells are identifiers and stay
+    strings (station `5`); in other columns a plain or thousands number becomes a number and a
+    lone dash null."""
+    if text == '':
+        return None
+    if is_key:
+        return text
+    if text in NULL_CELLS:
+        return None
+    t = text.replace('–', '-').replace('−', '-')
+    if NUMBER_RE.fullmatch(t):
+        return float(t) if '.' in t else int(t)
+    if THOUSANDS_RE.fullmatch(t):
+        return int(t.replace(',', ''))
+    return text
+
+
+def _table_spec(ps):
+    """Checks the table-only keys (columns, group, row rules) and returns the columns, the
+    group column (or None), the header column and the columns that carry an x range."""
+    cols = ps['columns']
+    assert isinstance(cols, list) and cols, "columns must be a non-empty list"
+    for n, c in enumerate(cols):
+        check_keys(c, *COLUMN_KEYS, prefix=f'columns[{n}].')
+    names = [c['name'] for c in cols]
+    assert len(set(names)) == len(names), f"duplicate column names {names}"
+    group = ps.get('group')
+    gcol = hcol = None
+    if group is not None:
+        check_keys(group, *GROUP_KEYS, prefix='group.')
+        gcol, hcol = group['column'], group['header']
+        assert gcol in names and hcol in names, f"group columns {gcol!r}, {hcol!r} not among {names}"
+    for c in cols:
+        if c['name'] == gcol:
+            assert 'x' not in c, f"group column {gcol!r} is filled from the group headers and takes no x"
+        else:
+            x = c.get('x')
+            assert isinstance(x, list) and len(x) == 2 and x[0] < x[1], \
+                f"column {c['name']!r} needs x: [x0, x1], not {x!r}"
+    placed = sorted((c for c in cols if c['name'] != gcol), key=lambda c: c['x'][0])
+    for a, b in zip(placed, placed[1:]):
+        assert a['x'][1] <= b['x'][0], f"columns {a['name']!r} and {b['name']!r} overlap"
+    for k in ps['key']:
+        assert k in names, f"key column {k!r} is not a column"
+    if 'row_end' in ps:
+        assert ps['row_end'] in names and ps['row_end'] != gcol, f"row_end {ps['row_end']!r} is not a placed column"
+    assert group is None or hcol != gcol, "group.header must be a placed column, not the group column"
+    assert isinstance(ps['rows'], int) and ps['rows'] > 0, f"rows must be a positive count, not {ps['rows']!r}"
+    for k in ps.get('fill_down', []):
+        assert k in names and k != gcol, f"fill_down {k!r} is not a placed column"
+    assert 'fill_down' not in ps or gcol is not None, "fill_down works within a group: declare group"
+    return cols, gcol, hcol, placed
+
+
+def _lines(words):
+    """Clusters words into lines by centre y: a word more than LINE_TOL_PT below the previous
+    one starts a new line. Asserts no line spans more than LINE_TOL_PT."""
+    lines = []
+    for w in sorted(words, key=lambda w: (w['cy'], w['x0'])):
+        if lines and w['cy'] - lines[-1][-1]['cy'] <= LINE_TOL_PT:
+            lines[-1].append(w)
+        else:
+            lines.append([w])
+    for ln in lines:
+        span = ln[-1]['cy'] - ln[0]['cy']
+        assert span <= LINE_TOL_PT, \
+            f"line at y {ln[0]['cy']:.1f} spans {span:.1f} pt (limit {LINE_TOL_PT:g})"
+    return lines
+
+
+def _text(lines, col):
+    """One column's words over some lines, top to bottom and left to right, joined by one space."""
+    return ' '.join(w['text'] for ln in lines for w in sorted(ln, key=lambda w: w['x0']) if w['col'] == col)
+
+
+def table(page, spec, ps, axes):
+    cols, gcol, hcol, placed = _table_spec(ps)
+    names = [c['name'] for c in cols]
+    x0, y0, x1, y1 = ps['clip']
+    band = ps['row_band']
+    assert y0 <= band[0] < band[1] <= y1, f"row_band {band} is not inside the clip's y [{y0}, {y1}]"
+    drop = ps.get('drop_words', [])
+    dropped = {d: 0 for d in drop}
+    words = []
+    for w in geom.page_words(page):
+        cx, cy = (w[0] + w[2]) / 2, (w[1] + w[3]) / 2
+        if not (x0 <= cx <= x1 and y0 <= cy <= y1):
+            continue
+        if w[4] in dropped:
+            dropped[w[4]] += 1
+            continue
+        col = next((c['name'] for c in placed if c['x'][0] <= cx <= c['x'][1]), None)
+        assert col is not None, f"word {w[4]!r} at ({cx:.1f}, {cy:.1f}) lies in no column"
+        if band[0] <= cy <= band[1]:
+            words.append({'text': w[4], 'x0': w[0], 'cy': cy, 'col': col})
+    for d, n in dropped.items():
+        assert n > 0, f"drop_words {d!r} matches no word in the clip"
+    lines = _lines(words)
+
+    attach = list(ps.get('attach_up', []))
+    mean_y = [sum(w['cy'] for w in ln) / len(ln) for ln in lines]
+    for y in attach:
+        n = sum(abs(ly - y) <= LINE_TOL_PT for ly in mean_y)
+        assert n == 1, f"attach_up {y} matches {n} lines (each must match exactly one line's mean y)"
+    row_end = ps.get('row_end')
+    rows, groups, pending = [], [], []    # groups: (text, header y) per header, in page order
+    group = group_x = None                 # the current group's index in groups, its header's x
+
+    def close():
+        nonlocal group, group_x
+        cells = {c: _text(pending, c) for c in names if c != gcol}
+        key_x = min((w['x0'] for ln in pending for w in ln if w['col'] == hcol), default=None)
+        if group is not None and key_x is not None and abs(key_x - group_x) <= GROUP_X_TOL_PT:
+            group = group_x = None
+        if gcol is not None:
+            cells[gcol] = '' if group is None else groups[group][0]
+        rows.append({'cells': cells, 'y': pending[0][0]['cy'], 'group': group})
+        pending.clear()
+
+    for ln in lines:
+        ly = sum(w['cy'] for w in ln) / len(ln)
+        hit = [y for y in attach if abs(ly - y) <= LINE_TOL_PT]
+        if hit:
+            assert len(hit) == 1, f"line at y {ly:.1f} matches attach_up {hit}"
+            assert not pending and rows, f"attach_up line at y {ly:.1f} has no closed row above it"
+            for c in names:
+                if c == gcol:
+                    continue
+                extra = _text([ln], c)
+                if extra:
+                    rows[-1]['cells'][c] = (rows[-1]['cells'][c] + ' ' + extra).strip()
+            continue
+        pending.append(ln)
+        if row_end is None or _text([ln], row_end):
+            close()
+        elif gcol is not None and _text(pending, hcol).endswith(':'):
+            parts = [_text(pending, hcol)] + [_text(pending, c['name']) for c in placed if c['name'] != hcol]
+            groups.append((' '.join(t for t in parts if t), pending[0][0]['cy']))
+            starts = [min(w['x0'] for w in p if w['col'] == hcol) for p in pending if _text([p], hcol)]
+            assert max(starts) - min(starts) <= GROUP_X_TOL_PT, \
+                f"group header {groups[-1][0]!r} at y {groups[-1][1]:.1f}: its lines start at x " \
+                f"{[round(x, 1) for x in starts]} (a continuation of the row above? see attach_up)"
+            group = len(groups) - 1
+            group_x = starts[0]
+            pending.clear()
+    if pending:
+        assert False, f"{len(pending)} line(s) left with no {row_end} cell at the end of the row band, " \
+                      f"first at y {pending[0][0]['cy']:.1f}: {_text(pending, hcol or row_end)!r}"
+    for i, (text, gy) in enumerate(groups):
+        assert any(r['group'] == i for r in rows), \
+            f"group header {text!r} at y {gy:.1f} has no rows (its first row starts at the header's x?)"
+    for r in rows:
+        for c, t in r['cells'].items():
+            assert not any(ord(ch) < 32 for ch in t), f"cell {t!r} (row at y {r['y']:.1f}) holds a control character"
+
+    for c in ps.get('fill_down', []):
+        for prev, r in zip(rows, rows[1:]):
+            if r['cells'][c] == '' and r['group'] is not None and r['group'] == prev['group']:
+                r['cells'][c] = prev['cells'][c]
+
+    keys = ps['key']
+    out_rows = []
+    for r in rows:
+        out_rows.append([cell_value(r['cells'][c], c in keys) for c in names])
+    for c in cols:
+        if 'pattern' not in c:
+            continue
+        pat = re.compile(c['pattern'])
+        for r in rows:
+            t = r['cells'][c['name']]
+            if t != '' and not (c['name'] not in keys and t in NULL_CELLS):
+                assert pat.fullmatch(t), \
+                    f"column {c['name']} cell {t!r} (row at y {r['y']:.1f}) does not match {c['pattern']!r}"
+    for r, o in zip(rows, out_rows):
+        assert len(o) == len(cols), f"row at y {r['y']:.1f} has {len(o)} cells for {len(cols)} columns"
+        for c, v in zip(names, o):
+            assert not (isinstance(v, (int, float)) and ',' in r['cells'][c]
+                        and not THOUSANDS_RE.fullmatch(r['cells'][c])), \
+                f"cell {r['cells'][c]!r} has a comma but became a number"
+            if c in keys and c != gcol:
+                assert v is not None, f"key column {c} is empty in the row at y {r['y']:.1f} ({r['cells']})"
+    seen = {}
+    for r, o in zip(rows, out_rows):
+        k = tuple(o[names.index(c)] for c in keys)
+        assert k not in seen, f"key {list(k)} repeats (rows at y {seen.get(k, 0):.1f} and {r['y']:.1f})"
+        seen[k] = r['y']
+    assert len(out_rows) == ps['rows'], f"{len(out_rows)} rows found, spec says {ps['rows']}"
+    return {
+        'id': ps['id'], 'type': 'table',
+        'columns': [{'name': c['name'], 'unit': c['unit']} for c in cols],
+        'rows': out_rows,
+    }
+
+
 TYPES = {
     'curve_family': curve_family,
     'single_curve': single_curve,
     'scale_pair': scale_pair,
     'guideline_panel': guideline_panel,
+    'table': table,
 }
 
 # Spec keys per panel type: (required, optional). A new type registers its keys here too.
@@ -366,6 +575,8 @@ KEYS = {
     # families: {name: rises | falls | any}; count: {name: exact line count}
     'guideline_panel': ({'id', 'type', 'clip', 'frame', 'input', 'output', 'baseline', 'families', 'count'},
                         {'filter'}),
+    'table': ({'id', 'type', 'clip', 'row_band', 'rows', 'key', 'columns'},
+              {'row_end', 'group', 'fill_down', 'attach_up', 'drop_words'}),  # columns, group: _table_spec
 }
 
 # Keys of the mapping-valued panel keys, wherever they appear: (required, optional).
