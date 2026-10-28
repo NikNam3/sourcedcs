@@ -34,6 +34,8 @@ panels:
     from: tof_mil
     to: tof_ab
     scale_line: [140, 664, 500, 670]    # the MAX AB scale line (y 666.9); its drawn ends are the tof_ab range
+    # The measured range starts at 0.5032, not 0.5: the line's left end (x 153.58) read through the
+    # tof_ab fit from unsnapped label centres. It is a measurement; never correct it by hand.
 corrections: []
 sample_problems:
   - inputs: {temp_c: 40, pa_ft: 2000}

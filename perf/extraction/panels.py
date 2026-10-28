@@ -264,8 +264,15 @@ def join_dashes(pieces, k, max_gap=9.0, tol=1.6):
                 break
             used[best[1]] = True
             q = pieces[best[1]]
-            close = ((q[0][0] - end[0]) ** 2 + (q[0][1] - end[1]) ** 2) ** 0.5 < 0.2
-            line += q[1:] if close else q
+            # A piece that overlaps the line's end (a gap down to -0.3 pt) starts behind it: its
+            # leading points at or behind the end along k are dropped, so the line stays one-way.
+            n = 0
+            while n < len(q) and q[n][k] <= end[k]:
+                n += 1
+            q = q[n:]
+            if q and ((q[0][0] - end[0]) ** 2 + (q[0][1] - end[1]) ** 2) ** 0.5 < 0.2:
+                q = q[1:]
+            line += q
         lines.append(line)
     return lines
 
