@@ -52,7 +52,7 @@ export interface Evaluation<K extends string> {
   readonly cells: Readonly<Record<K, Cell>>;
   /** The exact pass, in read order. */
   readonly trace: readonly { readonly id: string; readonly value: number }[];
-  /** The ids the exact pass read, in order of first read. */
+  /** The ids the exact pass read, in order (each id is read at most once per run). */
   readonly roundingPoints: readonly string[];
   /** Conservative runs made; the exact pass is not counted. */
   readonly runs: number;
@@ -84,11 +84,17 @@ function onStep(read: ReadRecord): boolean {
   return roundTo(read.value, read.step, 'down') === roundTo(read.value, read.step, 'up');
 }
 
-/** Runs the chain once; an id the plan names is rounded that way, every other id is read exact. */
+/**
+ * Runs the chain once; an id the plan names is rounded that way, every other id is read exact. A rounding point is
+ * read once per run: a second read of the same id is a chain defect and throws (it is not an OutOfChart).
+ */
 function execute<K extends string>(chain: Chain<K>, plan: ReadonlyMap<string, Direction>): Run<K> {
   const reads: ReadRecord[] = [];
+  const seen = new Set<string>();
   const ctx: Ctx = {
     read(id, value, step) {
+      if (seen.has(id)) throw new Error(`chain defect: rounding point '${id}' read twice in one run`);
+      seen.add(id);
       reads.push({ id, value, step });
       const dir = plan.get(id);
       return dir === undefined ? value : roundTo(value, step, dir);
@@ -97,16 +103,19 @@ function execute<K extends string>(chain: Chain<K>, plan: ReadonlyMap<string, Di
   return { outputs: chain(ctx), reads };
 }
 
-/** The ids of `reads` not on their step and not in `skip`, once each, in read order. */
+/** The ids of `reads` not on their step and not in `skip`, in read order. */
 function offStepIds(reads: readonly ReadRecord[], skip: ReadonlyMap<string, Direction>): string[] {
   const ids: string[] = [];
   for (const read of reads) {
-    if (!skip.has(read.id) && !ids.includes(read.id) && !onStep(read)) ids.push(read.id);
+    if (!skip.has(read.id) && !onStep(read)) ids.push(read.id);
   }
   return ids;
 }
 
-/** The direction whose run is worse for this output; an error is worse than any value; 'down' on a tie. */
+/**
+ * The direction whose run is worse for this output. An errored side is the worse one (both errored: 'down'), so the
+ * final run reproduces the error; 'down' on a tie of values.
+ */
 function worseDirection(worse: 'higher' | 'lower', down: Read<number>, up: Read<number>): Direction {
   if (!down.ok) return 'down';
   if (!up.ok) return 'up';
@@ -115,8 +124,9 @@ function worseDirection(worse: 'higher' | 'lower', down: Read<number>, up: Read<
 }
 
 /**
- * The cell for one output. An exact error rejects the whole cell; otherwise the first run that errored is the
- * conservative value (a rounding step left the drawn data); otherwise the worst value of the runs.
+ * The cell for one output. An exact error rejects the whole cell; otherwise the first run that errored, in run order
+ * (single-point runs in exact-pass read order, down before up, then the final runs), is the conservative value (a
+ * rounding step left the drawn data); otherwise the worst value of the runs.
  */
 function cellOf(exact: Read<number>, runs: readonly Read<number>[], worse: 'higher' | 'lower'): Cell {
   if (!exact.ok) return { exact, conservative: exact };
@@ -188,6 +198,6 @@ export function evaluate<K extends string>(chain: Chain<K>, kinds: Readonly<Reco
     );
   }
 
-  const roundingPoints = [...new Set(exact.reads.map((read) => read.id))];
+  const roundingPoints = exact.reads.map((read) => read.id);
   return { cells, trace: traceOf(exact.reads), roundingPoints, runs };
 }

@@ -26,8 +26,11 @@ export function evaluateExhaustive<K extends string>(
     const fixed = prefix;
     const choices: Direction[] = [];
     const offStep: boolean[] = [];
+    const seen = new Set<string>();
     const ctx: Ctx = {
-      read(_id, value, step) {
+      read(id, value, step) {
+        if (seen.has(id)) throw new Error(`chain defect: rounding point '${id}' read twice in one run`);
+        seen.add(id);
         const dir = fixed[choices.length] ?? 'down';
         choices.push(dir);
         offStep.push(roundTo(value, step, 'down') !== roundTo(value, step, 'up'));
@@ -58,6 +61,6 @@ export function evaluateExhaustive<K extends string>(
     cells[k] = { exact: exactRead, conservative: error ?? ok(worst ?? exactRead.value) };
   }
 
-  const roundingPoints = [...new Set(exact.trace.map((t) => t.id))];
+  const roundingPoints = exact.trace.map((t) => t.id);
   return { cells, trace: exact.trace, roundingPoints, runs: results.length };
 }

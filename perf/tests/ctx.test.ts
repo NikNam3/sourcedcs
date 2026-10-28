@@ -141,6 +141,42 @@ describe('evaluate', () => {
     assert.deepEqual(e.cells.d.conservative, outOfChart('B2-3', 'gross_weight', 48000, [20000, 47950]));
   });
 
+  test('only the up side errors: the direction is up, and the conservative value is that error', () => {
+    const edge: Chain<'d'> = (ctx) => {
+      const t = ctx.read('temp', 20.4, 1);
+      const w = ctx.read('weight', 47950, 100);
+      return { d: w > 47950 ? outOfChart('B2-3', 'gross_weight', w, [20000, 47950]) : ok(w * 0.1 + t) };
+    };
+    const { chain, seen } = spied(edge);
+    const e = evaluate(chain, { d: 'distance' });
+    // Runs: exact, temp down, temp up, weight down, weight up, final. The final run reads weight rounded up.
+    assert.equal(e.runs, 5);
+    assert.equal(seen.get('weight')?.at(-1), 48000);
+    assert.equal(seen.get('temp')?.at(-1), 21);
+    close(valueOf(e.cells.d.exact), 4815.4);
+    assert.deepEqual(e.cells.d.conservative, outOfChart('B2-3', 'gross_weight', 48000, [20000, 47950]));
+  });
+
+  test('the first error is by run order: single-point runs in exact-pass read order, down before up', () => {
+    const twoEdges: Chain<'d'> = (ctx) => {
+      const a = ctx.read('a', 9.5, 1);
+      const b = ctx.read('b', 4.5, 1);
+      if (b > 4.5) return { d: outOfChart('F-B', 'b', b, [0, 4.5]) };
+      if (a > 9.5) return { d: outOfChart('F-A', 'a', a, [0, 9.5]) };
+      return { d: ok(a + b) };
+    };
+    const e = evaluate(twoEdges, { d: 'distance' });
+    // a up errors before b up does (a is read first); the final run (both up) would give F-B.
+    assert.deepEqual(e.cells.d.conservative, outOfChart('F-A', 'a', 10, [0, 9.5]));
+  });
+
+  test('a second read of the same id in one run is a chain defect and throws', () => {
+    const twice: Chain<'d'> = (ctx) => ({ d: ok(ctx.read('a', 1.25, 0.1) + ctx.read('a', 2.5, 0.1)) });
+    assert.throws(() => runExact(twice), { name: 'Error', message: /'a' read twice/ });
+    assert.throws(() => evaluate(twice, { d: 'distance' }), { name: 'Error', message: /'a' read twice/ });
+    assert.throws(() => evaluateExhaustive(twice, { d: 'distance' }), { name: 'Error', message: /'a' read twice/ });
+  });
+
   test('an exact error rejects the whole cell', () => {
     const off: Chain<'d'> = (ctx) => {
       const w = ctx.read('weight', 52050, 100);
