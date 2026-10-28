@@ -158,17 +158,16 @@ export function runExact<K extends string>(
   return { outputs, trace: traceOf(reads) };
 }
 
+/** The most re-test rounds one output's final-run loop may take before the chain is called defective. */
+export const MAX_FINAL_ROUNDS = 64;
+
 export function evaluate<K extends string>(chain: Chain<K>, kinds: Readonly<Record<K, OutputKind>>): Evaluation<K> {
   const keys = Object.keys(kinds) as K[];
   const exact = execute(chain, new Map());
   let runs = 0;
-  // Every id any run has read, for the final-run loop's guard.
-  const seen = new Set<string>();
   const run = (plan: ReadonlyMap<string, Direction>): Run<K> => {
-    const result = execute(chain, plan);
     runs++;
-    for (const read of result.reads) seen.add(read.id);
-    return result;
+    return execute(chain, plan);
   };
 
   // Single-point tests of every point the exact pass read off its step, shared by all outputs.
@@ -186,18 +185,17 @@ export function evaluate<K extends string>(chain: Chain<K>, kinds: Readonly<Reco
     const worse = WORSE[kinds[k]];
     const dirs = new Map(firstDirs.get(k));
     const own: Run<K>[] = [];
-    // Each re-test round gives at least one more id a direction, so a chain with a finite set of ids ends. A chain
-    // whose ids keep changing from run to run (a defect) would not: stop it once the rounds outnumber the ids seen
-    // before this loop.
-    const limit = seen.size;
+    // Each re-test round gives at least one more id a direction, so a chain with a finite set of ids ends; chains use
+    // static ids, so real branch nesting stays far below the cap. A chain whose ids keep changing from run to run (a
+    // defect) would never end: it throws once the output has had MAX_FINAL_ROUNDS re-test rounds.
     for (let rounds = 0; ; rounds++) {
       const final = run(dirs);
       own.push(final);
       const fresh = offStepIds(final.reads, dirs);
       if (fresh.length === 0) break;
-      if (rounds >= limit) {
+      if (rounds >= MAX_FINAL_ROUNDS) {
         throw new Error(
-          `chain defect: the final-run loop for '${k}' passed ${String(limit)} rounds, its ids keep changing`,
+          `chain defect: the final-run loop for '${k}' passed ${String(MAX_FINAL_ROUNDS)} rounds, its ids keep changing`,
         );
       }
       // A point the final run read that no direction covers (a branch switched): test it with the others as in the

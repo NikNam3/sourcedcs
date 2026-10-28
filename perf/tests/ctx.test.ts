@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { performance } from 'node:perf_hooks';
 import { describe, test } from 'node:test';
 
-import { evaluate, roundTo, runExact, STEPS, WORSE } from '../src/core/ctx.ts';
+import { evaluate, MAX_FINAL_ROUNDS, roundTo, runExact, STEPS, WORSE } from '../src/core/ctx.ts';
 import type { Chain, Ctx, Evaluation, OutputKind } from '../src/core/ctx.ts';
 import { ok, outOfChart } from '../src/core/result.ts';
 import type { Read } from '../src/core/result.ts';
@@ -300,11 +300,34 @@ describe('guards and error order', () => {
     });
   }
 
-  test('the final-run loop throws an Error once its rounds outnumber the ids seen', () => {
+  test('branches nested three deep, a sound chain: the loop ends and equals the exhaustive search', () => {
+    // roll, then x only when roll is rounded up, y only when x is, z only when y is: three re-test rounds.
+    const nested: Chain<'d'> = (ctx) => {
+      const r = ctx.read('roll', 2495, 10);
+      if (r < 2500) return { d: ok(r) };
+      const x = ctx.read('x', 5.5, 1);
+      if (x < 6) return { d: ok(r + x) };
+      const y = ctx.read('y', 7.5, 1);
+      if (y < 8) return { d: ok(r + x + y) };
+      const z = ctx.read('z', 1.5, 1);
+      return { d: ok(r + x + y + z) };
+    };
+    const e = evaluate(nested, { d: 'distance' });
+    const oracle = evaluateExhaustive(nested, { d: 'distance' });
+    close(valueOf(e.cells.d.conservative), 2516);
+    close(valueOf(e.cells.d.conservative), valueOf(oracle.cells.d.conservative));
+  });
+
+  test(`the final-run loop throws an Error after ${String(MAX_FINAL_ROUNDS)} rounds when its ids keep changing`, () => {
     // A chain defect: every run reads a new id, so every final run has a fresh point and the loop would never end.
     let counter = 0;
     const drifting: Chain<'d'> = (ctx) => ({ d: ok(ctx.read(`n${String(counter++)}`, 1.25, 0.1)) });
-    assert.throws(() => evaluate(drifting, { d: 'distance' }), { name: 'Error', message: /final-run loop/ });
+    assert.throws(() => evaluate(drifting, { d: 'distance' }), {
+      name: 'Error',
+      message: new RegExp(`final-run loop for 'd' passed ${String(MAX_FINAL_ROUNDS)} rounds`),
+    });
+    // The exact pass, 2 single-point runs, then per round a final run and 2 re-tests, then the last final run.
+    assert.equal(counter, 1 + 2 + 3 * MAX_FINAL_ROUNDS + 1);
   });
 });
 
