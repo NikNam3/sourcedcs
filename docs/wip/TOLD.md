@@ -21,7 +21,7 @@ Five steps, each usable on its own. Step 1 is the first thing pilots use: a full
 
 | Step | Delivers | Manual parts | Gate to next step |
 | --- | --- | --- | --- |
-| 0. Foundations | Repo, extraction pipeline, chart spec format, test harness, CI, design tokens | Appendix B Part 1 (B1-1 tables) | Pipeline extracts B2-1 to B2-3 and passes their sample problems |
+| 0. Foundations | Repo, extraction pipeline, chart spec format, test harness, CI, design tokens | Appendix B Part 1 (B1-1 tables) | Pipeline extracts B2-1 to B2-3 and passes their sample problems (met 29 Oct 2026) |
 | 1. TOLD | Takeoff and landing data per AFMAN 11-2F-16V3 para. 2.5.1, exact and conservative, figure view, Limitations page, deployed | Parts 1, 2, 7 | Definition of done (1.5) met |
 | 2. Performance | Single calculations: ceilings, optimum altitude, climb, cruise, descent, diversion | Parts 3, 4, 6 | Sample problems pass; design check passed |
 | 3. Flight plan and fuel | Leg chain with weight updates, store drops, joker/bingo; recovery and alternate fields; airfield profiles; landing GW from the plan | Parts 3 to 7 combined | Hand-check of one complete mission |
@@ -114,14 +114,15 @@ Step 0 turns the prototype's throwaway scripts into a repeatable pipeline: one c
 
 ### 0.1 Repository and tooling
 
-- [ ] Create perf/ (layout above) following the repo's conventions; add it to the root CLAUDE.md.
-- [ ] TypeScript toolchain as in "Language and toolchain": `tsconfig.json` (strict, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `erasableSyntaxOnly`), `eslint.config.js` (typescript-eslint `strictTypeChecked` with `strict-boolean-expressions`, `switch-exhaustiveness-check`, `no-unnecessary-condition`), Prettier. npm scripts: `build`, `test`, `lint`, `typecheck`, `format:check`, `data:check`.
-- [ ] `perf/schema/charts.schema.json`, and `src/core/data/types.ts` generated from it with `json-schema-to-typescript` (a script, committed output; CI fails if regenerating changes it).
-- [ ] `data:check`: validates every file in `data/<aircraft-engine>/` against the schema and its SHA-256 against `manifest.json`. The manifest holds the data version, the PDF's SHA-256, the extractor's git commit and one hash per data file and page image. The Python side does not validate on write; `data:check` is the only gate.
-- [ ] Python dependencies for `extraction/` (PyMuPDF, PyYAML, Pillow) added to `flake.nix`. No mypy, pytest or lint for `extraction/`.
-- [ ] perf/README.md and the ADRs 0148–0153 written before the first feature.
-- [ ] CI (`.github/workflows/perf-docker.yml`, see Deployment): lint, format check, type check, `data:check`, core tests with the coverage floor, the Playwright smoke spec. CI never runs the extractor.
-- [ ] `.gitignore`: `perf/extraction/out/` and `perf/web/js/`.
+- [x] Create perf/ (layout above) following the repo's conventions; add it to the root CLAUDE.md.
+- [x] TypeScript toolchain as in "Language and toolchain": `tsconfig.json` (strict, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `erasableSyntaxOnly`), `eslint.config.js` (typescript-eslint `strictTypeChecked` with `strict-boolean-expressions`, `switch-exhaustiveness-check`, `no-unnecessary-condition`), Prettier. npm scripts: `build`, `test`, `lint`, `typecheck`, `format:check`, `data:check`.
+- [x] `perf/schema/charts.schema.json`, and `src/core/data/types.ts` generated from it with `json-schema-to-typescript` (a script, committed output; CI fails if regenerating changes it).
+- [x] `data:check`: validates every file in `data/<aircraft-engine>/` against the schema and its SHA-256 against `manifest.json`. The manifest holds the data version, the PDF's SHA-256, the extractor's git commit and one hash per data file and page image. The Python side does not validate on write; `data:check` is the only gate.
+- [x] Python dependencies for `extraction/` (PyMuPDF, PyYAML, Pillow) added to `flake.nix`. No mypy, pytest or lint for `extraction/`.
+- [x] perf/README.md and the ADRs 0148–0153 written before the first feature.
+- [x] CI (`.github/workflows/perf-docker.yml`, see Deployment): lint, format check, type check, `data:check`, core tests with the coverage floor. CI never runs the extractor.
+- [ ] CI: the Playwright smoke spec and the pressure-altitude parity test (step 1).
+- [x] `.gitignore`: `perf/extraction/out/` and `perf/web/js/`.
 
 ### 0.2 Chart spec format
 
@@ -146,21 +147,21 @@ python3 -I extraction/extract.py <pdf> [figure ...]     # no figures given: ever
 
 It refuses a PDF whose SHA-256 is not the pinned one, and stops at the first failed assert with the figure, panel and reason.
 
-- [ ] Tick calibration snapped to grid lines; fails if any label is more than 0.6 pt off the fitted line.
-- [ ] Curve chaining, y-monotonic splitting, dash joining; fails on unlabelled curves or leftover labels.
-- [ ] Order check (curve parameters monotonic in space) and physics direction check per family.
-- [ ] Axis-title check: the declared title must sit on the declared edge, otherwise stop.
-- [ ] Outputs per figure:
+- [x] Tick calibration snapped to grid lines; fails if any label is more than 0.6 pt off the fitted line.
+- [x] Curve chaining, y-monotonic splitting, dash joining; fails on unlabelled curves or leftover labels.
+- [x] Order check (curve parameters monotonic in space) and physics direction check per family.
+- [x] Axis-title check: the declared title must sit on the declared edge, otherwise stop.
+- [x] Outputs per figure:
   - `data/f16c-f110-129/<figure>.json`: curves in chart units, plus each panel's axis transform (chart units ↔ page points) for the figure view;
   - `data/f16c-f110-129/pages/<figure>.png`: the chart page as a greyscale image, committed, the figure view's background;
   - `extraction/out/overlay-<figure>.png`: extracted curves in red over the page, gitignored, for a person to look at when something seems off. No sign-off.
   - `manifest.json` rewritten: data version, PDF SHA-256, extractor commit, per-file hashes.
-- [ ] Tables (Fig. B1-1) read by word position with the column boundaries declared in the spec; the row and column counts are asserted, and the table is printed back as text for one comparison by a person against the page. No second automatic reading.
-- [ ] Known errors in the manual listed in `extraction/manual-errata.yaml` (figure, field, printed value, correct value, reason), never patched silently. The sample-problem tests read it. First entry: B7-2 sh. 2 labels its 3,902 ft entry "SEC" (section 0.6).
+- [x] Tables (Fig. B1-1) read by word position with the column boundaries declared in the spec; the row and column counts are asserted, and the table is printed back as text for one comparison by a person against the page. No second automatic reading.
+- [x] Known errors in the manual listed in `extraction/manual-errata.yaml` (figure, field, printed value, correct value, reason), never patched silently. The sample-problem tests read it. First entry: B7-2 sh. 2 labels its 3,902 ft entry "SEC" (section 0.6).
 
 ### 0.4 Design foundation
 
-- [ ] Design tokens and components from section 10 as one stylesheet and component set in `perf/web`.
+- [x] Design tokens and components from section 10 as one stylesheet and component set in `perf/web`.
 
 ### 0.5 Worked example: spec for Figure B2-3
 
@@ -344,7 +345,7 @@ Step 1 delivers every MDC TOLD field required by AFMAN 11-2F-16V3 para. 2.5.1 fo
 
 | Figure | Content | Used for | Status |
 | --- | --- | --- | --- |
-| B1-1 sh. 1 to 7 | Drag indexes and weights | Drag index builder | Read visually for prototype; needs table extraction |
+| B1-1 sh. 1 to 7 | Drag indexes and weights | Drag index builder | Extracted as tables; a person's comparison against the page pending |
 | B2-1 | Takeoff factor | All takeoff charts | Extracted, sample passes |
 | B2-2 | Takeoff speed | Rotation, takeoff speed | Extracted, sample passes |
 | B2-3 | Takeoff distance | Takeoff distance, runway used | Extracted, sample passes |

@@ -4,7 +4,7 @@ The F-16 performance calculator of the SOURCE tool suite. Step 1 is TOLD: takeof
 
 perf is a static app: all calculation runs in the browser, the server only serves files. It is public, without login. The plan is `docs/wip/TOLD.md`; the decisions are ADRs 0148 to 0153 in `docs/adr/`.
 
-Status: step 0 (foundations). There is no UI yet.
+Status: step 0 (foundations) is done; step 1 (TOLD) is next. There is no UI yet.
 
 ## Data flow
 

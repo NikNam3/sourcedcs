@@ -14,3 +14,4 @@ Step 0: foundations (`docs/wip/TOLD.md`).
 - Figures B2-1 to B2-3 in `src/core/figures/` and the manual's sample problems as golden tests (2 %).
 - Design tokens, component stylesheet and print stylesheet in `web/css/`.
 - ADRs 0148 to 0153, `README.md`, and the CI test workflow `perf-docker.yml`.
+- Step 0 done: B2-1 to B2-3 extracted and their sample problems passing (the step 0 gate). The planning prototype `perf/prototype/` is removed (b3fb1202); comments that came from it name `git show b3fb1202^:perf/prototype/…`.

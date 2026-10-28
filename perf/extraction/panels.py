@@ -215,7 +215,8 @@ GUIDE_MIN_SPAN_PT = 5.0
 
 def mono_pieces(chain, k):
     """Split a polyline into pieces monotonic in page coordinate k (0 = x, 1 = y), each oriented
-    ascending in k. From the planning prototype."""
+    ascending in k. From the planning prototype (removed in b3fb1202;
+    `git show b3fb1202^:perf/prototype/extraction/extract.py`)."""
     pieces, cur, sgn = [], [chain[0]], 0
     for p in chain[1:]:
         d = p[k] - cur[-1][k]
@@ -235,7 +236,8 @@ def join_dashes(pieces, k, max_gap=9.0, tol=1.6):
     """Join pieces monotonic in page coordinate k (see mono_pieces) whose ends line up across a
     gap of at most max_gap pt along k: a dashed line drawn as separate segments becomes one line.
     The next piece must start within tol pt of the line's direction extended across the gap.
-    From the planning prototype, generalised to either page direction."""
+    From the planning prototype (removed in b3fb1202; `git show b3fb1202^:perf/prototype/extraction/extract.py`),
+    generalised to either page direction."""
     o = 1 - k
     pieces = sorted(pieces, key=lambda p: (p[0][k], p[0][o]))
     used = [False] * len(pieces)
