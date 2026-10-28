@@ -116,3 +116,18 @@ jobs:
             echo "- wire protocol label: \`${{ steps.wire.outputs.protocol }}\`"
             echo "- commit: \`${GITHUB_SHA}\`"
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # crc-desktop-release.yml dispatches this workflow with GITHUB_TOKEN, and GitHub fires no workflow_run for a run
+  # started that way, so deploy.yml never started after a release (crc-desktop-v2.0.0). Dispatch it here instead; a
+  # push or a human's dispatch fires workflow_run as usual, so this skips those (no second deploy).
+  dispatch-deploy:
+    needs: build-and-push
+    if: github.event_name == 'workflow_dispatch' && github.actor == 'github-actions[bot]' && github.ref_name == 'main'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Trigger the deploy
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run deploy.yml --ref main --repo ${{ github.repository }}
