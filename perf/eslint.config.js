@@ -34,6 +34,24 @@ export default defineConfig(
     },
   },
   {
+    // src/core/ runs in the browser and in node --test with chart data passed in: no Node, no DOM,
+    // no I/O. The shared tsconfig has Node types, so typecheck cannot catch these; lint does.
+    files: ['src/core/**'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        { patterns: [{ group: ['node:*'], message: 'src/core/ has no Node imports: pass the data in.' }] },
+      ],
+      'no-restricted-globals': [
+        'error',
+        ...['fetch', 'document', 'window', 'localStorage', 'process'].map((name) => ({
+          name,
+          message: 'src/core/ has no DOM, no I/O and no process: pass the data in.',
+        })),
+      ],
+    },
+  },
+  {
     files: ['**/*.js'],
     extends: [tseslint.configs.disableTypeChecked],
   },
