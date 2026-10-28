@@ -1,22 +1,33 @@
 'use strict';
+import { markEfspChanged } from './efsp/efsp-change-bus.js';
+import { buildBullseye, buildDrawings, buildNavpoints, buildTextMarks } from '../geojson.js';
+import { applyAirportSurface, applyColors, applyMapTheme } from '../map-style.js';
+import { clearElevationContours, updateElevationContours } from '../elevation.js';
+import { hideLosProfile } from './los-panel.js';
+import { initToolsTab } from './tools-panel.js';
+import { applyScale } from '../geojson.js';
+import { _setBullseyePickTarget, bullseyePickTarget } from '../view-state.js';
+import { history, missionData } from '../picture.js';
+import { map, mapReady } from '../map-handle.js';
+import { saveSettings, settings } from '../settings.js';
+import { mountAirspaceMenuInSettings } from '../airspace-layer.js';
+import { coordFormatOf } from '../coords.js';
+import { getSetting, onSettingsTabsChanged, setSetting, settingsTabs } from '../settings-registry.js';
 
 // ── Settings panel: tab switching, per-tab wiring (map display, bullseye
 // override, colours, tools) and the bullseye pick-on-map mode. Split out of
-// the former ui.js "god file" — see panels/topbar.js for why this stays a
-// plain script rather than an IIFE (dock.js/app.js call these by name).
+// the former ui.js "god file" (history); dock.js and app.js import these by name.
 
-function initSettings() {
+export function initSettings() {
   const panel   = document.getElementById('settings-panel');
 
-  // ── Tab switching ─────────────────────────────────────────────────────
-  panel.querySelectorAll('.stab').forEach(btn => {
-    btn.addEventListener('click', () => {
-      panel.querySelectorAll('.stab').forEach(b => b.classList.remove('active'));
-      panel.querySelectorAll('.stab-pane').forEach(p => { p.style.display = 'none'; });
-      btn.classList.add('active');
-      document.getElementById('stab-' + btn.dataset.pane).style.display = '';
-    });
+  // ── Tab switching (delegated: registered tabs are added later) ───────
+  panel.querySelector('.settings-tabs').addEventListener('click', (e) => {
+    const btn = e.target.closest('.stab');
+    if (btn) selectSettingsTab(panel, btn.dataset.pane);
   });
+  renderRegisteredTabs(panel);
+  onSettingsTabsChanged(() => renderRegisteredTabs(panel));
 
   const els = {
     pplEnabled:     document.getElementById('set-ppl-enabled'),
@@ -30,11 +41,13 @@ function initSettings() {
     fadeGrace:      document.getElementById('set-fade-grace'),
     fadeGraceVal:   document.getElementById('set-fade-grace-val'),
     radarDebug:     document.getElementById('set-radar-debug'),
+    datalink:       document.getElementById('set-datalink'),
     textMarks:      document.getElementById('set-text-marks'),
     scale:          document.getElementById('set-scale'),
     scaleVal:       document.getElementById('set-scale-val'),
     lightMode:      document.getElementById('set-light-mode'),
     elevation:      document.getElementById('set-elevation'),
+    atcMapBackground: document.getElementById('set-atc-map-background'),
   };
 
   els.pplEnabled.checked = settings.pplEnabled;
@@ -51,34 +64,43 @@ function initSettings() {
   els.scaleVal.textContent = parseFloat(settings.scale).toFixed(1) + '×';
   els.lightMode.checked  = settings.lightMode;
   els.elevation.checked  = settings.showElevation;
+  // crc-sync's docs/adr/0088: on unless turned off (an older install has no key).
+  if (els.atcMapBackground) els.atcMapBackground.checked = settings.atcMapBackground !== false;
   els.radarDebug.checked   = settings.radarDebug;
+  els.datalink.checked     = settings.showDatalinkLocks !== false;
   els.textMarks.checked    = settings.textMarksEnabled;
   applyLightMode();
 
-  const persist = (key, val) => { settings[key] = val; saveSettings(); updateMap(); };
+  // Coordinates (H102 AP2B-Q2): how the airspace editor and the map readout write positions; input takes all formats.
+  const coordSel = document.getElementById('set-coord-format');
+  coordSel.value = coordFormatOf(settings.coordFormat);
+  coordSel.addEventListener('change', () => { settings.coordFormat = coordFormatOf(coordSel.value); saveSettings(); });
+  mountAirspaceMenuInSettings();
+
+  const persist = (key, val) => { settings[key] = val; saveSettings(); markEfspChanged('map'); };
 
   els.pplEnabled.addEventListener('change', () => persist('pplEnabled',  els.pplEnabled.checked));
   els.pplDuration.addEventListener('input', () => {
     settings.pplDuration = parseInt(els.pplDuration.value);
     els.pplVal.textContent = settings.pplDuration + 's';
-    saveSettings(); updateMap();
+    saveSettings(); markEfspChanged('map');
   });
   els.trailEn.addEventListener('change', () => persist('trailEnabled', els.trailEn.checked));
   els.trailLength.addEventListener('input', () => {
     settings.trailLength = parseInt(els.trailLength.value);
     els.trailLenVal.textContent = settings.trailLength;
-    saveSettings(); updateMap();
+    saveSettings(); markEfspChanged('map');
   });
   els.trailInterval.addEventListener('input', () => {
     settings.trailIntervalMs = parseInt(els.trailInterval.value);
     els.trailIntervalVal.textContent = (settings.trailIntervalMs / 1000).toFixed(0) + 's';
     history.clear(); // reset trail so old close-together dots are dropped
-    saveSettings(); updateMap();
+    saveSettings(); markEfspChanged('map');
   });
   els.fadeGrace.addEventListener('input', () => {
     settings.fadeGraceMs = parseInt(els.fadeGrace.value);
     els.fadeGraceVal.textContent = (settings.fadeGraceMs / 1000).toFixed(1) + 's';
-    saveSettings(); updateMap();
+    saveSettings(); markEfspChanged('map');
   });
   els.scale.addEventListener('input', () => {
     settings.scale = parseFloat(els.scale.value);
@@ -97,10 +119,16 @@ function initSettings() {
     if (settings.showElevation) updateElevationContours();
     else clearElevationContours();
   });
+  if (els.atcMapBackground) {
+    // Off: the black strict-STARS scope, in an ATC-only session. atc-scope.js
+    // applies it on its next beat.
+    els.atcMapBackground.addEventListener('change', () => persist('atcMapBackground', els.atcMapBackground.checked));
+  }
   els.radarDebug.addEventListener('change',   () => {
     persist('radarDebug', els.radarDebug.checked);
     if (!els.radarDebug.checked) hideLosProfile();
   });
+  els.datalink.addEventListener('change', () => persist('showDatalinkLocks', els.datalink.checked));
   els.textMarks.addEventListener('change', () => {
     settings.textMarksEnabled = els.textMarks.checked;
     saveSettings();
@@ -119,6 +147,87 @@ function initSettings() {
   initToolsTab();
 }
 
+// ── Registered tabs (settings-registry.js) ───────────────────────────────
+// One tab and pane per registerSettingsTab(); they sit before SRS. Rebuilt whenever the registry changes.
+
+function selectSettingsTab(panel, pane) {
+  panel.querySelectorAll('.stab').forEach(b => b.classList.toggle('active', b.dataset.pane === pane));
+  panel.querySelectorAll('.stab-pane').forEach(p => { p.style.display = p.id === 'stab-' + pane ? '' : 'none'; });
+}
+
+function fieldRow(f) {
+  const row = document.createElement('div');
+  row.className = 'setting-row';
+  const label = document.createElement('span');
+  label.textContent = f.label || f.key;
+  row.appendChild(label);
+  let input;
+  if (f.type === 'toggle') {
+    const wrap = document.createElement('label');
+    wrap.className = 'toggle';
+    input = document.createElement('input');
+    input.type = 'checkbox';
+    input.checked = !!getSetting(f.key);
+    input.addEventListener('change', () => setSetting(f.key, input.checked));
+    const slider = document.createElement('span');
+    slider.className = 'toggle-slider';
+    wrap.append(input, slider);
+    row.appendChild(wrap);
+  } else if (f.type === 'number') {
+    const wrap = document.createElement('span');
+    input = document.createElement('input');
+    input.type = 'number';
+    for (const a of ['min', 'max', 'step']) if (f[a] !== undefined) input.setAttribute(a, f[a]);
+    input.style.width = '70px';
+    input.value = getSetting(f.key);
+    input.addEventListener('change', () => { input.value = setSetting(f.key, input.value); });
+    wrap.appendChild(input);
+    if (f.unit) wrap.append(' ' + f.unit);
+    row.appendChild(wrap);
+  } else {
+    input = document.createElement('select');
+    input.className = 'setting-select';
+    for (const o of f.options) {
+      const opt = document.createElement('option');
+      opt.value = Array.isArray(o) ? o[0] : o;
+      opt.textContent = Array.isArray(o) ? o[1] : o;
+      input.appendChild(opt);
+    }
+    input.value = getSetting(f.key);
+    input.addEventListener('change', () => setSetting(f.key, input.value));
+    row.appendChild(input);
+  }
+  input.id = 'set-' + f.key;
+  return row;
+}
+
+function renderRegisteredTabs(panel) {
+  const bar = panel.querySelector('.settings-tabs');
+  const active = panel.querySelector('.stab.active')?.dataset.pane;
+  panel.querySelectorAll('.stab[data-reg], .stab-pane[data-reg]').forEach(n => n.remove());
+  const anchorBtn = bar.querySelector('.stab[data-pane="srs"]');
+  const anchorPane = document.getElementById('stab-srs');
+  for (const t of settingsTabs()) {
+    const btn = document.createElement('button');
+    btn.className = 'stab';
+    btn.dataset.pane = t.id;
+    btn.dataset.reg = '1';
+    btn.textContent = t.label;
+    bar.insertBefore(btn, anchorBtn);
+    const pane = document.createElement('div');
+    pane.id = 'stab-' + t.id;
+    pane.className = 'stab-pane';
+    pane.dataset.reg = '1';
+    pane.style.display = 'none';
+    const group = document.createElement('div');
+    group.className = 'setting-group';
+    for (const f of t.fields) group.appendChild(fieldRow(f));
+    pane.appendChild(group);
+    anchorPane.parentNode.insertBefore(pane, anchorPane);
+  }
+  if (active) selectSettingsTab(panel, document.getElementById('stab-' + active) ? active : 'general');
+}
+
 // ── Bullseye pick-on-map mode ────────────────────────────────────────────
 // bullseyePickTarget (declared in app.js) holds 'blue' | 'red' | null while
 // waiting for the next map click to set that side's override position.
@@ -126,7 +235,7 @@ function initSettings() {
 const $pickBanner = document.getElementById('pick-banner');
 
 function startBullseyePick(side) {
-  bullseyePickTarget = side;
+  _setBullseyePickTarget(side);
   document.querySelectorAll('[id^="set-be-"][id$="-pick"]').forEach(b => b.classList.remove('active-pick'));
   const $btn = document.getElementById(`set-be-${side}-pick`);
   if ($btn) { $btn.textContent = 'CLICK MAP…'; $btn.classList.add('active-pick'); }
@@ -140,7 +249,7 @@ function startBullseyePick(side) {
 }
 
 function cancelBullseyePick() {
-  bullseyePickTarget = null;
+  _setBullseyePickTarget(null);
   document.querySelectorAll('[id^="set-be-"][id$="-pick"]').forEach(b => {
     b.textContent = 'PICK ON MAP';
     b.classList.remove('active-pick');
@@ -149,7 +258,7 @@ function cancelBullseyePick() {
 }
 
 // Called from map-setup.js when a map click lands while pick mode is active.
-function applyBullseyePick(side, lat, lon) {
+export function applyBullseyePick(side, lat, lon) {
   settings.bullseyeOverride[side].enabled = true;
   settings.bullseyeOverride[side].lat = lat;
   settings.bullseyeOverride[side].lon = lon;
@@ -257,7 +366,7 @@ function initColorSettings() {
       if (key === 'braColor') {
         const $bra = document.getElementById('cursor-bra');
         if ($bra) $bra.style.color = inp.value;
-        updateMap();
+        markEfspChanged('map');
         return;
       }
       applyColors();
@@ -283,7 +392,7 @@ function initColorSettings() {
       if (key === 'braColor') {
         const $bra = document.getElementById('cursor-bra');
         if ($bra) $bra.style.color = def;
-        updateMap();
+        markEfspChanged('map');
       } else {
         applyColors();
       }
@@ -294,16 +403,37 @@ function initColorSettings() {
   const $declutter  = document.getElementById('set-declutter');
   const $navDecl    = document.getElementById('set-nav-declutter');
   const $navDecl5   = document.getElementById('set-nav-declutter-5');
-  const $aiEn            = document.getElementById('set-ai-enabled');
   const $shipsEn         = document.getElementById('set-ships-enabled');
-  const $hideGroundUnits = document.getElementById('set-hide-ground-units');
+  const $caPaths         = document.getElementById('set-ca-paths');
+  const $drawings        = document.getElementById('set-drawings');
+  const $airportSurface  = document.getElementById('set-airport-surface');
+
+  // U-SCOPE-SMALL: the mission's shape drawings, and the basemap's airport surface at high zoom. Both on by default.
+  // T28 keeps hiding a drawing an airspace outline stands in for whatever this says; the airspace editor's picker
+  // highlights a drawing with this off too (drawing-highlight.js).
+  if ($drawings) {
+    $drawings.checked = settings.drawingsEnabled !== false;
+    $drawings.addEventListener('change', () => {
+      settings.drawingsEnabled = $drawings.checked;
+      saveSettings();
+      if (mapReady && missionData) map.getSource('drawings').setData(buildDrawings());
+    });
+  }
+  if ($airportSurface) {
+    $airportSurface.checked = settings.airportSurface !== false;
+    $airportSurface.addEventListener('change', () => {
+      settings.airportSurface = $airportSurface.checked;
+      saveSettings();
+      applyAirportSurface();
+    });
+  }
 
   if ($declutter) {
-    $declutter.checked = settings.declutter ?? true;
+    $declutter.checked = settings.declutter ?? false; // H6: off by default
     $declutter.addEventListener('change', () => {
       settings.declutter = $declutter.checked;
       saveSettings();
-      updateMap();
+      markEfspChanged('map');
     });
   }
 
@@ -325,19 +455,14 @@ function initColorSettings() {
     });
   }
 
-  if ($aiEn) {
-    $aiEn.checked = settings.aiEnabled;
-    $aiEn.addEventListener('change', () => { settings.aiEnabled = $aiEn.checked; saveSettings(); updateMap(); });
-  }
-
   if ($shipsEn) {
     $shipsEn.checked = settings.shipsEnabled;
-    $shipsEn.addEventListener('change', () => { settings.shipsEnabled = $shipsEn.checked; saveSettings(); updateMap(); });
+    $shipsEn.addEventListener('change', () => { settings.shipsEnabled = $shipsEn.checked; saveSettings(); markEfspChanged('map'); });
   }
 
-  if ($hideGroundUnits) {
-    $hideGroundUnits.checked = settings.hideGroundUnits ?? false;
-    $hideGroundUnits.addEventListener('change', () => { settings.hideGroundUnits = $hideGroundUnits.checked; saveSettings(); updateMap(); });
+  if ($caPaths) { // T30: the conflict alert's paths only; the alert itself is never decluttered (H115-H119)
+    $caPaths.checked = settings.conflictAlertPaths !== false;
+    $caPaths.addEventListener('change', () => { settings.conflictAlertPaths = $caPaths.checked; saveSettings(); markEfspChanged('map'); });
   }
 
   const $extCenterlineNm = document.getElementById('set-ext-centerline-nm');
@@ -347,12 +472,12 @@ function initColorSettings() {
       const v = parseInt($extCenterlineNm.value, 10);
       settings.extCenterlineNm = Number.isFinite(v) && v > 0 ? v : 25;
       saveSettings();
-      updateMap();
+      markEfspChanged('map');
     });
   }
 }
 
-function applyLightMode() {
+export function applyLightMode() {
   document.body.classList.toggle('light', !!settings.lightMode);
   applyMapTheme();
 }

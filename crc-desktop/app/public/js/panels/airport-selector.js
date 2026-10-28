@@ -1,9 +1,16 @@
 'use strict';
+import { markEfspChanged } from './efsp/efsp-change-bus.js';
+import { _syncAuthHeaders } from '../sync.js';
+import { escapeHtml } from '../html-escape.js';
+import { requestTrueFromMagnetic } from '../magnetic.js';
+
+import { $aptDisplay, updateAptDisplay, updateTopbarUI } from './topbar.js';
+import { _setApproachRwyCourse, _setApproachRwyCourseTrue, _setSelectedApt, approachRwyCourse, selectedApt } from '../view-state.js';
+import { missionData } from '../picture.js';
 
 // ── Airport selector (topbar dropdown + runway course input) and the
 // airport-weather popup shown when left-clicking an airport label on the
-// map. Split out of the former ui.js "god file" — see panels/topbar.js for
-// why this stays a plain script rather than an IIFE.
+// map. Split out of the former ui.js "god file" (history).
 
 const HELIPAD_PATTERN = /helipad|farp|fob/i;
 
@@ -36,15 +43,19 @@ function populateAptDropdown($dd) {
     const el       = document.createElement('div');
     const isActive = selectedApt && selectedApt.name === a.name;
     el.className   = 'apt-option' + (isActive ? ' active' : '');
-    el.innerHTML   =
-      `<span>${a.icao || a.name}</span>` +
-      `<span class="apt-opt-name">${a.icao ? a.name : ''}</span>`;
+    const code = document.createElement('span');
+    code.textContent = a.icao || a.name;
+    const full = document.createElement('span');
+    full.className = 'apt-opt-name';
+    full.textContent = a.icao ? a.name : '';
+    el.append(code, full);
     el.addEventListener('click', () => {
-      selectedApt = a;
+      _setSelectedApt(a);
       $dd.classList.remove('open');
       updateAptDisplay();
       updateTopbarUI();
-      updateMap();
+      resolveApproachCourse();
+      markEfspChanged('map');
     });
     $list.appendChild(el);
   }
@@ -62,7 +73,7 @@ function openAptDropdown() {
   setTimeout(() => $search.focus(), 30);
 }
 
-function initAptSelector() {
+export function initAptSelector() {
   const $dd     = document.getElementById('apt-dropdown');
   const $search = document.getElementById('apt-search');
 
@@ -79,15 +90,32 @@ function initAptSelector() {
 }
 
 // ── Approach vector (runway course input) ─────────────────────────────────
+// The course is typed MAGNETIC. The map draws in true, and a typed magnetic
+// value is converted by crc-sync, never here (its docs/adr/0085): until the
+// answer comes back, no approach vector is drawn.
 
-function initRwyInput() {
+let _approachCourseReq = 0;
+
+export function resolveApproachCourse() {
+  const req = ++_approachCourseReq;
+  _setApproachRwyCourseTrue(null);
+  if (approachRwyCourse == null || !selectedApt) return;
+  requestTrueFromMagnetic(approachRwyCourse, selectedApt.lat, selectedApt.lon).then((t) => {
+    if (req !== _approachCourseReq) return; // a newer entry replaced it
+    _setApproachRwyCourseTrue(t);
+    markEfspChanged('map');
+  });
+}
+
+export function initRwyInput() {
   const $rwyInput = document.getElementById('rwy-input');
   if (!$rwyInput) return;
 
   $rwyInput.addEventListener('input', () => {
     const val = parseInt($rwyInput.value, 10);
-    approachRwyCourse = (!isNaN(val) && val >= 0 && val <= 360) ? val % 360 : null;
-    updateMap();
+    _setApproachRwyCourse((!isNaN(val) && val >= 0 && val <= 360) ? val % 360 : null);
+    resolveApproachCourse();
+    markEfspChanged('map');
   });
   $rwyInput.addEventListener('click', e => e.stopPropagation());
 }
@@ -95,12 +123,12 @@ function initRwyInput() {
 // ── Airport weather popup ─────────────────────────────────────────────────
 // Shown when the user left-clicks an airport label on the map.
 
-function showAptWeatherPanel(label, lat, lon, elevM, clientX, clientY) {
+export function showAptWeatherPanel(label, lat, lon, elevM, clientX, clientY) {
   const panel = document.getElementById('apt-weather-panel');
   if (!panel) return;
 
   panel.innerHTML =
-    `<div class="awp-header"><span class="awp-label">${label}</span>` +
+    `<div class="awp-header"><span class="awp-label">${escapeHtml(label)}</span>` +
     `<button class="awp-close" id="awp-close">✕</button></div>` +
     `<div class="awp-body" id="awp-body"><div class="awp-loading">FETCHING…</div></div>`;
 
@@ -122,15 +150,16 @@ function showAptWeatherPanel(label, lat, lon, elevM, clientX, clientY) {
       const body = document.getElementById('awp-body');
       if (!body) return;
       if (d.error) {
-        body.innerHTML = `<div class="awp-err">${d.error}</div>`;
+        body.innerHTML = `<div class="awp-err">${escapeHtml(d.error)}</div>`;
         return;
       }
       const inhg  = (d.pressureHpa / 33.8639).toFixed(2);
-      const windDir = String(d.windFrom).padStart(3, '0');
+      // Tower/ATIS wind: magnetic, converted by crc-sync (decisions H76).
+      const windDir = d.windFromMagnetic == null ? '---' : String(d.windFromMagnetic).padStart(3, '0');
       body.innerHTML =
-        `<div class="awp-row"><span class="awp-k">QNH</span><span class="awp-v">${d.pressureHpa} hPa / ${inhg} inHg</span></div>` +
-        `<div class="awp-row"><span class="awp-k">TEMP</span><span class="awp-v">${d.tempC}°C</span></div>` +
-        `<div class="awp-row"><span class="awp-k">WIND</span><span class="awp-v">${windDir}° @ ${d.windKt} kt</span></div>`;
+        `<div class="awp-row"><span class="awp-k">QNH</span><span class="awp-v">${escapeHtml(d.pressureHpa)} hPa / ${escapeHtml(inhg)} inHg</span></div>` +
+        `<div class="awp-row"><span class="awp-k">TEMP</span><span class="awp-v">${escapeHtml(d.tempC)}°C</span></div>` +
+        `<div class="awp-row"><span class="awp-k">WIND</span><span class="awp-v">${escapeHtml(windDir)}°M @ ${escapeHtml(d.windKt)} kt</span></div>`;
     })
     .catch(() => {
       const body = document.getElementById('awp-body');
@@ -138,7 +167,7 @@ function showAptWeatherPanel(label, lat, lon, elevM, clientX, clientY) {
     });
 }
 
-function closeAptWeatherPanel() {
+export function closeAptWeatherPanel() {
   const panel = document.getElementById('apt-weather-panel');
   if (panel) panel.style.display = 'none';
 }

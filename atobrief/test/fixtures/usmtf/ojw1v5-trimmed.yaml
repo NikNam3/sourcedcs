@@ -1,0 +1,381 @@
+# Trimmed, anonymised copy of the squadron reference ATO ojw1v5.yaml (decision H16).
+# Regenerate with test/helpers/trim-ojw1v5.js; recipe in docs/wip/L11.md.
+ato:
+  ingame_start_time: 0220Z
+  local_offset_hours: 3
+  missions:
+    - mission_number: MSN1896
+      callsign: FALCN31
+      mission_type: OCA
+      unit: TEST SQN
+      deploy: LTAG
+      recovery: LTAG
+      takeoff_time: '0300'
+      recovery_time: '0705'
+      aircraft:
+        count: 4
+        type: F16C
+        loadout: 400+2X88C
+      targets:
+        - target_id: SAM-1
+          tos: '0420'
+          toffs: '0515'
+          aim_points:
+            - coords: N33°21'12" E36°32'52"
+              name: Radar 1
+            - coords: N33°21'14" E36°32'50"
+              name: Launcher 1
+        - target_id: SAM-6
+          aim_points:
+            - coords: N32°48'55" E36°21'06"
+              name: Radar 1
+            - coords: N32°48'57" E36°21'04"
+              name: Launcher 1
+          toffs: '0450'
+        - target_id: SAM-7
+          aim_points:
+            - coords: N33°25'31" E36°06'38"
+              name: Radar 1
+            - coords: N33°25'19" E36°06'47"
+              name: Launcher 1
+      control:
+        agency_id: null
+      refuel:
+        - tanker_id: TEXACO11
+          time_from: '0345'
+          time_to: '0405'
+        - tanker_id: TEXACO11
+          time_from: '0535'
+          time_to: '0605'
+      steer_points:
+        - coords: N36°51'46" E35°12'03"
+          name: JAKUP
+          altitude_ft: 10000
+          speed_kts: 741
+          route: 1
+        - id: MARSHAL-1784150578123
+          time: '0415'
+        - coords: N32°56.991' E37°02.809'
+          name: ORBIT
+          altitude_ft: 25000
+          speed_kts: 741
+          route: 1
+          orbit:
+            heading_deg: 300
+            leg_nm: 10
+            width_nm: 5
+            cw: true
+    - mission_number: MSN1898
+      callsign: HORNT11
+      mission_type: OCA
+      deploy: CVN-1
+      recovery: CVN-1
+      takeoff_time: '0255'
+      recovery_time: '0630'
+      aircraft:
+        count: 4
+        type: FA18C
+        loadout: '000'
+      targets:
+        - target_id: ministry
+          tot_net: '0505'
+          tot_nlt: '0510'
+          aim_points:
+            - coords: N33°25'31" E36°06'38"
+              name: Radar 1
+            - coords: N33°25'19" E36°06'47"
+              name: Launcher 1
+          tos: '0425'
+          toffs: '0510'
+      control:
+        agency_id: null
+      refuel:
+        - tanker_id: SHELL11
+          time_from: '0530'
+          time_to: '0550'
+        - tanker_id: SHELL11
+          time_from: '0335'
+          time_to: '0350'
+      steer_points:
+        - coords: N35°13'59" E37°04'23"
+          altitude_ft: 243
+          speed_kts: 463
+          route: 1
+          name: ''
+        - id: MARSHAL-1784150578123
+          time: '0415'
+        - name: ''
+          coords: N34°15.579' E37°28.042'
+          orbit:
+            heading_deg: 220
+            leg_nm: 10
+            width_nm: 5
+            cw: true
+    - mission_number: MSN1899
+      callsign: BLADE21
+      mission_type: OCA
+      deploy: CVN-1
+      recovery: CVN-1
+      takeoff_time: '0310'
+      recovery_time: '0650'
+      aircraft:
+        count: 4
+        type: FA18C
+        loadout: '000'
+      targets:
+        - target_id: pp
+          tot_net: '0505'
+          tot_nlt: '0510'
+          aim_points:
+            - coords: N33°25'31" E36°06'38"
+              name: Radar 1
+            - coords: N33°25'19" E36°06'47"
+              name: Launcher 1
+          tos: '0425'
+          toffs: '0510'
+      control:
+        agency_id: null
+      refuel:
+        - tanker_id: SHELL11
+          time_from: '0350'
+          time_to: '0405'
+        - tanker_id: SHELL11
+          time_from: '0550'
+          time_to: '0610'
+      steer_points:
+        - coords: N35°13'59" E37°04'23"
+          altitude_ft: 243
+          speed_kts: 463
+          route: 1
+          name: ''
+        - id: MARSHAL-1784150578123
+          time: '0415'
+        - name: ''
+          coords: N33°44.234' E38°30.261'
+          orbit:
+            heading_deg: 220
+            leg_nm: 10
+            width_nm: 5
+            cw: true
+  operation: OPERATION JASMINE WAVE1
+  classification: CLASSIFIED
+  targets:
+    - id: SAM-1
+      name: Ground (SA-2 Guideline / S-75)
+      type: SA-2
+      coords: N33°21'12" E36°32'52"
+      aim_points:
+        - id: SAM-1-RD1
+          name: Radar 1
+          coords: N33°21'12" E36°32'52"
+        - id: SAM-1-LN1
+          name: Launcher 1
+          coords: N33°21'14" E36°32'50"
+      elevation: 2018ft
+    - id: SAM-6
+      name: Ground (SA-2 Guideline / S-75)
+      type: SA-2
+      coords: N33°16'29" E36°09'56"
+      aim_points:
+        - id: SAM-6-RD1
+          name: Radar 1
+          coords: N33°16'29" E36°09'56"
+        - id: SAM-6-LN1
+          name: Launcher 1
+          coords: N33°16'23" E36°09'50"
+      elevation: 2428ft
+    - id: SAM-7
+      name: Ground (SA-3 Neva / S-125)
+      type: SA-3
+      coords: N33°25'31" E36°06'38"
+      aim_points:
+        - id: SAM-7-RD1
+          name: Radar 1
+          coords: N33°25'31" E36°06'38"
+        - id: SAM-7-LN1
+          name: Launcher 1
+          coords: N33°25'19" E36°06'47"
+      elevation: 2671ft
+    - id: ministry
+      name: Ministry of Foreign Affairs
+      coords: N33°30.150' E36°16.183'
+      aim_points:
+        - id: SAM-7-RD1
+          name: Radar 1
+          coords: N33°25'31" E36°06'38"
+        - id: SAM-7-LN1
+          name: Launcher 1
+          coords: N33°25'19" E36°06'47"
+    - id: pp
+      name: Peoples Palace
+      coords: N33°31.033' E36°15.100'
+      aim_points:
+        - id: SAM-7-RD1
+          name: Radar 1
+          coords: N33°25'31" E36°06'38"
+        - id: SAM-7-LN1
+          name: Launcher 1
+          coords: N33°25'19" E36°06'47"
+  codewords:
+    - word: WILLIAM
+      time: 0435Z
+    - word: COCKTAIL
+      time: 0415Z
+    - word: JUICE
+      time: 0445Z
+    - word: MILLER TIME
+      time: 0510Z
+spins:
+  version: '1.0'
+  sections:
+    - title: C3 — IFF / SIF
+      note: Squawk assigned Mode 3 code. Mode 4 mandatory.
+      table:
+        headers:
+          - MSN
+          - MODE
+          - CODE
+        rows:
+          - - '1896'
+            - '3'
+            - '4001'
+          - - '1898'
+            - '3'
+            - '5001'
+          - - '1899'
+            - '3'
+            - '6001'
+  operation: OPERATION JASMINE WAVE1
+  classification: CLASSIFIED
+schema_version: '1.0'
+header:
+  operation: OPERATION JASMINE WAVE1
+  ato_date: '2026-07-04'
+  classification: CLASSIFIED
+registry:
+  callsigns:
+    Mauler 6:
+      type: S3BTANKER
+      role: TANKER
+    TEXACO11:
+      type: KC135
+      role: TANKER
+    SHELL11:
+      type: KC135MPRS
+      role: TANKER
+    FALCN31:
+      type: F16C
+      role: CAP flight lead
+    HORNT11:
+      type: FA18C
+      role: CAP flight lead
+    BLADE21:
+      type: FA18C
+      role: CAP flight lead
+  airfields:
+    LTAG:
+      name: Incirlik AB
+      coords: N36°59'33" E35°24'12"
+  carriers:
+    CVN-1:
+      name: USS HARRY S. TRUMAN
+      callsign: CVN-75 Harry S. Truman
+      deploy_coords: N35°04'52" E35°09'46"
+      recovery_coords: N33°55'22" E34°47'15"
+  tankers:
+    Mauler 6:
+      callsign: Mauler 6
+      orbit_direction: ccw
+    TEXACO11:
+      callsign: TEXACO11
+      altitude_ft: 12000
+      speed_kts: 320
+      orbit_anchor_coords: N34°49'00" E38°23'25"
+      orbit_heading_deg: 304
+      orbit_leg_nm: 49.9
+      orbit_width_nm: 20
+      orbit_direction: ccw
+    SHELL11:
+      callsign: SHELL11
+      altitude_ft: 16000
+      speed_kts: 400
+      orbit_anchor_coords: N34°49'10" E38°23'18"
+      orbit_heading_deg: 304
+      orbit_leg_nm: 49.9
+      orbit_width_nm: 20
+      orbit_direction: ccw
+  targets:
+    SAM-1:
+      name: Ground (SA-2 Guideline / S-75)
+      type: SA-2
+      coords: N33°21'12" E36°32'52"
+      aim_points:
+        - id: SAM-1-RD1
+          name: Radar 1
+          coords: N33°21'12" E36°32'52"
+        - id: SAM-1-LN1
+          name: Launcher 1
+          coords: N33°21'14" E36°32'50"
+      elevation: 2018ft
+    SAM-6:
+      name: Ground (SA-2 Guideline / S-75)
+      type: SA-2
+      coords: N33°16'29" E36°09'56"
+      aim_points:
+        - id: SAM-6-RD1
+          name: Radar 1
+          coords: N33°16'29" E36°09'56"
+        - id: SAM-6-LN1
+          name: Launcher 1
+          coords: N33°16'23" E36°09'50"
+      elevation: 2428ft
+    SAM-7:
+      name: Ground (SA-3 Neva / S-125)
+      type: SA-3
+      coords: N33°25'31" E36°06'38"
+      aim_points:
+        - id: SAM-7-RD1
+          name: Radar 1
+          coords: N33°25'31" E36°06'38"
+        - id: SAM-7-LN1
+          name: Launcher 1
+          coords: N33°25'19" E36°06'47"
+      elevation: 2671ft
+    ministry:
+      name: Ministry of Foreign Affairs
+      coords: N33°30.150' E36°16.183'
+      aim_points:
+        - id: SAM-7-RD1
+          name: Radar 1
+          coords: N33°25'31" E36°06'38"
+        - id: SAM-7-LN1
+          name: Launcher 1
+          coords: N33°25'19" E36°06'47"
+    pp:
+      name: Peoples Palace
+      coords: N33°31.033' E36°15.100'
+      aim_points:
+        - id: SAM-7-RD1
+          name: Radar 1
+          coords: N33°25'31" E36°06'38"
+        - id: SAM-7-LN1
+          name: Launcher 1
+          coords: N33°25'19" E36°06'47"
+  steerpoints:
+    - id: MARSHAL-1784150578123
+      type: marshal
+      coords: N34°08.283' E38°15.333'
+      altitude_ft: 20000
+  control_agencies:
+    THUMPER:
+      type: ABM
+      callsign: THUMPER
+      primary_freq_mhz: '318.425'
+    MAGIC:
+      type: IC
+      callsign: MAGIC
+      primary_freq_mhz: '261.500'
+    incrilikradar:
+      type: RADAR
+      callsign: LTAG RADAR
+      primary_freq_mhz: '340.775'

@@ -1,0 +1,69 @@
+/* The carrier management panel (crc-sync docs/adr/0113). Its own panel, its own file. Colours are efsp-panel.css's tokens, in
+   dark-cockpit use: grey for everything; amber (--efsp-attn) only for a ship that cannot be found or whose track was lost.
+   The font is the app's own (the Consolas stack), never a separate face. */
+
+#carrier-mgmt-panel {
+  overflow-y: auto;
+  padding: 8px;
+  color: var(--efsp-text, #d8e0e6);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.carrier-mgmt-status {
+  color: var(--efsp-muted, #8c9aa6);
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  margin-bottom: 6px;
+}
+.carrier-mgmt-status.carrier-mgmt-problem { color: var(--efsp-attn-text, #ffe0a8); border-left: 3px solid var(--efsp-attn, #e0a83c); padding-left: 6px; }
+
+.carrier-mgmt-group {
+  border-top: 1px solid var(--efsp-line, #2e3740);
+  padding: 8px 2px;
+  display: grid;
+  gap: 6px;
+}
+.carrier-mgmt-title {
+  margin: 0;
+  font-size: 10.5px;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  color: var(--efsp-muted, #8c9aa6);
+}
+
+.carrier-mgmt-row {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 8px;
+  align-items: center;
+}
+.carrier-mgmt-label { color: var(--efsp-muted, #8c9aa6); }
+.carrier-mgmt-val { display: flex; flex-wrap: wrap; gap: 0 6px; align-items: center; }
+
+.carrier-mgmt-input {
+  font: inherit;
+  color: var(--efsp-text, #d8e0e6);
+  background: #0e1114;
+  border: 1px solid var(--efsp-line-2, #4a5560);
+  padding: 1px 5px;
+}
+select.carrier-mgmt-input { padding: 0 2px; }
+.carrier-mgmt-input:focus-visible,
+.carrier-mgmt-reset:focus-visible { outline: 2px solid #8ec7ff; outline-offset: 1px; }
+.carrier-mgmt-input[hidden], .carrier-mgmt-value[hidden], .carrier-mgmt-reset[hidden] { display: none; }
+
+.carrier-mgmt-value { color: var(--efsp-text, #d8e0e6); }
+.carrier-mgmt-unit { color: var(--efsp-muted, #8c9aa6); }
+.carrier-mgmt-src { color: var(--efsp-faint, #56616c); font-size: 11px; }
+
+.carrier-mgmt-reset {
+  font: inherit;
+  font-size: 11px;
+  color: var(--efsp-muted, #8c9aa6);
+  background: none;
+  border: 1px solid var(--efsp-line, #2e3740);
+  border-radius: 3px;
+  padding: 0 6px;
+  cursor: pointer;
+}

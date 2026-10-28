@@ -1,0 +1,12 @@
+crc-desktop/app/public/js/panels/efsp/airspace-panel.js:237:occupied#1	N	airspace occupancy (DES-AIRSP F2)
+crc-desktop/app/public/js/panels/efsp/airspace-panel.js:237:occupied#2	N	airspace occupancy (DES-AIRSP F2)
+crc-desktop/app/public/js/panels/efsp/bay-view.js:503:occupancy#1	Y	Position staffing (comment follows the identifier)
+crc-desktop/app/public/js/panels/efsp/runway-status-panel.js:201:occupied#1	N	pad/runway occupancy (the wire field `occupied`), not a Position
+crc-desktop/app/public/js/panels/efsp/runway-status-panel.js:201:occupied#2	N	pad/runway occupancy (the wire field `occupied`), not a Position
+crc-desktop/app/public/js/panels/efsp/runway-status-panel.js:202:occupied#1	N	pad/runway occupancy (the wire field `occupied`), not a Position
+crc-desktop/tests/efsp-ordnance-client.test.mjs:39:occupied#1	N	pad/runway occupancy (the wire field `occupied`), not a Position
+crc-desktop/tests/efsp-ordnance-client.test.mjs:39:occupied#2	N	pad/runway occupancy (the wire field `occupied`), not a Position
+crc-desktop/tests/efsp-ordnance-client.test.mjs:40:occupied#1	N	pad/runway occupancy (the wire field `occupied`), not a Position
+crc-desktop/tests/efsp-runway-status-client.test.mjs:48:occupied#1	N	pad/runway occupancy (the wire field `occupied`), not a Position
+crc-desktop/tests/efsp-runway-status-client.test.mjs:49:occupied#1	N	pad/runway occupancy (the wire field `occupied`), not a Position
+crc-desktop/tests/efsp-ui-reachability.test.mjs:215:occupancy#1	Y	Position staffing (comment follows the identifier)

@@ -1,18 +1,34 @@
 'use strict';
+import { clearTrackRename, kinematics, setTrackRename, verticalFpm } from '../geo.js';
+import { getLatestTrack } from '../picture.js';
+import { magneticText } from '../magnetic.js';
+import { clearIffOverride, getIff, iffColor, setIffOverride } from '../iff.js';
+import {
+  altitudeLong, assignedAltText, assignedBlockText, tagEditable, trackName, typeText
+} from '../track-label.js';
+import { _flightDataForTrack, buildFiledRoute, parseFiledRouteWaypoints } from '../geojson.js';
+import { dock, ensureTrackPanel } from '../dock-handle.js';
+import { conflictRestoreTargets, conflictSuppressTargets, restoreConflict, suppressConflict } from './efsp/conflict-suppress.js';
+import { conformanceAlertsForFlightData, conflictAlertsForTrack, conflictName, refuelingAlertText, airspaceEntryAlertsForTrack, airspaceEntryText } from './efsp/efsp-state.js';
+import { history, tracks } from '../picture.js';
+import { map, mapReady } from '../map-handle.js';
+import { settings } from '../settings.js';
+import { markEfspChanged, onEfspChanged } from './efsp/efsp-change-bus.js';
+import { canTagTrack, pickVfrTagPosition, tagTrack, vfrTagPosition, vfrTagPositions } from './efsp/flight-following.js';
 
 // ── Track info panel ─────────────────────────────────────────────────────
 // Left-clicking an aircraft track opens this persistent side panel. It
-// shows live properties and integrates IFF + callsign override controls.
-// Also owns the ground-vehicle label popup (a small, unrelated floating
+// shows what this controller's sensors know about the contact (crc-sync's
+// docs/adr/0059 — every string from track-label.js), its correlated flight,
+// and the IFF and tag controls. Also owns the ground-vehicle tag popup (a small, unrelated floating
 // input shown when left-clicking a ground vehicle icon) — grouped here
 // because both are "click a map icon, get a small info/edit surface"
 // interactions triggered from the same map click-handling code.
-// Split out of the former ui.js "god file" — see panels/topbar.js for why
-// this stays a plain script rather than an IIFE.
+// Split out of the former ui.js "god file" (history).
 
 let _trackPanelId = null; // currently displayed track id (string), or null
 
-function initTrackPanel() {
+export function initTrackPanel() {
   const $panel   = document.getElementById('track-panel');
   if (!$panel) return;
 
@@ -31,7 +47,7 @@ function initTrackPanel() {
       if (_trackPanelId == null) return;
       setIffOverride(_trackPanelId, btn.dataset.state);
       _refreshIffButtons();
-      updateMap();
+      markEfspChanged('map');
     });
   });
 
@@ -40,15 +56,16 @@ function initTrackPanel() {
     if (_trackPanelId == null) return;
     clearIffOverride(_trackPanelId);
     _refreshIffButtons();
-    updateMap();
+    markEfspChanged('map');
   });
 
-  // Rename controls
+  // Tag controls: a name for a contact nothing else identifies. Disabled
+  // while the contact's flight (or its datalink report) names it.
   const $renameInput = document.getElementById('tp-rename-input');
   const commitRename = () => {
     if (_trackPanelId == null) return;
     setTrackRename(_trackPanelId, $renameInput.value);
-    updateMap();
+    markEfspChanged('map');
     _refreshCallsign();
   };
   document.getElementById('tp-rename-set').addEventListener('click', (e) => {
@@ -59,7 +76,7 @@ function initTrackPanel() {
     if (_trackPanelId == null) return;
     clearTrackRename(_trackPanelId);
     $renameInput.value = '';
-    updateMap();
+    markEfspChanged('map');
     _refreshCallsign();
   });
   $renameInput.addEventListener('keydown', (e) => {
@@ -68,12 +85,37 @@ function initTrackPanel() {
   });
   $renameInput.addEventListener('click', e => e.stopPropagation());
 
+  // Tag a VFR (crc-sync docs/adr/0146): callsign and, optionally, the Block 3 type, one press. The answer shows on the line
+  // below; on success the contact is the strip's, so the section goes away with the next refresh.
+  const $ffCallsign = document.getElementById('tp-ff-callsign');
+  const $ffType = document.getElementById('tp-ff-type');
+  const $ffMsg = document.getElementById('tp-ff-msg');
+  const startFf = () => {
+    if (_trackPanelId == null || !$ffCallsign || !$ffType) return;
+    const trackId = _trackPanelId;
+    const at = vfrTagPosition();
+    const problem = tagTrack(trackId, $ffCallsign.value, $ffType.value, (ack) => {
+      if (_trackPanelId !== trackId) return;
+      if ($ffMsg) $ffMsg.textContent = ack.ok ? '' : (ack.detail || ack.reason || 'refused');
+      if (ack.ok) { $ffCallsign.value = ''; $ffType.value = ''; }
+      updateTrackPanel();
+    }, { positionId: at });
+    if ($ffMsg) $ffMsg.textContent = problem || '';
+  };
+  const $ffStart = document.getElementById('tp-ff-start');
+  if ($ffStart) $ffStart.addEventListener('click', (e) => { e.stopPropagation(); startFf(); });
+  for (const $in of [$ffCallsign, $ffType]) {
+    if (!$in) continue;
+    $in.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); startFf(); } });
+    $in.addEventListener('click', e => e.stopPropagation());
+  }
+
   function _refreshIffButtons() {
     const cols = iffColors();
     // Fresh (non-sweep-gated) lookup: an IFF declaration is crc-sync's
     // shared state, not a radar return, so it should reflect immediately —
     // not wait for the simulated radar beam to next illuminate this track.
-    const t        = _trackPanelId != null ? window.getLatestTrack(_trackPanelId) : null;
+    const t        = _trackPanelId != null ? getLatestTrack(_trackPanelId) : null;
     const override = t ? t.iffOverride : null;
     $panel.querySelectorAll('.tp-iff-btn').forEach(btn => {
       const col = cols[btn.dataset.state] || '#888888';
@@ -86,8 +128,8 @@ function initTrackPanel() {
 
   function _refreshCallsign() {
     if (_trackPanelId == null) return;
-    const t = window.getLatestTrack(_trackPanelId);
-    if (t) document.getElementById('tp-callsign').textContent = resolveCallsign(t);
+    const t = getLatestTrack(_trackPanelId);
+    if (t) document.getElementById('tp-callsign').textContent = trackName(t);
   }
 
   // Expose so updateTrackPanel can call them
@@ -110,7 +152,7 @@ function _refreshIffState(t) {
   $badge.appendChild(span);
 }
 
-function showTrackPanel(id) {
+export function showTrackPanel(id) {
   _trackPanelId = String(id);
   // Track Info is a normal closable panel now (see dock.js's REQUIRED_PANELS
   // comment) — clicking a track is its reopen path, so get-or-create it
@@ -125,19 +167,20 @@ function showTrackPanel(id) {
 // forces the view away to whatever tab the user had open before (dockview
 // owns tab switching, and yanking focus away on every empty-map click would
 // be more surprising than useful).
-function closeTrackPanel() {
+export function closeTrackPanel() {
   _trackPanelId    = null;
-  _fplFetchCallsign = null;
+  _fplShownFor     = null;
   const $fplSec = document.getElementById('tp-fpl-section');
   if ($fplSec) $fplSec.style.display = 'none';
   _clearFiledRoute();
 }
 
-// Fetch and display the flight plan for the resolved callsign of the current track.
-// Aborts silently if the panel is closed or a newer fetch has started.
-let _fplFetchCallsign = null;
-let _currentFplMessage = null;
-let _filedRouteShown   = false;
+// The correlated flight's filed plan. The flight record IS the flight plan
+// (docs/adr/0059): a contact has one once it is correlated to a Strip, and
+// there is nothing to look up by callsign any more.
+let _fplShownFor     = null; // flightDataId + rev last rendered
+let _currentFiled    = null;
+let _filedRouteShown = false;
 
 function _clearFiledRoute() {
   _filedRouteShown = false;
@@ -148,36 +191,27 @@ function _clearFiledRoute() {
   if ($status) $status.textContent = '';
 }
 
-function _refreshTrackFpl(callsign) {
+function _refreshTrackFpl(flightData) {
   const $section = document.getElementById('tp-fpl-section');
   const $msg     = document.getElementById('tp-fpl-msg');
   if (!$section || !$msg) return;
-
-  _currentFplMessage = null;
+  const key = flightData ? `${flightData.flightDataId}:${flightData.rev}` : null;
+  if (key === _fplShownFor) return;
+  _fplShownFor = key;
   _clearFiledRoute();
-
-  if (!callsign) {
+  const filed = flightData && flightData.filed;
+  if (!filed || !(filed.route || filed.departureAirport || filed.destinationAirport)) {
+    _currentFiled = null;
     $section.style.display = 'none';
     return;
   }
-
-  _fplFetchCallsign = callsign;
-  fetch('/api/fpl/' + encodeURIComponent(callsign))
-    .then(r => r.json().then(j => ({ ok: r.ok, body: j })))
-    .then(({ ok, body }) => {
-      if (_fplFetchCallsign !== callsign) return; // stale
-      if (!ok || !body.fplMessage) {
-        $section.style.display = 'none';
-        return;
-      }
-      $msg.textContent       = body.fplMessage;
-      _currentFplMessage     = body.fplMessage;
-      $section.style.display = 'block';
-    })
-    .catch(() => {
-      if (_fplFetchCallsign !== callsign) return;
-      $section.style.display = 'none';
-    });
+  _currentFiled = filed;
+  const cruise = filed.requestedAltitude ? ` · ${filed.requestedAltitude}` : '';
+  $msg.textContent = [
+    `${flightData.identity.callsign}${flightData.identity.aircraftType ? ' ' + flightData.identity.aircraftType : ''}${cruise}`,
+    [filed.departureAirport, filed.route, filed.destinationAirport].filter(Boolean).join(' '),
+  ].join('\n');
+  $section.style.display = 'block';
 }
 
 (function initFiledRouteButton() {
@@ -188,8 +222,8 @@ function _refreshTrackFpl(callsign) {
   $btn.addEventListener('click', () => {
     if (_filedRouteShown) { _clearFiledRoute(); return; }
 
-    if (!_currentFplMessage) return;
-    const { points, matched, total } = parseFiledRouteWaypoints(_currentFplMessage);
+    if (!_currentFiled) return;
+    const { points, matched, total } = parseFiledRouteWaypoints(_currentFiled);
     if (matched < 2) {
       if ($status) $status.textContent = total > 0
         ? `only ${matched} of ${total} waypoints resolved — can't plot a route`
@@ -204,120 +238,166 @@ function _refreshTrackFpl(callsign) {
   });
 })();
 
-function updateTrackPanel() {
+/**
+ * docs/adr/0058 — the flight's assigned altitude and heading (from its Strip's
+ * flight record, when correlated), and any conflict or conformance alert.
+ * Nothing is shown while nothing is wrong.
+ */
+function _refreshTrackAlerts(trackId) {
+  const flightData = _flightDataForTrack(trackId);
+  // "ALT FL180 · HDG 050".
+  const active = (cell) => cell && cell.entries.find(e => e.status === 'ACTIVE');
+  const alt = flightData && flightData.clearance && active(flightData.clearance.altitude);
+  const hdg = flightData && flightData.clearance && active(flightData.clearance.heading);
+  const parts = [];
+  if (alt && alt.block) parts.push(`ALT ${assignedBlockText(alt.block)}`);
+  else if (alt && Number.isFinite(alt.parsed)) parts.push(`ALT ${assignedAltText(alt.parsed)}`);
+  if (hdg && Number.isFinite(hdg.parsed)) parts.push(`HDG ${String(hdg.parsed).padStart(3, '0')}`);
+  const $key = document.getElementById('tp-asgn-key');
+  const $val = document.getElementById('tp-asgn');
+  if ($key && $val) {
+    $key.hidden = parts.length === 0;
+    $val.hidden = parts.length === 0;
+    $val.textContent = parts.join(' · ');
+  }
+  const $alerts = document.getElementById('tp-alerts');
+  if (!$alerts) return;
+  const lines = [];
+  const clock = (sec) => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
+  for (const c of conflictAlertsForTrack(trackId)) {
+    // crc-sync's docs/adr/0145: SUPPRESS on the alert itself, one click; a suppressed one stays, grey, with RESTORE.
+    lines.push({ bad: !c.suppressed, off: c.suppressed, conflict: c, text: `${conflictName(c)} with ${c.otherCallsign} in ${clock(c.timeToCpaSec)}. Closest ${c.minNm} NM / ${c.vertFt} ft.${c.suppressed ? ' Suppressed.' : ''}` });
+  }
+  for (const a of (flightData ? conformanceAlertsForFlightData(flightData.flightDataId) : [])) {
+    const pad = (n) => String(n).padStart(3, '0');
+    const ar = refuelingAlertText(a); // crc-sync's docs/adr/0118
+    if (ar) { lines.push({ bad: true, text: ar.reason }); continue; }
+    if (a.kind === 'HEADING') lines.push({ bad: false, text: `Assigned heading ${pad(a.assigned)}, tracking ${pad(a.actual)}.` });
+    if (a.kind === 'WRONG_WAY') lines.push({ bad: true, text: `Assigned ${a.assigned.toLocaleString('en-US')} ft, ${a.fpm < 0 ? 'descending' : 'climbing'} at ${Math.abs(a.fpm).toLocaleString('en-US')} ft/min.` });
+    if (a.kind === 'LEVEL_BUST') lines.push({ bad: true, text: `Level bust: ${a.deviationFt > 0 ? '+' : '−'}${Math.abs(a.deviationFt)} ft from ${a.assigned.toLocaleString('en-US')} ft.` });
+  }
+  // crc-sync's docs/adr/0119: inside an ACTIVE airspace with no approved entry (amber).
+  for (const a of airspaceEntryAlertsForTrack(trackId)) lines.push({ bad: false, text: `${airspaceEntryText(a)}: inside, active, no approved entry.` });
+  $alerts.innerHTML = '';
+  for (const l of lines) {
+    const div = document.createElement('div');
+    div.className = 'tp-alert' + (l.off ? ' tp-alert-off' : l.bad ? '' : ' tp-alert-attn');
+    div.textContent = l.text;
+    if (l.conflict) {
+      div.dataset.conflictId = l.conflict.id;
+      const c = l.conflict;
+      const suppress = conflictSuppressTargets(c).length > 0;
+      const restore = !suppress && conflictRestoreTargets(c).length > 0;
+      if (suppress || restore) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'tp-alert-suppress';
+        btn.textContent = suppress ? 'SUPPRESS' : 'RESTORE';
+        btn.title = suppress ? `Stop this ${conflictName(c)} flashing at your Position, for this pair only` : `Show this ${conflictName(c)} in full again`;
+        btn.addEventListener('click', () => { if (suppress) suppressConflict(c); else restoreConflict(c); });
+        div.appendChild(btn);
+      }
+    }
+    $alerts.appendChild(div);
+  }
+}
+
+export function updateTrackPanel() {
   if (_trackPanelId == null) return;
   const t = tracks.get(_trackPanelId);
   if (!t) return; // track faded out — leave panel open with last values
 
-  // crc-sync's shared state (IFF/callsign/rename) should reflect immediately,
-  // independent of the sweep-gated `t` used for telemetry below — see
-  // window.getLatestTrack's definition in app.js.
-  const fresh = window.getLatestTrack(_trackPanelId) || t;
+  // Who the contact is (its name, IFF, tag) reflects immediately, independent
+  // of the sweep-gated `t` used for position and altitude below — see
+  // getLatestTrack's definition in picture.js.
+  const fresh = getLatestTrack(_trackPanelId) || t;
 
   const hist     = history.get(_trackPanelId) || [];
   const { heading, speedKt } = kinematics(hist);
   const fpm      = verticalFpm(hist);
-  const altFt    = Math.round(indicatedAltFt(t.alt || 0));
-  const fl       = Math.round(altFt / 100);
-  const spec     = aircraftTypes && aircraftTypes[t.type];
 
   // Header
-  const cs = resolveCallsign(fresh);
-  document.getElementById('tp-callsign').textContent = cs;
-  document.getElementById('tp-type').textContent     = (spec && spec.label) || t.type || '';
+  document.getElementById('tp-callsign').textContent = trackName(fresh);
+  document.getElementById('tp-type').textContent     = typeText(fresh);
 
-  // Properties
-  const taFt = settings.transitionAltFt ?? 18000;
-  document.getElementById('tp-alt').textContent  = altFt >= taFt
-    ? `FL${String(fl).padStart(3,'0')}`
-    : altFt.toLocaleString();
-  const vsSign = fpm >  50 ? '+' : fpm < -50 ? '' : '±';
-  document.getElementById('tp-vs').textContent   =
-    Math.abs(fpm) < 50 ? 'level' : `${vsSign}${Math.round(fpm)} fpm`;
-  // heading here is a true bearing (kinematics() derives it from raw
-  // lat/lon deltas) — first correct true→grid (gridConvergenceDeg, see
-  // geo.js: DCS's cockpit heading tape is referenced to its flat internal
-  // grid, not true geodetic north — the two differ by the local convergence
-  // angle), then apply settings.hdgCorrection the same way every other
-  // displayed heading does (BRA/cursor bearing above, runway heading in
-  // geojson.js): displayed = grid + hdgCorrection. hdgCorrection is a manual
-  // fudge factor, not real-world magnetic variation — see app.js DEFAULTS.
-  const conv   = gridConvergenceDeg(t.lat, t.lon);
-  const hdgMag = (Math.round(heading - conv) + (settings.hdgCorrection || 0) + 360) % 360;
+  // Properties — only what a sensor gives; '—' for the rest.
+  document.getElementById('tp-alt').textContent = altitudeLong(t);
+  document.getElementById('tp-vs').textContent  = fpm == null ? '—'
+    : Math.abs(fpm) < 50 ? 'level' : `${fpm > 0 ? '+' : ''}${Math.round(fpm)} fpm`;
+  // kinematics() gives a TRUE course over the ground (from lat/lon deltas);
+  // shown magnetic, like every heading (magnetic.js, crc-sync docs/adr/0085).
   document.getElementById('tp-hdg').textContent  =
-    `${String(hdgMag).padStart(3,'0')}°`;
+    `${magneticText(heading, t.lat, t.lon)}°`;
   document.getElementById('tp-spd').textContent  =
     `${Math.round(speedKt)} kt`;
-  document.getElementById('tp-sqwk').textContent =
-    t.squawk != null ? String(t.squawk).padStart(4,'0') : '—';
+  document.getElementById('tp-sqwk').textContent = (t.ssr && t.ssr.code) || '—';
 
   // IFF state badge
   _refreshIffState(fresh);
 
+  // Assigned values and alerts (docs/adr/0058)
+  _refreshTrackAlerts(String(_trackPanelId));
+
   // IFF buttons
   if (initTrackPanel._refreshIffButtons) initTrackPanel._refreshIffButtons();
 
-  // Rename input (only pre-fill if it's not focused)
+  // Tag input (only pre-fill if it's not focused); disabled while the
+  // contact's flight or datalink report names it.
   const $ri = document.getElementById('tp-rename-input');
-  if ($ri && document.activeElement !== $ri) {
-    $ri.value = fresh.rename || '';
+  if ($ri) {
+    const editable = tagEditable(fresh);
+    $ri.disabled = !editable;
+    $ri.placeholder = editable ? 'tag…' : `named by its ${fresh.label.source === 'DATALINK' ? 'datalink report' : 'flight'}`;
+    if (document.activeElement !== $ri) $ri.value = (fresh.label && fresh.label.tag) || '';
   }
 
-  // Flight plan (fetched once per callsign change; compare uppercase to avoid case-drift stalls)
-  if ((cs || '').toUpperCase() !== (_fplFetchCallsign || '').toUpperCase()) _refreshTrackFpl(cs);
+  // The correlated flight's plan
+  _refreshTrackFpl(_flightDataForTrack(String(_trackPanelId)));
+
+  _refreshFlightFollowing(fresh);
 }
 
-// ── Ground vehicle label popup ────────────────────────────────────────────
-// Left-clicking a ground vehicle icon opens a small floating input so the
-// controller can assign a custom label.  The popup is dismissed on Enter,
-// Escape, or clicking outside.
-
-function showGroundLabelPopup(id, clientX, clientY) {
-  const popup = document.getElementById('gnd-label-popup');
-  const input = document.getElementById('gnd-label-input');
-  if (!popup || !input) return;
-
-  // Pre-fill with any existing label for this vehicle
-  input.value = groundLabels.get(id) || '';
-
-  // Position near the click, keeping it inside the viewport
-  const popW = 160, popH = 36;
-  let left = clientX + 10;
-  let top  = clientY + 10;
-  if (left + popW > window.innerWidth)  left = clientX - popW - 4;
-  if (top  + popH > window.innerHeight) top  = clientY - popH - 4;
-
-  popup.style.left    = left + 'px';
-  popup.style.top     = top  + 'px';
-  popup.style.display = 'block';
-  input.focus();
-  input.select();
-
-  function commit() {
-    const label = input.value.trim().toUpperCase();
-    if (label) groundLabels.set(id, label);
-    else       groundLabels.delete(id);
-    close();
-    updateMap();
+// Shown only on a contact it applies to (a Position with a VFR Bay held, no live strip on the contact): dark cockpit.
+let _ffShownFor = null;
+function _refreshFlightFollowing(fresh) {
+  const $sec = document.getElementById('tp-ff-section');
+  if (!$sec) return;
+  const show = canTagTrack(_trackPanelId);
+  $sec.hidden = !show;
+  if (show) _refreshTagAt();
+  if (_ffShownFor !== _trackPanelId) {
+    // A new contact: start from its tag, if it has one (a name the controller already gave it), and no old message.
+    _ffShownFor = _trackPanelId;
+    const $cs = document.getElementById('tp-ff-callsign');
+    const $ty = document.getElementById('tp-ff-type');
+    const $msg = document.getElementById('tp-ff-msg');
+    if ($cs) $cs.value = (fresh && fresh.label && fresh.label.tag) || '';
+    if ($ty) $ty.value = '';
+    if ($msg) $msg.textContent = '';
   }
-
-  function close() {
-    popup.style.display = 'none';
-    input.removeEventListener('keydown', onKey);
-    document.removeEventListener('click', onOutside, true);
-  }
-
-  function onKey(e) {
-    if (e.key === 'Enter')  { e.preventDefault(); commit(); }
-    if (e.key === 'Escape') { close(); }
-  }
-
-  function onOutside(e) {
-    if (!popup.contains(e.target)) close();
-  }
-
-  input.addEventListener('keydown', onKey);
-  // Delay attaching the outside-click listener so the current click event
-  // that triggered the popup doesn't immediately dismiss it.
-  setTimeout(() => document.addEventListener('click', onOutside, true), 0);
 }
+
+// AT: one button per Position the controller works with a VFR Bay; the picked one (shared with the label menu) is lit.
+function _refreshTagAt() {
+  const $at = document.getElementById('tp-ff-at');
+  if (!$at) return;
+  const list = vfrTagPositions();
+  const picked = vfrTagPosition();
+  const key = `${list.join(',')}|${picked}`;
+  if ($at.dataset.key === key) return;
+  $at.dataset.key = key;
+  const label = document.createElement('span');
+  label.textContent = 'AT';
+  $at.replaceChildren(label, ...list.map(p => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = p === picked ? 'tp-ff-at-pos tp-ff-at-on' : 'tp-ff-at-pos';
+    btn.dataset.positionId = p;
+    btn.textContent = p;
+    btn.title = `the strip goes to ${p}`;
+    btn.addEventListener('click', (e) => { e.stopPropagation(); pickVfrTagPosition(p); _refreshTagAt(); });
+    return btn;
+  }));
+}
+
+onEfspChanged(['alerts', 'scope', 'correlations', 'positions', 'board'], () => updateTrackPanel()); // a conflict alert on the open contact (efsp-change-bus.js)

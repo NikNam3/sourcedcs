@@ -1,0 +1,234 @@
+'use strict';
+
+/* Lane 1 — MARSA behaviour: declaring, the void interlock, the participant
+ * highlight, and what SEP REG says about any of it.
+ *
+ * RECONSTRUCTED. The original lane-1 file was lost when the machine shut down;
+ * docs/ui-findings/lane1.md survived with full event traces, and this is built
+ * back from them. Every assertion here restates a measurement recorded in that
+ * file rather than a fresh claim.
+ *
+ * All five were catalogued findings and all five are fixed, so nothing here is
+ * annotated test.fail() any more and a failure is a regression:
+ *   F-110          every click inside the MARSA popover rebuilt it empty
+ *                  (the declarer-input half only; see lane1.md on the picker)
+ *   F-111          SEP REG never showed MARSA; the server had it, clients did not
+ *   extends F-305  the void and the participant highlight were never drawn
+ *
+ * Runs at 1600x2400, and the F-110 tests open the popover on the LAST Strip
+ * in the Bay, so that it is NOT covered. Opened on the first of two Strips,
+ * the second Strip's Blocks intercept the click and it times out as F-001 —
+ * and a timeout is not converted by test.fail(), so the test would report a
+ * failure about the wrong bug.
+ *
+ * Callsigns are unique per test: the Board lives for the whole run (one
+ * crc-sync per run), so a reused callsign finds an earlier test's Strip.
+ */
+
+const { test, expect } = require('./helpers/test');
+const { openPanel, seedStrip, stripByCallsign, startAction, settle } = require('./helpers/app');
+
+test.use({ viewport: { width: 1600, height: 2400 } });
+
+let seq = 0;
+const uniqueCallsign = (prefix) => `${prefix}${(Date.now() + seq++) % 10000}`;
+
+/** Two live Strips in the same Bay — the minimum a relation needs. */
+async function seedPair(page) {
+  const a = uniqueCallsign('TNK');
+  const b = uniqueCallsign('VPR');
+  await seedStrip(page, { callsign: a, stripType: 'DEPARTURE' });
+  await seedStrip(page, { callsign: b, stripType: 'DEPARTURE' });
+  return { a, b };
+}
+
+/** The relation this page's own store holds for a callsign, if any. */
+const relationFor = (page, callsign) => page.evaluate((cs) => {
+  const strip = [...crc.state.efspStrips.values()].find(s => crc.state.efspFlightDataList.get(s.flightDataId).identity.callsign === cs);
+  if (!strip) return null;
+  const rel = typeof crc.state.marsaForStrip === 'function' ? crc.state.marsaForStrip(strip) : null;
+  return rel && { state: rel.state, reason: rel.voidReason || null, declaringCallsign: rel.declaringCallsign };
+}, callsign);
+
+/** Declare through the page's own send function — the popover cannot (F-110). */
+async function declareVia(page, aCallsign, bCallsign, declaringCallsign) {
+  await page.evaluate(([csA, csB, declarer]) => {
+    const byCs = (cs) => [...crc.state.efspStrips.values()].find(s => crc.state.efspFlightDataList.get(s.flightDataId).identity.callsign === cs);
+    crc.ws.sendEfspMarsaMutation('OPS', undefined, undefined, {
+      kind: 'DeclareMarsa',
+      participants: [byCs(csA).flightDataId, byCs(csB).flightDataId],
+      startEvent: 'TANKER_ACCEPTED',
+      endCondition: 'VERTICALLY_POSITIONED',
+      declaringCallsign: declarer,
+    });
+  }, [aCallsign, bCallsign, declaringCallsign]);
+  await expect.poll(() => relationFor(page, aCallsign).then(r => r && r.state)).toBe('ACTIVE');
+}
+
+// ── F-110 ────────────────────────────────────────────────────────────────
+//
+// _openMarsaPopover(strip, anchorEl) does anchorEl.appendChild(popover), and
+// anchorEl is the MARSA… <button> whose own click handler opens it. A click
+// anywhere inside the popover bubbles to that button, re-runs the handler, and
+// builds a fresh empty form. The popover's pointerdown stopPropagation() does
+// not help: the rebuild is driven by `click`, not pointerdown.
+
+test('F-110: clicking into the declarer field replaces the field', async ({ page }) => {
+  await openPanel(page);
+  const { b } = await seedPair(page);
+
+  await startAction(stripByCallsign(page, b), 'MARSA…');
+  const input = page.locator('.efsp-marsa-popover input.efsp-coordinate-note');
+  await expect(input).toBeVisible();
+
+  // Identity, not just value: the finding measured the <input> afterwards as a
+  // DIFFERENT element, which is what makes typing land nowhere.
+  const same = await input.evaluate((el) => { window.__marsaInput = el; return true; });
+  expect(same).toBe(true);
+  await input.click();
+  const stillSameElement = await page.evaluate(() =>
+    window.__marsaInput === document.querySelector('.efsp-marsa-popover input.efsp-coordinate-note'));
+
+  expect(stillSameElement, 'the declarer input was replaced by the click that focused it').toBe(true);
+});
+
+test('F-110: typing the declarer leaves the field empty', async ({ page }) => {
+  await openPanel(page);
+  const { b } = await seedPair(page);
+
+  await startAction(stripByCallsign(page, b), 'MARSA…');
+  const input = page.locator('.efsp-marsa-popover input.efsp-coordinate-note');
+  await input.click();
+  await page.keyboard.type('SHELL71');
+
+  await expect(page.locator('.efsp-marsa-popover input.efsp-coordinate-note'))
+    .toHaveValue('SHELL71');
+});
+
+// ── F-111 ────────────────────────────────────────────────────────────────
+//
+// Declaring writes separationRegime = 'MARSA' server-side via flightDataStore.setTofi
+// (plan §1c). The delta does not carry it, so every connected client holds
+// null until a reload. Guide §4.8.3's "they inherit a lie", in the direction
+// it warns about: the Strip says nothing about who is separating the aircraft.
+
+test('F-111: declaring MARSA puts MARSA in SEP REG on this page', async ({ page }) => {
+  await openPanel(page);
+  const { a, b } = await seedPair(page);
+  await declareVia(page, a, b, 'SHELL71');
+
+  const regime = await page.evaluate((cs) => {
+    const strip = [...crc.state.efspStrips.values()].find(s => crc.state.efspFlightDataList.get(s.flightDataId).identity.callsign === cs);
+    return crc.state.efspFlightDataList.get(strip.flightDataId).tofi && crc.state.efspFlightDataList.get(strip.flightDataId).tofi.separationRegime;
+  }, a);
+
+  expect(regime, 'the server wrote MARSA; this client was never told').toBe('MARSA');
+});
+
+// ── extends F-305 ────────────────────────────────────────────────────────
+//
+// _stripElNeedsRebuild looks only at the Strip's own rev. Two more surfaces of
+// that mechanism, and the first is a WP6 acceptance line.
+
+test('extends F-305: the void reaches the declaring controller\'s own Strip', async ({ page }) => {
+  await openPanel(page);
+  const { a, b } = await seedPair(page);
+  await declareVia(page, a, b, 'SHELL71');
+
+  // The interlock: a controller altitude change on a participant before
+  // rendezvous voids the relation (plan §13's acceptance line).
+  await page.evaluate((cs) => {
+    const strip = [...crc.state.efspStrips.values()].find(s => crc.state.efspFlightDataList.get(s.flightDataId).identity.callsign === cs);
+    // sendEfspMutation is (actingPositionId, strip, op) — three arguments, and
+    // the second is the Strip RECORD, which is where the rev is read from. The
+    // reconstruction called it with (acting, stripId, rev, op); the op landed
+    // in the rev slot, so no SetBlock was ever sent and the interlock never
+    // fired. The assertion below was then measuring a relation that was still
+    // ACTIVE for the most ordinary reason.
+    crc.ws.sendEfspMutation('OPS', strip, { kind: 'SetBlock', blockId: '21', value: '5000' });
+  }, a);
+
+  await expect.poll(() => relationFor(page, a).then(r => r && r.state)).toBe('VOIDED');
+
+  // A was rebuilt by its own SetBlock ack, BEFORE the efsp-marsa-delta
+  // carrying the void arrived — so its badge still reads as armed. Measured at
+  // +0.8s, +3s and +8s; it only corrects when something else selects a Strip.
+  await settle(page);
+  const badge = stripByCallsign(page, a).locator('.efsp-marsa-badge');
+  await expect(badge, 'the Strip that issued the clearance still says MARSA armed')
+    .not.toHaveText(/MARSA\s*⚠/);
+});
+
+test('extends F-305: the participant highlight is drawn on the other Strip', async ({ page }) => {
+  await openPanel(page);
+  const { a, b } = await seedPair(page);
+  await declareVia(page, a, b, 'SHELL71');
+
+  await stripByCallsign(page, a).click();
+
+  // §9.2 rule 5. getMarsaHighlightStripIds() holds B's id, but B's element
+  // never gets the class: the highlight is client-local state of exactly the
+  // kind selection and expansion were given dataset entries for, and has none.
+  const signedOn = await page.evaluate((cs) => {
+    const strip = [...crc.state.efspStrips.values()].find(s => crc.state.efspFlightDataList.get(s.flightDataId).identity.callsign === cs);
+    return crc.marsaBadge.getMarsaHighlightStripIds().includes(strip.stripId);
+  }, b);
+  expect(signedOn, 'precondition: the highlight set should hold the peer').toBe(true);
+
+  await expect(stripByCallsign(page, b)).toHaveClass(/efsp-strip-marsa-participant/);
+});
+
+// ── T15 (live test 2026-10-11, crc-sync's docs/adr/0118) ─────────────────
+//
+// After a void, clicking a field on one participant made the Strips reorder. Cause: the Rack reconciler skipped a
+// protected Strip (one being edited) without stepping past it, so any render while the edit was open inserted every
+// Strip below it ABOVE it, and the order flipped back once the edit closed. A void makes that render certain: the
+// click selects the Strip and the participants' signatures move with it.
+
+const rackOrder = (page, callsigns) => page.evaluate((list) => {
+  const els = [...document.querySelectorAll('.efsp-strip')];
+  return els.map(el => list.find(cs => el.querySelector('.efsp-block-1') && el.querySelector('.efsp-block-1').textContent.includes(cs))).filter(Boolean);
+}, callsigns);
+
+test('T15: after a MARSA void, clicking a field on one Strip does not reorder the two', async ({ page }) => {
+  await openPanel(page);
+  const { a, b } = await seedPair(page);
+  await declareVia(page, a, b, 'SHELL71');
+  await page.evaluate((cs) => {
+    const strip = [...crc.state.efspStrips.values()].find(s => crc.state.efspFlightDataList.get(s.flightDataId).identity.callsign === cs);
+    crc.ws.sendEfspMutation('OPS', strip, { kind: 'SetBlock', blockId: '21', value: '5000' });
+  }, a);
+  await expect.poll(() => relationFor(page, a).then(r => r && r.state)).toBe('VOIDED');
+  await settle(page);
+
+  const before = await rackOrder(page, [a, b]);
+  expect(before.length, 'both Strips are on the page').toBe(2);
+  const first = stripByCallsign(page, before[0]);
+  // A real click on a field of the upper Strip: its Block edit opens and holds it.
+  await first.locator('.efsp-block-9').click();
+  await expect(first.locator('.efsp-block-input')).toBeFocused();
+  await settle(page);
+  expect(await rackOrder(page, [a, b]), 'the Strip below jumped above the one being edited').toEqual(before);
+  await page.keyboard.press('Escape');
+  await settle(page);
+  expect(await rackOrder(page, [a, b])).toEqual(before);
+});
+
+// ── T14 (crc-sync's docs/adr/0118, H134 LT-RQ15 a) ───────────────────────
+test('T14: the MARSA voided notice stays until the controller holding a Strip acknowledges it, then leaves both', async ({ page }) => {
+  await openPanel(page);
+  const { a, b } = await seedPair(page);
+  await declareVia(page, a, b, 'SHELL71');
+  await page.evaluate((cs) => {
+    const strip = [...crc.state.efspStrips.values()].find(s => crc.state.efspFlightDataList.get(s.flightDataId).identity.callsign === cs);
+    crc.ws.sendEfspMutation('OPS', strip, { kind: 'SetBlock', blockId: '21', value: '5000' });
+  }, a);
+  await expect.poll(() => relationFor(page, a).then(r => r && r.state)).toBe('VOIDED');
+  await settle(page);
+  for (const cs of [a, b]) await expect(stripByCallsign(page, cs).locator('.efsp-marsa-void-reason')).toBeVisible();
+  await stripByCallsign(page, b).getByRole('button', { name: 'Acknowledge' }).click();
+  for (const cs of [a, b]) {
+    await expect(stripByCallsign(page, cs).locator('.efsp-marsa-void-reason')).toHaveCount(0);
+    await expect(stripByCallsign(page, cs).locator('.efsp-marsa-badge')).toHaveCount(0);
+  }
+});

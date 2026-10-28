@@ -16,7 +16,7 @@ const DOT_COMMAND_RE = /^\.(\S+)(?:\s+(.*))?$/;
  * @returns {{verb:string, args:string[]}|null} null if `raw` isn't a
  *   well-formed dot-command (doesn't start with '.', or is empty/whitespace).
  */
-function parseDotCommand(raw) {
+export function parseDotCommand(raw) {
   const trimmed = (raw || '').trim();
   const match = DOT_COMMAND_RE.exec(trimmed);
   if (!match) return null;
@@ -24,8 +24,4 @@ function parseDotCommand(raw) {
   const argsStr = match[2] || '';
   const args = argsStr.length > 0 ? argsStr.split(/\s+/) : [];
   return { verb, args };
-}
-
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { parseDotCommand };
 }

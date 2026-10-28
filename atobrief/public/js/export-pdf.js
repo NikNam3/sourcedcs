@@ -65,6 +65,8 @@ function submitExportDialog() {
     return;
   }
 
+  if (format === 'usmtf') { closeExportDialog(); openUsmtfExport(); return; }
+
   // PDF
   const sel    = document.getElementById('exportMissionSelect');
   const msnIdx = (sel && sel.value !== '') ? parseInt(sel.value) : -1;

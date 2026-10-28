@@ -1,0 +1,135 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+
+/* §10.5's P-time chain through the real board (docs/adr/0073).
+ *
+ * OPS files from a DD1801 seed carrying item 13's departure time; the P-time
+ * reads from the plan; a controller amends Block 6 and it reads CONTROLLER;
+ * clearing the amendment falls back to the plan again. The chain writes
+ * nothing, so the Mutation log holds only what the controller did.
+ *
+ * The mission clock is injected on a date years from the wall clock (T7, H11).
+ */
+
+const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'efsp-time-chains-scn-'));
+for (const [k, v] of Object.entries({
+  CRCSYNC_EFSP_FACILITY_CONFIG_PATH: 'incirlik.json',
+  CRCSYNC_EFSP_FACILITY_CONFIG_PATH_CENTER: 'center.json',
+  CRCSYNC_EFSP_FACILITY_CONFIG_PATH_TACTICAL: 'tactical.json',
+  CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH: 'board.json',
+  CRCSYNC_EFSP_MUTATION_LOG_PATH: 'mutations.jsonl',
+  CRCSYNC_EFSP_AIRSPACES_PATH: 'airspaces.json',
+  CRCSYNC_EFSP_STEREO_ROUTES_PATH: 'stereo.json',
+})) process.env[k] = path.join(tmpDir, v);
+fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, '{}');
+fs.writeFileSync(process.env.CRCSYNC_EFSP_STEREO_ROUTES_PATH, '[]');
+
+const { createEfsp } = await import('../src/efsp/index.js');
+const { toFlightDataFiledSeed } = await import('../src/efsp/flight-plan-lookup.js');
+const { resolveTimeChain } = await import('../src/efsp/time-chains.js');
+const { crew, act, mustAct, jumpTo, DEPARTURE_FLIGHT_DATA, steppedWallClock, lapseNlaGuard } = await import('./helpers/efsp-scenario.mjs');
+
+const ATC = { OPS: 'INCIRLIK', CD: 'INCIRLIK', GC: 'INCIRLIK', LC: 'INCIRLIK', AP: 'INCIRLIK' };
+const zulu = (hh, mm) => Date.UTC(2016, 5, 21, hh, mm);
+
+test('SCENARIO T1 OPS files from a DD1801; P-time falls back to the plan, a controller amendment wins, clearing it resumes the chain', () => {
+  const clock = { now: () => zulu(13, 50), source: 'MISSION' };
+  const efsp = createEfsp({ clock });
+  const c = crew(efsp, ATC);
+
+  // What the client spreads into op.flightData from the lookup (efsp-panel.js `...seed`).
+  const seed = toFlightDataFiledSeed({ route: 'DCT', levelValue: '250', depAerodrome: 'LTAG', destAerodrome: 'LTAG', depTime: '1430' });
+  const strip = mustAct(efsp, c.OPS, 'OPS', null, {
+    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE',
+    flightData: { ...DEPARTURE_FLIGHT_DATA, ...seed, callsign: 'CHAIN1' },
+  });
+  const flightData = () => efsp.flightDataStore.getFlightData(strip.flightDataId);
+  assert.equal(flightData().timeInputs.flightPlanDepartureUtc, zulu(14, 30));
+  assert.deepEqual(pick(resolveTimeChain('departure', flightData())), { valueUtc: zulu(14, 30), source: 'FLIGHT_PLAN' });
+  assert.deepEqual(pick(resolveTimeChain('takeoff', flightData())), { valueUtc: zulu(14, 30), source: 'EST_OFF_BLOCK' });
+
+  // "We're delayed, new P-time 1450."
+  let s = efsp.boardStoreFor('INCIRLIK').getStrip(strip.stripId);
+  s = mustAct(efsp, c.OPS, 'OPS', s, { kind: 'SetBlock', blockId: '6', value: '1450' });
+  assert.deepEqual(pick(resolveTimeChain('departure', flightData())), { valueUtc: zulu(14, 50), source: 'CONTROLLER' });
+  assert.equal(resolveTimeChain('offBlock', flightData()).valueUtc, zulu(14, 50), 'the estimates follow the amendment');
+
+  // Cleared: back to the plan, not lost.
+  s = mustAct(efsp, c.OPS, 'OPS', s, { kind: 'SetBlock', blockId: '6', value: '' });
+  assert.equal(flightData().filed.proposedDepartureTimeUtc, null);
+  assert.deepEqual(pick(resolveTimeChain('departure', flightData())), { valueUtc: zulu(14, 30), source: 'FLIGHT_PLAN' });
+
+  // The estimates were never written (T5), and the log shows only the controller.
+  assert.equal(flightData().assigned.taxiTimeUtc, null);
+  assert.equal(flightData().assigned.takeoffTimeUtc, null);
+  const ours = efsp.mutationLog.readAll().filter(e => e.stripId === strip.stripId && e.ok !== false && !e.reason);
+  assert.deepEqual(ours.map(e => [e.op, e.actingPositionId]), [['CreateStrip', 'OPS'], ['SetBlock', 'OPS'], ['SetBlock', 'OPS']]);
+});
+
+test('SCENARIO T2 flight data carrying the ATO\'s departure time and no plan resolves to ATO (hand-built, contract C1)', () => {
+  const T = zulu(13, 10);
+  const flightData = { filed: { proposedDepartureTimeUtc: null }, assigned: {}, timeInputs: { flightPlanDepartureUtc: null }, ato: { departure: { timeUtc: T } } };
+  assert.deepEqual(pick(resolveTimeChain('departure', flightData)), { valueUtc: T, source: 'ATO' });
+  assert.equal(resolveTimeChain('takeoff', flightData).estimated, true);
+});
+
+test('SCENARIO T3 the takeoff is stamped by the state change, wins over the off-block estimate, loses to a typed time (docs/adr/0076)', async () => {
+  let now = zulu(14, 20);
+  const clock = { now: () => now, source: 'MISSION' };
+  const wall = steppedWallClock();
+  const efsp = createEfsp({ clock, wallClock: wall });
+  const c = crew(efsp, ATC);
+  const seed = toFlightDataFiledSeed({ route: 'DCT', levelValue: '250', depAerodrome: 'LTAG', destAerodrome: 'LTAG', depTime: '1430' });
+  let strip = mustAct(efsp, c.OPS, 'OPS', null, {
+    kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE', flightData: { ...DEPARTURE_FLIGHT_DATA, ...seed, callsign: 'STAMP1', departureRunway: '05' },
+  });
+  const flightData = () => efsp.flightDataStore.getFlightData(strip.flightDataId);
+  assert.equal(resolveTimeChain('takeoff', flightData()).source, 'EST_OFF_BLOCK');
+
+  strip = jumpTo(efsp, c.OPS, 'OPS', strip, 'RUNWAY_QUEUE');
+  strip = mustAct(efsp, c.OPS, 'OPS', strip, { kind: 'TransferStrip', toPositionId: 'LC', bayId: 'lc-runway-queue', rackId: 'rwy-05' });
+  strip = jumpTo(efsp, c.LC, 'LC', strip, 'LUAW');
+  assert.equal(flightData().timeInputs.takeoffStampedUtc, null, 'lining up is not taking off');
+
+  // LC presses Airborne: the NLA.
+  now = zulu(14, 33);
+  await lapseNlaGuard(wall); // the double-tap guard
+  const ack = act(efsp, c.LC, 'LC', strip, { kind: 'InvokeNla' });
+  assert.equal(ack.ok, true, JSON.stringify(ack));
+  assert.equal(ack.strip.state, 'DEPARTED');
+  assert.equal(ack.flightData.timeInputs.takeoffStampedUtc, zulu(14, 33), 'the ack carries the FDR, so it is broadcast');
+  assert.deepEqual(pick(resolveTimeChain('takeoff', flightData())), { valueUtc: zulu(14, 33), source: 'STATE_CHANGE' });
+  assert.equal(resolveTimeChain('takeoff', flightData()).estimated, false);
+  assert.equal(flightData().assigned.takeoffTimeUtc, null, 'never written into the controller\'s own field');
+  strip = efsp.boardStoreFor('INCIRLIK').getStrip(strip.stripId);
+
+  // Undo within its window: the takeoff did not happen.
+  const undone = act(efsp, c.LC, 'LC', strip, { kind: 'Undo', actionId: ack.undoable.actionId });
+  assert.equal(undone.ok, true, JSON.stringify(undone));
+  assert.equal(flightData().timeInputs.takeoffStampedUtc, null);
+  assert.equal(resolveTimeChain('takeoff', flightData()).source, 'EST_OFF_BLOCK');
+  strip = efsp.boardStoreFor('INCIRLIK').getStrip(strip.stripId);
+
+  // Again, later; a later state change does not restamp it.
+  now = zulu(14, 35);
+  strip = jumpTo(efsp, c.LC, 'LC', strip, 'DEPARTED');
+  assert.equal(flightData().timeInputs.takeoffStampedUtc, zulu(14, 35));
+  now = zulu(14, 40);
+  strip = mustAct(efsp, c.LC, 'LC', strip, { kind: 'TransferStrip', toPositionId: 'AP', bayId: 'ap-departures', rackId: 'main' });
+  assert.equal(flightData().timeInputs.takeoffStampedUtc, zulu(14, 35), 'handing off does not restamp');
+
+  // A controller's typed time wins; clearing it resumes the stamp.
+  strip = mustAct(efsp, c.AP, 'AP', strip, { kind: 'SetBlock', blockId: '18', value: '1436' });
+  assert.deepEqual(pick(resolveTimeChain('takeoff', flightData())), { valueUtc: zulu(14, 36), source: 'CONTROLLER' });
+  strip = mustAct(efsp, c.AP, 'AP', strip, { kind: 'SetBlock', blockId: '18', value: '' });
+  assert.equal(resolveTimeChain('takeoff', flightData()).source, 'STATE_CHANGE');
+
+  // A drop after takeoff keeps it.
+  mustAct(efsp, c.AP, 'AP', strip, { kind: 'DropStrip' });
+  assert.equal(flightData().timeInputs.takeoffStampedUtc, zulu(14, 35));
+});
+
+function pick(r) { return { valueUtc: r.valueUtc, source: r.source }; }

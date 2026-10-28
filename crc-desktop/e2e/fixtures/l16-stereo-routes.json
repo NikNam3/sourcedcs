@@ -1,0 +1,4 @@
+[
+  { "name": "PACK1", "description": "north climb-out", "departureAirport": "LTAG", "destinationAirport": "LTAG", "route": "LTAG DCT ALPHA DCT LTAG", "requestedAltitude": "250" },
+  { "name": "PACK2", "description": "south climb-out", "departureAirport": "LTAG", "destinationAirport": "LTAG", "route": "LTAG DCT BRAVO DCT LTAG", "requestedAltitude": "180" }
+]

@@ -1,0 +1,77 @@
+'use strict';
+
+const { correlationDelta, liveStamped } = require('../frames');
+const readScope = require('../../read-scope');
+
+/**
+ * Correlation ops (BindTrack/UnbindTrack) — a THIRD dispatch path, for the
+ * same reason the airspace family (airspace.js) is a second one: this targets a flight data.
+ * There is no stripId, no Strip baseRev and no Strip-owner check, because no
+ * Position owns a flight data.
+ *
+ * Guide §6.6 rule 1's top rung is "explicit controller binding", and this is
+ * its wire surface. It is the way out of every ambiguity the sweep reports,
+ * and the only way to correlate an aircraft with its transponder off and a
+ * callsign nothing matches.
+ */
+module.exports = {
+  type: 'efsp-correlation-mutation',
+  ackType: 'efsp-correlation-ack',
+  deltaType: 'efsp-correlation-delta',
+  replayKind: 'correlation',
+  snapshotKey: 'correlations',
+  subject: (msg) => ({ flightDataId: msg.flightDataId }),
+  store: (ctx) => ctx.correlationStore,
+  noStore: 'no correlation store',
+
+  // The same session binding the other two dispatch paths carry
+  // (docs/adr/0029), for the same reason: actingPositionId arrives as an
+  // untrusted client claim. This is now the THIRD place that check appears,
+  // and a new dispatch path is exactly where it gets forgotten and the hole
+  // reopens — the airspace family (airspace.js) says so, and it was right
+  // twice.
+  //
+  // "Primary somewhere" is the right gate here rather than at a particular
+  // Facility: no Position owns a flight data, and a correlation is not a clearance.
+  // Any Primary may bind, whichever Facility holds a Strip for that flight —
+  // the flight data is already shared theater-wide (docs/adr/0013), and refusing would
+  // mean a controller who can see the contact cannot tell the system what they
+  // see. The binding records boundBy/boundPositionId, so the audit says who.
+  gate: 'primary-somewhere',
+  notHolding: (msg) => `you are not Primary at ${msg.actingPositionId} — select it before binding a contact`,
+
+  // Refused by class, not by table: a range Position is the using agency, has
+  // no flights to identify (§4.1 rule 2) and, under docs/adr/0042, no scope on
+  // which to have seen anything.
+  permit: (ctx, msg) => ctx.permission.canCorrelate(msg.actingPositionId) ? null
+    : { reason: 'PERMISSION_DENIED', detail: `${msg.actingPositionId} works no flights, so it identifies no contacts` },
+
+  apply: (ctx, session, msg) => ctx.correlationStore.apply(
+    { clientMutationId: msg.clientMutationId, flightDataId: msg.flightDataId, baseRev: msg.baseRev, op: msg.op },
+    msg.actingPositionId, session.controllerId,
+  ),
+  rememberId: (result, msg) => msg.flightDataId,
+  fromCached: (ctx, cached) => ({ ...cached, correlation: ctx.correlationStore.getCorrelation(cached.id) }),
+  ack: (result, ctx) => ({
+    correlation: result.correlation, reason: result.reason, detail: result.detail,
+    correlationSeq: ctx.correlationStore.currentSeq, correlationEpoch: ctx.correlationStore.epoch,
+  }),
+
+  // Its own delta type with its own seq, like efsp-airspace-delta and
+  // deliberately NOT a section of efsp-board-delta: a correlation is not a
+  // Strip and rides no Board's sequence.
+  broadcasts: (result, ctx) => ({
+    primary: correlationDelta(ctx.correlationStore, [result.correlation]),
+  }),
+
+  // Correlation records, one per live flight data and sent whole for the same reason
+  // flightDataList are: cheap enough at this scale that a second ring buffer would
+  // cost more than it saved (_handleResync's own stated reasoning). There is
+  // deliberately no correlation branch in efsp-resync either — a reconnecting
+  // client gets these in its snapshot and a fresh reconcile delta within a
+  // second, so §5.6's "two paths only" holds.
+  snapshot: (ctx) => ctx.correlationStore ? ctx.correlationStore.getAll() : [],
+
+  /** What an owned session is sent of an efsp-correlation-delta (docs/adr/0080). */
+  filter: (ctx, scope, msg) => readScope.filterCorrelationDelta(msg, scope, readScope.visibleFlightDataIdsOf(scope, liveStamped(ctx))),
+};

@@ -1,0 +1,312 @@
+{
+  "_comment": "What each sensor can know. THE single home for these numbers (docs/adr/0042, 0059). `radar`: DCS unit type -> airborne radar; angleFromNose is the total scan arc in degrees centred on the nose (360 = a full rotating dish), rangeNm the detection range against a fighter-size target, sweepMs one full rotation or scan cycle, and an optional `caps` ({height, ssr, mode4}; mode4 = carries a Mode 4/5 interrogator, docs/adr/0066) overrides the defaults for its kind (`defaultCaps` below). `shipRadarDefault`: the surface-search radar of a ship type with no `carrierRadar` entry. `shipRadarHeightM`: the assumed antenna height above a ship's deck altitude, metres (DCS reports none; terrain masking needs one). `fieldRadar`: the ground-based radars built per airfield (`airport` surveillance, `approach`) and per carrier (`carrierApproach`): rangeNm, sweepMs and heightM, the assumed antenna height above the airfield elevation or the ship's altitude (DCS reports no tower height). All required: a missing or invalid key stops start-up naming this file and the key. `carrierRadar`: ship type -> surface/air search radar. `datalink`: which types are network participants (PPLI) and how often they report. `presentation`: which scheme (ATC or TACTICAL) draws a contact that a radar of each kind sees (airport, approach, carrierApproach, awacs, fighter, carrier); [SOURCE-DEFINED], docs/adr/0088. `transponder`: `syntheticFor` says which coalitions' AI aircraft squawk a synthetic Mode 3/C code; `mode4For` says which coalitions' AI aircraft and ships answer a Mode 4/5 interrogation (only `own` can ever be honoured: a valid reply needs our crypto keys); `syntheticBlock` is the Mode 3/A code range crc-sync mints for AI aircraft, 4-digit octal strings, first to last inclusive, [SOURCE-DEFINED] (docs/adr/0059): the EFSP never allocates one or takes one from an ATO (its refusal and warning texts quote it), but a controller may type one into a Strip to correlate an AI flight (docs/adr/0142). Every figure is [SOURCE-DEFINED] — DCS publishes none of it, and none of it should be presented as a real system's performance.",
+  "presentation": {
+    "airport": "ATC",
+    "approach": "ATC",
+    "carrierApproach": "ATC",
+    "awacs": "TACTICAL",
+    "fighter": "TACTICAL",
+    "carrier": "TACTICAL"
+  },
+  "defaultCaps": {
+    "airport":         { "height": false, "ssr": true, "mode4": true },
+    "approach":        { "height": false, "ssr": true, "mode4": true },
+    "awacs":           { "height": true,  "ssr": true, "mode4": true },
+    "fighter":         { "height": true,  "ssr": true, "mode4": true },
+    "carrier":         { "height": true,  "ssr": true, "mode4": true },
+    "carrierApproach": { "height": false, "ssr": true, "mode4": true }
+  },
+  "shipRadarDefault": { "rangeNm": 40, "sweepMs": 5000 },
+  "shipRadarHeightM": 40,
+  "fieldRadar": {
+    "airport":         { "rangeNm": 40, "sweepMs": 2000, "heightM": 15 },
+    "approach":        { "rangeNm": 80, "sweepMs": 3000, "heightM": 15 },
+    "carrierApproach": { "rangeNm": 50, "sweepMs": 4000, "heightM": 45 }
+  },
+  "radar": {
+    "E-3A": {
+      "angleFromNose": 360,
+      "rangeNm": 216,
+      "sweepMs": 10000
+    },
+    "A-50": {
+      "angleFromNose": 360,
+      "rangeNm": 200,
+      "sweepMs": 10000
+    },
+    "E-2D": {
+      "angleFromNose": 360,
+      "rangeNm": 335,
+      "sweepMs": 10000
+    },
+    "KJ-2000": {
+      "angleFromNose": 360,
+      "rangeNm": 200,
+      "sweepMs": 10000
+    },
+    "F-14A-135-GR": {
+      "angleFromNose": 120,
+      "rangeNm": 100,
+      "sweepMs": 4000
+    },
+    "F-14A": {
+      "angleFromNose": 120,
+      "rangeNm": 100,
+      "sweepMs": 4000
+    },
+    "F-14B": {
+      "angleFromNose": 120,
+      "rangeNm": 100,
+      "sweepMs": 4000
+    },
+    "F-15C": {
+      "angleFromNose": 120,
+      "rangeNm": 80,
+      "sweepMs": 3500
+    },
+    "F-15ESE": {
+      "angleFromNose": 120,
+      "rangeNm": 80,
+      "sweepMs": 3500
+    },
+    "F-16C_50": {
+      "angleFromNose": 120,
+      "rangeNm": 37,
+      "sweepMs": 3000
+    },
+    "FA-18C_hornet": {
+      "angleFromNose": 120,
+      "rangeNm": 70,
+      "sweepMs": 3000
+    },
+    "F-4E-45MC": {
+      "angleFromNose": 120,
+      "rangeNm": 45,
+      "sweepMs": 3000
+    },
+    "F-35": {
+      "angleFromNose": 120,
+      "rangeNm": 80,
+      "sweepMs": 1000
+    },
+    "M-2000C": {
+      "angleFromNose": 100,
+      "rangeNm": 40,
+      "sweepMs": 3000
+    },
+    "Mirage 2000-5": {
+      "angleFromNose": 100,
+      "rangeNm": 50,
+      "sweepMs": 3000
+    },
+    "Mirage-F1CE": {
+      "angleFromNose": 100,
+      "rangeNm": 35,
+      "sweepMs": 3500
+    },
+    "Mirage-F1EE": {
+      "angleFromNose": 100,
+      "rangeNm": 35,
+      "sweepMs": 3500
+    },
+    "Tornado": {
+      "angleFromNose": 100,
+      "rangeNm": 35,
+      "sweepMs": 3500
+    },
+    "Tornado GR4": {
+      "angleFromNose": 100,
+      "rangeNm": 35,
+      "sweepMs": 3500
+    },
+    "JF-17": {
+      "angleFromNose": 120,
+      "rangeNm": 40,
+      "sweepMs": 3000
+    },
+    "AJS37": {
+      "angleFromNose": 60,
+      "rangeNm": 30,
+      "sweepMs": 3000
+    },
+    "AV8BNA": {
+      "angleFromNose": 90,
+      "rangeNm": 20,
+      "sweepMs": 3000
+    },
+    "Su-27": {
+      "angleFromNose": 120,
+      "rangeNm": 80,
+      "sweepMs": 4000
+    },
+    "Su-30": {
+      "angleFromNose": 120,
+      "rangeNm": 100,
+      "sweepMs": 4000
+    },
+    "Su-30MKA": {
+      "angleFromNose": 120,
+      "rangeNm": 100,
+      "sweepMs": 4000
+    },
+    "Su-30MK2": {
+      "angleFromNose": 120,
+      "rangeNm": 100,
+      "sweepMs": 4000
+    },
+    "Su-33": {
+      "angleFromNose": 120,
+      "rangeNm": 80,
+      "sweepMs": 4000
+    },
+    "Su-35": {
+      "angleFromNose": 120,
+      "rangeNm": 120,
+      "sweepMs": 4000
+    },
+    "Su-57": {
+      "angleFromNose": 120,
+      "rangeNm": 120,
+      "sweepMs": 3500
+    },
+    "MiG-29A": {
+      "angleFromNose": 120,
+      "rangeNm": 50,
+      "sweepMs": 3500
+    },
+    "MiG-29G": {
+      "angleFromNose": 120,
+      "rangeNm": 50,
+      "sweepMs": 3500
+    },
+    "MiG-29S": {
+      "angleFromNose": 120,
+      "rangeNm": 60,
+      "sweepMs": 3500
+    },
+    "MiG-31": {
+      "angleFromNose": 120,
+      "rangeNm": 120,
+      "sweepMs": 5000
+    },
+    "MiG-25PD": {
+      "angleFromNose": 60,
+      "rangeNm": 60,
+      "sweepMs": 5000
+    },
+    "J-11A": {
+      "angleFromNose": 120,
+      "rangeNm": 80,
+      "sweepMs": 4000
+    },
+    "F-86F Sabre": {
+      "angleFromNose": 30,
+      "rangeNm": 10,
+      "sweepMs": 2000
+    },
+    "MiG-15bis": {
+      "angleFromNose": 30,
+      "rangeNm": 8,
+      "sweepMs": 2000
+    },
+    "MiG-21Bis": {
+      "angleFromNose": 60,
+      "rangeNm": 20,
+      "sweepMs": 3000
+    },
+    "MiG-23MLD": {
+      "angleFromNose": 120,
+      "rangeNm": 40,
+      "sweepMs": 3500
+    },
+    "F-5E-3": {
+      "angleFromNose": 60,
+      "rangeNm": 20,
+      "sweepMs": 3000
+    },
+    "P-8A": {
+      "angleFromNose": 180,
+      "rangeNm": 80,
+      "sweepMs": 6000
+    },
+    "Tu-142": {
+      "angleFromNose": 180,
+      "rangeNm": 80,
+      "sweepMs": 6000
+    },
+    "S-3B": {
+      "angleFromNose": 180,
+      "rangeNm": 60,
+      "sweepMs": 5000
+    }
+  },
+  "carrierRadar": {
+    "CVN_74": {
+      "rangeNm": 215,
+      "sweepMs": 4000
+    },
+    "CVN_75": {
+      "rangeNm": 215,
+      "sweepMs": 4000
+    },
+    "CVN_71": {
+      "rangeNm": 215,
+      "sweepMs": 4000
+    },
+    "CVN_72": {
+      "rangeNm": 215,
+      "sweepMs": 4000
+    },
+    "CVN_73": {
+      "rangeNm": 215,
+      "sweepMs": 4000
+    },
+    "CV_59": {
+      "rangeNm": 100,
+      "sweepMs": 5000
+    },
+    "LHA_Tarawa": {
+      "rangeNm": 100,
+      "sweepMs": 5000
+    },
+    "Kuznetsov": {
+      "rangeNm": 100,
+      "sweepMs": 5000
+    }
+  },
+  "datalink": {
+    "pliPeriodMs": 4000,
+    "lockPollMs": 2000,
+    "participants": [
+      "E-3A",
+      "E-2D",
+      "F-14A-135-GR",
+      "F-14B",
+      "F-15C",
+      "F-15ESE",
+      "F-16C_50",
+      "FA-18C_hornet",
+      "AV8BNA",
+      "A-10C_2",
+      "F-35",
+      "M-2000C",
+      "JF-17",
+      "AH-64D_BLK_II",
+      "CVN_71",
+      "CVN_72",
+      "CVN_73",
+      "CVN_74",
+      "CVN_75"
+    ]
+  },
+  "transponder": {
+    "syntheticFor": [
+      "own",
+      "neutral"
+    ],
+    "mode4For": [
+      "own"
+    ],
+    "syntheticBlock": { "first": "6000", "last": "6777" }
+  }
+}

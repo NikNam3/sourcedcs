@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, dialog, ipcMain } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, shell } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const { spawn } = require('child_process');
 const http = require('http');
@@ -8,7 +8,8 @@ const path = require('path');
 const fs   = require('fs');
 
 const config = require('./config.json');
-const { computePythonPkgDir, computeRuntimeCwd, ensureLxsrsVenv } = require('./lxsrs-setup');
+const { computePythonPkgDir, computeRuntimeCwd, ensureLxsrsVenv, lxsrsArgs } = require('./lxsrs-setup');
+const { createExternalLinkGate, isCasdoorLoginUrl, isLocalAppUrl, CASDOOR_POPUP_WEB_PREFERENCES } = require('./external-link');
 const { writePendingPatchNotes, readAndClearPendingPatchNotes, readLastPatchNotes } = require('./patch-notes');
 
 const IS_LINUX = process.platform === 'linux';
@@ -33,19 +34,10 @@ async function spawnLxsrs() {
     const venvPython = await ensureLxsrsVenv(venvDir, line => console.log('[lxsrs-setup]', line));
     if (!venvPython) return null;
 
-    const freqArgs = config.freqs.flatMap(f => ['--freq', f]);
     const pythonPkgDir = computePythonPkgDir(app.isPackaged, process.resourcesPath, __dirname);
     const runtimeCwd   = computeRuntimeCwd(app.isPackaged, app.getPath('userData'), __dirname);
 
-    const proc = spawn(venvPython, [
-        '-m', 'lxsrs_v2',
-        ...freqArgs,
-        '--tx-freq',  config.txFreq,
-        '--host',     config.srsHost,
-        '--port',     String(config.srsPort),
-        '--play-audio',
-        '--api-port', String(config.srsApiPort),
-    ], {
+    const proc = spawn(venvPython, lxsrsArgs(config), {
         cwd: runtimeCwd,
         env: {
             ...process.env,
@@ -85,14 +77,13 @@ app.on('ready', async () => {
     // DCS_GRPC_*/SRS_HOST/SRS_PORT are gone — crc-sync is now the sole
     // gRPC/SRS-transponder client (see crc-sync/server.js); this local
     // server only proxies a handful of on-demand RPCs to it.
-    process.env.CRC_SYNC_URL       = config.crcSyncUrl || 'wss://asacs.sourcedcs.page';
+    process.env.CRCSYNC_URL       = config.crcSyncUrl || 'wss://asacs.sourcedcs.page';
     process.env.CASDOOR_CLIENT_ID  = config.casdoorClientId || '';
     process.env.CASDOOR_ENDPOINT   = config.casdoorEndpoint || '';
     process.env.SRS_RADIO_API_PORT = String(config.srsApiPort);
     process.env.WS_PORT            = String(config.wsPort);
-    process.env.SOURCEDCS_WEB_URL  = config.sourcedcsWebUrl || '';
 
-    require('./app/server.js');
+    const localServer = require('./app/server.js');
 
     win = new BrowserWindow({
         width:  1400,
@@ -101,6 +92,8 @@ app.on('ready', async () => {
         autoHideMenuBar: true,
         webPreferences: {
             contextIsolation: true,
+            nodeIntegration: false,
+            sandbox: true,
             preload: path.join(__dirname, 'app', 'preload.js'),
         },
     });
@@ -118,15 +111,28 @@ app.on('ready', async () => {
     // calls window.open on the Casdoor authorize URL) — everything else stays
     // blocked, matching Electron's secure-by-default posture.
     win.webContents.setWindowOpenHandler(({ url }) => {
-        if (process.env.CASDOOR_ENDPOINT && url.startsWith(process.env.CASDOOR_ENDPOINT + '/login/oauth/authorize')) {
-            return { action: 'allow', overrideBrowserWindowOptions: { width: 480, height: 640, parent: win, modal: true } };
+        // The endpoint is read live from the local server: the connection widget changes it at runtime.
+        if (isCasdoorLoginUrl(url, localServer.getSyncConfig().casdoorEndpoint)) {
+            return { action: 'allow', overrideBrowserWindowOptions: { width: 480, height: 640, parent: win, modal: true, webPreferences: { ...CASDOOR_POPUP_WEB_PREFERENCES } } };
         }
+        // The one link that leaves the app (S-2PA0): the airspace booking page, and only on the origin crc-sync named.
+        if (externalLinks.canOpen(url)) shell.openExternal(url);
         return { action: 'deny' };
+    });
+
+    // The main window never leaves the local server (a redirect or a link would otherwise load a remote page next to the
+    // preload bridge); anything else that wants to navigate is dropped, and external pages open only via the gate above.
+    win.webContents.on('will-navigate', (event, url) => {
+        if (!isLocalAppUrl(url, config.wsPort)) event.preventDefault();
+    });
+    win.webContents.on('will-redirect', (event, url) => {
+        if (!isLocalAppUrl(url, config.wsPort)) event.preventDefault();
     });
 
     let lastUpdateStatus = { state: 'idle' };
     function sendUpdateStatus(status) {
         lastUpdateStatus = status;
+        updateInFlight = status.state === 'checking' || status.state === 'downloading';
         if (win && !win.isDestroyed()) win.webContents.send('update-status', status);
     }
 
@@ -208,6 +214,27 @@ app.on('ready', async () => {
 // Renderer's topbar update dot calls this directly when clicked while in
 // the 'ready' state — the click itself is the restart confirmation.
 ipcMain.on('update-restart-now', () => autoUpdater.quitAndInstall());
+
+// crc-sync refused this client's wire protocol and the "Update required" overlay asked for the release now (crc-sync
+// docs/adr/0103). Idempotent while a check or download is running; unpackaged there is no updater to ask. The outcome
+// reaches the overlay through the existing 'update-status' stream, so this only reports whether it started something.
+let updateInFlight = false;
+ipcMain.handle('update-check-now', async () => {
+    if (!app.isPackaged) return { state: 'idle' };
+    if (updateInFlight) return { state: 'checking' };
+    try {
+        await autoUpdater.checkForUpdates();
+    } catch (err) {
+        console.error('[autoupdate] check failed:', err.message);
+        return { state: 'idle' };
+    }
+    return { state: updateInFlight ? 'checking' : 'idle' };
+});
+// The renderer reports the booking page crc-sync sent (efsp-airspace-calendar.bookingUrl); only that origin may open.
+const externalLinks = createExternalLinkGate();
+ipcMain.on('external-link-allow', (_event, bookingUrl) => { externalLinks.allow(bookingUrl); });
+ipcMain.on('external-link-allow-download', (_event, downloadUrl) => { externalLinks.allowDownload(downloadUrl); });
+ipcMain.handle('get-app-version', () => app.getVersion());
 
 // Backs the "what's new" button in the topbar — returns { version, notes }
 // for the most recent update, or null if none has ever landed on this

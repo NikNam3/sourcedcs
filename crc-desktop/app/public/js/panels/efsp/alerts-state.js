@@ -1,0 +1,204 @@
+'use strict';
+
+
+// What the monitors say is wrong right now: obligations, conformance, surveillance hints, TOFI regime and conflicts, all sent whole by efsp-alerts (DESK-SPLIT, split out of efsp-state.js).
+
+// §4.6.1's timed forwarding obligations (docs/adr/0021, 0067) — stripId ->
+// every obligation due on it right now. Full state from efsp-alerts, like
+// conformance: one that is no longer due is simply not in the next message.
+const efspObligations = new Map(); // stripId -> [{ facilityId, stripId, obligationType, severity, dueAt, since }]
+
+// docs/adr/0058 — what crc-sync's conformance and conflict monitors say is
+// WRONG right now. Sent whole on every change (efsp-alerts), so a flight that
+// conforms again simply is not in the next message.
+const efspConformance = new Map(); // flightDataId -> [{ kind, assigned, actual?, altFt?, fpm?, deviationFt?, block?, tanker?, nm?, limitNm?, since }]
+
+// docs/adr/0076 (crc-sync) — surveillance informs, the controller advances: the
+// suggestion chip and the staleness indication, stripId -> hints. Full state in
+// efsp-alerts, so one that no longer applies is simply not in the next message.
+const efspSurveillanceHints = new Map(); // stripId -> [{ kind: 'AIRBORNE_ADVANCE'|'STALE', stripState, toState?, since, afterSec? }]
+
+const efspTofiRegime = new Map(); // flightDataId -> { kind: 'REGIME_OUTSIDE_AIRSPACE'|'AWAITING_ENTRY_UNKNOWN', since } (crc-sync docs/adr/0102)
+
+let efspConflicts = [];            // [{ id, kind: 'CA'|'MCI', a, b, aCallsign, bCallsign, intruder?, timeToCpaSec, minNm, vertFt, aAt, bAt }]
+
+// crc-sync docs/adr/0119: an aircraft inside an ACTIVE airspace it may not be in. Only this session's (the airspace's
+// controlling Position, or the Position working the flight); sent whole, so one that retracted is simply not there.
+let efspAirspaceEntry = [];        // [{ id, kind: 'AIRSPACE_ENTRY', trackId, flightDataId|null, callsign, airspaceId, airspaceName, airspaceType, since }]
+
+// crc-sync docs/adr/0124 §1 (H140 LT-AQ1 b): the airspace card's flight list, only for the airspaces this session may
+// approve entry into (the using agency, the controlling Position). Sent whole, like the rest.
+let efspAirspaceTraffic = [];      // [{ airspaceId, flights: [{ flightDataId, callsign, inside, filed, approved, alerting, strips: [{ facilityId, stripId, positionId }] }] }]
+
+// crc-sync docs/adr/0134 (H155 item 4): the Strips this session holds whose flight is airborne inside the Strip's approved
+// airspace, whatever its state. The server's geometry; the client has no containment test. Absent = not inside (grey).
+const efspAirspaceInside = new Set(); // 'facilityId:stripId:airspaceId'
+
+// crc-sync docs/adr/0136 (H156 MTB-Q3): the Strips this session holds whose flight's filed route crosses an ACTIVE MOA,
+// warning or restricted area with no transit and no approved entry for it. The server's geometry; absent = nothing to show.
+const efspAirspaceCoordinate = new Map(); // 'facilityId:stripId' -> [airspaceId]
+
+/**
+ * The one obligation a Strip's badge shows: OVERDUE before WARNING, then the
+ * earliest dueAt. null when nothing is due. See getEfspObligations for all.
+ */
+export function getEfspObligation(stripId) {
+  const list = efspObligations.get(stripId);
+  if (!list || !list.length) return null;
+  return list.slice().sort((a, b) =>
+    ((b.severity === 'OVERDUE') - (a.severity === 'OVERDUE')) || (a.dueAt - b.dueAt))[0];
+}
+
+/** Every obligation due on this Strip right now; [] when none. */
+export function getEfspObligations(stripId) { return efspObligations.get(stripId) || []; }
+
+/** Applies an efsp-alerts message: the complete current conformance, conflict and obligation picture. */
+export function applyEfspAlerts(msg) {
+  efspConformance.clear();
+  for (const r of (msg && msg.conformance) || []) if (r.alerts && r.alerts.length) efspConformance.set(r.flightDataId, r.alerts);
+  efspConflicts = (msg && msg.conflictAlert) || [];
+  efspAirspaceEntry = (msg && msg.airspaceEntry) || [];
+  efspAirspaceTraffic = (msg && msg.airspaceTraffic) || [];
+  efspAirspaceInside.clear();
+  for (const x of (msg && msg.airspaceInside) || []) efspAirspaceInside.add(`${x.facilityId}:${x.stripId}:${x.airspaceId}`);
+  efspAirspaceCoordinate.clear();
+  for (const x of (msg && msg.airspaceCoordinate) || []) {
+    const k = `${x.facilityId}:${x.stripId}`;
+    if (!efspAirspaceCoordinate.has(k)) efspAirspaceCoordinate.set(k, []);
+    efspAirspaceCoordinate.get(k).push(x.airspaceId);
+  }
+  efspTofiRegime.clear();
+  for (const r of (msg && msg.tofiRegime) || []) efspTofiRegime.set(r.flightDataId, r);
+  efspSurveillanceHints.clear();
+  for (const h of (msg && msg.surveillance) || []) {
+    if (!efspSurveillanceHints.has(h.stripId)) efspSurveillanceHints.set(h.stripId, []);
+    efspSurveillanceHints.get(h.stripId).push(h);
+  }
+  efspObligations.clear();
+  for (const o of (msg && msg.obligations) || []) {
+    if (!efspObligations.has(o.stripId)) efspObligations.set(o.stripId, []);
+    efspObligations.get(o.stripId).push(o);
+  }
+}
+
+/**
+ * The surveillance hints standing on this Strip right now (docs/adr/0076).
+ * A hint written against another state of the Strip is stale itself — the
+ * Strip moved since the server looked — and is not returned.
+ */
+export function surveillanceHintsForStrip(strip) {
+  if (!strip) return [];
+  return (efspSurveillanceHints.get(strip.stripId) || []).filter(h => h.stripState === strip.state);
+}
+
+/** What is wrong with this flight's conformance right now; [] when it conforms. */
+export function conformanceAlertsForFlightData(flightDataId) { return efspConformance.get(flightDataId) || []; }
+
+/** The TOFI regime alert standing on this flight ({ kind, since }), or null (crc-sync docs/adr/0102). */
+export function tofiRegimeAlertForFlightData(flightDataId) { return efspTofiRegime.get(flightDataId) || null; }
+
+/**
+ * A refueling-block alert (crc-sync's docs/adr/0118) as a short tag and a sentence: the receiver left the block around the
+ * tanker (±1,000 ft, within 3 NM) or is moving away from it. Null for any other alert.
+ */
+export function refuelingAlertText(a) {
+  if (!a || a.tanker === undefined) return null;
+  if (a.kind === 'TANKER_DISTANCE') {
+    return { text: `AR ${a.nm} NM`, reason: `${a.nm} NM from the tanker ${a.tanker}: outside the ${a.limitNm} NM refueling block.` };
+  }
+  const below = a.block && a.altFt < a.block.lowFt;
+  const off = a.block ? Math.abs(a.altFt - (below ? a.block.lowFt : a.block.highFt)) : Math.abs(a.deviationFt || 0);
+  const where = `${off.toLocaleString('en-US')} ft ${below ? 'below' : 'above'} the refueling block with ${a.tanker}`;
+  if (a.kind === 'WRONG_WAY') {
+    return { text: `AR ${below ? '↓' : '↑'}`, reason: `${where}, ${a.fpm < 0 ? 'descending' : 'climbing'} away at ${Math.abs(a.fpm).toLocaleString('en-US')} ft/min.` };
+  }
+  if (a.kind === 'LEVEL_BUST') return { text: `AR ${below ? '−' : '+'}${off}`, reason: `${where}.` };
+  return null;
+}
+
+/** The tag a conflict is shown with: `CA` or `MCI` (crc-sync's docs/adr/0118). */
+export function conflictTag(c) { return c && c.kind === 'MCI' ? 'MCI' : 'CA'; }
+
+/** The words for it: "Conflict Alert" or "Mode C Intruder". */
+export function conflictName(c) { return c && c.kind === 'MCI' ? 'Mode C Intruder' : 'Conflict Alert'; }
+
+/** Every current short-term conflict. */
+export function getAllEfspConflicts() { return efspConflicts; }
+
+/**
+ * The conflicts this track is in, each seen from its side: { id, kind, other, otherCallsign, timeToCpaSec, minNm, vertFt,
+ * shownAt, suppressedAt, suppressed }.
+ * `kind` is 'CA' (two tracked aircraft) or 'MCI' (a Mode C intruder against a tracked one), crc-sync's docs/adr/0118.
+ * crc-sync's docs/adr/0145: `shownAt` is this controller's ATC Positions it is shown at, `suppressedAt` those of them where it
+ * was suppressed; `suppressed` when every one of them suppressed it (it stops flashing, a grey CA stays).
+ */
+export function conflictAlertsForTrack(trackId) {
+  if (trackId == null) return [];
+  const id = String(trackId);
+  return efspConflicts.filter(c => c.a === id || c.b === id).map(c => ({
+    id: c.id,
+    kind: c.kind === 'MCI' ? 'MCI' : 'CA',
+    other: c.a === id ? c.b : c.a,
+    otherCallsign: c.a === id ? c.bCallsign : c.aCallsign,
+    timeToCpaSec: c.timeToCpaSec, minNm: c.minNm, vertFt: c.vertFt,
+    shownAt: c.shownAt || [], suppressedAt: c.suppressedAt || [], suppressed: isConflictSuppressed(c),
+  }));
+}
+
+/** crc-sync's docs/adr/0145: suppressed at every Position of this controller's that it is shown at. */
+export function isConflictSuppressed(c) {
+  const at = (c && c.suppressedAt) || [];
+  const shown = (c && c.shownAt) || [];
+  return at.length > 0 && shown.every(p => at.includes(p));
+}
+
+/** The airspace-entry alerts naming this track (crc-sync docs/adr/0119); [] when none. */
+export function airspaceEntryAlertsForTrack(trackId) {
+  if (trackId == null) return [];
+  const id = String(trackId);
+  return efspAirspaceEntry.filter(a => a.trackId === id);
+}
+
+/** The airspace-entry alerts standing on this flight; [] when none. */
+export function airspaceEntryAlertsForFlightData(flightDataId) {
+  if (!flightDataId) return [];
+  return efspAirspaceEntry.filter(a => a.flightDataId === flightDataId);
+}
+
+/** "Airspace conflict R-7203", the P/CG term (AIRSPACE CONFLICT) and the airspace's name. */
+export function airspaceEntryText(a) { return `Airspace conflict ${a.airspaceName || a.airspaceId}`; }
+
+/** The airspace card's flight list for this airspace (crc-sync docs/adr/0124 §1), or null when this session is sent none. */
+export function airspaceTrafficFor(airspaceId) {
+  return efspAirspaceTraffic.find(t => t.airspaceId === airspaceId) || null;
+}
+
+/**
+ * Is this Strip's flight airborne inside the Strip's approved airspace now (crc-sync docs/adr/0134)? False when the Strip
+ * has no entry approval, or the server said nothing (unknown is never inside).
+ */
+export function airspaceInsideForStrip(strip) {
+  const entry = strip && strip.airspaceEntry;
+  if (!entry || !entry.airspaceId) return false;
+  return efspAirspaceInside.has(`${strip.facilityId}:${strip.stripId}:${entry.airspaceId}`);
+}
+
+/** The airspaces this Strip's flight is filed through and still has to coordinate (crc-sync docs/adr/0136); [] when none. */
+export function airspaceCoordinateForStrip(strip) {
+  return (strip && efspAirspaceCoordinate.get(`${strip.facilityId}:${strip.stripId}`)) || [];
+}
+
+/** Every card list this session holds, as one string: what changed since the last efsp-alerts. */
+export function airspaceTrafficSignature() { return JSON.stringify(efspAirspaceTraffic); }
+
+export function _resetAlertsState() {
+  efspObligations.clear();
+  efspSurveillanceHints.clear();
+  efspConformance.clear();
+  efspTofiRegime.clear();
+  efspConflicts = [];
+  efspAirspaceEntry = [];
+  efspAirspaceTraffic = [];
+  efspAirspaceInside.clear();
+  efspAirspaceCoordinate.clear();
+}

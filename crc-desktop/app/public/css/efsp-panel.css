@@ -4,11 +4,19 @@
    state), monospace for scanned tokens (§7.6.5), touch targets >=44px
    (§7.6.4). */
 
+/* A column flex container, and since WP6 an ORDERED one: everything defaults
+   to order 0 and so keeps index.html's order, but the two transient status
+   banners are pulled below the Bay (lane 4's F-401 — see #efsp-mutation-error
+   for the reasoning). */
 #efsp-panel {
   display: flex;
   flex-direction: column;
   height: 100%;
   font-family: 'Consolas', 'DejaVu Sans Mono', monospace;
+  /* The panel's base size, the same 11px the track panel uses. Without it
+     every tab, the New Strip toolbar and every `font: inherit` control fell
+     through to the browser's 16px default (docs/adr/0057). */
+  font-size: 11px;
   font-variant-numeric: tabular-nums;
   background: #14181c;
   color: #d8e0e6;
@@ -41,6 +49,22 @@
   cursor: pointer;
   font: inherit;
 }
+/* Origin (Position + strip type) picker (docs/adr/0023) — shown only when 2+
+   origins are simultaneously reachable (a combined-Position controller,
+   e.g. signed on to OPS+AP+CTR at once); auto-resolved with no picker shown
+   for the common single-Position case. */
+/* The stereo-route and mission-line pickers share it — both were unstyled,
+   and so drew as the browser's white default select at its own size. */
+#efsp-create-strip-type,
+#efsp-create-strip-stereo,
+#efsp-create-strip-bind {
+  min-height: 32px;
+  padding: 4px 8px;
+  background: #0e1114;
+  border: 1px solid #2a3038;
+  color: #d8e0e6;
+  font: inherit;
+}
 #efsp-new-strip-callsign:disabled, #efsp-create-strip-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
@@ -50,34 +74,70 @@
    desaturation below is the "visual degradation", this text is the
    explicit "you MUST be able to tell" signal. */
 #efsp-connection-banner {
-  font-size: 12px;
+  font-size: 11px;
   color: #e0a83c;
   padding: 4px 8px;
   min-height: 16px;
   border-bottom: 1px solid #2a3038;
 }
+/* F-401 — an empty band is not a band. This one sits ABOVE the Bay, so
+   showing it does push the Strips down; that is acceptable here and only
+   here, because staleness is a sustained state change announced at the same
+   moment by the Board-wide desaturation below, not a flicker. */
+#efsp-connection-banner:empty { display: none; }
 /* Board-wide visual degradation while stale — not a corner icon; the
    guide is explicit that the WHOLE Board must read as frozen. */
 #efsp-panel.efsp-board-stale #efsp-bay-content {
   filter: saturate(0.35) brightness(0.8);
 }
 
+/* Refusals and warnings: below the Bay, not above it (lane 4's F-401).
+ *
+ * F-401 measured 68px of status bands reserved while empty, a third of a Bay
+ * that shows one Strip. Collapsing an empty band is easy; the hard half is
+ * that THIS is where every refusal lands, and a band that appears above the
+ * Bay shoves every Strip down by its height at the moment the controller is
+ * reaching for one. "Take no height" and "never move a Strip under the
+ * pointer" only pull against each other while the band is upstream of the
+ * Bay — so it is moved downstream of it.
+ *
+ * #efsp-bay-content is `flex: 1 1 auto`, so a banner appearing here takes its
+ * height out of the Bay's own box. The Bay's content is top-anchored, so no
+ * Strip moves. The only observable shift is at the very bottom of a scrolled
+ * Bay, where the browser re-clamps scrollTop — orders of magnitude less than
+ * displacing every Strip on every refusal.
+ *
+ * `order` rather than moving the div in index.html: the reading order for a
+ * screen reader and the JS that owns these elements both want them where they
+ * are, and this is a layout decision.
+ *
+ * `min-height`, never `height` — F-103 is concurrently making the refusal name
+ * its Strip and stop self-clearing, so this must survive a message that wraps
+ * to two lines and carries a dismiss control. `:empty` is the only condition
+ * it keys on, and efsp-panel.js clears both by setting textContent = ''. */
 #efsp-mutation-error {
-  font-size: 12px;
+  order: 1;
+  font-size: 11px;
   color: #ff5c5c;
   padding: 4px 8px;
   min-height: 16px;
-  border-bottom: 1px solid #2a3038;
+  border-top: 1px solid #2a3038;
 }
+#efsp-mutation-error:empty, #efsp-mutation-warning:empty { display: none; }
+/* Below the Bay with the banners, so a refusal never sits under the command
+   input that produced it. */
+.efsp-dot-command-row { order: 2; }
+#efsp-dot-command-preview { order: 3; }
 /* Distinct from #efsp-mutation-error on purpose (guide §7.7 rule 4) — a
    warning (e.g. a duplicate beacon code, accepted anyway per §3.10.2 rule
    7) must not read as a hard rejection. Amber, not red. */
 #efsp-mutation-warning {
-  font-size: 12px;
+  order: 1;
+  font-size: 11px;
   color: #e0a83c;
   padding: 4px 8px;
   min-height: 16px;
-  border-bottom: 1px solid #2a3038;
+  border-top: 1px solid #2a3038;
 }
 
 #efsp-create-strip-msg {
@@ -131,6 +191,17 @@
   font: inherit;
 }
 
+/* A Position this controller does NOT hold, shown only so a Strip can be
+   dragged onto it for a handoff. Recessed and not selectable — it has no Bay
+   content behind it. Still a full drop target (and still lights up under
+   .efsp-drop-target above during a drag). */
+.efsp-position-tab-drop-only {
+  background: transparent;
+  border-style: dashed;
+  color: #6a7580;
+  cursor: default;
+}
+
 .efsp-position-tab.active, .efsp-bay-tab.active {
   background: #2a3038;
   color: #fff;
@@ -147,6 +218,9 @@
   flex: 1 1 auto;
   overflow-y: auto;
   padding: 8px;
+  /* H138 U12: below this the Bay stops shrinking and the panel scrolls (layout.css .dock-panel), so the toolbar, the tabs
+     and the dot-command row are never cut off. */
+  min-height: 120px;
 }
 
 .efsp-rack {
@@ -155,7 +229,7 @@
 }
 
 .efsp-rack-header {
-  font-size: 11px;
+  font-size: 10px;
   letter-spacing: 0.05em;
   text-transform: uppercase;
   color: #6a7580;
@@ -165,7 +239,7 @@
 }
 
 .efsp-strip {
-  position: relative; /* anchors .efsp-highlight-popover */
+  position: relative; /* anchors .efsp-highlight-popover, .efsp-coordinate-popover */
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -175,70 +249,251 @@
   background: #1c2228;
   border: 1px solid #2a3038;
   border-left: 4px solid var(--efsp-highlight, transparent);
-  contain: layout style paint; /* §7.5 rule 5 — one Strip's text change can't invalidate the Bay's layout */
+  /* §7.5 rule 5 — one Strip's text change can't invalidate the Bay's
+     layout. `paint` deliberately dropped from this list: `contain: paint`
+     clips any descendant that paints outside this element's own box, which
+     silently hid BOTH .efsp-highlight-popover and .efsp-coordinate-popover
+     (each `top: 100%`, i.e. positioned below the Strip, entirely outside
+     it) — the click/contextmenu handler ran and appended the popover to
+     the DOM correctly, it just never became visible. `layout style` alone
+     still gives the intended reflow-isolation benefit. */
+  contain: layout style;
   cursor: grab;
   touch-action: none; /* §7.1 rule 2 — required for touch drag to work at all */
   min-height: 44px; /* §7.6 rule 4 — touch target floor */
 }
 
+/* docs/adr/0024 — a small muted label stacked above each compact-view
+   Block's value (chosen over inline "label: value" or hover-only after a
+   preview comparison) so e.g. '0001' reads as BEACON without memorizing
+   Block position. line-height:1 on the label keeps the two-line chip within
+   .efsp-strip's existing 44px touch-target floor above, no layout change
+   needed there. */
+.efsp-block-chip {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  /* F-407 — .efsp-strip is `align-items: center`, so chips of three different
+     natural heights (32px padded-and-filled, 29px empty-editable, 27px
+     read-only) were each centred on the row and their top-anchored labels
+     landed at 7px, 9px and 10px: a ragged line where a straight one was
+     intended. Stretching each chip to its own flex line's height makes them
+     uniform without choosing a fixed number, so the labels start together and
+     the row is still only as tall as its tallest chip. `flex-start` was the
+     other candidate and is worse: it lines the labels up by letting the chips
+     hang unevenly at the bottom instead, which just moves the ragged edge. */
+  align-self: stretch;
+}
+.efsp-block-label {
+  font-size: 8px;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  color: #6b7480;
+  text-transform: uppercase;
+}
+
 .efsp-strip-selected { outline: 2px solid #4a7dbf; }
+/* F-103 — the Strip a refusal was about. #ff5c5c is #efsp-mutation-error's own
+   red, so the banner and the Strip it names are visibly one thing.
+   An INSET box-shadow rather than an outline or a left edge, because both of
+   those channels are taken and a Strip can be in several of these states at
+   once: .efsp-strip-selected owns `outline` (a refused Strip is very often the
+   selected one — it is the Strip just acted on), and `border-left` already
+   carries the highlight colour plus the obligation, correlation and MARSA
+   edges. An inset shadow composes with all of them, costs no layout, and is
+   not .efsp-strip-attention, which recolours the Strip's TEXT (§7.7 rule 4's
+   reserved use) rather than drawing an edge. */
+.efsp-strip-refused { box-shadow: inset 0 0 0 2px #ff5c5c; }
 .efsp-strip-offset { margin-left: 18px; }
 .efsp-strip-flipped { justify-content: center; }
 .efsp-strip-attention { color: #ff5c5c; }
+/* Lane 4's F-403 — the dragged Strip swelled to ~1484px on an 800px panel and
+   was drawn over the map beside it. Fixed in bay-view.js's
+   _onStripPointerMove, which pins `style.width` from the rect captured on
+   pointerdown at the same moment it adds this class (and clears it in
+   _finishDrag). NOT fixed here, and the reason is worth recording so the next
+   reader does not try again in CSS:
+   `position: fixed` resolves against the nearest ancestor with `contain:
+   layout`, which is dockview's `.dv-grid-view` — the whole dock grid — and
+   `width: auto` then shrink-to-fits against THAT. Nothing available here names
+   the pre-drag width: `width: 100%`/`inherit` resolve against the same wrong
+   box, and a `max-width` tied to the Rack is not reliable while the Strip is
+   out of flow.
+   (Giving .efsp-rack `contain: layout` would also move the containing block
+   here, but it creates a stacking context and changes how the ghost behaves
+   when the Bay scrolls mid-drag — both squarely in F-001's and F-404's way.) */
+/* H168 — the hit area for the left edge's tooltip (bay/strip-element.js
+   _appendEdgeTip): over the 4px border and 6px of the padding, transparent,
+   never a control. Nothing is drawn. */
+.efsp-strip-edge-tip {
+  position: absolute;
+  left: -4px;
+  top: 0;
+  bottom: 0;
+  width: 10px;
+  /* An empty box: a double-click on it otherwise selects the whole Strip's
+     text, and the next press inside that selection starts the browser's own
+     text drag (pointercancel) instead of a Strip drag. */
+  user-select: none;
+}
+
 .efsp-strip-dragging {
   opacity: 0.55; /* §7.2 rule 3 */
   position: fixed;
   z-index: 100;
   pointer-events: none;
-  will-change: transform;
+  will-change: transform; /* correct: _onStripPointerMove moves it with translate3d, never top/left */
 }
 
 .efsp-block {
-  font-size: 13px;
+  font-size: 12px;
   white-space: pre;
 }
-.efsp-block-1 { font-weight: bold; min-width: 60px; }
+.efsp-block-1 { font-weight: bold; font-size: 13px; min-width: 60px; }
 
+/* F-105, the in-chip half. Measured at 28x20; the floor is 44x44 and a chip
+   row is 29px tall on a 35px pitch, so growing the box is not available —
+   that is F-003's density question, not this one's. So: 44x44 of border box,
+   pulled back to the original 20px-tall footprint with an equal negative
+   margin, and the cell's whole appearance (the dashed underline, the
+   hover/focus wash) moved onto a ::before inset to exactly where the box used
+   to be. Nothing moves; the target is real, and real to getBoundingClientRect
+   as well as to a finger.
+
+   The arithmetic that keeps targets from stealing each other's clicks, with
+   the chip 29px tall, its 20px value band 9px down it, and a 35px row pitch:
+     vertical    the target runs -3px..41px. Above, it stops 3px into the 6px
+                 row gap. Below, it reaches 6px into the NEXT row's chip — its
+                 8px LABEL, which is not a target; that row's own value band
+                 starts at 44px, three pixels clear. No cell reaches a cell.
+     horizontal  ±3px into the 6px gap between chips, so two neighbouring
+                 cells' targets meet exactly at the middle of the gap and
+                 never overlap.
+   `display: flex` + centring keeps the text where it was: it was top-aligned
+   in a 20px box, and is now centred in a 44px one whose centre is the same
+   point. */
 .efsp-block-editable {
-  min-width: 28px;
-  min-height: 20px;
-  padding: 2px 4px;
-  border-bottom: 1px dashed #4a5560;
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 34px;
+  min-height: 44px;
+  margin: -12px -3px;
+  padding: 0 4px;
   cursor: text;
 }
-.efsp-block-editable:hover, .efsp-block-editable:focus {
-  background: #232a32;
-  outline: none;
+.efsp-block-editable::before {
+  content: '';
+  position: absolute;
+  inset: 12px 3px; /* the 28x20 box the cell still LOOKS like */
+  z-index: -1;     /* behind the value, above .efsp-strip's background */
+  border-bottom: 1px dashed #4a5560;
+  pointer-events: none;
 }
+.efsp-block-editable:hover::before, .efsp-block-editable:focus::before {
+  background: #232a32;
+}
+.efsp-block-editable:focus { outline: none; }
+/* F-103/F-207 at cell resolution — the Block the refusal was actually about,
+   in .efsp-strip-refused's red so banner, Strip and cell read as one thing.
+   Two rules because an editable cell's own box is 44px tall for the touch
+   target above: marking THAT would paint a red band across its neighbours, so
+   the mark goes on the ::before, which is the 20px box a controller sees.
+   Read-only Blocks get it on the element, since there the two are the same. */
+.efsp-block-refused { border-bottom: 2px solid #ff5c5c; }
+.efsp-block-editable.efsp-block-refused { border-bottom: none; }
+.efsp-block-editable.efsp-block-refused::before { border-bottom: 2px solid #ff5c5c; }
 .efsp-block-with-strike {
   display: inline-flex;
   align-items: center;
   gap: 2px;
 }
+/* F-105 — the ⌿ on INIT ALT, measured 20x20. Same treatment as the cell it
+   sits beside: 32x44 of target, the 20x20 box it looks like drawn by
+   ::before, and a footprint that grows by 6px of width and not one pixel of
+   height. 32 and not 44 wide because 44 would reach 12px past its own box in
+   each direction — 10px of that onto the editable value cell 2px to its left,
+   which is a target of its own. Closing that last 12px needs the Strip's chip
+   layout to change, not a bigger margin here. */
 .efsp-confirm-vacated-btn {
-  min-width: 20px;
-  min-height: 20px;
-  padding: 0 3px;
-  background: transparent;
-  border: 1px solid #4a5560;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  min-height: 44px;
+  margin: -12px -3px;
+  padding: 0;
+  background: none;
+  border: none;
   color: #d8e0e6;
   cursor: pointer;
   font: inherit;
   font-size: 11px;
 }
+.efsp-confirm-vacated-btn::before {
+  content: '';
+  position: absolute;
+  inset: 12px 6px; /* the 20x20 bordered box it still looks like */
+  border: 1px solid #4a5560;
+  pointer-events: none;
+}
+/* The open editor must take exactly the flow height of the closed cell it
+   replaces. Without the negative margin it does not: 24px of input against the
+   20px .efsp-block-editable leaves behind, so its chip grows 29px -> 33px, the
+   whole chip row's pitch goes 35px -> 39px and the Strip 134px -> 138px — so
+   opening a Block nudges every Strip below it down while the controller is
+   typing into it, which is F-002's complaint at the worst possible moment.
+   Same trick as .efsp-block-editable's own 44px target, and a smaller dose:
+   the input keeps its legible 24px box and gives back the 4px of footprint,
+   overhanging 2px into .efsp-strip's 6px row gap where nothing else is. */
 .efsp-block-input {
   font: inherit;
-  font-size: 13px;
+  font-size: 12px;
   width: 90px;
   background: #0e1114;
   border: 1px solid #4a7dbf;
   color: #d8e0e6;
   padding: 2px 4px;
+  margin: -2px 0;
 }
 
+/* The reopened editor after a refused SetBlock (F-103/F-207). Needs its own
+ * rule rather than inheriting .efsp-block-refused's border-bottom: the
+ * shorthand `border` above is declared later and at equal specificity, so it
+ * would win and the mark would simply not be drawn. Recolouring the whole
+ * frame is also the clearer signal here — the input already has one, and this
+ * is the cell holding text the server just rejected. */
+.efsp-block-input.efsp-block-refused { border-color: #ff5c5c; }
+
+/* ── Touch targets (F-105, WP3's 44x44 CSS px criterion) ─────────────────
+ *
+ * Measured before this: MARSA… 43x15, offset/expand/drop 32x32, NLA ~60-204x32,
+ * editable Block cells 28x20, confirm-vacated 20x20, annotation-overflow 14x22.
+ * None met 44x44.
+ *
+ * Two different treatments, because the two groups have different constraints:
+ *
+ *   The trailing row's controls are raised to a real 44x44. They share one row
+ *   with the badges and nothing else, so the only cost is 12px of row height —
+ *   and F-002 above hands more than that back the moment a Strip carries a
+ *   badge, which used to buy a whole extra row each. Net, with F-407's uniform
+ *   chips: a plain Strip went 143px -> 134px, and one carrying three badges
+ *   went 164px+ -> the same 134px.
+ *
+ *   The controls INSIDE a chip cannot grow: a chip row is 29px on a 35px pitch,
+ *   and Strip height is F-003's open question, not this finding's licence to
+ *   spend it. They keep their visual size and their layout footprint, and get
+ *   the target from padding plus an equal negative margin — which is what
+ *   getBoundingClientRect() and a finger both actually measure, unlike a
+ *   transparent ::after overlay. Each is dimensioned against the real gap
+ *   around it below; none of them overlaps another target. */
+
 .efsp-nla-btn {
-  margin-left: auto;
-  min-height: 32px;
+  /* margin-left:auto removed — .efsp-strip-actions owns the placement now. */
+  min-width: 44px;
+  min-height: 44px; /* F-105 */
   padding: 2px 10px;
   background: #2a3038;
   border: 1px solid #4a7dbf;
@@ -262,14 +517,195 @@
 }
 
 .efsp-offset-btn {
-  min-width: 32px;
-  min-height: 32px;
+  min-width: 44px;
+  min-height: 44px; /* F-105 */
   padding: 2px 6px;
   background: #2a3038;
   border: 1px solid #4a5560;
   color: #d8e0e6;
   cursor: pointer;
   font: inherit;
+}
+
+/* ── Reasons and notes ─────────────────────────────────────────────────────
+ *
+ * What the server said, rendered rather than left in a hover `title` (F-307's
+ * point: a tooltip on a disabled control has no touch equivalent) — the NLA
+ * inhibit reason, the TOFI-exit precondition, §9.2 rule 2's void alert, and
+ * the proposer's verbal-coordination note.
+ *
+ * Each sentence is a full-width line of its own in the Strip's main column
+ * (Layout C, below). It used to share the badges' row: `flex: 1 1 0` with
+ * `min-width: 0` and `overflow-wrap: anywhere`, so it took whatever the badges
+ * and buttons left over. On a crowded row that was a few pixels, and
+ * `anywhere` let the text break between every letter — a column one character
+ * wide and dozens of lines tall. Its own line cannot be squeezed, and it
+ * breaks between words only (`break-word` still breaks an unbroken route
+ * string rather than overflowing). The NLA button stays put, because the
+ * sentence no longer competes for its row at all.
+ *
+ * COLOUR, and a deliberate departure from what was specified: these were asked
+ * for in #6a7580, the panel's existing muted grey. It measures 3.41:1 on the
+ * Strip's #1c2228 — under the 4.5:1 floor that 10px body text carries, and the
+ * same mistake as the 8px 2.07:1 MARSA… label F-105 records. A refusal reason
+ * is not chrome; it is the thing the controller has to read. #8c9aa6 is 5.57:1
+ * and is already this panel's muted-control colour. */
+.efsp-nla-inhibit-reason,
+.efsp-coordination-blocked-reason,
+.efsp-marsa-void-reason,
+.efsp-coordination-note {
+  max-width: 80ch;
+  font-size: 10px;
+  line-height: 1.3;
+  letter-spacing: 0.02em;
+  overflow-wrap: break-word;
+}
+.efsp-nla-inhibit-reason,
+.efsp-coordination-blocked-reason { color: #8c9aa6; }
+/* §9.2 rule 2 calls the void an ALERT, so this one carries weight: the same
+   hue as .efsp-marsa-voided, which is the badge it explains (4.72:1), and
+   deliberately NOT .efsp-strip-attention's red, which §7.7 rule 4 reserves. */
+.efsp-marsa-void-reason { color: #d4703a; font-weight: bold; }
+/* Quoted and attributed by bay-view.js, so italic here rather than a box —
+   this is somebody's words, not a state. 7.59:1. */
+.efsp-coordination-note { color: #a8b4bd; font-style: italic; }
+
+/* Expand — opens every Block for the Strip's strip type (§3.7's "full history on
+   tap" surface, and the only way to reach a Block that has no chip). */
+.efsp-expand-btn {
+  min-width: 44px;
+  min-height: 44px; /* F-105 */
+  padding: 2px 6px;
+  background: #2a3038;
+  border: 1px solid #4a5560;
+  color: #8c9aa6;
+  cursor: pointer;
+  font: inherit;
+}
+.efsp-expand-btn:hover { color: #d8e0e6; border-color: #7a8690; }
+
+.efsp-strip-expanded {
+  flex-basis: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 4px;
+  padding-top: 6px;
+  border-top: 1px solid #333c45;
+}
+.efsp-expanded-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 22px;
+}
+.efsp-expanded-label {
+  flex: 0 0 76px;
+  font-size: 9px;
+  letter-spacing: 0.02em;
+  color: #6b7480;
+  text-transform: uppercase;
+}
+.efsp-expanded-value { display: inline-flex; align-items: center; gap: 4px; }
+/* §9.4's lost-comms advisory (docs/adr/0062). Grey and plain: an advisory, not
+   a warning — no ▲, never amber (docs/adr/0058). */
+.efsp-strip .efsp-expanded-note {
+  font-size: 11px;
+  line-height: 1.4;
+  max-width: 80ch;
+  color: var(--efsp-muted);
+  padding-bottom: 4px;
+  margin-bottom: 2px;
+  border-bottom: 1px solid var(--efsp-line);
+  overflow-wrap: break-word;
+}
+
+/* The second way out of the expanded view (lane 2's F-208), at the END of the
+   rows. It wears .efsp-expand-btn's look because it does the same job, but it
+   is deliberately NOT that class: .efsp-expand-btn has to stay a single match
+   inside a Strip for the e2e specs that locate the ▲ in the actions row.
+   `flex-start` because .efsp-strip-expanded is a column and this should be a
+   button, not a full-width bar. 44x44 like every other control (F-105); it
+   sits at the bottom of a long list with room to spare, so there is nothing to
+   claw back here. */
+.efsp-expanded-collapse {
+  align-self: flex-start;
+  margin-top: 4px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 2px 10px;
+  background: #2a3038;
+  border: 1px solid #4a5560;
+  color: #8c9aa6;
+  cursor: pointer;
+  font: inherit;
+}
+.efsp-expanded-collapse:hover { color: #d8e0e6; border-color: #7a8690; }
+
+/* §3.7 rule 2 — "a superseded value MUST remain visible in the same Block,
+   rendered struck through, until the Strip is DROPPED." Nothing rendered any
+   of this before: resolveBlockValue collapsed every cell to its one ACTIVE
+   entry and the server's whole history was discarded by the renderer. */
+.efsp-annotation-history { display: inline-flex; align-items: center; gap: 4px; }
+.efsp-annotation-entry {
+  font-size: 12px;
+  white-space: pre;
+}
+.efsp-annotation-entry-superseded { color: #7d8792; text-decoration: line-through; }
+.efsp-annotation-entry-struck     { color: #9a6a6a; text-decoration: line-through; }
+/* A distinct status the server can produce, never previously shown — not
+   struck, because it was never active. */
+.efsp-annotation-entry-preplanned { color: #6a7d92; font-style: italic; }
+
+/* ATOP's `*` convention for state the strip cannot render — rule 2's own
+   overflow indicator, which is what makes capping the chip legal. */
+/* F-105 — the `*` overflow indicator, measured 14x22, the smallest control on
+   the Strip. It has no border or background of its own, so the target can be
+   grown with nothing to redraw. It grows UPWARDS only: the chip stacks label /
+   history / value, so 11px of downward growth would land on the editable value
+   cell directly beneath it inside the same chip. Upwards it covers only its
+   own chip's label. 26x32, then, not 44x44 — and `z-index: 1` so that the
+   cell's own upward growth (see .efsp-block-editable) does not take this
+   button's clicks in the strip where the two meet. */
+.efsp-annotation-overflow {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  min-height: 32px;
+  margin: -10px -6px 0;
+  padding: 0;
+  background: none;
+  border: none;
+  color: #b0883c;
+  cursor: pointer;
+  font: inherit;
+  font-weight: bold;
+}
+
+/* Drop — the affordance for "this Strip was a mistake". Same 32px touch
+   target as the offset button beside it (§7.1 rule 4 / WP3's measured
+   minimum), muted until armed so it never competes with the NLA button for
+   attention; the armed state is the only red-adjacent thing on the Strip
+   apart from the attention mark, and it is deliberately short-lived. */
+.efsp-drop-btn {
+  min-width: 44px;
+  min-height: 44px; /* F-105 */
+  padding: 2px 6px;
+  background: #2a3038;
+  border: 1px solid #4a5560;
+  color: #8c9aa6;
+  cursor: pointer;
+  font: inherit;
+}
+.efsp-drop-btn:hover { color: #d8e0e6; border-color: #7a8690; }
+.efsp-drop-btn-armed {
+  background: #4a2626;
+  border-color: #9a4040;
+  color: #f0d8d8;
+  min-width: 0;
 }
 
 /* Highlight (guide §7.3) — a small swatch-pick popover anchored to the
@@ -319,8 +755,11 @@
 #efsp-dot-command-preview {
   padding: 8px;
   color: #6a7580;
-  font-size: 12px;
+  font-size: 11px;
 }
+/* F-401 — nothing to preview, nothing to reserve. Already downstream of the
+   Bay, so it costs no Strip position when it does appear. */
+#efsp-dot-command-preview:empty { display: none; }
 
 #efsp-position-warnings {
   padding: 4px 4px 0;
@@ -334,16 +773,33 @@
 .efsp-coordinate-btn,
 .efsp-coordinate-accept-btn,
 .efsp-coordinate-reject-btn {
-  min-height: 32px;
+  min-height: 44px; /* F-105 */
+  min-width: 44px;
   padding: 2px 10px;
   cursor: pointer;
   font: inherit;
 }
 .efsp-coordinate-btn {
-  margin-left: auto;
+  /* margin-left:auto removed with F-002's row ordering: two items both
+     absorbing the row's free space split it between them, which put the
+     Coordinate button in the middle of a row whose left half is now the badge
+     strip. The trailing row's order alone places it. */
   background: #2a3038;
   border: 1px solid #6a5bbf; /* a distinct hue from the NLA button's blue (#4a7dbf) — a different KIND of action, not a variant of NLA */
   color: #fff;
+}
+/* Convert to Arrival (docs/adr/0023) — an in-place strip type change (same
+   Strip, same flight data), not a Drop/Coordinate/NLA-style action — the dashed
+   border reads as "transforms this Strip," distinct from every solid-
+   bordered action button next to it. */
+.efsp-spawn-return-btn {
+  min-height: 44px; /* F-105 */
+  padding: 2px 10px;
+  cursor: pointer;
+  font: inherit;
+  background: #2a3038;
+  border: 1px dashed #6a7078;
+  color: #a8b4bd;
 }
 .efsp-coordinate-accept-btn {
   background: #1c3a24;
@@ -354,6 +810,34 @@
   background: #2a3038;
   border: 1px solid #4a5560;
   color: #a8b4bd;
+}
+/* OPERATIONAL_REQUEST's 3rd response (guide §4.6, docs/adr/0022) — doesn't
+   resolve the request, so deliberately a neutral hue, not accept-green or
+   reject-grey. */
+.efsp-coordinate-standby-btn {
+  min-height: 44px; /* F-105 */
+  min-width: 44px;
+  padding: 2px 10px;
+  cursor: pointer;
+  font: inherit;
+  background: #2a3038;
+  border: 1px solid #e0a83c;
+  color: #ffe0a8;
+}
+/* A disabled action has to LOOK disabled. .efsp-nla-btn-denied is declared
+   earlier in this file with the same specificity, so every rule above won and
+   a blocked Accept TOFI Exit rendered as the bright green live button it
+   refused to be — pressed, it silently did nothing. Dashed and dim, the same
+   language as the NLA's denied state. */
+.efsp-coordinate-btn:disabled,
+.efsp-coordinate-accept-btn:disabled,
+.efsp-coordinate-reject-btn:disabled,
+.efsp-coordinate-standby-btn:disabled,
+.efsp-spawn-return-btn:disabled {
+  background: #1c2228;
+  border: 1px dashed #4a5560;
+  color: #6a7580;
+  cursor: not-allowed;
 }
 
 .efsp-coordinate-popover {
@@ -384,7 +868,7 @@
   border: 1px solid #2a3038;
   color: #d8e0e6;
   font: inherit;
-  font-size: 12px;
+  font-size: 11px;
   padding: 4px;
 }
 .efsp-coordinate-note-required {
@@ -407,10 +891,11 @@
 /* POINT_OUT dual-half rendering (guide §4.6 rule 1) — two ALWAYS-VISIBLE,
    distinctly labelled chips, never a toggle: data ownership and separation
    responsibility can genuinely differ, and the UI must show both at once. */
+/* F-002 — no `flex-basis: 100%`: the POINT_OUT pair shares the trailing row
+   with the other badges and the action buttons. */
 .efsp-coordination-badges {
   display: flex;
   gap: 4px;
-  flex-basis: 100%;
 }
 .efsp-coordination-badge {
   font-size: 10px;
@@ -419,8 +904,64 @@
   border: 1px solid #4a5560;
   color: #a8b4bd;
 }
+/* This flight has other live Strips elsewhere (a replica at another
+   Facility, or a MISSION Strip sharing its flight data). Advisory only. */
+.efsp-shared-flight-data-badge { border-color: #4a7dbf; color: #bfe0ff; }
 .efsp-coordination-badge-data { border-color: #6a5bbf; color: #c9c0ff; }
 .efsp-coordination-badge-sep  { border-color: #4a7dbf; color: #bfe0ff; }
+/* OPERATIONAL_REQUEST STAND BY indicator (docs/adr/0022) — same neutral
+   hue as the Stand By button, on the REQUESTER's own Strip. */
+.efsp-coordination-badge-standby { border-color: #e0a83c; color: #ffe0a8; }
+/* F-302 — which coordination this Strip is in, which way it points and where
+   it stands, in one chip. Layered on .efsp-coordination-badge for the box.
+   Blue, so it never reads as the TOFI amber-gold beside it: a cross-Facility
+   coordination and a tactical-control exchange are different protocols and the
+   Bay is scanned, not read. */
+.efsp-coordination-state-badge { border-color: #4a7dbf; color: #bfe0ff; }
+/* REJECTED / UNABLE. This is guide §7.7 rule 2's case — an outcome nobody was
+   ever shown — so it takes the STAND BY amber rather than staying blue: it
+   needs to be noticed, and it is still not the attention red rule 4 reserves
+   for the Strip itself. Declared after the base above, same specificity. */
+.efsp-coordination-state-rejected { border-color: #e0a83c; color: #ffe0a8; }
+
+/* Restricted-enum Blocks (airspace ownership, track-degradation) — a
+   dedicated <select>, docs/adr/0022. */
+.efsp-block-enum { cursor: pointer; }
+.efsp-block-enum-select {
+  min-height: 20px;
+  background: #0e1114;
+  border: 1px solid #6a5bbf;
+  color: #d8e0e6;
+  font: inherit;
+  font-size: inherit;
+}
+
+/* WP4A second slice — IFR (a boolean, not a restricted-value enum) gets a
+   plain click-to-toggle affordance, same cursor treatment as the enum
+   Blocks above but no <select> swap. */
+.efsp-block-toggle { cursor: pointer; }
+
+/* WP4A second slice — TOFI (guide §4.6.3), the ATC<->MRU sub-protocol. A
+   genuinely different sub-protocol from the 5 primitives above, not a
+   variant of them — a distinct hue (amber-gold, between the coordination
+   purple and the standby amber) so a controller scanning the Board can
+   tell TOFI apart from an ordinary cross-Facility coordination at a
+   glance. Every button/badge/popover here otherwise reuses the
+   .efsp-coordinate-*/.efsp-coordination-badge base rules above (layered
+   as a second class) rather than redeclaring layout properties. */
+.efsp-tofi-popover { border-color: #cf9b3c; }
+.efsp-tofi-transfer-comms-btn { border-color: #cf9b3c; color: #ffe3ad; }
+.efsp-tofi-badge { border-color: #cf9b3c; color: #ffe3ad; }
+.efsp-tofi-entered-btn { border-color: #cf9b3c; color: #ffe3ad; }
+/* ADR 0102: the regime that waits for the airspace, beside the effective SEP REG value */
+.efsp-block-with-pending { display: inline-flex; align-items: baseline; gap: 4px; }
+.efsp-x-regime-pending { font-size: 0.85em; color: #ffe3ad; }
+.efsp-sreg-pending { font-size: 0.8em; font-style: italic; color: #ffe3ad; border-bottom: 1px dashed #cf9b3c; white-space: nowrap; }
+/* F-307 — the exit is proposed and cannot be accepted yet. Declared after the
+   base so it wins at equal specificity; the same amber as a rejection, because
+   it is the same kind of fact: something is waiting on a person, and the
+   .efsp-coordination-blocked-reason beside it says on whom. */
+.efsp-coordination-badge-blocked { border-color: #e0a83c; color: #ffe0a8; }
 
 /* Forwarding-obligation alerts (guide §4.6.1) — a THIRD, distinct tier,
    deliberately not reusing efsp-strip-attention's red (reserved, §7.7 rule
@@ -440,7 +981,6 @@
   padding: 1px 5px;
   border: 1px solid #3ecfe8;
   color: #3ecfe8;
-  flex-basis: 100%;
 }
 .efsp-obligation-badge-overdue {
   border-color: #ff9a3c;
@@ -478,7 +1018,7 @@
 }
 .efsp-filed-plan-summary {
   color: #a8b4bd;
-  font-size: 13px;
+  font-size: 12px;
 }
 .efsp-filed-plan-by {
   color: #6a7580;
@@ -498,3 +1038,922 @@
   cursor: pointer;
   font: inherit;
 }
+
+/* On a Strip: the airspace this flight is working, and its frequency. */
+.efsp-airspace-badge { border-color: #39ff7a; color: #bfffd4; }
+/* §9.11 — approved into airspace nobody has activated. Allowed, but said
+   plainly on the Strip rather than only in the obligation badge. */
+.efsp-airspace-badge-unactivated { border-color: #e0a83c; color: #ffe0a8; }
+
+/* A destructive one-click action awaiting its second press. */
+.efsp-confirm-needed { border-color: #e0a83c; color: #ffe0a8; }
+/* This return leg has a departure leg behind it, archived (docs/adr/0040). */
+.efsp-previous-leg-badge { border-color: #6a5bbf; color: #c9c0ff; }
+
+    /* ── Correlation (WP5, guide §6.6 rule 5) ───────────────────────────────
+       Which surveillance contact a flight is, and on what evidence. A
+       Strip-level badge like the airspace and obligation badges — not a Block,
+       since a correlation is keyed by flightDataId in its own store and is neither
+       flight data nor a Strip annotation. Deliberately none of these use the
+       attention red that guide §7.7 rule 4 reserves. */
+    .efsp-correlation-badge {
+      display: inline-block;
+      font-size: 8px;
+      letter-spacing: 0.08em;
+      padding: 1px 4px;
+      margin-left: 4px;
+      border: 1px solid transparent;
+      white-space: nowrap;
+    }
+    .efsp-correlation-correlated {
+      color: #8aaa6a;
+      border-color: #8aaa6a55;
+    }
+    .efsp-correlation-uncorrelated {
+      color: var(--ui-text-dim);
+      border-color: var(--ui-border-3);
+    }
+    /* A binding that BROKE reads louder than one that never existed — that is
+       the difference §6.6 rule 3 is about. */
+    .efsp-correlation-warned {
+      color: #cc8844;
+      border-color: #cc884477;
+    }
+    /* A button, not a label: it opens the candidate picker, which is where an
+       explicit binding (rule 1's top rung) becomes reachable. */
+    .efsp-correlation-ambiguous {
+      color: #cc8844;
+      border-color: #cc8844;
+      background: none;
+      font-family: inherit;
+      cursor: pointer;
+      /* F-105 — the one correlation badge that is a button, so the one that
+         needs a target. It sits on the trailing row, which is 44px tall for
+         the action buttons anyway, so this costs nothing. */
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 44px;
+      min-height: 44px;
+      font-size: 10px;
+    }
+    .efsp-correlation-ambiguous:hover:not(:disabled) { color: var(--ui-text-bright); }
+    .efsp-correlation-ambiguous:disabled { opacity: 0.45; cursor: default; }
+    /* F-105 — 8px text in var(--ui-text-dim) (#3a5a3a) on the Strip's #1c2228
+       is 2.07:1 and reads as decoration rather than a control; #8c9aa6 at 10px
+       is 5.57:1 and is the panel's existing muted-control colour (the expand
+       and drop buttons beside it). 44x44 for the same reason as the ambiguous
+       badge above: it is on the 44px trailing row already. */
+    .efsp-correlation-btn {
+      background: none;
+      border: 1px solid var(--ui-border-2);
+      color: #8c9aa6;
+      font-family: inherit;
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      padding: 1px 6px;
+      margin-left: 3px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 44px;
+      min-height: 44px;
+    }
+    .efsp-correlation-btn:hover:not(:disabled) { border-color: var(--ui-text-bright); color: var(--ui-text-bright); }
+    .efsp-correlation-btn:disabled { opacity: 0.4; cursor: default; }
+    /* A Strip whose contact went away, at the same tier as an overdue
+       obligation rather than at attention level. */
+    .efsp-strip-correlation-warned {
+      border-left: 2px solid #cc884499;
+    }
+    /* The rate readout in the panel header — one number (guide §11.5). */
+    #efsp-correlation-rate {
+      font-size: 9px;
+      letter-spacing: 0.08em;
+      color: var(--ui-text-dim);
+      padding: 2px 0;
+    }
+    #efsp-correlation-rate.efsp-correlation-rate-low { color: #cc8844; }
+    /* F-401 — 4px of reserved band before the first stats frame arrives. */
+    #efsp-correlation-rate:empty { display: none; }
+    /* Correlated, but to a contact outside THIS controller's coverage
+       (crc-sync's docs/adr/0042 made the picture per-Position). Dimmer than a
+       live correlation and distinctly not a warning: nothing is wrong, there
+       is simply nothing here to ring. */
+    .efsp-correlation-outside {
+      color: var(--ui-text-dim);
+      border-color: var(--ui-border-2);
+      font-style: italic;
+    }
+
+    /* ── MARSA (WP6, guide §9.2 — crc-sync's docs/adr/0051) ────────────────
+       "Military Authority Assumes Responsibility for Separation of Aircraft."
+       A Strip-level badge like the correlation and airspace badges, and not a
+       Block, for the same reason: the relation is keyed by its own id with
+       flightDataId participants, so it is neither flight data nor a Strip annotation.
+
+       Three states that must be distinguishable at a glance, because each
+       means something different to the controller looking at it:
+         armed   — the pre-rendezvous interlock is live. A heading or altitude
+                   here VOIDS the relation, so this has to be visible BEFORE
+                   they type, not after.
+         active  — joined up, interlock spent. Quiet.
+         voided  — rule 2's alert. Loud.
+       An ENDED relation renders nothing at all, so it needs no rule here. */
+    .efsp-marsa-badge {
+      /* F-105 — a button, not a label, so it carries the 44x44 floor. Same
+         free ride on the trailing row's height as the correlation controls. */
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 44px;
+      min-height: 44px;
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      padding: 1px 6px;
+      margin-left: 4px;
+      border: 1px solid transparent;
+      white-space: nowrap;
+      background: none;
+      font-family: inherit;
+      cursor: pointer;
+    }
+    .efsp-marsa-badge:disabled { opacity: 0.45; cursor: default; }
+    .efsp-marsa-badge:hover:not(:disabled) { color: var(--ui-text-bright); }
+    /* Established: the military is separating them and nothing is pending. */
+    .efsp-marsa-active {
+      color: #6a9ebf;
+      border-color: #6a9ebf55;
+    }
+    /* Armed. Same amber tier as a broken correlation and an overdue
+       obligation — deliberately NOT the attention red guide §7.7 rule 4
+       reserves, because nothing has gone wrong yet. */
+    .efsp-marsa-armed {
+      color: #c8b46a;
+      border-color: #c8b46a;
+    }
+    /* Voided. This is the one badge in the subsystem that reports something
+       the controller just did and may not have meant, so it reads louder than
+       the amber tier without taking the reserved attention colour. */
+    .efsp-marsa-voided {
+      color: #d4703a;
+      border-color: #d4703a;
+    }
+    /* "Declare MARSA…" on a Strip in no relation — a plain control, not a
+       state, so it matches the correlation Bind/Unbind buttons. */
+    /* F-105's worst case, measured at 43x15 with 8px text in
+       var(--ui-text-dim) (#3a5a3a) on transparent — 2.07:1 against the Strip's
+       #1c2228, "a faint, tiny box that reads as decoration". Both halves
+       fixed: 44x44, and 10px text in #8c9aa6 at 5.57:1, matched to the
+       correlation Bind/Unbind buttons above exactly as the comment there
+       promises. */
+    .efsp-marsa-btn {
+      background: none;
+      border: 1px solid var(--ui-border-2);
+      color: #8c9aa6;
+      font-family: inherit;
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      padding: 1px 6px;
+      margin-left: 3px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 44px;
+      min-height: 44px;
+    }
+    .efsp-marsa-btn:hover:not(:disabled) { border-color: var(--ui-text-bright); color: var(--ui-text-bright); }
+    .efsp-marsa-btn:disabled { opacity: 0.4; cursor: default; }
+    /* Strip-level edges, same tier as .efsp-strip-correlation-warned. The
+       armed one is the point of the whole deliverable: a controller about to
+       vector this aircraft should see it on the Strip, not only in a tooltip
+       they have to hover for. */
+    .efsp-strip-marsa-armed  { border-left: 2px solid #c8b46a99; }
+    .efsp-strip-marsa-voided { border-left: 2px solid #d4703a; }
+    /* §9.2 rule 5 — "selecting one participant MUST highlight the others."
+       An outline rather than a left edge, so it never competes with the state
+       edges above: a Strip can be a voided participant AND a highlighted peer
+       of the selected Strip at the same time. */
+    .efsp-strip-marsa-participant {
+      outline: 1px dashed #6a9ebf99;
+      outline-offset: -2px;
+    }
+    .efsp-marsa-popover-heading {
+      font-size: 9px;
+      letter-spacing: 0.08em;
+      color: var(--ui-text-dim);
+      padding: 2px 0 4px;
+      border-bottom: 1px solid var(--ui-border-3);
+      margin-bottom: 4px;
+    }
+    /* Rule 5's "visible as a link": each other participant, selectable. */
+    .efsp-marsa-participant-btn {
+      display: block;
+      width: 100%;
+      text-align: left;
+      background: none;
+      border: 1px solid transparent;
+      color: #6a9ebf;
+      font-family: inherit;
+      font-size: 10px;
+      letter-spacing: 0.06em;
+      padding: 2px 4px;
+      cursor: pointer;
+    }
+    .efsp-marsa-participant-btn:hover:not(:disabled) { border-color: #6a9ebf; color: var(--ui-text-bright); }
+    .efsp-marsa-participant-btn:disabled { opacity: 0.4; cursor: default; }
+    /* Used by the bind picker's candidate rows since WP5 and by the MARSA
+       popover's actions now — it had no rule until this slice, so both
+       rendered as the browser's default button inside a dark popover. */
+    .efsp-coordinate-submit {
+      display: block;
+      width: 100%;
+      text-align: left;
+      background: none;
+      border: 1px solid var(--ui-border-2);
+      color: var(--ui-text);
+      font-family: inherit;
+      font-size: 10px;
+      letter-spacing: 0.06em;
+      padding: 2px 4px;
+      margin-top: 3px;
+      cursor: pointer;
+    }
+    .efsp-coordinate-submit:hover:not(:disabled) { border-color: var(--ui-text-bright); color: var(--ui-text-bright); }
+    .efsp-coordinate-submit:disabled { opacity: 0.4; cursor: default; }
+
+/* ══ Layout C — the Strip (docs/adr/0056) ═══════════════════════════════════
+ *
+ *   tab (next step + exchanges) | fields + indicators + reasons | tools ⋯ ▼ ✕
+ *
+ * Declared last, and one class deeper than the rules it replaces
+ * (`.efsp-strip .efsp-…`), so it wins over the per-badge and per-button colours
+ * above without editing each one: those classes stay on the elements because
+ * tests and a few other surfaces select on them, but their look is decided here.
+ *
+ * Tokens are on :root, not #efsp-panel: popovers and the ⋯ menu are portalled
+ * to <body> (F-001) and have to read them too. The panel stays dark in both
+ * themes, deliberately, and no longer borrows base.css's green --ui-* ramp.
+ *
+ * Colour carries meaning or nothing. Everything is grey; amber is "waiting on
+ * you / blocked", orange-red is "something failed" (kept apart from #ff5c5c,
+ * which §7.7 rule 4 reserves for Attention); one blue for the one filled
+ * button a Strip may show. */
+:root {
+  --efsp-strip: #1c2228;
+  --efsp-strip-2: #232a32;
+  --efsp-tab: #20272e;
+  --efsp-line: #2e3740;
+  --efsp-line-2: #4a5560;
+  --efsp-text: #d8e0e6;
+  --efsp-muted: #8c9aa6;   /* 5.57:1 on --efsp-strip */
+  --efsp-faint: #56616c;   /* off / disabled only */
+  --efsp-attn: #e0a83c;
+  --efsp-attn-text: #ffe0a8;
+  --efsp-bad: #ff8a4c;
+  --efsp-bad-text: #ffd2bd;
+  --efsp-go: #4a7dbf;
+  --efsp-danger: #ff5c5c;
+  --efsp-tap: 44px;        /* F-105 */
+}
+
+.efsp-strip.efsp-strip-c {
+  display: block;
+  padding: 0;
+  /* The size container for the narrow layout below. The Strip already carries
+     `contain: layout style`, so this adds no new containing block for the drag
+     ghost (F-403/F-404) — which is why it is here and not on the Rack. */
+  container: efsp-strip / inline-size;
+}
+.efsp-strip-grid {
+  display: grid;
+  grid-template-columns: clamp(176px, 24%, 220px) minmax(0, 1fr) auto;
+}
+.efsp-strip-inert {
+  opacity: 0.72;
+  background: repeating-linear-gradient(135deg, var(--efsp-strip) 0 10px, #1a1f24 10px 20px);
+}
+.efsp-strip-needs { border-top-color: var(--efsp-attn); border-right-color: var(--efsp-attn); border-bottom-color: var(--efsp-attn); }
+
+/* ── The tab ── */
+.efsp-strip-tab {
+  background: var(--efsp-tab);
+  border-right: 1px solid var(--efsp-line);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.efsp-strip-tab-type {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--efsp-muted);
+}
+.efsp-x {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-top: 1px solid var(--efsp-line);
+  padding-top: 6px;
+}
+.efsp-x-in { border-top-color: var(--efsp-attn); }
+.efsp-x-what { font-size: 11px; font-weight: bold; line-height: 1.25; overflow-wrap: break-word; }
+.efsp-x-meta { font-size: 11px; line-height: 1.25; color: var(--efsp-muted); overflow-wrap: break-word; }
+.efsp-x-meta-attn { color: var(--efsp-attn-text); }
+.efsp-strip .efsp-coordination-badges { display: flex; gap: 6px; font-size: 10px; color: var(--efsp-muted); }
+.efsp-strip .efsp-coordination-badge-data,
+.efsp-strip .efsp-coordination-badge-sep,
+.efsp-strip .efsp-coordination-badge-standby { all: unset; font-size: inherit; color: inherit; }
+.efsp-strip .efsp-coordination-badge-standby { color: var(--efsp-attn-text); }
+.efsp-strip .efsp-x .efsp-coordination-note { font-size: 11px; line-height: 1.3; }
+/* Buttons wrap onto their own line rather than shrink (Void + Rendezvous in a
+   176px tab). Never narrower than --efsp-tap. */
+.efsp-x-buttons { display: flex; flex-wrap: wrap; gap: 4px; }
+.efsp-x-buttons .efsp-sbtn { flex: 1 1 auto; }
+.efsp-x-regime {
+  display: grid;
+  gap: 2px;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  color: var(--efsp-muted);
+}
+.efsp-strip .efsp-tofi-regime-select {
+  min-height: 32px;
+  background: #0e1114;
+  color: var(--efsp-text);
+  border: 1px solid var(--efsp-line-2);
+  font: inherit;
+  font-size: 11px;
+}
+.efsp-strip-life { margin-top: auto; display: grid; }
+
+/* ── Main: fields, indicators, reasons, expanded view ── */
+.efsp-strip-main {
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+/* A fixed grid, so a field sits in the same place on every Strip in a Bay and
+   a column can be read down like the boxes on a paper strip. */
+.efsp-strip-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(66px, 1fr));
+  gap: 3px 10px;
+}
+.efsp-strip .efsp-field { display: flex; flex-direction: column; min-width: 0; align-self: stretch; }
+.efsp-field-w2 { grid-column: span 2; }
+.efsp-field-w3 { grid-column: span 3; }
+/* §9.4 (crc-sync's docs/adr/0062): the MTR group starts its own row, so it
+   lines up Strip to Strip. Every group begins with 9G-MTR (strip-fields.js). */
+.efsp-strip-fields > .efsp-field:has(> .efsp-block-9G-MTR) { grid-column-start: 1; }
+.efsp-strip .efsp-block-label {
+  display: flex;
+  gap: 5px;
+  align-items: baseline;
+  overflow: hidden;
+  white-space: nowrap;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  color: var(--efsp-muted);
+}
+.efsp-strip .efsp-field .efsp-block { overflow: hidden; text-overflow: ellipsis; }
+.efsp-strip .efsp-block-label .efsp-annotation-history { display: inline-flex; gap: 4px; align-items: baseline; }
+.efsp-strip .efsp-block-label .efsp-annotation-entry {
+  font-size: 10px;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--efsp-faint);
+  text-decoration: line-through;
+  text-decoration-color: var(--efsp-muted);
+}
+.efsp-strip .efsp-block-label .efsp-annotation-overflow {
+  all: unset;
+  font-size: 10px;
+  color: var(--efsp-muted);
+  cursor: pointer;
+}
+.efsp-strip .efsp-block-label .efsp-annotation-overflow:hover { color: var(--efsp-text); }
+
+/* Indicators: fixed slots, always drawn, never interactive (a 22px chip cannot
+   also be a 44px target without its hit area landing on the fields above). */
+.efsp-strip-slots { display: flex; flex-wrap: wrap; gap: 4px; }
+.efsp-strip .efsp-ind {
+  all: unset;
+  /* `all: unset` resets box-sizing to content-box, so the 1px border below made every chip 24px, not
+     the 22px this rule says, and a Strip's first indicator row cost 30px against a 28px budget
+     (l4-badges.spec.js). */
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 2px;
+  font-size: 10px;
+  font-weight: bold;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  color: var(--efsp-text);
+  background: var(--efsp-strip-2);
+  border: 1px solid var(--efsp-line-2);
+}
+.efsp-strip .efsp-ind.efsp-ind-off { color: var(--efsp-faint); background: transparent; border-color: var(--efsp-line); font-weight: normal; }
+.efsp-strip .efsp-ind.efsp-ind-attn { color: var(--efsp-attn-text); border-color: var(--efsp-attn); background: rgba(224, 168, 60, 0.14); }
+.efsp-strip .efsp-ind.efsp-ind-bad { color: var(--efsp-bad-text); border-color: var(--efsp-bad); background: rgba(255, 138, 76, 0.14); }
+
+.efsp-strip .efsp-strip-reason {
+  font-size: 11px;
+  line-height: 1.35;
+  max-width: 80ch;
+  color: var(--efsp-attn-text);
+  font-style: normal;
+  font-weight: normal;
+  overflow-wrap: break-word;
+}
+.efsp-strip .efsp-strip-reason::before { content: '▲ '; font-size: 9px; color: var(--efsp-attn); }
+.efsp-strip .efsp-strip-reason-bad { color: var(--efsp-bad-text); }
+.efsp-strip .efsp-strip-reason-bad::before { color: var(--efsp-bad); }
+
+/* ── Tools ── */
+.efsp-strip-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+  border-left: 1px solid var(--efsp-line);
+  /* F-208: an expanded Strip is taller than the Bay; the ▲ stays on screen. */
+  position: sticky;
+  top: 0;
+  align-self: start;
+}
+
+/* ── One button style ── */
+.efsp-strip .efsp-sbtn {
+  min-width: var(--efsp-tap);
+  min-height: var(--efsp-tap);
+  margin: 0;
+  padding: 0 10px;
+  border-radius: 3px;
+  background: var(--efsp-strip-2);
+  border: 1px solid var(--efsp-line-2);
+  color: var(--efsp-text);
+  font: inherit;
+  font-size: 11px;
+  font-weight: bold;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.efsp-strip .efsp-sbtn:hover { border-color: #7a8690; }
+.efsp-strip .efsp-sbtn:focus-visible { outline: 2px solid var(--efsp-go); outline-offset: 1px; }
+.efsp-strip .efsp-sbtn.efsp-sbtn-go { background: var(--efsp-go); border-color: var(--efsp-go); color: #fff; }
+.efsp-strip .efsp-sbtn:disabled,
+.efsp-strip .efsp-sbtn.efsp-nla-btn-denied {
+  background: transparent;
+  border: 1px dashed var(--efsp-line-2);
+  color: var(--efsp-faint);
+  cursor: not-allowed;
+}
+.efsp-strip .efsp-sbtn-icon { padding: 0; font-weight: normal; font-size: 16px; color: var(--efsp-muted); }
+.efsp-strip-tools .efsp-expand-btn,
+.efsp-strip-tools .efsp-drop-btn { border-radius: 3px; }
+
+/* ── The ⋯ menu (portalled to <body>, so not under .efsp-strip) ── */
+.efsp-strip-menu {
+  min-width: 210px;
+  max-width: 280px;
+  background: var(--efsp-strip-2);
+  border: 1px solid var(--efsp-line-2);
+  border-radius: 3px;
+  padding: 4px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
+  display: grid;
+  font-family: inherit;
+  color: var(--efsp-text);
+}
+.efsp-strip-menu-group {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--efsp-faint);
+  padding: 6px 10px 2px;
+}
+.efsp-strip-menu .efsp-strip-menu-item {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--efsp-tap);
+  padding: 0 10px;
+  border-radius: 2px;
+  font-size: 12px;
+  color: var(--efsp-text);
+  cursor: pointer;
+}
+.efsp-strip-menu .efsp-strip-menu-item:hover,
+.efsp-strip-menu .efsp-strip-menu-item:focus-visible { background: var(--efsp-line); }
+.efsp-strip-menu .efsp-strip-menu-item:disabled { color: var(--efsp-faint); cursor: not-allowed; }
+.efsp-strip-menu .efsp-strip-menu-item:disabled:hover { background: none; }
+.efsp-strip-menu-reason { font-size: 11px; color: var(--efsp-faint); text-align: right; }
+.efsp-strip-menu .efsp-confirm-needed { color: var(--efsp-attn-text); }
+
+/* ── Narrow Bays: the tab becomes a band across the top ── */
+@container efsp-strip (max-width: 479px) {
+  .efsp-strip-grid { grid-template-columns: minmax(0, 1fr) auto; }
+  .efsp-strip-tab {
+    grid-column: 1;
+    grid-row: 1;
+    border-right: 0;
+    border-bottom: 1px solid var(--efsp-line);
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    align-items: start;
+  }
+  .efsp-strip-tab-type { grid-column: 1 / -1; }
+  .efsp-strip-life { margin-top: 0; }
+  .efsp-strip-tools {
+    grid-column: 2;
+    grid-row: 1;
+    flex-direction: row;
+    border-left: 0;
+    border-bottom: 1px solid var(--efsp-line);
+    background: var(--efsp-tab);
+  }
+  .efsp-strip-main { grid-column: 1 / -1; grid-row: 2; }
+  .efsp-field-w3 { grid-column: span 2; }
+}
+
+/* Below 320px nothing squeezes further; the Bay scrolls sideways instead. */
+.efsp-rack { min-width: 320px; }
+#efsp-bay-content { overflow-x: auto; }
+
+
+/* ══ Text scale and arrivals (docs/adr/0057) ════════════════════════════════
+ *
+ * Four steps, the range the rest of CRC already uses: 9px labels, 10px
+ * indicators and headers, 11px the panel base (tabs, toolbar, buttons,
+ * reasons), 12px field values; the callsign 13px bold.
+ */
+
+/* Portalled to <body> (F-001), which sets Courier New and no size, so every
+   popover and the ⋯ menu rendered in a different face at 16px. */
+.efsp-coordinate-popover,
+.efsp-highlight-popover,
+.efsp-strip-menu {
+  font-family: 'Consolas', 'DejaVu Sans Mono', monospace;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.efsp-coordinate-popover select,
+.efsp-coordinate-popover input,
+.efsp-coordinate-popover textarea,
+.efsp-coordinate-popover button { font: inherit; }
+
+/* Toolbar and tabs: the text is centred in the control, not left at the top
+   of its min-height (the + New Strip button did exactly that). */
+#efsp-new-strip-callsign,
+#efsp-create-strip-btn,
+#efsp-create-strip-type,
+#efsp-create-strip-stereo,
+#efsp-create-strip-bind,
+.efsp-position-tab,
+.efsp-bay-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  line-height: 1;
+}
+#efsp-create-strip-btn { justify-content: center; }
+
+/* Counts on the tabs, and the unseen-arrival marks. */
+.efsp-tab-count {
+  min-width: 1.8em;
+  padding: 1px 4px;
+  border-radius: 2px;
+  text-align: center;
+  font-size: 10px;
+  color: var(--efsp-muted);
+  background: #0e1114;
+  border: 1px solid #2a3038;
+}
+.efsp-position-tab.active .efsp-tab-count,
+.efsp-bay-tab.active .efsp-tab-count { color: var(--efsp-text); border-color: var(--efsp-line-2); }
+.efsp-bay-tab.efsp-tab-has-arrival { border-color: var(--efsp-attn); color: var(--efsp-attn-text); }
+.efsp-tab-new {
+  padding: 1px 5px;
+  border-radius: 2px;
+  font-size: 10px;
+  font-weight: bold;
+  color: #1a1204;
+  background: var(--efsp-attn);
+}
+.efsp-tab-new-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--efsp-attn);
+}
+
+/* The arrivals line: Strips that landed in a Bay you are not looking at. */
+#efsp-arrivals-line {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 3px 8px 4px;
+  border-bottom: 1px solid #2a3038;
+}
+#efsp-arrivals-line[hidden] { display: none; }
+.efsp-arrival-row {
+  all: unset;
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  min-height: 22px;
+  cursor: pointer;
+  color: var(--efsp-muted);
+}
+.efsp-arrival-row:hover, .efsp-arrival-row:focus-visible { color: var(--efsp-text); }
+.efsp-arrival-row:focus-visible { outline: 2px solid var(--efsp-go); outline-offset: 1px; }
+.efsp-arrival-cs { color: var(--efsp-attn-text); font-weight: bold; }
+
+/* The Strip itself: an amber edge while it is new, a single flash when it is
+   first seen, and who it came from in the tab. */
+.efsp-strip.efsp-strip-arrived {
+  border-top-color: var(--efsp-attn);
+  border-right-color: var(--efsp-attn);
+  border-bottom-color: var(--efsp-attn);
+}
+.efsp-strip-arrived-flash .efsp-strip-grid { animation: efsp-arrived-flash 1.6s ease-out var(--efsp-arrived-flash-delay, 0s) 1; }
+@keyframes efsp-arrived-flash {
+  0% { background-color: rgba(224, 168, 60, 0.28); }
+  100% { background-color: transparent; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .efsp-strip-arrived-flash .efsp-strip-grid { animation: none; }
+}
+.efsp-strip-from { font-size: 10px; color: var(--efsp-attn-text); }
+
+/* Native controls (a <select>'s open list) follow the panel's dark palette rather than the browser's light default. The
+   scrollbars are base.css's one app-wide rule (H138 U13). */
+#efsp-panel,
+.efsp-coordinate-popover,
+.efsp-highlight-popover,
+.efsp-strip-menu { color-scheme: dark; }
+
+/* `hidden` has to win. The toolbar pickers are hidden with the attribute when
+   they have nothing to offer, and the id rules above that set `display` would
+   otherwise outrank the browser's own [hidden] rule and draw them empty. */
+#efsp-panel [hidden] { display: none !important; }
+
+/* ══ Conformance and conflict alerts (docs/adr/0058) ══════════════════════
+ * Nothing is drawn while a flight conforms. A warning gives the Strip an edge
+ * in its own colour, on top of whatever else it carries: orange-red for a
+ * conflict, a wrong-way climb or descent, or a level bust; amber for a heading
+ * deviation. Declared after the arrival edge so an alert wins over "new". */
+.efsp-strip.efsp-strip-alert { border-color: var(--efsp-bad); box-shadow: inset 3px 0 0 var(--efsp-bad); }
+.efsp-strip.efsp-strip-alert-attn { border-top-color: var(--efsp-attn); border-right-color: var(--efsp-attn); border-bottom-color: var(--efsp-attn); }
+
+/* §9.6 scramble line (docs/adr/0070) — the Board-wide priority indication at
+   the top of the Strip panel, on every Position tab. One row per scramble; it
+   never collapses (H6). A new row flashes once; no sound. */
+#efsp-scramble-line {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 3px 8px 4px;
+  border-bottom: 1px solid var(--efsp-bad);
+  background: rgba(255, 138, 76, 0.10);
+}
+#efsp-scramble-line[hidden] { display: none; }
+.efsp-scramble-row {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  min-height: 22px;
+  font-size: 12px;
+  color: var(--efsp-bad-text);
+}
+.efsp-scramble-tag { font-weight: bold; letter-spacing: 0.04em; color: var(--efsp-bad); }
+.efsp-scramble-cs {
+  all: unset;
+  cursor: pointer;
+  font-weight: bold;
+  color: var(--efsp-bad-text);
+  text-decoration: underline dotted;
+}
+.efsp-scramble-cs:focus-visible { outline: 2px solid var(--efsp-go); outline-offset: 1px; }
+.efsp-scramble-detail { color: var(--efsp-bad-text); }
+.efsp-scramble-row-new { animation: efsp-scramble-flash 1.6s ease-out 1; }
+@keyframes efsp-scramble-flash {
+  0% { background-color: rgba(255, 138, 76, 0.35); }
+  100% { background-color: transparent; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .efsp-scramble-row-new { animation: none; }
+}
+
+/* docs/adr/0073 — §10.5: a time Block showing another source's time as an
+   estimate (TAXI/TAKEOFF before the actual). Italic only: colour means
+   something is wrong (docs/adr/0056), and an estimate is not. */
+.efsp-block-estimated { font-style: italic; }
+/* S-L16 W3: a typed time left behind a later P-time. Not colour (ADR 0056): the hover says why. */
+.efsp-block-behind-plan { text-decoration: underline dotted; text-underline-offset: 2px; }
+
+/* WP7 (crc-sync docs/adr/0071) — the AR join and the ATO import dialog.
+ * The AR highlight is deliberately NOT the MARSA colour: a join is not a
+ * separation regime, and the two must never be mistaken for each other. */
+.efsp-strip.efsp-strip-ar-participant { box-shadow: inset 0 0 0 2px var(--efsp-go); }
+.efsp-ato-readonly { color: var(--efsp-muted); font-style: italic; }
+.efsp-ato-dialog {
+  position: fixed; left: 50%; top: 8vh; transform: translateX(-50%); width: min(820px, calc(100vw - 32px));
+  max-height: 84vh; overflow: auto; z-index: 1000; box-sizing: border-box;
+  background: var(--efsp-strip); border: 1px solid var(--efsp-line-2); padding: 8px; color: var(--efsp-text);
+  display: flex; flex-direction: column; gap: 6px;
+}
+.efsp-ato-head { display: flex; justify-content: space-between; align-items: center; font-weight: 600; }
+.efsp-ato-text { width: 100%; min-height: 90px; box-sizing: border-box; font-family: monospace; font-size: 11px; }
+.efsp-ato-actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.efsp-ato-msg { color: var(--efsp-attn-text); }
+.efsp-ato-warning { font-size: 11px; color: var(--efsp-muted); }
+.efsp-ato-lines { display: flex; flex-direction: column; gap: 4px; }
+.efsp-ato-line { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; padding: 4px; border: 1px solid var(--efsp-line); font-size: 12px; }
+.efsp-ato-cell { white-space: nowrap; }
+.efsp-ato-carrier { font-size: 11px; font-weight: 600; padding: 0 4px; border: 1px solid currentColor; border-radius: 3px; }
+.efsp-ato-missing { color: var(--efsp-attn-text); font-size: 11px; }
+.efsp-ato-changes { flex-basis: 100%; font-size: 11px; color: var(--efsp-muted); overflow-wrap: anywhere; }
+.efsp-ato-line-warnings { flex-basis: 100%; }
+.efsp-ato-subhead { font-weight: 600; margin-top: 4px; }
+.efsp-ato-ar-row, .efsp-ato-gone-row, .efsp-ato-result { font-size: 12px; }
+.efsp-ato-result-bad { color: var(--efsp-bad-text); }
+.efsp-ato-import-go { align-self: flex-start; }
+
+/* ── The carrier (crc-sync docs/adr/0074; guide §9.12) ────────────────────────
+   The ship banner and Case selector over the Position tabs, the Marshal stack's
+   slot board, and the four handoff buttons. Prominence is place and shape,
+   never colour alone (docs/adr/0056): each trigger type also has its own border
+   style, so the four handoffs stay four distinct affordances without colour. */
+.carrier-banner { padding: 6px 8px; border-bottom: 1px solid #2a3038; background: #151b21; font-size: 12px; }
+.carrier-banner[hidden] { display: none; }
+.carrier-banner-line { display: flex; gap: 10px; align-items: baseline; }
+.carrier-banner-hull { font-weight: 700; color: #cfd8df; }
+.carrier-banner-text { color: #a8b4bd; font-variant-numeric: tabular-nums; }
+.carrier-banner-problem { color: #ffb347; margin-top: 2px; }
+.carrier-case-row { display: flex; gap: 8px; align-items: center; margin-top: 4px; flex-wrap: wrap; }
+.carrier-case-label { color: #6a7580; }
+.carrier-case-value { font-weight: 700; color: #cfd8df; }
+.carrier-case-advisory { color: #ffb347; }
+.carrier-case-select, .carrier-altimeter-input, .carrier-charlie-input, .carrier-radial-input {
+  background: #1c2228; color: #cfd8df; border: 1px solid #2a3038; font: inherit; min-height: 26px;
+}
+.efsp-carrier-handoff { border-width: 2px; }
+.efsp-carrier-trigger-controller-initiated { border-style: solid; }
+.efsp-carrier-trigger-radar-acquisition { border-style: double; }
+.efsp-carrier-trigger-pilot-ball-call { border-style: dashed; }
+.efsp-carrier-trigger-pilot-see-you { border-style: dotted; }
+
+/* docs/adr/0076 — the suggestion chip is the one indicator that is also a control. */
+.efsp-strip .efsp-ind.efsp-surveillance-chip[role="button"] { cursor: pointer; }
+.efsp-strip .efsp-ind.efsp-surveillance-chip[role="button"]:focus-visible { outline: 2px solid var(--efsp-attn); outline-offset: 1px; }
+
+/* crc-sync docs/adr/0099 — formation Split / Join. */
+.efsp-formation-popover { display: flex; flex-direction: column; gap: 6px; min-width: 220px; }
+.efsp-formation-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.efsp-formation-label, .efsp-formation-heading { font-weight: 600; }
+.efsp-formation-size { width: 4.5em; }
+.efsp-formation-remainder { opacity: 0.8; }
+.efsp-formation-error:empty { display: none; }
+
+/* docs/adr/0100 §10: the Undo slot, and the message to a controller whose change an Undo voided. */
+#efsp-undo-slot, #efsp-undo-voided {
+  order: 1;
+  font-size: 11px;
+  padding: 4px 8px;
+  border-top: 1px solid #2a3038;
+}
+#efsp-undo-slot[hidden], #efsp-undo-voided[hidden] { display: none; }
+#efsp-undo-slot { color: #9fb3c8; }
+#efsp-undo-slot button {
+  font: inherit; color: #e6edf3; background: #2a3441; border: 1px solid #44566b;
+  border-radius: 3px; padding: 2px 8px; cursor: pointer;
+}
+#efsp-undo-slot.efsp-undo-refused { color: #ff5c5c; }
+.efsp-undo-voided-msg { color: #e0a83c; cursor: pointer; padding: 1px 0; }
+
+/* crc-sync docs/adr/0105, 0110: LC combined with a non-local Position, the standing offers to take a hat, and a Position's frequencies. */
+#efsp-combination { font-size: 11px; padding: 4px 8px; border-top: 1px solid #2a3038; }
+#efsp-combination[hidden] { display: none; }
+.efsp-combination-line { color: var(--efsp-muted); } /* T26: grey; only LUAW while combined is a problem */
+.efsp-combination-ackable { cursor: pointer; }
+.efsp-combination-line.efsp-combination-severe { color: #ff7a59; font-weight: 600; }
+.efsp-position-offer { color: #9fb3c8; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 2px 0; }
+.efsp-position-offer.efsp-combination-severe { color: #ff7a59; font-weight: 600; }
+.efsp-position-offer button { font: inherit; color: #e6edf3; background: #2a3441; border: 1px solid #44566b; border-radius: 3px; padding: 2px 8px; cursor: pointer; }
+.efsp-tab-freq { margin-left: 6px; font-size: 10px; opacity: 0.7; }
+.efsp-position-tab-combined { box-shadow: inset 0 -2px 0 #e0a83c; }
+.panel-ctrl-freq { margin-left: 8px; font-size: 10px; opacity: 0.7; }
+
+/* docs/adr/0101, 0122: an accepted HANDOFF's chips (who has communications and control, released or not, a release request). */
+.efsp-strip .efsp-handoff-chips { flex-wrap: wrap; row-gap: 2px; }
+.efsp-handoff-chip { font-size: 10px; letter-spacing: 0.03em; padding: 0 4px; border: 1px solid #4a5560; color: #a8b4bd; }
+.efsp-strip .efsp-handoff-chip { all: unset; font-size: 10px; padding: 0 4px; border: 1px solid #4a5560; color: #a8b4bd; overflow-wrap: anywhere; }
+.efsp-strip .efsp-handoff-mine { border-color: #4a7dbf; color: #bfe0ff; }
+.efsp-strip .efsp-handoff-tone-attn { border-color: var(--efsp-attn); color: var(--efsp-attn-text); }
+.efsp-strip .efsp-handoff-tone-bad { border-color: #ff5c5c; color: #ff8a8a; }
+/* H138 U3: COMMS/CTRL say who holds them, which is no problem: grey text, no background, no frame, whoever holds them
+   (dark cockpit, H115-H119). Only a problem tone may colour them. */
+.efsp-strip .efsp-handoff-tone-quiet, .efsp-strip .efsp-handoff-tone-quiet.efsp-handoff-mine {
+  border-color: transparent; background: transparent; color: var(--efsp-muted); padding: 0 1px;
+}
+.efsp-release-popover[hidden] { display: none; }
+/* docs/adr/0122: the HANDOFF's one switch in the Coordinate popover. */
+.efsp-coordinate-released { display: flex; align-items: center; gap: 4px; font-size: 11px; color: #c9d1d9; }
+.efsp-coordinate-released[hidden] { display: none; }
+#efsp-control-attest { order: 1; font-size: 11px; padding: 4px 8px; border-top: 1px solid #2a3038; color: #e0a83c; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+#efsp-control-attest[hidden] { display: none; }
+#efsp-control-attest button { font: inherit; color: #e6edf3; background: #2a3441; border: 1px solid #44566b; border-radius: 3px; padding: 2px 8px; cursor: pointer; }
+
+/* crc-sync docs/adr/0111 — Divert: the chip keeps the replaced destination struck through; the form is one input per clearance field. */
+.efsp-divert-chip { border-color: var(--efsp-line-2); color: var(--efsp-text); }
+.efsp-divert-old { color: var(--efsp-muted); text-decoration: line-through; }
+.efsp-divert-popover { display: flex; flex-direction: column; gap: 6px; min-width: 240px; }
+.efsp-divert-row { display: flex; align-items: center; gap: 8px; }
+.efsp-divert-label { width: 6em; color: var(--efsp-muted); }
+.efsp-divert-input { flex: 1; }
+.efsp-divert-error:empty { display: none; }
+
+/* ══ U-STRIP (decisions.md H138 U1/U2, H139) ═════════════════════════════════
+ *
+ * U1: a long value never runs under the next field. Every field's value is cut to its own cell with an ellipsis (the
+ * whole text is the cell's hover title, block-edit.js). An editable cell was `display: flex` for its 44px target, and
+ * text-overflow does not apply to a flex container's text, so it is a block with a 44px line instead: the same box,
+ * the text on the same centre line. Its -3px side margins give it 6px more than the cell; the max-width keeps it
+ * there (content box: 100% - 2px + 8px padding). Same in the expanded view's rows. */
+.efsp-strip .efsp-field .efsp-block { max-width: 100%; }
+.efsp-strip .efsp-field .efsp-block-editable,
+.efsp-strip .efsp-expanded-value .efsp-block-editable {
+  display: block;
+  line-height: 44px;
+  max-width: calc(100% - 2px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.efsp-strip .efsp-expanded-row { min-width: 0; }
+.efsp-strip .efsp-expanded-value { flex: 0 1 auto; min-width: 0; max-width: 100%; }
+.efsp-strip .efsp-expanded-value > .efsp-block { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+
+/* U2: the remarks row, the last row of the Strip's main column and only when there are remarks. One line, never taller:
+   strip-remarks.js cuts it at a word boundary, and the ellipsis here is the fallback for one word longer than the row. */
+.efsp-strip .efsp-strip-remarks { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.efsp-strip .efsp-strip-remarks-label { flex: none; }
+.efsp-strip .efsp-strip-remarks-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--efsp-text);
+  cursor: pointer;
+}
+.efsp-strip .efsp-strip-remarks-text:hover, .efsp-strip .efsp-strip-remarks-text:focus { background: var(--efsp-strip-2); outline: none; }
+
+/* H139: the text-box window. Portalled to <body>, so nothing here may lean on .efsp-strip. */
+.efsp-remarks-popover { width: min(440px, calc(100vw - 16px)); box-sizing: border-box; min-width: 0; }
+.efsp-remarks-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; font-size: 11px; color: var(--efsp-text); }
+.efsp-remarks-title { font-weight: bold; letter-spacing: 0.04em; }
+.efsp-remarks-readonly { color: var(--efsp-muted); }
+.efsp-remarks-textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 7.5em;
+  max-height: 40vh;
+  resize: vertical;
+  overflow: auto;
+  white-space: pre-wrap;
+  background: #0e1114;
+  border: 1px solid var(--efsp-line-2);
+  color: var(--efsp-text);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.4;
+  padding: 4px 6px;
+}
+.efsp-remarks-textarea:focus { border-color: #4a7dbf; outline: none; }
+.efsp-remarks-textarea[readonly] { color: var(--efsp-muted); }
+.efsp-remarks-foot { display: flex; gap: 6px; align-items: center; justify-content: flex-end; }
+.efsp-remarks-hint { margin-right: auto; font-size: 10px; color: var(--efsp-muted); }
+
+/* crc-sync docs/adr/0128 §3: the altitude block fields in the airspace-entry popover. */
+.efsp-entry-block { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin: 4px 0; }
+.efsp-entry-block-input { width: 72px; }
+.efsp-entry-block-why { flex-basis: 100%; color: var(--efsp-attn, #e0a83c); font-size: 11px; }
+.efsp-entry-block-why:empty { display: none; }
+.efsp-entry-block-title { color: #8a949c; margin-bottom: 2px; }

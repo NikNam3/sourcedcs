@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L2 MTR Mockup</title>
+<style>
+/* Tokens copied from crc-desktop/app/public/css/efsp-panel.css (Layout C, ADR 0056/0057). */
+:root {
+  --efsp-strip: #1c2228; --efsp-strip-2: #232a32; --efsp-tab: #20272e;
+  --efsp-line: #2e3740; --efsp-line-2: #4a5560; --efsp-text: #d8e0e6;
+  --efsp-muted: #8c9aa6; --efsp-faint: #56616c; --efsp-attn: #e0a83c;
+  --efsp-attn-text: #ffe0a8; --efsp-go: #4a7dbf; --efsp-tap: 44px;
+  --page: #11151a; --note: #a4b0bb; --annot: #6fb3ff;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--efsp-text);
+  font-family: "Courier New", ui-monospace, monospace; font-size: 11px; }
+.wrap { max-width: 1280px; margin: 0 auto; padding: 20px 16px 60px; }
+h1 { font-size: 16px; margin: 0 0 4px; letter-spacing: .04em; }
+h2 { font-size: 12px; margin: 28px 0 8px; letter-spacing: .08em; text-transform: uppercase; color: var(--efsp-muted); }
+p.lede, .notes li { font-family: system-ui, sans-serif; font-size: 13px; line-height: 1.5; color: #c3ccd4; max-width: 90ch; }
+.notes { margin: 6px 0 0; padding-left: 20px; }
+.cap { font-family: system-ui, sans-serif; font-size: 12px; color: var(--efsp-muted); margin: 6px 0 0; max-width: 90ch; line-height: 1.45; }
+.annot { color: var(--annot); font-family: system-ui, sans-serif; font-size: 11px; }
+
+/* ── Strip, Layout C ── */
+.efsp-strip { background: var(--efsp-strip); border: 1px solid #2a3038; border-left: 4px solid transparent;
+  margin: 2px 0; container: strip / inline-size; }
+.grid { display: grid; grid-template-columns: clamp(176px, 24%, 220px) minmax(0, 1fr) auto; }
+.tab { background: var(--efsp-tab); border-right: 1px solid var(--efsp-line); padding: 6px;
+  display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.tab-role { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--efsp-muted); }
+.life { margin-top: auto; display: grid; }
+.main { padding: 6px 8px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(66px, 1fr)); gap: 3px 10px; }
+.f { display: flex; flex-direction: column; min-width: 0; }
+.w2 { grid-column: span 2; } .w3 { grid-column: span 3; }
+.lbl { font-size: 9px; letter-spacing: .08em; color: var(--efsp-muted); white-space: nowrap; overflow: hidden; }
+.val { font-size: 12px; min-height: 20px; line-height: 20px; border-bottom: 1px dashed #3a444e;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.val.cs { font-size: 13px; font-weight: bold; }
+.val.empty { color: transparent; }
+/* THE ONE NEW RULE: the MTR group starts its own row at column 1. No colour. */
+.f.mtr-first { grid-column-start: 1; }
+.tools { display: flex; flex-direction: column; gap: 4px; padding: 6px; border-left: 1px solid var(--efsp-line); }
+.sbtn { min-width: var(--efsp-tap); min-height: var(--efsp-tap); padding: 0 10px; border-radius: 3px;
+  background: var(--efsp-strip-2); border: 1px solid var(--efsp-line-2); color: var(--efsp-text);
+  font: inherit; font-size: 11px; font-weight: bold; }
+.sbtn.icon { padding: 0; font-weight: normal; font-size: 16px; color: var(--efsp-muted); }
+.sbtn.go { background: var(--efsp-go); border-color: var(--efsp-go); color: #fff; }
+.ind { display: inline-flex; align-items: center; height: 22px; padding: 0 7px; border-radius: 2px;
+  font-size: 10px; font-weight: bold; background: var(--efsp-strip-2); border: 1px solid var(--efsp-line-2); }
+.slots { display: flex; gap: 4px; }
+
+/* ── Expanded (▼) view ── */
+.expanded { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; padding-top: 6px; border-top: 1px solid #333c45; }
+.xrow { display: flex; align-items: center; gap: 8px; min-height: 22px; }
+.xlbl { flex: 0 0 76px; font-size: 9px; color: #6b7480; text-transform: uppercase; }
+.xval { font-size: 12px; }
+/* The lost-comms note: grey, 11px, no ▲, not amber (ADR 0058: not a warning). */
+.note { font-size: 11px; line-height: 1.4; color: var(--note); max-width: 80ch; padding: 2px 0 6px;
+  border-bottom: 1px solid #2a3038; margin-bottom: 4px; }
+.note b { color: var(--efsp-text); }
+.more { color: var(--efsp-faint); font-size: 10px; padding: 2px 0; }
+
+/* hover demo */
+.tip { position: relative; overflow: visible !important; }
+.tip .bubble { display: none; position: absolute; top: 14px; left: 0; z-index: 3; width: 360px;
+  background: #0e1114; border: 1px solid var(--efsp-line-2); color: var(--efsp-text);
+  font-family: system-ui, sans-serif; font-size: 11px; line-height: 1.4; padding: 6px 8px;
+  letter-spacing: 0; white-space: normal; }
+.tip.show .bubble, .tip:hover .bubble { display: block; }
+
+@container strip (max-width: 479px) {
+  .grid { grid-template-columns: minmax(0, 1fr) auto; }
+  .tab { grid-column: 1; grid-row: 1; border-right: 0; border-bottom: 1px solid var(--efsp-line); }
+  .tools { grid-column: 2; grid-row: 1; flex-direction: row; border-left: 0; border-bottom: 1px solid var(--efsp-line); background: var(--efsp-tab); }
+  .main { grid-column: 1 / -1; grid-row: 2; }
+  .w3 { grid-column: span 2; }
+}
+.bay { background: #151a1f; border: 1px solid #262d34; padding: 4px; }
+.narrowrow { display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start; }
+.narrowrow .bay { width: 480px; } .narrowrow .bay.n320 { width: 320px; }
+table.pos { border-collapse: collapse; font-family: system-ui, sans-serif; font-size: 12px; margin-top: 6px; }
+table.pos th, table.pos td { border: 1px solid #2a3038; padding: 5px 9px; text-align: left; vertical-align: top; }
+table.pos th { color: var(--efsp-muted); font-weight: 600; background: #171c21; }
+table.pos td code { font-family: "Courier New", monospace; color: var(--efsp-text); }
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>L2 — MTR fields on the Strip (guide §9.4) — mockup for approval (H10)</h1>
+<p class="lede">Static mockup built from the real Layout C tokens and grid (<code>efsp-panel.css</code>): 176–220 px tab, field grid of
+<code>minmax(66px, 1fr)</code> columns, 9 px labels, 12 px values. Blue italic text is annotation, not UI.</p>
+
+<!-- ───────────────────────── 1. CTR OVERFLIGHT, quiet ───────────────────────── -->
+<h2>1 · CTR · Overflight — no MTR data (unchanged from today)</h2>
+<div class="bay">
+<div class="efsp-strip"><div class="grid">
+  <div class="tab"><div class="tab-role">OVF · ACTIVE</div><div class="life"><button class="sbtn go">Hand off</button></div></div>
+  <div class="main"><div class="fields">
+    <div class="f w2"><span class="lbl">CALLSIGN</span><span class="val cs">VIPER11</span></div>
+    <div class="f w2"><span class="lbl">TYPE</span><span class="val">2/F16/M</span></div>
+    <div class="f"><span class="lbl">SQUAWK</span><span class="val">4521</span></div>
+    <div class="f"><span class="lbl">ALT</span><span class="val">FL230</span></div>
+    <div class="f"><span class="lbl">DEST</span><span class="val">LTAG</span></div>
+    <div class="f w3"><span class="lbl">RTE</span><span class="val">ADA KONYA UMRUN</span></div>
+    <div class="f"><span class="lbl">HDG</span><span class="val empty">·</span></div>
+    <div class="f"><span class="lbl">FREQ</span><span class="val">251.0</span></div>
+    <div class="f w2"><span class="lbl">ARSPC</span><span class="val empty">·</span></div>
+    <div class="f"><span class="lbl">IFR</span><span class="val">IFR</span></div>
+    <div class="f"><span class="lbl">RADAR</span><span class="val">RADAR</span></div>
+    <div class="f"><span class="lbl">SEP REG</span><span class="val">STD</span></div>
+    <div class="f"><span class="lbl">DEGR</span><span class="val">NONE</span></div>
+  </div></div>
+  <div class="tools"><button class="sbtn icon">⋯</button><button class="sbtn icon">▼</button><button class="sbtn icon">✕</button></div>
+</div></div>
+</div>
+<p class="cap">Most flights never fly an MTR, so no Strip pays for MTR columns until the flight has MTR data. The six Blocks are still reachable in ▼.</p>
+
+<!-- ───────────────────────── 2. CTR OVERFLIGHT, with MTR ───────────────────────── -->
+<h2>2 · CTR · Overflight — MTR posted: the group appears on its own row, M11 first</h2>
+<div class="bay">
+<div class="efsp-strip"><div class="grid">
+  <div class="tab"><div class="tab-role">OVF · ACTIVE</div><div class="life"><button class="sbtn go">Hand off</button></div></div>
+  <div class="main"><div class="fields">
+    <div class="f w2"><span class="lbl">CALLSIGN</span><span class="val cs">VIPER11</span></div>
+    <div class="f w2"><span class="lbl">TYPE</span><span class="val">2/F16/M</span></div>
+    <div class="f"><span class="lbl">SQUAWK</span><span class="val">4521</span></div>
+    <div class="f"><span class="lbl">ALT</span><span class="val">FL180</span></div>
+    <div class="f"><span class="lbl">DEST</span><span class="val">LTAG</span></div>
+    <div class="f w3"><span class="lbl">RTE</span><span class="val">ADA KONYA UMRUN</span></div>
+    <div class="f"><span class="lbl">HDG</span><span class="val empty">·</span></div>
+    <div class="f"><span class="lbl">FREQ</span><span class="val">251.0</span></div>
+    <div class="f w2"><span class="lbl">ARSPC</span><span class="val empty">·</span></div>
+    <div class="f"><span class="lbl">IFR</span><span class="val">IFR</span></div>
+    <div class="f"><span class="lbl">RADAR</span><span class="val">RADAR</span></div>
+    <div class="f"><span class="lbl">SEP REG</span><span class="val">STD</span></div>
+    <div class="f"><span class="lbl">DEGR</span><span class="val">NONE</span></div>
+    <!-- MTR group -->
+    <div class="f mtr-first"><span class="lbl" title="MTR designator (guide M10)">MTR</span><span class="val">IR107</span></div>
+    <div class="f"><span class="lbl" title="MTR exit fix (guide §9.4)">EXIT</span><span class="val">F</span></div>
+    <div class="f"><span class="lbl" title="MTR exit estimate, UTC HHMM">EXIT EST</span><span class="val">1432</span></div>
+    <div class="f"><span class="lbl tip show">EXIT ALT<span class="bubble">requested altitude after exit.<br>Lost comms (§9.4): separate assuming the higher of the minimum IFR altitude for each remaining segment — not available in this system — or the altitude in the last clearance: FL180.</span></span><span class="val">FL190</span></div>
+    <div class="f"><span class="lbl" title="MTR entry fix">ENTRY</span><span class="val">A</span></div>
+    <div class="f"><span class="lbl" title="MTR entry time, UTC HHMM">ENTRY TM</span><span class="val">1405</span></div>
+  </div></div>
+  <div class="tools"><button class="sbtn icon">⋯</button><button class="sbtn icon">▼</button><button class="sbtn icon">✕</button></div>
+</div></div>
+</div>
+<p class="cap">
+<span class="annot">Row 3 = the MTR group.</span> It always starts at column 1 (one CSS rule), so it sits in the same place on every MTR Strip in the Bay
+whatever wrapped above. Order: <b>MTR · EXIT · EXIT EST · EXIT ALT · ENTRY · ENTRY TM</b> — the exit fix and estimate lead because §9.4 says
+they are what a controller asks for by voice and posts. <b>Prominence is position, not colour</b> (ADR 0056: colour means something is wrong).
+Hover shown pinned open on EXIT ALT: the lost-comms rule is in its tooltip. The group appears when <i>any</i> of the six has a value, not only the designator.
+</p>
+
+<!-- ───────────────────────── 3. expanded view ───────────────────────── -->
+<h2>3 · Same Strip, ▼ opened — the lost-comms advisory</h2>
+<div class="bay">
+<div class="efsp-strip"><div class="grid">
+  <div class="tab"><div class="tab-role">OVF · ACTIVE</div><div class="life"><button class="sbtn go">Hand off</button></div></div>
+  <div class="main">
+    <div class="fields">
+      <div class="f w2"><span class="lbl">CALLSIGN</span><span class="val cs">VIPER11</span></div>
+      <div class="f w2"><span class="lbl">TYPE</span><span class="val">2/F16/M</span></div>
+      <div class="f"><span class="lbl">SQUAWK</span><span class="val">4521</span></div>
+      <div class="f"><span class="lbl">ALT</span><span class="val">FL180</span></div>
+      <div class="f"><span class="lbl">DEST</span><span class="val">LTAG</span></div>
+      <div class="f w3"><span class="lbl">RTE</span><span class="val">ADA KONYA UMRUN</span></div>
+      <div class="f"><span class="lbl">HDG</span><span class="val empty">·</span></div>
+      <div class="f"><span class="lbl">FREQ</span><span class="val">251.0</span></div>
+      <div class="f w2"><span class="lbl">ARSPC</span><span class="val empty">·</span></div>
+      <div class="f"><span class="lbl">IFR</span><span class="val">IFR</span></div>
+      <div class="f"><span class="lbl">RADAR</span><span class="val">RADAR</span></div>
+      <div class="f"><span class="lbl">SEP REG</span><span class="val">STD</span></div>
+      <div class="f"><span class="lbl">DEGR</span><span class="val">NONE</span></div>
+      <div class="f mtr-first"><span class="lbl">MTR</span><span class="val">IR107</span></div>
+      <div class="f"><span class="lbl">EXIT</span><span class="val">F</span></div>
+      <div class="f"><span class="lbl">EXIT EST</span><span class="val">1432</span></div>
+      <div class="f"><span class="lbl">EXIT ALT</span><span class="val">FL190</span></div>
+      <div class="f"><span class="lbl">ENTRY</span><span class="val">A</span></div>
+      <div class="f"><span class="lbl">ENTRY TM</span><span class="val">1405</span></div>
+    </div>
+    <div class="expanded">
+      <div class="note">Lost comms (§9.4): separate assuming the higher of the minimum IFR altitude for each remaining segment — not available in this system — or the altitude in the last clearance: <b>FL180</b>.</div>
+      <div class="xrow"><span class="xlbl">REV</span><span class="xval">3</span></div>
+      <div class="xrow"><span class="xlbl">ACFT</span><span class="xval">F16</span></div>
+      <div class="xrow"><span class="xlbl">WAKE</span><span class="xval">M</span></div>
+      <div class="xrow"><span class="xlbl">CRUS ALT</span><span class="xval">FL230</span></div>
+      <div class="xrow"><span class="xlbl">ORIG</span><span class="xval">LCRA</span></div>
+      <div class="more">… the rest of the Blocks this Strip does not show, in Block Map order …</div>
+    </div>
+  </div>
+  <div class="tools"><button class="sbtn icon">⋯</button><button class="sbtn icon">▲</button><button class="sbtn icon">✕</button></div>
+</div></div>
+</div>
+<p class="cap">
+The advisory is a <b>grey note</b> at the top of ▼, never on the collapsed face, never an amber ▲ reason line or an indicator: a flight on an MTR
+with working radios is not wrong (ADR 0058, "nothing when nothing is wrong"). It states the §9.4 rule, shows the half we have (the ACTIVE ALT
+clearance, FL180 here), and says the other half — minimum IFR altitude per segment — is not in the system. It never computes a "lost-comms
+altitude" and never uses EXIT ALT (that is the pilot's <i>request</i>, not a clearance). With no ALT posted it reads "…the altitude in the last clearance: none posted (ALT is empty)."
+</p>
+
+<!-- ───────────────────────── 4. APP ARRIVAL + OPS DEP ───────────────────────── -->
+<h2>4 · APP · Arrival — M11 only (entry is history)</h2>
+<div class="bay">
+<div class="efsp-strip"><div class="grid">
+  <div class="tab"><div class="tab-role">ARR · INBOUND</div><div class="life"><button class="sbtn go">Hand off</button></div></div>
+  <div class="main"><div class="fields">
+    <div class="f w2"><span class="lbl">CALLSIGN</span><span class="val cs">VIPER11</span></div>
+    <div class="f w2"><span class="lbl">TYPE</span><span class="val">2/F16/M</span></div>
+    <div class="f"><span class="lbl">SQUAWK</span><span class="val">4521</span></div>
+    <div class="f"><span class="lbl">ETA</span><span class="val">1455</span></div>
+    <div class="f"><span class="lbl">ALT</span><span class="val">FL190</span></div>
+    <div class="f"><span class="lbl">FIX</span><span class="val">ADA</span></div>
+    <div class="f"><span class="lbl">RWY</span><span class="val">05</span></div>
+    <div class="f"><span class="lbl">HDG</span><span class="val empty">·</span></div>
+    <div class="f"><span class="lbl">SPEED</span><span class="val empty">·</span></div>
+    <div class="f"><span class="lbl">FREQ</span><span class="val">119.1</span></div>
+    <div class="f"><span class="lbl">DEGR</span><span class="val">NONE</span></div>
+    <div class="f"><span class="lbl">SEP REG</span><span class="val">STD</span></div>
+    <div class="f mtr-first"><span class="lbl">MTR</span><span class="val">IR107</span></div>
+    <div class="f"><span class="lbl">EXIT</span><span class="val">E</span></div>
+    <div class="f"><span class="lbl">EXIT EST</span><span class="val">1440</span></div>
+    <div class="f"><span class="lbl">EXIT ALT</span><span class="val">FL210</span></div>
+  </div></div>
+  <div class="tools"><button class="sbtn icon">⋯</button><button class="sbtn icon">▼</button><button class="sbtn icon">✕</button></div>
+</div></div>
+</div>
+
+<h2>5 · OPS · Departure — designator and entry only (OPS files it)</h2>
+<div class="bay">
+<div class="efsp-strip"><div class="grid">
+  <div class="tab"><div class="tab-role">DEP · PROPOSED</div><div class="life"><button class="sbtn go">Send to Clearance</button></div></div>
+  <div class="main"><div class="fields">
+    <div class="f w2"><span class="lbl">CALLSIGN</span><span class="val cs">VIPER11</span></div>
+    <div class="f w2"><span class="lbl">TYPE</span><span class="val">2/F16/M</span></div>
+    <div class="f"><span class="lbl">SQUAWK</span><span class="val">4521</span></div>
+    <div class="f"><span class="lbl">PROP DEP</span><span class="val">1330</span></div>
+    <div class="f"><span class="lbl">CRUS ALT</span><span class="val">FL230</span></div>
+    <div class="f"><span class="lbl">DEP</span><span class="val">LTAG</span></div>
+    <div class="f"><span class="lbl">RWY</span><span class="val">05</span></div>
+    <div class="f"><span class="lbl">DEST</span><span class="val">LTAG</span></div>
+    <div class="f w3"><span class="lbl">RTE</span><span class="val">ADA IR107 UMRUN</span></div>
+    <div class="f"><span class="lbl">STEREO</span><span class="val empty">·</span></div>
+    <div class="f"><span class="lbl">UNIT</span><span class="val">480FS</span></div>
+    <div class="f"><span class="lbl">HOME</span><span class="val">LTAG</span></div>
+    <div class="f mtr-first"><span class="lbl">MTR</span><span class="val">IR107</span></div>
+    <div class="f"><span class="lbl">ENTRY</span><span class="val">A</span></div>
+    <div class="f"><span class="lbl">ENTRY TM</span><span class="val">1405</span></div>
+  </div></div>
+  <div class="tools"><button class="sbtn icon">⋯</button><button class="sbtn icon">▼</button><button class="sbtn icon">✕</button></div>
+</div></div>
+</div>
+
+<!-- ───────────────────────── 6. narrow ───────────────────────── -->
+<h2>6 · Narrow Bays (ADR 0056 minimums: 480 px and 320 px) — CTR overflight</h2>
+<div class="narrowrow">
+<div class="bay"><div class="efsp-strip"><div class="grid">
+  <div class="tab"><div class="tab-role">OVF · ACTIVE</div><div class="life"><button class="sbtn go">Hand off</button></div></div>
+  <div class="main"><div class="fields">
+    <div class="f w2"><span class="lbl">CALLSIGN</span><span class="val cs">VIPER11</span></div>
+    <div class="f w2"><span class="lbl">TYPE</span><span class="val">2/F16/M</span></div>
+    <div class="f"><span class="lbl">SQUAWK</span><span class="val">4521</span></div>
+    <div class="f"><span class="lbl">ALT</span><span class="val">FL180</span></div>
+    <div class="f"><span class="lbl">DEST</span><span class="val">LTAG</span></div>
+    <div class="f w3"><span class="lbl">RTE</span><span class="val">ADA KONYA UMRUN</span></div>
+    <div class="f"><span class="lbl">HDG</span><span class="val empty">·</span></div>
+    <div class="f"><span class="lbl">FREQ</span><span class="val">251.0</span></div>
+    <div class="f mtr-first"><span class="lbl">MTR</span><span class="val">IR107</span></div>
+    <div class="f"><span class="lbl">EXIT</span><span class="val">F</span></div>
+    <div class="f"><span class="lbl">EXIT EST</span><span class="val">1432</span></div>
+    <div class="f"><span class="lbl">EXIT ALT</span><span class="val">FL190</span></div>
+    <div class="f"><span class="lbl">ENTRY</span><span class="val">A</span></div>
+    <div class="f"><span class="lbl">ENTRY TM</span><span class="val">1405</span></div>
+  </div></div>
+  <div class="tools"><button class="sbtn icon">⋯</button><button class="sbtn icon">▼</button><button class="sbtn icon">✕</button></div>
+</div></div></div>
+<div class="bay n320"><div class="efsp-strip"><div class="grid">
+  <div class="tab"><div class="tab-role">OVF · ACTIVE</div><div class="life"><button class="sbtn go">Hand off</button></div></div>
+  <div class="main"><div class="fields">
+    <div class="f w2"><span class="lbl">CALLSIGN</span><span class="val cs">VIPER11</span></div>
+    <div class="f w2"><span class="lbl">TYPE</span><span class="val">2/F16/M</span></div>
+    <div class="f"><span class="lbl">SQUAWK</span><span class="val">4521</span></div>
+    <div class="f"><span class="lbl">ALT</span><span class="val">FL180</span></div>
+    <div class="f mtr-first"><span class="lbl">MTR</span><span class="val">IR107</span></div>
+    <div class="f"><span class="lbl">EXIT</span><span class="val">F</span></div>
+    <div class="f"><span class="lbl">EXIT EST</span><span class="val">1432</span></div>
+    <div class="f"><span class="lbl">EXIT ALT</span><span class="val">FL190</span></div>
+  </div></div>
+  <div class="tools"><button class="sbtn icon">⋯</button><button class="sbtn icon">▼</button><button class="sbtn icon">✕</button></div>
+</div></div></div>
+</div>
+<p class="cap">(Abridged field lists in the narrow copies.) The group still starts a fresh row; columns never drop below 66 px, it just wraps.</p>
+
+<!-- ───────────────────────── placement table ───────────────────────── -->
+<h2>Which Positions show the group (H24: briefing default) — [SOURCE-DEFINED]</h2>
+<table class="pos">
+<tr><th>Role</th><th>OPS</th><th>CD</th><th>GND / TWR</th><th>APP / CTR</th><th>MISSION</th></tr>
+<tr><td>Departure</td><td><code>MTR ENTRY ENTRY TM</code></td><td><code>MTR</code></td><td>none</td><td><code>MTR EXIT EXIT EST EXIT ALT ENTRY ENTRY TM</code></td><td rowspan="3">no Blocks at all (shares the FDR with the ATC Strip)</td></tr>
+<tr><td>Arrival</td><td>—</td><td>—</td><td>none</td><td><code>MTR EXIT EXIT EST EXIT ALT</code></td></tr>
+<tr><td>Overflight</td><td>—</td><td>—</td><td>—</td><td><code>MTR EXIT EXIT EST EXIT ALT ENTRY ENTRY TM</code></td></tr>
+</table>
+<p class="cap">Any Position not listed (and every Position, for Blocks not on its face) reaches all six in ▼. All six are ordinary click-to-edit cells:
+fixes/designator are free text (upper-cased, no format rule — there is no route table yet, H23); times are 4-digit UTC <code>HHMM</code>
+(<code>14:32Z</code> → <code>1432</code>; <code>2460</code> refused at the cell); EXIT ALT takes <code>FL210</code> / <code>080</code> / <code>8000</code>.
+Overwrites keep no history (H25 — gap recorded for all <code>fdr</code> Blocks).</p>
+
+<h2>Design choices in one list</h2>
+<ul class="notes">
+<li><b>Conditional row:</b> the MTR group is drawn only when any of the six MTR fields has a value — no Strip pays height for an MTR it does not fly.</li>
+<li><b>Own row at column 1, M11 first:</b> MTR · EXIT · EXIT EST · EXIT ALT, then ENTRY · ENTRY TM. Same x on every MTR Strip in a Bay.</li>
+<li><b>No colour, no badge:</b> prominence is placement and grouping only (colour = something is wrong).</li>
+<li><b>Lost-comms advisory:</b> grey note at the top of ▼ + tooltip on the EXIT ALT label. States the rule, shows the ACTIVE ALT clearance, says MIA data is unavailable. Never on the collapsed face.</li>
+<li><b>Clearing MTR does not clear the others</b> (no hidden writes); the group stays until all six are empty.</li>
+</ul>
+</div>
+</body>
+</html>

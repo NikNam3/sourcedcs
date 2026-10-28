@@ -3,83 +3,85 @@
   "positions": [
     "OPS",
     "CD",
-    "GND",
-    "TWR",
-    "APP"
+    "GC",
+    "LC",
+    "AP",
+    "PAR"
   ],
-  "coveringChain": {
-    "CD": "GND",
-    "GND": "TWR",
-    "TWR": "APP"
+  "positionClasses": {
+    "OPS": "BASOPS",
+    "CD": "MILITARY_ATC",
+    "GC": "MILITARY_ATC",
+    "LC": "MILITARY_ATC",
+    "AP": "MILITARY_ATC",
+    "PAR": "MILITARY_ATC"
   },
-  "blockVisibility": {
-    "DEPARTURE": [
-      "1",
-      "2",
-      "3",
-      "4",
-      "5",
-      "6",
-      "7",
-      "8",
-      "9",
-      "10",
-      "11",
-      "14",
-      "14B",
-      "14C",
-      "16",
-      "17",
-      "18",
-      "19",
-      "20",
-      "21",
-      "22",
-      "23",
-      "24",
-      "24A",
-      "25",
-      "26",
-      "2A",
-      "4A",
-      "4B",
-      "8A",
-      "8B",
-      "9A",
-      "9B",
-      "9C",
-      "9D",
-      "9E"
+  "positionLetters": {
+    "OPS": "O",
+    "CD": "D",
+    "GC": "G",
+    "LC": "T",
+    "AP": "A",
+    "PAR": "P"
+  },
+  "airportSurfacePositions": [
+    "GC",
+    "LC"
+  ],
+  "consolidation": {
+    "CD": ["GC", "LC", "AP"],
+    "GC": ["LC", "AP"],
+    "LC": ["AP"],
+    "PAR": ["AP"]
+  },
+  "handBack": {},
+  "positionFrequencies": {
+    "GC": [
+      {
+        "label": "GND",
+        "mhz": 275.8
+      }
     ],
-    "ARRIVAL": [
-      "1",
-      "2",
-      "3",
-      "4",
-      "5",
-      "6",
-      "7",
-      "8",
-      "9",
-      "20",
-      "21",
-      "24",
-      "24A",
-      "25",
-      "26",
-      "2A",
-      "4A",
-      "4B",
-      "8A",
-      "8B",
-      "9A-FUEL",
-      "9A-DEST",
-      "9A-PTOUT",
-      "9A-VECTOR",
-      "9A-SPEED",
-      "9E"
+    "LC": [
+      {
+        "label": "TWR",
+        "mhz": 251
+      }
     ]
   },
+  "positionRadars": {
+    "OPS": [],
+    "CD": [],
+    "GC": [],
+    "LC": [
+      {
+        "kind": "airport",
+        "airport": "LTAG"
+      }
+    ],
+    "AP": [
+      {
+        "kind": "approach",
+        "airport": "LTAG"
+      },
+      {
+        "kind": "airport",
+        "airport": "LTAG"
+      }
+    ],
+    "PAR": [
+      {
+        "kind": "approach",
+        "airport": "LTAG"
+      }
+    ]
+  },
+  "modeCIntruder": {
+    "baseAltitudeFt": 500,
+    "reference": "AGL",
+    "inhibitedPositions": []
+  },
+  "hiddenBlocks": {},
   "bays": {
     "OPS": [
       {
@@ -96,7 +98,7 @@
         ]
       },
       {
-        "bayId": "ops-field-state",
+        "bayId": "ops-runway-status",
         "rackIds": [
           "main"
         ]
@@ -121,7 +123,8 @@
         "rackIds": [
           "main"
         ],
-        "impliesState": "CLEARED"
+        "impliesState": "CLEARED",
+        "vfr": true
       },
       {
         "bayId": "cd-held",
@@ -137,100 +140,239 @@
         ]
       }
     ],
-    "GND": [
+    "GC": [
       {
-        "bayId": "gnd-pushback",
+        "bayId": "gc-pushback",
         "rackIds": [
           "main"
         ],
         "impliesState": "PUSHBACK"
       },
       {
-        "bayId": "gnd-taxi-out",
+        "bayId": "gc-taxi-out",
         "rackIds": [
           "main"
         ],
-        "impliesState": "TAXI"
+        "impliesState": "TAXI",
+        "vfr": true
       },
       {
-        "bayId": "gnd-taxi-in",
+        "bayId": "gc-taxi-in",
         "rackIds": [
           "main"
         ],
         "impliesState": "TAXI_IN"
       },
       {
-        "bayId": "gnd-coordination",
+        "bayId": "gc-coordination",
         "rackIds": [
           "main"
         ]
       }
     ],
-    "TWR": [
+    "LC": [
       {
-        "bayId": "twr-runway-queue",
+        "bayId": "lc-runway-queue",
         "rackIds": [
           "rwy-05",
           "rwy-23"
         ],
-        "impliesState": "RUNWAY_QUEUE"
+        "impliesState": "RUNWAY_QUEUE",
+        "vfr": true
       },
       {
-        "bayId": "twr-airborne",
+        "bayId": "lc-airborne",
         "rackIds": [
           "main"
         ],
         "impliesState": "DEPARTED"
       },
       {
-        "bayId": "twr-arrivals",
+        "bayId": "lc-arrivals",
         "rackIds": [
           "main"
         ],
         "impliesState": "HANDED_TO_TOWER"
       },
       {
-        "bayId": "twr-final",
+        "bayId": "lc-pattern",
+        "rackIds": [
+          "main"
+        ],
+        "impliesState": "TRAFFIC_PATTERN"
+      },
+      {
+        "bayId": "lc-final",
         "rackIds": [
           "main"
         ],
         "impliesState": "FINAL"
       },
       {
-        "bayId": "twr-landed",
+        "bayId": "lc-landed",
         "rackIds": [
           "main"
         ],
         "impliesState": "LANDED"
       },
       {
-        "bayId": "twr-coordination",
+        "bayId": "lc-coordination",
         "rackIds": [
           "main"
         ]
       }
     ],
-    "APP": [
+    "AP": [
       {
-        "bayId": "app-inbound",
+        "bayId": "ap-inbound",
         "rackIds": [
           "main"
         ],
         "impliesState": "INBOUND"
       },
       {
-        "bayId": "app-departures",
+        "bayId": "ap-sfa",
+        "rackIds": [
+          "freq-1",
+          "freq-2",
+          "freq-3",
+          "freq-4",
+          "freq-5"
+        ],
+        "impliesState": "INBOUND",
+        "view": "sfa-freqs"
+      },
+      {
+        "bayId": "ap-departures",
         "rackIds": [
           "main"
         ],
         "impliesState": "HANDED_OFF"
       },
       {
-        "bayId": "app-coordination",
+        "bayId": "ap-overflight",
+        "rackIds": [
+          "main"
+        ],
+        "holdsStripType": "OVERFLIGHT",
+        "vfr": true
+      },
+      {
+        "bayId": "ap-coordination",
         "rackIds": [
           "main"
         ]
       }
+    ],
+    "PAR": [
+      {
+        "bayId": "par-final",
+        "rackIds": [
+          "main"
+        ],
+        "impliesState": "ON_FINAL",
+        "view": "final",
+        "replacesRacks": true,
+        "capacity": 1
+      },
+      {
+        "bayId": "par-missed",
+        "rackIds": [
+          "main"
+        ],
+        "impliesState": "BOLTER_WAVEOFF"
+      }
     ]
+  },
+  "singleFrequencyApproach": {
+    "jurisdiction": "AP",
+    "pool": [
+      {
+        "rackId": "freq-1",
+        "mhz": 232.1,
+        "use": "INITIAL_CONTACT"
+      },
+      {
+        "rackId": "freq-2",
+        "mhz": 233.1,
+        "use": "ROTATION"
+      },
+      {
+        "rackId": "freq-3",
+        "mhz": 234.1,
+        "use": "ROTATION"
+      },
+      {
+        "rackId": "freq-4",
+        "mhz": 235.1,
+        "use": "ROTATION"
+      },
+      {
+        "rackId": "freq-5",
+        "mhz": 236.1,
+        "use": "SPARE"
+      }
+    ]
+  },
+  "dataOnly": false,
+  "standingReleases": [],
+  "aitAuthorized": false,
+  "runwayStatus": {
+    "airportIcao": "LTAG",
+    "runways": [
+      {
+        "runwayId": "05/23",
+        "ends": [
+          "05",
+          "23"
+        ],
+        "endHeadingsTrue": {
+          "23": 232.7,
+          "05": 52.7
+        },
+        "rackIds": {
+          "23": "rwy-23",
+          "05": "rwy-05"
+        },
+        "arrestingGear": []
+      }
+    ],
+    "runwayChangeAcknowledgers": [
+      "OPS",
+      "AP"
+    ],
+    "inspectionAuthorityPositionId": "OPS",
+    "pads": {
+      "hotCargo": {
+        "name": "Hot cargo pad"
+      },
+      "alert": {
+        "name": "Alert pad",
+        "accessRoute": "ALERT ACCESS TAXIWAY"
+      }
+    }
+  },
+  "parApproaches": {
+    "_comment": "PAR approaches per runway end (docs/adr/0112), read once at start-up, never written by code (P5). EVERY VALUE IS [SOURCE-DEFINED] and only a DEFAULT: the PAR controller sets TDZE, TCH, decision height and glidepath angle at run time per runway end (docs/adr/0130, decisions H153; no LTAG plate is owed). thresholdLat/Lon: the landing threshold as DCS places it: the squadron mission's RW05 and RW23 nav points (STT v21, DCS x/z 220339.7/-36479.7 and 222075.4/-34001.1) through the Syria Transverse Mercator projection; they agree to about 35 m with the real thresholds (36.9937 N 35.4122 E, 37.0103 N 35.4395 E). courseTrueDeg: the final approach course, degrees TRUE, the geodesic bearing threshold to threshold (52.7, reciprocal 232.7; the real runway is 52.9 true), equal to the runway's endHeadingsTrue and shown magnetic through the theater's variation (U-LTAG-COURSE: the earlier 56 was the runway number read as magnetic, 3.3 degrees off the pavement). tdzeFt: touchdown zone elevation, feet MSL; null takes the DCS airfield's elevation, which is what the aircraft fly over in DCS (the real LTAG is 238 ft). tchFt: threshold crossing height (50 ft, the usual figure). decisionHeightFt: decision height above TDZE (200 ft, HAT; DA = TDZE + this). glideslopeDeg: the published glidepath angle, or null for none, in which case par.json's defaultGlideslopeDeg applies (H116: 3.06).",
+    "05": {
+      "label": "PAR RWY 05",
+      "thresholdLat": 36.99382,
+      "thresholdLon": 35.41255,
+      "courseTrueDeg": 52.7,
+      "tdzeFt": null,
+      "tchFt": 50,
+      "decisionHeightFt": 200,
+      "glideslopeDeg": null
+    },
+    "23": {
+      "label": "PAR RWY 23",
+      "thresholdLat": 37.01027,
+      "thresholdLon": 35.43963,
+      "courseTrueDeg": 232.7,
+      "tdzeFt": null,
+      "tchFt": 50,
+      "decisionHeightFt": 200,
+      "glideslopeDeg": null
+    }
   }
 }

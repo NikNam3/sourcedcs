@@ -2,23 +2,6 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import CollaborativeStore from '../src/collab-store.js';
 
-test('assignTrackNumber is idempotent for the same track', () => {
-  const store = new CollaborativeStore();
-  const tn1 = store.getOrAssignTrackNumber('100');
-  const tn2 = store.getOrAssignTrackNumber('100');
-  assert.equal(tn1, tn2);
-});
-
-test('assignTrackNumber never collides across tracks', () => {
-  const store = new CollaborativeStore();
-  const seen = new Set();
-  for (let i = 0; i < 500; i++) {
-    const tn = store.getOrAssignTrackNumber(String(i));
-    assert.ok(!seen.has(tn), `collision on ${tn}`);
-    seen.add(tn);
-  }
-});
-
 test('declare / clearDeclare round-trip and drop empty entries', () => {
   const store = new CollaborativeStore();
   store.declare('7', 'hostile', 'Alice');
@@ -53,22 +36,72 @@ test('evictStale removes entries for tracks no longer active, keeps active ones'
   assert.equal(store.get('2'), null);
 });
 
-test('clear() flushes every entry and logs gone events', () => {
+test('clear() empties the store: a mission reload wipes it for everybody', () => {
   const store = new CollaborativeStore();
   store.declare('1', 'hostile', 'Alice');
-  store.declare('2', 'bandit', 'Bob');
-  const seqBefore = store.currentSeq;
+  store.rename('2', 'tanker', 'Bob');
   store.clear();
   assert.equal(store.getAll().length, 0);
-  const delta = store.getDeltaSince(seqBefore);
-  assert.deepEqual(delta.goneIds.sort(), ['1', '2']);
 });
 
-test('getDeltaSince only reports entries changed after the given seq', () => {
+// ── persistence and unit continuity (docs/adr/0094) ──────────────────────────
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
+const VIPER = { id: 5, name: 'Viper 1-1', type: 'F-16C_50', callsign: 'Viper 1-1', coalition: 2 };
+const file = () => path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'collab-u-')), 'c.json');
+const mk = (p, extra = {}) => new CollaborativeStore({ persist: true, path: p, identityOf: () => VIPER, sessionSeq: () => 3, ...extra });
+
+test('a bare store never writes a file', () => {
   const store = new CollaborativeStore();
-  store.declare('1', 'hostile', 'Alice');
-  const seq1 = store.currentSeq;
-  store.declare('2', 'bandit', 'Bob');
-  const delta = store.getDeltaSince(seq1);
-  assert.deepEqual(delta.updatedIds, ['2']);
+  store.declare('5', 'hostile', 'A');
+  assert.equal(store.getAll().length, 1);
+});
+
+test('the clock grace opens the gate when no game time ever arrives', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] }); // the grace is a timer: step it, never wait for it
+  const p = file();
+  mk(p).declare('5', 'hostile', 'A');
+  const b = mk(p, { clockGraceMs: 30, identityOf: () => null });
+  b.noteMissionLoad();
+  assert.equal(b.get('5'), null);
+  b.observeUnit(VIPER); // streamed while the gate is closed: not shown yet
+  assert.equal(b.get('5'), null);
+  t.mock.timers.tick(30);
+  b.observeUnit(VIPER);
+  assert.equal(b.get('5').iff.state, 'hostile');
+  b.close();
+});
+
+test('a persisted overlay from another session number is discarded at the gate', () => {
+  const p = file();
+  mk(p).declare('5', 'hostile', 'A');
+  const b = mk(p, { sessionSeq: () => 4 });
+  b.noteMissionLoad(); b.noteClockSample();
+  b.observeUnit(VIPER);
+  assert.equal(b.get('5'), null);
+  assert.equal(JSON.parse(fs.readFileSync(p, 'utf8')).entries.length, 0);
+});
+
+test('a corrupt file is kept aside and the store starts empty', () => {
+  const p = file();
+  fs.writeFileSync(p, '{nope');
+  const b = mk(p);
+  assert.equal(b.getAll().length, 0);
+  assert.ok(fs.readdirSync(path.dirname(p)).some(f => f.includes('corrupt')));
+});
+
+test('release drops a despawned unit; parked entries expire', () => {
+  let now = 1000;
+  const b = mk(file(), { wallNow: () => now });
+  b.declare('5', 'hostile', 'A');
+  b.release('5');
+  assert.equal(b.get('5'), null);
+  b.declare('5', 'hostile', 'A');
+  b.evictStale(new Set());
+  now += CollaborativeStore.PARK_MS + 1;
+  b.evictStale(new Set());
+  b.observeUnit(VIPER);
+  assert.equal(b.get('5'), null);
 });

@@ -4,13 +4,32 @@ on:
   push:
     tags:
       - 'crc-desktop-v*'
-    paths:
-      - 'crc-desktop/**'
-      - '.github/workflows/crc-desktop-release.yml'
   workflow_dispatch:
 
 jobs:
+  # R3-37: a release tag must point at a commit that is already on main. Fails first and loudly;
+  # `build` and `trigger-crc-sync-release` both depend on this job, so a refused tag builds,
+  # uploads and redeploys nothing.
+  verify-main:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository (full history)
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Refuse a tag whose commit is not on main
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error title=Release refused::${GITHUB_REF_NAME} points at ${GITHUB_SHA}, which is not on main. Merge to main first, then tag from main (delete this tag: git push --delete origin ${GITHUB_REF_NAME})."
+            exit 1
+          fi
+          echo "${GITHUB_REF_NAME} (${GITHUB_SHA}) is on main."
+
   build:
+    needs: verify-main
     strategy:
       fail-fast: false
       matrix:
@@ -68,7 +87,18 @@ jobs:
         run: |
           set -e
           shopt -s nullglob
-          files=(*.exe *.AppImage *.yml *.blockmap)
+          # blockmaps before manifests: latest*.yml must never point at a version whose
+          # blockmap is not there yet (differential update would fall back to a full download)
+          files=(*.exe *.AppImage *.blockmap *.yml)
+          # B14: a leg that built nothing used to upload nothing and pass. It needs an installer and its manifest.
+          case "${{ matrix.target }}" in
+            win)   inst=(*.exe);      manifest=latest.yml ;;
+            linux) inst=(*.AppImage); manifest=latest-linux.yml ;;
+          esac
+          if [ "${#inst[@]}" -eq 0 ] || [ ! -f "$manifest" ]; then
+            echo "::error title=Release leg incomplete::${{ matrix.target }}: expected an installer (${inst[*]:-none found}) and $manifest in crc-desktop/dist; found: $(ls | tr '\n' ' ')"
+            exit 1
+          fi
           for f in "${files[@]}"; do
             echo "Uploading $f"
             curl --fail -sS \
@@ -77,14 +107,38 @@ jobs:
               https://sourcedcs.page/api/releases/upload
           done
 
+  # B14: a half-published release (one leg uploaded, the other failed or uploaded nothing) must be red, not a quiet success.
+  # Both platform manifests must name the tagged version on the live releases API. This job fails the run; it does NOT gate
+  # trigger-crc-sync-release below, which stays unconditional (see CLAUDE.md: gating it deadlocks a stale-server failure).
+  verify-published:
+    needs: [verify-main, build]
+    if: ${{ !cancelled() && needs.verify-main.result == 'success' && startsWith(github.ref, 'refs/tags/crc-desktop-v') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Both legs are published at this version
+        run: |
+          want="${GITHUB_REF_NAME#crc-desktop-v}"
+          json=$(curl --fail --silent --show-error --location --max-time 20 --retry 3 --retry-delay 5 https://sourcedcs.page/api/releases/latest) || {
+            echo "::error title=Release unverifiable::could not read https://sourcedcs.page/api/releases/latest"; exit 1; }
+          win=$(printf '%s' "$json" | jq -r '.win.version // "none"')
+          linux=$(printf '%s' "$json" | jq -r '.linux.version // "none"')
+          echo "tag $want; published: win=$win linux=$linux"
+          if [ "$win" != "$want" ] || [ "$linux" != "$want" ]; then
+            echo "::error title=Half-published release::${GITHUB_REF_NAME}: win=$win linux=$linux. Rerun the failed build leg (the upload is idempotent) or delete the tag. The deploy gate judges crc-sync by the newest published version."
+            exit 1
+          fi
+
   trigger-crc-sync-release:
-    needs: build
+    needs: [verify-main, build]
     # Always run this, even if a build/upload leg fails: crc-sync is a
     # shared dependency for every crc-desktop install, not something that
     # should go stale just because one platform's release upload had a
     # transient failure (e.g. the server not yet having a config fix this
     # very deploy chain is responsible for landing).
-    if: ${{ !cancelled() }}
+    # R3-37: the one exception is a tag refused by verify-main. A failed `build` still leaves
+    # verify-main "success", so the unconditional semantics are intact; a refused tag leaves it
+    # "failure" and nothing is redeployed. (`!cancelled()` alone would run after a failed need.)
+    if: ${{ !cancelled() && needs.verify-main.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       actions: write

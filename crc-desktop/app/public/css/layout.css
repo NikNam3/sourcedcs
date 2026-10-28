@@ -1,7 +1,8 @@
     /* Dockview grid fills everything below the topbar; the map is just its
        default center panel now, sized to whatever the grid gives it. */
     #dock-root { position: fixed; top: 32px; left: 0; right: 0; bottom: 0; }
-    #map { width: 100%; height: 100%; }
+    /* position:relative so #no-awacs-overlay (overlays.css) scopes to the map. */
+    #map { width: 100%; height: 100%; position: relative; }
     /* Legacy panel content (track/calls/settings/aprt/radars) used to hide
        itself via position:fixed + transform:translateX(-100%) before it was
        migrated into dockview — now that they're plain in-flow divs sized to
@@ -9,7 +10,15 @@
        this session (never opened) has nowhere else to go and renders inline
        wherever it sits in the HTML source instead. This class is the
        replacement "hidden until dockview actually places it" state —
-       mountExistingPanel() (dock.js) removes it the one time each panel is
-       first created. */
+       mountExistingPanel() (dock.js) removes it each time dockview creates the
+       panel and puts it back on dispose; hideStrayLegacyPanels() puts it back
+       on any panel element left outside #dock-root (a failed layout restore,
+       U-PANELS-GHOST). */
     .dock-unmounted { display: none !important; }
+    /* H138 U12: every docked panel fills its tab and scrolls instead of cutting its UI off when sized smaller (the AIRPORT
+       panel's container, made the rule). dock.js's mountExistingPanel() gives every panel the class. A panel that must not
+       scroll as a whole overrides `overflow` on its own id rule and scrolls inside: the carrier map (a picture that fills the
+       panel), Settings (its tab body scrolls under the fixed tabs) and the Strip panel (its Bay scrolls under the toolbar and
+       tabs, and the panel itself scrolls only once the Bay is at its minimum height). */
+    .dock-panel { width: 100%; height: 100%; overflow: auto; }
 

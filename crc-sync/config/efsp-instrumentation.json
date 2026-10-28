@@ -1,0 +1,9 @@
+{
+  "_note": "[SOURCE-DEFINED] policy choices, not doctrine (guide §11.3, §11.4; docs/adr/0065). Retention is not a guide requirement (guide D-6: any retention is a bonus), so every retentionDays here is ours. Read once at startup; edit and restart.",
+  "mutationLog":  { "retentionDays": 30 },
+  "metrics":      { "retentionDays": 30 },
+  "trafficCount": {
+    "retentionDays": 400,
+    "homeAirports": { "INCIRLIK": ["LTAG"], "CARRIER": ["UNION"] }
+  }
+}

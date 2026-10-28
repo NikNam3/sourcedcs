@@ -1,0 +1,17 @@
+{
+  "_comment": "FAKE EXAMPLE VALUES for tests: shows the shape the squadron fills into config/comm-card.json. Not the squadron's real card.",
+  "approachTypes": ["TACAN", "ICLS", "ACLS", "PAR", "VISUAL", "MARSHAL"],
+  "approachButtons": {
+    "min": 1,
+    "max": 20,
+    "buttons": [
+      { "button": 3, "label": "EXAMPLE CVN approach" },
+      { "button": 7, "label": "EXAMPLE CVN tower" },
+      { "button": 12, "label": "EXAMPLE divert field" }
+    ]
+  },
+  "frequencies": [
+    { "id": "example-app", "name": "EXAMPLE approach", "mhz": 305.5, "use": "approach" },
+    { "id": "example-atis", "name": "EXAMPLE ATIS", "mhz": 270.0, "use": "atis" }
+  ]
+}

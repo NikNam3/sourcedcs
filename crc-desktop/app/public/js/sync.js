@@ -1,4 +1,7 @@
 'use strict';
+import { loadMaptilerKey } from './maptiler-key.js';
+import { WIRE_PROTOCOL } from './wire-protocol.js';
+import { escapeHtml } from './html-escape.js';
 
 // crc-sync client — Casdoor login (via a popup, main.js's
 // setWindowOpenHandler allow-lists the Casdoor authorize URL), the
@@ -22,7 +25,7 @@ function getSyncToken() {
 // only forwards an Authorization header if the browser's own request to it
 // already had one; callers that skip this get "Authentication required"
 // back from crc-sync even though the user is fully logged in.
-function _syncAuthHeaders() {
+export function _syncAuthHeaders() {
   const token = getSyncToken();
   return token ? { Authorization: 'Bearer ' + token } : {};
 }
@@ -33,7 +36,7 @@ function clearSyncToken() {
 
 // ── Connection settings (URL / Casdoor endpoint / client ID) ──────────────
 // config.json (read at Electron startup, exposed via /js/config.js as
-// CRC_SYNC_URL/CASDOOR_ENDPOINT/CASDOOR_CLIENT_ID) provides the defaults.
+// CRCSYNC_URL/CASDOOR_ENDPOINT/CASDOOR_CLIENT_ID) provides the defaults.
 // A squadron member can override any of them from the widget below without
 // touching config.json — stored in localStorage, reapplied on every launch.
 
@@ -57,19 +60,19 @@ function getConnOverrides() {
 function getEffectiveConn() {
   const overrides = getConnOverrides();
   return {
-    crcSyncUrl:      overrides.crcSyncUrl      || (typeof CRC_SYNC_URL      !== 'undefined' ? CRC_SYNC_URL      : 'wss://asacs.sourcedcs.page'),
+    crcSyncUrl:      overrides.crcSyncUrl      || (typeof CRCSYNC_URL      !== 'undefined' ? CRCSYNC_URL      : 'wss://asacs.sourcedcs.page'),
     casdoorEndpoint: overrides.casdoorEndpoint || (typeof CASDOOR_ENDPOINT  !== 'undefined' ? CASDOOR_ENDPOINT  : ''),
     casdoorClientId: overrides.casdoorClientId || (typeof CASDOOR_CLIENT_ID !== 'undefined' ? CASDOOR_CLIENT_ID : ''),
   };
 }
 
 // Applies any stored overrides to the in-page globals (so the rest of this
-// file just reads CRC_SYNC_URL/CASDOOR_* as usual) and pushes them to the
+// file just reads CRCSYNC_URL/CASDOOR_* as usual) and pushes them to the
 // local server so its crc-sync proxies (ws-ticket, atis-transmit, ...) stay
 // consistent with what the renderer is actually using. Runs once at load.
 async function applyConnOverrides() {
   const eff = getEffectiveConn();
-  CRC_SYNC_URL      = eff.crcSyncUrl;
+  CRCSYNC_URL      = eff.crcSyncUrl;
   CASDOOR_ENDPOINT   = eff.casdoorEndpoint;
   CASDOOR_CLIENT_ID  = eff.casdoorClientId;
   try {
@@ -127,19 +130,19 @@ function hideLoginGate() {
 }
 
 // ── Connection settings widget ──────────────────────────────────────────
-// Always reachable via Settings → Tools → Connection Settings (ui.js's
+// Always reachable via Settings → Tools → Connection Settings (panels/tools-panel.js's
 // initToolsTab), plus from the login gate above when there's nothing to
 // connect to yet.
 
 function _connFieldRow(label, id, value) {
   return `<label style="display:flex;flex-direction:column;gap:4px;font-size:10px;letter-spacing:1px;">
-    ${label}
-    <input id="${id}" value="${(value || '').replace(/"/g, '&quot;')}" style="background:#0d130d;color:#c8d8c8;
+    ${escapeHtml(label)}
+    <input id="${escapeHtml(id)}" value="${escapeHtml(value)}" style="background:#0d130d;color:#c8d8c8;
       border:1px solid #2a3a2a;padding:7px 8px;font-family:inherit;font-size:12px;letter-spacing:0.5px;border-radius:2px;">
   </label>`;
 }
 
-function showConnWidget() {
+export function showConnWidget() {
   if (document.getElementById('crc-conn-widget')) return;
   const eff = getEffectiveConn();
 
@@ -206,7 +209,7 @@ function showConnWidget() {
 // here, hand-positioned above the SRS radio bar's fixed bottom edge (with a
 // ResizeObserver to track its height). Both panels are normal dockview
 // panels now — the trigger lives in Settings → Tools instead (wired in
-// ui.js's initToolsTab, calling showConnWidget directly).
+// panels/tools-panel.js's initToolsTab, calling showConnWidget directly).
 
 // Apply overrides immediately (not just lazily inside getSyncFeedUrl) so
 // the CASDOOR_ENDPOINT/CASDOOR_CLIENT_ID an early LOG IN click uses, and
@@ -233,7 +236,15 @@ async function fetchSyncTicket() {
   }
 }
 
-async function getSyncFeedUrl() {
+// The app version, for the server's log only (crc-sync docs/adr/0103). Outside Electron (no preload) it is 'dev'.
+async function appVersion() {
+  try {
+    if (window.crcUpdate && window.crcUpdate.getAppVersion) return String(await window.crcUpdate.getAppVersion());
+  } catch (_) { /* fall through */ }
+  return 'dev';
+}
+
+export async function getSyncFeedUrl() {
   await applyConnOverrides();
   const ticket = await fetchSyncTicket();
   if (!ticket) {
@@ -241,8 +252,9 @@ async function getSyncFeedUrl() {
     return null;
   }
   hideLoginGate();
-  const wsBase = CRC_SYNC_URL.replace(/^https:/, 'wss:').replace(/^http:/, 'ws:');
-  return `${wsBase}/feed?ticket=${encodeURIComponent(ticket)}`;
+  loadMaptilerKey(getSyncToken());
+  const wsBase = CRCSYNC_URL.replace(/^https:/, 'wss:').replace(/^http:/, 'ws:');
+  return `${wsBase}/feed?ticket=${encodeURIComponent(ticket)}&protocol=${WIRE_PROTOCOL}&client=${encodeURIComponent(await appVersion())}`;
 }
 
 // ── Outbound mutation channel ───────────────────────────────────────────
@@ -251,8 +263,8 @@ async function getSyncFeedUrl() {
 // without app.js exposing its module-scoped `_ws`.
 
 let _syncSocket = null;
-function _setSyncSocket(ws) { _syncSocket = ws; }
-function sendToSync(msg) {
+export function _setSyncSocket(ws) { _syncSocket = ws; }
+export function sendToSync(msg) {
   if (_syncSocket && _syncSocket.readyState === WebSocket.OPEN) {
     _syncSocket.send(JSON.stringify(msg));
   }
@@ -262,4 +274,10 @@ function sendToSync(msg) {
 // implicitly by the next state sync), but EFSP callers need to be able to
 // tell "silently dropped" apart from "sent, waiting on a reply" to avoid
 // looking identically broken either way. See efsp-ws.js.
-function isSyncOpen() { return !!(_syncSocket && _syncSocket.readyState === WebSocket.OPEN); }
+export function isSyncOpen() { return !!(_syncSocket && _syncSocket.readyState === WebSocket.OPEN); }
+
+// ESM-1: replaces sendToSync for every importer (live binding). The classic page let a caller assign the global
+// `sendToSync`; the e2e specs use this setter (e2e/helpers/modules.js), and unit tests may too.
+export function setSendToSync(fn) { sendToSync = fn; }
+// ESM-1 (S-ESM1b): the unit tests replaced the global isSyncOpen; this is that seam.
+export function setIsSyncOpen(fn) { isSyncOpen = fn; }

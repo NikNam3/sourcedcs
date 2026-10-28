@@ -1,24 +1,55 @@
 'use strict';
+import { markEfspChanged, onEfspChanged } from './efsp/efsp-change-bus.js';
+import { _setAprtRwyTrueDeg, _setAprtSelectedApt, _aprtSelectedApt, _aprtRwyTrueDeg } from '../view-state.js';
+import { _syncAuthHeaders, sendToSync } from '../sync.js';
+import { escapeHtml } from '../html-escape.js';
+import { currentTheaterFacts, magneticVariationAt, requestTrueFromMagnetic } from '../magnetic.js';
+import { getUserCoalition } from '../iff.js';
+import { facilityRunwayTrueDeg } from './aprt-runway.js';
+import { getAllEfspRunwayStatuses } from './efsp/runway-status-state.js';
+
+import { atisActive, missionData } from '../picture.js';
+import { saveSettings, settings } from '../settings.js';
 
 // ── APRT / Theater side panel ─────────────────────────────────────────────
-// Split out of the former ui.js "god file" — see panels/topbar.js for why
-// this stays a plain script rather than an IIFE. This was the single
+// Split out of the former ui.js "god file" (history). It was the single
 // largest chunk of ui.js (~625 of its 2234 lines) — airport reference card,
-// manual weather entry, ATIS build/transmit/loop, and theater-wide settings
-// (transition altitude, heading correction, game-time offset).
+// manual weather entry, ATIS build/transmit/loop, and a read-only line of
+// theater facts. Nothing about the theater is a setting any more: crc-sync
+// applies the UTC offset (docs/adr/0079) and owns the transition altitude and
+// magnetic variation (docs/adr/0085), all from its config/theaters.json.
 
-let _aprtSelectedApt = null;
+// The APRT panel's runway in true, for the extended AP-radar centerline
+// (geojson.js buildExtendedCenterline()). Cached rather than read from the DOM
+// every map-update tick. A runway end a Facility describes is drawn on its
+// TRUE heading from the runway-status record (crc-sync docs/adr/0139,
+// aprt-runway.js): the runway number is only a rounded magnetic name (Incirlik's
+// 05 is 050 magnetic but 052.7 true, 3 degrees off if read as 050). An airfield
+// no Facility describes falls back to the number times ten as magnetic,
+// converted by crc-sync (its docs/adr/0085 — a typed magnetic value is never
+// converted in the client); no centerline is drawn until it answers.
+let _aprtRwyHeading = null;  // magnetic, from the runway number (the fallback)
+let _aprtRwyReq = 0;
 
-// Numeric heading parsed from the APRT panel's runway field, for the
-// extended APP-radar centerline (geojson.js buildExtendedCenterline()).
-// Cached rather than read from the DOM every map-update tick.
-let _aprtRwyHeading = null;
+/** Test seam: the selected airfield and its runway's true bearing, as a click and crc-sync's answer set them. */
+export function _setAprtRunwayForTest(apt, trueDeg) { _setAprtSelectedApt(apt); _setAprtRwyTrueDeg(trueDeg); }
 
-function _updateAprtRwyHeading() {
+export function _updateAprtRwyHeading() {
   const raw = ((document.getElementById('aprt-atis-rwy') || {}).value || '').toUpperCase().trim();
   const m = raw.match(/^(\d{1,2})([LRC]?)$/);
   _aprtRwyHeading = m ? parseInt(m[1], 10) * 10 : null;
-  if (typeof updateMap === 'function') updateMap();
+  const req = ++_aprtRwyReq;
+  const apt = _aprtSelectedApt;
+  const facilityTrue = facilityRunwayTrueDeg(apt, raw, getAllEfspRunwayStatuses());
+  _setAprtRwyTrueDeg(facilityTrue);
+  if (facilityTrue == null && _aprtRwyHeading != null && apt) {
+    requestTrueFromMagnetic(_aprtRwyHeading, apt.lat, apt.lon).then((t) => {
+      if (req !== _aprtRwyReq) return; // a newer entry replaced it
+      _setAprtRwyTrueDeg(t);
+      markEfspChanged('map');
+    });
+  }
+  markEfspChanged('map');
 }
 
 // Per-app-session id so crc-sync can tell "my own next 5s loop tick" apart
@@ -34,7 +65,7 @@ const _atisOwnerId = crypto.randomUUID();
 // visible to update yet either.
 let _atisLiveRefresh = null;
 
-function _updateAprtRefCard() {
+export function _updateAprtRefCard() {
   const $card = document.getElementById('aprt-ref-card');
   if (!$card) return;
 
@@ -56,9 +87,14 @@ function _updateAprtRefCard() {
   const $qnh  = document.getElementById('aprt-ref-qnh');
   const $temp = document.getElementById('aprt-ref-temp');
   if (wx) {
-    const windDir = String(wx.windFrom).padStart(3, '0');
+    // Tower readout: magnetic wind, converted by crc-sync (decisions H76).
+    const windDir = wx.windFromMagnetic == null ? '---' : String(wx.windFromMagnetic).padStart(3, '0');
     const inhg    = (wx.pressureHpa / 33.8639).toFixed(2);
-    if ($wind) { $wind.textContent = `${windDir}° @ ${wx.windKt} kt`; $wind.className = 'aprt-ref-v'; }
+    if ($wind) {
+      $wind.textContent = `${windDir}°M @ ${wx.windKt} kt`;
+      $wind.title = wx.windFromTrue == null ? '' : `Magnetic. True: ${String(wx.windFromTrue).padStart(3, '0')}°T`;
+      $wind.className = 'aprt-ref-v';
+    }
     if ($qnh)  { $qnh.textContent  = `${wx.pressureHpa} hPa  /  ${inhg} inHg`; $qnh.className = 'aprt-ref-v'; }
     if ($temp) { $temp.textContent = `${wx.tempC > 0 ? '+' : ''}${wx.tempC}°C`; $temp.className = 'aprt-ref-v'; }
   } else {
@@ -83,10 +119,18 @@ function _updateAprtRefCard() {
     if (clouds.length === 0) {
       $cldRows.innerHTML = '<div class="aprt-ref-row"><span class="aprt-ref-k">CLD</span><span class="aprt-ref-v dim">—</span></div>';
     } else {
-      $cldRows.innerHTML = clouds.map((c, i) =>
-        `<div class="aprt-ref-row"><span class="aprt-ref-k">${i === 0 ? 'CLD' : ''}</span>` +
-        `<span class="aprt-ref-v">${CLOUD_LABELS[c.cover] || c.cover}${c.base ? ' ' + Number(c.base).toLocaleString() + ' ft' : ''}</span></div>`
-      ).join('');
+      $cldRows.replaceChildren(...clouds.map((c, i) => {
+        const row = document.createElement('div');
+        row.className = 'aprt-ref-row';
+        const k = document.createElement('span');
+        k.className = 'aprt-ref-k';
+        k.textContent = i === 0 ? 'CLD' : '';
+        const v = document.createElement('span');
+        v.className = 'aprt-ref-v';
+        v.textContent = (CLOUD_LABELS[c.cover] || c.cover) + (c.base ? ' ' + Number(c.base).toLocaleString() + ' ft' : '');
+        row.append(k, v);
+        return row;
+      }));
     }
   }
 
@@ -94,7 +138,7 @@ function _updateAprtRefCard() {
   const rwyRaw  = ((document.getElementById('aprt-atis-rwy')  || {}).value || '').toUpperCase().trim();
   const info    = ((document.getElementById('aprt-atis-info') || {}).value || '').toUpperCase().charAt(0);
   const freq    = (document.getElementById('aprt-atis-freq')  || {}).value || '';
-  const taFt    = settings.transitionAltFt ?? 18000;
+  const taFt    = settings.transitionAltFt;
 
   const $rwy  = document.getElementById('aprt-ref-rwy');
   const $info = document.getElementById('aprt-ref-info');
@@ -109,22 +153,28 @@ function _updateAprtRefCard() {
   if (_atisLiveRefresh) _atisLiveRefresh();
 }
 
-// Re-syncs the theater settings inputs' displayed values from `settings`
-// state — called from app.js when a 'theater-settings' broadcast arrives
-// from crc-sync (any client, including this one, having edited it) so every
-// controller's airport panel shows the same transition altitude / heading
-// correction / game-time offset instead of only whoever last edited it
-// locally. No-op if the panel has never been mounted (inputs don't exist).
-function refreshAprtTheaterInputs() {
-  const $transAlt      = document.getElementById('aprt-transition-alt');
-  const $hdgCorrection = document.getElementById('aprt-hdg-correction');
-  const $timeOffset    = document.getElementById('aprt-time-offset');
-  if ($transAlt)      $transAlt.value      = settings.transitionAltFt ?? 18000;
-  if ($hdgCorrection) $hdgCorrection.value = settings.hdgCorrection ?? 0;
-  if ($timeOffset)    $timeOffset.value    = settings.gameTimeOffset ?? 0;
+// Shows the theater facts crc-sync sent (app.js's 'theater' case): the
+// transition altitude, and the variation at the selected airfield (or the
+// theater's centre) with where it came from. No-op before the panel mounts.
+export function refreshAprtTheaterFacts() {
+  const msg = currentTheaterFacts();
+  const $ta  = document.getElementById('aprt-theater-ta');
+  const $var = document.getElementById('aprt-theater-var');
+  if ($ta) $ta.textContent = `${settings.transitionAltFt.toLocaleString('en-US')} ft`;
+  if (!$var) return;
+  const apt = _aprtSelectedApt;
+  const v = magneticVariationAt(apt ? apt.lat : undefined, apt ? apt.lon : undefined);
+  if (v == null) { $var.textContent = '—'; return; }
+  const m = (msg && msg.magnetic) || {};
+  const where = apt ? (apt.icao || apt.name) : 'centre';
+  const note = m.source === 'FIXED' ? 'fixed' : m.source === 'WMM2025+OFFSET' ? 'WMM + offset' : 'WMM';
+  $var.textContent = `${Math.abs(v).toFixed(1)}°${v >= 0 ? 'E' : 'W'} (${note}, ${where})`;
+  $var.title = m.modelDateValid === false
+    ? 'The mission date is outside WMM2025\'s 2025–2030 window, so the model is extrapolated.'
+    : 'World Magnetic Model 2025 at the mission date, unless crc-sync\'s theaters.json overrides it.';
 }
 
-function initAprtPanel() {
+export function initAprtPanel() {
   const $panel  = document.getElementById('aprt-panel');
   const $search = document.getElementById('aprt-search');
   if (!$panel) return;
@@ -208,48 +258,7 @@ function initAprtPanel() {
     });
   }
 
-  // Theater settings — squadron-wide via crc-sync (src/theater-settings.js),
-  // same pattern as the SQWK C/S mapping in the Calls panel: update the
-  // local cache optimistically so this client feels instant, then push the
-  // change so every other connected controller's panel picks it up too
-  // (refreshAprtTheaterInputs(), called from app.js's 'theater-settings'
-  // case, re-syncs these inputs' displayed values on the resulting
-  // broadcast — including back to the client that made the edit, keeping
-  // everyone converged on whatever crc-sync ends up persisting).
-  const $transAlt   = document.getElementById('aprt-transition-alt');
-  const $hdgCorrection = document.getElementById('aprt-hdg-correction');
-  const $timeOffset = document.getElementById('aprt-time-offset');
-
-  if ($transAlt) {
-    $transAlt.value = settings.transitionAltFt ?? 18000;
-    $transAlt.addEventListener('change', () => {
-      settings.transitionAltFt = parseInt($transAlt.value) || 18000;
-      saveSettings(); updateMap(); _updateAprtRefCard();
-      sendToSync({ type: 'theaterSettingsSet', transitionAltFt: settings.transitionAltFt });
-    });
-  }
-  if ($hdgCorrection) {
-    $hdgCorrection.value = settings.hdgCorrection ?? 0;
-    // 'input' fires on every keystroke — kept local-only (map redraw needs
-    // to feel instant while typing). The synced push waits for 'change'
-    // (blur/enter/spinner-commit) below so crc-sync isn't getting a
-    // WS message + a synchronous config-file write per keystroke.
-    $hdgCorrection.addEventListener('input', () => {
-      settings.hdgCorrection = parseInt($hdgCorrection.value) || 0;
-      saveSettings(); updateMap();
-    });
-    $hdgCorrection.addEventListener('change', () => {
-      sendToSync({ type: 'theaterSettingsSet', hdgCorrection: settings.hdgCorrection });
-    });
-  }
-  if ($timeOffset) {
-    $timeOffset.value = settings.gameTimeOffset ?? 0;
-    $timeOffset.addEventListener('change', () => {
-      settings.gameTimeOffset = parseInt($timeOffset.value) || 0;
-      saveSettings();
-      sendToSync({ type: 'theaterSettingsSet', gameTimeOffset: settings.gameTimeOffset });
-    });
-  }
+  refreshAprtTheaterFacts();
 
   // ATIS BUILD button
   const $build = document.getElementById('aprt-atis-build');
@@ -410,12 +419,15 @@ function _renderAprtAptList(filter) {
     const row      = document.createElement('div');
     const isActive = _aprtSelectedApt && _aprtSelectedApt.name === a.name;
     row.className  = 'aprt-apt-row' + (isActive ? ' active' : '');
-    row.innerHTML  =
-      `<span>${a.icao || a.name}</span>` +
-      `<span class="aprt-apt-sub">${a.icao ? a.name : ''}</span>`;
+    const code = document.createElement('span');
+    code.textContent = a.icao || a.name;
+    const sub = document.createElement('span');
+    sub.className = 'aprt-apt-sub';
+    sub.textContent = a.icao ? a.name : '';
+    row.append(code, sub);
     row.addEventListener('click', (e) => {
       e.stopPropagation();
-      _aprtSelectedApt = a;
+      _setAprtSelectedApt(a);
       _renderAprtAptList(document.getElementById('aprt-search').value || '');
       // Restore this airport's squadron-wide saved ATIS setup (freq/rwy/info
       // — see crc-sync's apt-config.js; settings.aprtAtis* here is just this
@@ -428,6 +440,7 @@ function _renderAprtAptList(filter) {
       const $info = document.getElementById('aprt-atis-info');
       if ($info) $info.value = (settings.aprtAtisInfo || {})[key] || '';
       _updateAprtRwyHeading();
+      refreshAprtTheaterFacts();
       _fetchAndShowAprtWeather(a);
     });
     $list.appendChild(row);
@@ -492,10 +505,13 @@ function _buildAtisText() {
   const infoLetter = ((document.getElementById('aprt-atis-info')    || {}).value || 'A').toUpperCase().charAt(0);
   const rwyRaw     = ((document.getElementById('aprt-atis-rwy')     || {}).value || '').toUpperCase().trim();
   const comment    = ((document.getElementById('aprt-atis-comment') || {}).value || '').trim();
-  const taFt       = settings.transitionAltFt ?? 18000;
+  const taFt       = settings.transitionAltFt;
 
   const aptName  = apt ? (apt.name || apt.icao) : 'THIS STATION';
-  const windDir  = wx ? String(wx.windFrom).padStart(3, '0') : '000';
+  // ATIS wind is magnetic (decisions H76), converted by crc-sync. Unknown
+  // variation: the ATIS says the wind is not available rather than read a
+  // true value as magnetic.
+  const windDir  = wx && wx.windFromMagnetic != null ? String(wx.windFromMagnetic).padStart(3, '0') : (wx ? null : '000');
   const windKt   = wx ? wx.windKt   : 0;
   const tempC    = wx ? wx.tempC    : 0;
   const qnhHpa   = wx ? wx.pressureHpa : 1013;
@@ -508,7 +524,7 @@ function _buildAtisText() {
   const infoPhon    = NATO[infoLetter] || infoLetter;
   const rwySpelled  = rwyRaw  ? spellRwy(rwyRaw)            : '—';
   const taSpelled   = spellDigits(taK)  + ' thousand';
-  const windDirSp   = spellDigits(windDir);
+  const windDirSp   = windDir == null ? null : spellDigits(windDir);
   const windKtSp    = spellNum(windKt);
   const tempSp      = spellNum(tempC);
   const qnhHpaSp    = spellDigits(qnhHpa);
@@ -532,7 +548,7 @@ function _buildAtisText() {
     `This is ${aptName} ATIS information ${infoPhon}.`,
     `Expect runway ${rwySpelled}.`,
     `Transition altitude ${taSpelled}.`,
-    `Wind ${windDirSp} degrees, ${windKtSp} knots.`,
+    windDirSp == null ? 'Wind not available.' : `Wind ${windDirSp} degrees, ${windKtSp} knots.`,
     `Visibility ${vis}.`,
     ...cloudLines,
     `Temperature ${tempSp} degrees.`,
@@ -599,7 +615,7 @@ function _loadAprtManualWx(apt) {
 // instead of only the next time they reselect it. Skips whichever field (if
 // any) the user currently has focused, so a live edit from someone else
 // can't overwrite this controller's own in-progress keystrokes.
-function refreshAprtSelectedApt() {
+export function refreshAprtSelectedApt() {
   if (!_aprtSelectedApt) return;
   const key    = _aprtSelectedApt.icao || _aprtSelectedApt.name;
   const active = document.activeElement;
@@ -627,8 +643,16 @@ function refreshAprtSelectedApt() {
 }
 
 // Called when airport list changes (new mission) while panel is open
-function refreshAprtAptList() {
+export function refreshAprtAptList() {
   const $panel = document.getElementById('aprt-panel');
   if (!$panel || !$panel.classList.contains('open')) return;
   _renderAprtAptList(document.getElementById('aprt-search').value || '');
 }
+
+// A runway-status record arriving (or changing) after the runway was typed: the centreline moves onto the end's true heading
+// (crc-sync docs/adr/0139). Only when it changes what is drawn.
+onEfspChanged(['bays', 'snapshot'], () => {
+  const raw = ((typeof document !== 'undefined' && document.getElementById('aprt-atis-rwy')) || {}).value || '';
+  const t = facilityRunwayTrueDeg(_aprtSelectedApt, raw, getAllEfspRunwayStatuses());
+  if (t != null && t !== _aprtRwyTrueDeg) _updateAprtRwyHeading();
+});

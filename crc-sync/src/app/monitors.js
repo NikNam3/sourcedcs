@@ -1,0 +1,351 @@
+'use strict';
+
+// Every monitor createApp runs, built in one place and handed back by name: forwarding obligations, the Strip<->track
+// correlation reconciler, EFSP instrumentation, surveillance hints, conformance, short-term conflict alert, the
+// airspace-entry alert, the TOFI regime monitor and the carrier tick, plus the one function that composes efsp-alerts from them.
+// They produce state and server-originated frames; every frame leaves through `hubLink` (late-binding.js), because the hub
+// is built after them: it takes the alert composer's `recheck` as its `onEfspChange`.
+
+const { ForwardingObligationMonitor } = require('../efsp/forwarding-obligations');
+const { CorrelationReconciler } = require('../efsp/correlation-reconciler');
+const { SurveillanceHintMonitor } = require('../efsp/surveillance-hints');
+const { getHintsConfig } = require('../efsp/surveillance-hints-config');
+const { ConformanceMonitor, refuelingReceivers } = require('../efsp/conformance');
+const { TofiRegimeMonitor } = require('../efsp/tofi-regime-monitor');
+const { AirspaceEntryAlertMonitor } = require('../efsp/airspace-entry-alert');
+const { ConflictAlertMonitor, mciFloorFt } = require('../conflict-alert');
+const { trackControlPositions } = require('../efsp/track-control');
+const { ATC_CLASSES } = require('../efsp/position-coverage');
+const { loadAlertingConfig } = require('../alerting-config');
+const { indicatedAltFt } = require('../altimetry');
+const { WALL_CLOCK } = require('../mission-clock');
+const { createEfspInstrumentation } = require('../efsp/metrics');
+const { CarrierTick } = require('../efsp/carrier-tick');
+const { createShipWind } = require('./ship-wind');
+const { carrierDelta, correlationDelta } = require('../efsp/wire/frames');
+const { ParMonitor } = require('../surveillance/par-monitor');
+const { flightsHeldOnFinal } = require('../efsp/final-position');
+const { loadParTuning } = require('../surveillance/par-tuning');
+
+const FT_PER_M = 3.28084;
+
+/**
+ * @param {object} deps
+ * @param {object} deps.env
+ * @param {object} deps.efsp the facade
+ * @param {object} deps.facilityConfig
+ * @param {object} deps.missionClock
+ * @param {object} deps.missionSession
+ * @param {object} deps.trackStore
+ * @param {object} deps.surveillance `{ transponders, identity }`
+ * @param {object} deps.theaterContext
+ * @param {object} deps.grpcClient
+ * @param {number} deps.ownCoalition
+ * @param {{get: () => object}} deps.hubLink
+ * @param {{beacon?:Function, callsign?:Function, gridToMagnetic?:Function}} [deps.trackSeams]
+ * @param {object|null} [deps.surveillanceHints] undefined builds the SurveillanceHintMonitor; null leaves it out (the soak)
+ * @param {{elevationAt:Function}|null} [deps.terrainStore] the ground under an MCI intruder (docs/adr/0118); null: sea level
+ * @param {{get:(airportName:string)=>object|undefined}|null} [deps.airportWeather] per-airport weather (the PAR's field wind, docs/adr/0139)
+ */
+function buildMonitors({ env, efsp, facilityConfig, missionClock, missionSession, trackStore, surveillance, theaterContext, grpcClient, ownCoalition, hubLink, trackSeams = {}, surveillanceHints: hintsDep, terrainStore = null, airportWeather = null, serverResources = null }) {
+  const { transponders, identity } = surveillance;
+  const deliver = (frames) => hubLink.get().deliverEfsp(frames);
+
+  // ── WP4A forwarding obligations (guide §4.6.1, docs/adr/0021, 0067) — the set due right now, sent as state in
+  // efsp-alerts (broadcastEfspAlerts below). Re-evaluated on a 15s sweep for the clock (comfortably fine-grained for
+  // minute-scale obligations) and right after any EFSP delivery (the hub's onEfspChange), so a controller's fix clears its
+  // badge at once. ────────────────────────────────────────────────────────
+  const alertingConfig = loadAlertingConfig();
+  const obligationMonitor = new ForwardingObligationMonitor({
+    clock: missionClock,
+    boardStoreFor: efsp.boardStoreFor,
+    flightDataStore: efsp.flightDataStore,
+    facilityConfig,
+    airspaceStore: efsp.airspaceStore,
+    // docs/adr/0122: an accepted HANDOFF not checked in, and a not-released one whose aircraft is inside the receiver's
+    // airspace already (ADR 0125), ask for attention.
+    handoffConfig: alertingConfig.handoff,
+    insideReceiverAirspace: efsp.insideReceiverAirspace,
+    // docs/adr/0134, H161 V2-Q2 a: UNACTIVATED_AIRSPACE_ENTRY only while the flight is inside its approved airspace, the
+    // airspace-entry monitor's fact (built below; read only at tick time, after it exists).
+    insideApprovedAirspace: (facilityId, strip) => !!strip.airspaceEntry
+      && airspaceEntryAlertMonitor.isInside(facilityId, strip.stripId, strip.airspaceEntry.airspaceId),
+  });
+
+  // ── WP5 Strip<->track correlation (guide §6.6, docs/adr/0045/0046) ───────
+  // Its own cadence again, and a much faster one: this is what keeps each Strip's bound contact fresh, and §6.6 rule 4's
+  // benchmark is one second. The store lives inside createEfsp() (it needs the MutationLog and the atomic snapshot); the
+  // reconciler lives out here, because only createApp has the TrackStore.
+  const correlationReconciler = new CorrelationReconciler({
+    clock: missionClock,
+    wallClock: WALL_CLOCK,
+    trackStore,
+    // The code the aircraft is actually sending (docs/adr/0059).
+    beaconOf: trackSeams.beacon || ((t) => { const x = transponders.transponderOf(t); return x ? x.code : null; }),
+    flightDataStore: efsp.flightDataStore,
+    correlationStore: efsp.correlationStore,
+    boardStoreFor: efsp.boardStoreFor,
+    facilityConfig,
+    onDelta: (payload) => deliver(correlationDelta(efsp.correlationStore, payload.correlations || [], payload.stats)),
+  });
+
+  // ── WP8 instrumentation (docs/adr/0065) — the §11.5 metric set, the §11.4 traffic count and Mutation-log retention. It
+  // wraps efsp.handleMessage/onDisconnect (ws-hub.js looks them up per message, and no socket connects before server.listen).
+  const efspInstrumentation = createEfspInstrumentation({
+    env,
+    efsp,
+    facilityConfig,
+    clock: missionClock,
+    correlationStats: () => correlationReconciler.getStats(),
+    obligationStats: () => obligationMonitor.getComplianceStats(),
+    // A metrics session is one mission to the next (H32): F3's mission session.
+    missionSession,
+    // The process's own CPU and memory (docs/adr/0141), the answer's `serverResources` block.
+    serverResources,
+  });
+
+  // ── Conformance and short-term conflict alerting (docs/adr/0058) ─────────
+  // Server-side, because only this process sees every track: a client only receives the ones inside its own coverage. Once
+  // a second, the same rhythm as correlation (whose records conformance reads). Only what is WRONG is ever sent; the whole
+  // alert state goes out when it changes.
+  const conformanceMonitor = new ConformanceMonitor({
+    clock: missionClock,
+    wallClock: WALL_CLOCK,
+    trackStore,
+    flightDataStore: efsp.flightDataStore,
+    correlationStore: efsp.correlationStore,
+    weather: () => grpcClient.getWeather(),
+    transitionAltFt: () => theaterContext.transitionAltFt(),
+    indicatedAltFt,
+    // DCS's course is grid; the typed HDG is magnetic (docs/adr/0085).
+    gridToMagnetic: trackSeams.gridToMagnetic || ((deg, lat, lon) => theaterContext.gridToMagnetic(deg, lat, lon)),
+    config: alertingConfig.conformance,
+    // docs/adr/0139 (H164 FT-Q8): the flights the final Position holds (final-position.js, by the Facility's final Bays, never
+    // an id): nothing of their clearance is checked; on a PAR final, after Begin descent, their glidepath is. A missed approach
+    // is checked again (JO 7110.65BB para 5-10-12). Read once per tick; the PAR monitor is built below and read only then.
+    finals: () => {
+      const out = new Map();
+      for (const [flightDataId, { facilityId, strip }] of flightsHeldOnFinal({ facilityConfig, boardStoreFor: efsp.boardStoreFor })) {
+        const descending = !!(strip.finalCalls && strip.finalCalls.BEGIN_DESCENT);
+        out.set(flightDataId, { glidepath: descending ? parMonitor.glidepathOf(facilityId, strip.stripId) : null });
+      }
+      return out;
+    },
+    // docs/adr/0128 §4: the altitude block a live Strip was approved to work in an airspace, checked when nothing is assigned.
+    entryBlocks: () => {
+      const out = new Map();
+      for (const facilityId of facilityConfig.getFacilityIds()) {
+        const board = efsp.boardStoreFor(facilityId);
+        if (!board) continue;
+        for (const s of board.getAll()) {
+          const block = s.state !== 'DROPPED' && s.flightDataId && s.airspaceEntry && s.airspaceEntry.altitudeBlock;
+          if (block && !out.has(s.flightDataId)) out.set(s.flightDataId, { ...block, at: s.airspaceEntry.approvedAt });
+        }
+      }
+      return out;
+    },
+    // docs/adr/0118: the receivers under MARSA with a tanker, and the tanker each is measured from.
+    refueling: () => refuelingReceivers(efsp.marsaStore.getAll(), (id) => efsp.flightDataStore.getFlightData(id)),
+  });
+  // docs/adr/0076 — "detected airborne" and staleness. It reads the Boards and the correlation records and writes nothing:
+  // surveillance informs, the controller advances (§10.3).
+  const surveillanceHints = hintsDep === null ? null : (hintsDep || new SurveillanceHintMonitor({
+    clock: missionClock,
+    wallClock: WALL_CLOCK,
+    trackStore,
+    correlationStore: efsp.correlationStore,
+    boardStoreFor: efsp.boardStoreFor,
+    facilityConfig,
+    getMissionData: () => hubLink.get().getMissionData(),
+    config: getHintsConfig(),
+    onStaleness: (e) => efspInstrumentation.metrics.recordStaleness(e),
+  }));
+  if (surveillanceHints) efspInstrumentation.metrics.declareSource('staleness');
+  // docs/adr/0118 (H134 LT-RQ16 a, H136 VQ7 a, VQ8 a): CA between tracked (correlated) contacts, MCI between a tracked one
+  // and an untracked one that reports altitude, nothing between two untracked; no alert inside one formation or one MARSA.
+  const conflictAlertMonitor = new ConflictAlertMonitor({
+    trackStore,
+    config: alertingConfig.conflictAlert,
+    trackedFlights: () => {
+      const out = new Map();
+      for (const [trackId, { flightDataId, state }] of efsp.correlationStore.trackIndex()) {
+        if (state === 'CORRELATED') out.set(String(trackId), flightDataId);
+      }
+      return out;
+    },
+    activeMarsaFor: (flightDataId) => efsp.marsaStore.activeFor(flightDataId),
+    flightSizeOf: (flightDataId) => {
+      const fd = efsp.flightDataStore.getFlightData(flightDataId);
+      return (fd && fd.identity && fd.identity.flightSize) || 1;
+    },
+    // A transponder that replies is Mode C here (surveillance/transponder.js); the soak's seam answers with a code.
+    reportsAltitude: trackSeams.beacon ? ((track) => trackSeams.beacon(track) != null) : ((track) => !!transponders.transponderOf(track)),
+    mciShownAt: (intruder, facilityId, positionId) => mciShownAt(intruder, facilityId, positionId),
+    // docs/adr/0145: only an ATC Position is shown CA, so only one suppresses it; the suppression is stamped in mission time.
+    isAtcPosition: (positionId) => ATC_CLASSES.has(facilityConfig.getPositionClass(positionId)),
+    clock: missionClock,
+    // docs/adr/0147 (H176): shown only at the Positions with track control of the aircraft (the Strip holders).
+    trackControlOf: (flightDataId) => trackControlPositions(stripsOfFlight(flightDataId)),
+    // Alert text names each aircraft the way identity does (docs/adr/0059).
+    callsignFor: trackSeams.callsign || ((track) => identity.labelFor(track.id)),
+  });
+  /** Every Strip of one flight on every Facility's Board, with its Facility (docs/adr/0147's track control reads them). */
+  function stripsOfFlight(flightDataId) {
+    const out = [];
+    for (const facilityId of facilityConfig.getFacilityIds()) {
+      const board = efsp.boardStoreFor(facilityId);
+      if (!board) continue;
+      for (const strip of board.getAll()) if (strip.flightDataId === flightDataId) out.push({ facilityId, strip });
+    }
+    return out;
+  }
+  // docs/adr/0119 (H132, H134 LT-Q5 a, H136 VQ4 b): an aircraft inside an ACTIVE airspace it may not be in, by airspace
+  // type. Ticks after the CA monitor (same ticker), whose formation members it reads.
+  const airspaceEntryAlertMonitor = new AirspaceEntryAlertMonitor({
+    trackStore,
+    airspaceStore: efsp.airspaceStore,
+    // The registry's limits are indicated feet (I4), as app.js's locateTrack.
+    locate: (track) => (Number.isFinite(track.lat) && Number.isFinite(track.lon)
+      ? { lat: track.lat, lon: track.lon, altFt: indicatedAltFt(track.alt, grpcClient.getWeather(), theaterContext.transitionAltFt()) }
+      : null),
+    trackedFlights: () => {
+      const out = new Map();
+      for (const [trackId, { flightDataId, state }] of efsp.correlationStore.trackIndex()) {
+        if (state === 'CORRELATED') out.set(String(trackId), flightDataId);
+      }
+      return out;
+    },
+    formationMembers: () => conflictAlertMonitor.formationMemberFlights(),
+    flightDataOf: (id) => efsp.flightDataStore.getFlightData(id),
+    liveStrips: () => {
+      const out = new Map();
+      for (const facilityId of facilityConfig.getFacilityIds()) {
+        const board = efsp.boardStoreFor(facilityId);
+        if (!board) continue;
+        for (const s of board.getAll()) {
+          if (s.state === 'DROPPED' || !s.flightDataId) continue;
+          if (!out.has(s.flightDataId)) out.set(s.flightDataId, []);
+          out.get(s.flightDataId).push({ facilityId, stripId: s.stripId, stripType: s.stripType, state: s.state, positionId: s.ownerPositionId, airspaceId: (s.airspaceEntry && s.airspaceEntry.airspaceId) || null });
+        }
+      }
+      return out;
+    },
+    reportsAltitude: trackSeams.beacon ? ((track) => trackSeams.beacon(track) != null) : ((track) => !!transponders.transponderOf(track)),
+    callsignFor: trackSeams.callsign || ((track) => identity.labelFor(track.id)),
+    clock: missionClock,
+    wallClock: WALL_CLOCK, // track ages: tracks.js stamps wall time
+    config: alertingConfig.airspaceEntry,
+    // docs/adr/0128: "filed through" resolves the filed route against the mission's nav points and airports.
+    missionData: () => hubLink.get().getMissionData(),
+  });
+  /**
+   * docs/adr/0118: is an MCI with this intruder shown at this Position? An ATC Position, MCI not inhibited there (JO 7210.3EE
+   * para 12-6-12 d), and the intruder above its Facility's base altitude (para 12-6-12 b, 8-2-5 b). AGL needs the ground:
+   * where terrain is not known (no terrain cache for the theater, docs/adr/0133) the ground is taken as sea level (ours); the
+   * high-terrain rule of para 8-2-5 b applies only where it is known.
+   */
+  function mciShownAt(intruder, facilityId, positionId) {
+    if (!ATC_CLASSES.has(facilityConfig.getPositionClass(positionId))) return false;
+    const mci = facilityConfig.getModeCIntruder(facilityId);
+    if (mci.inhibitedPositions.includes(positionId)) return false;
+    if (!intruder || !Number.isFinite(intruder.alt)) return false;
+    const altFt = intruder.alt * FT_PER_M;
+    const groundM = terrainStore && typeof terrainStore.elevationAt === 'function' ? terrainStore.elevationAt(intruder.lon, intruder.lat) : null;
+    const groundFt = Number.isFinite(groundM) ? groundM * FT_PER_M : null;
+    return altFt > mciFloorFt(mci, groundFt);
+  }
+  // ── The TOFI separation regime (docs/adr/0102) ────────────────────────────
+  // Where a correlated flight is, relative to the airspaces ACTIVE for an MRU Facility: one answer for ACCEPT, MARK_ENTERED and
+  // the monitor (`efsp.regimeLocator`, built inside createEfsp from the `locateTrack` it was given). No correlated contact is
+  // `located: false`, which is unknown, never outside.
+  const tofiRegimeMonitor = new TofiRegimeMonitor({
+    clock: missionClock,
+    wallClock: WALL_CLOCK,
+    flightDataStore: efsp.flightDataStore,
+    locate: efsp.regimeLocator,
+    activeMarsaFor: (flightDataId) => efsp.marsaStore.activeFor(flightDataId),
+    enter: (flightDataId, info) => efsp.markTofiEntered(flightDataId, info),
+    onEntered: (message) => deliver(message),
+    config: alertingConfig.tofiRegime,
+  });
+
+  // ── The carrier's ship banner (docs/adr/0074, ADR 0064 B6) — matched to the live ship track once a second, republished only
+  // when it changed enough to matter. Own coalition, grid convergence and magnetic variation are injected: the model owns none
+  // of them (decisions H15, H42).
+  const shipWind = createShipWind({ grpcClient });
+  const carrierTick = new CarrierTick({
+    carrierStore: efsp.carrierStore,
+    tracks: () => trackStore.getAll(),
+    ownCoalition: () => ownCoalition,
+    clock: missionClock,
+    convergenceAt: (lat, lon) => theaterContext.convergenceAt(lat, lon),
+    variationAt: (lat, lon) => theaterContext.variationAt(lat, lon),
+    weatherPa: () => { const w = grpcClient.getWeather(); return w && Number.isFinite(w.pressurePa) ? w.pressurePa : null; },
+    windAt: (lat, lon) => shipWind.get(lat, lon),
+    onChange: () => deliver(carrierDelta(efsp.carrierStore)),
+  });
+
+  // ── The PAR sample (docs/adr/0112; airfield only, ADR 0116): each aircraft on a final, measured against its approach, for the Position working it.
+  // The hub sends it (`sendParSamples`, the `par` ticker); the airfield elevation is DCS's, for an approach whose TDZE the
+  // config leaves to DCS. ──────────────────────────────────────────────────
+  const parMonitor = new ParMonitor({
+    facilityConfig,
+    boardStoreFor: (facilityId) => { try { return efsp.boardStoreFor(facilityId); } catch { return null; } },
+    flightDataOf: (id) => efsp.flightDataStore.getFlightData(id),
+    correlatedTrackId: (id) => efsp.correlationStore.correlatedTrackId(id),
+    runwayViewOf: (facilityId) => efsp.runwayStatusStore.statusView(facilityId),
+    parValuesOf: (facilityId) => efsp.runwayStatusStore.parValues(facilityId),
+    trackOf: (id) => trackStore.get(id),
+    variationAt: (lat, lon) => theaterContext.variationAt(lat, lon),
+    convergenceAt: (lat, lon) => theaterContext.convergenceAt(lat, lon),
+    // docs/adr/0139: the needed heading uses the airfield's wind as ATIS and the tower do (app/airport-weather.js, H76).
+    fieldWindOf: (icao) => {
+      const data = hubLink.get().getMissionData();
+      const apt = airportWeather && data && (data.airports || []).find(a => a.icao === icao);
+      const w = apt ? airportWeather.get(apt.name) : null;
+      return w && Number.isFinite(w.windFrom) && Number.isFinite(w.windKt) ? { windFromTrue: w.windFrom, windKt: w.windKt } : null;
+    },
+    airportElevationFt: (icao) => {
+      const data = hubLink.get().getMissionData();
+      const apt = data && (data.airports || []).find(a => a.icao === icao);
+      return apt && Number.isFinite(apt.elev) ? apt.elev * FT_PER_M : null;
+    },
+    wallClock: WALL_CLOCK,
+    tuning: loadParTuning(),
+  });
+
+  // The one place efsp-alerts is composed (docs/adr/0067). broadcastEfspAlerts replaces the whole alert state, so every
+  // producer — the 1s conformance/CA tick, the 15s obligation sweep, the post-delivery hook — must send all slices, or it would
+  // erase the others'.
+  function broadcastEfspAlerts() {
+    hubLink.get().broadcastEfspAlerts({
+      conformance: conformanceMonitor.getAll(),
+      tofiRegime: tofiRegimeMonitor.getAll(),
+      conflictAlert: conflictAlertMonitor.getAll(),
+      // Not sent: which sessions an MCI is for (docs/adr/0118), asked per session by the hub.
+      conflictAlertFor: (conflict, positions) => conflictAlertMonitor.deliverableTo(conflict, positions),
+      // docs/adr/0145: how it is shown to the session, `suppressedAt` its own Positions where a controller suppressed it.
+      conflictAlertAs: (conflict, positions) => conflictAlertMonitor.presentFor(conflict, positions),
+      airspaceEntry: airspaceEntryAlertMonitor.getAll(),
+      // Not sent either: an airspace-entry alert goes to the controlling Position and the flight's (docs/adr/0119).
+      airspaceEntryFor: (alert, positions) => airspaceEntryAlertMonitor.deliverableTo(alert, positions),
+      // docs/adr/0124 §1: the airspace card's flight list, only for the airspaces the session may approve entry into.
+      airspaceTrafficFor: (positions) => airspaceEntryAlertMonitor.trafficFor(positions),
+      // docs/adr/0134: which of the session's own Strips are airborne inside their approved airspace (the badge's amber).
+      airspaceInsideFor: (positions) => airspaceEntryAlertMonitor.insideFor(positions),
+      // docs/adr/0136: which of the session's own Strips are filed through an ACTIVE SUA with nothing coordinated (grey).
+      airspaceCoordinateFor: (positions) => airspaceEntryAlertMonitor.coordinateFor(positions),
+      obligations: obligationMonitor.getAll(),
+      surveillance: surveillanceHints ? surveillanceHints.getAll() : undefined, // docs/adr/0076: the suggestion chip and staleness
+    });
+  }
+  /** The hub's `onEfspChange`: obligations re-evaluated at once after an EFSP delivery, alerts sent when they moved. */
+  function recheckObligations() { if (obligationMonitor.tick()) broadcastEfspAlerts(); }
+
+  return {
+    obligationMonitor, correlationReconciler, efspInstrumentation, conformanceMonitor, surveillanceHints, conflictAlertMonitor,
+    airspaceEntryAlertMonitor, tofiRegimeMonitor, carrierTick, parMonitor, broadcastEfspAlerts, recheckObligations,
+  };
+}
+
+module.exports = { buildMonitors };

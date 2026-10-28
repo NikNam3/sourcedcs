@@ -23,9 +23,11 @@
 // is wired up; if DD175 lookup is wanted later, it needs a real design
 // decision about token forwarding, not just a second URL here.
 
-const SOURCEDCS_WEB_URL = process.env.CRCSYNC_SOURCEDCS_WEB_URL || 'http://localhost:7000';
-const LOOKUP_TIMEOUT_MS = 3000;
-const FLIGHT_PLAN_SERVICE_TOKEN = process.env.FLIGHT_PLAN_SERVICE_TOKEN || '';
+const { webCall, LOOKUP_TIMEOUT_MS } = require('./web-call');
+const { designatorFor } = require('./aircraft-data');
+
+// Read per call (an injected `opts` wins), never at require time.
+const webUrl = (opts) => String(opts.baseUrl || process.env.CRCSYNC_SOURCEDCS_WEB_URL || 'http://localhost:7000').replace(/\/+$/, '');
 
 /**
  * @param {string} callsign
@@ -33,47 +35,36 @@ const FLIGHT_PLAN_SERVICE_TOKEN = process.env.FLIGHT_PLAN_SERVICE_TOKEN || '';
  * @returns {Promise<{found:true, plan:object}|{found:false, reason:string}>} never throws, never rejects
  */
 async function lookupFlightPlan(callsign, opts = {}) {
-  const fetchImpl = opts.fetchImpl || fetch;
-  const baseUrl = opts.baseUrl || SOURCEDCS_WEB_URL;
-  const timeoutMs = opts.timeoutMs ?? LOOKUP_TIMEOUT_MS;
-
   if (!callsign || typeof callsign !== 'string') return { found: false, reason: 'no callsign given' };
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const res = await fetchImpl(`${baseUrl}/api/fpl1801/by-callsign/${encodeURIComponent(callsign)}`, {
-      signal: controller.signal,
-    });
-    if (res.status === 404) return { found: false, reason: 'no active flight plan for this callsign' };
-    if (!res.ok) return { found: false, reason: `sourcedcs-web returned ${res.status}` };
-
-    const plan = await res.json();
-    if (!plan || typeof plan !== 'object' || Array.isArray(plan)) return { found: false, reason: 'malformed response from sourcedcs-web' };
-    return { found: true, plan };
-  } catch (err) {
-    // Network error, DNS failure, connection refused, timeout/abort, or a
-    // JSON parse failure on a non-JSON body — all land here. Logged once,
-    // never thrown further, never left as an unhandled rejection.
-    console.warn('[flight-plan-lookup] sourcedcs-web unreachable or errored:', err.message);
-    return { found: false, reason: 'sourcedcs-web unreachable' };
-  } finally {
-    clearTimeout(timer);
-  }
+  const r = await webCall({ fetchImpl: opts.fetchImpl, url: `${webUrl(opts)}/api/fpl1801/by-callsign/${encodeURIComponent(callsign)}`, timeoutMs: opts.timeoutMs });
+  if (r.status === 404) return { found: false, reason: 'no active flight plan for this callsign' };
+  if (!r.ok) return { found: false, reason: r.reason };
+  const plan = r.body;
+  if (!plan || typeof plan !== 'object' || Array.isArray(plan)) return { found: false, reason: 'malformed response from sourcedcs-web' };
+  return { found: true, plan };
 }
 
 /**
- * Maps sourcedcs-web's DD1801 field names onto EFSP's FDR.filed shape
- * (fdr-store.js's createFdr() seed) — [SOURCE-DEFINED] mapping, since
+ * Maps sourcedcs-web's DD1801 field names onto EFSP's flight data seed shape
+ * (flight-data-store.js's createFlightData() seed — flat keys, nested into identity.* /
+ * filed.* by createFlightData() itself) — [SOURCE-DEFINED] mapping, since
  * sourcedcs-web's schema predates and is independent of EFSP's, and the
  * two use different field names for the same concepts. Only carries over
- * what EFSP actually models; DD1801-specific fields with no FDR
+ * what EFSP actually models; DD1801-specific fields with no flight data
  * equivalent (fplMessage, worldTour, liveStreaming, endurance, pob, pic,
  * altn1/altn2, ...) are dropped, not stashed anywhere — nothing reads them.
+ * aircraftType/wtc DO have a flight data home (identity.aircraftType/
+ * wakeCategory) even though they're not part of `filed`, unlike this
+ * function's name suggests — kept here anyway rather than a second mapping
+ * function, since it's still exactly "what a DD1801 plan can seed a new
+ * Strip's flight data with." tailNumber/unit/homeStation have no DD1801 equivalent
+ * at all (not part of an ICAO flight plan — squadron bookkeeping a
+ * controller enters by hand) and stay unseeded.
  * Never throws — a missing/malformed field on the plan just yields an
  * empty string for that seed field, same as an ordinary blank CreateStrip.
  */
-function toFdrFiledSeed(plan) {
+function toFlightDataFiledSeed(plan) {
   if (!plan || typeof plan !== 'object') return {};
   return {
     route: plan.route || '',
@@ -81,6 +72,13 @@ function toFdrFiledSeed(plan) {
     departureAirport: plan.depAerodrome || '',
     destinationAirport: plan.destAerodrome || '',
     remarks: plan.otherInfo || '',
+    aircraftType: designatorFor(plan.aircraftType), // S-ARCH-53: "F-16C" -> F16 (aircraft-data.js)
+    wakeCategory: plan.wtc || '',
+    // Item 13's departure time, HHMM Zulu as the pilot typed it. createFlightData()
+    // dates it by the mission clock into flightData.timeInputs, one source of the
+    // P-time fallback chain (docs/adr/0073) — never into the controller's
+    // filed.proposedDepartureTimeUtc.
+    flightPlanDepartureTimeHhmm: plan.depTime || '',
   };
 }
 
@@ -103,50 +101,32 @@ function toFdrFiledSeed(plan) {
  * down, slow, or unconfigured (no token set) always resolves {ok:false},
  * never a throw. Each returned entry is a lightweight display/seed pair,
  * not the raw sourcedcs-web record — callers never see plan-specific
- * fields EFSP doesn't model (see toFdrFiledSeed's own doc for what's
+ * fields EFSP doesn't model (see toFlightDataFiledSeed's own doc for what's
  * dropped and why).
  *
  * @param {{fetchImpl?:typeof fetch, baseUrl?:string, timeoutMs?:number, serviceToken?:string}} [opts]
  * @returns {Promise<{ok:true, plans:Array<{id, callsign, submittedByName, submittedAt, seed}>}|{ok:false, reason:string}>}
  */
 async function listFiledFlightPlans(opts = {}) {
-  const fetchImpl = opts.fetchImpl || fetch;
-  const baseUrl = opts.baseUrl || SOURCEDCS_WEB_URL;
-  const timeoutMs = opts.timeoutMs ?? LOOKUP_TIMEOUT_MS;
-  const serviceToken = opts.serviceToken ?? FLIGHT_PLAN_SERVICE_TOKEN;
-
+  const serviceToken = opts.serviceToken ?? (process.env.FLIGHT_PLAN_SERVICE_TOKEN || '');
   if (!serviceToken) return { ok: false, reason: 'FLIGHT_PLAN_SERVICE_TOKEN is not configured' };
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const res = await fetchImpl(`${baseUrl}/api/fpl1801/service/all`, {
-      headers: { Authorization: `Bearer ${serviceToken}` },
-      signal: controller.signal,
-    });
-    if (!res.ok) return { ok: false, reason: `sourcedcs-web returned ${res.status}` };
+  const r = await webCall({ fetchImpl: opts.fetchImpl, url: `${webUrl(opts)}/api/fpl1801/service/all`, token: serviceToken, timeoutMs: opts.timeoutMs });
+  if (!r.ok) return r;
+  const raw = r.body;
+  if (!Array.isArray(raw)) return { ok: false, reason: 'malformed response from sourcedcs-web' };
 
-    const raw = await res.json();
-    if (!Array.isArray(raw)) return { ok: false, reason: 'malformed response from sourcedcs-web' };
+  const plans = raw.map((plan) => ({
+    id: plan && plan.id != null ? plan.id : null,
+    callsign: (plan && plan.aircraftId) || '',
+    submittedByName: (plan && plan.submittedBy && plan.submittedBy.name) || null,
+    submittedAt: (plan && plan.submittedAt) || null,
+    seed: toFlightDataFiledSeed(plan),
+  })).filter((p) => p.callsign); // a plan with no aircraftId at all can't seed a CreateStrip — drop it rather than surface an unusable card
 
-    const plans = raw.map((plan) => ({
-      id: plan && plan.id != null ? plan.id : null,
-      callsign: (plan && plan.aircraftId) || '',
-      submittedByName: (plan && plan.submittedBy && plan.submittedBy.name) || null,
-      submittedAt: (plan && plan.submittedAt) || null,
-      seed: toFdrFiledSeed(plan),
-    })).filter((p) => p.callsign); // a plan with no aircraftId at all can't seed a CreateStrip — drop it rather than surface an unusable card
-
-    return { ok: true, plans };
-  } catch (err) {
-    console.warn('[flight-plan-lookup] sourcedcs-web unreachable or errored (list):', err.message);
-    return { ok: false, reason: 'sourcedcs-web unreachable' };
-  } finally {
-    clearTimeout(timer);
-  }
+  return { ok: true, plans };
 }
 
 module.exports = {
-  lookupFlightPlan, toFdrFiledSeed, listFiledFlightPlans,
-  SOURCEDCS_WEB_URL, LOOKUP_TIMEOUT_MS,
+  lookupFlightPlan, toFlightDataFiledSeed, listFiledFlightPlans,
 };

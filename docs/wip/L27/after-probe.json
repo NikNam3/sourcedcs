@@ -1,0 +1,55 @@
+{
+  "seed": 1,
+  "pairs": 400,
+  "rows": [
+    {
+      "pairs": 10,
+      "maxLen": 6,
+      "rebalances": 0,
+      "exhaustedThrows": 0
+    },
+    {
+      "pairs": 25,
+      "maxLen": 13,
+      "rebalances": 0,
+      "exhaustedThrows": 0
+    },
+    {
+      "pairs": 50,
+      "maxLen": 24,
+      "rebalances": 0,
+      "exhaustedThrows": 0
+    },
+    {
+      "pairs": 100,
+      "maxLen": 7,
+      "rebalances": 1,
+      "exhaustedThrows": 0
+    },
+    {
+      "pairs": 150,
+      "maxLen": 31,
+      "rebalances": 1,
+      "exhaustedThrows": 0
+    },
+    {
+      "pairs": 200,
+      "maxLen": 14,
+      "rebalances": 2,
+      "exhaustedThrows": 0
+    },
+    {
+      "pairs": 300,
+      "maxLen": 18,
+      "rebalances": 3,
+      "exhaustedThrows": 0
+    },
+    {
+      "pairs": 400,
+      "maxLen": 23,
+      "rebalances": 4,
+      "exhaustedThrows": 0
+    }
+  ],
+  "refusals": {}
+}

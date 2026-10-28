@@ -1,0 +1,1006 @@
+crc-sync/src/efsp/alert-scramble.js:55:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/alert-scramble.js:80:role#1	Y	a comment naming the strip.role field
+crc-sync/src/efsp/alert-scramble.js:89:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/alert-scramble.js:93:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/alert-scramble.js:93:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/ato/ato-board.js:153:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/ato/ato-board.js:171:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/ato/ato-board.js:175:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/ato/ato-board.js:175:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/ato/ato-board.js:455:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/ato/ato-board.js:460:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/ato/ato-board.js:494:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/authority/classes.js:27:Roles#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/authority/index.js:4:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/authority/index.js:6:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/authority/index.js:6:role#1	N	English prose in a comment: L20
+crc-sync/src/efsp/authority/index.js:6:Role#2	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/authority/index.js:10:Roles#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/authority/index.js:27:role#1	Y	a comment naming the strip.role field
+crc-sync/src/efsp/authority/index.js:32:Role#1	Y	a validation/refusal message naming the strip type
+crc-sync/src/efsp/authority/index.js:32:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/authority/index.js:33:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/authority/index.js:33:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/authority/index.js:33:Role#1	Y	a validation/refusal message naming the strip type
+crc-sync/src/efsp/authority/index.js:33:role#3	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/authority/index.js:34:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/authority/index.js:34:Role#1	Y	a validation/refusal message naming the strip type
+crc-sync/src/efsp/authority/index.js:34:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/authority/index.js:36:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/authority/index.js:36:Role#1	Y	a validation/refusal message naming the strip type
+crc-sync/src/efsp/authority/index.js:37:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/authority/index.js:38:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/authority/index.js:39:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/authority/index.js:40:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/authority/index.js:41:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/authority/index.js:42:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/authority/index.js:44:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/authority/index.js:46:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/authority/index.js:49:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/authority/index.js:81:roles#1	Y	local holding Strip types (createRoles values)
+crc-sync/src/efsp/authority/index.js:82:roles#1	Y	local holding Strip types (createRoles values)
+crc-sync/src/efsp/authority/index.js:82:Role#1	Y	a validation/refusal message naming the strip type
+crc-sync/src/efsp/authority/index.js:85:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/authority/index.js:86:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/authority/index.js:87:Role#1	Y	a validation/refusal message naming the strip type
+crc-sync/src/efsp/authority/index.js:87:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/authority/index.js:88:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/authority/index.js:88:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/authority/index.js:96:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/authority/index.js:105:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/authority/index.js:106:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/authority/index.js:107:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/authority/index.js:109:role#1	Y	a comment naming the strip.role field
+crc-sync/src/efsp/authority/index.js:109:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/authority/index.js:111:role#1	Y	a comment naming the strip.role field
+crc-sync/src/efsp/authority/index.js:111:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/authority/index.js:115:role#1	Y	a comment naming the strip.role field
+crc-sync/src/efsp/authority/index.js:117:role#1	Y	a comment naming the strip.role field
+crc-sync/src/efsp/authority/index.js:121:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/authority/index.js:128:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/authority/index.js:129:role#1	Y	a comment naming the strip.role field
+crc-sync/src/efsp/authority/index.js:147:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/authority/index.js:157:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/authority/index.js:158:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/authority/index.js:161:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/authority/index.js:164:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/authority/index.js:165:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/authority/index.js:165:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/authority/index.js:165:role#3	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/authority/index.js:166:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/authority/index.js:168:role#1	Y	a comment naming the strip.role field
+crc-sync/src/efsp/authority/index.js:169:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/authority/index.js:170:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/authority/index.js:170:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/authority/index.js:174:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/authority/index.js:174:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/authority/index.js:174:role#3	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/authority/index.js:175:role#1	Y	a comment naming the strip.role field
+crc-sync/src/efsp/authority/index.js:176:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/authority/index.js:176:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/authority/index.js:178:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/authority/index.js:178:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/authority/index.js:186:roles#1	N	English prose: L20
+crc-sync/src/efsp/authority/index.js:186:role#1	N	English prose in a comment: L20
+crc-sync/src/efsp/authority/index.js:218:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/authority/index.js:219:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/authority/index.js:282:role#1	Y	a comment naming the strip.role field
+crc-sync/src/efsp/authority/index.js:283:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/authority/index.js:284:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/authority/op-kinds.js:45:role#1	N	English prose in a comment: L20
+crc-sync/src/efsp/authority/positions/civil-atc.js:26:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/authority/positions/civil-atc.js:38:Roles#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/authority/positions/civil-atc.js:99:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/authority/positions/civil-atc.js:101:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/authority/positions/incirlik-military.js:5:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/authority/positions/incirlik-military.js:21:Roles#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/authority/positions/incirlik-military.js:22:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/authority/positions/incirlik-military.js:26:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/authority/primitives.js:11:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/authority/strip-types/arrival.js:3:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/authority/strip-types/arrival.js:11:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/authority/strip-types/arrival.js:11:role#1	Y	a comment naming the strip.role field
+crc-sync/src/efsp/authority/strip-types/arrival.js:12:role#1	Y	a comment naming the strip.role field
+crc-sync/src/efsp/authority/strip-types/arrival.js:88:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/authority/strip-types/departure.js:3:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/authority/strip-types/departure.js:68:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/authority/strip-types/departure.js:248:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/authority/strip-types/final.js:3:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/authority/strip-types/final.js:3:Role#2	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/authority/strip-types/final.js:5:Roles#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/authority/strip-types/final.js:42:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/authority/strip-types/marshal.js:3:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/authority/strip-types/marshal.js:6:Roles#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/authority/strip-types/marshal.js:8:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/authority/strip-types/marshal.js:9:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/authority/strip-types/marshal.js:9:role#1	Y	a comment naming the strip.role field
+crc-sync/src/efsp/authority/strip-types/marshal.js:13:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/authority/strip-types/marshal.js:15:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/authority/strip-types/marshal.js:16:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/authority/strip-types/marshal.js:19:Roles#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/authority/strip-types/marshal.js:35:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/authority/strip-types/marshal.js:38:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/authority/strip-types/marshal.js:68:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/authority/strip-types/marshal.js:78:Roles#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/authority/strip-types/marshal.js:83:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/authority/strip-types/mission.js:3:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/authority/strip-types/mission.js:51:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/authority/strip-types/mission.js:61:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/authority/strip-types/mission.js:61:Role#2	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/authority/strip-types/nla-common.js:3:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/authority/strip-types/overflight.js:3:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/authority/strip-types/overflight.js:12:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/authority/strip-types/overflight.js:12:Role#2	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/authority/strip-types/overflight.js:51:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/authority/strip-types/pattern.js:3:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/authority/strip-types/pattern.js:3:Role#2	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/authority/strip-types/pattern.js:5:Roles#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/authority/strip-types/pattern.js:25:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/block-map.js:3:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/block-map.js:61:Roles#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/block-map.js:62:Roles#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/block-map.js:64:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/block-map.js:95:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/block-map.js:120:Roles#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/block-map.js:198:role#1	N	English prose in a comment: L20
+crc-sync/src/efsp/block-map.js:296:roles#1	N	English prose: L20
+crc-sync/src/efsp/block-map.js:305:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/block-map.js:334:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/block-map.js:345:Roles#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/block-map.js:376:roles#1	N	English prose: L20
+crc-sync/src/efsp/block-map.js:384:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/block-map.js:470:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/block-map.js:529:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/block-map.js:567:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/block-map.js:567:role#1	N	English prose in a comment: L20
+crc-sync/src/efsp/block-map.js:568:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/block-map.js:569:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/block-map.js:572:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/block-map.js:573:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/block-map.js:583:role#1	Y	a comment naming the strip.role field
+crc-sync/src/efsp/block-map.js:585:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/block-map.js:586:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/block-map.js:624:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/block-map.js:634:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/block-map.js:635:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/block-map.js:640:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/block-map.js:640:Role#2	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/block-map.js:641:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/block-map.js:642:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/block-map.js:648:role#1	N	English prose in a comment: L20
+crc-sync/src/efsp/block-map.js:654:role#1	Y	a comment naming the strip.role field
+crc-sync/src/efsp/block-map.js:657:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/board-store.js:49:role#1	Y	a comment naming the strip.role field
+crc-sync/src/efsp/board-store.js:50:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/board-store.js:56:role#1	Y	a comment naming the strip.role field
+crc-sync/src/efsp/board-store.js:57:role#1	Y	a comment naming the strip.role field
+crc-sync/src/efsp/board-store.js:58:role#1	Y	a comment naming the strip.role field
+crc-sync/src/efsp/board/coordination.js:23:role#1	Y	a comment naming the strip.role field
+crc-sync/src/efsp/board/coordination.js:24:role#1	Y	a comment naming the strip.role field
+crc-sync/src/efsp/board/coordination.js:98:role#1	Y	a comment naming the strip.role field
+crc-sync/src/efsp/board/coordination.js:102:role#1	Y	a comment naming the strip.role field
+crc-sync/src/efsp/board/coordination.js:104:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/board/coordination.js:105:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/board/coordination.js:150:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/board/coordination.js:209:role#1	Y	a comment naming the strip.role field
+crc-sync/src/efsp/board/coordination.js:376:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/board/coordination.js:378:role#1	Y	a comment naming the strip.role field
+crc-sync/src/efsp/board/coordination.js:402:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/board/coordination.js:409:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/board/coordination.js:466:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/board/ops/carrier-handoff.js:25:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/board/ops/carrier-handoff.js:25:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/board/ops/carrier-handoff.js:26:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/board/ops/carrier-handoff.js:26:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/board/ops/carrier-handoff.js:64:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/board/ops/carrier-handoff.js:64:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/board/ops/carrier-handoff.js:65:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/board/ops/carrier-handoff.js:84:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/board/ops/carrier-handoff.js:84:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/board/ops/convert-to-arrival.js:21:role#1	N	English prose in a comment: L20
+crc-sync/src/efsp/board/ops/convert-to-arrival.js:26:role#1	Y	a comment naming the strip.role field
+crc-sync/src/efsp/board/ops/convert-to-arrival.js:31:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/board/ops/convert-to-arrival.js:105:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/board/ops/convert-to-arrival.js:116:role#1	N	English prose in a comment: L20
+crc-sync/src/efsp/board/ops/convert-to-arrival.js:123:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/board/ops/convert-to-arrival.js:138:role#1	N	English prose in a comment: L20
+crc-sync/src/efsp/board/ops/convert-to-arrival.js:146:role#1	N	English prose in a comment: L20
+crc-sync/src/efsp/board/ops/create-strip.js:12:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/board/ops/create-strip.js:12:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/board/ops/create-strip.js:13:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/board/ops/create-strip.js:14:Role#1	N	'Strip Role' in a message would read 'Strip strip type': sentence left for the reword
+crc-sync/src/efsp/board/ops/create-strip.js:14:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/board/ops/create-strip.js:21:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/board/ops/create-strip.js:31:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/board/ops/create-strip.js:35:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/board/ops/create-strip.js:53:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/board/ops/create-strip.js:53:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/board/ops/create-strip.js:57:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/board/ops/create-strip.js:88:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/board/ops/create-strip.js:89:role#1	Y	a comment naming the strip.role field
+crc-sync/src/efsp/board/ops/create-strip.js:94:role#1	N	English prose in a comment: L20
+crc-sync/src/efsp/board/ops/create-strip.js:96:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/board/ops/create-strip.js:106:role#1	N	English prose in a comment: L20
+crc-sync/src/efsp/board/ops/create-strip.js:124:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/board/ops/invoke-nla.js:52:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/board/ops/set-block.js:7:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/board/ops/set-block.js:38:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/board/ops/set-block.js:39:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/board/ops/set-state.js:12:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/board/ops/set-state.js:17:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/board/ops/set-state.js:51:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/board/ops/set-state.js:63:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/board/ops/sfa-rotation.js:7:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/board/ops/sfa-rotation.js:20:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/board/ops/sfa-rotation.js:20:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/board/ops/sfa-rotation.js:21:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/board/ops/sfa-rotation.js:21:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/board/ops/sfa-rotation.js:38:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/board/ops/sfa-rotation.js:38:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/board/ops/sfa-rotation.js:39:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/board/ops/sfa-rotation.js:48:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/board/ops/sfa-rotation.js:48:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/board/placement.js:4:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/board/placement.js:147:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/board/placement.js:148:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/board/placement.js:156:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/board/placement.js:176:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/board/placement.js:176:Role#2	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/board/placement.js:178:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/board/placement.js:179:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/board/placement.js:183:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/board/placement.js:183:Role#2	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/board/placement.js:185:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/board/placement.js:185:Role#1	Y	a validation/refusal message naming the strip type
+crc-sync/src/efsp/board/placement.js:201:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/board/placement.js:272:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/board/placement.js:274:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/board/placement.js:274:Role#2	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/board/strip-ops.js:30:role#1	Y	a comment naming the strip.role field
+crc-sync/src/efsp/board/strip-ops.js:157:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/board/strip-ops.js:221:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/board/strip-ops.js:233:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/board/strip-ops.js:290:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/board/strip-ops.js:389:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/board/strip-ops.js:414:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/board/strip-ops.js:424:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/board/strip-ops.js:461:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/board/tofi.js:23:role#1	Y	a comment naming the strip.role field
+crc-sync/src/efsp/board/tofi.js:111:role#1	Y	a comment naming the strip.role field
+crc-sync/src/efsp/board/tofi.js:114:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/board/tofi.js:115:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/board/tofi.js:118:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/board/tofi.js:119:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/board/tofi.js:407:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/board/tofi.js:408:roles#1	N	English prose: L20
+crc-sync/src/efsp/board/tofi.js:409:role#1	Y	a comment naming the strip.role field
+crc-sync/src/efsp/board/tofi.js:423:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/board/tofi.js:476:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/carrier/handoff-effects.js:9:role#1	N	English prose in a comment: L20
+crc-sync/src/efsp/carrier/handoff-effects.js:14:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/carrier/handoff-effects.js:15:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/carrier/handoff-effects.js:16:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/carrier/handoff-effects.js:17:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/carrier/handoff-effects.js:18:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/coordination.js:6:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/coordination.js:6:Role#2	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/coordination.js:7:role#1	N	English prose in a comment: L20
+crc-sync/src/efsp/coordination.js:23:role#1	Y	a comment naming the strip.role field
+crc-sync/src/efsp/coordination.js:23:role#2	N	English prose in a comment: L20
+crc-sync/src/efsp/coordination.js:24:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/coordination.js:25:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/coordination.js:33:role#1	Y	a comment naming the strip.role field
+crc-sync/src/efsp/coordination.js:33:role#2	N	English prose in a comment: L20
+crc-sync/src/efsp/coordination.js:34:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/coordination.js:35:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/correlation-reconciler.js:61:Roles#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/correlation-store.js:15:role#1	N	English prose in a comment: L20
+crc-sync/src/efsp/facility-config.js:274:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/facility-config.js:292:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/facility-config.js:295:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/facility-config.js:367:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/facility-config.js:367:Role#2	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/facility-config.js:368:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/facility-config.js:368:Role#2	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/facility-config.js:372:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/facility-schema.js:14:role#1	N	English prose in a comment: L20
+crc-sync/src/efsp/facility-schema.js:24:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/facility-schema.js:25:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/facility-schema.js:26:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/facility-schema.js:27:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/facility-schema.js:91:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/facility-schema.js:108:Role#1	Y	a validation/refusal message naming the strip type
+crc-sync/src/efsp/facility-schema.js:227:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/facility-schema.js:275:Role#1	Y	a validation/refusal message naming the strip type
+crc-sync/src/efsp/facility-schema.js:279:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/facility-schema.js:280:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/facility-schema.js:280:Role#1	Y	a validation/refusal message naming the strip type
+crc-sync/src/efsp/facility-schema.js:280:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/flight-data-store.js:124:role#1	N	English prose in a comment: L20
+crc-sync/src/efsp/flight-data-store.js:144:role#1	Y	a comment naming the strip.role field
+crc-sync/src/efsp/flight-data-store.js:666:role#1	N	English prose in a comment: L20
+crc-sync/src/efsp/flight-plan-lookup.js:112:role#1	N	sourcedcs-web admin/controller role (Casdoor)
+crc-sync/src/efsp/forwarding-obligations.js:47:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/forwarding-obligations.js:73:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/forwarding-obligations.js:104:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/forwarding-obligations.js:146:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/forwarding-obligations.js:151:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/forwarding-obligations.js:163:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/forwarding-obligations.js:164:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/index.js:89:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/index.js:89:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/index.js:90:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/index.js:90:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/index.js:97:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/index.js:97:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/index.js:98:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/index.js:98:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/index.js:102:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/index.js:102:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/index.js:103:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/index.js:103:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/index.js:146:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/index.js:148:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/index.js:148:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/index.js:149:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/index.js:149:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/index.js:166:Roles#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/index.js:167:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/index.js:167:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/nla.js:3:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/nla.js:49:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/nla.js:49:role#1	N	English prose in a comment: L20
+crc-sync/src/efsp/nla.js:64:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/nla.js:64:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/nla.js:70:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/nla.js:71:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/nla.js:100:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/nla.js:100:Role#2	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/nla.js:101:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/nla.js:103:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/nla.js:103:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/nla.js:103:role#3	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/nla.js:116:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/permission.js:35:role#1	N	English prose in a comment: L20
+crc-sync/src/efsp/permission.js:55:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/permission.js:55:role#1	N	English prose in a comment: L20
+crc-sync/src/efsp/permission.js:162:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/permission.js:166:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/permission.js:166:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/permission.js:176:role#1	Y	JSDoc naming the role parameter
+crc-sync/src/efsp/permission.js:176:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/permission.js:179:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/permission.js:181:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/permission.js:191:role#1	Y	JSDoc naming the role parameter
+crc-sync/src/efsp/permission.js:195:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/permission.js:196:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/position-store.js:6:role#1	N	English prose in a comment: L20
+crc-sync/src/efsp/position-store.js:7:role#1	N	Casdoor role selection
+crc-sync/src/efsp/runway-status.js:144:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/runway-status.js:145:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/runway-status.js:180:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/runway-status.js:180:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/runway-status.js:199:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/runway-status.js:424:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/runway-status.js:424:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/runway-status.js:430:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/sfa.js:32:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/stores.js:57:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/stores.js:66:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/stores.js:67:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/stores.js:71:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/surveillance-hints.js:57:Roles#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/surveillance-hints.js:107:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/surveillance-hints.js:132:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/surveillance-hints.js:133:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/traffic-count.js:43:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/traffic-count.js:44:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/traffic-count.js:44:roles#1	N	English prose: L20
+crc-sync/src/efsp/traffic-count.js:47:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/src/efsp/traffic-count.js:48:role#1	N	English prose in a comment: L20
+crc-sync/src/efsp/traffic-count.js:50:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/traffic-count.js:50:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/traffic-count.js:93:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/traffic-count.js:93:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/traffic-count.js:94:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/traffic-count.js:101:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/traffic-count.js:105:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/traffic-count.js:118:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/traffic-count.js:119:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/traffic-count.js:123:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/traffic-count.js:151:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/traffic-count.js:151:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/traffic-count.js:161:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/traffic-count.js:520:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/traffic-count.js:520:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/traffic-count.js:661:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/src/efsp/traffic-count.js:661:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/authority-registry.test.mjs:11:Role#1	N	English prose in a test title: L20
+crc-sync/tests/authority-registry.test.mjs:11:Role#2	N	English prose in a test title: L20
+crc-sync/tests/authority-registry.test.mjs:13:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/authority-registry.test.mjs:14:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/authority-registry.test.mjs:15:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/authority-registry.test.mjs:18:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/authority-registry.test.mjs:42:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-alert-scramble.test.mjs:26:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-alert-scramble.test.mjs:26:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-alert-scramble.test.mjs:59:Role#1	N	English prose in a test title: L20
+crc-sync/tests/efsp-alert-scramble.test.mjs:60:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-alert-scramble.test.mjs:61:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-alert-scramble.test.mjs:61:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-alert-scramble.test.mjs:108:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-alert-scramble.test.mjs:187:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/tests/efsp-alert-scramble.test.mjs:195:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-alert-scramble.test.mjs:197:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-alert-scramble.test.mjs:200:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-ato-board.test.mjs:162:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-ato-board.test.mjs:162:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-audit-completeness.test.mjs:72:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-audit-completeness.test.mjs:81:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-audit-completeness.test.mjs:131:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-block-altitude.test.mjs:89:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-block-map.test.mjs:31:role#1	N	English prose in a test title: L20
+crc-sync/tests/efsp-block-map.test.mjs:73:role#1	N	English prose in a test title: L20
+crc-sync/tests/efsp-block-map.test.mjs:102:Role#1	N	English prose in a test title: L20
+crc-sync/tests/efsp-block-map.test.mjs:135:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-block-map.test.mjs:141:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-block-map.test.mjs:219:roles#1	N	English prose: L20
+crc-sync/tests/efsp-block-map.test.mjs:226:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-block-map.test.mjs:227:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-block-map.test.mjs:229:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-block-map.test.mjs:229:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-block-map.test.mjs:230:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-block-map.test.mjs:230:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-block-map.test.mjs:238:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-block-map.test.mjs:244:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-block-map.test.mjs:251:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-block-map.test.mjs:257:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-block-map.test.mjs:261:role#1	N	English prose in a test title: L20
+crc-sync/tests/efsp-block-map.test.mjs:262:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-block-map.test.mjs:268:roles#1	N	English prose: L20
+crc-sync/tests/efsp-block-map.test.mjs:282:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/tests/efsp-block-map.test.mjs:291:Roles#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/tests/efsp-block-map.test.mjs:293:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-block-map.test.mjs:294:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-block-map.test.mjs:294:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-block-map.test.mjs:301:Role#1	N	English prose in a test title: L20
+crc-sync/tests/efsp-block-map.test.mjs:304:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/tests/efsp-block-map.test.mjs:305:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/tests/efsp-block-map.test.mjs:308:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-block-map.test.mjs:309:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-block-map.test.mjs:309:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-block-map.test.mjs:310:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-block-map.test.mjs:311:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-block-map.test.mjs:337:Role#1	N	English prose in a test title: L20
+crc-sync/tests/efsp-block-map.test.mjs:347:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-block-map.test.mjs:348:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-block-map.test.mjs:349:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-block-map.test.mjs:349:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-block-map.test.mjs:369:Role#1	N	English prose in a test title: L20
+crc-sync/tests/efsp-block-map.test.mjs:370:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/tests/efsp-block-map.test.mjs:373:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/tests/efsp-block-map.test.mjs:375:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-block-map.test.mjs:376:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-block-map.test.mjs:376:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-block-map.test.mjs:377:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-block-map.test.mjs:377:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-block-map.test.mjs:378:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-block-map.test.mjs:378:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-block-map.test.mjs:379:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-block-map.test.mjs:379:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-block-map.test.mjs:398:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-block-map.test.mjs:399:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-block-map.test.mjs:400:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-block-map.test.mjs:410:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/tests/efsp-block-map.test.mjs:419:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-block-map.test.mjs:420:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-block-map.test.mjs:421:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-block-map.test.mjs:422:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-block-map.test.mjs:423:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-block-map.test.mjs:437:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-block-map.test.mjs:438:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-block-map.test.mjs:440:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-block-map.test.mjs:449:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-block-map.test.mjs:450:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-block-map.test.mjs:454:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-block-map.test.mjs:488:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-block-map.test.mjs:489:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-block-map.test.mjs:490:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-block-map.test.mjs:490:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-block-map.test.mjs:502:Role#1	N	English prose in a test title: L20
+crc-sync/tests/efsp-block-map.test.mjs:503:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-block-map.test.mjs:505:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-block-map.test.mjs:505:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-block-map.test.mjs:506:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-block-map.test.mjs:506:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-block-map.test.mjs:507:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-block-map.test.mjs:507:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-block-map.test.mjs:514:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-block-map.test.mjs:515:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-block-map.test.mjs:515:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-block-map.test.mjs:520:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-block-map.test.mjs:521:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-block-map.test.mjs:522:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-block-map.test.mjs:528:Role#1	N	English prose in a test title: L20
+crc-sync/tests/efsp-block-map.test.mjs:530:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/tests/efsp-board-store-coordination.test.mjs:38:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-board-store-coordination.test.mjs:38:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-board-store-coordination.test.mjs:43:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-board-store-coordination.test.mjs:43:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-board-store-coordination.test.mjs:44:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-board-store-coordination.test.mjs:44:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-board-store-coordination.test.mjs:48:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-board-store-coordination.test.mjs:48:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-board-store-coordination.test.mjs:49:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-board-store-coordination.test.mjs:49:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-board-store-coordination.test.mjs:58:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-board-store-coordination.test.mjs:58:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-board-store-coordination.test.mjs:120:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-board-store-coordination.test.mjs:390:role#1	N	English prose in a test title: L20
+crc-sync/tests/efsp-board-store-coordination.test.mjs:393:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-board-store-coordination.test.mjs:402:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-board-store-coordination.test.mjs:433:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-board-store-coordination.test.mjs:442:role#1	Y	a comment naming the strip.role field
+crc-sync/tests/efsp-board-store-coordination.test.mjs:665:role#1	N	English prose in a comment: L20
+crc-sync/tests/efsp-board-store-coordination.test.mjs:682:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-board-store-coordination.test.mjs:711:role#1	N	English prose in a test title: L20
+crc-sync/tests/efsp-board-store-coordination.test.mjs:748:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-board-store-coordination.test.mjs:825:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-board-store.test.mjs:74:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-board-store.test.mjs:620:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-board-store.test.mjs:913:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-board-store.test.mjs:915:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-board-store.test.mjs:915:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-board-store.test.mjs:917:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-board-store.test.mjs:923:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-board-store.test.mjs:925:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-board-store.test.mjs:925:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-board-store.test.mjs:927:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-board-store.test.mjs:929:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-board-store.test.mjs:932:role#1	N	English prose in a test title: L20
+crc-sync/tests/efsp-board-store.test.mjs:932:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-board-store.test.mjs:933:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-board-store.test.mjs:933:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-board-store.test.mjs:934:role#1	Y	a comment naming the strip.role field
+crc-sync/tests/efsp-board-store.test.mjs:936:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-board-store.test.mjs:941:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-board-store.test.mjs:947:role#1	Y	a comment naming the strip.role field
+crc-sync/tests/efsp-board-store.test.mjs:952:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-board-store.test.mjs:957:role#1	N	English prose in a test title: L20
+crc-sync/tests/efsp-board-store.test.mjs:958:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-board-store.test.mjs:958:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-board-store.test.mjs:959:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-carrier-strip-types.test.mjs:4:Roles#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/tests/efsp-carrier-strip-types.test.mjs:17:Roles#1	N	English prose in a test title: L20
+crc-sync/tests/efsp-carrier-strip-types.test.mjs:18:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-carrier-strip-types.test.mjs:19:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-carrier-strip-types.test.mjs:19:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-carrier-strip-types.test.mjs:20:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-carrier-strip-types.test.mjs:20:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-carrier-strip-types.test.mjs:21:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-carrier-strip-types.test.mjs:22:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-carrier-strip-types.test.mjs:22:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-carrier-strip-types.test.mjs:23:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/tests/efsp-carrier-strip-types.test.mjs:24:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-carrier-strip-types.test.mjs:25:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-carrier-strip-types.test.mjs:26:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-carrier-strip-types.test.mjs:30:Role#1	N	English prose in a test title: L20
+crc-sync/tests/efsp-carrier-strip-types.test.mjs:32:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-carrier-strip-types.test.mjs:32:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-carrier-strip-types.test.mjs:34:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-carrier-strip-types.test.mjs:35:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-carrier-strip-types.test.mjs:37:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-carrier-strip-types.test.mjs:38:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-carrier-strip-types.test.mjs:38:Role#1	Y	a validation/refusal message naming the strip type
+crc-sync/tests/efsp-carrier-strip-types.test.mjs:45:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/tests/efsp-carrier-strip-types.test.mjs:56:Role#1	N	English prose in a test title: L20
+crc-sync/tests/efsp-carrier-strip-types.test.mjs:57:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-carrier-strip-types.test.mjs:59:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-carrier-strip-types.test.mjs:60:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-carrier-strip-types.test.mjs:61:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-carrier-strip-types.test.mjs:129:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/tests/efsp-carrier-strip-types.test.mjs:137:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-carrier-strip-types.test.mjs:137:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-clearance.test.mjs:81:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-clearance.test.mjs:100:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-crash-replay.test.mjs:64:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-facility-config.test.mjs:64:role#1	Y	a comment naming the strip.role field
+crc-sync/tests/efsp-facility-config.test.mjs:67:role#1	Y	a comment naming the strip.role field
+crc-sync/tests/efsp-facility-config.test.mjs:68:role#1	Y	a comment naming the strip.role field
+crc-sync/tests/efsp-facility-config.test.mjs:68:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/tests/efsp-facility-config.test.mjs:69:role#1	Y	a comment naming the strip.role field
+crc-sync/tests/efsp-facility-config.test.mjs:224:Role#1	N	English prose in a test title: L20
+crc-sync/tests/efsp-facility-config.test.mjs:300:Role#1	N	English prose in a test title: L20
+crc-sync/tests/efsp-facility-config.test.mjs:302:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-facility-config.test.mjs:304:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-facility-config.test.mjs:304:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-facility-schema.test.mjs:59:Role#1	N	English prose in a test title: L20
+crc-sync/tests/efsp-facility-schema.test.mjs:61:Role#1	Y	a validation/refusal message naming the strip type
+crc-sync/tests/efsp-facility-schema.test.mjs:78:Role#1	N	English prose in a test title: L20
+crc-sync/tests/efsp-facility-schema.test.mjs:80:Role#1	Y	a validation/refusal message naming the strip type
+crc-sync/tests/efsp-forwarding-obligations.test.mjs:13:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-forwarding-obligations.test.mjs:16:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-forwarding-obligations.test.mjs:364:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-forwarding-obligations.test.mjs:396:Role#1	N	English prose in a test title: L20
+crc-sync/tests/efsp-forwarding-obligations.test.mjs:398:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-incirlik-l18-config.test.mjs:47:Role#1	N	English prose in a test title: L20
+crc-sync/tests/efsp-incirlik-l18-config.test.mjs:49:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-incirlik-l18-config.test.mjs:52:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-incirlik-l18-config.test.mjs:52:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-index.test.mjs:172:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-metrics-tap.test.mjs:56:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-metrics-tap.test.mjs:164:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-nla.test.mjs:32:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-nla.test.mjs:39:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-nla.test.mjs:40:role#1	N	English prose in a comment: L20
+crc-sync/tests/efsp-nla.test.mjs:45:role#1	N	English prose in a test title: L20
+crc-sync/tests/efsp-nla.test.mjs:50:role#1	N	English prose in a test title: L20
+crc-sync/tests/efsp-nla.test.mjs:277:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-nla.test.mjs:346:role#1	N	English prose in a test title: L20
+crc-sync/tests/efsp-nla.test.mjs:346:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-nla.test.mjs:354:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-nla.test.mjs:381:role#1	N	English prose in a test title: L20
+crc-sync/tests/efsp-nla.test.mjs:392:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-nla.test.mjs:415:role#1	N	English prose in a test title: L20
+crc-sync/tests/efsp-ordnance-hung.test.mjs:38:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-ordnance-hung.test.mjs:39:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-ordnance-hung.test.mjs:101:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-ordnance-hung.test.mjs:103:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-ordnance-hung.test.mjs:127:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-ordnance-hung.test.mjs:128:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-permission.test.mjs:28:roles#1	N	English prose: L20
+crc-sync/tests/efsp-permission.test.mjs:51:role#1	N	English prose in a comment: L20
+crc-sync/tests/efsp-permission.test.mjs:171:Role#1	N	English prose in a test title: L20
+crc-sync/tests/efsp-permission.test.mjs:187:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-permission.test.mjs:201:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-permission.test.mjs:206:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-permission.test.mjs:266:Role#1	N	English prose in a test title: L20
+crc-sync/tests/efsp-permission.test.mjs:275:role#1	N	English prose in a test title: L20
+crc-sync/tests/efsp-permission.test.mjs:278:role#1	N	English prose in a comment: L20
+crc-sync/tests/efsp-permission.test.mjs:279:role#1	N	English prose in a comment: L20
+crc-sync/tests/efsp-permission.test.mjs:295:Role#1	N	English prose in a test title: L20
+crc-sync/tests/efsp-permission.test.mjs:350:Roles#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/tests/efsp-restore-refusal.test.mjs:38:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-role-bay-fallback.test.mjs:7:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/tests/efsp-role-bay-fallback.test.mjs:7:Role#2	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/tests/efsp-role-bay-fallback.test.mjs:29:Role#1	N	English prose in a test title: L20
+crc-sync/tests/efsp-role-bay-fallback.test.mjs:34:Role#1	N	English prose in a test title: L20
+crc-sync/tests/efsp-role-bay-fallback.test.mjs:44:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-role-bay-fallback.test.mjs:60:Role#1	N	English prose in a test title: L20
+crc-sync/tests/efsp-role-bay-fallback.test.mjs:60:Role#2	N	English prose in a test title: L20
+crc-sync/tests/efsp-role-bay-fallback.test.mjs:64:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-role-bay-fallback.test.mjs:65:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-role-bay-fallback.test.mjs:66:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-role-bay-fallback.test.mjs:67:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-role-bay-fallback.test.mjs:69:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-role-bay-fallback.test.mjs:74:Role#1	N	English prose in a test title: L20
+crc-sync/tests/efsp-role-bay-fallback.test.mjs:77:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-role-bay-fallback.test.mjs:83:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-runway-status.test.mjs:47:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-runway-status.test.mjs:48:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-runway-status.test.mjs:184:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-runway-status.test.mjs:185:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-runway-status.test.mjs:661:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-runway-status.test.mjs:667:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-runway-status.test.mjs:673:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-runway-status.test.mjs:679:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-runway-status.test.mjs:686:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-runway-status.test.mjs:688:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-runway-status.test.mjs:689:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-runway-status.test.mjs:693:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-runway-status.test.mjs:694:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-runway-status.test.mjs:695:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-runway-status.test.mjs:701:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-runway-status.test.mjs:702:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-runway-status.test.mjs:703:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-runway-status.test.mjs:704:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-runway-status.test.mjs:718:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-runway-status.test.mjs:721:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-airspace.test.mjs:61:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-ato.test.mjs:67:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-ato.test.mjs:71:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-ato.test.mjs:117:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-ato.test.mjs:120:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-ato.test.mjs:194:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/tests/efsp-scenario-ato.test.mjs:195:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-ato.test.mjs:197:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-ato.test.mjs:199:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-ato.test.mjs:209:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-ato.test.mjs:319:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-ato.test.mjs:327:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-ato.test.mjs:353:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-carrier-l17.test.mjs:43:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-carrier-l17.test.mjs:57:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-carrier-l17.test.mjs:60:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-carrier-l17.test.mjs:178:Role#1	N	English prose in a test title: L20
+crc-sync/tests/efsp-scenario-carrier-l17.test.mjs:184:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-carrier-l17.test.mjs:241:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-carrier-l17.test.mjs:253:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-carrier-l17.test.mjs:335:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-concurrency.test.mjs:99:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-concurrency.test.mjs:192:role#1	N	English prose in a test title: L20
+crc-sync/tests/efsp-scenario-concurrency.test.mjs:210:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-coordination.test.mjs:129:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-coordination.test.mjs:132:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-coordination.test.mjs:159:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-coordination.test.mjs:167:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-coordination.test.mjs:220:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-coordination.test.mjs:227:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-coordination.test.mjs:252:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-coordination.test.mjs:263:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-coordination.test.mjs:279:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-coordination.test.mjs:340:Role#1	Y	a validation/refusal message naming the strip type
+crc-sync/tests/efsp-scenario-correlation.test.mjs:345:role#1	N	English prose in a comment: L20
+crc-sync/tests/efsp-scenario-correlation.test.mjs:357:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-correlation.test.mjs:364:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-correlation.test.mjs:382:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-correlation.test.mjs:498:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-incirlik-l18.test.mjs:60:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-incirlik-l18.test.mjs:82:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-incirlik-l18.test.mjs:102:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-incirlik-l18.test.mjs:202:role#1	N	English prose in a comment: L20
+crc-sync/tests/efsp-scenario-incirlik-l18.test.mjs:205:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-incirlik-l18.test.mjs:237:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-incirlik-l18.test.mjs:243:Role#1	N	English prose in a test title: L20
+crc-sync/tests/efsp-scenario-incirlik-l18.test.mjs:248:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-incirlik-l18.test.mjs:258:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-incirlik-l18.test.mjs:309:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-incirlik-l18.test.mjs:317:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-manning.test.mjs:38:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-marsa.test.mjs:252:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-marsa.test.mjs:271:Roles#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/tests/efsp-scenario-marsa.test.mjs:275:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-marsa.test.mjs:291:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-military.test.mjs:47:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-military.test.mjs:184:Role#1	N	English prose in a test title: L20
+crc-sync/tests/efsp-scenario-military.test.mjs:209:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/tests/efsp-scenario-military.test.mjs:211:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/tests/efsp-scenario-military.test.mjs:213:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-military.test.mjs:217:Role#1	Y	a validation/refusal message naming the strip type
+crc-sync/tests/efsp-scenario-military.test.mjs:242:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-military.test.mjs:337:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-military.test.mjs:387:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-mtr.test.mjs:54:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-mtr.test.mjs:96:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-ordnance.test.mjs:62:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-ordnance.test.mjs:72:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-ordnance.test.mjs:166:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-release.test.mjs:31:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-resync.test.mjs:65:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-resync.test.mjs:90:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-resync.test.mjs:93:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-resync.test.mjs:125:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-runway-status.test.mjs:85:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-runway-status.test.mjs:101:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-scramble.test.mjs:62:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-scramble.test.mjs:76:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-scramble.test.mjs:87:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-scramble.test.mjs:226:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-stereo.test.mjs:74:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-stereo.test.mjs:138:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-stereo.test.mjs:337:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-tactical-l23.test.mjs:53:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-tactical-l23.test.mjs:162:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-tactical-l23.test.mjs:198:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-tactical-l23.test.mjs:201:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-tactical-l23.test.mjs:204:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-tactical-l23.test.mjs:209:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-tactical-l23.test.mjs:212:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/tests/efsp-scenario-tactical-l23.test.mjs:221:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-tactical-l23.test.mjs:281:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-tactical-l23.test.mjs:303:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-tactical.test.mjs:88:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-tactical.test.mjs:158:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-tactical.test.mjs:246:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-tactical.test.mjs:307:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-tactical.test.mjs:386:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-time-chains.test.mjs:46:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-time-chains.test.mjs:86:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-traffic-count.test.mjs:78:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-traffic-count.test.mjs:90:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-traffic-count.test.mjs:119:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenario-typed-times.test.mjs:58:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenarios.test.mjs:129:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenarios.test.mjs:177:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenarios.test.mjs:204:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenarios.test.mjs:226:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenarios.test.mjs:255:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenarios.test.mjs:272:Roles#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/tests/efsp-scenarios.test.mjs:278:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenarios.test.mjs:341:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenarios.test.mjs:378:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenarios.test.mjs:405:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenarios.test.mjs:432:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenarios.test.mjs:445:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenarios.test.mjs:453:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenarios.test.mjs:469:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenarios.test.mjs:516:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenarios.test.mjs:564:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenarios.test.mjs:579:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-scenarios.test.mjs:581:Roles#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/tests/efsp-scenarios.test.mjs:597:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-surveillance-hints.test.mjs:65:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-surveillance-hints.test.mjs:67:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-surveillance-hints.test.mjs:67:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-surveillance-hints.test.mjs:68:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-surveillance-hints.test.mjs:91:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-tofi.test.mjs:34:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-tofi.test.mjs:34:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-tofi.test.mjs:39:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-tofi.test.mjs:39:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-tofi.test.mjs:40:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-tofi.test.mjs:40:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-tofi.test.mjs:44:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-tofi.test.mjs:44:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-tofi.test.mjs:45:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-tofi.test.mjs:45:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-tofi.test.mjs:53:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-tofi.test.mjs:53:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-tofi.test.mjs:57:role#1	Y	a comment naming the strip.role field
+crc-sync/tests/efsp-tofi.test.mjs:61:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-tofi.test.mjs:61:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-tofi.test.mjs:92:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-tofi.test.mjs:148:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-tofi.test.mjs:387:role#1	Y	a comment naming the strip.role field
+crc-sync/tests/efsp-tofi.test.mjs:416:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-tofi.test.mjs:427:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-tofi.test.mjs:445:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-traffic-count.test.mjs:64:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-traffic-count.test.mjs:64:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-traffic-count.test.mjs:64:role#3	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-traffic-count.test.mjs:83:Role#1	N	English prose in a test title: L20
+crc-sync/tests/efsp-traffic-count.test.mjs:84:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-traffic-count.test.mjs:85:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-traffic-count.test.mjs:85:Role#1	Y	a validation/refusal message naming the strip type
+crc-sync/tests/efsp-traffic-count.test.mjs:85:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-traffic-count.test.mjs:86:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-traffic-count.test.mjs:86:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-traffic-count.test.mjs:86:role#3	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-traffic-count.test.mjs:88:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-traffic-count.test.mjs:89:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-traffic-count.test.mjs:89:Role#1	Y	a validation/refusal message naming the strip type
+crc-sync/tests/efsp-traffic-count.test.mjs:89:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-traffic-count.test.mjs:95:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-traffic-count.test.mjs:96:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-traffic-count.test.mjs:97:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-traffic-count.test.mjs:98:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-traffic-count.test.mjs:99:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-traffic-count.test.mjs:100:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-traffic-count.test.mjs:101:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-traffic-count.test.mjs:102:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-traffic-count.test.mjs:102:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-traffic-count.test.mjs:104:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-traffic-count.test.mjs:106:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-traffic-count.test.mjs:108:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-traffic-count.test.mjs:156:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-traffic-count.test.mjs:170:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-traffic-count.test.mjs:247:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-traffic-count.test.mjs:247:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-ui-a-hooks.test.mjs:8:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-ui-a-hooks.test.mjs:22:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-ui-b-hooks.test.mjs:47:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-ui-findings.test.mjs:78:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-ui-findings.test.mjs:310:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-ui-findings.test.mjs:346:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-ui-findings.test.mjs:370:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-ui-findings.test.mjs:392:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-ui-findings.test.mjs:480:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-ws-ato.test.mjs:104:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-ws-ato.test.mjs:117:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-ws-ato.test.mjs:123:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-ws-coordination.test.mjs:36:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-ws-coordination.test.mjs:36:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-ws-coordination.test.mjs:41:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-ws-coordination.test.mjs:41:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-ws-coordination.test.mjs:42:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-ws-coordination.test.mjs:42:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-ws-coordination.test.mjs:46:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-ws-coordination.test.mjs:46:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-ws-coordination.test.mjs:47:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-ws-coordination.test.mjs:47:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-ws-coordination.test.mjs:72:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-ws-coordination.test.mjs:188:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-ws-coordination.test.mjs:189:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-ws-replay.test.mjs:68:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-ws-replay.test.mjs:170:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-ws.test.mjs:39:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-ws.test.mjs:39:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-ws.test.mjs:44:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-ws.test.mjs:44:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-ws.test.mjs:45:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-ws.test.mjs:45:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-ws.test.mjs:49:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-ws.test.mjs:49:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-ws.test.mjs:50:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/efsp-ws.test.mjs:50:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/freeze/freeze-lib.mjs:39:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/freeze/freeze-lib.mjs:58:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/freeze/freeze-table.test.mjs:10:role#1	N	English prose in a comment: L20
+crc-sync/tests/freeze/freeze-table.test.mjs:44:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/freeze/freeze-table.test.mjs:45:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/freeze/freeze-table.test.mjs:46:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/freeze/freeze-table.test.mjs:47:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/freeze/freeze-table.test.mjs:77:role#1	Y	a comment naming the strip.role field
+crc-sync/tests/freeze/freeze-table.test.mjs:80:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/freeze/freeze-table.test.mjs:80:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/freeze/freeze-table.test.mjs:83:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/freeze/freeze-table.test.mjs:93:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/freeze/freeze-table.test.mjs:103:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/freeze/freeze-table.test.mjs:117:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/freeze/freeze-table.test.mjs:123:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/freeze/freeze-table.test.mjs:154:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/freeze/freeze-table.test.mjs:158:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/freeze/freeze-table.test.mjs:210:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/freeze/freeze-table.test.mjs:210:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/freeze/freeze-table.test.mjs:211:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/freeze/freeze-table.test.mjs:211:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/freeze/freeze-table.test.mjs:214:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/freeze/freeze-table.test.mjs:221:role#1	N	English prose in a test title: L20
+crc-sync/tests/freeze/freeze-table.test.mjs:226:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/freeze/freeze-table.test.mjs:238:Role#1	N	English prose in a test title: L20
+crc-sync/tests/freeze/freeze-tables.test.mjs:8:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/tests/freeze/freeze-tables.test.mjs:45:role#1	N	English prose in a test title: L20
+crc-sync/tests/freeze/freeze-tables.test.mjs:45:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/freeze/freeze-tables.test.mjs:50:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/freeze/freeze-tables.test.mjs:51:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/freeze/freeze-tables.test.mjs:51:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/freeze/freeze-tables.test.mjs:68:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/freeze/freeze-tables.test.mjs:69:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/freeze/freeze-traces.mjs:89:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/freeze/freeze-traces.mjs:119:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/freeze/freeze-traces.mjs:120:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/freeze/freeze-traces.mjs:121:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/freeze/freeze-traces.mjs:121:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/tests/freeze/freeze-traces.mjs:122:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/freeze/freeze-traces.mjs:123:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/freeze/freeze-traces.mjs:124:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/freeze/freeze-traces.mjs:125:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/freeze/freeze-traces.mjs:126:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/freeze/freeze-traces.mjs:127:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/freeze/freeze-traces.mjs:129:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/freeze/freeze-traces.mjs:130:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/freeze/freeze-traces.mjs:131:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/freeze/freeze-traces.mjs:132:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/freeze/freeze-traces.mjs:133:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/freeze/freeze-traces.mjs:329:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/freeze/freeze-traces.mjs:363:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/freeze/freeze-traces.mjs:400:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/freeze/selfcheck/M12.mjs:1:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/tests/helpers/efsp-scenario.mjs:109:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/helpers/full-rules.mjs:37:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/helpers/full-rules.mjs:37:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/helpers/full-rules.mjs:60:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/helpers/full-rules.mjs:60:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/wire-payload-contract.test.mjs:66:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/wire-payload-contract.test.mjs:93:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tests/ws-hub-read-scope.test.mjs:41:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tools/soak/driver.js:259:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tools/soak/driver.js:259:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tools/soak/driver.js:346:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tools/soak/driver.js:346:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tools/soak/driver.js:600:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tools/soak/driver.js:622:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tools/soak/driver.js:699:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tools/soak/driver.js:765:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tools/soak/driver.js:766:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tools/soak/driver.js:767:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tools/soak/driver.js:768:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tools/soak/driver.js:770:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tools/soak/driver.js:864:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tools/soak/driver.js:864:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tools/soak/driver.js:865:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tools/soak/driver.js:865:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tools/soak/driver.js:1036:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tools/soak/driver.js:1073:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tools/soak/host-core.js:33:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tools/soak/host-core.js:33:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tools/soak/ledger.js:208:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tools/soak/ledger.js:208:role#2	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tools/soak/orderkey-probe.js:36:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tools/soak/shadow.js:15:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tools/soak/traffic.js:103:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tools/soak/traffic.js:176:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tools/soak/traffic.js:186:Role#1	N	English prose in a comment: L20 (Role -> two-word "strip type")
+crc-sync/tools/soak/traffic.js:189:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tools/soak/traffic.js:225:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code
+crc-sync/tools/soak/traffic.js:281:role#1	Y	the Strip axis (strip/op/Bay/Block-Map role) in code

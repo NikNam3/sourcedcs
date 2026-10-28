@@ -1,4 +1,5 @@
 'use strict';
+const log = require('../logger');
 
 const express = require('express');
 const store = require('../store');
@@ -11,11 +12,11 @@ const router = express.Router();
 /* Send a new application as a Discord embed to the configured channel */
 async function sendApplicationToDiscord(application) {
   if (!discordClient.DISCORD_BOT_TOKEN) {
-    console.warn('[apply] DISCORD_BOT_TOKEN not set — cannot post application to Discord');
+    log.warn('[apply] DISCORD_BOT_TOKEN not set — cannot post application to Discord');
     return;
   }
   if (!discordClient.APPLY_CHANNEL_ID) {
-    console.warn('[apply] APPLY_CHANNEL_ID not set — cannot post application to Discord');
+    log.warn('[apply] APPLY_CHANNEL_ID not set — cannot post application to Discord');
     return;
   }
   const embed = {
@@ -34,7 +35,7 @@ async function sendApplicationToDiscord(application) {
     footer: { text: 'Application ID: ' + application.id },
   };
   await discordClient.discordPost('/channels/' + discordClient.APPLY_CHANNEL_ID + '/messages', { embeds: [embed] });
-  console.debug('[apply] Application ' + application.id + ' posted to Discord channel ' + discordClient.APPLY_CHANNEL_ID);
+  log.debug('[apply] Application ' + application.id + ' posted to Discord channel ' + discordClient.APPLY_CHANNEL_ID);
 }
 
 router.post('/apply', applyLimiter, (req, res) => {
@@ -66,7 +67,7 @@ router.post('/apply', applyLimiter, (req, res) => {
      Falls back to JSON storage if APPLY_CHANNEL_ID is not set or if posting fails. */
   if (discordClient.APPLY_CHANNEL_ID) {
     sendApplicationToDiscord(application).catch(err => {
-      console.error('[apply] Failed to post application to Discord:', err.message, '— falling back to JSON storage');
+      log.error('[apply] Failed to post application to Discord:', err.message, '— falling back to JSON storage');
       store.state.applications.push(application);
       store.saveJSON(store.APPS_FILE, store.state.applications);
     });

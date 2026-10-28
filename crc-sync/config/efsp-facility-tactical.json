@@ -1,0 +1,160 @@
+{
+  "facility": "TACTICAL",
+  "positions": [
+    "TAC_C2",
+    "AIC",
+    "GCI",
+    "JTAC"
+  ],
+  "positionClasses": {
+    "TAC_C2": "MRU",
+    "GCI": "MRU",
+    "AIC": "MRU_POSITION",
+    "JTAC": "NON_ATC"
+  },
+  "positionLetters": {
+    "TAC_C2": "M",
+    "AIC": "M",
+    "GCI": "M",
+    "JTAC": "M"
+  },
+  "consolidation": {},
+  "handBack": {
+    "AIC": "TAC_C2",
+    "GCI": "TAC_C2",
+    "JTAC": "TAC_C2"
+  },
+  "positionRadars": {
+    "TAC_C2": [
+      {
+        "kind": "awacs",
+        "coalition": "own"
+      },
+      {
+        "kind": "fighter",
+        "coalition": "own"
+      },
+      {
+        "kind": "datalink"
+      }
+    ],
+    "AIC": [
+      {
+        "kind": "awacs",
+        "coalition": "own"
+      },
+      {
+        "kind": "fighter",
+        "coalition": "own"
+      },
+      {
+        "kind": "datalink"
+      }
+    ],
+    "GCI": [
+      {
+        "kind": "awacs",
+        "coalition": "own"
+      },
+      {
+        "kind": "fighter",
+        "coalition": "own"
+      },
+      {
+        "kind": "datalink"
+      }
+    ],
+    "JTAC": []
+  },
+  "hiddenBlocks": {},
+  "bays": {
+    "TAC_C2": [
+      {
+        "bayId": "tac-c2-tasked",
+        "rackIds": [
+          "main"
+        ],
+        "impliesState": "TASKED"
+      },
+      {
+        "bayId": "tac-c2-airborne",
+        "rackIds": [
+          "main"
+        ],
+        "impliesState": "AIRBORNE"
+      },
+      {
+        "bayId": "tac-c2-on-station",
+        "rackIds": [
+          "main"
+        ],
+        "impliesState": "ON_STATION"
+      },
+      {
+        "bayId": "tac-c2-tanker",
+        "rackIds": [
+          "main"
+        ]
+      },
+      {
+        "bayId": "tac-c2-coordination",
+        "rackIds": [
+          "main"
+        ]
+      }
+    ],
+    "AIC": [
+      {
+        "bayId": "aic-on-station",
+        "rackIds": [
+          "main"
+        ],
+        "impliesState": "ON_STATION"
+      },
+      {
+        "bayId": "aic-committed",
+        "rackIds": [
+          "main"
+        ]
+      },
+      {
+        "bayId": "aic-coordination",
+        "rackIds": [
+          "main"
+        ]
+      }
+    ],
+    "GCI": [
+      {
+        "bayId": "gci-on-station",
+        "rackIds": [
+          "main"
+        ],
+        "impliesState": "ON_STATION"
+      },
+      {
+        "bayId": "gci-committed",
+        "rackIds": [
+          "main"
+        ]
+      },
+      {
+        "bayId": "gci-coordination",
+        "rackIds": [
+          "main"
+        ]
+      }
+    ],
+    "JTAC": [
+      {
+        "bayId": "jtac-mission",
+        "rackIds": [
+          "main"
+        ]
+      }
+    ]
+  },
+  "dataOnly": false,
+  "standingReleases": [],
+  "aitAuthorized": false
+}

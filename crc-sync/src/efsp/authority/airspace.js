@@ -1,0 +1,164 @@
+'use strict';
+
+// Who may create, edit, delete, import and use an airspace (docs/adr/0098 §11): the airspace rows of the authority
+// registry (S3-2, AUTH's follow-up: the store used to keep its own `_isControlling`/`_isUsing`).
+//
+// Rows, by Position, on the Position families (`airspace` column, authority/positions/*.js) and by Position class
+// below. A row is `{ create, edit, delete, use }`:
+//
+//   create/edit/delete  'OWN'       the Position that IS the airspace's controllingPositionId
+//                       'FACILITY'  any airspace whose controllingFacilityId is the Position's own Facility (no row
+//                                   uses it since docs/adr/0119: OPS lost it, H134 LT-RQ13 a)
+//                       'FREQUENCY' the airspace's `usingPositionId` is this Position: its control frequency only
+//   use                 true        may schedule, request activation and release for an airspace whose
+//                                   `usingFacilityId` is the Position's Facility (the `airspaceUse` capability,
+//                                   DA-7: TAC_C2; Incirlik's OPS since docs/adr/0119) or whose `usingPositionId` is this
+//                                   Position (a RANGES Position). The using agency also approves entry (ADR 0119)
+//
+// A Position with no row, and a session signed on to nothing, may do none of it (it still reads everything:
+// airspaces are not flights). Approve/confirm/deny/return stay with the controlling Position alone, as before.
+// Static (P5): read at load, never written.
+
+const { canEditCarrierState } = require('./positions/carrier');
+
+const SERVICE_ROWS = {
+  // The web service principal (ADR 0098 §9): create, edit and delete any airspace in any theater, and import. Still
+  // subject to R3-23, the delete guard, defRev and validation, which are not authority.
+  SQUADRON_ADMIN: { create: 'ANY', edit: 'ANY', delete: 'ANY', import: true, use: false },
+  // The standing-list seed at start-up (ImportAirspaces, via 'SEED').
+  SEED: { create: 'ANY', edit: null, delete: null, import: true, use: false },
+};
+
+// Class rows, for Positions no family lists (the derived RANGES Facility; authority/classes.js's USING_AGENCY).
+const CLASS_ROWS = {
+  USING_AGENCY: { create: null, edit: 'FREQUENCY', delete: null, use: true },
+};
+
+/** The registry's row for one Position: its family's row merged over its class's row. Null scopes mean "no". */
+function rowFor(positionId, { familyRows, classOf }) {
+  if (!positionId) return { create: null, edit: null, delete: null, use: false }; // a session signed on to nothing
+  const own = familyRows[positionId] || {};
+  const cls = CLASS_ROWS[classOf(positionId)] || {};
+  return { create: null, edit: null, delete: null, use: false, ...cls, ...own };
+}
+
+/**
+ * @typedef {{positionId:string}|{service:string}} Principal
+ * @param {object} deps `{ rowOf(positionId), facilityOf(positionId) }`
+ */
+function _scopeAllows(scope, def, positionId, facilityOf) {
+  if (scope === 'ANY') return true;
+  if (scope === 'OWN') return def.controllingPositionId === positionId;
+  if (scope === 'FACILITY') return facilityOf(positionId) === def.controllingFacilityId;
+  return false;
+}
+
+/**
+ * A JURISDICTION area (docs/adr/0125) is not defined in the panel: it comes from the theater configuration, so no
+ * Position creates or deletes one. Its controlling Position edits it (AP the RAPCON area, LC the tower's control zone),
+ * and a carrier circle also the Positions that edit the carrier's state (H119: CV_PRIFLY and CV_MARSHAL, the carrier
+ * management panel's right). The rows play no part. Ours (U-JURISDICTION default).
+ */
+function _jurisdictionAuthority(positionId, action, def, facilityOf) {
+  if (action !== 'edit' || !positionId) return null;
+  if (def.controllingPositionId === positionId) return 'ALL';
+  const onHull = !!(def.geometry && def.geometry.centre && typeof def.geometry.centre.hullId === 'string');
+  return onHull && canEditCarrierState(positionId) && facilityOf(positionId) === def.controllingFacilityId ? 'ALL' : null;
+}
+
+/** 'ALL' (any field), 'FREQUENCY' (control frequency only) or null, for creating/editing/deleting `def`. */
+function definitionAuthority(principal, action, def, { rowOf, facilityOf }) {
+  const row = principal.service ? SERVICE_ROWS[principal.service] : rowOf(principal.positionId);
+  if (!row) return null;
+  const scope = row[action];
+  if (principal.service) return scope === 'ANY' ? 'ALL' : null;
+  if (def && def.kind === 'JURISDICTION') return _jurisdictionAuthority(principal.positionId, action, def, facilityOf);
+  if (_scopeAllows(scope, def, principal.positionId, facilityOf)) return 'ALL';
+  if (action === 'edit' && scope === 'FREQUENCY' && def.usingPositionId === principal.positionId) return 'FREQUENCY';
+  return null;
+}
+
+/**
+ * The Positions that may `action` the whole of `def` ('ALL'), the controlling Position first: the candidates are the
+ * controlling Position and every Position of the controlling Facility, each judged by `definitionAuthority` itself, so
+ * the answer follows the rows (LT-AIRSPACE-FIX T27: a refusal names who may actually do it, never a Position that
+ * does not exist, such as "OPS of CENTER").
+ * @param {object} deps `{ rowOf, facilityOf, positionsOf(facilityId) }`
+ * @returns {string[]}
+ */
+function positionsThatMay(action, def, { rowOf, facilityOf, positionsOf }) {
+  const candidates = [def.controllingPositionId, ...((positionsOf && positionsOf(def.controllingFacilityId)) || [])].filter(Boolean);
+  return [...new Set(candidates)].filter(p => definitionAuthority({ positionId: p }, action, def, { rowOf, facilityOf }) === 'ALL');
+}
+
+/** "CTR", "AP or OPS", "AP, LC or OPS". */
+function _orList(ids) { return ids.length < 2 ? ids.join('') : `${ids.slice(0, -1).join(', ')} or ${ids[ids.length - 1]}`; }
+
+/**
+ * Why `who` may not `action` `def`, naming who may (T27): "only CTR may", or "no Position of CENTER may" when the rows
+ * give it to nobody. Edit adds the using Position's control-frequency reach when there is one.
+ */
+function refusalReason(action, def, deps) {
+  const may = positionsThatMay(action, def, deps);
+  let text = may.length ? `only ${_orList(may)} may` : `no Position of ${def.controllingFacilityId} may`;
+  if (action === 'edit' && def.usingPositionId
+    && definitionAuthority({ positionId: def.usingPositionId }, 'edit', def, deps) === 'FREQUENCY') {
+    text += ` (${def.usingPositionId}: its control frequency only)`;
+  }
+  return text;
+}
+
+/** May this principal import a list of definitions (service and seed only in v1)? */
+function mayImport(principal) {
+  return !!(principal.service && SERVICE_ROWS[principal.service] && SERVICE_ROWS[principal.service].import);
+}
+
+/** Is `positionId` the controlling Position of `def`? (approve, confirm, deny, return, and the delay of a route request) */
+function isControlling(def, positionId) { return def.controllingPositionId === positionId; }
+
+/**
+ * Does `positionId` act for the using side of `def`? A using Facility's Positions with the `use` capability; a using
+ * Position itself; and, with no using agency at all, the controlling Position (it acts for both sides, as before).
+ */
+function isUsing(def, positionId, { rowOf, facilityOf }) {
+  if (def.usingFacilityId) return !!rowOf(positionId).use && facilityOf(positionId) === def.usingFacilityId;
+  if (def.usingPositionId) return def.usingPositionId === positionId;
+  return isControlling(def, positionId);
+}
+
+// ── transit through active SUA (docs/adr/0128, H151) ─────────────────────────────────────────────────────────────
+
+/**
+ * The airspace types a transit is requested and decided for (H151 MT-Q8: MOA, warning and restricted). PROHIBITED has no
+ * transit (7400.2R para 21-1-8 c: joint use does not apply). RANGE and DANGER are no airspace types (docs/adr/0144).
+ */
+const TRANSIT_TYPES = ['MOA', 'WARNING', 'RESTRICTED'];
+
+/** The Position class of a Military Radar Unit that separates its own participants (ADR 0102; JO 7610.14A para 8-1-10). */
+const MRU_CLASS = 'MRU';
+
+/**
+ * Who decides a transit of `def` (H151 MT-Q1 a): the side that separates the airspace's users. The using Facility's
+ * `use` Positions of class MRU when the using agency is an MRU (TAC_C2 for a TACTICAL airspace: JO 7610.14A para 8-1-9
+ * b.1); otherwise the controlling Position (ATC works the airspace's users itself, para 3-3-4 a). A scheduling using
+ * agency (Incirlik's OPS, class BASOPS) and a range-control Position are not deciders: they see the transit, read-only.
+ * @param {object} deps `{ rowOf, positionsOf(facilityId), classOf(positionId) }`
+ * @returns {string[]}
+ */
+function transitDeciders(def, { rowOf, positionsOf, classOf }) {
+  if (def.usingFacilityId && positionsOf && classOf) {
+    const mru = (positionsOf(def.usingFacilityId) || []).filter(p => classOf(p) === MRU_CLASS && !!rowOf(p).use);
+    if (mru.length) return mru;
+  }
+  return def.controllingPositionId ? [def.controllingPositionId] : [];
+}
+
+/** Does `positionId` decide transits of `def`? */
+function isTransitDecider(def, positionId, deps) {
+  return !!positionId && transitDeciders(def, deps).includes(positionId);
+}
+
+module.exports = {
+  SERVICE_ROWS, CLASS_ROWS, rowFor, definitionAuthority, positionsThatMay, refusalReason, mayImport, isControlling, isUsing,
+  TRANSIT_TYPES, MRU_CLASS, transitDeciders, isTransitDecider,
+};

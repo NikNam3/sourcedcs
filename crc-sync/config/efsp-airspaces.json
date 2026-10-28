@@ -1,0 +1,58 @@
+{
+  "_comment": "The standing airspace list (docs/adr/0098 §10), keyed by the theater name DCS-gRPC's GetTheatre returns. Each id is imported into the registry once (a later delete is not resurrected; a later addition lands); after that the panel's edits live in the Board snapshot. A copy in state/efsp-airspaces.json replaces this file whole, and is as strict: a definition that does not validate, or two JURISDICTION areas sharing volume, stops start-up. JURISDICTION areas (docs/adr/0125, decisions H142-H146): whose airspace an aircraft is in. Altitudes are feet MSL; a null altLowerFt is the surface and a null altUpperFt unlimited. Outside every area the airspace is CENTER's, unclassified with VFR advisories (H173 VQ-B); a Class G area is nobody's; airspaceClass is optional (docs/adr/0143, H166: Türkiye does not classify its airspace), and an unclassified area names its vfrService (ALL_SEPARATED, IFR_SEPARATED or ADVISORY), which otherwise follows the class (B all separated, C IFR separated, D/E/F advisory); a carrier circle wins wherever it is; no two other areas may overlap, so RAPCON excludes the tower's control zone. Sources: LTAG-CZ is AIP Türkiye AD 2 LTAG AD 2.17 (page dated 14 MAY 26) verbatim; LTAG-RAPCON's lateral limits are the Adana MTMA of AIP Türkiye ENR 2.1.3 (AIRAC AMDT 08/26), its SFC floor is the squadron's (H143); it is unclassified (an MTMA, H166) with IFR separated from VFR and VFR from VFR by traffic advisories (H166 option 2); LTAG-CZ's class D is the human's (H166); the carrier control area (50 nm, SFC-UNL) is the squadron's (H142), unclassified with VFR advisories (H173 VQ-B: a CCA is special use under letters of agreement and Navy rules, not modelled for v2).",
+  "Syria": [
+    {
+      "airspaceId": "LTAG-CZ",
+      "name": "LTAG CTR (control zone)",
+      "kind": "JURISDICTION",
+      "controllingFacilityId": "INCIRLIK",
+      "controllingPositionId": "LC",
+      "ownerPositionIds": ["LC", "GC"],
+      "airspaceClass": "D",
+      "altLowerFt": null,
+      "altUpperFt": 3000,
+      "geometry": {
+        "source": "CIRCLE",
+        "centre": { "lat": 37.003333, "lon": 35.425 },
+        "radiusNm": 5,
+        "cut": { "from": [36.985, 35.323611], "to": [37.075556, 35.476944] }
+      },
+      "sourceText": "AIP Türkiye LTAG AD 2.17 (14 MAY 26), Incirlik CTR: Circle radius 5 NM centered on 370012N-0352530E except the part of the circle north west of a straight line joining 365906N-0351925E and 370432N-0352837E. SFC-3000ft. Class D per the human (H166: the control zone is classic airspace D, so VFR gets traffic advisories, not separation from IFR); the owners LC, GC are the squadron's (H145)."
+    },
+    {
+      "airspaceId": "LTAG-RAPCON",
+      "name": "Incirlik RAPCON (Adana MTMA)",
+      "kind": "JURISDICTION",
+      "controllingFacilityId": "INCIRLIK",
+      "controllingPositionId": "AP",
+      "ownerPositionIds": ["AP", "PAR"],
+      "vfrService": "IFR_SEPARATED",
+      "altLowerFt": null,
+      "altUpperFt": 28000,
+      "geometry": {
+        "source": "CIRCLE",
+        "centre": { "lat": 36.998889, "lon": 35.433056 },
+        "radiusNm": 50
+      },
+      "excludes": ["LTAG-CZ"],
+      "sourceText": "AIP Türkiye ENR 2.1.3 (AIRAC AMDT 08/26), Adana MTMA: Centered on 365956N-0352559E, Radius 50 NM, FL280 / 2000FT AMSL, Incirlik Approach. Floor lowered to SFC by the squadron (H143); the LTAG CTR's volume is cut out (H144). Not classified (an MTMA, H166); VFR service per H166 option 2: IFR separated from VFR, VFR from VFR by traffic advisories."
+    },
+    {
+      "airspaceId": "CVN-72-CCA",
+      "name": "CVN-72 CCA (carrier control area)",
+      "kind": "JURISDICTION",
+      "controllingFacilityId": "CARRIER",
+      "controllingPositionId": "CV_PRIFLY",
+      "ownerPositionIds": ["CV_MARSHAL", "CV_PRIFLY", "CV_APP1", "CV_APP2"],
+      "vfrService": "ADVISORY",
+      "altLowerFt": null,
+      "altUpperFt": null,
+      "geometry": {
+        "source": "CIRCLE",
+        "centre": { "hullId": "CVN-72" },
+        "radiusNm": 50
+      },
+      "sourceText": "The carrier's area (H142): a 50 nm circle on the live hull, surface to unlimited, owned by the CARRIER Positions; it wins over every other area. Not classified (H173 VQ-B): VFR gets traffic advisories."
+    }
+  ]
+}

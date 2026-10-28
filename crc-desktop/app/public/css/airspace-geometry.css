@@ -1,0 +1,91 @@
+/* The airspace geometry editor, the map drawing toolbar and the airspace layer menu (AIRSP-2P-B; mockup
+   docs/wip/AIRSP-2P-B-mockup.html). Colour rule (ADR 0056/0058): grey for everything saved; the blue accent (--efsp-go) for
+   the shape being edited (a selection); orange-red (--efsp-bad) only for something wrong. */
+
+/* ── the OUTLINE / ROUTE section in the editor ── */
+.asg { margin: 8px 0; padding: 8px; border: 1px solid var(--efsp-line-2, #4a5560); }
+.asg-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.asg-title { letter-spacing: .08em; color: var(--efsp-muted, #8c9aa6); font-size: 10px; }
+.asg-chip { border: 1px solid var(--efsp-line-2, #4a5560); padding: 0 5px; font-size: 9px; letter-spacing: .08em; color: var(--efsp-muted, #8c9aa6); }
+.asg-count { margin-left: auto; font-size: 11px; }
+.asg-limit { color: var(--efsp-faint, #56616c); font-size: 10px; }
+.asg-dot { color: var(--efsp-go, #4a7dbf); }
+.asg-body { display: flex; gap: 10px; margin-top: 6px; }
+.asg-thumb { flex: 0 0 96px; width: 96px; height: 64px; border: 1px solid var(--efsp-line-2, #4a5560); color: var(--efsp-muted, #8c9aa6); }
+.asg-text { font-size: 11px; color: var(--efsp-muted, #8c9aa6); }
+.asg-text b { color: inherit; font-weight: 600; }
+.asg-was { font-size: 10px; color: var(--efsp-faint, #56616c); }
+.asg-buttons { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.asg-btn { background: transparent; border: 1px solid var(--efsp-line-2, #4a5560); color: inherit; font: inherit; font-size: 11px; padding: 3px 8px; cursor: pointer; }
+.asg-btn:disabled, .asg-btn.asg-disabled { border-style: dashed; color: var(--efsp-faint, #56616c); cursor: default; }
+.asg-why { font-size: 10px; color: var(--efsp-muted, #8c9aa6); margin-top: 4px; }
+.asg-why-bad { color: var(--efsp-bad, #ff8a4c); }
+.asg-readonly { opacity: .85; }
+
+.asg-picker { margin-top: 6px; border: 1px solid var(--efsp-line-2, #4a5560); background: var(--efsp-strip-2, #232a32); max-height: 320px; overflow: auto; }
+.asg-picker-top { display: flex; gap: 8px; align-items: center; padding: 4px; position: sticky; top: 0; background: inherit; }
+.asg-picker-top input { flex: 1; background: transparent; border: 1px solid var(--efsp-line-2, #4a5560); color: inherit; font: inherit; padding: 3px 6px; }
+.asg-layer { font-size: 9px; letter-spacing: .1em; color: var(--efsp-faint, #56616c); padding: 4px 6px 2px; }
+.asg-drawing { display: flex; justify-content: space-between; gap: 8px; padding: 5px 6px; cursor: pointer; font-size: 11px; border-top: 1px solid var(--efsp-line, #343c45); border-left: 2px solid transparent; }
+.asg-drawing:hover:not(.asg-drawing-off) { background: rgba(128,128,128,.12); border-left-color: var(--efsp-go, #4a7dbf); }
+.asg-drawing:focus-visible { outline: none; background: rgba(128,128,128,.12); border-left-color: var(--efsp-go, #4a7dbf); }
+.asg-drawing-right { display: flex; gap: 6px; align-items: center; }
+.asg-drawing-show { background: transparent; border: 1px solid var(--efsp-line-2, #4a5560); color: var(--efsp-muted, #8c9aa6); font: inherit; font-size: 9px; letter-spacing: .06em; padding: 0 4px; cursor: pointer; visibility: hidden; }
+.asg-drawing:hover .asg-drawing-show, .asg-drawing:focus-within .asg-drawing-show { visibility: visible; }
+.asg-drawing-show:hover { color: inherit; }
+.asg-drawing-off { border-style: dashed; color: var(--efsp-faint, #56616c); cursor: default; }
+.asg-drawing-meta { color: var(--efsp-muted, #8c9aa6); font-size: 10px; white-space: nowrap; }
+.asg-picker-note { padding: 6px; font-size: 10px; color: var(--efsp-muted, #8c9aa6); }
+
+.asg-route-top { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; margin-top: 6px; }
+.asg-route-top label { display: flex; flex-direction: column; font-size: 9px; letter-spacing: .08em; color: var(--efsp-muted, #8c9aa6); }
+.asg-route-top input { width: 90px; }
+.asg-derived { border-style: dashed !important; color: var(--efsp-muted, #8c9aa6); }
+.asg-table { width: 100%; border-collapse: collapse; margin-top: 6px; font-size: 11px; }
+.asg-table th { text-align: left; font-size: 9px; letter-spacing: .08em; color: var(--efsp-muted, #8c9aa6); font-weight: 400; padding: 2px 3px; }
+.asg-table td { padding: 2px 3px; vertical-align: middle; }
+.asg-table input { width: 100%; min-width: 0; background: transparent; border: 1px solid var(--efsp-line-2, #4a5560); color: inherit; font: inherit; padding: 2px 4px; }
+.asg-table input.asg-bad { border-color: var(--efsp-bad, #ff8a4c); }
+.asg-leg { color: var(--efsp-muted, #8c9aa6); white-space: nowrap; font-size: 10px; }
+.asg-navmenu { position: absolute; z-index: 20; min-width: 260px; border: 1px solid var(--efsp-line-2, #4a5560); background: var(--efsp-strip-2, #232a32); }
+.asg-navmenu input { width: calc(100% - 8px); margin: 4px; background: transparent; border: 1px solid var(--efsp-line-2, #4a5560); color: inherit; font: inherit; padding: 3px 6px; }
+.asg-navitem { display: flex; justify-content: space-between; gap: 12px; padding: 4px 8px; cursor: pointer; font-size: 11px; }
+.asg-navitem:hover { background: rgba(128,128,128,.14); }
+
+/* ── the drawing toolbar over the map ── */
+.asd-bar { position: absolute; z-index: 30; top: 8px; left: 8px; max-width: min(640px, calc(100% - 140px)); padding: 8px 10px; border: 1px solid var(--efsp-go, #4a7dbf);
+  background: var(--ui-bg, rgba(13,13,13,.85)); color: var(--ui-text-bright, #cfd8e0); font-size: 11px; }
+.asd-bar.asd-bad { border-color: var(--efsp-bad, #ff8a4c); }
+.asd-title { font-weight: 600; letter-spacing: .06em; margin-bottom: 4px; }
+.asd-help { color: var(--efsp-muted, #8c9aa6); }
+.asd-problem { color: var(--efsp-bad, #ff8a4c); margin-top: 3px; }
+.asd-buttons { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+.asd-btn { background: transparent; border: 1px solid var(--efsp-line-2, #4a5560); color: inherit; font: inherit; padding: 3px 8px; cursor: pointer; }
+.asd-btn:disabled { border-style: dashed; color: var(--efsp-faint, #56616c); cursor: default; }
+.asd-primary:not(:disabled) { border-color: var(--efsp-go, #4a7dbf); }
+.asd-readout { margin-top: 4px; color: var(--efsp-muted, #8c9aa6); font-family: monospace; min-height: 1.2em; }
+
+/* ── the airspace layer menu (settings tab and map popover) ── */
+.airspace-menu-map-btn { position: absolute; z-index: 25; top: 8px; right: 8px; background: var(--ui-bg, rgba(13,13,13,.85)); border: 1px solid var(--efsp-line-2, #4a5560); color: inherit; font: inherit; font-size: 11px; padding: 3px 8px; cursor: pointer; }
+.airspace-menu-pop { position: absolute; z-index: 24; top: 38px; right: 8px; width: 330px; max-height: calc(100% - 60px); overflow: auto; background: var(--ui-bg, rgba(13,13,13,.95)); border: 1px solid var(--efsp-line-2, #4a5560); }
+.airspace-menu-pop[hidden] { display: none; }
+.aslm-head { display: flex; justify-content: space-between; align-items: center; padding: 6px 8px; }
+.aslm-title { letter-spacing: .08em; font-size: 10px; font-weight: 600; }
+.aslm-reset { background: transparent; border: 1px solid var(--efsp-line-2, #4a5560); color: inherit; font: inherit; font-size: 10px; padding: 2px 8px; cursor: pointer; }
+.aslm-reset:disabled { border-style: dashed; color: var(--efsp-faint, #56616c); cursor: default; }
+.aslm-section, .aslm-group { font-size: 9px; letter-spacing: .1em; color: var(--efsp-faint, #8c9aa6); padding: 6px 8px 2px; }
+.aslm-checks { display: flex; flex-wrap: wrap; gap: 4px 12px; padding: 2px 8px; }
+.aslm-check { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; cursor: pointer; }
+.aslm-dot { color: var(--efsp-muted, #8c9aa6); }
+.aslm-search { width: calc(100% - 16px); margin: 2px 8px 4px; background: transparent; border: 1px solid var(--efsp-line-2, #4a5560); color: inherit; font: inherit; padding: 3px 6px; }
+.aslm-row { display: flex; align-items: center; gap: 8px; padding: 3px 8px; font-size: 11px; }
+.aslm-name { flex: 1; min-width: 0; }
+.aslm-sub { font-size: 9px; color: var(--efsp-muted, #8c9aa6); }
+.aslm-seg { display: inline-flex; border: 1px solid var(--efsp-line-2, #4a5560); }
+.aslm-seg-btn { background: transparent; border: 0; color: var(--efsp-muted, #8c9aa6); font: inherit; font-size: 9px; padding: 2px 6px; cursor: pointer; }
+.aslm-seg-btn[aria-pressed="true"] { color: inherit; border-bottom: 2px solid currentColor; }
+.aslm-word { width: 56px; text-align: right; font-size: 9px; color: var(--efsp-faint, #56616c); }
+.aslm-foot, .aslm-empty { font-size: 10px; color: var(--efsp-muted, #8c9aa6); padding: 6px 8px; }
+
+/* ── the MTR route note on a Strip ── */
+.mtr-route-note { font-size: 10px; color: var(--efsp-muted, #8c9aa6); margin-top: 2px; }

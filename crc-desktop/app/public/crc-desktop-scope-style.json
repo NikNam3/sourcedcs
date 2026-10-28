@@ -8,12 +8,15 @@
       "type": "vector"
     },
     "maptiler_planet": {
-      "url": "https://api.maptiler.com/tiles/v3/tiles.json?key=b08eN2ojRae78YJNYhyu",
+      "tiles": [
+        "https://api.maptiler.com/tiles/v3/{z}/{x}/{y}.pbf"
+      ],
+      "minzoom": 0,
+      "maxzoom": 14,
       "type": "vector"
     }
   },
-  "glyphs": "https://api.maptiler.com/fonts/{fontstack}/{range}.pbf?key=b08eN2ojRae78YJNYhyu",
-  "sprite": "https://api.maptiler.com/maps/streets-v2-dark/sprite",
+  "glyphs": "/fonts/{fontstack}/{range}.pbf",
   "bearing": 0,
   "pitch": 0,
   "center": [
@@ -110,13 +113,118 @@
       "source-layer": "aeroway",
       "minzoom": 11,
       "filter": [
-        "==",
-        "$type",
-        "Polygon"
+        "all",
+        [
+          "==",
+          "$type",
+          "Polygon"
+        ],
+        [
+          "in",
+          "class",
+          "aerodrome",
+          "heliport"
+        ]
       ],
       "paint": {
         "fill-color": "#111111",
         "fill-opacity": 1
+      }
+    },
+    {
+      "id": "Airport pavement",
+      "type": "fill",
+      "source": "maptiler_planet",
+      "source-layer": "aeroway",
+      "minzoom": 12,
+      "filter": [
+        "all",
+        [
+          "==",
+          "$type",
+          "Polygon"
+        ],
+        [
+          "in",
+          "class",
+          "apron",
+          "runway",
+          "taxiway",
+          "helipad"
+        ]
+      ],
+      "paint": {
+        "fill-color": [
+          "match",
+          [
+            "get",
+            "class"
+          ],
+          "runway",
+          "#2e362e",
+          "taxiway",
+          "#262c26",
+          "#1e231e"
+        ],
+        "fill-outline-color": "#2e362e",
+        "fill-opacity": [
+          "interpolate",
+          [
+            "linear"
+          ],
+          [
+            "zoom"
+          ],
+          12,
+          0,
+          13,
+          1
+        ]
+      }
+    },
+    {
+      "id": "Taxiway",
+      "type": "line",
+      "source": "maptiler_planet",
+      "source-layer": "aeroway",
+      "minzoom": 12,
+      "filter": [
+        "all",
+        [
+          "==",
+          "$type",
+          "LineString"
+        ],
+        [
+          "==",
+          "class",
+          "taxiway"
+        ]
+      ],
+      "layout": {
+        "line-join": "round",
+        "line-cap": "round"
+      },
+      "paint": {
+        "line-color": "#323c32",
+        "line-width": [
+          "interpolate",
+          [
+            "exponential",
+            2
+          ],
+          [
+            "zoom"
+          ],
+          12,
+          0.75,
+          14,
+          2.5,
+          16,
+          10,
+          18,
+          40
+        ]
       }
     },
     {
@@ -126,19 +234,79 @@
       "source-layer": "aeroway",
       "minzoom": 5,
       "paint": {
-        "line-color": [
-          "match",
-          [
-            "get",
-            "class"
-          ],
-          "runway",
-          "#4a5a4a",
-          "taxiway",
-          "#2a3a2a",
-          "#1a2a1a"
-        ],
+        "line-color": "#4a5a4a",
         "line-width": [
+          "interpolate",
+          [
+            "exponential",
+            2
+          ],
+          [
+            "zoom"
+          ],
+          5,
+          1,
+          11,
+          2.5,
+          14,
+          6,
+          16,
+          24,
+          18,
+          94
+        ]
+      },
+      "filter": [
+        "all",
+        [
+          "==",
+          "$type",
+          "LineString"
+        ],
+        [
+          "==",
+          "class",
+          "runway"
+        ]
+      ],
+      "layout": {
+        "line-cap": "butt"
+      }
+    },
+    {
+      "id": "Runway designators",
+      "type": "symbol",
+      "source": "maptiler_planet",
+      "source-layer": "aeroway",
+      "minzoom": 12,
+      "filter": [
+        "all",
+        [
+          "==",
+          "$type",
+          "LineString"
+        ],
+        [
+          "==",
+          "class",
+          "runway"
+        ],
+        [
+          "has",
+          "ref"
+        ]
+      ],
+      "layout": {
+        "symbol-placement": "line-center",
+        "text-field": [
+          "get",
+          "ref"
+        ],
+        "text-font": [
+          "Roboto Medium",
+          "Noto Sans Regular"
+        ],
+        "text-size": [
           "interpolate",
           [
             "linear"
@@ -146,46 +314,18 @@
           [
             "zoom"
           ],
+          12,
           11,
-          [
-            "match",
-            [
-              "get",
-              "class"
-            ],
-            [
-              "runway"
-            ],
-            3,
-            1
-          ],
           16,
-          [
-            "match",
-            [
-              "get",
-              "class"
-            ],
-            [
-              "runway"
-            ],
-            14,
-            6
-          ],
-          20,
-          [
-            "match",
-            [
-              "get",
-              "class"
-            ],
-            [
-              "runway"
-            ],
-            22,
-            10
-          ]
-        ]
+          15
+        ],
+        "text-letter-spacing": 0.1,
+        "text-keep-upright": true
+      },
+      "paint": {
+        "text-color": "#8a9a8a",
+        "text-halo-color": "#000000",
+        "text-halo-width": 1.5
       }
     },
     {
@@ -195,13 +335,28 @@
       "source-layer": "aeroway",
       "minzoom": 13,
       "filter": [
-        "==",
-        "class",
-        "taxiway"
+        "all",
+        [
+          "==",
+          "$type",
+          "LineString"
+        ],
+        [
+          "==",
+          "class",
+          "taxiway"
+        ],
+        [
+          "has",
+          "ref"
+        ]
       ],
       "layout": {
         "symbol-placement": "line",
-        "text-field": "{ref}",
+        "text-field": [
+          "get",
+          "ref"
+        ],
         "text-font": [
           "Roboto Medium",
           "Noto Sans Regular"
@@ -221,8 +376,60 @@
         "text-keep-upright": true
       },
       "paint": {
-        "text-color": "#5a6a5a",
+        "text-color": "#788878",
         "text-halo-color": "#000",
+        "text-halo-width": 1
+      }
+    },
+    {
+      "id": "Apron labels",
+      "type": "symbol",
+      "source": "maptiler_planet",
+      "source-layer": "aeroway",
+      "minzoom": 14,
+      "filter": [
+        "all",
+        [
+          "==",
+          "$type",
+          "Polygon"
+        ],
+        [
+          "==",
+          "class",
+          "apron"
+        ],
+        [
+          "has",
+          "ref"
+        ]
+      ],
+      "layout": {
+        "text-field": [
+          "get",
+          "ref"
+        ],
+        "text-font": [
+          "Roboto Regular",
+          "Noto Sans Regular"
+        ],
+        "text-size": [
+          "interpolate",
+          [
+            "linear"
+          ],
+          [
+            "zoom"
+          ],
+          14,
+          10,
+          18,
+          13
+        ]
+      },
+      "paint": {
+        "text-color": "#627062",
+        "text-halo-color": "#000000",
         "text-halo-width": 1
       }
     },
@@ -258,7 +465,7 @@
         "visibility": "visible"
       },
       "paint": {
-        "text-color": "#5a6a5a",
+        "text-color": "#627062",
         "text-halo-color": "#000",
         "text-halo-width": 1
       }

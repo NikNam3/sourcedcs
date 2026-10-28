@@ -1,5 +1,5 @@
     /* LOS terrain profile chart — positioned dynamically by showLosProfile()
-       (ui.js), relative to the hovered row, since the radar panel is now a
+       (panels/los-panel.js), relative to the hovered row, since the radar panel is now a
        dockable panel that can be anywhere on screen. */
     #los-profile-panel {
       position: fixed;

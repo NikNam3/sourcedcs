@@ -1,4 +1,5 @@
 'use strict';
+const log = require('../logger');
 
 const express = require('express');
 const store = require('../store');
@@ -39,15 +40,15 @@ function buildGradingEmbed(request) {
 /* Post a new grading request to Discord; returns the Discord message ID or null */
 async function sendGradingRequestToDiscord(request) {
   if (!discordClient.DISCORD_BOT_TOKEN) {
-    console.warn('[grading] DISCORD_BOT_TOKEN not set — cannot post grading request to Discord');
+    log.warn('[grading] DISCORD_BOT_TOKEN not set — cannot post grading request to Discord');
     return null;
   }
   if (!discordClient.GRADING_CHANNEL_ID) {
-    console.warn('[grading] GRADING_CHANNEL_ID not set — skipping Discord notification');
+    log.warn('[grading] GRADING_CHANNEL_ID not set — skipping Discord notification');
     return null;
   }
   const msg = await discordClient.discordPost('/channels/' + discordClient.GRADING_CHANNEL_ID + '/messages', { embeds: [buildGradingEmbed(request)] });
-  console.debug('[grading] Request ' + request.id + ' posted to Discord channel ' + discordClient.GRADING_CHANNEL_ID);
+  log.debug('[grading] Request ' + request.id + ' posted to Discord channel ' + discordClient.GRADING_CHANNEL_ID);
   return msg && msg.id ? msg.id : null;
 }
 
@@ -58,7 +59,7 @@ async function updateGradingRequestOnDiscord(request) {
     '/channels/' + discordClient.GRADING_CHANNEL_ID + '/messages/' + request.discord_message_id,
     { embeds: [buildGradingEmbed(request)] }
   );
-  console.debug('[grading] Request ' + request.id + ' Discord message updated');
+  log.debug('[grading] Request ' + request.id + ' Discord message updated');
 }
 
 /* ── Grading Requests ── */
@@ -114,7 +115,7 @@ router.post('/grading-requests', writeOpsLimiter, auth.requireAuth, async (req, 
       store.saveJSON(store.GRADING_REQS_FILE, store.state.gradingRequests);
     }
   } catch (err) {
-    console.error('[grading] Discord post failed:', err.message);
+    log.error('[grading] Discord post failed:', err.message);
   }
 
   res.status(201).json(request);
@@ -139,7 +140,7 @@ router.put('/grading-requests/:id/claim', writeOpsLimiter, auth.requireAuth, aut
 
   /* Update Discord message to show claimed state */
   updateGradingRequestOnDiscord(gradingRequests[idx]).catch(err => {
-    console.error('[grading] Discord message update (claim) failed:', err.message);
+    log.error('[grading] Discord message update (claim) failed:', err.message);
   });
 
   res.json(gradingRequests[idx]);
@@ -167,7 +168,7 @@ router.put('/grading-requests/:id/unclaim', writeOpsLimiter, auth.requireAuth, a
 
   /* Update Discord message to show open state again */
   updateGradingRequestOnDiscord(gradingRequests[idx]).catch(err => {
-    console.error('[grading] Discord message update (unclaim) failed:', err.message);
+    log.error('[grading] Discord message update (unclaim) failed:', err.message);
   });
 
   res.json(gradingRequests[idx]);
@@ -196,7 +197,7 @@ router.delete('/grading-requests/:id', writeOpsLimiter, auth.requireAuth, (req, 
   /* Delete the Discord message after responding */
   if (msgId && discordClient.DISCORD_BOT_TOKEN && discordClient.GRADING_CHANNEL_ID) {
     discordClient.discordDelete('/channels/' + discordClient.GRADING_CHANNEL_ID + '/messages/' + msgId).catch(err => {
-      console.error('[grading] Discord message delete failed:', err.message);
+      log.error('[grading] Discord message delete failed:', err.message);
     });
   }
 });

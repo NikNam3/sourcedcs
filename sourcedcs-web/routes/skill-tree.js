@@ -1,4 +1,5 @@
 'use strict';
+const log = require('../logger');
 
 const express = require('express');
 const skillsCore = require('../public/js/skills-core.js');
@@ -88,7 +89,7 @@ router.put('/skill-grades/:pilotId/:itemId', writeOpsLimiter, auth.requireAuth, 
     removedReqs.forEach(r => {
       if (r.discord_message_id && discordClient.DISCORD_BOT_TOKEN && discordClient.GRADING_CHANNEL_ID) {
         discordClient.discordDelete('/channels/' + discordClient.GRADING_CHANNEL_ID + '/messages/' + r.discord_message_id)
-          .catch(err => console.error('[grading] Discord message delete failed:', err.message));
+          .catch(err => log.error('[grading] Discord message delete failed:', err.message));
       }
     });
   }

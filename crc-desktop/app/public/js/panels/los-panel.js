@@ -1,24 +1,34 @@
 'use strict';
+import { losBeamProfile } from '../los.js';
+import { getActiveRadars } from '../picture.js';
+import { settings } from '../settings.js';
 
 // ── LOS terrain profile chart ─────────────────────────────────────────────
-// Shown while hovering a radar row in the Panels control: a terrain-vs-
-// distance chart along that radar's current (live) beam bearing, with the
-// curvature-adjusted sight line and the point where terrain first blocks it.
-// Split out of the former ui.js "god file" — see panels/topbar.js for why
-// this stays a plain script rather than an IIFE.
+// Shown while hovering a radar row in the coverage list: a terrain-vs-distance
+// chart along that radar's current (live) beam bearing, with the curvature-
+// adjusted sight line and the point where terrain first blocks it.
+// Split out of the former ui.js "god file" (history).
+//
+// This is a DIAGNOSTIC, and it is the last thing in the renderer that reads
+// terrain. Masking itself is crc-sync's (its src/terrain.js, docs/adr/0044) —
+// the server's answer is the one that decides what appears on the scope, and
+// this chart is here to explain that answer, not to second-guess it. If the
+// two ever disagree, the server is right and this needs looking at.
 
 let losProfileRadarId = null;
 let losProfileTimer   = null;
 
 function currentBeamBearing(radar) {
   const now = Date.now();
-  if (!radarSweepStart.has(radar.id)) return radar.heading || 0;
+  // `sweepStart` is the server's phase, delivered in the coverage message, so
+  // the bearing charted here is the bearing the real beam is on.
+  if (!Number.isFinite(radar.sweepStart)) return radar.heading || 0;
   if (radar.angleFromNose === 360) {
-    return ((now - radarSweepStart.get(radar.id)) % radar.sweepMs) / radar.sweepMs * 360;
+    return ((now - radar.sweepStart) % radar.sweepMs) / radar.sweepMs * 360;
   }
   const halfAngle = radar.angleFromNose / 2;
   const cycleMs   = radar.sweepMs * 2;
-  const phase     = ((now - radarSweepStart.get(radar.id)) % cycleMs) / cycleMs;
+  const phase     = ((now - radar.sweepStart) % cycleMs) / cycleMs;
   const tNorm     = phase < 0.5 ? phase * 2 : (1 - phase) * 2;
   return (radar.heading - halfAngle + tNorm * radar.angleFromNose + 360) % 360;
 }
@@ -27,7 +37,7 @@ function currentBeamBearing(radar) {
 // (can be anywhere on screen), so position next to whatever's actually
 // being hovered instead of a fixed offset from the panel's old hardcoded
 // left-edge location.
-function showLosProfile(radar, triggerEl) {
+export function showLosProfile(radar, triggerEl) {
   if (!settings.radarDebug) return;
   const $panel = document.getElementById('los-profile-panel');
   const $label = document.getElementById('los-profile-radar-label');
@@ -46,7 +56,7 @@ function showLosProfile(radar, triggerEl) {
   losProfileTimer = setInterval(drawLosProfile, 200);
 }
 
-function hideLosProfile() {
+export function hideLosProfile() {
   losProfileRadarId = null;
   clearInterval(losProfileTimer);
   losProfileTimer = null;
@@ -57,7 +67,7 @@ function hideLosProfile() {
 function drawLosProfile() {
   const $canvas = document.getElementById('los-profile-canvas');
   if (!$canvas || !losProfileRadarId) return;
-  const radar = getAllRadars().find(r => r.id === losProfileRadarId);
+  const radar = getActiveRadars().find(r => r.id === losProfileRadarId);
   if (!radar) { hideLosProfile(); return; }
 
   const bearing = currentBeamBearing(radar);
@@ -136,3 +146,6 @@ function drawLosProfile() {
   ctx.arc(xOf(0), yOf(radar.elevM), 3, 0, Math.PI * 2);
   ctx.fill();
 }
+
+// ESM-1 (S-ESM1c): the unit tests replaced the global showLosProfile to count calls; this is that seam.
+export function _setShowLosProfileForTest(fn) { showLosProfile = fn; }

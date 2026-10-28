@@ -1,0 +1,25 @@
+crc-desktop/app/public/js/panels/efsp/airspace-panel.js:237:      _showMutationWarning(`Released with ${msg.occupied} flight${msg.occupied === 1 ? '' : 's'} still in the block`);
+crc-desktop/app/public/js/panels/efsp/carrier-panel.js:214:  const el = _cel('div', 'carrier-slot' + (row.entry ? ' carrier-slot-occupied' : ' carrier-slot-vacant'));
+crc-desktop/app/public/js/panels/efsp/runway-status-panel.js:201:    const occupied = p && p.occupied ? ` · occupied${p.occupantFlightDataId ? ` (${p.occupantFlightDataId})` : ''}` : '';
+crc-desktop/app/public/js/panels/efsp/runway-status-panel.js:202:    pads.appendChild(_fsEl('div', 'runway-status-line runway-status-pad', `${label} · ${(p && p.name) || 'not configured'}${occupied}`));
+crc-desktop/app/public/js/panels/radar-panel.js:72:    $label.textContent = r.label + (isGnd ? ' GND' : '');
+crc-sync/src/app.js:409:    archiverLog.info('archived Strips and FDRs', { strips: n, flightDataList: r.flightDataIds.length });
+crc-sync/src/efsp/board/coordination.js:384:    if (!flightData) return { ok: false, reason: 'NOT_FOUND', detail: 'referenced FDR not found' };
+crc-sync/src/efsp/board/ops/create-strip.js:44:    if (!bound) return { ok: false, reason: 'NOT_FOUND', detail: 'referenced FDR not found' };
+crc-sync/src/efsp/board/tofi.js:414:    if (!flightData) return { ok: false, reason: 'NOT_FOUND', detail: 'referenced FDR not found' };
+crc-sync/src/efsp/carrier-store.js:342:      return { ok: false, reason: 'NOT_FOUND', detail: `unknown FDR ${op.flightDataId}` };
+crc-sync/src/efsp/carrier/marshal-stack.js:443:  if (stack.entries.some((e) => e.stackIndex === fromIndex)) return _fail(`slot ${fromIndex} is occupied — there is no gap to close`);
+crc-sync/src/efsp/correlation-store.js:242:      const miss = { ok: false, reason: 'NOT_FOUND', detail: `unknown FDR ${mutation.flightDataId}` };
+crc-sync/src/efsp/index.js:379:    if (dropped) log.warn('dropped restored correlation records whose FDR is gone', { dropped });
+crc-sync/src/efsp/index.js:386:        log.warn('restored Strip references a missing FDR — it will render without flight data', { stripId: strip.stripId, facilityId, flightDataId: strip.flightDataId });
+crc-sync/src/efsp/marsa-store.js:334:        return { ok: false, reason: 'NOT_FOUND', detail: `unknown FDR ${flightDataId}` };
+crc-sync/src/efsp/marsa-store.js:453:    if (!this._flightDataExists(flightDataId)) return { ok: false, reason: 'NOT_FOUND', detail: `unknown FDR ${flightDataId}` };
+crc-sync/src/efsp/runway-status-store.js:250:        result = { ok: false, reason: 'NOT_FOUND', detail: `no field state at ${mutation.facilityId}` };
+crc-sync/src/efsp/runway-status-store.js:255:        result = { ok: false, reason: 'STALE_REV', detail: `field state is at rev ${record.rev}, not ${mutation.baseRev}` };
+crc-sync/src/efsp/runway-status-store.js:731:        log.warn('restored active runway is no longer configured — unset until the wind or TWR sets it', { facilityId: saved.facilityId, activeRunway: record.activeRunway });
+crc-sync/src/efsp/stores.js:210:      if (gone) log.warn('dropped restored Marshal stack entries whose FDR is gone', { dropped: gone });
+crc-sync/src/efsp/stores.js:292:const PAD_SHAPE = anyOf('name', 'accessRoute', 'occupied', 'occupantFlightDataId');
+crc-sync/src/radars.js:164:      id: `app:${apt.name}`, type: 'approach', label: `${aptLabel} APP`,
+crc-sync/src/radars.js:220:        label: `${label(t) || t.type} APP RDR`, sublabel: t.type,
+crc-sync/tools/soak/report.js:124:      diagnostics: meta.pruneRetired ? ['prune-retired (DIAGNOSTIC ONLY: DROPPED Strips and orphan FDRs deleted every 10 min — never a fix)'] : [],
+crc-sync/tools/soak/traffic.js:216:    yield act('CENTER', enroute, { kind: 'DropStrip', reason: 'handed to APP' });

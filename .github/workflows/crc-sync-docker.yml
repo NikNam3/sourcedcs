@@ -17,7 +17,37 @@ env:
   IMAGE_NAME: ${{ github.repository }}/crc-sync
 
 jobs:
+  # The deploy gate (docs/adr/0103, S3-5): no image is built unless both unit suites pass. crc-desktop's suite is here
+  # too because its parity test reads crc-sync's wire-protocol.js. A workflow_dispatch from the crc-desktop release runs it too.
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: |
+          (cd crc-sync && npm ci)
+          (cd crc-desktop && npm ci)
+          (cd crc-desktop/app && npm ci)
+
+      - name: crc-sync tests
+        working-directory: crc-sync
+        run: npm test
+
+      - name: crc-desktop tests
+        working-directory: crc-desktop
+        run: npm test
+
   build-and-push:
+    needs: test
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -26,6 +56,18 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      # R3-37: a v* release tag must be on main.
+      - name: Refuse a tag whose commit is not on main
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          git fetch --no-tags origin main
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main || {
+            echo "::error title=Release refused::${GITHUB_REF_NAME} (${GITHUB_SHA}) is not on main. Merge to main first, then tag from main."
+            exit 1
+          }
 
       - name: Log in to the Container registry
         uses: docker/login-action@v3
@@ -46,10 +88,31 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
             type=raw,value=dev,enable=${{ github.ref == 'refs/heads/dev' }}
 
+      # B14 / DEPLOY-GATE-2: the image carries the wire protocol it speaks, so the deploy gate reads it from the exact image it
+      # deploys (.github/scripts/protocol-gate.sh) instead of from source that may belong to a different build.
+      - name: Read the wire protocol
+        id: wire
+        run: |
+          n=$(sed -n 's/.*WIRE_PROTOCOL:[[:space:]]*\([0-9][0-9]*\).*/\1/p' crc-sync/src/wire-protocol.js | head -1)
+          [ -n "$n" ] || { echo "::error title=Wire protocol::could not read WIRE_PROTOCOL from crc-sync/src/wire-protocol.js"; exit 1; }
+          echo "protocol=$n" >> "$GITHUB_OUTPUT"
+
       - name: Build and push Docker image
+        id: build
         uses: docker/build-push-action@v5
         with:
           context: ./crc-sync
           push: true
           tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          labels: |
+            ${{ steps.meta.outputs.labels }}
+            org.sourcedcs.wire-protocol=${{ steps.wire.outputs.protocol }}
+
+      - name: Record the image digest
+        run: |
+          {
+            echo "### crc-sync image"
+            echo "- digest: \`${{ steps.build.outputs.digest }}\`"
+            echo "- wire protocol label: \`${{ steps.wire.outputs.protocol }}\`"
+            echo "- commit: \`${GITHUB_SHA}\`"
+          } >> "$GITHUB_STEP_SUMMARY"

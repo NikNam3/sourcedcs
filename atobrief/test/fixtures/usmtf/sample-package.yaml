@@ -1,0 +1,146 @@
+# Synthetic atobrief package with every ATO field of ADR 0078 / decision H43
+# set. Its USMTF export must be semantically equal to the research note's §3
+# fixture (research-sample.txt). SYNTHETIC — not derived from any real ATO.
+schema_version: '1.0'
+header:
+  operation: IRON FLAG 26-3
+  ato_date: '2026-09-14'
+  classification: UNCLAS
+  usmtf:
+    message_kind: EXER
+    originator: SOURCEDCS AOC
+    serial: ATO C
+    asof: '2026-09-13 1800Z'
+    country: US
+    service: F
+ato:
+  ingame_start_time: '0600Z'
+  missions:
+    - mission_number: MSN1101A
+      callsign: VIPER 11
+      mission_type: CAP
+      unit: SOURCE DCS 1
+      deploy: OMAM
+      recovery: OMAM
+      takeoff_time: '1200Z'
+      recovery_time: '1530Z'
+      priority: 1
+      vul: { start: '1300Z', end: '1500Z' }
+      aircraft: { count: 2, type: F16C, loadout: 402+ }
+      iff: { mode1: '12', mode2: '0011', mode3: '4521' }
+      datalink: { l16_callsign: VP11, ju: '00011' }
+      control: { agency_id: MAGIC, report_in_point: ALPHA, check_in_time: '1300Z' }
+      refuel:
+        - { tanker_id: SHELL71, time_from: '1345Z', time_to: '1400Z', offload_klb: 12 }
+      steer_points:
+        - name: CAP NORTH
+          coords: N26°10'00" E056°00'00"
+          altitude_ft: 25000
+          orbit: { heading_deg: 270, leg_nm: 20, width_nm: 8, cw: true }
+    - mission_number: MSN1202S
+      callsign: DUDE 21
+      mission_type: STRIKE
+      unit: SOURCE DCS 2
+      deploy: OMAM
+      recovery: OMAM
+      takeoff_time: '1315Z'
+      recovery_time: '1645Z'
+      package_id: AB
+      package_commander: true
+      aircraft: { count: 2, type: F15E, loadout: 202+4X31 }
+      iff: { mode1: '21', mode2: '0021', mode3: '4531' }
+      datalink: { l16_callsign: DU21, ju: '00021' }
+      targets:
+        - { target_id: TGT-01, tot_net: '1458Z', tot_nlt: '1502Z' }
+      control: { agency_id: MAGIC, report_in_point: BRAVO, check_in_time: '1445Z' }
+      refuel:
+        - { tanker_id: SHELL71, time_from: '1420Z', time_to: '1440Z', offload_klb: 16 }
+      narrative: PACKAGE AB PUSH FROM IP WEST AT 141445Z
+    - mission_number: MSN1203S
+      callsign: SNAKE 41
+      mission_type: SEAD
+      unit: SOURCE DCS 2
+      deploy: OMAM
+      recovery: OMAM
+      takeoff_time: '1305Z'
+      recovery_time: '1640Z'
+      package_id: AB
+      priority: 1
+      vul: { start: '1450Z', end: '1510Z' }
+      aircraft: { count: 2, type: F16C, loadout: 402+2X88 }
+      iff: { mode1: '41', mode2: '0041', mode3: '4541' }
+      datalink: { l16_callsign: SN41, ju: '00041' }
+      control: { agency_id: MAGIC, report_in_point: BRAVO, check_in_time: '1440Z' }
+      steer_points:
+        - { id: SEAD-BOX-EAST }
+    - mission_number: MSN1901T
+      callsign: SHELL 71
+      mission_type: REFUELING
+      unit: 909ARS
+      deploy: OMAM
+      recovery: OMAM
+      takeoff_time: '1130Z'
+      recovery_time: '1700Z'
+      priority: 1
+      vul: { start: '1230Z', end: '1630Z' }
+      aircraft: { count: 1, type: KC135 }
+      iff: { mode3: '4571' }
+      datalink: { tacan: 38Y }
+    - mission_number: MSN1801W
+      callsign: MAGIC 11
+      mission_type: AEW
+      unit: 960AACS
+      deploy: OMAM
+      recovery: OMAM
+      takeoff_time: '1100Z'
+      recovery_time: '1800Z'
+      priority: 1
+      vul: { start: '1200Z', end: '1730Z' }
+      aircraft: { count: 1, type: E3 }
+      iff: { mode3: '4501' }
+      datalink: { l16_callsign: MG11, ju: '00001' }
+      steer_points:
+        - name: AEW ORBIT
+          coords: N25°50'00" E055°40'00"
+          altitude_ft: 30000
+          orbit: { heading_deg: 300, leg_nm: 40, width_nm: 15, cw: true }
+registry:
+  units:
+    SOURCE DCS 2:
+      remarks: SNAKE 41 WEAPONS FREE IN SEAD BOX EAST ONLY
+    909ARS:
+      base: OMAM
+  callsigns:
+    SHELL 71: { type: KC135, role: TANKER }
+  airfields:
+    OMAM: { name: Al Dhafra AB, coords: N24°14'36" E054°27'07" }
+  tankers:
+    SHELL71:
+      callsign: SHELL 71
+      mission_number: MSN1901T
+      arcp: ANCHOR BLUE
+      altitude_ft: 22000
+      freq_mhz: 276.1
+      tacan: 38Y
+      system: BOOM
+      offload_klb: 60
+      alert_offload_klb: 10
+      fuel: JP8
+  control_agencies:
+    MAGIC:
+      type: AWACS
+      callsign: MAGIC 11
+      primary_freq_mhz: '251.0'
+      secondary_freq_mhz: '305.5'
+      mission_number: MSN1801W
+  targets:
+    TGT-01:
+      name: Command Bunker
+      coords: N27°11'30" E056°18'45"
+      elevation: 120ft
+  steerpoints:
+    - id: SEAD-BOX-EAST
+      name: SEAD BOX EAST
+      coords: N26°40'00" E056°30'00"
+      altitude_ft: 24000
+      orbit: { heading_deg: 90, leg_nm: 10, width_nm: 5, cw: true }

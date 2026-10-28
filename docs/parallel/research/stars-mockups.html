@@ -1,0 +1,605 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ATC Scheme Mockups</title>
+<meta name="description" content="Comparison board for H5: today's tactical scope against three STARS/ERAM-style ATC draw schemes, one traffic scenario.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  color-scheme: dark;
+  --bg:#0b0d0c; --panel:#111513; --panel2:#151a17; --line:#26302a; --line2:#34413a;
+  --text:#d6dcd8; --dim:#8f9a94; --faint:#66716b; --accent:#8aca8a;
+  --badge:#d6a8ff; --badge-bg:#1b1030; --approx:#ffb86b;
+}
+:root:not([data-theme="light"]){ color-scheme: dark; }
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){ --bg:#0b0d0c; } }
+:root[data-theme="dark"]{ --bg:#0b0d0c; }
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--text);font:15px/1.5 Roboto,system-ui,sans-serif;}
+.wrap{max-width:1400px;margin:0 auto;padding:20px 16px 60px}
+h1{font-size:24px;font-weight:500;margin:4px 0 6px}
+h2{font-size:19px;font-weight:500;margin:0 0 4px}
+h3{font-size:13px;font-weight:500;margin:14px 0 6px;color:var(--dim);text-transform:uppercase;letter-spacing:.06em}
+p{margin:6px 0 10px;max-width:95ch}
+code,.mono{font-family:"Roboto Mono",ui-monospace,monospace;font-size:.88em}
+code{background:#1a201d;padding:0 4px;border-radius:3px;color:#cfe3d4}
+a{color:var(--accent)}
+.lede{color:var(--dim)}
+.bar{display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center;margin:12px 0 4px;padding:10px 12px;background:var(--panel);border:1px solid var(--line);border-radius:6px;font-size:14px}
+.bar label{display:flex;gap:6px;align-items:center;cursor:pointer}
+.bar nav{display:flex;flex-wrap:wrap;gap:6px;margin-left:auto}
+.bar nav a{padding:2px 9px;border:1px solid var(--line2);border-radius:12px;text-decoration:none;font-size:13px}
+.scenario{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:4px 24px;font-size:14px;margin:10px 0}
+.scenario div{padding:2px 0;border-bottom:1px dashed var(--line)}
+section.v{margin:34px 0 0;padding:18px 0 0;border-top:1px solid var(--line2)}
+.tagline{color:var(--dim);margin:2px 0 12px;font-size:14px}
+.grid{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(0,1fr);gap:18px;align-items:start}
+.grid > div:first-child{position:sticky;top:8px}
+@media (max-width:980px){.grid > div:first-child{position:static}}
+.grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px;align-items:start;margin-top:14px}
+@media (max-width:980px){.grid,.grid2{grid-template-columns:minmax(0,1fr)}}
+svg.scope{width:100%;height:auto;display:block;border:1px solid var(--line2);border-radius:4px}
+ol.co{list-style:none;margin:0;padding:0;font-size:13.5px;line-height:1.45}
+ol.co li{display:grid;grid-template-columns:24px 1fr;gap:8px;padding:6px 0;border-bottom:1px solid var(--line)}
+ol.co li .n{width:20px;height:20px;border-radius:50%;background:var(--badge-bg);border:1.2px solid var(--badge);color:#e9d5ff;font:700 11px/18px Roboto;text-align:center;margin-top:1px}
+ol.co b{font-weight:500;color:#fff}
+ol.co .f{display:block;color:var(--dim);font-size:12.5px}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{text-align:left;padding:5px 6px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--dim);font-weight:500;font-size:12px}
+.sw{display:inline-block;width:14px;height:14px;border:1px solid #555;vertical-align:-2px;margin-right:6px;border-radius:2px}
+.src{display:inline-block;font-size:11px;padding:0 5px;border-radius:3px;border:1px solid var(--line2);color:var(--dim);white-space:nowrap;margin:1px 2px 1px 0}
+.s-7210{border-color:#4f7fbf;color:#9cc2f0}
+.s-hfm{border-color:#4fa37a;color:#96dcb8}
+.s-hfr{border-color:#3f8f8f;color:#8fd6d6}
+.s-app{border-color:#6a6a6a;color:#c8c8c8}
+.s-apx{border-color:var(--approx);color:var(--approx)}
+.s-com{border-color:#9b7ad0;color:#cbb3f0}
+.s-inf{border-color:#b08850;color:#e0c090}
+.pc{font-size:13.5px}
+.pc ul{margin:4px 0 8px;padding-left:18px}
+.pc li{margin:3px 0}
+.pro::marker{content:"+  ";color:#8aca8a}
+.con::marker{content:"−  ";color:#ff8a70}
+.srv::marker{content:"→  ";color:#9cc2f0}
+.note{font-size:13px;color:var(--dim);border-left:2px solid var(--line2);padding:2px 0 2px 10px;margin:10px 0}
+pre{background:#0f1311;border:1px solid var(--line);border-radius:4px;padding:10px;overflow-x:auto;font:12.5px/1.5 "Roboto Mono",monospace;color:#cfe3d4;margin:8px 0}
+.qs{counter-reset:q;padding-left:0;list-style:none}
+.qs li{counter-increment:q;padding:7px 0 7px 34px;position:relative;border-bottom:1px solid var(--line)}
+.qs li::before{content:"Q" counter(q);position:absolute;left:0;top:7px;font:500 12px "Roboto Mono";color:var(--accent)}
+.cmp td:first-child{color:var(--dim);white-space:nowrap}
+.tblwrap{overflow-x:auto}
+/* animation: blink = the app's 500 ms _pulseBright (1 Hz); time-share period is an approximation */
+.blink{animation:blink 1s steps(1,end) infinite}
+@keyframes blink{0%{opacity:1}50%{opacity:.15}}
+.blinkT{animation:blinkT 1s steps(1,end) infinite}
+@keyframes blinkT{0%{opacity:.95}50%{opacity:.12}}
+.ts1{animation:ts 4s steps(1,end) infinite}
+.ts2{animation:ts 4s steps(1,end) infinite -2s}
+@keyframes ts{0%{opacity:1}50%{opacity:0}}
+body.still .blink,body.still .blinkT,body.still .ts1,body.still .ts2{animation:none}
+body.still .ts2{opacity:0}
+body.nobadge .bdg{display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>ATC draw scheme: mockups for H5</h1>
+<p class="lede">Comparison board for the owner. Every scope below draws <b>the same traffic</b> at the same instant. The spec is <code>docs/parallel/research/stars.md</code>, and the section numbers (§) refer to it. The numbered violet badges are callouts, explained in the list next to each scope, and they are not part of any design. Any colour or timing tagged <span class="src s-apx">approx.</span> is my own approximation, not an FAA value.</p>
+
+<div class="scenario">
+  <div><b>You:</b> acting as <b>APP</b> (LTAG RAPCON), position letter <code>A</code>. In variant C you act as <b>CTR</b>.</div>
+  <div><b>Letters (proposed, Q5):</b> TWR <code>T</code>, APP <code>A</code>, CTR <code>C</code></div>
+  <div><b>"Owned"</b> = correlated (<code>label.source === 'FDR'</code>) to a live Strip whose <code>ownerPositionId</code> is a Position you are acting as</div>
+  <div><b>Scale:</b> range rings every 10 NM around LTAG, dim gray</div>
+</div>
+
+<div class="bar">
+  <label><input type="checkbox" id="still"> freeze blinking and time-sharing</label>
+  <label><input type="checkbox" id="nob"> hide callout badges</label>
+  <nav><a href="#today">Today</a><a href="#va">A · strict STARS</a><a href="#vb">B · STARS on app map</a><a href="#vc">C · ERAM CTR</a><a href="#both">Both radars</a><a href="#cmp">Compare</a><a href="#q">Questions</a></nav>
+</div>
+
+<div class="tblwrap"><table style="margin-top:10px;font-size:13px">
+<tr><th>#</th><th>Scenario element</th><th>What drives it (wire / EFSP)</th></tr>
+<tr><td>1</td><td>VIPER11: owned, correlated arrival, descending 120→060, assigned H250 (currently flying 200)</td><td><code>label.source 'FDR'</code>, Strip owner = APP, <code>fdr.clearance.altitude/heading</code> ACTIVE (ADR 0058)</td></tr>
+<tr><td>2</td><td>6123: squawking, no flight plan</td><td><code>ssr.code</code>, <code>altitude.source 'MODE_C'</code>, <code>label.source null</code></td></tr>
+<tr><td>3</td><td>Primary-only contact</td><td><code>sources</code> without <code>SSR</code></td></tr>
+<tr><td>4</td><td>COLT31: handoff CTR→APP pending</td><td>Strip <code>coordination.primitive HANDOFF</code>, <code>state 'PROPOSED'</code>, peer = a Position you hold</td></tr>
+<tr><td>5</td><td>SNAKE21: TWR departure pointed out to APP</td><td><code>coordination.primitive POINT_OUT</code>, <code>state 'PROPOSED'</code></td></tr>
+<tr><td>6</td><td>ENFLD11: squawking 7700, owned by CTR</td><td><code>ssr.emergency 'GENERAL'</code></td></tr>
+<tr><td>7</td><td>DUDE41 (yours) against HAWG61 (TWR's): conflict</td><td><code>efsp-alerts.stca</code> (ADR 0058, sent only to ATC sessions per ADR 0059)</td></tr>
+<tr><td>8</td><td>RAGE51: yours, just left radar cover (coasting)</td><td><b>Nothing on the wire today.</b> The contact goes <code>gone</code> and fades on the client (<code>sweepOpacity</code>)</td></tr>
+<tr><td>9</td><td>History trails</td><td>client <code>history</code> (<code>buildTrails</code>)</td></tr>
+<tr><td>10</td><td>Map: coast, LTAG runway, range rings</td><td>basemap / video map</td></tr>
+<tr><td>11</td><td>Conflict geometry overlay (CPA)</td><td><code>buildStcaOverlay</code> (app-specific, not STARS)</td></tr>
+<tr><td>12</td><td>BOAR05: CTR overflight at FL210 that doesn't involve you</td><td>correlated, Strip owner = CTR</td></tr>
+</table></div>
+
+<!-- ─────────────────────────── TODAY ─────────────────────────── -->
+<section class="v" id="today">
+<h2>Today (tactical/GCI): for reference</h2>
+<p class="tagline">What every scope draws now, TWR/APP/CTR included. Colour means <b>affiliation</b> (<code>iffState</code>), and every contact gets the same data block. Faithful to <code>track-label.js</code>, <code>geojson.js buildLabels/buildDots/buildTrails/buildStcaOverlay</code> and <code>map-setup.js</code>.</p>
+<div class="grid"><div id="svg-today"></div><ol class="co" id="co-today"></ol></div>
+<div class="grid2"><div><h3>Colours in use</h3><div id="lg-today"></div></div>
+<div class="pc"><h3>Why it doesn't serve ATC</h3><ul>
+<li class="con">It answers "whose side is it on?", but an ATC controller needs "what's my relation to it?" (mine / coming to me / pointed out / someone else's / nobody's). Ownership, handoffs and point-outs are nowhere on the scope, only on the Strips.</li>
+<li class="con">Every contact gets a full 3–4-line block, so a busy terminal area gets cluttered, and nothing orders the blocks by how much they matter to you.</li>
+<li class="con"><code>*</code> means radar height here, but on STARS <code>*</code> means pilot-reported. That's a false friend for anyone who knows STARS.</li>
+<li class="pro">It stays exactly as it is for TAC_C2 / AIC / GCI, and it wins whenever a tactical radar sees the track (see <a href="#both">Both radars</a>).</li>
+</ul></div></div>
+</section>
+
+<!-- ─────────────────────────── A ─────────────────────────── -->
+<section class="v" id="va">
+<h2>A · Strict STARS (7210.3 colour standard, TC-08/15 measured values)</h2>
+<p class="tagline">Black scope, dim-gray video map, blue fused targets with the owner's letter, and FDB/PDB/LDB chosen by your relation to each track. It carries no app extras: no conformance tags and no CPA overlay, because STARS has neither.</p>
+<div class="grid"><div id="svg-a"></div><ol class="co" id="co-a"></ol></div>
+<div class="grid2"><div><h3>Legend and sources</h3><div id="lg-a"></div></div>
+<div class="pc"><h3>Pros / cons</h3><ul>
+<li class="pro">It's the most faithful option, and every colour traces to 7210.3 §3-9-1 or the measured STARS TCW values. STARS is also what a real USAF RAPCON uses, so it's correct for Incirlik APP in its own right.</li>
+<li class="pro">Pure black gives white and green the most contrast, and the grading (FDB/PDB/LDB/none) removes most of the clutter.</li>
+<li class="con">A black scope hides the basemap (water, terrain, contours) that the rest of the app draws. On a mixed APP+GCI session the scope background would have to switch per session, not per track.</li>
+<li class="con">Saturated <code>#00FF00</code> / <code>#FF0000</code> are harsh on a desktop LCD next to the app's muted UI. You'd lose ADR 0058's conformance tags and CPA geometry, or have to keep them "off-standard" anyway.</li>
+</ul><h3>Needs from the server</h3><ul>
+<li class="srv">A per-contact <code>scheme: 'TACTICAL'|'ATC'</code> in <code>presentation.js</code> (Q1). Without it the client can't apply "tactical wins".</li>
+<li class="srv">Ownership, handoff and point-out states already exist (Strip <code>ownerPositionId</code>, <code>coordination.*</code>). The client resolves "mine" from the acting-as set. That's no server work.</li>
+<li class="srv">New: a position letter per Position in facility config (Q5). Optional: a short coast hold for correlated tracks (Q6).</li>
+</ul></div></div>
+</section>
+
+<!-- ─────────────────────────── B ─────────────────────────── -->
+<section class="v" id="vb">
+<h2>B · STARS layout on the app's dark map (the research's "Proposed" column)</h2>
+<p class="tagline">Same grammar as A, with the same letters, blocks and the white/green/yellow/red meanings. It keeps the MapTiler dark basemap, softens the green, uses TC-08/15's recommended red, dims LDB/target/trail brightness, and <b>keeps</b> the app's ADR 0058 conformance tag and the CPA overlay as documented extras.</p>
+<div class="grid"><div id="svg-b"></div><ol class="co" id="co-b"></ol></div>
+<div class="grid2"><div><h3>Legend and sources</h3><div id="lg-b"></div></div>
+<div class="pc"><h3>Pros / cons</h3><ul>
+<li class="pro">Anyone trained on STARS reads it as STARS, and it still sits on the same map as tactical tracks, so a mixed session doesn't need a background switch.</li>
+<li class="pro">It keeps everything ADR 0058 built (the <code>HDG</code>/<code>BUST</code> tag, the CPA geometry), which STARS lacks and the squadron already uses.</li>
+<li class="con">Several values are approximations and have to be tested on the real map, as 7210 §3-9-1g–h requires of any implementation.</li>
+<li class="con">The amber conformance tag (<code>#E0A83C</code>) sits close to point-out yellow. The tag is always text on line 0, never a whole block, but check it on a real scope.</li>
+<li class="con">The softer green departs from the measured value, and white on a non-black map has less headroom than on black.</li>
+</ul><h3>Needs from the server</h3><ul>
+<li class="srv">Same as A: <code>scheme</code> per contact (Q1), position letters (Q5), and optionally a coast hold (Q6).</li>
+<li class="srv">No other wire change. Brightness categories (FDB/LDB/POS/OTH/PRI/HST/MP) are client-side opacity multipliers on existing layers.</li>
+<li class="srv">Client: a monospace glyph stack (Roboto Mono) for MapLibre, a blue-disc icon and a second symbol layer for the letter (§7).</li>
+</ul></div></div>
+</section>
+
+<!-- ─────────────────────────── C ─────────────────────────── -->
+<section class="v" id="vc">
+<h2>C · ERAM-flavoured CTR (optional, only if CTR should feel like a Center)</h2>
+<p class="tagline">Here you act as <b>CTR</b>. ERAM codes by <b>brightness</b>, not by an ownership hue. It has its own symbol vocabulary (<code>\ / + ◇ #</code>), paired LDBs with no leader, assigned-vs-actual altitude in one field, and a 4th line for heading. The research (§4.2) recommends <b>against</b> this for v1. <b>No FAA source gives ERAM colours, so the whole palette here is approximated from the vNAS rendering.</b></p>
+<div class="grid"><div id="svg-c"></div><ol class="co" id="co-c"></ol></div>
+<div class="grid2"><div><h3>Legend and sources</h3><div id="lg-c"></div></div>
+<div class="pc"><h3>Pros / cons</h3><ul>
+<li class="pro">It feels like a Center: <code>060↓120</code> (assigned, trend, actual) in one field, <code>H250</code> on line 4, <code>EMRG</code>/<code>HIJK</code>/<code>RDOF</code> in field E.</li>
+<li class="pro">LDBs with no leader and no symbol are lighter, which suits CTR's wide theater-scale picture.</li>
+<li class="con">It breaks 7210.3 §3-9-1i ("one controller, one scheme"). A controller holding APP and CTR together, which is common, would see STARS and ERAM on one map, unless the scheme were chosen for the whole scope.</li>
+<li class="con">There's no FAA colour source, the symbol set is different, and it needs CIDs and sector numbers (new data). It's effectively a second ATC renderer.</li>
+<li class="con">CTR's radars are approach radars (2D+SSR, guide §8B), so nothing about the sensor picture calls for en-route presentation.</li>
+</ul><h3>Needs from the server</h3><ul>
+<li class="srv"><code>scheme</code> would need three values (<code>TACTICAL|STARS|ERAM</code>), or ERAM gets chosen per session on the client.</li>
+<li class="srv">New: a 3-character CID per flight (on the FDR) and a sector ID per Position for <code>H22</code>/<code>O22</code>.</li>
+<li class="srv">Same ownership and coordination data as A/B. The CA "flash data block" needs no new data.</li>
+</ul></div></div>
+</section>
+
+<!-- ─────────────────────────── BOTH ─────────────────────────── -->
+<section class="v" id="both">
+<h2>Both radars: the H5 rule on one scope</h2>
+<p class="tagline">This controller holds <b>GCI</b> (sees an E-3's tactical radar) and <b>APP</b> (sees the LTAG approach radar). A track that a tactical radar currently sees is drawn tactical, even if the controller owns its Strip as APP. A track only the ATC radar sees is drawn STARS (variant B shown here).</p>
+<div class="grid"><div id="svg-both"></div><ol class="co" id="co-both"></ol></div>
+<div class="grid2"><div><h3>What the wire would carry (proposal, §5.1)</h3>
+<pre>// crc-sync presentation.js, per session, per contact
+{ id: 17, scheme: 'TACTICAL',            // an E-3 (tactical type) sees it now
+  sources: ['PRIMARY','SSR','HEIGHT'], label: { callsign: 'VIPER11', source: 'FDR' }, … }
+
+{ id: 23, scheme: 'ATC',                 // only airport/approach radars see it
+  sources: ['PRIMARY','SSR'],          label: { callsign: 'COLT31',  source: 'FDR' }, … }
+
+{ id: 31, scheme: 'TACTICAL',            // E-3 lost it 1 sweep ago: held for ~2 sweeps
+  sources: ['PRIMARY','SSR'], … }      //   (hysteresis), then flips to 'ATC'</pre>
+<p class="note"><code>sources</code> alone can't decide this. <code>PRIMARY,SSR</code> is what both kinds of radar report, so a contact the E-3 sees without height looks the same as one only APP sees. The radar <i>type</i> has to be classified once in <code>sensor-specs.json</code> (<code>presentation: 'ATC'</code> on airport and approach radars).</p></div>
+<div class="pc"><h3>Consequences to accept or reject (Q8)</h3><ul>
+<li class="con">An owned VIPER11 drawn tactical loses the STARS cues (white = mine, the <code>A</code> letter, <code>PO</code>/handoff blink) for as long as the E-3 sees it. The Strip still shows ownership.</li>
+<li class="con">Tracks flip scheme as AWACS coverage comes and goes. Hysteresis of about 2 tactical sweeps, and counting a flip as a label revision, keeps that calm but doesn't remove it.</li>
+<li class="pro">A pure TWR/APP/CTR session never sees a tactical track: every contact is <code>ATC</code>.</li>
+<li class="pro">The alternative is one scheme for the whole scope, picked by the "highest" Position held. That's simpler and obeys 7210's one-scheme rule, but a GCI+APP controller would then lose STARS entirely.</li>
+</ul></div></div>
+</section>
+
+<!-- ─────────────────────────── COMPARE ─────────────────────────── -->
+<section class="v" id="cmp">
+<h2>At a glance</h2>
+<div class="tblwrap"><table class="cmp">
+<tr><th></th><th>Today</th><th>A · strict STARS</th><th>B · STARS on app map</th><th>C · ERAM CTR</th></tr>
+<tr><td>Colour means</td><td>affiliation (IFF)</td><td>relation to you</td><td>relation to you</td><td>brightness = relation to you</td></tr>
+<tr><td>Background</td><td>dark basemap</td><td>black</td><td>dark basemap</td><td>dark blue <span class="src s-apx">approx.</span></td></tr>
+<tr><td>Owned / other / unassoc.</td><td>same block for all</td><td>white FDB / green PDB / green LDB</td><td>same as A, softer green</td><td>bright FDB / dim paired LDB / unpaired LDB</td></tr>
+<tr><td>Handoff to you</td><td>not on scope</td><td>flashing white FDB</td><td>flashing white FDB</td><td>flashing FDB, <code>R</code> in column 0</td></tr>
+<tr><td>Point-out</td><td>not on scope</td><td>flashing yellow FDB, <code>PO</code></td><td>same as A</td><td>yellow <code>P</code> on line 0</td></tr>
+<tr><td>Conflict</td><td>orange <code>STCA</code> + CPA overlay</td><td>red <code>CA</code>, blinking</td><td>red <code>CA</code> + CPA overlay</td><td>data blocks flash</td></tr>
+<tr><td>Emergency</td><td>red square + <code>EMR</code></td><td>red <code>EM</code> line 0, forced FDB</td><td>same as A</td><td><code>EMRG</code> in field E</td></tr>
+<tr><td>Conformance (ADR 0058)</td><td>tag on line 0</td><td>dropped</td><td>kept, app-specific</td><td>dropped (field B trend instead)</td></tr>
+<tr><td>Coast</td><td>fades out</td><td><code>CST</code>, no target</td><td><code>CST</code>, no target</td><td><code>#</code> symbol, <code>CST</code></td></tr>
+<tr><td>New server data</td><td>none</td><td><code>scheme</code>, letters</td><td><code>scheme</code>, letters</td><td><code>scheme</code> (3-way), letters, CID, sector IDs</td></tr>
+</table></div>
+</section>
+
+<section class="v" id="q">
+<h2>What the owner must decide</h2>
+<ol class="qs">
+<li><b>Which variant:</b> A (strict), B (STARS on the app map, the research's proposal), or B with C added later for CTR?</li>
+<li><b><code>scheme</code> on the wire:</b> should crc-sync add <code>scheme: 'TACTICAL'|'ATC'</code> per contact, from the radar types that currently see it, with about 2 sweeps of hysteresis? (§5.1, §9 Q1)</li>
+<li><b>Mixed sessions:</b> do you accept per-track mixing with flips, or pick one scheme for the whole scope from the highest Position held? (Q8)</li>
+<li><b>ADR 0058 extras on ATC tracks:</b> should the conformance tag and CPA overlay stay (B) or go (A)?</li>
+<li><b>Position letters</b> for TWR/APP/CTR, and the owner letter after TOFI hands a flight to a tactical Position. (Q3, Q5)</li>
+<li><b>Coast:</b> should a correlated track hold <code>CST</code> for about 2 sweeps (new server or client state), or should the Strip's <code>NO TRK</code> be enough? (Q6)</li>
+<li><b>Primary-only symbol:</b> <code>+</code> (shown here, matches ERAM) or the vNAS diamond? (Q7)</li>
+<li><b>Declared hostiles</b> on ATC-scheme tracks: show nothing (pure H5), or a yellow <code>SA</code>-style indicator? (Q2)</li>
+</ol>
+</section>
+</div>
+
+<script>
+(function(){
+const RAD = Math.PI/180;
+const f = n => Math.round(n*10)/10;
+const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const W = 900, H = 560;
+
+// ── The scenario (identical positions in every scope) ──────────────────
+const T = {
+  viper:{x:640,y:250,h:200}, sq:{x:210,y:120,h:90}, prim:{x:160,y:330,h:45},
+  colt:{x:700,y:90,h:160},   snake:{x:330,y:420,h:180}, enf:{x:590,y:470,h:20},
+  dude:{x:380,y:170,h:100},  hawg:{x:490,y:185,h:280}, rage:{x:130,y:480,h:200},
+  boar:{x:800,y:300,h:350},
+};
+const AP = {x:430,y:330}; // LTAG
+const BADGE = {1:[622,270],2:[192,140],3:[180,350],4:[680,110],5:[312,440],6:[572,452],7:[436,210],8:[112,500],9:[674,200],10:[402,312],11:[432,146],12:[782,284]};
+
+function behind(t,i,s){ const dx=Math.sin(t.h*RAD), dy=-Math.cos(t.h*RAD); return [t.x-i*s*dx, t.y-i*s*dy]; }
+function badges(list){ return '<g class="bdg">'+list.map(n=>{const [x,y]=Array.isArray(n)?n.slice(1):BADGE[n]; const k=Array.isArray(n)?n[0]:n;
+  return `<circle cx="${x}" cy="${y}" r="8.5" fill="#1b1030" stroke="#d6a8ff" stroke-width="1.2"/><text x="${x}" y="${y+3.6}" text-anchor="middle" font-family="Roboto" font-size="10.5" font-weight="700" fill="#e9d5ff">${k}</text>`;}).join('')+'</g>'; }
+
+// ── Map backgrounds ────────────────────────────────────────────────────
+const COAST = 'M0,372 C60,380 110,400 160,418 S250,470 300,505 S360,545 380,560';
+function baseMap(k, clipId){
+  const M = {
+    today:{bg:'#141414', sea:'#07111a', coast:'#1f2a33', coastOp:1, rw:'#4a5a4a', rings:null, lbl:'#3a5a3a', grid:true},
+    A:{bg:'#000000', sea:null, coast:'#8C8C8C', coastOp:1, rw:'#8C8C8C', rings:'#8C8C8C', ringOp:1, lbl:'#8C8C8C'},
+    B:{bg:'#141414', sea:'#07111a', coast:'#8C8C8C', coastOp:.6, rw:'#8C8C8C', rings:'#8C8C8C', ringOp:.6, lbl:'#8C8C8C', grid:true},
+    C:{bg:'#000a1e', sea:null, coast:'#3a4a6a', coastOp:1, rw:'#4a5a7a', rings:null, lbl:'#4a5a7a', sector:true},
+  }[k];
+  let s = `<rect width="${W}" height="${H}" fill="${M.bg}"/>`;
+  if (M.sea) s += `<path d="${COAST} L0,560 Z" fill="${M.sea}"/>`;
+  if (M.grid) s += `<path d="M120,0 C150,120 110,220 170,330 M520,0 C560,70 600,120 700,160 S820,200 900,190" fill="none" stroke="#202020" stroke-width="1"/>`;
+  s += `<path d="${COAST}" fill="none" stroke="${M.coast}" stroke-width="1" opacity="${M.coastOp}"/>`;
+  if (M.rings) { for (const r of [100,200,300,400]) s += `<circle cx="${AP.x}" cy="${AP.y}" r="${r}" fill="none" stroke="${M.rings}" stroke-width=".8" opacity="${M.ringOp*.7}"/>`;
+    s += `<text x="${AP.x+102}" y="${AP.y-4}" font-family="Roboto Mono" font-size="9" fill="${M.rings}" opacity="${M.ringOp}">10</text><text x="${AP.x+202}" y="${AP.y-4}" font-family="Roboto Mono" font-size="9" fill="${M.rings}" opacity="${M.ringOp}">20</text>`;
+    if (k==='A') for (let a=0;a<360;a+=10){ const L=a%30?5:9, r=300; const x1=AP.x+Math.sin(a*RAD)*r, y1=AP.y-Math.cos(a*RAD)*r, x2=AP.x+Math.sin(a*RAD)*(r-L), y2=AP.y-Math.cos(a*RAD)*(r-L); s+=`<line x1="${f(x1)}" y1="${f(y1)}" x2="${f(x2)}" y2="${f(y2)}" stroke="#8C8C8C" stroke-width=".8" opacity=".7"/>`; }
+  }
+  if (M.sector) s += `<path d="M0,250 L260,210 L520,40 L560,0 M520,40 L900,120" fill="none" stroke="#3a4a6a" stroke-dasharray="6 5" stroke-width="1"/><text x="836" y="112" font-family="Roboto Mono" font-size="10" fill="#4a5a7a">S22</text>`;
+  // runway 05/23
+  s += `<line x1="${AP.x-13}" y1="${AP.y+8}" x2="${AP.x+13}" y2="${AP.y-8}" stroke="${M.rw}" stroke-width="3"/>`;
+  s += `<text x="${AP.x+14}" y="${AP.y+16}" font-family="${k==='today'?'Roboto':'Roboto Mono'}" font-size="10" fill="${M.lbl}">LTAG</text>`;
+  if (k==='today') s += `<path d="M745,372 l5,-9 l5,9 z" fill="none" stroke="#3a5a3a"/><text x="760" y="372" font-family="Roboto" font-size="10" fill="#3a5a3a">ADANA</text>`;
+  else s += `<path d="M745,372 l5,-9 l5,9 z" fill="none" stroke="${M.lbl}" opacity=".7"/><text x="760" y="372" font-family="Roboto Mono" font-size="10" fill="${M.lbl}" opacity=".7">ADANA</text>`;
+  return s;
+}
+
+// ── Text helpers ───────────────────────────────────────────────────────
+const segLen = sg => typeof sg==='string' ? [...sg].length : Math.max([...sg.t].length, sg.alt?[...sg.alt].length:0);
+const lineLen = l => l.reduce((a,s)=>a+segLen(s),0);
+
+function geom(x,y,dir,nLines,wPx,o){
+  const lh=o.lh, h=nLines*lh, L=o.L??14; let left,top,ax,ay;
+  switch(dir){
+    case 'NE': left=x+L; top=y-L-h+4; ax=left-2; ay=top+h-3; break;
+    case 'E':  left=x+L+4; top=y-h/2; ax=left-3; ay=y; break;
+    case 'SE': left=x+L; top=y+L-4; ax=left-2; ay=top+3; break;
+    case 'NW': left=x-L-wPx; top=y-L-h+4; ax=left+wPx+2; ay=top+h-3; break;
+    case 'W':  left=x-L-4-wPx; top=y-h/2; ax=left+wPx+3; ay=y; break;
+    case 'SW': left=x-L-wPx; top=y+L-4; ax=left+wPx+2; ay=top+3; break;
+  }
+  return {left,top,ax,ay,base:top+lh*0.78};
+}
+function leader(x,y,ax,ay,c,op,r0){ const d=Math.hypot(ax-x,ay-y); if(d<r0+2) return ''; const ux=(ax-x)/d, uy=(ay-y)/d;
+  return `<line x1="${f(x+ux*r0)}" y1="${f(y+uy*r0)}" x2="${f(ax)}" y2="${f(ay)}" stroke="${c}" stroke-width="1" opacity="${op}"/>`; }
+
+// monospace block: lines = [[seg...]], seg = 'text' | {t, c, cls, alt}
+function monoBlock(t,dir,lines,o){
+  const cw=o.size*0.6, wPx=Math.max(...lines.map(lineLen))*cw;
+  const g=geom(t.x,t.y,dir,lines.length,wPx,o);
+  let s='';
+  if (o.leader!==false) s += leader(t.x,t.y,g.ax,g.ay,o.lc||o.c,o.lop??1,7);
+  lines.forEach((ln,i)=>{ let col=0; const y=f(g.base+i*o.lh);
+    ln.forEach(sg=>{ if(typeof sg==='string') sg={t:sg}; const x=f(g.left+col*cw), c=sg.c||o.c, cls=sg.cls||'';
+      if (sg.alt!=null){ s+=`<text x="${x}" y="${y}" fill="${c}" class="ts1 ${cls}">${esc(sg.t)}</text><text x="${x}" y="${y}" fill="${c}" class="ts2 ${cls}">${esc(sg.alt)}</text>`; }
+      else if (sg.t.trim()) s+=`<text x="${x}" y="${y}" fill="${c}" class="${cls}" xml:space="preserve">${esc(sg.t)}</text>`;
+      col+=segLen(sg); });
+  });
+  if (o.col0){ s+=`<text x="${f(g.left-cw*1.6)}" y="${f(g.base+(o.col0Line||0)*o.lh)}" fill="${o.col0c||o.c}">${esc(o.col0)}</text>`; }
+  return `<g font-family="Roboto Mono, monospace" font-size="${o.size}" opacity="${o.op??1}" class="${o.cls||''}" ${o.halo?'stroke="#000" stroke-width="2.4" paint-order="stroke" stroke-linejoin="round"':''}>${s}</g>`;
+}
+
+// proportional block (today): lines = [[ [text,color], ... ]]
+function propBlock(t,dir,lines,o){
+  const wPx=Math.max(...lines.map(l=>l.reduce((a,[tx])=>a+[...tx].length,0)))*6.3;
+  const g=geom(t.x,t.y,dir,lines.length,wPx,{lh:o.lh,L:o.L??10});
+  let s=leader(t.x,t.y,g.ax,g.ay,o.c,o.op,7);
+  s+=`<text font-family="Roboto, sans-serif" font-size="${o.size}" stroke="#000" stroke-width="2" paint-order="stroke" stroke-linejoin="round">`;
+  lines.forEach((ln,i)=>{ s+=`<tspan x="${f(g.left)}" y="${f(g.base+i*o.lh)}">`+ln.map(([tx,c])=>`<tspan fill="${c||o.c}">${esc(tx)}</tspan>`).join('')+`</tspan>`; });
+  return `<g opacity="${o.op}">${s}</text></g>`;
+}
+const svg = (inner, vb) => `<svg class="scope" viewBox="0 0 ${vb?vb[0]:W} ${vb?vb[1]:H}" xmlns="http://www.w3.org/2000/svg" role="img">${inner}</svg>`;
+
+// ── TODAY ──────────────────────────────────────────────────────────────
+const IFF = {friendly:'#4488cc', bogey:'#ccaa00'};
+function todayTrack(t, iff, lines, dir, op=1, emerg){
+  const c=IFF[iff]; let s='';
+  for (let i=1;i<=8;i++){ const [x,y]=behind(t,i,7); s+=`<circle cx="${f(x)}" cy="${f(y)}" r="1.6" fill="${c}" opacity="${f((1-i/9)*0.55*op*100)/100}"/>`; }
+  s+=`<rect x="-4" y="-4" width="8" height="8" fill="none" stroke="${c}" stroke-width="1" transform="translate(${t.x} ${t.y}) rotate(45)" opacity="${op}"/>`;
+  if (emerg) s+=`<rect x="${t.x-10}" y="${t.y-10}" width="20" height="20" fill="none" stroke="#cc2222" stroke-width="2.5" class="blinkT"/>`;
+  s+=propBlock(t,dir,lines,{c,size:11.5,lh:13.5,op});
+  return s;
+}
+function cpaOverlay(){
+  const d=T.dude, h=T.hawg; const a=[429,179], b=[436,176], m=[432.5,177.5];
+  return `<g><line x1="${d.x}" y1="${d.y}" x2="${a[0]}" y2="${a[1]}" stroke="#ff8a4c" stroke-width="1.5" stroke-dasharray="3 2" opacity=".9"/>
+  <line x1="${h.x}" y1="${h.y}" x2="${b[0]}" y2="${b[1]}" stroke="#ff8a4c" stroke-width="1.5" stroke-dasharray="3 2" opacity=".9"/>
+  <line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="#ff8a4c"/>
+  <circle cx="${m[0]}" cy="${m[1]}" r="12" fill="rgba(255,138,76,.12)" stroke="#ff8a4c"/>
+  <text x="${m[0]+16}" y="${m[1]-9}" font-family="Roboto" font-size="11" fill="#ffd2bd">0:55  1.8 NM / 500 ft</text></g>`;
+}
+function todayScope(){
+  let s=baseMap('today');
+  s+=cpaOverlay();
+  const F=IFF.friendly;
+  s+=todayTrack(T.viper,'friendly',[[['HDG200','#e0a83c'],[' VIPER11']],[['120↓15 G280']],[['4521']],[['A060 H250']]],'E');
+  s+=todayTrack(T.sq,'friendly',[[['6123']],[['042 G160']]],'E');
+  s+=todayTrack(T.prim,'bogey',[[['TN00004']],[['G250']]],'E');
+  s+=todayTrack(T.colt,'friendly',[[['COLT31']],[['150 G320']],[['4532']]],'E');
+  s+=todayTrack(T.snake,'friendly',[[['SNAKE21']],[['025↑18 G220']],[['4561']]],'E');
+  s+=todayTrack(T.enf,'friendly',[[['ENFLD11']],[['090 G250']],[['EMR','#cc2222']]],'E',1,true);
+  s+=todayTrack(T.dude,'friendly',[[['STCA','#ff8a4c'],[' DUDE41']],[['070 G240']],[['4512']]],'W');
+  s+=todayTrack(T.hawg,'friendly',[[['STCA','#ff8a4c'],[' HAWG61']],[['065 G210']],[['4513']]],'SE');
+  s+=todayTrack(T.rage,'friendly',[[['RAGE51']],[['230 G230']],[['4570']]],'E',.3);
+  s+=todayTrack(T.boar,'friendly',[[['BOAR05']],[['210 G450']],[['4610']]],'E');
+  s+=badges([1,2,3,4,5,6,7,8,9,10,11,12]);
+  return svg(s);
+}
+
+// ── STARS (A and B) ────────────────────────────────────────────────────
+const PAL = {
+  A:{own:'#FFFFFF', oth:'#00FF00', po:'#FFFF00', al:'#FF0000', tgt:'#1E78FF', pri:1, ldbOp:1, oth2:1, hist:['#1E50C8','#4646AA','#323282','#28286E','#1E1E5A'], histOp:1, halo:false},
+  B:{own:'#E6E6E6', oth:'#3CE63C', po:'#FFFF00', al:'#FF3C3C', tgt:'#1E78FF', pri:.8, ldbOp:.8, oth2:.8, hist:['#1E50C8','#4646AA','#323282','#34347A','#2A2A6A'], histOp:.7, halo:true, conf:'#E0A83C'},
+};
+function starsScope(k){
+  const P=PAL[k]; let s=baseMap(k);
+  if (k==='B') s+=cpaOverlay();
+  const o=(c,extra={})=>Object.assign({c,size:12,lh:14,halo:P.halo},extra);
+  const trail=(t)=>{ let r=''; for(let i=1;i<=5;i++){const [x,y]=behind(t,i,9); r+=`<circle cx="${f(x)}" cy="${f(y)}" r="2" fill="${P.hist[i-1]}" opacity="${P.histOp}"/>`;} return r; };
+  const target=(t,ch,cc,{disc=true,op=1}={})=> (disc?`<circle cx="${t.x}" cy="${t.y}" r="6" fill="${P.tgt}" opacity="${P.pri}"/>`:'')+
+     `<text x="${t.x}" y="${t.y+3.6}" text-anchor="middle" font-family="Roboto Mono" font-weight="500" font-size="10.5" fill="${cc}" opacity="${op}">${esc(ch)}</text>`;
+  for (const t of Object.values(T)) s+=trail(t);
+  const ldb={op:P.ldbOp};
+  // 1 owned arrival
+  const vl=[['VIPER11'],['120 ',{t:'28',alt:'F16'}],['A060↓ H250']]; if (P.conf) vl.unshift([{t:'HDG200',c:P.conf}]);
+  s+=target(T.viper,'A',P.own)+monoBlock(T.viper,'E',vl,o(P.own));
+  // 2 LDB
+  s+=target(T.sq,'*',P.oth,{op:P.oth2})+monoBlock(T.sq,'NE',[['6123'],['042']],o(P.oth,ldb));
+  // 3 primary
+  s+=target(T.prim,'+',P.oth,{op:P.oth2});
+  // 4 handoff to me
+  s+=`<g class="blink">`+monoBlock(T.colt,'E',[['COLT31'],['150 ',{t:'32',alt:'F18'}]],o(P.own))+`</g>`+target(T.colt,'C',P.own);
+  // 5 point-out
+  s+=`<g class="blink">`+monoBlock(T.snake,'SE',[['SNAKE21 PO'],['025 ',{t:'22',alt:'F16'}]],o(P.po))+`</g>`+target(T.snake,'T',P.po);
+  // 6 emergency (forced FDB, owned by C)
+  s+=target(T.enf,'C',P.oth)+monoBlock(T.enf,'E',[[{t:'EM',c:P.al,cls:'blink'}],['ENFLD11'],['090 ',{t:'25',alt:'C130'}]],o(P.oth));
+  // 7 CA pair
+  s+=target(T.dude,'A',P.own)+monoBlock(T.dude,'NW',[[{t:'CA',c:P.al,cls:'blink'}],['DUDE41'],['070 ',{t:'24',alt:'F16'}]],o(P.own));
+  s+=target(T.hawg,'T',P.oth)+monoBlock(T.hawg,'SE',[[{t:'CA',c:P.al,cls:'blink'}],['HAWG61'],['065 ',{t:'21',alt:'A10'}]],o(P.oth));
+  // 8 coast: no disc, symbol at dead-reckoned position
+  s+=target(T.rage,'A',P.own,{disc:false})+monoBlock(T.rage,'E',[['RAGE51'],['CST 23']],o(P.own));
+  // 12 PDB
+  s+=target(T.boar,'C',P.oth,{op:P.oth2})+monoBlock(T.boar,'NE',[['210 45']],o(P.oth,ldb));
+  const b=[1,2,3,4,5,6,7,8,9,10,12]; if (k==='B') b.push(11,[13,722,238]);
+  s+=badges(b);
+  return svg(s);
+}
+
+// ── ERAM (C) — every value approximated from the vNAS rendering ────────
+const EP={fdb:'#E8DC6A', ldb:'#B4AA50', sym:'#D0C860', hist:'#6A6434', po:'#FFFF00', al:'#FF3C3C'};
+function eramScope(){
+  let s=baseMap('C');
+  const o=(c,extra={})=>Object.assign({c,size:12,lh:14},extra);
+  for (const t of Object.values(T)) for(let i=1;i<=5;i++){const [x,y]=behind(t,i,9); s+=`<circle cx="${f(x)}" cy="${f(y)}" r="1.5" fill="${EP.hist}" opacity="${1-i*0.13}"/>`;}
+  const glyph=(t,g,c=EP.sym)=>`<text x="${t.x}" y="${t.y+4}" text-anchor="middle" font-family="Roboto Mono" font-size="12" fill="${c}">${esc(g)}</text>`;
+  const corr=(t,c=EP.sym)=>`<path d="M${t.x},${t.y-6} L${t.x+6},${t.y} L${t.x},${t.y+6} L${t.x-6},${t.y} Z" fill="none" stroke="${c}" stroke-width="1"/><line x1="${t.x-3}" y1="${t.y-3}" x2="${t.x+3}" y2="${t.y+3}" stroke="${c}" stroke-width="1.2"/>`;
+  const ldb={leader:false,L:4};
+  s+=corr(T.viper)+monoBlock(T.viper,'E',[['VIPER11'],['060↓120'],['4F2 280'],['H250 F16']],o(EP.fdb));
+  s+=glyph(T.sq,'/')+monoBlock(T.sq,'E',[['6123 042']],o(EP.ldb,ldb));
+  s+=glyph(T.prim,'+');
+  s+=corr(T.colt)+`<g class="blink">`+monoBlock(T.colt,'E',[['COLT31'],['150C'],['7C1 H22']],o(EP.fdb,{col0:'R'}))+`</g>`;
+  s+=corr(T.snake)+monoBlock(T.snake,'SE',[[{t:'P',c:EP.po,cls:'blink'}],['SNAKE21'],['050↑025'],['2A9 220']],o(EP.fdb,{col0:'R',col0Line:1}));
+  s+=corr(T.enf)+monoBlock(T.enf,'E',[['ENFLD11'],['090C'],['5D3 ',{t:'EMRG',c:EP.al,cls:'blink'}]],o(EP.fdb,{col0:'R'}));
+  s+=corr(T.dude)+`<g class="blink">`+monoBlock(T.dude,'NW',[['DUDE41'],['070C'],['3B7 240']],o(EP.fdb))+`</g>`;
+  s+=corr(T.hawg)+`<g class="blink">`+monoBlock(T.hawg,'W',[['HAWG61 065']],o(EP.ldb,ldb))+`</g>`;
+  s+=glyph(T.rage,'#')+monoBlock(T.rage,'E',[['RAGE51'],['230C'],['8E1 CST']],o(EP.fdb));
+  s+=corr(T.boar)+monoBlock(T.boar,'E',[['BOAR05 210']],o(EP.ldb,ldb));
+  s+=badges([1,2,3,4,5,6,7,8,9,10,12,[13,748,60]]);
+  return svg(s);
+}
+
+// ── BOTH RADARS ────────────────────────────────────────────────────────
+function bothScope(){
+  const vb=[900,400]; let s=`<rect width="900" height="400" fill="#141414"/><defs><clipPath id="clipAw"><circle cx="170" cy="120" r="340"/></clipPath></defs>`;
+  s+=`<path d="M0,300 C80,300 150,330 220,350 S320,390 360,400 L0,400Z" fill="#07111a"/>`;
+  s+=`<circle cx="170" cy="120" r="340" fill="none" stroke="#6a9a6a" stroke-width="1.2" stroke-dasharray="7 5"/>`;
+  s+=`<circle cx="580" cy="240" r="240" fill="none" stroke="#8C8C8C" stroke-width="1.2" opacity=".75"/>`;
+  s+=`<circle cx="580" cy="240" r="240" fill="rgba(106,154,106,.07)" clip-path="url(#clipAw)"/>`;
+  s+=`<text x="16" y="24" font-family="Roboto" font-size="12" fill="#6a9a6a">E-3 radar (tactical type): GCI</text>`;
+  s+=`<text x="884" y="24" text-anchor="end" font-family="Roboto" font-size="12" fill="#a0a0a0">LTAG approach radar (ATC type): APP</text>`;
+  s+=`<text x="360" y="352" font-family="Roboto" font-size="11" fill="#6a9a6a" opacity=".8">both see this area</text>`;
+  s+=`<line x1="567" y1="248" x2="593" y2="232" stroke="#8C8C8C" stroke-width="3"/><text x="598" y="256" font-family="Roboto Mono" font-size="10" fill="#8C8C8C">LTAG</text>`;
+  // tactical, seen by both
+  const V={x:420,y:190,h:250};
+  s+=todayTrack(V,'friendly',[[['VIPER11']],[['120↓15 G280']],[['4521']],[['A060 H250']]],'E');
+  // ATC only, variant B
+  const C={x:720,y:250,h:280}, P=PAL.B;
+  for(let i=1;i<=5;i++){const [x,y]=behind(C,i,9); s+=`<circle cx="${f(x)}" cy="${f(y)}" r="2" fill="${P.hist[i-1]}" opacity=".7"/>`;}
+  s+=monoBlock(C,'NE',[['COLT31'],['150 ',{t:'32',alt:'F18'}],['A080↓ H280']],{c:P.own,size:12,lh:14,halo:true});
+  s+=`<circle cx="${C.x}" cy="${C.y}" r="6" fill="${P.tgt}" opacity=".8"/><text x="${C.x}" y="${C.y+3.6}" text-anchor="middle" font-family="Roboto Mono" font-weight="500" font-size="10.5" fill="${P.own}">A</text>`;
+  // at the E-3's edge: held tactical (hysteresis)
+  const S={x:520,y:100,h:80};
+  s+=`<circle cx="${S.x}" cy="${S.y}" r="14" fill="none" stroke="#bbb" stroke-dasharray="2 3" opacity=".7"/>`;
+  s+=todayTrack(S,'friendly',[[['SNAKE21']],[['080↑10 G300']],[['4561']]],'E',.75);
+  s+=badges([[1,400,210],[2,700,272],[3,500,120],[4,80,56],[5,862,62]]);
+  return svg(s, vb);
+}
+
+// ── Callout texts ──────────────────────────────────────────────────────
+const CO = {
+ today:[
+  [1,'VIPER11: every aircraft gets the same template','Hollow diamond (<code>sq-iff-*</code>). Colour = <code>iffState</code> friendly, not ownership. Line 0 <code>HDG200</code> is the ADR 0058 conformance tag (amber). Line 2 <code>120↓15 G280</code> is <code>infoLine()</code>: altitude, climb rate in 100 fpm, ground speed. Then the code line (<code>trackCodeTag</code>) and <code>A060 H250</code> (<code>buildAssignedLine</code>). You can\'t tell that you own it.'],
+  [2,'6123: unassociated squawk','The name falls back to the code (<code>trackName</code>), and it gets the same block as everyone. Colour = <code>iffState</code>.'],
+  [3,'TN00004: primary only','Named by its track number. No altitude (no SSR). Yellow = bogey, an affiliation guess.'],
+  [4,'COLT31: handoff pending','<b>Nothing on the scope.</b> The handoff lives only on the Strip (<code>coordination.state PROPOSED</code>).'],
+  [5,'SNAKE21: point-out','<b>Nothing on the scope.</b> Strip only.'],
+  [6,'ENFLD11: 7700','Blinking red square (<code>unit-emerg-square</code>, 500 ms pulse) plus <code>EMR</code> in <code>emergencyColor(GENERAL)</code> <code>#cc2222</code>.'],
+  [7,'DUDE41 / HAWG61: STCA','Orange <code>STCA</code> tag leads the block (<code>buildAlertTag</code>). Sent only to ATC sessions (ADR 0059). The HAWG61 and DUDE41 labels here are dragged apart by hand.'],
+  [8,'RAGE51: lost contact','There is no coast state. After <code>fadeGraceMs</code> (10 s) the contact fades (<code>sweepOpacity</code>) and disappears.'],
+  [9,'History trail','Dots in the <b>IFF colour</b>, opacity fading with age (<code>buildTrails</code>).'],
+  [10,'Map','MapTiler dark basemap: land <code>#141414</code>, water <code>#07111a</code>, runway <code>#4a5a4a</code>. No range rings by default.'],
+  [11,'CPA overlay','Both predicted paths (dashed), the closest-point line, a ring and a <code>m:ss NM / ft</code> label (<code>buildStcaOverlay</code>).'],
+  [12,'BOAR05: someone else\'s overflight','Full block, same as the aircraft you own. It competes for attention equally.'],
+ ],
+ A:[
+  [1,'VIPER11: owned → white FDB','Owned = correlated (<code>label.source \'FDR\'</code>) to a live Strip whose <code>ownerPositionId</code> is a Position you act as. Blue disc = fused target, <code>A</code> = your letter. L1 callsign. L2 <code>120</code> = Mode C in hundreds of ft (<code>altitude.ft</code>, <code>source MODE_C</code>) then GS in tens of kt <code>28</code>, time-shared with type <code>F16</code> (period ~2 s <span class="src s-apx">approx.</span>). L3 <code>A060↓ H250</code> = <code>fdr.clearance</code> ALT/HDG ACTIVE. The arrow is the trend from current toward assigned (65 §5-14-4d), and <code>H###</code> is 65 §5-4-10d. <b>No <code>HDG200</code> tag:</b> STARS has no conformance monitor.'],
+  [2,'6123: unassociated → green LDB','<code>label.source</code> null. <code>*</code> = beacon without a plan. L1 <code>ssr.code</code>, L2 Mode C altitude. Green, LDB brightness.'],
+  [3,'Primary only → <code>+</code>, no block','<code>sources</code> has no <code>SSR</code>. The sources disagree on the symbol (Q7): <code>+</code> matches ERAM, vNAS draws a diamond. Click opens the track panel (the TN lives there).'],
+  [4,'COLT31: handoff to you → flashing white FDB','Strip <code>coordination.primitive HANDOFF</code>, <code>state PROPOSED</code>, you are the peer. The target still shows <code>C</code> (CTR owns it) until you accept, and then it becomes <code>A</code>. The sender sees your letter on line 2.'],
+  [5,'SNAKE21: point-out → flashing yellow FDB, <code>PO</code>','<code>POINT_OUT</code> <code>PROPOSED</code>. Yellow is required by 7210 §3-9-1a2. <code>T</code> = TWR owns it. It turns steady yellow once accepted, then green on click.'],
+  [6,'ENFLD11: 7700 → red <code>EM</code> on line 0','<code>ssr.emergency GENERAL</code> (<code>RF</code>/<code>HJ</code> for RADIO/HIJACK). It forces an FDB for everyone and blinks until clicked. The block stays green because CTR (<code>C</code>) owns it.'],
+  [7,'CA pair → red <code>CA</code> on line 0, blinking','<code>efsp-alerts.stca</code>. Acknowledging (click either track) is local to your scope. HAWG61 is TWR\'s, so it gets a forced green FDB (<span class="src s-inf">inference</span>). <b>No CPA overlay</b> in strict STARS.'],
+  [8,'RAGE51: coast → <code>CST</code>, no blue disc','The letter sits at the dead-reckoned position and <code>CST</code> replaces the altitude. <b>Needs new state</b>: hold a correlated track about 2 sweeps after <code>gone</code> (Q6).'],
+  [9,'History → five fading blues','TC-08/15 values, newest to oldest. The trail colour never encodes identity, and every track\'s trail is the same.'],
+  [10,'Map → black, dim gray','7210 §3-9-1a1/a3: black background. Range rings, compass and video map in dim gray <code>#8C8C8C</code>.'],
+  [12,'BOAR05: someone else\'s → green PDB','Correlated, Strip owned by CTR, so only <code>210 45</code> (altitude, GS) and the owner letter show. Click to expand it to an FDB.'],
+ ],
+ B:[
+  [1,'VIPER11: owned → FDB in soft white','Same fields as A. <code>#E6E6E6</code> in place of <code>#FFFFFF</code>, with a thin black halo so it reads on the basemap. The ADR 0058 conformance tag (13) stays on line 0.'],
+  [2,'6123 → LDB at 80% brightness','Green <code>#3CE63C</code> <span class="src s-apx">approx.</span> with LDB brightness 0.8 <span class="src s-apx">approx.</span>'],
+  [3,'Primary only → <code>+</code> on the target','Target disc at PRI 0.8 <span class="src s-apx">approx.</span>'],
+  [4,'COLT31: handoff to you → flashing white','Same trigger as A.'],
+  [5,'SNAKE21: point-out → flashing yellow <code>PO</code>','Yellow kept at <code>#FFFF00</code>, the 7210 convention.'],
+  [6,'ENFLD11 → <code>EM</code> in <code>#FF3C3C</code>','TC-08/15\'s recommended alert red, softer than the measured <code>#FF0000</code>.'],
+  [7,'CA pair → red <code>CA</code> + CPA overlay','The CPA geometry (11) stays: it isn\'t STARS, but the squadron uses it.'],
+  [8,'RAGE51 → <code>CST</code>','Same as A. Needs the coast hold (Q6).'],
+  [9,'History → blues at 70% (HST)','The oldest two are lifted to <code>#34347A</code>/<code>#2A2A6A</code> <span class="src s-apx">approx.</span> so they survive a non-black map.'],
+  [10,'Map → basemap kept, dim-gray rings at 0.6','The research\'s proposed values <span class="src s-apx">approx.</span>'],
+  [11,'CPA overlay (app-specific)','Unchanged from today (<code>#ff8a4c</code>). Orange is unused by STARS text.'],
+  [12,'BOAR05 → PDB at 80%',''],
+  [13,'<code>HDG200</code>: conformance tag kept','ADR 0058 <code>buildAlertTag</code>, amber <code>#E0A83C</code> (app). Documented as off-standard. Check it against point-out yellow on a real scope.'],
+ ],
+ C:[
+  [1,'VIPER11: your track → FDB','L1 callsign. L2 <code>060↓120</code> = field B assigned (<code>fdr.clearance.altitude</code>), a trend char, then field C Mode C. L3 CID <code>4F2</code> (<b>new data</b>) and GS <code>280</code>. L4 <code>H250 F16</code>. Symbol = ◇ flight-plan-aided track with a <code>\\</code> correlated beacon.'],
+  [2,'6123 → unpaired LDB, no leader','<code>/</code> = uncorrelated beacon. LDB is code + altitude beside the target.'],
+  [3,'Primary → <code>+</code>','Uncorrelated primary (ERAM vocabulary).'],
+  [4,'COLT31: handoff APP→you','<code>R</code> in column 0 = not your control yet (13). The FDB blinks, and field E shows <code>H22</code> (handoff to sector 22) <span class="src s-com">community</span>.'],
+  [5,'SNAKE21: point-out → yellow <code>P</code> on line 0','It turns white <code>A</code> once acknowledged <span class="src s-com">vNAS</span>.'],
+  [6,'ENFLD11 → <code>EMRG</code> in field E','65 §5-2-8 NOTE 3 ("ERAM will display EMRG"). Red is <span class="src s-inf">inference</span>.'],
+  [7,'CA pair → data blocks flash','HAWG61 stays a paired LDB (someone else\'s), flashing. No text tag and no overlay <span class="src s-com">vNAS</span>.'],
+  [8,'RAGE51 → <code>#</code> coast symbol, <code>CST</code> in field E','Needs the same coast hold as A/B.'],
+  [9,'History → dim prior positions','Brightness only <span class="src s-apx">approx.</span>'],
+  [10,'Map → dark blue, sector line','<code>S22</code> boundary dashed <span class="src s-apx">approx.</span>, after the vNAS look.'],
+  [12,'BOAR05 → paired LDB','Callsign + altitude, no leader and no data beyond that.'],
+  [13,'Column 0 <code>R</code>','Means "not your control" on every track you don\'t own.'],
+ ],
+ both:[
+  [1,'VIPER11: E-3 and APP both see it → TACTICAL','Drawn exactly like today, even though APP owns its Strip. <code>scheme: \'TACTICAL\'</code> because a current radar in <code>_visibleTo(session)</code> is a tactical type.'],
+  [2,'COLT31: only the approach radar sees it → ATC','Drawn in variant B. <code>scheme: \'ATC\'</code>.'],
+  [3,'SNAKE21: just left E-3 cover','Held TACTICAL for about 2 tactical sweeps (hysteresis, ADR 0059\'s <code>currentRadars</code> window), then flips to ATC. The flip counts toward the label revision, so it draws at once.'],
+  [4,'E-3 coverage (tactical radar type)','Classified in <code>sensor-specs.json</code>, read once.'],
+  [5,'LTAG approach radar (ATC type)','<code>presentation: \'ATC\'</code> on airport, approach and carrier-approach radars.'],
+ ],
+};
+function coHtml(list){ return list.map(([n,t,d])=>`<li><span class="n">${n}</span><div><b>${t}</b>${d?`<span class="f">${d}</span>`:''}</div></li>`).join(''); }
+
+// ── Legends ────────────────────────────────────────────────────────────
+const S = {m:'<span class="src s-hfm">TC-08/15 measured</span>', r:'<span class="src s-hfr">TC-08/15 recommended</span>', s:t=>`<span class="src s-7210">7210.3 ${t}</span>`,
+  a:'<span class="src s-apx">approx.</span>', app:'<span class="src s-app">app today</span>', c:'<span class="src s-com">community (vNAS)</span>', i:'<span class="src s-inf">inference</span>'};
+const sw = h => h.split(' ').map(x=>`<span class="sw" style="background:${x}"></span>`).join('');
+function legend(rows){ return `<div class="tblwrap"><table><tr><th>Token / use</th><th>Value</th><th>Source</th></tr>${rows.map(([a,b,c])=>`<tr><td>${a}</td><td class="mono">${b.startsWith('#')?sw(b.split(' ').filter(x=>x.startsWith('#')).join(' ')):''}${b}</td><td>${c}</td></tr>`).join('')}</table></div>`; }
+const LG = {
+ today:[
+  ['friendly','#4488cc',S.app+' <code>IFF_COLOR_DEFAULTS</code>'],['bogey','#ccaa00',S.app],['neutral','#888888',S.app],['bandit','#cc6600',S.app],['hostile','#cc2222',S.app],
+  ['emergency GENERAL / RADIO / HIJACK','#cc2222 #b8a000 #cc6600',S.app+' settings defaults'],
+  ['STCA, BUST, WRONG_WAY / HDG tag','#ff8a4c #e0a83c',S.app+' <code>ALERT_COLOR_*</code>'],
+  ['CPA label','#ffd2bd',S.app],['land / water','#141414 #07111a',S.app+' <code>applyMapTheme</code>'],
+  ['font','Roboto Regular 11 px',S.app],['emergency pulse','500 ms on / off',S.app+' <code>_pulseBright</code>'],
+ ],
+ A:[
+  ['background','#000000',S.s('a1')+S.m],
+  ['owned FDB, its leader','#FFFFFF',S.s('a5 white')+S.m],
+  ['other: PDB / LDB / unowned FDB','#00FF00',S.s('a6 green')+S.m],
+  ['point-out FDB, PO','#FFFF00',S.s('a2 yellow')+S.m],
+  ['alert: CA, EM/RF/HJ','#FF0000',S.s('red = warning')+S.m],
+  ['fused target disc (never text)','#1E78FF',S.s('a7, d')+S.m],
+  ['history 1→5','#1E50C8 #4646AA #323282 #28286E #1E1E5A',S.s('a9 blue')+S.m],
+  ['maps, range rings, compass','#8C8C8C',S.s('a3 dim gray')+S.m],
+  ['controller highlight (not shown)','#00FFFF','cyan per 7210.3CC; hex '+S.r],
+  ['blink rate','1 Hz',S.a+' reuses app <code>_pulseBright</code>; no public STARS figure'],
+  ['time-share period','~2 s',S.a+' no public source'],
+  ['font','Roboto Mono 12',S.i+' STARS columns need mono'],
+ ],
+ B:[
+  ['background','basemap #141414 / #07111a',S.app],
+  ['owned FDB','#E6E6E6',S.a+' (TC-08/15 rec. #E1E1E1)'],
+  ['other: PDB / LDB','#3CE63C',S.a+' softened from #00FF00'],
+  ['point-out','#FFFF00',S.s('a2')+S.m],
+  ['alert','#FF3C3C',S.r],
+  ['target disc','#1E78FF',S.m+' at PRI 0.8 '+S.a],
+  ['history 1→5','#1E50C8 #4646AA #323282 #34347A #2A2A6A',S.m+' 1–3; 4–5 raised '+S.a+'; HST 0.7 '+S.a],
+  ['maps, rings','#8C8C8C',S.m+' at 0.6 opacity '+S.a],
+  ['conformance tag (not STARS)','#FF8A4C #E0A83C',S.app+' ADR 0058'],
+  ['CPA overlay (not STARS)','#ff8a4c',S.app],
+  ['brightness LDB / OTH / PRI / HST','0.8 / 0.8 / 0.8 / 0.7',S.a+' community defaults'],
+  ['text halo','#000 2.4 px',S.a+' for the non-black map'],
+ ],
+ C:[
+  ['background','#000a1e',S.a+' after '+S.c],
+  ['FDB text','#E8DC6A',S.a+' '+S.c],
+  ['LDB text (dimmer)','#B4AA50',S.a],
+  ['target / track symbols','#D0C860',S.a],
+  ['history','#6A6434',S.a],
+  ['point-out P','#FFFF00',S.i+' borrowing 7210 terminal yellow'],
+  ['EMRG','#FF3C3C',S.i],
+  ['maps, sector line','#3A4A6A',S.a],
+  ['note','—','No FAA source for ERAM colours was found (stars.md §4.1)'],
+ ],
+};
+
+document.getElementById('svg-today').innerHTML=todayScope();
+document.getElementById('svg-a').innerHTML=starsScope('A');
+document.getElementById('svg-b').innerHTML=starsScope('B');
+document.getElementById('svg-c').innerHTML=eramScope();
+document.getElementById('svg-both').innerHTML=bothScope();
+for (const k of ['today','A','B','C','both']) document.getElementById('co-'+(k.length===1?k.toLowerCase():k)).innerHTML=coHtml(CO[k]);
+for (const k of ['today','A','B','C']) document.getElementById('lg-'+(k.length===1?k.toLowerCase():k)).innerHTML=legend(LG[k]);
+
+const still=document.getElementById('still'), nob=document.getElementById('nob');
+still.addEventListener('change',()=>document.body.classList.toggle('still',still.checked));
+nob.addEventListener('change',()=>document.body.classList.toggle('nobadge',nob.checked));
+})();
+</script>
+</body>
+</html>

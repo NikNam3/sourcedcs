@@ -1,0 +1,39 @@
+SOAK FAIL realistic 240m seed=1 in 43.38s
+crew=three mode=fork clock=virtual DIAGNOSTIC:prune-retired digest=14c1f27dc359f06b
+
+check                         actual                     threshold
+lost / duplicateAck           0 / 0                      0
+audit missing/dup/refusal/orph0/0/0/0                    0
+internalErrors                0                          0
+replays / notIdempotent       30 / 0                     0
+broadcastMissing              0                          0
+silentStaleness               127 {"REBALANCE_SIDE_EFFECT":127}0
+resync delta/snapshot/diverge 28/0/0                     div 0
+acrossRestartDivergence (H4)  3 (probes 1)               0
+boardLostOnRestart            0                          0
+R2 ambiguous replay           CreateStrip:appliedTwice   reported
+orderKeys max / p99           7 / 7 (CENTER/ctr-app-coordination/main)<= 40
+rebalances / exhausted throws 13 / 13                    info
+heap slope (post-GC)          0.77 MB/h R²=0.927         <= 1
+heap net growth               20.21% (8.04->9.67 MB)     <= 10%
+per-DROPPED-Strip / residual  -3.48 KB / 0.77 MB/h       attribution
+snapshot bytes start->end     23794->57868               info
+codes allocated (max)         14                         <= 2048
+latency worst p99 / persist   16.282 / 2.573 ms          <= 200 (warn 50)
+flights started/done/aborted  181/164/7                  info
+live Strips min/max/end       2/27/15                    stationary
+orphans                       0                          warn > 0
+messages sent                 3643                       info
+correlation rate min/mean     0/0.791                    info
+misbinding (H8)               46 {"LINGERING_TRACK":46}  info
+
+hypotheses: H1=confirmed; H2=refuted; H3=not-exercised; H4=confirmed; H5=confirmed; H6=refuted; H7=not reached (max _cidSeq 230); H8=confirmed
+
+FAILURES:
+  - mutations.silentStaleness 127 > 0 (REBALANCE_SIDE_EFFECT:127)
+  - mutations.resync.acrossRestartDivergence 3 > 0 (H4)
+  - memory.netGrowth 20.21% > 10%
+WARNINGS:
+  - resync paths: delta 28, snapshot 0 — both should be > 0
+
+output: /tmp/L27base/r240p

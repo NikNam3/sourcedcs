@@ -1,0 +1,513 @@
+{
+  "protocol": 2,
+  "surface": {
+    "clientToServer": [
+      "aptConfigSet",
+      "clearDeclare",
+      "clearRename",
+      "declare",
+      "efsp-airspace-mutation",
+      "efsp-ato-mutation",
+      "efsp-ato-preview",
+      "efsp-carrier-mutation",
+      "efsp-conflict-suppress",
+      "efsp-correlation-mutation",
+      "efsp-frequency-mutation",
+      "efsp-marsa-mutation",
+      "efsp-mutation",
+      "efsp-resync",
+      "efsp-runway-status-mutation",
+      "efsp-set-positions",
+      "rename"
+    ],
+    "serverToClient": [
+      "apt-config",
+      "atis",
+      "coverage",
+      "delta",
+      "efsp-airspace-ack",
+      "efsp-airspace-calendar",
+      "efsp-airspace-delta",
+      "efsp-alerts",
+      "efsp-ato-ack",
+      "efsp-ato-preview-result",
+      "efsp-board-delta",
+      "efsp-carrier-ack",
+      "efsp-carrier-delta",
+      "efsp-conflict-suppress-ack",
+      "efsp-correlation-ack",
+      "efsp-correlation-delta",
+      "efsp-frequency-ack",
+      "efsp-frequency-delta",
+      "efsp-heartbeat",
+      "efsp-marsa-ack",
+      "efsp-marsa-delta",
+      "efsp-metrics",
+      "efsp-metrics-report-ack",
+      "efsp-mutation-ack",
+      "efsp-positions-ack",
+      "efsp-resync-reply",
+      "efsp-runway-status-ack",
+      "efsp-runway-status-delta",
+      "efsp-snapshot",
+      "efsp-undo-voided",
+      "game-time",
+      "init",
+      "par-sample",
+      "snapshot",
+      "status",
+      "theater",
+      "update-required",
+      "weather"
+    ],
+    "efspOpKinds": [
+      "AIT",
+      "ApproveAirspaceEntry",
+      "AssignCode",
+      "CarrierHandoff",
+      "ChangeFlightRules",
+      "ClearAirspaceEntry",
+      "ControlRelease",
+      "ConvertToArrival",
+      "CreateStrip",
+      "Divert",
+      "DropStrip",
+      "FinalCall",
+      "HANDOFF",
+      "InvokeNla",
+      "JoinFormation",
+      "JoinPattern",
+      "LeavePattern",
+      "MoveStrip",
+      "OPERATIONAL_REQUEST",
+      "POINT_OUT",
+      "SetBlock",
+      "SetFlag",
+      "SetState",
+      "SplitFormation",
+      "StartFlightFollowing",
+      "TOFI",
+      "TRAFFIC",
+      "TerminateRadarService",
+      "TransferStrip",
+      "Undo",
+      "VfrHandoff"
+    ],
+    "storeOpKinds": {
+      "efsp-airspace-mutation": [
+        "AcknowledgeTransit",
+        "ApproveActivation",
+        "ApproveTransit",
+        "CancelTransit",
+        "CreateAirspace",
+        "DeclineTransit",
+        "DelayActivation",
+        "DeleteAirspace",
+        "DenyActivation",
+        "EditAirspace",
+        "EndTransit",
+        "ImportAirspaces",
+        "ReleaseAirspace",
+        "RequestActivation",
+        "RequestTransit",
+        "ReturnAirspace",
+        "ScheduleAirspace"
+      ],
+      "efsp-ato-mutation": [
+        "ImportAto"
+      ],
+      "efsp-carrier-mutation": [
+        "Append",
+        "BackToStack",
+        "CloseUp",
+        "Delta",
+        "InsertAt",
+        "MarkPushed",
+        "Move",
+        "PassClearance",
+        "Remove",
+        "SetCarrierState",
+        "SetCaseIAngels",
+        "SetEat"
+      ],
+      "efsp-correlation-mutation": [
+        "BindTrack",
+        "UnbindTrack"
+      ],
+      "efsp-frequency-mutation": [
+        "AddFrequency",
+        "RemoveFrequency",
+        "ResetFrequency",
+        "SetFrequency"
+      ],
+      "efsp-marsa-mutation": [
+        "AcknowledgeVoid",
+        "AddParticipant",
+        "DeclareMarsa",
+        "EndMarsa",
+        "MarkRendezvous",
+        "RemoveParticipant",
+        "VoidMarsa"
+      ],
+      "efsp-runway-status-mutation": [
+        "AcceptRunwayRequest",
+        "AckRunwayChange",
+        "BeginRunwayChange",
+        "BeginRunwayWorks",
+        "CloseRunway",
+        "CompleteInspection",
+        "CompleteRunwayChange",
+        "CompleteRunwayWorks",
+        "OpenRunway",
+        "ProposeRunwayChange",
+        "RejectRunwayChange",
+        "RejectRunwayRequest",
+        "RequestRunwayStatus",
+        "SelfCoordinateRunwayChange",
+        "SetParApproach",
+        "WithdrawRunwayChange"
+      ]
+    },
+    "carrier": {
+      "handoffs": [
+        "APPROACH_TO_FINAL",
+        "COMMENCED_TO_MARSHAL",
+        "FINAL_TO_LSO",
+        "FINAL_TRAPPED",
+        "MARSHAL_TO_APPROACH",
+        "MARSHAL_TO_PATTERN_CASE_I",
+        "MARSHAL_TO_PRIFLY"
+      ],
+      "triggerTypes": [
+        "CONTROLLER_INITIATED",
+        "PILOT_BALL_CALL",
+        "PILOT_SEE_YOU",
+        "RADAR_ACQUISITION"
+      ],
+      "cases": [
+        "I",
+        "II",
+        "III"
+      ],
+      "stateFields": [
+        "altimeter",
+        "brc",
+        "case",
+        "ceiling",
+        "finalBearing",
+        "firstFix",
+        "radial",
+        "rampTime",
+        "tankerAltitude",
+        "tankerGive",
+        "tankerOnStation",
+        "tankerPatternSide",
+        "tankerSide",
+        "visibility",
+        "windOverDeck"
+      ],
+      "entryStatuses": [
+        "HOLDING",
+        "PUSHED"
+      ],
+      "clearanceFields": [
+        "angels",
+        "eat"
+      ],
+      "stackKeys": [
+        "deltaMs",
+        "entries",
+        "hullId",
+        "stackId"
+      ],
+      "entryKeys": [
+        "caseIAngels",
+        "eatOverrideUtc",
+        "eatUtc",
+        "flightDataId",
+        "pushedAtUtc",
+        "stackIndex",
+        "status",
+        "unpassed"
+      ],
+      "flightFields": [
+        "approachButton",
+        "approachTurnNm",
+        "approachType",
+        "bingoField",
+        "bingoFuelLb",
+        "eeatUtc",
+        "lowStateLb",
+        "sideNumber"
+      ],
+      "viewKeys": [
+        "advisory",
+        "consistency",
+        "derived",
+        "hull",
+        "hullId",
+        "lanes",
+        "overrides",
+        "recoveryCase",
+        "rev",
+        "shipState",
+        "slots",
+        "stacks",
+        "state",
+        "transitions",
+        "tuning"
+      ],
+      "stateKeys": [
+        "brc",
+        "case",
+        "finalBearing",
+        "firstFix",
+        "radial",
+        "rampTime",
+        "tanker",
+        "weather"
+      ],
+      "derivedEntryKeys": [
+        "angels",
+        "caseValue",
+        "expectedFinalBearingDeg",
+        "expectedFinalBearingDisplay",
+        "firstFixDme",
+        "flightDataId",
+        "marshalDme",
+        "marshalRadialDeg",
+        "marshalRadialDisplay",
+        "marshalRadialSource",
+        "minimumAltitudeOk",
+        "pushTimeUtc",
+        "pushWindowUtc",
+        "pushedAtUtc",
+        "rampEtaUtc",
+        "stackIndex",
+        "status",
+        "unpassed"
+      ]
+    },
+    "parFinal": {
+      "conversions": [
+        "LANDED",
+        "MISSED_APPROACH",
+        "PAR_HANDOFF"
+      ],
+      "finalCalls": [
+        "BEGIN_DESCENT",
+        "CLEARED_TO_LAND",
+        "LANDED",
+        "MISSED_APPROACH"
+      ],
+      "sfaUses": [
+        "INITIAL_CONTACT",
+        "ROTATION",
+        "SPARE"
+      ]
+    },
+    "par": {
+      "sample": [
+        "stripId",
+        "facilityId",
+        "positionId",
+        "approach",
+        "sensor",
+        "plot",
+        "plotAgeMs",
+        "trail",
+        "headings"
+      ],
+      "headings": [
+        "needed",
+        "current",
+        "windFromMagnetic",
+        "windKt"
+      ],
+      "approach": [
+        "id",
+        "label",
+        "runwayEnd",
+        "airportIcao",
+        "gpaDeg",
+        "tchFt",
+        "tdzeFt",
+        "dhFt",
+        "daFt",
+        "courseTrueDeg",
+        "courseDisplay",
+        "defaults",
+        "set"
+      ],
+      "plot": [
+        "rangeNm",
+        "heightFt",
+        "elevDeg",
+        "elevDevDeg",
+        "elevDevFt",
+        "azDeg",
+        "azDevFt",
+        "gsKt",
+        "vsFpm"
+      ],
+      "trail": [
+        "rangeNm",
+        "heightFt",
+        "elevDeg",
+        "elevDevDeg",
+        "elevDevFt",
+        "azDeg",
+        "azDevFt"
+      ],
+      "inopReasons": [
+        "NO_APPROACH",
+        "NO_TDZE"
+      ]
+    },
+    "storeSync": [
+      {
+        "key": "airspaces",
+        "seqKey": "airspaceSeq",
+        "epochKey": "airspaceEpoch",
+        "deltaType": "efsp-airspace-delta"
+      },
+      {
+        "key": "carriers",
+        "seqKey": "carrierSeq",
+        "epochKey": "carrierEpoch",
+        "deltaType": "efsp-carrier-delta"
+      },
+      {
+        "key": "correlations",
+        "seqKey": "correlationSeq",
+        "epochKey": "correlationEpoch",
+        "deltaType": "efsp-correlation-delta"
+      },
+      {
+        "key": "marsa",
+        "seqKey": "marsaSeq",
+        "epochKey": "marsaEpoch",
+        "deltaType": "efsp-marsa-delta"
+      },
+      {
+        "key": "runwayStatuses",
+        "seqKey": "runwayStatusSeq",
+        "epochKey": "runwayStatusEpoch",
+        "deltaType": "efsp-runway-status-delta"
+      }
+    ],
+    "frameKeys": {
+      "status": [
+        "grpc",
+        "srs",
+        "type",
+        "version"
+      ],
+      "weather": [
+        "pressurePa",
+        "tempK",
+        "type",
+        "version"
+      ],
+      "game-time": [
+        "source",
+        "type",
+        "version",
+        "zuluMs"
+      ],
+      "atis": [
+        "active",
+        "type",
+        "version"
+      ],
+      "apt-config": [
+        "airports",
+        "type",
+        "version"
+      ],
+      "init": [
+        "airports",
+        "bullseye",
+        "drawings",
+        "missionId",
+        "theatre",
+        "type",
+        "version",
+        "waypoints"
+      ],
+      "update-required": [
+        "clientProtocol",
+        "downloadUrl",
+        "serverProtocol",
+        "type",
+        "version"
+      ],
+      "par-sample": [
+        "approaches",
+        "at",
+        "samples",
+        "type",
+        "version"
+      ],
+      "efsp-alerts": [
+        "airspaceCoordinate",
+        "airspaceEntry",
+        "airspaceInside",
+        "airspaceTraffic",
+        "conflictAlert",
+        "conformance",
+        "obligations",
+        "surveillance",
+        "tofiRegime",
+        "type",
+        "version"
+      ],
+      "efsp-board-delta": [
+        "boardEpoch",
+        "boardSeq",
+        "facilityId",
+        "flightDataList",
+        "positions",
+        "strips",
+        "type",
+        "version"
+      ],
+      "efsp-airspace-delta": [
+        "airspaceEpoch",
+        "airspaceSeq",
+        "airspaces",
+        "type",
+        "version"
+      ],
+      "efsp-correlation-delta": [
+        "correlationEpoch",
+        "correlationSeq",
+        "correlations",
+        "stats",
+        "type",
+        "version"
+      ],
+      "efsp-marsa-delta": [
+        "marsa",
+        "marsaEpoch",
+        "marsaSeq",
+        "type",
+        "version"
+      ],
+      "efsp-runway-status-delta": [
+        "runwayStatusEpoch",
+        "runwayStatusSeq",
+        "runwayStatuses",
+        "type",
+        "version"
+      ],
+      "efsp-carrier-delta": [
+        "carrierEpoch",
+        "carrierSeq",
+        "carriers",
+        "type",
+        "version"
+      ]
+    }
+  }
+}

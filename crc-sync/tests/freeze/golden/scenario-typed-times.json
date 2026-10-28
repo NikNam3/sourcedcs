@@ -1,0 +1,773 @@
+{
+  "instances": [
+    {
+      "steps": [
+        {"n":0,"who":"c-OPS","in":{"facilityId":"INCIRLIK","signedOn":["OPS"],"type":"efsp-set-positions"},"out":{"ack":{"combination":null,"facilityId":"INCIRLIK","monitoring":[],"signedOn":["OPS"],"type":"efsp-positions-ack","version":1,"warnings":[]},"broadcast":{"facilityId":"INCIRLIK","flightDataList":{"updated":[]},"positions":{"updated":{"~big":"fd3ee9a066","chars":1038,"keys":"array[6]"}},"strips":{"gone":[],"updated":[]},"type":"efsp-board-delta","version":1}},"audit":[]},
+        {"n":1,"who":"c-CD","in":{"facilityId":"INCIRLIK","signedOn":["CD"],"type":"efsp-set-positions"},"out":{"ack":{"combination":null,"facilityId":"INCIRLIK","monitoring":[],"signedOn":["CD"],"type":"efsp-positions-ack","version":1,"warnings":[]},"broadcast":{"facilityId":"INCIRLIK","flightDataList":{"updated":[]},"positions":{"updated":{"~big":"a44975d115","chars":1101,"keys":"array[6]"}},"strips":{"gone":[],"updated":[]},"type":"efsp-board-delta","version":1}},"audit":[]},
+        {"n":2,"who":"c-GC","in":{"facilityId":"INCIRLIK","signedOn":["GC"],"type":"efsp-set-positions"},"out":{"ack":{"combination":null,"facilityId":"INCIRLIK","monitoring":[{"label":"GND","mhz":275.8,"positionId":"GC"}],"signedOn":["GC"],"type":"efsp-positions-ack","version":1,"warnings":[]},"broadcast":{"facilityId":"INCIRLIK","flightDataList":{"updated":[]},"positions":{"updated":{"~big":"e387a87062","chars":1164,"keys":"array[6]"}},"strips":{"gone":[],"updated":[]},"type":"efsp-board-delta","version":1}},"audit":[]},
+        {"n":3,"who":"c-LC","in":{"facilityId":"INCIRLIK","signedOn":["LC"],"type":"efsp-set-positions"},"out":{"ack":{"combination":null,"facilityId":"INCIRLIK","monitoring":[{"label":"TWR","mhz":251,"positionId":"LC"}],"signedOn":["LC"],"type":"efsp-positions-ack","version":1,"warnings":[]},"broadcast":{"facilityId":"INCIRLIK","flightDataList":{"updated":[]},"positions":{"updated":{"~big":"bb69c96ca1","chars":1227,"keys":"array[6]"}},"strips":{"gone":[],"updated":[]},"type":"efsp-board-delta","version":1}},"audit":[]},
+        {"n":4,"who":"c-AP","in":{"facilityId":"INCIRLIK","signedOn":["AP"],"type":"efsp-set-positions"},"out":{"ack":{"combination":null,"facilityId":"INCIRLIK","monitoring":[],"signedOn":["AP"],"type":"efsp-positions-ack","version":1,"warnings":[]},"broadcast":{"facilityId":"INCIRLIK","flightDataList":{"updated":[]},"positions":{"updated":{"~big":"1ed8805752","chars":1290,"keys":"array[6]"}},"strips":{"gone":[],"updated":[]},"type":"efsp-board-delta","version":1}},"audit":[]},
+        {"n":5,"who":"c-OPS","in":{"actingPositionId":"OPS","clientMutationId":"#1","facilityId":"INCIRLIK","op":{"bayId":"ops-proposed","flightData":{"aircraftType":"F16","callsign":"VOID9","departureAirport":"LTAG","destinationAirport":"LTAG","requestedAltitude":"250","route":"DCT","wakeCategory":"M"},"kind":"CreateStrip","rackId":"main","stripType":"DEPARTURE"},"type":"efsp-mutation","version":1},"out":{"ack":{"clientMutationId":"#1","facilityId":"INCIRLIK","flightData":"F #2 r1 VOID9 sq=0001 h=6370d1057c","ok":true,"strip":"S #3 r1 DEPARTURE/PROPOSED @OPS ops-proposed/main:V h=24a9a8115e","type":"efsp-mutation-ack","version":1},"broadcast":{"facilityId":"INCIRLIK","flightDataList":{"updated":["F #2 r1 VOID9 sq=0001 h=6370d1057c"]},"positions":{"updated":[]},"strips":{"gone":[],"updated":["S #3 r1 DEPARTURE/PROPOSED @OPS ops-proposed/main:V h=24a9a8115e"]},"type":"efsp-board-delta","version":1}},"audit":[{"actingPositionId":"OPS","actorId":"c-OPS","after":"S #3 r1 DEPARTURE/PROPOSED @OPS ops-proposed/main:V h=24a9a8115e","at":1466517000000,"before":null,"clientMutationId":"#1","facilityId":"INCIRLIK","flightDataId":"#2","op":"CreateStrip","stripId":"#3"}]},
+        {"n":6,"who":"c-OPS","in":{"actingPositionId":"OPS","baseRev":1,"clientMutationId":"#4","facilityId":"INCIRLIK","op":{"kind":"InvokeNla"},"stripId":"#3","type":"efsp-mutation","version":1},"out":{"ack":{"clientMutationId":"#4","facilityId":"INCIRLIK","ok":true,"routedTo":null,"strip":"S #3 r2 DEPARTURE/PENDING_CLEARANCE @CD cd-pending-clearance/main:V h=4e06675eb7","stripId":"#3","type":"efsp-mutation-ack","version":1},"broadcast":{"facilityId":"INCIRLIK","flightDataList":{"updated":[]},"positions":{"updated":[]},"strips":{"gone":[],"updated":["S #3 r2 DEPARTURE/PENDING_CLEARANCE @CD cd-pending-clearance/main:V h=4e06675eb7"]},"type":"efsp-board-delta","version":1}},"audit":[{"actingPositionId":"OPS","actorId":"c-OPS","after":"S #3 r2 DEPARTURE/PENDING_CLEARANCE @CD cd-pending-clearance/main:V h=4e06675eb7","at":1466517000000,"before":"S #3 r1 DEPARTURE/PROPOSED @OPS ops-proposed/main:V h=24a9a8115e","clientMutationId":"#4","facilityId":"INCIRLIK","flightDataId":"#2","op":"InvokeNla","selfCoordinated":false,"stripId":"#3"}]},
+        {"n":7,"who":"c-CD","in":{"actingPositionId":"CD","baseRev":2,"clientMutationId":"#5","facilityId":"INCIRLIK","op":{"kind":"SetState","toState":"CLEARED"},"stripId":"#3","type":"efsp-mutation","version":1},"out":{"ack":{"clientMutationId":"#5","facilityId":"INCIRLIK","ok":true,"strip":"S #3 r3 DEPARTURE/CLEARED @CD cd-cleared/main:V h=f372c484a9","stripId":"#3","type":"efsp-mutation-ack","version":1},"broadcast":{"facilityId":"INCIRLIK","flightDataList":{"updated":[]},"positions":{"updated":[]},"strips":{"gone":[],"updated":["S #3 r3 DEPARTURE/CLEARED @CD cd-cleared/main:V h=f372c484a9"]},"type":"efsp-board-delta","version":1}},"audit":[{"actingPositionId":"CD","actorId":"c-CD","after":"S #3 r3 DEPARTURE/CLEARED @CD cd-cleared/main:V h=f372c484a9","at":1466517000000,"before":"S #3 r2 DEPARTURE/PENDING_CLEARANCE @CD cd-pending-clearance/main:V h=4e06675eb7","clientMutationId":"#5","facilityId":"INCIRLIK","flightDataId":"#2","op":"SetState","stripId":"#3"}]},
+        {"n":8,"who":"c-CD","in":{"actingPositionId":"CD","baseRev":3,"clientMutationId":"#6","facilityId":"INCIRLIK","op":{"blockId":"14A","kind":"SetBlock","value":"CLEARANCE_VOID_TIME"},"stripId":"#3","type":"efsp-mutation","version":1},"out":{"ack":{"clientMutationId":"#6","facilityId":"INCIRLIK","flightData":"F #2 r2 VOID9 sq=0001 h=c6cccad5dc","ok":true,"strip":"S #3 r4 DEPARTURE/CLEARED @CD cd-cleared/main:V h=e5f8975413","stripId":"#3","type":"efsp-mutation-ack","version":1},"broadcast":{"facilityId":"INCIRLIK","flightDataList":{"updated":["F #2 r2 VOID9 sq=0001 h=c6cccad5dc"]},"positions":{"updated":[]},"strips":{"gone":[],"updated":["S #3 r4 DEPARTURE/CLEARED @CD cd-cleared/main:V h=e5f8975413"]},"type":"efsp-board-delta","version":1}},"audit":[{"actingPositionId":"CD","actorId":"c-CD","after":"S #3 r4 DEPARTURE/CLEARED @CD cd-cleared/main:V h=e5f8975413","at":1466517000000,"before":"S #3 r3 DEPARTURE/CLEARED @CD cd-cleared/main:V h=f372c484a9","blockId":"14A","clientMutationId":"#6","facilityId":"INCIRLIK","flightDataId":"#2","op":"SetBlock","stripId":"#3","value":"CLEARANCE_VOID_TIME"}]},
+        {"n":9,"who":"c-CD","in":{"actingPositionId":"CD","baseRev":4,"clientMutationId":"#7","facilityId":"INCIRLIK","op":{"blockId":"14D","kind":"SetBlock","value":"1400"},"stripId":"#3","type":"efsp-mutation","version":1},"out":{"ack":{"clientMutationId":"#7","facilityId":"INCIRLIK","flightData":"F #2 r3 VOID9 sq=0001 h=3c8bab5abd","ok":true,"strip":"S #3 r5 DEPARTURE/CLEARED @CD cd-cleared/main:V h=59aa41e863","stripId":"#3","type":"efsp-mutation-ack","version":1},"broadcast":{"facilityId":"INCIRLIK","flightDataList":{"updated":["F #2 r3 VOID9 sq=0001 h=3c8bab5abd"]},"positions":{"updated":[]},"strips":{"gone":[],"updated":["S #3 r5 DEPARTURE/CLEARED @CD cd-cleared/main:V h=59aa41e863"]},"type":"efsp-board-delta","version":1}},"audit":[{"actingPositionId":"CD","actorId":"c-CD","after":"S #3 r5 DEPARTURE/CLEARED @CD cd-cleared/main:V h=59aa41e863","at":1466517000000,"before":"S #3 r4 DEPARTURE/CLEARED @CD cd-cleared/main:V h=e5f8975413","blockId":"14D","clientMutationId":"#7","facilityId":"INCIRLIK","flightDataId":"#2","op":"SetBlock","stripId":"#3","value":"1400"}]},
+        {"n":10,"who":"c-CD","in":{"actingPositionId":"CD","baseRev":5,"clientMutationId":"#8","facilityId":"INCIRLIK","op":{"kind":"SetState","toState":"HELD"},"stripId":"#3","type":"efsp-mutation","version":1},"out":{"ack":{"clientMutationId":"#8","facilityId":"INCIRLIK","ok":true,"strip":"S #3 r6 DEPARTURE/HELD @CD cd-held/main:V h=e9f22617c2","stripId":"#3","type":"efsp-mutation-ack","version":1},"broadcast":{"facilityId":"INCIRLIK","flightDataList":{"updated":[]},"positions":{"updated":[]},"strips":{"gone":[],"updated":["S #3 r6 DEPARTURE/HELD @CD cd-held/main:V h=e9f22617c2"]},"type":"efsp-board-delta","version":1}},"audit":[{"actingPositionId":"CD","actorId":"c-CD","after":"S #3 r6 DEPARTURE/HELD @CD cd-held/main:V h=e9f22617c2","at":1466517000000,"before":"S #3 r5 DEPARTURE/CLEARED @CD cd-cleared/main:V h=59aa41e863","clientMutationId":"#8","facilityId":"INCIRLIK","flightDataId":"#2","op":"SetState","stripId":"#3"}]},
+        {"n":11,"who":"c-CD","in":{"actingPositionId":"CD","baseRev":6,"clientMutationId":"#9","facilityId":"INCIRLIK","op":{"kind":"InvokeNla"},"stripId":"#3","type":"efsp-mutation","version":1},"out":{"ack":{"clientMutationId":"#9","detail":"void time expired","facilityId":"INCIRLIK","ok":false,"reason":"NLA_INHIBITED","strip":"S #3 r6 DEPARTURE/HELD @CD cd-held/main:V h=e9f22617c2","stripId":"#3","type":"efsp-mutation-ack","version":1}},"audit":[]}
+      ],
+      "orphanAudit": [],
+      "final": {
+        "boards": {
+          "INCIRLIK": {
+            "n": 1,
+            "h": "a85e33c94e",
+            "rows": [
+              "S #3 r6 DEPARTURE/HELD @CD cd-held/main:V h=e9f22617c2"
+            ],
+            "rest": {
+              "cidSeq": 1,
+              "droppedWallAt": [],
+              "replay": [
+                ["#1",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#2","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#3","warnings":null}],
+                ["#4",{"appliedWallAt":1782009600410,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":false,"stripId":"#3","warnings":null}],
+                ["#5",{"appliedWallAt":1782009600410,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#3","warnings":null}],
+                ["#6",{"appliedWallAt":1782009600410,"detail":null,"flightDataId":"#2","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#3","warnings":null}],
+                ["#7",{"appliedWallAt":1782009600410,"detail":null,"flightDataId":"#2","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#3","warnings":null}],
+                ["#8",{"appliedWallAt":1782009600410,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#3","warnings":null}],
+                ["#9",{"appliedWallAt":1782009600410,"detail":"void time expired","flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"NLA_INHIBITED","routedTo":null,"selfCoordinated":null,"stripId":"#3","warnings":null}]
+              ]
+            }
+          },
+          "CENTER": {
+            "n": 0,
+            "h": "97d170e155",
+            "rows": [],
+            "rest": {
+              "cidSeq": 0,
+              "droppedWallAt": [],
+              "replay": []
+            }
+          },
+          "TACTICAL": {
+            "n": 0,
+            "h": "97d170e155",
+            "rows": [],
+            "rest": {
+              "cidSeq": 0,
+              "droppedWallAt": [],
+              "replay": []
+            }
+          },
+          "CARRIER": {
+            "n": 0,
+            "h": "97d170e155",
+            "rows": [],
+            "rest": {
+              "cidSeq": 0,
+              "droppedWallAt": [],
+              "replay": []
+            }
+          },
+          "RANGES": {
+            "n": 0,
+            "h": "97d170e155",
+            "rows": [],
+            "rest": {
+              "cidSeq": 0,
+              "droppedWallAt": [],
+              "replay": []
+            }
+          }
+        },
+        "flightData": {
+          "n": 1,
+          "h": "c3ac04a66b",
+          "rows": [
+            "F #2 r3 VOID9 sq=0001 h=3c8bab5abd"
+          ],
+          "rest": {
+            "codeCursor": 1,
+            "codes": [
+              ["0001","#2"]
+            ]
+          }
+        },
+        "airspaces": {
+          "h": "bf21a9e8fb",
+          "v": {
+            "byTheater": {},
+            "seeded": {}
+          }
+        },
+        "correlations": {
+          "n": 0,
+          "h": "97d170e155",
+          "rows": []
+        },
+        "marsa": {
+          "n": 0,
+          "h": "97d170e155",
+          "rows": []
+        },
+        "runwayStatuses": {
+          "n": 1,
+          "h": "8b6b3af46c",
+          "rows": [
+            "INCIRLIK h=89de413b69"
+          ]
+        },
+        "carriers": {
+          "n": 1,
+          "h": "89ace0b5ae",
+          "rows": [
+            "CVN-72 h=081d66341b"
+          ]
+        }
+      }
+    },
+    {
+      "steps": [
+        {"n":0,"who":"c-OPS","in":{"facilityId":"INCIRLIK","signedOn":["OPS"],"type":"efsp-set-positions"},"out":{"ack":{"combination":null,"facilityId":"INCIRLIK","monitoring":[],"signedOn":["OPS"],"type":"efsp-positions-ack","version":1,"warnings":[]},"broadcast":{"facilityId":"INCIRLIK","flightDataList":{"updated":[]},"positions":{"updated":{"~big":"fd3ee9a066","chars":1038,"keys":"array[6]"}},"strips":{"gone":[],"updated":["S #3 r6 DEPARTURE/HELD @CD cd-held/main:V h=e9f22617c2"]},"type":"efsp-board-delta","version":1}},"audit":[]},
+        {"n":1,"who":"c-CD","in":{"facilityId":"INCIRLIK","signedOn":["CD"],"type":"efsp-set-positions"},"out":{"ack":{"combination":null,"facilityId":"INCIRLIK","monitoring":[],"signedOn":["CD"],"type":"efsp-positions-ack","version":1,"warnings":[]},"broadcast":{"facilityId":"INCIRLIK","flightDataList":{"updated":[]},"positions":{"updated":{"~big":"a44975d115","chars":1101,"keys":"array[6]"}},"strips":{"gone":[],"updated":["S #3 r6 DEPARTURE/HELD @CD cd-held/main:V h=e9f22617c2"]},"type":"efsp-board-delta","version":1}},"audit":[]},
+        {"n":2,"who":"c-GC","in":{"facilityId":"INCIRLIK","signedOn":["GC"],"type":"efsp-set-positions"},"out":{"ack":{"combination":null,"facilityId":"INCIRLIK","monitoring":[{"label":"GND","mhz":275.8,"positionId":"GC"}],"signedOn":["GC"],"type":"efsp-positions-ack","version":1,"warnings":[]},"broadcast":{"facilityId":"INCIRLIK","flightDataList":{"updated":[]},"positions":{"updated":{"~big":"e387a87062","chars":1164,"keys":"array[6]"}},"strips":{"gone":[],"updated":["S #3 r6 DEPARTURE/HELD @CD cd-held/main:V h=e9f22617c2"]},"type":"efsp-board-delta","version":1}},"audit":[]},
+        {"n":3,"who":"c-LC","in":{"facilityId":"INCIRLIK","signedOn":["LC"],"type":"efsp-set-positions"},"out":{"ack":{"combination":null,"facilityId":"INCIRLIK","monitoring":[{"label":"TWR","mhz":251,"positionId":"LC"}],"signedOn":["LC"],"type":"efsp-positions-ack","version":1,"warnings":[]},"broadcast":{"facilityId":"INCIRLIK","flightDataList":{"updated":[]},"positions":{"updated":{"~big":"bb69c96ca1","chars":1227,"keys":"array[6]"}},"strips":{"gone":[],"updated":["S #3 r6 DEPARTURE/HELD @CD cd-held/main:V h=e9f22617c2"]},"type":"efsp-board-delta","version":1}},"audit":[]},
+        {"n":4,"who":"c-AP","in":{"facilityId":"INCIRLIK","signedOn":["AP"],"type":"efsp-set-positions"},"out":{"ack":{"combination":null,"facilityId":"INCIRLIK","monitoring":[],"signedOn":["AP"],"type":"efsp-positions-ack","version":1,"warnings":[]},"broadcast":{"facilityId":"INCIRLIK","flightDataList":{"updated":[]},"positions":{"updated":{"~big":"1ed8805752","chars":1290,"keys":"array[6]"}},"strips":{"gone":[],"updated":["S #3 r6 DEPARTURE/HELD @CD cd-held/main:V h=e9f22617c2"]},"type":"efsp-board-delta","version":1}},"audit":[]},
+        {"n":5,"who":"c-OPS","in":{"actingPositionId":"OPS","clientMutationId":"#10","facilityId":"INCIRLIK","op":{"bayId":"ops-proposed","flightData":{"aircraftType":"F16","callsign":"RLS9","departureAirport":"LTAG","destinationAirport":"LTAG","requestedAltitude":"250","route":"DCT","wakeCategory":"M"},"kind":"CreateStrip","rackId":"main","stripType":"DEPARTURE"},"type":"efsp-mutation","version":1},"out":{"ack":{"clientMutationId":"#10","facilityId":"INCIRLIK","flightData":"F #11 r1 RLS9 sq=0002 h=be7fa1a9a0","ok":true,"strip":"S #12 r1 DEPARTURE/PROPOSED @OPS ops-proposed/main:V h=24a9a8115e","type":"efsp-mutation-ack","version":1},"broadcast":{"facilityId":"INCIRLIK","flightDataList":{"updated":["F #11 r1 RLS9 sq=0002 h=be7fa1a9a0"]},"positions":{"updated":[]},"strips":{"gone":[],"updated":["S #12 r1 DEPARTURE/PROPOSED @OPS ops-proposed/main:V h=24a9a8115e"]},"type":"efsp-board-delta","version":1}},"audit":[{"actingPositionId":"OPS","actorId":"c-OPS","after":"S #12 r1 DEPARTURE/PROPOSED @OPS ops-proposed/main:V h=24a9a8115e","at":1466517000000,"before":null,"clientMutationId":"#10","facilityId":"INCIRLIK","flightDataId":"#11","op":"CreateStrip","stripId":"#12"}]},
+        {"n":6,"who":"c-OPS","in":{"actingPositionId":"OPS","baseRev":1,"clientMutationId":"#13","facilityId":"INCIRLIK","op":{"kind":"InvokeNla"},"stripId":"#12","type":"efsp-mutation","version":1},"out":{"ack":{"clientMutationId":"#13","facilityId":"INCIRLIK","ok":true,"routedTo":null,"strip":"S #12 r2 DEPARTURE/PENDING_CLEARANCE @CD cd-pending-clearance/main:V h=4e06675eb7","stripId":"#12","type":"efsp-mutation-ack","version":1},"broadcast":{"facilityId":"INCIRLIK","flightDataList":{"updated":[]},"positions":{"updated":[]},"strips":{"gone":[],"updated":["S #12 r2 DEPARTURE/PENDING_CLEARANCE @CD cd-pending-clearance/main:V h=4e06675eb7"]},"type":"efsp-board-delta","version":1}},"audit":[{"actingPositionId":"OPS","actorId":"c-OPS","after":"S #12 r2 DEPARTURE/PENDING_CLEARANCE @CD cd-pending-clearance/main:V h=4e06675eb7","at":1466517000000,"before":"S #12 r1 DEPARTURE/PROPOSED @OPS ops-proposed/main:V h=24a9a8115e","clientMutationId":"#13","facilityId":"INCIRLIK","flightDataId":"#11","op":"InvokeNla","selfCoordinated":false,"stripId":"#12"}]},
+        {"n":7,"who":"c-CD","in":{"actingPositionId":"CD","baseRev":2,"clientMutationId":"#14","facilityId":"INCIRLIK","op":{"kind":"SetState","toState":"CLEARED"},"stripId":"#12","type":"efsp-mutation","version":1},"out":{"ack":{"clientMutationId":"#14","facilityId":"INCIRLIK","ok":true,"strip":"S #12 r3 DEPARTURE/CLEARED @CD cd-cleared/main:V h=f372c484a9","stripId":"#12","type":"efsp-mutation-ack","version":1},"broadcast":{"facilityId":"INCIRLIK","flightDataList":{"updated":[]},"positions":{"updated":[]},"strips":{"gone":[],"updated":["S #12 r3 DEPARTURE/CLEARED @CD cd-cleared/main:V h=f372c484a9"]},"type":"efsp-board-delta","version":1}},"audit":[{"actingPositionId":"CD","actorId":"c-CD","after":"S #12 r3 DEPARTURE/CLEARED @CD cd-cleared/main:V h=f372c484a9","at":1466517000000,"before":"S #12 r2 DEPARTURE/PENDING_CLEARANCE @CD cd-pending-clearance/main:V h=4e06675eb7","clientMutationId":"#14","facilityId":"INCIRLIK","flightDataId":"#11","op":"SetState","stripId":"#12"}]},
+        {"n":8,"who":"c-CD","in":{"actingPositionId":"CD","baseRev":3,"clientMutationId":"#15","facilityId":"INCIRLIK","op":{"blockId":"14A","kind":"SetBlock","value":"RELEASE_TIME"},"stripId":"#12","type":"efsp-mutation","version":1},"out":{"ack":{"clientMutationId":"#15","facilityId":"INCIRLIK","flightData":"F #11 r2 RLS9 sq=0002 h=9ef63f2514","ok":true,"strip":"S #12 r4 DEPARTURE/CLEARED @CD cd-cleared/main:V h=e5f8975413","stripId":"#12","type":"efsp-mutation-ack","version":1},"broadcast":{"facilityId":"INCIRLIK","flightDataList":{"updated":["F #11 r2 RLS9 sq=0002 h=9ef63f2514"]},"positions":{"updated":[]},"strips":{"gone":[],"updated":["S #12 r4 DEPARTURE/CLEARED @CD cd-cleared/main:V h=e5f8975413"]},"type":"efsp-board-delta","version":1}},"audit":[{"actingPositionId":"CD","actorId":"c-CD","after":"S #12 r4 DEPARTURE/CLEARED @CD cd-cleared/main:V h=e5f8975413","at":1466517000000,"before":"S #12 r3 DEPARTURE/CLEARED @CD cd-cleared/main:V h=f372c484a9","blockId":"14A","clientMutationId":"#15","facilityId":"INCIRLIK","flightDataId":"#11","op":"SetBlock","stripId":"#12","value":"RELEASE_TIME"}]},
+        {"n":9,"who":"c-CD","in":{"actingPositionId":"CD","baseRev":4,"clientMutationId":"#16","facilityId":"INCIRLIK","op":{"blockId":"14","kind":"SetBlock","value":"14:00Z"},"stripId":"#12","type":"efsp-mutation","version":1},"out":{"ack":{"clientMutationId":"#16","facilityId":"INCIRLIK","flightData":"F #11 r3 RLS9 sq=0002 h=5f4c6b9481","ok":true,"strip":"S #12 r5 DEPARTURE/CLEARED @CD cd-cleared/main:V h=59aa41e863","stripId":"#12","type":"efsp-mutation-ack","version":1},"broadcast":{"facilityId":"INCIRLIK","flightDataList":{"updated":["F #11 r3 RLS9 sq=0002 h=5f4c6b9481"]},"positions":{"updated":[]},"strips":{"gone":[],"updated":["S #12 r5 DEPARTURE/CLEARED @CD cd-cleared/main:V h=59aa41e863"]},"type":"efsp-board-delta","version":1}},"audit":[{"actingPositionId":"CD","actorId":"c-CD","after":"S #12 r5 DEPARTURE/CLEARED @CD cd-cleared/main:V h=59aa41e863","at":1466517000000,"before":"S #12 r4 DEPARTURE/CLEARED @CD cd-cleared/main:V h=e5f8975413","blockId":"14","clientMutationId":"#16","facilityId":"INCIRLIK","flightDataId":"#11","op":"SetBlock","stripId":"#12","value":"14:00Z"}]},
+        {"n":10,"who":"c-CD","in":{"actingPositionId":"CD","baseRev":5,"clientMutationId":"#17","facilityId":"INCIRLIK","op":{"kind":"SetState","toState":"HELD"},"stripId":"#12","type":"efsp-mutation","version":1},"out":{"ack":{"clientMutationId":"#17","facilityId":"INCIRLIK","ok":true,"strip":"S #12 r6 DEPARTURE/HELD @CD cd-held/main:Vt h=857ef3e92b","stripId":"#12","type":"efsp-mutation-ack","version":1},"broadcast":{"facilityId":"INCIRLIK","flightDataList":{"updated":[]},"positions":{"updated":[]},"strips":{"gone":[],"updated":["S #12 r6 DEPARTURE/HELD @CD cd-held/main:Vt h=857ef3e92b"]},"type":"efsp-board-delta","version":1}},"audit":[{"actingPositionId":"CD","actorId":"c-CD","after":"S #12 r6 DEPARTURE/HELD @CD cd-held/main:Vt h=857ef3e92b","at":1466517000000,"before":"S #12 r5 DEPARTURE/CLEARED @CD cd-cleared/main:V h=59aa41e863","clientMutationId":"#17","facilityId":"INCIRLIK","flightDataId":"#11","op":"SetState","stripId":"#12"}]},
+        {"n":11,"who":"c-CD","in":{"actingPositionId":"CD","baseRev":6,"clientMutationId":"#18","facilityId":"INCIRLIK","op":{"kind":"InvokeNla"},"stripId":"#12","type":"efsp-mutation","version":1},"out":{"ack":{"clientMutationId":"#18","detail":"release time not reached","facilityId":"INCIRLIK","ok":false,"reason":"NLA_INHIBITED","strip":"S #12 r6 DEPARTURE/HELD @CD cd-held/main:Vt h=857ef3e92b","stripId":"#12","type":"efsp-mutation-ack","version":1}},"audit":[]},
+        {"n":12,"who":"c-CD","in":{"actingPositionId":"CD","baseRev":6,"clientMutationId":"#19","facilityId":"INCIRLIK","op":{"kind":"InvokeNla"},"stripId":"#12","type":"efsp-mutation","version":1},"out":{"ack":{"clientMutationId":"#19","facilityId":"INCIRLIK","ok":true,"routedTo":null,"strip":"S #12 r7 DEPARTURE/PUSHBACK @GC gc-pushback/main:V h=62ad90d0cf","stripId":"#12","type":"efsp-mutation-ack","version":1},"broadcast":{"facilityId":"INCIRLIK","flightDataList":{"updated":[]},"positions":{"updated":[]},"strips":{"gone":[],"updated":["S #12 r7 DEPARTURE/PUSHBACK @GC gc-pushback/main:V h=62ad90d0cf"]},"type":"efsp-board-delta","version":1}},"audit":[{"actingPositionId":"CD","actorId":"c-CD","after":"S #12 r7 DEPARTURE/PUSHBACK @GC gc-pushback/main:V h=62ad90d0cf","at":1466517600000,"before":"S #12 r6 DEPARTURE/HELD @CD cd-held/main:Vt h=857ef3e92b","clientMutationId":"#19","facilityId":"INCIRLIK","flightDataId":"#11","op":"InvokeNla","selfCoordinated":false,"stripId":"#12"}]}
+      ],
+      "orphanAudit": [],
+      "final": {
+        "boards": {
+          "INCIRLIK": {
+            "n": 2,
+            "h": "c88008e851",
+            "rows": [
+              "S #3 r6 DEPARTURE/HELD @CD cd-held/main:V h=e9f22617c2",
+              "S #12 r7 DEPARTURE/PUSHBACK @GC gc-pushback/main:V h=62ad90d0cf"
+            ],
+            "rest": {
+              "cidSeq": 2,
+              "droppedWallAt": [],
+              "replay": [
+                ["#1",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#2","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#3","warnings":null}],
+                ["#4",{"appliedWallAt":1782009600410,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":false,"stripId":"#3","warnings":null}],
+                ["#5",{"appliedWallAt":1782009600410,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#3","warnings":null}],
+                ["#6",{"appliedWallAt":1782009600410,"detail":null,"flightDataId":"#2","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#3","warnings":null}],
+                ["#7",{"appliedWallAt":1782009600410,"detail":null,"flightDataId":"#2","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#3","warnings":null}],
+                ["#8",{"appliedWallAt":1782009600410,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#3","warnings":null}],
+                ["#10",{"appliedWallAt":1782009600410,"detail":null,"flightDataId":"#11","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#12","warnings":null}],
+                ["#13",{"appliedWallAt":1782009600820,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":false,"stripId":"#12","warnings":null}],
+                ["#14",{"appliedWallAt":1782009600820,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#12","warnings":null}],
+                ["#15",{"appliedWallAt":1782009600820,"detail":null,"flightDataId":"#11","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#12","warnings":null}],
+                ["#16",{"appliedWallAt":1782009600820,"detail":null,"flightDataId":"#11","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#12","warnings":null}],
+                ["#17",{"appliedWallAt":1782009600820,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#12","warnings":null}],
+                ["#18",{"appliedWallAt":1782009600820,"detail":"release time not reached","flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"NLA_INHIBITED","routedTo":null,"selfCoordinated":null,"stripId":"#12","warnings":null}],
+                ["#19",{"appliedWallAt":1782009601230,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":false,"stripId":"#12","warnings":null}]
+              ]
+            }
+          },
+          "CENTER": {
+            "n": 0,
+            "h": "97d170e155",
+            "rows": [],
+            "rest": {
+              "cidSeq": 0,
+              "droppedWallAt": [],
+              "replay": []
+            }
+          },
+          "TACTICAL": {
+            "n": 0,
+            "h": "97d170e155",
+            "rows": [],
+            "rest": {
+              "cidSeq": 0,
+              "droppedWallAt": [],
+              "replay": []
+            }
+          },
+          "CARRIER": {
+            "n": 0,
+            "h": "97d170e155",
+            "rows": [],
+            "rest": {
+              "cidSeq": 0,
+              "droppedWallAt": [],
+              "replay": []
+            }
+          },
+          "RANGES": {
+            "n": 0,
+            "h": "97d170e155",
+            "rows": [],
+            "rest": {
+              "cidSeq": 0,
+              "droppedWallAt": [],
+              "replay": []
+            }
+          }
+        },
+        "flightData": {
+          "n": 2,
+          "h": "888f4f3eb6",
+          "rows": [
+            "F #2 r3 VOID9 sq=0001 h=3c8bab5abd",
+            "F #11 r3 RLS9 sq=0002 h=5f4c6b9481"
+          ],
+          "rest": {
+            "codeCursor": 2,
+            "codes": [
+              ["0001","#2"],
+              ["0002","#11"]
+            ]
+          }
+        },
+        "airspaces": {
+          "h": "bf21a9e8fb",
+          "v": {
+            "byTheater": {},
+            "seeded": {}
+          }
+        },
+        "correlations": {
+          "n": 0,
+          "h": "97d170e155",
+          "rows": []
+        },
+        "marsa": {
+          "n": 0,
+          "h": "97d170e155",
+          "rows": []
+        },
+        "runwayStatuses": {
+          "n": 1,
+          "h": "8b6b3af46c",
+          "rows": [
+            "INCIRLIK h=89de413b69"
+          ]
+        },
+        "carriers": {
+          "n": 1,
+          "h": "89ace0b5ae",
+          "rows": [
+            "CVN-72 h=081d66341b"
+          ]
+        }
+      }
+    },
+    {
+      "steps": [
+        {"n":0,"who":"c-OPS","in":{"facilityId":"INCIRLIK","signedOn":["OPS"],"type":"efsp-set-positions"},"out":{"ack":{"combination":null,"facilityId":"INCIRLIK","monitoring":[],"signedOn":["OPS"],"type":"efsp-positions-ack","version":1,"warnings":[]},"broadcast":{"facilityId":"INCIRLIK","flightDataList":{"updated":[]},"positions":{"updated":{"~big":"fd3ee9a066","chars":1038,"keys":"array[6]"}},"strips":{"gone":[],"updated":["S #3 r6 DEPARTURE/HELD @CD cd-held/main:V h=e9f22617c2","S #12 r7 DEPARTURE/PUSHBACK @GC gc-pushback/main:V h=62ad90d0cf"]},"type":"efsp-board-delta","version":1}},"audit":[]},
+        {"n":1,"who":"c-CD","in":{"facilityId":"INCIRLIK","signedOn":["CD"],"type":"efsp-set-positions"},"out":{"ack":{"combination":null,"facilityId":"INCIRLIK","monitoring":[],"signedOn":["CD"],"type":"efsp-positions-ack","version":1,"warnings":[]},"broadcast":{"facilityId":"INCIRLIK","flightDataList":{"updated":[]},"positions":{"updated":{"~big":"a44975d115","chars":1101,"keys":"array[6]"}},"strips":{"gone":[],"updated":["S #3 r6 DEPARTURE/HELD @CD cd-held/main:V h=e9f22617c2","S #12 r7 DEPARTURE/PUSHBACK @GC gc-pushback/main:V h=62ad90d0cf"]},"type":"efsp-board-delta","version":1}},"audit":[]},
+        {"n":2,"who":"c-GC","in":{"facilityId":"INCIRLIK","signedOn":["GC"],"type":"efsp-set-positions"},"out":{"ack":{"combination":null,"facilityId":"INCIRLIK","monitoring":[{"label":"GND","mhz":275.8,"positionId":"GC"}],"signedOn":["GC"],"type":"efsp-positions-ack","version":1,"warnings":[]},"broadcast":{"facilityId":"INCIRLIK","flightDataList":{"updated":[]},"positions":{"updated":{"~big":"e387a87062","chars":1164,"keys":"array[6]"}},"strips":{"gone":[],"updated":["S #3 r6 DEPARTURE/HELD @CD cd-held/main:V h=e9f22617c2","S #12 r7 DEPARTURE/PUSHBACK @GC gc-pushback/main:V h=62ad90d0cf"]},"type":"efsp-board-delta","version":1}},"audit":[]},
+        {"n":3,"who":"c-LC","in":{"facilityId":"INCIRLIK","signedOn":["LC"],"type":"efsp-set-positions"},"out":{"ack":{"combination":null,"facilityId":"INCIRLIK","monitoring":[{"label":"TWR","mhz":251,"positionId":"LC"}],"signedOn":["LC"],"type":"efsp-positions-ack","version":1,"warnings":[]},"broadcast":{"facilityId":"INCIRLIK","flightDataList":{"updated":[]},"positions":{"updated":{"~big":"bb69c96ca1","chars":1227,"keys":"array[6]"}},"strips":{"gone":[],"updated":["S #3 r6 DEPARTURE/HELD @CD cd-held/main:V h=e9f22617c2","S #12 r7 DEPARTURE/PUSHBACK @GC gc-pushback/main:V h=62ad90d0cf"]},"type":"efsp-board-delta","version":1}},"audit":[]},
+        {"n":4,"who":"c-AP","in":{"facilityId":"INCIRLIK","signedOn":["AP"],"type":"efsp-set-positions"},"out":{"ack":{"combination":null,"facilityId":"INCIRLIK","monitoring":[],"signedOn":["AP"],"type":"efsp-positions-ack","version":1,"warnings":[]},"broadcast":{"facilityId":"INCIRLIK","flightDataList":{"updated":[]},"positions":{"updated":{"~big":"1ed8805752","chars":1290,"keys":"array[6]"}},"strips":{"gone":[],"updated":["S #3 r6 DEPARTURE/HELD @CD cd-held/main:V h=e9f22617c2","S #12 r7 DEPARTURE/PUSHBACK @GC gc-pushback/main:V h=62ad90d0cf"]},"type":"efsp-board-delta","version":1}},"audit":[]},
+        {"n":5,"who":"c-OPS","in":{"actingPositionId":"OPS","clientMutationId":"#20","facilityId":"INCIRLIK","op":{"bayId":"ops-proposed","flightData":{"aircraftType":"F16","callsign":"EDCT9","departureAirport":"LTAG","destinationAirport":"LTAG","requestedAltitude":"250","route":"DCT","wakeCategory":"M"},"kind":"CreateStrip","rackId":"main","stripType":"DEPARTURE"},"type":"efsp-mutation","version":1},"out":{"ack":{"clientMutationId":"#20","facilityId":"INCIRLIK","flightData":"F #21 r1 EDCT9 sq=0003 h=1b579c3e4c","ok":true,"strip":"S #22 r1 DEPARTURE/PROPOSED @OPS ops-proposed/main:V h=24a9a8115e","type":"efsp-mutation-ack","version":1},"broadcast":{"facilityId":"INCIRLIK","flightDataList":{"updated":["F #21 r1 EDCT9 sq=0003 h=1b579c3e4c"]},"positions":{"updated":[]},"strips":{"gone":[],"updated":["S #22 r1 DEPARTURE/PROPOSED @OPS ops-proposed/main:V h=24a9a8115e"]},"type":"efsp-board-delta","version":1}},"audit":[{"actingPositionId":"OPS","actorId":"c-OPS","after":"S #22 r1 DEPARTURE/PROPOSED @OPS ops-proposed/main:V h=24a9a8115e","at":1466517000000,"before":null,"clientMutationId":"#20","facilityId":"INCIRLIK","flightDataId":"#21","op":"CreateStrip","stripId":"#22"}]},
+        {"n":6,"who":"c-OPS","in":{"actingPositionId":"OPS","baseRev":1,"clientMutationId":"#23","facilityId":"INCIRLIK","op":{"kind":"InvokeNla"},"stripId":"#22","type":"efsp-mutation","version":1},"out":{"ack":{"clientMutationId":"#23","facilityId":"INCIRLIK","ok":true,"routedTo":null,"strip":"S #22 r2 DEPARTURE/PENDING_CLEARANCE @CD cd-pending-clearance/main:V h=4e06675eb7","stripId":"#22","type":"efsp-mutation-ack","version":1},"broadcast":{"facilityId":"INCIRLIK","flightDataList":{"updated":[]},"positions":{"updated":[]},"strips":{"gone":[],"updated":["S #22 r2 DEPARTURE/PENDING_CLEARANCE @CD cd-pending-clearance/main:V h=4e06675eb7"]},"type":"efsp-board-delta","version":1}},"audit":[{"actingPositionId":"OPS","actorId":"c-OPS","after":"S #22 r2 DEPARTURE/PENDING_CLEARANCE @CD cd-pending-clearance/main:V h=4e06675eb7","at":1466517000000,"before":"S #22 r1 DEPARTURE/PROPOSED @OPS ops-proposed/main:V h=24a9a8115e","clientMutationId":"#23","facilityId":"INCIRLIK","flightDataId":"#21","op":"InvokeNla","selfCoordinated":false,"stripId":"#22"}]},
+        {"n":7,"who":"c-CD","in":{"actingPositionId":"CD","baseRev":2,"clientMutationId":"#24","facilityId":"INCIRLIK","op":{"kind":"SetState","toState":"CLEARED"},"stripId":"#22","type":"efsp-mutation","version":1},"out":{"ack":{"clientMutationId":"#24","facilityId":"INCIRLIK","ok":true,"strip":"S #22 r3 DEPARTURE/CLEARED @CD cd-cleared/main:V h=f372c484a9","stripId":"#22","type":"efsp-mutation-ack","version":1},"broadcast":{"facilityId":"INCIRLIK","flightDataList":{"updated":[]},"positions":{"updated":[]},"strips":{"gone":[],"updated":["S #22 r3 DEPARTURE/CLEARED @CD cd-cleared/main:V h=f372c484a9"]},"type":"efsp-board-delta","version":1}},"audit":[{"actingPositionId":"CD","actorId":"c-CD","after":"S #22 r3 DEPARTURE/CLEARED @CD cd-cleared/main:V h=f372c484a9","at":1466517000000,"before":"S #22 r2 DEPARTURE/PENDING_CLEARANCE @CD cd-pending-clearance/main:V h=4e06675eb7","clientMutationId":"#24","facilityId":"INCIRLIK","flightDataId":"#21","op":"SetState","stripId":"#22"}]},
+        {"n":8,"who":"c-CD","in":{"actingPositionId":"CD","baseRev":3,"clientMutationId":"#25","facilityId":"INCIRLIK","op":{"blockId":"14A","kind":"SetBlock","value":"EDCT"},"stripId":"#22","type":"efsp-mutation","version":1},"out":{"ack":{"clientMutationId":"#25","facilityId":"INCIRLIK","flightData":"F #21 r2 EDCT9 sq=0003 h=d84b41912a","ok":true,"strip":"S #22 r4 DEPARTURE/CLEARED @CD cd-cleared/main:V h=e5f8975413","stripId":"#22","type":"efsp-mutation-ack","version":1},"broadcast":{"facilityId":"INCIRLIK","flightDataList":{"updated":["F #21 r2 EDCT9 sq=0003 h=d84b41912a"]},"positions":{"updated":[]},"strips":{"gone":[],"updated":["S #22 r4 DEPARTURE/CLEARED @CD cd-cleared/main:V h=e5f8975413"]},"type":"efsp-board-delta","version":1}},"audit":[{"actingPositionId":"CD","actorId":"c-CD","after":"S #22 r4 DEPARTURE/CLEARED @CD cd-cleared/main:V h=e5f8975413","at":1466517000000,"before":"S #22 r3 DEPARTURE/CLEARED @CD cd-cleared/main:V h=f372c484a9","blockId":"14A","clientMutationId":"#25","facilityId":"INCIRLIK","flightDataId":"#21","op":"SetBlock","stripId":"#22","value":"EDCT"}]},
+        {"n":9,"who":"c-CD","in":{"actingPositionId":"CD","baseRev":4,"clientMutationId":"#26","facilityId":"INCIRLIK","op":{"blockId":"14B","kind":"SetBlock","value":"1355"},"stripId":"#22","type":"efsp-mutation","version":1},"out":{"ack":{"clientMutationId":"#26","facilityId":"INCIRLIK","flightData":"F #21 r3 EDCT9 sq=0003 h=c2125d1005","ok":true,"strip":"S #22 r5 DEPARTURE/CLEARED @CD cd-cleared/main:V h=59aa41e863","stripId":"#22","type":"efsp-mutation-ack","version":1},"broadcast":{"facilityId":"INCIRLIK","flightDataList":{"updated":["F #21 r3 EDCT9 sq=0003 h=c2125d1005"]},"positions":{"updated":[]},"strips":{"gone":[],"updated":["S #22 r5 DEPARTURE/CLEARED @CD cd-cleared/main:V h=59aa41e863"]},"type":"efsp-board-delta","version":1}},"audit":[{"actingPositionId":"CD","actorId":"c-CD","after":"S #22 r5 DEPARTURE/CLEARED @CD cd-cleared/main:V h=59aa41e863","at":1466517000000,"before":"S #22 r4 DEPARTURE/CLEARED @CD cd-cleared/main:V h=e5f8975413","blockId":"14B","clientMutationId":"#26","facilityId":"INCIRLIK","flightDataId":"#21","op":"SetBlock","stripId":"#22","value":"1355"}]},
+        {"n":10,"who":"c-CD","in":{"actingPositionId":"CD","baseRev":5,"clientMutationId":"#27","facilityId":"INCIRLIK","op":{"kind":"SetState","toState":"HELD"},"stripId":"#22","type":"efsp-mutation","version":1},"out":{"ack":{"clientMutationId":"#27","facilityId":"INCIRLIK","ok":true,"strip":"S #22 r6 DEPARTURE/HELD @CD cd-held/main:Vh h=f52687238a","stripId":"#22","type":"efsp-mutation-ack","version":1},"broadcast":{"facilityId":"INCIRLIK","flightDataList":{"updated":[]},"positions":{"updated":[]},"strips":{"gone":[],"updated":["S #22 r6 DEPARTURE/HELD @CD cd-held/main:Vh h=f52687238a"]},"type":"efsp-board-delta","version":1}},"audit":[{"actingPositionId":"CD","actorId":"c-CD","after":"S #22 r6 DEPARTURE/HELD @CD cd-held/main:Vh h=f52687238a","at":1466517000000,"before":"S #22 r5 DEPARTURE/CLEARED @CD cd-cleared/main:V h=59aa41e863","clientMutationId":"#27","facilityId":"INCIRLIK","flightDataId":"#21","op":"SetState","stripId":"#22"}]},
+        {"n":11,"who":"c-OPS","in":{"actingPositionId":"OPS","clientMutationId":"#28","facilityId":"INCIRLIK","op":{"bayId":"ops-proposed","flightData":{"aircraftType":"F16","callsign":"CFR9","departureAirport":"LTAG","destinationAirport":"LTAG","requestedAltitude":"250","route":"DCT","wakeCategory":"M"},"kind":"CreateStrip","rackId":"main","stripType":"DEPARTURE"},"type":"efsp-mutation","version":1},"out":{"ack":{"clientMutationId":"#28","facilityId":"INCIRLIK","flightData":"F #29 r1 CFR9 sq=0004 h=99916cff6b","ok":true,"strip":"S #30 r1 DEPARTURE/PROPOSED @OPS ops-proposed/main:V h=24a9a8115e","type":"efsp-mutation-ack","version":1},"broadcast":{"facilityId":"INCIRLIK","flightDataList":{"updated":["F #29 r1 CFR9 sq=0004 h=99916cff6b"]},"positions":{"updated":[]},"strips":{"gone":[],"updated":["S #30 r1 DEPARTURE/PROPOSED @OPS ops-proposed/main:V h=24a9a8115e"]},"type":"efsp-board-delta","version":1}},"audit":[{"actingPositionId":"OPS","actorId":"c-OPS","after":"S #30 r1 DEPARTURE/PROPOSED @OPS ops-proposed/main:V h=24a9a8115e","at":1466517000000,"before":null,"clientMutationId":"#28","facilityId":"INCIRLIK","flightDataId":"#29","op":"CreateStrip","stripId":"#30"}]},
+        {"n":12,"who":"c-OPS","in":{"actingPositionId":"OPS","baseRev":1,"clientMutationId":"#31","facilityId":"INCIRLIK","op":{"kind":"InvokeNla"},"stripId":"#30","type":"efsp-mutation","version":1},"out":{"ack":{"clientMutationId":"#31","facilityId":"INCIRLIK","ok":true,"routedTo":null,"strip":"S #30 r2 DEPARTURE/PENDING_CLEARANCE @CD cd-pending-clearance/main:V h=4e06675eb7","stripId":"#30","type":"efsp-mutation-ack","version":1},"broadcast":{"facilityId":"INCIRLIK","flightDataList":{"updated":[]},"positions":{"updated":[]},"strips":{"gone":[],"updated":["S #30 r2 DEPARTURE/PENDING_CLEARANCE @CD cd-pending-clearance/main:V h=4e06675eb7"]},"type":"efsp-board-delta","version":1}},"audit":[{"actingPositionId":"OPS","actorId":"c-OPS","after":"S #30 r2 DEPARTURE/PENDING_CLEARANCE @CD cd-pending-clearance/main:V h=4e06675eb7","at":1466517000000,"before":"S #30 r1 DEPARTURE/PROPOSED @OPS ops-proposed/main:V h=24a9a8115e","clientMutationId":"#31","facilityId":"INCIRLIK","flightDataId":"#29","op":"InvokeNla","selfCoordinated":false,"stripId":"#30"}]},
+        {"n":13,"who":"c-CD","in":{"actingPositionId":"CD","baseRev":2,"clientMutationId":"#32","facilityId":"INCIRLIK","op":{"kind":"SetState","toState":"CLEARED"},"stripId":"#30","type":"efsp-mutation","version":1},"out":{"ack":{"clientMutationId":"#32","facilityId":"INCIRLIK","ok":true,"strip":"S #30 r3 DEPARTURE/CLEARED @CD cd-cleared/main:V h=f372c484a9","stripId":"#30","type":"efsp-mutation-ack","version":1},"broadcast":{"facilityId":"INCIRLIK","flightDataList":{"updated":[]},"positions":{"updated":[]},"strips":{"gone":[],"updated":["S #30 r3 DEPARTURE/CLEARED @CD cd-cleared/main:V h=f372c484a9"]},"type":"efsp-board-delta","version":1}},"audit":[{"actingPositionId":"CD","actorId":"c-CD","after":"S #30 r3 DEPARTURE/CLEARED @CD cd-cleared/main:V h=f372c484a9","at":1466517000000,"before":"S #30 r2 DEPARTURE/PENDING_CLEARANCE @CD cd-pending-clearance/main:V h=4e06675eb7","clientMutationId":"#32","facilityId":"INCIRLIK","flightDataId":"#29","op":"SetState","stripId":"#30"}]},
+        {"n":14,"who":"c-CD","in":{"actingPositionId":"CD","baseRev":3,"clientMutationId":"#33","facilityId":"INCIRLIK","op":{"blockId":"14A","kind":"SetBlock","value":"CALL_FOR_RELEASE"},"stripId":"#30","type":"efsp-mutation","version":1},"out":{"ack":{"clientMutationId":"#33","facilityId":"INCIRLIK","flightData":"F #29 r2 CFR9 sq=0004 h=5a627ec228","ok":true,"strip":"S #30 r4 DEPARTURE/CLEARED @CD cd-cleared/main:V h=e5f8975413","stripId":"#30","type":"efsp-mutation-ack","version":1},"broadcast":{"facilityId":"INCIRLIK","flightDataList":{"updated":["F #29 r2 CFR9 sq=0004 h=5a627ec228"]},"positions":{"updated":[]},"strips":{"gone":[],"updated":["S #30 r4 DEPARTURE/CLEARED @CD cd-cleared/main:V h=e5f8975413"]},"type":"efsp-board-delta","version":1}},"audit":[{"actingPositionId":"CD","actorId":"c-CD","after":"S #30 r4 DEPARTURE/CLEARED @CD cd-cleared/main:V h=e5f8975413","at":1466517000000,"before":"S #30 r3 DEPARTURE/CLEARED @CD cd-cleared/main:V h=f372c484a9","blockId":"14A","clientMutationId":"#33","facilityId":"INCIRLIK","flightDataId":"#29","op":"SetBlock","stripId":"#30","value":"CALL_FOR_RELEASE"}]},
+        {"n":15,"who":"c-CD","in":{"actingPositionId":"CD","baseRev":4,"clientMutationId":"#34","facilityId":"INCIRLIK","op":{"blockId":"14C","kind":"SetBlock","value":"1400"},"stripId":"#30","type":"efsp-mutation","version":1},"out":{"ack":{"clientMutationId":"#34","facilityId":"INCIRLIK","flightData":"F #29 r3 CFR9 sq=0004 h=8b2b105302","ok":true,"strip":"S #30 r5 DEPARTURE/CLEARED @CD cd-cleared/main:V h=59aa41e863","stripId":"#30","type":"efsp-mutation-ack","version":1},"broadcast":{"facilityId":"INCIRLIK","flightDataList":{"updated":["F #29 r3 CFR9 sq=0004 h=8b2b105302"]},"positions":{"updated":[]},"strips":{"gone":[],"updated":["S #30 r5 DEPARTURE/CLEARED @CD cd-cleared/main:V h=59aa41e863"]},"type":"efsp-board-delta","version":1}},"audit":[{"actingPositionId":"CD","actorId":"c-CD","after":"S #30 r5 DEPARTURE/CLEARED @CD cd-cleared/main:V h=59aa41e863","at":1466517000000,"before":"S #30 r4 DEPARTURE/CLEARED @CD cd-cleared/main:V h=e5f8975413","blockId":"14C","clientMutationId":"#34","facilityId":"INCIRLIK","flightDataId":"#29","op":"SetBlock","stripId":"#30","value":"1400"}]},
+        {"n":16,"who":"c-CD","in":{"actingPositionId":"CD","baseRev":5,"clientMutationId":"#35","facilityId":"INCIRLIK","op":{"kind":"SetState","toState":"HELD"},"stripId":"#30","type":"efsp-mutation","version":1},"out":{"ack":{"clientMutationId":"#35","facilityId":"INCIRLIK","ok":true,"strip":"S #30 r6 DEPARTURE/HELD @CD cd-held/main:Vh9 h=27e2918f12","stripId":"#30","type":"efsp-mutation-ack","version":1},"broadcast":{"facilityId":"INCIRLIK","flightDataList":{"updated":[]},"positions":{"updated":[]},"strips":{"gone":[],"updated":["S #30 r6 DEPARTURE/HELD @CD cd-held/main:Vh9 h=27e2918f12"]},"type":"efsp-board-delta","version":1}},"audit":[{"actingPositionId":"CD","actorId":"c-CD","after":"S #30 r6 DEPARTURE/HELD @CD cd-held/main:Vh9 h=27e2918f12","at":1466517000000,"before":"S #30 r5 DEPARTURE/CLEARED @CD cd-cleared/main:V h=59aa41e863","clientMutationId":"#35","facilityId":"INCIRLIK","flightDataId":"#29","op":"SetState","stripId":"#30"}]},
+        {"n":17,"who":"c-CD","in":{"actingPositionId":"CD","baseRev":6,"clientMutationId":"#36","facilityId":"INCIRLIK","op":{"kind":"InvokeNla"},"stripId":"#30","type":"efsp-mutation","version":1},"out":{"ack":{"clientMutationId":"#36","detail":"call-for-release window is not open yet","facilityId":"INCIRLIK","ok":false,"reason":"NLA_INHIBITED","strip":"S #30 r6 DEPARTURE/HELD @CD cd-held/main:Vh9 h=27e2918f12","stripId":"#30","type":"efsp-mutation-ack","version":1}},"audit":[]},
+        {"n":18,"who":"c-CD","in":{"actingPositionId":"CD","baseRev":6,"clientMutationId":"#37","facilityId":"INCIRLIK","op":{"kind":"InvokeNla"},"stripId":"#30","type":"efsp-mutation","version":1},"out":{"ack":{"clientMutationId":"#37","facilityId":"INCIRLIK","ok":true,"routedTo":null,"strip":"S #30 r7 DEPARTURE/PUSHBACK @GC gc-pushback/main:V h=62ad90d0cf","stripId":"#30","type":"efsp-mutation-ack","version":1},"broadcast":{"facilityId":"INCIRLIK","flightDataList":{"updated":[]},"positions":{"updated":[]},"strips":{"gone":[],"updated":["S #30 r7 DEPARTURE/PUSHBACK @GC gc-pushback/main:V h=62ad90d0cf"]},"type":"efsp-board-delta","version":1}},"audit":[{"actingPositionId":"CD","actorId":"c-CD","after":"S #30 r7 DEPARTURE/PUSHBACK @GC gc-pushback/main:V h=62ad90d0cf","at":1466517480000,"before":"S #30 r6 DEPARTURE/HELD @CD cd-held/main:Vh9 h=27e2918f12","clientMutationId":"#37","facilityId":"INCIRLIK","flightDataId":"#29","op":"InvokeNla","selfCoordinated":false,"stripId":"#30"}]},
+        {"n":19,"who":"c-CD","in":{"actingPositionId":"CD","baseRev":6,"clientMutationId":"#38","facilityId":"INCIRLIK","op":{"kind":"InvokeNla"},"stripId":"#22","type":"efsp-mutation","version":1},"out":{"ack":{"clientMutationId":"#38","facilityId":"INCIRLIK","ok":true,"routedTo":null,"strip":"S #22 r7 DEPARTURE/PUSHBACK @GC gc-pushback/main:V h=62ad90d0cf","stripId":"#22","type":"efsp-mutation-ack","version":1},"broadcast":{"facilityId":"INCIRLIK","flightDataList":{"updated":[]},"positions":{"updated":[]},"strips":{"gone":[],"updated":["S #22 r7 DEPARTURE/PUSHBACK @GC gc-pushback/main:V h=62ad90d0cf"]},"type":"efsp-board-delta","version":1}},"audit":[{"actingPositionId":"CD","actorId":"c-CD","after":"S #22 r7 DEPARTURE/PUSHBACK @GC gc-pushback/main:V h=62ad90d0cf","at":1466517480000,"before":"S #22 r6 DEPARTURE/HELD @CD cd-held/main:Vh h=f52687238a","clientMutationId":"#38","facilityId":"INCIRLIK","flightDataId":"#21","op":"InvokeNla","selfCoordinated":false,"stripId":"#22"}]}
+      ],
+      "orphanAudit": [],
+      "final": {
+        "boards": {
+          "INCIRLIK": {
+            "n": 4,
+            "h": "38c57f4852",
+            "rows": [
+              "S #3 r6 DEPARTURE/HELD @CD cd-held/main:V h=e9f22617c2",
+              "S #12 r7 DEPARTURE/PUSHBACK @GC gc-pushback/main:V h=62ad90d0cf",
+              "S #22 r7 DEPARTURE/PUSHBACK @GC gc-pushback/main:V h=62ad90d0cf",
+              "S #30 r7 DEPARTURE/PUSHBACK @GC gc-pushback/main:V h=62ad90d0cf"
+            ],
+            "rest": {
+              "cidSeq": 4,
+              "droppedWallAt": [],
+              "replay": [
+                ["#1",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#2","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#3","warnings":null}],
+                ["#4",{"appliedWallAt":1782009600410,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":false,"stripId":"#3","warnings":null}],
+                ["#5",{"appliedWallAt":1782009600410,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#3","warnings":null}],
+                ["#6",{"appliedWallAt":1782009600410,"detail":null,"flightDataId":"#2","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#3","warnings":null}],
+                ["#7",{"appliedWallAt":1782009600410,"detail":null,"flightDataId":"#2","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#3","warnings":null}],
+                ["#8",{"appliedWallAt":1782009600410,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#3","warnings":null}],
+                ["#10",{"appliedWallAt":1782009600410,"detail":null,"flightDataId":"#11","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#12","warnings":null}],
+                ["#13",{"appliedWallAt":1782009600820,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":false,"stripId":"#12","warnings":null}],
+                ["#14",{"appliedWallAt":1782009600820,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#12","warnings":null}],
+                ["#15",{"appliedWallAt":1782009600820,"detail":null,"flightDataId":"#11","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#12","warnings":null}],
+                ["#16",{"appliedWallAt":1782009600820,"detail":null,"flightDataId":"#11","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#12","warnings":null}],
+                ["#17",{"appliedWallAt":1782009600820,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#12","warnings":null}],
+                ["#18",{"appliedWallAt":1782009600820,"detail":"release time not reached","flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"NLA_INHIBITED","routedTo":null,"selfCoordinated":null,"stripId":"#12","warnings":null}],
+                ["#19",{"appliedWallAt":1782009601230,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":false,"stripId":"#12","warnings":null}],
+                ["#20",{"appliedWallAt":1782009601230,"detail":null,"flightDataId":"#21","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#22","warnings":null}],
+                ["#23",{"appliedWallAt":1782009601640,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":false,"stripId":"#22","warnings":null}],
+                ["#24",{"appliedWallAt":1782009601640,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#22","warnings":null}],
+                ["#25",{"appliedWallAt":1782009601640,"detail":null,"flightDataId":"#21","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#22","warnings":null}],
+                ["#26",{"appliedWallAt":1782009601640,"detail":null,"flightDataId":"#21","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#22","warnings":null}],
+                ["#27",{"appliedWallAt":1782009601640,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#22","warnings":null}],
+                ["#28",{"appliedWallAt":1782009601640,"detail":null,"flightDataId":"#29","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#30","warnings":null}],
+                ["#31",{"appliedWallAt":1782009602050,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":false,"stripId":"#30","warnings":null}],
+                ["#32",{"appliedWallAt":1782009602050,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#30","warnings":null}],
+                ["#33",{"appliedWallAt":1782009602050,"detail":null,"flightDataId":"#29","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#30","warnings":null}],
+                ["#34",{"appliedWallAt":1782009602050,"detail":null,"flightDataId":"#29","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#30","warnings":null}],
+                ["#35",{"appliedWallAt":1782009602050,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#30","warnings":null}],
+                ["#36",{"appliedWallAt":1782009602050,"detail":"call-for-release window is not open yet","flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"NLA_INHIBITED","routedTo":null,"selfCoordinated":null,"stripId":"#30","warnings":null}],
+                ["#37",{"appliedWallAt":1782009602460,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":false,"stripId":"#30","warnings":null}],
+                ["#38",{"appliedWallAt":1782009602870,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":false,"stripId":"#22","warnings":null}]
+              ]
+            }
+          },
+          "CENTER": {
+            "n": 0,
+            "h": "97d170e155",
+            "rows": [],
+            "rest": {
+              "cidSeq": 0,
+              "droppedWallAt": [],
+              "replay": []
+            }
+          },
+          "TACTICAL": {
+            "n": 0,
+            "h": "97d170e155",
+            "rows": [],
+            "rest": {
+              "cidSeq": 0,
+              "droppedWallAt": [],
+              "replay": []
+            }
+          },
+          "CARRIER": {
+            "n": 0,
+            "h": "97d170e155",
+            "rows": [],
+            "rest": {
+              "cidSeq": 0,
+              "droppedWallAt": [],
+              "replay": []
+            }
+          },
+          "RANGES": {
+            "n": 0,
+            "h": "97d170e155",
+            "rows": [],
+            "rest": {
+              "cidSeq": 0,
+              "droppedWallAt": [],
+              "replay": []
+            }
+          }
+        },
+        "flightData": {
+          "n": 4,
+          "h": "6e82b2e4be",
+          "rows": [
+            "F #2 r3 VOID9 sq=0001 h=3c8bab5abd",
+            "F #11 r3 RLS9 sq=0002 h=5f4c6b9481",
+            "F #21 r3 EDCT9 sq=0003 h=c2125d1005",
+            "F #29 r3 CFR9 sq=0004 h=8b2b105302"
+          ],
+          "rest": {
+            "codeCursor": 4,
+            "codes": [
+              ["0001","#2"],
+              ["0002","#11"],
+              ["0003","#21"],
+              ["0004","#29"]
+            ]
+          }
+        },
+        "airspaces": {
+          "h": "bf21a9e8fb",
+          "v": {
+            "byTheater": {},
+            "seeded": {}
+          }
+        },
+        "correlations": {
+          "n": 0,
+          "h": "97d170e155",
+          "rows": []
+        },
+        "marsa": {
+          "n": 0,
+          "h": "97d170e155",
+          "rows": []
+        },
+        "runwayStatuses": {
+          "n": 1,
+          "h": "8b6b3af46c",
+          "rows": [
+            "INCIRLIK h=89de413b69"
+          ]
+        },
+        "carriers": {
+          "n": 1,
+          "h": "89ace0b5ae",
+          "rows": [
+            "CVN-72 h=081d66341b"
+          ]
+        }
+      }
+    },
+    {
+      "steps": [
+        {"n":0,"who":"c-OPS","in":{"facilityId":"INCIRLIK","signedOn":["OPS"],"type":"efsp-set-positions"},"out":{"ack":{"combination":null,"facilityId":"INCIRLIK","monitoring":[],"signedOn":["OPS"],"type":"efsp-positions-ack","version":1,"warnings":[]},"broadcast":{"facilityId":"INCIRLIK","flightDataList":{"updated":[]},"positions":{"updated":{"~big":"fd3ee9a066","chars":1038,"keys":"array[6]"}},"strips":{"gone":[],"updated":["S #3 r6 DEPARTURE/HELD @CD cd-held/main:V h=e9f22617c2","S #12 r7 DEPARTURE/PUSHBACK @GC gc-pushback/main:V h=62ad90d0cf","S #22 r7 DEPARTURE/PUSHBACK @GC gc-pushback/main:V h=62ad90d0cf","S #30 r7 DEPARTURE/PUSHBACK @GC gc-pushback/main:V h=62ad90d0cf"]},"type":"efsp-board-delta","version":1}},"audit":[]},
+        {"n":1,"who":"c-CD","in":{"facilityId":"INCIRLIK","signedOn":["CD"],"type":"efsp-set-positions"},"out":{"ack":{"combination":null,"facilityId":"INCIRLIK","monitoring":[],"signedOn":["CD"],"type":"efsp-positions-ack","version":1,"warnings":[]},"broadcast":{"facilityId":"INCIRLIK","flightDataList":{"updated":[]},"positions":{"updated":{"~big":"a44975d115","chars":1101,"keys":"array[6]"}},"strips":{"gone":[],"updated":["S #3 r6 DEPARTURE/HELD @CD cd-held/main:V h=e9f22617c2","S #12 r7 DEPARTURE/PUSHBACK @GC gc-pushback/main:V h=62ad90d0cf","S #22 r7 DEPARTURE/PUSHBACK @GC gc-pushback/main:V h=62ad90d0cf","S #30 r7 DEPARTURE/PUSHBACK @GC gc-pushback/main:V h=62ad90d0cf"]},"type":"efsp-board-delta","version":1}},"audit":[]},
+        {"n":2,"who":"c-GC","in":{"facilityId":"INCIRLIK","signedOn":["GC"],"type":"efsp-set-positions"},"out":{"ack":{"combination":null,"facilityId":"INCIRLIK","monitoring":[{"label":"GND","mhz":275.8,"positionId":"GC"}],"signedOn":["GC"],"type":"efsp-positions-ack","version":1,"warnings":[]},"broadcast":{"facilityId":"INCIRLIK","flightDataList":{"updated":[]},"positions":{"updated":{"~big":"e387a87062","chars":1164,"keys":"array[6]"}},"strips":{"gone":[],"updated":["S #3 r6 DEPARTURE/HELD @CD cd-held/main:V h=e9f22617c2","S #12 r7 DEPARTURE/PUSHBACK @GC gc-pushback/main:V h=62ad90d0cf","S #22 r7 DEPARTURE/PUSHBACK @GC gc-pushback/main:V h=62ad90d0cf","S #30 r7 DEPARTURE/PUSHBACK @GC gc-pushback/main:V h=62ad90d0cf"]},"type":"efsp-board-delta","version":1}},"audit":[]},
+        {"n":3,"who":"c-LC","in":{"facilityId":"INCIRLIK","signedOn":["LC"],"type":"efsp-set-positions"},"out":{"ack":{"combination":null,"facilityId":"INCIRLIK","monitoring":[{"label":"TWR","mhz":251,"positionId":"LC"}],"signedOn":["LC"],"type":"efsp-positions-ack","version":1,"warnings":[]},"broadcast":{"facilityId":"INCIRLIK","flightDataList":{"updated":[]},"positions":{"updated":{"~big":"bb69c96ca1","chars":1227,"keys":"array[6]"}},"strips":{"gone":[],"updated":["S #3 r6 DEPARTURE/HELD @CD cd-held/main:V h=e9f22617c2","S #12 r7 DEPARTURE/PUSHBACK @GC gc-pushback/main:V h=62ad90d0cf","S #22 r7 DEPARTURE/PUSHBACK @GC gc-pushback/main:V h=62ad90d0cf","S #30 r7 DEPARTURE/PUSHBACK @GC gc-pushback/main:V h=62ad90d0cf"]},"type":"efsp-board-delta","version":1}},"audit":[]},
+        {"n":4,"who":"c-AP","in":{"facilityId":"INCIRLIK","signedOn":["AP"],"type":"efsp-set-positions"},"out":{"ack":{"combination":null,"facilityId":"INCIRLIK","monitoring":[],"signedOn":["AP"],"type":"efsp-positions-ack","version":1,"warnings":[]},"broadcast":{"facilityId":"INCIRLIK","flightDataList":{"updated":[]},"positions":{"updated":{"~big":"1ed8805752","chars":1290,"keys":"array[6]"}},"strips":{"gone":[],"updated":["S #3 r6 DEPARTURE/HELD @CD cd-held/main:V h=e9f22617c2","S #12 r7 DEPARTURE/PUSHBACK @GC gc-pushback/main:V h=62ad90d0cf","S #22 r7 DEPARTURE/PUSHBACK @GC gc-pushback/main:V h=62ad90d0cf","S #30 r7 DEPARTURE/PUSHBACK @GC gc-pushback/main:V h=62ad90d0cf"]},"type":"efsp-board-delta","version":1}},"audit":[]},
+        {"n":5,"who":"c-OPS","in":{"actingPositionId":"OPS","clientMutationId":"#39","facilityId":"INCIRLIK","op":{"bayId":"ops-proposed","flightData":{"aircraftType":"F16","callsign":"TYPO9","departureAirport":"LTAG","destinationAirport":"LTAG","requestedAltitude":"250","route":"DCT","wakeCategory":"M"},"kind":"CreateStrip","rackId":"main","stripType":"DEPARTURE"},"type":"efsp-mutation","version":1},"out":{"ack":{"clientMutationId":"#39","facilityId":"INCIRLIK","flightData":"F #40 r1 TYPO9 sq=0005 h=18eceb5ce0","ok":true,"strip":"S #41 r1 DEPARTURE/PROPOSED @OPS ops-proposed/main:V h=24a9a8115e","type":"efsp-mutation-ack","version":1},"broadcast":{"facilityId":"INCIRLIK","flightDataList":{"updated":["F #40 r1 TYPO9 sq=0005 h=18eceb5ce0"]},"positions":{"updated":[]},"strips":{"gone":[],"updated":["S #41 r1 DEPARTURE/PROPOSED @OPS ops-proposed/main:V h=24a9a8115e"]},"type":"efsp-board-delta","version":1}},"audit":[{"actingPositionId":"OPS","actorId":"c-OPS","after":"S #41 r1 DEPARTURE/PROPOSED @OPS ops-proposed/main:V h=24a9a8115e","at":1466517000000,"before":null,"clientMutationId":"#39","facilityId":"INCIRLIK","flightDataId":"#40","op":"CreateStrip","stripId":"#41"}]},
+        {"n":6,"who":"c-OPS","in":{"actingPositionId":"OPS","baseRev":1,"clientMutationId":"#42","facilityId":"INCIRLIK","op":{"kind":"InvokeNla"},"stripId":"#41","type":"efsp-mutation","version":1},"out":{"ack":{"clientMutationId":"#42","facilityId":"INCIRLIK","ok":true,"routedTo":null,"strip":"S #41 r2 DEPARTURE/PENDING_CLEARANCE @CD cd-pending-clearance/main:V h=4e06675eb7","stripId":"#41","type":"efsp-mutation-ack","version":1},"broadcast":{"facilityId":"INCIRLIK","flightDataList":{"updated":[]},"positions":{"updated":[]},"strips":{"gone":[],"updated":["S #41 r2 DEPARTURE/PENDING_CLEARANCE @CD cd-pending-clearance/main:V h=4e06675eb7"]},"type":"efsp-board-delta","version":1}},"audit":[{"actingPositionId":"OPS","actorId":"c-OPS","after":"S #41 r2 DEPARTURE/PENDING_CLEARANCE @CD cd-pending-clearance/main:V h=4e06675eb7","at":1466517000000,"before":"S #41 r1 DEPARTURE/PROPOSED @OPS ops-proposed/main:V h=24a9a8115e","clientMutationId":"#42","facilityId":"INCIRLIK","flightDataId":"#40","op":"InvokeNla","selfCoordinated":false,"stripId":"#41"}]},
+        {"n":7,"who":"c-CD","in":{"actingPositionId":"CD","baseRev":2,"clientMutationId":"#43","facilityId":"INCIRLIK","op":{"kind":"SetState","toState":"CLEARED"},"stripId":"#41","type":"efsp-mutation","version":1},"out":{"ack":{"clientMutationId":"#43","facilityId":"INCIRLIK","ok":true,"strip":"S #41 r3 DEPARTURE/CLEARED @CD cd-cleared/main:V h=f372c484a9","stripId":"#41","type":"efsp-mutation-ack","version":1},"broadcast":{"facilityId":"INCIRLIK","flightDataList":{"updated":[]},"positions":{"updated":[]},"strips":{"gone":[],"updated":["S #41 r3 DEPARTURE/CLEARED @CD cd-cleared/main:V h=f372c484a9"]},"type":"efsp-board-delta","version":1}},"audit":[{"actingPositionId":"CD","actorId":"c-CD","after":"S #41 r3 DEPARTURE/CLEARED @CD cd-cleared/main:V h=f372c484a9","at":1466517000000,"before":"S #41 r2 DEPARTURE/PENDING_CLEARANCE @CD cd-pending-clearance/main:V h=4e06675eb7","clientMutationId":"#43","facilityId":"INCIRLIK","flightDataId":"#40","op":"SetState","stripId":"#41"}]},
+        {"n":8,"who":"c-CD","in":{"actingPositionId":"CD","baseRev":3,"clientMutationId":"#44","facilityId":"INCIRLIK","op":{"blockId":"14A","kind":"SetBlock","value":"CLEARANCE_VOID_TIME"},"stripId":"#41","type":"efsp-mutation","version":1},"out":{"ack":{"clientMutationId":"#44","facilityId":"INCIRLIK","flightData":"F #40 r2 TYPO9 sq=0005 h=a26108f47c","ok":true,"strip":"S #41 r4 DEPARTURE/CLEARED @CD cd-cleared/main:V h=e5f8975413","stripId":"#41","type":"efsp-mutation-ack","version":1},"broadcast":{"facilityId":"INCIRLIK","flightDataList":{"updated":["F #40 r2 TYPO9 sq=0005 h=a26108f47c"]},"positions":{"updated":[]},"strips":{"gone":[],"updated":["S #41 r4 DEPARTURE/CLEARED @CD cd-cleared/main:V h=e5f8975413"]},"type":"efsp-board-delta","version":1}},"audit":[{"actingPositionId":"CD","actorId":"c-CD","after":"S #41 r4 DEPARTURE/CLEARED @CD cd-cleared/main:V h=e5f8975413","at":1466517000000,"before":"S #41 r3 DEPARTURE/CLEARED @CD cd-cleared/main:V h=f372c484a9","blockId":"14A","clientMutationId":"#44","facilityId":"INCIRLIK","flightDataId":"#40","op":"SetBlock","stripId":"#41","value":"CLEARANCE_VOID_TIME"}]},
+        {"n":9,"who":"c-CD","in":{"actingPositionId":"CD","baseRev":4,"clientMutationId":"#45","facilityId":"INCIRLIK","op":{"blockId":"14D","kind":"SetBlock","value":"1400"},"stripId":"#41","type":"efsp-mutation","version":1},"out":{"ack":{"clientMutationId":"#45","facilityId":"INCIRLIK","flightData":"F #40 r3 TYPO9 sq=0005 h=8b415919e0","ok":true,"strip":"S #41 r5 DEPARTURE/CLEARED @CD cd-cleared/main:V h=59aa41e863","stripId":"#41","type":"efsp-mutation-ack","version":1},"broadcast":{"facilityId":"INCIRLIK","flightDataList":{"updated":["F #40 r3 TYPO9 sq=0005 h=8b415919e0"]},"positions":{"updated":[]},"strips":{"gone":[],"updated":["S #41 r5 DEPARTURE/CLEARED @CD cd-cleared/main:V h=59aa41e863"]},"type":"efsp-board-delta","version":1}},"audit":[{"actingPositionId":"CD","actorId":"c-CD","after":"S #41 r5 DEPARTURE/CLEARED @CD cd-cleared/main:V h=59aa41e863","at":1466517000000,"before":"S #41 r4 DEPARTURE/CLEARED @CD cd-cleared/main:V h=e5f8975413","blockId":"14D","clientMutationId":"#45","facilityId":"INCIRLIK","flightDataId":"#40","op":"SetBlock","stripId":"#41","value":"1400"}]},
+        {"n":10,"who":"c-CD","in":{"actingPositionId":"CD","baseRev":5,"clientMutationId":"#46","facilityId":"INCIRLIK","op":{"blockId":"14D","kind":"SetBlock","value":"1472"},"stripId":"#41","type":"efsp-mutation","version":1},"out":{"ack":{"clientMutationId":"#46","detail":"void time must be a UTC time as HHMM, e.g. 1432","facilityId":"INCIRLIK","ok":false,"reason":"VALIDATION_ERROR","strip":"S #41 r5 DEPARTURE/CLEARED @CD cd-cleared/main:V h=59aa41e863","stripId":"#41","type":"efsp-mutation-ack","version":1}},"audit":[]},
+        {"n":11,"who":"c-CD","in":{"actingPositionId":"CD","baseRev":5,"clientMutationId":"#47","facilityId":"INCIRLIK","op":{"blockId":"14D","kind":"SetBlock","value":""},"stripId":"#41","type":"efsp-mutation","version":1},"out":{"ack":{"clientMutationId":"#47","facilityId":"INCIRLIK","flightData":"F #40 r4 TYPO9 sq=0005 h=e3d7a279de","ok":true,"strip":"S #41 r6 DEPARTURE/CLEARED @CD cd-cleared/main:V h=136175141b","stripId":"#41","type":"efsp-mutation-ack","version":1},"broadcast":{"facilityId":"INCIRLIK","flightDataList":{"updated":["F #40 r4 TYPO9 sq=0005 h=e3d7a279de"]},"positions":{"updated":[]},"strips":{"gone":[],"updated":["S #41 r6 DEPARTURE/CLEARED @CD cd-cleared/main:V h=136175141b"]},"type":"efsp-board-delta","version":1}},"audit":[{"actingPositionId":"CD","actorId":"c-CD","after":"S #41 r6 DEPARTURE/CLEARED @CD cd-cleared/main:V h=136175141b","at":1466517000000,"before":"S #41 r5 DEPARTURE/CLEARED @CD cd-cleared/main:V h=59aa41e863","blockId":"14D","clientMutationId":"#47","facilityId":"INCIRLIK","flightDataId":"#40","op":"SetBlock","stripId":"#41","value":""}]}
+      ],
+      "orphanAudit": [],
+      "final": {
+        "boards": {
+          "INCIRLIK": {
+            "n": 5,
+            "h": "3ff9304309",
+            "rows": [
+              "S #3 r6 DEPARTURE/HELD @CD cd-held/main:V h=e9f22617c2",
+              "S #12 r7 DEPARTURE/PUSHBACK @GC gc-pushback/main:V h=62ad90d0cf",
+              "S #22 r7 DEPARTURE/PUSHBACK @GC gc-pushback/main:V h=62ad90d0cf",
+              "S #30 r7 DEPARTURE/PUSHBACK @GC gc-pushback/main:V h=62ad90d0cf",
+              "S #41 r6 DEPARTURE/CLEARED @CD cd-cleared/main:V h=136175141b"
+            ],
+            "rest": {
+              "cidSeq": 5,
+              "droppedWallAt": [],
+              "replay": [
+                ["#1",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#2","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#3","warnings":null}],
+                ["#4",{"appliedWallAt":1782009600410,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":false,"stripId":"#3","warnings":null}],
+                ["#5",{"appliedWallAt":1782009600410,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#3","warnings":null}],
+                ["#6",{"appliedWallAt":1782009600410,"detail":null,"flightDataId":"#2","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#3","warnings":null}],
+                ["#7",{"appliedWallAt":1782009600410,"detail":null,"flightDataId":"#2","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#3","warnings":null}],
+                ["#8",{"appliedWallAt":1782009600410,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#3","warnings":null}],
+                ["#10",{"appliedWallAt":1782009600410,"detail":null,"flightDataId":"#11","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#12","warnings":null}],
+                ["#13",{"appliedWallAt":1782009600820,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":false,"stripId":"#12","warnings":null}],
+                ["#14",{"appliedWallAt":1782009600820,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#12","warnings":null}],
+                ["#15",{"appliedWallAt":1782009600820,"detail":null,"flightDataId":"#11","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#12","warnings":null}],
+                ["#16",{"appliedWallAt":1782009600820,"detail":null,"flightDataId":"#11","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#12","warnings":null}],
+                ["#17",{"appliedWallAt":1782009600820,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#12","warnings":null}],
+                ["#18",{"appliedWallAt":1782009600820,"detail":"release time not reached","flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"NLA_INHIBITED","routedTo":null,"selfCoordinated":null,"stripId":"#12","warnings":null}],
+                ["#19",{"appliedWallAt":1782009601230,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":false,"stripId":"#12","warnings":null}],
+                ["#20",{"appliedWallAt":1782009601230,"detail":null,"flightDataId":"#21","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#22","warnings":null}],
+                ["#23",{"appliedWallAt":1782009601640,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":false,"stripId":"#22","warnings":null}],
+                ["#24",{"appliedWallAt":1782009601640,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#22","warnings":null}],
+                ["#25",{"appliedWallAt":1782009601640,"detail":null,"flightDataId":"#21","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#22","warnings":null}],
+                ["#26",{"appliedWallAt":1782009601640,"detail":null,"flightDataId":"#21","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#22","warnings":null}],
+                ["#27",{"appliedWallAt":1782009601640,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#22","warnings":null}],
+                ["#28",{"appliedWallAt":1782009601640,"detail":null,"flightDataId":"#29","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#30","warnings":null}],
+                ["#31",{"appliedWallAt":1782009602050,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":false,"stripId":"#30","warnings":null}],
+                ["#32",{"appliedWallAt":1782009602050,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#30","warnings":null}],
+                ["#33",{"appliedWallAt":1782009602050,"detail":null,"flightDataId":"#29","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#30","warnings":null}],
+                ["#34",{"appliedWallAt":1782009602050,"detail":null,"flightDataId":"#29","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#30","warnings":null}],
+                ["#35",{"appliedWallAt":1782009602050,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#30","warnings":null}],
+                ["#36",{"appliedWallAt":1782009602050,"detail":"call-for-release window is not open yet","flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"NLA_INHIBITED","routedTo":null,"selfCoordinated":null,"stripId":"#30","warnings":null}],
+                ["#37",{"appliedWallAt":1782009602460,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":false,"stripId":"#30","warnings":null}],
+                ["#38",{"appliedWallAt":1782009602870,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":false,"stripId":"#22","warnings":null}],
+                ["#39",{"appliedWallAt":1782009602870,"detail":null,"flightDataId":"#40","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#41","warnings":null}],
+                ["#42",{"appliedWallAt":1782009603280,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":false,"stripId":"#41","warnings":null}],
+                ["#43",{"appliedWallAt":1782009603280,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#41","warnings":null}],
+                ["#44",{"appliedWallAt":1782009603280,"detail":null,"flightDataId":"#40","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#41","warnings":null}],
+                ["#45",{"appliedWallAt":1782009603280,"detail":null,"flightDataId":"#40","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#41","warnings":null}],
+                ["#46",{"appliedWallAt":1782009603280,"detail":"void time must be a UTC time as HHMM, e.g. 1432","flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"VALIDATION_ERROR","routedTo":null,"selfCoordinated":null,"stripId":"#41","warnings":null}],
+                ["#47",{"appliedWallAt":1782009603280,"detail":null,"flightDataId":"#40","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#41","warnings":null}]
+              ]
+            }
+          },
+          "CENTER": {
+            "n": 0,
+            "h": "97d170e155",
+            "rows": [],
+            "rest": {
+              "cidSeq": 0,
+              "droppedWallAt": [],
+              "replay": []
+            }
+          },
+          "TACTICAL": {
+            "n": 0,
+            "h": "97d170e155",
+            "rows": [],
+            "rest": {
+              "cidSeq": 0,
+              "droppedWallAt": [],
+              "replay": []
+            }
+          },
+          "CARRIER": {
+            "n": 0,
+            "h": "97d170e155",
+            "rows": [],
+            "rest": {
+              "cidSeq": 0,
+              "droppedWallAt": [],
+              "replay": []
+            }
+          },
+          "RANGES": {
+            "n": 0,
+            "h": "97d170e155",
+            "rows": [],
+            "rest": {
+              "cidSeq": 0,
+              "droppedWallAt": [],
+              "replay": []
+            }
+          }
+        },
+        "flightData": {
+          "n": 5,
+          "h": "e142fda752",
+          "rows": [
+            "F #2 r3 VOID9 sq=0001 h=3c8bab5abd",
+            "F #11 r3 RLS9 sq=0002 h=5f4c6b9481",
+            "F #21 r3 EDCT9 sq=0003 h=c2125d1005",
+            "F #29 r3 CFR9 sq=0004 h=8b2b105302",
+            "F #40 r4 TYPO9 sq=0005 h=e3d7a279de"
+          ],
+          "rest": {
+            "codeCursor": 5,
+            "codes": [
+              ["0001","#2"],
+              ["0002","#11"],
+              ["0003","#21"],
+              ["0004","#29"],
+              ["0005","#40"]
+            ]
+          }
+        },
+        "airspaces": {
+          "h": "bf21a9e8fb",
+          "v": {
+            "byTheater": {},
+            "seeded": {}
+          }
+        },
+        "correlations": {
+          "n": 0,
+          "h": "97d170e155",
+          "rows": []
+        },
+        "marsa": {
+          "n": 0,
+          "h": "97d170e155",
+          "rows": []
+        },
+        "runwayStatuses": {
+          "n": 1,
+          "h": "8b6b3af46c",
+          "rows": [
+            "INCIRLIK h=89de413b69"
+          ]
+        },
+        "carriers": {
+          "n": 1,
+          "h": "89ace0b5ae",
+          "rows": [
+            "CVN-72 h=081d66341b"
+          ]
+        }
+      }
+    },
+    {
+      "steps": [
+        {"n":0,"who":"c-OPS","in":{"facilityId":"INCIRLIK","signedOn":["OPS"],"type":"efsp-set-positions"},"out":{"ack":{"combination":null,"facilityId":"INCIRLIK","monitoring":[],"signedOn":["OPS"],"type":"efsp-positions-ack","version":1,"warnings":[]},"broadcast":{"facilityId":"INCIRLIK","flightDataList":{"updated":[]},"positions":{"updated":{"~big":"fd3ee9a066","chars":1038,"keys":"array[6]"}},"strips":{"gone":[],"updated":["S #3 r6 DEPARTURE/HELD @CD cd-held/main:V h=e9f22617c2","S #12 r7 DEPARTURE/PUSHBACK @GC gc-pushback/main:V h=62ad90d0cf","S #22 r7 DEPARTURE/PUSHBACK @GC gc-pushback/main:V h=62ad90d0cf","S #30 r7 DEPARTURE/PUSHBACK @GC gc-pushback/main:V h=62ad90d0cf","S #41 r6 DEPARTURE/CLEARED @CD cd-cleared/main:V h=136175141b"]},"type":"efsp-board-delta","version":1}},"audit":[]},
+        {"n":1,"who":"c-CD","in":{"facilityId":"INCIRLIK","signedOn":["CD"],"type":"efsp-set-positions"},"out":{"ack":{"combination":null,"facilityId":"INCIRLIK","monitoring":[],"signedOn":["CD"],"type":"efsp-positions-ack","version":1,"warnings":[]},"broadcast":{"facilityId":"INCIRLIK","flightDataList":{"updated":[]},"positions":{"updated":{"~big":"a44975d115","chars":1101,"keys":"array[6]"}},"strips":{"gone":[],"updated":["S #3 r6 DEPARTURE/HELD @CD cd-held/main:V h=e9f22617c2","S #12 r7 DEPARTURE/PUSHBACK @GC gc-pushback/main:V h=62ad90d0cf","S #22 r7 DEPARTURE/PUSHBACK @GC gc-pushback/main:V h=62ad90d0cf","S #30 r7 DEPARTURE/PUSHBACK @GC gc-pushback/main:V h=62ad90d0cf","S #41 r6 DEPARTURE/CLEARED @CD cd-cleared/main:V h=136175141b"]},"type":"efsp-board-delta","version":1}},"audit":[]},
+        {"n":2,"who":"c-GC","in":{"facilityId":"INCIRLIK","signedOn":["GC"],"type":"efsp-set-positions"},"out":{"ack":{"combination":null,"facilityId":"INCIRLIK","monitoring":[{"label":"GND","mhz":275.8,"positionId":"GC"}],"signedOn":["GC"],"type":"efsp-positions-ack","version":1,"warnings":[]},"broadcast":{"facilityId":"INCIRLIK","flightDataList":{"updated":[]},"positions":{"updated":{"~big":"e387a87062","chars":1164,"keys":"array[6]"}},"strips":{"gone":[],"updated":["S #3 r6 DEPARTURE/HELD @CD cd-held/main:V h=e9f22617c2","S #12 r7 DEPARTURE/PUSHBACK @GC gc-pushback/main:V h=62ad90d0cf","S #22 r7 DEPARTURE/PUSHBACK @GC gc-pushback/main:V h=62ad90d0cf","S #30 r7 DEPARTURE/PUSHBACK @GC gc-pushback/main:V h=62ad90d0cf","S #41 r6 DEPARTURE/CLEARED @CD cd-cleared/main:V h=136175141b"]},"type":"efsp-board-delta","version":1}},"audit":[]},
+        {"n":3,"who":"c-LC","in":{"facilityId":"INCIRLIK","signedOn":["LC"],"type":"efsp-set-positions"},"out":{"ack":{"combination":null,"facilityId":"INCIRLIK","monitoring":[{"label":"TWR","mhz":251,"positionId":"LC"}],"signedOn":["LC"],"type":"efsp-positions-ack","version":1,"warnings":[]},"broadcast":{"facilityId":"INCIRLIK","flightDataList":{"updated":[]},"positions":{"updated":{"~big":"bb69c96ca1","chars":1227,"keys":"array[6]"}},"strips":{"gone":[],"updated":["S #3 r6 DEPARTURE/HELD @CD cd-held/main:V h=e9f22617c2","S #12 r7 DEPARTURE/PUSHBACK @GC gc-pushback/main:V h=62ad90d0cf","S #22 r7 DEPARTURE/PUSHBACK @GC gc-pushback/main:V h=62ad90d0cf","S #30 r7 DEPARTURE/PUSHBACK @GC gc-pushback/main:V h=62ad90d0cf","S #41 r6 DEPARTURE/CLEARED @CD cd-cleared/main:V h=136175141b"]},"type":"efsp-board-delta","version":1}},"audit":[]},
+        {"n":4,"who":"c-AP","in":{"facilityId":"INCIRLIK","signedOn":["AP"],"type":"efsp-set-positions"},"out":{"ack":{"combination":null,"facilityId":"INCIRLIK","monitoring":[],"signedOn":["AP"],"type":"efsp-positions-ack","version":1,"warnings":[]},"broadcast":{"facilityId":"INCIRLIK","flightDataList":{"updated":[]},"positions":{"updated":{"~big":"1ed8805752","chars":1290,"keys":"array[6]"}},"strips":{"gone":[],"updated":["S #3 r6 DEPARTURE/HELD @CD cd-held/main:V h=e9f22617c2","S #12 r7 DEPARTURE/PUSHBACK @GC gc-pushback/main:V h=62ad90d0cf","S #22 r7 DEPARTURE/PUSHBACK @GC gc-pushback/main:V h=62ad90d0cf","S #30 r7 DEPARTURE/PUSHBACK @GC gc-pushback/main:V h=62ad90d0cf","S #41 r6 DEPARTURE/CLEARED @CD cd-cleared/main:V h=136175141b"]},"type":"efsp-board-delta","version":1}},"audit":[]},
+        {"n":5,"who":"c-OPS","in":{"actingPositionId":"OPS","clientMutationId":"#48","facilityId":"INCIRLIK","op":{"bayId":"ops-proposed","flightData":{"aircraftType":"F16","callsign":"TIME9","departureAirport":"LTAG","destinationAirport":"LTAG","requestedAltitude":"250","route":"DCT","wakeCategory":"M"},"kind":"CreateStrip","rackId":"main","stripType":"DEPARTURE"},"type":"efsp-mutation","version":1},"out":{"ack":{"clientMutationId":"#48","facilityId":"INCIRLIK","flightData":"F #49 r1 TIME9 sq=0006 h=42f2332b44","ok":true,"strip":"S #50 r1 DEPARTURE/PROPOSED @OPS ops-proposed/main:V h=24a9a8115e","type":"efsp-mutation-ack","version":1},"broadcast":{"facilityId":"INCIRLIK","flightDataList":{"updated":["F #49 r1 TIME9 sq=0006 h=42f2332b44"]},"positions":{"updated":[]},"strips":{"gone":[],"updated":["S #50 r1 DEPARTURE/PROPOSED @OPS ops-proposed/main:V h=24a9a8115e"]},"type":"efsp-board-delta","version":1}},"audit":[{"actingPositionId":"OPS","actorId":"c-OPS","after":"S #50 r1 DEPARTURE/PROPOSED @OPS ops-proposed/main:V h=24a9a8115e","at":1466517000000,"before":null,"clientMutationId":"#48","facilityId":"INCIRLIK","flightDataId":"#49","op":"CreateStrip","stripId":"#50"}]},
+        {"n":6,"who":"c-OPS","in":{"actingPositionId":"OPS","baseRev":1,"clientMutationId":"#51","facilityId":"INCIRLIK","op":{"kind":"InvokeNla"},"stripId":"#50","type":"efsp-mutation","version":1},"out":{"ack":{"clientMutationId":"#51","facilityId":"INCIRLIK","ok":true,"routedTo":null,"strip":"S #50 r2 DEPARTURE/PENDING_CLEARANCE @CD cd-pending-clearance/main:V h=4e06675eb7","stripId":"#50","type":"efsp-mutation-ack","version":1},"broadcast":{"facilityId":"INCIRLIK","flightDataList":{"updated":[]},"positions":{"updated":[]},"strips":{"gone":[],"updated":["S #50 r2 DEPARTURE/PENDING_CLEARANCE @CD cd-pending-clearance/main:V h=4e06675eb7"]},"type":"efsp-board-delta","version":1}},"audit":[{"actingPositionId":"OPS","actorId":"c-OPS","after":"S #50 r2 DEPARTURE/PENDING_CLEARANCE @CD cd-pending-clearance/main:V h=4e06675eb7","at":1466517000000,"before":"S #50 r1 DEPARTURE/PROPOSED @OPS ops-proposed/main:V h=24a9a8115e","clientMutationId":"#51","facilityId":"INCIRLIK","flightDataId":"#49","op":"InvokeNla","selfCoordinated":false,"stripId":"#50"}]},
+        {"n":7,"who":"c-CD","in":{"actingPositionId":"CD","baseRev":2,"clientMutationId":"#52","facilityId":"INCIRLIK","op":{"kind":"SetState","toState":"CLEARED"},"stripId":"#50","type":"efsp-mutation","version":1},"out":{"ack":{"clientMutationId":"#52","facilityId":"INCIRLIK","ok":true,"strip":"S #50 r3 DEPARTURE/CLEARED @CD cd-cleared/main:VY h=5396cbdc19","stripId":"#50","type":"efsp-mutation-ack","version":1},"broadcast":{"facilityId":"INCIRLIK","flightDataList":{"updated":[]},"positions":{"updated":[]},"strips":{"gone":[],"updated":["S #50 r3 DEPARTURE/CLEARED @CD cd-cleared/main:VY h=5396cbdc19"]},"type":"efsp-board-delta","version":1}},"audit":[{"actingPositionId":"CD","actorId":"c-CD","after":"S #50 r3 DEPARTURE/CLEARED @CD cd-cleared/main:VY h=5396cbdc19","at":1466517000000,"before":"S #50 r2 DEPARTURE/PENDING_CLEARANCE @CD cd-pending-clearance/main:V h=4e06675eb7","clientMutationId":"#52","facilityId":"INCIRLIK","flightDataId":"#49","op":"SetState","stripId":"#50"}]},
+        {"n":8,"who":"c-CD","in":{"actingPositionId":"CD","baseRev":3,"clientMutationId":"#53","facilityId":"INCIRLIK","op":{"blockId":"6","kind":"SetBlock","value":"1345"},"stripId":"#50","type":"efsp-mutation","version":1},"out":{"ack":{"clientMutationId":"#53","facilityId":"INCIRLIK","flightData":"F #49 r2 TIME9 sq=0006 h=104221aedd","ok":true,"strip":"S #50 r4 DEPARTURE/CLEARED @CD cd-cleared/main:VY h=e7269ac97d","stripId":"#50","type":"efsp-mutation-ack","version":1},"broadcast":{"facilityId":"INCIRLIK","flightDataList":{"updated":["F #49 r2 TIME9 sq=0006 h=104221aedd"]},"positions":{"updated":[]},"strips":{"gone":[],"updated":["S #50 r4 DEPARTURE/CLEARED @CD cd-cleared/main:VY h=e7269ac97d"]},"type":"efsp-board-delta","version":1}},"audit":[{"actingPositionId":"CD","actorId":"c-CD","after":"S #50 r4 DEPARTURE/CLEARED @CD cd-cleared/main:VY h=e7269ac97d","at":1466517000000,"before":"S #50 r3 DEPARTURE/CLEARED @CD cd-cleared/main:VY h=5396cbdc19","blockId":"6","clientMutationId":"#53","facilityId":"INCIRLIK","flightDataId":"#49","op":"SetBlock","stripId":"#50","value":"1345"}]},
+        {"n":9,"who":"c-CD","in":{"actingPositionId":"CD","baseRev":4,"clientMutationId":"#54","facilityId":"INCIRLIK","op":{"blockId":"16","kind":"SetBlock","value":"1352"},"stripId":"#50","type":"efsp-mutation","version":1},"out":{"ack":{"clientMutationId":"#54","facilityId":"INCIRLIK","flightData":"F #49 r3 TIME9 sq=0006 h=45cc241b0d","ok":true,"strip":"S #50 r5 DEPARTURE/CLEARED @CD cd-cleared/main:VY h=b968f93e09","stripId":"#50","type":"efsp-mutation-ack","version":1},"broadcast":{"facilityId":"INCIRLIK","flightDataList":{"updated":["F #49 r3 TIME9 sq=0006 h=45cc241b0d"]},"positions":{"updated":[]},"strips":{"gone":[],"updated":["S #50 r5 DEPARTURE/CLEARED @CD cd-cleared/main:VY h=b968f93e09"]},"type":"efsp-board-delta","version":1}},"audit":[{"actingPositionId":"CD","actorId":"c-CD","after":"S #50 r5 DEPARTURE/CLEARED @CD cd-cleared/main:VY h=b968f93e09","at":1466517000000,"before":"S #50 r4 DEPARTURE/CLEARED @CD cd-cleared/main:VY h=e7269ac97d","blockId":"16","clientMutationId":"#54","facilityId":"INCIRLIK","flightDataId":"#49","op":"SetBlock","stripId":"#50","value":"1352"}]},
+        {"n":10,"who":"c-CD","in":{"actingPositionId":"CD","baseRev":5,"clientMutationId":"#55","facilityId":"INCIRLIK","op":{"blockId":"17","kind":"SetBlock","value":"1355"},"stripId":"#50","type":"efsp-mutation","version":1},"out":{"ack":{"clientMutationId":"#55","facilityId":"INCIRLIK","flightData":"F #49 r4 TIME9 sq=0006 h=04805b2998","ok":true,"strip":"S #50 r6 DEPARTURE/CLEARED @CD cd-cleared/main:VY h=c425e6a1f4","stripId":"#50","type":"efsp-mutation-ack","version":1},"broadcast":{"facilityId":"INCIRLIK","flightDataList":{"updated":["F #49 r4 TIME9 sq=0006 h=04805b2998"]},"positions":{"updated":[]},"strips":{"gone":[],"updated":["S #50 r6 DEPARTURE/CLEARED @CD cd-cleared/main:VY h=c425e6a1f4"]},"type":"efsp-board-delta","version":1}},"audit":[{"actingPositionId":"CD","actorId":"c-CD","after":"S #50 r6 DEPARTURE/CLEARED @CD cd-cleared/main:VY h=c425e6a1f4","at":1466517000000,"before":"S #50 r5 DEPARTURE/CLEARED @CD cd-cleared/main:VY h=b968f93e09","blockId":"17","clientMutationId":"#55","facilityId":"INCIRLIK","flightDataId":"#49","op":"SetBlock","stripId":"#50","value":"1355"}]},
+        {"n":11,"who":"c-CD","in":{"actingPositionId":"CD","baseRev":6,"clientMutationId":"#56","facilityId":"INCIRLIK","op":{"blockId":"18","kind":"SetBlock","value":"1405"},"stripId":"#50","type":"efsp-mutation","version":1},"out":{"ack":{"clientMutationId":"#56","facilityId":"INCIRLIK","flightData":"F #49 r5 TIME9 sq=0006 h=d1d39da6ab","ok":true,"strip":"S #50 r7 DEPARTURE/CLEARED @CD cd-cleared/main:VY h=4c8aa75206","stripId":"#50","type":"efsp-mutation-ack","version":1},"broadcast":{"facilityId":"INCIRLIK","flightDataList":{"updated":["F #49 r5 TIME9 sq=0006 h=d1d39da6ab"]},"positions":{"updated":[]},"strips":{"gone":[],"updated":["S #50 r7 DEPARTURE/CLEARED @CD cd-cleared/main:VY h=4c8aa75206"]},"type":"efsp-board-delta","version":1}},"audit":[{"actingPositionId":"CD","actorId":"c-CD","after":"S #50 r7 DEPARTURE/CLEARED @CD cd-cleared/main:VY h=4c8aa75206","at":1466517000000,"before":"S #50 r6 DEPARTURE/CLEARED @CD cd-cleared/main:VY h=c425e6a1f4","blockId":"18","clientMutationId":"#56","facilityId":"INCIRLIK","flightDataId":"#49","op":"SetBlock","stripId":"#50","value":"1405"}]}
+      ],
+      "orphanAudit": [],
+      "final": {
+        "boards": {
+          "INCIRLIK": {
+            "n": 6,
+            "h": "87a17e0a5c",
+            "rows": [
+              "S #3 r6 DEPARTURE/HELD @CD cd-held/main:V h=e9f22617c2",
+              "S #12 r7 DEPARTURE/PUSHBACK @GC gc-pushback/main:V h=62ad90d0cf",
+              "S #22 r7 DEPARTURE/PUSHBACK @GC gc-pushback/main:V h=62ad90d0cf",
+              "S #30 r7 DEPARTURE/PUSHBACK @GC gc-pushback/main:V h=62ad90d0cf",
+              "S #41 r6 DEPARTURE/CLEARED @CD cd-cleared/main:V h=136175141b",
+              "S #50 r7 DEPARTURE/CLEARED @CD cd-cleared/main:VY h=4c8aa75206"
+            ],
+            "rest": {
+              "cidSeq": 6,
+              "droppedWallAt": [],
+              "replay": [
+                ["#1",{"appliedWallAt":1782009600000,"detail":null,"flightDataId":"#2","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#3","warnings":null}],
+                ["#4",{"appliedWallAt":1782009600410,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":false,"stripId":"#3","warnings":null}],
+                ["#5",{"appliedWallAt":1782009600410,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#3","warnings":null}],
+                ["#6",{"appliedWallAt":1782009600410,"detail":null,"flightDataId":"#2","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#3","warnings":null}],
+                ["#7",{"appliedWallAt":1782009600410,"detail":null,"flightDataId":"#2","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#3","warnings":null}],
+                ["#8",{"appliedWallAt":1782009600410,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#3","warnings":null}],
+                ["#10",{"appliedWallAt":1782009600410,"detail":null,"flightDataId":"#11","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#12","warnings":null}],
+                ["#13",{"appliedWallAt":1782009600820,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":false,"stripId":"#12","warnings":null}],
+                ["#14",{"appliedWallAt":1782009600820,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#12","warnings":null}],
+                ["#15",{"appliedWallAt":1782009600820,"detail":null,"flightDataId":"#11","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#12","warnings":null}],
+                ["#16",{"appliedWallAt":1782009600820,"detail":null,"flightDataId":"#11","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#12","warnings":null}],
+                ["#17",{"appliedWallAt":1782009600820,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#12","warnings":null}],
+                ["#18",{"appliedWallAt":1782009600820,"detail":"release time not reached","flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"NLA_INHIBITED","routedTo":null,"selfCoordinated":null,"stripId":"#12","warnings":null}],
+                ["#19",{"appliedWallAt":1782009601230,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":false,"stripId":"#12","warnings":null}],
+                ["#20",{"appliedWallAt":1782009601230,"detail":null,"flightDataId":"#21","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#22","warnings":null}],
+                ["#23",{"appliedWallAt":1782009601640,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":false,"stripId":"#22","warnings":null}],
+                ["#24",{"appliedWallAt":1782009601640,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#22","warnings":null}],
+                ["#25",{"appliedWallAt":1782009601640,"detail":null,"flightDataId":"#21","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#22","warnings":null}],
+                ["#26",{"appliedWallAt":1782009601640,"detail":null,"flightDataId":"#21","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#22","warnings":null}],
+                ["#27",{"appliedWallAt":1782009601640,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#22","warnings":null}],
+                ["#28",{"appliedWallAt":1782009601640,"detail":null,"flightDataId":"#29","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#30","warnings":null}],
+                ["#31",{"appliedWallAt":1782009602050,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":false,"stripId":"#30","warnings":null}],
+                ["#32",{"appliedWallAt":1782009602050,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#30","warnings":null}],
+                ["#33",{"appliedWallAt":1782009602050,"detail":null,"flightDataId":"#29","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#30","warnings":null}],
+                ["#34",{"appliedWallAt":1782009602050,"detail":null,"flightDataId":"#29","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#30","warnings":null}],
+                ["#35",{"appliedWallAt":1782009602050,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#30","warnings":null}],
+                ["#36",{"appliedWallAt":1782009602050,"detail":"call-for-release window is not open yet","flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"NLA_INHIBITED","routedTo":null,"selfCoordinated":null,"stripId":"#30","warnings":null}],
+                ["#37",{"appliedWallAt":1782009602460,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":false,"stripId":"#30","warnings":null}],
+                ["#38",{"appliedWallAt":1782009602870,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":false,"stripId":"#22","warnings":null}],
+                ["#39",{"appliedWallAt":1782009602870,"detail":null,"flightDataId":"#40","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#41","warnings":null}],
+                ["#42",{"appliedWallAt":1782009603280,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":false,"stripId":"#41","warnings":null}],
+                ["#43",{"appliedWallAt":1782009603280,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#41","warnings":null}],
+                ["#44",{"appliedWallAt":1782009603280,"detail":null,"flightDataId":"#40","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#41","warnings":null}],
+                ["#45",{"appliedWallAt":1782009603280,"detail":null,"flightDataId":"#40","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#41","warnings":null}],
+                ["#46",{"appliedWallAt":1782009603280,"detail":"void time must be a UTC time as HHMM, e.g. 1432","flightDataId":null,"ok":false,"peerFacilityId":null,"peerStripId":null,"reason":"VALIDATION_ERROR","routedTo":null,"selfCoordinated":null,"stripId":"#41","warnings":null}],
+                ["#47",{"appliedWallAt":1782009603280,"detail":null,"flightDataId":"#40","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#41","warnings":null}],
+                ["#48",{"appliedWallAt":1782009603280,"detail":null,"flightDataId":"#49","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#50","warnings":null}],
+                ["#51",{"appliedWallAt":1782009603690,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":false,"stripId":"#50","warnings":null}],
+                ["#52",{"appliedWallAt":1782009603690,"detail":null,"flightDataId":null,"ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#50","warnings":null}],
+                ["#53",{"appliedWallAt":1782009603690,"detail":null,"flightDataId":"#49","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#50","warnings":null}],
+                ["#54",{"appliedWallAt":1782009603690,"detail":null,"flightDataId":"#49","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#50","warnings":null}],
+                ["#55",{"appliedWallAt":1782009603690,"detail":null,"flightDataId":"#49","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#50","warnings":null}],
+                ["#56",{"appliedWallAt":1782009603690,"detail":null,"flightDataId":"#49","ok":true,"peerFacilityId":null,"peerStripId":null,"reason":null,"routedTo":null,"selfCoordinated":null,"stripId":"#50","warnings":null}]
+              ]
+            }
+          },
+          "CENTER": {
+            "n": 0,
+            "h": "97d170e155",
+            "rows": [],
+            "rest": {
+              "cidSeq": 0,
+              "droppedWallAt": [],
+              "replay": []
+            }
+          },
+          "TACTICAL": {
+            "n": 0,
+            "h": "97d170e155",
+            "rows": [],
+            "rest": {
+              "cidSeq": 0,
+              "droppedWallAt": [],
+              "replay": []
+            }
+          },
+          "CARRIER": {
+            "n": 0,
+            "h": "97d170e155",
+            "rows": [],
+            "rest": {
+              "cidSeq": 0,
+              "droppedWallAt": [],
+              "replay": []
+            }
+          },
+          "RANGES": {
+            "n": 0,
+            "h": "97d170e155",
+            "rows": [],
+            "rest": {
+              "cidSeq": 0,
+              "droppedWallAt": [],
+              "replay": []
+            }
+          }
+        },
+        "flightData": {
+          "n": 7,
+          "h": "f132fd6604",
+          "rows": [
+            "F #2 r3 VOID9 sq=0001 h=3c8bab5abd",
+            "F #11 r3 RLS9 sq=0002 h=5f4c6b9481",
+            "F #21 r3 EDCT9 sq=0003 h=c2125d1005",
+            "F #29 r3 CFR9 sq=0004 h=8b2b105302",
+            "F #40 r4 TYPO9 sq=0005 h=e3d7a279de",
+            "F #49 r5 TIME9 sq=0006 h=d1d39da6ab",
+            "F #57 r1 ARR9 sq=0007 h=07277fefb3"
+          ],
+          "rest": {
+            "codeCursor": 7,
+            "codes": [
+              ["0001","#2"],
+              ["0002","#11"],
+              ["0003","#21"],
+              ["0004","#29"],
+              ["0005","#40"],
+              ["0006","#49"],
+              ["0007","#57"]
+            ]
+          }
+        },
+        "airspaces": {
+          "h": "bf21a9e8fb",
+          "v": {
+            "byTheater": {},
+            "seeded": {}
+          }
+        },
+        "correlations": {
+          "n": 0,
+          "h": "97d170e155",
+          "rows": []
+        },
+        "marsa": {
+          "n": 0,
+          "h": "97d170e155",
+          "rows": []
+        },
+        "runwayStatuses": {
+          "n": 1,
+          "h": "8b6b3af46c",
+          "rows": [
+            "INCIRLIK h=89de413b69"
+          ]
+        },
+        "carriers": {
+          "n": 1,
+          "h": "89ace0b5ae",
+          "rows": [
+            "CVN-72 h=081d66341b"
+          ]
+        }
+      }
+    }
+  ]
+}

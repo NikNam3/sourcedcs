@@ -1,0 +1,110 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import crypto from 'crypto';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+
+// UI-B: (1) RUNWAY_CHANGE has its own suspension wording; (2) an OBSERVED
+// departure may be recorded while the runway is suspended (S-L19's open point,
+// H19), and only that: the claim must be vouched for by the server's own
+// observer, only for DEPARTED, only on a DEPARTURE, audited with its reason.
+
+const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'efsp-ui-b-'));
+for (const [k, v] of Object.entries({
+  CRCSYNC_EFSP_FACILITY_CONFIG_PATH: 'incirlik.json',
+  CRCSYNC_EFSP_FACILITY_CONFIG_PATH_CENTER: 'center.json',
+  CRCSYNC_EFSP_FACILITY_CONFIG_PATH_TACTICAL: 'tactical.json',
+  CRCSYNC_EFSP_BOARD_SNAPSHOT_PATH: 'board.json',
+  CRCSYNC_EFSP_MUTATION_LOG_PATH: 'mutations.jsonl',
+  CRCSYNC_EFSP_AIRSPACES_PATH: 'airspaces.json',
+})) process.env[k] = path.join(tmpDir, v);
+fs.writeFileSync(process.env.CRCSYNC_EFSP_AIRSPACES_PATH, '{}');
+
+const { createEfsp } = await import('../src/efsp/index.js');
+const runwayStatus = await import('../src/efsp/runway-status.js');
+const { crew, mustAct, jumpTo, DEPARTURE_FLIGHT_DATA } = await import('./helpers/efsp-scenario.mjs');
+
+test('RUNWAY_CHANGE has its own label in the inhibit reason; WORKS and unknown kinds read as before', () => {
+  const rw = (kind) => ({ runwayId: '05/23', status: 'SUSPENDED_WORKS', suspension: kind ? { kind } : null });
+  assert.equal(runwayStatus.runwayStatusReason(rw('RUNWAY_CHANGE')), 'runway 05/23 suspended — runway change in progress');
+  assert.equal(runwayStatus.runwayStatusReason(rw('WORKS')), 'runway 05/23 suspended — works in progress');
+  assert.equal(runwayStatus.runwayStatusReason(rw(null)), 'runway 05/23 suspended — works in progress');
+  for (const kind of runwayStatus.SUSPENSION_KINDS) assert.ok(runwayStatus.SUSPENSION_LABELS[kind], `${kind} has a label`);
+});
+
+const airborne = { fn: undefined }; // createEfsp's airborneEvidence; a test points it at its own evidence
+const efsp = createEfsp({ airborneEvidence: (strip) => (airborne.fn ? airborne.fn(strip) : false) });
+const c = crew(efsp, { OPS: 'INCIRLIK', GC: 'INCIRLIK', LC: 'INCIRLIK' });
+const RWY = '05/23';
+const fs1 = (member, positionId, op) => {
+  const cur = efsp.runwayStatusStore.getRunwayStatus('INCIRLIK');
+  const ack = efsp.handleMessage(member.session, { version: 1, type: 'efsp-runway-status-mutation', clientMutationId: crypto.randomUUID(),
+    facilityId: 'INCIRLIK', baseRev: cur.rev, actingPositionId: positionId, op }).ack;
+  assert.equal(ack.ok, true, JSON.stringify(ack));
+};
+let n = 0;
+function taxiing() {
+  let s = mustAct(efsp, c.OPS, 'OPS', null, { kind: 'CreateStrip', bayId: 'ops-proposed', rackId: 'main', stripType: 'DEPARTURE', flightData: { ...DEPARTURE_FLIGHT_DATA, callsign: `OBS${++n}`, departureRunway: '05' } });
+  s = jumpTo(efsp, c.OPS, 'OPS', s, 'RUNWAY_QUEUE');
+  return mustAct(efsp, c.OPS, 'OPS', s, { kind: 'TransferStrip', toPositionId: 'LC', bayId: 'lc-runway-queue', rackId: 'rwy-05' });
+}
+const strip = (s) => efsp.boardStoreFor('INCIRLIK').getStrip(s.stripId);
+const setState = (s, extra = {}, toState = 'DEPARTED') => efsp.handleMessage(c.LC.session, { version: 1, type: 'efsp-mutation', clientMutationId: crypto.randomUUID(),
+  facilityId: 'INCIRLIK', actingPositionId: 'LC', stripId: s.stripId, baseRev: strip(s).rev, op: { kind: 'SetState', toState, ...extra } }).ack;
+const log = () => fs.readFileSync(process.env.CRCSYNC_EFSP_MUTATION_LOG_PATH, 'utf8').trim().split('\n').map(l => JSON.parse(l));
+
+const queuedA = taxiing(); // queued before any suspension, as in life
+const queuedB = taxiing();
+
+test('an observed departure may be recorded while the runway is suspended; a typed SetState may not', () => {
+  fs1(c.OPS, 'OPS', { kind: 'RequestRunwayStatus', runwayId: RWY, action: 'WORKS', note: 'BAK-12' });
+  fs1(c.LC, 'LC', { kind: 'AcceptRunwayRequest', runwayId: RWY });
+  const vouched = new Set();
+  airborne.fn = (s) => vouched.has(s.stripId);
+
+  const s = queuedA;
+  // typed: refused, whatever flag it carries when nobody vouches
+  assert.equal(setState(s).reason, 'NLA_INHIBITED');
+  assert.equal(setState(s, { observedAirborne: true }).reason, 'NLA_INHIBITED', 'a client claim alone is not evidence');
+  // vouched, but typed (no flag): still refused (H19)
+  vouched.add(s.stripId);
+  assert.equal(setState(s).reason, 'NLA_INHIBITED');
+  // the flag only ever opens DEPARTED
+  assert.equal(setState(s, { observedAirborne: true }, 'LUAW').reason, 'NLA_INHIBITED');
+  // vouched and flagged: recorded, audited with its reason
+  const ack = setState(s, { observedAirborne: true });
+  assert.equal(ack.ok, true, JSON.stringify(ack));
+  assert.equal(strip(s).state, 'DEPARTED');
+  const entry = log().filter(e => e.op === 'SetState' && e.stripId === s.stripId).at(-1);
+  assert.equal(entry.bypass.reason, 'OBSERVED_AIRBORNE');
+  assert.equal(entry.bypass.gate, 'RUNWAY_INHIBIT');
+  assert.match(entry.bypass.inhibit, /suspended/);
+});
+
+test('the bypass never skips the owner check, and a Strip that waits for no inhibit carries no bypass', () => {
+  airborne.fn = () => true;
+  const s = queuedB;
+  const wrong = efsp.handleMessage(c.GC.session, { version: 1, type: 'efsp-mutation', clientMutationId: crypto.randomUUID(),
+    facilityId: 'INCIRLIK', actingPositionId: 'GC', stripId: s.stripId, baseRev: strip(s).rev, op: { kind: 'SetState', toState: 'DEPARTED', observedAirborne: true } }).ack;
+  assert.equal(wrong.ok, false);
+  // reopen the runway: the same flagged SetState is an ordinary one, no bypass recorded
+  const cur = efsp.runwayStatusStore.getRunwayStatus('INCIRLIK');
+  assert.equal(cur.runways.find(r => r.runwayId === RWY).status, 'SUSPENDED_WORKS');
+  fs1(c.OPS, 'OPS', { kind: 'CompleteRunwayWorks', runwayId: RWY });
+  fs1(c.OPS, 'OPS', { kind: 'CompleteInspection', runwayId: RWY });
+  const ok = setState(s, { observedAirborne: true });
+  assert.equal(ok.ok, true, JSON.stringify(ok));
+  const entry = log().filter(e => e.op === 'SetState' && e.stripId === s.stripId).at(-1);
+  assert.equal(entry.bypass, undefined);
+});
+
+// The integration wiring (docs/wip/UI-B.md): app.js vouches through the surveillance hint
+// monitor, for every Facility's Board, and the chip sends the flag. Static, as server.js boots a
+// whole service; the Board half is tested above.
+test('app.js wires every Board\'s airborne observer to the chip\'s own AIRBORNE_ADVANCE hint', () => {
+  const server = fs.readFileSync(new URL('../src/app.js', import.meta.url), 'utf8');
+  assert.match(server, /airborneEvidence:[^\n]*hintsLink\.get\(\)[^\n]*hints\.getAll\(\)[^\n]*AIRBORNE_ADVANCE/);
+  const chip = fs.readFileSync(new URL('../../crc-desktop/app/public/js/panels/efsp/strip-indicators.js', import.meta.url), 'utf8');
+  assert.match(chip, /toState: h\.toState, observedAirborne: true/);
+});

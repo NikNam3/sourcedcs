@@ -1,0 +1,35 @@
+crc-sync/src/efsp/authority/index.js:137:APP-#1	N	Position id in comment/test-title prose: L20 (rename-map §2)
+crc-sync/src/efsp/authority/strip-types/departure.js:257:APP-#1	N	Position id in comment/test-title prose: L20 (rename-map §2)
+crc-sync/src/efsp/board/ops/invoke-nla.js:38:TWR-#1	N	Position id in comment/test-title prose: L20 (rename-map §2)
+crc-sync/src/efsp/board/placement.js:104:Hand-Off-to-APP#1	N	Position id in comment/test-title prose: L20 (rename-map §2)
+crc-sync/src/efsp/carrier-store.js:102:CV_APP#1	N	carrier Position CV_APP* (kept)
+crc-sync/src/efsp/facility-schema.js:124:APP-style#1	N	Position id in comment/test-title prose: L20 (rename-map §2)
+crc-sync/src/efsp/flight-data-store.js:41:APP-#1	N	Position id in comment/test-title prose: L20 (rename-map §2)
+crc-sync/src/efsp/nla.js:91:CV_APP#1	N	carrier Position CV_APP* (kept)
+crc-sync/tests/efsp-archiver.test.mjs:194:APP-side#1	N	Position id in comment/test-title prose: L20 (rename-map §2)
+crc-sync/tests/efsp-index.test.mjs:101:mid-DEPARTED-to-APP-transfer#1	N	Position id in comment/test-title prose: L20 (rename-map §2)
+crc-sync/tests/efsp-metrics-tap.test.mjs:245:c-TWR#1	Y	composite id built from the Position id (test controller id / freeze trace step name)
+crc-sync/tests/efsp-metrics-tap.test.mjs:245:c-APP#1	Y	composite id built from the Position id (test controller id / freeze trace step name)
+crc-sync/tests/efsp-metrics.test.mjs:294:c-GND#1	Y	composite id built from the Position id (test controller id / freeze trace step name)
+crc-sync/tests/efsp-permission.test.mjs:36:non-APP#1	N	Position id in comment/test-title prose: L20 (rename-map §2)
+crc-sync/tests/efsp-permission.test.mjs:138:OPS-vs-APP#1	N	Position id in comment/test-title prose: L20 (rename-map §2)
+crc-sync/tests/efsp-position-store.test.mjs:124:GND-#1	N	Position id in comment/test-title prose: L20 (rename-map §2)
+crc-sync/tests/efsp-runway-status.test.mjs:295:c-TWR#1	Y	composite id built from the Position id (test controller id / freeze trace step name)
+crc-sync/tests/efsp-runway-status.test.mjs:431:c-TWR#1	Y	composite id built from the Position id (test controller id / freeze trace step name)
+crc-sync/tests/efsp-runway-status.test.mjs:536:c-TWR#1	Y	composite id built from the Position id (test controller id / freeze trace step name)
+crc-sync/tests/efsp-scenario-manning.test.mjs:83:c-APP#1	Y	composite id built from the Position id (test controller id / freeze trace step name)
+crc-sync/tests/freeze/freeze-traces.mjs:382:observer-selects-APP#1	Y	composite id built from the Position id (test controller id / freeze trace step name)
+crc-sync/tests/freeze/freeze-traces.mjs:383:combine-GND#1	Y	composite id built from the Position id (test controller id / freeze trace step name)
+crc-sync/tests/presentation.test.mjs:197:APP_ATC#1	N	test approach-radar fixture (like APP_RADAR), not a Position
+crc-sync/tests/presentation.test.mjs:201:APP_ATC#1	N	test approach-radar fixture (like APP_RADAR), not a Position
+crc-sync/tests/presentation.test.mjs:202:APP_ATC#1	N	test approach-radar fixture (like APP_RADAR), not a Position
+crc-sync/tests/presentation.test.mjs:206:APP_ATC#1	N	test approach-radar fixture (like APP_RADAR), not a Position
+crc-sync/tests/presentation.test.mjs:207:APP_ATC#1	N	test approach-radar fixture (like APP_RADAR), not a Position
+crc-sync/tests/presentation.test.mjs:212:APP_ATC#1	N	test approach-radar fixture (like APP_RADAR), not a Position
+crc-sync/tests/presentation.test.mjs:219:APP_ATC#1	N	test approach-radar fixture (like APP_RADAR), not a Position
+crc-sync/tests/presentation.test.mjs:224:APP_ATC#1	N	test approach-radar fixture (like APP_RADAR), not a Position
+crc-sync/tests/wire-payload-contract.test.mjs:38:CLIENT_APP#1	N	the client app module text, not a Position
+crc-sync/tests/wire-payload-contract.test.mjs:81:CLIENT_APP#1	N	the client app module text, not a Position
+crc-sync/tests/wire-payload-contract.test.mjs:82:CLIENT_APP#1	N	the client app module text, not a Position
+crc-sync/tests/wire-payload-contract.test.mjs:85:CLIENT_APP#1	N	the client app module text, not a Position
+crc-sync/tests/wire-payload-contract.test.mjs:125:CLIENT_APP#1	N	the client app module text, not a Position

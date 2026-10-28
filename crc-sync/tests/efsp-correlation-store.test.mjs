@@ -1,0 +1,401 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+
+/* The correlation record (guide §6.6 rules 2 and 3).
+ *
+ * Two properties carry most of the weight here, and neither is obvious from
+ * the code alone:
+ *
+ *   - the warning RETRACTS, because it is a field on a record that arrives
+ *     whole in every delta rather than a fire-and-forget alert;
+ *   - and nothing is erased when it does — transitions[] holds the raise and
+ *     the retraction both (FAA JO 7110.65 para 2-3-1).
+ */
+
+const { CorrelationStore, MATCH_KEYS, TRANSITION_REASONS } = await import('../src/efsp/correlation-store.js');
+const { MAX_FREE_TEXT } = await import('../src/efsp/flight-data-store.js');
+
+const FDR = 'flight-data-1';
+
+function store({ flightDataList = [FDR], mutationLog = null } = {}) {
+  return new CorrelationStore({ mutationLog, flightDataExists: (id) => flightDataList.includes(id) });
+}
+
+function bind(s, { flightDataId = FDR, trackId = '101', note, baseRev } = {}) {
+  const current = s.getCorrelation(flightDataId);
+  return s.apply({
+    clientMutationId: `m-${Math.random()}`,
+    flightDataId,
+    baseRev: baseRev !== undefined ? baseRev : (current ? current.rev : 0),
+    op: { kind: 'BindTrack', trackId, note },
+  }, 'AP', 'controller-1');
+}
+
+function resolvedTo(trackId, matchedBy, state, extra = {}) {
+  return { trackId, matchedBy, state, ...extra };
+}
+
+// ── shape ──────────────────────────────────────────────────────────────────
+
+test('a record is minted on first ask, uncorrelated and with no history', () => {
+  const s = store();
+  const record = s.getCorrelation(FDR);
+  assert.equal(record, null, 'nothing exists until something asks');
+
+  s.reconcile(new Map([[FDR, null]]));
+  const seeded = s.getCorrelation(FDR);
+  assert.equal(seeded.state, 'UNCORRELATED');
+  assert.equal(seeded.trackId, null);
+  assert.deepEqual(seeded.transitions, []);
+});
+
+test('the record carries its own rev, independent of any Strip or flight data', () => {
+  const s = store();
+  bind(s);
+  assert.equal(s.getCorrelation(FDR).rev, 1);
+  bind(s, { trackId: '102' });
+  assert.equal(s.getCorrelation(FDR).rev, 2);
+});
+
+// ── controller ops ─────────────────────────────────────────────────────────
+
+test('BindTrack is rung 1: it correlates, records who bound it, and clears any warning', () => {
+  const s = store();
+  s.reconcile(new Map([[FDR, { warning: { kind: 'TRACK_LOST' } }]]));
+  assert.ok(s.getCorrelation(FDR).warning);
+
+  const result = bind(s, { trackId: '101', note: 'visual on him' });
+  assert.equal(result.ok, true);
+  const record = s.getCorrelation(FDR);
+  assert.equal(record.state, 'CORRELATED');
+  assert.equal(record.matchedBy, 'BINDING');
+  assert.equal(record.trackId, '101');
+  assert.equal(record.warning, null);
+  assert.equal(record.binding.boundBy, 'controller-1');
+  assert.equal(record.binding.boundPositionId, 'AP');
+  assert.equal(record.binding.note, 'visual on him');
+});
+
+test('BindTrack without a trackId is refused', () => {
+  const s = store();
+  const result = s.apply({ clientMutationId: 'm', flightDataId: FDR, baseRev: 0, op: { kind: 'BindTrack' } }, 'AP', 'c');
+  assert.equal(result.ok, false);
+  assert.match(result.detail, /needs a trackId/);
+});
+
+test('UnbindTrack drops to uncorrelated rather than guessing a lower rung', () => {
+  // The next reconcile tick is a second away and is the thing that knows what
+  // the live picture holds. A stale trackId left behind would be the silent
+  // break rule 3 forbids.
+  const s = store();
+  bind(s);
+  const result = s.apply({
+    clientMutationId: 'm2', flightDataId: FDR, baseRev: s.getCorrelation(FDR).rev, op: { kind: 'UnbindTrack' },
+  }, 'AP', 'controller-1');
+  assert.equal(result.ok, true);
+  const record = s.getCorrelation(FDR);
+  assert.equal(record.state, 'UNCORRELATED');
+  assert.equal(record.trackId, null);
+  assert.equal(record.binding, null);
+});
+
+test('UnbindTrack with nothing bound is refused', () => {
+  const s = store();
+  s.reconcile(new Map([[FDR, null]]));
+  const result = s.apply({
+    clientMutationId: 'm', flightDataId: FDR, baseRev: s.getCorrelation(FDR).rev, op: { kind: 'UnbindTrack' },
+  }, 'AP', 'c');
+  assert.equal(result.ok, false);
+  assert.match(result.detail, /nothing is explicitly bound/);
+});
+
+test('an unknown op kind and an unknown flight data are both refused, not thrown', () => {
+  const s = store();
+  assert.equal(s.apply({ flightDataId: FDR, op: { kind: 'Nope' } }, 'AP', 'c').reason, 'VALIDATION_ERROR');
+  assert.equal(s.apply({ flightDataId: 'ghost', op: { kind: 'BindTrack', trackId: '1' } }, 'AP', 'c').reason, 'NOT_FOUND');
+  assert.equal(s.apply({ op: { kind: 'BindTrack', trackId: '1' } }, 'AP', 'c').reason, 'VALIDATION_ERROR');
+});
+
+test('a stale baseRev is refused, and the refusal still carries the current record', () => {
+  const s = store();
+  bind(s);
+  const result = bind(s, { trackId: '999', baseRev: 0 });
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, 'STALE_REV');
+  assert.equal(result.correlation.trackId, '101', 'so the client renders truth, not its own guess');
+});
+
+test('every result carries the record, success or failure', () => {
+  const s = store();
+  assert.ok(bind(s).correlation);
+  assert.ok(s.apply({ flightDataId: FDR, baseRev: 0, op: { kind: 'Nope' } }, 'AP', 'c').correlation);
+});
+
+test('a binding note is capped at the free-text ceiling that rides every broadcast', () => {
+  const s = store();
+  bind(s, { note: 'x'.repeat(MAX_FREE_TEXT + 500) });
+  assert.equal(s.getCorrelation(FDR).binding.note.length, MAX_FREE_TEXT);
+});
+
+// ── the audit trail ────────────────────────────────────────────────────────
+
+test('a controller op is logged against its flight data, and a REFUSAL is logged too', () => {
+  const entries = [];
+  const s = store({ mutationLog: { record: (e) => entries.push(e) } });
+
+  bind(s, { trackId: '101' });
+  s.apply({ clientMutationId: 'bad', flightDataId: FDR, baseRev: 0, op: { kind: 'BindTrack', trackId: '9' } }, 'AP', 'c');
+
+  assert.equal(entries.length, 2);
+  assert.equal(entries[0].flightDataId, FDR);
+  assert.equal(entries[0].op, 'BindTrack');
+  assert.equal(entries[0].actingPositionId, 'AP');
+  assert.equal(entries[0].ok, true);
+  assert.equal(entries[0].stripId, undefined, 'a correlation op targets no Strip');
+  assert.equal(entries[1].ok, false);
+  assert.equal(entries[1].reason, 'STALE_REV');
+});
+
+test('reconciler changes are NOT logged — at a tick a second they would drown it', () => {
+  const entries = [];
+  const s = store({ mutationLog: { record: (e) => entries.push(e) } });
+  s.reconcile(new Map([[FDR, resolvedTo('101', 'BEACON', 'CORRELATED')]]));
+  s.reconcile(new Map([[FDR, null]]));
+  assert.equal(entries.length, 0, 'where it has BEEN lives in transitions[] instead');
+});
+
+// ── reconcile ──────────────────────────────────────────────────────────────
+
+test('a first match correlates and records why', () => {
+  const s = store();
+  const { changed } = s.reconcile(new Map([[FDR, resolvedTo('101', 'BEACON', 'CORRELATED', { observedBeacon: '0041' })]]));
+  assert.equal(changed.length, 1);
+  const record = s.getCorrelation(FDR);
+  assert.equal(record.state, 'CORRELATED');
+  assert.equal(record.matchedBy, 'BEACON');
+  assert.equal(record.observedBeacon, '0041');
+  assert.equal(record.transitions.length, 1);
+  assert.equal(record.transitions[0].reason, 'FIRST_MATCH');
+});
+
+test('an unchanged match produces no change and no transition — the tick is quiet', () => {
+  const s = store();
+  const resolution = new Map([[FDR, resolvedTo('101', 'BEACON', 'CORRELATED')]]);
+  s.reconcile(resolution);
+  const { changed } = s.reconcile(new Map([[FDR, resolvedTo('101', 'BEACON', 'CORRELATED')]]));
+  assert.deepEqual(changed, []);
+  assert.equal(s.getCorrelation(FDR).transitions.length, 1, 'appended on change only, never per tick');
+});
+
+test('a track identity change re-binds and records both ids — the named defect class', () => {
+  const s = store();
+  s.reconcile(new Map([[FDR, resolvedTo('101', 'BEACON', 'CORRELATED')]]));
+  const { changed } = s.reconcile(new Map([[FDR, resolvedTo('500', 'BEACON', 'CORRELATED')]]));
+
+  assert.equal(changed.length, 1);
+  const record = s.getCorrelation(FDR);
+  assert.equal(record.trackId, '500');
+  const last = record.transitions[record.transitions.length - 1];
+  assert.equal(last.reason, 'REBOUND_ON_BEACON');
+  assert.equal(last.fromTrackId, '101', 'the identity change is legible in one line');
+});
+
+test('a binding\'s contact changing is not a beacon re-bind (no callsign reason any more, docs/adr/0142)', () => {
+  const s = store();
+  s.reconcile(new Map([[FDR, resolvedTo('101', 'BINDING', 'CORRELATED')]]));
+  s.reconcile(new Map([[FDR, resolvedTo('500', 'BINDING', 'CORRELATED')]]));
+  const reason = s.getCorrelation(FDR).transitions.at(-1).reason;
+  assert.notEqual(reason, 'REBOUND_ON_BEACON');
+  assert.ok(TRANSITION_REASONS.includes(reason));
+  assert.ok(!TRANSITION_REASONS.includes('REBOUND_ON_CALLSIGN'));
+});
+
+test('losing the match drops the state and raises a warning — never silent', () => {
+  const s = store();
+  s.reconcile(new Map([[FDR, resolvedTo('101', 'BEACON', 'CORRELATED')]]));
+  const { changed } = s.reconcile(new Map([[FDR, { warning: { kind: 'TRACK_LOST', detail: 'nothing matches' } }]]));
+
+  assert.equal(changed.length, 1);
+  const record = s.getCorrelation(FDR);
+  assert.equal(record.state, 'UNCORRELATED');
+  assert.equal(record.trackId, null);
+  assert.equal(record.warning.kind, 'TRACK_LOST');
+  assert.equal(record.warning.lostTrackId, '101');
+  assert.equal(record.transitions[record.transitions.length - 1].reason, 'TRACK_GONE');
+});
+
+test('the ladder is the binding then the beacon code, and nothing else (H165)', () => {
+  assert.deepEqual(MATCH_KEYS, ['BINDING', 'BEACON']);
+  const s = store();
+  s.reconcile(new Map([[FDR, resolvedTo('101', 'BEACON', 'CORRELATED')]]));
+  assert.equal('confidence' in s.getCorrelation(FDR), false, 'no fuzzy score on a record');
+  assert.equal('confidence' in s.getCorrelation(FDR).transitions[0], false);
+});
+
+test('the same contact moving from the beacon to a binding is a promotion, and back a degradation', () => {
+  const s = store();
+  s.reconcile(new Map([[FDR, resolvedTo('101', 'BEACON', 'CORRELATED')]]));
+  s.reconcile(new Map([[FDR, resolvedTo('101', 'BINDING', 'CORRELATED')]]));
+  assert.equal(s.getCorrelation(FDR).transitions.at(-1).reason, 'PROMOTED');
+  s.reconcile(new Map([[FDR, resolvedTo('101', 'BEACON', 'CORRELATED')]]));
+  assert.equal(s.getCorrelation(FDR).transitions.at(-1).reason, 'DEGRADED');
+});
+
+test('an observed code change alone is broadcast, because a controller can see it', () => {
+  // §3.10.2 rule 1's assigned-vs-observed comparison is rendered from this.
+  const s = store();
+  s.reconcile(new Map([[FDR, resolvedTo('101', 'BINDING', 'CORRELATED', { observedBeacon: '0041' })]]));
+  const { changed } = s.reconcile(new Map([[FDR, resolvedTo('101', 'BINDING', 'CORRELATED', { observedBeacon: '0056' })]]));
+  assert.equal(changed.length, 1);
+  assert.equal(s.getCorrelation(FDR).observedBeacon, '0056');
+});
+
+// ── the retraction, which is the point ─────────────────────────────────────
+
+test('the warning retracts on the next match, and both the raise and the retraction stay in the history', () => {
+  const s = store();
+  s.reconcile(new Map([[FDR, resolvedTo('101', 'BEACON', 'CORRELATED')]]));
+  s.reconcile(new Map([[FDR, { warning: { kind: 'TRACK_IDENTITY_LOST' } }]]));
+  assert.ok(s.getCorrelation(FDR).warning, 'raised');
+
+  const { changed } = s.reconcile(new Map([[FDR, resolvedTo('500', 'BEACON', 'CORRELATED')]]));
+
+  const record = s.getCorrelation(FDR);
+  assert.equal(record.warning, null, 'the display clears...');
+  assert.equal(changed.length, 1, '...and the client is told, with no new mechanism');
+
+  const reasons = record.transitions.map(t => t.reason);
+  assert.deepEqual(reasons, ['FIRST_MATCH', 'TRACK_GONE', 'REBOUND_ON_BEACON'],
+    '...while the record keeps both. Nothing is erased.');
+});
+
+test('a warning retracted without the contact changing is still broadcast', () => {
+  const s = store();
+  s.reconcile(new Map([[FDR, resolvedTo('101', 'BEACON', 'CORRELATED')]]));
+  s.reconcile(new Map([[FDR, { warning: { kind: 'TRACK_LOST' } }]]));
+  const { changed } = s.reconcile(new Map([[FDR, resolvedTo('101', 'BEACON', 'CORRELATED')]]));
+  assert.equal(changed.length, 1);
+  assert.equal(s.getCorrelation(FDR).warning, null);
+});
+
+test('an ambiguous resolution is recorded as ambiguity, with the candidates', () => {
+  const s = store();
+  const { changed } = s.reconcile(new Map([[FDR, {
+    warning: { kind: 'AMBIGUOUS_BEACON', candidateTrackIds: ['101', '102'] },
+  }]]));
+  assert.equal(changed.length, 1);
+  const record = s.getCorrelation(FDR);
+  assert.equal(record.state, 'UNCORRELATED');
+  assert.deepEqual(record.warning.candidateTrackIds, ['101', '102']);
+  assert.equal(record.transitions.at(-1).reason, 'AMBIGUOUS');
+});
+
+test('a warning detail is capped like every other string that rides a broadcast', () => {
+  const s = store();
+  s.reconcile(new Map([[FDR, { warning: { kind: 'TRACK_LOST', detail: 'y'.repeat(MAX_FREE_TEXT + 100) } }]]));
+  assert.equal(s.getCorrelation(FDR).warning.detail.length, MAX_FREE_TEXT);
+});
+
+// ── mission reload ─────────────────────────────────────────────────────────
+
+test('resetPicture drops every record AND its binding, naming why', () => {
+  const s = store({ flightDataList: [FDR, 'flight-data-2'] });
+  bind(s, { trackId: '101' });
+  s.reconcile(new Map([['flight-data-2', resolvedTo('202', 'BEACON', 'CORRELATED')]]));
+
+  const { changed } = s.resetPicture('MISSION_RELOAD');
+  assert.equal(changed.length, 2);
+
+  const bound = s.getCorrelation(FDR);
+  assert.equal(bound.state, 'UNCORRELATED');
+  assert.equal(bound.binding, null, 'the binding named a contact that provably no longer exists');
+  assert.equal(bound.warning.kind, 'TRACK_IDENTITY_LOST');
+  assert.match(bound.warning.detail, /every track id was re-minted/);
+  assert.equal(bound.transitions.at(-1).reason, 'MISSION_RELOAD');
+  assert.equal(bound.transitions.at(-1).fromTrackId, '101');
+});
+
+test('resetPicture leaves an already-uncorrelated record alone rather than churning it', () => {
+  const s = store();
+  s.reconcile(new Map([[FDR, null]]));
+  const { changed } = s.resetPicture('MISSION_RELOAD');
+  assert.deepEqual(changed, []);
+});
+
+test('after a reset, the next tick re-binds on the beacon — warn, then re-bind', () => {
+  // §6.6 rule 3 permits exactly two outcomes on an identity change. This does
+  // both, in order, within one tick of each other.
+  const s = store();
+  s.reconcile(new Map([[FDR, resolvedTo('101', 'BEACON', 'CORRELATED')]]));
+  s.resetPicture('MISSION_RELOAD');
+  s.reconcile(new Map([[FDR, resolvedTo('500', 'BEACON', 'CORRELATED')]]));
+
+  const record = s.getCorrelation(FDR);
+  assert.equal(record.state, 'CORRELATED');
+  assert.equal(record.trackId, '500');
+  assert.equal(record.warning, null);
+  assert.equal(record.transitions.at(-1).reason, 'REBOUND_ON_BEACON');
+});
+
+// ── lookup and lifecycle ───────────────────────────────────────────────────
+
+test('flightDataForTrack answers the reverse question the client asks on a map click', () => {
+  const s = store({ flightDataList: [FDR, 'flight-data-2'] });
+  s.reconcile(new Map([[FDR, resolvedTo('101', 'BEACON', 'CORRELATED')]]));
+  assert.equal(s.flightDataForTrack('101'), FDR);
+  assert.equal(s.flightDataForTrack(101), FDR, 'a numeric id works too');
+  assert.equal(s.flightDataForTrack('999'), null);
+});
+
+test('a record whose flight data is gone is evicted — flight data lifecycle governs correlation lifecycle', () => {
+  const flightDataList = [FDR];
+  const s = new CorrelationStore({ flightDataExists: (id) => flightDataList.includes(id) });
+  s.reconcile(new Map([[FDR, resolvedTo('101', 'BEACON', 'CORRELATED')]]));
+  assert.equal(s.getAll().length, 1);
+  flightDataList.length = 0;
+  assert.equal(s.evictMissingFlightDataList(), 1);
+  assert.equal(s.getAll().length, 0);
+});
+
+// ── persistence ────────────────────────────────────────────────────────────
+
+test('restore keeps the history but never the contact — a persisted track id is a lie after a restart', () => {
+  const s = store();
+  bind(s, { trackId: '101', note: 'visual' });
+  const snapshot = s.snapshot();
+  assert.equal(snapshot[0].trackId, '101', 'the snapshot itself is a faithful record');
+
+  const restored = store();
+  restored.restore(snapshot);
+  const record = restored.getCorrelation(FDR);
+  assert.equal(record.state, 'UNCORRELATED');
+  assert.equal(record.trackId, null);
+  assert.equal(record.binding, null, 'the explicit binding does not survive a restart');
+  assert.equal(record.observedBeacon, null);
+  assert.ok(record.transitions.length > 0, 'but that it happened is preserved');
+  assert.equal(record.transitions[0].reason, 'EXPLICIT_BIND');
+});
+
+test('restore skips a record whose flight data is gone', () => {
+  const s = store();
+  bind(s);
+  const snapshot = s.snapshot();
+  const restored = new CorrelationStore({ flightDataExists: () => false });
+  restored.restore(snapshot);
+  assert.equal(restored.getAll().length, 0);
+});
+
+test('snapshot omits a record whose flight data has already gone', () => {
+  const flightDataList = [FDR];
+  const s = new CorrelationStore({ flightDataExists: (id) => flightDataList.includes(id) });
+  bind(s);
+  flightDataList.length = 0;
+  assert.deepEqual(s.snapshot(), []);
+});
+
+test('restore copes with junk rather than throwing', () => {
+  const s = store();
+  s.restore(null);
+  s.restore([null, {}, { flightDataId: 'ghost' }]);
+  assert.equal(s.getAll().length, 0);
+});

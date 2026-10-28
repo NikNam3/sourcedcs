@@ -1,0 +1,71 @@
+'use strict';
+
+/* The specs' one way into the client's modules (BRIDGE; it replaced the old classic-globals shim).
+ *
+ * `installAppModules(page)` puts `window.crc` on the page: one namespace object per module the specs use,
+ * made with a dynamic `import()` of the same URL main.js loaded, so each is the very module record the app
+ * runs (live bindings: `crc.state.efspStrips` is the Map the panel renders). Nothing in production reads or
+ * writes `window.crc`, and there are no getters on `window`.
+ *
+ *   crc.state.getAllEfspStrips()
+ *   crc.ws.setEfspSender('sendEfspMutation', fn)   // a sender is replaced through the owning module's setter,
+ *   crc.sync.setSendToSync(fn)                      // never by assigning to a name
+ *
+ * Inside page.evaluate / waitForFunction, read `crc.<key>.<name>`. Add a module to MODULES when a spec needs it.
+ */
+
+const MODULES = {
+  state: '/js/panels/efsp/efsp-state.js',
+  ws: '/js/panels/efsp/efsp-ws.js',
+  sync: '/js/sync.js',
+  dock: '/js/dock-handle.js', // crc.dock.dock is the dockview instance (null until initDock runs); toggleDockPanel etc. delegate to dock.js
+  app: '/js/app.js', // crc.app._ws, applySnapshot, applyCoverage
+  mapHandle: '/js/map-handle.js', // crc.mapHandle.map, .mapReady
+  terrainGrid: '/js/terrain-grid.js', // crc.terrainGrid.terrainGrid(), .terrainGridState() (crc-sync docs/adr/0133)
+  elevation: '/js/elevation.js', // crc.elevation.updateElevationContours
+  settings: '/js/settings.js', // crc.settings.settings
+  settingsRegistry: '/js/settings-registry.js', // crc.settingsRegistry.registerSettingsTab
+  picture: '/js/picture.js', // crc.picture.history, .labelOffsets, .latestFromServer
+  bayView: '/js/panels/efsp/bay-view.js',
+  arrivals: '/js/panels/efsp/efsp-arrivals.js', // crc.arrivals.efspArrivalFlashElapsed
+  dispatch: '/js/panels/efsp/bay/dispatch.js',
+  selection: '/js/panels/efsp/bay/selection.js',
+  carrier: '/js/panels/efsp/carrier-state.js',
+  nla: '/js/panels/efsp/efsp-nla.js',
+  sfa: '/js/panels/efsp/sfa-state.js',
+  metricsClient: '/js/panels/efsp/efsp-metrics-client.js',
+  metricsPanel: '/js/panels/metrics-panel.js',
+  stereo: '/js/panels/efsp/efsp-stereo-routes.js',
+  fields: '/js/panels/efsp/strip-fields.js',
+  template: '/js/panels/efsp/strip-template.js',
+  drag: '/js/panels/efsp/strip-drag.js',
+  marsaBadge: '/js/panels/efsp/marsa-badge.js',
+  geojson: '/js/geojson.js',
+  geo: '/js/geo.js',
+  atc: '/js/atc-scope.js',
+  airspace: '/js/panels/efsp/airspace-panel.js',
+  airspaceLayer: '/js/airspace-layer.js',
+  drawingHighlight: '/js/drawing-highlight.js', // crc.drawingHighlight.highlightedDrawing (U-SCOPE-SMALL picker highlight)
+  msgRegistry: '/js/panels/efsp/efsp-message-registry.js',
+  carrierMap: '/js/panels/efsp/carrier-map-panel.js', // crc.carrierMap.renderCarrierMap, carrierMapGeometry
+  par: '/js/panels/efsp/par-panel.js', // crc.par.parPanelView, parShownStripId, showParFlight
+  parSamples: '/js/panels/efsp/par-samples.js', // crc.parSamples.applyParSamples (a spec injects a PAR sample)
+  changeBus: '/js/panels/efsp/efsp-change-bus.js', // crc.changeBus.markEfspChanged
+  correlation: '/js/panels/efsp/correlation-highlight.js', // crc.correlation.getCorrelatedHighlightTrackId (LT-UI T10)
+  maptilerKey: '/js/maptiler-key.js', // crc.maptilerKey.loadMaptilerKey (LT-UI T3)
+  mapSetup: '/js/map-setup.js', // crc.mapSetup.basemapState (U-GLYPHS basemap fallback)
+  trackPanel: '/js/panels/track-panel.js', // crc.trackPanel.showTrackPanel (crc-sync ADR 0146: tag a VFR on a contact)
+  labelMenu: '/js/panels/efsp/label-menu.js', // crc.labelMenu.openLabelMenu (crc-sync ADR 0146: the VFR strip's menu)
+};
+
+/** Runs after page.goto('/'). Resolves once every module is imported and `window.crc` exists. */
+async function installAppModules(page) {
+  await page.evaluate(async (modules) => {
+    if (window.crc) return;
+    const crc = {};
+    for (const [key, url] of Object.entries(modules)) crc[key] = await import(url);
+    window.crc = crc;
+  }, MODULES);
+}
+
+module.exports = { MODULES, installAppModules };

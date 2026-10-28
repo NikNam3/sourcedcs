@@ -1,4 +1,7 @@
 'use strict';
+import { COALITION_COLOR, LIGHT_COALITION_COLOR } from './scope-constants.js';
+import { map, mapReady } from './map-handle.js';
+import { settings } from './settings.js';
 
 // ── Track icon factories ───────────────────────────────────────────────────
 // Each function renders to a canvas and returns raw ImageData for MapLibre.
@@ -69,18 +72,6 @@ function createShipIcon(color, size = 13) {
   return ctx.getImageData(0, 0, size, size);
 }
 
-// Small axis-aligned filled square — ground vehicles
-function createGroundIcon(color, size = 10) {
-  const canvas = document.createElement('canvas');
-  canvas.width  = size;
-  canvas.height = size;
-  const ctx = canvas.getContext('2d');
-  const m   = 2;
-  ctx.fillStyle = color;
-  ctx.fillRect(m, m, size - m * 2, size - m * 2);
-  return ctx.getImageData(0, 0, size, size);
-}
-
 // Blinking emergency square — drawn over the track icon position.
 // Larger than track symbols so it's clearly visible as an overlay ring.
 function createEmergencySquare(color, size = 22) {
@@ -135,7 +126,7 @@ function createTriangleIcon(color, size = 14) {
 }
 
 // Small hollow upward-pointing triangle — nav/waypoints
-function createNavpointIcon(color, size = 11) {
+export function createNavpointIcon(color, size = 11) {
   const canvas = document.createElement('canvas');
   canvas.width  = size;
   canvas.height = size;
@@ -153,16 +144,13 @@ function createNavpointIcon(color, size = 11) {
   return ctx.getImageData(0, 0, size, size);
 }
 
-function initIcons() {
+export function initIcons() {
   map.addImage('sq-neutral',   createSquareIcon('#888888'));
   map.addImage('sq-red',       createSquareIcon('#cc4444'));
   map.addImage('sq-blue',      createSquareIcon('#4488cc'));
   map.addImage('ac-neutral',   createAircraftIcon('#888888'));
   map.addImage('ac-red',       createAircraftIcon('#cc4444'));
   map.addImage('ac-blue',      createAircraftIcon('#4488cc'));
-  map.addImage('gnd-neutral',  createGroundIcon('#7a7a68'));
-  map.addImage('gnd-red',      createGroundIcon('#aa6644'));
-  map.addImage('gnd-blue',     createGroundIcon('#557799'));
   map.addImage('ship-neutral', createShipIcon('#7a7a68'));
   map.addImage('ship-red',     createShipIcon('#cc4444'));
   map.addImage('ship-blue',    createShipIcon('#4488cc'));
@@ -201,10 +189,6 @@ function _registerIffIcons(mode) {
   fn('ac-iff-friendly',   createAircraftIcon(fr));
   fn('ac-iff-bogey',      createAircraftIcon(bo));
   fn('ac-iff-neutral',    createAircraftIcon(ne));
-  // Ground vehicles (filled square)
-  fn('gnd-iff-friendly',  createGroundIcon(fr));
-  fn('gnd-iff-bogey',     createGroundIcon(bo));
-  fn('gnd-iff-neutral',   createGroundIcon(ne));
   // Ships (circle)
   fn('ship-iff-friendly', createShipIcon(fr));
   fn('ship-iff-bogey',    createShipIcon(bo));
@@ -216,19 +200,15 @@ function _registerIffIcons(mode) {
 }
 
 // Called whenever IFF / emergency colours change.
-function updateIffIcons() {
+export function updateIffIcons() {
   if (!mapReady) return;
   _registerIffIcons('update');
 }
 
 // Re-colour theme-sensitive icons when switching light / dark mode.
 // Icon images in MapLibre have baked-in colors; we must re-register them.
-function updateIcons(lightMode) {
+export function updateIcons(lightMode) {
   const ac  = lightMode ? LIGHT_COALITION_COLOR : COALITION_COLOR;
-  // Ground color palette in light mode: darker for contrast on the light map
-  const gnd = lightMode
-    ? { 1: '#505050', 2: '#aa3322', 3: '#334d80' }
-    : GROUND_COLOR;
 
   map.updateImage('sq-neutral',   createSquareIcon(ac[1]));
   map.updateImage('sq-red',       createSquareIcon(ac[2]));
@@ -236,9 +216,6 @@ function updateIcons(lightMode) {
   map.updateImage('ac-neutral',   createAircraftIcon(ac[1]));
   map.updateImage('ac-red',       createAircraftIcon(ac[2]));
   map.updateImage('ac-blue',      createAircraftIcon(ac[3]));
-  map.updateImage('gnd-neutral',  createGroundIcon(gnd[1]));
-  map.updateImage('gnd-red',      createGroundIcon(gnd[2]));
-  map.updateImage('gnd-blue',     createGroundIcon(gnd[3]));
   map.updateImage('ship-neutral', createShipIcon(ac[1]));
   map.updateImage('ship-red',     createShipIcon(ac[2]));
   map.updateImage('ship-blue',    createShipIcon(ac[3]));

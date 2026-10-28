@@ -1,0 +1,5 @@
+{
+  "steps": [
+    {"n":0,"act":"send","as":"gnd","in":{"actingPositionId":"GC","baseRev":13,"clientMutationId":"freeze-cmid-00047","facilityId":"INCIRLIK","op":{"kind":"DropStrip"},"stripId":"#1","type":"efsp-mutation","version":1},"label":"DropStrip","frames":[{"to":["gnd"],"m":{"clientMutationId":"freeze-cmid-00047","facilityId":"INCIRLIK","ok":true,"strip":"S #1 r14 DEPARTURE/DROPPED @GC gc-pushback/main:V h=9159505164","stripId":"#1","type":"efsp-mutation-ack","version":1}},{"to":["ops","cd","gnd","twr","app","ctr","tac","aic","gci","jtac","range","marshal","prifly","cvapp1","cvapp2","obs","ghost"],"m":{"facilityId":"INCIRLIK","flightDataList":{"updated":[]},"positions":{"updated":[]},"strips":{"gone":["#1"],"updated":[]},"type":"efsp-board-delta","version":1}}],"log":[{"actingPositionId":"GC","actorId":"gnd","after":"S #1 r14 DEPARTURE/DROPPED @GC gc-pushback/main:V h=9159505164","at":1782009632000,"atSource":"SOAK_VIRTUAL","before":"S #1 r13 DEPARTURE/PUSHBACK @GC gc-pushback/main:V h=f85958340f","clientMutationId":"freeze-cmid-00047","facilityId":"INCIRLIK","flightDataId":"#2","op":"DropStrip","stripId":"#1","wallAt":1782009632000}]}
+  ]
+}

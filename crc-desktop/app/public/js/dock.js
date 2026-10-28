@@ -1,4 +1,23 @@
 'use strict';
+import { initMap } from './map-setup.js';
+import { initSettings } from './panels/settings-panel.js';
+import { initRadarPanel, renderPanelControls } from './panels/radar-panel.js';
+import { initTrackPanel } from './panels/track-panel.js';
+import { initAprtPanel } from './panels/aprt-panel.js';
+import { initEfspPanel } from './panels/efsp/efsp-panel.js';
+import { initAirspacePanel } from './panels/efsp/airspace-panel.js';
+import { initRunwayStatusPanel } from './panels/efsp/runway-status-panel.js';
+import { initCarrierManagementPanel } from './panels/efsp/carrier-management-panel.js';
+import { initMarshalPanel } from './panels/efsp/marshal-panel.js';
+import { initCarrierMapPanel } from './panels/efsp/carrier-map-panel.js';
+import { initParPanel } from './panels/efsp/par-panel.js';
+import { initMetricsPanel } from './panels/metrics-panel.js';
+import { initFrequencyPanel } from './panels/efsp/frequency-panel.js';
+import { getActiveRadars } from './picture.js';
+import { map } from './map-handle.js';
+import { PANEL_TITLES, registerDockActions, setDock } from './dock-handle.js';
+
+registerDockActions({ ensureTrackPanel, isDockPanelOpen, toggleDockPanel, isPanelPinned, setPanelPinned });
 
 // ── Dockview bootstrap ────────────────────────────────────────────────────
 // Owns the dockview grid that replaces individually hand-positioned
@@ -10,7 +29,7 @@
 // Info reopens by clicking a track on the map (ensureTrackPanel), the
 // Panels control via its own topbar button (wireRadarsPanelButton/
 // toggleOrFocusPanel), and Settings/Airport/Squawk C/S/Radio via that
-// control's own Panels section (wired in ui.js's initRadarPanel()) — which
+// control's own Panels section (wired in panels/radar-panel.js's initRadarPanel()) — which
 // is why their old dedicated topbar/floating buttons (#btn-settings,
 // #btn-calls, #btn-aprt) were removed rather than rewired, and the
 // connection-settings ("SYNC") button moved into the Settings panel's
@@ -20,32 +39,12 @@
 // not a valid bare identifier, hence the bracket access below.
 const DockviewCore = window['dockview-core'];
 
-// Single source of truth for every panel's user-facing name. Every spot
-// that displays a panel's name — its dockview tab title, its row label in
-// the radars-panel's Panels section (ui.js's PANEL_CONTROL_ROWS), the
-// topbar RADARS/PANELS button's own text — reads from here, so renaming a
-// panel means changing exactly one string instead of hunting through both
-// files and the static HTML and hoping none of the copies drift apart (this
-// exact drift is what prompted consolidating it: the topbar button's label
-// used to be hardcoded in index.html separately from the panel's own title
-// here in dock.js). `map` has no entry — it uses dockview's own default
-// (the tab shows its id) via createNoCloseTab, and nothing has asked for
-// that to change.
-const PANEL_TITLES = {
-  track:    'TRACK INFO',
-  radars:   'PANELS',
-  settings: 'SETTINGS',
-  airport:  'AIRPORT',
-  calls:    'SQWK C/S',
-  radio:    'RADIO',
-  efsp:     'FLIGHT STRIPS',
-};
 
-const DOCK_LAYOUT_KEY = 'crc-desktop-dock-layout';
+const DOCK_LAYOUT_KEY = 'crc-desktop-dock-layout-v2';
 
 let dock = null;
 
-function initDock() {
+export function initDock() {
   const root = document.getElementById('dock-root');
 
   dock = new DockviewCore.DockviewComponent(root, {
@@ -54,12 +53,19 @@ function initDock() {
       switch (options.name) {
         case 'map':      return createMapPanel();
         case 'track':    return mountExistingPanel('track-panel', initTrackPanel);
-        case 'calls':    return mountExistingPanel('calls-panel', initCallsPanel);
         case 'settings': return mountExistingPanel('settings-panel', initSettings);
         case 'airport':  return mountExistingPanel('aprt-panel', initAprtPanel);
         case 'radars':   return mountExistingPanel('radars-panel', initRadarPanel);
         case 'radio':    return mountExistingPanel('srs-radio-panel', null);
         case 'efsp':     return mountExistingPanel('efsp-panel', initEfspPanel);
+        case 'airspace': return mountExistingPanel('airspace-panel', initAirspacePanel);
+        case 'runwayStatus': return mountExistingPanel('runway-status-panel', initRunwayStatusPanel);
+        case 'carrier':  return mountExistingPanel('carrier-mgmt-panel', initCarrierManagementPanel);
+        case 'marshal':  return mountExistingPanel('marshal-panel', initMarshalPanel);
+        case 'carrierMap': return mountExistingPanel('carrier-map-panel', initCarrierMapPanel);
+        case 'par':      return mountExistingPanel('par-panel', initParPanel);
+        case 'metrics':  return mountExistingPanel('metrics-panel', initMetricsPanel);
+        case 'frequencies': return mountExistingPanel('frequency-panel', initFrequencyPanel);
         default: throw new Error(`[dock] unknown panel component: ${options.name}`);
       }
     },
@@ -70,9 +76,11 @@ function initDock() {
       }
     },
   });
+  setDock(dock);
 
   loadDockLayout();
-  // The radars-panel's own init() (ui.js's initRadarPanel, invoked by
+  hideStrayLegacyPanels();
+  // The radars-panel's own init() (panels/radar-panel.js's initRadarPanel, invoked by
   // mountExistingPanel while fromJSON()/buildDefaultDockLayout() above is
   // still running) renders the Panels checkboxes against whatever sibling
   // panels dockview has constructed *so far* — but fromJSON() walks the
@@ -81,9 +89,9 @@ function initDock() {
   // checkboxes get built unchecked even when the saved layout has them
   // open. Nothing re-renders afterward (onDidLayoutChange isn't wired up
   // until below, and dockview has no onShow-style revisit hook despite
-  // ui.js's initRadarPanel returning one — see its comment). Re-rendering
+  // radar-panel.js's initRadarPanel returning one — see its comment). Re-rendering
   // once more here, now that the whole restore has settled, fixes that.
-  if (typeof renderPanelControls === 'function') renderPanelControls();
+  renderPanelControls();
   wireRadarsPanelButton();
 
   let saveTimer = null;
@@ -109,7 +117,8 @@ function initDock() {
     // bursts of change events into a single check — sidesteps this
     // entirely: by the time it runs, dockview's internal state has settled.
     scheduleEnsureRequiredPanels();
-    // The radars-panel's Panels section (ui.js) mirrors dock state in its
+    hideStrayLegacyPanels();
+    // The radars-panel's Panels section (panels/radar-panel.js) mirrors dock state in its
     // own checkboxes/status text, but only re-renders on its own tab
     // becoming active or a click inside it — closing a panel by its own tab
     // (the dockview "x", not that checkbox) previously left the checkbox
@@ -117,7 +126,7 @@ function initDock() {
     // layout change is a cheap enough re-render (a handful of DOM rows) to
     // just do unconditionally rather than trying to detect "was it a
     // close".
-    if (typeof renderPanelControls === 'function') renderPanelControls();
+    renderPanelControls();
     scheduleSave();
   });
 
@@ -185,7 +194,7 @@ function addMissingRequiredPanels() {
 // (it lands wherever the active group happens to be, sometimes merging
 // into completely the wrong group — both reproduced firsthand while
 // building this). `excludeId` leaves out the panel currently being placed.
-const LEFT_CLUSTER = ['track', 'radars', 'airport', 'calls', 'efsp'];
+const LEFT_CLUSTER = ['track', 'radars', 'airport', 'efsp', 'airspace', 'runwayStatus', 'carrier', 'marshal', 'carrierMap', 'par', 'metrics', 'frequencies'];
 
 function leftGroupAnchor(excludeId) {
   return LEFT_CLUSTER.filter(id => id !== excludeId).find(id => dock.api.getPanel(id));
@@ -196,13 +205,14 @@ function leftGroupAnchor(excludeId) {
 // panel. `map` isn't listed: it never closes, so it never needs a
 // remembered size to come back to.
 const PANEL_SIDE = {
-  track: 'left', radars: 'left', airport: 'left', calls: 'left', efsp: 'left',
+  track: 'left', radars: 'left', airport: 'left', efsp: 'left', airspace: 'left',
+  runwayStatus: 'left', carrier: 'left', marshal: 'left', carrierMap: 'left', par: 'left', metrics: 'left', frequencies: 'left',
   settings: 'right',
   radio: 'bottom',
 };
 
 // Track Info's reopen path: clicking a track on the map (showTrackPanel, in
-// ui.js) calls this to get-or-create the panel before activating it, rather
+// panels/track-panel.js) calls this to get-or-create the panel before activating it, rather
 // than relying on a permanent required-panel restore.
 function ensureTrackPanel() {
   const existing = dock.api.getPanel('track');
@@ -265,10 +275,10 @@ function toggleOrFocusPanel(id, addOptionsFn) {
 }
 
 // Optional panels toggled from the radars-panel's "Panels" section (see
-// initRadarPanel() in ui.js) — off by default so the map keeps maximum
+// initRadarPanel() in panels/radar-panel.js) — off by default so the map keeps maximum
 // space until the user actually asks for one. Airport is additionally
-// driven by radar state (see notifyRadarToggled) — Settings/Squawk C/S have
-// no radar tie and are purely manual. Future dockable panels (flight
+// driven by radar coverage (see notifyCoverageChanged) — Settings/Squawk C/S
+// have no radar tie and are purely manual. Future dockable panels (flight
 // strips, PAR scope, marshal stack, LSO, chat) register here too.
 const DOCKABLE_PANELS = {
   // Always a fresh split off map (nothing else ever anchors to its own
@@ -285,17 +295,72 @@ const DOCKABLE_PANELS = {
       position: anchor ? { referencePanel: anchor } : { referencePanel: 'map', direction: 'left' },
     }, !anchor);
   },
-  calls: () => {
-    const anchor = leftGroupAnchor('calls');
-    return withRememberedPlacement('calls', {
-      id: 'calls', component: 'calls', title: PANEL_TITLES.calls,
-      position: anchor ? { referencePanel: anchor } : { referencePanel: 'map', direction: 'left' },
-    }, !anchor);
-  },
   efsp: () => {
     const anchor = leftGroupAnchor('efsp');
     return withRememberedPlacement('efsp', {
       id: 'efsp', component: 'efsp', title: PANEL_TITLES.efsp,
+      position: anchor ? { referencePanel: anchor } : { referencePanel: 'map', direction: 'left' },
+    }, !anchor);
+  },
+  airspace: () => {
+    const anchor = leftGroupAnchor('airspace');
+    return withRememberedPlacement('airspace', {
+      id: 'airspace', component: 'airspace', title: PANEL_TITLES.airspace,
+      position: anchor ? { referencePanel: anchor } : { referencePanel: 'map', direction: 'left' },
+    }, !anchor);
+  },
+  runwayStatus: () => {
+    const anchor = leftGroupAnchor('runwayStatus');
+    return withRememberedPlacement('runwayStatus', {
+      id: 'runwayStatus', component: 'runwayStatus', title: PANEL_TITLES.runwayStatus,
+      position: anchor ? { referencePanel: anchor } : { referencePanel: 'map', direction: 'left' },
+    }, !anchor);
+  },
+  // The carrier's state, each value with its source (crc-sync docs/adr/0113). Everyone reads; PriFly and the Marshal type.
+  carrier: () => {
+    const anchor = leftGroupAnchor('carrier');
+    return withRememberedPlacement('carrier', {
+      id: 'carrier', component: 'carrier', title: PANEL_TITLES.carrier,
+      position: anchor ? { referencePanel: anchor } : { referencePanel: 'map', direction: 'left' },
+    }, !anchor);
+  },
+  // The recovery board (crc-sync docs/adr/0114). Everyone at the carrier reads it; the Marshal sequences.
+  marshal: () => {
+    const anchor = leftGroupAnchor('marshal');
+    return withRememberedPlacement('marshal', {
+      id: 'marshal', component: 'marshal', title: PANEL_TITLES.marshal,
+      position: anchor ? { referencePanel: anchor } : { referencePanel: 'map', direction: 'left' },
+    }, !anchor);
+  },
+  // The carrier map (docs/wip/CARRIER-MAP.md): fixed on the ship, north-up. Everyone reads it.
+  carrierMap: () => {
+    const anchor = leftGroupAnchor('carrierMap');
+    return withRememberedPlacement('carrierMap', {
+      id: 'carrierMap', component: 'carrierMap', title: PANEL_TITLES.carrierMap,
+      position: anchor ? { referencePanel: anchor } : { referencePanel: 'map', direction: 'left' },
+    }, !anchor);
+  },
+  // The PAR picture (docs/wip/PAR-2.md, H115): the final this controller works.
+  par: () => {
+    const anchor = leftGroupAnchor('par');
+    return withRememberedPlacement('par', {
+      id: 'par', component: 'par', title: PANEL_TITLES.par,
+      position: anchor ? { referencePanel: anchor } : { referencePanel: 'map', direction: 'left' },
+    }, !anchor);
+  },
+  // §11.5 metrics + §11.4 traffic count (docs/adr/0072). Needs no Position.
+  metrics: () => {
+    const anchor = leftGroupAnchor('metrics');
+    return withRememberedPlacement('metrics', {
+      id: 'metrics', component: 'metrics', title: PANEL_TITLES.metrics,
+      position: anchor ? { referencePanel: anchor } : { referencePanel: 'map', direction: 'left' },
+    }, !anchor);
+  },
+  // The station frequencies the controllers set (crc-sync docs/adr/0131). Everyone reads; any Primary edits.
+  frequencies: () => {
+    const anchor = leftGroupAnchor('frequencies');
+    return withRememberedPlacement('frequencies', {
+      id: 'frequencies', component: 'frequencies', title: PANEL_TITLES.frequencies,
       position: anchor ? { referencePanel: anchor } : { referencePanel: 'map', direction: 'left' },
     }, !anchor);
   },
@@ -322,9 +387,10 @@ function isDockPanelOpen(id) {
 // `preserveFocus`: dockview's addPanel() focuses whatever it just added by
 // default — fine for a deliberate "open this" click (Panels checkbox/pin),
 // but wrong for a panel opening as a *side effect* of something else (radar
-// implication, see notifyRadarToggled): confirmed firsthand that enabling a
-// radar mid-search yanked focus away from the Radars panel to the newly-
-// opened Airport panel, hiding the very search the user was still using.
+// implication, see notifyCoverageChanged): confirmed firsthand that gaining an
+// airport radar yanked focus away from the panel the user was working in to
+// the newly-opened Airport panel. It matters more now, not less — coverage can
+// change because a colleague took a Position, i.e. with no local input at all.
 function toggleDockPanel(id, open, { preserveFocus } = {}) {
   const optionsFn = DOCKABLE_PANELS[id];
   if (!optionsFn) return;
@@ -485,11 +551,16 @@ function withRememberedPlacement(id, options, allowGridSize) {
   return options;
 }
 
-// ── Radar-driven panel visibility ───────────────────────────────────────
-// Enabling a radar that implies a panel (currently just airport-type radars
-// → the Airport panel) opens it automatically; disabling the last radar
-// that implies it closes it again — unless the user has pinned it, which
-// keeps it open regardless of radar state until explicitly unpinned.
+// ── Coverage-driven panel visibility ────────────────────────────────────
+// Holding a Position that grants a radar implying a panel (currently just
+// airport-type radars → the Airport panel) opens it automatically; losing the
+// last radar that implies it closes it again — unless the user has pinned it,
+// which keeps it open until explicitly unpinned.
+//
+// The trigger used to be a user ticking a radar checkbox. Coverage follows the
+// Positions the controller is signed on to now (crc-sync's docs/adr/0042), so the implication fires when
+// a controller takes Tower or Approach — which is when they want the Airport
+// panel anyway, and is a better signal than the one it replaced.
 // Settings/Squawk C/S have no radar tie and aren't affected by any of this.
 const RADAR_TYPE_TO_PANEL = { airport: 'airport' };
 
@@ -516,31 +587,36 @@ function setPanelPinned(id, pinned) {
     localStorage.setItem(PINNED_PANELS_KEY, JSON.stringify(_pinnedPanels));
   } catch (_) {}
   // Clicking PIN happens from inside the radars-panel's Panels section —
-  // preserve focus there too, same reasoning as notifyRadarToggled.
+  // preserve focus there too, same reasoning as notifyCoverageChanged.
   if (pinned) toggleDockPanel(id, true, { preserveFocus: true });
   else if (!isPanelImplied(id)) toggleDockPanel(id, false);
 }
 
-// True if any currently-enabled radar implies this panel.
+/** True if any radar in our current coverage implies this panel. */
 function isPanelImplied(panelId) {
-  for (const r of getAllRadars()) {
-    if (enabledRadarIds.has(r.id) && RADAR_TYPE_TO_PANEL[r.type] === panelId) return true;
+  for (const r of getActiveRadars()) {
+    if (RADAR_TYPE_TO_PANEL[r.type] === panelId) return true;
   }
   return false;
 }
 
-// Called from ui.js whenever a radar's enabled state changes (both from the
-// active-radars list and the add-radar search) — reacts only to this one
-// radar's own transition, not a continuously-enforced invariant, so
-// manually closing an implied-open panel afterward doesn't get fought the
-// way Track Info's old permanent auto-restore did.
-function notifyRadarToggled(radar, enabled) {
-  const panelId = RADAR_TYPE_TO_PANEL[radar.type];
-  if (!panelId) return;
-  if (enabled) {
-    toggleDockPanel(panelId, true, { preserveFocus: true });
-  } else if (!isPanelImplied(panelId) && !isPanelPinned(panelId)) {
-    toggleDockPanel(panelId, false);
+// Called once per `coverage` message. Unlike the per-radar hook it replaces,
+// this sees the whole set at once rather than one radar's transition — so it
+// compares against what the implication last said and only acts on a change,
+// which keeps the "manually closing an implied-open panel is not fought"
+// property the old hook had for the same reason.
+const _impliedPanelState = new Map(); // panelId -> was implied
+
+export function notifyCoverageChanged() {
+  for (const panelId of new Set(Object.values(RADAR_TYPE_TO_PANEL))) {
+    const implied = isPanelImplied(panelId);
+    if (implied === _impliedPanelState.get(panelId)) continue;
+    _impliedPanelState.set(panelId, implied);
+    if (implied) {
+      toggleDockPanel(panelId, true, { preserveFocus: true });
+    } else if (!isPanelPinned(panelId)) {
+      toggleDockPanel(panelId, false);
+    }
   }
 }
 
@@ -567,6 +643,16 @@ function createMapPanel() {
   if (!_mapPanelElement) {
     _mapPanelElement = document.createElement('div');
     _mapPanelElement.id = 'map';
+    // The no-coverage overlay belongs to the MAP, not to the window. It ships
+    // in index.html at document top level and was `position: fixed; inset: 0`,
+    // so an empty scope greyed out the entire application — the Strip panel,
+    // the radio, the airport panel, everything — when the only thing that had
+    // nothing to show was the map. Adopted into the map panel here (rather
+    // than duplicated into the markup) so it covers exactly the surface whose
+    // emptiness it is explaining. app.js toggles it by id, which is unaffected
+    // by where it lives.
+    const noCoverage = document.getElementById('no-awacs-overlay');
+    if (noCoverage) _mapPanelElement.appendChild(noCoverage);
   }
 
   return {
@@ -648,17 +734,28 @@ function mountExistingPanel(domId, initFn) {
   if (!state) {
     const element = document.getElementById(domId);
     if (!element) console.error(`[dock] no #${domId} element found in index.html — this panel will not render`);
-    // See the .dock-unmounted rule (index.html): every legacy-adapter div
-    // starts hidden in the static markup, since a panel dockview hasn't
-    // been asked to create yet this session has nowhere to go and would
-    // otherwise render inline wherever it happens to sit in the HTML source.
-    if (element) element.classList.remove('dock-unmounted');
+    // Every docked panel fills its tab and scrolls rather than cut its UI off when sized smaller (H138 U12, layout.css
+    // .dock-panel); a panel that must not scroll as a whole says so on its own id rule.
+    if (element) element.classList.add('dock-panel');
     state = { element, initialized: false, hooks: null };
     _legacyPanelState.set(domId, state);
   }
+  // See the .dock-unmounted rule (layout.css): every legacy-adapter div starts hidden in the static markup, since a panel
+  // dockview hasn't placed has nowhere to go and would otherwise render inline wherever it sits in the HTML source. Shown
+  // on every (re)creation, hidden again on dispose and by hideStrayLegacyPanels() (U-PANELS-GHOST).
+  if (state.element) state.element.classList.remove('dock-unmounted');
+  let visibilityDisposable = null;
   return {
     element: state.element,
-    init() {
+    init(params) {
+      // A restored layout's background tabs keep their element in <body> until first shown (dockview's default
+      // 'onlyWhenVisible' renderer attaches only the active tab), so hideStrayLegacyPanels() hides them; dockview then
+      // attaches them on tab select with the class still on and the panel painted empty. Un-hide on every show.
+      if (params && params.api && params.api.onDidVisibilityChange) {
+        visibilityDisposable = params.api.onDidVisibilityChange((event) => {
+          if (event.isVisible && state.element) state.element.classList.remove('dock-unmounted');
+        });
+      }
       if (state.initialized) return;
       state.initialized = true;
       state.hooks = (initFn && initFn()) || null;
@@ -670,12 +767,27 @@ function mountExistingPanel(domId, initFn) {
     // need to clear that state here, or the next tick after close tries to
     // write into DOM that's no longer attached to the document and throws.
     dispose() {
+      if (visibilityDisposable) visibilityDisposable.dispose();
+      if (state.element) state.element.classList.add('dock-unmounted');
       if (state.hooks && state.hooks.onClose) state.hooks.onClose();
     },
     onShow() {
       if (state.hooks && state.hooks.onShow) state.hooks.onShow();
     },
   };
+}
+
+// U-PANELS-GHOST: a legacy panel's element that dockview created but does not hold must not paint. The case that showed
+// it: a saved layout dockview cannot restore (it names a panel that no longer exists, such as the old Squawk C/S `calls`)
+// throws partway through fromJSON(), after createComponent() has already un-hidden a sibling such as PANELS. dockview
+// reverts, but a panel it created and never opened is never disposed, so its element stayed where index.html put it, a
+// static block in <body> under the fixed #dock-root: its background hidden by the dock, its positioned toggles painted
+// over the map and clickable. Any element outside #dock-root is not held by dockview, so it is hidden again here.
+function hideStrayLegacyPanels() {
+  const root = document.getElementById('dock-root');
+  for (const { element } of _legacyPanelState.values()) {
+    if (element && element.isConnected && !(root && root.contains(element))) element.classList.add('dock-unmounted');
+  }
 }
 
 // ── Layout persistence ─────────────────────────────────────────────────────

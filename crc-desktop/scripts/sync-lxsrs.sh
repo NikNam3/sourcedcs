@@ -34,11 +34,13 @@ fi
 
 echo "Re-vendoring lxsrs_v2 into $VENDOR_DIR ..."
 
+# --upgrade: with --target, pip leaves an existing lxsrs_v2/ in place without it
+# (it warns "Target directory already exists"), so a re-vendor changed nothing.
 # --no-deps: crc-desktop's Electron-side venv (see lxsrs-setup.js's
 # LXSRS_VENV_DEPS) installs lxsrs_v2's third-party deps at first run on the
 # end user's machine — this vendored copy must contain ONLY lxsrs_v2's own
 # source, not numpy/sounddevice/opuslib themselves.
-"${PIP[@]}" install --no-deps --target="$VENDOR_DIR" "$LXSRS_SRC" --force-reinstall --no-input
+"${PIP[@]}" install --no-deps --target="$VENDOR_DIR" "$LXSRS_SRC" --upgrade --force-reinstall --no-input
 
 # pip's --target install leaves __pycache__ dirs and a RECORD file with
 # absolute build-machine paths baked in — neither is meant to be committed.

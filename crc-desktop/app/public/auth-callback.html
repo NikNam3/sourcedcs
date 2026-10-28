@@ -72,7 +72,7 @@
   var redirectUri = window.location.origin + '/auth-callback.html';
   // crc-sync's own token exchange, called cross-origin — this popup is
   // served by crc-desktop's local server, crc-sync is a remote host.
-  var httpBase = (typeof CRC_SYNC_URL !== 'undefined' && CRC_SYNC_URL ? CRC_SYNC_URL : 'wss://asacs.sourcedcs.page')
+  var httpBase = (typeof CRCSYNC_URL !== 'undefined' && CRCSYNC_URL ? CRCSYNC_URL : 'wss://asacs.sourcedcs.page')
     .replace(/^wss:/, 'https:').replace(/^ws:/, 'http:');
 
   fetch(httpBase + '/api/auth/token', {

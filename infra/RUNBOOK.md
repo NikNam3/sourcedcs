@@ -1,5 +1,171 @@
 # infra RUNBOOK
 
+## Rotating the MapTiler key
+
+crc-desktop ships with no MapTiler key. After login it asks crc-sync (`GET /api/client-config`, bearer token) and draws
+its basemap with the key it gets back. The key is `CRCSYNC_MAPTILER_CLIENT_KEY`, else `CRCSYNC_MAPTILER_KEY` (one key is
+enough; neither is a terrain key any more: terrain and contours come from the DCS cache, "Building the terrain cache"
+below). Nothing is cached on the client: it is fetched again at every login. A refused, exhausted or missing key no longer
+blanks the map: the client falls back to keyless OpenFreeMap with a grey FALLBACK BASEMAP note, and labels are drawn with
+bundled glyphs.
+
+The key that older crc-desktop releases shipped is in git history, so it is public. Only revoking it at MapTiler retires it.
+
+1. In the MapTiler account, create a new key. Optionally restrict it, remembering the client loads from `http://localhost:<port>`
+   (an origin allow-list that excludes localhost sends every client to the fallback basemap).
+2. Set `CRCSYNC_MAPTILER_CLIENT_KEY` (and/or `CRCSYNC_MAPTILER_KEY`) in `infra/.env` on the server. Never commit it.
+3. Deploy crc-sync by re-running the **Deploy** workflow (Actions, "Deploy", Run workflow on `main`; the human approves the
+   `production` environment). Do not run `docker compose pull crc-sync && docker compose up -d` by hand: that pulls whatever
+   `:latest` is and bypasses the wire protocol gate. Connected clients pick the new key up at their next login (restart or re-login).
+4. Check: log in with a crc-desktop of this release; the MapTiler basemap draws (no FALLBACK BASEMAP note).
+5. **Delete the old key in MapTiler.** Until then it still works, and it is public.
+
+Every crc-desktop older than this change keeps the old key built in, so it loses its basemap and contours the moment step 5
+is done. VERSION refuses those clients once the protocol is bumped anyway. A crc-desktop older than the DCS terrain change
+(ADR 0133) still asks MapTiler for contours until it is updated.
+
+## Building the terrain cache (crc-sync ADR 0133)
+
+**Shipped caches:** `crc-sync/data/terrain/<Theater>-<n>m.terrain.gz` is baked into the image (Syria at 500 m, built
+2026-10-22 against DCS 2.9.30.28536, validated: S-ARCH-89). crc-sync reads a cache in the state volume first and the
+shipped one otherwise, so a deploy needs no build for a shipped theater. To ship a new or rebuilt map: build it (below),
+`gzip -9 -c Syria-500m.terrain > crc-sync/data/terrain/Syria-500m.terrain.gz`, commit, deploy; then delete any older
+copy of that theater in the volume's `terrain-cache/`, or it keeps winning.
+
+crc-sync's radar masking, and crc-desktop's contours and debug line of sight, read a height grid of the whole map built
+from DCS itself. **Only a human runs the build**, at a time the DCS server may be loaded: every request is a
+`CustomService.Eval` on the sim thread. A mission on that theater must be running (the command checks it and refuses
+another map; a mission change mid-build stops it).
+
+```bash
+cd <repo>/infra
+docker compose exec crc-sync npm run terrain:build -- --theater Syria
+#   optional: --spacing 500 (metres, default 500)  --chunk 4000 (samples per Eval, at least one row)
+#             --pause 500 (ms between Evals)        --out <dir> (default CRCSYNC_TERRAIN_CACHE_DIR)
+#             --dry-run (plan only)                 --max-chunks <n> (stop cleanly after n Evals)
+```
+
+**Try it first.** `--dry-run` sends one small Eval (the theater check and the four map corners, no heights), prints the
+grid, the number of Evals, the file size and the time the pauses alone take, and writes nothing. Then
+`--max-chunks 3` asks three rows and stops: read the "ms in DCS per Eval" it prints before the full run. It leaves a
+`.partial` and `.progress.json` that the full command resumes; build the probe with `--out /tmp/terrain-probe` if you would
+rather throw it away.
+
+- **Where it lands:** `/app/state/terrain-cache/Syria-500m.terrain` on the `crc-sync-state` volume
+  (`CRCSYNC_TERRAIN_CACHE_DIR` is already that in the stack). While it runs, `Syria-500m.terrain.partial` and
+  `.progress.json` sit beside it. Or build locally (`cd crc-sync && npm run terrain:build -- --theater Syria` with
+  `CRCSYNC_DCS_GRPC_HOST` set) and `docker compose cp Syria-500m.terrain crc-sync:/app/state/terrain-cache/` (owned by `node`).
+- **Interrupted?** Run the same command again: it continues from the next row. To start over, delete the `.partial` and
+  `.progress.json` files; to rebuild a finished file, delete it first.
+- **How long:** Syria at 500 m is 1,319 rows × 2,397 columns, 6.3 MB, one row per Eval: roughly 13–20 minutes at
+  `--pause 500`. The command prints the round trip, the time inside DCS and an ETA after every chunk. **Watch the first
+  lines:** if "ms in DCS per Eval" is above ~10 ms with players on, raise `--pause` (e.g. 1500) or build when the server is
+  empty. At 1 km: a few minutes.
+- **Then** restart the mission (or crc-sync). crc-sync reads the file at every mission load and logs `terrain cache
+  loaded`; `GET /api/terrain/status` (bearer token) says what is loaded or why not. Clients pick it up at their next
+  `theater` message. Without a file for the theater: logged once, no masking, no contours.
+- **Pick the spacing:** `docker compose exec crc-sync npm run terrain:validate -- --theater Syria` (optional `--spacings
+  1000,500,250 --pairs 200 --seed 1 --pause 500`) compares grid line of sight with DCS `land.isVisible`. If 500 m is clearly
+  worse than 250 m, build `--spacing 250` (25 MB, ~45–60 min); the server takes the finest file present.
+- Only theaters with a `terrainExtent` in `crc-sync/config/theaters.json` can be built (Syria and Caucasus today).
+- **Cleanup:** the old MapTiler tiles on the volume are never read again:
+  `docker compose exec crc-sync rm -rf /app/state/terrain-cache/10`.
+- No wire protocol change; nothing to set in `infra/.env`.
+
+## Wire protocol and the deploy gate (crc-sync ADR 0103)
+
+crc-sync and crc-desktop each compile in a wire protocol number (`crc-sync/src/wire-protocol.js`, `crc-desktop/app/public/js/wire-protocol.js`).
+A client whose number differs from the server's is refused with an "Update required" overlay (close code 4426); it does not reconnect on its own.
+The per-frame `version: 1` is unrelated and stays 1.
+
+- **Bump rule.** Any lane that changes the wire runs `cd crc-sync && npm run wire:record`. `crc-sync/tests/wire-protocol.test.mjs` fails
+  until it has (message types, EFSP op kinds, top-level frame keys). The script bumps both copies by one only if the last
+  `crc-desktop-v*` tag already shipped the current number; a number already ahead of the release is shared by every change until the
+  next release, and running the script twice never bumps twice. A tag with no `wire-protocol.js` is protocol 1. A change the scan cannot see
+  (a value's meaning) is bumped by hand with `npm run wire:record -- --bump`. A crc-desktop parity test fails if only one copy moved.
+- **Release order.** Merge to `main`, tag `crc-desktop-vX.Y.Z` from `main` (the release uploads the installers, then dispatches the crc-sync
+  image, which deploys). Between the upload and the crc-sync deploy, updated clients see "the server must be updated first" for a few minutes.
+- **The gate** (`.github/scripts/protocol-gate.sh`, the "Wire protocol gate" step of `deploy.yml`, main only; its decision table is
+  `infra/tests/protocol-gate.test.js`, run by `infra nginx check`). It resolves the crc-sync image to a **digest** (`sha-<short>` of the
+  commit when a crc-sync build triggered the deploy, otherwise the current `:latest`), reads that image's `org.sourcedcs.wire-protocol`
+  label (stamped by `crc-sync-docker.yml`, digest also in that run's summary) and compares it with the protocol in the **newest**
+  published release (`https://sourcedcs.page/api/releases/latest`, newest of the win and linux versions, then
+  `git show crc-desktop-v<version>:...`). The SSH step then deploys that same digest (`CRC_SYNC_IMAGE`), never a moving tag. When they differ
+  the step reports an error: **"crc-sync speaks protocol N, the published CRC vX speaks M: publish a crc-desktop release first (tag
+  crc-desktop-vX.Y.Z from main) or revert the wire change."** It holds only crc-sync: the `git pull`, the other images and the rest of the stack
+  still deploy, and the running crc-sync is left alone. **It fails closed**: an unreadable releases API, a newest published version with no tag
+  in the repo, a tag whose `wire-protocol.js` has no readable number, or an image with no label (built before the label existed) all hold
+  crc-sync, with the reason in the error. Fix the cause and re-run Deploy; `skip_protocol_gate` is the override.
+- **Never recreate crc-sync by hand.** A bare `docker compose up -d` on the server (without `CRC_SYNC_IMAGE`) resolves crc-sync back to `:latest`
+  and recreates it from that, past the gate. Re-run the Deploy workflow instead. If you must, run the gate first and export its image:
+  `IMAGE_REPO=ghcr.io/niknam3/sourcedcs/crc-sync IMAGE_REF=latest bash .github/scripts/protocol-gate.sh` (from a checkout with all tags),
+  continue only if it prints `hold=false`, then `CRC_SYNC_IMAGE=<the image= line> docker compose pull crc-sync && CRC_SYNC_IMAGE=<same> docker compose up -d crc-sync`.
+- **A half-published release.** `crc-desktop-release.yml` fails a leg that builds no installer and has a `verify-published` job that turns the run red
+  when the releases API does not list the tagged version for both win and linux. Re-run the failed leg (uploads are idempotent), or delete the tag.
+  The gate judges by the newest published version, so a one-leg release does not hold crc-sync on the older one.
+- **`skip_protocol_gate`.** A `workflow_dispatch` input on `deploy.yml`, for the human only, that recreates crc-sync despite a mismatch (every old
+  client then sees "Update required" until it updates). Use it only knowingly.
+- `crc-sync-docker.yml` runs both unit suites first; no image is built when one fails.
+- Optional `CRCSYNC_DOWNLOAD_URL` (compose default `https://sourcedcs.page/download.html`) is the link the refusal frame carries.
+- Clients installed before the handshake send no protocol: they are refused and keep reconnecting every 2 s with the topbar showing
+  disconnected, until electron-updater installs the new release on their next launch. This is a one-time, accepted cost.
+
+## 2026-10 — crc-sync / crc-desktop vocabulary and structure release: before the deploy
+
+Every EFSP wire name changed, so **ship the client (a crc-desktop release) and the crc-sync image together**; an old
+client against the new server (or the reverse) does not work. Decisions S-M-W7, S-M-BACKCOMPAT, S-M-DATA1.
+
+1. `infra/.env`: rename `ASACS_DOMAIN` / `ASACS_URL` to `CRCSYNC_DOMAIN` / `CRCSYNC_URL` (the old names are no longer read; `.env.example`).
+2. In the `crc-sync-state` volume (`/app/state`), delete: `efsp-board.json`, `efsp-mutations.jsonl`, every `efsp-facility-*.json`, and `alerting.json` if it has an `stca` key (the key is `conflictAlert` now). A state file is not migrated: an unknown key or an old shape stops start-up, with the file and the reason in the log (`checkPersistedShape`, `crc-sync/src/efsp/stores.js`). That includes a top-level `board`, a Board for a Facility that is not configured, a Strip in TRANSITING, and a facility file that is missing or invalid (`crc-sync/config/efsp-facility-*.json` are complete files; there is no merge with a copy in `state/`). The fix is always to correct or delete the named file; deleting gives a clean start.
+3. Then deploy by re-running the Deploy workflow (it does the `git pull --ff-only`, `docker compose pull main-website atobrief crc-sync`, `docker compose up -d`; root `CLAUDE.md`, "How the docker-image services deploy").
+
+## Consolidation as offers (crc-sync ADR 0110): before the deploy
+
+`consolidation` in the facility config is now a list of Positions offered the hat (`"CD": ["GC", "LC", "AP"]`), and there is a new required key `handBack` (`{}` where empty). Strict state refuses the old shape. Check the `crc-sync-state` volume (`/app/state`) for any `efsp-facility-*.json`: no code writes these files, so one exists only if someone placed it. If there is one, delete it (the shipped file applies) or convert its `consolidation` values to lists and add `"handBack": {}`; a copy with a string value stops start-up with the file and the reason in the log. The same release changes the wire (protocol 2): release crc-desktop after the merge to `main`, as in "Wire protocol and the deploy gate" above.
+
+## v2 launch (round 2, crc-sync ADRs 0121-0144): before the deploy
+
+Ship crc-desktop and the crc-sync image together, as always. Strict state again refuses older files, so in the
+`crc-sync-state` volume (`/app/state`):
+
+1. **`efsp-board.json` and `efsp-mutations*.jsonl`:** a Board holding any HANDOFF Strip from before ADR 0122 (the old
+   `coordination.release` key) or RSU PATTERN Strips stops start-up. Delete both for a clean start (open Strips are lost).
+   If you keep the Board instead:
+   - **A `RANGE` or `DANGER` airspace** in the Board's airspace registry stops start-up (ADR 0144: the area types are
+     MOA, RESTRICTED, PROHIBITED, WARNING, no migration); crc-sync names the airspace. None is known to exist. Delete it
+     or retype it (restricted over land, warning offshore, MOA if non-hazardous), or reset the Board. A `PROHIBITED`
+     record that is not `RETURNED`, has a schedule window or a pending request is refused the same way (none known).
+   - **`LTAG-RAPCON` stays "Class C"**: the standing areas are imported once, so the deployed registry keeps the old
+     class (ADR 0143 makes the MTMA unclassified). It still behaves right (Class C gives "IFR separated"), but its card
+     says Class C. After the deploy `AP` opens it in the AIRSPACE panel, **Edit…**, CLASS *none (unclassified)*, VFR
+     SERVICE *IFR separated*; or reset the Board. `LTAG-CZ` needs nothing (it stays Class D).
+   - **`CVN-72-CCA` stays "Class E"** the same way (ADR 0145 lane, H173 VQ-B: unclassified, ADVISORY). A carrier Position
+     edits it: CLASS *none (unclassified)*, VFR SERVICE *advisory*; or reset the Board. CENTER's fallback is code: nothing to do.
+   - **Correlation `confidence`** (ADR 0142 removed it) is still accepted on restore and dropped, so the deployed Board
+     survives. That allowance goes at the next Board reset (v3 backlog); nothing to do now.
+2. **`efsp-facility-incirlik.json`**, if one exists: a copy naming `RSU` or the `rsu-pattern` Bay stops start-up (there is
+   no RSU, ADR 0126). Delete it, or remove every RSU entry and add the `lc-pattern` Bay. A kept copy also keeps the old
+   runway headings and PAR courses (056/236 true, 3.3° off the DCS runway; the shipped file has 052.7/232.7, S-ARCH-93) and
+   lacks `airportSurfacePositions` (no airport surface for anyone, H162): deleting it is the simple fix.
+   - **`alerting.json`**, if one exists: `headingGraceSec` is gone (the grace now scales with the turn: `headingTurnRateDegPerSec`,
+     `headingTurnMaxBankDeg`, `headingGraceMarginSec`, H163). A copy that still has it stops start-up (unknown key): delete the key.
+   - **`server-resources.json`** is new (crc-sync ADR 0141, the METRICS panel's Server section); a `state/` copy is optional and
+     strict. The same numbers outside the client:
+     `curl -H "Authorization: Bearer <token>" https://<CRCSYNC_DOMAIN>/api/server/resources`.
+   - Any other `state/efsp-facility-*.json` copy may name `airportSurfacePositions` (optional, strict: an unknown Position
+     stops start-up).
+3. **`efsp-airspaces.json`**, if one exists: it replaces the shipped standing list whole, so it must carry the jurisdiction
+   areas `LTAG-CZ`, `LTAG-RAPCON` and `CVN-72-CCA` (copy them from `crc-sync/config/efsp-airspaces.json`) or every point
+   is CENTER's and a not-released handoff never moves control. Delete it to take the shipped list. A copy with a `RANGE`
+   or `DANGER` entry, or an unclassified area with no `vfrService`, stops start-up (ADR 0143, 0144); a copy of the old
+   shipped `LTAG-RAPCON` (Class C) is valid but out of date.
+4. **`efsp-frequencies.json`** is new and written by crc-sync (the FREQUENCIES panel). It is strict: an unknown key, row or
+   bad value stops start-up naming the file. Delete it to go back to the facility files' frequencies.
+5. **The terrain cache:** build it after the deploy ("Building the terrain cache" above), and delete the old
+   `terrain-cache/10/` MapTiler tiles.
+6. Release in the order of "Wire protocol and the deploy gate" above (this tree carries protocol 2; the last release shipped 1),
+   then deploy by re-running the Deploy workflow.
+
 ## 2026-08-29 — wiki scraper incident: what's blocked and why
 
 The droplet hit a load average of ~145 (1 vCPU) with 811 MB swap in use. Root cause,

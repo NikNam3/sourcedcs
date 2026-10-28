@@ -7,15 +7,21 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "test": "node --test",
+    "test": "node --import ./tests/helpers/isolate-tmp.mjs --test 'tests/*.test.{js,mjs}'",
     "dev-check": "npm test && npm start",
     "release-check": "bash scripts/release-check.sh",
     "pack:linux": "electron-builder --linux AppImage --publish never",
-    "pack:win":   "electron-builder --win nsis --publish never"
+    "pack:win": "electron-builder --win nsis --publish never",
+    "e2e": "playwright test",
+    "e2e:headed": "playwright test --headed",
+    "e2e:sharded": "node e2e/tools/run-sharded.js"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "dockview-core": "5.1.0",
     "electron": "^43.4.1",
-    "electron-builder": "^26.15.3"
+    "electron-builder": "^26.15.3",
+    "maplibre-gl": "3.6.2"
   },
   "dependencies": {
     "electron-updater": "^6.3.9"
@@ -33,6 +39,7 @@
       "main.js",
       "lxsrs-setup.js",
       "patch-notes.js",
+      "external-link.js",
       "config.json",
       "app/**/*",
       "!app/package.json",
@@ -50,7 +57,9 @@
         {
           "from": "python-pkg",
           "to": "python-pkg",
-          "filter": ["**/*"]
+          "filter": [
+            "**/*"
+          ]
         }
       ]
     },

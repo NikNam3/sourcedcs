@@ -1,17 +1,21 @@
 'use strict';
+const log = require('./logger');
 
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
 const voiceGateway = require('./discord-gateway');
 const activityDailyJob = require('./activity-daily-job');
-const { parseReleaseManifest } = require('./releases.js');
+const { parseReleaseManifest, pruneReleases } = require('./releases.js');
 const store = require('./store');
 const auth = require('./auth');
 const discordClient = require('./discord-client');
 const rateLimiters = require('./rate-limiters');
 
 const app = express();
+/* Behind nginx (one hop): key req.ip / rate limiters on the real client from
+   X-Forwarded-For, not on the nginx container's address. */
+app.set('trust proxy', 1);
 const PORT = process.env.PORT || 3000;
 
 /* ─── Discord bot config (see discord-client.js) ─────────── */
@@ -31,7 +35,7 @@ voiceGateway.init({ dataDir: store.DATA_DIR, token: DISCORD_BOT_TOKEN, guildId: 
    interval of in-progress call time, not just crashes. */
 function gracefulShutdown() {
   try { voiceGateway.flushAndSave(); }
-  catch (err) { console.error('[shutdown] voice-activity flush failed:', err.message); }
+  catch (err) { log.error('[shutdown] voice-activity flush failed:', err.message); }
   process.exit(0);
 }
 process.on('SIGTERM', gracefulShutdown);
@@ -67,10 +71,10 @@ if (Object.keys(store.state.members).length === 0) {
         }
         if (migrated) {
           store.saveJSON(store.MEMBERS_FILE, store.state.members);
-          console.log('[members] Migrated ' + migrated + ' legacy squadron override(s) from pilot-squadron-overrides.json');
+          log.info('[members] Migrated ' + migrated + ' legacy squadron override(s) from pilot-squadron-overrides.json');
         }
       } catch (err) {
-        console.error('[members] Startup migration failed:', err.message);
+        log.error('[members] Startup migration failed:', err.message);
       }
     })();
   }
@@ -101,7 +105,7 @@ app.get('/js/config.js', (_req, res) => {
     'var WIKI_URL            = ' + JSON.stringify(store.WIKI_URL) + ';\n' +
     'var ATO_URL             = ' + JSON.stringify(store.ATO_URL) + ';\n' +
     'var OLYMPUS_URL         = ' + JSON.stringify(store.OLYMPUS_URL) + ';\n' +
-    'var ASACS_URL           = ' + JSON.stringify(store.ASACS_URL) + ';\n' +
+    'var CRCSYNC_URL           = ' + JSON.stringify(store.CRCSYNC_URL) + ';\n' +
     'var GITHUB_URL          = ' + JSON.stringify(store.GITHUB_URL) + ';\n' +
     'var SKILL_ADMIN_ROLES   = ' + JSON.stringify(auth.SKILL_ADMIN_ROLES) + ';\n'
   );
@@ -156,6 +160,7 @@ api.get('/health', (_req, res) => {
    public download page. */
 api.post('/releases/upload', rateLimiters.writeOpsLimiter, auth.requireReleaseUpload, store.uploadRelease.single('file'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+  try { pruneReleases(store.RELEASES_DIR, { keep: 3 }); } catch (e) { log.warn('[releases] prune failed:', e.message); }
   res.json({ ok: true, filename: req.file.filename, size: req.file.size });
 });
 
@@ -180,18 +185,18 @@ api.post('/auth/token', rateLimiters.authLimiter, async (req, res) => {
   try {
     const tokenData = await auth.casdoorTokenExchange(code, redirectUri);
     if (tokenData.error) {
-      console.warn('[auth] Casdoor token exchange error:', tokenData.error, tokenData.error_description);
+      log.warn('[auth] Casdoor token exchange error:', tokenData.error, tokenData.error_description);
       return res.status(400).json({ error: tokenData.error_description || tokenData.error });
     }
     const accessToken = tokenData.access_token;
     if (!accessToken) {
-      console.warn('[auth] Casdoor response missing access_token:', JSON.stringify(tokenData).slice(0, 200));
+      log.warn('[auth] Casdoor response missing access_token:', JSON.stringify(tokenData).slice(0, 200));
       return res.status(502).json({ error: 'No access token returned by auth server' });
     }
     auth.registerPilot(auth.decodeJWT(accessToken));
     res.json({ access_token: accessToken });
   } catch (err) {
-    console.error('[auth] Token exchange failed:', err.message);
+    log.error('[auth] Token exchange failed:', err.message);
     res.status(502).json({ error: 'Auth server unreachable or returned an error' });
   }
 });
@@ -206,6 +211,7 @@ api.use(require('./routes/grading-requests'));
 api.use(require('./routes/members'));
 api.use(require('./routes/flight-plans'));
 api.use(require('./routes/fpl1801'));
+api.use(require('./routes/airspaces'));
 api.use(require('./routes/bookings'));
 
 app.use('/api', api);
@@ -218,7 +224,7 @@ app.use('/api', api);
 app.use(function jsonErrorHandler(err, req, res, _next) {
   const status = err.status || err.statusCode || 500;
   const message = err.message || 'Internal server error';
-  console.error('[error]', status, message);
+  log.error('[error]', status, message);
   res.status(status).json({ error: message });
 });
 
@@ -229,10 +235,10 @@ app.get('*', (_req, res) => {
 
 /* ─── Start ─────────────────────────────────────────────── */
 app.listen(PORT, () => {
-  console.log(`[sourcedcs-web] listening on http://0.0.0.0:${PORT}`);
-  console.log('[sourcedcs-web] Config:');
-  console.log('  DISCORD_BOT_TOKEN  :', DISCORD_BOT_TOKEN ? '*** (set)' : 'NOT SET');
-  console.log('  DISCORD_GUILD_ID   :', DISCORD_GUILD_ID || 'NOT SET');
-  console.log('  APPLY_CHANNEL_ID   :', APPLY_CHANNEL_ID || 'NOT SET (applications will be stored in JSON)');
-  console.log('  GRADING_CHANNEL_ID :', GRADING_CHANNEL_ID || 'NOT SET (grading requests will not post to Discord)');
+  log.info(`[sourcedcs-web] listening on http://0.0.0.0:${PORT}`);
+  log.info('[sourcedcs-web] Config:');
+  log.info('  DISCORD_BOT_TOKEN  :', DISCORD_BOT_TOKEN ? '*** (set)' : 'NOT SET');
+  log.info('  DISCORD_GUILD_ID   :', DISCORD_GUILD_ID || 'NOT SET');
+  log.info('  APPLY_CHANNEL_ID   :', APPLY_CHANNEL_ID || 'NOT SET (applications will be stored in JSON)');
+  log.info('  GRADING_CHANNEL_ID :', GRADING_CHANNEL_ID || 'NOT SET (grading requests will not post to Discord)');
 });

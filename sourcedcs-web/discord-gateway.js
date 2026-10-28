@@ -1,4 +1,5 @@
 'use strict';
+const log = require('./logger');
 
 /* Minimal Discord Gateway v10 client — hand-rolled over `ws`, mirroring this
    repo's existing style of hand-rolled REST over `https` (see server.js's
@@ -31,12 +32,7 @@ const FATAL_CLOSE_CODES = new Set([4004, 4010, 4011, 4012, 4013, 4014]);
 /* Close codes after which the next connection must IDENTIFY fresh, not RESUME */
 const NEEDS_FRESH_IDENTIFY_CODES = new Set([4007, 4009]);
 
-function loadJSON(file, fallback) {
-  try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return fallback; }
-}
-function saveJSON(file, data) {
-  fs.writeFileSync(file, JSON.stringify(data, null, 2), 'utf8');
-}
+const { loadJSON, saveJSON } = require('./json-file');
 
 /* The squadron-wide "day" boundary — 05:00 UTC, fixed (no DST). Every
    segment `creditMinutes` walks is already split on UTC-hour boundaries,
@@ -51,7 +47,7 @@ function utcHourBoundary(ms) { return Math.floor(ms / 3600000) * 3600000; }
 function safe(fn) {
   return (...args) => {
     try { fn(...args); }
-    catch (err) { console.error('[voice-gateway] handler error:', (err && err.stack) || err); }
+    catch (err) { log.error('[voice-gateway] handler error:', (err && err.stack) || err); }
   };
 }
 
@@ -235,7 +231,7 @@ function sendHeartbeat() {
   if (!ackReceived) {
     /* Zombie connection — no ACK since the last beat. Don't wait for TCP to
        notice; force-close and let the close handler schedule a reconnect. */
-    console.warn('[voice-gateway] heartbeat ACK missing — terminating zombie connection');
+    log.warn('[voice-gateway] heartbeat ACK missing — terminating zombie connection');
     if (ws) ws.terminate();
     return;
   }
@@ -275,11 +271,11 @@ function handleDispatch(t, d) {
       sessionId = d.session_id;
       resumeGatewayUrl = d.resume_gateway_url;
       reconnectAttempt = 0;
-      console.log('[voice-gateway] READY');
+      log.info('[voice-gateway] READY');
       break;
     case 'RESUMED':
       reconnectAttempt = 0;
-      console.log('[voice-gateway] RESUMED');
+      log.info('[voice-gateway] RESUMED');
       break;
     case 'GUILD_CREATE':
       if (String(d.id) === String(identifiedGuildId)) reconcileGuildVoiceStates(d.voice_states || []);
@@ -332,12 +328,12 @@ function connectGateway() {
 
   ws = new WebSocket(url);
   ws.on('message', safe((data) => handleMessage(data)));
-  ws.on('error', safe((err) => console.error('[voice-gateway] socket error:', err.message)));
+  ws.on('error', safe((err) => log.error('[voice-gateway] socket error:', err.message)));
   ws.on('close', safe((code) => {
     clearHeartbeatTimers();
-    console.warn('[voice-gateway] connection closed, code=' + code);
+    log.warn('[voice-gateway] connection closed, code=' + code);
     if (FATAL_CLOSE_CODES.has(code)) {
-      console.error('[voice-gateway] fatal close code ' + code + ' — not reconnecting; check DISCORD_BOT_TOKEN / intents');
+      log.error('[voice-gateway] fatal close code ' + code + ' — not reconnecting; check DISCORD_BOT_TOKEN / intents');
       return;
     }
     if (NEEDS_FRESH_IDENTIFY_CODES.has(code)) { sessionId = null; lastSeq = null; }
@@ -429,7 +425,7 @@ function init({ dataDir, token, guildId }) {
   if (token && guildId) {
     startGateway(token, guildId);
   } else {
-    console.warn('[voice-gateway] DISCORD_BOT_TOKEN or DISCORD_GUILD_ID not set — voice activity tracking disabled');
+    log.warn('[voice-gateway] DISCORD_BOT_TOKEN or DISCORD_GUILD_ID not set — voice activity tracking disabled');
   }
 }
 

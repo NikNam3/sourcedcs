@@ -1,0 +1,34 @@
+[
+  {
+    "name": "KEMER1",
+    "description": "RWY 05: on departure turn left hdg 360 to intercept DAN R-360 outbound to 10DME, climb to 4000. When reaching 10DME turn left hdg 310 direct KEMER. Climb to FL220. From over KEMER turn left hdg 255 direct ERGEP. RWY 23: on departure climb on DAN R-229 to 4000. When reaching 10DME turn right hdg 325 direct KEMER. Climb to FL220. From over KEMER turn left hdg 255 direct ERGEP.",
+    "departureAirport": "LTAG",
+    "destinationAirport": "LTAG",
+    "route": "DCT KEMER DCT ERGEP/D1+00 ERGEP DCT KEMER DCT DAN LTAG",
+    "requestedAltitude": "220"
+  },
+  {
+    "name": "MANAZ2",
+    "description": "RWY 05: on departure turn right hdg 270 direct MANAZ to cross DAN R-140 at 5DME. Climb to cross DAN R-140 at 4000. Maintain 4000 until crossing DAN R-229 then climb to FL220. From over MANAZ turn right hdg 326 direct ERGEP. RWY 23: on departure climb on DAN R-229 to 4000. When reaching 10DME turn right hdg 270 direct MANAZ. Climb to FL220. From over MANAZ turn right hdg 326 direct ERGEP.",
+    "departureAirport": "LTAG",
+    "destinationAirport": "LTAG",
+    "route": "DCT MANAZ DCT ERGEP/D1+00 ERGEP DCT MANAZ DCT DAN LTAG",
+    "requestedAltitude": "220"
+  },
+  {
+    "name": "MANAZ3",
+    "description": "RWY 05: on departure turn right hdg 270 direct MANAZ to cross DAN R-140 at 5DME. Climb to cross DAN R-140 at 4000. Maintain 4000 until crossing DAN R-229 then climb to FL220. From over MANAZ turn left hdg 267 direct MUT. RWY 23: on departure climb on DAN R-229 to 4000. When reaching 10DME turn right hdg 270 direct MANAZ. Climb to FL220. From over MANAZ turn left hdg 267 direct MUT.",
+    "departureAirport": "LTAG",
+    "destinationAirport": "LTAG",
+    "route": "DCT MANAZ DCT MUT/D1+00 MUT DCT MANAZ DCT DAN LTAG",
+    "requestedAltitude": "220"
+  },
+  {
+    "name": "TARSU4",
+    "description": "RWY 05: on departure turn right hdg 246 direct TARSU to cross DAN R-140 at 5DME. Climb to cross DAN R-140 at 4000. Thereafter climb to FL220. From over TARSU turn right hdg 283 direct MUT. RWY 23: on departure turn right hdg 240 direct TARSU. Climb FL220. From over TARSU turn right hdg 283 direct MUT.",
+    "departureAirport": "LTAG",
+    "destinationAirport": "LTAG",
+    "route": "DCT TARSU DCT MUT/D1+00 MUT DCT TARSU DCT DAN LTAG",
+    "requestedAltitude": "220"
+  }
+]

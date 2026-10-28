@@ -1,5 +1,8 @@
 'use strict';
 
+import { escapeHtml } from './html-escape.js';
+import { createPttController, clampMaxTxSeconds, PTT_MAX_TX_DEFAULT_S } from './ptt-controller.js';
+
 // ── SRS Radio panel ──────────────────────────────────────────────────────────
 // Communicates with lxsrs_v2 via the /srs-api/ proxy on the CRC server.
 
@@ -14,6 +17,7 @@
   const LS_MIC     = 'srs_pref_mic';
   const LS_SINK    = 'srs_pref_sink';
   const LS_PTT_KEY = 'srs_pref_ptt_key';
+  const LS_PTT_MAX_TX_S = 'srs_pref_ptt_max_tx_s'; // seconds; clamped 5..120, default 30 (ptt-controller.js)
 
   function _loadPref(key) {
     try {
@@ -49,8 +53,6 @@
   };
 
   let _devices = { inputs: [], outputs: [] };
-  let _pttHeld       = false;
-  let _pttTimer      = null;
   let _rebuildingSelects = false;
   const _draggingSlots = new Set();  // slots whose vol slider is being dragged
 
@@ -95,6 +97,10 @@
   // ── DOM refs ───────────────────────────────────────────────────────────────
 
   const _radioList   = document.getElementById('srs-radio-list');
+  // Cached with the rest: looked up live in _renderSlots they were null once dockview had the
+  // RADIO panel closed (detached), and every poll threw (S-L1b finding).
+  const _addRadioBtn = document.getElementById('srs-add-radio');
+  const _addIcomBtn  = document.getElementById('srs-add-intercom');
   const _pttBtn      = document.getElementById('srs-ptt-btn');
   const _dot         = document.getElementById('srs-dot');
   // Settings tab elements
@@ -172,10 +178,10 @@
     top.className = 'srs-slot' + (r.tx ? ' srs-slot-tx' : '') + (r.rx ? ' srs-slot-rx' : '');
     const modBadge = isIntercom
       ? `<span class="srs-slot-mod srs-slot-mod-fixed" title="Intercom">IC</span>`
-      : `<span class="srs-slot-mod" data-slot="${r.slot}" title="Click to cycle modulation">${r.modulation.slice(0,2)}</span>`;
+      : `<span class="srs-slot-mod" data-slot="${escapeHtml(r.slot)}" title="Click to cycle modulation">${escapeHtml(r.modulation.slice(0,2))}</span>`;
     top.innerHTML =
-      `<span class="srs-slot-n">${r.slot + 1}</span>` +
-      (isIntercom ? `` : `<span class="srs-slot-freq" data-slot="${r.slot}" title="Click to set frequency">${r.freq_mhz.toFixed(3)}</span>`) +
+      `<span class="srs-slot-n">${escapeHtml(r.slot + 1)}</span>` +
+      (isIntercom ? `` : `<span class="srs-slot-freq" data-slot="${escapeHtml(r.slot)}" title="Click to set frequency">${escapeHtml(r.freq_mhz.toFixed(3))}</span>`) +
       modBadge +
       (r.tx ? `<span class="srs-slot-txbadge">TX</span>` : '');
     const rm = document.createElement('span');
@@ -188,8 +194,8 @@
     const volRow = document.createElement('div');
     volRow.className = 'srs-slot-volrow';
     volRow.innerHTML =
-      `<input class="srs-slot-vol" type="range" min="0" max="5" step="0.1" value="${vol}" data-slot="${r.slot}" title="Per-radio output volume">` +
-      `<span class="srs-slot-vol-lbl" data-slot="${r.slot}">${vol.toFixed(1)}x</span>`;
+      `<input class="srs-slot-vol" type="range" min="0" max="5" step="0.1" value="${escapeHtml(vol)}" data-slot="${escapeHtml(r.slot)}" title="Per-radio output volume">` +
+      `<span class="srs-slot-vol-lbl" data-slot="${escapeHtml(r.slot)}">${escapeHtml(vol.toFixed(1))}x</span>`;
     wrap.appendChild(volRow);
     return wrap;
   }
@@ -199,9 +205,10 @@
   function _renderSlots() {
     const active = (_state.radios || []).filter(r => r.modulation !== 'DISABLED');
     const vols   = _state.radio_volumes || [];
-    const addBtn = document.getElementById('srs-add-radio');
+    const addBtn = _addRadioBtn;
+    if (!_radioList || !addBtn) return; // panel not in the DOM right now
     addBtn.style.display = active.length >= MAX_RADIOS ? 'none' : '';
-    const addIcBtn = document.getElementById('srs-add-intercom');
+    const addIcBtn = _addIcomBtn;
     if (addIcBtn) {
       const hasIntercom = active.some(r => r.modulation === 'INTERCOM');
       addIcBtn.classList.toggle('srs-intercom-active', hasIntercom);
@@ -267,13 +274,13 @@
             top.className = 'srs-slot' + (r.tx ? ' srs-slot-tx' : '') + (r.rx ? ' srs-slot-rx' : '');
             const _isIcom = r.modulation === 'INTERCOM';
             top.innerHTML =
-              `<span class="srs-slot-n">${r.slot + 1}</span>` +
-              (_isIcom ? `` : `<span class="srs-slot-freq" data-slot="${r.slot}" title="Click to set frequency">${r.freq_mhz.toFixed(3)}</span>`) +
+              `<span class="srs-slot-n">${escapeHtml(r.slot + 1)}</span>` +
+              (_isIcom ? `` : `<span class="srs-slot-freq" data-slot="${escapeHtml(r.slot)}" title="Click to set frequency">${escapeHtml(r.freq_mhz.toFixed(3))}</span>`) +
               (_isIcom
                 ? `<span class="srs-slot-mod srs-slot-mod-fixed" title="Intercom">IC</span>`
-                : `<span class="srs-slot-mod" data-slot="${r.slot}" title="Click to cycle modulation">${r.modulation.slice(0,2)}</span>`) +
+                : `<span class="srs-slot-mod" data-slot="${escapeHtml(r.slot)}" title="Click to cycle modulation">${escapeHtml(r.modulation.slice(0,2))}</span>`) +
               (r.tx ? `<span class="srs-slot-txbadge">TX</span>` : '') +
-              `<span class="srs-slot-rm" data-slot="${r.slot}" title="Remove radio">✕</span>`;
+              `<span class="srs-slot-rm" data-slot="${escapeHtml(r.slot)}" title="Remove radio">✕</span>`;
           }
         }
         // Update slider value only when not actively dragging
@@ -301,8 +308,8 @@
                               :                                        'disconnected');
 
     // PTT — reflect server state for non-browser sources (pynput, stdin)
-    if (_state.ptt && !_pttHeld) _pttBtn.classList.add('ptt-active');
-    else if (!_state.ptt && !_pttHeld) _pttBtn.classList.remove('ptt-active');
+    if (_state.ptt && !_ptt.isHeld()) _pttBtn.classList.add('ptt-active');
+    else if (!_state.ptt && !_ptt.isHeld()) _pttBtn.classList.remove('ptt-active');
 
     // Radio slots — diffed to avoid destroying slider state mid-drag
     _renderSlots();
@@ -378,23 +385,21 @@
 
   // ── PTT ────────────────────────────────────────────────────────────────────
 
-  function _pttDown(e) {
-    if (e) e.preventDefault();
-    if (_pttHeld) return;
-    _pttHeld = true;
-    _post('/ptt/start');
-    _pttTimer = setInterval(() => _post('/ptt/start'), 400);
-    _pttBtn.classList.add('ptt-active');
-  }
+  // The PTT state machine (key, blur, visibility, maximum transmit time) lives in ptt-controller.js.
+  const _ptt = createPttController({
+    post: _post,
+    setActive: (on) => _pttBtn.classList.toggle('ptt-active', on),
+    getKey: () => _pttKey,
+    isTyping: _isTyping,
+    win: window,
+    doc: document,
+    getMaxTxSeconds: () => _loadPref(LS_PTT_MAX_TX_S) ?? PTT_MAX_TX_DEFAULT_S,
+    log: (m) => console.warn('[srs-ptt] ' + m),
+  });
+  console.info(`[srs-ptt] maximum transmit time ${clampMaxTxSeconds(_loadPref(LS_PTT_MAX_TX_S) ?? PTT_MAX_TX_DEFAULT_S)} s (pref ${LS_PTT_MAX_TX_S})`);
 
-  function _pttUp(e) {
-    if (e) e.preventDefault();
-    if (!_pttHeld) return;
-    _pttHeld = false;
-    clearInterval(_pttTimer);
-    _post('/ptt/stop');
-    _pttBtn.classList.remove('ptt-active');
-  }
+  function _pttDown(e) { if (e) e.preventDefault(); _ptt.down(); }
+  function _pttUp(e) { if (e) e.preventDefault(); _ptt.up(); }
 
   // ── PTT button wiring ──────────────────────────────────────────────────────
 
@@ -410,15 +415,6 @@
     return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
   }
 
-  document.addEventListener('keydown', (e) => {
-    if (e.code !== _pttKey || e.repeat || _isTyping()) return;
-    e.preventDefault();
-    _pttDown(null);
-  });
-  document.addEventListener('keyup', (e) => {
-    if (e.code === _pttKey && !_isTyping()) _pttUp(null);
-  });
-
   // Radio slot clicks — delegated
   _radioList.addEventListener('click', async (e) => {
     const freqEl = e.target.closest('.srs-slot-freq');
@@ -429,7 +425,7 @@
     if (freqEl) {
       const slot = parseInt(freqEl.dataset.slot, 10);
       const radio = (_state.radios || []).find(r => r.slot === slot);
-      const cur   = radio?.freq_mhz?.toFixed(3) ?? '251.000';
+      const cur   = radio?.freq_mhz?.toFixed(3) ?? ''; // no station frequency in code (H147 RQ5): an unset radio prompts empty
       const raw   = await _promptFreq(slot, cur);
       if (raw == null) return;
       const f = parseFloat(raw);
@@ -610,23 +606,9 @@
       _icUnitSel.appendChild(grp);
     }
 
-    // Live DCS tracks — blue coalition
-    if (typeof window.getAllTracks === 'function') {
-      const units = window.getAllTracks()
-        .filter(t => t.coalition === 3) // blue (coalition 3 = COALITION_BLUE)
-        .sort((a, b) => (a.callsign || '').localeCompare(b.callsign || ''));
-      if (units.length) {
-        const grp = document.createElement('optgroup');
-        grp.label = 'DCS units';
-        for (const t of units) {
-          const opt = document.createElement('option');
-          opt.value = String(t.id);
-          opt.textContent = `${t.callsign || t.type || '?'} (ID ${t.id})`;
-          grp.appendChild(opt);
-        }
-        _icUnitSel.appendChild(grp);
-      }
-    }
+    // No "DCS units" group: an intercom is joined through SRS, so the SRS
+    // clients above are the whole list — and the radar picture does not tell
+    // this controller which contacts are friendly units (docs/adr/0059).
 
     // Restore selection
     const target = String(currentUnitId || prev || '1');
@@ -643,7 +625,7 @@
 
   // ── Settings tab wiring (refresh devices when RADIO tab opens) ─────────────
 
-  document.querySelectorAll('.stab[data-pane="radio"]').forEach(btn => {
+  document.querySelectorAll('.stab[data-pane="srs"]').forEach(btn => {
     btn.addEventListener('click', () => {
       _pollDevices();
       _rebuildIntercomUnitSelect(_state.unit_id);

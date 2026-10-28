@@ -25,6 +25,12 @@ DEFAULT_VERSION = "2.3.3.3"
 UDP_PING_INTERVAL = 15.0
 MIC_SAMPLE_RATE = 16000
 MIC_FRAME_MS = 20
+# The web UI re-sends /api/ptt/start every 400 ms while the key is held. If none arrives for this long (renderer crashed,
+# window lost, network between them cut) the radio is un-keyed here, so a stuck client can never hold the frequency open.
+PTT_KEEPALIVE_TIMEOUT_S = 1.5
+# An enabled radio with no frequency yet: the same 1 Hz placeholder a DISABLED slot
+# carries (models.Radio), which matches no station.
+UNTUNED_HZ = 1.0
 
 
 def make_srs_guid() -> str:
@@ -42,6 +48,11 @@ class SRSClient:
     version: str = DEFAULT_VERSION
     guid: str = field(default_factory=make_srs_guid)
     tx_frequency_mhz: float | None = None
+    # Frequency a newly added radio (and a radio that has none yet) tunes to.
+    # No station frequency lives in code (H147 RQ5): the launcher passes it
+    # from config (crc-desktop config.json `defaultFreq`); None leaves the
+    # slot untuned (UNTUNED_HZ) for the controller to set.
+    default_frequency_mhz: float | None = None
     mic_source: str | None = None   # PulseAudio source name; None = default
     speaker_sink: str | None = None
     input_volume: float = 1.0
@@ -244,6 +255,19 @@ class SRSClient:
             self._ptt_active.clear()
             LOG.info("tx stop")
 
+    def ptt_watchdog_tick(self, now: float | None = None) -> bool:
+        """Stop transmitting if the web PTT keepalive went stale. Returns True when it released the key.
+
+        Run on every transmit-loop pass (even while the mic is unavailable) and on every state read, so it does not depend
+        on audio flowing. A key never raised through transmit_ptt_down has no heartbeat and is left alone."""
+        if not self._ptt_active.is_set() or self._ptt_heartbeat_at <= 0:
+            return False
+        if (time.monotonic() if now is None else now) - self._ptt_heartbeat_at <= PTT_KEEPALIVE_TIMEOUT_S:
+            return False
+        LOG.warning("ptt keepalive lost for more than %.1f s, releasing transmit", PTT_KEEPALIVE_TIMEOUT_S)
+        self.transmit_ptt_up()
+        return True
+
     def _get_tx_frequency_hz(self) -> float:
         with self._state_lock:
             return self._radio_info.radios[self._tx_slot].freq
@@ -266,6 +290,7 @@ class SRSClient:
         ptt_prev = False
         try:
             while not self._stop_threads.is_set():
+                self.ptt_watchdog_tick()
                 current_generation, current_source = self._get_mic_config()
                 if mic is None or current_generation != mic_generation:
                     if mic is not None:
@@ -300,13 +325,9 @@ class SRSClient:
                     pcm = None
                     time.sleep(0.1)
 
-                ptt_now = self._ptt_active.is_set()
-
                 # Auto-release PTT if the web heartbeat went stale (browser closed mid-TX)
-                if (ptt_now and self._ptt_heartbeat_at > 0
-                        and time.monotonic() - self._ptt_heartbeat_at > 1.5):
-                    self.transmit_ptt_up()
-                    ptt_now = False
+                self.ptt_watchdog_tick()
+                ptt_now = self._ptt_active.is_set()
 
                 # On PTT press: play TX start sound, start noise, flush stale mic frames
                 if ptt_now and not ptt_prev:
@@ -399,6 +420,11 @@ class SRSClient:
                 time.sleep(0.1)
             listener.stop()
 
+    def _default_freq_hz(self) -> float:
+        if self.default_frequency_mhz is None:
+            return UNTUNED_HZ
+        return self.default_frequency_mhz * 1_000_000
+
     def _get_tx_modulation(self) -> int:
         with self._state_lock:
             return int(self._radio_info.radios[self._tx_slot].modulation)
@@ -431,7 +457,7 @@ class SRSClient:
                 return -1
             for idx, radio in enumerate(self._radio_info.radios):
                 if radio.modulation == Modulation.DISABLED:
-                    self._radio_info.radios[idx] = make_radio(251_000_000.0, name=f"linux{idx + 1}")
+                    self._radio_info.radios[idx] = make_radio(self._default_freq_hz(), name=f"linux{idx + 1}")
                     self._schedule_radio_update()
                     self.save_state()
                     return idx
@@ -514,7 +540,7 @@ class SRSClient:
                     index = -1
                 radio.modulation = order[(index + 1) % len(order)]
                 if radio.freq <= 10000:
-                    radio.freq = 251_000_000.0
+                    radio.freq = self._default_freq_hz()
         self._schedule_radio_update()
         self.save_state()
         self._update_noise()
@@ -535,7 +561,8 @@ class SRSClient:
             for i, r in enumerate(radios):
                 if i >= len(self._radio_info.radios):
                     break
-                freq = float(r.get("freq_mhz", 251.0)) * 1_000_000
+                saved = r.get("freq_mhz")
+                freq = float(saved) * 1_000_000 if saved is not None else self._default_freq_hz()
                 mod_name = r.get("modulation", "AM")
                 try:
                     mod = Modulation[mod_name]
@@ -593,6 +620,7 @@ class SRSClient:
         return 1.0
 
     def get_ui_snapshot(self) -> dict[str, Any]:
+        self.ptt_watchdog_tick()
         with self._rx_lock:
             rx_freqs = dict(self._rx_freqs)
         with self._state_lock:

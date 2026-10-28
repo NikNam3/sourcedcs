@@ -67,6 +67,73 @@ _AIRDROME_ICAO_SET: frozenset[str] = frozenset(
 )
 
 
+# ── ATO callsign (decision H60) ──────────────────────────────────────────────
+ATO_CALLSIGN_MAX = 7
+_VOWELS = frozenset("AEIOU")
+
+
+def ato_callsign(name: str | None) -> str | None:
+    """
+    The callsign a DCS group name becomes in the ATO (decision H60).
+
+    Upper-cased, anything outside A–Z/0–9 dropped (so ``VIPER-1`` → ``VIPER1``,
+    ``Mauler 6`` → ``MAULER6``), then — while longer than 7 characters — vowels
+    are cut from back to front: ``ENFIELD11`` → ``ENFLD11``,
+    ``SHADOW11`` → ``SHADW11``.
+
+    The same rule as crc-sync's ATO import (L14, ``fitCallsign``), so the two
+    agree.  A name that still does not fit with every vowel gone is returned
+    normalised but uncut (``STRAWBERRY11``): nothing is invented, atobrief's
+    export flags it CALLSIGN_NOT_SEEDABLE and a planner shortens it.
+    """
+    if not name:
+        return None
+    cs = re.sub(r'[^A-Z0-9]', '', name.upper())
+    if not cs:
+        return None
+    chars = list(cs)
+    i = len(chars) - 1
+    while len(chars) > ATO_CALLSIGN_MAX and i >= 0:
+        if chars[i] in _VOWELS:
+            del chars[i]
+        i -= 1
+    return "".join(chars) if len(chars) <= ATO_CALLSIGN_MAX else cs
+
+
+# ── Support missions (tankers, AWACS) ────────────────────────────────────────
+# DCS flight task → ATO mission type for the flights miztoyaml used to skip.
+SUPPORT_MISSION_TYPES: dict[str, str] = {
+    "TANKER": "REFUELING",
+    "AWACS":  "AEW",
+}
+
+
+def mission_type_of(flight: Flight) -> str:
+    if flight.is_tanker:
+        return SUPPORT_MISSION_TYPES["TANKER"]
+    if flight.is_awacs:
+        return SUPPORT_MISSION_TYPES["AWACS"]
+    return flight.task
+
+
+def mission_datalink(flight: Flight) -> dict | None:
+    """
+    missions[].datalink from what the .miz holds for the flight lead:
+    the Link 16 voice callsign (l16_callsign), its STN as the JU, and — for a
+    flight that activates one (tankers) — its TACAN.  None when there is
+    nothing.  All values are strings, so leading zeros survive YAML.
+    """
+    lead = flight.units[0] if flight.units else None
+    dl: dict = {}
+    if lead and lead.voice_callsign:
+        dl["l16_callsign"] = lead.voice_callsign
+    if flight.tacan:
+        dl["tacan"] = flight.tacan
+    if lead and lead.stn_l16:
+        dl["ju"] = lead.stn_l16
+    return dl or None
+
+
 def _nm_between(x1: float, y1: float, x2: float, y2: float) -> float:
     """Approximate distance in NM between two DCS world-coords points."""
     dx, dy = x2 - x1, y2 - y1
@@ -625,8 +692,11 @@ def build_missions(flights: list[Flight], msn_start: int,
                    dtcs: dict | None = None,
                    theatre: str = "Syria") -> tuple[list[dict], list[dict]]:
     """
-    Produce the ato.missions list for non-tanker, non-AWACS flights,
-    and the steerpoints list for merged waypoints.
+    Produce the ato.missions list — one mission per flight, tankers as
+    REFUELING and AWACS as AEW missions (ADR 0089) — and the steerpoints list
+    for merged waypoints.  Mission numbers run in flight order from
+    msn_start; the registry links a tanker/agency to its mission through
+    mission_number (build_doc).
 
     When a flight has a DTC cartridge whose DTC data contains 'routes',
     those steerpoints are used instead of the mission-file waypoints.
@@ -635,19 +705,12 @@ def build_missions(flights: list[Flight], msn_start: int,
     Returns (missions, steerpoints).
     """
     missions = []
-    strike_i = 0
     flight_steerpoints: dict[str, list[dict]] = {}
 
-    for f in flights:
-        if f.is_awacs:
-            continue
-        if f.is_tanker:
-            continue
+    for i, f in enumerate(flights):
+        msn_num = f"MSN{msn_start + i}"
 
-        msn_num = f"MSN{msn_start + strike_i}"
-        strike_i += 1
-
-        callsign = f.name
+        callsign = ato_callsign(f.name) or f.name
         ac_base  = f.aircraft_type.split('_')[0]
         ac_type  = re.sub(r'[^A-Z0-9]', '', ac_base.upper())
         count    = len(f.units)
@@ -675,7 +738,7 @@ def build_missions(flights: list[Flight], msn_start: int,
         msn: dict = {
             "mission_number": msn_num,
             "callsign":       callsign,
-            "mission_type":   f.task,
+            "mission_type":   mission_type_of(f),
             "unit":           None,
             "deploy":         deploy,
             "recovery":       recovery,
@@ -687,6 +750,7 @@ def build_missions(flights: list[Flight], msn_start: int,
                 "loadout": loadout_str,
             },
             "targets":       msn_targets,
+            "datalink":      mission_datalink(f),
             "control":       {"agency_id": None},
             "refuel":        None,
             "steer_points":  None,  # filled after merge

@@ -1,3 +1,4 @@
+const log = require('./logger');
 // ═══════════════════════════════════════════════════════════
 // server.js — ATO BRIEF web server with session support
 // ═══════════════════════════════════════════════════════════
@@ -23,6 +24,7 @@ const http       = require('http');
 const path       = require('path');
 const rateLimit  = require('express-rate-limit');
 const { Server } = require('socket.io');
+const { mountUsmtfRoutes } = require('./usmtf-api');
 
 function hashPassword(pw) {
   const salt = crypto.randomBytes(16).toString('hex');
@@ -37,6 +39,9 @@ function verifyPassword(pw, stored) {
 }
 
 const app    = express();
+/* Behind nginx (one hop): key req.ip / rate limiters on the real client from
+   X-Forwarded-For, not on the nginx container's address. */
+app.set('trust proxy', 1);
 const server = http.createServer(app);
 const io     = new Server(server);
 
@@ -44,6 +49,10 @@ const io     = new Server(server);
 const CASDOOR_CLIENT_ID     = process.env.ATOBRIEF_CLIENT_ID     || '';
 const CASDOOR_CLIENT_SECRET = process.env.ATOBRIEF_CLIENT_SECRET || '';
 const CASDOOR_ENDPOINT      = process.env.CASDOOR_ENDPOINT       || '';
+// Shared secret for machine reads of the USMTF export (ADR 0078). Nothing sends it yet: crc-sync does not read
+// the export (its ATO import is a pasted/dropped file); only an external USMTF consumer needs this.
+// Read once at startup (P5); unset disables the service-token path.
+const USMTF_SERVICE_TOKEN   = process.env.ATOBRIEF_USMTF_TOKEN   || '';
 
 // ── Rate limiters ────────────────────────────────────────────
 const authLimiter = rateLimit({
@@ -129,17 +138,17 @@ app.post('/api/auth/token', authLimiter, async (req, res) => {
   try {
     const tokenData = await casdoorTokenExchange(code, redirectUri);
     if (tokenData.error) {
-      console.warn('[auth] Casdoor token exchange error:', tokenData.error, tokenData.error_description);
+      log.warn('[auth] Casdoor token exchange error:', tokenData.error, tokenData.error_description);
       return res.status(400).json({ error: tokenData.error_description || tokenData.error });
     }
     const accessToken = tokenData.access_token;
     if (!accessToken) {
-      console.warn('[auth] Casdoor response missing access_token:', JSON.stringify(tokenData).slice(0, 200));
+      log.warn('[auth] Casdoor response missing access_token:', JSON.stringify(tokenData).slice(0, 200));
       return res.status(502).json({ error: 'No access token returned by auth server' });
     }
     res.json({ access_token: accessToken });
   } catch (err) {
-    console.error('[auth] Token exchange failed:', err.message);
+    log.error('[auth] Token exchange failed:', err.message);
     res.status(502).json({ error: 'Auth server unreachable or returned an error' });
   }
 });
@@ -263,6 +272,7 @@ io.on('connection', (socket) => {
     if (!session || session.presenterId !== socket.id) return;
 
     session.packageYaml = yamlText;
+    session.packageUpdatedAt = Date.now();   // HTTP Last-Modified only, never a DTG
     socket.to(currentSessionId).emit('package-loaded', yamlText);
   });
 
@@ -334,6 +344,9 @@ io.on('connection', (socket) => {
   });
 });
 
+// ── USMTF ATO export (GET /api/rooms/:id/ato.usmtf, POST /api/usmtf) ──
+mountUsmtfRoutes(app, { sessions, serviceToken: USMTF_SERVICE_TOKEN });
+
 // ── Active rooms list ────────────────────────────────────────
 app.get('/api/rooms', (_req, res) => {
   const rooms = [];
@@ -355,7 +368,7 @@ const PORT = process.env.PORT || 4000;
 
 if (require.main === module) {
   server.listen(PORT, () => {
-    console.log(`ATO BRIEF server listening on http://localhost:${PORT}`);
+    log.info(`ATO BRIEF server listening on http://localhost:${PORT}`);
   });
 }
 

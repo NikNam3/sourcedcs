@@ -229,17 +229,27 @@ class TestBuildMissions:
         f = self._make_flight("VIPER-1")
         missions, shared = build_missions([f], 1000, {}, [], {"LTAG": {}}, {})
         assert len(missions) == 1
-        assert missions[0]["callsign"] == "VIPER-1"
+        assert missions[0]["callsign"] == "VIPER1"   # H60 ATO callsign
 
-    def test_tanker_excluded(self):
+    def test_tanker_is_refueling_mission(self):
         f = self._make_flight("SHELL-1", task="TANKER", is_tanker=True)
         missions, _ = build_missions([f], 1000, {}, [], {}, {})
-        assert len(missions) == 0
+        assert len(missions) == 1
+        assert missions[0]["mission_type"] == "REFUELING"
+        assert missions[0]["callsign"] == "SHELL1"
 
-    def test_awacs_excluded(self):
+    def test_awacs_is_aew_mission(self):
         f = self._make_flight("MAGIC-1", task="AWACS", is_awacs=True)
         missions, _ = build_missions([f], 1000, {}, [], {}, {})
-        assert len(missions) == 0
+        assert len(missions) == 1
+        assert missions[0]["mission_type"] == "AEW"
+
+    def test_support_flights_numbered_in_flight_order(self):
+        fs = [self._make_flight("A-1"),
+              self._make_flight("SHELL-1", task="TANKER", is_tanker=True),
+              self._make_flight("B-1")]
+        missions, _ = build_missions(fs, 1000, {}, [], {"LTAG": {}}, {})
+        assert [m["mission_number"] for m in missions] == ["MSN1000", "MSN1001", "MSN1002"]
 
     def test_mission_number_sequential(self):
         f1 = self._make_flight("A-1")

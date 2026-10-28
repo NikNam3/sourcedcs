@@ -1,0 +1,59 @@
+9	Position occupancy/combination	Position staffing/combination
+9	States/NLA/transfer	Strip states/NLA/strip transfer
+12	The `RANGE` station**:	The `RANGE` Position**:
+15	follows the Positions you hold**	follows the Positions you are signed on to**
+48	Covering chain `CD→GC→LC→AP`	Consolidation `CD→GC→LC→AP`
+49	No covering chain (mirrors `OPS`)	No consolidation (mirrors `OPS`)
+50	Covering chain `CV_APP2→CV_APP1→CV_MARSHAL`	Consolidation `CV_APP2→CV_APP1→CV_MARSHAL`
+51	`AIC`/`GCI`/`JTAC` covered by `TAC_C2`	`AIC`/`GCI`/`JTAC` consolidated at `TAC_C2`
+59	`CD` occupied (or its covering Position). This is transfer-shaped:	`CD` staffed (or the Position it is consolidated at). This is strip-transfer-shaped:
+84	## 3. Bays by station	## 3. Bays by Position
+119	until `AP` is occupied or covered)	until `AP`, or the Position it is consolidated at, is staffed)
+140	across every station:	across every Position:
+153	`DEPARTURE`-role creation	`DEPARTURE`-strip-type creation
+153	`ARRIVAL`-role creation	`ARRIVAL`-strip-type creation
+256	keeps the squawk and the CID	keeps the beacon code and the CID
+290	says the Role and state	says the strip type and strip state
+318	one controller holds both ends	one controller is signed on to both ends
+370	of every Role.	of every strip type.
+522	ARRIVAL-role fields only	ARRIVAL-strip-type fields only
+532	ARRIVAL-role field	ARRIVAL-strip-type field
+550	(callsign, type, squawk, equipment)	(callsign, type, beacon code, equipment)
+691	If you hold both sides	If you are signed on to both sides
+714	hold under **ACTING AS**	are signed on to under **ACTING AS**
+717	| Holding | You see |	| Signed on to | You see |
+726	so holding only those shows	so being signed on to only those shows
+731	**Everyone holding the same Position	**Everyone signed on to the same Position
+782	keeps its ATC squawk	keeps its ATC beacon code
+794	**its squawk**	**its beacon code**
+800	Position and Role,	Position and strip type,
+849	A controller holding both seats answers	A controller signed on to both Positions answers
+850	A held `TAC_C2` also gets	A signed-on `TAC_C2` also gets
+856	who leaves the seat leaves	who signs off leaves
+857	A controller holding nothing but `JTAC`	A controller signed on to nothing but `JTAC`
+860	- **A covering Position.** When a Position leaves, Strips routed to its cover land in the cover's own Bay	- **The Position it is consolidated at.** When a Position signs off, Strips routed to the Position it is consolidated at land in that Position's own Bay
+863	from when it is manned again.	from when it is staffed again.
+864	Position with Strips and no cover still warns	Position with Strips and nowhere to consolidate still warns
+918	| Every Role |	| Every strip type |
+981	of the Positions **you** hold could	of the Positions **you** are signed on to could
+1018	Holding a tactical and an ATC radar	Signed on to a tactical and an ATC radar
+1030	If you hold an ATC Position	If you are signed on to an ATC Position
+1032	who holds no ATC Position	who is signed on to no ATC Position
+1080	a Position you hold that owns	a Position you are signed on to that owns
+1087	The carrier Roles expect nothing	The carrier strip types expect nothing
+1127	nobody held AP when	nobody was signed on to AP when
+1135	| You hold |	| You are signed on to |
+1138	who also holds `LC`	who is also signed on to `LC`
+1198	An acknowledger nobody holds is skipped	An acknowledger nobody is signed on to is skipped
+1199	A controller holding `LC`, `OPS` and	A controller signed on to `LC`, `OPS` and
+1242	only while `TAC_C2` is held.	only while `TAC_C2` is signed on.
+1251	when its squawk matches	when its beacon code matches
+1322	Hold `CV_MARSHAL`, `CV_PRIFLY`, `CV_APP1` or `CV_APP2`	Sign on to `CV_MARSHAL`, `CV_PRIFLY`, `CV_APP1` or `CV_APP2`
+1323	one of three Roles:	one of three strip types:
+1324	The covering chain is	The consolidation is
+1325	which means a Marshal who covers for an approach Position then holds Strips it cannot advance	which means a Marshal that an approach Position is consolidated at then holds Strips it cannot advance
+1378	RSU has no covering Position.	RSU is consolidated at no Position.
+1387	Each held Position gets	Each signed-on Position gets
+1425	where you hold a Position	where you are signed on to a Position
+1430	per manned hour reads `—` until crc-sync's 60 s manning tick has recorded manned minutes.	per staffed hour reads `—` until crc-sync's 60 s manning tick has recorded staffed minutes.
+1470	Strips moved to its cover)	Strips moved to the Position it is consolidated at)

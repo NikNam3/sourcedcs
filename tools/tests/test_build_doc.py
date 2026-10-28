@@ -50,7 +50,7 @@ class TestBuildCallsignsRegistry:
         f = _make_flight("VIPER-1")
         result = build_callsigns_registry([f])
         assert result is not None
-        assert "VIPER-1" in result
+        assert "VIPER1" in result   # H60 ATO callsign
 
     def test_awacs_excluded(self):
         f = _make_flight("MAGIC-1", is_awacs=True)
@@ -77,7 +77,7 @@ class TestBuildTankersList:
         result = build_tankers_list([f])
         assert result is not None
         assert len(result) == 1
-        assert result[0]["callsign"] == "SHELL-1"
+        assert result[0]["callsign"] == "SHELL1"
         assert result[0]["orbit_direction"] == "ccw"
 
     def test_no_tankers(self):
@@ -100,8 +100,8 @@ class TestBuildControlAgencies:
                          is_awacs=True, freq=260.0)
         result = build_control_agencies([f])
         assert result is not None
-        assert "MAGIC-1" in result
-        assert result["MAGIC-1"]["type"] == "AWACS"
+        assert "MAGIC1" in result
+        assert result["MAGIC1"]["type"] == "AWACS"
 
     def test_no_awacs(self):
         f = _make_flight("VIPER-1")
@@ -211,8 +211,12 @@ class TestBuildDoc:
             metar="METAR", wx_notes="",
             flights=[f1, f2], carriers=[],
         )
-        assert doc["_meta"]["missions"] == 1
+        assert doc["_meta"]["missions"] == 2   # the tanker is a mission (ADR 0089)
         assert doc["_meta"]["tankers"] == 1
+        tanker = doc["registry"]["tankers"][0]
+        tanker_msn = doc["ato"]["missions"][1]
+        assert tanker_msn["mission_type"] == "REFUELING"
+        assert tanker["mission_number"] == tanker_msn["mission_number"]
 
 
 class TestBuildSpinsSections:

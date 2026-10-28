@@ -1,0 +1,682 @@
+{
+ "classification": "UNCLAS",
+ "messageKind": "EXER",
+ "operation": "IRON FLAG 26-3",
+ "msgid": {
+  "originator": "SOURCEDCS AOC",
+  "serial": "ATO C",
+  "month": "SEP"
+ },
+ "timeframe": {
+  "from": {
+   "year": 2026,
+   "month": 9,
+   "day": 14,
+   "hour": 6,
+   "minute": 0
+  },
+  "to": {
+   "year": 2026,
+   "month": 9,
+   "day": 15,
+   "hour": 5,
+   "minute": 59
+  },
+  "asof": {
+   "year": 2026,
+   "month": 9,
+   "day": 13,
+   "hour": 18,
+   "minute": 0
+  }
+ },
+ "generalText": [],
+ "country": "US",
+ "service": "F",
+ "units": [
+  {
+   "name": "SOURCE DCS 1",
+   "icao": "OMAM",
+   "remarks": null,
+   "missions": [
+    {
+     "missionNumber": "1101A",
+     "amcMissionNumber": null,
+     "packageId": null,
+     "isPackageCommander": false,
+     "missionType": {
+      "primary": "CAP",
+      "secondary": null
+     },
+     "alertStatus": null,
+     "departure": {
+      "location": "OMAM",
+      "time": {
+       "year": 2026,
+       "month": 9,
+       "day": 14,
+       "hour": 12,
+       "minute": 0
+      }
+     },
+     "recovery": {
+      "location": "OMAM",
+      "time": {
+       "year": 2026,
+       "month": 9,
+       "day": 14,
+       "hour": 15,
+       "minute": 30
+      }
+     },
+     "aircraft": [
+      {
+       "count": 2,
+       "aircraftType": "F16C",
+       "callsign": "VIPER 11",
+       "config": {
+        "primary": "402+",
+        "secondary": null
+       },
+       "datalink": {
+        "l16Callsign": "VP11",
+        "tacan": null,
+        "ju": "00011"
+       },
+       "iff": {
+        "modeOne": "12",
+        "modeTwo": "0011",
+        "modeThree": "4521"
+       }
+      }
+     ],
+     "location": {
+      "kind": "AMSNLOC",
+      "start": {
+       "year": 2026,
+       "month": 9,
+       "day": 14,
+       "hour": 13,
+       "minute": 0
+      },
+      "stop": {
+       "year": 2026,
+       "month": 9,
+       "day": 14,
+       "hour": 15,
+       "minute": 0
+      },
+      "name": "CAP NORTH",
+      "altitudeFt": 25000,
+      "priority": 1
+     },
+     "control": {
+      "type": "AWAC",
+      "callsign": "MAGIC 11",
+      "primary": {
+       "freqMhz": "251.0"
+      },
+      "secondary": {
+       "freqMhz": "305.5"
+      },
+      "reportInPoint": "ALPHA"
+     },
+     "arInfo": [
+      {
+       "tankerCallsign": "SHELL 71",
+       "tankerMissionNumber": "1901T",
+       "tankerModeThree": "4571",
+       "arcp": "ANCHOR BLUE",
+       "altitudeFt": 22000,
+       "arct": {
+        "year": 2026,
+        "month": 9,
+        "day": 14,
+        "hour": 13,
+        "minute": 45
+       },
+       "endAr": {
+        "year": 2026,
+        "month": 9,
+        "day": 14,
+        "hour": 14,
+        "minute": 0
+       },
+       "offloadKlb": 12,
+       "primary": {
+        "freqMhz": "276.1"
+       },
+       "secondary": null,
+       "tankerType": "KC135",
+       "system": "BOM",
+       "tacan": "38Y"
+      }
+     ],
+     "packageCommander": null,
+     "packageData": null,
+     "refuelTask": null,
+     "refuelRows": null,
+     "controlRows": null,
+     "narrative": []
+    }
+   ]
+  },
+  {
+   "name": "SOURCE DCS 2",
+   "icao": "OMAM",
+   "remarks": "SNAKE 41 WEAPONS FREE IN SEAD BOX EAST ONLY",
+   "missions": [
+    {
+     "missionNumber": "1202S",
+     "amcMissionNumber": null,
+     "packageId": "AB",
+     "isPackageCommander": true,
+     "missionType": {
+      "primary": "STRIKE",
+      "secondary": null
+     },
+     "alertStatus": null,
+     "departure": {
+      "location": "OMAM",
+      "time": {
+       "year": 2026,
+       "month": 9,
+       "day": 14,
+       "hour": 13,
+       "minute": 15
+      }
+     },
+     "recovery": {
+      "location": "OMAM",
+      "time": {
+       "year": 2026,
+       "month": 9,
+       "day": 14,
+       "hour": 16,
+       "minute": 45
+      }
+     },
+     "aircraft": [
+      {
+       "count": 2,
+       "aircraftType": "F15E",
+       "callsign": "DUDE 21",
+       "config": {
+        "primary": "202+4X31",
+        "secondary": null
+       },
+       "datalink": {
+        "l16Callsign": "DU21",
+        "tacan": null,
+        "ju": "00021"
+       },
+       "iff": {
+        "modeOne": "21",
+        "modeTwo": "0021",
+        "modeThree": "4531"
+       }
+      }
+     ],
+     "location": {
+      "kind": "GTGTLOC",
+      "targets": [
+       {
+        "tot": null,
+        "net": {
+         "year": 2026,
+         "month": 9,
+         "day": 14,
+         "hour": 14,
+         "minute": 58
+        },
+        "nlt": {
+         "year": 2026,
+         "month": 9,
+         "day": 14,
+         "hour": 15,
+         "minute": 2
+        },
+        "name": "Command Bunker",
+        "id": "TGT-01",
+        "type": null,
+        "dmpi": {
+         "lat": 27.191666666666666,
+         "lon": 56.3125
+        },
+        "elevationFt": 120
+       }
+      ]
+     },
+     "control": {
+      "type": "AWAC",
+      "callsign": "MAGIC 11",
+      "primary": {
+       "freqMhz": "251.0"
+      },
+      "secondary": {
+       "freqMhz": "305.5"
+      },
+      "reportInPoint": "BRAVO"
+     },
+     "arInfo": [
+      {
+       "tankerCallsign": "SHELL 71",
+       "tankerMissionNumber": "1901T",
+       "tankerModeThree": "4571",
+       "arcp": "ANCHOR BLUE",
+       "altitudeFt": 22000,
+       "arct": {
+        "year": 2026,
+        "month": 9,
+        "day": 14,
+        "hour": 14,
+        "minute": 20
+       },
+       "endAr": {
+        "year": 2026,
+        "month": 9,
+        "day": 14,
+        "hour": 14,
+        "minute": 40
+       },
+       "offloadKlb": 16,
+       "primary": {
+        "freqMhz": "276.1"
+       },
+       "secondary": null,
+       "tankerType": "KC135",
+       "system": "BOM",
+       "tacan": "38Y"
+      }
+     ],
+     "packageCommander": null,
+     "packageData": [
+      {
+       "packageId": "AB",
+       "unit": "SOURCE DCS 2",
+       "missionNumber": "1202S",
+       "missionType": "STRIKE",
+       "count": 2,
+       "aircraftType": "F15E",
+       "callsign": "DUDE 21"
+      },
+      {
+       "packageId": "AB",
+       "unit": "SOURCE DCS 2",
+       "missionNumber": "1203S",
+       "missionType": "SEAD",
+       "count": 2,
+       "aircraftType": "F16C",
+       "callsign": "SNAKE 41"
+      }
+     ],
+     "refuelTask": null,
+     "refuelRows": null,
+     "controlRows": null,
+     "narrative": [
+      "PACKAGE AB PUSH FROM IP WEST AT 141445Z"
+     ]
+    },
+    {
+     "missionNumber": "1203S",
+     "amcMissionNumber": null,
+     "packageId": "AB",
+     "isPackageCommander": false,
+     "missionType": {
+      "primary": "SEAD",
+      "secondary": null
+     },
+     "alertStatus": null,
+     "departure": {
+      "location": "OMAM",
+      "time": {
+       "year": 2026,
+       "month": 9,
+       "day": 14,
+       "hour": 13,
+       "minute": 5
+      }
+     },
+     "recovery": {
+      "location": "OMAM",
+      "time": {
+       "year": 2026,
+       "month": 9,
+       "day": 14,
+       "hour": 16,
+       "minute": 40
+      }
+     },
+     "aircraft": [
+      {
+       "count": 2,
+       "aircraftType": "F16C",
+       "callsign": "SNAKE 41",
+       "config": {
+        "primary": "402+2X88",
+        "secondary": null
+       },
+       "datalink": {
+        "l16Callsign": "SN41",
+        "tacan": null,
+        "ju": "00041"
+       },
+       "iff": {
+        "modeOne": "41",
+        "modeTwo": "0041",
+        "modeThree": "4541"
+       }
+      }
+     ],
+     "location": {
+      "kind": "AMSNLOC",
+      "start": {
+       "year": 2026,
+       "month": 9,
+       "day": 14,
+       "hour": 14,
+       "minute": 50
+      },
+      "stop": {
+       "year": 2026,
+       "month": 9,
+       "day": 14,
+       "hour": 15,
+       "minute": 10
+      },
+      "name": "SEAD BOX EAST",
+      "altitudeFt": 24000,
+      "priority": 1
+     },
+     "control": {
+      "type": "AWAC",
+      "callsign": "MAGIC 11",
+      "primary": {
+       "freqMhz": "251.0"
+      },
+      "secondary": {
+       "freqMhz": "305.5"
+      },
+      "reportInPoint": "BRAVO"
+     },
+     "arInfo": [],
+     "packageCommander": {
+      "packageId": "AB",
+      "unit": "SOURCE DCS 2",
+      "missionNumber": "1202S",
+      "callsign": "DUDE 21"
+     },
+     "packageData": null,
+     "refuelTask": null,
+     "refuelRows": null,
+     "controlRows": null,
+     "narrative": []
+    }
+   ]
+  },
+  {
+   "name": "909ARS",
+   "icao": "OMAM",
+   "remarks": null,
+   "missions": [
+    {
+     "missionNumber": "1901T",
+     "amcMissionNumber": null,
+     "packageId": null,
+     "isPackageCommander": false,
+     "missionType": {
+      "primary": "REFUELING",
+      "secondary": null
+     },
+     "alertStatus": null,
+     "departure": {
+      "location": "OMAM",
+      "time": {
+       "year": 2026,
+       "month": 9,
+       "day": 14,
+       "hour": 11,
+       "minute": 30
+      }
+     },
+     "recovery": {
+      "location": "OMAM",
+      "time": {
+       "year": 2026,
+       "month": 9,
+       "day": 14,
+       "hour": 17,
+       "minute": 0
+      }
+     },
+     "aircraft": [
+      {
+       "count": 1,
+       "aircraftType": "KC135",
+       "callsign": "SHELL 71",
+       "config": {
+        "primary": null,
+        "secondary": null
+       },
+       "datalink": {
+        "l16Callsign": null,
+        "tacan": "38Y",
+        "ju": null
+       },
+       "iff": {
+        "modeOne": null,
+        "modeTwo": null,
+        "modeThree": "4571"
+       }
+      }
+     ],
+     "location": {
+      "kind": "AMSNLOC",
+      "start": {
+       "year": 2026,
+       "month": 9,
+       "day": 14,
+       "hour": 12,
+       "minute": 30
+      },
+      "stop": {
+       "year": 2026,
+       "month": 9,
+       "day": 14,
+       "hour": 16,
+       "minute": 30
+      },
+      "name": "ANCHOR BLUE",
+      "altitudeFt": 22000,
+      "priority": 1
+     },
+     "control": null,
+     "arInfo": [],
+     "packageCommander": null,
+     "packageData": null,
+     "refuelTask": {
+      "system": "BOM",
+      "totalOffloadKlb": 60,
+      "alertOffloadKlb": 10,
+      "primary": {
+       "freqMhz": "276.1"
+      },
+      "secondary": null,
+      "tacan": "38Y"
+     },
+     "refuelRows": [
+      {
+       "missionNumber": "1101A",
+       "callsign": "VIPER 11",
+       "count": 2,
+       "aircraftType": "F16C",
+       "offloadKlb": 12,
+       "arct": {
+        "year": 2026,
+        "month": 9,
+        "day": 14,
+        "hour": 13,
+        "minute": 45
+       },
+       "sequence": 1,
+       "fuelType": "JP8",
+       "system": "BOM"
+      },
+      {
+       "missionNumber": "1202S",
+       "callsign": "DUDE 21",
+       "count": 2,
+       "aircraftType": "F15E",
+       "offloadKlb": 16,
+       "arct": {
+        "year": 2026,
+        "month": 9,
+        "day": 14,
+        "hour": 14,
+        "minute": 20
+       },
+       "sequence": 2,
+       "fuelType": "JP8",
+       "system": "BOM"
+      }
+     ],
+     "controlRows": null,
+     "narrative": []
+    }
+   ]
+  },
+  {
+   "name": "960AACS",
+   "icao": "OMAM",
+   "remarks": null,
+   "missions": [
+    {
+     "missionNumber": "1801W",
+     "amcMissionNumber": null,
+     "packageId": null,
+     "isPackageCommander": false,
+     "missionType": {
+      "primary": "AEW",
+      "secondary": null
+     },
+     "alertStatus": null,
+     "departure": {
+      "location": "OMAM",
+      "time": {
+       "year": 2026,
+       "month": 9,
+       "day": 14,
+       "hour": 11,
+       "minute": 0
+      }
+     },
+     "recovery": {
+      "location": "OMAM",
+      "time": {
+       "year": 2026,
+       "month": 9,
+       "day": 14,
+       "hour": 18,
+       "minute": 0
+      }
+     },
+     "aircraft": [
+      {
+       "count": 1,
+       "aircraftType": "E3",
+       "callsign": "MAGIC 11",
+       "config": {
+        "primary": null,
+        "secondary": null
+       },
+       "datalink": {
+        "l16Callsign": "MG11",
+        "tacan": null,
+        "ju": "00001"
+       },
+       "iff": {
+        "modeOne": null,
+        "modeTwo": null,
+        "modeThree": "4501"
+       }
+      }
+     ],
+     "location": {
+      "kind": "AMSNLOC",
+      "start": {
+       "year": 2026,
+       "month": 9,
+       "day": 14,
+       "hour": 12,
+       "minute": 0
+      },
+      "stop": {
+       "year": 2026,
+       "month": 9,
+       "day": 14,
+       "hour": 17,
+       "minute": 30
+      },
+      "name": "AEW ORBIT",
+      "altitudeFt": 30000,
+      "priority": 1
+     },
+     "control": null,
+     "arInfo": [],
+     "packageCommander": null,
+     "packageData": null,
+     "refuelTask": null,
+     "refuelRows": null,
+     "controlRows": [
+      {
+       "missionNumber": "1101A",
+       "callsign": "VIPER 11",
+       "count": 2,
+       "aircraftType": "F16C",
+       "missionType": "CAP",
+       "onStation": {
+        "year": 2026,
+        "month": 9,
+        "day": 14,
+        "hour": 13,
+        "minute": 0
+       },
+       "reportInPoint": "ALPHA"
+      },
+      {
+       "missionNumber": "1202S",
+       "callsign": "DUDE 21",
+       "count": 2,
+       "aircraftType": "F15E",
+       "missionType": "STRIKE",
+       "onStation": {
+        "year": 2026,
+        "month": 9,
+        "day": 14,
+        "hour": 14,
+        "minute": 45
+       },
+       "reportInPoint": "BRAVO"
+      },
+      {
+       "missionNumber": "1203S",
+       "callsign": "SNAKE 41",
+       "count": 2,
+       "aircraftType": "F16C",
+       "missionType": "SEAD",
+       "onStation": {
+        "year": 2026,
+        "month": 9,
+        "day": 14,
+        "hour": 14,
+        "minute": 40
+       },
+       "reportInPoint": "BRAVO"
+      }
+     ],
+     "narrative": []
+    }
+   ]
+  }
+ ]
+}

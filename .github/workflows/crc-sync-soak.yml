@@ -1,0 +1,91 @@
+name: crc-sync EFSP soak (manual)
+
+# WP8's four-hour soak (EFSPImplementationGuide.md §13, bullet 2), run on
+# demand only — decision H37 in docs/parallel/decisions.md. Never on push: a
+# realtime run takes the full four hours, and the verdict is expected to FAIL
+# until the retention (H36) and order-key findings in docs/wip/L6.md are fixed.
+#
+# The harness lives in crc-sync/tools/soak/ and is hermetic: it forks its own
+# host process against a temp state dir, needs no DCS, SRS, Casdoor or network.
+
+on:
+  workflow_dispatch:
+    inputs:
+      minutes:
+        description: 'Simulated minutes (240 = the §13 four-hour soak)'
+        required: true
+        default: '240'
+      seed:
+        description: 'PRNG seed'
+        required: true
+        default: '1'
+      profile:
+        description: 'realistic | stress | smoke'
+        required: true
+        default: 'realistic'
+      realtime:
+        description: 'Pace virtual time to wall time (the literal four-hour run)'
+        type: boolean
+        default: false
+      selfcheck:
+        description: 'Run selfcheck.mjs first (proves every detector fires)'
+        type: boolean
+        default: true
+      extra:
+        description: 'Extra run.js flags, e.g. --prune-retired or --crew solo'
+        required: false
+        default: ''
+
+jobs:
+  soak:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: crc-sync
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: crc-sync/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Self-check the detectors
+        if: ${{ inputs.selfcheck }}
+        run: node tools/soak/selfcheck.mjs
+
+      - name: Soak
+        id: soak
+        env:
+          MINUTES: ${{ inputs.minutes }}
+          SEED: ${{ inputs.seed }}
+          PROFILE: ${{ inputs.profile }}
+          REALTIME: ${{ inputs.realtime }}
+          EXTRA: ${{ inputs.extra }}
+        run: |
+          set +e
+          args=(--minutes "$MINUTES" --seed "$SEED" --profile "$PROFILE" --out "$RUNNER_TEMP/soak-out")
+          if [ "$REALTIME" = "true" ]; then args+=(--realtime); fi
+          # EXTRA is split on whitespace on purpose (flags only).
+          node tools/soak/run.js "${args[@]}" $EXTRA
+          code=$?
+          echo "exit=$code" >> "$GITHUB_OUTPUT"
+          if [ -f "$RUNNER_TEMP/soak-out/summary.txt" ]; then cat "$RUNNER_TEMP/soak-out/summary.txt" >> "$GITHUB_STEP_SUMMARY"; fi
+          exit $code
+
+      - name: Upload the report
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: soak-${{ inputs.profile }}-${{ inputs.minutes }}m-seed${{ inputs.seed }}
+          path: ${{ runner.temp }}/soak-out
+          if-no-files-found: warn

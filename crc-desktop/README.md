@@ -15,7 +15,7 @@ npm start                   # runs via `electron .`
 ## Testing
 
 ```bash
-npm test   # node --test tests/*.test.js
+npm test   # node --test 'tests/*.test.{js,mjs}'
 ```
 
 `lxsrs-setup.js` and the `build` config in `package.json` are covered — see their test files' own comments for exactly which real bug each test reproduces:
@@ -26,6 +26,51 @@ Both are cheap, fast, offline checks — no Electron download, no real Python/pi
 
 - `npm run dev-check` — fast, in-place: runs `npm test` then `npm start`, so you can click through whatever you're working on in the real Electron window. Doesn't touch your existing `app/node_modules` or Python venv (those are real dev state), so it won't catch a fresh-checkout regression by itself — that's what `release-check` is for.
 - `npm run release-check` — slower, run once before tagging a release: checks out a clean `HEAD` into an isolated `git worktree`, does the same two `npm ci`s CI does, runs the tests, packages a Linux AppImage, and actually launches it, failing if it crashes or logs a fatal error. This is the step that would have caught the v1.1.2 crash (`lxsrs-setup.js` missing from `build.files`) before it shipped. It only verifies the Linux/AppImage leg — CI remains the source of truth for the Windows/NSIS leg.
+
+## Client modules
+
+The renderer UI under `app/public/js/` is native ES modules, with no bundler and no build step (H87, ESM-1). `index.html` loads
+the CDN scripts (`maplibregl`, `dockview`) and the local server's generated `/js/config.js` (four `var` globals) as
+classic scripts first. It then loads one `<script type="module" src="./js/main.js">`. `main.js` imports every module once.
+It then makes the start-up calls (atc-scope's beat, `app.js`'s `startApp()`, then `srs-radio.js`) after the whole
+graph has been evaluated. A module does nothing at import beyond declaring its state, so the unit tests import
+the files directly. `app/public/js/package.json` (`{"type":"module"}`) makes Node treat them as ES modules. It ships
+in the asar (`app/**/*`; `tests/packaging-config.test.js` checks it), while `app/package.json` stays CommonJS for
+`app/server.js`.
+
+- **The import graph has no cycle.** `tests/module-graph.test.mjs` bounds the largest strongly connected component at
+  `LARGEST_CYCLE_MAX = 0` (59 of 106 modules before phase 3); never raise it. Shared state lives in **leaf modules**, which
+  import nothing from the app: `settings.js`, `map-handle.js` (the map, drag, measure), `picture.js` (tracks, coverage,
+  mission data), `view-state.js`, `scope-constants.js`, `format.js`, `html-escape.js`, `dock-handle.js`, `map-style.js`, and under
+  `panels/efsp/` `facility-topology.js`, `sync-cursor.js`, `efsp-change-bus.js`, `efsp-message-registry.js`, `board-data.js`.
+  No module imports `app.js` for state (only `main.js` imports `startApp`); `app.js` owns the socket and writes the leaves.
+  A new module that needs shared state reads a leaf; if it needs a leaf that would import it back, the leaf is wrong.
+- **The change bus** (`panels/efsp/efsp-change-bus.js`) replaces hand-kept renderer lists: a message handler applies state and
+  calls `markEfspChanged(topic, ...)`; a view subscribes once at load with `onEfspChanged(topics, fn, {order})` (order RESOLVE,
+  PANEL, BAYS, VIEW). `dispatchEfspMessage` batches, so the flush is once per frame. An unknown topic throws.
+- **No `window` globals.** Production code puts nothing on `window` and reads nothing custom from it
+  (`tests/no-window-globals.test.mjs` allows browser APIs and the preload's `crcLinks` and `crcUpdate`). The one exception is
+  the test-only `window.crc.<module>` that `e2e/helpers/modules.js` builds with dynamic imports; **a spec that calls a moved
+  function must be updated to the module that now holds it** (e.g. `crc.dispatch._invokeNla`).
+- No `innerHTML` with an unescaped dynamic part: `html-escape.js`'s `escapeHtml`, enforced by `tests/html-sinks.test.mjs`.
+- A module imports what it uses from another module. Code outside a module replaces a function or a binding only
+  through that module's explicit setter (`setSendToSync`, `setEfspSender`, `_set…`/`_set…ForTest`; 47 such seams remained after DESK-TIDY-2).
+- Client unit tests are `tests/*.test.mjs`. They import `tests/helpers/client-env.mjs` first (the browser-ish globals),
+  and `tests/helpers/fresh-graph.mjs` when a test needs a new instance of the module graph.
+- `tests/module-graph.test.mjs` checks the graph: every file reachable from `main.js`, every module evaluates as an
+  entry, no read of another module's export without an import, and the exported names frozen in
+  `tests/fixtures/module-graph-exports.json` (re-record with `GOLDEN_RECORD=1` when the structure changes on purpose).
+- The Playwright specs reach the client's modules through `e2e/helpers/modules.js` (`window.crc.<module>.<name>`, made with
+  dynamic imports of the same module URLs); nothing in the client puts its names on `window`.
+
+## The map
+
+The scope's label glyphs are bundled (`app/public/fonts/`, served at `/fonts/` by `app/glyph-route.js`), so no label and no
+track depends on MapTiler. The basemap is MapTiler's, with the key crc-sync serves after login (`GET /api/client-config`);
+when MapTiler refuses (401/403/429), is down (5xx) or unreachable, `basemap-fallback.js` re-points the style's one vector
+source at OpenFreeMap's keyless TileJSON and shows a grey FALLBACK BASEMAP note (NO BASEMAP if that fails too), until a new
+key arrives. Elevation contours and the radar-debug line of sight read crc-sync's DCS terrain grid (`terrain-grid.js`,
+`GET /api/terrain/grid`), not MapTiler. The e2e harness answers `tiles.openfreemap.org` with 503, so no run leaves the machine.
 
 ## Packaging
 
@@ -72,7 +117,7 @@ There is no build step that keeps this copy in sync automatically — a bugfix t
 crc-desktop/scripts/sync-lxsrs.sh
 ```
 
-and commit whatever it changes under `python-pkg/`, alongside your `lxsrs_v2` change. To just check whether the two have drifted (e.g. someone edited `lxsrs_v2` and forgot to re-vendor) without changing anything, run `crc-desktop/scripts/check-lxsrs-sync.sh`. Neither script is currently wired into CI or `npm test`: `crc-desktop-release.yml`'s build matrix includes `windows-latest`, and this check depends on `bash`/`python3`/`pip3` being present and on `PATH`, which isn't guaranteed there — so for now this is a manual step, not an automated gate.
+and commit whatever it changes under `python-pkg/`, alongside your `lxsrs_v2` change. **`npm test` checks the two copies are identical** (`tests/lxsrs-copies-identical.test.mjs`: a plain Node tree diff of the `*.py` files, ignoring `__pycache__`, so it runs on the Windows release leg too) and fails naming every file that differs or exists in only one copy. `crc-desktop/scripts/check-lxsrs-sync.sh` stays as the deeper manual check: it pip-installs `lxsrs_v2` into a scratch dir and diffs that, so it also catches a packaging change a tree diff cannot see; it needs `bash`/`python3`/`pip3` on `PATH`, which `windows-latest` does not guarantee, so it is not in CI.
 
 ## Release / autoupdate
 
@@ -90,6 +135,7 @@ Installed apps autoupdate via `electron-updater` (`main.js`) against the generic
 | `casdoorClientId` / `casdoorEndpoint` | Casdoor OAuth — public client ID only, no secret |
 | `srsHost` / `srsPort` | Upstream SRS server the bundled `lxsrs_v2` bridge connects to |
 | `srsApiPort` | Local HTTP API port `lxsrs_v2` exposes for the renderer's radio panel |
-| `wsPort` | Port `app/server.js` (the bundled local Express server) listens on |
+| `wsPort` | Port `app/server.js` (the bundled local Node server) listens on |
 | `sourcedcsWebUrl` | Used for flight-plan lookups proxied through the local server |
 | `freqs` / `txFreq` | Default monitored/transmit radio frequencies |
+| `defaultFreq` | Frequency a radio added in the SRS panel tunes to (passed to `lxsrs_v2` as `--default-freq`); unset, it starts untuned. No station frequency is hardcoded in the bridge |

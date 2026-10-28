@@ -1,0 +1,72 @@
+'use strict';
+
+// The thresholds behind "detected airborne" and staleness (docs/adr/0076).
+//
+// [SOURCE-DEFINED] (docs/adr/0076) — every threshold (config/efsp-surveillance-hints.json)
+// is SOURCE's own choice, not doctrine: guide §10.4 says only "a configured threshold".
+//
+// A TUNING FILE (decisions.md P5): read ONCE, at module load, never written by
+// code. A change applies on restart. Invalid values warn and fall back to the
+// default PER FIELD.
+
+const fs = require('fs');
+const { readPath } = require('../state-paths');
+const { readShipped } = require('../tuning-file');
+const log = require('../log').logger('efsp:surveillance-hints-config');
+
+const CONFIG_NAME = 'efsp-surveillance-hints.json';
+
+function _num(section, key, raw, fallback, source, { min }) {
+  if (raw === undefined) {
+    if (fallback === undefined) throw new Error(`[efsp-surveillance-hints] ${source}: ${section}.${key} is missing`);
+    return fallback;
+  }
+  if (typeof raw === 'number' && Number.isFinite(raw) && raw >= min) return raw;
+  if (fallback === undefined) throw new Error(`[efsp-surveillance-hints] ${source}: ${section}.${key} must be a number >= ${min}, got ${JSON.stringify(raw)}`);
+  log.warn('value must be a number >= min — using the fallback', { source, key: `${section}.${key}`, got: raw, min, fallback });
+  return fallback;
+}
+
+function normalizeHintsConfig(raw, source = 'config', d = defaultHintsConfig()) {
+  d = d || { airborne: {}, staleness: {} }; // strict: validating the shipped file
+  const obj = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+  const sec = (n) => (obj[n] && typeof obj[n] === 'object' ? obj[n] : {});
+  return Object.freeze({
+    airborne: Object.freeze({
+      minGroundSpeedKt: _num('airborne', 'minGroundSpeedKt', sec('airborne').minGroundSpeedKt, d.airborne.minGroundSpeedKt, source, { min: 1 }),
+      minAglFt: _num('airborne', 'minAglFt', sec('airborne').minAglFt, d.airborne.minAglFt, source, { min: 0 }),
+      holdSec: _num('airborne', 'holdSec', sec('airborne').holdSec, d.airborne.holdSec, source, { min: 0 }),
+    }),
+    staleness: Object.freeze({
+      afterSec: _num('staleness', 'afterSec', sec('staleness').afterSec, d.staleness.afterSec, source, { min: 1 }),
+    }),
+  });
+}
+
+// The defaults are the shipped JSON, validated strictly; no literal copy in code (H88).
+// Read on first use, not when this file is required.
+let DEFAULT_HINTS_CONFIG = null;
+function defaultHintsConfig() {
+  if (!DEFAULT_HINTS_CONFIG) DEFAULT_HINTS_CONFIG = normalizeHintsConfig(readShipped(CONFIG_NAME), `config/${CONFIG_NAME}`, null);
+  return DEFAULT_HINTS_CONFIG;
+}
+
+function loadHintsConfig(filePath = readPath(CONFIG_NAME, process.env.CRCSYNC_EFSP_SURVEILLANCE_HINTS_PATH)) {
+  let raw;
+  try {
+    raw = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  } catch (e) {
+    log.warn('could not read file — using the shipped defaults', { file: filePath, error: e.message });
+    return defaultHintsConfig();
+  }
+  return normalizeHintsConfig(raw, filePath);
+}
+
+// Once, on first use (P5): app.js asks for it at start-up.
+let HINTS_CONFIG = null;
+function getHintsConfig() {
+  if (!HINTS_CONFIG) HINTS_CONFIG = loadHintsConfig();
+  return HINTS_CONFIG;
+}
+
+module.exports = { defaultHintsConfig, getHintsConfig, loadHintsConfig, normalizeHintsConfig };

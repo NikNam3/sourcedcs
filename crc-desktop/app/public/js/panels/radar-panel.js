@@ -1,86 +1,147 @@
 'use strict';
+import { onEfspChanged } from './efsp/efsp-change-bus.js';
+import { NM_M } from '../geo.js';
+import { PANEL_TITLES, isDockPanelOpen, isPanelPinned, setPanelPinned, toggleDockPanel } from '../dock-handle.js';
+import { hideLosProfile, showLosProfile } from './los-panel.js';
+import { getAllEfspPositions } from './efsp/efsp-state.js';
+import { FACILITY_POSITIONS, shippedFacilityIds, RANGES_FACILITY_ID } from './efsp/facility-topology.js';
+import { formatFrequencies } from './efsp/combination-rules.js';
+import { getSignedOnPositions, isObserverAt, sendEfspSetPositions } from './efsp/efsp-ws.js';
+import { coverageSignedOnPositions, getActiveRadars } from '../picture.js';
 
-// ── Radar selection panel: active radars listed short and flat; everything
-// else found via search. Split out of the former ui.js "god file" — see
-// panels/topbar.js for why this stays a plain script rather than an IIFE.
+// ── Coverage panel: the radars this controller is looking through ─────────
+//
+// This used to be a radar SELECTOR — a search box, a checkbox per radar, and
+// an `enabledRadarIds` set in localStorage that decided what this client could
+// see. It is now a read-only list, because coverage follows the Positions a
+// controller holds rather than what they tick (crc-sync's docs/adr/0042).
+//
+// That is the inverse of the arrow crc-sync's docs/adr/0033 rejected. 0033
+// refused to derive Positions FROM radar selection, partly because Ground and
+// Clearance Delivery have no radar at all, and partly because "coupling
+// authority to visibility means a controller silently acquires or loses the
+// right to act on Strips by adjusting their display". Running it the other way
+// — declare what you hold, receive what it can see — removes that hazard
+// instead of reintroducing it, and the "ACTING AS" selector below is still the
+// one and only place a Position is declared.
+//
+// The DATALINK toggle went with the selector. What it did — auto-include every
+// own-coalition airborne radar — is now a property of the Positions it belongs
+// to: TAC_C2, AIC and GCI carry `coalition: 'own'` selectors in crc-sync's
+// facility config. It was never really a display preference; it was a
+// description of what a Military Radar Unit works from.
+//
+// Split out of the former ui.js "god file" (history).
 
 const TYPE_LABELS = { airport: 'AIRPORT', approach: 'APPROACH', awacs: 'AWACS', fighter: 'FIGHTER', carrier: 'CARRIER' };
-const TYPE_RANGE_LABEL = (r) => {
-  const nm = Math.round(r.rangeM / 1852);
-  return `${nm}nm`;
-};
 
-// Single entry point for enabling/disabling a radar — keeps the existing
-// side effects (persistence, sweep/zoom recompute, map refresh) and adds
-// the radar → panel implication hook (dock.js's notifyRadarToggled).
-function setRadarEnabled(radar, enabled) {
-  if (enabled) enabledRadarIds.add(radar.id);
-  else enabledRadarIds.delete(radar.id);
-  saveEnabledRadars();
-  updateTopbarUI();
-  resetSweepState();
-  updateMap();
-  updateZoomLimits();
-  notifyRadarToggled(radar, enabled);
+// Called from app.js when a `coverage` message lands, or when the mission data
+// behind the radar list changes. There is nothing to preserve across a
+// re-render any more — no search term, no partial selection — so this just
+// redraws.
+export function refreshRadarPanelData() {
+  renderCoverageList();
 }
 
-// Called from app.js when the underlying radar list itself changes (new
-// mission data, or the AWACS/carrier-derived radar set changing) rather
-// than a user toggling one — refreshes both the active list and whatever
-// search is currently in progress, without clearing/losing that search.
-function refreshRadarPanelData() {
-  renderActiveRadars();
-  const $search = document.getElementById('radar-search');
-  renderRadarSearchResults($search ? $search.value : '');
+// ── The radar list: collapsed by default (H171 FT-Q11) ──────────────────
+//
+// A CTR controller sees a couple of hundred radars; the list used to sit
+// above everything else in this panel, so every sign-on meant scrolling past
+// it. It now sits last, behind one grey summary line with its count, and
+// stays collapsed until the controller opens it. The choice is remembered per
+// viewer (localStorage, best effort: without storage it simply starts
+// collapsed). What a controller must notice survives the collapse: radars
+// on the ground (no sweep) are counted in the summary line.
+
+const RADAR_LIST_EXPANDED_KEY = 'crc-desktop-radar-list-expanded';
+
+/** Whether the viewer last left the radar list open. Collapsed when storage is missing or unreadable. */
+export function isRadarListExpanded() {
+  try { return localStorage.getItem(RADAR_LIST_EXPANDED_KEY) === '1'; } catch (_) { return false; }
 }
 
-// Only the radars actually in use — the point of this list is to stay
-// short and calm rather than showing every airport in the theater at once.
-// Turning one off here is the "remove" action (no separate delete control).
-function renderActiveRadars() {
+/** Remembers the open/closed choice; a storage failure only loses the memory, never the click. */
+export function setRadarListExpanded(expanded) {
+  _radarListExpanded = !!expanded;
+  try { localStorage.setItem(RADAR_LIST_EXPANDED_KEY, _radarListExpanded ? '1' : '0'); } catch (_) { /* no storage */ }
+  renderCoverageList();
+}
+
+let _radarListExpanded = isRadarListExpanded();
+
+/**
+ * The summary line's text, e.g. `RADARS · 214 · 2 GND ▸`. Ground radars are
+ * named because they are in the list but give no picture; the caret is
+ * left out when there is nothing to open.
+ */
+export function radarListSummary(radars, expanded) {
+  const n = radars.length;
+  const ground = radars.filter(r => r.onGround).length;
+  const parts = ['RADARS', String(n)];
+  if (ground > 0) parts.push(`${ground} GND`);
+  const text = parts.join(' · ');
+  return n === 0 ? text : `${text} ${expanded ? '▾' : '▸'}`;
+}
+
+function renderRadarListHeader(radars) {
+  const $header = document.getElementById('radar-list-header');
+  if (!$header) return;
+  $header.textContent = radarListSummary(radars, _radarListExpanded);
+  $header.title = radars.length === 0 ? '' : (_radarListExpanded ? 'Hide the radar list' : 'Show the radar list');
+}
+
+function toggleRadarList() {
+  if (getActiveRadars().length === 0) return; // nothing to open; the empty-state line is always shown
+  setRadarListExpanded(!_radarListExpanded);
+}
+
+/**
+ * The radars the Positions we are signed on to grant us, and why. An empty list is a real
+ * answer, not a failure: a Ground or Clearance Delivery controller has no
+ * scope, and saying which Position would give them one is more use than an
+ * empty box. That answer is one line and is shown even while the list is
+ * collapsed; the rows themselves are drawn either way and only hidden.
+ */
+export function renderCoverageList() {
   const $list = document.getElementById('radar-active-list');
+  const radars = getActiveRadars();
+  renderRadarListHeader(radars);
   if (!$list) return;
   $list.innerHTML = '';
+  $list.style.display = (radars.length === 0 || _radarListExpanded) ? '' : 'none';
 
-  const active = getAllRadars()
-    .filter(r => enabledRadarIds.has(r.id))
-    .sort((a, b) => a.label.localeCompare(b.label));
-
-  if (active.length === 0) {
+  if (radars.length === 0) {
     const $empty = document.createElement('div');
     $empty.className = 'radar-empty';
-    $empty.textContent = 'No active radars — search below to add one.';
+    $empty.textContent = coverageSignedOnPositions.length === 0
+      ? 'No radar coverage — select a Position under ACTING AS above.'
+      : `No radar coverage. ${coverageSignedOnPositions.map(p => p.positionId).join(', ')} ${coverageSignedOnPositions.length === 1 ? 'works' : 'work'} no scope.`;
     $list.appendChild($empty);
     return;
   }
 
-  for (const r of active) {
+  for (const r of [...radars].sort((a, b) => a.label.localeCompare(b.label))) {
     const isGnd = !!r.onGround;
     const $row = document.createElement('div');
-    $row.className = 'radar-row' + (isGnd ? ' disabled' : '');
-
-    const $check = document.createElement('input');
-    $check.type      = 'checkbox';
-    $check.checked   = true;
-    $check.className = 'radar-check';
-    $check.title     = 'Uncheck to remove';
-    $check.addEventListener('change', () => {
-      setRadarEnabled(r, false);
-      renderActiveRadars();
-      renderPanelControls();
-    });
+    $row.className = 'radar-row radar-row-coverage' + (isGnd ? ' disabled' : '');
 
     const $label = document.createElement('span');
     $label.className = 'radar-row-label';
-    $label.textContent = r.label;
+    $label.textContent = r.label + (isGnd ? ' GND' : '');
+
+    // Which of the Positions we are signed on to put this radar in the list — the answer to
+    // "why am I seeing this", which a checkbox never had to explain.
+    const $via = document.createElement('span');
+    $via.className = 'radar-row-via';
+    $via.textContent = (r.grantedBy || []).join('/');
 
     const $range = document.createElement('span');
     $range.className = 'radar-row-range';
-    $range.textContent = TYPE_RANGE_LABEL(r) + (isGnd ? ' GND' : '');
-    if (isGnd) $range.style.color = '#886633';
+    $range.textContent = `${Math.round(r.rangeM / NM_M)}nm`;
+    $range.title = `${TYPE_LABELS[r.type] || r.type.toUpperCase()} — range in crc-sync's model, not the real site's`;
 
-    $row.appendChild($check);
     $row.appendChild($label);
+    $row.appendChild($via);
     $row.appendChild($range);
     $row.addEventListener('mouseenter', () => showLosProfile(r, $row));
     $row.addEventListener('mouseleave', () => hideLosProfile());
@@ -88,58 +149,6 @@ function renderActiveRadars() {
   }
 }
 
-// Results only appear while the user is actually typing — an empty search
-// box shows nothing, keeping the panel quiet the rest of the time. Already-
-// active radars are excluded since they're already visible above.
-function renderRadarSearchResults(term) {
-  const $results = document.getElementById('radar-search-results');
-  if (!$results) return;
-  $results.innerHTML = '';
-
-  const q = (term || '').trim().toLowerCase();
-  if (!q) return;
-
-  const matches = getAllRadars()
-    .filter(r => !enabledRadarIds.has(r.id))
-    .filter(r => r.label.toLowerCase().includes(q) || (r.sublabel || '').toLowerCase().includes(q))
-    .sort((a, b) => a.label.localeCompare(b.label))
-    .slice(0, 30); // a broad match (e.g. a single letter) shouldn't dump the whole theater back in
-
-  if (matches.length === 0) {
-    const $empty = document.createElement('div');
-    $empty.className = 'radar-empty';
-    $empty.textContent = 'No match.';
-    $results.appendChild($empty);
-    return;
-  }
-
-  for (const r of matches) {
-    const $row = document.createElement('div');
-    $row.className = 'radar-row radar-row-add';
-
-    const $label = document.createElement('span');
-    $label.className = 'radar-row-label';
-    $label.textContent = r.label;
-
-    const $type = document.createElement('span');
-    $type.className = 'radar-row-range';
-    $type.textContent = TYPE_LABELS[r.type] || r.type.toUpperCase();
-
-    $row.appendChild($label);
-    $row.appendChild($type);
-    $row.addEventListener('mouseenter', () => showLosProfile(r, $row));
-    $row.addEventListener('mouseleave', () => hideLosProfile());
-    $row.addEventListener('click', () => {
-      setRadarEnabled(r, true);
-      const $search = document.getElementById('radar-search');
-      if ($search) $search.value = '';
-      renderRadarSearchResults('');
-      renderActiveRadars();
-      renderPanelControls();
-    });
-    $results.appendChild($row);
-  }
-}
 
 // The panels this radar list can drive open/closed. Every row is rendered
 // identically (label + slider + pin) regardless of whether anything else
@@ -155,13 +164,20 @@ function panelControlRows() {
   return [
     { id: 'settings', label: PANEL_TITLES.settings },
     { id: 'airport',  label: PANEL_TITLES.airport },
-    { id: 'calls',    label: PANEL_TITLES.calls },
     { id: 'radio',    label: PANEL_TITLES.radio },
     { id: 'efsp',     label: PANEL_TITLES.efsp },
+    { id: 'airspace', label: PANEL_TITLES.airspace },
+    { id: 'runwayStatus', label: PANEL_TITLES.runwayStatus },
+    { id: 'carrier',  label: PANEL_TITLES.carrier },
+    { id: 'marshal',  label: PANEL_TITLES.marshal },
+    { id: 'carrierMap', label: PANEL_TITLES.carrierMap },
+    { id: 'par',      label: PANEL_TITLES.par },
+    { id: 'metrics',  label: PANEL_TITLES.metrics },
+    { id: 'frequencies', label: PANEL_TITLES.frequencies },
   ];
 }
 
-function renderPanelControls() {
+export function renderPanelControls() {
   const $panels = document.getElementById('panel-controls');
   if (!$panels) return;
   $panels.innerHTML = '';
@@ -220,10 +236,31 @@ function renderPanelControls() {
 // Facility's held set is sent independently (sendEfspSetPositions(
 // facilityId, held)) since each has its own PositionStore instance
 // server-side — checking CTR never touches INCIRLIK's held set at all.
-const EFSP_FACILITY_POSITIONS = {
-  INCIRLIK: ['OPS', 'CD', 'GND', 'TWR', 'APP'],
-  CENTER: ['CTR'],
-};
+// The Facility -> Position table is efsp/facility-topology.js's; RANGES comes from the snapshot (_efspPositionsFor).
+
+/**
+ * The Positions to offer for a Facility. Static for the three Strip
+ * Facilities, whose sets are fixed in facility-config.js; read from the
+ * snapshot for RANGES, whose set depends on which ranges are configured.
+ *
+ * Reading the snapshot for ALL of them would be tidier and would kill this
+ * hand-maintained mirror outright, but it would also mean no "acting as"
+ * checkboxes at all until the first snapshot lands — a worse failure than
+ * the drift it would prevent.
+ */
+function _efspPositionsFor(facilityId) {
+  if (FACILITY_POSITIONS[facilityId]) return FACILITY_POSITIONS[facilityId];
+  return getAllEfspPositions()
+    .filter(p => p.facilityId === facilityId)
+    .map(p => p.positionId);
+}
+
+/** Every Facility with at least one Position to act as — RANGES disappears entirely when no range is configured. */
+function _efspFacilityIds() {
+  const ids = shippedFacilityIds();
+  if (_efspPositionsFor(RANGES_FACILITY_ID).length > 0) ids.push(RANGES_FACILITY_ID);
+  return ids;
+}
 
 // Cached once in initRadarPanel(), not looked up fresh per render — this
 // panel is called from app.js's async WS message handler (an
@@ -235,13 +272,14 @@ const EFSP_FACILITY_POSITIONS = {
 let _positionControlsEl = null;
 let _positionWarningsEl = null;
 
-function renderPositionControls() {
-  if (!_positionControlsEl || typeof getActingPositions !== 'function') return;
+export function renderPositionControls() {
+  if (!_positionControlsEl) return;
   const $positions = _positionControlsEl;
   $positions.innerHTML = '';
 
-  for (const [facilityId, positionIds] of Object.entries(EFSP_FACILITY_POSITIONS)) {
-    const held = new Set(getActingPositions(facilityId));
+  for (const facilityId of _efspFacilityIds()) {
+    const positionIds = _efspPositionsFor(facilityId);
+    const signedOn = new Set(getSignedOnPositions(facilityId));
 
     const $facilityHeader = document.createElement('div');
     $facilityHeader.className = 'panel-ctrl-facility-header';
@@ -255,15 +293,25 @@ function renderPositionControls() {
       const $label = document.createElement('span');
       $label.className = 'panel-ctrl-label';
       $label.textContent = positionId;
+      if (signedOn.has(positionId) && isObserverAt(facilityId, positionId)) $label.title = 'Observer: someone else is Primary here';
+      // crc-sync docs/adr/0105: the Position's frequencies where it is named.
+      const entry = getAllEfspPositions().find(p => p.positionId === positionId && (!p.facilityId || p.facilityId === facilityId));
+      const freqText = entry ? formatFrequencies(entry.frequencies) : '';
+      if (freqText) {
+        const $f = document.createElement('span');
+        $f.className = 'panel-ctrl-freq';
+        $f.textContent = freqText;
+        $label.appendChild($f);
+      }
       $row.appendChild($label);
 
       const $toggle = document.createElement('label');
       $toggle.className = 'toggle';
       const $cb = document.createElement('input');
       $cb.type = 'checkbox';
-      $cb.checked = held.has(positionId);
+      $cb.checked = signedOn.has(positionId);
       $cb.addEventListener('change', () => {
-        const next = new Set(held);
+        const next = new Set(signedOn);
         if ($cb.checked) next.add(positionId); else next.delete(positionId);
         console.warn('[efsp] Acting-As checkbox changed:', facilityId, positionId, '->', $cb.checked, '| sending held =', [...next]);
         sendEfspSetPositions(facilityId, [...next]);
@@ -284,19 +332,21 @@ function renderPositionControls() {
 // "warn, do not block" (guide §4.8.6 rule 5): the position change has
 // already been committed by the time this renders, this is purely the
 // count/destination notice, never a confirmation gate.
-function renderPositionWarnings(warnings) {
+export function renderPositionWarnings(warnings) {
   if (!_positionWarningsEl) return;
   const $el = _positionWarningsEl;
   if (!warnings || warnings.length === 0) { $el.textContent = ''; return; }
-  $el.textContent = warnings.map(w =>
-    w.routedTo
-      ? `${w.count} Strip(s) from ${w.positionId} routed to ${w.routedTo}`
-      : `${w.count} Strip(s) from ${w.positionId} have no covering Position — unassigned`
-  ).join(' · ');
+  $el.textContent = warnings.map(w => {
+    if (w.routedTo) return `${w.count} Strip(s) from ${w.positionId} routed to ${w.routedTo}`; // a TACTICAL hand-back
+    const runway = w.onRunway ? ` (${w.onRunway} on the runway)` : '';
+    return w.offeredTo
+      ? `${w.count} Strip(s)${runway} stay with ${w.positionId}; ${w.offeredTo} is offered ${w.positionId} (nobody has taken it yet)`
+      : `${w.count} Strip(s)${runway} stay with ${w.positionId} until someone signs on to it (nobody is offered it)`;
+  }).join(' · ');
 }
 
 // Updates the topbar Panels-control button's badge (number of active radars)
-function updateRadarBadge() {
+export function updateRadarBadge() {
   const $badge = document.getElementById('radar-count-badge');
   if (!$badge) return;
   const n = getActiveRadars().length;
@@ -306,48 +356,27 @@ function updateRadarBadge() {
 // Now a normal dockview panel, reached via the topbar Panels-control button
 // (dock.js's wireRadarsPanelButton/toggleOrFocusPanel) — no open/close
 // class toggling or outside-click handling needed here any more.
-function initRadarPanel() {
-  const $dlToggle = document.getElementById('datalink-toggle');
-  const $dlRow    = document.getElementById('datalink-row');
-  const $search   = document.getElementById('radar-search');
+export function initRadarPanel() {
   _positionControlsEl = document.getElementById('efsp-position-controls');
   _positionWarningsEl = document.getElementById('efsp-position-warnings');
+  document.getElementById('radar-list-header')?.addEventListener('click', toggleRadarList);
 
-  if ($dlToggle) {
-    $dlToggle.checked = settings.datalink ?? false;
-    if ($dlRow) $dlRow.classList.toggle('active', !!settings.datalink);
-    $dlToggle.addEventListener('change', () => {
-      settings.datalink = $dlToggle.checked;
-      if ($dlRow) $dlRow.classList.toggle('active', $dlToggle.checked);
-      saveSettings();
-      updateTopbarUI();
-      resetSweepState();
-      updateMap();
-      updateZoomLimits();
-    });
-  }
-
-  if ($search) {
-    $search.addEventListener('input', () => renderRadarSearchResults($search.value));
-  }
-
-  renderActiveRadars();
-  renderRadarSearchResults('');
+  renderCoverageList();
   renderPanelControls();
   renderPositionControls();
 
   return {
-    // Refresh every time the tab becomes active — active-radar list, search
-    // (cleared), and panel statuses/pins may all have drifted while this
-    // panel was in the background (e.g. a radar toggled elsewhere, or a
-    // panel closed/pinned from its own tab).
+    // Refresh every time the tab becomes active — coverage, panel statuses and
+    // pins may all have drifted while this panel was in the background (a
+    // colleague taking a Position changes what an Observer here can see, and a
+    // panel may have been closed or pinned from its own tab).
     onShow: () => {
-      if ($search) { $search.value = ''; setTimeout(() => $search.focus(), 60); }
-      renderActiveRadars();
-      renderRadarSearchResults('');
+      renderCoverageList();
       renderPanelControls();
       renderPositionControls();
     },
     onClose: hideLosProfile,
   };
 }
+
+onEfspChanged(['scope'], () => updateRadarBadge()); // the scope was redrawn (efsp-change-bus.js)

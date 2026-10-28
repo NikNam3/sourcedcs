@@ -3,16 +3,16 @@ import assert from 'node:assert/strict';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import { withPaths } from './helpers/with-paths.mjs';
 
-// apt-config.js reads its config path once at module load, so the override
-// env var must be set before the first import — this file gets its own
-// isolated module registry (node:test runs each file in its own worker), so
-// this never touches the real config/apt-config.json.
-const tmpDir  = fs.mkdtempSync(path.join(os.tmpdir(), 'apt-config-test-'));
-const tmpFile = path.join(tmpDir, 'apt-config.json');
-process.env.CRCSYNC_APT_CONFIG_PATH = tmpFile;
+// createAptConfig() reads its config path when it is called (the composition root, at start), from the env it is given;
+// this file points that env at a temp file so it never touches the real config/apt-config.json.
+const paths = withPaths('apt-config-test-', { CRCSYNC_APT_CONFIG_PATH: 'apt-config.json' }).apply();
+const tmpDir  = paths.dir;
+const tmpFile = paths.file('apt-config.json');
 
-const { getAptConfig, setAptConfig } = await import('../src/apt-config.js');
+const { createAptConfig } = await import('../src/apt-config.js');
+const { getAptConfig, setAptConfig } = createAptConfig();
 
 test('getAptConfig starts empty when no config file exists yet', () => {
   assert.deepEqual(getAptConfig(), {});

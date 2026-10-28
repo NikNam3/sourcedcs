@@ -1,0 +1,204 @@
+crc-sync/src/efsp/authority/classes.js:12	file	config.js	// config.js's per-Position positionClasses map (docs/adr/0020's own
+crc-sync/src/efsp/authority/classes.js:27	vocab:Role		// primitives — owns airspace state", Strip Roles "none". A Position of this
+crc-sync/src/efsp/authority/index.js:4	vocab:Role		// and how each Role's lifecycle runs, in one place.
+crc-sync/src/efsp/authority/index.js:6	vocab:Role		//  - A Role family (`strip-types/<role>.js`) is one Strip Role: its states, initial
+crc-sync/src/efsp/authority/index.js:10	vocab:Role		//    op grants, the Roles they create, their capability columns and read scope.
+crc-sync/src/efsp/authority/index.js:49	vocab:Role		// ── Role families, in today's STATES_BY_STRIP_TYPE order ─────────────────────────
+crc-sync/src/efsp/authority/index.js:95	vocab:TWR/GND/APP		// ── Position families. incirlik-military is last: it extends civil-atc's APP
+crc-sync/src/efsp/authority/index.js:96	vocab:Role		// and the Role families' owner tables. This order also reproduces the key and
+crc-sync/src/efsp/authority/index.js:105	vocab:Role		// ── Role tables, composed once ─────────────────────────────────────────────
+crc-sync/src/efsp/authority/index.js:109	vocab:Role		/** { stripType: states[] } — the same arrays the Role families own. */
+crc-sync/src/efsp/authority/index.js:111	vocab:Role		/** { stripType: { state: owners[] } } — the same objects the Role families own. */
+crc-sync/src/efsp/authority/index.js:113	bs		/** board-store.js's DEFAULT_INITIAL_STATE_BY_STRIP_TYPE (BOARD-3 switches its reads here). */
+crc-sync/src/efsp/authority/index.js:115	bs		/** board-store.js's REPLICA_STATE_ON_RECEIPT: { stripType: { senderState: replicaState } }; absent = the sender's state. */
+crc-sync/src/efsp/authority/index.js:117	bs		/** board-store.js's SENDER_STATE_ON_ACCEPT: { primitive: { stripType: { senderState: stateAfterAccept } } }. */
+crc-sync/src/efsp/authority/index.js:128	vocab:Role		// Which EfspState a Strip Role must be in to PROPOSE a coordination link —
+crc-sync/src/efsp/authority/index.js:136	vocab:TWR/GND/APP		// (docs/adr/0014's CTR->APP flow); docs/adr/0022 extends it to
+crc-sync/src/efsp/authority/index.js:137	vocab:TWR/GND/APP		// DEPARTURE/HANDED_OFF (APP->CTR) without inventing any new EfspState —
+crc-sync/src/efsp/authority/index.js:139	vocab:TWR/GND/APP		// APP's own existing DEPARTURE terminus.
+crc-sync/src/efsp/authority/index.js:143	bs		// APP. The receiving side mints it INBOUND (board-store.js's
+crc-sync/src/efsp/authority/index.js:143	vocab:TWR/GND/APP		// APP. The receiving side mints it INBOUND (board-store.js's
+crc-sync/src/efsp/authority/index.js:147	vocab:Role		// Which EfspState an ATC-side Strip Role must be in to open a TOFI ENTRY —
+crc-sync/src/efsp/authority/index.js:157	vocab:Role		// is deliberately absent: it is the MRU-side Role TOFI *creates*, never a
+crc-sync/src/efsp/authority/index.js:158	vocab:Role		// Role that opens an exchange of its own (docs/adr/0026).
+crc-sync/src/efsp/authority/index.js:161	vocab:Role		// ── Role accessors ─────────────────────────────────────────────────────────
+crc-sync/src/efsp/authority/index.js:164	vocab:Role		/** @returns {object|null} the registered Role family, or null. */
+crc-sync/src/efsp/authority/index.js:166	vocab:Role		/** @returns {string[]} every registered Role, in registration order. */
+crc-sync/src/efsp/authority/index.js:185	vocab:TWR/GND/APP		// all" gate — CreateStrip is included here for OPS/APP (both originate
+crc-sync/src/efsp/authority/index.js:187	bs		// separately by canCreateStripType(), which board-store.js's
+crc-sync/src/efsp/authority/index.js:189	vocab:TWR/GND/APP		// are included only for APP/CTR (guide §4.6: only ATC⇄ATC Positions that
+crc-sync/src/efsp/authority/index.js:193	vocab:TWR/GND/APP		// reason (only APP/CTR ever hold a DEPARTURE Strip at its HANDED_OFF
+crc-sync/src/efsp/authority/index.js:228	vocab:field state		/** Field state (guide §9.7): the owning family's rows, then each later family's grants appended. */
+crc-sync/src/efsp/authority/index.js:243	vocab:TWR/GND/APP		// the ATC Positions built so far (not APP) — so the ATC side is CTR only,
+crc-sync/src/efsp/authority/index.js:248	bs		// dynamic discovery) — board-store.js's _applyTofiPropose validates a
+crc-sync/src/efsp/authority/op-kinds.js:14	vocab:FDR		// ARRIVAL Strip IN PLACE (same Strip, same FDR), for a flight returning
+crc-sync/src/efsp/authority/op-kinds.js:16	vocab:TWR/GND/APP		// the same way the 5 coordination primitives are (only APP/CTR sit on a
+crc-sync/src/efsp/authority/op-kinds.js:24	vocab:TWR/GND/APP		// NOT granted to APP even though APP otherwise gets the full OP_KINDS
+crc-sync/src/efsp/authority/op-kinds.js:37	vocab:TWR/GND/APP		// PERMISSIONS below can grant them to exactly APP/CTR without repeating
+crc-sync/src/efsp/authority/op-kinds.js:41	vocab:TWR/GND/APP		// Op kinds restricted to exactly APP/CTR, for reasons other than being a
+crc-sync/src/efsp/authority/op-kinds.js:45	vocab:TWR/GND/APP		// role change), but needs the identical exclusion from OPS/CD/GND/TWR.
+crc-sync/src/efsp/authority/op-kinds.js:49	vocab:TWR/GND/APP		// airborne flight does — APP and CTR here, since they are the Positions that
+crc-sync/src/efsp/authority/positions/carrier.js:17	bs		// grant anyone could pick up silently): board-store.js's dispatch asks
+crc-sync/src/efsp/authority/positions/civil-atc.js:3	vocab:TWR/GND/APP		// The ATC Position family (authority registry, S3-2): Incirlik's OPS, CD, GND,
+crc-sync/src/efsp/authority/positions/civil-atc.js:4	vocab:TWR/GND/APP		// TWR and APP, and CENTER's CTR (guide §4.1). Moved from permission.js. RSU,
+crc-sync/src/efsp/authority/positions/civil-atc.js:5	vocab:TWR/GND/APP		// SFA and PAR are incirlik-military.js, which also adds APP's L18 columns.
+crc-sync/src/efsp/authority/positions/civil-atc.js:14	vocab:TWR/GND/APP		// APP deliberately excludes TOFI even though it otherwise gets the full
+crc-sync/src/efsp/authority/positions/civil-atc.js:16	vocab:TWR/GND/APP		// among the ATC Positions built so far; APP is not on TOFI's ATC side.
+crc-sync/src/efsp/authority/positions/civil-atc.js:20	vocab:TWR/GND/APP		// upstream is built yet" shape as docs/adr/0008's original APP stub),
+crc-sync/src/efsp/authority/positions/civil-atc.js:26	vocab:Role		// Which Strip Role(s) a Position may originate via CreateStrip. Every
+crc-sync/src/efsp/authority/positions/civil-atc.js:33	vocab:TWR/GND/APP		// reasoning ARRIVAL Strips at APP should only ever arrive via the real
+crc-sync/src/efsp/authority/positions/civil-atc.js:34	vocab:TWR/GND/APP		// CTR->APP HANDOFF, never local self-creation. Live testing against real
+crc-sync/src/efsp/authority/positions/civil-atc.js:38	vocab:Role		// APP's Strip Roles as "all", and none of those pop-up scenarios have a
+crc-sync/src/efsp/authority/positions/civil-atc.js:38	vocab:TWR/GND/APP		// APP's Strip Roles as "all", and none of those pop-up scenarios have a
+crc-sync/src/efsp/authority/positions/civil-atc.js:42	vocab:TWR/GND/APP		// cross-Facility HANDOFF, or via APP self-originating one directly, same
+crc-sync/src/efsp/authority/positions/civil-atc.js:52	vocab:field state		* Field state (guide §9.7, docs/adr/0061) — who may do what to a runway. An
+crc-sync/src/efsp/authority/positions/civil-atc.js:59	vocab:TWR/GND/APP		*   - Tower is the sole authority over the runways (decisions.md H18): only TWR
+crc-sync/src/efsp/authority/positions/civil-atc.js:61	vocab:TWR/GND/APP		*     ASKS (RequestRunwayStatus), and TWR accepts or rejects.
+crc-sync/src/efsp/authority/positions/civil-atc.js:64	vocab:TWR/GND/APP		*   - TWR proposes, begins and completes a runway change; OPS and APP
+crc-sync/src/efsp/authority/positions/civil-atc.js:82	vocab:TWR/GND/APP		// plus every Position with INCIRLIK_CAPABILITIES' requestsRunwayStatus (positions/incirlik-military.js): APP, RSU
+crc-sync/src/efsp/authority/positions/civil-atc.js:111	vocab:TWR/GND/APP		// TOFI's ATC side (guide §4.1): CTR only, not APP.
+crc-sync/src/efsp/authority/positions/incirlik-military.js:4	vocab:TWR/GND/APP		// and PAR, plus the columns L18 adds to civil-atc.js's APP. Moved from
+crc-sync/src/efsp/authority/positions/incirlik-military.js:5	vocab:Role		// permission.js. Registered LAST: it extends APP and the Role families' owner
+crc-sync/src/efsp/authority/positions/incirlik-military.js:5	vocab:TWR/GND/APP		// permission.js. Registered LAST: it extends APP and the Role families' owner
+crc-sync/src/efsp/authority/positions/incirlik-military.js:11	vocab:TWR/GND/APP		// RSU, SFA and PAR, plus APP's two new columns. ONE table, one row per Position,
+crc-sync/src/efsp/authority/positions/incirlik-military.js:21	vocab:Role		//  createsStripTypes        the Strip Roles it may originate via CreateStrip. Nothing
+crc-sync/src/efsp/authority/positions/incirlik-military.js:22	vocab:Role		//                      here is a Role a handoff would reach it with: only RSU
+crc-sync/src/efsp/authority/positions/incirlik-military.js:24	vocab:TWR/GND/APP		//                      the pattern, [SOURCE-DEFINED]); SFA's arrive from APP and
+crc-sync/src/efsp/authority/positions/incirlik-military.js:26	vocab:Role		//  ownsStates          { Role: [states] } this Position works (the "normally owned
+crc-sync/src/efsp/authority/positions/incirlik-military.js:29	vocab:TWR/GND/APP		//                      WORKS; BARRIER_CHANGE is WORKS since L1b). RSU asks; only TWR closes or opens a
+crc-sync/src/efsp/authority/positions/incirlik-military.js:33	vocab:TWR/GND/APP		//                      §4.7: APP "retains jurisdiction over the rotation"). The
+crc-sync/src/efsp/authority/positions/incirlik-military.js:41	vocab:TWR/GND/APP		// APP's own op grant is in positions/civil-atc.js; these are the columns L18 adds to it
+crc-sync/src/efsp/authority/positions/tactical.js:36	vocab:FDR		// FDR) for a mission that never touches ATC-controlled airspace at all —
+crc-sync/src/efsp/authority/positions/tactical.js:38	bs		// ENTRY exchange's byproduct (board-store.js's receiveTofiProposal),
+crc-sync/src/efsp/authority/positions/tactical.js:39	vocab:FDR		// which shares its FDR with the ATC-side Strip instead.
+crc-sync/src/efsp/authority/primitives.js:4	vocab:TWR/GND/APP		// — WP4A first slice (docs/adr/0013 ff.), civil ATC<->ATC only (APP<->CTR).
+crc-sync/src/efsp/authority/primitives.js:6	bs		// reproduced exactly) — injected into board-store.js as `rules.
+crc-sync/src/efsp/authority/primitives.js:10	bs		// board-store.js's Strip/Rack mechanics. (Moved from coordination.js into the
+crc-sync/src/efsp/authority/primitives.js:11	vocab:Role		// authority registry, AUTH: a table per primitive, neither a Role's nor a
+crc-sync/src/efsp/authority/primitives.js:21	bs		// is exactly why board-store.js models them as two independent refs
+crc-sync/src/efsp/authority/primitives.js:30	bs		// through the existing ownership-gated Mutation dispatch (board-store.js's
+crc-sync/src/efsp/authority/primitives.js:52	bs		// text, same as the other table's) — board-store.js's TOFI logic doesn't
+crc-sync/src/efsp/authority/strip-types/arrival.js:3	vocab:Role		// The ARRIVAL Role family (authority registry, S3-2). States and NLA moved
+crc-sync/src/efsp/authority/strip-types/arrival.js:11	vocab:Role		// Strip Role 'FINAL' (guide §7.10's PAR/carrier stripType, WP7A, still
+crc-sync/src/efsp/authority/strip-types/arrival.js:21	vocab:TWR/GND/APP		// local origination, mirroring APP's original ADR 0008 stub) needs its
+crc-sync/src/efsp/authority/strip-types/arrival.js:38	vocab:TWR/GND/APP		// the cross-Facility HANDOFF to APP — a genuinely different
+crc-sync/src/efsp/authority/strip-types/arrival.js:41	vocab:TWR/GND/APP		// intrafacility-transfer NLA. There is no TWR Position at CENTER to
+crc-sync/src/efsp/authority/strip-types/arrival.js:63	vocab:field state		// Never inhibited by field state, deliberately: LANDED is an
+crc-sync/src/efsp/authority/strip-types/arrival.js:97	vocab:TWR/GND/APP		// docs/adr/0014: CTR->APP
+crc-sync/src/efsp/authority/strip-types/departure.js:3	vocab:Role		// The DEPARTURE Role family (authority registry, S3-2). States and NLA moved
+crc-sync/src/efsp/authority/strip-types/departure.js:17	bs		// advance a Strip OUT of a given State. Checked by board-store.js in
+crc-sync/src/efsp/authority/strip-types/departure.js:29	bs		// NLA transition (board-store.js's _applyInvokeNla) AND every equivalent
+crc-sync/src/efsp/authority/strip-types/departure.js:30	priv	_validateBayImpliedTransition	// drag-based Bay-implied transition (_validateBayImpliedTransition) —
+crc-sync/src/efsp/authority/strip-types/departure.js:44	vocab:TWR/GND/APP		// (received via APP's real HANDOFF, mirroring ARRIVAL_STATE_OWNERS.
+crc-sync/src/efsp/authority/strip-types/departure.js:46	vocab:TWR/GND/APP		// needs its owning Position authorized to Drop it, same as APP's own
+crc-sync/src/efsp/authority/strip-types/departure.js:68	vocab:Role		// These are Blocks 7/8/8B/9 of every Role's Block Map. block-map.js carries
+crc-sync/src/efsp/authority/strip-types/departure.js:89	vocab:FDR		* the plan is complete, and every label when there is no FDR at all (nothing
+crc-sync/src/efsp/authority/strip-types/departure.js:130	vocab:TWR/GND/APP		// pattern as DEPARTED->APP below — matches real strip-passing
+crc-sync/src/efsp/authority/strip-types/departure.js:187	vocab:TWR/GND/APP		// HELD is jointly owned by CD and GND (DEPARTURE_STATE_OWNERS) since
+crc-sync/src/efsp/authority/strip-types/departure.js:188	vocab:TWR/GND/APP		// either may be the one holding it, but PUSHBACK is GND's alone —
+crc-sync/src/efsp/authority/strip-types/departure.js:189	vocab:TWR/GND/APP		// always transfer to GND here, a no-op reassignment when GND already
+crc-sync/src/efsp/authority/strip-types/departure.js:197	vocab:TWR/GND/APP		// TAXI is still GND's own — state-only.
+crc-sync/src/efsp/authority/strip-types/departure.js:231	vocab:TWR/GND/APP		// Real, staffing-gated "Hand Off" to APP (docs/adr/0007) — an
+crc-sync/src/efsp/authority/strip-types/departure.js:250	bs		// board-store.js's DEFAULT_INITIAL_STATE_BY_STRIP_TYPE
+crc-sync/src/efsp/authority/strip-types/departure.js:257	vocab:TWR/GND/APP		// docs/adr/0022: APP->CTR
+crc-sync/src/efsp/authority/strip-types/final.js:3	vocab:Role		// The FINAL Role family (authority registry, S3-2): the talk-down Role, shared
+crc-sync/src/efsp/authority/strip-types/final.js:5	vocab:Role		// owners from permission.js. See marshal.js for the carrier Roles' naming rule.
+crc-sync/src/efsp/authority/strip-types/final.js:21	bs		* Bolter Bay, ADR 0064 B2): board-store.js's Bay-implied check reads it, so the
+crc-sync/src/efsp/authority/strip-types/marshal.js:3	vocab:Role		// The MARSHAL Role family (authority registry, S3-2). States and NLA moved
+crc-sync/src/efsp/authority/strip-types/marshal.js:6	vocab:Role		// The carrier's three Roles (docs/adr/0064 B2, docs/adr/0074), guide §4.1 and
+crc-sync/src/efsp/authority/strip-types/marshal.js:8	vocab:Role		// Role's state but DROPPED: in particular NOT `FINAL`, which is an ARRIVAL
+crc-sync/src/efsp/authority/strip-types/marshal.js:9	vocab:Role		// *state* above (the Role named FINAL below lives on strip.stripType, not
+crc-sync/src/efsp/authority/strip-types/marshal.js:13	vocab:Role		// MARSHAL is the carrier's holding/launch Role (a launch is a MARSHAL Strip in
+crc-sync/src/efsp/authority/strip-types/marshal.js:15	vocab:FDR		// which lives on the FDR, survives to it). FINAL is the talk-down Role, shared
+crc-sync/src/efsp/authority/strip-types/marshal.js:15	vocab:Role		// which lives on the FDR, survives to it). FINAL is the talk-down Role, shared
+crc-sync/src/efsp/authority/strip-types/marshal.js:16	vocab:Role		// with PAR (L18); PATTERN is the visual-pattern Role, shared with RSU (L18).
+crc-sync/src/efsp/authority/strip-types/marshal.js:19	vocab:Role		// The carrier's three Roles (docs/adr/0064 B2, docs/adr/0074), [SOURCE-DEFINED]
+crc-sync/src/efsp/authority/strip-types/marshal.js:35	bs		* board-store.js then applies the whole transfer (ownership, Role, stack effect,
+crc-sync/src/efsp/authority/strip-types/marshal.js:35	vocab:Role		* board-store.js then applies the whole transfer (ownership, Role, stack effect,
+crc-sync/src/efsp/authority/strip-types/marshal.js:38	vocab:Role		* the Role the Strip takes in place. Every trigger is a controller gesture
+crc-sync/src/efsp/authority/strip-types/marshal.js:68	vocab:Role		// The Role changes in place (as ConvertToArrival does, ADR 0023) and the
+crc-sync/src/efsp/authority/strip-types/marshal.js:78	vocab:Role		// The carrier Roles' countability (docs/adr/0074), [SOURCE-DEFINED]: a launch
+crc-sync/src/efsp/authority/strip-types/mission.js:3	vocab:Role		// The MISSION Role family (authority registry, S3-2). States and NLA moved
+crc-sync/src/efsp/authority/strip-types/mission.js:56	vocab:FDR		// never: shares its FDR with the ATC Strip TOFI linked it to
+crc-sync/src/efsp/authority/strip-types/mission.js:61	vocab:Role		// MRU-side Role TOFI *creates*, never a Role that opens an exchange of its
+crc-sync/src/efsp/authority/strip-types/nla-common.js:3	vocab:Role		// Helpers more than one Role family's NLA table uses (moved from nla.js, AUTH).
+crc-sync/src/efsp/authority/strip-types/overflight.js:3	vocab:Role		// The OVERFLIGHT Role family (authority registry, S3-2). States and NLA moved
+crc-sync/src/efsp/authority/strip-types/overflight.js:5	bs		// board-store.js's REPLICA_STATE_ON_RECEIPT and SENDER_STATE_ON_ACCEPT.
+crc-sync/src/efsp/authority/strip-types/overflight.js:12	vocab:Role		// per Role, so nothing may compare a bare state without its Role.
+crc-sync/src/efsp/authority/strip-types/overflight.js:34	vocab:TWR/GND/APP		* (CTR -> APP) is Coordinate/HANDOFF, as at ARRIVAL's CENTER INBOUND.
+crc-sync/src/efsp/authority/strip-types/pattern.js:3	vocab:Role		// The PATTERN Role family (authority registry, S3-2): the visual-pattern Role,
+crc-sync/src/efsp/authority/strip-types/pattern.js:5	vocab:Role		// owners from permission.js. See marshal.js for the carrier Roles' naming rule.
+crc-sync/src/efsp/efsp-ws.js:15	bs		// existing 500ms tick tracks/collab-store use (see board-store.js's module
+crc-sync/src/efsp/efsp-ws.js:61	vocab:claim		// `actingPositionId` arrives as an untrusted client claim, and every
+crc-sync/src/efsp/efsp-ws.js:63	bs		// board-store's NOT_OWNER check, canActOnState — defects D10/D12/D21) is
+crc-sync/src/efsp/efsp-ws.js:67	vocab:claim		// selected. Bound here, at the wire boundary where the claim enters, so
+crc-sync/src/efsp/efsp-ws.js:68	bs		// board-store stays a pure function of (mutation, actingPositionId) with
+crc-sync/src/efsp/efsp-ws.js:87	vocab:FDR		// Every FDR this Mutation changed, not just the one it was addressed to. A
+crc-sync/src/efsp/efsp-ws.js:88	vocab:FDR		// Strip op can write an FDR as a SIDE EFFECT — accepting a TOFI ENTRY writes
+crc-sync/src/efsp/efsp-ws.js:94	bs		// until it next took a full snapshot. board-store.js collects them as
+crc-sync/src/efsp/efsp-ws.js:129	bs		// BoardStore (board-store.js's receiveCoordinationProposal/
+crc-sync/src/efsp/efsp-ws.js:136	vocab:held/hold Position		// holding a Position there sees the new/updated replica immediately,
+crc-sync/src/efsp/efsp-ws.js:147	vocab:covering		// flightDataList: one shared FlightDataStore (docs/adr/0013) — already covered by the primary broadcast's flightDataList.updated
+crc-sync/src/efsp/efsp-ws.js:235	vocab:FDR		// FDRs/Positions are cheap enough at this scale to always send in
+crc-sync/src/efsp/efsp-ws.js:237	bs		// board-store.js's module comment. flightDataStore is shared across every
+crc-sync/src/efsp/efsp-ws.js:282	vocab:covering		// no Bay of the covering Position fits: they stay where they were
+crc-sync/src/efsp/efsp-ws.js:285	vocab:covering		// Defect D19 boundary: the covering chain bottomed out with nobody
+crc-sync/src/efsp/efsp-ws.js:307	vocab:TWR/GND/APP		// touched — a TWR Strip at DEPARTED becomes "no receiving Position
+crc-sync/src/efsp/efsp-ws.js:308	vocab:TWR/GND/APP		// present" the instant APP is released, and F-408's whole point is that
+crc-sync/src/efsp/efsp-ws.js:310	bs		// (board-store.js's module comment) and a Position change is a rare,
+crc-sync/src/efsp/efsp-ws.js:394	vocab:held/hold Position		* record stamped with `facilityId`), since a client can now hold Positions
+crc-sync/src/efsp/efsp-ws.js:424	bs		// against the server-side check in board-store.js's
+crc-sync/src/efsp/nla.js:3	vocab:Role		// EFSP State machine + Next Logical Action, per Strip Role
+crc-sync/src/efsp/nla.js:10	vocab:TWR/GND/APP		// Phase 1 implemented DEPARTURE only, for OPS/CD/GND/TWR at one Facility.
+crc-sync/src/efsp/nla.js:11	vocab:TWR/GND/APP		// Phase 2 adds ARRIVAL (originated by APP — docs/adr/0008, since there's
+crc-sync/src/efsp/nla.js:13	vocab:TWR/GND/APP		// DEPARTED's NLA real: APP is now a configured, occupiable INCIRLIK
+crc-sync/src/efsp/nla.js:16	vocab:TWR/GND/APP		// TWR and APP are both INCIRLIK Positions, so this is NOT WP4A's
+crc-sync/src/efsp/nla.js:17	vocab:TWR/GND/APP		// cross-Facility HANDOFF, which is still APP<->CTR and still unbuilt).
+crc-sync/src/efsp/nla.js:21	vocab:TWR/GND/APP		// DEPARTED->APP): PROPOSED->PENDING_CLEARANCE, CLEARED->PUSHBACK,
+crc-sync/src/efsp/nla.js:28	vocab:field state		// Field state (§9.7 rule 1, docs/adr/0061) now inhibits: a DEPARTURE's
+crc-sync/src/efsp/nla.js:32	vocab:occupied/manned		// Runway OCCUPANCY is still not implemented: §9.7's schema has no occupancy
+crc-sync/src/efsp/nla.js:40	vocab:TWR/GND/APP		// 0008's local APP self-creation stub to a real cross-Facility HANDOFF
+crc-sync/src/efsp/nla.js:44	vocab:TWR/GND/APP		// TWR and APP are both INCIRLIK Positions, so "Hand Off to APP" stays the
+crc-sync/src/efsp/nla.js:48	vocab:Role		// The tables and the per-Role NLA functions now live in the authority
+crc-sync/src/efsp/nla.js:49	vocab:Role		// registry's Role families (authority/strip-types/<role>.js, S3-2). This module is
+crc-sync/src/efsp/nla.js:100	vocab:Role		// Each Role family's computeNla is registered in the same commit as the Role:
+crc-sync/src/efsp/nla.js:101	vocab:Role		// computeNla falls back to the DEPARTURE table for an unknown Role, which would
+crc-sync/src/efsp/permission.js:15	bs		// enforced separately and unconditionally by board-store.js. This module
+crc-sync/src/efsp/permission.js:19	vocab:TWR/GND/APP		// Phase 1 had only Military ATC-class Positions (OPS, CD, GND, TWR) at one
+crc-sync/src/efsp/permission.js:24	bs		// board-store.js's module comment — absent, not stubbed).
+crc-sync/src/efsp/permission.js:26	vocab:TWR/GND/APP		// Phase 2 adds APP. Deliberately NOT folded into the flat table the same
+crc-sync/src/efsp/permission.js:27	vocab:TWR/GND/APP		// maximally-permissive way CD/GND/TWR were — that would reproduce exactly
+crc-sync/src/efsp/permission.js:32	vocab:TWR/GND/APP		// originates DEPARTURE (guide §4.1 rule 3), APP originates ARRIVAL (the
+crc-sync/src/efsp/permission.js:44	vocab:TWR/GND/APP		// permission asymmetry: only APP and CTR get these 5 kinds — CD/GND/TWR/
+crc-sync/src/efsp/permission.js:48	vocab:TWR/GND/APP		// unique strings across both Facilities in this slice (OPS/CD/GND/TWR/APP
+crc-sync/src/efsp/permission.js:55	vocab:Role		// positions/<family>.js, each Role's state owners in strip-types/<role>.js, all
+crc-sync/src/efsp/permission.js:104	vocab:FDR		* an FDR — a controller who can see the contact must be able to say so, even
+crc-sync/src/efsp/permission.js:139	vocab:TWR/GND/APP		* construction. A controller holding TWR and APP acts as one or the other, and
+crc-sync/src/efsp/permission.js:140	vocab:TWR/GND/APP		* an acknowledgement sent as TWR never counts as APP's.
+crc-sync/src/efsp/permission.js:176	vocab:Role		* @param {string} stripType — the Strip Role being created (e.g. 'DEPARTURE')
+crc-sync/src/efsp/required-rules.js:3	bs		// The rules a BoardStore reads (ARCH-D5, H80): every name `board-store.js` and `board/**` reads as `rules.<name>`.
+crc-sync/src/efsp/required-rules.js:4	bs		// A BoardStore built without one throws at construction, naming what is missing, so a missing rule is a loud
+crc-sync/src/efsp/sync/replay-cache.js:8	bs		// - A Board's cache (`ReplayCache.forBoard()`, one per BoardStore, consulted inside applyMutation): keyed by cmid
+crc-sync/src/efsp/sync/replay-cache.js:17	bs		// L6's F13). BoardStore keeps its own cache inside applyMutation (a forBoard instance); the
+crc-sync/src/efsp/sync/replay-cache.js:34	bs		// ── the Board's shape (moved from board-store.js) ──
+crc-sync/src/efsp/sync/sync-log.js:87	bs		* reached — never by board-store itself (docs/adr/0081).
+crc-sync/src/efsp/wire/families/airspace.js:26	vocab:claim		// same reason: actingPositionId arrives as an untrusted client claim, and
+crc-sync/src/efsp/wire/families/airspace.js:33	vocab:claim		// holding either end without letting them claim a Position they don't hold.
+crc-sync/src/efsp/wire/families/correlation.js:9	priv	_handleAirspaceMutation	* same reason _handleAirspaceMutation is a second one: this targets an FDR.
+crc-sync/src/efsp/wire/families/correlation.js:9	vocab:FDR		* same reason _handleAirspaceMutation is a second one: this targets an FDR.
+crc-sync/src/efsp/wire/families/correlation.js:11	vocab:FDR		* Position owns an FDR.
+crc-sync/src/efsp/wire/families/correlation.js:30	vocab:claim		// untrusted client claim. This is now the THIRD place that check appears,
+crc-sync/src/efsp/wire/families/correlation.js:32	priv	_handleAirspaceMutation	// reopens — _handleAirspaceMutation's own comment says so, and it was right
+crc-sync/src/efsp/wire/families/correlation.js:36	vocab:FDR		// Facility: no Position owns an FDR, and a correlation is not a clearance.
+crc-sync/src/efsp/wire/families/correlation.js:38	vocab:FDR		// the FDR is already shared theater-wide (docs/adr/0013), and refusing would
+crc-sync/src/efsp/wire/families/correlation.js:72	vocab:FDR		// Correlation records, one per live FDR and sent whole for the same reason
+crc-sync/src/efsp/wire/families/marsa.js:39	priv	_handleAirspaceMutation	// _handleAirspaceMutation's comment — "a new dispatch path is exactly where
+crc-sync/src/efsp/wire/families/marsa.js:41	vocab:claim		// times. actingPositionId is an untrusted client claim.
+crc-sync/src/efsp/wire/families/marsa.js:80	vocab:FDR		// ending, voiding or leaving a relation writes ATC back. Those are FDR
+crc-sync/src/efsp/wire/families/marsa.js:81	vocab:FDR		// writes, and an FDR rides an efsp-board-delta — the marsa-delta above
+crc-sync/src/efsp/wire/families/runway-status.js:17	vocab:field state		* Field state (guide §9.7, docs/adr/0061) — its own dispatch path, since a
+crc-sync/src/efsp/wire/families/runway-status.js:78	vocab:field state		// Field state (§9.7, docs/adr/0061), one record per Facility with runways,
+crc-sync/src/efsp/wire/frames.js:18	bs		* reason it would be refused when it would be — see BoardStore.nlaStatusFor.
+crc-sync/src/efsp/wire/frames.js:24	bs		* board-store's NOT_OWNER gate) — Strips are not otherwise scoped per client,
+crc-sync/src/efsp/wire/frames.js:44	vocab:FDR		/** The FDRs a Mutation changed — the one it addressed, plus any it wrote as a side effect — deduplicated by flightDataId, most recent value winning. */
+crc-sync/src/efsp/wire/skeleton.js:5	priv	_subject	// `_subject` fields) -> broadcasts, in SLOT_ORDER. A family (families/*.js) declares the parts that differ; a family

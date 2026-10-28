@@ -40,12 +40,10 @@ if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 if (!fs.existsSync(RELEASES_DIR)) fs.mkdirSync(RELEASES_DIR, { recursive: true });
 
-function loadJSON(file, fallback) {
-  try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return fallback; }
-}
-function saveJSON(file, data) {
-  fs.writeFileSync(file, JSON.stringify(data, null, 2), 'utf8');
-}
+/* Seed files (data-seed/) fill in only files the data volume lacks; no-op while that dir does not exist. */
+require('./seed').seedDataDir(DATA_DIR, path.join(__dirname, 'data-seed'));
+
+const { loadJSON, saveJSON } = require('./json-file');
 function sanitizeStr(value, maxLen) {
   return String(value || '').trim().slice(0, maxLen);
 }
@@ -140,7 +138,7 @@ const DISCORD_URL = process.env.DISCORD_URL || 'https://discord.gg/sourcedcs';
 const WIKI_URL = process.env.WIKI_URL || 'https://wiki.sourcedcs.page';
 const ATO_URL = process.env.ATO_URL || 'https://ato.sourcedcs.page';
 const OLYMPUS_URL = process.env.OLYMPUS_URL || 'https://olympus.sourcedcs.page';
-const ASACS_URL = process.env.ASACS_URL || 'https://asacs.sourcedcs.page';
+const CRCSYNC_URL = process.env.CRCSYNC_URL || 'https://asacs.sourcedcs.page';
 const GITHUB_URL = process.env.GITHUB_URL || 'https://github.com/NikNam3/sourcedcs';
 
 const events = loadJSON(EVENTS_FILE, []);
@@ -224,6 +222,6 @@ module.exports = {
   loadJSON, saveJSON, sanitizeStr, parseCallsign, normalizeSkillTree,
   VALID_GRADES, ROLE_LABELS, DEFAULT_ROLE_SORT_ORDER,
   ROSTER_CACHE_TTL, EVENTS_SYNC_TTL,
-  DISCORD_URL, WIKI_URL, ATO_URL, OLYMPUS_URL, ASACS_URL, GITHUB_URL,
+  DISCORD_URL, WIKI_URL, ATO_URL, OLYMPUS_URL, CRCSYNC_URL, GITHUB_URL,
   state,
 };

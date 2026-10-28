@@ -32,7 +32,7 @@ Public-facing squadron website. Handles roster display, event scheduling, galler
 ```bash
 cd sourcedcs-web
 npm install
-npm start          # → http://localhost:7000
+npm start          # → http://localhost:3000 (the Docker stack sets PORT=7000)
 ```
 
 See [`sourcedcs-web/CASDOOR_SETUP.md`](sourcedcs-web/CASDOOR_SETUP.md) for authentication configuration.
@@ -89,7 +89,7 @@ See [`crc-sync/README.md`](crc-sync/README.md) for architecture details.
 
 ### crc-desktop — DCS GCI/Datalink Desktop Client ("CRC")
 
-Electron desktop client that connects to `crc-sync` for the live tactical picture. Bundles a local Express server and, on Linux, an SRS Standalone radio bridge (`lxsrs_v2`) with its own first-run Python environment setup.
+Electron desktop client that connects to `crc-sync` for the live tactical picture. Bundles a local Node server (plain `http`/`https`) and, on Linux, an SRS Standalone radio bridge (`lxsrs_v2`) with its own first-run Python environment setup.
 
 **Quick start**
 

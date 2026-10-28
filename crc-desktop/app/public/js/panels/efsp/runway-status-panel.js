@@ -1,0 +1,351 @@
+'use strict';
+import { toMagneticDisplay } from '../../magnetic.js';
+import { PANEL_TITLES, dock } from '../../dock-handle.js';
+import { getAllEfspRunwayStatuses } from './efsp-state.js';
+import { getActingPositions, sendEfspRunwayStatusMutation, settleEfspAck } from './efsp-ws.js';
+import { alertPadConstraintFor } from './scramble.js';
+import { runwayStatusActionsFor, runwayStatusSubjectFor } from './runway-status-rules.js';
+import { registerEfspMessage, registerEfspStoreRedraw } from './efsp-message-registry.js';
+import { applyEfspRunwayStatusDelta } from './efsp-state.js';
+import { _showMutationError } from './panel/refusal.js';
+import { markEfspChanged } from './efsp-change-bus.js';
+import { onEfspChanged } from './efsp-change-bus.js';
+
+// The runway-status board — guide §9.7, crc-sync docs/adr/0061, crc-desktop
+// docs/adr/0068. Per Facility with a runway inventory: each runway's status
+// and who put it there, the active end, the arresting gear, requests waiting
+// on tower, the runway change and its acknowledgements, and the pads.
+//
+// Its own dock panel, like AIRSPACE, and NOT the `ops-runway-status` Bay: a
+// runway is not a Strip, so nothing about it belongs in a rack, and a
+// controller working LC wants the field and the Strips open side by side.
+// The Bay stays the inert Strip container ADR 0061 left it.
+//
+// The buttons come from runway-status-rules.js's runwayStatusActionsFor — a
+// proactive mirror of crc-sync's authority split. The server decides; a
+// refusal lands in the Strip panel's refusal banner, named by the runway.
+//
+// Element references are cached once in initRunwayStatusPanel(), never looked
+// up per render — dockview detaches an inactive panel's root from the
+// document, so document.getElementById stops finding it while detached (the
+// airspace panel's module comment; the same bug if ignored).
+//
+// Every time shown is in-game Zulu from the server's mission-clock stamps
+// (decisions.md H11). The one direction shown, the mission wind that picked
+// the active end, goes through magnetic.js's toMagneticDisplay (H15).
+
+let _runwayStatusListEl = null;
+let _runwayStatusEmptyEl = null;
+
+const RUNWAY_STATUS_STATUS_BADGES = {
+  OPEN: 'OPEN', CLOSED: 'CLOSED', SUSPENDED_WORKS: 'WORKS', SUSPENDED_INSPECTION: 'INSPECT',
+};
+
+function _fsZulu(ms) {
+  if (!Number.isFinite(ms)) return '';
+  return new Date(ms).toISOString().slice(11, 16).replace(':', '') + 'Z';
+}
+
+function _fsWho(positionId, by) {
+  if (!positionId && !by) return '';
+  return by && by !== positionId ? `${positionId || '?'} (${by})` : positionId;
+}
+
+function _fsEl(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text != null) node.textContent = text;
+  return node;
+}
+
+function _fsWindText(source) {
+  const mag = toMagneticDisplay(source.windFromTrue);
+  const dir = mag === null || mag === undefined ? null
+    : typeof mag === 'number' ? `${String(Math.round(mag)).padStart(3, '0')}°` : String(mag);
+  const kt = Number.isFinite(source.windKt) ? `${Math.round(source.windKt)} kt` : null;
+  const wind = [dir, kt].filter(Boolean).join(' ');
+  return `from the mission wind${wind ? ` (${wind})` : ''} ${_fsZulu(source.at)}`.trim();
+}
+
+// An action that needs a reason asks for it inline (DESK-TIDY-2: it was a blocking window.prompt). The draft lives here, not
+// in the DOM, because the panel is rebuilt on every runway-status frame: a half-typed reason must survive that.
+let _reasonDraft = null; // { key, text, fresh }
+
+function _fsActionKey(action) { return [action.kind, action.runwayId || '', action.action || '', action.positionId].join('|'); }
+
+function _fsDispatch(record, action, btn, select, reasonText) {
+  const op = { kind: action.kind };
+  if (action.runwayId) op.runwayId = action.runwayId;
+  if (action.action) op.action = action.action;
+  if (action.needs === 'toEnd') op.toRunwayId = select ? select.value : (action.toEnds || [])[0];
+  if (action.needs === 'reason') {
+    const text = (reasonText || '').trim();
+    if (action.kind === 'CloseRunway') op.reason = text || null;
+    else op.note = text || null;
+  }
+  // §7.9: the button goes dead on the press, until the next render.
+  if (btn) btn.disabled = true;
+  // A press the socket could not carry gets an answer too (NOT_CONNECTED): re-render, so the dead button is not left dead.
+  sendEfspRunwayStatusMutation(action.positionId, record.facilityId, record.rev, op, {
+    onAck: (ack) => {
+      if (ack.reason === 'NOT_CONNECTED' || ack.reason === 'CONNECTION_LOST') _showMutationError(ack.reason, ack.detail, { subject: 'runway status' }); // no ack frame will show it
+      renderRunwayStatusPanel();
+    },
+  });
+}
+
+function _fsAskReason(action) {
+  const key = _fsActionKey(action);
+  _reasonDraft = _reasonDraft && _reasonDraft.key === key ? null : { key, text: '', fresh: true }; // the button toggles
+  renderRunwayStatusPanel();
+}
+
+/** The inline reason form: Enter sends, Escape or Cancel abandons (the airspace Deny precedent); an empty reason is allowed. */
+function _fsReasonForm(record, action, actionBtn) {
+  const what = action.kind === 'CloseRunway' ? `Close runway ${action.runwayId}` : action.title.replace(/^as \S+ — /, '');
+  const form = _fsEl('div', 'runway-status-reason');
+  const input = _fsEl('input', 'runway-status-reason-input');
+  input.type = 'text';
+  input.placeholder = `${what[0].toUpperCase()}${what.slice(1)} — reason?`;
+  input.value = _reasonDraft.text;
+  const cancel = () => { _reasonDraft = null; renderRunwayStatusPanel(); };
+  const send = () => {
+    const text = input.value;
+    _reasonDraft = null;
+    _fsDispatch(record, action, actionBtn, null, text);
+  };
+  input.addEventListener('input', () => { if (_reasonDraft) _reasonDraft.text = input.value; });
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); send(); }
+    else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); cancel(); }
+  });
+  const sendBtn = _fsEl('button', 'runway-status-reason-send', 'Send');
+  sendBtn.addEventListener('click', send);
+  const cancelBtn = _fsEl('button', 'runway-status-reason-cancel', 'Cancel');
+  cancelBtn.addEventListener('click', cancel);
+  form.append(input, sendBtn, cancelBtn);
+  if (_reasonDraft.fresh) {
+    _reasonDraft.fresh = false;
+    // after the row is attached: the panel builds detached, then appends
+    Promise.resolve().then(() => { if (typeof input.focus === 'function') input.focus(); });
+  }
+  return form;
+}
+
+function _fsActionRow(record, actions) {
+  const row = _fsEl('div', 'runway-status-actions');
+  for (const action of actions) {
+    let select = null;
+    if (action.needs === 'toEnd') {
+      select = _fsEl('select', 'runway-status-to-end');
+      select.title = 'the runway end to change to';
+      for (const end of action.toEnds || []) {
+        const opt = _fsEl('option', null, end);
+        opt.value = end;
+        select.appendChild(opt);
+      }
+      row.appendChild(select);
+    }
+    const btn = _fsEl('button', 'runway-status-action-btn', action.label);
+    btn.title = action.title;
+    btn.dataset.kind = action.kind;
+    btn.dataset.positionId = action.positionId;
+    if (action.action) btn.dataset.action = action.action;
+    if (action.needs === 'reason') btn.addEventListener('click', () => _fsAskReason(action));
+    else btn.addEventListener('click', () => _fsDispatch(record, action, btn, select));
+    row.appendChild(btn);
+    if (action.needs === 'reason' && _reasonDraft && _reasonDraft.key === _fsActionKey(action)) {
+      row.appendChild(_fsReasonForm(record, action, btn));
+    }
+  }
+  return row;
+}
+
+function _fsGearLine(gear) {
+  const type = { BAK_12: 'BAK-12', E_5: 'E-5', OTHER: 'Gear' }[gear.type] || gear.type;
+  const position = String(gear.position || '').replace(/_/g, ' ');
+  const distance = Number.isFinite(gear.distanceFt) ? `${gear.distanceFt.toLocaleString('en-US')} ft` : null;
+  return [type, `${gear.end} end`, position, distance, String(gear.state).replace(/_/g, ' ')].filter(Boolean).join(' · ');
+}
+
+function _buildRunwayCard(record, runway, actions) {
+  const card = _fsEl('div', `runway-status-runway runway-status-status-${String(runway.status).toLowerCase().replace(/_/g, '-')}`);
+  card.dataset.runwayId = runway.runwayId;
+
+  const header = _fsEl('div', 'runway-status-runway-header');
+  header.appendChild(_fsEl('span', 'runway-status-runway-id', runway.runwayId));
+  const ends = _fsEl('span', 'runway-status-ends');
+  for (const end of runway.ends || []) {
+    const active = end === record.activeRunway;
+    ends.appendChild(_fsEl('span', `runway-status-end${active ? ' runway-status-end-active' : ''}`, active ? `▶ ${end} ACTIVE` : end));
+  }
+  header.appendChild(ends);
+  header.appendChild(_fsEl('span', 'runway-status-badge', RUNWAY_STATUS_STATUS_BADGES[runway.status] || runway.status));
+  card.appendChild(header);
+
+  const line = (cls, text) => card.appendChild(_fsEl('div', `runway-status-line ${cls}`, text));
+  const s = runway.suspension;
+  if (s) {
+    const why = s.kind === 'RUNWAY_CHANGE' ? 'RUNWAY CHANGE' : 'WORKS';
+    const asked = s.requestedBy ? ` · requested by ${_fsWho(s.requestedBy.positionId, s.requestedBy.by)}` : '';
+    const stage = runway.status === 'SUSPENDED_INSPECTION' ? ' · awaiting inspection' : '';
+    line('runway-status-suspension', `SUSPENDED ${why} by ${_fsWho(s.positionId, s.by)} ${_fsZulu(s.since)}${asked}${s.note ? ` — ${s.note}` : ''}${stage}`);
+  }
+  const c = runway.closure;
+  if (c) {
+    const asked = c.requestedBy ? ` · requested by ${_fsWho(c.requestedBy.positionId, c.requestedBy.by)}` : '';
+    line('runway-status-closure', `CLOSED by ${_fsWho(c.positionId, c.by)} ${_fsZulu(c.since)}${asked}${c.reason ? ` — ${c.reason}` : ''}`);
+  }
+  const i = runway.lastInspection;
+  if (i) line('runway-status-inspection', `INSPECTED by ${_fsWho(i.positionId, i.by)} ${_fsZulu(i.at)}${i.note ? ` — ${i.note}` : ''}`);
+
+  const r = runway.pendingRequest;
+  if (r) {
+    line('runway-status-request', `REQUEST ${String(r.action).replace(/_/g, ' ')} from ${_fsWho(r.requestedPositionId, r.requestedBy)} ${_fsZulu(r.requestedAt)}${r.note ? ` — ${r.note}` : ''} · waiting on LC`);
+  }
+
+  const gear = runway.arrestingGear || [];
+  if (gear.length === 0) line('runway-status-gear runway-status-gear-none', 'No arresting gear configured (SOURCE practice).');
+  for (const g of gear) line(`runway-status-gear runway-status-gear-${String(g.state).toLowerCase()}`, _fsGearLine(g));
+
+  if (actions.length) card.appendChild(_fsActionRow(record, actions));
+  return card;
+}
+
+function _fsAckChip(positionId, ack) {
+  if (ack === null || ack === undefined) return _fsEl('span', 'runway-status-ack runway-status-ack-waiting', `${positionId} …`);
+  if (ack.skipped) {
+    const chip = _fsEl('span', 'runway-status-ack runway-status-ack-skipped', `${positionId} skipped`);
+    chip.title = `${positionId} was unstaffed when the change was proposed, so it was skipped (and audited)`;
+    return chip;
+  }
+  return _fsEl('span', 'runway-status-ack runway-status-ack-done', `${positionId} ✓${ack.selfCoordinated ? ' self' : ''} ${_fsZulu(ack.at)}`);
+}
+
+function _buildRunwayChange(record, actions) {
+  const change = record.runwayChange;
+  const box = _fsEl('div', 'runway-status-change');
+  if (change) {
+    box.dataset.state = change.state;
+    const who = _fsWho(change.proposedPositionId, change.proposedBy);
+    box.appendChild(_fsEl('div', 'runway-status-line runway-status-change-head',
+      `${change.fromRunwayId || '—'} → ${change.toRunwayId} · ${String(change.state).replace(/_/g, ' ')} · proposed by ${who} ${_fsZulu(change.proposedAt)}${change.selfCoordinated ? ' · self-coordinated' : ''}${change.note ? ` — ${change.note}` : ''}`));
+    if ((change.acknowledgers || []).length) {
+      const acks = _fsEl('div', 'runway-status-acks');
+      for (const p of change.acknowledgers) acks.appendChild(_fsAckChip(p, (change.acks || {})[p]));
+      box.appendChild(acks);
+    }
+    if (change.rejected) {
+      const rj = change.rejected;
+      box.appendChild(_fsEl('div', 'runway-status-line runway-status-change-rejected',
+        `${rj.cause === 'WITHDRAWN' ? 'WITHDRAWN' : 'REJECTED'} by ${_fsWho(rj.positionId, rj.by)} ${_fsZulu(rj.at)}${rj.note ? ` — ${rj.note}` : ''}`));
+    }
+    if (change.state === 'PENDING_INSPECTION' && (change.pendingInspection || []).length) {
+      box.appendChild(_fsEl('div', 'runway-status-line runway-status-change-pending', `PENDING INSPECTION: ${change.pendingInspection.join(', ')}`));
+    }
+  }
+  if (actions.length) box.appendChild(_fsActionRow(record, actions));
+  return change || actions.length ? box : null;
+}
+
+function _buildPads(record) {
+  const pads = _fsEl('div', 'runway-status-pads');
+  const pad = (label, p, extra) => {
+    const occupied = p && p.occupied ? ` · occupied${p.occupantFlightDataId ? ` (${p.occupantFlightDataId})` : ''}` : '';
+    pads.appendChild(_fsEl('div', 'runway-status-line runway-status-pad', `${label} · ${(p && p.name) || 'not configured'}${occupied}`));
+    if (extra) pads.appendChild(_fsEl('div', 'runway-status-line runway-status-pad-constraint', extra));
+  };
+  pad('HOT CARGO PAD', record.hotCargoPad);
+  // L13 (alert/scramble) defines alertPadConstraintFor; absent until it merges.
+  const constraint = alertPadConstraintFor(record.facilityId);
+  pad('ALERT PAD', record.alertPad, constraint);
+  return pads;
+}
+
+function _buildRunwayStatusSection(record, signedOnPositionIds) {
+  const section = _fsEl('div', 'runway-status-facility');
+  section.dataset.facilityId = record.facilityId;
+
+  const header = _fsEl('div', 'runway-status-facility-header');
+  header.appendChild(_fsEl('span', 'runway-status-facility-id', record.facilityId));
+  header.appendChild(_fsEl('span', 'runway-status-active', record.activeRunway ? `▶ ${record.activeRunway} ACTIVE` : 'ACTIVE —'));
+  header.appendChild(_fsEl('span', 'runway-status-rev', `rev ${record.rev}`));
+  section.appendChild(header);
+
+  const src = record.activeRunwaySource;
+  if (src && src.kind === 'WIND') section.appendChild(_fsEl('div', 'runway-status-line runway-status-active-source', `Active end ${_fsWindText(src)}`));
+  else if (src && src.kind === 'RUNWAY_CHANGE') section.appendChild(_fsEl('div', 'runway-status-line runway-status-active-source', `Active end by runway change ${_fsZulu(src.at)}`));
+  else if (!record.activeRunway) section.appendChild(_fsEl('div', 'runway-status-line runway-status-active-source', 'No active end yet: set from the mission wind at load, or by a runway change.'));
+
+  const actions = runwayStatusActionsFor(record, signedOnPositionIds);
+  for (const runway of record.runways || []) {
+    section.appendChild(_buildRunwayCard(record, runway, actions.filter(a => a.runwayId === runway.runwayId)));
+  }
+  const change = _buildRunwayChange(record, actions.filter(a => !a.runwayId));
+  if (change) section.appendChild(change);
+  section.appendChild(_buildPads(record));
+  return section;
+}
+
+/** The tab title, with a count of runway requests waiting on THIS controller (L1b-Q9 (a)). */
+function _fsUpdateTitle(records) {
+  let waiting = 0;
+  for (const record of records) {
+    const signedOn = getActingPositions(record.facilityId);
+    waiting += runwayStatusActionsFor(record, signedOn).filter(a => a.kind === 'AcceptRunwayRequest').length;
+  }
+  const base = PANEL_TITLES.runwayStatus || 'RUNWAY STATUS';
+  const title = waiting ? `${base} (${waiting})` : base;
+  const panel = dock && dock.api ? dock.api.getPanel('runwayStatus') : null;
+  // Only on a change: setting a dockview title re-lays the tab out, and doing
+  // that on every render would churn the panel under a controller's click.
+  if (panel && panel.api && typeof panel.api.setTitle === 'function' && panel.title !== title) panel.api.setTitle(title);
+  return waiting;
+}
+
+export function renderRunwayStatusPanel() {
+  const records = getAllEfspRunwayStatuses();
+  _fsUpdateTitle(records);
+  if (!_runwayStatusListEl) return; // not initialized yet
+  _runwayStatusListEl.innerHTML = '';
+  // L1b-Q6 (a): every record, since a CTR controller may want to know the
+  // runway is shut; actions only for Positions signed on at THAT Facility.
+  for (const record of records) {
+    _runwayStatusListEl.appendChild(_buildRunwayStatusSection(record, getActingPositions(record.facilityId)));
+  }
+  if (_runwayStatusEmptyEl) _runwayStatusEmptyEl.hidden = records.length > 0;
+}
+
+export function initRunwayStatusPanel() {
+  _runwayStatusListEl = document.getElementById('runway-status-list');
+  _runwayStatusEmptyEl = document.getElementById('runway-status-empty');
+  renderRunwayStatusPanel();
+  return { onShow: () => renderRunwayStatusPanel() };
+}
+
+// The runway-status family's wire handlers (CMSG; moved out of app.js's ws.onmessage).
+// WP6 §9.7 (crc-sync docs/adr/0061, crc-desktop 0068). Its own delta with its own seq —
+// Runway status is not Strips and rides no Board's sequence (0061's rule-5 deviation).
+function _redrawRunwayStatuses() {
+  renderRunwayStatusPanel();
+  markEfspChanged('bays'); // RWY / HOOK are derived from it
+}
+registerEfspMessage('efsp-runway-status-delta', (msg) => {
+  applyEfspRunwayStatusDelta(msg);
+  _redrawRunwayStatuses();
+});
+registerEfspStoreRedraw('runwayStatuses', _redrawRunwayStatuses);
+
+registerEfspMessage('efsp-runway-status-ack', (msg) => {
+  settleEfspAck(msg);
+  if (!msg.ok) {
+    _showMutationError(msg.reason || 'Rejected', msg.detail, { subject: runwayStatusSubjectFor(msg) });
+  }
+  if (msg.runwayStatus) {
+    applyEfspRunwayStatusDelta({ runwayStatuses: { updated: [msg.runwayStatus] } });
+  }
+  renderRunwayStatusPanel();
+  markEfspChanged('bays');
+});
+
+onEfspChanged(['snapshot'], () => renderRunwayStatusPanel()); // a new Board lifetime redraws the runways (efsp-change-bus.js)

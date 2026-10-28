@@ -1,0 +1,2 @@
+# The repo root ignores *.yaml; these are committed test fixtures (ADR 0078).
+!*.yaml

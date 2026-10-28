@@ -1,0 +1,113 @@
+'use strict';
+
+// The Board's kernel (docs/adr/0095): the Strip map, the seq/`_log` ring, the epoch, the touched-since-drain set and
+// the cid counter. The BoardStore facade (board-store.js) and its collaborators read and write Strips through it.
+//
+// Every touch (bump, insert, and each collaborator's `touch`, which is `recordTouch` itself) goes through
+// recordTouch, so an observer registered with observeTouches (the facade's, used by tools/soak/host-core.js) sees
+// every one.
+
+const { SyncLog } = require('../sync/sync-log');
+
+class BoardState {
+  /**
+   * @param {object} deps
+   * @param {{now: () => number}} deps.clock the mission clock (docs/adr/0079)
+   */
+  constructor({ clock }) {
+    this._clock = clock;
+    this._strips = new Map(); // stripId -> Strip
+    // The seq, the `_log` ring, the epoch and the touched set: the one sync mechanism (sync/sync-log.js, S3-1).
+    this._sync = new SyncLog({ ring: true, touched: true, epoch: true });
+    this._cidSeq = 0;
+    this._onTouch = null; // the undo history's hook (docs/adr/0100), set by the facade
+  }
+
+  /** `fn(stripId, {unobserved})` on every touch, before the ring entry (the undo history attributes it). */
+  setTouchHook(fn) { this._onTouch = fn; }
+
+  /** The Strip map itself (stripId -> Strip). */
+  get strips() { return this._strips; }
+  /** The ring (sync/sync-log.js). Read-only use. */
+  get log() { return this._sync.ring; }
+  get seq() { return this._sync.seq; }
+  get epoch() { return this._sync.epoch; }
+  get cidSeq() { return this._cidSeq; }
+
+  get(stripId) { return this._strips.get(stripId); }
+  all() { return [...this._strips.values()]; }
+
+  /** Strips currently placed in a Bay/Rack, in order, excluding DROPPED — a DROPPED Strip stays queryable via getStrip()/getAll() but leaves the visible Board (guide §3.4). */
+  rack(bayId, rackId) {
+    return this.all()
+      .filter(s => s.bayId === bayId && s.rackId === rackId && s.state !== 'DROPPED')
+      .sort((a, b) => (a.orderKey < b.orderKey ? -1 : a.orderKey > b.orderKey ? 1 : (a.stripId < b.stripId ? -1 : 1)));
+  }
+
+  /**
+   * The kernel's touch: every touch on this Board comes here. `unobserved` marks a rebalance re-keying a
+   * neighbour, which the undo history never counts as a change (docs/adr/0100 §4).
+   */
+  recordTouch(stripId, { unobserved = false } = {}) {
+    if (this._onTouch) this._onTouch(stripId, { unobserved });
+    this._sync.touch(stripId);
+  }
+
+  /**
+   * A Strip an undo removes (a record its action created, docs/adr/0100 §3): it leaves the map and the ring gets a
+   * `gone`, like an archive. Returns whether it was here.
+   */
+  remove(stripId) {
+    if (!this._strips.has(stripId)) return false;
+    this._strips.delete(stripId);
+    this._sync.gone(stripId);
+    return true;
+  }
+
+  /**
+   * One Strip changed by `by`: rev+1, updatedAt, updatedBy, touch: the one place that block lives. `at` is the instant the
+   * op already read from the clock (default: read it now), so a Strip's stamp and the op's own stamps agree.
+   */
+  bump(strip, by, at = this._clock.now()) {
+    strip.rev += 1;
+    strip.updatedAt = at;
+    strip.updatedBy = by || null;
+    this.recordTouch(strip.stripId);
+  }
+
+  /** A new Strip (created, or a minted replica) joins the Board and is touched. */
+  insert(strip) {
+    this._strips.set(strip.stripId, strip);
+    this.recordTouch(strip.stripId);
+  }
+
+  /** Whether any Strip was touched since the last drain (does not drain). */
+  hasTouched() { return this._sync.hasTouched(); }
+
+  /** The ids of every Strip touched since the last drain, in first-touch order (sync/sync-log.js). */
+  drainTouched() { return this._sync.drainTouched(); }
+
+  /** A `gone` entry for an archived Strip: it advances the seq like a touch, but is not a touch. */
+  logGone(stripId) { this._sync.gone(stripId); }
+
+  /** Delta resync (guide §5.6) within this Board lifetime (sync/sync-log.js deltaSince). */
+  getDeltaSince(afterSeq) { return this._sync.deltaSince(afterSeq, (id) => this._strips.get(id)); }
+
+  /** `fn(stripId)` after every touch (sync/sync-log.js observeTouches). */
+  observeTouches(fn) { return this._sync.observeTouches(fn); }
+
+  nextCid() {
+    this._cidSeq += 1;
+    // 3-digit, zero-padded, sequential for this store's lifetime —
+    // [SOURCE-DEFINED] format for Block 4 (guide §6.2); no real-world
+    // format is published. See the implementation plan.
+    return String(this._cidSeq).padStart(3, '0');
+  }
+
+  // ── restore (the facade's restore() drives these; SYNC moves restore) ──
+  replaceStrips(strips) { this._strips = strips; }
+  newEpoch() { this._sync.newEpoch(); }
+  setCidSeq(cidSeq) { this._cidSeq = cidSeq; }
+}
+
+module.exports = { BoardState };

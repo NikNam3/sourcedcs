@@ -1,4 +1,5 @@
 'use strict';
+const log = require('./logger');
 
 /* Discord REST client (guild members/roles, posting/editing/deleting
    messages) + roster-merge logic — pulled out of server.js. Sibling to
@@ -17,7 +18,7 @@ const USER_AGENT = 'SourceDCS-Web/1.0 (https://github.com/NikNam3/sourcedcs)';
 
 /* ─── Discord REST helpers ──────────────────────────────── */
 function discordRequest(apiPath) {
-  console.debug('[discord] GET /api/v10' + apiPath);
+  log.debug('[discord] GET /api/v10' + apiPath);
   const options = {
     hostname: 'discord.com',
     path: '/api/v10' + apiPath,
@@ -28,23 +29,23 @@ function discordRequest(apiPath) {
     },
   };
   return auth.rawRequest(options).then(({ statusCode, headers, raw }) => {
-    console.debug('[discord] GET /api/v10' + apiPath + ' → HTTP ' + statusCode);
+    log.debug('[discord] GET /api/v10' + apiPath + ' → HTTP ' + statusCode);
     if (statusCode === 429) {
       const retry = headers['retry-after'];
-      console.warn('[discord] Rate limited — retry-after: ' + retry + 's');
+      log.warn('[discord] Rate limited — retry-after: ' + retry + 's');
     }
     if (statusCode >= 200 && statusCode < 300) {
       try { return JSON.parse(raw); }
       catch (e) {
-        console.error('[discord] Failed to parse JSON from GET /api/v10' + apiPath + ':', e.message, '| raw:', raw.slice(0, 200));
+        log.error('[discord] Failed to parse JSON from GET /api/v10' + apiPath + ':', e.message, '| raw:', raw.slice(0, 200));
         throw new Error('Discord: invalid JSON response');
       }
     }
     const msg = 'Discord API ' + statusCode + ': ' + raw.slice(0, 200);
-    console.error('[discord] Error on GET /api/v10' + apiPath + ':', msg);
+    log.error('[discord] Error on GET /api/v10' + apiPath + ':', msg);
     throw new Error(msg);
   }, (err) => {
-    console.error('[discord] Network error on GET /api/v10' + apiPath + ':', err.message);
+    log.error('[discord] Network error on GET /api/v10' + apiPath + ':', err.message);
     throw err;
   });
 }
@@ -52,7 +53,7 @@ function discordRequest(apiPath) {
 /* POST to a Discord API endpoint (e.g. send a message to a channel) */
 function discordPost(apiPath, body) {
   const payload = JSON.stringify(body);
-  console.debug('[discord] POST /api/v10' + apiPath);
+  log.debug('[discord] POST /api/v10' + apiPath);
   const options = {
     hostname: 'discord.com',
     path: '/api/v10' + apiPath,
@@ -65,19 +66,19 @@ function discordPost(apiPath, body) {
     },
   };
   return auth.rawRequest(options, payload).then(({ statusCode, raw }) => {
-    console.debug('[discord] POST /api/v10' + apiPath + ' → HTTP ' + statusCode);
+    log.debug('[discord] POST /api/v10' + apiPath + ' → HTTP ' + statusCode);
     if (statusCode >= 200 && statusCode < 300) {
       try { return JSON.parse(raw); }
       catch (e) {
-        console.error('[discord] Failed to parse JSON from POST /api/v10' + apiPath + ':', e.message, '| raw:', raw.slice(0, 200));
+        log.error('[discord] Failed to parse JSON from POST /api/v10' + apiPath + ':', e.message, '| raw:', raw.slice(0, 200));
         return {};
       }
     }
     const msg = 'Discord API ' + statusCode + ': ' + raw.slice(0, 400);
-    console.error('[discord] Error on POST /api/v10' + apiPath + ':', msg);
+    log.error('[discord] Error on POST /api/v10' + apiPath + ':', msg);
     throw new Error(msg);
   }, (err) => {
-    console.error('[discord] Network error on POST /api/v10' + apiPath + ':', err.message);
+    log.error('[discord] Network error on POST /api/v10' + apiPath + ':', err.message);
     throw err;
   });
 }
@@ -85,7 +86,7 @@ function discordPost(apiPath, body) {
 /* PATCH a Discord message (edit in place) */
 function discordPatch(apiPath, body) {
   const payload = JSON.stringify(body);
-  console.debug('[discord] PATCH /api/v10' + apiPath);
+  log.debug('[discord] PATCH /api/v10' + apiPath);
   const options = {
     hostname: 'discord.com',
     path: '/api/v10' + apiPath,
@@ -98,7 +99,7 @@ function discordPatch(apiPath, body) {
     },
   };
   return auth.rawRequest(options, payload).then(({ statusCode, raw }) => {
-    console.debug('[discord] PATCH /api/v10' + apiPath + ' → HTTP ' + statusCode);
+    log.debug('[discord] PATCH /api/v10' + apiPath + ' → HTTP ' + statusCode);
     if (statusCode >= 200 && statusCode < 300) {
       try { return JSON.parse(raw); } catch (e) { return {}; }
     }
@@ -108,7 +109,7 @@ function discordPatch(apiPath, body) {
 
 /* DELETE a Discord message */
 function discordDelete(apiPath) {
-  console.debug('[discord] DELETE /api/v10' + apiPath);
+  log.debug('[discord] DELETE /api/v10' + apiPath);
   const options = {
     hostname: 'discord.com',
     path: '/api/v10' + apiPath,
@@ -119,7 +120,7 @@ function discordDelete(apiPath) {
     },
   };
   return auth.rawRequest(options).then(({ statusCode, raw }) => {
-    console.debug('[discord] DELETE /api/v10' + apiPath + ' → HTTP ' + statusCode);
+    log.debug('[discord] DELETE /api/v10' + apiPath + ' → HTTP ' + statusCode);
     if (statusCode === 204 || (statusCode >= 200 && statusCode < 300)) return;
     throw new Error('Discord API DELETE ' + statusCode);
   });
@@ -129,18 +130,18 @@ async function fetchAllGuildMembers(guildId) {
   const members = [];
   let after = '0';
   let page = 0;
-  console.debug('[roster] Fetching guild members for guild', guildId);
+  log.debug('[roster] Fetching guild members for guild', guildId);
   for (;;) {
     page++;
     const batch = await discordRequest(
       '/guilds/' + guildId + '/members?limit=1000&after=' + after
     );
-    console.debug('[roster] Page ' + page + ': received ' + batch.length + ' members (after=' + after + ')');
+    log.debug('[roster] Page ' + page + ': received ' + batch.length + ' members (after=' + after + ')');
     members.push(...batch);
     if (batch.length < 1000) break;
     after = batch[batch.length - 1].user.id;
   }
-  console.debug('[roster] Total members fetched:', members.length);
+  log.debug('[roster] Total members fetched:', members.length);
   return members;
 }
 
@@ -197,7 +198,7 @@ async function ensureMembersFresh() {
       await refreshMembers();
       store.state.membersCacheAt = now;
     } catch (err) {
-      console.error('[members] Refresh failed:', err.message);
+      log.error('[members] Refresh failed:', err.message);
     }
   }
 }
@@ -209,20 +210,20 @@ async function ensureMembersFresh() {
    linked skill records are preserved. */
 async function refreshMembers() {
   if (!DISCORD_BOT_TOKEN || !DISCORD_GUILD_ID) {
-    console.warn('[members] DISCORD_BOT_TOKEN or DISCORD_GUILD_ID not set — cannot refresh from Discord');
+    log.warn('[members] DISCORD_BOT_TOKEN or DISCORD_GUILD_ID not set — cannot refresh from Discord');
     return;
   }
 
   const members = store.state.members;
   const discordRoles = store.state.discordRoles;
 
-  console.debug('[members] Starting member refresh from Discord (guild=' + DISCORD_GUILD_ID + ')');
+  log.debug('[members] Starting member refresh from Discord (guild=' + DISCORD_GUILD_ID + ')');
 
   /* Resolve role IDs → names */
   const guildRoles = await discordRequest('/guilds/' + DISCORD_GUILD_ID + '/roles');
   const roleIdToName = {};
   for (const r of guildRoles) roleIdToName[r.id] = r.name;
-  console.debug('[members] Guild has ' + guildRoles.length + ' roles; configured mapping covers ' + Object.keys(discordRoles).length + ' role name(s)');
+  log.debug('[members] Guild has ' + guildRoles.length + ' roles; configured mapping covers ' + Object.keys(discordRoles).length + ' role name(s)');
 
   const discordMembers = await fetchAllGuildMembers(DISCORD_GUILD_ID);
 
@@ -278,7 +279,7 @@ async function refreshMembers() {
   }
 
   store.saveJSON(store.MEMBERS_FILE, members);
-  console.debug('[members] Refresh complete — matched: ' + matchedCount + ', unmatched: ' + skippedCount + ', total known: ' + Object.keys(members).length);
+  log.debug('[members] Refresh complete — matched: ' + matchedCount + ', unmatched: ' + skippedCount + ', total known: ' + Object.keys(members).length);
 }
 
 /* Finds a roster entry for a pilot. An admin-set `casdoorSub` link (see

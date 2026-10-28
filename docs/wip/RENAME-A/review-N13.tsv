@@ -1,0 +1,109 @@
+crc-sync/src/efsp/alert-scramble.js:42:'PROPOSED'#1	N	Strip state PROPOSED (proposed flight plan) or runway-status change PROPOSED: stays (RP-6 a)
+crc-sync/src/efsp/authority/strip-types/departure.js:12:'PROPOSED'#1	N	Strip state PROPOSED (proposed flight plan) or runway-status change PROPOSED: stays (RP-6 a)
+crc-sync/src/efsp/authority/strip-types/departure.js:34:PROPOSED#1	N	Strip state PROPOSED (proposed flight plan) or runway-status change PROPOSED: stays (RP-6 a)
+crc-sync/src/efsp/authority/strip-types/departure.js:127:'PROPOSED'#1	N	Strip state PROPOSED (proposed flight plan) or runway-status change PROPOSED: stays (RP-6 a)
+crc-sync/src/efsp/authority/strip-types/departure.js:250:'PROPOSED'#1	N	Strip state PROPOSED (proposed flight plan) or runway-status change PROPOSED: stays (RP-6 a)
+crc-sync/src/efsp/board/coordination.js:108:'PROPOSED'#1	Y	coordination/tofiCoordination state
+crc-sync/src/efsp/board/coordination.js:157:'PROPOSED'#1	Y	coordination record built or compared in the coordination/TOFI module (link/tofi/open are the coordination object)
+crc-sync/src/efsp/board/coordination.js:189:'PROPOSED'#1	Y	coordination/tofiCoordination state
+crc-sync/src/efsp/board/coordination.js:240:'PROPOSED'#1	Y	coordination/tofiCoordination state
+crc-sync/src/efsp/board/coordination.js:320:'PROPOSED'#1	Y	coordination record built or compared in the coordination/TOFI module (link/tofi/open are the coordination object)
+crc-sync/src/efsp/board/coordination.js:343:'PROPOSED'#1	Y	coordination/tofiCoordination state
+crc-sync/src/efsp/board/coordination.js:423:'PROPOSED'#1	Y	coordination record built or compared in the coordination/TOFI module (link/tofi/open are the coordination object)
+crc-sync/src/efsp/board/ops/convert-to-arrival.js:59:'PROPOSED'#1	Y	coordination/tofiCoordination state
+crc-sync/src/efsp/board/ops/convert-to-arrival.js:62:'PROPOSED'#1	Y	coordination/tofiCoordination state
+crc-sync/src/efsp/board/ops/create-strip.js:90:'PROPOSED'#1	N	Strip state PROPOSED (proposed flight plan) or runway-status change PROPOSED: stays (RP-6 a)
+crc-sync/src/efsp/board/ops/create-strip.js:91:'PROPOSED'#1	N	Strip state PROPOSED (proposed flight plan) or runway-status change PROPOSED: stays (RP-6 a)
+crc-sync/src/efsp/board/ops/create-strip.js:96:'PROPOSED'#1	N	Strip state PROPOSED (proposed flight plan) or runway-status change PROPOSED: stays (RP-6 a)
+crc-sync/src/efsp/board/ops/drop-strip.js:6:'PROPOSED'#1	Y	coordination/tofiCoordination state
+crc-sync/src/efsp/board/ops/drop-strip.js:9:'PROPOSED'#1	Y	coordination/tofiCoordination state
+crc-sync/src/efsp/board/strip-ops.js:304:'PROPOSED'#1	Y	coordination/tofiCoordination state
+crc-sync/src/efsp/board/strip-ops.js:311:'PROPOSED'#1	Y	coordination/tofiCoordination state
+crc-sync/src/efsp/board/tofi.js:89:'PROPOSED'#1	Y	coordination/tofiCoordination state
+crc-sync/src/efsp/board/tofi.js:95:'PROPOSED'#1	Y	coordination/tofiCoordination state
+crc-sync/src/efsp/board/tofi.js:149:'PROPOSED'#1	Y	coordination record built or compared in the coordination/TOFI module (link/tofi/open are the coordination object)
+crc-sync/src/efsp/board/tofi.js:182:'PROPOSED'#1	Y	coordination record built or compared in the coordination/TOFI module (link/tofi/open are the coordination object)
+crc-sync/src/efsp/board/tofi.js:202:'PROPOSED'#1	Y	coordination record built or compared in the coordination/TOFI module (link/tofi/open are the coordination object)
+crc-sync/src/efsp/board/tofi.js:321:'PROPOSED'#1	Y	coordination record built or compared in the coordination/TOFI module (link/tofi/open are the coordination object)
+crc-sync/src/efsp/board/tofi.js:436:'PROPOSED'#1	Y	coordination record built or compared in the coordination/TOFI module (link/tofi/open are the coordination object)
+crc-sync/src/efsp/board/tofi.js:446:'PROPOSED'#1	Y	coordination record built or compared in the coordination/TOFI module (link/tofi/open are the coordination object)
+crc-sync/src/efsp/board/tofi.js:490:'PROPOSED'#1	Y	coordination record built or compared in the coordination/TOFI module (link/tofi/open are the coordination object)
+crc-sync/src/efsp/board/tofi.js:520:'PROPOSED'#1	Y	coordination/tofiCoordination state
+crc-sync/src/efsp/correlation-reconciler.js:57:'PROPOSED'#1	N	Strip state PROPOSED (proposed flight plan) or runway-status change PROPOSED: stays (RP-6 a)
+crc-sync/src/efsp/forwarding-obligations.js:60:'PROPOSED'#1	Y	coordination/tofiCoordination state
+crc-sync/src/efsp/runway-status-store.js:482:'PROPOSED'#1	N	Strip state PROPOSED (proposed flight plan) or runway-status change PROPOSED: stays (RP-6 a)
+crc-sync/src/efsp/runway-status-store.js:508:'PROPOSED'#1	N	Strip state PROPOSED (proposed flight plan) or runway-status change PROPOSED: stays (RP-6 a)
+crc-sync/src/efsp/runway-status-store.js:531:'PROPOSED'#1	N	Strip state PROPOSED (proposed flight plan) or runway-status change PROPOSED: stays (RP-6 a)
+crc-sync/src/efsp/runway-status.js:69:'PROPOSED'#1	N	Strip state PROPOSED (proposed flight plan) or runway-status change PROPOSED: stays (RP-6 a)
+crc-sync/src/efsp/runway-status.js:70:'PROPOSED'#1	N	Strip state PROPOSED (proposed flight plan) or runway-status change PROPOSED: stays (RP-6 a)
+crc-sync/src/efsp/surveillance-hints.js:53:'PROPOSED'#1	N	Strip state PROPOSED (proposed flight plan) or runway-status change PROPOSED: stays (RP-6 a)
+crc-sync/tests/efsp-ato-board.test.mjs:162:'PROPOSED'#1	N	Strip state PROPOSED (proposed flight plan) or runway-status change PROPOSED: stays (RP-6 a)
+crc-sync/tests/efsp-board-store-coordination.test.mjs:144:'PROPOSED'#1	Y	coordination/tofiCoordination state
+crc-sync/tests/efsp-board-store-coordination.test.mjs:155:'PROPOSED'#1	Y	coordination/tofiCoordination state
+crc-sync/tests/efsp-board-store-coordination.test.mjs:450:'PROPOSED'#1	N	Strip state PROPOSED (proposed flight plan) or runway-status change PROPOSED: stays (RP-6 a)
+crc-sync/tests/efsp-board-store-coordination.test.mjs:476:'PROPOSED'#1	Y	coordination/tofiCoordination state
+crc-sync/tests/efsp-board-store-coordination.test.mjs:480:'PROPOSED'#1	Y	coordination/tofiCoordination state
+crc-sync/tests/efsp-board-store-coordination.test.mjs:564:'PROPOSED'#1	Y	coordination/tofiCoordination state
+crc-sync/tests/efsp-board-store-coordination.test.mjs:756:'PROPOSED'#1	N	Strip state PROPOSED (proposed flight plan) or runway-status change PROPOSED: stays (RP-6 a)
+crc-sync/tests/efsp-board-store-coordination.test.mjs:777:'PROPOSED'#1	N	Strip state PROPOSED (proposed flight plan) or runway-status change PROPOSED: stays (RP-6 a)
+crc-sync/tests/efsp-board-store.test.mjs:28:'PROPOSED'#1	N	Strip state PROPOSED (proposed flight plan) or runway-status change PROPOSED: stays (RP-6 a)
+crc-sync/tests/efsp-board-store.test.mjs:35:'PROPOSED'#1	N	Strip state PROPOSED (proposed flight plan) or runway-status change PROPOSED: stays (RP-6 a)
+crc-sync/tests/efsp-board-store.test.mjs:75:'PROPOSED'#1	N	Strip state PROPOSED (proposed flight plan) or runway-status change PROPOSED: stays (RP-6 a)
+crc-sync/tests/efsp-board-store.test.mjs:194:'PROPOSED'#1	N	Strip state PROPOSED (proposed flight plan) or runway-status change PROPOSED: stays (RP-6 a)
+crc-sync/tests/efsp-board-store.test.mjs:490:'PROPOSED'#1	N	Strip state PROPOSED (proposed flight plan) or runway-status change PROPOSED: stays (RP-6 a)
+crc-sync/tests/efsp-board-store.test.mjs:515:'PROPOSED'#1	N	Strip state PROPOSED (proposed flight plan) or runway-status change PROPOSED: stays (RP-6 a)
+crc-sync/tests/efsp-board-store.test.mjs:621:PROPOSED#1	N	Strip state PROPOSED (proposed flight plan) or runway-status change PROPOSED: stays (RP-6 a)
+crc-sync/tests/efsp-board-store.test.mjs:630:'PROPOSED'#1	N	Strip state PROPOSED (proposed flight plan) or runway-status change PROPOSED: stays (RP-6 a)
+crc-sync/tests/efsp-board-store.test.mjs:757:'PROPOSED'#1	N	Strip state PROPOSED (proposed flight plan) or runway-status change PROPOSED: stays (RP-6 a)
+crc-sync/tests/efsp-board-store.test.mjs:947:'PROPOSED'#1	N	Strip state PROPOSED (proposed flight plan) or runway-status change PROPOSED: stays (RP-6 a)
+crc-sync/tests/efsp-board-store.test.mjs:948:'PROPOSED'#1	N	Strip state PROPOSED (proposed flight plan) or runway-status change PROPOSED: stays (RP-6 a)
+crc-sync/tests/efsp-carrier-strip-types.test.mjs:49:PROPOSED#1	N	Strip state PROPOSED (proposed flight plan) or runway-status change PROPOSED: stays (RP-6 a)
+crc-sync/tests/efsp-correlation-reconciler.test.mjs:99:'PROPOSED'#1	N	Strip state PROPOSED (proposed flight plan) or runway-status change PROPOSED: stays (RP-6 a)
+crc-sync/tests/efsp-correlation-reconciler.test.mjs:111:'PROPOSED'#1	N	Strip state PROPOSED (proposed flight plan) or runway-status change PROPOSED: stays (RP-6 a)
+crc-sync/tests/efsp-correlation-reconciler.test.mjs:342:'PROPOSED'#1	N	Strip state PROPOSED (proposed flight plan) or runway-status change PROPOSED: stays (RP-6 a)
+crc-sync/tests/efsp-correlation-reconciler.test.mjs:440:'PROPOSED'#1	N	Strip state PROPOSED (proposed flight plan) or runway-status change PROPOSED: stays (RP-6 a)
+crc-sync/tests/efsp-facility-config.test.mjs:58:'PROPOSED'#1	N	Strip state PROPOSED (proposed flight plan) or runway-status change PROPOSED: stays (RP-6 a)
+crc-sync/tests/efsp-forwarding-obligations.test.mjs:16:'PROPOSED'#1	N	Strip state PROPOSED (proposed flight plan) or runway-status change PROPOSED: stays (RP-6 a)
+crc-sync/tests/efsp-forwarding-obligations.test.mjs:52:'PROPOSED'#1	Y	coordination/tofiCoordination state
+crc-sync/tests/efsp-forwarding-obligations.test.mjs:276:'PROPOSED'#1	Y	coordination/tofiCoordination state
+crc-sync/tests/efsp-forwarding-obligations.test.mjs:289:'PROPOSED'#1	Y	coordination/tofiCoordination state
+crc-sync/tests/efsp-forwarding-obligations.test.mjs:304:'PROPOSED'#1	Y	coordination/tofiCoordination state
+crc-sync/tests/efsp-index.test.mjs:201:'PROPOSED'#1	Y	coordination/tofiCoordination state
+crc-sync/tests/efsp-index.test.mjs:208:'PROPOSED'#1	Y	coordination/tofiCoordination state
+crc-sync/tests/efsp-mutation-log.test.mjs:41:'PROPOSED'#1	N	Strip state PROPOSED (proposed flight plan) or runway-status change PROPOSED: stays (RP-6 a)
+crc-sync/tests/efsp-nla.test.mjs:42:'PROPOSED'#1	N	Strip state PROPOSED (proposed flight plan) or runway-status change PROPOSED: stays (RP-6 a)
+crc-sync/tests/efsp-nla.test.mjs:51:'PROPOSED'#1	N	Strip state PROPOSED (proposed flight plan) or runway-status change PROPOSED: stays (RP-6 a)
+crc-sync/tests/efsp-nla.test.mjs:57:'PROPOSED'#1	N	Strip state PROPOSED (proposed flight plan) or runway-status change PROPOSED: stays (RP-6 a)
+crc-sync/tests/efsp-nla.test.mjs:63:'PROPOSED'#1	N	Strip state PROPOSED (proposed flight plan) or runway-status change PROPOSED: stays (RP-6 a)
+crc-sync/tests/efsp-nla.test.mjs:69:'PROPOSED'#1	N	Strip state PROPOSED (proposed flight plan) or runway-status change PROPOSED: stays (RP-6 a)
+crc-sync/tests/efsp-nla.test.mjs:75:'PROPOSED'#1	N	Strip state PROPOSED (proposed flight plan) or runway-status change PROPOSED: stays (RP-6 a)
+crc-sync/tests/efsp-nla.test.mjs:80:'PROPOSED'#1	N	Strip state PROPOSED (proposed flight plan) or runway-status change PROPOSED: stays (RP-6 a)
+crc-sync/tests/efsp-permission.test.mjs:225:PROPOSED#1	N	Strip state PROPOSED (proposed flight plan) or runway-status change PROPOSED: stays (RP-6 a)
+crc-sync/tests/efsp-permission.test.mjs:239:'PROPOSED'#1	N	Strip state PROPOSED (proposed flight plan) or runway-status change PROPOSED: stays (RP-6 a)
+crc-sync/tests/efsp-permission.test.mjs:241:'PROPOSED'#1	N	Strip state PROPOSED (proposed flight plan) or runway-status change PROPOSED: stays (RP-6 a)
+crc-sync/tests/efsp-permission.test.mjs:278:'PROPOSED'#1	N	Strip state PROPOSED (proposed flight plan) or runway-status change PROPOSED: stays (RP-6 a)
+crc-sync/tests/efsp-runway-status.test.mjs:745:'PROPOSED'#1	N	Strip state PROPOSED (proposed flight plan) or runway-status change PROPOSED: stays (RP-6 a)
+crc-sync/tests/efsp-runway-status.test.mjs:749:'PROPOSED'#1	N	Strip state PROPOSED (proposed flight plan) or runway-status change PROPOSED: stays (RP-6 a)
+crc-sync/tests/efsp-runway-status.test.mjs:775:'PROPOSED'#1	N	Strip state PROPOSED (proposed flight plan) or runway-status change PROPOSED: stays (RP-6 a)
+crc-sync/tests/efsp-runway-status.test.mjs:788:'PROPOSED'#1	N	Strip state PROPOSED (proposed flight plan) or runway-status change PROPOSED: stays (RP-6 a)
+crc-sync/tests/efsp-runway-status.test.mjs:815:'PROPOSED'#1	N	Strip state PROPOSED (proposed flight plan) or runway-status change PROPOSED: stays (RP-6 a)
+crc-sync/tests/efsp-runway-status.test.mjs:849:'PROPOSED'#1	N	Strip state PROPOSED (proposed flight plan) or runway-status change PROPOSED: stays (RP-6 a)
+crc-sync/tests/efsp-runway-status.test.mjs:1005:'PROPOSED'#1	N	Strip state PROPOSED (proposed flight plan) or runway-status change PROPOSED: stays (RP-6 a)
+crc-sync/tests/efsp-scenario-coordination.test.mjs:77:'PROPOSED'#1	Y	coordination/tofiCoordination state
+crc-sync/tests/efsp-scenario-military.test.mjs:119:'PROPOSED'#1	Y	coordination/tofiCoordination state
+crc-sync/tests/efsp-scenario-military.test.mjs:255:'PROPOSED'#1	N	Strip state PROPOSED (proposed flight plan) or runway-status change PROPOSED: stays (RP-6 a)
+crc-sync/tests/efsp-scenario-military.test.mjs:271:'PROPOSED'#1	N	Strip state PROPOSED (proposed flight plan) or runway-status change PROPOSED: stays (RP-6 a)
+crc-sync/tests/efsp-scenario-runway-status.test.mjs:347:'PROPOSED'#1	N	Strip state PROPOSED (proposed flight plan) or runway-status change PROPOSED: stays (RP-6 a)
+crc-sync/tests/efsp-scenario-runway-status.test.mjs:438:'PROPOSED'#1	N	Strip state PROPOSED (proposed flight plan) or runway-status change PROPOSED: stays (RP-6 a)
+crc-sync/tests/efsp-scenario-tactical-l23.test.mjs:158:'PROPOSED'#1	N	Strip state PROPOSED (proposed flight plan) or runway-status change PROPOSED: stays (RP-6 a)
+crc-sync/tests/efsp-scenario-tactical-l23.test.mjs:334:'PROPOSED'#1	Y	coordination/tofiCoordination state
+crc-sync/tests/efsp-scenario-tactical.test.mjs:189:'PROPOSED'#1	Y	coordination/tofiCoordination state
+crc-sync/tests/efsp-tofi.test.mjs:138:'PROPOSED'#1	Y	coordination/tofiCoordination state
+crc-sync/tests/efsp-tofi.test.mjs:154:'PROPOSED'#1	Y	coordination/tofiCoordination state
+crc-sync/tests/efsp-tofi.test.mjs:265:'PROPOSED'#1	Y	coordination/tofiCoordination state
+crc-sync/tests/efsp-tofi.test.mjs:271:'PROPOSED'#1	Y	coordination/tofiCoordination state
+crc-sync/tests/efsp-traffic-count.test.mjs:52:'PROPOSED'#1	N	Strip state PROPOSED (proposed flight plan) or runway-status change PROPOSED: stays (RP-6 a)
+crc-sync/tests/efsp-traffic-count.test.mjs:72:'PROPOSED'#1	N	Strip state PROPOSED (proposed flight plan) or runway-status change PROPOSED: stays (RP-6 a)
+crc-sync/tests/efsp-ui-findings.test.mjs:455:'PROPOSED'#1	Y	coordination/tofiCoordination state
+crc-sync/tests/freeze/freeze-traces.mjs:171:'PROPOSED'#1	N	Strip state PROPOSED (proposed flight plan) or runway-status change PROPOSED: stays (RP-6 a)
+crc-sync/tools/soak/driver.js:856:'PROPOSED'#1	Y	coordination/tofiCoordination state

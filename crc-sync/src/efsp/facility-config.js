@@ -1,281 +1,482 @@
 'use strict';
 
-// Facility adaptation layer (EFSPImplementationGuide.md §8) — Position set,
-// Bay/Rack definitions, the covering chain, and the Bay-implies-State
-// mapping. Persisted JSON config, same pattern as theater-settings.js/
-// apt-config.js: loaded once at require time, mutated and re-persisted
-// through setters, survives a crc-sync restart. "The configurability is the
-// specification" (§8.1) — even though this module ships no facility-config
-// *editing* UI, the load/persist path exists from the start so a future
-// editor is additive, not a retrofit.
+// Facility adaptation layer (EFSPImplementationGuide.md §8) — the loader for each Facility's data: Position set,
+// Bay/Rack definitions, consolidation, the Bay-implies-State mapping. "The configurability is the
+// specification" (§8.1).
 //
-// WP4A (docs/adr/0013) added a second Facility, `CENTER` (Ankara Center,
-// Position `CTR`) — every exported function now takes an OPTIONAL trailing
-// `facilityId` parameter defaulting to DEFAULT_FACILITY_ID ('INCIRLIK'), so
-// every zero-arg call site that predates WP4A keeps compiling and behaving
-// identically. `configs` is a Map keyed by facilityId rather than a single
-// module-level object — see docs/adr/0013-facility-config-multi-facility.md.
+// The data is not here. Each shipped Facility is config/efsp-facility-<id>.json (docs/wip/DATA-1.md); this module
+// loads them, lazily (the first use, or an explicit load(), never at require time), and answers questions about
+// them. facility-schema.js says what every key means and where its value comes from (the doctrine and
+// [SOURCE-DEFINED] notes live there, per key, because a JSON file takes no comments). The file layering is: an
+// env override path if set and present, else the live copy in state/, else the shipped config/ file; a copy
+// replaces the shipped one WHOLE, never key by key. A missing or invalid file is a start-up error, not a silent
+// fall back, and so is a file that still carries the replaced `blockVisibility` list (the code token below stays;
+// the file is refused, docs/adr/0041). RANGES alone is derived from the airspace definitions, every boot.
+// setFacilityConfig re-validates, replaces the live copy and persists it to state/, so a config survives a
+// crc-sync restart; the module ships no editing UI.
 //
-// Bay sets below are the guide's own §4.2 defaults, restricted to the
-// Positions each Facility actually has. Each ATC Position's `Coordination`
-// Bay was present-but-inert through Phase 2 (guide §16's build-sequencing
-// note: "an empty-but-present Coordination Bay" is the WP4A seam) — it's
-// now genuinely used by the 5 new coordination-primitive Mutations
-// (permission.js's OP_KINDS) to land a proposed cross-Facility Strip
-// replica. `bayImpliesState` (guide §3.5 rule 4 / §2 "Bay membership
-// expresses operational state") only covers Bays whose name cleanly maps to
-// one EfspState — Filed/Taxi In/Arrivals/every Coordination Bay have none.
+// WP4A (docs/adr/0013) added a second Facility, `CENTER` (Ankara Center, Position `CTR`) — every exported
+// function takes an OPTIONAL trailing `facilityId` defaulting to DEFAULT_FACILITY_ID ('INCIRLIK').
+// `configs` is a Map keyed by facilityId — see docs/adr/0013-facility-config-multi-facility.md.
+//
+// `bayImpliesState` (guide §3.5 rule 4 / §2 "Bay membership expresses operational state") only covers Bays whose
+// name cleanly maps to one strip state — Filed, Arrivals and every Coordination Bay imply none. A Position's
+// `-coordination` Bay is where the cross-Facility coordination primitives (authority/op-kinds.js's
+// COORDINATION_OP_KINDS) land a proposed Strip replica (docs/adr/0015).
 
 const fs = require('fs');
+const runwayStatus = require('./runway-status'); // pure, requires nothing back (docs/adr/0061)
+const schema = require('./facility-schema');
+const { MCI_DEFAULT } = schema;
+const { validateConfig, validateRadarSelector, BAY_VIEWS } = schema;
+// The RANGES Facility's Position set is derived from the airspace definitions (see _rangesConfig). The definitions
+// live in the registry (airspace-store.js, docs/adr/0098) and this module requires none of it: createEfsp derives the
+// ids from every theater's saved definitions and the standing list, and hands them over with setRangePositionIds()
+// before it builds the Facilities.
 const path = require('path');
-const blockMap = require('./block-map');
+const { dirs, readPath, writePath, ensureDirFor } = require('../state-paths');
+const log = require('../log').logger('efsp:facility-config');
 
 const DEFAULT_FACILITY_ID = 'INCIRLIK';
 
-// Overridable so tests exercise the mutate/persist path against a temp
-// file — same pattern as theater-settings.js's CRCSYNC_THEATER_SETTINGS_PATH.
-// One env var per Facility, so a test can override either (or both)
-// independently without the two Facilities' on-disk state colliding.
-const FACILITY_CONFIG_PATHS = {
-  INCIRLIK: process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH
-    || path.join(__dirname, '../../config/efsp-facility-incirlik.json'),
-  CENTER: process.env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH_CENTER
-    || path.join(__dirname, '../../config/efsp-facility-center.json'),
-};
-
-const DEFAULT_CONFIG = {
-  facility: 'INCIRLIK',
-  positions: ['OPS', 'CD', 'GND', 'TWR', 'APP'],
-  // Still ends at APP, deliberately NOT extended to CTR — the covering
-  // chain (guide §4.5 rule 3, §4.8.6) is an INTRAFACILITY occupancy-
-  // fallback mechanism ("route to the covering Position within this
-  // Facility"), a different thing from the cross-Facility HANDOFF
-  // primitive's own PROPOSE/ACCEPT flow (§4.6). APP has no covering
-  // Position within INCIRLIK, same as before WP4A. See
-  // docs/adr/0013-facility-config-multi-facility.md.
-  coveringChain: { CD: 'GND', GND: 'TWR', TWR: 'APP' },
-  // Per-role visible-Block set (guide §8.2/§8.3) — defaults to "every Block
-  // block-map.js defines for that role", i.e. nothing is hidden by default.
-  // A facility MAY narrow this (e.g. omit optional 9A sub-fields), but
-  // validateConfig() below enforces the doctrinal exceptions (every
-  // required Block MUST stay visible) rather than just checking shape.
-  blockVisibility: {
-    DEPARTURE: Object.keys(blockMap.DEPARTURE_BLOCK_MAP),
-    ARRIVAL: Object.keys(blockMap.ARRIVAL_BLOCK_MAP),
-  },
-  bays: {
-    OPS: [
-      // ops-proposed listed FIRST deliberately — it's what bayForImpliedState's
-      // "no match, fall back to this Position's first Bay" default resolves
-      // to, and what a Strip dropped on OPS's Position tab generally (not a
-      // specific Bay tab) lands in via _defaultBayFor (crc-desktop's
-      // bay-view.js). ops-filed is no longer an ordinary Strip-holding Bay
-      // at all client-side (its content is the client-local filed-plan
-      // queue, guide-analogous to the search pseudo-Bay — see
-      // docs/efsp-usage-guide.md §4) — a Strip landing there by accident
-      // would become invisible, so it must never be anyone's "default" Bay.
-      { bayId: 'ops-proposed', rackIds: ['main'], impliesState: 'PROPOSED' },
-      { bayId: 'ops-filed',    rackIds: ['main'] },
-      { bayId: 'ops-field-state',   rackIds: ['main'] }, // WP6 hook, inert
-      { bayId: 'ops-coordination',  rackIds: ['main'] }, // no cross-Facility primitive reaches OPS this slice — inert
-    ],
-    CD: [
-      { bayId: 'cd-pending-clearance', rackIds: ['main'], impliesState: 'PENDING_CLEARANCE' },
-      { bayId: 'cd-cleared',           rackIds: ['main'], impliesState: 'CLEARED' },
-      { bayId: 'cd-held',              rackIds: ['main'], impliesState: 'HELD' },
-      { bayId: 'cd-coordination',      rackIds: ['main'] }, // inert this slice
-    ],
-    GND: [
-      { bayId: 'gnd-pushback', rackIds: ['main'], impliesState: 'PUSHBACK' },
-      { bayId: 'gnd-taxi-out', rackIds: ['main'], impliesState: 'TAXI' },
-      { bayId: 'gnd-taxi-in',  rackIds: ['main'], impliesState: 'TAXI_IN' },
-      { bayId: 'gnd-coordination', rackIds: ['main'] }, // inert this slice
-    ],
-    TWR: [
-      { bayId: 'twr-runway-queue', rackIds: ['rwy-05', 'rwy-23'], impliesState: 'RUNWAY_QUEUE' }, // one Rack per runway, guide §4.2
-      { bayId: 'twr-airborne',     rackIds: ['main'], impliesState: 'DEPARTED' },
-      { bayId: 'twr-arrivals',     rackIds: ['main'], impliesState: 'HANDED_TO_TOWER' },
-      // NOTE: EfspState 'FINAL' (this Bay's implied state, on strip.state)
-      // is unrelated to Strip Role 'FINAL' (guide §7.10's PAR/carrier
-      // role, WP7A, still unbuilt — lives on strip.role) — see nla.js's
-      // module comment. Don't conflate them when WP7A eventually lands.
-      { bayId: 'twr-final',        rackIds: ['main'], impliesState: 'FINAL' },
-      { bayId: 'twr-landed',       rackIds: ['main'], impliesState: 'LANDED' },
-      { bayId: 'twr-coordination', rackIds: ['main'] }, // inert this slice
-    ],
-    APP: [
-      { bayId: 'app-inbound',      rackIds: ['main'], impliesState: 'INBOUND' },   // receives ARRIVAL Strips via CTR's real HANDOFF (docs/adr/0014, superseding docs/adr/0008's local stub)
-      { bayId: 'app-departures',   rackIds: ['main'], impliesState: 'HANDED_OFF' }, // receives DEPARTURE Strips from TWR's real Hand Off (docs/adr/0007)
-      // WP4A hook (APP<->CTR) — no longer inert: receives proposed
-      // HANDOFF/POINT_OUT/TRAFFIC/AIT replicas from CTR (docs/adr/0015).
-      { bayId: 'app-coordination', rackIds: ['main'] },
-    ],
-  },
-  // §4.6.1's data-only-facility 3-minute-verification obligation only
-  // branches when the RECEIVING Facility is data-only — neither Facility
-  // built this slice is (INCIRLIK/CENTER both have a real controller
-  // interface), so this stays false on both, exercised only by a
-  // synthetic test fixture. See docs/adr/0021-forwarding-obligations.md.
-  dataOnly: false,
-  // §4.6.2's standing-release envelopes — APP's own config (CTR has none;
-  // a standing release is granted BY the delegating/center facility TO the
-  // approach facility, guide §4.6.2's own wording: "the agreement normally
-  // converts the per-flight call into a standing release for a named
-  // envelope"). Empty by default; a real envelope is facility-config data,
-  // not code (release-envelope.js's matchesStandingRelease()).
-  standingReleases: [],
-};
-
-// [SOURCE-DEFINED] WP4A (docs/adr/0013) — the guide gives no published
-// default Bay set for CENTER/CTR (only INCIRLIK's §4.2 table is grounded).
-// This slice's CTR only ever handles ARRIVAL-shaped en-route strips (no
-// DEPARTURE lifecycle at CTR at all — see docs/adr/0012's scope-cut ADR),
-// so blockVisibility omits DEPARTURE entirely rather than populating it
-// with an empty/unused array.
-const DEFAULT_CENTER_CONFIG = {
-  facility: 'CENTER',
-  positions: ['CTR'],
-  // CTR has no covering Position this slice — mirrors OPS's "absent from
-  // the chain" precedent (there is no second civil ATC Position upstream
-  // of CTR built yet).
-  coveringChain: {},
-  blockVisibility: {
-    ARRIVAL: Object.keys(blockMap.ARRIVAL_BLOCK_MAP),
-  },
-  bays: {
-    CTR: [
-      { bayId: 'ctr-enroute',           rackIds: ['main'], impliesState: 'INBOUND' },
-      { bayId: 'ctr-app-coordination',  rackIds: ['main'] }, // WP4A seam — proposed HANDOFF/POINT_OUT/TRAFFIC/AIT replicas from APP land here
-    ],
-  },
-  dataOnly: false,
-  standingReleases: [],
-};
-
-const DEFAULT_CONFIGS = { INCIRLIK: DEFAULT_CONFIG, CENTER: DEFAULT_CENTER_CONFIG };
-
-function deepClone(obj) { return JSON.parse(JSON.stringify(obj)); }
-
 /**
- * Validates a candidate facility config (guide §8.3): every required Block
- * for each role in `blockVisibility` MUST stay visible, and every Bay's
- * owning Position MUST exist in the Position set (rule 3). Facility-
- * agnostic — operates on whichever candidate object is passed in. Returns
- * {ok:true} or {ok:false, reason:'VALIDATION_ERROR', detail}.
+ * The Facilities' configuration, read now from `env`'s paths (docs/adr/0095 §4). The composition root builds ONE and
+ * passes it down; there is no module-level instance. A missing or invalid file throws here, so start-up stops with it.
+ * @param {{env?: NodeJS.ProcessEnv}} [deps]
  */
-function validateConfig(candidate) {
-  for (const role of Object.keys(candidate.blockVisibility || {})) {
-    const result = blockMap.validateFacilityConfig({ role, visibleBlocks: candidate.blockVisibility[role] });
-    if (!result.ok) return result;
+function createFacilityConfig({ env = process.env } = {}) {
+  let rangePositionIds = [];
+
+  // Overridable so tests exercise the mutate/persist path against a temp
+  // file (the CRCSYNC_EFSP_FACILITY_CONFIG_PATH* env vars, read by load()).
+  // One env var per Facility, so a test can override either (or both)
+  // independently without the two Facilities' on-disk state colliding.
+  // `setFacilityConfig` rewrites these, so each has a read path (state/ if a live
+  // copy exists, else the shipped default) and a write path (always state/) — see
+  // state-paths.js for why that split exists at all.
+  const FACILITY_CONFIG_FILES = {
+    INCIRLIK: ['efsp-facility-incirlik.json', env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH],
+    CENTER: ['efsp-facility-center.json', env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH_CENTER],
+    // WP4A second slice — the TACTICAL Facility (docs/adr/0013's pattern
+    // repeated for a third Facility).
+    TACTICAL: ['efsp-facility-tactical.json', env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH_TACTICAL],
+    // docs/adr/0074 — the CARRIER Facility (docs/adr/0064 B1).
+    CARRIER: ['efsp-facility-carrier.json', env.CRCSYNC_EFSP_FACILITY_CONFIG_PATH_CARRIER],
+  };
+
+  /** Kept as a name->path map for any existing reader; resolved fresh per call. */
+  const FACILITY_CONFIG_PATHS = new Proxy({}, {
+    get: (_t, facilityId) => {
+      const entry = FACILITY_CONFIG_FILES[facilityId];
+      return entry ? writePath(entry[0], entry[1], env) : undefined;
+    },
+    has: (_t, facilityId) => facilityId in FACILITY_CONFIG_FILES,
+    ownKeys: () => Object.keys(FACILITY_CONFIG_FILES),
+    getOwnPropertyDescriptor: () => ({ enumerable: true, configurable: true }),
+  });
+
+  // RANGES is deliberately absent from the path table above: its Position set
+  // is DERIVED from airspace-schema.js, so an on-disk override would freeze a
+  // `positions` array that then silently goes stale the moment an airspace is
+  // added or removed. Deriving it every boot is the whole point — there is
+  // nothing here a facility config could usefully say. Also spares a
+  // load-failure warning on every startup for a file that should never exist.
+  const DERIVED_FACILITY_IDS = new Set(['RANGES']);
+
+
+  // The shipped Facilities are config/efsp-facility-<id>.json (docs/wip/DATA-1.md): the code
+  // holds rules, never the Facility's own data. RANGES alone is derived, below.
+  const SHIPPED_FACILITY_IDS = ['INCIRLIK', 'CENTER', 'TACTICAL', 'CARRIER'];
+
+
+  // The RANGES Facility (guide §4.1's fifth Facility, §4.1 rule 2). Unlike
+  // every Facility above it, this one's Position set is DERIVED rather than
+  // listed: a `RANGE` Position exists only for an airspace that has real
+  // control of its own (airspace-schema.js's usingPositionId). An ordinary MOA
+  // contributes no Position at all — a flight working inside one is approved
+  // onto a working frequency by whichever ATC Position owns the airspace, and
+  // there is nobody else to be.
+  //
+  // `bays` is empty and stays empty. §4.1: "RANGE works no Strips. It owns airspace
+  // state ... Give it a Runway Status board", §4.2: "Airspace board (not a strip rack)". Its board is
+  // airspace-store.js, which is not a Bay of Strips, so there is nothing for
+  // getAllBays() to return here — and because the client builds its Position
+  // tabs from Bays, a range Position correctly never grows a strip-rack tab.
+  //
+  // Absent from `consolidation` and `handBack` deliberately: they exist for a vacated
+  // Position's Strips (defect D19), and a Position that owns no Strips has none to strand.
+  function _rangesConfig() {
+    return {
+      facility: 'RANGES',
+      positions: rangePositionIds,
+      positionClasses: Object.fromEntries(
+        rangePositionIds.map(id => [id, 'USING_AGENCY'])
+      ),
+      consolidation: {},
+      handBack: {},
+      positionLetters: {},
+      // `hiddenBlocks`, not the `blockVisibility` inclusion list docs/adr/0041
+      // replaced — this config is derived and never persisted, so the stale key
+      // was inert, but leaving it here invited the next reader to copy it.
+      hiddenBlocks: {},
+      // §4.1 rule 2: a range Position is the using agency and owns airspace state,
+      // not a scope. No selectors, and none derived either — unlike `positions`,
+      // there is nothing in the airspace config that describes a radar.
+      positionRadars: {},
+      bays: {},
+      dataOnly: false,
+      standingReleases: [],
+      aitAuthorized: false,
+    };
   }
-  for (const positionId of Object.keys(candidate.bays || {})) {
-    if (!(candidate.positions || []).includes(positionId)) {
-      return { ok: false, reason: 'VALIDATION_ERROR', detail: `Bay set references unknown Position ${positionId}` };
+
+  /** One Facility's shipped config (config/, never state/), a fresh copy. For tests and tools that need the pristine file. */
+  function getShippedConfig(facilityId) {
+    if (DERIVED_FACILITY_IDS.has(facilityId)) return _rangesConfig();
+    return JSON.parse(fs.readFileSync(path.join(dirs(env).configDir, FACILITY_CONFIG_FILES[facilityId][0]), 'utf8'));
+  }
+
+  function deepClone(obj) { return JSON.parse(JSON.stringify(obj)); }
+
+
+  // A missing or invalid facility file is a startup error, never a silent fall back to something else
+  // (S-ARCH2 (12)): the shipped JSON is the only source of a Facility's data, a copy in state/ or at an
+  // override path replaces it WHOLE (no key-by-key merge), and what it says must pass the schema.
+  function _loadOne(facilityId) {
+    if (DERIVED_FACILITY_IDS.has(facilityId)) return _rangesConfig();
+    const [name, override] = FACILITY_CONFIG_FILES[facilityId];
+    const file = _readFrom(name, override);
+    let config;
+    try {
+      config = JSON.parse(fs.readFileSync(file, 'utf8'));
+    } catch (e) {
+      throw new Error(`[efsp-facility-config] ${facilityId}: cannot read its facility file ${file} (looked at the override, state/ and config/): ${e.message}`);
+    }
+    // `blockVisibility` was the inclusion list `hiddenBlocks` replaced (docs/adr/0041). No handling is left (ARCH-D5):
+    // a file that still has one is an old file, and stops start-up rather than being half read.
+    if (config && config.blockVisibility !== undefined) {
+      throw new Error(`[efsp-facility-config] ${facilityId}: ${file} still has a "blockVisibility" list, which was replaced by "hiddenBlocks" (docs/adr/0041): restate any narrowing as hiddenBlocks, or delete the file to use the shipped one`);
+    }
+    const check = schema.validateFacilityConfig(config, facilityId);
+    if (!check.ok) throw new Error(`[efsp-facility-config] ${facilityId}: ${file} is not a valid facility config: ${check.detail}`);
+    for (const warning of runwayStatus.runwayInventoryWarnings(config)) {
+      log.warn(warning, { facilityId });
+    }
+    return config;
+  }
+
+  // The file's read path: the override if one is set and exists, else the live copy in state/, else the shipped
+  // config/ file. (state-paths.js's readPath returns an override whether or not it exists; tests point the
+  // overrides at temp files that do not.) Writes always go to the override or state/ — FACILITY_CONFIG_PATHS.
+  function _readFrom(name, override) {
+    return override && fs.existsSync(override) ? override : readPath(name, undefined, env);
+  }
+
+  // The facilities, read when createFacilityConfig() is called (never at require time).
+  let configs = null;
+
+  /**
+   * Reads every Facility's config. A second call is a no-op unless `reload` is set, because setFacilityConfig changes
+   * the live Map. The env overrides were read when this instance was created.
+   */
+  function load({ reload = false } = {}) {
+    if (configs && !reload) return;
+    const loaded = new Map();
+    for (const id of [...SHIPPED_FACILITY_IDS, ...DERIVED_FACILITY_IDS]) loaded.set(id, _loadOne(id));
+    configs = loaded;
+  }
+
+  function _configs() { return configs; }
+
+  /**
+   * The RANGES Facility's Positions: every distinct `usingPositionId` of every theater's definitions (R3-24: a change
+   * takes effect at the next start). Called by createEfsp before the Facilities are built.
+   */
+  function setRangePositionIds(ids) {
+    rangePositionIds = [...new Set(ids)];
+    if (configs) configs.set('RANGES', _rangesConfig());
+  }
+
+  function _persist(facilityId) {
+    if (DERIVED_FACILITY_IDS.has(facilityId)) return; // see DERIVED_FACILITY_IDS
+    try {
+      const target = FACILITY_CONFIG_PATHS[facilityId];
+      ensureDirFor(target);
+      fs.writeFileSync(target, JSON.stringify(_configs().get(facilityId), null, 2));
+    } catch (e) {
+      log.warn('failed to persist facility config', { facilityId, error: e.message });
     }
   }
-  return { ok: true };
-}
 
-function _loadOne(facilityId) {
-  const defaults = DEFAULT_CONFIGS[facilityId];
-  let config = deepClone(defaults);
-  try {
-    const onDisk = JSON.parse(fs.readFileSync(FACILITY_CONFIG_PATHS[facilityId], 'utf8'));
-    const merged = { ...deepClone(defaults), ...onDisk };
-    const check = validateConfig(merged);
-    if (!check.ok) {
-      console.warn(`[efsp-facility-config] ${facilityId} on-disk config failed validation, using defaults:`, check.detail);
-    } else {
-      config = merged;
+  /** Every Facility this server knows about — index.js's composition root iterates this to build one {boardStore, positionStore} pair per Facility, generically (no hard-coded facility count). */
+  function getFacilityIds() { return [..._configs().keys()]; }
+
+  function getFacilityConfig(facilityId = DEFAULT_FACILITY_ID) { return deepClone(_configs().get(facilityId)); }
+
+  function getPositionSet(facilityId = DEFAULT_FACILITY_ID) { return [...(_configs().get(facilityId).positions)]; }
+
+  // The runtime frequency table's values over the shipped ones (docs/adr/0131): facilityId -> { positions: { <Position>:
+  // { <label>: mhz } }, sfa: { <rackId>: mhz }, added: { positions: { <Position>: [{ label, mhz }] }, sfa: [{ rackId, mhz,
+  // use }] } } (`added`: the rows controllers added at run time, docs/adr/0138). Set only by frequency-table.js; the files
+  // are never written for it (P5).
+  const frequencyOverlay = new Map();
+
+  /** Replaces one Facility's frequency overlay (frequency-table.js, docs/adr/0131). */
+  function setFrequencyOverlay(facilityId, overlay) {
+    frequencyOverlay.set(facilityId, deepClone(overlay || { positions: {}, sfa: {} }));
+  }
+
+  /** The shipped Position frequencies, `{ <Position>: [ { label, mhz } ] }` (docs/adr/0105), without the runtime table. */
+  function getShippedPositionFrequencies(facilityId = DEFAULT_FACILITY_ID) { return deepClone(_configs().get(facilityId).positionFrequencies || {}); }
+
+  /** A Position's frequencies, `{ <Position>: [ { label, mhz } ] }` (docs/adr/0105), the runtime table's value where it sets one (docs/adr/0131); `{}` when the Facility ships none. */
+  function getPositionFrequencies(facilityId = DEFAULT_FACILITY_ID) {
+    const out = getShippedPositionFrequencies(facilityId);
+    const over = (frequencyOverlay.get(facilityId) || {}).positions || {};
+    for (const [positionId, list] of Object.entries(out)) for (const f of list) {
+      const mhz = (over[positionId] || {})[f.label];
+      if (mhz !== undefined) f.mhz = mhz;
     }
-  } catch (e) {
-    console.warn(`[efsp-facility-config] failed to load ${facilityId} config, using defaults:`, e.message);
+    const added = ((frequencyOverlay.get(facilityId) || {}).added || {}).positions || {};
+    for (const [positionId, list] of Object.entries(added)) (out[positionId] || (out[positionId] = [])).push(...deepClone(list));
+    return out;
   }
-  return config;
-}
 
-const configs = new Map(Object.keys(DEFAULT_CONFIGS).map(id => [id, _loadOne(id)]));
-
-function _persist(facilityId) {
-  try {
-    fs.writeFileSync(FACILITY_CONFIG_PATHS[facilityId], JSON.stringify(configs.get(facilityId), null, 2));
-  } catch (e) {
-    console.warn(`[efsp-facility-config] failed to persist ${facilityId} config:`, e.message);
+  /** The Facility's Mode C Intruder setting (docs/adr/0118); the terminal default when its file names none. */
+  function getModeCIntruder(facilityId = DEFAULT_FACILITY_ID) {
+    const cfg = _configs().get(facilityId);
+    const mci = (cfg && cfg.modeCIntruder) || MCI_DEFAULT;
+    return { baseAltitudeFt: mci.baseAltitudeFt, reference: mci.reference, highTerrainAglFt: mci.highTerrainAglFt ?? null, inhibitedPositions: [...(mci.inhibitedPositions || [])] };
   }
-}
 
-/** Every Facility this server knows about — index.js's composition root iterates this to build one {boardStore, positionStore} pair per Facility, generically (no hard-coded facility count). */
-function getFacilityIds() { return [...configs.keys()]; }
+  /** `{ <Position>: [Position, ...] }`: who is offered a Position's hat, in order (docs/adr/0110). */
+  function getConsolidation(facilityId = DEFAULT_FACILITY_ID) { return deepClone(_configs().get(facilityId).consolidation); }
 
-function getFacilityConfig(facilityId = DEFAULT_FACILITY_ID) { return deepClone(configs.get(facilityId)); }
+  /** What a PositionStore is built with: `{ consolidation, handBack }`. */
+  function getHatMaps(facilityId = DEFAULT_FACILITY_ID) { return { consolidation: getConsolidation(facilityId), handBack: getHandBack(facilityId) }; }
 
-function getPositionSet(facilityId = DEFAULT_FACILITY_ID) { return [...(configs.get(facilityId).positions)]; }
+  /** `{ <Position>: Position }`: the TACTICAL one-hop reassignment (docs/adr/0110 decision 7). */
+  function getHandBack(facilityId = DEFAULT_FACILITY_ID) { return { ...(_configs().get(facilityId).handBack) }; }
 
-function getCoveringChain(facilityId = DEFAULT_FACILITY_ID) { return { ...(configs.get(facilityId).coveringChain) }; }
-
-function getBaysFor(positionId, facilityId = DEFAULT_FACILITY_ID) {
-  return deepClone(configs.get(facilityId).bays[positionId] || []);
-}
-
-// Includes each Bay's owning positionId — lost by a plain Object.values()
-// flatten otherwise, and the client needs it to keep Bays "grouped by
-// Position, never merged into one undifferentiated pile" (guide §4.8.5
-// rule 2). Also stamps facilityId, since a client can now hold Positions
-// across both Facilities and needs to know which Board a Bay belongs to.
-function getAllBays(facilityId = DEFAULT_FACILITY_ID) {
-  const out = [];
-  for (const [positionId, bays] of Object.entries(configs.get(facilityId).bays)) {
-    for (const bay of bays) out.push({ ...deepClone(bay), positionId, facilityId });
+  /**
+   * WP4A second slice — a Position's doctrinal class (guide §4.1's own Class
+   * column: MILITARY_ATC/CIVIL_ATC/BASOPS/MRU/MRU_POSITION/NON_ATC/...),
+   * permission.js's structural basis for D12 (an MRU/non-ATC Position must
+   * never be granted a cross-Facility ATC coordination primitive, regardless
+   * of any other Position the same controller also holds). Searches every
+   * known Facility's own positionClasses map, not just one — Position IDs
+   * are globally unique across Facilities in this slice (permission.js's own
+   * header comment), so a caller never needs to know which Facility a
+   * Position belongs to just to ask its class. Returns null for a Position
+   * with no class recorded anywhere (not an error — a config predating this
+   * field, or a genuinely classless test fixture).
+   */
+  function getPositionClass(positionId) {
+    for (const config of _configs().values()) {
+      const classes = config.positionClasses || {};
+      if (Object.prototype.hasOwnProperty.call(classes, positionId)) return classes[positionId];
+    }
+    return null;
   }
-  return out;
+
+  /** The one character an ATC scope draws for a contact this Position owns (docs/adr/0088); null when none is configured. */
+  function getPositionLetter(positionId) {
+    for (const config of _configs().values()) {
+      const letters = config.positionLetters || {};
+      if (Object.prototype.hasOwnProperty.call(letters, positionId)) return letters[positionId];
+    }
+    return null;
+  }
+
+  /** Every Facility's position letters, `{ facilityId: { positionId: letter } }` — sent in the EFSP snapshot (docs/adr/0088). */
+  function allPositionLetters() {
+    const out = {};
+    for (const [facilityId, config] of _configs()) out[facilityId] = { ...(config.positionLetters || {}) };
+    return out;
+  }
+
+  /** Every Facility's airport-surface Positions, `{ facilityId: [positionId] }` (H162), [] where none — sent in the EFSP snapshot. */
+  function allAirportSurfacePositions() {
+    const out = {};
+    for (const [facilityId, config] of _configs()) out[facilityId] = [...(config.airportSurfacePositions || [])];
+    return out;
+  }
+
+  /**
+   * A Position's radar selectors (docs/adr/0043). Empty for a Position with no
+   * scope — Ground and Clearance Delivery genuinely have none, and that is the
+   * answer, not a gap.
+   */
+  function getPositionRadars(positionId, facilityId = DEFAULT_FACILITY_ID) {
+    const config = _configs().get(facilityId);
+    if (!config) return [];
+    return deepClone((config.positionRadars || {})[positionId] || []);
+  }
+
+  /** Every Position, anywhere, that has at least one radar selector — what the coverage panel calls a "radar Position". */
+  function radarBearingPositionIds() {
+    const out = [];
+    for (const config of _configs().values()) {
+      for (const [positionId, selectors] of Object.entries(config.positionRadars || {})) {
+        if (Array.isArray(selectors) && selectors.length) out.push(positionId);
+      }
+    }
+    return out;
+  }
+
+  function getBaysFor(positionId, facilityId = DEFAULT_FACILITY_ID) {
+    return deepClone(_configs().get(facilityId).bays[positionId] || []);
+  }
+
+  /**
+   * May this Facility write this Block on this strip type? (guide §8.1 — "the
+   * configurability is the specification.")
+   *
+   * Expressed as what a Facility HIDES, not what it shows. The original shape
+   * was an inclusion list, which looked equivalent and was not: a persisted
+   * list is a snapshot of "everything that existed the day it was written", so
+   * every Block invented afterwards silently fell outside it. The shipped
+   * configs had frozen lists from before the separation-model Blocks existed,
+   * which meant `IFR`/`RSVC`/`SREG` were unwritable on the real server — and
+   * since completing a TOFI exit requires setting `SREG` to ATC, tactical
+   * control could be entered and never left. The release Blocks 14A/14D and
+   * the frequency Block 22 were caught the same way. Tests never saw it
+   * because they build config from the defaults, which are derived from the
+   * Block Map and so are always current.
+   *
+   * An exclusion list cannot drift that way: a new Block is visible until
+   * somebody deliberately hides it.
+   */
+  function isBlockVisible(stripType, blockId, facilityId = DEFAULT_FACILITY_ID) {
+    const config = _configs().get(facilityId);
+    if (!config) return true;
+    const hidden = (config.hiddenBlocks || {})[stripType];
+    return !hidden || !hidden.includes(blockId);
+  }
+
+  // Includes each Bay's owning positionId — lost by a plain Object.values()
+  // flatten otherwise, and the client needs it to keep Bays "grouped by
+  // Position, never merged into one undifferentiated pile" (guide §4.8.5
+  // rule 2). Also stamps facilityId, since a client can be signed on at Positions
+  // across both Facilities and needs to know which Board a Bay belongs to.
+  function getAllBays(facilityId = DEFAULT_FACILITY_ID) {
+    const out = [];
+    const config = _configs().get(facilityId);
+    for (const [positionId, bays] of Object.entries(config.bays)) {
+      for (const bay of bays) {
+        const d = { ...deepClone(bay), positionId, facilityId };
+        // The SFA Bay carries its pool, so a client draws the frequencies from the Bay it shows (docs/adr/0117).
+        // Its Racks are the pool's, so a Rack added at run time is one of its Racks (docs/adr/0138).
+        if (bay.view === 'sfa-freqs' && config.singleFrequencyApproach) { d.sfaPool = getSingleFrequencyApproach(facilityId).pool; d.rackIds = [...d.rackIds, ...d.sfaPool.map(p => p.rackId).filter(r => !d.rackIds.includes(r))]; }
+        out.push(d);
+      }
+    }
+    return out;
+  }
+
+  /**
+   * Is this a Bay this Facility actually has?
+   *
+   * Nothing checked until a scenario created a Strip in `ctr-overflights` when
+   * the Bay is `ctr-overflight`: the Strip was created, took a beacon code, and
+   * appeared in no Rack on any Board — invisible and unrecoverable, because
+   * every read path goes through a Bay. A typo in a client, or a stale bayId
+   * after a config change, produced a ghost.
+   */
+  function bayExists(bayId, facilityId = DEFAULT_FACILITY_ID) {
+    return getAllBays(facilityId).some(b => b.bayId === bayId);
+  }
+
+  /** One Bay's descriptor (bayId, rackIds, impliesState, and the `view` / `capacity` flags), with its positionId, or null. */
+  function getBay(bayId, facilityId = DEFAULT_FACILITY_ID) {
+    return getAllBays(facilityId).find(b => b.bayId === bayId) || null;
+  }
+
+  /** A Facility's shipped single frequency approach config (docs/adr/0117), without the runtime table; null when it has none. */
+  function getShippedSingleFrequencyApproach(facilityId = DEFAULT_FACILITY_ID) {
+    const config = _configs().get(facilityId);
+    return config && config.singleFrequencyApproach ? deepClone(config.singleFrequencyApproach) : null;
+  }
+
+  /**
+   * A Facility's single frequency approach config (docs/adr/0117), each pool frequency the runtime table's value where it
+   * sets one (docs/adr/0131), or null when it has none (every Facility but INCIRLIK).
+   */
+  function getSingleFrequencyApproach(facilityId = DEFAULT_FACILITY_ID) {
+    const sfa = getShippedSingleFrequencyApproach(facilityId);
+    if (!sfa) return null;
+    const over = (frequencyOverlay.get(facilityId) || {}).sfa || {};
+    for (const entry of sfa.pool) if (over[entry.rackId] !== undefined) entry.mhz = over[entry.rackId];
+    sfa.pool.push(...deepClone(((frequencyOverlay.get(facilityId) || {}).added || {}).sfa || [])); // docs/adr/0138
+    return sfa;
+  }
+
+  /** A Bay's configured implied EfspState (guide §3.5 rule 4), or null if the Bay doesn't imply one. */
+  function bayImpliesState(bayId, facilityId = DEFAULT_FACILITY_ID) {
+    const bay = getAllBays(facilityId).find(b => b.bayId === bayId);
+    return (bay && bay.impliesState) || null;
+  }
+
+  /**
+   * Replaces one Facility's whole config (an explicit reload step, guide
+   * §8.4 — "a live Board MUST NOT be mutated by a configuration change
+   * without an explicit reload"). `next` is the whole file and is checked as one
+   * (facility-schema.js's validateFacilityConfig); nothing is merged in from the
+   * shipped copy. No editing UI calls this yet; it exists so
+   * one is additive later, and so tests can exercise the persist path.
+   */
+  function setFacilityConfig(next, facilityId = DEFAULT_FACILITY_ID) {
+    if (!next || typeof next !== 'object') return false;
+    if (DERIVED_FACILITY_IDS.has(facilityId)) {
+      return { ok: false, reason: 'VALIDATION_ERROR', detail: `${facilityId}'s Positions are derived from the airspace config — edit that instead` };
+    }
+    if (!_configs().has(facilityId)) return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown facilityId ${facilityId}` };
+    const whole = deepClone(next);
+    const check = schema.validateFacilityConfig(whole, facilityId);
+    if (!check.ok) return check; // {ok:false, reason:'VALIDATION_ERROR', detail} — rejected, not persisted
+    _configs().set(facilityId, whole);
+    _persist(facilityId);
+    return true;
+  }
+
+  /** The Bay whose configured impliesState matches `state` for a Position, or that Position's first Bay as a defensive fallback (guide §3.5 rule 4 accelerator target). */
+  function bayForImpliedState(positionId, state, facilityId = DEFAULT_FACILITY_ID) {
+    const bays = getBaysFor(positionId, facilityId);
+    // The fallback never lands on a strip-type Bay (`holdsStripType`, docs/adr/0087): that Bay belongs to one strip type, and a caller
+    // that gets it back for another strip type's Strip files the Strip under the wrong strip type.
+    return bays.find(b => b.impliesState === state) || bays.find(b => !b.holdsStripType) || null;
+  }
+
+  /** The strip type a Bay is reserved for (`holdsStripType`, docs/adr/0087), or null for an ordinary Bay. */
+  function bayHoldsStripType(bayId, facilityId = DEFAULT_FACILITY_ID) {
+    const bay = getAllBays(facilityId).find(b => b.bayId === bayId);
+    return (bay && bay.holdsStripType) || null;
+  }
+
+  /**
+   * The Bay a proposed cross-Facility coordination replica lands in for a
+   * Position (WP4A, docs/adr/0015) — the Bay whose id ends '-coordination',
+   * used by HANDOFF/POINT_OUT/TRAFFIC/OPERATIONAL_REQUEST/AIT's PROPOSE action.
+   * Returns null if the Position has no Coordination Bay configured
+   * (board/coordination.js treats that as "this Position cannot receive a
+   * coordination proposal at all").
+   */
+  function coordinationBayFor(positionId, facilityId = DEFAULT_FACILITY_ID) {
+    const bays = getBaysFor(positionId, facilityId);
+    return bays.find(b => b.bayId.endsWith('-coordination')) || null;
+  }
+
+  load();
+  return {
+    setRangePositionIds,
+    DEFAULT_FACILITY_ID, getFacilityIds,
+    getFacilityConfig, getPositionSet, getPositionClass, getPositionLetter, allPositionLetters, allAirportSurfacePositions, getConsolidation, getHandBack, getHatMaps, getPositionFrequencies, getModeCIntruder, getBaysFor, getAllBays, isBlockVisible,
+    getPositionRadars, radarBearingPositionIds, validateRadarSelector,
+    bayImpliesState, bayHoldsStripType, bayForImpliedState, bayExists, coordinationBayFor, setFacilityConfig, validateConfig,
+    getBay, getSingleFrequencyApproach, BAY_VIEWS,
+    getShippedPositionFrequencies, getShippedSingleFrequencyApproach, setFrequencyOverlay,
+    getShippedConfig, load,
+  };
 }
 
-/** A Bay's configured implied EfspState (guide §3.5 rule 4), or null if the Bay doesn't imply one. */
-function bayImpliesState(bayId, facilityId = DEFAULT_FACILITY_ID) {
-  const bay = getAllBays(facilityId).find(b => b.bayId === bayId);
-  return (bay && bay.impliesState) || null;
-}
-
-/**
- * Replaces one Facility's whole config (an explicit reload step, guide
- * §8.4 — "a live Board MUST NOT be mutated by a configuration change
- * without an explicit reload"). No editing UI calls this yet; it exists so
- * one is additive later, and so tests can exercise the persist path.
- */
-function setFacilityConfig(next, facilityId = DEFAULT_FACILITY_ID) {
-  if (!next || typeof next !== 'object') return false;
-  if (!DEFAULT_CONFIGS[facilityId]) return { ok: false, reason: 'VALIDATION_ERROR', detail: `unknown facilityId ${facilityId}` };
-  const merged = { ...deepClone(DEFAULT_CONFIGS[facilityId]), ...deepClone(next) };
-  const check = validateConfig(merged);
-  if (!check.ok) return check; // {ok:false, reason:'VALIDATION_ERROR', detail} — rejected, not persisted
-  configs.set(facilityId, merged);
-  _persist(facilityId);
-  return true;
-}
-
-/** The Bay whose configured impliesState matches `state` for a Position, or that Position's first Bay as a defensive fallback (guide §3.5 rule 4 accelerator target). */
-function bayForImpliedState(positionId, state, facilityId = DEFAULT_FACILITY_ID) {
-  const bays = getBaysFor(positionId, facilityId);
-  return bays.find(b => b.impliesState === state) || bays[0] || null;
-}
-
-/**
- * The Bay a proposed cross-Facility coordination replica lands in for a
- * Position (WP4A, docs/adr/0015) — the Bay whose id ends '-coordination',
- * present-but-inert for every Position since Phase 2 (guide §16's build-
- * sequencing note) and now genuinely used by HANDOFF/POINT_OUT/TRAFFIC/
- * OPERATIONAL_REQUEST/AIT's PROPOSE action. Returns null if the Position
- * has no Coordination Bay configured (board-store.js treats that as "this
- * Position cannot receive a coordination proposal at all").
- */
-function coordinationBayFor(positionId, facilityId = DEFAULT_FACILITY_ID) {
-  const bays = getBaysFor(positionId, facilityId);
-  return bays.find(b => b.bayId.endsWith('-coordination')) || null;
-}
-
-module.exports = {
-  DEFAULT_FACILITY_ID, getFacilityIds,
-  getFacilityConfig, getPositionSet, getCoveringChain, getBaysFor, getAllBays,
-  bayImpliesState, bayForImpliedState, coordinationBayFor, setFacilityConfig, validateConfig,
-  DEFAULT_CONFIG, DEFAULT_CENTER_CONFIG, DEFAULT_CONFIGS,
-};
+module.exports = { createFacilityConfig, DEFAULT_FACILITY_ID, validateConfig, validateRadarSelector, BAY_VIEWS };

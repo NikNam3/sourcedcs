@@ -6,6 +6,11 @@ on:
     types:
       - completed
   workflow_dispatch:
+    inputs:
+      skip_protocol_gate:
+        description: 'Human only: recreate crc-sync even if its wire protocol differs from the published crc-desktop release (infra/RUNBOOK.md, "Wire protocol and the deploy gate")'
+        type: boolean
+        default: false
 
 concurrency:
   # One deploy at a time per branch, queued rather than dropped. Without
@@ -25,10 +30,59 @@ jobs:
       (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && (github.event.workflow_run.head_branch == 'main' || github.event.workflow_run.head_branch == 'dev'))
     environment: ${{ (github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || github.ref_name) == 'main' && 'production' || 'development' }}
     
+    permissions:
+      contents: read
+      packages: read   # the gate inspects the crc-sync image in ghcr.io
+
     steps:
+      # The wire protocol gate (crc-sync docs/adr/0103, B14). It decides only whether crc-sync is RECREATED by this deploy, and
+      # only on main (dev has no published release to compare with). It never fails the job: the git pull and every other image
+      # still deploy. It FAILS CLOSED: an unreadable release, an unlabelled image or a protocol mismatch holds crc-sync.
+      # It checks the exact image it then deploys: the tag is resolved to a digest once, the digest's wire-protocol label is
+      # read, and the SSH step pulls that digest (CRC_SYNC_IMAGE), never a moving `:latest`.
+      - name: Check out the deployed commit (full history and tags)
+        if: ${{ (github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || github.ref_name) == 'main' }}
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Log in to the Container registry
+        if: ${{ (github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || github.ref_name) == 'main' }}
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Wire protocol gate
+        id: gate
+        if: ${{ (github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || github.ref_name) == 'main' }}
+        env:
+          SKIP_PROTOCOL_GATE: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_protocol_gate && 'true' || 'false' }}
+          TRIGGER_WORKFLOW: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.name || '' }}
+          TRIGGER_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || '' }}
+        run: |
+          export IMAGE_REPO="ghcr.io/${GITHUB_REPOSITORY,,}/crc-sync"
+          # A crc-sync build triggered this: deploy exactly the image it built (the sha-<7> tag crc-sync-docker.yml pushes).
+          # Any other trigger (atobrief, sourcedcs-web, manual) deploys whatever crc-sync image is newest on main, pinned by
+          # digest right here so the label that is checked is the image that is deployed.
+          if [ "$TRIGGER_WORKFLOW" = "Build and Push crc-sync Docker Image" ]; then
+            export IMAGE_REF="sha-${TRIGGER_SHA:0:7}"
+          else
+            export IMAGE_REF=latest
+          fi
+          bash .github/scripts/protocol-gate.sh
+
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
+        env:
+          HOLD_CRC_SYNC: ${{ steps.gate.outputs.hold }}
+          # main: the digest the gate checked (repo@sha256:...). dev: empty, compose falls back to crc-sync:dev.
+          CRC_SYNC_IMAGE: ${{ steps.gate.outputs.image }}
         with:
+          envs: HOLD_CRC_SYNC,CRC_SYNC_IMAGE
           host: ${{ secrets.HOST }}
           username: ${{ secrets.USERNAME }}
           key: ${{ secrets.SSH_KEY }}
@@ -45,5 +99,15 @@ jobs:
             # base image aborts the whole deploy under set -e -- as happened
             # here with a mariadb:11 TLS handshake timeout blocking a nginx
             # config change that had nothing to do with mariadb.
-            docker compose pull main-website atobrief crc-sync
-            docker compose up -d --remove-orphans
+            if [ "${HOLD_CRC_SYNC:-false}" = "true" ]; then
+              # The wire protocol gate held crc-sync (see the "Wire protocol gate" step's error). Deploy everything else and
+              # leave the running crc-sync alone: no pull, no recreate.
+              echo "crc-sync is HELD by the wire protocol gate; deploying every other service."
+              docker compose pull main-website atobrief
+              docker compose up -d --remove-orphans --no-deps $(docker compose config --services | grep -vx crc-sync)
+            else
+              # CRC_SYNC_IMAGE (exported by the action from the gate's output) makes compose use that digest for crc-sync.
+              echo "crc-sync image: ${CRC_SYNC_IMAGE:-crc-sync:$TAG}"
+              docker compose pull main-website atobrief crc-sync
+              docker compose up -d --remove-orphans
+            fi

@@ -1,0 +1,38 @@
+SOAK FAIL realistic 10m seed=1 in 2.94s
+crew=three mode=fork clock=virtual digest=2344ea955b532ff3
+
+check                         actual                     threshold
+lost / duplicateAck           0 / 0                      0
+audit missing/dup/refusal/orph0/0/0/0                    0
+internalErrors                0                          0
+replays / notIdempotent       2 / 0                      0
+broadcastMissing              0                          0
+silentStaleness               0 {}                       0
+resync delta/snapshot/diverge 4/0/0                      div 0
+acrossRestartDivergence (H4)  1 (probes 1)               0
+boardLostOnRestart            0                          0
+R2 ambiguous replay           CreateStrip:appliedTwice   reported
+orderKeys max / p99           6 / 6 (INCIRLIK/cd-cleared/main)<= 40
+rebalances / exhausted throws 0 / 0                      info
+heap slope (post-GC)          4.31 MB/h R²=0.964         <= 1
+heap net growth               3.88% (7.75->8.05 MB)      <= 10%
+per-DROPPED-Strip / residual  0 KB / 4.31 MB/h           attribution
+snapshot bytes start->end     10150->53037               info
+codes allocated (max)         12                         <= 2048
+latency worst p99 / persist   9.668 / 2.468 ms           <= 200 (warn 50)
+flights started/done/aborted  12/0/0                     info
+live Strips min/max/end       2/14/14                    stationary
+orphans                       0                          warn > 0
+messages sent                 127                        info
+correlation rate min/mean     0.125/0.278                info
+misbinding (H8)               0 {}                       info
+
+hypotheses: H1=not-exercised; H2=refuted; H3=confirmed; H4=confirmed; H5=confirmed; H6=not-exercised; H7=not reached (max _cidSeq 14); H8=not-exercised
+
+FAILURES:
+  - mutations.resync.acrossRestartDivergence 1 > 0 (H4)
+  - memory.slope 4.31 MB/h > 1 (R² 0.964; per-DROPPED-Strip 0 KB, residual 4.31 MB/h)
+WARNINGS:
+  - resync paths: delta 4, snapshot 0 — both should be > 0
+
+output: /tmp/L27base/r10

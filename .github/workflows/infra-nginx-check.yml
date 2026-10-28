@@ -1,0 +1,49 @@
+name: infra nginx check
+
+# R3-36: the nginx config is a mounted template (infra/nginx/templates). Render it with dummy
+# env and run `nginx -t` in the official image, so a broken template fails here and not on the
+# server after the deploy's `git pull` + `docker compose up -d`.
+on:
+  pull_request:
+    paths:
+      - 'infra/nginx/**'
+      - 'infra/docker-compose.yml'
+      - 'infra/tests/**'
+      - '.github/scripts/**'
+      - '.github/workflows/deploy.yml'
+      - '.github/workflows/infra-nginx-check.yml'
+  push:
+    branches:
+      - main
+      - dev
+    paths:
+      - 'infra/nginx/**'
+      - 'infra/docker-compose.yml'
+      - 'infra/tests/**'
+      - '.github/scripts/**'
+      - '.github/workflows/deploy.yml'
+      - '.github/workflows/infra-nginx-check.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  nginx-t:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Compose file parses (dummy env)
+        working-directory: infra
+        run: |
+          cp ../.env.example .env
+          docker compose config --quiet
+
+      # Includes protocol-gate.test.js: the deploy gate's decision table (B14).
+      - name: Template renders like the old inline config; the deploy gate decides as tabled
+        run: node --test infra/tests/*.test.js
+
+      - name: nginx -t on the rendered template
+        run: infra/tests/nginx-t.sh

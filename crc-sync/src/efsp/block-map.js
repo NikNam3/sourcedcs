@@ -1,12 +1,12 @@
 'use strict';
 
-// The Block Maps as data, per Strip Role (EFSPImplementationGuide.md §6.2,
+// The Block Maps as data, per strip type (EFSPImplementationGuide.md §6.2,
 // §6.3, §6.5) — "the Block Map MUST be data, not code." This is the
-// server-side copy: binds each Block ID to either an FDR field path or a
+// server-side copy: binds each Block ID to either a flight data field path or a
 // Strip annotation cell, and records which Blocks are ✱-required. The
 // client keeps an identical copy (strip-template.js) for rendering — kept
 // in sync by a shared binding-table fixture used by both sides' test
-// suites (efsp-block-map-parity.test.js), NOT by import: crc-sync and
+// suites (efsp-block-map-parity.test.mjs), NOT by import: crc-sync and
 // crc-desktop are separately deployed packages with separate build/Docker
 // contexts (the same reason src/auth.js is duplicated across services
 // rather than shared, per its own header comment).
@@ -16,57 +16,201 @@
 // leave its schema fields present and unpopulated rather than absent."
 //
 // Blocks 2 (revision), 4 (cid), 25 (state) and 26 (NLA) are system-derived
-// — not writable through the generic SetBlock path at all (board-store.js
-// manages rev/cid/state directly; NLA is computed, never stored). Block 3
-// is a read-only composite render of several identity fields at once, and
+// — not writable through the generic SetBlock path at all (the Board
+// (board/) manages rev/cid/state directly; NLA is computed, never stored). Block 3
+// is the aircraft data (count, type, wake; T7, H134), typed as one field and
+// routed through flight-data-store.js's setAircraftData(), and
 // Block 4A is a flag (strip.flags.removeIndicator), not a SetBlock target
-// in Phase 1 (DropStrip sets it directly). resolveBlockTarget() returns
-// null for all of these, matching board-store.js's "unknown blockId is a
-// VALIDATION_ERROR" behavior for anything not fdr/annotation-routed.
+// (DropStrip sets it directly). resolveBlockTarget() returns
+// null for all of these, matching board/ops/set-block.js's "unknown blockId is a
+// VALIDATION_ERROR" behavior for anything not flightData/annotation-routed.
 
 const DEPARTURE_BLOCK_MAP = {
-  '1':  { required: true,  target: { kind: 'fdr', path: 'identity.callsign' } },
+  '1':  { required: true,  target: { kind: 'flightData', path: 'identity.callsign' } },
   '2':  { required: true,  target: { kind: 'system' } },
   '2A': { required: false, target: { kind: 'annotation' } },
-  '3':  { required: true,  target: { kind: 'composite' } },
+  '3':  { required: true,  target: { kind: 'aircraft-data' } },
+  // docs/adr/0023 gap-closure — Block 3 only ever DISPLAYED these as a
+  // read-only composite (formatBlock3, client-side); identity.aircraftType/
+  // wakeCategory/tailNumber/unit/homeStation were already validated and
+  // writable via flight-data-store.js's generic setField() (all five in
+  // WRITABLE_PATHS since Phase 1), but no Block anywhere ever routed a
+  // SetBlock at any of them — found live when a same-flight identity copy
+  // (bay-view.js's "Spawn Return Strip") had nothing to actually copy.
+  // Grouped near '3' as SOURCE-DEFINED sub-fields, same numbering
+  // convention '9A-FUEL' etc. already use.
+  '3A': { required: false, target: { kind: 'flightData', path: 'identity.aircraftType' } },
+  '3B': { required: false, target: { kind: 'flightData', path: 'identity.wakeCategory' } },
+  '3C': { required: false, target: { kind: 'flightData', path: 'identity.tailNumber' } },
+  '3D': { required: false, target: { kind: 'flightData', path: 'identity.unit' } },
+  '3E': { required: false, target: { kind: 'flightData', path: 'identity.homeStation' } },
+  // WP6 (docs/adr/0052), guide §6.4's military extension namespace. See
+  // MILITARY_BLOCK_NAMESPACE near the bottom of this file for the whole
+  // guide-M-number-to-Block-id mapping, and for why the M-prefix is not used.
+  //
+  // Both hang off Block 3 because the 3-family IS the airframe — 3A type, 3B
+  // wake, 3C tail, 3D unit, 3E home station — and a tailhook requirement and an
+  // ordnance state are both facts about the airframe and its configuration,
+  // not about the flight's intent or the clearance it has been issued.
+  //
+  // Dedicated 'military' target kind, never a generic 'flightData' path, on the
+  // setAirspaceOwner/setTofi template: 3F is a bare boolean (defect D15's own
+  // shape — "hook" alone does not say whether the aircraft HAS one or REQUIRES
+  // one, and only the second reading gates an arrival on a runway's gear being
+  // rigged) and 3G is a restricted enum. See flight-data-store.js's setMilitary().
+  //
+  // Present on all three ATC strip types, not just DEPARTURE. docs/adr/0051's lesson
+  // was that a per-strip-type Block Map lets a rule hold on two strip types and silently
+  // not on the third; an aircraft's hook and its ordnance are facts about the
+  // airframe, so there is no strip type they stop being true for.
+  '3F': { required: false, target: { kind: 'military', field: 'hookRequired' } },  // guide M15, §9.7
+  '3G': { required: false, target: { kind: 'military', field: 'ordnanceState' } }, // guide M14, §9.5
   '4':  { required: true,  target: { kind: 'system' } },
   '4A': { required: false, target: { kind: 'flag' } },
-  '4B': { required: true,  target: { kind: 'fdr', path: 'assigned.datalinkClearanceIndicator' } },
-  '5':  { required: true,  target: { kind: 'fdr', path: 'identity.beaconAssigned' } },
-  '6':  { required: true,  target: { kind: 'fdr', path: 'filed.proposedDepartureTimeUtc' } },
-  '7':  { required: true,  target: { kind: 'fdr', path: 'filed.requestedAltitude' } },
-  '8':  { required: true,  target: { kind: 'fdr', path: 'filed.departureAirport' } },
-  '8A': { required: true,  target: { kind: 'fdr', path: 'filed.departureRunway' } },
-  '8B': { required: true,  target: { kind: 'fdr', path: 'filed.destinationAirport' } },
-  '9':  { required: true,  target: { kind: 'fdr', path: 'filed.route' }, provenance: 'COMPUTER_GENERATED' }, // manual restrictions live separately in annotations['9'] — guide's "mixed provenance in one Block" note; rendered as two sources, one Block. provenance is the pre-edit fallback (fdr-store.js's setField() overrides fdr.provenance['filed.route'] to CONTROLLER_ENTERED once a controller actually edits it — this default only applies until then).
+  '4B': { required: true,  target: { kind: 'flightData', path: 'assigned.datalinkClearanceIndicator' } },
+  '5':  { required: true,  target: { kind: 'flightData', path: 'identity.beaconAssigned' } },
+  // WP4A gap-closure (docs/adr/0022), guide §4.6 rule 5 — track-degradation
+  // flag. Plain 'flightData'-routed, unlike '24A': flight-data-store.js's
+  // identity.trackDegradationFlag was already in WRITABLE_PATHS and
+  // validated inline by setField() since docs/adr/0019 — the gap this
+  // closes was purely the missing Block Map entry (no SetBlock path ever
+  // reached that already-working validation), not a missing setter.
+  '5A': { required: false, target: { kind: 'flightData', path: 'identity.trackDegradationFlag' } },
+  '6':  { required: true,  target: { kind: 'flightData', path: 'filed.proposedDepartureTimeUtc' } },
+  '7':  { required: true,  target: { kind: 'flightData', path: 'filed.requestedAltitude' } },
+  '8':  { required: true,  target: { kind: 'flightData', path: 'filed.departureAirport' } },
+  '8A': { required: true,  target: { kind: 'flightData', path: 'filed.departureRunway' } },
+  '8B': { required: true,  target: { kind: 'flightData', path: 'filed.destinationAirport' } },
+  '9':  { required: true,  target: { kind: 'flightData', path: 'filed.route' }, provenance: 'COMPUTER_GENERATED' }, // manual restrictions live separately in annotations['9'] — guide's "mixed provenance in one Block" note; rendered as two sources, one Block. provenance is the pre-edit fallback (flight-data-store.js's setField() overrides flightData.provenance['filed.route'] to CONTROLLER_ENTERED once a controller actually edits it — this default only applies until then).
   '9A': { required: false, target: { kind: 'annotation' } },
   '9B': { required: false, target: { kind: 'annotation' } },
   '9C': { required: false, target: { kind: 'annotation' } },
-  '9D': { required: true,  target: { kind: 'fdr', path: 'filed.fullRouteClearance' } },
-  '9E': { required: true,  target: { kind: 'fdr', path: 'filed.remarks' } },
-  '10': { required: true,  target: { kind: 'fdr', path: 'assigned.atisCode' } },
+  '9D': { required: true,  target: { kind: 'flightData', path: 'filed.fullRouteClearance' } },
+  '9E': { required: true,  target: { kind: 'flightData', path: 'filed.remarks' } },
+  // docs/adr/0126 (H150 TWR-Q1 a): LC's pattern cells on its ordinary Strips, set by whoever holds the Strip.
+  // 9J-ENTRY: PATTERN | STRAIGHT_IN; 9J-OPTION: TOUCH_AND_GO | FULL_STOP | LOW_APPROACH (no stop-and-go, H147 RQ7).
+  // On the flight data, so a local departure keeps them into closed traffic (JoinPattern) and back out (LeavePattern).
+  '9J-ENTRY':  { required: false, target: { kind: 'flightData', path: 'assigned.patternEntry' } },
+  '9J-OPTION': { required: false, target: { kind: 'flightData', path: 'assigned.patternOption' } },
+  // §9.10 stereo route name (docs/adr/0050). The guide numbers this Block
+  // M18 in its §6.4 military-extension table (whose "Basis" column cites
+  // §9.9, ATO ingest — that is a mis-citation in the guide; §9.10 is the
+  // right section). It is NOT numbered M18 here, for two reasons: the
+  // M-prefix namespace belongs to MISSION_BLOCK_MAP, which docs/adr/0026
+  // froze with its own meanings (its M4 is the beacon, the guide's M4 is IFF
+  // Mode 1/2), and MISSION is the one strip type that never files a stereo. '9F'
+  // instead, because sub-lettering a field onto its parent Block is this
+  // codebase's actual convention ('3A'-'3E', '8A'/'8B', '9A'-'9E', '5A',
+  // '14A'-'14D'), and a stereo route name IS Block 9's route, named.
+  //
+  // Plain 'flightData'-routed, like '5A' and unlike '24A' — writing it IS how a
+  // controller re-files a live flight onto another stereo ("VIPER11 request
+  // change to PACK 2"). It shipped as its own read-only kind; that made the
+  // switch case reachable only by hand-editing the route (losing the label
+  // and the standing-release match) or by dropping and re-creating the Strip
+  // (a new beacon code mid-taxi). flight-data-store.js's setField() validates the
+  // name against the table and re-expands the route from it, so the name and
+  // the route cannot disagree — the same inline-validation precedent
+  // identity.trackDegradationFlag set, not a weaker guard than the read-only
+  // kind was.
+  '9F': { required: false, target: { kind: 'flightData', path: 'filed.stereoRouteName' } },
+  // §9.4 Military Training Routes (docs/adr/0062). 9G-* is the guide's M10
+  // (designator / entry fix / entry time), 9H-* its M11 (exit fix / exit
+  // estimate / requested altitude after exit — "the two items a controller
+  // asks for by voice"). Split per field like '9A-*', so a Facility can hide
+  // one (hiddenBlocks) without the others. Plain 'flightData', not the 'military'
+  // kind: these are free text, times and an altitude, not an enum or a
+  // boolean; flight-data-store.js's normalizeMtrValue() says what each accepts. No
+  // interlock tag on any of them: 9H-ALT is the pilot's REQUEST, and posting a
+  // request issues nothing — the approval is written in ALT ('21'), which is
+  // tagged. On all three ATC strip types; none on MISSION (it shares the flight data).
+  '9G-MTR':   { required: false, target: { kind: 'flightData', path: 'military.mtr.designator' } },
+  '9G-ENTRY': { required: false, target: { kind: 'flightData', path: 'military.mtr.entryFix' } },
+  '9G-TIME':  { required: false, target: { kind: 'flightData', path: 'military.mtr.entryTimeUtc' } },
+  '9H-EXIT':  { required: false, target: { kind: 'flightData', path: 'military.mtr.exitFix' } },
+  '9H-TIME':  { required: false, target: { kind: 'flightData', path: 'military.mtr.exitEstimateUtc' } },
+  '9H-ALT':   { required: false, target: { kind: 'flightData', path: 'military.mtr.requestedAltitudeAfterExit' } },
+  '10': { required: true,  target: { kind: 'flightData', path: 'assigned.atisCode' } },
   '11': { required: true,  target: { kind: 'annotation' } },
-  '14': { required: true,  target: { kind: 'fdr', path: 'assigned.releaseTimeUtc' } },
+  '14': { required: true,  target: { kind: 'flightData', path: 'assigned.releaseTimeUtc' } },
   // WP4A (docs/adr/0017), §4.6.2's release-across-the-boundary additions —
   // independently optional sub-fields, same doctrinal shape as ADR 0008's
   // 9A-* split (each omittable per facility with no new validator logic).
-  '14B': { required: false, target: { kind: 'fdr', path: 'assigned.edctTimeUtc' } },
-  '14C': { required: false, target: { kind: 'fdr', path: 'assigned.callForReleaseTimeUtc' } },
-  '16': { required: false, target: { kind: 'fdr', path: 'assigned.movementAreaEntryTimeUtc' } }, // metering deferred, §12
-  '17': { required: false, target: { kind: 'fdr', path: 'assigned.taxiTimeUtc' } },
-  '18': { required: true,  target: { kind: 'fdr', path: 'assigned.takeoffTimeUtc' } },
+  // The release STATE itself, and the void time the 30-minute deadline is
+  // derived from. Both were reachable only from a test until now: §3.8's
+  // whole release model gated the NLA and validated server-side, but no
+  // Block routed to `assigned.departureRelease` or `assigned.voidTimeUtc`, so a
+  // controller could not put a flight on hold, or set a void time, at all —
+  // which also made WP4's own "void-time expiry raises an alert" criterion
+  // unexercisable in the real panel. Found by walking a release sortie.
+  //
+  // Numbered in the 14-family rather than taking the guide's unused 15: 14B
+  // and 14C are already local extensions of the same release cluster
+  // (docs/adr/0017), and a bare `15` would look like a guide Block it is not.
+  '14A': { required: false, target: { kind: 'flightData', path: 'assigned.departureRelease' } },
+  '14D': { required: false, target: { kind: 'flightData', path: 'assigned.voidTimeUtc' } },
+  '14B': { required: false, target: { kind: 'flightData', path: 'assigned.edctTimeUtc' } },
+  '14C': { required: false, target: { kind: 'flightData', path: 'assigned.callForReleaseTimeUtc' } },
+  // Guide M16, §9.6 alert status (docs/adr/0070). A 14-family sub-letter
+  // because a scramble is a release decision, and DEPARTURE only because only a
+  // departure sits on an alert pad: an ARRIVAL/OVERFLIGHT alert status means
+  // nothing. A 'military' target, so it is written through setMilitary()'s
+  // enum check by the ordinary SetBlock — a logged Strip Mutation.
+  '14E': { required: false, target: { kind: 'military', field: 'alertStatus' } }, // WP6, guide M16 §9.6 — docs/adr/0070
+  '16': { required: false, target: { kind: 'flightData', path: 'assigned.movementAreaEntryTimeUtc' } }, // metering deferred, §12
+  '17': { required: false, target: { kind: 'flightData', path: 'assigned.taxiTimeUtc' } },
+  '18': { required: true,  target: { kind: 'flightData', path: 'assigned.takeoffTimeUtc' } },
   '19': { required: false, target: { kind: 'annotation' } },
-  '20': { required: false, target: { kind: 'annotation' } },
-  '21': { required: false, target: { kind: 'annotation' } },
-  '22': { required: false, target: { kind: 'annotation' } },
+  // WP6 (docs/adr/0051), §9.2 rule 2 — the MARSA course/altitude void
+  // interlock. Blocks 20 and 21 are the guide's OWN §6.2 names for these
+  // ("Heading", "Initial altitude"), so no new Block is invented here: what is
+  // new is the `interlock` tag declaring which of them carries an ATC
+  // ASSIGNMENT, which is the thing §9.2 rule 2 keys on.
+  //
+  // Declared as Block Map DATA rather than a hard-coded list in
+  // marsa-store.js, per §6.5's "the Block Map MUST be data, not code" — and
+  // for the concrete reason docs/adr/0041 taught: a list of Block ids kept
+  // somewhere other than the Block Map is a set that silently stops matching
+  // the moment the Block Map grows.
+  //
+  // Block 7 above is deliberately NOT tagged. It is filed.requestedAltitude —
+  // what the flight ASKED FOR, not what ATC assigned it. Amending a filed
+  // request is not "issuing an altitude change".
+  //
+  // docs/adr/0058: both are the FLIGHT's clearance now, not Strip notes —
+  // flightData.clearance.heading / .altitude, shared by every Position and both
+  // Facilities, so CTR's copy of a departure carries what AP assigned. Shown
+  // as HDG and ALT; Block 7 above reads CRUS ALT (what was filed).
+  '20': { required: false, target: { kind: 'clearance', field: 'heading' }, interlock: 'COURSE' },
+  '21': { required: false, target: { kind: 'clearance', field: 'altitude' }, interlock: 'ALTITUDE' },
+  // docs/adr/0099 §3 (H100 DR-11 b): a recorded speed assignment, so a split by speed is visible on the part's Strip. No
+  // interlock and no conformance: speed is not a control axis.
+  '9A-SPEED': { required: false, target: { kind: 'clearance', field: 'speed' } },
+  // Guide's own Block 22, "Frequency" — listed in §6.2 with an entirely
+  // empty notes column. Structured rather than a free-text annotation so a
+  // frequency can be validated as one unit and one type, and so approving a
+  // flight onto an airspace's working frequency can write it directly.
+  // Dedicated target kind for the same reason 24A has one.
+  '22': { required: false, target: { kind: 'frequency' } },
   '23': { required: false, target: { kind: 'annotation' } },
   '24': { required: true,  target: { kind: 'annotation' } },
   // WP4A (docs/adr/0018), §4.6.4 — airspace ownership as a direction. A
-  // dedicated target kind, not 'fdr'/'annotation' — see resolveBlockTarget
-  // below and fdr-store.js's setAirspaceOwner() for why this can't be a
-  // generic FDR path (the "no boolean path" requirement needs a
+  // dedicated target kind, not 'flightData'/'annotation' — see resolveBlockTarget
+  // below and flight-data-store.js's setAirspaceOwner() for why this can't be a
+  // generic flight data path (the "no boolean path" requirement needs a
   // structurally distinct route, not just a documented convention).
   '24A': { required: false, target: { kind: 'airspace-owner' } },
+  // WP4A second slice (docs/adr/0025), §4.6.3 — the three-field separation
+  // model. Dedicated 'tofi' target kind, not 'flightData' — see flight-data-store.js's
+  // setTofi() for why (mirrors '24A''s own airspace-owner precedent: "no
+  // boolean path" needs a structurally distinct route, not just a
+  // documented convention). Applies to any ATC-side role a flight can
+  // enter tactically-controlled airspace while working — not MISSION
+  // itself, which is the MRU-side record built from a different Block Map
+  // entirely (see MISSION_BLOCK_MAP below).
+  'IFR':  { required: false, target: { kind: 'tofi', field: 'ifrActive' } },
+  'RSVC': { required: false, target: { kind: 'tofi', field: 'radarService' } },
+  'SREG': { required: false, target: { kind: 'tofi', field: 'separationRegime' } },
   '25': { required: true,  target: { kind: 'system' } },
   '26': { required: true,  target: { kind: 'system' } },
 };
@@ -78,7 +222,7 @@ const DEPARTURE_BLOCK_MAP = {
 // discipline: this is labelled SOURCE-DEFINED here and MUST NOT be
 // presented as real FAA numbering in UI text or documentation.
 //
-// Block 7 (assigned/cleared altitude) is annotation-routed, not fdr-routed
+// Block 7 (assigned/cleared altitude) is annotation-routed, not flight-data-routed
 // — unlike DEPARTURE's Block 7 — specifically so it carries the append-only
 // + confirmVacated model (§3.7 rule 3): a descending arrival's sequence of
 // altitude clearances is exactly where "don't strike a vacated altitude
@@ -88,79 +232,489 @@ const DEPARTURE_BLOCK_MAP = {
 // fuel is required and MUST survive any facility narrowing (enforced by
 // validateFacilityConfig below); destination/point-out/vector/speed are
 // each independently optional. Modelled as separate annotation-routed
-// Blocks (not one opaque composite) specifically so blockVisibility can
+// Blocks (not one opaque composite) specifically so a Facility's `hiddenBlocks` can
 // enforce that split per-Block, with no new validator logic needed.
 //
 // Blocks 20/21 are the guide's arrival radar-automation scratchpads
 // (§6.3 note 2 — "bind to the CRC track scratchpads, not Strip-local
-// storage" in the real system). WP5 track correlation isn't built yet
-// (strip.correlation stays inert), so these are Strip-local annotations
-// for now, same as DEPARTURE's — a documented Phase 2 simplification, to
-// be revisited once WP5 lands, not a silent doctrine violation.
+// storage" in the real system). They are Strip-local annotations, same as
+// DEPARTURE's, and WP5 settled that they stay that way (docs/adr/0047).
+// This track domain has no per-track scratchpad to bind to — collab-store.js
+// carries iff/rename/trackNumber and nothing else — so binding would mean
+// inventing a shared per-track free-text store with its own conflict,
+// retention and cap semantics for two Blocks. And a track-hosted scratchpad
+// would VANISH on a DCS re-ID, which is strictly worse than Strip-local for a
+// field a controller typed by hand. The guide's instinct assumes a radar
+// system with real track scratchpads; this one has none.
 //
 // Deliberately NOT carried over from DEPARTURE: Blocks 11/14/16/17/18
 // (APREQ, release/movement/taxi/takeoff times) are departure-specific
 // clearance-delivery concepts with no arrival equivalent.
 const ARRIVAL_BLOCK_MAP = {
-  '1':        { required: true,  target: { kind: 'fdr', path: 'identity.callsign' } },
+  '1':        { required: true,  target: { kind: 'flightData', path: 'identity.callsign' } },
   '2':        { required: true,  target: { kind: 'system' } },
   '2A':       { required: false, target: { kind: 'annotation' } },
-  '3':        { required: true,  target: { kind: 'composite' } },
+  '3':        { required: true,  target: { kind: 'aircraft-data' } },
+  '3A':       { required: false, target: { kind: 'flightData', path: 'identity.aircraftType' } }, // docs/adr/0023 gap-closure — see DEPARTURE_BLOCK_MAP's '3A' comment
+  '3B':       { required: false, target: { kind: 'flightData', path: 'identity.wakeCategory' } },
+  '3C':       { required: false, target: { kind: 'flightData', path: 'identity.tailNumber' } },
+  '3D':       { required: false, target: { kind: 'flightData', path: 'identity.unit' } },
+  '3E':       { required: false, target: { kind: 'flightData', path: 'identity.homeStation' } },
+  '3F':       { required: false, target: { kind: 'military', field: 'hookRequired' } },  // WP6, guide M15 §9.7 — see DEPARTURE_BLOCK_MAP's '3F'/'3G' comment
+  '3G':       { required: false, target: { kind: 'military', field: 'ordnanceState' } }, // WP6, guide M14 §9.5
   '4':        { required: true,  target: { kind: 'system' } },
   '4A':       { required: false, target: { kind: 'flag' } },
-  '4B':       { required: true,  target: { kind: 'fdr', path: 'assigned.datalinkClearanceIndicator' } },
-  '5':        { required: true,  target: { kind: 'fdr', path: 'identity.beaconAssigned' } },
-  '6':        { required: true,  target: { kind: 'fdr', path: 'filed.estimatedArrivalTimeUtc' } },
-  '7':        { required: true,  target: { kind: 'annotation' } }, // assigned/cleared altitude — confirmVacated-eligible, see module comment
-  '8':        { required: true,  target: { kind: 'fdr', path: 'filed.originAirport' } },
-  '8A':       { required: false, target: { kind: 'fdr', path: 'filed.arrivalFix' } },
-  '8B':       { required: true,  target: { kind: 'fdr', path: 'assigned.landingRunway' } },
-  '9':        { required: true,  target: { kind: 'fdr', path: 'filed.route' }, provenance: 'COMPUTER_GENERATED' },
+  '4B':       { required: true,  target: { kind: 'flightData', path: 'assigned.datalinkClearanceIndicator' } },
+  '5':        { required: true,  target: { kind: 'flightData', path: 'identity.beaconAssigned' } },
+  '5A':       { required: false, target: { kind: 'flightData', path: 'identity.trackDegradationFlag' } }, // WP4A gap-closure, §4.6 rule 5 — see DEPARTURE_BLOCK_MAP's '5A' comment
+  '6':        { required: true,  target: { kind: 'flightData', path: 'filed.estimatedArrivalTimeUtc' } },
+  // assigned/cleared altitude — confirmVacated-eligible, see module comment.
+  // interlock ALTITUDE (docs/adr/0051): unlike DEPARTURE's Block 7 this one IS
+  // the assigned altitude, which is exactly why it was annotation-routed in the
+  // first place. See DEPARTURE_BLOCK_MAP's '20'/'21' comment.
+  // docs/adr/0058 — the flight's clearance altitude, shared with every Facility.
+  '7':        { required: true,  target: { kind: 'clearance', field: 'altitude' }, interlock: 'ALTITUDE' },
+  '8':        { required: true,  target: { kind: 'flightData', path: 'filed.originAirport' } },
+  '8A':       { required: false, target: { kind: 'flightData', path: 'filed.arrivalFix' } },
+  '8B':       { required: true,  target: { kind: 'flightData', path: 'assigned.landingRunway' } },
+  '9':        { required: true,  target: { kind: 'flightData', path: 'filed.route' }, provenance: 'COMPUTER_GENERATED' },
   '9A-FUEL':  { required: true,  target: { kind: 'annotation' } }, // minimum fuel — the doctrinal exception, guide §6.3 note 1
   '9A-DEST':  { required: false, target: { kind: 'annotation' } },
   '9A-PTOUT': { required: false, target: { kind: 'annotation' } },
-  '9A-VECTOR':{ required: false, target: { kind: 'annotation' } },
-  '9A-SPEED': { required: false, target: { kind: 'annotation' } },
-  '9E':       { required: true,  target: { kind: 'fdr', path: 'filed.remarks' } },
+  // interlock COURSE (docs/adr/0051) — a radar vector IS a course assignment,
+  // and it is the only Block on an ARRIVAL Strip that is one.
+  '9A-VECTOR':{ required: false, target: { kind: 'clearance', field: 'heading' }, interlock: 'COURSE' }, // docs/adr/0058
+  '9A-SPEED': { required: false, target: { kind: 'clearance', field: 'speed' } }, // docs/adr/0099 §3: the speed cell, a recorded assignment only (no interlock)
+  // §9.4 MTR fields (docs/adr/0062) — see DEPARTURE_BLOCK_MAP's '9G-*' comment
+  '9G-MTR':   { required: false, target: { kind: 'flightData', path: 'military.mtr.designator' } },
+  '9G-ENTRY': { required: false, target: { kind: 'flightData', path: 'military.mtr.entryFix' } },
+  '9G-TIME':  { required: false, target: { kind: 'flightData', path: 'military.mtr.entryTimeUtc' } },
+  '9H-EXIT':  { required: false, target: { kind: 'flightData', path: 'military.mtr.exitFix' } },
+  '9H-TIME':  { required: false, target: { kind: 'flightData', path: 'military.mtr.exitEstimateUtc' } },
+  '9H-ALT':   { required: false, target: { kind: 'flightData', path: 'military.mtr.requestedAltitudeAfterExit' } },
+  '9E':       { required: true,  target: { kind: 'flightData', path: 'filed.remarks' } },
+  // docs/adr/0126: LC's pattern cells (see DEPARTURE_BLOCK_MAP's 9J comment). They steer ARRIVAL's NLA.
+  '9J-ENTRY':  { required: false, target: { kind: 'flightData', path: 'assigned.patternEntry' } },
+  '9J-OPTION': { required: false, target: { kind: 'flightData', path: 'assigned.patternOption' } },
   '20':       { required: false, target: { kind: 'annotation' } }, // radar scratchpad — Strip-local until WP5, see module comment
   '21':       { required: false, target: { kind: 'annotation' } }, // radar scratchpad — Strip-local until WP5, see module comment
   '24':       { required: true,  target: { kind: 'annotation' } },
   '24A':      { required: false, target: { kind: 'airspace-owner' } }, // WP4A, §4.6.4 — see DEPARTURE_BLOCK_MAP's '24A' comment
+  'IFR':      { required: false, target: { kind: 'tofi', field: 'ifrActive' } },       // WP4A second slice, §4.6.3 — see DEPARTURE_BLOCK_MAP's comment
+  'RSVC':     { required: false, target: { kind: 'tofi', field: 'radarService' } },
+  'SREG':     { required: false, target: { kind: 'tofi', field: 'separationRegime' } },
   '25':       { required: true,  target: { kind: 'system' } },
   '26':       { required: true,  target: { kind: 'system' } },
+  // Block 22 (Frequency) on the airborne roles too — the RANGE slice. A
+  // flight is approved onto an airspace's frequency while it is enroute,
+  // which is exactly when its Strip is an ARRIVAL or an OVERFLIGHT, so a
+  // DEPARTURE-only Block would have been invisible precisely when it matters.
+  '22': { required: false, target: { kind: 'frequency' } },
 };
 
-const BLOCK_MAPS = { DEPARTURE: DEPARTURE_BLOCK_MAP, ARRIVAL: ARRIVAL_BLOCK_MAP };
+// [SOURCE-DEFINED] Overflight Block Map (docs/adr/0023) — a flight
+// transiting this Facility's airspace without landing or departing here at
+// all (guide §2's strip type list; §6.3's only Overflight-specific note is
+// that it shares Blocks 20/21's radar scratchpads with ARRIVAL — no fuller
+// field table is published anywhere in the guide, so per §0.2 discipline
+// this mirrors ARRIVAL_BLOCK_MAP's general shape rather than transcribing
+// doctrine that doesn't exist). Reuses existing generic flight data paths instead
+// of adding new ones: '8'/'8B' (departureAirport/destinationAirport) here
+// mean the flight's REAL origin/destination — never Incirlik, since an
+// overflight strip only exists at all because it isn't landing or
+// departing there. No ground/runway/taxi Blocks (8A, 14, 16-18) — this
+// flight never touches Incirlik's ground.
+const OVERFLIGHT_BLOCK_MAP = {
+  '1':  { required: true,  target: { kind: 'flightData', path: 'identity.callsign' } },
+  '2':  { required: true,  target: { kind: 'system' } },
+  '3':  { required: true,  target: { kind: 'aircraft-data' } },
+  '3A': { required: false, target: { kind: 'flightData', path: 'identity.aircraftType' } }, // docs/adr/0023 gap-closure — see DEPARTURE_BLOCK_MAP's '3A' comment
+  '3B': { required: false, target: { kind: 'flightData', path: 'identity.wakeCategory' } },
+  '3C': { required: false, target: { kind: 'flightData', path: 'identity.tailNumber' } },
+  '3D': { required: false, target: { kind: 'flightData', path: 'identity.unit' } },
+  '3E': { required: false, target: { kind: 'flightData', path: 'identity.homeStation' } },
+  '3F': { required: false, target: { kind: 'military', field: 'hookRequired' } },  // WP6, guide M15 §9.7 — see DEPARTURE_BLOCK_MAP's '3F'/'3G' comment
+  '3G': { required: false, target: { kind: 'military', field: 'ordnanceState' } }, // WP6, guide M14 §9.5
+  '4':  { required: true,  target: { kind: 'system' } },
+  '4A': { required: false, target: { kind: 'flag' } },
+  '4B': { required: true,  target: { kind: 'flightData', path: 'assigned.datalinkClearanceIndicator' } },
+  '5':  { required: true,  target: { kind: 'flightData', path: 'identity.beaconAssigned' } },
+  '5A': { required: false, target: { kind: 'flightData', path: 'identity.trackDegradationFlag' } }, // WP4A gap-closure, §4.6 rule 5 — see DEPARTURE_BLOCK_MAP's '5A' comment
+  '7':  { required: true,  target: { kind: 'flightData', path: 'filed.requestedAltitude' } },
+  // [SOURCE-DEFINED] WP6 (docs/adr/0051) — OVERFLIGHT had NO Block carrying an
+  // ATC course or altitude assignment, which made §9.2 rule 2's interlock
+  // silently unreachable for one strip type: a MARSA participant transiting on
+  // an OVERFLIGHT Strip could be vectored or climbed with nothing voiding the
+  // relation. The acceptance criterion would have passed on DEPARTURE and
+  // ARRIVAL and quietly not held here.
+  //
+  // Both mirror ARRIVAL's shape — annotation-routed, so they carry §3.7's
+  // append-only + confirmVacated model, which is what an altitude clearance
+  // needs. Sub-lettered onto their parent Blocks per this file's convention
+  // ('3A'-'3E', '8A'/'8B', '9A'-'9F', '5A', '14A'-'14D'): '7A' is Block 7's
+  // altitude, assigned rather than requested. Numbered '7A' and not plain '7'
+  // because OVERFLIGHT's Block 7 already means filed.requestedAltitude here and
+  // ARRIVAL's does not — the two strip types genuinely differ, and collapsing them
+  // would be the field-reuse mistake docs/adr/0023 avoided for '8'/'8B'.
+  //
+  // Same [SOURCE-DEFINED] basis as OVERFLIGHT_BLOCK_MAP's whole existence: the
+  // guide publishes no Overflight field table beyond the 20/21 scratchpad note,
+  // so this mirrors ARRIVAL's structure rather than transcribing doctrine that
+  // does not exist. MUST NOT be presented as real FAA numbering (§0.2).
+  //
+  // docs/adr/0058 — both are the flight's clearance, shared across Facilities.
+  '7A': { required: false, target: { kind: 'clearance', field: 'altitude' }, interlock: 'ALTITUDE' },
+  '9A-VECTOR': { required: false, target: { kind: 'clearance', field: 'heading' }, interlock: 'COURSE' },
+  '9A-SPEED': { required: false, target: { kind: 'clearance', field: 'speed' } }, // docs/adr/0099 §3, no interlock
+  '8':  { required: true,  target: { kind: 'flightData', path: 'filed.departureAirport' } },  // the flight's real origin, not Incirlik
+  '8B': { required: true,  target: { kind: 'flightData', path: 'filed.destinationAirport' } }, // the flight's real destination, not Incirlik
+  '9':  { required: true,  target: { kind: 'flightData', path: 'filed.route' }, provenance: 'COMPUTER_GENERATED' },
+  // §9.4 MTR fields (docs/adr/0062) — see DEPARTURE_BLOCK_MAP's '9G-*' comment
+  '9G-MTR':   { required: false, target: { kind: 'flightData', path: 'military.mtr.designator' } },
+  '9G-ENTRY': { required: false, target: { kind: 'flightData', path: 'military.mtr.entryFix' } },
+  '9G-TIME':  { required: false, target: { kind: 'flightData', path: 'military.mtr.entryTimeUtc' } },
+  '9H-EXIT':  { required: false, target: { kind: 'flightData', path: 'military.mtr.exitFix' } },
+  '9H-TIME':  { required: false, target: { kind: 'flightData', path: 'military.mtr.exitEstimateUtc' } },
+  '9H-ALT':   { required: false, target: { kind: 'flightData', path: 'military.mtr.requestedAltitudeAfterExit' } },
+  '9E': { required: true,  target: { kind: 'flightData', path: 'filed.remarks' } },
+  '20': { required: false, target: { kind: 'annotation' } }, // radar scratchpad — Strip-local until WP5, see ARRIVAL_BLOCK_MAP's comment
+  '21': { required: false, target: { kind: 'annotation' } }, // radar scratchpad — Strip-local until WP5, see ARRIVAL_BLOCK_MAP's comment
+  '24': { required: true,  target: { kind: 'annotation' } },
+  '24A':{ required: false, target: { kind: 'airspace-owner' } }, // WP4A, §4.6.4 — see DEPARTURE_BLOCK_MAP's '24A' comment
+  'IFR':  { required: false, target: { kind: 'tofi', field: 'ifrActive' } },       // WP4A second slice, §4.6.3 — see DEPARTURE_BLOCK_MAP's comment
+  'RSVC': { required: false, target: { kind: 'tofi', field: 'radarService' } },
+  'SREG': { required: false, target: { kind: 'tofi', field: 'separationRegime' } },
+  '25': { required: true,  target: { kind: 'system' } },
+  '26': { required: true,  target: { kind: 'system' } },
+  // Block 22 (Frequency) on the airborne roles too — the RANGE slice. A
+  // flight is approved onto an airspace's frequency while it is enroute,
+  // which is exactly when its Strip is an ARRIVAL or an OVERFLIGHT, so a
+  // DEPARTURE-only Block would have been invisible precisely when it matters.
+  '22': { required: false, target: { kind: 'frequency' } },
+};
 
-/** Every Strip Role this facility's Block Map data actually defines — board-store.js's CreateStrip validation calls this so an unknown role is a VALIDATION_ERROR, not a silent fallback. */
-function isValidRole(role) {
-  return Object.prototype.hasOwnProperty.call(BLOCK_MAPS, role);
+// [SOURCE-DEFINED] WP4A second slice (docs/adr/0026) — the MISSION Strip
+// Strip type's Block Map, drawn from the guide's own "military extension
+// namespace" instruction (§9.8), NOT a DEPARTURE/ARRIVAL field-reuse the
+// way OVERFLIGHT's was (docs/adr/0023) — a mission line is keyed by
+// mission number/package ID, not callsign/beacon, per the guide's own
+// ATC-Strip-vs-mission-line comparison table (§9.8). Deliberately minimal:
+// mission number, package ID, callsign, beacon (the guide's own "bridge
+// field" joining a mission line to an ATC Strip's Mode 3/A), controlling
+// agency, and a basic vul/on-station window. Full ATO-driven mission-line
+// richness (Mode 1/2/datalink code, MARSA, ordnance, ROZ/ACM, the AR-line/
+// tanker join, ATO ingest) is explicitly deferred to WP6/WP7 — see the
+// scope-cut ADR this Block Map ships with.
+const MISSION_BLOCK_MAP = {
+  'M1': { required: true,  target: { kind: 'flightData', path: 'mission.missionNumber' } },
+  'M2': { required: false, target: { kind: 'flightData', path: 'mission.packageId' } },
+  'M3': { required: true,  target: { kind: 'flightData', path: 'identity.callsign' } },
+  'M4': { required: true,  target: { kind: 'flightData', path: 'identity.beaconAssigned' } },
+  'M5': { required: false, target: { kind: 'flightData', path: 'mission.controllingAgency' } },
+  'M6': { required: false, target: { kind: 'flightData', path: 'mission.vulWindowStartUtc' } },
+  'M7': { required: false, target: { kind: 'flightData', path: 'mission.vulWindowEndUtc' } },
+  'M8': { required: false, target: { kind: 'flightData', path: 'filed.remarks' } },
+  'M25': { required: true, target: { kind: 'system' } },
+  'M26': { required: true, target: { kind: 'system' } },
+  // No `interlock` Block here, and that is a decision rather than an omission
+  // (docs/adr/0051). §9.2 rule 2's interlock is about ATC ISSUING a course or
+  // altitude — "issuing a course or altitude change prior to rendezvous" — and
+  // a MISSION Strip is the MRU-side mission line (§9.8), not an ATC clearance
+  // surface. The ATC-side replica of the same flight is where a clearance is
+  // issued, and because the relation's participants are flightDataIds rather than
+  // stripIds (docs/adr/0045's key choice, reused), a void raised there IS a
+  // void of this flight's relation. Tagging a MISSION Block would not add
+  // coverage; it would add a second place the same aircraft can void from.
+  //
+  // Ordnance state on the mission line too (decisions.md H55, docs/adr/0069): a
+  // pilot reports hung ordnance to whoever they are talking to, and inbound from
+  // a tasking that is the tactical Position. It is the same field — the MISSION
+  // Strip and its ATC twin share one flight data — so this adds a second surface onto
+  // one fact, not a second fact. The hook requirement (3F) stays off: it gates
+  // a runway, which a mission line never uses.
+  '3G': { required: false, target: { kind: 'military', field: 'ordnanceState' } }, // guide M14, §9.5
+};
+
+// The carrier's three Block Maps (docs/adr/0064 B3, docs/adr/0074; guide §9.12).
+// [SOURCE-DEFINED] numbering: the Block ids are `C`-prefixed because `M` is
+// frozen for MISSION and a bare number would look like a guide Block it is not.
+// The whole point of §9.12 is in the `target.kind`s:
+//
+//  - `carrier-derived` Blocks are DISPLAY ONLY. resolveBlockTarget returns null
+//    for the kind, so SetBlock on one is a VALIDATION_ERROR by the same route as
+//    a `system` Block: CASE, MARSHAL DME, ANGELS, EAT/PUSH and EXPECTED FINAL
+//    BEARING cannot be typed (WP7A bullets 2 and 5, D16). The marshal radial
+//    (C5) is set through SetCarrierState (field radial, docs/adr/0113), and a Case I altitude
+//    through SetCaseIAngels, never through SetBlock.
+//  - `carrier` Blocks write flightData.military.carrier.<field> through
+//    flight-data-store.js's setCarrier(): EEAT, approach, button, bingo and low state
+//    belong to the FLIGHT, which outlives every Strip, so an EEAT set on the
+//    launch Strip is on the recovery Strip by construction.
+//
+// ALTIMETER and SHIP WX are the ship banner, not Blocks (§9.12 rule 5). Block 11
+// does not exist on purpose: there is no gap to fill.
+//
+// The client keeps the same ids and kinds in strip-template.js, held by the
+// parity test.
+const _CARRIER_CHROME = {
+  '2':  { required: true,  target: { kind: 'system' } },
+  '4':  { required: true,  target: { kind: 'system' } },
+  '4A': { required: false, target: { kind: 'flag' } },
+  '5':  { required: false, target: { kind: 'flightData', path: 'identity.beaconAssigned' } },
+  '25': { required: true,  target: { kind: 'system' } },
+  '26': { required: true,  target: { kind: 'system' } },
+};
+
+const MARSHAL_BLOCK_MAP = {
+  'C1':  { required: true,  target: { kind: 'flightData', path: 'identity.callsign' } },
+  'C2':  { required: true,  target: { kind: 'flightData', path: 'identity.aircraftType' } },
+  'C3':  { required: false, target: { kind: 'carrier-derived', field: 'case' } },
+  'C4':  { required: false, target: { kind: 'carrier', field: 'approachType' } },
+  'C5':  { required: false, target: { kind: 'carrier-derived', field: 'marshalRadial' } },
+  'C6':  { required: false, target: { kind: 'carrier-derived', field: 'marshalDme' } },
+  'C7':  { required: false, target: { kind: 'carrier-derived', field: 'angels' } },
+  'C8':  { required: false, target: { kind: 'carrier-derived', field: 'eatPush' } },
+  'C9':  { required: false, target: { kind: 'carrier-derived', field: 'expectedFinalBearing' } },
+  'C10': { required: false, target: { kind: 'carrier', field: 'approachButton' } },
+  'C12': { required: false, target: { kind: 'carrier', field: 'lowStateLb' } },
+  'C13': { required: false, target: { kind: 'carrier', field: 'bingoField' } },
+  'C14': { required: false, target: { kind: 'carrier', field: 'bingoFuelLb' } },
+  'C15': { required: false, target: { kind: 'carrier', field: 'eeatUtc' } }, // writable on the LAUNCH Strip too
+  'C18': { required: false, target: { kind: 'carrier', field: 'sideNumber' } }, // docs/adr/0114: the carrier regime names an aircraft by it
+  'C19': { required: false, target: { kind: 'carrier', field: 'approachTurnNm' } }, // H118: where a bolter turns back onto final
+  // Free note, annotation-routed like every strip type's remarks cell.
+  'C24': { required: false, target: { kind: 'annotation' } },
+  // decisions.md H138 U2: the flight's remarks on every strip type, the same field and Block id as the ATC maps'.
+  '9E':  { required: false, target: { kind: 'flightData', path: 'filed.remarks' } },
+  ..._CARRIER_CHROME,
+};
+
+// FINAL has nothing to type but the two assignments of the talk-down (docs/adr/0117, H134 LT-RQ8 a): the final
+// controller's course guidance is by headings ("HEADING (heading)", JO 7110.65BB para 5-12-4), and it may assign an
+// altitude until "BEGIN DESCENT" (para 5-12-3) or after a missed approach. Both are the flight's clearance (docs/adr/0058),
+// so PAR amends what AP assigned rather than keeping a copy, and the Block ids are OVERFLIGHT's (7A, 9A-VECTOR), the
+// non-required pair. Everything else stays read-only (§7.10, WP7A bullet 6): deck, final bearing and distance are
+// derived, drawn by the client from the ship state and the track. Shared with PAR (L18).
+// Every other Block of this map is `system`, `flag` or `carrier-derived`, none of which resolveBlockTarget lets SetBlock
+// write, except the flight's remarks (9E, H138 U2), which every strip type carries. (Block 5, the squawk, is the one
+// chrome Block left off.)
+const FINAL_BLOCK_MAP = {
+  'C1':  { required: true,  target: { kind: 'carrier-derived', field: 'callsign' } },
+  'C2':  { required: true,  target: { kind: 'carrier-derived', field: 'aircraftType' } },
+  'C9':  { required: false, target: { kind: 'carrier-derived', field: 'expectedFinalBearing' } },
+  'C18': { required: false, target: { kind: 'carrier-derived', field: 'sideNumber' } },
+  'C19': { required: false, target: { kind: 'carrier-derived', field: 'approachTurnNm' } },
+  'C16': { required: false, target: { kind: 'carrier-derived', field: 'deck' } },
+  'C17': { required: false, target: { kind: 'carrier-derived', field: 'finalDistance' } },
+  '7A': { required: false, target: { kind: 'clearance', field: 'altitude' }, interlock: 'ALTITUDE' },
+  '9A-VECTOR': { required: false, target: { kind: 'clearance', field: 'heading' }, interlock: 'COURSE' },
+  '9E':  { required: false, target: { kind: 'flightData', path: 'filed.remarks' } }, // H138 U2
+  '2':  _CARRIER_CHROME['2'], '4': _CARRIER_CHROME['4'], '4A': _CARRIER_CHROME['4A'],
+  '25': _CARRIER_CHROME['25'], '26': _CARRIER_CHROME['26'],
+};
+
+// PATTERN (the carrier's): identity and a free annotation.
+// C18: the side number the Marshal typed, read here (decisions.md H122: on a carrier
+// Strip it leads; the client draws it only once one is set).
+const PATTERN_BLOCK_MAP = {
+  'C1':  { required: true,  target: { kind: 'flightData', path: 'identity.callsign' } },
+  'C2':  { required: true,  target: { kind: 'flightData', path: 'identity.aircraftType' } },
+  'C18': { required: false, target: { kind: 'carrier-derived', field: 'sideNumber' } },
+  'C24': { required: false, target: { kind: 'annotation' } },
+  '9E':  { required: false, target: { kind: 'flightData', path: 'filed.remarks' } }, // H138 U2
+  ..._CARRIER_CHROME,
+};
+
+// The PAR final's two assignments (docs/adr/0117 decision 6) are an AIRFIELD's: the carrier's FINAL shares the map but has
+// nothing to type (docs/adr/0116, H125; the supervisor's ruling on LT-PAR-MISSED) and no conformance on its final
+// (docs/adr/0117 decision 8). resolveBlockTarget() refuses them at the carrier; crc-desktop strip-template.js mirrors it.
+const PAR_FINAL_ONLY_BLOCKS = Object.freeze(['7A', '9A-VECTOR']);
+const CARRIER_FACILITY_ID = 'CARRIER';
+
+// docs/adr/0146 (H174, H175 VR-Q1): the minimal VFR strip. Only what applies to a VFR aircraft a controller tagged:
+// callsign and Block 3, the code if one was given (not required: a primary target needs none, VR-Q4), the heading, speed
+// and altitude it was assigned (the flight's clearance cells, docs/adr/0058, OVERFLIGHT's ids, so conformance and the
+// label menu read them as on every strip type), the runway the tower gives it (Block 8A, DEPARTURE's own), the remarks
+// every strip type carries (H138 U2) and the working frequency an airspace approval writes (22). No route, no
+// destination, no release or void time, no clearance steps. The client draws "VFR" in the altitude cell (ERAM's
+// `VFR/055`, STARS's `V`), so nothing stored says it twice.
+const VFR_BLOCK_MAP = {
+  '1':  { required: true,  target: { kind: 'flightData', path: 'identity.callsign' } },
+  '2':  { required: true,  target: { kind: 'system' } },
+  '3':  { required: true,  target: { kind: 'aircraft-data' } },
+  '4':  { required: true,  target: { kind: 'system' } },
+  '4A': { required: false, target: { kind: 'flag' } },
+  '5':  { required: false, target: { kind: 'flightData', path: 'identity.beaconAssigned' } },
+  '7A': { required: false, target: { kind: 'clearance', field: 'altitude' }, interlock: 'ALTITUDE' },
+  '9A-VECTOR': { required: false, target: { kind: 'clearance', field: 'heading' }, interlock: 'COURSE' },
+  '9A-SPEED': { required: false, target: { kind: 'clearance', field: 'speed' } },
+  '8A': { required: false, target: { kind: 'flightData', path: 'filed.departureRunway' } },
+  '9E': { required: false, target: { kind: 'flightData', path: 'filed.remarks' } },
+  '22': { required: false, target: { kind: 'frequency' } },
+  '25': { required: true,  target: { kind: 'system' } },
+  '26': { required: true,  target: { kind: 'system' } },
+};
+
+const BLOCK_MAPS = {
+  DEPARTURE: DEPARTURE_BLOCK_MAP, ARRIVAL: ARRIVAL_BLOCK_MAP, OVERFLIGHT: OVERFLIGHT_BLOCK_MAP, MISSION: MISSION_BLOCK_MAP,
+  MARSHAL: MARSHAL_BLOCK_MAP, FINAL: FINAL_BLOCK_MAP, PATTERN: PATTERN_BLOCK_MAP, VFR: VFR_BLOCK_MAP,
+};
+
+/**
+ * WP6 (docs/adr/0052) — the guide's §6.4 military-extension `M`-numbers, and
+ * what each one is called HERE. Written down once because this question has
+ * now come up four times (docs/adr/0026 froze M1-M8 with its own meanings,
+ * 0050 hit it for the stereo route, 0051 for the hook, and §9.4/§9.5/§9.6 all
+ * need fields), and each time it was re-derived from scratch.
+ *
+ * **The guide's M-numbers are NOT used as Block ids on the ATC Block Maps.**
+ * The `M`-prefix namespace belongs to MISSION_BLOCK_MAP, which docs/adr/0026
+ * froze with meanings that DIFFER from the guide's own §6.4 table — its M4 is
+ * the beacon where the guide's M4 is IFF Mode 1/2; its M5 is the controlling
+ * agency where the guide's M7 is. Renumbering a shipped Block Map is worse
+ * than the divergence, so M1-M8 stay exactly as they are and the guide's
+ * numbering is cited in comments rather than used as an id.
+ *
+ * The convention that replaces it is this codebase's own and has won every
+ * time it has been asked: **sub-letter the field onto its parent Block**
+ * ('3A'-'3E', '8A'/'8B', '9A'-'9F', '5A', '14A'-'14E'), and name the guide's
+ * M-number in the comment so the next reader can find the section.
+ *
+ * `blockId: null` means RESERVED, not undecided — the id is spoken for and
+ * lands with that field's own deliverable. A row whose guide number covers
+ * several fields names them with `blocks` instead — `{ blockId: path }`, one
+ * plain 'flightData' Block per leaf, on every ATC strip type (M10/M11, docs/adr/0062). A
+ * row has one or the other, never both, and never a wildcard. Nothing reads this table at
+ * runtime; it is documentation that a test can assert against, which is what
+ * stops it drifting the way a comment would.
+ */
+const MILITARY_BLOCK_NAMESPACE = {
+  M9:  { field: 'military.altrvRef',    blockId: null,   guide: '§9.3 ALTRV reference — WP7/ATO, §12 present-and-unpopulated' },
+  M10: { field: 'military.mtr', blocks: { '9G-MTR': 'military.mtr.designator', '9G-ENTRY': 'military.mtr.entryFix', '9G-TIME': 'military.mtr.entryTimeUtc' },
+         guide: '§9.4 MTR designator / entry fix / entry time — BUILT (docs/adr/0062)' },
+  M11: { field: 'military.mtr', blocks: { '9H-EXIT': 'military.mtr.exitFix', '9H-TIME': 'military.mtr.exitEstimateUtc', '9H-ALT': 'military.mtr.requestedAltitudeAfterExit' },
+         guide: '§9.4 MTR exit fix / exit estimate / altitude after exit — BUILT (docs/adr/0062); the two the guide says are asked for by voice' },
+  M12: { field: 'military.arInfo',      blockId: null,   guide: '§9.2 AR track/anchor data — the MARSA RELATION is its own store (docs/adr/0051)' },
+  M13: { field: 'military.scl',         blockId: null,   guide: '§9.5 standard conventional load — ATO-owned, §12' },
+  M14: { field: 'military.ordnanceState', blockId: '3G', guide: '§9.5 ordnance state — BUILT' },
+  M15: { field: 'military.hookRequired',  blockId: '3F', guide: '§9.7 arresting-gear / hook requirement — BUILT' },
+  M16: { field: 'military.alertStatus',   blockId: '14E', guide: '§9.6 alert status — BUILT (docs/adr/0070)' },
+  M17: { field: 'military.fuelState',     blockId: null, guide: '§9.6 fuel state — §12' },
+  M18: { field: 'filed.stereoRouteName',  blockId: '9F', guide: '§9.10 stereo route — BUILT (docs/adr/0050; the guide mis-cites this as §9.9)' },
+  M19: { field: 'military.releaseAuthority', blockId: null, guide: '§9.5 weapons release authority — §12' },
+};
+
+// The 9G-*/9H-* MTR Blocks (M10/M11) were reserved here until §9.4 landed;
+// docs/adr/0062 built them. They are plain 'flightData' Blocks, one per leaf of
+// flightData.military.mtr, written through setField() rather than setMilitary(), so
+// MILITARY_WRITABLE_FIELDS does not grow. Where they sit on the Strip — a
+// field-grid row drawn only when the flight has MTR data, M11 first — is the
+// client's strip-fields.js, and the reasons are in that ADR.
+//
+// Nothing on MISSION_BLOCK_MAP, and that is a decision too. An ordnance state
+// and a hook requirement are facts about the airframe, and a MISSION Strip
+// shares its flightDataId with the ATC Strip it is TOFI-linked to (docs/adr/0025), so
+// a write from either surface is a write to the same flight. Giving MISSION
+// its own Block for them would need an id in the very M-namespace this table
+// exists to stop reusing — and would add a second place the same aircraft's
+// ordnance can be declared from, which is docs/adr/0045's "two answers to one
+// question" in a new costume. When §9.8's mission line grows richer (WP7),
+// that is the ADR that should settle it.
+
+/** Every strip type this facility's Block Map data actually defines — board/ops/create-strip.js's CreateStrip validation calls this so an unknown strip type is a VALIDATION_ERROR, not a silent fallback. */
+function isValidStripType(stripType) {
+  return Object.prototype.hasOwnProperty.call(BLOCK_MAPS, stripType);
 }
 
-function requiredBlocksFor(role) {
-  const map = BLOCK_MAPS[role];
+function requiredBlocksFor(stripType) {
+  const map = BLOCK_MAPS[stripType];
   if (!map) return [];
   return Object.entries(map).filter(([, def]) => def.required).map(([id]) => id);
 }
 
 /**
- * Resolves a Block ID to a SetBlock routing target for board-store.js's
- * applyMutation(): { kind:'fdr', path } for an FDR field, { kind:
+ * Resolves a Block ID to a SetBlock routing target for board/ops/set-block.js's
+ * _applySetBlock: { kind:'flightData', path } for a flight data field, { kind:
  * 'annotation' } for a Strip annotation cell, or null for anything not
- * writable through the generic SetBlock path (system/composite/flag
- * Blocks, or an unknown Block ID / role).
+ * writable through the generic SetBlock path (system/flag
+ * Blocks, an unknown Block ID / stripType, or a PAR-final-only Block on the
+ * carrier's FINAL, `facilityId` 'CARRIER').
  */
-function resolveBlockTarget(role, blockId) {
-  const map = BLOCK_MAPS[role];
+function resolveBlockTarget(stripType, blockId, facilityId) {
+  const map = BLOCK_MAPS[stripType];
   const def = map && map[blockId];
   if (!def) return null;
-  if (def.target.kind === 'fdr') return { kind: 'fdr', path: def.target.path };
+  if (stripType === 'FINAL' && facilityId === CARRIER_FACILITY_ID && PAR_FINAL_ONLY_BLOCKS.includes(blockId)) return null;
+  if (def.target.kind === 'flightData') return { kind: 'flightData', path: def.target.path };
   if (def.target.kind === 'annotation') return { kind: 'annotation' };
-  // WP4A (docs/adr/0018) — routed through fdr-store.js's dedicated
-  // setAirspaceOwner(), never the generic 'fdr' path above (see that
+  // WP4A (docs/adr/0018) — routed through flight-data-store.js's dedicated
+  // setAirspaceOwner(), never the generic 'flightData' path above (see that
   // method's own comment for why this needs to be structurally distinct).
   if (def.target.kind === 'airspace-owner') return { kind: 'airspace-owner' };
+  // WP4A second slice (docs/adr/0025) — routed through flight-data-store.js's
+  // dedicated setTofi(), same reasoning as 'airspace-owner' above. Unlike
+  // that kind, 3 different Blocks share this one target kind but route to
+  // 3 different keys on one flightData.tofi sub-object — `field` carries which.
+  if (def.target.kind === 'tofi') return { kind: 'tofi', field: def.target.field };
+  // Routed through flight-data-store.js's dedicated setWorkingFrequency(), same
+  // reasoning as 'airspace-owner' — a frequency needs validating as a number
+  // in one band, and the write is append-only.
+  if (def.target.kind === 'frequency') return { kind: 'frequency' };
+  // WP6 (docs/adr/0052), guide §6.4 — routed through flight-data-store.js's dedicated
+  // setMilitary(). Shares the 'tofi' shape exactly: several Blocks, one target
+  // kind, `field` carrying which key of one sub-object this Block writes.
+  if (def.target.kind === 'military') return { kind: 'military', field: def.target.field };
+  // docs/adr/0058 — the flight's assigned altitude or heading, through
+  // flight-data-store.js's setClearance(), which keeps §3.7's history on the flight data.
+  if (def.target.kind === 'clearance') return { kind: 'clearance', field: def.target.field };
+  // docs/adr/0074 — a flight's own carrier fields (EEAT, approach, button,
+  // bingo, low state), through flight-data-store.js's setCarrier(). The kind
+  // `carrier-derived` falls through to null on purpose: derived values cannot
+  // be written by any Block (§9.12 rule 1).
+  if (def.target.kind === 'carrier') return { kind: 'carrier', field: def.target.field };
+  // T7 (H134 LT-RQ2 b): Block 3 typed as one field, `[count/]TYPE[/WAKE]`, parsed by
+  // flight-data-store.js's setAircraftData() into the number, the type and the wake.
+  if (def.target.kind === 'aircraft-data') return { kind: 'aircraft-data' };
   return null;
+}
+
+/**
+ * WP6 (docs/adr/0051), §9.2 rule 2 — does writing this Block constitute ATC
+ * issuing a course or an altitude assignment?
+ *
+ * @returns {'COURSE'|'ALTITUDE'|null} null for every Block that is neither,
+ *   and for an unknown Block ID or strip type.
+ *
+ * Read by board/ops/set-block.js's _applySetBlock, which hands a non-null answer to
+ * marsa-store.js's voidForAssignment. Deliberately a Block Map lookup and not a
+ * list of ids held in marsa-store.js: the Block Map is the one place that knows
+ * what a Block MEANS, it is per-strip-type (ARRIVAL's Block 7 is an assigned altitude
+ * and DEPARTURE's Block 7 is a filed request — the same id, opposite answers),
+ * and a parallel list kept elsewhere is docs/adr/0041's frozen inclusion list
+ * in a new costume.
+ */
+function interlockFor(stripType, blockId) {
+  const map = BLOCK_MAPS[stripType];
+  const def = map && map[blockId];
+  return (def && def.interlock) || null;
+}
+
+/**
+ * docs/adr/0101 (H94, H100 DR-11 b): which control axis a Block write is, for the coordination a HANDOFF needs before
+ * control transfers. Read from the same `interlock` tag as MARSA's: COURSE is `TURNS`, ALTITUDE is `ALTITUDE` (the Board
+ * compares the new value with the assigned altitude to say CLIMB or DESCENT). **Speed is not a control axis**: `9A-SPEED`
+ * carries no tag and answers null, so it is never checked and never attested.
+ * @returns {'TURNS'|'ALTITUDE'|null}
+ */
+function controlAxisFor(stripType, blockId) {
+  const tag = interlockFor(stripType, blockId);
+  return tag === 'COURSE' ? 'TURNS' : tag === 'ALTITUDE' ? 'ALTITUDE' : null;
+}
+
+/** Every Block, per strip type, that interlockFor() answers non-null for — used by the test that holds each strip type to having the coverage docs/adr/0051 claims. */
+function interlockBlocks(stripType) {
+  const map = BLOCK_MAPS[stripType] || {};
+  return Object.entries(map).filter(([, def]) => def.interlock).map(([id]) => id);
 }
 
 /**
@@ -171,10 +725,10 @@ function resolveBlockTarget(role, blockId) {
  * required Block ('9A-FUEL') — no role-specific exception logic needed
  * here beyond the existing required-Block check.
  *
- * @param {{role:string, visibleBlocks:string[]}} config
+ * @param {{stripType:string, visibleBlocks:string[]}} config
  */
 function validateFacilityConfig(config) {
-  const required = requiredBlocksFor(config.role);
+  const required = requiredBlocksFor(config.stripType);
   const visible = new Set(config.visibleBlocks || []);
   const missing = required.filter(id => !visible.has(id));
   if (missing.length > 0) {
@@ -184,6 +738,8 @@ function validateFacilityConfig(config) {
 }
 
 module.exports = {
-  DEPARTURE_BLOCK_MAP, ARRIVAL_BLOCK_MAP, BLOCK_MAPS,
-  isValidRole, requiredBlocksFor, resolveBlockTarget, validateFacilityConfig,
+  DEPARTURE_BLOCK_MAP, ARRIVAL_BLOCK_MAP, OVERFLIGHT_BLOCK_MAP, MISSION_BLOCK_MAP,
+  MARSHAL_BLOCK_MAP, FINAL_BLOCK_MAP, PATTERN_BLOCK_MAP, BLOCK_MAPS, PAR_FINAL_ONLY_BLOCKS,
+  isValidStripType, requiredBlocksFor, resolveBlockTarget, validateFacilityConfig,
+  interlockFor, interlockBlocks, controlAxisFor, MILITARY_BLOCK_NAMESPACE,
 };

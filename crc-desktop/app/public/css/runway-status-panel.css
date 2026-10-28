@@ -1,0 +1,146 @@
+/* The runway-status board (guide §9.7, crc-sync docs/adr/0061, crc-desktop
+   docs/adr/0068). Its own panel, its own file. Colours are efsp-panel.css's
+   tokens: grey for normal, amber (--efsp-attn) for "waiting on someone",
+   orange-red (--efsp-bad) for "the runway cannot be used". */
+
+#runway-status-panel {
+  overflow-y: auto;
+  padding: 8px;
+  color: var(--efsp-text, #d8e0e6);
+  font-size: 12px;
+}
+
+.runway-status-facility { margin-bottom: 10px; }
+
+.runway-status-facility-header {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+.runway-status-facility-id { font-weight: 600; letter-spacing: 0.05em; }
+.runway-status-active { color: var(--efsp-text, #d8e0e6); font-weight: 600; }
+.runway-status-rev { margin-left: auto; color: var(--efsp-faint, #56616c); font-size: 11px; }
+
+.runway-status-line {
+  color: var(--efsp-muted, #8c9aa6);
+  font-size: 11px;
+  margin-top: 2px;
+}
+
+.runway-status-runway,
+.runway-status-change {
+  border: 1px solid var(--efsp-line, #2e3740);
+  border-left-width: 3px;
+  background: var(--efsp-strip, #1c2228);
+  padding: 6px 8px;
+  margin-top: 6px;
+}
+
+.runway-status-status-open                 { border-left-color: #4a5560; }
+.runway-status-status-closed               { border-left-color: var(--efsp-bad, #ff8a4c); }
+.runway-status-status-suspended-works      { border-left-color: var(--efsp-bad, #ff8a4c); }
+.runway-status-status-suspended-inspection { border-left-color: var(--efsp-attn, #e0a83c); }
+
+.runway-status-runway-header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.runway-status-runway-id { font-weight: 600; }
+.runway-status-ends { display: flex; gap: 6px; color: var(--efsp-muted, #8c9aa6); }
+.runway-status-end-active { color: var(--efsp-text, #d8e0e6); font-weight: 600; }
+
+.runway-status-badge {
+  margin-left: auto;
+  padding: 0 6px;
+  border: 1px solid #4a5560;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+}
+.runway-status-status-closed .runway-status-badge,
+.runway-status-status-suspended-works .runway-status-badge {
+  border-color: var(--efsp-bad, #ff8a4c);
+  color: var(--efsp-bad-text, #ffd2bd);
+}
+.runway-status-status-suspended-inspection .runway-status-badge {
+  border-color: var(--efsp-attn, #e0a83c);
+  color: var(--efsp-attn-text, #ffe0a8);
+}
+
+.runway-status-suspension,
+.runway-status-closure { color: var(--efsp-bad-text, #ffd2bd); }
+.runway-status-request,
+.runway-status-change-pending,
+.runway-status-ack-waiting { color: var(--efsp-attn-text, #ffe0a8); }
+.runway-status-change-rejected { color: var(--efsp-bad-text, #ffd2bd); }
+.runway-status-change[data-state="REJECTED"] { border-left-color: #4a5560; }
+.runway-status-change[data-state="PROPOSED"],
+.runway-status-change[data-state="ACKNOWLEDGED"],
+.runway-status-change[data-state="IN_PROGRESS"],
+.runway-status-change[data-state="PENDING_INSPECTION"] { border-left-color: var(--efsp-attn, #e0a83c); }
+.runway-status-change-head { color: var(--efsp-text, #d8e0e6); }
+
+.runway-status-acks { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.runway-status-ack {
+  padding: 0 6px;
+  border: 1px solid #4a5560;
+  font-size: 11px;
+}
+.runway-status-ack-done    { color: var(--efsp-text, #d8e0e6); }
+.runway-status-ack-waiting { border-color: var(--efsp-attn, #e0a83c); }
+.runway-status-ack-skipped { color: var(--efsp-faint, #56616c); font-style: italic; }
+
+.runway-status-gear-down,
+.runway-status-gear-out_of_service { color: var(--efsp-attn-text, #ffe0a8); }
+.runway-status-gear-none { font-style: italic; }
+
+.runway-status-pads { margin-top: 6px; }
+
+.runway-status-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+}
+.runway-status-action-btn,
+.runway-status-reason-send,
+.runway-status-reason-cancel,
+.runway-status-to-end {
+  min-height: 26px;
+  padding: 2px 8px;
+  background: var(--efsp-strip, #1c2228);
+  border: 1px solid #4a5560;
+  color: var(--efsp-text, #d8e0e6);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+}
+.runway-status-action-btn:disabled { color: var(--efsp-faint, #56616c); cursor: default; }
+
+/* The inline reason form an action opens (it was a blocking window.prompt): a whole row under the buttons. */
+.runway-status-reason {
+  display: flex;
+  flex: 1 0 100%;
+  gap: 4px;
+  align-items: center;
+}
+.runway-status-reason-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 26px;
+  padding: 2px 6px;
+  background: var(--efsp-strip, #1c2228);
+  border: 1px solid #4a5560;
+  color: var(--efsp-text, #d8e0e6);
+  font: inherit;
+  font-size: 11px;
+}
+
+/* On a Strip (docs/adr/0068): the runway it will use is not open, it is queued
+   for the inactive end, or a hook arrival has no rigged gear. The chip's tone
+   comes from efsp-panel.css's .efsp-ind-bad / .efsp-ind-attn. When the server's
+   NLA inhibit already says why, the chip's own reason is left empty rather
+   than said twice — and an empty reason line takes no room. */
+.efsp-strip-reason.efsp-alert-reason:empty { display: none; }

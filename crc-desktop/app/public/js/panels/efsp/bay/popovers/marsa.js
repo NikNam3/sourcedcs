@@ -1,0 +1,206 @@
+'use strict';
+import { activeMarsaForFlightData, getAllEfspStrips, getEfspFlightData, marsaForStrip } from '../../efsp-state.js';
+import { MARSA_EXPANSION, marsaActionsFor } from '../../marsa-badge.js';
+import { openPopover, _sendFromPopover } from '../popover-portal.js';
+import { _dispatchMarsa } from '../dispatch.js';
+import { selectEfspStripById } from '../selection.js';
+
+
+
+let _openPopoverHandle = null;
+
+function _closeMarsaPopover() { if (_openPopoverHandle) _openPopoverHandle.close(); }
+
+/**
+ * The relation's actions, and — for a declaration — who is in it.
+ *
+ * `declaringCallsign` is a required free-text field and that is doctrine, not
+ * an oversight: §9.2 rule 1 says "the declaration is the tanker's, and it is
+ * verbal — the EFSP records it, it does not decide it." So the form asks who
+ * said it rather than guessing from the Strip.
+ */
+export function _openMarsaPopover(strip, anchorEl) {
+  _closeMarsaPopover();
+  const popover = document.createElement('div');
+  popover.className = 'efsp-coordinate-popover efsp-marsa-popover';
+
+  const relation = marsaForStrip(strip);
+  const active = relation && relation.state === 'ACTIVE' ? relation : null;
+
+  if (relation) {
+    // Rule 5's link, made concrete: naming the other participants, and letting
+    // the controller jump to one.
+    const heading = document.createElement('div');
+    heading.className = 'efsp-marsa-popover-heading';
+    heading.textContent = relation.state === 'VOIDED'
+      ? `MARSA voided — declared by ${relation.declaringCallsign}`
+      : `MARSA — declared by ${relation.declaringCallsign}`;
+    heading.title = MARSA_EXPANSION;
+    popover.appendChild(heading);
+
+    for (const flightDataId of relation.participants) {
+      if (flightDataId === strip.flightDataId) continue;
+      const peer = getAllEfspStrips().find(s => s.flightDataId === flightDataId && s.state !== 'DROPPED');
+      const flightData = getEfspFlightData(flightDataId);
+      const label = (flightData && flightData.identity && flightData.identity.callsign) || flightDataId;
+      const row = document.createElement('button');
+      row.className = 'efsp-marsa-participant-btn';
+      row.textContent = label;
+      row.title = peer ? 'select this participant' : 'this participant has no live Strip on your board';
+      row.disabled = !peer;
+      if (peer) {
+        row.addEventListener('click', (e) => {
+          e.stopPropagation();
+          _closeMarsaPopover();
+          selectEfspStripById(peer.stripId);
+        });
+      }
+      popover.appendChild(row);
+    }
+  }
+
+  for (const action of marsaActionsFor(strip)) {
+    if (action.kind === 'DeclareMarsa') {
+      popover.appendChild(_buildMarsaDeclareForm(strip));
+      continue;
+    }
+    if (action.kind === 'AddParticipant') {
+      popover.appendChild(_buildMarsaAddForm(strip, active));
+      continue;
+    }
+    const btn = document.createElement('button');
+    btn.className = 'efsp-coordinate-submit';
+    btn.textContent = action.label;
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const op = action.kind === 'RemoveParticipant'
+        ? { kind: 'RemoveParticipant', flightDataId: strip.flightDataId }
+        : { kind: action.kind };
+      _sendFromPopover(popover, btn, (onAck) => _dispatchMarsa(strip, action.marsaId, op, { onAck }));
+    });
+    popover.appendChild(btn);
+  }
+
+  // F-110 lived here: `anchorEl.appendChild(popover)`, where anchorEl is the
+  // MARSA… <button> whose own click handler opens it. Every click inside the
+  // popover — into the declarer field, onto a candidate <select> — bubbled to
+  // that button and re-ran this function, so the form was rebuilt empty on
+  // every interaction and the declaration could never be completed. The
+  // popover is portalled out now (see _mountPopover) and is no longer a
+  // descendant of anything that reopens it. It also stops an <input> and two
+  // <select>s being nested inside a <button>, which was invalid HTML.
+  _openPopoverHandle = openPopover({ el: popover, anchor: anchorEl, strip, onClose: () => { _openPopoverHandle = null; } });
+}
+
+/** Which other live flights this one could be put into a relation with. */
+function _marsaCandidates(strip) {
+  return getAllEfspStrips().filter((s) => {
+    if (s.state === 'DROPPED' || s.flightDataId === strip.flightDataId) return false;
+    // A flight already under MARSA cannot be in a second relation — crc-sync
+    // refuses it, and offering it here would be a control that always fails.
+    return !activeMarsaForFlightData(s.flightDataId);
+  });
+}
+
+function _marsaCandidateSelect(strip) {
+  const select = document.createElement('select');
+  select.className = 'efsp-coordinate-primitive-select';
+  select.dataset.testid = 'marsa-candidate'; // e2e hook: the popover has three selects of one class
+  for (const s of _marsaCandidates(strip)) {
+    const flightData = getEfspFlightData(s.flightDataId);
+    const option = document.createElement('option');
+    option.value = s.flightDataId;
+    option.textContent = (flightData && flightData.identity && flightData.identity.callsign) || s.flightDataId;
+    select.appendChild(option);
+  }
+  return select;
+}
+
+function _buildMarsaDeclareForm(strip) {
+  const wrap = document.createElement('div');
+  const candidates = _marsaCandidates(strip);
+  if (candidates.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'efsp-coordinate-degraded-warning';
+    empty.textContent = 'no other live flight is available to declare MARSA with';
+    wrap.appendChild(empty);
+    return wrap;
+  }
+
+  const other = _marsaCandidateSelect(strip);
+  wrap.appendChild(other);
+
+  const startEvent = document.createElement('select');
+  startEvent.className = 'efsp-coordinate-primitive-select';
+  startEvent.dataset.testid = 'marsa-start-event';
+  for (const [value, label] of [
+    ['TANKER_ACCEPTED', 'tanker accepted MARSA'],
+    ['MTR_ENTRY', 'MTR entry'],
+    ['LOCAL_DECLARATION', 'local declaration'],
+  ]) {
+    const option = document.createElement('option');
+    option.value = value;
+    option.textContent = label;
+    startEvent.appendChild(option);
+  }
+  wrap.appendChild(startEvent);
+
+  const endCondition = document.createElement('select');
+  endCondition.className = 'efsp-coordinate-primitive-select';
+  endCondition.dataset.testid = 'marsa-end-condition';
+  for (const [value, label] of [
+    ['VERTICALLY_POSITIONED', 'until vertically positioned'],
+    ['MTR_COMPLETE', 'until MTR complete'],
+    ['ATC_SEPARATION_ESTABLISHED', 'until ATC separation is re-established'],
+  ]) {
+    const option = document.createElement('option');
+    option.value = value;
+    option.textContent = label;
+    endCondition.appendChild(option);
+  }
+  wrap.appendChild(endCondition);
+
+  const declaring = document.createElement('input');
+  declaring.className = 'efsp-coordinate-note';
+  declaring.placeholder = 'who declared it (heard on frequency)';
+  wrap.appendChild(declaring);
+
+  const send = document.createElement('button');
+  send.className = 'efsp-coordinate-send-btn';
+  send.textContent = 'Declare';
+  send.addEventListener('click', (e) => {
+    e.stopPropagation();
+    _sendFromPopover(_openPopoverHandle && _openPopoverHandle.el, send, (onAck) => _dispatchMarsa(strip, undefined, {
+      kind: 'DeclareMarsa',
+      participants: [strip.flightDataId, other.value],
+      startEvent: startEvent.value,
+      endCondition: endCondition.value,
+      declaringCallsign: (declaring.value || '').trim(),
+    }, { onAck }));
+  });
+  wrap.appendChild(send);
+  return wrap;
+}
+
+function _buildMarsaAddForm(strip, active) {
+  const wrap = document.createElement('div');
+  const candidates = _marsaCandidates(strip);
+  if (candidates.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'efsp-coordinate-degraded-warning';
+    empty.textContent = 'no other live flight is available to join this relation';
+    wrap.appendChild(empty);
+    return wrap;
+  }
+  const other = _marsaCandidateSelect(strip);
+  wrap.appendChild(other);
+  const add = document.createElement('button');
+  add.className = 'efsp-coordinate-send-btn';
+  add.textContent = 'Add to MARSA';
+  add.addEventListener('click', (e) => {
+    e.stopPropagation();
+    _sendFromPopover(_openPopoverHandle && _openPopoverHandle.el, add, (onAck) => _dispatchMarsa(strip, active && active.marsaId, { kind: 'AddParticipant', flightDataId: other.value }, { onAck }));
+  });
+  wrap.appendChild(add);
+  return wrap;
+}

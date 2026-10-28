@@ -15,6 +15,9 @@
 var currentToken   = getToken();
 var bkResources    = { ranges: [], controllers: [], notifyChannelId: '' };
 var bkBookings     = [];
+var bkTheaters     = [];     /* registry theaters (from crc-sync, through /api/airspaces/theaters) */
+var bkAirspaces    = {};     /* theater -> [{ definition, defRev, state }] */
+var bkRegistryDown = false;
 var bkAdminOpen    = false;
 var bkShowPast     = false;
 var bkTickTimer    = null;
@@ -44,6 +47,7 @@ var BK_STATE_RANK = { live: 0, soon: 1, upcoming: 2, past: 3 };
     document.getElementById('bkMain').style.display = '';
     if (isBookingAdminRole(currentToken)) {
       document.getElementById('bkAdminToggleBtn').style.display = '';
+      document.getElementById('bkAirspaceAdminLink').style.display = '';
     }
     bkPrefillDates();
     bkLoadAll();
@@ -104,12 +108,42 @@ function bkLoadAll() {
   ]).then(function(results) {
     bkResources = results[0] || { ranges: [], controllers: [], notifyChannelId: '' };
     bkBookings  = Array.isArray(results[1]) ? results[1] : [];
-    bkPopulateResourceSelect();
-    bkRenderStatusBar();
-    bkRenderBoard();
-    if (bkAdminOpen) bkRenderAdminPanel();
+    bkRenderAll();
+    bkLoadRegistry();
   }).catch(function() {});
 }
+
+function bkRenderAll() {
+  bkPopulateResourceSelect();
+  bkRenderStatusBar();
+  bkRenderBoard();
+  if (bkAdminOpen) bkRenderAdminPanel();
+}
+
+/* Airspace definitions live in crc-sync; a failure here must not stop controller bookings. */
+function bkLoadRegistry() {
+  fetch('/api/airspaces/theaters', { headers: bkAuthHeaders() }).then(function(r) {
+    return r.json().then(function(j) { return { ok: r.ok, body: j }; });
+  }).then(function(res) {
+    if (!res.ok) { bkRegistryDown = true; bkRenderAll(); return; }
+    bkRegistryDown = false;
+    bkTheaters = (res.body.theaters || []).map(function(t) { return t.theater; });
+    return Promise.all(bkTheaters.map(function(t) {
+      return fetch('/api/airspaces?theater=' + encodeURIComponent(t), { headers: bkAuthHeaders() })
+        .then(function(r) { return r.json(); })
+        .then(function(j) { bkAirspaces[t] = j.airspaces || []; })
+        .catch(function() { bkAirspaces[t] = bkAirspaces[t] || []; });
+    })).then(bkRenderAll);
+  }).catch(function() { bkRegistryDown = true; bkRenderAll(); });
+}
+
+function bkAirspaceDef(ref) {
+  var list = bkAirspaces[ref.theater] || [];
+  for (var i = 0; i < list.length; i++) if (list[i].definition.airspaceId === ref.airspaceId) return list[i].definition;
+  return null;
+}
+function bkRefKey(ref) { return ref.theater + '/' + ref.airspaceId; }
+function bkBandText(d) { return (d.altLowerFt == null ? 'SFC' : d.altLowerFt) + '&ndash;' + (d.altUpperFt == null ? 'UNL' : d.altUpperFt) + 'ft'; }
 
 function bkOnShowPastToggle() {
   bkShowPast = document.getElementById('bkShowPastToggle').checked;
@@ -130,14 +164,14 @@ function bkRenderAdminPanel() {
   var panel = document.getElementById('bkAdminPanel');
   if (!panel) return;
 
-  var rangeItems = bkResources.ranges.map(function(r) {
+  var rangeItems = bkResources.ranges.length ? bkResources.ranges.map(function(r) {
     return '<div class="bk-list-item">' +
       '<div class="bk-list-item-meta"><b>' + esc(r.name) + '</b> &middot; ' + esc(r.frequency) + ' &middot; ' + r.minAltitude + '&ndash;' + r.maxAltitude + 'ft</div>' +
       '<div class="bk-list-item-actions">' +
         '<button class="bk-link-btn" onclick="bkOpenRangeModal(\'' + esc(r.id) + '\')">EDIT</button>' +
         '<button class="bk-link-btn bk-link-btn--danger" onclick="bkDeleteRange(\'' + esc(r.id) + '\')">DELETE</button>' +
       '</div></div>';
-  }).join('') || '<div class="bk-empty">No ranges configured yet.</div>';
+  }).join('') : '';
 
   var ctrlItems = bkResources.controllers.map(function(c) {
     return '<div class="bk-list-item">' +
@@ -149,11 +183,11 @@ function bkRenderAdminPanel() {
   }).join('') || '<div class="bk-empty">No controller positions configured yet.</div>';
 
   panel.innerHTML =
-    '<div class="bk-admin-label"><span>MANAGE RANGES &amp; CONTROLLER POSITIONS</span></div>' +
+    '<div class="bk-admin-label"><span>MANAGE CONTROLLER POSITIONS</span></div>' +
     '<div class="bk-admin-body">' +
-      '<div class="bk-admin-sub-label">RANGES</div>' +
-      rangeItems +
-      '<div style="margin-top:8px"><button class="btn btn-ghost" style="font-size:9px;padding:6px 16px" onclick="bkOpenRangeModal()">+ ADD RANGE</button></div>' +
+      '<div class="bk-admin-sub-label">AIRSPACES</div>' +
+      '<div style="margin-top:4px"><a class="btn btn-ghost" style="font-size:9px;padding:6px 16px" href="/airspace-admin.html">MANAGE AIRSPACES</a></div>' +
+      (rangeItems ? '<div class="bk-admin-sub-label">LEGACY RANGES (MIGRATE THEM ON THE AIRSPACE PAGE)</div>' + rangeItems : '') +
       '<div class="bk-admin-sub-label">CONTROLLER POSITIONS</div>' +
       ctrlItems +
       '<div style="margin-top:8px"><button class="btn btn-ghost" style="font-size:9px;padding:6px 16px" onclick="bkOpenCtrlModal()">+ ADD CONTROLLER POSITION</button></div>' +
@@ -318,23 +352,45 @@ function bkPopulateResourceSelect() {
 function bkOnFormTypeChange() {
   var type = document.getElementById('bkFormType').value;
   var sel  = document.getElementById('bkFormResource');
-  var list = type === 'range' ? bkResources.ranges : bkResources.controllers;
-  sel.innerHTML = list.map(function(r) {
+  var isAirspace = type === 'airspace';
+  document.getElementById('bkFormTheaterGroup').style.display = isAirspace ? '' : 'none';
+  document.getElementById('bkFormAltitudeRow').style.display = isAirspace ? '' : 'none';
+  if (isAirspace) {
+    var tsel = document.getElementById('bkFormTheater');
+    var cur = tsel.value;
+    tsel.innerHTML = bkTheaters.map(function(t) { return '<option value="' + esc(t) + '">' + esc(t) + '</option>'; }).join('') ||
+      '<option value="">' + (bkRegistryDown ? 'crc-sync unreachable' : '— none —') + '</option>';
+    if (cur && bkTheaters.indexOf(cur) !== -1) tsel.value = cur;
+    bkOnFormTheaterChange();
+    return;
+  }
+  sel.innerHTML = bkResources.controllers.map(function(r) {
     return '<option value="' + esc(r.id) + '">' + esc(r.name) + ' (' + esc(r.frequency) + ')</option>';
   }).join('') || '<option value="">— none configured —</option>';
-  document.getElementById('bkFormAltitudeRow').style.display = type === 'range' ? '' : 'none';
+  bkOnFormResourceChange();
+}
+
+function bkOnFormTheaterChange() {
+  var theater = document.getElementById('bkFormTheater').value;
+  var sel = document.getElementById('bkFormResource');
+  var prev = sel.value;
+  var list = bkAirspaces[theater] || [];
+  sel.innerHTML = list.map(function(e) {
+    var d = e.definition;
+    return '<option value="' + esc(d.airspaceId) + '">' + esc(d.name) + ' (' + esc(d.airspaceId) + ')</option>';
+  }).join('') || '<option value="">' + (bkRegistryDown ? 'crc-sync unreachable: airspaces cannot be booked right now' : '— none in this theater —') + '</option>';
+  if (prev) sel.value = prev;
   bkOnFormResourceChange();
 }
 
 function bkOnFormResourceChange() {
-  var type  = document.getElementById('bkFormType').value;
-  if (type !== 'range') return;
-  var id    = document.getElementById('bkFormResource').value;
-  var range = bkResources.ranges.find(function(r) { return r.id === id; });
-  var hint  = document.getElementById('bkFormAltitudeHint');
-  hint.textContent = range
-    ? 'Between ' + range.minAltitude + ' and ' + range.maxAltitude + 'ft, and at least 999ft from any other overlapping booking on this range.'
-    : 'Must be at least 999ft from any other overlapping booking on this range.';
+  var type = document.getElementById('bkFormType').value;
+  if (type !== 'airspace') return;
+  var def  = bkAirspaceDef({ theater: document.getElementById('bkFormTheater').value, airspaceId: document.getElementById('bkFormResource').value });
+  var hint = document.getElementById('bkFormAltitudeHint');
+  hint.innerHTML = def
+    ? 'Within ' + bkBandText(def) + ' (indicated feet), and at least 999ft from any other overlapping booking on this airspace.'
+    : 'Must be at least 999ft from any other overlapping booking on this airspace.';
 }
 
 /* Composes an ISO 8601 UTC timestamp from a date input value (YYYY-MM-DD)
@@ -371,11 +427,12 @@ function bkSubmitBooking() {
 
   var data = {
     resourceType: type,
-    resourceId:   resourceId,
     startTime:    startISO,
     endTime:      endISO,
   };
-  if (type === 'range') {
+  if (type === 'airspace') data.airspaceRef = { theater: document.getElementById('bkFormTheater').value, airspaceId: resourceId };
+  else data.resourceId = resourceId;
+  if (type === 'airspace') {
     var altEl = document.getElementById('bkFormAltitude');
     if (!altEl.value) { errEl.textContent = 'Deconfliction altitude is required.'; errEl.style.display = ''; return; }
     data.altitude = Number(altEl.value);
@@ -503,7 +560,26 @@ function bkFmtWindow(startIso, endIso) {
    BOARD
 ════════════════════════════════════════════════════════════ */
 function bkRenderBoard() {
-  bkRenderResourceList('bkRangesBoard', bkResources.ranges, 'range');
+  /* Airspace cards: every registry airspace plus any airspace that has bookings (so a board
+     still shows them while crc-sync is down or after an airspace was deleted). */
+  var cards = {};
+  bkTheaters.forEach(function(t) {
+    (bkAirspaces[t] || []).forEach(function(e) {
+      var d = e.definition;
+      cards[t + '/' + d.airspaceId] = { id: t + '/' + d.airspaceId, theater: t, name: d.name, frequency: d.workingFrequencyMhz != null ? String(d.workingFrequencyMhz) : '', band: bkBandText(d) };
+    });
+  });
+  bkBookings.forEach(function(b) {
+    if (b.resourceType !== 'airspace' || !b.airspaceRef) return;
+    var k = bkRefKey(b.airspaceRef);
+    if (!cards[k]) cards[k] = { id: k, theater: b.airspaceRef.theater, name: b.airspaceRef.airspaceId, frequency: '', band: '' };
+  });
+  var list = Object.keys(cards).sort().map(function(k) { return cards[k]; });
+  document.getElementById('bkRegistryNotice').innerHTML = bkRegistryDown
+    ? '<div class="bk-empty">crc-sync unreachable: airspace limits cannot be checked, so airspaces cannot be booked right now. Controller position bookings still work.</div>' : '';
+  bkRenderResourceList('bkAirspacesBoard', list, 'airspace');
+  document.getElementById('bkLegacyWrap').style.display = bkResources.ranges.length ? '' : 'none';
+  if (bkResources.ranges.length) bkRenderResourceList('bkRangesBoard', bkResources.ranges, 'range');
   bkRenderResourceList('bkControllersBoard', bkResources.controllers, 'controller');
 }
 
@@ -519,7 +595,10 @@ function bkRenderResourceList(elId, resources, type) {
   var today   = new Date().toISOString().slice(0, 10);
 
   el.innerHTML = resources.map(function(resource) {
-    var allBookings = bkBookings.filter(function(b) { return b.resourceType === type && b.resourceId === resource.id; });
+    var allBookings = bkBookings.filter(function(b) {
+      if (b.resourceType !== type) return false;
+      return type === 'airspace' ? (b.airspaceRef && bkRefKey(b.airspaceRef) === resource.id) : b.resourceId === resource.id;
+    });
 
     var liveCount  = 0;
     var todayCount = 0;
@@ -539,7 +618,9 @@ function bkRenderResourceList(elId, resources, type) {
           : '<span class="bk-resource-chip bk-resource-chip--free">FREE NOW</span>');
     chip += '<span class="bk-badge">' + todayCount + ' today</span>';
 
-    var badges = chip + '<span class="bk-badge">' + esc(resource.frequency) + '</span>';
+    var badges = chip;
+    if (type === 'airspace') badges += '<span class="bk-badge">' + esc(resource.theater) + '</span>' + (resource.band ? '<span class="bk-badge">' + resource.band + '</span>' : '');
+    if (resource.frequency) badges += '<span class="bk-badge">' + esc(resource.frequency) + '</span>';
     if (type === 'range') badges += '<span class="bk-badge">' + resource.minAltitude + '&ndash;' + resource.maxAltitude + 'ft</span>';
 
     var visible = allBookings.filter(function(b) { return bkShowPast || bkBookingState(b) !== 'past'; })
@@ -554,7 +635,7 @@ function bkRenderResourceList(elId, resources, type) {
           '<div class="bk-booking-window">' + bkFmtWindow(b.startTime, b.endTime) +
             ' <span class="bk-status-badge bk-status-badge--' + state + '">' + bkRelativeLabel(b, state) + '</span>' +
           '</div>' +
-          '<div class="bk-booking-meta">' + esc(b.bookedBy.name || '—') + (type === 'range' ? ' &middot; <span class="bk-booking-alt">' + b.altitude + 'ft</span>' : '') + '</div>' +
+          '<div class="bk-booking-meta">' + esc(b.bookedBy.name || '—') + (type !== 'controller' ? ' &middot; <span class="bk-booking-alt">' + b.altitude + 'ft</span>' : '') + '</div>' +
         '</div>' +
         (canCancel ? '<button class="bk-link-btn bk-link-btn--danger" onclick="bkCancelBooking(' + b.id + ')">CANCEL</button>' : '') +
       '</div>';

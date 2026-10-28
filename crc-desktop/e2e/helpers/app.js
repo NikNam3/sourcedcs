@@ -1,0 +1,357 @@
+'use strict';
+
+const { expect } = require('@playwright/test');
+const { installAppModules } = require('./modules');
+
+/**
+ * A bearer token the panel will send and crc-sync will accept.
+ *
+ * crc-sync's `decodeJWT` base64-decodes the payload and never verifies the
+ * signature, so any well-formed three-part token authenticates. That is what
+ * makes this harness possible without a Casdoor round trip — and it is worth
+ * knowing as a property of the service rather than a trick of the tests. If
+ * signature verification is ever added, this helper is the one place to fix.
+ */
+function fakeToken(name = 'e2e-controller') {
+  const b64 = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
+  return `${b64({ alg: 'none', typ: 'JWT' })}.${b64({
+    sub: name, name, exp: Math.floor(Date.now() / 1000) + 3600,
+  })}.e2e`;
+}
+
+// The client swallows a second advancing press inside DOUBLE_TAP_MS of the first (bay-view.js's _swallowRepeatAdvance,
+// F-101), and that window is browser wall time. The harness starts crc-sync with its own guard at 0
+// (CRCSYNC_NLA_GUARD_MS, nla-guard.spec.js keeps the real 400 ms), so the only guard left between two presses is the
+// client's, and `lapseNlaGuard` moves the page's clock past it instead of sleeping and hoping the server saw the
+// first press more than 400 ms ago.
+const CLOCK_INSTALLED = new WeakSet();
+const NLA_GUARD_LAPSE_MS = 450;
+async function lapseNlaGuard(page) {
+  if (!CLOCK_INSTALLED.has(page)) { await page.clock.install(); CLOCK_INSTALLED.add(page); }
+  await page.clock.fastForward(NLA_GUARD_LAPSE_MS);
+}
+
+/** `n` animation frames in the page: whatever the last event scheduled for the next render has been painted. */
+const frames = (page, n = 2) => page.evaluate((k) => new Promise((resolve) => {
+  const step = (left) => (left <= 0 ? resolve() : requestAnimationFrame(() => step(left - 1)));
+  step(k);
+}), n);
+
+/**
+ * The page has caught up with what it just did, on a signal rather than a sleep: every Mutation it sent has been
+ * acked (crc.state's pending map is empty) and the render that follows has been painted. A press that would send
+ * something sends it inside the click, so after `settle` "nothing was sent" is a fact, not a guess.
+ */
+async function settle(page) {
+  await page.waitForFunction(() => crc.state.getPendingMutations().length === 0);
+  await frames(page, 2);
+}
+
+/** The server has ticked `n` more times (crc-sync's hub sends an efsp-heartbeat every tick), for "nothing moves by itself" checks. */
+const serverTicks = (page, n = 2) => page.evaluate((k) => new Promise((resolve) => {
+  const ws = crc.app._ws;
+  let seen = 0;
+  const onMessage = (ev) => {
+    let type = null;
+    try { type = JSON.parse(ev.data).type; } catch (_) { /* not JSON */ }
+    if (type === 'efsp-heartbeat' && ++seen >= k) { ws.removeEventListener('message', onMessage); resolve(); }
+  };
+  ws.addEventListener('message', onMessage);
+}), n);
+
+/**
+ * Opens the panel, authenticated and connected, with the given Positions held.
+ *
+ * The token is seeded through addInitScript so it is present BEFORE any script
+ * on the page runs — set it afterwards and the first connection attempt has
+ * already gone out unauthenticated, which fails in a way that looks like a
+ * server problem.
+ */
+async function openPanel(page, { signedOn = ['OPS'], facilityId = 'INCIRLIK', controller = 'e2e-controller' } = {}) {
+  const consoleErrors = [];
+  page.on('console', (msg) => { if (msg.type() === 'error') consoleErrors.push(msg.text()); });
+  page.on('pageerror', (err) => consoleErrors.push(String(err)));
+
+  await page.addInitScript(([key, token]) => {
+    try { localStorage.setItem(key, token); } catch (_) { /* private mode */ }
+  }, ['crc-desktop-sync-token', fakeToken(controller)]);
+
+  await page.goto('/');
+  await openEfspPanel(page);
+  await page.waitForFunction(() => typeof crc.ws.sendEfspSetPositions === 'function');
+  await page.evaluate(([f, h]) => crc.ws.sendEfspSetPositions(f, h), [facilityId, signedOn]);
+  // The SERVER's ack (getAckedPositions), not the client's own optimistic claim, is what makes the Positions held server-side; until it
+  // lands every op is refused as NOT_HOLDING_POSITION and a spec fails for a
+  // reason that has nothing to do with what it is testing.
+  await page.waitForFunction(
+    ([f, h]) => { const a = crc.ws.getAckedPositions ? crc.ws.getAckedPositions(f) : []; return a.length === h.length && h.every(p => a.includes(p)); },
+    [facilityId, signedOn],
+  );
+  return { consoleErrors };
+}
+
+/**
+ * The Strip panel is a dockview panel and starts UNMOUNTED.
+ *
+ * `#efsp-panel` exists in index.html from the first paint but carries
+ * `dock-unmounted` until dockview places it, so waiting on it to become
+ * visible waits forever. `toggleDockPanel` is the same entry point the UI's
+ * own panel controls use, so this opens it the way a controller does rather
+ * than reaching past dockview and un-hiding the div.
+ */
+async function openEfspPanel(page) {
+  // The page's modules are imported once boot has run (helpers/modules.js). `dock` is only set when app.js runs
+  // initDock(), a moment later (the first-test race, S-L1b finding), so wait for the dockview instance too.
+  await installAppModules(page);
+  await page.waitForFunction(() => crc.dock.dock !== null);
+  await page.evaluate(() => {
+    if (!crc.dock.isDockPanelOpen || !crc.dock.isDockPanelOpen('efsp')) crc.dock.toggleDockPanel('efsp', true);
+  });
+  await expect(page.locator('#efsp-panel')).toBeVisible({ timeout: 10000 });
+}
+
+/**
+ * Creates a Strip through the panel's own send function rather than the
+ * toolbar.
+ *
+ * Deliberate: a spec about MARSA should fail when MARSA is broken, not when
+ * the create-strip form is. Using the page's real `sendEfspCreateStrip` keeps
+ * the seed on the actual wire protocol, so it cannot drift from what the app
+ * does, while leaving the form itself to the spec that is about the form.
+ */
+async function seedStrip(page, { callsign, actingPositionId = 'OPS', bayId = 'ops-proposed', stripType, facilityId = 'INCIRLIK', flightData = {} }) {
+  const before = await page.locator('.efsp-strip').count();
+  await page.evaluate(([acting, op, fac]) => crc.ws.sendEfspCreateStrip(acting, op, fac), [
+    actingPositionId,
+    {
+      kind: 'CreateStrip', bayId, rackId: 'main', stripType,
+      flightData: { callsign, aircraftType: 'F16', wakeCategory: 'M', ...flightData },
+    },
+    facilityId,
+  ]);
+  // 10 s, not the 5 s default: a CreateStrip round trip was measured over 5 s
+  // with the machine at load 30 (l3 'a rejected proposal…', full run).
+  await expect(page.locator('.efsp-strip')).toHaveCount(before + 1, { timeout: 10000 });
+  await settleCorrelation(page, callsign);
+  return stripByCallsign(page, callsign);
+}
+
+// crc-sync's correlation-reconciler.js INELIGIBLE_STATES: a Strip in any other
+// state gets a correlation record on the next 1 s tick.
+const CORRELATION_INELIGIBLE = ['PROPOSED', 'PENDING_CLEARANCE', 'CLEARED', 'HELD', 'TASKED', 'DROPPED'];
+
+/**
+ * Waits until a just-seeded Strip has been redrawn with its correlation record.
+ *
+ * The record arrives on the reconciler's next tick (about 0.5 s idle, seconds
+ * on a loaded machine) and changes the Strip's render signature, so the
+ * element is REPLACED. A spec that grabbed the Strip before then clicks or
+ * screenshots a detached node — measured as "element was detached from the
+ * DOM" on the ⋯ button and on locator.screenshot, only under load.
+ */
+async function settleCorrelation(page, callsign) {
+  await expect.poll(() => page.evaluate(([cs, ineligible]) => {
+    const s = [...crc.state.efspStrips.values()].find((x) => x.state !== 'DROPPED'
+      && (crc.state.efspFlightDataList.get(x.flightDataId) || {}).identity && crc.state.efspFlightDataList.get(x.flightDataId).identity.callsign === cs);
+    if (!s || ineligible.includes(s.state)) return true;
+    const el = document.querySelector(`.efsp-strip[data-strip-id="${s.stripId}"]`);
+    return !!el && /\|cor:\d/.test(el.dataset.sig || '');
+  }, [callsign, CORRELATION_INELIGIBLE]), { message: `${callsign} redrawn with its correlation record`, timeout: 20000 }).toBe(true);
+}
+
+/** The Strip element showing this callsign. */
+function stripByCallsign(page, callsign) {
+  return page.locator('.efsp-strip', { has: page.locator('.efsp-block-1', { hasText: callsign }) }).first();
+}
+
+// ── the two standing rules ───────────────────────────────────────────────
+//
+// Applied across flows rather than per-control, because both failures found
+// by hand were of a KIND rather than a one-off: a control that looks pressable
+// and does nothing, and a refusal nobody can see.
+
+/**
+ * Rule 1 — an enabled control must DO something.
+ *
+ * Clicks it and requires either a mutation on the wire or a visible DOM
+ * change. Silence is the failure: that is precisely what "the button does
+ * nothing" means, and it is invisible to a test that only asserts a handler
+ * was registered.
+ */
+async function expectDoesSomething(page, locator, what) {
+  await expect(locator, `${what}: not visible`).toBeVisible();
+  await expect(locator, `${what}: rendered disabled`).toBeEnabled();
+
+  await page.evaluate(() => { window.__e2eSent = []; });
+  await page.evaluate(() => {
+    if (window.__e2eHooked) return;
+    window.__e2eHooked = true;
+    for (const fn of ['sendEfspMutation', 'sendEfspCreateStrip', 'sendEfspMarsaMutation',
+      'sendEfspAirspaceMutation', 'sendEfspCorrelationMutation', 'sendEfspSetPositions']) {
+      const original = crc.ws[fn];
+      if (typeof original !== 'function') continue;
+      crc.ws.setEfspSender(fn, (...args) => { (window.__e2eSent = window.__e2eSent || []).push({ fn, args }); return original(...args); });
+    }
+  });
+
+  const domBefore = await page.locator('#efsp-bay-content').innerHTML();
+  // A short click timeout on purpose. Playwright retries a click for the whole
+  // test budget while something covers the target, which turns "this control
+  // is unreachable" into a 20s hang and — worse — into a TIMEOUT, which
+  // test.fail() does not convert into an expected failure. Three seconds is
+  // far longer than any real click needs, and failing fast keeps an
+  // unreachable control reported as what it is.
+  await locator.click({ timeout: 5000 });
+  await settle(page);
+
+  const sent = await page.evaluate(() => window.__e2eSent || []);
+  const domAfter = await page.locator('#efsp-bay-content').innerHTML();
+  expect(sent.length > 0 || domAfter !== domBefore,
+    `${what}: enabled, clicked, and nothing happened — no mutation sent and nothing on screen changed`).toBe(true);
+  return sent;
+}
+
+/**
+ * Rule 2 — a refusal must be legible.
+ *
+ * The server refusing is correct; the controller not being told is the defect.
+ * Checks the panel's own error surfaces rather than the console, because a
+ * console message is not something anybody working a Board will ever read.
+ */
+async function expectRefusalIsVisible(page, what) {
+  const surfaces = ['#efsp-mutation-error', '#efsp-create-strip-msg', '#efsp-dot-command-preview'];
+  for (const sel of surfaces) {
+    const el = page.locator(sel);
+    if (await el.count() && (await el.textContent() || '').trim()) return (await el.textContent()).trim();
+  }
+  throw new Error(`${what}: the server refused and no surface in the panel says so`);
+}
+
+/**
+ * Is this element actually clickable where it is drawn?
+ *
+ * The MARSA popover disappearing behind another Strip is a stacking bug, and
+ * a test that only asserts `toBeVisible()` passes straight through it —
+ * Playwright's visibility means "has a box and is not hidden", not "is on
+ * top". This asks the document what is actually at the element's centre.
+ */
+async function expectOnTop(page, locator, what) {
+  await expect(locator, `${what}: not visible at all`).toBeVisible();
+  const verdict = await locator.evaluate((el) => {
+    const r = el.getBoundingClientRect();
+    if (r.width === 0 || r.height === 0) return { ok: false, why: 'zero-sized' };
+    const cx = r.left + r.width / 2;
+    const cy = r.top + r.height / 2;
+    if (cx < 0 || cy < 0 || cx > innerWidth || cy > innerHeight) return { ok: false, why: `off-screen at ${Math.round(cx)},${Math.round(cy)}` };
+    const hit = document.elementFromPoint(cx, cy);
+    if (!hit) return { ok: false, why: 'nothing at its centre — clipped by an ancestor' };
+    if (el.contains(hit) || hit.contains(el)) return { ok: true };
+    return { ok: false, why: `covered by ${hit.tagName.toLowerCase()}.${(hit.className || '').toString().split(/\s+/)[0]}` };
+  });
+  expect(verdict.ok, `${what}: ${verdict.why}`).toBe(true);
+}
+
+/**
+ * Touch-target floor — WP3's acceptance criterion, 44x44 CSS px, MEASURED.
+ *
+ * It used to assert 32, and only on height, while its own message quoted 44: a
+ * deliberately lenient tripwire, set while nothing in the panel had ever been
+ * measured and a 44 assert would have failed on nearly every control at once,
+ * which reports nothing useful. That was left for the pass that could see the
+ * whole picture, because raising it reclassifies findings rather than tidying
+ * a helper.
+ *
+ * F-105 has landed and the controls have real 44x44 border boxes, so this now
+ * enforces the criterion it names — BOTH dimensions, because 44x44 is two
+ * numbers and a 26px-wide control is no more hittable for being 44 tall.
+ *
+ * Two controls are still under it, deliberately: `⌿` (.efsp-confirm-vacated-btn,
+ * 32x44) and `*` (.efsp-annotation-overflow, 26x32), both of which sit 2px from
+ * an editable value cell that a full 44 would start stealing clicks from. Those
+ * two specs stay test.fail() and say so — see l2-block-editing.spec.js.
+ */
+const TOUCH_TARGET_FLOOR = 44;
+async function expectTouchTarget(locator, what) {
+  const box = await locator.boundingBox();
+  expect(box, `${what}: no box`).not.toBeNull();
+  const measured = `${Math.round(box.width)}x${Math.round(box.height)}`;
+  expect(
+    Math.round(box.width),
+    `${what}: ${measured} — width is under WP3's ${TOUCH_TARGET_FLOOR}x${TOUCH_TARGET_FLOOR} floor`,
+  ).toBeGreaterThanOrEqual(TOUCH_TARGET_FLOOR);
+  expect(
+    Math.round(box.height),
+    `${what}: ${measured} — height is under WP3's ${TOUCH_TARGET_FLOOR}x${TOUCH_TARGET_FLOOR} floor`,
+  ).toBeGreaterThanOrEqual(TOUCH_TARGET_FLOOR);
+}
+
+/**
+ * A Strip's ⋯ menu item. Layout C (docs/adr/0056) moved everything a
+ * controller STARTS — Coordinate…, TOFI…, Airspace…, MARSA…, Bind…, Convert,
+ * Offset — off the Strip's face into that menu, which is portalled to <body>
+ * like every popover (F-001), so the item is NOT inside `strip`.
+ */
+async function stripMenuItem(strip, name) {
+  const page = strip.page();
+  const menu = page.locator('.efsp-strip-menu');
+  if (!(await menu.isVisible().catch(() => false))) {
+    await strip.locator('.efsp-strip-menu-btn').click({ timeout: 5000 });
+  }
+  return menu.getByRole('menuitem', { name, exact: true });
+}
+
+/** Presses a Strip's ⋯ menu item — the replacement for clicking the old on-Strip button. */
+async function startAction(strip, name, opts = {}) {
+  const item = await stripMenuItem(strip, name);
+  await item.click({ timeout: 5000, ...opts });
+}
+
+/**
+ * Retires the live Strips carrying these callsigns, as their owners.
+ *
+ * The Board is one crc-sync for the whole run, so a Strip a spec leaves behind is still there for
+ * every file after it — l1-touch-targets' VIPER11 made l14-ato-import's import ambiguous (two live
+ * VIPER11s: the plan says CREATE, not BIND). Needs the owning Position held on this page.
+ */
+async function dropStrips(page, callsigns) {
+  await page.evaluate((cs) => {
+    for (const s of crc.state.getAllEfspStrips()) {
+      const flightData = crc.state.getEfspFlightData(s.flightDataId);
+      if (!flightData || !cs.includes(flightData.identity.callsign) || s.state === 'DROPPED') continue;
+      crc.ws.sendEfspMutation(s.ownerPositionId, s, { kind: 'DropStrip', reason: 'e2e cleanup' });
+    }
+  }, callsigns);
+  await settle(page);
+}
+
+/**
+ * Makes `end` ('05' or '23') INCIRLIK's active runway, through the real runway-status machinery.
+ *
+ * A fresh crc-sync has NO active runway (the harness has no mission wind, and the active runway is
+ * what the weather feed sets). A spec that asserts text naming the runway must establish it itself
+ * rather than rely on an earlier spec file having done so (ordnance-hung did, and failed alone).
+ * `page` must hold LC, OPS and AP: one controller holding all three self-coordinates the change.
+ */
+async function ensureActiveRunway(page, end = '05') {
+  await page.waitForFunction(() => typeof crc.state.getEfspRunwayStatus === 'function' && !!crc.state.getEfspRunwayStatus('INCIRLIK'));
+  const step = async (positionId, op) => {
+    const before = await page.evaluate(() => crc.state.getEfspRunwayStatus('INCIRLIK').rev);
+    await page.evaluate(([p, o]) => crc.ws.sendEfspRunwayStatusMutation(p, 'INCIRLIK', crc.state.getEfspRunwayStatus('INCIRLIK').rev, o), [positionId, op]);
+    await expect.poll(() => page.evaluate(() => crc.state.getEfspRunwayStatus('INCIRLIK').rev), { timeout: 5000 }).toBeGreaterThan(before);
+  };
+  const active = () => page.evaluate(() => crc.state.getEfspRunwayStatus('INCIRLIK').activeRunway);
+  if ((await active()) === end) return;
+  await step('LC', { kind: 'SelfCoordinateRunwayChange', toRunwayId: end });
+  await step('LC', { kind: 'BeginRunwayChange' });
+  await step('LC', { kind: 'CompleteRunwayChange' });
+  const needsInspection = await page.evaluate(() => crc.state.getEfspRunwayStatus('INCIRLIK').runways[0].status === 'SUSPENDED_INSPECTION');
+  if (needsInspection) await step('OPS', { kind: 'CompleteInspection', runwayId: '05/23' });
+  await expect.poll(active, { timeout: 5000 }).toBe(end);
+}
+
+module.exports = {
+  ensureActiveRunway, dropStrips, lapseNlaGuard, frames, settle, serverTicks,
+  fakeToken, openPanel, openEfspPanel, seedStrip, stripByCallsign,
+  expectDoesSomething, expectRefusalIsVisible, expectOnTop, expectTouchTarget,
+  stripMenuItem, startAction,
+};

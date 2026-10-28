@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Airspaces Panel Mockup</title>
+<meta name="description" content="AIRSP phase 1: the AIRSPACE panel where controllers edit airspace definitions. List, edit with validation errors, conflict, history and a refused delete, in light and dark. For approval before any product code.">
+<style>
+/* Page chrome */
+:root {
+  --page: #f3f5f7; --page-text: #1c2228; --page-muted: #56636f; --page-line: #cfd6dc; --page-accent: #1f5fa8;
+  --page-note: #2f64a8;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --page: #11151a; --page-text: #d8e0e6; --page-muted: #8c9aa6; --page-line: #2e3740; --page-accent: #8ec7ff;
+    --page-note: #6fb3ff;
+  }
+}
+:root[data-theme="dark"] {
+  --page: #11151a; --page-text: #d8e0e6; --page-muted: #8c9aa6; --page-line: #2e3740; --page-accent: #8ec7ff;
+  --page-note: #6fb3ff;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--page); color: var(--page-text); font: 14px/1.5 system-ui, sans-serif; overflow-x: hidden; }
+.wrap { max-width: 1320px; margin: 0 auto; padding: 20px 16px 64px; }
+h1 { font-size: 20px; font-weight: 600; margin: 4px 0; }
+h2 { font-size: 13px; margin: 34px 0 6px; letter-spacing: .08em; text-transform: uppercase; color: var(--page-muted); border-top: 1px solid var(--page-line); padding-top: 14px; }
+p { margin: 6px 0 10px; max-width: 96ch; }
+.lede { color: var(--page-muted); }
+.cap { font-size: 12.5px; color: var(--page-muted); margin: 8px 0 0; max-width: 96ch; }
+.annot { color: var(--page-note); font-style: italic; font-size: 12px; }
+code { font-family: "Courier New", ui-monospace, monospace; font-size: .9em; }
+.bar { position: sticky; top: 0; z-index: 9; display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin: 12px 0; padding: 8px 12px;
+  background: var(--page); border: 1px solid var(--page-line); border-radius: 6px; font-size: 13px; }
+.bar nav { display: flex; flex-wrap: wrap; gap: 6px; margin-left: auto; }
+.bar nav a { padding: 1px 9px; border: 1px solid var(--page-line); border-radius: 12px; color: var(--page-accent); text-decoration: none; font-size: 12.5px; }
+.seg { display: inline-flex; border: 1px solid var(--page-line); border-radius: 5px; overflow: hidden; }
+.seg button { background: none; border: 0; color: var(--page-text); font: inherit; padding: 2px 11px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--page-accent); color: var(--page); }
+
+/* Themed scenes: tokens are the real --efsp-* ramp (efsp-panel.css, ADR 0056). Dark is today's. Light is new. */
+.scene, .themed {
+  --efsp-strip: #1c2228; --efsp-strip-2: #232a32; --efsp-tab: #20272e; --efsp-line: #2e3740; --efsp-line-2: #4a5560;
+  --efsp-text: #d8e0e6; --efsp-muted: #8c9aa6; --efsp-faint: #56616c; --efsp-attn: #e0a83c; --efsp-go: #4a7dbf;
+  --efsp-bad: #ff8a4c; --efsp-bad-bg: #2b1a12; --efsp-input: #151a1f; --efsp-bay: #151a1f; --efsp-bay-line: #262d34;
+  --efsp-go-text: #fff; --efsp-note-bg: #181d22;
+  color: var(--efsp-text); font-family: "Courier New", ui-monospace, monospace; font-size: 11px;
+}
+.themed.light {
+  --efsp-strip: #ffffff; --efsp-strip-2: #eef1f4; --efsp-tab: #e9edf1; --efsp-line: #cfd6dc; --efsp-line-2: #8a96a1;
+  --efsp-text: #1c2228; --efsp-muted: #56636f; --efsp-faint: #8a96a1; --efsp-attn: #a86f00; --efsp-go: #2f64a8;
+  --efsp-bad: #b8420a; --efsp-bad-bg: #fdeee6; --efsp-input: #ffffff; --efsp-bay: #e4e9ee; --efsp-bay-line: #cfd6dc;
+  --efsp-go-text: #fff; --efsp-note-bg: #f3f6f8;
+}
+.themed { margin: 8px 0; }
+.pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+body[data-mode="dark"] .themed.light, body[data-mode="light"] .themed.dark { display: none; }
+body[data-mode="dark"] .pair, body[data-mode="light"] .pair { grid-template-columns: minmax(0, 1fr); }
+@media (max-width: 1000px) { .pair { grid-template-columns: minmax(0, 1fr); } }
+.themed .tag { font: 600 10px system-ui, sans-serif; letter-spacing: .1em; text-transform: uppercase; color: var(--page-muted); margin: 0 0 3px; }
+.panel { background: var(--efsp-bay); border: 1px solid var(--efsp-bay-line); padding: 6px; }
+.panel.fixed { max-width: 640px; }
+
+/* Panel chrome */
+.phead { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; padding: 2px 2px 6px; }
+.phead .ttl { font-weight: bold; letter-spacing: .08em; }
+.phead .sp { flex: 1; }
+.chip { display: inline-flex; align-items: center; height: 24px; padding: 0 8px; border: 1px solid var(--efsp-line-2); border-radius: 2px; background: var(--efsp-strip-2); font-size: 10px; font-weight: bold; color: var(--efsp-text); }
+.chip.on { background: var(--efsp-tab); border-color: var(--efsp-text); }
+.fac { font-size: 10px; letter-spacing: .1em; color: var(--efsp-muted); padding: 8px 2px 3px; text-transform: uppercase; }
+
+/* Card, Layout C */
+.card { background: var(--efsp-strip); border: 1px solid var(--efsp-line); border-left: 4px solid transparent; margin: 3px 0; container: card / inline-size; }
+.grid { display: grid; grid-template-columns: clamp(150px, 24%, 190px) minmax(0, 1fr) auto; }
+.tab { background: var(--efsp-tab); border-right: 1px solid var(--efsp-line); padding: 6px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.tab .role { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--efsp-muted); }
+.tab .nm { font-size: 13px; font-weight: bold; line-height: 1.2; overflow-wrap: anywhere; }
+.tab .st { font-size: 10px; letter-spacing: .08em; color: var(--efsp-muted); }
+.tab .life { margin-top: auto; display: grid; gap: 4px; }
+.main { padding: 6px 8px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(78px, 1fr)); gap: 4px 10px; }
+.f { display: flex; flex-direction: column; min-width: 0; }
+.w2 { grid-column: span 2; } .w3 { grid-column: span 3; }
+.lbl { font-size: 9px; letter-spacing: .08em; color: var(--efsp-muted); white-space: nowrap; overflow: hidden; }
+.val { font-size: 12px; min-height: 20px; line-height: 20px; border-bottom: 1px dashed var(--efsp-line-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.val.empty { color: var(--efsp-faint); }
+.tools { display: flex; flex-direction: column; gap: 4px; padding: 6px; border-left: 1px solid var(--efsp-line); }
+.sbtn { min-width: 44px; min-height: 44px; padding: 0 10px; border-radius: 3px; background: var(--efsp-strip-2); border: 1px solid var(--efsp-line-2); color: var(--efsp-text); font: inherit; font-size: 11px; font-weight: bold; cursor: default; }
+.sbtn.icon { padding: 0; font-weight: normal; font-size: 16px; color: var(--efsp-muted); }
+.sbtn.go { background: var(--efsp-go); border-color: var(--efsp-go); color: var(--efsp-go-text); }
+.sbtn.dis { background: transparent; border: 1px dashed var(--efsp-line-2); color: var(--efsp-muted); font-weight: normal; }
+.sbtn.small { min-height: 30px; font-size: 10px; }
+.ind { display: inline-flex; align-items: center; height: 22px; padding: 0 7px; border-radius: 2px; font-size: 10px; font-weight: bold; background: var(--efsp-strip-2); border: 1px solid var(--efsp-line-2); }
+.ind.bad { border-color: var(--efsp-bad); color: var(--efsp-bad); background: var(--efsp-bad-bg); }
+.row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.menu { position: absolute; right: 8px; top: 52px; z-index: 2; background: var(--efsp-strip); border: 1px solid var(--efsp-line-2); min-width: 190px; box-shadow: 0 4px 14px rgba(0,0,0,.35); }
+.menu div { padding: 0 12px; min-height: 40px; display: flex; align-items: center; font-size: 11px; border-bottom: 1px solid var(--efsp-line); }
+.menu div.dis { border: 1px dashed var(--efsp-line-2); color: var(--efsp-muted); margin: 4px; min-height: 36px; }
+.menu small { color: var(--efsp-muted); margin-left: 8px; }
+.relpos { position: relative; }
+
+/* Editor inputs */
+.inp { font: inherit; font-size: 12px; color: var(--efsp-text); background: var(--efsp-input); border: 1px solid var(--efsp-line-2); border-radius: 2px; height: 30px; padding: 0 6px; width: 100%; min-width: 0; }
+.inp.locked { background: transparent; border-style: dashed; color: var(--efsp-muted); }
+.inp.bad { border-color: var(--efsp-bad); box-shadow: 0 0 0 1px var(--efsp-bad); }
+.was { font-size: 9px; color: var(--efsp-muted); min-height: 12px; }
+.err { font: 11px/1.3 system-ui, sans-serif; color: var(--efsp-bad); min-height: 14px; }
+.f.chg .lbl::after { content: " \25CF"; color: var(--efsp-text); }
+.editbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding-top: 6px; border-top: 1px solid var(--efsp-line); }
+.editbar .why { font: 11px/1.3 system-ui, sans-serif; color: var(--efsp-muted); flex: 1 1 200px; }
+.editbar .why.bad { color: var(--efsp-bad); }
+.hdr { display: flex; flex-wrap: wrap; gap: 6px 14px; font: 11px system-ui, sans-serif; color: var(--efsp-muted); }
+.note { font: 11.5px/1.45 system-ui, sans-serif; color: var(--efsp-muted); background: var(--efsp-note-bg); border: 1px solid var(--efsp-line); padding: 6px 8px; }
+.note b { color: var(--efsp-text); }
+.note ul { margin: 4px 0 0; padding-left: 18px; }
+.banner { font: 12px/1.4 system-ui, sans-serif; border: 1px solid var(--efsp-bad); background: var(--efsp-bad-bg); color: var(--efsp-text); padding: 7px 9px; }
+.banner b { color: var(--efsp-bad); }
+
+/* Conflict table, history */
+table.t { border-collapse: collapse; width: 100%; font: 11.5px system-ui, sans-serif; }
+table.t th, table.t td { border-bottom: 1px solid var(--efsp-line); padding: 5px 6px; text-align: left; vertical-align: top; }
+table.t th { color: var(--efsp-muted); font-weight: 600; font-size: 10px; letter-spacing: .06em; text-transform: uppercase; }
+table.t td.mono, .mono { font-family: "Courier New", monospace; }
+table.t tr.bad td:first-child { box-shadow: inset 3px 0 0 var(--efsp-bad); }
+.opt { display: inline-flex; gap: 5px; align-items: center; margin-right: 10px; white-space: nowrap; }
+.radio { width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid var(--efsp-line-2); display: inline-block; }
+.radio.on { border-color: var(--efsp-go); background: radial-gradient(var(--efsp-go) 45%, transparent 50%); }
+.tl { list-style: none; margin: 0; padding: 0; font: 11.5px/1.4 system-ui, sans-serif; }
+.tl li { display: grid; grid-template-columns: 54px 78px minmax(0, 1fr); gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--efsp-line); }
+.tl .time { font-family: "Courier New", monospace; color: var(--efsp-muted); }
+.tl .kind { font-size: 9.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--efsp-muted); padding-top: 1px; }
+.tl .who { color: var(--efsp-muted); }
+.tl .chg { font-family: "Courier New", monospace; font-size: 11px; }
+.tl .chg s { color: var(--efsp-muted); text-decoration: none; }
+.tl .chg s::after { content: " \2192 "; }
+.tabs { display: flex; gap: 0; border-bottom: 1px solid var(--efsp-line); margin-bottom: 6px; }
+.tabs span { padding: 5px 12px; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--efsp-muted); border-bottom: 2px solid transparent; }
+.tabs span.on { color: var(--efsp-text); border-bottom-color: var(--efsp-text); }
+
+@container card (max-width: 479px) {
+  .grid { grid-template-columns: minmax(0, 1fr) auto; }
+  .tab { grid-column: 1; grid-row: 1; border-right: 0; border-bottom: 1px solid var(--efsp-line); }
+  .tools { grid-column: 2; grid-row: 1; flex-direction: row; border-left: 0; border-bottom: 1px solid var(--efsp-line); background: var(--efsp-tab); }
+  .main { grid-column: 1 / -1; grid-row: 2; }
+}
+.callouts { font-size: 13px; max-width: 100ch; padding-left: 18px; }
+.callouts li { margin: 3px 0; }
+</style>
+</head>
+<body data-mode="both">
+<div class="wrap">
+<h1>AIRSP: the airspaces panel, for approval</h1>
+<p class="lede">Mockup for the human's approval before any product code (H49). It shows the AIRSPACE dock panel with editing added: the list, the edit form (valid, then with validation errors), the conflict state when two controllers edit, the audit trail, and a refused delete. It uses the real Layout C tokens and field grid (ADR 0056/0057) and the colour rule of ADR 0056/0058: everything is grey, and orange-red appears only when something is wrong. Dark is today's panel; the light variant is new (ADR 0056 left it as a follow-up). All names, numbers and times are invented sample data. The design is in <code>docs/wip/AIRSP.md</code>; the open questions there are marked Q1 to Q11.</p>
+
+<div class="bar">
+  <span>Theme</span>
+  <span class="seg" id="mode"><button data-m="both" aria-pressed="true">Both</button><button data-m="dark" aria-pressed="false">Dark</button><button data-m="light" aria-pressed="false">Light</button></span>
+  <nav><a href="#s1">1 List</a><a href="#s2">2 Edit</a><a href="#s3">3 Errors</a><a href="#s4">4 Conflict</a><a href="#s5">5 History</a><a href="#s6">6 Delete</a></nav>
+</div>
+
+<!-- ───────────── 1. LIST ───────────── -->
+<h2 id="s1">1 · The list, as APP</h2>
+<div class="scene">
+<div class="panel">
+  <div class="phead"><span class="ttl">AIRSPACE</span><span class="chip on">MINE</span><span class="chip">ALL</span><span class="sp"></span><span class="chip">Acting as APP</span><button class="sbtn small go">+ New airspace</button></div>
+
+  <div class="fac">INCIRLIK · 2</div>
+  <div class="card"><div class="grid">
+    <div class="tab"><div class="role">RANGE · using RNG1</div><div class="nm">TOROS RANGE</div><div class="st">ACTIVE</div><div class="life"><button class="sbtn small">Release</button></div></div>
+    <div class="main"><div class="fields">
+      <div class="f"><span class="lbl">ID</span><span class="val">R-TOROS</span></div>
+      <div class="f"><span class="lbl">CTRL</span><span class="val">APP</span></div>
+      <div class="f"><span class="lbl">WORK FREQ</span><span class="val">138.000</span></div>
+      <div class="f"><span class="lbl">RANGE FREQ</span><span class="val">251.500</span></div>
+      <div class="f"><span class="lbl">ALT LOWER</span><span class="val">GND</span></div>
+      <div class="f"><span class="lbl">ALT UPPER</span><span class="val">FL180</span></div>
+      <div class="f w2"><span class="lbl">BOOKED</span><span class="val">1330Z–1530Z</span></div>
+      <div class="f"><span class="lbl">FLIGHTS</span><span class="val">2</span></div>
+    </div></div>
+    <div class="tools relpos"><button class="sbtn icon">⋯</button><button class="sbtn icon">▼</button></div>
+  </div></div>
+  <div class="card"><div class="grid">
+    <div class="tab"><div class="role">MOA</div><div class="nm">MOA ADANA SOUTH</div><div class="st">RETURNED</div><div class="life"><button class="sbtn small">Schedule</button></div></div>
+    <div class="main"><div class="fields">
+      <div class="f"><span class="lbl">ID</span><span class="val">MOA-ADS</span></div>
+      <div class="f"><span class="lbl">CTRL</span><span class="val">APP</span></div>
+      <div class="f"><span class="lbl">WORK FREQ</span><span class="val">139.250</span></div>
+      <div class="f"><span class="lbl">RANGE FREQ</span><span class="val empty">·</span></div>
+      <div class="f"><span class="lbl">ALT LOWER</span><span class="val">5000</span></div>
+      <div class="f"><span class="lbl">ALT UPPER</span><span class="val">FL230</span></div>
+      <div class="f w2"><span class="lbl">BOOKED</span><span class="val empty">·</span></div>
+      <div class="f"><span class="lbl">FLIGHTS</span><span class="val">0</span></div>
+    </div></div>
+    <div class="tools"><button class="sbtn icon">⋯</button><button class="sbtn icon">▼</button></div>
+  </div></div>
+
+  <div class="fac">CENTER · 2</div>
+  <div class="card"><div class="grid">
+    <div class="tab"><div class="role">MOA</div><div class="nm">MOA KONYA EAST</div><div class="st">ACTIVE</div><div class="life"><button class="sbtn small dis" title="Only CTR">Release</button></div></div>
+    <div class="main"><div class="fields">
+      <div class="f"><span class="lbl">ID</span><span class="val">MOA-KYE</span></div>
+      <div class="f"><span class="lbl">CTRL</span><span class="val">CTR</span></div>
+      <div class="f"><span class="lbl">WORK FREQ</span><span class="val">134.600</span></div>
+      <div class="f"><span class="lbl">RANGE FREQ</span><span class="val empty">·</span></div>
+      <div class="f"><span class="lbl">ALT LOWER</span><span class="val">FL100</span></div>
+      <div class="f"><span class="lbl">ALT UPPER</span><span class="val">FL280</span></div>
+      <div class="f w2"><span class="lbl">BOOKED</span><span class="val">1400Z–1600Z</span></div>
+      <div class="f"><span class="lbl">FLIGHTS</span><span class="val">1</span></div>
+    </div></div>
+    <div class="tools relpos"><button class="sbtn icon">⋯</button><button class="sbtn icon">▼</button>
+      <div class="menu" style="right:60px;top:8px"><div class="dis">Edit… <small>owned by CTR</small></div><div>History</div><div class="dis">Delete… <small>owned by CTR</small></div></div></div>
+  </div></div>
+  <div class="card"><div class="grid">
+    <div class="tab"><div class="role">DANGER</div><div class="nm">D-117 MERSIN</div><div class="st">RETURNED</div></div>
+    <div class="main"><div class="fields">
+      <div class="f"><span class="lbl">ID</span><span class="val">D-117</span></div>
+      <div class="f"><span class="lbl">CTRL</span><span class="val">CTR</span></div>
+      <div class="f"><span class="lbl">WORK FREQ</span><span class="val empty">·</span></div>
+      <div class="f"><span class="lbl">RANGE FREQ</span><span class="val empty">·</span></div>
+      <div class="f"><span class="lbl">ALT LOWER</span><span class="val empty">·</span></div>
+      <div class="f"><span class="lbl">ALT UPPER</span><span class="val empty">·</span></div>
+    </div></div>
+    <div class="tools"><button class="sbtn icon">⋯</button><button class="sbtn icon">▼</button></div>
+  </div></div>
+</div>
+</div>
+<p class="cap">Each card keeps today's actions (Schedule, Request, Approve, Release, Return) and gains <b>⋯ → Edit… / History / Delete…</b>. APP controls the two Incirlik blocks, so those carry live Edit. The CENTER cards belong to CTR: Edit and Delete are the dashed disabled outline with the reason, the same disabled rule as everywhere (ADR 0056); the menu on MOA KONYA EAST is shown open. Grouped by Facility, defaulting to "Mine" (airspaces whose controlling Position you hold). Nothing is coloured. <span class="annot">Q1: who may edit; Q9: no geometry.</span></p>
+
+<!-- ───────────── 2. EDIT, VALID ───────────── -->
+<h2 id="s2">2 · Editing: valid, with the impact note</h2>
+<div class="scene">
+<div class="panel fixed">
+  <div class="card"><div class="grid">
+    <div class="tab"><div class="role">RANGE · using RNG1</div><div class="nm">TOROS RANGE</div><div class="st">ACTIVE · EDITING</div></div>
+    <div class="main">
+      <div class="hdr"><span>Editing as <b>APP</b></span><span>definition rev 7</span><span>opened 1348Z</span></div>
+      <div class="fields">
+        <div class="f"><span class="lbl">ID</span><input class="inp locked" value="R-TOROS" readonly><span class="was">fixed after create</span></div>
+        <div class="f w2"><span class="lbl">NAME</span><input class="inp" value="TOROS RANGE"><span class="was"></span></div>
+        <div class="f"><span class="lbl">TYPE</span><input class="inp" value="RANGE ▾"><span class="was"></span></div>
+        <div class="f"><span class="lbl">CTRL FACILITY</span><input class="inp" value="INCIRLIK ▾"><span class="was"></span></div>
+        <div class="f"><span class="lbl">CTRL POSITION</span><input class="inp" value="APP ▾"><span class="was"></span></div>
+        <div class="f"><span class="lbl">USING POSITION</span><input class="inp locked" value="RNG1" readonly><span class="was">config + restart (Q3)</span></div>
+        <div class="f chg"><span class="lbl">WORK FREQ MHz</span><input class="inp" value="139.100"><span class="was">was 138.000</span></div>
+        <div class="f"><span class="lbl">RANGE FREQ MHz</span><input class="inp" value="251.500"><span class="was"></span></div>
+        <div class="f"><span class="lbl">ALT LOWER ft</span><input class="inp" value=""><span class="was">none = surface</span></div>
+        <div class="f chg"><span class="lbl">ALT UPPER ft</span><input class="inp" value="20000"><span class="was">was 18000 · FL200</span></div>
+      </div>
+      <div class="note"><b>Saving this changes a block with 2 flights approved into it.</b> They keep the frequency and block they were given; nothing is retuned for them.
+        <ul><li>VIPER11 and VIPER12 are on 138.000. Re-approve them on 139.100 from their Strips.</li><li>No flight has an altitude block above 18000, so the new upper limit changes nothing for them.</li></ul></div>
+      <div class="editbar"><button class="sbtn go">Save</button><button class="sbtn">Cancel</button><span class="why">2 fields changed. Applies at once, stamped 1352Z, for everyone.</span></div>
+    </div>
+    <div class="tools"></div>
+  </div></div>
+</div>
+</div>
+<p class="cap">The editor opens inline in the card, same field grid, no modal. One filled blue button (Save). A changed field gets a small dot on its label and the old value in grey beneath it, not a colour. ID is fixed after create; USING POSITION is read-only in v1 because it creates or removes a range Position that is derived at load (Q3). The note is grey information, not amber: it is not a fault. There is no draft on the server and no future "effective at" time; the form is the draft (Q4). <span class="annot">Phase 2: the same validator runs client-side as you type and again on the server.</span></p>
+
+<!-- ───────────── 3. EDIT, ERRORS ───────────── -->
+<h2 id="s3">3 · Editing: validation errors</h2>
+<div class="scene">
+<div class="panel fixed">
+  <div class="card"><div class="grid">
+    <div class="tab"><div class="role">MOA</div><div class="nm">MOA ADANA SOUTH</div><div class="st">RETURNED · EDITING</div></div>
+    <div class="main">
+      <div class="hdr"><span>Editing as <b>APP</b></span><span>definition rev 3</span></div>
+      <div class="fields">
+        <div class="f"><span class="lbl">ID</span><input class="inp locked" value="MOA-ADS" readonly><span class="was">fixed after create</span></div>
+        <div class="f w2 chg"><span class="lbl">NAME</span><input class="inp bad" value=""><span class="err">A name is required.</span></div>
+        <div class="f"><span class="lbl">TYPE</span><input class="inp" value="MOA ▾"><span class="was"></span></div>
+        <div class="f"><span class="lbl">CTRL FACILITY</span><input class="inp" value="INCIRLIK ▾"><span class="was"></span></div>
+        <div class="f chg"><span class="lbl">CTRL POSITION</span><input class="inp bad" value="CTR ▾"><span class="err">CTR is not a Position at INCIRLIK.</span></div>
+        <div class="f"><span class="lbl">USING POSITION</span><input class="inp locked" value="none" readonly><span class="was"></span></div>
+        <div class="f chg"><span class="lbl">WORK FREQ MHz</span><input class="inp bad" value="14.250"><span class="err">30 to 400 MHz.</span></div>
+        <div class="f"><span class="lbl">RANGE FREQ MHz</span><input class="inp" value=""><span class="was"></span></div>
+        <div class="f chg"><span class="lbl">ALT LOWER ft</span><input class="inp" value="23000"><span class="was">was 5000</span></div>
+        <div class="f chg"><span class="lbl">ALT UPPER ft</span><input class="inp bad" value="18000"><span class="err">Must be above the lower limit (23000).</span></div>
+      </div>
+      <div class="note">Not an error, for information: <b>134.600</b> is also the working frequency of MOA KONYA EAST. Saving is still allowed.</div>
+      <div class="editbar"><button class="sbtn dis">Save</button><button class="sbtn">Cancel</button><span class="why bad">4 problems to fix before Save: NAME, CTRL POSITION, WORK FREQ, ALT UPPER.</span></div>
+    </div>
+    <div class="tools"></div>
+  </div></div>
+</div>
+</div>
+<p class="cap">Errors are <code>--efsp-bad</code> (orange-red, kept apart from the Attention red), on the field and summarised beside Save. Save is disabled while anything is invalid and says why. These are the server's hard rules: name present and unique, a real Position at the named Facility, 30 to 400 MHz, whole feet 0 to 100000 with upper above lower (the first three are new, the last two are today's). A shared frequency is a grey note, never a refusal. <span class="annot">Changing TYPE changes nothing else: it is a label only (D14, ADR 0038).</span></p>
+
+<!-- ───────────── 4. CONFLICT ───────────── -->
+<h2 id="s4">4 · Two controllers edit: the conflict state</h2>
+<div class="scene">
+<div class="panel fixed">
+  <div class="card"><div class="grid">
+    <div class="tab"><div class="role">RANGE · using RNG1</div><div class="nm">TOROS RANGE</div><div class="st">ACTIVE · NOT SAVED</div></div>
+    <div class="main">
+      <div class="banner"><b>Not saved.</b> RNG1 changed this airspace at 1351Z while you were editing (definition rev 7 to 8). One of your fields clashes with their edit. Nothing was written.</div>
+      <table class="t">
+        <tr><th>Field</th><th>You started from</th><th>RNG1 now</th><th>Yours</th><th>Use</th></tr>
+        <tr class="bad"><td>RANGE FREQ</td><td class="mono">251.500</td><td class="mono">251.800</td><td class="mono">252.000</td>
+          <td><span class="opt"><span class="radio"></span>Theirs</span><span class="opt"><span class="radio on"></span>Mine</span></td></tr>
+        <tr><td>WORK FREQ</td><td class="mono">138.000</td><td class="mono">138.000</td><td class="mono">139.100</td><td>Applies cleanly (they did not touch it)</td></tr>
+        <tr><td>ALT UPPER</td><td class="mono">18000</td><td class="mono">18000</td><td class="mono">20000</td><td>Applies cleanly</td></tr>
+      </table>
+      <div class="editbar"><button class="sbtn go">Review and save</button><button class="sbtn">Discard my changes</button><span class="why">Only the clashing field needs a choice. Saving re-sends your three changes against rev 8.</span></div>
+    </div>
+    <div class="tools"></div>
+  </div></div>
+</div>
+</div>
+<p class="cap">Conflict is decided <b>per field</b>, from the airspace's edit history after the revision you opened. Two controllers changing different fields never collide, and an unrelated state change (someone approving activation) never makes an edit stale. The same field changed by both is refused with both values shown, so a frequency is never silently reverted. Orange-red marks the one clashing row; the rest is grey. The server logs the refusal (ADR 0083). <span class="annot">Same-field last-writer-wins was rejected on purpose (AIRSP.md section 7).</span></p>
+
+<!-- ───────────── 5. HISTORY ───────────── -->
+<h2 id="s5">5 · Audit trail: the History view</h2>
+<div class="scene">
+<div class="panel fixed">
+  <div class="card"><div class="grid">
+    <div class="tab"><div class="role">RANGE · using RNG1</div><div class="nm">TOROS RANGE</div><div class="st">ACTIVE</div></div>
+    <div class="main">
+      <div class="tabs"><span>Details</span><span class="on">History</span></div>
+      <ul class="tl">
+        <li><span class="time">1352Z</span><span class="kind">Edit</span><span><span class="who">APP · c-0412</span><div class="chg">WORK FREQ <s>138.000</s>139.100</div><div class="chg">ALT UPPER <s>18000</s>20000</div><div class="who">2 flights were approved on the old frequency</div></span></li>
+        <li><span class="time">1351Z</span><span class="kind">Edit</span><span><span class="who">RNG1 · c-0377</span><div class="chg">RANGE FREQ <s>251.500</s>251.800</div></span></li>
+        <li><span class="time">1332Z</span><span class="kind">State</span><span><span class="who">APP · c-0412</span><div class="chg">SCHEDULED → ACTIVE</div><div class="who">approved on request from RNG1</div></span></li>
+        <li><span class="time">1318Z</span><span class="kind">State</span><span><span class="who">RNG1 · c-0377</span><div class="chg">RETURNED → SCHEDULED 1330Z–1530Z</div></span></li>
+        <li><span class="time">1240Z</span><span class="kind">Edit</span><span><span class="who">APP · c-0412</span><div class="chg">NAME <s>TOROS</s>TOROS RANGE</div></span></li>
+        <li><span class="time">1205Z</span><span class="kind">Create</span><span><span class="who">APP · c-0412</span><div class="chg">R-TOROS · RANGE · INCIRLIK / APP · using RNG1</div></span></li>
+      </ul>
+      <div class="note">Accepted changes only, newest first, in mission time (Zulu). It joins the airspace's state history with its definition edits. Refused attempts, with the reason, are in the Mutation log (the audit trail of record), not here (Q7). The panel keeps the last 50 edits.</div>
+    </div>
+    <div class="tools"><button class="sbtn icon">⋯</button></div>
+  </div></div>
+</div>
+</div>
+<p class="cap">One edit that changes several fields is one entry with a change list (ADR 0083: one outcome, one entry). Every row names the Position and the controller. Times come from the mission clock, never the wall clock (H11, ADR 0079). Entries are neutral: nothing here is wrong.</p>
+
+<!-- ───────────── 6. DELETE ───────────── -->
+<h2 id="s6">6 · Delete: refused while the airspace is in use</h2>
+<div class="scene">
+<div class="panel fixed">
+  <div class="card"><div class="grid">
+    <div class="tab"><div class="role">RANGE · using RNG1</div><div class="nm">TOROS RANGE</div><div class="st">ACTIVE</div></div>
+    <div class="main">
+      <div class="banner"><b>Cannot delete TOROS RANGE yet.</b> An airspace can be deleted only when it is available, with no booking and no flight working it.</div>
+      <table class="t">
+        <tr><th>Blocking</th><th>What clears it</th></tr>
+        <tr class="bad"><td>State is ACTIVE (booked 1330Z–1530Z)</td><td>RNG1 releases it, then APP takes it back</td></tr>
+        <tr class="bad"><td>2 flights approved into it: VIPER11, VIPER12</td><td>Clear their airspace entry on each Strip</td></tr>
+      </table>
+      <div class="editbar"><button class="sbtn dis">Delete</button><button class="sbtn">Close</button><span class="why">Delete becomes available when both are clear. History and the audit log keep R-TOROS and its last definition.</span></div>
+    </div>
+    <div class="tools"></div>
+  </div></div>
+</div>
+</div>
+<p class="cap">The server refuses with a reason that lists the blockers (<code>VALIDATION_ERROR</code>, so a range booking or a flight on the block's frequency is never orphaned); the panel shows the same list from the data it already has, so the button is disabled with the reason instead of failing. When nothing blocks, Delete is a confirm step and removes the airspace from every client with one delta. Old Strips and log lines keep the id and show it bare. <span class="annot">Q6: hard delete versus retire.</span></p>
+
+<h2>What this does not show</h2>
+<ul class="callouts">
+  <li>The create form is the edit form with ID editable and an empty definition (the "+ New airspace" button, shown only to a Position that may create).</li>
+  <li>No authentication UI (out of scope). A session holding no Position sees the list and every Edit is the dashed outline.</li>
+  <li>No geometry fields and no scheduled "effective at" time (Q9, Q4).</li>
+  <li>Strip-side marking of a flight left on an old frequency is a follow-up (AIRSP.md F2); v1 lists those flights in the edit note and the History row.</li>
+</ul>
+</div>
+<script>
+(function () {
+  // Each .scene is written once (dark tokens). Wrap it in a pair: the dark original and a light clone.
+  document.querySelectorAll('.scene').forEach(function (src) {
+    var pair = document.createElement('div'); pair.className = 'pair';
+    var dark = document.createElement('div'); dark.className = 'themed dark';
+    var light = document.createElement('div'); light.className = 'themed light';
+    var d = document.createElement('div'); d.className = 'tag'; d.textContent = 'Dark';
+    var l = document.createElement('div'); l.className = 'tag'; l.textContent = 'Light';
+    var body = src.cloneNode(true); body.className = '';
+    dark.appendChild(d); dark.appendChild(body);
+    light.appendChild(l); light.appendChild(body.cloneNode(true));
+    pair.appendChild(dark); pair.appendChild(light);
+    src.parentNode.replaceChild(pair, src);
+  });
+  var buttons = document.querySelectorAll('#mode button');
+  buttons.forEach(function (b) {
+    b.addEventListener('click', function () {
+      document.body.setAttribute('data-mode', b.dataset.m);
+      buttons.forEach(function (x) { x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
+    });
+  });
+})();
+</script>
+</body>
+</html>

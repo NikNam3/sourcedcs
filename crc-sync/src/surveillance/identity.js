@@ -1,0 +1,72 @@
+'use strict';
+
+// Who a contact is (docs/adr/0059) — the same answer for every controller.
+//
+// What a controller's own sensors add (code, altitude, datalink) is per
+// session and lives in presentation.js. This is only the part that does not
+// depend on which radar is looking:
+//
+//   1. correlated to a flight: the flight's callsign, from its flight data — the
+//      flight plan is where a callsign comes from in the first place.
+//   2. a controller's tag (collab-store rename), for traffic nothing else
+//      identifies. A correlated flight's callsign beats it.
+//   3. its track number.
+//
+// Datalink sits between 1 and 2 but is per session, so presentation.js
+// applies it.
+
+class Identity {
+  /**
+   * @param {object} deps
+   * @param {{trackIndex:()=>Map}} deps.correlationStore
+   * @param {{getFlightData:(flightDataId:string)=>object|null}} deps.flightDataStore
+   * @param {{get:(trackId:string)=>object|null}} deps.collab
+   * @param {{get:(trackId:string)=>string}} deps.trackNumbers
+   */
+  constructor({ correlationStore, flightDataStore, collab, trackNumbers }) {
+    this._correlations = correlationStore;
+    this._flightDataList = flightDataStore;
+    this._collab = collab;
+    this._trackNumbers = trackNumbers;
+    this._index = null;
+  }
+
+  /** Rebuilds the trackId -> correlation index. Once per tick, before any identify(). */
+  indexTick() {
+    this._index = this._correlations.trackIndex();
+  }
+
+  _correlationOf(id) {
+    if (!this._index) this.indexTick();
+    const hit = this._index.get(id);
+    if (!hit || hit.state !== 'CORRELATED') return null;
+    return hit;
+  }
+
+  /**
+   * @returns {{flightDataId:string|null, correlation:'CORRELATED'|null,
+   *            flightDataCallsign:string|null, flightDataType:string|null, tag:string|null, trackNumber:string}}
+   */
+  identify(trackId) {
+    const id = String(trackId);
+    const hit = this._correlationOf(id);
+    const flightData = hit ? this._flightDataList.getFlightData(hit.flightDataId) : null;
+    const entry = this._collab.get(id);
+    return {
+      flightDataId: flightData ? hit.flightDataId : null,
+      correlation: flightData ? hit.state : null,
+      flightDataCallsign: (flightData && flightData.identity && flightData.identity.callsign) || null,
+      flightDataType: (flightData && flightData.identity && flightData.identity.aircraftType) || null,
+      tag: (entry && entry.rename && entry.rename.value) || null,
+      trackNumber: this._trackNumbers.get(id),
+    };
+  }
+
+  /** The one name for a contact where there is no per-session picture: alert text. */
+  labelFor(trackId) {
+    const who = this.identify(trackId);
+    return who.flightDataCallsign || who.tag || who.trackNumber;
+  }
+}
+
+module.exports = { Identity };

@@ -38,7 +38,8 @@ function _randomSquawkCode(exclude) {
   do {
     code = '';
     for (var i = 0; i < 4; i++) code += String(Math.floor(Math.random() * 8));
-  } while (FORBIDDEN.has(code) || exclude.has(code));
+  // 6xxx is crc-sync's synthetic AI block (docs/parallel/decisions.md S-L3).
+  } while (FORBIDDEN.has(code) || code[0] === '6' || exclude.has(code));
   return code;
 }
 

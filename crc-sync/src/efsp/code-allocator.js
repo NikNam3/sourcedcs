@@ -1,8 +1,6 @@
 'use strict';
 
-// Beacon/squawk (Mode 3/A) code allocation for the EFSP. Nothing in
-// crc-sync minted codes before this — src/resolve.js's squawk-map is a
-// cosmetic observed-code-to-display-name lookup, not allocation. Per the
+// Beacon/squawk (Mode 3/A) code allocation for the EFSP. Per the
 // phase-1 design decision ("crc-sync mints, EFSP consumes"), this is new,
 // server-authoritative capability: the EFSP panel only displays, lets a
 // controller override, and applies the doctrine below — it never mints.
@@ -22,6 +20,13 @@
 //   - the "monitor set" (1200,1202,1203,1255,1277, and 4000 in restricted/
 //     warning/VR context) is recognisable on sight (isMonitorSet), not an
 //     allocation concern — display-layer doctrine, exposed here for reuse
+//
+// [SOURCE-DEFINED] (docs/adr/0059) — the synthetic block (config/sensor-specs.json, 6000–6777 as shipped) is crc-sync's, not
+// doctrine: the codes crc-sync gives AI aircraft, which have no SRS transponder.
+// Never allocated, and never taken from an ATO. A CONTROLLER may enter one
+// (docs/adr/0142): there is no callsign correlation (H165), so reading an AI
+// aircraft's code off the scope and typing it into the Strip is how an AI flight
+// correlates. The guide has no such block.
 
 const RESERVED_CODES = new Set(['0000', '7500', '7600', '7700', '7400', '7777']);
 const MONITOR_SET     = new Set(['1200', '1202', '1203', '1255', '1277']);
@@ -40,24 +45,70 @@ function isReserved(code) { return RESERVED_CODES.has(code); }
 // this checks the unconditional part of the set only.
 function isMonitorSet(code) { return MONITOR_SET.has(code); }
 
+// The block's range is data (sensor-specs.json, DATA-3). It is loaded on first use, not at require time, so the pure
+// ATO parser that imports this file still reads no config when it loads. A block that swallows a reserved code is a
+// start-up error: transponder.js loads it eagerly, and the server requires that.
+let _block = null;
+function syntheticBlock() {
+  if (_block) return _block;
+  const b = require('../synthetic-block').syntheticBlock();
+  for (const c of RESERVED_CODES) {
+    const n = parseInt(c, 8);
+    if (n >= b.SYNTHETIC_BLOCK_START && n < b.SYNTHETIC_BLOCK_START + b.SYNTHETIC_BLOCK_SIZE) {
+      throw new Error(`[sensor-specs] "transponder.syntheticBlock" (${b.SYNTHETIC_BLOCK_LABEL}) contains the reserved code ${c}`);
+    }
+  }
+  _block = b;
+  return b;
+}
+
+/** A code from the block crc-sync reserves for AI transponders. */
+function isSynthetic(code) {
+  if (!isValidCodeFormat(code)) return false;
+  const n = parseInt(code, 8);
+  const { SYNTHETIC_BLOCK_START, SYNTHETIC_BLOCK_SIZE } = syntheticBlock();
+  return n >= SYNTHETIC_BLOCK_START && n < SYNTHETIC_BLOCK_START + SYNTHETIC_BLOCK_SIZE;
+}
+
 class CodeAllocator {
   constructor() {
-    this._allocated = new Map(); // code -> fdrId — single INCIRLIK facility in Phase 1, no per-facility pooling yet
+    this._allocated = new Map(); // code -> flightDataId — one pool shared by every Facility (docs/adr/0013)
+    // The last code allocate() handed out, as a number (docs/adr/0081). The
+    // next scan starts after it, so a released code is not handed out again
+    // until the whole discrete pool has cycled. 0 = nothing handed out yet.
+    this._cursor = 0;
+  }
+
+  /** The rotating cursor, persisted beside the allocated codes (flight-data-store.js snapshot). */
+  get cursor() { return this._cursor; }
+  restoreCursor(cursor) {
+    this._cursor = Number.isInteger(cursor) && cursor >= 0 && cursor <= 0o7777 ? cursor : 0;
   }
 
   /**
-   * Mints the next available discrete code for a newly created FDR.
-   * Sequential octal scan starting at 0001, skipping reserved/excluded and
-   * already-allocated codes — simple and auditable; the guide's fuller
-   * pool/search-order model (named pools, exclusion lists per facility) is
-   * WP6+-adjacent and not needed for a single-facility DEPARTURE-only slice.
+   * Mints the next available discrete code for a newly created flight data.
+   *
+   * A ROTATING scan (docs/adr/0081, L6's F6): from the code after the last one
+   * handed out, wrapping past 7777 back to 0001, skipping reserved/excluded,
+   * synthetic and already-allocated codes. It used to take the LOWEST free
+   * code, so a flight that landed released its code and the very next
+   * CreateStrip got it back while the old aircraft was still squawking it on
+   * the ramp or in the pattern — and correlation bound the new flight plan to
+   * the old aircraft (46 misbindings in a four-hour soak). Now a released code
+   * comes back only after every other free discrete code has been used:
+   * thousands of flights at this squadron's scale. No clock, no tuning file.
+   * The guide's fuller pool/search-order model (named pools, exclusion lists
+   * per facility) is WP6+-adjacent and not needed here.
    */
-  allocate(fdrId) {
-    for (let n = 1; n <= 0o7777; n++) {
+  allocate(flightDataId) {
+    const POOL = 0o7777;
+    for (let i = 1; i <= POOL; i++) {
+      const n = ((this._cursor + i - 1) % POOL) + 1; // 1..7777, starting after the cursor
       const code = n.toString(8).padStart(4, '0');
-      if (AUTO_ALLOCATE_EXCLUDED.has(code)) continue;
+      if (AUTO_ALLOCATE_EXCLUDED.has(code) || isSynthetic(code)) continue;
       if (this._allocated.has(code)) continue;
-      this._allocated.set(code, fdrId);
+      this._allocated.set(code, flightDataId);
+      this._cursor = n;
       return { code, pool: 'DISCRETE' };
     }
     return { error: 'POOL_EXHAUSTED' };
@@ -70,35 +121,42 @@ class CodeAllocator {
   /**
    * Validates a controller-entered override for Block 5 (§3.10.2):
    *   - malformed or reserved → hard VALIDATION_ERROR, never assignable
-   *   - already allocated to a *different* FDR → accepted, but flagged as
+   *   - in the synthetic block → accepted only when a controller typed it
+   *     (`controllerEntered`, docs/adr/0142): an AI aircraft's code read off
+   *     the scope. Any other source (an ATO's Mode 3) is refused.
+   *   - already allocated to a *different* flight data → accepted, but flagged as
    *     DUPLICATE_IGNORED_WARNING (defect D23 — duplicates are structural
    *     in the real system, never blocked)
    */
-  validateAssignment(code, fdrId) {
+  validateAssignment(code, flightDataId, { controllerEntered = false } = {}) {
     if (!isValidCodeFormat(code)) return { ok: false, reason: 'VALIDATION_ERROR' };
     if (isReserved(code))         return { ok: false, reason: 'VALIDATION_ERROR' };
+    if (isSynthetic(code) && !controllerEntered) return { ok: false, reason: 'VALIDATION_ERROR', detail: `reserved for AI aircraft (crc-sync's synthetic block ${syntheticBlock().SYNTHETIC_BLOCK_LABEL})` };
     const holder = this._allocated.get(code);
-    if (holder && holder !== fdrId) return { ok: true, warning: 'DUPLICATE_IGNORED_WARNING' };
+    if (holder && holder !== flightDataId) return { ok: true, warning: 'DUPLICATE_IGNORED_WARNING' };
     return { ok: true };
   }
 
   /**
    * Records a controller override as the new holder of `newCode`, after
-   * validateAssignment() has already approved it. Releases the FDR's prior
-   * discrete code first, if it held a different one — an FDR holds at most
+   * validateAssignment() has already approved it. Releases the flight data's prior
+   * discrete code first, if it held a different one — the flight data holds at most
    * one code at a time.
    */
-  reassign(fdrId, newCode, previousCode) {
+  reassign(flightDataId, newCode, previousCode) {
     if (previousCode && previousCode !== newCode) this.release(previousCode);
-    this._allocated.set(newCode, fdrId);
+    this._allocated.set(newCode, flightDataId);
   }
 
   isAllocated(code) { return this._allocated.has(code); }
   holderOf(code) { return this._allocated.get(code) || null; }
 
-  // ── Persistence (durable per ADR 0002 — ties to fdr-store.js's snapshot) ──
+  // ── Persistence (durable per ADR 0002 — ties to flight-data-store.js's snapshot) ──
   snapshot() { return [...this._allocated.entries()]; }
   restore(entries) { this._allocated = new Map(entries || []); }
 }
 
-module.exports = { CodeAllocator, isReserved, isMonitorSet, isValidCodeFormat, RESERVED_CODES, MONITOR_SET };
+module.exports = {
+  CodeAllocator, isReserved, isMonitorSet, isValidCodeFormat, isSynthetic,
+  RESERVED_CODES, syntheticBlock,
+};

@@ -4,11 +4,18 @@ const http  = require('http');
 const https = require('https');
 const fs    = require('fs');
 const path  = require('path');
+const { resolveProxyPath } = require('./proxy-routes');
+const { resolveGlyphs } = require('./glyph-route');
 
 const PUBLIC_DIR       = path.join(__dirname, 'public');
 const DATA_DIR         = path.join(__dirname, 'data');
+const FONTS_DIR        = path.join(PUBLIC_DIR, 'fonts');
 const SRS_RADIO_API    = parseInt(process.env.SRS_RADIO_API_PORT) || 5003;
 
+// This is the renderer's local server, built on Node's own `http`/`https`
+// modules (no Express): it serves app/public, generates /js/config.js and
+// proxies the few crc-sync calls below.
+//
 // crc-sync is the sole gRPC/SRS client now (see crc-sync/server.js) — this
 // local server no longer runs GrpcClient/SrsClient/TrackStore/WsServer at
 // all. The renderer connects straight to crc-sync's /feed WebSocket for
@@ -23,7 +30,7 @@ const SRS_RADIO_API    = parseInt(process.env.SRS_RADIO_API_PORT) || 5003;
 // so a squadron member can point at a different crc-sync/Casdoor without
 // hand-editing config.json. config.json's values are just the defaults.
 const syncConfig = {
-  crcSyncUrl:      process.env.CRC_SYNC_URL || 'wss://asacs.sourcedcs.page',
+  crcSyncUrl:      process.env.CRCSYNC_URL || 'wss://asacs.sourcedcs.page',
   casdoorClientId: process.env.CASDOOR_CLIENT_ID || '',
   casdoorEndpoint: process.env.CASDOOR_ENDPOINT || '',
 };
@@ -33,7 +40,7 @@ function syncHttpUrl() {
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
-  '.js':   'application/javascript',
+  '.js':   'text/javascript; charset=utf-8',
   '.json': 'application/json',
   '.css':  'text/css',
   '.png':  'image/png',
@@ -48,9 +55,14 @@ function proxyToSync(req, res, syncPath) {
   const mod    = target.protocol === 'https:' ? https : http;
   const headers = { 'Content-Type': 'application/json' };
   if (req.headers.authorization) headers.Authorization = req.headers.authorization;
+  // Compression and conditional requests pass through (the terrain grid, crc-sync docs/adr/0133, is a few MB gzipped
+  // once and answered 304 when the client already has it). Every other route answers JSON without either.
+  for (const h of ['accept-encoding', 'if-none-match']) if (req.headers[h]) headers[h] = req.headers[h];
 
   const preq = mod.request(target, { method: req.method, headers }, (pres) => {
-    res.writeHead(pres.statusCode, { 'Content-Type': pres.headers['content-type'] || 'application/json' });
+    const out = { 'Content-Type': pres.headers['content-type'] || 'application/json' };
+    for (const h of ['content-encoding', 'etag', 'cache-control', 'vary']) if (pres.headers[h]) out[h] = pres.headers[h];
+    res.writeHead(pres.statusCode, out);
     pres.pipe(res);
   });
   preq.on('error', () => {
@@ -66,7 +78,7 @@ const httpServer = http.createServer((req, res) => {
   if (req.url === '/js/config.js') {
     res.writeHead(200, { 'Content-Type': 'application/javascript; charset=utf-8', 'Cache-Control': 'no-store' });
     return res.end(
-      'var CRC_SYNC_URL      = ' + JSON.stringify(syncConfig.crcSyncUrl)      + ';\n' +
+      'var CRCSYNC_URL      = ' + JSON.stringify(syncConfig.crcSyncUrl)      + ';\n' +
       'var CASDOOR_CLIENT_ID = ' + JSON.stringify(syncConfig.casdoorClientId) + ';\n' +
       'var CASDOOR_ENDPOINT  = ' + JSON.stringify(syncConfig.casdoorEndpoint) + ';\n'
     );
@@ -97,16 +109,9 @@ const httpServer = http.createServer((req, res) => {
     return;
   }
 
-  // ── crc-sync proxies (ticket mint + the on-demand RPCs) ──────────────────
-  if (req.url === '/api/ws-ticket' && req.method === 'POST')      return proxyToSync(req, res, '/api/ws-ticket');
-  if (req.url === '/api/atis-transmit' && req.method === 'POST')  return proxyToSync(req, res, '/api/atis-transmit');
-  if (req.url === '/api/srs-clients')                              return proxyToSync(req, res, '/api/srs-clients');
-  if (req.url.startsWith('/api/apt-weather'))                      return proxyToSync(req, res, req.url);
-  // EFSP CreateStrip pre-fill (crc-sync/src/efsp/flight-plan-lookup.js) —
-  // same reverse-proxy shape, so the renderer never needs crc-sync's
-  // bearer token directly for this either.
-  if (req.url.startsWith('/api/flight-plan-lookup/'))              return proxyToSync(req, res, req.url);
-  if (req.url === '/api/flight-plan-list')                         return proxyToSync(req, res, req.url);
+  // ── crc-sync proxies (ticket mint + the on-demand RPCs): proxy-routes.js ──
+  const syncPath = resolveProxyPath(req.url, req.method);
+  if (syncPath !== null) return proxyToSync(req, res, syncPath);
 
   // ── SRS radio API proxy → lxsrs_v2 HTTP API (local pilot audio, unrelated to crc-sync) ─
   if (req.url.startsWith('/srs-api/')) {
@@ -146,31 +151,6 @@ const httpServer = http.createServer((req, res) => {
     return;
   }
 
-  // ── Flight plan lookup (proxy to sourcedcs-web) ──────────────────────────
-  if (req.url.startsWith('/api/fpl/')) {
-    const callsign = decodeURIComponent(req.url.slice('/api/fpl/'.length).split('?')[0]).toUpperCase().trim();
-    const webUrl   = (process.env.SOURCEDCS_WEB_URL || '').replace(/\/$/, '');
-    if (!webUrl || !callsign) {
-      res.writeHead(404, { 'Content-Type': 'application/json' });
-      return res.end(JSON.stringify({ error: 'not found' }));
-    }
-    const target = new URL('/api/fpl1801/by-callsign/' + encodeURIComponent(callsign), webUrl);
-    const mod    = target.protocol === 'https:' ? require('https') : http;
-    const preq   = mod.get(target.href, pres => {
-      const chunks = [];
-      pres.on('data', c => chunks.push(c));
-      pres.on('end', () => {
-        res.writeHead(pres.statusCode, { 'Content-Type': 'application/json' });
-        res.end(Buffer.concat(chunks));
-      });
-    });
-    preq.on('error', () => {
-      res.writeHead(502, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'upstream error' }));
-    });
-    return;
-  }
-
   // Serve static data files (aircraft-types.json, airports.json, icao.json …)
   if (req.url.startsWith('/data/')) {
     const dataPath = path.normalize(path.join(DATA_DIR, req.url.slice(6).split('?')[0]));
@@ -180,6 +160,14 @@ const httpServer = http.createServer((req, res) => {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(data);
     });
+  }
+
+  // Map glyphs (glyph-route.js): the shipped fonts of the requested stack, merged; an unshipped range is an empty 200.
+  const glyphs = resolveGlyphs(req.url, FONTS_DIR);
+  if (glyphs) {
+    if (glyphs.status !== 200) { res.writeHead(glyphs.status); return res.end(); }
+    res.writeHead(200, { 'Content-Type': 'application/x-protobuf' });
+    return res.end(glyphs.body);
   }
 
   const urlPath = req.url === '/' ? '/index.html' : req.url.split('?')[0];
@@ -203,3 +191,6 @@ const port = parseInt(process.env.WS_PORT) || 3100;
 httpServer.listen(port, () => {
   console.log(`[crc] http://localhost:${port}`);
 });
+
+// main.js reads the live Casdoor endpoint (the connection widget can change it at runtime) to allow the login popup.
+module.exports = { getSyncConfig: () => ({ ...syncConfig }) };

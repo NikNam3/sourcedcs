@@ -1,7 +1,7 @@
 'use strict';
 
 // Pure append-only annotation supersession model (guide §3.7), mirroring
-// board-store.js's _applyAnnotationSet exactly. Used here for CLIENT-SIDE
+// crc-sync's `_applyAnnotationSet` (board/ops/set-block.js) exactly. Used here for CLIENT-SIDE
 // optimistic preview only — the server's own application of the same
 // rules is authoritative and always wins on ack (efsp-state.js's
 // applyEfspMutationAck applies the server's returned Strip regardless of
@@ -16,11 +16,11 @@
 /**
  * Returns a NEW annotations object (does not mutate `annotations`) with
  * the amendment applied, or null if `confirmVacated` was requested but
- * there is no ACTIVE entry to strike (mirrors board-store.js's own
- * VALIDATION_ERROR case for that scenario — caller should not have
+ * there is no ACTIVE entry to strike (mirrors the VALIDATION_ERROR
+ * case in board/ops/set-block.js's `_applyAnnotationSet` for that scenario — caller should not have
  * offered the confirm-vacated action in the first place if this happens).
  */
-function applyAnnotationLocally(annotations, blockId, value, confirmVacated) {
+export function applyAnnotationLocally(annotations, blockId, value, confirmVacated) {
   const next = { ...annotations };
   const existing = next[blockId] || { blockId, entries: [] };
   const entries = existing.entries.map(e => ({ ...e }));
@@ -36,8 +36,4 @@ function applyAnnotationLocally(annotations, blockId, value, confirmVacated) {
 
   next[blockId] = { blockId, entries };
   return next;
-}
-
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { applyAnnotationLocally };
 }

@@ -1,4 +1,5 @@
 'use strict';
+const log = require('./logger');
 
 /* Rebuilds every member's activity-score history once per squadron-wide
    "day" (05:00 UTC, see discord-gateway.js's localDateKey), from
@@ -18,12 +19,7 @@ const activityScore = require('./activity-score');
 let ACTIVITY_SCORES_FILE = null;
 const cache = {}; /* memberId -> { rows, current, delta7d, updatedAt } */
 
-function loadJSON(file, fallback) {
-  try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return fallback; }
-}
-function saveJSON(file, data) {
-  fs.writeFileSync(file, JSON.stringify(data, null, 2), 'utf8');
-}
+const { loadJSON, saveJSON } = require('./json-file');
 
 /* Converts a member's raw vacation entries ({ from, until } ISO datetimes,
    as stored in members.json) into the { fromDay, untilDay } 'YYYY-MM-DD'
@@ -107,7 +103,7 @@ function init({ dataDir, memberIds, getMemberDays, getMemberVacations, localDate
     try {
       rebuildAll({ dataDir, memberIds: memberIds(), getMemberDays, getMemberVacations, localDateKey, todayKey });
     } catch (err) {
-      console.error('[activity-score] daily rebuild failed:', (err && err.stack) || err);
+      log.error('[activity-score] daily rebuild failed:', (err && err.stack) || err);
     }
   }
   tick();

@@ -2,9 +2,15 @@
 const EventEmitter = require('events');
 const net = require('net');
 const crypto = require('crypto');
+const log = require('./log').logger('srs');
 
-const SRS_HOST    = process.env.SRS_HOST || 'server.sourcedcs.page';
-const SRS_PORT    = parseInt(process.env.SRS_PORT) || 5002;
+const DEFAULT_SRS_HOST = 'server.sourcedcs.page';
+const DEFAULT_SRS_PORT = 5002;
+// The root `.env` names win, so compose passes them straight through; the bare names are what a local run and the e2e harness set.
+const endpointOf = (env) => ({
+  host: env.CRCSYNC_SRS_HOST || env.SRS_HOST || DEFAULT_SRS_HOST,
+  port: parseInt(env.CRCSYNC_SRS_PORT || env.SRS_PORT, 10) || DEFAULT_SRS_PORT,
+});
 const SRS_VERSION = '2.1.0.0';
 
 const MSG_UPDATE            = 0;
@@ -13,8 +19,10 @@ const MSG_RADIO_UPDATE      = 3;
 const MSG_CLIENT_DISCONNECT = 5;
 
 class SrsClient extends EventEmitter {
-  constructor() {
+  /** @param {{env?:object}} [opts] the environment (default process.env): `CRCSYNC_SRS_HOST` ?? `SRS_HOST`, `CRCSYNC_SRS_PORT` ?? `SRS_PORT` */
+  constructor(opts = {}) {
     super();
+    this._env          = opts.env || process.env;
     this._state        = 'disconnected';
     this._transponders = new Map(); // player name → {squawk, squawkStatus, mode4}
     this._identLatch   = new Map(); // player name → expiry timestamp (ms) for ident latch
@@ -60,11 +68,12 @@ class SrsClient extends EventEmitter {
     if (this._socket) { this._socket.destroy(); this._socket = null; }
     this._buf = '';
 
-    const sock = net.createConnection(SRS_PORT, SRS_HOST);
+    const { host, port } = endpointOf(this._env);
+    const sock = net.createConnection(port, host);
     this._socket = sock;
 
     sock.on('connect', () => {
-      console.log('[srs] connected');
+      log.info('connected');
       this._setState('connected');
       // Identify ourselves so the server sends client list updates
       sock.write(JSON.stringify({
@@ -93,11 +102,11 @@ class SrsClient extends EventEmitter {
     });
 
     sock.on('error', (err) => {
-      console.warn('[srs] error:', err.message);
+      log.warn('error', { error: err.message });
     });
 
     sock.on('close', () => {
-      console.log('[srs] disconnected');
+      log.info('disconnected');
       this._transponders.clear();
       this._identLatch.clear();
       this._setState('reconnecting');
@@ -174,7 +183,7 @@ class SrsClient extends EventEmitter {
     if (this._reconnTimer) return;
     this._reconnTimer = setTimeout(() => {
       this._reconnTimer = null;
-      console.log('[srs] reconnecting...');
+      log.info('reconnecting');
       this._doConnect();
     }, 5000);
   }
@@ -186,4 +195,5 @@ class SrsClient extends EventEmitter {
   }
 }
 
+SrsClient.endpointOf = endpointOf;
 module.exports = SrsClient;

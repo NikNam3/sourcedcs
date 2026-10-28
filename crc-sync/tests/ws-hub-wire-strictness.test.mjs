@@ -1,0 +1,381 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import WsHub from '../src/ws-hub.js';
+import TrackStore from '../src/tracks.js';
+import CollaborativeStore from '../src/collab-store.js';
+import crcLog from '../src/log.js';
+import { fakeWs } from './helpers/ws.mjs';
+
+/* docs/adr/0059: the client is told what its sensors know, and nothing else.
+ *
+ * presentation.test.mjs pins the rules; this pins that the hub sends nothing
+ * that did not come out of them, and that a change of identity reaches the
+ * client without waiting for a sweep.
+ */
+
+const { createSurveillance } = await import('../src/surveillance/index.js');
+const { WIRE_KEYS } = await import('../src/surveillance/presentation.js');
+
+const APP = { id: 'app:X', sweepMs: 3000, caps: { height: false, ssr: true, mode4: false } };
+
+// The hub's `onEfspChange` dependency; a test points `fn` at its own hook (it defaults to none).
+const hook = { fn: () => {} };
+
+function setup() {
+  const trackStore = new TrackStore();
+  trackStore.update({
+    id: 7, callsign: 'Enfield11', name: 'Aerial-1-1', coalition: 3, type: 'F-16C_50', player: null,
+    category: 1, lat: 37.1, lon: 35.2, alt: 3048, heading: 90,
+  });
+  const collabStore = new CollaborativeStore();
+  const records = [];
+  const surveillance = createSurveillance({
+    collab: collabStore,
+    correlationStore: { trackIndex: () => new Map(records.map(r => [r.trackId, r])) },
+    flightDataStore: { getFlightData: (id) => (id === 'f1' ? { identity: { callsign: 'VIPER11', aircraftType: 'F16' } } : null) },
+  });
+  const lit = { 7: new Map([['app:X', 5000]]) };
+  const picture = {
+    coverageFor: () => ({ radars: [APP], radarIds: new Set(['app:X']), signedOnPositions: [], radarBearingPositions: ['AP'] }),
+    illuminated: () => new Map(Object.entries(lit)),
+    radars: () => [APP],
+  };
+  const hub = new WsHub({ trackStore, collabStore, picture, surveillance, onEfspChange: () => hook.fn() });
+  const session = { controllerId: 'c1', lastSent: new Map(), labelRevs: new Map() };
+  hub._setCoverage(session, picture.coverageFor());
+  return { hub, session, records, collabStore };
+}
+
+test('every track sent carries only allow-listed keys, and none of DCS truth', () => {
+  const { hub, session } = setup();
+  const snapshot = hub._pictureSnapshot(session);
+  assert.equal(snapshot.tracks.length, 1);
+  for (const t of snapshot.tracks) {
+    for (const key of Object.keys(t)) assert.ok(WIRE_KEYS.includes(key), `unexpected key ${key}`);
+  }
+  const text = JSON.stringify(snapshot);
+  for (const leak of ['Enfield11', 'Aerial-1-1', 'F-16C_50', '"coalition"', '"player"', '"alt"', '"callsign":"Enfield']) {
+    assert.equal(text.includes(leak), false, `${leak} leaked`);
+  }
+});
+
+test('correlating the contact relabels it on the next tick, without a position update', () => {
+  const { hub, session, records } = setup();
+  const ws = fakeWs();
+  hub._tick(ws, session);
+  assert.equal(ws.sent[0].updated[0].label.callsign, null);
+
+  records.push({ trackId: '7', flightDataId: 'f1', state: 'CORRELATED' });
+  hub._tick(ws, session);
+  const delta = ws.sent[1];
+  assert.deepEqual(delta.updated, []);
+  assert.deepEqual(delta.relabeled.map(r => [r.id, r.label.callsign, r.label.source, r.type]), [['7', 'VIPER11', 'FLIGHT_DATA', 'F16']]);
+
+  hub._tick(ws, session);
+  assert.equal(ws.sent.length, 2, 'and only once');
+});
+
+test('a tag relabels too, and the flight callsign still beats it', () => {
+  const { hub, session, records, collabStore } = setup();
+  const ws = fakeWs();
+  hub._tick(ws, session);
+  collabStore.rename('7', 'bandit', 'c1');
+  hub._tick(ws, session);
+  assert.equal(ws.sent[1].relabeled[0].label.callsign, 'BANDIT');
+  records.push({ trackId: '7', flightDataId: 'f1', state: 'CORRELATED' });
+  hub._tick(ws, session);
+  assert.equal(ws.sent[2].relabeled[0].label.callsign, 'VIPER11');
+  assert.equal(ws.sent[2].relabeled[0].label.tag, 'BANDIT');
+});
+
+test('datalink: a participant is seen with no radar, and a lock never reveals a contact outside the picture', () => {
+  const trackStore = new TrackStore();
+  for (const [id, over] of [[1, {}], [9, { callsign: 'Bandit', coalition: 2, type: 'Su-27' }]]) {
+    trackStore.update({ id, callsign: 'Enfield11', name: `U${id}`, coalition: 3, type: 'F-16C_50', category: 1, lat: 37, lon: 35, alt: 6000, ...over });
+  }
+  let lock = '9';
+  const datalink = { reports: () => new Map([['1', { at: 4000, callsign: 'Enfield11', type: 'F-16C_50', lock }]]), clear() {} };
+  const collabStore = new CollaborativeStore();
+  const surveillance = createSurveillance({ collab: collabStore, datalink });
+  const lit = {};
+  const picture = {
+    coverageFor: () => ({ radars: [APP], radarIds: new Set(['app:X']), signedOnPositions: [], radarBearingPositions: [], datalink: true }),
+    illuminated: () => new Map(Object.entries(lit)),
+    radars: () => [APP],
+  };
+  const hub = new WsHub({ trackStore, collabStore, picture, surveillance });
+  const session = { controllerId: 'c1', lastSent: new Map(), labelRevs: new Map() };
+  hub._setCoverage(session, picture.coverageFor());
+
+  let snap = hub._pictureSnapshot(session);
+  assert.deepEqual(snap.tracks.map(t => t.id), ['1'], 'the participant, and not the contact it has locked');
+  assert.equal(snap.tracks[0].label.callsign, 'Enfield11');
+  assert.equal(snap.tracks[0].label.source, 'DATALINK');
+  assert.deepEqual(snap.tracks[0].dl, { lock: null }, 'the lock target is not in this picture');
+
+  lit[9] = new Map([['app:X', 5000]]);
+  snap = hub._pictureSnapshot(session);
+  assert.deepEqual(snap.tracks.find(t => t.id === '1').dl, { lock: '9' }, 'once my own radar has it, the lock may point at it');
+  assert.equal(JSON.stringify(snap).includes('Bandit'), false);
+});
+
+test('a ground vehicle is never sent, and a datalink lock on one is dropped (docs/adr/0121)', () => {
+  const trackStore = new TrackStore();
+  trackStore.update({ id: 1, callsign: 'Enfield11', name: 'U1', coalition: 3, type: 'F-16C_50', category: 1, lat: 37, lon: 35, alt: 6000 });
+  trackStore.update({ id: 5, callsign: 'Ural', name: 'U5', coalition: 2, type: 'Ural-375', category: 3, lat: 37, lon: 35.01, alt: 100 });
+  const datalink = { reports: () => new Map([['1', { at: 4000, callsign: 'Enfield11', type: 'F-16C_50', lock: '5' }]]), clear() {} };
+  const collabStore = new CollaborativeStore();
+  const surveillance = createSurveillance({ collab: collabStore, datalink });
+  const AIRPORT = { id: 'apt:X', sweepMs: 1000, caps: { height: false, ssr: true, mode4: false } };
+  const lit = { 5: new Map([['apt:X', 5000]]) };
+  const picture = {
+    coverageFor: () => ({ radars: [AIRPORT], radarIds: new Set(['apt:X']), signedOnPositions: [], radarBearingPositions: [], datalink: true }),
+    illuminated: () => new Map(Object.entries(lit)),
+    radars: () => [AIRPORT],
+  };
+  const hub = new WsHub({ trackStore, collabStore, picture, surveillance });
+  const session = { controllerId: 'c1', lastSent: new Map(), labelRevs: new Map() };
+  hub._setCoverage(session, picture.coverageFor());
+
+  const snap = hub._pictureSnapshot(session);
+  assert.deepEqual(snap.tracks.map(t => t.id), ['1'], 'the airport radar returned the vehicle; it is still not presented');
+  assert.deepEqual(snap.tracks[0].dl, { lock: null }, 'the lock does not name the vehicle');
+});
+
+test('CA reaches only an ATC Position, and only when both aircraft are in its picture', () => {
+  const { hub, session } = setup();
+  const sent = [];
+  const ws = { readyState: 1, send: (raw) => sent.push(JSON.parse(raw)) };
+  hub._sessions.set(ws, session);
+  hub._tick(ws, session); // contact 7 now in this picture
+  const conflict = (a, b) => ({ id: `${a}|${b}`, a, b, aCallsign: 'A', bCallsign: 'B', timeToCpaSec: 40, minNm: 1, vertFt: 0 });
+  const alerts = { conformance: [{ flightDataId: 'f1', alerts: [] }], conflictAlert: [conflict('7', '8')] };
+
+  session.coverage = { ...session.coverage, conflictAlert: true };
+  hub.broadcastEfspAlerts(alerts);
+  let msg = sent.filter(m => m.type === 'efsp-alerts').pop();
+  assert.deepEqual(msg.conflictAlert, [], 'the other aircraft is not in this picture');
+  assert.equal(msg.conformance.length, 1, 'conformance is about the flight, and goes to everybody');
+
+  session.lastSent.set('8', 1);
+  hub.broadcastEfspAlerts(alerts);
+  msg = sent.filter(m => m.type === 'efsp-alerts').pop();
+  assert.equal(msg.conflictAlert.length, 1);
+
+  session.coverage = { ...session.coverage, conflictAlert: false };
+  hub.broadcastEfspAlerts(alerts);
+  msg = sent.filter(m => m.type === 'efsp-alerts').pop();
+  assert.deepEqual(msg.conflictAlert, [], 'a tactical Position gets no conflict alerts');
+});
+
+// ── IFF from interrogation, per session (docs/adr/0066) ────────────────────
+
+const CRC = { id: 'crc:A', sweepMs: 10000, caps: { height: true, ssr: true, mode4: true } };
+const APT = { id: 'apt:X', sweepMs: 2000, caps: { height: false, ssr: true, mode4: false } };
+
+/** One hub, contacts lit by the radars given, a session per radar list. */
+function iffSetup({ tracks, lit, srs = null, missionData = null }) {
+  const trackStore = new TrackStore();
+  for (const t of tracks) {
+    trackStore.update({ callsign: 'X', name: `U${t.id}`, type: 'F-16C_50', player: null, category: 1, lat: 37.1, lon: 35.2, alt: 3048, heading: 90, coalition: 3, ...t });
+  }
+  const collabStore = new CollaborativeStore();
+  const surveillance = createSurveillance({ collab: collabStore, srs });
+  const all = [APP, CRC, APT];
+  const coverageFor = (ids) => ({ radars: all.filter(r => ids.includes(r.id)), radarIds: new Set(ids), signedOnPositions: [], radarBearingPositions: [] });
+  const picture = {
+    coverageFor: () => coverageFor([]),
+    illuminated: () => new Map(Object.entries(lit)),
+    radars: () => all,
+  };
+  const hub = new WsHub({ trackStore, collabStore, picture, surveillance });
+  hub._missionData = missionData;
+  const sessionWith = (ids) => {
+    const session = { controllerId: ids.join('+'), lastSent: new Map(), labelRevs: new Map() };
+    hub._setCoverage(session, coverageFor(ids));
+    return session;
+  };
+  return { hub, collabStore, sessionWith };
+}
+
+test('two sessions, two colours: one own aircraft is neutral on AP and friendly on a Mode 4 radar', () => {
+  const { hub, sessionWith } = iffSetup({
+    tracks: [{ id: 7 }],
+    lit: { 7: new Map([['app:X', 5000], ['crc:A', 5000]]) },
+  });
+  const app = hub._pictureSnapshot(sessionWith(['app:X']));
+  const gci = hub._pictureSnapshot(sessionWith(['crc:A']));
+  assert.equal(app.tracks[0].iffState, 'neutral');
+  assert.equal(gci.tracks[0].iffState, 'friendly');
+  const both = hub._pictureSnapshot(sessionWith(['app:X', 'crc:A']));
+  assert.equal(both.tracks[0].iffState, 'friendly', 'holding both, the Mode 4 radar answers (decision H5)');
+});
+
+test('an automatic IFF change waits for the next fresh return; it is never a relabel', () => {
+  const entry = { squawk: 4521, squawkStatus: 1, mode4: false };
+  const srs = { getTransponder: (name) => (name === 'Maverick' ? entry : null) };
+  const lit = { 7: new Map([['crc:A', 5000]]) };
+  const { hub, sessionWith } = iffSetup({ tracks: [{ id: 7, player: 'Maverick' }], lit, srs });
+  const session = sessionWith(['crc:A']);
+  const ws = fakeWs();
+  hub._tick(ws, session);
+  assert.equal(ws.sent[0].updated[0].iffState, 'neutral', 'Mode 4 off: answers Mode 3 only');
+
+  entry.mode4 = true;
+  hub._tick(ws, session);
+  assert.equal(ws.sent.length, 1, 'no new return, so no interrogation, so nothing sent');
+
+  lit[7] = new Map([['crc:A', 15000]]);
+  hub._tick(ws, session);
+  assert.equal(ws.sent[1].updated[0].iffState, 'friendly');
+  assert.deepEqual(ws.sent[1].relabeled, []);
+});
+
+test('clearing a declaration relabels back to the automatic colour without a sweep', () => {
+  const { hub, collabStore, sessionWith } = iffSetup({ tracks: [{ id: 7 }], lit: { 7: new Map([['crc:A', 5000]]) } });
+  const session = sessionWith(['crc:A']);
+  const ws = fakeWs();
+  hub._tick(ws, session);
+  collabStore.declare('7', 'hostile', 'c1');
+  hub._tick(ws, session);
+  assert.equal(ws.sent[1].relabeled[0].iffState, 'hostile');
+  collabStore.clearDeclare('7');
+  hub._tick(ws, session);
+  assert.deepEqual(ws.sent[2].updated, []);
+  assert.equal(ws.sent[2].relabeled[0].iffState, 'friendly');
+  assert.equal(ws.sent[2].relabeled[0].iffOverride, null);
+});
+
+test('no aircraft is hidden on the ground any more: a parked hostile is a bogey, a parked own AI neutral (H6)', () => {
+  const missionData = { airports: [{ lat: 36.0, lon: 35.0, elev: 0 }] };
+  const parked = { lat: 36.001, lon: 35.001, alt: 10 };
+  const { hub, sessionWith } = iffSetup({
+    tracks: [{ id: 1, coalition: 2, ...parked }, { id: 2, coalition: 3, ...parked }],
+    lit: { 1: new Map([['apt:X', 5000]]), 2: new Map([['apt:X', 5000]]) },
+    missionData,
+  });
+  const snap = hub._pictureSnapshot(sessionWith(['apt:X']));
+  const byId = new Map(snap.tracks.map(t => [t.id, t]));
+  assert.equal(byId.get('1').iffState, 'bogey');
+  assert.equal(byId.get('1').onGround, true);
+  assert.equal(byId.get('2').iffState, 'neutral', 'its synthetic squawk answers the SSR; the tower has no Mode 4');
+  for (const t of snap.tracks) assert.ok(['friendly', 'neutral', 'bogey'].includes(t.iffState), t.iffState);
+});
+
+// docs/adr/0067 — obligations are state in efsp-alerts, beside conformance and CA.
+
+test('obligations reach every session, including a tactical one that gets no CA', () => {
+  const { hub, session } = setup();
+  const sent = [];
+  const ws = { readyState: 1, send: (raw) => sent.push(JSON.parse(raw)) };
+  hub._sessions.set(ws, session);
+  const obligation = { facilityId: 'INCIRLIK', stripId: 's1', obligationType: 'VOID_TIME_EXPIRED', severity: 'OVERDUE', dueAt: 1, since: 1 };
+  session.coverage = { ...session.coverage, conflictAlert: false };
+  hub.broadcastEfspAlerts({ conformance: [], conflictAlert: [], obligations: [obligation] });
+  const msg = sent.filter(m => m.type === 'efsp-alerts').pop();
+  assert.deepEqual(msg.obligations, [obligation]);
+  assert.deepEqual(msg.conflictAlert, []);
+});
+
+test('a fresh hub already has an efsp-alerts message with all three keys empty — what a connecting client is sent', () => {
+  const { hub, session } = setup();
+  const msg = hub._efspAlertsMsg(session);
+  assert.equal(msg.type, 'efsp-alerts');
+  assert.deepEqual([msg.conformance, msg.conflictAlert, msg.obligations], [[], [], []]);
+});
+
+test('onEfspChange fires after an EFSP message that broadcast, not after one that only acked, and a throw is contained', () => {
+  const { hub, session } = setup();
+  const ws = fakeWs();
+  let result = { ack: { type: 'efsp-ack' }, broadcasts: [] };
+  hub._efsp = { handleMessage: () => result };
+  let fired = 0;
+  hook.fn = () => { fired += 1; };
+
+  hub._onMessage(ws, session, JSON.stringify({ type: 'efsp-mutation' }));
+  assert.equal(fired, 0, 'an ack alone changed nothing');
+
+  result = { ack: { type: 'efsp-ack' }, broadcasts: [{ type: 'efsp-board-delta' }] };
+  hub._onMessage(ws, session, JSON.stringify({ type: 'efsp-mutation' }));
+  assert.equal(fired, 1);
+
+  hook.fn = () => { throw new Error('monitor bug'); };
+  const cap = crcLog.capture();
+  try {
+    assert.doesNotThrow(() => hub._onMessage(ws, session, JSON.stringify({ type: 'efsp-mutation' })));
+  } finally { cap.stop(); }
+  assert.deepEqual(cap.records.map((r) => [r.level, r.name, r.message]), [['error', 'ws-hub', 'onEfspChange failed']]);
+  assert.equal(ws.sent.filter(m => m.type === 'efsp-ack').length, 3, 'the sender still got every ack');
+});
+
+test('deliverEfsp: every server-originated frame runs the post-change hook once, an empty list does not, and the hook is not re-entered', () => {
+  const { hub } = setup();
+  const sent = [];
+  hub._broadcastEfsp = (m) => sent.push(m.type);
+  let fired = 0;
+  hook.fn = () => { fired += 1; hub.deliverEfsp({ type: 'efsp-from-the-hook' }); };
+  hub.deliverEfsp([]);
+  hub.deliverEfsp(null);
+  assert.equal(fired, 0);
+  hub.deliverEfsp({ type: 'efsp-carrier-delta' });
+  hub.deliverEfsp([{ type: 'efsp-board-delta' }, { type: 'efsp-board-delta' }]);
+  assert.equal(fired, 2, 'one hook run per delivery');
+  assert.deepEqual(sent, ['efsp-carrier-delta', 'efsp-from-the-hook', 'efsp-board-delta', 'efsp-board-delta', 'efsp-from-the-hook']);
+});
+
+test('a handler result with an ack and no broadcasts array (metrics report/request, resync answers) is sent, not thrown on', () => {
+  const { hub, session } = setup();
+  const ws = fakeWs();
+  hub._efsp = { handleMessage: () => ({ ack: { type: 'efsp-metrics-ack' } }) };
+  let fired = 0;
+  hook.fn = () => { fired += 1; };
+  assert.doesNotThrow(() => hub._onMessage(ws, session, JSON.stringify({ type: 'efsp-metrics-report' })));
+  assert.deepEqual(ws.sent.map(m => m.type), ['efsp-metrics-ack']);
+  assert.equal(fired, 0, 'nothing was broadcast, so nothing changed');
+});
+
+// ── The draw scheme on the wire (docs/adr/0088) ────────────────────────────
+
+test('scheme is on every wire track, and follows the session: ATC Positions + a tactical radar per track (H50)', () => {
+  const E3 = { ...CRC, presentation: 'TACTICAL' };
+  const AP = { ...APP, presentation: 'ATC' };
+  const trackStore = new TrackStore();
+  for (const id of [1, 2]) trackStore.update({ id, callsign: 'X', name: `U${id}`, coalition: 3, type: 'F-16C_50', category: 1, lat: 37, lon: 35, alt: 3000 });
+  const collabStore = new CollaborativeStore();
+  const surveillance = createSurveillance({ collab: collabStore });
+  const lit = { 1: new Map([['app:X', 5000], ['crc:A', 5000]]), 2: new Map([['app:X', 5000]]) };
+  const cov = (conflictAlert) => ({ radars: [AP, E3], radarIds: new Set(['app:X', 'crc:A']), signedOnPositions: [], radarBearingPositions: [], conflictAlert });
+  const picture = { coverageFor: () => cov(true), illuminated: () => new Map(Object.entries(lit)), radars: () => [AP, E3] };
+  const hub = new WsHub({ trackStore, collabStore, picture, surveillance });
+
+  const mixed = { controllerId: 'c1', lastSent: new Map(), labelRevs: new Map() };
+  hub._setCoverage(mixed, cov(true));
+  const snap = hub._pictureSnapshot(mixed);
+  const scheme = Object.fromEntries(snap.tracks.map(t => [t.id, t.scheme]));
+  assert.deepEqual(scheme, { 1: 'TACTICAL', 2: 'ATC' });
+
+  const tactical = { controllerId: 'c2', lastSent: new Map(), labelRevs: new Map() };
+  hub._setCoverage(tactical, cov(false));
+  assert.deepEqual(hub._pictureSnapshot(tactical).tracks.map(t => t.scheme), ['TACTICAL', 'TACTICAL'], 'no ATC Position: tactical only');
+});
+
+test('taking or releasing an ATC Position re-sends the picture even when the radars are unchanged', () => {
+  const AP = { ...APP, presentation: 'ATC' };
+  const trackStore = new TrackStore();
+  trackStore.update({ id: 7, callsign: 'X', name: 'U7', coalition: 3, type: 'F-16C_50', category: 1, lat: 37, lon: 35, alt: 3000 });
+  const collabStore = new CollaborativeStore();
+  let conflictAlert = false;
+  const picture = {
+    coverageFor: () => ({ radars: [AP], radarIds: new Set(['app:X']), signedOnPositions: [], radarBearingPositions: [], conflictAlert }),
+    illuminated: () => new Map([['7', new Map([['app:X', 5000]])]]),
+    radars: () => [AP],
+  };
+  const hub = new WsHub({ trackStore, collabStore, picture, surveillance: createSurveillance({ collab: collabStore }) });
+  const session = { controllerId: 'c1', lastSent: new Map(), labelRevs: new Map() };
+  hub._setCoverage(session, picture.coverageFor());
+  const ws = fakeWs();
+  conflictAlert = true;
+  assert.equal(hub._refreshCoverage(ws, session), true);
+  const snap = ws.sent.find(m => m.type === 'snapshot');
+  assert.equal(snap.tracks[0].scheme, 'ATC');
+});

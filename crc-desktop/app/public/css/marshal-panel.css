@@ -1,0 +1,109 @@
+/* The MARSHAL panel, the recovery board (crc-sync docs/adr/0114; mockup docs/mockups/marshal-stack-panel.html, revision 7).
+   Colours are efsp-panel.css's tokens, in dark-cockpit use: grey while the recovery is in order; amber (--efsp-attn) is "look at this
+   now" (fuel within the margin of bingo, past EAT and not pushed, a clearance changed and not yet passed); red (--efsp-danger) is
+   fuel at or below bingo; blue (--efsp-go) is the one action due, Commence. The font is the app's own (the Consolas stack). */
+
+#marshal-panel {
+  overflow: auto;
+  color: var(--efsp-text, #d8e0e6);
+  background: #14181c;
+  font-family: 'Consolas', 'DejaVu Sans Mono', monospace;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.mb-hdr {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px 18px;
+  padding: 7px 12px; background: #101418; border-bottom: 1px solid var(--efsp-line-2, #4a5560);
+  font-size: 13px; letter-spacing: 0.03em;
+}
+.mb-k { color: var(--efsp-muted, #8c9aa6); }
+.mb-hdr b { font-weight: 700; color: #fff; }
+.mb-right { margin-left: auto; }
+.mb-delta { display: inline-flex; align-items: center; gap: 4px; }
+.mb-delta[hidden] { display: none; }
+.mb-delta-note { color: var(--efsp-attn, #e0a83c); font-size: 11px; }
+
+.mb-btn {
+  font: inherit; font-size: 11.5px; color: var(--efsp-text, #d8e0e6); background: var(--efsp-strip, #1c2228);
+  border: 1px solid var(--efsp-line-2, #4a5560); border-radius: 3px; padding: 2px 10px; cursor: pointer;
+}
+.mb-btn:hover { border-color: var(--efsp-muted, #8c9aa6); }
+.mb-btn[hidden] { display: none; }
+.mb-input {
+  font: inherit; font-size: 12px; color: var(--efsp-text, #d8e0e6); background: #0b0e11;
+  border: 1px solid var(--efsp-line-2, #4a5560); padding: 0 5px; width: 54px;
+}
+.mb-ang-input { width: 40px; }
+.mb-btn:focus-visible, .mb-input:focus-visible, .mb-commence:focus-visible { outline: 2px solid #8ec7ff; outline-offset: 1px; }
+
+.mb-main { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(240px, 1fr); }
+.mb-main > .mb-patcol[hidden] { display: none; }
+.mb-main:has(> .mb-patcol[hidden]) { grid-template-columns: minmax(0, 1fr); }
+.mb-tablecol { border-right: 1px solid var(--efsp-line, #2e3740); display: flex; flex-direction: column; min-width: 0; }
+.mb-tw { overflow-x: auto; }
+.mb-table { border-collapse: collapse; width: 100%; }
+.mb-table th {
+  font-weight: 400; color: var(--efsp-muted, #8c9aa6); font-size: 10.5px; letter-spacing: 0.08em; text-align: left;
+  padding: 6px 8px; border-bottom: 1px solid var(--efsp-line-2, #4a5560); white-space: nowrap;
+}
+.mb-table td {
+  padding: 0 8px; height: 32px; border-bottom: 1px solid var(--efsp-line, #2e3740); border-right: 1px solid var(--efsp-line, #2e3740);
+  font-size: 14px; white-space: nowrap;
+}
+.mb-table td:last-child { border-right: none; }
+.mb-side { color: #fff; font-weight: 700; }
+.mb-side-missing { color: var(--efsp-muted, #8c9aa6); font-weight: 400; }
+.mb-type { color: var(--efsp-muted, #8c9aa6); font-size: 12px; }
+.mb-st { font-size: 12.5px; text-align: center; }
+.mb-act { text-align: right; width: 1%; }
+.mb-row.mb-hold { cursor: default; }
+.mb-row.mb-hold[draggable="true"] { cursor: grab; }
+.mb-row.mb-hold:hover td { background: #171c21; }
+.mb-row.mb-dragging td { opacity: 0.35; }
+.mb-row.mb-over td { box-shadow: inset 0 2px 0 var(--efsp-muted, #8c9aa6); }
+.mb-vacant td { color: var(--efsp-faint, #56616c); font-size: 12px; }
+.mb-chg { color: var(--efsp-attn, #e0a83c); }
+.mb-late { color: var(--efsp-attn, #e0a83c); }
+/* crc-sync docs/adr/0137: the Marshal types fuel and the EAT here; an assigned EAT stays grey, underlined until cleared. */
+.mb-edit { cursor: text; }
+.mb-edit:hover { text-decoration: underline dotted; }
+.mb-eat-set { text-decoration: underline; text-underline-offset: 2px; }
+.mb-fe-input { width: 4.5em; }
+.mb-fuel-attn { color: var(--efsp-attn, #e0a83c); }
+.mb-fuel-danger { color: var(--efsp-danger, #ff5c5c); }
+
+.mb-commence {
+  font: inherit; font-size: 11.5px; color: #fff; background: var(--efsp-go, #4a7dbf); border: 1px solid #6b9be0;
+  border-radius: 3px; padding: 2px 10px; cursor: pointer;
+}
+.mb-none { padding: 10px 12px; color: var(--efsp-muted, #8c9aa6); }
+.mb-none[hidden] { display: none; }
+.mb-togo {
+  margin-top: auto; display: flex; justify-content: flex-end; align-items: baseline; gap: 14px;
+  padding: 8px 14px; border-top: 1px solid var(--efsp-line-2, #4a5560);
+}
+.mb-togo span { color: var(--efsp-muted, #8c9aa6); letter-spacing: 0.08em; font-size: 12px; }
+.mb-togo b { font-size: 22px; color: #fff; }
+
+.mb-patcol { padding: 10px 12px; min-width: 0; }
+.mb-picture { display: block; width: 100%; max-width: 360px; margin: 0 auto; font-family: inherit; }
+.mb-picture .mp-ref line, .mb-picture .mp-ref path { stroke: #5f6b76; stroke-width: 1.6; fill: none; }
+.mb-picture .mp-bolter { opacity: 0.8; }
+.mb-picture .mp-ship { fill: #c9d1d7; }
+.mb-picture .mp-tick { stroke: #5f6b76; stroke-width: 1.6; }
+.mb-picture .mp-scale { fill: var(--efsp-faint, #56616c); font-size: 12px; }
+.mb-picture .mp-plane { fill: #e6edf3; }
+.mb-picture .mp-label { fill: var(--efsp-text, #d8e0e6); font-size: 13px; }
+.mb-picture .mp-fuel { fill: var(--efsp-muted, #8c9aa6); font-size: 12px; }
+.mb-picture .mp-stack { stroke: #5f6b76; stroke-width: 1.4; }
+.mb-picture .mp-fix { stroke: #c9d1d7; stroke-width: 1.6; }
+.mb-picture .mp-fixlabel { fill: var(--efsp-text, #d8e0e6); font-size: 12px; }
+.mb-picture .mp-radial { fill: var(--efsp-faint, #56616c); font-size: 11px; }
+.mb-picture .mp-attn { fill: var(--efsp-attn, #e0a83c); }
+.mb-picture .mp-danger { fill: var(--efsp-danger, #ff5c5c); }
+
+@media (max-width: 900px) {
+  .mb-main { grid-template-columns: 1fr; }
+  .mb-tablecol { border-right: none; border-bottom: 1px solid var(--efsp-line, #2e3740); }
+}

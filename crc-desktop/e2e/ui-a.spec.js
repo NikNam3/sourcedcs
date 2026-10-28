@@ -1,0 +1,202 @@
+'use strict';
+
+/* UI-A follow-up (docs/wip/UI-A.md): the human-reported U1-U8, S-L15 and S-L16 items on screen.
+ * Every Strip a test seeds is dropped at its end (the Board lives for the whole run). */
+
+const { test, expect } = require('./helpers/test');
+const { openPanel, seedStrip, stripByCallsign, startAction, dropStrips } = require('./helpers/app');
+
+test.describe.configure({ timeout: 60000 });
+test.use({ viewport: { width: 1500, height: 1000 } });
+
+let seq = 0;
+const cs = (p) => `${p}${(Date.now() + seq++) % 10000}`;
+const _contexts = [];
+test.afterEach(async () => { while (_contexts.length) await _contexts.pop().close().catch(() => {}); });
+
+async function controller(browser, opts) {
+  const ctx = await browser.newContext({ baseURL: test.info().project.use.baseURL, viewport: { width: 1500, height: 1000 } });
+  _contexts.push(ctx);
+  const page = await ctx.newPage();
+  await openPanel(page, opts);
+  return page;
+}
+
+test('U1 + U4: OPS has ORDNANCE on its face and can set HUNG; TYPE is editable', async ({ page }) => {
+  await openPanel(page, { signedOn: ['OPS'] });
+  const callsign = cs('UIA');
+  const strip = await seedStrip(page, { callsign });
+  try {
+    const ord = strip.locator('.efsp-strip-fields .efsp-block-3G').first();
+    await expect(ord, 'ORDNANCE is on OPS\'s face').toBeVisible();
+    await ord.click();
+    await strip.locator('select.efsp-block-enum-select').selectOption('HUNG');
+    await expect(stripByCallsign(page, callsign).locator('.efsp-strip-fields .efsp-block-3G')).toHaveText('HUNG');
+
+    // U4 / T7 (H134): TYPE shows TYPE/WAKE in ICAO order, the wake from the type; it is edited as one field.
+    const type = () => stripByCallsign(page, callsign).locator('.efsp-strip-fields .efsp-block-3').first();
+    await expect(type()).toHaveText('F16/M');
+    await type().click();
+    const input = stripByCallsign(page, callsign).locator('input.efsp-block-input');
+    await expect(input, 'the editor opens on TYPE/WAKE').toHaveValue('F16/M');
+    await expect(input).toHaveAttribute('placeholder', 'TYPE/WAKE');
+    await input.fill('m/f15'); // the wake typed first is read the same way
+    await input.press('Enter');
+    await expect(type()).toHaveText('F15/M');
+    await type().click();
+    await stripByCallsign(page, callsign).locator('input.efsp-block-input').fill('2/K35R');
+    await stripByCallsign(page, callsign).locator('input.efsp-block-input').press('Enter');
+    await expect(type(), 'the wake comes from the type when none is typed').toHaveText('2/K35R/H');
+    await type().click();
+    await stripByCallsign(page, callsign).locator('input.efsp-block-input').fill('F-16');
+    await stripByCallsign(page, callsign).locator('input.efsp-block-input').press('Enter');
+    await expect(page.locator('#efsp-mutation-error')).toContainText('not an aircraft type designator');
+    // F-207: the refused text comes back in the editor; Esc leaves the Block as it was.
+    await expect(stripByCallsign(page, callsign).locator('input.efsp-block-input')).toHaveValue('F-16');
+    await stripByCallsign(page, callsign).locator('input.efsp-block-input').press('Escape');
+    await expect(type()).toHaveText('2/K35R/H');
+
+    // T8: Block 1 is ACID, and a label names its FAA block on hover; T31 a: a time says HHMM before it is typed.
+    const label = (id) => stripByCallsign(page, callsign).locator('.efsp-strip-fields .efsp-field', { has: page.locator(`.efsp-block-${id}`) })
+      .locator('.efsp-block-label');
+    await expect(label('1')).toHaveText('ACID');
+    await expect(label('1')).toHaveAttribute('title', 'Block 1, aircraft identification');
+    await expect(label('6')).toHaveAttribute('title', /^Block 6, proposed departure time \(P time\), UTC HHMM/);
+    await stripByCallsign(page, callsign).locator('.efsp-strip-fields .efsp-block-6').first().click();
+    await expect(stripByCallsign(page, callsign).locator('input.efsp-block-input')).toHaveAttribute('placeholder', 'HHMM');
+    await stripByCallsign(page, callsign).locator('input.efsp-block-input').press('Escape');
+  } finally {
+    await dropStrips(page, [callsign]);
+  }
+});
+
+test('S-L15: Alt+click offsets a Strip and Ctrl+click steps its highlight, one input each', async ({ page }) => {
+  await openPanel(page, { signedOn: ['OPS'] });
+  const callsign = cs('GST');
+  const strip = await seedStrip(page, { callsign });
+  try {
+    const fields = () => stripByCallsign(page, callsign).locator('.efsp-strip-tab-type'); // an inert part of the Strip
+    await fields().click({ modifiers: ['Alt'] });
+    await expect(stripByCallsign(page, callsign)).toHaveClass(/efsp-strip-offset/);
+    await fields().click({ modifiers: ['Alt'] });
+    await expect(stripByCallsign(page, callsign)).not.toHaveClass(/efsp-strip-offset/);
+    const colour = () => stripByCallsign(page, callsign).evaluate(el => el.style.getPropertyValue('--efsp-highlight'));
+    for (const want of ['yellow', 'cyan', 'lime', '']) {
+      await fields().click({ modifiers: ['Control'] });
+      await expect.poll(colour).toBe(want);
+    }
+  } finally {
+    await dropStrips(page, [callsign]);
+  }
+});
+
+test('S-L16 W5: retyping a shown estimate accepts it as the actual', async ({ page }) => {
+  await openPanel(page, { signedOn: ['OPS', 'GC'] });
+  const callsign = cs('EST');
+  const strip = await seedStrip(page, { callsign, flightData: { proposedDepartureTimeUtc: '1450' } });
+  try {
+    // P-time 1450 gives TAXI an estimate; the expanded view carries TAXI.
+    await strip.locator('.efsp-expand-btn').click();
+    const taxi = stripByCallsign(page, callsign).locator('[data-expanded-block="17"] .efsp-block').first();
+    await expect(taxi).toHaveClass(/efsp-block-estimated/);
+    await taxi.click();
+    const input = stripByCallsign(page, callsign).locator('input.efsp-block-input');
+    const shown = await input.inputValue();
+    await input.press('Enter'); // the same value, unchanged: accepts the estimate
+    await expect(stripByCallsign(page, callsign).locator('[data-expanded-block="17"] .efsp-block').first()).not.toHaveClass(/efsp-block-estimated/);
+    await expect(stripByCallsign(page, callsign).locator('[data-expanded-block="17"] .efsp-block').first()).toHaveText(shown);
+  } finally {
+    await dropStrips(page, [callsign]);
+  }
+});
+
+test('U2: a HANDOFF proposal to CTR announces a new Strip at CTR, even to one controller holding AP and CTR', async ({ browser }) => {
+  const page = await controller(browser, { signedOn: ['AP'], facilityId: 'INCIRLIK', controller: 'uia-combo' });
+  await page.evaluate(() => crc.ws.sendEfspSetPositions('CENTER', ['CTR']));
+  await page.waitForFunction(() => crc.ws.getActingPositions('CENTER').includes('CTR'));
+  const callsign = cs('HND');
+  const s = await seedStrip(page, { callsign, actingPositionId: 'AP', bayId: 'ap-inbound', stripType: 'ARRIVAL' });
+  try {
+    await startAction(s, 'Coordinate…');
+    const popover = page.locator('.efsp-coordinate-popover');
+    await popover.locator('.efsp-coordinate-primitive-select').selectOption('HANDOFF');
+    await popover.locator('.efsp-coordinate-send-btn').dispatchEvent('click');
+    const ctrTab = page.locator('.efsp-position-tab[data-position-id="CTR"]');
+    await expect(ctrTab.locator('.efsp-tab-new-dot, .efsp-tab-new'), 'CTR\'s tab says a Strip arrived').toBeVisible({ timeout: 10000 });
+    await ctrTab.click();
+    await page.locator('#efsp-bay-tabs .efsp-bay-tab.efsp-tab-has-arrival').click();
+    await expect(page.locator('.efsp-strip', { hasText: callsign }).first().locator('.efsp-strip-from')).toContainText('from AP');
+  } finally {
+    await dropStrips(page, [callsign]);
+  }
+});
+
+test('U8: TOFI Exit becomes CTR\'s primary action once the mission line goes OFF_STATION', async ({ browser }) => {
+  const ctr = await controller(browser, { signedOn: ['CTR'], facilityId: 'CENTER', controller: 'uia-ctr' });
+  const tac = await controller(browser, { signedOn: ['TAC_C2'], facilityId: 'TACTICAL', controller: 'uia-tac' });
+  const callsign = cs('EXT');
+  const act = (page, pos, stripType, op) => page.evaluate(([p, c, r, o]) => {
+    const s = crc.state.getAllEfspStrips().find(x => x.state !== 'DROPPED' && x.stripType === r && crc.state.getEfspFlightData(x.flightDataId).identity.callsign === c);
+    crc.ws.sendEfspMutation(p, crc.state.getEfspStrip(s.stripId), o);
+  }, [pos, callsign, stripType, op]);
+  const state = (page, stripType) => page.evaluate(([c, r]) => {
+    const s = crc.state.getAllEfspStrips().find(x => x.state !== 'DROPPED' && x.stripType === r && crc.state.getEfspFlightData(x.flightDataId).identity.callsign === c);
+    return s ? s.state : null;
+  }, [callsign, stripType]);
+  try {
+    await ctr.evaluate((c) => crc.ws.sendEfspCreateStrip('CTR', { kind: 'CreateStrip', bayId: 'ctr-overflight', rackId: 'main', stripType: 'OVERFLIGHT', flightData: { callsign: c } }, 'CENTER'), callsign);
+    await expect.poll(() => state(ctr, 'OVERFLIGHT')).toBe('INBOUND');
+    await act(ctr, 'CTR', 'OVERFLIGHT', { kind: 'SetState', toState: 'IN_SECTOR' }); // TOFI ENTRY needs the flight being worked (docs/adr/0087)
+    await expect.poll(() => state(ctr, 'OVERFLIGHT')).toBe('IN_SECTOR');
+    await act(ctr, 'CTR', 'OVERFLIGHT', { kind: 'TOFI', action: 'PROPOSE', direction: 'ENTRY', toFacilityId: 'TACTICAL', toPositionId: 'TAC_C2' });
+    await expect.poll(() => state(tac, 'MISSION')).not.toBeNull();
+    await act(tac, 'TAC_C2', 'MISSION', { kind: 'TOFI', action: 'ACCEPT', separationRegime: 'ATC' });
+    for (const to of ['AIRBORNE', 'ON_STATION']) {
+      await act(tac, 'TAC_C2', 'MISSION', { kind: 'SetState', toState: to });
+      await expect.poll(() => state(tac, 'MISSION')).toBe(to);
+    }
+    const ctrStrip = ctr.locator('.efsp-strip', { hasText: callsign }).first();
+    await ctr.locator('#efsp-bay-tabs .efsp-bay-tab', { hasText: 'overflight' }).first().click().catch(() => {});
+    await expect(ctrStrip).toBeVisible();
+    await expect(ctrStrip.locator('[data-strip-action="tofi-exit-primary"]'), 'not while the line is ON_STATION').toHaveCount(0);
+    await act(tac, 'TAC_C2', 'MISSION', { kind: 'SetState', toState: 'OFF_STATION' });
+    await expect.poll(() => state(ctr, 'MISSION')).toBe('OFF_STATION');
+    const exit = ctrStrip.locator('[data-strip-action="tofi-exit-primary"]');
+    await expect(exit, 'TOFI Exit is CTR\'s primary action').toBeVisible();
+    await expect(exit).toHaveText('TOFI Exit');
+    await exit.click();
+    await expect.poll(() => ctr.evaluate((c) => {
+      const s = crc.state.getAllEfspStrips().find(x => x.stripType === 'OVERFLIGHT' && x.state !== 'DROPPED' && crc.state.getEfspFlightData(x.flightDataId).identity.callsign === c);
+      return s && s.tofiCoordination && s.tofiCoordination.direction + ':' + s.tofiCoordination.state;
+    }, callsign)).toBe('EXIT:INITIATED');
+  } finally {
+    await dropStrips(ctr, [callsign]);
+    await dropStrips(tac, [callsign]);
+  }
+});
+
+test('S-L23 finding: a TAC_C2-only controller sees the line AIC holds, and a JTAC-only one sees no other Position\'s tab', async ({ browser }) => {
+  const tac = await controller(browser, { signedOn: ['TAC_C2'], facilityId: 'TACTICAL', controller: 'uia-tac2' });
+  const jtac = await controller(browser, { signedOn: ['JTAC'], facilityId: 'TACTICAL', controller: 'uia-jtac2' });
+  await controller(browser, { signedOn: ['AIC'], facilityId: 'TACTICAL', controller: 'uia-aic2' }); // a staffed AIC, or the transfer has no receiver
+  const callsign = cs('WTH');
+  try {
+    await tac.evaluate((c) => crc.ws.sendEfspCreateStrip('TAC_C2', { kind: 'CreateStrip', bayId: 'tac-c2-tasked', rackId: 'main', stripType: 'MISSION', flightData: { callsign: c } }, 'TACTICAL'), callsign);
+    const line = (page) => page.evaluate((c) => crc.state.getAllEfspStrips().find(x => x.state !== 'DROPPED' && crc.state.getEfspFlightData(x.flightDataId).identity.callsign === c), callsign);
+    await expect.poll(() => line(tac)).not.toBeNull();
+    for (const to of ['AIRBORNE', 'ON_STATION']) {
+      await tac.evaluate(([c, t]) => { const s = crc.state.getAllEfspStrips().find(x => x.state !== 'DROPPED' && crc.state.getEfspFlightData(x.flightDataId).identity.callsign === c); crc.ws.sendEfspMutation('TAC_C2', crc.state.getEfspStrip(s.stripId), { kind: 'SetState', toState: t }); }, [callsign, to]);
+      await expect.poll(async () => (await line(tac)).state).toBe(to);
+    }
+    await tac.evaluate((c) => { const s = crc.state.getAllEfspStrips().find(x => x.state !== 'DROPPED' && crc.state.getEfspFlightData(x.flightDataId).identity.callsign === c); crc.ws.sendEfspMutation('TAC_C2', crc.state.getEfspStrip(s.stripId), { kind: 'TransferStrip', toPositionId: 'AIC', bayId: 'aic-on-station', rackId: 'main' }); }, callsign);
+    await expect.poll(async () => (await line(tac)).ownerPositionId).toBe('AIC');
+    const withTab = tac.locator('#efsp-bay-tabs .efsp-bay-tab', { hasText: 'with AIC/JTAC' });
+    await expect(withTab, 'TAC_C2 has a tab for lines held below it').toBeVisible();
+    await withTab.click();
+    await expect(tac.locator('.efsp-strip', { hasText: callsign }).first()).toBeVisible();
+    // JTAC-only: only its own tab (the line is AIC's, never sent to it).
+    await expect(jtac.locator('#efsp-position-tabs .efsp-position-tab')).toHaveCount(1);
+  } finally {
+    await dropStrips(tac, [callsign]);
+  }
+});

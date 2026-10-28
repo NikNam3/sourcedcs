@@ -1,4 +1,27 @@
 'use strict';
+import { NM_M, haversineM, kinematics, projectPos, verticalFpm } from './geo.js';
+import { getIff, iffColor } from './iff.js';
+import {
+  emergencyColor, infoLine, isAir, shouldLabel, trackCodeTag, trackEmergency, trackIsIdent, trackName
+} from './track-label.js';
+import { atcDisplay, atcPalette } from './atc-scope.js';
+import { losVisibleRangeM } from './los.js';
+import {
+  conformanceAlertsForFlightData, getAllEfspConflicts, getEfspFlightData, getEfspStrip, conflictAlertsForTrack, isConflictSuppressed, stripIdsForTrackId, refuelingAlertText, airspaceEntryAlertsForTrack
+} from './panels/efsp/efsp-state.js';
+import { getCorrelatedHighlightTrackId } from './panels/efsp/correlation-highlight.js';
+import { buildCarrierFinalLine } from './panels/efsp/carrier-panel.js';
+import {
+  CRC_RANGE_M, FADE_DURATION_MS, getLabelHalfW, getLeaderIconGap, getScale, getTextSizePx, HISTORY_MAX, LABEL_EDGE_MARGIN, MIN_SPD_KT_PPL, STALE_MS, TEXT_OFFSET_EM
+} from './scope-constants.js';
+import { _aprtRwyTrueDeg, _aprtSelectedApt, _pulseBright, approachRwyCourse, approachRwyCourseTrue, grpcStatus, lastUpdateMs, selectedApt, selectedRef } from './view-state.js';
+import {
+  coverageApproachFor, getActiveRadars, getBullseye, history, labelOffsets, lastSweepMs, latestFromServer, missionData, tracks, zeroSpeedSinceMs
+} from './picture.js';
+import { map, mapReady, updateZoomLimits } from './map-handle.js';
+import { settings } from './settings.js';
+import { drawingGeometry } from './drawing-highlight.js';
+import { markEfspChanged, onEfspChanged } from './panels/efsp/efsp-change-bus.js';
 
 // ── GeoJSON builders ───────────────────────────────────────────────────────
 // All functions return FeatureCollections ready for MapLibre setData().
@@ -13,20 +36,89 @@ function trackColor(track) {
   return iffColor(getIff(track));
 }
 
-function buildInfo(track, hist) {
+/** The data block's second line, from the track history's speed and climb. */
+function infoLine_(t, hist) {
   const { speedKt } = kinematics(hist);
-  const fpm         = verticalFpm(hist);
-  const fl          = Math.round(indicatedAltFt(track.alt) / 100).toString().padStart(3, '0');
-  const gs          = Math.round(speedKt).toString().padStart(3, '0');
-  let line;
-  if (Math.abs(fpm) > 100) {
-    const arrow = fpm > 0 ? '↑' : '↓';
-    const vv    = Math.min(99, Math.round(Math.abs(fpm) / 100)).toString().padStart(2, '0');
-    line = `${fl}${arrow}${vv} G${gs}`;
-  } else {
-    line = `${fl} G${gs}`;
+  return infoLine(t, speedKt, verticalFpm(hist));
+}
+
+// ── Assigned values and alerts in the data block (docs/adr/0058) ───────────
+const ALERT_COLOR_BAD = '#ff8a4c';
+const ALERT_COLOR_ATTN = '#e0a83c';
+const ALERT_COLOR_SUPPRESSED = '#8c8c8c'; // crc-sync's docs/adr/0145: a suppressed CA, grey (atc-scope.js's ATC_DIM_GRAY)
+
+/** The Strip-side flight record for a track, if it is correlated to one. */
+export function _flightDataForTrack(trackId) {
+  for (const stripId of stripIdsForTrackId(trackId)) {
+    const strip = getEfspStrip(stripId);
+    const flightData = strip && getEfspFlightData(strip.flightDataId);
+    if (flightData) return flightData;
   }
-  return line;
+  return null;
+}
+
+/** "A180 H050": the flight's assigned altitude (hundreds of feet) and heading, when it has them. */
+function buildAssignedLine(flightData) {
+  if (!flightData || !flightData.clearance) return '';
+  const active = (cell) => cell && cell.entries.find(e => e.status === 'ACTIVE');
+  const alt = active(flightData.clearance.altitude);
+  const hdg = active(flightData.clearance.heading);
+  const parts = [];
+  const h = (ft) => String(Math.round(ft / 100)).padStart(3, '0');
+  if (alt && alt.block) parts.push(`A${h(alt.block.lowFt)}B${h(alt.block.highFt)}`);
+  else if (alt && Number.isFinite(alt.parsed)) parts.push('A' + h(alt.parsed));
+  if (hdg && Number.isFinite(hdg.parsed)) parts.push('H' + String(hdg.parsed).padStart(3, '0'));
+  return parts.join(' ');
+}
+
+/** The one alert tag a data block leads with: a conflict first, then conformance. */
+function buildAlertTag(trackId, flightData) {
+  const all = conflictAlertsForTrack(trackId);
+  // crc-sync's docs/adr/0145: a suppressed alert keeps a grey tag, after every live alert.
+  const conflicts = all.filter(c => !c.suppressed);
+  // crc-sync's docs/adr/0118: an MCI is shown like a CA, named MCI; a CA wins when the track is in both.
+  if (conflicts.length) return { tag: conflicts.every(c => c.kind === 'MCI') ? 'MCI' : 'CA', color: ALERT_COLOR_BAD };
+  const alerts = flightData ? conformanceAlertsForFlightData(flightData.flightDataId) : [];
+  const bad = alerts.find(a => a.kind !== 'HEADING');
+  const ar = bad && refuelingAlertText(bad);
+  if (ar) return { tag: ar.text.replace(' ', ''), color: ALERT_COLOR_BAD };
+  if (bad && bad.kind === 'LEVEL_BUST') return { tag: `BUST${bad.deviationFt > 0 ? '+' : '−'}${Math.abs(bad.deviationFt)}`, color: ALERT_COLOR_BAD };
+  if (bad && bad.kind === 'WRONG_WAY') return { tag: `ALT${bad.fpm < 0 ? '↓' : '↑'}`, color: ALERT_COLOR_BAD };
+  // crc-sync's docs/adr/0119: inside an active airspace it may not be in (amber, after the red alerts).
+  if (airspaceEntryAlertsForTrack(trackId).length) return { tag: 'SAA', color: ALERT_COLOR_ATTN };
+  const hdg = alerts.find(a => a.kind === 'HEADING');
+  if (hdg) return { tag: `HDG${String(hdg.actual).padStart(3, '0')}`, color: ALERT_COLOR_ATTN };
+  if (all.length) return { tag: all.every(c => c.kind === 'MCI') ? 'MCI' : 'CA', color: ALERT_COLOR_SUPPRESSED };
+  return { tag: '', color: ALERT_COLOR_ATTN };
+}
+
+/**
+ * Each short-term conflict drawn on the scope: both predicted paths, the line
+ * between their closest points, and a marker there with the countdown. The
+ * paths and the line are a per-controller switch (Settings → RADAR, T30); the
+ * marker and the data block's CA are the alert and always drawn.
+ */
+export function buildConflictAlertOverlay() {
+  const features = [];
+  const conflicts = getAllEfspConflicts();
+  const now = (id) => tracks.get(String(id)) || latestFromServer.get(String(id));
+  const paths = settings.conflictAlertPaths !== false;
+  for (const c of conflicts) {
+    // crc-sync's docs/adr/0145: a suppressed alert draws nothing on the scope; its grey tag is on the labels.
+    if (isConflictSuppressed(c)) continue;
+    const a = paths && now(c.a);
+    const b = paths && now(c.b);
+    if (a) features.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: [[a.lon, a.lat], [c.aAt.lon, c.aAt.lat]] }, properties: { kind: 'path' } });
+    if (b) features.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: [[b.lon, b.lat], [c.bAt.lon, c.bAt.lat]] }, properties: { kind: 'path' } });
+    if (paths) features.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: [[c.aAt.lon, c.aAt.lat], [c.bAt.lon, c.bAt.lat]] }, properties: { kind: 'cpa-line' } });
+    const clock = `${Math.floor(c.timeToCpaSec / 60)}:${String(c.timeToCpaSec % 60).padStart(2, '0')}`;
+    features.push({
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [(c.aAt.lon + c.bAt.lon) / 2, (c.aAt.lat + c.bAt.lat) / 2] },
+      properties: { kind: 'cpa', label: `${clock}  ${c.minNm} NM / ${c.vertFt} ft` },
+    });
+  }
+  return { type: 'FeatureCollection', features };
 }
 
 // Fade opacity for a track based on time since last radar sweep hit,
@@ -44,39 +136,84 @@ function sweepOpacity(id, baseOp) {
   return baseOp * Math.max(0, 1 - (effective - grace) / FADE_DURATION_MS);
 }
 
+// ── ATC scheme (crc-sync's docs/adr/0088) ────────────────────────────────
+// A contact sent with `scheme: 'ATC'` is drawn in the STARS layout. What it
+// shows is atc-scope.js's; this only turns it into features. One display per
+// contact per frame, shared by the dots, the block and its leader.
+// [SOURCE-DEFINED] (docs/adr/0088, H41/H71) — 16 is an engineering bound, not STARS: the
+// number of text-segment layers map-setup.js pre-creates for one block.
+export const ATC_MAX_SEGMENTS = 16;
+const ATC_TRANSPARENT = 'rgba(0,0,0,0)';
+let _atcFrame = null;
+
+function _isAtc(t) { return !!t && t.scheme === 'ATC'; }
+
+function _atcDisplayFor(id, t) {
+  const now = Date.now();
+  if (!_atcFrame || now - _atcFrame.at > 50) _atcFrame = { at: now, byId: new Map() };
+  let d = _atcFrame.byId.get(id);
+  if (!d) { d = atcDisplay(id, t, now); _atcFrame.byId.set(id, d); }
+  return d;
+}
+
+/** The block's segments as flat properties s0..sN / c0..cN, blink applied: MapLibre's `format` needs a fixed shape. */
+function _atcSegmentProps(d) {
+  const props = {};
+  const flat = [];
+  d.lines.forEach((line, i) => {
+    if (i > 0) flat.push({ text: '\n', color: null, blink: false });
+    for (const seg of line) flat.push(seg);
+  });
+  for (let i = 0; i < ATC_MAX_SEGMENTS; i++) {
+    const seg = flat[i];
+    props[`s${i}`] = seg ? seg.text : '';
+    const color = seg && seg.color ? seg.color : d.view.color;
+    props[`c${i}`] = seg && seg.blink && !_pulseBright ? ATC_TRANSPARENT : color;
+  }
+  return props;
+}
+
 // Track dots
-function buildDots() {
+export function buildDots() {
   const features = [];
   const baseOp   = trackOpacity();
 
   for (const [id, t] of tracks) {
-    if (!settings.aiEnabled && !t.player) continue;
-    if (!settings.shipsEnabled && t.category === 4) continue;
-    if (settings.hideGroundUnits && t.category === 3) continue;
+    if (!settings.shipsEnabled && t.domain === 'SEA') continue;
     const iffState = getIff(t);
-    if (iffState === 'invisible') continue;
     const hist       = history.get(id) || [];
     const { heading } = kinematics(hist);
-    const onGround   = checkOnGround(t);
-    const emType     = squawkEmergency(t.squawk);
-    const isIdent    = t.squawkStatus === 2;
+    const emType     = trackEmergency(t);
     let   opacity    = sweepOpacity(id, baseOp);
-    if (isIdent) opacity = sweepOpacity(id, baseOp) * (_pulseBright ? 1.0 : 0.3);
+    if (_isAtc(t)) {
+      const d = _atcDisplayFor(id, t);
+      features.push({
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: [d.lon, d.lat] },
+        properties: {
+          id, scheme: 'ATC', domain: t.domain, emergency: '',
+          disc: d.view.disc, targetColor: d.palette.target, targetOpacity: d.palette.targetOpacity * opacity,
+          posChar: d.view.posChar, posColor: d.view.posColor, posOpacity: d.view.opacity * opacity,
+          opacity,
+        },
+      });
+      continue;
+    }
+    if (trackIsIdent(t)) opacity = sweepOpacity(id, baseOp) * (_pulseBright ? 1.0 : 0.3);
     features.push({
       type: 'Feature',
       geometry: { type: 'Point', coordinates: [t.lon, t.lat] },
       properties: {
         id,
-        callsign:       resolveCallsign(t),
+        scheme:         'TACTICAL',
         color:          trackColor(t),
-        coalition:      t.coalition,
-        category:       t.category,
+        domain:         t.domain,
         iff:            iffState,
         opacity,
-        onGround,
+        onGround:       !!t.onGround,
         heading:        Math.round(heading),
         emergency:      emType || '',
-        emergencyColor: emType ? EMERGENCY_COLOR[emType] : '',
+        emergencyColor: emType ? emergencyColor(emType) : '',
       },
     });
   }
@@ -105,13 +242,27 @@ function buildTrails() {
   };
 
   for (const [id, t] of tracks) {
-    if (!settings.aiEnabled && !t.player) continue;
-    if (!settings.shipsEnabled && t.category === 4) continue;
-    if (getIff(t) === 'invisible') continue;
-    if (t.category === 3) continue; // ground units have no trail
-    if (checkOnGround(t)) continue; // aircraft on ground have no trail
+    if (!settings.shipsEnabled && t.domain === 'SEA') continue;
+    if (t.onGround) continue; // aircraft on ground have no trail
     const hist = history.get(id);
-    if (hist && hist.length > 1) addDots(hist, t, sweepOpacity(id, 1));
+    if (!hist || hist.length < 2) continue;
+    if (_isAtc(t)) {
+      // STARS history: five blues, newest to oldest, the same for every
+      // track — the trail never says who it is (docs/adr/0088).
+      const P = atcPalette();
+      if (!P) continue;
+      const fade = sweepOpacity(id, 1) * baseOp;
+      for (let age = 1; age <= P.history.length && age < hist.length; age++) {
+        const pt = hist[hist.length - 1 - age];
+        features.push({
+          type: 'Feature',
+          geometry: { type: 'Point', coordinates: [pt.lon, pt.lat] },
+          properties: { color: P.history[age - 1], opacity: P.historyOpacity * fade },
+        });
+      }
+      continue;
+    }
+    addDots(hist, t, sweepOpacity(id, 1));
   }
 
   return { type: 'FeatureCollection', features };
@@ -124,11 +275,9 @@ function buildPPL() {
   const durS     = settings.pplDuration;
 
   for (const [id, t] of tracks) {
-    if (!settings.aiEnabled && !t.player) continue;
-    if (!settings.shipsEnabled && t.category === 4) continue;
-    if (getIff(t) === 'invisible') continue;
-    if (t.category === 3) continue; // ground units have no PPL
-    if (checkOnGround(t)) continue; // aircraft on ground have no PPL
+    if (!settings.shipsEnabled && t.domain === 'SEA') continue;
+    if (t.onGround) continue; // aircraft on ground have no PPL
+    if (_isAtc(t)) continue; // a STARS scope draws no projected line (docs/adr/0088)
     const hist = history.get(id) || [];
     const { heading, speedMs, speedKt } = kinematics(hist);
     if (speedKt < MIN_SPD_KT_PPL) continue;
@@ -156,11 +305,9 @@ function buildLeaders() {
   const decluttered = getDeclutteredIds();
 
   for (const [id, t] of tracks) {
-    if (!settings.shipsEnabled && t.category === 4) continue;
-    if (settings.hideGroundUnits && t.category === 3) continue;
-    if (getIff(t) === 'invisible') continue;
+    if (!settings.shipsEnabled && t.domain === 'SEA') continue;
     if (decluttered.has(id)) continue;
-    if ((t.category === 3 || t.category === 4) && !groundLabels.has(id)) continue;
+    if (!shouldLabel(t)) continue;
 
     const relOff = labelOffsets.get(id);
     if (!relOff) continue;
@@ -168,8 +315,12 @@ function buildLeaders() {
     const [dLat, dLon] = relOff;
     if (Math.abs(dLat) < 1e-7 && Math.abs(dLon) < 1e-7) continue;
 
-    const iconPx  = map.project([t.lon, t.lat]);
-    const labelPx = map.project([t.lon + dLon, t.lat + dLat]);
+    // An ATC block has its own colour and may sit at a coasting position.
+    const atc = _isAtc(t) ? _atcDisplayFor(id, t) : null;
+    if (atc && atc.lines.length === 0) continue;
+    const at = atc ? { lat: atc.lat, lon: atc.lon } : t;
+    const iconPx  = map.project([at.lon, at.lat]);
+    const labelPx = map.project([at.lon + dLon, at.lat + dLat]);
     const dx  = labelPx.x - iconPx.x;
     const dy  = labelPx.y - iconPx.y;
     const len = Math.hypot(dx, dy);
@@ -188,7 +339,9 @@ function buildLeaders() {
         type: 'LineString',
         coordinates: [[start.lng, start.lat], [end.lng, end.lat]],
       },
-      properties: { color: trackColor(t), opacity: sweepOpacity(id, baseOp) },
+      properties: atc
+        ? { color: atc.view.color, opacity: sweepOpacity(id, baseOp) * atc.view.opacity * (atc.view.blinkBlock && !_pulseBright ? 0.15 : 1) }
+        : { color: trackColor(t), opacity: sweepOpacity(id, baseOp) },
     });
   }
 
@@ -199,28 +352,28 @@ function buildLeaders() {
 // Returns the Set of track IDs whose labels should be suppressed because they
 // are part of a sequential-squawk formation (e.g. 1101→1102→1103) where each
 // follower is within 0.5 nm horizontally and 1 000 ft vertically of the
-// previous squawk in the sequence.  Only labels are hidden; icons still show.
+// previous squawk in the sequence. Only labels are hidden; icons still show.
+// Needs what an SSR radar gives — a code and a Mode C altitude — so it only
+// ever applies to contacts that have both.
 
 function getDeclutteredIds() {
   if (!settings.declutter) return new Set();
 
-  // Build a map of squawk → track for all currently visible tracks
-  const bySquawk = new Map();
+  const byCode = new Map(); // numeric (octal) code -> track
   for (const [, t] of tracks) {
-    if (t.squawk == null) continue;
-    const sq = Number(t.squawk);
-    if (Number.isFinite(sq) && sq >= 0 && sq <= 7777) bySquawk.set(sq, t);
+    if (!t.ssr || !t.ssr.code || !t.altitude) continue;
+    byCode.set(parseInt(t.ssr.code, 8), t);
   }
 
   const hidden = new Set();
-  const HORIZ_M = 0.5 * 1852;   // 0.5 nm in metres
-  const VERT_M  = 304.8;        // 1 000 ft in metres
+  const HORIZ_M = 0.5 * NM_M; // 0.5 nm in metres
+  const VERT_FT = 1000;
 
-  for (const [sq, t] of bySquawk) {
-    const prev = bySquawk.get(sq - 1);
+  for (const [code, t] of byCode) {
+    const prev = byCode.get(code - 1);
     if (!prev) continue;
     if (haversineM(t.lat, t.lon, prev.lat, prev.lon) > HORIZ_M) continue;
-    if (Math.abs((t.alt || 0) - (prev.alt || 0))    > VERT_M)  continue;
+    if (Math.abs(t.altitude.ft - prev.altitude.ft) > VERT_FT) continue;
     hidden.add(String(t.id));
   }
 
@@ -232,7 +385,7 @@ function getDeclutteredIds() {
 // Non-dragged tracks: geo offset computed from em-offset at first render, stored in labelOffsets.
 // Dragged tracks: labelOffsets already holds the geo offset set by the drag interaction.
 // The rendered text uses textOffset [0,0] so MapLibre places it at the geo coordinate directly.
-function buildLabels() {
+export function buildLabels() {
   if (!mapReady) return { type: 'FeatureCollection', features: [] };
   const features    = [];
   const baseOp      = trackOpacity();
@@ -240,11 +393,10 @@ function buildLabels() {
   const decluttered = getDeclutteredIds();
 
   for (const [id, t] of tracks) {
-    if (!settings.aiEnabled && !t.player) continue;
-    if (!settings.shipsEnabled && t.category === 4) continue;
-    if (settings.hideGroundUnits && t.category === 3) continue;
-    if (getIff(t) === 'invisible') continue;
+    if (!settings.shipsEnabled && t.domain === 'SEA') continue;
     if (decluttered.has(id)) continue; // formation follower — suppress label
+    const atc = _isAtc(t) ? _atcDisplayFor(id, t) : null;
+    if (atc ? atc.lines.length === 0 : !shouldLabel(t)) continue; // ships only once named; ATC: no block
 
     // Ensure every track has a stored geo offset (compute from em-offset if not yet set)
     if (!labelOffsets.has(id)) {
@@ -258,50 +410,46 @@ function buildLabels() {
     }
 
     const relOff     = labelOffsets.get(id);
-    const coords     = [t.lon + relOff[1], t.lat + relOff[0]];
     const textOffset = [0, 0]; // label is placed at its geo coordinate
-    const color      = trackColor(t);
-    const opacity    = sweepOpacity(id, baseOp);
-
-    // Ground vehicles and ships: only render if the user has assigned a label
-    if (t.category === 3 || t.category === 4) {
-      const customLabel = groundLabels.get(id);
-      if (!customLabel) continue;
+    if (atc) {
+      // docs/adr/0088: the STARS block, from atc-scope.js / track-label.js.
+      const blink = atc.view.blinkBlock && !_pulseBright ? 0.15 : 1;
       features.push({
         type: 'Feature',
-        geometry: { type: 'Point', coordinates: coords },
-        properties: { id, callsign: customLabel, infoLine: '', sqTag: '', sqColor: color, color, opacity, textOffset },
+        geometry: { type: 'Point', coordinates: [atc.lon + relOff[1], atc.lat + relOff[0]] },
+        properties: {
+          id, scheme: 'ATC', textOffset,
+          opacity: sweepOpacity(id, baseOp) * atc.view.opacity * blink,
+          halo: atc.palette.halo,
+          ..._atcSegmentProps(atc),
+        },
       });
       continue;
     }
+    const coords     = [t.lon + relOff[1], t.lat + relOff[0]];
+    const color      = trackColor(t);
+    const opacity    = sweepOpacity(id, baseOp);
 
+    // The data block. Every string in it comes from track-label.js.
+    const air      = isAir(t);
     const hist     = history.get(id) || [];
-    const csOnly   = checkOnGround(t);
-    const infoLine = csOnly ? '' : buildInfo(t, hist);
+    const csOnly   = !air || t.onGround;
+    const infoLine = csOnly ? '' : infoLine_(t, hist);
 
-    // Squawk tag — shown on its own line below the info line.
-    // Suppressed when the squawk already resolves to a known callsign via squawkMap/squawkSeq.
-    const emType = squawkEmergency(t.squawk);
-    let sqTag = '', sqColor = color;
-    if (emType === 'hijack')     { sqTag = 'HIJ'; sqColor = settings.colEmergHijack || '#cc6600'; }
-    else if (emType === 'radio') { sqTag = 'RDF'; sqColor = settings.colEmergRadio  || '#b8a000'; }
-    else if (emType === 'gen')   { sqTag = 'EMR'; sqColor = settings.colEmergGen    || '#cc2222'; }
-    else if (t.squawk != null && Number(t.squawk) !== 0) {
-      // Only show raw squawk if it isn't already mapped to a callsign
-      const sq = Number(t.squawk);
-      const mappedByExact = settings.squawkMap && settings.squawkMap[String(sq)];
-      const mappedBySeq   = !mappedByExact && settings.squawkSeq &&
-        Object.entries(settings.squawkSeq).some(([base]) => {
-          const off = sq - parseInt(base, 10);
-          return off >= 0 && off <= 98;
-        });
-      if (!mappedByExact && !mappedBySeq) sqTag = String(t.squawk).padStart(4, '0');
-    }
+    // docs/adr/0058: what the flight was told, and anything it is doing wrong.
+    const flightData = air ? _flightDataForTrack(id) : null;
+    const code     = trackCodeTag(t, flightData && flightData.identity ? flightData.identity.beaconAssigned : null);
+    const { tag: alertTag, color: alertColor } = buildAlertTag(id, flightData);
+    const asgnLine = csOnly ? '' : buildAssignedLine(flightData);
 
     features.push({
       type: 'Feature',
       geometry: { type: 'Point', coordinates: coords },
-      properties: { id, callsign: resolveCallsign(t), infoLine, sqTag, sqColor, color, opacity, textOffset },
+      properties: {
+        id, scheme: 'TACTICAL', callsign: trackName(t), infoLine,
+        sqTag: code.text, sqColor: code.color || color,
+        color, opacity, textOffset, alertTag, alertColor, asgnLine,
+      },
     });
   }
 
@@ -310,7 +458,7 @@ function buildLabels() {
 
 // ── Navpoints ─────────────────────────────────────────────────────────────
 
-function buildNavpoints() {
+export function buildNavpoints() {
   if (!missionData || !missionData.waypoints || !missionData.waypoints.length)
     return { type: 'FeatureCollection', features: [] };
   return {
@@ -344,62 +492,29 @@ function dcsColorToCss(colorStr) {
   return `rgba(${r},${g},${b},${a.toFixed(2)})`;
 }
 
-function buildDrawings() {
-  if (!missionData || !missionData.drawings || !missionData.drawings.length)
+/** The DCS shape drawings (not the text boxes). Empty when the controller has switched "DCS drawings" off (Settings →
+ *  Declutter, on by default); the airspace editor's picker highlight does not depend on it (drawing-highlight.js). */
+export function buildDrawings() {
+  if (settings.drawingsEnabled === false || !missionData || !missionData.drawings || !missionData.drawings.length)
     return { type: 'FeatureCollection', features: [] };
 
+  const color     = settings.lightMode ? 'rgba(40,40,40,0.85)' : 'rgba(255,255,255,0.75)';
+  const fillColor = 'rgba(0,0,0,0)';
   const features = [];
-
-  for (const d of missionData.drawings) {
-    if (d.primitiveType === 'TextBox') continue; // rendered by buildTextMarks() instead
-
-    const color     = settings.lightMode ? 'rgba(40,40,40,0.85)' : 'rgba(255,255,255,0.75)';
-    const fillColor = 'rgba(0,0,0,0)';
-    const props     = { color, fillColor };
-
-    if (d.polygonMode === 'circle' && d.lat != null && d.radius) {
-      // Approximate circle as closed polygon
-      const coords = [];
-      for (let i = 0; i <= 64; i++) {
-        const [lat, lon] = projectPos(d.lat, d.lon, (i / 64) * 360, d.radius);
-        coords.push([lon, lat]);
-      }
-      features.push({ type: 'Feature', geometry: { type: 'Polygon', coordinates: [coords] }, properties: props });
-
-    } else if (d.points && d.points.length >= 2) {
-      const coords = d.points.map(p => [p.lon, p.lat]);
-      // Closed if explicitly flagged or it's a polygon primitive (not a plain line)
-      const closed = d.closed || d.primitiveType === 'Polygon';
-
-      if (closed && coords.length >= 3) {
-        const ring = [...coords];
-        if (ring[0][0] !== ring[ring.length - 1][0] || ring[0][1] !== ring[ring.length - 1][1]) {
-          ring.push(ring[0]);
-        }
-        features.push({ type: 'Feature', geometry: { type: 'Polygon', coordinates: [ring] }, properties: props });
-      } else {
-        features.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: coords }, properties: props });
-      }
-    }
-  }
-
+  missionData.drawings.forEach((d, idx) => {
+    const geometry = drawingGeometry(d); // a text box has none: buildTextMarks() renders it
+    // idx: the drawing's place in missionData.drawings, which airspace-layer.js's filter hides by (T28)
+    if (geometry) features.push({ type: 'Feature', geometry, properties: { color, fillColor, idx } });
+  });
   return { type: 'FeatureCollection', features };
 }
 
-// Parses an ICAO-style FPL message built by sourcedcs-web's form1801.js:
-//   line 2 (index 2): "-<DEP ICAO><HHMM>"                     e.g. "-UGKO1630"
-//   line 3 (index 3): "-<speed><level> <ROUTE>"               e.g. "-N0450F350 DCT DEVOL UL9 KONAN DCT"
-//   line 4 (index 4): "-<DEST ICAO><EET>[ <ALTN1>][ <ALTN2>]" e.g. "-UGTB0130"
-// The full filed route is dep → route waypoints → dest, not just field 15's
-// enroute string — a route of "DCT ERGEP DCT" is genuinely just one enroute
-// fix, but the plotted line still needs to start/end at the filed airports.
-// Each token is resolved against the mission's navpoints/airports by
-// name/ICAO; airway identifiers (e.g. "UL9") simply won't match anything and
-// are dropped — no special casing needed since there's no airway geometry to
-// plot them against.
-function parseFiledRouteWaypoints(fplMessage) {
-  if (!fplMessage) return { points: [], matched: 0, total: 0 };
-  const lines = fplMessage.split('\n');
+// The filed route of a flight record, as points on the map: departure →
+// route tokens → destination, each resolved against the mission's navpoints
+// and airports by name/ICAO. Airway identifiers (e.g. "UL9") simply match
+// nothing and are dropped — there is no airway geometry to plot them against.
+export function parseFiledRouteWaypoints(filed) {
+  if (!filed) return { points: [], matched: 0, total: 0 };
 
   const byName = new Map();
   for (const w of (missionData && missionData.waypoints) || []) {
@@ -416,19 +531,11 @@ function parseFiledRouteWaypoints(fplMessage) {
   };
 
   const tokens = [];
-  // Dep/dest lines are "-<ICAO letters><digits...>" with no separator —
-  // the ICAO is the leading run of letters.
-  const depMatch  = (lines[2] || '').match(/^-([A-Za-z]+)/);
-  const destMatch = (lines[4] || '').match(/^-([A-Za-z]+)/);
-  if (depMatch) tokens.push(depMatch[1]);
-
-  const routeMatch = (lines[3] || '').match(/^-\S+\s+(.*)$/);
-  if (routeMatch) {
-    for (const t of routeMatch[1].trim().split(/\s+/)) {
-      if (t && t.toUpperCase() !== 'DCT') tokens.push(t);
-    }
+  if (filed.departureAirport) tokens.push(filed.departureAirport);
+  for (const t of String(filed.route || '').trim().split(/\s+/)) {
+    if (t && t.toUpperCase() !== 'DCT') tokens.push(t);
   }
-  if (destMatch) tokens.push(destMatch[1]);
+  if (filed.destinationAirport) tokens.push(filed.destinationAirport);
 
   const points = [];
   for (const tok of tokens) {
@@ -438,7 +545,7 @@ function parseFiledRouteWaypoints(fplMessage) {
   return { points, matched: points.length, total: tokens.length };
 }
 
-function buildFiledRoute(points) {
+export function buildFiledRoute(points) {
   if (!points || points.length < 2) return { type: 'FeatureCollection', features: [] };
   return {
     type: 'FeatureCollection',
@@ -453,7 +560,7 @@ function buildFiledRoute(points) {
 // DCS mission-editor "Text" objects (primitiveType TextBox). Kept as its own
 // source/layer rather than folded into buildDrawings() so it can be toggled
 // independently of shape drawings.
-function buildTextMarks() {
+export function buildTextMarks() {
   if (!settings.textMarksEnabled || !missionData || !missionData.drawings || !missionData.drawings.length)
     return { type: 'FeatureCollection', features: [] };
 
@@ -478,9 +585,10 @@ function buildApproachVector() {
   if (!selectedApt || approachRwyCourse == null)
     return { type: 'FeatureCollection', features: [] };
 
-  const course     = approachRwyCourse;                    // aircraft heading TO runway
+  if (approachRwyCourseTrue == null) return { type: 'FeatureCollection', features: [] };
+  const course     = approachRwyCourseTrue;                // aircraft course TO runway, true (airport-selector.js)
   const reciprocal = (course + 180) % 360;                 // outbound from threshold
-  const FAF_M      = 15 * 1852;
+  const FAF_M      = 15 * NM_M;
 
   const [fafLat, fafLon] = projectPos(selectedApt.lat, selectedApt.lon, reciprocal, FAF_M);
 
@@ -498,11 +606,11 @@ function buildApproachVector() {
   };
 }
 
-// Extended centerline for APP-control: independent of the topbar-driven
+// Extended centerline for AP-control: independent of the topbar-driven
 // buildApproachVector() above (different airport-selection state — the APRT
 // panel's _aprtSelectedApt, not the topbar's selectedApt/approachRwyCourse —
 // and no real runway geometry exists to unify them on). Only drawn when an
-// APP radar for the APRT panel's airport is enabled and a runway heading has
+// AP radar for the APRT panel's airport is enabled and a runway heading has
 // been entered there.
 // Distance-tick spacing in nm, coarser at low zoom so ticks don't merge into
 // noise once the centerline's whole length is only a few screen pixels long.
@@ -515,23 +623,22 @@ function _extCenterlineTickPlan(zoom) {
   return { minorNm: 10, majorNm: 20 };
 }
 
-function buildExtendedCenterline() {
-  if (!_aprtSelectedApt || _aprtRwyHeading == null) return { type: 'FeatureCollection', features: [] };
-  if (!enabledRadarIds.has('app:' + _aprtSelectedApt.name)) return { type: 'FeatureCollection', features: [] };
+export function buildExtendedCenterline() {
+  if (!_aprtSelectedApt || _aprtRwyTrueDeg == null) return { type: 'FeatureCollection', features: [] };
+  // Only drawn for an airfield whose approach radar we are actually looking
+  // through. Asked by airport rather than by radar id, because the id used to
+  // be built here as `'app:' + name` and crc-sync's CVN approach radars once
+  // shared that prefix (its docs/adr/0042 renamed them `cvapp:`).
+  if (!coverageApproachFor(_aprtSelectedApt.name)) return { type: 'FeatureCollection', features: [] };
 
-  // The runway number is a magnetic heading (real-world convention) — the
-  // map's geometry math (projectPos/bearingDeg) is all true-bearing, so it
-  // needs the reverse of the chain the BRA readout uses (ui.js: displayed
-  // = grid + hdgCorrection, where grid = true - gridConvergenceDeg):
-  // magnetic -> grid (subtract hdgCorrection) -> true (add convergence back).
-  const hdgCorrection = settings.hdgCorrection || 0;
-  const gridHeading = ((_aprtRwyHeading - hdgCorrection) % 360 + 360) % 360;
-  const conv        = gridConvergenceDeg(_aprtSelectedApt.lat, _aprtSelectedApt.lon);
-  const trueHeading = ((gridHeading + conv) % 360 + 360) % 360;
-  const reciprocal  = (trueHeading + 180) % 360;
+  // True: the runway end's own true heading from the Facility's runway-status
+  // record where one describes the field (crc-sync docs/adr/0139), else the
+  // runway number as magnetic, converted by crc-sync (aprt-panel.js
+  // _updateAprtRwyHeading).
+  const reciprocal  = (_aprtRwyTrueDeg + 180) % 360;
 
   const lengthNm = settings.extCenterlineNm || 25;
-  const lengthM  = lengthNm * 1852;
+  const lengthM  = lengthNm * NM_M;
   const [startLat, startLon] = projectPos(_aprtSelectedApt.lat, _aprtSelectedApt.lon, reciprocal, lengthM);
   const color = settings.lightMode ? 'rgba(40,40,40,0.7)' : 'rgba(255,255,255,0.5)';
 
@@ -550,9 +657,9 @@ function buildExtendedCenterline() {
     const d       = i * minorNm;
     const isMajor = (i * minorNm) % majorNm === 0; // majorNm is always a multiple of minorNm
     const halfWidthM = isMajor ? MAJOR_HALF_WIDTH_M : MINOR_HALF_WIDTH_M;
-    const [tLat, tLon] = projectPos(_aprtSelectedApt.lat, _aprtSelectedApt.lon, reciprocal, d * 1852);
-    const [aLat, aLon] = projectPos(tLat, tLon, (trueHeading + 90) % 360, halfWidthM);
-    const [bLat, bLon] = projectPos(tLat, tLon, (trueHeading + 270) % 360, halfWidthM);
+    const [tLat, tLon] = projectPos(_aprtSelectedApt.lat, _aprtSelectedApt.lon, reciprocal, d * NM_M);
+    const [aLat, aLon] = projectPos(tLat, tLon, (_aprtRwyTrueDeg + 90) % 360, halfWidthM);
+    const [bLat, bLon] = projectPos(tLat, tLon, (_aprtRwyTrueDeg + 270) % 360, halfWidthM);
     features.push({
       type: 'Feature',
       geometry: { type: 'LineString', coordinates: [[aLon, aLat], [bLon, bLat]] },
@@ -578,7 +685,7 @@ function _makeRing(lat, lon, radiusM, ringType) {
 
 // Range ring — shown for the selected reference track or airport.
 // Ring size for an airport is determined by the largest active radar for that airport.
-function buildRangeRing() {
+export function buildRangeRing() {
   const features = [];
 
   // Reference range ring (CRC/AWACS style)
@@ -593,13 +700,13 @@ function buildRangeRing() {
     const hasApp = active.some(r => r.id === `app:${selectedApt.name}`);
     const hasApt = active.some(r => r.id === `apt:${selectedApt.name}`);
     if (hasApp) {
-      features.push(_makeRing(selectedApt.lat, selectedApt.lon, 80 * 1852, 'range'));
+      features.push(_makeRing(selectedApt.lat, selectedApt.lon, 80 * NM_M, 'range'));
     } else if (hasApt) {
-      features.push(_makeRing(selectedApt.lat, selectedApt.lon, 20 * 1852, 'range'));
-      features.push(_makeRing(selectedApt.lat, selectedApt.lon,  2 * 1852, 'ground'));
+      features.push(_makeRing(selectedApt.lat, selectedApt.lon, 20 * NM_M, 'range'));
+      features.push(_makeRing(selectedApt.lat, selectedApt.lon,  2 * NM_M, 'ground'));
     } else {
       // Airport selected but no radar active: show small reference ring
-      features.push(_makeRing(selectedApt.lat, selectedApt.lon, 20 * 1852, 'range'));
+      features.push(_makeRing(selectedApt.lat, selectedApt.lon, 20 * NM_M, 'range'));
     }
   }
 
@@ -621,7 +728,32 @@ function buildRefDot() {
   };
 }
 
-function buildAirports() {
+/**
+ * The ring "Show on map" draws around a Strip's contact (H129; the Strip's ⋯
+ * menu, correlation-highlight.js). A near-copy of buildRefDot above, with one deliberate difference:
+ * it falls back to `latestFromServer` when the contact is not in the
+ * sweep-gated `tracks` map — the same fix buildRangeRing already carries.
+ *
+ * That matters. `tracks` only holds contacts inside the fade window, so a
+ * just-appeared or between-sweeps contact would render no ring and look like a
+ * broken highlight. A correlation is flight-data truth, not a radar return.
+ */
+function buildEfspCorrelationRing() {
+  const trackId = getCorrelatedHighlightTrackId();
+  if (!trackId) return { type: 'FeatureCollection', features: [] };
+  const t = tracks.get(trackId) || latestFromServer.get(trackId);
+  if (!t) return { type: 'FeatureCollection', features: [] };
+  return {
+    type: 'FeatureCollection',
+    features: [{
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [t.lon, t.lat] },
+      properties: {},
+    }],
+  };
+}
+
+export function buildAirports() {
   if (!missionData || !missionData.airports) return { type: 'FeatureCollection', features: [] };
   return {
     type: 'FeatureCollection',
@@ -635,7 +767,7 @@ function buildAirports() {
   };
 }
 
-function buildBullseye() {
+export function buildBullseye() {
   const features = [];
   const be = getBullseye();
   if (!be.blue && !be.red) return { type: 'FeatureCollection', features };
@@ -652,7 +784,7 @@ function buildBullseye() {
 // Draws a sweep beam for each active radar when debug mode is on.
 // 360° radars: single rotating line.
 // Nose radars: animated beam + faint cone edges as reference.
-function buildRadarDebug(radars) {
+export function buildRadarDebug(radars) {
   if (!settings.radarDebug || !radars) return { type: 'FeatureCollection', features: [] };
   const features = [];
   const now = Date.now();
@@ -663,9 +795,12 @@ function buildRadarDebug(radars) {
     const color = isApt ? '#aa8833' : isApp ? '#3388aa' : '#33aa55';
 
     if (radar.angleFromNose === 360) {
-      // Rotating beam: single line in current sweep direction
-      if (!radarSweepStart.has(radar.id)) continue;
-      const angle = ((now - radarSweepStart.get(radar.id)) % radar.sweepMs) / radar.sweepMs * 360;
+      // Rotating beam: single line in the current sweep direction. The phase
+      // is the server's own (`sweepStart` in the coverage message), so the
+      // drawn beam is where the beam that reveals contacts actually is — it
+      // never was when every client minted its own phase.
+      if (!Number.isFinite(radar.sweepStart)) continue;
+      const angle = ((now - radar.sweepStart) % radar.sweepMs) / radar.sweepMs * 360;
       const visibleM = losVisibleRangeM(radar, angle, radar.rangeM);
       const [vLat, vLon] = projectPos(radar.lat, radar.lon, angle, visibleM);
       features.push({
@@ -685,10 +820,10 @@ function buildRadarDebug(radars) {
       }
     } else {
       // Nose radar: animated sweep beam + faint static cone edges
-      if (!radarSweepStart.has(radar.id)) continue;
+      if (!Number.isFinite(radar.sweepStart)) continue;
       const halfAngle = radar.angleFromNose / 2;
       const cycleMs   = radar.sweepMs * 2;
-      const phase     = ((now - radarSweepStart.get(radar.id)) % cycleMs) / cycleMs;
+      const phase     = ((now - radar.sweepStart) % cycleMs) / cycleMs;
       const tNorm     = phase < 0.5 ? phase * 2 : (1 - phase) * 2;
       const beamAngle = (radar.heading - halfAngle + tNorm * radar.angleFromNose + 360) % 360;
 
@@ -727,37 +862,45 @@ function buildRadarDebug(radars) {
   return { type: 'FeatureCollection', features };
 }
 
-// Datalink lock lines: dashed line from each friendly player unit to its radar lock.
-// Only drawn when settings.datalink is enabled.
+// Datalink lock lines: a dashed line from a datalink participant to the
+// contact its radar is locked on (crc-sync's docs/adr/0059). crc-sync only
+// sends a lock whose target is already in this controller's picture, so both
+// ends are always contacts on the scope.
 function buildDatalinkLines() {
   const features = [];
-  if (!settings.datalink || radarLocks.size === 0) return { type: 'FeatureCollection', features };
+  if (settings.showDatalinkLocks === false) return { type: 'FeatureCollection', features };
 
   const color = settings.colFriendly || '#4488cc';
-
-  for (const [unitId, lock] of radarLocks) {
-    const track = latestFromServer.get(unitId);
-    if (!track || !track.player) continue;
-
+  for (const [, t] of tracks) {
+    const lock = t.dl && t.dl.lock;
+    if (!lock) continue;
+    const target = tracks.get(String(lock));
+    if (!target) continue;
     features.push({
       type: 'Feature',
-      geometry: {
-        type: 'LineString',
-        coordinates: [
-          [track.lon, track.lat],
-          [lock.targetLon, lock.targetLat],
-        ],
-      },
+      geometry: { type: 'LineString', coordinates: [[t.lon, t.lat], [target.lon, target.lat]] },
       properties: { color },
     });
   }
-
   return { type: 'FeatureCollection', features };
 }
 
 let _mapRafId = null;
 
-function updateMap() {
+export function applyScale() {
+  if (!mapReady) return;
+  const s = getScale();
+  map.setLayoutProperty('unit-squares',      'icon-size',     s);
+  map.setLayoutProperty('unit-emerg-square', 'icon-size',     s);
+  map.setLayoutProperty('unit-labels',       'text-size',     getTextSizePx());
+  map.setLayoutProperty('navpt-labels',      'text-size',     9 * s);
+  map.setPaintProperty('trail-dots',         'circle-radius', 1.5 * s);
+  map.setPaintProperty('leader-lines',       'line-width',    0.75 * s);
+  map.setPaintProperty('ppl-lines',          'line-width',    s);
+  updateMap();
+}
+
+export function updateMap() {
   if (_mapRafId !== null) return;
   _mapRafId = requestAnimationFrame(() => {
     _mapRafId = null;
@@ -769,6 +912,8 @@ function _doUpdateMap() {
   if (!mapReady) return;
   map.getSource('range-ring').setData(buildRangeRing());
   map.getSource('ref-dot').setData(buildRefDot());
+  map.getSource('efsp-correlation').setData(buildEfspCorrelationRing());
+  if (map.getSource('conflictAlert')) map.getSource('conflictAlert').setData(buildConflictAlertOverlay());
   map.getSource('trails').setData(buildTrails());
   map.getSource('ppl').setData(buildPPL());
   // buildLabels first — it populates labelOffsets which buildLeaders depends on
@@ -778,12 +923,17 @@ function _doUpdateMap() {
   map.getSource('bullseye').setData(buildBullseye());
   map.getSource('approach-vec').setData(buildApproachVector());
   map.getSource('ext-centerline').setData(buildExtendedCenterline());
+  if (map.getSource('carrier-final')) map.getSource('carrier-final').setData(buildCarrierFinalLine()); // crc-sync docs/adr/0074
   map.getSource('datalink-locks').setData(buildDatalinkLines());
   if (!settings.radarDebug) {
     map.getSource('radar-debug').setData({ type: 'FeatureCollection', features: [] });
   }
   updateZoomLimits();
-  updateTopbarUI();
-  updateRadarBadge();
-  if (typeof updateTrackPanel === 'function') updateTrackPanel();
+  markEfspChanged('scope'); // the topbar, the radar badge and the track panel follow (efsp-change-bus.js)
 }
+
+// ESM-1 (S-ESM1b): the unit tests replaced the global updateMap to count calls; this is that seam.
+export function _setUpdateMapForTest(fn) { updateMap = fn; }
+
+// The scope follows a snapshot, a correlation change, an alert change and a direct 'map' request (efsp-change-bus.js).
+onEfspChanged(['snapshot', 'correlations', 'alerts', 'map'], () => updateMap());

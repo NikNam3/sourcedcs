@@ -70,3 +70,30 @@ test('normalizeSkillTree: invalid min_pass_grade falls back to G', () => {
   const migrated = store.normalizeSkillTree(legacy);
   assert.equal(migrated.tree[0].subModules[0].gradingItems[0].min_pass_grade, 'G');
 });
+
+/* ══════════════════════════════════════════════════════════
+   saveJSON / loadJSON — atomic write
+══════════════════════════════════════════════════════════ */
+
+test('saveJSON: round-trips and leaves no temp file behind', () => {
+  const fs = require('fs'), os = require('os'), path = require('path');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'savejson-'));
+  const f = path.join(dir, 'x.json');
+  store.saveJSON(f, { a: 1 });
+  store.saveJSON(f, { a: 2 });
+  assert.deepEqual(store.loadJSON(f, null), { a: 2 });
+  assert.deepEqual(fs.readdirSync(dir), ['x.json']);
+  fs.rmSync(dir, { recursive: true });
+});
+
+test('saveJSON: a failed write keeps the previous file intact and cleans up', () => {
+  const fs = require('fs'), os = require('os'), path = require('path');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'savejson-'));
+  const f = path.join(dir, 'x.json');
+  store.saveJSON(f, { keep: 'me' });
+  const circular = {}; circular.self = circular;
+  assert.throws(() => store.saveJSON(f, circular));
+  assert.deepEqual(store.loadJSON(f, null), { keep: 'me' });
+  assert.deepEqual(fs.readdirSync(dir), ['x.json']);
+  fs.rmSync(dir, { recursive: true });
+});

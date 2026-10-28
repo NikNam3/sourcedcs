@@ -1,0 +1,377 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PAR Panel Mockup</title>
+<style>
+/* Dark-cockpit PAR panel: grey when the approach is normal; amber = needs attention; orange-red = a sensor failed;
+   red = past a safety limit. Tokens are crc-desktop's own (efsp-panel.css :root). */
+:root{
+  --bg:#0d0d0d;--panel:#14181c;--well:#0b0e11;--strip:#1c2228;--line:#2e3740;--line2:#4a5560;
+  --text:#d8e0e6;--muted:#8c9aa6;--faint:#56616c;--attn:#e0a83c;--attn-t:#ffe0a8;--bad:#ff8a4c;--danger:#ff5c5c;
+  --grid:#181e24;
+  --mono:'Consolas','DejaVu Sans Mono',ui-monospace,monospace;
+  color-scheme:dark}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font:13px/1.45 var(--mono);padding-block:24px 60px;padding-inline:16px}
+main{max-width:1180px;margin:0 auto;display:grid;gap:20px}
+h1{font-size:19px;font-weight:600}
+h2{font-size:14px;color:#fff;border-bottom:1px solid var(--line);padding-bottom:4px;font-weight:600}
+p{color:var(--muted);max-width:860px}
+a{color:#8ec7ff}
+
+/* ---- the panel ---- */
+.par{background:var(--panel);border:1px solid var(--line);font-size:11px;font-variant-numeric:tabular-nums;max-width:860px;display:grid;min-width:0}
+.ptitle{background:#0e1114;border-bottom:1px solid var(--line);padding:4px 8px;color:var(--muted);font-size:10.5px;letter-spacing:.06em}
+.row{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 0;padding:5px 8px;border-bottom:1px solid var(--line)}
+.k{color:var(--muted);font-size:10px;letter-spacing:.05em;margin:0 4px 0 12px}
+.v{color:var(--text)}
+.cs{color:#fff;font-size:15px;margin-right:10px}
+.right{margin-left:auto}
+.range{font-size:24px;color:#fff;line-height:1}
+.range small{font-size:11px;color:var(--muted);margin-left:4px}
+.flag{font-size:10.5px;padding:0 5px;border:1px solid;border-radius:2px;margin-left:8px;letter-spacing:.04em}
+.flag.bad{color:var(--bad);border-color:var(--bad)}
+.scopes{display:grid;gap:4px;padding:6px 8px}
+.scope{position:relative;background:var(--well);border:1px solid var(--line);user-select:none;cursor:default}
+.scope svg{display:block;width:100%}
+.scope .cap{position:absolute;left:6px;top:3px;color:var(--faint);font-size:10px;letter-spacing:.06em;pointer-events:none}
+.scope .win{position:absolute;right:6px;top:3px;color:var(--faint);font-size:10px;pointer-events:none}
+.dev{display:flex;flex-wrap:wrap;gap:4px 18px;padding:2px 8px 6px;color:var(--muted)}
+.dev b{font-weight:400;color:var(--text)}
+.dev .attn,.dev .attn b{color:var(--attn)}
+.dev .danger,.dev .danger b{color:var(--danger)}
+.msg{margin:0 8px 6px;padding:4px 8px;border:1px solid;font-size:11.5px}
+.msg.attn{color:var(--attn-t);border-color:var(--attn)}
+.terms{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:6px 8px 8px;border-top:1px solid var(--line)}
+.terms button{min-height:40px;font:inherit;font-size:12px;color:var(--text);background:var(--strip);border:1px solid var(--line2);border-radius:3px;cursor:pointer}
+.terms button:hover{border-color:var(--muted)}
+button:focus-visible,input:focus-visible{outline:2px solid #8ec7ff;outline-offset:1px}
+
+/* ---- page chrome around the mockup ---- */
+.bar{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.bar .lbl{color:var(--faint);font-size:11px;margin-right:4px;min-width:84px}
+.bar button{font:inherit;font-size:11.5px;color:var(--muted);background:var(--panel);border:1px solid var(--line);padding:4px 10px;border-radius:3px;cursor:pointer}
+.bar button[aria-pressed="true"]{color:#fff;border-color:var(--line2);background:var(--strip)}
+.bar label{display:flex;gap:6px;align-items:center;color:var(--muted);font-size:11.5px;cursor:pointer}
+.layout{display:grid;grid-template-columns:minmax(0,860px) minmax(220px,1fr);gap:22px;align-items:start}
+.notes{display:grid;gap:12px;font-size:12px}
+.notes h3{font-size:12px;color:#fff;font-weight:600;margin-bottom:2px}
+.notes p{font-size:12px}
+.tw{overflow-x:auto;max-width:860px}
+table.t{border-collapse:collapse;font-size:12px;width:100%}
+table.t td,table.t th{border:1px solid var(--line);padding:4px 7px;text-align:left;vertical-align:top}
+table.t th{color:var(--muted);font-weight:400;background:var(--panel)}
+.setp{background:var(--panel);border:1px solid var(--line);max-width:860px;font-size:11.5px}
+.stabs{display:flex;flex-wrap:wrap;gap:2px;padding:4px 6px 0;background:#0e1114;border-bottom:1px solid var(--line)}
+.stabs span{padding:3px 10px;color:var(--muted);border:1px solid var(--line);border-bottom:none;background:var(--strip)}
+.stabs span.on{color:#fff;background:var(--panel)}
+.sbody{display:flex;flex-wrap:wrap;gap:8px 22px;padding:8px 10px;align-items:center;color:var(--muted)}
+.sbody label{display:flex;gap:6px;align-items:center;cursor:pointer}
+.sbody input[type=number]{width:62px;font:inherit;color:var(--text);background:var(--well);border:1px solid var(--line2);padding:1px 4px}
+.shint{color:var(--faint);font-size:10.5px;flex-basis:100%}
+.sw{display:inline-block;width:10px;height:10px;border-radius:2px;vertical-align:-1px;margin-right:6px}
+@media (max-width:980px){.layout{grid-template-columns:1fr}}
+</style></head><body><main>
+<p><a href="index.html">← mockups</a></p>
+<header>
+<h1>PAR panel <span style="color:var(--muted);font-size:12px;font-weight:400">mockup, revision 5, 2026-10-14</span></h1>
+<p>A normal crc-desktop panel. It shows the precision approach radar picture for the aircraft on final and nothing the controller
+already knows. When the approach is normal the panel is all grey except the track. Colour elsewhere appears only when something needs attention.</p>
+<p>Revision 5 (decisions H141, ADR 0123): the azimuth scope is in <b>degrees only</b> (axis, window and readout; the tolerance
+lines are straight), and the elevation tolerance is split: <b>1° above</b> the glidepath and <b>0.5° below</b> it, the FAA lower
+safe limit (Order 8200.1D, the "B" cursor). An aircraft 0.5–1° low is now red. The buttons are the final controller's steps
+(Begin descent, Cleared to land, Landed, Missed approach).</p>
+</header>
+
+<div class="bar" role="group" aria-label="Sample situation"><span class="lbl">Situation</span>
+  <button type="button" data-state="fly" aria-pressed="false">▶ Fly the approach</button>
+  <button type="button" data-state="normal" aria-pressed="true">On glidepath</button>
+  <button type="button" data-state="slight" aria-pressed="false">Slightly above, left</button>
+  <button type="button" data-state="wellright" aria-pressed="false">Right, outside tolerance</button>
+  <button type="button" data-state="low04" aria-pressed="false">0.4° below (inside)</button>
+  <button type="button" data-state="low07" aria-pressed="false">0.7° below (past the lower safe limit)</button>
+  <button type="button" data-state="belowsafety" aria-pressed="false">Well below</button>
+  <button type="button" data-state="belowda" aria-pressed="false">Below DA, off centre</button>
+  <button type="button" data-state="lost" aria-pressed="false">Contact lost</button>
+  <button type="button" data-state="elfail" aria-pressed="false">Elevation failed</button>
+</div>
+<div class="bar" role="group" aria-label="Track style to compare"><span class="lbl">Track style</span>
+  <button type="button" data-style="grey" aria-pressed="false">A · revision 2 (white)</button>
+  <button type="button" data-style="cyan" aria-pressed="false">B · cyan</button>
+  <button type="button" data-style="green" aria-pressed="false">C · phosphor green</button>
+  <button type="button" data-style="halo" aria-pressed="false">D · white, haloed</button>
+  <button type="button" data-style="magenta" aria-pressed="true">E · magenta (approved)</button>
+</div>
+<section class="setp" aria-label="Settings panel sketch">
+  <div class="ptitle">SETTINGS <span style="color:var(--faint);letter-spacing:0">· sketch: one tab per panel</span></div>
+  <div class="stabs" role="tablist"><span>General</span><span>EFSP</span><span>Radar</span><span class="on">PAR</span><span>Marshal</span><span>SRS</span></div>
+  <div class="sbody">
+    <label><input type="checkbox" id="autoset" checked> Autoscale</label>
+    <label>Default glideslope <input type="number" id="setgpa" value="3.06" step="0.01" min="2" max="4"> °</label>
+    <label>Elevation tolerance above <input type="number" id="setel" value="1.0" step="0.1" min="0.1" max="3"> °</label>
+    <label>Elevation tolerance below <input type="number" id="setellow" value="0.5" step="0.1" min="0.1" max="3"> °</label>
+    <label>Azimuth tolerance ± <input type="number" id="setaz" value="1.0" step="0.1" min="0.1" max="5"> °</label>
+    <span class="shint">An approach with its own published glideslope uses that; this is the default. Below the glidepath the default is the FAA lower safe limit (0.5°). Tolerances do not apply below DA.</span>
+  </div>
+</section>
+
+<div class="layout">
+<section class="par" aria-label="PAR panel">
+  <div class="ptitle">PAR</div>
+  <div class="row">
+    <span class="v">RWY 05 · LTAG</span>
+    <span class="k">GPA</span><span class="v" id="hgpa">3.06°</span>
+    <span class="k">TCH</span><span class="v">50</span>
+    <span class="k">DA</span><span class="v">440</span>
+    <span class="k">FAC</span><span class="v">051M</span>
+    <span class="right" id="sensor"></span>
+  </div>
+  <div class="row">
+    <span class="cs">VIPER 21</span><span class="v">F-16C</span>
+    <span class="k">BCN</span><span class="v">4621</span>
+    <span class="k">GS</span><span class="v" id="gs">142 kt</span>
+    <span class="k">VS</span><span class="v" id="vs">−750</span>
+    <span class="right range" id="rng">3.2<small>NM to TD</small></span>
+  </div>
+  <div class="scopes">
+    <div class="scope" id="el"><span class="cap">ELEVATION</span><span class="win" id="elwin"></span><svg id="elsvg" height="220" aria-label="Elevation scope"></svg></div>
+    <div class="scope" id="az"><span class="cap">AZIMUTH</span><span class="win" id="azwin"></span><svg id="azsvg" height="150" aria-label="Azimuth scope"></svg></div>
+  </div>
+  <div class="dev" id="dev"></div>
+  <div id="msg"></div>
+  <div class="terms"><button type="button">Begin descent</button><button type="button">Cleared to land</button><button type="button">Landed</button><button type="button">Missed approach</button></div>
+</section>
+
+<aside class="notes">
+  <div><h3>Zoom</h3>
+  <p>Touchdown stays in the bottom-left corner of the elevation scope and on the left edge of the azimuth scope, always. Wheel: zoom range (both scopes). Shift + wheel: zoom height or the azimuth angle (this scope). No panning.</p></div>
+  <div><h3>Autoscale</h3>
+  <p>With the setting on, the window follows the aircraft so the track sits at the golden-ratio point (61.8 % of the range width, likewise in height; the azimuth window is twice the tolerance, ±2°, or wider for a track far off the course, never past the ±15° the PAR covers) until the window is down to 10 NM; from there it stays at 10 NM. A manual zoom pauses autoscale (the window label says so); double-click resumes it. With the setting off the window stays where the controller put it.</p></div>
+  <div><h3>Azimuth in degrees</h3>
+  <p>The azimuth scope plots range against the angle off the course seen from touchdown (a B-display), so the tolerance lines are straight. Close in, a few feet are many degrees: a plot past the window's edge is drawn at the edge.</p></div>
+  <div><h3>Track styles</h3>
+  <p>B to E give the track its own colour and dim the reference lines so the plot stands out. Amber and red stay reserved for problems, so a coloured track turns amber or red only when it is one.</p></div>
+</aside>
+</div>
+
+<section style="display:grid;gap:8px">
+<h2>When colour appears</h2>
+<div class="tw"><table class="t">
+<tr><th>Colour</th><th>Means</th><th>Where on this panel</th></tr>
+<tr><td><span class="sw" style="background:var(--muted)"></span>grey</td><td>Normal.</td><td>Everything while the aircraft is within tolerance, including "slightly" off.</td></tr>
+<tr><td><span class="sw" style="background:#e58bff"></span>magenta</td><td>The aircraft (style E, approved).</td><td>The current plot and its trail.</td></tr>
+<tr><td><span class="sw" style="background:var(--attn)"></span>amber</td><td>Look at this now.</td><td>No radar plot for 3 s.</td></tr>
+<tr><td><span class="sw" style="background:var(--bad)"></span>orange-red</td><td>Something failed.</td><td>Elevation or azimuth data unavailable; that scope is blanked with the reason.</td></tr>
+<tr><td><span class="sw" style="background:var(--danger)"></span>red</td><td>Outside tolerance.</td><td>Elevation more than 1° above or 0.5° below the glidepath, or azimuth more than 1° off the course, above DA only. Below DA the pilot decides and nothing is coloured.</td></tr>
+</table></div>
+<p>Defaults: glideslope 3.06°; elevation tolerance 1° above and 0.5° below the glidepath; azimuth ±1°; set per controller in the PAR tab of the Settings panel. The dashed tolerance lines start at DA, because they do not apply below it.</p>
+</section>
+</main>
+
+<script>
+(function () {
+  'use strict';
+  var FT_PER_NM = 6076.12, TCH = 50, GPA = 3.06, DA_HAT = 202, TDZE = 238, rad = Math.PI / 180, PHI = 0.618;
+  var TOL = { el: 1.0, elLow: 0.5, az: 1.0 };
+  var STYLES = {
+    grey:    { plot: '#e6edf3', trail: '#8c9aa6', ref: '#8c9aa6', refDash: '#8c9aa6', shape: 'square', halo: false },
+    cyan:    { plot: '#6fd3ff', trail: '#6fd3ff', ref: '#5f6b76', refDash: '#46505a', shape: 'circle', halo: true },
+    green:   { plot: '#5ce68a', trail: '#5ce68a', ref: '#5f6b76', refDash: '#46505a', shape: 'square', halo: true },
+    halo:    { plot: '#ffffff', trail: '#c9d3db', ref: '#4f5a65', refDash: '#3c4650', shape: 'circle', halo: true, ring: true },
+    magenta: { plot: '#e58bff', trail: '#e58bff', ref: '#5f6b76', refDash: '#46505a', shape: 'diamond', halo: true }
+  };
+  var STATES = {
+    normal:      { r: 3.2, el: 0.05, az: -0.1, elTrend: 0,     azTrend: 0,    gs: 142, vs: -750 },
+    slight:      { r: 3.6, el: 0.35, az: -0.9, elTrend: -0.03, azTrend: 0.05, gs: 140, vs: -820 },
+    wellright:   { r: 5.1, el: 0.10, az: 1.3,  elTrend: 0,     azTrend: 0.02, gs: 148, vs: -780 },
+    low04:       { r: 4.2, el: -0.4, az: 0.1,  elTrend: -0.02, azTrend: 0,    gs: 142, vs: -830 },
+    low07:       { r: 4.2, el: -0.7, az: 0.1,  elTrend: -0.03, azTrend: 0,    gs: 142, vs: -870 },
+    belowsafety: { r: 2.4, el: -1.2, az: 0.3,  elTrend: -0.06, azTrend: 0,    gs: 145, vs: -1150 },
+    belowda:     { r: 0.35, el: -0.6, az: 1.4,  elTrend: 0,     azTrend: 0,    gs: 138, vs: -760 },
+    lost:        { r: 1.9, el: 0.08, az: -0.2, elTrend: 0,     azTrend: 0,    gs: 140, vs: -740, lost: 4 },
+    elfail:      { r: 3.6, el: null, az: -0.3, elTrend: 0,     azTrend: 0,    gs: 142, vs: null, elFail: true }
+  };
+  // The view is anchored at touchdown: range 0..rMax, height 0..hMax, azimuth -azMax..+azMax degrees.
+  var view = { rMax: 10, hMax: 3500, azMax: 2 }, auto = true, paused = false, state = 'normal', style = 'magenta';
+  var fly = null; // { t0, simT } while flying
+
+  function gpHeight(r, offDeg) { return TCH + r * FT_PER_NM * Math.tan((GPA + (offDeg || 0)) * rad); }
+  function flyAt(t) { // a sample approach from 14 NM, sim seconds since start
+    var r = Math.max(0.2, 14 - 145 * t / 3600);
+    return { r: r, el: 0.25 * Math.sin(t / 40) - 0.05, az: 0.8 * Math.sin(t / 55 + 1) * Math.min(1, r / 4), gs: 145, vs: -770 };
+  }
+  function current() {
+    if (fly) {
+      var p = flyAt(fly.simT), pts = [];
+      for (var i = 11; i >= 0; i--) pts.push(flyAt(Math.max(0, fly.simT - i)));
+      return Object.assign({ elTrend: 0, azTrend: 0, pts: pts }, p);
+    }
+    var s = STATES[state], dr = s.gs / 3600, out = [];
+    for (var j = 11; j >= 0; j--) out.push({ r: s.r + j * dr, el: s.el === null ? null : s.el - s.elTrend * j * 0.2, az: s.az - s.azTrend * j * 0.2 });
+    return Object.assign({ pts: out }, s);
+  }
+  function autoscale(s) {
+    if (!auto || paused) return;
+    view.rMax = Math.max(10, s.r / PHI);
+    var hTrack = s.el === null ? gpHeight(s.r, 0) : gpHeight(s.r, s.el);
+    view.hMax = Math.max(gpHeight(view.rMax, 0) * 1.08, hTrack / PHI);
+    view.azMax = Math.min(15, Math.max(2 * TOL.az, Math.abs(s.az) / PHI));
+  }
+  function svgEl(name, attrs) {
+    var e = document.createElementNS('http://www.w3.org/2000/svg', name);
+    for (var k in attrs) e.setAttribute(k, attrs[k]);
+    return e;
+  }
+  function niceStep(span, target) {
+    var raw = span / target, p = Math.pow(10, Math.floor(Math.log10(raw))), m = raw / p;
+    return p * (m < 1.5 ? 1 : m < 3.5 ? 2 : m < 7.5 ? 5 : 10);
+  }
+  // Elevation: red more than TOL.el above or TOL.elLow below the glidepath; azimuth: more than TOL.az off the course. Below DA the pilot decides: no tolerance applies, nothing is coloured.
+  function rDA() { return (DA_HAT - TCH) / (FT_PER_NM * Math.tan(GPA * rad)); }
+  function severity(kind, s) {
+    if (s.r <= rDA()) return '';
+    if (kind === 'el') return s.el !== null && (s.el > TOL.el || s.el < -TOL.elLow) ? 'danger' : '';
+    return Math.abs(s.az) > TOL.az ? 'danger' : '';
+  }
+  function mark(g, x, y, st, fill, hollow) {
+    var size = 4.5, a = { fill: hollow ? 'none' : fill, stroke: hollow ? fill : (st.halo ? '#0b0e11' : 'none'), 'stroke-width': hollow ? 1.6 : (st.halo ? 2.5 : 0), 'paint-order': 'stroke' };
+    if (st.ring && !hollow) g.appendChild(svgEl('circle', { cx: x, cy: y, r: 8, fill: 'none', stroke: fill, 'stroke-width': 1, opacity: 0.6 }));
+    if (st.shape === 'circle') g.appendChild(svgEl('circle', Object.assign({ cx: x, cy: y, r: size }, a)));
+    else if (st.shape === 'diamond') g.appendChild(svgEl('path', Object.assign({ d: 'M' + x + ' ' + (y - 6) + 'L' + (x + 6) + ' ' + y + 'L' + x + ' ' + (y + 6) + 'L' + (x - 6) + ' ' + y + 'Z' }, a)));
+    else g.appendChild(svgEl('rect', Object.assign({ x: x - size, y: y - size, width: size * 2, height: size * 2 }, a)));
+  }
+
+  function draw(kind, s) {
+    var svg = document.getElementById(kind + 'svg'), st = STYLES[style];
+    var w = svg.clientWidth || 800, h = +svg.getAttribute('height');
+    svg.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+    var L = 40, R = w - 8, T = 18, B = h - 16;
+    var lo = kind === 'el' ? 0 : -view.azMax, hi = kind === 'el' ? view.hMax : view.azMax;
+    var clampAz = function (a) { return Math.min(hi, Math.max(lo, a)); };
+    var X = function (r) { return L + r / view.rMax * (R - L); };
+    var Y = function (v) { return B - (v - lo) / (hi - lo) * (B - T); };
+    var defs = svgEl('defs', {}), clip = svgEl('clipPath', { id: 'c' + kind });
+    clip.appendChild(svgEl('rect', { x: L, y: T, width: R - L, height: B - T })); defs.appendChild(clip); svg.appendChild(defs);
+    var g = svgEl('g', {}), pg = svgEl('g', { 'clip-path': 'url(#c' + kind + ')' });
+    svg.appendChild(g); svg.appendChild(pg);
+    var rs = niceStep(view.rMax, 8);
+    for (var r = 0; r <= view.rMax + 1e-9; r += rs) {
+      g.appendChild(svgEl('line', { x1: X(r), x2: X(r), y1: T, y2: B, stroke: getVar('--grid') }));
+      var t = svgEl('text', { x: X(r), y: h - 3, 'text-anchor': r === 0 ? 'start' : 'middle', fill: getVar('--faint'), 'font-size': 10 });
+      t.textContent = r === 0 ? 'TD' : String(+r.toFixed(2)); g.appendChild(t);
+    }
+    var vs = niceStep(hi - lo, 4);
+    for (var v = Math.ceil(lo / vs) * vs; v <= hi + 1e-9; v += vs) {
+      g.appendChild(svgEl('line', { x1: L, x2: R, y1: Y(v), y2: Y(v), stroke: getVar('--grid') }));
+      var tv = svgEl('text', { x: L - 4, y: Y(v) + 3, 'text-anchor': 'end', fill: getVar('--faint'), 'font-size': 10 });
+      tv.textContent = kind === 'el' ? String(Math.round(v)) : (Math.abs(v) < 1e-9 ? '0°' : +Math.abs(v).toFixed(2) + '°' + (v < 0 ? 'L' : 'R'));
+      g.appendChild(tv);
+    }
+    function path(fn, dash) {
+      var d = '', from = dash ? Math.min(rDA(), view.rMax) : 0;
+      for (var i = 0; i <= 60; i++) { var rr = from + (view.rMax - from) * i / 60; d += (i ? 'L' : 'M') + X(rr).toFixed(1) + ' ' + Y(fn(rr)).toFixed(1); }
+      pg.appendChild(svgEl('path', { d: d, fill: 'none', stroke: dash ? st.refDash : st.ref, 'stroke-width': dash ? 1 : 1.3, 'stroke-dasharray': dash ? '5 4' : 'none' }));
+    }
+    if (kind === 'el' && s.elFail) {
+      var ft = svgEl('text', { x: (L + R) / 2, y: (T + B) / 2, 'text-anchor': 'middle', fill: getVar('--bad'), 'font-size': 12 });
+      ft.textContent = 'NO ELEVATION DATA'; svg.appendChild(ft);
+    } else {
+      if (kind === 'el') {
+        path(function (rr) { return gpHeight(rr, 0); });
+        path(function (rr) { return gpHeight(rr, -TOL.elLow); }, true);
+        path(function (rr) { return gpHeight(rr, TOL.el); }, true);
+        var rD = rDA();
+        pg.appendChild(svgEl('line', { x1: X(rD), x2: X(rD), y1: Y(DA_HAT) - 7, y2: Y(DA_HAT) + 7, stroke: st.ref }));
+        var dt = svgEl('text', { x: X(rD) + 4, y: Y(DA_HAT) + 15, fill: getVar('--faint'), 'font-size': 10 }); dt.textContent = 'DA'; pg.appendChild(dt);
+      } else {
+        path(function () { return 0; });
+        path(function () { return TOL.az; }, true);
+        path(function () { return -TOL.az; }, true);
+      }
+      var pts = s.pts, cur = pts[pts.length - 1];
+      var sev = severity(kind, s), col = sev === 'danger' ? getVar('--danger') : sev === 'attn' ? getVar('--attn') : st.plot;
+      pts.slice(0, -1).forEach(function (p, i) {
+        var yy = kind === 'el' ? gpHeight(p.r, p.el) : clampAz(p.az);
+        pg.appendChild(svgEl('circle', { cx: X(p.r), cy: Y(yy), r: 1.9, fill: sev ? col : st.trail, opacity: (0.18 + i * 0.06).toFixed(2) }));
+      });
+      var yc = kind === 'el' ? gpHeight(cur.r, cur.el) : clampAz(cur.az);
+      mark(pg, X(cur.r), Y(yc), st, s.lost ? getVar('--attn') : col, !!s.lost);
+    }
+    var label = '0–' + view.rMax.toFixed(1) + ' NM · ' + (kind === 'el' ? '0–' + Math.round(view.hMax) + ' ft' : '±' + (+view.azMax.toPrecision(2)) + '°');
+    document.getElementById(kind + 'win').textContent = label + (auto ? (paused ? ' · AUTO paused (double-click)' : ' · AUTO') : '');
+  }
+  var cssCache = getComputedStyle(document.documentElement);
+  function getVar(n) { return cssCache.getPropertyValue(n).trim(); }
+
+  function text(s) {
+    document.getElementById('rng').firstChild.nodeValue = s.r.toFixed(1);
+    document.getElementById('gs').textContent = s.gs + ' kt';
+    document.getElementById('vs').textContent = s.vs === null ? '—' : String(s.vs).replace('-', '−');
+    var sensor = document.getElementById('sensor'); sensor.textContent = '';
+    if (s.elFail) { var f = document.createElement('span'); f.className = 'flag bad'; f.textContent = 'EL INOP'; sensor.appendChild(f); }
+    var elFt = s.el === null ? null : Math.round(gpHeight(s.r, s.el) - gpHeight(s.r, 0));
+    var azD = Math.round(Math.abs(s.az) * 10) / 10, elSev = severity('el', s), azSev = severity('az', s);
+    var dev = document.getElementById('dev'); dev.textContent = '';
+    function item(cls, label, value, extra) {
+      var sp = document.createElement('span'); sp.className = cls; sp.appendChild(document.createTextNode(label + ' '));
+      var b = document.createElement('b'); b.textContent = value; sp.appendChild(b);
+      if (extra) sp.appendChild(document.createTextNode(' ' + extra));
+      dev.appendChild(sp);
+    }
+    item(elSev, 'EL', elFt === null ? '—' : (elFt > 0 ? '+' : elFt < 0 ? '−' : '') + Math.abs(elFt) + ' ft', elSev === 'danger' ? 'OUTSIDE TOLERANCE' : '');
+    item(azSev, 'AZ', azD.toFixed(1) + '°' + (azD === 0 ? '' : s.az < 0 ? ' L' : ' R'), azSev === 'danger' ? 'OUTSIDE TOLERANCE' : '');
+    item('', 'ALT', s.el === null ? '—' : Math.round(TDZE + gpHeight(s.r, s.el)).toLocaleString('en') + ' ft');
+    var msg = document.getElementById('msg'); msg.textContent = '';
+    if (s.lost) { var m = document.createElement('div'); m.className = 'msg attn'; m.textContent = 'NO PLOT ' + s.lost + ' s'; msg.appendChild(m); }
+  }
+  function render() { var s = current(); autoscale(s); text(s); draw('el', s); draw('az', s); }
+
+  // Zoom only, anchored at touchdown. A manual zoom pauses autoscale; double-click resumes it.
+  ['el', 'az'].forEach(function (kind) {
+    var box = document.getElementById(kind);
+    box.addEventListener('wheel', function (e) {
+      e.preventDefault();
+      var z = e.deltaY > 0 ? 1.15 : 1 / 1.15;
+      if (e.shiftKey) { if (kind === 'el') view.hMax = Math.max(150, view.hMax * z); else view.azMax = Math.min(15, Math.max(0.25, view.azMax * z)); }
+      else view.rMax = Math.min(40, Math.max(0.5, view.rMax * z));
+      if (auto) paused = true;
+      render();
+    }, { passive: false });
+    box.addEventListener('dblclick', function () {
+      paused = false;
+      if (!auto) view = { rMax: 10, hMax: 3500, azMax: 2 };
+      render();
+    });
+  });
+  document.getElementById('autoset').addEventListener('change', function (e) { auto = e.target.checked; paused = false; render(); });
+  function num(id, lo, hi, fallback) { var v = parseFloat(document.getElementById(id).value); return isFinite(v) ? Math.min(hi, Math.max(lo, v)) : fallback; }
+  ['setgpa', 'setel', 'setellow', 'setaz'].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', function () {
+      GPA = num('setgpa', 2, 4, 3.06); TOL.el = num('setel', 0.1, 3, 1); TOL.elLow = num('setellow', 0.1, 3, 0.5); TOL.az = num('setaz', 0.1, 5, 1);
+      document.getElementById('hgpa').textContent = GPA.toFixed(2) + '°';
+      render();
+    });
+  });
+  function press(group, attr, value) {
+    document.querySelectorAll('[data-' + attr + ']').forEach(function (o) { o.setAttribute('aria-pressed', String(o.dataset[attr] === value)); });
+  }
+  document.querySelectorAll('[data-state]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var v = b.dataset.state; press('state', 'state', v);
+      if (v === 'fly') { fly = { last: performance.now(), simT: 0 }; requestAnimationFrame(tick); }
+      else { fly = null; state = v; render(); }
+    });
+  });
+  document.querySelectorAll('[data-style]').forEach(function (b) {
+    b.addEventListener('click', function () { style = b.dataset.style; press('style', 'style', style); render(); });
+  });
+  function tick(now) { // 12x real time so the 14 NM approach takes about 30 s
+    if (!fly) return;
+    fly.simT += (now - fly.last) / 1000 * 12; fly.last = now;
+    render();
+    if (flyAt(fly.simT).r > 0.2) requestAnimationFrame(tick);
+  }
+  window.addEventListener('resize', render);
+  render();
+})();
+</script>
+</body></html>

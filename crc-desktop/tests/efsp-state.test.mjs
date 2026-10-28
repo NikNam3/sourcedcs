@@ -1,0 +1,256 @@
+
+/* Unit tests for the pure client-side EFSP state mirror (efsp-state.js) —
+   snapshot/delta/ack merge logic and the pending-mutation/rebase-on-reject
+   bookkeeping, exercised directly without DOM/Electron/network, same
+   pattern as los-math.test.mjs. */
+
+import test from 'node:test';
+import assert from 'node:assert/strict';
+
+import {
+  applyEfspSnapshot, applyEfspDelta, applyEfspMutationAck,
+  registerPendingMutation, getPendingMutations, rebaseForResend,
+  getEfspStrip, getEfspFlightData, getEfspPosition, getAllEfspStrips, getAllEfspPositions,
+  getEfspRack, searchEfspStrips, getEfspFacility, getEfspBays,
+  applyEfspAlerts, getEfspObligation, getEfspObligations,
+  _resetEfspStateForTest,
+} from '../app/public/js/panels/efsp/efsp-state.js';
+import { boardCursorName, getCursor } from '../app/public/js/panels/efsp/sync-cursor.js';
+
+function strip(overrides = {}) {
+  return { stripId: 's1', flightDataId: 'f1', rev: 1, bayId: 'b1', rackId: 'r1', orderKey: 'A', state: 'PROPOSED', ...overrides };
+}
+
+test.beforeEach(() => _resetEfspStateForTest());
+
+test('applyEfspSnapshot populates strips/flightDataList/positions and boardSeq/facility/bays', () => {
+  applyEfspSnapshot({
+    facilities: ['INCIRLIK'], boardSeqByFacility: { INCIRLIK: 5 },
+    strips: [strip()], flightDataList: [{ flightDataId: 'f1' }], positions: [{ positionId: 'OPS' }],
+    bays: [{ bayId: 'b1' }],
+  });
+  assert.equal(getCursor(boardCursorName(getEfspFacility())).seq, 5);
+  assert.equal(getEfspFacility(), 'INCIRLIK');
+  assert.deepEqual(getEfspStrip('s1'), strip());
+  assert.ok(getEfspFlightData('f1'));
+  assert.ok(getEfspPosition('OPS'));
+  assert.deepEqual(getEfspBays(), [{ bayId: 'b1' }]);
+});
+
+test('applyEfspSnapshot replaces prior state wholesale, not merges', () => {
+  applyEfspSnapshot({ boardSeq: 1, strips: [strip({ stripId: 'old' })], flightDataList: [], positions: [] });
+  applyEfspSnapshot({ boardSeq: 2, strips: [strip({ stripId: 'new' })], flightDataList: [], positions: [] });
+  assert.equal(getEfspStrip('old'), null);
+  assert.ok(getEfspStrip('new'));
+  assert.equal(getAllEfspStrips().length, 1);
+});
+
+test('applyEfspDelta updates changed strips and removes gone ones, leaving others untouched', () => {
+  applyEfspSnapshot({ boardSeq: 1, strips: [strip({ stripId: 's1' }), strip({ stripId: 's2' })], flightDataList: [], positions: [] });
+  applyEfspDelta({ boardSeq: 2, strips: { updated: [strip({ stripId: 's1', rev: 2 })], gone: ['s2'] }, flightDataList: { updated: [] }, positions: { updated: [] } });
+
+  assert.equal(getEfspStrip('s1').rev, 2);
+  assert.equal(getEfspStrip('s2'), null);
+});
+
+test('applyEfspDelta updates flight data and Positions too', () => {
+  applyEfspDelta({ boardSeq: 1, strips: { updated: [], gone: [] }, flightDataList: { updated: [{ flightDataId: 'f1', rev: 3 }] }, positions: { updated: [{ positionId: 'GC', primary: null }] } });
+  assert.equal(getEfspFlightData('f1').rev, 3);
+  assert.equal(getAllEfspPositions().length, 1);
+});
+
+test('applyEfspDelta drops flight data named in flightDataList.gone (an undone Split, ADR 0099/0100)', () => {
+  applyEfspDelta({ boardSeq: 1, strips: { updated: [], gone: [] }, flightDataList: { updated: [{ flightDataId: 'part', rev: 1 }, { flightDataId: 'lead', rev: 1 }] }, positions: { updated: [] } });
+  applyEfspDelta({ boardSeq: 2, strips: { updated: [], gone: [] }, flightDataList: { updated: [{ flightDataId: 'lead', rev: 2 }], gone: ['part'] }, positions: { updated: [] } });
+  assert.equal(getEfspFlightData('part'), null);
+  assert.equal(getEfspFlightData('lead').rev, 2);
+});
+
+test('applyEfspDelta with a non-finite boardSeq leaves the current one unchanged', () => {
+  applyEfspSnapshot({ facilities: ['INCIRLIK'], boardSeqByFacility: { INCIRLIK: 7 }, strips: [], flightDataList: [], positions: [] });
+  applyEfspDelta({ strips: { updated: [], gone: [] }, flightDataList: { updated: [] }, positions: { updated: [] } });
+  assert.equal(getCursor(boardCursorName(getEfspFacility())).seq, 7);
+});
+
+// ── applyEfspMutationAck ─────────────────────────────────────────────────
+
+test('a successful ack applies the returned strip/flightData and clears the pending entry', () => {
+  registerPendingMutation({ clientMutationId: 'm1', stripId: 's1', baseRev: 1, op: { kind: 'SetFlag' } });
+  const result = applyEfspMutationAck({ clientMutationId: 'm1', ok: true, boardSeq: 2, strip: strip({ rev: 2 }) });
+
+  assert.equal(result.wasPending, true);
+  assert.equal(result.ok, true);
+  assert.equal(getEfspStrip('s1').rev, 2);
+  assert.equal(getPendingMutations().length, 0);
+});
+
+test('a REJECTED ack still applies the server\'s current strip (snap-back), not just on success', () => {
+  registerPendingMutation({ clientMutationId: 'm1', stripId: 's1', baseRev: 1, op: { kind: 'SetFlag' } });
+  const result = applyEfspMutationAck({ clientMutationId: 'm1', ok: false, reason: 'STALE_REV', boardSeq: 3, strip: strip({ rev: 3, state: 'CLEARED' }) });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, 'STALE_REV');
+  assert.equal(getEfspStrip('s1').rev, 3);
+  assert.equal(getEfspStrip('s1').state, 'CLEARED'); // server truth, not whatever the optimistic local guess was
+});
+
+test('a rejection\'s human-readable detail is surfaced through the return value, not just the bare reason code', () => {
+  const result = applyEfspMutationAck({
+    clientMutationId: 'm1', ok: false, reason: 'VALIDATION_ERROR',
+    detail: 'dropping here would set state to CLEARED, but the only valid next state from PROPOSED is PENDING_CLEARANCE',
+    strip: strip(),
+  });
+  assert.equal(result.reason, 'VALIDATION_ERROR');
+  assert.match(result.detail, /only valid next state/);
+});
+
+test('an ack for a clientMutationId that was never registered as pending still applies cleanly (wasPending:false)', () => {
+  const result = applyEfspMutationAck({ clientMutationId: 'unknown', ok: true, strip: strip() });
+  assert.equal(result.wasPending, false);
+  assert.equal(result.ok, true);
+  assert.ok(getEfspStrip('s1'));
+});
+
+test('a warning on the ack is surfaced through the return value', () => {
+  const result = applyEfspMutationAck({ clientMutationId: 'm1', ok: true, warnings: [{ code: 'DUPLICATE_IGNORED_WARNING' }], strip: strip() });
+  assert.deepEqual(result.warnings, [{ code: 'DUPLICATE_IGNORED_WARNING' }]);
+});
+
+// ── Pending mutations / rebase-on-reject (§5.6.3) ───────────────────────────
+
+test('registerPendingMutation tracks a sent-but-unacked mutation until its ack clears it', () => {
+  registerPendingMutation({ clientMutationId: 'm1', stripId: 's1', baseRev: 1, op: {} });
+  registerPendingMutation({ clientMutationId: 'm2', stripId: 's2', baseRev: 1, op: {} });
+  assert.equal(getPendingMutations().length, 2);
+});
+
+test('rebaseForResend rebuilds baseRev against the current local Strip', () => {
+  applyEfspSnapshot({ boardSeq: 1, strips: [strip({ rev: 5 })], flightDataList: [], positions: [] });
+  registerPendingMutation({ clientMutationId: 'm1', stripId: 's1', baseRev: 1, op: { kind: 'SetFlag', flag: 'offset', value: true } });
+
+  const rebased = rebaseForResend('m1');
+  assert.equal(rebased.baseRev, 5);
+  assert.equal(rebased.stripId, 's1');
+  assert.deepEqual(rebased.op, { kind: 'SetFlag', flag: 'offset', value: true });
+});
+
+test('rebaseForResend returns null when the target Strip no longer exists locally', () => {
+  registerPendingMutation({ clientMutationId: 'm1', stripId: 'does-not-exist', baseRev: 1, op: {} });
+  assert.equal(rebaseForResend('m1'), null);
+});
+
+test('rebaseForResend re-sends a CreateStrip as it was (no stripId to rebase; the server replay cache keys on the same cmid)', () => {
+  const create = { clientMutationId: 'm1', facilityId: 'INCIRLIK', op: { kind: 'CreateStrip' } };
+  registerPendingMutation(create);
+  assert.deepEqual(rebaseForResend('m1'), create);
+});
+
+test('rebaseForResend returns null for an unknown clientMutationId', () => {
+  assert.equal(rebaseForResend('never-registered'), null);
+});
+
+// ── getEfspRack ──────────────────────────────────────────────────────────
+
+test('getEfspRack filters by bay/rack, excludes DROPPED, and sorts by orderKey', () => {
+  applyEfspSnapshot({
+    boardSeq: 1,
+    strips: [
+      strip({ stripId: 's1', bayId: 'b1', rackId: 'r1', orderKey: 'B' }),
+      strip({ stripId: 's2', bayId: 'b1', rackId: 'r1', orderKey: 'A' }),
+      strip({ stripId: 's3', bayId: 'b1', rackId: 'r1', orderKey: 'C', state: 'DROPPED' }),
+      strip({ stripId: 's4', bayId: 'b2', rackId: 'r1', orderKey: 'A' }), // different bay
+    ],
+    flightDataList: [], positions: [],
+  });
+  const rack = getEfspRack('b1', 'r1');
+  assert.deepEqual(rack.map(s => s.stripId), ['s2', 's1']);
+});
+
+// ── searchEfspStrips (guide §4.3 rule 2, defect D2) ─────────────────────
+
+function flightData(overrides = {}) {
+  return { flightDataId: 'f1', identity: { callsign: 'VIPER1', beaconAssigned: '1234', ...overrides.identity } };
+}
+
+test('searchEfspStrips matches callsign, case-insensitively', () => {
+  applyEfspSnapshot({ boardSeq: 1, strips: [strip({ flightDataId: 'f1' })], flightDataList: [flightData()], positions: [] });
+  assert.deepEqual(searchEfspStrips('viper').map(s => s.stripId), ['s1']);
+  assert.deepEqual(searchEfspStrips('VIPER1').map(s => s.stripId), ['s1']);
+});
+
+test('searchEfspStrips matches beacon code as a substring', () => {
+  applyEfspSnapshot({ boardSeq: 1, strips: [strip({ flightDataId: 'f1' })], flightDataList: [flightData()], positions: [] });
+  assert.deepEqual(searchEfspStrips('234').map(s => s.stripId), ['s1']);
+});
+
+test('searchEfspStrips matches a carrier side number (H117/H122: the carrier names an aircraft by it)', () => {
+  const fd = { ...flightData(), military: { carrier: { sideNumber: '407' } } };
+  applyEfspSnapshot({ boardSeq: 1, strips: [strip({ flightDataId: 'f1' })], flightDataList: [fd], positions: [] });
+  assert.deepEqual(searchEfspStrips('407').map(s => s.stripId), ['s1']);
+  assert.deepEqual(searchEfspStrips('408'), []);
+});
+
+test('searchEfspStrips with an empty or whitespace-only query returns no results, not everything', () => {
+  applyEfspSnapshot({ boardSeq: 1, strips: [strip({ flightDataId: 'f1' })], flightDataList: [flightData()], positions: [] });
+  assert.deepEqual(searchEfspStrips(''), []);
+  assert.deepEqual(searchEfspStrips('   '), []);
+  assert.deepEqual(searchEfspStrips(undefined), []);
+});
+
+test('searchEfspStrips excludes DROPPED Strips, same as getEfspRack', () => {
+  applyEfspSnapshot({ boardSeq: 1, strips: [strip({ flightDataId: 'f1', state: 'DROPPED' })], flightDataList: [flightData()], positions: [] });
+  assert.deepEqual(searchEfspStrips('viper'), []);
+});
+
+test('searchEfspStrips finds a Strip regardless of which Bay/Rack it currently sits in — it\'s a second view onto the same live data, not a re-parent', () => {
+  applyEfspSnapshot({
+    boardSeq: 1,
+    strips: [strip({ stripId: 's1', flightDataId: 'f1', bayId: 'cd-held', rackId: 'main' })],
+    flightDataList: [flightData()], positions: [],
+  });
+  const [result] = searchEfspStrips('viper');
+  assert.equal(result.bayId, 'cd-held'); // unchanged — search doesn't move anything
+});
+
+// ── Obligations: full state in efsp-alerts (docs/adr/0067) ──────────────
+
+function obligation(overrides = {}) {
+  return { facilityId: 'INCIRLIK', stripId: 's1', obligationType: 'VOID_TIME_EXPIRED', severity: 'OVERDUE', dueAt: 1000, since: 1000, ...overrides };
+}
+
+test('an obligation in efsp-alerts appears on its Strip', () => {
+  applyEfspAlerts({ conformance: [], conflictAlert: [], obligations: [obligation()] });
+  assert.equal(getEfspObligation('s1').obligationType, 'VOID_TIME_EXPIRED');
+  assert.deepEqual(getEfspObligations('s1'), [obligation()]);
+  assert.equal(getEfspObligation('s2'), null);
+  assert.deepEqual(getEfspObligations('s2'), []);
+});
+
+test('the next efsp-alerts without an obligation removes it — replace, never merge', () => {
+  applyEfspAlerts({ conformance: [], conflictAlert: [], obligations: [obligation(), obligation({ stripId: 's2' })] });
+  applyEfspAlerts({ conformance: [], conflictAlert: [], obligations: [obligation({ stripId: 's2' })] });
+  assert.equal(getEfspObligation('s1'), null);
+  assert.notEqual(getEfspObligation('s2'), null);
+});
+
+test('OVERDUE outranks WARNING on one Strip, then the earliest dueAt', () => {
+  applyEfspAlerts({ obligations: [
+    obligation({ obligationType: 'ETA_REVISION', severity: 'WARNING', dueAt: 10 }),
+    obligation({ obligationType: 'UNACTIVATED_AIRSPACE_ENTRY', severity: 'OVERDUE', dueAt: 500 }),
+    obligation({ obligationType: 'VOID_TIME_EXPIRED', severity: 'OVERDUE', dueAt: 200 }),
+  ] });
+  assert.equal(getEfspObligation('s1').obligationType, 'VOID_TIME_EXPIRED');
+  assert.equal(getEfspObligations('s1').length, 3);
+});
+
+test('an efsp-alerts with no obligations key clears them', () => {
+  applyEfspAlerts({ obligations: [obligation()] });
+  applyEfspAlerts({ conformance: [], conflictAlert: [] });
+  assert.equal(getEfspObligation('s1'), null);
+});
+
+test('_resetEfspStateForTest clears obligations', () => {
+  applyEfspAlerts({ obligations: [obligation()] });
+  _resetEfspStateForTest();
+  assert.equal(getEfspObligation('s1'), null);
+});

@@ -1,0 +1,478 @@
+crc-desktop/app/public/css/overlays.css:71:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/app/public/css/radar-panel.css:31:held#1	N	comment prose (L20)
+crc-desktop/app/public/index.html:190:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/app/public/js/app.js:104:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/app/public/js/app.js:137:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/app/public/js/app.js:617:held#1	N	comment prose (L20)
+crc-desktop/app/public/js/app.js:618:held#1	N	comment prose (L20)
+crc-desktop/app/public/js/dock.js:526:held#1	N	comment prose (L20)
+crc-desktop/app/public/js/panels/efsp/airspace-panel.js:41:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/app/public/js/panels/efsp/airspace-panel.js:43:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/app/public/js/panels/efsp/airspace-panel.js:45:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/app/public/js/panels/efsp/airspace-panel.js:161:held#1	N	comment prose (L20)
+crc-desktop/app/public/js/panels/efsp/airspace-panel.js:191:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/app/public/js/panels/efsp/airspace-panel.js:195:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/app/public/js/panels/efsp/ato-import.js:55:held#1	N	comment prose (L20)
+crc-desktop/app/public/js/panels/efsp/ato-import.js:67:held#1	N	comment prose (L20)
+crc-desktop/app/public/js/panels/efsp/bay-view.js:267:held#1	N	comment prose (L20)
+crc-desktop/app/public/js/panels/efsp/bay-view.js:267:held#2	N	comment prose (L20)
+crc-desktop/app/public/js/panels/efsp/bay-views.js:85:held#1	N	comment prose (L20)
+crc-desktop/app/public/js/panels/efsp/bay-views.js:193:held#1	N	comment prose (L20)
+crc-desktop/app/public/js/panels/efsp/bay-views.js:194:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/app/public/js/panels/efsp/bay-views.js:195:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/app/public/js/panels/efsp/bay-views.js:223:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/app/public/js/panels/efsp/bay-views.js:253:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/app/public/js/panels/efsp/bay-views.js:280:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/app/public/js/panels/efsp/bay-views.js:281:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/app/public/js/panels/efsp/bay/authority-mirror.js:41:held#1	N	comment prose (L20)
+crc-desktop/app/public/js/panels/efsp/bay/authority-mirror.js:48:held#1	N	comment prose (L20)
+crc-desktop/app/public/js/panels/efsp/bay/block-edit.js:79:held#1	N	comment prose (L20)
+crc-desktop/app/public/js/panels/efsp/bay/drag.js:121:held#1	N	comment prose (L20)
+crc-desktop/app/public/js/panels/efsp/bay/drag.js:334:held#1	N	comment prose (L20)
+crc-desktop/app/public/js/panels/efsp/bay/strip-element.js:33:held#1	N	comment prose (L20)
+crc-desktop/app/public/js/panels/efsp/carrier-panel.js:40:held#1	N	comment prose (L20)
+crc-desktop/app/public/js/panels/efsp/carrier-panel.js:73:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/app/public/js/panels/efsp/carrier-panel.js:75:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/app/public/js/panels/efsp/carrier-panel.js:99:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/app/public/js/panels/efsp/carrier-panel.js:125:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/app/public/js/panels/efsp/efsp-arrivals.js:61:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/app/public/js/panels/efsp/efsp-arrivals.js:70:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/app/public/js/panels/efsp/efsp-messages.js:124:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/app/public/js/panels/efsp/efsp-messages.js:124:held#2	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/app/public/js/panels/efsp/efsp-metrics-client.js:71:held#1	Y	comment names the identifier (follows it)
+crc-desktop/app/public/js/panels/efsp/efsp-metrics-client.js:71:held#2	N	comment prose
+crc-desktop/app/public/js/panels/efsp/efsp-metrics-client.js:104:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/app/public/js/panels/efsp/efsp-metrics-client.js:112:held#1	N	English in a string (UI label / message): the UI pass rewords it
+crc-desktop/app/public/js/panels/efsp/efsp-metrics-client.js:286:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/app/public/js/panels/efsp/efsp-panel.js:45:held#1	N	comment prose (L20)
+crc-desktop/app/public/js/panels/efsp/efsp-state.js:477:held#1	N	comment prose (L20)
+crc-desktop/app/public/js/panels/efsp/efsp-ws.js:46:held#1	N	comment prose (L20)
+crc-desktop/app/public/js/panels/efsp/efsp-ws.js:83:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/app/public/js/panels/efsp/efsp-ws.js:84:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/app/public/js/panels/efsp/efsp-ws.js:85:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/app/public/js/panels/efsp/panel/arrivals.js:73:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/app/public/js/panels/efsp/panel/arrivals.js:75:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/app/public/js/panels/efsp/panel/arrivals.js:80:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/app/public/js/panels/efsp/panel/create-strip.js:109:held#1	N	comment prose (L20)
+crc-desktop/app/public/js/panels/efsp/panel/create-strip.js:110:held#1	N	comment prose (L20)
+crc-desktop/app/public/js/panels/efsp/panel/create-strip.js:138:held#1	N	comment prose (L20)
+crc-desktop/app/public/js/panels/efsp/panel/create-strip.js:138:held#2	N	comment prose (L20)
+crc-desktop/app/public/js/panels/efsp/panel/create-strip.js:140:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/app/public/js/panels/efsp/panel/create-strip.js:141:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/app/public/js/panels/efsp/panel/tabs.js:23:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/app/public/js/panels/efsp/panel/tabs.js:26:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/app/public/js/panels/efsp/panel/tabs.js:29:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/app/public/js/panels/efsp/panel/tabs.js:35:held#1	N	comment prose (L20)
+crc-desktop/app/public/js/panels/efsp/panel/tabs.js:50:held#1	N	comment prose (L20)
+crc-desktop/app/public/js/panels/efsp/panel/tabs.js:66:held#1	Y	comment names the identifier (follows it)
+crc-desktop/app/public/js/panels/efsp/panel/tabs.js:66:held#2	N	comment prose
+crc-desktop/app/public/js/panels/efsp/panel/tabs.js:75:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/app/public/js/panels/efsp/panel/tabs.js:78:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/app/public/js/panels/efsp/panel/tabs.js:81:held#1	N	comment prose (L20)
+crc-desktop/app/public/js/panels/efsp/panel/tabs.js:83:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/app/public/js/panels/efsp/panel/tabs.js:90:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/app/public/js/panels/efsp/panel/tabs.js:94:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/app/public/js/panels/efsp/panel/tabs.js:101:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/app/public/js/panels/efsp/panel/tabs.js:101:held#2	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/app/public/js/panels/efsp/panel/tabs.js:129:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/app/public/js/panels/efsp/panel/tabs.js:133:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/app/public/js/panels/efsp/panel/tabs.js:135:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/app/public/js/panels/efsp/panel/tabs.js:136:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/app/public/js/panels/efsp/panel/tabs.js:142:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/app/public/js/panels/efsp/panel/tabs.js:159:held#1	N	English in a string (UI label / message): the UI pass rewords it
+crc-desktop/app/public/js/panels/efsp/panel/tabs.js:277:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/app/public/js/panels/efsp/panel/tabs.js:278:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/app/public/js/panels/efsp/panel/tabs.js:279:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/app/public/js/panels/efsp/runway-status-panel.js:241:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/app/public/js/panels/efsp/runway-status-panel.js:242:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/app/public/js/panels/efsp/runway-status-panel.js:259:held#1	N	comment prose (L20)
+crc-desktop/app/public/js/panels/efsp/runway-status-rules.js:47:held#1	N	comment prose (L20)
+crc-desktop/app/public/js/panels/efsp/runway-status-rules.js:229:held#1	N	English in a string (UI label / message): the UI pass rewords it
+crc-desktop/app/public/js/panels/efsp/runway-status-rules.js:335:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/app/public/js/panels/efsp/runway-status-rules.js:337:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/app/public/js/panels/efsp/runway-status-rules.js:339:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/app/public/js/panels/efsp/runway-status-rules.js:343:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/app/public/js/panels/efsp/runway-status-rules.js:384:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/app/public/js/panels/efsp/runway-status-rules.js:393:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/app/public/js/panels/efsp/runway-status-rules.js:400:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/app/public/js/panels/efsp/scramble.js:158:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/app/public/js/panels/efsp/scramble.js:159:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/app/public/js/panels/efsp/sfa-state.js:41:held#1	N	comment prose (L20)
+crc-desktop/app/public/js/panels/efsp/sfa-state.js:54:held#1	N	comment prose (L20)
+crc-desktop/app/public/js/panels/efsp/strip-drag.js:24:held#1	N	comment prose (L20)
+crc-desktop/app/public/js/panels/efsp/strip-template.js:289:held#1	N	comment prose (L20)
+crc-desktop/app/public/js/panels/efsp/strip-view.js:528:held#1	N	comment prose (L20)
+crc-desktop/app/public/js/panels/radar-panel.js:44:held#1	N	comment prose (L20)
+crc-desktop/app/public/js/panels/radar-panel.js:75:held#1	N	comment prose (L20)
+crc-desktop/app/public/js/panels/radar-panel.js:174:held#1	N	comment prose (L20)
+crc-desktop/app/public/js/panels/radar-panel.js:175:held#1	N	comment prose (L20)
+crc-desktop/app/public/js/panels/radar-panel.js:176:held#1	N	comment prose (L20)
+crc-desktop/app/public/js/panels/radar-panel.js:238:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/app/public/js/panels/radar-panel.js:258:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/app/public/js/panels/radar-panel.js:260:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/app/public/js/panels/radar-panel.js:262:held#1	N	English in a string (UI label / message): the UI pass rewords it
+crc-desktop/e2e/alert-scramble.spec.js:90:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/alert-scramble.spec.js:153:held#1	N	comment prose (L20)
+crc-desktop/e2e/helpers/app.js:22:held#1	N	comment prose (L20)
+crc-desktop/e2e/helpers/app.js:29:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/helpers/app.js:41:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/helpers/app.js:42:held#1	N	comment prose (L20)
+crc-desktop/e2e/helpers/app.js:47:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/helpers/app.js:272:held#1	N	comment prose (L20)
+crc-desktop/e2e/helpers/test.js:48:held#1	N	comment prose (L20)
+crc-desktop/e2e/l1-marsa.spec.js:172:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l1-marsa.spec.js:176:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l1-nla-clearance-chain.spec.js:39:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l1-nla-clearance-chain.spec.js:73:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l1-nla-clearance-chain.spec.js:105:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l1-nla-clearance-chain.spec.js:125:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l1-overlays.spec.js:41:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l1-popovers.spec.js:134:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l1-popovers.spec.js:205:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l1-touch-targets.spec.js:18:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l14-ato-import.spec.js:36:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l15-metrics.spec.js:29:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l15-metrics.spec.js:114:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l16-picker-and-times.spec.js:39:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l16-picker-and-times.spec.js:77:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l16-picker-and-times.spec.js:82:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l17-carrier.spec.js:26:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l17-carrier.spec.js:30:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l17-carrier.spec.js:59:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l17-carrier.spec.js:61:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l18-incirlik.spec.js:37:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l18-incirlik.spec.js:59:held#1	N	comment prose (L20)
+crc-desktop/e2e/l19-surveillance-hints.spec.js:39:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l19-surveillance-hints.spec.js:86:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l2-block-editing.spec.js:50:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l2-block-editing.spec.js:62:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l2-block-editing.spec.js:76:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l2-block-editing.spec.js:87:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l2-block-editing.spec.js:113:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l2-block-editing.spec.js:127:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l2-block-editing.spec.js:143:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l2-block-editing.spec.js:158:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l2-block-editing.spec.js:170:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l2-block-editing.spec.js:190:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l2-block-editing.spec.js:208:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l2-block-editing.spec.js:222:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l2-block-editing.spec.js:247:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l2-block-editing.spec.js:293:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l2-block-editing.spec.js:305:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l2-block-editing.spec.js:331:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l2-block-editing.spec.js:342:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l22-stars-scope.spec.js:60:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l22-stars-scope.spec.js:98:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l22-stars-scope.spec.js:99:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l22-stars-scope.spec.js:100:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l22-stars-scope.spec.js:100:held#2	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l22-stars-scope.spec.js:101:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l22-stars-scope.spec.js:153:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l22-stars-scope.spec.js:180:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l22-stars-scope.spec.js:226:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l3-coordination.spec.js:36:held#1	N	comment prose (L20)
+crc-desktop/e2e/l3-coordination.spec.js:45:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l3-coordination.spec.js:46:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l3-coordination.spec.js:47:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l4-badges.spec.js:55:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l4-badges.spec.js:63:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l4-badges.spec.js:87:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l4-badges.spec.js:110:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l4-chain.spec.js:65:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l4-chain.spec.js:110:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l4-density.spec.js:42:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l4-density.spec.js:71:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l4-drag.spec.js:75:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l4-drag.spec.js:93:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l4-drag.spec.js:113:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l4-drag.spec.js:144:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l4-drag.spec.js:177:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l5-arrivals.spec.js:51:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l5-arrivals.spec.js:52:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l5-arrivals.spec.js:88:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l5-arrivals.spec.js:89:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l5-arrivals.spec.js:101:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l5-arrivals.spec.js:102:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l5-arrivals.spec.js:129:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/l5-arrivals.spec.js:139:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/marsa-popover.spec.js:34:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/mtr-fields.spec.js:60:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/mtr-fields.spec.js:117:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/mtr-fields.spec.js:141:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/mtr-fields.spec.js:161:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/mtr-fields.spec.js:181:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/mtr-fields.spec.js:213:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/mtr-fields.spec.js:233:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/mtr-pilot-walk.spec.js:57:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/mtr-pilot-walk.spec.js:58:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/obligation-retract.spec.js:65:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/obligation-retract.spec.js:78:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/obligation-retract.spec.js:89:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/obligation-retract.spec.js:95:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/ordnance-hung.spec.js:75:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/ordnance-hung.spec.js:135:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/overflight-lifecycle.spec.js:43:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/overflight-lifecycle.spec.js:44:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/overflight-lifecycle.spec.js:101:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/runway-status.spec.js:53:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/runway-status.spec.js:57:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/runway-status.spec.js:123:held#1	N	comment prose (L20)
+crc-desktop/e2e/runway-status.spec.js:147:held#1	N	comment prose (L20)
+crc-desktop/e2e/runway-status.spec.js:147:held#2	N	comment prose (L20)
+crc-desktop/e2e/runway-status.spec.js:151:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/runway-status.spec.js:152:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/runway-status.spec.js:152:held#2	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/runway-status.spec.js:257:held#1	N	comment prose (L20)
+crc-desktop/e2e/runway-status.spec.js:274:held#1	N	comment prose (L20)
+crc-desktop/e2e/runway-status.spec.js:283:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/smoke.spec.js:15:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/tactical-positions.spec.js:29:held#1	N	comment prose (L20)
+crc-desktop/e2e/tactical-positions.spec.js:30:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/tactical-positions.spec.js:33:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/u6-block-altitude.spec.js:12:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/ui-a.spec.js:26:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/ui-a.spec.js:51:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/ui-a.spec.js:71:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/ui-a.spec.js:91:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/ui-a.spec.js:112:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/ui-a.spec.js:113:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/ui-a.spec.js:156:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/ui-a.spec.js:157:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/ui-a.spec.js:158:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/ui-a.spec.js:171:held#1	N	English in a string (UI label / message): the UI pass rewords it
+crc-desktop/e2e/ui-b-resync.spec.js:30:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/e2e/ui-b-resync.spec.js:31:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/client-mirror-parity.test.mjs:154:held#1	N	test title prose
+crc-desktop/tests/client-mirror-parity.test.mjs:156:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/client-mirror-parity.test.mjs:157:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/client-mirror-parity.test.mjs:183:held#1	N	comment prose (L20)
+crc-desktop/tests/efsp-airspace-panel.test.mjs:37:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-airspace-panel.test.mjs:37:held#2	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ato-import.test.mjs:3:held#1	N	comment prose (L20)
+crc-desktop/tests/efsp-ato-import.test.mjs:22:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ato-import.test.mjs:29:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ato-import.test.mjs:67:held#1	N	test title prose
+crc-desktop/tests/efsp-ato-import.test.mjs:69:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-bay-views.test.mjs:27:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-bay-views.test.mjs:39:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-bay-views.test.mjs:40:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-bay-views.test.mjs:234:held#1	N	test title prose
+crc-desktop/tests/efsp-block-map-parity.test.mjs:111:held#1	N	comment prose (L20)
+crc-desktop/tests/efsp-metrics-client.test.mjs:30:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-metrics-client.test.mjs:43:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-metrics-client.test.mjs:43:held#2	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-metrics-client.test.mjs:157:held#1	N	test title prose
+crc-desktop/tests/efsp-metrics-client.test.mjs:171:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-metrics-hooks.test.mjs:166:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-mission-line-panel.test.mjs:59:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-mission-line-panel.test.mjs:79:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-mission-line-panel.test.mjs:79:held#2	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-mission-line-panel.test.mjs:125:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-mission-line-panel.test.mjs:237:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ordnance-client.test.mjs:151:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ordnance-client.test.mjs:163:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ordnance-client.test.mjs:183:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ordnance-client.test.mjs:201:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ordnance-client.test.mjs:208:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ordnance-client.test.mjs:209:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ordnance-client.test.mjs:217:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-panel-drop-targets.test.mjs:25:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-panel-drop-targets.test.mjs:28:held#1	N	test title prose
+crc-desktop/tests/efsp-panel-drop-targets.test.mjs:31:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-panel-drop-targets.test.mjs:32:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-panel-drop-targets.test.mjs:42:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-panel-drop-targets.test.mjs:44:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-panel-drop-targets.test.mjs:47:held#1	N	test title prose
+crc-desktop/tests/efsp-resync-state.test.mjs:31:held#1	N	test title prose
+crc-desktop/tests/efsp-runway-status-client.test.mjs:213:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-runway-status-client.test.mjs:214:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-runway-status-client.test.mjs:216:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-runway-status-client.test.mjs:218:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-runway-status-client.test.mjs:231:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-runway-status-client.test.mjs:231:held#2	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-runway-status-client.test.mjs:264:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-runway-status-client.test.mjs:264:held#2	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-runway-status-client.test.mjs:334:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-runway-status-client.test.mjs:380:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-runway-status-client.test.mjs:391:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-runway-status-client.test.mjs:420:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-runway-status-client.test.mjs:433:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-runway-status-client.test.mjs:439:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-runway-status-client.test.mjs:449:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-runway-status-client.test.mjs:454:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-runway-status-client.test.mjs:466:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-runway-status-client.test.mjs:474:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-runway-status-client.test.mjs:483:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-runway-status-client.test.mjs:489:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-runway-status-client.test.mjs:491:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-runway-status-client.test.mjs:496:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-scramble-client.test.mjs:127:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-scramble-client.test.mjs:139:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-sfa-client.test.mjs:2:held#1	N	comment prose (L20)
+crc-desktop/tests/efsp-sfa-client.test.mjs:49:held#1	N	test title prose
+crc-desktop/tests/efsp-sfa-client.test.mjs:57:held#1	N	test title prose
+crc-desktop/tests/efsp-sfa-client.test.mjs:63:held#1	N	English in a string (UI label / message): the UI pass rewords it
+crc-desktop/tests/efsp-stereo-panel.test.mjs:41:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-stereo-panel.test.mjs:75:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-stereo-panel.test.mjs:75:held#2	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-stereo-panel.test.mjs:130:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-stereo-panel.test.mjs:230:held#1	N	test title prose
+crc-desktop/tests/efsp-stereo-panel.test.mjs:231:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-stereo-panel.test.mjs:237:held#1	N	test title prose
+crc-desktop/tests/efsp-stereo-panel.test.mjs:238:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-strip-fields.test.mjs:4:held#1	N	comment prose (L20)
+crc-desktop/tests/efsp-ui-reachability.test.mjs:87:held#1	N	comment prose (L20)
+crc-desktop/tests/efsp-ui-reachability.test.mjs:106:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:168:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:187:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:209:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:372:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:401:held#1	N	comment prose (L20)
+crc-desktop/tests/efsp-ui-reachability.test.mjs:405:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:485:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:491:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:515:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:523:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:530:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:536:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:549:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:568:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:584:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:592:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:602:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:612:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:624:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:641:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:661:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:682:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:709:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:725:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:742:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:754:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:766:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:778:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:784:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:789:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:793:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:801:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:806:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:814:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:828:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:843:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:852:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:859:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:877:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:883:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:888:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:892:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:907:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:914:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:926:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:932:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:954:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:965:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:989:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:1004:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:1020:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:1042:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:1054:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:1064:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:1094:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:1103:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:1113:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:1119:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:1133:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:1149:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:1161:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:1172:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:1181:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:1191:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:1208:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:1230:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:1245:held#1	N	comment prose (L20)
+crc-desktop/tests/efsp-ui-reachability.test.mjs:1248:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:1285:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:1290:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:1295:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:1301:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:1312:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:1323:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:1330:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:1474:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:1526:held#1	N	comment prose (L20)
+crc-desktop/tests/efsp-ui-reachability.test.mjs:1533:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:1554:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:1555:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:1598:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:1606:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:1619:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:1633:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:1652:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:1668:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:1684:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:1714:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:1722:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:1743:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:1770:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:1796:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:1825:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:1840:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:1854:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:1858:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:1869:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:1879:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:1898:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:1918:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:1932:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:1945:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:1950:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:1959:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:1968:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:1983:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:1994:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:2018:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:2021:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:2025:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:2039:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:2055:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:2072:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:2090:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:2101:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:2123:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:2142:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:2143:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:2151:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:2178:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:2197:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:2217:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:2225:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:2260:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:2283:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:2295:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:2314:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:2324:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:2355:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:2376:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:2390:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:2403:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:2420:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:2460:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:2466:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:2484:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:2485:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:2534:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:2538:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:2542:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:2545:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:2575:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:2576:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:2592:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:2606:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:2608:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:2613:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:2628:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:2645:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:2662:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:2672:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:2679:held#1	Y	Position list (signed-on Positions): local, parameter or wire field
+crc-desktop/tests/efsp-ui-reachability.test.mjs:2691:held#1	Y	Position list (signed-on Positions): local, parameter or wire field

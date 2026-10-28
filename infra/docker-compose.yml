@@ -20,153 +20,18 @@ services:
     volumes:
       - certbot-webroot:/var/www/certbot:ro
       - certbot-certs:/etc/letsencrypt:ro
+      - ./nginx/templates:/etc/nginx/templates:ro
+      - ./nginx/snippets:/etc/nginx/snippets:ro
+      - ./nginx/entrypoint.d/30-reload-certs.sh:/docker-entrypoint.d/30-reload-certs.sh:ro
     environment:
       - WIKI_DOMAIN=${WIKI_DOMAIN}
       - AUTH_DOMAIN=${AUTH_DOMAIN}
       - DOMAIN=${DOMAIN}
       - ATOBRIEF_DOMAIN=${ATOBRIEF_DOMAIN}
-      - ASACS_DOMAIN=${ASACS_DOMAIN}
-    command: >
-      /bin/sh -c "
-      echo 'resolver 127.0.0.11 valid=10s ipv6=off;
-      client_max_body_size 350M;
-      map \$$http_upgrade \$$connection_upgrade {
-        default upgrade;
-        \"\" close;
-      }
-      map \$$http_user_agent \$$bad_bot {
-        default 0;
-        \"~*GPTBot\" 1;
-        \"~*Amazonbot\" 1;
-        \"~*MJ12bot\" 1;
-        \"~*DotBot\" 1;
-        \"~*Bytespider\" 1;
-        \"~*l9scan\" 1;
-        \"~*RootEvidence\" 1;
-        \"~*crusader-worker\" 1;
-        \"~*Dataprovider\" 1;
-      }
-      map \$$args \$$scraper_sig {
-        default 0;
-        \"~*tagfilter=visualeditor\" 1;
-        \"~*tagfilter%3Dvisualeditor\" 1;
-        \"~*action=feedrecentchanges\" 1;
-      }
-      limit_req_zone \$$binary_remote_addr zone=wiki:10m rate=5r/s;
-      limit_req_zone \$$binary_remote_addr zone=wikiauth:5m rate=1r/s;
-      server {
-        listen 80;
-        server_name '$$WIKI_DOMAIN';
-        location /.well-known/acme-challenge/ { root /var/www/certbot; }
-        location / { return 301 https://\$$host\$$request_uri; }
-      }
-      server {
-        listen 443 ssl;
-        server_name '$$WIKI_DOMAIN';
-        ssl_certificate /etc/letsencrypt/live/'$$WIKI_DOMAIN'/fullchain.pem;
-        ssl_certificate_key /etc/letsencrypt/live/'$$WIKI_DOMAIN'/privkey.pem;
-        deny 74.7.227.48;
-        deny 74.7.243.248;
-        if (\$$bad_bot) { return 403; }
-        if (\$$scraper_sig) { return 403; }
-        location = /robots.txt {
-          add_header Content-Type text/plain;
-          return 200 \"User-agent: GPTBot\\nDisallow: /\\nUser-agent: Amazonbot\\nDisallow: /\\n\\nUser-agent: *\\nDisallow: /index.php?\\nDisallow: /api.php\\n\";
-        }
-        location = /index.php/Special:PluggableAuthLogin {
-          limit_req zone=wikiauth burst=3 nodelay;
-          set \$$upstream mediawiki;
-          proxy_pass http://\$$upstream:80;
-          proxy_set_header Host $$host;
-          proxy_set_header X-Real-IP $$remote_addr;
-          proxy_set_header X-Forwarded-Proto https;
-        }
-        location / {
-          limit_req zone=wiki burst=30 nodelay;
-          set \$$upstream mediawiki;
-          proxy_pass http://\$$upstream:80;
-          proxy_set_header Host $$host;
-          proxy_set_header X-Real-IP $$remote_addr;
-          proxy_set_header X-Forwarded-Proto https; }
-      }
-      server {
-        listen 80;
-        server_name '$$AUTH_DOMAIN';
-        location /.well-known/acme-challenge/ { root /var/www/certbot; }
-        location / { return 301 https://\$$host\$$request_uri; }
-      }
-      server {
-        listen 443 ssl;
-        server_name '$$AUTH_DOMAIN';
-        ssl_certificate /etc/letsencrypt/live/'$$AUTH_DOMAIN'/fullchain.pem;
-        ssl_certificate_key /etc/letsencrypt/live/'$$AUTH_DOMAIN'/privkey.pem;
-        location / {
-          set \$$upstream casdoor;
-          proxy_pass http://\$$upstream:8000;
-          proxy_set_header Host $$host;
-          proxy_set_header X-Real-IP $$remote_addr;
-          proxy_set_header X-Forwarded-Proto https; }
-      }
-      server {
-        listen 80;
-        server_name '$$DOMAIN';
-        location /.well-known/acme-challenge/ { root /var/www/certbot; }
-        location / { return 301 https://\$$host\$$request_uri; }
-      }
-      server {
-        listen 443 ssl;
-        server_name '$$DOMAIN';
-        ssl_certificate /etc/letsencrypt/live/'$$DOMAIN'/fullchain.pem;
-        ssl_certificate_key /etc/letsencrypt/live/'$$DOMAIN'/privkey.pem;
-        location / {
-          set \$$upstream main-website;
-          proxy_pass http://\$$upstream:7000;
-          proxy_set_header Host $$host;
-          proxy_set_header X-Real-IP $$remote_addr;
-          proxy_set_header X-Forwarded-Proto https; }
-      }
-      server {
-        listen 80;
-        server_name '$$ATOBRIEF_DOMAIN';
-        location /.well-known/acme-challenge/ { root /var/www/certbot; }
-        location / { return 301 https://\$$host\$$request_uri; }
-      }
-      server {
-        listen 443 ssl;
-        server_name '$$ATOBRIEF_DOMAIN';
-        ssl_certificate /etc/letsencrypt/live/'$$ATOBRIEF_DOMAIN'/fullchain.pem;
-        ssl_certificate_key /etc/letsencrypt/live/'$$ATOBRIEF_DOMAIN'/privkey.pem;
-        location / {
-          set \$$upstream atobrief;
-          proxy_pass http://\$$upstream:4000;
-          proxy_set_header Host $$host;
-          proxy_set_header X-Real-IP $$remote_addr;
-          proxy_set_header Upgrade \$$http_upgrade;
-          proxy_set_header Connection \$$connection_upgrade;
-          proxy_set_header X-Forwarded-Proto https; }
-      }
-      server {
-        listen 80;
-        server_name '$$ASACS_DOMAIN';
-        location /.well-known/acme-challenge/ { root /var/www/certbot; }
-        location / { return 301 https://\$$host\$$request_uri; }
-      }
-      server {
-        listen 443 ssl;
-        server_name '$$ASACS_DOMAIN';
-        ssl_certificate /etc/letsencrypt/live/'$$ASACS_DOMAIN'/fullchain.pem;
-        ssl_certificate_key /etc/letsencrypt/live/'$$ASACS_DOMAIN'/privkey.pem;
-        location / {
-          set \$$upstream crc-sync;
-          proxy_pass http://\$$upstream:3000;
-          proxy_set_header Host $$host;
-          proxy_set_header X-Real-IP $$remote_addr;
-          proxy_set_header Upgrade \$$http_upgrade;
-          proxy_set_header Connection \$$connection_upgrade;
-          proxy_set_header X-Forwarded-Proto https; }
-      }
-      ' > /etc/nginx/conf.d/default.conf
-      && nginx -g 'daemon off;'"
+      # The crc-sync vhost. One spelling only; the retired asacs_link name is no longer read (R3-35).
+      - CRCSYNC_DOMAIN=${CRCSYNC_DOMAIN}
+    # No `command:`: the nginx image's entrypoint renders templates/*.template with
+    # envsubst into conf.d/ (only the variables set in `environment` above).
     depends_on:
       - mediawiki
       - casdoor
@@ -203,7 +68,7 @@ services:
       CASDOOR_DB_PASSWORD: ${CASDOOR_DB_PASSWORD}
     volumes:
       - mariadb-data:/var/lib/mysql
-      - ./mariadb/init.sh:/docker-entrypoint-initdb.d/init.sh:ro
+      - ./init.sh:/docker-entrypoint-initdb.d/init.sh:ro
     networks:
       - internal
     healthcheck:
@@ -267,14 +132,14 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=7000
-      - LOG_LEVEL=${LOG_LEVEL:-warn}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
       - CASDOOR_CLIENT_ID=${CASDOOR_CLIENT_ID}
       - CASDOOR_ENDPOINT=${CASDOOR_ENDPOINT}
       - DISCORD_URL=${DISCORD_URL}
       - WIKI_URL=${WIKI_URL}
       - ATO_URL=${ATO_URL}
       - OLYMPUS_URL=${OLYMPUS_URL}
-      - ASACS_URL=${ASACS_URL}
+      - CRCSYNC_URL=${CRCSYNC_URL}
       - GITHUB_URL=${GITHUB_URL}
       - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
       - DISCORD_GUILD_ID=${DISCORD_GUILD_ID}
@@ -283,6 +148,8 @@ services:
       - CASDOOR_CLIENT_SECRET=${CASDOOR_CLIENT_SECRET}
       - RELEASE_UPLOAD_TOKEN=${RELEASE_UPLOAD_TOKEN}
       - FLIGHT_PLAN_SERVICE_TOKEN=${FLIGHT_PLAN_SERVICE_TOKEN}
+      - AIRSPACE_SERVICE_TOKEN=${AIRSPACE_SERVICE_TOKEN}
+      - SOURCEDCS_CRCSYNC_URL=http://crc-sync:3000
     networks:
       - web
     volumes:
@@ -299,10 +166,11 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=4000
-      - LOG_LEVEL=${LOG_LEVEL:-warn}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
       - CASDOOR_ENDPOINT=${CASDOOR_ENDPOINT}
       - ATOBRIEF_CLIENT_ID=${ATOBRIEF_CLIENT_ID}
       - ATOBRIEF_CLIENT_SECRET=${ATOBRIEF_CLIENT_SECRET}
+      - ATOBRIEF_USMTF_TOKEN=${ATOBRIEF_USMTF_TOKEN}
     networks:
       - web
 
@@ -313,22 +181,56 @@ services:
   # client to server.sourcedcs.page on behalf of every crc-desktop instance.
   # ─────────────────────────────────────────
   crc-sync:
-    image: ghcr.io/niknam3/sourcedcs/crc-sync:${TAG:-latest}
+    # CRC_SYNC_IMAGE is set only by deploy.yml: the digest the wire protocol gate checked (B14). Unset: the tag, as before.
+    image: ${CRC_SYNC_IMAGE:-ghcr.io/niknam3/sourcedcs/crc-sync:${TAG:-latest}}
     container_name: crc-sync
     restart: unless-stopped
     logging: *default-logging
     environment:
       - NODE_ENV=production
       - PORT=3000
-      - LOG_LEVEL=${LOG_LEVEL:-warn}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
       - CASDOOR_ENDPOINT=${CASDOOR_ENDPOINT}
       - CRCSYNC_CLIENT_ID=${CRCSYNC_CLIENT_ID}
       - CRCSYNC_CLIENT_SECRET=${CRCSYNC_CLIENT_SECRET}
-      - DCS_GRPC_HOST=${CRCSYNC_DCS_GRPC_HOST:-server.sourcedcs.page:50051}
-      - SRS_HOST=${CRCSYNC_SRS_HOST:-server.sourcedcs.page}
-      - SRS_PORT=${CRCSYNC_SRS_PORT:-5002}
+      - CRCSYNC_DCS_GRPC_HOST=${CRCSYNC_DCS_GRPC_HOST:-server.sourcedcs.page:50051}
+      - DCS_GRPC_POLL_RATE=${DCS_GRPC_POLL_RATE:-1}
+      - DCS_GRPC_MAX_BACKOFF=${DCS_GRPC_MAX_BACKOFF:-5}
+      - CRCSYNC_SRS_HOST=${CRCSYNC_SRS_HOST:-server.sourcedcs.page}
+      - CRCSYNC_SRS_PORT=${CRCSYNC_SRS_PORT:-5002}
+      - CRCSYNC_COALITION=${CRCSYNC_COALITION:-3}
       - CRCSYNC_SOURCEDCS_WEB_URL=${CRCSYNC_SOURCEDCS_WEB_URL:-http://main-website:7000}
       - FLIGHT_PLAN_SERVICE_TOKEN=${FLIGHT_PLAN_SERVICE_TOKEN}
+      - AIRSPACE_SERVICE_TOKEN=${AIRSPACE_SERVICE_TOKEN}
+      - CRCSYNC_SOURCEDCS_WEB_PUBLIC_URL=${CRCSYNC_SOURCEDCS_WEB_PUBLIC_URL:-https://sourcedcs.page}
+      # MapTiler is the client basemap only (crc-sync docs/adr/0133); terrain is the DCS height cache in
+      # CRCSYNC_TERRAIN_CACHE_DIR, built by hand with `npm run terrain:build`. This key is only the fallback for
+      # CRCSYNC_MAPTILER_CLIENT_KEY.
+      - CRCSYNC_MAPTILER_KEY=${CRCSYNC_MAPTILER_KEY:-}
+      # The key crc-desktop draws its basemap with, handed to it after login (GET /api/client-config). Falls back
+      # to CRCSYNC_MAPTILER_KEY; set it to give clients a separate, browser-restricted key.
+      - CRCSYNC_MAPTILER_CLIENT_KEY=${CRCSYNC_MAPTILER_CLIENT_KEY:-}
+      # The DCS terrain cache (<Theater>-<spacing>m.terrain), on the state volume; read at mission load, never fetched.
+      - CRCSYNC_TERRAIN_CACHE_DIR=/app/state/terrain-cache
+      # Where an out-of-date crc-desktop is pointed by the update-required frame (crc-sync docs/adr/0103).
+      - CRCSYNC_DOWNLOAD_URL=${CRCSYNC_DOWNLOAD_URL:-https://sourcedcs.page/download.html}
+    volumes:
+      # EVERYTHING crc-sync writes, and nothing else. Mounted at /app/state,
+      # deliberately NOT over /app/config (shipped squadron data: facility,
+      # airspace, sensor specs) and NOT over /app/data (shipped
+      # reference tables: the airfield name-to-ICAO map). A named volume starts
+      # empty, so mounting it over either would shadow those files and present
+      # as every one of them having reset to defaults.
+      #
+      # So the service splits the two (crc-sync/src/state-paths.js):
+      # config/ and data/ hold shipped defaults and reference tables, state/ holds
+      # runtime state, and a read prefers state/ and falls back to the shipped
+      # default. Without this volume a `docker compose up -d` that recreated the
+      # container discarded the EFSP Board, the whole Mutation audit log, the
+      # squadron squawk map, the theater settings, the per-airport ATIS config
+      # and the airspace definitions — despite docs/adr/0002 making the Board
+      # durable. See docs/adr/0048.
+      - crc-sync-state:/app/state
     networks:
       - web
 
@@ -346,3 +248,4 @@ volumes:
   certbot-certs:
   casdoor-conf:
   sourcedcs-web-data:
+  crc-sync-state:
