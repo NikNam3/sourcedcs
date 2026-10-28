@@ -164,7 +164,7 @@ It refuses a PDF whose SHA-256 is not the pinned one, and stops at the first fai
 
 ### 0.5 Worked example: spec for Figure B2-3
 
-The prototype's extraction of B2-3 written as a spec, `perf/extraction/specs/B2-3.yaml`. Page coordinates are PDF points; they come from the prototype and were checked by overlay. Every spec follows this shape: axes are named and calibrated once, and each panel names its input and output axis (a scale pair its `from` and `to`). Every axis has a `title` and the `edge` of the panel frame it must sit beyond; the axis-title check uses the frame of every panel that uses the axis. Specs B2-1 and B2-2 are in the same directory.
+The prototype's extraction of B2-3 written as a spec, `perf/extraction/specs/B2-3.yaml`. Page coordinates are PDF points; they come from the prototype and were checked by overlay. Every spec follows this shape: axes are named and calibrated once, and each panel names its input and output axis (a scale pair its `from` and `to`). Every axis has a `title` and the `edge` of the panel frame it must sit beyond; the axis-title check uses the frame of every panel that uses the axis. Specs B2-1 and B2-2 are in the same directory. The printed curve labels are vector glyphs, not text, so `labels` gives each value's position; the extractor assigns values to curves by these anchors (nearest curve within 3 pt and unique, one anchor per curve) and only then checks `order`. An unknown or missing spec key stops the run. Spec text is written with normal hyphens: the manual encodes hyphens as `\x06` and spaces as `\x05`/`\x03`, which the extractor maps.
 
 ```yaml
 id: B2-3                        # data file name: the figure, or figure and sheet (B1-1.sh1)
@@ -193,7 +193,9 @@ panels:                         # reading order
     input: takeoff_factor
     output: distance
     param: {name: gross_weight, unit: 1000 lb, values: [20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40, 42, 44, 46, 48]}
+    labels: [[x, y], ...]       # one page point per value, in values order: a point on that curve beside its printed label
     order: {output: rises, check_at: [1.2, 1.5, 2, 2.5]}   # output rises with param at each input
+    monotonic: rises            # optional: each curve's output along its input
     filter: {min_points: 5}     # keys: min_points, min_span_pt (extent along the input axis), stroke_width
   - id: cg
     type: guideline_panel
