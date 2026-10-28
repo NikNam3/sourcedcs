@@ -223,7 +223,7 @@ sample_problems:
   - `guidelinePanel`: entry exactly on a guideline at the baseline follows that line; entry between two lines interpolates; target equal to baseline returns entry; entry outside the outermost lines → `OutOfChart`; target beyond every line → `OutOfChart`;
   - `scalePair(p, 2)` with a=0.5, b=0.1 → 1.1;
   - `tableCell` hit, miss, null cell.
-  Write `tests/core-purity.test.ts`: no file under `src/core/` contains `from 'node:`, `document`, `window`, `fetch(`, `localStorage`.
+  Write `tests/core-purity.test.ts`: no file under `src/core/` contains `from 'node:`, `document`, `window`, `fetch(`, `localStorage`; and the test dynamically imports every `.ts` file under `src/core/`, so a module no test exercises still counts against the 90 % coverage floor (Node only counts loaded files).
 - [ ] **Step 2:** Run `cd perf && nice -n 19 node --test tests/read.test.ts tests/core-purity.test.ts`: FAIL.
 - [ ] **Step 3:** Implement the files.
 - [ ] **Step 4:** Run the same command: PASS. Commit `feat(perf): chart reading building blocks with OutOfChart`.
