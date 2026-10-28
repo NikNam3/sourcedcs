@@ -85,8 +85,9 @@ function onStep(read: ReadRecord): boolean {
 }
 
 /**
- * Runs the chain once; an id the plan names is rounded that way, every other id is read exact. A rounding point is
- * read once per run: a second read of the same id is a chain defect and throws (it is not an OutOfChart).
+ * Runs the chain once; an id the plan names is rounded that way, every other id is read exact. These are chain
+ * defects and throw an Error (they are not an OutOfChart): a second read of the same id in one run, a step that is
+ * not a positive finite number, a value that is not finite.
  */
 function execute<K extends string>(chain: Chain<K>, plan: ReadonlyMap<string, Direction>): Run<K> {
   const reads: ReadRecord[] = [];
@@ -94,6 +95,9 @@ function execute<K extends string>(chain: Chain<K>, plan: ReadonlyMap<string, Di
   const ctx: Ctx = {
     read(id, value, step) {
       if (seen.has(id)) throw new Error(`chain defect: rounding point '${id}' read twice in one run`);
+      if (!Number.isFinite(step) || step <= 0)
+        throw new Error(`chain defect: rounding point '${id}' has step ${String(step)}`);
+      if (!Number.isFinite(value)) throw new Error(`chain defect: rounding point '${id}' read ${String(value)}`);
       seen.add(id);
       reads.push({ id, value, step });
       const dir = plan.get(id);
@@ -124,9 +128,10 @@ function worseDirection(worse: 'higher' | 'lower', down: Read<number>, up: Read<
 }
 
 /**
- * The cell for one output. An exact error rejects the whole cell; otherwise the first run that errored, in run order
- * (single-point runs in exact-pass read order, down before up, then the final runs), is the conservative value (a
- * rounding step left the drawn data); otherwise the worst value of the runs.
+ * The cell for one output. An exact error rejects the whole cell; otherwise the first run that errored, in run order,
+ * is the conservative value (a rounding step left the drawn data); otherwise the worst value of the runs. Run order:
+ * the shared single-point runs in exact-pass read order, down before up; then the output's own loop, each final run
+ * followed by its re-tests (down before up, in read order), which come before the next final run.
  */
 function cellOf(exact: Read<number>, runs: readonly Read<number>[], worse: 'higher' | 'lower'): Cell {
   if (!exact.ok) return { exact, conservative: exact };
@@ -157,14 +162,21 @@ export function evaluate<K extends string>(chain: Chain<K>, kinds: Readonly<Reco
   const keys = Object.keys(kinds) as K[];
   const exact = execute(chain, new Map());
   let runs = 0;
+  // Every id any run has read, for the final-run loop's guard.
+  const seen = new Set<string>();
+  const run = (plan: ReadonlyMap<string, Direction>): Run<K> => {
+    const result = execute(chain, plan);
+    runs++;
+    for (const read of result.reads) seen.add(read.id);
+    return result;
+  };
 
   // Single-point tests of every point the exact pass read off its step, shared by all outputs.
   const shared: Run<K>[] = [];
   const firstDirs = new Map<K, Map<string, Direction>>(keys.map((k) => [k, new Map()]));
   for (const id of offStepIds(exact.reads, new Map())) {
-    const down = execute(chain, new Map([[id, 'down']]));
-    const up = execute(chain, new Map([[id, 'up']]));
-    runs += 2;
+    const down = run(new Map([[id, 'down']]));
+    const up = run(new Map([[id, 'up']]));
     shared.push(down, up);
     for (const k of keys) firstDirs.get(k)?.set(id, worseDirection(WORSE[kinds[k]], down.outputs[k], up.outputs[k]));
   }
@@ -174,19 +186,26 @@ export function evaluate<K extends string>(chain: Chain<K>, kinds: Readonly<Reco
     const worse = WORSE[kinds[k]];
     const dirs = new Map(firstDirs.get(k));
     const own: Run<K>[] = [];
-    for (;;) {
-      const final = execute(chain, dirs);
-      runs++;
+    // Each re-test round gives at least one more id a direction, so a chain with a finite set of ids ends. A chain
+    // whose ids keep changing from run to run (a defect) would not: stop it once the rounds outnumber the ids seen
+    // before this loop.
+    const limit = seen.size;
+    for (let rounds = 0; ; rounds++) {
+      const final = run(dirs);
       own.push(final);
       const fresh = offStepIds(final.reads, dirs);
       if (fresh.length === 0) break;
+      if (rounds >= limit) {
+        throw new Error(
+          `chain defect: the final-run loop for '${k}' passed ${String(limit)} rounds, its ids keep changing`,
+        );
+      }
       // A point the final run read that no direction covers (a branch switched): test it with the others as in the
       // final run, then repeat the final run.
       const plan = new Map(dirs);
       for (const id of fresh) {
-        const down = execute(chain, new Map([...plan, [id, 'down']]));
-        const up = execute(chain, new Map([...plan, [id, 'up']]));
-        runs += 2;
+        const down = run(new Map([...plan, [id, 'down']]));
+        const up = run(new Map([...plan, [id, 'up']]));
         own.push(down, up);
         dirs.set(id, worseDirection(worse, down.outputs[k], up.outputs[k]));
       }

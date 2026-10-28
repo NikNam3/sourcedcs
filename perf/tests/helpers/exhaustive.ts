@@ -30,6 +30,9 @@ export function evaluateExhaustive<K extends string>(
     const ctx: Ctx = {
       read(id, value, step) {
         if (seen.has(id)) throw new Error(`chain defect: rounding point '${id}' read twice in one run`);
+        if (!Number.isFinite(step) || step <= 0)
+          throw new Error(`chain defect: rounding point '${id}' has step ${String(step)}`);
+        if (!Number.isFinite(value)) throw new Error(`chain defect: rounding point '${id}' read ${String(value)}`);
         seen.add(id);
         const dir = fixed[choices.length] ?? 'down';
         choices.push(dir);

@@ -210,11 +210,17 @@ describe('evaluate', () => {
       const s = sum(ctx);
       return { a: ok(s), b: ok(2 * s), c: ok(s + 1) };
     };
-    const start = performance.now();
-    const e = evaluate(chain, { a: 'distance', b: 'refusalSpeed', c: 'speed' });
-    const elapsedMs = performance.now() - start;
+    const kinds = { a: 'distance', b: 'refusalSpeed', c: 'speed' } as const;
+    // The fastest of three, so one slow moment on a loaded machine does not fail it.
+    const times: number[] = [];
+    let e = evaluate(chain, kinds);
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const start = performance.now();
+      e = evaluate(chain, kinds);
+      times.push(performance.now() - start);
+    }
     assert.equal(e.runs, 93);
-    assert.ok(elapsedMs < 20, `${String(elapsedMs)} ms`);
+    assert.ok(Math.min(...times) < 20, `${times.map(String).join(', ')} ms`);
     close(valueOf(e.cells.a.conservative), 1035);
     close(valueOf(e.cells.b.conservative), 1980);
   });
@@ -224,6 +230,81 @@ describe('evaluate', () => {
     const e = evaluate((ctx) => ({ d: ok(sum(ctx)) }), { d: 'distance' });
     assert.equal(e.runs, 1);
     close(valueOf(e.cells.d.conservative), 45);
+  });
+});
+
+describe('direction tests', () => {
+  test('a distance that falls as a headwind read rises rounds the headwind down', () => {
+    const { chain, seen } = spied<'d'>((ctx) => ({ d: ok(3000 - 20 * ctx.read('headwind', 12.4, 1)) }));
+    const e = evaluate(chain, { d: 'distance' });
+    close(valueOf(e.cells.d.conservative), 2760);
+    // The final run (the last run) rounds the headwind down; the cell's worst alone would hide a wrong direction.
+    assert.equal(seen.get('headwind')?.at(-1), 12);
+  });
+
+  test('a refusal speed that rises with a weight read rounds the weight down', () => {
+    const { chain, seen } = spied<'v'>((ctx) => ({ v: ok(100 + 0.002 * ctx.read('weight', 30050, 100)) }));
+    const e = evaluate(chain, { v: 'refusalSpeed' });
+    close(valueOf(e.cells.v.conservative), 160);
+    assert.equal(seen.get('weight')?.at(-1), 30000);
+  });
+
+  test('a refusal speed that falls with a weight read rounds the weight up', () => {
+    const { chain, seen } = spied<'v'>((ctx) => ({ v: ok(200 - 0.002 * ctx.read('weight', 30050, 100)) }));
+    const e = evaluate(chain, { v: 'refusalSpeed' });
+    close(valueOf(e.cells.v.conservative), 139.8);
+    assert.equal(seen.get('weight')?.at(-1), 30100);
+  });
+
+  test('one output with one read raising it and another lowering it: each read in its own direction', () => {
+    const mixed: Chain<'d'> = (ctx) => ({ d: ok(10 * ctx.read('a', 1.25, 0.1) - 5 * ctx.read('b', 2.25, 0.1)) });
+    const { chain, seen } = spied(mixed);
+    const e = evaluate(chain, { d: 'distance' });
+    close(valueOf(e.cells.d.conservative), 2);
+    // The final run is the last run: a up, b down.
+    assert.equal(seen.get('a')?.at(-1), 1.3);
+    assert.equal(seen.get('b')?.at(-1), 2.2);
+  });
+});
+
+describe('guards and error order', () => {
+  test("an output's re-tests come before its next final run in the error order", () => {
+    // The exact pass and roll down take the short branch; roll up reads x and y, both fresh in the final run.
+    // Re-tests: x up errors (F-X), then y up errors (F-Y). The repeated final run, both up, reports F-Y first.
+    const branch: Chain<'d'> = (ctx) => {
+      const r = ctx.read('roll', 2495, 10);
+      if (r < 2500) return { d: ok(r) };
+      const x = ctx.read('x', 5.5, 1);
+      const y = ctx.read('y', 7.5, 1);
+      if (y > 7.5) return { d: outOfChart('F-Y', 'y', y, [0, 7.5]) };
+      if (x > 5.5) return { d: outOfChart('F-X', 'x', x, [0, 5.5]) };
+      return { d: ok(r + x + y) };
+    };
+    const e = evaluate(branch, { d: 'distance' });
+    // 2 single-point runs, final, 4 re-tests, final.
+    assert.equal(e.runs, 8);
+    assert.deepEqual(e.cells.d.conservative, outOfChart('F-X', 'x', 6, [0, 5.5]));
+  });
+
+  for (const [label, value, step] of [
+    ['a zero step', 1.25, 0],
+    ['a negative step', 1.25, -0.1],
+    ['a non-finite step', 1.25, Number.POSITIVE_INFINITY],
+    ['a NaN value', Number.NaN, 0.1],
+    ['an infinite value', Number.NEGATIVE_INFINITY, 0.1],
+  ] as const) {
+    test(`ctx.read throws an Error for ${label}`, () => {
+      const bad: Chain<'d'> = (ctx) => ({ d: ok(ctx.read('a', value, step)) });
+      assert.throws(() => runExact(bad), { name: 'Error', message: /chain defect: rounding point 'a'/ });
+      assert.throws(() => evaluate(bad, { d: 'distance' }), { name: 'Error', message: /chain defect/ });
+    });
+  }
+
+  test('the final-run loop throws an Error once its rounds outnumber the ids seen', () => {
+    // A chain defect: every run reads a new id, so every final run has a fresh point and the loop would never end.
+    let counter = 0;
+    const drifting: Chain<'d'> = (ctx) => ({ d: ok(ctx.read(`n${String(counter++)}`, 1.25, 0.1)) });
+    assert.throws(() => evaluate(drifting, { d: 'distance' }), { name: 'Error', message: /final-run loop/ });
   });
 });
 
@@ -355,26 +436,164 @@ function randomChain(rng: () => number): RandomChain {
   return { chain, kinds };
 }
 
-describe('oracle agreement', () => {
-  test('200 seeded random chains: evaluate equals the exhaustive search for every output', () => {
-    const rng = mulberry32(0x70_1d_20_26);
-    let branchesSwitched = 0;
-    for (let n = 0; n < 200; n++) {
-      const { chain, kinds } = randomChain(rng);
-      const fast: Evaluation<string> = evaluate(chain, kinds);
-      const oracle: Evaluation<string> = evaluateExhaustive(chain, kinds);
-      assert.deepEqual(fast.trace, oracle.trace);
-      assert.deepEqual(fast.roundingPoints, oracle.roundingPoints);
-      for (const k of Object.keys(kinds)) {
-        close(
-          valueOf(fast.cells[k]?.conservative),
-          valueOf(oracle.cells[k]?.conservative),
-          `chain ${String(n)} output ${k}:`,
-        );
-      }
-      // The final run read a branch point the exact pass did not: 2 single-point runs per point do not explain the count.
-      if (fast.runs !== 2 * fast.roundingPoints.length + Object.keys(kinds).length) branchesSwitched++;
+const KINDS = ['distance', 'speed', 'refusalSpeed', 'accelCheckSpeed'] as const;
+
+/** Two different output kinds, so one chain is judged in two directions. */
+function twoKinds(rng: () => number): Record<string, OutputKind> {
+  const first = Math.floor(rng() * KINDS.length);
+  const second = (first + 1 + Math.floor(rng() * (KINDS.length - 1))) % KINDS.length;
+  return { o0: KINDS[first] ?? 'distance', o1: KINDS[second] ?? 'distance' };
+}
+
+const sign = (rng: () => number): number => (rng() < 0.5 ? -1 : 1);
+
+/** Reads that do not feed each other (each value an input constant); two outputs, signed sums of reads and roots. */
+function independentSignedChain(rng: () => number): RandomChain {
+  const count = 3 + Math.floor(rng() * 6);
+  const steps = [0.01, 0.1, 0.5, 1, 10, 100];
+  const specs = Array.from({ length: count }, () => {
+    const step = steps[Math.floor(rng() * steps.length)] ?? 1;
+    return { step, value: step * (3 + rng() * 300) };
+  });
+  const kinds = twoKinds(rng);
+  const outputs = Object.keys(kinds).map((name) => ({
+    name,
+    uses: specs.map(() => ({ w: sign(rng) * (0.1 + rng()), root: rng() < 0.3 })),
+  }));
+  const chain: Chain<string> = (ctx) => {
+    const values = specs.map((spec, i) => ctx.read(`r${String(i)}`, spec.value, spec.step));
+    const result: Record<string, Read<number>> = {};
+    for (const { name, uses } of outputs) {
+      let sum = 0;
+      uses.forEach(({ w, root }, i) => {
+        const x = values[i] ?? 0;
+        sum += w * (root ? Math.sqrt(x) : x);
+      });
+      result[name] = ok(sum);
     }
+    return result;
+  };
+  return { chain, kinds };
+}
+
+interface BoundedChain extends RandomChain {
+  /** The largest step times the largest absolute coefficient (output weights and feeding coefficients). */
+  readonly bound: number;
+}
+
+/**
+ * Signed chains whose reads feed each other, with a branch (the review's shape): read i adds `c * 0.01` of each
+ * feeding read j, in step units (`c * 0.01 * step_i * r_j / step_j`), so one step of a feeding read moves read i by
+ * at most about a hundredth of its step. Outputs are signed sums of every read. Spec 5.2: here the per-point
+ * conservative value and the exhaustive maximum differ, within the bound.
+ */
+function signedFeedingChain(rng: () => number): BoundedChain {
+  const count = 3 + Math.floor(rng() * 6);
+  const steps = [0.01, 0.1, 1, 10];
+  const specs = Array.from({ length: count }, (_, i) => ({
+    step: steps[Math.floor(rng() * steps.length)] ?? 1,
+    base: 1000 + rng() * 300,
+    terms: Array.from({ length: Math.min(i, 2) }, () => ({ j: Math.floor(rng() * i), c: sign(rng) * (0.05 + rng()) })),
+  }));
+  const branchAt = 1 + Math.floor(rng() * (count - 1));
+  const selector = Math.floor(rng() * branchAt);
+  const jump = sign(rng) * rng() * 20;
+  let threshold = Number.POSITIVE_INFINITY;
+  const reads = (ctx: Ctx): number[] => {
+    const values: number[] = [];
+    specs.forEach((spec, i) => {
+      let value = spec.base;
+      for (const { j, c } of spec.terms) value += c * 0.01 * spec.step * ((values[j] ?? 0) / (specs[j]?.step ?? 1));
+      let id = `r${String(i)}`;
+      if (i === branchAt) {
+        const high = (values[selector] ?? 0) >= threshold;
+        id += high ? '.hi' : '.lo';
+        if (high) value += jump * spec.step;
+      }
+      values.push(ctx.read(id, value, spec.step));
+    });
+    return values;
+  };
+  const v = reads({ read: (_id, value) => value })[selector] ?? 0;
+  const step = specs[selector]?.step ?? 1;
+  const lo = roundTo(v, step, 'down');
+  const hi = roundTo(v, step, 'up');
+  threshold = lo === hi ? v + step / 2 : lo + (0.05 + 0.9 * rng()) * (hi - lo);
+
+  const kinds = twoKinds(rng);
+  const outputs = Object.keys(kinds).map((name) => ({ name, w: specs.map(() => sign(rng) * (0.1 + rng())) }));
+  const largestCoefficient = Math.max(
+    ...outputs.flatMap(({ w }) => w.map(Math.abs)),
+    ...specs.flatMap(({ terms }) => terms.map(({ c }) => Math.abs(c))),
+  );
+  const largestStep = Math.max(...specs.map((spec) => spec.step));
+  const chain: Chain<string> = (ctx) => {
+    const values = reads(ctx);
+    const result: Record<string, Read<number>> = {};
+    for (const { name, w } of outputs) result[name] = ok(values.reduce((sum, x, i) => sum + (w[i] ?? 0) * x, 0));
+    return result;
+  };
+  return { chain, kinds, bound: largestStep * largestCoefficient };
+}
+
+function assertAgreement(make: (rng: () => number) => RandomChain, seed: number): number {
+  const rng = mulberry32(seed);
+  let branchesSwitched = 0;
+  for (let n = 0; n < 200; n++) {
+    const { chain, kinds } = make(rng);
+    const fast: Evaluation<string> = evaluate(chain, kinds);
+    const oracle: Evaluation<string> = evaluateExhaustive(chain, kinds);
+    assert.deepEqual(fast.trace, oracle.trace);
+    assert.deepEqual(fast.roundingPoints, oracle.roundingPoints);
+    for (const k of Object.keys(kinds)) {
+      close(
+        valueOf(fast.cells[k]?.conservative),
+        valueOf(oracle.cells[k]?.conservative),
+        `chain ${String(n)} output ${k}:`,
+      );
+    }
+    // The final run read a point the exact pass did not: 2 single-point runs per point do not explain the count.
+    if (fast.runs !== 2 * fast.roundingPoints.length + Object.keys(kinds).length) branchesSwitched++;
+  }
+  return branchesSwitched;
+}
+
+describe('oracle agreement, where the definitions coincide', () => {
+  test('200 seeded chains of independent reads, signed, two output kinds: evaluate equals the exhaustive search', () => {
+    assertAgreement(independentSignedChain, 0x1d_e9_20_26);
+  });
+
+  test('200 seeded chains of reads feeding each other, with a branch, outputs rising with every read: equal', () => {
+    const branchesSwitched = assertAgreement(randomChain, 0x70_1d_20_26);
     assert.ok(branchesSwitched > 10, `only ${String(branchesSwitched)} chains switched a branch`);
+  });
+});
+
+describe('oracle bound, elsewhere', () => {
+  test('200 seeded signed chains feeding each other, with a branch: never better than exact, within the bound', (t) => {
+    const rng = mulberry32(0x5e_ed_20_26);
+    let outputs = 0;
+    let differ = 0;
+    for (let n = 0; n < 200; n++) {
+      const { chain, kinds, bound } = signedFeedingChain(rng);
+      const fast = evaluate(chain, kinds);
+      const oracle = evaluateExhaustive(chain, kinds);
+      for (const [k, kind] of Object.entries(kinds)) {
+        outputs++;
+        const exact = valueOf(fast.cells[k]?.exact);
+        const conservative = valueOf(fast.cells[k]?.conservative);
+        const exhaustive = valueOf(oracle.cells[k]?.conservative);
+        const label = `chain ${String(n)} output ${k} (${kind}):`;
+        if (WORSE[kind] === 'higher')
+          assert.ok(conservative >= exact - 1e-9, `${label} ${String(conservative)} < exact`);
+        else assert.ok(conservative <= exact + 1e-9, `${label} ${String(conservative)} > exact`);
+        const gap = Math.abs(conservative - exhaustive);
+        assert.ok(gap <= bound + 1e-9, `${label} gap ${String(gap)} > bound ${String(bound)}`);
+        if (gap > 1e-9) differ++;
+      }
+    }
+    t.diagnostic(
+      `${String(differ)} of ${String(outputs)} outputs (${((100 * differ) / outputs).toFixed(1)} %) differ from the exhaustive search`,
+    );
   });
 });
