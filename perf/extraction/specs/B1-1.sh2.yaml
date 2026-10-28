@@ -1,0 +1,30 @@
+# Figure B1-1 sheet 2, Drag Indexes and Weights - Suspension Equipment. Coordinates are PDF
+# points: column x ranges are the printed table's vertical rules, the row band lies between the
+# header rule and the bottom rule. Five names run over two lines with their values on the second
+# (row_end), so no group or fill rules are needed; the key is [store, station] (ruling R7).
+id: B1-1.sh2
+figure: B1-1
+sheet: 2
+dataset: f16c-f110-129
+title: Drag Indexes and Weights — Suspension Equipment
+engine: F110-GE-129
+page_index: 259                 # 0-based
+printed_page: B1-7
+must_contain: ["Figure B1-1. (Sheet 2)", "Drag Indexes and Weights", "Suspension Equipment",
+               "SUSPENSION EQUIPMENT", "JETTISON", "**WEIGHT IF BDU-33 ADAPTERS ARE INSTALLED."]
+image_clip: [40, 50, 575, 560]
+axes: {}
+panels:
+  - id: suspension
+    type: table
+    clip: [53.8, 132.8, 559.2, 523.6]
+    row_band: [182.9, 522.9]
+    rows: 15
+    key: [store, station]
+    row_end: drag_index
+    columns:
+      - {name: store, unit: "", x: [54.5, 254.4]}
+      - {name: station, unit: "", x: [255.1, 329.2], pattern: '^\d[LR]?(,\d)*(,? (OR|AND) \d)?$'}
+      - {name: jettison_weight, unit: lb, x: [329.9, 409.0], pattern: '^\d+( \(\d+\*\*\))?$'}
+      - {name: total_weight, unit: lb, x: [409.7, 483.8], pattern: '^\d+( \(\d+\*\*\))?$'}
+      - {name: drag_index, unit: "", x: [484.4, 558.5], pattern: '^\d+(/\d+)?\*{0,2}$'}
