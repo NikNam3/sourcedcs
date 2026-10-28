@@ -1,0 +1,348 @@
+/*
+ * The components of the perf pages: a printed tech-order page (TOLD.md 10.1). Colours come only from tokens.css.
+ * components.html shows every class below.
+ *
+ * Page         .page (the fixed 1280 px paper), .page-header, .page-title, .page-footer, .columns (two columns),
+ *              .section
+ * Text         .section-heading (small caps, Roman numeral), .derived (grey values worked out from the inputs),
+ *              .notes (numbered notes, Limitations page)
+ * Inputs       .fields (grid of inputs), .field (label and underlined input), .unparsed (an input that does not
+ *              parse: grey dotted underline)
+ * Tables       .data-table, .drag-index (the 16 px drag index table), .table-title (Takeoff, Landing),
+ *              .column-group (MIL, MAX AB), .column-kinds (the exact / cons. row), .num (a right-aligned number),
+ *              .exact, .cons (conservative, bold), .subheading (italic row), .group-start (rule above a group),
+ *              .total (ink rule, bold), .no-value (a grey dash), .alert (a problem with a cited rule),
+ *              .reason (grey reason line under a table)
+ * Figure       .figure (page image with the path over it), .figure-image, .figure-overlay, .path-mil (solid),
+ *              .path-max-ab (dashed), .figure-letter (circled letter), .figure-legend, .figure-key
+ * Links        .figure-link (a figure reference), .subpage-link (Limitations, back to the TOLD page)
+ */
+
+html {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: 'Times New Roman', Times, 'Liberation Serif', serif;
+  font-size: 17px;
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+}
+
+body {
+  margin: 0;
+}
+
+a {
+  color: inherit;
+}
+
+a:hover {
+  opacity: 0.7;
+}
+
+/* Page. The width is fixed; scaling the page to the window is the page script's job. */
+
+.page {
+  box-sizing: border-box;
+  width: 1280px;
+  margin: 0 auto;
+  padding: 56px 80px;
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+}
+
+.page-header,
+.page-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 24px;
+  font-size: 14px;
+}
+
+.page-header {
+  border-bottom: 1px solid var(--ink);
+  padding-bottom: 6px;
+}
+
+.page-footer {
+  margin-top: auto;
+  border-top: 1px solid var(--ink);
+  padding-top: 6px;
+}
+
+.page-title {
+  margin: 0;
+  text-align: center;
+  font-size: 30px;
+  font-weight: bold;
+  font-variant: small-caps;
+  letter-spacing: 0.04em;
+}
+
+.columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 56px;
+  align-items: start;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Text */
+
+.section-heading {
+  margin: 0;
+  font-size: 18px;
+  font-weight: bold;
+  font-variant: small-caps;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid var(--ink);
+  padding-bottom: 3px;
+}
+
+.derived {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 15px;
+  color: var(--grey);
+}
+
+.notes {
+  line-height: 1.5;
+}
+
+.notes p {
+  margin: 0;
+}
+
+/* Inputs: bold value, right-aligned, 1 px underline, no box. */
+
+.fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px 18px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.field input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 2px 0;
+  border: 0;
+  border-bottom: 1px solid currentColor;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: bold;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.field input::placeholder {
+  color: var(--grey);
+  font-weight: normal;
+  opacity: 1;
+}
+
+.field input:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+.field input.unparsed {
+  border-bottom: 1px dotted var(--grey);
+}
+
+/* Tables */
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.data-table th,
+.data-table td {
+  padding: 6px 8px;
+  text-align: left;
+  vertical-align: baseline;
+}
+
+.data-table .num {
+  text-align: right;
+}
+
+.data-table thead tr:last-child {
+  border-bottom: 1px solid var(--ink);
+}
+
+.data-table.drag-index {
+  font-size: 16px;
+}
+
+.data-table .table-title {
+  font-size: 18px;
+  font-variant: small-caps;
+  letter-spacing: 0.05em;
+}
+
+.data-table .column-group {
+  text-align: right;
+  border-bottom: 1px solid var(--ink);
+}
+
+.data-table .column-kinds {
+  font-size: 14px;
+  color: var(--grey);
+}
+
+.data-table .exact {
+  font-weight: normal;
+}
+
+.data-table .cons {
+  font-weight: bold;
+}
+
+.data-table .subheading td {
+  padding-top: 8px;
+  font-style: italic;
+}
+
+.data-table .group-start {
+  border-top: 1px solid var(--rule);
+}
+
+.data-table .total {
+  border-top: 1px solid var(--ink);
+  font-weight: bold;
+}
+
+.no-value {
+  color: var(--grey);
+}
+
+.reason {
+  margin: 4px 0 0;
+  font-size: 14px;
+  color: var(--grey);
+}
+
+/* After .reason, so a reason line that cites a broken rule (.reason.alert) is red. */
+.alert {
+  color: var(--alert);
+}
+
+/* Figure view: the committed page image with the computed path over it. The overlay's viewBox is in PDF points,
+   so the stroke widths and the letter size below are PDF points too. */
+
+.figure {
+  position: relative;
+}
+
+.figure-image {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+@media screen and (prefers-color-scheme: dark) {
+  .figure-image {
+    filter: invert(1);
+  }
+}
+
+.figure-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.path-mil,
+.path-max-ab {
+  fill: none;
+  stroke: var(--ink);
+}
+
+.path-mil {
+  stroke-width: 1.8;
+}
+
+.path-max-ab {
+  stroke-width: 1.6;
+  stroke-dasharray: 5 3;
+}
+
+/* A circled letter: <g class="figure-letter"><circle r="5"/><text/></g>. */
+.figure-letter circle {
+  fill: var(--paper);
+  stroke: var(--ink);
+  stroke-width: 0.7;
+}
+
+.figure-letter text {
+  fill: var(--ink);
+  font-size: 8px;
+  text-anchor: middle;
+}
+
+.figure-legend {
+  display: flex;
+  gap: 28px;
+  align-items: center;
+  font-size: 15px;
+}
+
+.figure-legend span {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.figure-key {
+  border-collapse: collapse;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+
+.figure-key td {
+  padding: 2px 0;
+}
+
+.figure-key .num {
+  padding-left: 12px;
+  text-align: right;
+}
+
+.figure-key .num + td {
+  padding-left: 22px;
+}
+
+.figure-key .total {
+  border-top: 1px solid var(--ink);
+  font-weight: bold;
+}
+
+.figure-key .total td {
+  padding-top: 3px;
+}
+
+/* Links */
+
+.figure-link {
+  color: var(--grey);
+}

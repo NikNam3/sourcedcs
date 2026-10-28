@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=1280" />
+    <title>perf: component specimen</title>
+    <link rel="stylesheet" href="css/tokens.css" />
+    <link rel="stylesheet" href="css/perf.css" />
+    <link rel="stylesheet" href="css/print.css" media="print" />
+  </head>
+  <body>
+    <!-- Every component of css/perf.css, laid out as the approved mockup (docs/mockups/perf-told.html). The values
+         are illustrative, not computed. Static: no script. Step 1's pages are built from these classes. -->
+    <div class="page">
+      <header class="page-header">
+        <span>T.O. GR1F-16CJ-1-1 · Appendix B · F110-GE-129</span>
+        <span>F-16C Block 50 · component specimen</span>
+      </header>
+
+      <h1 class="page-title">Takeoff and Landing Data</h1>
+
+      <div class="columns">
+        <section class="section">
+          <h2 class="section-heading">I. Aircraft</h2>
+          <div class="fields">
+            <label class="field">Takeoff GW, lb<input value="37,240" /></label>
+            <label class="field">Landing GW, lb<input class="unparsed" value="28,0O0" /></label>
+            <label class="field">CG, % MAC<input placeholder="35.0" /></label>
+          </div>
+          <table class="data-table drag-index">
+            <thead>
+              <tr>
+                <th>Sta.</th>
+                <th>Store</th>
+                <th class="num">Each</th>
+                <th class="num">DI</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>—</td>
+                <td>Basic aircraft (incl. tip AIM-9)</td>
+                <td class="num">4</td>
+                <td class="num">4</td>
+              </tr>
+              <tr>
+                <td>1, 9</td>
+                <td>AIM-120B on LAU-129</td>
+                <td class="num">−3</td>
+                <td class="num">−6</td>
+              </tr>
+              <tr>
+                <td>3, 7</td>
+                <td>GBU-12 on weapon pylon</td>
+                <td class="num">22</td>
+                <td class="num">44</td>
+              </tr>
+              <tr>
+                <td>4, 6</td>
+                <td>370-gal tank, single stores at 3/7</td>
+                <td class="num">35</td>
+                <td class="num">70</td>
+              </tr>
+              <tr>
+                <td>—</td>
+                <td>Additional (stores not in Fig. B1-1)</td>
+                <td class="num"></td>
+                <td class="num">0</td>
+              </tr>
+              <tr class="total">
+                <td></td>
+                <td>Drag index</td>
+                <td></td>
+                <td class="num">112</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section class="section">
+          <h2 class="section-heading">II. Fields</h2>
+          <div class="fields">
+            <label class="field">Runway<input value="21" /></label>
+            <label class="field">Heading, °<input value="210" /></label>
+            <label class="field">Length avail., ft<input value="5,900" /></label>
+            <label class="field">Threshold elev., ft<input value="1,980" /></label>
+            <label class="field">Far-end elev., ft<input value="2,027" /></label>
+            <label class="field">Altimeter, in. Hg<input value="29.86" /></label>
+            <label class="field">Temperature, °C<input value="38.4" /></label>
+            <label class="field">Wind, ° / kt<input value="230 / 08" /></label>
+            <label class="field">RCR dry / wet<input value="23 / 18" /></label>
+          </div>
+          <p class="derived">
+            <span>Pressure altitude 2,036 ft · slope 0.8 % uphill</span>
+            <span>Headwind 7.5 kt · crosswind 2.7 kt from the right</span>
+          </p>
+        </section>
+      </div>
+
+      <section class="section">
+        <h2 class="section-heading">III. TOLD</h2>
+        <div class="columns">
+          <div>
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th class="table-title">Takeoff</th>
+                  <th colspan="2" class="column-group">MIL</th>
+                  <th colspan="2" class="column-group">MAX AB</th>
+                </tr>
+                <tr class="column-kinds">
+                  <th></th>
+                  <th class="num exact">exact</th>
+                  <th class="num cons">cons.</th>
+                  <th class="num exact">exact</th>
+                  <th class="num cons">cons.</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Rotation, KIAS</td>
+                  <td class="num exact">172.5</td>
+                  <td class="num cons">174</td>
+                  <td class="num exact">167.5</td>
+                  <td class="num cons">169</td>
+                </tr>
+                <tr>
+                  <td>Takeoff speed, KIAS</td>
+                  <td class="num exact">182.5</td>
+                  <td class="num cons">184</td>
+                  <td class="num exact">182.5</td>
+                  <td class="num cons">184</td>
+                </tr>
+                <tr class="group-start">
+                  <td>Takeoff distance, ft</td>
+                  <td class="num exact alert">5,752</td>
+                  <td class="num cons alert">5,960</td>
+                  <td class="num exact">3,227</td>
+                  <td class="num cons">3,350</td>
+                </tr>
+                <tr>
+                  <td>Runway used, %</td>
+                  <td class="num exact alert">97.5</td>
+                  <td class="num cons alert">101.0</td>
+                  <td class="num exact">54.7</td>
+                  <td class="num cons">56.8</td>
+                </tr>
+                <tr class="group-start">
+                  <td>Accel. check at 2,000 ft, KIAS</td>
+                  <td class="num exact no-value">—</td>
+                  <td class="num cons no-value">—</td>
+                  <td class="num exact no-value">—</td>
+                  <td class="num cons no-value">—</td>
+                </tr>
+                <tr>
+                  <td>Refusal speed, dry, KIAS</td>
+                  <td class="num exact">121</td>
+                  <td class="num cons">119</td>
+                  <td class="num exact">133</td>
+                  <td class="num cons">131</td>
+                </tr>
+              </tbody>
+            </table>
+            <p class="reason">
+              <a class="figure-link" href="figure.html">B2-4</a>: temperature 38.4 °C outside the drawn range −20–35 °C
+            </p>
+            <p class="reason alert">Takeoff roll over 80 % of the runway available (3.6.3)</p>
+          </div>
+
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th class="table-title">Landing</th>
+                <th colspan="2" class="column-group">Dry</th>
+                <th colspan="2" class="column-group">Wet</th>
+              </tr>
+              <tr class="column-kinds">
+                <th></th>
+                <th class="num exact">exact</th>
+                <th class="num cons">cons.</th>
+                <th class="num exact">exact</th>
+                <th class="num cons">cons.</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="subheading">
+                <td colspan="5">Normal · 28,000 lb</td>
+              </tr>
+              <tr>
+                <td>Final approach, KIAS</td>
+                <td class="num exact">151.2</td>
+                <td class="num cons">152</td>
+                <td class="num exact">151.2</td>
+                <td class="num cons">152</td>
+              </tr>
+              <tr>
+                <td>Landing distance, ft</td>
+                <td class="num exact">3,412</td>
+                <td class="num cons">3,450</td>
+                <td class="num exact">4,105</td>
+                <td class="num cons">4,150</td>
+              </tr>
+              <tr class="subheading group-start">
+                <td colspan="5">Heavyweight · 37,240 lb</td>
+              </tr>
+              <tr>
+                <td>Final approach, KIAS</td>
+                <td class="num exact no-value">—</td>
+                <td class="num cons no-value">—</td>
+                <td class="num exact no-value">—</td>
+                <td class="num cons no-value">—</td>
+              </tr>
+              <tr>
+                <td>Landing distance, ft</td>
+                <td class="num exact no-value">—</td>
+                <td class="num cons no-value">—</td>
+                <td class="num exact no-value">—</td>
+                <td class="num cons no-value">—</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <div class="columns">
+        <section class="section">
+          <h2 class="section-heading">Figure view</h2>
+          <div class="figure">
+            <img
+              class="figure-image"
+              width="540"
+              height="642"
+              alt="Stand-in for the committed page image of Figure B2-3"
+              src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='62 120 498 592'><rect x='102' y='150' width='0.5' height='550'/><rect x='178' y='150' width='0.5' height='550'/><rect x='254' y='150' width='0.5' height='550'/><rect x='330' y='150' width='0.5' height='550'/><rect x='406' y='150' width='0.5' height='550'/><rect x='482' y='150' width='0.5' height='550'/><rect x='558' y='150' width='0.5' height='550'/><rect x='102' y='150' width='456' height='0.5'/><rect x='102' y='250' width='456' height='0.5'/><rect x='102' y='350' width='456' height='0.5'/><rect x='102' y='450' width='456' height='0.5'/><rect x='102' y='550' width='456' height='0.5'/><rect x='102' y='650' width='456' height='0.5'/><rect x='102' y='700' width='456' height='0.5'/></svg>"
+            />
+            <svg
+              class="figure-overlay"
+              viewBox="62 120 498 592"
+              role="img"
+              aria-label="Computed path: MIL solid, MAX AB dashed"
+            >
+              <polyline
+                class="path-max-ab"
+                points="104,322.7 225.9,322.7 225.9,399.4 225.9,446.4 227.9,474.5 227.9,529.4 230.3,558.2 230.3,612.4 220.2,625.9 220.2,684.5"
+              />
+              <polyline
+                class="path-mil"
+                points="104,275.9 316.4,275.9 316.4,399.4 316.4,446.4 321.4,474.5 321.4,529.4 327.2,558.2 327.2,612.4 311.1,625.9 311.1,684.5"
+              />
+              <g class="figure-letter">
+                <circle cx="111" cy="270" r="5" />
+                <text x="111" y="272.8">A</text>
+              </g>
+              <g class="figure-letter">
+                <circle cx="324" cy="270" r="5" />
+                <text x="324" y="272.8">B</text>
+              </g>
+              <g class="figure-letter">
+                <circle cx="324" cy="405" r="5" />
+                <text x="324" y="407.8">C</text>
+              </g>
+              <g class="figure-letter">
+                <circle cx="329" cy="480" r="5" />
+                <text x="329" y="482.8">D</text>
+              </g>
+              <g class="figure-letter">
+                <circle cx="335" cy="563" r="5" />
+                <text x="335" y="565.8">E</text>
+              </g>
+              <g class="figure-letter">
+                <circle cx="303" cy="631" r="5" />
+                <text x="303" y="633.8">F</text>
+              </g>
+              <g class="figure-letter">
+                <circle cx="318" cy="678" r="5" />
+                <text x="318" y="680.8">G</text>
+              </g>
+            </svg>
+          </div>
+          <div class="figure-legend">
+            <span
+              ><svg width="36" height="6" aria-hidden="true"><line class="path-mil" x1="0" y1="3" x2="36" y2="3" /></svg
+              >MIL</span
+            >
+            <span
+              ><svg width="36" height="6" aria-hidden="true">
+                <line class="path-max-ab" x1="0" y1="3" x2="36" y2="3" /></svg
+              >MAX AB</span
+            >
+          </div>
+          <table class="figure-key">
+            <tr>
+              <td>Ⓐ Takeoff factor</td>
+              <td class="num">3.123</td>
+              <td>Ⓓ Drag index</td>
+              <td class="num">156</td>
+            </tr>
+            <tr>
+              <td>Ⓑ Gross weight, lb</td>
+              <td class="num">37,240</td>
+              <td>Ⓔ Slope, %</td>
+              <td class="num">0.8 up</td>
+            </tr>
+            <tr>
+              <td>Ⓒ CG, % MAC</td>
+              <td class="num">35.0</td>
+              <td>Ⓕ Headwind, kt</td>
+              <td class="num">7.5</td>
+            </tr>
+            <tr class="total">
+              <td colspan="3">Ⓖ Takeoff distance, MIL, ft</td>
+              <td class="num">5,752</td>
+            </tr>
+          </table>
+        </section>
+
+        <section class="section notes">
+          <h2 class="section-heading">I. Computation</h2>
+          <p>1. Exact values are interpolated from the chart curves without rounding.</p>
+          <p>
+            2. Conservative values round every intermediate step toward the longer distance, the lower refusal speed and
+            the higher takeoff, approach and touchdown speeds.
+          </p>
+          <p>3. Inputs outside a chart's range are rejected, not extrapolated.</p>
+          <p>4. Each value links to its figure, for example <a class="figure-link" href="figure.html">Fig. B2-3</a>.</p>
+        </section>
+      </div>
+
+      <footer class="page-footer">
+        <span>Data f16c-f110-129 · app 0.0.0 · computed 28 Oct 2026</span>
+        <a class="subpage-link" href="limitations.html">Limitations</a>
+      </footer>
+    </div>
+  </body>
+</html>
