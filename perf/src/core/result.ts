@@ -8,8 +8,15 @@ export interface OutOfChart {
   readonly kind: 'outOfChart';
   readonly figure: string;
   readonly input: string;
+  /**
+   * The input's value. NaN when the input has no number, e.g. a table key not found (JSON then
+   * carries null); drawnRange is null then too.
+   */
   readonly value: number;
-  /** The range the chart draws for the input; null when there is none, e.g. a table key not found. */
+  /**
+   * The range the chart draws for the input; null when there is none, e.g. a table key not found.
+   * The UI branches on drawnRange === null (no range to show), never on value.
+   */
   readonly drawnRange: readonly [number, number] | null;
 }
 

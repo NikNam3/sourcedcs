@@ -175,6 +175,39 @@ describe('curveFamily', () => {
     assert.deepEqual(curveFamily(one, 'B2-1', 5, 1), outOfChart('B2-1', 'pressure_altitude', 1, [0, 0]));
   });
 
+  test('a param exactly on a curve reads that curve alone, though its neighbour is drawn shorter', () => {
+    // Mirrored: the lower neighbour (param 0) stops at 5, the curve asked for (param 2) runs to 10.
+    const mirrored: CurveFamily = {
+      ...family,
+      curves: [
+        {
+          param: 0,
+          points: [
+            [0, 20],
+            [5, 25],
+          ],
+        },
+        {
+          param: 2,
+          points: [
+            [0, 30],
+            [10, 40],
+          ],
+        },
+        {
+          param: 4,
+          points: [
+            [0, 40],
+            [5, 45],
+          ],
+        },
+      ],
+    };
+    near(valueOf(curveFamily(mirrored, 'B2-1', 8, 2)), 38);
+    assert.deepEqual(curveFamily(mirrored, 'B2-1', 8, 1), outOfChart('B2-1', 'temperature', 8, [0, 5]));
+    assert.deepEqual(curveFamily(mirrored, 'B2-1', 8, 4), outOfChart('B2-1', 'temperature', 8, [0, 5]));
+  });
+
   test('a family with no curves is a data defect', () => {
     assert.throws(() => curveFamily({ ...family, curves: [] }, 'B2-1', 5, 0), Error);
   });
@@ -360,6 +393,35 @@ describe('guidelinePanel', () => {
 
   test('an unknown family is a data defect', () => {
     assert.throws(() => guidelinePanel(cg, 'B2-3', 'uphill', 2000, 40), /uphill/);
+  });
+
+  test('an unknown family throws even when the target is the baseline', () => {
+    assert.throws(() => guidelinePanel(cg, 'B2-3', 'uphill', 2000, 35), /uphill/);
+  });
+
+  test('signed params: a family drawn on [-2, 0] reads a negative target from baseline 0', () => {
+    const slope: GuidelinePanel = {
+      ...cg,
+      input: q('slope', '%'),
+      baseline: 0,
+      families: {
+        downhill: [
+          [
+            [-2, 900],
+            [0, 1000],
+          ],
+          [
+            [-2, 1800],
+            [0, 2000],
+          ],
+        ],
+      },
+    };
+    near(valueOf(guidelinePanel(slope, 'B2-3', 'downhill', 1500, -1)), 1425);
+    near(valueOf(guidelinePanel(slope, 'B2-3', 'downhill', 2000, -2)), 1800);
+    assert.deepEqual(guidelinePanel(slope, 'B2-3', 'downhill', 1500, 0), { ok: true, value: 1500 });
+    assert.deepEqual(guidelinePanel(slope, 'B2-3', 'downhill', 1500, 1), outOfChart('B2-3', 'slope', 1, [-2, 0]));
+    assert.deepEqual(guidelinePanel(slope, 'B2-3', 'downhill', 1500, -3), outOfChart('B2-3', 'slope', -3, [-2, 0]));
   });
 
   test('a NaN entry or target gives OutOfChart', () => {
