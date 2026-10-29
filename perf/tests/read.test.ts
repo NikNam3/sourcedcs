@@ -2,10 +2,19 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
 import { panel } from '../src/core/data/panel.ts';
-import type { CurveFamily, FigureFile, GuidelinePanel, ScalePair, SingleCurve, Table } from '../src/core/data/types.ts';
+import type {
+  CurveFamily,
+  FigureFile,
+  GuidelinePanel,
+  LimitLine,
+  ScalePair,
+  SingleCurve,
+  Table,
+} from '../src/core/data/types.ts';
 import { curveFamily } from '../src/core/read/curve-family.ts';
 import { guidelinePanel } from '../src/core/read/guideline-panel.ts';
 import { drawnRange, EDGE_TOLERANCE, interp, interpWithin } from '../src/core/read/interp.ts';
+import { beyondLimit } from '../src/core/read/limit-line.ts';
 import { scalePair } from '../src/core/read/scale-pair.ts';
 import { singleCurve } from '../src/core/read/single-curve.ts';
 import { tableCell } from '../src/core/read/table.ts';
@@ -535,6 +544,48 @@ describe('tableCell', () => {
   test('an unknown key or value column is a data defect', () => {
     assert.throws(() => tableCell(stores, 'B1-1.sh1', { rack: 'LAU-129' }, 'drag_index'), /rack/);
     assert.throws(() => tableCell(stores, 'B1-1.sh1', { store: 'AIM-120B' }, 'cost'), /cost/);
+  });
+});
+
+describe('beyondLimit', () => {
+  const line = (beyond: LimitLine['beyond']): LimitLine => ({
+    id: 'brake_energy',
+    type: 'limit_line',
+    label: 'MAXIMUM BRAKE ENERGY LIMIT LINE',
+    input: q('carry', 'pt'),
+    output: q('ground_roll', '1000 ft'),
+    beyond,
+    points: [
+      [0, 10],
+      [10, 20],
+    ],
+    axes: {},
+  });
+  const above = line('above');
+
+  test('a point on the side beyond the line is beyond it; the other side is not', () => {
+    assert.equal(beyondLimit(above, 5, 16), true);
+    assert.equal(beyondLimit(above, 5, 14), false);
+  });
+
+  test('a point exactly on the line is not beyond it', () => {
+    assert.equal(beyondLimit(above, 5, 15), false);
+    assert.equal(beyondLimit(line('below'), 5, 15), false);
+  });
+
+  test('tolerance/2 beyond a drawn end is judged against the end value (R1)', () => {
+    assert.equal(beyondLimit(above, 10 + (EDGE_TOLERANCE * 10) / 2, 25), true);
+  });
+
+  test('an input outside the drawn range, or no number, is not judged', () => {
+    assert.equal(beyondLimit(above, 11, 25), null);
+    assert.equal(beyondLimit(above, NaN, 25), null);
+    assert.equal(beyondLimit(above, 5, NaN), null);
+  });
+
+  test('beyond: below exceeds the limit under the line', () => {
+    assert.equal(beyondLimit(line('below'), 5, 14), true);
+    assert.equal(beyondLimit(line('below'), 5, 16), false);
   });
 });
 

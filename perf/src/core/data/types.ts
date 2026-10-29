@@ -7,7 +7,7 @@
  * The chart data the extractor writes and the TOLD core reads: one FigureFile per figure sheet and one Manifest per dataset. data:check validates each file against FigureFile or Manifest; types:gen turns the definitions into src/core/data/types.ts.
  */
 export type ChartData = FigureFile | Manifest;
-export type Panel = CurveFamily | SingleCurve | GuidelinePanel | ScalePair | Table;
+export type Panel = CurveFamily | SingleCurve | GuidelinePanel | ScalePair | Table | LimitLine;
 /**
  * [input, output], both in chart units.
  *
@@ -89,6 +89,10 @@ export interface Transform {
   page: 'x' | 'y';
   a: number;
   b: number;
+  /**
+   * An axis the chart prints no scale for: the line a pilot carries from one panel into the next. Its values are page points (unit "pt", a 1, b 0); omitted on a scaled axis.
+   */
+  unscaled?: true;
 }
 export interface SingleCurve {
   id: string;
@@ -157,6 +161,33 @@ export interface Table {
    * One cell per column.
    */
   rows: (number | string | null)[][];
+}
+/**
+ * A printed limit drawn as a line over another panel's axes (B7-2's brake energy and tire speed limits).
+ */
+export interface LimitLine {
+  id: string;
+  type: 'limit_line';
+  /**
+   * The limit's printed label, verbatim from the spec.
+   */
+  label: string;
+  input: Quantity;
+  output: Quantity;
+  /**
+   * The side of the line where the limit is exceeded, in output terms.
+   */
+  beyond: 'above' | 'below';
+  /**
+   * Sorted by input, ascending.
+   */
+  points: Pt[];
+  /**
+   * Page transforms keyed by quantity name.
+   */
+  axes: {
+    [k: string]: Transform;
+  };
 }
 /**
  * perf/data/<dataset>/manifest.json.

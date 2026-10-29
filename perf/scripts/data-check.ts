@@ -95,6 +95,7 @@ function panelProblems(panel: Panel): string[] {
       }
       break;
     case 'single_curve':
+    case 'limit_line':
       needAxes(panel.axes, [panel.input.name, panel.output.name]);
       if (panel.points.length === 0) problems.push(`${name} has no points`);
       if (!isAscending(inputs(panel.points))) problems.push(`${name} points are not in ascending input order`);

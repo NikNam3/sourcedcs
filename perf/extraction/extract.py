@@ -33,6 +33,10 @@ REQUIRED = {'id', 'figure', 'sheet', 'dataset', 'title', 'engine', 'page_index',
 OPTIONAL = {'corrections', 'sample_problems'}
 AXIS_REQUIRED = {'unit', 'page', 'label_band', 'range', 'ticks', 'title', 'edge'}
 AXIS_OPTIONAL = {'snap'}
+# An unscaled axis (the line carried from one panel into the next) has no labels to fit: values
+# are page points. It takes only these keys, unit pt and unscaled true.
+AXIS_UNSCALED = {'unit', 'page', 'unscaled'}
+UNSCALED_FIT = {'a': 1.0, 'b': 0.0, 'resid': 0.0}
 SAMPLE_KEYS = {'inputs', 'expected'}
 EDGES = ('left', 'right', 'top', 'bottom')
 
@@ -57,7 +61,14 @@ def load_spec(fid):
     if not isinstance(spec['axes'], dict) or not isinstance(spec['panels'], list):
         fail(f'{fid} spec: axes must be a mapping and panels a list')
     for name in sorted(spec['axes']):
-        keys(f'{fid} axis {name}', panels.check_keys, spec['axes'][name], AXIS_REQUIRED, AXIS_OPTIONAL)
+        ax = spec['axes'][name]
+        if isinstance(ax, dict) and 'unscaled' in ax:
+            keys(f'{fid} axis {name}', panels.check_keys, ax, AXIS_UNSCALED, set())
+            if ax['unscaled'] is not True or ax['unit'] != 'pt' or ax['page'] not in ('x', 'y'):
+                fail(f"{fid} axis {name}: an unscaled axis has unscaled: true, unit: pt and page x or y, "
+                     f"not {ax['unscaled']!r}, {ax['unit']!r}, {ax['page']!r}")
+        else:
+            keys(f'{fid} axis {name}', panels.check_keys, ax, AXIS_REQUIRED, AXIS_OPTIONAL)
     for n, p in enumerate(spec['panels']):
         pid = p.get('id', f'#{n}') if isinstance(p, dict) else f'#{n}'
         keys(f'{fid} panel {pid}', panels.check_panel_keys, p)
@@ -89,9 +100,11 @@ def title_beyond(frame, edge, cx, cy):
 def check_titles(page, spec, fid):
     """Each axis's title words must lie beyond the frame of every panel using that axis, on the
     axis's `edge`. With several occurrences of the title, the one nearest the axis's label band
-    is the axis's title."""
+    is the axis's title. An unscaled axis has no title and is skipped."""
     for name in sorted(spec['axes']):
         ax = spec['axes'][name]
+        if panels.unscaled(ax):
+            continue
         if ax['edge'] not in EDGES:
             fail(f"{fid} axis {name}: edge {ax['edge']!r} is not one of {EDGES}")
         found = geom.find_title(page, ax['title'])
@@ -118,6 +131,9 @@ def extract_figure(doc, spec):
             fail(f'{fid} spec: {s!r} is not on page index {spec["page_index"]}')
     axes = {}
     for name in sorted(spec['axes']):
+        if panels.unscaled(spec['axes'][name]):
+            axes[name] = dict(UNSCALED_FIT)
+            continue
         try:
             axes[name] = geom.fit_axis(page, spec['axes'][name])
         except AssertionError as e:
@@ -148,7 +164,8 @@ def extract_figure(doc, spec):
 
 def summary(res):
     spec = res['spec']
-    parts = [f"{n} resid {res['axes'][n]['resid']:.3f}" for n in sorted(res['axes'])]
+    parts = [f"{n} unscaled" if panels.unscaled(spec['axes'][n]) else f"{n} resid {res['axes'][n]['resid']:.3f}"
+             for n in sorted(res['axes'])]
     print(f"{spec['id']}: axes " + (', '.join(parts) or 'none'))
     for p in res['panels']:
         if p['type'] == 'curve_family':
@@ -161,6 +178,10 @@ def summary(res):
             info = ', '.join(f"{f} {len(ls)} lines" for f, ls in sorted(p['families'].items()))
         elif p['type'] == 'table':
             info = f"{len(p['rows'])} rows x {len(p['columns'])} columns"
+        elif p['type'] == 'limit_line':
+            pts = p['points']
+            info = (f"{p['label']!r}, beyond {p['beyond']}, {len(pts)} points, "
+                    f"{p['input']['name']} [{pts[0][0]}, {pts[-1][0]}]")
         else:
             info = ''
         print(f"  panel {p['id']} ({p['type']}): {info}")

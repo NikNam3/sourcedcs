@@ -38,6 +38,10 @@ describe('checkDataset on the fixture datasets', () => {
     assert.match(problems[0] ?? '', /not in the manifest/);
   });
 
+  test('a dataset with an unscaled axis and a limit line is clean', () => {
+    assert.deepEqual(checkDataset(fixture('data-ok-limit')), []);
+  });
+
   test('a manifest entry with no file gives one problem naming the entry', () => {
     const problems = checkDataset(fixture('data-bad-missing'));
     assert.equal(problems.length, 1, problems.join('\n'));
@@ -55,14 +59,15 @@ after(() => {
   rmSync(scratch, { recursive: true, force: true });
 });
 
-function editedDataset(
+function editedCopy(
+  source: { fixture: string; file: string },
   name: string,
   edit: (figure: Record<string, unknown>) => void,
   editManifest: (manifest: Record<string, unknown>) => void = () => undefined,
 ): string {
   const dir = join(scratch, name);
-  cpSync(fixture('data-ok'), dir, { recursive: true });
-  const figurePath = join(dir, 'X1-1.json');
+  cpSync(fixture(source.fixture), dir, { recursive: true });
+  const figurePath = join(dir, source.file);
   const figure = JSON.parse(readFileSync(figurePath, 'utf8')) as Record<string, unknown>;
   edit(figure);
   const bytes = JSON.stringify(figure) + '\n';
@@ -70,10 +75,18 @@ function editedDataset(
   const manifestPath = join(dir, 'manifest.json');
   const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as { dataset: string; files: Record<string, string> };
   manifest.dataset = name;
-  manifest.files['X1-1.json'] = createHash('sha256').update(bytes).digest('hex');
+  manifest.files[source.file] = createHash('sha256').update(bytes).digest('hex');
   editManifest(manifest);
   writeFileSync(manifestPath, JSON.stringify(manifest) + '\n');
   return dir;
+}
+
+function editedDataset(
+  name: string,
+  edit: (figure: Record<string, unknown>) => void,
+  editManifest?: (manifest: Record<string, unknown>) => void,
+): string {
+  return editedCopy({ fixture: 'data-ok', file: 'X1-1.json' }, name, edit, editManifest);
 }
 
 function firstPanel(figure: Record<string, unknown>): Record<string, unknown> {
@@ -202,6 +215,74 @@ describe('checkDataset beyond the schema', () => {
     );
     assert.equal(problems.length, 1, problems.join('\n'));
     assert.match(problems[0] ?? '', /row 1/);
+  });
+});
+
+describe('checkDataset: unscaled axes and limit lines', () => {
+  const limitDataset = (name: string, edit: (limit: Record<string, unknown>) => void): string =>
+    editedCopy({ fixture: 'data-ok-limit', file: 'X1-4.json' }, name, (figure) => {
+      const limit = (figure['panels'] as Record<string, unknown>[]).find((p) => p['type'] === 'limit_line');
+      assert.ok(limit !== undefined);
+      edit(limit);
+    });
+
+  test('an edited copy of data-ok-limit with nothing changed is still clean', () => {
+    assert.deepEqual(
+      checkDataset(
+        limitDataset('limit-unchanged', () => {
+          /* no change */
+        }),
+      ),
+      [],
+    );
+  });
+
+  test('unscaled: false is a schema problem (an unscaled axis says so, a scaled one omits the key)', () => {
+    const problems = checkDataset(
+      limitDataset('unscaled-false', (limit) => {
+        (limit['axes'] as Record<string, Record<string, unknown>>)['carry'] = {
+          page: 'x',
+          a: 1,
+          b: 0,
+          unscaled: false,
+        };
+      }),
+    );
+    assert.equal(problems.length, 1, problems.join('\n'));
+    assert.match(problems[0] ?? '', /X1-4\.json: \/panels\/1\/axes\/carry\/unscaled must be equal to constant/);
+  });
+
+  test('a limit line with a beyond other than above or below is a schema problem', () => {
+    const problems = checkDataset(
+      limitDataset('beyond-left', (limit) => {
+        limit['beyond'] = 'left';
+      }),
+    );
+    assert.equal(problems.length, 1, problems.join('\n'));
+    assert.match(problems[0] ?? '', /\/panels\/1\/beyond/);
+  });
+
+  test('limit line points out of input order are a problem naming the panel', () => {
+    const problems = checkDataset(
+      limitDataset('limit-order', (limit) => {
+        limit['points'] = [
+          [160, 4.2],
+          [120, 3.5],
+        ];
+      }),
+    );
+    assert.equal(problems.length, 1, problems.join('\n'));
+    assert.match(problems[0] ?? '', /panel "brake_energy" points are not in ascending input order/);
+  });
+
+  test('a limit line with no points is a problem', () => {
+    const problems = checkDataset(
+      limitDataset('limit-empty', (limit) => {
+        limit['points'] = [];
+      }),
+    );
+    assert.equal(problems.length, 1, problems.join('\n'));
+    assert.match(problems[0] ?? '', /panel "brake_energy" has no points/);
   });
 });
 
