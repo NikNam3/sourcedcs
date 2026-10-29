@@ -7,6 +7,7 @@ import { runExact } from '../../src/core/ctx.ts';
 import { takeoffFactor } from '../../src/core/figures/b2-1.ts';
 import { takeoffSpeed } from '../../src/core/figures/b2-2.ts';
 import { takeoffDistance } from '../../src/core/figures/b2-3.ts';
+import { accelCheckSpeed } from '../../src/core/figures/b2-4.ts';
 import type { Read } from '../../src/core/result.ts';
 
 import { loadFigure } from './data.ts';
@@ -80,5 +81,27 @@ export const SAMPLE_RUNNERS: Readonly<Record<string, Runner>> = Object.freeze({
       }),
     );
     return { distance_ft: outputs.distanceFt };
+  },
+  'B2-4': (inputs: Inputs) => {
+    const i = inputsOf('B2-4', inputs, [
+      'takeoff_factor',
+      'check_distance_ft',
+      'gross_weight_lb',
+      'drag_index',
+      'headwind_kt',
+      'slope_pct',
+    ]);
+    const fig = loadFigure('B2-4');
+    const { outputs } = runExact((ctx) =>
+      accelCheckSpeed(ctx, fig, {
+        takeoffFactor: i.takeoff_factor,
+        checkDistanceFt: i.check_distance_ft,
+        grossWeightLb: i.gross_weight_lb,
+        dragIndex: i.drag_index,
+        headwindKt: i.headwind_kt,
+        slopePct: i.slope_pct,
+      }),
+    );
+    return { accel_check_kias: outputs.accelCheckKias };
   },
 });

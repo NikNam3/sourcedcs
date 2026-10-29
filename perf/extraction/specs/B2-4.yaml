@@ -1,0 +1,84 @@
+# Figure B2-4, Acceleration Check Speed. Coordinates are PDF points, read off renders of page
+# index 286 (the distance labels off a 6x render) and the plan 1 page evidence
+# (.superpowers/sdd/TOLD-STEP1-P1/evidence.md, "B2-4"), checked by overlay.
+id: B2-4
+figure: B2-4
+sheet: null
+dataset: f16c-f110-129
+title: Acceleration Check Speed
+engine: F110-GE-129
+page_index: 286                 # 0-based
+printed_page: B2-10
+must_contain: ["Acceleration Check Speed", "F110-GE-129", "Figure B2-4", "DATA BASIS FLIGHT TEST"]
+image_clip: [62, 120, 560, 712]
+# The two-line titles ("DRAG"/"INDEX", "WIND"/"KNOTS", "SLOPE"/"%") are matched by one word. The
+# speed title needs KIAS: "ACCELERATION CHECK SPEED" alone also matches the page heading.
+axes:
+  takeoff_factor:    {unit: "", page: y, label_band: [96, 106], range: [138, 292], ticks: [1, 2, 3, 4, 5, 6], title: TAKEOFF FACTOR, edge: left}
+  accel_check_speed: {unit: KIAS, page: x, label_band: [680, 690], range: [100, 520], ticks: [40, 60, 80, 100, 120, 140, 160, 180], title: ACCELERATION CHECK SPEED KIAS, edge: bottom}
+  gross_weight:      {unit: 1000 lb, page: y, label_band: [90, 105], range: [290, 502], ticks: [15, 20, 25, 30, 35, 40, 45, 50], title: GW 1000 POUNDS, edge: left}
+  drag_index:        {unit: "", page: y, label_band: [84, 105], range: [505, 556], ticks: [0, 100, 200, 300], title: INDEX, edge: left}
+  wind:              {unit: kt, page: y, label_band: [90, 105], range: [560, 625], ticks: [0, 20, 40], title: KNOTS, edge: left}
+  slope:             {unit: "%", page: y, label_band: [95, 105], range: [628, 680], ticks: [0, 1, 2, 3], title: SLOPE, edge: left}
+# Clips take in the left and right frame lines: the 40 kt guide lines start at the left frame corner
+# and the 190 kt lines at the right one (panel_segments still drops the vertical frame lines).
+panels:
+  - id: distance
+    type: curve_family
+    clip: [108.6, 142.8, 535.1, 285.6]
+    frame: {x: [109.1, 534.6], y: [143.3, 285.1]}    # frame lines dropped
+    input: takeoff_factor
+    output: accel_check_speed
+    param: {name: check_distance, unit: ft, values: [500, 1000, 1500, 2000, 2500, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000, 11000]}
+    # labels: the point on each curve nearest its printed distance label (the label sits above-right
+    # of its curve, 4 pt off it), read off a 6x render, in values order; the next curve is at least
+    # 11 pt from each anchor
+    labels: [[149.0, 237.2], [189.3, 217.0], [218.6, 204.1], [243.8, 193.9], [266.6, 186.6], [284.1, 181.3], [320.2, 173.0], [346.2, 167.9], [371.7, 163.7], [404.6, 164.2], [430.9, 164.1], [454.6, 164.2], [476.2, 163.4], [497.7, 163.6]]
+    # All 14 curves are drawn only over TOF [4.52, 5.13] (500 ft leaves the left frame at 5.13, 11,000 ft
+    # the right frame at 4.52).
+    order: {output: rises, check_at: [4.7, 4.9]}   # check speed rises with check distance
+    monotonic: falls            # check speed falls as takeoff factor rises along every curve
+  # Guide lines: [param, speed], wind and slope stored as drawn magnitudes (wind 0-40 kt, slope 0-3 %);
+  # the sign of a wind or slope input only picks the family (ruling R8).
+  - id: gw
+    type: guideline_panel
+    clip: [108.6, 297.0, 535.1, 496.6]
+    frame: {x: [109.1, 534.6], y: [297.5, 496.1]}    # frame lines dropped; the BASELINE line at 43 too
+    input: gross_weight
+    output: accel_check_speed
+    baseline: 43
+    families: {all: falls}      # check speed falls as gross weight rises
+    count: {all: 16}            # baseline speeds 40 (left corner) ... 190 (right corner)
+    # The "BASELINE" label box cuts the line through ~151 kt with a 10.2 pt gap along GW (ruling P4 (iii)).
+    filter: {max_gap_pt: 12}
+  - id: di
+    type: guideline_panel
+    clip: [108.6, 507.9, 535.1, 551.4]
+    frame: {x: [109.1, 534.6], y: [508.4, 550.9]}
+    input: drag_index
+    output: accel_check_speed
+    baseline: 0
+    families: {all: falls}      # check speed falls as drag index rises
+    count: {all: 14}            # baseline speeds 60 ... 190: no line below 60 kt (ruling P9)
+  - id: wind
+    type: guideline_panel
+    clip: [108.6, 562.9, 535.1, 620.5]
+    frame: {x: [109.1, 534.6], y: [563.4, 620.0]}
+    input: wind
+    output: accel_check_speed
+    baseline: 0
+    families: {headwind: rises, tailwind: falls}    # split by direction, not line style (headwind solid, tailwind dashed)
+    count: {headwind: 8, tailwind: 7}               # headwind 40 ... 180 drawn to 40 kt; tailwind 60 ... 180 drawn to 20 kt
+  - id: slope
+    type: guideline_panel
+    clip: [108.6, 631.9, 535.1, 675.5]
+    frame: {x: [109.1, 534.6], y: [632.4, 675.0]}
+    input: slope
+    output: accel_check_speed
+    baseline: 0
+    families: {downhill: rises, uphill: falls}      # split by direction, not line style (downhill solid, uphill dashed)
+    count: {downhill: 8, uphill: 7}                 # downhill 40 ... 180; uphill 60 ... 180, drawn 0-3 %
+corrections: []
+sample_problems:
+  - inputs: {takeoff_factor: 1.85, check_distance_ft: 1500, gross_weight_lb: 33000, drag_index: 150, headwind_kt: 10, slope_pct: 1}
+    expected: {accel_check_kias: 129}
