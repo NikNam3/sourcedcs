@@ -15,7 +15,7 @@ refusal speed can rise with gross weight at low RCR.
 1. **Two values for every result.** *Exact*: interpolated from the chart curves without rounding. *Conservative*: every
    input and every intermediate value read off a chart rounded to its step in the worse direction.
 2. **One read path.** Every chart read in a figure file goes through `ctx.read(id, value, step)` (`src/core/ctx.ts`),
-   where `id` names the rounding point (for example `b2-3.distance`). Inputs are rounding points like any other.
+   where `id` names the rounding point (for example `b2-3.gw`). Inputs are rounding points like any other.
    - Exact pass: `ctx.read` returns the value unchanged and records the path points for the figure view.
    - Conservative pass, by a **single-point test**:
      1. Each rounding point is tested on its own: the chain is run once with that point rounded down to its step and
@@ -26,6 +26,9 @@ refusal speed can rise with gross weight at low RCR.
         example the acceleration check at 1,000 ft or 2,000 ft depending on the rounded takeoff roll), that point gets
         the same test, with the other points in their chosen directions, and the final run is repeated.
      4. The conservative value is the worst of the final run and every single-point run.
+
+   This per-point rounding is the conservative value, by definition: each point rounded in its own worse direction,
+   every later reading taken from the rounded earlier ones. It is the pilot's procedure (principle 2).
 3. **The worst value per output.** One evaluation covers all outputs of a chain and keeps, per output, the worst value
    found. Two outputs sharing an intermediate (the takeoff factor feeds distance, acceleration check and refusal speed)
    may use different rounded values of it.
@@ -41,7 +44,8 @@ refusal speed can rise with gross weight at low RCR.
    rounding point (2^n). Step 1's takeoff chain has about 45 rounding points: about 3·10^13 runs. The single-point
    test takes about two runs per rounding point plus one per output, about 100 runs there, well under a millisecond.
    The exhaustive search is kept as a **test oracle only**, never in the app (human decision, 2026-10-28, after the
-   exponential cost was raised).
+   exponential cost was raised). Its maximum is not the definition. It can round an earlier value the better way so
+   that a later reading crosses a step and rounds up a whole step, which no pilot does.
 
 5. **Steps.**
 
@@ -69,10 +73,11 @@ refusal speed can rise with gross weight at low RCR.
 
 - The direction is found by test, not set by hand per quantity. Trying both directions at every point is never wrong.
 - The cost is linear in the rounding points, so a longer chain (step 1's takeoff, step 3's leg chain) stays cheap.
-- The single-point test misses only a point whose worse direction flips because another point moved by one step
-  (10 ft, 1 kt, 0.01 TOF). Over one step the charts are smooth enough that this does not happen in practice. Tests
-  check it: the single-point test and the exhaustive oracle give the same conservative values on synthetic chains with
-  a branch and on B2-3 over many inputs.
+- Tests compare the conservative value with the exhaustive oracle. Where the output is monotone in every reading
+  (B2-3 included) or the readings do not feed each other, they require equality. Elsewhere they require the
+  conservative value to be no better than the exact one, and within the sum over the rounding points of each point's
+  own |o(up) − o(down)| of the exhaustive value. That sum is the tests' criterion. It is not proven for branching
+  chains.
 - A test pins the list of rounding point ids per chain, so adding or losing a read is a visible change.
 - `ctx` is tested on small synthetic chains, one with a branch, so the single-point test, the branch re-test and the
   per-output worst values are tested without chart data.
